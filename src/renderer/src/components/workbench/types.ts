@@ -40,26 +40,14 @@ export type WorkbenchFileRef = {
   pageNumber?: number
 }
 
-export type AssistantProcessStatus = 'active' | 'completed' | 'failed'
+export type AssistantProcessStatus = 'running' | 'completed' | 'failed'
 
 export type AssistantProcessSourceEventType = 'thinking' | AiRunEvent['type']
 
-export type AssistantProcessNodeKind =
-  | 'brain'
-  | 'hand'
-  | 'learning'
-  | 'mouth'
-  | 'context_compaction'
-  | 'search'
-
-export type AssistantProcessVariant =
-  | 'brain_placeholder'
-  | 'brain_thought'
-  | 'hand_tool'
-  | 'learning_skill'
-  | 'mouth_summary'
-  | 'context_compaction'
-  | 'search_placeholder'
+export type AssistantRichTextSegment = {
+  text: string
+  emphasis?: boolean
+}
 
 export type AssistantToolName =
   | 'terminal_run'
@@ -73,39 +61,49 @@ export type AssistantToolName =
   | 'docx_rollback'
   | 'unnamed'
 
-export type AssistantToolDetail = {
-  label: string
-  value: string
-}
-
 export type AssistantProcessIconKind =
-  | 'brain'
   | 'search'
   | 'terminal'
   | 'document'
-  | 'search-doc'
   | 'edit'
   | 'learning'
-  | 'mouth'
   | 'compaction'
   | 'default'
 
-export type AssistantBaseProcessItem = {
+export type AssistantProcessGroupKind = 'thinking' | 'skill' | 'learning' | 'compaction'
+
+export type AssistantProcessSkillKey =
+  | 'docx-reader'
+  | 'docx-writer'
+  | 'reference-reader'
+  | 'terminal-runner'
+  | 'generic-task'
+
+export type AssistantProcessGroupItem = {
   id: string
-  nodeKind: AssistantProcessNodeKind
-  variant: AssistantProcessVariant
-  text: string
   status: AssistantProcessStatus
-  isCurrent: boolean
+  runningText: AssistantRichTextSegment[]
+  completedText: AssistantRichTextSegment[]
+  failedText: AssistantRichTextSegment[]
   createdAt: number
   sourceEventType: AssistantProcessSourceEventType
-  iconKind: AssistantProcessIconKind
-  details: AssistantToolDetail[]
   toolName?: AssistantToolName
-  skillId?: RuntimeSkillId
 }
 
-export type AssistantProcessItem = AssistantBaseProcessItem
+export type AssistantProcessGroup = {
+  id: string
+  kind: AssistantProcessGroupKind
+  skillKey: AssistantProcessSkillKey
+  iconKind: AssistantProcessIconKind
+  status: AssistantProcessStatus
+  runningText: AssistantRichTextSegment[]
+  completedText: AssistantRichTextSegment[]
+  failedText: AssistantRichTextSegment[]
+  items: AssistantProcessGroupItem[]
+  createdAt: number
+  sourceEventType: AssistantProcessSourceEventType
+  skillId?: RuntimeSkillId
+}
 
 export type DocxApplyWorkspaceTab = {
   fileKey: string
@@ -138,7 +136,7 @@ export type AssistantTurnViewModel = {
   messageId: string
   runId?: string
   status: 'running' | 'completed' | 'failed'
-  processItems: AssistantProcessItem[]
+  processGroups: AssistantProcessGroup[]
   finalAnswerMarkdown: string
   artifacts: AssistantArtifactItem[]
   applyTargets: AssistantTurnApplyTarget[]

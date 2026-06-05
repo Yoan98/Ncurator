@@ -9,7 +9,7 @@ type ReadonlyCommandRule = {
 }
 
 const hasShellMetacharacters = (segmentText: string): boolean =>
-  /(^|[^\\])(?:>>?|<|\(|\)|\$\(.*|\*)/.test(segmentText) || /\btee\b/i.test(segmentText)
+  /(^|[^\\])(?:>>?|<|\(|\)|\$\(.*|`|&|\*)/.test(segmentText) || /\btee\b/i.test(segmentText)
 
 const hasForbiddenToken = (tokens: readonly string[], forbidden: readonly string[]): boolean => {
   const normalized = tokens.map((token) => token.toLowerCase())
@@ -27,7 +27,10 @@ const isSimpleCommand = (
   return !hasForbiddenToken(tokens.slice(1), forbidden)
 }
 
-const isGitReadonlyCommand = (tokens: readonly string[], subcommand: 'status' | 'diff' | 'show'): boolean => {
+const isGitReadonlyCommand = (
+  tokens: readonly string[],
+  subcommand: 'status' | 'diff' | 'show'
+): boolean => {
   if (tokens.length < 2) return false
   if (tokens[0].toLowerCase() !== 'git') return false
   if (tokens[1].toLowerCase() !== subcommand) return false
@@ -51,16 +54,25 @@ const isReadonlyFindCommand = (tokens: readonly string[]): boolean => {
   ])
 }
 
-const READONLY_COMMAND_RULES: ReadonlyCommandRule[] = [
+const SAFE_READONLY_COMMAND_RULES: ReadonlyCommandRule[] = [
   { id: 'pwd', guidance: '`pwd`', matches: ({ tokens }) => isSimpleCommand(tokens, ['pwd']) },
   { id: 'ls', guidance: '`ls`', matches: ({ tokens }) => isSimpleCommand(tokens, ['ls']) },
   { id: 'cat', guidance: '`cat`', matches: ({ tokens }) => isSimpleCommand(tokens, ['cat']) },
+  {
+    id: 'strings',
+    guidance: '`strings`',
+    matches: ({ tokens }) => isSimpleCommand(tokens, ['strings'])
+  },
   { id: 'head', guidance: '`head`', matches: ({ tokens }) => isSimpleCommand(tokens, ['head']) },
   { id: 'tail', guidance: '`tail`', matches: ({ tokens }) => isSimpleCommand(tokens, ['tail']) },
   { id: 'wc', guidance: '`wc`', matches: ({ tokens }) => isSimpleCommand(tokens, ['wc']) },
   { id: 'stat', guidance: '`stat`', matches: ({ tokens }) => isSimpleCommand(tokens, ['stat']) },
   { id: 'echo', guidance: '`echo`', matches: ({ tokens }) => isSimpleCommand(tokens, ['echo']) },
-  { id: 'printf', guidance: '`printf`', matches: ({ tokens }) => isSimpleCommand(tokens, ['printf']) },
+  {
+    id: 'printf',
+    guidance: '`printf`',
+    matches: ({ tokens }) => isSimpleCommand(tokens, ['printf'])
+  },
   { id: 'find', guidance: '`find`', matches: ({ tokens }) => isReadonlyFindCommand(tokens) },
   { id: 'rg', guidance: '`rg`', matches: ({ tokens }) => isSimpleCommand(tokens, ['rg']) },
   { id: 'grep', guidance: '`grep`', matches: ({ tokens }) => isSimpleCommand(tokens, ['grep']) },
@@ -96,11 +108,21 @@ const READONLY_COMMAND_RULES: ReadonlyCommandRule[] = [
   }
 ]
 
-export const TERMINAL_READONLY_COMMAND_GUIDANCE = READONLY_COMMAND_RULES.map(
+export const TERMINAL_READONLY_COMMAND_GUIDANCE = SAFE_READONLY_COMMAND_RULES.map(
   (rule) => rule.guidance
 ).join('、')
 
-export const analyzeReadonlyTerminalCommandPolicy = (command: string): TerminalReadonlyPolicyResult => {
+const findSafeReadonlyCommandRule = (segment: {
+  text: string
+  tokens: string[]
+}): ReadonlyCommandRule | undefined => {
+  if (hasShellMetacharacters(segment.text)) return undefined
+  return SAFE_READONLY_COMMAND_RULES.find((rule) => rule.matches(segment))
+}
+
+export const analyzeReadonlyTerminalCommandPolicy = (
+  command: string
+): TerminalReadonlyPolicyResult => {
   const text = String(command || '').trim()
   if (!text) {
     return {
@@ -112,36 +134,31 @@ export const analyzeReadonlyTerminalCommandPolicy = (command: string): TerminalR
 
   const windowsStyle = getAiRuntimePlatform() === 'windows'
   const segments = parseShellCommandSegments(text, { windowsStyle })
-  if (segments.length !== 1) {
+  if (segments.length === 0) {
     return {
       executionPolicy: 'approval_required',
       mutability: 'mutating',
-      reason: 'only one simple terminal command can run without approval'
+      reason: 'empty command is not allowed'
     }
   }
 
-  const [segment] = segments
-  if (!segment || hasShellMetacharacters(segment.text)) {
-    return {
-      executionPolicy: 'approval_required',
-      mutability: 'mutating',
-      reason: 'command uses shell features outside the approved readonly command set'
+  const matchedRuleIds: string[] = []
+  for (const segment of segments) {
+    const matchedRule = findSafeReadonlyCommandRule(segment)
+    if (!matchedRule) {
+      return {
+        executionPolicy: 'approval_required',
+        mutability: 'mutating',
+        reason: 'command is outside the safe readonly terminal command set'
+      }
     }
-  }
-
-  const matchedRule = READONLY_COMMAND_RULES.find((rule) => rule.matches(segment))
-  if (!matchedRule) {
-    return {
-      executionPolicy: 'approval_required',
-      mutability: 'mutating',
-      reason: 'command is outside the approved readonly terminal command set'
-    }
+    matchedRuleIds.push(matchedRule.id)
   }
 
   return {
     executionPolicy: 'readonly_allowed',
     mutability: 'read_only',
-    matchedRuleId: matchedRule.id,
-    reason: `matched readonly rule ${matchedRule.id}`
+    matchedRuleId: matchedRuleIds.join('|'),
+    reason: `matched safe readonly rule ${matchedRuleIds.join('|')}`
   }
 }

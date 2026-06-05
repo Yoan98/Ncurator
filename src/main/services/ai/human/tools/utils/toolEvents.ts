@@ -4,6 +4,7 @@ import type {
   IpcJsonObject
 } from '../../../../../../shared/types'
 import type { AiEventDispatchContext } from '../../../types'
+import { emitToolProcessCompleted, emitToolProcessStarted } from '../../../events/processEvents'
 
 type DraftRef = {
   draftSnapshotId: string
@@ -20,6 +21,13 @@ export const emitToolCallStarted = (input: {
   stage?: 'human_hand'
 }): string => {
   const toolCallId = randomUUID()
+  emitToolProcessStarted({
+    sendEvent: input.ctx.sendEvent,
+    runId: input.runId,
+    toolCallId,
+    toolName: input.toolName,
+    args: input.args
+  })
   input.ctx.sendEvent({
     type: 'tool_call_started',
     runId: input.runId,
@@ -44,6 +52,14 @@ export const emitToolCallResult = (input: {
   stage?: 'human_hand'
   draftRef?: DraftRef
 }): void => {
+  emitToolProcessCompleted({
+    sendEvent: input.ctx.sendEvent,
+    runId: input.runId,
+    toolCallId: input.toolCallId,
+    toolName: input.toolName,
+    ok: input.result?.ok !== false && !input.error,
+    error: input.error || input.result?.diagnostic?.message
+  })
   input.ctx.sendEvent({
     type: 'tool_call_result',
     runId: input.runId,

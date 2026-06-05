@@ -103,6 +103,7 @@ export type HumanRuntimeCache = {
   familyToolsets: Partial<Record<AiToolFamilyId, StructuredToolInterface[]>>
   skillToolsets: Partial<Record<RuntimeSkillId, StructuredToolInterface[]>>
   docxRuntime?: DocxToolRuntime
+  approvedTerminalCommandCounts?: Map<string, number>
   toolCallCount: number
   currentState?: HumanState
   lastBrainInputTokens?: number

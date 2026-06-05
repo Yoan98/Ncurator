@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { App, Button } from 'antd'
 import {
+  HiArrowUp,
   HiBookOpen,
+  HiCheck,
   HiChevronLeft,
   HiChevronRight,
   HiOutlineExclamationCircle,
@@ -10,7 +12,8 @@ import {
   HiOutlineViewColumns,
   HiRectangleGroup,
   HiTrash,
-  HiViewColumns
+  HiViewColumns,
+  HiXMark
 } from 'react-icons/hi2'
 import type {
   AiArtifactRef,
@@ -47,15 +50,16 @@ import type {
   WorkbenchMode
 } from '../components/workbench/types'
 import {
-  createAssistantPlaceholderItem,
-  createAssistantThinkingItem,
+  completeAssistantProcessGroups,
+  createAssistantThinkingGroup,
+  createSearchProcessGroup,
   dedupeFileRefs,
   extractReadableFilesFromToolOutput,
   extractSearchResultsFromToolOutput,
   formatSessionDate,
   getSearchResultFileRef,
   readWorkbenchModePreference,
-  reduceAssistantProcessItems,
+  reduceAssistantProcessGroups,
   readWorkbenchModelPreference,
   readWorkbenchWorkspacePreference,
   resolveWorkbenchModelSelection,
@@ -94,7 +98,7 @@ const createEmptyPanel = (): WorkbenchContentPanelState => ({
 const createAssistantTurn = (messageId: string): AssistantTurnViewModel => ({
   messageId,
   status: 'running',
-  processItems: [createAssistantThinkingItem(messageId)],
+  processGroups: [createAssistantThinkingGroup(messageId)],
   finalAnswerMarkdown: '',
   artifacts: [],
   applyTargets: [],
@@ -104,7 +108,7 @@ const createAssistantTurn = (messageId: string): AssistantTurnViewModel => ({
 const createSearchAssistantTurn = (messageId: string): AssistantTurnViewModel => ({
   messageId,
   status: 'running',
-  processItems: [createAssistantPlaceholderItem(messageId, '让俺找找')],
+  processGroups: [createSearchProcessGroup(messageId)],
   finalAnswerMarkdown: '',
   artifacts: [],
   applyTargets: [],
@@ -130,7 +134,7 @@ const buildAssistantTurnFromMessage = (message: ChatMessage): AssistantTurnViewM
   return {
     messageId: message.id,
     status: 'completed',
-    processItems: [],
+    processGroups: [],
     finalAnswerMarkdown: message.content,
     artifacts: artifacts.map((artifact) => ({
       path: artifact.path,
@@ -912,7 +916,7 @@ const ChatPage: React.FC = () => {
 
       updateActiveTurn((current) => ({
         ...current,
-        processItems: reduceAssistantProcessItems(current.processItems, event)
+        processGroups: reduceAssistantProcessGroups(current.processGroups, event)
       }))
 
       if (event.type === 'tool_call_result') {
@@ -1075,7 +1079,8 @@ const ChatPage: React.FC = () => {
         )
         updateActiveTurn((current) => ({
           ...current,
-          finalAnswerMarkdown: `${current.finalAnswerMarkdown}${event.token}`
+          finalAnswerMarkdown: `${current.finalAnswerMarkdown}${event.token}`,
+          processGroups: completeAssistantProcessGroups(current.processGroups)
         }))
         scrollToBottom()
         return
@@ -1090,7 +1095,8 @@ const ChatPage: React.FC = () => {
         updateActiveTurn((current) => ({
           ...current,
           finalAnswerMarkdown: event.text,
-          status: 'completed'
+          status: 'completed',
+          processGroups: completeAssistantProcessGroups(current.processGroups)
         }))
         const assistantMessage: ChatMessage = {
           id: messageId,
@@ -1371,7 +1377,10 @@ const ChatPage: React.FC = () => {
           ...(previous[completedAssistantMessageId] ||
             createSearchAssistantTurn(completedAssistantMessageId)),
           status: 'completed',
-          processItems: [],
+          processGroups: completeAssistantProcessGroups(
+            previous[completedAssistantMessageId]?.processGroups ||
+              createSearchAssistantTurn(completedAssistantMessageId).processGroups
+          ),
           finalAnswerMarkdown: assistantContent
         }
       }))
@@ -1401,12 +1410,11 @@ const ChatPage: React.FC = () => {
             ...(previous[failedAssistantMessageId] ||
               createSearchAssistantTurn(failedAssistantMessageId)),
             status: 'failed',
-            processItems: [
-              {
-                ...createAssistantPlaceholderItem(failedAssistantMessageId, '让俺找找'),
-                status: 'failed'
-              }
-            ],
+            processGroups: completeAssistantProcessGroups(
+              previous[failedAssistantMessageId]?.processGroups ||
+                createSearchAssistantTurn(failedAssistantMessageId).processGroups,
+              'failed'
+            ),
             finalAnswerMarkdown: '搜索失败了，请稍后再试。',
             error: '搜索失败了，请稍后再试。'
           }
@@ -1910,45 +1918,21 @@ const ChatPage: React.FC = () => {
 
                 <div className="shrink-0 bg-gradient-to-t from-[#F5F5F4] via-[#F5F5F4]/96 via-58% to-transparent px-6 pb-6 pt-6">
                   <div className="mx-auto max-w-[920px]">
-                    <WorkbenchComposer
-                      mode={composerMode}
-                      onModeChange={handleModeChange}
-                      activeModelConfig={activeModelConfig}
-                      remoteModels={remoteModels}
-                      selectedModelName={selectedModelName}
-                      onModelNameChange={handleModelNameChange}
-                      workspaces={workspaces}
-                      selectedWorkspaceId={selectedWorkspaceId}
-                      onWorkspaceChange={handleWorkspaceChange}
-                      onDraftChange={handleComposerDraftChange}
-                      onSubmit={() => void handleSend()}
-                      onCancel={() => void handleCancel()}
-                      loading={loading}
-                      canSubmit={Boolean(
-                        input.trim() &&
-                        selectedWorkspace &&
-                        (composerMode === 'search' || selectedModelName)
-                      )}
-                      showCancel={loading && composerMode === 'ai' && Boolean(aiRunId)}
-                      resetKey={composerResetKey}
-                      contextUsage={contextUsage}
-                    />
-
                     {composerMode === 'ai' && (pendingApprovalBatch || pendingWorkspaceRequest) ? (
                       <div
-                        className="mt-3 flex items-start gap-2 rounded-[14px] border border-[#FDECC8] bg-[#FFF9ED] px-3 py-3 text-sm text-[#8A6510]"
+                        className="mb-3 flex items-start gap-3 rounded-[14px] border border-[#FDECC8] bg-[#FFF9ED] px-3 py-3 text-sm text-[#8A6510]"
                         data-testid={
                           pendingApprovalBatch
                             ? chatSelectors.approvalBatchCard
                             : chatSelectors.workspaceBanner
                         }
                       >
-                        <HiOutlineExclamationCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                        <HiOutlineExclamationCircle className="mt-1 h-4 w-4 shrink-0" />
                         <div className="min-w-0 flex-1">
                           {pendingApprovalBatch && currentApprovalItem ? (
                             <div className="flex flex-col gap-3">
                               <div className="flex items-center justify-between gap-3">
-                                <div className="text-sm font-medium text-[#8A6510]">
+                                <div className="text-sm font-semibold text-[#8A6510]">
                                   审批 {approvalCurrentIndex + 1} /{' '}
                                   {pendingApprovalBatch.items.length}
                                 </div>
@@ -1980,59 +1964,78 @@ const ChatPage: React.FC = () => {
                                   />
                                 </div>
                               </div>
-                              <div>{currentApprovalItem.reason}</div>
-                              <div className="text-xs text-[#8A6510]">
-                                {currentApprovalItem.command}
-                              </div>
-                              <div className="flex gap-2">
-                                <Button
-                                  type="primary"
-                                  onClick={() =>
-                                    setApprovalAction(currentApprovalItem.itemId, 'approve')
-                                  }
-                                  loading={
-                                    approvalSubmitting &&
-                                    approvalDraftDecisions[currentApprovalItem.itemId]?.action ===
+
+                              <div className="flex items-center gap-3">
+                                <code className="min-w-0 flex-1 overflow-x-auto whitespace-pre rounded-[10px] border border-[#E7CFA5] bg-white/80 px-3 py-2 font-mono text-[14px] leading-6 text-[#6F5311]">
+                                  {currentApprovalItem.command}
+                                </code>
+                                <div className="flex shrink-0 items-center gap-2">
+                                  <Button
+                                    aria-label="同意"
+                                    type={
+                                      approvalDraftDecisions[currentApprovalItem.itemId]?.action ===
                                       'approve'
+                                        ? 'primary'
+                                        : 'default'
+                                    }
+                                    className="!flex !h-9 !w-9 !items-center !justify-center !rounded-[10px] !p-0"
+                                    icon={<HiCheck className="h-4 w-4" />}
+                                    onClick={() =>
+                                      setApprovalAction(currentApprovalItem.itemId, 'approve')
+                                    }
+                                    loading={
+                                      approvalSubmitting &&
+                                      approvalDraftDecisions[currentApprovalItem.itemId]?.action ===
+                                        'approve'
+                                    }
+                                    data-testid={chatSelectors.approvalBatchApproveButton}
+                                  />
+                                  <Button
+                                    aria-label="拒绝"
+                                    type={
+                                      approvalDraftDecisions[currentApprovalItem.itemId]?.action ===
+                                      'reject'
+                                        ? 'primary'
+                                        : 'default'
+                                    }
+                                    className="!flex !h-9 !w-9 !items-center !justify-center !rounded-[10px] !p-0"
+                                    icon={<HiXMark className="h-4 w-4" />}
+                                    onClick={() =>
+                                      setApprovalAction(currentApprovalItem.itemId, 'reject')
+                                    }
+                                    disabled={approvalSubmitting}
+                                    data-testid={chatSelectors.approvalBatchDenyButton}
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2">
+                                <input
+                                  className="min-w-0 flex-1 rounded-[10px] border border-[#E7CFA5] bg-white px-3 py-2 text-sm text-[#6F5311] outline-none placeholder:text-[#B68A2D] focus:border-[#D97757] focus:ring-2 focus:ring-[#F4E5DF]"
+                                  placeholder="告诉馆长该怎么做"
+                                  value={
+                                    approvalDraftDecisions[currentApprovalItem.itemId]?.message ||
+                                    ''
                                   }
-                                  data-testid={chatSelectors.approvalBatchApproveButton}
-                                >
-                                  同意
-                                </Button>
-                                <Button
-                                  onClick={() =>
-                                    setApprovalAction(currentApprovalItem.itemId, 'reject')
+                                  onChange={(event) =>
+                                    setApprovalGuideMessage(
+                                      currentApprovalItem.itemId,
+                                      event.target.value
+                                    )
                                   }
                                   disabled={approvalSubmitting}
-                                  data-testid={chatSelectors.approvalBatchDenyButton}
-                                >
-                                  拒绝
-                                </Button>
-                              </div>
-                              <input
-                                className="w-full rounded-[10px] border border-[#E7CFA5] bg-white px-3 py-2 text-sm text-[#6F5311] outline-none placeholder:text-[#B68A2D]"
-                                placeholder="告诉馆长该怎么做"
-                                value={
-                                  approvalDraftDecisions[currentApprovalItem.itemId]?.message || ''
-                                }
-                                onChange={(event) =>
-                                  setApprovalGuideMessage(
-                                    currentApprovalItem.itemId,
-                                    event.target.value
-                                  )
-                                }
-                                disabled={approvalSubmitting}
-                                data-testid={chatSelectors.approvalBatchGuideInput}
-                              />
-                              <div className="flex justify-end">
+                                  data-testid={chatSelectors.approvalBatchGuideInput}
+                                />
                                 <Button
                                   type="primary"
+                                  className="!flex !h-9 !items-center !gap-1 !rounded-[10px]"
+                                  icon={<HiArrowUp className="h-4 w-4" />}
                                   onClick={() => void handleApprovalBatchSubmit()}
                                   loading={approvalSubmitting}
                                   disabled={approvalSubmitDisabled}
                                   data-testid={chatSelectors.approvalBatchSubmitButton}
                                 >
-                                  提交审核结果
+                                  提交
                                 </Button>
                               </div>
                             </div>
@@ -2060,6 +2063,30 @@ const ChatPage: React.FC = () => {
                         </div>
                       </div>
                     ) : null}
+
+                    <WorkbenchComposer
+                      mode={composerMode}
+                      onModeChange={handleModeChange}
+                      activeModelConfig={activeModelConfig}
+                      remoteModels={remoteModels}
+                      selectedModelName={selectedModelName}
+                      onModelNameChange={handleModelNameChange}
+                      workspaces={workspaces}
+                      selectedWorkspaceId={selectedWorkspaceId}
+                      onWorkspaceChange={handleWorkspaceChange}
+                      onDraftChange={handleComposerDraftChange}
+                      onSubmit={() => void handleSend()}
+                      onCancel={() => void handleCancel()}
+                      loading={loading}
+                      canSubmit={Boolean(
+                        input.trim() &&
+                        selectedWorkspace &&
+                        (composerMode === 'search' || selectedModelName)
+                      )}
+                      showCancel={loading && composerMode === 'ai' && Boolean(aiRunId)}
+                      resetKey={composerResetKey}
+                      contextUsage={contextUsage}
+                    />
 
                     {composerMode === 'ai' &&
                     selectedReferences.some(hasIncompleteLocalKbCoverage) ? (

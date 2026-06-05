@@ -1,5 +1,6 @@
 import type {
   AiRunEvent,
+  AssistantProcessDisplay,
   IpcJsonArray,
   IpcJsonObject,
   IpcJsonValue,
@@ -14,9 +15,13 @@ import {
   WORKBENCH_PREFERENCE_WORKSPACE_STORAGE_KEY
 } from './constants'
 import type {
-  AssistantToolDetail,
+  AssistantProcessGroup,
+  AssistantProcessGroupItem,
+  AssistantProcessIconKind,
+  AssistantProcessSkillKey,
+  AssistantProcessStatus,
+  AssistantRichTextSegment,
   AssistantToolName,
-  AssistantProcessItem,
   WorkbenchFileRef,
   WorkbenchMode,
   WorkbenchModelPreference,
@@ -72,30 +77,19 @@ const isAssistantToolName = (toolName: string): toolName is AssistantToolName =>
 const normalizeToolName = (toolName: string): AssistantToolName =>
   isAssistantToolName(toolName) ? toolName : 'unnamed'
 
-const getEventTimestamp = (event: AiRunEvent): number =>
-  'createdAt' in event
-    ? event.createdAt
-    : 'completedAt' in event
-      ? event.completedAt
-      : 'decidedAt' in event
-        ? event.decidedAt
-        : Date.now()
+const text = (value: string, emphasis = false): AssistantRichTextSegment => ({
+  text: value,
+  emphasis
+})
 
-const getSkillDisplayName = (skillId?: RuntimeSkillId): string => {
-  if (skillId === 'terminal') return '跑指令能力'
-  if (skillId === 'kb-retrieval') return '资料检索能力'
-  if (skillId === 'docx-read' || skillId === 'docx-write') return '文档处理能力'
-  return '新能力'
-}
+const sentence = (...segments: AssistantRichTextSegment[]): AssistantRichTextSegment[] => segments
+
+const plainText = (segments: AssistantRichTextSegment[]): string =>
+  segments.map((segment) => segment.text).join('')
 
 const readStringValue = (value: IpcJsonObject, key: string): string | undefined => {
   const candidate = value[key]
   return typeof candidate === 'string' && candidate.trim() ? candidate.trim() : undefined
-}
-
-const readNumberValue = (value: IpcJsonObject, key: string): number | undefined => {
-  const candidate = value[key]
-  return typeof candidate === 'number' && Number.isFinite(candidate) ? candidate : undefined
 }
 
 const readFirstStringValue = (value: IpcJsonObject, keys: string[]): string | undefined => {
@@ -106,415 +100,304 @@ const readFirstStringValue = (value: IpcJsonObject, keys: string[]): string | un
   return undefined
 }
 
-const addToolDetail = (
-  details: AssistantToolDetail[],
-  label: string,
-  value: string | number | undefined
-): void => {
-  const text = String(value ?? '').trim()
-  if (!text) return
-  details.push({ label, value: text })
+const truncateMiddle = (value: string, maxLength: number): string => {
+  if (value.length <= maxLength) return value
+  const keep = Math.max(8, Math.floor((maxLength - 1) / 2))
+  return `${value.slice(0, keep)}…${value.slice(-keep)}`
 }
 
-const readDocxReadRange = (input: IpcJsonObject): string | undefined => {
-  const from =
-    readNumberValue(input, 'fromBlockIndex') ??
-    readNumberValue(input, 'fromIndex') ??
-    readNumberValue(input, 'startIndex')
-  const to =
-    readNumberValue(input, 'toBlockIndex') ??
-    readNumberValue(input, 'toIndex') ??
-    readNumberValue(input, 'endIndex')
-  if (typeof from === 'number' && typeof to === 'number') return `${from} - ${to}`
-  if (typeof from === 'number') return `从 ${from} 开始`
-  if (typeof to === 'number') return `到 ${to} 结束`
-  return undefined
-}
-
-const readDocxEditActionTypes = (input: IpcJsonObject): string | undefined => {
-  const actions = (input as Record<string, IpcJsonValue>).actions
-  if (!Array.isArray(actions)) return undefined
-  const actionTypes = actions
-    .map((action) =>
-      action && typeof action === 'object' && !Array.isArray(action)
-        ? readStringValue(action, 'type')
-        : undefined
-    )
-    .filter((actionType): actionType is string => Boolean(actionType))
-  return actionTypes.length > 0 ? actionTypes.join('、') : undefined
-}
-
-const buildToolDetails = (
-  toolName: AssistantToolName,
-  input: IpcJsonObject
-): AssistantToolDetail[] => {
-  const details: AssistantToolDetail[] = []
-  if (toolName === 'kb_search') {
-    addToolDetail(details, '查询词', readFirstStringValue(input, ['queryText', 'query']))
-    addToolDetail(details, '策略', readStringValue(input, 'strategy') || 'auto')
-    return details
-  }
-  if (toolName === 'kb_list_documents') {
-    addToolDetail(details, '过滤词', readFirstStringValue(input, ['sourceNameQuery', 'query']))
-    addToolDetail(
-      details,
-      '分页',
-      `第 ${readNumberValue(input, 'page') ?? 1} 页，每页 ${readNumberValue(input, 'pageSize') ?? 5} 条`
-    )
-    return details
-  }
-  if (toolName === 'terminal_run') {
-    addToolDetail(details, '命令', readStringValue(input, 'command'))
-    addToolDetail(details, 'cwd', readStringValue(input, 'cwd'))
-    return details
-  }
-  if (toolName === 'docx_search') {
-    addToolDetail(details, '目标文件', readFirstStringValue(input, ['sourcePath', 'path']))
-    addToolDetail(details, '查询词', readFirstStringValue(input, ['query', 'queryText', 'keyword']))
-    return details
-  }
-  if (
-    toolName === 'docx_read_blocks' ||
-    toolName === 'docx_outline' ||
-    toolName === 'docx_history'
-  ) {
-    addToolDetail(details, '文件名', readFirstStringValue(input, ['sourcePath', 'path']))
-    addToolDetail(details, '读取范围', readDocxReadRange(input) || '默认范围')
-    return details
-  }
-  if (toolName === 'docx_edit') {
-    addToolDetail(details, '目标文件', readFirstStringValue(input, ['sourcePath', 'path']))
-    addToolDetail(details, '操作类型', readDocxEditActionTypes(input))
-    return details
-  }
-  if (toolName === 'docx_rollback') {
-    addToolDetail(details, '目标文件', readFirstStringValue(input, ['sourcePath', 'path']))
-    addToolDetail(details, '操作类型', 'rollback')
-  }
-  return details
-}
-
-const getToolIconKind = (toolName: AssistantToolName) => {
-  if (toolName === 'terminal_run') return 'terminal' as const
-  if (toolName === 'docx_edit' || toolName === 'docx_rollback') return 'edit' as const
-  if (toolName === 'kb_search' || toolName === 'docx_search') return 'search-doc' as const
-  if (
-    toolName === 'kb_list_documents' ||
-    toolName === 'docx_outline' ||
-    toolName === 'docx_read_blocks' ||
-    toolName === 'docx_history'
-  ) {
-    return 'document' as const
-  }
-  return 'default' as const
-}
-
-const getToolStatusText = (
-  toolName: AssistantToolName,
-  status: 'active' | 'completed' | 'failed'
-): string => {
-  if (toolName === 'kb_search') {
-    if (status === 'active') return '俺正在搜索知识库线索'
-    if (status === 'completed') return '已完成搜索知识库线索'
-    return '搜索知识库线索失败了'
-  }
-  if (toolName === 'kb_list_documents') {
-    if (status === 'active') return '俺正在查看知识库资料'
-    if (status === 'completed') return '已完成查看知识库资料'
-    return '查看知识库资料失败了'
-  }
-  if (toolName === 'terminal_run') {
-    if (status === 'active') return '俺正在跑指令'
-    if (status === 'completed') return '已完成跑指令'
-    return '跑指令失败了'
-  }
-  if (toolName === 'docx_search') {
-    if (status === 'active') return '俺正在文档里查找内容'
-    if (status === 'completed') return '已完成文档内容查找'
-    return '文档内容查找失败了'
-  }
-  if (toolName === 'docx_read_blocks') {
-    if (status === 'active') return '俺正在读取文档内容'
-    if (status === 'completed') return '已完成文档内容读取'
-    return '文档内容读取失败了'
-  }
-  if (toolName === 'docx_outline') {
-    if (status === 'active') return '俺正在查看文档结构'
-    if (status === 'completed') return '已完成文档结构查看'
-    return '文档结构查看失败了'
-  }
-  if (toolName === 'docx_history') {
-    if (status === 'active') return '俺正在查看文档历史'
-    if (status === 'completed') return '已完成文档历史查看'
-    return '文档历史查看失败了'
-  }
-  if (toolName === 'docx_edit') {
-    if (status === 'active') return '俺正在编辑文档'
-    if (status === 'completed') return '已完成文档编辑'
-    return '文档编辑失败了'
-  }
-  if (toolName === 'docx_rollback') {
-    if (status === 'active') return '俺正在回退文档修改'
-    if (status === 'completed') return '已完成文档修改回退'
-    return '文档修改回退失败了'
-  }
-  if (status === 'active') return '未命名'
-  if (status === 'completed') return '已完成未命名步骤'
-  return '未命名步骤失败了'
-}
-
-const getLearningStatusText = (
-  skillId: RuntimeSkillId | undefined,
-  status: 'active' | 'completed' | 'failed'
-): string => {
-  const skillName = getSkillDisplayName(skillId)
-  if (status === 'active') return `俺在学习${skillName}`
-  if (status === 'completed') return `已学会${skillName}`
-  return `学习${skillName}失败了`
-}
-
-const getMouthStatusText = (status: 'active' | 'completed' | 'failed'): string => {
-  if (status === 'active') return '让俺收尾下'
-  if (status === 'completed') return '已完成收尾总结'
-  return '收尾总结失败了'
-}
-
-const getCompactionStatusText = (status: 'active' | 'completed' | 'failed'): string => {
-  if (status === 'active') return '让俺整理下，东西太多'
-  if (status === 'completed') return '已整理好上下文'
-  return '上下文整理失败了'
-}
-
-const buildProcessItem = (input: {
-  id: string
-  nodeKind: AssistantProcessItem['nodeKind']
-  variant: AssistantProcessItem['variant']
-  status: AssistantProcessItem['status']
-  isCurrent: boolean
-  createdAt: number
-  sourceEventType: AssistantProcessItem['sourceEventType']
-  iconKind: AssistantProcessItem['iconKind']
-  text?: string
-  details?: AssistantToolDetail[]
-  toolName?: AssistantToolName
-  skillId?: RuntimeSkillId
-}): AssistantProcessItem => ({
-  id: input.id,
-  nodeKind: input.nodeKind,
-  variant: input.variant,
-  text: input.text || '',
-  status: input.status,
-  isCurrent: input.isCurrent,
-  createdAt: input.createdAt,
-  sourceEventType: input.sourceEventType,
-  iconKind: input.iconKind,
-  details: input.details || [],
-  toolName: input.toolName,
-  skillId: input.skillId
-})
-
-const applyProcessItemState = (
-  item: AssistantProcessItem,
-  status: AssistantProcessItem['status'],
-  isCurrent: boolean
-): AssistantProcessItem => {
-  if (item.variant === 'hand_tool') {
-    return {
-      ...item,
-      status,
-      isCurrent,
-      text: getToolStatusText(item.toolName || 'unnamed', status)
-    }
-  }
-  if (item.variant === 'learning_skill') {
-    return {
-      ...item,
-      status,
-      isCurrent,
-      text: getLearningStatusText(item.skillId, status)
-    }
-  }
-  if (item.variant === 'mouth_summary') {
-    return {
-      ...item,
-      status,
-      isCurrent,
-      text: getMouthStatusText(status)
-    }
-  }
-  if (item.variant === 'context_compaction') {
-    return {
-      ...item,
-      status,
-      isCurrent,
-      text: getCompactionStatusText(status)
-    }
-  }
-  return {
-    ...item,
-    status,
-    isCurrent
-  }
-}
-
-const removeCurrentBrainPlaceholders = (items: AssistantProcessItem[]): AssistantProcessItem[] =>
-  items.filter((item) => !(item.variant === 'brain_placeholder' && item.isCurrent))
-
-const settleCurrentItemsForNextBrain = (items: AssistantProcessItem[]): AssistantProcessItem[] =>
-  items
-    .filter((item) => item.variant !== 'brain_placeholder')
-    .map((item) =>
-      item.isCurrent
-        ? applyProcessItemState(
-            item,
-            item.status === 'failed'
-              ? 'failed'
-              : item.status === 'completed'
-                ? 'completed'
-                : 'completed',
-            false
-          )
-        : item
-    )
-
-const clearCurrentFlags = (items: AssistantProcessItem[]): AssistantProcessItem[] =>
-  items
-    .filter((item) => item.variant !== 'brain_placeholder')
-    .map((item) => (item.isCurrent ? applyProcessItemState(item, item.status, false) : item))
-
-const upsertProcessItem = (
-  items: AssistantProcessItem[],
-  next: AssistantProcessItem
-): AssistantProcessItem[] => {
-  const existing = items.find((item) => item.id === next.id)
-  const merged =
-    existing && existing.details.length > 0 && next.details.length === 0
-      ? { ...next, details: existing.details }
-      : next
-  return [...items.filter((item) => item.id !== next.id), merged].sort(
-    (left, right) => left.createdAt - right.createdAt
+const readToolFileLabel = (input?: IpcJsonObject): string => {
+  if (!input) return '目标'
+  return (
+    readFirstStringValue(input, [
+      'fileName',
+      'file_name',
+      'sourceName',
+      'source_name',
+      'sourcePath',
+      'source_path',
+      'path',
+      'filePath',
+      'file_path'
+    ]) || '目标'
   )
 }
 
-const createBrainPlaceholderFromEvent = (event: AiRunEvent): AssistantProcessItem =>
-  buildProcessItem({
-    id: `${event.runId}:brain:${getEventTimestamp(event)}`,
-    nodeKind: 'brain',
-    variant: 'brain_placeholder',
-    status: 'active',
-    isCurrent: true,
-    createdAt: getEventTimestamp(event),
-    sourceEventType: event.type,
-    iconKind: 'brain',
-    text: '让俺想想'
-  })
+const readToolQueryLabel = (input?: IpcJsonObject): string => {
+  if (!input) return '相关内容'
+  return (
+    readFirstStringValue(input, ['queryText', 'query', 'keyword', 'sourceNameQuery']) || '相关内容'
+  )
+}
 
-const createSearchPlaceholderItem = (messageId: string): AssistantProcessItem =>
-  buildProcessItem({
-    id: `${messageId}:search`,
-    nodeKind: 'search',
-    variant: 'search_placeholder',
-    status: 'active',
-    isCurrent: true,
-    createdAt: Date.now(),
-    sourceEventType: 'thinking',
-    iconKind: 'search',
-    text: '让俺找找'
-  })
+const readCommandLabel = (input?: IpcJsonObject): string => {
+  if (!input) return '一条本地命令'
+  const command = readStringValue(input, 'command')
+  return command ? truncateMiddle(command, 96) : '一条本地命令'
+}
 
-const createBrainThoughtItem = (
-  event: Extract<AiRunEvent, { type: 'human_step' }>
-): AssistantProcessItem =>
-  buildProcessItem({
-    id: `${event.taskId}:brain:${event.stepIndex}`,
-    nodeKind: 'brain',
-    variant: 'brain_thought',
-    status: event.resultStatus === 'error' ? 'failed' : 'active',
-    isCurrent: true,
-    createdAt: event.createdAt,
-    sourceEventType: event.type,
-    iconKind: 'brain',
-    text: event.publicNarrative.trim() || event.summary || '俺在判断下一步怎么做'
-  })
+const getSkillDisplayName = (skillId?: RuntimeSkillId): string => {
+  if (skillId === 'terminal') return '命令执行器'
+  if (skillId === 'kb-retrieval') return '资料查阅器'
+  if (skillId === 'docx-read') return 'docx 阅读器'
+  if (skillId === 'docx-write') return 'docx 写作器'
+  return '新能力'
+}
 
-const createLearningItem = (
-  event: Extract<AiRunEvent, { type: 'human_step' }>
-): AssistantProcessItem =>
-  buildProcessItem({
-    id: `${event.taskId}:learning:${event.stepIndex}:${event.skillId || 'unknown'}`,
-    nodeKind: 'learning',
-    variant: 'learning_skill',
-    status: event.resultStatus === 'error' ? 'failed' : 'active',
-    isCurrent: true,
-    createdAt: event.createdAt,
-    sourceEventType: event.type,
-    iconKind: 'learning',
-    text: getLearningStatusText(
-      event.skillId,
-      event.resultStatus === 'error' ? 'failed' : 'active'
-    ),
-    skillId: event.skillId
-  })
+const getToolSkillKey = (toolName: AssistantToolName): AssistantProcessSkillKey => {
+  if (
+    toolName === 'docx_outline' ||
+    toolName === 'docx_read_blocks' ||
+    toolName === 'docx_history' ||
+    toolName === 'docx_search'
+  ) {
+    return 'docx-reader'
+  }
+  if (toolName === 'docx_edit' || toolName === 'docx_rollback') return 'docx-writer'
+  if (toolName === 'kb_search' || toolName === 'kb_list_documents') return 'reference-reader'
+  if (toolName === 'terminal_run') return 'terminal-runner'
+  return 'generic-task'
+}
 
-const createMouthItem = (
-  event: Extract<AiRunEvent, { type: 'human_step' }>
-): AssistantProcessItem =>
-  buildProcessItem({
-    id: `${event.taskId}:mouth:${event.stepIndex}`,
-    nodeKind: 'mouth',
-    variant: 'mouth_summary',
-    status: event.resultStatus === 'error' ? 'failed' : 'active',
-    isCurrent: event.resultStatus !== 'error',
-    createdAt: event.createdAt,
-    sourceEventType: event.type,
-    iconKind: 'mouth',
-    text: getMouthStatusText(event.resultStatus === 'error' ? 'failed' : 'active')
-  })
+const getDisplaySkillKey = (display: AssistantProcessDisplay): AssistantProcessSkillKey => {
+  if (display.kind === 'tool') return getToolSkillKey(normalizeToolName(display.toolName))
+  return 'generic-task'
+}
 
-const createHandToolItem = (
-  event: Extract<AiRunEvent, { type: 'tool_call_started' | 'tool_call_result' }>
-): AssistantProcessItem => {
-  const toolName = normalizeToolName(event.toolName)
-  const status =
-    event.type === 'tool_call_result'
-      ? event.error || event.result?.ok === false
-        ? 'failed'
-        : 'completed'
-      : 'active'
-  return buildProcessItem({
-    id: event.toolCallId,
-    nodeKind: 'hand',
-    variant: 'hand_tool',
-    status,
-    isCurrent: event.type === 'tool_call_started',
-    createdAt: getEventTimestamp(event),
-    sourceEventType: event.type,
-    iconKind: getToolIconKind(toolName),
-    text: getToolStatusText(toolName, status),
-    details: event.type === 'tool_call_started' ? buildToolDetails(toolName, event.input) : [],
-    toolName
+const getSkillIconKind = (skillKey: AssistantProcessSkillKey): AssistantProcessIconKind => {
+  if (skillKey === 'docx-writer') return 'edit'
+  if (skillKey === 'docx-reader') return 'document'
+  if (skillKey === 'reference-reader') return 'search'
+  if (skillKey === 'terminal-runner') return 'terminal'
+  return 'default'
+}
+
+const getDisplayIconKind = (display: AssistantProcessDisplay): AssistantProcessIconKind => {
+  if (display.kind === 'thinking') return 'default'
+  if (display.kind === 'learning') return 'learning'
+  if (display.kind === 'compaction') return 'compaction'
+  return getSkillIconKind(getDisplaySkillKey(display))
+}
+
+const getSkillHeaderText = (
+  skillKey: AssistantProcessSkillKey,
+  status: AssistantProcessStatus
+): AssistantRichTextSegment[] => {
+  if (skillKey === 'docx-reader') {
+    if (status === 'running') return sentence(text('俺正在阅读 '), text('docx', true))
+    if (status === 'completed') return sentence(text('俺已阅读完 '), text('docx', true))
+    return sentence(text('阅读 '), text('docx', true), text(' 失败了'))
+  }
+  if (skillKey === 'docx-writer') {
+    if (status === 'running') return sentence(text('俺正在写 '), text('docx', true))
+    if (status === 'completed') return sentence(text('俺已写完 '), text('docx', true))
+    return sentence(text('写 '), text('docx', true), text(' 失败了'))
+  }
+  if (skillKey === 'reference-reader') {
+    if (status === 'running') return sentence(text('俺正在查阅资料'))
+    if (status === 'completed') return sentence(text('俺已查阅完资料'))
+    return sentence(text('查阅资料失败了'))
+  }
+  if (skillKey === 'terminal-runner') {
+    if (status === 'running') return sentence(text('俺在跑命令呢，等等俺'))
+    if (status === 'completed') return sentence(text('俺已跑完命令'))
+    return sentence(text('跑命令失败了'))
+  }
+  if (status === 'running') return sentence(text('俺正在处理任务'))
+  if (status === 'completed') return sentence(text('俺已处理完任务'))
+  return sentence(text('处理任务失败了'))
+}
+
+const buildToolNarrative = (
+  toolName: AssistantToolName,
+  status: AssistantProcessStatus,
+  input?: IpcJsonObject
+): AssistantRichTextSegment[] => {
+  const fileLabel = readToolFileLabel(input)
+  const queryLabel = readToolQueryLabel(input)
+  const commandLabel = readCommandLabel(input)
+
+  if (toolName === 'docx_outline') {
+    if (status === 'running') {
+      return sentence(text('正在阅读 '), text(fileLabel, true), text(' 文件的结构'))
+    }
+    if (status === 'completed') {
+      return sentence(text('已阅读 '), text(fileLabel, true), text(' 文件的结构'))
+    }
+    return sentence(text('阅读 '), text(fileLabel, true), text(' 文件的结构失败了'))
+  }
+  if (toolName === 'docx_read_blocks') {
+    if (status === 'running') {
+      return sentence(text('正在阅读 '), text(fileLabel, true), text(' 文件细节'))
+    }
+    if (status === 'completed') {
+      return sentence(text('已阅读 '), text(fileLabel, true), text(' 文件细节'))
+    }
+    return sentence(text('阅读 '), text(fileLabel, true), text(' 文件细节失败了'))
+  }
+  if (toolName === 'docx_edit') {
+    if (status === 'running')
+      return sentence(text('正在编辑 '), text(fileLabel, true), text(' 文件'))
+    if (status === 'completed')
+      return sentence(text('已编辑 '), text(fileLabel, true), text(' 文件'))
+    return sentence(text('编辑 '), text(fileLabel, true), text(' 文件失败了'))
+  }
+  if (toolName === 'docx_history') {
+    if (status === 'running') {
+      return sentence(text('正在检查 '), text(fileLabel, true), text(' 文件的修改历史'))
+    }
+    if (status === 'completed') {
+      return sentence(text('已检查 '), text(fileLabel, true), text(' 文件的修改历史'))
+    }
+    return sentence(text('检查 '), text(fileLabel, true), text(' 文件的修改历史失败了'))
+  }
+  if (toolName === 'terminal_run') {
+    if (status === 'running') return sentence(text('正在执行 '), text(commandLabel, true))
+    if (status === 'completed') return sentence(text('已执行 '), text(commandLabel, true))
+    return sentence(text('执行 '), text(commandLabel, true), text(' 失败了'))
+  }
+  if (toolName === 'kb_search' || toolName === 'docx_search') {
+    if (status === 'running') return sentence(text('正在搜索 '), text(queryLabel, true))
+    if (status === 'completed') return sentence(text('已搜索 '), text(queryLabel, true))
+    return sentence(text('搜索 '), text(queryLabel, true), text(' 失败了'))
+  }
+  if (toolName === 'kb_list_documents') {
+    if (status === 'running') return sentence(text('正在查看资料列表'))
+    if (status === 'completed') return sentence(text('已查看资料列表'))
+    return sentence(text('查看资料列表失败了'))
+  }
+  if (status === 'running') return sentence(text('正在处理任务中的一步'))
+  if (status === 'completed') return sentence(text('已处理任务中的一步'))
+  return sentence(text('这一步没跑通'))
+}
+
+const getDisplayGroupText = (
+  display: AssistantProcessDisplay,
+  status: AssistantProcessStatus
+): AssistantRichTextSegment[] => {
+  if (display.kind === 'thinking') {
+    if (status === 'running') return sentence(text('让俺想想'))
+    if (status === 'completed') return sentence(text('俺想好了'))
+    return sentence(text('俺没想明白'))
+  }
+  if (display.kind === 'learning') {
+    const skillName = getSkillDisplayName(display.skillId)
+    if (status === 'running') return sentence(text('俺在学 '), text(skillName, true))
+    if (status === 'completed') return sentence(text('已学完 '), text(skillName, true))
+    return sentence(text('学习 '), text(skillName, true), text(' 失败了'))
+  }
+  if (display.kind === 'compaction') {
+    if (status === 'running') return sentence(text('怎么这么多东西，太多了，俺要整理下！！'))
+    if (status === 'completed') return sentence(text('呼，终于整理完了'))
+    return sentence(text('上下文整理失败了'))
+  }
+  return getSkillHeaderText(getDisplaySkillKey(display), status)
+}
+
+const getDisplayItemText = (
+  display: AssistantProcessDisplay,
+  status: AssistantProcessStatus
+): AssistantRichTextSegment[] => {
+  if (display.kind === 'tool') {
+    return buildToolNarrative(normalizeToolName(display.toolName), status, display.input)
+  }
+  return getDisplayGroupText(display, status)
+}
+
+const createProcessGroup = (input: {
+  id: string
+  kind: AssistantProcessGroup['kind']
+  skillKey: AssistantProcessSkillKey
+  iconKind: AssistantProcessIconKind
+  status: AssistantProcessStatus
+  runningText: AssistantRichTextSegment[]
+  completedText: AssistantRichTextSegment[]
+  failedText: AssistantRichTextSegment[]
+  items?: AssistantProcessGroupItem[]
+  createdAt: number
+  sourceEventType: AssistantProcessGroup['sourceEventType']
+  skillId?: RuntimeSkillId
+}): AssistantProcessGroup => ({
+  id: input.id,
+  kind: input.kind,
+  skillKey: input.skillKey,
+  iconKind: input.iconKind,
+  status: input.status,
+  runningText: input.runningText,
+  completedText: input.completedText,
+  failedText: input.failedText,
+  items: input.items || [],
+  createdAt: input.createdAt,
+  sourceEventType: input.sourceEventType,
+  skillId: input.skillId
+})
+
+const resolveGroupStatus = (items: AssistantProcessGroupItem[]): AssistantProcessStatus => {
+  if (items.some((item) => item.status === 'running')) return 'running'
+  if (items.some((item) => item.status === 'failed')) return 'failed'
+  return 'completed'
+}
+
+const upsertProcessGroup = (
+  groups: AssistantProcessGroup[],
+  next: AssistantProcessGroup
+): AssistantProcessGroup[] =>
+  [...groups.filter((group) => group.id !== next.id), next].sort(
+    (left, right) => left.createdAt - right.createdAt
+  )
+
+const mergeProcessGroup = (
+  groups: AssistantProcessGroup[],
+  groupId: string,
+  mapper: (group: AssistantProcessGroup) => AssistantProcessGroup
+): AssistantProcessGroup[] =>
+  groups.map((group) => (group.id === groupId ? mapper(group) : group))
+
+const createDisplayProcessGroup = (input: {
+  groupId: string
+  kind: AssistantProcessGroup['kind']
+  display: AssistantProcessDisplay
+  status: AssistantProcessStatus
+  createdAt: number
+  sourceEventType: AssistantProcessGroup['sourceEventType']
+}): AssistantProcessGroup => {
+  const skillKey = getDisplaySkillKey(input.display)
+  return createProcessGroup({
+    id: input.groupId,
+    kind: input.kind,
+    skillKey,
+    iconKind: getDisplayIconKind(input.display),
+    status: input.status,
+    runningText: getDisplayGroupText(input.display, 'running'),
+    completedText: getDisplayGroupText(input.display, 'completed'),
+    failedText: getDisplayGroupText(input.display, 'failed'),
+    createdAt: input.createdAt,
+    sourceEventType: input.sourceEventType,
+    skillId: input.display.kind === 'learning' ? input.display.skillId : undefined
   })
 }
 
-const createCompactionItem = (
-  event: Extract<
-    AiRunEvent,
-    { type: 'context_compaction_started' | 'context_compaction_completed' }
-  >
-): AssistantProcessItem =>
-  buildProcessItem({
-    id: `${event.runId}:context-compaction`,
-    nodeKind: 'context_compaction',
-    variant: 'context_compaction',
-    status: event.type === 'context_compaction_completed' ? 'completed' : 'active',
-    isCurrent: event.type === 'context_compaction_started',
-    createdAt: getEventTimestamp(event),
-    sourceEventType: event.type,
-    iconKind: 'compaction',
-    text: getCompactionStatusText(
-      event.type === 'context_compaction_completed' ? 'completed' : 'active'
-    )
-  })
+const createDisplayProcessItem = (input: {
+  itemId: string
+  display: AssistantProcessDisplay
+  status: AssistantProcessStatus
+  createdAt: number
+  sourceEventType: AssistantProcessGroupItem['sourceEventType']
+  existing?: AssistantProcessGroupItem
+}): AssistantProcessGroupItem => {
+  const toolName =
+    input.display.kind === 'tool' ? normalizeToolName(input.display.toolName) : undefined
+  return {
+    id: input.itemId,
+    status: input.status,
+    runningText: input.existing?.runningText || getDisplayItemText(input.display, 'running'),
+    completedText: input.existing?.completedText || getDisplayItemText(input.display, 'completed'),
+    failedText: input.existing?.failedText || getDisplayItemText(input.display, 'failed'),
+    createdAt: input.existing?.createdAt || input.createdAt,
+    sourceEventType: input.sourceEventType,
+    toolName
+  }
+}
 
 const createFileRefFromObject = (
   item: IpcJsonObject,
@@ -544,171 +427,257 @@ const createFileRefFromObject = (
 }
 
 export const getAssistantToolNarrative = (toolName?: string): string =>
-  getToolStatusText(normalizeToolName(String(toolName || '')), 'active')
+  plainText(
+    getSkillHeaderText(getToolSkillKey(normalizeToolName(String(toolName || ''))), 'running')
+  )
 
 export const buildAssistantProcessText = (event: AiRunEvent): string | null => {
-  if (event.type === 'human_step') {
-    if (event.stage === 'human_learning' || event.action === 'learn_skill') {
-      return getLearningStatusText(
-        event.skillId,
-        event.resultStatus === 'error' ? 'failed' : 'active'
-      )
-    }
-    if (event.stage === 'human_mouth' || event.action === 'deliver_result') {
-      return getMouthStatusText(event.resultStatus === 'error' ? 'failed' : 'active')
-    }
-    if (event.stage === 'human_brain') {
-      return event.publicNarrative.trim() || event.summary || '俺在判断下一步怎么做'
-    }
-    return null
+  if (event.type === 'assistant_process_group_started') {
+    return plainText(getDisplayGroupText(event.display, 'running'))
   }
-  if (event.type === 'tool_call_started' || event.type === 'tool_call_result') {
-    return getToolStatusText(
-      normalizeToolName(event.toolName),
-      event.type === 'tool_call_started'
-        ? 'active'
-        : event.error || event.result?.ok === false
-          ? 'failed'
-          : 'completed'
-    )
+  if (event.type === 'assistant_process_group_completed') {
+    return event.display ? plainText(getDisplayGroupText(event.display, 'completed')) : null
   }
-  if (
-    event.type === 'context_compaction_started' ||
-    event.type === 'context_compaction_completed'
-  ) {
-    return getCompactionStatusText(
-      event.type === 'context_compaction_started' ? 'active' : 'completed'
-    )
+  if (event.type === 'assistant_process_group_failed') {
+    return event.display ? plainText(getDisplayGroupText(event.display, 'failed')) : null
+  }
+  if (event.type === 'assistant_process_item_started') {
+    return plainText(getDisplayItemText(event.display, 'running'))
+  }
+  if (event.type === 'assistant_process_item_completed') {
+    return event.display ? plainText(getDisplayItemText(event.display, 'completed')) : null
+  }
+  if (event.type === 'assistant_process_item_failed') {
+    return event.display ? plainText(getDisplayItemText(event.display, 'failed')) : null
   }
   return null
 }
 
-export const createAssistantPlaceholderItem = (
-  messageId: string,
-  text = '让俺想下'
-): AssistantProcessItem =>
-  text === '让俺找找'
-    ? createSearchPlaceholderItem(messageId)
-    : buildProcessItem({
-        id: `${messageId}:brain`,
-        nodeKind: 'brain',
-        variant: 'brain_placeholder',
-        status: 'active',
-        isCurrent: true,
-        createdAt: Date.now(),
-        sourceEventType: 'thinking',
-        iconKind: 'brain',
-        text
+export const createAssistantThinkingGroup = (messageId: string): AssistantProcessGroup =>
+  createProcessGroup({
+    id: `${messageId}:thinking`,
+    kind: 'thinking',
+    skillKey: 'generic-task',
+    iconKind: 'default',
+    status: 'running',
+    runningText: sentence(text('让俺想想')),
+    completedText: sentence(text('俺想好了')),
+    failedText: sentence(text('俺没想明白')),
+    createdAt: Date.now(),
+    sourceEventType: 'thinking'
+  })
+
+export const createSearchProcessGroup = (messageId: string): AssistantProcessGroup =>
+  createProcessGroup({
+    id: `${messageId}:search`,
+    kind: 'skill',
+    skillKey: 'reference-reader',
+    iconKind: 'search',
+    status: 'running',
+    runningText: getSkillHeaderText('reference-reader', 'running'),
+    completedText: getSkillHeaderText('reference-reader', 'completed'),
+    failedText: getSkillHeaderText('reference-reader', 'failed'),
+    createdAt: Date.now(),
+    sourceEventType: 'thinking'
+  })
+
+export const completeAssistantProcessGroups = (
+  groups: AssistantProcessGroup[],
+  status: AssistantProcessStatus = 'completed'
+): AssistantProcessGroup[] =>
+  groups.map((group) => {
+    if (group.status !== 'running') return group
+    const nextItems = group.items.map((item) =>
+      item.status === 'running' ? { ...item, status } : item
+    )
+    return {
+      ...group,
+      status: status === 'failed' ? 'failed' : resolveGroupStatus(nextItems),
+      items: nextItems
+    }
+  })
+
+const upsertGroupFromDisplayEvent = (
+  current: AssistantProcessGroup[],
+  input: {
+    groupId: string
+    kind: AssistantProcessGroup['kind']
+    display: AssistantProcessDisplay
+    status: AssistantProcessStatus
+    createdAt: number
+    sourceEventType: AssistantProcessGroup['sourceEventType']
+  }
+): AssistantProcessGroup[] => {
+  const currentWithoutLocalThinking =
+    input.display.kind === 'thinking'
+      ? current.filter(
+          (group) => !(group.kind === 'thinking' && group.sourceEventType === 'thinking')
+        )
+      : current
+  const existing = currentWithoutLocalThinking.find((group) => group.id === input.groupId)
+  const next = createDisplayProcessGroup({
+    groupId: input.groupId,
+    kind: input.kind,
+    display: input.display,
+    status: input.status,
+    createdAt: existing?.createdAt || input.createdAt,
+    sourceEventType: input.sourceEventType
+  })
+  return upsertProcessGroup(currentWithoutLocalThinking, {
+    ...next,
+    items: existing?.items || []
+  })
+}
+
+const completeProcessGroupById = (
+  current: AssistantProcessGroup[],
+  groupId: string,
+  status: AssistantProcessStatus,
+  display?: AssistantProcessDisplay
+): AssistantProcessGroup[] =>
+  mergeProcessGroup(current, groupId, (group) => {
+    const nextItems =
+      status === 'failed'
+        ? group.items.map((item) => (item.status === 'running' ? { ...item, status } : item))
+        : group.items
+    return {
+      ...group,
+      status: status === 'completed' && nextItems.length > 0 ? resolveGroupStatus(nextItems) : status,
+      runningText: display ? getDisplayGroupText(display, 'running') : group.runningText,
+      completedText: display ? getDisplayGroupText(display, 'completed') : group.completedText,
+      failedText: display ? getDisplayGroupText(display, 'failed') : group.failedText,
+      items: nextItems
+    }
+  })
+
+const upsertProcessItem = (
+  current: AssistantProcessGroup[],
+  input: {
+    groupId: string
+    itemId: string
+    display: AssistantProcessDisplay
+    status: AssistantProcessStatus
+    createdAt: number
+    sourceEventType: AssistantProcessGroupItem['sourceEventType']
+  }
+): AssistantProcessGroup[] => {
+  const existingGroup = current.find((group) => group.id === input.groupId)
+  const groupsWithParent = existingGroup
+    ? current
+    : upsertGroupFromDisplayEvent(current, {
+        groupId: input.groupId,
+        kind: input.display.kind === 'tool' ? 'skill' : input.display.kind,
+        display: input.display,
+        status: 'running',
+        createdAt: input.createdAt,
+        sourceEventType: input.sourceEventType
       })
 
-export const createAssistantThinkingItem = (messageId: string): AssistantProcessItem =>
-  createAssistantPlaceholderItem(messageId)
-
-export const createAssistantProcessItem = (
-  event: AiRunEvent,
-  options?: { id?: string; text?: string }
-): AssistantProcessItem | null => {
-  if (event.type === 'human_step') {
-    if (event.stage === 'human_hand') return null
-    if (event.stage === 'human_learning' || event.action === 'learn_skill') {
-      const learningItem = createLearningItem(event)
-      return options?.text ? { ...learningItem, text: options.text } : learningItem
+  return mergeProcessGroup(groupsWithParent, input.groupId, (group) => {
+    const existingItem = group.items.find((item) => item.id === input.itemId)
+    const nextItem = createDisplayProcessItem({
+      itemId: input.itemId,
+      display: input.display,
+      status: input.status,
+      createdAt: input.createdAt,
+      sourceEventType: input.sourceEventType,
+      existing: existingItem
+    })
+    return {
+      ...group,
+      status: 'running',
+      items: [...group.items.filter((item) => item.id !== input.itemId), nextItem].sort(
+        (left, right) => left.createdAt - right.createdAt
+      )
     }
-    if (event.stage === 'human_mouth' || event.action === 'deliver_result') {
-      const mouthItem = createMouthItem(event)
-      return options?.text ? { ...mouthItem, text: options.text } : mouthItem
-    }
-    const thoughtItem = createBrainThoughtItem(event)
-    return options?.text ? { ...thoughtItem, text: options.text } : thoughtItem
-  }
-  if (event.type === 'tool_call_started' || event.type === 'tool_call_result') {
-    const toolItem = createHandToolItem(event)
-    return options?.text ? { ...toolItem, text: options.text } : toolItem
-  }
-  if (
-    event.type === 'context_compaction_started' ||
-    event.type === 'context_compaction_completed'
-  ) {
-    const compactionItem = createCompactionItem(event)
-    return options?.text ? { ...compactionItem, text: options.text } : compactionItem
-  }
-  return null
+  })
 }
 
-export const reduceAssistantProcessItems = (
-  current: AssistantProcessItem[],
+const completeProcessItem = (
+  current: AssistantProcessGroup[],
+  input: {
+    groupId: string
+    itemId: string
+    status: AssistantProcessStatus
+    display?: AssistantProcessDisplay
+    sourceEventType: AssistantProcessGroupItem['sourceEventType']
+  }
+): AssistantProcessGroup[] =>
+  mergeProcessGroup(current, input.groupId, (group) => {
+    const nextItems = group.items.map((item) => {
+      if (item.id !== input.itemId) return item
+      return {
+        ...item,
+        status: input.status,
+        completedText: input.display
+          ? getDisplayItemText(input.display, 'completed')
+          : item.completedText,
+        failedText: input.display ? getDisplayItemText(input.display, 'failed') : item.failedText,
+        sourceEventType: input.sourceEventType
+      }
+    })
+    return {
+      ...group,
+      status: resolveGroupStatus(nextItems),
+      items: nextItems
+    }
+  })
+
+export const reduceAssistantProcessGroups = (
+  current: AssistantProcessGroup[],
   event: AiRunEvent
-): AssistantProcessItem[] => {
-  if (event.type === 'human_step') {
-    if (event.stage === 'human_hand') return current
-    if (event.stage === 'human_brain') {
-      const next = createBrainThoughtItem(event)
-      return upsertProcessItem(
-        removeCurrentBrainPlaceholders(settleCurrentItemsForNextBrain(current)),
-        next
-      )
+): AssistantProcessGroup[] => {
+  if (event.type === 'assistant_process_group_started') {
+    return upsertGroupFromDisplayEvent(current, {
+      groupId: event.groupId,
+      kind: event.kind,
+      display: event.display,
+      status: 'running',
+      createdAt: event.createdAt,
+      sourceEventType: event.type
+    })
+  }
+
+  if (event.type === 'assistant_process_group_completed') {
+    if (event.groupId.endsWith(':thinking')) {
+      return current.filter((group) => group.id !== event.groupId)
     }
-    if (event.stage === 'human_learning' || event.action === 'learn_skill') {
-      return upsertProcessItem(current, createLearningItem(event))
-    }
-    if (event.stage === 'human_mouth' || event.action === 'deliver_result') {
-      const currentHasCompletedMouth = current.some(
-        (item) => item.nodeKind === 'mouth' && item.status === 'completed'
-      )
-      if (currentHasCompletedMouth) return current
-      return upsertProcessItem(removeCurrentBrainPlaceholders(current), createMouthItem(event))
-    }
-    return current
+    return completeProcessGroupById(current, event.groupId, 'completed', event.display)
   }
 
-  if (event.type === 'tool_call_started') {
-    return upsertProcessItem(current, createHandToolItem(event))
+  if (event.type === 'assistant_process_group_failed') {
+    return completeProcessGroupById(current, event.groupId, 'failed', event.display)
   }
 
-  if (event.type === 'tool_call_result') {
-    const withCompletedTool = upsertProcessItem(current, createHandToolItem(event))
-    const settled = settleCurrentItemsForNextBrain(withCompletedTool)
-    return upsertProcessItem(settled, createBrainPlaceholderFromEvent(event))
+  if (event.type === 'assistant_process_item_started') {
+    return upsertProcessItem(current, {
+      groupId: event.groupId,
+      itemId: event.itemId,
+      display: event.display,
+      status: 'running',
+      createdAt: event.createdAt,
+      sourceEventType: event.type
+    })
   }
 
-  if (event.type === 'context_compaction_started') {
-    return upsertProcessItem(current, createCompactionItem(event))
+  if (event.type === 'assistant_process_item_completed') {
+    return completeProcessItem(current, {
+      groupId: event.groupId,
+      itemId: event.itemId,
+      status: 'completed',
+      display: event.display,
+      sourceEventType: event.type
+    })
   }
 
-  if (event.type === 'context_compaction_completed') {
-    const withCompletedCompaction = upsertProcessItem(current, createCompactionItem(event))
-    const settled = settleCurrentItemsForNextBrain(withCompletedCompaction)
-    return upsertProcessItem(settled, createBrainPlaceholderFromEvent(event))
-  }
-
-  if (event.type === 'answer_token') {
-    const nextItems = removeCurrentBrainPlaceholders(current)
-    const hasActiveMouth = nextItems.some(
-      (item) => item.nodeKind === 'mouth' && item.status === 'active'
-    )
-    if (hasActiveMouth) return nextItems
-    return upsertProcessItem(
-      nextItems,
-      buildProcessItem({
-        id: `${event.runId}:mouth`,
-        nodeKind: 'mouth',
-        variant: 'mouth_summary',
-        status: 'active',
-        isCurrent: true,
-        createdAt: Date.now(),
-        sourceEventType: event.type,
-        iconKind: 'mouth',
-        text: getMouthStatusText('active')
-      })
-    )
-  }
-
-  if (event.type === 'answer_completed') {
-    return current
-      .filter((item) => item.variant !== 'brain_placeholder')
-      .map((item) =>
-        item.nodeKind === 'mouth' ? applyProcessItemState(item, 'completed', false) : item
-      )
+  if (event.type === 'assistant_process_item_failed') {
+    return completeProcessItem(current, {
+      groupId: event.groupId,
+      itemId: event.itemId,
+      status: 'failed',
+      display: event.display,
+      sourceEventType: event.type
+    })
   }
 
   if (
@@ -716,16 +685,11 @@ export const reduceAssistantProcessItems = (
     event.type === 'runtime_issue' ||
     event.type === 'run_cancelled'
   ) {
-    return clearCurrentFlags(current)
+    return completeAssistantProcessGroups(current, 'failed')
   }
 
   return current
 }
-
-export const mergeAssistantProcessItem = (
-  current: AssistantProcessItem[],
-  next: AssistantProcessItem
-): AssistantProcessItem[] => upsertProcessItem(current, next)
 
 export const dedupeFileRefs = (items: WorkbenchFileRef[]): WorkbenchFileRef[] => {
   const seen = new Set<string>()

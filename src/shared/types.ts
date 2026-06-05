@@ -589,6 +589,12 @@ export type AiRunEventStage =
   | 'human_learning'
   | 'human_hand'
   | 'human_mouth'
+export type AssistantProcessDisplay =
+  | { kind: 'thinking' }
+  | { kind: 'learning'; skillId: RuntimeSkillId }
+  | { kind: 'tool'; toolName: string; input: IpcJsonObject }
+  | { kind: 'compaction' }
+export type AssistantProcessKind = 'thinking' | 'skill' | 'learning' | 'compaction'
 export type AiToolCallDiagnostic = {
   message: string
 }
@@ -767,6 +773,54 @@ type AiRunEventPayload =
       sessionId: string
       createdAt: number
       input: string
+    }
+  | {
+      type: 'assistant_process_group_started'
+      runId: string
+      groupId: string
+      kind: AssistantProcessKind
+      display: AssistantProcessDisplay
+      createdAt: number
+    }
+  | {
+      type: 'assistant_process_group_completed'
+      runId: string
+      groupId: string
+      display?: AssistantProcessDisplay
+      completedAt: number
+    }
+  | {
+      type: 'assistant_process_group_failed'
+      runId: string
+      groupId: string
+      display?: AssistantProcessDisplay
+      error?: string
+      failedAt: number
+    }
+  | {
+      type: 'assistant_process_item_started'
+      runId: string
+      groupId: string
+      itemId: string
+      display: AssistantProcessDisplay
+      createdAt: number
+    }
+  | {
+      type: 'assistant_process_item_completed'
+      runId: string
+      groupId: string
+      itemId: string
+      display?: AssistantProcessDisplay
+      completedAt: number
+    }
+  | {
+      type: 'assistant_process_item_failed'
+      runId: string
+      groupId: string
+      itemId: string
+      display?: AssistantProcessDisplay
+      error?: string
+      failedAt: number
     }
   | {
       type: 'tool_call_started'

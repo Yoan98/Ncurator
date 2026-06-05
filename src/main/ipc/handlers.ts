@@ -9,6 +9,7 @@ import { StorageService } from '../services/storage/StorageService'
 import { ModelService } from '../services/model/ModelService'
 import { fetchLlmRemoteModels } from '../services/llm/modelCatalog'
 import { AiRunService } from '../services/ai/AiRunService'
+import { emitThinkingStarted } from '../services/ai/events/processEvents'
 import { updateConversationMemoryAfterRun } from '../services/ai/memory'
 import { getAiContextUsage } from '../services/ai/contextUsage'
 import { DocxApplyService } from '../services/ai/human/tools/docx/review/DocxApplyService'
@@ -2932,6 +2933,7 @@ export function registerHandlers(services: {
       }
 
       sendEvent({ type: 'run_started', runId, sessionId, createdAt: Date.now(), input })
+      emitThinkingStarted({ sendEvent, runId })
       docxApplyService.beginRun({
         runId,
         sessionId,
@@ -3007,17 +3009,11 @@ export function registerHandlers(services: {
                     }
                   | { accepted: false; error: string }
                 >((resolve) => {
-                  const timeout = setTimeout(() => {
-                    activeAiApprovals.delete(runId)
-                    resolve({ accepted: false, error: 'approval timeout' })
-                  }, 60_000)
-
                   activeAiApprovals.set(runId, {
                     batchId: request.batchId,
                     taskId: request.taskId,
                     itemIds: request.items.map((item) => item.itemId),
                     resolve: (result) => {
-                      clearTimeout(timeout)
                       activeAiApprovals.delete(runId)
                       sendEvent({
                         type: 'approval_batch_decision',

@@ -1,10 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { tool } from '@langchain/core/tools'
-import type {
-  AiToolCallResult,
-  JsonObject,
-  IpcJsonObject
-} from '../../../../../../shared/types'
+import type { AiToolCallResult, JsonObject, IpcJsonObject } from '../../../../../../shared/types'
 import type { TerminalToolContext } from '../../../types'
 import { DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS } from '../../constants'
 import type { HumanDecisionHint } from '../../types'
@@ -18,13 +14,8 @@ import { analyzeReadonlyTerminalCommandPolicy } from './readonlyCommandPolicy'
 import { resolveTerminalCwd } from './terminalCwd'
 import { runTerminalCommand } from './terminalExec'
 import { inspectTerminalOutputQuality } from './terminalOutputQuality'
-import type {
-  TerminalCapabilityToolsInput,
-  TerminalCapabilityToolsRuntimeState
-} from './types'
-import {
-  TERMINAL_RUN_TOOL_SPEC
-} from './toolSpecs'
+import type { TerminalCapabilityToolsInput, TerminalCapabilityToolsRuntimeState } from './types'
+import { TERMINAL_RUN_TOOL_SPEC } from './toolSpecs'
 
 const isJsonObjectRecord = (value: AiToolCallResult['data']): value is JsonObject =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -170,6 +161,27 @@ const buildTerminalTokenEstimateSource = (input: { stdout: string; stderr: strin
   return input.stdout || input.stderr
 }
 
+const buildApprovedTerminalCommandKey = (command: string): string => String(command || '').trim()
+
+const consumeApprovedTerminalCommand = (input: {
+  cache: TerminalCapabilityToolsInput['cache']
+  command: string
+}): boolean => {
+  const approvedCounts = input.cache.approvedTerminalCommandCounts
+  if (!approvedCounts) return false
+
+  const key = buildApprovedTerminalCommandKey(input.command)
+  const count = approvedCounts.get(key) || 0
+  if (count <= 0) return false
+
+  if (count === 1) {
+    approvedCounts.delete(key)
+  } else {
+    approvedCounts.set(key, count - 1)
+  }
+  return true
+}
+
 export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput) => {
   const state: TerminalCapabilityToolsRuntimeState = {
     stepIndex: 0
@@ -251,7 +263,11 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
             cwd: args.cwd
           })
           const readonlyPolicy = analyzeReadonlyTerminalCommandPolicy(command)
-          if (readonlyPolicy.executionPolicy !== 'readonly_allowed') {
+          const approvedByHand = consumeApprovedTerminalCommand({
+            cache: input.cache,
+            command
+          })
+          if (readonlyPolicy.executionPolicy !== 'readonly_allowed' && !approvedByHand) {
             const approvalBatchResult = await input.ctx.requestApprovalBatch({
               runId: input.runId,
               taskId: input.taskId,
@@ -353,8 +369,8 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
 
           const aiResultTokenLimit = getAiResultTokenLimit({
             modelContextWindowTokens:
-              input.ctx.humanRuntimeOverrides?.modelContextWindowTokens
-              || DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS,
+              input.ctx.humanRuntimeOverrides?.modelContextWindowTokens ||
+              DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS,
             ratio: input.aiResultTokenLimitRatio
           })
           const estimatedTokens = estimateToolResultTokens(buildTerminalTokenEstimateSource(result))

@@ -10,7 +10,7 @@ import { extractArtifactRefsFromToolResults, mergeArtifactRefs } from '../../../
 import {
   appendDecisionRound,
   buildPreExecutionBlockedExecution,
-  buildHandExecution,
+  buildHandExecution
 } from '../../memory/rounds'
 import {
   createDeliveryGuidanceItem,
@@ -19,22 +19,31 @@ import {
 import { buildToolCallDisplayText } from '../../shared/toolResultRenderers'
 import { assertExternalLearnedSkillIds } from '../../skills'
 import { analyzeReadonlyTerminalCommandPolicy } from '../../tools/terminal/readonlyCommandPolicy'
-import {
-  createToolCallSchema,
-  formatToolCallSchemaDiagnostic
-} from '../../toolCallSchema'
-import type { HandCallList, HumanRuntimeCache, HumanState, HumanDecisionHint, ToolCallResult } from '../../types'
+import { createToolCallSchema, formatToolCallSchemaDiagnostic } from '../../toolCallSchema'
+import type {
+  HandCallList,
+  HumanRuntimeCache,
+  HumanState,
+  HumanDecisionHint,
+  ToolCallResult
+} from '../../types'
 import { renderDeliveryGuidanceForMouth } from '../../prompts/deliveryGuidance'
 import { deriveHandFollowupSignals, shouldStopSerialHandPlan } from './followupSignals'
 import { buildHandCallInvalidHint } from './decisionHints'
 import { executeToolCall } from './toolExecutor'
-import { returnToBrain, returnToBrainAfterTrace, returnToBrainWithDecisionHint } from '../utils/stateTransitions'
+import {
+  returnToBrain,
+  returnToBrainAfterTrace,
+  returnToBrainWithDecisionHint
+} from '../utils/stateTransitions'
 import { getAvailableToolNames } from '../utils/runtimeCache'
 
 const isTerminalRunCall = (toolName: string): boolean => toolName === 'terminal_run'
 
 const readTerminalCommandArg = (args: JsonObject): string | undefined =>
-  typeof args.command === 'string' && args.command.trim().length > 0 ? args.command.trim() : undefined
+  typeof args.command === 'string' && args.command.trim().length > 0
+    ? args.command.trim()
+    : undefined
 
 type ParsedHandCall = {
   toolName: string
@@ -132,7 +141,12 @@ const buildApprovalBlockedDecisionHint = (input: {
     .map((decision) => input.approvalItems.find((item) => item.itemId === decision.itemId)?.command)
     .filter((command): command is string => Boolean(command))
   const blockedCommands = input.approvalItems
-    .filter((item) => !input.decisions.some((decision) => decision.itemId === item.itemId && decision.action === 'approve'))
+    .filter(
+      (item) =>
+        !input.decisions.some(
+          (decision) => decision.itemId === item.itemId && decision.action === 'approve'
+        )
+    )
     .map((item) => item.command)
   const notes = input.decisions
     .filter((decision) => decision.action === 'guide')
@@ -155,6 +169,33 @@ const buildApprovalBlockedDecisionHint = (input: {
       notes
     }
   }
+}
+
+const buildApprovedTerminalCommandKey = (command: string): string => String(command || '').trim()
+
+const markApprovedTerminalCommands = (input: {
+  cache: HumanRuntimeCache
+  decisions: Array<{
+    itemId: string
+    action: 'approve' | 'reject' | 'guide'
+  }>
+  approvalItems: Array<{
+    itemId: string
+    command: string
+  }>
+}): void => {
+  const approvedCommands = input.decisions
+    .filter((decision) => decision.action === 'approve')
+    .map((decision) => input.approvalItems.find((item) => item.itemId === decision.itemId)?.command)
+    .filter((command): command is string => Boolean(command))
+
+  if (approvedCommands.length === 0) return
+  const approvedCounts = input.cache.approvedTerminalCommandCounts || new Map<string, number>()
+  approvedCommands.forEach((command) => {
+    const key = buildApprovedTerminalCommandKey(command)
+    approvedCounts.set(key, (approvedCounts.get(key) || 0) + 1)
+  })
+  input.cache.approvedTerminalCommandCounts = approvedCounts
 }
 
 const executeHandCalls = async (input: {
@@ -221,11 +262,13 @@ const parseHandCalls = (input: {
   for (const [index, call] of input.calls.entries()) {
     const parsed = toolCallSchema.safeParse(call)
     if (!parsed.success) {
-      invalidResults.push(buildSchemaInvalidResult({
+      invalidResults.push(
+        buildSchemaInvalidResult({
           toolName: call.toolName,
           error: parsed.error,
           callIndex: index
-        }))
+        })
+      )
       continue
     }
 
@@ -257,7 +300,10 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
     const toolCallLimit =
       input.ctx.humanRuntimeOverrides?.hardActionLimit || HUMAN_DEFAULT_TOOL_CALL_LIMIT
 
-    if (!state.execution.currentThought || state.execution.currentThought.nextAction.action !== 'hand') {
+    if (
+      !state.execution.currentThought ||
+      state.execution.currentThought.nextAction.action !== 'hand'
+    ) {
       return returnToBrain(state)
     }
 
@@ -271,16 +317,17 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
       const decisionHint = buildHandCallInvalidHint(
         results.map((result) => ({
           callIndex: Number(
-            String(result.diagnostic?.message || '').match(/^tool call schema invalid\ncalls\[(\d+)\]\.args:/)?.[1]
-            || 0
+            String(result.diagnostic?.message || '').match(
+              /^tool call schema invalid\ncalls\[(\d+)\]\.args:/
+            )?.[1] || 0
           ),
           toolName: result.toolName,
           message: String(
             result.diagnostic?.message ||
-            (result.data && typeof result.data === 'object' && !Array.isArray(result.data)
-              ? result.data.error
-              : '') ||
-            ''
+              (result.data && typeof result.data === 'object' && !Array.isArray(result.data)
+                ? result.data.error
+                : '') ||
+              ''
           ).trim()
         }))
       )
@@ -383,6 +430,11 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
           }
         })
       }
+      markApprovedTerminalCommands({
+        cache: input.cache,
+        decisions: approvalBatchResult.decisions,
+        approvalItems
+      })
     }
 
     const learnedSkillIds = state.skills.learnedSkillIds
@@ -402,7 +454,8 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
     const toolLimitDecisionHint =
       input.cache.toolCallCount > toolCallLimit
         ? buildToolLimitDecisionHint(input.cache.toolCallCount, toolCallLimit)
-        : input.cache.toolCallCount >= Math.ceil(toolCallLimit * HUMAN_TOOL_LIMIT_NEAR_EXHAUSTED_RATIO)
+        : input.cache.toolCallCount >=
+            Math.ceil(toolCallLimit * HUMAN_TOOL_LIMIT_NEAR_EXHAUSTED_RATIO)
           ? buildToolLimitNearExhaustedDecisionHint(input.cache.toolCallCount, toolCallLimit)
           : undefined
     const decisionHint = toolLimitDecisionHint || followupSignals.decisionHint

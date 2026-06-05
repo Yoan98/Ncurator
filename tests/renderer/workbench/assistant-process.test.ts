@@ -2,135 +2,291 @@ import { describe, expect, it } from 'vitest'
 import type { AiRunEvent } from '../../../src/shared/types'
 import {
   buildAssistantProcessText,
-  createAssistantProcessItem,
-  reduceAssistantProcessItems
+  createAssistantThinkingGroup,
+  createSearchProcessGroup,
+  reduceAssistantProcessGroups
 } from '../../../src/renderer/src/components/workbench/utils'
 
-const baseEvent = {
+const toText = (segments: { text: string }[]): string =>
+  segments.map((segment) => segment.text).join('')
+
+const groupStarted = (overrides: {
+  groupId: string
+  kind: Extract<AiRunEvent, { type: 'assistant_process_group_started' }>['kind']
+  display: Extract<AiRunEvent, { type: 'assistant_process_group_started' }>['display']
+  createdAt?: number
+}): AiRunEvent => ({
+  type: 'assistant_process_group_started',
   runId: 'run-1',
-  taskId: 'task-1'
-}
+  groupId: overrides.groupId,
+  kind: overrides.kind,
+  display: overrides.display,
+  createdAt: overrides.createdAt || 1
+})
 
-describe('workbench assistant process narrative', () => {
-  it('maps internal tool names to user-facing text', () => {
-    const docxEvent: AiRunEvent = {
-      ...baseEvent,
-      type: 'tool_call_started',
-      toolCallId: 'tool-1',
-      toolName: 'docx_edit',
-      input: {},
-      createdAt: 1
-    }
-    const terminalEvent: AiRunEvent = {
-      ...baseEvent,
-      type: 'tool_call_started',
-      toolCallId: 'tool-2',
-      toolName: 'terminal_run',
-      input: {},
-      createdAt: 2
-    }
+const groupCompleted = (overrides: {
+  groupId: string
+  display?: Extract<AiRunEvent, { type: 'assistant_process_group_completed' }>['display']
+  completedAt?: number
+}): AiRunEvent => ({
+  type: 'assistant_process_group_completed',
+  runId: 'run-1',
+  groupId: overrides.groupId,
+  display: overrides.display,
+  completedAt: overrides.completedAt || 2
+})
 
-    expect(buildAssistantProcessText(docxEvent)).toBe('俺正在编辑文档')
-    expect(buildAssistantProcessText(terminalEvent)).toBe('俺正在跑指令')
-    expect(buildAssistantProcessText(docxEvent)).not.toContain('docx_edit')
-    expect(buildAssistantProcessText(terminalEvent)).not.toContain('terminal_run')
+const itemStarted = (overrides: {
+  groupId: string
+  itemId: string
+  display: Extract<AiRunEvent, { type: 'assistant_process_item_started' }>['display']
+  createdAt?: number
+}): AiRunEvent => ({
+  type: 'assistant_process_item_started',
+  runId: 'run-1',
+  groupId: overrides.groupId,
+  itemId: overrides.itemId,
+  display: overrides.display,
+  createdAt: overrides.createdAt || 1
+})
+
+const itemCompleted = (overrides: {
+  groupId: string
+  itemId: string
+  display?: Extract<AiRunEvent, { type: 'assistant_process_item_completed' }>['display']
+  completedAt?: number
+}): AiRunEvent => ({
+  type: 'assistant_process_item_completed',
+  runId: 'run-1',
+  groupId: overrides.groupId,
+  itemId: overrides.itemId,
+  display: overrides.display,
+  completedAt: overrides.completedAt || 2
+})
+
+describe('workbench assistant process groups', () => {
+  it('replaces local thinking placeholder with backend thinking event', () => {
+    const groups = reduceAssistantProcessGroups(
+      [createAssistantThinkingGroup('assistant-1')],
+      groupStarted({
+        groupId: 'run-1:thinking',
+        kind: 'thinking',
+        display: { kind: 'thinking' }
+      })
+    )
+
+    expect(groups).toHaveLength(1)
+    expect(groups[0]).toMatchObject({
+      id: 'run-1:thinking',
+      kind: 'thinking',
+      status: 'running'
+    })
+    expect(toText(groups[0].runningText)).toBe('让俺想想')
   })
 
-  it('merges tool start and result into one process row without completion filler text', () => {
-    const started: AiRunEvent = {
-      ...baseEvent,
-      type: 'tool_call_started',
-      toolCallId: 'tool-1',
-      toolName: 'kb_search',
-      input: {
-        queryText: 'langchain',
-        strategy: 'auto'
-      },
-      createdAt: 1
-    }
-    const completed: AiRunEvent = {
-      ...baseEvent,
-      type: 'tool_call_result',
-      toolCallId: 'tool-1',
-      toolName: 'kb_search',
-      result: {
-        toolName: 'kb_search',
-        ok: true,
-        data: []
-      },
-      completedAt: 2
-    }
+  it('removes thinking group when backend marks thinking completed', () => {
+    const startedGroups = reduceAssistantProcessGroups(
+      [],
+      groupStarted({
+        groupId: 'run-1:thinking',
+        kind: 'thinking',
+        display: { kind: 'thinking' }
+      })
+    )
+    const completedGroups = reduceAssistantProcessGroups(
+      startedGroups,
+      groupCompleted({
+        groupId: 'run-1:thinking',
+        display: { kind: 'thinking' }
+      })
+    )
 
-    const startedItem = createAssistantProcessItem(started)
-    const completedItem = createAssistantProcessItem(completed)
+    expect(completedGroups).toEqual([])
+  })
 
-    expect(startedItem).toMatchObject({
-      id: 'tool-1',
-      nodeKind: 'hand',
-      variant: 'hand_tool',
-      toolName: 'kb_search',
-      text: '俺正在搜索知识库线索',
-      status: 'active',
-      isCurrent: true,
-      details: [
-        { label: '查询词', value: 'langchain' },
-        { label: '策略', value: 'auto' }
-      ]
-    })
-    expect(completedItem).toMatchObject({
-      id: 'tool-1',
-      nodeKind: 'hand',
-      text: '已完成搜索知识库线索',
-      status: 'completed'
-    })
-    expect(completedItem?.text).not.toBe('这一步处理完了')
-    expect(reduceAssistantProcessItems([startedItem!], completed)).toMatchObject([
-      {
-        id: 'tool-1',
-        text: '已完成搜索知识库线索',
-        status: 'completed',
-        isCurrent: false
-      },
-      {
-        nodeKind: 'brain',
-        variant: 'brain_placeholder',
-        text: '让俺想想',
-        status: 'active',
-        isCurrent: true
+  it('groups docx read tools by skill and builds tool-specific sentences from input', () => {
+    const groupId = 'run-1:skill:docx-reader'
+    const group = groupStarted({
+      groupId,
+      kind: 'skill',
+      display: {
+        kind: 'tool',
+        toolName: 'docx_outline',
+        input: { sourcePath: '/tmp/report.docx' }
       }
-    ])
+    })
+    const outline = itemStarted({
+      groupId,
+      itemId: 'tool-outline',
+      display: {
+        kind: 'tool',
+        toolName: 'docx_outline',
+        input: { sourcePath: '/tmp/report.docx' }
+      },
+      createdAt: 2
+    })
+    const readBlocks = itemStarted({
+      groupId,
+      itemId: 'tool-read',
+      display: {
+        kind: 'tool',
+        toolName: 'docx_read_blocks',
+        input: { sourcePath: '/tmp/report.docx' }
+      },
+      createdAt: 3
+    })
+
+    const groups = [group, outline, readBlocks].reduce(reduceAssistantProcessGroups, [])
+
+    expect(groups).toHaveLength(1)
+    expect(groups[0]).toMatchObject({
+      id: groupId,
+      skillKey: 'docx-reader',
+      status: 'running'
+    })
+    expect(toText(groups[0].runningText)).toBe('俺正在阅读 docx')
+    expect(toText(groups[0].items[0].runningText)).toBe('正在阅读 /tmp/report.docx 文件的结构')
+    expect(toText(groups[0].items[1].runningText)).toBe('正在阅读 /tmp/report.docx 文件细节')
+    expect(groups[0].items[0].runningText.some((segment) => segment.emphasis)).toBe(true)
   })
 
-  it('maps context compaction to natural process text', () => {
-    const started: AiRunEvent = {
-      ...baseEvent,
-      type: 'context_compaction_started',
-      targetRoundIds: [1],
-      budgetTokensBefore: 20000,
-      thresholdTokens: 12000,
-      createdAt: 3
+  it('keeps a skill group running while any grouped tool item is still running', () => {
+    const groupId = 'run-1:skill:docx-reader'
+    const outlineDisplay = {
+      kind: 'tool' as const,
+      toolName: 'docx_outline',
+      input: { sourcePath: '/tmp/report.docx' }
     }
-    const completed: AiRunEvent = {
-      ...baseEvent,
-      type: 'context_compaction_completed',
-      compactBlockId: 'compact-1',
-      sourceRoundIds: [1],
-      tokenEstimateBefore: 20000,
-      sourceHistoryTokenEstimate: 10000,
-      tokenEstimateAfter: 9000,
-      summaryPreview: 'summary',
-      completedAt: 4
+    const readDisplay = {
+      kind: 'tool' as const,
+      toolName: 'docx_read_blocks',
+      input: { sourcePath: '/tmp/report.docx' }
+    }
+    const groups = [
+      groupStarted({ groupId, kind: 'skill', display: outlineDisplay }),
+      itemStarted({ groupId, itemId: 'tool-outline', display: outlineDisplay, createdAt: 2 }),
+      itemStarted({ groupId, itemId: 'tool-read', display: readDisplay, createdAt: 3 }),
+      itemCompleted({ groupId, itemId: 'tool-outline', completedAt: 4 }),
+      groupCompleted({ groupId, completedAt: 5 })
+    ].reduce(reduceAssistantProcessGroups, [])
+
+    expect(groups[0].status).toBe('running')
+    expect(groups[0].items[0].status).toBe('completed')
+    expect(groups[0].items[1].status).toBe('running')
+  })
+
+  it('keeps docx edit precise to the file and marks completion naturally', () => {
+    const groupId = 'run-1:skill:docx-writer'
+    const display = {
+      kind: 'tool' as const,
+      toolName: 'docx_edit',
+      input: { sourcePath: '/tmp/draft.docx' }
+    }
+    const groups = [
+      groupStarted({ groupId, kind: 'skill', display }),
+      itemStarted({ groupId, itemId: 'tool-edit', display }),
+      itemCompleted({ groupId, itemId: 'tool-edit' }),
+      groupCompleted({ groupId })
+    ].reduce(reduceAssistantProcessGroups, [])
+
+    expect(toText(groups[0].runningText)).toBe('俺正在写 docx')
+    expect(toText(groups[0].completedText)).toBe('俺已写完 docx')
+    expect(groups[0].status).toBe('completed')
+    expect(toText(groups[0].items[0].runningText)).toBe('正在编辑 /tmp/draft.docx 文件')
+    expect(toText(groups[0].items[0].completedText)).toBe('已编辑 /tmp/draft.docx 文件')
+  })
+
+  it('uses reference-reader text for search and does not expose internal tool names', () => {
+    const event = groupStarted({
+      groupId: 'run-1:skill:reference-reader',
+      kind: 'skill',
+      display: {
+        kind: 'tool',
+        toolName: 'kb_search',
+        input: { query: '课程设计' }
+      }
+    })
+    const groups = reduceAssistantProcessGroups([], event)
+    const itemGroups = reduceAssistantProcessGroups(
+      groups,
+      itemStarted({
+        groupId: 'run-1:skill:reference-reader',
+        itemId: 'tool-search',
+        display: {
+          kind: 'tool',
+          toolName: 'kb_search',
+          input: { query: '课程设计' }
+        }
+      })
+    )
+
+    expect(buildAssistantProcessText(event)).toBe('俺正在查阅资料')
+    expect(toText(itemGroups[0].runningText)).toBe('俺正在查阅资料')
+    expect(toText(itemGroups[0].completedText)).toBe('俺已查阅完资料')
+    expect(toText(itemGroups[0].items[0].runningText)).toBe('正在搜索 课程设计')
+    expect(toText(itemGroups[0].items[0].runningText)).not.toContain('kb_search')
+  })
+
+  it('keeps learning running until assistant_process_group_completed arrives', () => {
+    const started = groupStarted({
+      groupId: 'run-1:learning:docx-read',
+      kind: 'learning',
+      display: { kind: 'learning', skillId: 'docx-read' }
+    })
+    const runningGroups = reduceAssistantProcessGroups([], started)
+    const completedGroups = reduceAssistantProcessGroups(
+      runningGroups,
+      groupCompleted({
+        groupId: 'run-1:learning:docx-read',
+        display: { kind: 'learning', skillId: 'docx-read' }
+      })
+    )
+
+    expect(toText(runningGroups[0].runningText)).toBe('俺在学 docx 阅读器')
+    expect(runningGroups[0].status).toBe('running')
+    expect(toText(completedGroups[0].completedText)).toBe('已学完 docx 阅读器')
+    expect(completedGroups[0].status).toBe('completed')
+  })
+
+  it('maps context compaction protocol to dedicated groups', () => {
+    const compactionGroups = [
+      groupStarted({
+        groupId: 'run-1:compaction',
+        kind: 'compaction',
+        display: { kind: 'compaction' }
+      }),
+      groupCompleted({
+        groupId: 'run-1:compaction',
+        display: { kind: 'compaction' }
+      })
+    ].reduce(reduceAssistantProcessGroups, [])
+
+    expect(toText(compactionGroups[0].runningText)).toBe('怎么这么多东西，太多了，俺要整理下！！')
+    expect(toText(compactionGroups[0].completedText)).toBe('呼，终于整理完了')
+  })
+
+  it('does not add legacy mouth events to process groups', () => {
+    const mouth: AiRunEvent = {
+      type: 'human_step',
+      runId: 'run-1',
+      taskId: 'task-1',
+      stepIndex: 2,
+      action: 'deliver_result',
+      publicNarrative: '准备回答',
+      learnedSkillIds: [],
+      effectiveSkillIds: [],
+      availableToolNames: [],
+      summary: '',
+      createdAt: 1
     }
 
-    expect(createAssistantProcessItem(started)).toMatchObject({
-      text: '让俺整理下，东西太多',
-      status: 'active',
-      sourceEventType: 'context_compaction_started'
-    })
-    expect(createAssistantProcessItem(completed)).toMatchObject({
-      text: '已整理好上下文',
-      status: 'completed',
-      sourceEventType: 'context_compaction_completed'
-    })
+    expect(reduceAssistantProcessGroups([], mouth)).toEqual([])
+  })
+
+  it('creates search-mode placeholder as reference reader', () => {
+    const group = createSearchProcessGroup('assistant-search')
+
+    expect(toText(group.runningText)).toBe('俺正在查阅资料')
+    expect(group.skillKey).toBe('reference-reader')
   })
 })

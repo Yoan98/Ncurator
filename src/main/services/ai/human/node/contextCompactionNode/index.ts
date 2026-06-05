@@ -7,6 +7,7 @@ import { renderBrainRoundExecutionOnly, renderBrainRoundSection } from '../../sh
 import { renderTaskProgress } from '../../shared/memoryRenderers'
 import type { HumanRuntimeCache, HumanState } from '../../types'
 import { estimateTextTokens } from '../../utils/tokenEstimate'
+import { emitCompactionCompleted, emitCompactionStarted } from '../../../events/processEvents'
 
 export const createContextCompactionNode = (input: {
   ctx: AiRunContext
@@ -37,6 +38,10 @@ export const createContextCompactionNode = (input: {
       ])
     )
     const budgetTokensBefore = state.execution.contextBudget?.budgetTokens || 0
+    emitCompactionStarted({
+      sendEvent: input.ctx.sendEvent,
+      runId: input.ctx.runId
+    })
     input.ctx.sendEvent({
       type: 'context_compaction_started',
       runId: input.ctx.runId,
@@ -85,6 +90,10 @@ export const createContextCompactionNode = (input: {
       tokenEstimateAfter
     }
 
+    emitCompactionCompleted({
+      sendEvent: input.ctx.sendEvent,
+      runId: input.ctx.runId
+    })
     input.ctx.sendEvent({
       type: 'context_compaction_completed',
       runId: input.ctx.runId,

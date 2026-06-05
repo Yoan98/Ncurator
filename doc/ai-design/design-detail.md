@@ -191,7 +191,6 @@ type AiArtifactRef = {
   summary: string
 }
 
-
 interface HumanTaskInput {
   // 当前 human 任务 ID；当前正式实现里与 runId 对齐。
   taskId: string
@@ -246,6 +245,14 @@ type ChatSessionResumeSnapshot = {
 - 新 run 命中恢复快照后，仍从 `context_budget -> brain` 重新开始；恢复的是语义上下文，不恢复旧 run 的工具计数、审批态、context budget cache 或 docx 运行态。
 - 新 run 命中恢复快照后，会向 `brain` 注入 `decision_hint(code='run_resumed_after_interruption')`，`detail` 只包含 `reason: 'timeout' | 'network_error'`；该 hint 只说明当前是中断恢复态，并强调当前最新用户输入、当前 selected references、当前 workspace 是本轮唯一有效入口。
 
+#### Assistant Process 事件协议
+
+- Workbench assistant 过程流只消费稳定的 `assistant_process_*` 事件，不从 `human_step`、`tool_call_*` 或 `context_compaction_*` 推断 UI 过程。
+- 后端负责按真实生命周期派发过程开始、完成与失败事件：run 启动后先派发 thinking；learning、hand 工具和 context compaction 开始前结束当前 thinking，完成后按需重新进入 thinking；mouth 开始输出前结束 thinking，但 mouth 自身不派发可见过程组。
+- `assistant_process_group_*` 表示用户可理解的过程组，`assistant_process_item_*` 表示组内可展开的工具句子；同一工具技能可复用同一个 groupId 聚合多个 item。
+- 事件的 `display` 字段只承载稳定展示意图，例如 thinking、learning skillId、toolName 与工具入参、compaction；renderer 负责将这些展示意图映射为本地化文案、强调样式、展开收起和状态降权。
+- legacy 运行事件仍可服务日志、审计、artifact 提取和兼容其他内部流程，但不得作为 Workbench assistant 过程 UI 的事实来源。
+
 ## 4. Human 总体
 
 ### 职责边界
@@ -258,13 +265,7 @@ type ChatSessionResumeSnapshot = {
 ### 相关数据定义
 
 ```ts
-type HumanStage =
-  | 'context_budget'
-  | 'context_compaction'
-  | 'brain'
-  | 'learning'
-  | 'hand'
-  | 'mouth'
+type HumanStage = 'context_budget' | 'context_compaction' | 'brain' | 'learning' | 'hand' | 'mouth'
 
 type HumanStatus = 'running' | 'completed'
 
@@ -590,6 +591,7 @@ type HumanDecisionHint =
 
 - `hand` 失败时应优先保留原始校验/运行时错误文本。
 - 影响下一轮 `brain` 决策的诊断信息，应通过 `decisionHint` 回流最小结构化事实。
+- `terminal_run` 只负责执行 workspace 边界内的 shell command；直接执行资格由安全只读指令集决定，一条 command 被拆分后的每段都命中 `SAFE_READONLY_COMMAND_RULES` 时可直接执行，任一段未命中则必须先经用户审批。
 - `terminal_run` 禁止用 terminal 读取或写入 Word / Excel / PPT / PDF 等结构化文档内容；若执行后返回明显非文本/二进制内容，工具必须省略原始输出，并通过 `hand_tool_result_unusable` 回流检测到的结构化特征。
 
 ## 8. Mouth
@@ -750,6 +752,7 @@ interface HumanExecution {
 
 - `trace` 用于外部事件、审计和回放。
 - 文档只保留外部可理解的稳定结构，不穷举全部运行事件枚举。
+- `trace` 不驱动 Workbench assistant 过程 UI；该 UI 的跨层 contract 是 Runtime Shell 中定义的 `assistant_process_*` 事件协议。
 
 ### 相关数据定义
 

@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import {
-  analyzeTerminalCommand
-} from '../../../src/main/services/ai/human/tools/terminal/terminalCommandPolicy'
-import {
-  analyzeReadonlyTerminalCommandPolicy
-} from '../../../src/main/services/ai/human/tools/terminal/readonlyCommandPolicy'
+import { analyzeTerminalCommand } from '../../../src/main/services/ai/human/tools/terminal/terminalCommandPolicy'
+import { analyzeReadonlyTerminalCommandPolicy } from '../../../src/main/services/ai/human/tools/terminal/readonlyCommandPolicy'
 import { TERMINAL_RUN_TOOL_SPEC } from '../../../src/main/services/ai/human/tools/terminal/toolSpecs'
 
 describe('ai unit terminal command policy', () => {
@@ -18,6 +14,13 @@ describe('ai unit terminal command policy', () => {
     expect(analyzeReadonlyTerminalCommandPolicy('find . -type f').executionPolicy).toBe(
       'readonly_allowed'
     )
+    expect(analyzeReadonlyTerminalCommandPolicy('cat notes.txt | head -10').executionPolicy).toBe(
+      'readonly_allowed'
+    )
+    expect(
+      analyzeReadonlyTerminalCommandPolicy("cat '学习笔记/深度学习.pdf' | strings | head -500")
+        .executionPolicy
+    ).toBe('readonly_allowed')
     expect(analyzeTerminalCommand({ command: 'echo hello world' }).artifactCandidates).toEqual([])
   })
 
@@ -55,6 +58,12 @@ describe('ai unit terminal command policy', () => {
       'approval_required'
     )
     expect(analyzeReadonlyTerminalCommandPolicy('find . -delete').executionPolicy).toBe(
+      'approval_required'
+    )
+    expect(
+      analyzeReadonlyTerminalCommandPolicy('cat notes.txt | python3 -c "print(1)"').executionPolicy
+    ).toBe('approval_required')
+    expect(analyzeReadonlyTerminalCommandPolicy('ls & rm -rf tmp').executionPolicy).toBe(
       'approval_required'
     )
   })

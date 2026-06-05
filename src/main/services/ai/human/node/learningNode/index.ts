@@ -12,6 +12,7 @@ import { appendDecisionRound, buildLearningExecution } from '../../memory/rounds
 import { ensureSkillTools } from './skillLoader'
 import { countActiveToolNamesForSkillIds, fitSkillIdsToToolBudget } from './toolBudget'
 import { returnToBrain, returnToBrainAfterTrace, returnToBrainWithDecisionHint } from '../utils/stateTransitions'
+import { emitLearningCompleted, emitLearningStarted } from '../../../events/processEvents'
 
 const dedupeInOrder = <TValue extends string>(values: readonly TValue[]): TValue[] => {
   const out: TValue[] = []
@@ -178,6 +179,14 @@ export const createLearningNode = (input: { ctx: AiRunContext; cache: HumanRunti
     }
 
     newSkillIds.forEach((skillId) => {
+      emitLearningStarted({
+        sendEvent: input.ctx.sendEvent,
+        runId: input.ctx.runId,
+        skillId
+      })
+    })
+
+    newSkillIds.forEach((skillId) => {
       ensureSkillTools({
         cache: input.cache,
         ctx: input.ctx,
@@ -229,6 +238,13 @@ export const createLearningNode = (input: { ctx: AiRunContext; cache: HumanRunti
           })
         }
       }
+    })
+    newSkillIds.forEach((skillId) => {
+      emitLearningCompleted({
+        sendEvent: input.ctx.sendEvent,
+        runId: input.ctx.runId,
+        skillId
+      })
     })
     return nextState
   }

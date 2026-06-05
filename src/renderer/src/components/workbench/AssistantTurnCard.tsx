@@ -1,20 +1,12 @@
 import React, { useMemo } from 'react'
 import { Tooltip } from 'antd'
-import {
-  HiChevronDown,
-  HiCodeBracketSquare,
-  HiDocumentText,
-  HiMagnifyingGlass,
-  HiMiniSparkles,
-  HiOutlineDocumentText,
-  HiPencilSquare,
-  HiSparkles
-} from 'react-icons/hi2'
+import { HiChevronDown, HiOutlineDocumentText } from 'react-icons/hi2'
 import MarkdownRenderer from '../MarkdownRenderer'
 import { DOCX_APPLY_STATUS_META } from './constants'
 import type {
   AssistantArtifactItem,
-  AssistantProcessIconKind,
+  AssistantProcessGroup,
+  AssistantRichTextSegment,
   AssistantTurnViewModel
 } from './types'
 import { workbenchSelectors } from '../../testing/selectors'
@@ -27,93 +19,71 @@ type AssistantTurnCardProps = {
   onOpenApply: (applyId: string) => void
 }
 
-const getProcessStatusClassName = (
-  status: AssistantTurnViewModel['processItems'][number]['status']
-): string => {
-  if (status === 'active') return 'text-[#D97757]'
+const getProcessStatusClassName = (status: AssistantProcessGroup['status']): string => {
+  if (status === 'running') return 'text-[#D97757]'
   if (status === 'failed') return 'text-[#B5455D]'
   return 'text-[#8A8884]'
 }
 
-const getProcessIcon = (iconKind: AssistantProcessIconKind): React.ReactNode => {
-  if (iconKind === 'terminal') return <HiCodeBracketSquare className="h-4 w-4" />
-  if (iconKind === 'edit') {
-    return <HiPencilSquare className="h-4 w-4" />
-  }
-  if (iconKind === 'search' || iconKind === 'search-doc') {
-    return <HiMagnifyingGlass className="h-4 w-4" />
-  }
-  if (iconKind === 'document') {
-    return <HiDocumentText className="h-4 w-4" />
-  }
-  if (iconKind === 'learning') return <HiMiniSparkles className="h-4 w-4" />
-  if (iconKind === 'mouth') return <HiSparkles className="h-4 w-4" />
-  if (iconKind === 'compaction') return <HiSparkles className="h-4 w-4" />
-  return <HiSparkles className="h-4 w-4" />
+const getGroupText = (group: AssistantProcessGroup): AssistantRichTextSegment[] => {
+  if (group.status === 'completed') return group.completedText
+  if (group.status === 'failed') return group.failedText
+  return group.runningText
 }
 
-const AssistantProcessText: React.FC<{ item: AssistantTurnViewModel['processItems'][number] }> = ({
-  item
-}) => {
-  const flow = item.isCurrent
+const getItemText = (item: AssistantProcessGroup['items'][number]): AssistantRichTextSegment[] => {
+  if (item.status === 'completed') return item.completedText
+  if (item.status === 'failed') return item.failedText
+  return item.runningText
+}
+
+const renderSegments = (
+  segments: AssistantRichTextSegment[],
+  options?: { shimmer?: boolean }
+): React.ReactNode => (
+  <span className={options?.shimmer ? 'workbench-thinking-shimmer' : undefined}>
+    {segments.map((segment, index) => (
+      <span
+        key={`${segment.text}-${index}`}
+        className={segment.emphasis ? 'font-semibold text-[#2F2925]' : undefined}
+      >
+        {segment.text}
+      </span>
+    ))}
+  </span>
+)
+
+const AssistantProcessGroupView: React.FC<{ group: AssistantProcessGroup }> = ({ group }) => {
+  const isRunning = group.status === 'running'
+  const groupText = getGroupText(group)
   return (
-    <div
-      className={`group text-[14px] leading-7 ${getProcessStatusClassName(item.status)}`}
-      data-testid={`${workbenchSelectors.assistantProcessItemPrefix}-${item.id}`}
+    <details
+      className="group/process"
+      open={isRunning || group.items.length === 0 ? true : undefined}
+      data-testid={`${workbenchSelectors.assistantProcessItemPrefix}-${group.id}`}
     >
-      <details className="group/details">
-        <summary
-          className={`flex list-none items-start gap-2.5 rounded-xl outline-none [&::-webkit-details-marker]:hidden ${
-            item.details.length > 0 ? 'cursor-pointer' : 'cursor-default'
-          }`}
-          onClick={(event) => {
-            if (item.details.length === 0) event.preventDefault()
-          }}
+      <summary className="flex list-none items-start rounded-xl outline-none [&::-webkit-details-marker]:hidden">
+        <span
+          className={`inline-flex min-w-0 flex-1 items-center gap-1 text-[14px] leading-7 ${getProcessStatusClassName(group.status)}`}
         >
-          {item.isCurrent ? (
-            <span
-              className={`mt-[11px] h-1.5 w-1.5 shrink-0 rounded-full ${
-                item.status === 'failed' ? 'bg-[#B5455D]' : 'bg-[#D97757]'
-              }`}
-            />
-          ) : (
-            <span className="w-1.5 shrink-0" />
-          )}
-          <span
-            className={`mt-[3px] inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${
-              flow ? 'bg-[#FBF5F2] text-[#D97757]' : 'bg-transparent text-[#A8A6A1]'
-            }`}
-          >
-            {getProcessIcon(item.iconKind)}
+          <span className={isRunning ? 'font-medium' : undefined}>
+            {renderSegments(groupText, { shimmer: isRunning })}
           </span>
-          <span
-            className={`inline-flex items-center gap-1 ${
-              flow
-                ? 'workbench-thinking-shimmer font-medium'
-                : item.status === 'completed'
-                  ? 'text-[#8A8884]'
-                  : 'font-medium'
-            }`}
-          >
-            <span>{item.text}</span>
-            {item.details.length > 0 ? (
-              <HiChevronDown className="mt-[1px] h-4 w-4 shrink-0 text-[#AAA6A0] transition-transform duration-200 group-open/details:rotate-180" />
-            ) : null}
-          </span>
-          {item.details.length > 0 ? <span className="sr-only">展开详情</span> : null}
-        </summary>
-        {item.details.length > 0 ? (
-          <div className="ml-[48px] mt-1.5 space-y-1 rounded-xl bg-[#FAFAF9] px-3 py-2 text-[12px] leading-5 text-[#666666]">
-            {item.details.map((detail) => (
-              <div key={`${detail.label}-${detail.value}`} className="flex gap-2">
-                <span className="shrink-0 text-[#999999]">{detail.label}</span>
-                <span className="min-w-0 break-words text-[#555555]">{detail.value}</span>
-              </div>
-            ))}
-          </div>
-        ) : null}
-      </details>
-    </div>
+          {group.items.length > 0 ? (
+            <HiChevronDown className="mt-[1px] h-4 w-4 shrink-0 text-[#AAA6A0] transition-transform duration-200 group-open/process:rotate-180" />
+          ) : null}
+        </span>
+      </summary>
+      {group.items.length > 0 ? (
+        <div className="mt-1.5 space-y-1.5 pl-4 text-[13px] leading-6 text-[#77736E]">
+          {group.items.map((item) => (
+            <div key={item.id} className={item.status === 'failed' ? 'text-[#B5455D]' : undefined}>
+              {renderSegments(getItemText(item))}
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </details>
   )
 }
 
@@ -139,7 +109,7 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
   onOpenFile,
   onOpenApply
 }) => {
-  const processItems = useMemo(() => turn?.processItems || [], [turn?.processItems])
+  const processGroups = useMemo(() => turn?.processGroups || [], [turn?.processGroups])
   const finalAnswerMarkdown = turn?.finalAnswerMarkdown || ''
   const hasFinalAnswer = finalAnswerMarkdown.trim().length > 0
 
@@ -150,16 +120,16 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
   return (
     <div className="w-full" data-testid={`workbench-assistant-turn-${messageId}`}>
       <div className="space-y-4">
-        {processItems.length > 0 ? (
+        {processGroups.length > 0 ? (
           <div
             className={`transition-opacity duration-200 ${
               turn.status === 'completed' && hasFinalAnswer ? 'opacity-75' : ''
             }`}
             data-testid={`${workbenchSelectors.assistantProcessPrefix}-${messageId}`}
           >
-            <div className="space-y-1.5">
-              {processItems.map((item) => (
-                <AssistantProcessText key={item.id} item={item} />
+            <div className="space-y-2">
+              {processGroups.map((group) => (
+                <AssistantProcessGroupView key={group.id} group={group} />
               ))}
             </div>
           </div>

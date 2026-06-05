@@ -91,6 +91,22 @@ describe('ai human mock-llm backend', () => {
         const humanSteps = filterAiRunEventsByType(result.events, 'human_step')
         const runCompletedEvents = filterAiRunEventsByType(result.events, 'run_completed')
         const answerCompletedEvents = filterAiRunEventsByType(result.events, 'answer_completed')
+        const processGroupStartedEvents = filterAiRunEventsByType(
+          result.events,
+          'assistant_process_group_started'
+        )
+        const processGroupCompletedEvents = filterAiRunEventsByType(
+          result.events,
+          'assistant_process_group_completed'
+        )
+        const processItemStartedEvents = filterAiRunEventsByType(
+          result.events,
+          'assistant_process_item_started'
+        )
+        const processItemCompletedEvents = filterAiRunEventsByType(
+          result.events,
+          'assistant_process_item_completed'
+        )
         const stages = new Set(humanSteps.map((event) => event.stage))
 
         runtime.assertThat(
@@ -119,6 +135,64 @@ describe('ai human mock-llm backend', () => {
             data: {
               answerCompletedCount: answerCompletedEvents.length,
               runCompletedCount: runCompletedEvents.length
+            }
+          }
+        )
+
+        const learningStartedIndex = result.events.findIndex(
+          (event) =>
+            event.type === 'assistant_process_group_started' &&
+            event.groupId.endsWith(':learning:docx-read')
+        )
+        const learningCompletedIndex = result.events.findIndex(
+          (event) =>
+            event.type === 'assistant_process_group_completed' &&
+            event.groupId.endsWith(':learning:docx-read')
+        )
+        const terminalGroupStarted = processGroupStartedEvents.find(
+          (event) =>
+            event.kind === 'skill' &&
+            event.display.kind === 'tool' &&
+            event.display.toolName === 'terminal_run'
+        )
+        const terminalItemStarted = processItemStartedEvents.find(
+          (event) => event.display.kind === 'tool' && event.display.toolName === 'terminal_run'
+        )
+        const terminalItemCompleted = processItemCompletedEvents.find(
+          (event) => event.itemId === terminalItemStarted?.itemId
+        )
+
+        runtime.assertThat(
+          learningStartedIndex >= 0 &&
+            learningCompletedIndex > learningStartedIndex &&
+            Boolean(terminalGroupStarted) &&
+            Boolean(terminalItemStarted) &&
+            Boolean(terminalItemCompleted) &&
+            processItemStartedEvents.every((event) => event.display.kind === 'tool'),
+          {
+            name: 'assistant-process-events-follow-human-lifecycle',
+            message:
+              'Assistant process 协议应按 human 生命周期发出 learning running/completed 与 hand 工具组/工具项事件，mouth 不作为过程项展示。',
+            data: {
+              processGroupStarted: processGroupStartedEvents.map((event) => ({
+                groupId: event.groupId,
+                kind: event.kind,
+                display: event.display
+              })),
+              processGroupCompleted: processGroupCompletedEvents.map((event) => ({
+                groupId: event.groupId,
+                display: event.display
+              })),
+              processItemsStarted: processItemStartedEvents.map((event) => ({
+                groupId: event.groupId,
+                itemId: event.itemId,
+                display: event.display
+              })),
+              processItemsCompleted: processItemCompletedEvents.map((event) => ({
+                groupId: event.groupId,
+                itemId: event.itemId,
+                display: event.display
+              }))
             }
           }
         )
