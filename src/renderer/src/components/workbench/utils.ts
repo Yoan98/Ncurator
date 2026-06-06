@@ -814,6 +814,7 @@ export const reduceAssistantProcessGroups = (
   event: AiRunEvent
 ): AssistantProcessGroup[] => {
   if (event.type === 'assistant_process_thought') {
+    if (!event.text.trim()) return current
     return current.filter((group) => group.kind !== 'thinking')
   }
 

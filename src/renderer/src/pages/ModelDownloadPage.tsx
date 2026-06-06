@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Button, List, Progress, Tag, Typography, message } from 'antd'
+import { Button, List, Popconfirm, Progress, Tag, Typography, message } from 'antd'
 import { HiCheckCircle, HiCloudArrowDown, HiExclamationCircle } from 'react-icons/hi2'
 import AppPageHeader from '../components/app/AppPageHeader'
 import SettingsFloatingMenu from '../components/settings/SettingsFloatingMenu'
@@ -51,6 +51,11 @@ const TEXT = {
   deleteFailed: '\u5220\u9664\u6a21\u578b\u5931\u8d25',
   deleteFailedPrefix: '\u5220\u9664\u5931\u8d25',
   deleteCompleted: '\u6a21\u578b\u5df2\u5220\u9664',
+  deleteConfirmTitle: '\u786e\u8ba4\u5220\u9664\u6b64\u6a21\u578b\u5417\uff1f',
+  deleteConfirmDescription:
+    '\u5220\u9664\u540e\u9700\u91cd\u65b0\u4e0b\u8f7d\u624d\u80fd\u518d\u6b21\u4f7f\u7528\u3002',
+  confirmDelete: '\u786e\u8ba4\u5220\u9664',
+  cancelDelete: '\u53d6\u6d88',
   installed: '\u5df2\u5b89\u88c5',
   delete: '\u5220\u9664',
   downloading: '\u4e0b\u8f7d\u4e2d',
@@ -241,14 +246,27 @@ const ModelDownloadPage: React.FC = () => {
                     actions={
                       item.isDownloaded
                         ? [
-                            <Button
-                              key={`delete-${item.id}`}
-                              danger
-                              onClick={() => void handleDelete(item.id)}
-                              data-testid={`${vectorSelectors.deleteButtonPrefix}-${item.id}`}
+                            <Popconfirm
+                              key={`delete-confirm-${item.id}`}
+                              title={TEXT.deleteConfirmTitle}
+                              description={TEXT.deleteConfirmDescription}
+                              okText={TEXT.confirmDelete}
+                              cancelText={TEXT.cancelDelete}
+                              onConfirm={() => void handleDelete(item.id)}
+                              okButtonProps={{
+                                'data-testid': `${vectorSelectors.deleteConfirmButtonPrefix}-${item.id}`
+                              }}
+                              cancelButtonProps={{
+                                'data-testid': `${vectorSelectors.deleteCancelButtonPrefix}-${item.id}`
+                              }}
                             >
-                              {TEXT.delete}
-                            </Button>,
+                              <Button
+                                danger
+                                data-testid={`${vectorSelectors.deleteButtonPrefix}-${item.id}`}
+                              >
+                                {TEXT.delete}
+                              </Button>
+                            </Popconfirm>,
                             <div
                               key={`installed-${item.id}`}
                               className="flex items-center gap-2 font-medium text-green-600"

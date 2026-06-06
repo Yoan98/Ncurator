@@ -94,6 +94,8 @@ export const vectorSelectors = {
   cardPrefix: 'vector-model-card',
   downloadButtonPrefix: 'vector-download-button',
   deleteButtonPrefix: 'vector-delete-button',
+  deleteConfirmButtonPrefix: 'vector-delete-confirm-button',
+  deleteCancelButtonPrefix: 'vector-delete-cancel-button',
   installedBadgePrefix: 'vector-installed-badge',
   progressPrefix: 'vector-download-progress',
   currentFilePrefix: 'vector-download-current-file',

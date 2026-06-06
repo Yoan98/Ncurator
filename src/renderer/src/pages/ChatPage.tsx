@@ -910,10 +910,16 @@ const ChatPage: React.FC = () => {
   }
 
   useEffect(() => {
-    if (!aiRunId) return
     window.api.removeAiRunEventListeners()
     window.api.onAiRunEvent((event) => {
-      if (event.runId !== aiRunId) return
+      const hasActiveRun = Boolean(aiRunId)
+      const hasPendingAssistantTurn = Boolean(assistantMsgIdRef.current)
+      if (hasActiveRun && event.runId !== aiRunId) return
+      if (!hasActiveRun && !hasPendingAssistantTurn) return
+
+      if (!hasActiveRun && event.type === 'run_started') {
+        setAiRunId(event.runId)
+      }
 
       updateActiveTurn((current) => ({
         ...current,

@@ -49,7 +49,7 @@ describe('settings vector e2e', () => {
         domain: 'settings',
         suite: 'vector',
         description:
-          'Installed vector model deletion restores the download action on success and keeps the installed state on failure.',
+          'Installed vector model deletion requires confirmation, keeps state on cancel, restores the download action on success, and keeps the installed state on failure.',
         fixtures: [],
         runMode: 'single',
         execute: async (runtime) => {
@@ -70,6 +70,39 @@ describe('settings vector e2e', () => {
           await getSettingsLocator(
             page,
             `${vectorSelectors.deleteButtonPrefix}-vector-delete-success`
+          ).click()
+          const deleteSuccessConfirmButton = getSettingsLocator(
+            page,
+            `${vectorSelectors.deleteConfirmButtonPrefix}-vector-delete-success`
+          )
+          const deleteSuccessCancelButton = getSettingsLocator(
+            page,
+            `${vectorSelectors.deleteCancelButtonPrefix}-vector-delete-success`
+          )
+          await deleteSuccessConfirmButton.waitFor({ state: 'visible' })
+          await deleteSuccessCancelButton.waitFor({ state: 'visible' })
+
+          const deleteConfirmVisible =
+            (await deleteSuccessConfirmButton.isVisible()) &&
+            (await deleteSuccessCancelButton.isVisible())
+
+          await deleteSuccessCancelButton.click()
+          const deleteCancelInstalledVisible = await getSettingsLocator(
+            page,
+            `${vectorSelectors.installedBadgePrefix}-vector-delete-success`
+          ).isVisible()
+          const deleteCancelDownloadVisible = await getSettingsLocator(
+            page,
+            `${vectorSelectors.downloadButtonPrefix}-vector-delete-success`
+          ).isVisible().catch(() => false)
+
+          await getSettingsLocator(
+            page,
+            `${vectorSelectors.deleteButtonPrefix}-vector-delete-success`
+          ).click()
+          await getSettingsLocator(
+            page,
+            `${vectorSelectors.deleteConfirmButtonPrefix}-vector-delete-success`
           ).click()
           await getSettingsLocator(
             page,
@@ -104,10 +137,11 @@ describe('settings vector e2e', () => {
             `${vectorSelectors.deleteButtonPrefix}-vector-delete-failure`
           )
           await deleteFailureButton.waitFor({ state: 'visible' })
-          await page.evaluate((testId) => {
-            const element = document.querySelector<HTMLElement>(`[data-testid="${testId}"]`)
-            element?.click()
-          }, `${vectorSelectors.deleteButtonPrefix}-vector-delete-failure`)
+          await deleteFailureButton.click()
+          await getSettingsLocator(
+            page,
+            `${vectorSelectors.deleteConfirmButtonPrefix}-vector-delete-failure`
+          ).click()
           const deleteFailureErrorLocator = getSettingsLocator(
             page,
             `${vectorSelectors.errorPrefix}-vector-delete-failure`
@@ -121,6 +155,9 @@ describe('settings vector e2e', () => {
             .catch(() => false)
 
           return {
+            deleteConfirmVisible,
+            deleteCancelInstalledVisible,
+            deleteCancelDownloadVisible,
             deleteSuccessDownloadVisible,
             deleteSuccessInstalledVisible,
             deleteFailureMessageVisible,
@@ -135,6 +172,18 @@ describe('settings vector e2e', () => {
           }
         },
         assert: async (result, runtime) => {
+          await runtime.assertThat(
+            result.deleteConfirmVisible &&
+              result.deleteCancelInstalledVisible &&
+              !result.deleteCancelDownloadVisible,
+            {
+              name: 'vector-delete-requires-confirmation-before-removal',
+              message:
+                'Clicking delete should open a confirmation prompt, and cancelling should keep the installed model unchanged to satisfy SET-VECTOR-004-AC3 and SET-VECTOR-004-AC4.',
+              data: result
+            }
+          )
+
           await runtime.assertThat(
             result.deleteSuccessDownloadVisible && !result.deleteSuccessInstalledVisible,
             {

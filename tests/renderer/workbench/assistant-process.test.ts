@@ -141,6 +141,19 @@ describe('workbench assistant process groups', () => {
     expect(groups).toEqual([])
   })
 
+  it('keeps thinking placeholder when a malformed public decision event has no text', () => {
+    const initialGroups = [createAssistantThinkingGroup('assistant-1')]
+    const groups = reduceAssistantProcessGroups(initialGroups, {
+      type: 'assistant_process_thought',
+      runId: 'run-1',
+      thoughtId: 'thought-empty',
+      text: '   ',
+      createdAt: 2
+    })
+
+    expect(groups).toEqual(initialGroups)
+  })
+
   it('groups docx read tools by skill and builds tool-specific sentences from input', () => {
     const groupId = 'run-1:skill:docx-reader'
     const group = groupStarted({

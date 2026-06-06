@@ -1,0 +1,154 @@
+import fs from 'fs'
+import path from 'path'
+import { afterEach, describe, it, vi, waitFor } from 'vitest'
+import { MODELS_PATH } from '../../../src/main/utils/paths'
+import { EmbeddingService } from '../../../src/main/services/vector/EmbeddingService'
+import { ModelService } from '../../../src/main/services/model/ModelService'
+import { VectorModelDownloadService } from '../../../src/main/services/model/VectorModelDownloadService'
+import type {
+  ModelDownloadProgress,
+  ModelDownloadProgressReporter
+} from '../../../src/main/services/model/ModelService'
+import { runBackendCase } from '../../harness/backend/run-backend-case'
+
+const ACTIVE_DOWNLOAD_SNAPSHOT_FILE = '.active-vector-download.json'
+const SNAPSHOT_REPO_ID = 'jinaai/jina-embeddings-v2-base-zh'
+
+type VectorModelDownloadServiceStatics = typeof VectorModelDownloadService & {
+  instance: VectorModelDownloadService | null
+}
+
+const resolveSnapshotPath = (): string => path.join(MODELS_PATH, ACTIVE_DOWNLOAD_SNAPSHOT_FILE)
+
+afterEach(async () => {
+  vi.restoreAllMocks()
+  ;(VectorModelDownloadService as VectorModelDownloadServiceStatics).instance = null
+  await fs.promises.rm(resolveSnapshotPath(), { force: true })
+})
+
+describe('settings vector backend', () => {
+  it('vector-download-startup-resume-contract', async () => {
+    await runBackendCase({
+      caseId: 'vector-download-startup-resume-contract',
+      harnessMode: 'tool-real',
+      domain: 'settings',
+      suite: 'vector',
+      description:
+        'When a persisted active download snapshot exists, vector model startup initialization resumes the download in the background and clears the snapshot after completion.',
+      fixtures: [],
+      runMode: 'single',
+      execute: async () => {
+        const modelService = ModelService.getInstance()
+        const embeddingService = EmbeddingService.getInstance()
+        const service = VectorModelDownloadService.getInstance({
+          modelService,
+          embeddingService
+        })
+        const progressEvents: ModelDownloadProgress[] = []
+        let releaseDownload: (() => void) | null = null
+        const blockedDownload = new Promise<void>((resolve) => {
+          releaseDownload = resolve
+        })
+
+        await fs.promises.mkdir(MODELS_PATH, { recursive: true })
+        await fs.promises.writeFile(
+          resolveSnapshotPath(),
+          JSON.stringify(
+            {
+              repoId: SNAPSHOT_REPO_ID,
+              status: 'downloading',
+              progress: 18,
+              currentFile: 'onnx/model.onnx',
+              totalFiles: 4,
+              completedFiles: 0,
+              updatedAt: Date.now()
+            },
+            null,
+            2
+          ),
+          'utf8'
+        )
+
+        const downloadSpy = vi.spyOn(modelService, 'downloadModel').mockImplementation(
+          async (repoId: string, reporter?: ModelDownloadProgressReporter) => {
+            reporter?.({
+              repoId,
+              file: 'onnx/model.onnx',
+              status: 'downloading',
+              progress: 64,
+              totalFiles: 4,
+              completedFiles: 2
+            })
+            await blockedDownload
+            return { success: true }
+          }
+        )
+        vi.spyOn(modelService, 'isModelDownloaded').mockReturnValue(false)
+        vi.spyOn(embeddingService, 'initialize').mockResolvedValue()
+
+        const unsubscribe = service.onProgress((payload) => {
+          progressEvents.push(payload)
+        })
+
+        await service.initialize()
+        await waitFor(() => {
+          if (downloadSpy.mock.calls.length !== 1) {
+            throw new Error('download resume not started yet')
+          }
+        })
+
+        const activeDownloadDuringResume = service.getActiveDownload()
+
+        releaseDownload?.()
+        await waitFor(() => {
+          if (!progressEvents.some((event) => event.status === 'completed' && event.progress === 100)) {
+            throw new Error('download resume not completed yet')
+          }
+        })
+        unsubscribe()
+
+        return {
+          resumedRepoId: downloadSpy.mock.calls[0]?.[0] || '',
+          activeDownloadDuringResume,
+          progressEvents,
+          activeDownloadAfterFinish: service.getActiveDownload(),
+          snapshotExistsAfterFinish: fs.existsSync(resolveSnapshotPath())
+        }
+      },
+      assert: async (result, runtime) => {
+        runtime.assertThat(result.resumedRepoId === SNAPSHOT_REPO_ID, {
+          name: 'vector-startup-resume-starts-saved-download',
+          message:
+            'When startup finds a persisted active download snapshot, it should resume the same vector model download in the background to satisfy SET-VECTOR-002-AC4.',
+          data: result
+        })
+
+        runtime.assertThat(
+          result.activeDownloadDuringResume?.repoId === SNAPSHOT_REPO_ID &&
+            result.progressEvents.some(
+              (event) =>
+                event.status === 'downloading' &&
+                event.file === 'onnx/model.onnx' &&
+                event.progress === 64
+            ),
+          {
+            name: 'vector-startup-resume-keeps-progress-stream',
+            message:
+              'A resumed startup download should continue emitting progress for the saved model so the renderer can restore background progress state, aligning with SET-VECTOR-002-AC4.',
+            data: result
+          }
+        )
+
+        runtime.assertThat(
+          result.activeDownloadAfterFinish === null && result.snapshotExistsAfterFinish === false,
+          {
+            name: 'vector-startup-resume-clears-snapshot-after-success',
+            message:
+              'After a resumed download completes, the active snapshot should be cleared so the app does not replay a finished task on the next startup.',
+            data: result
+          }
+        )
+      }
+    })
+  })
+})
