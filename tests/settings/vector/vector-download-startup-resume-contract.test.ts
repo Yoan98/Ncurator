@@ -1,6 +1,6 @@
 import fs from 'fs'
 import path from 'path'
-import { afterEach, describe, it, vi, waitFor } from 'vitest'
+import { afterEach, describe, it, vi } from 'vitest'
 import { MODELS_PATH } from '../../../src/main/utils/paths'
 import { EmbeddingService } from '../../../src/main/services/vector/EmbeddingService'
 import { ModelService } from '../../../src/main/services/model/ModelService'
@@ -20,6 +20,18 @@ type VectorModelDownloadServiceStatics = typeof VectorModelDownloadService & {
 
 const resolveSnapshotPath = (): string => path.join(MODELS_PATH, ACTIVE_DOWNLOAD_SNAPSHOT_FILE)
 
+const waitForCondition = async (predicate: () => boolean, timeoutMs = 5000): Promise<void> => {
+  const deadline = Date.now() + timeoutMs
+  while (!predicate()) {
+    if (Date.now() >= deadline) {
+      throw new Error('condition not met before timeout')
+    }
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 20)
+    })
+  }
+}
+
 afterEach(async () => {
   vi.restoreAllMocks()
   ;(VectorModelDownloadService as VectorModelDownloadServiceStatics).instance = null
@@ -38,6 +50,7 @@ describe('settings vector backend', () => {
       fixtures: [],
       runMode: 'single',
       execute: async () => {
+        ;(VectorModelDownloadService as VectorModelDownloadServiceStatics).instance = null
         const modelService = ModelService.getInstance()
         const embeddingService = EmbeddingService.getInstance()
         const service = VectorModelDownloadService.getInstance({
@@ -91,20 +104,18 @@ describe('settings vector backend', () => {
         })
 
         await service.initialize()
-        await waitFor(() => {
-          if (downloadSpy.mock.calls.length !== 1) {
-            throw new Error('download resume not started yet')
-          }
-        })
+        await waitForCondition(() => downloadSpy.mock.calls.length === 1)
 
         const activeDownloadDuringResume = service.getActiveDownload()
+        const resumedDownloadTask = downloadSpy.mock.results[0]?.value as
+          | Promise<{ success: boolean }>
+          | undefined
 
         releaseDownload?.()
-        await waitFor(() => {
-          if (!progressEvents.some((event) => event.status === 'completed' && event.progress === 100)) {
-            throw new Error('download resume not completed yet')
-          }
-        })
+        if (resumedDownloadTask) {
+          await resumedDownloadTask
+        }
+        await waitForCondition(() => service.getActiveDownload() === null)
         unsubscribe()
 
         return {
