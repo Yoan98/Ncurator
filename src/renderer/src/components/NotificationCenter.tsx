@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+﻿import React, { useEffect, useState } from 'react'
 import { Card, Button, Typography } from 'antd'
 import { HiCloudArrowDown, HiOutlineCog6Tooth } from 'react-icons/hi2'
 import { useNavigate, useLocation } from 'react-router-dom'
@@ -158,7 +158,7 @@ const NotificationCenter: React.FC = () => {
       {notifications.map((item) => (
         <Card
           key={item.id}
-          className="w-80 shadow-lg border-[#D97757]/20 !bg-white/95 backdrop-blur-md pointer-events-auto animate-slide-in-right"
+          className="w-80 shadow-lg border-[#181818]/20 !bg-white/95 backdrop-blur-md pointer-events-auto animate-slide-in-right"
           size="small"
           actions={[
             <Button
@@ -166,7 +166,7 @@ const NotificationCenter: React.FC = () => {
               type="text"
               size="small"
               onClick={() => updateNotification(item.id, null)}
-              className="text-[#999999]"
+              className="text-[#9C9A94]"
             >
               稍后
             </Button>,
@@ -179,7 +179,7 @@ const NotificationCenter: React.FC = () => {
                 updateNotification(item.id, null)
                 item.action.onClick()
               }}
-              className="!bg-[#D97757] hover:!bg-[#C66A4A]"
+              className="!bg-[#181818] hover:!bg-[#3F3F3D]"
             >
               {item.action.label}
             </Button>
@@ -187,12 +187,12 @@ const NotificationCenter: React.FC = () => {
         >
           <Card.Meta
             avatar={
-              <div className="w-10 h-10 rounded-lg bg-[#FBF5F2] flex items-center justify-center text-[#D97757]">
+              <div className="w-10 h-10 rounded-lg bg-[#F0EFEB] flex items-center justify-center text-[#181818]">
                 {item.icon}
               </div>
             }
-            title={<span className="text-[#1F1F1F]">{item.title}</span>}
-            description={<Text className="text-[#666666] text-xs">{item.description}</Text>}
+            title={<span className="text-[#181818]">{item.title}</span>}
+            description={<Text className="text-[#6E6D69] text-xs">{item.description}</Text>}
           />
         </Card>
       ))}

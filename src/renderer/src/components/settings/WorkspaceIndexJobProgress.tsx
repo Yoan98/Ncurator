@@ -1,4 +1,4 @@
-import React from 'react'
+﻿import React from 'react'
 import { Progress } from 'antd'
 import type { WorkspaceIndexJobRecord } from '../../../../shared/types'
 
@@ -27,23 +27,23 @@ const WorkspaceIndexJobProgress: React.FC<WorkspaceIndexJobProgressProps> = ({ j
 
   return (
     <div
-      className="mt-3 rounded-[12px] border border-[#E5E5E4] bg-white px-3 py-2"
+      className="mt-3 rounded-[12px] border border-[#E1DED6] bg-white px-3 py-2"
       data-testid={testId}
     >
       <div className="flex items-center justify-between gap-3 text-[12px]">
-        <span className="font-medium text-[#1F1F1F]">{title}</span>
-        <span className="shrink-0 text-[#999999]">{percent}%</span>
+        <span className="font-medium text-[#181818]">{title}</span>
+        <span className="shrink-0 text-[#9C9A94]">{percent}%</span>
       </div>
       <Progress
         percent={percent}
         showInfo={false}
         size="small"
-        strokeColor="#D97757"
+        strokeColor="#181818"
         trailColor="#F1EFEC"
         className="mt-1.5"
       />
       {shouldHideMessage ? null : (
-        <div className="mt-1 text-[11px] text-[#666666]">
+        <div className="mt-1 text-[11px] text-[#6E6D69]">
           <span className="block truncate">{message}</span>
         </div>
       )}

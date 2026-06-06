@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+﻿import React, { useMemo } from 'react'
 import { Tooltip } from 'antd'
 import {
   HiChevronDown,
@@ -35,19 +35,19 @@ type AssistantTurnCardProps = {
 }
 
 const getProcessStatusClassName = (status: AssistantProcessGroup['status']): string => {
-  if (status === 'running') return 'text-[#D97757]'
-  if (status === 'failed') return 'text-[#B5455D]'
-  return 'text-[#8A8884]'
+  if (status === 'running') return 'text-[#181818]'
+  if (status === 'failed') return 'text-[#A83A31]'
+  return 'text-[#9C9A94]'
 }
 
 const getLayerIconClassName = (iconKind: AssistantProcessIconKind): string => {
-  if (iconKind === 'learning') return 'text-[#B98516]'
-  if (iconKind === 'compaction') return 'text-[#168A7A]'
-  if (iconKind === 'document') return 'text-[#6B7FBD]'
-  if (iconKind === 'edit') return 'text-[#B85F74]'
-  if (iconKind === 'search') return 'text-[#168A7A]'
-  if (iconKind === 'terminal') return 'text-[#7A6F67]'
-  return 'text-[#AAA6A0]'
+  if (iconKind === 'learning') return 'text-[#6E6D69]'
+  if (iconKind === 'compaction') return 'text-[#6E6D69]'
+  if (iconKind === 'document') return 'text-[#6E6D69]'
+  if (iconKind === 'edit') return 'text-[#6E6D69]'
+  if (iconKind === 'search') return 'text-[#6E6D69]'
+  if (iconKind === 'terminal') return 'text-[#6E6D69]'
+  return 'text-[#9C9A94]'
 }
 
 const LayerIcon: React.FC<{ iconKind: AssistantProcessIconKind; className?: string }> = ({
@@ -84,7 +84,7 @@ const renderSegments = (
     {segments.map((segment, index) => (
       <span
         key={`${segment.text}-${index}`}
-        className={`inline-flex items-center gap-1 ${segment.emphasis ? 'font-semibold text-[#2F2925]' : ''}`}
+        className={`inline-flex items-center gap-1 ${segment.emphasis ? 'font-semibold text-[#181818]' : ''}`}
       >
         {segment.iconKind ? <LayerIcon iconKind={segment.iconKind} /> : null}
         {segment.text}
@@ -97,7 +97,7 @@ const AssistantProcessThoughtView: React.FC<{ thought: AssistantProcessThought }
   thought
 }) => (
   <div
-    className="text-[14px] leading-7 text-[#2F2925]"
+    className="text-[14px] leading-7 text-[#181818]"
     data-testid={workbenchSelectors.assistantThoughts}
   >
     {thought.text}
@@ -123,14 +123,14 @@ const AssistantProcessGroupView: React.FC<{ group: AssistantProcessGroup }> = ({
             {renderSegments(groupText, { shimmer: isRunning })}
           </span>
           {group.items.length > 0 ? (
-            <HiChevronDown className="mt-[1px] h-4 w-4 shrink-0 text-[#AAA6A0] transition-transform duration-200 group-open/process:rotate-180" />
+            <HiChevronDown className="mt-[1px] h-4 w-4 shrink-0 text-[#9C9A94] transition-transform duration-200 group-open/process:rotate-180" />
           ) : null}
         </span>
       </summary>
       {group.items.length > 0 ? (
-        <div className="mt-1.5 space-y-1.5 pl-4 text-[13px] leading-6 text-[#77736E]">
+        <div className="mt-1.5 space-y-1.5 pl-4 text-[13px] leading-6 text-[#6E6D69]">
           {group.items.map((item) => (
-            <div key={item.id} className={item.status === 'failed' ? 'text-[#B5455D]' : undefined}>
+            <div key={item.id} className={item.status === 'failed' ? 'text-[#A83A31]' : undefined}>
               {renderSegments(getItemText(item))}
             </div>
           ))}
@@ -238,10 +238,10 @@ const AssistantExecutionGroupView: React.FC<{ groups: AssistantProcessGroup[]; i
         <span
           className={`inline-flex min-w-0 flex-1 items-center gap-1 text-[13px] leading-6 transition-colors duration-200 ${
             status === 'failed'
-              ? 'text-[#B5455D]'
+              ? 'text-[#A83A31]'
               : isRunning
-                ? 'text-[#D97757]'
-                : 'text-[#8A8884] group-hover/execution:text-[#2F2925]'
+                ? 'text-[#181818]'
+                : 'text-[#9C9A94] group-hover/execution:text-[#181818]'
           }`}
         >
           <span className={isRunning ? 'font-medium' : undefined}>
@@ -249,16 +249,16 @@ const AssistantExecutionGroupView: React.FC<{ groups: AssistantProcessGroup[]; i
           </span>
           {items.length > 0 ? (
             <>
-              <HiChevronRight className="mt-[1px] h-4 w-4 shrink-0 text-[#AAA6A0] opacity-0 transition-all duration-200 group-hover/execution:opacity-100 group-open/execution:hidden" />
-              <HiChevronDown className="mt-[1px] hidden h-4 w-4 shrink-0 text-[#AAA6A0] transition-all duration-200 group-open/execution:block" />
+              <HiChevronRight className="mt-[1px] h-4 w-4 shrink-0 text-[#9C9A94] opacity-0 transition-all duration-200 group-hover/execution:opacity-100 group-open/execution:hidden" />
+              <HiChevronDown className="mt-[1px] hidden h-4 w-4 shrink-0 text-[#9C9A94] transition-all duration-200 group-open/execution:block" />
             </>
           ) : null}
         </span>
       </summary>
       {items.length > 0 ? (
-        <div className="mt-1.5 space-y-1.5 pl-4 text-[13px] leading-6 text-[#77736E]">
+        <div className="mt-1.5 space-y-1.5 pl-4 text-[13px] leading-6 text-[#6E6D69]">
           {items.map((item) => (
-            <div key={item.id} className={item.status === 'failed' ? 'text-[#B5455D]' : undefined}>
+            <div key={item.id} className={item.status === 'failed' ? 'text-[#A83A31]' : undefined}>
               {renderSegments(getItemText(item))}
             </div>
           ))}
@@ -276,7 +276,7 @@ const renderArtifactChip = (
     <button
       type="button"
       onClick={() => onOpenFile(file)}
-      className="ui-hover-lift inline-flex max-w-full items-center gap-2 rounded-full border border-[#E5E5E4] bg-white px-3 py-1.5 text-left text-xs text-[#666666] hover:border-[#D97757] hover:text-[#D97757]"
+      className="ui-hover-lift inline-flex max-w-full items-center gap-2 rounded-full border border-[#E1DED6] bg-white px-3 py-1.5 text-left text-xs text-[#6E6D69] hover:border-[#181818] hover:text-[#181818]"
     >
       <HiOutlineDocumentText className="h-3.5 w-3.5 shrink-0" />
       <span className="truncate">{file.fileName}</span>
@@ -340,7 +340,7 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
 
         {hasFinalAnswer ? (
           <div
-            className="min-w-0 text-[15px] leading-7 text-[#1F1F1F]"
+            className="min-w-0 text-[15px] leading-7 text-[#181818]"
             data-testid={`${workbenchSelectors.assistantFinalAnswerPrefix}-${messageId}`}
           >
             <MarkdownRenderer content={finalAnswerMarkdown} />
@@ -348,14 +348,14 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
         ) : null}
 
         {!hasFinalAnswer && turn.status === 'failed' && turn.error ? (
-          <div className="rounded-[18px] border border-[#F7D5D9] bg-[#FFF2F4] px-4 py-3 text-sm leading-6 text-[#B5455D]">
+          <div className="rounded-[18px] border border-[#D9C6C2] bg-[#F7F1EF] px-4 py-3 text-sm leading-6 text-[#A83A31]">
             {turn.error}
           </div>
         ) : null}
 
         {turn.applyTargets.length > 0 ? (
-          <div className="rounded-[18px] border border-[#F4E5DF] bg-[#FBF5F2] px-4 py-3">
-            <div className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-[#B98572]">
+          <div className="rounded-[18px] border border-[#E1DED6] bg-[#F0EFEB] px-4 py-3">
+            <div className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-[#6E6D69]">
               修改的文件
             </div>
             <div className="space-y-2">
@@ -367,12 +367,12 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
                     type="button"
                     onClick={() => onOpenApply(apply.applyId)}
                     data-testid={`${workbenchSelectors.assistantTurnApplyPrefix}-${apply.applyId}`}
-                    className="w-full rounded-2xl border border-[#F4E5DF] bg-white px-4 py-3 text-left transition-all duration-200 hover:-translate-y-[1px] hover:border-[#D97757]"
+                    className="w-full rounded-2xl border border-[#E1DED6] bg-white px-4 py-3 text-left transition-all duration-200 hover:-translate-y-[1px] hover:border-[#181818]"
                   >
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
-                        <div className="text-[13px] font-medium text-[#1F1F1F]">{apply.title}</div>
-                        <div className="mt-1 text-xs text-[#666666]">
+                        <div className="text-[13px] font-medium text-[#181818]">{apply.title}</div>
+                        <div className="mt-1 text-xs text-[#6E6D69]">
                           {apply.changeCount} 处修改
                         </div>
                       </div>
@@ -402,10 +402,10 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
             {turn.blockers.map((blocker) => (
               <div
                 key={`${blocker.kind}-${blocker.title}`}
-                className="rounded-2xl border border-[#FDECC8] bg-[#FFF9ED] px-4 py-3 text-sm text-[#8A6510]"
+                className="rounded-2xl border border-[#E1DED6] bg-[#FAF9F5] px-4 py-3 text-sm text-[#6E6D69]"
               >
-                <div className="font-medium text-[#8A6510]">{blocker.title}</div>
-                <div className="mt-1 text-xs leading-relaxed text-[#8A6510]">
+                <div className="font-medium text-[#6E6D69]">{blocker.title}</div>
+                <div className="mt-1 text-xs leading-relaxed text-[#6E6D69]">
                   {blocker.description}
                 </div>
               </div>

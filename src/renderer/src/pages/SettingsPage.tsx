@@ -1,4 +1,4 @@
-import React from 'react'
+﻿import React from 'react'
 import { Navigate, useLocation, useParams } from 'react-router-dom'
 import AppPageHeader from '../components/app/AppPageHeader'
 import ModelSettingsPanel from '../components/settings/ModelSettingsPanel'
@@ -40,7 +40,7 @@ const SettingsPage: React.FC = () => {
   const sectionMeta = SETTINGS_SECTION_META[currentSection]
 
   return (
-    <div className="h-screen overflow-hidden bg-[#F5F5F4]" data-testid={settingsSelectors.page}>
+    <div className="h-screen overflow-hidden bg-[#F6F5F1]" data-testid={settingsSelectors.page}>
       <div className="mx-auto flex h-full w-full max-w-[1320px] flex-col gap-4 px-5 py-5 lg:px-6">
         <AppPageHeader
           icon={sectionMeta.icon}

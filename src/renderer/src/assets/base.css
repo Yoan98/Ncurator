@@ -1,22 +1,32 @@
 @import 'tailwindcss';
 
 :root {
-  /* 核心色板 */
-  --color-bg-primary: #f5f5f4; /* 米色主背景 */
-  --color-bg-white: #ffffff; /* 纯白卡片背景 */
-  --color-brand: #d97757; /* 赤陶色品牌色 */
-  --color-brand-hover: #c66a4a; /* 品牌色悬停 */
-  --color-brand-light: #f4e5df; /* 品牌色浅色变体 */
-  --color-brand-bg: #fbf5f2; /* 极浅品牌背景 */
+  /* ink-mono 色板 */
+  --ink-canvas: #f6f5f1;
+  --ink-paper: #fffdf8;
+  --ink-paper-soft: #faf9f5;
+  --ink-wash: #f0efeb;
+  --ink-wash-strong: #e8e6df;
+  --ink: #181818;
+  --ink-2: #3f3f3d;
+  --ink-3: #6e6d69;
+  --ink-4: #9c9a94;
+  --ink-line: #e1ded6;
+  --ink-line-strong: #cbc7bd;
+  --ink-seal: #a83a31;
 
-  /* 文本色板 */
-  --color-text-primary: #1f1f1f; /* 深炭黑主文本 */
-  --color-text-secondary: #666666; /* 中灰色次要文本 */
-  --color-text-tertiary: #999999; /* 浅灰色辅助文本 */
-
-  /* 边框与分割线 */
-  --color-border: #e5e5e4; /* 主要边框色 */
-  --color-border-dark: #d4d4d3; /* 深色边框 */
+  /* 兼容通用 utility 命名，语义已切到 ink-mono */
+  --color-bg-primary: var(--ink-canvas);
+  --color-bg-white: var(--ink-paper);
+  --color-brand: var(--ink);
+  --color-brand-hover: var(--ink-2);
+  --color-brand-light: var(--ink-line);
+  --color-brand-bg: var(--ink-wash);
+  --color-text-primary: var(--ink);
+  --color-text-secondary: var(--ink-3);
+  --color-text-tertiary: var(--ink-4);
+  --color-border: var(--ink-line);
+  --color-border-dark: var(--ink-line-strong);
 
   /* 阴影变量 (仅供参考，主要使用 Tailwind 类) */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
@@ -83,32 +93,32 @@ textarea,
 }
 
 .ui-panel {
-  @apply border border-[#E5E5E4] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)];
+  @apply border border-[#E1DED6] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)];
   border-radius: var(--ui-radius-panel);
 }
 
 .ui-panel-soft {
-  @apply border border-[#E5E5E4] bg-[#FCFBF8] shadow-[0_1px_2px_rgba(0,0,0,0.04)];
+  @apply border border-[#E1DED6] bg-[#FAF9F5] shadow-[0_1px_2px_rgba(0,0,0,0.04)];
   border-radius: var(--ui-radius-panel);
 }
 
 .ui-panel-ghost {
-  @apply border border-[#E8E2DA] bg-white/88 shadow-[0_1px_2px_rgba(0,0,0,0.04)] backdrop-blur-sm;
+  @apply border border-[#CBC7BD] bg-white/88 shadow-[0_1px_2px_rgba(0,0,0,0.04)] backdrop-blur-sm;
   border-radius: var(--ui-radius-panel);
 }
 
 .ui-inset {
-  @apply border border-[#ECE7DF] bg-[#FAFAF9];
+  @apply border border-[#E8E6DF] bg-[#F0EFEB];
   border-radius: var(--ui-radius-inset);
 }
 
 .ui-icon-well {
-  @apply inline-flex items-center justify-center border border-[#E8E2DA] bg-[#FAFAF9] text-[#666666];
+  @apply inline-flex items-center justify-center border border-[#CBC7BD] bg-[#F0EFEB] text-[#6E6D69];
   border-radius: var(--ui-radius-inset);
 }
 
 .ui-icon-well-brand {
-  @apply border-[#F4E5DF] bg-[#FBF5F2] text-[#D97757];
+  @apply border-[#E1DED6] bg-[#F0EFEB] text-[#181818];
 }
 
 .ui-status-pill {
@@ -139,17 +149,17 @@ textarea,
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #d4d4d3;
+  background: #CBC7BD;
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #999999;
+  background: #9C9A94;
 }
 
 /* 覆盖 Mark 样式 */
 mark {
-  @apply bg-[#F4E5DF] text-[#D97757] rounded-sm px-0.5 font-medium;
+  @apply bg-[#E1DED6] text-[#181818] rounded-sm px-0.5 font-medium;
 }
 
 @keyframes slideInRight {
@@ -169,27 +179,27 @@ mark {
 
 @keyframes workbenchThinkingFlow {
   0% {
-    background-position: 120% 0;
+    background-position: -240% 0;
   }
   100% {
-    background-position: -120% 0;
+    background-position: 240% 0;
   }
 }
 
 .workbench-thinking-shimmer {
-  color: #9f6b56;
-  background-image: linear-gradient(90deg, #9f6b56 0%, #d97757 42%, #f0b39b 50%, #d97757 58%, #9f6b56 100%);
-  background-size: 220% 100%;
+  color: var(--ink-3);
+  background-image: linear-gradient(90deg, var(--ink-4) 0%, var(--ink-4) 36%, var(--ink) 48%, var(--ink-line-strong) 52%, var(--ink-4) 64%, var(--ink-4) 100%);
+  background-size: 320% 100%;
   background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-  animation: workbenchThinkingFlow 1.5s ease-in-out infinite;
+  animation: workbenchThinkingFlow 3.2s linear infinite;
 }
 
 .workbench-scope-select.ant-select .ant-select-selector {
   min-height: 40px !important;
   border-radius: 16px !important;
-  border-color: #e5e5e4 !important;
+  border-color: #E1DED6 !important;
   background: #f8f8f7 !important;
   box-shadow: none !important;
   padding: 4px 10px !important;
@@ -197,24 +207,24 @@ mark {
 
 .workbench-scope-select.ant-select-focused .ant-select-selector,
 .workbench-scope-select.ant-select-open .ant-select-selector {
-  border-color: #d97757 !important;
-  box-shadow: 0 0 0 3px rgba(244, 229, 223, 0.95) !important;
+  border-color: #181818 !important;
+  box-shadow: 0 0 0 3px rgba(232, 230, 223, 0.95) !important;
 }
 
 .workbench-scope-select .ant-select-selection-placeholder {
-  color: #999999 !important;
+  color: #9C9A94 !important;
 }
 
 .workbench-scope-select .ant-select-selection-item {
   border-radius: 999px !important;
   background: #ffffff !important;
-  border: 1px solid #e5e5e4 !important;
-  color: #666666 !important;
+  border: 1px solid #E1DED6 !important;
+  color: #6E6D69 !important;
   padding-inline-end: 8px !important;
 }
 
 .workbench-composer-select.ant-select {
-  color: #757572;
+  color: #6E6D69;
   font-size: 12px;
 }
 
@@ -236,7 +246,7 @@ mark {
 }
 
 .workbench-composer-select.ant-select .ant-select-selection-placeholder {
-  color: #9b9b97 !important;
+  color: #9C9A94 !important;
 }
 
 .workspace-file-tree.ant-tree,
@@ -251,6 +261,8 @@ mark {
 }
 
 .workspace-file-tree.ant-tree .ant-tree-treenode {
+  display: flex;
+  align-items: center;
   width: 100%;
   max-width: 100%;
   border-radius: var(--ui-radius-control);
@@ -267,6 +279,26 @@ mark {
   min-width: 0;
   overflow: hidden;
   background: transparent !important;
+}
+
+.workspace-file-tree.ant-tree .ant-tree-switcher {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: stretch;
+  width: 28px;
+  min-width: 28px;
+  height: auto;
+  line-height: 1;
+  background: transparent !important;
+}
+
+.workspace-file-tree.ant-tree .ant-tree-indent {
+  align-self: stretch;
+}
+
+.workspace-file-tree.ant-tree .ant-tree-indent-unit {
+  width: 18px;
 }
 
 .workspace-file-tree.ant-tree .ant-tree-list-holder-inner {

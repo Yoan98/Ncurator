@@ -1,4 +1,4 @@
-import React from 'react'
+﻿import React from 'react'
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Layout, ConfigProvider, theme } from 'antd'
 import ConversationWorkbenchPage from './pages/ConversationWorkbenchPage'
@@ -15,8 +15,8 @@ function App(): React.JSX.Element {
       theme={{
         algorithm: theme.defaultAlgorithm,
         token: {
-          colorPrimary: '#D97757',
-          colorLink: '#D97757',
+          colorPrimary: '#181818',
+          colorLink: '#181818',
           borderRadius: 10,
           controlHeight: 36,
           controlHeightLG: 40,
@@ -24,14 +24,14 @@ function App(): React.JSX.Element {
           fontSize: 14,
           fontFamily:
             '"SF Pro Text", "PingFang SC", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-          colorText: '#1F1F1F',
-          colorTextHeading: '#1F1F1F',
-          colorBorder: '#E5E5E4',
-          colorBgLayout: '#F5F5F4'
+          colorText: '#181818',
+          colorTextHeading: '#181818',
+          colorBorder: '#E1DED6',
+          colorBgLayout: '#F6F5F1'
         },
         components: {
           Button: {
-            primaryShadow: '0 2px 8px rgba(217, 119, 87, 0.2)',
+            primaryShadow: '0 2px 8px rgba(24, 24, 24, 0.12)',
             borderRadius: 10,
             controlHeight: 36,
             defaultShadow: 'none'
@@ -41,15 +41,15 @@ function App(): React.JSX.Element {
           },
           Input: {
             controlHeight: 38,
-            activeBorderColor: '#D97757',
-            hoverBorderColor: '#C66A4A'
+            activeBorderColor: '#181818',
+            hoverBorderColor: '#3F3F3D'
           },
           Modal: {
             borderRadiusLG: 24
           },
           Select: {
-            activeBorderColor: '#D97757',
-            hoverBorderColor: '#C66A4A'
+            activeBorderColor: '#181818',
+            hoverBorderColor: '#3F3F3D'
           }
         }
       }}
@@ -62,8 +62,8 @@ function App(): React.JSX.Element {
 }
 
 const MainLayout: React.FC = () => (
-  <Layout className="min-h-screen bg-[#F5F5F4]">
-    <Content className="overflow-auto bg-[#F5F5F4]">
+  <Layout className="min-h-screen bg-[var(--ink-canvas)]">
+    <Content className="overflow-auto bg-[var(--ink-canvas)]">
       <Routes>
         <Route path="/" element={<ConversationWorkbenchPage />} />
         <Route path="/chat" element={<Navigate to="/" replace />} />

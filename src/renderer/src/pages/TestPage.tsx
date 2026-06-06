@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+﻿import React, { useEffect, useState } from 'react'
 import type { SearchResult, DocumentRecord, ChunkListItem } from '../../../shared/types'
 import {
   Alert,
@@ -143,7 +143,7 @@ function TestPage(): React.JSX.Element {
   }, [view])
 
   return (
-    <div className="h-screen overflow-hidden bg-[radial-gradient(circle_at_top_left,_rgba(251,245,242,0.95),_rgba(245,245,244,0.92)_42%,_#F5F5F4_72%)]">
+    <div className="h-screen overflow-hidden bg-[radial-gradient(circle_at_top_left,_rgba(255,253,248,0.86),_rgba(240,239,235,0.74)_42%,_#F6F5F1_72%)]">
       <div className="mx-auto flex h-full w-full max-w-[1360px] flex-col gap-5 px-5 py-5 font-sans lg:px-6">
         <AppPageHeader
           icon={<HiCube className="h-5 w-5" />}
@@ -153,7 +153,7 @@ function TestPage(): React.JSX.Element {
 
         <div className="min-h-0 flex-1 overflow-y-auto pb-5">
           <Alert
-            className="mb-6 rounded-xl border-[#F4E5DF] bg-[#FBF5F2]"
+            className="mb-6 rounded-xl border-[#E1DED6] bg-[#F0EFEB]"
             message="本地文件导入已迁移"
             description="本地资料现在通过“设置 > 工作空间 / 网页资料”管理。实验室仅保留检索、文档和 chunk 调试能力。"
             type="info"
@@ -169,7 +169,7 @@ function TestPage(): React.JSX.Element {
               ]}
               value={view}
               onChange={(val) => setView(val as typeof view)}
-              className="bg-[#F5F5F4]"
+              className="bg-[#F6F5F1]"
             />
 
             {view === 'search' ? (
@@ -181,7 +181,7 @@ function TestPage(): React.JSX.Element {
                 ]}
                 value={mode}
                 onChange={(val) => setMode(val as typeof mode)}
-                className="bg-[#F5F5F4]"
+                className="bg-[#F6F5F1]"
               />
             ) : null}
 
@@ -231,7 +231,7 @@ function TestPage(): React.JSX.Element {
             </div>
           ) : null}
 
-          <div className="flex-1 overflow-hidden rounded-lg border border-[#E5E5E4] bg-white">
+          <div className="flex-1 overflow-hidden rounded-lg border border-[#E1DED6] bg-white">
             {view === 'search' ? (
               <div className="h-full overflow-auto p-4">
                 <List
@@ -240,7 +240,7 @@ function TestPage(): React.JSX.Element {
                   renderItem={(item) => (
                     <List.Item>
                       <Card
-                        title={<span className="text-sm text-[#1F1F1F]">{item.document_name}</span>}
+                        title={<span className="text-sm text-[#181818]">{item.document_name}</span>}
                         className="w-full shadow-sm hover:shadow-md transition-shadow"
                         size="small"
                       >
@@ -251,7 +251,7 @@ function TestPage(): React.JSX.Element {
                         >
                           {item.text}
                         </Paragraph>
-                        <div className="mt-2 flex flex-wrap gap-4 text-xs text-[#999999]">
+                        <div className="mt-2 flex flex-wrap gap-4 text-xs text-[#9C9A94]">
                           <span>ID: {item.id}</span>
                           {mode !== 'vectorSearch' ? (
                             <Tag color="blue">Score: {item._score?.toFixed(4)}</Tag>
@@ -283,7 +283,7 @@ function TestPage(): React.JSX.Element {
                   onChange: (page, pageSize) => loadDocuments(page, pageSize, docKeyword),
                   showTotal: (total) => `Total ${total} docs`
                 }}
-                className="[&_.ant-table-thead_th]:!bg-[#F5F5F4] [&_.ant-table-thead_th]:!text-[#666666] [&_.ant-table-thead_th]:!font-medium"
+                className="[&_.ant-table-thead_th]:!bg-[#F6F5F1] [&_.ant-table-thead_th]:!text-[#6E6D69] [&_.ant-table-thead_th]:!font-medium"
                 columns={[
                   {
                     title: 'ID',
@@ -329,7 +329,7 @@ function TestPage(): React.JSX.Element {
                   onChange: (page, pageSize) => loadChunks(page, pageSize, chunkQuery),
                   showTotal: (total) => `Total ${total} chunks`
                 }}
-                className="[&_.ant-table-thead_th]:!bg-[#F5F5F4] [&_.ant-table-thead_th]:!text-[#666666] [&_.ant-table-thead_th]:!font-medium"
+                className="[&_.ant-table-thead_th]:!bg-[#F6F5F1] [&_.ant-table-thead_th]:!text-[#6E6D69] [&_.ant-table-thead_th]:!font-medium"
                 columns={[
                   {
                     title: 'ID',

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { App, Button } from 'antd'
 import {
   HiArrowUp,
@@ -89,6 +89,8 @@ type ApprovalDraftDecision = {
   action?: ApprovalBatchDecisionAction
   message: string
 }
+
+const SCROLL_BOTTOM_TOLERANCE = 72
 
 const createEmptyPanel = (): WorkbenchContentPanelState => ({
   kind: 'empty',
@@ -265,6 +267,8 @@ const ChatPage: React.FC = () => {
   const lastSubmittedInputRef = useRef('')
   const lastSubmittedReferencesRef = useRef<SelectedReference[]>([])
   const scrollRef = useRef<HTMLDivElement>(null)
+  const shouldAutoScrollRef = useRef(true)
+  const scrollFrameRef = useRef<number | null>(null)
 
   const kbScopeDocumentIds = useMemo(() => {
     const explicitIds = collectReferenceDocumentIds(selectedReferences)
@@ -322,10 +326,24 @@ const ChatPage: React.FC = () => {
     return (approvalDraftDecisions[currentApprovalItem.itemId]?.message || '').trim().length === 0
   }, [approvalDraftDecisions, approvalSubmitting, currentApprovalItem])
 
-  const scrollToBottom = (): void => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+  const scrollToBottom = (force = false): void => {
+    if (!force && !shouldAutoScrollRef.current) return
+    if (scrollFrameRef.current !== null) {
+      window.cancelAnimationFrame(scrollFrameRef.current)
     }
+    scrollFrameRef.current = window.requestAnimationFrame(() => {
+      const scrollElement = scrollRef.current
+      scrollFrameRef.current = null
+      if (!scrollElement) return
+      scrollElement.scrollTop = scrollElement.scrollHeight
+    })
+  }
+
+  const handleMessageScroll = (event: React.UIEvent<HTMLDivElement>): void => {
+    const scrollElement = event.currentTarget
+    const distanceToBottom =
+      scrollElement.scrollHeight - scrollElement.scrollTop - scrollElement.clientHeight
+    shouldAutoScrollRef.current = distanceToBottom <= SCROLL_BOTTOM_TOLERANCE
   }
 
   const emitSuccessMessage = (content: string): void => {
@@ -364,7 +382,7 @@ const ChatPage: React.FC = () => {
       return {
         title: contentPanel.file.fileName || contentPanel.title,
         badge: FILE_ORIGIN_LABELS[contentPanel.file.origin],
-        badgeClassName: 'border-[#E5E5E4] bg-white text-[#666666]'
+        badgeClassName: 'border-[#E1DED6] bg-white text-[#6E6D69]'
       }
     }
 
@@ -445,7 +463,8 @@ const ChatPage: React.FC = () => {
         }
         return nextTurns
       })
-      scrollToBottom()
+      shouldAutoScrollRef.current = true
+      scrollToBottom(true)
     } catch (error) {
       console.error('Failed to load messages', error)
     }
@@ -819,7 +838,16 @@ const ChatPage: React.FC = () => {
 
   useEffect(() => {
     scrollToBottom()
-  }, [currentMessages])
+  }, [assistantTurns, currentMessages, loading, pendingApprovalBatch, pendingWorkspaceRequest])
+
+  useEffect(
+    () => () => {
+      if (scrollFrameRef.current !== null) {
+        window.cancelAnimationFrame(scrollFrameRef.current)
+      }
+    },
+    []
+  )
 
   useEffect(() => {
     window.dispatchEvent(
@@ -1220,6 +1248,8 @@ const ChatPage: React.FC = () => {
     setInput('')
     setSelectedReferences([])
     setComposerResetKey((value) => value + 1)
+    shouldAutoScrollRef.current = true
+    scrollToBottom(true)
     setLoading(true)
     setCancellingRun(false)
     setPendingApprovalBatch(null)
@@ -1333,6 +1363,8 @@ const ChatPage: React.FC = () => {
     setInput('')
     setSelectedReferences([])
     setComposerResetKey((value) => value + 1)
+    shouldAutoScrollRef.current = true
+    scrollToBottom(true)
     setLoading(true)
     setCancellingRun(false)
     setAiRunId(null)
@@ -1717,7 +1749,7 @@ const ChatPage: React.FC = () => {
     return (
       <div key={messageItem.id} className="flex justify-end">
         <div className="max-w-[66%]">
-          <div className="rounded-[18px] bg-[#EDE5DF] px-3.5 py-2.5 text-[14px] leading-6 text-[#2F2925]">
+          <div className="rounded-[18px] bg-[#F0EFEB] px-3.5 py-2.5 text-[14px] leading-6 text-[#181818]">
             {messageItem.content}
           </div>
           {sources.length > 0 ? (
@@ -1730,7 +1762,7 @@ const ChatPage: React.FC = () => {
                     key={`${messageItem.id}-${source.id}`}
                     type="button"
                     onClick={() => void openFile(fileRef)}
-                    className="rounded-full border border-[#E5E5E4] bg-white px-3 py-1.5 text-[12px] text-[#666666] transition-all duration-200 hover:border-[#D97757] hover:text-[#D97757]"
+                    className="rounded-full border border-[#E1DED6] bg-white px-3 py-1.5 text-[12px] text-[#6E6D69] transition-all duration-200 hover:border-[#181818] hover:text-[#181818]"
                   >
                     {source.document_name}
                   </button>
@@ -1748,7 +1780,7 @@ const ChatPage: React.FC = () => {
     if (!turn) {
       return (
         <div key={messageItem.id} className="w-full">
-          <div className="min-w-0 text-[15px] leading-7 text-[#1F1F1F]">
+          <div className="min-w-0 text-[15px] leading-7 text-[#181818]">
             <MarkdownRenderer content={messageItem.content} />
           </div>
         </div>
@@ -1779,16 +1811,16 @@ const ChatPage: React.FC = () => {
 
   return (
     <div
-      className="flex min-h-screen bg-[#F5F5F4]"
+      className="flex min-h-screen bg-[#F6F5F1]"
       data-testid={workbenchSelectors.page}
       data-workbench-mode={composerMode}
     >
       <aside
-        className={`flex h-screen flex-col border-r border-[#E5E5E4] bg-[#F7F5F1] transition-all duration-200 ${
+        className={`flex h-screen flex-col border-r border-[#E1DED6] bg-[#F7F5F1] transition-all duration-200 ${
           sidebarCollapsed ? 'w-14' : 'w-[220px]'
         }`}
       >
-        <div className="border-b border-[#E5E5E4] px-2 py-2">
+        <div className="border-b border-[#E1DED6] px-2 py-2">
           <div
             className={`flex ${sidebarCollapsed ? 'flex-col items-center gap-1.5' : 'items-center justify-between gap-2'}`}
           >
@@ -1801,7 +1833,7 @@ const ChatPage: React.FC = () => {
                 <span className="ui-icon-well flex h-7 w-7 shrink-0 bg-white">
                   <img src={brandIcon} alt="馆长" className="w-4 invert-100" />
                 </span>
-                <span className="truncate text-[13px] font-semibold tracking-[0.01em] text-[#1F1F1F]">
+                <span className="truncate text-[13px] font-semibold tracking-[0.01em] text-[#181818]">
                   馆长
                 </span>
               </div>
@@ -1812,7 +1844,7 @@ const ChatPage: React.FC = () => {
                 type="text"
                 size="small"
                 icon={<HiOutlinePencilSquare className="h-3 w-3" />}
-                className="!flex !h-7 !w-7 !items-center !justify-center !rounded-[10px] !border !border-[#E5E5E4] !bg-white !p-0 !text-[#D97757] !shadow-none hover:!border-[#D97757] hover:!text-[#C66A4A]"
+                className="!flex !h-7 !w-7 !items-center !justify-center !rounded-[10px] !border !border-[#E1DED6] !bg-white !p-0 !text-[#181818] !shadow-none hover:!border-[#181818] hover:!text-[#3F3F3D]"
                 onClick={() => void createNewSession()}
                 data-testid={workbenchSelectors.newSessionButton}
               />
@@ -1826,10 +1858,10 @@ const ChatPage: React.FC = () => {
                     <HiViewColumns className="h-3 w-3" />
                   )
                 }
-                className={`!flex !h-7 !w-7 !items-center !justify-center !rounded-[10px] !border !p-0 !shadow-none hover:!border-[#D97757] hover:!text-[#D97757] ${
+                className={`!flex !h-7 !w-7 !items-center !justify-center !rounded-[10px] !border !p-0 !shadow-none hover:!border-[#181818] hover:!text-[#181818] ${
                   sidebarCollapsed
-                    ? '!border-[#E5E5E4] !bg-white !text-[#666666]'
-                    : '!border-[#F4E5DF] !bg-[#FBF5F2] !text-[#D97757]'
+                    ? '!border-[#E1DED6] !bg-white !text-[#6E6D69]'
+                    : '!border-[#E1DED6] !bg-[#F0EFEB] !text-[#181818]'
                 }`}
                 onClick={() => setSidebarCollapsed((previous) => !previous)}
                 data-testid={workbenchSelectors.sessionsToggle}
@@ -1849,8 +1881,8 @@ const ChatPage: React.FC = () => {
               tabIndex={0}
               className={`group relative w-full rounded-[14px] border text-left transition-all duration-200 ${
                 currentSessionId === session.id
-                  ? 'border-[#F4E5DF] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]'
-                  : 'border-transparent bg-transparent hover:border-[#ECE7DF] hover:bg-white/80'
+                  ? 'border-[#E1DED6] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]'
+                  : 'border-transparent bg-transparent hover:border-[#E8E6DF] hover:bg-white/80'
               } ${sidebarCollapsed ? 'px-2 py-2' : 'px-3 py-2'}`}
               onClick={() => setCurrentSessionId(session.id)}
               onKeyDown={(event) => {
@@ -1861,15 +1893,15 @@ const ChatPage: React.FC = () => {
               }}
             >
               {sidebarCollapsed ? (
-                <div className="flex justify-center text-xs font-medium text-[#1F1F1F]">
+                <div className="flex justify-center text-xs font-medium text-[#181818]">
                   {session.title.slice(0, 1)}
                 </div>
               ) : (
                 <>
-                  <div className="truncate pr-6 text-[13px] font-medium text-[#1F1F1F]">
+                  <div className="truncate pr-6 text-[13px] font-medium text-[#181818]">
                     {session.title}
                   </div>
-                  <div className="mt-1 text-[12px] text-[#999999]">
+                  <div className="mt-1 text-[12px] text-[#9C9A94]">
                     {formatSessionDate(session.created_at)}
                   </div>
                   <Button
@@ -1899,24 +1931,24 @@ const ChatPage: React.FC = () => {
       <div className="min-w-0 flex-1">
         <div className="flex h-screen min-h-0 flex-col">
           <div
-            className={`flex h-11 shrink-0 items-center justify-between bg-[#F5F5F4] px-4 ${
-              contentPanelCollapsed ? '' : 'border-b border-[#E5E5E4]'
+            className={`flex h-11 shrink-0 items-center justify-between bg-[#F6F5F1] px-4 ${
+              contentPanelCollapsed ? '' : 'border-b border-[#E1DED6]'
             }`}
           >
             <div className="min-w-0 flex-1">
               {currentSession || sharedHeaderMeta ? (
                 <div className="flex min-w-0 items-center gap-2">
                   {currentSession ? (
-                    <div className="truncate text-sm font-semibold text-[#1F1F1F]">
+                    <div className="truncate text-sm font-semibold text-[#181818]">
                       {currentSession.title}
                     </div>
                   ) : null}
                   {currentSession && sharedHeaderMeta ? (
-                    <span className="text-[#D4D4D3]">/</span>
+                    <span className="text-[#CBC7BD]">/</span>
                   ) : null}
                   {sharedHeaderMeta ? (
                     <div
-                      className="truncate text-sm font-semibold text-[#1F1F1F]"
+                      className="truncate text-sm font-semibold text-[#181818]"
                       data-testid={workbenchSelectors.contentPanelTitle}
                     >
                       {sharedHeaderMeta.title}
@@ -1943,10 +1975,10 @@ const ChatPage: React.FC = () => {
                   <HiRectangleGroup className="h-3 w-3" />
                 )
               }
-              className={`!flex !h-7 !w-7 !items-center !justify-center !rounded-[10px] !border !p-0 !shadow-none hover:!border-[#D97757] hover:!text-[#D97757] ${
+              className={`!flex !h-7 !w-7 !items-center !justify-center !rounded-[10px] !border !p-0 !shadow-none hover:!border-[#181818] hover:!text-[#181818] ${
                 contentPanelCollapsed
-                  ? '!border-[#E5E5E4] !bg-white !text-[#666666]'
-                  : '!border-[#F4E5DF] !bg-[#FBF5F2] !text-[#D97757]'
+                  ? '!border-[#E1DED6] !bg-white !text-[#6E6D69]'
+                  : '!border-[#E1DED6] !bg-[#F0EFEB] !text-[#181818]'
               }`}
               onClick={() => setContentPanelCollapsed((previous) => !previous)}
             />
@@ -1955,20 +1987,24 @@ const ChatPage: React.FC = () => {
           <div className="flex min-h-0 flex-1 overflow-hidden">
             <div className="min-w-0 flex-1">
               <div className="flex h-full min-h-0 flex-col">
-                <div className="min-h-0 flex-1 overflow-y-auto px-6 pt-4" ref={scrollRef}>
+                <div
+                  className="min-h-0 flex-1 overflow-y-auto px-6 pt-4"
+                  ref={scrollRef}
+                  onScroll={handleMessageScroll}
+                >
                   <div className="mx-auto flex max-w-[920px] flex-col gap-5 pb-8">
                     {currentMessages.length === 0 ? (
                       <div className="relative flex min-h-[58vh] items-center justify-center overflow-hidden px-8 py-12 text-center">
-                        <div className="absolute inset-x-[12%] top-[18%] h-44 rounded-full bg-[radial-gradient(circle,rgba(251,245,242,0.98),rgba(251,245,242,0.58)_42%,rgba(245,245,244,0)_76%)] blur-2xl" />
-                        <div className="absolute inset-x-[20%] bottom-[20%] h-32 rounded-full bg-[radial-gradient(circle,rgba(244,229,223,0.42),rgba(245,245,244,0)_72%)] blur-3xl" />
+                        <div className="absolute inset-x-[12%] top-[18%] h-44 rounded-full bg-[radial-gradient(circle,rgba(255,253,248,0.9),rgba(240,239,235,0.48)_42%,rgba(246,245,241,0)_76%)] blur-2xl" />
+                        <div className="absolute inset-x-[20%] bottom-[20%] h-32 rounded-full bg-[radial-gradient(circle,rgba(225,222,214,0.38),rgba(246,245,241,0)_72%)] blur-3xl" />
                         <div className="relative max-w-[420px]">
-                          <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-white/45 text-[#D19A87] shadow-[inset_0_0_0_1px_rgba(228,215,206,0.7)] backdrop-blur-sm">
+                          <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-[#FFFDF8]/70 text-[#6E6D69] shadow-[inset_0_0_0_1px_rgba(203,199,189,0.7)] backdrop-blur-sm">
                             <HiBookOpen className="h-5 w-5" />
                           </div>
-                          <h3 className="mt-5 text-[18px] font-semibold tracking-[-0.01em] text-[#2A2826]">
+                          <h3 className="mt-5 text-[18px] font-semibold tracking-[-0.01em] text-[#181818]">
                             从一个问题开始
                           </h3>
-                          <p className="mt-2 text-[13px] leading-6 text-[#7C7771]">
+                          <p className="mt-2 text-[13px] leading-6 text-[#6E6D69]">
                             {composerMode === 'search'
                               ? '搜索模式只检索当前资料范围。'
                               : '智能模式会结合当前工作区与插入资料执行。'}
@@ -1985,189 +2021,194 @@ const ChatPage: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="shrink-0 bg-gradient-to-t from-[#F5F5F4] via-[#F5F5F4]/96 via-58% to-transparent px-6 pb-6 pt-6">
+                <div className="shrink-0 bg-gradient-to-t from-[#F6F5F1] via-[#F6F5F1]/96 via-58% to-transparent px-6 pb-6 pt-6">
                   <div className="mx-auto max-w-[920px]">
                     {composerMode === 'ai' && (pendingApprovalBatch || pendingWorkspaceRequest) ? (
                       <div
-                        className="mb-3 flex items-start gap-3 rounded-[14px] border border-[#F3E6C7] bg-[#FFFCF6] px-3 py-3 text-sm text-[#7A6530]"
+                        className="overflow-hidden rounded-[24px] border border-[#CBC7BD] bg-[#FFFDF8] shadow-[0_22px_52px_rgba(24,24,24,0.12)]"
                         data-testid={
                           pendingApprovalBatch
                             ? chatSelectors.approvalBatchCard
                             : chatSelectors.workspaceBanner
                         }
                       >
-                        <HiOutlineExclamationCircle className="mt-1 h-4 w-4 shrink-0" />
-                        <div className="min-w-0 flex-1">
-                          {pendingApprovalBatch && currentApprovalItem ? (
-                            <div className="flex flex-col gap-3">
-                              <div className="flex items-center justify-between gap-3">
-                                <div className="text-sm font-semibold text-[#7A6530]">
-                                  审批 {approvalCurrentIndex + 1} /{' '}
-                                  {pendingApprovalBatch.items.length}
-                                </div>
-                                <div className="flex items-center gap-1">
-                                  <Button
-                                    type="text"
-                                    size="small"
-                                    icon={<HiChevronLeft className="h-4 w-4" />}
-                                    disabled={approvalCurrentIndex <= 0 || approvalSubmitting}
-                                    onClick={() =>
-                                      setApprovalCurrentIndex((current) => Math.max(0, current - 1))
-                                    }
-                                    data-testid={chatSelectors.approvalBatchPrevButton}
-                                  />
-                                  <Button
-                                    type="text"
-                                    size="small"
-                                    icon={<HiChevronRight className="h-4 w-4" />}
-                                    disabled={
-                                      approvalCurrentIndex >=
-                                        pendingApprovalBatch.items.length - 1 || approvalSubmitting
-                                    }
-                                    onClick={() =>
-                                      setApprovalCurrentIndex((current) =>
-                                        Math.min(pendingApprovalBatch.items.length - 1, current + 1)
-                                      )
-                                    }
-                                    data-testid={chatSelectors.approvalBatchNextButton}
-                                  />
+                        {pendingApprovalBatch && currentApprovalItem ? (
+                          <div>
+                            <div className="flex items-center justify-between gap-3 px-5 pt-4">
+                              <div className="flex min-w-0 items-center gap-2">
+                                <div className="min-w-0">
+                                  <div className="text-[15px] font-semibold text-[#181818]">
+                                    需要确认此操作
+                                  </div>
+                                  <div className="text-xs text-[#9C9A94]">
+                                    审批 {approvalCurrentIndex + 1} /{' '}
+                                    {pendingApprovalBatch.items.length}
+                                  </div>
                                 </div>
                               </div>
-
-                              <div className="flex items-start gap-3">
-                                <code className="min-w-0 flex-1 overflow-hidden whitespace-pre-wrap break-words rounded-[10px] border border-[#EDE0C7] bg-[#FFFEFB] px-3 py-2 font-mono text-[14px] leading-6 text-[#6D5A2B]">
-                                  {currentApprovalItem.command}
-                                </code>
-                                <div className="flex shrink-0 items-center gap-2">
-                                  <Button
-                                    aria-label="同意"
-                                    type={
-                                      approvalDraftDecisions[currentApprovalItem.itemId]?.action ===
-                                      'approve'
-                                        ? 'primary'
-                                        : 'default'
-                                    }
-                                    className="!flex !h-9 !w-9 !items-center !justify-center !rounded-[10px] !p-0"
-                                    icon={<HiCheck className="h-4 w-4" />}
-                                    onClick={() =>
-                                      void handleApprovalDecision({
-                                        itemId: currentApprovalItem.itemId,
-                                        action: 'approve'
-                                      })
-                                    }
-                                    loading={
-                                      approvalSubmitting &&
-                                      approvalDraftDecisions[currentApprovalItem.itemId]?.action ===
-                                        'approve'
-                                    }
-                                    data-testid={chatSelectors.approvalBatchApproveButton}
-                                  />
-                                  <Button
-                                    aria-label="拒绝"
-                                    type={
-                                      approvalDraftDecisions[currentApprovalItem.itemId]?.action ===
-                                      'reject'
-                                        ? 'primary'
-                                        : 'default'
-                                    }
-                                    className="!flex !h-9 !w-9 !items-center !justify-center !rounded-[10px] !p-0"
-                                    icon={<HiXMark className="h-4 w-4" />}
-                                    onClick={() =>
-                                      void handleApprovalDecision({
-                                        itemId: currentApprovalItem.itemId,
-                                        action: 'reject'
-                                      })
-                                    }
-                                    disabled={approvalSubmitting}
-                                    data-testid={chatSelectors.approvalBatchDenyButton}
-                                  />
-                                </div>
-                              </div>
-
-                              <div className="flex items-center gap-2">
-                                <input
-                                  className="min-w-0 flex-1 rounded-[10px] border border-[#EDE0C7] bg-[#FFFEFB] px-3 py-2 text-sm text-[#6D5A2B] outline-none placeholder:text-[#C3A56A] focus:border-[#D9A07A] focus:ring-2 focus:ring-[#F6EADF]"
-                                  placeholder="告诉馆长该怎么做"
-                                  value={
-                                    approvalDraftDecisions[currentApprovalItem.itemId]?.message ||
-                                    ''
+                              <div className="flex items-center gap-1">
+                                <Button
+                                  type="text"
+                                  size="small"
+                                  icon={<HiChevronLeft className="h-4 w-4" />}
+                                  disabled={approvalCurrentIndex <= 0 || approvalSubmitting}
+                                  onClick={() =>
+                                    setApprovalCurrentIndex((current) => Math.max(0, current - 1))
                                   }
-                                  onChange={(event) =>
-                                    setApprovalGuideMessage(
-                                      currentApprovalItem.itemId,
-                                      event.target.value
-                                    )
-                                  }
-                                  disabled={approvalSubmitting}
-                                  data-testid={chatSelectors.approvalBatchGuideInput}
+                                  data-testid={chatSelectors.approvalBatchPrevButton}
                                 />
                                 <Button
-                                  type="primary"
-                                  className="!flex !h-9 !items-center !gap-1 !rounded-[10px] !border-0 !bg-[#D98A67] hover:!bg-[#CC7A56]"
-                                  icon={<HiArrowUp className="h-4 w-4" />}
-                                  onClick={() => void handleApprovalBatchSubmit()}
-                                  loading={approvalSubmitting}
-                                  disabled={approvalSubmitDisabled}
-                                  data-testid={chatSelectors.approvalBatchSubmitButton}
-                                >
-                                  提交
-                                </Button>
+                                  type="text"
+                                  size="small"
+                                  icon={<HiChevronRight className="h-4 w-4" />}
+                                  disabled={
+                                    approvalCurrentIndex >=
+                                      pendingApprovalBatch.items.length - 1 || approvalSubmitting
+                                  }
+                                  onClick={() =>
+                                    setApprovalCurrentIndex((current) =>
+                                      Math.min(pendingApprovalBatch.items.length - 1, current + 1)
+                                    )
+                                  }
+                                  data-testid={chatSelectors.approvalBatchNextButton}
+                                />
                               </div>
                             </div>
-                          ) : null}
+                            <p className="mx-5 mt-3 text-[13px] leading-6 text-[#6E6D69]">
+                              当前运行需要你授权本地操作。
+                            </p>
+                            <code className="mx-5 mt-3 block overflow-hidden whitespace-pre-wrap break-words rounded-[12px] border border-[#E1DED6] bg-[#F0EFEB] px-3.5 py-3 font-mono text-[13px] leading-6 text-[#3F3F3D]">
+                              {currentApprovalItem.command}
+                            </code>
+                            <div className="mx-2 mt-3 space-y-1">
+                              <button
+                                type="button"
+                                className="grid min-h-11 w-full grid-cols-[28px_1fr_auto] items-center rounded-[12px] px-3 text-left text-[13px] text-[#181818] shadow-[inset_3px_0_0_#181818,inset_0_0_0_1px_#E1DED6] hover:bg-[#F0EFEB]"
+                                onClick={() =>
+                                  void handleApprovalDecision({
+                                    itemId: currentApprovalItem.itemId,
+                                    action: 'approve'
+                                  })
+                                }
+                                disabled={approvalSubmitting}
+                                data-testid={chatSelectors.approvalBatchApproveButton}
+                              >
+                                <span className="text-[#9C9A94]">1.</span>
+                                <span>允许本次操作</span>
+                                <HiCheck className="h-4 w-4" />
+                              </button>
+                              <button
+                                type="button"
+                                className="grid min-h-11 w-full grid-cols-[28px_1fr_auto] items-center rounded-[12px] px-3 text-left text-[13px] text-[#6E6D69] hover:bg-[#F0EFEB]"
+                                onClick={() =>
+                                  void handleApprovalDecision({
+                                    itemId: currentApprovalItem.itemId,
+                                    action: 'reject'
+                                  })
+                                }
+                                disabled={approvalSubmitting}
+                                data-testid={chatSelectors.approvalBatchDenyButton}
+                              >
+                                <span className="text-[#9C9A94]">2.</span>
+                                <span>拒绝本次操作</span>
+                                <HiXMark className="h-4 w-4 text-[#A83A31]" />
+                              </button>
+                            </div>
+                            <div className="mt-3 flex items-center gap-2 border-t border-[#E1DED6] px-4 py-4">
+                              <input
+                                className="min-w-0 flex-1 rounded-[12px] border border-[#E1DED6] bg-[#FFFDF8] px-3 py-2 text-sm text-[#181818] outline-none placeholder:text-[#9C9A94] focus:border-[#181818] focus:ring-2 focus:ring-[#E8E6DF]"
+                                placeholder="告诉馆长该怎么做"
+                                value={
+                                  approvalDraftDecisions[currentApprovalItem.itemId]?.message || ''
+                                }
+                                onChange={(event) =>
+                                  setApprovalGuideMessage(
+                                    currentApprovalItem.itemId,
+                                    event.target.value
+                                  )
+                                }
+                                disabled={approvalSubmitting}
+                                data-testid={chatSelectors.approvalBatchGuideInput}
+                              />
+                              <Button
+                                type="primary"
+                                className="!flex !h-9 !items-center !gap-1 !rounded-full !border-[#181818] !bg-[#181818] !text-white hover:!bg-[#3F3F3D] disabled:!border-[#E1DED6] disabled:!bg-[#F0EFEB] disabled:!text-[#9C9A94]"
+                                icon={<HiArrowUp className="h-4 w-4" />}
+                                onClick={() => void handleApprovalBatchSubmit()}
+                                loading={approvalSubmitting}
+                                disabled={approvalSubmitDisabled}
+                                data-testid={chatSelectors.approvalBatchSubmitButton}
+                              >
+                                提交
+                              </Button>
+                            </div>
+                          </div>
+                        ) : null}
 
-                          {pendingWorkspaceRequest ? (
-                            <div className="flex flex-col gap-3">
-                              <div>{pendingWorkspaceRequest.reason}</div>
-                              <div className="text-xs text-[#7A6530]">
-                                请选择当前工作区，必要时再通过 @ 插入目录或文件后继续运行。
-                              </div>
-                              <div className="flex gap-2">
-                                <Button
-                                  type="primary"
-                                  onClick={() => void handleContinueWithWorkspace()}
-                                  loading={loading}
-                                  disabled={!selectedWorkspace}
-                                  data-testid={chatSelectors.workspaceContinueButton}
-                                >
-                                  继续运行
-                                </Button>
+                        {pendingWorkspaceRequest ? (
+                          <div className="px-5 py-4">
+                            <div className="flex items-start gap-3">
+                              <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[9px] border border-[#181818] bg-[#FFFDF8] text-[13px] font-semibold text-[#181818]">
+                                范
+                              </span>
+                              <div className="min-w-0 flex-1">
+                                <div className="text-[15px] font-semibold text-[#181818]">
+                                  需要补充工作区范围
+                                </div>
+                                <div className="mt-2 text-[13px] leading-6 text-[#6E6D69]">
+                                  {pendingWorkspaceRequest.reason}
+                                </div>
+                                <div className="mt-1 text-xs leading-5 text-[#9C9A94]">
+                                  请选择当前工作区，必要时再通过 @ 插入目录或文件后继续运行。
+                                </div>
                               </div>
                             </div>
-                          ) : null}
-                        </div>
+                            <div className="mt-4 flex justify-end">
+                              <Button
+                                type="primary"
+                                className="!rounded-full !border-[#181818] !bg-[#181818] !text-white hover:!bg-[#3F3F3D] disabled:!border-[#E1DED6] disabled:!bg-[#F0EFEB] disabled:!text-[#9C9A94]"
+                                onClick={() => void handleContinueWithWorkspace()}
+                                loading={loading}
+                                disabled={!selectedWorkspace}
+                                data-testid={chatSelectors.workspaceContinueButton}
+                              >
+                                继续运行
+                              </Button>
+                            </div>
+                          </div>
+                        ) : null}
                       </div>
-                    ) : null}
-
-                    <WorkbenchComposer
-                      mode={composerMode}
-                      onModeChange={handleModeChange}
-                      activeModelConfig={activeModelConfig}
-                      remoteModels={remoteModels}
-                      selectedModelName={selectedModelName}
-                      onModelNameChange={handleModelNameChange}
-                      workspaces={workspaces}
-                      selectedWorkspaceId={selectedWorkspaceId}
-                      onWorkspaceChange={handleWorkspaceChange}
-                      onDraftChange={handleComposerDraftChange}
-                      onSubmit={() => void handleSend()}
-                      onCancel={() => void handleCancel()}
-                      loading={loading}
-                      cancelling={cancellingRun}
-                      canSubmit={Boolean(
-                        input.trim() &&
-                        selectedWorkspace &&
-                        (composerMode === 'search' || selectedModelName)
-                      )}
-                      showCancel={composerMode === 'ai' && Boolean(aiRunId)}
-                      resetKey={composerResetKey}
-                      contextUsage={contextUsage}
-                    />
+                    ) : (
+                      <WorkbenchComposer
+                        mode={composerMode}
+                        onModeChange={handleModeChange}
+                        activeModelConfig={activeModelConfig}
+                        remoteModels={remoteModels}
+                        selectedModelName={selectedModelName}
+                        onModelNameChange={handleModelNameChange}
+                        workspaces={workspaces}
+                        selectedWorkspaceId={selectedWorkspaceId}
+                        onWorkspaceChange={handleWorkspaceChange}
+                        onDraftChange={handleComposerDraftChange}
+                        onSubmit={() => void handleSend()}
+                        onCancel={() => void handleCancel()}
+                        loading={loading}
+                        cancelling={cancellingRun}
+                        canSubmit={Boolean(
+                          input.trim() &&
+                          selectedWorkspace &&
+                          (composerMode === 'search' || selectedModelName)
+                        )}
+                        showCancel={composerMode === 'ai' && Boolean(aiRunId)}
+                        resetKey={composerResetKey}
+                        contextUsage={contextUsage}
+                      />
+                    )}
 
                     {composerMode === 'ai' &&
                     selectedReferences.some(hasIncompleteLocalKbCoverage) ? (
                       <div
-                        className="mt-3 flex items-start gap-2 rounded-[14px] border border-[#FDECC8] bg-[#FFF9ED] px-3 py-2.5 text-sm text-[#8A6510]"
+                        className="mt-3 flex items-start gap-2 rounded-[14px] border border-[#E1DED6] bg-[#FAF9F5] px-3 py-2.5 text-sm text-[#6E6D69]"
                         data-testid={workbenchSelectors.referenceAiWarning}
                       >
                         <HiOutlineExclamationCircle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -2183,7 +2224,7 @@ const ChatPage: React.FC = () => {
                         reference.kind === 'directory' && reference.kbAvailability === 'partial'
                     ) ? (
                       <div
-                        className="mt-3 flex items-start gap-2 rounded-[14px] border border-[#FDECC8] bg-[#FFF9ED] px-3 py-2.5 text-sm text-[#8A6510]"
+                        className="mt-3 flex items-start gap-2 rounded-[14px] border border-[#E1DED6] bg-[#FAF9F5] px-3 py-2.5 text-sm text-[#6E6D69]"
                         data-testid={workbenchSelectors.referenceSearchWarning}
                       >
                         <HiOutlineExclamationCircle className="mt-0.5 h-4 w-4 shrink-0" />

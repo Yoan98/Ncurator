@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react'
+﻿import React, { useCallback, useEffect, useState } from 'react'
 import { Button, Empty, Input, Modal, Tooltip, message } from 'antd'
 import type {
   WorkspaceIndexJobRecord,
@@ -193,7 +193,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({ works
     >
       <div className="space-y-4">
         <section className="ui-panel-soft p-4">
-          <div className="text-[14px] font-semibold text-[#1F1F1F]">网页来源</div>
+          <div className="text-[14px] font-semibold text-[#181818]">网页来源</div>
           <Button
             type="primary"
             className="mt-4 w-full"
@@ -210,27 +210,27 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({ works
 
         <section className="ui-panel-soft p-4">
           <div className="flex items-center gap-1.5">
-            <div className="text-[14px] font-semibold text-[#1F1F1F]">索引状态</div>
+            <div className="text-[14px] font-semibold text-[#181818]">索引状态</div>
             <Tooltip title="网页索引会先爬取正文，再写入本地检索库。">
-              <HiOutlineQuestionMarkCircle className="h-4 w-4 cursor-help text-[#999999] transition-colors hover:text-[#D97757]" />
+              <HiOutlineQuestionMarkCircle className="h-4 w-4 cursor-help text-[#9C9A94] transition-colors hover:text-[#181818]" />
             </Tooltip>
           </div>
 
-          <div className="mt-3 text-[12px] text-[#666666]">
+          <div className="mt-3 text-[12px] text-[#6E6D69]">
             <div className="ui-inset px-3 py-3">
               <div className="inline-flex items-center gap-1.5">
-                <HiArrowPath className="h-4 w-4 text-[#AD7B18]" />
+                <HiArrowPath className="h-4 w-4 text-[#6E6D69]" />
                 <span>可索引</span>
               </div>
               <div
-                className="mt-1 text-[16px] font-semibold text-[#1F1F1F]"
+                className="mt-1 text-[16px] font-semibold text-[#181818]"
                 data-testid={importSelectors.webSourceActionableIndexCount}
               >
                 {actionableWebIndexCount}
               </div>
               {webSummary.failed_count > 0 ? (
                 <div
-                  className="mt-1 text-[11px] text-[#B5455D]"
+                  className="mt-1 text-[11px] text-[#A83A31]"
                   data-testid={importSelectors.webSourceActionableFailedHint}
                 >
                   含失败 {webSummary.failed_count} 个
@@ -245,7 +245,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({ works
               onClick={() => void handleScanWebSources()}
               disabled={Boolean(webIndexJob)}
               loading={webIndexJob?.action === 'scan'}
-              className="border-[#E5E5E4] bg-white text-[#1F1F1F]"
+              className="border-[#E1DED6] bg-white text-[#181818]"
             >
               检查更新
             </Button>
@@ -267,7 +267,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({ works
       </div>
 
       <section className="flex min-h-0 min-w-0 flex-col">
-        <div className="mb-3 text-[14px] font-semibold text-[#1F1F1F]">网页列表</div>
+        <div className="mb-3 text-[14px] font-semibold text-[#181818]">网页列表</div>
         <div
           className="ui-inset flex min-h-0 flex-1 overflow-auto p-3"
           data-testid={importSelectors.webSourceList}
@@ -277,7 +277,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({ works
               <Empty
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
                 description={
-                  <span className="text-[#666666]">{webLoading ? '正在加载网页' : '暂无网页'}</span>
+                  <span className="text-[#6E6D69]">{webLoading ? '正在加载网页' : '暂无网页'}</span>
                 }
               />
             </div>
@@ -289,18 +289,18 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({ works
                 return (
                   <div
                     key={source.id}
-                    className="rounded-[14px] border border-[#E5E5E4] bg-white px-4 py-4"
+                    className="rounded-[14px] border border-[#E1DED6] bg-white px-4 py-4"
                     data-testid={`${importSelectors.webSourceCardPrefix}-${source.id}`}
                   >
                     <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                       <div className="min-w-0">
-                        <div className="truncate text-[14px] font-semibold text-[#1F1F1F]">
+                        <div className="truncate text-[14px] font-semibold text-[#181818]">
                           {source.title || source.url}
                         </div>
-                        <div className="mt-1 break-all text-[12px] text-[#666666]">
+                        <div className="mt-1 break-all text-[12px] text-[#6E6D69]">
                           {source.url}
                         </div>
-                        <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-[#999999]">
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-[#9C9A94]">
                           <StatusTag
                             label={statusBadge.label}
                             className={statusBadge.className}
@@ -360,7 +360,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({ works
       >
         <div className="space-y-4 pt-2">
           <div>
-            <div className="mb-2 text-sm font-medium text-[#1F1F1F]">URL</div>
+            <div className="mb-2 text-sm font-medium text-[#181818]">URL</div>
             <Input.TextArea
               value={webUrlsText}
               onChange={(event) => {
@@ -372,7 +372,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({ works
               data-testid={importSelectors.webSourceUrlInput}
             />
             {webUrlsError ? (
-              <div className="mt-2 text-[12px] text-[#B5455D]">{webUrlsError}</div>
+              <div className="mt-2 text-[12px] text-[#A83A31]">{webUrlsError}</div>
             ) : null}
           </div>
         </div>
@@ -392,7 +392,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({ works
         cancelButtonProps={{ 'data-testid': importSelectors.webSourceDeleteCancelButton }}
         className="[&_.ant-modal-content]:!rounded-[24px]"
       >
-        <p className="mb-0 text-[#666666]">
+        <p className="mb-0 text-[#6E6D69]">
           {deleteWebSource?.title || deleteWebSource?.url
             ? `将删除网页「${deleteWebSource?.title || deleteWebSource?.url}」。`
             : '将删除该网页。'}

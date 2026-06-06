@@ -19,7 +19,7 @@
 - `doc/architecture.md`：涉及项目整体架构或技术栈时阅读。
 - `doc/database.md`：涉及数据库结构、具名工作空间/网页索引状态存储或持久化关系时阅读。
 - `doc/project-structure.md`：涉及工程结构或目录归位时阅读。
-- `doc/ui-style.md`：涉及 UI 风格或通用交互规范时阅读。
+- `doc/ui-style.md`：涉及全前端 UI 风格、主题或通用交互规范时阅读。
 
 ### 1.4 测试相关
 

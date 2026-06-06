@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+﻿import React, { useEffect, useState } from 'react'
 import { Button, List, Popconfirm, Progress, Tag, Typography, message } from 'antd'
 import { HiCheckCircle, HiCloudArrowDown, HiExclamationCircle } from 'react-icons/hi2'
 import AppPageHeader from '../components/app/AppPageHeader'
@@ -206,7 +206,7 @@ const ModelDownloadPage: React.FC = () => {
 
   return (
     <div
-      className="h-screen overflow-hidden bg-[radial-gradient(circle_at_top_left,_rgba(251,245,242,0.95),_rgba(245,245,244,0.92)_42%,_#F5F5F4_72%)]"
+      className="h-screen overflow-hidden bg-[radial-gradient(circle_at_top_left,_rgba(255,253,248,0.86),_rgba(240,239,235,0.74)_42%,_#F6F5F1_72%)]"
       data-testid={vectorSelectors.page}
     >
       <div className="mx-auto flex h-full w-full max-w-[1360px] flex-col gap-5 px-5 py-5 lg:px-6">
@@ -219,16 +219,16 @@ const ModelDownloadPage: React.FC = () => {
         />
 
         <div className="min-h-0 flex-1 overflow-hidden pb-4 pr-1">
-          <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-[20px] border border-[#E5E5E4] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
-            <div className="border-b border-[#E5E5E4] px-5 py-4">
-              <Title level={4} className="!mb-0 !text-[#1F1F1F]">
+          <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-[20px] border border-[#E1DED6] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+            <div className="border-b border-[#E1DED6] px-5 py-4">
+              <Title level={4} className="!mb-0 !text-[#181818]">
                 {TEXT.listTitle}
               </Title>
             </div>
             <div className="min-h-0 flex-1 overflow-auto px-5 py-2 pr-4">
               {catalogError ? (
                 <div
-                  className="mb-4 rounded-[18px] border border-[#F3D1C6] bg-[#FFF7F4] px-4 py-3 text-sm text-[#B5451B]"
+                  className="mb-4 rounded-[18px] border border-[#D9C6C2] bg-[#F7F1EF] px-4 py-3 text-sm text-[#A83A31]"
                   data-testid={vectorSelectors.catalogError}
                 >
                   {catalogError}
@@ -287,7 +287,7 @@ const ModelDownloadPage: React.FC = () => {
                                 key={`download-${item.id}`}
                                 type="primary"
                                 onClick={() => void handleDownload(item.id)}
-                                className="!border-none !bg-[#D97757] shadow-sm hover:!bg-[#C66A4A]"
+                                className="!border-none !bg-[#181818] shadow-sm hover:!bg-[#3F3F3D]"
                                 disabled={Boolean(downloadingId)}
                                 data-testid={`${vectorSelectors.downloadButtonPrefix}-${item.id}`}
                               >
@@ -300,7 +300,7 @@ const ModelDownloadPage: React.FC = () => {
                     <List.Item.Meta
                       title={
                         <div className="mb-2 flex items-center gap-3">
-                          <span className="text-[16px] font-semibold text-[#1F1F1F]">
+                          <span className="text-[16px] font-semibold text-[#181818]">
                             {item.name}
                           </span>
                           {item.tags.map((tag) => (
@@ -312,28 +312,28 @@ const ModelDownloadPage: React.FC = () => {
                       }
                       description={
                         <div className="space-y-4">
-                          <p className="text-[#666666]">{item.description}</p>
+                          <p className="text-[#6E6D69]">{item.description}</p>
 
                           {downloadingId === item.id ? (
                             <div
-                              className="rounded-[18px] border border-[#E5E5E4] bg-[#F5F5F4] p-4"
+                              className="rounded-[18px] border border-[#E1DED6] bg-[#F6F5F1] p-4"
                               data-testid={`${vectorSelectors.progressPrefix}-${item.id}`}
                             >
                               <div className="mb-2 flex justify-between text-sm">
-                                <span className="font-medium text-[#1F1F1F]">
+                                <span className="font-medium text-[#181818]">
                                   {TEXT.downloadingLabel}
                                 </span>
-                                <span className="font-medium text-[#D97757]">
+                                <span className="font-medium text-[#181818]">
                                   {downloadProgress}%
                                 </span>
                               </div>
                               <Progress
                                 percent={downloadProgress}
-                                strokeColor="#D97757"
+                                strokeColor="#181818"
                                 showInfo={false}
                                 className="!mb-2"
                               />
-                              <div className="flex justify-between text-xs text-[#999999]">
+                              <div className="flex justify-between text-xs text-[#9C9A94]">
                                 <span
                                   className="max-w-[200px] truncate"
                                   data-testid={`${vectorSelectors.currentFilePrefix}-${item.id}`}

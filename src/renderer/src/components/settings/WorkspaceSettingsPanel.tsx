@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+﻿import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Alert, Button, Empty, Input, Modal, Tabs, Tooltip, Tree, message } from 'antd'
 import type {
   WorkspaceIndexJobRecord,
@@ -326,14 +326,14 @@ const WorkspaceSettingsPanel: React.FC = () => {
       <section className="ui-panel-ghost shrink-0 px-4 py-3">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
-            <h2 className="text-[16px] font-semibold tracking-tight text-[#1F1F1F]">工作空间</h2>
-            <div className="text-[12px] text-[#666666]">共 {workspaces.length} 个</div>
+            <h2 className="text-[16px] font-semibold tracking-tight text-[#181818]">工作空间</h2>
+            <div className="text-[12px] text-[#6E6D69]">共 {workspaces.length} 个</div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
             <Button
               icon={<HiArrowPath className="h-4 w-4" />}
-              className="border-[#E5E5E4] bg-white text-[#1F1F1F]"
+              className="border-[#E1DED6] bg-white text-[#181818]"
               onClick={() => void loadWorkspaces()}
               loading={workspaceLoading}
             >
@@ -355,7 +355,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
       {legacyMigrationStatus?.hasLegacyLocalImports ? (
         <Alert
           showIcon
-          className="rounded-[18px] border-[#FDECC8] bg-[#FFF9ED] text-[#666666]"
+          className="rounded-[18px] border-[#E1DED6] bg-[#FAF9F5] text-[#6E6D69]"
           message="检测到旧本地导入记录"
           description={`已清理 ${legacyMigrationStatus.removedDocumentCount} 条旧记录与 ${legacyMigrationStatus.removedChunkCount} 条 chunk。`}
         />
@@ -363,8 +363,8 @@ const WorkspaceSettingsPanel: React.FC = () => {
 
       <div className="grid min-h-0 flex-1 gap-4 overflow-hidden pr-1 xl:grid-cols-[340px_minmax(0,1fr)]">
         <section className="ui-panel flex min-h-0 flex-col" data-testid={importSelectors.page}>
-          <div className="border-b border-[#E5E5E4] px-4 py-4">
-            <div className="text-[15px] font-semibold text-[#1F1F1F]">工作空间</div>
+          <div className="border-b border-[#E1DED6] px-4 py-4">
+            <div className="text-[15px] font-semibold text-[#181818]">工作空间</div>
           </div>
 
           {workspaces.length === 0 ? (
@@ -374,7 +374,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
             >
               <Empty
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description={<span className="text-[#666666]">暂无工作空间</span>}
+                description={<span className="text-[#6E6D69]">暂无工作空间</span>}
               />
             </div>
           ) : (
@@ -393,25 +393,25 @@ const WorkspaceSettingsPanel: React.FC = () => {
                     data-testid={`${importSelectors.workspaceCardPrefix}-${workspace.id}`}
                     className={`ui-hover-lift w-full rounded-[14px] border px-4 py-4 text-left ${
                       isSelected
-                        ? 'border-[#D97757] bg-[#FCFBF8] shadow-[0_0_0_1px_rgba(244,229,223,0.9)]'
-                        : 'border-[#E5E5E4] bg-white hover:border-[#D4D4D3] hover:bg-[#FCFBF8]'
+                        ? 'border-[#181818] bg-[#FAF9F5] shadow-[0_0_0_1px_rgba(232,230,223,0.95)]'
+                        : 'border-[#E1DED6] bg-white hover:border-[#CBC7BD] hover:bg-[#FAF9F5]'
                     }`}
                   >
                     <div className="min-w-0">
-                      <div className="text-[14px] font-semibold text-[#1F1F1F]">
+                      <div className="text-[14px] font-semibold text-[#181818]">
                         {workspace.name}
                       </div>
-                      <div className="mt-1 break-all text-[12px] text-[#666666]">
+                      <div className="mt-1 break-all text-[12px] text-[#6E6D69]">
                         {workspace.root_path || '未设置文件目录'}
                       </div>
                     </div>
 
-                    <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-[#666666]">
-                      <span className="ui-status-pill border-transparent bg-[#F7F5F1] text-[#666666]">
+                    <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-[#6E6D69]">
+                      <span className="ui-status-pill border-transparent bg-[#F0EFEB] text-[#6E6D69]">
                         <HiDocumentText className="h-3.5 w-3.5" />
                         {workspace.file_count}
                       </span>
-                      <span className="ui-status-pill border-transparent bg-[#F4F6FB] text-[#5B6B8C]">
+                      <span className="ui-status-pill border-transparent bg-[#F0EFEB] text-[#6E6D69]">
                         <HiGlobeAlt className="h-3.5 w-3.5" />
                         {workspace.web_count}
                       </span>
@@ -429,11 +429,11 @@ const WorkspaceSettingsPanel: React.FC = () => {
         >
           {selectedWorkspace ? (
             <>
-              <div className="border-b border-[#E5E5E4] px-5 py-5">
+              <div className="border-b border-[#E1DED6] px-5 py-5">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="text-[16px] font-semibold text-[#1F1F1F]">
+                      <h3 className="text-[16px] font-semibold text-[#181818]">
                         {selectedWorkspace.name}
                       </h3>
                     </div>
@@ -466,14 +466,14 @@ const WorkspaceSettingsPanel: React.FC = () => {
                           <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[minmax(0,320px)_minmax(0,1fr)]">
                             <div className="space-y-4">
                               <section className="ui-panel-soft p-4">
-                                <div className="text-[14px] font-semibold text-[#1F1F1F]">
+                                <div className="text-[14px] font-semibold text-[#181818]">
                                   文件目录
                                 </div>
-                                <div className="mt-2 break-all text-[12px] leading-5 text-[#666666]">
+                                <div className="mt-2 break-all text-[12px] leading-5 text-[#6E6D69]">
                                   {selectedWorkspace.root_path || '未设置工作文件地址'}
                                 </div>
                                 <Button
-                                  className="mt-4 w-full border-[#E5E5E4] bg-white text-[#1F1F1F]"
+                                  className="mt-4 w-full border-[#E1DED6] bg-white text-[#181818]"
                                   onClick={() => void handleSetWorkspaceRootPath(selectedWorkspace)}
                                 >
                                   设置工作文件地址
@@ -482,29 +482,29 @@ const WorkspaceSettingsPanel: React.FC = () => {
 
                               <section className="ui-panel-soft p-4">
                                 <div className="flex items-center gap-1.5">
-                                  <div className="text-[14px] font-semibold text-[#1F1F1F]">
+                                  <div className="text-[14px] font-semibold text-[#181818]">
                                     索引状态
                                   </div>
                                   <Tooltip title="索引后的文件会加速搜索，并在一定程度降低 token 消耗，减少 AI 花费哦。">
-                                    <HiOutlineQuestionMarkCircle className="h-4 w-4 cursor-help text-[#999999] transition-colors hover:text-[#D97757]" />
+                                    <HiOutlineQuestionMarkCircle className="h-4 w-4 cursor-help text-[#9C9A94] transition-colors hover:text-[#181818]" />
                                   </Tooltip>
                                 </div>
 
-                                <div className="mt-3 text-[12px] text-[#666666]">
+                                <div className="mt-3 text-[12px] text-[#6E6D69]">
                                   <div className="ui-inset px-3 py-3">
                                     <div className="inline-flex items-center gap-1.5">
-                                      <HiArrowPath className="h-4 w-4 text-[#AD7B18]" />
+                                      <HiArrowPath className="h-4 w-4 text-[#6E6D69]" />
                                       <span>可索引</span>
                                     </div>
                                     <div
-                                      className="mt-1 text-[16px] font-semibold text-[#1F1F1F]"
+                                      className="mt-1 text-[16px] font-semibold text-[#181818]"
                                       data-testid={importSelectors.workspaceActionableIndexCount}
                                     >
                                       {selectedWorkspaceActionableIndexCount}
                                     </div>
                                     {selectedWorkspaceSummary.failed_file_count > 0 ? (
                                       <div
-                                        className="mt-1 text-[11px] text-[#B5455D]"
+                                        className="mt-1 text-[11px] text-[#A83A31]"
                                         data-testid={importSelectors.workspaceActionableFailedHint}
                                       >
                                         含失败 {selectedWorkspaceSummary.failed_file_count} 个
@@ -520,7 +520,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
                                       onClick={() => void handleWorkspaceScan(selectedWorkspace)}
                                       disabled={Boolean(selectedWorkspaceIndexJob)}
                                       loading={selectedWorkspaceIndexJob?.action === 'scan'}
-                                      className="border-[#E5E5E4] bg-white text-[#1F1F1F]"
+                                      className="border-[#E1DED6] bg-white text-[#181818]"
                                       data-testid={importSelectors.workspaceQuickScanButton}
                                     >
                                       检查更新
@@ -549,7 +549,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
                             <div className="flex min-h-0 min-w-0 flex-col">
                               <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                                 <div className="flex min-w-0 flex-wrap items-center gap-2.5">
-                                  <div className="text-[14px] font-semibold text-[#1F1F1F]">
+                                  <div className="text-[14px] font-semibold text-[#181818]">
                                     目录树
                                   </div>
                                 </div>
@@ -563,7 +563,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
                                   >
                                     <Button
                                       size="small"
-                                      className="border-[#E5E5E4] bg-white text-[#1F1F1F]"
+                                      className="border-[#E1DED6] bg-white text-[#181818]"
                                       icon={
                                         (workspaceExpandedKeys[selectedWorkspace.id] || []).length >
                                         0 ? (
@@ -613,7 +613,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
                                     <Empty
                                       image={Empty.PRESENTED_IMAGE_SIMPLE}
                                       description={
-                                        <span className="text-[#666666]">
+                                        <span className="text-[#6E6D69]">
                                           当前目录没有可显示文件
                                         </span>
                                       }
@@ -645,7 +645,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
             <div className="flex min-h-0 flex-1 items-center justify-center px-6">
               <Empty
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description={<span className="text-[#666666]">选择一个工作空间</span>}
+                description={<span className="text-[#6E6D69]">选择一个工作空间</span>}
               />
             </div>
           )}
@@ -666,7 +666,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
         cancelButtonProps={{ 'data-testid': importSelectors.workspaceDeleteCancelButton }}
         className="[&_.ant-modal-content]:!rounded-[24px]"
       >
-        <p className="mb-0 text-[#666666]">
+        <p className="mb-0 text-[#6E6D69]">
           移除后，该工作空间将不再出现在资料范围和聊天范围里。若仍需使用，请重新添加并重新建立索引。
         </p>
       </Modal>
@@ -688,7 +688,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
         className="[&_.ant-modal-content]:!rounded-[24px]"
       >
         <div className="space-y-2 pt-2">
-          <div className="text-sm font-medium text-[#1F1F1F]">工作空间名称</div>
+          <div className="text-sm font-medium text-[#181818]">工作空间名称</div>
           <Input
             value={createWorkspaceName}
             onChange={(event) => setCreateWorkspaceName(event.target.value)}

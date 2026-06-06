@@ -1,4 +1,4 @@
-import React from 'react'
+﻿import React from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
@@ -53,7 +53,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, className 
           },
           // Custom styling for other elements
           p: ({ children }) => (
-            <Typography.Paragraph className="!mb-2 leading-relaxed text-[#1F1F1F]">
+            <Typography.Paragraph className="!mb-2 leading-relaxed text-[#181818]">
               {children}
             </Typography.Paragraph>
           ),
@@ -74,7 +74,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, className 
           ),
           ul: ({ children }) => <ul className="list-disc pl-5 mb-2">{children}</ul>,
           ol: ({ children }) => <ol className="list-decimal pl-5 mb-2">{children}</ol>,
-          li: ({ children }) => <li className="mb-1 text-[#1F1F1F]">{children}</li>,
+          li: ({ children }) => <li className="mb-1 text-[#181818]">{children}</li>,
           a: ({ href, children }) => {
             const parsed = parseRefHref(href)
             if (parsed.type === 'reference') {
@@ -82,7 +82,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, className 
               return (
                 <a
                   href={href}
-                  className="inline-flex items-center gap-1 rounded-full border border-[#E8C8BD] bg-[#FFF7F2] px-2 py-0.5 text-[#B85C38] hover:bg-[#FDEADB]"
+                  className="inline-flex items-center gap-1 rounded-full border border-[#E1DED6] bg-[#F0EFEB] px-2 py-0.5 text-[#181818] hover:bg-[#E8E6DF]"
                   data-ref-path={parsed.path}
                 >
                   {renderReferenceIcon(label, parsed.path)}
@@ -96,14 +96,14 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, className 
                 href={href}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-[#D97757] hover:underline"
+                className="text-[#181818] hover:underline"
               >
                 {children}
               </a>
             )
           },
           blockquote: ({ children }) => (
-            <blockquote className="border-l-4 border-[#D97757] pl-4 italic text-gray-500 my-2">
+            <blockquote className="border-l-4 border-[#181818] pl-4 italic text-gray-500 my-2">
               {children}
             </blockquote>
           ),

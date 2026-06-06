@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+﻿import React, { useMemo } from 'react'
 import { Button, Empty, Tooltip } from 'antd'
 import {
   HiArrowTopRightOnSquare,
@@ -126,16 +126,16 @@ const WorkbenchContentPanel: React.FC<WorkbenchContentPanelProps> = ({
   return (
     <>
       <aside
-        className="flex h-full min-h-0 flex-col border-l border-[#E5E5E4] bg-[#FCFBF8]"
+        className="flex h-full min-h-0 flex-col border-l border-[#E1DED6] bg-[#FAF9F5]"
         data-testid={workbenchSelectors.contentPanel}
       >
         <div className="min-h-0 flex-1 overflow-hidden">
           {state.kind === 'empty' ? (
             <div className="flex h-full items-center justify-center px-5 py-4">
-              <div className="flex h-full w-full items-center justify-center rounded-[18px] border border-dashed border-[#E5E5E4] bg-[#FAFAF9]">
+              <div className="flex h-full w-full items-center justify-center rounded-[18px] border border-dashed border-[#E1DED6] bg-[#F0EFEB]">
                 <Empty
                   image={Empty.PRESENTED_IMAGE_SIMPLE}
-                  description={<span className="text-[12px] text-[#999999]">右侧暂无内容</span>}
+                  description={<span className="text-[12px] text-[#9C9A94]">右侧暂无内容</span>}
                 />
               </div>
             </div>
@@ -143,7 +143,7 @@ const WorkbenchContentPanel: React.FC<WorkbenchContentPanelProps> = ({
 
           {state.kind === 'search_list' ? (
             <div className="flex h-full min-h-0 flex-col px-4 py-4">
-              <div className="mb-3 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-[#999999]">
+              <div className="mb-3 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-[#9C9A94]">
                 <HiOutlineMagnifyingGlass className="h-4 w-4" />
                 搜索结果
               </div>
@@ -159,22 +159,22 @@ const WorkbenchContentPanel: React.FC<WorkbenchContentPanelProps> = ({
                   return (
                     <div
                       key={result.id}
-                      className="w-full rounded-[16px] border border-[#E5E5E4] bg-white px-4 py-3 text-left transition-all hover:border-[#D97757]"
+                      className="w-full rounded-[16px] border border-[#E1DED6] bg-white px-4 py-3 text-left transition-all hover:border-[#181818]"
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
                             {isWeb ? (
-                              <HiGlobeAlt className="h-3.5 w-3.5 shrink-0 text-[#4F6B95]" />
+                              <HiGlobeAlt className="h-3.5 w-3.5 shrink-0 text-[#6E6D69]" />
                             ) : (
-                              <HiDocumentText className="h-3.5 w-3.5 shrink-0 text-[#D97757]" />
+                              <HiDocumentText className="h-3.5 w-3.5 shrink-0 text-[#181818]" />
                             )}
                             <div className="min-w-0 flex items-center gap-2">
-                              <span className="truncate text-[13px] font-medium text-[#1F1F1F]">
+                              <span className="truncate text-[13px] font-medium text-[#181818]">
                                 {result.document_name}
                               </span>
                               {relevancePercent !== null ? (
-                                <span className="inline-flex shrink-0 items-center gap-1 text-[11px] font-medium text-[#D97757]">
+                                <span className="inline-flex shrink-0 items-center gap-1 text-[11px] font-medium text-[#181818]">
                                   <HiSparkles className="h-3.5 w-3.5" />
                                   <span>{relevancePercent}%</span>
                                 </span>
@@ -184,7 +184,7 @@ const WorkbenchContentPanel: React.FC<WorkbenchContentPanelProps> = ({
                           <TextHighlighter
                             text={result.text}
                             keywords={state.tokens}
-                            className="mt-2 line-clamp-6 text-xs leading-relaxed text-[#666666]"
+                            className="mt-2 line-clamp-6 text-xs leading-relaxed text-[#6E6D69]"
                           />
                         </div>
 
@@ -240,16 +240,16 @@ const WorkbenchContentPanel: React.FC<WorkbenchContentPanelProps> = ({
 
           {state.kind === 'file_preview' ? (
             <div className="flex h-full min-h-0 flex-col">
-              <div className="flex shrink-0 items-center gap-3 border-b border-[#E5E5E4] bg-[#FCFBF8] px-4 py-3">
+              <div className="flex shrink-0 items-center gap-3 border-b border-[#E1DED6] bg-[#FAF9F5] px-4 py-3">
                 <div className="min-w-0">
-                  <div className="truncate text-[13px] font-semibold text-[#1F1F1F]">
+                  <div className="truncate text-[13px] font-semibold text-[#181818]">
                     {state.file.fileName}
                   </div>
-                  <div className="mt-1 truncate text-xs text-[#999999]">{state.file.path}</div>
+                  <div className="mt-1 truncate text-xs text-[#9C9A94]">{state.file.path}</div>
                 </div>
               </div>
               <div
-                className="min-h-0 flex-1 bg-[#F5F3EE] p-3"
+                className="min-h-0 flex-1 bg-[#FAF9F5] p-3"
                 data-testid={workbenchSelectors.documentView}
               >
                 <FileRenderViewer documents={previewDocuments} />

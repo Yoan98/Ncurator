@@ -1,15 +1,15 @@
-.vue-office-docx {
+﻿.vue-office-docx {
     overflow-y: unset !important;
 }
 
 .docx-content ins {
-    background: #e9f7ef !important;
-    color: #166534 !important;
+    background: #F0EFEB !important;
+    color: #3F3F3D !important;
     text-decoration: none !important;
 }
 
 .docx-content del {
-    background: #fdecec !important;
-    color: #b42318 !important;
+    background: #F7F1EF !important;
+    color: #A83A31 !important;
     text-decoration: line-through !important;
 }

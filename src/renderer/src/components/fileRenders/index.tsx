@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+﻿import React, { useEffect, useState } from 'react'
 import { Empty, Modal, Spin } from 'antd'
 import DocViewer, { DocViewerRenderers } from 'react-doc-viewer'
 import CustomPDFRenderer from './pdf'
@@ -99,13 +99,13 @@ export const FileRenderViewer: React.FC<FileRenderViewerProps> = ({
   if (documents.length === 0) {
     return (
       <div
-        className={`flex h-full items-center justify-center rounded-2xl border border-dashed border-[#E5E5E4] bg-[#FAFAF9] ${
+        className={`flex h-full items-center justify-center rounded-2xl border border-dashed border-[#E1DED6] bg-[#F0EFEB] ${
           className || ''
         }`}
       >
         <Empty
           image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description={<span className="text-[#666666]">{emptyText}</span>}
+          description={<span className="text-[#6E6D69]">{emptyText}</span>}
         />
       </div>
     )
@@ -114,7 +114,7 @@ export const FileRenderViewer: React.FC<FileRenderViewerProps> = ({
   if (loading) {
     return (
       <div
-        className={`flex h-full items-center justify-center rounded-2xl border border-[#E5E5E4] bg-white ${
+        className={`flex h-full items-center justify-center rounded-2xl border border-[#E1DED6] bg-white ${
           className || ''
         }`}
       >
@@ -126,7 +126,7 @@ export const FileRenderViewer: React.FC<FileRenderViewerProps> = ({
   if (loadedDocuments.length === 0) {
     return (
       <div
-        className={`flex h-full items-center justify-center rounded-2xl border border-[#E5E5E4] bg-white ${
+        className={`flex h-full items-center justify-center rounded-2xl border border-[#E1DED6] bg-white ${
           className || ''
         }`}
       >
@@ -137,7 +137,7 @@ export const FileRenderViewer: React.FC<FileRenderViewerProps> = ({
 
   return (
     <div
-      className={`h-full overflow-hidden rounded-2xl border border-[#E5E5E4] bg-white ${
+      className={`h-full overflow-hidden rounded-2xl border border-[#E1DED6] bg-white ${
         className || ''
       }`}
     >
