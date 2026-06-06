@@ -11,6 +11,7 @@ export const terminalToolFamily = createWorkspaceBoundToolFamily({
     buildTerminalCapabilityTools({
       ctx: {
         runId: ctx.runId,
+        platform: ctx.platform,
         checkCancelled: ctx.checkCancelled,
         sendEvent: ctx.sendEvent,
         requestApprovalBatch: ctx.requestApprovalBatch

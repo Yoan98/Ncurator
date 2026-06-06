@@ -1,49 +1,76 @@
 import { describe, expect, it } from 'vitest'
-import { analyzeTerminalCommand } from '../../../src/main/services/ai/human/tools/terminal/terminalCommandPolicy'
-import { analyzeReadonlyTerminalCommandPolicy } from '../../../src/main/services/ai/human/tools/terminal/readonlyCommandPolicy'
-import { TERMINAL_RUN_TOOL_SPEC } from '../../../src/main/services/ai/human/tools/terminal/toolSpecs'
+import {
+  analyzeSafeTerminalCommandPolicy,
+  analyzeTerminalCommand
+} from '../../../src/main/services/ai/human/tools/terminal/commandPolicy'
+import { buildWindowsPowerShellEncodedCommand } from '../../../src/main/services/ai/human/tools/terminal/terminalExec'
+import {
+  createTerminalRunPromptSpec,
+  createTerminalRunToolSpec
+} from '../../../src/main/services/ai/human/tools/terminal/toolSpecs'
 
 describe('ai unit terminal command policy', () => {
-  it('allows readonly commands from the approved set', () => {
-    expect(analyzeReadonlyTerminalCommandPolicy('echo hello world').executionPolicy).toBe(
-      'readonly_allowed'
+  it('allows macos commands from the platform safe command set', () => {
+    expect(analyzeSafeTerminalCommandPolicy('echo hello world', 'macos').executionPolicy).toBe(
+      'safe_allowed'
     )
-    expect(analyzeReadonlyTerminalCommandPolicy('printf "%s\\n" hello').executionPolicy).toBe(
-      'readonly_allowed'
+    expect(analyzeSafeTerminalCommandPolicy('printf "%s\\n" hello', 'macos').executionPolicy).toBe(
+      'safe_allowed'
     )
-    expect(analyzeReadonlyTerminalCommandPolicy('find . -type f').executionPolicy).toBe(
-      'readonly_allowed'
+    expect(analyzeSafeTerminalCommandPolicy('find . -type f', 'macos').executionPolicy).toBe(
+      'safe_allowed'
     )
-    expect(analyzeReadonlyTerminalCommandPolicy('cat notes.txt | head -10').executionPolicy).toBe(
-      'readonly_allowed'
+    expect(analyzeSafeTerminalCommandPolicy('cat notes.txt | head -10', 'macos').executionPolicy).toBe(
+      'safe_allowed'
     )
     expect(
-      analyzeReadonlyTerminalCommandPolicy("cat '学习笔记/深度学习.pdf' | strings | head -500")
+      analyzeSafeTerminalCommandPolicy("cat '学习笔记/深度学习.pdf' | strings | head -500", 'macos')
         .executionPolicy
-    ).toBe('readonly_allowed')
-    expect(analyzeTerminalCommand({ command: 'echo hello world' }).artifactCandidates).toEqual([])
+    ).toBe('safe_allowed')
+    expect(
+      analyzeTerminalCommand({ command: 'echo hello world', platform: 'macos' }).artifactCandidates
+    ).toEqual([])
+  })
+
+  it('allows windows commands from the platform safe command set', () => {
+    expect(analyzeSafeTerminalCommandPolicy('Get-Location', 'windows').executionPolicy).toBe(
+      'safe_allowed'
+    )
+    expect(
+      analyzeSafeTerminalCommandPolicy('Get-ChildItem -LiteralPath notes', 'windows').executionPolicy
+    ).toBe('safe_allowed')
+    expect(
+      analyzeSafeTerminalCommandPolicy(
+        'Get-ChildItem -Path notes -Recurse -File | Select-String -Pattern "alpha"',
+        'windows'
+      ).executionPolicy
+    ).toBe('safe_allowed')
+    expect(analyzeSafeTerminalCommandPolicy('ls', 'windows').executionPolicy).toBe(
+      'approval_required'
+    )
   })
 
   it('requires approval for inline interpreter commands', () => {
-    expect(analyzeReadonlyTerminalCommandPolicy('python3 -c "print(1)"').executionPolicy).toBe(
+    expect(analyzeSafeTerminalCommandPolicy('python3 -c "print(1)"', 'macos').executionPolicy).toBe(
       'approval_required'
     )
-    expect(analyzeReadonlyTerminalCommandPolicy('node -e "console.log(1)"').executionPolicy).toBe(
+    expect(analyzeSafeTerminalCommandPolicy('node -e "console.log(1)"', 'macos').executionPolicy).toBe(
       'approval_required'
     )
   })
 
-  it('marks readonly commands as read_only and other commands as mutating', () => {
-    const pythonMeta = TERMINAL_RUN_TOOL_SPEC.resolveExecutionMeta({
+  it('maps safe terminal commands without artifacts to read_only execution metadata', () => {
+    const macTerminalSpec = createTerminalRunToolSpec('macos')
+    const pythonMeta = macTerminalSpec.resolveExecutionMeta({
       command: 'python3 -c "print(1)"'
     })
-    const nodeMeta = TERMINAL_RUN_TOOL_SPEC.resolveExecutionMeta({
+    const nodeMeta = macTerminalSpec.resolveExecutionMeta({
       command: 'node -e "console.log(1)"'
     })
-    const echoMeta = TERMINAL_RUN_TOOL_SPEC.resolveExecutionMeta({
+    const echoMeta = macTerminalSpec.resolveExecutionMeta({
       command: 'echo hello world'
     })
-    const findMeta = TERMINAL_RUN_TOOL_SPEC.resolveExecutionMeta({
+    const findMeta = macTerminalSpec.resolveExecutionMeta({
       command: 'find . -type f'
     })
 
@@ -54,17 +81,39 @@ describe('ai unit terminal command policy', () => {
   })
 
   it('requires approval for shell redirection and broad commands', () => {
-    expect(analyzeReadonlyTerminalCommandPolicy('echo hi > a.txt').executionPolicy).toBe(
+    expect(analyzeSafeTerminalCommandPolicy('echo hi > a.txt', 'macos').executionPolicy).toBe(
       'approval_required'
     )
-    expect(analyzeReadonlyTerminalCommandPolicy('find . -delete').executionPolicy).toBe(
+    expect(analyzeSafeTerminalCommandPolicy('find . -delete', 'macos').executionPolicy).toBe(
       'approval_required'
     )
     expect(
-      analyzeReadonlyTerminalCommandPolicy('cat notes.txt | python3 -c "print(1)"').executionPolicy
+      analyzeSafeTerminalCommandPolicy('cat notes.txt | python3 -c "print(1)"', 'macos')
+        .executionPolicy
     ).toBe('approval_required')
-    expect(analyzeReadonlyTerminalCommandPolicy('ls & rm -rf tmp').executionPolicy).toBe(
+    expect(analyzeSafeTerminalCommandPolicy('ls & rm -rf tmp', 'macos').executionPolicy).toBe(
       'approval_required'
     )
+  })
+
+  it('renders terminal prompt specs by platform', () => {
+    const windowsPrompt = createTerminalRunPromptSpec('windows')
+    const macosPrompt = createTerminalRunPromptSpec('macos')
+
+    expect(windowsPrompt.description).toContain('PowerShell')
+    expect(windowsPrompt.description).not.toContain('zsh')
+    expect(windowsPrompt.examples[0]?.args.command).toBe('Get-ChildItem -LiteralPath .')
+    expect(macosPrompt.description).toContain('zsh')
+    expect(macosPrompt.description).not.toContain('PowerShell')
+    expect(macosPrompt.examples[0]?.args.command).toBe('ls .')
+  })
+
+  it('builds windows powershell encoded commands with utf8 prelude', () => {
+    const encoded = buildWindowsPowerShellEncodedCommand('Get-ChildItem')
+    const decoded = Buffer.from(encoded, 'base64').toString('utf16le')
+
+    expect(decoded).toContain('[Console]::OutputEncoding')
+    expect(decoded).toContain('$OutputEncoding')
+    expect(decoded).toContain('Get-ChildItem')
   })
 })

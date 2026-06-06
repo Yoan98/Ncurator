@@ -7,6 +7,8 @@ import {
   filterAiRunEventsByType
 } from '../testUtils'
 
+const isWindows = process.platform === 'win32'
+
 describe('ai human mock-llm backend', () => {
   it('tool-limit-converge', async () => {
     await runBackendCase({
@@ -26,18 +28,18 @@ describe('ai human mock-llm backend', () => {
                 output: buildToolDecision({
                   toolName: 'terminal_run',
                   args: {
-                    command: 'pwd'
+                    command: isWindows ? 'Get-Location' : 'pwd'
                   },
-                  summary: '执行第一轮只读命令'
+                  summary: '执行第一轮安全指令'
                 })
               },
               {
                 output: buildToolDecision({
                   toolName: 'terminal_run',
                   args: {
-                    command: 'ls'
+                    command: isWindows ? 'Get-ChildItem -LiteralPath .' : 'ls'
                   },
-                  summary: '执行第二轮只读命令'
+                  summary: '执行第二轮安全指令'
                 })
               },
               {
@@ -62,7 +64,7 @@ describe('ai human mock-llm backend', () => {
 
         const output = await runner.run({
           taskId: runtime.taskId,
-          userInput: '请连续执行两次只读命令，并观察收敛提醒。'
+          userInput: '请连续执行两次安全指令，并观察收敛提醒。'
         })
 
         return {

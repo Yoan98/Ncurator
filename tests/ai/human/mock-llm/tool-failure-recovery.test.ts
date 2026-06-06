@@ -7,6 +7,8 @@ import {
   filterAiRunEventsByType
 } from '../testUtils'
 
+const isWindows = process.platform === 'win32'
+
 describe('ai human mock-llm backend', () => {
   it('tool-failure-recovery', async () => {
     await runBackendCase({
@@ -26,9 +28,11 @@ describe('ai human mock-llm backend', () => {
                 output: buildToolDecision({
                   toolName: 'terminal_run',
                   args: {
-                    command: 'cat definitely-missing-file.txt'
+                    command: isWindows
+                      ? 'Get-Content -LiteralPath definitely-missing-file.txt'
+                      : 'cat definitely-missing-file.txt'
                   },
-                  summary: '执行一个会失败的只读命令'
+                  summary: '执行一个会失败的安全指令'
                 })
               },
               {

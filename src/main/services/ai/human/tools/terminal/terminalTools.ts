@@ -9,13 +9,15 @@ import { withToolLifecycle } from '../utils/lifecycle'
 import { createToolEventEmitter } from '../utils/toolEvents'
 import type { CapabilityActivityInput } from '../types'
 import { mergeArtifactCandidates, recordTerminalArtifacts } from './terminalArtifacts'
-import { analyzeTerminalCommand, checkWorkspaceBoundary } from './terminalCommandPolicy'
-import { analyzeReadonlyTerminalCommandPolicy } from './readonlyCommandPolicy'
-import { resolveTerminalCwd } from './terminalCwd'
-import { runTerminalCommand } from './terminalExec'
-import { inspectTerminalOutputQuality } from './terminalOutputQuality'
+import {
+  analyzeSafeTerminalCommandPolicy,
+  analyzeTerminalCommand,
+  checkWorkspaceBoundary,
+  resolveTerminalCwd
+} from './commandPolicy'
+import { inspectTerminalOutputQuality, runTerminalCommand } from './terminalExec'
 import type { TerminalCapabilityToolsInput, TerminalCapabilityToolsRuntimeState } from './types'
-import { TERMINAL_RUN_TOOL_SPEC } from './toolSpecs'
+import { createTerminalRunToolSpec } from './toolSpecs'
 
 const isJsonObjectRecord = (value: AiToolCallResult['data']): value is JsonObject =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -183,6 +185,7 @@ const consumeApprovedTerminalCommand = (input: {
 }
 
 export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput) => {
+  const terminalRunToolSpec = createTerminalRunToolSpec(input.ctx.platform)
   const state: TerminalCapabilityToolsRuntimeState = {
     stepIndex: 0
   }
@@ -196,7 +199,7 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
     async (args) =>
       await withToolLifecycle({
         emitter: toolEvents,
-        toolName: TERMINAL_RUN_TOOL_SPEC.name,
+        toolName: terminalRunToolSpec.name,
         args: args as IpcJsonObject,
         execute: async (session) => {
           input.ctx.checkCancelled()
@@ -210,7 +213,7 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
               emptyResult.error,
               undefined,
               buildTerminalToolResult({
-                toolName: TERMINAL_RUN_TOOL_SPEC.name,
+                toolName: terminalRunToolSpec.name,
                 ok: false,
                 data: emptyResult
               })
@@ -231,7 +234,7 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
               cwdError.error,
               undefined,
               buildTerminalToolResult({
-                toolName: TERMINAL_RUN_TOOL_SPEC.name,
+                toolName: terminalRunToolSpec.name,
                 ok: false,
                 data: cwdError
               })
@@ -240,7 +243,11 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
           }
           const cwd = cwdResult.cwd
 
-          const boundary = checkWorkspaceBoundary(command, input.workspaceRootPath)
+          const boundary = checkWorkspaceBoundary(
+            command,
+            input.workspaceRootPath,
+            input.ctx.platform
+          )
           if (!boundary.ok) {
             const boundaryError = buildFailure({
               reason: 'workspace_required',
@@ -250,7 +257,7 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
               boundaryError.error,
               undefined,
               buildTerminalToolResult({
-                toolName: TERMINAL_RUN_TOOL_SPEC.name,
+                toolName: terminalRunToolSpec.name,
                 ok: false,
                 data: boundaryError
               })
@@ -260,14 +267,15 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
 
           const analysis = analyzeTerminalCommand({
             command,
-            cwd: args.cwd
+            cwd: args.cwd,
+            platform: input.ctx.platform
           })
-          const readonlyPolicy = analyzeReadonlyTerminalCommandPolicy(command)
+          const safePolicy = analyzeSafeTerminalCommandPolicy(command, input.ctx.platform)
           const approvedByHand = consumeApprovedTerminalCommand({
             cache: input.cache,
             command
           })
-          if (readonlyPolicy.executionPolicy !== 'readonly_allowed' && !approvedByHand) {
+          if (safePolicy.executionPolicy !== 'safe_allowed' && !approvedByHand) {
             const approvalBatchResult = await input.ctx.requestApprovalBatch({
               runId: input.runId,
               taskId: input.taskId,
@@ -278,9 +286,9 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
                 {
                   itemId: randomUUID(),
                   order: 0,
-                  toolName: TERMINAL_RUN_TOOL_SPEC.name,
+                  toolName: terminalRunToolSpec.name,
                   command,
-                  reason: readonlyPolicy.reason
+                  reason: safePolicy.reason
                 }
               ]
             })
@@ -291,13 +299,13 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
             if (!approved) {
               const denied = buildFailure({
                 reason: 'approval_denied',
-                error: `command requires approval preflight: ${readonlyPolicy.reason}`
+                error: `command requires approval preflight: ${safePolicy.reason}`
               })
               session.fail(
                 denied.error,
                 undefined,
                 buildTerminalToolResult({
-                  toolName: TERMINAL_RUN_TOOL_SPEC.name,
+                  toolName: terminalRunToolSpec.name,
                   ok: false,
                   data: denied
                 })
@@ -404,7 +412,7 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
               stepError,
               undefined,
               buildTerminalToolResult({
-                toolName: TERMINAL_RUN_TOOL_SPEC.name,
+                toolName: terminalRunToolSpec.name,
                 ok: false,
                 data: payload
               })
@@ -416,14 +424,14 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
             payload.reason = 'result_unusable'
             payload.error = 'terminal result unusable'
             payload.decisionHint = buildResultUnusableDecisionHint({
-              toolName: TERMINAL_RUN_TOOL_SPEC.name,
+              toolName: terminalRunToolSpec.name,
               quality: outputQuality
             })
             session.fail(
               payload.error,
               undefined,
               buildTerminalToolResult({
-                toolName: TERMINAL_RUN_TOOL_SPEC.name,
+                toolName: terminalRunToolSpec.name,
                 ok: false,
                 data: payload
               })
@@ -436,7 +444,7 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
             payload.estimatedTokens = estimatedTokens
             payload.limit = aiResultTokenLimit
             payload.decisionHint = buildResultTooLargeDecisionHint({
-              toolName: TERMINAL_RUN_TOOL_SPEC.name,
+              toolName: terminalRunToolSpec.name,
               estimatedTokens,
               limit: aiResultTokenLimit
             })
@@ -445,7 +453,7 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
               payload.error,
               undefined,
               buildTerminalToolResult({
-                toolName: TERMINAL_RUN_TOOL_SPEC.name,
+                toolName: terminalRunToolSpec.name,
                 ok: false,
                 data: payload
               })
@@ -456,7 +464,7 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
           session.succeed(
             undefined,
             buildTerminalToolResult({
-              toolName: TERMINAL_RUN_TOOL_SPEC.name,
+              toolName: terminalRunToolSpec.name,
               ok: true,
               data: payload
             })
@@ -465,9 +473,9 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
         }
       }),
     {
-      name: TERMINAL_RUN_TOOL_SPEC.name,
-      description: TERMINAL_RUN_TOOL_SPEC.promptSpec.description,
-      schema: TERMINAL_RUN_TOOL_SPEC.inputSchema
+      name: terminalRunToolSpec.name,
+      description: terminalRunToolSpec.promptSpec.description,
+      schema: terminalRunToolSpec.inputSchema
     }
   )
 

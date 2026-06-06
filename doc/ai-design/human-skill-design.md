@@ -58,10 +58,10 @@
 ### `terminal`
 
 - 类型：builtin
-- 职责：提供当前 workspace 边界内的 terminal 能力，可执行单条终端命令，并返回命令输出、退出状态与可识别的工作区文件产物。
+- 职责：提供当前 workspace 边界内的 terminal 能力，可按当前平台执行单条终端命令，并返回命令输出、退出状态与可识别的工作区文件产物。
 - 工具列表：
   - `terminal_run`
-- 适用场景：适用于需要使用当前 workspace 终端能力的任务。命令的直接执行与审批要求由终端命令策略决定。
+- 适用场景：适用于需要使用当前 workspace 终端能力的任务。`terminal_run` 是单一平台化工具，Windows 使用 PowerShell 语法，macOS 使用 zsh 语法；命令是否直接执行与是否需要审批由当前平台安全指令集决定。
 
 ### `docx-read`
 

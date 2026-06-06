@@ -20,7 +20,7 @@ describe('ai tool terminal backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['terminal'],
-      description: '验证非只读命令审批、路径逃逸和 workspace 边界保护。',
+      description: '验证安全集外命令审批、路径逃逸和 workspace 边界保护。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -34,7 +34,7 @@ describe('ai tool terminal backend', () => {
         })
 
         return {
-          nonReadonlyDenied: await harness.invoke<TerminalRunCommandResult>('terminal_run', {
+          unsafeDenied: await harness.invoke<TerminalRunCommandResult>('terminal_run', {
             command: isWindows ? 'Remove-Item -Recurse -Force guarded' : 'rm -rf guarded'
           }),
           relativeEscape: await harness.invoke<TerminalRunCommandResult>('terminal_run', {
@@ -55,7 +55,7 @@ describe('ai tool terminal backend', () => {
         const stepStarted = filterEventsByType(result.events, 'terminal_step_started')
 
         runtime.assertThat(
-          result.nonReadonlyDenied.reason === 'approval_denied' &&
+          result.unsafeDenied.reason === 'approval_denied' &&
             approvalEvents.some((event) =>
               event.items.some(
                 (item) =>
@@ -64,10 +64,10 @@ describe('ai tool terminal backend', () => {
             ) &&
             result.guardedStillExists,
           {
-            name: 'non-readonly-commands-stop-at-approval',
-            message: '非只读 terminal 命令应先触发审批；审批拒绝后不得产生副作用。',
+            name: 'unsafe-commands-stop-at-approval',
+            message: '安全集外 terminal 命令应先触发审批；审批拒绝后不得产生副作用。',
             data: {
-              nonReadonlyDenied: result.nonReadonlyDenied,
+              unsafeDenied: result.unsafeDenied,
               approvals: approvalEvents.map((event) => ({
                 command: event.items[0]?.command,
                 reason: event.items[0]?.reason

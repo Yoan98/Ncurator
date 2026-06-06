@@ -18,7 +18,7 @@ import {
 } from '../../shared/deliveryGuidance'
 import { buildToolCallDisplayText } from '../../shared/toolResultRenderers'
 import { assertExternalLearnedSkillIds } from '../../skills'
-import { analyzeReadonlyTerminalCommandPolicy } from '../../tools/terminal/readonlyCommandPolicy'
+import { analyzeSafeTerminalCommandPolicy } from '../../tools/terminal/commandPolicy'
 import { createToolCallSchema, formatToolCallSchemaDiagnostic } from '../../toolCallSchema'
 import type {
   HandCallList,
@@ -98,6 +98,7 @@ const collectApprovalBatchItems = (input: {
   runId: string
   taskId: string
   calls: ParsedHandCall[]
+  platform: AiRunContext['platform']
 }): Array<{
   itemId: string
   order: number
@@ -109,15 +110,15 @@ const collectApprovalBatchItems = (input: {
     if (!isTerminalRunCall(call.toolName)) return []
     const command = readTerminalCommandArg(call.args)
     if (!command) return []
-    const readonlyPolicy = analyzeReadonlyTerminalCommandPolicy(command)
-    if (readonlyPolicy.executionPolicy === 'readonly_allowed') return []
+    const safePolicy = analyzeSafeTerminalCommandPolicy(command, input.platform)
+    if (safePolicy.executionPolicy === 'safe_allowed') return []
     return [
       {
         itemId: randomUUID(),
         order: index,
         toolName: call.toolName,
         command,
-        reason: readonlyPolicy.reason
+        reason: safePolicy.reason
       }
     ]
   })
@@ -369,7 +370,8 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
     const approvalItems = collectApprovalBatchItems({
       runId: input.ctx.runId,
       taskId: state.task.taskId,
-      calls: parsedCalls
+      calls: parsedCalls,
+      platform: input.ctx.platform
     })
     const invalidPlanDecisionHint = validateCalls(parsedCalls)
     if (invalidPlanDecisionHint) {

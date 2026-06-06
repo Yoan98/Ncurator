@@ -6,6 +6,8 @@ import { createHumanRuntimeCache } from '../../../../src/main/services/ai/human/
 import { createInitialHumanState } from '../../../../src/main/services/ai/human/state/schema'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 
+const isWindows = process.platform === 'win32'
+
 describe('ai tool hand backend', () => {
   it('hand-call-limit', async () => {
     await runBackendCase({
@@ -27,12 +29,12 @@ describe('ai tool hand backend', () => {
         const state = await handNode({
           ...createInitialHumanState({
             taskId: runtime.taskId,
-            userInput: '请执行多个终端只读命令'
+            userInput: '请执行多个终端安全指令'
           }),
           execution: {
             ...createInitialHumanState({
               taskId: runtime.taskId,
-              userInput: '请执行多个终端只读命令'
+              userInput: '请执行多个终端安全指令'
             }).execution,
             currentThought: {
               thought: {
@@ -43,7 +45,7 @@ describe('ai tool hand backend', () => {
                 calls: Array.from({ length: HUMAN_HAND_CALL_LIMIT + 1 }, () => ({
                   toolName: 'terminal_run',
                   args: {
-                    command: 'pwd'
+                    command: isWindows ? 'Get-Location' : 'pwd'
                   }
                 }))
               }

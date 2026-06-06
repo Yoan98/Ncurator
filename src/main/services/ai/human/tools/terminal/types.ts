@@ -20,6 +20,11 @@ export type TerminalCommandResult = {
   durationMs: number
 }
 
+export type TerminalCommandSegment = {
+  text: string
+  tokens: string[]
+}
+
 export type TerminalArtifactCandidate = {
   rawPath: string
   operation?: AiFileArtifactOperation
@@ -47,11 +52,10 @@ export type TerminalCommandAnalysis = {
   artifactCandidates: TerminalArtifactCandidate[]
 }
 
-export type TerminalReadonlyExecutionPolicy = 'readonly_allowed' | 'approval_required'
+export type TerminalSafeExecutionPolicy = 'safe_allowed' | 'approval_required'
 
-export type TerminalReadonlyPolicyResult = {
-  executionPolicy: TerminalReadonlyExecutionPolicy
-  mutability: 'read_only' | 'mutating'
+export type TerminalSafePolicyResult = {
+  executionPolicy: TerminalSafeExecutionPolicy
   matchedRuleId?: string
   reason: string
 }

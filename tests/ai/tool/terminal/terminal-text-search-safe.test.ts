@@ -15,14 +15,14 @@ type TerminalRunCommandResult = {
 const isWindows = process.platform === 'win32'
 
 describe('ai tool terminal backend', () => {
-  it('terminal-text-search-readonly', async () => {
+  it('terminal-text-search-safe', async () => {
     await runBackendCase({
-      caseId: 'terminal-text-search-readonly',
+      caseId: 'terminal-text-search-safe',
       harnessMode: 'tool-real',
       domain: 'ai',
       suite: 'tool',
       groups: ['terminal'],
-      description: '验证通过单条只读命令执行文本搜索，并在越界路径参数下于执行前拒绝。',
+      description: '验证通过平台安全指令执行文本搜索，并在越界路径参数下于执行前拒绝。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -65,8 +65,8 @@ describe('ai tool terminal backend', () => {
             !result.secondSearch.reason &&
             approvalEvents.length === 0,
           {
-            name: 'search-commands-stay-readonly',
-            message: '只读文本搜索命令应直接成功执行，不触发审批。',
+            name: 'search-commands-stay-safe',
+            message: '安全文本搜索指令应直接成功执行，不触发审批。',
             data: {
               approvals: approvalEvents.length,
               firstSearch: result.firstSearch,

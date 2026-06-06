@@ -19,8 +19,9 @@
   - 通过率：`2 / 2`
   - 检测时间：`2026-04-16 16:16:05 +08:00`
 - `tool / terminal`
-  - 通过率：`4 / 4`
-  - 检测时间：`2026-04-16 16:16:11 +08:00`
+  - 通过率：`6 / 6`
+  - 检测时间：`2026-06-06`
+  - 覆盖补充：terminal 正式测试按“安全指令集”语义维护；Windows 路径覆盖 PowerShell 语法、`EncodedCommand` 执行与 UTF-8 输出，macOS 路径覆盖 zsh 语法。
 - `tool / hand`
   - 通过率：`4 / 4`
   - 检测时间：`2026-04-16 16:16:05 +08:00`
@@ -607,23 +608,23 @@
 
 #### terminal 类别
 
-##### `terminal-directory-inspection-readonly`
+##### `terminal-directory-inspection-safe`
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证 AI 可仅通过 `terminal_run` 真实执行目录浏览与文本读取类只读命令。
-- Why：这是 terminal 工具最典型的只读路径。
-- How：调用 `terminal_run` 执行真实 shell 命令，分别完成目录浏览与文件读取。
+- What：验证 AI 可仅通过 `terminal_run` 真实执行目录浏览与文本读取类安全指令。
+- Why：这是 terminal 工具最典型的安全执行路径。
+- How：调用 `terminal_run` 执行当前平台 shell 命令，分别完成目录浏览与文件读取。
 - Oracle：返回真实 stdout 片段、退出码与可消费摘要。
 - Not：不验证写操作。
 
-##### `terminal-text-search-readonly`
+##### `terminal-text-search-safe`
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证 AI 可仅通过 `terminal_run` 真实执行只读文本搜索命令。
+- What：验证 AI 可仅通过 `terminal_run` 真实执行安全文本搜索指令。
 - Why：搜索是 terminal 工具最常见的辅助路径。
-- How：调用 `terminal_run` 执行真实 shell 搜索命令。
+- How：调用 `terminal_run` 执行当前平台 shell 搜索命令。
 - Oracle：返回可断言命中信息与正确退出状态。
 - Not：不验证修改文件。
 
@@ -641,7 +642,7 @@
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证未命中只读白名单的命令与越界输入会被真实守卫拒绝。
+- What：验证未命中安全指令集的命令与越界输入会被真实守卫拒绝。
 - Why：terminal 风险边界必须靠正式测试长期守住。
 - How：构造危险或越权命令调用 `terminal_run`。
 - Oracle：返回明确拒绝，不执行实际副作用操作。
@@ -770,7 +771,7 @@
 - 实现状态：`已实现`
 - What：验证真实工具失败结果会被 `human` 吸收，并继续收束到最终交付。
 - Why：工具失败是高频真实场景，如果失败后链路无法继续，`human` 就不具备稳定执行能力。
-- How：直接真实执行一个会失败的 builtin terminal 只读命令 `cat definitely-missing-file.txt`，随后由 `brain` 决定停止重试并进入 `mouth`。
+- How：直接真实执行一个会失败的 builtin terminal 安全指令，随后由 `brain` 决定停止重试并进入 `mouth`。
 - Oracle：真实 `terminal_run` 结果为失败，且 `human` 最终仍进入 `completed` 并产出最终交付。
 - Not：不验证失败后的最佳补救策略是否最优。
 

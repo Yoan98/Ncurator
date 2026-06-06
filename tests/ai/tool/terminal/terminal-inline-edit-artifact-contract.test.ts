@@ -11,6 +11,7 @@ type TerminalRunCommandResult = {
 }
 
 const isWindows = process.platform === 'win32'
+const normalizeArtifactPath = (value: string): string => value.replace(/\\/g, '/')
 
 describe('ai tool terminal backend', () => {
   it('terminal-inline-edit-artifact-contract', async () => {
@@ -79,11 +80,14 @@ describe('ai tool terminal backend', () => {
 
         runtime.assertThat(
           result.updateExisting.artifacts.some(
-            (artifact) => artifact.operation === 'updated' && artifact.path.endsWith('/notes.txt')
+            (artifact) =>
+              artifact.operation === 'updated' &&
+              normalizeArtifactPath(artifact.path).endsWith('/notes.txt')
           ) &&
             result.createNew.artifacts.some(
               (artifact) =>
-                artifact.operation === 'created' && artifact.path.endsWith('/generated/output.txt')
+                artifact.operation === 'created' &&
+                normalizeArtifactPath(artifact.path).endsWith('/generated/output.txt')
             ) &&
             artifactEvents.length >= 2,
           {

@@ -1,7 +1,12 @@
 import { DOCX_TOOL_SPECS } from './docx/toolSpecs'
 import { KB_TOOL_SPECS } from './kb/toolSpecs'
-import { TERMINAL_TOOL_SPECS } from './terminal/toolSpecs'
+import {
+  createTerminalRunToolSpec,
+  TERMINAL_RUN_TOOL_SPEC,
+  TERMINAL_TOOL_SPECS
+} from './terminal/toolSpecs'
 import type { AiToolFamilyId, HumanToolSpec } from './types'
+import type { AiRuntimePlatform } from '../../types'
 
 export const ALL_TOOL_SPECS = [
   ...TERMINAL_TOOL_SPECS,
@@ -21,10 +26,20 @@ for (const spec of ALL_TOOL_SPECS) {
 }
 
 export function getToolSpec<TName extends AnyToolSpec['name']>(
-  toolName: TName
+  toolName: TName,
+  platform?: AiRuntimePlatform
 ): Extract<AnyToolSpec, { name: TName }> | undefined
-export function getToolSpec(toolName: string): HumanToolSpec | undefined
-export function getToolSpec(toolName: string): HumanToolSpec | undefined {
+export function getToolSpec(
+  toolName: string,
+  platform?: AiRuntimePlatform
+): HumanToolSpec | undefined
+export function getToolSpec(
+  toolName: string,
+  platform?: AiRuntimePlatform
+): HumanToolSpec | undefined {
+  if (toolName === TERMINAL_RUN_TOOL_SPEC.name) {
+    return createTerminalRunToolSpec(platform)
+  }
   return TOOL_SPEC_BY_NAME.get(toolName)
 }
 

@@ -7,6 +7,8 @@ import type { AiArtifactRef } from '../../../../src/shared/types'
 import { writeTestDocxFile } from '../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 
+const isWindows = process.platform === 'win32'
+
 const buildHandState = (input: {
   taskId: string
   userInput: string
@@ -76,22 +78,22 @@ describe('ai tool hand backend', () => {
         const firstState = await handNode(
           buildHandState({
             taskId: runtime.taskId,
-            userInput: '第一次只读命令',
+            userInput: '第一次安全指令',
             learnedSkillIds: [],
             toolName: 'terminal_run',
             args: {
-              command: 'pwd'
+              command: isWindows ? 'Get-Location' : 'pwd'
             }
           })
         )
         const secondState = await handNode({
           ...buildHandState({
             taskId: runtime.taskId,
-            userInput: '第二次只读命令',
+            userInput: '第二次安全指令',
             learnedSkillIds: [],
             toolName: 'terminal_run',
             args: {
-              command: 'ls'
+              command: isWindows ? 'Get-ChildItem -LiteralPath .' : 'ls'
             }
           }),
           trace: firstState.trace
@@ -99,11 +101,11 @@ describe('ai tool hand backend', () => {
         const thirdState = await handNode({
           ...buildHandState({
             taskId: runtime.taskId,
-            userInput: '第三次只读命令',
+            userInput: '第三次安全指令',
             learnedSkillIds: [],
             toolName: 'terminal_run',
             args: {
-              command: 'pwd'
+              command: isWindows ? 'Get-Location' : 'pwd'
             }
           }),
           trace: secondState.trace
@@ -183,7 +185,7 @@ describe('ai tool hand backend', () => {
             learnedSkillIds: [],
             toolName: 'terminal_run',
             args: {
-              command: 'touch first.txt'
+              command: isWindows ? 'New-Item -ItemType File -Path first.txt' : 'touch first.txt'
             }
           })
         )

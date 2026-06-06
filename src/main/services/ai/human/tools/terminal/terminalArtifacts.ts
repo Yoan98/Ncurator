@@ -2,93 +2,10 @@ import fs from 'node:fs'
 import path from 'node:path'
 import type { AiFileArtifactOperation } from '../../../../../../shared/types'
 import type { ArtifactCandidate, TerminalArtifactCandidate } from './types'
-import { parseShellCommandSegments } from './commandParsing'
-import { resolveWorkspacePath } from './terminalCwd'
+import { resolveWorkspacePath } from './commandPolicy'
 import { emitFileArtifactEvent } from '../../../events/fileArtifacts'
 import type { TerminalToolContext } from '../../../types'
 import type { CapabilityActivityInput } from '../types'
-import { getAiRuntimePlatform } from '../../../utils/platform'
-
-const extractRedirectionPaths = (tokens: string[]): string[] => {
-  const paths: string[] = []
-  for (let index = 0; index < tokens.length; index += 1) {
-    const token = tokens[index]
-    if (token === '>' || token === '>>' || token === '1>' || token === '1>>') {
-      const next = tokens[index + 1]
-      if (next && !next.startsWith('-')) paths.push(next)
-      continue
-    }
-    const inline = token.match(/^(?:1?>>?)(.+)$/)
-    if (inline?.[1]) {
-      paths.push(inline[1])
-    }
-  }
-  return paths
-}
-
-const pickNonOptionArgs = (tokens: string[]): string[] =>
-  tokens.filter((token, index) => index > 0 && token && !token.startsWith('-'))
-
-const detectSegmentArtifacts = (tokens: string[]): TerminalArtifactCandidate[] => {
-  if (tokens.length === 0) return []
-
-  const first = String(tokens[0] || '').toLowerCase()
-  const candidates: TerminalArtifactCandidate[] = extractRedirectionPaths(tokens).map(
-    (rawPath) => ({
-      rawPath
-    })
-  )
-  const args = pickNonOptionArgs(tokens)
-
-  if (first === 'touch' || first === 'mkdir') {
-    for (const rawPath of args) candidates.push({ rawPath, operation: 'created' })
-  } else if (first === 'cp' || first === 'mv') {
-    const destination = args.at(-1)
-    if (destination) {
-      candidates.push({
-        rawPath: destination,
-        operation: first === 'mv' ? 'updated' : undefined
-      })
-    }
-  } else if (first === 'copy-item' || first === 'move-item') {
-    const destination = args.at(-1)
-    if (destination) {
-      candidates.push({
-        rawPath: destination,
-        operation: first === 'move-item' ? 'updated' : undefined
-      })
-    }
-  } else if (first === 'new-item') {
-    const destination = args.at(-1)
-    if (destination) candidates.push({ rawPath: destination, operation: 'created' })
-  } else if (first === 'set-content' || first === 'add-content' || first === 'out-file') {
-    const destination = args.at(-1)
-    if (destination) candidates.push({ rawPath: destination })
-  } else if (first === 'tee') {
-    const destination = args.find((token) => token !== '/dev/null')
-    if (destination) candidates.push({ rawPath: destination })
-  }
-
-  return candidates
-}
-
-export const collectTerminalArtifactCandidates = (command: string): TerminalArtifactCandidate[] => {
-  const unique = new Map<string, TerminalArtifactCandidate>()
-  const windowsStyle = getAiRuntimePlatform() === 'windows'
-  for (const segment of parseShellCommandSegments(command, { windowsStyle })) {
-    for (const candidate of detectSegmentArtifacts(segment.tokens)) {
-      const key = candidate.rawPath.trim()
-      if (!key) continue
-      const previous = unique.get(key)
-      if (!previous) {
-        unique.set(key, candidate)
-      } else if (!previous.operation && candidate.operation) {
-        unique.set(key, candidate)
-      }
-    }
-  }
-  return Array.from(unique.values())
-}
 
 export const mergeArtifactCandidates = (input: {
   commandCandidates: TerminalArtifactCandidate[]

@@ -593,7 +593,7 @@ type HumanDecisionHint =
 
 - `hand` 失败时应优先保留原始校验/运行时错误文本。
 - 影响下一轮 `brain` 决策的诊断信息，应通过 `decisionHint` 回流最小结构化事实。
-- `terminal_run` 只负责执行 workspace 边界内的 shell command；直接执行资格由安全只读指令集决定，一条 command 被拆分后的每段都命中 `SAFE_READONLY_COMMAND_RULES` 时可直接执行，任一段未命中则必须先经用户审批。
+- `terminal_run` 只负责执行 workspace 边界内的 shell command；直接执行资格由当前平台安全指令集决定，一条 command 被拆分后的每段都命中安全指令集时可直接执行，任一段未命中则必须先经用户审批。
 - `terminal_run` 禁止用 terminal 读取或写入 Word / Excel / PPT / PDF 等结构化文档内容；若执行后返回明显非文本/二进制内容，工具必须省略原始输出，并通过 `hand_tool_result_unusable` 回流检测到的结构化特征。
 
 ## 8. Mouth

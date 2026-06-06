@@ -22,7 +22,7 @@ import type {
 } from './types'
 import { getDocxWorkerClient } from './worker/docxWorkerClient'
 import type { DocxWorkerRequest, DocxWorkerResponse } from './worker/types'
-import { resolveWorkspacePath } from '../terminal/terminalCwd'
+import { resolveWorkspacePath } from '../terminal/commandPolicy'
 import { isSemanticSearchableBlock, splitEmbeddingRows } from './semanticSearch'
 import { createToolEventEmitter } from '../utils/toolEvents'
 import type { ToolEventEmitter } from '../utils/toolEvents'

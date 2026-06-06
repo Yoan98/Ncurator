@@ -10,14 +10,14 @@ type TerminalRunCommandResult = {
 }
 
 describe('ai tool terminal backend', () => {
-  it('terminal-nonreadonly-requires-approval', async () => {
+  it('terminal-unsafe-requires-approval', async () => {
     await runBackendCase({
-      caseId: 'terminal-nonreadonly-requires-approval',
+      caseId: 'terminal-unsafe-requires-approval',
       harnessMode: 'tool-real',
       domain: 'ai',
       suite: 'tool',
       groups: ['terminal'],
-      description: '验证未命中只读白名单但并非高危的 terminal 命令仍必须审批。',
+      description: '验证未命中安全指令集但并非高危的 terminal 命令仍必须审批。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -47,8 +47,8 @@ describe('ai tool terminal backend', () => {
               event.items.some((item) => item.command === 'mkdir blocked-dir')
             ),
           {
-            name: 'non-readonly-command-requires-approval-even-without-risk-tiering',
-            message: '未命中只读白名单的 terminal 命令即使不是旧语义里的高危命令，也必须先审批。',
+            name: 'unsafe-command-requires-approval-even-without-risk-tiering',
+            message: '未命中安全指令集的 terminal 命令即使不是高危命令，也必须先审批。',
             data: {
               mkdirDenied: result.mkdirDenied,
               blockedDirExists: result.blockedDirExists,

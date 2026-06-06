@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { inspectTerminalOutputQuality } from '../../../src/main/services/ai/human/tools/terminal/terminalOutputQuality'
+import { inspectTerminalOutputQuality } from '../../../src/main/services/ai/human/tools/terminal/terminalExec'
 
 describe('ai unit terminal output quality', () => {
   it('detects obvious office binary output signatures', () => {

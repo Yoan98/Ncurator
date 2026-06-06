@@ -22,6 +22,7 @@ import {
 import { createHumanThoughtDecisionSchema } from '../schema'
 import type { HumanState, ToolPromptExample } from '../types'
 import type { HumanToolSpec } from '../tools/types'
+import type { AiRuntimePlatform } from '../../types'
 import { renderDecisionHintForBrain } from './decisionHints'
 import { getAvailableToolNames } from '../node/utils/runtimeCache'
 
@@ -59,7 +60,7 @@ ${examples}
 `.trim()
 }
 
-const renderSkillCatalogSection = (state: HumanState): string => {
+const renderSkillCatalogSection = (state: HumanState, platform: AiRuntimePlatform): string => {
   const effectiveSkillIds = getEffectiveLearnedSkillIds(state.skills.learnedSkillIds)
   const effectiveSkillDefinitions = effectiveSkillIds.map((skillId) => getSkillDefinition(skillId))
   const learnedExternalSkillDefinitions = effectiveSkillDefinitions.filter(
@@ -77,7 +78,7 @@ const renderSkillCatalogSection = (state: HumanState): string => {
   const effectiveToolSpecLines = Array.from(
     new Set(effectiveSkillDefinitions.flatMap((definition) => definition.toolNames))
   )
-    .map((toolName) => getToolSpec(toolName))
+    .map((toolName) => getToolSpec(toolName, platform))
     .filter((spec): spec is HumanToolSpec => Boolean(spec))
     .map((spec) =>
       renderSkillCatalogToolSpecLine({
@@ -252,7 +253,7 @@ ${JSON.stringify({
       {
         toolName: 'terminal_run',
         args: {
-          command: 'pwd'
+          command: input.ctx.platform === 'windows' ? 'Get-Location' : 'pwd'
         }
       }
     ]
@@ -333,7 +334,7 @@ ${renderPlatformText(input.ctx)}
   </conversation_history>
 
   <skill_catalog>
-${renderSkillCatalogSection(input.state)}
+${renderSkillCatalogSection(input.state, input.ctx.platform)}
   </skill_catalog>
 
   <round_history>

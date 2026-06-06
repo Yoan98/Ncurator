@@ -13,6 +13,7 @@ import {
 const SHARED_WORKSPACE_FIXTURE_PATH = 'tests/fixtures/workspace'
 const POSITIONED_DOCX_FIXTURE_PATH = 'tests/fixtures/workspace/学习笔记/图形学.docx'
 const LARGE_DOCX_FIXTURE_PATH = 'tests/fixtures/workspace/交互式探究学习案例：产业转移.docx'
+const isWindows = process.platform === 'win32'
 
 type DocxOutlineBlockPreview = {
   blockId: string
@@ -129,18 +130,18 @@ describe('ai human mock-llm backend', () => {
                 output: buildToolDecision({
                   toolName: 'terminal_run',
                   args: {
-                    command: 'pwd'
+                    command: isWindows ? 'Get-Location' : 'pwd'
                   },
-                  summary: '第一轮只读命令，作为 hardActionLimit 的已执行动作'
+                  summary: '第一轮安全指令，作为 hardActionLimit 的已执行动作'
                 })
               },
               {
                 output: buildToolDecision({
                   toolName: 'terminal_run',
                   args: {
-                    command: 'ls'
+                    command: isWindows ? 'Get-ChildItem -LiteralPath .' : 'ls'
                   },
-                  summary: '第二轮只读命令，触发 hand_tool_limit_exceeded'
+                  summary: '第二轮安全指令，触发 hand_tool_limit_exceeded'
                 })
               },
               {
@@ -213,7 +214,7 @@ describe('ai human mock-llm backend', () => {
             event.stage === 'human_brain' &&
             event.action === 'brain_decision' &&
             typeof event.summary === 'string' &&
-            event.summary.includes('第一轮只读命令')
+            event.summary.includes('第一轮安全指令')
         )
 
         runtime.assertThat(

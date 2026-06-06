@@ -11,6 +11,7 @@ const VITEST_BIN = resolveLocalBin('vitest')
 const ELECTRON_VITE_BIN = resolveLocalBin('electron-vite')
 const LIVE_BACKEND_NODE_OLD_SPACE_MB = 8192
 const DEFAULT_E2E_FILE_DELAY_MS = 1000
+const USE_WINDOWS_SHELL = process.platform === 'win32'
 
 const removeNpmLifecycleEnv = () => {
   for (const key of Object.keys(process.env)) {
@@ -143,33 +144,59 @@ const buildCommandEnv = (overrides, options = {}) => {
   }
 }
 
+const formatCommand = (bin, args) => [bin, ...args].join(' ')
+
+const runSpawn = (bin, args, env, omitNpmEnv) =>
+  spawnSync(bin, args, {
+    cwd: ROOT,
+    stdio: 'inherit',
+    shell: USE_WINDOWS_SHELL,
+    env: buildCommandEnv(env, { omitNpmEnv })
+  })
+
+const reportSpawnFailure = (label, bin, args, result) => {
+  if (result.error) {
+    process.stderr.write(
+      `[test-workflow] ${label} failed to start: ${formatCommand(bin, args)}\n${String(result.error)}\n`
+    )
+    return
+  }
+  if (typeof result.status !== 'number') {
+    process.stderr.write(
+      `[test-workflow] ${label} exited without a numeric status: ${formatCommand(bin, args)}\n`
+    )
+  }
+}
+
 const runCommandWithFallback = (input) => {
   if (input.preferFallback) {
-    const fallbackResult = spawnSync(input.fallback.bin, input.fallback.args, {
-      cwd: ROOT,
-      stdio: 'inherit',
-      env: buildCommandEnv(input.env, { omitNpmEnv: input.omitNpmEnv })
-    })
+    const fallbackResult = runSpawn(
+      input.fallback.bin,
+      input.fallback.args,
+      input.env,
+      input.omitNpmEnv
+    )
+    reportSpawnFailure('fallback command', input.fallback.bin, input.fallback.args, fallbackResult)
     if (typeof fallbackResult.status === 'number') return fallbackResult.status
     return 1
   }
 
-  const primaryResult = spawnSync(input.primary.bin, input.primary.args, {
-    cwd: ROOT,
-    stdio: 'inherit',
-    env: buildCommandEnv(input.env, { omitNpmEnv: input.omitNpmEnv })
-  })
+  const primaryResult = runSpawn(input.primary.bin, input.primary.args, input.env, input.omitNpmEnv)
 
   if (!primaryResult.error) {
+    reportSpawnFailure('primary command', input.primary.bin, input.primary.args, primaryResult)
     if (typeof primaryResult.status === 'number') return primaryResult.status
     return 1
   }
 
-  const fallbackResult = spawnSync(input.fallback.bin, input.fallback.args, {
-    cwd: ROOT,
-    stdio: 'inherit',
-    env: buildCommandEnv(input.env, { omitNpmEnv: input.omitNpmEnv })
-  })
+  reportSpawnFailure('primary command', input.primary.bin, input.primary.args, primaryResult)
+  const fallbackResult = runSpawn(
+    input.fallback.bin,
+    input.fallback.args,
+    input.env,
+    input.omitNpmEnv
+  )
+  reportSpawnFailure('fallback command', input.fallback.bin, input.fallback.args, fallbackResult)
   if (typeof fallbackResult.status === 'number') return fallbackResult.status
   return 1
 }

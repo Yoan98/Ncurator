@@ -13,14 +13,14 @@ type TerminalRunCommandResult = {
 const isWindows = process.platform === 'win32'
 
 describe('ai tool terminal backend', () => {
-  it('terminal-directory-inspection-readonly', async () => {
+  it('terminal-directory-inspection-safe', async () => {
     await runBackendCase({
-      caseId: 'terminal-directory-inspection-readonly',
+      caseId: 'terminal-directory-inspection-safe',
       harnessMode: 'tool-real',
       domain: 'ai',
       suite: 'tool',
       groups: ['terminal'],
-      description: '验证 workspace 目录浏览与文本读取都可通过单条只读命令稳定完成。',
+      description: '验证 workspace 目录浏览与文本读取都可通过平台安全指令稳定完成。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -45,8 +45,8 @@ describe('ai tool terminal backend', () => {
               ? 'Get-ChildItem -LiteralPath materials -Recurse -File'
               : 'find materials -type f'
           }),
-          echoReadOnly: await harness.invoke<TerminalRunCommandResult>('terminal_run', {
-            command: isWindows ? 'Write-Output "terminal readonly check"' : 'echo terminal readonly check'
+          safeEcho: await harness.invoke<TerminalRunCommandResult>('terminal_run', {
+            command: isWindows ? 'Write-Output "terminal safe check"' : 'echo terminal safe check'
           }),
           read: await harness.invoke<TerminalRunCommandResult>('terminal_run', {
             command: isWindows
@@ -61,22 +61,22 @@ describe('ai tool terminal backend', () => {
         const stepErrors = filterEventsByType(result.events, 'terminal_step_error')
 
         runtime.assertThat(
-          !result.list.reason &&
+            !result.list.reason &&
             !result.recursiveFind.reason &&
-            !result.echoReadOnly.reason &&
+            !result.safeEcho.reason &&
             !result.read.reason &&
             approvalEvents.length === 0 &&
             stepErrors.length === 0,
           {
-            name: 'readonly-shell-inspection-runs-without-approval',
-            message: '目录浏览与文本读取类只读命令应直接成功执行，且不触发审批。',
+            name: 'safe-shell-inspection-runs-without-approval',
+            message: '目录浏览与文本读取类安全指令应直接成功执行，且不触发审批。',
             data: {
               approvals: approvalEvents.length,
               stepErrors: stepErrors.length,
               reasons: [
                 result.list.reason,
                 result.recursiveFind.reason,
-                result.echoReadOnly.reason,
+                result.safeEcho.reason,
                 result.read.reason
               ]
             }
@@ -86,15 +86,15 @@ describe('ai tool terminal backend', () => {
         runtime.assertThat(
           result.list.stdout.includes('daily-note.txt') &&
             result.recursiveFind.stdout.includes('daily-note.txt') &&
-            result.echoReadOnly.stdout.includes('terminal readonly check') &&
+            result.safeEcho.stdout.includes('terminal safe check') &&
             result.read.stdout.includes('alpha') &&
             result.read.stdout.includes('gamma'),
           {
-            name: 'readonly-shell-inspection-returns-stable-output',
+            name: 'safe-shell-inspection-returns-stable-output',
             message: 'terminal_run 应为目录浏览与文本读取返回可消费的稳定输出。',
             data: {
               list: result.list,
-              echoReadOnly: result.echoReadOnly,
+              safeEcho: result.safeEcho,
               read: result.read
             }
           }
