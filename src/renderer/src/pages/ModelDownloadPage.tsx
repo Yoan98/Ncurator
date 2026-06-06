@@ -349,7 +349,7 @@ const ModelDownloadPage: React.FC = () => {
 
                           {errorMsg && errorRepoId === item.id ? (
                             <div
-                              className="flex items-center gap-1 text-sm text-red-500"
+                              className="flex items-center gap-1 text-sm text-[#A83A31]"
                               data-testid={`${vectorSelectors.errorPrefix}-${item.id}`}
                             >
                               <HiExclamationCircle />

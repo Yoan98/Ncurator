@@ -114,7 +114,11 @@ const AssistantProcessGroupView: React.FC<{ group: AssistantProcessGroup }> = ({
       open={group.items.length === 0 ? true : undefined}
       data-testid={`${workbenchSelectors.assistantProcessItemPrefix}-${group.id}`}
     >
-      <summary className="flex list-none items-start rounded-xl outline-none [&::-webkit-details-marker]:hidden">
+      <summary
+        className={`flex list-none items-start rounded-xl outline-none [&::-webkit-details-marker]:hidden ${
+          group.items.length > 0 ? 'cursor-pointer' : ''
+        }`}
+      >
         <span
           className={`inline-flex min-w-0 flex-1 items-center gap-1 text-[14px] leading-7 ${getProcessStatusClassName(group.status)}`}
         >
@@ -234,7 +238,11 @@ const AssistantExecutionGroupView: React.FC<{ groups: AssistantProcessGroup[]; i
       className="group/execution"
       data-testid={`${workbenchSelectors.assistantProcessItemPrefix}-${id}`}
     >
-      <summary className="flex list-none items-start rounded-xl outline-none [&::-webkit-details-marker]:hidden">
+      <summary
+        className={`flex list-none items-start rounded-xl outline-none [&::-webkit-details-marker]:hidden ${
+          items.length > 0 ? 'cursor-pointer' : ''
+        }`}
+      >
         <span
           className={`inline-flex min-w-0 flex-1 items-center gap-1 text-[13px] leading-6 transition-colors duration-200 ${
             status === 'failed'

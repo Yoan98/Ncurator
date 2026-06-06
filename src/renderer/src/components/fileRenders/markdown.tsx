@@ -35,7 +35,7 @@ const CustomMarkdownRenderer = ({ mainState }) => {
   return (
     <div
       id="my-markdown-renderer"
-      className="chat-markdown w-full h-full overflow-auto bg-white p-8 prose max-w-none"
+      className="markdown-body h-full w-full overflow-auto bg-[#FFFDF8] p-8"
     >
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
@@ -43,12 +43,18 @@ const CustomMarkdownRenderer = ({ mainState }) => {
           code({ className, children, ...props }) {
             const match = /language-(\w+)/.exec(className || '')
             return match ? (
-              <SyntaxHighlighter language={match[1]} PreTag="div" style={oneLight} {...props}>
+              <SyntaxHighlighter
+                language={match[1]}
+                PreTag="div"
+                style={oneLight}
+                className="markdown-code-block !my-0"
+                {...props}
+              >
                 {String(children).replace(/\n$/, '')}
               </SyntaxHighlighter>
             ) : (
               <code
-                className={`${className} bg-gray-100 rounded px-1 py-0.5 text-sm text-gray-800`}
+                className={`markdown-inline-code ${className || ''}`}
                 {...props}
               >
                 {children}

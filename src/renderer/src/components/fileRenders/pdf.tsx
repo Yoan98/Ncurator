@@ -75,14 +75,14 @@ const CustomPDFRenderer: DocRenderer = ({ mainState }: DocRendererProps) => {
     <div
       id="my-pdf-renderer"
       ref={scrollContainerRef}
-      className="relative h-full w-full overflow-auto bg-gray-100/50 p-4"
+      className="relative h-full w-full overflow-auto bg-[#F0EFEB] p-4"
     >
       <Document
         file={file}
         onLoadSuccess={onDocumentLoadSuccess}
         onLoadError={onDocumentLoadError}
         loading={
-          <div className="flex items-center justify-center h-full text-gray-400">
+          <div className="flex h-full items-center justify-center text-[#9C9A94]">
             Loading PDF...
           </div>
         }

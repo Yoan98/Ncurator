@@ -5,8 +5,7 @@ import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
-import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
-import { Typography } from 'antd'
+import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { parseRefHref, renderReferenceIcon } from './markdownReference'
 
 interface MarkdownRendererProps {
@@ -35,46 +34,29 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, className 
             return !inline && match ? (
               <SyntaxHighlighter
                 {...props}
-                style={vscDarkPlus}
+                style={oneLight}
                 language={match[1]}
                 PreTag="div"
-                className="!my-0 rounded-md"
+                className="markdown-code-block !my-0"
               >
                 {String(children).replace(/\n$/, '')}
               </SyntaxHighlighter>
             ) : (
               <code
                 {...props}
-                className={`${className} bg-gray-100 text-red-500 px-1 py-0.5 rounded text-sm font-mono`}
+                className={`markdown-inline-code ${className || ''}`}
               >
                 {children}
               </code>
             )
           },
-          // Custom styling for other elements
-          p: ({ children }) => (
-            <Typography.Paragraph className="!mb-2 leading-relaxed text-[#181818]">
-              {children}
-            </Typography.Paragraph>
-          ),
-          h1: ({ children }) => (
-            <Typography.Title level={3} className="!mt-4 !mb-2">
-              {children}
-            </Typography.Title>
-          ),
-          h2: ({ children }) => (
-            <Typography.Title level={4} className="!mt-3 !mb-2">
-              {children}
-            </Typography.Title>
-          ),
-          h3: ({ children }) => (
-            <Typography.Title level={5} className="!mt-2 !mb-1">
-              {children}
-            </Typography.Title>
-          ),
-          ul: ({ children }) => <ul className="list-disc pl-5 mb-2">{children}</ul>,
-          ol: ({ children }) => <ol className="list-decimal pl-5 mb-2">{children}</ol>,
-          li: ({ children }) => <li className="mb-1 text-[#181818]">{children}</li>,
+          p: ({ children }) => <p>{children}</p>,
+          h1: ({ children }) => <h1>{children}</h1>,
+          h2: ({ children }) => <h2>{children}</h2>,
+          h3: ({ children }) => <h3>{children}</h3>,
+          ul: ({ children }) => <ul>{children}</ul>,
+          ol: ({ children }) => <ol>{children}</ol>,
+          li: ({ children }) => <li>{children}</li>,
           a: ({ href, children }) => {
             const parsed = parseRefHref(href)
             if (parsed.type === 'reference') {
@@ -82,7 +64,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, className 
               return (
                 <a
                   href={href}
-                  className="inline-flex items-center gap-1 rounded-full border border-[#E1DED6] bg-[#F0EFEB] px-2 py-0.5 text-[#181818] hover:bg-[#E8E6DF]"
+                  className="markdown-reference-link"
                   data-ref-path={parsed.path}
                 >
                   {renderReferenceIcon(label, parsed.path)}
@@ -96,31 +78,22 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, className 
                 href={href}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-[#181818] hover:underline"
               >
                 {children}
               </a>
             )
           },
           blockquote: ({ children }) => (
-            <blockquote className="border-l-4 border-[#181818] pl-4 italic text-gray-500 my-2">
-              {children}
-            </blockquote>
+            <blockquote>{children}</blockquote>
           ),
           table: ({ children }) => (
-            <div className="overflow-x-auto my-2">
-              <table className="min-w-full divide-y divide-gray-200 border">{children}</table>
+            <div className="markdown-table-wrap">
+              <table>{children}</table>
             </div>
           ),
-          thead: ({ children }) => <thead className="bg-gray-50">{children}</thead>,
-          th: ({ children }) => (
-            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">
-              {children}
-            </th>
-          ),
-          td: ({ children }) => (
-            <td className="px-3 py-2 whitespace-nowrap text-sm border-b">{children}</td>
-          )
+          thead: ({ children }) => <thead>{children}</thead>,
+          th: ({ children }) => <th>{children}</th>,
+          td: ({ children }) => <td>{children}</td>
         }}
       >
         {content}
