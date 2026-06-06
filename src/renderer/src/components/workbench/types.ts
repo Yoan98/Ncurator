@@ -47,6 +47,7 @@ export type AssistantProcessSourceEventType = 'thinking' | AiRunEvent['type']
 export type AssistantRichTextSegment = {
   text: string
   emphasis?: boolean
+  iconKind?: AssistantProcessIconKind
 }
 
 export type AssistantToolName =
@@ -68,9 +69,15 @@ export type AssistantProcessIconKind =
   | 'edit'
   | 'learning'
   | 'compaction'
+  | 'finalizing'
   | 'default'
 
-export type AssistantProcessGroupKind = 'thinking' | 'skill' | 'learning' | 'compaction'
+export type AssistantProcessGroupKind =
+  | 'thinking'
+  | 'skill'
+  | 'learning'
+  | 'compaction'
+  | 'finalizing'
 
 export type AssistantProcessSkillKey =
   | 'docx-reader'
@@ -88,6 +95,7 @@ export type AssistantProcessGroupItem = {
   createdAt: number
   sourceEventType: AssistantProcessSourceEventType
   toolName?: AssistantToolName
+  targetLabel?: string
 }
 
 export type AssistantProcessGroup = {

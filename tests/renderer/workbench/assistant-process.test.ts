@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import type { AiRunEvent } from '../../../src/shared/types'
 import {
   buildAssistantProcessText,
+  buildAssistantExecutionSummaryText,
+  completeAssistantProcessGroups,
   createAssistantThinkingGroup,
   createSearchProcessGroup,
   reduceAssistantProcessGroups,
@@ -124,6 +126,21 @@ describe('workbench assistant process groups', () => {
     expect(completedGroups).toEqual([])
   })
 
+  it('removes thinking group as soon as public decision text arrives', () => {
+    const groups = reduceAssistantProcessGroups(
+      [createAssistantThinkingGroup('assistant-1')],
+      {
+        type: 'assistant_process_thought',
+        runId: 'run-1',
+        thoughtId: 'thought-1',
+        text: '先确认需要审批的本地命令。',
+        createdAt: 2
+      }
+    )
+
+    expect(groups).toEqual([])
+  })
+
   it('groups docx read tools by skill and builds tool-specific sentences from input', () => {
     const groupId = 'run-1:skill:docx-reader'
     const group = groupStarted({
@@ -164,10 +181,58 @@ describe('workbench assistant process groups', () => {
       skillKey: 'docx-reader',
       status: 'running'
     })
-    expect(toText(groups[0].runningText)).toBe('俺正在阅读 docx')
+    expect(toText(buildAssistantExecutionSummaryText(groups))).toBe('正在读取 1 个 docx 文件')
     expect(toText(groups[0].items[0].runningText)).toBe('正在阅读 /tmp/report.docx 文件的结构')
-    expect(toText(groups[0].items[1].runningText)).toBe('正在阅读 /tmp/report.docx 文件细节')
+    expect(toText(groups[0].items[1].runningText)).toBe('正在读取 /tmp/report.docx 文件细节')
     expect(groups[0].items[0].runningText.some((segment) => segment.emphasis)).toBe(true)
+  })
+
+  it('summarizes adjacent execution skill groups by action and unique docx file count', () => {
+    const readGroupId = 'run-1:skill:docx-reader'
+    const writeGroupId = 'run-1:skill:docx-writer'
+    const groups = [
+      itemStarted({
+        groupId: readGroupId,
+        itemId: 'tool-outline',
+        display: {
+          kind: 'tool',
+          toolName: 'docx_outline',
+          input: { sourcePath: '/tmp/report.docx' }
+        },
+        createdAt: 1
+      }),
+      itemStarted({
+        groupId: readGroupId,
+        itemId: 'tool-read',
+        display: {
+          kind: 'tool',
+          toolName: 'docx_read_blocks',
+          input: {
+            sourcePath: '/tmp/report.docx',
+            range: { type: 'block_index', fromBlockIndex: 3, toBlockIndex: 8 }
+          }
+        },
+        createdAt: 2
+      }),
+      itemStarted({
+        groupId: writeGroupId,
+        itemId: 'tool-edit',
+        display: {
+          kind: 'tool',
+          toolName: 'docx_edit',
+          input: { sourcePath: '/tmp/report.docx' }
+        },
+        createdAt: 3
+      })
+    ].reduce(reduceAssistantProcessGroups, [])
+
+    expect(toText(buildAssistantExecutionSummaryText(groups))).toBe(
+      '正在读取 1 个 docx 文件，正在编辑 1 个 docx 文件'
+    )
+    expect(buildAssistantExecutionSummaryText(groups).filter((segment) => segment.iconKind)).toHaveLength(2)
+    expect(toText(groups[0].items[1].runningText)).toBe(
+      '正在读取 /tmp/report.docx 文件的 3-8 区间'
+    )
   })
 
   it('keeps a skill group running while any grouped tool item is still running', () => {
@@ -209,8 +274,7 @@ describe('workbench assistant process groups', () => {
       groupCompleted({ groupId })
     ].reduce(reduceAssistantProcessGroups, [])
 
-    expect(toText(groups[0].runningText)).toBe('俺正在写 docx')
-    expect(toText(groups[0].completedText)).toBe('俺已写完 docx')
+    expect(toText(buildAssistantExecutionSummaryText(groups))).toBe('已编辑 1 个 docx 文件')
     expect(groups[0].status).toBe('completed')
     expect(toText(groups[0].items[0].runningText)).toBe('正在编辑 /tmp/draft.docx 文件')
     expect(toText(groups[0].items[0].completedText)).toBe('已编辑 /tmp/draft.docx 文件')
@@ -241,8 +305,7 @@ describe('workbench assistant process groups', () => {
     )
 
     expect(buildAssistantProcessText(event)).toBe('俺正在查阅资料')
-    expect(toText(itemGroups[0].runningText)).toBe('俺正在查阅资料')
-    expect(toText(itemGroups[0].completedText)).toBe('俺已查阅完资料')
+    expect(toText(buildAssistantExecutionSummaryText(itemGroups))).toBe('正在检索知识库')
     expect(toText(itemGroups[0].items[0].runningText)).toBe('正在搜索 课程设计')
     expect(toText(itemGroups[0].items[0].runningText)).not.toContain('kb_search')
   })
@@ -262,9 +325,9 @@ describe('workbench assistant process groups', () => {
       })
     )
 
-    expect(toText(runningGroups[0].runningText)).toBe('俺在学 docx 阅读器')
+    expect(toText(runningGroups[0].runningText)).toBe('正在学习 docx 阅读器')
     expect(runningGroups[0].status).toBe('running')
-    expect(toText(completedGroups[0].completedText)).toBe('已学完 docx 阅读器')
+    expect(toText(completedGroups[0].completedText)).toBe('已学会 docx 阅读器')
     expect(completedGroups[0].status).toBe('completed')
   })
 
@@ -281,8 +344,22 @@ describe('workbench assistant process groups', () => {
       })
     ].reduce(reduceAssistantProcessGroups, [])
 
-    expect(toText(compactionGroups[0].runningText)).toBe('怎么这么多东西，太多了，俺要整理下！！')
-    expect(toText(compactionGroups[0].completedText)).toBe('呼，终于整理完了')
+    expect(toText(compactionGroups[0].runningText)).toBe('东西太多了，让俺整理下')
+    expect(toText(compactionGroups[0].completedText)).toBe('呼，终于整理好了，累死俺了')
+  })
+
+  it('hides finalizing when final answer starts', () => {
+    const groups = reduceAssistantProcessGroups(
+      [],
+      groupStarted({
+        groupId: 'run-1:finalizing',
+        kind: 'finalizing',
+        display: { kind: 'finalizing' }
+      })
+    )
+
+    expect(toText(groups[0].runningText)).toBe('基本完成了，让俺收尾下吧')
+    expect(completeAssistantProcessGroups(groups)).toEqual([])
   })
 
   it('does not add legacy mouth events to process groups', () => {

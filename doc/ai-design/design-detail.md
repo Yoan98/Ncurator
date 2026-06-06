@@ -249,9 +249,10 @@ type ChatSessionResumeSnapshot = {
 
 - Workbench assistant 过程流只消费稳定的 `assistant_process_*` 事件，不从 `human_step`、`tool_call_*` 或 `context_compaction_*` 推断 UI 过程。
 - `assistant_process_thought` 表示可公开的 brain 决策摘要，来源是经过 prompt/schema 约束的 `thought.next`，用于 Workbench 常显思路文本；它不是模型原始 chain-of-thought。
-- 后端负责按真实生命周期派发过程开始、完成与失败事件：run 启动后先派发 thinking；learning、hand 工具和 context compaction 开始前结束当前 thinking，完成后按需重新进入 thinking；mouth 开始输出前结束 thinking，但 mouth 自身不派发可见过程组。
-- `assistant_process_group_*` 表示用户可理解的过程组，`assistant_process_item_*` 表示组内可展开的工具句子；同一工具技能可复用同一个 groupId 聚合多个 item。
-- 事件的 `display` 字段只承载稳定展示意图，例如 thinking、learning skillId、toolName 与工具入参、compaction；renderer 负责将这些展示意图映射为本地化文案、强调样式、展开收起和状态降权。
+- renderer 收到 `assistant_process_thought` 时应结束当前 thinking 展示，避免 hand 在审批或其他前置阻塞前尚未派发工具过程组时同时显示思考层与决策层。
+- 后端负责按真实生命周期派发过程开始、完成与失败事件：run 启动后先派发 thinking；learning、hand 工具和 context compaction 开始前结束当前 thinking，完成后按需重新进入 thinking；进入 mouth 且等待最终文本返回时派发 finalizing 等待组，最终 markdown 首个 token 或完成事件到达后由 renderer 隐藏该等待组。
+- `assistant_process_group_*` 表示用户可理解的过程组，`assistant_process_item_*` 表示组内可展开的工具句子；renderer 可将同一轮连续 hand 技能组聚合为一个执行层 header，但展开项仍来自稳定 item 事件。
+- 事件的 `display` 字段只承载稳定展示意图，例如 thinking、learning skillId、toolName 与工具入参、compaction、finalizing；renderer 负责将这些展示意图映射为本地化文案、强调样式、展开收起和状态降权。
 - legacy 运行事件仍可服务日志、审计、artifact 提取和兼容其他内部流程，但不得作为 Workbench assistant 过程 UI 的事实来源。
 
 ## 4. Human 总体

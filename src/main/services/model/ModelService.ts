@@ -96,12 +96,6 @@ export interface ModelInfo {
 
 export class ModelService {
   private static instance: ModelService
-  private static activeDownload:
-    | {
-        repoId: string
-        task: Promise<{ success: boolean }>
-      }
-    | null = null
 
   private constructor() {}
 
@@ -429,6 +423,12 @@ export class ModelService {
     })
   }
 
+  public async deleteModel(repoId: string): Promise<{ success: boolean }> {
+    await fs.promises.rm(this.resolveModelPath(repoId), { recursive: true, force: true })
+    await fs.promises.rm(this.resolveDownloadLockPath(repoId), { recursive: true, force: true })
+    return { success: true }
+  }
+
   private async performDownload(
     repoId: string,
     reporter?: ModelDownloadProgressReporter
@@ -483,20 +483,41 @@ export class ModelService {
           continue
         }
 
-        await fs.promises.rm(`${filePath}.part`, { force: true })
-
         console.log(`[ModelService] Downloading ${filename}...`)
 
+        const baseProgress = Math.round((completedFiles / totalFiles) * 100)
         this.emitProgress(reporter, {
           repoId,
           file: filename,
           status: 'downloading',
-          progress: 0,
+          progress: baseProgress,
           totalFiles,
           completedFiles
         })
 
-        await this.downloadFileWithRetry(fileUrl, filePath, () => {})
+        let lastProgress = baseProgress
+        await this.downloadFileWithRetry(fileUrl, filePath, (fileProgress) => {
+          const boundedFileProgress = Math.min(1, Math.max(0, fileProgress))
+          const nextProgress = Math.min(
+            99,
+            Math.max(
+              baseProgress,
+              Math.round(((completedFiles + boundedFileProgress) / totalFiles) * 100)
+            )
+          )
+          if (nextProgress === lastProgress) {
+            return
+          }
+          lastProgress = nextProgress
+          this.emitProgress(reporter, {
+            repoId,
+            file: filename,
+            status: 'downloading',
+            progress: nextProgress,
+            totalFiles,
+            completedFiles
+          })
+        })
 
         completedSet.add(filename)
         completedFiles++
@@ -543,51 +564,29 @@ export class ModelService {
     repoId: string,
     reporter?: ModelDownloadProgressReporter
   ): Promise<{ success: boolean }> {
-    const existing = ModelService.activeDownload
-    if (existing) {
-      if (existing.repoId === repoId) {
-        return existing.task
-      }
-      throw new Error('download already running')
-    }
-
-    const task = (async () => {
-      const releaseLock = await this.acquireDownloadLock(repoId)
-      try {
-        if (this.isModelDownloaded(repoId)) {
-          this.emitProgress(reporter, {
-            repoId,
-            status: 'completed',
-            progress: 100
-          })
-          return { success: true }
-        }
-
-        if (await this.reuseDownloadedModelFromAlternatePath(repoId)) {
-          this.emitProgress(reporter, {
-            repoId,
-            status: 'completed',
-            progress: 100
-          })
-          return { success: true }
-        }
-
-        return await this.performDownload(repoId, reporter)
-      } finally {
-        await releaseLock()
-      }
-    })()
-
-    ModelService.activeDownload = {
-      repoId,
-      task
-    }
+    const releaseLock = await this.acquireDownloadLock(repoId)
     try {
-      return await task
-    } finally {
-      if (ModelService.activeDownload?.task === task) {
-        ModelService.activeDownload = null
+      if (this.isModelDownloaded(repoId)) {
+        this.emitProgress(reporter, {
+          repoId,
+          status: 'completed',
+          progress: 100
+        })
+        return { success: true }
       }
+
+      if (await this.reuseDownloadedModelFromAlternatePath(repoId)) {
+        this.emitProgress(reporter, {
+          repoId,
+          status: 'completed',
+          progress: 100
+        })
+        return { success: true }
+      }
+
+      return await this.performDownload(repoId, reporter)
+    } finally {
+      await releaseLock()
     }
   }
 

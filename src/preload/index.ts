@@ -196,6 +196,22 @@ const api: DesktopApi = {
   removeDownloadProgressListeners: () => {
     downloadProgressListeners.clear()
   },
+  getActiveDownload: () => {
+    const overrides = getE2EApiOverrides()
+    if (overrides && hasOverrideKey(overrides, 'activeDownloadSnapshot')) {
+      return Promise.resolve(overrides.activeDownloadSnapshot ?? null)
+    }
+    return ipcRenderer.invoke('get-active-download')
+  },
+  deleteModel: (repoId: string): Promise<{ success: boolean; error?: string }> => {
+    const safeRepoId = String(repoId || '').trim()
+    emitE2EIpcCall('deleteModel', safeRepoId)
+    const response = getE2EApiOverrides()?.deleteModelResponseByRepoId?.[safeRepoId]
+    if (response) {
+      return Promise.resolve(response)
+    }
+    return ipcRenderer.invoke('delete-model', repoId)
+  },
   getModels: () => {
     emitE2EIpcCall('getModels')
     const modelCatalog = getE2EApiOverrides()?.modelCatalog

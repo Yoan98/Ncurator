@@ -1,0 +1,555 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>NCurator Ink Mono Preview</title>
+    <style>
+      :root {
+        --canvas: #f6f5f1;
+        --paper: #fffdf8;
+        --paper-soft: #faf9f5;
+        --wash: #f0efeb;
+        --wash-strong: #e8e6df;
+        --ink: #181818;
+        --ink-2: #3f3f3d;
+        --ink-3: #6e6d69;
+        --ink-4: #9c9a94;
+        --line: #e1ded6;
+        --line-strong: #cbc7bd;
+        --seal: #a83a31;
+        --shadow: 0 1px 2px rgba(24, 24, 24, 0.04), 0 20px 44px rgba(24, 24, 24, 0.07);
+        --panel-radius: 22px;
+        --control-radius: 10px;
+        color: var(--ink);
+        font-family:
+          Inter, "Segoe UI", "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background:
+          linear-gradient(90deg, #eeeeea 0 232px, transparent 232px),
+          radial-gradient(circle at 80% 8%, rgba(24, 24, 24, 0.035), transparent 30%),
+          var(--canvas);
+      }
+
+      body::before {
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        content: "";
+        opacity: 0.18;
+        background-image:
+          linear-gradient(rgba(24, 24, 24, 0.022) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(24, 24, 24, 0.018) 1px, transparent 1px);
+        background-size: 28px 28px;
+        mask-image: linear-gradient(180deg, #000, transparent 78%);
+      }
+
+      .app {
+        display: grid;
+        grid-template-columns: 232px minmax(640px, 1fr) 312px;
+        min-height: 100vh;
+      }
+
+      .sidebar {
+        padding: 18px 10px;
+        border-right: 1px solid rgba(203, 199, 189, 0.7);
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        height: 38px;
+        padding: 0 10px;
+        margin-bottom: 16px;
+        color: var(--ink);
+        font-weight: 680;
+      }
+
+      .brand-mark {
+        display: grid;
+        width: 24px;
+        height: 24px;
+        place-items: center;
+        border: 1px solid var(--ink);
+        border-radius: 7px;
+        font-size: 13px;
+        font-weight: 760;
+        background: var(--paper);
+      }
+
+      .nav-section {
+        margin-top: 18px;
+      }
+
+      .nav-title {
+        padding: 8px 12px;
+        color: var(--ink-4);
+        font-size: 12px;
+      }
+
+      .nav-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-height: 34px;
+        padding: 0 12px;
+        border-radius: var(--control-radius);
+        color: var(--ink-3);
+        font-size: 14px;
+      }
+
+      .nav-item.active {
+        color: var(--ink);
+        background: var(--wash-strong);
+        box-shadow: inset 3px 0 0 var(--ink);
+      }
+
+      .nav-item.muted {
+        color: var(--ink-4);
+      }
+
+      .main {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        margin-top: 32px;
+        background: var(--paper);
+        border: 1px solid var(--line);
+        border-bottom: 0;
+        border-radius: var(--panel-radius) var(--panel-radius) 0 0;
+        box-shadow: var(--shadow);
+      }
+
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        min-height: 54px;
+        padding: 0 24px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .thread-title {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: var(--ink);
+        font-weight: 650;
+      }
+
+      .ink-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        background: var(--ink);
+      }
+
+      .actions {
+        display: flex;
+        gap: 8px;
+      }
+
+      .icon-button {
+        display: grid;
+        width: 32px;
+        height: 32px;
+        place-items: center;
+        border: 1px solid var(--line);
+        border-radius: var(--control-radius);
+        color: var(--ink-3);
+        background: var(--paper);
+        font-size: 14px;
+      }
+
+      .thread {
+        flex: 1;
+        width: min(760px, calc(100% - 56px));
+        margin: 0 auto;
+        padding: 34px 0 20px;
+      }
+
+      .message {
+        margin-bottom: 22px;
+      }
+
+      .meta {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+        color: var(--ink-4);
+        font-size: 12px;
+      }
+
+      .user-card {
+        padding: 14px 16px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: var(--paper-soft);
+        line-height: 1.65;
+        font-size: 14px;
+      }
+
+      .assistant-text {
+        max-width: 680px;
+        color: var(--ink-2);
+        line-height: 1.7;
+        font-size: 14px;
+      }
+
+      .process {
+        margin: 18px 0 4px 3px;
+        padding-left: 17px;
+        border-left: 1px solid var(--line-strong);
+      }
+
+      .process-row {
+        position: relative;
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 10px;
+        align-items: start;
+        min-height: 34px;
+        color: var(--ink-3);
+        font-size: 13px;
+        line-height: 1.45;
+      }
+
+      .process-row::before {
+        position: absolute;
+        left: -22px;
+        top: 5px;
+        width: 8px;
+        height: 8px;
+        content: "";
+        border: 2px solid var(--paper);
+        border-radius: 999px;
+        background: var(--ink-4);
+        box-shadow: 0 0 0 1px var(--line-strong);
+      }
+
+      .process-row.strong::before {
+        background: var(--ink);
+      }
+
+      .process-row.risk::before {
+        background: var(--seal);
+      }
+
+      .tag {
+        display: inline-flex;
+        align-items: center;
+        height: 22px;
+        padding: 0 8px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        color: var(--ink-3);
+        background: var(--paper);
+        font-size: 12px;
+        white-space: nowrap;
+      }
+
+      .tag.dark {
+        color: var(--paper);
+        border-color: var(--ink);
+        background: var(--ink);
+      }
+
+      .tag.risk {
+        color: var(--ink);
+      }
+
+      .tag.risk::before {
+        width: 6px;
+        height: 6px;
+        margin-right: 6px;
+        content: "";
+        border-radius: 999px;
+        background: var(--seal);
+      }
+
+      .composer-zone {
+        position: sticky;
+        bottom: 0;
+        width: min(760px, calc(100% - 56px));
+        margin: 0 auto;
+        padding: 10px 0 28px;
+        background: linear-gradient(180deg, rgba(255, 253, 248, 0), var(--paper) 28%);
+      }
+
+      .approval {
+        overflow: hidden;
+        border: 1px solid var(--line-strong);
+        border-radius: 22px;
+        background: rgba(255, 253, 248, 0.98);
+        box-shadow: 0 22px 52px rgba(24, 24, 24, 0.13);
+      }
+
+      .approval-head {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 18px 20px 10px;
+        color: var(--ink);
+        font-size: 15px;
+        font-weight: 650;
+      }
+
+      .approval-mark {
+        display: grid;
+        flex: 0 0 auto;
+        width: 26px;
+        height: 26px;
+        place-items: center;
+        border: 1px solid var(--ink);
+        border-radius: 9px;
+        background: var(--paper);
+        font-size: 13px;
+      }
+
+      .approval-subtitle {
+        margin: 0 20px 12px;
+        color: var(--ink-3);
+        font-size: 13px;
+        line-height: 1.5;
+      }
+
+      .command {
+        margin: 0 20px 14px;
+        padding: 12px 14px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        color: var(--ink-2);
+        background: var(--wash);
+        font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+        font-size: 13px;
+      }
+
+      .options {
+        padding: 0 10px 10px;
+      }
+
+      .option {
+        display: grid;
+        grid-template-columns: 28px 1fr 18px;
+        align-items: center;
+        min-height: 44px;
+        padding: 0 12px;
+        border-radius: 12px;
+        color: var(--ink-3);
+        font-size: 13px;
+      }
+
+      .option.selected {
+        color: var(--ink);
+        background: var(--wash);
+        box-shadow: inset 3px 0 0 var(--ink), inset 0 0 0 1px var(--line);
+      }
+
+      .option-index,
+      .option-key {
+        color: var(--ink-4);
+      }
+
+      .approval-foot {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        padding: 12px 16px 16px;
+        border-top: 1px solid var(--line);
+      }
+
+      button {
+        height: 34px;
+        padding: 0 14px;
+        border-radius: 999px;
+        font: inherit;
+        font-size: 13px;
+        font-weight: 650;
+      }
+
+      .ghost {
+        color: var(--ink-3);
+        border: 1px solid transparent;
+        background: transparent;
+      }
+
+      .primary {
+        color: var(--paper);
+        border: 1px solid var(--ink);
+        background: var(--ink);
+      }
+
+      .sidepanel {
+        margin: 64px 20px 0;
+      }
+
+      .env-card {
+        padding: 16px;
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        background: rgba(255, 253, 248, 0.85);
+        box-shadow: 0 1px 2px rgba(24, 24, 24, 0.04);
+      }
+
+      .env-title {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 12px;
+        color: var(--ink-2);
+        font-size: 14px;
+        font-weight: 650;
+      }
+
+      .env-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        min-height: 32px;
+        border-top: 1px solid rgba(225, 222, 214, 0.82);
+        color: var(--ink-3);
+        font-size: 13px;
+      }
+
+      .env-row:first-of-type {
+        border-top: 0;
+      }
+
+      .mono {
+        font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      }
+
+      .delta {
+        color: var(--ink);
+      }
+
+      .delete {
+        color: var(--ink-4);
+        text-decoration: line-through;
+      }
+
+      @media (max-width: 1120px) {
+        .app {
+          grid-template-columns: 210px minmax(0, 1fr);
+        }
+
+        .sidepanel {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar">
+        <div class="brand"><span class="brand-mark">N</span><span>NCurator</span></div>
+        <div class="nav-item active">新对话</div>
+        <div class="nav-item">搜索</div>
+        <div class="nav-item">插件</div>
+        <div class="nav-item">自动化</div>
+
+        <div class="nav-section">
+          <div class="nav-title">工作区</div>
+          <div class="nav-item">资料整理</div>
+          <div class="nav-item muted">文档索引</div>
+          <div class="nav-item muted">内容审阅</div>
+          <div class="nav-item muted">研究记录</div>
+        </div>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <div class="thread-title"><span class="ink-dot"></span><span>馆藏资料整理</span></div>
+          <div class="actions">
+            <div class="icon-button">⌕</div>
+            <div class="icon-button">☷</div>
+          </div>
+        </header>
+
+        <section class="thread">
+          <article class="message">
+            <div class="meta">用户 · 09:41</div>
+            <div class="user-card">
+              帮我整理这批资料，先分析结构，再给出可以归档的分类建议。
+            </div>
+          </article>
+
+          <article class="message">
+            <div class="meta">NCurator · 已处理 1m 18s</div>
+            <div class="assistant-text">
+              我会先识别资料来源、文件层级与重复片段，再把可归档的内容按主题、时间和可信度拆成几个候选集合。
+            </div>
+
+            <div class="process">
+              <div class="process-row strong">
+                <span class="tag dark">已读取</span>
+                <span>扫描工作区中的资料目录与索引状态。</span>
+              </div>
+              <div class="process-row">
+                <span class="tag">已分析</span>
+                <span>抽取标题、来源、时间线和疑似重复内容。</span>
+              </div>
+              <div class="process-row risk">
+                <span class="tag risk">待确认</span>
+                <span>检测到一个需要人工授权的本地操作，底部输入区已切换为审核态。</span>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="composer-zone">
+          <div class="approval">
+            <div class="approval-head">
+              <span class="approval-mark">审</span>
+              <span>需要确认此操作</span>
+            </div>
+            <p class="approval-subtitle">
+              此操作会读取本地资料目录的文件列表，用于继续生成归档建议。确认前，输入框会暂时隐藏。
+            </p>
+            <div class="command">list workspace documents --scope current</div>
+            <div class="options">
+              <div class="option selected">
+                <span class="option-index">1.</span>
+                <span>允许本次操作</span>
+                <span class="option-key">↵</span>
+              </div>
+              <div class="option">
+                <span class="option-index">2.</span>
+                <span>允许同类只读操作，后续不再询问</span>
+                <span></span>
+              </div>
+              <div class="option">
+                <span class="option-index">3.</span>
+                <span>拒绝，并说明需要调整的范围</span>
+                <span></span>
+              </div>
+            </div>
+            <div class="approval-foot">
+              <button class="ghost">跳过</button>
+              <button class="primary">提交</button>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <aside class="sidepanel">
+        <div class="env-card">
+          <div class="env-title"><span>环境信息</span><span>设置</span></div>
+          <div class="env-row"><span>变更</span><span><span class="delta">+24</span> <span class="delete">-6</span></span></div>
+          <div class="env-row"><span>模式</span><span>本地</span></div>
+          <div class="env-row"><span>分支</span><span class="mono">main</span></div>
+          <div class="env-row"><span>状态</span><span>等待审核</span></div>
+        </div>
+      </aside>
+    </div>
+  </body>
+</html>

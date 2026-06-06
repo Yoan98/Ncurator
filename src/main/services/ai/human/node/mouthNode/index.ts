@@ -9,7 +9,7 @@ import {
   buildRuntimeArtifactsSummaryFromDocxApplyRecords,
   mergeArtifactRefs
 } from '../../../utils/artifacts'
-import { emitThinkingCompleted } from '../../../events/processEvents'
+import { emitFinalizingStarted } from '../../../events/processEvents'
 
 export const createMouthNode = (input: {
   ctx: AiRunContext
@@ -51,7 +51,13 @@ export const createMouthNode = (input: {
       conversationSummaryText: history.conversationSummaryText,
       recentTurnsText: history.recentTurnsText
     })
-    let thinkingCompletedBeforeAnswer = false
+    if (input.emitAnswerEvents) {
+      emitFinalizingStarted({
+        sendEvent: input.ctx.sendEvent,
+        runId: input.ctx.runId
+      })
+    }
+
     const rawDeliveryMarkdown = await input.ctx.chatText({
       caller: 'human.mouth',
       taskId: promptState.task.taskId,
@@ -61,13 +67,6 @@ export const createMouthNode = (input: {
       temperature: 0.2,
       onTextDelta: input.emitAnswerEvents
         ? (text) => {
-            if (!thinkingCompletedBeforeAnswer) {
-              thinkingCompletedBeforeAnswer = true
-              emitThinkingCompleted({
-                sendEvent: input.ctx.sendEvent,
-                runId: input.ctx.runId
-              })
-            }
             input.ctx.sendEvent({
               type: 'answer_token',
               runId: input.ctx.runId,
@@ -78,13 +77,6 @@ export const createMouthNode = (input: {
           }
         : undefined
     })
-    if (input.emitAnswerEvents && !thinkingCompletedBeforeAnswer) {
-      thinkingCompletedBeforeAnswer = true
-      emitThinkingCompleted({
-        sendEvent: input.ctx.sendEvent,
-        runId: input.ctx.runId
-      })
-    }
 
     const artifacts =
       docxApplyRecords.length > 0

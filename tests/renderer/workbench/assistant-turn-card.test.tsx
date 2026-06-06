@@ -43,6 +43,7 @@ const createToolGroup = (): AssistantProcessGroup => ({
     {
       id: 'tool-1',
       toolName: 'docx_outline',
+      targetLabel: '/tmp/report.docx',
       status: 'running',
       runningText: [
         { text: '正在阅读 ' },
@@ -166,7 +167,7 @@ describe('AssistantTurnCard', () => {
       />
     )
 
-    expect(screen.getByText('俺正在阅读')).toBeTruthy()
+    expect(screen.getByText('正在读取 1 个 docx 文件')).toBeTruthy()
     const fileName = screen.getByText('/tmp/report.docx')
     expect(fileName.className).toContain('font-semibold')
     expect(screen.getByText('文件的结构')).toBeTruthy()
@@ -175,5 +176,69 @@ describe('AssistantTurnCard', () => {
       '[data-testid="workbench-assistant-process-item-run-1:skill:docx-reader"]'
     )
     expect(details?.hasAttribute('open')).toBe(false)
+  })
+
+  it('renders finalizing as a transient shimmer layer before markdown', () => {
+    const finalizingGroup: AssistantProcessGroup = {
+      id: 'run-1:finalizing',
+      kind: 'finalizing',
+      skillKey: 'generic-task',
+      iconKind: 'finalizing',
+      status: 'running',
+      runningText: [{ text: '基本完成了，让俺收尾下吧' }],
+      completedText: [{ text: '收尾完成了' }],
+      failedText: [{ text: '收尾失败了' }],
+      createdAt: 2,
+      sourceEventType: 'assistant_process_group_started',
+      items: []
+    }
+
+    render(
+      <AssistantTurnCard
+        messageId="assistant-1"
+        turn={createTurn({
+          processGroups: [finalizingGroup]
+        })}
+        isStreaming
+        onOpenFile={vi.fn()}
+        onOpenApply={vi.fn()}
+      />
+    )
+
+    expect(screen.getByText('基本完成了，让俺收尾下吧').parentElement?.className).toContain(
+      'workbench-thinking-shimmer'
+    )
+  })
+
+  it('hides finalizing once markdown is available', () => {
+    const finalizingGroup: AssistantProcessGroup = {
+      id: 'run-1:finalizing',
+      kind: 'finalizing',
+      skillKey: 'generic-task',
+      iconKind: 'finalizing',
+      status: 'running',
+      runningText: [{ text: '基本完成了，让俺收尾下吧' }],
+      completedText: [{ text: '收尾完成了' }],
+      failedText: [{ text: '收尾失败了' }],
+      createdAt: 2,
+      sourceEventType: 'assistant_process_group_started',
+      items: []
+    }
+
+    render(
+      <AssistantTurnCard
+        messageId="assistant-1"
+        turn={createTurn({
+          processGroups: [finalizingGroup],
+          finalAnswerMarkdown: '收好了'
+        })}
+        isStreaming
+        onOpenFile={vi.fn()}
+        onOpenApply={vi.fn()}
+      />
+    )
+
+    expect(screen.queryByText('基本完成了，让俺收尾下吧')).toBeNull()
+    expect(screen.getByTestId('mock-markdown-renderer').textContent).toBe('收好了')
   })
 })

@@ -8,7 +8,7 @@ import type { AiRunEvent } from '../../../src/shared/types'
 
 const createBaseContext = (input: {
   events: AiRunEvent[]
-  onChatText: (user: string) => Promise<string>
+  onChatText: (input: { user: string; onTextDelta?: (text: string) => void }) => Promise<string>
 }): AiRunContext =>
   ({
     runId: 'run-1',
@@ -30,7 +30,7 @@ const createBaseContext = (input: {
     chatStructured: async () => {
       throw new Error('not used in mouth node test')
     },
-    chatText: async ({ user }) => input.onChatText(user),
+    chatText: async ({ user, onTextDelta }) => input.onChatText({ user, onTextDelta }),
     sendEvent: (event) => input.events.push(event),
     requestApprovalBatch: async () => ({
       accepted: true,
@@ -60,7 +60,7 @@ describe('ai unit mouth node', () => {
     let capturedUserPrompt = ''
     const ctx = createBaseContext({
       events,
-      onChatText: async (user) => {
+      onChatText: async ({ user }) => {
         capturedUserPrompt = user
         return '# 最终交付\n\n总结文件已经整理完毕。'
       }
@@ -194,5 +194,54 @@ describe('ai unit mouth node', () => {
     expect(events.some((event) => event.type === 'human_step' && event.action === 'deliver_result')).toBe(
       true
     )
+  })
+
+  it('emits finalizing before streaming mouth answer events', async () => {
+    const events: AiRunEvent[] = []
+    const ctx = createBaseContext({
+      events,
+      onChatText: async ({ onTextDelta }) => {
+        onTextDelta?.('收尾')
+        return '收尾完成'
+      }
+    })
+    const cache = createHumanRuntimeCache()
+    const node = createMouthNode({
+      ctx,
+      cache,
+      emitAnswerEvents: true
+    })
+    const initialState = createInitialHumanState({
+      taskId: 'task-mouth-finalizing',
+      userInput: '整理最终交付'
+    })
+    initialState.execution.stage = 'mouth'
+    initialState.execution.currentThought = {
+      thought: {
+        next: '已经完成主要步骤，进入最终收尾'
+      },
+      nextAction: {
+        action: 'mouth'
+      }
+    }
+
+    await node(initialState)
+
+    const finalizingIndex = events.findIndex(
+      (event) =>
+        event.type === 'assistant_process_group_started' && event.display.kind === 'finalizing'
+    )
+    const answerTokenIndex = events.findIndex((event) => event.type === 'answer_token')
+    const answerCompletedIndex = events.findIndex((event) => event.type === 'answer_completed')
+
+    expect(finalizingIndex).toBeGreaterThanOrEqual(0)
+    expect(answerTokenIndex).toBeGreaterThan(finalizingIndex)
+    expect(answerCompletedIndex).toBeGreaterThan(answerTokenIndex)
+    expect(events[finalizingIndex]).toMatchObject({
+      type: 'assistant_process_group_started',
+      groupId: 'run-1:finalizing',
+      kind: 'finalizing',
+      display: { kind: 'finalizing' }
+    })
   })
 })

@@ -168,14 +168,14 @@
 
 #### WB-COMPOSER-003 智能模式发送路径
 
-- 系统行为：智能模式发送时，系统先插入用户消息和一条 assistant 占位回复，再启动 AI 运行并等待流式事件逐步补全内容；输入区模式选项中该模式展示为“大聪明”，但内部模式语义仍是智能模式。assistant 过程流由后端派发稳定的 `assistant_process_*` 过程事件驱动，renderer 只负责把过程事件展示为公开思路文本、技能组、工具句子、状态文案、强调样式和展开收起。
+- 系统行为：智能模式发送时，系统先插入用户消息和一条 assistant 占位回复，再启动 AI 运行并等待流式事件逐步补全内容；输入区模式选项中该模式展示为“大聪明”，但内部模式语义仍是智能模式。assistant 过程流由后端派发稳定的 `assistant_process_*` 过程事件驱动，renderer 负责将过程事件展示为思考层、决策层、执行层、学习层、压缩层、总结层与最终 markdown 输出。
 - 验收：
   - `WB-COMPOSER-003-AC1` 智能模式发送后，主区先可见用户消息与 assistant 占位消息。
   - `WB-COMPOSER-003-AC2` AI 运行成功启动后，assistant 过程流通过事件逐步追加更新，而不是一次性静态替换。
   - `WB-COMPOSER-003-AC3` assistant 占位回复在最终输出前展示“让俺想想”并带有流动视觉反馈；当后端 thinking 过程事件到达时，本地占位被替换为该 run 的 thinking 过程组，不重复展示。
-  - `WB-COMPOSER-003-AC4` assistant turn 中 mouth 最终输出始终位于过程流下方，并按 markdown 渲染；mouth 自身不作为过程流条目展示。
-  - `WB-COMPOSER-003-AC5` 过程流先展示可公开思路文本，再展示技能组和工具句子；公开思路文本来自 `assistant_process_thought`，不得展示模型原始 chain-of-thought。
-  - `WB-COMPOSER-003-AC6` 过程流使用用户可理解的技能组和工具句子，不直接暴露内部 tool 名或底层事件名；同一技能下的多个工具调用聚合到同一技能组，展开后每个工具按其入参生成一句自然语言说明。
+  - `WB-COMPOSER-003-AC4` assistant turn 中 mouth 最终输出始终位于过程流下方，并按 markdown 渲染；mouth 等待 AI 返回时先展示总结层“基本完成了，让俺收尾下吧”，首个 markdown token 或完成事件到达后隐藏该等待层。
+  - `WB-COMPOSER-003-AC5` 决策层文本来自 `assistant_process_thought` 中经过 schema 约束的 `thought.next`，不得展示模型原始 chain-of-thought；决策层出现时，当前思考层必须立即隐藏，即使下一步执行正等待审批。
+  - `WB-COMPOSER-003-AC6` 过程流使用用户可理解的分层文案，不直接暴露内部 tool 名或底层事件名；同一轮执行中的多个工具调用合并为一个执行层 header，展开后每个工具按其入参生成一句自然语言说明。
 
 #### WB-COMPOSER-004 搜索模式发送路径
 
@@ -219,18 +219,18 @@
 
 #### WB-COMPOSER-009 消息流布局
 
-- 系统行为：workbench 消息区移除用户与 assistant 头像；assistant 回复以左对齐内容流展示，过程流不展示独立标题或左侧竖线，且与最终 mouth 输出共用消息 rail；最终 markdown 输出不再使用独立背景卡片；用户消息保持右对齐，并使用更紧凑的消息泡样式。过程流先常显公开思路文本，再按技能组展示执行过程；技能组 header 包含技能状态文案和展开入口，不展示技能图标；展开后按每个工具调用展示一句由工具名和入参生成的自然语言说明。当前进行中的技能组展示高光，不展示前置小圆点。
+- 系统行为：workbench 消息区移除用户与 assistant 头像；assistant 回复以左对齐内容流展示，过程流不展示独立标题或左侧竖线，且与最终 mouth 输出共用消息 rail；最终 markdown 输出不再使用独立背景卡片；用户消息保持右对齐，并使用更紧凑的消息泡样式。过程流按真实时间展示决策层与过程层：思考层和总结层是临时等待层，执行层、学习层、压缩层和决策层累计保留；执行层 header 默认折叠，hover 时显示展开箭头并提升文字颜色，展开后每个工具调用展示一句自然语言说明。
 - 验收：
   - `WB-COMPOSER-009-AC1` 用户与 assistant 消息都不再展示头像或头像占位。
   - `WB-COMPOSER-009-AC2` assistant 过程流和最终输出左边缘与底部 composer 内容 rail 对齐。
   - `WB-COMPOSER-009-AC3` assistant 最终 markdown 输出默认无独立背景卡片，保持在过程流下方。
   - `WB-COMPOSER-009-AC4` 用户消息以右对齐紧凑气泡展示，不再使用过宽过高的大块白底样式。
-  - `WB-COMPOSER-009-AC5` 技能组 header 文案按技能状态展示，例如 `docx 阅读器` 运行中为“俺正在阅读 docx”、完成后为“俺已阅读完 docx”；`资料查阅器` 运行中为“俺正在查阅资料”、完成后为“俺已查阅完资料”。
-  - `WB-COMPOSER-009-AC6` 展开后的工具句子必须按具体工具生成：`docx_outline` 展示“正在阅读 xx 文件的结构”；`docx_read_blocks` 展示“正在阅读 xx 文件细节”；`docx_edit` 展示“正在编辑 xx 文件”；`docx_history` 展示“正在检查 xx 文件的修改历史”；`terminal_run` 展示“正在执行 xxxx”。
+  - `WB-COMPOSER-009-AC5` 执行层 header 按同一轮工具调用聚合展示操作与数量，例如读取类 docx 工具展示“正在读取 1 个 docx 文件”，编辑类 docx 工具展示“正在编辑 1 个 docx 文件”，知识库工具展示“正在检索知识库”，terminal 工具展示“正在跑神秘代码”；完成后对应更新为完成态文案。
+  - `WB-COMPOSER-009-AC6` 展开后的工具句子必须按具体工具生成：`docx_outline` 展示“正在阅读 xx 文件的结构”；`docx_read_blocks` 展示“正在读取 xx 文件的 xx 区间/细节”；`docx_edit` 展示“正在编辑 xx 文件”；`docx_history` 展示“正在检查 xx 文件的修改历史”；`terminal_run` 展示“正在执行 xxxx”。
   - `WB-COMPOSER-009-AC7` 文件名、query、命令和技能名使用独立强调样式展示，不使用书名号包装。
-  - `WB-COMPOSER-009-AC8` 学习步骤使用技能通用名称展示，例如 `docx 阅读器`、`docx 写作器`、`资料查阅器`、`命令执行器`；完成后展示“已学完 xx”。
-  - `WB-COMPOSER-009-AC9` 过程流不渲染 mouth 条目，不渲染每条工具前置小圆点、技能图标或“AI 思路”类图标。
-  - `WB-COMPOSER-009-AC10` 公开思路文本展示在技能组、工具句子和上下文压缩过程之前，且不折叠。
+  - `WB-COMPOSER-009-AC8` 学习步骤使用技能通用名称展示，例如 `docx 阅读器`、`docx 写作器`、`资料查阅器`、`命令执行器`；运行中展示“正在学习 xx 技能”，完成后展示“已学会 xx 技能”。
+  - `WB-COMPOSER-009-AC9` 执行层 header、学习层和压缩层展示对应图标；展开后的每条工具句子不展示图标，也不渲染前置小圆点或“AI 思路”类图标。
+  - `WB-COMPOSER-009-AC10` 决策层、执行层、学习层、压缩层、总结层按事件时间顺序累计展示；决策层不折叠，执行层默认折叠。
 
 ### 8.4 模式切换
 
@@ -306,7 +306,7 @@
 
 #### WB-BLOCKER-004 上下文压缩过程提示
 
-- 系统行为：当 AI 运行触发上下文压缩时，后端通过 `assistant_process_group_started` 派发 compaction 过程组，assistant turn 展示“怎么这么多东西，太多了，俺要整理下！！”；压缩完成后通过 `assistant_process_group_completed` 更新为“呼，终于整理完了”。
+- 系统行为：当 AI 运行触发上下文压缩时，后端通过 `assistant_process_group_started` 派发 compaction 过程组，assistant turn 展示“东西太多了，让俺整理下”；压缩完成后通过 `assistant_process_group_completed` 更新为“呼，终于整理好了，累死俺了”。
 - 验收：
   - `WB-BLOCKER-004-AC1` 收到 compaction 类型的 `assistant_process_group_started` 事件后，当前 assistant turn 中出现运行中的上下文整理过程组。
   - `WB-BLOCKER-004-AC2` 收到 compaction 类型的 `assistant_process_group_completed` 事件后，该过程组更新为完成态并展示完成文案。

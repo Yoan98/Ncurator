@@ -7,6 +7,7 @@ import { EmbeddingService } from '../services/vector/EmbeddingService'
 import { ensureEmbeddingReady } from '../services/vector/ensureEmbeddingReady'
 import { StorageService } from '../services/storage/StorageService'
 import { ModelService } from '../services/model/ModelService'
+import { VectorModelDownloadService } from '../services/model/VectorModelDownloadService'
 import { fetchLlmRemoteModels } from '../services/llm/modelCatalog'
 import { AiRunService } from '../services/ai/AiRunService'
 import { emitThinkingStarted } from '../services/ai/events/processEvents'
@@ -201,9 +202,16 @@ export function registerHandlers(services: {
   embeddingService: EmbeddingService
   storageService: StorageService
   modelService: ModelService
+  vectorModelDownloadService: VectorModelDownloadService
   recordLlmIo?: (record: AiLlmIoRecord) => void
 }) {
-  const { ingestionService, embeddingService, storageService, modelService } = services
+  const {
+    ingestionService,
+    embeddingService,
+    storageService,
+    modelService,
+    vectorModelDownloadService
+  } = services
   const activeAiRuns = new Map<
     string,
     { cancelled: boolean; senderId: number; abortController: AbortController }
@@ -264,6 +272,14 @@ export function registerHandlers(services: {
       }
     })
   }
+
+  vectorModelDownloadService.onProgress((payload) => {
+    BrowserWindow.getAllWindows().forEach((window) => {
+      if (!window.webContents.isDestroyed()) {
+        window.webContents.send('download-progress', payload)
+      }
+    })
+  })
 
   const getWorkspaceIndexJobKey = (
     workspaceId: string,
@@ -2853,16 +2869,24 @@ export function registerHandlers(services: {
     }
   })
 
-  ipcMain.handle('download-model', async (event, repoId: string) => {
+  ipcMain.handle('download-model', async (_event, repoId: string) => {
     try {
-      const result = await modelService.downloadModel(repoId, (payload) => {
-        event.sender.send('download-progress', payload)
-      })
-      // After successful download, re-initialize embedding service
-      await embeddingService.initialize()
-      return result
+      return await vectorModelDownloadService.startDownload(repoId)
     } catch (error) {
       console.error('❌ [DOWNLOAD-MODEL] ERROR:', error)
+      return { success: false, error: getErrorMessage(error) }
+    }
+  })
+
+  ipcMain.handle('get-active-download', async () => {
+    return vectorModelDownloadService.getActiveDownload()
+  })
+
+  ipcMain.handle('delete-model', async (_event, repoId: string) => {
+    try {
+      return await vectorModelDownloadService.deleteModel(repoId)
+    } catch (error) {
+      console.error('鉂?[DELETE-MODEL] ERROR:', error)
       return { success: false, error: getErrorMessage(error) }
     }
   })

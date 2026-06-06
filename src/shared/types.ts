@@ -594,7 +594,8 @@ export type AssistantProcessDisplay =
   | { kind: 'learning'; skillId: RuntimeSkillId }
   | { kind: 'tool'; toolName: string; input: IpcJsonObject }
   | { kind: 'compaction' }
-export type AssistantProcessKind = 'thinking' | 'skill' | 'learning' | 'compaction'
+  | { kind: 'finalizing' }
+export type AssistantProcessKind = 'thinking' | 'skill' | 'learning' | 'compaction' | 'finalizing'
 export type AiToolCallDiagnostic = {
   message: string
 }

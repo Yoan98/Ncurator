@@ -64,11 +64,21 @@ export type ModelInfo = {
 export type DownloadProgress = {
   repoId: string
   file?: string
-  status: string
+  status: 'downloading' | 'completed' | 'error'
   progress: number
   totalFiles?: number
   completedFiles?: number
   error?: string
+}
+
+export type ActiveDownloadSnapshot = {
+  repoId: string
+  status: 'downloading'
+  progress: number
+  currentFile: string
+  totalFiles: number
+  completedFiles: number
+  updatedAt: number
 }
 
 export type E2EDownloadModelResponse = {
@@ -99,6 +109,8 @@ export type SettingsE2EApiOverrides = {
   downloadModelResponseByRepoId?: Record<string, E2EDownloadModelResponse>
   downloadProgressEventsByRepoId?: Record<string, DownloadProgress[]>
   downloadProgressDelayMs?: number
+  activeDownloadSnapshot?: ActiveDownloadSnapshot | null
+  deleteModelResponseByRepoId?: Record<string, { success: boolean; error?: string }>
 }
 
 export type DesktopApi = {
@@ -168,6 +180,8 @@ export type DesktopApi = {
   downloadModel: (repoId: string) => Promise<{ success: boolean; error?: string }>
   onDownloadProgress: (cb: (progressData: DownloadProgress) => void) => void
   removeDownloadProgressListeners: () => void
+  getActiveDownload: () => Promise<ActiveDownloadSnapshot | null>
+  deleteModel: (repoId: string) => Promise<{ success: boolean; error?: string }>
   getModels: () => Promise<ModelInfo[]>
   getEmbeddingStatus: () => Promise<'uninitialized' | 'initializing' | 'ready' | 'error'>
   readFile: (filePath: string) => Promise<Uint8Array>

@@ -7,6 +7,7 @@ import { IngestionService } from './services/ingestion/loader'
 import { EmbeddingService } from './services/vector/EmbeddingService'
 import { StorageService } from './services/storage/StorageService'
 import { ModelService } from './services/model/ModelService'
+import { VectorModelDownloadService } from './services/model/VectorModelDownloadService'
 import { globalShortcut } from 'electron'
 import { loadRootEnvOnce } from './utils/rootEnv'
 
@@ -80,6 +81,10 @@ app.whenReady().then(async () => {
   const embeddingService = EmbeddingService.getInstance()
   const storageService = StorageService.getInstance()
   const modelService = ModelService.getInstance()
+  const vectorModelDownloadService = VectorModelDownloadService.getInstance({
+    modelService,
+    embeddingService
+  })
 
   console.log('Starting background initialization of services...')
   embeddingService
@@ -87,13 +92,22 @@ app.whenReady().then(async () => {
     .catch((err) => console.error('Failed to initialize EmbeddingService:', err))
   await storageService.initialize()
 
-  registerHandlers({ ingestionService, embeddingService, storageService, modelService })
+  registerHandlers({
+    ingestionService,
+    embeddingService,
+    storageService,
+    modelService,
+    vectorModelDownloadService
+  })
 
   app.on('before-quit', () => {
     void storageService.failInterruptedWorkspaceIndexJobs()
   })
 
   createWindow()
+  vectorModelDownloadService
+    .initialize()
+    .catch((err) => console.error('Failed to initialize VectorModelDownloadService:', err))
 
   app.on('activate', function () {
     // On macOS it's common to re-create a window in the app when the

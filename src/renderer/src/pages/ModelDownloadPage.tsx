@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react'
-import { Button, Progress, Typography, message, Tag, List } from 'antd'
-import { HiCloudArrowDown, HiCheckCircle, HiExclamationCircle } from 'react-icons/hi2'
+import React, { useEffect, useState } from 'react'
+import { Button, List, Progress, Tag, Typography, message } from 'antd'
+import { HiCheckCircle, HiCloudArrowDown, HiExclamationCircle } from 'react-icons/hi2'
 import AppPageHeader from '../components/app/AppPageHeader'
 import SettingsFloatingMenu from '../components/settings/SettingsFloatingMenu'
 import { vectorSelectors } from '../testing/selectors'
@@ -15,6 +15,53 @@ interface ModelInfo {
   isDownloaded: boolean
 }
 
+type DownloadStatus = 'downloading' | 'completed' | 'error'
+
+type DownloadProgressPayload = {
+  repoId: string
+  file?: string
+  status: DownloadStatus
+  progress: number
+  totalFiles?: number
+  completedFiles?: number
+  error?: string
+}
+
+type ActiveDownloadSnapshot = {
+  repoId: string
+  status: 'downloading'
+  progress: number
+  currentFile: string
+  totalFiles: number
+  completedFiles: number
+  updatedAt: number
+}
+
+const TEXT = {
+  pageTitle: '\u5411\u91cf\u6a21\u578b',
+  pageDescription:
+    '\u4e0b\u8f7d\u672c\u5730\u68c0\u7d22\u6a21\u578b\uff0c\u4e3a\u641c\u7d22\u548c\u77e5\u8bc6\u5e93\u80fd\u529b\u63d0\u4f9b\u5411\u91cf\u57fa\u7840\u3002',
+  listTitle: '\u6a21\u578b\u5217\u8868',
+  catalogError: '\u83b7\u53d6\u6a21\u578b\u5217\u8868\u5931\u8d25',
+  downloadCompleted: '\u6a21\u578b\u4e0b\u8f7d\u5b8c\u6210',
+  activeTaskWarning: '\u5df2\u6709\u4efb\u52a1\u6b63\u5728\u4e0b\u8f7d\u4e2d',
+  startDownloadFailed: '\u542f\u52a8\u4e0b\u8f7d\u5931\u8d25',
+  downloadFailedPrefix: '\u4e0b\u8f7d\u5931\u8d25',
+  unknownError: '\u672a\u77e5\u9519\u8bef',
+  deleteFailed: '\u5220\u9664\u6a21\u578b\u5931\u8d25',
+  deleteFailedPrefix: '\u5220\u9664\u5931\u8d25',
+  deleteCompleted: '\u6a21\u578b\u5df2\u5220\u9664',
+  installed: '\u5df2\u5b89\u88c5',
+  delete: '\u5220\u9664',
+  downloading: '\u4e0b\u8f7d\u4e2d',
+  downloadingLabel: '\u6b63\u5728\u4e0b\u8f7d...',
+  download: '\u4e0b\u8f7d',
+  fileUnit: '\u6587\u4ef6'
+} as const
+
+const toErrorMessage = (error: Error | string): string =>
+  error instanceof Error ? error.message : String(error)
+
 const ModelDownloadPage: React.FC = () => {
   const [models, setModels] = useState<ModelInfo[]>([])
   const [loading, setLoading] = useState(false)
@@ -26,98 +73,130 @@ const ModelDownloadPage: React.FC = () => {
   const [fileProgress, setFileProgress] = useState({ completed: 0, total: 0 })
   const [errorMsg, setErrorMsg] = useState('')
 
-  useEffect(() => {
-    fetchModels()
-
-    const handleProgress = (data: {
-      repoId: string
-      file?: string
-      status: string
-      progress: number
-      totalFiles?: number
-      completedFiles?: number
-      error?: string
-    }) => {
-      if (data.status === 'downloading') {
-        setDownloadingId(data.repoId)
-        setErrorRepoId(null)
-        // Use file count for progress calculation if totalFiles is available
-        // because individual file progress might be too fast or granular.
-        if (data.totalFiles && data.totalFiles > 0) {
-          const percent = Math.round(((data.completedFiles || 0) / data.totalFiles) * 100)
-          setDownloadProgress(percent)
-          setFileProgress({
-            completed: data.completedFiles || 0,
-            total: data.totalFiles
-          })
-        } else {
-          setDownloadProgress(data.progress)
-        }
-
-        if (data.file) setCurrentFile(data.file)
-      } else if (data.status === 'completed') {
-        setDownloadingId(null)
-        setErrorRepoId(null)
-        setDownloadProgress(100)
-        message.success('模型下载完成！')
-        fetchModels() // Refresh status
-      } else if (data.status === 'error') {
-        setDownloadingId(null)
-        setErrorRepoId(data.repoId)
-        setErrorMsg(data.error || '未知错误')
-        message.error('下载失败: ' + data.error)
-      }
-    }
-
-    window.api.onDownloadProgress(handleProgress)
-
-    return () => {
-      window.api.removeDownloadProgressListeners()
-    }
-  }, [])
-
-  const fetchModels = async () => {
+  const fetchModels = async (): Promise<void> => {
     setLoading(true)
     try {
       const list = await window.api.getModels()
       setModels(list)
       setCatalogError('')
-    } catch (e) {
-      console.error(e)
+    } catch (error) {
+      console.error(error)
       setModels([])
-      setCatalogError('获取模型列表失败')
-      message.error('获取模型列表失败')
+      setCatalogError(TEXT.catalogError)
+      message.error(TEXT.catalogError)
     } finally {
       setLoading(false)
     }
   }
 
-  const handleDownload = async (repoId: string) => {
-    if (downloadingId) {
-      message.warning('已有任务正在下载中')
+  const applyDownloadState = (
+    data: DownloadProgressPayload | ActiveDownloadSnapshot,
+    status: DownloadStatus = 'downloading'
+  ): void => {
+    if (status === 'downloading') {
+      setDownloadingId(data.repoId)
+      setErrorRepoId(null)
+      setErrorMsg('')
+      setDownloadProgress(data.progress)
+      setCurrentFile('currentFile' in data ? data.currentFile : data.file || '')
+      setFileProgress({
+        completed: data.completedFiles || 0,
+        total: data.totalFiles || 0
+      })
       return
     }
+
+    if (status === 'completed') {
+      setDownloadingId(null)
+      setErrorRepoId(null)
+      setErrorMsg('')
+      setDownloadProgress(100)
+      void fetchModels()
+      message.success(TEXT.downloadCompleted)
+      return
+    }
+
+    const nextError = 'error' in data ? data.error || TEXT.unknownError : TEXT.unknownError
+    setDownloadingId(null)
+    setErrorRepoId(data.repoId)
+    setErrorMsg(nextError)
+    if ('file' in data && data.file) {
+      setCurrentFile(data.file)
+    }
+    message.error(`${TEXT.downloadFailedPrefix}: ${nextError}`)
+  }
+
+  useEffect(() => {
+    let disposed = false
+
+    const handleProgress = (data: DownloadProgressPayload) => {
+      if (disposed) return
+      applyDownloadState(data, data.status)
+    }
+
+    window.api.onDownloadProgress(handleProgress)
+
+    void (async () => {
+      await fetchModels()
+      const activeDownload = await window.api.getActiveDownload()
+      if (!disposed && activeDownload) {
+        applyDownloadState(activeDownload)
+      }
+    })()
+
+    return () => {
+      disposed = true
+      window.api.removeDownloadProgressListeners()
+    }
+  }, [])
+
+  const handleDownload = async (repoId: string): Promise<void> => {
+    if (downloadingId) {
+      message.warning(TEXT.activeTaskWarning)
+      return
+    }
+
     setDownloadingId(repoId)
     setErrorRepoId(null)
     setDownloadProgress(0)
     setCurrentFile('')
     setFileProgress({ completed: 0, total: 0 })
     setErrorMsg('')
+
     try {
-      const res = await window.api.downloadModel(repoId)
-      if (!res.success) {
+      const response = await window.api.downloadModel(repoId)
+      if (!response.success) {
+        const messageText = response.error || TEXT.startDownloadFailed
         setDownloadingId(null)
         setErrorRepoId(repoId)
-        setErrorMsg(res.error || '启动下载失败')
-        message.error('下载失败: ' + (res.error || '启动下载失败'))
+        setErrorMsg(messageText)
+        message.error(`${TEXT.downloadFailedPrefix}: ${messageText}`)
       }
-    } catch (e: unknown) {
+    } catch (error) {
+      const messageText = toErrorMessage(error instanceof Error ? error : String(error))
       setDownloadingId(null)
       setErrorRepoId(repoId)
-      const messageText = e instanceof Error ? e.message : String(e)
       setErrorMsg(messageText)
-      message.error('下载失败: ' + messageText)
+      message.error(`${TEXT.downloadFailedPrefix}: ${messageText}`)
     }
+  }
+
+  const handleDelete = async (repoId: string): Promise<void> => {
+    const response = await window.api.deleteModel(repoId)
+    if (!response.success) {
+      const messageText = response.error || TEXT.deleteFailed
+      setErrorRepoId(repoId)
+      setErrorMsg(messageText)
+      message.error(`${TEXT.deleteFailedPrefix}: ${messageText}`)
+      return
+    }
+
+    if (errorRepoId === repoId) {
+      setErrorRepoId(null)
+      setErrorMsg('')
+    }
+    message.success(TEXT.deleteCompleted)
+    await fetchModels()
   }
 
   return (
@@ -128,8 +207,8 @@ const ModelDownloadPage: React.FC = () => {
       <div className="mx-auto flex h-full w-full max-w-[1360px] flex-col gap-5 px-5 py-5 lg:px-6">
         <AppPageHeader
           icon={<HiCloudArrowDown className="h-5 w-5" />}
-          title="向量模型"
-          description="下载本地检索模型，为搜索和知识库能力提供向量基础。"
+          title={TEXT.pageTitle}
+          description={TEXT.pageDescription}
           navigationMode="back"
           backTo="/"
         />
@@ -138,7 +217,7 @@ const ModelDownloadPage: React.FC = () => {
           <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-[20px] border border-[#E5E5E4] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
             <div className="border-b border-[#E5E5E4] px-5 py-4">
               <Title level={4} className="!mb-0 !text-[#1F1F1F]">
-                模型列表
+                {TEXT.listTitle}
               </Title>
             </div>
             <div className="min-h-0 flex-1 overflow-auto px-5 py-2 pr-4">
@@ -150,6 +229,7 @@ const ModelDownloadPage: React.FC = () => {
                   {catalogError}
                 </div>
               ) : null}
+
               <List
                 loading={loading}
                 itemLayout="horizontal"
@@ -158,31 +238,45 @@ const ModelDownloadPage: React.FC = () => {
                 renderItem={(item) => (
                   <List.Item
                     data-testid={`${vectorSelectors.cardPrefix}-${item.id}`}
-                    actions={[
-                      item.isDownloaded ? (
-                        <div
-                          className="flex items-center gap-2 font-medium text-green-600"
-                          data-testid={`${vectorSelectors.installedBadgePrefix}-${item.id}`}
-                        >
-                          <HiCheckCircle className="text-lg" />
-                          <span>已安装</span>
-                        </div>
-                      ) : downloadingId === item.id ? (
-                        <Button disabled loading>
-                          下载中
-                        </Button>
-                      ) : (
-                        <Button
-                          type="primary"
-                          onClick={() => handleDownload(item.id)}
-                          className="!border-none !bg-[#D97757] shadow-sm hover:!bg-[#C66A4A]"
-                          disabled={!!downloadingId}
-                          data-testid={`${vectorSelectors.downloadButtonPrefix}-${item.id}`}
-                        >
-                          下载
-                        </Button>
-                      )
-                    ]}
+                    actions={
+                      item.isDownloaded
+                        ? [
+                            <Button
+                              key={`delete-${item.id}`}
+                              danger
+                              onClick={() => void handleDelete(item.id)}
+                              data-testid={`${vectorSelectors.deleteButtonPrefix}-${item.id}`}
+                            >
+                              {TEXT.delete}
+                            </Button>,
+                            <div
+                              key={`installed-${item.id}`}
+                              className="flex items-center gap-2 font-medium text-green-600"
+                              data-testid={`${vectorSelectors.installedBadgePrefix}-${item.id}`}
+                            >
+                              <HiCheckCircle className="text-lg" />
+                              <span>{TEXT.installed}</span>
+                            </div>
+                          ]
+                        : downloadingId === item.id
+                          ? [
+                              <Button key={`downloading-${item.id}`} disabled loading>
+                                {TEXT.downloading}
+                              </Button>
+                            ]
+                          : [
+                              <Button
+                                key={`download-${item.id}`}
+                                type="primary"
+                                onClick={() => void handleDownload(item.id)}
+                                className="!border-none !bg-[#D97757] shadow-sm hover:!bg-[#C66A4A]"
+                                disabled={Boolean(downloadingId)}
+                                data-testid={`${vectorSelectors.downloadButtonPrefix}-${item.id}`}
+                              >
+                                {TEXT.download}
+                              </Button>
+                            ]
+                    }
                     className="!px-0 !py-5"
                   >
                     <List.Item.Meta
@@ -208,7 +302,9 @@ const ModelDownloadPage: React.FC = () => {
                               data-testid={`${vectorSelectors.progressPrefix}-${item.id}`}
                             >
                               <div className="mb-2 flex justify-between text-sm">
-                                <span className="font-medium text-[#1F1F1F]">正在下载...</span>
+                                <span className="font-medium text-[#1F1F1F]">
+                                  {TEXT.downloadingLabel}
+                                </span>
                                 <span className="font-medium text-[#D97757]">
                                   {downloadProgress}%
                                 </span>
@@ -227,7 +323,7 @@ const ModelDownloadPage: React.FC = () => {
                                   {currentFile}
                                 </span>
                                 <span>
-                                  {fileProgress.completed}/{fileProgress.total} 文件
+                                  {fileProgress.completed}/{fileProgress.total} {TEXT.fileUnit}
                                 </span>
                               </div>
                             </div>

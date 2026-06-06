@@ -1,5 +1,7 @@
 import { afterEach, describe, it, vi } from 'vitest'
+import { EmbeddingService } from '../../../src/main/services/vector/EmbeddingService'
 import { ModelService } from '../../../src/main/services/model/ModelService'
+import { VectorModelDownloadService } from '../../../src/main/services/model/VectorModelDownloadService'
 import type {
   ModelDownloadProgress,
   ModelDownloadProgressReporter
@@ -9,27 +11,13 @@ import { runBackendCase } from '../../harness/backend/run-backend-case'
 const REPO_A = 'jinaai/jina-embeddings-v2-base-zh'
 const REPO_B = 'jinaai/jina-embeddings-v2-base-zh-secondary'
 
-type ModelDownloadTask = Promise<{ success: boolean }>
-
-type ModelServiceStatics = typeof ModelService & {
-  activeDownload: {
-    repoId: string
-    task: ModelDownloadTask
-  } | null
-}
-
-type ModelServiceInternals = ModelService & {
-  acquireDownloadLock(repoId: string): Promise<() => Promise<void>>
-  reuseDownloadedModelFromAlternatePath(repoId: string): Promise<boolean>
-  performDownload(
-    repoId: string,
-    reporter?: ModelDownloadProgressReporter
-  ): Promise<{ success: boolean }>
+type VectorModelDownloadServiceStatics = typeof VectorModelDownloadService & {
+  instance: VectorModelDownloadService | null
 }
 
 afterEach(() => {
   vi.restoreAllMocks()
-  ;(ModelService as ModelServiceStatics).activeDownload = null
+  ;(VectorModelDownloadService as VectorModelDownloadServiceStatics).instance = null
 })
 
 describe('settings vector backend', () => {
@@ -43,20 +31,19 @@ describe('settings vector backend', () => {
       fixtures: [],
       runMode: 'single',
       execute: async () => {
-        const service = ModelService.getInstance()
-        const serviceInternals = service as ModelServiceInternals
+        const modelService = ModelService.getInstance()
+        const embeddingService = EmbeddingService.getInstance()
+        const service = VectorModelDownloadService.getInstance({
+          modelService,
+          embeddingService
+        })
         const progressEvents: ModelDownloadProgress[] = []
         let releaseFirstDownload: (() => void) | null = null
         const firstDownloadSettled = new Promise<void>((resolve) => {
           releaseFirstDownload = resolve
         })
 
-        vi.spyOn(serviceInternals, 'acquireDownloadLock').mockResolvedValue(
-          async () => Promise.resolve()
-        )
-        vi.spyOn(service, 'isModelDownloaded').mockReturnValue(false)
-        vi.spyOn(serviceInternals, 'reuseDownloadedModelFromAlternatePath').mockResolvedValue(false)
-        vi.spyOn(serviceInternals, 'performDownload').mockImplementation(
+        vi.spyOn(modelService, 'downloadModel').mockImplementation(
           async (repoId: string, reporter?: ModelDownloadProgressReporter) => {
             reporter?.({
               repoId,
@@ -67,35 +54,26 @@ describe('settings vector backend', () => {
               completedFiles: 1
             })
             await firstDownloadSettled
-            reporter?.({
-              repoId,
-              status: 'completed',
-              progress: 100,
-              totalFiles: 3,
-              completedFiles: 3
-            })
             return { success: true }
           }
         )
+        vi.spyOn(embeddingService, 'initialize').mockResolvedValue()
 
-        const firstTask = service.downloadModel(REPO_A, (payload) => {
+        const unsubscribe = service.onProgress((payload) => {
           progressEvents.push(payload)
         })
-        const secondTask = service.downloadModel(REPO_B)
-          .then((value) => value)
-          .catch((error: unknown) => ({
-            success: false,
-            error: error instanceof Error ? error.message : String(error)
-          }))
 
-        const secondResult = await secondTask
+        const firstTask = service.startDownload(REPO_A)
+        const secondResult = await service.startDownload(REPO_B)
         releaseFirstDownload?.()
         const firstResult = await firstTask
+        unsubscribe()
 
         return {
           firstResult,
           secondResult,
-          progressEvents
+          progressEvents,
+          activeDownloadAfterFinish: service.getActiveDownload()
         }
       },
       assert: async (result, runtime) => {
@@ -110,8 +88,7 @@ describe('settings vector backend', () => {
             String(result.secondResult.error || '').includes('download already running'),
           {
             name: 'vector-download-rejects-second-task-while-active',
-            message:
-              '已有下载任务时，新的下载请求应被阻止，对齐 SET-VECTOR-002-AC1。',
+            message: '已有下载任务时，新的下载入口不可继续触发新任务，对齐 SET-VECTOR-002-AC1。',
             data: result
           }
         )
@@ -139,11 +116,16 @@ describe('settings vector backend', () => {
           ),
           {
             name: 'vector-download-contract-completes-progress-stream',
-            message:
-              '下载完成后，进度事件流应能收敛到完成态，供页面结束下载中状态。',
+            message: '下载完成后，进度事件流应能收敛到完成态，供页面结束下载中状态。',
             data: result
           }
         )
+
+        runtime.assertThat(result.activeDownloadAfterFinish === null, {
+          name: 'vector-download-clears-active-snapshot-after-finish',
+          message: '下载完成后，后台下载服务不应继续保留活动下载快照。',
+          data: result
+        })
       }
     })
   })

@@ -14,6 +14,8 @@ export const getLearningProcessGroupId = (runId: string, skillId: RuntimeSkillId
 
 export const getCompactionProcessGroupId = (runId: string): string => `${runId}:compaction`
 
+export const getFinalizingProcessGroupId = (runId: string): string => `${runId}:finalizing`
+
 export const getSkillKeyFromToolName = (toolName: string): string => {
   if (
     toolName === 'docx_outline' ||
@@ -29,8 +31,8 @@ export const getSkillKeyFromToolName = (toolName: string): string => {
   return 'generic-task'
 }
 
-export const getToolProcessGroupId = (runId: string, toolName: string): string =>
-  `${runId}:skill:${getSkillKeyFromToolName(toolName)}`
+export const getToolProcessGroupId = (runId: string, toolCallId: string): string =>
+  `${runId}:tool:${toolCallId}`
 
 export const emitAssistantProcessThought = (input: {
   sendEvent: SendEvent
@@ -129,7 +131,7 @@ export const emitToolProcessStarted = (input: {
   input.sendEvent({
     type: 'assistant_process_group_started',
     runId: input.runId,
-    groupId: getToolProcessGroupId(input.runId, input.toolName),
+    groupId: getToolProcessGroupId(input.runId, input.toolCallId),
     kind: 'skill',
     display,
     createdAt: input.createdAt || Date.now()
@@ -137,7 +139,7 @@ export const emitToolProcessStarted = (input: {
   input.sendEvent({
     type: 'assistant_process_item_started',
     runId: input.runId,
-    groupId: getToolProcessGroupId(input.runId, input.toolName),
+    groupId: getToolProcessGroupId(input.runId, input.toolCallId),
     itemId: input.toolCallId,
     display,
     createdAt: input.createdAt || Date.now()
@@ -153,7 +155,7 @@ export const emitToolProcessCompleted = (input: {
   error?: string
   completedAt?: number
 }): void => {
-  const groupId = getToolProcessGroupId(input.runId, input.toolName)
+  const groupId = getToolProcessGroupId(input.runId, input.toolCallId)
   if (input.ok) {
     input.sendEvent({
       type: 'assistant_process_item_completed',
@@ -168,7 +170,6 @@ export const emitToolProcessCompleted = (input: {
       groupId,
       completedAt: input.completedAt || Date.now()
     })
-    emitThinkingStarted(input)
     return
   }
   input.sendEvent({
@@ -186,7 +187,6 @@ export const emitToolProcessCompleted = (input: {
     error: input.error,
     failedAt: input.completedAt || Date.now()
   })
-  emitThinkingStarted(input)
 }
 
 export const emitCompactionStarted = (input: {
@@ -218,4 +218,20 @@ export const emitCompactionCompleted = (input: {
     completedAt: input.completedAt || Date.now()
   })
   emitThinkingStarted(input)
+}
+
+export const emitFinalizingStarted = (input: {
+  sendEvent: SendEvent
+  runId: string
+  createdAt?: number
+}): void => {
+  emitThinkingCompleted(input)
+  input.sendEvent({
+    type: 'assistant_process_group_started',
+    runId: input.runId,
+    groupId: getFinalizingProcessGroupId(input.runId),
+    kind: 'finalizing',
+    display: { kind: 'finalizing' },
+    createdAt: input.createdAt || Date.now()
+  })
 }

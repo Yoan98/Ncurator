@@ -5,7 +5,7 @@
 ### 1.1 AI相关
 
 - `doc/ai-design/architecture.md`：涉及 AI 整体架构、模块关系或主流程时阅读。
-- `doc/ai-design/design-detail.md`：涉及 AI 设计边界、职责划分、核心数据、关键 contract 或关键流程时阅读。
+- `doc/ai-design/design-detail.md`：涉及 AI 设计边界、职责划分、核心数据、关键 contract、过程事件或关键流程时阅读。
 - `doc/ai-design/human-skill-design.md`：涉及 human skill 体系、能力边界或工具使用范围时阅读。
 - `doc/ai-design/prompt-design.md`：涉及 prompt 设计、AI-facing 文案或工具描述方式时阅读。
 
@@ -29,7 +29,7 @@
 
 ### 1.5 prd产品文档相关
 
-- `doc/prd/workbench.md`：涉及 Workbench 产品需求、消息流交互或 composer 偏好验收标准时阅读。
+- `doc/prd/workbench.md`：涉及 Workbench 产品需求、消息流/过程层交互或 composer 偏好验收标准时阅读。
 - `doc/prd/settings.md`：涉及 Settings 产品需求、具名工作空间资料/索引交互或验收标准时阅读。
 
 ## 2. 必须遵守的规则
