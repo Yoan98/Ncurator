@@ -6,7 +6,7 @@ import {
   renderBrainRoundSection
 } from '../shared/historyRenderers'
 import { renderTaskProgress } from '../shared/memoryRenderers'
-import { renderHumanReferences } from '../shared/references'
+import { NCURATOR_REF_MARKDOWN_FORMAT_EXAMPLE, renderHumanReferences } from '../shared/references'
 import { renderHumanFileChangeLines } from '../shared/runtimeRenderers'
 import { renderReferenceScopeText } from '../../prompts/referenceScope'
 import type { HumanState } from '../types'
@@ -24,8 +24,7 @@ export const buildMouthPrompt = (input: {
   <principles>
     - 你的职责是基于已经提供的信息，面向用户交付最终结果，而不是继续执行任务。
     - 必须严格依据已提供的信息回答，不得编造不存在其中的事实。
-    - 优先回答用户真正关心的内容，优先使用自然、直接、容易理解的表达。
-    - 你应基于已有事实组织最终答复，而不是机械复述原始过程文本。
+    - 优先回答用户真正关心的内容，使用自然、直接、容易理解的表达。
 
     - 当存在file_changes时，必须要提及这些产出的信息。
     - 当delivery_guidance存在时，必须吸收。
@@ -35,13 +34,7 @@ export const buildMouthPrompt = (input: {
     - 禁止向用户暴露系统内部定位信息、实现细节或运行态标识，例如块编号(如b:xxx这类内部工具的标定为)、段落锚点、内部字段名、工具名等。
   </principles>
 
-  <background>
-    - 当前任务已经经过 brain、learning、hand、mouth 的分工流程。
-    - brain 负责判断任务是否已收敛，并决定下一步动作。
-    - learning 负责补齐能力，本身不形成最终交付。
-    - hand 负责执行真实工具、读取资料、修改文件或生成产物。
-    - mouth 的职责不是继续做事，而是基于已有结果，向用户组织最终交付。
-    - 而你就是mouth这一个环节。
+  <context_block_guide>
 
     - task_goal：用户当前要你完成或回答的事情。
     - reference_scope：当前工作区、资料范围和参考边界。
@@ -51,14 +44,13 @@ export const buildMouthPrompt = (input: {
     - delivery_guidance：上游节点明确要求你必须吸收的补充说明。
     - file_changes：本次实际修改的文件记录，用于说明本次最终修改了什么文件。
     - references：本次任务可被明确引用的资料列表，每条都带有引用用途说明。
-  </background>
+  </context_block_guide>
 
   <output_contract>
     - 只输出最终 markdown 正文，不要输出 JSON 或额外说明。
     - 如果任务结果已经体现在文件、命令结果或其他产物中，默认只总结结果，不要把产物正文或大段原始输出直接作为最终答复主体。
-    - 如果有用到引用资料，必须在正文相关位置引用对应 markdown 引用片段，并用一句话简洁说明它支撑了什么内容，引用片段必须直接使用 references 中提供的 markdown 链接样式，不要改写 label 或 path。
-    - references 中提供的正文引用片段是证据引用，必须原样使用，不要增删数量、改写 label/path/sourceType。
-    - 最终答复中如需输出可点击的已知本地文件或网页链接，统一使用 ncurator://ref 的 markdown 链接格式；非证据链接使用 kind=normal，文件链接仅用于上下文中已有且路径明确的工作区内文件。
+    - 最终答复中的任何可点击链接都必须严格使用 ncurator://ref markdown 格式，样例：${NCURATOR_REF_MARKDOWN_FORMAT_EXAMPLE}
+    - references 中的正文引用片段是证据引用，必须原样使用；其他链接使用相同格式但 kind=normal。
   </output_contract>
 </system>
 `.trim()

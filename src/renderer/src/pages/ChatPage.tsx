@@ -52,7 +52,7 @@ import type {
 } from '../components/workbench/types'
 import type {
   ParsedNcuratorRefKind,
-  ParsedNcuratorRefSourceType
+  ParsedNcuratorRefResourceType
 } from '../components/markdownReference'
 import {
   completeAssistantProcessGroups,
@@ -912,11 +912,11 @@ const ChatPage: React.FC = () => {
 
   const openMarkdownReference = async (reference: {
     kind: ParsedNcuratorRefKind
-    sourceType: ParsedNcuratorRefSourceType
+    resourceType: ParsedNcuratorRefResourceType
     label: string
     path: string
   }): Promise<void> => {
-    if (reference.sourceType === 'web') {
+    if (reference.resourceType === 'web') {
       const response = await window.api.openExternal(reference.path)
       if (!response.success) {
         message.error(response.error || '打开链接失败')

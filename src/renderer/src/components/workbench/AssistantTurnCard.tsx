@@ -20,7 +20,7 @@ import type {
   AssistantRichTextSegment,
   AssistantTurnViewModel
 } from './types'
-import type { ParsedNcuratorRefKind, ParsedNcuratorRefSourceType } from '../markdownReference'
+import type { ParsedNcuratorRefKind, ParsedNcuratorRefResourceType } from '../markdownReference'
 import { workbenchSelectors } from '../../testing/selectors'
 import {
   buildAssistantExecutionSummaryText,
@@ -35,7 +35,7 @@ type AssistantTurnCardProps = {
   onOpenApply: (changeId: string) => void
   onOpenReference: (reference: {
     kind: ParsedNcuratorRefKind
-    sourceType: ParsedNcuratorRefSourceType
+    resourceType: ParsedNcuratorRefResourceType
     label: string
     path: string
   }) => void

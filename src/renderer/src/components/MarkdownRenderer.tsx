@@ -10,7 +10,7 @@ import {
   parseRefHref,
   renderReferenceIcon,
   type ParsedNcuratorRefKind,
-  type ParsedNcuratorRefSourceType
+  type ParsedNcuratorRefResourceType
 } from './markdownReference'
 
 interface MarkdownRendererProps {
@@ -18,7 +18,7 @@ interface MarkdownRendererProps {
   className?: string
   onOpenReference?: (reference: {
     kind: ParsedNcuratorRefKind
-    sourceType: ParsedNcuratorRefSourceType
+    resourceType: ParsedNcuratorRefResourceType
     label: string
     path: string
   }) => void
@@ -86,13 +86,13 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
                   }
                   data-ref-path={parsed.path}
                   data-ref-kind={parsed.kind}
-                  data-ref-source-type={parsed.sourceType}
+                  data-ref-resource-type={parsed.resourceType}
                   onClick={(event) => {
                     if (!onOpenReference) return
                     event.preventDefault()
                     onOpenReference({
                       kind: parsed.kind,
-                      sourceType: parsed.sourceType,
+                      resourceType: parsed.resourceType,
                       label,
                       path: parsed.path
                     })
@@ -100,7 +100,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
                 >
                   {renderReferenceIcon({
                     kind: parsed.kind,
-                    sourceType: parsed.sourceType
+                    resourceType: parsed.resourceType
                   })}
                   <span>{children}</span>
                 </a>

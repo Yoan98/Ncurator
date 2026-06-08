@@ -141,7 +141,7 @@ describe('ai unit brain decision-hint prompt contract', () => {
     expect(prompt).toContain('nextAction.references')
     expect(prompt).toContain('usedFor')
     expect(prompt).toContain('支撑了最终交付的哪些地方')
-    expect(prompt).toContain('references[*].sourceType 必须为 file 或 web')
+    expect(prompt).toContain('references[*].resourceType 必须为 file 或 web')
     expect(prompt).toContain('没有明确路径或 URL 的资料不要放入 references')
   })
 

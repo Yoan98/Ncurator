@@ -342,7 +342,7 @@ type BrainNextAction =
       references?: Array<{
         label: string
         path: string
-        kind: 'internal' | 'external'
+        resourceType: 'file' | 'web'
         usedFor: string
       }>
     }
@@ -629,9 +629,9 @@ interface HumanResult {
 - `mouth` 优先吸收 `reference_scope`、`memory.thought`、结果导向 `history`、`deliveryGuidanceItems`、`file_changes` 与 `references`。
 - `mouth` 必须在最终 markdown 中明确说明引用了哪些资料，以及这些资料支撑了交付中的哪些内容。
 - `references` 的正式来源是 `brain(nextAction=mouth)` 的结构化输出；`mouth` 只消费和披露，不自行推断新的已引用来源。
-- `references` 每项必须包含 `label / path / sourceType / usedFor`；`sourceType` 只能是 `file` 或 `web`，且 `path` 必须是对应类型下明确可打开的本地路径或网页 URL。
+- `references` 每项必须包含 `label / path / resourceType / usedFor`；`resourceType` 只能是 `file` 或 `web`，且 `path` 必须是对应类型下明确可打开的本地路径或网页 URL。
 - `references` 渲染为 `kind=reference` 的 `ncurator://ref` markdown 链接，是证据引用样式和点击行为的唯一来源。
-- `mouth` 需要输出其他已知文件或网页链接时，也使用 `ncurator://ref`；非证据链接必须使用 `kind=normal`，文件链接只允许上下文中已有且路径明确的工作区内文件。
+- `mouth` 输出任何可点击文件或网页链接时，都必须使用 `ncurator://ref` markdown 链接；非证据链接必须使用 `kind=normal`，文件链接只允许上下文中已有且路径明确的工作区内文件。
 - `file_changes` 表示本轮 AI 实际修改过的文件，是最终答复中“修改了什么”的来源；它来自统一的 `AiFileChangeRecord` 投影，不表示读过或引用过的任意文件。
 - human state 内部使用 `fileChanges` 保存本轮修改文件摘要；读过、检索过或仅引用过的文件不得进入该字段。
 
@@ -748,6 +748,7 @@ interface HumanExecution {
   references?: Array<{
     label: string
     path: string
+    resourceType: 'file' | 'web'
     usedFor: string
   }>
 }

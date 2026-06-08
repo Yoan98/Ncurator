@@ -250,7 +250,7 @@ export const humanThoughtSchema = z.object({
 export const humanReferenceSchema = z.object({
   label: z.string().min(1),
   path: z.string().min(1),
-  sourceType: z.enum(['file', 'web']),
+  resourceType: z.enum(['file', 'web']),
   usedFor: z.string().min(1)
 })
 

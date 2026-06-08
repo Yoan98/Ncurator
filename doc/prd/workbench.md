@@ -57,7 +57,7 @@
 - 直接写回：AI run 收尾将最终 docx 结果写入源文件或创建目标文件的流程。
 - 修改记录：一次 AI run 中实际创建或更新的文件记录，提供打开文件与回退本次修改入口；当前包括 docx 直接写回和可识别的 terminal 文件改动，后续写类能力接入同一记录。
 - 回退本次修改：基于写回前 checkpoint 恢复文件；新建文件回退时删除目标文件，若文件在 AI 写回后又被修改，需提示用户确认会丢失后续修改。
-- 内部引用链接：assistant markdown 中的 `ncurator://ref` 链接；`kind=reference` 表示 brain 指定的证据引用，`kind=normal` 表示普通可点击文件或网页链接，`sourceType=file/web` 决定打开右侧文件预览或系统浏览器。
+- 内部引用链接：assistant markdown 中的 `ncurator://ref` 链接；任何可点击文件或网页链接都必须使用该格式，`kind=reference` 表示 brain 指定的证据引用，`kind=normal` 表示普通可点击文件或网页链接，`resourceType=file/web` 决定打开右侧文件预览或系统浏览器。
 
 ## 7. 需求规则
 

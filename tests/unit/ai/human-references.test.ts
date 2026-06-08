@@ -16,7 +16,7 @@ describe('ai unit human references', () => {
           {
             label: 'report.docx',
             path: '/tmp/workspace/report.docx',
-            sourceType: 'file',
+            resourceType: 'file',
             usedFor: '用于支撑最终答复中的周报结论'
           }
         ]
@@ -33,7 +33,7 @@ describe('ai unit human references', () => {
           {
             label: 'report.docx',
             path: '/tmp/workspace/report.docx',
-            sourceType: 'file',
+            resourceType: 'file',
             usedFor: 'invalid'
           }
         ]
@@ -59,13 +59,13 @@ describe('ai unit human references', () => {
             {
               label: 'report.docx',
               path: '/tmp/workspace/report.docx',
-              sourceType: 'file',
+              resourceType: 'file',
               usedFor: '用于支撑最终答复中的周报结论'
             },
             {
               label: '审批规则网页',
               path: 'https://example.com/approval-rules',
-              sourceType: 'web',
+              resourceType: 'web',
               usedFor: '用于补充最终答复中的通用审批背景说明'
             }
           ]
@@ -79,13 +79,13 @@ describe('ai unit human references', () => {
       {
         label: 'report.docx',
         path: '/tmp/workspace/report.docx',
-        sourceType: 'file',
+        resourceType: 'file',
         usedFor: '用于支撑最终答复中的周报结论'
       },
       {
         label: '审批规则网页',
         path: 'https://example.com/approval-rules',
-        sourceType: 'web',
+        resourceType: 'web',
         usedFor: '用于补充最终答复中的通用审批背景说明'
       }
     ])
@@ -96,12 +96,12 @@ describe('ai unit human references', () => {
       buildReferenceMarkdown({
         label: 'report.docx',
         path: '/tmp/workspace/report.docx',
-        sourceType: 'file',
+        resourceType: 'file',
         usedFor: '用于周报撰写'
       })
     ).toContain('kind=reference')
 
-    expect(inferReferenceIconKind({ sourceType: 'file' })).toBe('file')
-    expect(inferReferenceIconKind({ sourceType: 'web' })).toBe('web')
+    expect(inferReferenceIconKind({ resourceType: 'file' })).toBe('file')
+    expect(inferReferenceIconKind({ resourceType: 'web' })).toBe('web')
   })
 })

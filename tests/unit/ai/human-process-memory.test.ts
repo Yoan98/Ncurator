@@ -275,7 +275,7 @@ describe('ai unit human memory history', () => {
           {
             label: 'report.docx',
             path: '/tmp/workspace/report.docx',
-            sourceType: 'file',
+            resourceType: 'file',
             usedFor: '用于支撑上一次收尾'
           }
         ]

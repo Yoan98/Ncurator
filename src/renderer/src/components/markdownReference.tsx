@@ -7,13 +7,13 @@ import {
 } from '@ant-design/icons'
 
 export type ParsedNcuratorRefKind = 'reference' | 'normal'
-export type ParsedNcuratorRefSourceType = 'file' | 'web'
+export type ParsedNcuratorRefResourceType = 'file' | 'web'
 
 export type ParsedRefLink =
   | {
       type: 'reference'
       kind: ParsedNcuratorRefKind
-      sourceType: ParsedNcuratorRefSourceType
+      resourceType: ParsedNcuratorRefResourceType
       label: string
       path: string
     }
@@ -33,12 +33,12 @@ export const parseRefHref = (href?: string): ParsedRefLink => {
   try {
     const url = new URL(href)
     const kind = url.searchParams.get('kind')
-    const sourceType = url.searchParams.get('sourceType')
+    const resourceType = url.searchParams.get('resourceType')
     const label = url.searchParams.get('label') || ''
     const path = url.searchParams.get('path') || ''
     if (
       (kind !== 'reference' && kind !== 'normal') ||
-      (sourceType !== 'file' && sourceType !== 'web') ||
+      (resourceType !== 'file' && resourceType !== 'web') ||
       !label ||
       !path
     ) {
@@ -50,7 +50,7 @@ export const parseRefHref = (href?: string): ParsedRefLink => {
     return {
       type: 'reference',
       kind,
-      sourceType,
+      resourceType,
       label,
       path
     }
@@ -64,13 +64,13 @@ export const parseRefHref = (href?: string): ParsedRefLink => {
 
 export const renderReferenceIcon = (input: {
   kind: ParsedNcuratorRefKind
-  sourceType: ParsedNcuratorRefSourceType
+  resourceType: ParsedNcuratorRefResourceType
 }): React.ReactNode =>
   input.kind === 'reference' ? (
     <SnippetsOutlined />
-  ) : input.sourceType === 'web' ? (
+  ) : input.resourceType === 'web' ? (
     <GlobalOutlined />
-  ) : input.sourceType === 'file' ? (
+  ) : input.resourceType === 'file' ? (
     <FileTextOutlined />
   ) : (
     <LinkOutlined />
