@@ -35,7 +35,6 @@ export const buildMouthPrompt = (input: {
   </principles>
 
   <context_block_guide>
-
     - task_goal：用户当前要你完成或回答的事情。
     - reference_scope：当前工作区、资料范围和参考边界。
     - conversation_history：当前会话历史视图，用于理解这次最终交付与同一会话前文的连续性。
