@@ -48,6 +48,7 @@ describe('ai unit mouth prompt contract', () => {
           {
             label: '深度学习.docx',
             path: '学习笔记/深度学习.docx',
+            sourceType: 'file',
             usedFor: '支撑深度学习部分的总结内容'
           }
         ]
@@ -55,9 +56,10 @@ describe('ai unit mouth prompt contract', () => {
     }
     state.execution.references = [
       {
-        label: '深度学习.docx',
-        path: '学习笔记/深度学习.docx',
-        usedFor: '支撑深度学习部分的总结内容'
+      label: '深度学习.docx',
+      path: '学习笔记/深度学习.docx',
+      sourceType: 'file',
+      usedFor: '支撑深度学习部分的总结内容'
       }
     ]
 
@@ -160,6 +162,7 @@ describe('ai unit mouth prompt contract', () => {
     expect(taskProgressSection).not.toContain('旧 thought.next 不应直接作为 mouth task_progress 主体')
     expect(prompt.user).toContain('深度学习与图形学复习总结.docx')
     expect(prompt.user).toContain('引用资料：深度学习.docx')
-    expect(prompt.user).toContain('正文引用片段：[深度学习.docx](ncurator://ref?label=')
+    expect(prompt.user).toContain('正文引用片段：[深度学习.docx](ncurator://ref?kind=reference')
+    expect(prompt.user).toContain('sourceType=file')
   })
 })

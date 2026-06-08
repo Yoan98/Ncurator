@@ -22,6 +22,7 @@ export const LANCE_TABLES = {
   CHAT_MESSAGE: 'chat_message',
   CHAT_CONVERSATION_MEMORY: 'chat_conversation_memory',
   CHAT_SESSION_RESUME_SNAPSHOT: 'chat_session_resume_snapshot',
+  AI_FILE_CHANGE: 'ai_file_change',
   DOCX_APPLY: 'docx_apply',
   LLM_CONFIG: 'llm_config',
   AI_RUNTIME_SETTINGS: 'ai_runtime_settings'
@@ -342,6 +343,29 @@ export class LanceDbCore {
           new arrow.Field('human_state_json', new arrow.Utf8()),
           new arrow.Field('error_message', new arrow.Utf8()),
           new arrow.Field('updated_at', new arrow.Int64())
+        ])
+      },
+      {
+        name: LANCE_TABLES.AI_FILE_CHANGE,
+        recreateIfSchemaChanged: true,
+        schema: new arrow.Schema([
+          new arrow.Field('id', new arrow.Utf8()),
+          new arrow.Field('session_id', new arrow.Utf8()),
+          new arrow.Field('run_id', new arrow.Utf8()),
+          new arrow.Field('status', new arrow.Utf8()),
+          new arrow.Field('capability', new arrow.Utf8()),
+          new arrow.Field('path', new arrow.Utf8()),
+          new arrow.Field('file_name', new arrow.Utf8()),
+          new arrow.Field('operation', new arrow.Utf8()),
+          new arrow.Field('change_count', new arrow.Int32()),
+          new arrow.Field('before_snapshot_path', new arrow.Utf8(), true),
+          new arrow.Field('before_checksum', new arrow.Utf8(), true),
+          new arrow.Field('after_checksum', new arrow.Utf8(), true),
+          new arrow.Field('preview_path', new arrow.Utf8(), true),
+          new arrow.Field('created_at', new arrow.Int64()),
+          new arrow.Field('updated_at', new arrow.Int64()),
+          new arrow.Field('reverted_at', new arrow.Int64(), true),
+          new arrow.Field('last_error', new arrow.Utf8(), true)
         ])
       },
       {

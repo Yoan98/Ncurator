@@ -480,7 +480,64 @@ export interface ChatSession {
   created_at: number
 }
 
-export type DocxApplyStatus = 'applied' | 'reverted' | 'failed'
+export type AiFileChangeStatus = 'applied' | 'reverted' | 'failed'
+export type AiFileChangeCapability = 'docx' | 'terminal_exec' | 'ppt'
+export type AiFileChangeOperation = 'created' | 'updated'
+
+export interface AiFileChangeRecord {
+  id: string
+  sessionId: string
+  runId: string
+  status: AiFileChangeStatus
+  capability: AiFileChangeCapability
+  path: string
+  fileName: string
+  operation: AiFileChangeOperation
+  changeCount: number
+  beforeSnapshotPath?: string
+  beforeChecksum?: string
+  afterChecksum?: string
+  previewPath?: string
+  createdAt: number
+  updatedAt: number
+  revertedAt?: number
+  error?: string
+}
+
+export interface ListAiFileChangeRecordsRequest {
+  sessionId?: string
+  runId?: string
+  status?: AiFileChangeStatus
+}
+
+export interface ListAiFileChangeRecordsResponse {
+  items: AiFileChangeRecord[]
+  total: number
+}
+
+export interface GetAiFileChangeRecordRequest {
+  changeId: string
+}
+
+export interface GetAiFileChangeRecordResponse {
+  record?: AiFileChangeRecord
+  error?: string
+}
+
+export interface RevertAiFileChangeRequest {
+  changeId: string
+  force?: boolean
+}
+
+export interface RevertAiFileChangeResponse {
+  success: boolean
+  record?: AiFileChangeRecord
+  requiresForce?: boolean
+  warning?: string
+  error?: string
+}
+
+export type DocxApplyStatus = AiFileChangeStatus
 
 export interface DocxApplyRecord {
   id: string
@@ -489,7 +546,7 @@ export interface DocxApplyRecord {
   status: DocxApplyStatus
   source_path: string
   source_name: string
-  operation: AiFileArtifactOperation
+  operation: AiFileChangeOperation
   final_revision_ref: string
   change_count: number
   before_exists: boolean
@@ -541,18 +598,18 @@ export interface RevertDocxApplyResponse {
   error?: string
 }
 
-export interface RuntimeChangedFile {
-  file_name: string
-  source_path: string
-  format: 'docx'
-  change_count: number
-  summary: string
-  change_highlights: string[]
-  apply_id?: string
+export interface FileChangeSummaryItem {
+  id: string
+  fileName: string
+  path: string
+  capability: AiFileChangeCapability
+  operation: AiFileChangeOperation
+  changeCount: number
+  status: AiFileChangeStatus
 }
 
-export interface RuntimeArtifactsSummary {
-  changed_files: RuntimeChangedFile[]
+export interface FileChangesSummary {
+  changed_files: FileChangeSummaryItem[]
 }
 
 export interface PickApplicationResponse {
@@ -666,7 +723,7 @@ export type AiRuntimeSettings = {
 }
 
 export type AiFileArtifactCapability = 'terminal_exec' | 'docx'
-export type AiFileArtifactOperation = 'created' | 'updated'
+export type AiFileArtifactOperation = AiFileChangeOperation
 export type AiFileArtifactRef = {
   kind: 'file'
   capability: AiFileArtifactCapability

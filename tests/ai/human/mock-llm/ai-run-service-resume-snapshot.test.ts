@@ -25,6 +25,11 @@ const buildDeps = async (
         await runtime.ensureEmbeddingReady()
       },
       docxApplyService: runtime.docxApplyService,
+      saveFileChangeRecord: async (record) => {
+        await runtime.storageService.aiFileChange.saveRecord(record)
+      },
+      listFileChangeRecords: async (request) =>
+        (await runtime.storageService.aiFileChange.listRecords(request)).items,
       isCancelled: () => controller.signal.aborted,
       abortSignal: controller.signal,
       sendEvent: (event) => runtime.eventCollector.add(event),

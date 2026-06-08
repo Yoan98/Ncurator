@@ -141,6 +141,8 @@ describe('ai unit brain decision-hint prompt contract', () => {
     expect(prompt).toContain('nextAction.references')
     expect(prompt).toContain('usedFor')
     expect(prompt).toContain('支撑了最终交付的哪些地方')
+    expect(prompt).toContain('references[*].sourceType 必须为 file 或 web')
+    expect(prompt).toContain('没有明确路径或 URL 的资料不要放入 references')
   })
 
   it('renders prompt-friendly output shape for hand calls while keeping args generic', () => {
@@ -238,7 +240,7 @@ describe('ai unit brain decision-hint prompt contract', () => {
       '{"thought":{"next":"审批驳回是否保留原文件已经确认，当前证据足够进入最终交付。","todolist":[{"item":"确认审批驳回时是否保留原文件","status":"done"},{"item":"检查是否已经满足用户诉求并能进入最终交付","status":"done"}],"progressionSummary":"-当前任务的用户诉求是关于审批驳回时是否保留原文件，已经确认审批驳回时会保留原文件，当前证据足够进入最终交付。\\n-每个todolist项的推进理解：'
     )
     expect(prompt.user).toContain('- 输入结构：\n    { command: string, cwd?: string }')
-    expect(prompt.user).toContain('{"command":"ls 工作","cwd":"."}')
+    expect(prompt.user).toContain('{"command":"ls .","cwd":"."}')
     expect(prompt.user).toContain(
       '- 输入结构：\n    { queryText: string, strategy?: "auto" | "semantic" | "keyword", limit?: integer, sourceType?: "all" | "file" | "web", documentIds?: Array<string> }'
     )

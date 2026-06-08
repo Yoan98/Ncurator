@@ -1,18 +1,19 @@
 import React from 'react'
 import {
-  BookOutlined,
-  FileMarkdownOutlined,
-  FilePdfOutlined,
   FileTextOutlined,
-  FileWordOutlined,
   GlobalOutlined,
-  LinkOutlined
+  LinkOutlined,
+  SnippetsOutlined
 } from '@ant-design/icons'
-import { inferReferenceIconKind } from '../../../main/services/ai/human/shared/references'
+
+export type ParsedNcuratorRefKind = 'reference' | 'normal'
+export type ParsedNcuratorRefSourceType = 'file' | 'web'
 
 export type ParsedRefLink =
   | {
       type: 'reference'
+      kind: ParsedNcuratorRefKind
+      sourceType: ParsedNcuratorRefSourceType
       label: string
       path: string
     }
@@ -31,9 +32,16 @@ export const parseRefHref = (href?: string): ParsedRefLink => {
 
   try {
     const url = new URL(href)
-    const label = decodeURIComponent(url.searchParams.get('label') || '')
-    const path = decodeURIComponent(url.searchParams.get('path') || '')
-    if (!label || !path) {
+    const kind = url.searchParams.get('kind')
+    const sourceType = url.searchParams.get('sourceType')
+    const label = url.searchParams.get('label') || ''
+    const path = url.searchParams.get('path') || ''
+    if (
+      (kind !== 'reference' && kind !== 'normal') ||
+      (sourceType !== 'file' && sourceType !== 'web') ||
+      !label ||
+      !path
+    ) {
       return {
         type: 'normal',
         href
@@ -41,6 +49,8 @@ export const parseRefHref = (href?: string): ParsedRefLink => {
     }
     return {
       type: 'reference',
+      kind,
+      sourceType,
       label,
       path
     }
@@ -52,21 +62,16 @@ export const parseRefHref = (href?: string): ParsedRefLink => {
   }
 }
 
-export const renderReferenceIcon = (label: string, path: string): React.ReactNode => {
-  switch (inferReferenceIconKind({ label, path })) {
-    case 'web':
-      return <GlobalOutlined />
-    case 'knowledge':
-      return <BookOutlined />
-    case 'docx':
-      return <FileWordOutlined />
-    case 'pdf':
-      return <FilePdfOutlined />
-    case 'markdown':
-      return <FileMarkdownOutlined />
-    case 'text':
-      return <FileTextOutlined />
-    default:
-      return <LinkOutlined />
-  }
-}
+export const renderReferenceIcon = (input: {
+  kind: ParsedNcuratorRefKind
+  sourceType: ParsedNcuratorRefSourceType
+}): React.ReactNode =>
+  input.kind === 'reference' ? (
+    <SnippetsOutlined />
+  ) : input.sourceType === 'web' ? (
+    <GlobalOutlined />
+  ) : input.sourceType === 'file' ? (
+    <FileTextOutlined />
+  ) : (
+    <LinkOutlined />
+  )

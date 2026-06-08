@@ -173,7 +173,8 @@ export const buildBrainPrompt = (input: {
     nextAction为mouth时：
     - 若完成用户诉求时引用了本地资料，或引用了不来自本地资料的知识以及外部资料必须在 nextAction.references 中列出这些资料，并说明来源定位与它支撑了最终交付的哪些地方。
     - references[*].label,为资料名，比如文件名也可能是网页名等。
-    - references[*].path,为地址，比如文件地址，网页地址等，如果是非用户本地的资料，但又没有明确路径则可以写为From LLM。
+    - references[*].path,为明确可打开地址；sourceType=file 时必须是已知本地文件路径，sourceType=web 时必须是明确网页 URL；没有明确路径或 URL 的资料不要放入 references。
+    - references[*].sourceType 必须为 file 或 web。
     - references[*].usedFor 必须明确描述“这条资料支撑了最终答复中的哪部分内容”，不能只写笼统用途。
   </next_action_contract>
 
@@ -299,6 +300,7 @@ ${JSON.stringify({
       {
         label: '审批制度说明.docx',
         path: '/workspace/审批制度说明.docx',
+        sourceType: 'file',
         usedFor: '用于支撑最终答复中“审批驳回时保留原文件”的结论'
       }
     ]

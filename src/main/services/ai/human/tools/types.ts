@@ -11,6 +11,7 @@ export type ToolFamilyBuildInput = {
   ctx: AiRunContext
   cache: HumanRuntimeCache
   runId: string
+  sessionId: string
   taskId: string
 }
 
@@ -40,6 +41,7 @@ export type WorkspaceCapabilityBuildInput<TContext = AiRunContext> = {
   ctx: TContext
   cache: HumanRuntimeCache
   runId: string
+  sessionId: string
   taskId: string
   workspaceRootPath: string
   emitActivity: (input: CapabilityActivityInput) => void

@@ -2,15 +2,15 @@
 import { Button, Spin } from 'antd'
 import type { DocxApplyRecord } from '../../../../shared/types'
 import { FileRenderViewer } from '../fileRenders'
-import { DOCX_APPLY_STATUS_META } from './constants'
-import type { DocxApplyWorkspaceTab } from './types'
+import { FILE_CHANGE_STATUS_META } from './constants'
+import type { FileChangeWorkspaceTab } from './types'
 import { workbenchSelectors } from '../../testing/selectors'
 
 type WorkbenchApplyPanelProps = {
   record: DocxApplyRecord | null
   loading: boolean
   reverting: boolean
-  tabs: DocxApplyWorkspaceTab[]
+  tabs: FileChangeWorkspaceTab[]
   onSelectTab: (fileKey: string) => void
   onRevert: () => void
   onOpenPath: (filePath: string) => Promise<void>
@@ -29,8 +29,9 @@ const WorkbenchApplyPanel: React.FC<WorkbenchApplyPanelProps> = ({
   onOpenWithApplication,
   onRevealPath
 }) => {
-  const statusMeta = record ? DOCX_APPLY_STATUS_META[record.status] : null
+  const statusMeta = record ? FILE_CHANGE_STATUS_META[record.status] : null
   const canRevert = Boolean(record && record.status === 'applied' && !reverting)
+  const hasDedicatedPreview = Boolean(record?.preview_diff_checksum)
 
   const viewerDocuments = useMemo(
     () =>
@@ -139,7 +140,10 @@ const WorkbenchApplyPanel: React.FC<WorkbenchApplyPanelProps> = ({
       ) : null}
 
       <div className="min-h-0 flex-1 bg-[#FAF9F5] p-3">
-        <FileRenderViewer documents={viewerDocuments} emptyText="当前文件暂时不可预览。" />
+        <FileRenderViewer
+          documents={viewerDocuments}
+          emptyText={hasDedicatedPreview ? '当前文件暂时不可预览。' : '当前修改记录没有专用预览稿。'}
+        />
       </div>
     </div>
   )

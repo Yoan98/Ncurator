@@ -1,11 +1,14 @@
 import fs from 'node:fs'
+import fsPromises from 'node:fs/promises'
 import path from 'node:path'
+import { randomUUID } from 'node:crypto'
 import type { AiFileArtifactOperation } from '../../../../../../shared/types'
-import type { ArtifactCandidate, TerminalArtifactCandidate } from './types'
+import type { ArtifactCandidate, PreparedArtifactCandidate, TerminalArtifactCandidate } from './types'
 import { resolveWorkspacePath } from './commandPolicy'
 import { emitFileArtifactEvent } from '../../../events/fileArtifacts'
 import type { TerminalToolContext } from '../../../types'
 import type { CapabilityActivityInput } from '../types'
+import { calculateFileStats } from '../docx/review/utils'
 
 export const mergeArtifactCandidates = (input: {
   commandCandidates: TerminalArtifactCandidate[]
@@ -59,14 +62,15 @@ export const mergeArtifactCandidates = (input: {
   }))
 }
 
-export const recordTerminalArtifacts = (input: {
+export const recordTerminalArtifacts = async (input: {
   ctx: TerminalToolContext
   runId: string
+  sessionId: string
   taskId: string
   stepId: string
-  candidates: ArtifactCandidate[]
+  candidates: PreparedArtifactCandidate[]
   emitActivity: (activity: CapabilityActivityInput) => void
-}): Array<{ path: string; operation: AiFileArtifactOperation }> => {
+}): Promise<Array<{ path: string; operation: AiFileArtifactOperation }>> => {
   const artifacts: Array<{ path: string; operation: AiFileArtifactOperation }> = []
   for (const artifact of input.candidates) {
     if (!fs.existsSync(artifact.resolvedPath)) continue
@@ -90,6 +94,32 @@ export const recordTerminalArtifacts = (input: {
       }
     })
     if (emitted) {
+      try {
+        const now = Date.now()
+        const afterStats = await calculateFileStats(artifact.resolvedPath)
+        await input.ctx.saveFileChangeRecord({
+          id: randomUUID(),
+          sessionId: input.sessionId,
+          runId: input.runId,
+          status: 'applied',
+          capability: 'terminal_exec',
+          path: artifact.resolvedPath,
+          fileName: path.basename(artifact.resolvedPath),
+          operation,
+          changeCount: 1,
+          beforeSnapshotPath: artifact.beforeSnapshotPath,
+          beforeChecksum: artifact.beforeChecksum,
+          afterChecksum: afterStats.checksum,
+          createdAt: now,
+          updatedAt: now
+        })
+      } catch (error) {
+        input.emitActivity({
+          actionType: 'file_change_record',
+          status: 'failed',
+          summary: error instanceof Error ? error.message : String(error)
+        })
+      }
       artifacts.push({
         path: artifact.resolvedPath,
         operation
@@ -97,4 +127,29 @@ export const recordTerminalArtifacts = (input: {
     }
   }
   return artifacts
+}
+
+export const prepareTerminalArtifactCandidates = async (input: {
+  candidates: ArtifactCandidate[]
+  runId: string
+  workspaceRootPath: string
+}): Promise<PreparedArtifactCandidate[]> => {
+  const snapshotRoot = path.join(input.workspaceRootPath, '.ncurator', 'file-change-snapshots', input.runId)
+  const prepared: PreparedArtifactCandidate[] = []
+  for (const candidate of input.candidates) {
+    if (!candidate.existedBefore || !fs.existsSync(candidate.resolvedPath)) {
+      prepared.push(candidate)
+      continue
+    }
+    const stats = await calculateFileStats(candidate.resolvedPath)
+    const snapshotPath = path.join(snapshotRoot, `${randomUUID()}-${path.basename(candidate.resolvedPath)}`)
+    await fsPromises.mkdir(path.dirname(snapshotPath), { recursive: true })
+    await fsPromises.copyFile(candidate.resolvedPath, snapshotPath)
+    prepared.push({
+      ...candidate,
+      beforeSnapshotPath: snapshotPath,
+      beforeChecksum: stats.checksum
+    })
+  }
+  return prepared
 }

@@ -16,6 +16,7 @@ describe('ai unit human references', () => {
           {
             label: 'report.docx',
             path: '/tmp/workspace/report.docx',
+            sourceType: 'file',
             usedFor: '用于支撑最终答复中的周报结论'
           }
         ]
@@ -32,6 +33,7 @@ describe('ai unit human references', () => {
           {
             label: 'report.docx',
             path: '/tmp/workspace/report.docx',
+            sourceType: 'file',
             usedFor: 'invalid'
           }
         ]
@@ -57,11 +59,13 @@ describe('ai unit human references', () => {
             {
               label: 'report.docx',
               path: '/tmp/workspace/report.docx',
+              sourceType: 'file',
               usedFor: '用于支撑最终答复中的周报结论'
             },
             {
-              label: '审批规则常识',
-              path: 'knowledge://approval-rules',
+              label: '审批规则网页',
+              path: 'https://example.com/approval-rules',
+              sourceType: 'web',
               usedFor: '用于补充最终答复中的通用审批背景说明'
             }
           ]
@@ -75,11 +79,13 @@ describe('ai unit human references', () => {
       {
         label: 'report.docx',
         path: '/tmp/workspace/report.docx',
+        sourceType: 'file',
         usedFor: '用于支撑最终答复中的周报结论'
       },
       {
-        label: '审批规则常识',
-        path: 'knowledge://approval-rules',
+        label: '审批规则网页',
+        path: 'https://example.com/approval-rules',
+        sourceType: 'web',
         usedFor: '用于补充最终答复中的通用审批背景说明'
       }
     ])
@@ -90,12 +96,12 @@ describe('ai unit human references', () => {
       buildReferenceMarkdown({
         label: 'report.docx',
         path: '/tmp/workspace/report.docx',
+        sourceType: 'file',
         usedFor: '用于周报撰写'
       })
-    ).toContain('ncurator://ref?')
+    ).toContain('kind=reference')
 
-    expect(inferReferenceIconKind({ label: 'report.docx', path: '/tmp/workspace/report.docx' })).toBe('docx')
-    expect(inferReferenceIconKind({ label: 'Project Page', path: 'https://example.com' })).toBe('web')
-    expect(inferReferenceIconKind({ label: 'Validation Set', path: 'knowledge://validation-set' })).toBe('knowledge')
+    expect(inferReferenceIconKind({ sourceType: 'file' })).toBe('file')
+    expect(inferReferenceIconKind({ sourceType: 'web' })).toBe('web')
   })
 })

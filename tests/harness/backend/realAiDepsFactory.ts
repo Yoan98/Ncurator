@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import path from 'node:path'
 import { createHumanGraphRunner } from '../../../src/main/services/ai/human/graph/humanGraph'
+import { AiFileChangeService } from '../../../src/main/services/ai/fileChanges/AiFileChangeService'
 import { DocxApplyService } from '../../../src/main/services/ai/human/tools/docx/review/DocxApplyService'
 import { createAiRunContext } from '../../../src/main/services/ai/runtime'
 import { runAiRuntimePreflight } from '../../../src/main/services/ai/runtimePreflight'
@@ -109,7 +110,8 @@ export const createRealAiDepsFactory = async (input: {
     documentsStore: storageService.documents
   })
 
-  const docxApplyService = new DocxApplyService(storageService.docxApply)
+  const aiFileChangeService = new AiFileChangeService(storageService.aiFileChange)
+  const docxApplyService = new DocxApplyService(storageService.docxApply, aiFileChangeService)
 
   const seedLlmConfig = async (config: LiveLlmConfig): Promise<void> => {
     const { model_name: _modelName, ...persistedConfig } = config
@@ -170,6 +172,11 @@ export const createRealAiDepsFactory = async (input: {
         embeddingService,
         ensureEmbeddingReady: ensureReady,
         docxApplyService,
+        saveFileChangeRecord: async (record) => {
+          await aiFileChangeService.saveRecord(record)
+        },
+        listFileChangeRecords: async (request) =>
+          (await aiFileChangeService.listRecords(request)).items,
         isCancelled: contextInput.checkCancelledOverride || (() => false),
         sendEvent: (event) => input.eventCollector.add(event),
         recordLlmIo: (record) => input.eventCollector.addLlmIo(record),

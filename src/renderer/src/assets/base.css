@@ -316,6 +316,21 @@ mark {
   background: var(--ink-wash-strong);
 }
 
+.markdown-body .markdown-normal-ref-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  color: var(--ink-2);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-line-strong);
+  text-underline-offset: 3px;
+}
+
+.markdown-body .markdown-normal-ref-link:hover {
+  color: var(--ink);
+  background: transparent;
+}
+
 .markdown-body .markdown-inline-code,
 .markdown-body :not(pre) > code {
   border: 1px solid var(--ink-line);

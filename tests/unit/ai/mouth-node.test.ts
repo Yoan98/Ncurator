@@ -4,11 +4,12 @@ import { createMouthNode } from '../../../src/main/services/ai/human/node/mouthN
 import { createHumanRuntimeCache } from '../../../src/main/services/ai/human/node/utils/runtimeCache'
 import { createInitialHumanState } from '../../../src/main/services/ai/human/state/schema'
 import type { AiRunContext } from '../../../src/main/services/ai/types'
-import type { AiRunEvent } from '../../../src/shared/types'
+import type { AiFileChangeRecord, AiRunEvent } from '../../../src/shared/types'
 
 const createBaseContext = (input: {
   events: AiRunEvent[]
   onChatText: (input: { user: string; onTextDelta?: (text: string) => void }) => Promise<string>
+  fileChangeRecords?: AiFileChangeRecord[]
 }): AiRunContext =>
   ({
     runId: 'run-1',
@@ -50,6 +51,23 @@ const createBaseContext = (input: {
     beginDocxApplyRun: () => undefined,
     applyDocxRunEdits: async () => [],
     discardDocxApplyRun: () => undefined,
+    saveFileChangeRecord: async () => undefined,
+    listFileChangeRecords: async () =>
+      input.fileChangeRecords || [
+        {
+          id: 'terminal-change-1',
+          sessionId: 'session-1',
+          runId: 'run-1',
+          status: 'applied',
+          capability: 'terminal_exec',
+          path: '/tmp/workspace/report.md',
+          fileName: 'report.md',
+          operation: 'created',
+          changeCount: 1,
+          createdAt: 1,
+          updatedAt: 1
+        }
+      ],
     documentsStore: {} as AiRunContext['documentsStore'],
     embeddingService: {} as AiRunContext['embeddingService']
   }) satisfies AiRunContext
@@ -97,6 +115,7 @@ describe('ai unit mouth node', () => {
           {
             label: '深度学习.docx',
             path: '学习笔记/深度学习.docx',
+            sourceType: 'file',
             usedFor: '支撑深度学习部分的总结内容'
           }
         ]
@@ -185,6 +204,9 @@ describe('ai unit mouth node', () => {
     expect(taskProgressSection).toContain('类型：mouth')
     expect(taskProgressSection).toContain('动作：组织最终交付')
     expect(taskProgressSection).not.toContain('类型：hand')
+    expect(capturedUserPrompt).toContain('文件：report.md')
+    expect(capturedUserPrompt).toContain('来源能力：terminal_exec')
+    expect(capturedUserPrompt).toContain('修改记录：terminal-change-1')
     expect(nextState.execution.status).toBe('completed')
     expect(nextState.result?.deliveryMarkdown).toBe('# 最终交付\n\n总结文件已经整理完毕。')
     expect(nextState.trace.steps.at(-1)).toMatchObject({

@@ -8,7 +8,11 @@ import { getAiResultTokenLimit, estimateToolResultTokens } from '../utils/result
 import { withToolLifecycle } from '../utils/lifecycle'
 import { createToolEventEmitter } from '../utils/toolEvents'
 import type { CapabilityActivityInput } from '../types'
-import { mergeArtifactCandidates, recordTerminalArtifacts } from './terminalArtifacts'
+import {
+  mergeArtifactCandidates,
+  prepareTerminalArtifactCandidates,
+  recordTerminalArtifacts
+} from './terminalArtifacts'
 import {
   analyzeSafeTerminalCommandPolicy,
   analyzeTerminalCommand,
@@ -320,6 +324,11 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
             cwd,
             workspaceRootPath: input.workspaceRootPath
           })
+          const preparedArtifactCandidates = await prepareTerminalArtifactCandidates({
+            candidates: artifactCandidates,
+            runId: input.runId,
+            workspaceRootPath: input.workspaceRootPath
+          })
 
           state.stepIndex += 1
           const stepId = randomUUID()
@@ -355,9 +364,10 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
           const artifacts = await recordTerminalArtifacts({
             ctx: input.ctx,
             runId: input.runId,
+            sessionId: input.sessionId,
             taskId: input.taskId,
             stepId,
-            candidates: artifactCandidates,
+            candidates: preparedArtifactCandidates,
             emitActivity: input.emitActivity
           })
 

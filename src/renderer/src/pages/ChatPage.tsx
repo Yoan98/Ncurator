@@ -17,6 +17,7 @@ import {
 } from 'react-icons/hi2'
 import type {
   AiArtifactRef,
+  AiFileChangeRecord,
   AiRunEvent,
   ChatMessage,
   ChatSession,
@@ -35,7 +36,7 @@ import AssistantTurnCard from '../components/workbench/AssistantTurnCard'
 import WorkbenchComposer from '../components/workbench/WorkbenchComposer'
 import WorkbenchContentPanel from '../components/workbench/WorkbenchContentPanel'
 import {
-  DOCX_APPLY_STATUS_META,
+  FILE_CHANGE_STATUS_META,
   FILE_ORIGIN_LABELS,
   WORKBENCH_CONTENT_PANEL_COLLAPSED_STORAGE_KEY,
   WORKBENCH_SIDEBAR_STORAGE_KEY
@@ -43,12 +44,16 @@ import {
 import type {
   AssistantTurnViewModel,
   WorkbenchContextUsage,
-  DocxApplyWorkspaceTab,
+  FileChangeWorkspaceTab,
   SearchWorkbenchTurn,
   WorkbenchContentPanelState,
   WorkbenchFileRef,
   WorkbenchMode
 } from '../components/workbench/types'
+import type {
+  ParsedNcuratorRefKind,
+  ParsedNcuratorRefSourceType
+} from '../components/markdownReference'
 import {
   completeAssistantProcessGroups,
   createAssistantThinkingGroup,
@@ -125,7 +130,7 @@ const artifactToApplyTarget = (
 ): AssistantTurnViewModel['applyTargets'][number] | null => {
   if (artifact.kind !== 'file' || !artifact.applyId) return null
   return {
-    applyId: artifact.applyId,
+    changeId: artifact.applyId,
     title: artifact.fileName,
     changeCount: 0,
     status: 'applied'
@@ -177,10 +182,10 @@ const appendArtifactForMessage = (
   }
 }
 
-const ACTIVE_APPLY_WORKSPACE_STATUSES = new Set<DocxApplyRecord['status']>(['applied', 'failed'])
+const ACTIVE_FILE_CHANGE_STATUSES = new Set<AiFileChangeRecord['status']>(['applied', 'failed'])
 
-const sortDocxApplyRecords = (items: DocxApplyRecord[]): DocxApplyRecord[] => {
-  const priority: Record<DocxApplyRecord['status'], number> = {
+const sortFileChangeRecords = (items: AiFileChangeRecord[]): AiFileChangeRecord[] => {
+  const priority: Record<AiFileChangeRecord['status'], number> = {
     applied: 0,
     failed: 1,
     reverted: 2
@@ -188,9 +193,32 @@ const sortDocxApplyRecords = (items: DocxApplyRecord[]): DocxApplyRecord[] => {
   return [...items].sort((left, right) => {
     const priorityGap = priority[left.status] - priority[right.status]
     if (priorityGap !== 0) return priorityGap
-    return right.updated_at - left.updated_at
+    return right.updatedAt - left.updatedAt
   })
 }
+
+const fileChangeToDocxApplyRecord = (record: AiFileChangeRecord): DocxApplyRecord => ({
+  id: record.id,
+  session_id: record.sessionId,
+  run_id: record.runId,
+  status: record.status,
+  source_path: record.path,
+  source_name: record.fileName,
+  operation: record.operation,
+  final_revision_ref: '',
+  change_count: record.changeCount,
+  before_exists: Boolean(record.beforeSnapshotPath),
+  before_snapshot_path: record.beforeSnapshotPath,
+  before_checksum: record.beforeChecksum,
+  preview_diff_artifact_path: record.previewPath || record.path,
+  preview_diff_checksum: '',
+  preview_diff_byte_size: 0,
+  after_checksum: record.afterChecksum,
+  created_at: record.createdAt,
+  updated_at: record.updatedAt,
+  reverted_at: record.revertedAt,
+  error: record.error
+})
 
 const createWorkspaceBinding = (
   workspace: WorkspaceSource | null
@@ -233,8 +261,7 @@ const ChatPage: React.FC = () => {
   const [contextUsage, setContextUsage] = useState<WorkbenchContextUsage | null>(null)
   const [assistantTurns, setAssistantTurns] = useState<Record<string, AssistantTurnViewModel>>({})
   const [contentPanel, setContentPanel] = useState<WorkbenchContentPanelState>(createEmptyPanel())
-  const [applyWorkspaceTabs, setApplyWorkspaceTabs] = useState<DocxApplyWorkspaceTab[]>([])
-  const [modalPreviewFile, setModalPreviewFile] = useState<WorkbenchFileRef | null>(null)
+  const [applyWorkspaceTabs, setApplyWorkspaceTabs] = useState<FileChangeWorkspaceTab[]>([])
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
     const stored = window.localStorage.getItem(WORKBENCH_SIDEBAR_STORAGE_KEY)
     return stored === 'true'
@@ -244,9 +271,9 @@ const ChatPage: React.FC = () => {
     return stored === null ? true : stored === 'true'
   })
 
-  const [activeDocxApplyRecord, setActiveDocxApplyRecord] = useState<DocxApplyRecord | null>(null)
-  const [docxApplyLoading, setDocxApplyLoading] = useState(false)
-  const [docxApplyReverting, setDocxApplyReverting] = useState(false)
+  const [activeApplyRecord, setActiveApplyRecord] = useState<DocxApplyRecord | null>(null)
+  const [applyLoading, setApplyLoading] = useState(false)
+  const [applyReverting, setApplyReverting] = useState(false)
 
   const [pendingApprovalBatch, setPendingApprovalBatch] =
     useState<ApprovalBatchRequiredEvent | null>(null)
@@ -362,7 +389,7 @@ const ChatPage: React.FC = () => {
   }, [])
 
   const showApplyWorkspace = useCallback(
-    (tabs: DocxApplyWorkspaceTab[], activeFileKey: string | null): void => {
+    (tabs: FileChangeWorkspaceTab[], activeFileKey: string | null): void => {
       showContentPanel({
         kind: 'apply_workspace',
         title: '修改的文件',
@@ -386,10 +413,10 @@ const ChatPage: React.FC = () => {
       }
     }
 
-    if (contentPanel.kind === 'apply_workspace' && activeDocxApplyRecord) {
-      const statusMeta = DOCX_APPLY_STATUS_META[activeDocxApplyRecord.status]
+    if (contentPanel.kind === 'apply_workspace' && activeApplyRecord) {
+      const statusMeta = FILE_CHANGE_STATUS_META[activeApplyRecord.status]
       return {
-        title: activeDocxApplyRecord.source_name || contentPanel.title,
+        title: activeApplyRecord.source_name || contentPanel.title,
         badge: statusMeta.label,
         badgeClassName: statusMeta.className
       }
@@ -400,12 +427,12 @@ const ChatPage: React.FC = () => {
       badge: null,
       badgeClassName: ''
     }
-  }, [contentPanel, contentPanelCollapsed])
+  }, [activeApplyRecord, contentPanel, contentPanelCollapsed])
 
-  const resetDocxApplyState = (): void => {
-    setActiveDocxApplyRecord(null)
-    setDocxApplyLoading(false)
-    setDocxApplyReverting(false)
+  const resetApplyWorkspaceState = (): void => {
+    setActiveApplyRecord(null)
+    setApplyLoading(false)
+    setApplyReverting(false)
     setApplyWorkspaceTabs([])
   }
 
@@ -598,41 +625,46 @@ const ChatPage: React.FC = () => {
     }
   }
 
-  const loadDocxApplyRecord = async (input: {
+  const loadApplyRecord = async (input: {
     applyId: string
     detail?: DocxApplyRecord | null
-    tabs?: DocxApplyWorkspaceTab[]
+    tabs?: FileChangeWorkspaceTab[]
     activeFileKey?: string | null
     openWorkspace?: boolean
   }): Promise<void> => {
-    setDocxApplyLoading(true)
+    setApplyLoading(true)
     try {
       const response =
         input.detail !== undefined
           ? { record: input.detail }
           : await window.api.docxApplyGet({ applyId: input.applyId })
-      if (!response.record) {
-        setActiveDocxApplyRecord(null)
+      let nextRecord = response.record || null
+      if (!nextRecord) {
+        const fallback = await window.api.aiFileChangeGet({ changeId: input.applyId })
+        nextRecord = fallback.record ? fileChangeToDocxApplyRecord(fallback.record) : null
+      }
+      if (!nextRecord) {
+        setActiveApplyRecord(null)
         return
       }
 
-      setActiveDocxApplyRecord(response.record)
+      setActiveApplyRecord(nextRecord)
 
       if (input.openWorkspace) {
         showApplyWorkspace(
           input.tabs || applyWorkspaceTabs,
-          input.activeFileKey || response.record.source_path || null
+          input.activeFileKey || nextRecord.source_path || null
         )
       }
     } catch (error) {
-      console.error('Failed to load docx apply record', error)
-      setActiveDocxApplyRecord(null)
+      console.error('Failed to load apply record', error)
+      setActiveApplyRecord(null)
     } finally {
-      setDocxApplyLoading(false)
+      setApplyLoading(false)
     }
   }
 
-  const loadDocxAppliesForSession = async (
+  const loadFileChangesForSession = async (
     sessionId: string,
     options?: {
       preferredApplyId?: string | null
@@ -644,14 +676,14 @@ const ChatPage: React.FC = () => {
       const shouldWaitForRecords =
         Boolean(options?.forceOpenWorkspace) || Boolean(options?.preferredApplyId)
       const maxAttempts = shouldWaitForRecords ? 6 : 1
-      let allRecords: DocxApplyRecord[] = []
-      let activeRecords: DocxApplyRecord[] = []
+      let allRecords: AiFileChangeRecord[] = []
+      let activeRecords: AiFileChangeRecord[] = []
 
       for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-        const response = await window.api.docxApplyList({ sessionId })
-        const nextItems = sortDocxApplyRecords(response.items)
+        const response = await window.api.aiFileChangeList({ sessionId })
+        const nextItems = sortFileChangeRecords(response.items)
         allRecords = nextItems
-        activeRecords = nextItems.filter((item) => ACTIVE_APPLY_WORKSPACE_STATUSES.has(item.status))
+        activeRecords = nextItems.filter((item) => ACTIVE_FILE_CHANGE_STATUSES.has(item.status))
 
         const missingPreferred =
           options?.preferredApplyId !== undefined &&
@@ -679,21 +711,21 @@ const ChatPage: React.FC = () => {
         ? allRecords.find((record) => record.id === options.preferredApplyId) || null
         : null
       const workspaceRecords = preferredRecord
-        ? allRecords.filter((record) => record.run_id === preferredRecord.run_id)
+        ? allRecords.filter((record) => record.runId === preferredRecord.runId)
         : activeRecords
 
       if (workspaceRecords.length === 0) {
         setApplyWorkspaceTabs([])
-        setActiveDocxApplyRecord(null)
+        setActiveApplyRecord(null)
         setContentPanel((current) =>
           current.kind === 'apply_workspace' ? createEmptyPanel() : current
         )
         return
       }
 
-      const latestByFileKey = new Map<string, DocxApplyRecord>()
+      const latestByFileKey = new Map<string, AiFileChangeRecord>()
       workspaceRecords.forEach((record) => {
-        const fileKey = record.source_path
+        const fileKey = record.path
         if (!fileKey || latestByFileKey.has(fileKey)) return
         latestByFileKey.set(fileKey, record)
       })
@@ -701,11 +733,11 @@ const ChatPage: React.FC = () => {
       const currentWorkspaceFileKey =
         contentPanel.kind === 'apply_workspace'
           ? contentPanel.activeFileKey
-          : activeDocxApplyRecord?.source_path || null
+          : activeApplyRecord?.source_path || null
       const previewFileKey = contentPanel.kind === 'file_preview' ? contentPanel.file.path : null
-      const preferredFileKey = preferredRecord?.source_path || null
+      const preferredFileKey = preferredRecord?.path || null
       const nextTabs = [...latestByFileKey.values()].map((record) => {
-        const fileKey = record.source_path || record.id
+        const fileKey = record.path || record.id
         const previousTab = applyWorkspaceTabs.find((tab) => tab.fileKey === fileKey)
         const shouldMarkUnseen =
           previousTab?.applyId !== record.id &&
@@ -716,9 +748,9 @@ const ChatPage: React.FC = () => {
         return {
           fileKey,
           applyId: record.id,
-          fileName: record.source_name,
+          fileName: record.fileName,
           sourcePath: fileKey,
-          changeCount: record.change_count,
+          changeCount: record.changeCount,
           status: record.status,
           unseen: shouldMarkUnseen
         }
@@ -757,16 +789,15 @@ const ChatPage: React.FC = () => {
           (contentPanel.kind === 'empty' ||
             (previewFileKey !== null && previewFileKey === nextSelectedTab.fileKey)))
 
-      await loadDocxApplyRecord({
+      await loadApplyRecord({
         applyId: nextSelectedTab.applyId,
-        detail: nextSelectedRecord,
         tabs: normalizedTabs,
         activeFileKey: nextSelectedTab.fileKey,
         openWorkspace: shouldOpenWorkspace
       })
     } catch (error) {
-      console.error('Failed to load docx apply records', error)
-      setActiveDocxApplyRecord(null)
+      console.error('Failed to load file change records', error)
+      setActiveApplyRecord(null)
     }
   }
 
@@ -813,7 +844,6 @@ const ChatPage: React.FC = () => {
       setLoading(false)
       setAiRunId(null)
       setCancellingRun(false)
-      setModalPreviewFile(null)
       setInput('')
       setSelectedReferences([])
       setComposerResetKey((value) => value + 1)
@@ -824,15 +854,14 @@ const ChatPage: React.FC = () => {
       setPendingWorkspaceRequest(null)
       setAssistantTurns({})
       setContentPanel(createEmptyPanel())
-      resetDocxApplyState()
-      void loadDocxAppliesForSession(currentSessionId, { autoOpen: true })
+      resetApplyWorkspaceState()
+      void loadFileChangesForSession(currentSessionId, { autoOpen: true })
       void refreshContextUsage(currentSessionId)
     } else {
       setCurrentMessages([])
       setAssistantTurns({})
-      setModalPreviewFile(null)
       setContextUsage(null)
-      resetDocxApplyState()
+      resetApplyWorkspaceState()
     }
   }, [currentSessionId, refreshContextUsage])
 
@@ -869,20 +898,36 @@ const ChatPage: React.FC = () => {
     }
   }
 
-  const openFile = async (file: WorkbenchFileRef): Promise<void> => {
-    if (/^https?:\/\//.test(file.path)) {
-      const response = await window.api.openExternal(file.path)
+  const openFile = async (
+    file: WorkbenchFileRef,
+    backTarget?: WorkbenchContentPanelState
+  ): Promise<void> => {
+    showContentPanel({
+      kind: 'file_preview',
+      title: '文档查看',
+      file,
+      backTarget
+    })
+  }
+
+  const openMarkdownReference = async (reference: {
+    kind: ParsedNcuratorRefKind
+    sourceType: ParsedNcuratorRefSourceType
+    label: string
+    path: string
+  }): Promise<void> => {
+    if (reference.sourceType === 'web') {
+      const response = await window.api.openExternal(reference.path)
       if (!response.success) {
         message.error(response.error || '打开链接失败')
       }
       return
     }
 
-    setModalPreviewFile(null)
-    showContentPanel({
-      kind: 'file_preview',
-      title: '文档查看',
-      file
+    await openFile({
+      path: reference.path,
+      fileName: reference.label,
+      origin: reference.kind === 'reference' ? 'source' : 'read'
     })
   }
 
@@ -910,27 +955,33 @@ const ChatPage: React.FC = () => {
       message.warning('未找到文件路径')
       return
     }
-    setModalPreviewFile(fileRef)
+    await openFile(fileRef, {
+        kind: 'search_list',
+        title: '搜索结果',
+        query: turn.query,
+        results: turn.results,
+        tokens: turn.tokens
+    })
   }
 
-  const openDocxApply = (applyId: string): void => {
+  const openFileChange = (changeId: string): void => {
     if (currentSessionId) {
-      void loadDocxAppliesForSession(currentSessionId, {
-        preferredApplyId: applyId,
+      void loadFileChangesForSession(currentSessionId, {
+        preferredApplyId: changeId,
         forceOpenWorkspace: true
       })
       return
     }
 
-    const nextTab = applyWorkspaceTabs.find((tab) => tab.applyId === applyId) || null
+    const nextTab = applyWorkspaceTabs.find((tab) => tab.applyId === changeId) || null
     const nextTabs = nextTab
       ? applyWorkspaceTabs.map((tab) =>
           tab.fileKey === nextTab.fileKey ? { ...tab, unseen: false } : tab
         )
       : applyWorkspaceTabs
     setApplyWorkspaceTabs(nextTabs)
-    void loadDocxApplyRecord({
-      applyId,
+    void loadApplyRecord({
+      applyId: changeId,
       tabs: nextTabs,
       activeFileKey: nextTab?.fileKey || null,
       openWorkspace: true
@@ -970,7 +1021,6 @@ const ChatPage: React.FC = () => {
 
         const searchResults = extractSearchResultsFromToolOutput(toolOutput)
         if (searchResults.length > 0) {
-          setModalPreviewFile(null)
           showContentPanel({
             kind: 'search_list',
             title: '搜索结果',
@@ -1011,7 +1061,7 @@ const ChatPage: React.FC = () => {
           ]),
           applyTargets: event.applyId
             ? mergeApplyTargets(current.applyTargets, {
-                applyId: event.applyId,
+                changeId: event.applyId,
                 title: event.fileName,
                 changeCount: 0,
                 status: 'applied'
@@ -1200,6 +1250,9 @@ const ChatPage: React.FC = () => {
           ...current,
           status: current.status === 'failed' ? 'failed' : 'completed'
         }))
+        if (currentSessionId) {
+          void loadFileChangesForSession(currentSessionId, { autoOpen: true })
+        }
         void refreshContextUsage(currentSessionId)
       }
     })
@@ -1437,7 +1490,6 @@ const ChatPage: React.FC = () => {
         }
       }))
 
-      setModalPreviewFile(null)
       showContentPanel({
         kind: 'search_list',
         title: '搜索结果',
@@ -1670,12 +1722,12 @@ const ChatPage: React.FC = () => {
     }
   }
 
-  const handleDocxApplyRevert = async (): Promise<void> => {
-    if (!activeDocxApplyRecord || !currentSessionId || docxApplyReverting) return
-    setDocxApplyReverting(true)
+  const handleApplyRevert = async (): Promise<void> => {
+    if (!activeApplyRecord || !currentSessionId || applyReverting) return
+    setApplyReverting(true)
     try {
-      const response = await window.api.docxApplyRevert({
-        applyId: activeDocxApplyRecord.id,
+      const response = await window.api.aiFileChangeRevert({
+        changeId: activeApplyRecord.id,
         force: false
       })
       if (response.requiresForce) {
@@ -1687,8 +1739,8 @@ const ChatPage: React.FC = () => {
           okText: '恢复到此前版本',
           cancelText: '取消',
           onOk: async () => {
-            const forced = await window.api.docxApplyRevert({
-              applyId: activeDocxApplyRecord.id,
+            const forced = await window.api.aiFileChangeRevert({
+              changeId: activeApplyRecord.id,
               force: true
             })
             if (!forced.success) {
@@ -1696,7 +1748,7 @@ const ChatPage: React.FC = () => {
               return
             }
             emitSuccessMessage('已回退本次修改')
-            await loadDocxAppliesForSession(currentSessionId, { autoOpen: true })
+            await loadFileChangesForSession(currentSessionId, { autoOpen: true })
           }
         })
         return
@@ -1706,12 +1758,12 @@ const ChatPage: React.FC = () => {
         return
       }
       emitSuccessMessage('已回退本次修改')
-      await loadDocxAppliesForSession(currentSessionId, { autoOpen: true })
+      await loadFileChangesForSession(currentSessionId, { autoOpen: true })
     } catch (error) {
       console.error(error)
       message.error('回退失败')
     } finally {
-      setDocxApplyReverting(false)
+      setApplyReverting(false)
     }
   }
 
@@ -1781,7 +1833,12 @@ const ChatPage: React.FC = () => {
       return (
         <div key={messageItem.id} className="w-full">
           <div className="min-w-0 text-[15px] leading-7 text-[#181818]">
-            <MarkdownRenderer content={messageItem.content} />
+            <MarkdownRenderer
+              content={messageItem.content}
+              onOpenReference={(reference) => {
+                void openMarkdownReference(reference)
+              }}
+            />
           </div>
         </div>
       )
@@ -1796,7 +1853,10 @@ const ChatPage: React.FC = () => {
         onOpenFile={(file) => {
           void openFile(file)
         }}
-        onOpenApply={openDocxApply}
+        onOpenApply={openFileChange}
+        onOpenReference={(reference) => {
+          void openMarkdownReference(reference)
+        }}
       />
     )
   }
@@ -2250,10 +2310,9 @@ const ChatPage: React.FC = () => {
             >
               <WorkbenchContentPanel
                 state={contentPanel}
-                activeApplyRecord={activeDocxApplyRecord}
-                docxApplyLoading={docxApplyLoading}
-                docxApplyReverting={docxApplyReverting}
-                modalPreviewFile={modalPreviewFile}
+                activeApplyRecord={activeApplyRecord}
+                applyLoading={applyLoading}
+                applyReverting={applyReverting}
                 onOpenSearchResult={(turn, resultIndex) => void openSearchResult(turn, resultIndex)}
                 onSelectApplyTab={(fileKey) => {
                   const nextTab = applyWorkspaceTabs.find((tab) => tab.fileKey === fileKey)
@@ -2262,15 +2321,15 @@ const ChatPage: React.FC = () => {
                     tab.fileKey === fileKey ? { ...tab, unseen: false } : tab
                   )
                   setApplyWorkspaceTabs(nextTabs)
-                  void loadDocxApplyRecord({
+                  void loadApplyRecord({
                     applyId: nextTab.applyId,
                     tabs: nextTabs,
                     activeFileKey: fileKey,
                     openWorkspace: true
                   })
                 }}
-                onRevertApply={() => void handleDocxApplyRevert()}
-                onCloseModalPreview={() => setModalPreviewFile(null)}
+                onRevertApply={() => void handleApplyRevert()}
+                onBackToPanelState={showContentPanel}
                 onOpenPath={openPathOrNotify}
                 onOpenWithApplication={openPathWithApplicationOrNotify}
                 onRevealPath={revealPathOrNotify}

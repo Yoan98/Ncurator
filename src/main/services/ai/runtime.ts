@@ -85,6 +85,7 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
 
   return {
     runId: payload.runId,
+    sessionId: payload.sessionId,
     platform,
     referenceScope: buildReferenceScope({
       workspace: normalizedWorkspace,
@@ -163,6 +164,12 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     },
     discardDocxApplyRun: () => {
       deps.docxApplyService.discardRun(payload.runId)
+    },
+    saveFileChangeRecord: async (record) => {
+      await deps.saveFileChangeRecord(record)
+    },
+    listFileChangeRecords: async (input) => {
+      return await deps.listFileChangeRecords(input)
     },
     documentsStore: deps.documentsStore,
     embeddingService: deps.embeddingService

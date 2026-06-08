@@ -23,6 +23,7 @@ import type {
   AiRunEvent,
   AiRunEventStage,
   AiRunStatus,
+  AiFileChangeRecord,
   BrainContextBudgetSnapshot,
   ChatConversationMemory,
   ChatSessionResumeSnapshot,
@@ -127,6 +128,8 @@ export type AiRunDeps = {
   embeddingService: EmbeddingService
   ensureEmbeddingReady: () => Promise<void>
   docxApplyService: DocxApplyService
+  saveFileChangeRecord: (record: AiFileChangeRecord) => Promise<void>
+  listFileChangeRecords: (input: { runId: string }) => Promise<AiFileChangeRecord[]>
   isCancelled: () => boolean
   abortSignal?: AbortSignal
   sendEvent: (event: AiRunEvent) => void
@@ -137,6 +140,7 @@ export type AiRunDeps = {
 
 export type AiRunContext = {
   runId: string
+  sessionId: string
   platform: AiRuntimePlatform
   referenceScope: AiReferenceScope
   humanRuntimeOverrides?: {
@@ -208,6 +212,8 @@ export type AiRunContext = {
   beginDocxApplyRun: () => void
   applyDocxRunEdits: () => Promise<DocxApplyRecord[]>
   discardDocxApplyRun: () => void
+  saveFileChangeRecord: (record: AiFileChangeRecord) => Promise<void>
+  listFileChangeRecords: (input: { runId: string }) => Promise<AiFileChangeRecord[]>
   documentsStore: DocumentsStore
   embeddingService: EmbeddingService
 }
@@ -230,6 +236,7 @@ export type TerminalToolContext = Pick<
   | 'sendEvent'
   | 'requestApprovalBatch'
   | 'humanRuntimeOverrides'
+  | 'saveFileChangeRecord'
 >
 
 export type KnowledgeRetrievalContext = Pick<

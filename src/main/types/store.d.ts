@@ -56,8 +56,8 @@ import {
   LlmRuntimeConfig,
   LlmRemoteModel,
   LlmModelListResponse,
-  RuntimeChangedFile,
-  RuntimeArtifactsSummary,
+  FileChangeSummaryItem,
+  FileChangesSummary,
   PickApplicationResponse,
   OpenPathWithApplicationRequest,
   OpenPathWithApplicationResponse,
@@ -84,6 +84,14 @@ import {
   GetDocxApplyRecordResponse,
   RevertDocxApplyRequest,
   RevertDocxApplyResponse,
+  AiFileChangeRecord,
+  AiFileChangeStatus,
+  ListAiFileChangeRecordsRequest,
+  ListAiFileChangeRecordsResponse,
+  GetAiFileChangeRecordRequest,
+  GetAiFileChangeRecordResponse,
+  RevertAiFileChangeRequest,
+  RevertAiFileChangeResponse,
   ChatSessionResumeSnapshotRow
 } from '../../shared/types'
 
@@ -144,8 +152,8 @@ export type {
   LlmRuntimeConfig,
   LlmRemoteModel,
   LlmModelListResponse,
-  RuntimeChangedFile,
-  RuntimeArtifactsSummary,
+  FileChangeSummaryItem,
+  FileChangesSummary,
   PickApplicationResponse,
   OpenPathWithApplicationRequest,
   OpenPathWithApplicationResponse,
@@ -172,6 +180,14 @@ export type {
   GetDocxApplyRecordResponse,
   RevertDocxApplyRequest,
   RevertDocxApplyResponse,
+  AiFileChangeRecord,
+  AiFileChangeStatus,
+  ListAiFileChangeRecordsRequest,
+  ListAiFileChangeRecordsResponse,
+  GetAiFileChangeRecordRequest,
+  GetAiFileChangeRecordResponse,
+  RevertAiFileChangeRequest,
+  RevertAiFileChangeResponse,
   ChatSessionResumeSnapshotRow
 }
 

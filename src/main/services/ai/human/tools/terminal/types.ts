@@ -47,6 +47,11 @@ export type ArtifactCandidate = {
   existedBefore: boolean
 }
 
+export type PreparedArtifactCandidate = ArtifactCandidate & {
+  beforeSnapshotPath?: string
+  beforeChecksum?: string
+}
+
 export type TerminalCommandAnalysis = {
   resourceKey: string
   artifactCandidates: TerminalArtifactCandidate[]

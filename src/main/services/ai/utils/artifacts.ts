@@ -2,13 +2,14 @@ import path from 'node:path'
 import { v4 as uuidv4 } from 'uuid'
 import type {
   AiArtifactRef,
+  AiFileChangeRecord,
   AiFileArtifactOperation,
   AiFileArtifactRef,
   AiRunEvent,
   DocxApplyRecord,
+  FileChangesSummary,
   JsonObject,
   JsonValue,
-  RuntimeArtifactsSummary
 } from '../../../../shared/types'
 import type { ToolCallResult } from '../human/types'
 
@@ -135,16 +136,46 @@ export const appendDocxApplyArtifactsAndEmitEvents = (input: {
   return nextArtifacts
 }
 
-export const buildRuntimeArtifactsSummaryFromDocxApplyRecords = (
+export const buildFileChangesSummaryFromDocxApplyRecords = (
   records: readonly DocxApplyRecord[]
-): RuntimeArtifactsSummary => ({
-  changed_files: records.map((record) => ({
-    file_name: record.source_name,
-    source_path: record.source_path,
-    format: 'docx',
-    change_count: record.change_count,
-    summary: `已直接修改源文件：${record.source_name}`,
-    change_highlights: [],
-    apply_id: record.id
-  }))
+): FileChangesSummary => ({
+  changed_files: records.map((record) => toFileChangeSummaryItem(toAiFileChangeRecordFromDocxApply(record)))
+})
+
+export const buildFileChangesSummaryFromFileChangeRecords = (
+  records: readonly AiFileChangeRecord[]
+): FileChangesSummary => ({
+  changed_files: records.map(toFileChangeSummaryItem)
+})
+
+const toFileChangeSummaryItem = (record: AiFileChangeRecord): FileChangesSummary['changed_files'][number] => ({
+  id: record.id,
+  fileName: record.fileName,
+  path: record.path,
+  capability: record.capability,
+  operation: record.operation,
+  changeCount: record.changeCount,
+  status: record.status
+})
+
+export const toAiFileChangeRecordFromDocxApply = (
+  record: DocxApplyRecord
+): AiFileChangeRecord => ({
+  id: record.id,
+  sessionId: record.session_id,
+  runId: record.run_id,
+  status: record.status,
+  capability: 'docx',
+  path: record.source_path,
+  fileName: record.source_name,
+  operation: record.operation,
+  changeCount: record.change_count,
+  beforeSnapshotPath: record.before_snapshot_path,
+  beforeChecksum: record.before_checksum,
+  afterChecksum: record.after_checksum,
+  previewPath: record.preview_diff_artifact_path,
+  createdAt: record.created_at,
+  updatedAt: record.updated_at,
+  revertedAt: record.reverted_at,
+  error: record.error
 })

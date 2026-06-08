@@ -10,34 +10,30 @@ const getRenderStyle = (mode: HumanRuntimeRenderMode): 'plain' | 'bullet' =>
   mode === 'fallback_markdown' ? 'bullet' : 'plain'
 
 const renderChangedFile = (
-  file: NonNullable<HumanState['execution']['runtimeArtifacts']>['changed_files'][number],
+  file: NonNullable<HumanState['execution']['fileChanges']>['changed_files'][number],
   mode: HumanRuntimeRenderMode
 ): string => {
   if (mode === 'fallback_markdown') {
-    const applyText = file.apply_id ? `; applyId=${file.apply_id}` : ''
-    return `${file.file_name} (${file.source_path}) - ${file.format}, 改动数=${String(file.change_count)}${applyText}`
+    return `${file.fileName} (${file.path}) - ${file.capability}, 改动数=${String(file.changeCount)}; changeId=${file.id}`
   }
 
-  const applyLine = file.apply_id
-    ? `  - AI 修改记录：${file.apply_id}`
-    : undefined
   return [
-    `- 文件：${file.file_name}`,
-    `  - 原文件路径：${file.source_path}`,
-    `  - 格式：${file.format}`,
-    `  - 改动数：${file.change_count}`,
-    applyLine
+    `- 文件：${file.fileName}`,
+    `  - 文件路径：${file.path}`,
+    `  - 来源能力：${file.capability}`,
+    `  - 操作：${file.operation}`,
+    `  - 改动数：${file.changeCount}`,
+    `  - 修改记录：${file.id}`
   ]
-    .filter(Boolean)
     .join('\n')
 }
 
-export const renderHumanArtifactLines = (
+export const renderHumanFileChangeLines = (
   state: HumanState,
   mode: HumanRuntimeRenderMode
 ): string =>
   renderLineList(
-    (state.execution.runtimeArtifacts?.changed_files || []).map((file) =>
+    (state.execution.fileChanges?.changed_files || []).map((file) =>
       renderChangedFile(file, mode)
     ),
     {
@@ -45,3 +41,5 @@ export const renderHumanArtifactLines = (
       style: getRenderStyle(mode)
     }
   )
+
+export const renderHumanArtifactLines = renderHumanFileChangeLines

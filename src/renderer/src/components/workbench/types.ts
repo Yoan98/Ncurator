@@ -1,6 +1,6 @@
 import type {
   AiRunEvent,
-  DocxApplyStatus,
+  AiFileChangeStatus,
   RuntimeSkillId,
   SearchResult
 } from '../../../../shared/types'
@@ -120,21 +120,21 @@ export type AssistantProcessThought = {
   sourceEventType: Extract<AiRunEvent['type'], 'assistant_process_thought'>
 }
 
-export type DocxApplyWorkspaceTab = {
+export type FileChangeWorkspaceTab = {
   fileKey: string
   applyId: string
   fileName: string
   sourcePath: string
   changeCount: number
-  status: DocxApplyStatus
+  status: AiFileChangeStatus
   unseen: boolean
 }
 
 export type AssistantTurnApplyTarget = {
-  applyId: string
+  changeId: string
   title: string
   changeCount: number
-  status?: DocxApplyStatus
+  status?: AiFileChangeStatus
 }
 
 export type AssistantTurnBlocker = {
@@ -177,10 +177,11 @@ export type WorkbenchContentPanelState =
       kind: 'file_preview'
       title: string
       file: WorkbenchFileRef
+      backTarget?: WorkbenchContentPanelState
     }
   | {
       kind: 'apply_workspace'
       title: string
-      tabs: DocxApplyWorkspaceTab[]
+      tabs: FileChangeWorkspaceTab[]
       activeFileKey: string | null
     }

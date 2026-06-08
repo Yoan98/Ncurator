@@ -22,6 +22,7 @@
   - `WorkspaceStore`：`workspace_source` / `workspace_file_index`（具名工作空间、可选文件目录绑定、文件索引状态、摘要统计）
   - `WorkspaceIndexJobStore`：`workspace_index_job`（文件/网页检查与索引批次进度）
   - `ChatStore`：`chat_session` / `chat_message`（会话与消息 CRUD）
+  - `AiFileChangeStore`：`ai_file_change`（AI 本轮实际修改文件记录、统一修改列表与跨能力回退状态）
   - `DocxApplyStore`：`docx_apply`（docx 直接写回记录、checkpoint 与回退状态）
   - `LlmConfigStore`：`llm_config`（配置 CRUD 与激活态切换）
 - **组合根（Facade）**: `src/main/services/storage/StorageService.ts`
@@ -240,6 +241,8 @@
 
 存储一次 AI 运行中某个 docx 文件的直接写回记录。写回前会保存当前磁盘文件 checkpoint，用于用户回退本次 AI 修改。
 
+说明：`docx_apply` 是 docx 能力的细节表，保留 revision、diff 预览稿和 docx 专属 checkpoint 元数据；Workbench “修改的文件”列表和跨能力回退入口以 `ai_file_change` 为统一来源。
+
 | 字段名                | 类型             | 描述 |
 | :-------------------- | :--------------- | :--- |
 | id                    | Utf8             | AI 修改记录 ID |
@@ -266,6 +269,37 @@
 | updated_at            | Int64            | 更新时间 |
 | reverted_at           | Int64（Nullable）| 回退时间 |
 | last_error            | Utf8（Nullable） | 最近错误 |
+
+### 表: ai_file_change（AI 修改文件统一记录表）
+
+存储一次 AI run 中实际写入磁盘的文件记录，是 Workbench 修改文件列表、mouth 修改摘要和跨能力回退入口的统一来源。读过、检索过或仅被引用的文件不进入该表。
+
+| 字段名               | 类型             | 描述 |
+| :------------------- | :--------------- | :--- |
+| id                   | Utf8             | 修改记录 ID |
+| session_id           | Utf8             | 所属会话 |
+| run_id               | Utf8             | 所属运行 |
+| status               | Utf8             | `applied / reverted / failed` |
+| capability           | Utf8             | 写入来源能力，当前为 `docx / terminal_exec / ppt` |
+| path                 | Utf8             | 实际被写入的文件路径 |
+| file_name            | Utf8             | 文件名 |
+| operation            | Utf8             | `created / updated` |
+| change_count         | Int32            | 变更数量；无法精确计数的能力先记录候选文件级数量 |
+| before_snapshot_path | Utf8（Nullable） | 写入前 checkpoint 快照路径 |
+| before_checksum      | Utf8（Nullable） | 写入前 checksum |
+| after_checksum       | Utf8（Nullable） | 写入后 checksum |
+| preview_path         | Utf8（Nullable） | 可预览文件或 diff 预览稿路径 |
+| created_at           | Int64            | 创建时间 |
+| updated_at           | Int64            | 更新时间 |
+| reverted_at          | Int64（Nullable）| 回退时间 |
+| last_error           | Utf8（Nullable） | 最近错误 |
+
+说明：
+
+- `created` 回退时删除目标文件；`updated` 回退时用 `before_snapshot_path` 原子替换目标文件。
+- 回退前默认校验当前文件 checksum 是否等于 `after_checksum`；不一致时 UI 必须提示继续回退会覆盖后续修改。
+- docx apply 会同步写入 `ai_file_change`；docx 差异预览仍从 `docx_apply` 读取。
+- terminal 写入只对声明或系统识别出的候选文件建立写前快照并记录，未识别的隐式副作用不进入该表，也不承诺可回退。
 
 ### 表: llm_config（大模型配置表）
 

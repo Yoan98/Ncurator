@@ -1,10 +1,10 @@
-import type { DocxApplyRecord } from '../../../../shared/types'
+import type { AiFileChangeRecord } from '../../../../shared/types'
 import type { AssistantTurnApplyTarget } from './types'
 
-export const buildApplyTarget = (record: DocxApplyRecord): AssistantTurnApplyTarget => ({
-  applyId: record.id,
-  title: record.source_name,
-  changeCount: record.change_count,
+export const buildApplyTarget = (record: AiFileChangeRecord): AssistantTurnApplyTarget => ({
+  changeId: record.id,
+  title: record.fileName,
+  changeCount: record.changeCount,
   status: record.status
 })
 
@@ -13,17 +13,17 @@ export const mergeApplyTargets = (
   next: AssistantTurnApplyTarget
 ): AssistantTurnApplyTarget[] => [
   next,
-  ...current.filter((item) => item.applyId !== next.applyId)
+  ...current.filter((item) => item.changeId !== next.changeId)
 ]
 
 export const groupApplyTargetsByRunId = (
-  records: DocxApplyRecord[]
+  records: AiFileChangeRecord[]
 ): Map<string, AssistantTurnApplyTarget[]> => {
-  const grouped = new Map<string, DocxApplyRecord[]>()
+  const grouped = new Map<string, AiFileChangeRecord[]>()
   records.forEach((record) => {
-    const existing = grouped.get(record.run_id) || []
+    const existing = grouped.get(record.runId) || []
     existing.push(record)
-    grouped.set(record.run_id, existing)
+    grouped.set(record.runId, existing)
   })
 
   return new Map(
@@ -31,7 +31,7 @@ export const groupApplyTargetsByRunId = (
       runId,
       runRecords
         .slice()
-        .sort((left, right) => right.updated_at - left.updated_at)
+        .sort((left, right) => right.updatedAt - left.updatedAt)
         .map((record) => buildApplyTarget(record))
     ])
   )

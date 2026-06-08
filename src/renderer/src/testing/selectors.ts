@@ -124,7 +124,6 @@ export const workbenchSelectors = {
   assistantFinalAnswerPrefix: 'workbench-assistant-final-answer',
   assistantTurnApplyPrefix: 'workbench-assistant-turn-apply',
   searchResults: 'workbench-search-results',
-  previewModal: 'workbench-preview-modal',
   documentView: 'workbench-document-view',
   applyPanel: 'workbench-apply-panel',
   applyTabs: 'workbench-apply-tabs',

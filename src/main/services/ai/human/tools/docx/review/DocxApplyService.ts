@@ -9,7 +9,9 @@ import type {
   RevertDocxApplyRequest,
   RevertDocxApplyResponse
 } from '../../../../../../../shared/types'
+import type { AiFileChangeService } from '../../../../fileChanges/AiFileChangeService'
 import type { DocxApplyStore } from '../../../../../storage/domains/DocxApplyStore'
+import { toAiFileChangeRecordFromDocxApply } from '../../../../utils/artifacts'
 import { RunDocxEditTracker } from './RunDocxEditTracker'
 import type { ResolvedDocxOpenTarget } from './types'
 import { calculateFileStats, fileExists } from './utils'
@@ -20,7 +22,10 @@ const FORCE_REVERT_WARNING =
 export class DocxApplyService {
   private readonly editTracker: RunDocxEditTracker
 
-  public constructor(private readonly docxApplyStore: DocxApplyStore) {
+  public constructor(
+    private readonly docxApplyStore: DocxApplyStore,
+    private readonly aiFileChangeService?: AiFileChangeService
+  ) {
     this.editTracker = new RunDocxEditTracker(docxApplyStore)
   }
 
@@ -44,7 +49,13 @@ export class DocxApplyService {
     runId: string
     workspaceRootPath: string
   }): Promise<DocxApplyRecord[]> {
-    return await this.editTracker.applyRunEdits(input)
+    const records = await this.editTracker.applyRunEdits(input)
+    await Promise.all(
+      records.map((record) =>
+        this.aiFileChangeService?.saveRecord(toAiFileChangeRecordFromDocxApply(record))
+      )
+    )
+    return records
   }
 
   public async listRecords(
@@ -114,6 +125,7 @@ export class DocxApplyService {
         error: undefined
       }
       await this.docxApplyStore.saveRecord(reverted)
+      await this.aiFileChangeService?.saveRecord(toAiFileChangeRecordFromDocxApply(reverted))
       return { success: true, record: reverted }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
@@ -124,6 +136,7 @@ export class DocxApplyService {
         error: message
       }
       await this.docxApplyStore.saveRecord(failed)
+      await this.aiFileChangeService?.saveRecord(toAiFileChangeRecordFromDocxApply(failed))
       return { success: false, record: failed, error: message }
     }
   }

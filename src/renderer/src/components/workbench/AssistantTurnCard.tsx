@@ -11,7 +11,7 @@ import {
   HiOutlinePencilSquare
 } from 'react-icons/hi2'
 import MarkdownRenderer from '../MarkdownRenderer'
-import { DOCX_APPLY_STATUS_META } from './constants'
+import { FILE_CHANGE_STATUS_META } from './constants'
 import type {
   AssistantArtifactItem,
   AssistantProcessGroup,
@@ -20,6 +20,7 @@ import type {
   AssistantRichTextSegment,
   AssistantTurnViewModel
 } from './types'
+import type { ParsedNcuratorRefKind, ParsedNcuratorRefSourceType } from '../markdownReference'
 import { workbenchSelectors } from '../../testing/selectors'
 import {
   buildAssistantExecutionSummaryText,
@@ -31,7 +32,13 @@ type AssistantTurnCardProps = {
   turn?: AssistantTurnViewModel
   isStreaming?: boolean
   onOpenFile: (file: AssistantArtifactItem) => void
-  onOpenApply: (applyId: string) => void
+  onOpenApply: (changeId: string) => void
+  onOpenReference: (reference: {
+    kind: ParsedNcuratorRefKind
+    sourceType: ParsedNcuratorRefSourceType
+    label: string
+    path: string
+  }) => void
 }
 
 const getProcessStatusClassName = (status: AssistantProcessGroup['status']): string => {
@@ -296,7 +303,8 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
   messageId,
   turn,
   onOpenFile,
-  onOpenApply
+  onOpenApply,
+  onOpenReference
 }) => {
   const processGroups = useMemo(() => turn?.processGroups || [], [turn?.processGroups])
   const processThoughts = useMemo(() => turn?.processThoughts || [], [turn?.processThoughts])
@@ -351,7 +359,7 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
             className="min-w-0 text-[15px] leading-7 text-[#181818]"
             data-testid={`${workbenchSelectors.assistantFinalAnswerPrefix}-${messageId}`}
           >
-            <MarkdownRenderer content={finalAnswerMarkdown} />
+            <MarkdownRenderer content={finalAnswerMarkdown} onOpenReference={onOpenReference} />
           </div>
         ) : null}
 
@@ -368,13 +376,13 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
             </div>
             <div className="space-y-2">
               {turn.applyTargets.map((apply) => {
-                const statusMeta = apply.status ? DOCX_APPLY_STATUS_META[apply.status] : null
+                const statusMeta = apply.status ? FILE_CHANGE_STATUS_META[apply.status] : null
                 return (
                   <button
-                    key={apply.applyId}
+                    key={apply.changeId}
                     type="button"
-                    onClick={() => onOpenApply(apply.applyId)}
-                    data-testid={`${workbenchSelectors.assistantTurnApplyPrefix}-${apply.applyId}`}
+                    onClick={() => onOpenApply(apply.changeId)}
+                    data-testid={`${workbenchSelectors.assistantTurnApplyPrefix}-${apply.changeId}`}
                     className="w-full rounded-2xl border border-[#E1DED6] bg-white px-4 py-3 text-left transition-all duration-200 hover:-translate-y-[1px] hover:border-[#181818]"
                   >
                     <div className="flex flex-wrap items-start justify-between gap-3">

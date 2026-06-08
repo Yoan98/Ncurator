@@ -250,6 +250,7 @@ export const humanThoughtSchema = z.object({
 export const humanReferenceSchema = z.object({
   label: z.string().min(1),
   path: z.string().min(1),
+  sourceType: z.enum(['file', 'web']),
   usedFor: z.string().min(1)
 })
 
@@ -313,16 +314,18 @@ export const humanDeliveryPayloadSchema = z.object({
 
 export const mouthOutputSchema = humanDeliveryPayloadSchema
 
-export const runtimeChangedFileSchema = z.object({
-  file_name: z.string().min(1),
-  source_path: z.string().min(1),
-  format: z.literal('docx'),
-  change_count: z.number().int().min(0),
-  apply_id: z.string().min(1).optional()
+export const fileChangeSummaryItemSchema = z.object({
+  id: z.string().min(1),
+  fileName: z.string().min(1),
+  path: z.string().min(1),
+  capability: z.enum(['docx', 'terminal_exec', 'ppt']),
+  operation: z.enum(['created', 'updated']),
+  changeCount: z.number().int().min(0),
+  status: z.enum(['applied', 'reverted', 'failed'])
 })
 
-export const runtimeArtifactsSummarySchema = z.object({
-  changed_files: z.array(runtimeChangedFileSchema)
+export const fileChangesSummarySchema = z.object({
+  changed_files: z.array(fileChangeSummaryItemSchema)
 })
 
 export const deliveryGuidanceItemSchema = z.object({
@@ -351,7 +354,7 @@ export const humanExecutionSchema = z.object({
   lastToolResults: z.array(toolCallResultSchema).optional(),
   lastLearningOutcome: humanLearningOutcomeSchema.optional(),
   artifacts: z.array(aiArtifactRefSchema),
-  runtimeArtifacts: runtimeArtifactsSummarySchema.optional(),
+  fileChanges: fileChangesSummarySchema.optional(),
   references: z.array(humanReferenceSchema).optional(),
   contextBudget: z
     .object({

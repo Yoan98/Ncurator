@@ -7,7 +7,7 @@ import {
 } from '../shared/historyRenderers'
 import { renderTaskProgress } from '../shared/memoryRenderers'
 import { renderHumanReferences } from '../shared/references'
-import { renderHumanArtifactLines } from '../shared/runtimeRenderers'
+import { renderHumanFileChangeLines } from '../shared/runtimeRenderers'
 import { renderReferenceScopeText } from '../../prompts/referenceScope'
 import type { HumanState } from '../types'
 import { getLastRoundFocus, getRecentHistoryRounds } from '../memory/rounds'
@@ -27,7 +27,7 @@ export const buildMouthPrompt = (input: {
     - 优先回答用户真正关心的内容，优先使用自然、直接、容易理解的表达。
     - 你应基于已有事实组织最终答复，而不是机械复述原始过程文本。
 
-    - 当存在runtime_artifacts时，必须要提及这些产出的信息。
+    - 当存在file_changes时，必须要提及这些产出的信息。
     - 当delivery_guidance存在时，必须吸收。
     - 当存在references时，必须吸收其中信息，明确说明引用了哪些资料来分别支撑了哪部分交付内容。
 
@@ -48,8 +48,8 @@ export const buildMouthPrompt = (input: {
     - conversation_history：当前会话历史视图，用于理解这次最终交付与同一会话前文的连续性。
     - task_progress：当前任务已经收敛的全局进度信息，包含待办路径、推进摘要，以及最新一轮判断和执行。
     - round_history：当前任务的历史证据视图，包含已压缩的较早历史和较新的真实轮次记录。
-    - delivery_guidance：上游节点明确要求你必须吸收的补充说明；
-    - runtime_artifacts：结果文件事实，用于说明本次最终修改了什么文件。；
+    - delivery_guidance：上游节点明确要求你必须吸收的补充说明。
+    - file_changes：本次实际修改的文件记录，用于说明本次最终修改了什么文件。
     - references：本次任务可被明确引用的资料列表，每条都带有引用用途说明。
   </background>
 
@@ -57,6 +57,8 @@ export const buildMouthPrompt = (input: {
     - 只输出最终 markdown 正文，不要输出 JSON 或额外说明。
     - 如果任务结果已经体现在文件、命令结果或其他产物中，默认只总结结果，不要把产物正文或大段原始输出直接作为最终答复主体。
     - 如果有用到引用资料，必须在正文相关位置引用对应 markdown 引用片段，并用一句话简洁说明它支撑了什么内容，引用片段必须直接使用 references 中提供的 markdown 链接样式，不要改写 label 或 path。
+    - references 中提供的正文引用片段是证据引用，必须原样使用，不要增删数量、改写 label/path/sourceType。
+    - 最终答复中如需输出可点击的已知本地文件或网页链接，统一使用 ncurator://ref 的 markdown 链接格式；非证据链接使用 kind=normal，文件链接仅用于上下文中已有且路径明确的工作区内文件。
   </output_contract>
 </system>
 `.trim()
@@ -104,9 +106,9 @@ ${renderTaskProgress({
 ${renderDeliveryGuidanceItems(input.state.execution.deliveryGuidanceItems)}
   </delivery_guidance>
 
-  <runtime_artifacts>
-${renderHumanArtifactLines(input.state, 'prompt')}
-  </runtime_artifacts>
+  <file_changes>
+${renderHumanFileChangeLines(input.state, 'prompt')}
+  </file_changes>
 
   <references>
 ${renderHumanReferences(input.state.execution.references)}

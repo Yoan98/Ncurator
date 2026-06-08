@@ -45,6 +45,11 @@ describe('ai human mock-llm backend', () => {
               await runtime.ensureEmbeddingReady()
             },
             docxApplyService: runtime.docxApplyService,
+            saveFileChangeRecord: async (record) => {
+              await runtime.storageService.aiFileChange.saveRecord(record)
+            },
+            listFileChangeRecords: async (request) =>
+              (await runtime.storageService.aiFileChange.listRecords(request)).items,
             isCancelled: () => false,
             sendEvent: (event) => runtime.eventCollector.add(event),
             recordLlmIo: (record) => runtime.eventCollector.addLlmIo(record),

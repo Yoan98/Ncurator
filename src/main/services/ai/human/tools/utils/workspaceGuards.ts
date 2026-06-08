@@ -153,6 +153,7 @@ export const createWorkspaceBoundToolFamily = (input: {
           ctx,
           cache,
           runId,
+          sessionId: ctx.sessionId,
           taskId,
           workspaceRootPath,
           emitActivity: createWorkspaceCapabilityActivityEmitter({

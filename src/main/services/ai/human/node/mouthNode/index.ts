@@ -6,7 +6,7 @@ import { assertExternalLearnedSkillIds } from '../../skills'
 import { completeHumanTask } from '../utils/stateTransitions'
 import {
   appendDocxApplyArtifactsAndEmitEvents,
-  buildRuntimeArtifactsSummaryFromDocxApplyRecords,
+  buildFileChangesSummaryFromFileChangeRecords,
   mergeArtifactRefs
 } from '../../../utils/artifacts'
 import { emitFinalizingStarted } from '../../../events/processEvents'
@@ -34,13 +34,14 @@ export const createMouthNode = (input: {
     input.cache.currentState = stateWithMouthRound
 
     const docxApplyRecords = await input.ctx.applyDocxRunEdits()
-    const runtimeArtifacts = buildRuntimeArtifactsSummaryFromDocxApplyRecords(docxApplyRecords)
+    const fileChangeRecords = await input.ctx.listFileChangeRecords({ runId: input.ctx.runId })
+    const fileChanges = buildFileChangesSummaryFromFileChangeRecords(fileChangeRecords)
     const history = await input.ctx.loadConversationContext()
-    let promptState: HumanState = {
+    const promptState: HumanState = {
       ...stateWithMouthRound,
       execution: {
         ...stateWithMouthRound.execution,
-        runtimeArtifacts
+        fileChanges
       }
     }
     input.cache.currentState = promptState

@@ -21,7 +21,7 @@ export const docxToolFamily = createWorkspaceBoundToolFamily({
   descriptionForTool: (name) => `docx tool: ${name}`,
   reason: 'docx capability requires workspace binding before execution',
   error: 'workspace is required for docx capability',
-  buildWorkspaceTools: ({ ctx, cache, runId, taskId, workspaceRootPath, emitActivity }) =>
+  buildWorkspaceTools: ({ ctx, cache, runId, sessionId, taskId, workspaceRootPath, emitActivity }) =>
     buildDocxCapabilityTools({
       ctx: {
         runId: ctx.runId,
@@ -35,6 +35,7 @@ export const docxToolFamily = createWorkspaceBoundToolFamily({
       },
       cache,
       runId,
+      sessionId,
       taskId,
       workspaceRootPath,
       emitActivity,

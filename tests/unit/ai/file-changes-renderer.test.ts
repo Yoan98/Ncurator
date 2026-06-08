@@ -1,33 +1,33 @@
 import { describe, expect, it } from 'vitest'
 import { createInitialHumanState } from '../../../src/main/services/ai/human/state/schema'
-import { renderHumanArtifactLines } from '../../../src/main/services/ai/human/shared/runtimeRenderers'
+import { renderHumanFileChangeLines } from '../../../src/main/services/ai/human/shared/runtimeRenderers'
 
-describe('ai unit runtime artifacts renderer', () => {
+describe('ai unit file changes renderer', () => {
   it('renders changed files in prompt mode', () => {
     const state = createInitialHumanState({
       taskId: 'task-runtime-1',
       userInput: '整理文档'
     })
-    state.execution.runtimeArtifacts = {
+    state.execution.fileChanges = {
       changed_files: [
         {
-          file_name: 'sample.docx',
-          source_path: '/workspace/sample.docx',
-          format: 'docx',
-          change_count: 2,
-          summary: '补充了课堂说明',
-          change_highlights: ['补充交互设计说明', '新增总结表'],
-          apply_id: 'apply-sample'
+          id: 'change-sample',
+          fileName: 'sample.docx',
+          path: '/workspace/sample.docx',
+          capability: 'docx',
+          operation: 'updated',
+          changeCount: 2,
+          status: 'applied'
         }
       ]
     }
 
-    const rendered = renderHumanArtifactLines(state, 'prompt')
+    const rendered = renderHumanFileChangeLines(state, 'prompt')
 
     expect(rendered).toContain('文件：sample.docx')
     expect(rendered).toContain('改动数：2')
-    expect(rendered).toContain('原文件路径：/workspace/sample.docx')
-    expect(rendered).toContain('AI 修改记录：apply-sample')
+    expect(rendered).toContain('文件路径：/workspace/sample.docx')
+    expect(rendered).toContain('修改记录：change-sample')
   })
 
   it('renders empty fallback when no changed files exist', () => {
@@ -36,7 +36,7 @@ describe('ai unit runtime artifacts renderer', () => {
       userInput: '整理文档'
     })
 
-    const rendered = renderHumanArtifactLines(state, 'prompt')
+    const rendered = renderHumanFileChangeLines(state, 'prompt')
 
     expect(rendered).toContain('本次运行未形成新的文件改动结果。')
     expect(rendered).not.toContain('AI 修改记录')

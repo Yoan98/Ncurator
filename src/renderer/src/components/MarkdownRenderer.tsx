@@ -6,14 +6,29 @@ import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism'
-import { parseRefHref, renderReferenceIcon } from './markdownReference'
+import {
+  parseRefHref,
+  renderReferenceIcon,
+  type ParsedNcuratorRefKind,
+  type ParsedNcuratorRefSourceType
+} from './markdownReference'
 
 interface MarkdownRendererProps {
   content: string
   className?: string
+  onOpenReference?: (reference: {
+    kind: ParsedNcuratorRefKind
+    sourceType: ParsedNcuratorRefSourceType
+    label: string
+    path: string
+  }) => void
 }
 
-const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, className }) => {
+const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
+  content,
+  className,
+  onOpenReference
+}) => {
   return (
     <div className={`markdown-body ${className || ''}`}>
       <ReactMarkdown
@@ -64,10 +79,29 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, className 
               return (
                 <a
                   href={href}
-                  className="markdown-reference-link"
+                  className={
+                    parsed.kind === 'reference'
+                      ? 'markdown-reference-link'
+                      : 'markdown-normal-ref-link'
+                  }
                   data-ref-path={parsed.path}
+                  data-ref-kind={parsed.kind}
+                  data-ref-source-type={parsed.sourceType}
+                  onClick={(event) => {
+                    if (!onOpenReference) return
+                    event.preventDefault()
+                    onOpenReference({
+                      kind: parsed.kind,
+                      sourceType: parsed.sourceType,
+                      label,
+                      path: parsed.path
+                    })
+                  }}
                 >
-                  {renderReferenceIcon(label, parsed.path)}
+                  {renderReferenceIcon({
+                    kind: parsed.kind,
+                    sourceType: parsed.sourceType
+                  })}
                   <span>{children}</span>
                 </a>
               )

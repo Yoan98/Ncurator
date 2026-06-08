@@ -10,6 +10,7 @@ import { ModelService } from '../services/model/ModelService'
 import { VectorModelDownloadService } from '../services/model/VectorModelDownloadService'
 import { fetchLlmRemoteModels } from '../services/llm/modelCatalog'
 import { AiRunService } from '../services/ai/AiRunService'
+import { AiFileChangeService } from '../services/ai/fileChanges/AiFileChangeService'
 import { emitThinkingStarted } from '../services/ai/events/processEvents'
 import { updateConversationMemoryAfterRun } from '../services/ai/memory'
 import { getAiContextUsage } from '../services/ai/contextUsage'
@@ -44,10 +45,12 @@ import type {
   AiRunApprovalBatchDecisionResponse,
   GetDocxApplyRecordRequest,
   GetDocxApplyRecordResponse,
-  ListDocxApplyRecordsRequest,
-  ListDocxApplyRecordsResponse,
-  RevertDocxApplyRequest,
-  RevertDocxApplyResponse,
+  GetAiFileChangeRecordRequest,
+  GetAiFileChangeRecordResponse,
+  ListAiFileChangeRecordsRequest,
+  ListAiFileChangeRecordsResponse,
+  RevertAiFileChangeRequest,
+  RevertAiFileChangeResponse,
   CreateWorkspaceSourceRequest,
   DeleteWorkspaceSourceResponse,
   ListReferenceItemsRequest,
@@ -244,7 +247,8 @@ export function registerHandlers(services: {
   const webSourceStore = storageService.webSource
   const workspaceStore = storageService.workspace
   const workspaceIndexJobStore = storageService.workspaceIndexJob
-  const docxApplyService = new DocxApplyService(storageService.docxApply)
+  const aiFileChangeService = new AiFileChangeService(storageService.aiFileChange)
+  const docxApplyService = new DocxApplyService(storageService.docxApply, aiFileChangeService)
   const workspaceService = new WorkspaceSourceService()
   const workspaceKnowledgePrepareService = new WorkspaceKnowledgePrepareService({
     embeddingService,
@@ -849,6 +853,7 @@ export function registerHandlers(services: {
 
   const emitE2EChatArtifactFlow = async (input: {
     runId: string
+    sessionId: string
     sendEvent: (event: AiRunEvent) => void
   }): Promise<void> => {
     input.sendEvent({
@@ -918,22 +923,40 @@ export function registerHandlers(services: {
     })
     await pauseForE2EFixture()
 
+    const artifactPath = '/tmp/ncurator-e2e-result.docx'
+    const artifactFileName = 'ncurator-e2e-result.docx'
+    fs.writeFileSync(artifactPath, 'ncurator e2e generated document')
     input.sendEvent({
       type: 'file_artifact',
       runId: input.runId,
       taskId: input.runId,
       artifactId: 'artifact-e2e-1',
       capability: 'docx',
-      path: '/tmp/ncurator-e2e-result.docx',
-      fileName: 'ncurator-e2e-result.docx',
+      path: artifactPath,
+      fileName: artifactFileName,
       operation: 'created',
       summary: 'E2E 生成测试文档',
       createdAt: Date.now()
+    })
+    const now = Date.now()
+    await aiFileChangeService.saveRecord({
+      id: 'artifact-e2e-1',
+      sessionId: input.sessionId,
+      runId: input.runId,
+      status: 'applied',
+      capability: 'docx',
+      path: artifactPath,
+      fileName: artifactFileName,
+      operation: 'created',
+      changeCount: 1,
+      createdAt: now,
+      updatedAt: now
     })
   }
 
   const emitE2EDocxApplyFlow = async (input: {
     runId: string
+    sessionId: string
     sendEvent: (event: AiRunEvent) => void
     multiple: boolean
     answerText?: string
@@ -976,6 +999,26 @@ export function registerHandlers(services: {
     })
     await pauseForE2EFixture()
 
+    await Promise.all(
+      applyEvents.map(async (item) => {
+        fs.writeFileSync(item.path, `ncurator e2e updated document: ${item.fileName}`)
+        const now = Date.now()
+        await aiFileChangeService.saveRecord({
+          id: item.id,
+          sessionId: input.sessionId,
+          runId: input.runId,
+          status: 'applied',
+          capability: 'docx',
+          path: item.path,
+          fileName: item.fileName,
+          operation: 'created',
+          changeCount: 1,
+          createdAt: now,
+          updatedAt: now
+        })
+      })
+    )
+
     applyEvents.forEach((item) => {
       input.sendEvent({
         type: 'file_artifact',
@@ -985,7 +1028,7 @@ export function registerHandlers(services: {
         capability: 'docx',
         path: item.path,
         fileName: item.fileName,
-        operation: 'updated',
+        operation: 'created',
         applyId: item.id,
         summary: `docx applied: ${item.fileName}`,
         createdAt: Date.now()
@@ -1097,6 +1140,7 @@ export function registerHandlers(services: {
 
   const maybeHandleE2EFixtureRun = async (input: {
     runId: string
+    sessionId: string
     inputText: string
     workspace?: {
       workspaceId: string
@@ -1117,6 +1161,7 @@ export function registerHandlers(services: {
     if (scenario === 'chat-artifact-flow') {
       await emitE2EChatArtifactFlow({
         runId: input.runId,
+        sessionId: input.sessionId,
         sendEvent: input.sendEvent
       })
       input.sendEvent({
@@ -1156,6 +1201,7 @@ export function registerHandlers(services: {
 
       await emitE2EChatArtifactFlow({
         runId: input.runId,
+        sessionId: input.sessionId,
         sendEvent: input.sendEvent
       })
       input.sendEvent({
@@ -1185,6 +1231,7 @@ export function registerHandlers(services: {
 
       await emitE2EChatArtifactFlow({
         runId: input.runId,
+        sessionId: input.sessionId,
         sendEvent: input.sendEvent
       })
       input.sendEvent({
@@ -1202,6 +1249,7 @@ export function registerHandlers(services: {
     if (scenario === 'chat-edit-apply') {
       await emitE2EDocxApplyFlow({
         runId: input.runId,
+        sessionId: input.sessionId,
         sendEvent: input.sendEvent,
         multiple: false
       })
@@ -1211,6 +1259,7 @@ export function registerHandlers(services: {
     if (scenario === 'chat-edit-apply-b') {
       await emitE2EDocxApplyFlow({
         runId: input.runId,
+        sessionId: input.sessionId,
         sendEvent: input.sendEvent,
         multiple: false,
         answerText: 'E2E fixture 已直接修改 B 文件，可回退本次修改。'
@@ -1221,6 +1270,7 @@ export function registerHandlers(services: {
     if (scenario === 'chat-multi-apply') {
       await emitE2EDocxApplyFlow({
         runId: input.runId,
+        sessionId: input.sessionId,
         sendEvent: input.sendEvent,
         multiple: true
       })
@@ -1230,6 +1280,7 @@ export function registerHandlers(services: {
     if (scenario === 'chat-apply-revert-warning') {
       await emitE2EDocxApplyFlow({
         runId: input.runId,
+        sessionId: input.sessionId,
         sendEvent: input.sendEvent,
         multiple: false
       })
@@ -2967,6 +3018,7 @@ export function registerHandlers(services: {
         try {
           const handledByE2EFixture = await maybeHandleE2EFixtureRun({
             runId,
+            sessionId,
             inputText: input,
             workspace,
             sendEvent,
@@ -2999,6 +3051,11 @@ export function registerHandlers(services: {
                 })
               },
               docxApplyService,
+              saveFileChangeRecord: async (record) => {
+                await aiFileChangeService.saveRecord(record)
+              },
+              listFileChangeRecords: async (request) =>
+                (await aiFileChangeService.listRecords(request)).items,
               isCancelled: () => Boolean(activeAiRuns.get(runId)?.cancelled),
               abortSignal: activeAiRuns.get(runId)?.abortController.signal,
               sendEvent,
@@ -3199,21 +3256,6 @@ export function registerHandlers(services: {
   )
 
   ipcMain.handle(
-    'docx-apply-list',
-    async (
-      _event,
-      payload?: ListDocxApplyRecordsRequest
-    ): Promise<ListDocxApplyRecordsResponse> => {
-      try {
-        return await docxApplyService.listRecords(payload)
-      } catch (e: unknown) {
-        console.error('[DOCX-APPLY-LIST] Error:', e)
-        return { items: [], total: 0 }
-      }
-    }
-  )
-
-  ipcMain.handle(
     'docx-apply-get',
     async (_event, payload: GetDocxApplyRecordRequest): Promise<GetDocxApplyRecordResponse> => {
       try {
@@ -3226,12 +3268,82 @@ export function registerHandlers(services: {
   )
 
   ipcMain.handle(
-    'docx-apply-revert',
-    async (_event, payload: RevertDocxApplyRequest): Promise<RevertDocxApplyResponse> => {
+    'ai-file-change-list',
+    async (
+      _event,
+      payload?: ListAiFileChangeRecordsRequest
+    ): Promise<ListAiFileChangeRecordsResponse> => {
       try {
-        return await docxApplyService.revertRecord(payload)
+        return await aiFileChangeService.listRecords(payload)
       } catch (e: unknown) {
-        console.error('[DOCX-APPLY-REVERT] Error:', e)
+        console.error('[AI-FILE-CHANGE-LIST] Error:', e)
+        return { items: [], total: 0 }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'ai-file-change-get',
+    async (
+      _event,
+      payload: GetAiFileChangeRecordRequest
+    ): Promise<GetAiFileChangeRecordResponse> => {
+      try {
+        return await aiFileChangeService.getRecord(payload)
+      } catch (e: unknown) {
+        console.error('[AI-FILE-CHANGE-GET] Error:', e)
+        return { error: getErrorMessage(e) }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'ai-file-change-revert',
+    async (
+      _event,
+      payload: RevertAiFileChangeRequest
+    ): Promise<RevertAiFileChangeResponse> => {
+      try {
+        const current = await aiFileChangeService.getRecord({ changeId: payload.changeId })
+        if (current.record?.capability === 'docx') {
+          const docxResponse = await docxApplyService.revertRecord({
+            applyId: payload.changeId,
+            force: payload.force
+          })
+          if (!docxResponse.record && docxResponse.error === 'docx apply record not found') {
+            return await aiFileChangeService.revertRecord(payload)
+          }
+          return {
+            success: docxResponse.success,
+            record: docxResponse.record
+              ? {
+                  id: docxResponse.record.id,
+                  sessionId: docxResponse.record.session_id,
+                  runId: docxResponse.record.run_id,
+                  status: docxResponse.record.status,
+                  capability: 'docx',
+                  path: docxResponse.record.source_path,
+                  fileName: docxResponse.record.source_name,
+                  operation: docxResponse.record.operation,
+                  changeCount: docxResponse.record.change_count,
+                  beforeSnapshotPath: docxResponse.record.before_snapshot_path,
+                  beforeChecksum: docxResponse.record.before_checksum,
+                  afterChecksum: docxResponse.record.after_checksum,
+                  previewPath: docxResponse.record.preview_diff_artifact_path,
+                  createdAt: docxResponse.record.created_at,
+                  updatedAt: docxResponse.record.updated_at,
+                  revertedAt: docxResponse.record.reverted_at,
+                  error: docxResponse.record.error
+                }
+              : undefined,
+            requiresForce: docxResponse.requiresForce,
+            warning: docxResponse.warning,
+            error: docxResponse.error
+          }
+        }
+        return await aiFileChangeService.revertRecord(payload)
+      } catch (e: unknown) {
+        console.error('[AI-FILE-CHANGE-REVERT] Error:', e)
         return { success: false, error: getErrorMessage(e) }
       }
     }

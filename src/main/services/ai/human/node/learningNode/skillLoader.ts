@@ -28,6 +28,7 @@ const ensureFamilyTools = (input: {
     ctx: input.ctx,
     cache: input.cache,
     runId: input.runId,
+    sessionId: input.ctx.sessionId,
     taskId: input.taskId
   })
   input.cache.familyToolsets[input.familyId] = built

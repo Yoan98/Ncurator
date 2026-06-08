@@ -18,8 +18,8 @@
 3. 进入 create、edit、history 或 rollback 后，升级到 `replay session`。
 4. 编辑始终写入当前 session 的最新状态，并生成新的 revision。
 5. 当前 session 维护最新工作态，apply 时可以投影出 `review` 和 `committed` 两类视图。
-6. run 收尾时从 `committed view` 直接写回源文件，并记录 `DocxApplyRecord`。
-7. 用户回退围绕 `DocxApplyRecord` 和 checkpoint 展开，不依赖任务内 revision 重放。
+6. run 收尾时从 `committed view` 直接写回源文件，并记录 `DocxApplyRecord` 与统一 `AiFileChangeRecord`。
+7. 用户回退围绕统一修改记录和 checkpoint 展开，不依赖任务内 revision 重放；docx diff 预览继续读取 `DocxApplyRecord`。
 
 ## 3. Source Baseline
 
@@ -80,7 +80,7 @@ DocxReplaySession -> working state -> review/committed view projections
 - `working state` 对应 AI 读取和继续编辑的当前任务态，只在任务内使用。
 - `review view` 对应系统内 diff 预览稿，只用于用户查看本次 AI 修改差异。
 - `committed view` 对应最终写回源文件的正式文档净稿。
-- apply 时只持久化 `DocxApplyRecord`、checkpoint 和 diff 预览稿；不再维护 session 级 artifact registry。
+- apply 时持久化 `DocxApplyRecord`、统一 `AiFileChangeRecord`、checkpoint 和 diff 预览稿；不再维护 session 级 artifact registry。
 
 ## 7. Edit / History / Rollback
 
@@ -130,6 +130,26 @@ interface DocxApplyRecord {
   reverted_at?: number
   error?: string
 }
+
+interface AiFileChangeRecord {
+  id: string
+  sessionId: string
+  runId: string
+  status: 'applied' | 'reverted' | 'failed'
+  capability: 'docx' | 'terminal_exec' | 'ppt'
+  path: string
+  fileName: string
+  operation: 'created' | 'updated'
+  changeCount: number
+  beforeSnapshotPath?: string
+  beforeChecksum?: string
+  afterChecksum?: string
+  previewPath?: string
+  createdAt: number
+  updatedAt: number
+  revertedAt?: number
+  error?: string
+}
 ```
 
 ### 规则说明
@@ -137,6 +157,8 @@ interface DocxApplyRecord {
 - 采用宽松写回模式：apply 前不校验 replay 初始化版本是否仍等于当前磁盘版本。
 - apply 前总是以当前磁盘文件作为 checkpoint；若文件不存在则记录 `before_exists=false`。
 - apply 同时生成系统内 diff 预览 artifact；diff 预览粒度为一次 AI run 内每个被修改文件一份，不按单次工具调用拆分。
+- docx apply 同步写入统一修改文件记录；Workbench 修改文件列表、mouth 修改摘要和跨能力回退入口以统一记录为来源。
+- `DocxApplyRecord` 保留 docx 专属的 revision、diff 预览和详细 checkpoint 字段，不作为通用修改文件列表的来源。
 - operation 以实际磁盘行为为准：写回前存在则 `updated`，不存在则 `created`。
 - revert 默认校验当前文件 checksum 是否等于 `after_checksum`；若不一致，UI 必须提示继续回退会丢失后续修改。
 - 用户确认后允许 force revert；updated 恢复 checkpoint，created 删除文件。

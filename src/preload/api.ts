@@ -38,12 +38,14 @@ import type {
   WebSourceMutationResponse,
   WebIngestPayload,
   SetWorkspaceRootPathRequest,
-  ListDocxApplyRecordsRequest,
-  ListDocxApplyRecordsResponse,
   GetDocxApplyRecordRequest,
   GetDocxApplyRecordResponse,
-  RevertDocxApplyRequest,
-  RevertDocxApplyResponse,
+  GetAiFileChangeRecordRequest,
+  GetAiFileChangeRecordResponse,
+  ListAiFileChangeRecordsRequest,
+  ListAiFileChangeRecordsResponse,
+  RevertAiFileChangeRequest,
+  RevertAiFileChangeResponse,
   WorkspaceIndexJobGetRequest,
   WorkspaceIndexJobRecord,
   WorkspaceIndexJobResponse,
@@ -207,9 +209,16 @@ export type DesktopApi = {
     payload: AiRunApprovalBatchDecisionRequest
   ) => Promise<AiRunApprovalBatchDecisionResponse>
   aiContextUsageGet: (payload: AiContextUsageRequest) => Promise<AiContextUsageResponse>
-  docxApplyList: (payload?: ListDocxApplyRecordsRequest) => Promise<ListDocxApplyRecordsResponse>
   docxApplyGet: (payload: GetDocxApplyRecordRequest) => Promise<GetDocxApplyRecordResponse>
-  docxApplyRevert: (payload: RevertDocxApplyRequest) => Promise<RevertDocxApplyResponse>
+  aiFileChangeList: (
+    payload?: ListAiFileChangeRecordsRequest
+  ) => Promise<ListAiFileChangeRecordsResponse>
+  aiFileChangeGet: (
+    payload: GetAiFileChangeRecordRequest
+  ) => Promise<GetAiFileChangeRecordResponse>
+  aiFileChangeRevert: (
+    payload: RevertAiFileChangeRequest
+  ) => Promise<RevertAiFileChangeResponse>
   pickApplication: () => Promise<PickApplicationResponse>
   openPathWithApplication: (
     payload: OpenPathWithApplicationRequest

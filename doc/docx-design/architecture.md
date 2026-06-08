@@ -61,7 +61,7 @@ flowchart TD
 - run 结束时，系统从当前 session 生成 `committed view`。
 - 写回前先保存当前磁盘源文件 checkpoint。
 - committed view 原子写回源文件。
-- 系统记录 `DocxApplyRecord`，供 UI 展示和回退。
+- 系统记录 `DocxApplyRecord` 并同步统一 `AiFileChangeRecord`；UI 的修改文件列表和回退入口以 `AiFileChangeRecord` 为准，docx diff 预览继续读取 `DocxApplyRecord`。
 
 ### 4.4 回退
 
