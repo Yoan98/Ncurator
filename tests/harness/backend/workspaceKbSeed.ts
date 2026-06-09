@@ -208,12 +208,14 @@ export const seedWorkspaceKb = async (input: {
     documentsStore: input.runtime.documentsStore
   })
 
-  const scan = await workspaceService.scanWorkspace({
+  const scan = await workspaceService.scanWorkspaceTree({
     workspaceId: TEST_WORKSPACE_ID,
     rootPath: input.runtime.workspaceRoot,
     workspaceName: TEST_WORKSPACE_ID
   })
-  const supportedNodes = scan.nodes.filter((node) => node.kind === 'file')
+  const supportedNodes = scan.entries.filter(
+    (node) => node.kind === 'file' && node.supported_for_index
+  )
   const supportedNodeMap = new Map(
     supportedNodes.map((node) => [normalizeRelativePath(node.relative_path), node] as const)
   )

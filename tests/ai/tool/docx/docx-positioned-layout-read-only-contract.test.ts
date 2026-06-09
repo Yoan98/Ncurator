@@ -137,7 +137,8 @@ describe('ai tool docx backend', () => {
           failures.every(
             (failure) =>
               failure.error.length > 0 &&
-              failure.error.includes(POSITIONED_READ_ONLY_MESSAGE)
+              failure.error.includes('当前命中复杂定位排版区域') &&
+              failure.error.includes('暂不支持自动编辑')
           ),
           {
             name: 'positioned-layout-rejects-all-write-tools',

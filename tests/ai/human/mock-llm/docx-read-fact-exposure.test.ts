@@ -55,9 +55,9 @@ describe('ai human mock-llm backend', () => {
               },
               (input) => {
                 if (
-                  !input.user.includes('"blocks"') ||
-                  !input.user.includes('"blockIndex": 0') ||
-                  !input.user.includes('"blockIndex": 229') ||
+                  !input.user.includes('"blocks":[{"blockId":"b:0"') ||
+                  !input.user.includes('"blockIndex":0') ||
+                  !input.user.includes('"blockIndex":229') ||
                   !input.user.includes('第 230 段普通说明。')
                 ) {
                   throw new Error('brain prompt is missing outline range structured facts')
@@ -73,7 +73,7 @@ describe('ai human mock-llm backend', () => {
               },
               (input) => {
                 if (
-                  !input.user.includes('"returnedMatchCount": 1') ||
+                  !input.user.includes('"returnedMatchCount":1') ||
                   (!input.user.includes('反⾛样') && !input.user.includes('反走样'))
                 ) {
                   throw new Error('brain prompt is missing normalized search hit structured facts')
@@ -93,7 +93,7 @@ describe('ai human mock-llm backend', () => {
               },
               (input) => {
                 if (
-                  !input.user.includes('"blocks"') ||
+                  !input.user.includes('"blocks":[{"blockId":"b:5"') ||
                   !input.user.includes('反⾛样会在采样不足时出现明显锯齿')
                 ) {
                   throw new Error('brain prompt is missing range read structured facts')

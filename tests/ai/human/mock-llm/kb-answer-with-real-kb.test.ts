@@ -89,14 +89,17 @@ describe('ai human mock-llm backend', () => {
       },
       assert: async (result, runtime) => {
         const toolResults = filterAiRunEventsByType(result.events, 'tool_call_result')
-        const kbResult = readLatestToolResultDataFromEvents<Array<{ document_id?: string; text: string }>>(
+        const kbResult = readLatestToolResultDataFromEvents<{
+          items: Array<{ document_id?: string; text: string }>
+          total: number
+        }>(
           toolResults,
           'kb_search'
         )
 
         runtime.assertThat(
           result.output.status === 'completed' &&
-            kbResult.some((row) => row.document_id === 'doc-1') &&
+            kbResult.items.some((row) => row.document_id === 'doc-1') &&
             filterAiRunEventsByType(result.events, 'tool_call_result').some(
               (event) => event.toolName === 'kb_search'
             ),

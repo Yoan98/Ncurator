@@ -78,8 +78,9 @@ describe('ai human mock-llm backend', () => {
               },
               ({ user }) => {
                 thirdBrainSeesIncompleteHint =
-                  user.includes('你必须先完成这些事项') &&
-                  user.includes('pendingItems=[确认 B 事项, 检查是否已经满足用户诉求并能进入最终交付]')
+                  user.includes('上一轮选择了最终交付，但todolist中仍有未完成事项') &&
+                  user.includes('确认 B 事项') &&
+                  user.includes('检查是否已经满足用户诉求并能进入最终交付')
 
                 return buildToolDecision({
                   toolName: 'terminal_run',

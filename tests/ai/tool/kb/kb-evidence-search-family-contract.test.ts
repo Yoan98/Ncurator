@@ -11,6 +11,11 @@ type KbSearchRow = {
   _score?: number
 }
 
+type KbSearchResult = {
+  items: KbSearchRow[]
+  total: number
+}
+
 describe('ai tool kb backend', () => {
   it('kb-evidence-search-family-contract', async () => {
     await runBackendCase({
@@ -59,18 +64,18 @@ describe('ai tool kb backend', () => {
 
         const harness = createRetrievalToolHarness(runtime)
 
-        const hybridInScope = await harness.invoke<KbSearchRow[]>('kb_search', {
+        const hybridInScope = await harness.invoke<KbSearchResult>('kb_search', {
           queryText: 'approval denied unchanged files',
           strategy: 'auto',
           limit: 5
         })
-        const vectorSubset = await harness.invoke<KbSearchRow[]>('kb_search', {
+        const vectorSubset = await harness.invoke<KbSearchResult>('kb_search', {
           queryText: 'terminal artifacts recorded',
           strategy: 'semantic',
           limit: 5,
           documentIds: ['doc-2', 'doc-3']
         })
-        const ftsOutOfScope = await harness.invoke<KbSearchRow[]>('kb_search', {
+        const ftsOutOfScope = await harness.invoke<KbSearchResult>('kb_search', {
           queryText: 'out of scope notes',
           strategy: 'keyword',
           limit: 5,
@@ -85,14 +90,14 @@ describe('ai tool kb backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.hybridInScope.length >= 1 &&
-            result.hybridInScope.every(
+          result.hybridInScope.total >= 1 &&
+            result.hybridInScope.items.every(
               (row) =>
                 (row.document_id === 'doc-1' || row.document_id === 'doc-2') &&
                 typeof row.document_name === 'string' &&
                 typeof row.text === 'string'
             ) &&
-            result.hybridInScope.some((row) => row.document_id === 'doc-1'),
+            result.hybridInScope.items.some((row) => row.document_id === 'doc-1'),
           {
             name: 'hybrid-search-returns-stable-rows',
             message: 'kb_search(auto) 应返回稳定 rows 结构，并默认限制在当前工作区范围内。',
@@ -101,8 +106,8 @@ describe('ai tool kb backend', () => {
         )
 
         runtime.assertThat(
-          result.vectorSubset.length >= 1 &&
-            result.vectorSubset.every((row) => row.document_id === 'doc-2'),
+          result.vectorSubset.total >= 1 &&
+            result.vectorSubset.items.every((row) => row.document_id === 'doc-2'),
           {
             name: 'vector-search-honors-explicit-document-scope',
             message: 'kb_search(semantic) 应继续遵守 documentIds 在当前工作区内的收窄范围。',
@@ -110,7 +115,7 @@ describe('ai tool kb backend', () => {
           }
         )
 
-        runtime.assertThat(result.ftsOutOfScope.length === 0, {
+        runtime.assertThat(result.ftsOutOfScope.total === 0 && result.ftsOutOfScope.items.length === 0, {
           name: 'fts-search-rejects-out-of-scope-document-ids',
           message: 'kb_search(keyword) 在 requested documentIds 完全超出当前工作区时应返回空结果。',
           data: result.ftsOutOfScope

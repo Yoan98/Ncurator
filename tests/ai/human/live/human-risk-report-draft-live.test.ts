@@ -99,7 +99,20 @@ const hasPendingRiskStateSemantics = (text: string): boolean => {
 const hasAffirmativeForbiddenRiskConclusion = (text: string): boolean => {
   const normalizedText = normalizeAssertionText(text)
   const forbiddenPhrases = ['风险已解除', '全部完成', '风险已完全收口']
-  const negationHints = ['不使用', '不要', '不建议', '避免', '不应', '禁用']
+  const negationHints = [
+    '不使用',
+    '不要',
+    '不建议',
+    '避免',
+    '不应',
+    '禁用',
+    '不提前',
+    '不写成',
+    '不提前写成',
+    '不直接写成',
+    '不直接下',
+    '不要提前写成'
+  ]
   const sentenceBoundaryPattern = /[。；！？]/
 
   for (const phrase of forbiddenPhrases) {

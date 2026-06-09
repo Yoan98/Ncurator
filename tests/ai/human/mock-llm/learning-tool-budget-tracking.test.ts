@@ -81,8 +81,13 @@ describe('ai human mock-llm backend', () => {
             latestLearningStep.availableToolNames.includes('terminal_run') &&
             latestLearningStep.availableToolNames.includes('kb_list_documents') &&
             latestLearningStep.availableToolNames.includes('kb_search') &&
-            latestLearningStep.availableToolNames.length === 15 &&
-            latestLearningStep.summary.includes('当前 active tools=') &&
+            latestLearningStep.availableToolNames.includes('docx_outline') &&
+            latestLearningStep.availableToolNames.includes('docx_search') &&
+            latestLearningStep.availableToolNames.includes('docx_read_blocks') &&
+            latestLearningStep.availableToolNames.includes('docx_history') &&
+            latestLearningStep.availableToolNames.includes('docx_edit') &&
+            latestLearningStep.availableToolNames.includes('docx_rollback') &&
+            latestLearningStep.summary.includes('当前 active tools=6') &&
             !latestLearningStep.summary.includes('已淘汰最早学习的 skill='),
           {
             name: 'learning-tracks-active-tool-count-under-budget',

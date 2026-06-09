@@ -105,7 +105,7 @@ describe('ai human mock-llm backend', () => {
               restoredRoundSeen = user.includes('先学习一个 skill 再继续。')
               resumeHintSeen =
                 user.includes('上一次运行因 timeout 中断') &&
-                user.includes('当前用户最新输入、当前 selected references、当前 workspace 是本轮唯一有效入口')
+                user.includes('已恢复最近一次上下文信息')
               return buildCompleteTaskDecision({
                 summary: '已从恢复快照继续完成任务。'
               })
