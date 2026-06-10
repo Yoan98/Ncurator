@@ -25,7 +25,7 @@
 - `tool / web-browsing`
   - 通过率：`未执行`
   - 检测时间：`未执行`
-  - 覆盖计划：`web_fetch` 成功抓取、redirect 后 URL、HTTP 失败和结果过大；`browser_use` DOM 模式覆盖 extract / observe / act，visual 模式覆盖不支持图片时的真实诊断和支持图片时的基础截图提取或动作。
+  - 覆盖计划：`web_fetch` 成功抓取、redirect 后 URL、HTTP 失败和结果过大；`browser_use` 覆盖缺少内置浏览器服务时的真实 diagnostic。
 - `tool / utility`
   - 通过率：`未执行`
   - 检测时间：`未执行`
@@ -65,7 +65,7 @@
 - 目标：验证 tool 与 `hand` 工具执行守卫在真实生产代码下的输入输出是否正常、合理。
 - 约束：必须真实调用生产工具、真实 store、真实 docx apply service、真实 artifact 流。
 - 禁止：fake `documentsStore`、fake `embeddingService`、fake `resolveDocxOpenTarget`、fake tool result。
-- `web-browsing` 工具测试应覆盖程序抓取与内置浏览器两条路径；内置浏览器路径需要验证右侧面板事件、首次审批和工具失败后的现有 diagnostic / decision hint 收敛。
+- `web-browsing` 工具测试先覆盖程序抓取与 `browser_use` 服务不可用诊断。
 
 ### 3.2 `human`
 
