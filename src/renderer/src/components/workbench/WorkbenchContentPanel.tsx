@@ -15,6 +15,7 @@ import type { DocxApplyRecord, SearchResult } from '../../../../shared/types'
 import TextHighlighter from '../TextHighlighter'
 import { FileRenderViewer } from '../fileRenders'
 import WorkbenchApplyPanel from './WorkbenchApplyPanel'
+import WorkbenchBrowserPanel from './WorkbenchBrowserPanel'
 import type { SearchWorkbenchTurn, WorkbenchContentPanelState } from './types'
 import { workbenchSelectors } from '../../testing/selectors'
 
@@ -304,6 +305,7 @@ const WorkbenchContentPanel: React.FC<WorkbenchContentPanelProps> = ({
           onRevealPath={onRevealPath}
         />
       ) : null}
+      {state.kind === 'browser' ? <WorkbenchBrowserPanel /> : null}
     </div>
   </aside>
 )

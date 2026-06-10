@@ -98,6 +98,8 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     sendEvent: deps.sendEvent,
     recordLlmIo: deps.recordLlmIo,
     requestApprovalBatch: deps.requestApprovalBatch,
+    getLlmConfig: loadRequestedConfig,
+    browserUseService: deps.browserUseService,
     loadConversationContext,
     loadConversationMemory,
     trackDocxOpen: ({ docId, sourcePath, replaySession }) => {

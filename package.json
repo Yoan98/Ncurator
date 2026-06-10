@@ -33,6 +33,7 @@
   },
   "dependencies": {
     "@ant-design/icons": "^6.1.0",
+    "@browserbasehq/stagehand": "^3.5.0",
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
     "@huggingface/transformers": "^3.8.1",

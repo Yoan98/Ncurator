@@ -6,10 +6,12 @@ import {
 } from '../../../src/main/services/ai/human/skills'
 
 describe('ai unit runtime skill contract', () => {
-  it('exposes terminal and kb-retrieval as builtin skills', () => {
+  it('exposes builtin skills', () => {
     expect(listBuiltinSkillDefinitions().map((definition) => definition.skillId)).toEqual([
       'terminal',
-      'kb-retrieval'
+      'kb-retrieval',
+      'web-browsing',
+      'utility'
     ])
     expect(listExternalSkillDefinitions().map((definition) => definition.skillId)).toEqual([
       'docx-read',
@@ -20,7 +22,9 @@ describe('ai unit runtime skill contract', () => {
   it('includes builtin skills in effective skills before any external learning', () => {
     expect(getEffectiveLearnedSkillIds([])).toEqual([
       'terminal',
-      'kb-retrieval'
+      'kb-retrieval',
+      'web-browsing',
+      'utility'
     ])
   })
 })

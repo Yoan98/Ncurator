@@ -22,6 +22,14 @@
   - 通过率：`6 / 6`
   - 检测时间：`2026-06-06`
   - 覆盖补充：terminal 正式测试按“安全指令集”语义维护；Windows 路径覆盖 PowerShell 语法、`EncodedCommand` 执行与 UTF-8 输出，macOS 路径覆盖 zsh 语法。
+- `tool / web-browsing`
+  - 通过率：`未执行`
+  - 检测时间：`未执行`
+  - 覆盖计划：`web_fetch` 成功抓取、redirect 后 URL、HTTP 失败和结果过大；`browser_use` DOM 模式覆盖 extract / observe / act，visual 模式覆盖不支持图片时的真实诊断和支持图片时的基础截图提取或动作。
+- `tool / utility`
+  - 通过率：`未执行`
+  - 检测时间：`未执行`
+  - 覆盖计划：`wait_time` 等待时长与返回 `waitedMs`。
 - `tool / hand`
   - 通过率：`4 / 4`
   - 检测时间：`2026-04-16 16:16:05 +08:00`
@@ -57,6 +65,7 @@
 - 目标：验证 tool 与 `hand` 工具执行守卫在真实生产代码下的输入输出是否正常、合理。
 - 约束：必须真实调用生产工具、真实 store、真实 docx apply service、真实 artifact 流。
 - 禁止：fake `documentsStore`、fake `embeddingService`、fake `resolveDocxOpenTarget`、fake tool result。
+- `web-browsing` 工具测试应覆盖程序抓取与内置浏览器两条路径；内置浏览器路径需要验证右侧面板事件、首次审批和工具失败后的现有 diagnostic / decision hint 收敛。
 
 ### 3.2 `human`
 
@@ -657,6 +666,40 @@
 - How：对测试文件执行真实 inline edit 命令并读取返回产物。
 - Oracle：artifact 信息完整，修改结果与磁盘状态一致。
 - Not：不验证上层审批流。
+
+#### web-browsing 类别
+
+##### `web-fetch-contract`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证 `web_fetch` 的成功抓取、redirect 最终 URL、HTTP 失败状态和结果过大兜底。
+- Why：程序级网页抓取是低成本网页能力入口，必须稳定返回可被 brain 消费的最小结果。
+- How：启动本地 HTTP server，分别返回正常 HTML、302 redirect、404 和超长正文。
+- Oracle：正常结果包含最终 URL、HTTP 状态、标题和正文；HTTP 失败保留状态码；超长结果返回 `hand_tool_result_too_large`。
+- Not：不验证网页搜索、selector 配置或外网可达性。
+
+##### `browser-use-service-unavailable-diagnostic`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证 `browser_use` 在缺少内置浏览器服务时返回真实 diagnostic。
+- Why：浏览器能力依赖 Electron 内置浏览器服务，服务不可用时必须进入现有工具失败兜底，而不是静默失败。
+- How：在 tool harness 中不注入 `browserUseService`，直接调用 `browser_use(extract)`。
+- Oracle：工具结果返回 `browser_use service unavailable`。
+- Not：不验证 Stagehand DOM/visual 实际网页操作。
+
+#### utility 类别
+
+##### `wait-time-contract`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证 `wait_time` 会等待指定秒数并返回实际等待毫秒数。
+- Why：浏览器和其他异步任务需要一个明确的等待工具，避免把等待塞进其他工具参数。
+- How：调用 `wait_time(seconds=0.05)` 并比较工具返回值与墙钟时间。
+- Oracle：返回 `waitedMs`，且实际等待时间接近请求时长。
+- Not：不验证浏览器页面加载状态。
 
 #### human hand 类别
 

@@ -1,5 +1,7 @@
 import { DOCX_TOOL_SPECS } from './docx/toolSpecs'
 import { KB_TOOL_SPECS } from './kb/toolSpecs'
+import { UTILITY_TOOL_SPECS } from './utility/toolSpecs'
+import { WEB_TOOL_SPECS } from './web/toolSpecs'
 import {
   createTerminalRunToolSpec,
   TERMINAL_RUN_TOOL_SPEC,
@@ -11,7 +13,9 @@ import type { AiRuntimePlatform } from '../../types'
 export const ALL_TOOL_SPECS = [
   ...TERMINAL_TOOL_SPECS,
   ...KB_TOOL_SPECS,
-  ...DOCX_TOOL_SPECS
+  ...DOCX_TOOL_SPECS,
+  ...WEB_TOOL_SPECS,
+  ...UTILITY_TOOL_SPECS
 ] as const
 
 type AnyToolSpec = (typeof ALL_TOOL_SPECS)[number]

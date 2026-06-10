@@ -40,11 +40,22 @@ import { getAvailableToolNames } from '../utils/runtimeCache'
 import { emitThinkingStarted } from '../../../events/processEvents'
 
 const isTerminalRunCall = (toolName: string): boolean => toolName === 'terminal_run'
+const isBrowserUseCall = (toolName: string): boolean => toolName === 'browser_use'
 
 const readTerminalCommandArg = (args: JsonObject): string | undefined =>
   typeof args.command === 'string' && args.command.trim().length > 0
     ? args.command.trim()
     : undefined
+
+const readBrowserUseApprovalText = (args: JsonObject): string => {
+  const action = typeof args.action === 'string' && args.action.trim() ? args.action.trim() : 'use'
+  const instruction =
+    typeof args.instruction === 'string' && args.instruction.trim()
+      ? args.instruction.trim()
+      : '使用内置浏览器'
+  const url = typeof args.url === 'string' && args.url.trim() ? ` url=${args.url.trim()}` : ''
+  return `browser_use ${action}: ${instruction}${url}`
+}
 
 type ParsedHandCall = {
   toolName: string
@@ -99,6 +110,7 @@ const collectApprovalBatchItems = (input: {
   taskId: string
   calls: ParsedHandCall[]
   platform: AiRunContext['platform']
+  cache: HumanRuntimeCache
 }): Array<{
   itemId: string
   order: number
@@ -107,20 +119,36 @@ const collectApprovalBatchItems = (input: {
   reason: string
 }> => {
   return input.calls.flatMap((call, index) => {
-    if (!isTerminalRunCall(call.toolName)) return []
-    const command = readTerminalCommandArg(call.args)
-    if (!command) return []
-    const safePolicy = analyzeSafeTerminalCommandPolicy(command, input.platform)
-    if (safePolicy.executionPolicy === 'safe_allowed') return []
-    return [
-      {
-        itemId: randomUUID(),
-        order: index,
-        toolName: call.toolName,
-        command,
-        reason: safePolicy.reason
-      }
-    ]
+    if (isBrowserUseCall(call.toolName)) {
+      if (input.cache.approvedBrowserUseTaskIds?.has(input.taskId)) return []
+      return [
+        {
+          itemId: randomUUID(),
+          order: index,
+          toolName: call.toolName,
+          command: readBrowserUseApprovalText(call.args),
+          reason: '首次使用内置浏览器网页操作能力'
+        }
+      ]
+    }
+
+    if (isTerminalRunCall(call.toolName)) {
+      const command = readTerminalCommandArg(call.args)
+      if (!command) return []
+      const safePolicy = analyzeSafeTerminalCommandPolicy(command, input.platform)
+      if (safePolicy.executionPolicy === 'safe_allowed') return []
+      return [
+        {
+          itemId: randomUUID(),
+          order: index,
+          toolName: call.toolName,
+          command,
+          reason: safePolicy.reason
+        }
+      ]
+    }
+
+    return []
   })
 }
 
@@ -198,6 +226,29 @@ const markApprovedTerminalCommands = (input: {
     approvedCounts.set(key, (approvedCounts.get(key) || 0) + 1)
   })
   input.cache.approvedTerminalCommandCounts = approvedCounts
+}
+
+const markApprovedBrowserUseTask = (input: {
+  cache: HumanRuntimeCache
+  taskId: string
+  decisions: Array<{
+    itemId: string
+    action: 'approve' | 'reject' | 'guide'
+  }>
+  approvalItems: Array<{
+    itemId: string
+    toolName: string
+  }>
+}): void => {
+  const approved = input.decisions.some((decision) => {
+    if (decision.action !== 'approve') return false
+    const item = input.approvalItems.find((approvalItem) => approvalItem.itemId === decision.itemId)
+    return item?.toolName === 'browser_use'
+  })
+  if (!approved) return
+  const approvedTaskIds = input.cache.approvedBrowserUseTaskIds || new Set<string>()
+  approvedTaskIds.add(input.taskId)
+  input.cache.approvedBrowserUseTaskIds = approvedTaskIds
 }
 
 const executeHandCalls = async (input: {
@@ -367,12 +418,13 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
     }
 
     const parsedCalls = parsedCallsResult.calls
-    const approvalItems = collectApprovalBatchItems({
-      runId: input.ctx.runId,
-      taskId: state.task.taskId,
-      calls: parsedCalls,
-      platform: input.ctx.platform
-    })
+      const approvalItems = collectApprovalBatchItems({
+        runId: input.ctx.runId,
+        taskId: state.task.taskId,
+        calls: parsedCalls,
+        platform: input.ctx.platform,
+        cache: input.cache
+      })
     const invalidPlanDecisionHint = validateCalls(parsedCalls)
     if (invalidPlanDecisionHint) {
       return returnToBrainWithDecisionHint({
@@ -435,6 +487,12 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
       }
       markApprovedTerminalCommands({
         cache: input.cache,
+        decisions: approvalBatchResult.decisions,
+        approvalItems
+      })
+      markApprovedBrowserUseTask({
+        cache: input.cache,
+        taskId: state.task.taskId,
         decisions: approvalBatchResult.decisions,
         approvalItems
       })

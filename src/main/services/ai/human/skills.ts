@@ -50,6 +50,28 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
       '能力：查询当前工作区知识库中已建立索引的文档列表，或按查询词、语义语句检索相关内容片段。\n结果：返回命中证据、来源文档与内容块信息。\n边界：检索基本单位是内容块，不是整份文档。',
     whenToUse: '适用于需要使用工作区知识库检索能力的任务。',
     toolNames: ['kb_list_documents', 'kb_search']
+  },
+  'web-browsing': {
+    skillId: 'web-browsing',
+    familyId: 'web',
+    source: 'builtin',
+    countsTowardToolBudget: false,
+    title: 'web-browsing',
+    description:
+      '能力：抓取公开网页正文，或操作内置浏览器执行网页阅读、观察和页面动作。\n结果：返回网页文本、当前页面内容、可见动作或动作执行结果。\n边界：程序抓取只支持 http/https URL；内置浏览器操作会显示在该应用的右侧浏览器面板，首次使用需要用户审核。',
+    whenToUse: '适用于需要访问网页、读取网页内容或操作网页界面的任务。',
+    toolNames: ['web_fetch', 'browser_use']
+  },
+  utility: {
+    skillId: 'utility',
+    familyId: 'utility',
+    source: 'builtin',
+    countsTowardToolBudget: false,
+    title: 'utility',
+    description:
+      '能力：提供任务执行中的通用辅助动作。\n结果：返回辅助动作的客观执行结果。\n边界：不读取或修改用户内容。',
+    whenToUse: '适用于需要通用辅助能力的任务。',
+    toolNames: ['wait_time']
   }
 }
 

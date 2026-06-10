@@ -30,6 +30,7 @@ import type {
   DocxApplyRecord,
   SelectedReference
 } from '../../../shared/types'
+import type { LlmRuntimeConfig } from '../../../shared/types'
 import type { HumanState, HumanTaskInput, HumanTaskOutput } from './human/types'
 import { aiRunStateContractSchema, aiRunStatusSchema } from './schema'
 
@@ -120,6 +121,51 @@ export type AiTerminalApprovalFallback = {
   stage?: AiRunEventStage
 }
 
+export type BrowserUseAction = 'extract' | 'observe' | 'act'
+export type BrowserUseMode = 'dom' | 'visual'
+
+export type BrowserUseActionItem = {
+  description: string
+  method?: string
+}
+
+export type BrowserUseResult =
+  | {
+      action: 'extract'
+      url: string
+      title?: string
+      mode: BrowserUseMode
+      content: string
+    }
+  | {
+      action: 'observe'
+      url: string
+      title?: string
+      mode: BrowserUseMode
+      actions: BrowserUseActionItem[]
+    }
+  | {
+      action: 'act'
+      url: string
+      title?: string
+      mode: BrowserUseMode
+      success: boolean
+      message: string
+      pageState?: string
+    }
+
+export type BrowserUseService = {
+  show: () => Promise<void>
+  navigate: (url: string) => Promise<void>
+  run: (input: {
+    action: BrowserUseAction
+    instruction: string
+    url?: string
+    mode: BrowserUseMode
+    llmConfig: LlmRuntimeConfig
+  }) => Promise<BrowserUseResult>
+}
+
 export type AiRunDeps = {
   runtimeSettings: AiRuntimeSettings
   llmStore: LlmConfigStore
@@ -136,6 +182,7 @@ export type AiRunDeps = {
   recordLlmIo?: (record: AiLlmIoRecord) => void
   requestApprovalBatch: (request: AiApprovalBatchRequest) => Promise<AiApprovalBatchResult>
   llmDriver?: AiLlmDriver
+  browserUseService?: BrowserUseService
 }
 
 export type AiRunContext = {
@@ -181,6 +228,8 @@ export type AiRunContext = {
   sendEvent: (event: AiRunEvent) => void
   recordLlmIo?: (record: AiLlmIoRecord) => void
   requestApprovalBatch: (request: AiApprovalBatchRequest) => Promise<AiApprovalBatchResult>
+  getLlmConfig: () => Promise<LlmRuntimeConfig>
+  browserUseService?: BrowserUseService
   loadConversationContext: (limits?: {
     recentTurns?: number
     maxRecentTurnsChars?: number

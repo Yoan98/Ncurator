@@ -10,12 +10,19 @@ import { ModelService } from './services/model/ModelService'
 import { VectorModelDownloadService } from './services/model/VectorModelDownloadService'
 import { globalShortcut } from 'electron'
 import { loadRootEnvOnce } from './utils/rootEnv'
+import { BrowserEmbedService } from './services/browser/BrowserEmbedService'
+import { EMBEDDED_BROWSER_REMOTE_DEBUGGING_PORT } from './services/browser/constants'
+
+app.commandLine.appendSwitch(
+  'remote-debugging-port',
+  String(EMBEDDED_BROWSER_REMOTE_DEBUGGING_PORT)
+)
 
 if (!app.isPackaged) {
   loadRootEnvOnce()
 }
 
-function createWindow(): void {
+function createWindow(): BrowserWindow {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
     width: 1440,
@@ -57,6 +64,8 @@ function createWindow(): void {
       wc.openDevTools({ mode: 'right' })
     }
   })
+
+  return mainWindow
 }
 
 // This method will be called when Electron has finished
@@ -92,19 +101,22 @@ app.whenReady().then(async () => {
     .catch((err) => console.error('Failed to initialize EmbeddingService:', err))
   await storageService.initialize()
 
+  const mainWindow = createWindow()
+  const browserEmbedService = new BrowserEmbedService(mainWindow)
+
   registerHandlers({
     ingestionService,
     embeddingService,
     storageService,
     modelService,
-    vectorModelDownloadService
+    vectorModelDownloadService,
+    browserEmbedService
   })
 
   app.on('before-quit', () => {
     void storageService.failInterruptedWorkspaceIndexJobs()
   })
 
-  createWindow()
   vectorModelDownloadService
     .initialize()
     .catch((err) => console.error('Failed to initialize VectorModelDownloadService:', err))

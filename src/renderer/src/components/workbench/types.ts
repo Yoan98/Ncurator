@@ -185,3 +185,7 @@ export type WorkbenchContentPanelState =
       tabs: FileChangeWorkspaceTab[]
       activeFileKey: string | null
     }
+  | {
+      kind: 'browser'
+      title: string
+    }

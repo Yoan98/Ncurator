@@ -27,6 +27,7 @@ import { validateSelectedReferencesForRun } from '../services/sourceScope/valida
 import { WorkspaceSourceService } from '../services/workspace/WorkspaceSourceService'
 import { WorkspaceKnowledgePrepareService } from '../services/workspace/WorkspaceKnowledgePrepareService'
 import { WebSourceService } from '../services/web/WebSourceService'
+import type { BrowserEmbedService } from '../services/browser/BrowserEmbedService'
 import { v4 as uuidv4 } from 'uuid'
 import type {
   SearchResult,
@@ -43,6 +44,10 @@ import type {
   AiRunCancelResponse,
   AiRunApprovalBatchDecisionRequest,
   AiRunApprovalBatchDecisionResponse,
+  BrowserPanelBoundsRequest,
+  BrowserPanelE2ERunRequest,
+  BrowserPanelE2ERunResponse,
+  BrowserPanelMutationResponse,
   GetDocxApplyRecordRequest,
   GetDocxApplyRecordResponse,
   GetAiFileChangeRecordRequest,
@@ -206,6 +211,7 @@ export function registerHandlers(services: {
   storageService: StorageService
   modelService: ModelService
   vectorModelDownloadService: VectorModelDownloadService
+  browserEmbedService?: BrowserEmbedService
   recordLlmIo?: (record: AiLlmIoRecord) => void
 }) {
   const {
@@ -213,7 +219,8 @@ export function registerHandlers(services: {
     embeddingService,
     storageService,
     modelService,
-    vectorModelDownloadService
+    vectorModelDownloadService,
+    browserEmbedService
   } = services
   const activeAiRuns = new Map<
     string,
@@ -3116,7 +3123,8 @@ export function registerHandlers(services: {
                     }
                   })
                 })
-              }
+              },
+              browserUseService: browserEmbedService
             }
           )
 
@@ -3201,6 +3209,85 @@ export function registerHandlers(services: {
       return { success: false, error: e instanceof Error ? e.message : String(e) }
     }
   })
+
+  ipcMain.handle(
+    'browser-panel-set-bounds',
+    async (_event, payload: BrowserPanelBoundsRequest): Promise<BrowserPanelMutationResponse> => {
+      try {
+        if (!browserEmbedService) return { success: false, error: 'browser service unavailable' }
+        browserEmbedService.setBounds({
+          x: Number(payload?.x || 0),
+          y: Number(payload?.y || 0),
+          width: Number(payload?.width || 0),
+          height: Number(payload?.height || 0),
+          visible: payload?.visible === true
+        })
+        return { success: true }
+      } catch (e) {
+        return { success: false, error: e instanceof Error ? e.message : String(e) }
+      }
+    }
+  )
+
+  ipcMain.handle('browser-panel-show', async (): Promise<BrowserPanelMutationResponse> => {
+    try {
+      if (!browserEmbedService) return { success: false, error: 'browser service unavailable' }
+      await browserEmbedService.show()
+      return { success: true }
+    } catch (e) {
+      return { success: false, error: e instanceof Error ? e.message : String(e) }
+    }
+  })
+
+  ipcMain.handle('browser-panel-hide', async (): Promise<BrowserPanelMutationResponse> => {
+    try {
+      if (!browserEmbedService) return { success: false, error: 'browser service unavailable' }
+      browserEmbedService.hide()
+      return { success: true }
+    } catch (e) {
+      return { success: false, error: e instanceof Error ? e.message : String(e) }
+    }
+  })
+
+  ipcMain.handle('browser-panel-reload', async (): Promise<BrowserPanelMutationResponse> => {
+    try {
+      if (!browserEmbedService) return { success: false, error: 'browser service unavailable' }
+      browserEmbedService.reload()
+      return { success: true }
+    } catch (e) {
+      return { success: false, error: e instanceof Error ? e.message : String(e) }
+    }
+  })
+
+  ipcMain.handle('browser-panel-open-external', async (): Promise<BrowserPanelMutationResponse> => {
+    try {
+      if (!browserEmbedService) return { success: false, error: 'browser service unavailable' }
+      browserEmbedService.openExternal()
+      return { success: true }
+    } catch (e) {
+      return { success: false, error: e instanceof Error ? e.message : String(e) }
+    }
+  })
+
+  ipcMain.handle(
+    'browser-panel-e2e-run',
+    async (_event, payload: BrowserPanelE2ERunRequest): Promise<BrowserPanelE2ERunResponse> => {
+      try {
+        if (!isE2EFixtureModeEnabled()) return { success: false, error: 'e2e mode required' }
+        if (!browserEmbedService) return { success: false, error: 'browser service unavailable' }
+        const result = await browserEmbedService.run({
+          action: payload.action,
+          instruction: String(payload.instruction || '').trim(),
+          url: payload.url,
+          mode: payload.mode === 'visual' ? 'visual' : 'dom',
+          llmConfig: payload.llmConfig
+        })
+        return { success: true, result }
+      } catch (e) {
+        return { success: false, error: e instanceof Error ? e.message : String(e) }
+      }
+    }
+  )
 
   ipcMain.handle(
     'ai-run-approval-batch-decide',

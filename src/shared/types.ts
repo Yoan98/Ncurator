@@ -641,6 +641,8 @@ export type RuntimeSkillId =
   | 'docx-read'
   | 'docx-write'
   | 'kb-retrieval'
+  | 'web-browsing'
+  | 'utility'
 export type AiRunEventStage =
   | 'human_brain'
   | 'human_learning'
@@ -784,6 +786,36 @@ export type AiRunApprovalBatchDecisionResponse = {
   error?: string
 }
 
+export type BrowserPanelBounds = {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+export type BrowserPanelBoundsRequest = BrowserPanelBounds & {
+  visible: boolean
+}
+
+export type BrowserPanelMutationResponse = {
+  success: boolean
+  error?: string
+}
+
+export type BrowserPanelE2ERunRequest = {
+  action: 'extract' | 'observe' | 'act'
+  instruction: string
+  url?: string
+  mode?: 'dom' | 'visual'
+  llmConfig: LlmRuntimeConfig
+}
+
+export type BrowserPanelE2ERunResponse = {
+  success: boolean
+  result?: JsonValue
+  error?: string
+}
+
 export type AiContextUsageRequest = {
   sessionId: string
 }
@@ -906,6 +938,12 @@ type AiRunEventPayload =
       draftRef?: AiDraftSnapshotRef
       completedAt: number
       error?: string
+    }
+  | {
+      type: 'browser_panel_opened'
+      runId: string
+      taskId?: string
+      createdAt: number
     }
   | {
       type: 'terminal_step_started'

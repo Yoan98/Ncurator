@@ -17,6 +17,8 @@ import { releaseDocxRunSession } from '../../../src/main/services/ai/human/tools
 import { DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS } from '../../../src/main/services/ai/human/constants'
 import { buildKbCapabilityTools } from '../../../src/main/services/ai/human/tools/kb/retrievalTools'
 import { buildTerminalCapabilityTools } from '../../../src/main/services/ai/human/tools/terminal/terminalTools'
+import { utilityToolFamily } from '../../../src/main/services/ai/human/tools/utility'
+import { webToolFamily } from '../../../src/main/services/ai/human/tools/web'
 import { createHumanRuntimeCache } from '../../../src/main/services/ai/human/node/utils/runtimeCache'
 import type { JsonObject, JsonValue } from '../../../src/shared/types'
 import type { BackendTestRuntime, CreateAiRunContextInput } from './test-types'
@@ -135,6 +137,48 @@ export const createRetrievalToolHarness = (
       buildKbCapabilityTools({
         ctx,
         runId: runtime.runId,
+        taskId: runtime.taskId
+      }) as readonly ToolLike[]
+    ),
+    ctx
+  }
+}
+
+export const createWebToolHarness = (
+  runtime: BackendTestRuntime,
+  contextInput: CreateAiRunContextInput = {}
+) => {
+  const ctx = runtime.createAiRunContext(contextInput)
+  const cache = createHumanRuntimeCache()
+
+  return {
+    ...createToolInvoker(
+      webToolFamily.buildTools({
+        ctx,
+        cache,
+        runId: runtime.runId,
+        sessionId: contextInput.sessionId || 'test-session',
+        taskId: runtime.taskId
+      }) as readonly ToolLike[]
+    ),
+    ctx
+  }
+}
+
+export const createUtilityToolHarness = (
+  runtime: BackendTestRuntime,
+  contextInput: CreateAiRunContextInput = {}
+) => {
+  const ctx = runtime.createAiRunContext(contextInput)
+  const cache = createHumanRuntimeCache()
+
+  return {
+    ...createToolInvoker(
+      utilityToolFamily.buildTools({
+        ctx,
+        cache,
+        runId: runtime.runId,
+        sessionId: contextInput.sessionId || 'test-session',
         taskId: runtime.taskId
       }) as readonly ToolLike[]
     ),

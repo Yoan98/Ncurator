@@ -290,6 +290,12 @@ const api: DesktopApi = {
     return ipcRenderer.invoke('ai-run-approval-batch-decide', payload)
   },
   aiContextUsageGet: (payload) => ipcRenderer.invoke('ai-context-usage-get', payload),
+  browserPanelSetBounds: (payload) => ipcRenderer.invoke('browser-panel-set-bounds', payload),
+  browserPanelShow: () => ipcRenderer.invoke('browser-panel-show'),
+  browserPanelHide: () => ipcRenderer.invoke('browser-panel-hide'),
+  browserPanelReload: () => ipcRenderer.invoke('browser-panel-reload'),
+  browserPanelOpenExternal: () => ipcRenderer.invoke('browser-panel-open-external'),
+  browserPanelE2ERun: (payload) => ipcRenderer.invoke('browser-panel-e2e-run', payload),
   docxApplyGet: (payload) => ipcRenderer.invoke('docx-apply-get', payload),
   aiFileChangeList: (payload) => ipcRenderer.invoke('ai-file-change-list', payload),
   aiFileChangeGet: (payload) => ipcRenderer.invoke('ai-file-change-get', payload),

@@ -989,6 +989,19 @@ const ChatPage: React.FC = () => {
   }
 
   useEffect(() => {
+    const handleOpenBrowserPanel = (): void => {
+      showContentPanel({
+        kind: 'browser',
+        title: '内置浏览器'
+      })
+    }
+    window.addEventListener('ncurator-e2e-open-browser-panel', handleOpenBrowserPanel)
+    return () => {
+      window.removeEventListener('ncurator-e2e-open-browser-panel', handleOpenBrowserPanel)
+    }
+  }, [showContentPanel])
+
+  useEffect(() => {
     window.api.removeAiRunEventListeners()
     window.api.onAiRunEvent((event) => {
       const hasActiveRun = Boolean(aiRunId)
@@ -1029,6 +1042,14 @@ const ChatPage: React.FC = () => {
             tokens: []
           })
         }
+        return
+      }
+
+      if (event.type === 'browser_panel_opened') {
+        showContentPanel({
+          kind: 'browser',
+          title: '内置浏览器'
+        })
         return
       }
 
@@ -2303,6 +2324,8 @@ const ChatPage: React.FC = () => {
                   ? 0
                   : contentPanel.kind === 'apply_workspace'
                     ? 'min(48vw, 780px)'
+                    : contentPanel.kind === 'browser'
+                      ? 'min(52vw, 860px)'
                     : contentPanel.kind === 'file_preview'
                       ? 'min(46vw, 740px)'
                       : 440

@@ -104,6 +104,7 @@ export type HumanRuntimeCache = {
   skillToolsets: Partial<Record<RuntimeSkillId, StructuredToolInterface[]>>
   docxRuntime?: DocxToolRuntime
   approvedTerminalCommandCounts?: Map<string, number>
+  approvedBrowserUseTaskIds?: Set<string>
   toolCallCount: number
   currentState?: HumanState
   lastBrainInputTokens?: number

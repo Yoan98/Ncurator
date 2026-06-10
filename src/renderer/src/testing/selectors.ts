@@ -127,6 +127,8 @@ export const workbenchSelectors = {
   documentView: 'workbench-document-view',
   applyPanel: 'workbench-apply-panel',
   applyTabs: 'workbench-apply-tabs',
+  browserPanel: 'workbench-browser-panel',
+  browserViewport: 'workbench-browser-viewport',
   timeline: 'workbench-timeline',
   timelineItemPrefix: 'workbench-timeline-item',
   inspector: 'workbench-inspector',
