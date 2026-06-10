@@ -404,7 +404,7 @@ interface HumanLearningOutcome {
 
 - `hand` 承接 `brain` 已明确决定的工具调用批次，执行工具并回写结果、历史与产物。
 - `hand` 只按顺序串行执行 `calls`。
-- `hand` 节点不额外承担推理职责；具体工具可按自身能力调用底层服务，例如内置浏览器工具可使用当前大模型完成 DOM/视觉网页操作。
+- `hand` 节点不额外承担推理职责；具体工具可按自身能力调用底层服务，例如内置浏览器工具可使用当前大模型完成 DOM 网页操作。
 - `browser_use` 首次在同一 task 中执行前进入现有批量审批；同一 task 后续浏览器操作不重复审核。
 - 工具结果过大统一通过 `hand_tool_result_too_large` decision hint 回到 brain，不在各工具中复制独立提示逻辑。
 

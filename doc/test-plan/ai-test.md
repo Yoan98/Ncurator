@@ -687,7 +687,7 @@
 - Why：浏览器能力依赖 Electron 内置浏览器服务，服务不可用时必须进入现有工具失败兜底，而不是静默失败。
 - How：在 tool harness 中不注入 `browserUseService`，直接调用 `browser_use(extract)`。
 - Oracle：工具结果返回 `browser_use service unavailable`。
-- Not：不验证 Stagehand DOM/visual 实际网页操作。
+- Not：不验证 Stagehand 实际网页操作。
 
 #### utility 类别
 

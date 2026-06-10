@@ -9,34 +9,20 @@ import {
   EMBEDDED_BROWSER_REMOTE_DEBUGGING_PORT,
   EMBEDDED_BROWSER_STAGEHAND_TIMEOUT_MS
 } from './constants'
-import type {
-  BrowserPanelBoundsState,
-  BrowserUseRunInput,
-  BrowserUseRunResult,
-  OpenAIChatMessage,
-  OpenAICompatibleChatClient,
-  OpenAICompatibleChatCompletionResponse
-} from './types'
+import type { BrowserPanelBoundsState, BrowserUseRunInput, BrowserUseRunResult } from './types'
 
 type StagehandModule = typeof import('@browserbasehq/stagehand')
 type StagehandInstance = InstanceType<StagehandModule['Stagehand']>
 type StagehandCustomClientParams = ConstructorParameters<StagehandModule['CustomOpenAIClient']>[0]
 
-const visualObserveSchema = z.object({
-  actions: z.array(
+const stagehandChatResponseSchema = z.object({
+  choices: z.array(
     z.object({
-      description: z.string(),
-      method: z.string().optional()
+      message: z.object({
+        content: z.string().nullable()
+      })
     })
   )
-})
-
-const visualActSchema = z.object({
-  action: z.enum(['click', 'type', 'none']),
-  x: z.number().optional(),
-  y: z.number().optional(),
-  text: z.string().optional(),
-  message: z.string().optional()
 })
 
 const normalizeUrl = (rawUrl: string): string => {
@@ -122,47 +108,10 @@ const loadWebContentsUrl = async (webContents: WebContents, url: string): Promis
   })
 }
 
-const parseJsonFromModelText = (text: string): object => {
-  const trimmed = String(text || '').trim()
-  const withoutFence = trimmed
-    .replace(/^```(?:json)?/i, '')
-    .replace(/```$/i, '')
-    .trim()
-  const firstBrace = withoutFence.indexOf('{')
-  const lastBrace = withoutFence.lastIndexOf('}')
-  const jsonText =
-    firstBrace >= 0 && lastBrace > firstBrace
-      ? withoutFence.slice(firstBrace, lastBrace + 1)
-      : withoutFence
-  return JSON.parse(jsonText) as object
-}
-
 const stringifyStagehandExtraction = (value: object): string => {
   if ('extraction' in value && typeof value.extraction === 'string') return value.extraction
   if ('pageText' in value && typeof value.pageText === 'string') return value.pageText
   return JSON.stringify(value)
-}
-
-const normalizeOpenAIChatResponse = (payload: object): OpenAICompatibleChatCompletionResponse => {
-  const parsed = z
-    .object({
-      choices: z.array(
-        z.object({
-          message: z.object({
-            content: z.string().nullable()
-          })
-        })
-      ),
-      usage: z
-        .object({
-          prompt_tokens: z.number().optional(),
-          completion_tokens: z.number().optional(),
-          total_tokens: z.number().optional()
-        })
-        .optional()
-    })
-    .parse(payload)
-  return parsed
 }
 
 export class BrowserEmbedService implements BrowserUseService {
@@ -226,9 +175,6 @@ export class BrowserEmbedService implements BrowserUseService {
     await this.show()
     if (input.url) {
       await this.navigate(input.url)
-    }
-    if (input.mode === 'visual') {
-      return await this.runVisual(input)
     }
     return await this.runDom(input)
   }
@@ -305,7 +251,6 @@ export class BrowserEmbedService implements BrowserUseService {
           action: 'extract',
           url: page.url(),
           title,
-          mode: input.mode,
           content: stringifyStagehandExtraction(result)
         }
       }
@@ -315,7 +260,6 @@ export class BrowserEmbedService implements BrowserUseService {
           action: 'observe',
           url: page.url(),
           title,
-          mode: input.mode,
           actions: actions.map((action): BrowserUseActionItem => ({
             description: action.description,
             method: action.method
@@ -328,86 +272,12 @@ export class BrowserEmbedService implements BrowserUseService {
         action: 'act',
         url: page.url(),
         title: await page.title(),
-        mode: input.mode,
         success: result.success,
         message: result.message,
         pageState: await this.readPageState()
       }
     } finally {
       await this.closeStagehand(stagehand)
-    }
-  }
-
-  private async runVisual(input: BrowserUseRunInput): Promise<BrowserUseRunResult> {
-    const view = this.ensureView()
-    await waitForWebContentsLoad(view.webContents)
-    const title = await this.getTitle()
-    const url = view.webContents.getURL()
-    const screenshot = await view.webContents.capturePage()
-    const imageUrl = screenshot.toDataURL()
-
-    if (input.action === 'extract') {
-      const content = await this.chatWithScreenshot({
-        llmConfig: input.llmConfig,
-        imageUrl,
-        system:
-          'You read browser screenshots. Return only the content requested by the user, without markdown fences.',
-        user: input.instruction
-      })
-      return {
-        action: 'extract',
-        url,
-        title,
-        mode: input.mode,
-        content
-      }
-    }
-
-    if (input.action === 'observe') {
-      const content = await this.chatWithScreenshot({
-        llmConfig: input.llmConfig,
-        imageUrl,
-        system:
-          'You inspect a browser screenshot. Return JSON only: {"actions":[{"description":"...","method":"click|type|scroll|read"}]}.',
-        user: input.instruction
-      })
-      const parsed = visualObserveSchema.parse(parseJsonFromModelText(content))
-      return {
-        action: 'observe',
-        url,
-        title,
-        mode: input.mode,
-        actions: parsed.actions
-      }
-    }
-
-    const content = await this.chatWithScreenshot({
-      llmConfig: input.llmConfig,
-      imageUrl,
-      system:
-        'You control a browser screenshot. Return JSON only: {"action":"click|type|none","x":number,"y":number,"text":"optional","message":"short result"}. Coordinates are relative to the screenshot top-left.',
-      user: input.instruction
-    })
-    const parsed = visualActSchema.parse(parseJsonFromModelText(content))
-    if (parsed.action === 'click' && typeof parsed.x === 'number' && typeof parsed.y === 'number') {
-      view.webContents.sendInputEvent({ type: 'mouseDown', x: parsed.x, y: parsed.y, button: 'left' })
-      view.webContents.sendInputEvent({ type: 'mouseUp', x: parsed.x, y: parsed.y, button: 'left' })
-      await waitForWebContentsLoad(view.webContents)
-    } else if (parsed.action === 'type' && parsed.text) {
-      if (typeof parsed.x === 'number' && typeof parsed.y === 'number') {
-        view.webContents.sendInputEvent({ type: 'mouseDown', x: parsed.x, y: parsed.y, button: 'left' })
-        view.webContents.sendInputEvent({ type: 'mouseUp', x: parsed.x, y: parsed.y, button: 'left' })
-      }
-      await view.webContents.insertText(parsed.text)
-    }
-    return {
-      action: 'act',
-      url: view.webContents.getURL(),
-      title: await this.getTitle(),
-      mode: input.mode,
-      success: parsed.action !== 'none',
-      message: parsed.message || (parsed.action === 'none' ? 'visual action not available' : 'visual action executed'),
-      pageState: await this.readPageState()
     }
   }
 
@@ -443,7 +313,9 @@ export class BrowserEmbedService implements BrowserUseService {
     return payload.webSocketDebuggerUrl
   }
 
-  private createOpenAICompatibleClient(config: BrowserUseRunInput['llmConfig']): OpenAICompatibleChatClient {
+  private createStagehandOpenAIClient(
+    config: BrowserUseRunInput['llmConfig']
+  ): StagehandCustomClientParams['client'] {
     return {
       chat: {
         completions: {
@@ -458,7 +330,7 @@ export class BrowserEmbedService implements BrowserUseService {
               },
               body: JSON.stringify(body)
             })
-            const payload = (await response.json()) as object
+            const payload = await response.json()
             if (!response.ok) {
               const errorMessage =
                 'error' in payload && typeof payload.error === 'object'
@@ -466,56 +338,11 @@ export class BrowserEmbedService implements BrowserUseService {
                   : JSON.stringify(payload)
               throw new Error(`LLM chat completion failed: ${errorMessage}`)
             }
-            return normalizeOpenAIChatResponse(payload)
+            return stagehandChatResponseSchema.parse(payload) as never
           }
         }
       }
     }
-  }
-
-  private createStagehandOpenAIClient(
-    config: BrowserUseRunInput['llmConfig']
-  ): StagehandCustomClientParams['client'] {
-    return this.createOpenAICompatibleClient(config) as never
-  }
-
-  private async chatWithScreenshot(input: {
-    llmConfig: BrowserUseRunInput['llmConfig']
-    imageUrl: string
-    system: string
-    user: string
-  }): Promise<string> {
-    const client = this.createOpenAICompatibleClient(input.llmConfig)
-    const messages: OpenAIChatMessage[] = [
-      {
-        role: 'system',
-        content: input.system
-      },
-      {
-        role: 'user',
-        content: [
-          {
-            type: 'text',
-            text: input.user
-          },
-          {
-            type: 'image_url',
-            image_url: {
-              url: input.imageUrl
-            }
-          }
-        ]
-      }
-    ]
-    const result = await client.chat.completions.create({
-      model: input.llmConfig.model_name,
-      messages,
-      temperature: 0,
-      stream: false
-    })
-    const content = result.choices[0]?.message.content
-    if (!content) throw new Error('vision model returned empty content')
-    return content
   }
 
   private async getTitle(): Promise<string | undefined> {

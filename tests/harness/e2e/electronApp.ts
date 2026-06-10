@@ -1,5 +1,6 @@
 import path from 'node:path'
 import os from 'node:os'
+import { createServer } from 'node:net'
 import { access, mkdtemp, rm } from 'node:fs/promises'
 import electronPath from 'electron'
 import {
@@ -94,9 +95,37 @@ const ensureBuiltAppExists = async (): Promise<void> => {
   await access(OUT_MAIN_ENTRY)
 }
 
+const allocateFreePort = async (): Promise<number> => {
+  const server = createServer()
+  await new Promise<void>((resolve, reject) => {
+    server.once('error', reject)
+    server.listen(0, '127.0.0.1', () => {
+      server.off('error', reject)
+      resolve()
+    })
+  })
+  const address = server.address()
+  if (!address || typeof address === 'string') {
+    server.close()
+    throw new Error('failed to allocate free port for electron e2e')
+  }
+  const port = address.port
+  await new Promise<void>((resolve, reject) => {
+    server.close((error) => {
+      if (error) {
+        reject(error)
+        return
+      }
+      resolve()
+    })
+  })
+  return port
+}
+
 const buildElectronLaunchEnv = (
   userDataDir: string,
-  launchMode: ElectronLaunchMode
+  launchMode: ElectronLaunchMode,
+  remoteDebuggingPort: number
 ): NodeJS.ProcessEnv => {
   const env: NodeJS.ProcessEnv = {}
 
@@ -114,6 +143,7 @@ const buildElectronLaunchEnv = (
   }
   env.NCURATOR_E2E_WINDOW_MODE = process.env.NCURATOR_E2E_WINDOW_MODE || 'background'
   env.NCURATOR_USER_DATA_PATH = userDataDir
+  env.NCURATOR_EMBEDDED_BROWSER_REMOTE_DEBUGGING_PORT = String(remoteDebuggingPort)
 
   return env
 }
@@ -176,7 +206,12 @@ export const launchElectronApp = async (
 
   const consoleEntries: E2EConsoleEntry[] = []
   const userDataDir = await mkdtemp(path.join(os.tmpdir(), 'ncurator-e2e-user-data-'))
-  const launchEnv = buildElectronLaunchEnv(userDataDir, input.launchMode || 'fixture')
+  const remoteDebuggingPort = await allocateFreePort()
+  const launchEnv = buildElectronLaunchEnv(
+    userDataDir,
+    input.launchMode || 'fixture',
+    remoteDebuggingPort
+  )
   const electronApp = await electron.launch({
     executablePath: electronPath,
     args: ['.'],

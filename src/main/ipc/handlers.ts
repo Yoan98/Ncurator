@@ -3279,7 +3279,6 @@ export function registerHandlers(services: {
           action: payload.action,
           instruction: String(payload.instruction || '').trim(),
           url: payload.url,
-          mode: payload.mode === 'visual' ? 'visual' : 'dom',
           llmConfig: payload.llmConfig
         })
         return { success: true, result }

@@ -112,7 +112,6 @@ describe('workbench browser panel e2e', () => {
                   action: 'extract',
                   instruction: 'Extract the current Alpha status text. Return only that visible text.',
                   url: targetUrl,
-                  mode: 'dom',
                   llmConfig
                 })
               } catch (error) {
@@ -137,7 +136,6 @@ describe('workbench browser panel e2e', () => {
               await runBrowserPanelE2E(page, {
                 action: 'observe',
                 instruction: 'Find the action that marks the Alpha status complete.',
-                mode: 'dom',
                 llmConfig
               })
           })
@@ -149,7 +147,6 @@ describe('workbench browser panel e2e', () => {
               await runBrowserPanelE2E(page, {
                 action: 'act',
                 instruction: 'Click the Mark Complete button.',
-                mode: 'dom',
                 llmConfig
               })
           })
@@ -161,7 +158,6 @@ describe('workbench browser panel e2e', () => {
               await runBrowserPanelE2E(page, {
                 action: 'extract',
                 instruction: 'Extract the current Alpha status text. Return only that visible text.',
-                mode: 'dom',
                 llmConfig
               })
           })

@@ -3,7 +3,6 @@ import { load } from 'cheerio'
 import type { AiToolCallResult, IpcJsonObject, JsonValue } from '../../../../../../shared/types'
 import { DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS } from '../../constants'
 import { WebSourceService } from '../../../../web/WebSourceService'
-import type { BrowserUseMode } from '../../../types'
 import { withToolLifecycle } from '../utils/lifecycle'
 import { createToolEventEmitter } from '../utils/toolEvents'
 import { checkToolResultSize } from '../utils/resultSizeGuard'
@@ -215,7 +214,6 @@ export const webToolFamily: ToolFamilyDefinition = {
 
             const action = args.action
             const instruction = String(args.instruction || '').trim()
-            const mode: BrowserUseMode = args.mode === 'visual' ? 'visual' : 'dom'
             const url = typeof args.url === 'string' ? args.url.trim() : undefined
             try {
               ctx.sendEvent({
@@ -229,7 +227,6 @@ export const webToolFamily: ToolFamilyDefinition = {
                 action,
                 instruction,
                 url,
-                mode,
                 llmConfig: await ctx.getLlmConfig()
               })
               const payload = { ...result }

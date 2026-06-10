@@ -122,7 +122,6 @@ export type AiTerminalApprovalFallback = {
 }
 
 export type BrowserUseAction = 'extract' | 'observe' | 'act'
-export type BrowserUseMode = 'dom' | 'visual'
 
 export type BrowserUseActionItem = {
   description: string
@@ -134,21 +133,18 @@ export type BrowserUseResult =
       action: 'extract'
       url: string
       title?: string
-      mode: BrowserUseMode
       content: string
     }
   | {
       action: 'observe'
       url: string
       title?: string
-      mode: BrowserUseMode
       actions: BrowserUseActionItem[]
     }
   | {
       action: 'act'
       url: string
       title?: string
-      mode: BrowserUseMode
       success: boolean
       message: string
       pageState?: string
@@ -161,7 +157,6 @@ export type BrowserUseService = {
     action: BrowserUseAction
     instruction: string
     url?: string
-    mode: BrowserUseMode
     llmConfig: LlmRuntimeConfig
   }) => Promise<BrowserUseResult>
 }

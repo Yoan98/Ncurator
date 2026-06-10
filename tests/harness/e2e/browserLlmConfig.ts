@@ -8,8 +8,7 @@ const readEnv = (name: string): string => {
   return String(process.env[name] || '').trim()
 }
 
-const resolveBrowserE2EModelName = (): string =>
-  readEnv('AI_LIVE_VISION_MODEL_NAME')
+const resolveBrowserE2EModelName = (): string => readEnv('AI_LIVE_PRIMARY_MODEL_NAME')
 
 const resolveBrowserE2EBaseUrl = (): string => {
   return normalizeOpenAIBaseUrl(readEnv('AI_LIVE_BASE_URL'))
@@ -28,10 +27,10 @@ export const loadBrowserE2ELlmConfigFromEnv = (): LlmRuntimeConfig => {
   if (!baseUrl || !modelName || !apiKey) {
     throw new Error(
       [
-        'browser e2e 缺少视觉/网页操作模型配置，请设置环境变量：',
+        'browser e2e 缺少网页操作模型配置，请设置环境变量：',
         '- AI_LIVE_BASE_URL',
         '- AI_LIVE_API_KEY',
-        '- AI_LIVE_VISION_MODEL_NAME',
+        '- AI_LIVE_PRIMARY_MODEL_NAME',
         '可选配置：',
         '- AI_LIVE_PROVIDER_KIND（默认按 base URL 推断）'
       ].join('\n')

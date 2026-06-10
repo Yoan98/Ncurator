@@ -9,8 +9,7 @@ export const WEB_FETCH_SCHEMA = z.object({
 export const BROWSER_USE_SCHEMA = z.object({
   action: z.enum(['extract', 'observe', 'act']),
   instruction: z.string().min(1),
-  url: z.string().min(1).optional(),
-  mode: z.enum(['dom', 'visual']).optional()
+  url: z.string().min(1).optional()
 })
 
 export const WEB_FETCH_OUTPUT_SCHEMA = z.union([
@@ -29,8 +28,7 @@ export const WEB_FETCH_OUTPUT_SCHEMA = z.union([
 
 const browserUseBaseOutputSchema = z.object({
   url: z.string(),
-  title: z.string().optional(),
-  mode: z.enum(['dom', 'visual'])
+  title: z.string().optional()
 })
 
 export const BROWSER_USE_OUTPUT_SCHEMA = z.union([
@@ -104,7 +102,7 @@ export const BROWSER_USE_TOOL_SPEC: HumanToolSpec<
   promptSpec: {
     name: 'browser_use',
     description:
-      '能力：操作应用的右侧内置浏览器，支持 extract、observe、act 三类网页操作。\n结果：extract 返回页面内容；observe 返回可见动作；act 返回动作执行结果与页面状态。\n边界：mode 默认为 dom；visual 使用当前页面截图和当前模型视觉能力；首次使用会进入用户审核。',
+      '能力：操作应用的右侧内置浏览器，支持 extract、observe、act 三类网页操作。\n结果：extract 返回页面内容；observe 返回可见动作；act 返回动作执行结果与页面状态。\n边界：使用页面 DOM 与浏览器上下文完成操作；首次使用会进入用户审核。',
     whenToUse: '适用于需要在网页界面中读取、观察或执行动作的任务。',
     examples: [
       {

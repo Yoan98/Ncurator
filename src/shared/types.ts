@@ -806,7 +806,6 @@ export type BrowserPanelE2ERunRequest = {
   action: 'extract' | 'observe' | 'act'
   instruction: string
   url?: string
-  mode?: 'dom' | 'visual'
   llmConfig: LlmRuntimeConfig
 }
 
