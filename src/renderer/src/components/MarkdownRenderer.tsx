@@ -1,5 +1,5 @@
 ﻿import React from 'react'
-import ReactMarkdown from 'react-markdown'
+import ReactMarkdown, { defaultUrlTransform } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
@@ -24,6 +24,13 @@ interface MarkdownRendererProps {
   }) => void
 }
 
+const transformMarkdownUrl = (url: string): string => {
+  if (url.startsWith('ncurator://ref?')) {
+    return url
+  }
+  return defaultUrlTransform(url)
+}
+
 const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   content,
   className,
@@ -34,6 +41,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMath]}
         rehypePlugins={[rehypeKatex]}
+        urlTransform={transformMarkdownUrl}
         components={{
           code({
             inline,
