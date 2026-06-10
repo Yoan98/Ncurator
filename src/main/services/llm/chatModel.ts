@@ -2,8 +2,8 @@ import { ChatOpenAI } from '@langchain/openai'
 import { ChatDeepSeek } from '@langchain/deepseek'
 import type { LlmRuntimeConfig } from '../../types/store'
 import type { AiStructuredOutputTransport } from '../../../shared/types'
-import { normalizeOpenAIBaseUrl } from '../../../shared/llmBaseUrl'
 import { resolveLlmProviderKind } from '../../../shared/llmProvider'
+import { resolveOpenAICompatibleRuntimeOptions } from './openaiCompatible'
 
 export type ChatModelFactoryOptions = {
   temperature?: number
@@ -38,16 +38,21 @@ export const createChatModel = (cfg: LlmRuntimeConfig, opts?: ChatModelFactoryOp
     })
   }
 
+  const runtimeOptions = resolveOpenAICompatibleRuntimeOptions(cfg, {
+    consumerName: 'chat_model',
+    supportedProviderKinds: ['openai', 'openai-compatible']
+  })
+
   return new ChatOpenAI({
-    model: cfg.model_name,
-    apiKey: cfg.api_key,
+    model: runtimeOptions.modelName,
+    apiKey: runtimeOptions.apiKey,
     useResponsesApi: opts?.transport === 'responses',
     temperature: opts?.temperature ?? 0.2,
     maxRetries: 0,
     timeout: opts?.timeout,
     streaming: opts?.streaming === true,
     configuration: {
-      baseURL: normalizeOpenAIBaseUrl(cfg.base_url)
+      baseURL: runtimeOptions.baseURL
     }
   })
 }

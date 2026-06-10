@@ -24,7 +24,6 @@ import type {
   DocxApplyRecord,
   LLMConfig,
   LlmRemoteModel,
-  SearchResult,
   SelectedReference,
   WorkspaceSource,
   WorkspaceRuntimeBinding

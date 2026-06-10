@@ -1,7 +1,6 @@
 import { shell, WebContentsView } from 'electron'
 import type { BrowserWindow, Rectangle, WebContents } from 'electron'
 import { z } from 'zod/v4'
-import { normalizeOpenAIBaseUrl } from '../../../shared/llmBaseUrl'
 import type { BrowserUseActionItem, BrowserUseService } from '../ai/types'
 import {
   EMBEDDED_BROWSER_NAVIGATION_TIMEOUT_MS,
@@ -10,20 +9,10 @@ import {
   EMBEDDED_BROWSER_STAGEHAND_TIMEOUT_MS
 } from './constants'
 import type { BrowserPanelBoundsState, BrowserUseRunInput, BrowserUseRunResult } from './types'
+import { resolveStagehandModelConfig } from '../llm/stagehandModel'
 
 type StagehandModule = typeof import('@browserbasehq/stagehand')
 type StagehandInstance = InstanceType<StagehandModule['Stagehand']>
-type StagehandCustomClientParams = ConstructorParameters<StagehandModule['CustomOpenAIClient']>[0]
-
-const stagehandChatResponseSchema = z.object({
-  choices: z.array(
-    z.object({
-      message: z.object({
-        content: z.string().nullable()
-      })
-    })
-  )
-})
 
 const normalizeUrl = (rawUrl: string): string => {
   const parsed = new URL(String(rawUrl || '').trim())
@@ -225,15 +214,16 @@ export class BrowserEmbedService implements BrowserUseService {
     await waitForWebContentsLoad(view.webContents)
     const stagehandModule = await import('@browserbasehq/stagehand')
     const cdpUrl = await this.getCdpWebSocketUrl()
+    const modelConfig = resolveStagehandModelConfig(input.llmConfig)
     const stagehand = new stagehandModule.Stagehand({
       env: 'LOCAL',
       disablePino: true,
       verbose: 0,
       disableAPI: true,
-      llmClient: new stagehandModule.CustomOpenAIClient({
-        modelName: input.llmConfig.model_name,
-        client: this.createStagehandOpenAIClient(input.llmConfig)
-      }),
+      model: {
+        modelName: modelConfig.modelName,
+        ...modelConfig.clientOptions
+      },
       localBrowserLaunchOptions: {
         cdpUrl,
         connectTimeoutMs: 20_000
@@ -311,38 +301,6 @@ export class BrowserEmbedService implements BrowserUseService {
       })
       .parse(await response.json())
     return payload.webSocketDebuggerUrl
-  }
-
-  private createStagehandOpenAIClient(
-    config: BrowserUseRunInput['llmConfig']
-  ): StagehandCustomClientParams['client'] {
-    return {
-      chat: {
-        completions: {
-          create: async (body) => {
-            const baseUrl = normalizeOpenAIBaseUrl(config.base_url)
-            if (!baseUrl) throw new Error('LLM base_url is empty')
-            const response = await fetch(`${baseUrl}/chat/completions`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${config.api_key}`
-              },
-              body: JSON.stringify(body)
-            })
-            const payload = await response.json()
-            if (!response.ok) {
-              const errorMessage =
-                'error' in payload && typeof payload.error === 'object'
-                  ? JSON.stringify(payload.error)
-                  : JSON.stringify(payload)
-              throw new Error(`LLM chat completion failed: ${errorMessage}`)
-            }
-            return stagehandChatResponseSchema.parse(payload) as never
-          }
-        }
-      }
-    }
   }
 
   private async getTitle(): Promise<string | undefined> {
