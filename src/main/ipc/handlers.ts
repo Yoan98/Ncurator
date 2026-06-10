@@ -28,6 +28,7 @@ import { WorkspaceSourceService } from '../services/workspace/WorkspaceSourceSer
 import { WorkspaceKnowledgePrepareService } from '../services/workspace/WorkspaceKnowledgePrepareService'
 import { WebSourceService } from '../services/web/WebSourceService'
 import type { BrowserEmbedService } from '../services/browser/BrowserEmbedService'
+import type { WebCrawlerService } from '../services/webCrawler/types'
 import { v4 as uuidv4 } from 'uuid'
 import type {
   SearchResult,
@@ -212,6 +213,7 @@ export function registerHandlers(services: {
   modelService: ModelService
   vectorModelDownloadService: VectorModelDownloadService
   browserEmbedService?: BrowserEmbedService
+  webCrawlerService?: WebCrawlerService
   recordLlmIo?: (record: AiLlmIoRecord) => void
 }) {
   const {
@@ -220,7 +222,8 @@ export function registerHandlers(services: {
     storageService,
     modelService,
     vectorModelDownloadService,
-    browserEmbedService
+    browserEmbedService,
+    webCrawlerService
   } = services
   const activeAiRuns = new Map<
     string,
@@ -3124,7 +3127,8 @@ export function registerHandlers(services: {
                   })
                 })
               },
-              browserUseService: browserEmbedService
+              browserUseService: browserEmbedService,
+              webCrawlerService
             }
           )
 

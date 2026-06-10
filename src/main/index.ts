@@ -12,6 +12,7 @@ import { globalShortcut } from 'electron'
 import { loadRootEnvOnce } from './utils/rootEnv'
 import { BrowserEmbedService } from './services/browser/BrowserEmbedService'
 import { EMBEDDED_BROWSER_REMOTE_DEBUGGING_PORT } from './services/browser/constants'
+import { ManagedWebCrawlerService } from './services/webCrawler/WebCrawlerService'
 
 app.commandLine.appendSwitch(
   'remote-debugging-port',
@@ -103,6 +104,11 @@ app.whenReady().then(async () => {
 
   const mainWindow = createWindow()
   const browserEmbedService = new BrowserEmbedService(mainWindow)
+  const webCrawlerService = new ManagedWebCrawlerService({
+    appRootPath: app.getAppPath(),
+    isPackaged: app.isPackaged,
+    resourcesPath: process.resourcesPath
+  })
 
   registerHandlers({
     ingestionService,
@@ -110,11 +116,13 @@ app.whenReady().then(async () => {
     storageService,
     modelService,
     vectorModelDownloadService,
-    browserEmbedService
+    browserEmbedService,
+    webCrawlerService
   })
 
   app.on('before-quit', () => {
     void storageService.failInterruptedWorkspaceIndexJobs()
+    void webCrawlerService.close()
   })
 
   vectorModelDownloadService

@@ -2,8 +2,9 @@ import { z } from 'zod/v4'
 import type { HumanToolSpec } from '../types'
 import { createStaticExecutionMetaResolver } from '../utils/toolSpecUtils'
 
-export const WEB_FETCH_SCHEMA = z.object({
-  url: z.string().min(1)
+export const WEB_CRAWL_SCHEMA = z.object({
+  url: z.string().min(1),
+  topic: z.string().min(1).optional()
 })
 
 export const BROWSER_USE_SCHEMA = z.object({
@@ -12,16 +13,22 @@ export const BROWSER_USE_SCHEMA = z.object({
   url: z.string().min(1).optional()
 })
 
-export const WEB_FETCH_OUTPUT_SCHEMA = z.union([
+export const WEB_CRAWL_OUTPUT_SCHEMA = z.union([
   z.object({
-    url: z.string(),
-    statusCode: z.number().int(),
+    finalUrl: z.string(),
     title: z.string().optional(),
-    text: z.string()
+    markdown: z.string(),
+    links: z.array(
+      z.object({
+        href: z.string(),
+        text: z.string().optional()
+      })
+    ),
+    publishedAt: z.string().optional()
   }),
   z.object({
     error: z.string(),
-    url: z.string().optional(),
+    finalUrl: z.string().optional(),
     statusCode: z.number().int().optional()
   })
 ])
@@ -58,28 +65,29 @@ const WEB_EXECUTION_META = createStaticExecutionMetaResolver({
   defaultResourceKey: 'web'
 })
 
-export const WEB_FETCH_TOOL_SPEC: HumanToolSpec<
-  z.infer<typeof WEB_FETCH_SCHEMA>,
-  z.infer<typeof WEB_FETCH_OUTPUT_SCHEMA>,
-  'web_fetch',
+export const WEB_CRAWL_TOOL_SPEC: HumanToolSpec<
+  z.infer<typeof WEB_CRAWL_SCHEMA>,
+  z.infer<typeof WEB_CRAWL_OUTPUT_SCHEMA>,
+  'web_crawl',
   'web-browsing'
 > = {
-  name: 'web_fetch',
+  name: 'web_crawl',
   familyId: 'web',
   skillIds: ['web-browsing'],
   requiresWorkspace: false,
-  inputSchema: WEB_FETCH_SCHEMA,
-  outputSchema: WEB_FETCH_OUTPUT_SCHEMA,
+  inputSchema: WEB_CRAWL_SCHEMA,
+  outputSchema: WEB_CRAWL_OUTPUT_SCHEMA,
   promptSpec: {
-    name: 'web_fetch',
+    name: 'web_crawl',
     description:
-      '能力：通过程序请求抓取 http/https 网页并抽取正文文本。\n结果：返回最终 URL、HTTP 状态、标题和正文文本。\n边界：不操作页面界面，不执行浏览器交互。',
-    whenToUse: '适用于需要快速读取公开网页正文的任务。',
+      '能力：抓取公开网页，并返回当前选中的最相关页面的正文 markdown、标题、发布时间和可继续跟进的链接。\n结果：支持基于 topic 做链接排序，并在必要时少量自动跟进相关页面；因此 finalUrl 可能不同于输入 url，只要返回了 finalUrl/title/markdown，就表示已成功抓取到选中页面正文。\n边界：不执行登录、点击、输入或验证码等浏览器交互。',
+    whenToUse: '适用于需要读取公开网页、基于页面内容继续判断下一步要抓取哪个链接的任务。',
     examples: [
       {
-        goal: '读取一个公开网页的正文',
+        goal: '读取一个公开网页，并围绕当前主题查找更相关的页面内容',
         args: {
-          url: 'https://example.com'
+          url: 'https://example.com',
+          topic: '查询退费规则和到账时限'
         }
       }
     ]
@@ -120,4 +128,4 @@ export const BROWSER_USE_TOOL_SPEC: HumanToolSpec<
   })
 }
 
-export const WEB_TOOL_SPECS = [WEB_FETCH_TOOL_SPEC, BROWSER_USE_TOOL_SPEC] as const
+export const WEB_TOOL_SPECS = [WEB_CRAWL_TOOL_SPEC, BROWSER_USE_TOOL_SPEC] as const

@@ -13,6 +13,7 @@ import type { StorageService } from '../../../src/main/services/storage/StorageS
 import type { EmbeddingService } from '../../../src/main/services/vector/EmbeddingService'
 import type { WorkspaceSourceService } from '../../../src/main/services/workspace/WorkspaceSourceService'
 import type { WorkspaceKnowledgePrepareService } from '../../../src/main/services/workspace/WorkspaceKnowledgePrepareService'
+import type { WebCrawlerService } from '../../../src/main/services/webCrawler/types'
 import type {
   ChatMessage,
   ChatConversationMemory,
@@ -178,6 +179,7 @@ export type CreateAiRunContextInput = {
   }
   llmScript?: LlmScript
   structuredOutputScript?: StructuredOutputScript
+  webCrawlerService?: WebCrawlerService
 }
 
 export type BackendTestRuntime = {

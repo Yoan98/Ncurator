@@ -8,3 +8,4 @@ out
 tests/logs
 tests/.cache
 artifacts/ai-test-results
+__pycache__

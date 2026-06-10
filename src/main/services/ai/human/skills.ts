@@ -58,9 +58,9 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
     countsTowardToolBudget: false,
     title: 'web-browsing',
     description:
-      '能力：抓取公开网页正文，或操作内置浏览器执行网页阅读、观察和页面动作。\n结果：返回网页文本、当前页面内容、可见动作或动作执行结果。\n边界：程序抓取只支持 http/https URL；内置浏览器操作会显示在该应用的右侧浏览器面板，首次使用需要用户审核。',
+      '能力：抓取公开网页，并返回正文 markdown、发布时间与可继续跟进的链接，或操作内置浏览器执行网页阅读、观察和页面动作。\n结果：返回当前最相关网页的内容、链接、可见动作或动作执行结果。\n边界：程序抓取只支持公开 http/https URL；内置浏览器操作会显示在该应用的右侧浏览器面板，首次使用需要用户审核。',
     whenToUse: '适用于需要访问网页、读取网页内容或操作网页界面的任务。',
-    toolNames: ['web_fetch', 'browser_use']
+    toolNames: ['web_crawl', 'browser_use']
   },
   utility: {
     skillId: 'utility',

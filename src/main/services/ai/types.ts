@@ -3,6 +3,7 @@ import type { DocumentsStore } from '../storage/domains/DocumentsStore'
 import type { LlmConfigStore } from '../storage/domains/LlmConfigStore'
 import type { EmbeddingService } from '../vector/EmbeddingService'
 import type { AiLlmDriver } from './llmExecutor'
+import type { WebCrawlerService } from '../webCrawler/types'
 import type {
   DocxChangedBlock,
   DocxCreatedBlock,
@@ -178,6 +179,7 @@ export type AiRunDeps = {
   requestApprovalBatch: (request: AiApprovalBatchRequest) => Promise<AiApprovalBatchResult>
   llmDriver?: AiLlmDriver
   browserUseService?: BrowserUseService
+  webCrawlerService?: WebCrawlerService
 }
 
 export type AiRunContext = {
@@ -225,6 +227,7 @@ export type AiRunContext = {
   requestApprovalBatch: (request: AiApprovalBatchRequest) => Promise<AiApprovalBatchResult>
   getLlmConfig: () => Promise<LlmRuntimeConfig>
   browserUseService?: BrowserUseService
+  webCrawlerService?: WebCrawlerService
   loadConversationContext: (limits?: {
     recentTurns?: number
     maxRecentTurnsChars?: number

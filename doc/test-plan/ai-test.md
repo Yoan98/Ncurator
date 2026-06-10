@@ -25,7 +25,7 @@
 - `tool / web-browsing`
   - 通过率：`未执行`
   - 检测时间：`未执行`
-  - 覆盖计划：`web_fetch` 成功抓取、redirect 后 URL、HTTP 失败和结果过大；`browser_use` 覆盖缺少内置浏览器服务时的真实 diagnostic。
+  - 覆盖计划：`web_crawl` 当前页抓取、导航页 topic 跟进与结果过大；`browser_use` 覆盖缺少内置浏览器服务时的真实 diagnostic。
 - `tool / utility`
   - 通过率：`未执行`
   - 检测时间：`未执行`
@@ -669,15 +669,25 @@
 
 #### web-browsing 类别
 
-##### `web-fetch-contract`
+##### `web-crawl-page-contract`
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证 `web_fetch` 的成功抓取、redirect 最终 URL、HTTP 失败状态和结果过大兜底。
-- Why：程序级网页抓取是低成本网页能力入口，必须稳定返回可被 brain 消费的最小结果。
-- How：启动本地 HTTP server，分别返回正常 HTML、302 redirect、404 和超长正文。
-- Oracle：正常结果包含最终 URL、HTTP 状态、标题和正文；HTTP 失败保留状态码；超长结果返回 `hand_tool_result_too_large`。
-- Not：不验证网页搜索、selector 配置或外网可达性。
+- What：验证 `web_crawl` 会返回当前最相关页面的最终 URL、标题、正文 markdown、发布时间与后续链接。
+- Why：程序级网页抓取是低成本网页能力入口，必须稳定返回可被 brain 继续消费的网页事实和导航线索。
+- How：启动本地 HTTP server，返回文章页 HTML，并通过真实 sidecar 协议返回抓取结果。
+- Oracle：结果包含 `finalUrl`、`title`、`markdown`、`publishedAt` 和至少一条可继续跟进的链接。
+- Not：不验证复杂浏览器交互或外网可达性。
+
+##### `web-crawl-navigation-contract`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证 `web_crawl` 在导航页上会基于 `topic` 跟进更相关页面，并保留可继续跟进的链接。
+- Why：`human` 要能把 `web_crawl` 作为多轮网页判断工具，而不仅是单页正文抓取器。
+- How：启动本地 HTTP server，返回包含通知页和指南页链接的导航页，并通过真实 sidecar 协议执行 topic 驱动抓取。
+- Oracle：结果命中更相关的目标页面正文，同时 links 中仍保留后续可继续抓取的相关链接。
+- Not：不验证无限深爬或搜索引擎级网页发现。
 
 ##### `browser-use-service-unavailable-diagnostic`
 
@@ -1019,6 +1029,16 @@
 - How：注入真实 live LLM 配置；workspace 直接使用 `tests/fixtures/workspace` 共享目录，不传 `selectedReferences`；在 run 前通过真实生产文件 ingestion 链把该目录下当前所有已支持文件（当前为全部 `docx`）索引进 KB，其中既包括 `学习笔记/` 下的 `图形学.docx` 与 `深度学习.docx`，也包括两份目标教学文档和其他 docx 干扰项；直接输入“我工作区里这几份课件和教学材料有点多，我想把里面跟反走样和过拟合有关的内容整理进两份教学文档里。你先把相关资料找出来看一遍，再把适合老师讲‘概念区分’的内容分别补到课堂 PRD 和交互式案例里，写法尽量像备课备注和课堂引导语，不要像教材摘抄。”的自然语言诉求，让真实 `human` 自主完成。
 - Oracle：任务最终完成；共享 workspace 中关键源资料与目标教学文档均被索引；事件流中至少出现一次 KB 工具调用，且至少一次 `kb_search` 返回有效命中；至少两次允许的 docx 编辑成功，且写入目标落在 `人工智能探究课堂PRD.docx` 与 `交互式探究学习案例：产业转移.docx` 两份目标稿上；最终输出 artifacts 中至少包含两组携带 `applyId` 的 docx file artifact；原始源 `docx` 文件不被覆盖，目标 `docx` 文件被直接更新且可回退；最终答复明确说明更新了哪两份教学文档，且内容保持“概念区分 / 备课备注 / 课堂引导语”风格。
 - Not：不强制固定执行路径，也不要求 KB 缩圈后必须再打开所有候选资料。
+
+##### `human-web-crawl-multi-page-reading-live`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证 live 模式下 `human` 会围绕网页诉求自主多次调用 `web_crawl`，并基于多个网页整理事实结果。
+- Why：真实用户经常只给一个入口网址和整理诉求；这条 case 要长期守住“读取网页、根据返回链接继续判断下一步、最终完成整理”的正式能力。
+- How：启动本地 HTTP server，提供一个首页、通知页和办理指南页；输入自然语言诉求，要求模型自行查清申请对象、材料、截止时间和办理方式。
+- Oracle：任务最终完成；事件流中至少两次调用 `web_crawl`；最终答复同时覆盖申请对象、材料、截止时间和办理方式四组网页事实。
+- Not：不要求固定访问顺序，也不要求模型必须经过特定中间页。
 
 ## 6. 验收口径
 

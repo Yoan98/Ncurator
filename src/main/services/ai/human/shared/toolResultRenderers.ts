@@ -275,6 +275,36 @@ const renderDocxHistoryResult = (obj: JsonObject): string =>
     .filter(Boolean)
     .join('\n')
 
+const renderWebCrawlLinks = (value: JsonValue | undefined): string => {
+  if (!Array.isArray(value) || value.length === 0) return 'none'
+
+  return value
+    .map((item, index) => {
+      if (!isJsonObject(item)) return renderGenericArrayItem(item, index)
+      return `${index + 1}. ${renderKeyValuePairs([
+        ['href', readStringField(item, 'href')],
+        ['text', readStringField(item, 'text')]
+      ])}`
+    })
+    .join('\n')
+}
+
+const renderWebCrawlResult = (obj: JsonObject): string =>
+  [
+    renderKeyValuePairs([
+      ['finalUrl', readStringField(obj, 'finalUrl')],
+      ['title', readStringField(obj, 'title')],
+      ['publishedAt', readStringField(obj, 'publishedAt')]
+    ]),
+    'selected page content:',
+    'markdown:',
+    readStringField(obj, 'markdown') || 'none',
+    'links:',
+    renderWebCrawlLinks(obj.links)
+  ]
+    .filter(Boolean)
+    .join('\n')
+
 const renderDocxCreateResult = (obj: JsonObject): string =>
   [
     renderKeyValuePairs([
@@ -339,6 +369,8 @@ export const renderToolResultDataText = (
       return renderDocxOutlineResult(value)
     case 'docx_history':
       return renderDocxHistoryResult(value)
+    case 'web_crawl':
+      return renderWebCrawlResult(value)
     default:
       return renderGenericObject(value)
   }

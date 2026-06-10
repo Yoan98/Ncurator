@@ -12,6 +12,7 @@ import { StorageService } from '../../../src/main/services/storage/StorageServic
 import { EmbeddingService } from '../../../src/main/services/vector/EmbeddingService'
 import { ensureEmbeddingReady } from '../../../src/main/services/vector/ensureEmbeddingReady'
 import { WorkspaceKnowledgePrepareService } from '../../../src/main/services/workspace/WorkspaceKnowledgePrepareService'
+import type { WebCrawlerService } from '../../../src/main/services/webCrawler/types'
 import { WorkspaceSourceService } from '../../../src/main/services/workspace/WorkspaceSourceService'
 import type { AiRuntimeSettings } from '../../../src/shared/types'
 import type { BackendHarnessMode, CreateAiRunContextInput, LiveLlmConfig } from './test-types'
@@ -212,7 +213,8 @@ export const createRealAiDepsFactory = async (input: {
         },
         llmDriver: llmScript
           ? createScriptedStructuredOutputDriver(llmScript)
-          : undefined
+          : undefined,
+        webCrawlerService: contextInput.webCrawlerService
       }
     )
 

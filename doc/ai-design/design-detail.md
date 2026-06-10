@@ -122,6 +122,9 @@ interface AiRunContext {
   // Workbench 内置浏览器网页操作能力；不存在时相关工具返回真实诊断错误。
   browserUseService?: BrowserUseService
 
+  // 程序化网页抓取能力；供 web_crawl 抓取网页并返回正文与链接结果。
+  webCrawlerService?: WebCrawlerService
+
   // 读取最近对话和会话摘要。
   loadConversationContext(limits?: {
     recentTurns?: number
