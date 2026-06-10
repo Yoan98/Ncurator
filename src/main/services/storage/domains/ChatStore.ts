@@ -15,7 +15,6 @@ type ChatMessageRow = {
   role?: unknown
   content?: unknown
   timestamp?: unknown
-  sources?: unknown
   artifacts_json?: unknown
   error?: unknown
 }
@@ -170,7 +169,6 @@ export class ChatStore {
         role: message.role,
         content: message.content,
         timestamp: message.timestamp,
-        sources: message.sources,
         error: message.error,
         artifacts_json: message.artifacts ? JSON.stringify(message.artifacts) : undefined
       }
@@ -192,7 +190,6 @@ export class ChatStore {
           role: toChatRole(row.role),
           content: String(row.content || ''),
           timestamp: Number(row.timestamp || 0),
-          sources: row.sources ? String(row.sources) : undefined,
           artifacts: parseArtifacts(row.artifacts_json),
           error: typeof row.error === 'boolean' ? row.error : undefined
         }

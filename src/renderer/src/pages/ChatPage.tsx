@@ -1339,7 +1339,6 @@ const ChatPage: React.FC = () => {
       role: 'user',
       content: userQuery,
       timestamp: Date.now(),
-      sources: undefined,
       error: false
     }
 
@@ -1386,33 +1385,6 @@ const ChatPage: React.FC = () => {
           runId: response.runId
         }
       }))
-
-      try {
-        if (selectedWorkspace && kbScopeDocumentIds.length === 0) {
-          return
-        }
-        const searchResponse = await window.api.search(
-          userQuery,
-          'all',
-          kbScopeDocumentIds.length > 0 ? kbScopeDocumentIds : undefined
-        )
-        const parsedResults = searchResponse.results.map(parseIpcResult)
-        const unique: SearchResult[] = []
-        const seenIds = new Set<string>()
-        for (const result of parsedResults) {
-          if (result.document_id && !seenIds.has(result.document_id)) {
-            seenIds.add(result.document_id)
-            unique.push(result)
-          }
-        }
-        userMessage.sources = JSON.stringify(unique.slice(0, 5))
-        setCurrentMessages((previous) =>
-          previous.map((item) => (item.id === userMessage.id ? userMessage : item))
-        )
-        void window.api.chatMessageSave(userMessage).catch(console.error)
-      } catch {
-        // ignore quick preview failures
-      }
     } catch (error) {
       console.error(error)
       setLoading(false)
@@ -1810,39 +1782,12 @@ const ChatPage: React.FC = () => {
   }
 
   const renderUserMessage = (messageItem: ChatMessage): React.ReactNode => {
-    let sources: SearchResult[] = []
-    try {
-      if (messageItem.sources) {
-        sources = JSON.parse(messageItem.sources) as SearchResult[]
-      }
-    } catch (error) {
-      console.warn('Failed to parse sources', error)
-    }
-
     return (
       <div key={messageItem.id} className="flex justify-end">
         <div className="max-w-[66%]">
-          <div className="rounded-[18px] bg-[#F0EFEB] px-3.5 py-2.5 text-[14px] leading-6 text-[#181818]">
+          <div className="rounded-[18px] border border-[#CBC7BD] bg-[#E8E6DF] px-3.5 py-2.5 text-[14px] leading-6 text-[#181818]">
             {messageItem.content}
           </div>
-          {sources.length > 0 ? (
-            <div className="mt-2.5 flex flex-wrap gap-2">
-              {sources.map((source) => {
-                const fileRef = getSearchResultFileRef(source)
-                if (!fileRef) return null
-                return (
-                  <button
-                    key={`${messageItem.id}-${source.id}`}
-                    type="button"
-                    onClick={() => void openFile(fileRef)}
-                    className="rounded-full border border-[#E1DED6] bg-white px-3 py-1.5 text-[12px] text-[#6E6D69] transition-all duration-200 hover:border-[#181818] hover:text-[#181818]"
-                  >
-                    {source.document_name}
-                  </button>
-                )
-              })}
-            </div>
-          ) : null}
         </div>
       </div>
     )

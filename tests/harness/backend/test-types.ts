@@ -157,7 +157,6 @@ export type SeedChatHistoryInput = {
     role: ChatMessage['role']
     content: string
     timestamp: number
-    sources?: string
     artifacts?: ChatMessage['artifacts']
     error?: boolean
   }>

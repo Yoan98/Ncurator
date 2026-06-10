@@ -23,7 +23,6 @@ export const seedChatHistory = async (input: {
       role: message.role,
       content: message.content,
       timestamp: message.timestamp,
-      sources: message.sources,
       artifacts: message.artifacts,
       error: message.error
     })

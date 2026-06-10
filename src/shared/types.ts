@@ -468,8 +468,6 @@ export interface ChatMessage {
   role: 'user' | 'assistant' | 'system'
   content: string
   timestamp: number
-  // JSON string of SearchResult[]
-  sources?: string
   artifacts?: AiArtifactRef[]
   error?: boolean
 }
