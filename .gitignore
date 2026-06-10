@@ -9,3 +9,8 @@ tests/logs
 tests/.cache
 artifacts/ai-test-results
 __pycache__
+.runvenv
+.pip-cache
+.codex-tmp
+.pyinstaller
+resources/web_crawler_sidecar/bin

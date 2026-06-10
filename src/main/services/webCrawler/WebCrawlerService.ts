@@ -27,6 +27,7 @@ type PendingRequest = {
 
 type WebCrawlerServiceOptions = {
   sidecarCommand?: SidecarCommand
+  sidecarEnv?: NodeJS.ProcessEnv
   appRootPath?: string
   isPackaged?: boolean
   resourcesPath?: string
@@ -266,7 +267,8 @@ const resolveDefaultSidecarCommand = (options: WebCrawlerServiceOptions): Sideca
     }
     return {
       executablePath: resolvePackagedSidecarExecutablePath(resourcesPath),
-      args: []
+      args: [],
+      env: options.sidecarEnv
     }
   }
 
@@ -276,7 +278,8 @@ const resolveDefaultSidecarCommand = (options: WebCrawlerServiceOptions): Sideca
   }
   return {
     executablePath: process.env.NCURATOR_WEB_CRAWLER_SIDECAR_PYTHON || 'python3',
-    args: [path.join(appRootPath, DEV_SIDECAR_SCRIPT_PATH)]
+    args: [path.join(appRootPath, DEV_SIDECAR_SCRIPT_PATH)],
+    env: options.sidecarEnv
   }
 }
 

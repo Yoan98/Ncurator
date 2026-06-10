@@ -1,3 +1,4 @@
+import os
 import platform
 import shutil
 import subprocess
@@ -9,6 +10,7 @@ ROOT = Path(__file__).resolve().parent.parent
 SIDECAR_SCRIPT = ROOT / "resources" / "web_crawler_sidecar" / "web_crawler_sidecar.py"
 OUTPUT_DIR = ROOT / "resources" / "web_crawler_sidecar" / "bin"
 SIDECAR_NAME = "web_crawler_sidecar"
+PYINSTALLER_CONFIG_DIR = ROOT / ".pyinstaller" / "web_crawler_sidecar"
 
 
 def platform_name() -> str:
@@ -25,8 +27,14 @@ def main() -> int:
         print(f"Missing sidecar script: {SIDECAR_SCRIPT}", file=sys.stderr)
         return 1
 
-    pyinstaller = shutil.which("pyinstaller")
-    if not pyinstaller:
+    pyinstaller_module = "PyInstaller"
+    pyinstaller_check = subprocess.run(
+        [sys.executable, "-m", pyinstaller_module, "--version"],
+        cwd=str(ROOT),
+        capture_output=True,
+        text=True,
+    )
+    if pyinstaller_check.returncode != 0:
         print("pyinstaller is required to build the web crawler sidecar", file=sys.stderr)
         return 1
 
@@ -38,7 +46,9 @@ def main() -> int:
         shutil.rmtree(build_path)
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     command = [
-        pyinstaller,
+        sys.executable,
+        "-m",
+        pyinstaller_module,
         "--noconfirm",
         "--clean",
         "--onedir",
@@ -54,7 +64,11 @@ def main() -> int:
         "crawl4ai",
         str(SIDECAR_SCRIPT),
     ]
-    subprocess.run(command, check=True, cwd=str(ROOT))
+    env = {
+        **dict(os.environ),
+        "PYINSTALLER_CONFIG_DIR": str(PYINSTALLER_CONFIG_DIR),
+    }
+    subprocess.run(command, check=True, cwd=str(ROOT), env=env)
     executable_path = sidecar_dist_dir / platform_name()
     if not executable_path.exists():
         print(f"Missing built sidecar executable: {executable_path}", file=sys.stderr)

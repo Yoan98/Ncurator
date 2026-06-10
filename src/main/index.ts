@@ -104,10 +104,14 @@ app.whenReady().then(async () => {
 
   const mainWindow = createWindow()
   const browserEmbedService = new BrowserEmbedService(mainWindow)
+  const webCrawlerBaseDirectory = join(app.getPath('userData'), 'web-crawler')
   const webCrawlerService = new ManagedWebCrawlerService({
     appRootPath: app.getAppPath(),
     isPackaged: app.isPackaged,
-    resourcesPath: process.resourcesPath
+    resourcesPath: process.resourcesPath,
+    sidecarEnv: {
+      CRAWL4_AI_BASE_DIRECTORY: webCrawlerBaseDirectory
+    }
   })
 
   registerHandlers({

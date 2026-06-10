@@ -6,7 +6,7 @@
 
 - `doc/ai-design/architecture.md`：涉及 AI 整体架构、模块关系或主流程时阅读。
 - `doc/ai-design/design-detail.md`：涉及 AI 设计边界、职责划分、核心数据、关键 contract、过程事件或关键流程时阅读。
-- `doc/ai-design/human-skill-design.md`：涉及 human skill 体系、能力边界或工具使用范围时阅读。
+- `doc/ai-design/human-skill-design.md`：涉及 human skill 体系、能力边界、builtin/external skill 或工具使用范围时阅读。
 - `doc/ai-design/prompt-design.md`：涉及 prompt 设计、AI-facing 文案或工具描述方式时阅读。
 
 ### 1.2 docx相关
@@ -23,7 +23,7 @@
 
 ### 1.4 测试相关
 
-- `doc/test-plan/ai-test.md`：涉及 AI 测试范围、正式 case 设计或执行摘要维护时阅读。
+- `doc/test-plan/ai-test.md`：涉及 AI 测试范围、正式 case 设计、执行摘要或 suite 覆盖维护时阅读。
 - `doc/test-plan/settings-test.md`：涉及 Settings 测试范围或测试边界时阅读。
 - `doc/test.md`：涉及测试体系、runner、renderer 辅助测试命令或正式测试流程时阅读。
 

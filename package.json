@@ -10,8 +10,8 @@
     "lint": "eslint --cache .",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
-    "typecheck": "npm run typecheck:node && npm run typecheck:web",
-    "build:sidecar": "python3 scripts/build_web_crawler_sidecar.py",
+    "typecheck": "pnpm run typecheck:node && pnpm run typecheck:web",
+    "build:sidecar": "node scripts/build-web-crawler-sidecar.mjs",
     "test:ai": "node scripts/test-workflow.mjs --domain ai --type backend",
     "test:ai:backend": "node scripts/test-workflow.mjs --domain ai --type backend",
     "test:ai:tool": "node scripts/test-workflow.mjs --domain ai --suite tool --type backend",
@@ -25,12 +25,12 @@
     "test:settings:e2e": "node scripts/test-workflow.mjs --domain settings --type e2e",
     "start": "electron-vite preview",
     "dev": "electron-vite dev",
-    "build": "npm run typecheck && npm run build:sidecar && electron-vite build",
+    "build": "pnpm run typecheck && pnpm run build:sidecar && electron-vite build",
     "postinstall": "electron-builder install-app-deps",
-    "build:unpack": "npm run build && electron-builder --dir",
-    "build:win": "npm run build && electron-builder --win",
-    "build:mac": "npm run build && electron-builder --mac",
-    "build:linux": "npm run build && electron-builder --linux"
+    "build:unpack": "pnpm run build && electron-builder --dir",
+    "build:win": "pnpm run build && electron-builder --win",
+    "build:mac": "pnpm run build && electron-builder --mac",
+    "build:linux": "pnpm run build && electron-builder --linux"
   },
   "dependencies": {
     "@ant-design/icons": "^6.1.0",
