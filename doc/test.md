@@ -39,6 +39,7 @@ tests/
     ai/
     unit/
     settings/
+    workbench/
     kb-search/
   logs/
 ```
@@ -59,7 +60,7 @@ tests/
 ### 2.3 稳定映射模型
 
 - `domain`
-  - 稳定业务域，例如 `ai`、`settings`、`kb-search`。
+  - 稳定业务域，例如 `ai`、`settings`、`workbench`、`kb-search`。
 - `suite`
   - 领域内第一层稳定分类。
   - 具体取值与归属只看对应 `doc/test-plan/**`。
@@ -173,7 +174,7 @@ runner 不负责：
 - 写失败原因分析。
 - 写优化建议。
 
-当前常用命令按域收口如下。`workbench` 不再维护 formal test-plan，对应端到端体验验证改走 hand-test，不再提供 `test:workbench*` 或 renderer 专用 runner；一次性视觉或交互排查不得直接新增未登记的 formal workbench case。
+当前常用命令按域收口如下。Workbench 重新纳入 formal test-plan，正式 case 只允许按 `doc/test-plan/workbench-test.md` 登记后进入 `tests/case/workbench/**`；一次性视觉或交互排查不得直接新增未登记的 formal workbench case。
 
 - AI
   - `pnpm test:ai`
@@ -188,6 +189,10 @@ runner 不负责：
   - `pnpm test:settings`
   - `pnpm test:settings:backend`
   - `pnpm test:settings:e2e`
+- Workbench
+  - `node scripts/test-workflow.mjs --domain workbench`
+  - `node scripts/test-workflow.mjs --domain workbench --type backend`
+  - `node scripts/test-workflow.mjs --domain workbench --type e2e`
 
 runner 支持的过滤参数：
 
