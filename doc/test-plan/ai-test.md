@@ -24,7 +24,7 @@
   - 覆盖补充：terminal 正式测试按“安全指令集”语义维护；Windows 路径覆盖 PowerShell 语法、`EncodedCommand` 执行与 UTF-8 输出，macOS 路径覆盖 zsh 语法。
 - `tool / web-browsing`
   - 通过率：`5 / 5`
-  - 检测时间：`2026-06-11 17:16:38 +08:00`
+  - 检测时间：`2026-06-11 18:15:55 +08:00`
   - 覆盖补充：`web_crawl` 已通过冻结 sidecar bin 和内置 headless shell 覆盖当前页抓取、导航页 topic 跟进、HTTP 失败与结果过大；`browser_use` 已覆盖缺少内置浏览器服务时的真实 diagnostic。
 - `tool / utility`
   - 通过率：`1 / 1`

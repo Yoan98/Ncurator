@@ -173,7 +173,8 @@ describe('ai tool web backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['web-browsing'],
-      description: '验证 web_crawl 在导航页上会基于 topic 自动跟进相关页面，并保留可继续跟进的链接。',
+      description:
+        '验证 web_crawl 在导航页上会基于 topic 自动跟进相关页面，并保留可继续跟进的链接。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -235,9 +236,9 @@ describe('ai tool web backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.error === '网页请求失败：404'
-            && result.statusCode === 404
-            && result.finalUrl?.endsWith('/missing') === true,
+          result.error === '网页请求失败：404' &&
+            result.statusCode === 404 &&
+            result.finalUrl?.endsWith('/missing') === true,
           {
             name: 'web-crawl-preserves-http-failure-fields',
             message: 'web_crawl HTTP 失败时应保留错误文本、最终 URL 和状态码。',
@@ -278,10 +279,10 @@ describe('ai tool web backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.error === 'web_crawl result too large'
-            && result.reason === 'result_too_large'
-            && result.finalUrl?.endsWith('/large') === true
-            && result.decisionHint?.code === 'hand_tool_result_too_large',
+          result.error === 'web_crawl result too large' &&
+            result.reason === 'result_too_large' &&
+            result.finalUrl?.endsWith('/large') === true &&
+            result.decisionHint?.code === 'hand_tool_result_too_large',
           {
             name: 'web-crawl-too-large-uses-shared-decision-hint',
             message: 'web_crawl 结果过大时应走统一 hand_tool_result_too_large 兜底。',
