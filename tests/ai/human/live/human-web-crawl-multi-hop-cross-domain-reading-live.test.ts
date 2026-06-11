@@ -21,6 +21,9 @@ const readResultFinalUrl = (event: { result?: { data?: JsonValue } }): string | 
   return data.finalUrl
 }
 
+const includesUrl = (urls: string[], expectedUrl: string): boolean =>
+  urls.some((url) => normalizeUrl(url) === normalizeUrl(expectedUrl))
+
 describe('ai human live backend', () => {
   it('human-web-crawl-multi-hop-cross-domain-reading-live', async () => {
     await runWithStructuredOutputRetry(async () => {
@@ -90,17 +93,18 @@ describe('ai human live backend', () => {
             .filter((value): value is string => typeof value === 'string')
           const visitedHosts = [...new Set(successfulFinalUrls.map((url) => new URL(url).hostname))]
           const startedToolNames = toolStarts.map((event) => event.toolName)
+          const exploredUrls = [...startedUrls, ...successfulFinalUrls]
           const deliveryText = String(result.output?.deliveryMarkdown || '')
 
           runtime.assertThat(
             result.output?.status === 'completed'
               && startedUrls.length >= 4
               && successfulFinalUrls.length >= 4
-              && startedUrls.some((url) => normalizeUrl(url) === normalizeUrl(result.site.entryUrl))
-              && successfulFinalUrls.some((url) => normalizeUrl(url) === normalizeUrl(result.site.employmentHubUrl))
-              && successfulFinalUrls.some((url) => normalizeUrl(url) === normalizeUrl(result.site.noticeUrl))
-              && successfulFinalUrls.some((url) => normalizeUrl(url) === normalizeUrl(result.site.guideUrl))
-              && successfulFinalUrls.some((url) => normalizeUrl(url) === normalizeUrl(result.site.applyUrl))
+              && includesUrl(startedUrls, result.site.entryUrl)
+              && includesUrl(successfulFinalUrls, result.site.employmentHubUrl)
+              && includesUrl(successfulFinalUrls, result.site.noticeUrl)
+              && includesUrl(exploredUrls, result.site.guideUrl)
+              && includesUrl(successfulFinalUrls, result.site.applyUrl)
               && visitedHosts.includes('127.0.0.1')
               && visitedHosts.includes('localhost')
               && !startedToolNames.includes('browser_use')
@@ -114,6 +118,7 @@ describe('ai human live backend', () => {
               message: 'live human 应围绕入口网址多次调用 web_crawl，跨域并多跳完成申请对象、材料、截止时间和线上办理方式整理。',
               data: {
                 startedUrls,
+                exploredUrls,
                 successfulFinalUrls,
                 deliveryMarkdown: result.output?.deliveryMarkdown
               }
