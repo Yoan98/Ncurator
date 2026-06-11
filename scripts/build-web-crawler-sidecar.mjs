@@ -127,7 +127,8 @@ const ensureBundledPlaywrightBrowser = (pythonPath) => {
 
   const browserEnv = {
     ...process.env,
-    PLAYWRIGHT_BROWSERS_PATH: '0'
+    PLAYWRIGHT_BROWSERS_PATH: '0',
+    PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT: '300000'
   }
   spawnChecked(pythonPath, ['-m', 'playwright', 'install', 'chromium'], { env: browserEnv })
   fs.writeFileSync(PLAYWRIGHT_BROWSER_STAMP_PATH, `${expectedHash}\n`, 'utf8')

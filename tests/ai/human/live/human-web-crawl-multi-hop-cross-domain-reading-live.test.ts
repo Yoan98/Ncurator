@@ -1,7 +1,7 @@
 import { describe, it } from 'vitest'
 import { loadLiveLlmConfigFromEnv, hasLiveLlmConfigInEnv } from '../../../harness/backend/llmConfig'
 import { createHumanTestRunner } from '../../../harness/backend/humanHarness'
-import { createMockWebCrawlerService } from '../../../harness/backend/webCrawlerTestUtils'
+import { createWebCrawlerService } from '../../../harness/backend/webCrawlerTestUtils'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 import { createMultiHopCrossDomainWebCrawlSite } from '../../../harness/backend/webCrawlLiveTestSites'
 import { buildHumanWebCrawlMultiHopCrossDomainUserInput } from '../../../harness/backend/aiLiveTestData'
@@ -47,7 +47,7 @@ describe('ai human live backend', () => {
           }
 
           const site = await createMultiHopCrossDomainWebCrawlSite()
-          const webCrawlerService = createMockWebCrawlerService()
+          const webCrawlerService = createWebCrawlerService()
           try {
             await runtime.seedLlmConfig(loadLiveLlmConfigFromEnv())
             const runner = createHumanTestRunner(runtime, {

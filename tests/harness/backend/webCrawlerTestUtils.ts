@@ -1,11 +1,16 @@
+import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { ManagedWebCrawlerService } from '../../../src/main/services/webCrawler/WebCrawlerService'
 
-export const createMockWebCrawlerService = (): ManagedWebCrawlerService =>
+export const createWebCrawlerService = (): ManagedWebCrawlerService =>
   new ManagedWebCrawlerService({
-    sidecarCommand: {
-      executablePath: process.execPath,
-      args: [path.join(process.cwd(), 'tests', 'harness', 'backend', 'mockWebCrawlerSidecar.mjs')]
+    appRootPath: process.cwd(),
+    isPackaged: false,
+    sidecarEnv: {
+      CRAWL4_AI_BASE_DIRECTORY: fs.mkdtempSync(
+        path.join(os.tmpdir(), 'ncurator-web-crawler-test-')
+      )
     },
-    requestTimeoutMs: 15_000
+    requestTimeoutMs: 180_000
   })

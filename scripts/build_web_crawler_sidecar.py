@@ -62,6 +62,8 @@ def main() -> int:
         str(build_path / "spec"),
         "--collect-all",
         "crawl4ai",
+        "--collect-all",
+        "playwright",
         str(SIDECAR_SCRIPT),
     ]
     env = {

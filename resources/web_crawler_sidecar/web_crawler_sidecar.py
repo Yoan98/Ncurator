@@ -215,7 +215,10 @@ async def crawl_once(crawler: AsyncWebCrawler, url: str) -> dict[str, Any]:
     success = True if not isinstance(success_value, bool) else success_value
     status_code = resolve_status_code(raw_result)
     error_message = resolve_error_message(raw_result)
-    if not success or ((status_code is not None and status_code >= 400) and not markdown):
+    if status_code is not None and status_code >= 400:
+        message = error_message or f"网页请求失败：{status_code}"
+        raise CrawlFailure(message, build_failure_data(raw_result, url, message))
+    if not success:
         raise CrawlFailure(
             error_message or f"web crawl failed for {url}",
             build_failure_data(raw_result, url, error_message or ""),
@@ -284,7 +287,7 @@ async def handle_crawl(
 
 
 async def process_requests() -> None:
-    browser_config = BrowserConfig(headless=True)
+    browser_config = BrowserConfig(headless=True, verbose=False)
     crawler = AsyncWebCrawler(config=browser_config)
     await crawler.start()
     try:

@@ -1,7 +1,7 @@
 import http from 'node:http'
 import { describe, it } from 'vitest'
 import { createWebToolHarness } from '../../../harness/backend/aiToolHarness'
-import { createMockWebCrawlerService } from '../../../harness/backend/webCrawlerTestUtils'
+import { createWebCrawlerService } from '../../../harness/backend/webCrawlerTestUtils'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 
 type WebCrawlResult = {
@@ -134,7 +134,7 @@ describe('ai tool web backend', () => {
       runMode: 'single',
       execute: async (runtime) => {
         const server = await createLocalServer()
-        const webCrawlerService = createMockWebCrawlerService()
+        const webCrawlerService = createWebCrawlerService()
         try {
           const harness = createWebToolHarness(runtime, {
             webCrawlerService
@@ -177,7 +177,7 @@ describe('ai tool web backend', () => {
       runMode: 'single',
       execute: async (runtime) => {
         const server = await createLocalServer()
-        const webCrawlerService = createMockWebCrawlerService()
+        const webCrawlerService = createWebCrawlerService()
         try {
           const harness = createWebToolHarness(runtime, {
             webCrawlerService
@@ -219,7 +219,7 @@ describe('ai tool web backend', () => {
       runMode: 'single',
       execute: async (runtime) => {
         const server = await createLocalServer()
-        const webCrawlerService = createMockWebCrawlerService()
+        const webCrawlerService = createWebCrawlerService()
         try {
           const harness = createWebToolHarness(runtime, {
             webCrawlerService
@@ -259,7 +259,7 @@ describe('ai tool web backend', () => {
       runMode: 'single',
       execute: async (runtime) => {
         const server = await createLocalServer()
-        const webCrawlerService = createMockWebCrawlerService()
+        const webCrawlerService = createWebCrawlerService()
         try {
           const harness = createWebToolHarness(runtime, {
             webCrawlerService,

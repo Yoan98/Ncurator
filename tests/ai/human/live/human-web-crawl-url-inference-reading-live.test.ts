@@ -1,7 +1,7 @@
 import { describe, it } from 'vitest'
 import { loadLiveLlmConfigFromEnv, hasLiveLlmConfigInEnv } from '../../../harness/backend/llmConfig'
 import { createHumanTestRunner } from '../../../harness/backend/humanHarness'
-import { createMockWebCrawlerService } from '../../../harness/backend/webCrawlerTestUtils'
+import { createWebCrawlerService } from '../../../harness/backend/webCrawlerTestUtils'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 import { HUMAN_WEB_CRAWL_URL_INFERENCE_USER_INPUT } from '../../../harness/backend/aiLiveTestData'
 import { filterAiRunEventsByType, runWithStructuredOutputRetry } from '../testUtils'
@@ -32,7 +32,7 @@ describe('ai human live backend', () => {
             }
           }
 
-          const webCrawlerService = createMockWebCrawlerService()
+          const webCrawlerService = createWebCrawlerService()
           try {
             await runtime.seedLlmConfig(loadLiveLlmConfigFromEnv())
             const runner = createHumanTestRunner(runtime, {

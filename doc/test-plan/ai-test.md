@@ -25,7 +25,7 @@
 - `tool / web-browsing`
   - 通过率：`5 / 5`
   - 检测时间：`2026-06-10`
-  - 覆盖补充：`web_crawl` 已覆盖当前页抓取、导航页 topic 跟进、HTTP 失败与结果过大；`browser_use` 已覆盖缺少内置浏览器服务时的真实 diagnostic。
+  - 覆盖补充：`web_crawl` 已通过冻结 sidecar bin 覆盖当前页抓取、导航页 topic 跟进、HTTP 失败与结果过大；`browser_use` 已覆盖缺少内置浏览器服务时的真实 diagnostic。
 - `tool / utility`
   - 通过率：`未执行`
   - 检测时间：`未执行`
@@ -65,7 +65,7 @@
 - 目标：验证 tool 与 `hand` 工具执行守卫在真实生产代码下的输入输出是否正常、合理。
 - 约束：必须真实调用生产工具、真实 store、真实 docx apply service、真实 artifact 流。
 - 禁止：fake `documentsStore`、fake `embeddingService`、fake `resolveDocxOpenTarget`、fake tool result。
-- `web-browsing` 工具测试先覆盖程序抓取与 `browser_use` 服务不可用诊断。
+- `web-browsing` 工具测试先覆盖冻结 sidecar bin 程序抓取与 `browser_use` 服务不可用诊断。
 
 ### 3.2 `human`
 
@@ -675,7 +675,7 @@
 - 实现状态：`已实现`
 - What：验证 `web_crawl` 会返回当前最相关页面的最终 URL、标题、正文 markdown、发布时间与后续链接。
 - Why：程序级网页抓取是低成本网页能力入口，必须稳定返回可被 brain 继续消费的网页事实和导航线索。
-- How：启动本地 HTTP server，返回文章页 HTML，并通过真实 sidecar 协议返回抓取结果。
+- How：启动本地 HTTP server，返回文章页 HTML，并通过真实冻结 sidecar bin 返回抓取结果。
 - Oracle：结果包含 `finalUrl`、`title`、`markdown`、`publishedAt` 和至少一条可继续跟进的链接。
 - Not：不验证复杂浏览器交互或外网可达性。
 
@@ -685,7 +685,7 @@
 - 实现状态：`已实现`
 - What：验证 `web_crawl` 在导航页上会基于 `topic` 跟进更相关页面，并保留可继续跟进的链接。
 - Why：`human` 要能把 `web_crawl` 作为多轮网页判断工具，而不仅是单页正文抓取器。
-- How：启动本地 HTTP server，返回包含通知页和指南页链接的导航页，并通过真实 sidecar 协议执行 topic 驱动抓取。
+- How：启动本地 HTTP server，返回包含通知页和指南页链接的导航页，并通过真实冻结 sidecar bin 执行 topic 驱动抓取。
 - Oracle：结果命中更相关的目标页面正文，同时 links 中仍保留后续可继续抓取的相关链接。
 - Not：不验证无限深爬或搜索引擎级网页发现。
 
@@ -695,7 +695,7 @@
 - 实现状态：`已实现`
 - What：验证 `web_crawl` HTTP 失败时会保留错误文本、最终 URL 和状态码。
 - Why：网页读取失败也必须保持可诊断，避免 `human` 误把空结果当成“网页无信息”。
-- How：启动本地 HTTP server，返回 404 页面，并通过真实 sidecar 协议执行抓取。
+- How：启动本地 HTTP server，返回 404 页面，并通过真实冻结 sidecar bin 执行抓取。
 - Oracle：结果返回明确错误文本，同时保留 `finalUrl` 和 `statusCode`。
 - Not：不验证复杂重定向链或外站错误页样式。
 
@@ -705,7 +705,7 @@
 - 实现状态：`已实现`
 - What：验证 `web_crawl` 结果过大时会走统一 `hand_tool_result_too_large` 兜底。
 - Why：网页正文可能很长，正式工具必须复用统一大小守卫，而不是把超长正文直接塞进 prompt。
-- How：启动本地 HTTP server，返回超长正文页，并把 tool harness 的 `modelContextWindowTokens` 压低到触发阈值。
+- How：启动本地 HTTP server，返回超长正文页，通过真实冻结 sidecar bin 抓取，并把 tool harness 的 `modelContextWindowTokens` 压低到触发阈值。
 - Oracle：结果返回 `web_crawl result too large`，且带有统一 `decisionHint`。
 - Not：不验证压缩摘要或自动截断策略。
 

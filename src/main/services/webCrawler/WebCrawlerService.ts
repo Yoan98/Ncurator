@@ -37,6 +37,7 @@ type WebCrawlerServiceOptions = {
 const DEFAULT_REQUEST_TIMEOUT_MS = 60_000
 const PACKAGED_SIDECAR_DIR = 'web_crawler_sidecar'
 const PACKAGED_SIDECAR_BIN_DIR = 'bin'
+const PYTHON_SIDECAR_DEBUG_ENV = 'NCURATOR_WEB_CRAWLER_USE_PYTHON_SIDECAR'
 const DEV_SIDECAR_SCRIPT_PATH = path.join(
   'resources',
   'web_crawler_sidecar',
@@ -238,14 +239,13 @@ const normalizeResult = (payload: JsonObject): WebCrawlerResult => {
   }
 }
 
-const toJsonString = (value: unknown): string => `${JSON.stringify(value)}\n`
+const toJsonString = (value: WebCrawlerSidecarRequest): string => `${JSON.stringify(value)}\n`
 
 const getPackagedExecutableName = (): string =>
   process.platform === 'win32' ? 'web_crawler_sidecar.exe' : 'web_crawler_sidecar'
 
-const resolvePackagedSidecarExecutablePath = (resourcesPath: string): string => {
+const resolveSidecarExecutablePath = (binDir: string): string => {
   const executableName = getPackagedExecutableName()
-  const binDir = path.join(resourcesPath, PACKAGED_SIDECAR_DIR, PACKAGED_SIDECAR_BIN_DIR)
   const nestedPath = path.join(binDir, 'web_crawler_sidecar', executableName)
   if (fs.existsSync(nestedPath)) {
     return nestedPath
@@ -259,14 +259,36 @@ const resolvePackagedSidecarExecutablePath = (resourcesPath: string): string => 
   return nestedPath
 }
 
+const resolvePackagedSidecarExecutablePath = (resourcesPath: string): string =>
+  resolveSidecarExecutablePath(
+    path.join(resourcesPath, PACKAGED_SIDECAR_DIR, PACKAGED_SIDECAR_BIN_DIR)
+  )
+
+const resolveDevelopmentSidecarExecutablePath = (appRootPath: string): string =>
+  resolveSidecarExecutablePath(
+    path.join(appRootPath, 'resources', 'web_crawler_sidecar', PACKAGED_SIDECAR_BIN_DIR)
+  )
+
+const assertExecutableExists = (executablePath: string, message: string): void => {
+  if (fs.existsSync(executablePath)) {
+    return
+  }
+  throw new Error(`${message}: ${executablePath}`)
+}
+
+const shouldUsePythonSidecar = (): boolean =>
+  String(process.env[PYTHON_SIDECAR_DEBUG_ENV] || '').trim() === '1'
+
 const resolveDefaultSidecarCommand = (options: WebCrawlerServiceOptions): SidecarCommand => {
   if (options.isPackaged) {
     const resourcesPath = String(options.resourcesPath || '').trim()
     if (!resourcesPath) {
       throw new Error('missing Electron resourcesPath for packaged web crawler sidecar')
     }
+    const executablePath = resolvePackagedSidecarExecutablePath(resourcesPath)
+    assertExecutableExists(executablePath, 'missing packaged web crawler sidecar binary')
     return {
-      executablePath: resolvePackagedSidecarExecutablePath(resourcesPath),
+      executablePath,
       args: [],
       env: options.sidecarEnv
     }
@@ -275,6 +297,18 @@ const resolveDefaultSidecarCommand = (options: WebCrawlerServiceOptions): Sideca
   const appRootPath = String(options.appRootPath || '').trim()
   if (!appRootPath) {
     throw new Error('missing appRootPath for development web crawler sidecar')
+  }
+  if (!shouldUsePythonSidecar()) {
+    const executablePath = resolveDevelopmentSidecarExecutablePath(appRootPath)
+    assertExecutableExists(
+      executablePath,
+      'missing development web crawler sidecar binary. Run `pnpm run build:sidecar` before using web_crawl'
+    )
+    return {
+      executablePath,
+      args: [],
+      env: options.sidecarEnv
+    }
   }
   return {
     executablePath: process.env.NCURATOR_WEB_CRAWLER_SIDECAR_PYTHON || 'python3',
@@ -412,13 +446,18 @@ export class ManagedWebCrawlerService implements WebCrawlerServiceContract {
   private handleSidecarLine(line: string): void {
     const text = line.trim()
     if (!text) return
+    if (!text.startsWith('{')) {
+      this.stderrBuffer += `${text}\n`
+      this.stderrBuffer = this.stderrBuffer.slice(-8_000)
+      return
+    }
 
     let parsed: WebCrawlerSidecarResponse
     try {
       parsed = JSON.parse(text) as WebCrawlerSidecarResponse
-    } catch (error) {
+    } catch {
       this.rejectAllPending(
-        error instanceof Error ? error : new Error(`invalid web crawler sidecar JSON: ${text}`)
+        new Error(`invalid web crawler sidecar JSON: ${text}`)
       )
       return
     }
