@@ -4,6 +4,7 @@ import { spawnSync } from 'node:child_process'
 
 const ROOT = process.cwd()
 const TESTS_ROOT = path.join(ROOT, 'tests')
+const TEST_CASES_ROOT = path.join(TESTS_ROOT, 'case')
 const resolveLocalBin = (name) =>
   path.join(ROOT, 'node_modules', '.bin', process.platform === 'win32' ? `${name}.cmd` : name)
 const PNPM_BIN = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
@@ -91,7 +92,7 @@ const walk = async (target) => {
 }
 
 const resolveScopeDir = (input) => {
-  const parts = [TESTS_ROOT]
+  const parts = [TEST_CASES_ROOT]
   if (input.domain) parts.push(input.domain)
   if (input.suite) parts.push(input.suite)
   if (input.groups.length > 0) parts.push(...input.groups)

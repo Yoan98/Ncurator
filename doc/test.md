@@ -23,10 +23,10 @@
   - 必须进入正式测试闭环。
 - 临时排查 case
   - 只用于一次性排查、验证猜想、临时复现或补上下文。
-  - 固定放在 `tests/temp/**`。
+  - 不进入 `tests/**`，也不作为长期测试资产提交。
 - 默认策略
-  - 用户没有明确要求“补正式长期 case”时，默认先写 `tests/temp/**`。
-  - 只要还在排查、验证猜想、试运行 fixture 或尚未确定要长期维护，一律先放 `tests/temp/**`。
+  - 用户没有明确要求“补正式长期 case”时，默认不新增正式测试文件。
+  - 只要还在排查、验证猜想、试运行 fixture 或尚未确定要长期维护，一律不写入正式测试目录。
   - 只有确认要长期维护、参与 gating 的 case，才进入正式测试目录。
 
 ### 2.2 目录结构
@@ -35,25 +35,24 @@
 tests/
   harness/
   fixtures/
-  ai/
-  unit/
-  settings/
-  kb-search/
-  temp/
+  case/
+    ai/
+    unit/
+    settings/
+    kb-search/
   logs/
 ```
 
 规则：
 
 - 目录统一使用 kebab-case。
-- 测试发现目录使用通用树形结构：`tests/<domain>/<suite>/<groups...>/<case>.test.ts`。
-- e2e 测试文件使用 `tests/<domain>/<suite>/<groups...>/<case>.e2e.test.ts`。
+- 测试发现目录使用通用树形结构：`tests/case/<domain>/<suite>/<groups...>/<case>.test.ts`。
+- e2e 测试文件使用 `tests/case/<domain>/<suite>/<groups...>/<case>.e2e.test.ts`。
 - `suite` 是第一层稳定分类；`groups...` 是 suite 下可选的任意深度子目录。
 - 各 domain 的 `suite` 列表与归属，只在对应 `doc/test-plan/**` 中定义。
 - 当某个 `suite` 不需要继续细分时，正式 case 可以直接放在该 `suite` 目录下。
-- `tests/unit/**` 用于长期保留、但不进入 `doc/test-plan/**` 正式治理的 unit / helper / schema / prompt 类测试。
-- `tests/temp/**` 默认不参与 gating，也不沉淀正式长期产物。
-- 除 `tests/temp/**` 外，`tests/**` 中的正式测试目录只允许放已在 `doc/test-plan/**` 登记的 case。
+- `tests/case/unit/**` 用于长期保留、但不进入 `doc/test-plan/**` 正式治理的 unit / helper / schema / prompt 类测试。
+- `tests/case/**` 中除 `unit/**` 外，只允许放已在 `doc/test-plan/**` 登记的正式 case。
 - `tests/fixtures/workspace/` 是共享工作区 fixture 根目录；凡是依赖“工作区里有什么文件”的测试，优先复用该目录。
 - 当 case 直接传入 `tests/fixtures/workspace` 目录时，runner 应把该目录下的子内容原样复制到临时 workspace 根目录，而不是保留 `tests/fixtures/**` 中间层路径。
 
@@ -79,8 +78,8 @@ tests/
 
 - `doc/test-plan/**` 下每个领域文档，都是该领域正式测试用例定义的唯一规格来源。
 - 新增、修改或补齐正式 case 时，必须先更新对应 `doc/test-plan/**`，再修改测试代码。
-- 未登记的 case 不得直接写进 `tests/**` 非 `temp` 目录。
-- 当临时 case 需要转为正式长期 case 时，顺序必须是：先补 `doc/test-plan/**`，再迁入正式目录。
+- 未登记的 case 不得直接写进 `tests/case/**` 非 `unit` 目录。
+- 当临时验证需要转为正式长期 case 时，顺序必须是：先补 `doc/test-plan/**`，再迁入正式目录。
 - 如果实现行为变更导致正式 case 预期变化，必须先更新对应 `doc/test-plan/**`，再修改测试代码。
 - 每个正式 `caseId` 都必须稳定映射到唯一测试文件与唯一日志目录。
 
@@ -132,29 +131,28 @@ tests/
 ### 3.4 长期价值与常见误区
 
 - 进入正式 domain 目录的 case 默认都应具备长期回归价值。
-- `tests/unit/**` 默认具备长期维护价值，但不属于 formal test-plan case。
-- 一次性排查、临时验证、待定样例统一放在 `tests/temp/**`。
+- `tests/case/unit/**` 默认具备长期维护价值，但不属于 formal test-plan case。
+- 一次性排查、临时验证、待定样例不进入正式测试树。
 
 常见反例：
 
-- 为了排查某个猜想，直接在 `tests/ai/**` 或 `tests/settings/**` 新增正式 case。
+- 为了排查某个猜想，直接在 `tests/case/ai/**` 或 `tests/case/settings/**` 新增正式 case。
 - 还没补 `doc/test-plan/**`，就先写正式测试代码。
 - 正式 case 的 `How` 开始直接描述内部 route、内部工具顺序或固定 plan 条数。
 
 常见正例：
 
-- 为了确认某个上下文拼接问题是否真实存在，先写 `tests/temp/**` 做一次性验证。
 - 某条真实用户场景已经确定要长期回归，先补对应 `doc/test-plan/**`，再补正式测试代码。
-- 某个 helper / schema / prompt 需要长期回归，但不属于 formal 业务 case，放进 `tests/unit/**`。
+- 某个 helper / schema / prompt 需要长期回归，但不属于 formal 业务 case，放进 `tests/case/unit/**`。
 
 ## 4. 正式测试闭环
 
 ### 4.1 固定顺序
 
 1. 先判断这是正式长期回归 case，还是临时排查 case。
-2. 如果只是临时排查，直接写入 `tests/temp/**`，不进入正式闭环。
+2. 如果只是临时排查，不写入 `tests/**`，也不进入正式闭环。
 3. 如果要进入正式目录，先更新对应 `doc/test-plan/**`。
-4. 再写或调整 `tests/**` 中的正式测试代码。
+4. 再写或调整 `tests/case/**` 中的正式测试代码。
 5. 通过 `scripts/test-workflow.mjs` 执行并产生日志。
 6. 先看 `timeline.jsonl`，不足时再看 `runtime-events.jsonl`、`meta.json` 与 `artifacts.json`。
 7. 最后基于 raw logs 回流结论，决定是否需要更新 `doc/test-plan/**` 或实现代码。
@@ -175,7 +173,7 @@ runner 不负责：
 - 写失败原因分析。
 - 写优化建议。
 
-当前常用命令按域收口如下。`workbench` 不再维护 formal test-plan，对应端到端体验验证改走 hand-test，不再提供 `test:workbench*` runner；Workbench renderer UI 的长期辅助契约可放入 `tests/renderer/**`，通过 `pnpm test:renderer` 执行；一次性视觉或交互排查放入 `tests/temp/**`，不得直接新增未登记的 formal workbench case。
+当前常用命令按域收口如下。`workbench` 不再维护 formal test-plan，对应端到端体验验证改走 hand-test，不再提供 `test:workbench*` 或 renderer 专用 runner；一次性视觉或交互排查不得直接新增未登记的 formal workbench case。
 
 - AI
   - `pnpm test:ai`
@@ -183,8 +181,6 @@ runner 不负责：
   - `pnpm test:ai:tool`
   - `pnpm test:ai:human:mock-llm`
   - `pnpm test:ai:human:live`
-- Renderer
-  - `pnpm test:renderer`
 - Unit
   - `pnpm test:unit`
   - `pnpm test:unit:ai`
@@ -413,7 +409,7 @@ tests/logs/<domain>/<suite>/<groups...>/<caseId>/<runId>/
 
 常见误区：
 
-- 把 `tests/unit/**` 当成 formal domain case 管理。
-- 把 `tests/temp/**` 的结果直接当成正式长期结论。
+- 把 `tests/case/unit/**` 当成 formal domain case 管理。
+- 把一次性排查结果直接当成正式长期结论。
 - 在 `timeline.jsonl` 中倾倒底层噪音，而不是保留高价值语义事件。
 - 在没有更新 `doc/test-plan/**` 的情况下直接修改正式 case 预期。

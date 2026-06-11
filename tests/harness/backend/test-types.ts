@@ -25,12 +25,7 @@ import type {
   SelectedReference
 } from '../../../src/shared/types'
 import type { EventCollector } from '../core/eventCollector'
-import type {
-  TestDomain,
-  TestType,
-  TestLogEvent,
-  TestRunMeta
-} from '../core/run-log-contract'
+import type { TestDomain, TestType, TestLogEvent, TestRunMeta } from '../core/run-log-contract'
 
 export type { TestDomain, TestType, TestLogEvent, TestRunMeta } from '../core/run-log-contract'
 
@@ -55,14 +50,14 @@ type ScriptedLlmStreamShape = {
 }
 
 export type ScriptedLlmStep =
-  | {
+  | ({
       output: JsonObject
       usage?: AiLlmUsage
-    } & ScriptedLlmStreamShape
-  | {
+    } & ScriptedLlmStreamShape)
+  | ({
       text: string
       usage?: AiLlmUsage
-    } & ScriptedLlmStreamShape
+    } & ScriptedLlmStreamShape)
   | {
       error: string
     }
@@ -201,7 +196,10 @@ export type BackendTestRuntime = {
   embeddingService: EmbeddingService
   docxApplyService: DocxApplyService
   recordEvent: (input: Omit<TestLogEvent, 'ts'>) => void
-  assertThat: (condition: boolean, input: { name: string; message: string; data?: JsonValue }) => void
+  assertThat: (
+    condition: boolean,
+    input: { name: string; message: string; data?: JsonValue }
+  ) => void
   getFixtureWorkspacePath: (sourcePath: string) => string
   recordSeedWorkspaceFile: (input: SeedWorkspaceFileRecord) => void
   getSeedManifest: () => BackendSeedManifest
@@ -218,7 +216,7 @@ export type TestCaseDefinition<TResult> = {
   caseId: string
   harnessMode: BackendHarnessMode
   testType?: Extract<TestType, 'backend'>
-  domain: Extract<TestDomain, 'ai' | 'settings' | 'kb-search' | 'temp'>
+  domain: Extract<TestDomain, 'ai' | 'settings' | 'kb-search'>
   suite: string
   groups?: readonly string[]
   description: string

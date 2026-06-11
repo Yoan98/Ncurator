@@ -3,7 +3,7 @@
 ## 1. 总体目标
 
 - 本计划用于定义 AI 域正式测试的范围与领域特有规则。
-- 正式 / temp 准入、runner、raw logs 与正式 case 共享字段，统一遵循 `doc/test.md`。
+- 正式 / 临时准入、runner、raw logs 与正式 case 共享字段，统一遵循 `doc/test.md`。
 - AI 正式测试只围绕两类稳定对象治理：
   1. `tool`
   2. `human`
@@ -13,29 +13,29 @@
 ### 2.1 按 Suite / 分类汇总
 
 - `tool / docx`
-  - 通过率：`43 / 43`
-  - 检测时间：`2026-04-29 16:39:22 +08:00`
+  - 通过率：`42 / 42`
+  - 检测时间：`2026-06-11 17:16:38 +08:00`
 - `tool / kb`
   - 通过率：`2 / 2`
-  - 检测时间：`2026-04-16 16:16:05 +08:00`
+  - 检测时间：`2026-06-11 17:16:38 +08:00`
 - `tool / terminal`
-  - 通过率：`6 / 6`
-  - 检测时间：`2026-06-06`
+  - 通过率：`5 / 5`
+  - 检测时间：`2026-06-11 17:16:38 +08:00`
   - 覆盖补充：terminal 正式测试按“安全指令集”语义维护；Windows 路径覆盖 PowerShell 语法、`EncodedCommand` 执行与 UTF-8 输出，macOS 路径覆盖 zsh 语法。
 - `tool / web-browsing`
   - 通过率：`5 / 5`
-  - 检测时间：`2026-06-11`
+  - 检测时间：`2026-06-11 17:16:38 +08:00`
   - 覆盖补充：`web_crawl` 已通过冻结 sidecar bin 和内置 headless shell 覆盖当前页抓取、导航页 topic 跟进、HTTP 失败与结果过大；`browser_use` 已覆盖缺少内置浏览器服务时的真实 diagnostic。
 - `tool / utility`
-  - 通过率：`未执行`
-  - 检测时间：`未执行`
-  - 覆盖计划：`wait_time` 等待时长与返回 `waitedMs`。
+  - 通过率：`1 / 1`
+  - 检测时间：`2026-06-11 17:16:38 +08:00`
+  - 覆盖补充：`wait_time` 等待时长与返回 `waitedMs`。
 - `tool / hand`
-  - 通过率：`4 / 4`
-  - 检测时间：`2026-04-16 16:16:05 +08:00`
+  - 通过率：`9 / 9`
+  - 检测时间：`2026-06-11 17:16:38 +08:00`
 - `human / mock-llm`
-  - 通过率：`15 / 15`
-  - 检测时间：`2026-04-29 17:02:09 +08:00`
+  - 通过率：`22 / 22`
+  - 检测时间：`2026-06-11 17:16:38 +08:00`
 - `human / live`
   - 通过率：`2 / 2`（2026-06-11 定向执行 `web_crawl` live case；2026-06-01 全量 `--runs 2` raw run 样本为 `10 / 31`，suite 最终失败）
   - 检测时间：`2026-06-11`
@@ -95,7 +95,7 @@
 - 凡是会进入 `human` 的正式 run，必须在进入 `human` 前完成 embedding 基础服务 preflight；不允许把 embedding 初始化推迟到某个工具调用时才暴露。
 - KB fixture 必须走真实导入、真实索引、真实检索。
 - embedding 模型缺失时，harness 应优先通过真实生产下载链自动检查并下载，不得引入测试专用 embedding 替身。
-- 旧式 fake API 一律不得进入 formal harness；一次性排查如果确实需要 fake，只允许写入 `tests/temp/**`。
+- 旧式 fake API 一律不得进入 formal harness；一次性排查不得进入 `tests/case/**` 正式测试树。
 - backend/live/e2e 正式测试统一使用默认 `testTimeout=900_000`、`hookTimeout=900_000`；不再为单个正式 case 单独配置超时。
 
 ### 4.2 `mock-llm` 与 `live` 设计口径
@@ -113,20 +113,19 @@
 - case 设计必须使用真实用户风格输入，不得把内部固定工具顺序写进用户输入。
 - 断言重点：完成态、关键工具调用、关键 artifact、关键事实是否成立。
 - 不对最终文案做精确文本断言。
-- transport / structured output 兼容性探针类 case，应至少分别覆盖一次 `force_non_stream` 与 `force_stream` 路径。
 - 每次 formal `human / live` 执行完成后，除更新通过率、检测时间、备注外，还要在执行摘要中补充本轮已执行样例的完成度评分及简短依据。
 
 ### 4.3 目录与命令
 
 正式 AI 测试目录：
 
-- `tests/ai/tool/<group>/<case>.test.ts`
-- `tests/ai/human/mock-llm/<case>.test.ts`
-- `tests/ai/human/live/<case>.test.ts`
+- `tests/case/ai/tool/<group>/<case>.test.ts`
+- `tests/case/ai/human/mock-llm/<case>.test.ts`
+- `tests/case/ai/human/live/<case>.test.ts`
 
 长期非 formal 测试目录：
 
-- `tests/unit/ai/<case>.test.ts`
+- `tests/case/unit/ai/<case>.test.ts`
 
 推荐命令：
 
@@ -141,7 +140,6 @@
 ## 5. 正式 Case 清单
 
 ### 5.1 `tool`
-
 
 #### docx 类别
 
@@ -365,14 +363,64 @@
 - Oracle：各类 action 都能写入成功并返回最终文档状态下可继续消费的 `postWriteReadback`。
 - Not：不验证上层 op 选择策略。
 
-##### `docx-edit-serial-actions-stability`
+##### `docx-edit-insert-blocks-order`
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证单次 `docx_edit(actions[])` 内部按 action 顺序执行，并通过稳定 locator 避免前序写入造成后序 blockId 漂移。
-- Why：这是 docx 批量精细修改的核心写入契约，避免 AI 以读到的真实 blockId 连续编辑时被 blockIndex 改变误伤。
-- How：覆盖“先插入再替换原目标”、“replace 后继续引用同一原始 blockId 命中 successor”、“删除后再修改同一目标失败且不提交部分结果”。
-- Oracle：前两类成功并命中预期最终文本，失败类返回错误且 active 文档保持原状态。
+- What：验证 `docx_edit(insert_blocks)` 在同一 anchor 后插入多条段落与表格时保持输入顺序。
+- Why：结构插入顺序一旦漂移，后续 AI 读回确认和用户可见文档都会出现错位。
+- How：在段落 A 后一次插入 `P1 / P2 / Table / P3`，再读取完整 outline。
+- Oracle：最终顺序稳定为 `A / P1 / P2 / Table / P3 / B`，且返回 `createdBlocks` 与 `postWriteReadback`。
+- Not：不验证多 action 串行插入；该场景由 `docx-edit-serial-multiple-inserts-preserve-created-blocks` 覆盖。
+
+##### `docx-edit-serial-multiple-inserts-preserve-created-blocks`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证一次 `docx_edit(actions[])` 内多个 `insert_blocks` 会按 action 顺序稳定写入，并分别返回新增 block。
+- Why：批量结构插入需要让后续读回和继续编辑能准确识别每个新增结构。
+- How：在同一文档里先在 A 后插入两个段落，再在 C 前插入段落和表格。
+- Oracle：最终顺序稳定，`createdBlocks` 能对应到本次新增的段落与表格，不误收尾部旧块。
+- Not：不验证 replace/delete 与 insert 的混合漂移；该场景由串行动作稳定性 case 覆盖。
+
+##### `docx-structural-op-behavior`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证文本替换不会创建新结构，段落/表格对象编辑可以创建独立结构块。
+- Why：docx 工具必须清晰区分文本级修改与结构级修改，否则会污染后续 outline、read 和 createdBlocks 语义。
+- How：先执行 `replace_text`，再执行段落与表格 `insert_blocks`，分别读取 outline。
+- Oracle：`replace_text` 后 body 结构数量不变；对象插入后出现新增 paragraph/table 结构，且 changedBlocks 标记为结构插入。
+- Not：不验证 run 级样式保留。
+
+##### `docx-edit-serial-actions-resolve-original-target-after-insert-drift`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证单次 `docx_edit(actions[])` 内前序插入导致 blockIndex 漂移后，后序 action 仍能命中最初读取到的原始 blockId。
+- Why：AI 常基于同一轮读取结果连续提交批量编辑，必须避免前序插入让后续目标误伤相邻旧块。
+- How：先在 A 后插入 A1，再继续用最初读取到的 C blockId 执行 `replace_block`。
+- Oracle：最终文档为 `A / A1 / B / C updated`，changedBlocks 同时记录插入与替换。
+- Not：不支持同一次 actions 内引用本次刚创建且尚未回读的新 blockId。
+
+##### `docx-edit-serial-actions-follow-replacement-successor`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证同一次 `docx_edit(actions[])` 内 `replace_block` 后继续引用同一原始 blockId，会解析到替换后的 successor。
+- Why：批量编辑经常需要先替换整段，再继续对新段落做局部文字处理。
+- How：先把目标段落替换为含 `keyword` 的新段落，再用同一原始 blockId 执行 `replace_text`。
+- Oracle：最终文本包含二次修改后的 `styled-keyword`，并同时记录 `replace_block` 与 `replace_text`。
+- Not：不验证跨多轮引用新增 block 的策略。
+
+##### `docx-edit-serial-actions-fail-after-delete-without-committing`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证同一次 `docx_edit(actions[])` 内删除后再修改同一原始 blockId 会失败，且不会提交部分结果。
+- Why：批量编辑失败必须保持 transaction 边界，不能留下半成功 working draft。
+- How：先删除目标 block，再尝试对同一原始 block 执行 `replace_block`。
+- Oracle：工具返回失败；active 文档仍保留原目标文本，不出现后续替换文本。
 - Not：不支持同一次 actions 内引用本次刚创建且尚未回读的新 blockId。
 
 ##### `docx-format-variants-contract`
@@ -445,16 +493,6 @@
 - Oracle：未修改部分样式保留，修改目标样式正确。
 - Not：不验证 UI。
 
-##### `docx-replay-open-and-continue-edit`
-
-- 测试类型：`backend`
-- 实现状态：`已实现`
-- What：验证同一 run 内 docx 自动 open 会基于 latest replay session 继续编辑。
-- Why：多轮编辑能否累计，依赖 replay session 的真实行为。
-- How：先执行一次 docx 写入，再执行 `docx_read_blocks / docx_edit(replace_text)`。
-- Oracle：读取内容来自最新 replay session，新增修改叠加在当前 revision 上。
-- Not：不验证 UI 与最终 direct apply。
-
 ##### `docx-working-draft-hides-deleted-content`
 
 - 测试类型：`backend`
@@ -466,16 +504,6 @@
 - Not：不验证 UI 展示层。
 
 #### docx hand 类别
-
-##### `hand-serial-docx-chain`
-
-- 测试类型：`backend`
-- 实现状态：`已实现`
-- What：验证 hand 在 `serial` 模式下会按顺序执行 `docx` 写入与后续读取。
-- Why：这是 hand 承接 docx 写工具返回复核信息后继续执行后续读取的最小基线。
-- How：真实执行 `docx_edit(replace_text) -> docx_read_blocks`。
-- Oracle：工具结果按顺序成功返回，写工具结果包含 `postWriteReadback.regions`，且不产生旧写后阻断 decision hint。
-- Not：不验证复杂定位恢复。
 
 ##### `hand-docx-single-file-multi-write-allowed`
 
@@ -536,36 +564,6 @@
 - How：真实执行“插入段落 -> 改写新增段落 -> 插入表格 -> 更新新增 cell”。
 - Oracle：新增段落与新增 cell 都可继续被定位和修改，最新 working draft 只暴露最新有效内容。
 - Not：不验证 live 模型如何规划多轮编辑。
-
-##### `docx-committed-view-projection`
-
-- 测试类型：`backend`
-- 实现状态：`已实现`
-- What：验证 direct apply 使用 committed view projection，且 projected docx 使用稳定表格布局。
-- Why：committed view 格式稳定性是 docx direct apply 的核心工程约束。
-- How：真实执行结构化编辑并 materialize committed view，再直接检查生成的 docx XML。
-- Oracle：committed view 不包含原生 `w:ins/w:del`，且插入表格带 `tblGrid / tblLayout / tcW`。
-- Not：不验证 live 渲染外观。
-
-##### `docx-direct-apply-uses-committed-view`
-
-- 测试类型：`backend`
-- 实现状态：`已实现`
-- What：验证 direct apply 时按 committed view 语义落盘，而不是以 working artifact 直接覆盖源文件。
-- Why：最终落盘必须来自 committed view，不能把仅供 AI 继续编辑的 working draft 直接写回源文件。
-- How：构造 replay session 后执行 `applyDocxRunEdits`，检查源文件采用 committed view 内容。
-- Oracle：写回后 source 文件采用 committed view 内容，不包含 working-only 展示痕迹。
-- Not：不验证冲突处理。
-
-##### `docx-risk-report-direct-apply`
-
-- 测试类型：`backend`
-- 实现状态：`已实现`
-- What：验证风险周报场景能直接把最终内容落盘到源 `docx`，并生成可回退 checkpoint。
-- Why：通用 direct apply 契约之外，还需要一条贴近真实业务内容的 docx 写回样例。
-- How：构造与 live 风险周报 case 相同的模板；通过真实 docx 工具执行两处占位符替换，随后执行 `applyDocxRunEdits` 并检查源文档最终内容。
-- Oracle：源模板中两处占位符被最终内容替换，且不再保留 `RISK_TODO / OWNER_TODO`；生成 `DocxApplyRecord(status=applied)`。
-- Not：不覆盖 live 模型执行路径，不要求经过 KB 或 terminal。
 
 ##### `docx-history-and-rollback`
 
@@ -737,15 +735,35 @@
 
 #### human hand 类别
 
-##### `hand-tool-call-order-contract`
+##### `hand-call-limit`
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证 `hand` 的多工具顺序执行、总调用数约束与结果聚合守卫。
-- Why：工具执行器本身必须在真实结果下稳定收敛，且不能再暴露并行分支复杂度。
-- How：通过真实 `hand` 执行多工具顺序调用、达到调用上限的批次，以及超过上限的批次。
-- Oracle：多工具调用会按输入顺序真实执行并正确聚合；超过 `HUMAN_HAND_CALL_LIMIT` 的批次会在执行前被 `hand_call_limit_exceeded` 拦截。
-- Not：不验证 `brain` 决策来源。
+- What：验证 `hand` 会在执行前拦截超过单轮调用上限的 `calls`。
+- Why：`calls` 数量上限是工具执行失控前的第一道硬边界，不能等到部分工具已执行后才发现超限。
+- How：直接构造 `HUMAN_HAND_CALL_LIMIT + 1` 个安全 terminal 调用交给真实 `hand` node。
+- Oracle：返回 `hand_call_limit_exceeded` decision hint，detail 中包含 limit 与 callCount，且不会产生 `lastToolResults`。
+- Not：不验证 hardActionLimit 的执行后收敛；该场景由 `hand-tool-limit-and-artifact-merge` 覆盖。
+
+##### `hand-schema-preflight-invalid-input`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证 `hand` preflight schema 失败时稳定返回 `invalid_input`，并保留具体 diagnostic。
+- Why：模型常见错误是把工具参数包错层级，preflight 必须在真实工具执行前给出可恢复的结构化失败。
+- How：向真实 `hand` node 提交双层嵌套的坏 `docx_edit` 参数。
+- Oracle：工具结果为失败，diagnostic 指向 `calls[0].args`，并提升为 `hand_call_invalid` decision hint。
+- Not：不验证 brain 如何根据该 hint 重写计划。
+
+##### `hand-docx-edit-invalid-blockid-failed`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证 `docx_edit` 使用不存在或过期 blockId 时失败，并返回统一 `hand_docx_edit_failed`。
+- Why：无效 blockId 是 docx 多轮编辑的高频失败入口，必须稳定进入可恢复 hint，而不是静默写错位置。
+- How：创建真实 docx 后，通过 `hand` 调用 `docx_edit(insert_blocks)`，anchorBlockId 使用不存在的 `b:99`。
+- Oracle：`docx_edit` 返回失败；pending decision hint 为 `hand_docx_edit_failed`，detail 包含 toolName、sourcePath、action 与具体错误。
+- Not：不验证 human 最终交付话术。
 
 ##### `hand-terminal-approval-batch`
 
@@ -773,14 +791,13 @@
 - 实现状态：`已实现`
 - What：验证 `hand` 的工具次数限制与 artifact 合并行为。
 - Why：这是工具执行层的关键边界。
-- How：通过真实工具结果触发 limit 与 artifact merge 分支。
-- Oracle：超限被守卫拦截，artifact 合并结果稳定。
+- How：先执行会产生 file artifact 的 terminal 工具，再在保留既有 artifact 的情况下执行不产生 artifact 的 docx read，并触发 hardActionLimit 收敛。
+- Oracle：已有 artifact 不被后续无 artifact 工具覆盖；超过 hardActionLimit 后产生 `hand_tool_limit_exceeded` decision hint、交付说明和当前工具结果。
 - Not：不验证 `human` 全链路。
 
 ### 5.2 `human`
 
 #### mock-llm 类别
-
 
 ##### `ai-run-service-human-only`
 
@@ -796,10 +813,20 @@
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证 `AiRunService` 会在进入 `human` 前完成 embedding preflight，且 preflight 失败时会直接失败收口。
+- What：验证 `AiRunService` 会在进入 `human` 前完成 embedding preflight，并支撑后续 semantic docx 搜索。
 - Why：embedding 已被定义为 AI run 的基础设施，不应等到 semantic 工具调用时才第一次暴露未就绪问题。
-- How：分别覆盖 preflight 成功后执行真实 `docx_read_blocks`，以及 preflight 直接失败的分支。
-- Oracle：成功分支中 `docx_read_blocks` 正常返回结果；失败分支中 run 直接失败且不会进入 `human` stage。
+- How：通过 `AiRunService.getInstance().run(...)` 启动真实 run，在 preflight 成功后执行 `docx_search(mode=semantic)`。
+- Oracle：preflight 被调用一次；任务完成；semantic 搜索返回带 score 的真实命中。
+- Not：不验证 preflight 失败收口；该场景由 `ai-run-service-embedding-preflight-failure` 覆盖。
+
+##### `ai-run-service-embedding-preflight-failure`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证 embedding preflight 失败时，`AiRunService` 会在进入 `human` 前直接失败收口。
+- Why：基础服务不可用时继续进入 human graph 会制造后续工具层噪音，应该在入口阶段明确失败。
+- How：注入会抛错的 `ensureEmbeddingReady`，启动一次真实 `AiRunService` run。
+- Oracle：run 状态为 `failed`，错误包含 preflight 失败原因，事件流中没有任何 `human_step`。
 - Not：不验证模型下载进度展示。
 
 ##### `learning-hand-mouth-smoke`
@@ -831,6 +858,16 @@
 - How：第一轮先学习一个 external skill（如 `docx-read`），第二轮故意重复学习同一个 external skill 触发 learning decision hint，随后再执行一次真实 `terminal_run(pwd)` 并完成交付。
 - Oracle：事件流中真实出现 source 为 `learning` 的 `decision_hint`，并且在它之后仍发生真实 terminal 工具调用，任务最终完成。
 - Not：不验证 live 模型是否会自然产生这类重复决策。
+
+##### `brain-output-schema-invalid-retry`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证 `brain` 输出 hand plan schema 不合法时会产出 `brain_output_schema_invalid` decision hint，并在纠偏后继续完成任务。
+- Why：结构化输出偶发坏参数是 LLM 链路的真实风险，graph 必须把它转成可恢复 hint。
+- How：scripted brain 先返回带非法字段的 `docx_edit` hand plan，再返回完成任务决策。
+- Oracle：任务最终完成；事件流出现 source 为 `brain` 的 `brain_output_schema_invalid` decision hint，且 detail 中包含 `nextAction.calls` 相关 issue。
+- Not：不验证具体工具执行，因为坏 plan 应在执行前被拦截。
 
 ##### `decision-hint-contract-and-recovery`
 
@@ -931,6 +968,16 @@
 - How：先写入 fixture docx，再通过真实 `docx_edit(replace_text) -> docx_read_blocks -> docx_search` 完成一次正文替换、读取确认和定位。
 - Oracle：真实 `docx_edit(replace_text)` 只产生一处 `changedBlocks`，真实 `docx_search` 与 `docx_read_blocks` 都能命中新文本，任务最终完成。
 - Not：不验证 UI 或最终落盘流程。
+
+##### `complex-docx-insert-structured-content`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证 mock-llm 下 `human` 可以按对象类型提交段落与表格编辑参数。
+- Why：复杂 docx 编辑不能只覆盖文本替换，还要保护 structured content 插入这类高价值写作场景。
+- How：先读取真实 docx outline，定位 anchor 后通过真实 `docx_edit(insert_blocks)` 插入段落和表格，再读回确认。
+- Oracle：任务最终完成；docx apply artifact 与 file artifact 正常生成；写入内容包含新增段落和表格结构。
+- Not：不验证 live 模型是否自然选择同样的结构化参数。
 
 ##### `docx-read-fact-exposure`
 

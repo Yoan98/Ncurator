@@ -62,7 +62,7 @@ export type E2ETestRuntime = {
 
 export type E2ETestCaseDefinition<TResult> = {
   caseId: string
-  domain: Extract<TestDomain, 'ai' | 'settings' | 'kb-search' | 'renderer' | 'temp'>
+  domain: Extract<TestDomain, 'ai' | 'settings' | 'kb-search'>
   suite: string
   groups?: readonly string[]
   description: string
@@ -83,11 +83,8 @@ const buildRunScope = (input: {
   return parts.join('/')
 }
 
-const buildTaskId = (input: {
-  suite: string
-  groups: readonly string[]
-  caseId: string
-}): string => [input.suite, ...input.groups, input.caseId].join('-')
+const buildTaskId = (input: { suite: string; groups: readonly string[]; caseId: string }): string =>
+  [input.suite, ...input.groups, input.caseId].join('-')
 
 const buildStats = (
   startedAtMs: number,
@@ -170,7 +167,9 @@ const buildPlaywrightReportHtml = (input: {
   ].join('\n')
 }
 
-export const runE2ECase = async <TResult>(definition: E2ETestCaseDefinition<TResult>): Promise<void> => {
+export const runE2ECase = async <TResult>(
+  definition: E2ETestCaseDefinition<TResult>
+): Promise<void> => {
   const startedAtMs = Date.now()
   const runId = createRunId(startedAtMs)
   const scope = buildRunScope({

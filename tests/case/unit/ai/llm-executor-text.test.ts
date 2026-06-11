@@ -1,0 +1,346 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+const { createChatModelMock } = vi.hoisted(() => ({
+  createChatModelMock: vi.fn()
+}))
+
+vi.mock('../../../../src/main/services/llm/chatModel', () => ({
+  createChatModel: createChatModelMock,
+  getSupportedTransportsForConfig: () => ['responses', 'completions']
+}))
+
+import { createAiLlmExecutor } from '../../../../src/main/services/ai/llmExecutor'
+import type { AiLlmDriver } from '../../../../src/main/services/ai/llmExecutor'
+import type { AiLlmIoRecord, AiRunEvent, LlmRuntimeConfig } from '../../../../src/shared/types'
+
+const baseConfig: LlmRuntimeConfig = {
+  id: 'cfg-1',
+  providerKind: 'openai',
+  base_url: 'https://example.test/v1',
+  model_name: 'gpt-5',
+  api_key: 'test-key',
+  is_active: true,
+  default_model: 'gpt-5'
+}
+
+describe('ai unit llm executor text path', () => {
+  beforeEach(() => {
+    createChatModelMock.mockReset()
+  })
+
+  it('falls back from completions to responses and persists the resolved text transport', async () => {
+    const events: AiRunEvent[] = []
+    const llmIoRecords: AiLlmIoRecord[] = []
+    const saveConfig = vi.fn(async (_cfg: LlmRuntimeConfig) => undefined)
+
+    createChatModelMock.mockImplementation(
+      (_cfg: LlmRuntimeConfig, options?: { transport?: 'completions' | 'responses' }) => {
+        const transport = options?.transport ?? 'responses'
+        return {
+          invoke: async () => {
+            if (transport === 'completions') {
+              throw new Error("Cannot read properties of undefined (reading 'message')")
+            }
+
+            return {
+              content: 'Hello from responses'
+            }
+          },
+          stream: async () => ({
+            async *[Symbol.asyncIterator]() {
+              yield {
+                content: 'unexpected'
+              }
+            }
+          }),
+          withConfig: () => {
+            throw new Error('text output should not call withConfig')
+          }
+        }
+      }
+    )
+
+    const executor = createAiLlmExecutor({
+      eventCtx: {
+        runId: 'run-1',
+        sendEvent: (event) => events.push(event),
+        recordLlmIo: (record) => llmIoRecords.push(record)
+      },
+      runtimeSettings: {
+        llmStreamingMode: 'force_non_stream'
+      },
+      getConfig: async () => ({
+        ...baseConfig,
+        preferredTransport: 'completions'
+      }),
+      saveConfig,
+      checkCancelled: () => undefined
+    })
+
+    const result = await executor.chatText({
+      caller: 'human.mouth',
+      taskId: 'task-1',
+      schemaName: 'human_mouth_markdown',
+      system: 'system prompt',
+      user: 'user prompt'
+    })
+
+    expect(result).toBe('Hello from responses')
+    expect(
+      createChatModelMock.mock.calls.map(
+        (call) => (call[1] as { transport?: 'completions' | 'responses' } | undefined)?.transport
+      )
+    ).toEqual(['completions', 'responses'])
+    expect(saveConfig).toHaveBeenCalledTimes(1)
+    expect(saveConfig.mock.calls[0]?.[0]).toMatchObject({
+      preferredTransport: 'responses'
+    })
+    expect(
+      events.some(
+        (event) =>
+          event.type === 'activity' &&
+          event.actionType === 'llm_text_output' &&
+          event.status === 'completed'
+      )
+    ).toBe(true)
+    expect(llmIoRecords[0]).toMatchObject({
+      caller: 'human.mouth',
+      transport: 'responses',
+      streamingMode: 'force_non_stream',
+      streamed: false,
+      rawText: 'Hello from responses'
+    })
+  })
+
+  it('forwards streamed text deltas through the observer and records stream metadata', async () => {
+    const events: AiRunEvent[] = []
+    const llmIoRecords: AiLlmIoRecord[] = []
+    const saveConfig = vi.fn(async (_cfg: LlmRuntimeConfig) => undefined)
+    const answerChunks: string[] = []
+
+    const driver: AiLlmDriver = {
+      chatText: async (input) => {
+        input.observer?.onDelta?.('Hello')
+        input.observer?.onDelta?.(' world')
+        return {
+          output: 'Hello world',
+          rawText: 'Hello world',
+          transport: 'responses',
+          streamed: true
+        }
+      }
+    }
+
+    const executor = createAiLlmExecutor({
+      eventCtx: {
+        runId: 'run-2',
+        sendEvent: (event) => events.push(event),
+        recordLlmIo: (record) => llmIoRecords.push(record)
+      },
+      runtimeSettings: {
+        llmStreamingMode: 'force_stream'
+      },
+      getConfig: async () => baseConfig,
+      saveConfig,
+      checkCancelled: () => undefined,
+      driver
+    })
+
+    const result = await executor.chatText({
+      caller: 'human.mouth',
+      taskId: 'task-2',
+      schemaName: 'human_mouth_markdown',
+      system: 'system prompt',
+      user: 'user prompt',
+      onTextDelta: (text) => answerChunks.push(text)
+    })
+
+    expect(result).toBe('Hello world')
+    expect(answerChunks).toEqual(['Hello', ' world'])
+
+    const streamEvents = events.filter((event) => event.type === 'llm_stream_delta')
+    expect(streamEvents).toHaveLength(2)
+    expect(streamEvents[0]).toMatchObject({
+      type: 'llm_stream_delta',
+      runId: 'run-2',
+      taskId: 'task-2',
+      caller: 'human.mouth',
+      chunkIndex: 1,
+      text: 'Hello',
+      internal: true
+    })
+    expect(llmIoRecords[0]).toMatchObject({
+      caller: 'human.mouth',
+      transport: 'responses',
+      streamingMode: 'force_stream',
+      streamed: true,
+      chunkCount: 2,
+      rawText: 'Hello world',
+      status: 'completed'
+    })
+    expect(saveConfig).toHaveBeenCalledTimes(1)
+    expect(saveConfig.mock.calls[0]?.[0]).toMatchObject({
+      preferredTransport: 'responses'
+    })
+  })
+
+  it('fails early when a streamed response stalls on blank deltas', async () => {
+    const events: AiRunEvent[] = []
+    const llmIoRecords: AiLlmIoRecord[] = []
+    const saveConfig = vi.fn(async (_cfg: LlmRuntimeConfig) => undefined)
+
+    createChatModelMock.mockImplementation(() => ({
+      invoke: async () => ({
+        content: 'unexpected'
+      }),
+      stream: async () => ({
+        async *[Symbol.asyncIterator]() {
+          yield {
+            content: '{"partial":'
+          }
+          for (let index = 0; index < 513; index += 1) {
+            yield {
+              content: ' \t   '
+            }
+          }
+        }
+      }),
+      withConfig: () => {
+        throw new Error('text output should not call withConfig')
+      }
+    }))
+
+    const executor = createAiLlmExecutor({
+      eventCtx: {
+        runId: 'run-3',
+        sendEvent: (event) => events.push(event),
+        recordLlmIo: (record) => llmIoRecords.push(record)
+      },
+      runtimeSettings: {
+        llmStreamingMode: 'force_stream'
+      },
+      getConfig: async () => ({
+        ...baseConfig,
+        preferredTransport: 'completions'
+      }),
+      saveConfig,
+      checkCancelled: () => undefined
+    })
+
+    await expect(
+      executor.chatText({
+        caller: 'human.brain',
+        taskId: 'task-3',
+        schemaName: 'human_brain_decision',
+        system: 'system prompt',
+        user: 'user prompt'
+      })
+    ).rejects.toThrow('llm_stream_blank_delta_stall; blankChunks=513')
+
+    const failedActivity = events
+      .filter((event) => event.type === 'activity')
+      .find((event) => event.type === 'activity' && event.status === 'failed')
+    expect(failedActivity).toMatchObject({
+      type: 'activity',
+      actionType: 'llm_text_output',
+      status: 'failed',
+      details: {
+        streamed: true,
+        chunkCount: 513,
+        reason: 'error'
+      }
+    })
+    expect(llmIoRecords[0]).toMatchObject({
+      caller: 'human.brain',
+      schemaName: 'human_brain_decision',
+      streamingMode: 'force_stream',
+      streamed: true,
+      chunkCount: 513,
+      status: 'failed',
+      reason: expect.stringContaining('llm_stream_blank_delta_stall; blankChunks=513')
+    })
+  })
+
+  it('preserves cancellation errors when external abort is triggered', async () => {
+    const controller = new AbortController()
+    const driver: AiLlmDriver = {
+      chatText: async (input) =>
+        await new Promise((_resolve, reject) => {
+          input.signal?.addEventListener(
+            'abort',
+            () => reject(Object.assign(new Error('cancelled'), { code: 'CANCELLED' })),
+            { once: true }
+          )
+        })
+    }
+    const executor = createAiLlmExecutor({
+      eventCtx: {
+        runId: 'run-cancel',
+        sendEvent: () => undefined
+      },
+      runtimeSettings: {
+        llmStreamingMode: 'force_non_stream'
+      },
+      getConfig: async () => baseConfig,
+      saveConfig: async () => undefined,
+      checkCancelled: () => undefined,
+      abortSignal: controller.signal,
+      driver
+    })
+
+    const pending = executor.chatText({
+      caller: 'human.mouth',
+      taskId: 'task-cancel',
+      schemaName: 'human_mouth_markdown',
+      system: 'system prompt',
+      user: 'user prompt'
+    })
+    setTimeout(() => controller.abort(), 0)
+
+    await expect(pending).rejects.toMatchObject({
+      message: 'cancelled',
+      code: 'CANCELLED'
+    })
+  })
+
+  it('passes the fixed llm timeout into model creation', async () => {
+    createChatModelMock.mockImplementation(() => ({
+      invoke: async () => ({
+        content: 'ok'
+      }),
+      stream: async () => ({
+        async *[Symbol.asyncIterator]() {
+          yield { content: 'ok' }
+        }
+      }),
+      withConfig: () => {
+        throw new Error('text output should not call withConfig')
+      }
+    }))
+
+    const executor = createAiLlmExecutor({
+      eventCtx: {
+        runId: 'run-timeout-prop',
+        sendEvent: () => undefined
+      },
+      runtimeSettings: {
+        llmStreamingMode: 'force_non_stream'
+      },
+      getConfig: async () => baseConfig,
+      saveConfig: async () => undefined,
+      checkCancelled: () => undefined
+    })
+
+    await executor.chatText({
+      caller: 'human.mouth',
+      taskId: 'task-timeout-prop',
+      schemaName: 'human_mouth_markdown',
+      system: 'system prompt',
+      user: 'user prompt'
+    })
+
+    expect(createChatModelMock.mock.calls[0]?.[1]).toMatchObject({
+      timeout: 480000
+    })
+  })
+})
