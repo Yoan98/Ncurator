@@ -35,6 +35,7 @@ const createLocalServer = async (): Promise<{
   close: () => Promise<void>
 }> => {
   const server = http.createServer((request, response) => {
+    response.setHeader('Content-Type', 'text/html; charset=utf-8')
     const currentPath = request.url || '/'
     if (currentPath === '/missing') {
       response.statusCode = 404

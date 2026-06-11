@@ -24,8 +24,8 @@
   - 覆盖补充：terminal 正式测试按“安全指令集”语义维护；Windows 路径覆盖 PowerShell 语法、`EncodedCommand` 执行与 UTF-8 输出，macOS 路径覆盖 zsh 语法。
 - `tool / web-browsing`
   - 通过率：`5 / 5`
-  - 检测时间：`2026-06-10`
-  - 覆盖补充：`web_crawl` 已通过冻结 sidecar bin 覆盖当前页抓取、导航页 topic 跟进、HTTP 失败与结果过大；`browser_use` 已覆盖缺少内置浏览器服务时的真实 diagnostic。
+  - 检测时间：`2026-06-11`
+  - 覆盖补充：`web_crawl` 已通过冻结 sidecar bin 和内置 headless shell 覆盖当前页抓取、导航页 topic 跟进、HTTP 失败与结果过大；`browser_use` 已覆盖缺少内置浏览器服务时的真实 diagnostic。
 - `tool / utility`
   - 通过率：`未执行`
   - 检测时间：`未执行`
@@ -37,9 +37,13 @@
   - 通过率：`15 / 15`
   - 检测时间：`2026-04-29 17:02:09 +08:00`
 - `human / live`
-  - 通过率：`10 / 31`（2026-06-01 执行 `--runs 2` 后产生的 raw run 样本；suite 最终失败）
-  - 检测时间：`2026-06-01 11:23:22 +08:00`
+  - 通过率：`2 / 2`（2026-06-11 定向执行 `web_crawl` live case；2026-06-01 全量 `--runs 2` raw run 样本为 `10 / 31`，suite 最终失败）
+  - 检测时间：`2026-06-11`
   - 样例评分：
+    - `human-web-crawl-url-inference-reading-live`：`9.0 / 10`
+      - 依据：2026-06-11 定向执行 1 轮通过，单轮耗时约 `60s`。用户未提供 URL，仅给 pandas 文档整理诉求；模型自行推断 `pandas.pydata.org` 官网文档地址，并至少两次调用 `web_crawl` 完成 `read_csv` 与 `DataFrame.to_csv` 的用途和读写 CSV 差异整理；未使用 `browser_use` 或 `terminal_run`。扣分点是 live LLM 行为仍依赖真实模型稳定性，且首次冻结 sidecar 冷启动会带来额外耗时。
+    - `human-web-crawl-multi-hop-cross-domain-reading-live`：`8.8 / 10`
+      - 依据：2026-06-11 定向执行 1 轮通过，单轮耗时约 `307s`。模型围绕入口网址多次调用 `web_crawl`，访问覆盖 `127.0.0.1` 与 `localhost` 两个域名，并完成专题页、通知页、办理指南页和申报入口页的多跳事实整合；最终答复覆盖申请对象、材料、截止时间和线上办理方式，且未使用 `browser_use` 或 `terminal_run`。扣分点主要是多轮 live 调用耗时偏长。
     - `human-risk-report-draft-live`：`8.3 / 10`
       - 依据：2026-06-01 全量 live 执行中产生 4 个 raw run，2 过 2 失败，单轮耗时约 `189s ~ 255s`。4 轮都创建了本周周报 docx，并真实读取上周周报、本周工作 docx 与 txt 材料；失败轮主要卡在风险口径断言，实际成稿仍覆盖负责人、后续动作和未收口风险，但存在“风险已解除”等禁用表述被引用进最终说明的稳定性问题。综合按用户写周报诉求计为 `8.3 / 10`。
     - `human-docx-cause-remedy-reading-live`：`8.4 / 10`

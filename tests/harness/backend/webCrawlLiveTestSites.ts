@@ -17,7 +17,10 @@ export type MultiHopCrossDomainWebCrawlSite = {
 const createServer = async (
   handler: http.RequestListener<typeof http.IncomingMessage, typeof http.ServerResponse>
 ): Promise<RunningServer> => {
-  const server = http.createServer(handler)
+  const server = http.createServer((request, response) => {
+    response.setHeader('Content-Type', 'text/html; charset=utf-8')
+    handler(request, response)
+  })
   await new Promise<void>((resolve) => {
     server.listen(0, resolve)
   })

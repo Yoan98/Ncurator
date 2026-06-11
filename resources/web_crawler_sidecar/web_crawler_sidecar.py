@@ -1,9 +1,12 @@
 import asyncio
 import json
+import os
 import re
 import sys
 from typing import Any
 from urllib.parse import urljoin, urlparse
+
+os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "0")
 
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig
 
@@ -214,10 +217,10 @@ async def crawl_once(crawler: AsyncWebCrawler, url: str) -> dict[str, Any]:
     success_value = raw_result.get("success")
     success = True if not isinstance(success_value, bool) else success_value
     status_code = resolve_status_code(raw_result)
-    error_message = resolve_error_message(raw_result)
     if status_code is not None and status_code >= 400:
-        message = error_message or f"网页请求失败：{status_code}"
+        message = f"网页请求失败：{status_code}"
         raise CrawlFailure(message, build_failure_data(raw_result, url, message))
+    error_message = resolve_error_message(raw_result)
     if not success:
         raise CrawlFailure(
             error_message or f"web crawl failed for {url}",
@@ -288,6 +291,8 @@ async def handle_crawl(
 
 async def process_requests() -> None:
     browser_config = BrowserConfig(headless=True, verbose=False)
+    browser_config.chrome_channel = ""
+    browser_config.channel = ""
     crawler = AsyncWebCrawler(config=browser_config)
     await crawler.start()
     try:
