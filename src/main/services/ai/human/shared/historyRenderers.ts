@@ -113,6 +113,16 @@ const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
     sourcePath: true,
     previousRevisionRef: true,
     currentRevisionRef: true,
+  },
+  web_crawl: {
+    finalUrl: true,
+    title: true,
+    markdown: true,
+    publishedAt: true,
+    links: {
+      href: true,
+      text: true
+    }
   }
 }
 

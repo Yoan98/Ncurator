@@ -17,7 +17,8 @@ export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
     input.cache.currentState = state
     const history = await input.ctx.loadConversationContext()
     const availableToolNames = getAvailableToolNames({
-      learnedSkillIds: state.skills.learnedSkillIds
+      learnedSkillIds: state.skills.learnedSkillIds,
+      allowedToolNames: input.ctx.allowedToolNames
     })
     const thoughtDecisionSchema = createHumanThoughtDecisionSchema(availableToolNames)
 

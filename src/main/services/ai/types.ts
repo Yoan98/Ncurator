@@ -187,6 +187,7 @@ export type AiRunContext = {
   sessionId: string
   platform: AiRuntimePlatform
   referenceScope: AiReferenceScope
+  allowedToolNames?: string[]
   humanRuntimeOverrides?: {
     hardActionLimit?: number
     modelContextWindowTokens?: number

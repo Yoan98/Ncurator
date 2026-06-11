@@ -303,10 +303,12 @@ const buildSchemaInvalidResult = (input: {
 const parseHandCalls = (input: {
   calls: HandCallList
   learnedSkillIds: HumanState['skills']['learnedSkillIds']
+  allowedToolNames?: readonly string[]
 }): { ok: true; calls: ParsedHandCall[] } | { ok: false; results: ToolCallResult[] } => {
   const toolCallSchema = createToolCallSchema(
     getAvailableToolNames({
-      learnedSkillIds: input.learnedSkillIds
+      learnedSkillIds: input.learnedSkillIds,
+      allowedToolNames: input.allowedToolNames
     })
   )
 
@@ -363,7 +365,8 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
     const { calls } = state.execution.currentThought.nextAction
     const parsedCallsResult = parseHandCalls({
       calls,
-      learnedSkillIds: state.skills.learnedSkillIds
+      learnedSkillIds: state.skills.learnedSkillIds,
+      allowedToolNames: input.ctx.allowedToolNames
     })
     if (!parsedCallsResult.ok) {
       const results = parsedCallsResult.results

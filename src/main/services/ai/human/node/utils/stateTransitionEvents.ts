@@ -42,13 +42,15 @@ const emitHumanStep = (input: {
 }
 
 const buildStepToolContext = (input: {
+  ctx: AiRunContext
   cache: HumanRuntimeCache
   state: HumanState
 }) => ({
   learnedSkillIds: input.state.skills.learnedSkillIds,
   effectiveSkillIds: getEffectiveLearnedSkillIds(input.state.skills.learnedSkillIds),
   availableToolNames: getAvailableToolNames({
-    learnedSkillIds: input.state.skills.learnedSkillIds
+    learnedSkillIds: input.state.skills.learnedSkillIds,
+    allowedToolNames: input.ctx.allowedToolNames
   })
 })
 
@@ -88,6 +90,7 @@ export const emitLatestHumanStepForState = (input: {
   if (!step) return
 
   const toolContext = buildStepToolContext({
+    ctx: input.ctx,
     cache: input.cache,
     state: input.state
   })
@@ -113,6 +116,7 @@ export const emitTailHumanStepsForState = (input: {
   if (input.count <= 0) return
 
   const toolContext = buildStepToolContext({
+    ctx: input.ctx,
     cache: input.cache,
     state: input.state
   })

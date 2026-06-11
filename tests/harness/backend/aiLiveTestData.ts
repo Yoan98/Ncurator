@@ -75,6 +75,12 @@ export const HUMAN_KB_GUIDED_DOCX_COMPARISON_DRAFT_USER_INPUT =
 export const HUMAN_KB_GUIDED_DOCX_READING_USER_INPUT =
   '我工作区里应该有两份课件分别讲过过拟合和反走样，但我忘了文件名。你先帮我找出来，再告诉我这两个问题一般怎么处理。'
 
+export const buildHumanWebCrawlMultiHopCrossDomainUserInput = (entryUrl: string): string =>
+  `帮我基于这个网站整理杭州灵活就业补贴的申请说明：${entryUrl}。我需要知道谁可以申请、需要哪些材料、截止时间和线上办理方式。`
+
+export const HUMAN_WEB_CRAWL_URL_INFERENCE_USER_INPUT =
+  '帮我基于 pandas 官网文档分别看下 read_csv 和 DataFrame.to_csv 这两个条目，说明它们分别是做什么的，以及最直接的使用区别。不要用终端命令，也不要打开浏览器操作。'
+
 type RiskReportTrackedFile = {
   workspacePath: string
   relativePath: string

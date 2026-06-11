@@ -60,12 +60,19 @@ ${examples}
 `.trim()
 }
 
-const renderSkillCatalogSection = (state: HumanState, platform: AiRuntimePlatform): string => {
+const renderSkillCatalogSection = (
+  state: HumanState,
+  platform: AiRuntimePlatform,
+  allowedToolNames?: readonly string[]
+): string => {
   const effectiveSkillIds = getEffectiveLearnedSkillIds(state.skills.learnedSkillIds)
   const effectiveSkillDefinitions = effectiveSkillIds.map((skillId) => getSkillDefinition(skillId))
   const learnedExternalSkillDefinitions = effectiveSkillDefinitions.filter(
     (definition) => definition.source === 'external'
   )
+  const allowedToolNameSet = allowedToolNames
+    ? new Set(allowedToolNames.map((toolName) => String(toolName || '').trim()).filter(Boolean))
+    : null
   const renderSkillLine = (definition: ReturnType<typeof getSkillDefinition>): string =>
     [
       `- ${definition.skillId}：${definition.description}`,
@@ -78,6 +85,7 @@ const renderSkillCatalogSection = (state: HumanState, platform: AiRuntimePlatfor
   const effectiveToolSpecLines = Array.from(
     new Set(effectiveSkillDefinitions.flatMap((definition) => definition.toolNames))
   )
+    .filter((toolName) => !allowedToolNameSet || allowedToolNameSet.has(toolName))
     .map((toolName) => getToolSpec(toolName, platform))
     .filter((spec): spec is HumanToolSpec => Boolean(spec))
     .map((spec) =>
@@ -114,7 +122,8 @@ export const buildBrainPrompt = (input: {
 }) => {
   const latestRound = getLastRoundFocus(input.state)
   const availableToolNames = getAvailableToolNames({
-    learnedSkillIds: input.state.skills.learnedSkillIds
+    learnedSkillIds: input.state.skills.learnedSkillIds,
+    allowedToolNames: input.ctx.allowedToolNames
   })
   const thoughtDecisionSchema = createHumanThoughtDecisionSchema(availableToolNames)
   const outputShapeText = indentLines(
@@ -336,7 +345,7 @@ ${renderPlatformText(input.ctx)}
   </conversation_history>
 
   <skill_catalog>
-${renderSkillCatalogSection(input.state, input.ctx.platform)}
+${renderSkillCatalogSection(input.state, input.ctx.platform, input.ctx.allowedToolNames)}
   </skill_catalog>
 
   <round_history>

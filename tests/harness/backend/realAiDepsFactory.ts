@@ -221,9 +221,19 @@ export const createRealAiDepsFactory = async (input: {
     return contextInput.humanRuntimeOverrides
       ? {
           ...ctx,
+          ...(contextInput.allowedToolNames
+            ? {
+                allowedToolNames: [...contextInput.allowedToolNames]
+              }
+            : {}),
           humanRuntimeOverrides: contextInput.humanRuntimeOverrides
         }
-      : ctx
+      : contextInput.allowedToolNames
+        ? {
+            ...ctx,
+            allowedToolNames: [...contextInput.allowedToolNames]
+          }
+        : ctx
   }
 
   return {
