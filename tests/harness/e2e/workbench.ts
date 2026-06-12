@@ -256,7 +256,20 @@ export const createWorkspaceThroughSettingsUi = async (
     .waitFor({ state: 'visible' })
 }
 
-export const selectDirectoryInNativeDialog = async (directoryPath: string): Promise<void> => {
+type WorkbenchE2EWindow = Window & {
+  __NCURATOR_E2E_ELECTRON_PROCESS_ID__?: number
+}
+
+const readElectronProcessId = async (page: Page): Promise<number | null> =>
+  page.evaluate(() => {
+    const currentWindow = window as WorkbenchE2EWindow
+    return currentWindow.__NCURATOR_E2E_ELECTRON_PROCESS_ID__ || null
+  })
+
+export const selectDirectoryInNativeDialog = async (
+  directoryPath: string,
+  electronProcessId: number | null
+): Promise<void> => {
   if (process.platform !== 'darwin') {
     throw new Error('native directory dialog automation currently supports macOS only')
   }
@@ -264,51 +277,82 @@ export const selectDirectoryInNativeDialog = async (directoryPath: string): Prom
   const script = [
     'on run argv',
     '  set targetPath to item 1 of argv',
+    '  set targetPid to item 2 of argv',
     '  tell application "System Events"',
-    '    repeat 40 times',
-    '      if exists (first process whose frontmost is true) then exit repeat',
-    '      delay 0.1',
-    '    end repeat',
-    '    tell (first process whose frontmost is true)',
+    '    set targetProcess to missing value',
+    '    if targetPid is not "" then',
+    '      set numericPid to targetPid as integer',
+    '      repeat 80 times',
+    '        set matches to every process whose unix id is numericPid',
+    '        if (count of matches) > 0 then',
+    '          set targetProcess to item 1 of matches',
+    '          exit repeat',
+    '        end if',
+    '        delay 0.1',
+    '      end repeat',
+    '    end if',
+    '    if targetProcess is missing value then',
+    '      set targetProcess to first process whose frontmost is true',
+    '    end if',
+    '    tell targetProcess',
+    '      set frontmost to true',
+    '      delay 0.5',
+    '      set the clipboard to targetPath',
     '      keystroke "g" using {command down, shift down}',
-    '      delay 0.2',
-    '      keystroke targetPath',
-    '      delay 0.1',
-    '      key code 36',
+    '      delay 0.8',
+    '      keystroke "v" using {command down}',
     '      delay 0.2',
     '      key code 36',
+    '      delay 1.0',
+    '      key code 36',
+    '      delay 0.5',
     '    end tell',
     '  end tell',
     'end run'
   ].join('\n')
 
-  await execFileAsync('/usr/bin/osascript', ['-e', script, directoryPath], {
-    timeout: 10_000
-  })
+  await execFileAsync(
+    '/usr/bin/osascript',
+    ['-e', script, directoryPath, electronProcessId ? String(electronProcessId) : ''],
+    {
+      timeout: 30_000
+    }
+  )
 }
 
 export const bindWorkspaceRootThroughSettingsUi = async (
   page: Page,
   rootPath: string
 ): Promise<void> => {
+  const rootPathButton = page.getByRole('button', { name: '设置工作文件地址' }).first()
   await page.bringToFront()
-  await page.getByRole('button', { name: '设置工作文件地址' }).first().waitFor({
-    state: 'visible'
-  })
-  await page.getByRole('button', { name: '设置工作文件地址' }).first().click()
-  await page.waitForTimeout(700)
-  await selectDirectoryInNativeDialog(rootPath)
-  await page.waitForFunction(
-    (input: { testId: string; rootPath: string }) => {
-      const detail = document.querySelector(`[data-testid="${input.testId}"]`)
-      return detail instanceof HTMLElement && detail.innerText.includes(input.rootPath)
-    },
-    {
-      testId: importSelectors.workspaceDetail,
-      rootPath
-    },
-    { timeout: WORKBENCH_E2E_TIMEOUT_MS }
-  )
+  await rootPathButton.waitFor({ state: 'visible' })
+
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    const electronProcessId = await readElectronProcessId(page)
+    await rootPathButton.evaluate((element) => {
+      if (element instanceof HTMLElement) element.click()
+    })
+    await page.waitForTimeout(1500)
+    await selectDirectoryInNativeDialog(rootPath, electronProcessId)
+    const selected = await page
+      .waitForFunction(
+        (input: { testId: string; rootPath: string }) => {
+          const detail = document.querySelector(`[data-testid="${input.testId}"]`)
+          return detail instanceof HTMLElement && detail.innerText.includes(input.rootPath)
+        },
+        {
+          testId: importSelectors.workspaceDetail,
+          rootPath
+        },
+        { timeout: 10_000 }
+      )
+      .then(() => true)
+      .catch(() => false)
+    if (selected) return
+  }
+
+  throw new Error(`failed to select workspace root path through native dialog: ${rootPath}`)
 }
 
 export const waitForSettingsCountToBecome = async (
@@ -366,7 +410,7 @@ export const addWebSourceThroughSettingsUi = async (page: Page, url: string): Pr
   await getSettingsLocator(page, importSelectors.webSourceUrlInput).fill(url)
   await getSettingsLocator(page, importSelectors.webSourceConfirmButton).click()
   await getSettingsLocator(page, importSelectors.webSourceModal).waitFor({ state: 'hidden' })
-  await getSettingsLocator(page, importSelectors.webSourceList).getByText(url).waitFor({
+  await getSettingsLocator(page, importSelectors.webSourceList).getByText(url).first().waitFor({
     state: 'visible'
   })
 }
@@ -583,12 +627,14 @@ export const switchWorkbenchMode = async (
 }
 
 export const selectWorkbenchModel = async (page: Page, modelName: string): Promise<void> => {
-  await getWorkbenchLocator(page, workbenchSelectors.modelSelect).click()
-  const dropdown = page.locator('.workbench-composer-select-dropdown:not(.ant-select-dropdown-hidden)')
+  const modelSelect = getWorkbenchLocator(page, workbenchSelectors.modelSelect)
+  await modelSelect.click()
+  await modelSelect.locator('input').fill(modelName)
+  const dropdown = page
+    .locator('.workbench-composer-select-dropdown:not(.ant-select-dropdown-hidden)')
+    .last()
   const options = dropdown.locator('.ant-select-item-option')
-  const modelOption = options
-    .filter({ hasText: modelName })
-    .first()
+  const modelOption = options.filter({ hasText: modelName }).first()
   await dropdown.waitFor({ state: 'visible' })
   try {
     await modelOption.waitFor({
@@ -615,6 +661,7 @@ export const selectWorkbenchWorkspace = async (
   await getWorkbenchLocator(page, workbenchSelectors.workspaceSelect).click()
   const workspaceOption = page
     .locator('.workbench-composer-select-dropdown:not(.ant-select-dropdown-hidden)')
+    .last()
     .locator('.ant-select-item-option')
     .filter({ hasText: workspaceName })
     .first()

@@ -49,6 +49,7 @@ type E2EObserverState = {
 
 type E2EWindow = Window & {
   __NCURATOR_E2E_OBSERVER__?: E2EObserverState
+  __NCURATOR_E2E_ELECTRON_PROCESS_ID__?: number
 }
 
 export type E2ERuntimeSignals = {
@@ -144,6 +145,11 @@ const buildElectronLaunchEnv = (
   } else {
     delete env.NCURATOR_E2E_MODE
     env.NCURATOR_E2E_OBSERVER = '1'
+    env.NCURATOR_WORKSPACE_KNOWLEDGE_CACHE =
+      process.env.NCURATOR_WORKSPACE_KNOWLEDGE_CACHE || '1'
+    env.NCURATOR_WORKSPACE_KNOWLEDGE_CACHE_PATH =
+      process.env.NCURATOR_WORKSPACE_KNOWLEDGE_CACHE_PATH ||
+      path.resolve(process.cwd(), 'tests', '.cache', 'workspace-knowledge')
   }
   env.NCURATOR_E2E_WINDOW_MODE =
     windowMode || process.env.NCURATOR_E2E_WINDOW_MODE || 'background'
@@ -256,6 +262,10 @@ export const launchElectronApp = async (
 
   await page.waitForLoadState('domcontentloaded')
   await installPageObservers(page)
+  await page.evaluate((processId) => {
+    const currentWindow = window as E2EWindow
+    currentWindow.__NCURATOR_E2E_ELECTRON_PROCESS_ID__ = processId || undefined
+  }, electronProcess?.pid || null)
 
   return {
     electronApp,

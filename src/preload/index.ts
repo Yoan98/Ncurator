@@ -97,6 +97,7 @@ const api: DesktopApi = {
     if (overrides && hasOverrideKey(overrides, 'pickDirectoryResponse')) {
       return Promise.resolve(overrides.pickDirectoryResponse || { canceled: true })
     }
+    emitE2EIpcCall('pickDirectory')
     return ipcRenderer.invoke('pick-directory')
   },
   pickApplication: () => ipcRenderer.invoke('pick-application'),

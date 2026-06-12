@@ -26,6 +26,7 @@ import {
 import { validateSelectedReferencesForRun } from '../services/sourceScope/validation'
 import { WorkspaceSourceService } from '../services/workspace/WorkspaceSourceService'
 import { WorkspaceKnowledgePrepareService } from '../services/workspace/WorkspaceKnowledgePrepareService'
+import { createWorkspaceKnowledgeCache } from '../services/workspace/WorkspaceKnowledgeCache'
 import { WebSourceService } from '../services/web/WebSourceService'
 import type { BrowserEmbedService } from '../services/browser/BrowserEmbedService'
 import type { WebCrawlerService } from '../services/webCrawler/types'
@@ -610,6 +611,7 @@ export function registerHandlers(services: {
 
       let processed = 0
       let failed = 0
+      const knowledgeCache = createWorkspaceKnowledgeCache()
       for (const target of targets) {
         const currentRecord = recordMap.get(target.relative_path) || target
         const documentId = currentRecord.document_id || uuidv4()
@@ -622,7 +624,8 @@ export function registerHandlers(services: {
             workspaceId,
             documentId,
             filePath: currentRecord.absolute_path,
-            documentName: currentRecord.name
+            documentName: currentRecord.name,
+            cache: knowledgeCache || undefined
           })
           const preparedAt = Date.now()
           const preparedRecord: WorkspaceFileIndexRecord = {
