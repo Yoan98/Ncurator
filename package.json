@@ -1,6 +1,6 @@
 {
   "name": "ncurator",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "An Electron application with React and TypeScript",
   "main": "./out/main/index.js",
   "author": "example.com",
@@ -22,13 +22,18 @@
     "test:settings": "node scripts/test-workflow.mjs --domain settings",
     "test:settings:backend": "node scripts/test-workflow.mjs --domain settings --type backend",
     "test:settings:e2e": "node scripts/test-workflow.mjs --domain settings --type e2e",
+    "test:workbench": "node scripts/test-workflow.mjs --domain workbench",
+    "test:workbench:backend": "node scripts/test-workflow.mjs --domain workbench --type backend",
+    "test:workbench:e2e": "node scripts/test-workflow.mjs --domain workbench --type e2e",
     "start": "electron-vite preview",
     "dev": "electron-vite dev",
     "build": "pnpm run typecheck && pnpm run build:sidecar && electron-vite build",
     "postinstall": "electron-builder install-app-deps",
     "build:unpack": "pnpm run build && electron-builder --dir",
-    "build:win": "pnpm run build && electron-builder --win",
-    "build:mac": "pnpm run build && electron-builder --mac",
+    "build:win": "pnpm run build && electron-builder --win --x64 --publish never",
+    "build:mac": "pnpm run build && electron-builder --mac --publish never",
+    "build:mac:x64": "pnpm run build && electron-builder --mac --x64 --publish never",
+    "build:mac:arm64": "pnpm run build && electron-builder --mac --arm64 --publish never",
     "build:linux": "pnpm run build && electron-builder --linux"
   },
   "dependencies": {

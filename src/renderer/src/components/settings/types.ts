@@ -5,12 +5,9 @@ import type {
   WorkspaceTreeEntry
 } from '../../../../shared/types'
 
-export type SettingsSectionValue = 'model' | 'workspace'
+export type SettingsSectionValue = 'model' | 'workspace' | 'app'
 
-export type LlmConfigFormValues = Pick<
-  LLMConfig,
-  'providerKind' | 'base_url' | 'api_key'
->
+export type LlmConfigFormValues = Pick<LLMConfig, 'providerKind' | 'base_url' | 'api_key'>
 
 export type FlatModelOption = { value: string; label: string }
 export type GroupedModelOption = { label: string; options: FlatModelOption[] }

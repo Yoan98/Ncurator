@@ -13,6 +13,8 @@ import { loadRootEnvOnce } from './utils/rootEnv'
 import { BrowserEmbedService } from './services/browser/BrowserEmbedService'
 import { EMBEDDED_BROWSER_REMOTE_DEBUGGING_PORT } from './services/browser/constants'
 import { ManagedWebCrawlerService } from './services/webCrawler/WebCrawlerService'
+import { AppUpdateService } from './services/update/AppUpdateService'
+import { APP_ID } from '../shared/constants'
 
 app.commandLine.appendSwitch(
   'remote-debugging-port',
@@ -74,7 +76,7 @@ function createWindow(): BrowserWindow {
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(async () => {
   // Set app user model id for windows
-  electronApp.setAppUserModelId('com.electron')
+  electronApp.setAppUserModelId(APP_ID)
 
   // Default open or close DevTools by F12 in development
   // and ignore CommandOrControl + R in production.
@@ -103,6 +105,7 @@ app.whenReady().then(async () => {
   await storageService.initialize()
 
   const mainWindow = createWindow()
+  const appUpdateService = new AppUpdateService()
   const browserEmbedService = new BrowserEmbedService(mainWindow)
   const webCrawlerBaseDirectory = join(app.getPath('userData'), 'web-crawler')
   const webCrawlerService = new ManagedWebCrawlerService({
@@ -123,6 +126,8 @@ app.whenReady().then(async () => {
     browserEmbedService,
     webCrawlerService
   })
+  appUpdateService.initialize()
+  appUpdateService.checkForUpdatesOnLaunch()
 
   app.on('before-quit', () => {
     void storageService.failInterruptedWorkspaceIndexJobs()

@@ -10,11 +10,7 @@ export type WebSourceIndexStatus =
   | 'indexed'
   | 'index_failed'
 export type WorkspaceNodeKind = 'directory' | 'file'
-export type WorkspaceFileIndexStatus =
-  | 'needs_index'
-  | 'indexing'
-  | 'indexed'
-  | 'failed'
+export type WorkspaceFileIndexStatus = 'needs_index' | 'indexing' | 'indexed' | 'failed'
 export type ReferenceKind = 'directory' | 'file' | 'web'
 export type KbAvailability = 'indexed' | 'partial' | 'not_indexed'
 export type JsonPrimitive = string | number | boolean | null
@@ -25,6 +21,50 @@ export type IpcJsonPrimitive = JsonPrimitive
 export type IpcJsonObject = object
 export type IpcJsonArray = IpcJsonValue[]
 export type IpcJsonValue = IpcJsonPrimitive | IpcJsonObject | IpcJsonArray
+
+export type AppUpdateStatus =
+  | 'idle'
+  | 'checking'
+  | 'available'
+  | 'downloading'
+  | 'downloaded'
+  | 'not-available'
+  | 'error'
+
+export type AppRuntimePlatform =
+  | 'aix'
+  | 'android'
+  | 'cygwin'
+  | 'darwin'
+  | 'freebsd'
+  | 'haiku'
+  | 'linux'
+  | 'netbsd'
+  | 'openbsd'
+  | 'sunos'
+  | 'win32'
+
+export interface AppUpdateSnapshot {
+  status: AppUpdateStatus
+  currentVersion: string
+  isPackaged: boolean
+  updateSupported: boolean
+  platform: AppRuntimePlatform
+  availableVersion?: string
+  releaseName?: string
+  releaseDate?: string
+  progressPercent?: number
+  transferredBytes?: number
+  totalBytes?: number
+  bytesPerSecond?: number
+  error?: string
+}
+
+export interface AppUpdateActionResponse {
+  success: boolean
+  snapshot: AppUpdateSnapshot
+  error?: string
+}
 
 export interface WebIngestPayload {
   workspaceId: string
@@ -641,11 +681,7 @@ export type RuntimeSkillId =
   | 'kb-retrieval'
   | 'web-browsing'
   | 'utility'
-export type AiRunEventStage =
-  | 'human_brain'
-  | 'human_learning'
-  | 'human_hand'
-  | 'human_mouth'
+export type AiRunEventStage = 'human_brain' | 'human_learning' | 'human_hand' | 'human_mouth'
 export type AssistantProcessDisplay =
   | { kind: 'thinking' }
   | { kind: 'learning'; skillId: RuntimeSkillId }

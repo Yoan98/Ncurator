@@ -1,6 +1,7 @@
 ﻿import React from 'react'
 import { Navigate, useLocation, useParams } from 'react-router-dom'
 import AppPageHeader from '../components/app/AppPageHeader'
+import AppUpdateSettingsPanel from '../components/settings/AppUpdateSettingsPanel'
 import ModelSettingsPanel from '../components/settings/ModelSettingsPanel'
 import SettingsFloatingMenu from '../components/settings/SettingsFloatingMenu'
 import WorkspaceSettingsPanel from '../components/settings/WorkspaceSettingsPanel'
@@ -11,7 +12,7 @@ import { settingsSelectors } from '../testing/selectors'
 const normalizeSettingsSection = (value: string | undefined): SettingsSectionValue | null => {
   if (!value) return null
   if (value === 'web-sources') return 'workspace'
-  if (value === 'model' || value === 'workspace') {
+  if (value === 'model' || value === 'workspace' || value === 'app') {
     return value
   }
   return null
@@ -53,6 +54,7 @@ const SettingsPage: React.FC = () => {
         <div className="min-h-0 flex-1 overflow-hidden pb-4 pr-1">
           {currentSection === 'workspace' ? <WorkspaceSettingsPanel /> : null}
           {currentSection === 'model' ? <ModelSettingsPanel /> : null}
+          {currentSection === 'app' ? <AppUpdateSettingsPanel /> : null}
         </div>
       </div>
       <SettingsFloatingMenu />

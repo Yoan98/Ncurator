@@ -190,6 +190,9 @@ runner 不负责：
   - `pnpm test:settings:backend`
   - `pnpm test:settings:e2e`
 - Workbench
+  - `pnpm test:workbench`
+  - `pnpm test:workbench:backend`
+  - `pnpm test:workbench:e2e`
   - `node scripts/test-workflow.mjs --domain workbench`
   - `node scripts/test-workflow.mjs --domain workbench --type backend`
   - `node scripts/test-workflow.mjs --domain workbench --type e2e`

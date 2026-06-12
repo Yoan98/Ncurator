@@ -2,10 +2,17 @@ import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type {
   AiRunEvent,
+  AppUpdateSnapshot,
   JsonValue,
   SearchSourceFilter,
-  WorkspaceIndexJobRecord,
+  WorkspaceIndexJobRecord
 } from '../shared/types'
+import {
+  APP_UPDATE_CHECK_CHANNEL,
+  APP_UPDATE_GET_SNAPSHOT_CHANNEL,
+  APP_UPDATE_INSTALL_CHANNEL,
+  APP_UPDATE_STATUS_CHANNEL
+} from '../shared/constants'
 import type { DesktopApi, DownloadProgress, SettingsE2EApiOverrides } from './api'
 
 const isE2EObserverEnabled = process.env.NCURATOR_E2E_MODE === '1'
@@ -259,9 +266,7 @@ const api: DesktopApi = {
   llmConfigSetActive: (id: string) => ipcRenderer.invoke('llm-config-set-active', id),
   llmConfigModelList: (id: string) => {
     emitE2EIpcCall('llmConfigModelList', id)
-    const response = getE2EApiOverrides()?.llmModelListResponseByConfigId?.[
-      String(id || '').trim()
-    ]
+    const response = getE2EApiOverrides()?.llmModelListResponseByConfigId?.[String(id || '').trim()]
     if (response) {
       return Promise.resolve(response)
     }
@@ -302,6 +307,18 @@ const api: DesktopApi = {
   aiFileChangeRevert: (payload) => {
     emitE2EIpcCall('aiFileChangeRevert')
     return ipcRenderer.invoke('ai-file-change-revert', payload)
+  },
+  appUpdateGetSnapshot: () => ipcRenderer.invoke(APP_UPDATE_GET_SNAPSHOT_CHANNEL),
+  appUpdateCheck: () => ipcRenderer.invoke(APP_UPDATE_CHECK_CHANNEL),
+  appUpdateInstall: () => ipcRenderer.invoke(APP_UPDATE_INSTALL_CHANNEL),
+  onAppUpdateStatus: (cb: (snapshot: AppUpdateSnapshot) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, snapshot: AppUpdateSnapshot): void => {
+      cb(snapshot)
+    }
+    ipcRenderer.on(APP_UPDATE_STATUS_CHANNEL, listener)
+    return () => {
+      ipcRenderer.removeListener(APP_UPDATE_STATUS_CHANNEL, listener)
+    }
   },
   onAiRunEvent: (cb: (event: AiRunEvent) => void) =>
     ipcRenderer.on('ai-run-event', (_event, data) => {

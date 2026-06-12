@@ -9,23 +9,43 @@
 
 ## 2. 执行摘要
 
-### 2.1 按 Suite 汇总
+### 2.1 最近执行
+
+- 检测时间：`2026-06-12 11:14:15 +0800`
+- 执行命令：`pnpm exec vitest run --config vitest.e2e.config.mts --maxWorkers 1 tests/case/workbench`
+- 总体登记：`13` 个 e2e case；已实现 `12` 个，阻塞未实现 `1` 个。
+- 当前执行：`6 / 12` 通过；失败 case 保留 PRD 断言，不通过修改生产代码绕过。
+- 阻塞未实现：`browser-use-task-panel`，现有 e2e fixture 不会真实触发 `browser_use` / `browser_panel_opened` 闭环，本轮按约束不能修改 `src/**` 增加事件驱动。
+
+### 2.2 按 Suite 汇总
 
 - `conversation`
   - 登记 case：`3`
-  - 通过率：`0 / 0`（正式 case 尚未实现）
-  - 检测时间：`未执行`
-  - 备注：本轮只登记测试计划，不落具体 case 实现。
+  - 已实现 case：`3`
+  - 通过率：`2 / 3`
+  - 检测时间：`2026-06-12 11:14:15 +0800`
+  - 备注：`reference-token-lifecycle` 当前失败，暴露 `WB-SCOPE-002-AC1`、`WB-SCOPE-002-AC2` 的多 token 共存缺口。
 - `run`
   - 登记 case：`5`
-  - 通过率：`0 / 0`（正式 case 尚未实现）
-  - 检测时间：`未执行`
-  - 备注：本轮只登记测试计划，不落具体 case 实现。
+  - 已实现 case：`4`
+  - 通过率：`3 / 4`（已实现 case 口径；另 `1` 个阻塞未实现）
+  - 检测时间：`2026-06-12 11:14:15 +0800`
+  - 备注：`stop-running-or-approval-run` 当前失败，暴露 `WB-COMPOSER-006-AC1` 的运行中停止入口缺口；`browser-use-task-panel` 需生产侧 e2e fixture 支持后才能落正式 case。
 - `result`
   - 登记 case：`5`
-  - 通过率：`0 / 0`（正式 case 尚未实现）
-  - 检测时间：`未执行`
-  - 备注：本轮只登记测试计划，不落具体 case 实现。
+  - 已实现 case：`5`
+  - 通过率：`1 / 5`
+  - 检测时间：`2026-06-12 11:14:15 +0800`
+  - 备注：搜索 / 预览 / docx apply 相关失败分别暴露 `WB-COMPOSER-004-AC3`、`WB-PANEL-003-AC1`、`WB-APPLY-001-AC1`、`WB-APPLY-001-AC3`、`WB-APPLY-004-AC1` 等缺口。
+
+### 2.3 待产品 / 生产实现决策的缺口
+
+- `reference-token-lifecycle`：插入网页资料 token 后，已插入的本地目录 / 文件 token 未保持共存，未满足 `WB-SCOPE-002-AC1`、`WB-SCOPE-002-AC2`。
+- `stop-running-or-approval-run`：审批等待运行中底部发送按钮未切换为停止入口，未满足 `WB-COMPOSER-006-AC1`。
+- `search-results-open-rules` / `file-preview-actions`：当前 e2e 搜索 fixture 与 Workbench 工作区文档 ID 不一致，导致右侧搜索命中和本地预览链路无法进入目标状态，未满足 `WB-COMPOSER-004-AC3`、`WB-PANEL-003-AC1`。
+- `docx-apply-panel-preview-and-revert`：当前 e2e docx apply fixture 产物不足以形成真实 docx 预览与修改文件工作区闭环，未满足 `WB-APPLY-001-AC1`、`WB-APPLY-001-AC3`、`WB-PANEL-003-AC1`。
+- `docx-apply-force-revert-warning`：当前 e2e apply 记录缺少后续修改检测所需状态，首次回退不会出现风险提示，未满足 `WB-APPLY-004-AC1`。
+- `browser-use-task-panel`：缺少能通过页面正常入口触发 `browser_use`、右侧内置浏览器面板和最终 assistant 收口的 e2e fixture，暂不能覆盖 `WB-PANEL-004-AC1` 至 `WB-PANEL-004-AC4`。
 
 ## 3. Suite 设计
 
@@ -71,13 +91,17 @@ tests/case/workbench/
 
 推荐命令：
 
+- `pnpm test:workbench`
+- `pnpm test:workbench:e2e`
+- `pnpm test:workbench:backend`
 - `node scripts/test-workflow.mjs --domain workbench`
 - `node scripts/test-workflow.mjs --domain workbench --type e2e`
 - `node scripts/test-workflow.mjs --domain workbench --type backend`
 
 补充规则：
 
-- package scripts 可在首批 case 与 harness 落地时再补齐；正式发现目录与日志目录先以 `workbench` domain 为准。
+- package scripts 已补齐；正式发现目录与日志目录以 `workbench` domain 为准。
+- 需要一次性查看全部已实现 e2e case 通过 / 失败矩阵时，可临时使用 `pnpm exec vitest run --config vitest.e2e.config.mts --maxWorkers 1 tests/case/workbench`；正式 gating 仍使用 `scripts/test-workflow.mjs` 入口。
 - `conversation / run / result` 是稳定 suite，不因 PRD 小节增删而轻易重排。
 - suite 下的 `session / composer / scope / process / blocker / browser / search / preview / apply` 是 group，只在同一 suite 内用于收敛相近 case。
 - 每个正式 case 的 `caseId` 必须与最终测试文件名一致，并稳定映射到唯一日志目录。
@@ -89,7 +113,7 @@ tests/case/workbench/
 #### `session-initial-create-and-title`
 
 - 测试类型：`e2e`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证首次进入 Workbench 时会自动创建初始会话，并在第一条用户消息发送后更新默认标题。
 - Why：会话初始化和标题更新是 Workbench 最早的可见状态；失败时用户会看到空会话或无法区分任务主线。
 - How：以空会话数据启动 Workbench，等待页面初始化；发送第一条用户消息，再继续发送第二条消息。
@@ -99,7 +123,7 @@ tests/case/workbench/
 #### `send-guard-mode-switch-and-preferences`
 
 - 测试类型：`e2e`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证发送前置条件、模式切换保留输入、模型 / 工作区偏好恢复和失效回退。
 - Why：Workbench 的任务入口依赖这些基础交互；任一状态失真都会导致用户无法发起任务或把任务发到错误上下文。
 - How：分别覆盖空输入、无工作区、发送中、模式切换、模型搜索、切换工作区 / 模型后重进页面，以及缓存候选失效后的回退。
@@ -109,7 +133,7 @@ tests/case/workbench/
 #### `reference-token-lifecycle`
 
 - 测试类型：`e2e`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证 `@` 参考资料候选、目录 / 文件 / 网页 token 插入、多 token 共存、删除、去重、切工作区清理和空候选提示。
 - Why：显式参考资料是用户控制 AI 上下文的核心入口，错误会直接导致搜索或 AI 执行范围偏离用户意图。
 - How：准备包含本地目录、本地文件和网页资料的工作区；输入 `@` 触发候选，插入多个 token，删除其中一个 token，尝试重复插入，再切换工作区并覆盖空候选状态。
@@ -121,7 +145,7 @@ tests/case/workbench/
 #### `ai-process-stream-and-final-answer`
 
 - 测试类型：`e2e`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证智能模式发送后用户消息、assistant 占位、过程流、最终 markdown 输出和中间结果收口。
 - Why：Workbench 的核心体验不是只启动 AI，而是让用户看见过程并得到可消费结果。
 - How：使用确定性 AI run fixture 触发 thinking、decision、tool group、finalizing 和 answer completed 等事件；等待 assistant turn 完成。
@@ -131,7 +155,7 @@ tests/case/workbench/
 #### `approval-batch-flow`
 
 - 测试类型：`e2e`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证 AI 运行中收到批量审批事件后，composer 上方审批卡片的同意、拒绝和指导输入流程。
 - Why：审批是高风险 terminal 执行的用户确认边界；UI 误执行或误恢复都会破坏安全约束。
 - How：使用审批 fixture 触发一批需审批命令；分别覆盖全同意、任一拒绝、填写指导输入和不操作期间保持等待。
@@ -141,7 +165,7 @@ tests/case/workbench/
 #### `workspace-required-continue`
 
 - 测试类型：`e2e`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证 AI 运行中断为 `workspace_required` 后，用户补工作区并点击继续时可以基于原请求恢复运行。
 - Why：工作区缺失是可恢复阻塞；如果恢复链路丢失原请求，用户会被迫重新描述任务。
 - How：使用工作区缺失 fixture 触发 `workspace_required`；先在未补工作区时点击继续，再补工作区并继续运行。
@@ -151,7 +175,7 @@ tests/case/workbench/
 #### `stop-running-or-approval-run`
 
 - 测试类型：`e2e`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证智能模式运行中底部发送按钮切换为停止图标，并能取消普通运行和审批等待中的运行。
 - Why：用户需要可靠中断长任务；审批等待时停止若不能释放等待，会造成运行态卡死。
 - How：分别启动长耗时 fixture run 和审批等待 fixture run；点击底部停止图标并观察运行态、审批态和反馈。
@@ -162,6 +186,7 @@ tests/case/workbench/
 
 - 测试类型：`e2e`
 - 实现状态：`未实现`
+- 阻塞原因：现有 e2e fixture 不会通过页面正常入口触发 `browser_use`、`browser_panel_opened` 和最终 assistant 输出闭环；本轮约束禁止修改 `src/**`，因此暂不落实现。
 - What：验证 AI 通过内置浏览器完成网页任务时，右侧浏览器面板、页面导航、网页操作结果和最终回答形成闭环。
 - Why：内置浏览器是 Electron 与 AI run 深度联动场景，仅 backend 或静态事件无法覆盖视口嵌入、导航和最终收口问题。
 - How：启动本地 fixture 页面；通过 AI run fixture 触发 `browser_use` 打开页面并执行可观察操作；等待最终 assistant 输出。
@@ -173,7 +198,7 @@ tests/case/workbench/
 #### `search-results-open-rules`
 
 - 测试类型：`e2e`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证搜索模式发送、搜索占位、右侧搜索结果、网页 / 本地结果打开规则和无可检索资料拦截。
 - Why：搜索模式是 Workbench 的非 AI 路径，必须确保不误启动 AI，且右侧结果操作符合用户预期。
 - How：使用有索引资料的工作区发送搜索请求，分别点击网页结果和本地结果的操作图标；再切换到无可检索资料范围发送搜索。
@@ -183,7 +208,7 @@ tests/case/workbench/
 #### `file-preview-actions`
 
 - 测试类型：`e2e`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证右侧普通文件预览态的预览优先布局、定位文件、系统打开入口和 PDF 命中定位。
 - Why：右侧面板是用户消费搜索 / 引用结果的主要区域，预览布局错误会直接阻断阅读。
 - How：从搜索结果或内部链接打开普通文件和 PDF；检查右侧工具条、预览主体、返回路径和 PDF 命中页定位。
@@ -193,7 +218,7 @@ tests/case/workbench/
 #### `docx-apply-panel-preview-and-revert`
 
 - 测试类型：`e2e`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证 AI 修改真实 docx 后，assistant 修改文件入口、右侧修改文件工作区、当前记录预览和干净回退闭环。
 - Why：直接写回和回退是 Workbench 文件编辑能力的安全边界，只看 artifact 事件无法证明用户能检查和撤销修改。
 - How：使用真实 docx fixture 触发 AI docx apply；点击 assistant turn 中的修改文件入口；检查右侧默认 tab、状态和预览；执行回退并重新读取状态与文件内容。
@@ -203,7 +228,7 @@ tests/case/workbench/
 #### `docx-apply-force-revert-warning`
 
 - 测试类型：`e2e`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证 AI 写回后文件又被外部修改时，首次回退展示风险提示，确认后允许强制回退并刷新右侧状态。
 - Why：强制回退是避免静默覆盖用户后续修改的关键安全交互。
 - How：AI 写回真实 docx 后，由测试进程模拟后续修改；在右侧修改文件工作区点击回退，先观察风险提示，再确认强制回退。
@@ -213,7 +238,7 @@ tests/case/workbench/
 #### `multi-file-apply-tabs`
 
 - 测试类型：`e2e`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证同一轮 AI 修改多个文件时，assistant turn 和右侧修改文件工作区保留全部入口，并能按文件 tab 切换对应记录。
 - Why：多文件任务如果只保留最新或单个入口，用户无法检查和回退完整结果。
 - How：使用多文件 apply fixture 生成至少两个真实修改记录；分别点击 assistant turn 中不同入口，并在右侧切换文件 tab。

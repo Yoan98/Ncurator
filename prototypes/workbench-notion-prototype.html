@@ -1,0 +1,1326 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>NCurator Workbench Notion Prototype</title>
+    <style>
+      :root {
+        --page: #ffffff;
+        --canvas: #fbfbfa;
+        --sidebar: #f7f7f5;
+        --surface: #f2f1ee;
+        --surface-hover: #ededeb;
+        --line: #e6e4df;
+        --line-strong: #d8d6d0;
+        --text: #37352f;
+        --text-soft: #5f5e59;
+        --text-faint: #9b9a97;
+        --accent: #2f3437;
+        --red: #b3261e;
+        --red-bg: #f8ebe9;
+        --green: #2f6f4e;
+        --green-bg: #edf6ef;
+        --blue: #2f5f8f;
+        --blue-bg: #edf3f8;
+        --yellow-bg: #fbf3db;
+        --shadow-popover: 0 16px 40px rgba(15, 15, 15, 0.12);
+        --radius: 6px;
+        --radius-lg: 8px;
+        color: var(--text);
+        font-family:
+          -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', 'Segoe UI', sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+      }
+
+      body {
+        min-height: 100vh;
+        overflow: hidden;
+        background: var(--canvas);
+        color: var(--text);
+        font-size: 14px;
+        line-height: 1.5;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      button,
+      input {
+        font: inherit;
+      }
+
+      button {
+        cursor: pointer;
+      }
+
+      .app-shell {
+        display: grid;
+        grid-template-columns: 244px minmax(620px, 1fr) 364px;
+        height: 100vh;
+        min-height: 680px;
+      }
+
+      .sidebar {
+        display: flex;
+        min-width: 0;
+        flex-direction: column;
+        border-right: 1px solid var(--line);
+        background: var(--sidebar);
+        padding: 10px 8px;
+      }
+
+      .brand-row,
+      .topbar,
+      .sidepeek-header,
+      .composer-footer,
+      .result-row,
+      .property-row,
+      .source-row,
+      .activity-row {
+        display: flex;
+        align-items: center;
+      }
+
+      .brand-row {
+        height: 40px;
+        justify-content: space-between;
+        padding: 0 4px 0 8px;
+      }
+
+      .brand-lockup {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 9px;
+        font-weight: 650;
+      }
+
+      .brand-mark {
+        display: grid;
+        width: 24px;
+        height: 24px;
+        flex: 0 0 auto;
+        place-items: center;
+        border: 1px solid var(--line-strong);
+        border-radius: var(--radius);
+        background: var(--page);
+      }
+
+      .brand-mark img {
+        width: 15px;
+        filter: invert(1);
+      }
+
+      .brand-name,
+      .nav-label,
+      .page-title,
+      .result-title,
+      .source-title {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .icon-button,
+      .send-button,
+      .pill-button {
+        display: inline-grid;
+        place-items: center;
+        border: 0;
+        color: var(--text-soft);
+        background: transparent;
+      }
+
+      .icon-button {
+        width: 28px;
+        height: 28px;
+        border-radius: var(--radius);
+      }
+
+      .icon-button:hover,
+      .nav-item:hover,
+      .new-button:hover,
+      .chip:hover,
+      .result-row:hover,
+      .source-row:hover,
+      .mini-action:hover {
+        background: var(--surface-hover);
+      }
+
+      .new-button {
+        display: flex;
+        width: calc(100% - 8px);
+        min-height: 32px;
+        align-items: center;
+        gap: 8px;
+        margin: 8px 4px 12px;
+        padding: 0 8px;
+        border: 0;
+        border-radius: var(--radius);
+        background: transparent;
+        color: var(--text-soft);
+        text-align: left;
+      }
+
+      .section-label {
+        padding: 10px 8px 4px;
+        color: var(--text-faint);
+        font-size: 11px;
+        font-weight: 600;
+      }
+
+      .nav-list {
+        display: grid;
+        gap: 1px;
+      }
+
+      .nav-item {
+        display: grid;
+        grid-template-columns: 20px minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 7px;
+        min-height: 30px;
+        padding: 0 8px;
+        border-radius: var(--radius);
+        color: var(--text-soft);
+        text-decoration: none;
+      }
+
+      .nav-item.active {
+        background: var(--surface);
+        color: var(--text);
+        font-weight: 560;
+      }
+
+      .nav-icon,
+      .row-icon,
+      .block-icon,
+      .side-icon {
+        display: inline-grid;
+        place-items: center;
+        color: var(--text-faint);
+        font-size: 13px;
+      }
+
+      .nav-count {
+        color: var(--text-faint);
+        font-size: 12px;
+      }
+
+      .sidebar-bottom {
+        margin-top: auto;
+        padding: 8px 4px 4px;
+      }
+
+      .status-line {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 34px;
+        padding: 0 8px;
+        border-radius: var(--radius);
+        color: var(--text-soft);
+        font-size: 12px;
+      }
+
+      .status-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 999px;
+        background: var(--green);
+      }
+
+      .workspace {
+        display: flex;
+        min-width: 0;
+        flex-direction: column;
+        background: var(--page);
+      }
+
+      .topbar {
+        z-index: 3;
+        height: 44px;
+        flex: 0 0 auto;
+        justify-content: space-between;
+        border-bottom: 1px solid transparent;
+        background: rgba(255, 255, 255, 0.92);
+        padding: 0 14px;
+        backdrop-filter: blur(14px);
+      }
+
+      .breadcrumbs {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 6px;
+        color: var(--text-soft);
+        font-size: 13px;
+      }
+
+      .breadcrumb-current {
+        color: var(--text);
+        font-weight: 540;
+      }
+
+      .top-actions {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      .page-scroll {
+        min-height: 0;
+        flex: 1;
+        overflow: auto;
+        padding: 20px 32px 32px;
+      }
+
+      .page {
+        width: min(820px, 100%);
+        margin: 0 auto;
+        padding: 28px 4px 156px;
+      }
+
+      .page-cover {
+        height: 88px;
+        margin: -28px -4px 18px;
+        border-radius: var(--radius-lg);
+        background:
+          linear-gradient(135deg, rgba(55, 53, 47, 0.08), rgba(55, 53, 47, 0)),
+          repeating-linear-gradient(
+            135deg,
+            rgba(55, 53, 47, 0.08) 0,
+            rgba(55, 53, 47, 0.08) 1px,
+            transparent 1px,
+            transparent 12px
+          ),
+          #f5f4f1;
+      }
+
+      .page-icon-large {
+        display: grid;
+        width: 58px;
+        height: 58px;
+        place-items: center;
+        margin-top: -48px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-lg);
+        background: var(--page);
+        color: var(--text);
+        font-size: 24px;
+        font-weight: 720;
+        box-shadow: 0 1px 1px rgba(15, 15, 15, 0.04);
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+
+      .page-title-main {
+        margin-top: 14px;
+        color: var(--text);
+        font-size: clamp(32px, 4vw, 44px);
+        font-weight: 730;
+        letter-spacing: 0;
+        line-height: 1.08;
+      }
+
+      .page-subtitle {
+        max-width: 660px;
+        margin-top: 10px;
+        color: var(--text-soft);
+        font-size: 14px;
+        line-height: 1.8;
+      }
+
+      .properties {
+        display: grid;
+        max-width: 700px;
+        grid-template-columns: 126px minmax(0, 1fr);
+        gap: 0;
+        margin-top: 26px;
+        border-top: 1px solid var(--line);
+      }
+
+      .property-row {
+        display: contents;
+      }
+
+      .property-key,
+      .property-value {
+        min-height: 34px;
+        border-bottom: 1px solid var(--line);
+        padding: 7px 0;
+      }
+
+      .property-key {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        color: var(--text-faint);
+        font-size: 13px;
+      }
+
+      .property-value {
+        display: flex;
+        min-width: 0;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+        color: var(--text-soft);
+        font-size: 13px;
+      }
+
+      .tag,
+      .token,
+      .chip {
+        display: inline-flex;
+        max-width: 100%;
+        align-items: center;
+        gap: 6px;
+        border-radius: var(--radius);
+        line-height: 1;
+        white-space: nowrap;
+      }
+
+      .tag {
+        min-height: 24px;
+        padding: 0 7px;
+        background: var(--surface);
+        color: var(--text-soft);
+        font-size: 12px;
+      }
+
+      .tag.green {
+        background: var(--green-bg);
+        color: var(--green);
+      }
+
+      .tag.blue {
+        background: var(--blue-bg);
+        color: var(--blue);
+      }
+
+      .tag.yellow {
+        background: var(--yellow-bg);
+        color: #765c1d;
+      }
+
+      .block-stack {
+        display: grid;
+        gap: 14px;
+        margin-top: 32px;
+      }
+
+      .user-message {
+        display: flex;
+        justify-content: flex-end;
+      }
+
+      .user-bubble {
+        max-width: min(560px, 78%);
+        border-radius: var(--radius-lg);
+        background: var(--surface);
+        padding: 10px 12px;
+        color: var(--text);
+        line-height: 1.72;
+      }
+
+      .block {
+        position: relative;
+        display: grid;
+        grid-template-columns: 28px minmax(0, 1fr);
+        gap: 8px;
+        min-height: 30px;
+      }
+
+      .block-icon {
+        width: 28px;
+        height: 28px;
+        border-radius: var(--radius);
+      }
+
+      .block:hover .block-icon {
+        background: var(--surface);
+      }
+
+      .block-content {
+        min-width: 0;
+        padding-top: 2px;
+      }
+
+      .muted-text {
+        color: var(--text-soft);
+      }
+
+      .caption {
+        color: var(--text-faint);
+        font-size: 12px;
+      }
+
+      .process-list {
+        display: grid;
+        gap: 2px;
+      }
+
+      .process-item {
+        display: grid;
+        grid-template-columns: 22px minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 8px;
+        min-height: 32px;
+        border-radius: var(--radius);
+        padding: 0 6px;
+        color: var(--text-soft);
+      }
+
+      .process-item.current {
+        background: var(--surface);
+        color: var(--text);
+      }
+
+      .process-item .mini-status {
+        color: var(--text-faint);
+        font-size: 12px;
+      }
+
+      details.toggle-block {
+        border-radius: var(--radius);
+      }
+
+      details.toggle-block summary {
+        display: grid;
+        grid-template-columns: 22px minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 8px;
+        min-height: 34px;
+        list-style: none;
+        border-radius: var(--radius);
+        padding: 0 6px;
+        color: var(--text-soft);
+      }
+
+      details.toggle-block summary::-webkit-details-marker {
+        display: none;
+      }
+
+      details.toggle-block summary:hover {
+        background: var(--surface);
+      }
+
+      .toggle-caret {
+        color: var(--text-faint);
+        transition: transform 160ms ease;
+      }
+
+      details[open] .toggle-caret {
+        transform: rotate(90deg);
+      }
+
+      .toggle-body {
+        display: grid;
+        gap: 4px;
+        margin: 2px 0 8px 36px;
+        color: var(--text-soft);
+        font-size: 13px;
+      }
+
+      .toggle-body-row {
+        display: grid;
+        grid-template-columns: 18px minmax(0, 1fr);
+        gap: 8px;
+        min-height: 26px;
+        align-items: center;
+      }
+
+      .answer {
+        display: grid;
+        gap: 14px;
+        color: var(--text);
+        font-size: 15px;
+        line-height: 1.78;
+      }
+
+      .answer h2 {
+        margin-top: 6px;
+        font-size: 20px;
+        line-height: 1.3;
+      }
+
+      .answer h3 {
+        margin-top: 4px;
+        font-size: 16px;
+      }
+
+      .answer ul {
+        display: grid;
+        gap: 8px;
+        margin: 0;
+        padding-left: 20px;
+      }
+
+      .answer li::marker {
+        color: var(--text-faint);
+      }
+
+      .quote-block {
+        border-left: 3px solid var(--line-strong);
+        padding-left: 12px;
+        color: var(--text-soft);
+      }
+
+      .database {
+        overflow: hidden;
+        border-top: 1px solid var(--line);
+        border-bottom: 1px solid var(--line);
+      }
+
+      .database-header,
+      .database-row {
+        display: grid;
+        grid-template-columns: minmax(180px, 1fr) 90px 86px 104px;
+        align-items: center;
+        gap: 12px;
+        min-height: 38px;
+        border-bottom: 1px solid var(--line);
+        padding: 0 6px;
+      }
+
+      .database-header {
+        color: var(--text-faint);
+        font-size: 12px;
+      }
+
+      .database-row {
+        color: var(--text-soft);
+        font-size: 13px;
+      }
+
+      .database-row:last-child {
+        border-bottom: 0;
+      }
+
+      .file-cell {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 8px;
+        color: var(--text);
+      }
+
+      .file-cell span:last-child {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .composer-wrap {
+        position: sticky;
+        bottom: 0;
+        z-index: 5;
+        flex: 0 0 auto;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0), var(--page) 26%);
+        padding: 28px 32px 18px;
+      }
+
+      .composer {
+        width: min(820px, 100%);
+        margin: 0 auto;
+        border: 1px solid var(--line-strong);
+        border-radius: var(--radius-lg);
+        background: var(--page);
+        box-shadow: 0 8px 26px rgba(15, 15, 15, 0.08);
+      }
+
+      .reference-line {
+        display: flex;
+        min-height: 34px;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+        border-bottom: 1px solid var(--line);
+        padding: 6px 9px 5px;
+      }
+
+      .token {
+        min-height: 24px;
+        max-width: 100%;
+        padding: 0 7px;
+        background: var(--surface);
+        color: var(--text-soft);
+        font-size: 12px;
+      }
+
+      .token span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .input-line {
+        min-height: 58px;
+        padding: 12px 12px 6px;
+        color: var(--text);
+        font-size: 15px;
+        line-height: 1.65;
+      }
+
+      .composer-footer {
+        min-height: 38px;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 4px 8px 8px;
+      }
+
+      .composer-chips {
+        display: flex;
+        min-width: 0;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 4px;
+      }
+
+      .chip {
+        min-height: 26px;
+        border: 0;
+        padding: 0 7px;
+        background: transparent;
+        color: var(--text-soft);
+        font-size: 12px;
+      }
+
+      .send-button {
+        width: 30px;
+        height: 30px;
+        flex: 0 0 auto;
+        border-radius: var(--radius);
+        background: var(--accent);
+        color: #fff;
+        font-size: 16px;
+      }
+
+      .sidepeek {
+        display: flex;
+        min-width: 0;
+        flex-direction: column;
+        border-left: 1px solid var(--line);
+        background: var(--canvas);
+      }
+
+      .sidepeek-header {
+        min-height: 44px;
+        flex: 0 0 auto;
+        justify-content: space-between;
+        border-bottom: 1px solid var(--line);
+        padding: 0 12px;
+      }
+
+      .side-title {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 8px;
+        font-weight: 600;
+      }
+
+      .side-scroll {
+        min-height: 0;
+        flex: 1;
+        overflow: auto;
+        padding: 14px 12px 24px;
+      }
+
+      .side-section {
+        margin-bottom: 20px;
+      }
+
+      .side-section-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        min-height: 28px;
+        color: var(--text-faint);
+        font-size: 11px;
+        font-weight: 650;
+      }
+
+      .mini-action {
+        border: 0;
+        border-radius: var(--radius);
+        background: transparent;
+        color: var(--text-faint);
+        font-size: 12px;
+      }
+
+      .source-list,
+      .activity-list,
+      .outline-list {
+        display: grid;
+        gap: 2px;
+      }
+
+      .source-row {
+        min-height: 44px;
+        gap: 9px;
+        border-radius: var(--radius);
+        padding: 5px 6px;
+      }
+
+      .source-meta {
+        min-width: 0;
+        flex: 1;
+      }
+
+      .source-title {
+        color: var(--text);
+        font-size: 13px;
+      }
+
+      .source-desc {
+        overflow: hidden;
+        color: var(--text-faint);
+        font-size: 12px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .score {
+        color: var(--text-faint);
+        font-size: 12px;
+      }
+
+      .preview-box {
+        border: 1px solid var(--line);
+        border-radius: var(--radius-lg);
+        background: var(--page);
+      }
+
+      .preview-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        min-height: 34px;
+        border-bottom: 1px solid var(--line);
+        padding: 0 8px;
+        color: var(--text-soft);
+        font-size: 12px;
+      }
+
+      .doc-preview {
+        display: grid;
+        gap: 8px;
+        padding: 12px;
+      }
+
+      .doc-line {
+        height: 8px;
+        border-radius: 999px;
+        background: var(--surface);
+      }
+
+      .doc-line.strong {
+        width: 68%;
+        height: 12px;
+        background: #dedbd4;
+      }
+
+      .doc-line.short {
+        width: 42%;
+      }
+
+      .doc-line.mid {
+        width: 76%;
+      }
+
+      .outline-item,
+      .activity-row {
+        min-height: 30px;
+        border-radius: var(--radius);
+        padding: 0 6px;
+        color: var(--text-soft);
+        font-size: 13px;
+      }
+
+      .outline-item {
+        display: grid;
+        grid-template-columns: 20px minmax(0, 1fr);
+        align-items: center;
+        gap: 6px;
+      }
+
+      .outline-item:hover,
+      .activity-row:hover {
+        background: var(--surface-hover);
+      }
+
+      .activity-row {
+        gap: 8px;
+      }
+
+      .activity-dot {
+        width: 6px;
+        height: 6px;
+        flex: 0 0 auto;
+        border-radius: 999px;
+        background: var(--text-faint);
+      }
+
+      .activity-dot.green {
+        background: var(--green);
+      }
+
+      .activity-dot.red {
+        background: var(--red);
+      }
+
+      @media (max-width: 1120px) {
+        .app-shell {
+          grid-template-columns: 220px minmax(0, 1fr);
+        }
+
+        .sidepeek {
+          display: none;
+        }
+      }
+
+      @media (max-width: 760px) {
+        body {
+          overflow: auto;
+        }
+
+        .app-shell {
+          display: block;
+          min-height: 100vh;
+        }
+
+        .sidebar {
+          display: none;
+        }
+
+        .workspace {
+          min-height: 100vh;
+        }
+
+        .topbar {
+          position: sticky;
+          top: 0;
+        }
+
+        .page-scroll {
+          padding: 16px 18px 28px;
+        }
+
+        .page {
+          padding-bottom: 186px;
+        }
+
+        .page-cover {
+          height: 64px;
+        }
+
+        .properties {
+          grid-template-columns: 1fr;
+        }
+
+        .property-key {
+          min-height: 22px;
+          border-bottom: 0;
+          padding-bottom: 0;
+        }
+
+        .property-value {
+          min-height: 30px;
+          padding-top: 2px;
+        }
+
+        .user-bubble {
+          max-width: 100%;
+        }
+
+        .database-header {
+          display: none;
+        }
+
+        .database-row {
+          grid-template-columns: 1fr;
+          gap: 4px;
+          padding: 8px 6px;
+        }
+
+        .composer-wrap {
+          position: fixed;
+          right: 0;
+          bottom: 0;
+          left: 0;
+          border-top: 1px solid var(--line);
+          background: var(--page);
+          padding: 10px 12px 12px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="会话列表">
+        <div class="brand-row">
+          <div class="brand-lockup">
+            <span class="brand-mark">
+              <img src="../resources/icon.png" alt="馆长" />
+            </span>
+            <span class="brand-name">馆长</span>
+          </div>
+          <button class="icon-button" aria-label="折叠侧栏">≡</button>
+        </div>
+
+        <button class="new-button" type="button">
+          <span class="nav-icon">+</span>
+          <span>新对话</span>
+        </button>
+
+        <div class="section-label">工作区</div>
+        <nav class="nav-list">
+          <a class="nav-item active" href="#">
+            <span class="nav-icon">▦</span>
+            <span class="nav-label">论文资料库</span>
+            <span class="nav-count">18</span>
+          </a>
+          <a class="nav-item" href="#">
+            <span class="nav-icon">▤</span>
+            <span class="nav-label">产品调研</span>
+            <span class="nav-count">9</span>
+          </a>
+          <a class="nav-item" href="#">
+            <span class="nav-icon">◫</span>
+            <span class="nav-label">会议纪要</span>
+            <span class="nav-count">12</span>
+          </a>
+        </nav>
+
+        <div class="section-label">最近会话</div>
+        <nav class="nav-list">
+          <a class="nav-item active" href="#">
+            <span class="nav-icon">●</span>
+            <span class="nav-label">重写项目调研报告</span>
+            <span class="nav-count">刚刚</span>
+          </a>
+          <a class="nav-item" href="#">
+            <span class="nav-icon">○</span>
+            <span class="nav-label">整理用户访谈摘要</span>
+            <span class="nav-count">10:42</span>
+          </a>
+          <a class="nav-item" href="#">
+            <span class="nav-icon">○</span>
+            <span class="nav-label">搜索竞品价格信息</span>
+            <span class="nav-count">昨天</span>
+          </a>
+          <a class="nav-item" href="#">
+            <span class="nav-icon">○</span>
+            <span class="nav-label">生成立项评审初稿</span>
+            <span class="nav-count">周二</span>
+          </a>
+        </nav>
+
+        <div class="sidebar-bottom">
+          <div class="status-line">
+            <span class="status-dot"></span>
+            <span>资料索引已同步</span>
+          </div>
+          <a class="nav-item" href="#">
+            <span class="nav-icon">⚙</span>
+            <span class="nav-label">设置</span>
+          </a>
+        </div>
+      </aside>
+
+      <main class="workspace">
+        <header class="topbar">
+          <div class="breadcrumbs">
+            <span>论文资料库</span>
+            <span>/</span>
+            <span class="breadcrumb-current">重写项目调研报告</span>
+          </div>
+          <div class="top-actions">
+            <button class="icon-button" aria-label="打开右侧资料">▤</button>
+            <button class="icon-button" aria-label="更多操作">···</button>
+          </div>
+        </header>
+
+        <div class="page-scroll">
+          <article class="page">
+            <div class="page-cover"></div>
+            <div class="page-icon-large">馆</div>
+            <h1 class="page-title-main">重写项目调研报告</h1>
+            <p class="page-subtitle">
+              当前会话围绕本地资料、网页索引和 docx
+              初稿推进，右侧保留可打开的资料命中、预览和修改记录。
+            </p>
+
+            <div class="properties" aria-label="会话属性">
+              <div class="property-row">
+                <div class="property-key"><span class="row-icon">◇</span><span>模式</span></div>
+                <div class="property-value"><span class="tag blue">大聪明</span></div>
+              </div>
+              <div class="property-row">
+                <div class="property-key"><span class="row-icon">⌘</span><span>模型</span></div>
+                <div class="property-value"><span>gpt-5.1</span></div>
+              </div>
+              <div class="property-row">
+                <div class="property-key"><span class="row-icon">@</span><span>范围</span></div>
+                <div class="property-value">
+                  <span class="tag">论文资料库</span>
+                  <span class="tag">用户访谈.docx</span>
+                  <span class="tag">竞品摘要</span>
+                </div>
+              </div>
+              <div class="property-row">
+                <div class="property-key"><span class="row-icon">◷</span><span>上下文</span></div>
+                <div class="property-value"><span class="tag green">42% 可用</span></div>
+              </div>
+            </div>
+
+            <div class="block-stack">
+              <section class="user-message" aria-label="用户消息">
+                <div class="user-bubble">
+                  把季度用户访谈、竞品摘要和现有 docx
+                  初稿整理成面向产品会的调研结论。需要保留证据来源，并直接更新初稿。
+                </div>
+              </section>
+
+              <section class="block" aria-label="执行过程">
+                <div class="block-icon">↳</div>
+                <div class="block-content">
+                  <div class="process-list">
+                    <div class="process-item">
+                      <span class="side-icon">✓</span>
+                      <span>已检索知识库，命中 8 条相关资料</span>
+                      <span class="mini-status">完成</span>
+                    </div>
+                    <div class="process-item">
+                      <span class="side-icon">✓</span>
+                      <span>已读取 1 个 docx 文件的结构和正文区间</span>
+                      <span class="mini-status">完成</span>
+                    </div>
+                    <div class="process-item current">
+                      <span class="side-icon">◆</span>
+                      <span>正在编辑 1 个 docx 文件</span>
+                      <span class="mini-status">运行中</span>
+                    </div>
+                  </div>
+
+                  <details class="toggle-block" open>
+                    <summary>
+                      <span class="toggle-caret">›</span>
+                      <span>执行细节</span>
+                      <span class="mini-status">3 步</span>
+                    </summary>
+                    <div class="toggle-body">
+                      <div class="toggle-body-row">
+                        <span class="caption">1.</span>
+                        <span>阅读 调研初稿.docx 的章节结构</span>
+                      </div>
+                      <div class="toggle-body-row">
+                        <span class="caption">2.</span>
+                        <span>检索 访谈记录 与 竞品摘要 中的证据段落</span>
+                      </div>
+                      <div class="toggle-body-row">
+                        <span class="caption">3.</span>
+                        <span>重写 结论与建议 章节，并保留回退入口</span>
+                      </div>
+                    </div>
+                  </details>
+                </div>
+              </section>
+
+              <section class="block" aria-label="最终回答">
+                <div class="block-icon">¶</div>
+                <div class="block-content answer">
+                  <h2>已整理成产品会版本</h2>
+                  <p>
+                    我把结论调整为三个面向决策的部分：用户阻塞、竞品对照、下一轮产品动作。原文中分散的访谈摘录已经合并到对应论点下。
+                  </p>
+
+                  <h3>主要结论</h3>
+                  <ul>
+                    <li>新用户最大的阻塞不是功能缺失，而是不知道资料是否已经进入可检索范围。</li>
+                    <li>竞品在导入后的状态反馈更明确，但缺少本地 docx 写回和回退链路。</li>
+                    <li>下一步应优先补强工作区索引状态、引用来源展示和修改后的确认体验。</li>
+                  </ul>
+
+                  <p class="quote-block">
+                    更新后的文件已放在右侧“修改的文件”里，可以预览 diff、系统打开或回退本次修改。
+                  </p>
+
+                  <div class="database" aria-label="修改的文件">
+                    <div class="database-header">
+                      <span>文件</span>
+                      <span>修改</span>
+                      <span>状态</span>
+                      <span>操作</span>
+                    </div>
+                    <div class="database-row">
+                      <div class="file-cell">
+                        <span>▦</span>
+                        <span>调研初稿.docx</span>
+                      </div>
+                      <span>12 处</span>
+                      <span class="tag green">已写回</span>
+                      <span class="muted-text">预览 diff</span>
+                    </div>
+                    <div class="database-row">
+                      <div class="file-cell">
+                        <span>▦</span>
+                        <span>调研证据索引.md</span>
+                      </div>
+                      <span>新建</span>
+                      <span class="tag yellow">待确认</span>
+                      <span class="muted-text">打开</span>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            </div>
+          </article>
+        </div>
+
+        <footer class="composer-wrap" aria-label="输入区">
+          <div class="composer">
+            <div class="reference-line">
+              <span class="token">@ <span>论文资料库</span></span>
+              <span class="token">@ <span>用户访谈.docx</span></span>
+              <span class="token">@ <span>竞品摘要</span></span>
+            </div>
+            <div class="input-line">继续把“下一步动作”改成可执行清单，并保留对应证据来源。</div>
+            <div class="composer-footer">
+              <div class="composer-chips">
+                <button class="chip" type="button">◇ 大聪明</button>
+                <button class="chip" type="button">⌘ gpt-5.1</button>
+                <button class="chip" type="button">▦ 论文资料库</button>
+                <button class="chip" type="button">◷ 42%</button>
+              </div>
+              <button class="send-button" type="button" aria-label="发送">↑</button>
+            </div>
+          </div>
+        </footer>
+      </main>
+
+      <aside class="sidepeek" aria-label="右侧内容面板">
+        <header class="sidepeek-header">
+          <div class="side-title">
+            <span class="side-icon">▤</span>
+            <span>资料与修改</span>
+          </div>
+          <button class="icon-button" aria-label="收起右侧">×</button>
+        </header>
+
+        <div class="side-scroll">
+          <section class="side-section">
+            <div class="side-section-title">
+              <span>搜索结果</span>
+              <button class="mini-action" type="button">全部</button>
+            </div>
+            <div class="source-list">
+              <div class="source-row">
+                <span class="side-icon">▦</span>
+                <div class="source-meta">
+                  <div class="source-title">用户访谈.docx</div>
+                  <div class="source-desc">导入后状态不明确，用户反复确认是否可检索</div>
+                </div>
+                <span class="score">96%</span>
+              </div>
+              <div class="source-row">
+                <span class="side-icon">◫</span>
+                <div class="source-meta">
+                  <div class="source-title">竞品摘要</div>
+                  <div class="source-desc">导入流程中状态标签和失败恢复更完整</div>
+                </div>
+                <span class="score">91%</span>
+              </div>
+              <div class="source-row">
+                <span class="side-icon">↗</span>
+                <div class="source-meta">
+                  <div class="source-title">网页资料：Onboarding Notes</div>
+                  <div class="source-desc">用户期望看到索引完成后的明确反馈</div>
+                </div>
+                <span class="score">84%</span>
+              </div>
+            </div>
+          </section>
+
+          <section class="side-section">
+            <div class="side-section-title">
+              <span>文档预览</span>
+              <button class="mini-action" type="button">系统打开</button>
+            </div>
+            <div class="preview-box">
+              <div class="preview-toolbar">
+                <span>调研初稿.docx</span>
+                <span>12 处修改</span>
+              </div>
+              <div class="doc-preview">
+                <div class="doc-line strong"></div>
+                <div class="doc-line mid"></div>
+                <div class="doc-line"></div>
+                <div class="doc-line"></div>
+                <div class="doc-line short"></div>
+                <div class="doc-line mid"></div>
+                <div class="doc-line"></div>
+              </div>
+            </div>
+          </section>
+
+          <section class="side-section">
+            <div class="side-section-title">
+              <span>修改大纲</span>
+              <button class="mini-action" type="button">回退</button>
+            </div>
+            <div class="outline-list">
+              <div class="outline-item">
+                <span class="side-icon">1</span>
+                <span>重写背景与问题定义</span>
+              </div>
+              <div class="outline-item">
+                <span class="side-icon">2</span>
+                <span>合并访谈证据</span>
+              </div>
+              <div class="outline-item">
+                <span class="side-icon">3</span>
+                <span>新增产品动作清单</span>
+              </div>
+            </div>
+          </section>
+
+          <section class="side-section">
+            <div class="side-section-title">
+              <span>运行记录</span>
+              <button class="mini-action" type="button">详情</button>
+            </div>
+            <div class="activity-list">
+              <div class="activity-row">
+                <span class="activity-dot green"></span>
+                <span>docx 写回完成</span>
+              </div>
+              <div class="activity-row">
+                <span class="activity-dot"></span>
+                <span>证据索引已生成</span>
+              </div>
+              <div class="activity-row">
+                <span class="activity-dot red"></span>
+                <span>1 项新建文件等待确认</span>
+              </div>
+            </div>
+          </section>
+        </div>
+      </aside>
+    </div>
+  </body>
+</html>

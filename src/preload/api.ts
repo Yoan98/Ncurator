@@ -12,6 +12,8 @@ import type {
   AiRunEvent,
   AiRunStartRequest,
   AiRunStartResponse,
+  AppUpdateActionResponse,
+  AppUpdateSnapshot,
   ChatMessage,
   ChatSession,
   ChunkListResponse,
@@ -164,9 +166,7 @@ export type DesktopApi = {
   workspacePrepare: (payload: PrepareWorkspaceRequest) => Promise<WorkspaceJobResponse>
   workspaceIndexJobGet: (payload: WorkspaceIndexJobGetRequest) => Promise<WorkspaceIndexJobResponse>
   onWorkspaceIndexJobProgress: (cb: (job: WorkspaceIndexJobRecord) => void) => () => void
-  referenceItemList: (
-    payload: ListReferenceItemsRequest
-  ) => Promise<ReferenceItemListResponse>
+  referenceItemList: (payload: ListReferenceItemsRequest) => Promise<ReferenceItemListResponse>
   webSourceList: (payload: ListWebSourcesRequest) => Promise<WebSourceListResponse>
   webSourcesScan: (payload: ScanWebSourcesRequest) => Promise<WorkspaceJobResponse>
   webSourcesPrepare: (payload: PrepareWebSourcesRequest) => Promise<WorkspaceJobResponse>
@@ -225,12 +225,12 @@ export type DesktopApi = {
   aiFileChangeList: (
     payload?: ListAiFileChangeRecordsRequest
   ) => Promise<ListAiFileChangeRecordsResponse>
-  aiFileChangeGet: (
-    payload: GetAiFileChangeRecordRequest
-  ) => Promise<GetAiFileChangeRecordResponse>
-  aiFileChangeRevert: (
-    payload: RevertAiFileChangeRequest
-  ) => Promise<RevertAiFileChangeResponse>
+  aiFileChangeGet: (payload: GetAiFileChangeRecordRequest) => Promise<GetAiFileChangeRecordResponse>
+  aiFileChangeRevert: (payload: RevertAiFileChangeRequest) => Promise<RevertAiFileChangeResponse>
+  appUpdateGetSnapshot: () => Promise<AppUpdateSnapshot>
+  appUpdateCheck: () => Promise<AppUpdateActionResponse>
+  appUpdateInstall: () => Promise<AppUpdateActionResponse>
+  onAppUpdateStatus: (cb: (snapshot: AppUpdateSnapshot) => void) => () => void
   pickApplication: () => Promise<PickApplicationResponse>
   openPathWithApplication: (
     payload: OpenPathWithApplicationRequest
