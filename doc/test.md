@@ -114,7 +114,18 @@ tests/
 - 每次正式 case 执行完成后，如果该次结果要作为当前有效测试结论，必须主动更新对应 `doc/test-plan/**` 顶部“执行摘要”中的通过率、检测时间、以及该领域明确要求维护的附加摘要信息。
 - 正式 `mock-llm` case 只允许替换 LLM 输出；不得 fake tool、store、docx apply service、runner 或节点执行结果。
 
-### 3.3 实现状态取值约定
+### 3.3 Formal UI E2E 规则
+
+- Formal UI e2e 的目标是验证真实用户路径：通过可见 UI、Electron、IPC、文件系统、网络与后端服务完成操作。
+- 测试准备只允许创建真实输入数据，例如真实文件、真实 docx、真实 PDF、真实工作区目录、真实本地 HTTP 页面或真实网页 URL；不得用 fixture 直接替代产品运行结果。
+- `tests/fixtures/**` 只能作为真实输入数据来源，不得作为搜索结果、AI 事件、artifact、docx 修改记录、模型返回或 renderer 状态的替身。
+- Formal UI e2e 禁止使用 fake model、fake search、fake docx、脚本化 AI 事件、脚本化 artifact、直接写 renderer 状态、直接写业务 store 或直接调用内部 IPC 来绕过用户可见操作。
+- 测试 helper 可以做用户同等可见的点击、输入、选择、等待、截图、读取 raw logs 和读取输出文件；不得在被测行为上替代 UI、Electron 或后端真实实现。
+- 涉及真实 AI 调用的 UI e2e 必须使用测试计划声明的 live 环境变量或真实应用配置；缺少配置时必须 preflight fail，不得静默跳过，也不得回落到 mock LLM。
+- 如果某个正式 UI e2e 需要生产代码或 testability 入口才能继续，测试实现不得改用模拟路径绕过；应把缺口记录到对应 `doc/test-plan/**` 的执行摘要和最终结论，交给产品 / 生产实现决策。
+- 旧 case 若依赖上述禁止路径，不能继续作为有效 formal 通过结论；必须改为真实 UI 路径、标记待重构或废弃。
+
+### 3.4 实现状态取值约定
 
 - `待检查`
   - 已在计划中定义，但还未核对代码是否已经实现或与文档一致。
@@ -129,7 +140,7 @@ tests/
 - `已废弃`
   - 该 case 不再作为正式测试目标保留，但保留历史记录。
 
-### 3.4 长期价值与常见误区
+### 3.5 长期价值与常见误区
 
 - 进入正式 domain 目录的 case 默认都应具备长期回归价值。
 - `tests/case/unit/**` 默认具备长期维护价值，但不属于 formal test-plan case。

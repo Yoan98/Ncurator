@@ -1,54 +1,66 @@
 import type { Locator, Page } from 'playwright'
-import type { LLMConfig, WorkspaceMutationResponse } from '../../../src/shared/types'
 import {
   chatSelectors,
+  importSelectors,
   settingsSelectors,
   workbenchSelectors
 } from '../../../src/renderer/src/testing/selectors'
+import { loadRootEnvOnce } from '../core/rootEnv'
 import {
   SETTINGS_E2E_TIMEOUT_MS,
-  createFixtureWorkspace,
+  SETTINGS_REAL_WORKSPACE_E2E_TIMEOUT_MS,
   getSettingsLocator,
-  seedModelConfigs,
-  setSettingsE2EApiOverrides,
-  waitForFileIndexJobIdle
+  navigateToSettingsSection
 } from './settings'
 
 export const WORKBENCH_E2E_TIMEOUT_MS = SETTINGS_E2E_TIMEOUT_MS
-export const WORKBENCH_LONG_E2E_TIMEOUT_MS = 60_000
+export const WORKBENCH_LONG_E2E_TIMEOUT_MS = SETTINGS_REAL_WORKSPACE_E2E_TIMEOUT_MS
+export const WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS = 900_000
+export const WORKBENCH_MODEL_LIST_TIMEOUT_MS = 60_000
 
-export const WORKBENCH_FIXTURE_MODEL_CONFIG: LLMConfig = {
-  id: 'workbench-e2e-model-config',
-  providerKind: 'openai-compatible',
-  base_url: 'https://example.test/v1',
-  api_key: 'sk-workbench-e2e',
-  is_active: true,
-  default_model: 'workbench-e2e-model'
-}
-
-export const WORKBENCH_FIXTURE_MODEL_LIST = {
-  success: true,
-  items: [
-    {
-      id: 'workbench-e2e-model',
-      label: 'Workbench E2E Model'
-    },
-    {
-      id: 'workbench-e2e-model-alt',
-      label: 'Workbench E2E Model Alt'
-    }
-  ]
+export type WorkbenchLiveModelEnv = {
+  baseUrl: string
+  apiKey: string
+  modelName: string
 }
 
 const byTestId = (testId: string): string => `[data-testid="${testId}"]`
 
 const byTestIdPrefix = (testIdPrefix: string): string => `[data-testid^="${testIdPrefix}-"]`
 
+const readEnv = (name: string): string => {
+  loadRootEnvOnce()
+  return String(process.env[name] || '').trim()
+}
+
 export const getWorkbenchLocator = (page: Page, testId: string): Locator =>
   page.locator(byTestId(testId))
 
 export const getWorkbenchPrefixLocator = (page: Page, testIdPrefix: string): Locator =>
   page.locator(byTestIdPrefix(testIdPrefix))
+
+export const loadWorkbenchLiveModelEnv = (): WorkbenchLiveModelEnv => {
+  const baseUrl = readEnv('AI_LIVE_BASE_URL')
+  const apiKey = readEnv('AI_LIVE_API_KEY')
+  const modelName = readEnv('AI_LIVE_PRIMARY_MODEL_NAME')
+
+  if (!baseUrl || !apiKey || !modelName) {
+    throw new Error(
+      [
+        'Workbench formal AI e2e 缺少真实模型配置，必须设置：',
+        '- AI_LIVE_BASE_URL',
+        '- AI_LIVE_API_KEY',
+        '- AI_LIVE_PRIMARY_MODEL_NAME'
+      ].join('\n')
+    )
+  }
+
+  return {
+    baseUrl,
+    apiKey,
+    modelName
+  }
+}
 
 export const navigateToWorkbench = async (page: Page): Promise<void> => {
   await page.evaluate(() => {
@@ -58,56 +70,61 @@ export const navigateToWorkbench = async (page: Page): Promise<void> => {
   await getWorkbenchLocator(page, workbenchSelectors.input).waitFor({ state: 'visible' })
 }
 
-export const seedWorkbenchModelConfig = async (page: Page): Promise<void> => {
-  await seedModelConfigs(page, [WORKBENCH_FIXTURE_MODEL_CONFIG])
-  await setSettingsE2EApiOverrides(page, {
-    llmModelListResponseByConfigId: {
-      [WORKBENCH_FIXTURE_MODEL_CONFIG.id]: WORKBENCH_FIXTURE_MODEL_LIST
-    }
-  })
-  await page.evaluate(() => {
-    window.dispatchEvent(new Event('check-llm-config'))
-  })
-}
-
-export const createWorkbenchWorkspace = async (
+export const configureLiveModelThroughSettingsUi = async (
   page: Page,
-  input?: { name?: string; rootPath?: string; prepare?: boolean }
-): Promise<WorkspaceMutationResponse> => {
-  const response = await createFixtureWorkspace(page, {
-    name: input?.name || 'Workbench E2E 工作区',
-    rootPath: input?.rootPath ?? '/tmp/ncurator-workbench-e2e-workspace'
+  env: WorkbenchLiveModelEnv = loadWorkbenchLiveModelEnv()
+): Promise<void> => {
+  await navigateToSettingsSection(page, 'model')
+  await getSettingsLocator(page, settingsSelectors.modelAddButton).click()
+  await getSettingsLocator(page, settingsSelectors.modelBaseUrlInput).waitFor({
+    state: 'visible'
   })
-  if (input?.prepare) {
-    const prepareResponse = await page.evaluate(async (workspaceId) => {
-      return await window.api.workspacePrepare({ workspaceId })
-    }, response.workspace!.id)
-    if (!prepareResponse.success) {
-      throw new Error(prepareResponse.error || 'failed to prepare workbench workspace')
-    }
-    await waitForFileIndexJobIdle(page, response.workspace!.id, WORKBENCH_LONG_E2E_TIMEOUT_MS)
-  }
-  return response
-}
+  await getSettingsLocator(page, settingsSelectors.modelBaseUrlInput)
+    .locator('input')
+    .fill(env.baseUrl)
+  await getSettingsLocator(page, settingsSelectors.modelApiKeyInput).fill(env.apiKey)
+  await getSettingsLocator(page, settingsSelectors.modelSaveButton).click()
+  await getSettingsLocator(page, settingsSelectors.modelSummaryCurrent).waitFor({
+    state: 'visible'
+  })
 
-export const seedWorkbenchReadyState = async (
-  page: Page,
-  input?: { prepareWorkspace?: boolean; rootPath?: string }
-): Promise<WorkspaceMutationResponse> => {
-  await seedWorkbenchModelConfig(page)
-  const workspaceResponse = await createWorkbenchWorkspace(page, {
-    rootPath: input?.rootPath,
-    prepare: input?.prepareWorkspace
-  })
-  await page.evaluate(() => {
-    window.localStorage.setItem('workbench.preference.mode', 'ai')
-    window.location.hash = '#/settings/model'
-  })
-  await getSettingsLocator(page, settingsSelectors.page).waitFor({ state: 'visible' })
   await navigateToWorkbench(page)
-  await getWorkbenchLocator(page, workbenchSelectors.modelSelect).waitFor({ state: 'visible' })
-  await getWorkbenchLocator(page, workbenchSelectors.workspaceSelect).waitFor({ state: 'visible' })
-  return workspaceResponse
+  await getWorkbenchLocator(page, workbenchSelectors.modelSelect).click()
+  const modelOption = page
+    .locator('.workbench-composer-select-dropdown:not(.ant-select-dropdown-hidden)')
+    .locator('.ant-select-item-option')
+    .filter({ hasText: env.modelName })
+    .first()
+  await modelOption.waitFor({
+    state: 'visible',
+    timeout: WORKBENCH_MODEL_LIST_TIMEOUT_MS
+  })
+  await modelOption.click()
+}
+
+export const createWorkspaceThroughSettingsUi = async (
+  page: Page,
+  workspaceName: string
+): Promise<void> => {
+  await navigateToSettingsSection(page, 'workspace')
+  await getSettingsLocator(page, importSelectors.createWorkspaceButton).click()
+  await getSettingsLocator(page, importSelectors.createWorkspaceNameInput).fill(workspaceName)
+  await getSettingsLocator(page, importSelectors.createWorkspaceConfirmButton).click()
+  await getSettingsLocator(page, importSelectors.workspaceDetail)
+    .getByRole('heading', { name: workspaceName })
+    .waitFor({ state: 'visible' })
+}
+
+export const addWebSourceThroughSettingsUi = async (page: Page, url: string): Promise<void> => {
+  await navigateToSettingsSection(page, 'workspace')
+  await page.getByRole('tab', { name: /网页/u }).click()
+  await getSettingsLocator(page, importSelectors.webSourceOpenModalButton).click()
+  await getSettingsLocator(page, importSelectors.webSourceUrlInput).fill(url)
+  await getSettingsLocator(page, importSelectors.webSourceConfirmButton).click()
+  await getSettingsLocator(page, importSelectors.webSourceModal).waitFor({ state: 'hidden' })
+  await getSettingsLocator(page, importSelectors.webSourceList).getByText(url).waitFor({
+    state: 'visible'
+  })
 }
 
 export const setWorkbenchInput = async (page: Page, value: string): Promise<void> => {
@@ -231,7 +248,10 @@ export const switchWorkbenchMode = async (
 }
 
 export const waitForLatestAssistantFinalAnswer = async (page: Page): Promise<Locator> => {
-  const locator = getWorkbenchPrefixLocator(page, workbenchSelectors.assistantFinalAnswerPrefix).last()
+  const locator = getWorkbenchPrefixLocator(
+    page,
+    workbenchSelectors.assistantFinalAnswerPrefix
+  ).last()
   await locator.waitFor({ state: 'visible' })
   return locator
 }
@@ -244,21 +264,22 @@ export const waitForLatestAssistantProcess = async (page: Page): Promise<Locator
 
 export const waitForApplyEntry = async (page: Page, changeIdPart?: string): Promise<Locator> => {
   const locator = changeIdPart
-    ? page.locator(`[data-testid*="${workbenchSelectors.assistantTurnApplyPrefix}-${changeIdPart}"]`)
+    ? page.locator(
+        `[data-testid*="${workbenchSelectors.assistantTurnApplyPrefix}-${changeIdPart}"]`
+      )
     : getWorkbenchPrefixLocator(page, workbenchSelectors.assistantTurnApplyPrefix)
   await locator.first().waitFor({ state: 'visible' })
   return locator.first()
 }
 
 export const getApprovalCard = (page: Page): Locator =>
-  getSettingsLocator(page, chatSelectors.approvalBatchCard)
+  page.locator(byTestId(chatSelectors.approvalBatchCard))
 
 export const getWorkspaceRequiredCard = (page: Page): Locator =>
-  getSettingsLocator(page, chatSelectors.workspaceBanner)
+  page.locator(byTestId(chatSelectors.workspaceBanner))
 
 export const getAntMessageText = async (page: Page): Promise<string> => {
   const messages = page.locator('.ant-message')
-  const count = await messages.count()
-  if (count === 0) return ''
-  return (await messages.nth(count - 1).textContent({ timeout: 500 })) || ''
+  if (!(await messages.count())) return ''
+  return ((await messages.last().textContent()) || '').trim()
 }

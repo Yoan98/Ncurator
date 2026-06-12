@@ -26,8 +26,8 @@
 
 - `doc/test-plan/ai-test.md`：涉及 AI 测试范围、正式或 live case 设计、执行摘要或 suite 覆盖维护时阅读。
 - `doc/test-plan/settings-test.md`：涉及 Settings 测试范围或测试边界时阅读。
-- `doc/test-plan/workbench-test.md`：涉及 Workbench 测试范围、正式 case 设计、执行摘要或 suite 覆盖维护时阅读。
-- `doc/test.md`：涉及测试体系、runner 或正式测试流程时阅读。
+- `doc/test-plan/workbench-test.md`：涉及 Workbench 测试范围、真实 e2e case 设计、执行摘要或 suite 覆盖维护时阅读。
+- `doc/test.md`：涉及测试体系、formal e2e 规则、runner 或正式测试流程时阅读。
 
 ### 1.5 prd产品文档相关
 
