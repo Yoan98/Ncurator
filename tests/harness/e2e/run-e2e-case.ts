@@ -14,7 +14,12 @@ import {
   type TestRunStatus
 } from '../core/run-log-contract'
 import { createRunId, resolveRunArtifactsDir, writeRunLog } from '../core/write-run-log'
-import { launchElectronApp, type E2ERuntimeSignals, type ElectronLaunchMode } from './electronApp'
+import {
+  launchElectronApp,
+  type E2ERuntimeSignals,
+  type ElectronLaunchMode,
+  type ElectronWindowMode
+} from './electronApp'
 
 export type E2ETestRunMode = 'single' | 'repeatable'
 
@@ -68,6 +73,7 @@ export type E2ETestCaseDefinition<TResult> = {
   description: string
   fixtures: readonly string[]
   launchMode?: ElectronLaunchMode
+  windowMode?: ElectronWindowMode
   runMode: E2ETestRunMode
   execute: (runtime: E2ETestRuntime) => Promise<TResult>
   assert: (result: TResult, runtime: E2ETestRuntime) => Promise<void>
@@ -195,7 +201,8 @@ export const runE2ECase = async <TResult>(
   let artifactCounter = 0
   let lastStepId: string | null = null
   const launchedApp = await launchElectronApp({
-    launchMode: definition.launchMode
+    launchMode: definition.launchMode,
+    windowMode: definition.windowMode
   })
 
   const pushEvent = (event: TestLogEvent): void => {
@@ -360,6 +367,7 @@ export const runE2ECase = async <TResult>(
       description: definition.description,
       fixtures: definition.fixtures.map((fixturePath) => path.resolve(fixturePath)),
       launchMode: definition.launchMode || 'fixture',
+      windowMode: definition.windowMode || 'background',
       runMode: definition.runMode
     }
   })

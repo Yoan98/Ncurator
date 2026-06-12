@@ -15,7 +15,9 @@ import {
 } from '../shared/constants'
 import type { DesktopApi, DownloadProgress, SettingsE2EApiOverrides } from './api'
 
-const isE2EObserverEnabled = process.env.NCURATOR_E2E_MODE === '1'
+const isE2EFixtureMode = process.env.NCURATOR_E2E_MODE === '1'
+const isE2EObserverEnabled =
+  isE2EFixtureMode || process.env.NCURATOR_E2E_OBSERVER === '1'
 let e2eApiOverrides: SettingsE2EApiOverrides | null = null
 let modelCatalogCallCount = 0
 const downloadProgressListeners = new Set<(progressData: DownloadProgress) => void>()
@@ -43,7 +45,7 @@ const emitE2EAiRunEvent = (event: AiRunEvent): void => {
 }
 
 const getE2EApiOverrides = (): SettingsE2EApiOverrides | null => {
-  if (!isE2EObserverEnabled) return null
+  if (!isE2EFixtureMode) return null
   return e2eApiOverrides
 }
 
@@ -273,12 +275,12 @@ const api: DesktopApi = {
     return ipcRenderer.invoke('llm-config-model-list', id)
   },
   setE2EApiOverrides: (overrides) => {
-    if (!isE2EObserverEnabled) return
+    if (!isE2EFixtureMode) return
     e2eApiOverrides = overrides
     modelCatalogCallCount = 0
   },
   clearE2EApiOverrides: () => {
-    if (!isE2EObserverEnabled) return
+    if (!isE2EFixtureMode) return
     e2eApiOverrides = null
     modelCatalogCallCount = 0
   },
@@ -300,7 +302,6 @@ const api: DesktopApi = {
   browserPanelHide: () => ipcRenderer.invoke('browser-panel-hide'),
   browserPanelReload: () => ipcRenderer.invoke('browser-panel-reload'),
   browserPanelOpenExternal: () => ipcRenderer.invoke('browser-panel-open-external'),
-  browserPanelE2ERun: (payload) => ipcRenderer.invoke('browser-panel-e2e-run', payload),
   docxApplyGet: (payload) => ipcRenderer.invoke('docx-apply-get', payload),
   aiFileChangeList: (payload) => ipcRenderer.invoke('ai-file-change-list', payload),
   aiFileChangeGet: (payload) => ipcRenderer.invoke('ai-file-change-get', payload),

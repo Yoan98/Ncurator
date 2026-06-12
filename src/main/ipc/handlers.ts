@@ -46,8 +46,6 @@ import type {
   AiRunApprovalBatchDecisionRequest,
   AiRunApprovalBatchDecisionResponse,
   BrowserPanelBoundsRequest,
-  BrowserPanelE2ERunRequest,
-  BrowserPanelE2ERunResponse,
   BrowserPanelMutationResponse,
   GetDocxApplyRecordRequest,
   GetDocxApplyRecordResponse,
@@ -95,27 +93,6 @@ import { WEB_INGEST_CONCURRENCY } from '../utils/constant'
 import { Jieba } from '@node-rs/jieba'
 import { dict } from '@node-rs/jieba/dict'
 import { normalizeForIpc } from '../utils/serialization'
-import {
-  createE2EFixtureWorkspace,
-  deleteE2EFixtureWebSource,
-  deleteE2EFixtureWorkspace,
-  getE2EFixtureSearchResponse,
-  getE2EFixtureWebSourceList,
-  getE2EFixtureWorkspaceList,
-  getE2EFixtureWorkspaceDelayMs,
-  getE2EFixtureReferenceItems,
-  ingestE2EFixtureWebSource,
-  ingestE2EFixtureWebSources,
-  isE2EFixtureModeEnabled,
-  matchE2EChatScenario,
-  prepareE2EFixtureWebSources,
-  prepareE2EFixtureWorkspace,
-  refreshE2EFixtureWebSource,
-  scanE2EFixtureWebSources,
-  scanE2EFixtureWorkspace,
-  getE2EFixtureWorkspaceTree,
-  setE2EFixtureWorkspaceRootPath
-} from '../testing/e2eFixtures'
 
 const jieba = Jieba.withDict(dict)
 const execFileAsync = promisify(execFile)
@@ -368,20 +345,6 @@ export function registerHandlers(services: {
     }
   }
 
-  const pauseForE2EFixture = async (): Promise<void> => {
-    await new Promise<void>((resolve) => setTimeout(resolve, 30))
-  }
-
-  const pauseForE2EFixtureVisiblePhase = async (): Promise<void> => {
-    await new Promise<void>((resolve) => setTimeout(resolve, 150))
-  }
-
-  const waitForE2EFixtureDelay = async (phase: 'scan' | 'prepare'): Promise<void> => {
-    const durationMs = getE2EFixtureWorkspaceDelayMs(phase)
-    if (durationMs <= 0) return
-    await new Promise<void>((resolve) => setTimeout(resolve, durationMs))
-  }
-
   const hydrateWorkspaceListItem = async (
     workspace: WorkspaceSource
   ): Promise<WorkspaceListItem> => {
@@ -449,7 +412,6 @@ export function registerHandlers(services: {
       if (!currentWorkspace) throw new Error('workspace not found')
       if (!currentWorkspace.root_path) throw new Error('请先设置工作文件地址')
 
-      await waitForE2EFixtureDelay('scan')
       const existingRecords = await workspaceStore.listWorkspaceFileIndexRecords(workspaceId)
       const now = Date.now()
       const scanResult = await workspaceService.scanWorkspaceTree({
@@ -530,127 +492,6 @@ export function registerHandlers(services: {
       })
     } finally {
       activeWorkspaceIndexJobs.delete(getWorkspaceIndexJobKey(workspaceId, 'file'))
-    }
-  }
-
-  const runE2EWorkspaceIndexJob = async (input: {
-    sender: Electron.WebContents
-    job: WorkspaceIndexJobRecord
-    delayPhase?: 'scan' | 'prepare'
-    run: () => WorkspaceJobResponse | null
-  }): Promise<void> => {
-    const job = input.job
-    try {
-      if (input.delayPhase) {
-        await waitForE2EFixtureDelay(input.delayPhase)
-      } else {
-        await pauseForE2EFixture()
-      }
-      const response = input.run()
-      if (!response?.success) {
-        const message = response?.error || 'E2E fixture job failed'
-        await updateAndEmitWorkspaceIndexJob(job, {
-          status: 'failed',
-          message,
-          last_error: message,
-          updated_at: Date.now(),
-          finished_at: Date.now()
-        })
-        return
-      }
-      const progress = response.progress
-      const failedCount = progress?.failed || 0
-      await updateAndEmitWorkspaceIndexJob(job, {
-        status: failedCount > 0 ? 'failed' : 'succeeded',
-        phase: 'complete',
-        total_count: progress?.total || job.total_count,
-        processed_count: progress?.completed || progress?.total || job.total_count,
-        failed_count: failedCount,
-        message: progress?.message || 'E2E fixture job complete',
-        updated_at: Date.now(),
-        finished_at: Date.now()
-      })
-      emitSourceListRefresh(input.sender)
-      emitSourceListRefreshToAll()
-    } finally {
-      activeWorkspaceIndexJobs.delete(getWorkspaceIndexJobKey(job.workspace_id, job.source_kind))
-    }
-  }
-
-  const runE2EWebPrepareJob = async (input: {
-    sender: Electron.WebContents
-    job: WorkspaceIndexJobRecord
-  }): Promise<void> => {
-    let job = input.job
-    const workspaceId = job.workspace_id
-    try {
-      const currentList = getE2EFixtureWebSourceList(workspaceId)
-      const targets = (currentList?.items || []).filter(
-        (item) =>
-          item.index_status === 'needs_index' ||
-          item.index_status === 'crawl_failed' ||
-          item.index_status === 'index_failed'
-      )
-      job = await updateAndEmitWorkspaceIndexJob(job, {
-        phase: targets.length > 0 ? 'crawl' : 'index',
-        step_index: targets.length > 0 ? 1 : 2,
-        step_total: 2,
-        total_count: targets.length,
-        target_ids: targets.map((item) => item.id),
-        message:
-          targets.length > 0
-            ? `步骤 1/2 抓取网页：0/${targets.length}`
-            : '步骤 2/2 建立索引：无需处理',
-        updated_at: Date.now()
-      })
-      await waitForE2EFixtureDelay('prepare')
-      if (targets.length > 0) {
-        job = await updateAndEmitWorkspaceIndexJob(job, {
-          processed_count: targets.length,
-          message: `步骤 1/2 抓取网页：${targets.length}/${targets.length}`,
-          updated_at: Date.now()
-        })
-      }
-      job = await updateAndEmitWorkspaceIndexJob(job, {
-        phase: 'index',
-        step_index: 2,
-        step_total: 2,
-        total_count: targets.length,
-        processed_count: 0,
-        failed_count: 0,
-        message: `步骤 2/2 建立索引：0/${targets.length}`,
-        updated_at: Date.now()
-      })
-      await pauseForE2EFixtureVisiblePhase()
-
-      const response = prepareE2EFixtureWebSources(workspaceId)
-      if (!response?.success) {
-        const message = response?.error || 'E2E fixture web prepare failed'
-        await updateAndEmitWorkspaceIndexJob(job, {
-          status: 'failed',
-          message,
-          last_error: message,
-          updated_at: Date.now(),
-          finished_at: Date.now()
-        })
-        return
-      }
-      const progress = response.progress
-      const failedCount = progress?.failed || 0
-      await updateAndEmitWorkspaceIndexJob(job, {
-        status: failedCount > 0 ? 'failed' : 'succeeded',
-        phase: 'complete',
-        total_count: progress?.total || targets.length,
-        processed_count: progress?.completed || progress?.total || targets.length,
-        failed_count: failedCount,
-        message: progress?.message || 'E2E fixture web prepare complete',
-        updated_at: Date.now(),
-        finished_at: Date.now()
-      })
-      emitSourceListRefresh(input.sender)
-      emitSourceListRefreshToAll()
-    } finally {
-      activeWorkspaceIndexJobs.delete(getWorkspaceIndexJobKey(workspaceId, 'web'))
     }
   }
 
@@ -740,7 +581,6 @@ export function registerHandlers(services: {
       if (!currentWorkspace) throw new Error('workspace not found')
       if (!currentWorkspace.root_path) throw new Error('请先设置工作文件地址')
 
-      await waitForE2EFixtureDelay('prepare')
       const prepareStartedAt = Date.now()
       const { targets, recordMap, added, updated, removed } = await collectFilePrepareTargets({
         workspaceId,
@@ -859,445 +699,6 @@ export function registerHandlers(services: {
     } finally {
       activeWorkspaceIndexJobs.delete(getWorkspaceIndexJobKey(workspaceId, 'file'))
     }
-  }
-
-  const emitE2EChatArtifactFlow = async (input: {
-    runId: string
-    sessionId: string
-    sendEvent: (event: AiRunEvent) => void
-  }): Promise<void> => {
-    input.sendEvent({
-      type: 'human_step',
-      runId: input.runId,
-      taskId: input.runId,
-      stepIndex: 1,
-      action: 'call_tool',
-      toolName: 'kb_search',
-      publicNarrative: '执行检索并整理结果',
-      learnedSkillIds: [],
-      effectiveSkillIds: [],
-      availableToolNames: ['kb_search'],
-      summary: 'E2E fixture 开始执行检索。',
-      createdAt: Date.now(),
-      stage: 'human_hand'
-    })
-    await pauseForE2EFixture()
-
-    input.sendEvent({
-      type: 'tool_call_started',
-      runId: input.runId,
-      taskId: input.runId,
-      toolCallId: 'tool-e2e-search',
-      toolName: 'kb_search',
-      input: {
-        query: 'e2e fixture search'
-      },
-      createdAt: Date.now()
-    })
-    await pauseForE2EFixture()
-
-    input.sendEvent({
-      type: 'tool_call_result',
-      runId: input.runId,
-      taskId: input.runId,
-      toolCallId: 'tool-e2e-search',
-      toolName: 'kb_search',
-      result: {
-        toolName: 'kb_search',
-        ok: true,
-        data: [
-          {
-            id: 'chunk-e2e-1',
-            text: 'E2E 检索命中内容',
-            document_name: 'E2E 文档'
-          }
-        ]
-      },
-      completedAt: Date.now()
-    })
-    await pauseForE2EFixture()
-
-    input.sendEvent({
-      type: 'human_step',
-      runId: input.runId,
-      taskId: input.runId,
-      stepIndex: 2,
-      action: 'deliver_result',
-      publicNarrative: '生成文件产物并整理最终结果',
-      learnedSkillIds: [],
-      effectiveSkillIds: [],
-      availableToolNames: [],
-      summary: 'E2E fixture 已生成文件产物。',
-      createdAt: Date.now(),
-      stage: 'human_mouth'
-    })
-    await pauseForE2EFixture()
-
-    const artifactPath = '/tmp/ncurator-e2e-result.docx'
-    const artifactFileName = 'ncurator-e2e-result.docx'
-    fs.writeFileSync(artifactPath, 'ncurator e2e generated document')
-    input.sendEvent({
-      type: 'file_artifact',
-      runId: input.runId,
-      taskId: input.runId,
-      artifactId: 'artifact-e2e-1',
-      capability: 'docx',
-      path: artifactPath,
-      fileName: artifactFileName,
-      operation: 'created',
-      summary: 'E2E 生成测试文档',
-      createdAt: Date.now()
-    })
-    const now = Date.now()
-    await aiFileChangeService.saveRecord({
-      id: 'artifact-e2e-1',
-      sessionId: input.sessionId,
-      runId: input.runId,
-      status: 'applied',
-      capability: 'docx',
-      path: artifactPath,
-      fileName: artifactFileName,
-      operation: 'created',
-      changeCount: 1,
-      createdAt: now,
-      updatedAt: now
-    })
-  }
-
-  const emitE2EDocxApplyFlow = async (input: {
-    runId: string
-    sessionId: string
-    sendEvent: (event: AiRunEvent) => void
-    multiple: boolean
-    answerText?: string
-  }): Promise<void> => {
-    const applyEvents = input.multiple
-      ? [
-          {
-            id: `e2e-apply-${input.runId}-a`,
-            path: `/tmp/ncurator-e2e-apply-${input.runId}-a.docx`,
-            fileName: 'e2e-apply-a.docx'
-          },
-          {
-            id: `e2e-apply-${input.runId}-b`,
-            path: `/tmp/ncurator-e2e-apply-${input.runId}-b.docx`,
-            fileName: 'e2e-apply-b.docx'
-          }
-        ]
-      : [
-          {
-            id: `e2e-apply-${input.runId}`,
-            path: `/tmp/ncurator-e2e-apply-${input.runId}.docx`,
-            fileName: 'e2e-apply.docx'
-          }
-        ]
-
-    input.sendEvent({
-      type: 'human_step',
-      runId: input.runId,
-      taskId: input.runId,
-      stepIndex: 1,
-      action: 'call_tool',
-      toolName: 'docx_edit',
-      publicNarrative: '直接修改 docx 源文件',
-      learnedSkillIds: [],
-      effectiveSkillIds: [],
-      availableToolNames: ['docx_edit'],
-      summary: 'E2E fixture 已准备 docx 直接写回结果。',
-      createdAt: Date.now(),
-      stage: 'human_hand'
-    })
-    await pauseForE2EFixture()
-
-    await Promise.all(
-      applyEvents.map(async (item) => {
-        fs.writeFileSync(item.path, `ncurator e2e updated document: ${item.fileName}`)
-        const now = Date.now()
-        await aiFileChangeService.saveRecord({
-          id: item.id,
-          sessionId: input.sessionId,
-          runId: input.runId,
-          status: 'applied',
-          capability: 'docx',
-          path: item.path,
-          fileName: item.fileName,
-          operation: 'created',
-          changeCount: 1,
-          createdAt: now,
-          updatedAt: now
-        })
-      })
-    )
-
-    applyEvents.forEach((item) => {
-      input.sendEvent({
-        type: 'file_artifact',
-        runId: input.runId,
-        taskId: input.runId,
-        artifactId: uuidv4(),
-        capability: 'docx',
-        path: item.path,
-        fileName: item.fileName,
-        operation: 'created',
-        applyId: item.id,
-        summary: `docx applied: ${item.fileName}`,
-        createdAt: Date.now()
-      })
-    })
-    await pauseForE2EFixture()
-
-    input.sendEvent({
-      type: 'human_step',
-      runId: input.runId,
-      taskId: input.runId,
-      stepIndex: 2,
-      action: 'deliver_result',
-      publicNarrative: '整理已修改文件结果',
-      learnedSkillIds: [],
-      effectiveSkillIds: [],
-      availableToolNames: [],
-      summary: 'E2E fixture 已暴露 docx 直接写回结果。',
-      createdAt: Date.now(),
-      stage: 'human_mouth'
-    })
-    await pauseForE2EFixture()
-
-    input.sendEvent({
-      type: 'answer_completed',
-      runId: input.runId,
-      text:
-        input.answerText ||
-        (input.multiple
-          ? 'E2E fixture 已直接修改两个 docx 文件，可分别回退。'
-          : 'E2E fixture 已直接修改 docx 源文件，可回退本次修改。')
-    })
-    input.sendEvent({
-      type: 'run_completed',
-      runId: input.runId
-    })
-  }
-
-  const waitForE2EApprovalDecision = async (input: {
-    runId: string
-    taskId: string
-    sendEvent: (event: AiRunEvent) => void
-  }): Promise<boolean> => {
-    const batchId = 'approval-batch-e2e-1'
-    const itemId = 'approval-item-e2e-1'
-
-    input.sendEvent({
-      type: 'approval_batch_required',
-      runId: input.runId,
-      taskId: input.taskId,
-      batchId,
-      items: [
-        {
-          itemId,
-          order: 0,
-          toolName: 'terminal_run',
-          command: 'rm -rf /tmp/ncurator-e2e',
-          reason: 'E2E fixture 需要审批才能继续'
-        }
-      ],
-      createdAt: Date.now()
-    })
-
-    return await new Promise<boolean>((resolve) => {
-      const timeout = setTimeout(() => {
-        activeAiApprovals.delete(input.runId)
-        input.sendEvent({
-          type: 'approval_batch_decision',
-          runId: input.runId,
-          taskId: input.taskId,
-          batchId,
-          decisions: [
-            {
-              itemId,
-              action: 'reject',
-              message: 'e2e_fixture_timeout'
-            }
-          ],
-          decidedAt: Date.now()
-        })
-        resolve(false)
-      }, 10_000)
-
-      activeAiApprovals.set(input.runId, {
-        batchId,
-        taskId: input.taskId,
-        itemIds: [itemId],
-        resolve: (result) => {
-          clearTimeout(timeout)
-          activeAiApprovals.delete(input.runId)
-          const decisions = result.accepted
-            ? result.decisions
-            : [{ itemId, action: 'reject' as const, message: result.error }]
-          input.sendEvent({
-            type: 'approval_batch_decision',
-            runId: input.runId,
-            taskId: input.taskId,
-            batchId,
-            decisions,
-            decidedAt: Date.now()
-          })
-          resolve(
-            result.accepted && result.decisions.every((decision) => decision.action === 'approve')
-          )
-        }
-      })
-    })
-  }
-
-  const maybeHandleE2EFixtureRun = async (input: {
-    runId: string
-    sessionId: string
-    inputText: string
-    workspace?: {
-      workspaceId: string
-      workspaceName: string
-      rootPath: string
-      policyProfile?: string
-    }
-    sendEvent: (event: AiRunEvent) => void
-    docxApplyService: DocxApplyService
-  }): Promise<boolean> => {
-    if (!isE2EFixtureModeEnabled()) return false
-
-    const scenario = matchE2EChatScenario(input.inputText)
-    if (!scenario) return false
-
-    const taskId = input.runId
-
-    if (scenario === 'chat-artifact-flow') {
-      await emitE2EChatArtifactFlow({
-        runId: input.runId,
-        sessionId: input.sessionId,
-        sendEvent: input.sendEvent
-      })
-      input.sendEvent({
-        type: 'answer_completed',
-        runId: input.runId,
-        text: 'E2E fixture 已生成过程结果与文件产物。'
-      })
-      input.sendEvent({
-        type: 'run_completed',
-        runId: input.runId
-      })
-      return true
-    }
-
-    if (scenario === 'chat-approval') {
-      const approved = await waitForE2EApprovalDecision({
-        runId: input.runId,
-        taskId,
-        sendEvent: input.sendEvent
-      })
-
-      if (!approved) {
-        input.sendEvent({
-          type: 'runtime_issue',
-          runId: input.runId,
-          code: 'approval_denied',
-          message: 'E2E fixture 审批被拒绝',
-          taskId,
-          createdAt: Date.now()
-        })
-        input.sendEvent({
-          type: 'run_completed',
-          runId: input.runId
-        })
-        return true
-      }
-
-      await emitE2EChatArtifactFlow({
-        runId: input.runId,
-        sessionId: input.sessionId,
-        sendEvent: input.sendEvent
-      })
-      input.sendEvent({
-        type: 'answer_completed',
-        runId: input.runId,
-        text: '审批通过，E2E fixture 已继续执行。'
-      })
-      input.sendEvent({
-        type: 'run_completed',
-        runId: input.runId
-      })
-      return true
-    }
-
-    if (scenario === 'chat-workspace') {
-      if (!input.workspace?.rootPath) {
-        input.sendEvent({
-          type: 'workspace_required',
-          runId: input.runId,
-          taskId,
-          reason: 'E2E fixture 需要工作区上下文才能继续',
-          requiredFields: ['workspaceId', 'rootPath'],
-          createdAt: Date.now()
-        })
-        return true
-      }
-
-      await emitE2EChatArtifactFlow({
-        runId: input.runId,
-        sessionId: input.sessionId,
-        sendEvent: input.sendEvent
-      })
-      input.sendEvent({
-        type: 'answer_completed',
-        runId: input.runId,
-        text: '工作区已补充，E2E fixture 已继续执行。'
-      })
-      input.sendEvent({
-        type: 'run_completed',
-        runId: input.runId
-      })
-      return true
-    }
-
-    if (scenario === 'chat-edit-apply') {
-      await emitE2EDocxApplyFlow({
-        runId: input.runId,
-        sessionId: input.sessionId,
-        sendEvent: input.sendEvent,
-        multiple: false
-      })
-      return true
-    }
-
-    if (scenario === 'chat-edit-apply-b') {
-      await emitE2EDocxApplyFlow({
-        runId: input.runId,
-        sessionId: input.sessionId,
-        sendEvent: input.sendEvent,
-        multiple: false,
-        answerText: 'E2E fixture 已直接修改 B 文件，可回退本次修改。'
-      })
-      return true
-    }
-
-    if (scenario === 'chat-multi-apply') {
-      await emitE2EDocxApplyFlow({
-        runId: input.runId,
-        sessionId: input.sessionId,
-        sendEvent: input.sendEvent,
-        multiple: true
-      })
-      return true
-    }
-
-    if (scenario === 'chat-apply-revert-warning') {
-      await emitE2EDocxApplyFlow({
-        runId: input.runId,
-        sessionId: input.sessionId,
-        sendEvent: input.sendEvent,
-        multiple: false
-      })
-      return true
-    }
-
-    return false
   }
 
   const ensureWebSourcesHydrated = async (): Promise<void> => {
@@ -1921,11 +1322,6 @@ export function registerHandlers(services: {
       }
     ) => {
       try {
-        const fixtureResponse = ingestE2EFixtureWebSource(payload)
-        if (fixtureResponse) {
-          emitSourceListRefresh(event.sender)
-          return fixtureResponse
-        }
         await ensureWebSourcesHydrated()
         const workspaceId = String(payload?.workspaceId || '').trim()
         const rawUrl = String(payload?.url || '').trim()
@@ -1996,11 +1392,6 @@ export function registerHandlers(services: {
       }>
     ) => {
       try {
-        const fixtureResponse = ingestE2EFixtureWebSources(payload)
-        if (fixtureResponse) {
-          emitSourceListRefresh(event.sender)
-          return fixtureResponse
-        }
         await ensureWebSourcesHydrated()
         const items = Array.isArray(payload) ? payload : []
         const preparedSources: WebSourceRecord[] = []
@@ -2066,9 +1457,6 @@ export function registerHandlers(services: {
       const parsed = new URL(String(url))
       if (!['http:', 'https:'].includes(parsed.protocol)) {
         return { success: false, error: '仅支持 http/https URL' }
-      }
-      if (isE2EFixtureModeEnabled()) {
-        return { success: true }
       }
       await shell.openExternal(parsed.toString())
       return { success: true }
@@ -2187,8 +1575,6 @@ export function registerHandlers(services: {
 
   ipcMain.handle('workspace-list', async (): Promise<WorkspaceListResponse> => {
     try {
-      const fixtureList = getE2EFixtureWorkspaceList()
-      if (fixtureList) return fixtureList
       const workspaces = await workspaceStore.listWorkspaces()
       const items = await Promise.all(
         workspaces.map((workspace) => hydrateWorkspaceListItem(workspace))
@@ -2204,17 +1590,6 @@ export function registerHandlers(services: {
     'workspace-create',
     async (event, payload: CreateWorkspaceSourceRequest): Promise<WorkspaceMutationResponse> => {
       try {
-        const fixtureRootPath = String(
-          (payload as CreateWorkspaceSourceRequest & { rootPath?: string })?.rootPath || ''
-        ).trim()
-        const fixtureCreate = createE2EFixtureWorkspace({
-          rootPath: fixtureRootPath,
-          name: payload.name
-        })
-        if (fixtureCreate) {
-          emitSourceListRefresh(event.sender)
-          return fixtureCreate
-        }
         const name = String(payload.name || '').trim()
         if (!name) {
           return { success: false, error: '工作空间名称不能为空' }
@@ -2244,11 +1619,6 @@ export function registerHandlers(services: {
     'workspace-delete',
     async (event, workspaceId: string): Promise<DeleteWorkspaceSourceResponse> => {
       try {
-        const fixtureResponse = deleteE2EFixtureWorkspace(String(workspaceId || '').trim())
-        if (fixtureResponse) {
-          emitSourceListRefresh(event.sender)
-          return fixtureResponse
-        }
         await workspaceStore.deleteWorkspace(String(workspaceId || '').trim())
         emitSourceListRefresh(event.sender)
         return { success: true, deletedWorkspaceId: String(workspaceId || '').trim() }
@@ -2267,12 +1637,6 @@ export function registerHandlers(services: {
         const rootPath = String(payload?.rootPath || '').trim()
         if (!workspaceId) return { success: false, error: 'workspaceId is required' }
         if (!rootPath) return { success: false, error: '文件目录不能为空' }
-
-        const fixtureResponse = setE2EFixtureWorkspaceRootPath(workspaceId, rootPath)
-        if (fixtureResponse) {
-          emitSourceListRefresh(event.sender)
-          return fixtureResponse
-        }
 
         const currentWorkspace = await workspaceStore.getWorkspaceById(workspaceId)
         if (!currentWorkspace) {
@@ -2323,11 +1687,6 @@ export function registerHandlers(services: {
     'workspace-tree',
     async (_event, payload: ListWorkspaceTreeRequest): Promise<WorkspaceTreeListResponse> => {
       try {
-        const fixtureTree = getE2EFixtureWorkspaceTree(
-          String(payload.workspaceId || '').trim(),
-          Boolean(payload.includeUnsupported)
-        )
-        if (fixtureTree) return fixtureTree
         return await readWorkspaceTree(
           String(payload.workspaceId || '').trim(),
           Boolean(payload.includeUnsupported)
@@ -2345,30 +1704,6 @@ export function registerHandlers(services: {
       try {
         const workspaceId = String(payload.workspaceId || '').trim()
         if (!workspaceId) return { success: false, error: 'workspaceId is required' }
-        if (isE2EFixtureModeEnabled()) {
-          const jobKey = getWorkspaceIndexJobKey(workspaceId, 'file')
-          const activeJob = await workspaceIndexJobStore.getActiveJob(workspaceId, 'file')
-          if (activeJob) return { success: true, workspaceId, job: activeJob }
-          const job = await saveAndEmitWorkspaceIndexJob(
-            createWorkspaceIndexJob({
-              workspaceId,
-              sourceKind: 'file',
-              action: 'scan',
-              phase: 'scan',
-              stepIndex: 1,
-              stepTotal: 1,
-              message: '正在检查目录变化'
-            })
-          )
-          activeWorkspaceIndexJobs.add(jobKey)
-          void runE2EWorkspaceIndexJob({
-            sender: event.sender,
-            job,
-            delayPhase: 'scan',
-            run: () => scanE2EFixtureWorkspace(workspaceId)
-          })
-          return { success: true, workspaceId, job }
-        }
         const activeJob = await workspaceIndexJobStore.getActiveJob(workspaceId, 'file')
         if (activeJob) return { success: true, workspaceId, job: activeJob }
         const currentWorkspace = await workspaceStore.getWorkspaceById(workspaceId)
@@ -2412,30 +1747,6 @@ export function registerHandlers(services: {
       const workspaceId = String(payload.workspaceId || '').trim()
       if (!workspaceId) return { success: false, error: 'workspaceId is required' }
       try {
-        if (isE2EFixtureModeEnabled()) {
-          const activeJob = await workspaceIndexJobStore.getActiveJob(workspaceId, 'file')
-          if (activeJob) return { success: true, workspaceId, job: activeJob }
-          const jobKey = getWorkspaceIndexJobKey(workspaceId, 'file')
-          const job = await saveAndEmitWorkspaceIndexJob(
-            createWorkspaceIndexJob({
-              workspaceId,
-              sourceKind: 'file',
-              action: 'prepare',
-              phase: 'index',
-              stepIndex: 1,
-              stepTotal: 1,
-              message: '正在准备文件索引'
-            })
-          )
-          activeWorkspaceIndexJobs.add(jobKey)
-          void runE2EWorkspaceIndexJob({
-            sender: event.sender,
-            job,
-            delayPhase: 'prepare',
-            run: () => prepareE2EFixtureWorkspace(workspaceId)
-          })
-          return { success: true, workspaceId, job }
-        }
         const activeJob = await workspaceIndexJobStore.getActiveJob(workspaceId, 'file')
         if (activeJob) return { success: true, workspaceId, job: activeJob }
 
@@ -2485,8 +1796,6 @@ export function registerHandlers(services: {
             summary: { web_count: 0, needs_index_count: 0, failed_count: 0 }
           }
         }
-        const fixtureList = getE2EFixtureWebSourceList(workspaceId)
-        if (fixtureList) return fixtureList
         await ensureWebSourcesHydrated()
         const [items, summary] = await Promise.all([
           webSourceStore.listWebSources(workspaceId),
@@ -2525,29 +1834,6 @@ export function registerHandlers(services: {
       const workspaceId = String(payload?.workspaceId || '').trim()
       if (!workspaceId) return { success: false, error: 'workspaceId is required' }
       try {
-        if (isE2EFixtureModeEnabled()) {
-          const activeJob = await workspaceIndexJobStore.getActiveJob(workspaceId, 'web')
-          if (activeJob) return { success: true, workspaceId, job: activeJob }
-          const jobKey = getWorkspaceIndexJobKey(workspaceId, 'web')
-          const job = await saveAndEmitWorkspaceIndexJob(
-            createWorkspaceIndexJob({
-              workspaceId,
-              sourceKind: 'web',
-              action: 'scan',
-              phase: 'scan',
-              stepIndex: 1,
-              stepTotal: 1,
-              message: '正在检查网页更新'
-            })
-          )
-          activeWorkspaceIndexJobs.add(jobKey)
-          void runE2EWorkspaceIndexJob({
-            sender: event.sender,
-            job,
-            run: () => scanE2EFixtureWebSources(workspaceId)
-          })
-          return { success: true, workspaceId, job }
-        }
         const activeJob = await workspaceIndexJobStore.getActiveJob(workspaceId, 'web')
         if (activeJob) return { success: true, workspaceId, job: activeJob }
         const jobKey = getWorkspaceIndexJobKey(workspaceId, 'web')
@@ -2582,28 +1868,6 @@ export function registerHandlers(services: {
       const workspaceId = String(payload?.workspaceId || '').trim()
       if (!workspaceId) return { success: false, error: 'workspaceId is required' }
       try {
-        if (isE2EFixtureModeEnabled()) {
-          const activeJob = await workspaceIndexJobStore.getActiveJob(workspaceId, 'web')
-          if (activeJob) return { success: true, workspaceId, job: activeJob }
-          const jobKey = getWorkspaceIndexJobKey(workspaceId, 'web')
-          const job = await saveAndEmitWorkspaceIndexJob(
-            createWorkspaceIndexJob({
-              workspaceId,
-              sourceKind: 'web',
-              action: 'prepare',
-              phase: 'crawl',
-              stepIndex: 1,
-              stepTotal: 2,
-              message: '正在准备网页索引'
-            })
-          )
-          activeWorkspaceIndexJobs.add(jobKey)
-          void runE2EWebPrepareJob({
-            sender: event.sender,
-            job
-          })
-          return { success: true, workspaceId, job }
-        }
         const activeJob = await workspaceIndexJobStore.getActiveJob(workspaceId, 'web')
         if (activeJob) return { success: true, workspaceId, job: activeJob }
         const jobKey = getWorkspaceIndexJobKey(workspaceId, 'web')
@@ -2642,11 +1906,6 @@ export function registerHandlers(services: {
       try {
         const workspaceId = String(payload?.workspaceId || '').trim()
         const webSourceId = String(payload?.webSourceId || '').trim()
-        const fixtureResponse = refreshE2EFixtureWebSource(workspaceId, webSourceId)
-        if (fixtureResponse) {
-          emitSourceListRefresh(event.sender)
-          return fixtureResponse
-        }
         await ensureWebSourcesHydrated()
         if (!workspaceId || !webSourceId) {
           return { success: false, error: 'workspaceId and webSourceId are required' }
@@ -2670,11 +1929,6 @@ export function registerHandlers(services: {
       try {
         const workspaceId = String(payload?.workspaceId || '').trim()
         const safeId = String(payload?.webSourceId || '').trim()
-        const fixtureResponse = deleteE2EFixtureWebSource(workspaceId, safeId)
-        if (fixtureResponse) {
-          emitSourceListRefresh(event.sender)
-          return fixtureResponse
-        }
         await ensureWebSourcesHydrated()
         if (!workspaceId || !safeId) {
           return { success: false, error: 'workspaceId and webSourceId are required' }
@@ -2700,11 +1954,6 @@ export function registerHandlers(services: {
     'reference-item-list',
     async (_event, payload: ListReferenceItemsRequest): Promise<ReferenceItemListResponse> => {
       try {
-        const e2eReferences = getE2EFixtureReferenceItems(payload)
-        if (e2eReferences) {
-          return e2eReferences
-        }
-
         await ensureWebSourcesHydrated()
         const workspaceIdFilter = String(payload.workspaceId || '').trim()
         const referenceKindFilters = normalizeReferenceKindFilters(payload.referenceKinds)
@@ -2750,10 +1999,6 @@ export function registerHandlers(services: {
     'search',
     async (_event, query: string, sourceType?: 'all' | 'file' | 'web', documentIds?: string[]) => {
       try {
-        const fixtureSearch = getE2EFixtureSearchResponse(query, documentIds)
-        if (fixtureSearch) {
-          return fixtureSearch
-        }
         const { data: queryVector } = await embeddingService.embed(query)
         const filter = sourceType && sourceType !== 'all' ? sourceType : undefined
         const results = await documentsStore.search(
@@ -2986,7 +2231,6 @@ export function registerHandlers(services: {
                 : undefined
             }
           : undefined
-      const e2eFixtureScenario = isE2EFixtureModeEnabled() ? matchE2EChatScenario(input) : null
       if (!sessionId) return { success: false, error: 'sessionId is required' }
       if (!input) return { success: false, error: 'input is required' }
 
@@ -3002,19 +2246,17 @@ export function registerHandlers(services: {
         event.sender.send('ai-run-event', evt)
       }
 
-      if (!e2eFixtureScenario) {
-        const validation = await validateSelectedReferencesForRun({
-          references: selectedReferences,
-          workspaceStore,
-          webSourceStore,
-          sendEvent,
-          runId
-        })
-        if (!validation.ok) {
-          activeAiApprovals.delete(runId)
-          activeAiRuns.delete(runId)
-          return { success: false, error: validation.error }
-        }
+      const validation = await validateSelectedReferencesForRun({
+        references: selectedReferences,
+        workspaceStore,
+        webSourceStore,
+        sendEvent,
+        runId
+      })
+      if (!validation.ok) {
+        activeAiApprovals.delete(runId)
+        activeAiRuns.delete(runId)
+        return { success: false, error: validation.error }
       }
 
       sendEvent({ type: 'run_started', runId, sessionId, createdAt: Date.now(), input })
@@ -3026,18 +2268,6 @@ export function registerHandlers(services: {
       })
       ;(async () => {
         try {
-          const handledByE2EFixture = await maybeHandleE2EFixtureRun({
-            runId,
-            sessionId,
-            inputText: input,
-            workspace,
-            sendEvent,
-            docxApplyService
-          })
-          if (handledByE2EFixture) {
-            return
-          }
-
           const runtimeSettings = await aiRuntimeSettingsStore.get()
           const result = await AiRunService.getInstance().run(
             {
@@ -3272,25 +2502,6 @@ export function registerHandlers(services: {
       return { success: false, error: e instanceof Error ? e.message : String(e) }
     }
   })
-
-  ipcMain.handle(
-    'browser-panel-e2e-run',
-    async (_event, payload: BrowserPanelE2ERunRequest): Promise<BrowserPanelE2ERunResponse> => {
-      try {
-        if (!isE2EFixtureModeEnabled()) return { success: false, error: 'e2e mode required' }
-        if (!browserEmbedService) return { success: false, error: 'browser service unavailable' }
-        const result = await browserEmbedService.run({
-          action: payload.action,
-          instruction: String(payload.instruction || '').trim(),
-          url: payload.url,
-          llmConfig: payload.llmConfig
-        })
-        return { success: true, result }
-      } catch (e) {
-        return { success: false, error: e instanceof Error ? e.message : String(e) }
-      }
-    }
-  )
 
   ipcMain.handle(
     'ai-run-approval-batch-decide',

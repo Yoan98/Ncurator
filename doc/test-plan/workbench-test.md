@@ -8,46 +8,50 @@
 - Workbench formal 测试重定义为真实 Electron e2e：通过 UI 配模型、配工作区、发送消息、选择 `@` 资料、搜索、预览、回退和操作右侧面板。
 - Workbench formal e2e 不允许使用 fake model、fake search、fake docx、脚本化 AI 事件、脚本化 artifact、直接写 renderer 状态或直接调用内部 IPC 绕过用户路径。
 - 涉及 AI 的 Workbench formal e2e 必须使用真实模型调用；测试只从 `AI_LIVE_BASE_URL`、`AI_LIVE_API_KEY`、`AI_LIVE_PRIMARY_MODEL_NAME` 读取 live 配置，并在应用内未配置时通过 Settings UI 新增配置。
-- 如果实现 formal e2e 时发现必须改 `src/**` 或增加 testability 入口才能继续，本轮测试实现不修改生产代码，只记录为待产品 / 生产实现决策项。
+- 本轮已批准删除 Workbench 旧 fake e2e 基础设施；删除范围包括 `[e2e:*]` prompt 触发、fake search、fake docx apply、fake browser panel 与 fake approval/run 事件。
+- 真实执行 case 时，如果失败来自新的生产行为缺口或必须修改业务实现才能通过，不在测试实现中硬改生产行为；统一记录为待产品 / 生产实现决策项。
 
 ## 2. 执行摘要
 
 ### 2.1 最近执行
 
-- 检测时间：`未形成新的有效 formal 执行结论`
-- 执行命令：`未执行完整有效 formal suite`
+- 检测时间：`2026-06-12 16:34:20 +0800`
+- 执行命令：`pnpm run typecheck:node`、`pnpm run typecheck:web`、`pnpm test:workbench:e2e -- --case reference-token-lifecycle`、`pnpm test:workbench:e2e -- --case ai-process-stream-and-final-answer`
 - 总体登记：`13` 个 e2e case。
 - 当前有效结论：`0 / 13` 有效通过。
 - 旧结论处理：`2026-06-12 11:14:15 +0800` 的 `6 / 12` 结果依赖 `[e2e:*]`、seed model、fake search、fake docx apply 等模拟路径，已废弃，不再作为 Workbench formal 结论。
-- 当前实现状态：`tests/case/workbench/**` 下暂无 case 文件；旧模拟 case 和临时 blocker placeholder 均已删除，等待按本文重新设计并逐条实现。
-- 最近验证执行：`2026-06-12 14:31:22 +0800` 运行 `pnpm test:workbench:e2e -- --case reference-token-lifecycle`，结果按预期失败在真实 UI 目录绑定阻塞点，确认不再静默跳过或模拟通过。
+- 当前实现状态：`tests/case/workbench/**` 已落地 `13` 个独立 `.e2e.test.ts` 文件，不使用 `formalCases.ts`、集中 register、placeholder 或假通过；当前有效通过仍为 `0 / 13`，因为尚未形成真实可执行通过结论。
+- 最近验证执行：
+  - `2026-06-12 16:30:59 +0800` 运行 `pnpm test:workbench:e2e -- --case reference-token-lifecycle`，结果失败在 macOS 原生目录选择自动化：`osascript` 无辅助功能权限，无法向系统目录选择器发送按键。
+  - `2026-06-12 16:33:16 +0800` 运行 `pnpm test:workbench:e2e -- --case ai-process-stream-and-final-answer`，结果失败在真实模型选择：`AI_LIVE_PRIMARY_MODEL_NAME="deepseek-v4-flash"` 未出现在 Workbench 真实模型下拉中。
 
 ### 2.2 按 Suite 汇总
 
 - `conversation`
   - 登记 case：`3`
   - 有效通过：`0 / 3`
-  - 检测时间：`未形成新的有效 formal 执行结论`
-  - 备注：暂无 case 实现；真实路径依赖 UI 配模型、UI 创建 / 绑定工作区和真实发送。
+  - 检测时间：`2026-06-12 16:30:59 +0800`
+  - 备注：case 已实现；`reference-token-lifecycle` 实测阻断在 macOS 原生目录选择自动化权限，尚无有效通过结论。
 - `run`
   - 登记 case：`5`
   - 有效通过：`0 / 5`
-  - 检测时间：`未形成新的有效 formal 执行结论`
-  - 备注：暂无 case 实现；所有 AI 场景必须走真实模型和真实 AI run，审批、停止、browser_use 不能再用脚本化事件替代。
+  - 检测时间：`2026-06-12 16:33:16 +0800`
+  - 备注：case 已实现；`ai-process-stream-and-final-answer` 实测阻断在 `AI_LIVE_PRIMARY_MODEL_NAME` 无法通过 Workbench 真实模型下拉选择，尚无有效通过结论。
 - `result`
   - 登记 case：`5`
   - 有效通过：`0 / 5`
-  - 检测时间：`未形成新的有效 formal 执行结论`
-  - 备注：暂无 case 实现；搜索、文件预览和 docx apply 必须来自真实索引、真实文件和真实 AI 写回记录。
+  - 检测时间：`2026-06-12 16:34:20 +0800`
+  - 备注：case 已实现；尚未越过原生目录选择与模型选择阻断形成有效通过结论。
 
 ### 2.3 待产品 / 生产实现决策的缺口
 
-- Settings 工作区绑定目录当前通过系统原生目录选择器完成，Playwright 页面层无法像真实用户一样稳定选择 `tests/fixtures/workspace`；禁止使用 `pickDirectoryResponse` 或 `workspaceSetRootPath` 绕过后，依赖真实本地文件索引的 Workbench case 暂无法闭环。
-- Settings 模型配置 UI 当前只提供 `base_url` 与 `api_key` 输入；Workbench 可以从真实远端模型列表中选择模型并保存默认模型，但如果远端模型列表未返回 `AI_LIVE_PRIMARY_MODEL_NAME`，页面没有手动填写 `default_model` / `model_name` 的用户路径。
+- Workbench formal e2e 通过脚本在 case 运行时把 `tests/fixtures/workspace` 复制到临时目录，并尝试用用户等价路径完成系统原生目录选择；如果当前运行环境无法稳定自动化原生目录选择，则记录为 testability / 执行环境决策项，不回退到 `pickDirectoryResponse` 或 `workspaceSetRootPath`。
+- 当前 macOS 执行环境未授予 `osascript` 辅助功能权限，导致真实原生目录选择无法自动化完成；需要决策是给 e2e 运行器授予权限，还是提供不绕过产品行为的可测试目录选择方案。
+- Settings 模型配置 UI 当前只提供 `base_url` 与 `api_key` 输入；Workbench 可以从真实远端模型列表中选择模型并保存默认模型，但如果远端模型列表未返回 `AI_LIVE_PRIMARY_MODEL_NAME`，页面没有手动填写 `default_model` / `model_name` 的用户路径。本轮实测 `AI_LIVE_PRIMARY_MODEL_NAME="deepseek-v4-flash"` 不在列表中，可见候选为 `sre-gpu-auto-handle`、`qwen3.7-max-2026-06-08`、`qwen3.5-ocr`、`qwentype-api-dingtalk`、`qwen3.7-plus-2026-05-26`、`qwen3.7-plus`、`qwen3.7-max-2026-05-17`、`qwen3.7-max-preview`、`ZHIPU/GLM-5`、`qwen3.7-max-2026-05-20`。
 - Workbench formal e2e 需要真实索引完成信号和 UI 可见状态作为等待条件；不得再读取内部 store 或注入 fixed document id 来制造搜索结果。
 - docx apply case 需要真实 docx 输入、真实 AI 编辑、真实写回记录、真实预览和真实回退；旧的文本伪装 `.docx` 与脚本化 apply 记录均无效。
 - `browser-use-task-panel` 需要真实 AI run 触发 `browser_use` 并驱动内置浏览器完成本地网页任务；旧脚本化 `browser_panel_opened` 事件无效。
-- `src/main/testing/e2eFixtures.ts` 仍保留旧 `[e2e:*]` 替身基础设施；本轮按约束未修改 `src/**`，Workbench formal case 已停止使用，是否删除或隔离该生产侧测试入口需另行决策。
+- Workbench 旧 `[e2e:*]` 替身基础设施本轮按计划删除；删除后 `pnpm test:workbench:e2e` 不再具备 fake run、fake search、fake docx apply 或 fake browser panel 后门。
 
 ## 3. Suite 设计
 
@@ -114,7 +118,7 @@ tests/case/workbench/
 #### `session-initial-create-and-title`
 
 - 测试类型：`e2e`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证首次进入 Workbench 时会自动创建初始会话，并在第一条用户消息真实发送后更新默认标题，第二条消息不再自动改写标题。
 - Why：会话初始化和标题更新是 Workbench 最早的可见状态；失败时用户会看到空会话或无法区分任务主线。
 - How：通过 Settings UI 新增真实模型配置；通过 Settings UI 创建并绑定真实工作区；进入 Workbench 后发送真实自然语言请求，再继续发送第二条真实请求。
@@ -124,7 +128,7 @@ tests/case/workbench/
 #### `send-guard-mode-switch-and-preferences`
 
 - 测试类型：`e2e`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证发送前置条件、模式切换保留输入、模型 / 工作区偏好恢复和失效回退。
 - Why：Workbench 的任务入口依赖这些基础交互；任一状态失真都会导致用户无法发起任务或把任务发到错误上下文。
 - How：通过 UI 配置真实模型和工作区；覆盖空输入、无工作区、发送中、模式切换、模型搜索、切换工作区 / 模型后重进页面，以及缓存候选失效后的回退；真实发送时走真实模型。
@@ -134,7 +138,7 @@ tests/case/workbench/
 #### `reference-token-lifecycle`
 
 - 测试类型：`e2e`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证 `@` 参考资料候选、目录 / 文件 / 网页 token 插入、多 token 共存、删除、去重、切工作区清理和空候选提示。
 - Why：显式参考资料是用户控制 AI 上下文的核心入口，错误会直接导致搜索或 AI 执行范围偏离用户意图。
 - How：通过 UI 创建真实 workspace，绑定 `tests/fixtures/workspace`，等待真实索引完成；通过 UI 添加真实 web source；输入 `@` 触发候选，选择文件、目录、网页；选中即追加，同一资料才去重；切工作区清理旧 token。
@@ -146,7 +150,7 @@ tests/case/workbench/
 #### `ai-process-stream-and-final-answer`
 
 - 测试类型：`e2e`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证智能模式真实发送后用户消息、assistant 占位、过程流、最终 markdown 输出和中间结果收口。
 - Why：Workbench 的核心体验不是只启动 AI，而是让用户看见过程并得到可消费结果。
 - How：真实工作区内准备带唯一事实的文件；用户通过 UI 发送自然语言总结请求；等待真实 AI run 完成。
@@ -156,7 +160,7 @@ tests/case/workbench/
 #### `approval-batch-flow`
 
 - 测试类型：`e2e`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证真实 AI 运行中触发需审批 terminal 操作后，composer 上方审批卡片的同意、拒绝和指导输入流程。
 - Why：审批是高风险 terminal 执行的用户确认边界；UI 误执行或误恢复都会破坏安全约束。
 - How：通过真实用户请求诱导 AI 产生需要审批的 terminal 操作；分别覆盖全同意、任一拒绝、填写指导输入和不操作期间保持等待。
@@ -166,7 +170,7 @@ tests/case/workbench/
 #### `workspace-required-continue`
 
 - 测试类型：`e2e`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证 AI 运行中断为 `workspace_required` 后，用户补工作区并点击继续时可以基于原请求恢复运行。
 - Why：工作区缺失是可恢复阻塞；如果恢复链路丢失原请求，用户会被迫重新描述任务。
 - How：通过 UI 制造缺失或失效工作区状态并发送真实请求；再通过 Settings UI 补工作区，回到 Workbench 点击继续上一条请求。
@@ -176,7 +180,7 @@ tests/case/workbench/
 #### `stop-running-or-approval-run`
 
 - 测试类型：`e2e`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证智能模式运行中底部发送按钮切换为停止图标，并能取消普通长任务和审批等待中的运行。
 - Why：用户需要可靠中断长任务；审批等待时停止若不能释放等待，会造成运行态卡死。
 - How：发送真实长任务请求和真实审批等待请求；运行中点击底部停止图标并观察运行态、审批态和反馈。
@@ -186,7 +190,7 @@ tests/case/workbench/
 #### `browser-use-task-panel`
 
 - 测试类型：`e2e`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证 AI 通过内置浏览器完成网页任务时，右侧浏览器面板、页面导航、网页操作结果和最终回答形成闭环。
 - Why：内置浏览器是 Electron 与 AI run 深度联动场景，仅 backend 或静态事件无法覆盖视口嵌入、导航和最终收口问题。
 - How：启动本地测试网页；通过真实用户请求让 AI 使用 `browser_use` 操作页面；等待右侧浏览器面板、网页结果和最终 assistant 输出。
@@ -198,7 +202,7 @@ tests/case/workbench/
 #### `search-results-open-rules`
 
 - 测试类型：`e2e`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证搜索模式发送、搜索占位、右侧搜索结果、网页 / 本地结果打开规则和无可检索资料拦截。
 - Why：搜索模式是 Workbench 的非 AI 路径，必须确保不误启动 AI，且右侧结果操作符合用户预期。
 - How：通过 UI 创建并绑定真实工作区，等待本地文件和网页资料真实索引完成；切换搜索模式发送自然语言查询；点击网页结果和本地结果操作图标；再切换到无可检索资料范围发送搜索。
@@ -208,7 +212,7 @@ tests/case/workbench/
 #### `file-preview-actions`
 
 - 测试类型：`e2e`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证右侧普通文件预览态的预览优先布局、定位文件、系统打开入口和 PDF 命中定位。
 - Why：右侧面板是用户消费搜索 / 引用结果的主要区域，预览布局错误会直接阻断阅读。
 - How：从真实搜索结果或 assistant 内部链接打开真实 md、pdf、docx 文件；检查右侧工具条、预览主体、返回路径和 PDF 命中页定位。
@@ -218,7 +222,7 @@ tests/case/workbench/
 #### `docx-apply-panel-preview-and-revert`
 
 - 测试类型：`e2e`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证 AI 修改真实 docx 后，assistant 修改文件入口、右侧修改文件工作区、当前记录预览和干净回退闭环。
 - Why：直接写回和回退是 Workbench 文件编辑能力的安全边界，只看 artifact 事件无法证明用户能检查和撤销修改。
 - How：通过 UI 选择真实 docx 资料并发送真实编辑请求；等待 AI 写回；点击 assistant turn 中的修改文件入口；检查右侧默认 tab、状态和预览；执行回退并重新读取文件内容。
@@ -228,7 +232,7 @@ tests/case/workbench/
 #### `docx-apply-force-revert-warning`
 
 - 测试类型：`e2e`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证 AI 写回后文件又被外部真实修改时，首次回退展示风险提示，确认后允许强制回退并刷新右侧状态。
 - Why：强制回退是避免静默覆盖用户后续修改的关键安全交互。
 - How：AI 写回真实 docx 后，由测试进程对同一个真实文件做外部修改；在右侧修改文件工作区点击回退，先观察风险提示，再确认强制回退。
@@ -238,7 +242,7 @@ tests/case/workbench/
 #### `multi-file-apply-tabs`
 
 - 测试类型：`e2e`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证同一轮 AI 修改多个文件时，assistant turn 和右侧修改文件工作区保留全部入口，并能按文件 tab 切换对应记录。
 - Why：多文件任务如果只保留最新或单个入口，用户无法检查和回退完整结果。
 - How：通过 UI 选择至少两个真实 docx 文件并发送真实多文件编辑请求；等待 AI 写回；分别点击 assistant turn 中不同入口，并在右侧切换文件 tab。

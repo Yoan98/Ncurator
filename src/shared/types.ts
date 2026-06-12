@@ -836,19 +836,6 @@ export type BrowserPanelMutationResponse = {
   error?: string
 }
 
-export type BrowserPanelE2ERunRequest = {
-  action: 'extract' | 'observe' | 'act'
-  instruction: string
-  url?: string
-  llmConfig: LlmRuntimeConfig
-}
-
-export type BrowserPanelE2ERunResponse = {
-  success: boolean
-  result?: JsonValue
-  error?: string
-}
-
 export type AiContextUsageRequest = {
   sessionId: string
 }

@@ -42,6 +42,11 @@ function createWindow(): BrowserWindow {
   })
 
   mainWindow.on('ready-to-show', () => {
+    if (process.env.NCURATOR_E2E_WINDOW_MODE === 'visible') {
+      mainWindow.show()
+      mainWindow.focus()
+      return
+    }
     mainWindow.showInactive()
   })
 

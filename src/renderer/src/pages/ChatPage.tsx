@@ -988,19 +988,6 @@ const ChatPage: React.FC = () => {
   }
 
   useEffect(() => {
-    const handleOpenBrowserPanel = (): void => {
-      showContentPanel({
-        kind: 'browser',
-        title: '内置浏览器'
-      })
-    }
-    window.addEventListener('ncurator-e2e-open-browser-panel', handleOpenBrowserPanel)
-    return () => {
-      window.removeEventListener('ncurator-e2e-open-browser-panel', handleOpenBrowserPanel)
-    }
-  }, [showContentPanel])
-
-  useEffect(() => {
     window.api.removeAiRunEventListeners()
     window.api.onAiRunEvent((event) => {
       const hasActiveRun = Boolean(aiRunId)

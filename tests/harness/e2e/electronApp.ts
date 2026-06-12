@@ -67,6 +67,7 @@ export type LaunchedElectronApp = {
 }
 
 export type ElectronLaunchMode = 'fixture' | 'real'
+export type ElectronWindowMode = 'background' | 'visible'
 
 const OUT_MAIN_ENTRY = path.resolve(process.cwd(), 'out', 'main', 'index.js')
 
@@ -125,7 +126,8 @@ const allocateFreePort = async (): Promise<number> => {
 const buildElectronLaunchEnv = (
   userDataDir: string,
   launchMode: ElectronLaunchMode,
-  remoteDebuggingPort: number
+  remoteDebuggingPort: number,
+  windowMode?: ElectronWindowMode
 ): NodeJS.ProcessEnv => {
   const env: NodeJS.ProcessEnv = {}
 
@@ -138,10 +140,13 @@ const buildElectronLaunchEnv = (
 
   if (launchMode === 'fixture') {
     env.NCURATOR_E2E_MODE = '1'
+    delete env.NCURATOR_E2E_OBSERVER
   } else {
     delete env.NCURATOR_E2E_MODE
+    env.NCURATOR_E2E_OBSERVER = '1'
   }
-  env.NCURATOR_E2E_WINDOW_MODE = process.env.NCURATOR_E2E_WINDOW_MODE || 'background'
+  env.NCURATOR_E2E_WINDOW_MODE =
+    windowMode || process.env.NCURATOR_E2E_WINDOW_MODE || 'background'
   env.NCURATOR_USER_DATA_PATH = userDataDir
   env.NCURATOR_EMBEDDED_BROWSER_REMOTE_DEBUGGING_PORT = String(remoteDebuggingPort)
 
@@ -200,7 +205,7 @@ const installPageObservers = async (page: Page): Promise<void> => {
 }
 
 export const launchElectronApp = async (
-  input: { launchMode?: ElectronLaunchMode } = {}
+  input: { launchMode?: ElectronLaunchMode; windowMode?: ElectronWindowMode } = {}
 ): Promise<LaunchedElectronApp> => {
   await ensureBuiltAppExists()
 
@@ -210,7 +215,8 @@ export const launchElectronApp = async (
   const launchEnv = buildElectronLaunchEnv(
     userDataDir,
     input.launchMode || 'fixture',
-    remoteDebuggingPort
+    remoteDebuggingPort,
+    input.windowMode
   )
   const electronApp = await electron.launch({
     executablePath: electronPath,
