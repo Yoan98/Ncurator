@@ -217,6 +217,19 @@ const installPageObservers = async (page: Page): Promise<void> => {
   })
 }
 
+const focusVisibleElectronWindow = async (electronApp: ElectronApplication): Promise<void> => {
+  await electronApp.evaluate(({ BrowserWindow }) => {
+    const window = BrowserWindow.getAllWindows()[0]
+    if (!window || window.isDestroyed()) return
+
+    if (window.isMinimized()) {
+      window.restore()
+    }
+    window.show()
+    window.focus()
+  })
+}
+
 export const launchElectronApp = async (
   input: { launchMode?: ElectronLaunchMode; windowMode?: ElectronWindowMode } = {}
 ): Promise<LaunchedElectronApp> => {
@@ -269,6 +282,9 @@ export const launchElectronApp = async (
   })
 
   const page = await electronApp.firstWindow()
+  if ((input.windowMode || process.env.NCURATOR_E2E_WINDOW_MODE) === 'visible') {
+    await focusVisibleElectronWindow(electronApp)
+  }
   page.on('close', () => {
     recordLifecycle('page-close')
   })

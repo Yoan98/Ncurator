@@ -205,6 +205,10 @@ export const runE2ECase = async <TResult>(
   let assertionCounter = 0
   let artifactCounter = 0
   let lastStepId: string | null = null
+  let failedStepId: string | null = null
+  let failedAssertionId: string | null = null
+  let executionErrorName: string | null = null
+  let executionErrorMessage: string | null = null
   const launchedApp = await launchElectronApp({
     launchMode: definition.launchMode,
     windowMode: definition.windowMode
@@ -324,13 +328,20 @@ export const runE2ECase = async <TResult>(
         })
         return result
       } catch (error) {
+        failedStepId = stepId
+        executionErrorName = error instanceof Error ? error.name : 'Error'
+        executionErrorMessage = error instanceof Error ? error.message : String(error)
         recordEvent({
           type: 'step',
           name: input.name,
           id: stepId,
           status: 'failed',
           message: input.message,
-          data: input.data
+          data: {
+            input: input.data || null,
+            errorName: executionErrorName,
+            errorMessage: executionErrorMessage
+          }
         })
         throw error
       }
@@ -338,6 +349,9 @@ export const runE2ECase = async <TResult>(
     assertThat: async (condition, input) => {
       assertionCounter += 1
       const assertionId = `assertion-${assertionCounter}`
+      if (!condition) {
+        failedAssertionId = assertionId
+      }
       recordEvent({
         type: 'assertion',
         name: input.name,
@@ -382,12 +396,20 @@ export const runE2ECase = async <TResult>(
     await definition.assert(result, runtime)
     status = 'passed'
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
+    executionErrorName = executionErrorName || (error instanceof Error ? error.name : 'Error')
+    executionErrorMessage =
+      executionErrorMessage || (error instanceof Error ? error.message : String(error))
     recordEvent({
       type: 'error',
       name: 'execution-failed',
       status: 'failed',
-      message: `测试失败：${message}`
+      message: `测试失败：${executionErrorMessage}`,
+      data: {
+        errorName: executionErrorName,
+        errorMessage: executionErrorMessage,
+        failedStepId,
+        failedAssertionId
+      }
     })
     if (!artifacts.some((artifact) => artifact.kind === 'screenshot')) {
       await captureScreenshot({
@@ -507,7 +529,16 @@ export const runE2ECase = async <TResult>(
       type: 'run',
       name: 'end',
       status: status === 'passed' ? 'ok' : 'failed',
-      message: status === 'passed' ? '本次测试执行完成' : '本次测试执行失败'
+      message: status === 'passed' ? '本次测试执行完成' : '本次测试执行失败',
+      data:
+        status === 'passed'
+          ? null
+          : {
+              errorName: executionErrorName,
+              errorMessage: executionErrorMessage,
+              failedStepId,
+              failedAssertionId
+            }
     })
 
     const finishedAt = new Date()

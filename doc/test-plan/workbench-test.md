@@ -8,34 +8,23 @@
 - Workbench formal 测试重定义为真实 Electron e2e：通过 UI 配模型、配工作区、发送消息、选择 `@` 资料、搜索、预览、回退和操作右侧面板。
 - Workbench formal e2e 不允许使用 fake model、fake search、fake docx、脚本化 AI 事件、脚本化 artifact、直接写 renderer 状态或直接调用内部 IPC 绕过用户路径。
 - 涉及 AI 的 Workbench formal e2e 必须使用真实模型调用；测试只从 `AI_LIVE_BASE_URL`、`AI_LIVE_API_KEY`、`AI_LIVE_PRIMARY_MODEL_NAME` 读取 live 配置，并在应用内未配置时通过 Settings UI 新增配置。
-- 本轮已批准删除 Workbench 旧 fake e2e 基础设施；删除范围包括 `[e2e:*]` prompt 触发、fake search、fake docx apply、fake browser panel 与 fake approval/run 事件。
 - 真实执行 case 时，如果失败来自新的生产行为缺口或必须修改业务实现才能通过，不在测试实现中硬改生产行为；统一记录为待产品 / 生产实现决策项。
 
 ## 2. 执行摘要
 
-### 2.1 最近执行
+### 2.1 当前状态
 
-- 检测时间：`2026-06-12 19:19:35 +0800`
-- 执行命令：`pnpm run typecheck:node`、`pnpm run typecheck:web`、`pnpm test:workbench:e2e -- --case ai-process-stream-and-final-answer`、`pnpm test:workbench:e2e -- --case session-initial-create-and-title`、`pnpm test:workbench:e2e -- --case send-guard-mode-switch-and-preferences`、`pnpm test:workbench:e2e -- --case reference-token-lifecycle`、`pnpm test:workbench:e2e -- --case search-results-open-rules`
 - 总体登记：`13` 个 e2e case。
-- 当前有效结论：`3 / 13` 有效通过。
-- 旧结论处理：`2026-06-12 11:14:15 +0800` 的 `6 / 12` 结果依赖 `[e2e:*]`、seed model、fake search、fake docx apply 等模拟路径，已废弃，不再作为 Workbench formal 结论。
-- 当前实现状态：`tests/case/workbench/**` 已落地 `13` 个独立 `.e2e.test.ts` 文件，不使用 `formalCases.ts`、集中 register、placeholder 或假通过；当前已有 `3 / 13` 形成真实有效通过结论。
-- 最近验证执行：
-  - `2026-06-12 18:19:40 +0800` 运行 `pnpm test:workbench:e2e -- --case ai-process-stream-and-final-answer`，结果通过；真实模型为 `AI_LIVE_PRIMARY_MODEL_NAME`，本次通过 Workbench 模型下拉搜索选中，耗时 `148393ms`。
-  - `2026-06-12 18:40:34 +0800` 运行 `pnpm test:workbench:e2e -- --case session-initial-create-and-title`，结果通过；通过真实 UI 配置模型、绑定 workspace、真实发送两轮消息，耗时 `33300ms`。
-  - `2026-06-12 18:48:16 +0800` 运行 `pnpm test:workbench:e2e -- --case send-guard-mode-switch-and-preferences`，结果通过；通过真实 UI 验证 composer guard、模式切换、模型 / workspace 偏好与真实发送运行态，耗时 `34373ms`。
-  - `2026-06-12 18:18:14 +0800` 运行 `pnpm test:workbench:e2e -- --case reference-token-lifecycle`，macOS 原生目录选择、真实 workspace 绑定、真实索引与网页资料添加均已越过；进入 Workbench 后输入 `@` 等待 `human-input.txt` 候选时 Electron 主进程稳定 `SIGSEGV`，尚无有效通过结论。
-  - `2026-06-12 19:18:43 +0800` 运行 `pnpm test:workbench:e2e -- --case search-results-open-rules`，当前未进入搜索断言；通过真实 UI 创建 workspace 后，三次触发 `pickDirectory` 但 macOS 原生目录选择自动化未能把临时目录回填到 Settings UI，耗时 `51879ms`。
-  - `2026-06-12 19:18:43 +0800` 前后运行 `pnpm run typecheck:node`、`pnpm run typecheck:web`，均通过。
+- 当前有效结论：`4 / 13` 有效通过。
+- 当前实现状态：`tests/case/workbench/**` 已按 suite / group 落地 `13` 个独立 `.e2e.test.ts` 文件；当前已有 `4 / 13` 形成真实有效通过结论。
 
 ### 2.2 按 Suite 汇总
 
 - `conversation`
   - 登记 case：`3`
-  - 有效通过：`2 / 3`
-  - 检测时间：`2026-06-12 18:48:16 +0800`
-  - 备注：case 已实现；`session-initial-create-and-title`、`send-guard-mode-switch-and-preferences` 已通过真实 Electron UI 和真实模型；`reference-token-lifecycle` 已越过 macOS 原生目录选择、workspace 绑定和索引，当前稳定失败在 Workbench `@` 候选阶段 Electron 主进程 `SIGSEGV`，尚无有效通过结论。
+  - 有效通过：`3 / 3`
+  - 检测时间：`2026-06-15 10:48:54 +0800`
+  - 备注：case 已实现；`session-initial-create-and-title`、`send-guard-mode-switch-and-preferences`、`reference-token-lifecycle` 均已通过真实 Electron UI；其中涉及 AI 的 case 使用真实模型，`reference-token-lifecycle` 不启动 AI。
 - `run`
   - 登记 case：`5`
   - 有效通过：`1 / 5`
@@ -44,20 +33,17 @@
 - `result`
   - 登记 case：`5`
   - 有效通过：`0 / 5`
-  - 检测时间：`2026-06-12 19:18:43 +0800`
-  - 备注：case 已实现；`search-results-open-rules` 当前阻塞在共享 workspace 绑定前置，已确认真实 UI 创建 workspace 并触发 `pickDirectory`，但 macOS 原生目录选择自动化未能回填临时目录，尚未进入真实搜索断言。
+  - 备注：case 已实现；`search-results-open-rules` 按原计划覆盖真实索引、本地结果预览、网页结果系统打开和无可检索资料拦截。
 
-### 2.3 待产品 / 生产实现决策的缺口
+### 2.3 当前边界
 
 - Workbench formal e2e 通过脚本在 case 运行时把 `tests/fixtures/workspace` 复制到临时目录，并使用 macOS 系统辅助功能权限操作原生目录选择器；测试不得回退到 `pickDirectoryResponse` 或 `workspaceSetRootPath`。
-- 当前系统自动化缺口：`search-results-open-rules` 多次重跑均能通过真实 UI 触发 `pickDirectory`，但 macOS 原生目录选择器没有把临时 workspace 路径回填到 Settings UI；该问题阻塞所有需要新建 / 绑定真实 workspace 的后续 case 继续执行到业务断言。
 - Workbench e2e 的 workspace 文件索引允许在测试环境通过 `NCURATOR_WORKSPACE_KNOWLEDGE_CACHE=1` 启用真实 split / vector 缓存；缓存只按文件内容 hash、扩展名、splitter 参数和 embedding model 复用计算结果，不替代 workspace 文件记录、document id、搜索结果或 UI 状态。
-- `reference-token-lifecycle` 当前暴露生产运行期缺口：真实 workspace 与网页资料准备完成后，在 Workbench 输入 `@` 并等待 `human-input.txt` 候选期间，Electron 主进程稳定 `SIGSEGV`；该问题需要产品 / 生产实现决策，本轮不在测试实现中修业务代码。
 - Workbench 模型选择 helper 已改为通过真实下拉搜索选择 `AI_LIVE_PRIMARY_MODEL_NAME`；`ai-process-stream-and-final-answer` 已验证 `deepseek-v4-flash` 可通过真实 UI 搜索选中。
 - Workbench formal e2e 需要真实索引完成信号和 UI 可见状态作为等待条件；不得再读取内部 store 或注入 fixed document id 来制造搜索结果。
-- docx apply case 需要真实 docx 输入、真实 AI 编辑、真实写回记录、真实预览和真实回退；旧的文本伪装 `.docx` 与脚本化 apply 记录均无效。
-- `browser-use-task-panel` 需要真实 AI run 触发 `browser_use` 并驱动内置浏览器完成本地网页任务；旧脚本化 `browser_panel_opened` 事件无效。
-- Workbench 旧 `[e2e:*]` 替身基础设施本轮按计划删除；删除后 `pnpm test:workbench:e2e` 不再具备 fake run、fake search、fake docx apply 或 fake browser panel 后门。
+- `file-preview-actions` 当前按生产真实索引能力覆盖 `pdf/docx`：`src/main/services/ingestion/loader.ts` 只支持 `.pdf`、`.docx` 本地知识库索引，`tests/fixtures/workspace/workbench-preview.md` 无法通过真实搜索结果打开；如 PRD 需要 markdown 也进入 Workbench 搜索 / 预览链路，需要产品 / 生产实现决策。
+- docx apply case 需要真实 docx 输入、真实 AI 编辑、真实写回记录、真实预览和真实回退。
+- `browser-use-task-panel` 需要真实 AI run 触发 `browser_use` 并驱动内置浏览器完成本地网页任务。
 
 ## 3. Suite 设计
 
@@ -219,11 +205,11 @@ tests/case/workbench/
 
 - 测试类型：`e2e`
 - 实现状态：`已实现`
-- What：验证右侧普通文件预览态的预览优先布局、定位文件、系统打开入口和 PDF 命中定位。
+- What：验证右侧普通文件预览态的预览优先布局、定位文件、系统打开入口和 PDF 命中定位；当前正式实现先覆盖生产真实可索引的 `pdf/docx`。
 - Why：右侧面板是用户消费搜索 / 引用结果的主要区域，预览布局错误会直接阻断阅读。
-- How：从真实搜索结果或 assistant 内部链接打开真实 md、pdf、docx 文件；检查右侧工具条、预览主体、返回路径和 PDF 命中页定位。
+- How：从真实搜索结果打开真实 pdf、docx 文件；检查右侧工具条、预览主体、返回路径和 PDF 命中页定位。Markdown 文件暂不作为有效搜索预览断言，因为当前生产本地知识库索引只支持 `.pdf` / `.docx`。
 - Oracle：普通文件打开后右侧主体用于预览且工具条提供定位文件和系统打开，对齐 `WB-PANEL-003-AC1`；PDF 搜索命中打开后保留整份 PDF 可滚动内容并定位到命中页，对齐 `WB-PANEL-003-AC3`。
-- Not：不验证系统文件管理器或系统默认应用本身是否成功打开。
+- Not：不验证系统文件管理器或系统默认应用本身是否成功打开；不把不可索引的 markdown fixture 伪造成搜索结果。
 
 #### `docx-apply-panel-preview-and-revert`
 

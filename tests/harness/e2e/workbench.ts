@@ -7,7 +7,7 @@ import path from 'node:path'
 import { promisify } from 'node:util'
 import JSZip from 'jszip'
 import type { Locator, Page } from 'playwright'
-import type { AiRunEvent } from '../../../src/shared/types'
+import type { AiRunEvent, WorkspaceIndexJobAction } from '../../../src/shared/types'
 import {
   buildBlockIndex,
   loadDocxBundle
@@ -22,7 +22,9 @@ import { loadRootEnvOnce } from '../core/rootEnv'
 import {
   SETTINGS_E2E_TIMEOUT_MS,
   SETTINGS_REAL_WORKSPACE_E2E_TIMEOUT_MS,
+  getWorkspaceIndexCounts,
   getSettingsLocator,
+  getSettingsPrefixLocator,
   navigateToSettingsSection
 } from './settings'
 import type { E2ETestRuntime } from './run-e2e-case'
@@ -30,6 +32,7 @@ import type { E2ERuntimeSignals } from './electronApp'
 
 export const WORKBENCH_E2E_TIMEOUT_MS = SETTINGS_E2E_TIMEOUT_MS
 export const WORKBENCH_LONG_E2E_TIMEOUT_MS = SETTINGS_REAL_WORKSPACE_E2E_TIMEOUT_MS
+export const WORKBENCH_RESULT_E2E_TIMEOUT_MS = WORKBENCH_LONG_E2E_TIMEOUT_MS + 120_000
 export const WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS = 900_000
 export const WORKBENCH_MODEL_LIST_TIMEOUT_MS = 60_000
 export const WORKBENCH_FIXTURE_ROOT = 'tests/fixtures/workspace'
@@ -68,25 +71,168 @@ export type WorkbenchAiCompletionEvidence = {
   finalAnswerText: string
 }
 
-export {
-  chatSelectors,
-  importSelectors,
-  settingsSelectors,
-  workbenchSelectors
+type WorkbenchDraftSubmitState = {
+  inputText: string
+  tokenTexts: string[]
+  sendButtonDisabled: boolean | null
+  sendButtonText: string
 }
+
+export { chatSelectors, importSelectors, settingsSelectors, workbenchSelectors }
 
 const byTestId = (testId: string): string => `[data-testid="${testId}"]`
 
 const byTestIdPrefix = (testIdPrefix: string): string => `[data-testid^="${testIdPrefix}-"]`
 const execFileAsync = promisify(execFile)
+const NATIVE_DIALOG_APPLESCRIPT_PATH = path.join(
+  os.tmpdir(),
+  'ncurator-workbench-select-directory.applescript'
+)
+const NATIVE_DIALOG_APPLESCRIPT = `
+on run argv
+  set targetPath to item 1 of argv
+  set targetPid to (item 2 of argv) as integer
+  set targetBundleId to item 3 of argv
+  set fallbackProcessName to item 4 of argv
+  set inputMode to item 5 of argv
+  set beforeFrontmost to ""
+  set afterFrontmost to ""
+  set targetProcessName to ""
+  set targetProcessCount to 0
+  set keyStatus to "not-run"
+
+  try
+    tell application id targetBundleId to activate
+  end try
+
+  tell application "System Events"
+    set beforeFrontmost to name of first application process whose frontmost is true
+    repeat 40 times
+      set targetProcesses to application processes whose unix id is targetPid
+      if (count of targetProcesses) is 0 then
+        set targetProcesses to application processes whose bundle identifier is targetBundleId
+      end if
+      if (count of targetProcesses) is 0 then
+        set targetProcesses to application processes whose name is fallbackProcessName
+      end if
+      set targetProcessCount to count of targetProcesses
+      if (count of targetProcesses) is greater than 0 then
+        set targetProcess to item 1 of targetProcesses
+        set targetProcessName to name of targetProcess
+        set frontmost of targetProcess to true
+        try
+          perform action "AXRaise" of window 1 of targetProcess
+        end try
+        delay 0.15
+        if (name of first application process whose frontmost is true) is targetProcessName then
+          exit repeat
+        end if
+      end if
+      delay 0.1
+    end repeat
+    delay 0.4
+    set afterFrontmost to name of first application process whose frontmost is true
+  end tell
+
+  if targetProcessName is not "" and afterFrontmost is targetProcessName then
+    tell application "System Events"
+      key code 5 using {command down, shift down}
+      delay 1.0
+      if inputMode is "type" then
+        keystroke targetPath
+      else
+        set the clipboard to targetPath
+        key code 9 using {command down}
+      end if
+      delay 0.4
+      key code 36
+      delay 1.0
+      key code 36
+      set keyStatus to "sent"
+    end tell
+  else
+    set keyStatus to "skipped-not-frontmost"
+  end if
+
+  return "frontmost-before=" & beforeFrontmost & "; frontmost-after=" & afterFrontmost & "; target-process-name=" & targetProcessName & "; target-process-count=" & targetProcessCount & "; input-mode=" & inputMode & "; key-status=" & keyStatus
+end run
+`
+const NATIVE_DIALOG_SWIFT_SCRIPT_PATH = path.join(
+  os.tmpdir(),
+  'ncurator-workbench-select-directory.swift'
+)
+const NATIVE_DIALOG_SWIFT_SCRIPT = `
+import AppKit
+import ApplicationServices
+import Foundation
+
+func postKey(_ keyCode: CGKeyCode, _ flags: CGEventFlags = []) {
+  let source = CGEventSource(stateID: .hidSystemState)
+  guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: true),
+        let keyUp = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: false) else {
+    return
+  }
+  keyDown.flags = flags
+  keyUp.flags = flags
+  keyDown.post(tap: .cghidEventTap)
+  keyUp.post(tap: .cghidEventTap)
+}
+
+let targetPath = CommandLine.arguments[1]
+let processId = pid_t(Int32(CommandLine.arguments[2]) ?? 0)
+let bundleIdentifier = CommandLine.arguments[3]
+
+let beforeFrontmost = NSWorkspace.shared.frontmostApplication?.localizedName ?? ""
+let processApp = NSRunningApplication(processIdentifier: processId)
+let bundleApp = NSRunningApplication.runningApplications(withBundleIdentifier: bundleIdentifier).first
+let targetApp = processApp ?? bundleApp
+
+if let app = targetApp {
+  app.activate(options: [.activateAllWindows])
+}
+
+Thread.sleep(forTimeInterval: 1.2)
+NSPasteboard.general.clearContents()
+NSPasteboard.general.setString(targetPath, forType: .string)
+
+postKey(5, [.maskCommand, .maskShift])
+Thread.sleep(forTimeInterval: 1.0)
+postKey(9, [.maskCommand])
+Thread.sleep(forTimeInterval: 0.4)
+postKey(36)
+Thread.sleep(forTimeInterval: 1.2)
+postKey(36)
+Thread.sleep(forTimeInterval: 0.6)
+
+let afterFrontmost = NSWorkspace.shared.frontmostApplication?.localizedName ?? ""
+print("frontmost-before=\\(beforeFrontmost); frontmost-after=\\(afterFrontmost); target-app=\\(targetApp?.localizedName ?? "none")")
+`
+
+type NativeDirectoryDialogStrategy = 'applescript-paste' | 'applescript-type' | 'swift'
+
+type NativeDirectoryDialogResult = {
+  strategy: NativeDirectoryDialogStrategy
+  stdout: string
+  stderr: string
+}
+
+type NativeDirectoryDialogDiagnostics = {
+  strategy: NativeDirectoryDialogStrategy
+  selected: boolean
+  stdout: string
+  stderr: string
+  error?: string
+}
+
+const MACOS_ELECTRON_BUNDLE_ID = 'com.github.Electron'
+const MACOS_ELECTRON_PROCESS_NAME = 'Electron'
 
 const readEnv = (name: string): string => {
   loadRootEnvOnce()
   return String(process.env[name] || '').trim()
 }
 
-const sanitizeCasePathPart = (caseId: string): string =>
-  caseId.replace(/[^a-zA-Z0-9-_]/g, '-')
+const sanitizeCasePathPart = (caseId: string): string => caseId.replace(/[^a-zA-Z0-9-_]/g, '-')
 
 const closeServer = async (server: Server): Promise<void> => {
   await new Promise<void>((resolve, reject) => {
@@ -100,14 +246,12 @@ const closeServer = async (server: Server): Promise<void> => {
   })
 }
 
-const waitForCondition = async (
-  input: {
-    name: string
-    timeoutMs: number
-    intervalMs?: number
-    check: () => Promise<boolean>
-  }
-): Promise<void> => {
+const waitForCondition = async (input: {
+  name: string
+  timeoutMs: number
+  intervalMs?: number
+  check: () => Promise<boolean>
+}): Promise<void> => {
   const deadline = Date.now() + input.timeoutMs
   const intervalMs = input.intervalMs || 500
   for (;;) {
@@ -218,6 +362,18 @@ export const navigateToWorkbench = async (page: Page): Promise<void> => {
     window.location.hash = '#/'
   })
   await getWorkbenchLocator(page, workbenchSelectors.page).waitFor({ state: 'visible' })
+  await getWorkbenchLocator(page, workbenchSelectors.sessionsList).waitFor({ state: 'visible' })
+  await waitForCondition({
+    name: 'workbench session list ready',
+    timeoutMs: WORKBENCH_E2E_TIMEOUT_MS,
+    check: async () => {
+      const sessionListText =
+        (await getWorkbenchLocator(page, workbenchSelectors.sessionsList)
+          .textContent()
+          .catch(() => '')) || ''
+      return sessionListText.trim().length > 0
+    }
+  })
   await getWorkbenchLocator(page, workbenchSelectors.input).waitFor({ state: 'visible' })
 }
 
@@ -270,56 +426,57 @@ const readElectronProcessId = async (page: Page): Promise<number | null> =>
 
 export const selectDirectoryInNativeDialog = async (
   directoryPath: string,
-  electronProcessId: number | null
-): Promise<void> => {
+  electronProcessId: number | null,
+  strategy: NativeDirectoryDialogStrategy
+): Promise<NativeDirectoryDialogResult> => {
   if (process.platform !== 'darwin') {
     throw new Error('native directory dialog automation currently supports macOS only')
   }
+  if (!electronProcessId) {
+    throw new Error('native directory dialog automation requires Electron process id')
+  }
 
-  const script = [
-    'on run argv',
-    '  set targetPath to item 1 of argv',
-    '  set targetPid to item 2 of argv',
-    '  tell application "System Events"',
-    '    set targetProcess to missing value',
-    '    if targetPid is not "" then',
-    '      set numericPid to targetPid as integer',
-    '      repeat 80 times',
-    '        set matches to every process whose unix id is numericPid',
-    '        if (count of matches) > 0 then',
-    '          set targetProcess to item 1 of matches',
-    '          exit repeat',
-    '        end if',
-    '        delay 0.1',
-    '      end repeat',
-    '    end if',
-    '    if targetProcess is missing value then',
-    '      set targetProcess to first process whose frontmost is true',
-    '    end if',
-    '    tell targetProcess',
-    '      set frontmost to true',
-    '      delay 0.5',
-    '      set the clipboard to targetPath',
-    '      keystroke "g" using {command down, shift down}',
-    '      delay 0.8',
-    '      keystroke "v" using {command down}',
-    '      delay 0.2',
-    '      key code 36',
-    '      delay 1.0',
-    '      key code 36',
-    '      delay 0.5',
-    '    end tell',
-    '  end tell',
-    'end run'
-  ].join('\n')
+  if (strategy === 'applescript-paste' || strategy === 'applescript-type') {
+    await writeFile(NATIVE_DIALOG_APPLESCRIPT_PATH, NATIVE_DIALOG_APPLESCRIPT, 'utf8')
+    const output = await execFileAsync(
+      '/usr/bin/osascript',
+      [
+        NATIVE_DIALOG_APPLESCRIPT_PATH,
+        directoryPath,
+        String(electronProcessId),
+        MACOS_ELECTRON_BUNDLE_ID,
+        MACOS_ELECTRON_PROCESS_NAME,
+        strategy === 'applescript-type' ? 'type' : 'paste'
+      ],
+      {
+        timeout: 30_000
+      }
+    )
+    return {
+      strategy,
+      stdout: output.stdout,
+      stderr: output.stderr
+    }
+  }
 
-  await execFileAsync(
-    '/usr/bin/osascript',
-    ['-e', script, directoryPath, electronProcessId ? String(electronProcessId) : ''],
+  await writeFile(NATIVE_DIALOG_SWIFT_SCRIPT_PATH, NATIVE_DIALOG_SWIFT_SCRIPT, 'utf8')
+  const output = await execFileAsync(
+    '/usr/bin/swift',
+    [
+      NATIVE_DIALOG_SWIFT_SCRIPT_PATH,
+      directoryPath,
+      String(electronProcessId),
+      MACOS_ELECTRON_BUNDLE_ID
+    ],
     {
       timeout: 30_000
     }
   )
+  return {
+    strategy,
+    stdout: output.stdout,
+    stderr: output.stderr
+  }
 }
 
 export const bindWorkspaceRootThroughSettingsUi = async (
@@ -329,15 +486,9 @@ export const bindWorkspaceRootThroughSettingsUi = async (
   const rootPathButton = page.getByRole('button', { name: '设置工作文件地址' }).first()
   await page.bringToFront()
   await rootPathButton.waitFor({ state: 'visible' })
-
-  for (let attempt = 1; attempt <= 3; attempt += 1) {
-    const electronProcessId = await readElectronProcessId(page)
-    await rootPathButton.evaluate((element) => {
-      if (element instanceof HTMLElement) element.click()
-    })
-    await page.waitForTimeout(1500)
-    await selectDirectoryInNativeDialog(rootPath, electronProcessId)
-    const selected = await page
+  const diagnostics: NativeDirectoryDialogDiagnostics[] = []
+  const waitForSelectedRootPath = async (timeoutMs: number): Promise<boolean> =>
+    await page
       .waitForFunction(
         (input: { testId: string; rootPath: string }) => {
           const detail = document.querySelector(`[data-testid="${input.testId}"]`)
@@ -347,14 +498,62 @@ export const bindWorkspaceRootThroughSettingsUi = async (
           testId: importSelectors.workspaceDetail,
           rootPath
         },
-        { timeout: 10_000 }
+        { timeout: timeoutMs }
       )
       .then(() => true)
       .catch(() => false)
-    if (selected) return
+
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    const electronProcessId = await readElectronProcessId(page)
+    await rootPathButton.click()
+    await page.waitForTimeout(1500)
+    const strategies: NativeDirectoryDialogStrategy[] = [
+      'applescript-paste',
+      'applescript-type',
+      'swift'
+    ]
+    for (const [strategyIndex, strategy] of strategies.entries()) {
+      if (strategyIndex > 0) {
+        const reopened = await rootPathButton
+          .click({
+            timeout: 1000
+          })
+          .then(() => true)
+          .catch(() => false)
+        if (reopened) {
+          await page.waitForTimeout(1500)
+        }
+      }
+      try {
+        const output = await selectDirectoryInNativeDialog(rootPath, electronProcessId, strategy)
+        const selected = await waitForSelectedRootPath(
+          strategy.startsWith('applescript') ? 6000 : 10_000
+        )
+        diagnostics.push({
+          strategy: output.strategy,
+          selected,
+          stdout: output.stdout.trim(),
+          stderr: output.stderr.trim()
+        })
+        if (selected) return
+      } catch (error) {
+        diagnostics.push({
+          strategy,
+          selected: false,
+          stdout: '',
+          stderr: '',
+          error: error instanceof Error ? error.message : String(error)
+        })
+      }
+    }
   }
 
-  throw new Error(`failed to select workspace root path through native dialog: ${rootPath}`)
+  throw new Error(
+    [
+      `failed to select workspace root path through native dialog: ${rootPath}`,
+      `diagnostics=${JSON.stringify(diagnostics)}`
+    ].join('\n')
+  )
 }
 
 export const waitForSettingsCountToBecome = async (
@@ -376,33 +575,110 @@ export const waitForSettingsCountToBecome = async (
   )
 }
 
-export const prepareSelectedWorkspaceFilesThroughSettingsUi = async (
-  page: Page
+const waitForSettingsCountAbove = async (
+  page: Page,
+  testId: string,
+  minimumCount: number,
+  timeoutMs = WORKBENCH_LONG_E2E_TIMEOUT_MS
 ): Promise<void> => {
-  const prepareButton = getSettingsLocator(page, importSelectors.workspaceQuickPrepareButton)
-  await prepareButton.waitFor({ state: 'visible' })
-  await waitForCondition({
-    name: 'workspace files actionable count ready',
-    timeoutMs: WORKBENCH_E2E_TIMEOUT_MS,
-    check: async () => {
-      const text =
-        (await getSettingsLocator(page, importSelectors.workspaceActionableIndexCount)
-          .textContent()
-          .catch(() => '')) || ''
-      return Number(text.trim() || 0) >= 0
+  await page.waitForFunction(
+    (input: { testId: string; minimumCount: number }) => {
+      const text = document.querySelector(`[data-testid="${input.testId}"]`)?.textContent || ''
+      return Number(text.trim() || 0) > input.minimumCount
+    },
+    {
+      testId,
+      minimumCount
+    },
+    { timeout: timeoutMs }
+  )
+}
+
+const waitForButtonEnabled = async (locator: Locator): Promise<void> => {
+  await locator.waitFor({ state: 'visible' })
+  await locator.page().waitForFunction(
+    (element) => element instanceof HTMLButtonElement && !element.disabled,
+    await locator.elementHandle(),
+    { timeout: WORKBENCH_LONG_E2E_TIMEOUT_MS }
+  )
+}
+
+const readWorkspaceIdFromSettingsCard = async (
+  page: Page,
+  workspaceName: string
+): Promise<string> => {
+  const card = getSettingsPrefixLocator(page, importSelectors.workspaceCardPrefix)
+    .filter({ hasText: workspaceName })
+    .first()
+  await card.waitFor({ state: 'visible' })
+  const testId = await card.getAttribute('data-testid')
+  const prefix = `${importSelectors.workspaceCardPrefix}-`
+  if (!testId?.startsWith(prefix)) {
+    throw new Error(`failed to read workspace id from Settings card for "${workspaceName}"`)
+  }
+  return testId.slice(prefix.length)
+}
+
+const waitForWorkspaceFileJobCycle = async (
+  page: Page,
+  workspaceId: string,
+  action: WorkspaceIndexJobAction
+): Promise<void> => {
+  const deadline = Date.now() + WORKBENCH_LONG_E2E_TIMEOUT_MS
+  const startedAt = Date.now()
+  let sawExpectedJob = false
+  for (;;) {
+    const response = await page.evaluate(
+      async (input: { workspaceId: string }) =>
+        await window.api.workspaceIndexJobGet({
+          workspaceId: input.workspaceId,
+          sourceKind: 'file'
+        }),
+      { workspaceId }
+    )
+    if (!response.success) {
+      throw new Error(response.error || 'failed to read workspace file index job')
     }
-  })
-  const actionableText =
-    (await getSettingsLocator(page, importSelectors.workspaceActionableIndexCount).textContent()) ||
-    '0'
-  if (Number(actionableText.trim() || 0) === 0) return
+    if (response.job?.action === action) {
+      sawExpectedJob = true
+    }
+    if (sawExpectedJob && !response.job) return
+    if (!sawExpectedJob && !response.job && Date.now() - startedAt > 3000) return
+    if (Date.now() >= deadline) {
+      throw new Error(`workspace file ${action} job did not finish`)
+    }
+    await page.waitForTimeout(500)
+  }
+}
+
+export const prepareSelectedWorkspaceFilesThroughSettingsUi = async (
+  page: Page,
+  workspaceId: string
+): Promise<void> => {
+  const scanButton = getSettingsLocator(page, importSelectors.workspaceQuickScanButton)
+  const prepareButton = getSettingsLocator(page, importSelectors.workspaceQuickPrepareButton)
+  await waitForButtonEnabled(scanButton)
+  await scanButton.click()
+  await waitForWorkspaceFileJobCycle(page, workspaceId, 'scan')
+  await waitForSettingsCountAbove(
+    page,
+    importSelectors.workspaceActionableIndexCount,
+    0,
+    WORKBENCH_LONG_E2E_TIMEOUT_MS
+  )
+  await waitForButtonEnabled(prepareButton)
   await prepareButton.click()
+  await waitForWorkspaceFileJobCycle(page, workspaceId, 'prepare')
   await waitForSettingsCountToBecome(
     page,
     importSelectors.workspaceActionableIndexCount,
     0,
     WORKBENCH_LONG_E2E_TIMEOUT_MS
   )
+  const counts = await getWorkspaceIndexCounts(page)
+  if (counts.actionableCount !== 0 || counts.failedHint) {
+    throw new Error(`workspace file indexing did not finish cleanly: ${JSON.stringify(counts)}`)
+  }
 }
 
 export const addWebSourceThroughSettingsUi = async (page: Page, url: string): Promise<void> => {
@@ -447,8 +723,9 @@ export const prepareWorkbenchWorkspaceThroughUi = async (
   }
 ): Promise<void> => {
   await createWorkspaceThroughSettingsUi(page, input.workspaceName)
+  const workspaceId = await readWorkspaceIdFromSettingsCard(page, input.workspaceName)
   await bindWorkspaceRootThroughSettingsUi(page, input.rootPath)
-  await prepareSelectedWorkspaceFilesThroughSettingsUi(page)
+  await prepareSelectedWorkspaceFilesThroughSettingsUi(page, workspaceId)
   if (input.webSourceUrl) {
     await addWebSourceThroughSettingsUi(page, input.webSourceUrl)
     await prepareSelectedWorkspaceWebSourcesThroughSettingsUi(page)
@@ -543,6 +820,12 @@ export const setWorkbenchInput = async (page: Page, value: string): Promise<void
 
   await selectAllInput()
   await page.keyboard.press('Backspace')
+  await page.waitForFunction((testId: string) => {
+    const element = document.querySelector(`[data-testid="${testId}"]`)
+    if (!(element instanceof HTMLElement)) return false
+    const tokenCount = element.querySelectorAll('[data-role="scope-token"]').length
+    return tokenCount === 0 && !element.textContent?.trim()
+  }, workbenchSelectors.input)
   if (!value) return
 
   for (let attempt = 1; attempt <= 3; attempt += 1) {
@@ -603,15 +886,52 @@ export const appendWorkbenchInputText = async (page: Page, value: string): Promi
   }, value)
 }
 
+export const submitWorkbenchCurrentDraft = async (page: Page): Promise<void> => {
+  const sendButton = getWorkbenchLocator(page, workbenchSelectors.sendButton)
+  const enabled = await page
+    .waitForFunction(
+      (testId: string) => {
+        const element = document.querySelector(`[data-testid="${testId}"]`)
+        return element instanceof HTMLButtonElement && !element.disabled
+      },
+      workbenchSelectors.sendButton,
+      { timeout: WORKBENCH_E2E_TIMEOUT_MS }
+    )
+    .then(() => true)
+    .catch(() => false)
+  if (!enabled) {
+    const state = await page.evaluate(
+      (input: { inputTestId: string; sendButtonTestId: string }): WorkbenchDraftSubmitState => {
+        const editor = document.querySelector(`[data-testid="${input.inputTestId}"]`)
+        const send = document.querySelector(`[data-testid="${input.sendButtonTestId}"]`)
+        const tokenTexts =
+          editor instanceof HTMLElement
+            ? Array.from(editor.querySelectorAll('[data-role="scope-token"]')).map((node) =>
+                String(node.textContent || '')
+                  .replace('×', '')
+                  .trim()
+              )
+            : []
+        return {
+          inputText: editor?.textContent?.trim() || '',
+          tokenTexts,
+          sendButtonDisabled: send instanceof HTMLButtonElement ? send.disabled : null,
+          sendButtonText: send?.textContent?.trim() || ''
+        }
+      },
+      {
+        inputTestId: workbenchSelectors.input,
+        sendButtonTestId: workbenchSelectors.sendButton
+      }
+    )
+    throw new Error(`workbench send button did not become enabled: ${JSON.stringify(state)}`)
+  }
+  await sendButton.click()
+}
+
 export const sendWorkbenchMessage = async (page: Page, value: string): Promise<void> => {
   await setWorkbenchInput(page, value)
-  await page.waitForFunction((testId: string) => {
-    const element = document.querySelector(`[data-testid="${testId}"]`)
-    return element instanceof HTMLButtonElement && !element.disabled
-  }, workbenchSelectors.sendButton)
-  await getWorkbenchLocator(page, workbenchSelectors.sendButton).evaluate((element) => {
-    if (element instanceof HTMLElement) element.click()
-  })
+  await submitWorkbenchCurrentDraft(page)
 }
 
 export const switchWorkbenchMode = async (
@@ -669,6 +989,35 @@ export const selectWorkbenchWorkspace = async (
     .first()
   await workspaceOption.waitFor({ state: 'visible' })
   await workspaceOption.click()
+  await page.waitForFunction(
+    (input: { testId: string; workspaceName: string }) => {
+      const host = document.querySelector(`[data-testid="${input.testId}"]`)
+      return Boolean(host?.textContent?.includes(input.workspaceName))
+    },
+    {
+      testId: workbenchSelectors.workspaceSelect,
+      workspaceName
+    },
+    { timeout: WORKBENCH_E2E_TIMEOUT_MS }
+  )
+}
+
+export const waitForWorkbenchSearchScopeEmptyThroughUi = async (page: Page): Promise<string> => {
+  await setWorkbenchInput(page, '@__ncurator_empty_scope_probe__')
+  const panel = getWorkbenchLocator(page, workbenchSelectors.mentionPanel)
+  await panel.waitFor({ state: 'visible', timeout: WORKBENCH_E2E_TIMEOUT_MS })
+  await page.waitForFunction(
+    (testId: string) => {
+      const text = document.querySelector(`[data-testid="${testId}"]`)?.textContent || ''
+      return /没有匹配项|No data/u.test(text)
+    },
+    workbenchSelectors.mentionPanel,
+    { timeout: WORKBENCH_E2E_TIMEOUT_MS }
+  )
+  const panelText = ((await panel.textContent()) || '').trim()
+  await setWorkbenchInput(page, '')
+  await page.waitForTimeout(500)
+  return panelText
 }
 
 export const readWorkbenchSelectedControlText = async (
@@ -684,13 +1033,25 @@ export const readWorkbenchSelectedControlText = async (
 
 export const insertWorkbenchReferenceToken = async (
   page: Page,
-  visibleName: string
+  visibleName: string,
+  queryText = visibleName
 ): Promise<void> => {
-  await appendWorkbenchInputText(page, '@')
+  await appendWorkbenchInputText(page, `@${queryText}`)
   const panel = getWorkbenchLocator(page, workbenchSelectors.mentionPanel)
   await panel.waitFor({ state: 'visible' })
-  const option = panel.getByText(visibleName, { exact: false }).first()
-  await option.waitFor({ state: 'visible' })
+  const option = panel.getByRole('button').filter({ hasText: visibleName }).first()
+  try {
+    await option.waitFor({ state: 'visible' })
+  } catch (error) {
+    const panelText = ((await panel.textContent().catch(() => '')) || '').trim()
+    throw new Error(
+      [
+        `workbench reference token option not found: visibleName="${visibleName}", queryText="${queryText}"`,
+        `mentionPanelText="${panelText}"`,
+        error instanceof Error ? error.message : String(error)
+      ].join('\n')
+    )
+  }
   await option.click()
   await page.waitForFunction(
     (input: { testId: string; visibleName: string }) => {
@@ -713,7 +1074,9 @@ export const getWorkbenchReferenceTokenTexts = async (page: Page): Promise<strin
       throw new Error('workbench input is not an HTMLElement')
     }
     return Array.from(element.querySelectorAll('[data-role="scope-token"]')).map((node) =>
-      String(node.textContent || '').replace('×', '').trim()
+      String(node.textContent || '')
+        .replace('×', '')
+        .trim()
     )
   })
 
@@ -762,6 +1125,19 @@ export const getAntMessageText = async (page: Page): Promise<string> => {
   return ((await messages.last().textContent()) || '').trim()
 }
 
+export const waitForAntMessageText = async (
+  page: Page,
+  text: string,
+  timeoutMs = WORKBENCH_E2E_TIMEOUT_MS
+): Promise<string> => {
+  const message = page.locator('.ant-message').getByText(text).last()
+  await message.waitFor({
+    state: 'visible',
+    timeout: timeoutMs
+  })
+  return ((await message.textContent()) || '').trim()
+}
+
 export const collectWorkbenchAiRunEvents = async (
   runtime: E2ETestRuntime
 ): Promise<AiRunEvent[]> => {
@@ -807,12 +1183,14 @@ export const waitForWorkbenchAiRunCompletion = async (
     matches: (event) => event.type === 'run_completed'
   })
   const events = await collectWorkbenchAiRunEvents(runtime)
-  const finalAnswerText = events
-    .filter((event): event is Extract<AiRunEvent, { type: 'answer_completed' }> =>
-      event.type === 'answer_completed'
-    )
-    .map((event) => event.text)
-    .at(-1) || ''
+  const finalAnswerText =
+    events
+      .filter(
+        (event): event is Extract<AiRunEvent, { type: 'answer_completed' }> =>
+          event.type === 'answer_completed'
+      )
+      .map((event) => event.text)
+      .at(-1) || ''
   return {
     modelName,
     durationMs: Date.now() - startedAtMs,
@@ -827,6 +1205,30 @@ export const recordWorkbenchAiEvidence = (
   completionScore: number,
   failureAttribution = ''
 ): void => {
+  const eventTypeCounts = evidence.events.reduce<Record<string, number>>((counts, event) => {
+    counts[event.type] = (counts[event.type] || 0) + 1
+    return counts
+  }, {})
+  const toolCallResultCount = evidence.events.filter(
+    (event): event is Extract<AiRunEvent, { type: 'tool_call_result' }> =>
+      event.type === 'tool_call_result'
+  ).length
+  const fileArtifactCount = evidence.events.filter(
+    (event): event is Extract<AiRunEvent, { type: 'file_artifact' }> =>
+      event.type === 'file_artifact'
+  ).length
+  const toolNames = Array.from(
+    new Set(
+      evidence.events
+        .filter(
+          (event): event is Extract<
+            AiRunEvent,
+            { type: 'tool_call_started' | 'tool_call_result' }
+          > => event.type === 'tool_call_started' || event.type === 'tool_call_result'
+        )
+        .map((event) => event.toolName)
+    )
+  )
   runtime.signal({
     name: 'workbench-ai-evidence',
     message: '记录 Workbench 真实 AI e2e 模型、耗时、完成度评分与失败归因。',
@@ -834,7 +1236,12 @@ export const recordWorkbenchAiEvidence = (
       modelName: evidence.modelName,
       durationMs: evidence.durationMs,
       completionScore,
-      failureAttribution
+      failureAttribution,
+      eventTypeCounts,
+      toolCallResultCount,
+      fileArtifactCount,
+      finalAnswerLength: evidence.finalAnswerText.trim().length,
+      toolNames
     }
   })
 }
@@ -902,10 +1309,7 @@ export const assertNoWorkbenchFakeSignals = async (
   )
 }
 
-export const mutateDocxExternally = async (
-  filePath: string,
-  marker: string
-): Promise<void> => {
+export const mutateDocxExternally = async (filePath: string, marker: string): Promise<void> => {
   const zip = await JSZip.loadAsync(await readFile(filePath))
   zip.file(
     'customXml/ncurator-e2e-external-mutation.xml',
@@ -920,8 +1324,8 @@ export const mutateDocxExternally = async (
 
 export const readDocxPlainText = async (filePath: string): Promise<string> => {
   const bundle = await loadDocxBundle(await readFile(filePath))
-  return buildBlockIndex(bundle.documentDom).outline
-    .filter((block) => block.type !== 'table_cell')
+  return buildBlockIndex(bundle.documentDom)
+    .outline.filter((block) => block.type !== 'table_cell')
     .map((block) => block.text)
     .join('\n')
 }
