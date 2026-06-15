@@ -5,6 +5,7 @@ import {
   WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
   assertNoWorkbenchFakeSignals,
   getWorkbenchLocator,
+  getAntMessageText,
   insertWorkbenchReferenceToken,
   mutateDocxExternally,
   readDocxPlainText,
@@ -12,6 +13,8 @@ import {
   sendWorkbenchMessage,
   setupWorkbenchWithTempWorkspace,
   waitForApplyEntry,
+  waitForWorkbenchApplyPanelReady,
+  waitForWorkbenchApplyRecordStatus,
   waitForWorkbenchAiRunCompletion,
   workbenchSelectors
 } from '../../../../harness/e2e/workbench'
@@ -46,23 +49,24 @@ describe('workbench result e2e', () => {
           const evidence = await waitForWorkbenchAiRunCompletion(
             runtime,
             startedAtMs,
-            setup.env.modelName
+            setup.env.modelName,
+            WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
+            { page, blockerPolicy: 'auto_approve' }
           )
           recordWorkbenchAiEvidence(runtime, evidence, 0.8)
           const afterApplyText = await readDocxPlainText(targetPath)
           const applyEntry = await waitForApplyEntry(page)
           await applyEntry.click()
-          await getWorkbenchLocator(page, workbenchSelectors.applyPanel).waitFor({
-            state: 'visible'
-          })
+          await waitForWorkbenchApplyPanelReady(page)
 
           await mutateDocxExternally(targetPath, `external-${MARKER}`)
           await getWorkbenchLocator(page, workbenchSelectors.applyRevertButton).click()
           await page.getByText('恢复到本次修改前？').waitFor({ state: 'visible' })
           const warningText = ((await page.locator('.ant-modal').last().textContent()) || '').trim()
           await page.getByRole('button', { name: '恢复到此前版本' }).click()
-          await page.getByText('已回退本次修改').waitFor({ state: 'visible' })
+          await waitForWorkbenchApplyRecordStatus(page, 'reverted')
           const afterForceRevertText = await readDocxPlainText(targetPath)
+          const antMessageText = await getAntMessageText(page)
           const panelText =
             ((await getWorkbenchLocator(page, workbenchSelectors.applyPanel).textContent()) ||
               '').trim()
@@ -72,6 +76,7 @@ describe('workbench result e2e', () => {
             afterApplyText,
             warningText,
             afterForceRevertText,
+            antMessageText,
             panelText
           }
         } finally {

@@ -295,6 +295,7 @@ const WorkbenchContentPanel: React.FC<WorkbenchContentPanelProps> = ({
       {state.kind === 'apply_workspace' ? (
         <WorkbenchApplyPanel
           record={activeApplyRecord}
+          activeFileKey={state.activeFileKey}
           loading={applyLoading}
           reverting={applyReverting}
           tabs={state.tabs}

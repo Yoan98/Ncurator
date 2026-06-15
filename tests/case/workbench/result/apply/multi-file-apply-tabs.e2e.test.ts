@@ -11,6 +11,7 @@ import {
   recordWorkbenchAiEvidence,
   sendWorkbenchMessage,
   setupWorkbenchWithTempWorkspace,
+  waitForWorkbenchApplyPanelReady,
   waitForWorkbenchAiRunCompletion,
   workbenchSelectors
 } from '../../../../harness/e2e/workbench'
@@ -51,7 +52,9 @@ describe('workbench result e2e', () => {
           const evidence = await waitForWorkbenchAiRunCompletion(
             runtime,
             startedAtMs,
-            setup.env.modelName
+            setup.env.modelName,
+            WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
+            { page, blockerPolicy: 'auto_approve' }
           )
           recordWorkbenchAiEvidence(runtime, evidence, 0.8)
           const firstAfterText = await readDocxPlainText(firstPath)
@@ -66,21 +69,21 @@ describe('workbench result e2e', () => {
           await getWorkbenchPrefixLocator(page, workbenchSelectors.assistantTurnApplyPrefix)
             .first()
             .click()
-          await getWorkbenchLocator(page, workbenchSelectors.applyPanel).waitFor({
-            state: 'visible'
-          })
+          await waitForWorkbenchApplyPanelReady(page)
           const tabsText =
             ((await getWorkbenchLocator(page, workbenchSelectors.applyTabs).textContent()) ||
               '').trim()
           await getWorkbenchLocator(page, workbenchSelectors.applyTabs)
             .getByText(SECOND_FILE)
             .click()
+          await waitForWorkbenchApplyPanelReady(page)
           const afterSecondTabText =
             ((await getWorkbenchLocator(page, workbenchSelectors.applyPanel).textContent()) ||
               '').trim()
           await getWorkbenchLocator(page, workbenchSelectors.applyTabs)
             .getByText(FIRST_FILE)
             .click()
+          await waitForWorkbenchApplyPanelReady(page)
           const afterFirstTabText =
             ((await getWorkbenchLocator(page, workbenchSelectors.applyPanel).textContent()) ||
               '').trim()

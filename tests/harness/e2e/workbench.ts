@@ -7,7 +7,7 @@ import path from 'node:path'
 import { promisify } from 'node:util'
 import JSZip from 'jszip'
 import type { Locator, Page } from 'playwright'
-import type { AiRunEvent, WorkspaceIndexJobAction } from '../../../src/shared/types'
+import type { AiRunEvent, JsonValue, WorkspaceIndexJobAction } from '../../../src/shared/types'
 import {
   buildBlockIndex,
   loadDocxBundle
@@ -70,6 +70,32 @@ export type WorkbenchAiCompletionEvidence = {
   events: AiRunEvent[]
   finalAnswerText: string
 }
+
+export type WorkbenchRunBlockerPolicy = 'fail' | 'auto_approve'
+
+export type WorkbenchRunBlockedResult =
+  | {
+      kind: 'approval'
+      event: Extract<AiRunEvent, { type: 'approval_batch_required' }>
+      assistantTextSoFar: string
+      cardText: string
+    }
+  | {
+      kind: 'workspace'
+      event: Extract<AiRunEvent, { type: 'workspace_required' }>
+      assistantTextSoFar: string
+      cardText: string
+    }
+
+export type WorkbenchAiRunOutcome =
+  | {
+      status: 'completed'
+      evidence: WorkbenchAiCompletionEvidence
+    }
+  | {
+      status: 'blocked'
+      blocked: WorkbenchRunBlockedResult
+    }
 
 type WorkbenchDraftSubmitState = {
   inputText: string
@@ -1113,11 +1139,137 @@ export const waitForApplyEntry = async (page: Page, changeIdPart?: string): Prom
   return locator.first()
 }
 
+export const waitForWorkbenchApplyPanelReady = async (page: Page): Promise<Locator> => {
+  const panel = getWorkbenchLocator(page, workbenchSelectors.applyPanel)
+  await panel.waitFor({ state: 'visible' })
+  await page.waitForFunction(
+    (testId) => {
+      const root = document.querySelector(`[data-testid="${testId}"]`)
+      if (!(root instanceof HTMLElement)) return false
+      const text = root.innerText.trim()
+      if (text.includes('当前没有 AI 修改记录。')) return true
+      if (text.includes('当前文件暂时不可预览。')) return true
+      if (text.includes('当前修改记录没有专用预览稿。')) return true
+      if (text.includes('本次 AI 修改已回退。')) return true
+      if (text.includes('回退本次修改')) return true
+      return Boolean(root.querySelector(`[data-testid="${workbenchSelectors.docxViewer}"]`))
+    },
+    workbenchSelectors.applyPanel,
+    { timeout: WORKBENCH_LONG_E2E_TIMEOUT_MS }
+  )
+  return panel
+}
+
+export const waitForWorkbenchApplyRecordStatus = async (
+  page: Page,
+  status: 'applied' | 'reverted' | 'failed'
+): Promise<Locator> => {
+  const panel = getWorkbenchLocator(page, workbenchSelectors.applyPanel)
+  await panel.waitFor({ state: 'visible' })
+  const expectedText =
+    status === 'reverted'
+      ? '本次 AI 修改已回退。'
+      : status === 'failed'
+        ? '失败'
+        : '回退本次修改'
+  await page.waitForFunction(
+    ({ testId, text }) => {
+      const root = document.querySelector(`[data-testid="${testId}"]`)
+      return root instanceof HTMLElement && root.innerText.includes(text)
+    },
+    { testId: workbenchSelectors.applyPanel, text: expectedText },
+    { timeout: WORKBENCH_LONG_E2E_TIMEOUT_MS }
+  )
+  return panel
+}
+
 export const getApprovalCard = (page: Page): Locator =>
   page.locator(byTestId(chatSelectors.approvalBatchCard))
 
 export const getWorkspaceRequiredCard = (page: Page): Locator =>
   page.locator(byTestId(chatSelectors.workspaceBanner))
+
+const readLocatorText = async (locator: Locator): Promise<string> =>
+  ((await locator.textContent().catch(() => '')) || '').trim()
+
+const readAssistantTextSoFar = async (page: Page): Promise<string> => {
+  const finalAnswerText = await readLocatorText(
+    getWorkbenchPrefixLocator(page, workbenchSelectors.assistantFinalAnswerPrefix).last()
+  )
+  if (finalAnswerText) return finalAnswerText
+  return await readLocatorText(
+    getWorkbenchPrefixLocator(page, workbenchSelectors.assistantThoughts).last()
+  )
+}
+
+const describeWorkbenchBlockedResult = (
+  blocked: WorkbenchRunBlockedResult
+): { blockerType: string; summary: string; data: JsonValue } => {
+  if (blocked.kind === 'approval') {
+    return {
+      blockerType: 'approval',
+      summary: `运行被审批卡住，待审命令数=${blocked.event.items.length}`,
+      data: {
+        batchId: blocked.event.batchId,
+        taskId: blocked.event.taskId,
+        items: blocked.event.items.map((item) => ({
+          itemId: item.itemId,
+          order: item.order,
+          toolName: item.toolName,
+          command: item.command,
+          reason: item.reason
+        })),
+        assistantTextSoFar: blocked.assistantTextSoFar,
+        cardText: blocked.cardText
+      }
+    }
+  }
+  return {
+    blockerType: 'workspace',
+    summary: '运行被工作区补充卡住',
+    data: {
+      taskId: blocked.event.taskId,
+      reason: blocked.event.reason,
+      requiredFields: blocked.event.requiredFields,
+      assistantTextSoFar: blocked.assistantTextSoFar,
+      cardText: blocked.cardText
+    }
+  }
+}
+
+const autoApproveWorkbenchApprovalBatch = async (
+  page: Page,
+  runtime: E2ETestRuntime,
+  event: Extract<AiRunEvent, { type: 'approval_batch_required' }>
+): Promise<void> => {
+  const card = getApprovalCard(page)
+  await card.waitFor({ state: 'visible', timeout: WORKBENCH_E2E_TIMEOUT_MS })
+  const totalItems = event.items.length
+  for (let index = 0; index < totalItems; index += 1) {
+    const cardText = await readLocatorText(card)
+    runtime.signal({
+      name: 'workbench-approval-auto-approve',
+      message: `自动同意审批 ${index + 1}/${totalItems}`,
+      data: {
+        batchId: event.batchId,
+        item: event.items[index] || null,
+        cardText
+      }
+    })
+    await getWorkbenchLocator(page, chatSelectors.approvalBatchApproveButton).click()
+    if (index < totalItems - 1) {
+      await page.waitForFunction(
+        (testId: string, expectedIndex: number) => {
+          const root = document.querySelector(`[data-testid="${testId}"]`)
+          return Boolean(root?.textContent?.includes(`审批 ${expectedIndex} /`))
+        },
+        chatSelectors.approvalBatchCard,
+        index + 2,
+        { timeout: WORKBENCH_E2E_TIMEOUT_MS }
+      )
+    }
+  }
+}
 
 export const getAntMessageText = async (page: Page): Promise<string> => {
   const messages = page.locator('.ant-message')
@@ -1171,32 +1323,150 @@ export const waitForWorkbenchAiEvent = async (
   }
 }
 
+export const waitForWorkbenchAiRunOutcome = async (
+  runtime: E2ETestRuntime,
+  startedAtMs: number,
+  modelName: string,
+  options?: {
+    timeoutMs?: number
+    page?: Page
+    blockerPolicy?: WorkbenchRunBlockerPolicy
+  }
+): Promise<WorkbenchAiRunOutcome> => {
+  const timeoutMs = options?.timeoutMs || WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS
+  const deadline = Date.now() + timeoutMs
+  const blockerPolicy = options?.blockerPolicy || 'fail'
+  const page = options?.page || runtime.page
+  let approvalAutoHandledBatchIds = new Set<string>()
+
+  for (;;) {
+    const events = await collectWorkbenchAiRunEvents(runtime)
+    const runFailed = events.find((event) => event.type === 'run_failed')
+    if (runFailed?.type === 'run_failed') {
+      throw new Error(`AI run failed while waiting for completion: ${runFailed.error}`)
+    }
+
+    const runCompleted = events.find((event) => event.type === 'run_completed')
+    if (runCompleted?.type === 'run_completed') {
+      const finalAnswerText =
+        events
+          .filter(
+            (event): event is Extract<AiRunEvent, { type: 'answer_completed' }> =>
+              event.type === 'answer_completed'
+          )
+          .map((event) => event.text)
+          .at(-1) || ''
+      return {
+        status: 'completed',
+        evidence: {
+          modelName,
+          durationMs: Date.now() - startedAtMs,
+          events,
+          finalAnswerText
+        }
+      }
+    }
+
+    const approvalRequired = events
+      .filter(
+        (event): event is Extract<AiRunEvent, { type: 'approval_batch_required' }> =>
+          event.type === 'approval_batch_required'
+      )
+      .at(-1)
+    if (approvalRequired && !approvalAutoHandledBatchIds.has(approvalRequired.batchId)) {
+      const assistantTextSoFar = await readAssistantTextSoFar(page)
+      const cardText = await readLocatorText(getApprovalCard(page))
+      const blocked: WorkbenchRunBlockedResult = {
+        kind: 'approval',
+        event: approvalRequired,
+        assistantTextSoFar,
+        cardText
+      }
+      const blockedSummary = describeWorkbenchBlockedResult(blocked)
+      runtime.signal({
+        name: 'workbench-run-blocked',
+        message: blockedSummary.summary,
+        status: 'failed',
+        data: {
+          blockerType: blockedSummary.blockerType,
+          ...(blockedSummary.data as Record<string, JsonValue>)
+        }
+      })
+      if (blockerPolicy === 'auto_approve') {
+        approvalAutoHandledBatchIds = new Set([
+          ...approvalAutoHandledBatchIds,
+          approvalRequired.batchId
+        ])
+        await autoApproveWorkbenchApprovalBatch(page, runtime, approvalRequired)
+        await page.waitForTimeout(500)
+        continue
+      }
+      return {
+        status: 'blocked',
+        blocked
+      }
+    }
+
+    const workspaceRequired = events
+      .filter(
+        (event): event is Extract<AiRunEvent, { type: 'workspace_required' }> =>
+          event.type === 'workspace_required'
+      )
+      .at(-1)
+    if (workspaceRequired) {
+      const blocked: WorkbenchRunBlockedResult = {
+        kind: 'workspace',
+        event: workspaceRequired,
+        assistantTextSoFar: await readAssistantTextSoFar(page),
+        cardText: await readLocatorText(getWorkspaceRequiredCard(page))
+      }
+      const blockedSummary = describeWorkbenchBlockedResult(blocked)
+      runtime.signal({
+        name: 'workbench-run-blocked',
+        message: blockedSummary.summary,
+        status: 'failed',
+        data: {
+          blockerType: blockedSummary.blockerType,
+          ...(blockedSummary.data as Record<string, JsonValue>)
+        }
+      })
+      return {
+        status: 'blocked',
+        blocked
+      }
+    }
+
+    if (Date.now() >= deadline) {
+      throw new Error('AI run completion timed out')
+    }
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 500)
+    })
+  }
+}
+
 export const waitForWorkbenchAiRunCompletion = async (
   runtime: E2ETestRuntime,
   startedAtMs: number,
   modelName: string,
-  timeoutMs = WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS
-): Promise<WorkbenchAiCompletionEvidence> => {
-  await waitForWorkbenchAiEvent(runtime, {
-    name: 'run_completed',
-    timeoutMs,
-    matches: (event) => event.type === 'run_completed'
-  })
-  const events = await collectWorkbenchAiRunEvents(runtime)
-  const finalAnswerText =
-    events
-      .filter(
-        (event): event is Extract<AiRunEvent, { type: 'answer_completed' }> =>
-          event.type === 'answer_completed'
-      )
-      .map((event) => event.text)
-      .at(-1) || ''
-  return {
-    modelName,
-    durationMs: Date.now() - startedAtMs,
-    events,
-    finalAnswerText
+  timeoutMs = WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
+  options?: {
+    page?: Page
+    blockerPolicy?: WorkbenchRunBlockerPolicy
   }
+): Promise<WorkbenchAiCompletionEvidence> => {
+  const outcome = await waitForWorkbenchAiRunOutcome(runtime, startedAtMs, modelName, {
+    timeoutMs,
+    page: options?.page,
+    blockerPolicy: options?.blockerPolicy
+  })
+  if (outcome.status === 'blocked') {
+    const blockedSummary = describeWorkbenchBlockedResult(outcome.blocked)
+    throw new Error(
+      `AI run blocked: ${blockedSummary.blockerType} - ${blockedSummary.summary}`
+    )
+  }
+  return outcome.evidence
 }
 
 export const recordWorkbenchAiEvidence = (

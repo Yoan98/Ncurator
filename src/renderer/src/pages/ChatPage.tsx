@@ -1,5 +1,5 @@
 ﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { App, Button } from 'antd'
+import { App, Button, Modal } from 'antd'
 import {
   HiArrowUp,
   HiBookOpen,
@@ -88,6 +88,12 @@ import {
 type ApprovalBatchRequiredEvent = Extract<AiRunEvent, { type: 'approval_batch_required' }>
 type ApprovalBatchDecisionAction = 'approve' | 'reject' | 'guide'
 type WorkspaceRequiredEvent = Extract<AiRunEvent, { type: 'workspace_required' }>
+
+type ApplyForceConfirmState = {
+  changeId: string
+  title: string
+  content: string
+}
 
 type ApprovalDraftDecision = {
   action?: ApprovalBatchDecisionAction
@@ -181,18 +187,31 @@ const appendArtifactForMessage = (
   }
 }
 
-const ACTIVE_FILE_CHANGE_STATUSES = new Set<AiFileChangeRecord['status']>(['applied', 'failed'])
+const ACTIVE_FILE_CHANGE_STATUSES = new Set<AiFileChangeRecord['status']>([
+  'applied',
+  'failed',
+  'reverted'
+])
 
 const sortFileChangeRecords = (items: AiFileChangeRecord[]): AiFileChangeRecord[] => {
+  const latestById = new Map<string, AiFileChangeRecord>()
+  items.forEach((item) => {
+    const current = latestById.get(item.id)
+    if (!current || item.updatedAt > current.updatedAt) {
+      latestById.set(item.id, item)
+    }
+  })
   const priority: Record<AiFileChangeRecord['status'], number> = {
     applied: 0,
     failed: 1,
     reverted: 2
   }
-  return [...items].sort((left, right) => {
+  return [...latestById.values()].sort((left, right) => {
+    const updatedAtGap = right.updatedAt - left.updatedAt
+    if (updatedAtGap !== 0) return updatedAtGap
     const priorityGap = priority[left.status] - priority[right.status]
     if (priorityGap !== 0) return priorityGap
-    return right.updatedAt - left.updatedAt
+    return right.createdAt - left.createdAt
   })
 }
 
@@ -273,6 +292,7 @@ const ChatPage: React.FC = () => {
   const [activeApplyRecord, setActiveApplyRecord] = useState<DocxApplyRecord | null>(null)
   const [applyLoading, setApplyLoading] = useState(false)
   const [applyReverting, setApplyReverting] = useState(false)
+  const [applyForceConfirm, setApplyForceConfirm] = useState<ApplyForceConfirmState | null>(null)
 
   const [pendingApprovalBatch, setPendingApprovalBatch] =
     useState<ApprovalBatchRequiredEvent | null>(null)
@@ -382,6 +402,16 @@ const ChatPage: React.FC = () => {
     }
   }
 
+  const emitErrorMessage = (content: string): void => {
+    if (typeof message.error === 'function') {
+      message.error(content)
+      return
+    }
+    if (typeof message.open === 'function') {
+      message.open({ type: 'error', content })
+    }
+  }
+
   const showContentPanel = useCallback((nextState: WorkbenchContentPanelState): void => {
     setContentPanel(nextState)
     setContentPanelCollapsed(false)
@@ -432,6 +462,7 @@ const ChatPage: React.FC = () => {
     setActiveApplyRecord(null)
     setApplyLoading(false)
     setApplyReverting(false)
+    setApplyForceConfirm(null)
     setApplyWorkspaceTabs([])
   }
 
@@ -451,12 +482,12 @@ const ChatPage: React.FC = () => {
 
   const openPathOrNotify = async (filePath: string): Promise<void> => {
     const result = await window.api.openPath(filePath)
-    if (!result.success) message.error(result.error || '打开失败')
+    if (!result.success) emitErrorMessage(result.error || '打开失败')
   }
 
   const revealPathOrNotify = async (filePath: string): Promise<void> => {
     const result = await window.api.revealPath(filePath)
-    if (!result.success) message.error(result.error || '定位失败')
+    if (!result.success) emitErrorMessage(result.error || '定位失败')
   }
 
   const loadSessions = async (): Promise<void> => {
@@ -588,7 +619,7 @@ const ChatPage: React.FC = () => {
       setActiveModelConfig(nextConfig)
       void window.api.llmConfigSave(nextConfig).then((response) => {
         if (!response.success) {
-          message.error(response.error || '默认模型保存失败')
+          emitErrorMessage(response.error || '默认模型保存失败')
           return
         }
         window.dispatchEvent(new Event('check-llm-config'))
@@ -620,7 +651,7 @@ const ChatPage: React.FC = () => {
       setCurrentSessionId(nextSession.id)
     } catch (error) {
       console.error(error)
-      message.error('创建会话失败')
+      emitErrorMessage('创建会话失败')
     }
   }
 
@@ -669,6 +700,7 @@ const ChatPage: React.FC = () => {
       preferredApplyId?: string | null
       autoOpen?: boolean
       forceOpenWorkspace?: boolean
+      skipApplyRecordReload?: boolean
     }
   ): Promise<void> => {
     try {
@@ -777,6 +809,13 @@ const ChatPage: React.FC = () => {
       const nextSelectedTab =
         normalizedTabs.find((tab) => tab.fileKey === nextSelectedFileKey) || normalizedTabs[0]
       if (!nextSelectedTab) return
+
+      if (options?.skipApplyRecordReload) {
+        if (options.forceOpenWorkspace || contentPanel.kind === 'apply_workspace') {
+          showApplyWorkspace(normalizedTabs, nextSelectedTab.fileKey)
+        }
+        return
+      }
 
       const nextSelectedRecord = latestByFileKey.get(nextSelectedTab.fileKey) || null
       if (!nextSelectedRecord) return
@@ -893,7 +932,7 @@ const ChatPage: React.FC = () => {
       await loadSessions()
     } catch (error) {
       console.error(error)
-      message.error('删除会话失败')
+      emitErrorMessage('删除会话失败')
     }
   }
 
@@ -918,7 +957,7 @@ const ChatPage: React.FC = () => {
     if (reference.resourceType === 'web') {
       const response = await window.api.openExternal(reference.path)
       if (!response.success) {
-        message.error(response.error || '打开链接失败')
+        emitErrorMessage(response.error || '打开链接失败')
       }
       return
     }
@@ -944,7 +983,7 @@ const ChatPage: React.FC = () => {
       }
       const response = await window.api.openExternal(url)
       if (!response.success) {
-        message.error(response.error || '打开链接失败')
+        emitErrorMessage(response.error || '打开链接失败')
       }
       return
     }
@@ -1228,7 +1267,7 @@ const ChatPage: React.FC = () => {
             )
           )
         }
-        message.error(event.error || '运行失败')
+        emitErrorMessage(event.error || '运行失败')
         return
       }
 
@@ -1360,7 +1399,7 @@ const ChatPage: React.FC = () => {
       })
       if (!response.success || !response.runId) {
         setLoading(false)
-        message.error(response.error || '启动失败')
+        emitErrorMessage(response.error || '启动失败')
         return
       }
       setAiRunId(response.runId)
@@ -1374,7 +1413,7 @@ const ChatPage: React.FC = () => {
     } catch (error) {
       console.error(error)
       setLoading(false)
-      message.error('发送失败')
+      emitErrorMessage('发送失败')
     }
   }
 
@@ -1503,7 +1542,7 @@ const ChatPage: React.FC = () => {
           }
         }))
       }
-      message.error('搜索失败')
+      emitErrorMessage('搜索失败')
     } finally {
       setLoading(false)
     }
@@ -1516,11 +1555,11 @@ const ChatPage: React.FC = () => {
       const response = await window.api.aiRunCancel(aiRunId)
       if (!response.success) {
         setCancellingRun(false)
-        message.error(response.error || '取消失败')
+        emitErrorMessage(response.error || '取消失败')
       }
     } catch (error) {
       setCancellingRun(false)
-      message.error(error instanceof Error ? error.message : '取消失败')
+      emitErrorMessage(error instanceof Error ? error.message : '取消失败')
     }
   }
 
@@ -1564,7 +1603,7 @@ const ChatPage: React.FC = () => {
       })
       if (!response.success) {
         setApprovalSubmitting(false)
-        message.error(response.error || '审核提交失败')
+        emitErrorMessage(response.error || '审核提交失败')
         return
       }
       const allApproved = decisions.every((decision) => decision.action === 'approve')
@@ -1577,7 +1616,7 @@ const ChatPage: React.FC = () => {
       setApprovalSubmitting(false)
     } catch (error) {
       setApprovalSubmitting(false)
-      message.error(error instanceof Error ? error.message : '审核提交失败')
+      emitErrorMessage(error instanceof Error ? error.message : '审核提交失败')
     }
   }
 
@@ -1682,7 +1721,7 @@ const ChatPage: React.FC = () => {
       })
       if (!response.success || !response.runId) {
         setLoading(false)
-        message.error(response.error || '继续运行失败')
+        emitErrorMessage(response.error || '继续运行失败')
         return
       }
       setPendingWorkspaceRequest(null)
@@ -1697,7 +1736,7 @@ const ChatPage: React.FC = () => {
     } catch (error) {
       console.error(error)
       setLoading(false)
-      message.error('继续运行失败')
+      emitErrorMessage('继续运行失败')
     }
   }
 
@@ -1710,37 +1749,91 @@ const ChatPage: React.FC = () => {
         force: false
       })
       if (response.requiresForce) {
-        modal.confirm({
+        setApplyForceConfirm({
+          changeId: activeApplyRecord.id,
           title: '恢复到本次修改前？',
           content:
             response.warning ||
-            '当前文件在这次 AI 修改后又发生了变化。继续操作会恢复到这次修改前的版本，并丢失之后的修改。',
-          okText: '恢复到此前版本',
-          cancelText: '取消',
-          onOk: async () => {
-            const forced = await window.api.aiFileChangeRevert({
-              changeId: activeApplyRecord.id,
-              force: true
-            })
-            if (!forced.success) {
-              message.error(forced.error || '回退失败')
-              return
-            }
-            emitSuccessMessage('已回退本次修改')
-            await loadFileChangesForSession(currentSessionId, { autoOpen: true })
-          }
+            '当前文件在这次 AI 修改后又发生了变化。继续操作会恢复到这次修改前的版本，并丢失之后的修改。'
         })
         return
       }
       if (!response.success) {
-        message.error(response.error || '回退失败')
+        emitErrorMessage(response.error || '回退失败')
         return
       }
+      if (response.record) {
+        const nextTabs = applyWorkspaceTabs.map((tab) =>
+          tab.applyId === response.record!.id
+            ? {
+                ...tab,
+                applyId: response.record!.id,
+                sourcePath: response.record!.path,
+                changeCount: response.record!.changeCount,
+                status: response.record!.status,
+                unseen: false
+              }
+            : tab
+        )
+        setApplyWorkspaceTabs(nextTabs)
+        setActiveApplyRecord(fileChangeToDocxApplyRecord(response.record))
+        showApplyWorkspace(nextTabs, response.record.path)
+      }
       emitSuccessMessage('已回退本次修改')
-      await loadFileChangesForSession(currentSessionId, { autoOpen: true })
+      await loadFileChangesForSession(currentSessionId, {
+        preferredApplyId: response.record?.id || activeApplyRecord.id,
+        autoOpen: true,
+        forceOpenWorkspace: true,
+        skipApplyRecordReload: true
+      })
     } catch (error) {
       console.error(error)
-      message.error('回退失败')
+      emitErrorMessage('回退失败')
+    } finally {
+      setApplyReverting(false)
+    }
+  }
+
+  const handleForceApplyRevertConfirm = async (): Promise<void> => {
+    if (!applyForceConfirm || !currentSessionId) return
+    setApplyReverting(true)
+    try {
+      const forced = await window.api.aiFileChangeRevert({
+        changeId: applyForceConfirm.changeId,
+        force: true
+      })
+      if (!forced.success) {
+        emitErrorMessage(forced.error || '回退失败')
+        return
+      }
+      if (forced.record) {
+        const nextTabs = applyWorkspaceTabs.map((tab) =>
+          tab.applyId === forced.record!.id
+            ? {
+                ...tab,
+                applyId: forced.record!.id,
+                sourcePath: forced.record!.path,
+                changeCount: forced.record!.changeCount,
+                status: forced.record!.status,
+                unseen: false
+              }
+            : tab
+        )
+        setApplyWorkspaceTabs(nextTabs)
+        setActiveApplyRecord(fileChangeToDocxApplyRecord(forced.record))
+        showApplyWorkspace(nextTabs, forced.record.path)
+      }
+      setApplyForceConfirm(null)
+      emitSuccessMessage('已回退本次修改')
+      await loadFileChangesForSession(currentSessionId, {
+        preferredApplyId: forced.record?.id || applyForceConfirm.changeId,
+        autoOpen: true,
+        forceOpenWorkspace: true,
+        skipApplyRecordReload: true
+      })
+    } catch (error) {
+      console.error(error)
+      emitErrorMessage('回退失败')
     } finally {
       setApplyReverting(false)
     }
@@ -1751,7 +1844,7 @@ const ChatPage: React.FC = () => {
       const picked = await window.api.pickApplication()
       if (picked.canceled) return
       if (!picked.appPath) {
-        message.error(picked.error || '未选择应用')
+        emitErrorMessage(picked.error || '未选择应用')
         return
       }
       const response = await window.api.openPathWithApplication({
@@ -1759,11 +1852,11 @@ const ChatPage: React.FC = () => {
         appPath: picked.appPath
       })
       if (!response.success) {
-        message.error(response.error || '使用指定应用打开失败')
+        emitErrorMessage(response.error || '使用指定应用打开失败')
       }
     } catch (error) {
       console.error(error)
-      message.error('使用指定应用打开失败')
+      emitErrorMessage('使用指定应用打开失败')
     }
   }
 
@@ -2291,6 +2384,17 @@ const ChatPage: React.FC = () => {
             </div>
           </div>
         </div>
+        <Modal
+          open={Boolean(applyForceConfirm)}
+          title={applyForceConfirm?.title || '恢复到本次修改前？'}
+          okText="恢复到此前版本"
+          cancelText="取消"
+          confirmLoading={applyReverting}
+          onOk={() => void handleForceApplyRevertConfirm()}
+          onCancel={() => setApplyForceConfirm(null)}
+        >
+          <p>{applyForceConfirm?.content}</p>
+        </Modal>
       </div>
     </div>
   )

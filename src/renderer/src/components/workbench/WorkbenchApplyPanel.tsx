@@ -8,6 +8,7 @@ import { workbenchSelectors } from '../../testing/selectors'
 
 type WorkbenchApplyPanelProps = {
   record: DocxApplyRecord | null
+  activeFileKey: string | null
   loading: boolean
   reverting: boolean
   tabs: FileChangeWorkspaceTab[]
@@ -20,6 +21,7 @@ type WorkbenchApplyPanelProps = {
 
 const WorkbenchApplyPanel: React.FC<WorkbenchApplyPanelProps> = ({
   record,
+  activeFileKey,
   loading,
   reverting,
   tabs,
@@ -76,7 +78,7 @@ const WorkbenchApplyPanel: React.FC<WorkbenchApplyPanelProps> = ({
           data-testid={workbenchSelectors.applyTabs}
         >
           {tabs.map((tab) => {
-            const active = tab.fileKey === record.source_path
+            const active = tab.fileKey === activeFileKey
             return (
               <button
                 key={tab.fileKey}
