@@ -40,6 +40,12 @@ export type E2EConsoleEntry = {
   text: string
 }
 
+export type E2ELifecycleEntry = {
+  ts: string
+  name: string
+  data?: JsonValue
+}
+
 type E2EObserverState = {
   routeEntries: E2ERouteEntry[]
   ipcInvokeEntries: E2EIpcInvokeEntry[]
@@ -58,6 +64,7 @@ export type E2ERuntimeSignals = {
   aiRunEventEntries: E2EAiRunEventEntry[]
   domEventEntries: E2EDomEventEntry[]
   consoleEntries: E2EConsoleEntry[]
+  lifecycleEntries: E2ELifecycleEntry[]
 }
 
 export type LaunchedElectronApp = {
@@ -216,6 +223,14 @@ export const launchElectronApp = async (
   await ensureBuiltAppExists()
 
   const consoleEntries: E2EConsoleEntry[] = []
+  const lifecycleEntries: E2ELifecycleEntry[] = []
+  const recordLifecycle = (name: string, data?: JsonValue): void => {
+    lifecycleEntries.push({
+      ts: new Date().toISOString(),
+      name,
+      data
+    })
+  }
   const userDataDir = await mkdtemp(path.join(os.tmpdir(), 'ncurator-e2e-user-data-'))
   const remoteDebuggingPort = await allocateFreePort()
   const launchEnv = buildElectronLaunchEnv(
@@ -231,6 +246,9 @@ export const launchElectronApp = async (
     env: launchEnv
   })
   const electronProcess = electronApp.process()
+  recordLifecycle('electron-process-started', {
+    pid: electronProcess?.pid || null
+  })
   electronProcess?.stdout?.on('data', (chunk) => {
     pushProcessLog(consoleEntries, 'log', 'main:stdout', chunk)
   })
@@ -238,6 +256,10 @@ export const launchElectronApp = async (
     pushProcessLog(consoleEntries, 'error', 'main:stderr', chunk)
   })
   electronProcess?.on('exit', (code, signal) => {
+    recordLifecycle('electron-process-exit', {
+      code,
+      signal: signal || null
+    })
     pushProcessLog(
       consoleEntries,
       code === 0 ? 'log' : 'error',
@@ -247,6 +269,15 @@ export const launchElectronApp = async (
   })
 
   const page = await electronApp.firstWindow()
+  page.on('close', () => {
+    recordLifecycle('page-close')
+  })
+  page.on('crash', () => {
+    recordLifecycle('page-crash')
+  })
+  electronApp.on('close', () => {
+    recordLifecycle('electron-app-close')
+  })
   await page.context().tracing.start({
     screenshots: true,
     snapshots: true
@@ -303,7 +334,8 @@ export const launchElectronApp = async (
 
       return {
         ...state,
-        consoleEntries
+        consoleEntries,
+        lifecycleEntries
       }
     },
     close: async (input) => {

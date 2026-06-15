@@ -261,10 +261,12 @@ type WorkbenchE2EWindow = Window & {
 }
 
 const readElectronProcessId = async (page: Page): Promise<number | null> =>
-  page.evaluate(() => {
-    const currentWindow = window as WorkbenchE2EWindow
-    return currentWindow.__NCURATOR_E2E_ELECTRON_PROCESS_ID__ || null
-  })
+  page
+    .evaluate(() => {
+      const currentWindow = window as WorkbenchE2EWindow
+      return currentWindow.__NCURATOR_E2E_ELECTRON_PROCESS_ID__ || null
+    })
+    .catch(() => null)
 
 export const selectDirectoryInNativeDialog = async (
   directoryPath: string,

@@ -130,6 +130,7 @@ const buildPlaywrightReportHtml = (input: {
     2
   )
   const consoleText = JSON.stringify(input.signals.consoleEntries, null, 2)
+  const lifecycleText = JSON.stringify(input.signals.lifecycleEntries, null, 2)
 
   return [
     '<!doctype html>',
@@ -167,6 +168,10 @@ const buildPlaywrightReportHtml = (input: {
     '  <section>',
     '    <h2>Console Entries</h2>',
     `    <pre>${escapeHtml(consoleText)}</pre>`,
+    '  </section>',
+    '  <section>',
+    '    <h2>Lifecycle Entries</h2>',
+    `    <pre>${escapeHtml(lifecycleText)}</pre>`,
     '  </section>',
     '</body>',
     '</html>'
@@ -451,6 +456,17 @@ export const runE2ECase = async <TResult>(
           level: consoleEntry.level,
           text: consoleEntry.text
         }
+      })
+    }
+
+    for (const lifecycleEntry of signals.lifecycleEntries) {
+      pushEvent({
+        ts: lifecycleEntry.ts,
+        type: 'signal',
+        name: 'electron-lifecycle',
+        status: 'info',
+        message: `Electron lifecycle: ${lifecycleEntry.name}`,
+        data: lifecycleEntry.data
       })
     }
 

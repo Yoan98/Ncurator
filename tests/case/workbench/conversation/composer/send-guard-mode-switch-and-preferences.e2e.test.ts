@@ -83,6 +83,13 @@ describe('workbench conversation e2e', () => {
 
           const startedAtMs = Date.now()
           await sendWorkbenchMessage(page, REAL_SEND_PROMPT)
+          await getWorkbenchLocator(page, workbenchSelectors.sendButton).waitFor({
+            state: 'visible'
+          })
+          await page.waitForFunction((testId: string) => {
+            const element = document.querySelector(`[data-testid="${testId}"]`)
+            return element?.getAttribute('aria-label')?.includes('停止')
+          }, workbenchSelectors.sendButton)
           const runningButtonLabel =
             (await getWorkbenchLocator(page, workbenchSelectors.sendButton).getAttribute(
               'aria-label'

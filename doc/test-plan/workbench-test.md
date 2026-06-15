@@ -15,24 +15,27 @@
 
 ### 2.1 最近执行
 
-- 检测时间：`2026-06-12 16:34:20 +0800`
-- 执行命令：`pnpm run typecheck:node`、`pnpm run typecheck:web`、`pnpm test:workbench:e2e -- --case reference-token-lifecycle`、`pnpm test:workbench:e2e -- --case ai-process-stream-and-final-answer`
+- 检测时间：`2026-06-12 19:19:35 +0800`
+- 执行命令：`pnpm run typecheck:node`、`pnpm run typecheck:web`、`pnpm test:workbench:e2e -- --case ai-process-stream-and-final-answer`、`pnpm test:workbench:e2e -- --case session-initial-create-and-title`、`pnpm test:workbench:e2e -- --case send-guard-mode-switch-and-preferences`、`pnpm test:workbench:e2e -- --case reference-token-lifecycle`、`pnpm test:workbench:e2e -- --case search-results-open-rules`
 - 总体登记：`13` 个 e2e case。
-- 当前有效结论：`1 / 13` 有效通过。
+- 当前有效结论：`3 / 13` 有效通过。
 - 旧结论处理：`2026-06-12 11:14:15 +0800` 的 `6 / 12` 结果依赖 `[e2e:*]`、seed model、fake search、fake docx apply 等模拟路径，已废弃，不再作为 Workbench formal 结论。
-- 当前实现状态：`tests/case/workbench/**` 已落地 `13` 个独立 `.e2e.test.ts` 文件，不使用 `formalCases.ts`、集中 register、placeholder 或假通过；当前已有 `1 / 13` 形成真实有效通过结论。
+- 当前实现状态：`tests/case/workbench/**` 已落地 `13` 个独立 `.e2e.test.ts` 文件，不使用 `formalCases.ts`、集中 register、placeholder 或假通过；当前已有 `3 / 13` 形成真实有效通过结论。
 - 最近验证执行：
   - `2026-06-12 18:19:40 +0800` 运行 `pnpm test:workbench:e2e -- --case ai-process-stream-and-final-answer`，结果通过；真实模型为 `AI_LIVE_PRIMARY_MODEL_NAME`，本次通过 Workbench 模型下拉搜索选中，耗时 `148393ms`。
+  - `2026-06-12 18:40:34 +0800` 运行 `pnpm test:workbench:e2e -- --case session-initial-create-and-title`，结果通过；通过真实 UI 配置模型、绑定 workspace、真实发送两轮消息，耗时 `33300ms`。
+  - `2026-06-12 18:48:16 +0800` 运行 `pnpm test:workbench:e2e -- --case send-guard-mode-switch-and-preferences`，结果通过；通过真实 UI 验证 composer guard、模式切换、模型 / workspace 偏好与真实发送运行态，耗时 `34373ms`。
   - `2026-06-12 18:18:14 +0800` 运行 `pnpm test:workbench:e2e -- --case reference-token-lifecycle`，macOS 原生目录选择、真实 workspace 绑定、真实索引与网页资料添加均已越过；进入 Workbench 后输入 `@` 等待 `human-input.txt` 候选时 Electron 主进程稳定 `SIGSEGV`，尚无有效通过结论。
-  - `2026-06-12 18:23:03 +0800` 运行 `pnpm run typecheck:node`、`pnpm run typecheck:web`，均通过。
+  - `2026-06-12 19:18:43 +0800` 运行 `pnpm test:workbench:e2e -- --case search-results-open-rules`，当前未进入搜索断言；通过真实 UI 创建 workspace 后，三次触发 `pickDirectory` 但 macOS 原生目录选择自动化未能把临时目录回填到 Settings UI，耗时 `51879ms`。
+  - `2026-06-12 19:18:43 +0800` 前后运行 `pnpm run typecheck:node`、`pnpm run typecheck:web`，均通过。
 
 ### 2.2 按 Suite 汇总
 
 - `conversation`
   - 登记 case：`3`
-  - 有效通过：`0 / 3`
-  - 检测时间：`2026-06-12 18:18:14 +0800`
-  - 备注：case 已实现；`reference-token-lifecycle` 已越过 macOS 原生目录选择、workspace 绑定和索引，当前稳定失败在 Workbench `@` 候选阶段 Electron 主进程 `SIGSEGV`，尚无有效通过结论。
+  - 有效通过：`2 / 3`
+  - 检测时间：`2026-06-12 18:48:16 +0800`
+  - 备注：case 已实现；`session-initial-create-and-title`、`send-guard-mode-switch-and-preferences` 已通过真实 Electron UI 和真实模型；`reference-token-lifecycle` 已越过 macOS 原生目录选择、workspace 绑定和索引，当前稳定失败在 Workbench `@` 候选阶段 Electron 主进程 `SIGSEGV`，尚无有效通过结论。
 - `run`
   - 登记 case：`5`
   - 有效通过：`1 / 5`
@@ -41,12 +44,13 @@
 - `result`
   - 登记 case：`5`
   - 有效通过：`0 / 5`
-  - 检测时间：`2026-06-12 16:34:20 +0800`
-  - 备注：case 已实现；本轮未重跑 result suite，尚无有效通过结论。
+  - 检测时间：`2026-06-12 19:18:43 +0800`
+  - 备注：case 已实现；`search-results-open-rules` 当前阻塞在共享 workspace 绑定前置，已确认真实 UI 创建 workspace 并触发 `pickDirectory`，但 macOS 原生目录选择自动化未能回填临时目录，尚未进入真实搜索断言。
 
 ### 2.3 待产品 / 生产实现决策的缺口
 
 - Workbench formal e2e 通过脚本在 case 运行时把 `tests/fixtures/workspace` 复制到临时目录，并使用 macOS 系统辅助功能权限操作原生目录选择器；测试不得回退到 `pickDirectoryResponse` 或 `workspaceSetRootPath`。
+- 当前系统自动化缺口：`search-results-open-rules` 多次重跑均能通过真实 UI 触发 `pickDirectory`，但 macOS 原生目录选择器没有把临时 workspace 路径回填到 Settings UI；该问题阻塞所有需要新建 / 绑定真实 workspace 的后续 case 继续执行到业务断言。
 - Workbench e2e 的 workspace 文件索引允许在测试环境通过 `NCURATOR_WORKSPACE_KNOWLEDGE_CACHE=1` 启用真实 split / vector 缓存；缓存只按文件内容 hash、扩展名、splitter 参数和 embedding model 复用计算结果，不替代 workspace 文件记录、document id、搜索结果或 UI 状态。
 - `reference-token-lifecycle` 当前暴露生产运行期缺口：真实 workspace 与网页资料准备完成后，在 Workbench 输入 `@` 并等待 `human-input.txt` 候选期间，Electron 主进程稳定 `SIGSEGV`；该问题需要产品 / 生产实现决策，本轮不在测试实现中修业务代码。
 - Workbench 模型选择 helper 已改为通过真实下拉搜索选择 `AI_LIVE_PRIMARY_MODEL_NAME`；`ai-process-stream-and-final-answer` 已验证 `deepseek-v4-flash` 可通过真实 UI 搜索选中。
