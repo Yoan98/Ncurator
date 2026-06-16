@@ -88,7 +88,7 @@ const CustomDocxRenderer = ({ mainState }: DocRendererProps) => {
   return (
     <div
       ref={containerRef}
-      className="docx-content h-full w-full overflow-auto bg-[#FAF9F5] px-3 py-3"
+      className="docx-content h-full w-full overflow-auto bg-[#F7F7F5] px-3 py-3"
       data-testid={workbenchSelectors.docxViewer}
     />
   )

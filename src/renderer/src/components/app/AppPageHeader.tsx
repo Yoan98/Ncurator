@@ -30,17 +30,17 @@ const AppPageHeader: React.FC<AppPageHeaderProps> = ({
           <Button
             type="text"
             onClick={() => navigate(backTo || '/')}
-            className="!flex !h-9 !w-9 !items-center !justify-center !rounded-[10px] !border !border-[#E1DED6] !bg-white !p-0 !text-[#6E6D69] shadow-none hover:!border-[#181818] hover:!text-[#181818]"
+            className="!flex !h-9 !w-9 !items-center !justify-center !rounded-[6px] !border !border-[#E6E4DF] !bg-white !p-0 !text-[#5F5E59] shadow-none hover:!border-[#37352F] hover:!text-[#37352F]"
             icon={<HiArrowLeft className="h-[18px] w-[18px]" />}
           />
-          <div className="flex min-w-0 items-center gap-2 text-[#181818]">
+          <div className="flex min-w-0 items-center gap-2 text-[#37352F]">
             <span className="ui-icon-well ui-icon-well-brand flex h-9 w-9">{icon}</span>
             <div className="min-w-0">
-              <h1 className="truncate text-[18px] font-semibold tracking-tight text-[#181818]">
+              <h1 className="truncate text-[18px] font-semibold tracking-tight text-[#37352F]">
                 {title}
               </h1>
               {description ? (
-                <p className="truncate text-[12px] text-[#6E6D69]">{description}</p>
+                <p className="truncate text-[12px] text-[#5F5E59]">{description}</p>
               ) : null}
             </div>
           </div>
@@ -58,22 +58,22 @@ const AppPageHeader: React.FC<AppPageHeaderProps> = ({
           <Button
             type="text"
             onClick={() => navigate('/')}
-            className="!flex !h-10 !items-center !gap-2 !rounded-[10px] !border !border-[#E1DED6] !bg-white !px-3 !text-[#181818] shadow-none hover:!border-[#181818] hover:!text-[#181818]"
+            className="!flex !h-10 !items-center !gap-2 !rounded-[6px] !border !border-[#E6E4DF] !bg-white !px-3 !text-[#37352F] shadow-none hover:!border-[#37352F] hover:!text-[#37352F]"
           >
             <span className="ui-icon-well ui-icon-well-brand flex h-7 w-7 border-none">
               <img src={brandIcon} alt="馆长" className="w-5 invert-100" />
             </span>
             <span className="text-[13px] font-semibold tracking-[0.01em]">馆长</span>
           </Button>
-          <span className="text-[#CBC7BD]">/</span>
-          <div className="flex min-w-0 items-center gap-2 text-[#181818]">
+          <span className="text-[#D8D6D0]">/</span>
+          <div className="flex min-w-0 items-center gap-2 text-[#37352F]">
             <span className="ui-icon-well ui-icon-well-brand flex h-9 w-9">{icon}</span>
             <div className="min-w-0">
-              <h1 className="truncate text-[18px] font-semibold tracking-tight text-[#181818]">
+              <h1 className="truncate text-[18px] font-semibold tracking-tight text-[#37352F]">
                 {title}
               </h1>
               {description ? (
-                <p className="truncate text-[12px] text-[#6E6D69]">{description}</p>
+                <p className="truncate text-[12px] text-[#5F5E59]">{description}</p>
               ) : null}
             </div>
           </div>

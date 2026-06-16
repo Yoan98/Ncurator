@@ -158,7 +158,7 @@ const NotificationCenter: React.FC = () => {
       {notifications.map((item) => (
         <Card
           key={item.id}
-          className="w-80 shadow-lg border-[#181818]/20 !bg-white/95 backdrop-blur-md pointer-events-auto animate-slide-in-right"
+          className="w-80 shadow-none border-[#37352F]/20 !bg-white/95 backdrop-blur-md pointer-events-auto animate-slide-in-right"
           size="small"
           actions={[
             <Button
@@ -166,7 +166,7 @@ const NotificationCenter: React.FC = () => {
               type="text"
               size="small"
               onClick={() => updateNotification(item.id, null)}
-              className="text-[#9C9A94]"
+              className="text-[#9B9A97]"
             >
               稍后
             </Button>,
@@ -179,7 +179,7 @@ const NotificationCenter: React.FC = () => {
                 updateNotification(item.id, null)
                 item.action.onClick()
               }}
-              className="!bg-[#181818] hover:!bg-[#3F3F3D]"
+              className="!bg-[#37352F] hover:!bg-[#2F3437]"
             >
               {item.action.label}
             </Button>
@@ -187,12 +187,12 @@ const NotificationCenter: React.FC = () => {
         >
           <Card.Meta
             avatar={
-              <div className="w-10 h-10 rounded-lg bg-[#F0EFEB] flex items-center justify-center text-[#181818]">
+              <div className="w-10 h-10 rounded-[8px] bg-[#F2F1EE] flex items-center justify-center text-[#37352F]">
                 {item.icon}
               </div>
             }
-            title={<span className="text-[#181818]">{item.title}</span>}
-            description={<Text className="text-[#6E6D69] text-xs">{item.description}</Text>}
+            title={<span className="text-[#37352F]">{item.title}</span>}
+            description={<Text className="text-[#5F5E59] text-xs">{item.description}</Text>}
           />
         </Card>
       ))}

@@ -15,41 +15,61 @@ function App(): React.JSX.Element {
       theme={{
         algorithm: theme.defaultAlgorithm,
         token: {
-          colorPrimary: '#181818',
-          colorLink: '#181818',
-          borderRadius: 10,
-          controlHeight: 36,
+          colorPrimary: '#2F3437',
+          colorLink: '#2F3437',
+          borderRadius: 6,
+          controlHeight: 34,
           controlHeightLG: 40,
           controlHeightSM: 28,
           fontSize: 14,
           fontFamily:
             '"SF Pro Text", "PingFang SC", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-          colorText: '#181818',
-          colorTextHeading: '#181818',
-          colorBorder: '#E1DED6',
-          colorBgLayout: '#F6F5F1'
+          colorText: '#37352F',
+          colorTextHeading: '#37352F',
+          colorTextSecondary: '#5F5E59',
+          colorTextTertiary: '#9B9A97',
+          colorBorder: '#E6E4DF',
+          colorBorderSecondary: '#E6E4DF',
+          colorBgBase: '#FFFFFF',
+          colorBgContainer: '#FFFFFF',
+          colorBgElevated: '#FFFFFF',
+          colorBgLayout: '#FBFBFA',
+          colorFillAlter: '#F7F7F5',
+          colorFillSecondary: '#F2F1EE',
+          colorFillTertiary: '#EDEDEB'
         },
         components: {
           Button: {
-            primaryShadow: '0 2px 8px rgba(24, 24, 24, 0.12)',
-            borderRadius: 10,
-            controlHeight: 36,
+            primaryShadow: 'none',
+            borderRadius: 6,
+            controlHeight: 34,
             defaultShadow: 'none'
           },
           Card: {
-            borderRadiusLG: 18
+            borderRadiusLG: 8
           },
           Input: {
-            controlHeight: 38,
-            activeBorderColor: '#181818',
-            hoverBorderColor: '#3F3F3D'
+            controlHeight: 36,
+            activeBorderColor: '#2F3437',
+            hoverBorderColor: '#D8D6D0'
           },
           Modal: {
-            borderRadiusLG: 24
+            borderRadiusLG: 8
           },
           Select: {
-            activeBorderColor: '#181818',
-            hoverBorderColor: '#3F3F3D'
+            activeBorderColor: '#2F3437',
+            hoverBorderColor: '#D8D6D0'
+          },
+          Table: {
+            borderColor: '#E6E4DF',
+            headerBg: '#F7F7F5',
+            headerColor: '#5F5E59',
+            rowHoverBg: '#F7F7F5'
+          },
+          Tag: {
+            borderRadiusSM: 6,
+            defaultBg: '#F2F1EE',
+            defaultColor: '#5F5E59'
           }
         }
       }}
@@ -62,8 +82,8 @@ function App(): React.JSX.Element {
 }
 
 const MainLayout: React.FC = () => (
-  <Layout className="min-h-screen bg-[var(--ink-canvas)]">
-    <Content className="overflow-auto bg-[var(--ink-canvas)]">
+  <Layout className="min-h-screen bg-[var(--notion-canvas)]">
+    <Content className="overflow-auto bg-[var(--notion-canvas)]">
       <Routes>
         <Route path="/" element={<ConversationWorkbenchPage />} />
         <Route path="/chat" element={<Navigate to="/" replace />} />

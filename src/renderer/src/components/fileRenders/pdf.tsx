@@ -75,14 +75,14 @@ const CustomPDFRenderer: DocRenderer = ({ mainState }: DocRendererProps) => {
     <div
       id="my-pdf-renderer"
       ref={scrollContainerRef}
-      className="relative h-full w-full overflow-auto bg-[#F0EFEB] p-4"
+      className="relative h-full w-full overflow-auto bg-[#F2F1EE] p-4"
     >
       <Document
         file={file}
         onLoadSuccess={onDocumentLoadSuccess}
         onLoadError={onDocumentLoadError}
         loading={
-          <div className="flex h-full items-center justify-center text-[#9C9A94]">
+          <div className="flex h-full items-center justify-center text-[#9B9A97]">
             Loading PDF...
           </div>
         }
@@ -95,7 +95,7 @@ const CustomPDFRenderer: DocRenderer = ({ mainState }: DocRendererProps) => {
               pageRefs.current[page] = element
             }}
             data-pdf-page={page}
-            className="shadow-lg"
+            className="shadow-none"
           >
             <Page
               pageNumber={page}
@@ -106,7 +106,7 @@ const CustomPDFRenderer: DocRenderer = ({ mainState }: DocRendererProps) => {
           </div>
         ))}
         {numPages > 1 && (
-          <div className="sticky bottom-4 left-1/2 z-10 w-fit min-w-[200px] -translate-x-1/2 rounded-full bg-white/80 p-2 opacity-20 shadow-md backdrop-blur-sm transition-opacity duration-300 hover:opacity-100">
+          <div className="sticky bottom-4 left-1/2 z-10 w-fit min-w-[200px] -translate-x-1/2 rounded-full bg-white/80 p-2 opacity-20 shadow-none backdrop-blur-sm transition-opacity duration-300 hover:opacity-100">
             <Pagination
               current={pageNumber}
               total={numPages}

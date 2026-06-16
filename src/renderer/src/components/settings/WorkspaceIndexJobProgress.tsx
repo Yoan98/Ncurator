@@ -27,23 +27,23 @@ const WorkspaceIndexJobProgress: React.FC<WorkspaceIndexJobProgressProps> = ({ j
 
   return (
     <div
-      className="mt-3 rounded-[12px] border border-[#E1DED6] bg-white px-3 py-2"
+      className="mt-3 rounded-[6px] border border-[#E6E4DF] bg-white px-3 py-2"
       data-testid={testId}
     >
       <div className="flex items-center justify-between gap-3 text-[12px]">
-        <span className="font-medium text-[#181818]">{title}</span>
-        <span className="shrink-0 text-[#9C9A94]">{percent}%</span>
+        <span className="font-medium text-[#37352F]">{title}</span>
+        <span className="shrink-0 text-[#9B9A97]">{percent}%</span>
       </div>
       <Progress
         percent={percent}
         showInfo={false}
         size="small"
-        strokeColor="#181818"
+        strokeColor="#37352F"
         trailColor="#F1EFEC"
         className="mt-1.5"
       />
       {shouldHideMessage ? null : (
-        <div className="mt-1 text-[11px] text-[#6E6D69]">
+        <div className="mt-1 text-[11px] text-[#5F5E59]">
           <span className="block truncate">{message}</span>
         </div>
       )}

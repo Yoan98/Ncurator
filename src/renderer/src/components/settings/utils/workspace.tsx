@@ -27,13 +27,13 @@ export const getTreeEntryStatusMeta = (
   if (entry.kind !== 'file' || !entry.supported_for_index) return null
   switch (entry.index_status) {
     case 'indexing':
-      return { label: '索引中', className: 'border-[#E1DED6] bg-[#F0EFEB] text-[#3F3F3D]' }
+      return { label: '索引中', className: 'border-[#E6E4DF] bg-[#F2F1EE] text-[#2F3437]' }
     case 'indexed':
-      return { label: '已索引', className: 'border-[#CBC7BD] bg-[#FAF9F5] text-[#6E6D69]' }
+      return { label: '已索引', className: 'border-[#D8D6D0] bg-[#F7F7F5] text-[#5F5E59]' }
     case 'failed':
-      return { label: '失败', className: 'border-[#D9C6C2] bg-[#F7F1EF] text-[#A83A31]' }
+      return { label: '失败', className: 'border-[#E7CAC6] bg-[#F8EBE9] text-[#B3261E]' }
     default:
-      return { label: '可索引', className: 'border-[#E1DED6] bg-[#F8F8F7] text-[#6E6D69]' }
+      return { label: '可索引', className: 'border-[#E6E4DF] bg-[#F7F7F5] text-[#5F5E59]' }
   }
 }
 
@@ -73,7 +73,7 @@ export const createWorkspaceTree = (entries: WorkspaceTreeEntry[]): WorkspaceTre
     const fileNameNode = (
       <Tooltip title={entry.name} placement="topLeft">
         <span
-          className="block min-w-0 truncate text-[14px] leading-6 text-[#181818]"
+          className="block min-w-0 truncate text-[14px] leading-6 text-[#37352F]"
           style={{ maxWidth: WORKSPACE_TREE_FILE_NAME_MAX_WIDTH }}
         >
           {entry.name}
@@ -85,10 +85,10 @@ export const createWorkspaceTree = (entries: WorkspaceTreeEntry[]): WorkspaceTre
       title: (
         <div className="grid w-full min-w-0 max-w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 py-1">
           {entry.kind === 'directory' ? (
-            <HiFolder className="h-4 w-4 shrink-0 text-[#181818]" />
+            <HiFolder className="h-4 w-4 shrink-0 text-[#37352F]" />
           ) : (
             <HiDocumentText
-              className={`h-4 w-4 shrink-0 ${entry.supported_for_index ? 'text-[#6E6D69]' : 'text-[#9C9A94]'}`}
+              className={`h-4 w-4 shrink-0 ${entry.supported_for_index ? 'text-[#5F5E59]' : 'text-[#9B9A97]'}`}
             />
           )}
           <div className="min-w-0">{fileNameNode}</div>
@@ -98,7 +98,7 @@ export const createWorkspaceTree = (entries: WorkspaceTreeEntry[]): WorkspaceTre
                 {statusMeta.label}
               </Tag>
             ) : (
-              <Tag className="!mr-0 shrink-0 rounded-full border-[#E1DED6] bg-[#F8F8F7] text-[#9C9A94]">
+              <Tag className="!mr-0 shrink-0 rounded-full border-[#E6E4DF] bg-[#F7F7F5] text-[#9B9A97]">
                 不支持
               </Tag>
             )
@@ -155,7 +155,7 @@ export const getWebStatusBadge = (
   if (isRefreshing || source.index_status === 'crawling') {
     return {
       label: '爬取中',
-      className: 'border-[#E1DED6] bg-[#F0EFEB] text-[#3F3F3D]',
+      className: 'border-[#E6E4DF] bg-[#F2F1EE] text-[#2F3437]',
       tooltip: '正在爬取网页正文。',
       icon: <HiArrowPath className={STATUS_SPIN_ICON_CLASSNAME} />
     }
@@ -164,7 +164,7 @@ export const getWebStatusBadge = (
   if (source.index_status === 'indexing') {
     return {
       label: '索引中',
-      className: 'border-[#E1DED6] bg-[#F0EFEB] text-[#3F3F3D]',
+      className: 'border-[#E6E4DF] bg-[#F2F1EE] text-[#2F3437]',
       tooltip: '正在建立网页索引。',
       icon: <HiArrowPath className={STATUS_SPIN_ICON_CLASSNAME} />
     }
@@ -173,7 +173,7 @@ export const getWebStatusBadge = (
   if (source.index_status === 'indexed') {
     return {
       label: '已索引',
-      className: 'border-[#CBC7BD] bg-[#FAF9F5] text-[#6E6D69]',
+      className: 'border-[#D8D6D0] bg-[#F7F7F5] text-[#5F5E59]',
       tooltip: `最近索引：${formatDateTime(source.last_indexed_at)}`,
       icon: <HiCheckCircle className={STATUS_ICON_CLASSNAME} />
     }
@@ -182,7 +182,7 @@ export const getWebStatusBadge = (
   if (source.index_status === 'crawl_failed') {
     return {
       label: '爬取失败',
-      className: 'border-[#D9C6C2] bg-[#F7F1EF] text-[#A83A31]',
+      className: 'border-[#E7CAC6] bg-[#F8EBE9] text-[#B3261E]',
       tooltip: source.last_error || '最近一次网页爬取失败。',
       icon: <HiOutlineExclamationCircle className={STATUS_ICON_CLASSNAME} />
     }
@@ -191,7 +191,7 @@ export const getWebStatusBadge = (
   if (source.index_status === 'index_failed') {
     return {
       label: '索引失败',
-      className: 'border-[#D9C6C2] bg-[#F7F1EF] text-[#A83A31]',
+      className: 'border-[#E7CAC6] bg-[#F8EBE9] text-[#B3261E]',
       tooltip: source.last_error || '最近一次网页索引失败。',
       icon: <HiOutlineExclamationCircle className={STATUS_ICON_CLASSNAME} />
     }
@@ -199,7 +199,7 @@ export const getWebStatusBadge = (
 
   return {
     label: '可索引',
-    className: 'border-[#E1DED6] bg-[#FAF9F5] text-[#6E6D69]',
+    className: 'border-[#E6E4DF] bg-[#F7F7F5] text-[#5F5E59]',
     tooltip: '网页需要建立或更新索引。',
     icon: <HiOutlineClock className={STATUS_ICON_CLASSNAME} />
   }

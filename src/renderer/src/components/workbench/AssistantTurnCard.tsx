@@ -42,19 +42,19 @@ type AssistantTurnCardProps = {
 }
 
 const getProcessStatusClassName = (status: AssistantProcessGroup['status']): string => {
-  if (status === 'running') return 'text-[#181818]'
-  if (status === 'failed') return 'text-[#A83A31]'
-  return 'text-[#9C9A94]'
+  if (status === 'running') return 'text-[#37352F]'
+  if (status === 'failed') return 'text-[#B3261E]'
+  return 'text-[#9B9A97]'
 }
 
 const getLayerIconClassName = (iconKind: AssistantProcessIconKind): string => {
-  if (iconKind === 'learning') return 'text-[#6E6D69]'
-  if (iconKind === 'compaction') return 'text-[#6E6D69]'
-  if (iconKind === 'document') return 'text-[#6E6D69]'
-  if (iconKind === 'edit') return 'text-[#6E6D69]'
-  if (iconKind === 'search') return 'text-[#6E6D69]'
-  if (iconKind === 'terminal') return 'text-[#6E6D69]'
-  return 'text-[#9C9A94]'
+  if (iconKind === 'learning') return 'text-[#5F5E59]'
+  if (iconKind === 'compaction') return 'text-[#5F5E59]'
+  if (iconKind === 'document') return 'text-[#5F5E59]'
+  if (iconKind === 'edit') return 'text-[#5F5E59]'
+  if (iconKind === 'search') return 'text-[#5F5E59]'
+  if (iconKind === 'terminal') return 'text-[#5F5E59]'
+  return 'text-[#9B9A97]'
 }
 
 const LayerIcon: React.FC<{ iconKind: AssistantProcessIconKind; className?: string }> = ({
@@ -91,7 +91,7 @@ const renderSegments = (
     {segments.map((segment, index) => (
       <span
         key={`${segment.text}-${index}`}
-        className={`inline-flex items-center gap-1 ${segment.emphasis ? 'font-semibold text-[#181818]' : ''}`}
+        className={`inline-flex items-center gap-1 ${segment.emphasis ? 'font-semibold text-[#37352F]' : ''}`}
       >
         {segment.iconKind ? <LayerIcon iconKind={segment.iconKind} /> : null}
         {segment.text}
@@ -104,7 +104,7 @@ const AssistantProcessThoughtView: React.FC<{ thought: AssistantProcessThought }
   thought
 }) => (
   <div
-    className="text-[14px] leading-7 text-[#181818]"
+    className="text-[14px] leading-7 text-[#37352F]"
     data-testid={workbenchSelectors.assistantThoughts}
   >
     {thought.text}
@@ -122,7 +122,7 @@ const AssistantProcessGroupView: React.FC<{ group: AssistantProcessGroup }> = ({
       data-testid={`${workbenchSelectors.assistantProcessItemPrefix}-${group.id}`}
     >
       <summary
-        className={`flex list-none items-start rounded-xl outline-none [&::-webkit-details-marker]:hidden ${
+        className={`flex list-none items-start rounded-[8px] outline-none [&::-webkit-details-marker]:hidden ${
           group.items.length > 0 ? 'cursor-pointer' : ''
         }`}
       >
@@ -134,14 +134,14 @@ const AssistantProcessGroupView: React.FC<{ group: AssistantProcessGroup }> = ({
             {renderSegments(groupText, { shimmer: isRunning })}
           </span>
           {group.items.length > 0 ? (
-            <HiChevronDown className="mt-[1px] h-4 w-4 shrink-0 text-[#9C9A94] transition-transform duration-200 group-open/process:rotate-180" />
+            <HiChevronDown className="mt-[1px] h-4 w-4 shrink-0 text-[#9B9A97] transition-transform duration-200 group-open/process:rotate-180" />
           ) : null}
         </span>
       </summary>
       {group.items.length > 0 ? (
-        <div className="mt-1.5 space-y-1.5 pl-4 text-[13px] leading-6 text-[#6E6D69]">
+        <div className="mt-1.5 space-y-1.5 pl-4 text-[13px] leading-6 text-[#5F5E59]">
           {group.items.map((item) => (
-            <div key={item.id} className={item.status === 'failed' ? 'text-[#A83A31]' : undefined}>
+            <div key={item.id} className={item.status === 'failed' ? 'text-[#B3261E]' : undefined}>
               {renderSegments(getItemText(item))}
             </div>
           ))}
@@ -246,17 +246,17 @@ const AssistantExecutionGroupView: React.FC<{ groups: AssistantProcessGroup[]; i
       data-testid={`${workbenchSelectors.assistantProcessItemPrefix}-${id}`}
     >
       <summary
-        className={`flex list-none items-start rounded-xl outline-none [&::-webkit-details-marker]:hidden ${
+        className={`flex list-none items-start rounded-[8px] outline-none [&::-webkit-details-marker]:hidden ${
           items.length > 0 ? 'cursor-pointer' : ''
         }`}
       >
         <span
           className={`inline-flex min-w-0 flex-1 items-center gap-1 text-[13px] leading-6 transition-colors duration-200 ${
             status === 'failed'
-              ? 'text-[#A83A31]'
+              ? 'text-[#B3261E]'
               : isRunning
-                ? 'text-[#181818]'
-                : 'text-[#9C9A94] group-hover/execution:text-[#181818]'
+                ? 'text-[#37352F]'
+                : 'text-[#9B9A97] group-hover/execution:text-[#37352F]'
           }`}
         >
           <span className={isRunning ? 'font-medium' : undefined}>
@@ -264,16 +264,16 @@ const AssistantExecutionGroupView: React.FC<{ groups: AssistantProcessGroup[]; i
           </span>
           {items.length > 0 ? (
             <>
-              <HiChevronRight className="mt-[1px] h-4 w-4 shrink-0 text-[#9C9A94] opacity-0 transition-all duration-200 group-hover/execution:opacity-100 group-open/execution:hidden" />
-              <HiChevronDown className="mt-[1px] hidden h-4 w-4 shrink-0 text-[#9C9A94] transition-all duration-200 group-open/execution:block" />
+              <HiChevronRight className="mt-[1px] h-4 w-4 shrink-0 text-[#9B9A97] opacity-0 transition-all duration-200 group-hover/execution:opacity-100 group-open/execution:hidden" />
+              <HiChevronDown className="mt-[1px] hidden h-4 w-4 shrink-0 text-[#9B9A97] transition-all duration-200 group-open/execution:block" />
             </>
           ) : null}
         </span>
       </summary>
       {items.length > 0 ? (
-        <div className="mt-1.5 space-y-1.5 pl-4 text-[13px] leading-6 text-[#6E6D69]">
+        <div className="mt-1.5 space-y-1.5 pl-4 text-[13px] leading-6 text-[#5F5E59]">
           {items.map((item) => (
-            <div key={item.id} className={item.status === 'failed' ? 'text-[#A83A31]' : undefined}>
+            <div key={item.id} className={item.status === 'failed' ? 'text-[#B3261E]' : undefined}>
               {renderSegments(getItemText(item))}
             </div>
           ))}
@@ -291,7 +291,7 @@ const renderArtifactChip = (
     <button
       type="button"
       onClick={() => onOpenFile(file)}
-      className="ui-hover-lift inline-flex max-w-full items-center gap-2 rounded-full border border-[#E1DED6] bg-white px-3 py-1.5 text-left text-xs text-[#6E6D69] hover:border-[#181818] hover:text-[#181818]"
+      className="ui-hover-lift inline-flex max-w-full items-center gap-2 rounded-full border border-[#E6E4DF] bg-white px-3 py-1.5 text-left text-xs text-[#5F5E59] hover:border-[#37352F] hover:text-[#37352F]"
     >
       <HiOutlineDocumentText className="h-3.5 w-3.5 shrink-0" />
       <span className="truncate">{file.fileName}</span>
@@ -356,7 +356,7 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
 
         {hasFinalAnswer ? (
           <div
-            className="min-w-0 text-[15px] leading-7 text-[#181818]"
+            className="min-w-0 text-[15px] leading-7 text-[#37352F]"
             data-testid={`${workbenchSelectors.assistantFinalAnswerPrefix}-${messageId}`}
           >
             <MarkdownRenderer content={finalAnswerMarkdown} onOpenReference={onOpenReference} />
@@ -364,17 +364,17 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
         ) : null}
 
         {!hasFinalAnswer && turn.status === 'failed' && turn.error ? (
-          <div className="rounded-[18px] border border-[#D9C6C2] bg-[#F7F1EF] px-4 py-3 text-sm leading-6 text-[#A83A31]">
+          <div className="rounded-[8px] border border-[#E7CAC6] bg-[#F8EBE9] px-4 py-3 text-sm leading-6 text-[#B3261E]">
             {turn.error}
           </div>
         ) : null}
 
         {turn.applyTargets.length > 0 ? (
-          <div className="rounded-[18px] border border-[#E1DED6] bg-[#F0EFEB] px-4 py-3">
-            <div className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-[#6E6D69]">
+          <div className="border-y border-[#E6E4DF] bg-white py-2">
+            <div className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-[#5F5E59]">
               修改的文件
             </div>
-            <div className="space-y-2">
+            <div>
               {turn.applyTargets.map((apply) => {
                 const statusMeta = apply.status ? FILE_CHANGE_STATUS_META[apply.status] : null
                 return (
@@ -383,12 +383,12 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
                     type="button"
                     onClick={() => onOpenApply(apply.changeId)}
                     data-testid={`${workbenchSelectors.assistantTurnApplyPrefix}-${apply.changeId}`}
-                    className="w-full rounded-2xl border border-[#E1DED6] bg-white px-4 py-3 text-left transition-all duration-200 hover:-translate-y-[1px] hover:border-[#181818]"
+                    className="w-full rounded-[6px] px-3 py-2.5 text-left transition-colors duration-200 hover:bg-[#F7F7F5]"
                   >
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
-                        <div className="text-[13px] font-medium text-[#181818]">{apply.title}</div>
-                        <div className="mt-1 text-xs text-[#6E6D69]">
+                        <div className="text-[13px] font-medium text-[#37352F]">{apply.title}</div>
+                        <div className="mt-1 text-xs text-[#5F5E59]">
                           {apply.changeCount} 处修改
                         </div>
                       </div>
@@ -418,10 +418,10 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
             {turn.blockers.map((blocker) => (
               <div
                 key={`${blocker.kind}-${blocker.title}`}
-                className="rounded-2xl border border-[#E1DED6] bg-[#FAF9F5] px-4 py-3 text-sm text-[#6E6D69]"
+                className="rounded-[8px] border border-[#E6E4DF] bg-[#F7F7F5] px-4 py-3 text-sm text-[#5F5E59]"
               >
-                <div className="font-medium text-[#6E6D69]">{blocker.title}</div>
-                <div className="mt-1 text-xs leading-relaxed text-[#6E6D69]">
+                <div className="font-medium text-[#5F5E59]">{blocker.title}</div>
+                <div className="mt-1 text-xs leading-relaxed text-[#5F5E59]">
                   {blocker.description}
                 </div>
               </div>

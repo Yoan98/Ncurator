@@ -9,9 +9,9 @@ export const WORKBENCH_PREFERENCE_WORKSPACE_STORAGE_KEY = 'workbench.preference.
 
 export const FILE_CHANGE_STATUS_META: Record<AiFileChangeStatus, { label: string; className: string }> =
   {
-    applied: { label: '已修改', className: 'border-[#E1DED6] bg-[#F0EFEB] text-[#181818]' },
-    reverted: { label: '已回退', className: 'border-[#CBC7BD] bg-[#FAF9F5] text-[#6E6D69]' },
-    failed: { label: '失败', className: 'border-[#D9C6C2] bg-[#F7F1EF] text-[#A83A31]' }
+    applied: { label: '已修改', className: 'border-[#E6E4DF] bg-[#F2F1EE] text-[#37352F]' },
+    reverted: { label: '已回退', className: 'border-[#D8D6D0] bg-[#F7F7F5] text-[#5F5E59]' },
+    failed: { label: '失败', className: 'border-[#E7CAC6] bg-[#F8EBE9] text-[#B3261E]' }
   }
 
 export const FILE_ORIGIN_LABELS: Record<WorkbenchFileOrigin, string> = {

@@ -206,7 +206,7 @@ const ModelDownloadPage: React.FC = () => {
 
   return (
     <div
-      className="h-screen overflow-hidden bg-[radial-gradient(circle_at_top_left,_rgba(255,253,248,0.86),_rgba(240,239,235,0.74)_42%,_#F6F5F1_72%)]"
+      className="h-screen overflow-hidden bg-[#FBFBFA]"
       data-testid={vectorSelectors.page}
     >
       <div className="mx-auto flex h-full w-full max-w-[1360px] flex-col gap-5 px-5 py-5 lg:px-6">
@@ -219,16 +219,16 @@ const ModelDownloadPage: React.FC = () => {
         />
 
         <div className="min-h-0 flex-1 overflow-hidden pb-4 pr-1">
-          <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-[20px] border border-[#E1DED6] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
-            <div className="border-b border-[#E1DED6] px-5 py-4">
-              <Title level={4} className="!mb-0 !text-[#181818]">
+          <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-[8px] border border-[#E6E4DF] bg-white shadow-none">
+            <div className="border-b border-[#E6E4DF] px-5 py-4">
+              <Title level={4} className="!mb-0 !text-[#37352F]">
                 {TEXT.listTitle}
               </Title>
             </div>
-            <div className="min-h-0 flex-1 overflow-auto px-5 py-2 pr-4">
+            <div className="min-h-0 flex-1 overflow-auto px-5 py-2 pr-4 [&_.ant-list-item]:!border-[#E6E4DF] [&_.ant-list-item]:transition-colors [&_.ant-list-item:hover]:!bg-[#F7F7F5]">
               {catalogError ? (
                 <div
-                  className="mb-4 rounded-[18px] border border-[#D9C6C2] bg-[#F7F1EF] px-4 py-3 text-sm text-[#A83A31]"
+                  className="mb-4 rounded-[8px] border border-[#E7CAC6] bg-[#F8EBE9] px-4 py-3 text-sm text-[#B3261E]"
                   data-testid={vectorSelectors.catalogError}
                 >
                   {catalogError}
@@ -269,7 +269,7 @@ const ModelDownloadPage: React.FC = () => {
                             </Popconfirm>,
                             <div
                               key={`installed-${item.id}`}
-                              className="flex items-center gap-2 font-medium text-green-600"
+                              className="flex items-center gap-2 font-medium text-[#2F6F4E]"
                               data-testid={`${vectorSelectors.installedBadgePrefix}-${item.id}`}
                             >
                               <HiCheckCircle className="text-lg" />
@@ -287,7 +287,7 @@ const ModelDownloadPage: React.FC = () => {
                                 key={`download-${item.id}`}
                                 type="primary"
                                 onClick={() => void handleDownload(item.id)}
-                                className="!border-none !bg-[#181818] shadow-sm hover:!bg-[#3F3F3D]"
+                                className="!border-none !bg-[#37352F] shadow-none hover:!bg-[#2F3437]"
                                 disabled={Boolean(downloadingId)}
                                 data-testid={`${vectorSelectors.downloadButtonPrefix}-${item.id}`}
                               >
@@ -300,7 +300,7 @@ const ModelDownloadPage: React.FC = () => {
                     <List.Item.Meta
                       title={
                         <div className="mb-2 flex items-center gap-3">
-                          <span className="text-[16px] font-semibold text-[#181818]">
+                          <span className="text-[16px] font-semibold text-[#37352F]">
                             {item.name}
                           </span>
                           {item.tags.map((tag) => (
@@ -312,28 +312,28 @@ const ModelDownloadPage: React.FC = () => {
                       }
                       description={
                         <div className="space-y-4">
-                          <p className="text-[#6E6D69]">{item.description}</p>
+                          <p className="text-[#5F5E59]">{item.description}</p>
 
                           {downloadingId === item.id ? (
                             <div
-                              className="rounded-[18px] border border-[#E1DED6] bg-[#F6F5F1] p-4"
+                              className="rounded-[8px] border border-[#E6E4DF] bg-[#FBFBFA] p-4"
                               data-testid={`${vectorSelectors.progressPrefix}-${item.id}`}
                             >
                               <div className="mb-2 flex justify-between text-sm">
-                                <span className="font-medium text-[#181818]">
+                                <span className="font-medium text-[#37352F]">
                                   {TEXT.downloadingLabel}
                                 </span>
-                                <span className="font-medium text-[#181818]">
+                                <span className="font-medium text-[#37352F]">
                                   {downloadProgress}%
                                 </span>
                               </div>
                               <Progress
                                 percent={downloadProgress}
-                                strokeColor="#181818"
+                                strokeColor="#37352F"
                                 showInfo={false}
                                 className="!mb-2"
                               />
-                              <div className="flex justify-between text-xs text-[#9C9A94]">
+                              <div className="flex justify-between text-xs text-[#9B9A97]">
                                 <span
                                   className="max-w-[200px] truncate"
                                   data-testid={`${vectorSelectors.currentFilePrefix}-${item.id}`}
@@ -349,7 +349,7 @@ const ModelDownloadPage: React.FC = () => {
 
                           {errorMsg && errorRepoId === item.id ? (
                             <div
-                              className="flex items-center gap-1 text-sm text-[#A83A31]"
+                              className="flex items-center gap-1 text-sm text-[#B3261E]"
                               data-testid={`${vectorSelectors.errorPrefix}-${item.id}`}
                             >
                               <HiExclamationCircle />

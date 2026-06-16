@@ -35,7 +35,7 @@ const CustomMarkdownRenderer = ({ mainState }) => {
   return (
     <div
       id="my-markdown-renderer"
-      className="markdown-body h-full w-full overflow-auto bg-[#FFFDF8] p-8"
+      className="markdown-body h-full w-full overflow-auto bg-[#FFFFFF] p-8"
     >
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}

@@ -206,14 +206,14 @@ const ModelSettingsPanel: React.FC = () => {
       render: (_value, record) => (
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <span className="font-medium text-[#181818]">{getProviderLabel(record)}</span>
+            <span className="font-medium text-[#37352F]">{getProviderLabel(record)}</span>
             {record.is_active ? (
-              <Tag color="#181818" icon={<HiCheckCircle className="inline" />}>
+              <Tag color="#37352F" icon={<HiCheckCircle className="inline" />}>
                 当前使用
               </Tag>
             ) : null}
           </div>
-          <div className="truncate text-[12px] text-[#6E6D69]">{record.base_url}</div>
+          <div className="truncate text-[12px] text-[#5F5E59]">{record.base_url}</div>
         </div>
       )
     },
@@ -244,7 +244,7 @@ const ModelSettingsPanel: React.FC = () => {
             size="small"
             loading={state?.loading}
             onClick={() => handleOpenModelList(record)}
-            className="!h-auto !px-0 !text-[#181818]"
+            className="!h-auto !px-0 !text-[#37352F]"
             data-testid={`${settingsSelectors.modelListButtonPrefix}-${record.id}`}
           >
             {label}
@@ -263,7 +263,7 @@ const ModelSettingsPanel: React.FC = () => {
               type="link"
               size="small"
               onClick={() => void handleActivate(record.id)}
-              className="!text-[#181818]"
+              className="!text-[#37352F]"
               data-testid={`${settingsSelectors.modelActivateButtonPrefix}-${record.id}`}
             >
               启用
@@ -274,7 +274,7 @@ const ModelSettingsPanel: React.FC = () => {
             size="small"
             icon={<HiPencil />}
             onClick={() => handleEdit(record)}
-            className="text-[#6E6D69] hover:text-[#181818]"
+            className="text-[#5F5E59] hover:text-[#37352F]"
             data-testid={`${settingsSelectors.modelEditButtonPrefix}-${record.id}`}
           />
           <Popconfirm
@@ -304,21 +304,21 @@ const ModelSettingsPanel: React.FC = () => {
       <section className="ui-panel-ghost shrink-0 px-4 py-3">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
-            <h2 className="text-[16px] font-semibold tracking-tight text-[#181818]">大模型</h2>
+            <h2 className="text-[16px] font-semibold tracking-tight text-[#37352F]">大模型</h2>
             {activeConfig ? (
-              <div className="truncate text-[12px] text-[#6E6D69]">
+              <div className="truncate text-[12px] text-[#5F5E59]">
                 {getProviderLabel(activeConfig)}
                 {activeConfig.default_model ? ` · ${activeConfig.default_model}` : ''}
               </div>
             ) : null}
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Tag className="!m-0 rounded-full border-[#E1DED6] bg-white px-3 py-1 text-[12px] text-[#6E6D69]">
+            <Tag className="!m-0 rounded-full border-[#E6E4DF] bg-white px-3 py-1 text-[12px] text-[#5F5E59]">
               共 {configs.length} 个配置
             </Tag>
             {activeConfig ? (
               <Tag
-                className="!m-0 rounded-full border-[#E1DED6] bg-[#F0EFEB] px-3 py-1 text-[12px] text-[#181818]"
+                className="!m-0 rounded-full border-[#E6E4DF] bg-[#F2F1EE] px-3 py-1 text-[12px] text-[#37352F]"
                 data-testid={settingsSelectors.modelSummaryCurrent}
               >
                 当前 {getProviderLabel(activeConfig)}
@@ -328,7 +328,7 @@ const ModelSettingsPanel: React.FC = () => {
               type="primary"
               icon={<HiPlus className="h-4 w-4" />}
               onClick={handleAdd}
-              className="border-none !bg-[#181818] shadow-sm hover:!bg-[#3F3F3D]"
+              className="border-none !bg-[#37352F] shadow-none hover:!bg-[#2F3437]"
               data-testid={settingsSelectors.modelAddButton}
             >
               新增配置
@@ -338,7 +338,7 @@ const ModelSettingsPanel: React.FC = () => {
       </section>
 
       {actionError ? (
-        <div className="rounded-[18px] border border-[#D9C6C2] bg-[#F7F1EF] px-4 py-3 text-[12px] text-[#A83A31]">
+        <div className="rounded-[8px] border border-[#E7CAC6] bg-[#F8EBE9] px-4 py-3 text-[12px] text-[#B3261E]">
           {actionError}
         </div>
       ) : null}
@@ -352,7 +352,7 @@ const ModelSettingsPanel: React.FC = () => {
             pagination={false}
             loading={loading}
             size="middle"
-            className="[&_.ant-table-thead_th]:!bg-[#F6F5F1] [&_.ant-table-thead_th]:!py-3 [&_.ant-table-thead_th]:!text-[12px] [&_.ant-table-thead_th]:!text-[#6E6D69] [&_.ant-table-thead_th]:!font-medium [&_.ant-table-tbody_td]:!py-3 [&_.ant-table-tbody_td]:!align-middle"
+            className="[&_.ant-table-thead_th]:!bg-[#FBFBFA] [&_.ant-table-thead_th]:!py-3 [&_.ant-table-thead_th]:!text-[12px] [&_.ant-table-thead_th]:!text-[#5F5E59] [&_.ant-table-thead_th]:!font-medium [&_.ant-table-tbody_td]:!py-3 [&_.ant-table-tbody_td]:!align-middle"
             data-testid={settingsSelectors.modelTable}
           />
         </div>
@@ -367,7 +367,7 @@ const ModelSettingsPanel: React.FC = () => {
         data-testid={settingsSelectors.modelModal}
         okButtonProps={{ 'data-testid': settingsSelectors.modelSaveButton }}
         cancelButtonProps={{ 'data-testid': settingsSelectors.modelCancelButton }}
-        className="[&_.ant-modal-content]:!rounded-[24px]"
+        className="[&_.ant-modal-content]:!rounded-[8px]"
       >
         <Form form={form} layout="vertical" className="pt-4">
           <Form.Item
@@ -397,9 +397,9 @@ const ModelSettingsPanel: React.FC = () => {
                       <div className="flex h-5 w-5 items-center justify-center">
                         {provider.icon}
                       </div>
-                      <span className="font-medium text-[#181818]">{provider.label}</span>
+                      <span className="font-medium text-[#37352F]">{provider.label}</span>
                     </div>
-                    <span className="text-xs text-[#9C9A94]">{provider.desc}</span>
+                    <span className="text-xs text-[#9B9A97]">{provider.desc}</span>
                   </div>
                 )
               }))}
@@ -449,13 +449,13 @@ const ModelSettingsPanel: React.FC = () => {
         }
         onCancel={() => setModelListConfigId(null)}
         width={560}
-        className="[&_.ant-modal-content]:!rounded-[24px]"
+        className="[&_.ant-modal-content]:!rounded-[8px]"
         data-testid={settingsSelectors.modelListModal}
       >
         {modelListConfig ? (
           <div className="flex flex-col gap-3 pt-2">
-            <div className="rounded-[14px] border border-[#E8E6DF] bg-[#FAF9F5] px-3 py-2 text-[12px] text-[#6E6D69]">
-              <div className="font-medium text-[#181818]">{modelListConfig.base_url}</div>
+            <div className="rounded-[8px] border border-[#EDEDEB] bg-[#F7F7F5] px-3 py-2 text-[12px] text-[#5F5E59]">
+              <div className="font-medium text-[#37352F]">{modelListConfig.base_url}</div>
               {modelListConfig.default_model ? (
                 <div className="mt-1">默认模型：{modelListConfig.default_model}</div>
               ) : (
@@ -463,35 +463,35 @@ const ModelSettingsPanel: React.FC = () => {
               )}
             </div>
             {modelListByConfigId[modelListConfig.id]?.error ? (
-              <div className="rounded-[14px] border border-[#D9C6C2] bg-[#F7F1EF] px-3 py-2 text-[12px] text-[#A83A31]">
+              <div className="rounded-[8px] border border-[#E7CAC6] bg-[#F8EBE9] px-3 py-2 text-[12px] text-[#B3261E]">
                 {modelListByConfigId[modelListConfig.id]?.error}
               </div>
             ) : null}
-            <div className="text-[12px] text-[#6E6D69]">
+            <div className="text-[12px] text-[#5F5E59]">
               共 {modelListByConfigId[modelListConfig.id]?.items.length || 0} 个模型
             </div>
-            <div className="max-h-[320px] overflow-auto rounded-[14px] border border-[#E1DED6]">
+            <div className="max-h-[320px] overflow-auto rounded-[8px] border border-[#E6E4DF]">
               {(modelListByConfigId[modelListConfig.id]?.items || []).map((model) => (
                 <div
                   key={model.id}
-                  className="flex items-center justify-between gap-3 border-b border-[#E1DED6] px-3 py-2 last:border-b-0"
+                  className="flex items-center justify-between gap-3 border-b border-[#E6E4DF] px-3 py-2 last:border-b-0"
                 >
-                  <span className="min-w-0 truncate text-[13px] text-[#181818]">
+                  <span className="min-w-0 truncate text-[13px] text-[#37352F]">
                     {model.label || model.id}
                   </span>
                   {model.id === modelListConfig.default_model ? (
-                    <Tag className="!m-0 border-[#E1DED6] bg-[#F0EFEB] text-[#181818]">
+                    <Tag className="!m-0 border-[#E6E4DF] bg-[#F2F1EE] text-[#37352F]">
                       默认
                     </Tag>
                   ) : null}
                 </div>
               ))}
               {modelListByConfigId[modelListConfig.id]?.loading ? (
-                <div className="px-3 py-8 text-center text-[12px] text-[#9C9A94]">获取中...</div>
+                <div className="px-3 py-8 text-center text-[12px] text-[#9B9A97]">获取中...</div>
               ) : null}
               {!modelListByConfigId[modelListConfig.id]?.loading &&
               (modelListByConfigId[modelListConfig.id]?.items.length || 0) === 0 ? (
-                <div className="px-3 py-8 text-center text-[12px] text-[#9C9A94]">
+                <div className="px-3 py-8 text-center text-[12px] text-[#9B9A97]">
                   暂无可展示模型
                 </div>
               ) : null}

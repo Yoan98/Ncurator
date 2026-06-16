@@ -3,13 +3,13 @@
 }
 
 .docx-content ins {
-    background: #F0EFEB !important;
-    color: #3F3F3D !important;
+    background: #F2F1EE !important;
+    color: #2F3437 !important;
     text-decoration: none !important;
 }
 
 .docx-content del {
-    background: #F7F1EF !important;
-    color: #A83A31 !important;
+    background: #F8EBE9 !important;
+    color: #B3261E !important;
     text-decoration: line-through !important;
 }

@@ -9,7 +9,7 @@ const SettingsFloatingMenu: React.FC = () => {
           placement="topLeft"
           bare
           iconClassName="h-6 w-6"
-          className="h-12 w-12 p-0 text-[#6E6D69]"
+          className="h-12 w-12 p-0 text-[#5F5E59]"
         />
       </div>
     </div>

@@ -4,7 +4,7 @@ import { HiArrowPath, HiCheckCircle, HiExclamationTriangle, HiRocketLaunch } fro
 import type { AppUpdateSnapshot, AppUpdateStatus } from '../../../../shared/types'
 
 const STATUS_META: Record<AppUpdateStatus, { label: string; className: string }> = {
-  idle: { label: '待检查', className: 'border-[#E1DED6] text-[#6E6D69]' },
+  idle: { label: '待检查', className: 'border-[#E6E4DF] text-[#5F5E59]' },
   checking: { label: '检查中', className: 'border-[#B8C7D9] text-[#2F5D8C]' },
   available: { label: '发现新版本', className: 'border-[#B8C7D9] text-[#2F5D8C]' },
   downloading: { label: '下载中', className: 'border-[#D7C48C] text-[#8A6D1A]' },
@@ -105,12 +105,12 @@ const AppUpdateSettingsPanel: React.FC = () => {
   }
 
   return (
-    <div className="h-full overflow-auto rounded-[18px] border border-[#E1DED6] bg-white p-5 shadow-sm">
+    <div className="h-full overflow-auto rounded-[8px] border border-[#E6E4DF] bg-white p-5 shadow-none">
       <div className="flex flex-col gap-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h2 className="m-0 text-[18px] font-semibold text-[#181818]">应用更新</h2>
-            <div className="mt-1 text-[13px] text-[#6E6D69]">
+            <h2 className="m-0 text-[18px] font-semibold text-[#37352F]">应用更新</h2>
+            <div className="mt-1 text-[13px] text-[#5F5E59]">
               当前版本 {snapshot?.currentVersion || '-'}
             </div>
           </div>
@@ -141,14 +141,14 @@ const AppUpdateSettingsPanel: React.FC = () => {
         />
 
         {snapshot?.availableVersion ? (
-          <div className="grid gap-3 text-[13px] text-[#3F3F3D] sm:grid-cols-2">
+          <div className="grid gap-3 text-[13px] text-[#2F3437] sm:grid-cols-2">
             <div>
-              <div className="text-[#6E6D69]">可用版本</div>
-              <div className="mt-1 font-medium text-[#181818]">{snapshot.availableVersion}</div>
+              <div className="text-[#5F5E59]">可用版本</div>
+              <div className="mt-1 font-medium text-[#37352F]">{snapshot.availableVersion}</div>
             </div>
             <div>
-              <div className="text-[#6E6D69]">发布时间</div>
-              <div className="mt-1 font-medium text-[#181818]">{snapshot.releaseDate || '-'}</div>
+              <div className="text-[#5F5E59]">发布时间</div>
+              <div className="mt-1 font-medium text-[#37352F]">{snapshot.releaseDate || '-'}</div>
             </div>
           </div>
         ) : null}
@@ -159,7 +159,7 @@ const AppUpdateSettingsPanel: React.FC = () => {
               percent={progressPercent}
               status={snapshot.status === 'downloaded' ? 'success' : 'active'}
             />
-            <div className="mt-1 text-[12px] text-[#6E6D69]">
+            <div className="mt-1 text-[12px] text-[#5F5E59]">
               {formatBytes(snapshot.transferredBytes)} / {formatBytes(snapshot.totalBytes)}
             </div>
           </div>

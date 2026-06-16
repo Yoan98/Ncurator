@@ -265,7 +265,7 @@ const delay = (ms: number): Promise<void> =>
   })
 
 const ChatPage: React.FC = () => {
-  const { message, modal } = App.useApp()
+  const { message } = App.useApp()
   const [sessions, setSessions] = useState<ChatSession[]>([])
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
   const [currentMessages, setCurrentMessages] = useState<ChatMessage[]>([])
@@ -451,7 +451,7 @@ const ChatPage: React.FC = () => {
       return {
         title: contentPanel.file.fileName || contentPanel.title,
         badge: FILE_ORIGIN_LABELS[contentPanel.file.origin],
-        badgeClassName: 'border-[#E1DED6] bg-white text-[#6E6D69]'
+        badgeClassName: 'border-[#E6E4DF] bg-white text-[#5F5E59]'
       }
     }
 
@@ -1784,7 +1784,7 @@ const ChatPage: React.FC = () => {
     return (
       <div key={messageItem.id} className="flex justify-end">
         <div className="max-w-[66%]">
-          <div className="rounded-[18px] border border-[#CBC7BD] bg-[#E8E6DF] px-3.5 py-2.5 text-[14px] leading-6 text-[#181818]">
+          <div className="rounded-[8px] border border-[#D8D6D0] bg-[#EDEDEB] px-3.5 py-2.5 text-[14px] leading-6 text-[#37352F]">
             {messageItem.content}
           </div>
         </div>
@@ -1797,7 +1797,7 @@ const ChatPage: React.FC = () => {
     if (!turn) {
       return (
         <div key={messageItem.id} className="w-full">
-          <div className="min-w-0 text-[15px] leading-7 text-[#181818]">
+          <div className="min-w-0 text-[15px] leading-7 text-[#37352F]">
             <MarkdownRenderer
               content={messageItem.content}
               onOpenReference={(reference) => {
@@ -1836,16 +1836,16 @@ const ChatPage: React.FC = () => {
 
   return (
     <div
-      className="flex min-h-screen bg-[#F6F5F1]"
+      className="flex min-h-screen bg-[#FBFBFA]"
       data-testid={workbenchSelectors.page}
       data-workbench-mode={composerMode}
     >
       <aside
-        className={`flex h-screen flex-col border-r border-[#E1DED6] bg-[#F7F5F1] transition-all duration-200 ${
+        className={`flex h-screen flex-col border-r border-[#E6E4DF] bg-[#F7F7F5] transition-all duration-200 ${
           sidebarCollapsed ? 'w-14' : 'w-[220px]'
         }`}
       >
-        <div className="border-b border-[#E1DED6] px-2 py-2">
+        <div className="border-b border-[#E6E4DF] px-2 py-2">
           <div
             className={`flex ${sidebarCollapsed ? 'flex-col items-center gap-1.5' : 'items-center justify-between gap-2'}`}
           >
@@ -1858,7 +1858,7 @@ const ChatPage: React.FC = () => {
                 <span className="ui-icon-well flex h-7 w-7 shrink-0 bg-white">
                   <img src={brandIcon} alt="馆长" className="w-4 invert-100" />
                 </span>
-                <span className="truncate text-[13px] font-semibold tracking-[0.01em] text-[#181818]">
+                <span className="truncate text-[13px] font-semibold tracking-[0.01em] text-[#37352F]">
                   馆长
                 </span>
               </div>
@@ -1869,7 +1869,7 @@ const ChatPage: React.FC = () => {
                 type="text"
                 size="small"
                 icon={<HiOutlinePencilSquare className="h-3 w-3" />}
-                className="!flex !h-7 !w-7 !items-center !justify-center !rounded-[10px] !border !border-[#E1DED6] !bg-white !p-0 !text-[#181818] !shadow-none hover:!border-[#181818] hover:!text-[#3F3F3D]"
+                className="!flex !h-7 !w-7 !items-center !justify-center !rounded-[6px] !border !border-[#E6E4DF] !bg-white !p-0 !text-[#37352F] !shadow-none hover:!border-[#37352F] hover:!text-[#2F3437]"
                 onClick={() => void createNewSession()}
                 data-testid={workbenchSelectors.newSessionButton}
               />
@@ -1883,10 +1883,10 @@ const ChatPage: React.FC = () => {
                     <HiViewColumns className="h-3 w-3" />
                   )
                 }
-                className={`!flex !h-7 !w-7 !items-center !justify-center !rounded-[10px] !border !p-0 !shadow-none hover:!border-[#181818] hover:!text-[#181818] ${
+                className={`!flex !h-7 !w-7 !items-center !justify-center !rounded-[6px] !border !p-0 !shadow-none hover:!border-[#37352F] hover:!text-[#37352F] ${
                   sidebarCollapsed
-                    ? '!border-[#E1DED6] !bg-white !text-[#6E6D69]'
-                    : '!border-[#E1DED6] !bg-[#F0EFEB] !text-[#181818]'
+                    ? '!border-[#E6E4DF] !bg-white !text-[#5F5E59]'
+                    : '!border-[#E6E4DF] !bg-[#F2F1EE] !text-[#37352F]'
                 }`}
                 onClick={() => setSidebarCollapsed((previous) => !previous)}
                 data-testid={workbenchSelectors.sessionsToggle}
@@ -1904,10 +1904,10 @@ const ChatPage: React.FC = () => {
               key={session.id}
               role="button"
               tabIndex={0}
-              className={`group relative w-full rounded-[14px] border text-left transition-all duration-200 ${
+              className={`group relative w-full rounded-[6px] text-left transition-all duration-200 ${
                 currentSessionId === session.id
-                  ? 'border-[#E1DED6] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]'
-                  : 'border-transparent bg-transparent hover:border-[#E8E6DF] hover:bg-white/80'
+                  ? 'bg-[#F2F1EE]'
+                  : 'bg-transparent hover:bg-[#EDEDEB]'
               } ${sidebarCollapsed ? 'px-2 py-2' : 'px-3 py-2'}`}
               onClick={() => setCurrentSessionId(session.id)}
               onKeyDown={(event) => {
@@ -1918,15 +1918,15 @@ const ChatPage: React.FC = () => {
               }}
             >
               {sidebarCollapsed ? (
-                <div className="flex justify-center text-xs font-medium text-[#181818]">
+                <div className="flex justify-center text-xs font-medium text-[#37352F]">
                   {session.title.slice(0, 1)}
                 </div>
               ) : (
                 <>
-                  <div className="truncate pr-6 text-[13px] font-medium text-[#181818]">
+                  <div className="truncate pr-6 text-[13px] font-medium text-[#37352F]">
                     {session.title}
                   </div>
-                  <div className="mt-1 text-[12px] text-[#9C9A94]">
+                  <div className="mt-1 text-[12px] text-[#9B9A97]">
                     {formatSessionDate(session.created_at)}
                   </div>
                   <Button
@@ -1946,7 +1946,7 @@ const ChatPage: React.FC = () => {
           <SettingsMenuButton
             label={sidebarCollapsed ? undefined : '设置'}
             placement={sidebarCollapsed ? 'topRight' : 'topLeft'}
-            className={`!h-7 !rounded-[10px] ${
+            className={`!h-7 !rounded-[6px] ${
               sidebarCollapsed ? '!w-7 !px-0' : '!w-full !justify-start !px-2.5'
             }`}
           />
@@ -1956,24 +1956,24 @@ const ChatPage: React.FC = () => {
       <div className="min-w-0 flex-1">
         <div className="flex h-screen min-h-0 flex-col">
           <div
-            className={`flex h-11 shrink-0 items-center justify-between bg-[#F6F5F1] px-4 ${
-              contentPanelCollapsed ? '' : 'border-b border-[#E1DED6]'
+            className={`flex h-11 shrink-0 items-center justify-between bg-white px-4 ${
+              contentPanelCollapsed ? '' : 'border-b border-[#E6E4DF]'
             }`}
           >
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0 flex-1 bg-white">
               {currentSession || sharedHeaderMeta ? (
                 <div className="flex min-w-0 items-center gap-2">
                   {currentSession ? (
-                    <div className="truncate text-sm font-semibold text-[#181818]">
+                    <div className="truncate text-sm font-semibold text-[#37352F]">
                       {currentSession.title}
                     </div>
                   ) : null}
                   {currentSession && sharedHeaderMeta ? (
-                    <span className="text-[#CBC7BD]">/</span>
+                    <span className="text-[#D8D6D0]">/</span>
                   ) : null}
                   {sharedHeaderMeta ? (
                     <div
-                      className="truncate text-sm font-semibold text-[#181818]"
+                      className="truncate text-sm font-semibold text-[#37352F]"
                       data-testid={workbenchSelectors.contentPanelTitle}
                     >
                       {sharedHeaderMeta.title}
@@ -2000,10 +2000,10 @@ const ChatPage: React.FC = () => {
                   <HiRectangleGroup className="h-3 w-3" />
                 )
               }
-              className={`!flex !h-7 !w-7 !items-center !justify-center !rounded-[10px] !border !p-0 !shadow-none hover:!border-[#181818] hover:!text-[#181818] ${
+              className={`!flex !h-7 !w-7 !items-center !justify-center !rounded-[6px] !border !p-0 !shadow-none hover:!border-[#37352F] hover:!text-[#37352F] ${
                 contentPanelCollapsed
-                  ? '!border-[#E1DED6] !bg-white !text-[#6E6D69]'
-                  : '!border-[#E1DED6] !bg-[#F0EFEB] !text-[#181818]'
+                  ? '!border-[#E6E4DF] !bg-white !text-[#5F5E59]'
+                  : '!border-[#E6E4DF] !bg-[#F2F1EE] !text-[#37352F]'
               }`}
               onClick={() => setContentPanelCollapsed((previous) => !previous)}
             />
@@ -2020,16 +2020,14 @@ const ChatPage: React.FC = () => {
                   <div className="mx-auto flex max-w-[920px] flex-col gap-5 pb-8">
                     {currentMessages.length === 0 ? (
                       <div className="relative flex min-h-[58vh] items-center justify-center overflow-hidden px-8 py-12 text-center">
-                        <div className="absolute inset-x-[12%] top-[18%] h-44 rounded-full bg-[radial-gradient(circle,rgba(255,253,248,0.9),rgba(240,239,235,0.48)_42%,rgba(246,245,241,0)_76%)] blur-2xl" />
-                        <div className="absolute inset-x-[20%] bottom-[20%] h-32 rounded-full bg-[radial-gradient(circle,rgba(225,222,214,0.38),rgba(246,245,241,0)_72%)] blur-3xl" />
                         <div className="relative max-w-[420px]">
-                          <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-[#FFFDF8]/70 text-[#6E6D69] shadow-[inset_0_0_0_1px_rgba(203,199,189,0.7)] backdrop-blur-sm">
+                          <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-[8px] border border-[#E6E4DF] bg-white text-[#5F5E59] shadow-none">
                             <HiBookOpen className="h-5 w-5" />
                           </div>
-                          <h3 className="mt-5 text-[18px] font-semibold tracking-[-0.01em] text-[#181818]">
+                          <h3 className="mt-5 text-[18px] font-semibold tracking-[-0.01em] text-[#37352F]">
                             从一个问题开始
                           </h3>
-                          <p className="mt-2 text-[13px] leading-6 text-[#6E6D69]">
+                          <p className="mt-2 text-[13px] leading-6 text-[#5F5E59]">
                             {composerMode === 'search'
                               ? '搜索模式只检索当前资料范围。'
                               : '智能模式会结合当前工作区与插入资料执行。'}
@@ -2046,11 +2044,11 @@ const ChatPage: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="shrink-0 bg-gradient-to-t from-[#F6F5F1] via-[#F6F5F1]/96 via-58% to-transparent px-6 pb-6 pt-6">
+                <div className="shrink-0 bg-gradient-to-t from-white via-white/96 via-58% to-transparent px-6 pb-6 pt-6">
                   <div className="mx-auto max-w-[920px]">
                     {composerMode === 'ai' && pendingApprovalBatch ? (
                       <div
-                        className="overflow-hidden rounded-[24px] border border-[#CBC7BD] bg-[#FFFDF8] shadow-[0_22px_52px_rgba(24,24,24,0.12)]"
+                        className="overflow-hidden rounded-[8px] border border-[#D8D6D0] bg-[#FFFFFF] shadow-[0_8px_26px_rgba(15,15,15,0.08)]"
                         data-testid={chatSelectors.approvalBatchCard}
                       >
                         {pendingApprovalBatch && currentApprovalItem ? (
@@ -2058,10 +2056,10 @@ const ChatPage: React.FC = () => {
                             <div className="flex items-center justify-between gap-3 px-5 pt-4">
                               <div className="flex min-w-0 items-center gap-2">
                                 <div className="min-w-0">
-                                  <div className="text-[15px] font-semibold text-[#181818]">
+                                  <div className="text-[15px] font-semibold text-[#37352F]">
                                     需要确认此操作
                                   </div>
-                                  <div className="text-xs text-[#9C9A94]">
+                                  <div className="text-xs text-[#9B9A97]">
                                     审批 {approvalCurrentIndex + 1} /{' '}
                                     {pendingApprovalBatch.items.length}
                                   </div>
@@ -2097,10 +2095,10 @@ const ChatPage: React.FC = () => {
                                   type="button"
                                   onClick={() => void handleCancel()}
                                   disabled={cancellingRun}
-                                  className={`ml-1 inline-flex h-8 w-8 items-center justify-center rounded-full text-white transition ${
+                                  className={`ml-1 inline-flex h-8 w-8 items-center justify-center rounded-[6px] text-white transition ${
                                     cancellingRun
-                                      ? 'bg-[#CBC7BD]'
-                                      : 'bg-[#A83A31] shadow-[0_6px_14px_rgba(181,69,93,0.16)] hover:-translate-y-[1px] hover:bg-[#8F3028]'
+                                      ? 'bg-[#D8D6D0]'
+                                      : 'bg-[#B3261E] hover:bg-[#8F3028]'
                                   }`}
                                   data-testid={workbenchSelectors.sendButton}
                                   aria-label="停止本次运行"
@@ -2113,16 +2111,16 @@ const ChatPage: React.FC = () => {
                                 </button>
                               </div>
                             </div>
-                            <p className="mx-5 mt-3 text-[13px] leading-6 text-[#6E6D69]">
+                            <p className="mx-5 mt-3 text-[13px] leading-6 text-[#5F5E59]">
                               当前运行需要你授权本地操作。
                             </p>
-                            <code className="mx-5 mt-3 block overflow-hidden whitespace-pre-wrap break-words rounded-[12px] border border-[#E1DED6] bg-[#F0EFEB] px-3.5 py-3 font-mono text-[13px] leading-6 text-[#3F3F3D]">
+                            <code className="mx-5 mt-3 block overflow-hidden whitespace-pre-wrap break-words rounded-[6px] border border-[#E6E4DF] bg-[#F2F1EE] px-3.5 py-3 font-mono text-[13px] leading-6 text-[#2F3437]">
                               {currentApprovalItem.command}
                             </code>
                             <div className="mx-2 mt-3 space-y-1">
                               <button
                                 type="button"
-                                className="grid min-h-11 w-full grid-cols-[28px_1fr_auto] items-center rounded-[12px] px-3 text-left text-[13px] text-[#181818] shadow-[inset_3px_0_0_#181818,inset_0_0_0_1px_#E1DED6] hover:bg-[#F0EFEB]"
+                                className="grid min-h-11 w-full grid-cols-[28px_1fr_auto] items-center rounded-[6px] px-3 text-left text-[13px] text-[#37352F] shadow-[inset_3px_0_0_#37352F,inset_0_0_0_1px_#E6E4DF] hover:bg-[#F2F1EE]"
                                 onClick={() =>
                                   void handleApprovalDecision({
                                     itemId: currentApprovalItem.itemId,
@@ -2132,13 +2130,13 @@ const ChatPage: React.FC = () => {
                                 disabled={approvalSubmitting}
                                 data-testid={chatSelectors.approvalBatchApproveButton}
                               >
-                                <span className="text-[#9C9A94]">1.</span>
+                                <span className="text-[#9B9A97]">1.</span>
                                 <span>允许本次操作</span>
                                 <HiCheck className="h-4 w-4" />
                               </button>
                               <button
                                 type="button"
-                                className="grid min-h-11 w-full grid-cols-[28px_1fr_auto] items-center rounded-[12px] px-3 text-left text-[13px] text-[#6E6D69] hover:bg-[#F0EFEB]"
+                                className="grid min-h-11 w-full grid-cols-[28px_1fr_auto] items-center rounded-[6px] px-3 text-left text-[13px] text-[#5F5E59] hover:bg-[#F2F1EE]"
                                 onClick={() =>
                                   void handleApprovalDecision({
                                     itemId: currentApprovalItem.itemId,
@@ -2148,14 +2146,14 @@ const ChatPage: React.FC = () => {
                                 disabled={approvalSubmitting}
                                 data-testid={chatSelectors.approvalBatchDenyButton}
                               >
-                                <span className="text-[#9C9A94]">2.</span>
+                                <span className="text-[#9B9A97]">2.</span>
                                 <span>拒绝本次操作</span>
-                                <HiXMark className="h-4 w-4 text-[#A83A31]" />
+                                <HiXMark className="h-4 w-4 text-[#B3261E]" />
                               </button>
                             </div>
-                            <div className="mt-3 flex items-center gap-2 border-t border-[#E1DED6] px-4 py-4">
+                            <div className="mt-3 flex items-center gap-2 border-t border-[#E6E4DF] px-4 py-4">
                               <input
-                                className="min-w-0 flex-1 rounded-[12px] border border-[#E1DED6] bg-[#FFFDF8] px-3 py-2 text-sm text-[#181818] outline-none placeholder:text-[#9C9A94] focus:border-[#181818] focus:ring-2 focus:ring-[#E8E6DF]"
+                                className="min-w-0 flex-1 rounded-[6px] border border-[#E6E4DF] bg-[#FFFFFF] px-3 py-2 text-sm text-[#37352F] outline-none placeholder:text-[#9B9A97] focus:border-[#37352F] focus:ring-2 focus:ring-[#EDEDEB]"
                                 placeholder="告诉馆长该怎么做"
                                 value={
                                   approvalDraftDecisions[currentApprovalItem.itemId]?.message || ''
@@ -2171,7 +2169,7 @@ const ChatPage: React.FC = () => {
                               />
                               <Button
                                 type="primary"
-                                className="!flex !h-9 !items-center !gap-1 !rounded-full !border-[#181818] !bg-[#181818] !text-white hover:!bg-[#3F3F3D] disabled:!border-[#E1DED6] disabled:!bg-[#F0EFEB] disabled:!text-[#9C9A94]"
+                                className="!flex !h-9 !items-center !gap-1 !rounded-full !border-[#37352F] !bg-[#37352F] !text-white hover:!bg-[#2F3437] disabled:!border-[#E6E4DF] disabled:!bg-[#F2F1EE] disabled:!text-[#9B9A97]"
                                 icon={<HiArrowUp className="h-4 w-4" />}
                                 onClick={() => void handleApprovalBatchSubmit()}
                                 loading={approvalSubmitting}
@@ -2216,7 +2214,7 @@ const ChatPage: React.FC = () => {
                     {composerMode === 'ai' &&
                     selectedReferences.some(hasIncompleteLocalKbCoverage) ? (
                       <div
-                        className="mt-3 flex items-start gap-2 rounded-[14px] border border-[#E1DED6] bg-[#FAF9F5] px-3 py-2.5 text-sm text-[#6E6D69]"
+                        className="mt-3 flex items-start gap-2 rounded-[8px] border border-[#E6E4DF] bg-[#F7F7F5] px-3 py-2.5 text-sm text-[#5F5E59]"
                         data-testid={workbenchSelectors.referenceAiWarning}
                       >
                         <HiOutlineExclamationCircle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -2232,7 +2230,7 @@ const ChatPage: React.FC = () => {
                         reference.kind === 'directory' && reference.kbAvailability === 'partial'
                     ) ? (
                       <div
-                        className="mt-3 flex items-start gap-2 rounded-[14px] border border-[#E1DED6] bg-[#FAF9F5] px-3 py-2.5 text-sm text-[#6E6D69]"
+                        className="mt-3 flex items-start gap-2 rounded-[8px] border border-[#E6E4DF] bg-[#F7F7F5] px-3 py-2.5 text-sm text-[#5F5E59]"
                         data-testid={workbenchSelectors.referenceSearchWarning}
                       >
                         <HiOutlineExclamationCircle className="mt-0.5 h-4 w-4 shrink-0" />

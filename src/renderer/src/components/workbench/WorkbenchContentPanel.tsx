@@ -58,10 +58,10 @@ const getRelevancePercent = (
 
 const WorkbenchEmptyPanel: React.FC = () => (
   <div className="flex h-full items-center justify-center px-5 py-4">
-    <div className="flex h-full w-full items-center justify-center rounded-[18px] border border-dashed border-[#E1DED6] bg-[#F0EFEB]">
+    <div className="flex h-full w-full items-center justify-center rounded-[8px] border border-dashed border-[#E6E4DF] bg-white">
       <Empty
         image={Empty.PRESENTED_IMAGE_SIMPLE}
-        description={<span className="text-[12px] text-[#9C9A94]">右侧暂无内容</span>}
+        description={<span className="text-[12px] text-[#9B9A97]">右侧暂无内容</span>}
       />
     </div>
   </div>
@@ -91,12 +91,12 @@ const WorkbenchSearchResultsPanel: React.FC<{
 
   return (
     <div className="flex h-full min-h-0 flex-col px-4 py-4">
-      <div className="mb-3 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-[#9C9A94]">
+      <div className="mb-3 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-[#9B9A97]">
         <HiOutlineMagnifyingGlass className="h-4 w-4" />
         搜索结果
       </div>
       <div
-        className="min-h-0 flex-1 space-y-2 overflow-auto pr-1"
+        className="min-h-0 flex-1 overflow-auto border-y border-[#E6E4DF] bg-white"
         data-testid={workbenchSelectors.searchResults}
       >
         {sortedSearchResults.map((result, index) => {
@@ -107,22 +107,22 @@ const WorkbenchSearchResultsPanel: React.FC<{
           return (
             <div
               key={result.id}
-              className="w-full rounded-[16px] border border-[#E1DED6] bg-white px-4 py-3 text-left transition-all hover:border-[#181818]"
+              className="w-full border-b border-[#E6E4DF] px-3 py-3 text-left transition-colors last:border-b-0 hover:bg-[#F7F7F5]"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     {isWeb ? (
-                      <HiGlobeAlt className="h-3.5 w-3.5 shrink-0 text-[#6E6D69]" />
+                      <HiGlobeAlt className="h-3.5 w-3.5 shrink-0 text-[#5F5E59]" />
                     ) : (
-                      <HiDocumentText className="h-3.5 w-3.5 shrink-0 text-[#181818]" />
+                      <HiDocumentText className="h-3.5 w-3.5 shrink-0 text-[#37352F]" />
                     )}
                     <div className="min-w-0 flex items-center gap-2">
-                      <span className="truncate text-[13px] font-medium text-[#181818]">
+                      <span className="truncate text-[13px] font-medium text-[#37352F]">
                         {result.document_name}
                       </span>
                       {relevancePercent !== null ? (
-                        <span className="inline-flex shrink-0 items-center gap-1 text-[11px] font-medium text-[#181818]">
+                        <span className="inline-flex shrink-0 items-center gap-1 text-[11px] font-medium text-[#37352F]">
                           <HiSparkles className="h-3.5 w-3.5" />
                           <span>{relevancePercent}%</span>
                         </span>
@@ -132,7 +132,7 @@ const WorkbenchSearchResultsPanel: React.FC<{
                   <TextHighlighter
                     text={result.text}
                     keywords={state.tokens}
-                    className="mt-2 line-clamp-6 text-xs leading-relaxed text-[#6E6D69]"
+                    className="mt-2 line-clamp-6 text-xs leading-relaxed text-[#5F5E59]"
                   />
                 </div>
 
@@ -209,7 +209,7 @@ const WorkbenchFilePreviewPanel: React.FC<{
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex shrink-0 items-center gap-3 border-b border-[#E1DED6] bg-[#FAF9F5] px-4 py-3">
+      <div className="flex shrink-0 items-center gap-3 border-b border-[#E6E4DF] bg-[#F7F7F5] px-4 py-3">
         {state.backTarget ? (
           <Tooltip title="返回">
               <Button
@@ -222,10 +222,10 @@ const WorkbenchFilePreviewPanel: React.FC<{
           </Tooltip>
         ) : null}
         <div className="min-w-0 flex-1">
-          <div className="truncate text-[13px] font-semibold text-[#181818]">
+          <div className="truncate text-[13px] font-semibold text-[#37352F]">
             {state.file.fileName}
           </div>
-          <div className="mt-1 truncate text-xs text-[#9C9A94]">{state.file.path}</div>
+          <div className="mt-1 truncate text-xs text-[#9B9A97]">{state.file.path}</div>
         </div>
         <div className="flex shrink-0 items-center gap-1">
           <Tooltip title="定位文件">
@@ -249,7 +249,7 @@ const WorkbenchFilePreviewPanel: React.FC<{
         </div>
       </div>
       <div
-        className="min-h-0 flex-1 bg-[#FAF9F5] p-3"
+        className="min-h-0 flex-1 bg-[#F7F7F5] p-3"
         data-testid={workbenchSelectors.documentView}
       >
         <FileRenderViewer documents={previewDocuments} />
@@ -272,7 +272,7 @@ const WorkbenchContentPanel: React.FC<WorkbenchContentPanelProps> = ({
   onRevealPath
 }) => (
   <aside
-    className="flex h-full min-h-0 flex-col border-l border-[#E1DED6] bg-[#FAF9F5]"
+    className="flex h-full min-h-0 flex-col border-l border-[#E6E4DF] bg-[#F7F7F5]"
     data-testid={workbenchSelectors.contentPanel}
   >
     <div className="min-h-0 flex-1 overflow-hidden">

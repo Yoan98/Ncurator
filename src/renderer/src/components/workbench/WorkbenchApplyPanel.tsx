@@ -62,7 +62,7 @@ const WorkbenchApplyPanel: React.FC<WorkbenchApplyPanelProps> = ({
   if (!record) {
     return (
       <div
-        className="ui-inset flex h-full items-center justify-center border-dashed text-sm text-[#9C9A94]"
+        className="ui-inset flex h-full items-center justify-center border-dashed text-sm text-[#9B9A97]"
         data-testid={workbenchSelectors.applyPanel}
       >
         当前没有 AI 修改记录。
@@ -72,7 +72,7 @@ const WorkbenchApplyPanel: React.FC<WorkbenchApplyPanelProps> = ({
 
   return (
     <div className="flex h-full min-h-0 flex-col" data-testid={workbenchSelectors.applyPanel}>
-      <div className="flex shrink-0 items-center gap-3 border-b border-[#E1DED6] bg-[#FAF9F5] px-4 py-3">
+      <div className="flex shrink-0 items-center gap-3 border-b border-[#E6E4DF] bg-[#F7F7F5] px-4 py-3">
         <div
           className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto"
           data-testid={workbenchSelectors.applyTabs}
@@ -86,15 +86,15 @@ const WorkbenchApplyPanel: React.FC<WorkbenchApplyPanelProps> = ({
                 onClick={() => onSelectTab(tab.fileKey)}
                 className={`flex shrink-0 items-center gap-2 rounded-full border px-3 py-1.5 text-xs transition-colors ${
                   active
-                    ? 'border-[#181818] bg-white text-[#181818]'
-                    : 'border-[#E1DED6] bg-[#F8F8F7] text-[#6E6D69] hover:border-[#181818] hover:text-[#181818]'
+                    ? 'border-[#37352F] bg-white text-[#37352F]'
+                    : 'border-[#E6E4DF] bg-[#F7F7F5] text-[#5F5E59] hover:border-[#37352F] hover:text-[#37352F]'
                 }`}
               >
                 <span className="max-w-[180px] truncate">{tab.fileName}</span>
                 <span className="rounded-full bg-white/90 px-2 py-0.5 text-[11px]">
                   {tab.changeCount}
                 </span>
-                {tab.unseen ? <span className="h-1.5 w-1.5 rounded-full bg-[#181818]" /> : null}
+                {tab.unseen ? <span className="h-1.5 w-1.5 rounded-full bg-[#37352F]" /> : null}
               </button>
             )
           })}
@@ -106,7 +106,7 @@ const WorkbenchApplyPanel: React.FC<WorkbenchApplyPanelProps> = ({
               {statusMeta.label}
             </span>
           ) : null}
-          <span className="text-xs text-[#6E6D69]">{record.change_count} 处修改</span>
+          <span className="text-xs text-[#5F5E59]">{record.change_count} 处修改</span>
           <Button size="small" onClick={() => void onOpenPath(record.source_path)}>
             系统打开
           </Button>
@@ -130,18 +130,18 @@ const WorkbenchApplyPanel: React.FC<WorkbenchApplyPanelProps> = ({
       </div>
 
       {record.status === 'reverted' ? (
-        <div className="shrink-0 border-b border-[#E1DED6] bg-[#F8F8F7] px-4 py-2.5 text-xs text-[#6E6D69]">
+        <div className="shrink-0 border-b border-[#E6E4DF] bg-[#F7F7F5] px-4 py-2.5 text-xs text-[#5F5E59]">
           本次 AI 修改已回退。
         </div>
       ) : null}
 
       {record.status === 'failed' && record.error ? (
-        <div className="shrink-0 border-b border-[#D9C6C2] bg-[#F7F1EF] px-4 py-2.5 text-xs text-[#A83A31]">
+        <div className="shrink-0 border-b border-[#E7CAC6] bg-[#F8EBE9] px-4 py-2.5 text-xs text-[#B3261E]">
           {record.error}
         </div>
       ) : null}
 
-      <div className="min-h-0 flex-1 bg-[#FAF9F5] p-3">
+      <div className="min-h-0 flex-1 bg-[#F7F7F5] p-3">
         <FileRenderViewer
           documents={viewerDocuments}
           emptyText={hasDedicatedPreview ? '当前文件暂时不可预览。' : '当前修改记录没有专用预览稿。'}

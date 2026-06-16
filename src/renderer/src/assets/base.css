@@ -1,44 +1,63 @@
 @import 'tailwindcss';
 
 :root {
-  /* ink-mono 色板 */
-  --ink-canvas: #f6f5f1;
-  --ink-paper: #fffdf8;
-  --ink-paper-soft: #faf9f5;
-  --ink-wash: #f0efeb;
-  --ink-wash-strong: #e8e6df;
-  --ink: #181818;
-  --ink-2: #3f3f3d;
-  --ink-3: #6e6d69;
-  --ink-4: #9c9a94;
-  --ink-line: #e1ded6;
-  --ink-line-strong: #cbc7bd;
-  --ink-seal: #a83a31;
+  /* Notion-like 文档工作台色板 */
+  --notion-page: #ffffff;
+  --notion-canvas: #fbfbfa;
+  --notion-sidebar: #f7f7f5;
+  --notion-surface: #f2f1ee;
+  --notion-surface-hover: #ededeb;
+  --notion-line: #e6e4df;
+  --notion-line-strong: #d8d6d0;
+  --notion-text: #37352f;
+  --notion-text-soft: #5f5e59;
+  --notion-text-faint: #9b9a97;
+  --notion-accent: #2f3437;
+  --notion-red: #b3261e;
+  --notion-red-bg: #f8ebe9;
+  --notion-green: #2f6f4e;
+  --notion-green-bg: #edf6ef;
+  --notion-blue: #2f5f8f;
+  --notion-blue-bg: #edf3f8;
+  --notion-yellow-bg: #fbf3db;
 
-  /* 兼容通用 utility 命名，语义已切到 ink-mono */
-  --color-bg-primary: var(--ink-canvas);
-  --color-bg-white: var(--ink-paper);
-  --color-brand: var(--ink);
-  --color-brand-hover: var(--ink-2);
-  --color-brand-light: var(--ink-line);
-  --color-brand-bg: var(--ink-wash);
-  --color-text-primary: var(--ink);
-  --color-text-secondary: var(--ink-3);
-  --color-text-tertiary: var(--ink-4);
-  --color-border: var(--ink-line);
-  --color-border-dark: var(--ink-line-strong);
+  /* 兼容旧 utility 命名，语义已切到 Notion-like */
+  --ink-canvas: var(--notion-canvas);
+  --ink-paper: var(--notion-page);
+  --ink-paper-soft: var(--notion-sidebar);
+  --ink-wash: var(--notion-surface);
+  --ink-wash-strong: var(--notion-surface-hover);
+  --ink: var(--notion-text);
+  --ink-2: var(--notion-accent);
+  --ink-3: var(--notion-text-soft);
+  --ink-4: var(--notion-text-faint);
+  --ink-line: var(--notion-line);
+  --ink-line-strong: var(--notion-line-strong);
+  --ink-seal: var(--notion-red);
+
+  --color-bg-primary: var(--notion-canvas);
+  --color-bg-white: var(--notion-page);
+  --color-brand: var(--notion-accent);
+  --color-brand-hover: var(--notion-text);
+  --color-brand-light: var(--notion-line);
+  --color-brand-bg: var(--notion-surface);
+  --color-text-primary: var(--notion-text);
+  --color-text-secondary: var(--notion-text-soft);
+  --color-text-tertiary: var(--notion-text-faint);
+  --color-border: var(--notion-line);
+  --color-border-dark: var(--notion-line-strong);
 
   /* 阴影变量 (仅供参考，主要使用 Tailwind 类) */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
-  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06);
-  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.08);
+  --shadow-sm: none;
+  --shadow-md: 0 8px 24px rgba(15, 15, 15, 0.08);
+  --shadow-lg: 0 16px 40px rgba(15, 15, 15, 0.12);
 
   /* 统一 UI token */
-  --ui-radius-control: 10px;
-  --ui-radius-inset: 14px;
-  --ui-radius-panel: 18px;
-  --ui-radius-overlay: 24px;
-  --ui-transition: 180ms ease;
+  --ui-radius-control: 6px;
+  --ui-radius-inset: 8px;
+  --ui-radius-panel: 8px;
+  --ui-radius-overlay: 8px;
+  --ui-transition: 160ms ease;
 }
 
 body {
@@ -97,10 +116,10 @@ textarea,
 .ant-popover .ant-popover-inner,
 .ant-cascader-dropdown,
 .ant-mentions-dropdown {
-  background: var(--ink-paper) !important;
-  border: 1px solid var(--ink-line) !important;
-  border-radius: var(--ui-radius-inset) !important;
-  box-shadow: 0 18px 42px rgba(24, 24, 24, 0.12) !important;
+  background: var(--notion-page) !important;
+  border: 1px solid var(--notion-line) !important;
+  border-radius: var(--ui-radius-overlay) !important;
+  box-shadow: var(--shadow-lg) !important;
 }
 
 .ant-select-dropdown .ant-select-item,
@@ -126,15 +145,15 @@ textarea,
 .ant-dropdown .ant-dropdown-menu-submenu-title:hover,
 .ant-cascader-dropdown .ant-cascader-menu-item-active:not(.ant-cascader-menu-item-disabled),
 .ant-mentions-dropdown .ant-mentions-dropdown-menu-item-active {
-  background: var(--ink-wash) !important;
-  color: var(--ink) !important;
+  background: var(--notion-surface-hover) !important;
+  color: var(--notion-text) !important;
 }
 
 .ant-select-dropdown .ant-select-item-option-selected:not(.ant-select-item-option-disabled),
 .ant-dropdown .ant-dropdown-menu-item-selected,
 .ant-cascader-dropdown .ant-cascader-menu-item-active:not(.ant-cascader-menu-item-disabled):has(.ant-cascader-checkbox-checked),
 .ant-mentions-dropdown .ant-mentions-dropdown-menu-item-selected {
-  background: var(--ink) !important;
+  background: var(--notion-accent) !important;
   color: #ffffff !important;
   font-weight: 500 !important;
 }
@@ -160,32 +179,32 @@ textarea,
 }
 
 .ui-panel {
-  @apply border border-[#E1DED6] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)];
+  @apply border border-[#E6E4DF] bg-white shadow-none;
   border-radius: var(--ui-radius-panel);
 }
 
 .ui-panel-soft {
-  @apply border border-[#E1DED6] bg-[#FAF9F5] shadow-[0_1px_2px_rgba(0,0,0,0.04)];
+  @apply border border-[#E6E4DF] bg-[#F7F7F5] shadow-none;
   border-radius: var(--ui-radius-panel);
 }
 
 .ui-panel-ghost {
-  @apply border border-[#CBC7BD] bg-white/88 shadow-[0_1px_2px_rgba(0,0,0,0.04)] backdrop-blur-sm;
+  @apply border border-[#E6E4DF] bg-white/92 shadow-none backdrop-blur-sm;
   border-radius: var(--ui-radius-panel);
 }
 
 .ui-inset {
-  @apply border border-[#E8E6DF] bg-[#F0EFEB];
+  @apply border border-[#E6E4DF] bg-[#F7F7F5];
   border-radius: var(--ui-radius-inset);
 }
 
 .ui-icon-well {
-  @apply inline-flex items-center justify-center border border-[#CBC7BD] bg-[#F0EFEB] text-[#6E6D69];
+  @apply inline-flex items-center justify-center border border-[#E6E4DF] bg-[#F7F7F5] text-[#5F5E59];
   border-radius: var(--ui-radius-inset);
 }
 
 .ui-icon-well-brand {
-  @apply border-[#E1DED6] bg-[#F0EFEB] text-[#181818];
+  @apply border-[#E6E4DF] bg-white text-[#37352F];
 }
 
 .ui-status-pill {
@@ -202,7 +221,8 @@ textarea,
 }
 
 .ui-hover-lift:hover {
-  transform: translateY(-1px);
+  transform: none;
+  background-color: var(--notion-surface-hover);
 }
 
 /* 滚动条样式优化 */
@@ -216,17 +236,17 @@ textarea,
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #CBC7BD;
+  background: #d8d6d0;
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #9C9A94;
+  background: #9b9a97;
 }
 
 /* 覆盖 Mark 样式 */
 mark {
-  @apply bg-[#E1DED6] text-[#181818] rounded-sm px-0.5 font-medium;
+  @apply bg-[#F2F1EE] text-[#37352F] rounded-sm px-0.5 font-medium;
 }
 
 .markdown-body {
@@ -439,7 +459,7 @@ mark {
 
 .workbench-thinking-shimmer {
   color: var(--ink-3);
-  background-image: linear-gradient(90deg, var(--ink-4) 0%, var(--ink-4) 36%, var(--ink) 48%, var(--ink-line-strong) 52%, var(--ink-4) 64%, var(--ink-4) 100%);
+  background-image: linear-gradient(90deg, var(--notion-text-faint) 0%, var(--notion-text-faint) 36%, var(--notion-text) 48%, var(--notion-line-strong) 52%, var(--notion-text-faint) 64%, var(--notion-text-faint) 100%);
   background-size: 320% 100%;
   background-clip: text;
   -webkit-background-clip: text;
@@ -448,41 +468,41 @@ mark {
 }
 
 .workbench-scope-select.ant-select .ant-select-selector {
-  min-height: 40px !important;
-  border-radius: 16px !important;
-  border-color: #E1DED6 !important;
-  background: #f8f8f7 !important;
+  min-height: 36px !important;
+  border-radius: var(--ui-radius-inset) !important;
+  border-color: var(--notion-line) !important;
+  background: var(--notion-sidebar) !important;
   box-shadow: none !important;
   padding: 4px 10px !important;
 }
 
 .workbench-scope-select.ant-select-focused .ant-select-selector,
 .workbench-scope-select.ant-select-open .ant-select-selector {
-  border-color: #181818 !important;
-  box-shadow: 0 0 0 3px rgba(232, 230, 223, 0.95) !important;
+  border-color: var(--notion-accent) !important;
+  box-shadow: 0 0 0 3px rgba(237, 237, 235, 0.95) !important;
 }
 
 .workbench-scope-select .ant-select-selection-placeholder {
-  color: #9C9A94 !important;
+  color: var(--notion-text-faint) !important;
 }
 
 .workbench-scope-select .ant-select-selection-item {
-  border-radius: 999px !important;
+  border-radius: var(--ui-radius-control) !important;
   background: #ffffff !important;
-  border: 1px solid #E1DED6 !important;
-  color: #6E6D69 !important;
+  border: 1px solid var(--notion-line) !important;
+  color: var(--notion-text-soft) !important;
   padding-inline-end: 8px !important;
 }
 
 .workbench-composer-select.ant-select {
-  color: #6E6D69;
+  color: var(--notion-text-soft);
   font-size: 12px;
 }
 
 .workbench-composer-select.ant-select .ant-select-selector {
   min-height: 24px !important;
   padding: 0 6px !important;
-  border-radius: 999px !important;
+  border-radius: var(--ui-radius-control) !important;
   box-shadow: none !important;
 }
 
@@ -497,7 +517,7 @@ mark {
 }
 
 .workbench-composer-select.ant-select .ant-select-selection-placeholder {
-  color: #9C9A94 !important;
+  color: var(--notion-text-faint) !important;
 }
 
 .workspace-file-tree.ant-tree,
@@ -574,12 +594,12 @@ mark {
 }
 
 .workbench-composer-select.ant-select:hover .ant-select-selector {
-  background: rgba(255, 255, 255, 0.72) !important;
+  background: var(--notion-surface-hover) !important;
 }
 
 .workbench-composer-select.ant-select-focused .ant-select-selector,
 .workbench-composer-select.ant-select-open .ant-select-selector {
-  background: rgba(255, 255, 255, 0.88) !important;
+  background: var(--notion-page) !important;
 }
 
 .workbench-composer-select-dropdown .ant-select-item {
