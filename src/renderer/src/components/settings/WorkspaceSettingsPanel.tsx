@@ -472,6 +472,11 @@ const WorkspaceSettingsPanel: React.FC = () => {
                                 <div className="mt-2 break-all text-[12px] leading-5 text-[#6E6D69]">
                                   {selectedWorkspace.root_path || '未设置工作文件地址'}
                                 </div>
+                                {!selectedWorkspace.root_path ? (
+                                  <div className="mt-2 text-[11px] leading-5 text-[#9C9A94]">
+                                    设置后才能在 Workbench 中发送任务。
+                                  </div>
+                                ) : null}
                                 <Button
                                   className="mt-4 w-full border-[#E1DED6] bg-white text-[#181818]"
                                   onClick={() => void handleSetWorkspaceRootPath(selectedWorkspace)}

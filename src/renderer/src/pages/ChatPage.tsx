@@ -87,7 +87,6 @@ import {
 
 type ApprovalBatchRequiredEvent = Extract<AiRunEvent, { type: 'approval_batch_required' }>
 type ApprovalBatchDecisionAction = 'approve' | 'reject' | 'guide'
-type WorkspaceRequiredEvent = Extract<AiRunEvent, { type: 'workspace_required' }>
 
 type ApplyForceConfirmState = {
   changeId: string
@@ -241,13 +240,23 @@ const fileChangeToDocxApplyRecord = (record: AiFileChangeRecord): DocxApplyRecor
 const createWorkspaceBinding = (
   workspace: WorkspaceSource | null
 ): WorkspaceRuntimeBinding | undefined =>
-  workspace?.root_path
+  hasWorkspaceRootPath(workspace)
     ? {
         workspaceId: workspace.id,
         workspaceName: workspace.name,
         rootPath: workspace.root_path
       }
     : undefined
+
+const hasWorkspaceRootPath = (
+  workspace: WorkspaceSource | null
+): workspace is WorkspaceSource & { root_path: string } =>
+  typeof workspace?.root_path === 'string' && workspace.root_path.trim().length > 0
+
+const getWorkspaceRequirementHint = (workspace: WorkspaceSource | null): string =>
+  workspace
+    ? '当前工作区未设置文件目录，请前往 设置 > 工作空间 绑定地址'
+    : '请先选择工作区'
 
 const delay = (ms: number): Promise<void> =>
   new Promise((resolve) => {
@@ -301,17 +310,10 @@ const ChatPage: React.FC = () => {
     Record<string, ApprovalDraftDecision>
   >({})
   const [approvalSubmitting, setApprovalSubmitting] = useState(false)
-  const [pendingWorkspaceRequest, setPendingWorkspaceRequest] = useState<{
-    input: string
-    references: SelectedReference[]
-    reason: string
-    request: WorkspaceRequiredEvent
-  } | null>(null)
 
   const assistantMsgIdRef = useRef<string | null>(null)
   const assistantArtifactsRef = useRef<Record<string, AiArtifactRef[]>>({})
   const lastSubmittedInputRef = useRef('')
-  const lastSubmittedReferencesRef = useRef<SelectedReference[]>([])
   const scrollRef = useRef<HTMLDivElement>(null)
   const shouldAutoScrollRef = useRef(true)
   const scrollFrameRef = useRef<number | null>(null)
@@ -366,6 +368,16 @@ const ChatPage: React.FC = () => {
     if (!pendingApprovalBatch) return null
     return pendingApprovalBatch.items[approvalCurrentIndex] || pendingApprovalBatch.items[0] || null
   }, [approvalCurrentIndex, pendingApprovalBatch])
+
+  const selectedWorkspaceReady = useMemo(
+    () => hasWorkspaceRootPath(selectedWorkspace),
+    [selectedWorkspace]
+  )
+
+  const composerWorkspaceHint = useMemo(() => {
+    if (selectedWorkspaceReady) return null
+    return getWorkspaceRequirementHint(selectedWorkspace)
+  }, [selectedWorkspace, selectedWorkspaceReady])
 
   const approvalSubmitDisabled = useMemo(() => {
     if (!currentApprovalItem || approvalSubmitting) return true
@@ -889,7 +901,6 @@ const ChatPage: React.FC = () => {
       setApprovalCurrentIndex(0)
       setApprovalDraftDecisions({})
       setApprovalSubmitting(false)
-      setPendingWorkspaceRequest(null)
       setAssistantTurns({})
       setContentPanel(createEmptyPanel())
       resetApplyWorkspaceState()
@@ -905,7 +916,7 @@ const ChatPage: React.FC = () => {
 
   useEffect(() => {
     scrollToBottom()
-  }, [assistantTurns, currentMessages, loading, pendingApprovalBatch, pendingWorkspaceRequest])
+  }, [assistantTurns, currentMessages, loading, pendingApprovalBatch])
 
   useEffect(
     () => () => {
@@ -1120,24 +1131,13 @@ const ChatPage: React.FC = () => {
       if (event.type === 'workspace_required') {
         if (!event.internal) {
           setLoading(false)
-          setPendingWorkspaceRequest({
-            input: lastSubmittedInputRef.current,
-            references: lastSubmittedReferencesRef.current,
-            reason: event.reason,
-            request: event
-          })
-          message.warning(event.reason || '执行任务需要先绑定工作区')
+          message.warning(event.reason || '当前工作区未设置文件目录，请先完成绑定后再发送')
+          updateActiveTurn((current) => ({
+            ...current,
+            status: 'failed',
+            error: event.reason
+          }))
         }
-        updateActiveTurn((current) => ({
-          ...current,
-          blockers: [
-            {
-              kind: 'workspace',
-              title: '等待补充工作区范围',
-              description: event.reason
-            }
-          ]
-        }))
         return
       }
 
@@ -1325,8 +1325,8 @@ const ChatPage: React.FC = () => {
       return
     }
     if (!input.trim() || !currentSessionId || loading) return
-    if (!selectedWorkspace) {
-      message.warning('请先选择当前工作区后再发送消息')
+    if (!selectedWorkspaceReady) {
+      message.warning(`${getWorkspaceRequirementHint(selectedWorkspace)}后再发送消息`)
       return
     }
     if (!selectedModelName) {
@@ -1338,8 +1338,7 @@ const ChatPage: React.FC = () => {
     const likelyExecutable =
       /\b(cmd|bash|shell|terminal|command|run)\b/i.test(userQuery) ||
       /终端|命令|脚本|执行|创建文件|删除文件|修改文件/.test(userQuery)
-    const hasWorkspaceBinding = Boolean(selectedWorkspace)
-    if (likelyExecutable && !hasWorkspaceBinding) {
+    if (likelyExecutable && !selectedWorkspaceReady) {
       message.warning('该请求可能触发本地执行，请先选择当前工作区，必要时再通过 @ 插入文件或目录')
       return
     }
@@ -1353,10 +1352,8 @@ const ChatPage: React.FC = () => {
     setCancellingRun(false)
     setPendingApprovalBatch(null)
     setApprovalSubmitting(false)
-    setPendingWorkspaceRequest(null)
     assistantMsgIdRef.current = null
     lastSubmittedInputRef.current = userQuery
-    lastSubmittedReferencesRef.current = selectedReferences
 
     const userMessage: ChatMessage = {
       id: crypto.randomUUID(),
@@ -1419,8 +1416,8 @@ const ChatPage: React.FC = () => {
 
   const handleSearchSend = async (): Promise<void> => {
     if (!input.trim() || !currentSessionId || loading) return
-    if (!selectedWorkspace) {
-      message.warning('请先选择当前工作区后再发送消息')
+    if (!selectedWorkspaceReady) {
+      message.warning(`${getWorkspaceRequirementHint(selectedWorkspace)}后再发送消息`)
       return
     }
 
@@ -1441,7 +1438,6 @@ const ChatPage: React.FC = () => {
     setAiRunId(null)
     setPendingApprovalBatch(null)
     setApprovalSubmitting(false)
-    setPendingWorkspaceRequest(null)
 
     const userMessage: ChatMessage = {
       id: crypto.randomUUID(),
@@ -1661,83 +1657,6 @@ const ChatPage: React.FC = () => {
       action: 'guide',
       message: messageText.trim()
     })
-  }
-
-  const handleContinueWithWorkspace = async (): Promise<void> => {
-    if (!pendingWorkspaceRequest || !currentSessionId || loading) return
-    const hasWorkspaceBinding = Boolean(selectedWorkspace)
-    if (!hasWorkspaceBinding) {
-      message.warning('请先选择当前工作区，必要时再通过 @ 插入目录或文件后继续')
-      return
-    }
-    if (!selectedModelName) {
-      message.warning('当前配置未获取到可用模型，请先在「大模型」中打开模型列表获取模型')
-      return
-    }
-
-    const continueMessage: ChatMessage = {
-      id: crypto.randomUUID(),
-      session_id: currentSessionId,
-      role: 'user',
-      content: '已补充工作区上下文，请继续处理上一条请求。',
-      timestamp: Date.now()
-    }
-    setCurrentMessages((previous) => [...previous, continueMessage])
-    void window.api.chatMessageSave(continueMessage).catch(console.error)
-
-    setLoading(true)
-    setCancellingRun(false)
-    setPendingApprovalBatch(null)
-    setApprovalSubmitting(false)
-    assistantMsgIdRef.current = null
-    lastSubmittedInputRef.current = pendingWorkspaceRequest.input
-    lastSubmittedReferencesRef.current = selectedReferences
-
-    try {
-      const assistantMessageId = crypto.randomUUID()
-      assistantMsgIdRef.current = assistantMessageId
-      setAssistantTurns((previous) => ({
-        ...previous,
-        [assistantMessageId]: createAssistantTurn(assistantMessageId)
-      }))
-      setCurrentMessages((previous) => [
-        ...previous,
-        {
-          id: assistantMessageId,
-          session_id: currentSessionId,
-          role: 'assistant',
-          content: '',
-          timestamp: Date.now()
-        }
-      ])
-      assistantArtifactsRef.current[assistantMessageId] = []
-
-      const response = await window.api.aiRunStart({
-        sessionId: currentSessionId,
-        input: pendingWorkspaceRequest.input,
-        selectedReferences: selectedReferences.length > 0 ? selectedReferences : undefined,
-        modelName: selectedModelName,
-        workspace: createWorkspaceBinding(selectedWorkspace)
-      })
-      if (!response.success || !response.runId) {
-        setLoading(false)
-        emitErrorMessage(response.error || '继续运行失败')
-        return
-      }
-      setPendingWorkspaceRequest(null)
-      setAiRunId(response.runId)
-      setAssistantTurns((previous) => ({
-        ...previous,
-        [assistantMessageId]: {
-          ...previous[assistantMessageId],
-          runId: response.runId
-        }
-      }))
-    } catch (error) {
-      console.error(error)
-      setLoading(false)
-      emitErrorMessage('继续运行失败')
-    }
   }
 
   const handleApplyRevert = async (): Promise<void> => {
@@ -2128,14 +2047,10 @@ const ChatPage: React.FC = () => {
 
                 <div className="shrink-0 bg-gradient-to-t from-[#F6F5F1] via-[#F6F5F1]/96 via-58% to-transparent px-6 pb-6 pt-6">
                   <div className="mx-auto max-w-[920px]">
-                    {composerMode === 'ai' && (pendingApprovalBatch || pendingWorkspaceRequest) ? (
+                    {composerMode === 'ai' && pendingApprovalBatch ? (
                       <div
                         className="overflow-hidden rounded-[24px] border border-[#CBC7BD] bg-[#FFFDF8] shadow-[0_22px_52px_rgba(24,24,24,0.12)]"
-                        data-testid={
-                          pendingApprovalBatch
-                            ? chatSelectors.approvalBatchCard
-                            : chatSelectors.workspaceBanner
-                        }
+                        data-testid={chatSelectors.approvalBatchCard}
                       >
                         {pendingApprovalBatch && currentApprovalItem ? (
                           <div>
@@ -2250,38 +2165,6 @@ const ChatPage: React.FC = () => {
                           </div>
                         ) : null}
 
-                        {pendingWorkspaceRequest ? (
-                          <div className="px-5 py-4">
-                            <div className="flex items-start gap-3">
-                              <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[9px] border border-[#181818] bg-[#FFFDF8] text-[13px] font-semibold text-[#181818]">
-                                范
-                              </span>
-                              <div className="min-w-0 flex-1">
-                                <div className="text-[15px] font-semibold text-[#181818]">
-                                  需要补充工作区范围
-                                </div>
-                                <div className="mt-2 text-[13px] leading-6 text-[#6E6D69]">
-                                  {pendingWorkspaceRequest.reason}
-                                </div>
-                                <div className="mt-1 text-xs leading-5 text-[#9C9A94]">
-                                  请选择当前工作区，必要时再通过 @ 插入目录或文件后继续运行。
-                                </div>
-                              </div>
-                            </div>
-                            <div className="mt-4 flex justify-end">
-                              <Button
-                                type="primary"
-                                className="!rounded-full !border-[#181818] !bg-[#181818] !text-white hover:!bg-[#3F3F3D] disabled:!border-[#E1DED6] disabled:!bg-[#F0EFEB] disabled:!text-[#9C9A94]"
-                                onClick={() => void handleContinueWithWorkspace()}
-                                loading={loading}
-                                disabled={!selectedWorkspace}
-                                data-testid={chatSelectors.workspaceContinueButton}
-                              >
-                                继续运行
-                              </Button>
-                            </div>
-                          </div>
-                        ) : null}
                       </div>
                     ) : (
                       <WorkbenchComposer
@@ -2299,9 +2182,10 @@ const ChatPage: React.FC = () => {
                         onCancel={() => void handleCancel()}
                         loading={loading}
                         cancelling={cancellingRun}
+                        submitHint={composerWorkspaceHint}
                         canSubmit={Boolean(
                           input.trim() &&
-                          selectedWorkspace &&
+                          selectedWorkspaceReady &&
                           (composerMode === 'search' || selectedModelName)
                         )}
                         showCancel={composerMode === 'ai' && Boolean(aiRunId)}

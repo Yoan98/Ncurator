@@ -19,8 +19,6 @@ export const chatSelectors = {
   approvalBatchSubmitButton: 'chat-approval-batch-submit-button',
   approvalBatchPrevButton: 'chat-approval-batch-prev-button',
   approvalBatchNextButton: 'chat-approval-batch-next-button',
-  workspaceBanner: 'chat-workspace-banner',
-  workspaceContinueButton: 'chat-workspace-continue-button',
   nonLocalBanner: 'chat-non-local-banner',
   nonLocalAllowButton: 'chat-non-local-allow-button',
   nonLocalDeclineButton: 'chat-non-local-decline-button'
@@ -111,6 +109,7 @@ export const workbenchSelectors = {
   input: 'workbench-input',
   sendButton: 'workbench-send-button',
   cancelButton: 'workbench-cancel-button',
+  composerHint: 'workbench-composer-hint',
   referenceField: 'workbench-reference-field',
   modelSelect: 'workbench-model-select',
   workspaceSelect: 'workbench-workspace-select',

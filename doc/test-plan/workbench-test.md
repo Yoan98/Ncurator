@@ -15,20 +15,20 @@
 ### 2.1 当前状态
 
 - 总体登记：`13` 个 e2e case。
-- 当前有效结论：`9 / 13` 有效通过。
-- 当前实现状态：`tests/case/workbench/**` 已按 suite / group 落地 `13` 个独立 `.e2e.test.ts` 文件；当前已有 `9 / 13` 形成真实有效通过结论。
+- 当前有效结论：`10 / 13` 有效通过。
+- 当前实现状态：`tests/case/workbench/**` 已按 suite / group 落地 `13` 个独立 `.e2e.test.ts` 文件；当前已有 `10 / 13` 形成真实有效通过结论。
 
 ### 2.2 按 Suite 汇总
 
 - `conversation`
-  - 登记 case：`3`
-  - 有效通过：`3 / 3`
-  - 检测时间：`2026-06-15 10:48:54 +0800`
-  - 备注：case 已实现；`session-initial-create-and-title`、`send-guard-mode-switch-and-preferences`、`reference-token-lifecycle` 均已通过真实 Electron UI；其中涉及 AI 的 case 使用真实模型，`reference-token-lifecycle` 不启动 AI。
+  - 登记 case：`4`
+  - 有效通过：`4 / 4`
+  - 检测时间：`2026-06-16 10:32:04 +0800`
+  - 备注：case 已实现；`session-initial-create-and-title`、`send-guard-mode-switch-and-preferences`、`workspace-root-path-required`、`reference-token-lifecycle` 均已通过真实 Electron UI；其中涉及 AI 的 case 使用真实模型，`reference-token-lifecycle` 不启动 AI。
 - `run`
-  - 登记 case：`5`
-  - 有效通过：`1 / 5`
-  - 检测时间：`2026-06-12 18:19:40 +0800`
+  - 登记 case：`4`
+  - 有效通过：`1 / 4`
+  - 检测时间：`2026-06-16 10:32:04 +0800`
   - 备注：case 已实现；`ai-process-stream-and-final-answer` 已通过真实 Electron UI、真实模型、真实 workspace 索引和真实 AI run。
 - `result`
   - 登记 case：`5`
@@ -56,8 +56,8 @@ Workbench 的正式测试顶层 suite 按用户任务闭环划分，而不是逐
 
 领域规则：
 
-- `conversation` 验证用户发起任务前后的会话壳、composer、模式、模型 / 工作区偏好与 `@` 参考资料 token。
-- `run` 验证智能模式运行中的过程流、停止、审批、补工作区、压缩提示和 AI 内置浏览器任务。
+- `conversation` 验证用户发起任务前后的会话壳、composer、模式、模型 / 工作区偏好、工作目录前置条件与 `@` 参考资料 token。
+- `run` 验证智能模式运行中的过程流、停止、审批、压缩提示和 AI 内置浏览器任务。
 - `result` 验证搜索结果、文件预览、修改文件工作区、真实 docx 预览、回退和多文件修改入口。
 - Workbench 正式测试优先使用 `e2e`，因为核心风险集中在 Electron、renderer 状态、IPC、真实 AI 调用、右侧面板和文件系统联动。
 - `backend` 只用于稳定的纯契约测试，例如参考资料候选过滤、搜索范围 payload 或会话 / 修改记录查询契约；不得用 backend case 代替真实 UI 交互断言。
@@ -128,6 +128,16 @@ tests/case/workbench/
 - Oracle：空白输入、未绑定工作区或发送中不会触发发送，对齐 `WB-COMPOSER-001-AC1`、`WB-COMPOSER-001-AC2`、`WB-COMPOSER-005-AC1`；拦截提示明确要求先选择工作区，对齐 `WB-COMPOSER-005-AC2`；切换模式后输入保留且发送路径按新模式执行，对齐 `WB-MODE-001-AC1`、`WB-MODE-001-AC2`；模型搜索、偏好恢复、失效回退、入口图标和“大聪明 / 没头脑”展示符合 `WB-COMPOSER-007-AC1` 至 `WB-COMPOSER-007-AC5`。
 - Not：不验证真实模型回答质量，只验证用户路径和发送前置条件。
 
+#### `workspace-root-path-required`
+
+- 测试类型：`e2e`
+- 实现状态：`已实现`
+- What：验证已选工作区但未设置工作文件地址时，Settings 和 Workbench 都会给出轻提示，且 Workbench 发送按钮保持禁用；绑定目录后恢复可发送。
+- Why：工作区名称选择和工作目录绑定已经拆开，若缺少“未绑定目录不可发送”的明确反馈，用户会误以为工作区已经可用。
+- How：通过 Settings UI 创建未绑定目录的真实工作区；在 Settings 文件 tab 验证轻提示；进入 Workbench 选择该工作区和真实模型，确认发送按钮禁用与 composer 提示；再回到 Settings 绑定真实目录，返回 Workbench 发送真实请求。
+- Oracle：未设置工作文件地址时，Settings 文件 tab 会提示设置后才能在 Workbench 发送任务，对齐 `SET-WORKSPACE-006-AC3`；Workbench 发送按钮保持禁用且 composer 提示前往设置页绑定地址，对齐 `WB-COMPOSER-005-AC1`、`WB-COMPOSER-005-AC2`；绑定目录后恢复发送并完成真实 AI 运行，对齐 `WB-CORE-006-AC1`；记录模型、耗时、完成度评分和失败归因。
+- Not：不验证运行中补工作区恢复流；该产品语义已废弃。
+
 #### `reference-token-lifecycle`
 
 - 测试类型：`e2e`
@@ -159,16 +169,6 @@ tests/case/workbench/
 - How：通过真实用户请求诱导 AI 产生需要审批的 terminal 操作；分别覆盖全同意、任一拒绝、填写指导输入和不操作期间保持等待。
 - Oracle：整批同意后按原 serial 顺序继续，对齐 `WB-BLOCKER-001-AC1`；任一拒绝或填写指导输入时本批命令 0 执行并回到后续 AI 决策，对齐 `WB-BLOCKER-001-AC2`；指导输入不作为独立第三按钮，对齐 `WB-BLOCKER-001-AC3`；审批不因固定超时自动失败，对齐 `WB-BLOCKER-001-AC4`；记录模型、耗时、完成度评分和失败归因。
 - Not：不验证 terminal 工具安全指令集本身，该能力归 AI tool 测试。
-
-#### `workspace-required-continue`
-
-- 测试类型：`e2e`
-- 实现状态：`已实现`
-- What：验证 AI 运行中断为 `workspace_required` 后，用户补工作区并点击继续时可以基于原请求恢复运行。
-- Why：工作区缺失是可恢复阻塞；如果恢复链路丢失原请求，用户会被迫重新描述任务。
-- How：通过 UI 制造缺失或失效工作区状态并发送真实请求；再通过 Settings UI 补工作区，回到 Workbench 点击继续上一条请求。
-- Oracle：未补工作区时继续按钮不会绕过校验，对齐 `WB-BLOCKER-002-AC1`；补工作区后插入“已补充工作区上下文，请继续处理上一条请求。”用户消息并以原请求重新启动运行，对齐 `WB-BLOCKER-002-AC2`；记录模型、耗时、完成度评分和失败归因。
-- Not：不通过内部 API 直接把工作区标记为已补充。
 
 #### `stop-running-or-approval-run`
 

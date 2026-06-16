@@ -60,6 +60,7 @@ type WorkbenchComposerProps = {
   onCancel: () => void
   loading: boolean
   cancelling?: boolean
+  submitHint?: string | null
   canSubmit: boolean
   showCancel: boolean
   resetKey: number
@@ -97,6 +98,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   onCancel,
   loading,
   cancelling = false,
+  submitHint = null,
   canSubmit,
   showCancel,
   resetKey,
@@ -929,6 +931,15 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
             </button>
           </div>
         </div>
+
+        {submitHint ? (
+          <div
+            className="mt-2 text-[11px] leading-5 text-[#9C9A94]"
+            data-testid={workbenchSelectors.composerHint}
+          >
+            {submitHint}
+          </div>
+        ) : null}
       </div>
     </div>
   )

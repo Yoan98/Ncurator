@@ -74,18 +74,12 @@ export type WorkbenchAiCompletionEvidence = {
 export type WorkbenchRunBlockerPolicy = 'fail' | 'auto_approve'
 
 export type WorkbenchRunBlockedResult =
-  | {
-      kind: 'approval'
-      event: Extract<AiRunEvent, { type: 'approval_batch_required' }>
-      assistantTextSoFar: string
-      cardText: string
-    }
-  | {
-      kind: 'workspace'
-      event: Extract<AiRunEvent, { type: 'workspace_required' }>
-      assistantTextSoFar: string
-      cardText: string
-    }
+  {
+    kind: 'approval'
+    event: Extract<AiRunEvent, { type: 'approval_batch_required' }>
+    assistantTextSoFar: string
+    cardText: string
+  }
 
 export type WorkbenchAiRunOutcome =
   | {
@@ -1189,9 +1183,6 @@ export const waitForWorkbenchApplyRecordStatus = async (
 export const getApprovalCard = (page: Page): Locator =>
   page.locator(byTestId(chatSelectors.approvalBatchCard))
 
-export const getWorkspaceRequiredCard = (page: Page): Locator =>
-  page.locator(byTestId(chatSelectors.workspaceBanner))
-
 const readLocatorText = async (locator: Locator): Promise<string> =>
   ((await locator.textContent().catch(() => '')) || '').trim()
 
@@ -1208,32 +1199,19 @@ const readAssistantTextSoFar = async (page: Page): Promise<string> => {
 const describeWorkbenchBlockedResult = (
   blocked: WorkbenchRunBlockedResult
 ): { blockerType: string; summary: string; data: JsonValue } => {
-  if (blocked.kind === 'approval') {
-    return {
-      blockerType: 'approval',
-      summary: `运行被审批卡住，待审命令数=${blocked.event.items.length}`,
-      data: {
-        batchId: blocked.event.batchId,
-        taskId: blocked.event.taskId,
-        items: blocked.event.items.map((item) => ({
-          itemId: item.itemId,
-          order: item.order,
-          toolName: item.toolName,
-          command: item.command,
-          reason: item.reason
-        })),
-        assistantTextSoFar: blocked.assistantTextSoFar,
-        cardText: blocked.cardText
-      }
-    }
-  }
   return {
-    blockerType: 'workspace',
-    summary: '运行被工作区补充卡住',
+    blockerType: 'approval',
+    summary: `运行被审批卡住，待审命令数=${blocked.event.items.length}`,
     data: {
+      batchId: blocked.event.batchId,
       taskId: blocked.event.taskId,
-      reason: blocked.event.reason,
-      requiredFields: blocked.event.requiredFields,
+      items: blocked.event.items.map((item) => ({
+        itemId: item.itemId,
+        order: item.order,
+        toolName: item.toolName,
+        command: item.command,
+        reason: item.reason
+      })),
       assistantTextSoFar: blocked.assistantTextSoFar,
       cardText: blocked.cardText
     }
@@ -1415,35 +1393,6 @@ export const waitForWorkbenchAiRunOutcome = async (
         await page.waitForTimeout(500)
         continue
       }
-      return {
-        status: 'blocked',
-        blocked
-      }
-    }
-
-    const workspaceRequired = events
-      .filter(
-        (event): event is Extract<AiRunEvent, { type: 'workspace_required' }> =>
-          event.type === 'workspace_required'
-      )
-      .at(-1)
-    if (workspaceRequired) {
-      const blocked: WorkbenchRunBlockedResult = {
-        kind: 'workspace',
-        event: workspaceRequired,
-        assistantTextSoFar: await readAssistantTextSoFar(page),
-        cardText: await readLocatorText(getWorkspaceRequiredCard(page))
-      }
-      const blockedSummary = describeWorkbenchBlockedResult(blocked)
-      runtime.signal({
-        name: 'workbench-run-blocked',
-        message: blockedSummary.summary,
-        status: 'failed',
-        data: {
-          blockerType: blockedSummary.blockerType,
-          ...(blockedSummary.data as Record<string, JsonValue>)
-        }
-      })
       return {
         status: 'blocked',
         blocked
