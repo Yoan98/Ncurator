@@ -1,22 +1,133 @@
 import { describe, it } from 'vitest'
+import type { AiRunEvent } from '../../../../../src/shared/types'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
   WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
+  type WorkbenchAiCompletionEvidence,
   assertNoWorkbenchFakeSignals,
-  chatSelectors,
-  getApprovalCard,
+  collectWorkbenchAiRunEvents,
+  decideWorkbenchApprovalBatch,
   getWorkbenchLocator,
   recordWorkbenchAiEvidence,
   sendWorkbenchMessage,
   setupWorkbenchWithTempWorkspace,
   startLocalWorkbenchHttpServer,
-  waitForWorkbenchAiEvent,
-  waitForWorkbenchAiRunCompletion,
   workbenchSelectors
 } from '../../../../harness/e2e/workbench'
 
 const CASE_ID = 'browser-use-task-panel'
 const TASK_CODE = 'cedar-browser-731'
+const BROWSER_PANEL_WAIT_TIMEOUT_MS = 180_000
+const BROWSER_TASK_COMPLETION_TIMEOUT_MS = 240_000
+const BROWSER_USE_FAILURE_LIMIT = 2
+
+const isApprovalBatchRequiredEvent = (
+  event: AiRunEvent
+): event is Extract<AiRunEvent, { type: 'approval_batch_required' }> =>
+  event.type === 'approval_batch_required'
+
+const waitForBrowserPanelOpenedWithApproval = async (
+  runtime: Parameters<typeof collectWorkbenchAiRunEvents>[0]
+): Promise<void> => {
+  const handledBatchIds = new Set<string>()
+  const deadline = Date.now() + BROWSER_PANEL_WAIT_TIMEOUT_MS
+  for (;;) {
+    const events = await collectWorkbenchAiRunEvents(runtime)
+    const failed = events.find((event) => event.type === 'run_failed')
+    if (failed?.type === 'run_failed') {
+      throw new Error(`AI run failed while waiting for browser panel: ${failed.error}`)
+    }
+    if (events.some((event) => event.type === 'browser_panel_opened')) return
+
+    const approvalRequired = events
+      .filter(
+        (event): event is Extract<AiRunEvent, { type: 'approval_batch_required' }> =>
+          isApprovalBatchRequiredEvent(event) && !handledBatchIds.has(event.batchId)
+      )
+      .at(-1)
+    if (approvalRequired) {
+      handledBatchIds.add(approvalRequired.batchId)
+      await decideWorkbenchApprovalBatch(runtime, runtime.page, {
+        event: approvalRequired,
+        action: 'approve'
+      })
+      continue
+    }
+
+    if (Date.now() >= deadline) {
+      throw new Error('browser panel did not open before timeout')
+    }
+    await runtime.page.waitForTimeout(500)
+  }
+}
+
+const waitForBrowserTaskCompletion = async (
+  runtime: Parameters<typeof collectWorkbenchAiRunEvents>[0],
+  startedAtMs: number,
+  modelName: string
+): Promise<WorkbenchAiCompletionEvidence> => {
+  const deadline = Date.now() + BROWSER_TASK_COMPLETION_TIMEOUT_MS
+  for (;;) {
+    const events = await collectWorkbenchAiRunEvents(runtime)
+    const failed = events.find((event) => event.type === 'run_failed')
+    if (failed?.type === 'run_failed') {
+      throw new Error(`AI run failed while waiting for browser task: ${failed.error}`)
+    }
+
+    const browserUseFailures = events.filter(
+      (event): event is Extract<AiRunEvent, { type: 'tool_call_result' }> =>
+        event.type === 'tool_call_result' &&
+        event.toolName === 'browser_use' &&
+        (Boolean(event.error) || event.result?.ok === false)
+    )
+    if (browserUseFailures.length >= BROWSER_USE_FAILURE_LIMIT) {
+      const latestFailure = browserUseFailures.at(-1)
+      runtime.signal({
+        name: 'workbench-browser-use-repeated-failure',
+        status: 'failed',
+        message: 'browser_use 连续失败，停止等待模型重复重试。',
+        data: {
+          failureCount: browserUseFailures.length,
+          latestFailure: latestFailure
+            ? {
+                toolCallId: latestFailure.toolCallId,
+                error: latestFailure.error || '',
+                result: latestFailure.result || null
+              }
+            : null
+        }
+      })
+      throw new Error(
+        `browser_use failed ${browserUseFailures.length} times; latest=${JSON.stringify(
+          latestFailure?.result || latestFailure?.error || null
+        )}`
+      )
+    }
+
+    const runCompleted = events.find((event) => event.type === 'run_completed')
+    if (runCompleted?.type === 'run_completed') {
+      const finalAnswerText =
+        events
+          .filter(
+            (event): event is Extract<AiRunEvent, { type: 'answer_completed' }> =>
+              event.type === 'answer_completed'
+          )
+          .map((event) => event.text)
+          .at(-1) || ''
+      return {
+        modelName,
+        durationMs: Date.now() - startedAtMs,
+        events,
+        finalAnswerText
+      }
+    }
+
+    if (Date.now() >= deadline) {
+      throw new Error('browser task did not complete before timeout')
+    }
+    await runtime.page.waitForTimeout(500)
+  }
+}
 
 describe('workbench run e2e', () => {
   it(CASE_ID, async () => {
@@ -50,25 +161,14 @@ describe('workbench run e2e', () => {
             `请使用右侧内置浏览器打开 ${server.url}，在“任务口令”输入框填入 ${TASK_CODE}，点击“提交任务”，然后告诉我页面显示的完整结果。不要只抓取源码，必须实际操作页面。`
           )
 
-          const approvalVisible = await getApprovalCard(page)
-            .waitFor({ state: 'visible', timeout: 30_000 })
-            .then(() => true)
-            .catch(() => false)
-          if (approvalVisible) {
-            await getWorkbenchLocator(page, chatSelectors.approvalBatchApproveButton).click()
-          }
-
-          await waitForWorkbenchAiEvent(runtime, {
-            name: 'browser_panel_opened',
-            matches: (event) => event.type === 'browser_panel_opened'
-          })
+          await waitForBrowserPanelOpenedWithApproval(runtime)
           await getWorkbenchLocator(page, workbenchSelectors.browserPanel).waitFor({
             state: 'visible'
           })
           await getWorkbenchLocator(page, workbenchSelectors.browserViewport).waitFor({
             state: 'visible'
           })
-          const evidence = await waitForWorkbenchAiRunCompletion(
+          const evidence = await waitForBrowserTaskCompletion(
             runtime,
             startedAtMs,
             setup.env.modelName

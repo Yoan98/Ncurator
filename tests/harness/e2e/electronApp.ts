@@ -56,6 +56,7 @@ type E2EObserverState = {
 type E2EWindow = Window & {
   __NCURATOR_E2E_OBSERVER__?: E2EObserverState
   __NCURATOR_E2E_ELECTRON_PROCESS_ID__?: number
+  __NCURATOR_E2E_RECORD_AI_RUN_EVENT__?: (entry: E2EAiRunEventEntry) => void
 }
 
 export type E2ERuntimeSignals = {
@@ -77,6 +78,12 @@ export type LaunchedElectronApp = {
 export type ElectronLaunchMode = 'fixture' | 'real'
 export type ElectronWindowMode = 'background' | 'visible'
 
+export type ElectronSignalSink = {
+  onAiRunEvent?: (entry: E2EAiRunEventEntry) => void
+  onConsole?: (entry: E2EConsoleEntry) => void
+  onLifecycle?: (entry: E2ELifecycleEntry) => void
+}
+
 const OUT_MAIN_ENTRY = path.resolve(process.cwd(), 'out', 'main', 'index.js')
 
 const toConsoleLevel = (message: ConsoleMessage): E2EConsoleLevel => {
@@ -89,15 +96,18 @@ const pushProcessLog = (
   entries: E2EConsoleEntry[],
   level: E2EConsoleLevel,
   source: string,
-  chunk: Buffer | string
+  chunk: Buffer | string,
+  sink?: ElectronSignalSink
 ): void => {
   const text = String(chunk)
   if (!text.trim()) return
-  entries.push({
+  const entry = {
     ts: new Date().toISOString(),
     level,
     text: `[${source}] ${text.trim()}`
-  })
+  }
+  entries.push(entry)
+  sink?.onConsole?.(entry)
 }
 
 const ensureBuiltAppExists = async (): Promise<void> => {
@@ -166,8 +176,13 @@ const buildElectronLaunchEnv = (
   return env
 }
 
-const installPageObservers = async (page: Page): Promise<void> => {
+const installPageObservers = async (page: Page, sink?: ElectronSignalSink): Promise<void> => {
   await page.waitForFunction(() => Boolean(window.api))
+  if (sink?.onAiRunEvent) {
+    await page.exposeFunction('__NCURATOR_E2E_RECORD_AI_RUN_EVENT__', (entry: E2EAiRunEventEntry) => {
+      sink.onAiRunEvent?.(entry)
+    })
+  }
 
   await page.evaluate(() => {
     const currentWindow = window as E2EWindow
@@ -202,10 +217,12 @@ const installPageObservers = async (page: Page): Promise<void> => {
 
     window.addEventListener('ncurator-e2e-ai-run-event', (event) => {
       const detail = (event as CustomEvent<AiRunEvent>).detail
-      currentWindow.__NCURATOR_E2E_OBSERVER__?.aiRunEventEntries.push({
+      const entry = {
         ts: now(),
         event: detail
-      })
+      }
+      currentWindow.__NCURATOR_E2E_OBSERVER__?.aiRunEventEntries.push(entry)
+      currentWindow.__NCURATOR_E2E_RECORD_AI_RUN_EVENT__?.(entry)
     })
 
     window.addEventListener('check-llm-config', () => {
@@ -231,18 +248,24 @@ const focusVisibleElectronWindow = async (electronApp: ElectronApplication): Pro
 }
 
 export const launchElectronApp = async (
-  input: { launchMode?: ElectronLaunchMode; windowMode?: ElectronWindowMode } = {}
+  input: {
+    launchMode?: ElectronLaunchMode
+    windowMode?: ElectronWindowMode
+    signalSink?: ElectronSignalSink
+  } = {}
 ): Promise<LaunchedElectronApp> => {
   await ensureBuiltAppExists()
 
   const consoleEntries: E2EConsoleEntry[] = []
   const lifecycleEntries: E2ELifecycleEntry[] = []
   const recordLifecycle = (name: string, data?: JsonValue): void => {
-    lifecycleEntries.push({
+    const entry = {
       ts: new Date().toISOString(),
       name,
       data
-    })
+    }
+    lifecycleEntries.push(entry)
+    input.signalSink?.onLifecycle?.(entry)
   }
   const userDataDir = await mkdtemp(path.join(os.tmpdir(), 'ncurator-e2e-user-data-'))
   const remoteDebuggingPort = await allocateFreePort()
@@ -263,10 +286,10 @@ export const launchElectronApp = async (
     pid: electronProcess?.pid || null
   })
   electronProcess?.stdout?.on('data', (chunk) => {
-    pushProcessLog(consoleEntries, 'log', 'main:stdout', chunk)
+    pushProcessLog(consoleEntries, 'log', 'main:stdout', chunk, input.signalSink)
   })
   electronProcess?.stderr?.on('data', (chunk) => {
-    pushProcessLog(consoleEntries, 'error', 'main:stderr', chunk)
+    pushProcessLog(consoleEntries, 'error', 'main:stderr', chunk, input.signalSink)
   })
   electronProcess?.on('exit', (code, signal) => {
     recordLifecycle('electron-process-exit', {
@@ -277,7 +300,8 @@ export const launchElectronApp = async (
       consoleEntries,
       code === 0 ? 'log' : 'error',
       'main:exit',
-      `code=${String(code)} signal=${String(signal)}`
+      `code=${String(code)} signal=${String(signal)}`,
+      input.signalSink
     )
   })
 
@@ -300,15 +324,17 @@ export const launchElectronApp = async (
   })
 
   page.on('console', (message) => {
-    consoleEntries.push({
+    const entry = {
       ts: new Date().toISOString(),
       level: toConsoleLevel(message),
       text: message.text()
-    })
+    }
+    consoleEntries.push(entry)
+    input.signalSink?.onConsole?.(entry)
   })
 
   await page.waitForLoadState('domcontentloaded')
-  await installPageObservers(page)
+  await installPageObservers(page, input.signalSink)
   await page.evaluate((processId) => {
     const currentWindow = window as E2EWindow
     currentWindow.__NCURATOR_E2E_ELECTRON_PROCESS_ID__ = processId || undefined
@@ -361,13 +387,25 @@ export const launchElectronApp = async (
             path: input.tracePath
           })
         } catch (error) {
-          pushProcessLog(consoleEntries, 'warning', 'trace', error instanceof Error ? error.message : String(error))
+          pushProcessLog(
+            consoleEntries,
+            'warning',
+            'trace',
+            error instanceof Error ? error.message : String(error),
+            input.signalSink
+          )
         }
       }
       try {
         await electronApp.close()
       } catch (error) {
-        pushProcessLog(consoleEntries, 'warning', 'electron-close', error instanceof Error ? error.message : String(error))
+        pushProcessLog(
+          consoleEntries,
+          'warning',
+          'electron-close',
+          error instanceof Error ? error.message : String(error),
+          input.signalSink
+        )
       }
       await rm(userDataDir, { recursive: true, force: true })
     }

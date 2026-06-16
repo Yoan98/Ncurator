@@ -954,6 +954,25 @@ export const sendWorkbenchMessage = async (page: Page, value: string): Promise<v
   await submitWorkbenchCurrentDraft(page)
 }
 
+export const createWorkbenchNewSession = async (page: Page): Promise<void> => {
+  await getWorkbenchLocator(page, workbenchSelectors.newSessionButton).click()
+  await getWorkbenchLocator(page, workbenchSelectors.input).waitFor({ state: 'visible' })
+  await page.waitForFunction(
+    (input: { assistantTurnPrefix: string; approvalBatchCard: string }) => {
+      const assistantTurns = document.querySelectorAll(
+        `[data-testid^="${input.assistantTurnPrefix}-"]`
+      )
+      const approvalCard = document.querySelector(`[data-testid="${input.approvalBatchCard}"]`)
+      return assistantTurns.length === 0 && !approvalCard
+    },
+    {
+      assistantTurnPrefix: workbenchSelectors.assistantTurnPrefix,
+      approvalBatchCard: chatSelectors.approvalBatchCard
+    },
+    { timeout: WORKBENCH_E2E_TIMEOUT_MS }
+  )
+}
+
 export const switchWorkbenchMode = async (
   page: Page,
   modeLabel: '大聪明' | '没头脑'
@@ -1315,6 +1334,73 @@ export const waitForWorkbenchAiEvent = async (
   }
 }
 
+export const decideWorkbenchApprovalBatch = async (
+  runtime: E2ETestRuntime,
+  page: Page,
+  input: {
+    event: Extract<AiRunEvent, { type: 'approval_batch_required' }>
+    action: 'approve' | 'reject'
+    timeoutMs?: number
+  }
+): Promise<Extract<AiRunEvent, { type: 'approval_batch_decision' }>> => {
+  const card = getApprovalCard(page)
+  const buttonTestId =
+    input.action === 'approve'
+      ? chatSelectors.approvalBatchApproveButton
+      : chatSelectors.approvalBatchDenyButton
+  const button = getWorkbenchLocator(page, buttonTestId)
+  await card.waitFor({ state: 'visible', timeout: WORKBENCH_E2E_TIMEOUT_MS })
+
+  for (let index = 0; index < input.event.items.length; index += 1) {
+    const cardText = await readLocatorText(card)
+    runtime.signal({
+      name: 'workbench-approval-decision-click',
+      message: `提交审批决策 ${index + 1}/${input.event.items.length}`,
+      data: {
+        action: input.action,
+        batchId: input.event.batchId,
+        item: input.event.items[index] || null,
+        cardText
+      }
+    })
+    await button.waitFor({ state: 'visible', timeout: WORKBENCH_E2E_TIMEOUT_MS })
+    await button.scrollIntoViewIfNeeded()
+    await page.waitForFunction(
+      (testId: string) => {
+        const element = document.querySelector(`[data-testid="${testId}"]`)
+        return element instanceof HTMLButtonElement && !element.disabled
+      },
+      buttonTestId,
+      { timeout: WORKBENCH_E2E_TIMEOUT_MS }
+    )
+    await button.click()
+    if (index < input.event.items.length - 1) {
+      await page.waitForFunction(
+        (testId: string, expectedIndex: number) => {
+          const root = document.querySelector(`[data-testid="${testId}"]`)
+          return Boolean(root?.textContent?.includes(`审批 ${expectedIndex} /`))
+        },
+        chatSelectors.approvalBatchCard,
+        index + 2,
+        { timeout: WORKBENCH_E2E_TIMEOUT_MS }
+      )
+    }
+  }
+
+  const decision = await waitForWorkbenchAiEvent(runtime, {
+    name: `approval_batch_decision_${input.action}_${input.event.batchId}`,
+    timeoutMs: input.timeoutMs || WORKBENCH_E2E_TIMEOUT_MS,
+    matches: (event) =>
+      event.type === 'approval_batch_decision' &&
+      event.batchId === input.event.batchId &&
+      event.decisions.some((item) => item.action === input.action)
+  })
+  if (decision.type !== 'approval_batch_decision') {
+    throw new Error(`approval batch decision did not resolve for ${input.event.batchId}`)
+  }
+  return decision
+}
+
 export const waitForWorkbenchAiRunOutcome = async (
   runtime: E2ETestRuntime,
   startedAtMs: number,
@@ -1365,7 +1451,17 @@ export const waitForWorkbenchAiRunOutcome = async (
           event.type === 'approval_batch_required'
       )
       .at(-1)
-    if (approvalRequired && !approvalAutoHandledBatchIds.has(approvalRequired.batchId)) {
+    const approvalAlreadyDecided = approvalRequired
+      ? events.some(
+          (event) =>
+            event.type === 'approval_batch_decision' && event.batchId === approvalRequired.batchId
+        )
+      : false
+    if (
+      approvalRequired &&
+      !approvalAlreadyDecided &&
+      !approvalAutoHandledBatchIds.has(approvalRequired.batchId)
+    ) {
       const assistantTextSoFar = await readAssistantTextSoFar(page)
       const cardText = await readLocatorText(getApprovalCard(page))
       const blocked: WorkbenchRunBlockedResult = {

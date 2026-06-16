@@ -13,12 +13,18 @@ import {
   type TestRunMeta,
   type TestRunStatus
 } from '../core/run-log-contract'
-import { createRunId, resolveRunArtifactsDir, writeRunLog } from '../core/write-run-log'
+import {
+  createRunId,
+  createStreamingRunLogWriter,
+  resolveRunArtifactsDir,
+  type StreamingRunLogWriter
+} from '../core/write-run-log'
 import {
   launchElectronApp,
   type E2ERuntimeSignals,
   type ElectronLaunchMode,
-  type ElectronWindowMode
+  type ElectronWindowMode,
+  type LaunchedElectronApp
 } from './electronApp'
 
 export type E2ETestRunMode = 'single' | 'repeatable'
@@ -113,6 +119,20 @@ const escapeHtml = (value: string): string =>
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;')
 
+const getRuntimeEventKey = (entry: E2ERuntimeSignals['aiRunEventEntries'][number]): string => {
+  const event = entry.event
+  const runId = 'runId' in event ? String(event.runId || '') : ''
+  const createdAt = 'createdAt' in event ? String(event.createdAt || '') : ''
+  return [entry.ts, event.type, runId, createdAt].join(':')
+}
+
+const getTimelineSignalKey = (input: {
+  source: string
+  ts: string
+  name: string
+  data?: JsonValue
+}): string => `${input.source}:${input.ts}:${input.name}:${JSON.stringify(input.data || null)}`
+
 const buildPlaywrightReportHtml = (input: {
   caseId: string
   runId: string
@@ -195,11 +215,19 @@ export const runE2ECase = async <TResult>(
   })
   const events: TestLogEvent[] = []
   const artifacts: TestArtifact[] = []
+  const streamingLogWriter: StreamingRunLogWriter = createStreamingRunLogWriter({
+    scope,
+    caseId: definition.caseId,
+    runId
+  })
   const logDirArtifacts = resolveRunArtifactsDir({
     scope,
     caseId: definition.caseId,
     runId
   })
+  const emittedTimelineSignalKeys = new Set<string>()
+  const emittedRuntimeEventKeys = new Set<string>()
+  let launchedApp: LaunchedElectronApp | null = null
   let status: TestRunStatus = 'failed'
   let stepCounter = 0
   let assertionCounter = 0
@@ -209,13 +237,34 @@ export const runE2ECase = async <TResult>(
   let failedAssertionId: string | null = null
   let executionErrorName: string | null = null
   let executionErrorMessage: string | null = null
-  const launchedApp = await launchElectronApp({
-    launchMode: definition.launchMode,
-    windowMode: definition.windowMode
-  })
 
   const pushEvent = (event: TestLogEvent): void => {
     events.push(event)
+    streamingLogWriter.appendTimelineEvent(event)
+  }
+
+  const appendRuntimeEventOnce = (
+    entry: E2ERuntimeSignals['aiRunEventEntries'][number]
+  ): void => {
+    const key = getRuntimeEventKey(entry)
+    if (emittedRuntimeEventKeys.has(key)) return
+    emittedRuntimeEventKeys.add(key)
+    streamingLogWriter.appendRuntimeEvent(entry.event)
+  }
+
+  const pushSignalEventOnce = (input: {
+    source: string
+    event: TestLogEvent
+  }): void => {
+    const key = getTimelineSignalKey({
+      source: input.source,
+      ts: input.event.ts,
+      name: input.event.name,
+      data: input.event.data
+    })
+    if (emittedTimelineSignalKeys.has(key)) return
+    emittedTimelineSignalKeys.add(key)
+    pushEvent(input.event)
   }
 
   const recordEvent = (input: Omit<TestLogEvent, 'ts'>): void => {
@@ -261,18 +310,24 @@ export const runE2ECase = async <TResult>(
     const relativePath = path.posix.join('screenshots', `${input.name}.png`)
     const absolutePath = path.join(logDirArtifacts, relativePath)
     await mkdir(path.dirname(absolutePath), { recursive: true })
-    if (launchedApp.page.isClosed()) {
+    if (!launchedApp || launchedApp.page.isClosed()) {
       recordEvent({
         type: 'signal',
         name: 'screenshot-skipped',
         status: 'info',
-        message: '页面已关闭，跳过失败截图',
+        message: launchedApp ? '页面已关闭，跳过失败截图' : 'Electron 未启动，跳过失败截图',
         data: {
           name: input.name
         }
       })
       const placeholderPath = path.join(logDirArtifacts, relativePath)
-      await writeFile(placeholderPath, 'page already closed; screenshot skipped', 'utf8')
+      await writeFile(
+        placeholderPath,
+        launchedApp
+          ? 'page already closed; screenshot skipped'
+          : 'electron not launched; screenshot skipped',
+        'utf8'
+      )
       return captureArtifact({
         kind: 'other',
         relativePath,
@@ -306,10 +361,10 @@ export const runE2ECase = async <TResult>(
     })
   }
 
-  const runtime: E2ETestRuntime = {
+  const createRuntime = (app: LaunchedElectronApp): E2ETestRuntime => ({
     runId,
     taskId,
-    page: launchedApp.page,
+    page: app.page,
     recordEvent,
     signal,
     step: async (input) => {
@@ -374,8 +429,32 @@ export const runE2ECase = async <TResult>(
     },
     captureArtifact,
     captureScreenshot,
-    collectSignals: launchedApp.collectSignals
-  }
+    collectSignals: app.collectSignals
+  })
+
+  streamingLogWriter.init({
+    meta: {
+      schemaVersion: TEST_LOG_SCHEMA_VERSION,
+      runId,
+      caseId: definition.caseId,
+      scope,
+      startedAt: new Date(startedAtMs).toISOString(),
+      finishedAt: '',
+      status: 'running',
+      stats: {
+        durationMs: 0,
+        steps: 0,
+        assertions: 0,
+        errors: 0,
+        artifacts: 0
+      },
+      runtime: {
+        driver: 'playwright',
+        target: 'electron',
+        modelName: null
+      }
+    }
+  })
 
   recordEvent({
     type: 'run',
@@ -390,8 +469,62 @@ export const runE2ECase = async <TResult>(
       runMode: definition.runMode
     }
   })
+  await streamingLogWriter.flush()
 
   try {
+    launchedApp = await launchElectronApp({
+      launchMode: definition.launchMode,
+      windowMode: definition.windowMode,
+      signalSink: {
+        onAiRunEvent: (entry) => {
+          appendRuntimeEventOnce(entry)
+          pushSignalEventOnce({
+            source: 'ai-run-event',
+            event: {
+              ts: entry.ts,
+              type: 'signal',
+              name: 'ai-run-event',
+              status: 'info',
+              message: `收到 AI 事件 ${entry.event.type}`,
+              data: {
+                eventType: entry.event.type
+              }
+            }
+          })
+        },
+        onConsole: (entry) => {
+          if (entry.level === 'log') return
+          pushSignalEventOnce({
+            source: 'console',
+            event: {
+              ts: entry.ts,
+              type: 'signal',
+              name: entry.level === 'warning' ? 'console-warning' : 'console-error',
+              status: 'info',
+              message: `捕获到 console ${entry.level}：${entry.text}`,
+              data: {
+                level: entry.level,
+                text: entry.text
+              }
+            }
+          })
+        },
+        onLifecycle: (entry) => {
+          pushSignalEventOnce({
+            source: 'electron-lifecycle',
+            event: {
+              ts: entry.ts,
+              type: 'signal',
+              name: 'electron-lifecycle',
+              status: 'info',
+              message: `Electron lifecycle: ${entry.name}`,
+              data: entry.data
+            }
+          })
+        }
+      }
+    })
+    const runtime = createRuntime(launchedApp)
     const result = await definition.execute(runtime)
     await definition.assert(result, runtime)
     status = 'passed'
@@ -422,44 +555,62 @@ export const runE2ECase = async <TResult>(
     }
     throw error
   } finally {
-    const signals = await launchedApp.collectSignals()
-    const runtimeEvents = signals.aiRunEventEntries.map((entry) => entry.event)
+    const signals: E2ERuntimeSignals = launchedApp
+      ? await launchedApp.collectSignals()
+      : {
+          routeEntries: [],
+          ipcInvokeEntries: [],
+          aiRunEventEntries: [],
+          domEventEntries: [],
+          consoleEntries: [],
+          lifecycleEntries: []
+        }
 
     for (const routeEntry of signals.routeEntries) {
-      pushEvent({
-        ts: routeEntry.ts,
-        type: 'signal',
-        name: 'route-change',
-        status: 'info',
-        message: `路由变更为 ${routeEntry.route}`,
-        data: {
-          route: routeEntry.route
+      pushSignalEventOnce({
+        source: 'route-change',
+        event: {
+          ts: routeEntry.ts,
+          type: 'signal',
+          name: 'route-change',
+          status: 'info',
+          message: `路由变更为 ${routeEntry.route}`,
+          data: {
+            route: routeEntry.route
+          }
         }
       })
     }
 
     for (const ipcEntry of signals.ipcInvokeEntries) {
-      pushEvent({
-        ts: ipcEntry.ts,
-        type: 'signal',
-        name: 'ipc-call',
-        status: 'info',
-        message: `调用 IPC ${ipcEntry.name}`,
-        data: {
-          name: ipcEntry.name
+      pushSignalEventOnce({
+        source: 'ipc-call',
+        event: {
+          ts: ipcEntry.ts,
+          type: 'signal',
+          name: 'ipc-call',
+          status: 'info',
+          message: `调用 IPC ${ipcEntry.name}`,
+          data: {
+            name: ipcEntry.name
+          }
         }
       })
     }
 
     for (const aiRunEventEntry of signals.aiRunEventEntries) {
-      pushEvent({
-        ts: aiRunEventEntry.ts,
-        type: 'signal',
-        name: 'ai-run-event',
-        status: 'info',
-        message: `收到 AI 事件 ${aiRunEventEntry.event.type}`,
-        data: {
-          eventType: aiRunEventEntry.event.type
+      appendRuntimeEventOnce(aiRunEventEntry)
+      pushSignalEventOnce({
+        source: 'ai-run-event',
+        event: {
+          ts: aiRunEventEntry.ts,
+          type: 'signal',
+          name: 'ai-run-event',
+          status: 'info',
+          message: `收到 AI 事件 ${aiRunEventEntry.event.type}`,
+          data: {
+            eventType: aiRunEventEntry.event.type
+          }
         }
       })
     }
@@ -468,41 +619,49 @@ export const runE2ECase = async <TResult>(
       if (consoleEntry.level === 'log') {
         continue
       }
-      pushEvent({
-        ts: consoleEntry.ts,
-        type: 'signal',
-        name: consoleEntry.level === 'warning' ? 'console-warning' : 'console-error',
-        status: 'info',
-        message: `捕获到 console ${consoleEntry.level}：${consoleEntry.text}`,
-        data: {
-          level: consoleEntry.level,
-          text: consoleEntry.text
+      pushSignalEventOnce({
+        source: 'console',
+        event: {
+          ts: consoleEntry.ts,
+          type: 'signal',
+          name: consoleEntry.level === 'warning' ? 'console-warning' : 'console-error',
+          status: 'info',
+          message: `捕获到 console ${consoleEntry.level}：${consoleEntry.text}`,
+          data: {
+            level: consoleEntry.level,
+            text: consoleEntry.text
+          }
         }
       })
     }
 
     for (const lifecycleEntry of signals.lifecycleEntries) {
-      pushEvent({
-        ts: lifecycleEntry.ts,
-        type: 'signal',
-        name: 'electron-lifecycle',
-        status: 'info',
-        message: `Electron lifecycle: ${lifecycleEntry.name}`,
-        data: lifecycleEntry.data
+      pushSignalEventOnce({
+        source: 'electron-lifecycle',
+        event: {
+          ts: lifecycleEntry.ts,
+          type: 'signal',
+          name: 'electron-lifecycle',
+          status: 'info',
+          message: `Electron lifecycle: ${lifecycleEntry.name}`,
+          data: lifecycleEntry.data
+        }
       })
     }
 
-    const traceRelativePath = path.posix.join('trace', 'playwright-trace.zip')
-    const traceAbsolutePath = path.join(logDirArtifacts, traceRelativePath)
-    await mkdir(path.dirname(traceAbsolutePath), { recursive: true })
-    await launchedApp.close({
-      tracePath: traceAbsolutePath
-    })
-    await captureArtifact({
-      kind: 'trace',
-      relativePath: traceRelativePath,
-      message: '保存 Playwright trace'
-    })
+    if (launchedApp) {
+      const traceRelativePath = path.posix.join('trace', 'playwright-trace.zip')
+      const traceAbsolutePath = path.join(logDirArtifacts, traceRelativePath)
+      await mkdir(path.dirname(traceAbsolutePath), { recursive: true })
+      await launchedApp.close({
+        tracePath: traceAbsolutePath
+      })
+      await captureArtifact({
+        kind: 'trace',
+        relativePath: traceRelativePath,
+        message: '保存 Playwright trace'
+      })
+    }
 
     if (status === 'failed') {
       const reportRelativePath = path.posix.join('playwright', 'report', 'index.html')
@@ -558,10 +717,8 @@ export const runE2ECase = async <TResult>(
       }
     }
 
-    await writeRunLog({
+    await streamingLogWriter.finalize({
       meta,
-      events,
-      runtimeEvents,
       artifacts
     })
   }

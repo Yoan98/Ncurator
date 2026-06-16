@@ -73,7 +73,7 @@ const buildEmptySeedManifest = (): PersistedSeedManifest => ({
   kbDocuments: []
 })
 
-type StreamingRunLogWriter = {
+export type StreamingRunLogWriter = {
   logDir: string
   paths: {
     metaPath: string
