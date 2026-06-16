@@ -24,10 +24,10 @@
 
 ### 1.4 测试相关
 
-- `doc/test-plan/ai-test.md`：涉及 AI 测试范围、正式或 live case 设计、执行摘要或 suite 覆盖维护时阅读。
+- `doc/test-plan/ai-test.md`：涉及 AI 回归测试范围、live case 设计、执行摘要或 suite 覆盖维护时阅读。
 - `doc/test-plan/settings-test.md`：涉及 Settings 测试范围或测试边界时阅读。
-- `doc/test-plan/workbench-test.md`：涉及 Workbench 测试范围、真实 e2e case 设计、发送前置条件验证、执行摘要或 suite 覆盖维护时阅读。
-- `doc/test.md`：涉及测试体系、formal e2e 规则、runner 或正式测试流程时阅读。
+- `doc/test-plan/workbench-test.md`：涉及 Workbench 回归测试范围、真实 e2e case 设计、发送前置条件验证、执行摘要或 suite 覆盖维护时阅读。
+- `doc/test.md`：涉及测试体系、UI E2E 回归规则、runner 或回归测试流程时阅读。
 
 ### 1.5 prd产品文档相关
 
@@ -70,5 +70,5 @@
 
 ### 你的回复相关
 
-- 当对应测试用例文档明确要求引用 PRD 编号时，写正式测试或验收结论应按该文档要求执行
+- 当对应测试用例文档明确要求引用 PRD 编号时，写回归测试或验收结论应按该文档要求执行
 - 最终回复涉及功能实现时，应说明已验证和未验证项；只有在对应测试用例文档明确要求或 `doc/prd/**` 发生变更时，才需要说明 PRD 对齐情况

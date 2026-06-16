@@ -3,31 +3,28 @@
 ## 1. 文档定位
 
 - 本文是 NCurator-Desktop 的唯一测试总规范。
-- 本文负责定义测试体系总览、正式 case 准入、正式测试闭环、runner 与 raw logs 契约。
-- 各业务域的 suite 列表、正式 case 定义与领域特有规则，只在对应 `doc/test-plan/**` 中维护，本文不重复登记 case 清单。
+- 本文负责定义测试分类、回归测试准入、测试执行闭环、UI E2E 真实性、真实 AI / live 断言、runner 与 raw logs 契约。
+- 各业务域的 suite 列表、回归 case 定义与领域特有规则，只在对应 `doc/test-plan/**` 中维护，本文不重复登记 case 清单。
 - 只有当功能代码发生变动、对应 `doc/test-plan/**` 明确要求对齐 `doc/prd/**`，或者 `doc/prd/**` 本身发生变更时，才需要校验实现与 `doc/prd/**` 的一致性。
-- 如果只记一件事：写测试前先判断这是正式长期回归 case，还是一次性临时排查 case。
+- 新增任何测试文件前，必须先与用户确认目标分类：回归测试，或 `unit / 辅助测试`。
 
-正式测试体系只沉淀一层长期产物：
+测试体系只沉淀一层长期执行产物：
 
 - 原始日志：`tests/logs/**`
 
-正式测试样例只记录事实，不直接写失败原因分析、优化建议或能力判断。
+测试样例只记录事实，不直接写失败原因分析、优化建议或能力判断。
 
 ## 2. 测试体系总览
 
-### 2.1 正式 case 与临时 case
+### 2.1 测试分类
 
-- 正式长期回归 case
-  - 用于长期维护、参与 gating。
-  - 必须进入正式测试闭环。
-- 临时排查 case
-  - 只用于一次性排查、验证猜想、临时复现或补上下文。
-  - 不进入 `tests/**`，也不作为长期测试资产提交。
-- 默认策略
-  - 用户没有明确要求“补正式长期 case”时，默认不新增正式测试文件。
-  - 只要还在排查、验证猜想、试运行 fixture 或尚未确定要长期维护，一律不写入正式测试目录。
-  - 只有确认要长期维护、参与 gating 的 case，才进入正式测试目录。
+- 回归测试
+  - 列入 `doc/test-plan/**`，放在 `tests/case/<domain>/<suite>/**`。
+  - 用于长期维护、批量执行和执行摘要统计。
+- `unit / 辅助测试`
+  - 放在 `tests/case/unit/**`。
+  - 不进入 `doc/test-plan/**`，不计入领域回归执行摘要。
+- 不落测试文件的排查不作为测试文档治理对象；一旦要新增测试文件，必须先与用户确认归入回归测试还是 `unit / 辅助测试`。
 
 ### 2.2 目录结构
 
@@ -51,9 +48,8 @@ tests/
 - e2e 测试文件使用 `tests/case/<domain>/<suite>/<groups...>/<case>.e2e.test.ts`。
 - `suite` 是第一层稳定分类；`groups...` 是 suite 下可选的任意深度子目录。
 - 各 domain 的 `suite` 列表与归属，只在对应 `doc/test-plan/**` 中定义。
-- 当某个 `suite` 不需要继续细分时，正式 case 可以直接放在该 `suite` 目录下。
-- `tests/case/unit/**` 用于长期保留、但不进入 `doc/test-plan/**` 正式治理的 unit / helper / schema / prompt 类测试。
-- `tests/case/**` 中除 `unit/**` 外，只允许放已在 `doc/test-plan/**` 登记的正式 case。
+- 当某个 `suite` 不需要继续细分时，回归 case 可以直接放在该 `suite` 目录下。
+- `tests/case/**` 中除 `unit/**` 外，只允许放已在 `doc/test-plan/**` 登记的回归 case。
 - `tests/fixtures/workspace/` 是共享工作区 fixture 根目录；凡是依赖“工作区里有什么文件”的测试，优先复用该目录。
 - 当 case 直接传入 `tests/fixtures/workspace` 目录时，runner 应把该目录下的子内容原样复制到临时 workspace 根目录，而不是保留 `tests/fixtures/**` 中间层路径。
 
@@ -73,25 +69,21 @@ tests/
   - 测试类型只通过文件名体现。
   - 普通测试默认视为 `backend`；文件名包含 `.e2e.test.ts` 时视为 `e2e`。
 
-## 3. 正式 case 规则
+## 3. 回归 case 规则
 
 ### 3.1 准入规则
 
-- `doc/test-plan/**` 下每个领域文档，都是该领域正式测试用例定义的唯一规格来源。
-- 新增、修改或补齐正式 case 时，必须先更新对应 `doc/test-plan/**`，再修改测试代码。
-- 未登记的 case 不得直接写进 `tests/case/**` 非 `unit` 目录。
-- 当临时验证需要转为正式长期 case 时，顺序必须是：先补 `doc/test-plan/**`，再迁入正式目录。
-- 如果实现行为变更导致正式 case 预期变化，必须先更新对应 `doc/test-plan/**`，再修改测试代码。
-- 每个正式 `caseId` 都必须稳定映射到唯一测试文件与唯一日志目录。
+- 新增任何测试文件前，必须先与用户确认目标分类。
+- `doc/test-plan/**` 是回归 case 的唯一规格来源；新增、修改或补齐回归 case 时，必须先更新对应测试计划，再修改测试代码。
+- `tests/case/<domain>/**` 只能放已登记的回归 case；`tests/case/unit/**` 不进入回归计划和领域执行摘要。
+- 每个回归 `caseId` 都必须稳定映射到唯一测试文件与唯一日志目录。
 
-### 3.2 正式 case 共享字段
+### 3.2 回归 case 共享字段
 
-正式 case 在 `doc/test-plan/**` 中统一使用以下字段：
+回归 case 在 `doc/test-plan/**` 中统一使用以下字段：
 
 - `测试类型`
   - `backend` 或 `e2e`。
-- `实现状态`
-  - 标记当前代码实现与文档定义的匹配状态。
 - `What`
   - 这条 case 到底要验证什么。
 - `Why`
@@ -110,64 +102,38 @@ tests/
 - `检测时间`
   - 记录该 suite 或分类最近一次完整执行完成时间，建议使用 `YYYY-MM-DD HH:mm:ss ±HH:mm`。
 
-- 执行状态统一写在对应 `doc/test-plan/**` 顶部的独立“执行摘要”区域，不在 suite 小节或 case 小节重复维护。
-- 每次正式 case 执行完成后，如果该次结果要作为当前有效测试结论，必须主动更新对应 `doc/test-plan/**` 顶部“执行摘要”中的通过率、检测时间、以及该领域明确要求维护的附加摘要信息。
-- 正式 `mock-llm` case 只允许替换 LLM 输出；不得 fake tool、store、docx apply service、runner 或节点执行结果。
+- 执行摘要只保留当前有效结论，不记录迁移历史、排查过程或旧实现解释。
+- 每次回归 case 执行完成后，如果该次结果要作为当前有效测试结论，必须主动更新对应 `doc/test-plan/**` 顶部“执行摘要”中的通过率、检测时间、以及该领域明确要求维护的附加摘要信息。
+- `mock-llm` 回归 case 只允许替换 LLM 输出；不得 fake tool、store、docx apply service、runner 或节点执行结果。
 
-### 3.3 Formal UI E2E 规则
+### 3.3 UI E2E 回归规则
 
-- Formal UI e2e 的目标是验证真实用户路径：通过可见 UI、Electron、IPC、文件系统、网络与后端服务完成操作。
+- UI e2e 回归测试的目标是验证真实用户路径：通过可见 UI、Electron、IPC、文件系统、网络与后端服务完成操作。
 - 测试准备只允许创建真实输入数据，例如真实文件、真实 docx、真实 PDF、真实工作区目录、真实本地 HTTP 页面或真实网页 URL；不得用 fixture 直接替代产品运行结果。
 - `tests/fixtures/**` 只能作为真实输入数据来源，不得作为搜索结果、AI 事件、artifact、docx 修改记录、模型返回或 renderer 状态的替身。
-- Formal UI e2e 禁止使用 fake model、fake search、fake docx、脚本化 AI 事件、脚本化 artifact、直接写 renderer 状态、直接写业务 store 或直接调用内部 IPC 来绕过用户可见操作。
+- UI e2e 回归测试禁止使用 fake / mock / stub 替代被测产品结果，包括 fake model、fake search、fake docx、脚本化 AI 事件、脚本化 artifact、直接写 renderer 状态、直接写业务 store 或直接调用内部 IPC 来绕过用户可见操作。
 - 测试 helper 可以做用户同等可见的点击、输入、选择、等待、截图、读取 raw logs 和读取输出文件；不得在被测行为上替代 UI、Electron 或后端真实实现。
 - 涉及真实 AI 调用的 UI e2e 必须使用测试计划声明的 live 环境变量或真实应用配置；缺少配置时必须 preflight fail，不得静默跳过，也不得回落到 mock LLM。
-- 如果某个正式 UI e2e 需要生产代码或 testability 入口才能继续，测试实现不得改用模拟路径绕过；应把缺口记录到对应 `doc/test-plan/**` 的执行摘要和最终结论，交给产品 / 生产实现决策。
-- 旧 case 若依赖上述禁止路径，不能继续作为有效 formal 通过结论；必须改为真实 UI 路径、标记待重构或废弃。
+- 如果某个 UI e2e 回归测试需要生产代码或 testability 入口才能继续，测试实现不得改用模拟路径绕过；应把缺口记录到对应 `doc/test-plan/**` 的执行摘要和最终结论，交给产品 / 生产实现决策。
+- 依赖上述禁止路径的旧 case，不能继续作为有效回归通过结论；必须改为真实用户路径，或在执行摘要中明确不计入有效通过。
 
-### 3.4 实现状态取值约定
+### 3.4 真实 AI / live 断言规则
 
-- `待检查`
-  - 已在计划中定义，但还未核对代码是否已经实现或与文档一致。
-- `未实现`
-  - 代码中还没有对应测试用例实现。
-- `部分实现`
-  - 已有部分实现，但与文档定义不完全一致，或缺少关键断言 / fixture / 分支覆盖。
-- `已实现`
-  - 代码中的测试用例已与文档定义对齐。
-- `待调整`
-  - 当前代码已有实现，但文档定义或代码实现需要进一步调整后才能对齐。
-- `已废弃`
-  - 该 case 不再作为正式测试目标保留，但保留历史记录。
+- 涉及真实 AI 调用的回归测试，硬断言只验证最低工程契约：完成态、关键事实、关键工具或事件、关键 artifact、用户诉求是否真实落地。
+- 不对最终文案做逐字断言，不断言固定工具顺序，不断言固定 prompt 原文，不因表达差异判失败。
+- 如果用户诉求已经落地但硬断言过严导致失败，应优先调整 `Oracle` 和测试代码，再基于 raw logs 更新执行摘要与完成度评分。
+- 完成度评分由执行者或 agent 基于 raw logs 回流到测试计划；测试代码不得在执行过程中隐式修改文档。
 
-### 3.5 长期价值与常见误区
-
-- 进入正式 domain 目录的 case 默认都应具备长期回归价值。
-- `tests/case/unit/**` 默认具备长期维护价值，但不属于 formal test-plan case。
-- 一次性排查、临时验证、待定样例不进入正式测试树。
-
-常见反例：
-
-- 为了排查某个猜想，直接在 `tests/case/ai/**` 或 `tests/case/settings/**` 新增正式 case。
-- 还没补 `doc/test-plan/**`，就先写正式测试代码。
-- 正式 case 的 `How` 开始直接描述内部 route、内部工具顺序或固定 plan 条数。
-
-常见正例：
-
-- 某条真实用户场景已经确定要长期回归，先补对应 `doc/test-plan/**`，再补正式测试代码。
-- 某个 helper / schema / prompt 需要长期回归，但不属于 formal 业务 case，放进 `tests/case/unit/**`。
-
-## 4. 正式测试闭环
+## 4. 测试执行闭环
 
 ### 4.1 固定顺序
 
-1. 先判断这是正式长期回归 case，还是临时排查 case。
-2. 如果只是临时排查，不写入 `tests/**`，也不进入正式闭环。
-3. 如果要进入正式目录，先更新对应 `doc/test-plan/**`。
-4. 再写或调整 `tests/case/**` 中的正式测试代码。
-5. 通过 `scripts/test-workflow.mjs` 执行并产生日志。
-6. 先看 `timeline.jsonl`，不足时再看 `runtime-events.jsonl`、`meta.json` 与 `artifacts.json`。
-7. 最后基于 raw logs 回流结论，决定是否需要更新 `doc/test-plan/**` 或实现代码。
+1. 先与用户确认是否新增或调整测试，以及目标分类。
+2. 如果是回归测试，先更新对应 `doc/test-plan/**`，再修改 `tests/case/<domain>/**`。
+3. 如果是 `unit / 辅助测试`，放入 `tests/case/unit/**`，不更新 `doc/test-plan/**`。
+4. 通过 `scripts/test-workflow.mjs` 执行并产生日志。
+5. 先看 `timeline.jsonl`，不足时再看 `runtime-events.jsonl`、`meta.json` 与 `artifacts.json`。
+6. 最后基于 raw logs 回流结论，决定是否需要更新 `doc/test-plan/**` 或实现代码。
 
 ### 4.2 runner 与常用命令
 
@@ -185,7 +151,7 @@ runner 不负责：
 - 写失败原因分析。
 - 写优化建议。
 
-当前常用命令按域收口如下。Workbench 重新纳入 formal test-plan，正式 case 只允许按 `doc/test-plan/workbench-test.md` 登记后进入 `tests/case/workbench/**`；一次性视觉或交互排查不得直接新增未登记的 formal workbench case。
+当前常用命令按域收口如下。
 
 - AI
   - `pnpm test:ai`
@@ -417,18 +383,3 @@ tests/logs/<domain>/<suite>/<groups...>/<caseId>/<runId>/
   - 始终生成失败截图，并通过 `refs.assertionId` 或 `refs.stepId` 绑定。
   - 生成位于 `artifacts/playwright/report/index.html` 的 HTML 诊断页。
 - 默认不保留 video。
-
-## 6. 明确禁止与常见误区
-
-明确禁止：
-
-- 测试样例直接输出失败原因分析。
-- 脱离 raw logs 与 artifacts 写入没有证据依据的分析结论。
-- 为单个 runner 或单种工具单独再设计一套平行 raw log 契约。
-
-常见误区：
-
-- 把 `tests/case/unit/**` 当成 formal domain case 管理。
-- 把一次性排查结果直接当成正式长期结论。
-- 在 `timeline.jsonl` 中倾倒底层噪音，而不是保留高价值语义事件。
-- 在没有更新 `doc/test-plan/**` 的情况下直接修改正式 case 预期。
