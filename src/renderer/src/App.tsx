@@ -26,17 +26,17 @@ function App(): React.JSX.Element {
             '"SF Pro Text", "PingFang SC", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
           colorText: '#37352F',
           colorTextHeading: '#37352F',
-          colorTextSecondary: '#5F5E59',
+          colorTextSecondary: '#787774',
           colorTextTertiary: '#9B9A97',
-          colorBorder: '#E6E4DF',
-          colorBorderSecondary: '#E6E4DF',
+          colorBorder: '#EEEEEC',
+          colorBorderSecondary: '#EEEEEC',
           colorBgBase: '#FFFFFF',
           colorBgContainer: '#FFFFFF',
           colorBgElevated: '#FFFFFF',
-          colorBgLayout: '#FBFBFA',
+          colorBgLayout: '#FFFFFF',
           colorFillAlter: '#F7F7F5',
-          colorFillSecondary: '#F2F1EE',
-          colorFillTertiary: '#EDEDEB'
+          colorFillSecondary: '#F4F4F2',
+          colorFillTertiary: '#EFEFED'
         },
         components: {
           Button: {
@@ -51,25 +51,25 @@ function App(): React.JSX.Element {
           Input: {
             controlHeight: 36,
             activeBorderColor: '#2F3437',
-            hoverBorderColor: '#D8D6D0'
+            hoverBorderColor: '#E0DFDC'
           },
           Modal: {
             borderRadiusLG: 8
           },
           Select: {
             activeBorderColor: '#2F3437',
-            hoverBorderColor: '#D8D6D0'
+            hoverBorderColor: '#E0DFDC'
           },
           Table: {
-            borderColor: '#E6E4DF',
-            headerBg: '#F7F7F5',
-            headerColor: '#5F5E59',
+            borderColor: '#EEEEEC',
+            headerBg: '#FFFFFF',
+            headerColor: '#787774',
             rowHoverBg: '#F7F7F5'
           },
           Tag: {
             borderRadiusSM: 6,
-            defaultBg: '#F2F1EE',
-            defaultColor: '#5F5E59'
+            defaultBg: '#F4F4F2',
+            defaultColor: '#787774'
           }
         }
       }}

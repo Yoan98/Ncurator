@@ -27,7 +27,7 @@ const WorkspaceIndexJobProgress: React.FC<WorkspaceIndexJobProgressProps> = ({ j
 
   return (
     <div
-      className="mt-3 rounded-[6px] border border-[#E6E4DF] bg-white px-3 py-2"
+      className="mt-3 rounded-[6px] border border-[#EEEEEC] bg-white px-3 py-2"
       data-testid={testId}
     >
       <div className="flex items-center justify-between gap-3 text-[12px]">
@@ -43,7 +43,7 @@ const WorkspaceIndexJobProgress: React.FC<WorkspaceIndexJobProgressProps> = ({ j
         className="mt-1.5"
       />
       {shouldHideMessage ? null : (
-        <div className="mt-1 text-[11px] text-[#5F5E59]">
+        <div className="mt-1 text-[11px] text-[#787774]">
           <span className="block truncate">{message}</span>
         </div>
       )}

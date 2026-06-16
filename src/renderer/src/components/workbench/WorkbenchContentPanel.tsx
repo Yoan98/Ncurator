@@ -58,7 +58,7 @@ const getRelevancePercent = (
 
 const WorkbenchEmptyPanel: React.FC = () => (
   <div className="flex h-full items-center justify-center px-5 py-4">
-    <div className="flex h-full w-full items-center justify-center rounded-[8px] border border-dashed border-[#E6E4DF] bg-white">
+    <div className="flex h-full w-full items-center justify-center rounded-[8px] border border-dashed border-[#EEEEEC] bg-white">
       <Empty
         image={Empty.PRESENTED_IMAGE_SIMPLE}
         description={<span className="text-[12px] text-[#9B9A97]">右侧暂无内容</span>}
@@ -96,7 +96,7 @@ const WorkbenchSearchResultsPanel: React.FC<{
         搜索结果
       </div>
       <div
-        className="min-h-0 flex-1 overflow-auto border-y border-[#E6E4DF] bg-white"
+        className="min-h-0 flex-1 overflow-auto border-y border-[#EEEEEC] bg-white"
         data-testid={workbenchSelectors.searchResults}
       >
         {sortedSearchResults.map((result, index) => {
@@ -107,13 +107,13 @@ const WorkbenchSearchResultsPanel: React.FC<{
           return (
             <div
               key={result.id}
-              className="w-full border-b border-[#E6E4DF] px-3 py-3 text-left transition-colors last:border-b-0 hover:bg-[#F7F7F5]"
+              className="w-full border-b border-[#EEEEEC] px-3 py-3 text-left transition-colors last:border-b-0 hover:bg-[#F7F7F5]"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     {isWeb ? (
-                      <HiGlobeAlt className="h-3.5 w-3.5 shrink-0 text-[#5F5E59]" />
+                      <HiGlobeAlt className="h-3.5 w-3.5 shrink-0 text-[#787774]" />
                     ) : (
                       <HiDocumentText className="h-3.5 w-3.5 shrink-0 text-[#37352F]" />
                     )}
@@ -132,7 +132,7 @@ const WorkbenchSearchResultsPanel: React.FC<{
                   <TextHighlighter
                     text={result.text}
                     keywords={state.tokens}
-                    className="mt-2 line-clamp-6 text-xs leading-relaxed text-[#5F5E59]"
+                    className="mt-2 line-clamp-6 text-xs leading-relaxed text-[#787774]"
                   />
                 </div>
 
@@ -209,7 +209,7 @@ const WorkbenchFilePreviewPanel: React.FC<{
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex shrink-0 items-center gap-3 border-b border-[#E6E4DF] bg-[#F7F7F5] px-4 py-3">
+      <div className="flex shrink-0 items-center gap-3 border-b border-[#EEEEEC] bg-[#F7F7F5] px-4 py-3">
         {state.backTarget ? (
           <Tooltip title="返回">
               <Button
@@ -272,7 +272,7 @@ const WorkbenchContentPanel: React.FC<WorkbenchContentPanelProps> = ({
   onRevealPath
 }) => (
   <aside
-    className="flex h-full min-h-0 flex-col border-l border-[#E6E4DF] bg-[#F7F7F5]"
+    className="flex h-full min-h-0 flex-col border-l border-[#EEEEEC] bg-[#F7F7F5]"
     data-testid={workbenchSelectors.contentPanel}
   >
     <div className="min-h-0 flex-1 overflow-hidden">

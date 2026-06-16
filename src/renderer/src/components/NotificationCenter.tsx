@@ -187,12 +187,12 @@ const NotificationCenter: React.FC = () => {
         >
           <Card.Meta
             avatar={
-              <div className="w-10 h-10 rounded-[8px] bg-[#F2F1EE] flex items-center justify-center text-[#37352F]">
+              <div className="w-10 h-10 rounded-[8px] bg-[#F4F4F2] flex items-center justify-center text-[#37352F]">
                 {item.icon}
               </div>
             }
             title={<span className="text-[#37352F]">{item.title}</span>}
-            description={<Text className="text-[#5F5E59] text-xs">{item.description}</Text>}
+            description={<Text className="text-[#787774] text-xs">{item.description}</Text>}
           />
         </Card>
       ))}

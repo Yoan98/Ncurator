@@ -33,7 +33,7 @@ const SettingsMenuButton: React.FC<SettingsMenuButtonProps> = ({
           label: (
             <div className="min-w-[152px] py-0.5">
               <div className="flex items-center gap-3 text-[13px] font-medium text-[#37352F]">
-                <span className="ui-icon-well flex h-7 w-7 text-[#5F5E59]">{item.icon}</span>
+                <span className="ui-icon-well flex h-7 w-7 text-[#787774]">{item.icon}</span>
                 <span>{item.label}</span>
               </div>
             </div>
@@ -51,7 +51,7 @@ const SettingsMenuButton: React.FC<SettingsMenuButtonProps> = ({
         <button
           type="button"
           aria-label="设置"
-          className={`inline-flex items-center justify-center text-[#5F5E59] transition-colors hover:text-[#37352F] ${className || ''}`}
+          className={`inline-flex items-center justify-center text-[#787774] transition-colors hover:text-[#37352F] ${className || ''}`}
         >
           <HiOutlineCog6Tooth className={iconClassName || 'h-3.5 w-3.5'} />
           {label ? <span className="ml-2">{label}</span> : null}
@@ -60,7 +60,7 @@ const SettingsMenuButton: React.FC<SettingsMenuButtonProps> = ({
         <Button
           icon={<HiOutlineCog6Tooth className={iconClassName || 'h-3.5 w-3.5'} />}
           aria-label="设置"
-          className={`!inline-flex !h-9 !items-center !rounded-[6px] !border-[#E6E4DF] !bg-white !text-[#5F5E59] !shadow-none hover:!border-[#37352F] hover:!text-[#37352F] ${
+          className={`!inline-flex !h-9 !items-center !rounded-[6px] !border-[#EEEEEC] !bg-white !text-[#787774] !shadow-none hover:!border-[#37352F] hover:!text-[#37352F] ${
             iconOnly ? '!w-9 !justify-center !px-0' : '!px-3'
           } ${className || ''}`}
         >

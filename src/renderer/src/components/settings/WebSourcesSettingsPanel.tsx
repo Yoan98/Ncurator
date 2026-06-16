@@ -216,10 +216,10 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({ works
             </Tooltip>
           </div>
 
-          <div className="mt-3 text-[12px] text-[#5F5E59]">
+          <div className="mt-3 text-[12px] text-[#787774]">
             <div className="ui-inset px-3 py-3">
               <div className="inline-flex items-center gap-1.5">
-                <HiArrowPath className="h-4 w-4 text-[#5F5E59]" />
+                <HiArrowPath className="h-4 w-4 text-[#787774]" />
                 <span>可索引</span>
               </div>
               <div
@@ -245,7 +245,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({ works
               onClick={() => void handleScanWebSources()}
               disabled={Boolean(webIndexJob)}
               loading={webIndexJob?.action === 'scan'}
-              className="border-[#E6E4DF] bg-white text-[#37352F]"
+              className="border-[#EEEEEC] bg-white text-[#37352F]"
             >
               检查更新
             </Button>
@@ -269,7 +269,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({ works
       <section className="flex min-h-0 min-w-0 flex-col">
         <div className="mb-3 text-[14px] font-semibold text-[#37352F]">网页列表</div>
         <div
-          className="ui-inset flex min-h-0 flex-1 overflow-auto p-3"
+          className="flex min-h-0 flex-1 overflow-auto border-y border-[#EEEEEC] bg-white"
           data-testid={importSelectors.webSourceList}
         >
           {webSources.length === 0 ? (
@@ -277,19 +277,19 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({ works
               <Empty
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
                 description={
-                  <span className="text-[#5F5E59]">{webLoading ? '正在加载网页' : '暂无网页'}</span>
+                  <span className="text-[#787774]">{webLoading ? '正在加载网页' : '暂无网页'}</span>
                 }
               />
             </div>
           ) : (
-            <div className="w-full space-y-2">
+            <div className="w-full">
               {webSources.map((source) => {
                 const statusBadge = getWebStatusBadge(source, false)
                 const lastUpdatedAt = source.last_crawled_at || source.fetched_at
                 return (
                   <div
                     key={source.id}
-                    className="rounded-[8px] border border-[#E6E4DF] bg-white px-4 py-4"
+                    className="border-b border-[#EEEEEC] px-1 py-4 transition-colors last:border-b-0 hover:bg-[#F7F7F5]"
                     data-testid={`${importSelectors.webSourceCardPrefix}-${source.id}`}
                   >
                     <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -297,7 +297,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({ works
                         <div className="truncate text-[14px] font-semibold text-[#37352F]">
                           {source.title || source.url}
                         </div>
-                        <div className="mt-1 break-all text-[12px] text-[#5F5E59]">
+                        <div className="mt-1 break-all text-[12px] text-[#787774]">
                           {source.url}
                         </div>
                         <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-[#9B9A97]">
@@ -392,7 +392,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({ works
         cancelButtonProps={{ 'data-testid': importSelectors.webSourceDeleteCancelButton }}
         className="[&_.ant-modal-content]:!rounded-[8px]"
       >
-        <p className="mb-0 text-[#5F5E59]">
+        <p className="mb-0 text-[#787774]">
           {deleteWebSource?.title || deleteWebSource?.url
             ? `将删除网页「${deleteWebSource?.title || deleteWebSource?.url}」。`
             : '将删除该网页。'}

@@ -3,14 +3,14 @@
 :root {
   /* Notion-like 文档工作台色板 */
   --notion-page: #ffffff;
-  --notion-canvas: #fbfbfa;
+  --notion-canvas: #ffffff;
   --notion-sidebar: #f7f7f5;
-  --notion-surface: #f2f1ee;
-  --notion-surface-hover: #ededeb;
-  --notion-line: #e6e4df;
-  --notion-line-strong: #d8d6d0;
+  --notion-surface: #f4f4f2;
+  --notion-surface-hover: #efefed;
+  --notion-line: #eeeeec;
+  --notion-line-strong: #e0dfdc;
   --notion-text: #37352f;
-  --notion-text-soft: #5f5e59;
+  --notion-text-soft: #787774;
   --notion-text-faint: #9b9a97;
   --notion-accent: #2f3437;
   --notion-red: #b3261e;
@@ -179,32 +179,32 @@ textarea,
 }
 
 .ui-panel {
-  @apply border border-[#E6E4DF] bg-white shadow-none;
+  @apply border border-[#EEEEEC] bg-white shadow-none;
   border-radius: var(--ui-radius-panel);
 }
 
 .ui-panel-soft {
-  @apply border border-[#E6E4DF] bg-[#F7F7F5] shadow-none;
+  @apply bg-[#F7F7F5] shadow-none;
   border-radius: var(--ui-radius-panel);
 }
 
 .ui-panel-ghost {
-  @apply border border-[#E6E4DF] bg-white/92 shadow-none backdrop-blur-sm;
+  @apply border border-[#EEEEEC] bg-white/92 shadow-none backdrop-blur-sm;
   border-radius: var(--ui-radius-panel);
 }
 
 .ui-inset {
-  @apply border border-[#E6E4DF] bg-[#F7F7F5];
+  @apply border border-[#EEEEEC] bg-[#F7F7F5];
   border-radius: var(--ui-radius-inset);
 }
 
 .ui-icon-well {
-  @apply inline-flex items-center justify-center border border-[#E6E4DF] bg-[#F7F7F5] text-[#5F5E59];
+  @apply inline-flex items-center justify-center border border-[#EEEEEC] bg-[#F7F7F5] text-[#787774];
   border-radius: var(--ui-radius-inset);
 }
 
 .ui-icon-well-brand {
-  @apply border-[#E6E4DF] bg-white text-[#37352F];
+  @apply border-[#EEEEEC] bg-white text-[#37352F];
 }
 
 .ui-status-pill {
@@ -246,7 +246,7 @@ textarea,
 
 /* 覆盖 Mark 样式 */
 mark {
-  @apply bg-[#F2F1EE] text-[#37352F] rounded-sm px-0.5 font-medium;
+  @apply bg-[#F4F4F2] text-[#37352F] rounded-sm px-0.5 font-medium;
 }
 
 .markdown-body {

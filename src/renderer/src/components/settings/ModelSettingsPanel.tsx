@@ -213,7 +213,7 @@ const ModelSettingsPanel: React.FC = () => {
               </Tag>
             ) : null}
           </div>
-          <div className="truncate text-[12px] text-[#5F5E59]">{record.base_url}</div>
+          <div className="truncate text-[12px] text-[#787774]">{record.base_url}</div>
         </div>
       )
     },
@@ -274,7 +274,7 @@ const ModelSettingsPanel: React.FC = () => {
             size="small"
             icon={<HiPencil />}
             onClick={() => handleEdit(record)}
-            className="text-[#5F5E59] hover:text-[#37352F]"
+            className="text-[#787774] hover:text-[#37352F]"
             data-testid={`${settingsSelectors.modelEditButtonPrefix}-${record.id}`}
           />
           <Popconfirm
@@ -301,24 +301,24 @@ const ModelSettingsPanel: React.FC = () => {
       className="flex h-full min-h-0 flex-col gap-4 overflow-hidden"
       data-testid={settingsSelectors.modelPanel}
     >
-      <section className="ui-panel-ghost shrink-0 px-4 py-3">
+      <section className="shrink-0 border-b border-[#EEEEEC] px-1 pb-4 pt-1">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
             <h2 className="text-[16px] font-semibold tracking-tight text-[#37352F]">大模型</h2>
             {activeConfig ? (
-              <div className="truncate text-[12px] text-[#5F5E59]">
+              <div className="truncate text-[12px] text-[#787774]">
                 {getProviderLabel(activeConfig)}
                 {activeConfig.default_model ? ` · ${activeConfig.default_model}` : ''}
               </div>
             ) : null}
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Tag className="!m-0 rounded-full border-[#E6E4DF] bg-white px-3 py-1 text-[12px] text-[#5F5E59]">
+            <Tag className="!m-0 rounded-full border-[#EEEEEC] bg-white px-3 py-1 text-[12px] text-[#787774]">
               共 {configs.length} 个配置
             </Tag>
             {activeConfig ? (
               <Tag
-                className="!m-0 rounded-full border-[#E6E4DF] bg-[#F2F1EE] px-3 py-1 text-[12px] text-[#37352F]"
+                className="!m-0 rounded-full border-[#EEEEEC] bg-[#F4F4F2] px-3 py-1 text-[12px] text-[#37352F]"
                 data-testid={settingsSelectors.modelSummaryCurrent}
               >
                 当前 {getProviderLabel(activeConfig)}
@@ -343,7 +343,7 @@ const ModelSettingsPanel: React.FC = () => {
         </div>
       ) : null}
 
-      <section className="ui-panel min-h-0 flex-1 overflow-hidden">
+      <section className="min-h-0 flex-1 overflow-hidden border-y border-[#EEEEEC] bg-white">
         <div className="h-full overflow-auto pr-1">
           <Table
             dataSource={configs}
@@ -352,7 +352,7 @@ const ModelSettingsPanel: React.FC = () => {
             pagination={false}
             loading={loading}
             size="middle"
-            className="[&_.ant-table-thead_th]:!bg-[#FBFBFA] [&_.ant-table-thead_th]:!py-3 [&_.ant-table-thead_th]:!text-[12px] [&_.ant-table-thead_th]:!text-[#5F5E59] [&_.ant-table-thead_th]:!font-medium [&_.ant-table-tbody_td]:!py-3 [&_.ant-table-tbody_td]:!align-middle"
+            className="[&_.ant-table-thead_th]:!bg-[#FFFFFF] [&_.ant-table-thead_th]:!py-3 [&_.ant-table-thead_th]:!text-[12px] [&_.ant-table-thead_th]:!text-[#787774] [&_.ant-table-thead_th]:!font-medium [&_.ant-table-tbody_td]:!py-3 [&_.ant-table-tbody_td]:!align-middle"
             data-testid={settingsSelectors.modelTable}
           />
         </div>
@@ -454,7 +454,7 @@ const ModelSettingsPanel: React.FC = () => {
       >
         {modelListConfig ? (
           <div className="flex flex-col gap-3 pt-2">
-            <div className="rounded-[8px] border border-[#EDEDEB] bg-[#F7F7F5] px-3 py-2 text-[12px] text-[#5F5E59]">
+            <div className="rounded-[8px] border border-[#EFEFED] bg-[#F7F7F5] px-3 py-2 text-[12px] text-[#787774]">
               <div className="font-medium text-[#37352F]">{modelListConfig.base_url}</div>
               {modelListConfig.default_model ? (
                 <div className="mt-1">默认模型：{modelListConfig.default_model}</div>
@@ -467,20 +467,20 @@ const ModelSettingsPanel: React.FC = () => {
                 {modelListByConfigId[modelListConfig.id]?.error}
               </div>
             ) : null}
-            <div className="text-[12px] text-[#5F5E59]">
+            <div className="text-[12px] text-[#787774]">
               共 {modelListByConfigId[modelListConfig.id]?.items.length || 0} 个模型
             </div>
-            <div className="max-h-[320px] overflow-auto rounded-[8px] border border-[#E6E4DF]">
+            <div className="max-h-[320px] overflow-auto rounded-[8px] border border-[#EEEEEC]">
               {(modelListByConfigId[modelListConfig.id]?.items || []).map((model) => (
                 <div
                   key={model.id}
-                  className="flex items-center justify-between gap-3 border-b border-[#E6E4DF] px-3 py-2 last:border-b-0"
+                  className="flex items-center justify-between gap-3 border-b border-[#EEEEEC] px-3 py-2 last:border-b-0"
                 >
                   <span className="min-w-0 truncate text-[13px] text-[#37352F]">
                     {model.label || model.id}
                   </span>
                   {model.id === modelListConfig.default_model ? (
-                    <Tag className="!m-0 border-[#E6E4DF] bg-[#F2F1EE] text-[#37352F]">
+                    <Tag className="!m-0 border-[#EEEEEC] bg-[#F4F4F2] text-[#37352F]">
                       默认
                     </Tag>
                   ) : null}

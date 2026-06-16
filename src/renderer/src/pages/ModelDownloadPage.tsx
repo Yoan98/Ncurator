@@ -206,7 +206,7 @@ const ModelDownloadPage: React.FC = () => {
 
   return (
     <div
-      className="h-screen overflow-hidden bg-[#FBFBFA]"
+      className="h-screen overflow-hidden bg-[#FFFFFF]"
       data-testid={vectorSelectors.page}
     >
       <div className="mx-auto flex h-full w-full max-w-[1360px] flex-col gap-5 px-5 py-5 lg:px-6">
@@ -219,13 +219,13 @@ const ModelDownloadPage: React.FC = () => {
         />
 
         <div className="min-h-0 flex-1 overflow-hidden pb-4 pr-1">
-          <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-[8px] border border-[#E6E4DF] bg-white shadow-none">
-            <div className="border-b border-[#E6E4DF] px-5 py-4">
+          <div className="flex h-full min-h-0 flex-col overflow-hidden border-y border-[#EEEEEC] bg-white">
+            <div className="border-b border-[#EEEEEC] px-1 py-4">
               <Title level={4} className="!mb-0 !text-[#37352F]">
                 {TEXT.listTitle}
               </Title>
             </div>
-            <div className="min-h-0 flex-1 overflow-auto px-5 py-2 pr-4 [&_.ant-list-item]:!border-[#E6E4DF] [&_.ant-list-item]:transition-colors [&_.ant-list-item:hover]:!bg-[#F7F7F5]">
+            <div className="min-h-0 flex-1 overflow-auto py-2 pr-4 [&_.ant-list-item]:!border-[#EEEEEC] [&_.ant-list-item]:transition-colors [&_.ant-list-item:hover]:!bg-[#F7F7F5]">
               {catalogError ? (
                 <div
                   className="mb-4 rounded-[8px] border border-[#E7CAC6] bg-[#F8EBE9] px-4 py-3 text-sm text-[#B3261E]"
@@ -312,11 +312,11 @@ const ModelDownloadPage: React.FC = () => {
                       }
                       description={
                         <div className="space-y-4">
-                          <p className="text-[#5F5E59]">{item.description}</p>
+                          <p className="text-[#787774]">{item.description}</p>
 
                           {downloadingId === item.id ? (
                             <div
-                              className="rounded-[8px] border border-[#E6E4DF] bg-[#FBFBFA] p-4"
+                              className="rounded-[8px] border border-[#EEEEEC] bg-[#FFFFFF] p-4"
                               data-testid={`${vectorSelectors.progressPrefix}-${item.id}`}
                             >
                               <div className="mb-2 flex justify-between text-sm">

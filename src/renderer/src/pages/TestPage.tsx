@@ -143,7 +143,7 @@ function TestPage(): React.JSX.Element {
   }, [view])
 
   return (
-    <div className="h-screen overflow-hidden bg-[#FBFBFA]">
+    <div className="h-screen overflow-hidden bg-[#FFFFFF]">
       <div className="mx-auto flex h-full w-full max-w-[1360px] flex-col gap-5 px-5 py-5 font-sans lg:px-6">
         <AppPageHeader
           icon={<HiCube className="h-5 w-5" />}
@@ -153,7 +153,7 @@ function TestPage(): React.JSX.Element {
 
         <div className="min-h-0 flex-1 overflow-y-auto pb-5">
           <Alert
-            className="mb-6 rounded-[8px] border-[#E6E4DF] bg-[#F2F1EE]"
+            className="mb-6 rounded-[8px] border-[#EEEEEC] bg-[#F4F4F2]"
             message="本地文件导入已迁移"
             description="本地资料现在通过“设置 > 工作空间 / 网页资料”管理。实验室仅保留检索、文档和 chunk 调试能力。"
             type="info"
@@ -169,7 +169,7 @@ function TestPage(): React.JSX.Element {
               ]}
               value={view}
               onChange={(val) => setView(val as typeof view)}
-              className="bg-[#FBFBFA]"
+              className="bg-[#FFFFFF]"
             />
 
             {view === 'search' ? (
@@ -181,7 +181,7 @@ function TestPage(): React.JSX.Element {
                 ]}
                 value={mode}
                 onChange={(val) => setMode(val as typeof mode)}
-                className="bg-[#FBFBFA]"
+                className="bg-[#FFFFFF]"
               />
             ) : null}
 
@@ -231,7 +231,7 @@ function TestPage(): React.JSX.Element {
             </div>
           ) : null}
 
-          <div className="flex-1 overflow-hidden rounded-[8px] border border-[#E6E4DF] bg-white">
+          <div className="flex-1 overflow-hidden border-y border-[#EEEEEC] bg-white">
             {view === 'search' ? (
               <div className="h-full overflow-auto p-4">
                 <List
@@ -283,7 +283,7 @@ function TestPage(): React.JSX.Element {
                   onChange: (page, pageSize) => loadDocuments(page, pageSize, docKeyword),
                   showTotal: (total) => `Total ${total} docs`
                 }}
-                className="[&_.ant-table-thead_th]:!bg-[#FBFBFA] [&_.ant-table-thead_th]:!text-[#5F5E59] [&_.ant-table-thead_th]:!font-medium"
+                className="[&_.ant-table-thead_th]:!bg-[#FFFFFF] [&_.ant-table-thead_th]:!text-[#787774] [&_.ant-table-thead_th]:!font-medium"
                 columns={[
                   {
                     title: 'ID',
@@ -329,7 +329,7 @@ function TestPage(): React.JSX.Element {
                   onChange: (page, pageSize) => loadChunks(page, pageSize, chunkQuery),
                   showTotal: (total) => `Total ${total} chunks`
                 }}
-                className="[&_.ant-table-thead_th]:!bg-[#FBFBFA] [&_.ant-table-thead_th]:!text-[#5F5E59] [&_.ant-table-thead_th]:!font-medium"
+                className="[&_.ant-table-thead_th]:!bg-[#FFFFFF] [&_.ant-table-thead_th]:!text-[#787774] [&_.ant-table-thead_th]:!font-medium"
                 columns={[
                   {
                     title: 'ID',

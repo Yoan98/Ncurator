@@ -42,9 +42,9 @@ const WorkbenchBrowserPanel: React.FC = () => {
       className="flex h-full min-h-0 flex-col bg-[#F7F7F5]"
       data-testid={workbenchSelectors.browserPanel}
     >
-      <div className="flex h-10 shrink-0 items-center justify-between border-b border-[#E6E4DF] px-3">
+      <div className="flex h-10 shrink-0 items-center justify-between border-b border-[#EEEEEC] px-3">
         <div className="flex min-w-0 items-center gap-2 text-[13px] font-semibold text-[#37352F]">
-          <HiGlobeAlt className="h-4 w-4 shrink-0 text-[#5F5E59]" />
+          <HiGlobeAlt className="h-4 w-4 shrink-0 text-[#787774]" />
           <span className="truncate">内置浏览器</span>
         </div>
         <div className="flex shrink-0 items-center gap-1">

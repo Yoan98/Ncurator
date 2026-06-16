@@ -48,12 +48,12 @@ const getProcessStatusClassName = (status: AssistantProcessGroup['status']): str
 }
 
 const getLayerIconClassName = (iconKind: AssistantProcessIconKind): string => {
-  if (iconKind === 'learning') return 'text-[#5F5E59]'
-  if (iconKind === 'compaction') return 'text-[#5F5E59]'
-  if (iconKind === 'document') return 'text-[#5F5E59]'
-  if (iconKind === 'edit') return 'text-[#5F5E59]'
-  if (iconKind === 'search') return 'text-[#5F5E59]'
-  if (iconKind === 'terminal') return 'text-[#5F5E59]'
+  if (iconKind === 'learning') return 'text-[#787774]'
+  if (iconKind === 'compaction') return 'text-[#787774]'
+  if (iconKind === 'document') return 'text-[#787774]'
+  if (iconKind === 'edit') return 'text-[#787774]'
+  if (iconKind === 'search') return 'text-[#787774]'
+  if (iconKind === 'terminal') return 'text-[#787774]'
   return 'text-[#9B9A97]'
 }
 
@@ -139,7 +139,7 @@ const AssistantProcessGroupView: React.FC<{ group: AssistantProcessGroup }> = ({
         </span>
       </summary>
       {group.items.length > 0 ? (
-        <div className="mt-1.5 space-y-1.5 pl-4 text-[13px] leading-6 text-[#5F5E59]">
+        <div className="mt-1.5 space-y-1.5 pl-4 text-[13px] leading-6 text-[#787774]">
           {group.items.map((item) => (
             <div key={item.id} className={item.status === 'failed' ? 'text-[#B3261E]' : undefined}>
               {renderSegments(getItemText(item))}
@@ -271,7 +271,7 @@ const AssistantExecutionGroupView: React.FC<{ groups: AssistantProcessGroup[]; i
         </span>
       </summary>
       {items.length > 0 ? (
-        <div className="mt-1.5 space-y-1.5 pl-4 text-[13px] leading-6 text-[#5F5E59]">
+        <div className="mt-1.5 space-y-1.5 pl-4 text-[13px] leading-6 text-[#787774]">
           {items.map((item) => (
             <div key={item.id} className={item.status === 'failed' ? 'text-[#B3261E]' : undefined}>
               {renderSegments(getItemText(item))}
@@ -291,7 +291,7 @@ const renderArtifactChip = (
     <button
       type="button"
       onClick={() => onOpenFile(file)}
-      className="ui-hover-lift inline-flex max-w-full items-center gap-2 rounded-full border border-[#E6E4DF] bg-white px-3 py-1.5 text-left text-xs text-[#5F5E59] hover:border-[#37352F] hover:text-[#37352F]"
+      className="ui-hover-lift inline-flex max-w-full items-center gap-2 rounded-full border border-[#EEEEEC] bg-white px-3 py-1.5 text-left text-xs text-[#787774] hover:border-[#37352F] hover:text-[#37352F]"
     >
       <HiOutlineDocumentText className="h-3.5 w-3.5 shrink-0" />
       <span className="truncate">{file.fileName}</span>
@@ -370,8 +370,8 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
         ) : null}
 
         {turn.applyTargets.length > 0 ? (
-          <div className="border-y border-[#E6E4DF] bg-white py-2">
-            <div className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-[#5F5E59]">
+          <div className="border-y border-[#EEEEEC] bg-white py-2">
+            <div className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-[#787774]">
               修改的文件
             </div>
             <div>
@@ -388,7 +388,7 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
                         <div className="text-[13px] font-medium text-[#37352F]">{apply.title}</div>
-                        <div className="mt-1 text-xs text-[#5F5E59]">
+                        <div className="mt-1 text-xs text-[#787774]">
                           {apply.changeCount} 处修改
                         </div>
                       </div>
@@ -418,10 +418,10 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
             {turn.blockers.map((blocker) => (
               <div
                 key={`${blocker.kind}-${blocker.title}`}
-                className="rounded-[8px] border border-[#E6E4DF] bg-[#F7F7F5] px-4 py-3 text-sm text-[#5F5E59]"
+                className="rounded-[8px] border border-[#EEEEEC] bg-[#F7F7F5] px-4 py-3 text-sm text-[#787774]"
               >
-                <div className="font-medium text-[#5F5E59]">{blocker.title}</div>
-                <div className="mt-1 text-xs leading-relaxed text-[#5F5E59]">
+                <div className="font-medium text-[#787774]">{blocker.title}</div>
+                <div className="mt-1 text-xs leading-relaxed text-[#787774]">
                   {blocker.description}
                 </div>
               </div>

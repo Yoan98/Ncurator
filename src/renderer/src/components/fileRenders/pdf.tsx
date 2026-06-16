@@ -75,7 +75,7 @@ const CustomPDFRenderer: DocRenderer = ({ mainState }: DocRendererProps) => {
     <div
       id="my-pdf-renderer"
       ref={scrollContainerRef}
-      className="relative h-full w-full overflow-auto bg-[#F2F1EE] p-4"
+      className="relative h-full w-full overflow-auto bg-[#F4F4F2] p-4"
     >
       <Document
         file={file}

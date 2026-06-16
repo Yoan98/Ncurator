@@ -9,8 +9,8 @@
 ## 1. 设计语言
 
 - 全前端统一使用 **Notion-like 文档工作台主题**，以 `prototypes/workbench-notion-prototype.html` 为视觉基准。
-- 整体气质是白纸、浅灰侧栏、细线数据库和文档块，而不是宣传页、强装饰 dashboard 或水墨面板。
-- 页面层级优先通过留白、细分割线、浅灰 hover、文本权重和列表密度表达。
+- 整体气质是大面积白纸、浅灰侧栏、极淡细线数据库和文档块，而不是宣传页、强装饰 dashboard 或水墨面板。
+- 主工作区必须以纯白为主，页面层级优先通过留白、极淡分割线、浅灰 hover、文本权重和列表密度表达。
 - 禁止恢复旧 Claude/陶土色体系，也不再使用旧 ink-mono 墨白主题作为主视觉。
 
 ## 2. 配色
@@ -18,14 +18,14 @@
 ### Token
 
 - `page`：`#FFFFFF`
-- `canvas`：`#FBFBFA`
+- `canvas`：`#FFFFFF`
 - `sidebar`：`#F7F7F5`
-- `surface`：`#F2F1EE`
-- `surface-hover`：`#EDEDEB`
-- `line`：`#E6E4DF`
-- `line-strong`：`#D8D6D0`
+- `surface`：`#F4F4F2`
+- `surface-hover`：`#EFEFED`
+- `line`：`#EEEEEC`
+- `line-strong`：`#E0DFDC`
 - `text`：`#37352F`
-- `text-soft`：`#5F5E59`
+- `text-soft`：`#787774`
 - `text-faint`：`#9B9A97`
 - `accent`：`#2F3437`
 - `red`：`#B3261E`
@@ -38,8 +38,8 @@
 
 ### 使用规则
 
-- App 外层和侧栏使用 `canvas/sidebar`，主阅读与工作区使用 `page`。
-- 普通 hover、选中、用户消息气泡、弱背景统一使用 `surface/surface-hover`。
+- App 外层、主阅读区、Settings 和下载页默认使用 `page/canvas` 的纯白底，侧栏使用 `sidebar`。
+- 普通 hover、选中、用户消息气泡、弱提示和 tag 才使用 `surface/surface-hover`，不得把它们作为大面积页面背景。
 - 常规状态优先使用灰阶、图标与文案；可用低饱和绿、蓝、黄 tag 表示成功、信息、待处理。
 - 危险、拒绝、错误才使用 `red/red-bg`。
 - 禁止大面积彩色渐变、彩色阴影和高饱和状态色。
@@ -69,17 +69,17 @@
 
 ### 阴影
 
-- 默认不用阴影，只用分割线和背景层级。
+- 默认不用阴影，只用留白、极淡分割线和局部浅灰状态表达层级。
 - composer、popover、modal 可使用轻浮层阴影：`0 16px 40px rgba(15, 15, 15, 0.12)`。
 - 禁止厚重彩色阴影。
 
 ## 4. Surface 层级
 
-- `canvas`：App 外层底色。
+- `canvas`：App 外层和主工作区底色，默认应与 `page` 同为纯白。
 - `sidebar`：导航、会话列表、辅助入口。
 - `page`：主文档工作区、表单内容和列表内容。
-- `surface`：选中态、用户消息、弱提示、tag、列表 hover。
-- `line`：不同区域之间的主要边界。
+- `surface`：选中态、用户消息、弱提示、tag、列表 hover，不承载大面积区块。
+- `line`：不同区域之间的弱边界，存在感要低于正文和 tag。
 - `accent`：主按钮和关键文字动作。
 
 ## 5. 组件规则
@@ -106,9 +106,10 @@
 
 ### Table / Database
 
-- 表格应更接近 Notion database：细线、白底、浅灰表头、紧凑行高。
+- 表格应更接近 Notion database：极淡细线、白底、近白表头、紧凑行高。
 - 行 hover 使用 `surface-hover`。
 - 不把每行做成独立大卡片。
+- Settings、下载页等列表型页面不使用灰底托白色大卡片的后台布局。
 
 ### Icon
 

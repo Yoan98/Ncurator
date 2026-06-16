@@ -72,7 +72,7 @@ const WorkbenchApplyPanel: React.FC<WorkbenchApplyPanelProps> = ({
 
   return (
     <div className="flex h-full min-h-0 flex-col" data-testid={workbenchSelectors.applyPanel}>
-      <div className="flex shrink-0 items-center gap-3 border-b border-[#E6E4DF] bg-[#F7F7F5] px-4 py-3">
+      <div className="flex shrink-0 items-center gap-3 border-b border-[#EEEEEC] bg-[#F7F7F5] px-4 py-3">
         <div
           className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto"
           data-testid={workbenchSelectors.applyTabs}
@@ -87,7 +87,7 @@ const WorkbenchApplyPanel: React.FC<WorkbenchApplyPanelProps> = ({
                 className={`flex shrink-0 items-center gap-2 rounded-full border px-3 py-1.5 text-xs transition-colors ${
                   active
                     ? 'border-[#37352F] bg-white text-[#37352F]'
-                    : 'border-[#E6E4DF] bg-[#F7F7F5] text-[#5F5E59] hover:border-[#37352F] hover:text-[#37352F]'
+                    : 'border-[#EEEEEC] bg-[#F7F7F5] text-[#787774] hover:border-[#37352F] hover:text-[#37352F]'
                 }`}
               >
                 <span className="max-w-[180px] truncate">{tab.fileName}</span>
@@ -106,7 +106,7 @@ const WorkbenchApplyPanel: React.FC<WorkbenchApplyPanelProps> = ({
               {statusMeta.label}
             </span>
           ) : null}
-          <span className="text-xs text-[#5F5E59]">{record.change_count} 处修改</span>
+          <span className="text-xs text-[#787774]">{record.change_count} 处修改</span>
           <Button size="small" onClick={() => void onOpenPath(record.source_path)}>
             系统打开
           </Button>
@@ -130,7 +130,7 @@ const WorkbenchApplyPanel: React.FC<WorkbenchApplyPanelProps> = ({
       </div>
 
       {record.status === 'reverted' ? (
-        <div className="shrink-0 border-b border-[#E6E4DF] bg-[#F7F7F5] px-4 py-2.5 text-xs text-[#5F5E59]">
+        <div className="shrink-0 border-b border-[#EEEEEC] bg-[#F7F7F5] px-4 py-2.5 text-xs text-[#787774]">
           本次 AI 修改已回退。
         </div>
       ) : null}
