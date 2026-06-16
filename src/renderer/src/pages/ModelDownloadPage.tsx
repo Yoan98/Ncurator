@@ -205,11 +205,8 @@ const ModelDownloadPage: React.FC = () => {
   }
 
   return (
-    <div
-      className="h-screen overflow-hidden bg-[#FFFFFF]"
-      data-testid={vectorSelectors.page}
-    >
-      <div className="mx-auto flex h-full w-full max-w-[1360px] flex-col gap-5 px-5 py-5 lg:px-6">
+    <div className="nc-page" data-testid={vectorSelectors.page}>
+      <div className="nc-page-inner gap-5">
         <AppPageHeader
           icon={<HiCloudArrowDown className="h-5 w-5" />}
           title={TEXT.pageTitle}
@@ -218,17 +215,17 @@ const ModelDownloadPage: React.FC = () => {
           backTo="/"
         />
 
-        <div className="min-h-0 flex-1 overflow-hidden pb-4 pr-1">
-          <div className="flex h-full min-h-0 flex-col overflow-hidden border-y border-[#EEEEEC] bg-white">
+        <div className="nc-page-body">
+          <div className="flex h-full min-h-0 flex-col overflow-hidden bg-white">
             <div className="border-b border-[#EEEEEC] px-1 py-4">
               <Title level={4} className="!mb-0 !text-[#37352F]">
                 {TEXT.listTitle}
               </Title>
             </div>
-            <div className="min-h-0 flex-1 overflow-auto py-2 pr-4 [&_.ant-list-item]:!border-[#EEEEEC] [&_.ant-list-item]:transition-colors [&_.ant-list-item:hover]:!bg-[#F7F7F5]">
+            <div className="nc-list-shell flex-1 [&_.ant-list-item]:!border-[#EEEEEC] [&_.ant-list-item]:transition-colors [&_.ant-list-item:hover]:!bg-[#F7F7F5]">
               {catalogError ? (
                 <div
-                  className="mb-4 rounded-[8px] border border-[#E7CAC6] bg-[#F8EBE9] px-4 py-3 text-sm text-[#B3261E]"
+                  className="nc-notice nc-notice-danger my-3"
                   data-testid={vectorSelectors.catalogError}
                 >
                   {catalogError}
@@ -295,7 +292,7 @@ const ModelDownloadPage: React.FC = () => {
                               </Button>
                             ]
                     }
-                    className="!px-0 !py-5"
+                    className="!px-3 !py-4"
                   >
                     <List.Item.Meta
                       title={

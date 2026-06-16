@@ -255,9 +255,7 @@ const hasWorkspaceRootPath = (
   typeof workspace?.root_path === 'string' && workspace.root_path.trim().length > 0
 
 const getWorkspaceRequirementHint = (workspace: WorkspaceSource | null): string =>
-  workspace
-    ? '当前工作区未设置文件目录，请前往 设置 > 工作空间 绑定地址'
-    : '请先选择工作区'
+  workspace ? '当前工作区未设置文件目录，请前往 设置 > 工作空间 绑定地址' : '请先选择工作区'
 
 const delay = (ms: number): Promise<void> =>
   new Promise((resolve) => {
@@ -1006,11 +1004,11 @@ const ChatPage: React.FC = () => {
       return
     }
     await openFile(fileRef, {
-        kind: 'search_list',
-        title: '搜索结果',
-        query: turn.query,
-        results: turn.results,
-        tokens: turn.tokens
+      kind: 'search_list',
+      title: '搜索结果',
+      query: turn.query,
+      results: turn.results,
+      tokens: turn.tokens
     })
   }
 
@@ -1836,16 +1834,16 @@ const ChatPage: React.FC = () => {
 
   return (
     <div
-      className="flex min-h-screen bg-[#FFFFFF]"
+      className="nc-app-shell"
       data-testid={workbenchSelectors.page}
       data-workbench-mode={composerMode}
     >
       <aside
-        className={`flex h-screen flex-col border-r border-[#EEEEEC] bg-[#F7F7F5] transition-all duration-200 ${
+        className={`nc-sidebar transition-all duration-200 ${
           sidebarCollapsed ? 'w-14' : 'w-[220px]'
         }`}
       >
-        <div className="border-b border-[#EEEEEC] px-2 py-2">
+        <div className="nc-sidebar-header">
           <div
             className={`flex ${sidebarCollapsed ? 'flex-col items-center gap-1.5' : 'items-center justify-between gap-2'}`}
           >
@@ -1904,10 +1902,8 @@ const ChatPage: React.FC = () => {
               key={session.id}
               role="button"
               tabIndex={0}
-              className={`group relative w-full rounded-[6px] text-left transition-all duration-200 ${
-                currentSessionId === session.id
-                  ? 'bg-[#F4F4F2]'
-                  : 'bg-transparent hover:bg-[#EFEFED]'
+              className={`nc-sidebar-item group relative ${
+                currentSessionId === session.id ? 'nc-sidebar-item-active' : 'bg-transparent'
               } ${sidebarCollapsed ? 'px-2 py-2' : 'px-3 py-2'}`}
               onClick={() => setCurrentSessionId(session.id)}
               onKeyDown={(event) => {
@@ -1955,14 +1951,14 @@ const ChatPage: React.FC = () => {
 
       <div className="min-w-0 flex-1">
         <div className="flex h-screen min-h-0 flex-col">
-          <div
-            className={`flex h-11 shrink-0 items-center justify-between bg-white px-4 ${
-              contentPanelCollapsed ? '' : 'border-b border-[#EEEEEC]'
-            }`}
-          >
+          <div className="nc-topbar">
             <div className="min-w-0 flex-1 bg-white">
               {currentSession || sharedHeaderMeta ? (
                 <div className="flex min-w-0 items-center gap-2">
+                  <span className="text-[#787774]">馆长</span>
+                  {currentSession || sharedHeaderMeta ? (
+                    <span className="text-[#E0DFDC]">/</span>
+                  ) : null}
                   {currentSession ? (
                     <div className="truncate text-sm font-semibold text-[#37352F]">
                       {currentSession.title}
@@ -2012,22 +2008,18 @@ const ChatPage: React.FC = () => {
           <div className="flex min-h-0 flex-1 overflow-hidden">
             <div className="min-w-0 flex-1">
               <div className="flex h-full min-h-0 flex-col">
-                <div
-                  className="min-h-0 flex-1 overflow-y-auto px-6 pt-4"
-                  ref={scrollRef}
-                  onScroll={handleMessageScroll}
-                >
-                  <div className="mx-auto flex max-w-[920px] flex-col gap-5 pb-8">
+                <div className="nc-document-scroll" ref={scrollRef} onScroll={handleMessageScroll}>
+                  <div className="nc-document">
                     {currentMessages.length === 0 ? (
-                      <div className="relative flex min-h-[58vh] items-center justify-center overflow-hidden px-8 py-12 text-center">
+                      <div className="nc-empty-state">
                         <div className="relative max-w-[420px]">
-                          <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-[8px] border border-[#EEEEEC] bg-white text-[#787774] shadow-none">
-                            <HiBookOpen className="h-5 w-5" />
+                          <div className="nc-empty-icon">
+                            <HiBookOpen className="h-7 w-7" />
                           </div>
-                          <h3 className="mt-5 text-[18px] font-semibold tracking-[-0.01em] text-[#37352F]">
+                          <h3 className="mt-5 text-[32px] font-semibold text-[#37352F]">
                             从一个问题开始
                           </h3>
-                          <p className="mt-2 text-[13px] leading-6 text-[#787774]">
+                          <p className="mt-3 text-[16px] leading-7 text-[#787774]">
                             {composerMode === 'search'
                               ? '搜索模式只检索当前资料范围。'
                               : '智能模式会结合当前工作区与插入资料执行。'}
@@ -2044,11 +2036,11 @@ const ChatPage: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="shrink-0 bg-gradient-to-t from-white via-white/96 via-58% to-transparent px-6 pb-6 pt-6">
-                  <div className="mx-auto max-w-[920px]">
+                <div className="nc-floating-composer-shell">
+                  <div className="mx-auto max-w-[760px]">
                     {composerMode === 'ai' && pendingApprovalBatch ? (
                       <div
-                        className="overflow-hidden rounded-[8px] border border-[#E0DFDC] bg-[#FFFFFF] shadow-[0_8px_26px_rgba(15,15,15,0.08)]"
+                        className="overflow-hidden rounded-[12px] border border-[#E0DFDC] bg-[#FFFFFF] shadow-[0_8px_24px_rgba(15,15,15,0.08)]"
                         data-testid={chatSelectors.approvalBatchCard}
                       >
                         {pendingApprovalBatch && currentApprovalItem ? (
@@ -2081,8 +2073,8 @@ const ChatPage: React.FC = () => {
                                   size="small"
                                   icon={<HiChevronRight className="h-4 w-4" />}
                                   disabled={
-                                    approvalCurrentIndex >=
-                                      pendingApprovalBatch.items.length - 1 || approvalSubmitting
+                                    approvalCurrentIndex >= pendingApprovalBatch.items.length - 1 ||
+                                    approvalSubmitting
                                   }
                                   onClick={() =>
                                     setApprovalCurrentIndex((current) =>
@@ -2181,7 +2173,6 @@ const ChatPage: React.FC = () => {
                             </div>
                           </div>
                         ) : null}
-
                       </div>
                     ) : (
                       <WorkbenchComposer
@@ -2214,7 +2205,7 @@ const ChatPage: React.FC = () => {
                     {composerMode === 'ai' &&
                     selectedReferences.some(hasIncompleteLocalKbCoverage) ? (
                       <div
-                        className="mt-3 flex items-start gap-2 rounded-[8px] border border-[#EEEEEC] bg-[#F7F7F5] px-3 py-2.5 text-sm text-[#787774]"
+                        className="nc-notice nc-notice-warning mt-3"
                         data-testid={workbenchSelectors.referenceAiWarning}
                       >
                         <HiOutlineExclamationCircle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -2230,7 +2221,7 @@ const ChatPage: React.FC = () => {
                         reference.kind === 'directory' && reference.kbAvailability === 'partial'
                     ) ? (
                       <div
-                        className="mt-3 flex items-start gap-2 rounded-[8px] border border-[#EEEEEC] bg-[#F7F7F5] px-3 py-2.5 text-sm text-[#787774]"
+                        className="nc-notice nc-notice-warning mt-3"
                         data-testid={workbenchSelectors.referenceSearchWarning}
                       >
                         <HiOutlineExclamationCircle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -2251,9 +2242,9 @@ const ChatPage: React.FC = () => {
                     ? 'min(48vw, 780px)'
                     : contentPanel.kind === 'browser'
                       ? 'min(52vw, 860px)'
-                    : contentPanel.kind === 'file_preview'
-                      ? 'min(46vw, 740px)'
-                      : 440
+                      : contentPanel.kind === 'file_preview'
+                        ? 'min(46vw, 740px)'
+                        : 440
               }}
             >
               <WorkbenchContentPanel

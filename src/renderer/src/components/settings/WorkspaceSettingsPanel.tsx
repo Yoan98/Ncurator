@@ -361,9 +361,9 @@ const WorkspaceSettingsPanel: React.FC = () => {
         />
       ) : null}
 
-      <div className="grid min-h-0 flex-1 gap-4 overflow-hidden pr-1 xl:grid-cols-[340px_minmax(0,1fr)]">
+      <div className="nc-page-split">
         <section
-          className="flex min-h-0 flex-col overflow-hidden border-y border-[#EEEEEC] bg-[#F7F7F5]"
+          className="flex min-h-0 flex-col overflow-hidden border-r border-[#EEEEEC] bg-[#F7F7F5]"
           data-testid={importSelectors.page}
         >
           <div className="border-b border-[#EEEEEC] px-4 py-4">
@@ -394,10 +394,8 @@ const WorkspaceSettingsPanel: React.FC = () => {
                     type="button"
                     onClick={() => setSelectedWorkspaceId(workspace.id)}
                     data-testid={`${importSelectors.workspaceCardPrefix}-${workspace.id}`}
-                    className={`ui-hover-lift w-full rounded-[6px] border border-transparent px-3 py-3 text-left ${
-                      isSelected
-                        ? 'bg-[#EFEFED]'
-                        : 'bg-transparent hover:bg-[#EFEFED]'
+                    className={`nc-sidebar-item px-3 py-3 ${
+                      isSelected ? 'nc-sidebar-item-active' : 'bg-transparent'
                     }`}
                   >
                     <div className="min-w-0">
@@ -410,11 +408,11 @@ const WorkspaceSettingsPanel: React.FC = () => {
                     </div>
 
                     <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-[#787774]">
-                      <span className="ui-status-pill border-transparent bg-[#F4F4F2] text-[#787774]">
+                      <span className="nc-tag">
                         <HiDocumentText className="h-3.5 w-3.5" />
                         {workspace.file_count}
                       </span>
-                      <span className="ui-status-pill border-transparent bg-[#F4F4F2] text-[#787774]">
+                      <span className="nc-tag">
                         <HiGlobeAlt className="h-3.5 w-3.5" />
                         {workspace.web_count}
                       </span>
@@ -427,7 +425,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
         </section>
 
         <section
-          className="flex min-h-0 flex-col overflow-hidden border-y border-[#EEEEEC] bg-white"
+          className="flex min-h-0 flex-col overflow-hidden bg-white"
           data-testid={importSelectors.workspaceDetail}
         >
           {selectedWorkspace ? (

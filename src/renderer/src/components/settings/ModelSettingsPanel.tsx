@@ -1,5 +1,16 @@
 ﻿import React, { useEffect, useMemo, useState } from 'react'
-import { AutoComplete, Button, Form, Input, Modal, Popconfirm, Space, Table, Tag, message } from 'antd'
+import {
+  AutoComplete,
+  Button,
+  Form,
+  Input,
+  Modal,
+  Popconfirm,
+  Space,
+  Table,
+  Tag,
+  message
+} from 'antd'
 import type { TableColumnsType } from 'antd'
 import { HiArrowPath, HiCheckCircle, HiPencil, HiPlus, HiTrash } from 'react-icons/hi2'
 import type { LLMConfig, LlmRemoteModel } from '../../../../shared/types'
@@ -230,14 +241,13 @@ const ModelSettingsPanel: React.FC = () => {
       width: 180,
       render: (_value, record) => {
         const state = modelListByConfigId[record.id]
-        const label =
-          state?.loading
-            ? '获取中'
-            : state?.error
-              ? '获取失败'
-              : state?.loadedAt !== undefined
-                ? `${state.items.length} 个模型`
-                : '未获取'
+        const label = state?.loading
+          ? '获取中'
+          : state?.error
+            ? '获取失败'
+            : state?.loadedAt !== undefined
+              ? `${state.items.length} 个模型`
+              : '未获取'
         return (
           <Button
             type="link"
@@ -337,13 +347,9 @@ const ModelSettingsPanel: React.FC = () => {
         </div>
       </section>
 
-      {actionError ? (
-        <div className="rounded-[8px] border border-[#E7CAC6] bg-[#F8EBE9] px-4 py-3 text-[12px] text-[#B3261E]">
-          {actionError}
-        </div>
-      ) : null}
+      {actionError ? <div className="nc-notice nc-notice-danger">{actionError}</div> : null}
 
-      <section className="min-h-0 flex-1 overflow-hidden border-y border-[#EEEEEC] bg-white">
+      <section className="nc-list-shell flex-1">
         <div className="h-full overflow-auto pr-1">
           <Table
             dataSource={configs}
@@ -480,9 +486,7 @@ const ModelSettingsPanel: React.FC = () => {
                     {model.label || model.id}
                   </span>
                   {model.id === modelListConfig.default_model ? (
-                    <Tag className="!m-0 border-[#EEEEEC] bg-[#F4F4F2] text-[#37352F]">
-                      默认
-                    </Tag>
+                    <Tag className="!m-0 border-[#EEEEEC] bg-[#F4F4F2] text-[#37352F]">默认</Tag>
                   ) : null}
                 </div>
               ))}

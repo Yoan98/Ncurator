@@ -41,8 +41,8 @@ const SettingsPage: React.FC = () => {
   const sectionMeta = SETTINGS_SECTION_META[currentSection]
 
   return (
-    <div className="h-screen overflow-hidden bg-[#FFFFFF]" data-testid={settingsSelectors.page}>
-      <div className="mx-auto flex h-full w-full max-w-[1320px] flex-col gap-4 px-5 py-5 lg:px-6">
+    <div className="nc-page" data-testid={settingsSelectors.page}>
+      <div className="nc-page-inner gap-4">
         <AppPageHeader
           icon={sectionMeta.icon}
           title={sectionMeta.title}
@@ -51,7 +51,7 @@ const SettingsPage: React.FC = () => {
           backTo="/"
         />
 
-        <div className="min-h-0 flex-1 overflow-hidden pb-4 pr-1">
+        <div className="nc-page-body">
           {currentSection === 'workspace' ? <WorkspaceSettingsPanel /> : null}
           {currentSection === 'model' ? <ModelSettingsPanel /> : null}
           {currentSection === 'app' ? <AppUpdateSettingsPanel /> : null}

@@ -592,7 +592,10 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
 
   const localMentionOptions = mentionOptions.filter((scope) => scope.kind !== 'web')
   const webMentionOptions = mentionOptions.filter((scope) => scope.kind === 'web')
-  const contextUsagePercent = Math.max(0, Math.min(100, Math.round((contextUsage?.ratio || 0) * 100)))
+  const contextUsagePercent = Math.max(
+    0,
+    Math.min(100, Math.round((contextUsage?.ratio || 0) * 100))
+  )
   const contextUsageTitle = contextUsage
     ? `当前上下文约 ${contextUsage.usedContextTokens.toLocaleString()} / ${contextUsage.contextWindowTokens.toLocaleString()} tokens`
     : '暂无上下文用量'
@@ -601,10 +604,10 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     <div className="relative">
       {mentionQuery !== null ? (
         <div
-          className="absolute inset-x-0 bottom-full mb-2 overflow-hidden rounded-[8px] border border-[#E0DFDC] bg-white shadow-[0_18px_44px_rgba(31,31,31,0.08)]"
+          className="absolute inset-x-0 bottom-full mb-2 overflow-hidden rounded-[8px] border border-[#E0DFDC] bg-white shadow-[0_16px_40px_rgba(15,15,15,0.12)]"
           data-testid={workbenchSelectors.mentionPanel}
         >
-          <div className="max-h-[300px] overflow-y-auto px-2.5 py-2.5">
+          <div className="max-h-[320px] overflow-y-auto">
             {mentionLoading ? (
               <div className="flex items-center justify-center py-8 text-[#9B9A97]">
                 <Spin size="small" />
@@ -612,13 +615,15 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
             ) : mentionOptions.length === 0 ? (
               <Empty
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description={selectedWorkspace ? '当前工作区和网页资料中没有匹配项' : '请先选择工作区'}
+                description={
+                  selectedWorkspace ? '当前工作区和网页资料中没有匹配项' : '请先选择工作区'
+                }
               />
             ) : (
-              <div className="space-y-3">
+              <div>
                 {localMentionOptions.length > 0 ? (
-                  <div className="space-y-1">
-                    <div className="px-2 text-[11px] font-medium uppercase tracking-[0.14em] text-[#9B9A97]">
+                  <div>
+                    <div className="border-b border-[#EEEEEC] px-4 py-2 text-[12px] font-semibold text-[#787774]">
                       当前工作区
                     </div>
                     {localMentionOptions.map((scope) => {
@@ -630,8 +635,8 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                         <button
                           key={getScopeKey(scope)}
                           type="button"
-                          className={`flex w-full items-center gap-3 rounded-[8px] px-3 py-2.5 text-left transition ${
-                            active ? 'bg-[#F4F4F2]' : 'hover:bg-[#EFEFED]'
+                          className={`flex w-full items-center gap-3 border-b border-[#EEEEEC] px-4 py-2.5 text-left transition last:border-b-0 ${
+                            active ? 'bg-[#EFEFED]' : 'hover:bg-[#F7F7F5]'
                           }`}
                           onMouseDown={(event) => {
                             event.preventDefault()
@@ -659,11 +664,9 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                               {getReferenceDisplayPath(scope)}
                             </div>
                           </div>
-                          <div className="shrink-0 space-x-1">
-                            <span className="rounded-full border border-[#EEEEEC] bg-[#F7F7F5] px-2 py-0.5 text-[11px] text-[#787774]">
-                              {getReferenceTypeLabel(scope)}
-                            </span>
-                            <span className="rounded-full border border-[#EEEEEC] bg-[#F4F4F2] px-2 py-0.5 text-[11px] text-[#37352F]">
+                          <div className="flex shrink-0 gap-1">
+                            <span className="nc-tag">{getReferenceTypeLabel(scope)}</span>
+                            <span className="nc-tag nc-tag-blue">
                               {getKbAvailabilityLabel(scope.kbAvailability)}
                             </span>
                           </div>
@@ -674,8 +677,8 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                 ) : null}
 
                 {webMentionOptions.length > 0 ? (
-                  <div className="space-y-1">
-                    <div className="px-2 text-[11px] font-medium uppercase tracking-[0.14em] text-[#9B9A97]">
+                  <div>
+                    <div className="border-b border-[#EEEEEC] px-4 py-2 text-[12px] font-semibold text-[#787774]">
                       网页资料
                     </div>
                     {webMentionOptions.map((scope) => {
@@ -687,8 +690,8 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                         <button
                           key={getScopeKey(scope)}
                           type="button"
-                          className={`flex w-full items-center gap-3 rounded-[8px] px-3 py-2.5 text-left transition ${
-                            active ? 'bg-[#F4F4F2]' : 'hover:bg-[#EFEFED]'
+                          className={`flex w-full items-center gap-3 border-b border-[#EEEEEC] px-4 py-2.5 text-left transition last:border-b-0 ${
+                            active ? 'bg-[#EFEFED]' : 'hover:bg-[#F7F7F5]'
                           }`}
                           onMouseDown={(event) => {
                             event.preventDefault()
@@ -706,11 +709,9 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                               {getReferenceDisplayPath(scope)}
                             </div>
                           </div>
-                          <div className="shrink-0 space-x-1">
-                            <span className="rounded-full border border-[#EEEEEC] bg-[#F7F7F5] px-2 py-0.5 text-[11px] text-[#787774]">
-                              {getReferenceTypeLabel(scope)}
-                            </span>
-                            <span className="rounded-full border border-[#EEEEEC] bg-[#F4F4F2] px-2 py-0.5 text-[11px] text-[#37352F]">
+                          <div className="flex shrink-0 gap-1">
+                            <span className="nc-tag">{getReferenceTypeLabel(scope)}</span>
+                            <span className="nc-tag nc-tag-green">
                               {getKbAvailabilityLabel(scope.kbAvailability)}
                             </span>
                           </div>
@@ -726,7 +727,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
       ) : null}
 
       <div
-        className="rounded-[8px] border border-[#E0DFDC] bg-white px-3.5 pb-2 pt-2.5 shadow-[0_8px_24px_rgba(15,15,15,0.08)] transition-all duration-200 focus-within:border-[#2F3437] focus-within:ring-4 focus-within:ring-[#EFEFED]"
+        className="nc-floating-composer px-4 pb-3 pt-3 transition-all duration-200"
         data-testid={workbenchSelectors.referenceField}
         onMouseDown={(event) => {
           const target = event.target
@@ -737,7 +738,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
           focusEditor()
         }}
       >
-        <div className="relative min-h-[58px]">
+        <div className="relative min-h-[64px]">
           <span
             ref={editorRef}
             contentEditable
@@ -746,7 +747,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
             aria-multiline="true"
             tabIndex={0}
             spellCheck={false}
-            className="block min-h-[40px] w-full whitespace-pre-wrap break-words bg-transparent text-[15px] leading-6 text-[#37352F] outline-none [&_[data-role='scope-token']]:align-middle"
+            className="block min-h-[48px] w-full whitespace-pre-wrap break-words bg-transparent text-[16px] leading-7 text-[#37352F] outline-none [&_[data-role='scope-token']]:align-middle"
             data-testid={workbenchSelectors.input}
             onInput={handleEditorInput}
             onKeyDown={handleEditorKeyDown}
@@ -777,7 +778,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
           />
 
           <div
-            className={`pointer-events-none absolute inset-x-0 top-0 text-[15px] leading-6 text-[#9B9A97] ${
+            className={`pointer-events-none absolute inset-x-0 top-0 text-[16px] leading-7 text-[#9B9A97] ${
               hasContent ? 'hidden' : ''
             }`}
           >
@@ -785,8 +786,8 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
           </div>
         </div>
 
-        <div className="mt-1.5 flex items-center justify-between gap-3 border-t border-[#EEEEEC] pt-1.5">
-          <div className="flex min-w-0 items-center gap-1.5 text-[#787774]">
+        <div className="mx-[-4px] mt-2 flex items-center justify-between gap-3 border-t border-[#EEEEEC] px-1 pt-2">
+          <div className="flex min-w-0 items-center gap-1 text-[#787774]">
             <Select
               value={mode}
               onChange={(nextValue) => {
@@ -833,7 +834,9 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                 const label = String(option?.title || option?.value || '')
                 return (
                   label.toLowerCase().includes(normalizedInput) ||
-                  String(option?.value || '').toLowerCase().includes(normalizedInput)
+                  String(option?.value || '')
+                    .toLowerCase()
+                    .includes(normalizedInput)
                 )
               }}
               variant="borderless"
@@ -911,8 +914,8 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                     ? 'bg-[#E0DFDC]'
                     : 'bg-[#B3261E] hover:bg-[#8F3028]'
                   : loading || !canSubmit
-                  ? 'bg-[#E0DFDC]'
-                  : 'bg-[#37352F] hover:bg-[#2F3437]'
+                    ? 'bg-[#E0DFDC]'
+                    : 'bg-[#37352F] hover:bg-[#2F3437]'
               }`}
               data-testid={workbenchSelectors.sendButton}
               aria-label={showCancel ? '停止本次运行' : mode === 'ai' ? '发送智能请求' : '执行搜索'}

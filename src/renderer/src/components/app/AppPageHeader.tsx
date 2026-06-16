@@ -25,20 +25,18 @@ const AppPageHeader: React.FC<AppPageHeaderProps> = ({
 
   if (navigationMode === 'back') {
     return (
-      <header className="flex flex-col gap-3 pb-3 md:flex-row md:items-center md:justify-between">
+      <header className="flex min-h-[46px] flex-col gap-3 border-b border-[#EEEEEC] pb-3 md:flex-row md:items-center md:justify-between">
         <div className="flex min-w-0 items-center gap-3">
           <Button
             type="text"
             onClick={() => navigate(backTo || '/')}
-            className="!flex !h-9 !w-9 !items-center !justify-center !rounded-[6px] !border !border-[#EEEEEC] !bg-white !p-0 !text-[#787774] shadow-none hover:!border-[#37352F] hover:!text-[#37352F]"
+            className="!flex !h-8 !w-8 !items-center !justify-center !rounded-[6px] !border !border-transparent !bg-transparent !p-0 !text-[#787774] shadow-none hover:!bg-[#EFEFED] hover:!text-[#37352F]"
             icon={<HiArrowLeft className="h-[18px] w-[18px]" />}
           />
           <div className="flex min-w-0 items-center gap-2 text-[#37352F]">
-            <span className="ui-icon-well ui-icon-well-brand flex h-9 w-9">{icon}</span>
+            <span className="ui-icon-well ui-icon-well-brand flex h-8 w-8">{icon}</span>
             <div className="min-w-0">
-              <h1 className="truncate text-[18px] font-semibold tracking-tight text-[#37352F]">
-                {title}
-              </h1>
+              <h1 className="truncate text-[18px] font-semibold text-[#37352F]">{title}</h1>
               {description ? (
                 <p className="truncate text-[12px] text-[#787774]">{description}</p>
               ) : null}
@@ -52,7 +50,7 @@ const AppPageHeader: React.FC<AppPageHeaderProps> = ({
   }
 
   return (
-    <header className="flex flex-col gap-4 pb-4 md:flex-row md:items-start md:justify-between">
+    <header className="flex flex-col gap-4 border-b border-[#EEEEEC] pb-4 md:flex-row md:items-start md:justify-between">
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-3">
           <Button

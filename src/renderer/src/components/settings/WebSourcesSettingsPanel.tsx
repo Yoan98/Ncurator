@@ -188,11 +188,11 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({ works
 
   return (
     <div
-      className="grid h-full min-h-0 gap-4 xl:grid-cols-[minmax(0,320px)_minmax(0,1fr)]"
+      className="grid h-full min-h-0 gap-4 xl:grid-cols-[260px_minmax(0,1fr)]"
       data-testid={importSelectors.webSourceSection}
     >
       <div className="space-y-4">
-        <section className="ui-panel-soft p-4">
+        <section className="border-b border-[#EEEEEC] bg-white pb-4">
           <div className="text-[14px] font-semibold text-[#37352F]">网页来源</div>
           <Button
             type="primary"
@@ -208,7 +208,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({ works
           </Button>
         </section>
 
-        <section className="ui-panel-soft p-4">
+        <section className="border-b border-[#EEEEEC] bg-white pb-4">
           <div className="flex items-center gap-1.5">
             <div className="text-[14px] font-semibold text-[#37352F]">索引状态</div>
             <Tooltip title="网页索引会先爬取正文，再写入本地检索库。">
@@ -269,7 +269,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({ works
       <section className="flex min-h-0 min-w-0 flex-col">
         <div className="mb-3 text-[14px] font-semibold text-[#37352F]">网页列表</div>
         <div
-          className="flex min-h-0 flex-1 overflow-auto border-y border-[#EEEEEC] bg-white"
+          className="nc-list-shell flex min-h-0 flex-1"
           data-testid={importSelectors.webSourceList}
         >
           {webSources.length === 0 ? (
@@ -289,7 +289,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({ works
                 return (
                   <div
                     key={source.id}
-                    className="border-b border-[#EEEEEC] px-1 py-4 transition-colors last:border-b-0 hover:bg-[#F7F7F5]"
+                    className="nc-list-row px-3 py-4"
                     data-testid={`${importSelectors.webSourceCardPrefix}-${source.id}`}
                   >
                     <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
