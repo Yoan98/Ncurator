@@ -1,0 +1,1347 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>NCurator Notion Demo</title>
+    <style>
+      :root {
+        --page: #ffffff;
+        --sidebar: #f7f7f5;
+        --surface: #f1f1ef;
+        --surface-2: #f4f4f2;
+        --surface-hover: #efefed;
+        --line: #eeeeec;
+        --line-strong: #e0dfdc;
+        --text: #37352f;
+        --text-soft: #787774;
+        --text-faint: #9b9a97;
+        --accent: #2f3437;
+        --blue: #2383e2;
+        --blue-soft: #eaf5ff;
+        --blue-text: #2f76c7;
+        --green: #2f6f4e;
+        --green-soft: #edf6ef;
+        --yellow-soft: #fbf3db;
+        --red: #b3261e;
+        --red-soft: #f8ebe9;
+        --shadow-soft: 0 1px 2px rgba(15, 15, 15, 0.06);
+        --shadow-composer: 0 18px 42px rgba(15, 15, 15, 0.1);
+        color: var(--text);
+        font-family:
+          -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', 'Segoe UI', sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+      }
+
+      body {
+        height: 100vh;
+        overflow: hidden;
+        background: var(--page);
+        color: var(--text);
+        font-size: 14px;
+        line-height: 1.5;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      button,
+      input,
+      textarea {
+        font: inherit;
+      }
+
+      button {
+        cursor: pointer;
+      }
+
+      button:focus:not(:focus-visible) {
+        outline: none;
+      }
+
+      button:focus-visible {
+        outline: 2px solid var(--blue);
+        outline-offset: 2px;
+      }
+
+      .demo {
+        height: 100vh;
+        min-height: 760px;
+        background: var(--page);
+      }
+
+      .view {
+        display: none;
+        height: 100%;
+      }
+
+      .view.is-active {
+        display: block;
+      }
+
+      .workbench-shell,
+      .settings-shell {
+        display: grid;
+        height: 100%;
+        background: var(--page);
+      }
+
+      .workbench-shell {
+        grid-template-columns: 300px minmax(0, 1fr);
+      }
+
+      .settings-shell {
+        grid-template-columns: 300px minmax(0, 1fr);
+      }
+
+      .sidebar,
+      .settings-sidebar {
+        display: flex;
+        min-width: 0;
+        flex-direction: column;
+        border-right: 1px solid var(--line);
+        background: var(--sidebar);
+      }
+
+      .sidebar {
+        padding: 10px 8px;
+      }
+
+      .settings-sidebar {
+        overflow: auto;
+        padding: 18px 14px;
+      }
+
+      .window-row,
+      .sidebar-toolbar,
+      .topbar,
+      .composer-bar,
+      .property-label,
+      .page-heading,
+      .database-toolbar,
+      .tabs,
+      .top-actions,
+      .assistant-tools {
+        display: flex;
+        align-items: center;
+      }
+
+      .window-row {
+        gap: 7px;
+        height: 32px;
+        padding: 0 6px;
+      }
+
+      .dot {
+        width: 11px;
+        height: 11px;
+        border-radius: 999px;
+      }
+
+      .dot.red {
+        background: #ff5f57;
+      }
+
+      .dot.yellow {
+        background: #ffbd2e;
+      }
+
+      .dot.green {
+        background: #28c840;
+      }
+
+      .workspace-name {
+        margin-left: 6px;
+        overflow: hidden;
+        color: var(--text);
+        font-weight: 700;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .sidebar-toolbar {
+        display: grid;
+        grid-template-columns: 1fr repeat(3, 30px);
+        gap: 4px;
+        margin: 8px 0 18px;
+      }
+
+      .home-pill {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: 34px;
+        border-radius: 999px;
+        background: var(--surface-hover);
+        padding: 0 12px;
+        font-weight: 700;
+      }
+
+      .icon-btn,
+      .ghost-btn,
+      .primary-btn,
+      .danger-btn,
+      .sidebar-row,
+      .setting-link,
+      .tab,
+      .new-chat,
+      .send-circle {
+        border: 0;
+      }
+
+      .icon-btn {
+        display: grid;
+        width: 30px;
+        height: 30px;
+        place-items: center;
+        border-radius: 8px;
+        background: transparent;
+        color: var(--text-soft);
+      }
+
+      .icon-btn:hover,
+      .ghost-btn:hover,
+      .sidebar-row:hover,
+      .setting-link:hover,
+      .tab:hover,
+      .database-row:hover,
+      .tree-row:hover,
+      .source-row:hover {
+        background: var(--surface-hover);
+      }
+
+      .sidebar-section {
+        display: grid;
+        gap: 2px;
+        margin-bottom: 18px;
+      }
+
+      .sidebar-label,
+      .setting-group-label {
+        color: var(--text-faint);
+        font-size: 12px;
+        font-weight: 650;
+      }
+
+      .sidebar-label {
+        padding: 0 8px 6px;
+      }
+
+      .sidebar-row {
+        display: grid;
+        grid-template-columns: 22px minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 8px;
+        min-height: 34px;
+        border-radius: 7px;
+        background: transparent;
+        color: var(--text-soft);
+        padding: 0 8px;
+        text-align: left;
+      }
+
+      .sidebar-row strong,
+      .sidebar-row.is-active {
+        color: var(--text);
+      }
+
+      .sidebar-row.is-active {
+        background: var(--surface-hover);
+        font-weight: 650;
+      }
+
+      .sidebar-meta {
+        color: var(--text-faint);
+        font-size: 12px;
+      }
+
+      .sidebar-bottom {
+        display: grid;
+        grid-template-columns: 1fr 42px;
+        gap: 8px;
+        margin-top: auto;
+        padding: 8px 0 0;
+      }
+
+      .new-chat {
+        height: 42px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: var(--page);
+        box-shadow: var(--shadow-soft);
+        color: var(--text);
+        font-weight: 650;
+      }
+
+      .main {
+        display: flex;
+        min-width: 0;
+        flex-direction: column;
+        background: var(--page);
+      }
+
+      .topbar {
+        height: 46px;
+        flex: 0 0 auto;
+        justify-content: space-between;
+        border-bottom: 1px solid rgba(238, 238, 236, 0.72);
+        padding: 0 18px;
+      }
+
+      .breadcrumb {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 8px;
+        font-weight: 650;
+      }
+
+      .top-actions {
+        gap: 6px;
+      }
+
+      .workspace-view {
+        display: none;
+        min-height: 0;
+        flex: 1;
+      }
+
+      .workspace-view.is-active {
+        display: flex;
+      }
+
+      .chat-layout {
+        position: relative;
+        min-height: 0;
+        flex: 1;
+        justify-content: center;
+        overflow: hidden;
+      }
+
+      .chat-document {
+        width: min(860px, calc(100% - 80px));
+        min-height: 0;
+        overflow: auto;
+        padding: 92px 0 190px;
+      }
+
+      .empty-hero {
+        display: grid;
+        justify-items: center;
+        gap: 16px;
+        margin-top: 64px;
+        text-align: center;
+      }
+
+      .ai-orb {
+        display: grid;
+        width: 58px;
+        height: 58px;
+        place-items: center;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: var(--page);
+        box-shadow: 0 18px 35px rgba(15, 15, 15, 0.08);
+        font-size: 28px;
+      }
+
+      .empty-title {
+        margin: 0;
+        font-size: 34px;
+        letter-spacing: 0;
+        line-height: 1.18;
+      }
+
+      .empty-subtitle {
+        max-width: 520px;
+        margin: 0;
+        color: var(--text-soft);
+        font-size: 16px;
+      }
+
+      .assistant-block {
+        margin: 0 0 34px;
+      }
+
+      .assistant-block h2 {
+        margin: 0 0 14px;
+        font-size: 24px;
+        letter-spacing: 0;
+      }
+
+      .assistant-block p {
+        margin: 0 0 10px;
+        color: var(--text);
+        font-size: 16px;
+        line-height: 1.75;
+      }
+
+      .assistant-tools {
+        gap: 12px;
+        margin-top: 14px;
+        color: var(--text-faint);
+      }
+
+      .user-row {
+        display: flex;
+        justify-content: flex-end;
+        margin: 0 0 32px;
+      }
+
+      .user-bubble {
+        max-width: 560px;
+        border-radius: 22px;
+        background: var(--surface);
+        padding: 10px 16px;
+        color: var(--text);
+        font-size: 16px;
+        font-weight: 650;
+      }
+
+      .task-block {
+        margin-top: 16px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--page);
+      }
+
+      .task-row {
+        display: grid;
+        grid-template-columns: 28px minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 10px;
+        min-height: 46px;
+        border-bottom: 1px solid var(--line);
+        padding: 0 12px;
+      }
+
+      .task-row:last-child {
+        border-bottom: 0;
+      }
+
+      .notice {
+        display: grid;
+        grid-template-columns: 22px minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 10px;
+        margin: 18px 0;
+        border-radius: 8px;
+        background: var(--blue-soft);
+        color: var(--blue-text);
+        padding: 12px 14px;
+        font-weight: 650;
+      }
+
+      .notice.warning {
+        background: var(--yellow-soft);
+        color: #8a6d1a;
+      }
+
+      .notice.danger {
+        background: var(--red-soft);
+        color: var(--red);
+      }
+
+      .tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        min-height: 22px;
+        border-radius: 999px;
+        background: var(--surface-2);
+        color: var(--text-soft);
+        padding: 0 8px;
+        font-size: 12px;
+        font-weight: 650;
+      }
+
+      .tag.green {
+        background: var(--green-soft);
+        color: var(--green);
+      }
+
+      .tag.blue {
+        background: var(--blue-soft);
+        color: var(--blue-text);
+      }
+
+      .tag.red {
+        background: var(--red-soft);
+        color: var(--red);
+      }
+
+      .composer-wrap {
+        position: absolute;
+        right: 0;
+        bottom: 28px;
+        left: 0;
+        display: grid;
+        place-items: center;
+        pointer-events: none;
+      }
+
+      .composer {
+        width: min(780px, calc(100% - 112px));
+        min-height: 116px;
+        border: 1px solid var(--line-strong);
+        border-radius: 18px;
+        background: var(--page);
+        box-shadow: var(--shadow-composer);
+        pointer-events: auto;
+      }
+
+      .composer.focus {
+        border-color: var(--blue);
+        box-shadow:
+          0 0 0 2px rgba(35, 131, 226, 0.08),
+          var(--shadow-composer);
+      }
+
+      .composer-placeholder {
+        min-height: 58px;
+        padding: 18px 18px 8px;
+        color: var(--text-faint);
+        font-size: 18px;
+      }
+
+      .composer-bar {
+        gap: 8px;
+        padding: 0 12px 12px;
+      }
+
+      .spacer {
+        flex: 1;
+      }
+
+      .composer-mode {
+        color: var(--text-soft);
+        font-weight: 650;
+      }
+
+      .send-circle {
+        display: grid;
+        width: 30px;
+        height: 30px;
+        place-items: center;
+        border-radius: 999px;
+        background: var(--surface-hover);
+        color: var(--text-faint);
+      }
+
+      .send-circle.active {
+        background: var(--accent);
+        color: white;
+      }
+
+      .split-chat {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 360px;
+        width: 100%;
+        min-height: 0;
+      }
+
+      .workspace-view:not(.is-active) {
+        display: none !important;
+      }
+
+      .workspace-view.chat-layout.is-active {
+        display: flex;
+      }
+
+      .workspace-view.split-chat.is-active {
+        display: grid;
+      }
+
+      .right-panel {
+        min-height: 0;
+        overflow: auto;
+        border-left: 1px solid var(--line);
+        background: var(--sidebar);
+        padding: 18px;
+      }
+
+      .right-panel h3 {
+        margin: 0 0 14px;
+        font-size: 17px;
+      }
+
+      .source-list {
+        display: grid;
+        gap: 2px;
+      }
+
+      .source-row {
+        display: grid;
+        grid-template-columns: 24px minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 8px;
+        min-height: 42px;
+        border-radius: 7px;
+        padding: 0 8px;
+      }
+
+      .source-title,
+      .tree-name,
+      .model-title {
+        font-weight: 700;
+      }
+
+      .settings-top {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 18px;
+      }
+
+      .avatar,
+      .mini-avatar {
+        display: grid;
+        place-items: center;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: var(--page);
+      }
+
+      .avatar {
+        width: 32px;
+        height: 32px;
+      }
+
+      .setting-group {
+        display: grid;
+        gap: 3px;
+        margin-bottom: 18px;
+      }
+
+      .setting-group-label {
+        padding: 0 6px 6px;
+      }
+
+      .setting-link {
+        display: grid;
+        grid-template-columns: 26px minmax(0, 1fr);
+        align-items: center;
+        gap: 8px;
+        min-height: 38px;
+        border-radius: 8px;
+        background: transparent;
+        color: var(--text-soft);
+        padding: 0 8px;
+        text-align: left;
+        font-weight: 650;
+      }
+
+      .setting-link.is-active {
+        background: var(--surface-hover);
+        color: var(--text);
+      }
+
+      .settings-content {
+        min-width: 0;
+        overflow: auto;
+        padding: 56px 64px;
+      }
+
+      .settings-inner {
+        max-width: 1120px;
+      }
+
+      .settings-view {
+        display: none;
+      }
+
+      .settings-view.is-active {
+        display: block;
+      }
+
+      .page-heading {
+        justify-content: space-between;
+        gap: 24px;
+        margin-bottom: 46px;
+      }
+
+      .page-heading h1 {
+        margin: 0;
+        font-size: 42px;
+        letter-spacing: 0;
+        line-height: 1.08;
+      }
+
+      .page-heading p {
+        margin: 12px 0 0;
+        color: var(--text-soft);
+        font-size: 18px;
+      }
+
+      .primary-btn,
+      .danger-btn,
+      .ghost-btn {
+        min-height: 34px;
+        border-radius: 7px;
+        padding: 0 12px;
+        font-weight: 650;
+      }
+
+      .primary-btn {
+        background: var(--accent);
+        color: white;
+      }
+
+      .danger-btn {
+        border: 1px solid #ff4d4f;
+        background: var(--page);
+        color: #ff4d4f;
+      }
+
+      .ghost-btn {
+        background: transparent;
+        color: var(--text-soft);
+      }
+
+      .tabs {
+        gap: 22px;
+        margin-bottom: 32px;
+      }
+
+      .tab {
+        min-height: 36px;
+        border-radius: 999px;
+        background: transparent;
+        color: var(--text-soft);
+        padding: 0 14px;
+        font-size: 16px;
+        font-weight: 700;
+      }
+
+      .tab.is-active {
+        background: var(--surface-hover);
+        color: var(--text);
+      }
+
+      .section-title {
+        margin: 0 0 6px;
+        font-size: 24px;
+        line-height: 1.2;
+      }
+
+      .section-copy {
+        margin: 0 0 28px;
+        color: var(--text-soft);
+        font-size: 17px;
+      }
+
+      .database-toolbar {
+        justify-content: space-between;
+        margin: 0 0 14px;
+        color: var(--text-soft);
+      }
+
+      .database {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      .database th,
+      .database td {
+        border-bottom: 1px solid var(--line);
+        padding: 11px 10px;
+        text-align: left;
+        vertical-align: middle;
+      }
+
+      .database th {
+        color: var(--text-soft);
+        font-weight: 650;
+      }
+
+      .database td {
+        font-size: 15px;
+      }
+
+      .workspace-layout {
+        display: grid;
+        grid-template-columns: 260px minmax(0, 1fr);
+        gap: 30px;
+      }
+
+      .workspace-list {
+        min-height: 540px;
+        background: var(--sidebar);
+        padding: 16px 8px;
+      }
+
+      .workspace-card {
+        display: grid;
+        gap: 5px;
+        border-radius: 8px;
+        padding: 12px;
+        color: var(--text-soft);
+      }
+
+      .workspace-card.is-active {
+        background: var(--surface-hover);
+        color: var(--text);
+      }
+
+      .workspace-detail {
+        min-width: 0;
+      }
+
+      .property-grid {
+        display: grid;
+        max-width: 700px;
+        gap: 12px;
+        margin-bottom: 24px;
+      }
+
+      .property-row {
+        display: grid;
+        grid-template-columns: 160px minmax(0, 1fr);
+        align-items: center;
+        gap: 18px;
+        min-height: 28px;
+        color: var(--text-soft);
+        font-size: 16px;
+      }
+
+      .property-row strong {
+        color: var(--text);
+        font-weight: 560;
+      }
+
+      .property-label {
+        gap: 8px;
+      }
+
+      .tree {
+        max-width: 760px;
+        margin-top: 22px;
+      }
+
+      .tree-header {
+        display: grid;
+        grid-template-columns: 1fr 120px 110px;
+        gap: 10px;
+        border-bottom: 1px solid var(--line);
+        color: var(--text-soft);
+        padding: 0 8px 8px;
+        font-weight: 650;
+      }
+
+      .tree-row {
+        display: grid;
+        grid-template-columns: 1fr 120px 110px;
+        align-items: center;
+        gap: 10px;
+        min-height: 42px;
+        border-radius: 6px;
+        padding: 0 8px;
+      }
+
+      .tree-name {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .model-list {
+        display: grid;
+        max-width: 920px;
+        border-top: 1px solid var(--line);
+      }
+
+      .model-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 18px;
+        min-height: 82px;
+        border-bottom: 1px solid var(--line);
+        padding: 10px 0;
+      }
+
+      .model-title {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 16px;
+      }
+
+      .connection-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(180px, 1fr));
+        gap: 18px;
+      }
+
+      .connection-card {
+        display: grid;
+        grid-template-columns: 48px 1fr;
+        align-items: center;
+        gap: 18px;
+        min-height: 92px;
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        background: var(--page);
+        padding: 18px;
+        box-shadow: var(--shadow-soft);
+      }
+
+      .logo-tile {
+        display: grid;
+        width: 44px;
+        height: 44px;
+        place-items: center;
+        border-radius: 10px;
+        background: var(--surface-hover);
+        font-size: 24px;
+      }
+
+      .muted {
+        color: var(--text-soft);
+      }
+
+      .faint {
+        color: var(--text-faint);
+      }
+
+      @media (max-width: 1120px) {
+        .workbench-shell,
+        .settings-shell {
+          grid-template-columns: 260px minmax(0, 1fr);
+        }
+
+        .settings-content {
+          padding: 42px 38px;
+        }
+
+        .workspace-layout {
+          grid-template-columns: 230px minmax(0, 1fr);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="demo">
+      <section class="view is-active" id="workbench">
+        <div class="workbench-shell">
+          <aside class="sidebar">
+            <div class="window-row">
+              <span class="dot red"></span>
+              <span class="dot yellow"></span>
+              <span class="dot green"></span>
+              <span class="workspace-name">馆长</span>
+            </div>
+
+            <div class="sidebar-toolbar">
+              <button class="home-pill" data-workbench="empty">⌂ Home</button>
+              <button class="icon-btn">○</button>
+              <button class="icon-btn">▣</button>
+              <button class="icon-btn">⌕</button>
+            </div>
+
+            <div class="sidebar-section">
+              <div class="sidebar-label">Recents</div>
+              <button class="sidebar-row is-active" data-workbench="empty">
+                <span>☂</span><strong>新对话</strong><span></span>
+              </button>
+              <button class="sidebar-row" data-workbench="chat">
+                <span>☂</span><span>深度学习资料整理</span><span class="sidebar-meta">今天</span>
+              </button>
+              <button class="sidebar-row" data-workbench="approval">
+                <span>✓</span><span>报告修改确认</span><span class="sidebar-meta">审批</span>
+              </button>
+              <button class="sidebar-row" data-workbench="sources">
+                <span>📎</span><span>资料核对</span><span></span>
+              </button>
+            </div>
+
+            <div class="sidebar-section">
+              <div class="sidebar-label">Workspace</div>
+              <button class="sidebar-row" data-view="settings" data-settings="workspace">
+                <span>▦</span><span>产品资料库</span><span class="sidebar-meta">18</span>
+              </button>
+              <button class="sidebar-row" data-view="settings" data-settings="download">
+                <span>⬇</span><span>向量模型</span><span></span>
+              </button>
+              <button class="sidebar-row" data-view="settings" data-settings="model">
+                <span>✦</span><span>模型设置</span><span></span>
+              </button>
+            </div>
+
+            <div class="sidebar-section">
+              <div class="sidebar-label">Agents</div>
+              <button class="sidebar-row"><span>＋</span><span>New agent</span><span></span></button>
+            </div>
+
+            <div class="sidebar-bottom">
+              <button class="new-chat" data-workbench="empty">☂ New chat</button>
+              <button class="new-chat">✎</button>
+            </div>
+          </aside>
+
+          <main class="main">
+            <div class="topbar">
+              <div class="breadcrumb" id="workbench-title">☂ 馆长 / 新对话</div>
+              <div class="top-actions">
+                <button class="icon-btn">⇧</button>
+                <button class="icon-btn">＋</button>
+                <button class="icon-btn">⋯</button>
+              </div>
+            </div>
+
+            <div class="workspace-view chat-layout is-active" id="wb-empty">
+              <div class="chat-document">
+                <div class="empty-hero">
+                  <div class="ai-orb">☂</div>
+                  <h1 class="empty-title">从一个问题开始</h1>
+                  <p class="empty-subtitle">
+                    询问资料、生成计划、整理笔记，或让 AI 在当前工作区里执行任务。
+                  </p>
+                </div>
+              </div>
+              <div class="composer-wrap">
+                <div class="composer focus">
+                  <div class="composer-placeholder">输入问题，或 @ 资料</div>
+                  <div class="composer-bar">
+                    <button class="icon-btn">＋</button>
+                    <button class="icon-btn">☷</button>
+                    <span class="tag">大聪明</span>
+                    <span class="tag">gpt-4.1</span>
+                    <span class="tag">产品资料库</span>
+                    <span class="spacer"></span>
+                    <span class="composer-mode">Auto</span>
+                    <button class="icon-btn">♬</button>
+                    <button class="send-circle">↑</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="workspace-view chat-layout" id="wb-chat">
+              <div class="chat-document">
+                <div class="user-row">
+                  <div class="user-bubble">帮我把工作区里的深度学习资料整理成学习计划</div>
+                </div>
+                <article class="assistant-block">
+                  <h2>可以。我会先按资料来源建立学习路线。</h2>
+                  <p>
+                    我在产品资料库里看到了 18 个本地文件和 3 个网页来源。建议把它们拆成基础概念、模型训练、实践项目和复盘笔记四个阶段。
+                  </p>
+                  <div class="task-block">
+                    <div class="task-row">
+                      <span>1</span><strong>梳理目录与来源可信度</strong><span class="tag green">完成</span>
+                    </div>
+                    <div class="task-row">
+                      <span>2</span><strong>提取关键概念与依赖关系</strong><span class="tag blue">进行中</span>
+                    </div>
+                    <div class="task-row">
+                      <span>3</span><strong>生成 4 周学习计划</strong><span class="tag">待处理</span>
+                    </div>
+                  </div>
+                  <div class="assistant-tools"><span>⧉</span><span>＋</span><span>👍</span><span>👎</span></div>
+                </article>
+              </div>
+              <div class="composer-wrap">
+                <div class="composer">
+                  <div class="composer-placeholder">继续追问，或 @ 资料</div>
+                  <div class="composer-bar">
+                    <button class="icon-btn">＋</button>
+                    <button class="icon-btn">☷</button>
+                    <span class="tag">Auto</span>
+                    <span class="spacer"></span>
+                    <button class="send-circle active">↑</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="workspace-view chat-layout" id="wb-approval">
+              <div class="chat-document">
+                <div class="user-row">
+                  <div class="user-bubble">把报告里的结论段落改得更清晰一些</div>
+                </div>
+                <article class="assistant-block">
+                  <h2>我准备修改 2 个文件，需要你确认。</h2>
+                  <p>修改范围集中在结论摘要和证据段落，不会变更原始数据表。</p>
+                  <div class="notice warning">
+                    <span>!</span>
+                    <span>等待审批：AI 将写入本地文件。确认后才会执行。</span>
+                    <button class="ghost-btn">查看详情</button>
+                  </div>
+                  <div class="task-block">
+                    <div class="task-row"><span>✎</span><strong>report.md</strong><span class="tag blue">改写 3 段</span></div>
+                    <div class="task-row"><span>✎</span><strong>summary.md</strong><span class="tag blue">补充结论</span></div>
+                  </div>
+                  <div style="display:flex; gap:10px; margin-top:18px">
+                    <button class="primary-btn">批准执行</button>
+                    <button class="ghost-btn">拒绝</button>
+                  </div>
+                </article>
+              </div>
+              <div class="composer-wrap">
+                <div class="composer">
+                  <div class="composer-placeholder">审批期间可补充约束...</div>
+                  <div class="composer-bar">
+                    <button class="icon-btn">＋</button>
+                    <span class="spacer"></span>
+                    <span class="composer-mode">等待确认</span>
+                    <button class="send-circle">↑</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="workspace-view split-chat" id="wb-sources">
+              <div class="chat-layout">
+                <div class="chat-document">
+                  <article class="assistant-block">
+                    <h2>我找到了 5 条相关资料。</h2>
+                    <p>
+                      最相关的是课程笔记、模型训练记录和 Notion API 文档。右侧可以直接查看来源、打开文件或引用到下一轮问题。
+                    </p>
+                    <div class="notice">
+                      <span>i</span>
+                      <span>资料范围来自「产品资料库」，共命中 5 条。</span>
+                      <button class="ghost-btn" data-view="settings" data-settings="workspace">切换范围</button>
+                    </div>
+                  </article>
+                </div>
+                <div class="composer-wrap">
+                  <div class="composer">
+                    <div class="composer-placeholder">基于这些资料继续提问...</div>
+                    <div class="composer-bar">
+                      <button class="icon-btn">＋</button>
+                      <span class="spacer"></span>
+                      <button class="send-circle active">↑</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <aside class="right-panel">
+                <h3>引用资料</h3>
+                <div class="source-list">
+                  <div class="source-row">
+                    <span>☰</span>
+                    <div><div class="source-title">深度学习课程笔记.md</div><div class="muted">本地文件 · 92%</div></div>
+                    <span>↗</span>
+                  </div>
+                  <div class="source-row">
+                    <span>◎</span>
+                    <div><div class="source-title">course.fast.ai</div><div class="muted">网页资料 · 86%</div></div>
+                    <span>↗</span>
+                  </div>
+                  <div class="source-row">
+                    <span>☰</span>
+                    <div><div class="source-title">训练记录.xlsx</div><div class="muted">本地文件 · 74%</div></div>
+                    <span>↗</span>
+                  </div>
+                </div>
+              </aside>
+            </div>
+          </main>
+        </div>
+      </section>
+
+      <section class="view" id="settings">
+        <div class="settings-shell">
+          <aside class="settings-sidebar">
+            <button class="setting-link" data-view="workbench">
+              <span>←</span><span>返回 Workbench</span>
+            </button>
+
+            <div class="settings-top" style="margin-top:18px">
+              <div class="avatar">Y</div>
+              <div><strong>yuan xiao</strong><div class="muted">Local workspace</div></div>
+            </div>
+
+            <div class="setting-group">
+              <div class="setting-group-label">Workspace</div>
+              <button class="setting-link is-active" data-settings="workspace"><span>▦</span><span>工作空间</span></button>
+              <button class="setting-link" data-settings="model"><span>✦</span><span>大模型</span></button>
+              <button class="setting-link" data-settings="update"><span>↻</span><span>应用更新</span></button>
+            </div>
+            <div class="setting-group">
+              <div class="setting-group-label">Resources</div>
+              <button class="setting-link" data-settings="download"><span>⬇</span><span>向量模型</span></button>
+              <button class="setting-link"><span>◎</span><span>网页资料</span></button>
+            </div>
+          </aside>
+
+          <main class="settings-content">
+            <div class="settings-inner">
+              <section class="settings-view is-active" id="settings-workspace">
+                <div class="page-heading">
+                  <div>
+                    <h1>工作空间</h1>
+                    <p>管理本地项目路径、网页资料、目录变化和索引状态。</p>
+                  </div>
+                  <button class="primary-btn">＋ 添加工作空间</button>
+                </div>
+                <div class="workspace-layout">
+                  <aside class="workspace-list">
+                    <div class="sidebar-label">Workspaces</div>
+                    <div class="workspace-card is-active">
+                      <strong>产品资料库</strong>
+                      <span>/Users/test/Documents/NCurator</span>
+                      <span><span class="tag">18 文件</span> <span class="tag">3 网页</span></span>
+                    </div>
+                    <div class="workspace-card">
+                      <strong>课程笔记</strong>
+                      <span>/Users/test/Documents/Course</span>
+                      <span><span class="tag">42 文件</span></span>
+                    </div>
+                  </aside>
+                  <section class="workspace-detail">
+                    <h2 class="section-title">产品资料库</h2>
+                    <div class="property-grid">
+                      <div class="property-row"><span class="property-label">⌂ 文件目录</span><strong>/Users/test/Documents/NCurator</strong></div>
+                      <div class="property-row"><span class="property-label">☰ 文件</span><strong>18</strong></div>
+                      <div class="property-row"><span class="property-label">◎ 网页</span><strong>3</strong></div>
+                      <div class="property-row"><span class="property-label">↻ 可索引</span><strong>4</strong></div>
+                    </div>
+                    <div class="notice">
+                      <span>i</span>
+                      <span>有 4 个资料需要更新索引，其中 1 个上次失败。</span>
+                      <button class="ghost-btn">更新索引</button>
+                    </div>
+                    <div class="tabs"><button class="tab is-active">文件 18</button><button class="tab">网页 3</button></div>
+                    <div class="tree">
+                      <div class="tree-header"><span>名称</span><span>状态</span><span>来源</span></div>
+                      <div class="tree-row"><div class="tree-name">▾ research</div><span class="tag">目录</span><span class="muted">本地</span></div>
+                      <div class="tree-row"><div class="tree-name" style="padding-left:24px">☰ note.md</div><span class="tag blue">可索引</span><span class="muted">本地</span></div>
+                      <div class="tree-row"><div class="tree-name">☰ spec.md</div><span class="tag green">已索引</span><span class="muted">本地</span></div>
+                    </div>
+                  </section>
+                </div>
+              </section>
+
+              <section class="settings-view" id="settings-model">
+                <div class="page-heading">
+                  <div><h1>大模型</h1><p>配置默认对话模型、API Key 和当前启用入口。</p></div>
+                  <button class="primary-btn">＋ 新增配置</button>
+                </div>
+                <div class="tabs"><button class="tab is-active">Discover</button><button class="tab">Installed</button><button class="tab">Manage</button></div>
+                <h2 class="section-title">模型服务</h2>
+                <p class="section-copy">以 database 行管理服务配置，当前启用项保持低对比标签。</p>
+                <table class="database">
+                  <thead><tr><th>模型服务</th><th>API Key</th><th>模型列表</th><th>状态</th><th>操作</th></tr></thead>
+                  <tbody>
+                    <tr class="database-row"><td><strong>OpenAI</strong><div class="muted">https://api.openai.com/v1</div></td><td><span class="tag">****1234</span></td><td>24 个模型</td><td><span class="tag green">当前使用</span></td><td>✎  🗑</td></tr>
+                    <tr class="database-row"><td><strong>DeepSeek</strong><div class="muted">https://api.deepseek.com</div></td><td><span class="tag">****8821</span></td><td>未获取</td><td><span class="tag">备用</span></td><td>启用  ✎</td></tr>
+                  </tbody>
+                </table>
+                <div class="notice" style="margin-top:32px"><span>i</span><span>建议至少保留一个可用配置，Workbench 会读取当前启用模型。</span><button class="ghost-btn">测试连接</button></div>
+              </section>
+
+              <section class="settings-view" id="settings-update">
+                <div class="page-heading">
+                  <div><h1>应用更新</h1><p>检查桌面端版本、下载状态和重启安装。</p></div>
+                  <span class="tag green">已是最新</span>
+                </div>
+                <div class="property-grid">
+                  <div class="property-row"><span class="property-label">⌘ 当前版本</span><strong>0.1.0</strong></div>
+                  <div class="property-row"><span class="property-label">↻ 更新状态</span><strong>当前已经是最新版本</strong></div>
+                  <div class="property-row"><span class="property-label">☁ 下载进度</span><strong>-</strong></div>
+                </div>
+                <div class="notice"><span>i</span><span>开发模式不会自动安装更新，正式包会在后台检查版本。</span><button class="ghost-btn">查看发布说明</button></div>
+                <div style="display:flex; gap:10px; margin-top:26px"><button class="primary-btn">检查更新</button><button class="ghost-btn">重启安装</button></div>
+              </section>
+
+              <section class="settings-view" id="settings-download">
+                <div class="page-heading">
+                  <div><h1>向量模型</h1><p>下载本地检索模型，为搜索和知识库能力提供向量基础。</p></div>
+                </div>
+                <div class="database-toolbar"><span>模型列表</span><span>⌕  ☷</span></div>
+                <div class="model-list">
+                  <div class="model-row"><div><div class="model-title">BAAI bge-m3 <span class="tag">Embedding</span><span class="tag">Local</span></div><div class="muted">通用多语言向量模型，适合本地知识库检索。</div></div><button class="primary-btn">下载</button></div>
+                  <div class="model-row"><div><div class="model-title">Qwen Embedding <span class="tag">中文</span><span class="tag">推荐</span></div><div class="muted">中文资料检索表现稳定的本地向量模型。</div></div><span class="tag green">已安装</span></div>
+                  <div class="model-row"><div><div class="model-title">MiniLM <span class="tag">轻量</span></div><div class="muted">更小的本地模型，适合快速试用。</div></div><button class="ghost-btn">下载</button></div>
+                </div>
+                <h2 class="section-title" style="margin-top:46px">可选连接</h2>
+                <p class="section-copy">如果以后接入第三方资料源，可沿用 Notion Connections 的 tile 样式。</p>
+                <div class="connection-grid">
+                  <div class="connection-card"><div class="logo-tile">G</div><strong>Google Drive</strong></div>
+                  <div class="connection-card"><div class="logo-tile">◎</div><strong>Web pages</strong></div>
+                  <div class="connection-card"><div class="logo-tile">☰</div><strong>Local files</strong></div>
+                </div>
+              </section>
+            </div>
+          </main>
+        </div>
+      </section>
+    </div>
+
+    <script>
+      const viewNodes = Array.from(document.querySelectorAll('.view'))
+      const workspaceNodes = Array.from(document.querySelectorAll('.workspace-view'))
+      const settingsNodes = Array.from(document.querySelectorAll('.settings-view'))
+      const workbenchTitle = document.getElementById('workbench-title')
+      let lastWorkbench = 'empty'
+
+      const workbenchTitles = {
+        empty: '☂ 馆长 / 新对话',
+        chat: '☂ 馆长 / 深度学习资料整理',
+        approval: '✓ 馆长 / 报告修改确认',
+        sources: '📎 馆长 / 资料核对'
+      }
+
+      function setTopView(name) {
+        viewNodes.forEach((view) => view.classList.toggle('is-active', view.id === name))
+      }
+
+      function setWorkbench(name) {
+        lastWorkbench = name
+        setTopView('workbench')
+        workspaceNodes.forEach((node) => node.classList.toggle('is-active', node.id === `wb-${name}`))
+        document.querySelectorAll('[data-workbench]').forEach((node) => {
+          node.classList.toggle('is-active', node.dataset.workbench === name)
+        })
+        workbenchTitle.textContent = workbenchTitles[name] || workbenchTitles.empty
+        history.replaceState(null, '', `#workbench-${name}`)
+      }
+
+      function setSettings(name) {
+        setTopView('settings')
+        settingsNodes.forEach((node) => node.classList.toggle('is-active', node.id === `settings-${name}`))
+        document.querySelectorAll('[data-settings]').forEach((node) => {
+          node.classList.toggle('is-active', node.dataset.settings === name)
+        })
+        history.replaceState(null, '', `#settings-${name}`)
+      }
+
+      document.addEventListener('click', (event) => {
+        const target = event.target.closest('button')
+        if (!target) return
+        if (target.dataset.workbench) {
+          setWorkbench(target.dataset.workbench)
+          return
+        }
+        if (target.dataset.settings) {
+          setSettings(target.dataset.settings)
+          return
+        }
+        if (target.dataset.view === 'workbench') {
+          setWorkbench(lastWorkbench || 'empty')
+          return
+        }
+        if (target.dataset.view === 'settings') {
+          setSettings(target.dataset.settings || 'workspace')
+        }
+      })
+
+      const initial = location.hash.slice(1)
+      if (initial.startsWith('settings-')) {
+        setSettings(initial.replace('settings-', ''))
+      } else if (initial.startsWith('workbench-')) {
+        setWorkbench(initial.replace('workbench-', ''))
+      }
+    </script>
+  </body>
+</html>

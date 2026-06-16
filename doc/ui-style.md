@@ -8,7 +8,7 @@
 
 ## 1. 设计语言
 
-- 全前端统一使用 **Notion-like 文档工作台主题**，以 `prototypes/workbench-notion-prototype.html` 为视觉基准。
+- 全前端统一使用 **Notion-like 文档工作台主题**，以 `prototypes/notion-redesign/index.html` 为视觉基准。
 - 整体气质是大面积白纸、浅灰侧栏、极淡细线数据库和文档块，而不是宣传页、强装饰 dashboard 或水墨面板。
 - 主工作区必须以纯白为主，页面层级优先通过留白、极淡分割线、浅灰 hover、文本权重和列表密度表达。
 - 禁止恢复旧 Claude/陶土色体系，也不再使用旧 ink-mono 墨白主题作为主视觉。
