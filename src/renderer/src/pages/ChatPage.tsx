@@ -1,5 +1,5 @@
 ﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { App, Button, Modal } from 'antd'
+import { App, Button, Modal, Spin } from 'antd'
 import {
   HiArrowUp,
   HiBookOpen,
@@ -11,6 +11,7 @@ import {
   HiOutlineRectangleGroup,
   HiOutlineViewColumns,
   HiRectangleGroup,
+  HiStop,
   HiTrash,
   HiViewColumns,
   HiXMark
@@ -2092,6 +2093,24 @@ const ChatPage: React.FC = () => {
                                   }
                                   data-testid={chatSelectors.approvalBatchNextButton}
                                 />
+                                <button
+                                  type="button"
+                                  onClick={() => void handleCancel()}
+                                  disabled={cancellingRun}
+                                  className={`ml-1 inline-flex h-8 w-8 items-center justify-center rounded-full text-white transition ${
+                                    cancellingRun
+                                      ? 'bg-[#CBC7BD]'
+                                      : 'bg-[#A83A31] shadow-[0_6px_14px_rgba(181,69,93,0.16)] hover:-translate-y-[1px] hover:bg-[#8F3028]'
+                                  }`}
+                                  data-testid={workbenchSelectors.sendButton}
+                                  aria-label="停止本次运行"
+                                >
+                                  {cancellingRun ? (
+                                    <Spin size="small" />
+                                  ) : (
+                                    <HiStop className="h-4 w-4" />
+                                  )}
+                                </button>
                               </div>
                             </div>
                             <p className="mx-5 mt-3 text-[13px] leading-6 text-[#6E6D69]">

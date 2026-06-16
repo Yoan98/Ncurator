@@ -15,8 +15,8 @@
 ### 2.1 当前状态
 
 - 总体登记：`13` 个 e2e case。
-- 当前有效结论：`11 / 13` 有效通过。
-- 当前实现状态：`tests/case/workbench/**` 已按 suite / group 落地 `13` 个独立 `.e2e.test.ts` 文件；当前已有 `11 / 13` 形成真实有效通过结论。
+- 当前有效结论：`12 / 13` 有效通过。
+- 当前实现状态：`tests/case/workbench/**` 已按 suite / group 落地 `13` 个独立 `.e2e.test.ts` 文件；当前已有 `12 / 13` 形成真实有效通过结论。
 
 ### 2.2 按 Suite 汇总
 
@@ -27,9 +27,9 @@
   - 备注：case 已实现；`session-initial-create-and-title`、`send-guard-mode-switch-and-preferences`、`workspace-root-path-required`、`reference-token-lifecycle` 均已通过真实 Electron UI；其中涉及 AI 的 case 使用真实模型，`reference-token-lifecycle` 不启动 AI。
 - `run`
   - 登记 case：`4`
-  - 有效通过：`2 / 4`
-  - 检测时间：`2026-06-16 12:04:17 +0800`
-  - 备注：case 已实现；`ai-process-stream-and-final-answer`、`approval-batch-flow` 已通过真实 Electron UI、真实模型、真实 workspace 索引和真实 AI run；`stop-running-or-approval-run` 当前暴露审批等待时缺少停止入口的生产行为缺口；`browser-use-task-panel` 当前暴露 `browser_use` / Stagehand 对当前 live 模型接口返回 `Bad Request` 的生产或配置阻塞。
+  - 有效通过：`3 / 4`
+  - 检测时间：`2026-06-16 12:47:24 +0800`
+  - 备注：case 已实现；`ai-process-stream-and-final-answer`、`approval-batch-flow`、`stop-running-or-approval-run` 已通过真实 Electron UI、真实模型、真实 workspace 索引和真实 AI run；`approval-batch-flow` 在拒绝审批分支中出现多轮模型自纠后收口，当前有效通过但耗时偏长；`browser-use-task-panel` 按本轮推进口径暂不作为有效通过结论，由用户手测确认。
 - `result`
   - 登记 case：`5`
   - 有效通过：`5 / 5`
@@ -44,7 +44,7 @@
 - Workbench formal e2e 需要真实索引完成信号和 UI 可见状态作为等待条件；不得再读取内部 store 或注入 fixed document id 来制造搜索结果。
 - `file-preview-actions` 当前按生产真实索引能力覆盖 `pdf/docx`：`src/main/services/ingestion/loader.ts` 只支持 `.pdf`、`.docx` 本地知识库索引，`tests/fixtures/workspace/workbench-preview.md` 无法通过真实搜索结果打开；如 PRD 需要 markdown 也进入 Workbench 搜索 / 预览链路，需要产品 / 生产实现决策。
 - docx apply case 需要真实 docx 输入、真实 AI 编辑、真实写回记录、真实预览和真实回退。
-- `browser-use-task-panel` 需要真实 AI run 触发 `browser_use` 并驱动内置浏览器完成本地网页任务；当前测试已在连续两次 `browser_use` 失败时快速失败并记录诊断，避免模型无效重试导致长时间无反馈。
+- `browser-use-task-panel` 需要真实 AI run 触发 `browser_use` 并驱动内置浏览器完成本地网页任务；当前测试已在连续两次 `browser_use` 失败时快速失败并记录诊断，避免模型无效重试导致长时间无反馈；本轮暂不把该 case 作为 Workbench 收口条件。
 
 ## 3. Suite 设计
 
