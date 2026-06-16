@@ -9,12 +9,11 @@ import {
   insertWorkbenchReferenceToken,
   navigateToWorkbench,
   selectWorkbenchWorkspace,
-  sendWorkbenchMessage,
+  setWorkbenchInput,
   setupWorkbenchWorkspaceOnly,
   startLocalWorkbenchHttpServer,
   submitWorkbenchCurrentDraft,
   switchWorkbenchMode,
-  waitForAntMessageText,
   waitForWorkbenchSearchScopeEmptyThroughUi,
   waitForWorkbenchSearchResults,
   workbenchSelectors
@@ -77,15 +76,15 @@ describe('workbench result e2e', () => {
                 await getWorkbenchLocator(page, workbenchSelectors.documentView).waitFor({
                   state: 'visible'
                 })
-                const documentViewText = (
-                  (await getWorkbenchLocator(
-                    page,
-                    workbenchSelectors.documentView
-                  ).textContent()) || ''
-                ).trim()
+                const docxViewerVisible = await getWorkbenchLocator(
+                  page,
+                  workbenchSelectors.docxViewer
+                )
+                  .isVisible()
+                  .catch(() => false)
                 return {
                   fileResultsText,
-                  documentViewText
+                  docxViewerVisible
                 }
               }
             })
@@ -110,7 +109,7 @@ describe('workbench result e2e', () => {
               }
             })
 
-            const emptySearchMessage = await runtime.step({
+            const emptySearchResult = await runtime.step({
               name: 'search-empty-workspace',
               message: '创建无可检索资料的真实工作区并验证搜索模式拦截提示。',
               run: async () => {
@@ -126,17 +125,54 @@ describe('workbench result e2e', () => {
                     emptyScopeProbe
                   }
                 })
-                await sendWorkbenchMessage(page, 'anything')
-                return await waitForAntMessageText(page, '当前搜索范围没有已索引资料')
+                const messagesBefore = await getWorkbenchLocator(page, workbenchSelectors.messageList)
+                  .locator('.ant-chat-message')
+                  .count()
+                await setWorkbenchInput(page, 'anything')
+                const sendButtonStateBefore = await getWorkbenchLocator(
+                  page,
+                  workbenchSelectors.sendButton
+                ).evaluate((element) => {
+                  if (!(element instanceof HTMLButtonElement)) {
+                    throw new Error('workbench send button is not an HTMLButtonElement')
+                  }
+                  return {
+                    disabled: element.disabled,
+                    text: (element.textContent || '').trim()
+                  }
+                })
+                await getWorkbenchLocator(page, workbenchSelectors.sendButton).evaluate((element) => {
+                  if (!(element instanceof HTMLButtonElement)) {
+                    throw new Error('workbench send button is not an HTMLButtonElement')
+                  }
+                  element.click()
+                })
+                await page.waitForTimeout(1000)
+                const messagesAfter = await getWorkbenchLocator(page, workbenchSelectors.messageList)
+                  .locator('.ant-chat-message')
+                  .count()
+                const draftText = (
+                  (await getWorkbenchLocator(page, workbenchSelectors.input).textContent()) || ''
+                ).trim()
+                const rightPanelText = (
+                  (await getWorkbenchLocator(page, workbenchSelectors.contentPanel).textContent()) || ''
+                ).trim()
+                return {
+                  messagesBefore,
+                  messagesAfter,
+                  sendButtonStateBefore,
+                  draftText,
+                  rightPanelText
+                }
               }
             })
             const signals = await runtime.collectSignals()
 
             return {
               fileResultsText: fileSearch.fileResultsText,
-              documentViewText: fileSearch.documentViewText,
+              docxViewerVisible: fileSearch.docxViewerVisible,
               webResultsText: webSearch,
-              emptySearchMessage,
+              emptySearchResult,
               aiEventCount: signals.aiRunEventEntries.length,
               openExternalCalls: signals.ipcInvokeEntries.filter(
                 (entry) => entry.name === 'openExternal'
@@ -151,14 +187,16 @@ describe('workbench result e2e', () => {
           await runtime.assertThat(
             result.aiEventCount === 0 &&
               result.fileResultsText.includes(LOCAL_RESULT_FILE) &&
-              /Alice|合规负责人/u.test(result.documentViewText) &&
+              result.docxViewerVisible &&
               /cedar-search-888/u.test(result.webResultsText) &&
               result.openExternalCalls >= 1 &&
-              result.emptySearchMessage.includes('当前搜索范围没有已索引资料'),
+              result.emptySearchResult.messagesBefore === result.emptySearchResult.messagesAfter &&
+              result.emptySearchResult.draftText.includes('anything') &&
+              result.emptySearchResult.rightPanelText.includes('右侧暂无内容'),
             {
               name: 'workbench-search-results-real-open-rules',
               message:
-                '搜索模式应使用真实索引结果且不启动 AI；本地结果进入文件预览，网页结果走系统打开，无可检索资料时拦截并提示原因，对齐 WB-COMPOSER-004、WB-PANEL-002、WB-MODE-002。',
+                '搜索模式应使用真实索引结果且不启动 AI；本地结果进入文件预览，网页结果走系统打开，无可检索资料时应拦截发送并保留输入，对齐 WB-COMPOSER-004、WB-PANEL-002、WB-MODE-002。',
               data: result
             }
           )

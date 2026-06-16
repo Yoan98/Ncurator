@@ -11,6 +11,7 @@ import {
   sendWorkbenchMessage,
   setupWorkbenchWithTempWorkspace,
   waitForApplyEntry,
+  waitForWorkbenchApplyRecordStatus,
   waitForWorkbenchAiRunCompletion,
   workbenchSelectors
 } from '../../../../harness/e2e/workbench'
@@ -61,7 +62,7 @@ describe('workbench result e2e', () => {
             .isVisible()
             .catch(() => false)
           await getWorkbenchLocator(page, workbenchSelectors.applyRevertButton).click()
-          await page.getByText('已回退本次修改').waitFor({ state: 'visible' })
+          await waitForWorkbenchApplyRecordStatus(page, 'reverted')
           const afterRevertText = await readDocxPlainText(targetPath)
           const revertedPanelText =
             ((await getWorkbenchLocator(page, workbenchSelectors.applyPanel).textContent()) ||

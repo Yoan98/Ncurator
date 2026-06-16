@@ -15,8 +15,8 @@
 ### 2.1 当前状态
 
 - 总体登记：`13` 个 e2e case。
-- 当前有效结论：`4 / 13` 有效通过。
-- 当前实现状态：`tests/case/workbench/**` 已按 suite / group 落地 `13` 个独立 `.e2e.test.ts` 文件；当前已有 `4 / 13` 形成真实有效通过结论。
+- 当前有效结论：`9 / 13` 有效通过。
+- 当前实现状态：`tests/case/workbench/**` 已按 suite / group 落地 `13` 个独立 `.e2e.test.ts` 文件；当前已有 `9 / 13` 形成真实有效通过结论。
 
 ### 2.2 按 Suite 汇总
 
@@ -32,8 +32,9 @@
   - 备注：case 已实现；`ai-process-stream-and-final-answer` 已通过真实 Electron UI、真实模型、真实 workspace 索引和真实 AI run。
 - `result`
   - 登记 case：`5`
-  - 有效通过：`0 / 5`
-  - 备注：case 已实现；`search-results-open-rules` 按原计划覆盖真实索引、本地结果预览、网页结果系统打开和无可检索资料拦截。
+  - 有效通过：`5 / 5`
+  - 检测时间：`2026-06-16 09:23:50 +0800`
+  - 备注：`search-results-open-rules` 已通过；当前 `result` suite 五条 case 均已形成真实有效通过结论。
 
 ### 2.3 当前边界
 
@@ -195,10 +196,10 @@ tests/case/workbench/
 
 - 测试类型：`e2e`
 - 实现状态：`已实现`
-- What：验证搜索模式发送、搜索占位、右侧搜索结果、网页 / 本地结果打开规则和无可检索资料拦截。
+- What：验证搜索模式发送、搜索占位、右侧搜索结果、网页 / 本地结果打开规则和无可检索资料下的发送拦截。
 - Why：搜索模式是 Workbench 的非 AI 路径，必须确保不误启动 AI，且右侧结果操作符合用户预期。
 - How：通过 UI 创建并绑定真实工作区，等待本地文件和网页资料真实索引完成；切换搜索模式发送自然语言查询；点击网页结果和本地结果操作图标；再切换到无可检索资料范围发送搜索。
-- Oracle：搜索模式不启动 AI run，对齐 `WB-COMPOSER-004-AC1`；搜索中和搜索成功状态符合 `WB-COMPOSER-004-AC2`、`WB-COMPOSER-004-AC3`；网页结果调用系统浏览器、本地结果进入文件预览且正文区域无动作，对齐 `WB-PANEL-002-AC1`、`WB-PANEL-002-AC2`；无可检索资料时不执行搜索并提示原因，对齐 `WB-MODE-002-AC1`、`WB-MODE-002-AC2`。
+- Oracle：搜索模式不启动 AI run，对齐 `WB-COMPOSER-004-AC1`；搜索中和搜索成功状态符合 `WB-COMPOSER-004-AC2`、`WB-COMPOSER-004-AC3`；网页结果调用系统浏览器、本地结果进入文件预览且正文区域无动作，对齐 `WB-PANEL-002-AC1`、`WB-PANEL-002-AC2`；无可检索资料时不执行发送并保留当前输入，对齐 `WB-MODE-002-AC1`、`WB-MODE-002-AC2`。
 - Not：不验证 embedding 召回质量和排序算法。
 
 #### `file-preview-actions`

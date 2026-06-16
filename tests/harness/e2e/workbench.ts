@@ -1143,8 +1143,8 @@ export const waitForWorkbenchApplyPanelReady = async (page: Page): Promise<Locat
   const panel = getWorkbenchLocator(page, workbenchSelectors.applyPanel)
   await panel.waitFor({ state: 'visible' })
   await page.waitForFunction(
-    (testId) => {
-      const root = document.querySelector(`[data-testid="${testId}"]`)
+    ({ panelTestId, docxViewerTestId }) => {
+      const root = document.querySelector(`[data-testid="${panelTestId}"]`)
       if (!(root instanceof HTMLElement)) return false
       const text = root.innerText.trim()
       if (text.includes('当前没有 AI 修改记录。')) return true
@@ -1152,9 +1152,12 @@ export const waitForWorkbenchApplyPanelReady = async (page: Page): Promise<Locat
       if (text.includes('当前修改记录没有专用预览稿。')) return true
       if (text.includes('本次 AI 修改已回退。')) return true
       if (text.includes('回退本次修改')) return true
-      return Boolean(root.querySelector(`[data-testid="${workbenchSelectors.docxViewer}"]`))
+      return Boolean(root.querySelector(`[data-testid="${docxViewerTestId}"]`))
     },
-    workbenchSelectors.applyPanel,
+    {
+      panelTestId: workbenchSelectors.applyPanel,
+      docxViewerTestId: workbenchSelectors.docxViewer
+    },
     { timeout: WORKBENCH_LONG_E2E_TIMEOUT_MS }
   )
   return panel
@@ -1272,9 +1275,15 @@ const autoApproveWorkbenchApprovalBatch = async (
 }
 
 export const getAntMessageText = async (page: Page): Promise<string> => {
-  const messages = page.locator('.ant-message')
-  if (!(await messages.count())) return ''
-  return ((await messages.last().textContent()) || '').trim()
+  return await page.evaluate(() => {
+    const notices = Array.from(
+      document.querySelectorAll('.ant-message .ant-message-notice-content')
+    )
+    const texts = notices
+      .map((node) => String(node.textContent || '').trim())
+      .filter((text) => text.length > 0)
+    return texts.at(-1) || ''
+  })
 }
 
 export const waitForAntMessageText = async (
@@ -1282,12 +1291,17 @@ export const waitForAntMessageText = async (
   text: string,
   timeoutMs = WORKBENCH_E2E_TIMEOUT_MS
 ): Promise<string> => {
-  const message = page.locator('.ant-message').getByText(text).last()
-  await message.waitFor({
-    state: 'visible',
-    timeout: timeoutMs
-  })
-  return ((await message.textContent()) || '').trim()
+  const deadline = Date.now() + timeoutMs
+  for (;;) {
+    const currentText = await getAntMessageText(page)
+    if (currentText.includes(text)) return currentText
+    if (Date.now() >= deadline) {
+      throw new Error(
+        `ant message did not include "${text}" within ${timeoutMs}ms; latest="${currentText}"`
+      )
+    }
+    await page.waitForTimeout(100)
+  }
 }
 
 export const collectWorkbenchAiRunEvents = async (

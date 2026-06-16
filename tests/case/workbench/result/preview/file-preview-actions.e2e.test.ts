@@ -26,6 +26,22 @@ const openSearchPreview = async (page: Page, results: Locator, fileName: string)
   await getWorkbenchLocator(page, workbenchSelectors.documentView).waitFor({ state: 'visible' })
 }
 
+const waitForPdfPreviewPage = async (page: Page): Promise<boolean> => {
+  const documentView = getWorkbenchLocator(page, workbenchSelectors.documentView)
+  await documentView.waitFor({ state: 'visible' })
+  return await page
+    .waitForFunction(
+      (testId) => {
+        const root = document.querySelector(`[data-testid="${testId}"]`)
+        return Boolean(root?.querySelector('[data-pdf-page]'))
+      },
+      workbenchSelectors.documentView,
+      { timeout: 30_000 }
+    )
+    .then(() => true)
+    .catch(() => false)
+}
+
 describe('workbench result e2e', () => {
   it(
     CASE_ID,
@@ -51,11 +67,7 @@ describe('workbench result e2e', () => {
             await submitWorkbenchCurrentDraft(page)
             const pdfResults = await waitForWorkbenchSearchResults(page)
             await openSearchPreview(page, pdfResults, '深度学习.pdf')
-            const pdfPageVisible = await getWorkbenchLocator(page, workbenchSelectors.documentView)
-              .locator('[data-pdf-page]')
-              .first()
-              .isVisible()
-              .catch(() => false)
+            const pdfPageVisible = await waitForPdfPreviewPage(page)
             await page.getByRole('button', { name: '定位文件' }).last().click()
 
             await switchWorkbenchMode(page, '没头脑')
