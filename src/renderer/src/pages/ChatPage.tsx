@@ -6,6 +6,7 @@ import {
   HiCheck,
   HiChevronLeft,
   HiChevronRight,
+  HiClock,
   HiOutlineChatBubbleLeft,
   HiOutlineExclamationCircle,
   HiOutlinePencilSquare,
@@ -32,7 +33,8 @@ import type {
 } from '../../../shared/types'
 import { parseIpcResult } from '../utils/serialization'
 import MarkdownRenderer from '../components/MarkdownRenderer'
-import SettingsMenuButton from '../components/settings/SettingsMenuButton'
+import { useNavigate } from 'react-router-dom'
+import { HiOutlineCog6Tooth } from 'react-icons/hi2'
 import AssistantTurnCard from '../components/workbench/AssistantTurnCard'
 import WorkbenchComposer from '../components/workbench/WorkbenchComposer'
 import WorkbenchContentPanel from '../components/workbench/WorkbenchContentPanel'
@@ -62,7 +64,7 @@ import {
   dedupeFileRefs,
   extractReadableFilesFromToolOutput,
   extractSearchResultsFromToolOutput,
-  formatSessionDate,
+  formatRelativeTime,
   getSearchResultFileRef,
   readWorkbenchModePreference,
   reduceAssistantProcessGroups,
@@ -265,6 +267,7 @@ const delay = (ms: number): Promise<void> =>
 
 const ChatPage: React.FC = () => {
   const { message } = App.useApp()
+  const navigate = useNavigate()
   const [sessions, setSessions] = useState<ChatSession[]>([])
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
   const [currentMessages, setCurrentMessages] = useState<ChatMessage[]>([])
@@ -1841,7 +1844,7 @@ const ChatPage: React.FC = () => {
     >
       <aside
         className={`nc-sidebar transition-all duration-200 ${
-          sidebarCollapsed ? 'w-14' : 'w-[220px]'
+          sidebarCollapsed ? 'w-14' : 'w-[240px]'
         }`}
       >
         <div className="nc-sidebar-header">
@@ -1919,13 +1922,13 @@ const ChatPage: React.FC = () => {
                   <HiOutlineChatBubbleLeft className="h-4 w-4 text-[#787774]" />
                 </div>
               ) : (
-                <div className="flex min-w-0 items-center gap-2 pr-6">
-                  <HiOutlineChatBubbleLeft className="h-4 w-4 shrink-0 text-[#787774]" />
+                <div className="flex min-w-0 items-center gap-2">
                   <div className="min-w-0 flex-1 truncate text-[13px] font-medium text-[#37352F]">
                     {session.title}
                   </div>
-                  <div className="shrink-0 text-[11px] text-[#9B9A97] group-hover:opacity-0">
-                    {formatSessionDate(session.created_at)}
+                  <div className="flex shrink-0 items-center gap-1 text-[11px] text-[#9B9A97] group-hover:hidden">
+                    <HiClock className="h-3 w-3" />
+                    <span>{formatRelativeTime(session.created_at)}</span>
                   </div>
                   <Button
                     type="text"
@@ -1941,13 +1944,15 @@ const ChatPage: React.FC = () => {
         </div>
 
         <div className="px-2 py-2">
-          <SettingsMenuButton
-            label={sidebarCollapsed ? undefined : '设置'}
-            placement={sidebarCollapsed ? 'topRight' : 'topLeft'}
-            className={`!h-7 !rounded-[6px] ${
+          <Button
+            icon={<HiOutlineCog6Tooth className="h-3.5 w-3.5" />}
+            onClick={() => navigate('/settings/model')}
+            className={`!h-7 !rounded-[6px] !border-[#EEEEEC] !bg-white !text-[#787774] !shadow-none hover:!border-[#37352F] hover:!text-[#37352F] ${
               sidebarCollapsed ? '!w-7 !px-0' : '!w-full !justify-start !px-2.5'
             }`}
-          />
+          >
+            {sidebarCollapsed ? undefined : '设置'}
+          </Button>
         </div>
       </aside>
 

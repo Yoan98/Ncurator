@@ -955,6 +955,21 @@ export const formatSessionDate = (timestamp: number): string => {
   return date.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' })
 }
 
+export const formatRelativeTime = (timestamp: number): string => {
+  const now = Date.now()
+  const diff = now - timestamp
+  const hours = Math.floor(diff / (1000 * 60 * 60))
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24))
+
+  if (hours < 1) {
+    return '刚刚'
+  }
+  if (hours < 24) {
+    return `${hours}小时`
+  }
+  return `${days}天`
+}
+
 export const readWorkbenchModePreference = (storage: WorkbenchPreferenceStorage): WorkbenchMode => {
   const stored = storage.getItem(WORKBENCH_PREFERENCE_MODE_STORAGE_KEY)
   return isWorkbenchMode(stored) ? stored : 'ai'

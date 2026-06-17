@@ -1,5 +1,5 @@
 ﻿import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Empty, Select, Spin, Tooltip } from 'antd'
+import { Empty, Select, Spin } from 'antd'
 import {
   HiArrowUp,
   HiChevronDown,
@@ -786,7 +786,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
           </div>
         </div>
 
-        <div className="mx-[-4px] mt-2 flex items-center justify-between gap-3 border-t border-[#EEEEEC] px-1 pt-2">
+        <div className="mx-[-4px] mt-2 flex items-center justify-between gap-3 px-1 pt-2">
           <div className="flex min-w-0 items-center gap-1 text-[#787774]">
             <Select
               value={mode}
@@ -820,6 +820,62 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
               className="workbench-composer-select min-w-[72px]"
               data-testid={workbenchSelectors.modeSwitch}
             />
+
+            <Select
+              value={selectedWorkspace?.id}
+              onChange={(nextValue) => {
+                onWorkspaceChange(nextValue ? String(nextValue) : null)
+                focusEditorAfterControlChange()
+              }}
+              variant="borderless"
+              suffixIcon={<HiChevronDown className="h-3.5 w-3.5 text-[#9B9A97]" />}
+              optionLabelProp="label"
+              popupClassName="workbench-composer-select-dropdown"
+              className="workbench-composer-select min-w-[132px]"
+              options={workspaces.map((workspace) => ({
+                value: workspace.id,
+                label: (
+                  <span className="flex min-w-0 items-center gap-1.5 text-[12px]">
+                    <HiFolder className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">{workspace.name}</span>
+                  </span>
+                ),
+                title: workspace.root_path || '未设置文件目录'
+              }))}
+              placeholder="工作区"
+              data-testid={workbenchSelectors.workspaceSelect}
+            />
+          </div>
+
+          <div className="flex items-center gap-2">
+            {mode === 'ai' && contextUsage ? (
+              <div
+                className="relative inline-flex h-5 w-5 shrink-0 items-center justify-center"
+                aria-label={contextUsageTitle}
+              >
+                <svg className="h-5 w-5 -rotate-90" viewBox="0 0 20 20">
+                  <circle
+                    cx="10"
+                    cy="10"
+                    r="8"
+                    fill="none"
+                    stroke="#EFEFED"
+                    strokeWidth="2"
+                  />
+                  <circle
+                    cx="10"
+                    cy="10"
+                    r="8"
+                    fill="none"
+                    stroke="#37352F"
+                    strokeWidth="2"
+                    strokeDasharray={`${2 * Math.PI * 8}`}
+                    strokeDashoffset={`${2 * Math.PI * 8 * (1 - contextUsagePercent / 100)}`}
+                    strokeLinecap="round"
+                  />
+                </svg>
+              </div>
+            ) : null}
 
             <Select
               value={selectedModelName || undefined}
@@ -860,55 +916,11 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
               data-testid={workbenchSelectors.modelSelect}
             />
 
-            <Select
-              value={selectedWorkspace?.id}
-              onChange={(nextValue) => {
-                onWorkspaceChange(nextValue ? String(nextValue) : null)
-                focusEditorAfterControlChange()
-              }}
-              variant="borderless"
-              suffixIcon={<HiChevronDown className="h-3.5 w-3.5 text-[#9B9A97]" />}
-              optionLabelProp="label"
-              popupClassName="workbench-composer-select-dropdown"
-              className="workbench-composer-select min-w-[132px]"
-              options={workspaces.map((workspace) => ({
-                value: workspace.id,
-                label: (
-                  <span className="flex min-w-0 items-center gap-1.5 text-[12px]">
-                    <HiFolder className="h-3.5 w-3.5 shrink-0" />
-                    <span className="truncate">{workspace.name}</span>
-                  </span>
-                ),
-                title: workspace.root_path || '未设置文件目录'
-              }))}
-              placeholder="工作区"
-              data-testid={workbenchSelectors.workspaceSelect}
-            />
-          </div>
-
-          <div className="flex items-center gap-2">
-            {mode === 'ai' ? (
-              <Tooltip title={contextUsageTitle}>
-                <div
-                  className="relative inline-flex h-7 w-7 items-center justify-center rounded-[6px] text-[9px] font-medium text-[#787774]"
-                  aria-label={contextUsageTitle}
-                >
-                  <div
-                    className="absolute inset-0 rounded-[6px]"
-                    style={{
-                      background: `conic-gradient(#37352F ${contextUsagePercent}%, #EFEFED ${contextUsagePercent}% 100%)`
-                    }}
-                  />
-                  <div className="absolute inset-[3px] rounded-[4px] bg-white" />
-                  <span className="relative">{contextUsagePercent}%</span>
-                </div>
-              </Tooltip>
-            ) : null}
             <button
               type="button"
               onClick={showCancel ? onCancel : onSubmit}
               disabled={showCancel ? cancelling : loading || !canSubmit}
-              className={`inline-flex h-8 w-8 items-center justify-center rounded-[6px] text-white transition ${
+              className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white transition ${
                 showCancel
                   ? cancelling
                     ? 'bg-[#E0DFDC]'
