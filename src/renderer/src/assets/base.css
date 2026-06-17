@@ -420,6 +420,7 @@ textarea,
 
 .nc-sidebar-resizer::before {
   content: '';
+  display: none;
   position: absolute;
   top: 0;
   left: 3px;
@@ -433,8 +434,8 @@ textarea,
 
 .nc-sidebar-resizer:hover::before,
 .workbench-sidebar-resizing .nc-sidebar-resizer::before {
-  width: 2px;
-  background: #d9d7d1;
+  width: 0;
+  background: transparent;
 }
 
 .workbench-sidebar-resizing {
@@ -626,7 +627,7 @@ textarea,
 }
 
 .workbench-composer-pill {
-  @apply min-w-0 text-[#787774];
+  @apply min-w-max text-[#787774];
   background: transparent;
 }
 
@@ -636,6 +637,15 @@ textarea,
 
 .workbench-composer-mode-pill {
   margin-left: -10px;
+}
+
+.workbench-composer-model-select {
+  width: 70px;
+}
+
+.workbench-composer-model-pill {
+  @apply min-w-0;
+  width: 100%;
 }
 
 .workbench-composer-pill.workbench-select-trigger-open {

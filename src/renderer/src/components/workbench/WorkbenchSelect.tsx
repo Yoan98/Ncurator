@@ -163,6 +163,7 @@ const WorkbenchSelect: React.FC<WorkbenchSelectProps> = ({
         ref={triggerRef}
         type="button"
         disabled={disabled}
+        title={triggerLabel}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={listboxId}
@@ -180,7 +181,7 @@ const WorkbenchSelect: React.FC<WorkbenchSelectProps> = ({
           setOpen((current) => !current)
         }}
       >
-        <span className="flex min-w-0 items-center gap-2">
+        <span className="flex min-w-0 flex-1 items-center gap-2">
           {triggerIconNode ? (
             <span className="flex h-4 w-4 shrink-0 items-center justify-center">
               {triggerIconNode}

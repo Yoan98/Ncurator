@@ -836,7 +836,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
         </div>
 
         <div className="mx-[-4px] mt-1.5 flex items-center justify-between gap-2 px-1">
-          <div className="flex min-w-0 items-center gap-1.5 text-[#91918E]">
+          <div className="flex shrink-0 items-center gap-1.5 text-[#91918E]">
             <WorkbenchSelect
               value={mode}
               options={modeOptions}
@@ -854,29 +854,27 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
 
           </div>
 
-          <div className="flex items-center gap-2">
-            {mode === 'ai' ? (
-              <div
-                className="workbench-context-ring relative inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full"
-                aria-label={contextUsageTitle}
-                title={contextUsageTitle}
-              >
-                <svg className="h-4 w-4 -rotate-90" viewBox="0 0 16 16">
-                  <circle cx="8" cy="8" r="6.5" fill="none" stroke="#EEEEEC" strokeWidth="1.5" />
-                  <circle
-                    cx="8"
-                    cy="8"
-                    r="6.5"
-                    fill="none"
-                    stroke="#91918E"
-                    strokeWidth="1.5"
-                    strokeDasharray={`${2 * Math.PI * 6.5}`}
-                    strokeDashoffset={`${2 * Math.PI * 6.5 * (1 - contextUsagePercent / 100)}`}
-                    strokeLinecap="round"
-                  />
-                </svg>
-              </div>
-            ) : null}
+          <div className="flex min-w-0 items-center gap-2">
+            <div
+              className="workbench-context-ring relative inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full"
+              aria-label={contextUsageTitle}
+              title={contextUsageTitle}
+            >
+              <svg className="h-4 w-4 -rotate-90" viewBox="0 0 16 16">
+                <circle cx="8" cy="8" r="6.5" fill="none" stroke="#EEEEEC" strokeWidth="1.5" />
+                <circle
+                  cx="8"
+                  cy="8"
+                  r="6.5"
+                  fill="none"
+                  stroke="#91918E"
+                  strokeWidth="1.5"
+                  strokeDasharray={`${2 * Math.PI * 6.5}`}
+                  strokeDashoffset={`${2 * Math.PI * 6.5 * (1 - contextUsagePercent / 100)}`}
+                  strokeLinecap="round"
+                />
+              </svg>
+            </div>
 
             <WorkbenchSelect
               value={selectedModelName}
@@ -891,8 +889,8 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
               searchable
               searchPlaceholder="搜索模型"
               noDrag
-              className="max-w-[168px]"
-              triggerClassName="workbench-composer-pill"
+              className="workbench-composer-model-select"
+              triggerClassName="workbench-composer-pill workbench-composer-model-pill"
               menuClassName="workbench-composer-menu"
               selectedWithoutBackground
               data-testid={workbenchSelectors.modelSelect}

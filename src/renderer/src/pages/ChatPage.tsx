@@ -84,7 +84,6 @@ import {
   mergeApplyTargets
 } from '../components/workbench/applyTargetUtils'
 import { chatSelectors, workbenchSelectors } from '../testing/selectors'
-import brandIcon from '../../../../resources/icon.png'
 import WindowsTitleBar from '../components/WindowsTitleBar'
 import SidebarPanelIcon from '../components/SidebarPanelIcon'
 import {
@@ -307,7 +306,6 @@ const ChatPage: React.FC = () => {
     const stored = window.localStorage.getItem(WORKBENCH_SIDEBAR_WIDTH_STORAGE_KEY)
     return clampWorkbenchSidebarWidth(stored ? Number(stored) : WORKBENCH_SIDEBAR_DEFAULT_WIDTH)
   })
-  const [sidebarResizeGuideX, setSidebarResizeGuideX] = useState<number | null>(null)
   const [contentPanelCollapsed, setContentPanelCollapsed] = useState<boolean>(() => {
     const stored = window.localStorage.getItem(WORKBENCH_CONTENT_PANEL_COLLAPSED_STORAGE_KEY)
     return stored === null ? true : stored === 'true'
@@ -958,7 +956,6 @@ const ChatPage: React.FC = () => {
       }
       sidebarResizeFrameRef.current = window.requestAnimationFrame(() => {
         setSidebarWidth(nextWidth)
-        setSidebarResizeGuideX(nextWidth)
         sidebarResizeFrameRef.current = null
       })
     }
@@ -971,7 +968,6 @@ const ChatPage: React.FC = () => {
         sidebarResizeFrameRef.current = null
       }
       sidebarDragStartRef.current = null
-      setSidebarResizeGuideX(null)
       document.body.classList.remove('workbench-sidebar-resizing')
     }
 
@@ -1987,7 +1983,7 @@ const ChatPage: React.FC = () => {
         className={`nc-sidebar-titlebar-toggle workbench-no-drag ${
           sidebarCollapsed ? 'nc-sidebar-titlebar-toggle-hidden' : ''
         }`}
-        style={{ left: sidebarCollapsed ? 104 : Math.max(104, sidebarWidth - 48) }}
+        style={{ left: sidebarCollapsed ? 104 : WORKBENCH_SIDEBAR_DEFAULT_WIDTH - 48 }}
         onClick={() => setSidebarCollapsed((previous) => !previous)}
         data-testid={workbenchSelectors.sessionsToggle}
         aria-label={sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'}
@@ -2107,14 +2103,10 @@ const ChatPage: React.FC = () => {
               startX: event.clientX,
               startWidth: sidebarWidth
             }
-            setSidebarResizeGuideX(sidebarWidth)
             document.body.classList.add('workbench-sidebar-resizing')
           }}
         />
       </aside>
-      {sidebarResizeGuideX !== null ? (
-        <div className="nc-sidebar-resize-guide" style={{ left: sidebarResizeGuideX }} />
-      ) : null}
 
       <div className="nc-main-pane min-w-0 flex-1">
         <div className="flex h-full min-h-0 flex-col">
@@ -2201,9 +2193,8 @@ const ChatPage: React.FC = () => {
                 >
                   <div className="mx-auto w-full max-w-[760px]">
                     {isNewSession ? (
-                      <div className="mb-8 flex items-center justify-center gap-1.5 text-center text-[28px] font-normal tracking-[-0.02em] text-[#37352F]">
+                      <div className="mb-8 flex items-center justify-center text-center text-[28px] font-normal tracking-[-0.02em] text-[#37352F]">
                         <span>{composerMode === 'search' ? '俺只会搜索本地资料！！' : '找俺干啥？'}</span>
-                        <img src={brandIcon} alt="馆长" className="h-10 w-10 shrink-0" />
                       </div>
                     ) : null}
                     {composerMode === 'ai' && pendingApprovalBatch ? (

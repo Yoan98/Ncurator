@@ -9,6 +9,12 @@ import { SETTINGS_SECTION_META, SETTINGS_SECTION_ORDER } from '../components/set
 import type { SettingsSectionValue } from '../components/settings/types'
 import { settingsSelectors } from '../testing/selectors'
 import WindowsTitleBar from '../components/WindowsTitleBar'
+import {
+  WORKBENCH_SIDEBAR_DEFAULT_WIDTH,
+  WORKBENCH_SIDEBAR_MAX_WIDTH,
+  WORKBENCH_SIDEBAR_MIN_WIDTH,
+  WORKBENCH_SIDEBAR_WIDTH_STORAGE_KEY
+} from '../components/workbench/constants'
 
 const normalizeSettingsSection = (value: string | undefined): SettingsSectionValue | null => {
   if (!value) return null
@@ -27,11 +33,20 @@ const getLegacySection = (search: string): SettingsSectionValue => {
   return 'model'
 }
 
+const clampSettingsSidebarWidth = (width: number): number =>
+  Math.min(WORKBENCH_SIDEBAR_MAX_WIDTH, Math.max(WORKBENCH_SIDEBAR_MIN_WIDTH, width))
+
 const SettingsPage: React.FC = () => {
   const location = useLocation()
   const params = useParams<{ section?: string }>()
   const currentSection = normalizeSettingsSection(params.section)
   const [platform, setPlatform] = useState<string>('darwin')
+  const [sidebarWidth] = useState<number>(() => {
+    const stored = window.localStorage.getItem(WORKBENCH_SIDEBAR_WIDTH_STORAGE_KEY)
+    return clampSettingsSidebarWidth(
+      stored ? Number(stored) : WORKBENCH_SIDEBAR_DEFAULT_WIDTH
+    )
+  })
   const sectionMeta = useMemo(
     () => (currentSection ? SETTINGS_SECTION_META[currentSection] : null),
     [currentSection]
@@ -58,6 +73,7 @@ const SettingsPage: React.FC = () => {
 
       <aside
         className={`nc-sidebar nc-settings-sidebar ${platform === 'darwin' ? 'nc-sidebar-mac' : ''}`}
+        style={{ width: sidebarWidth, minWidth: sidebarWidth, flexBasis: sidebarWidth }}
       >
         <div
           className={`nc-sidebar-window-spacer ${platform === 'darwin' ? 'nc-sidebar-window-spacer-mac' : ''}`}
