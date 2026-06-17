@@ -773,7 +773,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
               scheduleDraftSyncFromEditor()
               scheduleMentionRefresh()
             }}
-          />
+          ></span>
 
           <div
             className={`pointer-events-none absolute inset-x-0 top-0 text-[15px] leading-6 text-[#91918E] ${

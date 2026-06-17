@@ -377,25 +377,6 @@ const ChatPage: React.FC = () => {
     [selectedWorkspace]
   )
 
-  useEffect(() => {
-    if (!selectedWorkspaceReady && selectedWorkspace) {
-      message.warning({
-        content: (
-          <span>
-            当前工作区未设置文件目录，
-            <a
-              onClick={() => navigate('/settings/workspace')}
-              style={{ color: '#0B6BCB', textDecoration: 'underline', cursor: 'pointer' }}
-            >
-              点击前往设置
-            </a>
-          </span>
-        ),
-        duration: 5
-      })
-    }
-  }, [selectedWorkspaceReady, selectedWorkspace, navigate, message])
-
   const approvalSubmitDisabled = useMemo(() => {
     if (!currentApprovalItem || approvalSubmitting) return true
     return (approvalDraftDecisions[currentApprovalItem.itemId]?.message || '').trim().length === 0
