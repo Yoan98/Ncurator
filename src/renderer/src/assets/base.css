@@ -238,7 +238,7 @@ textarea,
 }
 
 .nc-sidebar-header {
-  @apply border-b border-[#EEEEEC] px-2 py-2;
+  @apply px-2 py-2;
 }
 
 .nc-sidebar-item {
@@ -294,8 +294,16 @@ textarea,
   @apply min-h-0 overflow-auto border-y border-[#EEEEEC] bg-white;
 }
 
+.nc-list-shell-borderless {
+  @apply min-h-0 overflow-auto bg-white;
+}
+
 .nc-list-row {
   @apply border-b border-[#EEEEEC] transition-colors last:border-b-0 hover:bg-[#F7F7F5];
+}
+
+.nc-settings-side-section {
+  @apply bg-white;
 }
 
 .nc-notice {
@@ -335,8 +343,8 @@ textarea,
 }
 
 .nc-floating-composer {
-  @apply mx-auto w-full max-w-[760px] overflow-visible rounded-[12px] border border-[#E0DFDC] bg-white;
-  box-shadow: var(--shadow-md);
+  @apply mx-auto w-full max-w-[760px] overflow-visible rounded-[14px] border border-[#E0DFDC] bg-white;
+  box-shadow: 0 10px 28px rgba(15, 15, 15, 0.08);
 }
 
 .nc-floating-composer:focus-within {

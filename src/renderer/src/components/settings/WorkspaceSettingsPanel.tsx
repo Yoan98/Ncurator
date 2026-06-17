@@ -8,14 +8,14 @@ import type {
 } from '../../../../shared/types'
 import {
   HiArrowPath,
+  HiCircleStack,
   HiDocumentText,
   HiGlobeAlt,
   HiOutlineArrowsPointingIn,
   HiOutlineArrowsPointingOut,
   HiOutlineFolderPlus,
   HiOutlineQuestionMarkCircle,
-  HiOutlineTrash,
-  HiSparkles
+  HiOutlineTrash
 } from 'react-icons/hi2'
 import { importSelectors, settingsSelectors } from '../../testing/selectors'
 import WebSourcesSettingsPanel from './WebSourcesSettingsPanel'
@@ -323,13 +323,8 @@ const WorkspaceSettingsPanel: React.FC = () => {
       className="flex h-full min-h-0 flex-col gap-4 overflow-hidden"
       data-testid={settingsSelectors.workspacePanel}
     >
-      <section className="shrink-0 border-b border-[#EEEEEC] px-1 pb-4 pt-1">
+      <section className="shrink-0 px-1 pb-4 pt-1">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="min-w-0">
-            <h2 className="text-[16px] font-semibold tracking-tight text-[#37352F]">工作空间</h2>
-            <div className="text-[12px] text-[#787774]">共 {workspaces.length} 个</div>
-          </div>
-
           <div className="flex flex-wrap items-center gap-2">
             <Button
               icon={<HiArrowPath className="h-4 w-4" />}
@@ -363,11 +358,14 @@ const WorkspaceSettingsPanel: React.FC = () => {
 
       <div className="nc-page-split">
         <section
-          className="flex min-h-0 flex-col overflow-hidden border-r border-[#EEEEEC] bg-[#F7F7F5]"
+          className="flex min-h-0 flex-col overflow-hidden border-r border-[#EEEEEC] bg-white"
           data-testid={importSelectors.page}
         >
-          <div className="border-b border-[#EEEEEC] px-4 py-4">
-            <div className="text-[15px] font-semibold text-[#37352F]">工作空间</div>
+          <div className="px-4 py-4">
+            <div className="flex items-center gap-2">
+              <div className="text-[15px] font-semibold text-[#37352F]">工作空间</div>
+              <div className="text-[12px] text-[#787774]">共 {workspaces.length} 个</div>
+            </div>
           </div>
 
           {workspaces.length === 0 ? (
@@ -430,63 +428,53 @@ const WorkspaceSettingsPanel: React.FC = () => {
         >
           {selectedWorkspace ? (
             <>
-              <div className="border-b border-[#EEEEEC] px-5 py-5">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="text-[16px] font-semibold text-[#37352F]">
-                        {selectedWorkspace.name}
-                      </h3>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      danger
-                      icon={<HiOutlineTrash className="h-4 w-4" />}
-                      onClick={() => setDeleteWorkspaceId(selectedWorkspace.id)}
-                      data-testid={importSelectors.workspaceRemoveButton}
-                    >
-                      移除
-                    </Button>
-                  </div>
-                </div>
-              </div>
-
               <div className="min-h-0 flex flex-1 flex-col overflow-hidden px-5 py-5 pr-4">
                 <Tabs
                   className="flex h-full min-h-0 flex-col [&_.ant-tabs-content]:h-full [&_.ant-tabs-content-holder]:min-h-0 [&_.ant-tabs-content-holder]:flex-1 [&_.ant-tabs-nav]:mb-4 [&_.ant-tabs-tabpane]:h-full [&_.ant-tabs-tabpane]:overflow-hidden"
                   activeKey={selectedTabKey}
                   onChange={(key) => setSelectedTabKey(key as 'files' | 'web')}
+                  tabBarExtraContent={{
+                    right: (
+                      <Button
+                        danger
+                        size="small"
+                        icon={<HiOutlineTrash className="h-4 w-4" />}
+                        onClick={() => setDeleteWorkspaceId(selectedWorkspace.id)}
+                        data-testid={importSelectors.workspaceRemoveButton}
+                      >
+                        移除
+                      </Button>
+                    )
+                  }}
                   items={[
                     {
                       key: 'files',
                       label: `文件 ${selectedWorkspace.file_count}`,
                       children: (
                         <div className="flex h-full min-h-0 flex-col gap-4">
-                          <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[minmax(0,320px)_minmax(0,1fr)]">
+                          <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[260px_minmax(0,1fr)]">
                             <div className="space-y-4">
-                              <section className="ui-panel-soft p-4">
+                              <section className="nc-settings-side-section">
                                 <div className="text-[14px] font-semibold text-[#37352F]">
                                   文件目录
                                 </div>
-                                <div className="mt-2 break-all text-[12px] leading-5 text-[#787774]">
-                                  {selectedWorkspace.root_path || '未设置工作文件地址'}
-                                </div>
                                 {!selectedWorkspace.root_path ? (
-                                  <div className="mt-2 text-[11px] leading-5 text-[#9B9A97]">
+                                  <div className="mt-2 text-[12px] leading-5 text-[#787774]">
                                     设置后才能在 Workbench 中发送任务。
                                   </div>
                                 ) : null}
                                 <Button
-                                  className="mt-4 w-full border-[#EEEEEC] bg-white text-[#37352F]"
+                                  type="primary"
+                                  className="mt-4 w-full"
                                   onClick={() => void handleSetWorkspaceRootPath(selectedWorkspace)}
                                 >
-                                  设置工作文件地址
+                                  {selectedWorkspace.root_path
+                                    ? '更换工作文件地址'
+                                    : '设置工作文件地址'}
                                 </Button>
                               </section>
 
-                              <section className="ui-panel-soft p-4">
+                              <section className="nc-settings-side-section">
                                 <div className="flex items-center gap-1.5">
                                   <div className="text-[14px] font-semibold text-[#37352F]">
                                     索引状态
@@ -535,7 +523,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
                                   <Tooltip title="检查目录变化并更新可索引文件。">
                                     <Button
                                       type="primary"
-                                      icon={<HiSparkles className="h-4 w-4" />}
+                                      icon={<HiCircleStack className="h-4 w-4" />}
                                       onClick={() => void handleWorkspacePrepare(selectedWorkspace)}
                                       disabled={Boolean(selectedWorkspaceIndexJob)}
                                       loading={selectedWorkspaceIndexJob?.action === 'prepare'}
@@ -596,7 +584,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
                               </div>
 
                               <div
-                                className="flex min-h-0 flex-1 overflow-auto border-y border-[#EEEEEC] bg-white px-1 py-3"
+                                className="nc-list-shell-borderless flex min-h-0 flex-1 overflow-auto px-1 py-3"
                                 data-testid={importSelectors.workspaceTree}
                               >
                                 {selectedWorkspaceEntries.length > 0 ? (

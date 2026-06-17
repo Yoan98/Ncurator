@@ -11,6 +11,7 @@ type AppPageHeaderProps = {
   actions?: React.ReactNode
   navigationMode?: 'brand' | 'back'
   backTo?: string
+  bordered?: boolean
 }
 
 const AppPageHeader: React.FC<AppPageHeaderProps> = ({
@@ -19,13 +20,17 @@ const AppPageHeader: React.FC<AppPageHeaderProps> = ({
   description,
   actions,
   navigationMode = 'brand',
-  backTo
+  backTo,
+  bordered = true
 }) => {
   const navigate = useNavigate()
+  const borderClassName = bordered ? 'border-b border-[#EEEEEC]' : ''
 
   if (navigationMode === 'back') {
     return (
-      <header className="flex min-h-[46px] flex-col gap-3 border-b border-[#EEEEEC] pb-3 md:flex-row md:items-center md:justify-between">
+      <header
+        className={`flex min-h-[46px] flex-col gap-3 pb-3 md:flex-row md:items-center md:justify-between ${borderClassName}`}
+      >
         <div className="flex min-w-0 items-center gap-3">
           <Button
             type="text"
@@ -50,7 +55,9 @@ const AppPageHeader: React.FC<AppPageHeaderProps> = ({
   }
 
   return (
-    <header className="flex flex-col gap-4 border-b border-[#EEEEEC] pb-4 md:flex-row md:items-start md:justify-between">
+    <header
+      className={`flex flex-col gap-4 pb-4 md:flex-row md:items-start md:justify-between ${borderClassName}`}
+    >
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-3">
           <Button

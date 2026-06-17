@@ -311,45 +311,35 @@ const ModelSettingsPanel: React.FC = () => {
       className="flex h-full min-h-0 flex-col gap-4 overflow-hidden"
       data-testid={settingsSelectors.modelPanel}
     >
-      <section className="shrink-0 border-b border-[#EEEEEC] px-1 pb-4 pt-1">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="min-w-0">
-            <h2 className="text-[16px] font-semibold tracking-tight text-[#37352F]">大模型</h2>
-            {activeConfig ? (
-              <div className="truncate text-[12px] text-[#787774]">
-                {getProviderLabel(activeConfig)}
-                {activeConfig.default_model ? ` · ${activeConfig.default_model}` : ''}
-              </div>
-            ) : null}
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Tag className="!m-0 rounded-full border-[#EEEEEC] bg-white px-3 py-1 text-[12px] text-[#787774]">
-              共 {configs.length} 个配置
-            </Tag>
-            {activeConfig ? (
-              <Tag
-                className="!m-0 rounded-full border-[#EEEEEC] bg-[#F4F4F2] px-3 py-1 text-[12px] text-[#37352F]"
-                data-testid={settingsSelectors.modelSummaryCurrent}
-              >
-                当前 {getProviderLabel(activeConfig)}
-              </Tag>
-            ) : null}
-            <Button
-              type="primary"
-              icon={<HiPlus className="h-4 w-4" />}
-              onClick={handleAdd}
-              className="border-none !bg-[#37352F] shadow-none hover:!bg-[#2F3437]"
-              data-testid={settingsSelectors.modelAddButton}
+      <section className="shrink-0 px-1 pt-1">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {activeConfig ? (
+            <Tag
+              className="!m-0 rounded-full border-[#EEEEEC] bg-[#F4F4F2] px-3 py-1 text-[12px] text-[#37352F]"
+              data-testid={settingsSelectors.modelSummaryCurrent}
             >
-              新增配置
-            </Button>
-          </div>
+              当前 {getProviderLabel(activeConfig)}
+              {activeConfig.default_model ? ` · ${activeConfig.default_model}` : ''}
+            </Tag>
+          ) : null}
+          <Tag className="!m-0 rounded-full border-[#EEEEEC] bg-white px-3 py-1 text-[12px] text-[#787774]">
+            共 {configs.length} 个配置
+          </Tag>
+          <Button
+            type="primary"
+            icon={<HiPlus className="h-4 w-4" />}
+            onClick={handleAdd}
+            className="border-none !bg-[#37352F] shadow-none hover:!bg-[#2F3437]"
+            data-testid={settingsSelectors.modelAddButton}
+          >
+            新增配置
+          </Button>
         </div>
       </section>
 
       {actionError ? <div className="nc-notice nc-notice-danger">{actionError}</div> : null}
 
-      <section className="nc-list-shell flex-1">
+      <section className="min-h-0 flex-1">
         <div className="h-full overflow-auto pr-1">
           <Table
             dataSource={configs}

@@ -8,10 +8,10 @@ import type {
 import {
   HiArrowTopRightOnSquare,
   HiArrowPath,
+  HiCircleStack,
   HiGlobeAlt,
   HiOutlineQuestionMarkCircle,
-  HiOutlineTrash,
-  HiSparkles
+  HiOutlineTrash
 } from 'react-icons/hi2'
 import { importSelectors } from '../../testing/selectors'
 import StatusTag from './StatusTag'
@@ -192,7 +192,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({ works
       data-testid={importSelectors.webSourceSection}
     >
       <div className="space-y-4">
-        <section className="border-b border-[#EEEEEC] bg-white pb-4">
+        <section className="nc-settings-side-section pb-4">
           <div className="text-[14px] font-semibold text-[#37352F]">网页来源</div>
           <Button
             type="primary"
@@ -208,7 +208,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({ works
           </Button>
         </section>
 
-        <section className="border-b border-[#EEEEEC] bg-white pb-4">
+        <section className="nc-settings-side-section pb-4">
           <div className="flex items-center gap-1.5">
             <div className="text-[14px] font-semibold text-[#37352F]">索引状态</div>
             <Tooltip title="网页索引会先爬取正文，再写入本地检索库。">
@@ -251,7 +251,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({ works
             </Button>
             <Button
               type="primary"
-              icon={<HiSparkles className="h-4 w-4" />}
+              icon={<HiCircleStack className="h-4 w-4" />}
               onClick={() => void handlePrepareWebSources()}
               disabled={Boolean(webIndexJob)}
               loading={webIndexJob?.action === 'prepare'}
@@ -269,7 +269,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({ works
       <section className="flex min-h-0 min-w-0 flex-col">
         <div className="mb-3 text-[14px] font-semibold text-[#37352F]">网页列表</div>
         <div
-          className="nc-list-shell flex min-h-0 flex-1"
+          className="nc-list-shell-borderless flex min-h-0 flex-1"
           data-testid={importSelectors.webSourceList}
         >
           {webSources.length === 0 ? (

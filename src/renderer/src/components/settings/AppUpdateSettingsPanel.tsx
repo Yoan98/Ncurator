@@ -107,16 +107,34 @@ const AppUpdateSettingsPanel: React.FC = () => {
   return (
     <div className="h-full overflow-auto bg-white px-1 py-1">
       <div className="flex flex-col gap-5">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h2 className="m-0 text-[18px] font-semibold text-[#37352F]">应用更新</h2>
-            <div className="mt-1 text-[13px] text-[#787774]">
-              当前版本 {snapshot?.currentVersion || '-'}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <div className="text-[13px] text-[#787774]">
+              当前版本 <span className="font-medium text-[#37352F]">{snapshot?.currentVersion || '-'}</span>
             </div>
+            <Tag className={`m-0 rounded-full border bg-white px-3 py-1 ${statusMeta.className}`}>
+              {statusMeta.label}
+            </Tag>
           </div>
-          <Tag className={`m-0 rounded-full border bg-white px-3 py-1 ${statusMeta.className}`}>
-            {statusMeta.label}
-          </Tag>
+          <Space wrap>
+            <Button
+              icon={<HiArrowPath />}
+              loading={checking || snapshot?.status === 'checking'}
+              disabled={checkDisabled}
+              onClick={handleCheck}
+            >
+              检查更新
+            </Button>
+            <Button
+              type="primary"
+              icon={<HiRocketLaunch />}
+              loading={installing}
+              disabled={installDisabled}
+              onClick={handleInstall}
+            >
+              重启安装
+            </Button>
+          </Space>
         </div>
 
         <Alert
@@ -164,26 +182,6 @@ const AppUpdateSettingsPanel: React.FC = () => {
             </div>
           </div>
         ) : null}
-
-        <Space wrap>
-          <Button
-            icon={<HiArrowPath />}
-            loading={checking || snapshot?.status === 'checking'}
-            disabled={checkDisabled}
-            onClick={handleCheck}
-          >
-            检查更新
-          </Button>
-          <Button
-            type="primary"
-            icon={<HiRocketLaunch />}
-            loading={installing}
-            disabled={installDisabled}
-            onClick={handleInstall}
-          >
-            重启安装
-          </Button>
-        </Space>
       </div>
     </div>
   )

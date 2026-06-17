@@ -1,11 +1,9 @@
 ﻿import React, { useEffect, useState } from 'react'
-import { Button, List, Popconfirm, Progress, Tag, Typography, message } from 'antd'
-import { HiCheckCircle, HiCloudArrowDown, HiExclamationCircle } from 'react-icons/hi2'
+import { Button, List, Popconfirm, Progress, Tag, message } from 'antd'
+import { HiCheckCircle, HiCloudArrowDown, HiExclamationCircle, HiTrash } from 'react-icons/hi2'
 import AppPageHeader from '../components/app/AppPageHeader'
 import SettingsFloatingMenu from '../components/settings/SettingsFloatingMenu'
 import { vectorSelectors } from '../testing/selectors'
-
-const { Title } = Typography
 
 interface ModelInfo {
   id: string
@@ -213,16 +211,12 @@ const ModelDownloadPage: React.FC = () => {
           description={TEXT.pageDescription}
           navigationMode="back"
           backTo="/"
+          bordered={false}
         />
 
         <div className="nc-page-body">
           <div className="flex h-full min-h-0 flex-col overflow-hidden bg-white">
-            <div className="border-b border-[#EEEEEC] px-1 py-4">
-              <Title level={4} className="!mb-0 !text-[#37352F]">
-                {TEXT.listTitle}
-              </Title>
-            </div>
-            <div className="nc-list-shell flex-1 [&_.ant-list-item]:!border-[#EEEEEC] [&_.ant-list-item]:transition-colors [&_.ant-list-item:hover]:!bg-[#F7F7F5]">
+            <div className="min-h-0 flex-1 overflow-auto [&_.ant-list-item]:!border-[#EEEEEC] [&_.ant-list-item]:transition-colors [&_.ant-list-item:hover]:!bg-[#F7F7F5]">
               {catalogError ? (
                 <div
                   className="nc-notice nc-notice-danger my-3"
@@ -258,11 +252,12 @@ const ModelDownloadPage: React.FC = () => {
                               }}
                             >
                               <Button
+                                type="text"
                                 danger
+                                icon={<HiTrash className="h-4 w-4" />}
+                                aria-label={TEXT.delete}
                                 data-testid={`${vectorSelectors.deleteButtonPrefix}-${item.id}`}
-                              >
-                                {TEXT.delete}
-                              </Button>
+                              />
                             </Popconfirm>,
                             <div
                               key={`installed-${item.id}`}
