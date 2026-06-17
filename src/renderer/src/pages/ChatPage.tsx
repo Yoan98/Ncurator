@@ -1,13 +1,13 @@
 ﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { App, Button, Modal, Select, Spin } from 'antd'
+import { App, Button, Modal, Spin } from 'antd'
 import {
   HiArrowUp,
   HiCheck,
-  HiChevronDown,
   HiChevronLeft,
   HiChevronRight,
   HiClock,
   HiFolder,
+  HiOutlineBars3CenterLeft,
   HiOutlineChatBubbleLeft,
   HiOutlineExclamationCircle,
   HiOutlinePencilSquare,
@@ -84,6 +84,7 @@ import {
 import { chatSelectors, workbenchSelectors } from '../testing/selectors'
 import brandIcon from '../../../../resources/icon.png'
 import WindowsTitleBar from '../components/WindowsTitleBar'
+import WorkbenchSelect from '../components/workbench/WorkbenchSelect'
 import {
   collectReferenceDocumentIds,
   hasIncompleteLocalKbCoverage,
@@ -372,6 +373,17 @@ const ChatPage: React.FC = () => {
     if (!pendingApprovalBatch) return null
     return pendingApprovalBatch.items[approvalCurrentIndex] || pendingApprovalBatch.items[0] || null
   }, [approvalCurrentIndex, pendingApprovalBatch])
+  const workspaceSelectOptions = useMemo(
+    () =>
+      workspaces.map((workspace) => ({
+        value: workspace.id,
+        label: workspace.name,
+        icon: <HiFolder className="h-3.5 w-3.5" />,
+        description: workspace.root_path || '未设置文件目录',
+        keywords: [workspace.name, workspace.root_path || '']
+      })),
+    [workspaces]
+  )
 
   const selectedWorkspaceReady = useMemo(
     () => hasWorkspaceRootPath(selectedWorkspace),
@@ -1935,7 +1947,7 @@ const ChatPage: React.FC = () => {
             className={`flex items-center ${sidebarCollapsed ? 'justify-center' : 'justify-between'} gap-2`}
           >
             {!sidebarCollapsed ? (
-              <div className="flex min-w-0 items-center gap-2">
+              <div className="nc-brand-strip flex min-w-0 items-center gap-2">
                 <span className="ui-icon-well flex h-7 w-7 shrink-0 bg-white">
                   <img src={brandIcon} alt="馆长" className="w-4 invert-100" />
                 </span>
@@ -1946,16 +1958,12 @@ const ChatPage: React.FC = () => {
             ) : null}
             <button
               type="button"
-              className="nc-sidebar-collapse-btn"
+              className="nc-sidebar-collapse-btn workbench-no-drag"
               onClick={() => setSidebarCollapsed((previous) => !previous)}
               data-testid={workbenchSelectors.sessionsToggle}
               aria-label={sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'}
             >
-              {sidebarCollapsed ? (
-                <HiChevronRight className="h-4 w-4" />
-              ) : (
-                <HiChevronLeft className="h-4 w-4" />
-              )}
+              <HiOutlineBars3CenterLeft className="h-4 w-4" />
             </button>
           </div>
         </div>
@@ -2063,61 +2071,64 @@ const ChatPage: React.FC = () => {
         </div>
       </aside>
 
-      <div className="min-w-0 flex-1">
+      <div className="nc-main-pane min-w-0 flex-1">
         <div className="flex h-screen min-h-0 flex-col">
-          <div className="nc-topbar">
-            <div className="min-w-0 flex-1 bg-white">
-              {currentSession || sharedHeaderMeta ? (
-                <div className="flex min-w-0 items-center gap-2">
-                  <span className="text-[#787774]">馆长</span>
-                  {currentSession || sharedHeaderMeta ? (
-                    <span className="text-[#E0DFDC]">/</span>
-                  ) : null}
-                  {currentSession ? (
-                    <div className="truncate text-sm font-semibold text-[#37352F]">
-                      {currentSession.title}
-                    </div>
-                  ) : null}
-                  {currentSession && sharedHeaderMeta ? (
-                    <span className="text-[#E0DFDC]">/</span>
-                  ) : null}
-                  {sharedHeaderMeta ? (
-                    <div
-                      className="truncate text-sm font-semibold text-[#37352F]"
-                      data-testid={workbenchSelectors.contentPanelTitle}
-                    >
-                      {sharedHeaderMeta.title}
-                    </div>
-                  ) : null}
-                  {sharedHeaderMeta?.badge ? (
-                    <span
-                      className={`rounded-full border px-2.5 py-1 text-[11px] ${sharedHeaderMeta.badgeClassName}`}
-                    >
-                      {sharedHeaderMeta.badge}
-                    </span>
-                  ) : null}
-                </div>
-              ) : null}
-            </div>
+          {!isNewSession ? (
+            <div className="nc-topbar">
+              <div className="min-w-0 flex-1 bg-white">
+                {currentSession || sharedHeaderMeta ? (
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="text-[#787774]">馆长</span>
+                    {currentSession || sharedHeaderMeta ? (
+                      <span className="text-[#E0DFDC]">/</span>
+                    ) : null}
+                    {currentSession ? (
+                      <div className="truncate text-sm font-semibold text-[#37352F]">
+                        {currentSession.title}
+                      </div>
+                    ) : null}
+                    {currentSession && sharedHeaderMeta ? (
+                      <span className="text-[#E0DFDC]">/</span>
+                    ) : null}
+                    {sharedHeaderMeta ? (
+                      <div
+                        className="truncate text-sm font-semibold text-[#37352F]"
+                        data-testid={workbenchSelectors.contentPanelTitle}
+                      >
+                        {sharedHeaderMeta.title}
+                      </div>
+                    ) : null}
+                    {sharedHeaderMeta?.badge ? (
+                      <span
+                        className={`rounded-full border px-2.5 py-1 text-[11px] ${sharedHeaderMeta.badgeClassName}`}
+                      >
+                        {sharedHeaderMeta.badge}
+                      </span>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
 
-            <Button
-              type="text"
-              size="small"
-              icon={
-                contentPanelCollapsed ? (
-                  <HiOutlineRectangleGroup className="h-3 w-3" />
-                ) : (
-                  <HiRectangleGroup className="h-3 w-3" />
-                )
-              }
-              className={`!flex !h-7 !w-7 !items-center !justify-center !rounded-[6px] !border !p-0 !shadow-none hover:!border-[#37352F] hover:!text-[#37352F] ${
-                contentPanelCollapsed
-                  ? '!border-[#EEEEEC] !bg-white !text-[#787774]'
-                  : '!border-[#EEEEEC] !bg-[#F4F4F2] !text-[#37352F]'
-              }`}
-              onClick={() => setContentPanelCollapsed((previous) => !previous)}
-            />
-          </div>
+              <Button
+                type="text"
+                size="small"
+                icon={
+                  contentPanelCollapsed ? (
+                    <HiOutlineRectangleGroup className="h-3 w-3" />
+                  ) : (
+                    <HiRectangleGroup className="h-3 w-3" />
+                  )
+                }
+                className={`!flex !h-7 !w-7 !items-center !justify-center !rounded-[6px] !border !p-0 !shadow-none hover:!border-[#37352F] hover:!text-[#37352F] ${
+                  contentPanelCollapsed
+                    ? '!border-[#EEEEEC] !bg-white !text-[#787774]'
+                    : '!border-[#EEEEEC] !bg-[#F4F4F2] !text-[#37352F]'
+                }`}
+                style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+                onClick={() => setContentPanelCollapsed((previous) => !previous)}
+              />
+            </div>
+          ) : null}
 
           <div className="flex min-h-0 flex-1 overflow-hidden">
             <div className="min-w-0 flex-1">
@@ -2143,7 +2154,7 @@ const ChatPage: React.FC = () => {
                 >
                   <div className="mx-auto w-full max-w-[760px]">
                     {isNewSession ? (
-                      <div className="mb-8 text-center text-[30px] font-semibold tracking-[-0.02em] text-[#37352F]">
+                      <div className="mb-8 text-center text-[28px] font-medium tracking-[-0.02em] text-[#37352F]">
                         {composerMode === 'search' ? '俺只会搜索本地资料！！' : '找俺干啥？'}
                       </div>
                     ) : null}
@@ -2293,6 +2304,8 @@ const ChatPage: React.FC = () => {
                         onModelNameChange={handleModelNameChange}
                         workspaces={workspaces}
                         selectedWorkspaceId={selectedWorkspaceId}
+                        onWorkspaceChange={handleWorkspaceChange}
+                        showWorkspaceSelector={!isNewSession}
                         onDraftChange={handleComposerDraftChange}
                         onSubmit={() => void handleSend()}
                         onCancel={() => void handleCancel()}
@@ -2310,28 +2323,18 @@ const ChatPage: React.FC = () => {
                     )}
 
                     {isNewSession ? (
-                      <div className="mt-3 flex items-center justify-center gap-3 rounded-b-[16px] bg-[#F7F7F5] px-4 py-3 text-[13px] text-[#787774]">
-                        <Select
-                          value={selectedWorkspaceId || undefined}
-                          onChange={(nextWorkspaceId) =>
-                            handleNewSessionWorkspaceChange(String(nextWorkspaceId))
-                          }
-                          variant="borderless"
-                          suffixIcon={<HiChevronDown className="h-3.5 w-3.5 text-[#91918E]" />}
-                          optionLabelProp="label"
-                          popupClassName="workbench-composer-select-dropdown"
-                          className="workbench-composer-select-mini max-w-[220px]"
-                          options={workspaces.map((workspace) => ({
-                            value: workspace.id,
-                            label: (
-                              <span className="flex min-w-0 items-center gap-2 text-[13px] text-[#787774]">
-                                <HiFolder className="h-4 w-4 shrink-0" />
-                                <span className="truncate">{workspace.name}</span>
-                              </span>
-                            ),
-                            title: workspace.root_path || '未设置文件目录'
-                          }))}
+                      <div className="nc-composer-rail mx-auto mt-2 w-full max-w-[760px]">
+                        <WorkbenchSelect
+                          value={selectedWorkspaceId}
+                          onChange={handleNewSessionWorkspaceChange}
+                          options={workspaceSelectOptions}
                           placeholder="选择工作空间"
+                          triggerIcon={<HiFolder className="h-4 w-4" />}
+                          className="w-full"
+                          triggerClassName="nc-composer-rail-trigger"
+                          menuClassName="workbench-composer-menu"
+                          selectedWithoutBackground
+                          data-testid={workbenchSelectors.workspaceSelect}
                         />
                       </div>
                     ) : null}

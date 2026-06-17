@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import type {
   AiRunEvent,
   AiFileChangeStatus,
@@ -19,6 +20,16 @@ export type WorkbenchContextUsage = {
   usedContextTokens: number
   ratio: number
   updatedAt: number
+}
+
+export type WorkbenchSelectOption = {
+  value: string
+  label: string
+  icon?: ReactNode
+  description?: string
+  keywords?: string[]
+  trailing?: ReactNode
+  disabled?: boolean
 }
 
 export type SearchWorkbenchTurn = {

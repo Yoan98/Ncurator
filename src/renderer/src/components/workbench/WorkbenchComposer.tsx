@@ -1,8 +1,7 @@
 ﻿import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Empty, Select, Spin } from 'antd'
+import { Empty, Spin } from 'antd'
 import {
   HiArrowUp,
-  HiChevronDown,
   HiCpuChip,
   HiDocumentText,
   HiFolder,
@@ -19,7 +18,7 @@ import type {
   WorkspaceSource
 } from '../../../../shared/types'
 import { workbenchSelectors } from '../../testing/selectors'
-import type { WorkbenchContextUsage, WorkbenchMode } from './types'
+import type { WorkbenchContextUsage, WorkbenchMode, WorkbenchSelectOption } from './types'
 import { COMPOSER_PLACEHOLDER, COMPOSER_REFERENCE_KINDS } from './composer/constants'
 import type { ComposerDraftValue, ComposerNode } from './composer/types'
 import {
@@ -37,6 +36,7 @@ import {
   getReferenceDisplayPath,
   getReferenceTypeLabel
 } from '../../utils/reference'
+import WorkbenchSelect from './WorkbenchSelect'
 
 type MentionContext = {
   textNode: Text
@@ -54,6 +54,8 @@ type WorkbenchComposerProps = {
   onModelNameChange: (modelName: string) => void
   workspaces: WorkspaceSource[]
   selectedWorkspaceId: string | null
+  onWorkspaceChange: (workspaceId: string) => void
+  showWorkspaceSelector?: boolean
   onDraftChange: (draft: ComposerDraftValue) => void
   onSubmit: () => void
   onCancel: () => void
@@ -90,6 +92,8 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   onModelNameChange,
   workspaces,
   selectedWorkspaceId,
+  onWorkspaceChange,
+  showWorkspaceSelector = true,
   onDraftChange,
   onSubmit,
   onCancel,
@@ -595,6 +599,43 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   const contextUsageTitle = contextUsage
     ? `当前上下文约 ${contextUsage.usedContextTokens.toLocaleString()} / ${contextUsage.contextWindowTokens.toLocaleString()} tokens`
     : '暂无上下文用量'
+  const modeOptions = useMemo<WorkbenchSelectOption[]>(
+    () => [
+      {
+        value: 'ai',
+        label: 'AI',
+        icon: <HiSparkles className="h-3.5 w-3.5" />
+      },
+      {
+        value: 'search',
+        label: '搜索',
+        icon: <HiMagnifyingGlass className="h-3.5 w-3.5" />
+      }
+    ],
+    []
+  )
+  const workspaceOptions = useMemo<WorkbenchSelectOption[]>(
+    () =>
+      workspaces.map((workspace) => ({
+        value: workspace.id,
+        label: workspace.name,
+        icon: <HiFolder className="h-3.5 w-3.5" />,
+        description: workspace.root_path || '未设置文件目录',
+        keywords: [workspace.name, workspace.root_path || '']
+      })),
+    [workspaces]
+  )
+  const modelOptions = useMemo<WorkbenchSelectOption[]>(
+    () =>
+      remoteModels.map((model) => ({
+        value: model.id,
+        label: model.label || model.id,
+        icon: <HiCpuChip className="h-3.5 w-3.5" />,
+        description: activeModelConfig ? `${activeModelConfig.base_url} · ${model.id}` : model.id,
+        keywords: [model.label || model.id, model.id, activeModelConfig?.base_url || '']
+      })),
+    [activeModelConfig, remoteModels]
+  )
 
   return (
     <div className="relative">
@@ -729,7 +770,9 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
           const target = event.target
           if (!(target instanceof HTMLElement)) return
           if (target.closest('[contenteditable="true"]')) return
-          if (target.closest('button') || target.closest('.ant-select')) return
+          if (target.closest('button') || target.closest('[data-workbench-select-root="true"]')) {
+            return
+          }
           event.preventDefault()
           focusEditor()
         }}
@@ -784,45 +827,48 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
 
         <div className="mx-[-4px] mt-1.5 flex items-center justify-between gap-2 px-1">
           <div className="flex min-w-0 items-center gap-1.5 text-[#91918E]">
-            <Select
+            <WorkbenchSelect
               value={mode}
+              options={modeOptions}
               onChange={(nextValue) => {
                 onModeChange(nextValue as WorkbenchMode)
                 focusEditorAfterControlChange()
               }}
-              variant="borderless"
-              suffixIcon={<HiChevronDown className="h-3 w-3 text-[#91918E]" />}
-              options={[
-                {
-                  value: 'ai',
-                  label: (
-                    <span className="flex items-center gap-1.5 text-[11px] text-[#91918E]">
-                      <HiSparkles className="h-3 w-3" />
-                      <span>AI</span>
-                    </span>
-                  )
-                },
-                {
-                  value: 'search',
-                  label: (
-                    <span className="flex items-center gap-1.5 text-[11px] text-[#91918E]">
-                      <HiMagnifyingGlass className="h-3 w-3" />
-                      <span>搜索</span>
-                    </span>
-                  )
-                }
-              ]}
-              popupClassName="workbench-composer-select-dropdown"
-              className="workbench-composer-select-mini"
+              placeholder="模式"
+              compact
+              noDrag
+              triggerClassName="workbench-composer-pill"
+              menuClassName="workbench-composer-menu"
               data-testid={workbenchSelectors.modeSwitch}
             />
+
+            {showWorkspaceSelector ? (
+              <WorkbenchSelect
+                value={selectedWorkspaceId}
+                options={workspaceOptions}
+                onChange={(nextValue) => {
+                  onWorkspaceChange(nextValue)
+                  focusEditorAfterControlChange()
+                }}
+                placeholder="选择工作空间"
+                triggerIcon={<HiFolder className="h-3.5 w-3.5" />}
+                compact
+                noDrag
+                className="max-w-[170px]"
+                triggerClassName="workbench-composer-pill workbench-composer-pill-workspace"
+                menuClassName="workbench-composer-menu"
+                selectedWithoutBackground
+                data-testid={workbenchSelectors.workspaceSelect}
+              />
+            ) : null}
           </div>
 
           <div className="flex items-center gap-1.5">
-            {mode === 'ai' && contextUsage ? (
+            {mode === 'ai' ? (
               <div
-                className="relative inline-flex h-4 w-4 shrink-0 items-center justify-center"
+                className="relative inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#F4F4F2]"
                 aria-label={contextUsageTitle}
+                title={contextUsageTitle}
               >
                 <svg className="h-4 w-4 -rotate-90" viewBox="0 0 16 16">
                   <circle cx="8" cy="8" r="6.5" fill="none" stroke="#EEEEEC" strokeWidth="1.5" />
@@ -841,42 +887,23 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
               </div>
             ) : null}
 
-            <Select
-              value={selectedModelName || undefined}
+            <WorkbenchSelect
+              value={selectedModelName}
+              options={modelOptions}
               onChange={(nextValue) => {
-                onModelNameChange(String(nextValue))
+                onModelNameChange(nextValue)
                 focusEditorAfterControlChange()
               }}
-              showSearch
-              filterOption={(inputValue, option) => {
-                const normalizedInput = inputValue.trim().toLowerCase()
-                if (!normalizedInput) return true
-                const label = String(option?.title || option?.value || '')
-                return (
-                  label.toLowerCase().includes(normalizedInput) ||
-                  String(option?.value || '')
-                    .toLowerCase()
-                    .includes(normalizedInput)
-                )
-              }}
-              variant="borderless"
-              suffixIcon={<HiChevronDown className="h-3 w-3 text-[#91918E]" />}
-              optionLabelProp="label"
-              popupClassName="workbench-composer-select-dropdown"
-              className="workbench-composer-select-mini max-w-[160px]"
-              options={remoteModels.map((model) => ({
-                value: model.id,
-                label: (
-                  <span className="flex min-w-0 items-center gap-1.5 text-[11px] text-[#91918E]">
-                    <HiCpuChip className="h-3 w-3 shrink-0" />
-                    <span className="truncate">{model.label || model.id}</span>
-                  </span>
-                ),
-                title: activeModelConfig
-                  ? `${activeModelConfig.base_url} · ${model.label || model.id} · ${model.id}`
-                  : `${model.label || model.id} · ${model.id}`
-              }))}
               placeholder={activeModelConfig ? '选择模型' : '模型'}
+              triggerIcon={<HiCpuChip className="h-3.5 w-3.5" />}
+              compact
+              searchable
+              searchPlaceholder="搜索模型"
+              noDrag
+              className="max-w-[168px]"
+              triggerClassName="workbench-composer-pill"
+              menuClassName="workbench-composer-menu"
+              selectedWithoutBackground
               data-testid={workbenchSelectors.modelSelect}
             />
 
