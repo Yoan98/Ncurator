@@ -28,10 +28,7 @@ const TEXT = {
   downloading: '下载中',
   downloadingLabel: '正在下载...',
   download: '下载',
-  fileUnit: '文件',
-  pageTitle: '向量模型',
-  pageDescription: '下载本地检索模型，为搜索和知识库能力提供向量基础。',
-  listTitle: '模型列表'
+  fileUnit: '文件'
 } as const
 
 const toErrorMessage = (error: Error | string): string =>
@@ -176,13 +173,6 @@ const VectorModelSettingsPanel: React.FC = () => {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-5" data-testid={vectorSelectors.page}>
-      <section className="shrink-0 px-1 pt-1">
-        <div>
-          <div className="text-[15px] font-semibold text-[#37352F]">{TEXT.pageTitle}</div>
-          <div className="mt-1 text-[12px] leading-5 text-[#787774]">{TEXT.pageDescription}</div>
-        </div>
-      </section>
-
       <section className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white">
         <div className="min-h-0 flex-1 overflow-auto [&_.ant-list-item]:!border-[#EEEEEC] [&_.ant-list-item]:transition-colors [&_.ant-list-item:hover]:!bg-[#F7F7F5]">
           {catalogError ? (
