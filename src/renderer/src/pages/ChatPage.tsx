@@ -1,21 +1,21 @@
 ﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { App, Button, Modal, Spin } from 'antd'
+import { App, Button, Modal, Select, Spin } from 'antd'
 import {
   HiArrowUp,
-  HiBookOpen,
   HiCheck,
+  HiChevronDown,
   HiChevronLeft,
   HiChevronRight,
   HiClock,
+  HiFolder,
   HiOutlineChatBubbleLeft,
   HiOutlineExclamationCircle,
   HiOutlinePencilSquare,
   HiOutlineRectangleGroup,
-  HiOutlineViewColumns,
+  HiPlus,
   HiRectangleGroup,
   HiStop,
   HiTrash,
-  HiViewColumns,
   HiXMark
 } from 'react-icons/hi2'
 import type {
@@ -83,6 +83,7 @@ import {
 } from '../components/workbench/applyTargetUtils'
 import { chatSelectors, workbenchSelectors } from '../testing/selectors'
 import brandIcon from '../../../../resources/icon.png'
+import WindowsTitleBar from '../components/WindowsTitleBar'
 import {
   collectReferenceDocumentIds,
   hasIncompleteLocalKbCoverage,
@@ -402,25 +403,31 @@ const ChatPage: React.FC = () => {
     shouldAutoScrollRef.current = distanceToBottom <= SCROLL_BOTTOM_TOLERANCE
   }
 
-  const emitSuccessMessage = (content: string): void => {
-    if (typeof message.success === 'function') {
-      message.success(content)
-      return
-    }
-    if (typeof message.open === 'function') {
-      message.open({ type: 'success', content })
-    }
-  }
+  const emitSuccessMessage = useCallback(
+    (content: string): void => {
+      if (typeof message.success === 'function') {
+        message.success(content)
+        return
+      }
+      if (typeof message.open === 'function') {
+        message.open({ type: 'success', content })
+      }
+    },
+    [message]
+  )
 
-  const emitErrorMessage = (content: string): void => {
-    if (typeof message.error === 'function') {
-      message.error(content)
-      return
-    }
-    if (typeof message.open === 'function') {
-      message.open({ type: 'error', content })
-    }
-  }
+  const emitErrorMessage = useCallback(
+    (content: string): void => {
+      if (typeof message.error === 'function') {
+        message.error(content)
+        return
+      }
+      if (typeof message.open === 'function') {
+        message.open({ type: 'error', content })
+      }
+    },
+    [message]
+  )
 
   const showContentPanel = useCallback((nextState: WorkbenchContentPanelState): void => {
     setContentPanel(nextState)
@@ -500,19 +507,17 @@ const ChatPage: React.FC = () => {
     if (!result.success) emitErrorMessage(result.error || '定位失败')
   }
 
-  const loadSessions = async (): Promise<void> => {
+  const loadSessions = useCallback(async (): Promise<void> => {
     try {
       const list = await window.api.chatSessionList()
       setSessions(list)
-      if (list.length > 0 && !currentSessionId) {
-        setCurrentSessionId(list[0].id)
-      } else if (list.length === 0) {
-        await createNewSession()
+      if (list.length > 0) {
+        setCurrentSessionId((current) => current || list[0].id)
       }
     } catch (error) {
       console.error('Failed to load sessions', error)
     }
-  }
+  }, [])
 
   const loadMessages = async (sessionId: string): Promise<void> => {
     try {
@@ -635,7 +640,7 @@ const ChatPage: React.FC = () => {
         window.dispatchEvent(new Event('check-llm-config'))
       })
     },
-    [activeModelConfig, message]
+    [activeModelConfig, emitErrorMessage]
   )
 
   const handleModeChange = useCallback((mode: WorkbenchMode): void => {
@@ -648,21 +653,64 @@ const ChatPage: React.FC = () => {
     writeWorkbenchWorkspacePreference(window.localStorage, workspaceId)
   }, [])
 
-  const createNewSession = async (): Promise<void> => {
-    try {
-      const timestamp = Date.now()
-      const nextSession: ChatSession = {
-        id: crypto.randomUUID(),
-        title: '新对话',
-        created_at: timestamp
+  const handleNewSessionWorkspaceChange = useCallback(
+    (workspaceId: string): void => {
+      handleWorkspaceChange(workspaceId)
+      if (!currentSession || currentMessages.length > 0) return
+      const nextSession = { ...currentSession, workspace_id: workspaceId }
+      setSessions((items) => items.map((item) => (item.id === nextSession.id ? nextSession : item)))
+      void window.api.chatSessionSave(nextSession).catch(console.error)
+    },
+    [currentMessages.length, currentSession, handleWorkspaceChange]
+  )
+
+  const createNewSession = useCallback(
+    async (workspaceId?: string): Promise<void> => {
+      try {
+        const timestamp = Date.now()
+        const targetWorkspaceId =
+          workspaceId ||
+          currentSession?.workspace_id ||
+          selectedWorkspaceId ||
+          (workspaces.length > 0 ? workspaces[0].id : '')
+
+        if (!targetWorkspaceId) {
+          message.warning('请先在设置中创建工作空间')
+          return
+        }
+
+        const nextSession: ChatSession = {
+          id: crypto.randomUUID(),
+          title: '新对话',
+          created_at: timestamp,
+          workspace_id: targetWorkspaceId
+        }
+        await window.api.chatSessionSave(nextSession)
+        await loadSessions()
+        setCurrentSessionId(nextSession.id)
+        if (targetWorkspaceId !== selectedWorkspaceId) {
+          setSelectedWorkspaceId(targetWorkspaceId)
+          writeWorkbenchWorkspacePreference(window.localStorage, targetWorkspaceId)
+        }
+      } catch (error) {
+        console.error(error)
+        emitErrorMessage('创建会话失败')
       }
-      await window.api.chatSessionSave(nextSession)
-      await loadSessions()
-      setCurrentSessionId(nextSession.id)
-    } catch (error) {
-      console.error(error)
-      emitErrorMessage('创建会话失败')
-    }
+    },
+    [
+      currentSession?.workspace_id,
+      emitErrorMessage,
+      loadSessions,
+      message,
+      selectedWorkspaceId,
+      workspaces
+    ]
+  )
+
+  const selectSession = (session: ChatSession): void => {
+    setCurrentSessionId(session.id)
+    setSelectedWorkspaceId(session.workspace_id)
+    writeWorkbenchWorkspacePreference(window.localStorage, session.workspace_id)
   }
 
   const loadApplyRecord = async (input: {
@@ -853,7 +901,7 @@ const ChatPage: React.FC = () => {
     void loadSessions()
     void loadWorkspaces()
     void loadModelConfigs()
-  }, [loadModelConfigs, loadWorkspaces])
+  }, [loadSessions, loadModelConfigs, loadWorkspaces])
 
   useEffect(() => {
     const handleModelRefresh = (): void => {
@@ -887,7 +935,18 @@ const ChatPage: React.FC = () => {
   }, [contentPanelCollapsed])
 
   useEffect(() => {
+    if (sessions.length === 0 && workspaces.length > 0 && !currentSessionId) {
+      void createNewSession(workspaces[0].id)
+    }
+  }, [sessions.length, workspaces, currentSessionId, createNewSession])
+
+  useEffect(() => {
     if (currentSessionId) {
+      const sessionWorkspaceId = currentSession?.workspace_id || null
+      if (sessionWorkspaceId && sessionWorkspaceId !== selectedWorkspaceId) {
+        setSelectedWorkspaceId(sessionWorkspaceId)
+        writeWorkbenchWorkspacePreference(window.localStorage, sessionWorkspaceId)
+      }
       void loadMessages(currentSessionId)
       setLoading(false)
       setAiRunId(null)
@@ -910,6 +969,8 @@ const ChatPage: React.FC = () => {
       setContextUsage(null)
       resetApplyWorkspaceState()
     }
+    // Session switch reset must run only when the selected session id changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentSessionId, refreshContextUsage])
 
   useEffect(() => {
@@ -1303,6 +1364,8 @@ const ChatPage: React.FC = () => {
     return () => {
       window.api.removeAiRunEventListeners()
     }
+    // AI run listener is intentionally keyed by active run/session identity to avoid resubscribing on UI helper changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aiRunId, currentSessionId, message, refreshContextUsage])
 
   const updateSessionTitleIfNeeded = async (userQuery: string): Promise<void> => {
@@ -1831,26 +1894,47 @@ const ChatPage: React.FC = () => {
     []
   )
 
+  // 按工作空间分组会话
+  const sessionsByWorkspace = useMemo(() => {
+    const groups = new Map<string, ChatSession[]>()
+    sessions.forEach((session) => {
+      const wsId = session.workspace_id || ''
+      if (!groups.has(wsId)) {
+        groups.set(wsId, [])
+      }
+      groups.get(wsId)!.push(session)
+    })
+    return groups
+  }, [sessions])
+
+  // 判断是否为新会话（没有消息）
+  const isNewSession = useMemo(() => currentMessages.length === 0, [currentMessages])
+
+  // 获取平台信息
+  const [platform, setPlatform] = useState<string>('darwin')
+  useEffect(() => {
+    setPlatform(navigator.platform.toLowerCase().includes('win') ? 'win32' : 'darwin')
+  }, [])
+
   return (
     <div
-      className="nc-app-shell"
+      className={`nc-app-shell ${platform === 'win32' ? 'nc-app-shell-windows' : ''}`}
       data-testid={workbenchSelectors.page}
       data-workbench-mode={composerMode}
     >
+      {platform === 'win32' ? <WindowsTitleBar /> : null}
       <aside
-        className={`nc-sidebar transition-all duration-200 ${
-          sidebarCollapsed ? 'w-14' : 'w-[240px]'
+        className={`nc-sidebar ${platform === 'darwin' ? 'nc-sidebar-mac' : ''} transition-all duration-200 ${
+          sidebarCollapsed ? 'w-14' : 'w-[260px]'
         }`}
       >
-        <div className="nc-sidebar-header">
+        <div
+          className={`nc-sidebar-header ${platform === 'darwin' ? 'nc-sidebar-header-mac' : 'pt-3'}`}
+        >
           <div
-            className={`flex ${sidebarCollapsed ? 'flex-col items-center gap-1.5' : 'items-center justify-between gap-2'}`}
+            className={`flex items-center ${sidebarCollapsed ? 'justify-center' : 'justify-between'} gap-2`}
           >
-            {sidebarCollapsed ? (
-              <span className="ui-icon-well flex h-7 w-7 bg-white">
-                <img src={brandIcon} alt="馆长" className="w-4 invert-100" />
-              </span>
-            ) : (
+            {!sidebarCollapsed ? (
               <div className="flex min-w-0 items-center gap-2">
                 <span className="ui-icon-well flex h-7 w-7 shrink-0 bg-white">
                   <img src={brandIcon} alt="馆长" className="w-4 invert-100" />
@@ -1859,83 +1943,111 @@ const ChatPage: React.FC = () => {
                   馆长
                 </span>
               </div>
-            )}
-
-            <div className={`flex items-center gap-1 ${sidebarCollapsed ? 'flex-col' : ''}`}>
-              <Button
-                type="text"
-                size="small"
-                icon={<HiOutlinePencilSquare className="h-3 w-3" />}
-                className="!flex !h-7 !w-7 !items-center !justify-center !rounded-[6px] !border !border-[#EEEEEC] !bg-white !p-0 !text-[#91918E] !shadow-none hover:!border-[#37352F] hover:!text-[#37352F]"
-                onClick={() => void createNewSession()}
-                data-testid={workbenchSelectors.newSessionButton}
-              />
-              <Button
-                type="text"
-                size="small"
-                icon={
-                  sidebarCollapsed ? (
-                    <HiOutlineViewColumns className="h-3 w-3" />
-                  ) : (
-                    <HiViewColumns className="h-3 w-3" />
-                  )
-                }
-                className={`!flex !h-7 !w-7 !items-center !justify-center !rounded-[6px] !border !p-0 !shadow-none hover:!border-[#37352F] hover:!text-[#37352F] ${
-                  sidebarCollapsed
-                    ? '!border-[#EEEEEC] !bg-white !text-[#91918E]'
-                    : '!border-[#EEEEEC] !bg-[#EFEFEE] !text-[#37352F]'
-                }`}
-                onClick={() => setSidebarCollapsed((previous) => !previous)}
-                data-testid={workbenchSelectors.sessionsToggle}
-              />
-            </div>
+            ) : null}
+            <button
+              type="button"
+              className="nc-sidebar-collapse-btn"
+              onClick={() => setSidebarCollapsed((previous) => !previous)}
+              data-testid={workbenchSelectors.sessionsToggle}
+              aria-label={sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'}
+            >
+              {sidebarCollapsed ? (
+                <HiChevronRight className="h-4 w-4" />
+              ) : (
+                <HiChevronLeft className="h-4 w-4" />
+              )}
+            </button>
           </div>
         </div>
 
+        <div className="px-2 pb-2">
+          <button
+            type="button"
+            className={`nc-sidebar-new-chat ${sidebarCollapsed ? 'justify-center px-0' : ''}`}
+            onClick={() => void createNewSession()}
+            data-testid={workbenchSelectors.newSessionButton}
+            aria-label="新对话"
+          >
+            <HiOutlinePencilSquare className="h-4 w-4 shrink-0 text-[#787774]" />
+            {sidebarCollapsed ? null : <span>新对话</span>}
+          </button>
+        </div>
+
         <div
-          className="flex-1 space-y-1 overflow-y-auto px-2 py-2"
+          className="flex-1 overflow-y-auto px-2 py-2"
           data-testid={workbenchSelectors.sessionsList}
         >
-          {sessions.map((session) => (
-            <div
-              key={session.id}
-              role="button"
-              tabIndex={0}
-              className={`nc-sidebar-item group relative ${
-                currentSessionId === session.id ? 'nc-sidebar-item-active' : 'bg-transparent'
-              } ${sidebarCollapsed ? 'px-2 py-2' : 'px-3 py-2'}`}
-              onClick={() => setCurrentSessionId(session.id)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' || event.key === ' ') {
-                  event.preventDefault()
-                  setCurrentSessionId(session.id)
-                }
-              }}
-            >
-              {sidebarCollapsed ? (
-                <div className="flex justify-center">
-                  <HiOutlineChatBubbleLeft className="h-4 w-4 text-[#91918E]" />
-                </div>
-              ) : (
-                <div className="flex min-w-0 items-center gap-2">
-                  <div className="min-w-0 flex-1 truncate text-[13px] font-medium text-[#37352F]">
-                    {session.title}
+          {workspaces.map((workspace) => {
+            const workspaceSessions = sessionsByWorkspace.get(workspace.id) || []
+            return (
+              <div key={workspace.id} className="nc-sidebar-workspace-group">
+                <div
+                  className={`nc-sidebar-workspace-header group ${
+                    sidebarCollapsed ? 'justify-center px-0' : ''
+                  }`}
+                >
+                  <div className="flex min-w-0 items-center gap-2">
+                    <HiFolder className="h-4 w-4 shrink-0 text-[#91918E]" />
+                    {sidebarCollapsed ? null : <span className="truncate">{workspace.name}</span>}
                   </div>
-                  <div className="flex shrink-0 items-center gap-1 text-[11px] text-[#91918E] group-hover:hidden">
-                    <HiClock className="h-3 w-3" />
-                    <span>{formatRelativeTime(session.created_at)}</span>
-                  </div>
-                  <Button
-                    type="text"
-                    size="small"
-                    icon={<HiTrash className="h-3.5 w-3.5" />}
-                    className="!absolute !right-1 !top-1/2 !z-10 !h-6 !w-6 !-translate-y-1/2 !rounded-[6px] !p-0 opacity-0 transition-opacity group-hover:opacity-100"
-                    onClick={(event) => void deleteSession(event, session.id)}
-                  />
+                  {sidebarCollapsed ? null : (
+                    <button
+                      type="button"
+                      className="flex h-5 w-5 items-center justify-center rounded-[5px] text-[#91918E] opacity-0 transition hover:bg-white hover:text-[#37352F] group-hover:opacity-100"
+                      onClick={() => void createNewSession(workspace.id)}
+                      aria-label={`在 ${workspace.name} 中新建对话`}
+                    >
+                      <HiPlus className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                 </div>
-              )}
-            </div>
-          ))}
+                <div className="mt-1 space-y-1">
+                  {workspaceSessions.map((session) => (
+                    <div
+                      key={session.id}
+                      role="button"
+                      tabIndex={0}
+                      className={`nc-sidebar-item group relative ${
+                        currentSessionId === session.id
+                          ? 'nc-sidebar-item-active'
+                          : 'bg-transparent'
+                      } ${sidebarCollapsed ? 'px-2 py-2' : 'px-3 py-2'}`}
+                      onClick={() => selectSession(session)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault()
+                          selectSession(session)
+                        }
+                      }}
+                    >
+                      {sidebarCollapsed ? (
+                        <div className="flex justify-center">
+                          <HiOutlineChatBubbleLeft className="h-4 w-4 text-[#91918E]" />
+                        </div>
+                      ) : (
+                        <div className="flex min-w-0 items-center gap-2 pl-4">
+                          <div className="min-w-0 flex-1 truncate text-[13px] font-medium text-[#37352F]">
+                            {session.title}
+                          </div>
+                          <div className="flex shrink-0 items-center gap-1 text-[11px] text-[#91918E] group-hover:hidden">
+                            <HiClock className="h-3 w-3" />
+                            <span>{formatRelativeTime(session.created_at)}</span>
+                          </div>
+                          <Button
+                            type="text"
+                            size="small"
+                            icon={<HiTrash className="h-3.5 w-3.5" />}
+                            className="!absolute !right-1 !top-1/2 !z-10 !h-6 !w-6 !-translate-y-1/2 !rounded-[6px] !p-0 opacity-0 transition-opacity group-hover:opacity-100"
+                            onClick={(event) => void deleteSession(event, session.id)}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
         </div>
 
         <div className="px-2 py-2">
@@ -2010,36 +2122,31 @@ const ChatPage: React.FC = () => {
           <div className="flex min-h-0 flex-1 overflow-hidden">
             <div className="min-w-0 flex-1">
               <div className="flex h-full min-h-0 flex-col">
-                <div className="nc-document-scroll" ref={scrollRef} onScroll={handleMessageScroll}>
+                <div
+                  className={`nc-document-scroll ${isNewSession ? '!hidden' : ''}`}
+                  ref={scrollRef}
+                  onScroll={handleMessageScroll}
+                >
                   <div className="nc-document">
-                    {currentMessages.length === 0 ? (
-                      <div className="nc-empty-state">
-                        <div className="relative max-w-[420px]">
-                          <div className="nc-empty-icon">
-                            <HiBookOpen className="h-7 w-7" />
-                          </div>
-                          <h3 className="mt-5 text-[32px] font-semibold text-[#37352F]">
-                            从一个问题开始
-                          </h3>
-                          <p className="mt-3 text-[16px] leading-7 text-[#787774]">
-                            {composerMode === 'search'
-                              ? '搜索模式只检索当前资料范围。'
-                              : '智能模式会结合当前工作区与插入资料执行。'}
-                          </p>
-                        </div>
-                      </div>
-                    ) : (
-                      currentMessages.map((messageItem) =>
-                        messageItem.role === 'user'
-                          ? renderUserMessage(messageItem)
-                          : renderAssistantMessage(messageItem)
-                      )
+                    {currentMessages.map((messageItem) =>
+                      messageItem.role === 'user'
+                        ? renderUserMessage(messageItem)
+                        : renderAssistantMessage(messageItem)
                     )}
                   </div>
                 </div>
 
-                <div className="nc-floating-composer-shell">
-                  <div className="mx-auto max-w-[760px]">
+                <div
+                  className={`nc-floating-composer-shell ${
+                    isNewSession ? 'flex flex-1 items-center justify-center pb-[18vh]' : ''
+                  }`}
+                >
+                  <div className="mx-auto w-full max-w-[760px]">
+                    {isNewSession ? (
+                      <div className="mb-8 text-center text-[30px] font-semibold tracking-[-0.02em] text-[#37352F]">
+                        {composerMode === 'search' ? '俺只会搜索本地资料！！' : '找俺干啥？'}
+                      </div>
+                    ) : null}
                     {composerMode === 'ai' && pendingApprovalBatch ? (
                       <div
                         className="overflow-hidden rounded-[12px] border border-[#E0DFDC] bg-[#FFFFFF] shadow-[0_8px_24px_rgba(15,15,15,0.08)]"
@@ -2186,7 +2293,6 @@ const ChatPage: React.FC = () => {
                         onModelNameChange={handleModelNameChange}
                         workspaces={workspaces}
                         selectedWorkspaceId={selectedWorkspaceId}
-                        onWorkspaceChange={handleWorkspaceChange}
                         onDraftChange={handleComposerDraftChange}
                         onSubmit={() => void handleSend()}
                         onCancel={() => void handleCancel()}
@@ -2202,6 +2308,33 @@ const ChatPage: React.FC = () => {
                         contextUsage={contextUsage}
                       />
                     )}
+
+                    {isNewSession ? (
+                      <div className="mt-3 flex items-center justify-center gap-3 rounded-b-[16px] bg-[#F7F7F5] px-4 py-3 text-[13px] text-[#787774]">
+                        <Select
+                          value={selectedWorkspaceId || undefined}
+                          onChange={(nextWorkspaceId) =>
+                            handleNewSessionWorkspaceChange(String(nextWorkspaceId))
+                          }
+                          variant="borderless"
+                          suffixIcon={<HiChevronDown className="h-3.5 w-3.5 text-[#91918E]" />}
+                          optionLabelProp="label"
+                          popupClassName="workbench-composer-select-dropdown"
+                          className="workbench-composer-select-mini max-w-[220px]"
+                          options={workspaces.map((workspace) => ({
+                            value: workspace.id,
+                            label: (
+                              <span className="flex min-w-0 items-center gap-2 text-[13px] text-[#787774]">
+                                <HiFolder className="h-4 w-4 shrink-0" />
+                                <span className="truncate">{workspace.name}</span>
+                              </span>
+                            ),
+                            title: workspace.root_path || '未设置文件目录'
+                          }))}
+                          placeholder="选择工作空间"
+                        />
+                      </div>
+                    ) : null}
 
                     {composerMode === 'ai' &&
                     selectedReferences.some(hasIncompleteLocalKbCoverage) ? (

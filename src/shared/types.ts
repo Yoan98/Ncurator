@@ -516,6 +516,7 @@ export interface ChatSession {
   id: string
   title: string
   created_at: number
+  workspace_id: string
 }
 
 export type AiFileChangeStatus = 'applied' | 'reverted' | 'failed'

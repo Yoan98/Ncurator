@@ -54,7 +54,6 @@ type WorkbenchComposerProps = {
   onModelNameChange: (modelName: string) => void
   workspaces: WorkspaceSource[]
   selectedWorkspaceId: string | null
-  onWorkspaceChange: (workspaceId: string | null) => void
   onDraftChange: (draft: ComposerDraftValue) => void
   onSubmit: () => void
   onCancel: () => void
@@ -91,7 +90,6 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   onModelNameChange,
   workspaces,
   selectedWorkspaceId,
-  onWorkspaceChange,
   onDraftChange,
   onSubmit,
   onCancel,
@@ -326,7 +324,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
       syncDraftFromEditor()
       refreshMentionContext()
     },
-    [refreshMentionContext, syncDraftFromEditor]
+    [focusEditor, refreshMentionContext, syncDraftFromEditor]
   )
 
   const insertMentionScope = useCallback(
@@ -800,7 +798,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                   label: (
                     <span className="flex items-center gap-1.5 text-[11px] text-[#91918E]">
                       <HiSparkles className="h-3 w-3" />
-                      <span>大聪明</span>
+                      <span>AI</span>
                     </span>
                   )
                 },
@@ -809,7 +807,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                   label: (
                     <span className="flex items-center gap-1.5 text-[11px] text-[#91918E]">
                       <HiMagnifyingGlass className="h-3 w-3" />
-                      <span>没头脑</span>
+                      <span>搜索</span>
                     </span>
                   )
                 }
@@ -817,31 +815,6 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
               popupClassName="workbench-composer-select-dropdown"
               className="workbench-composer-select-mini"
               data-testid={workbenchSelectors.modeSwitch}
-            />
-
-            <Select
-              value={selectedWorkspace?.id}
-              onChange={(nextValue) => {
-                onWorkspaceChange(nextValue ? String(nextValue) : null)
-                focusEditorAfterControlChange()
-              }}
-              variant="borderless"
-              suffixIcon={<HiChevronDown className="h-3 w-3 text-[#91918E]" />}
-              optionLabelProp="label"
-              popupClassName="workbench-composer-select-dropdown"
-              className="workbench-composer-select-mini max-w-[140px]"
-              options={workspaces.map((workspace) => ({
-                value: workspace.id,
-                label: (
-                  <span className="flex min-w-0 items-center gap-1.5 text-[11px] text-[#91918E]">
-                    <HiFolder className="h-3 w-3 shrink-0" />
-                    <span className="truncate">{workspace.name}</span>
-                  </span>
-                ),
-                title: workspace.root_path || '未设置文件目录'
-              }))}
-              placeholder="工作区"
-              data-testid={workbenchSelectors.workspaceSelect}
             />
           </div>
 
@@ -852,14 +825,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                 aria-label={contextUsageTitle}
               >
                 <svg className="h-4 w-4 -rotate-90" viewBox="0 0 16 16">
-                  <circle
-                    cx="8"
-                    cy="8"
-                    r="6.5"
-                    fill="none"
-                    stroke="#EEEEEC"
-                    strokeWidth="1.5"
-                  />
+                  <circle cx="8" cy="8" r="6.5" fill="none" stroke="#EEEEEC" strokeWidth="1.5" />
                   <circle
                     cx="8"
                     cy="8"

@@ -8,7 +8,12 @@ import type {
 import type { AiArtifactRef } from '../../../types/store'
 import { LanceDbCore, LANCE_TABLES } from '../core/LanceDbCore'
 
-type ChatSessionRow = { id?: unknown; title?: unknown; created_at?: unknown }
+type ChatSessionRow = {
+  id?: unknown
+  title?: unknown
+  created_at?: unknown
+  workspace_id?: unknown
+}
 type ChatMessageRow = {
   id?: unknown
   session_id?: unknown
@@ -38,7 +43,10 @@ const parseArtifacts = (value: unknown): AiArtifactRef[] | undefined => {
 export class ChatStore {
   public constructor(private readonly core: LanceDbCore) {}
 
-  public async saveConversationMemory(sessionId: string, memory: ChatConversationMemory): Promise<void> {
+  public async saveConversationMemory(
+    sessionId: string,
+    memory: ChatConversationMemory
+  ): Promise<void> {
     const safeId = this.core.escapeSqlString(sessionId)
     const table = await this.core.openTable(LANCE_TABLES.CHAT_CONVERSATION_MEMORY)
     await table.delete(`session_id = '${safeId}'`)
@@ -100,10 +108,7 @@ export class ChatStore {
       const workspace = row.workspace_json ? JSON.parse(String(row.workspace_json)) : undefined
       const humanState = JSON.parse(String(row.human_state_json))
       return {
-        reason:
-          String(row.reason) === 'network_error'
-            ? 'network_error'
-            : 'timeout',
+        reason: String(row.reason) === 'network_error' ? 'network_error' : 'timeout',
         runId: String(row.run_id || ''),
         userInput: String(row.user_input || ''),
         selectedReferences: Array.isArray(selectedReferences) ? selectedReferences : [],
@@ -126,7 +131,14 @@ export class ChatStore {
   public async saveChatSession(session: ChatSession): Promise<void> {
     const table = await this.core.openTable(LANCE_TABLES.CHAT_SESSION)
     await table.delete(`id = '${this.core.escapeSqlString(session.id)}'`)
-    await table.add([{ ...session }])
+    await table.add([
+      {
+        id: session.id,
+        title: session.title,
+        created_at: session.created_at,
+        workspace_id: session.workspace_id
+      }
+    ])
   }
 
   public async getChatSessions(): Promise<ChatSession[]> {
@@ -138,7 +150,8 @@ export class ChatStore {
         return {
           id: String(row.id || ''),
           title: String(row.title || ''),
-          created_at: Number(row.created_at || 0)
+          created_at: Number(row.created_at || 0),
+          workspace_id: String(row.workspace_id || '')
         }
       })
       .sort((a, b) => b.created_at - a.created_at)

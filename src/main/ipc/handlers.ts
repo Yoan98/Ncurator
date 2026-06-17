@@ -2767,6 +2767,26 @@ export function registerHandlers(services: {
     }
   })
 
+  // Windows 窗口控制
+  ipcMain.on('window-minimize', () => {
+    const window = BrowserWindow.getFocusedWindow()
+    window?.minimize()
+  })
+
+  ipcMain.on('window-maximize', () => {
+    const window = BrowserWindow.getFocusedWindow()
+    if (window?.isMaximized()) {
+      window.unmaximize()
+    } else {
+      window?.maximize()
+    }
+  })
+
+  ipcMain.on('window-close', () => {
+    const window = BrowserWindow.getFocusedWindow()
+    window?.close()
+  })
+
   ipcMain.handle('ai-runtime-settings-save', async (_event, settings: AiRuntimeSettings) => {
     try {
       await aiRuntimeSettingsStore.save(settings)

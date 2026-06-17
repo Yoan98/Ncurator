@@ -1,4 +1,4 @@
-﻿import React from 'react'
+﻿import React, { useEffect, useState } from 'react'
 import { NavLink, Navigate, useLocation, useParams } from 'react-router-dom'
 import AppUpdateSettingsPanel from '../components/settings/AppUpdateSettingsPanel'
 import ModelSettingsPanel from '../components/settings/ModelSettingsPanel'
@@ -8,6 +8,7 @@ import { SETTINGS_SECTION_META, SETTINGS_SECTION_ORDER } from '../components/set
 import type { SettingsSectionValue } from '../components/settings/types'
 import { settingsSelectors } from '../testing/selectors'
 import { HiArrowLeft } from 'react-icons/hi2'
+import WindowsTitleBar from '../components/WindowsTitleBar'
 
 const normalizeSettingsSection = (value: string | undefined): SettingsSectionValue | null => {
   if (!value) return null
@@ -30,6 +31,11 @@ const SettingsPage: React.FC = () => {
   const location = useLocation()
   const params = useParams<{ section?: string }>()
   const currentSection = normalizeSettingsSection(params.section)
+  const [platform, setPlatform] = useState<string>('darwin')
+
+  useEffect(() => {
+    setPlatform(navigator.platform.toLowerCase().includes('win') ? 'win32' : 'darwin')
+  }, [])
 
   if (!params.section) {
     return <Navigate to={SETTINGS_SECTION_META[getLegacySection(location.search)].path} replace />
@@ -42,9 +48,15 @@ const SettingsPage: React.FC = () => {
   const sectionMeta = SETTINGS_SECTION_META[currentSection]
 
   return (
-    <div className="nc-app-shell" data-testid={settingsSelectors.page}>
-      <aside className="nc-sidebar w-[240px]">
-        <div className="nc-sidebar-header">
+    <div
+      className={`nc-app-shell ${platform === 'win32' ? 'nc-app-shell-windows' : ''}`}
+      data-testid={settingsSelectors.page}
+    >
+      {platform === 'win32' ? <WindowsTitleBar /> : null}
+      <aside className={`nc-sidebar w-[240px] ${platform === 'darwin' ? 'nc-sidebar-mac' : ''}`}>
+        <div
+          className={`nc-sidebar-header ${platform === 'darwin' ? 'nc-sidebar-header-mac' : 'pt-3'}`}
+        >
           <NavLink to="/" className="nc-sidebar-item flex items-center gap-2 px-2.5 py-2">
             <HiArrowLeft className="h-4 w-4 shrink-0 text-[#787774]" />
             <span className="truncate text-[13px] font-medium text-[#37352F]">返回工作台</span>

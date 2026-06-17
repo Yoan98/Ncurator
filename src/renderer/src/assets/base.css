@@ -235,12 +235,72 @@ textarea,
   @apply flex min-h-screen bg-[#FFFFFF] text-[#37352F];
 }
 
+/* Windows: frame:false 后只让顶部区域可拖拽，避免影响输入和正文选择 */
+.nc-app-shell-windows .nc-sidebar-header,
+.nc-app-shell-windows .nc-topbar {
+  -webkit-app-region: drag;
+}
+
+.nc-app-shell-windows button,
+.nc-app-shell-windows a,
+.nc-app-shell-windows input,
+.nc-app-shell-windows textarea,
+.nc-app-shell-windows select,
+.nc-app-shell-windows [contenteditable='true'],
+.nc-app-shell-windows .ant-select,
+.nc-app-shell-windows .ant-btn {
+  -webkit-app-region: no-drag;
+}
+
+.windows-titlebar {
+  @apply fixed right-0 top-0 z-50 flex h-12 select-none items-center gap-0;
+  -webkit-app-region: no-drag;
+}
+
+.windows-titlebar-button {
+  @apply flex h-12 w-12 items-center justify-center text-[#787774] transition-colors hover:bg-[#F4F4F2];
+}
+
+.windows-titlebar-close:hover {
+  @apply bg-[#B3261E] text-white;
+}
+
 .nc-sidebar {
   @apply flex h-screen flex-col border-r border-[#EEEEEC] bg-[#FBFBFA];
 }
 
+/* macOS: 侧边栏延伸到标题栏 */
+.nc-sidebar-mac {
+  padding-top: env(safe-area-inset-top, 0);
+}
+
 .nc-sidebar-header {
   @apply px-2 py-2;
+}
+
+/* macOS: 标题栏区域额外高度 */
+.nc-sidebar-header-mac {
+  @apply pt-12;
+}
+
+.nc-sidebar-new-chat {
+  @apply flex w-full items-center gap-2 rounded-[6px] px-3 py-2.5 text-left text-[13px] font-medium text-[#37352F] transition-colors hover:bg-[#EFEFEE];
+}
+
+.nc-sidebar-workspace-group {
+  @apply mb-3;
+}
+
+.nc-sidebar-workspace-header {
+  @apply flex items-center justify-between gap-2 rounded-[6px] px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-[#91918E] transition-colors hover:bg-[#EFEFEE];
+}
+
+.nc-sidebar-collapse-btn {
+  @apply flex h-7 w-7 items-center justify-center rounded-[6px] border border-[#EEEEEC] bg-white text-[#91918E] transition-colors hover:border-[#37352F] hover:text-[#37352F];
+}
+
+.nc-sidebar-collapse-btn-mac {
+  @apply ml-2;
 }
 
 .nc-sidebar-item {

@@ -307,8 +307,10 @@ export class LanceDbCore {
         schema: new arrow.Schema([
           new arrow.Field('id', new arrow.Utf8()),
           new arrow.Field('title', new arrow.Utf8()),
-          new arrow.Field('created_at', new arrow.Int64())
-        ])
+          new arrow.Field('created_at', new arrow.Int64()),
+          new arrow.Field('workspace_id', new arrow.Utf8())
+        ]),
+        recreateIfSchemaChanged: true
       },
       {
         name: LANCE_TABLES.CHAT_MESSAGE,
