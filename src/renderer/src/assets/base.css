@@ -61,6 +61,9 @@
   --ui-radius-overlay: 8px;
   --ui-radius-composer: 12px;
   --ui-transition: 160ms ease;
+  --app-sidebar-width: 240px;
+  --app-sidebar-collapsed-width: 72px;
+  --app-sidebar-mac-window-spacer-height: 44px;
 }
 
 body {
@@ -273,6 +276,15 @@ textarea,
 
 .nc-sidebar {
   @apply flex h-screen flex-col bg-[#FBFBFA];
+  position: relative;
+  z-index: 1;
+  width: var(--app-sidebar-width);
+  flex: 0 0 var(--app-sidebar-width);
+}
+
+.nc-sidebar-collapsed {
+  width: var(--app-sidebar-collapsed-width);
+  flex-basis: var(--app-sidebar-collapsed-width);
 }
 
 /* macOS: 侧边栏延伸到标题栏 */
@@ -282,6 +294,17 @@ textarea,
 
 .nc-sidebar-header {
   @apply px-2 py-2;
+  position: relative;
+  z-index: 2;
+  overflow: hidden;
+}
+
+.nc-sidebar-window-spacer {
+  flex: 0 0 12px;
+}
+
+.nc-sidebar-window-spacer-mac {
+  flex-basis: var(--app-sidebar-mac-window-spacer-height);
 }
 
 /* macOS: 标题栏区域额外高度 */
@@ -290,13 +313,25 @@ textarea,
   min-height: 52px;
 }
 
+.nc-sidebar-controls-header {
+  @apply pb-2 pt-0;
+}
+
 .nc-brand-strip {
   min-height: 28px;
-  padding-left: 46px;
+  padding-right: 8px;
+}
+
+.nc-settings-back-row {
+  @apply rounded-[6px] px-2.5 py-2 text-[#37352F] transition-colors hover:bg-[#EFEFEE];
+}
+
+.nc-sidebar-nav-row {
+  @apply flex h-9 w-full items-center gap-2 rounded-[6px] px-3 text-left text-[13px] font-normal text-[#37352F] transition-colors hover:bg-[#EFEFEE];
 }
 
 .nc-sidebar-new-chat {
-  @apply flex w-full items-center gap-2 rounded-[6px] px-3 py-2.5 text-left text-[13px] font-medium text-[#37352F] transition-colors hover:bg-[#EFEFEE];
+  @apply font-normal;
 }
 
 .nc-sidebar-workspace-group {
@@ -308,7 +343,24 @@ textarea,
 }
 
 .nc-sidebar-collapse-btn {
-  @apply flex h-7 w-7 items-center justify-center rounded-[6px] border border-[#EEEEEC] bg-white text-[#91918E] transition-colors hover:border-[#37352F] hover:text-[#37352F];
+  @apply flex h-9 w-9 items-center justify-center rounded-[6px] border border-[#EEEEEC] bg-white text-[#91918E] transition-colors hover:border-[#37352F] hover:text-[#37352F];
+  flex-shrink: 0;
+}
+
+.nc-sidebar-collapse-icon {
+  @apply flex h-9 w-9 items-center justify-center text-[#91918E] transition-colors hover:bg-[#EFEFEE] hover:text-[#37352F];
+  flex-shrink: 0;
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+
+.nc-sidebar-action-icon {
+  @apply flex h-9 w-9 items-center justify-center rounded-[6px] text-[#91918E] transition-colors hover:bg-[#EFEFEE] hover:text-[#37352F];
+  flex-shrink: 0;
+  background: transparent;
+  border: 0;
+  padding: 0;
 }
 
 .nc-sidebar-collapse-btn-mac {
@@ -324,11 +376,74 @@ textarea,
 }
 
 .nc-topbar {
-  @apply flex h-[44px] shrink-0 items-center justify-between border-b border-[#EEEEEC] bg-white px-5;
+  @apply flex h-[40px] shrink-0 items-center justify-between border-b border-[#EEEEEC] bg-white px-5;
+  position: relative;
+  z-index: 1;
 }
 
 .nc-main-pane {
-  @apply flex h-screen min-h-0 flex-1 flex-col overflow-hidden rounded-l-[22px] border-l border-[#EEEEEC] bg-white;
+  @apply flex min-h-0 flex-1 flex-col overflow-hidden rounded-l-[18px] border border-[#EEEEEC] bg-white;
+  border-left-color: #e0dfdc;
+  height: 100vh;
+  margin: 0;
+  box-shadow: none;
+}
+
+.nc-sidebar-resizer {
+  position: absolute;
+  top: 0;
+  right: -4px;
+  z-index: 20;
+  width: 8px;
+  height: 100%;
+  cursor: col-resize;
+}
+
+.nc-sidebar-resizer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 3px;
+  width: 1px;
+  height: 100%;
+  background: #eeeeec;
+  transition:
+    width 160ms ease,
+    background-color 160ms ease;
+}
+
+.nc-sidebar-resizer:hover::before,
+.workbench-sidebar-resizing .nc-sidebar-resizer::before {
+  width: 2px;
+  background: #d9d7d1;
+}
+
+.workbench-sidebar-resizing {
+  cursor: col-resize !important;
+  user-select: none;
+}
+
+.nc-topbar-drag-spacer {
+  flex: 1 1 auto;
+  min-width: 120px;
+  align-self: stretch;
+}
+
+.nc-settings-sidebar {
+  min-width: var(--app-sidebar-width);
+}
+
+.nc-settings-sidebar-header {
+  position: relative;
+}
+
+.nc-settings-main-pane {
+  position: relative;
+}
+
+.nc-settings-topbar {
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(10px);
 }
 
 .nc-document-scroll {
@@ -433,11 +548,15 @@ textarea,
 }
 
 .nc-composer-rail {
-  @apply overflow-hidden rounded-[0_0_18px_18px] border border-t-0 border-[#E0DFDC] bg-[#F7F7F5];
+  @apply overflow-hidden rounded-[0_0_24px_24px] border border-t-0 border-[#E3E1DB] bg-[#F7F6F2];
+  margin-top: -1px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.88),
+    0 16px 30px rgba(15, 15, 15, 0.045);
 }
 
 .nc-composer-rail-trigger {
-  @apply h-[54px] w-full rounded-none border-0 bg-transparent px-4 text-[13px] font-medium text-[#787774] hover:bg-[#F2F2EF];
+  @apply h-[56px] w-full rounded-none border-0 bg-transparent px-6 text-[13px] font-medium text-[#37352F];
 }
 
 .workbench-select-trigger {
@@ -461,27 +580,70 @@ textarea,
 
 .workbench-select-trigger-compact {
   @apply h-7 rounded-full border-transparent px-2.5 text-[12px] font-medium text-[#787774];
-  background: #ffffff;
+  background: transparent;
+}
+
+.workbench-select-trigger-rail {
+  @apply h-[56px] rounded-none border-0 px-6 text-[14px] font-medium;
+  background: transparent;
+  box-shadow: none;
+}
+
+.workbench-select-trigger-rail:hover,
+.workbench-select-trigger-rail.workbench-select-trigger-open {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
 }
 
 .workbench-composer-pill {
-  @apply min-w-0 bg-[#F7F7F5] text-[#787774];
+  @apply min-w-0 text-[#787774];
+  background: transparent;
 }
 
 .workbench-composer-pill:hover {
-  background: #ececea;
+  background: #efefed;
 }
 
 .workbench-composer-pill.workbench-select-trigger-open {
-  background: #ffffff;
+  background: #efefed;
+  box-shadow: none;
 }
 
 .workbench-composer-pill-workspace {
-  background: #f7f7f5;
+  background: transparent;
 }
 
 .workbench-composer-pill-subtle {
   background: #fbfbfa;
+}
+
+.workspace-quick-select-trigger {
+  @apply inline-flex h-7 max-w-[190px] min-w-0 items-center gap-2 rounded-full px-2.5 text-[12px] font-medium text-[#787774] transition-colors;
+  background: transparent;
+}
+
+.workspace-quick-select-trigger:hover,
+.workspace-quick-select-trigger-open {
+  background: #efefed;
+  color: #37352f;
+}
+
+.workspace-quick-select-popup {
+  @apply flex items-center gap-1.5 overflow-x-auto rounded-[10px] border border-[#E5E4E0] bg-white p-1.5;
+  box-shadow: 0 16px 40px rgba(15, 15, 15, 0.12);
+}
+
+.workspace-quick-select-option {
+  @apply inline-flex h-8 max-w-[180px] shrink-0 items-center gap-1.5 rounded-[6px] px-2.5 text-left text-[12px] font-medium text-[#787774] transition-colors hover:bg-[#F4F4F2] hover:text-[#37352F];
+}
+
+.workspace-quick-select-option-selected {
+  @apply bg-[#EFEFEE] text-[#37352F];
+}
+
+.workspace-quick-select-empty {
+  @apply whitespace-nowrap px-3 py-1.5 text-[12px] text-[#91918E];
 }
 
 .workbench-select-menu {
@@ -515,6 +677,25 @@ textarea,
 
 .workbench-select-option-disabled {
   @apply cursor-not-allowed opacity-50;
+}
+
+.workbench-context-ring {
+  position: relative;
+  background: #f4f4f2;
+}
+
+.workbench-context-ring::after {
+  content: '';
+  position: absolute;
+  inset: 3.5px;
+  border-radius: 999px;
+  background: #ffffff;
+  z-index: 0;
+}
+
+.workbench-context-ring svg {
+  position: relative;
+  z-index: 1;
 }
 
 .nc-page {

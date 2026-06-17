@@ -37,6 +37,7 @@ import {
   getReferenceTypeLabel
 } from '../../utils/reference'
 import WorkbenchSelect from './WorkbenchSelect'
+import WorkspaceQuickSelect from './WorkspaceQuickSelect'
 
 type MentionContext = {
   textNode: Text
@@ -614,17 +615,6 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     ],
     []
   )
-  const workspaceOptions = useMemo<WorkbenchSelectOption[]>(
-    () =>
-      workspaces.map((workspace) => ({
-        value: workspace.id,
-        label: workspace.name,
-        icon: <HiFolder className="h-3.5 w-3.5" />,
-        description: workspace.root_path || '未设置文件目录',
-        keywords: [workspace.name, workspace.root_path || '']
-      })),
-    [workspaces]
-  )
   const modelOptions = useMemo<WorkbenchSelectOption[]>(
     () =>
       remoteModels.map((model) => ({
@@ -763,8 +753,25 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
         </div>
       ) : null}
 
+      {showWorkspaceSelector ? (
+        <div className="mb-2 flex min-w-0 items-center">
+          <WorkspaceQuickSelect
+            selectedWorkspaceId={selectedWorkspaceId}
+            workspaces={workspaces}
+            onWorkspaceChange={(nextValue) => {
+              onWorkspaceChange(nextValue)
+              focusEditorAfterControlChange()
+            }}
+            placeholder="选择工作空间"
+            noDrag
+            className="max-w-[190px]"
+            data-testid={workbenchSelectors.workspaceSelect}
+          />
+        </div>
+      ) : null}
+
       <div
-        className="nc-floating-composer px-4 pb-2.5 pt-2.5 transition-all duration-200"
+        className="nc-floating-composer px-4 pb-2.5 pt-3 transition-all duration-200"
         data-testid={workbenchSelectors.referenceField}
         onMouseDown={(event) => {
           const target = event.target
@@ -842,31 +849,12 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
               data-testid={workbenchSelectors.modeSwitch}
             />
 
-            {showWorkspaceSelector ? (
-              <WorkbenchSelect
-                value={selectedWorkspaceId}
-                options={workspaceOptions}
-                onChange={(nextValue) => {
-                  onWorkspaceChange(nextValue)
-                  focusEditorAfterControlChange()
-                }}
-                placeholder="选择工作空间"
-                triggerIcon={<HiFolder className="h-3.5 w-3.5" />}
-                compact
-                noDrag
-                className="max-w-[170px]"
-                triggerClassName="workbench-composer-pill workbench-composer-pill-workspace"
-                menuClassName="workbench-composer-menu"
-                selectedWithoutBackground
-                data-testid={workbenchSelectors.workspaceSelect}
-              />
-            ) : null}
           </div>
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-2">
             {mode === 'ai' ? (
               <div
-                className="relative inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#F4F4F2]"
+                className="workbench-context-ring relative inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full"
                 aria-label={contextUsageTitle}
                 title={contextUsageTitle}
               >

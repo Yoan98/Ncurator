@@ -16,6 +16,8 @@ type WorkbenchSelectProps = {
   triggerClassName?: string
   compact?: boolean
   selectedWithoutBackground?: boolean
+  rail?: boolean
+  inlineChevron?: boolean
   disabled?: boolean
   noDrag?: boolean
   'data-testid'?: string
@@ -49,6 +51,8 @@ const WorkbenchSelect: React.FC<WorkbenchSelectProps> = ({
   triggerClassName,
   compact = false,
   selectedWithoutBackground = false,
+  rail = false,
+  inlineChevron = false,
   disabled = false,
   noDrag = false,
   'data-testid': dataTestId
@@ -165,6 +169,7 @@ const WorkbenchSelect: React.FC<WorkbenchSelectProps> = ({
         className={joinClassNames(
           'workbench-select-trigger',
           compact ? 'workbench-select-trigger-compact' : '',
+          rail ? 'workbench-select-trigger-rail' : '',
           open ? 'workbench-select-trigger-open' : '',
           disabled ? 'workbench-select-trigger-disabled' : '',
           noDrag ? 'workbench-no-drag' : '',
@@ -182,13 +187,23 @@ const WorkbenchSelect: React.FC<WorkbenchSelectProps> = ({
             </span>
           ) : null}
           <span className="truncate">{triggerLabel}</span>
+          {inlineChevron ? (
+            <HiChevronDown
+              className={joinClassNames(
+                'h-3.5 w-3.5 shrink-0 transition-transform duration-150',
+                open ? 'rotate-180' : ''
+              )}
+            />
+          ) : null}
         </span>
-        <HiChevronDown
-          className={joinClassNames(
-            'h-3.5 w-3.5 shrink-0 transition-transform duration-150',
-            open ? 'rotate-180' : ''
-          )}
-        />
+        {inlineChevron ? null : (
+          <HiChevronDown
+            className={joinClassNames(
+              'h-3.5 w-3.5 shrink-0 transition-transform duration-150',
+              open ? 'rotate-180' : ''
+            )}
+          />
+        )}
       </button>
 
       {open

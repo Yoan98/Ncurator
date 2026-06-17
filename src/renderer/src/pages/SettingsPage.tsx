@@ -1,5 +1,6 @@
-﻿import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { NavLink, Navigate, useLocation, useParams } from 'react-router-dom'
+import { HiArrowLeft } from 'react-icons/hi2'
 import AppUpdateSettingsPanel from '../components/settings/AppUpdateSettingsPanel'
 import ModelSettingsPanel from '../components/settings/ModelSettingsPanel'
 import VectorModelSettingsPanel from '../components/settings/VectorModelSettingsPanel'
@@ -7,7 +8,6 @@ import WorkspaceSettingsPanel from '../components/settings/WorkspaceSettingsPane
 import { SETTINGS_SECTION_META, SETTINGS_SECTION_ORDER } from '../components/settings/constants'
 import type { SettingsSectionValue } from '../components/settings/types'
 import { settingsSelectors } from '../testing/selectors'
-import { HiArrowLeft } from 'react-icons/hi2'
 import WindowsTitleBar from '../components/WindowsTitleBar'
 
 const normalizeSettingsSection = (value: string | undefined): SettingsSectionValue | null => {
@@ -32,6 +32,10 @@ const SettingsPage: React.FC = () => {
   const params = useParams<{ section?: string }>()
   const currentSection = normalizeSettingsSection(params.section)
   const [platform, setPlatform] = useState<string>('darwin')
+  const sectionMeta = useMemo(
+    () => (currentSection ? SETTINGS_SECTION_META[currentSection] : null),
+    [currentSection]
+  )
 
   useEffect(() => {
     setPlatform(navigator.platform.toLowerCase().includes('win') ? 'win32' : 'darwin')
@@ -41,11 +45,9 @@ const SettingsPage: React.FC = () => {
     return <Navigate to={SETTINGS_SECTION_META[getLegacySection(location.search)].path} replace />
   }
 
-  if (!currentSection) {
+  if (!currentSection || !sectionMeta) {
     return <Navigate to={SETTINGS_SECTION_META.model.path} replace />
   }
-
-  const sectionMeta = SETTINGS_SECTION_META[currentSection]
 
   return (
     <div
@@ -53,17 +55,23 @@ const SettingsPage: React.FC = () => {
       data-testid={settingsSelectors.page}
     >
       {platform === 'win32' ? <WindowsTitleBar /> : null}
-      <aside className={`nc-sidebar w-[240px] ${platform === 'darwin' ? 'nc-sidebar-mac' : ''}`}>
+
+      <aside
+        className={`nc-sidebar nc-settings-sidebar ${platform === 'darwin' ? 'nc-sidebar-mac' : ''}`}
+      >
         <div
-          className={`nc-sidebar-header ${platform === 'darwin' ? 'nc-sidebar-header-mac' : 'pt-3'}`}
-        >
-          <NavLink to="/" className="nc-sidebar-item flex items-center gap-2 px-2.5 py-2">
-            <HiArrowLeft className="h-4 w-4 shrink-0 text-[#787774]" />
-            <span className="truncate text-[13px] font-medium text-[#37352F]">返回工作台</span>
-          </NavLink>
-        </div>
+          className={`nc-sidebar-window-spacer ${platform === 'darwin' ? 'nc-sidebar-window-spacer-mac' : ''}`}
+          aria-hidden="true"
+        />
 
         <div className="flex-1 overflow-y-auto px-2 py-3">
+          <NavLink
+            to="/"
+            className="nc-settings-back-row workbench-no-drag mb-2 flex min-w-0 items-center gap-2"
+          >
+            <HiArrowLeft className="h-[18px] w-[18px] shrink-0 text-[#787774]" />
+            <span className="truncate text-[13px] font-medium text-[#37352F]">返回工作台</span>
+          </NavLink>
           <div className="px-2 pb-2 text-[12px] font-medium text-[#9B9A97]">设置</div>
           <div className="space-y-1">
             {SETTINGS_SECTION_ORDER.map((section) => {
@@ -89,8 +97,8 @@ const SettingsPage: React.FC = () => {
         </div>
       </aside>
 
-      <main className="min-w-0 flex-1 bg-white">
-        <div className="flex h-screen min-h-0 flex-col px-6 py-5">
+      <main className="nc-main-pane nc-settings-main-pane min-w-0 flex-1">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-6 py-5">
           <header className="shrink-0 pb-5">
             <div className="flex items-center gap-2 text-[#37352F]">
               <span className="flex h-8 w-8 items-center justify-center rounded-[6px] border border-[#EEEEEC] bg-white text-[#787774]">

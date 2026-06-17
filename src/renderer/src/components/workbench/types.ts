@@ -3,7 +3,8 @@ import type {
   AiRunEvent,
   AiFileChangeStatus,
   RuntimeSkillId,
-  SearchResult
+  SearchResult,
+  WorkspaceSource
 } from '../../../../shared/types'
 
 export type WorkbenchMode = 'ai' | 'search'
@@ -30,6 +31,22 @@ export type WorkbenchSelectOption = {
   keywords?: string[]
   trailing?: ReactNode
   disabled?: boolean
+}
+
+export type WorkspaceQuickSelectProps = {
+  workspaces: WorkspaceSource[]
+  selectedWorkspaceId: string | null
+  onWorkspaceChange: (workspaceId: string) => void
+  placeholder?: string
+  className?: string
+  noDrag?: boolean
+  'data-testid'?: string
+}
+
+export type WorkspaceQuickSelectPopupPosition = {
+  top: number
+  left: number
+  maxWidth: number
 }
 
 export type SearchWorkbenchTurn = {

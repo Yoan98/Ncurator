@@ -7,7 +7,6 @@ import {
   HiChevronRight,
   HiClock,
   HiFolder,
-  HiOutlineBars3CenterLeft,
   HiOutlineChatBubbleLeft,
   HiOutlineExclamationCircle,
   HiOutlinePencilSquare,
@@ -42,7 +41,11 @@ import {
   FILE_CHANGE_STATUS_META,
   FILE_ORIGIN_LABELS,
   WORKBENCH_CONTENT_PANEL_COLLAPSED_STORAGE_KEY,
-  WORKBENCH_SIDEBAR_STORAGE_KEY
+  WORKBENCH_SIDEBAR_DEFAULT_WIDTH,
+  WORKBENCH_SIDEBAR_MAX_WIDTH,
+  WORKBENCH_SIDEBAR_MIN_WIDTH,
+  WORKBENCH_SIDEBAR_STORAGE_KEY,
+  WORKBENCH_SIDEBAR_WIDTH_STORAGE_KEY
 } from '../components/workbench/constants'
 import type {
   AssistantTurnViewModel,
@@ -84,7 +87,7 @@ import {
 import { chatSelectors, workbenchSelectors } from '../testing/selectors'
 import brandIcon from '../../../../resources/icon.png'
 import WindowsTitleBar from '../components/WindowsTitleBar'
-import WorkbenchSelect from '../components/workbench/WorkbenchSelect'
+import SidebarPanelIcon from '../components/SidebarPanelIcon'
 import {
   collectReferenceDocumentIds,
   hasIncompleteLocalKbCoverage,
@@ -106,6 +109,9 @@ type ApprovalDraftDecision = {
 }
 
 const SCROLL_BOTTOM_TOLERANCE = 72
+
+const clampWorkbenchSidebarWidth = (width: number): number =>
+  Math.max(WORKBENCH_SIDEBAR_MIN_WIDTH, Math.min(WORKBENCH_SIDEBAR_MAX_WIDTH, width))
 
 const createEmptyPanel = (): WorkbenchContentPanelState => ({
   kind: 'empty',
@@ -298,6 +304,10 @@ const ChatPage: React.FC = () => {
     const stored = window.localStorage.getItem(WORKBENCH_SIDEBAR_STORAGE_KEY)
     return stored === 'true'
   })
+  const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
+    const stored = window.localStorage.getItem(WORKBENCH_SIDEBAR_WIDTH_STORAGE_KEY)
+    return clampWorkbenchSidebarWidth(stored ? Number(stored) : WORKBENCH_SIDEBAR_DEFAULT_WIDTH)
+  })
   const [contentPanelCollapsed, setContentPanelCollapsed] = useState<boolean>(() => {
     const stored = window.localStorage.getItem(WORKBENCH_CONTENT_PANEL_COLLAPSED_STORAGE_KEY)
     return stored === null ? true : stored === 'true'
@@ -319,6 +329,11 @@ const ChatPage: React.FC = () => {
   const assistantMsgIdRef = useRef<string | null>(null)
   const assistantArtifactsRef = useRef<Record<string, AiArtifactRef[]>>({})
   const lastSubmittedInputRef = useRef('')
+  const sidebarDragStartRef = useRef<{
+    pointerId: number
+    startX: number
+    startWidth: number
+  } | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const shouldAutoScrollRef = useRef(true)
   const scrollFrameRef = useRef<number | null>(null)
@@ -373,18 +388,6 @@ const ChatPage: React.FC = () => {
     if (!pendingApprovalBatch) return null
     return pendingApprovalBatch.items[approvalCurrentIndex] || pendingApprovalBatch.items[0] || null
   }, [approvalCurrentIndex, pendingApprovalBatch])
-  const workspaceSelectOptions = useMemo(
-    () =>
-      workspaces.map((workspace) => ({
-        value: workspace.id,
-        label: workspace.name,
-        icon: <HiFolder className="h-3.5 w-3.5" />,
-        description: workspace.root_path || '未设置文件目录',
-        keywords: [workspace.name, workspace.root_path || '']
-      })),
-    [workspaces]
-  )
-
   const selectedWorkspaceReady = useMemo(
     () => hasWorkspaceRootPath(selectedWorkspace),
     [selectedWorkspace]
@@ -938,6 +941,33 @@ const ChatPage: React.FC = () => {
   useEffect(() => {
     window.localStorage.setItem(WORKBENCH_SIDEBAR_STORAGE_KEY, String(sidebarCollapsed))
   }, [sidebarCollapsed])
+
+  useEffect(() => {
+    window.localStorage.setItem(WORKBENCH_SIDEBAR_WIDTH_STORAGE_KEY, String(sidebarWidth))
+  }, [sidebarWidth])
+
+  useEffect(() => {
+    const handlePointerMove = (event: PointerEvent): void => {
+      const drag = sidebarDragStartRef.current
+      if (!drag || event.pointerId !== drag.pointerId) return
+      const delta = event.clientX - drag.startX
+      setSidebarWidth(clampWorkbenchSidebarWidth(drag.startWidth + delta))
+    }
+
+    const handlePointerUp = (event: PointerEvent): void => {
+      const drag = sidebarDragStartRef.current
+      if (!drag || event.pointerId !== drag.pointerId) return
+      sidebarDragStartRef.current = null
+      document.body.classList.remove('workbench-sidebar-resizing')
+    }
+
+    window.addEventListener('pointermove', handlePointerMove)
+    window.addEventListener('pointerup', handlePointerUp)
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove)
+      window.removeEventListener('pointerup', handlePointerUp)
+    }
+  }, [])
 
   useEffect(() => {
     window.localStorage.setItem(
@@ -1937,47 +1967,48 @@ const ChatPage: React.FC = () => {
       {platform === 'win32' ? <WindowsTitleBar /> : null}
       <aside
         className={`nc-sidebar ${platform === 'darwin' ? 'nc-sidebar-mac' : ''} transition-all duration-200 ${
-          sidebarCollapsed ? 'w-14' : 'w-[260px]'
+          sidebarCollapsed ? 'nc-sidebar-collapsed' : ''
         }`}
+        style={sidebarCollapsed ? undefined : { width: sidebarWidth, flexBasis: sidebarWidth }}
       >
         <div
-          className={`nc-sidebar-header ${platform === 'darwin' ? 'nc-sidebar-header-mac' : 'pt-3'}`}
-        >
-          <div
-            className={`flex items-center ${sidebarCollapsed ? 'justify-center' : 'justify-between'} gap-2`}
+          className={`nc-sidebar-window-spacer ${platform === 'darwin' ? 'nc-sidebar-window-spacer-mac' : ''}`}
+          aria-hidden="true"
+        />
+
+        <div className="px-2 pb-1">
+          <button
+            type="button"
+            className={`nc-sidebar-nav-row workbench-no-drag ${
+              sidebarCollapsed ? 'justify-center px-0' : ''
+            }`}
+            onClick={() => setSidebarCollapsed((previous) => !previous)}
+            data-testid={workbenchSelectors.sessionsToggle}
+            aria-label={sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'}
           >
-            {!sidebarCollapsed ? (
-              <div className="nc-brand-strip flex min-w-0 items-center gap-2">
-                <span className="ui-icon-well flex h-7 w-7 shrink-0 bg-white">
-                  <img src={brandIcon} alt="馆长" className="w-4 invert-100" />
-                </span>
-                <span className="truncate text-[13px] font-semibold tracking-[0.01em] text-[#37352F]">
-                  馆长
-                </span>
-              </div>
-            ) : null}
-            <button
-              type="button"
-              className="nc-sidebar-collapse-btn workbench-no-drag"
-              onClick={() => setSidebarCollapsed((previous) => !previous)}
-              data-testid={workbenchSelectors.sessionsToggle}
-              aria-label={sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'}
-            >
-              <HiOutlineBars3CenterLeft className="h-4 w-4" />
-            </button>
-          </div>
+            <SidebarPanelIcon
+              className="h-[18px] w-[18px] shrink-0 text-[#787774]"
+              variant={sidebarCollapsed ? 'expand' : 'collapse'}
+            />
+            {sidebarCollapsed ? null : <span>收起</span>}
+          </button>
         </div>
 
         <div className="px-2 pb-2">
           <button
             type="button"
-            className={`nc-sidebar-new-chat ${sidebarCollapsed ? 'justify-center px-0' : ''}`}
+            className={`nc-sidebar-nav-row nc-sidebar-new-chat ${
+              sidebarCollapsed ? 'justify-center px-0' : ''
+            }`}
             onClick={() => void createNewSession()}
             data-testid={workbenchSelectors.newSessionButton}
             aria-label="新对话"
           >
-            <HiOutlinePencilSquare className="h-4 w-4 shrink-0 text-[#787774]" />
+            <HiOutlinePencilSquare className="h-[18px] w-[18px] shrink-0 text-[#787774]" />
             {sidebarCollapsed ? null : <span>新对话</span>}
+            {sidebarCollapsed ? null : (
+              <img src={brandIcon} alt="馆长" className="ml-auto h-4 w-4 shrink-0 invert-100" />
+            )}
           </button>
         </div>
 
@@ -2059,20 +2090,35 @@ const ChatPage: React.FC = () => {
         </div>
 
         <div className="px-2 py-2">
-          <Button
-            icon={<HiOutlineCog6Tooth className="h-3.5 w-3.5" />}
+          <button
+            type="button"
             onClick={() => navigate('/settings/model')}
-            className={`!h-7 !rounded-[6px] !border-[#EEEEEC] !bg-white !text-[#91918E] !shadow-none hover:!border-[#37352F] hover:!text-[#37352F] ${
-              sidebarCollapsed ? '!w-7 !px-0' : '!w-full !justify-start !px-2.5'
+            className={`nc-sidebar-nav-row ${
+              sidebarCollapsed ? 'justify-center px-0' : ''
             }`}
+            aria-label="设置"
           >
-            {sidebarCollapsed ? undefined : '设置'}
-          </Button>
+            <HiOutlineCog6Tooth className="h-[18px] w-[18px] shrink-0 text-[#787774]" />
+            {sidebarCollapsed ? null : <span>设置</span>}
+          </button>
         </div>
+        {!sidebarCollapsed ? (
+          <div
+            className="nc-sidebar-resizer workbench-no-drag"
+            onPointerDown={(event) => {
+              sidebarDragStartRef.current = {
+                pointerId: event.pointerId,
+                startX: event.clientX,
+                startWidth: sidebarWidth
+              }
+              document.body.classList.add('workbench-sidebar-resizing')
+            }}
+          />
+        ) : null}
       </aside>
 
       <div className="nc-main-pane min-w-0 flex-1">
-        <div className="flex h-screen min-h-0 flex-col">
+        <div className="flex h-full min-h-0 flex-col">
           {!isNewSession ? (
             <div className="nc-topbar">
               <div className="min-w-0 flex-1 bg-white">
@@ -2108,6 +2154,8 @@ const ChatPage: React.FC = () => {
                   </div>
                 ) : null}
               </div>
+
+              <div className="nc-topbar-drag-spacer" aria-hidden="true" />
 
               <Button
                 type="text"
@@ -2154,7 +2202,7 @@ const ChatPage: React.FC = () => {
                 >
                   <div className="mx-auto w-full max-w-[760px]">
                     {isNewSession ? (
-                      <div className="mb-8 text-center text-[28px] font-medium tracking-[-0.02em] text-[#37352F]">
+                      <div className="mb-8 text-center text-[28px] font-normal tracking-[-0.02em] text-[#37352F]">
                         {composerMode === 'search' ? '俺只会搜索本地资料！！' : '找俺干啥？'}
                       </div>
                     ) : null}
@@ -2304,8 +2352,10 @@ const ChatPage: React.FC = () => {
                         onModelNameChange={handleModelNameChange}
                         workspaces={workspaces}
                         selectedWorkspaceId={selectedWorkspaceId}
-                        onWorkspaceChange={handleWorkspaceChange}
-                        showWorkspaceSelector={!isNewSession}
+                        onWorkspaceChange={
+                          isNewSession ? handleNewSessionWorkspaceChange : handleWorkspaceChange
+                        }
+                        showWorkspaceSelector
                         onDraftChange={handleComposerDraftChange}
                         onSubmit={() => void handleSend()}
                         onCancel={() => void handleCancel()}
@@ -2321,23 +2371,6 @@ const ChatPage: React.FC = () => {
                         contextUsage={contextUsage}
                       />
                     )}
-
-                    {isNewSession ? (
-                      <div className="nc-composer-rail mx-auto mt-2 w-full max-w-[760px]">
-                        <WorkbenchSelect
-                          value={selectedWorkspaceId}
-                          onChange={handleNewSessionWorkspaceChange}
-                          options={workspaceSelectOptions}
-                          placeholder="选择工作空间"
-                          triggerIcon={<HiFolder className="h-4 w-4" />}
-                          className="w-full"
-                          triggerClassName="nc-composer-rail-trigger"
-                          menuClassName="workbench-composer-menu"
-                          selectedWithoutBackground
-                          data-testid={workbenchSelectors.workspaceSelect}
-                        />
-                      </div>
-                    ) : null}
 
                     {composerMode === 'ai' &&
                     selectedReferences.some(hasIncompleteLocalKbCoverage) ? (
