@@ -7,7 +7,6 @@ import {
   HiChevronRight,
   HiClock,
   HiFolder,
-  HiOutlineChatBubbleLeft,
   HiOutlineExclamationCircle,
   HiOutlinePencilSquare,
   HiOutlineRectangleGroup,
@@ -308,6 +307,7 @@ const ChatPage: React.FC = () => {
     const stored = window.localStorage.getItem(WORKBENCH_SIDEBAR_WIDTH_STORAGE_KEY)
     return clampWorkbenchSidebarWidth(stored ? Number(stored) : WORKBENCH_SIDEBAR_DEFAULT_WIDTH)
   })
+  const [sidebarResizeGuideX, setSidebarResizeGuideX] = useState<number | null>(null)
   const [contentPanelCollapsed, setContentPanelCollapsed] = useState<boolean>(() => {
     const stored = window.localStorage.getItem(WORKBENCH_CONTENT_PANEL_COLLAPSED_STORAGE_KEY)
     return stored === null ? true : stored === 'true'
@@ -334,6 +334,7 @@ const ChatPage: React.FC = () => {
     startX: number
     startWidth: number
   } | null>(null)
+  const sidebarResizeFrameRef = useRef<number | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const shouldAutoScrollRef = useRef(true)
   const scrollFrameRef = useRef<number | null>(null)
@@ -951,13 +952,26 @@ const ChatPage: React.FC = () => {
       const drag = sidebarDragStartRef.current
       if (!drag || event.pointerId !== drag.pointerId) return
       const delta = event.clientX - drag.startX
-      setSidebarWidth(clampWorkbenchSidebarWidth(drag.startWidth + delta))
+      const nextWidth = clampWorkbenchSidebarWidth(drag.startWidth + delta)
+      if (sidebarResizeFrameRef.current !== null) {
+        window.cancelAnimationFrame(sidebarResizeFrameRef.current)
+      }
+      sidebarResizeFrameRef.current = window.requestAnimationFrame(() => {
+        setSidebarWidth(nextWidth)
+        setSidebarResizeGuideX(nextWidth)
+        sidebarResizeFrameRef.current = null
+      })
     }
 
     const handlePointerUp = (event: PointerEvent): void => {
       const drag = sidebarDragStartRef.current
       if (!drag || event.pointerId !== drag.pointerId) return
+      if (sidebarResizeFrameRef.current !== null) {
+        window.cancelAnimationFrame(sidebarResizeFrameRef.current)
+        sidebarResizeFrameRef.current = null
+      }
       sidebarDragStartRef.current = null
+      setSidebarResizeGuideX(null)
       document.body.classList.remove('workbench-sidebar-resizing')
     }
 
@@ -966,6 +980,9 @@ const ChatPage: React.FC = () => {
     return () => {
       window.removeEventListener('pointermove', handlePointerMove)
       window.removeEventListener('pointerup', handlePointerUp)
+      if (sidebarResizeFrameRef.current !== null) {
+        window.cancelAnimationFrame(sidebarResizeFrameRef.current)
+      }
     }
   }, [])
 
@@ -1965,47 +1982,42 @@ const ChatPage: React.FC = () => {
       data-workbench-mode={composerMode}
     >
       {platform === 'win32' ? <WindowsTitleBar /> : null}
-      <aside
-        className={`nc-sidebar ${platform === 'darwin' ? 'nc-sidebar-mac' : ''} transition-all duration-200 ${
-          sidebarCollapsed ? 'nc-sidebar-collapsed' : ''
+      <button
+        type="button"
+        className={`nc-sidebar-titlebar-toggle workbench-no-drag ${
+          sidebarCollapsed ? 'nc-sidebar-titlebar-toggle-hidden' : ''
         }`}
-        style={sidebarCollapsed ? undefined : { width: sidebarWidth, flexBasis: sidebarWidth }}
+        style={{ left: sidebarCollapsed ? 104 : Math.max(104, sidebarWidth - 48) }}
+        onClick={() => setSidebarCollapsed((previous) => !previous)}
+        data-testid={workbenchSelectors.sessionsToggle}
+        aria-label={sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'}
+      >
+        <SidebarPanelIcon
+          className="h-[18px] w-[18px]"
+          variant={sidebarCollapsed ? 'expand' : 'collapse'}
+        />
+      </button>
+      <aside
+        className={`nc-sidebar ${platform === 'darwin' ? 'nc-sidebar-mac' : ''} ${
+          sidebarCollapsed ? 'nc-sidebar-hidden' : ''
+        }`}
+        style={{ width: sidebarWidth, flexBasis: sidebarWidth }}
       >
         <div
           className={`nc-sidebar-window-spacer ${platform === 'darwin' ? 'nc-sidebar-window-spacer-mac' : ''}`}
           aria-hidden="true"
         />
 
-        <div className="px-2 pb-1">
-          <button
-            type="button"
-            className={`nc-sidebar-nav-row workbench-no-drag ${
-              sidebarCollapsed ? 'justify-center px-0' : ''
-            }`}
-            onClick={() => setSidebarCollapsed((previous) => !previous)}
-            data-testid={workbenchSelectors.sessionsToggle}
-            aria-label={sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'}
-          >
-            <SidebarPanelIcon
-              className="h-[18px] w-[18px] shrink-0 text-[#787774]"
-              variant={sidebarCollapsed ? 'expand' : 'collapse'}
-            />
-            {sidebarCollapsed ? null : <span>收起</span>}
-          </button>
-        </div>
-
         <div className="px-2 pb-2">
           <button
             type="button"
-            className={`nc-sidebar-nav-row nc-sidebar-new-chat ${
-              sidebarCollapsed ? 'justify-center px-0' : ''
-            }`}
+            className="nc-sidebar-nav-row nc-sidebar-new-chat"
             onClick={() => void createNewSession()}
             data-testid={workbenchSelectors.newSessionButton}
             aria-label="新对话"
           >
             <HiOutlinePencilSquare className="h-[18px] w-[18px] shrink-0 text-[#787774]" />
-            {sidebarCollapsed ? null : <span>新对话</span>}
+            <span>新对话</span>
           </button>
         </div>
 
@@ -2018,24 +2030,20 @@ const ChatPage: React.FC = () => {
             return (
               <div key={workspace.id} className="nc-sidebar-workspace-group">
                 <div
-                  className={`nc-sidebar-workspace-header group ${
-                    sidebarCollapsed ? 'justify-center px-0' : ''
-                  }`}
+                  className="nc-sidebar-workspace-header group"
                 >
                   <div className="flex min-w-0 items-center gap-2">
                     <HiFolder className="h-4 w-4 shrink-0 text-[#91918E]" />
-                    {sidebarCollapsed ? null : <span className="truncate">{workspace.name}</span>}
+                    <span className="truncate">{workspace.name}</span>
                   </div>
-                  {sidebarCollapsed ? null : (
-                    <button
-                      type="button"
-                      className="flex h-5 w-5 items-center justify-center rounded-[5px] text-[#91918E] opacity-0 transition hover:bg-white hover:text-[#37352F] group-hover:opacity-100"
-                      onClick={() => void createNewSession(workspace.id)}
-                      aria-label={`在 ${workspace.name} 中新建对话`}
-                    >
-                      <HiPlus className="h-3.5 w-3.5" />
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    className="flex h-5 w-5 items-center justify-center rounded-[5px] text-[#91918E] opacity-0 transition hover:bg-white hover:text-[#37352F] group-hover:opacity-100"
+                    onClick={() => void createNewSession(workspace.id)}
+                    aria-label={`在 ${workspace.name} 中新建对话`}
+                  >
+                    <HiPlus className="h-3.5 w-3.5" />
+                  </button>
                 </div>
                 <div className="mt-1 space-y-1">
                   {workspaceSessions.map((session) => (
@@ -2047,7 +2055,7 @@ const ChatPage: React.FC = () => {
                         currentSessionId === session.id
                           ? 'nc-sidebar-item-active'
                           : 'bg-transparent'
-                      } ${sidebarCollapsed ? 'px-2 py-2' : 'px-3 py-2'}`}
+                      } px-3 py-2`}
                       onClick={() => selectSession(session)}
                       onKeyDown={(event) => {
                         if (event.key === 'Enter' || event.key === ' ') {
@@ -2056,28 +2064,22 @@ const ChatPage: React.FC = () => {
                         }
                       }}
                     >
-                      {sidebarCollapsed ? (
-                        <div className="flex justify-center">
-                          <HiOutlineChatBubbleLeft className="h-4 w-4 text-[#91918E]" />
+                      <div className="flex min-w-0 items-center gap-2 pl-4">
+                        <div className="min-w-0 flex-1 truncate text-[13px] font-medium text-[#37352F]">
+                          {session.title}
                         </div>
-                      ) : (
-                        <div className="flex min-w-0 items-center gap-2 pl-4">
-                          <div className="min-w-0 flex-1 truncate text-[13px] font-medium text-[#37352F]">
-                            {session.title}
-                          </div>
-                          <div className="flex shrink-0 items-center gap-1 text-[11px] text-[#91918E] group-hover:hidden">
-                            <HiClock className="h-3 w-3" />
-                            <span>{formatRelativeTime(session.created_at)}</span>
-                          </div>
-                          <Button
-                            type="text"
-                            size="small"
-                            icon={<HiTrash className="h-3.5 w-3.5" />}
-                            className="!absolute !right-1 !top-1/2 !z-10 !h-6 !w-6 !-translate-y-1/2 !rounded-[6px] !p-0 opacity-0 transition-opacity group-hover:opacity-100"
-                            onClick={(event) => void deleteSession(event, session.id)}
-                          />
+                        <div className="flex shrink-0 items-center gap-1 text-[11px] text-[#91918E] group-hover:hidden">
+                          <HiClock className="h-3 w-3" />
+                          <span>{formatRelativeTime(session.created_at)}</span>
                         </div>
-                      )}
+                        <Button
+                          type="text"
+                          size="small"
+                          icon={<HiTrash className="h-3.5 w-3.5" />}
+                          className="!absolute !right-1 !top-1/2 !z-10 !h-6 !w-6 !-translate-y-1/2 !rounded-[6px] !p-0 opacity-0 transition-opacity group-hover:opacity-100"
+                          onClick={(event) => void deleteSession(event, session.id)}
+                        />
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -2090,29 +2092,29 @@ const ChatPage: React.FC = () => {
           <button
             type="button"
             onClick={() => navigate('/settings/model')}
-            className={`nc-sidebar-nav-row ${
-              sidebarCollapsed ? 'justify-center px-0' : ''
-            }`}
+            className="nc-sidebar-nav-row"
             aria-label="设置"
           >
             <HiOutlineCog6Tooth className="h-[18px] w-[18px] shrink-0 text-[#787774]" />
-            {sidebarCollapsed ? null : <span>设置</span>}
+            <span>设置</span>
           </button>
         </div>
-        {!sidebarCollapsed ? (
-          <div
-            className="nc-sidebar-resizer workbench-no-drag"
-            onPointerDown={(event) => {
-              sidebarDragStartRef.current = {
-                pointerId: event.pointerId,
-                startX: event.clientX,
-                startWidth: sidebarWidth
-              }
-              document.body.classList.add('workbench-sidebar-resizing')
-            }}
-          />
-        ) : null}
+        <div
+          className="nc-sidebar-resizer workbench-no-drag"
+          onPointerDown={(event) => {
+            sidebarDragStartRef.current = {
+              pointerId: event.pointerId,
+              startX: event.clientX,
+              startWidth: sidebarWidth
+            }
+            setSidebarResizeGuideX(sidebarWidth)
+            document.body.classList.add('workbench-sidebar-resizing')
+          }}
+        />
       </aside>
+      {sidebarResizeGuideX !== null ? (
+        <div className="nc-sidebar-resize-guide" style={{ left: sidebarResizeGuideX }} />
+      ) : null}
 
       <div className="nc-main-pane min-w-0 flex-1">
         <div className="flex h-full min-h-0 flex-col">

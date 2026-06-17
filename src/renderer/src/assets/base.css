@@ -62,8 +62,8 @@
   --ui-radius-composer: 12px;
   --ui-transition: 160ms ease;
   --app-sidebar-width: 240px;
-  --app-sidebar-collapsed-width: 72px;
-  --app-sidebar-mac-window-spacer-height: 44px;
+  --app-sidebar-collapsed-width: 0px;
+  --app-sidebar-mac-window-spacer-height: 36px;
 }
 
 body {
@@ -280,11 +280,30 @@ textarea,
   z-index: 1;
   width: var(--app-sidebar-width);
   flex: 0 0 var(--app-sidebar-width);
+  transform: translateX(0);
+  opacity: 1;
+  transition:
+    width 180ms ease,
+    flex-basis 180ms ease,
+    transform 180ms ease,
+    opacity 120ms ease;
 }
 
-.nc-sidebar-collapsed {
-  width: var(--app-sidebar-collapsed-width);
-  flex-basis: var(--app-sidebar-collapsed-width);
+.nc-sidebar-hidden {
+  width: 0 !important;
+  flex-basis: 0 !important;
+  min-width: 0;
+  pointer-events: none;
+  transform: translateX(-24px);
+  opacity: 0;
+}
+
+.nc-sidebar-titlebar-toggle {
+  @apply fixed z-30 flex h-9 w-9 items-center justify-center rounded-[6px] text-[#91918E] transition-colors hover:bg-[#EFEFEE] hover:text-[#37352F];
+  top: 16px;
+  left: 286px;
+  background: transparent;
+  border: 0;
 }
 
 /* macOS: 侧边栏延伸到标题栏 */
@@ -408,7 +427,7 @@ textarea,
   height: 100%;
   background: transparent;
   transition:
-    width 160ms ease,
+    width 60ms linear,
     background-color 160ms ease;
 }
 
@@ -421,6 +440,16 @@ textarea,
 .workbench-sidebar-resizing {
   cursor: col-resize !important;
   user-select: none;
+}
+
+.nc-sidebar-resize-guide {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  z-index: 60;
+  width: 2px;
+  pointer-events: none;
+  background: #d9d7d1;
 }
 
 .nc-topbar-drag-spacer {
@@ -620,7 +649,7 @@ textarea,
 
 .workspace-quick-select-trigger {
   @apply inline-flex h-7 max-w-[190px] min-w-0 items-center gap-2 rounded-full px-2.5 text-[12px] font-medium text-[#787774] transition-colors;
-  background: transparent;
+  background: #efefed;
 }
 
 .workspace-quick-select-trigger:hover,
