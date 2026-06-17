@@ -299,8 +299,8 @@ textarea,
 }
 
 .nc-sidebar-titlebar-toggle {
-  @apply fixed z-30 flex h-9 w-9 items-center justify-center rounded-[6px] text-[#91918E] transition-colors hover:bg-[#EFEFEE] hover:text-[#37352F];
-  top: 16px;
+  @apply fixed z-30 flex h-8 w-8 items-center justify-center rounded-[6px] text-[#91918E] transition-colors hover:bg-[#EFEFEE] hover:text-[#37352F];
+  top: 10px;
   left: 286px;
   background: transparent;
   border: 0;
@@ -632,6 +632,10 @@ textarea,
 
 .workbench-composer-pill:hover {
   background: #efefed;
+}
+
+.workbench-composer-mode-pill {
+  margin-left: -10px;
 }
 
 .workbench-composer-pill.workbench-select-trigger-open {

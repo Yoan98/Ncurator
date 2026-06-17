@@ -847,7 +847,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
               placeholder="模式"
               compact
               noDrag
-              triggerClassName="workbench-composer-pill"
+              triggerClassName="workbench-composer-pill workbench-composer-mode-pill"
               menuClassName="workbench-composer-menu"
               data-testid={workbenchSelectors.modeSwitch}
             />

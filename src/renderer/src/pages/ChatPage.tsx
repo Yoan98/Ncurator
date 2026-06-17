@@ -1993,7 +1993,7 @@ const ChatPage: React.FC = () => {
         aria-label={sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'}
       >
         <SidebarPanelIcon
-          className="h-[18px] w-[18px]"
+          className="h-4 w-4"
           variant={sidebarCollapsed ? 'expand' : 'collapse'}
         />
       </button>
@@ -2008,7 +2008,7 @@ const ChatPage: React.FC = () => {
           aria-hidden="true"
         />
 
-        <div className="px-2 pb-2">
+        <div className="px-2 py-3">
           <button
             type="button"
             className="nc-sidebar-nav-row nc-sidebar-new-chat"
@@ -2201,9 +2201,9 @@ const ChatPage: React.FC = () => {
                 >
                   <div className="mx-auto w-full max-w-[760px]">
                     {isNewSession ? (
-                      <div className="mb-8 flex items-center justify-center gap-3 text-center text-[28px] font-normal tracking-[-0.02em] text-[#37352F]">
+                      <div className="mb-8 flex items-center justify-center gap-1.5 text-center text-[28px] font-normal tracking-[-0.02em] text-[#37352F]">
                         <span>{composerMode === 'search' ? '俺只会搜索本地资料！！' : '找俺干啥？'}</span>
-                        <img src={brandIcon} alt="馆长" className="h-9 w-9 shrink-0 invert-100" />
+                        <img src={brandIcon} alt="馆长" className="h-10 w-10 shrink-0" />
                       </div>
                     ) : null}
                     {composerMode === 'ai' && pendingApprovalBatch ? (

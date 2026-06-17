@@ -176,7 +176,6 @@ const WorkspaceQuickSelect: React.FC<WorkspaceQuickSelectProps> = ({
                     onEmptyAction?.()
                   }}
                 >
-                  <HiFolder className="h-3.5 w-3.5 shrink-0" />
                   <span>去设置工作空间</span>
                 </button>
               )}
