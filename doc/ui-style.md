@@ -34,9 +34,13 @@
 ### Workbench Composer
 
 - Composer 是 Workbench 的主操作入口，放在底部并使用 Notion-like 轻浮层视觉：白底、细边框、低圆角、轻阴影。
+- 提示文案（如工作区未绑定警告）显示在输入框上方，使用 `11px` 字号和 `text-faint` 颜色。
+- 输入框文字使用 `15px` 字号，`leading-6` 行高，与 Notion 保持一致。
 - Composer 工具栏应紧凑，控件布局：左侧放置模式选择和工作区选择，右侧放置上下文用量指示器、模型选择和发送/停止按钮，所有控件保持同一行扫描。
-- 上下文用量指示器使用纯圆形进度环（无文字、无 tooltip），尺寸为 `20px`，stroke 宽度 `2px`。
-- 发送/停止按钮使用圆形（`rounded-full`），尺寸 `36px`。
+- 工具栏控件使用 `11px` 字号，间距紧凑（`gap-1.5`）。
+- 上下文用量指示器使用纯圆形进度环（无文字、无 tooltip），尺寸为 `16px`，stroke 宽度 `1.5px`。
+- 模型和工作区选择器设置最大宽度（`max-w-[140px]` 和 `max-w-[160px]`），防止过长。
+- 发送/停止按钮使用圆形（`rounded-full`），尺寸 `32px`（h-8 w-8），图标 `14px`（h-3.5 w-3.5）。
 - 工具栏不使用分隔线，保持视觉连贯性。
 - 审核/审批态应保持稳定的信息结构、决策路径和交互节奏。
 
@@ -46,14 +50,14 @@
 
 - `page`：`#FFFFFF`
 - `canvas`：`#FFFFFF`
-- `sidebar`：`#F7F7F5`
+- `sidebar`：`#FBFBFA`
 - `surface`：`#F4F4F2`
-- `surface-hover`：`#EFEFED`
+- `surface-hover`：`#EFEFEE`
 - `line`：`#EEEEEC`
 - `line-strong`：`#E0DFDC`
 - `text`：`#37352F`
 - `text-soft`：`#787774`
-- `text-faint`：`#9B9A97`
+- `text-faint`：`#91918E`
 - `accent`：`#2F3437`
 - `red`：`#B3261E`
 - `red-bg`：`#F8EBE9`

@@ -1871,7 +1871,7 @@ const ChatPage: React.FC = () => {
                 type="text"
                 size="small"
                 icon={<HiOutlinePencilSquare className="h-3 w-3" />}
-                className="!flex !h-7 !w-7 !items-center !justify-center !rounded-[6px] !border !border-[#EEEEEC] !bg-white !p-0 !text-[#37352F] !shadow-none hover:!border-[#37352F] hover:!text-[#2F3437]"
+                className="!flex !h-7 !w-7 !items-center !justify-center !rounded-[6px] !border !border-[#EEEEEC] !bg-white !p-0 !text-[#91918E] !shadow-none hover:!border-[#37352F] hover:!text-[#37352F]"
                 onClick={() => void createNewSession()}
                 data-testid={workbenchSelectors.newSessionButton}
               />
@@ -1887,8 +1887,8 @@ const ChatPage: React.FC = () => {
                 }
                 className={`!flex !h-7 !w-7 !items-center !justify-center !rounded-[6px] !border !p-0 !shadow-none hover:!border-[#37352F] hover:!text-[#37352F] ${
                   sidebarCollapsed
-                    ? '!border-[#EEEEEC] !bg-white !text-[#787774]'
-                    : '!border-[#EEEEEC] !bg-[#F4F4F2] !text-[#37352F]'
+                    ? '!border-[#EEEEEC] !bg-white !text-[#91918E]'
+                    : '!border-[#EEEEEC] !bg-[#EFEFEE] !text-[#37352F]'
                 }`}
                 onClick={() => setSidebarCollapsed((previous) => !previous)}
                 data-testid={workbenchSelectors.sessionsToggle}
@@ -1919,14 +1919,14 @@ const ChatPage: React.FC = () => {
             >
               {sidebarCollapsed ? (
                 <div className="flex justify-center">
-                  <HiOutlineChatBubbleLeft className="h-4 w-4 text-[#787774]" />
+                  <HiOutlineChatBubbleLeft className="h-4 w-4 text-[#91918E]" />
                 </div>
               ) : (
                 <div className="flex min-w-0 items-center gap-2">
                   <div className="min-w-0 flex-1 truncate text-[13px] font-medium text-[#37352F]">
                     {session.title}
                   </div>
-                  <div className="flex shrink-0 items-center gap-1 text-[11px] text-[#9B9A97] group-hover:hidden">
+                  <div className="flex shrink-0 items-center gap-1 text-[11px] text-[#91918E] group-hover:hidden">
                     <HiClock className="h-3 w-3" />
                     <span>{formatRelativeTime(session.created_at)}</span>
                   </div>
@@ -1947,7 +1947,7 @@ const ChatPage: React.FC = () => {
           <Button
             icon={<HiOutlineCog6Tooth className="h-3.5 w-3.5" />}
             onClick={() => navigate('/settings/model')}
-            className={`!h-7 !rounded-[6px] !border-[#EEEEEC] !bg-white !text-[#787774] !shadow-none hover:!border-[#37352F] hover:!text-[#37352F] ${
+            className={`!h-7 !rounded-[6px] !border-[#EEEEEC] !bg-white !text-[#91918E] !shadow-none hover:!border-[#37352F] hover:!text-[#37352F] ${
               sidebarCollapsed ? '!w-7 !px-0' : '!w-full !justify-start !px-2.5'
             }`}
           >

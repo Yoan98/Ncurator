@@ -738,7 +738,16 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
           focusEditor()
         }}
       >
-        <div className="relative min-h-[64px]">
+        {submitHint ? (
+          <div
+            className="mb-2 text-[11px] leading-4 text-[#91918E]"
+            data-testid={workbenchSelectors.composerHint}
+          >
+            {submitHint}
+          </div>
+        ) : null}
+
+        <div className="relative min-h-[52px]">
           <span
             ref={editorRef}
             contentEditable
@@ -747,7 +756,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
             aria-multiline="true"
             tabIndex={0}
             spellCheck={false}
-            className="block min-h-[48px] w-full whitespace-pre-wrap break-words bg-transparent text-[16px] leading-7 text-[#37352F] outline-none [&_[data-role='scope-token']]:align-middle"
+            className="block min-h-[40px] w-full whitespace-pre-wrap break-words bg-transparent text-[15px] leading-6 text-[#37352F] outline-none [&_[data-role='scope-token']]:align-middle"
             data-testid={workbenchSelectors.input}
             onInput={handleEditorInput}
             onKeyDown={handleEditorKeyDown}
@@ -778,7 +787,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
           />
 
           <div
-            className={`pointer-events-none absolute inset-x-0 top-0 text-[16px] leading-7 text-[#9B9A97] ${
+            className={`pointer-events-none absolute inset-x-0 top-0 text-[15px] leading-6 text-[#91918E] ${
               hasContent ? 'hidden' : ''
             }`}
           >
@@ -786,8 +795,8 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
           </div>
         </div>
 
-        <div className="mx-[-4px] mt-2 flex items-center justify-between gap-3 px-1 pt-2">
-          <div className="flex min-w-0 items-center gap-1 text-[#787774]">
+        <div className="mx-[-4px] mt-2 flex items-center justify-between gap-2 px-1 pt-1">
+          <div className="flex min-w-0 items-center gap-1.5 text-[#91918E]">
             <Select
               value={mode}
               onChange={(nextValue) => {
@@ -795,13 +804,13 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                 focusEditorAfterControlChange()
               }}
               variant="borderless"
-              suffixIcon={<HiChevronDown className="h-3.5 w-3.5 text-[#9B9A97]" />}
+              suffixIcon={<HiChevronDown className="h-3 w-3 text-[#91918E]" />}
               options={[
                 {
                   value: 'ai',
                   label: (
-                    <span className="flex items-center gap-1.5 text-[12px]">
-                      <HiSparkles className="h-3.5 w-3.5" />
+                    <span className="flex items-center gap-1.5 text-[11px]">
+                      <HiSparkles className="h-3 w-3" />
                       <span>大聪明</span>
                     </span>
                   )
@@ -809,15 +818,15 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                 {
                   value: 'search',
                   label: (
-                    <span className="flex items-center gap-1.5 text-[12px]">
-                      <HiMagnifyingGlass className="h-3.5 w-3.5" />
+                    <span className="flex items-center gap-1.5 text-[11px]">
+                      <HiMagnifyingGlass className="h-3 w-3" />
                       <span>没头脑</span>
                     </span>
                   )
                 }
               ]}
               popupClassName="workbench-composer-select-dropdown"
-              className="workbench-composer-select min-w-[72px]"
+              className="workbench-composer-select-mini"
               data-testid={workbenchSelectors.modeSwitch}
             />
 
@@ -828,15 +837,15 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                 focusEditorAfterControlChange()
               }}
               variant="borderless"
-              suffixIcon={<HiChevronDown className="h-3.5 w-3.5 text-[#9B9A97]" />}
+              suffixIcon={<HiChevronDown className="h-3 w-3 text-[#91918E]" />}
               optionLabelProp="label"
               popupClassName="workbench-composer-select-dropdown"
-              className="workbench-composer-select min-w-[132px]"
+              className="workbench-composer-select-mini max-w-[140px]"
               options={workspaces.map((workspace) => ({
                 value: workspace.id,
                 label: (
-                  <span className="flex min-w-0 items-center gap-1.5 text-[12px]">
-                    <HiFolder className="h-3.5 w-3.5 shrink-0" />
+                  <span className="flex min-w-0 items-center gap-1.5 text-[11px]">
+                    <HiFolder className="h-3 w-3 shrink-0" />
                     <span className="truncate">{workspace.name}</span>
                   </span>
                 ),
@@ -847,30 +856,30 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
             />
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             {mode === 'ai' && contextUsage ? (
               <div
-                className="relative inline-flex h-5 w-5 shrink-0 items-center justify-center"
+                className="relative inline-flex h-4 w-4 shrink-0 items-center justify-center"
                 aria-label={contextUsageTitle}
               >
-                <svg className="h-5 w-5 -rotate-90" viewBox="0 0 20 20">
+                <svg className="h-4 w-4 -rotate-90" viewBox="0 0 16 16">
                   <circle
-                    cx="10"
-                    cy="10"
-                    r="8"
+                    cx="8"
+                    cy="8"
+                    r="6.5"
                     fill="none"
-                    stroke="#EFEFED"
-                    strokeWidth="2"
+                    stroke="#EEEEEC"
+                    strokeWidth="1.5"
                   />
                   <circle
-                    cx="10"
-                    cy="10"
-                    r="8"
+                    cx="8"
+                    cy="8"
+                    r="6.5"
                     fill="none"
                     stroke="#37352F"
-                    strokeWidth="2"
-                    strokeDasharray={`${2 * Math.PI * 8}`}
-                    strokeDashoffset={`${2 * Math.PI * 8 * (1 - contextUsagePercent / 100)}`}
+                    strokeWidth="1.5"
+                    strokeDasharray={`${2 * Math.PI * 6.5}`}
+                    strokeDashoffset={`${2 * Math.PI * 6.5 * (1 - contextUsagePercent / 100)}`}
                     strokeLinecap="round"
                   />
                 </svg>
@@ -896,15 +905,15 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                 )
               }}
               variant="borderless"
-              suffixIcon={<HiChevronDown className="h-3.5 w-3.5 text-[#9B9A97]" />}
+              suffixIcon={<HiChevronDown className="h-3 w-3 text-[#91918E]" />}
               optionLabelProp="label"
               popupClassName="workbench-composer-select-dropdown"
-              className="workbench-composer-select min-w-[132px]"
+              className="workbench-composer-select-mini max-w-[160px]"
               options={remoteModels.map((model) => ({
                 value: model.id,
                 label: (
-                  <span className="flex min-w-0 items-center gap-1.5 text-[12px]">
-                    <HiCpuChip className="h-3.5 w-3.5 shrink-0" />
+                  <span className="flex min-w-0 items-center gap-1.5 text-[11px]">
+                    <HiCpuChip className="h-3 w-3 shrink-0" />
                     <span className="truncate">{model.label || model.id}</span>
                   </span>
                 ),
@@ -920,7 +929,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
               type="button"
               onClick={showCancel ? onCancel : onSubmit}
               disabled={showCancel ? cancelling : loading || !canSubmit}
-              className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white transition ${
+              className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white transition ${
                 showCancel
                   ? cancelling
                     ? 'bg-[#E0DFDC]'
@@ -936,25 +945,16 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                 cancelling ? (
                   <Spin size="small" />
                 ) : (
-                  <HiStop className="h-4 w-4" />
+                  <HiStop className="h-3.5 w-3.5" />
                 )
               ) : loading ? (
                 <Spin size="small" />
               ) : (
-                <HiArrowUp className="h-4 w-4" />
+                <HiArrowUp className="h-3.5 w-3.5" />
               )}
             </button>
           </div>
         </div>
-
-        {submitHint ? (
-          <div
-            className="mt-2 text-[11px] leading-5 text-[#9B9A97]"
-            data-testid={workbenchSelectors.composerHint}
-          >
-            {submitHint}
-          </div>
-        ) : null}
       </div>
     </div>
   )
