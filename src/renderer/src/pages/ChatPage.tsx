@@ -107,6 +107,22 @@ type ApprovalDraftDecision = {
 }
 
 const SCROLL_BOTTOM_TOLERANCE = 72
+const WORKBENCH_TOPBAR_DRAG_LAYER_STYLE = {
+  position: 'absolute',
+  inset: 0,
+  WebkitAppRegion: 'drag'
+} as React.CSSProperties
+const WORKBENCH_DRAG_REGION_STYLE = {
+  WebkitAppRegion: 'drag',
+  pointerEvents: 'none',
+  userSelect: 'none',
+  WebkitUserSelect: 'none'
+} as React.CSSProperties
+const WORKBENCH_NO_DRAG_REGION_STYLE = {
+  position: 'relative',
+  zIndex: 2,
+  WebkitAppRegion: 'no-drag'
+} as React.CSSProperties
 
 const clampWorkbenchSidebarWidth = (width: number): number =>
   Math.max(WORKBENCH_SIDEBAR_MIN_WIDTH, Math.min(WORKBENCH_SIDEBAR_MAX_WIDTH, width))
@@ -2112,7 +2128,8 @@ const ChatPage: React.FC = () => {
         <div className="flex h-full min-h-0 flex-col">
           {!isNewSession ? (
             <div className="nc-topbar">
-              <div className="min-w-0 flex-1 bg-white">
+              <div aria-hidden="true" style={WORKBENCH_TOPBAR_DRAG_LAYER_STYLE} />
+              <div className="min-w-0 flex-1 bg-white" style={WORKBENCH_DRAG_REGION_STYLE}>
                 {currentSession || sharedHeaderMeta ? (
                   <div className="flex min-w-0 items-center gap-2">
                     <span className="text-[#787774]">馆长</span>
@@ -2146,7 +2163,11 @@ const ChatPage: React.FC = () => {
                 ) : null}
               </div>
 
-              <div className="nc-topbar-drag-spacer" aria-hidden="true" />
+              <div
+                className="nc-topbar-drag-spacer"
+                style={WORKBENCH_DRAG_REGION_STYLE}
+                aria-hidden="true"
+              />
 
               <Button
                 type="text"
@@ -2163,7 +2184,7 @@ const ChatPage: React.FC = () => {
                     ? '!border-[#EEEEEC] !bg-white !text-[#787774]'
                     : '!border-[#EEEEEC] !bg-[#F4F4F2] !text-[#37352F]'
                 }`}
-                style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+                style={WORKBENCH_NO_DRAG_REGION_STYLE}
                 onClick={() => setContentPanelCollapsed((previous) => !previous)}
               />
             </div>
