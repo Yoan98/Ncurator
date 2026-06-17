@@ -5,7 +5,7 @@ import type {
   WorkspaceTreeEntry
 } from '../../../../shared/types'
 
-export type SettingsSectionValue = 'model' | 'workspace' | 'app'
+export type SettingsSectionValue = 'model' | 'workspace' | 'vector' | 'app'
 
 export type LlmConfigFormValues = Pick<LLMConfig, 'providerKind' | 'base_url' | 'api_key'>
 
@@ -40,4 +40,34 @@ export type StatusBadgeVisual = {
   className: string
   tooltip: string
   icon: ReactNode
+}
+
+export type ModelInfo = {
+  id: string
+  name: string
+  description: string
+  tags: string[]
+  isDownloaded: boolean
+}
+
+export type DownloadStatus = 'downloading' | 'completed' | 'error'
+
+export type DownloadProgressPayload = {
+  repoId: string
+  file?: string
+  status: DownloadStatus
+  progress: number
+  totalFiles?: number
+  completedFiles?: number
+  error?: string
+}
+
+export type ActiveDownloadSnapshot = {
+  repoId: string
+  status: 'downloading'
+  progress: number
+  currentFile: string
+  totalFiles: number
+  completedFiles: number
+  updatedAt: number
 }

@@ -191,7 +191,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({ works
       className="grid h-full min-h-0 gap-4 xl:grid-cols-[260px_minmax(0,1fr)]"
       data-testid={importSelectors.webSourceSection}
     >
-      <div className="space-y-4">
+      <div className="space-y-5">
         <section className="nc-settings-side-section pb-4">
           <div className="text-[14px] font-semibold text-[#37352F]">网页来源</div>
           <Button

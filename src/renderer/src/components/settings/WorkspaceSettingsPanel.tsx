@@ -323,30 +323,6 @@ const WorkspaceSettingsPanel: React.FC = () => {
       className="flex h-full min-h-0 flex-col gap-4 overflow-hidden"
       data-testid={settingsSelectors.workspacePanel}
     >
-      <section className="shrink-0 px-1 pb-4 pt-1">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              icon={<HiArrowPath className="h-4 w-4" />}
-              className="border-[#EEEEEC] bg-white text-[#37352F]"
-              onClick={() => void loadWorkspaces()}
-              loading={workspaceLoading}
-            >
-              刷新
-            </Button>
-            <Button
-              type="primary"
-              icon={<HiOutlineFolderPlus className="h-4 w-4" />}
-              onClick={() => setCreateModalVisible(true)}
-              loading={createSubmitting}
-              data-testid={importSelectors.createWorkspaceButton}
-            >
-              添加工作空间
-            </Button>
-          </div>
-        </div>
-      </section>
-
       {legacyMigrationStatus?.hasLegacyLocalImports ? (
         <Alert
           showIcon
@@ -362,9 +338,34 @@ const WorkspaceSettingsPanel: React.FC = () => {
           data-testid={importSelectors.page}
         >
           <div className="px-4 py-4">
-            <div className="flex items-center gap-2">
-              <div className="text-[15px] font-semibold text-[#37352F]">工作空间</div>
-              <div className="text-[12px] text-[#787774]">共 {workspaces.length} 个</div>
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-2">
+                <div className="text-[15px] font-semibold text-[#37352F]">工作空间</div>
+                <div className="text-[12px] text-[#787774]">共 {workspaces.length} 个</div>
+              </div>
+              <div className="flex shrink-0 items-center gap-1.5">
+                <Tooltip title="刷新">
+                  <Button
+                    size="small"
+                    icon={<HiArrowPath className="h-4 w-4" />}
+                    className="border-[#EEEEEC] bg-white text-[#37352F]"
+                    onClick={() => void loadWorkspaces()}
+                    loading={workspaceLoading}
+                    aria-label="刷新"
+                  />
+                </Tooltip>
+                <Tooltip title="添加工作空间">
+                  <Button
+                    type="primary"
+                    size="small"
+                    icon={<HiOutlineFolderPlus className="h-4 w-4" />}
+                    onClick={() => setCreateModalVisible(true)}
+                    loading={createSubmitting}
+                    aria-label="添加工作空间"
+                    data-testid={importSelectors.createWorkspaceButton}
+                  />
+                </Tooltip>
+              </div>
             </div>
           </div>
 
@@ -387,35 +388,55 @@ const WorkspaceSettingsPanel: React.FC = () => {
                 const isSelected = workspace.id === selectedWorkspaceId
 
                 return (
-                  <button
+                  <div
                     key={workspace.id}
-                    type="button"
-                    onClick={() => setSelectedWorkspaceId(workspace.id)}
                     data-testid={`${importSelectors.workspaceCardPrefix}-${workspace.id}`}
                     className={`nc-sidebar-item px-3 py-3 ${
                       isSelected ? 'nc-sidebar-item-active' : 'bg-transparent'
                     }`}
                   >
-                    <div className="min-w-0">
-                      <div className="text-[14px] font-semibold text-[#37352F]">
-                        {workspace.name}
+                    <button
+                      type="button"
+                      className="block w-full cursor-pointer border-0 bg-transparent p-0 text-left"
+                      onClick={() => setSelectedWorkspaceId(workspace.id)}
+                    >
+                      <div className="min-w-0">
+                        <div className="text-[14px] font-semibold text-[#37352F]">
+                          {workspace.name}
+                        </div>
+                        <div className="mt-1 break-all text-[12px] text-[#787774]">
+                          {workspace.root_path || '未设置文件目录'}
+                        </div>
                       </div>
-                      <div className="mt-1 break-all text-[12px] text-[#787774]">
-                        {workspace.root_path || '未设置文件目录'}
-                      </div>
-                    </div>
+                    </button>
 
-                    <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-[#787774]">
-                      <span className="nc-tag">
-                        <HiDocumentText className="h-3.5 w-3.5" />
-                        {workspace.file_count}
-                      </span>
-                      <span className="nc-tag">
-                        <HiGlobeAlt className="h-3.5 w-3.5" />
-                        {workspace.web_count}
-                      </span>
+                    <div className="mt-3 flex items-end justify-between gap-2">
+                      <div className="flex flex-wrap gap-2 text-[11px] text-[#787774]">
+                        <span className="nc-tag">
+                          <HiDocumentText className="h-3.5 w-3.5" />
+                          {workspace.file_count}
+                        </span>
+                        <span className="nc-tag">
+                          <HiGlobeAlt className="h-3.5 w-3.5" />
+                          {workspace.web_count}
+                        </span>
+                      </div>
+                      <Tooltip title="移除工作空间">
+                        <Button
+                          danger
+                          type="text"
+                          size="small"
+                          icon={<HiOutlineTrash className="h-4 w-4" />}
+                          aria-label="移除工作空间"
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            setDeleteWorkspaceId(workspace.id)
+                          }}
+                          data-testid={importSelectors.workspaceRemoveButton}
+                        />
+                      </Tooltip>
                     </div>
-                  </button>
+                  </div>
                 )
               })}
             </div>
@@ -433,19 +454,6 @@ const WorkspaceSettingsPanel: React.FC = () => {
                   className="flex h-full min-h-0 flex-col [&_.ant-tabs-content]:h-full [&_.ant-tabs-content-holder]:min-h-0 [&_.ant-tabs-content-holder]:flex-1 [&_.ant-tabs-nav]:mb-4 [&_.ant-tabs-tabpane]:h-full [&_.ant-tabs-tabpane]:overflow-hidden"
                   activeKey={selectedTabKey}
                   onChange={(key) => setSelectedTabKey(key as 'files' | 'web')}
-                  tabBarExtraContent={{
-                    right: (
-                      <Button
-                        danger
-                        size="small"
-                        icon={<HiOutlineTrash className="h-4 w-4" />}
-                        onClick={() => setDeleteWorkspaceId(selectedWorkspace.id)}
-                        data-testid={importSelectors.workspaceRemoveButton}
-                      >
-                        移除
-                      </Button>
-                    )
-                  }}
                   items={[
                     {
                       key: 'files',
@@ -453,8 +461,8 @@ const WorkspaceSettingsPanel: React.FC = () => {
                       children: (
                         <div className="flex h-full min-h-0 flex-col gap-4">
                           <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[260px_minmax(0,1fr)]">
-                            <div className="space-y-4">
-                              <section className="nc-settings-side-section">
+                            <div className="space-y-5">
+                              <section className="nc-settings-side-section pb-4">
                                 <div className="text-[14px] font-semibold text-[#37352F]">
                                   文件目录
                                 </div>
@@ -474,7 +482,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
                                 </Button>
                               </section>
 
-                              <section className="nc-settings-side-section">
+                              <section className="nc-settings-side-section pb-4">
                                 <div className="flex items-center gap-1.5">
                                   <div className="text-[14px] font-semibold text-[#37352F]">
                                     索引状态

@@ -11,7 +11,12 @@ import deepseekLogo from '../../assets/img/deepseek.png'
 import kimiLogo from '../../assets/img/kimi.png'
 import guijiliudongLogo from '../../assets/img/guijiliudong.png'
 
-export const SETTINGS_SECTION_ORDER: SettingsSectionValue[] = ['model', 'workspace', 'app']
+export const SETTINGS_SECTION_ORDER: SettingsSectionValue[] = [
+  'model',
+  'workspace',
+  'vector',
+  'app'
+]
 
 export const WORKSPACE_TREE_FILE_NAME_MAX_WIDTH = 'min(34rem, calc(100vw - 20rem))'
 
@@ -31,6 +36,14 @@ export const SETTINGS_SECTION_META: Record<SettingsSectionValue, SettingsSection
     description: '管理本地项目路径、网页资料、目录变化和索引状态。',
     path: '/settings/workspace',
     icon: <HiOutlineRectangleStack className="h-5 w-5" />
+  },
+  vector: {
+    value: 'vector',
+    label: '向量模型',
+    title: '向量模型',
+    description: '下载本地检索模型，为搜索和知识库能力提供向量基础。',
+    path: '/settings/vector',
+    icon: <HiCloudArrowDown className="h-5 w-5" />
   },
   app: {
     value: 'app',
@@ -68,7 +81,7 @@ export const APP_MENU_ITEMS = [
     key: 'model-download',
     label: '向量模型',
     description: '下载本地检索模型',
-    path: '/model-download',
+    path: '/settings/vector',
     icon: <HiCloudArrowDown className="h-4 w-4" />
   }
 ] as const

@@ -2,6 +2,7 @@
 import { NavLink, Navigate, useLocation, useParams } from 'react-router-dom'
 import AppUpdateSettingsPanel from '../components/settings/AppUpdateSettingsPanel'
 import ModelSettingsPanel from '../components/settings/ModelSettingsPanel'
+import VectorModelSettingsPanel from '../components/settings/VectorModelSettingsPanel'
 import WorkspaceSettingsPanel from '../components/settings/WorkspaceSettingsPanel'
 import { SETTINGS_SECTION_META, SETTINGS_SECTION_ORDER } from '../components/settings/constants'
 import type { SettingsSectionValue } from '../components/settings/types'
@@ -11,7 +12,8 @@ import { HiArrowLeft } from 'react-icons/hi2'
 const normalizeSettingsSection = (value: string | undefined): SettingsSectionValue | null => {
   if (!value) return null
   if (value === 'web-sources') return 'workspace'
-  if (value === 'model' || value === 'workspace' || value === 'app') {
+  if (value === 'model-download') return 'vector'
+  if (value === 'model' || value === 'workspace' || value === 'vector' || value === 'app') {
     return value
   }
   return null
@@ -96,6 +98,7 @@ const SettingsPage: React.FC = () => {
           <div className="min-h-0 flex-1 overflow-hidden">
             {currentSection === 'workspace' ? <WorkspaceSettingsPanel /> : null}
             {currentSection === 'model' ? <ModelSettingsPanel /> : null}
+            {currentSection === 'vector' ? <VectorModelSettingsPanel /> : null}
             {currentSection === 'app' ? <AppUpdateSettingsPanel /> : null}
           </div>
         </div>
