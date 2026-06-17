@@ -1983,7 +1983,7 @@ const ChatPage: React.FC = () => {
         className={`nc-sidebar-titlebar-toggle workbench-no-drag ${
           sidebarCollapsed ? 'nc-sidebar-titlebar-toggle-hidden' : ''
         }`}
-        style={{ left: sidebarCollapsed ? 104 : WORKBENCH_SIDEBAR_DEFAULT_WIDTH - 48 }}
+        style={{ left: sidebarCollapsed ? 104 : WORKBENCH_SIDEBAR_DEFAULT_WIDTH - 60 }}
         onClick={() => setSidebarCollapsed((previous) => !previous)}
         data-testid={workbenchSelectors.sessionsToggle}
         aria-label={sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'}
