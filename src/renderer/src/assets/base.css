@@ -404,9 +404,9 @@ textarea,
   position: absolute;
   top: 0;
   left: 3px;
-  width: 1px;
+  width: 0;
   height: 100%;
-  background: #eeeeec;
+  background: transparent;
   transition:
     width 160ms ease,
     background-color 160ms ease;
@@ -629,6 +629,11 @@ textarea,
   color: #37352f;
 }
 
+.workspace-quick-select-trigger-selected {
+  background: #efefed;
+  color: #37352f;
+}
+
 .workspace-quick-select-popup {
   @apply flex items-center gap-1.5 overflow-x-auto rounded-[10px] border border-[#E5E4E0] bg-white p-1.5;
   box-shadow: 0 16px 40px rgba(15, 15, 15, 0.12);
@@ -642,8 +647,8 @@ textarea,
   @apply bg-[#EFEFEE] text-[#37352F];
 }
 
-.workspace-quick-select-empty {
-  @apply whitespace-nowrap px-3 py-1.5 text-[12px] text-[#91918E];
+.workspace-quick-select-empty-action {
+  @apply max-w-none whitespace-nowrap text-[#37352F];
 }
 
 .workbench-select-menu {

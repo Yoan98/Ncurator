@@ -37,6 +37,7 @@ export type WorkspaceQuickSelectProps = {
   workspaces: WorkspaceSource[]
   selectedWorkspaceId: string | null
   onWorkspaceChange: (workspaceId: string) => void
+  onEmptyAction?: () => void
   placeholder?: string
   className?: string
   noDrag?: boolean

@@ -56,6 +56,7 @@ type WorkbenchComposerProps = {
   workspaces: WorkspaceSource[]
   selectedWorkspaceId: string | null
   onWorkspaceChange: (workspaceId: string) => void
+  onWorkspaceEmptyAction?: () => void
   showWorkspaceSelector?: boolean
   onDraftChange: (draft: ComposerDraftValue) => void
   onSubmit: () => void
@@ -94,6 +95,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   workspaces,
   selectedWorkspaceId,
   onWorkspaceChange,
+  onWorkspaceEmptyAction,
   showWorkspaceSelector = true,
   onDraftChange,
   onSubmit,
@@ -762,6 +764,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
               onWorkspaceChange(nextValue)
               focusEditorAfterControlChange()
             }}
+            onEmptyAction={onWorkspaceEmptyAction}
             placeholder="选择工作空间"
             noDrag
             className="max-w-[190px]"

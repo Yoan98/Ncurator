@@ -2006,9 +2006,6 @@ const ChatPage: React.FC = () => {
           >
             <HiOutlinePencilSquare className="h-[18px] w-[18px] shrink-0 text-[#787774]" />
             {sidebarCollapsed ? null : <span>新对话</span>}
-            {sidebarCollapsed ? null : (
-              <img src={brandIcon} alt="馆长" className="ml-auto h-4 w-4 shrink-0 invert-100" />
-            )}
           </button>
         </div>
 
@@ -2202,8 +2199,9 @@ const ChatPage: React.FC = () => {
                 >
                   <div className="mx-auto w-full max-w-[760px]">
                     {isNewSession ? (
-                      <div className="mb-8 text-center text-[28px] font-normal tracking-[-0.02em] text-[#37352F]">
-                        {composerMode === 'search' ? '俺只会搜索本地资料！！' : '找俺干啥？'}
+                      <div className="mb-8 flex items-center justify-center gap-3 text-center text-[28px] font-normal tracking-[-0.02em] text-[#37352F]">
+                        <span>{composerMode === 'search' ? '俺只会搜索本地资料！！' : '找俺干啥？'}</span>
+                        <img src={brandIcon} alt="馆长" className="h-9 w-9 shrink-0 invert-100" />
                       </div>
                     ) : null}
                     {composerMode === 'ai' && pendingApprovalBatch ? (
@@ -2355,6 +2353,7 @@ const ChatPage: React.FC = () => {
                         onWorkspaceChange={
                           isNewSession ? handleNewSessionWorkspaceChange : handleWorkspaceChange
                         }
+                        onWorkspaceEmptyAction={() => navigate('/settings/workspace')}
                         showWorkspaceSelector
                         onDraftChange={handleComposerDraftChange}
                         onSubmit={() => void handleSend()}

@@ -16,6 +16,7 @@ const WorkspaceQuickSelect: React.FC<WorkspaceQuickSelectProps> = ({
   workspaces,
   selectedWorkspaceId,
   onWorkspaceChange,
+  onEmptyAction,
   placeholder = '选择工作空间',
   className,
   noDrag = false,
@@ -108,6 +109,7 @@ const WorkspaceQuickSelect: React.FC<WorkspaceQuickSelectProps> = ({
         type="button"
         className={joinClassNames(
           'workspace-quick-select-trigger',
+          selectedWorkspace ? 'workspace-quick-select-trigger-selected' : '',
           open ? 'workspace-quick-select-trigger-open' : '',
           noDrag ? 'workbench-no-drag' : ''
         )}
@@ -164,7 +166,19 @@ const WorkspaceQuickSelect: React.FC<WorkspaceQuickSelectProps> = ({
                   )
                 })
               ) : (
-                <div className="workspace-quick-select-empty">暂无工作空间</div>
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={false}
+                  className="workspace-quick-select-option workspace-quick-select-empty-action"
+                  onClick={() => {
+                    setOpen(false)
+                    onEmptyAction?.()
+                  }}
+                >
+                  <HiFolder className="h-3.5 w-3.5 shrink-0" />
+                  <span>去设置工作空间</span>
+                </button>
               )}
             </div>,
             document.body
