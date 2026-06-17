@@ -60,7 +60,6 @@ type WorkbenchComposerProps = {
   onCancel: () => void
   loading: boolean
   cancelling?: boolean
-  submitHint?: string | null
   canSubmit: boolean
   showCancel: boolean
   resetKey: number
@@ -98,7 +97,6 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   onCancel,
   loading,
   cancelling = false,
-  submitHint = null,
   canSubmit,
   showCancel,
   resetKey,
@@ -727,7 +725,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
       ) : null}
 
       <div
-        className="nc-floating-composer px-4 pb-3 pt-3 transition-all duration-200"
+        className="nc-floating-composer px-4 pb-2.5 pt-2.5 transition-all duration-200"
         data-testid={workbenchSelectors.referenceField}
         onMouseDown={(event) => {
           const target = event.target
@@ -738,16 +736,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
           focusEditor()
         }}
       >
-        {submitHint ? (
-          <div
-            className="mb-2 text-[11px] leading-4 text-[#91918E]"
-            data-testid={workbenchSelectors.composerHint}
-          >
-            {submitHint}
-          </div>
-        ) : null}
-
-        <div className="relative min-h-[52px]">
+        <div className="relative min-h-[46px]">
           <span
             ref={editorRef}
             contentEditable
@@ -756,7 +745,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
             aria-multiline="true"
             tabIndex={0}
             spellCheck={false}
-            className="block min-h-[40px] w-full whitespace-pre-wrap break-words bg-transparent text-[15px] leading-6 text-[#37352F] outline-none [&_[data-role='scope-token']]:align-middle"
+            className="block min-h-[32px] w-full whitespace-pre-wrap break-words bg-transparent text-[15px] leading-6 text-[#37352F] outline-none [&_[data-role='scope-token']]:align-middle"
             data-testid={workbenchSelectors.input}
             onInput={handleEditorInput}
             onKeyDown={handleEditorKeyDown}
@@ -795,7 +784,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
           </div>
         </div>
 
-        <div className="mx-[-4px] mt-2 flex items-center justify-between gap-2 px-1 pt-1">
+        <div className="mx-[-4px] mt-1.5 flex items-center justify-between gap-2 px-1">
           <div className="flex min-w-0 items-center gap-1.5 text-[#91918E]">
             <Select
               value={mode}
@@ -809,7 +798,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                 {
                   value: 'ai',
                   label: (
-                    <span className="flex items-center gap-1.5 text-[11px]">
+                    <span className="flex items-center gap-1.5 text-[11px] text-[#91918E]">
                       <HiSparkles className="h-3 w-3" />
                       <span>大聪明</span>
                     </span>
@@ -818,7 +807,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                 {
                   value: 'search',
                   label: (
-                    <span className="flex items-center gap-1.5 text-[11px]">
+                    <span className="flex items-center gap-1.5 text-[11px] text-[#91918E]">
                       <HiMagnifyingGlass className="h-3 w-3" />
                       <span>没头脑</span>
                     </span>
@@ -844,7 +833,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
               options={workspaces.map((workspace) => ({
                 value: workspace.id,
                 label: (
-                  <span className="flex min-w-0 items-center gap-1.5 text-[11px]">
+                  <span className="flex min-w-0 items-center gap-1.5 text-[11px] text-[#91918E]">
                     <HiFolder className="h-3 w-3 shrink-0" />
                     <span className="truncate">{workspace.name}</span>
                   </span>
@@ -876,7 +865,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                     cy="8"
                     r="6.5"
                     fill="none"
-                    stroke="#37352F"
+                    stroke="#91918E"
                     strokeWidth="1.5"
                     strokeDasharray={`${2 * Math.PI * 6.5}`}
                     strokeDashoffset={`${2 * Math.PI * 6.5 * (1 - contextUsagePercent / 100)}`}
@@ -912,7 +901,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
               options={remoteModels.map((model) => ({
                 value: model.id,
                 label: (
-                  <span className="flex min-w-0 items-center gap-1.5 text-[11px]">
+                  <span className="flex min-w-0 items-center gap-1.5 text-[11px] text-[#91918E]">
                     <HiCpuChip className="h-3 w-3 shrink-0" />
                     <span className="truncate">{model.label || model.id}</span>
                   </span>
@@ -929,14 +918,14 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
               type="button"
               onClick={showCancel ? onCancel : onSubmit}
               disabled={showCancel ? cancelling : loading || !canSubmit}
-              className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white transition ${
+              className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition ${
                 showCancel
                   ? cancelling
-                    ? 'bg-[#E0DFDC]'
-                    : 'bg-[#B3261E] hover:bg-[#8F3028]'
+                    ? 'bg-[#EEEEEC] text-[#91918E]'
+                    : 'bg-[#B3261E] text-white hover:bg-[#8F3028]'
                   : loading || !canSubmit
-                    ? 'bg-[#E0DFDC]'
-                    : 'bg-[#37352F] hover:bg-[#2F3437]'
+                    ? 'bg-[#EEEEEC] text-[#91918E]'
+                    : 'bg-[#37352F] text-white hover:bg-[#2F3437]'
               }`}
               data-testid={workbenchSelectors.sendButton}
               aria-label={showCancel ? '停止本次运行' : mode === 'ai' ? '发送智能请求' : '执行搜索'}
@@ -945,12 +934,12 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                 cancelling ? (
                   <Spin size="small" />
                 ) : (
-                  <HiStop className="h-3.5 w-3.5" />
+                  <HiStop className="h-3 w-3" />
                 )
               ) : loading ? (
                 <Spin size="small" />
               ) : (
-                <HiArrowUp className="h-3.5 w-3.5" />
+                <HiArrowUp className="h-3 w-3" />
               )}
             </button>
           </div>

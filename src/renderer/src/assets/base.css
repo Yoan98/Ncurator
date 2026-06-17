@@ -13,6 +13,8 @@
   --notion-text-soft: #787774;
   --notion-text-faint: #91918e;
   --notion-accent: #2f3437;
+  --notion-accent-blue: #0b6bcb;
+  --notion-accent-blue-hover: #0958a5;
   --notion-red: #b3261e;
   --notion-red-bg: #f8ebe9;
   --notion-green: #2f6f4e;
@@ -348,9 +350,9 @@ textarea,
 }
 
 .nc-floating-composer:focus-within {
-  border-color: var(--notion-accent);
+  border-color: var(--notion-accent-blue);
   box-shadow:
-    0 0 0 4px var(--notion-surface-hover),
+    0 0 0 4px rgba(11, 107, 203, 0.1),
     var(--shadow-md);
 }
 
