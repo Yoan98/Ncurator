@@ -312,12 +312,12 @@ textarea,
   display: flex;
   align-items: center;
   width: var(--app-sidebar-width);
-  height: 44px;
+  height: 52px;
   pointer-events: none;
 }
 
 .nc-left-titlebar-window-controls {
-  flex: 0 0 72px;
+  flex: 0 0 84px;
   height: 100%;
   pointer-events: none;
 }
@@ -447,6 +447,9 @@ textarea,
 }
 
 .nc-topbar-title-region {
+  align-self: stretch;
+  display: flex;
+  align-items: center;
   user-select: none;
   -webkit-user-select: none;
   -webkit-app-region: drag;
@@ -456,6 +459,18 @@ textarea,
   pointer-events: none;
   user-select: none;
   -webkit-user-select: none;
+}
+
+.nc-main-empty-drag-strip {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 3;
+  height: 52px;
+  background: transparent;
+  pointer-events: auto;
+  -webkit-app-region: drag;
 }
 
 .nc-main-pane {

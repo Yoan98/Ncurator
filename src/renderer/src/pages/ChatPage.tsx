@@ -2202,50 +2202,51 @@ const ChatPage: React.FC = () => {
       </aside>
 
       <div className="nc-main-pane min-w-0 flex-1" style={WORKBENCH_POSITIONED_PANE_STYLE}>
+        {isNewSession ? <div className="nc-main-empty-drag-strip" aria-hidden="true" /> : null}
         <div className="flex h-full min-h-0 flex-col">
-          <div className="nc-topbar">
-            <div
-              className="nc-topbar-collapsed-safe-zone"
-              style={{ width: sidebarCollapsed ? sidebarWidth : 0 }}
-              aria-hidden="true"
-            />
-            <div className="nc-topbar-title-region min-w-0 flex-1 bg-white">
-              {!isNewSession && (currentSession || sharedHeaderMeta) ? (
-                <div className="flex min-w-0 items-center gap-2 leading-none">
-                  {currentSession ? (
-                    <div className="nc-topbar-title-text truncate text-sm font-semibold leading-none text-[#37352F]">
-                      {currentSession.title}
-                    </div>
-                  ) : null}
-                  {currentSession && sharedHeaderMeta ? (
-                    <span className="nc-topbar-title-text text-[#E0DFDC]">/</span>
-                  ) : null}
-                  {sharedHeaderMeta ? (
-                    <div
-                      className="nc-topbar-title-text truncate text-sm font-semibold leading-none text-[#37352F]"
-                      data-testid={workbenchSelectors.contentPanelTitle}
-                    >
-                      {sharedHeaderMeta.title}
-                    </div>
-                  ) : null}
-                  {sharedHeaderMeta?.badge ? (
-                    <span
-                      className={`rounded-full border px-2.5 py-1 text-[11px] ${sharedHeaderMeta.badgeClassName}`}
-                    >
-                      {sharedHeaderMeta.badge}
-                    </span>
-                  ) : null}
-                </div>
-              ) : null}
-            </div>
+          {!isNewSession ? (
+            <div className="nc-topbar">
+              <div
+                className="nc-topbar-collapsed-safe-zone"
+                style={{ width: sidebarCollapsed ? sidebarWidth : 0 }}
+                aria-hidden="true"
+              />
+              <div className="nc-topbar-title-region min-w-0 flex-1 bg-white">
+                {currentSession || sharedHeaderMeta ? (
+                  <div className="flex min-w-0 items-center gap-2 leading-none">
+                    {currentSession ? (
+                      <div className="nc-topbar-title-text truncate text-sm font-semibold leading-none text-[#37352F]">
+                        {currentSession.title}
+                      </div>
+                    ) : null}
+                    {currentSession && sharedHeaderMeta ? (
+                      <span className="nc-topbar-title-text text-[#E0DFDC]">/</span>
+                    ) : null}
+                    {sharedHeaderMeta ? (
+                      <div
+                        className="nc-topbar-title-text truncate text-sm font-semibold leading-none text-[#37352F]"
+                        data-testid={workbenchSelectors.contentPanelTitle}
+                      >
+                        {sharedHeaderMeta.title}
+                      </div>
+                    ) : null}
+                    {sharedHeaderMeta?.badge ? (
+                      <span
+                        className={`rounded-full border px-2.5 py-1 text-[11px] ${sharedHeaderMeta.badgeClassName}`}
+                      >
+                        {sharedHeaderMeta.badge}
+                      </span>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
 
-            <div
-              className="nc-topbar-drag-spacer"
-              style={WORKBENCH_DRAG_REGION_STYLE}
-              aria-hidden="true"
-            />
+              <div
+                className="nc-topbar-drag-spacer"
+                style={WORKBENCH_DRAG_REGION_STYLE}
+                aria-hidden="true"
+              />
 
-            {!isNewSession ? (
               <Button
                 type="text"
                 size="small"
@@ -2259,8 +2260,8 @@ const ChatPage: React.FC = () => {
                 style={WORKBENCH_NO_DRAG_REGION_STYLE}
                 onClick={() => setContentPanelCollapsed((previous) => !previous)}
               />
-            ) : null}
-          </div>
+            </div>
+          ) : null}
 
           <div className="flex min-h-0 flex-1 overflow-hidden">
             <div className="min-w-0 flex-1">
