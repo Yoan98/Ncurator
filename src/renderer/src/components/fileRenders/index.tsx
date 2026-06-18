@@ -12,6 +12,7 @@ type FileRenderViewerProps = {
   documents: FileRenderDocument[]
   emptyText?: string
   className?: string
+  framed?: boolean
 }
 
 type FileRenderProps = {
@@ -92,16 +93,20 @@ const renderers = [CustomPDFRenderer, CustomMarkdownRenderer, CustomDocxRenderer
 export const FileRenderViewer: React.FC<FileRenderViewerProps> = ({
   documents,
   emptyText = '选择一个文件后在这里查看内容。',
-  className
+  className,
+  framed = true
 }) => {
   const { documents: loadedDocuments, loading } = usePreparedDocuments(documents)
+  const surfaceClassName = framed
+    ? `rounded-[8px] border border-[#EEEEEC] bg-white ${className || ''}`
+    : `bg-white ${className || ''}`
 
   if (documents.length === 0) {
     return (
       <div
-        className={`flex h-full items-center justify-center rounded-[8px] border border-dashed border-[#EEEEEC] bg-[#F4F4F2] ${
-          className || ''
-        }`}
+        className={`flex h-full items-center justify-center ${
+          framed ? 'rounded-[8px] border border-dashed border-[#EEEEEC] bg-[#F4F4F2]' : 'bg-white'
+        } ${className || ''}`}
       >
         <Empty
           image={Empty.PRESENTED_IMAGE_SIMPLE}
@@ -114,9 +119,9 @@ export const FileRenderViewer: React.FC<FileRenderViewerProps> = ({
   if (loading) {
     return (
       <div
-        className={`flex h-full items-center justify-center rounded-[8px] border border-[#EEEEEC] bg-white ${
-          className || ''
-        }`}
+        className={`flex h-full items-center justify-center ${
+          framed ? 'rounded-[8px] border border-[#EEEEEC] bg-white' : 'bg-white'
+        } ${className || ''}`}
       >
         <Spin size="large" />
       </div>
@@ -126,9 +131,9 @@ export const FileRenderViewer: React.FC<FileRenderViewerProps> = ({
   if (loadedDocuments.length === 0) {
     return (
       <div
-        className={`flex h-full items-center justify-center rounded-[8px] border border-[#EEEEEC] bg-white ${
-          className || ''
-        }`}
+        className={`flex h-full items-center justify-center ${
+          framed ? 'rounded-[8px] border border-[#EEEEEC] bg-white' : 'bg-white'
+        } ${className || ''}`}
       >
         <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="文件暂时无法预览" />
       </div>
@@ -136,11 +141,7 @@ export const FileRenderViewer: React.FC<FileRenderViewerProps> = ({
   }
 
   return (
-    <div
-      className={`h-full overflow-hidden rounded-[8px] border border-[#EEEEEC] bg-white ${
-        className || ''
-      }`}
-    >
+    <div className={`h-full overflow-hidden ${surfaceClassName}`}>
       <DocViewer
         className="h-full w-full"
         style={{ height: '100%', width: '100%' }}

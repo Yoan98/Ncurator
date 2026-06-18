@@ -251,10 +251,10 @@ const WorkbenchFilePreviewPanel: React.FC<{
         </div>
       </div>
       <div
-        className="min-h-0 flex-1 bg-white p-3"
+        className="min-h-0 flex-1 bg-white"
         data-testid={workbenchSelectors.documentView}
       >
-        <FileRenderViewer documents={previewDocuments} />
+        <FileRenderViewer documents={previewDocuments} framed={false} />
       </div>
     </div>
   )
