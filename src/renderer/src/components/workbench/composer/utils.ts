@@ -1,6 +1,7 @@
 import type { SelectedReference } from '../../../../../shared/types'
 import type { ComposerDraftValue, ComposerNode } from './types'
 import { getReferenceKey, pruneReferencesByWorkspace } from '../../../utils/reference'
+import { REFERENCE_ICON_PATHS } from './constants'
 import { getReferenceVisualKind, getReferenceVisualTone } from './referenceVisuals'
 
 export const createTextNode = (text = ''): ComposerNode => ({
@@ -87,15 +88,6 @@ export const readComposerNodesFromEditor = (
   return normalizeComposerNodes(nextNodes)
 }
 
-const ICON_PATHS: Record<string, string> = {
-  directory:
-    'M2.25 6.75A2.25 2.25 0 014.5 4.5h3.879c.596 0 1.168.237 1.59.659l.872.872c.14.14.331.219.53.219H19.5a2.25 2.25 0 012.25 2.25v7.5a2.25 2.25 0 01-2.25 2.25h-15A2.25 2.25 0 012.25 16.5V6.75z',
-  web: 'M12 2.25a9.75 9.75 0 100 19.5 9.75 9.75 0 000-19.5zm0 0c2.25 2.25 3.375 5.25 3.375 9.75S14.25 19.5 12 21.75m0-19.5C9.75 4.5 8.625 7.5 8.625 12S9.75 19.5 12 21.75m-8.25-9.75h16.5',
-  docx: 'M19.5 14.25v-5.4a2.25 2.25 0 00-.659-1.591l-4.1-4.1a2.25 2.25 0 00-1.591-.659H6.75A2.25 2.25 0 004.5 4.75v14.5a2.25 2.25 0 002.25 2.25h10.5a2.25 2.25 0 002.25-2.25v-5zM13.5 2.5V8a1 1 0 001 1h5',
-  pdf: 'M19.5 14.25v-5.4a2.25 2.25 0 00-.659-1.591l-4.1-4.1a2.25 2.25 0 00-1.591-.659H6.75A2.25 2.25 0 004.5 4.75v14.5a2.25 2.25 0 002.25 2.25h10.5a2.25 2.25 0 002.25-2.25v-5zM8 15.5h8M8 18h5',
-  file: 'M19.5 14.25v-5.4a2.25 2.25 0 00-.659-1.591l-4.1-4.1a2.25 2.25 0 00-1.591-.659H6.75A2.25 2.25 0 004.5 4.75v14.5a2.25 2.25 0 002.25 2.25h10.5a2.25 2.25 0 002.25-2.25v-5zM13.5 2.5V8a1 1 0 001 1h5'
-}
-
 const appendReferenceIcon = (container: HTMLElement, scope: SelectedReference): void => {
   const visualKind = getReferenceVisualKind(scope)
   const tone = getReferenceVisualTone(scope)
@@ -114,7 +106,7 @@ const appendReferenceIcon = (container: HTMLElement, scope: SelectedReference): 
   svg.setAttribute('class', `h-3.5 w-3.5 ${tone.iconClassName}`)
 
   const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
-  path.setAttribute('d', ICON_PATHS[visualKind])
+  path.setAttribute('d', REFERENCE_ICON_PATHS[visualKind])
   svg.appendChild(path)
   icon.appendChild(svg)
   container.appendChild(icon)

@@ -47,10 +47,10 @@ const ReferenceMentionPanel: React.FC<ReferenceMentionPanelProps> = ({
 
   return (
     <div
-      className="absolute inset-x-0 bottom-full mb-3 overflow-hidden rounded-[18px] border border-[#E5E4E0] bg-white px-2 py-3 shadow-[0_18px_48px_rgba(15,15,15,0.11)]"
+      className="absolute inset-x-0 bottom-full mb-2 overflow-hidden rounded-[14px] border border-[#E5E4E0] bg-white px-2 py-2 shadow-[0_16px_36px_rgba(15,15,15,0.1)]"
       data-testid={workbenchSelectors.mentionPanel}
     >
-      <div className="max-h-[360px] overflow-y-auto pr-1">
+      <div className="max-h-[180px] overflow-y-auto pr-1">
         {loading ? (
           <div className="flex items-center justify-center py-8 text-[#9B9A97]">
             <Spin size="small" />
@@ -61,10 +61,10 @@ const ReferenceMentionPanel: React.FC<ReferenceMentionPanelProps> = ({
             description={hasWorkspace ? '当前工作区中没有匹配项' : '请先选择工作区'}
           />
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-2">
             {visibleGroups.map((group) => (
               <div key={group.title}>
-                <div className="px-3 pb-1 text-[13px] font-medium leading-6 text-[#9B9A97]">
+                <div className="px-2.5 pb-0.5 text-[11px] font-medium leading-5 text-[#9B9A97]">
                   {group.title}
                 </div>
                 <div className="space-y-0.5">
@@ -78,7 +78,7 @@ const ReferenceMentionPanel: React.FC<ReferenceMentionPanelProps> = ({
                       <button
                         key={getScopeKey(reference)}
                         type="button"
-                        className={`flex h-9 w-full items-center gap-3 rounded-[10px] px-3 text-left transition-colors ${
+                        className={`flex h-7 w-full items-center gap-2.5 rounded-[8px] px-2.5 text-left transition-colors ${
                           active ? 'bg-[#F1F1F0]' : 'hover:bg-[#F7F7F5]'
                         }`}
                         data-reference-kind={reference.kind}
@@ -87,18 +87,18 @@ const ReferenceMentionPanel: React.FC<ReferenceMentionPanelProps> = ({
                           onSelect(reference)
                         }}
                       >
-                        <ReferenceIcon reference={reference} size="sm" />
+                        <ReferenceIcon reference={reference} size="sm" variant="plain" />
                         <span className="min-w-0 flex flex-1 items-center gap-2">
-                          <span className="truncate text-[15px] font-normal leading-6 text-[#2F3437]">
+                          <span className="truncate text-[13px] font-normal leading-5 text-[#2F3437]">
                             {reference.name}
                           </span>
                           {parentPath ? (
-                            <span className="truncate text-[13px] font-normal leading-5 text-[#B1B0AD]">
+                            <span className="truncate text-[11px] font-normal leading-4 text-[#B1B0AD]">
                               {parentPath}
                             </span>
                           ) : null}
                         </span>
-                        <span className="shrink-0 text-[12px] font-medium leading-5 text-[#9B9A97]">
+                        <span className="shrink-0 text-[11px] font-medium leading-4 text-[#9B9A97]">
                           {getKbAvailabilityLabel(reference.kbAvailability)}
                         </span>
                       </button>

@@ -1,7 +1,7 @@
 import { describe, it } from 'vitest'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
-  WORKBENCH_LONG_E2E_TIMEOUT_MS,
+  WORKBENCH_RESULT_E2E_TIMEOUT_MS,
   appendWorkbenchInputText,
   assertNoWorkbenchFakeSignals,
   createWorkspaceThroughSettingsUi,
@@ -16,6 +16,7 @@ import {
   startLocalWorkbenchHttpServer,
   submitWorkbenchCurrentDraft,
   switchWorkbenchMode,
+  waitForWorkbenchMentionPanelText,
   waitForWorkbenchSearchScopeEmptyThroughUi,
   workbenchSelectors
 } from '../../../../harness/e2e/workbench'
@@ -55,11 +56,8 @@ describe('workbench conversation e2e', () => {
             const afterDirectory = await getWorkbenchReferenceTokenTexts(page)
 
             await appendWorkbenchInputText(page, '@')
-            await getWorkbenchLocator(page, workbenchSelectors.mentionPanel).waitFor({
-              state: 'visible'
-            })
             const mentionPanel = getWorkbenchLocator(page, workbenchSelectors.mentionPanel)
-            const mentionPanelText = ((await mentionPanel.textContent()) || '').trim()
+            const mentionPanelText = await waitForWorkbenchMentionPanelText(page)
             const fileGroupVisible = await mentionPanel.getByText('文件').isVisible()
             const webGroupVisible = await mentionPanel.getByText('网页').isVisible()
             const legacyDirectoryGroupVisible = await mentionPanel
@@ -89,28 +87,47 @@ describe('workbench conversation e2e', () => {
               .getByText('sample-edit.docx')
               .isVisible()
               .catch(() => false)
+            const unsupportedTextFileVisible = await mentionPanel
+              .getByRole('button')
+              .filter({ hasText: 'human-input.txt' })
+              .first()
+              .isVisible()
+              .catch(() => false)
+            const unsupportedMarkdownVisible = await mentionPanel
+              .getByRole('button')
+              .filter({ hasText: 'workbench-preview.md' })
+              .first()
+              .isVisible()
+              .catch(() => false)
+            const unsupportedStatusVisible = await mentionPanel
+              .getByRole('button')
+              .filter({ hasText: 'human-input.txt' })
+              .filter({ hasText: '未索引' })
+              .first()
+              .isVisible()
+              .catch(() => false)
             await mentionPanel
               .getByRole('button')
               .filter({ hasText: 'Workbench Web Fixture' })
               .click()
             const afterWeb = await getWorkbenchReferenceTokenTexts(page)
             const tokensBeforeSubmit = await getWorkbenchReferenceTokenTexts(page)
+            const composerTokenCloseButtonVisible = await getWorkbenchLocator(
+              page,
+              workbenchSelectors.input
+            )
+              .locator('[data-role="scope-token"] button')
+              .first()
+              .isVisible()
+              .catch(() => false)
             await switchWorkbenchMode(page, '没头脑')
             await appendWorkbenchInputText(page, '请用一句话说明这些资料。')
             await submitWorkbenchCurrentDraft(page)
             const latestUserMessageReferenceTokens =
               await getWorkbenchLatestUserMessageReferenceTokenTexts(page)
-            await getWorkbenchLocator(page, workbenchSelectors.sendButton).waitFor({
+            await getWorkbenchLocator(page, workbenchSelectors.searchResults).waitFor({
               state: 'visible'
             })
-            await page.waitForFunction(
-              (testId: string) => {
-                const button = document.querySelector(`[data-testid="${testId}"]`)
-                return button instanceof HTMLButtonElement && !button.disabled
-              },
-              workbenchSelectors.sendButton,
-              { timeout: WORKBENCH_LONG_E2E_TIMEOUT_MS }
-            )
 
             await switchWorkbenchMode(page, '大聪明')
             await insertWorkbenchReferenceToken(page, 'sample-edit.docx')
@@ -138,7 +155,11 @@ describe('workbench conversation e2e', () => {
               directoryIconVisible,
               webIconVisible,
               duplicateCandidateVisible,
+              unsupportedTextFileVisible,
+              unsupportedMarkdownVisible,
+              unsupportedStatusVisible,
               tokensBeforeSubmit,
+              composerTokenCloseButtonVisible,
               tokensBeforeDelete,
               latestUserMessageReferenceTokens,
               afterDelete,
@@ -166,7 +187,11 @@ describe('workbench conversation e2e', () => {
               result.directoryIconVisible &&
               result.webIconVisible &&
               !result.duplicateCandidateVisible &&
+              result.unsupportedTextFileVisible &&
+              result.unsupportedMarkdownVisible &&
+              result.unsupportedStatusVisible &&
               result.tokensBeforeSubmit.length === 3 &&
+              !result.composerTokenCloseButtonVisible &&
               result.tokensBeforeDelete.length === 3 &&
               result.latestUserMessageReferenceTokens.length === 3 &&
               result.latestUserMessageReferenceTokens.some((text) =>
@@ -182,7 +207,7 @@ describe('workbench conversation e2e', () => {
             {
               name: 'workbench-reference-token-real-lifecycle',
               message:
-                '@ 参考资料应来自真实 workspace/web 索引；候选按文件/网页分组，目录在文件组内用图标区分，右侧只显示索引状态；选择文件、目录、网页时应追加共存，发送后用户消息保留紧凑 token，同一资料不重复出现，删除后移除 token，切换工作区后清理旧 token，空候选给出提示，对齐 WB-SCOPE-001 至 WB-SCOPE-004。',
+                '@ 参考资料应来自真实 workspace/web 资料；候选按文件/网页分组并覆盖不可索引本地文件，目录在文件组内用图标区分，右侧只显示索引状态；选择文件、目录、网页时应追加共存，发送后用户消息保留紧凑 token，同一资料不重复出现，删除后移除 token，切换工作区后清理旧 token，空候选给出提示，对齐 WB-SCOPE-001 至 WB-SCOPE-004。',
               data: result
             }
           )
@@ -190,6 +215,6 @@ describe('workbench conversation e2e', () => {
         }
       })
     },
-    WORKBENCH_LONG_E2E_TIMEOUT_MS
+    WORKBENCH_RESULT_E2E_TIMEOUT_MS
   )
 })

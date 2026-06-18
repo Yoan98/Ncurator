@@ -632,24 +632,6 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
         />
       ) : null}
 
-      {showWorkspaceSelector ? (
-        <div className="mb-2 flex min-w-0 items-center">
-          <WorkspaceQuickSelect
-            selectedWorkspaceId={selectedWorkspaceId}
-            workspaces={workspaces}
-            onWorkspaceChange={(nextValue) => {
-              onWorkspaceChange(nextValue)
-              focusEditorAfterControlChange()
-            }}
-            onEmptyAction={onWorkspaceEmptyAction}
-            placeholder="选择工作空间"
-            noDrag
-            className="max-w-[190px]"
-            data-testid={workbenchSelectors.workspaceSelect}
-          />
-        </div>
-      ) : null}
-
       <div
         className="nc-floating-composer px-4 pb-2.5 pt-3 transition-all duration-200"
         data-testid={workbenchSelectors.referenceField}
@@ -817,6 +799,24 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
           </div>
         </div>
       </div>
+
+      {showWorkspaceSelector ? (
+        <div className="mt-2 flex min-w-0 items-center px-1">
+          <WorkspaceQuickSelect
+            selectedWorkspaceId={selectedWorkspaceId}
+            workspaces={workspaces}
+            onWorkspaceChange={(nextValue) => {
+              onWorkspaceChange(nextValue)
+              focusEditorAfterControlChange()
+            }}
+            onEmptyAction={onWorkspaceEmptyAction}
+            placeholder="选择工作空间"
+            noDrag
+            className="max-w-[220px]"
+            data-testid={workbenchSelectors.workspaceSelect}
+          />
+        </div>
+      ) : null}
     </div>
   )
 }

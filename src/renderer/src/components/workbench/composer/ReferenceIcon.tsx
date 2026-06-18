@@ -1,6 +1,6 @@
 import React from 'react'
-import { HiDocument, HiDocumentText, HiFolder, HiGlobeAlt } from 'react-icons/hi2'
 import type { SelectedReference } from '../../../../../shared/types'
+import { REFERENCE_ICON_PATHS } from './constants'
 import { getReferenceVisualKind, getReferenceVisualTone } from './referenceVisuals'
 
 type ReferenceIconProps = {
@@ -29,24 +29,23 @@ export const ReferenceIcon: React.FC<ReferenceIconProps> = ({
   const iconClassName = `${iconSizeClassName[size]} ${tone.iconClassName}`
   const containerToneClassName = variant === 'badge' ? tone.containerClassName : tone.iconClassName
 
-  const icon =
-    visualKind === 'directory' ? (
-      <HiFolder className={iconClassName} />
-    ) : visualKind === 'web' ? (
-      <HiGlobeAlt className={iconClassName} />
-    ) : visualKind === 'docx' || visualKind === 'pdf' ? (
-      <HiDocumentText className={iconClassName} />
-    ) : (
-      <HiDocument className={iconClassName} />
-    )
-
   return (
     <span
       aria-hidden="true"
       className={`inline-flex shrink-0 items-center justify-center ${containerSizeClassName[size]} ${containerToneClassName}`}
       data-reference-icon-kind={visualKind}
     >
-      {icon}
+      <svg
+        className={iconClassName}
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d={REFERENCE_ICON_PATHS[visualKind]} />
+      </svg>
     </span>
   )
 }

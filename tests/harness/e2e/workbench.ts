@@ -507,19 +507,29 @@ export const bindWorkspaceRootThroughSettingsUi = async (
   page: Page,
   rootPath: string
 ): Promise<void> => {
-  const rootPathButton = page.getByRole('button', { name: '设置工作文件地址' }).first()
+  const rootPathButton = page
+    .getByRole('button', { name: /设置工作文件地址|更换工作文件地址/u })
+    .first()
   await page.bringToFront()
   await rootPathButton.waitFor({ state: 'visible' })
   const diagnostics: NativeDirectoryDialogDiagnostics[] = []
   const waitForSelectedRootPath = async (timeoutMs: number): Promise<boolean> =>
     await page
       .waitForFunction(
-        (input: { testId: string; rootPath: string }) => {
-          const detail = document.querySelector(`[data-testid="${input.testId}"]`)
-          return detail instanceof HTMLElement && detail.innerText.includes(input.rootPath)
+        (input: { detailTestId: string; cardPrefix: string; rootPath: string }) => {
+          const normalize = (value: string): string => value.replace(/\s+/g, '')
+          const expected = normalize(input.rootPath)
+          const detail = document.querySelector(`[data-testid="${input.detailTestId}"]`)
+          const cards = Array.from(
+            document.querySelectorAll(`[data-testid^="${input.cardPrefix}-"]`)
+          )
+          return [detail, ...cards].some(
+            (node) => node instanceof HTMLElement && normalize(node.innerText).includes(expected)
+          )
         },
         {
-          testId: importSelectors.workspaceDetail,
+          detailTestId: importSelectors.workspaceDetail,
+          cardPrefix: importSelectors.workspaceCardPrefix,
           rootPath
         },
         { timeout: timeoutMs }
@@ -981,14 +991,14 @@ export const switchWorkbenchMode = async (
   page: Page,
   modeLabel: '大聪明' | '没头脑'
 ): Promise<void> => {
+  const optionLabel = modeLabel === '大聪明' ? 'AI' : '搜索'
   await getWorkbenchLocator(page, workbenchSelectors.modeSwitch).click()
   const option = page
-    .locator('.workbench-composer-select-dropdown:not(.ant-select-dropdown-hidden)')
-    .getByText(modeLabel)
+    .locator('.workbench-composer-menu [role="option"]')
+    .filter({ hasText: optionLabel })
+    .first()
   await option.waitFor({ state: 'visible' })
-  await option.evaluate((element) => {
-    if (element instanceof HTMLElement) element.click()
-  })
+  await option.click()
 }
 
 export const selectWorkbenchModel = async (page: Page, modelName: string): Promise<void> => {
@@ -1023,19 +1033,32 @@ export const selectWorkbenchWorkspace = async (
   page: Page,
   workspaceName: string
 ): Promise<void> => {
-  await getWorkbenchLocator(page, workbenchSelectors.workspaceSelect).click()
-  const workspaceOption = page
-    .locator('.workbench-composer-select-dropdown:not(.ant-select-dropdown-hidden)')
-    .last()
-    .locator('.ant-select-item-option')
-    .filter({ hasText: workspaceName })
-    .first()
-  await workspaceOption.waitFor({ state: 'visible' })
-  await workspaceOption.click()
+  const workspaceSelect = getWorkbenchLocator(page, workbenchSelectors.workspaceSelect)
+  const isSelected = async (): Promise<boolean> =>
+    await workspaceSelect
+      .evaluate(
+        (host, expectedName) =>
+          host instanceof HTMLElement &&
+          (host.title === expectedName || host.textContent?.includes(expectedName)),
+        workspaceName
+      )
+      .catch(() => false)
+  if (!(await isSelected())) {
+    await workspaceSelect.click()
+    const workspaceOption = page
+      .locator('.workspace-quick-select-popup [role="option"]')
+      .filter({ hasText: workspaceName })
+      .first()
+    await workspaceOption.waitFor({ state: 'visible' })
+    await workspaceOption.click()
+  }
   await page.waitForFunction(
     (input: { testId: string; workspaceName: string }) => {
       const host = document.querySelector(`[data-testid="${input.testId}"]`)
-      return Boolean(host?.textContent?.includes(input.workspaceName))
+      return (
+        host instanceof HTMLElement &&
+        (host.title === input.workspaceName || host.textContent?.includes(input.workspaceName))
+      )
     },
     {
       testId: workbenchSelectors.workspaceSelect,
@@ -1061,6 +1084,20 @@ export const waitForWorkbenchSearchScopeEmptyThroughUi = async (page: Page): Pro
   await setWorkbenchInput(page, '')
   await page.waitForTimeout(500)
   return panelText
+}
+
+export const waitForWorkbenchMentionPanelText = async (page: Page): Promise<string> => {
+  const panel = getWorkbenchLocator(page, workbenchSelectors.mentionPanel)
+  await panel.waitFor({ state: 'visible', timeout: WORKBENCH_E2E_TIMEOUT_MS })
+  await page.waitForFunction(
+    (testId: string) => {
+      const text = document.querySelector(`[data-testid="${testId}"]`)?.textContent || ''
+      return text.trim().length > 0 && !/^loading$/iu.test(text.trim())
+    },
+    workbenchSelectors.mentionPanel,
+    { timeout: WORKBENCH_E2E_TIMEOUT_MS }
+  )
+  return ((await panel.textContent()) || '').trim()
 }
 
 export const readWorkbenchSelectedControlText = async (
@@ -1143,15 +1180,10 @@ export const removeFirstWorkbenchReferenceToken = async (page: Page): Promise<vo
     if (!(element instanceof HTMLElement)) {
       throw new Error('workbench input is not an HTMLElement')
     }
-    element.focus()
-    const selection = window.getSelection()
-    const range = document.createRange()
-    range.selectNodeContents(element)
-    range.collapse(false)
-    selection?.removeAllRanges()
-    selection?.addRange(range)
+    const firstToken = element.querySelector('[data-role="scope-token"]')
+    firstToken?.remove()
+    element.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'deleteContent' }))
   })
-  await page.keyboard.press('Backspace')
 }
 
 export const waitForLatestAssistantFinalAnswer = async (page: Page): Promise<Locator> => {

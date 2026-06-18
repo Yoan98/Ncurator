@@ -25,6 +25,14 @@ if (!app.isPackaged) {
   loadRootEnvOnce()
 }
 
+const singleInstanceLock = process.env.NCURATOR_E2E_OBSERVER
+  ? true
+  : app.requestSingleInstanceLock()
+
+if (!singleInstanceLock) {
+  app.quit()
+}
+
 function createWindow(): BrowserWindow {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
@@ -79,6 +87,14 @@ function createWindow(): BrowserWindow {
 
   return mainWindow
 }
+
+app.on('second-instance', () => {
+  const mainWindow = BrowserWindow.getAllWindows()[0]
+  if (!mainWindow) return
+  if (mainWindow.isMinimized()) mainWindow.restore()
+  mainWindow.show()
+  mainWindow.focus()
+})
 
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.

@@ -1964,7 +1964,7 @@ export function registerHandlers(services: {
         if (workspaceIdFilter) {
           const workspace = await workspaceStore.getWorkspaceById(workspaceIdFilter)
           if (workspace) {
-            const tree = await readWorkspaceTree(workspace.id, false)
+            const tree = await readWorkspaceTree(workspace.id, true)
             const records = await workspaceStore.listWorkspaceFileIndexRecords(workspace.id)
             localReferences.push(
               ...buildWorkspaceReferenceItems({
