@@ -2,7 +2,7 @@ import React from 'react'
 import { Empty, Spin } from 'antd'
 import type { SelectedReference } from '../../../../../shared/types'
 import { workbenchSelectors } from '../../../testing/selectors'
-import { getKbAvailabilityLabel, getReferenceDisplayPath } from '../../../utils/reference'
+import { getKbAvailabilityLabel } from '../../../utils/reference'
 import ReferenceIcon from './ReferenceIcon'
 import { getScopeKey } from './utils'
 
@@ -17,6 +17,13 @@ type ReferenceMentionPanelProps = {
 type ReferenceMentionGroup = {
   title: '文件' | '网页'
   items: SelectedReference[]
+}
+
+const getReferenceParentDisplayPath = (reference: SelectedReference): string => {
+  if (reference.kind === 'web') return reference.url
+  const pathParts = reference.relativePath.split('/').filter(Boolean)
+  pathParts.pop()
+  return pathParts.join('/')
 }
 
 const ReferenceMentionPanel: React.FC<ReferenceMentionPanelProps> = ({
@@ -66,6 +73,7 @@ const ReferenceMentionPanel: React.FC<ReferenceMentionPanelProps> = ({
                       (option) => getScopeKey(option) === getScopeKey(reference)
                     )
                     const active = activeIndex === optionIndex
+                    const parentPath = getReferenceParentDisplayPath(reference)
                     return (
                       <button
                         key={getScopeKey(reference)}
@@ -84,9 +92,11 @@ const ReferenceMentionPanel: React.FC<ReferenceMentionPanelProps> = ({
                           <span className="truncate text-[15px] font-normal leading-6 text-[#2F3437]">
                             {reference.name}
                           </span>
-                          <span className="truncate text-[13px] font-normal leading-5 text-[#B1B0AD]">
-                            {getReferenceDisplayPath(reference)}
-                          </span>
+                          {parentPath ? (
+                            <span className="truncate text-[13px] font-normal leading-5 text-[#B1B0AD]">
+                              {parentPath}
+                            </span>
+                          ) : null}
                         </span>
                         <span className="shrink-0 text-[12px] font-medium leading-5 text-[#9B9A97]">
                           {getKbAvailabilityLabel(reference.kbAvailability)}

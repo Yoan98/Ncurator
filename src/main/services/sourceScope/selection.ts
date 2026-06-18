@@ -17,8 +17,9 @@ export const getWorkspaceScopeKey = (
 const isIndexedWorkspaceFile = (record?: WorkspaceFileIndexRecord): boolean =>
   Boolean(record && record.index_status === 'indexed' && record.document_id)
 
-const collectIndexedFileRecords = (records: WorkspaceFileIndexRecord[]): WorkspaceFileIndexRecord[] =>
-  records.filter((record) => isIndexedWorkspaceFile(record))
+const collectIndexedFileRecords = (
+  records: WorkspaceFileIndexRecord[]
+): WorkspaceFileIndexRecord[] => records.filter((record) => isIndexedWorkspaceFile(record))
 
 const collectIndexedDocumentIds = (records: WorkspaceFileIndexRecord[]): string[] =>
   Array.from(
@@ -42,18 +43,13 @@ const resolveDirectoryAvailability = (records: WorkspaceFileIndexRecord[]): KbAv
 
 export const isLocalReference = (reference: SelectedReference): boolean => reference.kind !== 'web'
 
-export const buildWorkspaceDefaultDocumentIds = (
-  records: WorkspaceFileIndexRecord[]
-): string[] => collectIndexedDocumentIds(records)
+export const buildWorkspaceDefaultDocumentIds = (records: WorkspaceFileIndexRecord[]): string[] =>
+  collectIndexedDocumentIds(records)
 
-export const shouldIncludeReferenceInSearch = (reference: SelectedReference): boolean =>
-  reference.kbDocumentIds.length > 0
-
-export const referenceMatchesQuery = (
-  reference: SelectedReference,
-  rawQuery?: string
-): boolean => {
-  const query = String(rawQuery || '').trim().toLowerCase()
+export const referenceMatchesQuery = (reference: SelectedReference, rawQuery?: string): boolean => {
+  const query = String(rawQuery || '')
+    .trim()
+    .toLowerCase()
   if (!query) return true
 
   const values =
@@ -84,9 +80,7 @@ export const buildWorkspaceReferenceItems = (input: {
 }): SelectedReference[] => {
   const { workspace, entries, records } = input
   const directoryEntries = entries.filter((entry) => entry.kind === 'directory')
-  const fileEntries = entries.filter(
-    (entry) => entry.kind === 'file' && entry.supported_for_index
-  )
+  const fileEntries = entries.filter((entry) => entry.kind === 'file')
   const recordMap = new Map(records.map((record) => [record.relative_path, record] as const))
 
   const directoryReferences: DirectoryReference[] = directoryEntries.map((entry) => {
@@ -120,7 +114,8 @@ export const buildWorkspaceReferenceItems = (input: {
       relativePath: entry.relative_path,
       absolutePath: entry.absolute_path,
       fileExt: entry.file_ext || undefined,
-      kbDocumentIds: isIndexedWorkspaceFile(record) && record?.document_id ? [record.document_id] : [],
+      kbDocumentIds:
+        isIndexedWorkspaceFile(record) && record?.document_id ? [record.document_id] : [],
       kbAvailability: isIndexedWorkspaceFile(record) ? 'indexed' : 'not_indexed'
     }
   })
@@ -134,6 +129,8 @@ export const buildWebReferenceItem = (source: WebSourceRecord): WebReference => 
   webSourceId: source.id,
   name: source.title || source.url,
   url: source.url,
-  kbDocumentIds: source.document_id && source.index_status === 'indexed' ? [source.document_id] : [],
-  kbAvailability: source.document_id && source.index_status === 'indexed' ? 'indexed' : 'not_indexed'
+  kbDocumentIds:
+    source.document_id && source.index_status === 'indexed' ? [source.document_id] : [],
+  kbAvailability:
+    source.document_id && source.index_status === 'indexed' ? 'indexed' : 'not_indexed'
 })

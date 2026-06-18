@@ -1138,11 +1138,20 @@ export const getWorkbenchLatestUserMessageReferenceTokenTexts = async (
     })
 
 export const removeFirstWorkbenchReferenceToken = async (page: Page): Promise<void> => {
-  const removeButton = getWorkbenchLocator(page, workbenchSelectors.input)
-    .locator('[data-action="remove-scope-token"]')
-    .first()
-  await removeButton.waitFor({ state: 'visible' })
-  await removeButton.click()
+  const input = getWorkbenchLocator(page, workbenchSelectors.input)
+  await input.evaluate((element) => {
+    if (!(element instanceof HTMLElement)) {
+      throw new Error('workbench input is not an HTMLElement')
+    }
+    element.focus()
+    const selection = window.getSelection()
+    const range = document.createRange()
+    range.selectNodeContents(element)
+    range.collapse(false)
+    selection?.removeAllRanges()
+    selection?.addRange(range)
+  })
+  await page.keyboard.press('Backspace')
 }
 
 export const waitForLatestAssistantFinalAnswer = async (page: Page): Promise<Locator> => {

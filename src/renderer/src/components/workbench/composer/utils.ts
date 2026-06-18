@@ -120,17 +120,6 @@ const appendReferenceIcon = (container: HTMLElement, scope: SelectedReference): 
   container.appendChild(icon)
 }
 
-const appendRemoveButton = (container: HTMLElement): void => {
-  const button = document.createElement('button')
-  button.type = 'button'
-  button.className =
-    'inline-flex h-4 w-4 items-center justify-center rounded-full text-[11px] leading-none text-current opacity-40 transition hover:bg-[#F1F1F0] hover:opacity-80'
-  button.setAttribute('aria-label', '移除资料标签')
-  button.dataset.action = 'remove-scope-token'
-  button.textContent = '×'
-  container.appendChild(button)
-}
-
 export const createScopeTokenElement = (scope: SelectedReference): HTMLElement => {
   const token = document.createElement('span')
   const tone = getReferenceVisualTone(scope)
@@ -146,7 +135,6 @@ export const createScopeTokenElement = (scope: SelectedReference): HTMLElement =
   label.textContent = scope.name
   token.appendChild(label)
 
-  appendRemoveButton(token)
   return token
 }
 

@@ -20,8 +20,7 @@ import type { AiLlmIoRecord } from '../../shared/types'
 import {
   buildWebReferenceItem,
   buildWorkspaceReferenceItems,
-  referenceMatchesQuery,
-  shouldIncludeReferenceInSearch
+  referenceMatchesQuery
 } from '../services/sourceScope/selection'
 import { validateSelectedReferencesForRun } from '../services/sourceScope/validation'
 import { WorkspaceSourceService } from '../services/workspace/WorkspaceSourceService'
@@ -2002,9 +2001,6 @@ export function registerHandlers(services: {
           .filter((reference) => referenceMatchesQuery(reference, payload.query))
           .filter((reference) =>
             referenceKindFilters ? referenceKindFilters.has(reference.kind) : true
-          )
-          .filter((reference) =>
-            payload.mode === 'search' ? shouldIncludeReferenceInSearch(reference) : true
           )
 
         return { items: allReferences, total: allReferences.length }

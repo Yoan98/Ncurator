@@ -135,9 +135,9 @@ tests/case/workbench/
 #### `reference-token-lifecycle`
 
 - 测试类型：`e2e`
-- What：验证 `@` 参考资料候选、目录 / 文件 / 网页 token 插入、多 token 共存、删除、去重、切工作区清理和空候选提示。
+- What：验证 `@` 参考资料候选覆盖工作区全部本地目录 / 文件与网页资料、目录 / 文件 / 网页 token 插入、多 token 共存、键盘删除、去重、切工作区清理和空候选提示。
 - Why：显式参考资料是用户控制 AI 上下文的核心入口，错误会直接导致搜索或 AI 执行范围偏离用户意图。
-- How：通过 UI 创建真实 workspace，绑定 `tests/fixtures/workspace`，等待真实索引完成；通过 UI 添加真实 web source；输入 `@` 触发候选，选择文件、目录、网页；选中即追加，同一资料才去重；切工作区清理旧 token。
+- How：通过 UI 创建真实 workspace，绑定 `tests/fixtures/workspace`，等待真实文件扫描并准备索引状态；通过 UI 添加真实 web source；输入 `@` 触发候选，选择文件、目录、网页；候选应包含工作区下未索引本地项并显示索引状态；选中即追加，同一资料才去重；通过 Backspace 删除 token；切工作区清理旧 token。
 - Oracle：候选来源符合当前工作区和模式，对齐 `WB-SCOPE-001-AC1`、`WB-SCOPE-001-AC2`；token 插入、共存和删除后发送参数符合 `WB-SCOPE-002-AC1` 至 `WB-SCOPE-002-AC3`；重复候选和跨工作区清理符合 `WB-SCOPE-003-AC1`、`WB-SCOPE-003-AC2`；空候选提示符合 `WB-SCOPE-004-AC1`、`WB-SCOPE-004-AC2`。
 - Not：不验证底层 KB 检索排序质量，也不验证 Settings 工作区资料配置细节。
 

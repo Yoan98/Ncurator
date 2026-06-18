@@ -571,15 +571,9 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   const handleEditorClickCapture = (event: React.MouseEvent<HTMLSpanElement>): void => {
     const target = event.target
     if (!(target instanceof HTMLElement)) return
-    const removeButton = target.closest('[data-action="remove-scope-token"]')
-    if (!removeButton) return
-    event.preventDefault()
-    const token = removeButton.closest('[data-role="scope-token"]')
-    if (!(token instanceof HTMLElement)) return
-    token.remove()
-    focusEditor()
-    syncDraftFromEditor()
-    closeMention()
+    if (target.closest('[data-role="scope-token"]')) {
+      restoreCaretToEnd()
+    }
   }
 
   const contextUsagePercent = Math.max(
