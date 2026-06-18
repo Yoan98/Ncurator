@@ -20,6 +20,8 @@ type WorkbenchSelectProps = {
   inlineChevron?: boolean
   disabled?: boolean
   noDrag?: boolean
+  minMenuWidth?: number
+  maxMenuWidth?: number
   'data-testid'?: string
 }
 
@@ -55,6 +57,8 @@ const WorkbenchSelect: React.FC<WorkbenchSelectProps> = ({
   inlineChevron = false,
   disabled = false,
   noDrag = false,
+  minMenuWidth,
+  maxMenuWidth,
   'data-testid': dataTestId
 }) => {
   const rootRef = useRef<HTMLDivElement | null>(null)
@@ -86,16 +90,20 @@ const WorkbenchSelect: React.FC<WorkbenchSelectProps> = ({
       if (!trigger) return
       const rect = trigger.getBoundingClientRect()
       const viewportWidth = window.innerWidth
-      const preferredWidth = Math.max(rect.width, compact ? 200 : 240)
-      const maxWidth = Math.min(preferredWidth, viewportWidth - 24)
-      const left = Math.min(rect.left, viewportWidth - maxWidth - 12)
+      const minimumWidth = minMenuWidth || (compact ? 200 : 240)
+      const preferredWidth = Math.max(rect.width, minimumWidth)
+      const constrainedWidth = maxMenuWidth
+        ? Math.min(preferredWidth, maxMenuWidth)
+        : preferredWidth
+      const width = Math.min(constrainedWidth, viewportWidth - 24)
+      const left = Math.min(rect.left, viewportWidth - width - 12)
       setMenuPosition({
         top: rect.bottom + 8,
         left: Math.max(12, left),
-        width: maxWidth
+        width
       })
     },
-    [compact]
+    [compact, maxMenuWidth, minMenuWidth]
   )
 
   useLayoutEffect(() => {
@@ -214,6 +222,7 @@ const WorkbenchSelect: React.FC<WorkbenchSelectProps> = ({
               id={listboxId}
               role="listbox"
               className={joinClassNames('workbench-select-menu', menuClassName)}
+              data-workbench-select-root="true"
               style={{
                 position: 'fixed',
                 top: menuPosition.top,

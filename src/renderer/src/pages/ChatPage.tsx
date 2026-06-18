@@ -3,15 +3,14 @@ import { App, Button, Modal, Spin } from 'antd'
 import {
   HiArrowUp,
   HiCheck,
+  HiChevronDown,
   HiChevronLeft,
   HiChevronRight,
   HiClock,
   HiFolder,
   HiOutlineExclamationCircle,
   HiOutlinePencilSquare,
-  HiOutlineRectangleGroup,
   HiPlus,
-  HiRectangleGroup,
   HiStop,
   HiTrash,
   HiXMark
@@ -323,6 +322,7 @@ const ChatPage: React.FC = () => {
     const stored = window.localStorage.getItem(WORKBENCH_SIDEBAR_WIDTH_STORAGE_KEY)
     return clampWorkbenchSidebarWidth(stored ? Number(stored) : WORKBENCH_SIDEBAR_DEFAULT_WIDTH)
   })
+  const [collapsedWorkspaceIds, setCollapsedWorkspaceIds] = useState<Set<string>>(() => new Set())
   const [contentPanelCollapsed, setContentPanelCollapsed] = useState<boolean>(() => {
     const stored = window.localStorage.getItem(WORKBENCH_CONTENT_PANEL_COLLAPSED_STORAGE_KEY)
     return stored === null ? true : stored === 'true'
@@ -697,6 +697,18 @@ const ChatPage: React.FC = () => {
   const handleWorkspaceChange = useCallback((workspaceId: string | null): void => {
     setSelectedWorkspaceId(workspaceId)
     writeWorkbenchWorkspacePreference(window.localStorage, workspaceId)
+  }, [])
+
+  const toggleWorkspaceCollapsed = useCallback((workspaceId: string): void => {
+    setCollapsedWorkspaceIds((current) => {
+      const next = new Set(current)
+      if (next.has(workspaceId)) {
+        next.delete(workspaceId)
+      } else {
+        next.add(workspaceId)
+      }
+      return next
+    })
   }, [])
 
   const handleNewSessionWorkspaceChange = useCallback(
@@ -1934,7 +1946,7 @@ const ChatPage: React.FC = () => {
     return (
       <div key={messageItem.id} className="flex justify-end">
         <div className="max-w-[66%]">
-          <div className="rounded-[8px] border border-[#E0DFDC] bg-[#EFEFED] px-3.5 py-2.5 text-[14px] leading-6 text-[#37352F]">
+          <div className="rounded-[8px] bg-[#F4F4F2] px-3.5 py-2.5 text-[14px] leading-6 text-[#37352F] shadow-[inset_0_0_0_1px_rgba(55,53,47,0.04)]">
             {messageReferences.length > 0 ? (
               <div
                 className="mb-1.5 flex flex-wrap gap-1"
@@ -2040,10 +2052,7 @@ const ChatPage: React.FC = () => {
         data-testid={workbenchSelectors.sessionsToggle}
         aria-label={sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'}
       >
-        <SidebarPanelIcon
-          className="h-4 w-4"
-          variant={sidebarCollapsed ? 'expand' : 'collapse'}
-        />
+        <SidebarPanelIcon className="h-4 w-4" variant={sidebarCollapsed ? 'expand' : 'collapse'} />
       </button>
       <aside
         className={`nc-sidebar ${platform === 'darwin' ? 'nc-sidebar-mac' : ''} ${
@@ -2076,14 +2085,29 @@ const ChatPage: React.FC = () => {
         >
           {workspaces.map((workspace) => {
             const workspaceSessions = sessionsByWorkspace.get(workspace.id) || []
+            const workspaceCollapsed = collapsedWorkspaceIds.has(workspace.id)
             return (
               <div key={workspace.id} className="nc-sidebar-workspace-group">
-                <div
-                  className="nc-sidebar-workspace-header group"
-                >
+                <div className="nc-sidebar-workspace-header group">
                   <div className="flex min-w-0 items-center gap-2">
                     <HiFolder className="h-4 w-4 shrink-0 text-[#91918E]" />
                     <span className="truncate">{workspace.name}</span>
+                    <button
+                      type="button"
+                      className="nc-sidebar-workspace-collapse workbench-no-drag"
+                      onClick={() => toggleWorkspaceCollapsed(workspace.id)}
+                      aria-label={
+                        workspaceCollapsed
+                          ? `展开 ${workspace.name} 的对话`
+                          : `折叠 ${workspace.name} 的对话`
+                      }
+                    >
+                      <HiChevronDown
+                        className={`h-3.5 w-3.5 transition-transform duration-150 ${
+                          workspaceCollapsed ? '-rotate-90' : ''
+                        }`}
+                      />
+                    </button>
                   </div>
                   <button
                     type="button"
@@ -2094,7 +2118,7 @@ const ChatPage: React.FC = () => {
                     <HiPlus className="h-3.5 w-3.5" />
                   </button>
                 </div>
-                <div className="mt-1 space-y-1">
+                <div className={`mt-1 space-y-1 ${workspaceCollapsed ? 'hidden' : ''}`}>
                   {workspaceSessions.map((session) => (
                     <div
                       key={session.id}
@@ -2169,10 +2193,6 @@ const ChatPage: React.FC = () => {
               <div className="min-w-0 flex-1 bg-white" style={WORKBENCH_DRAG_REGION_STYLE}>
                 {currentSession || sharedHeaderMeta ? (
                   <div className="flex min-w-0 items-center gap-2">
-                    <span className="text-[#787774]">馆长</span>
-                    {currentSession || sharedHeaderMeta ? (
-                      <span className="text-[#E0DFDC]">/</span>
-                    ) : null}
                     {currentSession ? (
                       <div className="truncate text-sm font-semibold text-[#37352F]">
                         {currentSession.title}
@@ -2209,13 +2229,7 @@ const ChatPage: React.FC = () => {
               <Button
                 type="text"
                 size="small"
-                icon={
-                  contentPanelCollapsed ? (
-                    <HiOutlineRectangleGroup className="h-3 w-3" />
-                  ) : (
-                    <HiRectangleGroup className="h-3 w-3" />
-                  )
-                }
+                icon={<SidebarPanelIcon className="h-4 w-4" variant="expand" />}
                 className={`!flex !h-7 !w-7 !items-center !justify-center !rounded-[6px] !border !p-0 !shadow-none hover:!border-[#37352F] hover:!text-[#37352F] ${
                   contentPanelCollapsed
                     ? '!border-[#EEEEEC] !bg-white !text-[#787774]'
@@ -2252,7 +2266,9 @@ const ChatPage: React.FC = () => {
                   <div className="mx-auto w-full max-w-[760px]">
                     {isNewSession ? (
                       <div className="mb-8 flex items-center justify-center text-center text-[28px] font-normal tracking-[-0.02em] text-[#37352F]">
-                        <span>{composerMode === 'search' ? '俺只会搜索本地资料！！' : '找俺干啥？'}</span>
+                        <span>
+                          {composerMode === 'search' ? '俺只会搜索本地资料！！' : '找俺干啥？'}
+                        </span>
                       </div>
                     ) : null}
                     {composerMode === 'ai' && pendingApprovalBatch ? (
@@ -2405,7 +2421,7 @@ const ChatPage: React.FC = () => {
                           isNewSession ? handleNewSessionWorkspaceChange : handleWorkspaceChange
                         }
                         onWorkspaceEmptyAction={() => navigate('/settings/workspace')}
-                        showWorkspaceSelector
+                        showWorkspaceSelector={isNewSession}
                         onDraftChange={handleComposerDraftChange}
                         onSubmit={() => void handleSend()}
                         onCancel={() => void handleCancel()}

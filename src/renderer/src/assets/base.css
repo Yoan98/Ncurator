@@ -358,7 +358,11 @@ textarea,
 }
 
 .nc-sidebar-workspace-header {
-  @apply flex items-center justify-between gap-2 rounded-[6px] px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-[#91918E] transition-colors hover:bg-[#EFEFEE];
+  @apply flex items-center justify-between gap-2 rounded-[6px] px-3 py-2 text-[12px] font-medium text-[#787774] transition-colors hover:bg-[#EFEFEE];
+}
+
+.nc-sidebar-workspace-collapse {
+  @apply flex h-5 w-5 shrink-0 items-center justify-center rounded-[5px] text-[#91918E] transition-colors hover:bg-white hover:text-[#37352F];
 }
 
 .nc-sidebar-collapse-btn {
@@ -590,7 +594,7 @@ textarea,
 }
 
 .workbench-select-trigger {
-  @apply inline-flex h-9 w-full items-center justify-between gap-2 rounded-[10px] border border-[#E5E4E0] bg-white px-3 text-left text-[13px] font-medium text-[#37352F] shadow-none transition;
+  @apply inline-flex h-9 items-center justify-between gap-2 rounded-[10px] border border-[#E5E4E0] bg-white px-3 text-left text-[13px] font-medium text-[#37352F] shadow-none transition;
 }
 
 .workbench-select-trigger:hover {
@@ -640,12 +644,14 @@ textarea,
 }
 
 .workbench-composer-model-select {
-  width: 95px;
+  width: fit-content;
+  max-width: 180px;
 }
 
 .workbench-composer-model-pill {
   @apply min-w-0;
-  width: 100%;
+  width: fit-content;
+  max-width: 180px;
 }
 
 .workbench-composer-pill.workbench-select-trigger-open {

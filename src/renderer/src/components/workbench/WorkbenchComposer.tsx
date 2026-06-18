@@ -751,6 +751,8 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
               triggerClassName="workbench-composer-pill workbench-composer-model-pill"
               menuClassName="workbench-composer-menu"
               selectedWithoutBackground
+              minMenuWidth={320}
+              maxMenuWidth={440}
               data-testid={workbenchSelectors.modelSelect}
             />
 
