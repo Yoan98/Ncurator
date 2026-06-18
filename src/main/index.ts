@@ -29,10 +29,6 @@ const singleInstanceLock = process.env.NCURATOR_E2E_OBSERVER
   ? true
   : app.requestSingleInstanceLock()
 
-if (!singleInstanceLock) {
-  app.quit()
-}
-
 function createWindow(): BrowserWindow {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
@@ -88,96 +84,100 @@ function createWindow(): BrowserWindow {
   return mainWindow
 }
 
-app.on('second-instance', () => {
-  const mainWindow = BrowserWindow.getAllWindows()[0]
-  if (!mainWindow) return
-  if (mainWindow.isMinimized()) mainWindow.restore()
-  mainWindow.show()
-  mainWindow.focus()
-})
-
-// This method will be called when Electron has finished
-// initialization and is ready to create browser windows.
-// Some APIs can only be used after this event occurs.
-app.whenReady().then(async () => {
-  // Set app user model id for windows
-  electronApp.setAppUserModelId(APP_ID)
-
-  // Default open or close DevTools by F12 in development
-  // and ignore CommandOrControl + R in production.
-  // see https://github.com/alex8088/electron-toolkit/tree/master/packages/utils
-  app.on('browser-window-created', (_, window) => {
-    optimizer.watchWindowShortcuts(window)
+if (!singleInstanceLock) {
+  app.quit()
+} else {
+  app.on('second-instance', () => {
+    const mainWindow = BrowserWindow.getAllWindows()[0]
+    if (!mainWindow) return
+    if (mainWindow.isMinimized()) mainWindow.restore()
+    mainWindow.show()
+    mainWindow.focus()
   })
 
-  // IPC test
-  ipcMain.on('ping', () => console.log('pong'))
+  // This method will be called when Electron has finished
+  // initialization and is ready to create browser windows.
+  // Some APIs can only be used after this event occurs.
+  app.whenReady().then(async () => {
+    // Set app user model id for windows
+    electronApp.setAppUserModelId(APP_ID)
 
-  // Initialize services
-  const ingestionService = IngestionService.getInstance()
-  const embeddingService = EmbeddingService.getInstance()
-  const storageService = StorageService.getInstance()
-  const modelService = ModelService.getInstance()
-  const vectorModelDownloadService = VectorModelDownloadService.getInstance({
-    modelService,
+    // Default open or close DevTools by F12 in development
+    // and ignore CommandOrControl + R in production.
+    // see https://github.com/alex8088/electron-toolkit/tree/master/packages/utils
+    app.on('browser-window-created', (_, window) => {
+      optimizer.watchWindowShortcuts(window)
+    })
+
+    // IPC test
+    ipcMain.on('ping', () => console.log('pong'))
+
+    // Initialize services
+    const ingestionService = IngestionService.getInstance()
+    const embeddingService = EmbeddingService.getInstance()
+    const storageService = StorageService.getInstance()
+    const modelService = ModelService.getInstance()
+    const vectorModelDownloadService = VectorModelDownloadService.getInstance({
+      modelService,
+      embeddingService
+    })
+
+    console.log('Starting background initialization of services...')
     embeddingService
+      .initialize()
+      .catch((err) => console.error('Failed to initialize EmbeddingService:', err))
+    await storageService.initialize()
+
+    const mainWindow = createWindow()
+    const appUpdateService = new AppUpdateService()
+    const browserEmbedService = new BrowserEmbedService(mainWindow)
+    const webCrawlerBaseDirectory = join(app.getPath('userData'), 'web-crawler')
+    const webCrawlerService = new ManagedWebCrawlerService({
+      appRootPath: app.getAppPath(),
+      isPackaged: app.isPackaged,
+      resourcesPath: process.resourcesPath,
+      sidecarEnv: {
+        CRAWL4_AI_BASE_DIRECTORY: webCrawlerBaseDirectory
+      }
+    })
+
+    registerHandlers({
+      ingestionService,
+      embeddingService,
+      storageService,
+      modelService,
+      vectorModelDownloadService,
+      browserEmbedService,
+      webCrawlerService
+    })
+    appUpdateService.initialize()
+    appUpdateService.checkForUpdatesOnLaunch()
+
+    app.on('before-quit', () => {
+      void storageService.failInterruptedWorkspaceIndexJobs()
+      void webCrawlerService.close()
+    })
+
+    vectorModelDownloadService
+      .initialize()
+      .catch((err) => console.error('Failed to initialize VectorModelDownloadService:', err))
+
+    app.on('activate', function () {
+      // On macOS it's common to re-create a window in the app when the
+      // dock icon is clicked and there are no other windows open.
+      if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    })
   })
 
-  console.log('Starting background initialization of services...')
-  embeddingService
-    .initialize()
-    .catch((err) => console.error('Failed to initialize EmbeddingService:', err))
-  await storageService.initialize()
-
-  const mainWindow = createWindow()
-  const appUpdateService = new AppUpdateService()
-  const browserEmbedService = new BrowserEmbedService(mainWindow)
-  const webCrawlerBaseDirectory = join(app.getPath('userData'), 'web-crawler')
-  const webCrawlerService = new ManagedWebCrawlerService({
-    appRootPath: app.getAppPath(),
-    isPackaged: app.isPackaged,
-    resourcesPath: process.resourcesPath,
-    sidecarEnv: {
-      CRAWL4_AI_BASE_DIRECTORY: webCrawlerBaseDirectory
+  // Quit when all windows are closed, except on macOS. There, it's common
+  // for applications and their menu bar to stay active until the user quits
+  // explicitly with Cmd + Q.
+  app.on('window-all-closed', () => {
+    if (process.platform !== 'darwin') {
+      app.quit()
     }
   })
-
-  registerHandlers({
-    ingestionService,
-    embeddingService,
-    storageService,
-    modelService,
-    vectorModelDownloadService,
-    browserEmbedService,
-    webCrawlerService
-  })
-  appUpdateService.initialize()
-  appUpdateService.checkForUpdatesOnLaunch()
-
-  app.on('before-quit', () => {
-    void storageService.failInterruptedWorkspaceIndexJobs()
-    void webCrawlerService.close()
-  })
-
-  vectorModelDownloadService
-    .initialize()
-    .catch((err) => console.error('Failed to initialize VectorModelDownloadService:', err))
-
-  app.on('activate', function () {
-    // On macOS it's common to re-create a window in the app when the
-    // dock icon is clicked and there are no other windows open.
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
-  })
-})
-
-// Quit when all windows are closed, except on macOS. There, it's common
-// for applications and their menu bar to stay active until the user quits
-// explicitly with Cmd + Q.
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit()
-  }
-})
+}
 
 // In this file you can include the rest of your app's specific main process
 // code. You can also put them in separate files and require them here.
