@@ -299,10 +299,35 @@ textarea,
 }
 
 .nc-sidebar-titlebar-toggle {
-  @apply fixed z-30 flex h-8 w-8 items-center justify-center rounded-[6px] text-[#91918E] transition-colors hover:bg-[#EFEFEE] hover:text-[#37352F];
+  @apply flex h-8 w-8 items-center justify-center rounded-[6px] text-[#91918E] transition-colors hover:bg-[#EFEFEE] hover:text-[#37352F];
   top: 10px;
   background: transparent;
   border: 0;
+  pointer-events: auto;
+  -webkit-app-region: no-drag;
+}
+
+.nc-sidebar-titlebar-toggle-fixed-zone {
+  position: fixed;
+  top: 0;
+  left: 96px;
+  z-index: 100;
+  width: 56px;
+  height: 56px;
+  pointer-events: auto;
+  -webkit-app-region: no-drag;
+}
+
+.nc-sidebar-titlebar-toggle-fixed {
+  position: absolute;
+  z-index: 101;
+  left: 8px;
+}
+
+.nc-sidebar-titlebar-toggle-inside {
+  position: absolute;
+  z-index: 30;
+  right: 52px;
 }
 
 /* macOS: 侧边栏延伸到标题栏 */

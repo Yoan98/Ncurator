@@ -120,9 +120,13 @@ const WORKBENCH_NO_DRAG_REGION_STYLE = {
   zIndex: 2,
   WebkitAppRegion: 'no-drag'
 } as React.CSSProperties
+const WORKBENCH_NO_DRAG_STYLE = {
+  WebkitAppRegion: 'no-drag'
+} as React.CSSProperties
 const WORKBENCH_POSITIONED_PANE_STYLE = {
   position: 'relative'
 } as React.CSSProperties
+const WORKBENCH_COLLAPSED_SIDEBAR_TOGGLE_SAFE_WIDTH = 152
 
 const clampWorkbenchSidebarWidth = (width: number): number =>
   Math.max(WORKBENCH_SIDEBAR_MIN_WIDTH, Math.min(WORKBENCH_SIDEBAR_MAX_WIDTH, width))
@@ -2042,16 +2046,28 @@ const ChatPage: React.FC = () => {
       data-workbench-mode={composerMode}
     >
       {platform === 'win32' ? <WindowsTitleBar /> : null}
-      <button
-        type="button"
-        className="nc-sidebar-titlebar-toggle workbench-no-drag"
-        style={{ left: sidebarCollapsed ? 104 : sidebarWidth - 60 }}
-        onClick={() => setSidebarCollapsed((previous) => !previous)}
-        data-testid={workbenchSelectors.sessionsToggle}
-        aria-label={sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'}
-      >
-        <SidebarPanelIcon className="h-4 w-4" variant={sidebarCollapsed ? 'expand' : 'collapse'} />
-      </button>
+      {sidebarCollapsed ? (
+        <div className="nc-sidebar-titlebar-toggle-fixed-zone workbench-no-drag">
+          <button
+            type="button"
+            className="nc-sidebar-titlebar-toggle nc-sidebar-titlebar-toggle-fixed workbench-no-drag"
+            style={WORKBENCH_NO_DRAG_STYLE}
+            onPointerDown={(event) => {
+              event.preventDefault()
+              event.stopPropagation()
+              setSidebarCollapsed(false)
+            }}
+            onClick={(event) => {
+              event.preventDefault()
+              event.stopPropagation()
+            }}
+            data-testid={workbenchSelectors.sessionsToggle}
+            aria-label="展开侧边栏"
+          >
+            <SidebarPanelIcon className="h-4 w-4" variant="expand" />
+          </button>
+        </div>
+      ) : null}
       <aside
         className={`nc-sidebar ${platform === 'darwin' ? 'nc-sidebar-mac' : ''} ${
           sidebarCollapsed ? 'nc-sidebar-hidden' : ''
@@ -2059,6 +2075,25 @@ const ChatPage: React.FC = () => {
         style={{ width: sidebarWidth, flexBasis: sidebarWidth }}
       >
         <div aria-hidden="true" style={WORKBENCH_TOP_DRAG_ZONE_STYLE} />
+        {!sidebarCollapsed ? (
+          <button
+            type="button"
+            className="nc-sidebar-titlebar-toggle nc-sidebar-titlebar-toggle-inside workbench-no-drag"
+            onPointerDown={(event) => {
+              event.preventDefault()
+              event.stopPropagation()
+              setSidebarCollapsed(true)
+            }}
+            onClick={(event) => {
+              event.preventDefault()
+              event.stopPropagation()
+            }}
+            data-testid={workbenchSelectors.sessionsToggle}
+            aria-label="收起侧边栏"
+          >
+            <SidebarPanelIcon className="h-4 w-4" variant="collapse" />
+          </button>
+        ) : null}
         <div
           className={`nc-sidebar-window-spacer ${platform === 'darwin' ? 'nc-sidebar-window-spacer-mac' : ''}`}
           aria-hidden="true"
@@ -2187,7 +2222,13 @@ const ChatPage: React.FC = () => {
       </aside>
 
       <div className="nc-main-pane min-w-0 flex-1" style={WORKBENCH_POSITIONED_PANE_STYLE}>
-        <div aria-hidden="true" style={WORKBENCH_TOP_DRAG_ZONE_STYLE} />
+        <div
+          aria-hidden="true"
+          style={{
+            ...WORKBENCH_TOP_DRAG_ZONE_STYLE,
+            left: sidebarCollapsed ? WORKBENCH_COLLAPSED_SIDEBAR_TOGGLE_SAFE_WIDTH : 0
+          }}
+        />
         <div className="flex h-full min-h-0 flex-col">
           {!isNewSession ? (
             <div className="nc-topbar" style={WORKBENCH_DRAG_REGION_STYLE}>
