@@ -301,7 +301,6 @@ textarea,
 .nc-sidebar-titlebar-toggle {
   @apply fixed z-30 flex h-8 w-8 items-center justify-center rounded-[6px] text-[#91918E] transition-colors hover:bg-[#EFEFEE] hover:text-[#37352F];
   top: 10px;
-  left: 286px;
   background: transparent;
   border: 0;
 }
@@ -399,9 +398,9 @@ textarea,
 }
 
 .nc-topbar {
-  @apply flex h-[40px] shrink-0 items-center justify-between border-b border-[#EEEEEC] bg-white px-5;
+  @apply flex h-11 shrink-0 items-center justify-between border-b border-[#EEEEEC] bg-white px-4;
   position: relative;
-  z-index: 1;
+  z-index: 4;
 }
 
 .nc-main-pane {

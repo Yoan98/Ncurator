@@ -1946,7 +1946,7 @@ const ChatPage: React.FC = () => {
     return (
       <div key={messageItem.id} className="flex justify-end">
         <div className="max-w-[66%]">
-          <div className="rounded-[8px] bg-[#F4F4F2] px-3.5 py-2.5 text-[14px] leading-6 text-[#37352F] shadow-[inset_0_0_0_1px_rgba(55,53,47,0.04)]">
+          <div className="rounded-[22px] bg-[#F4F4F2] px-4 py-2.5 text-[14px] leading-6 text-[#37352F]">
             {messageReferences.length > 0 ? (
               <div
                 className="mb-1.5 flex flex-wrap gap-1"
@@ -2044,10 +2044,8 @@ const ChatPage: React.FC = () => {
       {platform === 'win32' ? <WindowsTitleBar /> : null}
       <button
         type="button"
-        className={`nc-sidebar-titlebar-toggle workbench-no-drag ${
-          sidebarCollapsed ? 'nc-sidebar-titlebar-toggle-hidden' : ''
-        }`}
-        style={{ left: sidebarCollapsed ? 104 : WORKBENCH_SIDEBAR_DEFAULT_WIDTH - 60 }}
+        className="nc-sidebar-titlebar-toggle workbench-no-drag"
+        style={{ left: sidebarCollapsed ? 104 : sidebarWidth - 60 }}
         onClick={() => setSidebarCollapsed((previous) => !previous)}
         data-testid={workbenchSelectors.sessionsToggle}
         aria-label={sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'}
@@ -2094,7 +2092,8 @@ const ChatPage: React.FC = () => {
                     <span className="truncate">{workspace.name}</span>
                     <button
                       type="button"
-                      className="nc-sidebar-workspace-collapse workbench-no-drag"
+                      className="nc-sidebar-workspace-collapse workbench-no-drag relative z-10 cursor-pointer"
+                      onMouseDown={(event) => event.stopPropagation()}
                       onClick={() => toggleWorkspaceCollapsed(workspace.id)}
                       aria-label={
                         workspaceCollapsed
@@ -2118,44 +2117,46 @@ const ChatPage: React.FC = () => {
                     <HiPlus className="h-3.5 w-3.5" />
                   </button>
                 </div>
-                <div className={`mt-1 space-y-1 ${workspaceCollapsed ? 'hidden' : ''}`}>
-                  {workspaceSessions.map((session) => (
-                    <div
-                      key={session.id}
-                      role="button"
-                      tabIndex={0}
-                      className={`nc-sidebar-item group relative ${
-                        currentSessionId === session.id
-                          ? 'nc-sidebar-item-active'
-                          : 'bg-transparent'
-                      } px-3 py-2`}
-                      onClick={() => selectSession(session)}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter' || event.key === ' ') {
-                          event.preventDefault()
-                          selectSession(session)
-                        }
-                      }}
-                    >
-                      <div className="flex min-w-0 items-center gap-2 pl-4">
-                        <div className="min-w-0 flex-1 truncate text-[13px] font-medium text-[#37352F]">
-                          {session.title}
+                {workspaceCollapsed ? null : (
+                  <div className="mt-1 space-y-1">
+                    {workspaceSessions.map((session) => (
+                      <div
+                        key={session.id}
+                        role="button"
+                        tabIndex={0}
+                        className={`nc-sidebar-item group relative ${
+                          currentSessionId === session.id
+                            ? 'nc-sidebar-item-active'
+                            : 'bg-transparent'
+                        } px-3 py-2`}
+                        onClick={() => selectSession(session)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault()
+                            selectSession(session)
+                          }
+                        }}
+                      >
+                        <div className="flex min-w-0 items-center gap-2 pl-4">
+                          <div className="min-w-0 flex-1 truncate text-[13px] font-medium text-[#37352F]">
+                            {session.title}
+                          </div>
+                          <div className="flex shrink-0 items-center gap-1 text-[11px] text-[#91918E] group-hover:hidden">
+                            <HiClock className="h-3 w-3" />
+                            <span>{formatRelativeTime(session.created_at)}</span>
+                          </div>
+                          <Button
+                            type="text"
+                            size="small"
+                            icon={<HiTrash className="h-3.5 w-3.5" />}
+                            className="!absolute !right-1 !top-1/2 !z-10 !h-6 !w-6 !-translate-y-1/2 !rounded-[6px] !p-0 opacity-0 transition-opacity group-hover:opacity-100"
+                            onClick={(event) => void deleteSession(event, session.id)}
+                          />
                         </div>
-                        <div className="flex shrink-0 items-center gap-1 text-[11px] text-[#91918E] group-hover:hidden">
-                          <HiClock className="h-3 w-3" />
-                          <span>{formatRelativeTime(session.created_at)}</span>
-                        </div>
-                        <Button
-                          type="text"
-                          size="small"
-                          icon={<HiTrash className="h-3.5 w-3.5" />}
-                          className="!absolute !right-1 !top-1/2 !z-10 !h-6 !w-6 !-translate-y-1/2 !rounded-[6px] !p-0 opacity-0 transition-opacity group-hover:opacity-100"
-                          onClick={(event) => void deleteSession(event, session.id)}
-                        />
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )
           })}
@@ -2192,9 +2193,9 @@ const ChatPage: React.FC = () => {
             <div className="nc-topbar" style={WORKBENCH_DRAG_REGION_STYLE}>
               <div className="min-w-0 flex-1 bg-white" style={WORKBENCH_DRAG_REGION_STYLE}>
                 {currentSession || sharedHeaderMeta ? (
-                  <div className="flex min-w-0 items-center gap-2">
+                  <div className="flex min-w-0 items-center gap-2 leading-none">
                     {currentSession ? (
-                      <div className="truncate text-sm font-semibold text-[#37352F]">
+                      <div className="truncate text-sm font-semibold leading-none text-[#37352F]">
                         {currentSession.title}
                       </div>
                     ) : null}
@@ -2203,7 +2204,7 @@ const ChatPage: React.FC = () => {
                     ) : null}
                     {sharedHeaderMeta ? (
                       <div
-                        className="truncate text-sm font-semibold text-[#37352F]"
+                        className="truncate text-sm font-semibold leading-none text-[#37352F]"
                         data-testid={workbenchSelectors.contentPanelTitle}
                       >
                         {sharedHeaderMeta.title}
@@ -2229,12 +2230,13 @@ const ChatPage: React.FC = () => {
               <Button
                 type="text"
                 size="small"
-                icon={<SidebarPanelIcon className="h-4 w-4" variant="expand" />}
-                className={`!flex !h-7 !w-7 !items-center !justify-center !rounded-[6px] !border !p-0 !shadow-none hover:!border-[#37352F] hover:!text-[#37352F] ${
-                  contentPanelCollapsed
-                    ? '!border-[#EEEEEC] !bg-white !text-[#787774]'
-                    : '!border-[#EEEEEC] !bg-[#F4F4F2] !text-[#37352F]'
-                }`}
+                icon={
+                  <SidebarPanelIcon
+                    className="h-4 w-4"
+                    variant={contentPanelCollapsed ? 'expand' : 'collapse'}
+                  />
+                }
+                className="!flex !h-7 !w-7 !items-center !justify-center !rounded-[6px] !border-0 !bg-transparent !p-0 !shadow-none !text-[#91918E] hover:!bg-transparent hover:!text-[#37352F]"
                 style={WORKBENCH_NO_DRAG_REGION_STYLE}
                 onClick={() => setContentPanelCollapsed((previous) => !previous)}
               />
