@@ -106,15 +106,6 @@ const SCROLL_BOTTOM_TOLERANCE = 72
 const WORKBENCH_DRAG_REGION_STYLE = {
   WebkitAppRegion: 'drag'
 } as React.CSSProperties
-const WORKBENCH_TOP_DRAG_ZONE_STYLE = {
-  position: 'absolute',
-  top: 0,
-  left: 0,
-  right: 0,
-  height: 52,
-  zIndex: 1,
-  WebkitAppRegion: 'drag'
-} as React.CSSProperties
 const WORKBENCH_NO_DRAG_REGION_STYLE = {
   position: 'relative',
   zIndex: 2,
@@ -125,16 +116,6 @@ const WORKBENCH_NO_DRAG_STYLE = {
 } as React.CSSProperties
 const WORKBENCH_POSITIONED_PANE_STYLE = {
   position: 'relative'
-} as React.CSSProperties
-const WORKBENCH_COLLAPSED_SIDEBAR_TOGGLE_SAFE_WIDTH = 170
-const WORKBENCH_COLLAPSED_TOPBAR_NO_DRAG_ZONE_STYLE = {
-  position: 'absolute',
-  top: 0,
-  left: 0,
-  width: WORKBENCH_COLLAPSED_SIDEBAR_TOGGLE_SAFE_WIDTH,
-  height: 52,
-  zIndex: 3,
-  WebkitAppRegion: 'no-drag'
 } as React.CSSProperties
 
 const clampWorkbenchSidebarWidth = (width: number): number =>
@@ -2055,7 +2036,7 @@ const ChatPage: React.FC = () => {
       data-workbench-mode={composerMode}
     >
       {platform === 'win32' ? <WindowsTitleBar /> : null}
-      {sidebarCollapsed ? (
+      {sidebarCollapsed && isNewSession ? (
         <div className="nc-sidebar-titlebar-toggle-fixed-zone workbench-no-drag">
           <button
             type="button"
@@ -2083,7 +2064,6 @@ const ChatPage: React.FC = () => {
         }`}
         style={{ width: sidebarWidth, flexBasis: sidebarWidth }}
       >
-        <div aria-hidden="true" style={WORKBENCH_TOP_DRAG_ZONE_STYLE} />
         {!sidebarCollapsed ? (
           <button
             type="button"
@@ -2233,37 +2213,48 @@ const ChatPage: React.FC = () => {
       </aside>
 
       <div className="nc-main-pane min-w-0 flex-1" style={WORKBENCH_POSITIONED_PANE_STYLE}>
-        {sidebarCollapsed ? (
-          <div
-            aria-hidden="true"
-            className="workbench-no-drag"
-            style={WORKBENCH_COLLAPSED_TOPBAR_NO_DRAG_ZONE_STYLE}
-          />
-        ) : null}
-        <div
-          aria-hidden="true"
-          style={{
-            ...WORKBENCH_TOP_DRAG_ZONE_STYLE,
-            left: sidebarCollapsed ? WORKBENCH_COLLAPSED_SIDEBAR_TOGGLE_SAFE_WIDTH : 0
-          }}
-        />
         <div className="flex h-full min-h-0 flex-col">
           {!isNewSession ? (
             <div className="nc-topbar">
-              <div className="min-w-0 flex-1 bg-white">
+              <div
+                className="nc-topbar-collapsed-safe-zone"
+                style={{ width: sidebarCollapsed ? sidebarWidth : 0 }}
+              >
+                {sidebarCollapsed ? (
+                  <button
+                    type="button"
+                    className="nc-sidebar-titlebar-toggle nc-sidebar-titlebar-toggle-inline workbench-no-drag"
+                    style={WORKBENCH_NO_DRAG_STYLE}
+                    onPointerDown={(event) => {
+                      event.preventDefault()
+                      event.stopPropagation()
+                      setSidebarCollapsed(false)
+                    }}
+                    onClick={(event) => {
+                      event.preventDefault()
+                      event.stopPropagation()
+                    }}
+                    data-testid={workbenchSelectors.sessionsToggle}
+                    aria-label="展开侧边栏"
+                  >
+                    <SidebarPanelIcon className="h-4 w-4" variant="expand" />
+                  </button>
+                ) : null}
+              </div>
+              <div className="nc-topbar-title-region min-w-0 flex-1 bg-white">
                 {currentSession || sharedHeaderMeta ? (
                   <div className="flex min-w-0 items-center gap-2 leading-none">
                     {currentSession ? (
-                      <div className="truncate text-sm font-semibold leading-none text-[#37352F]">
+                      <div className="nc-topbar-title-text truncate text-sm font-semibold leading-none text-[#37352F]">
                         {currentSession.title}
                       </div>
                     ) : null}
                     {currentSession && sharedHeaderMeta ? (
-                      <span className="text-[#E0DFDC]">/</span>
+                      <span className="nc-topbar-title-text text-[#E0DFDC]">/</span>
                     ) : null}
                     {sharedHeaderMeta ? (
                       <div
-                        className="truncate text-sm font-semibold leading-none text-[#37352F]"
+                        className="nc-topbar-title-text truncate text-sm font-semibold leading-none text-[#37352F]"
                         data-testid={workbenchSelectors.contentPanelTitle}
                       >
                         {sharedHeaderMeta.title}

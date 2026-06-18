@@ -1,7 +1,16 @@
-import React, { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import React, {
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState
+} from 'react'
 import { createPortal } from 'react-dom'
 import { HiCheck, HiChevronDown, HiMagnifyingGlass } from 'react-icons/hi2'
 import type { WorkbenchSelectOption } from './types'
+import { resolveFloatingPlacement } from './floatingPlacement'
 
 type WorkbenchSelectProps = {
   value: string | null
@@ -26,18 +35,22 @@ type WorkbenchSelectProps = {
 }
 
 type MenuPosition = {
-  top: number
+  top?: number
+  bottom?: number
   left: number
   width: number
+  maxHeight: number
+  placement: 'top' | 'bottom'
 }
 
 const joinClassNames = (...parts: Array<string | false | null | undefined>): string =>
   parts.filter(Boolean).join(' ')
 
 const DEFAULT_MENU_POSITION: MenuPosition = {
-  top: 0,
   left: 0,
-  width: 240
+  width: 240,
+  maxHeight: 320,
+  placement: 'bottom'
 }
 
 const WorkbenchSelect: React.FC<WorkbenchSelectProps> = ({
@@ -84,27 +97,30 @@ const WorkbenchSelect: React.FC<WorkbenchSelectProps> = ({
     })
   }, [options, query])
 
-  const updateMenuPosition = useMemo(
-    () => () => {
-      const trigger = triggerRef.current
-      if (!trigger) return
-      const rect = trigger.getBoundingClientRect()
-      const viewportWidth = window.innerWidth
-      const minimumWidth = minMenuWidth || (compact ? 200 : 240)
-      const preferredWidth = Math.max(rect.width, minimumWidth)
-      const constrainedWidth = maxMenuWidth
-        ? Math.min(preferredWidth, maxMenuWidth)
-        : preferredWidth
-      const width = Math.min(constrainedWidth, viewportWidth - 24)
-      const left = Math.min(rect.left, viewportWidth - width - 12)
-      setMenuPosition({
-        top: rect.bottom + 8,
-        left: Math.max(12, left),
-        width
+  const updateMenuPosition = useCallback(() => {
+    const trigger = triggerRef.current
+    if (!trigger) return
+    const rect = trigger.getBoundingClientRect()
+    const viewportWidth = window.innerWidth
+    const viewportHeight = window.innerHeight
+    const minimumWidth = minMenuWidth || (compact ? 200 : 240)
+    const preferredWidth = Math.max(rect.width, minimumWidth)
+    const constrainedWidth = maxMenuWidth ? Math.min(preferredWidth, maxMenuWidth) : preferredWidth
+      const placement = resolveFloatingPlacement({
+        triggerRect: rect,
+        viewportWidth,
+        viewportHeight,
+        preferredWidth: constrainedWidth,
+        preferredHeight: searchable ? 320 + 48 : 320,
+        maxHeight: searchable ? 420 : 320,
+        minWidth: minimumWidth,
+        maxWidth: maxMenuWidth
       })
-    },
-    [compact, maxMenuWidth, minMenuWidth]
-  )
+      setMenuPosition({
+        ...placement,
+        maxHeight: Math.max(120, placement.maxHeight)
+      })
+  }, [compact, maxMenuWidth, minMenuWidth, searchable])
 
   useLayoutEffect(() => {
     if (!open) return
@@ -226,6 +242,7 @@ const WorkbenchSelect: React.FC<WorkbenchSelectProps> = ({
               style={{
                 position: 'fixed',
                 top: menuPosition.top,
+                bottom: menuPosition.bottom,
                 left: menuPosition.left,
                 width: menuPosition.width,
                 zIndex: 1000
@@ -244,7 +261,7 @@ const WorkbenchSelect: React.FC<WorkbenchSelectProps> = ({
                 </div>
               ) : null}
 
-              <div className="max-h-[320px] overflow-y-auto py-1.5">
+              <div className="overflow-y-auto py-1.5" style={{ maxHeight: menuPosition.maxHeight }}>
                 {filteredOptions.length > 0 ? (
                   filteredOptions.map((option) => {
                     const selected = option.value === value

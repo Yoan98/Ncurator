@@ -45,9 +45,12 @@ export type WorkspaceQuickSelectProps = {
 }
 
 export type WorkspaceQuickSelectPopupPosition = {
-  top: number
+  top?: number
+  bottom?: number
   left: number
-  maxWidth: number
+  width: number
+  maxHeight: number
+  placement: 'top' | 'bottom'
 }
 
 export type SearchWorkbenchTurn = {

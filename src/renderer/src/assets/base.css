@@ -322,6 +322,13 @@ textarea,
   left: 8px;
 }
 
+.nc-sidebar-titlebar-toggle-inline {
+  position: absolute;
+  top: 8px;
+  left: 126px;
+  z-index: 6;
+}
+
 .nc-sidebar-titlebar-toggle-inside {
   position: absolute;
   z-index: 30;
@@ -424,7 +431,29 @@ textarea,
   @apply flex h-11 shrink-0 items-center justify-between border-b border-[#EEEEEC] bg-white px-4;
   position: relative;
   z-index: 4;
+  user-select: none;
+  -webkit-user-select: none;
   -webkit-app-region: no-drag;
+}
+
+.nc-topbar-collapsed-safe-zone {
+  position: relative;
+  flex: 0 0 auto;
+  height: 100%;
+  transition: width 180ms ease;
+  -webkit-app-region: no-drag;
+}
+
+.nc-topbar-title-region {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-app-region: drag;
+}
+
+.nc-topbar-title-text {
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .nc-main-pane {

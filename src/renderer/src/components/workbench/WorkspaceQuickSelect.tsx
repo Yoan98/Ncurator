@@ -2,11 +2,13 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { HiCheck, HiChevronDown, HiFolder } from 'react-icons/hi2'
 import type { WorkspaceQuickSelectPopupPosition, WorkspaceQuickSelectProps } from './types'
+import { resolveFloatingPlacement } from './floatingPlacement'
 
 const DEFAULT_POPUP_POSITION: WorkspaceQuickSelectPopupPosition = {
-  top: 0,
   left: 0,
-  maxWidth: 360
+  width: 360,
+  maxHeight: 180,
+  placement: 'bottom'
 }
 
 const joinClassNames = (...parts: Array<string | false | null | undefined>): string =>
@@ -36,25 +38,18 @@ const WorkspaceQuickSelect: React.FC<WorkspaceQuickSelectProps> = ({
     const trigger = triggerRef.current
     if (!trigger) return
     const rect = trigger.getBoundingClientRect()
-    const viewportWidth = window.innerWidth
-    const left = rect.right + 8
-    const availableRight = viewportWidth - left - 12
-    const fallbackLeft = Math.max(12, rect.left)
-    const fallbackWidth = viewportWidth - fallbackLeft - 12
-
-    if (availableRight >= 220) {
-      setPopupPosition({
-        top: rect.top,
-        left,
-        maxWidth: Math.min(availableRight, 560)
-      })
-      return
-    }
-
+    const placement = resolveFloatingPlacement({
+      triggerRect: rect,
+      viewportWidth: window.innerWidth,
+      viewportHeight: window.innerHeight,
+      preferredWidth: 360,
+      preferredHeight: 180,
+      minWidth: 240,
+      maxWidth: 560
+    })
     setPopupPosition({
-      top: rect.bottom + 8,
-      left: fallbackLeft,
-      maxWidth: Math.min(fallbackWidth, 560)
+      ...placement,
+      maxHeight: Math.max(120, placement.maxHeight)
     })
   }
 
@@ -136,8 +131,9 @@ const WorkspaceQuickSelect: React.FC<WorkspaceQuickSelectProps> = ({
               style={{
                 position: 'fixed',
                 top: popupPosition.top,
+                bottom: popupPosition.bottom,
                 left: popupPosition.left,
-                maxWidth: popupPosition.maxWidth,
+                width: popupPosition.width,
                 zIndex: 1000
               }}
               role="listbox"
