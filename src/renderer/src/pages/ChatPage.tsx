@@ -87,11 +87,7 @@ import {
 import { chatSelectors, workbenchSelectors } from '../testing/selectors'
 import WindowsTitleBar from '../components/WindowsTitleBar'
 import SidebarPanelIcon from '../components/SidebarPanelIcon'
-import {
-  collectReferenceDocumentIds,
-  hasIncompleteLocalKbCoverage,
-  pruneReferencesByWorkspace
-} from '../utils/reference'
+import { collectReferenceDocumentIds, pruneReferencesByWorkspace } from '../utils/reference'
 
 type ApprovalBatchRequiredEvent = Extract<AiRunEvent, { type: 'approval_batch_required' }>
 type ApprovalBatchDecisionAction = 'approve' | 'reject' | 'guide'
@@ -2427,19 +2423,6 @@ const ChatPage: React.FC = () => {
                         contextUsage={contextUsage}
                       />
                     )}
-
-                    {composerMode === 'ai' &&
-                    selectedReferences.some(hasIncompleteLocalKbCoverage) ? (
-                      <div
-                        className="nc-notice nc-notice-warning mt-3"
-                        data-testid={workbenchSelectors.referenceAiWarning}
-                      >
-                        <HiOutlineExclamationCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                        <span>
-                          已选本地参考资料含未完全索引内容，AI 可能需要直接读取原文件，耗时更长。
-                        </span>
-                      </div>
-                    ) : null}
 
                     {composerMode === 'search' &&
                     selectedReferences.some(

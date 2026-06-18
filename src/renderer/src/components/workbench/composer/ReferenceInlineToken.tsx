@@ -17,7 +17,7 @@ export const ReferenceInlineToken: React.FC<ReferenceInlineTokenProps> = ({
   const tone = getReferenceVisualTone(reference)
   return (
     <span
-      className={`inline-flex max-w-full items-center gap-1 align-baseline text-[13px] font-medium leading-5 ${tone.iconClassName} ${className}`}
+      className={`inline-flex max-w-full items-center gap-0.5 align-baseline text-[13px] font-medium leading-5 ${tone.iconClassName} ${className}`}
       data-role={role}
     >
       <ReferenceIcon reference={reference} size="sm" variant="plain" />

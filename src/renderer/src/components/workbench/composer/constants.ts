@@ -7,6 +7,8 @@ export const COMPOSER_REFERENCE_KINDS: ReferenceKind[] = ['directory', 'file', '
 export type ReferenceIconTone = {
   containerClassName: string
   iconClassName: string
+  fillClassName: string
+  textClassName: string
 }
 
 export const REFERENCE_ICON_PATHS = {
@@ -21,22 +23,32 @@ export const REFERENCE_ICON_PATHS = {
 export const REFERENCE_ICON_TONES = {
   directory: {
     containerClassName: 'bg-[#F4F1E8] text-[#8A6F2A]',
-    iconClassName: 'text-[#8A6F2A]'
+    iconClassName: 'text-[#8A6F2A]',
+    fillClassName: 'fill-none',
+    textClassName: 'fill-[#8A6F2A]'
   },
   docx: {
     containerClassName: 'bg-[#EAF2FB] text-[#2F6FBC]',
-    iconClassName: 'text-[#2F6FBC]'
+    iconClassName: 'text-[#2F6FBC]',
+    fillClassName: 'fill-[#2F6FBC]',
+    textClassName: 'fill-white'
   },
   pdf: {
     containerClassName: 'bg-[#FBEDEC] text-[#B3261E]',
-    iconClassName: 'text-[#B3261E]'
+    iconClassName: 'text-[#B3261E]',
+    fillClassName: 'fill-[#F0524D]',
+    textClassName: 'fill-white'
   },
   web: {
     containerClassName: 'bg-[#EAF4EF] text-[#2F6F4E]',
-    iconClassName: 'text-[#2F6F4E]'
+    iconClassName: 'text-[#2F6F4E]',
+    fillClassName: 'fill-none',
+    textClassName: 'fill-[#2F6F4E]'
   },
   file: {
     containerClassName: 'bg-[#F1F1EF] text-[#6B6A67]',
-    iconClassName: 'text-[#6B6A67]'
+    iconClassName: 'text-[#6B6A67]',
+    fillClassName: 'fill-[#F7F7F5]',
+    textClassName: 'fill-[#6B6A67]'
   }
 } as const

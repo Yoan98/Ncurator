@@ -1118,7 +1118,7 @@ export const insertWorkbenchReferenceToken = async (
 ): Promise<void> => {
   await appendWorkbenchInputText(page, `@${queryText}`)
   const panel = getWorkbenchLocator(page, workbenchSelectors.mentionPanel)
-  await panel.waitFor({ state: 'visible' })
+  await waitForWorkbenchMentionPanelText(page)
   const option = panel.getByRole('button').filter({ hasText: visibleName }).first()
   try {
     await option.waitFor({ state: 'visible' })
