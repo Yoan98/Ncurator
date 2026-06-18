@@ -108,24 +108,26 @@ type ApprovalDraftDecision = {
 }
 
 const SCROLL_BOTTOM_TOLERANCE = 72
-const WORKBENCH_MANUAL_WINDOW_DRAG_REGION_STYLE = {
-  WebkitAppRegion: 'no-drag',
-  pointerEvents: 'none',
-  userSelect: 'none',
-  WebkitUserSelect: 'none'
+const WORKBENCH_DRAG_REGION_STYLE = {
+  WebkitAppRegion: 'drag'
 } as React.CSSProperties
-const WORKBENCH_MANUAL_WINDOW_TOPBAR_STYLE = {
-  WebkitAppRegion: 'no-drag',
-  userSelect: 'none',
-  WebkitUserSelect: 'none'
+const WORKBENCH_TOP_DRAG_ZONE_STYLE = {
+  position: 'absolute',
+  top: 0,
+  left: 0,
+  right: 0,
+  height: 52,
+  zIndex: 1,
+  WebkitAppRegion: 'drag'
 } as React.CSSProperties
 const WORKBENCH_NO_DRAG_REGION_STYLE = {
   position: 'relative',
   zIndex: 2,
   WebkitAppRegion: 'no-drag'
 } as React.CSSProperties
-const WORKBENCH_MANUAL_WINDOW_DRAG_SELECTOR =
-  'button, a, input, textarea, select, [contenteditable="true"], .workbench-no-drag, .ant-select, .ant-btn'
+const WORKBENCH_POSITIONED_PANE_STYLE = {
+  position: 'relative'
+} as React.CSSProperties
 
 const clampWorkbenchSidebarWidth = (width: number): number =>
   Math.max(WORKBENCH_SIDEBAR_MIN_WIDTH, Math.min(WORKBENCH_SIDEBAR_MAX_WIDTH, width))
@@ -1931,28 +1933,6 @@ const ChatPage: React.FC = () => {
     }
   }
 
-  const handleTopbarMouseDown = useCallback((event: React.MouseEvent<HTMLDivElement>): void => {
-    if (event.button !== 0) return
-    if (!(event.target instanceof HTMLElement)) return
-    if (event.target.closest(WORKBENCH_MANUAL_WINDOW_DRAG_SELECTOR)) return
-
-    event.preventDefault()
-    window.api.windowDragStart({ screenX: event.screenX, screenY: event.screenY })
-
-    const handleMouseMove = (moveEvent: MouseEvent): void => {
-      window.api.windowDragMove({ screenX: moveEvent.screenX, screenY: moveEvent.screenY })
-    }
-
-    const handleMouseUp = (): void => {
-      window.removeEventListener('mousemove', handleMouseMove)
-      window.removeEventListener('mouseup', handleMouseUp)
-      window.api.windowDragEnd()
-    }
-
-    window.addEventListener('mousemove', handleMouseMove)
-    window.addEventListener('mouseup', handleMouseUp, { once: true })
-  }, [])
-
   const renderUserMessage = (messageItem: ChatMessage): React.ReactNode => {
     const messageReferences = messageItem.selectedReferences || []
     return (
@@ -2075,6 +2055,7 @@ const ChatPage: React.FC = () => {
         }`}
         style={{ width: sidebarWidth, flexBasis: sidebarWidth }}
       >
+        <div aria-hidden="true" style={WORKBENCH_TOP_DRAG_ZONE_STYLE} />
         <div
           className={`nc-sidebar-window-spacer ${platform === 'darwin' ? 'nc-sidebar-window-spacer-mac' : ''}`}
           aria-hidden="true"
@@ -2184,15 +2165,12 @@ const ChatPage: React.FC = () => {
         />
       </aside>
 
-      <div className="nc-main-pane min-w-0 flex-1">
+      <div className="nc-main-pane min-w-0 flex-1" style={WORKBENCH_POSITIONED_PANE_STYLE}>
+        <div aria-hidden="true" style={WORKBENCH_TOP_DRAG_ZONE_STYLE} />
         <div className="flex h-full min-h-0 flex-col">
           {!isNewSession ? (
-            <div
-              className="nc-topbar"
-              style={WORKBENCH_MANUAL_WINDOW_TOPBAR_STYLE}
-              onMouseDown={handleTopbarMouseDown}
-            >
-              <div className="min-w-0 flex-1 bg-white" style={WORKBENCH_MANUAL_WINDOW_DRAG_REGION_STYLE}>
+            <div className="nc-topbar" style={WORKBENCH_DRAG_REGION_STYLE}>
+              <div className="min-w-0 flex-1 bg-white" style={WORKBENCH_DRAG_REGION_STYLE}>
                 {currentSession || sharedHeaderMeta ? (
                   <div className="flex min-w-0 items-center gap-2">
                     <span className="text-[#787774]">馆长</span>
@@ -2228,7 +2206,7 @@ const ChatPage: React.FC = () => {
 
               <div
                 className="nc-topbar-drag-spacer"
-                style={WORKBENCH_MANUAL_WINDOW_DRAG_REGION_STYLE}
+                style={WORKBENCH_DRAG_REGION_STYLE}
                 aria-hidden="true"
               />
 

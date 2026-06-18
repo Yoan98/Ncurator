@@ -67,15 +67,6 @@ const emitDownloadProgress = (payload: DownloadProgress): void => {
 
 // Custom APIs for renderer
 const api: DesktopApi = {
-  windowDragStart: (payload): void => {
-    ipcRenderer.send('window-drag-start', payload)
-  },
-  windowDragMove: (payload): void => {
-    ipcRenderer.send('window-drag-move', payload)
-  },
-  windowDragEnd: (): void => {
-    ipcRenderer.send('window-drag-end')
-  },
   ingestWeb: (payload): Promise<{ success: boolean; count?: number; error?: string }> =>
     ipcRenderer.invoke('ingest-web', payload),
   ingestWebs: (payload): Promise<{ success: boolean; created?: number; error?: string }> =>
