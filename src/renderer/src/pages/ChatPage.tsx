@@ -126,7 +126,16 @@ const WORKBENCH_NO_DRAG_STYLE = {
 const WORKBENCH_POSITIONED_PANE_STYLE = {
   position: 'relative'
 } as React.CSSProperties
-const WORKBENCH_COLLAPSED_SIDEBAR_TOGGLE_SAFE_WIDTH = 152
+const WORKBENCH_COLLAPSED_SIDEBAR_TOGGLE_SAFE_WIDTH = 170
+const WORKBENCH_COLLAPSED_TOPBAR_NO_DRAG_ZONE_STYLE = {
+  position: 'absolute',
+  top: 0,
+  left: 0,
+  width: WORKBENCH_COLLAPSED_SIDEBAR_TOGGLE_SAFE_WIDTH,
+  height: 52,
+  zIndex: 3,
+  WebkitAppRegion: 'no-drag'
+} as React.CSSProperties
 
 const clampWorkbenchSidebarWidth = (width: number): number =>
   Math.max(WORKBENCH_SIDEBAR_MIN_WIDTH, Math.min(WORKBENCH_SIDEBAR_MAX_WIDTH, width))
@@ -2143,14 +2152,16 @@ const ChatPage: React.FC = () => {
                       />
                     </button>
                   </div>
-                  <button
-                    type="button"
-                    className="flex h-5 w-5 items-center justify-center rounded-[5px] text-[#91918E] opacity-0 transition hover:bg-white hover:text-[#37352F] group-hover:opacity-100"
-                    onClick={() => void createNewSession(workspace.id)}
-                    aria-label={`在 ${workspace.name} 中新建对话`}
-                  >
-                    <HiPlus className="h-3.5 w-3.5" />
-                  </button>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <button
+                      type="button"
+                      className="flex h-5 w-5 items-center justify-center rounded-[5px] text-[#91918E] opacity-0 transition hover:bg-white hover:text-[#37352F] group-hover:opacity-100"
+                      onClick={() => void createNewSession(workspace.id)}
+                      aria-label={`在 ${workspace.name} 中新建对话`}
+                    >
+                      <HiPlus className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 </div>
                 {workspaceCollapsed ? null : (
                   <div className="mt-1 space-y-1">
@@ -2222,6 +2233,13 @@ const ChatPage: React.FC = () => {
       </aside>
 
       <div className="nc-main-pane min-w-0 flex-1" style={WORKBENCH_POSITIONED_PANE_STYLE}>
+        {sidebarCollapsed ? (
+          <div
+            aria-hidden="true"
+            className="workbench-no-drag"
+            style={WORKBENCH_COLLAPSED_TOPBAR_NO_DRAG_ZONE_STYLE}
+          />
+        ) : null}
         <div
           aria-hidden="true"
           style={{
@@ -2231,8 +2249,8 @@ const ChatPage: React.FC = () => {
         />
         <div className="flex h-full min-h-0 flex-col">
           {!isNewSession ? (
-            <div className="nc-topbar" style={WORKBENCH_DRAG_REGION_STYLE}>
-              <div className="min-w-0 flex-1 bg-white" style={WORKBENCH_DRAG_REGION_STYLE}>
+            <div className="nc-topbar">
+              <div className="min-w-0 flex-1 bg-white">
                 {currentSession || sharedHeaderMeta ? (
                   <div className="flex min-w-0 items-center gap-2 leading-none">
                     {currentSession ? (

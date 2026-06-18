@@ -240,9 +240,7 @@ textarea,
 
 /* 顶部 chrome 区域可拖拽，交互控件单独标记 no-drag */
 .nc-app-shell-windows .nc-sidebar-header,
-.nc-app-shell-windows .nc-topbar,
-.nc-sidebar-header,
-.nc-topbar {
+.nc-sidebar-header {
   -webkit-app-region: drag;
 }
 
@@ -300,7 +298,7 @@ textarea,
 
 .nc-sidebar-titlebar-toggle {
   @apply flex h-8 w-8 items-center justify-center rounded-[6px] text-[#91918E] transition-colors hover:bg-[#EFEFEE] hover:text-[#37352F];
-  top: 10px;
+  top: 8px;
   background: transparent;
   border: 0;
   pointer-events: auto;
@@ -310,7 +308,7 @@ textarea,
 .nc-sidebar-titlebar-toggle-fixed-zone {
   position: fixed;
   top: 0;
-  left: 96px;
+  left: 118px;
   z-index: 100;
   width: 56px;
   height: 56px;
@@ -327,7 +325,7 @@ textarea,
 .nc-sidebar-titlebar-toggle-inside {
   position: absolute;
   z-index: 30;
-  right: 52px;
+  right: 34px;
 }
 
 /* macOS: 侧边栏延伸到标题栏 */
@@ -386,7 +384,7 @@ textarea,
 }
 
 .nc-sidebar-workspace-collapse {
-  @apply flex h-5 w-5 shrink-0 items-center justify-center rounded-[5px] text-[#91918E] transition-colors hover:bg-white hover:text-[#37352F];
+  @apply flex h-5 w-5 shrink-0 items-center justify-center rounded-[5px] text-[#91918E] opacity-0 transition hover:bg-white hover:text-[#37352F] group-hover:opacity-100;
 }
 
 .nc-sidebar-collapse-btn {
@@ -426,6 +424,7 @@ textarea,
   @apply flex h-11 shrink-0 items-center justify-between border-b border-[#EEEEEC] bg-white px-4;
   position: relative;
   z-index: 4;
+  -webkit-app-region: no-drag;
 }
 
 .nc-main-pane {
@@ -509,7 +508,7 @@ textarea,
 }
 
 .nc-document {
-  @apply mx-auto flex w-full max-w-[860px] flex-col gap-5 pb-8;
+  @apply mx-auto flex w-full max-w-[760px] flex-col gap-5 pb-8;
 }
 
 .nc-empty-state {
