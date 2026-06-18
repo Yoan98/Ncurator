@@ -100,7 +100,7 @@ const appendReferenceIcon = (container: HTMLElement, scope: SelectedReference): 
   const visualKind = getReferenceVisualKind(scope)
   const tone = getReferenceVisualTone(scope)
   const icon = document.createElement('span')
-  icon.className = `inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[4px] ${tone.containerClassName}`
+  icon.className = `inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[4px] ${tone.iconClassName}`
   icon.dataset.referenceIconKind = visualKind
 
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
@@ -124,7 +124,7 @@ const appendRemoveButton = (container: HTMLElement): void => {
   const button = document.createElement('button')
   button.type = 'button'
   button.className =
-    'inline-flex h-4 w-4 items-center justify-center rounded-full text-[11px] leading-none text-[#B1B0AD] opacity-60 transition hover:bg-[#F1F1F0] hover:text-[#37352F] hover:opacity-100'
+    'inline-flex h-4 w-4 items-center justify-center rounded-full text-[11px] leading-none text-current opacity-40 transition hover:bg-[#F1F1F0] hover:opacity-80'
   button.setAttribute('aria-label', '移除资料标签')
   button.dataset.action = 'remove-scope-token'
   button.textContent = '×'
@@ -133,8 +133,8 @@ const appendRemoveButton = (container: HTMLElement): void => {
 
 export const createScopeTokenElement = (scope: SelectedReference): HTMLElement => {
   const token = document.createElement('span')
-  token.className =
-    'mx-0.5 inline-flex max-w-full items-center gap-1.5 rounded-[6px] border border-[#E0DFDC] bg-white px-1.5 py-[1px] align-baseline text-[13px] font-medium leading-5 text-[#2F3437] shadow-[0_1px_0_rgba(15,15,15,0.03)]'
+  const tone = getReferenceVisualTone(scope)
+  token.className = `mx-0.5 inline-flex max-w-full items-center gap-1 px-0.5 py-[1px] align-baseline text-[13px] font-medium leading-5 ${tone.iconClassName}`
   token.contentEditable = 'false'
   token.dataset.role = 'scope-token'
   token.dataset.scopeKey = getScopeKey(scope)

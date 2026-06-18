@@ -410,6 +410,21 @@ const ChatPage: React.FC = () => {
     () => hasWorkspaceRootPath(selectedWorkspace),
     [selectedWorkspace]
   )
+  const composerSubmitDisabledReason = useMemo(() => {
+    if (!input.trim()) return '输入内容后再发送'
+    if (!currentSessionId) return '当前会话未就绪'
+    if (!selectedWorkspaceReady)
+      return `${getWorkspaceRequirementHint(selectedWorkspace)}后再发送消息`
+    if (composerMode === 'ai' && !selectedModelName) return '请先选择可用模型'
+    return null
+  }, [
+    composerMode,
+    currentSessionId,
+    input,
+    selectedModelName,
+    selectedWorkspace,
+    selectedWorkspaceReady
+  ])
 
   const approvalSubmitDisabled = useMemo(() => {
     if (!currentApprovalItem || approvalSubmitting) return true
@@ -1957,7 +1972,6 @@ const ChatPage: React.FC = () => {
                         : `${reference.kind}:${reference.workspaceId}:${reference.nodeId}`
                     }
                     reference={reference}
-                    className="bg-white/70"
                   />
                 ))}
               </div>
@@ -2425,9 +2439,11 @@ const ChatPage: React.FC = () => {
                         cancelling={cancellingRun}
                         canSubmit={Boolean(
                           input.trim() &&
+                          currentSessionId &&
                           selectedWorkspaceReady &&
                           (composerMode === 'search' || selectedModelName)
                         )}
+                        submitDisabledReason={composerSubmitDisabledReason}
                         showCancel={composerMode === 'ai' && Boolean(aiRunId)}
                         resetKey={composerResetKey}
                         contextUsage={contextUsage}

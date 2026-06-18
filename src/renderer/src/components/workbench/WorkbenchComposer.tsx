@@ -1,5 +1,5 @@
 ﻿import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Spin } from 'antd'
+import { Spin, Tooltip } from 'antd'
 import { HiArrowUp, HiCpuChip, HiMagnifyingGlass, HiSparkles, HiStop } from 'react-icons/hi2'
 import type {
   LLMConfig,
@@ -51,6 +51,7 @@ type WorkbenchComposerProps = {
   loading: boolean
   cancelling?: boolean
   canSubmit: boolean
+  submitDisabledReason?: string | null
   showCancel: boolean
   resetKey: number
   contextUsage?: WorkbenchContextUsage | null
@@ -90,6 +91,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   loading,
   cancelling = false,
   canSubmit,
+  submitDisabledReason,
   showCancel,
   resetKey,
   contextUsage
@@ -613,6 +615,16 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
       })),
     [activeModelConfig, remoteModels]
   )
+  const sendButtonDisabled = showCancel ? cancelling : loading || !canSubmit
+  const sendButtonTooltip = showCancel
+    ? cancelling
+      ? '正在停止本次运行'
+      : ''
+    : loading
+      ? '正在处理上一条请求'
+      : !canSubmit
+        ? submitDisabledReason || '当前还不能发送'
+        : ''
 
   return (
     <div className="relative">
@@ -766,34 +778,48 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
               data-testid={workbenchSelectors.modelSelect}
             />
 
-            <button
-              type="button"
-              onClick={showCancel ? onCancel : onSubmit}
-              disabled={showCancel ? cancelling : loading || !canSubmit}
-              className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition ${
-                showCancel
-                  ? cancelling
-                    ? 'bg-[#EEEEEC] text-[#91918E]'
-                    : 'bg-[#B3261E] text-white hover:bg-[#8F3028]'
-                  : loading || !canSubmit
-                    ? 'bg-[#EEEEEC] text-[#91918E]'
-                    : 'bg-[#37352F] text-white hover:bg-[#2F3437]'
-              }`}
-              data-testid={workbenchSelectors.sendButton}
-              aria-label={showCancel ? '停止本次运行' : mode === 'ai' ? '发送智能请求' : '执行搜索'}
+            <Tooltip
+              title={sendButtonDisabled ? sendButtonTooltip : ''}
+              color="#F4F4F2"
+              overlayInnerStyle={{
+                color: '#37352F',
+                border: '1px solid #E0DFDC',
+                boxShadow: '0 8px 24px rgba(15, 15, 15, 0.08)'
+              }}
             >
-              {showCancel ? (
-                cancelling ? (
-                  <Spin size="small" />
-                ) : (
-                  <HiStop className="h-3 w-3" />
-                )
-              ) : loading ? (
-                <Spin size="small" />
-              ) : (
-                <HiArrowUp className="h-3 w-3" />
-              )}
-            </button>
+              <span className="inline-flex h-7 w-7 shrink-0">
+                <button
+                  type="button"
+                  onClick={showCancel ? onCancel : onSubmit}
+                  disabled={sendButtonDisabled}
+                  className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border transition ${
+                    showCancel
+                      ? cancelling
+                        ? 'border-[#E5E4E0] bg-[#F4F4F2] text-[#B5B3AD]'
+                        : 'border-[#B3261E] bg-[#B3261E] text-white hover:bg-[#8F3028]'
+                      : sendButtonDisabled
+                        ? 'border-[#E5E4E0] bg-[#F4F4F2] text-[#B5B3AD]'
+                        : 'border-[#37352F] bg-[#37352F] text-white hover:bg-[#2F3437]'
+                  }`}
+                  data-testid={workbenchSelectors.sendButton}
+                  aria-label={
+                    showCancel ? '停止本次运行' : mode === 'ai' ? '发送智能请求' : '执行搜索'
+                  }
+                >
+                  {showCancel ? (
+                    cancelling ? (
+                      <Spin size="small" />
+                    ) : (
+                      <HiStop className="h-3 w-3" />
+                    )
+                  ) : loading ? (
+                    <Spin size="small" />
+                  ) : (
+                    <HiArrowUp className="h-3 w-3" />
+                  )}
+                </button>
+              </span>
+            </Tooltip>
           </div>
         </div>
       </div>

@@ -6,6 +6,7 @@ import { getReferenceVisualKind, getReferenceVisualTone } from './referenceVisua
 type ReferenceIconProps = {
   reference: SelectedReference
   size?: 'sm' | 'md'
+  variant?: 'badge' | 'plain'
 }
 
 const iconSizeClassName = {
@@ -18,10 +19,15 @@ const containerSizeClassName = {
   md: 'h-7 w-7 rounded-[6px]'
 } as const
 
-export const ReferenceIcon: React.FC<ReferenceIconProps> = ({ reference, size = 'md' }) => {
+export const ReferenceIcon: React.FC<ReferenceIconProps> = ({
+  reference,
+  size = 'md',
+  variant = 'badge'
+}) => {
   const visualKind = getReferenceVisualKind(reference)
   const tone = getReferenceVisualTone(reference)
   const iconClassName = `${iconSizeClassName[size]} ${tone.iconClassName}`
+  const containerToneClassName = variant === 'badge' ? tone.containerClassName : tone.iconClassName
 
   const icon =
     visualKind === 'directory' ? (
@@ -37,7 +43,7 @@ export const ReferenceIcon: React.FC<ReferenceIconProps> = ({ reference, size = 
   return (
     <span
       aria-hidden="true"
-      className={`inline-flex shrink-0 items-center justify-center ${containerSizeClassName[size]} ${tone.containerClassName}`}
+      className={`inline-flex shrink-0 items-center justify-center ${containerSizeClassName[size]} ${containerToneClassName}`}
       data-reference-icon-kind={visualKind}
     >
       {icon}

@@ -120,7 +120,7 @@ tests/case/workbench/
 - What：验证发送前置条件、模式切换保留输入、模型 / 工作区偏好恢复和失效回退。
 - Why：Workbench 的任务入口依赖这些基础交互；任一状态失真都会导致用户无法发起任务或把任务发到错误上下文。
 - How：通过 UI 配置真实模型和工作区；覆盖空输入、无工作区、发送中、模式切换、模型搜索、切换工作区 / 模型后重进页面，以及缓存候选失效后的回退；真实发送时走真实模型。
-- Oracle：空白输入、未绑定工作区或发送中不会触发发送，对齐 `WB-COMPOSER-001-AC1`、`WB-COMPOSER-001-AC2`、`WB-COMPOSER-005-AC1`；拦截提示明确要求先选择工作区，对齐 `WB-COMPOSER-005-AC2`；切换模式后输入保留且发送路径按新模式执行，对齐 `WB-MODE-001-AC1`、`WB-MODE-001-AC2`；模型搜索、偏好恢复、失效回退、入口图标和“大聪明 / 没头脑”展示符合 `WB-COMPOSER-007-AC1` 至 `WB-COMPOSER-007-AC5`。
+- Oracle：空白输入、未绑定工作区或发送中不会触发发送，且发送按钮 hover 可见禁用原因，对齐 `WB-COMPOSER-001-AC1` 至 `WB-COMPOSER-001-AC3`、`WB-COMPOSER-005-AC1`；拦截提示明确要求先选择工作区，对齐 `WB-COMPOSER-005-AC2`；切换模式后输入保留且发送路径按新模式执行，对齐 `WB-MODE-001-AC1`、`WB-MODE-001-AC2`；模型搜索、偏好恢复、失效回退、入口图标和“大聪明 / 没头脑”展示符合 `WB-COMPOSER-007-AC1` 至 `WB-COMPOSER-007-AC5`。
 - Not：不验证真实模型回答质量，只验证用户路径和发送前置条件。
 
 #### `workspace-root-path-required`
