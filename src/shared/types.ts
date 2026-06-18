@@ -508,6 +508,7 @@ export interface ChatMessage {
   role: 'user' | 'assistant' | 'system'
   content: string
   timestamp: number
+  selectedReferences?: SelectedReference[]
   artifacts?: AiArtifactRef[]
   error?: boolean
 }

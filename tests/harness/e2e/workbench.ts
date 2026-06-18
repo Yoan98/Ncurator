@@ -427,8 +427,12 @@ export const createWorkspaceThroughSettingsUi = async (
   await getSettingsLocator(page, importSelectors.createWorkspaceButton).click()
   await getSettingsLocator(page, importSelectors.createWorkspaceNameInput).fill(workspaceName)
   await getSettingsLocator(page, importSelectors.createWorkspaceConfirmButton).click()
+  await getSettingsPrefixLocator(page, importSelectors.workspaceCardPrefix)
+    .filter({ hasText: workspaceName })
+    .first()
+    .waitFor({ state: 'visible' })
   await getSettingsLocator(page, importSelectors.workspaceDetail)
-    .getByRole('heading', { name: workspaceName })
+    .getByRole('tab', { name: /文件/u })
     .waitFor({ state: 'visible' })
 }
 
@@ -1118,6 +1122,20 @@ export const getWorkbenchReferenceTokenTexts = async (page: Page): Promise<strin
         .trim()
     )
   })
+
+export const getWorkbenchLatestUserMessageReferenceTokenTexts = async (
+  page: Page
+): Promise<string[]> =>
+  await getWorkbenchLocator(page, workbenchSelectors.userMessageReferences)
+    .last()
+    .evaluate((element) => {
+      if (!(element instanceof HTMLElement)) {
+        throw new Error('workbench user message references is not an HTMLElement')
+      }
+      return Array.from(element.querySelectorAll('[data-role="reference-inline-token"]')).map(
+        (node) => String(node.textContent || '').trim()
+      )
+    })
 
 export const removeFirstWorkbenchReferenceToken = async (page: Page): Promise<void> => {
   const removeButton = getWorkbenchLocator(page, workbenchSelectors.input)

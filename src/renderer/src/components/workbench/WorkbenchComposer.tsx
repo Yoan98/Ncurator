@@ -1,15 +1,6 @@
 ﻿import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Empty, Spin } from 'antd'
-import {
-  HiArrowUp,
-  HiCpuChip,
-  HiDocumentText,
-  HiFolder,
-  HiGlobeAlt,
-  HiMagnifyingGlass,
-  HiSparkles,
-  HiStop
-} from 'react-icons/hi2'
+import { Spin } from 'antd'
+import { HiArrowUp, HiCpuChip, HiMagnifyingGlass, HiSparkles, HiStop } from 'react-icons/hi2'
 import type {
   LLMConfig,
   LlmRemoteModel,
@@ -20,6 +11,7 @@ import type {
 import { workbenchSelectors } from '../../testing/selectors'
 import type { WorkbenchContextUsage, WorkbenchMode, WorkbenchSelectOption } from './types'
 import { COMPOSER_PLACEHOLDER, COMPOSER_REFERENCE_KINDS } from './composer/constants'
+import ReferenceMentionPanel from './composer/ReferenceMentionPanel'
 import type { ComposerDraftValue, ComposerNode } from './composer/types'
 import {
   createScopeTokenElement,
@@ -31,11 +23,6 @@ import {
   readComposerNodesFromEditor,
   renderComposerNodesToEditor
 } from './composer/utils'
-import {
-  getKbAvailabilityLabel,
-  getReferenceDisplayPath,
-  getReferenceTypeLabel
-} from '../../utils/reference'
 import WorkbenchSelect from './WorkbenchSelect'
 import WorkspaceQuickSelect from './WorkspaceQuickSelect'
 
@@ -593,8 +580,6 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     closeMention()
   }
 
-  const localMentionOptions = mentionOptions.filter((scope) => scope.kind !== 'web')
-  const webMentionOptions = mentionOptions.filter((scope) => scope.kind === 'web')
   const contextUsagePercent = Math.max(
     0,
     Math.min(100, Math.round((contextUsage?.ratio || 0) * 100))
@@ -632,127 +617,13 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   return (
     <div className="relative">
       {mentionQuery !== null ? (
-        <div
-          className="absolute inset-x-0 bottom-full mb-2 overflow-hidden rounded-[8px] border border-[#E0DFDC] bg-white shadow-[0_16px_40px_rgba(15,15,15,0.12)]"
-          data-testid={workbenchSelectors.mentionPanel}
-        >
-          <div className="max-h-[320px] overflow-y-auto">
-            {mentionLoading ? (
-              <div className="flex items-center justify-center py-8 text-[#9B9A97]">
-                <Spin size="small" />
-              </div>
-            ) : mentionOptions.length === 0 ? (
-              <Empty
-                image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description={
-                  selectedWorkspace ? '当前工作区和网页资料中没有匹配项' : '请先选择工作区'
-                }
-              />
-            ) : (
-              <div>
-                {localMentionOptions.length > 0 ? (
-                  <div>
-                    <div className="border-b border-[#EEEEEC] px-4 py-2 text-[12px] font-semibold text-[#787774]">
-                      当前工作区
-                    </div>
-                    {localMentionOptions.map((scope) => {
-                      const optionIndex = mentionOptions.findIndex(
-                        (option) => getScopeKey(option) === getScopeKey(scope)
-                      )
-                      const active = mentionActiveIndex === optionIndex
-                      return (
-                        <button
-                          key={getScopeKey(scope)}
-                          type="button"
-                          className={`flex w-full items-center gap-3 border-b border-[#EEEEEC] px-4 py-2.5 text-left transition last:border-b-0 ${
-                            active ? 'bg-[#EFEFED]' : 'hover:bg-[#F7F7F5]'
-                          }`}
-                          onMouseDown={(event) => {
-                            event.preventDefault()
-                            insertMentionScope(scope)
-                          }}
-                        >
-                          <span
-                            className={`inline-flex h-7 w-7 items-center justify-center rounded-[6px] ${
-                              scope.kind === 'directory'
-                                ? 'bg-[#F4F4F2] text-[#787774]'
-                                : 'bg-[#F4F4F2] text-[#787774]'
-                            }`}
-                          >
-                            {scope.kind === 'directory' ? (
-                              <HiFolder className="h-4 w-4" />
-                            ) : (
-                              <HiDocumentText className="h-4 w-4" />
-                            )}
-                          </span>
-                          <div className="min-w-0 flex-1">
-                            <div className="truncate text-[14px] font-medium leading-6 text-[#37352F]">
-                              {scope.name}
-                            </div>
-                            <div className="truncate text-[12px] leading-5 text-[#9B9A97]">
-                              {getReferenceDisplayPath(scope)}
-                            </div>
-                          </div>
-                          <div className="flex shrink-0 gap-1">
-                            <span className="nc-tag">{getReferenceTypeLabel(scope)}</span>
-                            <span className="nc-tag nc-tag-blue">
-                              {getKbAvailabilityLabel(scope.kbAvailability)}
-                            </span>
-                          </div>
-                        </button>
-                      )
-                    })}
-                  </div>
-                ) : null}
-
-                {webMentionOptions.length > 0 ? (
-                  <div>
-                    <div className="border-b border-[#EEEEEC] px-4 py-2 text-[12px] font-semibold text-[#787774]">
-                      网页资料
-                    </div>
-                    {webMentionOptions.map((scope) => {
-                      const optionIndex = mentionOptions.findIndex(
-                        (option) => getScopeKey(option) === getScopeKey(scope)
-                      )
-                      const active = mentionActiveIndex === optionIndex
-                      return (
-                        <button
-                          key={getScopeKey(scope)}
-                          type="button"
-                          className={`flex w-full items-center gap-3 border-b border-[#EEEEEC] px-4 py-2.5 text-left transition last:border-b-0 ${
-                            active ? 'bg-[#EFEFED]' : 'hover:bg-[#F7F7F5]'
-                          }`}
-                          onMouseDown={(event) => {
-                            event.preventDefault()
-                            insertMentionScope(scope)
-                          }}
-                        >
-                          <span className="inline-flex h-7 w-7 items-center justify-center rounded-[6px] bg-[#F4F4F2] text-[#787774]">
-                            <HiGlobeAlt className="h-4 w-4" />
-                          </span>
-                          <div className="min-w-0 flex-1">
-                            <div className="truncate text-[14px] font-medium leading-6 text-[#37352F]">
-                              {scope.name}
-                            </div>
-                            <div className="truncate text-[12px] leading-5 text-[#9B9A97]">
-                              {getReferenceDisplayPath(scope)}
-                            </div>
-                          </div>
-                          <div className="flex shrink-0 gap-1">
-                            <span className="nc-tag">{getReferenceTypeLabel(scope)}</span>
-                            <span className="nc-tag nc-tag-green">
-                              {getKbAvailabilityLabel(scope.kbAvailability)}
-                            </span>
-                          </div>
-                        </button>
-                      )
-                    })}
-                  </div>
-                ) : null}
-              </div>
-            )}
-          </div>
-        </div>
+        <ReferenceMentionPanel
+          loading={mentionLoading}
+          options={mentionOptions}
+          activeIndex={mentionActiveIndex}
+          hasWorkspace={Boolean(selectedWorkspace)}
+          onSelect={insertMentionScope}
+        />
       ) : null}
 
       {showWorkspaceSelector ? (
@@ -851,7 +722,6 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
               menuClassName="workbench-composer-menu"
               data-testid={workbenchSelectors.modeSwitch}
             />
-
           </div>
 
           <div className="flex min-w-0 items-center gap-2">

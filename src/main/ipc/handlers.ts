@@ -100,6 +100,23 @@ const execFileAsync = promisify(execFile)
 const getErrorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error)
 
+type WindowDragState = {
+  startMouseX: number
+  startMouseY: number
+  startWindowX: number
+  startWindowY: number
+}
+
+type WindowDragPayload = {
+  screenX: number
+  screenY: number
+}
+
+const windowDragStates = new Map<number, WindowDragState>()
+
+const isWindowDragPayload = (input: WindowDragPayload): boolean =>
+  Number.isFinite(input.screenX) && Number.isFinite(input.screenY)
+
 const toTrimmedStringList = (values: string[] | undefined): string[] =>
   Array.isArray(values) ? values.map((value) => String(value).trim()).filter(Boolean) : []
 
@@ -2785,6 +2802,38 @@ export function registerHandlers(services: {
   ipcMain.on('window-close', () => {
     const window = BrowserWindow.getFocusedWindow()
     window?.close()
+  })
+
+  ipcMain.on('window-drag-start', (event, payload: WindowDragPayload) => {
+    if (!isWindowDragPayload(payload)) return
+    const window = BrowserWindow.fromWebContents(event.sender)
+    if (!window) return
+
+    const [startWindowX, startWindowY] = window.getPosition()
+    windowDragStates.set(event.sender.id, {
+      startMouseX: payload.screenX,
+      startMouseY: payload.screenY,
+      startWindowX,
+      startWindowY
+    })
+  })
+
+  ipcMain.on('window-drag-move', (event, payload: WindowDragPayload) => {
+    if (!isWindowDragPayload(payload)) return
+    const dragState = windowDragStates.get(event.sender.id)
+    if (!dragState) return
+
+    const window = BrowserWindow.fromWebContents(event.sender)
+    if (!window || window.isDestroyed() || window.isMaximized()) return
+
+    window.setPosition(
+      Math.round(dragState.startWindowX + payload.screenX - dragState.startMouseX),
+      Math.round(dragState.startWindowY + payload.screenY - dragState.startMouseY)
+    )
+  })
+
+  ipcMain.on('window-drag-end', (event) => {
+    windowDragStates.delete(event.sender.id)
   })
 
   ipcMain.handle('ai-runtime-settings-save', async (_event, settings: AiRuntimeSettings) => {

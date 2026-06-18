@@ -1,11 +1,7 @@
 import type { SelectedReference } from '../../../../../shared/types'
-import { TOKEN_BADGE_CLASSNAME, TOKEN_TONE_CLASSNAME } from './constants'
 import type { ComposerDraftValue, ComposerNode } from './types'
-import {
-  getReferenceBadgeLabel,
-  getReferenceKey,
-  pruneReferencesByWorkspace
-} from '../../../utils/reference'
+import { getReferenceKey, pruneReferencesByWorkspace } from '../../../utils/reference'
+import { getReferenceVisualKind, getReferenceVisualTone } from './referenceVisuals'
 
 export const createTextNode = (text = ''): ComposerNode => ({
   id: crypto.randomUUID(),
@@ -91,17 +87,44 @@ export const readComposerNodesFromEditor = (
   return normalizeComposerNodes(nextNodes)
 }
 
-const appendBadge = (container: HTMLElement, label: string, className: string): void => {
-  const badge = document.createElement('span')
-  badge.className = `inline-flex h-4 min-w-4 items-center justify-center rounded-md px-1 text-[9px] font-semibold tracking-[0.08em] ${className}`
-  badge.textContent = label
-  container.appendChild(badge)
+const ICON_PATHS: Record<string, string> = {
+  directory:
+    'M2.25 6.75A2.25 2.25 0 014.5 4.5h3.879c.596 0 1.168.237 1.59.659l.872.872c.14.14.331.219.53.219H19.5a2.25 2.25 0 012.25 2.25v7.5a2.25 2.25 0 01-2.25 2.25h-15A2.25 2.25 0 012.25 16.5V6.75z',
+  web: 'M12 2.25a9.75 9.75 0 100 19.5 9.75 9.75 0 000-19.5zm0 0c2.25 2.25 3.375 5.25 3.375 9.75S14.25 19.5 12 21.75m0-19.5C9.75 4.5 8.625 7.5 8.625 12S9.75 19.5 12 21.75m-8.25-9.75h16.5',
+  docx: 'M19.5 14.25v-5.4a2.25 2.25 0 00-.659-1.591l-4.1-4.1a2.25 2.25 0 00-1.591-.659H6.75A2.25 2.25 0 004.5 4.75v14.5a2.25 2.25 0 002.25 2.25h10.5a2.25 2.25 0 002.25-2.25v-5zM13.5 2.5V8a1 1 0 001 1h5',
+  pdf: 'M19.5 14.25v-5.4a2.25 2.25 0 00-.659-1.591l-4.1-4.1a2.25 2.25 0 00-1.591-.659H6.75A2.25 2.25 0 004.5 4.75v14.5a2.25 2.25 0 002.25 2.25h10.5a2.25 2.25 0 002.25-2.25v-5zM8 15.5h8M8 18h5',
+  file: 'M19.5 14.25v-5.4a2.25 2.25 0 00-.659-1.591l-4.1-4.1a2.25 2.25 0 00-1.591-.659H6.75A2.25 2.25 0 004.5 4.75v14.5a2.25 2.25 0 002.25 2.25h10.5a2.25 2.25 0 002.25-2.25v-5zM13.5 2.5V8a1 1 0 001 1h5'
+}
+
+const appendReferenceIcon = (container: HTMLElement, scope: SelectedReference): void => {
+  const visualKind = getReferenceVisualKind(scope)
+  const tone = getReferenceVisualTone(scope)
+  const icon = document.createElement('span')
+  icon.className = `inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[4px] ${tone.containerClassName}`
+  icon.dataset.referenceIconKind = visualKind
+
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+  svg.setAttribute('viewBox', '0 0 24 24')
+  svg.setAttribute('fill', 'none')
+  svg.setAttribute('stroke', 'currentColor')
+  svg.setAttribute('stroke-width', '1.8')
+  svg.setAttribute('stroke-linecap', 'round')
+  svg.setAttribute('stroke-linejoin', 'round')
+  svg.setAttribute('aria-hidden', 'true')
+  svg.setAttribute('class', `h-3.5 w-3.5 ${tone.iconClassName}`)
+
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+  path.setAttribute('d', ICON_PATHS[visualKind])
+  svg.appendChild(path)
+  icon.appendChild(svg)
+  container.appendChild(icon)
 }
 
 const appendRemoveButton = (container: HTMLElement): void => {
   const button = document.createElement('button')
   button.type = 'button'
-  button.className = 'inline-flex h-4 w-4 items-center justify-center rounded-full text-[10px] leading-none text-current/70 transition hover:bg-black/5 hover:text-current'
+  button.className =
+    'inline-flex h-4 w-4 items-center justify-center rounded-full text-[11px] leading-none text-[#B1B0AD] opacity-60 transition hover:bg-[#F1F1F0] hover:text-[#37352F] hover:opacity-100'
   button.setAttribute('aria-label', '移除资料标签')
   button.dataset.action = 'remove-scope-token'
   button.textContent = '×'
@@ -110,12 +133,13 @@ const appendRemoveButton = (container: HTMLElement): void => {
 
 export const createScopeTokenElement = (scope: SelectedReference): HTMLElement => {
   const token = document.createElement('span')
-  token.className = `mx-0.5 inline-flex max-w-full items-center gap-1.5 rounded-lg border px-2 py-0.5 align-baseline text-[13px] leading-5 ${TOKEN_TONE_CLASSNAME[scope.kind]}`
+  token.className =
+    'mx-0.5 inline-flex max-w-full items-center gap-1.5 rounded-[6px] border border-[#E0DFDC] bg-white px-1.5 py-[1px] align-baseline text-[13px] font-medium leading-5 text-[#2F3437] shadow-[0_1px_0_rgba(15,15,15,0.03)]'
   token.contentEditable = 'false'
   token.dataset.role = 'scope-token'
   token.dataset.scopeKey = getScopeKey(scope)
 
-  appendBadge(token, getReferenceBadgeLabel(scope), TOKEN_BADGE_CLASSNAME[scope.kind])
+  appendReferenceIcon(token, scope)
 
   const label = document.createElement('span')
   label.className = 'max-w-[180px] truncate font-medium'
@@ -126,10 +150,7 @@ export const createScopeTokenElement = (scope: SelectedReference): HTMLElement =
   return token
 }
 
-export const renderComposerNodesToEditor = (
-  editor: HTMLElement,
-  nodes: ComposerNode[]
-): void => {
+export const renderComposerNodesToEditor = (editor: HTMLElement, nodes: ComposerNode[]): void => {
   editor.replaceChildren()
   nodes.forEach((node) => {
     if (node.kind === 'text') {

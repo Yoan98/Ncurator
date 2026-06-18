@@ -114,6 +114,7 @@ export const workbenchSelectors = {
   modelSelect: 'workbench-model-select',
   workspaceSelect: 'workbench-workspace-select',
   mentionPanel: 'workbench-mention-panel',
+  userMessageReferences: 'workbench-user-message-references',
   contentPanel: 'workbench-content-panel',
   contentPanelTitle: 'workbench-content-panel-title',
   assistantTurnPrefix: 'workbench-assistant-turn',

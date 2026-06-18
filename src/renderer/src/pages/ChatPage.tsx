@@ -36,6 +36,7 @@ import { HiOutlineCog6Tooth } from 'react-icons/hi2'
 import AssistantTurnCard from '../components/workbench/AssistantTurnCard'
 import WorkbenchComposer from '../components/workbench/WorkbenchComposer'
 import WorkbenchContentPanel from '../components/workbench/WorkbenchContentPanel'
+import ReferenceInlineToken from '../components/workbench/composer/ReferenceInlineToken'
 import {
   FILE_CHANGE_STATUS_META,
   FILE_ORIGIN_LABELS,
@@ -107,14 +108,14 @@ type ApprovalDraftDecision = {
 }
 
 const SCROLL_BOTTOM_TOLERANCE = 72
-const WORKBENCH_TOPBAR_DRAG_LAYER_STYLE = {
-  position: 'absolute',
-  inset: 0,
-  WebkitAppRegion: 'drag'
-} as React.CSSProperties
-const WORKBENCH_DRAG_REGION_STYLE = {
-  WebkitAppRegion: 'drag',
+const WORKBENCH_MANUAL_WINDOW_DRAG_REGION_STYLE = {
+  WebkitAppRegion: 'no-drag',
   pointerEvents: 'none',
+  userSelect: 'none',
+  WebkitUserSelect: 'none'
+} as React.CSSProperties
+const WORKBENCH_MANUAL_WINDOW_TOPBAR_STYLE = {
+  WebkitAppRegion: 'no-drag',
   userSelect: 'none',
   WebkitUserSelect: 'none'
 } as React.CSSProperties
@@ -123,6 +124,8 @@ const WORKBENCH_NO_DRAG_REGION_STYLE = {
   zIndex: 2,
   WebkitAppRegion: 'no-drag'
 } as React.CSSProperties
+const WORKBENCH_MANUAL_WINDOW_DRAG_SELECTOR =
+  'button, a, input, textarea, select, [contenteditable="true"], .workbench-no-drag, .ant-select, .ant-btn'
 
 const clampWorkbenchSidebarWidth = (width: number): number =>
   Math.max(WORKBENCH_SIDEBAR_MIN_WIDTH, Math.min(WORKBENCH_SIDEBAR_MAX_WIDTH, width))
@@ -1493,6 +1496,7 @@ const ChatPage: React.FC = () => {
       role: 'user',
       content: userQuery,
       timestamp: Date.now(),
+      selectedReferences: selectedReferences.length > 0 ? selectedReferences : undefined,
       error: false
     }
 
@@ -1576,7 +1580,8 @@ const ChatPage: React.FC = () => {
       session_id: currentSessionId,
       role: 'user',
       content: userQuery,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      selectedReferences: selectedReferences.length > 0 ? selectedReferences : undefined
     }
     setCurrentMessages((previous) => [...previous, userMessage])
     void window.api.chatMessageSave(userMessage).catch(console.error)
@@ -1911,11 +1916,52 @@ const ChatPage: React.FC = () => {
     }
   }
 
+  const handleTopbarMouseDown = useCallback((event: React.MouseEvent<HTMLDivElement>): void => {
+    if (event.button !== 0) return
+    if (!(event.target instanceof HTMLElement)) return
+    if (event.target.closest(WORKBENCH_MANUAL_WINDOW_DRAG_SELECTOR)) return
+
+    event.preventDefault()
+    window.api.windowDragStart({ screenX: event.screenX, screenY: event.screenY })
+
+    const handleMouseMove = (moveEvent: MouseEvent): void => {
+      window.api.windowDragMove({ screenX: moveEvent.screenX, screenY: moveEvent.screenY })
+    }
+
+    const handleMouseUp = (): void => {
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mouseup', handleMouseUp)
+      window.api.windowDragEnd()
+    }
+
+    window.addEventListener('mousemove', handleMouseMove)
+    window.addEventListener('mouseup', handleMouseUp, { once: true })
+  }, [])
+
   const renderUserMessage = (messageItem: ChatMessage): React.ReactNode => {
+    const messageReferences = messageItem.selectedReferences || []
     return (
       <div key={messageItem.id} className="flex justify-end">
         <div className="max-w-[66%]">
           <div className="rounded-[8px] border border-[#E0DFDC] bg-[#EFEFED] px-3.5 py-2.5 text-[14px] leading-6 text-[#37352F]">
+            {messageReferences.length > 0 ? (
+              <div
+                className="mb-1.5 flex flex-wrap gap-1"
+                data-testid={workbenchSelectors.userMessageReferences}
+              >
+                {messageReferences.map((reference) => (
+                  <ReferenceInlineToken
+                    key={
+                      reference.kind === 'web'
+                        ? `web:${reference.workspaceId}:${reference.webSourceId}`
+                        : `${reference.kind}:${reference.workspaceId}:${reference.nodeId}`
+                    }
+                    reference={reference}
+                    className="bg-white/70"
+                  />
+                ))}
+              </div>
+            ) : null}
             {messageItem.content}
           </div>
         </div>
@@ -2127,9 +2173,12 @@ const ChatPage: React.FC = () => {
       <div className="nc-main-pane min-w-0 flex-1">
         <div className="flex h-full min-h-0 flex-col">
           {!isNewSession ? (
-            <div className="nc-topbar">
-              <div aria-hidden="true" style={WORKBENCH_TOPBAR_DRAG_LAYER_STYLE} />
-              <div className="min-w-0 flex-1 bg-white" style={WORKBENCH_DRAG_REGION_STYLE}>
+            <div
+              className="nc-topbar"
+              style={WORKBENCH_MANUAL_WINDOW_TOPBAR_STYLE}
+              onMouseDown={handleTopbarMouseDown}
+            >
+              <div className="min-w-0 flex-1 bg-white" style={WORKBENCH_MANUAL_WINDOW_DRAG_REGION_STYLE}>
                 {currentSession || sharedHeaderMeta ? (
                   <div className="flex min-w-0 items-center gap-2">
                     <span className="text-[#787774]">馆长</span>
@@ -2165,7 +2214,7 @@ const ChatPage: React.FC = () => {
 
               <div
                 className="nc-topbar-drag-spacer"
-                style={WORKBENCH_DRAG_REGION_STYLE}
+                style={WORKBENCH_MANUAL_WINDOW_DRAG_REGION_STYLE}
                 aria-hidden="true"
               />
 

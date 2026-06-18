@@ -120,6 +120,9 @@ export type SettingsE2EApiOverrides = {
 }
 
 export type DesktopApi = {
+  windowDragStart: (payload: { screenX: number; screenY: number }) => void
+  windowDragMove: (payload: { screenX: number; screenY: number }) => void
+  windowDragEnd: () => void
   ingestWeb: (
     payload: WebIngestPayload
   ) => Promise<{ success: boolean; count?: number; error?: string }>

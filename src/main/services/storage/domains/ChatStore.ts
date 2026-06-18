@@ -20,6 +20,7 @@ type ChatMessageRow = {
   role?: unknown
   content?: unknown
   timestamp?: unknown
+  selected_references_json?: unknown
   artifacts_json?: unknown
   error?: unknown
 }
@@ -34,6 +35,16 @@ const parseArtifacts = (value: unknown): AiArtifactRef[] | undefined => {
   if (!value) return undefined
   try {
     const parsed = JSON.parse(String(value)) as AiArtifactRef[]
+    return Array.isArray(parsed) ? parsed : undefined
+  } catch {
+    return undefined
+  }
+}
+
+const parseSelectedReferences = (value: unknown): ChatMessage['selectedReferences'] => {
+  if (!value) return undefined
+  try {
+    const parsed = JSON.parse(String(value))
     return Array.isArray(parsed) ? parsed : undefined
   } catch {
     return undefined
@@ -182,6 +193,9 @@ export class ChatStore {
         role: message.role,
         content: message.content,
         timestamp: message.timestamp,
+        selected_references_json: message.selectedReferences
+          ? JSON.stringify(message.selectedReferences)
+          : undefined,
         error: message.error,
         artifacts_json: message.artifacts ? JSON.stringify(message.artifacts) : undefined
       }
@@ -203,6 +217,7 @@ export class ChatStore {
           role: toChatRole(row.role),
           content: String(row.content || ''),
           timestamp: Number(row.timestamp || 0),
+          selectedReferences: parseSelectedReferences(row.selected_references_json),
           artifacts: parseArtifacts(row.artifacts_json),
           error: typeof row.error === 'boolean' ? row.error : undefined
         }
