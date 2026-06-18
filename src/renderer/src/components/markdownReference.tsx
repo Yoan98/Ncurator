@@ -1,9 +1,7 @@
 import React from 'react'
 import {
   FileTextOutlined,
-  GlobalOutlined,
-  LinkOutlined,
-  SnippetsOutlined
+  GlobalOutlined
 } from '@ant-design/icons'
 
 export type ParsedNcuratorRefKind = 'reference' | 'normal'
@@ -66,12 +64,8 @@ export const renderReferenceIcon = (input: {
   kind: ParsedNcuratorRefKind
   resourceType: ParsedNcuratorRefResourceType
 }): React.ReactNode =>
-  input.kind === 'reference' ? (
-    <SnippetsOutlined />
-  ) : input.resourceType === 'web' ? (
+  input.resourceType === 'web' ? (
     <GlobalOutlined />
   ) : input.resourceType === 'file' ? (
     <FileTextOutlined />
-  ) : (
-    <LinkOutlined />
-  )
+  ) : null

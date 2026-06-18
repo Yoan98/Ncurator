@@ -39,7 +39,7 @@ const WorkbenchBrowserPanel: React.FC = () => {
 
   return (
     <div
-      className="flex h-full min-h-0 flex-col bg-[#F7F7F5]"
+      className="flex h-full min-h-0 flex-col bg-white"
       data-testid={workbenchSelectors.browserPanel}
     >
       <div className="flex h-10 shrink-0 items-center justify-between border-b border-[#EEEEEC] px-3">

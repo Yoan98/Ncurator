@@ -584,11 +584,15 @@ const createFileRefFromObject = (
     (nestedDocument ? readStringField(nestedDocument, 'name') : undefined)
 
   if (!path || !fileName) return null
+  const isDirectory =
+    String(readStringField(item, 'kind') || readStringField(item, 'type') || '').toLowerCase() ===
+      'directory' || String(path).endsWith('/')
   return {
     path,
     fileName,
     origin,
-    summary: readStringField(item, 'summary')
+    summary: readStringField(item, 'summary'),
+    isDirectory
   }
 }
 

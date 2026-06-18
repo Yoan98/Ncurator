@@ -139,30 +139,12 @@ const appendReferenceIcon = (container: HTMLElement, scope: SelectedReference): 
     svg.appendChild(background)
     const fold = document.createElementNS('http://www.w3.org/2000/svg', 'path')
     fold.setAttribute('d', 'M10.4 1.7v3.4h3.5l-3.5-3.4z')
-    fold.setAttribute('class', visualKind === 'file' ? tone.textClassName : 'fill-white/70')
+    fold.setAttribute('class', tone.textClassName)
     svg.appendChild(fold)
-    if (visualKind === 'pdf') {
-      const text = document.createElementNS('http://www.w3.org/2000/svg', 'text')
-      text.setAttribute('x', '9')
-      text.setAttribute('y', '11.4')
-      text.setAttribute('text-anchor', 'middle')
-      text.setAttribute('font-family', 'Arial, sans-serif')
-      text.setAttribute('font-size', '4')
-      text.setAttribute('font-weight', '700')
-      text.setAttribute('class', tone.textClassName)
-      text.textContent = 'PDF'
-      svg.appendChild(text)
-    } else {
-      const lines = document.createElementNS('http://www.w3.org/2000/svg', 'path')
-      lines.setAttribute(
-        'd',
-        visualKind === 'docx'
-          ? 'M6 7.1h5.9v1.2H6zM6 9.1h5.9v1.2H6zM6 11.1h4.2v1.2H6z'
-          : 'M6 7.2h5.1v1.2H6zM6 9.4h5.1v1.2H6zM6 11.6h3.6v1.2H6z'
-      )
-      lines.setAttribute('class', visualKind === 'docx' ? 'fill-white' : tone.textClassName)
-      svg.appendChild(lines)
-    }
+    const lines = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+    lines.setAttribute('d', 'M6 7.2h5.1v1.2H6zM6 9.4h5.1v1.2H6zM6 11.6h3.6v1.2H6z')
+    lines.setAttribute('class', tone.textClassName)
+    svg.appendChild(lines)
   }
   icon.appendChild(svg)
   container.appendChild(icon)
@@ -170,8 +152,8 @@ const appendReferenceIcon = (container: HTMLElement, scope: SelectedReference): 
 
 export const createScopeTokenElement = (scope: SelectedReference): HTMLElement => {
   const token = document.createElement('span')
-  const tone = getReferenceVisualTone(scope)
-  token.className = `inline-flex max-w-full items-center gap-0.5 px-0 py-[1px] align-baseline text-[13px] font-medium leading-5 ${tone.iconClassName}`
+  token.className =
+    'inline-flex max-w-full items-center gap-1 align-middle text-[13px] font-medium leading-5 text-[#0B6BCB]'
   token.contentEditable = 'false'
   token.dataset.role = 'scope-token'
   token.dataset.scopeKey = getScopeKey(scope)
@@ -182,6 +164,12 @@ export const createScopeTokenElement = (scope: SelectedReference): HTMLElement =
   label.className = 'max-w-[180px] truncate font-medium'
   label.textContent = scope.name
   token.appendChild(label)
+
+  const suffix = document.createElement('span')
+  suffix.className = 'sr-only'
+  suffix.textContent =
+    scope.kind === 'web' ? '网页链接' : scope.kind === 'directory' ? '目录链接' : '文件链接'
+  token.appendChild(suffix)
 
   return token
 }

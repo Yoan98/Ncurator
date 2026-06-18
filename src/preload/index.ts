@@ -92,6 +92,7 @@ const api: DesktopApi = {
     }
     return ipcRenderer.invoke('reveal-path', filePath)
   },
+  pathInfo: (filePath: string) => ipcRenderer.invoke('path-info', filePath),
   pickDirectory: () => {
     const overrides = getE2EApiOverrides()
     if (overrides && hasOverrideKey(overrides, 'pickDirectoryResponse')) {

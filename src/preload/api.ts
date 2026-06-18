@@ -119,6 +119,12 @@ export type SettingsE2EApiOverrides = {
   deleteModelResponseByRepoId?: Record<string, { success: boolean; error?: string }>
 }
 
+export type PathInfoResponse = {
+  success: boolean
+  isDirectory?: boolean
+  error?: string
+}
+
 export type DesktopApi = {
   ingestWeb: (
     payload: WebIngestPayload
@@ -129,6 +135,7 @@ export type DesktopApi = {
   openExternal: (url: string) => Promise<{ success: boolean; error?: string }>
   openPath: (filePath: string) => Promise<{ success: boolean; error?: string }>
   revealPath: (filePath: string) => Promise<{ success: boolean; error?: string }>
+  pathInfo: (filePath: string) => Promise<PathInfoResponse>
   pickDirectory: () => Promise<PickDirectoryResponse>
   search: (
     query: string,

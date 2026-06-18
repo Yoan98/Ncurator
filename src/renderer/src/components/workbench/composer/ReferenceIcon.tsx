@@ -5,7 +5,6 @@ import { getReferenceVisualKind, getReferenceVisualTone } from './referenceVisua
 type ReferenceIconProps = {
   reference: SelectedReference
   size?: 'sm' | 'md'
-  variant?: 'badge' | 'plain'
 }
 
 const iconSizeClassName = {
@@ -19,70 +18,44 @@ const containerSizeClassName = {
 } as const
 
 const DocumentGlyph: React.FC<{
-  kind: 'docx' | 'pdf' | 'file'
+  kind: 'file'
   className: string
   fillClassName: string
   textClassName: string
-}> = ({ kind, className, fillClassName, textClassName }) => {
-  const label = kind === 'pdf' ? 'PDF' : kind === 'docx' ? '' : ''
+}> = ({ className, fillClassName, textClassName }) => {
   return (
     <svg className={className} viewBox="0 0 18 18" aria-hidden="true">
       <path
         className={fillClassName}
         d="M4.3 1.7h6.5l3.1 3.1v10.4c0 .7-.6 1.2-1.2 1.2H4.3c-.7 0-1.2-.6-1.2-1.2V2.9c0-.7.5-1.2 1.2-1.2z"
       />
-      {kind === 'file' ? (
-        <path className="fill-white" d="M4.3 2.7h6.1l2.5 2.5v10.1H4.3V2.7z" />
-      ) : null}
+      <path className="fill-white" d="M4.3 2.7h6.1l2.5 2.5v10.1H4.3V2.7z" />
       <path
-        className={kind === 'file' ? textClassName : 'fill-white/70'}
+        className={textClassName}
         d="M10.4 1.7v3.4h3.5l-3.5-3.4z"
       />
-      {kind === 'docx' ? (
-        <>
-          <path className="fill-white" d="M6 7.1h5.9v1.2H6zM6 9.1h5.9v1.2H6zM6 11.1h4.2v1.2H6z" />
-          <path className="fill-[#9FC4FF]" d="M6 4.9h3.1v1.1H6z" />
-        </>
-      ) : null}
-      {kind === 'pdf' ? (
-        <text
-          x="9"
-          y="11.4"
-          textAnchor="middle"
-          className={`${textClassName} text-[4px] font-bold`}
-          fontFamily="Arial, sans-serif"
-        >
-          {label}
-        </text>
-      ) : null}
-      {kind === 'file' ? (
-        <path className={textClassName} d="M6 7.2h5.1v1.2H6zM6 9.4h5.1v1.2H6zM6 11.6h3.6v1.2H6z" />
-      ) : null}
+      <path className={textClassName} d="M6 7.2h5.1v1.2H6zM6 9.4h5.1v1.2H6zM6 11.6h3.6v1.2H6z" />
     </svg>
   )
 }
 
 export const ReferenceIcon: React.FC<ReferenceIconProps> = ({
   reference,
-  size = 'md',
-  variant = 'badge'
+  size = 'md'
 }) => {
   const visualKind = getReferenceVisualKind(reference)
   const tone = getReferenceVisualTone(reference)
   const iconClassName = `${iconSizeClassName[size]} ${tone.iconClassName}`
-  const containerToneClassName = variant === 'badge' ? tone.containerClassName : tone.iconClassName
-  const documentKind =
-    visualKind === 'docx' || visualKind === 'pdf' || visualKind === 'file' ? visualKind : null
 
   return (
     <span
       aria-hidden="true"
-      className={`inline-flex shrink-0 items-center justify-center ${containerSizeClassName[size]} ${containerToneClassName}`}
+      className={`inline-flex shrink-0 items-center justify-center ${containerSizeClassName[size]}`}
       data-reference-icon-kind={visualKind}
     >
-      {documentKind ? (
+      {visualKind === 'file' ? (
         <DocumentGlyph
-          kind={documentKind}
+          kind="file"
           className={iconClassName}
           fillClassName={tone.fillClassName}
           textClassName={tone.textClassName}

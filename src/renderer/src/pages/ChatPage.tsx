@@ -1111,6 +1111,11 @@ const ChatPage: React.FC = () => {
     })
   }
 
+  const resolveReferencePathInfo = async (filePath: string): Promise<boolean> => {
+    const response = await window.api.pathInfo(filePath)
+    return Boolean(response.success && response.isDirectory)
+  }
+
   const openMarkdownReference = async (reference: {
     kind: ParsedNcuratorRefKind
     resourceType: ParsedNcuratorRefResourceType
@@ -1128,7 +1133,8 @@ const ChatPage: React.FC = () => {
     await openFile({
       path: reference.path,
       fileName: reference.label,
-      origin: reference.kind === 'reference' ? 'source' : 'read'
+      origin: reference.kind === 'reference' ? 'source' : 'read',
+      isDirectory: await resolveReferencePathInfo(reference.path)
     })
   }
 

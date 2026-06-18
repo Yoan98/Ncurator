@@ -209,7 +209,7 @@ const WorkbenchFilePreviewPanel: React.FC<{
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex shrink-0 items-center gap-3 border-b border-[#EEEEEC] bg-[#F7F7F5] px-4 py-3">
+      <div className="flex shrink-0 items-center gap-3 border-b border-[#EEEEEC] bg-white px-4 py-3">
         {state.backTarget ? (
           <Tooltip title="返回">
               <Button
@@ -225,31 +225,33 @@ const WorkbenchFilePreviewPanel: React.FC<{
           <div className="truncate text-[13px] font-semibold text-[#37352F]">
             {state.file.fileName}
           </div>
-          <div className="mt-1 truncate text-xs text-[#9B9A97]">{state.file.path}</div>
+          <div className="mt-1 truncate text-xs text-[#B1B0AD]">{state.file.path}</div>
         </div>
         <div className="flex shrink-0 items-center gap-1">
-          <Tooltip title="定位文件">
+          <Tooltip title="定位到系统位置">
             <Button
               type="text"
               size="small"
-              aria-label="定位文件"
-              icon={<HiMapPin className="h-4 w-4" />}
+              aria-label="定位到系统位置"
+              icon={<HiFolderOpen className="h-4 w-4" />}
               onClick={() => void onRevealPath(state.file.path)}
             />
           </Tooltip>
-          <Tooltip title="系统打开">
-            <Button
-              type="text"
-              size="small"
-              aria-label="系统打开"
-              icon={<HiFolderOpen className="h-4 w-4" />}
-              onClick={() => void onOpenPath(state.file.path)}
-            />
-          </Tooltip>
+          <Button
+            type="text"
+            size="small"
+            aria-label="系统默认打开"
+            icon={<HiArrowTopRightOnSquare className="h-4 w-4" />}
+            disabled={state.file.isDirectory}
+            onClick={() => {
+              if (state.file.isDirectory) return
+              void onOpenPath(state.file.path)
+            }}
+          />
         </div>
       </div>
       <div
-        className="min-h-0 flex-1 bg-[#F7F7F5] p-3"
+        className="min-h-0 flex-1 bg-white p-3"
         data-testid={workbenchSelectors.documentView}
       >
         <FileRenderViewer documents={previewDocuments} />
@@ -272,7 +274,7 @@ const WorkbenchContentPanel: React.FC<WorkbenchContentPanelProps> = ({
   onRevealPath
 }) => (
   <aside
-    className="flex h-full min-h-0 flex-col border-l border-[#EEEEEC] bg-[#F7F7F5]"
+    className="flex h-full min-h-0 flex-col border-l border-[#EEEEEC] bg-white"
     data-testid={workbenchSelectors.contentPanel}
   >
     <div className="min-h-0 flex-1 overflow-hidden">

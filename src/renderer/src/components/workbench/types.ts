@@ -70,6 +70,7 @@ export type WorkbenchFileRef = {
   applyId?: string
   format?: 'docx'
   pageNumber?: number
+  isDirectory?: boolean
 }
 
 export type AssistantProcessStatus = 'running' | 'completed' | 'failed'

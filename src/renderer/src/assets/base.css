@@ -916,51 +916,52 @@ mark {
 }
 
 .markdown-body a {
-  color: var(--ink);
-  text-decoration: underline;
-  text-decoration-color: var(--ink-line-strong);
-  text-underline-offset: 3px;
+  color: var(--notion-accent-blue);
+  text-decoration: none;
   transition:
     background-color var(--ui-transition),
     color var(--ui-transition),
-    text-decoration-color var(--ui-transition);
+    opacity var(--ui-transition);
 }
 
 .markdown-body a:hover {
-  color: var(--ink);
-  text-decoration-color: var(--ink);
-  background: var(--ink-wash);
+  color: var(--notion-accent-blue-hover);
 }
 
 .markdown-body .markdown-reference-link {
   display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  border: 1px solid var(--ink-line);
-  border-radius: 999px;
-  background: var(--ink-wash);
-  padding: 1px 8px;
-  color: var(--ink);
+  align-items: baseline;
+  gap: 0.35rem;
+  vertical-align: middle;
+  color: var(--notion-accent-blue);
+  text-decoration: none;
+  text-underline-offset: 3px;
+}
+
+.markdown-body .markdown-reference-icon {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--notion-accent-blue);
+  line-height: 1;
+}
+
+.markdown-body .markdown-normal-link {
+  color: var(--notion-accent-blue);
+  text-decoration: none;
+  text-underline-offset: 3px;
+  vertical-align: middle;
+}
+
+.markdown-body .markdown-reference-link:hover,
+.markdown-body .markdown-normal-link:hover {
+  color: var(--notion-accent-blue-hover);
   text-decoration: none;
 }
 
 .markdown-body .markdown-reference-link:hover {
-  background: var(--ink-wash-strong);
-}
-
-.markdown-body .markdown-normal-ref-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.2rem;
-  color: var(--ink-2);
-  text-decoration: underline;
-  text-decoration-color: var(--ink-line-strong);
-  text-underline-offset: 3px;
-}
-
-.markdown-body .markdown-normal-ref-link:hover {
-  color: var(--ink);
-  background: transparent;
+  opacity: 0.92;
 }
 
 .markdown-body .markdown-inline-code,

@@ -87,7 +87,7 @@ const ReferenceMentionPanel: React.FC<ReferenceMentionPanelProps> = ({
                           onSelect(reference)
                         }}
                       >
-                        <ReferenceIcon reference={reference} size="sm" variant="plain" />
+                        <ReferenceIcon reference={reference} size="sm" />
                         <span className="min-w-0 flex flex-1 items-center gap-2">
                           <span className="truncate text-[13px] font-normal leading-5 text-[#2F3437]">
                             {reference.name}

@@ -87,11 +87,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
               return (
                 <a
                   href={href}
-                  className={
-                    parsed.kind === 'reference'
-                      ? 'markdown-reference-link'
-                      : 'markdown-normal-ref-link'
-                  }
+                  className="markdown-reference-link"
                   data-ref-path={parsed.path}
                   data-ref-kind={parsed.kind}
                   data-ref-resource-type={parsed.resourceType}
@@ -106,10 +102,12 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
                     })
                   }}
                 >
-                  {renderReferenceIcon({
-                    kind: parsed.kind,
-                    resourceType: parsed.resourceType
-                  })}
+                  <span className="markdown-reference-icon">
+                    {renderReferenceIcon({
+                      kind: parsed.kind,
+                      resourceType: parsed.resourceType
+                    })}
+                  </span>
                   <span>{children}</span>
                 </a>
               )
@@ -118,6 +116,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
             return (
               <a
                 href={href}
+                className="markdown-normal-link"
                 target="_blank"
                 rel="noopener noreferrer"
               >

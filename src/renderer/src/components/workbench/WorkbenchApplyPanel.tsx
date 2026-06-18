@@ -72,7 +72,7 @@ const WorkbenchApplyPanel: React.FC<WorkbenchApplyPanelProps> = ({
 
   return (
     <div className="flex h-full min-h-0 flex-col" data-testid={workbenchSelectors.applyPanel}>
-      <div className="flex shrink-0 items-center gap-3 border-b border-[#EEEEEC] bg-[#F7F7F5] px-4 py-3">
+      <div className="flex shrink-0 items-center gap-3 border-b border-[#EEEEEC] bg-white px-4 py-3">
         <div
           className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto"
           data-testid={workbenchSelectors.applyTabs}
@@ -106,7 +106,7 @@ const WorkbenchApplyPanel: React.FC<WorkbenchApplyPanelProps> = ({
               {statusMeta.label}
             </span>
           ) : null}
-          <span className="text-xs text-[#787774]">{record.change_count} 处修改</span>
+          <span className="text-xs text-[#9B9A97]">{record.change_count} 处修改</span>
           <Button size="small" onClick={() => void onOpenPath(record.source_path)}>
             系统打开
           </Button>
@@ -130,18 +130,18 @@ const WorkbenchApplyPanel: React.FC<WorkbenchApplyPanelProps> = ({
       </div>
 
       {record.status === 'reverted' ? (
-        <div className="shrink-0 border-b border-[#EEEEEC] bg-[#F7F7F5] px-4 py-2.5 text-xs text-[#787774]">
+        <div className="shrink-0 border-b border-[#EEEEEC] bg-white px-4 py-2.5 text-xs text-[#787774]">
           本次 AI 修改已回退。
         </div>
       ) : null}
 
       {record.status === 'failed' && record.error ? (
-        <div className="shrink-0 border-b border-[#E7CAC6] bg-[#F8EBE9] px-4 py-2.5 text-xs text-[#B3261E]">
+        <div className="shrink-0 border-b border-[#E7CAC6] bg-white px-4 py-2.5 text-xs text-[#B3261E]">
           {record.error}
         </div>
       ) : null}
 
-      <div className="min-h-0 flex-1 bg-[#F7F7F5] p-3">
+      <div className="min-h-0 flex-1 bg-white p-3">
         <FileRenderViewer
           documents={viewerDocuments}
           emptyText={hasDedicatedPreview ? '当前文件暂时不可预览。' : '当前修改记录没有专用预览稿。'}
