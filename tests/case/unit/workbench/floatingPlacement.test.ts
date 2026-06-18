@@ -40,4 +40,22 @@ describe('workbench floating placement', () => {
     expect(placement.top).toBe(148)
     expect(placement.bottom).toBeUndefined()
   })
+
+  it('caps max height when an explicit limit is provided', () => {
+    const placement = resolveFloatingPlacement({
+      triggerRect: {
+        top: 300,
+        bottom: 340,
+        left: 200,
+        right: 300
+      },
+      viewportWidth: 1280,
+      viewportHeight: 800,
+      preferredWidth: 360,
+      preferredHeight: 500,
+      maxHeight: 240
+    })
+
+    expect(placement.maxHeight).toBe(240)
+  })
 })

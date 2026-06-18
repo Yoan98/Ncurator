@@ -286,26 +286,19 @@ const WorkbenchSelect: React.FC<WorkbenchSelectProps> = ({
                           setOpen(false)
                         }}
                       >
-                        <span className="flex min-w-0 items-center gap-3">
+                        <span className="flex min-w-0 items-center gap-2">
                           {option.icon ? (
-                            <span className="flex h-4 w-4 shrink-0 items-center justify-center text-[#787774]">
+                            <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center text-[#787774]">
                               {option.icon}
                             </span>
                           ) : null}
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate text-[13px] font-medium text-[#37352F]">
-                              {option.label}
-                            </span>
-                            {option.description ? (
-                              <span className="mt-0.5 block truncate text-[12px] text-[#91918E]">
-                                {option.description}
-                              </span>
-                            ) : null}
+                          <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[#37352F]">
+                            {option.label}
                           </span>
                         </span>
-                        <span className="flex shrink-0 items-center gap-2 text-[#787774]">
+                        <span className="flex shrink-0 items-center gap-1.5 text-[#787774]">
                           {option.trailing}
-                          {selected ? <HiCheck className="h-4 w-4 text-[#37352F]" /> : null}
+                          {selected ? <HiCheck className="h-3.5 w-3.5 text-[#37352F]" /> : null}
                         </span>
                       </button>
                     )

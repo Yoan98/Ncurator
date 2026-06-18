@@ -298,41 +298,44 @@ textarea,
 
 .nc-sidebar-titlebar-toggle {
   @apply flex h-8 w-8 items-center justify-center rounded-[6px] text-[#91918E] transition-colors hover:bg-[#EFEFEE] hover:text-[#37352F];
-  top: 8px;
   background: transparent;
   border: 0;
   pointer-events: auto;
   -webkit-app-region: no-drag;
 }
 
-.nc-sidebar-titlebar-toggle-fixed-zone {
+.nc-left-titlebar-chrome {
   position: fixed;
   top: 0;
-  left: 118px;
+  left: 0;
   z-index: 100;
-  width: 56px;
-  height: 56px;
+  display: flex;
+  align-items: center;
+  width: var(--app-sidebar-width);
+  height: 44px;
+  pointer-events: none;
+}
+
+.nc-left-titlebar-window-controls {
+  flex: 0 0 72px;
+  height: 100%;
+  pointer-events: none;
+}
+
+.nc-sidebar-titlebar-toggle-chrome {
+  position: relative;
+  z-index: 102;
+  flex: 0 0 32px;
   pointer-events: auto;
   -webkit-app-region: no-drag;
 }
 
-.nc-sidebar-titlebar-toggle-fixed {
-  position: absolute;
-  z-index: 101;
-  left: 8px;
-}
-
-.nc-sidebar-titlebar-toggle-inline {
-  position: absolute;
-  top: 8px;
-  left: 126px;
-  z-index: 6;
-}
-
-.nc-sidebar-titlebar-toggle-inside {
-  position: absolute;
-  z-index: 30;
-  right: 34px;
+.nc-left-titlebar-drag {
+  align-self: stretch;
+  flex: 1 1 auto;
+  min-width: 0;
+  pointer-events: auto;
+  -webkit-app-region: drag;
 }
 
 /* macOS: 侧边栏延伸到标题栏 */
@@ -437,11 +440,10 @@ textarea,
 }
 
 .nc-topbar-collapsed-safe-zone {
-  position: relative;
   flex: 0 0 auto;
   height: 100%;
   transition: width 180ms ease;
-  -webkit-app-region: no-drag;
+  pointer-events: none;
 }
 
 .nc-topbar-title-region {
@@ -770,7 +772,7 @@ textarea,
 }
 
 .workbench-select-option {
-  @apply flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-[#F7F7F5];
+  @apply flex w-full items-center justify-between gap-3 px-4 py-2 text-left transition hover:bg-[#F7F7F5];
 }
 
 .workbench-select-option-selected {

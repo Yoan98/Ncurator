@@ -44,6 +44,7 @@ const WorkspaceQuickSelect: React.FC<WorkspaceQuickSelectProps> = ({
       viewportHeight: window.innerHeight,
       preferredWidth: 360,
       preferredHeight: 180,
+      maxHeight: 240,
       minWidth: 240,
       maxWidth: 560
     })
