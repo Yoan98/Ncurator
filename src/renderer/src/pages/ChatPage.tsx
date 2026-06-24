@@ -40,6 +40,7 @@ import {
   FILE_CHANGE_STATUS_META,
   FILE_ORIGIN_LABELS,
   WORKBENCH_CONTENT_PANEL_COLLAPSED_STORAGE_KEY,
+  WORKBENCH_LEFT_TITLEBAR_COLLAPSED_WIDTH,
   WORKBENCH_SIDEBAR_DEFAULT_WIDTH,
   WORKBENCH_SIDEBAR_MAX_WIDTH,
   WORKBENCH_SIDEBAR_MIN_WIDTH,
@@ -861,6 +862,9 @@ const ChatPage: React.FC = () => {
         setContentPanel((current) =>
           current.kind === 'apply_workspace' ? createEmptyPanel() : current
         )
+        if (contentPanel.kind === 'apply_workspace') {
+          setContentPanelCollapsed(true)
+        }
         return
       }
 
@@ -1053,13 +1057,16 @@ const ChatPage: React.FC = () => {
       setApprovalSubmitting(false)
       setAssistantTurns({})
       setContentPanel(createEmptyPanel())
+      setContentPanelCollapsed(true)
       resetApplyWorkspaceState()
-      void loadFileChangesForSession(currentSessionId, { autoOpen: true })
+      void loadFileChangesForSession(currentSessionId)
       void refreshContextUsage(currentSessionId)
     } else {
       setCurrentMessages([])
       setAssistantTurns({})
       setContextUsage(null)
+      setContentPanel(createEmptyPanel())
+      setContentPanelCollapsed(true)
       resetApplyWorkspaceState()
     }
     // Session switch reset must run only when the selected session id changes.
@@ -2045,7 +2052,9 @@ const ChatPage: React.FC = () => {
       {platform !== 'win32' ? (
         <div
           className="nc-left-titlebar-chrome"
-          style={{ width: sidebarCollapsed ? 170 : sidebarWidth }}
+          style={{
+            width: sidebarCollapsed ? WORKBENCH_LEFT_TITLEBAR_COLLAPSED_WIDTH : sidebarWidth
+          }}
         >
           <div className="nc-left-titlebar-window-controls" aria-hidden="true" />
           <button
@@ -2053,13 +2062,11 @@ const ChatPage: React.FC = () => {
             className="nc-sidebar-titlebar-toggle nc-sidebar-titlebar-toggle-chrome workbench-no-drag"
             style={WORKBENCH_NO_DRAG_STYLE}
             onPointerDown={(event) => {
-              event.preventDefault()
               event.stopPropagation()
-              setSidebarCollapsed((previous) => !previous)
             }}
             onClick={(event) => {
-              event.preventDefault()
               event.stopPropagation()
+              setSidebarCollapsed((previous) => !previous)
             }}
             data-testid={workbenchSelectors.sessionsToggle}
             aria-label={sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'}
@@ -2077,6 +2084,7 @@ const ChatPage: React.FC = () => {
           sidebarCollapsed ? 'nc-sidebar-hidden' : ''
         }`}
         style={{ width: sidebarWidth, flexBasis: sidebarWidth }}
+        data-testid={workbenchSelectors.sidebar}
       >
         <div
           className={`nc-sidebar-window-spacer ${platform === 'darwin' ? 'nc-sidebar-window-spacer-mac' : ''}`}
@@ -2196,7 +2204,11 @@ const ChatPage: React.FC = () => {
         </div>
         <div
           className="nc-sidebar-resizer workbench-no-drag"
+          data-testid={workbenchSelectors.sidebarResizer}
           onPointerDown={(event) => {
+            event.preventDefault()
+            event.stopPropagation()
+            event.currentTarget.setPointerCapture(event.pointerId)
             sidebarDragStartRef.current = {
               pointerId: event.pointerId,
               startX: event.clientX,
@@ -2208,13 +2220,28 @@ const ChatPage: React.FC = () => {
       </aside>
 
       <div className="nc-main-pane min-w-0 flex-1" style={WORKBENCH_POSITIONED_PANE_STYLE}>
-        {isNewSession ? <div className="nc-main-empty-drag-strip" aria-hidden="true" /> : null}
+        {isNewSession ? (
+          <div className="nc-main-empty-titlebar" aria-hidden="true">
+            <div
+              className="nc-main-empty-titlebar-safe-zone"
+              style={{
+                width: sidebarCollapsed ? WORKBENCH_LEFT_TITLEBAR_COLLAPSED_WIDTH : 0
+              }}
+            />
+            <div
+              className="nc-main-empty-titlebar-drag-region"
+              data-testid={workbenchSelectors.emptyDragRegion}
+            />
+          </div>
+        ) : null}
         <div className="flex h-full min-h-0 flex-col">
           {!isNewSession ? (
-            <div className="nc-topbar">
+            <div className="nc-topbar" data-testid={workbenchSelectors.topbar}>
               <div
                 className="nc-topbar-collapsed-safe-zone"
-                style={{ width: sidebarCollapsed ? sidebarWidth : 0 }}
+                style={{
+                  width: sidebarCollapsed ? WORKBENCH_LEFT_TITLEBAR_COLLAPSED_WIDTH : 0
+                }}
                 aria-hidden="true"
               />
               <div className="nc-topbar-title-region min-w-0 flex-1 bg-white">
@@ -2250,6 +2277,7 @@ const ChatPage: React.FC = () => {
               <div
                 className="nc-topbar-drag-spacer"
                 style={WORKBENCH_DRAG_REGION_STYLE}
+                data-testid={workbenchSelectors.topbarDragRegion}
                 aria-hidden="true"
               />
 
@@ -2262,9 +2290,11 @@ const ChatPage: React.FC = () => {
                     variant={contentPanelCollapsed ? 'expand' : 'collapse'}
                   />
                 }
-                className="!flex !h-7 !w-7 !items-center !justify-center !rounded-[6px] !border-0 !bg-transparent !p-0 !shadow-none !text-[#91918E] hover:!bg-transparent hover:!text-[#37352F]"
+                className="workbench-no-drag !flex !h-7 !w-7 !items-center !justify-center !rounded-[6px] !border-0 !bg-transparent !p-0 !shadow-none !text-[#91918E] hover:!bg-transparent hover:!text-[#37352F]"
                 style={WORKBENCH_NO_DRAG_REGION_STYLE}
                 onClick={() => setContentPanelCollapsed((previous) => !previous)}
+                data-testid={workbenchSelectors.contentPanelToggle}
+                aria-label={contentPanelCollapsed ? '展开右侧栏' : '收起右侧栏'}
               />
             </div>
           ) : null}
@@ -2488,6 +2518,7 @@ const ChatPage: React.FC = () => {
 
             <div
               className="min-h-0 overflow-hidden transition-[width] duration-200"
+              data-testid={workbenchSelectors.contentPanelShell}
               style={{
                 width: contentPanelCollapsed
                   ? 0

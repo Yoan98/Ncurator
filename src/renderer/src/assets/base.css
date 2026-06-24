@@ -64,6 +64,8 @@
   --app-sidebar-width: 240px;
   --app-sidebar-collapsed-width: 0px;
   --app-sidebar-mac-window-spacer-height: 36px;
+  --workbench-titlebar-height: 52px;
+  --workbench-left-titlebar-collapsed-width: 170px;
 }
 
 body {
@@ -255,6 +257,17 @@ textarea,
   -webkit-app-region: no-drag;
 }
 
+.nc-app-shell button,
+.nc-app-shell a,
+.nc-app-shell input,
+.nc-app-shell textarea,
+.nc-app-shell select,
+.nc-app-shell [contenteditable='true'],
+.nc-app-shell .ant-select,
+.nc-app-shell .ant-btn {
+  -webkit-app-region: no-drag;
+}
+
 .workbench-no-drag {
   -webkit-app-region: no-drag;
 }
@@ -312,7 +325,7 @@ textarea,
   display: flex;
   align-items: center;
   width: var(--app-sidebar-width);
-  height: 52px;
+  height: var(--workbench-titlebar-height);
   pointer-events: none;
 }
 
@@ -431,9 +444,10 @@ textarea,
 }
 
 .nc-topbar {
-  @apply flex h-11 shrink-0 items-center justify-between border-b border-[#EEEEEC] bg-white px-4;
+  @apply flex shrink-0 items-center justify-between border-b border-[#EEEEEC] bg-white px-4;
   position: relative;
   z-index: 4;
+  height: var(--workbench-titlebar-height);
   user-select: none;
   -webkit-user-select: none;
   -webkit-app-region: no-drag;
@@ -461,14 +475,30 @@ textarea,
   -webkit-user-select: none;
 }
 
-.nc-main-empty-drag-strip {
+.nc-main-empty-titlebar {
   position: absolute;
   top: 0;
   right: 0;
   left: 0;
   z-index: 3;
-  height: 52px;
+  display: flex;
+  height: var(--workbench-titlebar-height);
   background: transparent;
+  pointer-events: none;
+}
+
+.nc-main-empty-titlebar-safe-zone {
+  flex: 0 0 auto;
+  height: 100%;
+  transition: width 180ms ease;
+  pointer-events: none;
+  -webkit-app-region: no-drag;
+}
+
+.nc-main-empty-titlebar-drag-region {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
   pointer-events: auto;
   -webkit-app-region: drag;
 }
@@ -489,6 +519,7 @@ textarea,
   width: 8px;
   height: 100%;
   cursor: col-resize;
+  -webkit-app-region: no-drag;
 }
 
 .nc-sidebar-resizer::before {
