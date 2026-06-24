@@ -1,6 +1,7 @@
 import React from 'react'
 import type { SelectedReference } from '../../../../../shared/types'
 import ReferenceIcon from './ReferenceIcon'
+import { getReferenceVisualSpec } from './referenceVisuals'
 
 type ReferenceInlineTokenProps = {
   reference: SelectedReference
@@ -13,9 +14,11 @@ export const ReferenceInlineToken: React.FC<ReferenceInlineTokenProps> = ({
   className = '',
   role = 'reference-inline-token'
 }) => {
+  const visualSpec = getReferenceVisualSpec(reference)
+
   return (
     <span
-      className={`inline-flex max-w-full items-center gap-1 align-middle text-[13px] font-medium leading-5 text-[#0B6BCB] ${className}`}
+      className={`inline-flex max-w-full items-center gap-1 align-middle text-[13px] font-medium leading-5 ${visualSpec.labelClassName} ${className}`}
       data-role={role}
     >
       <ReferenceIcon reference={reference} size="sm" />

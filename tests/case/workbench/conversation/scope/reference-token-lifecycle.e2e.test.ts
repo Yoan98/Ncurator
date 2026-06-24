@@ -182,6 +182,18 @@ describe('workbench conversation e2e', () => {
               .first()
               .isVisible()
               .catch(() => false)
+            const docxIconPresent =
+              (await mentionPanel.locator('[data-reference-icon-kind="docx"]').count()) > 0
+            const pdfIconPresent =
+              (await mentionPanel.locator('[data-reference-icon-kind="pdf"]').count()) > 0
+            const markdownIconPresent =
+              (await mentionPanel.locator('[data-reference-icon-kind="markdown"]').count()) > 0
+            const genericFileIconPresent =
+              (await mentionPanel
+                .getByRole('button')
+                .filter({ hasText: 'human-input.txt' })
+                .locator('[data-reference-icon-kind="file"]')
+                .count()) > 0
             const duplicateCandidateVisible = await getWorkbenchLocator(
               page,
               workbenchSelectors.mentionPanel
@@ -216,6 +228,17 @@ describe('workbench conversation e2e', () => {
               .click()
             const afterWeb = await getWorkbenchReferenceTokenTexts(page)
             const tokensBeforeSubmit = await getWorkbenchReferenceTokenTexts(page)
+            const composerReferenceIconKinds = await getWorkbenchLocator(
+              page,
+              workbenchSelectors.input
+            ).evaluate((element) => {
+              if (!(element instanceof HTMLElement)) {
+                throw new Error('workbench input is not an HTMLElement')
+              }
+              return Array.from(
+                element.querySelectorAll('[data-role="scope-token"] [data-reference-icon-kind]')
+              ).map((node) => node.getAttribute('data-reference-icon-kind') || '')
+            })
             const composerTokenCloseButtonVisible = await getWorkbenchLocator(
               page,
               workbenchSelectors.input
@@ -229,6 +252,21 @@ describe('workbench conversation e2e', () => {
             await submitWorkbenchCurrentDraft(page)
             const latestUserMessageReferenceTokens =
               await getWorkbenchLatestUserMessageReferenceTokenTexts(page)
+            const latestUserMessageReferenceIconKinds = await getWorkbenchLocator(
+              page,
+              workbenchSelectors.userMessageReferences
+            )
+              .last()
+              .evaluate((element) => {
+                if (!(element instanceof HTMLElement)) {
+                  throw new Error('workbench user message references is not an HTMLElement')
+                }
+                return Array.from(
+                  element.querySelectorAll(
+                    '[data-role="reference-inline-token"] [data-reference-icon-kind]'
+                  )
+                ).map((node) => node.getAttribute('data-reference-icon-kind') || '')
+              })
             await getWorkbenchLocator(page, workbenchSelectors.searchResults).waitFor({
               state: 'visible'
             })
@@ -258,14 +296,20 @@ describe('workbench conversation e2e', () => {
               legacyTypeTagVisible,
               directoryIconVisible,
               webIconVisible,
+              docxIconPresent,
+              pdfIconPresent,
+              markdownIconPresent,
+              genericFileIconPresent,
               duplicateCandidateVisible,
               textFileIndexedVisible,
               markdownFileIndexedVisible,
               localTextFileStillUnindexed,
               tokensBeforeSubmit,
+              composerReferenceIconKinds,
               composerTokenCloseButtonVisible,
               tokensBeforeDelete,
               latestUserMessageReferenceTokens,
+              latestUserMessageReferenceIconKinds,
               afterDelete,
               afterWorkspaceSwitch,
               emptyPanelText
@@ -290,14 +334,24 @@ describe('workbench conversation e2e', () => {
               !result.legacyTypeTagVisible &&
               result.directoryIconVisible &&
               result.webIconVisible &&
+              result.docxIconPresent &&
+              result.pdfIconPresent &&
+              result.markdownIconPresent &&
+              result.genericFileIconPresent &&
               !result.duplicateCandidateVisible &&
               result.textFileIndexedVisible &&
               result.markdownFileIndexedVisible &&
               !result.localTextFileStillUnindexed &&
               result.tokensBeforeSubmit.length === 3 &&
+              result.composerReferenceIconKinds.includes('docx') &&
+              result.composerReferenceIconKinds.includes('directory') &&
+              result.composerReferenceIconKinds.includes('web') &&
               !result.composerTokenCloseButtonVisible &&
               result.tokensBeforeDelete.length === 3 &&
               result.latestUserMessageReferenceTokens.length === 3 &&
+              result.latestUserMessageReferenceIconKinds.includes('docx') &&
+              result.latestUserMessageReferenceIconKinds.includes('directory') &&
+              result.latestUserMessageReferenceIconKinds.includes('web') &&
               result.latestUserMessageReferenceTokens.some((text) =>
                 text.includes('sample-edit.docx')
               ) &&
@@ -311,7 +365,7 @@ describe('workbench conversation e2e', () => {
             {
               name: 'workbench-reference-token-real-lifecycle',
               message:
-                '@ 参考资料应来自真实 workspace/web 资料；候选按文件/网页分组并覆盖 md/txt 已索引本地文件，目录在文件组内用图标区分，右侧只显示索引状态；选择文件、目录、网页时应追加共存，发送后用户消息保留紧凑 token，同一资料不重复出现，删除后移除 token，切换工作区后清理旧 token，空候选给出提示，对齐 WB-SCOPE-001 至 WB-SCOPE-004。',
+                '@ 参考资料应来自真实 workspace/web 资料；候选按文件/网页分组并覆盖 md/txt 已索引本地文件，目录、网页、pdf/docx/md 和普通文件使用分型图标；选择文件、目录、网页时应追加共存，发送后用户消息保留紧凑 token 和分型图标，同一资料不重复出现，删除后移除 token，切换工作区后清理旧 token，空候选给出提示，对齐 WB-SCOPE-001 至 WB-SCOPE-004。',
               data: result
             }
           )

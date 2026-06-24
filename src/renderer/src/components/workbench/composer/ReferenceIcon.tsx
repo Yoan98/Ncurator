@@ -1,6 +1,6 @@
 import React from 'react'
 import type { SelectedReference } from '../../../../../shared/types'
-import { getReferenceVisualKind, getReferenceVisualTone } from './referenceVisuals'
+import { getReferenceVisualSpec } from './referenceVisuals'
 
 type ReferenceIconProps = {
   reference: SelectedReference
@@ -18,47 +18,58 @@ const containerSizeClassName = {
 } as const
 
 const DocumentGlyph: React.FC<{
-  kind: 'file'
   className: string
   fillClassName: string
-  textClassName: string
-}> = ({ className, fillClassName, textClassName }) => {
+  accentClassName: string
+  label?: string
+}> = ({ className, fillClassName, accentClassName, label }) => {
   return (
     <svg className={className} viewBox="0 0 18 18" aria-hidden="true">
       <path
         className={fillClassName}
         d="M4.3 1.7h6.5l3.1 3.1v10.4c0 .7-.6 1.2-1.2 1.2H4.3c-.7 0-1.2-.6-1.2-1.2V2.9c0-.7.5-1.2 1.2-1.2z"
       />
-      <path className="fill-white" d="M4.3 2.7h6.1l2.5 2.5v10.1H4.3V2.7z" />
-      <path
-        className={textClassName}
-        d="M10.4 1.7v3.4h3.5l-3.5-3.4z"
-      />
-      <path className={textClassName} d="M6 7.2h5.1v1.2H6zM6 9.4h5.1v1.2H6zM6 11.6h3.6v1.2H6z" />
+      {label ? null : <path className="fill-white" d="M4.3 2.7h6.1l2.5 2.5v10.1H4.3V2.7z" />}
+      <path className={accentClassName} d="M10.4 1.7v3.4h3.5l-3.5-3.4z" />
+      {label ? (
+        <text
+          x="8.55"
+          y="11.2"
+          className="fill-white"
+          dominantBaseline="middle"
+          fontFamily="Arial, sans-serif"
+          fontSize="4"
+          fontWeight="700"
+          textAnchor="middle"
+        >
+          {label}
+        </text>
+      ) : (
+        <path
+          className={accentClassName}
+          d="M6 7.2h5.1v1.2H6zM6 9.4h5.1v1.2H6zM6 11.6h3.6v1.2H6z"
+        />
+      )}
     </svg>
   )
 }
 
-export const ReferenceIcon: React.FC<ReferenceIconProps> = ({
-  reference,
-  size = 'md'
-}) => {
-  const visualKind = getReferenceVisualKind(reference)
-  const tone = getReferenceVisualTone(reference)
-  const iconClassName = `${iconSizeClassName[size]} ${tone.iconClassName}`
+export const ReferenceIcon: React.FC<ReferenceIconProps> = ({ reference, size = 'md' }) => {
+  const visualSpec = getReferenceVisualSpec(reference)
+  const iconClassName = `${iconSizeClassName[size]} ${visualSpec.iconClassName}`
 
   return (
     <span
       aria-hidden="true"
       className={`inline-flex shrink-0 items-center justify-center ${containerSizeClassName[size]}`}
-      data-reference-icon-kind={visualKind}
+      data-reference-icon-kind={visualSpec.kind}
     >
-      {visualKind === 'file' ? (
+      {visualSpec.kind !== 'directory' && visualSpec.kind !== 'web' ? (
         <DocumentGlyph
-          kind="file"
           className={iconClassName}
-          fillClassName={tone.fillClassName}
-          textClassName={tone.textClassName}
+          fillClassName={visualSpec.documentFillClassName}
+          accentClassName={visualSpec.documentAccentClassName}
+          label={visualSpec.documentLabel}
         />
       ) : (
         <svg
@@ -70,7 +81,7 @@ export const ReferenceIcon: React.FC<ReferenceIconProps> = ({
           strokeLinecap="round"
           strokeLinejoin="round"
         >
-          {visualKind === 'directory' ? (
+          {visualSpec.kind === 'directory' ? (
             <path d="M3.5 6.5h5.15l1.45 1.65h10.4v8.9c0 .8-.65 1.45-1.45 1.45H4.95c-.8 0-1.45-.65-1.45-1.45V6.5z" />
           ) : (
             <>
