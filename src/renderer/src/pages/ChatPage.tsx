@@ -2331,7 +2331,7 @@ const ChatPage: React.FC = () => {
                     ) : null}
                     {composerMode === 'ai' && pendingApprovalBatch ? (
                       <div
-                        className="overflow-hidden rounded-[12px] border border-[#E0DFDC] bg-[#FFFFFF] shadow-[0_8px_24px_rgba(15,15,15,0.08)]"
+                        className="min-w-0 overflow-hidden rounded-[12px] border border-[#E0DFDC] bg-[#FFFFFF] shadow-[0_8px_24px_rgba(15,15,15,0.08)]"
                         data-testid={chatSelectors.approvalBatchCard}
                       >
                         {pendingApprovalBatch && currentApprovalItem ? (
@@ -2397,7 +2397,7 @@ const ChatPage: React.FC = () => {
                             <p className="mx-5 mt-3 text-[13px] leading-6 text-[#787774]">
                               当前运行需要你授权本地操作。
                             </p>
-                            <code className="mx-5 mt-3 block overflow-hidden whitespace-pre-wrap break-words rounded-[6px] border border-[#EEEEEC] bg-[#F4F4F2] px-3.5 py-3 font-mono text-[13px] leading-6 text-[#2F3437]">
+                            <code className="mx-5 mt-3 block max-h-[min(34vh,320px)] overflow-auto whitespace-pre-wrap break-words rounded-[6px] border border-[#EEEEEC] bg-[#F4F4F2] px-3.5 py-3 font-mono text-[13px] leading-6 text-[#2F3437] [overflow-wrap:anywhere]">
                               {currentApprovalItem.command}
                             </code>
                             <div className="mx-2 mt-3 space-y-1">

@@ -82,6 +82,7 @@ const ReferenceMentionPanel: React.FC<ReferenceMentionPanelProps> = ({
                           active ? 'bg-[#F1F1F0]' : 'hover:bg-[#F7F7F5]'
                         }`}
                         data-reference-kind={reference.kind}
+                        data-mention-active={active ? 'true' : undefined}
                         onMouseDown={(event) => {
                           event.preventDefault()
                           onSelect(reference)

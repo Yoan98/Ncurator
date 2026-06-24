@@ -101,6 +101,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   const knownScopesRef = useRef(new Map<string, SelectedReference>())
   const draftSyncFrameRef = useRef<number | null>(null)
   const mentionRefreshFrameRef = useRef<number | null>(null)
+  const mentionQueryRef = useRef<string | null>(null)
   const controlFocusTimeoutRef = useRef<number | null>(null)
   const isComposingRef = useRef(false)
   const [mentionQuery, setMentionQuery] = useState<string | null>(null)
@@ -115,6 +116,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   )
 
   const closeMention = useCallback(() => {
+    mentionQueryRef.current = null
     setMentionQuery(null)
     setMentionOptions([])
     setMentionActiveIndex(0)
@@ -271,6 +273,8 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
       closeMention()
       return
     }
+    if (mentionQueryRef.current === context.query) return
+    mentionQueryRef.current = context.query
     setMentionQuery(context.query)
     setMentionActiveIndex(0)
   }, [closeMention, getMentionContext])
