@@ -36,11 +36,11 @@
 
 ### 2.3 当前边界
 
-- Workbench UI E2E 回归测试通过脚本在 case 运行时把 `tests/fixtures/workspace` 复制到临时目录，并使用 macOS 系统辅助功能权限操作原生目录选择器；测试不得回退到 `pickDirectoryResponse` 或 `workspaceSetRootPath`。
+- Workbench UI E2E 回归测试通过脚本在 case 运行时把 `tests/fixtures/workspace` 复制到临时目录；非 Settings 目录选择器专项测试可使用生产 IPC 创建工作区、绑定目录并触发真实索引，以避免 macOS 原生目录选择器偶发卡死，但不得回退到 fake `pickDirectoryResponse`、固定 document id 或伪造搜索结果。
 - Workbench e2e 的 workspace 文件索引允许在测试环境通过 `NCURATOR_WORKSPACE_KNOWLEDGE_CACHE=1` 启用真实 split / vector 缓存；缓存只按文件内容 hash、扩展名、splitter 参数和 embedding model 复用计算结果，不替代 workspace 文件记录、document id、搜索结果或 UI 状态。
 - Workbench 模型选择 helper 已改为通过真实下拉搜索选择 `AI_LIVE_PRIMARY_MODEL_NAME`；`ai-process-stream-and-final-answer` 已验证 `deepseek-v4-flash` 可通过真实 UI 搜索选中。
 - Workbench UI E2E 回归测试需要真实索引完成信号和 UI 可见状态作为等待条件；不得再读取内部 store 或注入 fixed document id 来制造搜索结果。
-- `file-preview-actions` 当前按生产真实索引能力覆盖 `pdf/docx`：`src/main/services/ingestion/loader.ts` 只支持 `.pdf`、`.docx` 本地知识库索引，`tests/fixtures/workspace/workbench-preview.md` 无法通过真实搜索结果打开；如 PRD 需要 markdown 也进入 Workbench 搜索 / 预览链路，需要产品 / 生产实现决策。
+- `file-preview-actions` 当前按生产真实索引能力覆盖 `pdf/docx/md/txt`：`.md`、`.markdown`、`.txt` 必须通过真实索引进入搜索结果，并从搜索结果打开右侧预览。
 - docx apply case 需要真实 docx 输入、真实 AI 编辑、真实写回记录、真实预览和真实回退。
 - `browser-use-task-panel` 需要真实 AI run 触发 `browser_use` 并驱动内置浏览器完成本地网页任务；当前暂无有效通过结论。
 
@@ -137,7 +137,7 @@ tests/case/workbench/
 - 测试类型：`e2e`
 - What：验证 `@` 参考资料候选覆盖工作区全部本地目录 / 文件与网页资料、目录 / 文件 / 网页 token 插入、多 token 共存、键盘删除、去重、切工作区清理和空候选提示。
 - Why：显式参考资料是用户控制 AI 上下文的核心入口，错误会直接导致搜索或 AI 执行范围偏离用户意图。
-- How：通过 UI 创建真实 workspace，绑定 `tests/fixtures/workspace`，等待真实文件扫描并准备索引状态；通过 UI 添加真实 web source；输入 `@` 触发候选，选择文件、目录、网页；候选应包含工作区下未索引本地项并显示索引状态；选中即追加，同一资料才去重；通过 Backspace 删除 token；切工作区清理旧 token。
+- How：创建真实 workspace，绑定 `tests/fixtures/workspace`，等待真实文件扫描并准备索引状态；添加真实 web source 并等待真实网页索引完成；输入 `@` 触发候选，选择文件、目录、网页；候选应覆盖工作区下本地项并显示索引状态，其中 md/txt 索引完成后应显示为已索引；选中即追加，同一资料才去重；通过 Backspace 删除 token；切工作区清理旧 token。
 - Oracle：候选来源符合当前工作区和模式，对齐 `WB-SCOPE-001-AC1`、`WB-SCOPE-001-AC2`；token 插入、共存和删除后发送参数符合 `WB-SCOPE-002-AC1` 至 `WB-SCOPE-002-AC3`；重复候选和跨工作区清理符合 `WB-SCOPE-003-AC1`、`WB-SCOPE-003-AC2`；空候选提示符合 `WB-SCOPE-004-AC1`、`WB-SCOPE-004-AC2`。
 - Not：不验证底层 KB 检索排序质量，也不验证 Settings 工作区资料配置细节。
 
@@ -193,11 +193,11 @@ tests/case/workbench/
 #### `file-preview-actions`
 
 - 测试类型：`e2e`
-- What：验证右侧普通文件预览态的预览优先布局、定位文件、系统打开入口和 PDF 命中定位；当前回归口径先覆盖生产真实可索引的 `pdf/docx`。
+- What：验证右侧普通文件预览态的预览优先布局、定位文件、系统打开入口、PDF 命中定位，以及 Markdown / 纯文本预览。
 - Why：右侧面板是用户消费搜索 / 引用结果的主要区域，预览布局错误会直接阻断阅读。
-- How：从真实搜索结果打开真实 pdf、docx 文件；检查右侧工具条、预览主体、返回路径和 PDF 命中页定位。Markdown 文件暂不作为有效搜索预览断言，因为当前生产本地知识库索引只支持 `.pdf` / `.docx`。
-- Oracle：普通文件打开后右侧主体用于预览且工具条提供定位文件和系统打开，对齐 `WB-PANEL-003-AC1`；PDF 搜索命中打开后保留整份 PDF 可滚动内容并定位到命中页，对齐 `WB-PANEL-003-AC3`。
-- Not：不验证系统文件管理器或系统默认应用本身是否成功打开；不把不可索引的 markdown fixture 伪造成搜索结果。
+- How：从真实搜索结果打开真实 pdf、docx、md、txt 文件；检查右侧工具条、预览主体、返回路径、PDF 命中页定位、Markdown 标题 / 列表 / 表格 / 代码块渲染，以及纯文本换行保留。
+- Oracle：普通文件打开后右侧主体用于预览且工具条提供定位文件和系统打开，对齐 `WB-PANEL-003-AC1`；PDF 搜索命中打开后保留整份 PDF 可滚动内容并定位到命中页，对齐 `WB-PANEL-003-AC3`；md/txt 必须来自真实索引搜索命中，并打开同一右侧文件预览面板。
+- Not：不验证系统文件管理器或系统默认应用本身是否成功打开；不伪造 md/txt 搜索结果或右侧预览状态。
 
 #### `docx-apply-panel-preview-and-revert`
 

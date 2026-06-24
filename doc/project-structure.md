@@ -86,7 +86,7 @@ tests/                   # 自动化测试
 ## 7. 文档目录规则
 
 - `doc/` 下的 canonical 文档默认直接放在根目录。
-- 文档阅读路径默认由 `AGENTS.md` 维护。
+- 文档阅读路径默认由根目录 `README.md` 维护；`README.md` 承担根文档索引职责。
 - canonical 文档、阅读路径和同步清单都在 `doc/` 根目录维护。
 - `doc/ai-design/` 用于 AI 总体架构、实现规范、数据契约与数据流转、skill 设计、prompt 设计，以及未来重构规划。
 - `doc/prd/` 用于按产品模块维护用户可见功能规格与验收标准，例如 `workbench.md` 与 `settings.md`。
