@@ -8,6 +8,7 @@ const getMimeType = (filename: string): string => {
     case 'docx':
       return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
     case 'md':
+    case 'markdown':
       return 'text/markdown'
     case 'txt':
       return 'text/plain'

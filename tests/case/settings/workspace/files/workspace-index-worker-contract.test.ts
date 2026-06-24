@@ -7,7 +7,10 @@ import {
   WORKSPACE_EMBEDDING_BATCH_MAX_CHARS,
   WORKSPACE_EMBEDDING_CHUNK_MAX_CHARS
 } from '../../../../../src/main/services/workspace/constants'
-import { IngestionService } from '../../../../../src/main/services/ingestion/loader'
+import {
+  IngestionService,
+  isSupportedLocalFilePath
+} from '../../../../../src/main/services/ingestion/loader'
 import {
   buildWorkspaceKnowledgeSplitSnapshot,
   computeWorkspaceFileContentHash,
@@ -94,6 +97,67 @@ describe('settings workspace backend', () => {
           contentHash: pdfContentHash,
           fileExt: '.pdf'
         })
+        const markdownFilePath = path.join(runtime.workspaceRoot, 'indexed-notes.md')
+        await fs.writeFile(
+          markdownFilePath,
+          [
+            '# Indexed Markdown Notes',
+            '',
+            'Unique markdown vector marker: cedar-md-index-118.',
+            '',
+            '- searchable markdown item'
+          ].join('\n'),
+          'utf8'
+        )
+        const markdownContentHash = await computeWorkspaceFileContentHash(markdownFilePath)
+        const markdownSplitSnapshot = await buildWorkspaceKnowledgeSplitSnapshot({
+          ingestionService: IngestionService.getInstance(),
+          filePath: markdownFilePath,
+          contentHash: markdownContentHash,
+          fileExt: '.md'
+        })
+        const textFilePath = path.join(runtime.workspaceRoot, 'indexed-notes.txt')
+        await fs.writeFile(
+          textFilePath,
+          'Unique plain text vector marker: cedar-txt-index-219.\nSecond text line.',
+          'utf8'
+        )
+        const textContentHash = await computeWorkspaceFileContentHash(textFilePath)
+        const textSplitSnapshot = await buildWorkspaceKnowledgeSplitSnapshot({
+          ingestionService: IngestionService.getInstance(),
+          filePath: textFilePath,
+          contentHash: textContentHash,
+          fileExt: '.txt'
+        })
+        const markdownWorkerSuccess = await handleWorkspaceIndexWorkerRequest({
+          requestId: 'worker-contract-markdown-success',
+          action: 'prepare_file',
+          payload: {
+            workspaceId: 'workspace-index-worker-contract',
+            documentId: 'worker-contract-markdown-document',
+            filePath: markdownFilePath,
+            documentName: 'indexed-notes.md',
+            cachedSplit: markdownSplitSnapshot,
+            cachedVectors: {
+              contentHash: markdownContentHash,
+              fileExt: '.md',
+              modelName: 'cached-model',
+              vectors: markdownSplitSnapshot.chunks.map(() => [0.1, 0.2, 0.3])
+            }
+          }
+        })
+        const emptyTextFilePath = path.join(runtime.workspaceRoot, 'empty-notes.txt')
+        await fs.writeFile(emptyTextFilePath, ' \n\t', 'utf8')
+        const emptyTextWorkerSuccess = await handleWorkspaceIndexWorkerRequest({
+          requestId: 'worker-contract-empty-text-success',
+          action: 'prepare_file',
+          payload: {
+            workspaceId: 'workspace-index-worker-contract',
+            documentId: 'worker-contract-empty-text-document',
+            filePath: emptyTextFilePath,
+            documentName: 'empty-notes.txt'
+          }
+        })
         const pdfWorkerSuccess = await handleWorkspaceIndexWorkerRequest({
           requestId: 'worker-contract-pdf-success',
           action: 'prepare_file',
@@ -116,8 +180,8 @@ describe('settings workspace backend', () => {
           requestId: 'worker-contract-error',
           payload: {
             ...workerRequest.payload,
-            filePath: path.join(runtime.workspaceRoot, 'unsupported.txt'),
-            documentName: 'unsupported.txt'
+            filePath: path.join(runtime.workspaceRoot, 'unsupported.js'),
+            documentName: 'unsupported.js'
           }
         })
         const exitWorkerPath = path.join(runtime.workspaceRoot, 'workspace-exit-worker.js')
@@ -192,6 +256,16 @@ parentPort.on('message', (request) => {
             batch.reduce((total, chunk) => total + chunk.text.length, 0)
           ),
           hardLimitError,
+          textFileSupport: {
+            md: isSupportedLocalFilePath(markdownFilePath),
+            markdown: isSupportedLocalFilePath(path.join(runtime.workspaceRoot, 'notes.markdown')),
+            txt: isSupportedLocalFilePath(textFilePath),
+            js: isSupportedLocalFilePath(path.join(runtime.workspaceRoot, 'unsupported.js'))
+          },
+          markdownSplitSnapshot,
+          textSplitSnapshot,
+          markdownWorkerSuccess,
+          emptyTextWorkerSuccess,
           workerSuccess,
           pdfWorkerSuccess,
           workerFailure,
@@ -227,6 +301,58 @@ parentPort.on('message', (request) => {
           message: '单个 chunk 超过 40000 字符硬上限时，应抛错并交由文件级失败收敛。',
           data: result
         })
+
+        runtime.assertThat(
+          result.textFileSupport.md &&
+            result.textFileSupport.markdown &&
+            result.textFileSupport.txt &&
+            !result.textFileSupport.js,
+          {
+            name: 'text-file-extensions-supported-for-index',
+            message: 'workspace 文件索引应支持 .md/.markdown/.txt，并继续拒绝无关脚本文件。',
+            data: result
+          }
+        )
+
+        runtime.assertThat(
+          result.markdownSplitSnapshot.chunks.some((chunk) =>
+            chunk.text.includes('cedar-md-index-118')
+          ) &&
+            result.textSplitSnapshot.chunks.some((chunk) =>
+              chunk.text.includes('cedar-txt-index-219')
+            ),
+          {
+            name: 'text-files-produce-searchable-split-chunks',
+            message: 'md/txt 文本文件应通过 UTF-8 读取进入现有 splitter，生成可检索 chunk。',
+            data: result
+          }
+        )
+
+        runtime.assertThat(
+          result.markdownWorkerSuccess.ok &&
+            result.markdownWorkerSuccess.payload?.fileExt === '.md' &&
+            result.markdownWorkerSuccess.payload.chunkCount > 0 &&
+            result.markdownWorkerSuccess.payload.chunks.some((chunk) =>
+              chunk.text.includes('cedar-md-index-118')
+            ),
+          {
+            name: 'worker-markdown-success-uses-text-loader',
+            message: 'workspace worker 应能处理 markdown 文件，并返回可写入本地索引的 chunk。',
+            data: result
+          }
+        )
+
+        runtime.assertThat(
+          result.emptyTextWorkerSuccess.ok &&
+            result.emptyTextWorkerSuccess.payload?.fileExt === '.txt' &&
+            result.emptyTextWorkerSuccess.payload.chunkCount === 0 &&
+            result.emptyTextWorkerSuccess.payload.vectorSnapshot.vectors.length === 0,
+          {
+            name: 'empty-text-file-indexes-without-embedding',
+            message: '空 md/txt 应收敛为 0 chunk 索引结果，不应因 embedding 未就绪导致文件级失败。',
+            data: result
+          }
+        )
 
         runtime.assertThat(
           result.workerSuccess.ok &&

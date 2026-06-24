@@ -3,7 +3,9 @@ import { DocxLoader } from '@langchain/community/document_loaders/fs/docx'
 import { CheerioWebBaseLoader } from '@langchain/community/document_loaders/web/cheerio'
 import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters'
 import { Document } from '@langchain/core/documents'
+import fs from 'node:fs/promises'
 import path from 'node:path'
+import { TextDecoder } from 'node:util'
 import {
   SPLITTER_BIG_CHUNK_SETTING,
   SPLITTER_MINI_CHUNK_SIZE,
@@ -11,12 +13,22 @@ import {
   WEB_INGEST_TIMEOUT_MS
 } from '../../utils/constant'
 
-export const SUPPORTED_LOCAL_FILE_EXTENSIONS = ['.pdf', '.docx'] as const
+export const SUPPORTED_LOCAL_FILE_EXTENSIONS = [
+  '.pdf',
+  '.docx',
+  '.md',
+  '.markdown',
+  '.txt'
+] as const
 
 const SUPPORTED_LOCAL_FILE_EXTENSION_SET = new Set<string>(SUPPORTED_LOCAL_FILE_EXTENSIONS)
+const SUPPORTED_TEXT_FILE_EXTENSION_SET = new Set<string>(['.md', '.markdown', '.txt'])
 
 export const isSupportedLocalFilePath = (filePath: string): boolean =>
   SUPPORTED_LOCAL_FILE_EXTENSION_SET.has(path.extname(filePath).toLowerCase())
+
+export const isSupportedTextFilePath = (filePath: string): boolean =>
+  SUPPORTED_TEXT_FILE_EXTENSION_SET.has(path.extname(filePath).toLowerCase())
 
 export class IngestionService {
   private static instance: IngestionService
@@ -32,10 +44,13 @@ export class IngestionService {
 
   public async loadFile(filePath: string): Promise<Document[]> {
     let loader
-    if (path.extname(filePath).toLowerCase() === '.pdf') {
+    const fileExt = path.extname(filePath).toLowerCase()
+    if (fileExt === '.pdf') {
       loader = new PDFLoader(filePath)
-    } else if (path.extname(filePath).toLowerCase() === '.docx') {
+    } else if (fileExt === '.docx') {
       loader = new DocxLoader(filePath)
+    } else if (isSupportedTextFilePath(filePath)) {
+      return await this.loadTextFile(filePath, fileExt)
     } else {
       throw new Error('Unsupported file type')
     }
@@ -44,10 +59,34 @@ export class IngestionService {
     return docs
   }
 
+  private async loadTextFile(filePath: string, fileExt: string): Promise<Document[]> {
+    const buffer = await fs.readFile(filePath)
+    const text = new TextDecoder('utf-8', { fatal: true }).decode(buffer)
+    if (!text.trim()) return []
+
+    return [
+      new Document({
+        pageContent: text,
+        metadata: {
+          source: filePath,
+          file_path: filePath,
+          fileExt
+        }
+      })
+    ]
+  }
+
   public async splitDocuments(docs: Document[]): Promise<{
     bigSplitDocs: Document[]
     miniSplitDocs: Document[]
   }> {
+    if (docs.length === 0) {
+      return {
+        bigSplitDocs: [],
+        miniSplitDocs: []
+      }
+    }
+
     const bigSplitter = new RecursiveCharacterTextSplitter({
       chunkSize: SPLITTER_BIG_CHUNK_SETTING.chunkSize,
       chunkOverlap: SPLITTER_BIG_CHUNK_SETTING.chunkOverlap

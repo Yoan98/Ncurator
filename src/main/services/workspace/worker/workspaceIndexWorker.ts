@@ -43,25 +43,34 @@ export const handleWorkspaceIndexWorkerRequest = async (
       input.cachedVectors?.vectors.length === splitSnapshot.chunks.length
     let vectorSnapshot = input.cachedVectors
     if (!hasUsableCachedVectors || !vectorSnapshot) {
-      const embeddingService = EmbeddingService.getInstance()
-      if (embeddingService.getStatus() !== 'ready') {
-        await embeddingService.initialize()
-      }
-      if (embeddingService.getStatus() !== 'ready') {
-        throw new Error(
-          `EmbeddingService is not ready in workspace index worker. Current status: ${embeddingService.getStatus()}`
-        )
-      }
-      vectorSnapshot = {
-        contentHash,
-        fileExt,
-        modelName: embeddingService.getModelName(),
-        vectors: (
-          await buildWorkspaceKnowledgeVectors({
-            embeddingService,
-            chunks: splitSnapshot.chunks
-          })
-        ).vectors
+      if (splitSnapshot.chunks.length === 0) {
+        vectorSnapshot = {
+          contentHash,
+          fileExt,
+          modelName: EmbeddingService.getInstance().getModelName(),
+          vectors: []
+        }
+      } else {
+        const embeddingService = EmbeddingService.getInstance()
+        if (embeddingService.getStatus() !== 'ready') {
+          await embeddingService.initialize()
+        }
+        if (embeddingService.getStatus() !== 'ready') {
+          throw new Error(
+            `EmbeddingService is not ready in workspace index worker. Current status: ${embeddingService.getStatus()}`
+          )
+        }
+        vectorSnapshot = {
+          contentHash,
+          fileExt,
+          modelName: embeddingService.getModelName(),
+          vectors: (
+            await buildWorkspaceKnowledgeVectors({
+              embeddingService,
+              chunks: splitSnapshot.chunks
+            })
+          ).vectors
+        }
       }
     }
 

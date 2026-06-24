@@ -132,6 +132,8 @@ export const workbenchSelectors = {
   assistantTurnApplyPrefix: 'workbench-assistant-turn-apply',
   searchResults: 'workbench-search-results',
   documentView: 'workbench-document-view',
+  markdownViewer: 'workbench-markdown-viewer',
+  plainTextViewer: 'workbench-plain-text-viewer',
   applyPanel: 'workbench-apply-panel',
   applyTabs: 'workbench-apply-tabs',
   browserPanel: 'workbench-browser-panel',

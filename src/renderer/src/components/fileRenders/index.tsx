@@ -2,7 +2,7 @@
 import { Empty, Modal, Spin } from 'antd'
 import DocViewer, { DocViewerRenderers } from 'react-doc-viewer'
 import CustomPDFRenderer from './pdf'
-import CustomMarkdownRenderer from './markdown'
+import { CustomMarkdownRenderer, CustomPlainTextRenderer } from './markdown'
 import CustomDocxRenderer from './docx'
 import { prepareFileRenderDocument } from './utils'
 import type { FileRenderDocument, LoadedFileRenderDocument } from './types'
@@ -88,7 +88,13 @@ const usePreparedDocuments = (
   }
 }
 
-const renderers = [CustomPDFRenderer, CustomMarkdownRenderer, CustomDocxRenderer, ...DocViewerRenderers]
+const renderers = [
+  CustomPDFRenderer,
+  CustomMarkdownRenderer,
+  CustomPlainTextRenderer,
+  CustomDocxRenderer,
+  ...DocViewerRenderers
+]
 
 export const FileRenderViewer: React.FC<FileRenderViewerProps> = ({
   documents,

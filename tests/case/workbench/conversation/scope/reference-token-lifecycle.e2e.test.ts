@@ -4,7 +4,8 @@ import {
   WORKBENCH_RESULT_E2E_TIMEOUT_MS,
   appendWorkbenchInputText,
   assertNoWorkbenchFakeSignals,
-  createWorkspaceThroughSettingsUi,
+  createTemporaryWorkbenchWorkspace,
+  createWorkbenchNewSession,
   getWorkbenchLocator,
   getWorkbenchLatestUserMessageReferenceTokenTexts,
   getWorkbenchReferenceTokenTexts,
@@ -12,7 +13,6 @@ import {
   navigateToWorkbench,
   removeFirstWorkbenchReferenceToken,
   selectWorkbenchWorkspace,
-  setupWorkbenchWorkspaceOnly,
   startLocalWorkbenchHttpServer,
   submitWorkbenchCurrentDraft,
   switchWorkbenchMode,
@@ -20,8 +20,111 @@ import {
   waitForWorkbenchSearchScopeEmptyThroughUi,
   workbenchSelectors
 } from '../../../../harness/e2e/workbench'
+import {
+  createFixtureWorkspace,
+  createRealWorkspaceWithRoot,
+  seedWebSources,
+  waitForFileIndexJobIdle
+} from '../../../../harness/e2e/settings'
 
 const CASE_ID = 'reference-token-lifecycle'
+
+const waitForWebSourceIndexJobIdle = async (
+  page: import('playwright').Page,
+  workspaceId: string
+): Promise<void> => {
+  const deadline = Date.now() + WORKBENCH_RESULT_E2E_TIMEOUT_MS
+  for (;;) {
+    const response = await page.evaluate(async (selectedWorkspaceId) => {
+      return await window.api.workspaceIndexJobGet({
+        workspaceId: selectedWorkspaceId,
+        sourceKind: 'web'
+      })
+    }, workspaceId)
+    if (!response.success) {
+      throw new Error(response.error || 'failed to read web index job')
+    }
+    if (!response.job) return
+    if (Date.now() >= deadline) {
+      throw new Error('web source index job did not become idle')
+    }
+    await page.waitForTimeout(500)
+  }
+}
+
+const setupScopeWorkspace = async (
+  page: import('playwright').Page,
+  input: {
+    workspaceName: string
+    webSourceUrl: string
+  }
+): Promise<{
+  workspace: Awaited<ReturnType<typeof createTemporaryWorkbenchWorkspace>>
+  workspaceName: string
+}> => {
+  const workspace = await createTemporaryWorkbenchWorkspace(CASE_ID)
+  const response = await createRealWorkspaceWithRoot(page, {
+    name: input.workspaceName,
+    rootPath: workspace.rootPath
+  })
+  const workspaceId = response.workspace!.id
+
+  const prepareFilesResponse = await page.evaluate(async (selectedWorkspaceId) => {
+    return await window.api.workspacePrepare({ workspaceId: selectedWorkspaceId })
+  }, workspaceId)
+  if (!prepareFilesResponse.success) {
+    throw new Error(prepareFilesResponse.error || 'failed to prepare workspace files')
+  }
+  const filePrepared = await waitForFileIndexJobIdle(
+    page,
+    workspaceId,
+    WORKBENCH_RESULT_E2E_TIMEOUT_MS
+  )
+  const textFileStatuses = filePrepared.tree.items
+    .filter(
+      (item) =>
+        item.kind === 'file' &&
+        ['workbench-preview.md', 'human-input.txt'].includes(item.relative_path)
+    )
+    .map((item) => ({
+      relativePath: item.relative_path,
+      status: item.index_status,
+      documentId: item.document_id,
+      lastError: item.last_error
+    }))
+  if (
+    textFileStatuses.length !== 2 ||
+    textFileStatuses.some((item) => item.status !== 'indexed' || !item.documentId)
+  ) {
+    throw new Error(`md/txt fixture indexing failed: ${JSON.stringify(textFileStatuses)}`)
+  }
+
+  await seedWebSources(page, workspaceId, [input.webSourceUrl])
+  const prepareWebResponse = await page.evaluate(async (selectedWorkspaceId) => {
+    return await window.api.webSourcesPrepare({ workspaceId: selectedWorkspaceId })
+  }, workspaceId)
+  if (!prepareWebResponse.success) {
+    throw new Error(prepareWebResponse.error || 'failed to prepare web source')
+  }
+  await waitForWebSourceIndexJobIdle(page, workspaceId)
+  const webSourceList = await page.evaluate(async (selectedWorkspaceId) => {
+    return await window.api.webSourceList({ workspaceId: selectedWorkspaceId })
+  }, workspaceId)
+  const indexedWebSource = webSourceList.items.find(
+    (item) => item.url === input.webSourceUrl && item.index_status === 'indexed'
+  )
+  if (!indexedWebSource) {
+    throw new Error(`web source indexing failed: ${JSON.stringify(webSourceList.items)}`)
+  }
+
+  await navigateToWorkbench(page)
+  await selectWorkbenchWorkspace(page, input.workspaceName)
+
+  return {
+    workspace,
+    workspaceName: input.workspaceName
+  }
+}
 
 describe('workbench conversation e2e', () => {
   it(
@@ -43,8 +146,7 @@ describe('workbench conversation e2e', () => {
           const server = await startLocalWorkbenchHttpServer(
             '<!doctype html><title>Workbench Web Fixture</title><main>Workbench web fixture unique fact: cedar-scope-731.</main>'
           )
-          const setup = await setupWorkbenchWorkspaceOnly(page, {
-            caseId: CASE_ID,
+          const setup = await setupScopeWorkspace(page, {
             workspaceName: 'Workbench Scope Workspace',
             webSourceUrl: server.url
           })
@@ -87,19 +189,21 @@ describe('workbench conversation e2e', () => {
               .getByText('sample-edit.docx')
               .isVisible()
               .catch(() => false)
-            const unsupportedTextFileVisible = await mentionPanel
+            const textFileIndexedVisible = await mentionPanel
               .getByRole('button')
               .filter({ hasText: 'human-input.txt' })
+              .filter({ hasText: '已索引' })
               .first()
               .isVisible()
               .catch(() => false)
-            const unsupportedMarkdownVisible = await mentionPanel
+            const markdownFileIndexedVisible = await mentionPanel
               .getByRole('button')
               .filter({ hasText: 'workbench-preview.md' })
+              .filter({ hasText: '已索引' })
               .first()
               .isVisible()
               .catch(() => false)
-            const unsupportedStatusVisible = await mentionPanel
+            const localTextFileStillUnindexed = await mentionPanel
               .getByRole('button')
               .filter({ hasText: 'human-input.txt' })
               .filter({ hasText: '未索引' })
@@ -137,8 +241,8 @@ describe('workbench conversation e2e', () => {
             await removeFirstWorkbenchReferenceToken(page)
             const afterDelete = await getWorkbenchReferenceTokenTexts(page)
 
-            await createWorkspaceThroughSettingsUi(page, 'Workbench Empty Scope Workspace')
-            await navigateToWorkbench(page)
+            await createFixtureWorkspace(page, { name: 'Workbench Empty Scope Workspace' })
+            await createWorkbenchNewSession(page)
             await selectWorkbenchWorkspace(page, 'Workbench Empty Scope Workspace')
             const afterWorkspaceSwitch = await getWorkbenchReferenceTokenTexts(page)
             const emptyPanelText = await waitForWorkbenchSearchScopeEmptyThroughUi(page)
@@ -155,9 +259,9 @@ describe('workbench conversation e2e', () => {
               directoryIconVisible,
               webIconVisible,
               duplicateCandidateVisible,
-              unsupportedTextFileVisible,
-              unsupportedMarkdownVisible,
-              unsupportedStatusVisible,
+              textFileIndexedVisible,
+              markdownFileIndexedVisible,
+              localTextFileStillUnindexed,
               tokensBeforeSubmit,
               composerTokenCloseButtonVisible,
               tokensBeforeDelete,
@@ -187,9 +291,9 @@ describe('workbench conversation e2e', () => {
               result.directoryIconVisible &&
               result.webIconVisible &&
               !result.duplicateCandidateVisible &&
-              result.unsupportedTextFileVisible &&
-              result.unsupportedMarkdownVisible &&
-              result.unsupportedStatusVisible &&
+              result.textFileIndexedVisible &&
+              result.markdownFileIndexedVisible &&
+              !result.localTextFileStillUnindexed &&
               result.tokensBeforeSubmit.length === 3 &&
               !result.composerTokenCloseButtonVisible &&
               result.tokensBeforeDelete.length === 3 &&
@@ -207,7 +311,7 @@ describe('workbench conversation e2e', () => {
             {
               name: 'workbench-reference-token-real-lifecycle',
               message:
-                '@ 参考资料应来自真实 workspace/web 资料；候选按文件/网页分组并覆盖不可索引本地文件，目录在文件组内用图标区分，右侧只显示索引状态；选择文件、目录、网页时应追加共存，发送后用户消息保留紧凑 token，同一资料不重复出现，删除后移除 token，切换工作区后清理旧 token，空候选给出提示，对齐 WB-SCOPE-001 至 WB-SCOPE-004。',
+                '@ 参考资料应来自真实 workspace/web 资料；候选按文件/网页分组并覆盖 md/txt 已索引本地文件，目录在文件组内用图标区分，右侧只显示索引状态；选择文件、目录、网页时应追加共存，发送后用户消息保留紧凑 token，同一资料不重复出现，删除后移除 token，切换工作区后清理旧 token，空候选给出提示，对齐 WB-SCOPE-001 至 WB-SCOPE-004。',
               data: result
             }
           )
