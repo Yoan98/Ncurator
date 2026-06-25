@@ -581,7 +581,7 @@ textarea,
 }
 
 .nc-document-scroll {
-  @apply min-h-0 flex-1 overflow-y-auto px-6 pt-5;
+  @apply min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-6 pt-5;
 }
 
 .nc-document {
@@ -896,6 +896,8 @@ mark {
   color: var(--ink);
   font-size: 14px;
   line-height: 1.78;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .markdown-body > *:first-child {
@@ -949,6 +951,7 @@ mark {
 .markdown-body a {
   color: var(--notion-accent-blue);
   text-decoration: none;
+  overflow-wrap: anywhere;
   transition:
     background-color var(--ui-transition),
     color var(--ui-transition),
@@ -963,10 +966,13 @@ mark {
   display: inline-flex;
   align-items: baseline;
   gap: 0.35rem;
+  max-width: 100%;
+  min-width: 0;
   vertical-align: middle;
   color: var(--notion-accent-blue);
   text-decoration: none;
   text-underline-offset: 3px;
+  overflow-wrap: anywhere;
 }
 
 .markdown-body .markdown-reference-icon {
@@ -983,6 +989,8 @@ mark {
   text-decoration: none;
   text-underline-offset: 3px;
   vertical-align: middle;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .markdown-body .markdown-reference-link:hover,

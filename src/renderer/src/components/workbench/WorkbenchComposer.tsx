@@ -368,7 +368,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     renderComposerNodesToEditor(editor, [])
     ensureEditorHasCaretTarget()
     setHasContent(false)
-    onDraftChange({ input: '', selectedReferences: [] })
+    onDraftChange({ input: '', contentNodes: [], selectedReferences: [] })
     closeMention()
   }, [closeMention, ensureEditorHasCaretTarget, onDraftChange, resetKey])
 

@@ -18,10 +18,10 @@ export const ReferenceInlineToken: React.FC<ReferenceInlineTokenProps> = ({
 
   return (
     <span
-      className={`inline-flex max-w-full items-center gap-1 align-middle text-[13px] font-medium leading-5 ${visualSpec.labelClassName} ${className}`}
+      className={`inline-flex max-w-full items-center gap-1 align-[-0.08em] text-[0.9em] font-medium leading-[inherit] ${visualSpec.labelClassName} ${className}`}
       data-role={role}
     >
-      <ReferenceIcon reference={reference} size="sm" />
+      <ReferenceIcon reference={reference} size="inline" />
       <span className="min-w-0 max-w-[180px] truncate">{reference.name}</span>
     </span>
   )

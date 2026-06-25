@@ -166,6 +166,7 @@ export type FileChangeWorkspaceTab = {
 export type AssistantTurnApplyTarget = {
   changeId: string
   title: string
+  sourcePath?: string
   changeCount: number
   status?: AiFileChangeStatus
 }

@@ -130,6 +130,7 @@ export const workbenchSelectors = {
   assistantProcessItemPrefix: 'workbench-assistant-process-item',
   assistantFinalAnswerPrefix: 'workbench-assistant-final-answer',
   assistantTurnApplyPrefix: 'workbench-assistant-turn-apply',
+  assistantTurnArtifactPrefix: 'workbench-assistant-turn-artifact',
   searchResults: 'workbench-search-results',
   documentView: 'workbench-document-view',
   markdownViewer: 'workbench-markdown-viewer',

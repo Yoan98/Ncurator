@@ -270,6 +270,7 @@ export class ChatRunService {
       role: 'user',
       content: payload.input,
       timestamp: createdAt,
+      contentNodes: payload.contentNodes,
       selectedReferences: normalizedReferences
     }
     await this.saveUserMessageAndTitle(userMessage)
@@ -345,6 +346,7 @@ export class ChatRunService {
       role: 'user',
       content: payload.input,
       timestamp: createdAt,
+      contentNodes: payload.contentNodes,
       selectedReferences: normalizedReferences,
       error: false
     }

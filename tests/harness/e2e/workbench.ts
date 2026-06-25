@@ -376,23 +376,28 @@ export const startLocalWorkbenchHttpServer = async (
   }
 }
 
-export const navigateToWorkbench = async (page: Page): Promise<void> => {
+export const navigateToWorkbench = async (
+  page: Page,
+  options?: { waitForSessionListText?: boolean }
+): Promise<void> => {
   await page.evaluate(() => {
     window.location.hash = '#/'
   })
   await getWorkbenchLocator(page, workbenchSelectors.page).waitFor({ state: 'visible' })
   await getWorkbenchLocator(page, workbenchSelectors.sessionsList).waitFor({ state: 'visible' })
-  await waitForCondition({
-    name: 'workbench session list ready',
-    timeoutMs: WORKBENCH_E2E_TIMEOUT_MS,
-    check: async () => {
-      const sessionListText =
-        (await getWorkbenchLocator(page, workbenchSelectors.sessionsList)
-          .textContent()
-          .catch(() => '')) || ''
-      return sessionListText.trim().length > 0
-    }
-  })
+  if (options?.waitForSessionListText !== false) {
+    await waitForCondition({
+      name: 'workbench session list ready',
+      timeoutMs: WORKBENCH_E2E_TIMEOUT_MS,
+      check: async () => {
+        const sessionListText =
+          (await getWorkbenchLocator(page, workbenchSelectors.sessionsList)
+            .textContent()
+            .catch(() => '')) || ''
+        return sessionListText.trim().length > 0
+      }
+    })
+  }
   await getWorkbenchLocator(page, workbenchSelectors.input).waitFor({ state: 'visible' })
 }
 
@@ -414,7 +419,7 @@ export const configureLiveModelThroughSettingsUi = async (
     state: 'visible'
   })
 
-  await navigateToWorkbench(page)
+  await navigateToWorkbench(page, { waitForSessionListText: false })
   await selectWorkbenchModel(page, env.modelName)
 }
 

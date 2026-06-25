@@ -1,15 +1,37 @@
 ﻿.vue-office-docx {
-    overflow-y: unset !important;
+  overflow-y: unset !important;
+}
+
+.docx-content {
+  overflow-x: hidden;
+}
+
+.docx-content .docx-wrapper {
+  box-sizing: border-box !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  overflow-x: hidden !important;
+  background: #f7f7f5 !important;
+  padding: 16px !important;
+  padding-bottom: 0 !important;
+}
+
+.docx-content .docx-wrapper > section.docx,
+.docx-content section.docx {
+  box-sizing: border-box !important;
+  max-width: 100% !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
 }
 
 .docx-content ins {
-    background: #F4F4F2 !important;
-    color: #2F3437 !important;
-    text-decoration: none !important;
+  background: #f4f4f2 !important;
+  color: #2f3437 !important;
+  text-decoration: none !important;
 }
 
 .docx-content del {
-    background: #F8EBE9 !important;
-    color: #B3261E !important;
-    text-decoration: line-through !important;
+  background: #f8ebe9 !important;
+  color: #b3261e !important;
+  text-decoration: line-through !important;
 }

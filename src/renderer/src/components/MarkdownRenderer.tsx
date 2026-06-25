@@ -65,10 +65,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
                 {String(children).replace(/\n$/, '')}
               </SyntaxHighlighter>
             ) : (
-              <code
-                {...props}
-                className={`markdown-inline-code ${className || ''}`}
-              >
+              <code {...props} className={`markdown-inline-code ${className || ''}`}>
                 {children}
               </code>
             )
@@ -108,7 +105,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
                       resourceType: parsed.resourceType
                     })}
                   </span>
-                  <span>{children}</span>
+                  <span className="min-w-0 break-words [overflow-wrap:anywhere]">{children}</span>
                 </a>
               )
             }
@@ -124,9 +121,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
               </a>
             )
           },
-          blockquote: ({ children }) => (
-            <blockquote>{children}</blockquote>
-          ),
+          blockquote: ({ children }) => <blockquote>{children}</blockquote>,
           table: ({ children }) => (
             <div className="markdown-table-wrap">
               <table>{children}</table>

@@ -1,4 +1,4 @@
-import type { SelectedReference } from '../../../../../shared/types'
+import type { ChatMessageContentNode, SelectedReference } from '../../../../../shared/types'
 import type { ComposerDraftValue, ComposerNode } from './types'
 import { getReferenceKey, pruneReferencesByWorkspace } from '../../../utils/reference'
 import { getReferenceVisualSpec } from './referenceVisuals'
@@ -35,6 +35,8 @@ export const normalizeComposerNodes = (nodes: ComposerNode[]): ComposerNode[] =>
 
 export const extractComposerDraftValue = (nodes: ComposerNode[]): ComposerDraftValue => {
   const scopeMap = new Map<string, SelectedReference>()
+  const seenScopeKeys = new Set<string>()
+  const contentNodes: ChatMessageContentNode[] = []
   const input = nodes
     .filter((node): node is Extract<ComposerNode, { kind: 'text' }> => node.kind === 'text')
     .map((node) => node.text)
@@ -43,12 +45,35 @@ export const extractComposerDraftValue = (nodes: ComposerNode[]): ComposerDraftV
     .trim()
 
   nodes.forEach((node) => {
-    if (node.kind !== 'scope') return
-    scopeMap.set(getScopeKey(node.scope), node.scope)
+    if (node.kind === 'text') {
+      const text = node.text.replace(/\u00a0/g, ' ')
+      if (text) contentNodes.push({ kind: 'text', text })
+      return
+    }
+    const scopeKey = getScopeKey(node.scope)
+    if (seenScopeKeys.has(scopeKey)) return
+    seenScopeKeys.add(scopeKey)
+    scopeMap.set(scopeKey, node.scope)
+    contentNodes.push({ kind: 'reference', reference: node.scope })
   })
+
+  const firstText = contentNodes.find((node) => node.kind === 'text')
+  if (firstText?.kind === 'text') firstText.text = firstText.text.replace(/^\s+/, '')
+  let lastText: ChatMessageContentNode | undefined
+  for (let index = contentNodes.length - 1; index >= 0; index -= 1) {
+    if (contentNodes[index].kind === 'text') {
+      lastText = contentNodes[index]
+      break
+    }
+  }
+  if (lastText?.kind === 'text') lastText.text = lastText.text.replace(/\s+$/, '')
+  const normalizedContentNodes = contentNodes.filter(
+    (node) => node.kind !== 'text' || node.text.length > 0
+  )
 
   return {
     input,
+    contentNodes: normalizedContentNodes,
     selectedReferences: Array.from(scopeMap.values())
   }
 }
@@ -90,7 +115,7 @@ export const readComposerNodesFromEditor = (
 const appendReferenceIcon = (container: HTMLElement, scope: SelectedReference): void => {
   const visualSpec = getReferenceVisualSpec(scope)
   const icon = document.createElement('span')
-  icon.className = `inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center ${visualSpec.iconClassName}`
+  icon.className = `inline-flex h-[1.15em] w-[1.15em] shrink-0 items-center justify-center ${visualSpec.iconClassName}`
   icon.dataset.referenceIconKind = visualSpec.kind
 
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
@@ -99,7 +124,7 @@ const appendReferenceIcon = (container: HTMLElement, scope: SelectedReference): 
     visualSpec.kind === 'directory' || visualSpec.kind === 'web' ? '0 0 24 24' : '0 0 18 18'
   )
   svg.setAttribute('aria-hidden', 'true')
-  svg.setAttribute('class', `h-3.5 w-3.5 ${visualSpec.iconClassName}`)
+  svg.setAttribute('class', `h-[1em] w-[1em] ${visualSpec.iconClassName}`)
 
   if (visualSpec.kind === 'directory' || visualSpec.kind === 'web') {
     svg.setAttribute('fill', 'none')
@@ -172,7 +197,7 @@ const appendReferenceIcon = (container: HTMLElement, scope: SelectedReference): 
 export const createScopeTokenElement = (scope: SelectedReference): HTMLElement => {
   const visualSpec = getReferenceVisualSpec(scope)
   const token = document.createElement('span')
-  token.className = `inline-flex max-w-full items-center gap-1 align-middle text-[13px] font-medium leading-5 ${visualSpec.labelClassName}`
+  token.className = `inline-flex max-w-full items-center gap-1 align-[-0.08em] text-[0.9em] font-medium leading-[inherit] ${visualSpec.labelClassName}`
   token.contentEditable = 'false'
   token.dataset.role = 'scope-token'
   token.dataset.scopeKey = getScopeKey(scope)

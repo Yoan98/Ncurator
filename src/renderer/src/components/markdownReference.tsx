@@ -1,8 +1,5 @@
 import React from 'react'
-import {
-  FileTextOutlined,
-  GlobalOutlined
-} from '@ant-design/icons'
+import { FileTextOutlined, GlobalOutlined } from '@ant-design/icons'
 
 export type ParsedNcuratorRefKind = 'reference' | 'normal'
 export type ParsedNcuratorRefResourceType = 'file' | 'web'
@@ -29,22 +26,27 @@ export const parseRefHref = (href?: string): ParsedRefLink => {
   }
 
   try {
-    const url = new URL(href)
-    const kind = url.searchParams.get('kind')
-    const resourceType = url.searchParams.get('resourceType')
-    const label = url.searchParams.get('label') || ''
-    const path = url.searchParams.get('path') || ''
-    if (
-      (kind !== 'reference' && kind !== 'normal') ||
-      (resourceType !== 'file' && resourceType !== 'web') ||
-      !label ||
-      !path
-    ) {
+    const params = new URLSearchParams(href.slice('ncurator://ref?'.length))
+    const rawKind = params.get('kind')
+    const rawResourceType = params.get('resourceType')
+    const path = params.get('path') || ''
+    if (!path) {
       return {
         type: 'normal',
         href
       }
     }
+    const kind: ParsedNcuratorRefKind =
+      rawKind === 'reference' || rawKind === 'normal' ? rawKind : 'normal'
+    const resourceType: ParsedNcuratorRefResourceType =
+      rawResourceType === 'file' || rawResourceType === 'web'
+        ? rawResourceType
+        : /^https?:\/\//i.test(path)
+          ? 'web'
+          : 'file'
+    const normalizedPath = path.replace(/\\/g, '/')
+    const fallbackLabel = normalizedPath.split('/').filter(Boolean).pop() || normalizedPath || path
+    const label = params.get('label') || fallbackLabel
     return {
       type: 'reference',
       kind,

@@ -11,7 +11,6 @@ import {
   HiOutlinePencilSquare
 } from 'react-icons/hi2'
 import MarkdownRenderer from '../MarkdownRenderer'
-import { FILE_CHANGE_STATUS_META } from './constants'
 import type {
   AssistantArtifactItem,
   AssistantProcessGroup,
@@ -22,10 +21,7 @@ import type {
 } from './types'
 import type { ParsedNcuratorRefKind, ParsedNcuratorRefResourceType } from '../markdownReference'
 import { workbenchSelectors } from '../../testing/selectors'
-import {
-  buildAssistantExecutionSummaryText,
-  resolveAssistantExecutionStatus
-} from './utils'
+import { buildAssistantExecutionSummaryText, resolveAssistantExecutionStatus } from './utils'
 
 type AssistantTurnCardProps = {
   messageId: string
@@ -238,7 +234,9 @@ const AssistantExecutionGroupView: React.FC<{ groups: AssistantProcessGroup[]; i
 }) => {
   const status = resolveAssistantExecutionStatus(groups)
   const isRunning = status === 'running'
-  const items = groups.flatMap((group) => group.items).sort((left, right) => left.createdAt - right.createdAt)
+  const items = groups
+    .flatMap((group) => group.items)
+    .sort((left, right) => left.createdAt - right.createdAt)
   const summaryText = buildAssistantExecutionSummaryText(groups)
   return (
     <details
@@ -286,18 +284,33 @@ const AssistantExecutionGroupView: React.FC<{ groups: AssistantProcessGroup[]; i
 const renderArtifactChip = (
   file: AssistantArtifactItem,
   onOpenFile: (file: AssistantArtifactItem) => void
-): React.ReactNode => (
-  <Tooltip key={`${file.origin}-${file.path}-${file.applyId || ''}`} title={file.path}>
-    <button
-      type="button"
-      onClick={() => onOpenFile(file)}
-      className="ui-hover-lift inline-flex max-w-full items-center gap-2 rounded-full border border-[#EEEEEC] bg-white px-3 py-1.5 text-left text-xs text-[#787774] hover:border-[#37352F] hover:text-[#37352F]"
-    >
-      <HiOutlineDocumentText className="h-3.5 w-3.5 shrink-0" />
-      <span className="truncate">{file.fileName}</span>
-    </button>
-  </Tooltip>
-)
+): React.ReactNode => {
+  const testIdSuffix = (file.applyId || file.path).replace(/[^a-zA-Z0-9_-]/g, '-')
+  return (
+    <Tooltip key={`${file.origin}-${file.path}-${file.applyId || ''}`} title={file.path}>
+      <button
+        type="button"
+        onClick={() => onOpenFile(file)}
+        data-testid={`${workbenchSelectors.assistantTurnArtifactPrefix}-${testIdSuffix}`}
+        className="ui-hover-lift inline-flex max-w-full items-center gap-2 rounded-full border border-[#EEEEEC] bg-white px-3 py-1.5 text-left text-xs text-[#787774] hover:border-[#37352F] hover:text-[#37352F]"
+      >
+        <HiOutlineDocumentText className="h-3.5 w-3.5 shrink-0" />
+        <span className="truncate">{file.fileName}</span>
+      </button>
+    </Tooltip>
+  )
+}
+
+const getCompactSourcePath = (sourcePath?: string): string => {
+  if (!sourcePath) return ''
+  const normalized = sourcePath.replace(/\\/g, '/')
+  const workspaceMarker = '/workspace/'
+  const workspaceIndex = normalized.lastIndexOf(workspaceMarker)
+  if (workspaceIndex >= 0) return normalized.slice(workspaceIndex + workspaceMarker.length)
+  const parts = normalized.split('/').filter(Boolean)
+  if (parts.length <= 2) return normalized
+  return parts.slice(-3).join('/')
+}
 
 const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
   messageId,
@@ -310,6 +323,18 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
   const processThoughts = useMemo(() => turn?.processThoughts || [], [turn?.processThoughts])
   const finalAnswerMarkdown = turn?.finalAnswerMarkdown || ''
   const hasFinalAnswer = finalAnswerMarkdown.trim().length > 0
+  const visibleArtifacts = useMemo(() => {
+    if (!turn) return []
+    const applyIds = new Set(turn.applyTargets.map((target) => target.changeId))
+    const applyPaths = new Set(
+      turn.applyTargets
+        .map((target) => target.sourcePath)
+        .filter((path): path is string => Boolean(path))
+    )
+    return turn.artifacts.filter(
+      (file) => !(file.applyId && applyIds.has(file.applyId)) && !applyPaths.has(file.path)
+    )
+  }, [turn])
   const timeline = useMemo(
     () =>
       buildAssistantTimeline({
@@ -376,7 +401,7 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
             </div>
             <div>
               {turn.applyTargets.map((apply) => {
-                const statusMeta = apply.status ? FILE_CHANGE_STATUS_META[apply.status] : null
+                const compactPath = getCompactSourcePath(apply.sourcePath)
                 return (
                   <button
                     key={apply.changeId}
@@ -385,20 +410,19 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
                     data-testid={`${workbenchSelectors.assistantTurnApplyPrefix}-${apply.changeId}`}
                     className="w-full rounded-[6px] px-3 py-2.5 text-left transition-colors duration-200 hover:bg-[#F7F7F5]"
                   >
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <div className="text-[13px] font-medium text-[#37352F]">{apply.title}</div>
-                        <div className="mt-1 text-xs text-[#787774]">
-                          {apply.changeCount} 处修改
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="truncate text-[13px] font-medium text-[#37352F]">
+                          {apply.title}
                         </div>
+                        {compactPath ? (
+                          <div className="mt-1 truncate text-xs text-[#787774]">{compactPath}</div>
+                        ) : null}
                       </div>
-                      {statusMeta ? (
-                        <span
-                          className={`rounded-full border px-2.5 py-1 text-[11px] ${statusMeta.className}`}
-                        >
-                          {statusMeta.label}
-                        </span>
-                      ) : null}
+                      <span className="inline-flex shrink-0 items-center gap-1 pt-0.5 text-xs font-medium text-[#D14343]">
+                        <HiOutlinePencilSquare className="h-3.5 w-3.5" />
+                        {apply.changeCount}
+                      </span>
                     </div>
                   </button>
                 )
@@ -407,9 +431,9 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
           </div>
         ) : null}
 
-        {turn.artifacts.length > 0 ? (
+        {visibleArtifacts.length > 0 ? (
           <div className="flex flex-wrap gap-2">
-            {turn.artifacts.map((file) => renderArtifactChip(file, onOpenFile))}
+            {visibleArtifacts.map((file) => renderArtifactChip(file, onOpenFile))}
           </div>
         ) : null}
 

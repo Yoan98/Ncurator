@@ -502,12 +502,23 @@ export type AiLlmUsage = {
   rawUsage?: JsonObject
 }
 
+export type ChatMessageContentNode =
+  | {
+      kind: 'text'
+      text: string
+    }
+  | {
+      kind: 'reference'
+      reference: SelectedReference
+    }
+
 export interface ChatMessage {
   id: string
   session_id: string
   role: 'user' | 'assistant' | 'system'
   content: string
   timestamp: number
+  contentNodes?: ChatMessageContentNode[]
   selectedReferences?: SelectedReference[]
   artifacts?: AiArtifactRef[]
   error?: boolean
@@ -784,6 +795,7 @@ export type ChatSubmitRequest = {
   mode: ChatSubmitMode
   sessionId: string
   input: string
+  contentNodes?: ChatMessageContentNode[]
   selectedReferences?: SelectedReference[]
   modelName?: string
   workspace?: WorkspaceRuntimeBinding

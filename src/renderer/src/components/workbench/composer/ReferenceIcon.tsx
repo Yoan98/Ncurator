@@ -4,17 +4,19 @@ import { getReferenceVisualSpec } from './referenceVisuals'
 
 type ReferenceIconProps = {
   reference: SelectedReference
-  size?: 'sm' | 'md'
+  size?: 'sm' | 'md' | 'inline'
 }
 
 const iconSizeClassName = {
   sm: 'h-3.5 w-3.5',
-  md: 'h-4 w-4'
+  md: 'h-4 w-4',
+  inline: 'h-[1em] w-[1em]'
 } as const
 
 const containerSizeClassName = {
   sm: 'h-[18px] w-[18px]',
-  md: 'h-7 w-7'
+  md: 'h-7 w-7',
+  inline: 'h-[1.15em] w-[1.15em]'
 } as const
 
 const DocumentGlyph: React.FC<{

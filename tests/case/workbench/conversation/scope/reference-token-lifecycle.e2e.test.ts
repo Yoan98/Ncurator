@@ -252,6 +252,11 @@ describe('workbench conversation e2e', () => {
             await submitWorkbenchCurrentDraft(page)
             const latestUserMessageReferenceTokens =
               await getWorkbenchLatestUserMessageReferenceTokenTexts(page)
+            const latestUserMessageText = (
+              (await getWorkbenchLocator(page, workbenchSelectors.userMessageReferences)
+                .last()
+                .textContent()) || ''
+            ).trim()
             const latestUserMessageReferenceIconKinds = await getWorkbenchLocator(
               page,
               workbenchSelectors.userMessageReferences
@@ -309,6 +314,7 @@ describe('workbench conversation e2e', () => {
               composerTokenCloseButtonVisible,
               tokensBeforeDelete,
               latestUserMessageReferenceTokens,
+              latestUserMessageText,
               latestUserMessageReferenceIconKinds,
               afterDelete,
               afterWorkspaceSwitch,
@@ -321,7 +327,12 @@ describe('workbench conversation e2e', () => {
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
-            result.afterFile.some((text) => text.includes('sample-edit.docx')) &&
+            result.latestUserMessageText.indexOf('sample-edit.docx') >= 0 &&
+              result.latestUserMessageText.indexOf('工作') >
+                result.latestUserMessageText.indexOf('sample-edit.docx') &&
+              result.latestUserMessageText.indexOf('请用一句话说明这些资料。') >
+                result.latestUserMessageText.indexOf('工作') &&
+              result.afterFile.some((text) => text.includes('sample-edit.docx')) &&
               result.afterDirectory.some((text) => text.includes('工作')) &&
               result.afterWeb.some((text) => text.includes('sample-edit.docx')) &&
               result.afterWeb.some((text) => text.includes('工作')) &&

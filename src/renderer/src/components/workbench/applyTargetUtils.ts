@@ -4,6 +4,7 @@ import type { AssistantTurnApplyTarget } from './types'
 export const buildApplyTarget = (record: AiFileChangeRecord): AssistantTurnApplyTarget => ({
   changeId: record.id,
   title: record.fileName,
+  sourcePath: record.path,
   changeCount: record.changeCount,
   status: record.status
 })
@@ -29,7 +30,17 @@ export const groupApplyTargetsByRunId = (
   return new Map(
     [...grouped.entries()].map(([runId, runRecords]) => [
       runId,
-      runRecords
+      Array.from(
+        runRecords
+          .slice()
+          .sort((left, right) => right.updatedAt - left.updatedAt)
+          .reduce((latestByPath, record) => {
+            const key = record.path || record.id
+            if (!latestByPath.has(key)) latestByPath.set(key, record)
+            return latestByPath
+          }, new Map<string, AiFileChangeRecord>())
+          .values()
+      )
         .slice()
         .sort((left, right) => right.updatedAt - left.updatedAt)
         .map((record) => buildApplyTarget(record))

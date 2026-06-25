@@ -21,6 +21,7 @@ import type {
   AiRunEvent,
   AiRunRecord,
   ChatMessage,
+  ChatMessageContentNode,
   ChatSession,
   ChatSessionRunSnapshot,
   DocxApplyRecord,
@@ -158,6 +159,7 @@ const artifactToApplyTarget = (
   return {
     changeId: artifact.applyId,
     title: artifact.fileName,
+    sourcePath: artifact.path,
     changeCount: 0,
     status: 'applied'
   }
@@ -236,6 +238,7 @@ const reduceAssistantTurnByRunEvent = (
         ? mergeApplyTargets(next.applyTargets, {
             changeId: event.applyId,
             title: event.fileName,
+            sourcePath: event.path,
             changeCount: 0,
             status: 'applied'
           })
@@ -335,14 +338,10 @@ const applyRunRecordToTurn = (
         format: artifact.capability === 'docx' ? ('docx' as const) : undefined
       }))
     ]),
-    applyTargets: [
-      ...turn.applyTargets,
-      ...artifacts
-        .map(artifactToApplyTarget)
-        .filter((target): target is AssistantTurnViewModel['applyTargets'][number] =>
-          Boolean(target)
-        )
-    ],
+    applyTargets: artifacts
+      .map(artifactToApplyTarget)
+      .filter((target): target is AssistantTurnViewModel['applyTargets'][number] => Boolean(target))
+      .reduce((items, target) => mergeApplyTargets(items, target), turn.applyTargets),
     blockers: run.pendingApproval
       ? [
           {
@@ -489,6 +488,7 @@ const ChatPage: React.FC = () => {
   const [loading, setLoading] = useState(false)
   const [aiRunId, setAiRunId] = useState<string | null>(null)
   const [cancellingRun, setCancellingRun] = useState(false)
+  const [composerContentNodes, setComposerContentNodes] = useState<ChatMessageContentNode[]>([])
   const [selectedReferences, setSelectedReferences] = useState<SelectedReference[]>([])
   const [workspaces, setWorkspaces] = useState<WorkspaceSource[]>([])
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(() =>
@@ -1274,6 +1274,7 @@ const ChatPage: React.FC = () => {
       setAiRunId(null)
       setCancellingRun(false)
       setInput('')
+      setComposerContentNodes([])
       setSelectedReferences([])
       setComposerResetKey((value) => value + 1)
       setPendingApprovalBatch(null)
@@ -1638,6 +1639,7 @@ const ChatPage: React.FC = () => {
     }
 
     const userQuery = input.trim()
+    const submittedContentNodes = composerContentNodes
     const submittedReferences = selectedReferences
     const likelyExecutable =
       /\b(cmd|bash|shell|terminal|command|run)\b/i.test(userQuery) ||
@@ -1648,6 +1650,7 @@ const ChatPage: React.FC = () => {
     }
 
     setInput('')
+    setComposerContentNodes([])
     setSelectedReferences([])
     setComposerResetKey((value) => value + 1)
     shouldAutoScrollRef.current = true
@@ -1663,6 +1666,7 @@ const ChatPage: React.FC = () => {
         mode: 'ai',
         sessionId: currentSessionId,
         input: userQuery,
+        contentNodes: submittedContentNodes.length > 0 ? submittedContentNodes : undefined,
         selectedReferences: submittedReferences.length > 0 ? submittedReferences : undefined,
         modelName: selectedModelName,
         workspace: createWorkspaceBinding(selectedWorkspace)
@@ -1708,6 +1712,7 @@ const ChatPage: React.FC = () => {
     }
 
     const userQuery = input.trim()
+    const submittedContentNodes = composerContentNodes
     const submittedReferences = selectedReferences
     const hasStrictScope = selectedReferences.length > 0 || Boolean(selectedWorkspace)
     if (hasStrictScope && kbScopeDocumentIds.length === 0) {
@@ -1716,6 +1721,7 @@ const ChatPage: React.FC = () => {
     }
 
     setInput('')
+    setComposerContentNodes([])
     setSelectedReferences([])
     setComposerResetKey((value) => value + 1)
     shouldAutoScrollRef.current = true
@@ -1731,6 +1737,7 @@ const ChatPage: React.FC = () => {
         mode: 'search',
         sessionId: currentSessionId,
         input: userQuery,
+        contentNodes: submittedContentNodes.length > 0 ? submittedContentNodes : undefined,
         selectedReferences: submittedReferences.length > 0 ? submittedReferences : undefined,
         workspace: createWorkspaceBinding(selectedWorkspace),
         searchDocumentIds: hasStrictScope ? kbScopeDocumentIds : undefined
@@ -2011,29 +2018,39 @@ const ChatPage: React.FC = () => {
   }
 
   const renderUserMessage = (messageItem: ChatMessage): React.ReactNode => {
-    const messageReferences = messageItem.selectedReferences || []
+    const contentNodes: ChatMessageContentNode[] =
+      messageItem.contentNodes && messageItem.contentNodes.length > 0
+        ? messageItem.contentNodes
+        : [
+            ...(messageItem.selectedReferences || []).map(
+              (reference): ChatMessageContentNode => ({ kind: 'reference', reference })
+            ),
+            ...(messageItem.content ? [{ kind: 'text' as const, text: messageItem.content }] : [])
+          ]
     return (
       <div key={messageItem.id} className="flex justify-end">
-        <div className="max-w-[66%]">
-          <div className="rounded-[22px] bg-[#F4F4F2] px-4 py-2.5 text-[14px] leading-6 text-[#37352F]">
-            {messageReferences.length > 0 ? (
-              <div
-                className="mb-1.5 flex flex-wrap gap-1"
-                data-testid={workbenchSelectors.userMessageReferences}
-              >
-                {messageReferences.map((reference) => (
+        <div className="min-w-0 max-w-[66%]">
+          <div className="min-w-0 rounded-[22px] bg-[#F4F4F2] px-4 py-2.5 text-[14px] leading-6 text-[#37352F] [overflow-wrap:anywhere]">
+            <div
+              className="min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere]"
+              data-testid={workbenchSelectors.userMessageReferences}
+            >
+              {contentNodes.map((node, index) =>
+                node.kind === 'reference' ? (
                   <ReferenceInlineToken
                     key={
-                      reference.kind === 'web'
-                        ? `web:${reference.workspaceId}:${reference.webSourceId}`
-                        : `${reference.kind}:${reference.workspaceId}:${reference.nodeId}`
+                      node.reference.kind === 'web'
+                        ? `${index}:web:${node.reference.workspaceId}:${node.reference.webSourceId}`
+                        : `${index}:${node.reference.kind}:${node.reference.workspaceId}:${node.reference.nodeId}`
                     }
-                    reference={reference}
+                    reference={node.reference}
+                    className="mx-[1px]"
                   />
-                ))}
-              </div>
-            ) : null}
-            {messageItem.content}
+                ) : (
+                  <span key={`${index}:text`}>{node.text}</span>
+                )
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -2075,8 +2092,13 @@ const ChatPage: React.FC = () => {
   }
 
   const handleComposerDraftChange = useCallback(
-    (draft: { input: string; selectedReferences: SelectedReference[] }) => {
+    (draft: {
+      input: string
+      contentNodes: ChatMessageContentNode[]
+      selectedReferences: SelectedReference[]
+    }) => {
       setInput(draft.input)
+      setComposerContentNodes(draft.contentNodes)
       setSelectedReferences(draft.selectedReferences)
     },
     []
