@@ -1223,7 +1223,7 @@ export const waitForWorkbenchApplyPanelReady = async (page: Page): Promise<Locat
   const panel = getWorkbenchLocator(page, workbenchSelectors.applyPanel)
   await panel.waitFor({ state: 'visible' })
   await page.waitForFunction(
-    ({ panelTestId, docxViewerTestId }) => {
+    ({ panelTestId, docxViewerTestId, revertButtonTestId }) => {
       const root = document.querySelector(`[data-testid="${panelTestId}"]`)
       if (!(root instanceof HTMLElement)) return false
       const text = root.innerText.trim()
@@ -1231,12 +1231,13 @@ export const waitForWorkbenchApplyPanelReady = async (page: Page): Promise<Locat
       if (text.includes('当前文件暂时不可预览。')) return true
       if (text.includes('当前修改记录没有专用预览稿。')) return true
       if (text.includes('本次 AI 修改已回退。')) return true
-      if (text.includes('回退本次修改')) return true
+      if (root.querySelector(`[data-testid="${revertButtonTestId}"]`)) return true
       return Boolean(root.querySelector(`[data-testid="${docxViewerTestId}"]`))
     },
     {
       panelTestId: workbenchSelectors.applyPanel,
-      docxViewerTestId: workbenchSelectors.docxViewer
+      docxViewerTestId: workbenchSelectors.docxViewer,
+      revertButtonTestId: workbenchSelectors.applyRevertButton
     },
     { timeout: WORKBENCH_LONG_E2E_TIMEOUT_MS }
   )
@@ -1249,14 +1250,23 @@ export const waitForWorkbenchApplyRecordStatus = async (
 ): Promise<Locator> => {
   const panel = getWorkbenchLocator(page, workbenchSelectors.applyPanel)
   await panel.waitFor({ state: 'visible' })
-  const expectedText =
-    status === 'reverted' ? '本次 AI 修改已回退。' : status === 'failed' ? '失败' : '回退本次修改'
+  const expectedText = status === 'reverted' ? '本次 AI 修改已回退。' : '失败'
   await page.waitForFunction(
-    ({ testId, text }) => {
+    ({ testId, text, status, revertButtonTestId }) => {
       const root = document.querySelector(`[data-testid="${testId}"]`)
-      return root instanceof HTMLElement && root.innerText.includes(text)
+      if (!(root instanceof HTMLElement)) return false
+      if (status === 'applied') {
+        const button = root.querySelector(`[data-testid="${revertButtonTestId}"]`)
+        return button instanceof HTMLButtonElement && !button.disabled
+      }
+      return root.innerText.includes(text)
     },
-    { testId: workbenchSelectors.applyPanel, text: expectedText },
+    {
+      testId: workbenchSelectors.applyPanel,
+      text: expectedText,
+      status,
+      revertButtonTestId: workbenchSelectors.applyRevertButton
+    },
     { timeout: WORKBENCH_LONG_E2E_TIMEOUT_MS }
   )
   return panel

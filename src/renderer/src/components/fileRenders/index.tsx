@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from 'react'
+﻿import React, { useEffect, useRef, useState } from 'react'
 import { Empty, Modal, Spin } from 'antd'
 import DocViewer, { DocViewerRenderers } from 'react-doc-viewer'
 import CustomPDFRenderer from './pdf'
@@ -28,8 +28,25 @@ const usePreparedDocuments = (
 ): { documents: LoadedFileRenderDocument[]; loading: boolean } => {
   const [loadedDocuments, setLoadedDocuments] = useState<LoadedFileRenderDocument[]>([])
   const [loading, setLoading] = useState(false)
+  const latestDocumentsRef = useRef(documents)
+  const lastSignatureRef = useRef('')
+  const documentsSignature = documents
+    .map((document) =>
+      [
+        document.filePath,
+        document.fileName,
+        document.metadata ? JSON.stringify(document.metadata) : ''
+      ].join('\u0000')
+    )
+    .join('\u0001')
+
+  if (lastSignatureRef.current !== documentsSignature) {
+    lastSignatureRef.current = documentsSignature
+    latestDocumentsRef.current = documents
+  }
 
   useEffect(() => {
+    const documentsToLoad = latestDocumentsRef.current
     let createdUrls: string[] = []
 
     const cleanupUrls = (): void => {
@@ -37,7 +54,7 @@ const usePreparedDocuments = (
       createdUrls = []
     }
 
-    if (documents.length === 0) {
+    if (documentsToLoad.length === 0) {
       cleanupUrls()
       setLoadedDocuments([])
       setLoading(false)
@@ -52,10 +69,11 @@ const usePreparedDocuments = (
 
       try {
         const preparedDocuments = await Promise.all(
-          documents.map((document) => prepareFileRenderDocument(document, createdUrls))
+          documentsToLoad.map((document) => prepareFileRenderDocument(document, createdUrls))
         )
         const validDocuments = preparedDocuments.filter(
-          (document): document is LoadedFileRenderDocument => document !== null && Boolean(document.uri)
+          (document): document is LoadedFileRenderDocument =>
+            document !== null && Boolean(document.uri)
         )
         if (!cancelled) {
           setLoadedDocuments(validDocuments)
@@ -80,7 +98,7 @@ const usePreparedDocuments = (
       cancelled = true
       cleanupUrls()
     }
-  }, [documents])
+  }, [documentsSignature])
 
   return {
     documents: loadedDocuments,

@@ -39,7 +39,6 @@ import WorkbenchComposer from '../components/workbench/WorkbenchComposer'
 import WorkbenchContentPanel from '../components/workbench/WorkbenchContentPanel'
 import ReferenceInlineToken from '../components/workbench/composer/ReferenceInlineToken'
 import {
-  FILE_CHANGE_STATUS_META,
   FILE_ORIGIN_LABELS,
   WORKBENCH_CONTENT_PANEL_COLLAPSED_STORAGE_KEY,
   WORKBENCH_LEFT_TITLEBAR_COLLAPSED_WIDTH,
@@ -481,6 +480,8 @@ const ChatPage: React.FC = () => {
   const [sessions, setSessions] = useState<ChatSession[]>([])
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
   const [currentMessages, setCurrentMessages] = useState<ChatMessage[]>([])
+  const [deleteConfirmSession, setDeleteConfirmSession] = useState<ChatSession | null>(null)
+  const [deletingSessionIds, setDeletingSessionIds] = useState<Set<string>>(() => new Set())
   const [composerMode, setComposerMode] = useState<WorkbenchMode>(() =>
     readWorkbenchModePreference(window.localStorage)
   )
@@ -695,11 +696,10 @@ const ChatPage: React.FC = () => {
     }
 
     if (contentPanel.kind === 'apply_workspace' && activeApplyRecord) {
-      const statusMeta = FILE_CHANGE_STATUS_META[activeApplyRecord.status]
       return {
         title: activeApplyRecord.source_name || contentPanel.title,
-        badge: statusMeta.label,
-        badgeClassName: statusMeta.className
+        badge: null,
+        badgeClassName: ''
       }
     }
 
@@ -1319,17 +1319,38 @@ const ChatPage: React.FC = () => {
     )
   }, [composerMode])
 
-  const deleteSession = async (event: React.MouseEvent, id: string): Promise<void> => {
+  const requestDeleteSession = (event: React.MouseEvent, session: ChatSession): void => {
     event.stopPropagation()
+    setDeleteConfirmSession(session)
+  }
+
+  const confirmDeleteSession = async (): Promise<void> => {
+    const session = deleteConfirmSession
+    if (!session || deletingSessionIds.has(session.id)) return
+    const id = session.id
+    setDeletingSessionIds((current) => new Set(current).add(id))
     try {
-      await window.api.chatSessionDelete(id)
-      if (currentSessionId === id) {
-        setCurrentSessionId(null)
+      const response = await window.api.chatSessionDelete(id)
+      if (!response.success) {
+        emitErrorMessage(response.error || '删除会话失败')
+        return
       }
-      await loadSessions()
+      const remainingSessions = sessions.filter((item) => item.id !== id)
+      setSessions(remainingSessions)
+      setCurrentSessionId((current) =>
+        current === id ? remainingSessions[0]?.id || null : current
+      )
+      setDeleteConfirmSession(null)
+      void loadSessions()
     } catch (error) {
       console.error(error)
       emitErrorMessage('删除会话失败')
+    } finally {
+      setDeletingSessionIds((current) => {
+        const next = new Set(current)
+        next.delete(id)
+        return next
+      })
     }
   }
 
@@ -1641,12 +1662,42 @@ const ChatPage: React.FC = () => {
     const userQuery = input.trim()
     const submittedContentNodes = composerContentNodes
     const submittedReferences = selectedReferences
+    const optimisticUserMessage: ChatMessage = {
+      id: `local-user-${crypto.randomUUID()}`,
+      session_id: currentSessionId,
+      role: 'user',
+      content: userQuery,
+      timestamp: Date.now(),
+      contentNodes: submittedContentNodes.length > 0 ? submittedContentNodes : undefined,
+      selectedReferences: submittedReferences.length > 0 ? submittedReferences : undefined,
+      error: false
+    }
+    const optimisticAssistantMessage: ChatMessage = {
+      id: `local-assistant-${crypto.randomUUID()}`,
+      session_id: currentSessionId,
+      role: 'assistant',
+      content: '',
+      timestamp: optimisticUserMessage.timestamp + 1,
+      error: false
+    }
     const likelyExecutable =
       /\b(cmd|bash|shell|terminal|command|run)\b/i.test(userQuery) ||
       /终端|命令|脚本|执行|创建文件|删除文件|修改文件/.test(userQuery)
     if (likelyExecutable && !selectedWorkspaceReady) {
       message.warning('该请求可能触发本地执行，请先选择当前工作区，必要时再通过 @ 插入文件或目录')
       return
+    }
+    const removeOptimisticMessages = (messages: ChatMessage[]): ChatMessage[] =>
+      messages.filter(
+        (message) =>
+          message.id !== optimisticUserMessage.id && message.id !== optimisticAssistantMessage.id
+      )
+    const removeOptimisticAssistantTurn = (
+      turns: Record<string, AssistantTurnViewModel>
+    ): Record<string, AssistantTurnViewModel> => {
+      const next = { ...turns }
+      delete next[optimisticAssistantMessage.id]
+      return next
     }
 
     setInput('')
@@ -1660,6 +1711,13 @@ const ChatPage: React.FC = () => {
     setPendingApprovalBatch(null)
     setApprovalSubmitting(false)
     lastSubmittedInputRef.current = userQuery
+    setCurrentMessages((previous) =>
+      appendMessagesDedupe(previous, [optimisticUserMessage, optimisticAssistantMessage])
+    )
+    setAssistantTurns((previous) => ({
+      ...previous,
+      [optimisticAssistantMessage.id]: createAssistantTurn(optimisticAssistantMessage.id)
+    }))
 
     try {
       const response = await window.api.chatSubmit({
@@ -1678,6 +1736,8 @@ const ChatPage: React.FC = () => {
         !response.assistantMessage
       ) {
         setLoading(false)
+        setCurrentMessages(removeOptimisticMessages)
+        setAssistantTurns(removeOptimisticAssistantTurn)
         emitErrorMessage(response.error || '启动失败')
         return
       }
@@ -1686,20 +1746,28 @@ const ChatPage: React.FC = () => {
       activeRunMessageIdsRef.current[run.id] = assistantMessageId
       assistantArtifactsRef.current[assistantMessageId] = []
       setCurrentMessages((previous) =>
-        appendMessagesDedupe(previous, [response.userMessage, response.assistantMessage])
+        appendMessagesDedupe(removeOptimisticMessages(previous), [
+          response.userMessage,
+          response.assistantMessage
+        ])
       )
       setAiRunId(run.id)
-      setAssistantTurns((previous) => ({
-        ...previous,
-        [assistantMessageId]: {
-          ...(previous[assistantMessageId] || createAssistantTurn(assistantMessageId)),
-          runId: run.id
+      setAssistantTurns((previous) => {
+        const next = removeOptimisticAssistantTurn(previous)
+        return {
+          ...next,
+          [assistantMessageId]: {
+            ...(previous[assistantMessageId] || createAssistantTurn(assistantMessageId)),
+            runId: run.id
+          }
         }
-      }))
+      })
       void loadSessions()
     } catch (error) {
       console.error(error)
       setLoading(false)
+      setCurrentMessages(removeOptimisticMessages)
+      setAssistantTurns(removeOptimisticAssistantTurn)
       emitErrorMessage('发送失败')
     }
   }
@@ -1996,27 +2064,6 @@ const ChatPage: React.FC = () => {
     }
   }
 
-  const openPathWithApplicationOrNotify = async (filePath: string): Promise<void> => {
-    try {
-      const picked = await window.api.pickApplication()
-      if (picked.canceled) return
-      if (!picked.appPath) {
-        emitErrorMessage(picked.error || '未选择应用')
-        return
-      }
-      const response = await window.api.openPathWithApplication({
-        filePath,
-        appPath: picked.appPath
-      })
-      if (!response.success) {
-        emitErrorMessage(response.error || '使用指定应用打开失败')
-      }
-    } catch (error) {
-      console.error(error)
-      emitErrorMessage('使用指定应用打开失败')
-    }
-  }
-
   const renderUserMessage = (messageItem: ChatMessage): React.ReactNode => {
     const contentNodes: ChatMessageContentNode[] =
       messageItem.contentNodes && messageItem.contentNodes.length > 0
@@ -2237,11 +2284,12 @@ const ChatPage: React.FC = () => {
                         key={session.id}
                         role="button"
                         tabIndex={0}
+                        data-testid={`${workbenchSelectors.sessionItemPrefix}-${session.id}`}
                         className={`nc-sidebar-item group relative ${
                           currentSessionId === session.id
                             ? 'nc-sidebar-item-active'
                             : 'bg-transparent'
-                        } px-3 py-2`}
+                        } ${deletingSessionIds.has(session.id) ? 'pointer-events-none opacity-60' : ''} px-3 py-2`}
                         onClick={() => selectSession(session)}
                         onKeyDown={(event) => {
                           if (event.key === 'Enter' || event.key === ' ') {
@@ -2263,7 +2311,11 @@ const ChatPage: React.FC = () => {
                             size="small"
                             icon={<HiTrash className="h-3.5 w-3.5" />}
                             className="!absolute !right-1 !top-1/2 !z-10 !h-6 !w-6 !-translate-y-1/2 !rounded-[6px] !p-0 opacity-0 transition-opacity group-hover:opacity-100"
-                            onClick={(event) => void deleteSession(event, session.id)}
+                            loading={deletingSessionIds.has(session.id)}
+                            disabled={deletingSessionIds.has(session.id)}
+                            data-testid={`${workbenchSelectors.sessionDeleteButtonPrefix}-${session.id}`}
+                            onMouseDown={(event) => event.stopPropagation()}
+                            onClick={(event) => requestDeleteSession(event, session)}
                           />
                         </div>
                       </div>
@@ -2638,7 +2690,6 @@ const ChatPage: React.FC = () => {
                 onRevertApply={() => void handleApplyRevert()}
                 onBackToPanelState={showContentPanel}
                 onOpenPath={openPathOrNotify}
-                onOpenWithApplication={openPathWithApplicationOrNotify}
                 onRevealPath={revealPathOrNotify}
               />
             </div>
@@ -2654,6 +2705,37 @@ const ChatPage: React.FC = () => {
           onCancel={() => setApplyForceConfirm(null)}
         >
           <p>{applyForceConfirm?.content}</p>
+        </Modal>
+        <Modal
+          open={Boolean(deleteConfirmSession)}
+          title="删除这个会话？"
+          okText="删除"
+          cancelText="取消"
+          okButtonProps={{
+            danger: true,
+            'data-testid': workbenchSelectors.sessionDeleteConfirmButton
+          }}
+          cancelButtonProps={{
+            'data-testid': workbenchSelectors.sessionDeleteCancelButton
+          }}
+          confirmLoading={Boolean(
+            deleteConfirmSession && deletingSessionIds.has(deleteConfirmSession.id)
+          )}
+          onOk={() => void confirmDeleteSession()}
+          onCancel={() => {
+            if (deleteConfirmSession && deletingSessionIds.has(deleteConfirmSession.id)) return
+            setDeleteConfirmSession(null)
+          }}
+          data-testid={workbenchSelectors.sessionDeleteConfirmModal}
+        >
+          <p className="text-sm leading-6 text-[#787774]">
+            删除后会清掉这条会话里的消息、记忆和恢复进度。这个操作不能撤回。
+          </p>
+          {deleteConfirmSession ? (
+            <div className="mt-3 rounded-[6px] border border-[#EEEEEC] bg-[#F7F7F5] px-3 py-2 text-sm font-medium text-[#37352F]">
+              {deleteConfirmSession.title || '未命名会话'}
+            </div>
+          ) : null}
         </Modal>
       </div>
     </div>

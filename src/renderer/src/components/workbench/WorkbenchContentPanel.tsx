@@ -29,7 +29,6 @@ type WorkbenchContentPanelProps = {
   onRevertApply: () => void
   onBackToPanelState: (state: WorkbenchContentPanelState) => void
   onOpenPath: (filePath: string) => Promise<void>
-  onOpenWithApplication: (filePath: string) => Promise<void>
   onRevealPath: (filePath: string) => Promise<void>
 }
 
@@ -153,24 +152,24 @@ const WorkbenchSearchResultsPanel: React.FC<{
                   ) : (
                     <>
                       <Tooltip title="预览文件">
-                          <Button
-                            type="text"
-                            size="small"
-                            aria-label="预览文件"
-                            icon={<HiEye className="h-4 w-4" />}
-                            onClick={(event) => {
+                        <Button
+                          type="text"
+                          size="small"
+                          aria-label="预览文件"
+                          icon={<HiEye className="h-4 w-4" />}
+                          onClick={(event) => {
                             event.stopPropagation()
                             void onOpenSearchResult(turnSnapshot, index)
                           }}
                         />
                       </Tooltip>
                       <Tooltip title="定位文件">
-                          <Button
-                            type="text"
-                            size="small"
-                            aria-label="定位文件"
-                            disabled={!resultPath}
-                            icon={<HiMapPin className="h-4 w-4" />}
+                        <Button
+                          type="text"
+                          size="small"
+                          aria-label="定位文件"
+                          disabled={!resultPath}
+                          icon={<HiMapPin className="h-4 w-4" />}
                           onClick={(event) => {
                             event.stopPropagation()
                             if (!resultPath) return
@@ -204,7 +203,7 @@ const WorkbenchFilePreviewPanel: React.FC<{
         metadata: state.file.pageNumber ? { pageNumber: state.file.pageNumber } : undefined
       }
     ],
-    [state.file]
+    [state.file.fileName, state.file.pageNumber, state.file.path]
   )
 
   return (
@@ -212,12 +211,12 @@ const WorkbenchFilePreviewPanel: React.FC<{
       <div className="flex shrink-0 items-center gap-3 border-b border-[#EEEEEC] bg-white px-4 py-3">
         {state.backTarget ? (
           <Tooltip title="返回">
-              <Button
-                type="text"
-                size="small"
-                aria-label="返回"
-                icon={<HiArrowLeft className="h-4 w-4" />}
-                onClick={() => onBackToPanelState(state.backTarget!)}
+            <Button
+              type="text"
+              size="small"
+              aria-label="返回"
+              icon={<HiArrowLeft className="h-4 w-4" />}
+              onClick={() => onBackToPanelState(state.backTarget!)}
             />
           </Tooltip>
         ) : null}
@@ -250,10 +249,7 @@ const WorkbenchFilePreviewPanel: React.FC<{
           />
         </div>
       </div>
-      <div
-        className="min-h-0 flex-1 bg-white"
-        data-testid={workbenchSelectors.documentView}
-      >
+      <div className="min-h-0 flex-1 bg-white" data-testid={workbenchSelectors.documentView}>
         <FileRenderViewer documents={previewDocuments} framed={false} />
       </div>
     </div>
@@ -270,7 +266,6 @@ const WorkbenchContentPanel: React.FC<WorkbenchContentPanelProps> = ({
   onRevertApply,
   onBackToPanelState,
   onOpenPath,
-  onOpenWithApplication,
   onRevealPath
 }) => (
   <aside
@@ -304,7 +299,6 @@ const WorkbenchContentPanel: React.FC<WorkbenchContentPanelProps> = ({
           onSelectTab={onSelectApplyTab}
           onRevert={onRevertApply}
           onOpenPath={onOpenPath}
-          onOpenWithApplication={onOpenWithApplication}
           onRevealPath={onRevealPath}
         />
       ) : null}

@@ -697,12 +697,9 @@ const upsertGroupFromDisplayEvent = (
     sourceEventType: AssistantProcessGroup['sourceEventType']
   }
 ): AssistantProcessGroup[] => {
-  const currentWithoutLocalThinking =
-    input.display.kind === 'thinking'
-      ? current.filter(
-          (group) => !(group.kind === 'thinking' && group.sourceEventType === 'thinking')
-        )
-      : current
+  const currentWithoutLocalThinking = current.filter(
+    (group) => !(group.kind === 'thinking' && group.sourceEventType === 'thinking')
+  )
   const existing = currentWithoutLocalThinking.find((group) => group.id === input.groupId)
   const next = createDisplayProcessGroup({
     groupId: input.groupId,
@@ -751,10 +748,13 @@ const upsertProcessItem = (
     sourceEventType: AssistantProcessGroupItem['sourceEventType']
   }
 ): AssistantProcessGroup[] => {
-  const existingGroup = current.find((group) => group.id === input.groupId)
+  const currentWithoutLocalThinking = current.filter(
+    (group) => !(group.kind === 'thinking' && group.sourceEventType === 'thinking')
+  )
+  const existingGroup = currentWithoutLocalThinking.find((group) => group.id === input.groupId)
   const groupsWithParent = existingGroup
-    ? current
-    : upsertGroupFromDisplayEvent(current, {
+    ? currentWithoutLocalThinking
+    : upsertGroupFromDisplayEvent(currentWithoutLocalThinking, {
         groupId: input.groupId,
         kind: input.display.kind === 'tool' ? 'skill' : input.display.kind,
         display: input.display,
@@ -818,8 +818,7 @@ export const reduceAssistantProcessGroups = (
   event: AiRunEvent
 ): AssistantProcessGroup[] => {
   if (event.type === 'assistant_process_thought') {
-    if (!event.text.trim()) return current
-    return current.filter((group) => group.kind !== 'thinking')
+    return current
   }
 
   if (event.type === 'assistant_process_group_started') {

@@ -10,6 +10,7 @@ import {
   insertWorkbenchReferenceToken,
   navigateToWorkbench,
   selectWorkbenchWorkspace,
+  setWorkbenchInput,
   submitWorkbenchCurrentDraft,
   switchWorkbenchMode,
   waitForWorkbenchSearchResults,
@@ -22,7 +23,9 @@ import {
 
 const CASE_ID = 'file-preview-actions'
 
-const setupPreviewWorkspace = async (page: Page): Promise<{
+const setupPreviewWorkspace = async (
+  page: Page
+): Promise<{
   workspaceName: string
   cleanup: () => Promise<void>
 }> => {
@@ -110,6 +113,44 @@ const waitForPlainTextPreview = async (page: Page): Promise<boolean> => {
   return text.includes('Hello from human fixture.') && text.includes('workspace read validation')
 }
 
+const verifyDocxPreviewStaysMountedWhileTyping = async (page: Page): Promise<boolean> => {
+  await page.evaluate((testId) => {
+    const target = window as unknown as {
+      __workbenchDocxViewerRemoved?: boolean
+      __workbenchDocxViewerObserver?: MutationObserver
+    }
+    target.__workbenchDocxViewerRemoved = false
+    target.__workbenchDocxViewerObserver?.disconnect()
+    target.__workbenchDocxViewerObserver = new MutationObserver(() => {
+      if (!document.querySelector(`[data-testid="${testId}"]`)) {
+        target.__workbenchDocxViewerRemoved = true
+      }
+    })
+    target.__workbenchDocxViewerObserver.observe(document.body, {
+      childList: true,
+      subtree: true
+    })
+  }, workbenchSelectors.docxViewer)
+
+  await getWorkbenchLocator(page, workbenchSelectors.input).click()
+  await page.keyboard.type(' preview stability', { delay: 20 })
+  await page.waitForTimeout(500)
+
+  const viewerWasRemoved = await page.evaluate(() => {
+    const target = window as unknown as {
+      __workbenchDocxViewerRemoved?: boolean
+      __workbenchDocxViewerObserver?: MutationObserver
+    }
+    target.__workbenchDocxViewerObserver?.disconnect()
+    return Boolean(target.__workbenchDocxViewerRemoved)
+  })
+  const viewerStillVisible = await getWorkbenchLocator(page, workbenchSelectors.docxViewer)
+    .isVisible()
+    .catch(() => false)
+  await setWorkbenchInput(page, '')
+  return !viewerWasRemoved && viewerStillVisible
+}
+
 describe('workbench result e2e', () => {
   it(
     CASE_ID,
@@ -144,13 +185,12 @@ describe('workbench result e2e', () => {
             await submitWorkbenchCurrentDraft(page)
             const docxResults = await waitForWorkbenchSearchResults(page)
             await openSearchPreview(page, docxResults, '深度学习.docx')
-            const docxViewerVisible = await getWorkbenchLocator(
-              page,
-              workbenchSelectors.docxViewer
-            )
+            const docxViewerVisible = await getWorkbenchLocator(page, workbenchSelectors.docxViewer)
               .waitFor({ state: 'visible', timeout: 30_000 })
               .then(() => true)
               .catch(() => false)
+            const docxPreviewStableWhileTyping =
+              await verifyDocxPreviewStaysMountedWhileTyping(page)
             await page.getByRole('button', { name: '系统默认打开' }).last().click()
 
             await switchWorkbenchMode(page, '没头脑')
@@ -173,6 +213,7 @@ describe('workbench result e2e', () => {
             return {
               pdfPageVisible,
               docxViewerVisible,
+              docxPreviewStableWhileTyping,
               markdownPreviewVisible,
               plainTextPreviewVisible,
               revealPathCalls: signals.ipcInvokeEntries.filter(
@@ -187,6 +228,7 @@ describe('workbench result e2e', () => {
           await runtime.assertThat(
             result.pdfPageVisible &&
               result.docxViewerVisible &&
+              result.docxPreviewStableWhileTyping &&
               result.markdownPreviewVisible &&
               result.plainTextPreviewVisible &&
               result.revealPathCalls >= 1,

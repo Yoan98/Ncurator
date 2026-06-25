@@ -584,9 +584,32 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     0,
     Math.min(100, Math.round((contextUsage?.ratio || 0) * 100))
   )
+  const contextUsageRemainingPercent = Math.max(0, 100 - contextUsagePercent)
+  const contextUsageVisiblePercent = contextUsage
+    ? Math.max(contextUsage.usedContextTokens > 0 ? 1 : 0, contextUsagePercent)
+    : 0
+  const contextUsageRemainingTokens = contextUsage
+    ? Math.max(0, contextUsage.contextWindowTokens - contextUsage.usedContextTokens)
+    : 0
+  const contextUsageStroke =
+    contextUsagePercent >= 90 ? '#B3261E' : contextUsagePercent >= 70 ? '#B26A00' : '#787774'
   const contextUsageTitle = contextUsage
-    ? `当前上下文约 ${contextUsage.usedContextTokens.toLocaleString()} / ${contextUsage.contextWindowTokens.toLocaleString()} tokens`
+    ? `已用 ${contextUsagePercent}% · 剩余 ${contextUsageRemainingPercent}%`
     : '暂无上下文用量'
+  const contextUsageTooltip = contextUsage ? (
+    <div className="space-y-1 text-xs leading-5">
+      <div className="font-medium text-[#37352F]">上下文用量</div>
+      <div>已用 {contextUsagePercent}%</div>
+      <div>剩余 {contextUsageRemainingPercent}%</div>
+      <div className="text-[#787774]">
+        {contextUsage.usedContextTokens.toLocaleString()} /{' '}
+        {contextUsage.contextWindowTokens.toLocaleString()} tokens，剩余{' '}
+        {contextUsageRemainingTokens.toLocaleString()} tokens
+      </div>
+    </div>
+  ) : (
+    '暂无上下文用量'
+  )
   const modeOptions = useMemo<WorkbenchSelectOption[]>(
     () => [
       {
@@ -717,26 +740,46 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
           </div>
 
           <div className="flex min-w-0 items-center gap-2">
-            <div
-              className="workbench-context-ring relative inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full"
-              aria-label={contextUsageTitle}
-              title={contextUsageTitle}
+            <Tooltip
+              title={contextUsageTooltip}
+              color="#FFFFFF"
+              overlayInnerStyle={{
+                color: '#37352F',
+                border: '1px solid #E0DFDC',
+                boxShadow: '0 10px 28px rgba(15, 15, 15, 0.12)'
+              }}
             >
-              <svg className="h-4 w-4 -rotate-90" viewBox="0 0 16 16">
-                <circle cx="8" cy="8" r="6.5" fill="none" stroke="#EEEEEC" strokeWidth="1.5" />
-                <circle
-                  cx="8"
-                  cy="8"
-                  r="6.5"
-                  fill="none"
-                  stroke="#91918E"
-                  strokeWidth="1.5"
-                  strokeDasharray={`${2 * Math.PI * 6.5}`}
-                  strokeDashoffset={`${2 * Math.PI * 6.5 * (1 - contextUsagePercent / 100)}`}
-                  strokeLinecap="round"
-                />
-              </svg>
-            </div>
+              <div
+                className="workbench-context-ring relative inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full"
+                aria-label={contextUsageTitle}
+                title={contextUsageTitle}
+                data-testid={workbenchSelectors.contextRing}
+              >
+                <svg className="h-4 w-4 -rotate-90" viewBox="0 0 16 16">
+                  <circle
+                    className="workbench-context-ring-track"
+                    cx="8"
+                    cy="8"
+                    r="6.5"
+                    fill="none"
+                    stroke="#E8E7E4"
+                    strokeWidth="1.5"
+                  />
+                  <circle
+                    className="workbench-context-ring-progress"
+                    cx="8"
+                    cy="8"
+                    r="6.5"
+                    fill="none"
+                    stroke={contextUsageStroke}
+                    strokeWidth="1.5"
+                    strokeDasharray={`${2 * Math.PI * 6.5}`}
+                    strokeDashoffset={`${2 * Math.PI * 6.5 * (1 - contextUsageVisiblePercent / 100)}`}
+                    strokeLinecap="round"
+                  />
+                </svg>
+              </div>
+            </Tooltip>
 
             <WorkbenchSelect
               value={selectedModelName}

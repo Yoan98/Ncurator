@@ -852,6 +852,17 @@ textarea,
   z-index: 1;
 }
 
+.workbench-context-ring-track,
+.workbench-context-ring-progress {
+  transition:
+    stroke-dashoffset 260ms ease,
+    stroke 160ms ease;
+}
+
+.workbench-context-ring:hover .workbench-context-ring-progress {
+  stroke-width: 2;
+}
+
 .nc-page {
   @apply h-screen overflow-hidden bg-white;
 }

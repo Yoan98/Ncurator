@@ -395,9 +395,18 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
         ) : null}
 
         {turn.applyTargets.length > 0 ? (
-          <div className="border-y border-[#EEEEEC] bg-white py-2">
-            <div className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-[#787774]">
-              修改的文件
+          <div className="overflow-hidden rounded-[8px] border border-[#E5E4E0] bg-white">
+            <div className="flex items-center gap-3 border-b border-[#EEEEEC] px-3.5 py-3">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[6px] bg-[#F4F4F2] text-[#787774]">
+                <HiOutlineDocumentText className="h-4 w-4" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-[14px] font-semibold text-[#37352F]">修改的文件</div>
+                <div className="mt-0.5 text-xs text-[#787774]">点击文件查看本次修改</div>
+              </div>
+              <div className="ml-auto shrink-0 text-sm font-semibold tabular-nums text-[#37352F]">
+                {turn.applyTargets.length} 个
+              </div>
             </div>
             <div>
               {turn.applyTargets.map((apply) => {
@@ -408,7 +417,7 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
                     type="button"
                     onClick={() => onOpenApply(apply.changeId)}
                     data-testid={`${workbenchSelectors.assistantTurnApplyPrefix}-${apply.changeId}`}
-                    className="w-full rounded-[6px] px-3 py-2.5 text-left transition-colors duration-200 hover:bg-[#F7F7F5]"
+                    className="w-full border-b border-[#F1F0ED] px-3.5 py-2.5 text-left transition-colors duration-200 last:border-b-0 hover:bg-[#F7F7F5]"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
@@ -419,9 +428,8 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
                           <div className="mt-1 truncate text-xs text-[#787774]">{compactPath}</div>
                         ) : null}
                       </div>
-                      <span className="inline-flex shrink-0 items-center gap-1 pt-0.5 text-xs font-medium text-[#D14343]">
-                        <HiOutlinePencilSquare className="h-3.5 w-3.5" />
-                        {apply.changeCount}
+                      <span className="shrink-0 pt-0.5 text-xs font-medium tabular-nums text-[#787774]">
+                        修改 {apply.changeCount} 处
                       </span>
                     </div>
                   </button>

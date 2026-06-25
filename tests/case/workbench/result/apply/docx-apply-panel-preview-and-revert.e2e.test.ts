@@ -66,6 +66,24 @@ describe('workbench result e2e', () => {
             const applyPanelText = (
               (await getWorkbenchLocator(page, workbenchSelectors.applyPanel).textContent()) || ''
             ).trim()
+            const openSystemButtonVisible = await getWorkbenchLocator(
+              page,
+              workbenchSelectors.applyOpenSystemButton
+            )
+              .isVisible()
+              .catch(() => false)
+            const revealButtonVisible = await getWorkbenchLocator(
+              page,
+              workbenchSelectors.applyRevealButton
+            )
+              .isVisible()
+              .catch(() => false)
+            const revertButtonVisible = await getWorkbenchLocator(
+              page,
+              workbenchSelectors.applyRevertButton
+            )
+              .isVisible()
+              .catch(() => false)
             const docxViewerVisible = await getWorkbenchLocator(page, workbenchSelectors.docxViewer)
               .isVisible()
               .catch(() => false)
@@ -96,6 +114,9 @@ describe('workbench result e2e', () => {
               applyEntryText,
               artifactChipCount,
               applyPanelText,
+              openSystemButtonVisible,
+              revealButtonVisible,
+              revertButtonVisible,
               revertedPanelText,
               docxViewerVisible,
               docxViewerNoHorizontalOverflow,
@@ -114,7 +135,12 @@ describe('workbench result e2e', () => {
               result.applyEntryText.includes('sample-edit.docx') &&
               !result.applyEntryText.includes('已修改') &&
               result.artifactChipCount === 0 &&
-              result.applyPanelText.includes('回退本次修改') &&
+              !result.applyPanelText.includes('已修改') &&
+              !result.applyPanelText.includes('其他应用') &&
+              !result.applyPanelText.includes('处修改') &&
+              result.openSystemButtonVisible &&
+              result.revealButtonVisible &&
+              result.revertButtonVisible &&
               result.revertedPanelText.includes('已回退') &&
               result.docxViewerVisible &&
               result.docxViewerNoHorizontalOverflow &&
