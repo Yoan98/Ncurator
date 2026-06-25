@@ -8,12 +8,14 @@ import type {
   AiContextUsageRequest,
   AiContextUsageResponse,
   AiRunEvent,
-  AiRunStartRequest,
-  AiRunStartResponse,
   AppUpdateActionResponse,
   AppUpdateSnapshot,
   ChatMessage,
   ChatSession,
+  ChatSessionSnapshotRequest,
+  ChatSessionSnapshotResponse,
+  ChatSubmitRequest,
+  ChatSubmitResponse,
   ChunkListResponse,
   CreateWorkspaceSourceRequest,
   DeleteWebSourceRequest,
@@ -200,7 +202,10 @@ export type DesktopApi = {
   chatSessionSave: (session: ChatSession) => Promise<{ success: boolean; error?: string }>
   chatSessionDelete: (id: string) => Promise<{ success: boolean; error?: string }>
   chatMessageList: (sessionId: string) => Promise<ChatMessage[]>
-  chatMessageSave: (message: ChatMessage) => Promise<{ success: boolean; error?: string }>
+  chatSessionSnapshotGet: (
+    payload: ChatSessionSnapshotRequest
+  ) => Promise<ChatSessionSnapshotResponse>
+  chatSubmit: (payload: ChatSubmitRequest) => Promise<ChatSubmitResponse>
   llmConfigList: () => Promise<LLMConfig[]>
   llmConfigSave: (config: LLMConfig) => Promise<{ success: boolean; error?: string }>
   llmConfigDelete: (id: string) => Promise<{ success: boolean; error?: string }>
@@ -212,7 +217,6 @@ export type DesktopApi = {
   aiRuntimeSettingsSave: (
     settings: AiRuntimeSettings
   ) => Promise<{ success: boolean; error?: string }>
-  aiRunStart: (payload: AiRunStartRequest) => Promise<AiRunStartResponse>
   aiRunCancel: (runId: string) => Promise<AiRunCancelResponse>
   aiRunApprovalBatchDecide: (
     payload: AiRunApprovalBatchDecisionRequest
@@ -239,6 +243,5 @@ export type DesktopApi = {
   openPathWithApplication: (
     payload: OpenPathWithApplicationRequest
   ) => Promise<OpenPathWithApplicationResponse>
-  onAiRunEvent: (cb: (event: AiRunEvent) => void) => void
-  removeAiRunEventListeners: () => void
+  onAiRunEvent: (cb: (event: AiRunEvent) => void) => () => void
 }

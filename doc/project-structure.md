@@ -36,6 +36,7 @@ tests/                   # 自动化测试
 ### AI 目录
 
 - AI 运行入口与中性基础设施放在 `src/main/services/ai/*` 根目录。
+- `ChatRunService` 负责 Workbench 对话提交、assistant 占位消息、AI run 持久化、事件投影、取消与审批接管；Human graph 只作为单次任务执行器。
 - run state 与 run 级收口逻辑放在 `src/main/services/ai/run/**`。
 - 会话记忆更新逻辑与记忆 prompt 放在 `src/main/services/ai/memory/**`。
 - AI 级别通用 helper 放在 `src/main/services/ai/utils/**`。

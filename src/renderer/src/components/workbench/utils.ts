@@ -513,8 +513,7 @@ const mergeProcessGroup = (
   groups: AssistantProcessGroup[],
   groupId: string,
   mapper: (group: AssistantProcessGroup) => AssistantProcessGroup
-): AssistantProcessGroup[] =>
-  groups.map((group) => (group.id === groupId ? mapper(group) : group))
+): AssistantProcessGroup[] => groups.map((group) => (group.id === groupId ? mapper(group) : group))
 
 const createDisplayProcessGroup = (input: {
   groupId: string
@@ -732,7 +731,8 @@ const completeProcessGroupById = (
         : group.items
     return {
       ...group,
-      status: status === 'completed' && nextItems.length > 0 ? resolveGroupStatus(nextItems) : status,
+      status:
+        status === 'completed' && nextItems.length > 0 ? resolveGroupStatus(nextItems) : status,
       runningText: display ? getDisplayGroupText(display, 'running') : group.runningText,
       completedText: display ? getDisplayGroupText(display, 'completed') : group.completedText,
       failedText: display ? getDisplayGroupText(display, 'failed') : group.failedText,
@@ -1062,6 +1062,9 @@ export const resolveWorkbenchModelSelection = (input: {
     preferredModelName !== defaultModelName &&
     models.some((model) => model.id === defaultModelName)
   ) {
+    return defaultModelName
+  }
+  if (defaultModelName && models.length === 0) {
     return defaultModelName
   }
   return models[0]?.id || null

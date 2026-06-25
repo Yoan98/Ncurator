@@ -9,20 +9,16 @@ import { StorageService } from '../services/storage/StorageService'
 import { ModelService } from '../services/model/ModelService'
 import { VectorModelDownloadService } from '../services/model/VectorModelDownloadService'
 import { fetchLlmRemoteModels } from '../services/llm/modelCatalog'
-import { AiRunService } from '../services/ai/AiRunService'
+import { ChatRunService } from '../services/ai/ChatRunService'
 import { AiFileChangeService } from '../services/ai/fileChanges/AiFileChangeService'
-import { emitThinkingStarted } from '../services/ai/events/processEvents'
-import { updateConversationMemoryAfterRun } from '../services/ai/memory'
 import { getAiContextUsage } from '../services/ai/contextUsage'
 import { DocxApplyService } from '../services/ai/human/tools/docx/review/DocxApplyService'
-import { releaseDocxRunSession } from '../services/ai/human/tools/docx/worker/docxWorkerClient'
 import type { AiLlmIoRecord } from '../../shared/types'
 import {
   buildWebReferenceItem,
   buildWorkspaceReferenceItems,
   referenceMatchesQuery
 } from '../services/sourceScope/selection'
-import { validateSelectedReferencesForRun } from '../services/sourceScope/validation'
 import { WorkspaceSourceService } from '../services/workspace/WorkspaceSourceService'
 import { WorkspaceKnowledgePrepareService } from '../services/workspace/WorkspaceKnowledgePrepareService'
 import { createWorkspaceKnowledgeCache } from '../services/workspace/WorkspaceKnowledgeCache'
@@ -35,13 +31,13 @@ import type {
   DocumentListResponse,
   ChunkListResponse,
   ChatSession,
-  ChatMessage,
+  ChatSessionSnapshotRequest,
+  ChatSessionSnapshotResponse,
+  ChatSubmitRequest,
+  ChatSubmitResponse,
   AiRuntimeSettings,
   LLMConfig,
   LlmModelListResponse,
-  AiRunEvent,
-  AiRunStartRequest,
-  AiRunStartResponse,
   AiRunCancelResponse,
   AiRunApprovalBatchDecisionRequest,
   AiRunApprovalBatchDecisionResponse,
@@ -99,77 +95,6 @@ const execFileAsync = promisify(execFile)
 const getErrorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error)
 
-const toTrimmedStringList = (values: string[] | undefined): string[] =>
-  Array.isArray(values) ? values.map((value) => String(value).trim()).filter(Boolean) : []
-
-const normalizeKbAvailability = (value: string | undefined): SelectedReference['kbAvailability'] =>
-  value === 'indexed' || value === 'partial' || value === 'not_indexed' ? value : 'not_indexed'
-
-const normalizeSelectedReferences = (
-  references: AiRunStartRequest['selectedReferences']
-): SelectedReference[] | undefined => {
-  if (!Array.isArray(references)) return undefined
-
-  const normalized = references
-    .map((reference) => {
-      if (reference.kind === 'web') {
-        return {
-          kind: 'web' as const,
-          workspaceId: String(reference.workspaceId || '').trim(),
-          webSourceId: String(reference.webSourceId || '').trim(),
-          name: String(reference.name || '').trim(),
-          url: String(reference.url || '').trim(),
-          kbDocumentIds: toTrimmedStringList(reference.kbDocumentIds),
-          kbAvailability: normalizeKbAvailability(reference.kbAvailability)
-        }
-      }
-
-      if (reference.kind === 'directory') {
-        return {
-          kind: 'directory' as const,
-          workspaceId: String(reference.workspaceId || '').trim(),
-          nodeId: String(reference.nodeId || '').trim(),
-          name: String(reference.name || '').trim(),
-          relativePath: String(reference.relativePath || '').trim(),
-          absolutePath: String(reference.absolutePath || '').trim(),
-          kbDocumentIds: toTrimmedStringList(reference.kbDocumentIds),
-          kbAvailability: normalizeKbAvailability(reference.kbAvailability),
-          indexedFileCount: Math.max(0, Number(reference.indexedFileCount || 0)),
-          notIndexedFileCount: Math.max(0, Number(reference.notIndexedFileCount || 0))
-        }
-      }
-
-      return {
-        kind: 'file' as const,
-        workspaceId: String(reference.workspaceId || '').trim(),
-        nodeId: String(reference.nodeId || '').trim(),
-        name: String(reference.name || '').trim(),
-        relativePath: String(reference.relativePath || '').trim(),
-        absolutePath: String(reference.absolutePath || '').trim(),
-        fileExt: reference.fileExt ? String(reference.fileExt).trim() : undefined,
-        kbDocumentIds: toTrimmedStringList(reference.kbDocumentIds),
-        kbAvailability: normalizeKbAvailability(reference.kbAvailability)
-      }
-    })
-    .filter((reference) => {
-      if (reference.kind === 'web') {
-        return Boolean(
-          reference.workspaceId && reference.webSourceId && reference.name && reference.url
-        )
-      }
-
-      return Boolean(
-        reference.workspaceId &&
-        reference.nodeId &&
-        reference.name &&
-        reference.relativePath &&
-        reference.absolutePath
-      )
-    })
-
-  return normalized.length > 0 ? normalized : undefined
-}
-
 const normalizeReferenceKindFilters = (
   referenceKinds: ListReferenceItemsRequest['referenceKinds']
 ): Set<SelectedReference['kind']> | null => {
@@ -202,33 +127,10 @@ export function registerHandlers(services: {
     browserEmbedService,
     webCrawlerService
   } = services
-  const activeAiRuns = new Map<
-    string,
-    { cancelled: boolean; senderId: number; abortController: AbortController }
-  >()
   const activeWorkspaceIndexJobs = new Set<string>()
-  const activeAiApprovals = new Map<
-    string,
-    {
-      batchId: string
-      taskId: string
-      itemIds: string[]
-      resolve: (
-        result:
-          | {
-              accepted: true
-              decisions: Array<{
-                itemId: string
-                action: 'approve' | 'reject' | 'guide'
-                message?: string
-              }>
-            }
-          | { accepted: false; error: string }
-      ) => void
-    }
-  >()
   const documentsStore = storageService.documents
   const chatStore = storageService.chat
+  const aiRunStore = storageService.aiRun
   const llmStore = storageService.llm
   const aiRuntimeSettingsStore = storageService.aiRuntimeSettings
   const webSourceStore = storageService.webSource
@@ -236,6 +138,30 @@ export function registerHandlers(services: {
   const workspaceIndexJobStore = storageService.workspaceIndexJob
   const aiFileChangeService = new AiFileChangeService(storageService.aiFileChange)
   const docxApplyService = new DocxApplyService(storageService.docxApply, aiFileChangeService)
+  const chatRunService = new ChatRunService({
+    chatStore,
+    aiRunStore,
+    documentsStore,
+    embeddingService,
+    llmStore,
+    aiRuntimeSettingsStore,
+    workspaceStore,
+    webSourceStore,
+    ensureEmbeddingReady: async () => {
+      await ensureEmbeddingReady({
+        embeddingService,
+        modelService
+      })
+    },
+    docxApplyService,
+    aiFileChangeService,
+    browserUseService: browserEmbedService,
+    webCrawlerService,
+    recordLlmIo: services.recordLlmIo
+  })
+  void chatRunService.failInterruptedRuns().catch((error) => {
+    console.error('[CHAT-RUN] Failed to mark interrupted runs:', error)
+  })
   const workspaceService = new WorkspaceSourceService()
   const workspaceKnowledgePrepareService = new WorkspaceKnowledgePrepareService({
     embeddingService,
@@ -2222,227 +2148,8 @@ export function registerHandlers(services: {
     return embeddingService.getStatus()
   })
 
-  ipcMain.handle(
-    'ai-run-start',
-    async (event, payload: AiRunStartRequest): Promise<AiRunStartResponse> => {
-      const sessionId = String(payload?.sessionId || '').trim()
-      const input = String(payload?.input || '').trim()
-      const modelName = payload?.modelName ? String(payload.modelName).trim() : undefined
-      const selectedReferences = normalizeSelectedReferences(payload?.selectedReferences)
-      const workspace =
-        payload?.workspace &&
-        String(payload.workspace.workspaceId || '').trim() &&
-        String(payload.workspace.workspaceName || '').trim() &&
-        String(payload.workspace.rootPath || '').trim()
-          ? {
-              workspaceId: String(payload.workspace.workspaceId).trim(),
-              workspaceName: String(payload.workspace.workspaceName).trim(),
-              rootPath: String(payload.workspace.rootPath).trim(),
-              policyProfile: payload.workspace.policyProfile
-                ? String(payload.workspace.policyProfile)
-                : undefined
-            }
-          : undefined
-      if (!sessionId) return { success: false, error: 'sessionId is required' }
-      if (!input) return { success: false, error: 'input is required' }
-
-      const runId = uuidv4()
-      activeAiRuns.set(runId, {
-        cancelled: false,
-        senderId: event.sender.id,
-        abortController: new AbortController()
-      })
-
-      const sendEvent = (evt: AiRunEvent) => {
-        if (event.sender.isDestroyed()) return
-        event.sender.send('ai-run-event', evt)
-      }
-
-      const validation = await validateSelectedReferencesForRun({
-        references: selectedReferences,
-        workspaceStore,
-        webSourceStore,
-        sendEvent,
-        runId
-      })
-      if (!validation.ok) {
-        activeAiApprovals.delete(runId)
-        activeAiRuns.delete(runId)
-        return { success: false, error: validation.error }
-      }
-
-      sendEvent({ type: 'run_started', runId, sessionId, createdAt: Date.now(), input })
-      emitThinkingStarted({ sendEvent, runId })
-      docxApplyService.beginRun({
-        runId,
-        sessionId,
-        inputText: input
-      })
-      ;(async () => {
-        try {
-          const runtimeSettings = await aiRuntimeSettingsStore.get()
-          const result = await AiRunService.getInstance().run(
-            {
-              runId,
-              sessionId,
-              input,
-              selectedReferences,
-              modelName,
-              workspace
-            },
-            {
-              runtimeSettings,
-              llmStore,
-              chatStore,
-              documentsStore,
-              embeddingService,
-              ensureEmbeddingReady: async () => {
-                await ensureEmbeddingReady({
-                  embeddingService,
-                  modelService
-                })
-              },
-              docxApplyService,
-              saveFileChangeRecord: async (record) => {
-                await aiFileChangeService.saveRecord(record)
-              },
-              listFileChangeRecords: async (request) =>
-                (await aiFileChangeService.listRecords(request)).items,
-              isCancelled: () => Boolean(activeAiRuns.get(runId)?.cancelled),
-              abortSignal: activeAiRuns.get(runId)?.abortController.signal,
-              sendEvent,
-              recordLlmIo: services.recordLlmIo,
-              requestApprovalBatch: async (request) => {
-                if (activeAiRuns.get(runId)?.cancelled) {
-                  return { accepted: false, error: 'run not active' }
-                }
-                if (activeAiApprovals.has(runId)) {
-                  return { accepted: false, error: 'approval batch already pending' }
-                }
-
-                sendEvent({
-                  type: 'approval_batch_required',
-                  runId,
-                  taskId: request.taskId,
-                  batchId: request.batchId,
-                  items: request.items,
-                  createdAt: Date.now(),
-                  internal: request.internal,
-                  stage: request.stage
-                })
-
-                return await new Promise<
-                  | {
-                      accepted: true
-                      decisions: Array<{
-                        itemId: string
-                        action: 'approve' | 'reject' | 'guide'
-                        message?: string
-                      }>
-                    }
-                  | { accepted: false; error: string }
-                >((resolve) => {
-                  activeAiApprovals.set(runId, {
-                    batchId: request.batchId,
-                    taskId: request.taskId,
-                    itemIds: request.items.map((item) => item.itemId),
-                    resolve: (result) => {
-                      activeAiApprovals.delete(runId)
-                      sendEvent({
-                        type: 'approval_batch_decision',
-                        runId,
-                        taskId: request.taskId,
-                        batchId: request.batchId,
-                        decisions: result.accepted
-                          ? result.decisions
-                          : request.items.map((item) => ({
-                              itemId: item.itemId,
-                              action: 'reject' as const,
-                              message: result.error
-                            })),
-                        decidedAt: Date.now(),
-                        internal: request.internal,
-                        stage: request.stage
-                      })
-                      resolve(result)
-                    }
-                  })
-                })
-              },
-              browserUseService: browserEmbedService,
-              webCrawlerService
-            }
-          )
-
-          if (result.status === 'cancelled') {
-            docxApplyService.discardRun(runId)
-            sendEvent({ type: 'run_cancelled', runId })
-            return
-          }
-
-          if (result.status === 'failed') {
-            docxApplyService.discardRun(runId)
-            sendEvent({
-              type: 'run_failed',
-              runId,
-              error: result.error || 'failed',
-              code: result.failureCode,
-              resumeSnapshotSaved: result.resumeSnapshotSaved
-            })
-            return
-          }
-
-          try {
-            await updateConversationMemoryAfterRun({
-              runId,
-              sessionId,
-              userInput: input,
-              assistantOutput: result.finalDeliveryMarkdown || '',
-              artifacts: result.finalArtifacts || [],
-              runtimeSettings,
-              modelName: modelName || '',
-              chatStore,
-              llmStore,
-              sendEvent,
-              recordLlmIo: services.recordLlmIo,
-              abortSignal: activeAiRuns.get(runId)?.abortController.signal
-            })
-          } catch (e) {
-            void e
-          }
-
-          sendEvent({ type: 'run_completed', runId })
-        } catch (e: unknown) {
-          docxApplyService.discardRun(runId)
-          if (activeAiRuns.get(runId)?.cancelled) {
-            sendEvent({ type: 'run_cancelled', runId })
-            return
-          }
-          const msg = e instanceof Error ? getErrorMessage(e) : String(e)
-          sendEvent({ type: 'run_failed', runId, error: msg, code: 'error' })
-        } finally {
-          await releaseDocxRunSession(runId)
-          const approval = activeAiApprovals.get(runId)
-          approval?.resolve({ accepted: false, error: 'run closed' })
-          activeAiApprovals.delete(runId)
-          activeAiRuns.delete(runId)
-        }
-      })()
-
-      return { success: true, runId }
-    }
-  )
-
   ipcMain.handle('ai-run-cancel', async (_event, runId: string): Promise<AiRunCancelResponse> => {
-    const normalizedRunId = String(runId || '')
-    const entry = activeAiRuns.get(normalizedRunId)
-    if (!entry) return { success: false, error: 'run not found' }
-    entry.cancelled = true
-    entry.abortController.abort()
-    const approval = activeAiApprovals.get(normalizedRunId)
-    approval?.resolve({ accepted: false, error: 'run cancelled' })
-    activeAiApprovals.delete(normalizedRunId)
-    return { success: true }
+    return await chatRunService.cancelRun(runId)
   })
 
   ipcMain.handle('ai-context-usage-get', async (_event, payload?: { sessionId?: string }) => {
@@ -2521,50 +2228,7 @@ export function registerHandlers(services: {
       _event,
       payload: AiRunApprovalBatchDecisionRequest
     ): Promise<AiRunApprovalBatchDecisionResponse> => {
-      const runId = String(payload?.runId || '').trim()
-      const batchId = String(payload?.batchId || '').trim()
-      if (!runId || !batchId) {
-        return { success: false, error: 'runId and batchId are required' }
-      }
-
-      const pending = activeAiApprovals.get(runId)
-      if (!pending) return { success: false, error: 'run not found' }
-      if (pending.batchId !== batchId) return { success: false, error: 'approval batch not found' }
-
-      const decisions = Array.isArray(payload?.decisions) ? payload.decisions : []
-      if (decisions.length !== pending.itemIds.length) {
-        return { success: false, error: 'each approval item must have exactly one decision' }
-      }
-
-      const seenIds = new Set<string>()
-      for (const decision of decisions) {
-        const itemId = String(decision?.itemId || '').trim()
-        const action = String(decision?.action || '').trim()
-        if (!itemId || !pending.itemIds.includes(itemId) || seenIds.has(itemId)) {
-          return { success: false, error: 'invalid approval decision items' }
-        }
-        if (action !== 'approve' && action !== 'reject' && action !== 'guide') {
-          return { success: false, error: 'invalid approval decision action' }
-        }
-        if (action === 'guide') {
-          const message = String(decision?.message || '').trim()
-          if (!message) {
-            return { success: false, error: 'guide decision requires non-empty message' }
-          }
-        }
-        seenIds.add(itemId)
-      }
-
-      pending.resolve({
-        accepted: true,
-        decisions: decisions.map((decision) => ({
-          itemId: String(decision.itemId).trim(),
-          action: decision.action,
-          message: typeof decision.message === 'string' ? decision.message.trim() : undefined
-        }))
-      })
-
-      return { success: true }
+      return await chatRunService.decideApprovalBatch(payload)
     }
   )
 
@@ -2612,10 +2276,7 @@ export function registerHandlers(services: {
 
   ipcMain.handle(
     'ai-file-change-revert',
-    async (
-      _event,
-      payload: RevertAiFileChangeRequest
-    ): Promise<RevertAiFileChangeResponse> => {
+    async (_event, payload: RevertAiFileChangeRequest): Promise<RevertAiFileChangeResponse> => {
       try {
         const current = await aiFileChangeService.getRecord({ changeId: payload.changeId })
         if (current.record?.capability === 'docx') {
@@ -2685,7 +2346,7 @@ export function registerHandlers(services: {
 
   ipcMain.handle('chat-session-delete', async (_event, id: string) => {
     try {
-      await chatStore.deleteChatSession(id)
+      await chatRunService.deleteSession(id)
       return { success: true }
     } catch (e: unknown) {
       console.error('[CHAT-SESSION-DELETE] Error:', e)
@@ -2702,15 +2363,29 @@ export function registerHandlers(services: {
     }
   })
 
-  ipcMain.handle('chat-message-save', async (_event, message: ChatMessage) => {
-    try {
-      await chatStore.saveChatMessage(message)
-      return { success: true }
-    } catch (e: unknown) {
-      console.error('[CHAT-MESSAGE-SAVE] Error:', e)
-      return { success: false, error: getErrorMessage(e) }
+  ipcMain.handle(
+    'chat-session-snapshot-get',
+    async (_event, payload: ChatSessionSnapshotRequest): Promise<ChatSessionSnapshotResponse> => {
+      try {
+        return await chatRunService.getSessionSnapshot(payload?.sessionId)
+      } catch (e: unknown) {
+        console.error('[CHAT-SESSION-SNAPSHOT-GET] Error:', e)
+        return { messages: [], runs: [], activeRuns: [] }
+      }
     }
-  })
+  )
+
+  ipcMain.handle(
+    'chat-submit',
+    async (_event, payload: ChatSubmitRequest): Promise<ChatSubmitResponse> => {
+      try {
+        return await chatRunService.submit(payload)
+      } catch (e: unknown) {
+        console.error('[CHAT-SUBMIT] Error:', e)
+        return { success: false, error: getErrorMessage(e) }
+      }
+    }
+  )
 
   ipcMain.handle('llm-config-list', async () => {
     try {

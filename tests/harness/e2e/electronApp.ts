@@ -85,6 +85,7 @@ export type ElectronSignalSink = {
 }
 
 const OUT_MAIN_ENTRY = path.resolve(process.cwd(), 'out', 'main', 'index.js')
+const APP_ROOT = process.cwd()
 
 const toConsoleLevel = (message: ConsoleMessage): E2EConsoleLevel => {
   if (message.type() === 'error') return 'error'
@@ -112,6 +113,20 @@ const pushProcessLog = (
 
 const ensureBuiltAppExists = async (): Promise<void> => {
   await access(OUT_MAIN_ENTRY)
+}
+
+const assertLaunchedWorkbenchApp = (page: Page): void => {
+  const url = page.url()
+  if (url.includes('default_app.asar')) {
+    throw new Error(
+      [
+        'Electron e2e launched the default Electron app instead of NCurator.',
+        `pageUrl=${url}`,
+        `appRoot=${APP_ROOT}`,
+        `mainEntry=${OUT_MAIN_ENTRY}`
+      ].join('\n')
+    )
+  }
 }
 
 const allocateFreePort = async (): Promise<number> => {
@@ -162,14 +177,12 @@ const buildElectronLaunchEnv = (
   } else {
     delete env.NCURATOR_E2E_MODE
     env.NCURATOR_E2E_OBSERVER = '1'
-    env.NCURATOR_WORKSPACE_KNOWLEDGE_CACHE =
-      process.env.NCURATOR_WORKSPACE_KNOWLEDGE_CACHE || '1'
+    env.NCURATOR_WORKSPACE_KNOWLEDGE_CACHE = process.env.NCURATOR_WORKSPACE_KNOWLEDGE_CACHE || '1'
     env.NCURATOR_WORKSPACE_KNOWLEDGE_CACHE_PATH =
       process.env.NCURATOR_WORKSPACE_KNOWLEDGE_CACHE_PATH ||
       path.resolve(process.cwd(), 'tests', '.cache', 'workspace-knowledge')
   }
-  env.NCURATOR_E2E_WINDOW_MODE =
-    windowMode || process.env.NCURATOR_E2E_WINDOW_MODE || 'background'
+  env.NCURATOR_E2E_WINDOW_MODE = windowMode || process.env.NCURATOR_E2E_WINDOW_MODE || 'background'
   env.NCURATOR_USER_DATA_PATH = userDataDir
   env.NCURATOR_EMBEDDED_BROWSER_REMOTE_DEBUGGING_PORT = String(remoteDebuggingPort)
 
@@ -179,9 +192,12 @@ const buildElectronLaunchEnv = (
 const installPageObservers = async (page: Page, sink?: ElectronSignalSink): Promise<void> => {
   await page.waitForFunction(() => Boolean(window.api))
   if (sink?.onAiRunEvent) {
-    await page.exposeFunction('__NCURATOR_E2E_RECORD_AI_RUN_EVENT__', (entry: E2EAiRunEventEntry) => {
-      sink.onAiRunEvent?.(entry)
-    })
+    await page.exposeFunction(
+      '__NCURATOR_E2E_RECORD_AI_RUN_EVENT__',
+      (entry: E2EAiRunEventEntry) => {
+        sink.onAiRunEvent?.(entry)
+      }
+    )
   }
 
   await page.evaluate(() => {
@@ -277,8 +293,8 @@ export const launchElectronApp = async (
   )
   const electronApp = await electron.launch({
     executablePath: electronPath,
-    args: ['.'],
-    cwd: process.cwd(),
+    args: [APP_ROOT],
+    cwd: APP_ROOT,
     env: launchEnv
   })
   const electronProcess = electronApp.process()
@@ -306,6 +322,7 @@ export const launchElectronApp = async (
   })
 
   const page = await electronApp.firstWindow()
+  assertLaunchedWorkbenchApp(page)
   if ((input.windowMode || process.env.NCURATOR_E2E_WINDOW_MODE) === 'visible') {
     await focusVisibleElectronWindow(electronApp)
   }
@@ -334,6 +351,7 @@ export const launchElectronApp = async (
   })
 
   await page.waitForLoadState('domcontentloaded')
+  assertLaunchedWorkbenchApp(page)
   await installPageObservers(page, input.signalSink)
   await page.evaluate((processId) => {
     const currentWindow = window as E2EWindow

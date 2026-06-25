@@ -19,8 +19,10 @@ import type {
   AiArtifactRef,
   AiFileChangeRecord,
   AiRunEvent,
+  AiRunRecord,
   ChatMessage,
   ChatSession,
+  ChatSessionRunSnapshot,
   DocxApplyRecord,
   LLMConfig,
   LlmRemoteModel,
@@ -28,7 +30,6 @@ import type {
   WorkspaceSource,
   WorkspaceRuntimeBinding
 } from '../../../shared/types'
-import { parseIpcResult } from '../utils/serialization'
 import MarkdownRenderer from '../components/MarkdownRenderer'
 import { useNavigate } from 'react-router-dom'
 import { HiOutlineCog6Tooth } from 'react-icons/hi2'
@@ -165,10 +166,9 @@ const artifactToApplyTarget = (
 const buildAssistantTurnFromMessage = (message: ChatMessage): AssistantTurnViewModel | null => {
   if (message.role !== 'assistant') return null
   const artifacts = message.artifacts || []
-  if (artifacts.length === 0) return null
   return {
     messageId: message.id,
-    status: 'completed',
+    status: message.error ? 'failed' : 'completed',
     processThoughts: [],
     processGroups: [],
     finalAnswerMarkdown: message.content,
@@ -188,6 +188,186 @@ const buildAssistantTurnFromMessage = (message: ChatMessage): AssistantTurnViewM
       ),
     blockers: []
   }
+}
+
+const getRunMessageContent = (run: AiRunRecord): string =>
+  run.finalAnswer || run.partialAnswer || ''
+
+const reduceAssistantTurnByRunEvent = (
+  turn: AssistantTurnViewModel,
+  event: AiRunEvent
+): AssistantTurnViewModel => {
+  let next: AssistantTurnViewModel = {
+    ...turn,
+    processThoughts: reduceAssistantProcessThoughts(turn.processThoughts, event),
+    processGroups: reduceAssistantProcessGroups(turn.processGroups, event)
+  }
+
+  if (event.type === 'tool_call_result') {
+    const toolOutput = event.result?.data ?? null
+    const readFiles = extractReadableFilesFromToolOutput(
+      toolOutput,
+      event.toolName.includes('search') ? 'search_hit' : 'read'
+    )
+    if (readFiles.length > 0) {
+      next = {
+        ...next,
+        artifacts: dedupeFileRefs([...next.artifacts, ...readFiles])
+      }
+    }
+  }
+
+  if (event.type === 'file_artifact') {
+    next = {
+      ...next,
+      artifacts: dedupeFileRefs([
+        ...next.artifacts,
+        {
+          path: event.path,
+          fileName: event.fileName,
+          origin: 'artifact',
+          summary: event.summary,
+          applyId: event.applyId,
+          operation: event.operation,
+          format: event.capability === 'docx' ? 'docx' : undefined
+        }
+      ]),
+      applyTargets: event.applyId
+        ? mergeApplyTargets(next.applyTargets, {
+            changeId: event.applyId,
+            title: event.fileName,
+            changeCount: 0,
+            status: 'applied'
+          })
+        : next.applyTargets
+    }
+  }
+
+  if (event.type === 'workspace_required' && !event.internal) {
+    next = { ...next, status: 'failed', error: event.reason }
+  }
+
+  if (event.type === 'runtime_issue') {
+    next = { ...next, status: 'failed', error: event.message }
+  }
+
+  if (event.type === 'approval_batch_required') {
+    next = {
+      ...next,
+      blockers: [
+        {
+          kind: 'approval',
+          title: '等待批量审核',
+          description: `共有 ${event.items.length} 条命令待审核`
+        }
+      ]
+    }
+  }
+
+  if (event.type === 'approval_batch_decision') {
+    next = { ...next, blockers: [] }
+  }
+
+  if (event.type === 'answer_token') {
+    next = {
+      ...next,
+      finalAnswerMarkdown: `${next.finalAnswerMarkdown}${event.token}`,
+      processGroups: completeAssistantProcessGroups(next.processGroups)
+    }
+  }
+
+  if (event.type === 'answer_completed') {
+    next = {
+      ...next,
+      finalAnswerMarkdown: event.text,
+      status: 'completed',
+      processGroups: completeAssistantProcessGroups(next.processGroups)
+    }
+  }
+
+  if (event.type === 'run_failed') {
+    next = { ...next, status: 'failed', error: event.error }
+  }
+
+  if (event.type === 'run_cancelled') {
+    next = { ...next, status: 'failed', error: '已取消' }
+  }
+
+  if (event.type === 'run_completed') {
+    next = {
+      ...next,
+      status: next.status === 'failed' ? 'failed' : 'completed'
+    }
+  }
+
+  return next
+}
+
+const applyRunRecordToTurn = (
+  turn: AssistantTurnViewModel,
+  run: AiRunRecord
+): AssistantTurnViewModel => {
+  const artifacts = run.artifacts || []
+  const status =
+    run.status === 'completed'
+      ? 'completed'
+      : run.status === 'failed' || run.status === 'cancelled'
+        ? 'failed'
+        : 'running'
+  return {
+    ...turn,
+    runId: run.id,
+    status,
+    processGroups:
+      run.status === 'completed' || Boolean(getRunMessageContent(run))
+        ? completeAssistantProcessGroups(turn.processGroups)
+        : turn.processGroups,
+    finalAnswerMarkdown: getRunMessageContent(run) || turn.finalAnswerMarkdown,
+    artifacts: dedupeFileRefs([
+      ...turn.artifacts,
+      ...artifacts.map((artifact) => ({
+        path: artifact.path,
+        fileName: artifact.fileName,
+        origin: 'artifact' as const,
+        summary: artifact.summary,
+        applyId: artifact.applyId,
+        operation: artifact.operation,
+        format: artifact.capability === 'docx' ? ('docx' as const) : undefined
+      }))
+    ]),
+    applyTargets: [
+      ...turn.applyTargets,
+      ...artifacts
+        .map(artifactToApplyTarget)
+        .filter((target): target is AssistantTurnViewModel['applyTargets'][number] =>
+          Boolean(target)
+        )
+    ],
+    blockers: run.pendingApproval
+      ? [
+          {
+            kind: 'approval',
+            title: '等待批量审核',
+            description: `共有 ${run.pendingApproval.items.length} 条命令待审核`
+          }
+        ]
+      : turn.blockers,
+    error: run.error || turn.error
+  }
+}
+
+const buildAssistantTurnFromRunSnapshot = (
+  snapshot: ChatSessionRunSnapshot
+): AssistantTurnViewModel => {
+  const base: AssistantTurnViewModel = {
+    ...createAssistantTurn(snapshot.run.assistantMessageId),
+    runId: snapshot.run.id
+  }
+  const replayed = snapshot.events.reduce<AssistantTurnViewModel>(
+    (turn, event) => reduceAssistantTurnByRunEvent(turn, event),
+    base
+  )
+  return applyRunRecordToTurn(replayed, snapshot.run)
 }
 
 const appendArtifactForMessage = (
@@ -282,6 +462,20 @@ const delay = (ms: number): Promise<void> =>
     window.setTimeout(resolve, ms)
   })
 
+const appendMessagesDedupe = (
+  current: ChatMessage[],
+  additions: Array<ChatMessage | undefined>
+): ChatMessage[] => {
+  const seen = new Set(current.map((message) => message.id))
+  const next = [...current]
+  for (const message of additions) {
+    if (!message || seen.has(message.id)) continue
+    seen.add(message.id)
+    next.push(message)
+  }
+  return next.sort((left, right) => left.timestamp - right.timestamp)
+}
+
 const ChatPage: React.FC = () => {
   const { message } = App.useApp()
   const navigate = useNavigate()
@@ -336,7 +530,7 @@ const ChatPage: React.FC = () => {
   >({})
   const [approvalSubmitting, setApprovalSubmitting] = useState(false)
 
-  const assistantMsgIdRef = useRef<string | null>(null)
+  const activeRunMessageIdsRef = useRef<Record<string, string>>({})
   const assistantArtifactsRef = useRef<Record<string, AiArtifactRef[]>>({})
   const lastSubmittedInputRef = useRef('')
   const sidebarDragStartRef = useRef<{
@@ -524,10 +718,11 @@ const ChatPage: React.FC = () => {
     setApplyWorkspaceTabs([])
   }
 
-  const updateActiveTurn = (
+  const updateTurnForRun = (
+    runId: string,
     updater: (current: AssistantTurnViewModel) => AssistantTurnViewModel
   ): void => {
-    const messageId = assistantMsgIdRef.current
+    const messageId = activeRunMessageIdsRef.current[runId]
     if (!messageId) return
     setAssistantTurns((previous) => {
       const current = previous[messageId] || createAssistantTurn(messageId)
@@ -560,26 +755,51 @@ const ChatPage: React.FC = () => {
     }
   }, [])
 
-  const loadMessages = async (sessionId: string): Promise<void> => {
+  const loadSessionSnapshot = async (sessionId: string): Promise<void> => {
     try {
-      const messages = await window.api.chatMessageList(sessionId)
-      setCurrentMessages(messages)
+      const snapshot = await window.api.chatSessionSnapshotGet({ sessionId })
+      setCurrentMessages(snapshot.messages)
       assistantArtifactsRef.current = {}
+      activeRunMessageIdsRef.current = {}
       setAssistantTurns(() => {
         const nextTurns: Record<string, AssistantTurnViewModel> = {}
-        for (const message of messages) {
+        for (const message of snapshot.messages) {
           if (message.artifacts && message.artifacts.length > 0) {
             assistantArtifactsRef.current[message.id] = message.artifacts
           }
           const turn = buildAssistantTurnFromMessage(message)
           if (turn) nextTurns[message.id] = turn
         }
+        const runSnapshots = snapshot.runs || snapshot.activeRuns
+        const activeRunIds = new Set(snapshot.activeRuns.map((item) => item.run.id))
+        for (const runSnapshot of runSnapshots) {
+          if (activeRunIds.has(runSnapshot.run.id)) {
+            activeRunMessageIdsRef.current[runSnapshot.run.id] = runSnapshot.run.assistantMessageId
+          }
+          const turn = buildAssistantTurnFromRunSnapshot(runSnapshot)
+          nextTurns[runSnapshot.run.assistantMessageId] = turn
+          if (runSnapshot.run.artifacts && runSnapshot.run.artifacts.length > 0) {
+            assistantArtifactsRef.current[runSnapshot.run.assistantMessageId] =
+              runSnapshot.run.artifacts
+          }
+        }
         return nextTurns
       })
+      const visibleActiveRun =
+        snapshot.activeRuns.find((item) => item.run.status === 'running') || snapshot.activeRuns[0]
+      setAiRunId(visibleActiveRun?.run.id || null)
+      setLoading(Boolean(visibleActiveRun && visibleActiveRun.run.status === 'running'))
+      const approval =
+        snapshot.activeRuns.find((item) => item.pendingApproval && !item.pendingApproval.internal)
+          ?.pendingApproval || null
+      setPendingApprovalBatch(approval)
+      setApprovalCurrentIndex(0)
+      setApprovalDraftDecisions({})
+      setApprovalSubmitting(false)
       shouldAutoScrollRef.current = true
       scrollToBottom(true)
     } catch (error) {
-      console.error('Failed to load messages', error)
+      console.error('Failed to load session snapshot', error)
     }
   }
 
@@ -627,8 +847,14 @@ const ChatPage: React.FC = () => {
         setSelectedModelName(null)
         return
       }
+      const fallbackModelName = activeConfig.default_model?.trim() || null
+      const fallbackModels: LlmRemoteModel[] = fallbackModelName
+        ? [{ id: fallbackModelName, label: fallbackModelName }]
+        : []
+      setRemoteModels(fallbackModels)
+      setSelectedModelName(fallbackModelName)
       const response = await window.api.llmConfigModelList(activeConfig.id)
-      const items = response.success ? response.items : []
+      const items = response.success && response.items.length > 0 ? response.items : fallbackModels
       setRemoteModels(items)
       const nextModelName = resolveWorkbenchModelSelection({
         configId: activeConfig.id,
@@ -1044,7 +1270,6 @@ const ChatPage: React.FC = () => {
         setSelectedWorkspaceId(sessionWorkspaceId)
         writeWorkbenchWorkspacePreference(window.localStorage, sessionWorkspaceId)
       }
-      void loadMessages(currentSessionId)
       setLoading(false)
       setAiRunId(null)
       setCancellingRun(false)
@@ -1059,6 +1284,7 @@ const ChatPage: React.FC = () => {
       setContentPanel(createEmptyPanel())
       setContentPanelCollapsed(true)
       resetApplyWorkspaceState()
+      void loadSessionSnapshot(currentSessionId)
       void loadFileChangesForSession(currentSessionId)
       void refreshContextUsage(currentSessionId)
     } else {
@@ -1203,36 +1429,23 @@ const ChatPage: React.FC = () => {
   }
 
   useEffect(() => {
-    window.api.removeAiRunEventListeners()
-    window.api.onAiRunEvent((event) => {
-      const hasActiveRun = Boolean(aiRunId)
-      const hasPendingAssistantTurn = Boolean(assistantMsgIdRef.current)
-      if (hasActiveRun && event.runId !== aiRunId) return
-      if (!hasActiveRun && !hasPendingAssistantTurn) return
+    const unsubscribe = window.api.onAiRunEvent((event) => {
+      const messageId = activeRunMessageIdsRef.current[event.runId]
+      if (!messageId) {
+        if (event.type === 'run_started' && event.sessionId === currentSessionId) {
+          void loadSessionSnapshot(currentSessionId)
+        }
+        return
+      }
 
-      if (!hasActiveRun && event.type === 'run_started') {
+      if (event.type === 'run_started') {
         setAiRunId(event.runId)
       }
 
-      updateActiveTurn((current) => ({
-        ...current,
-        processThoughts: reduceAssistantProcessThoughts(current.processThoughts, event),
-        processGroups: reduceAssistantProcessGroups(current.processGroups, event)
-      }))
+      updateTurnForRun(event.runId, (current) => reduceAssistantTurnByRunEvent(current, event))
 
       if (event.type === 'tool_call_result') {
         const toolOutput = event.result?.data ?? null
-        const readFiles = extractReadableFilesFromToolOutput(
-          toolOutput,
-          event.toolName.includes('search') ? 'search_hit' : 'read'
-        )
-        if (readFiles.length > 0) {
-          updateActiveTurn((current) => ({
-            ...current,
-            artifacts: dedupeFileRefs([...current.artifacts, ...readFiles])
-          }))
-        }
-
         const searchResults = extractSearchResultsFromToolOutput(toolOutput)
         if (searchResults.length > 0) {
           showContentPanel({
@@ -1255,41 +1468,22 @@ const ChatPage: React.FC = () => {
       }
 
       if (event.type === 'file_artifact') {
-        const messageId = assistantMsgIdRef.current
-        if (messageId) {
-          appendArtifactForMessage(assistantArtifactsRef.current, messageId, {
-            kind: 'file',
-            capability: event.capability,
-            path: event.path,
-            fileName: event.fileName,
-            operation: event.operation,
-            applyId: event.applyId,
-            summary: event.summary
-          })
-        }
-        updateActiveTurn((current) => ({
-          ...current,
-          artifacts: dedupeFileRefs([
-            ...current.artifacts,
-            {
-              path: event.path,
-              fileName: event.fileName,
-              origin: 'artifact',
-              summary: event.summary,
-              applyId: event.applyId,
-              operation: event.operation,
-              format: event.capability === 'docx' ? 'docx' : undefined
-            }
-          ]),
-          applyTargets: event.applyId
-            ? mergeApplyTargets(current.applyTargets, {
-                changeId: event.applyId,
-                title: event.fileName,
-                changeCount: 0,
-                status: 'applied'
-              })
-            : current.applyTargets
-        }))
+        appendArtifactForMessage(assistantArtifactsRef.current, messageId, {
+          kind: 'file',
+          capability: event.capability,
+          path: event.path,
+          fileName: event.fileName,
+          operation: event.operation,
+          applyId: event.applyId,
+          summary: event.summary
+        })
+        setCurrentMessages((previous) =>
+          previous.map((item) =>
+            item.id === messageId
+              ? { ...item, artifacts: assistantArtifactsRef.current[messageId] || [] }
+              : item
+          )
+        )
         return
       }
 
@@ -1297,11 +1491,6 @@ const ChatPage: React.FC = () => {
         if (!event.internal) {
           setLoading(false)
           message.warning(event.reason || '当前工作区未设置文件目录，请先完成绑定后再发送')
-          updateActiveTurn((current) => ({
-            ...current,
-            status: 'failed',
-            error: event.reason
-          }))
         }
         return
       }
@@ -1317,11 +1506,6 @@ const ChatPage: React.FC = () => {
           }
           message.warning(event.message || '当前运行被阻塞')
         }
-        updateActiveTurn((current) => ({
-          ...current,
-          status: 'failed',
-          error: event.message
-        }))
         return
       }
 
@@ -1334,16 +1518,6 @@ const ChatPage: React.FC = () => {
           setApprovalDraftDecisions({})
           message.info(`有 ${event.items.length} 条命令需要审核`)
         }
-        updateActiveTurn((current) => ({
-          ...current,
-          blockers: [
-            {
-              kind: 'approval',
-              title: '等待批量审核',
-              description: `共有 ${event.items.length} 条命令待审核`
-            }
-          ]
-        }))
         return
       }
 
@@ -1365,8 +1539,6 @@ const ChatPage: React.FC = () => {
       }
 
       if (event.type === 'answer_token') {
-        const messageId = assistantMsgIdRef.current
-        if (!messageId) return
         setCurrentMessages((previous) =>
           previous.map((item) =>
             item.id === messageId
@@ -1374,36 +1546,14 @@ const ChatPage: React.FC = () => {
               : item
           )
         )
-        updateActiveTurn((current) => ({
-          ...current,
-          finalAnswerMarkdown: `${current.finalAnswerMarkdown}${event.token}`,
-          processGroups: completeAssistantProcessGroups(current.processGroups)
-        }))
         scrollToBottom()
         return
       }
 
       if (event.type === 'answer_completed') {
-        const messageId = assistantMsgIdRef.current
-        if (!messageId || !currentSessionId) return
         setCurrentMessages((previous) =>
           previous.map((item) => (item.id === messageId ? { ...item, content: event.text } : item))
         )
-        updateActiveTurn((current) => ({
-          ...current,
-          finalAnswerMarkdown: event.text,
-          status: 'completed',
-          processGroups: completeAssistantProcessGroups(current.processGroups)
-        }))
-        const assistantMessage: ChatMessage = {
-          id: messageId,
-          session_id: currentSessionId,
-          role: 'assistant',
-          content: event.text,
-          timestamp: Date.now(),
-          artifacts: assistantArtifactsRef.current[messageId] || []
-        }
-        void window.api.chatMessageSave(assistantMessage).catch(console.error)
         return
       }
 
@@ -1413,25 +1563,17 @@ const ChatPage: React.FC = () => {
         setCancellingRun(false)
         setPendingApprovalBatch(null)
         setApprovalSubmitting(false)
-        updateActiveTurn((current) => ({
-          ...current,
-          status: 'failed',
-          error: event.error
-        }))
-        const messageId = assistantMsgIdRef.current
-        if (messageId) {
-          setCurrentMessages((previous) =>
-            previous.map((item) =>
-              item.id === messageId
-                ? {
-                    ...item,
-                    error: true,
-                    content: `${item.content || ''}\n\n**[失败]** ${event.error}`
-                  }
-                : item
-            )
+        setCurrentMessages((previous) =>
+          previous.map((item) =>
+            item.id === messageId
+              ? {
+                  ...item,
+                  error: true,
+                  content: `${item.content || ''}\n\n**[失败]** ${event.error}`
+                }
+              : item
           )
-        }
+        )
         emitErrorMessage(event.error || '运行失败')
         return
       }
@@ -1442,11 +1584,17 @@ const ChatPage: React.FC = () => {
         setCancellingRun(false)
         setPendingApprovalBatch(null)
         setApprovalSubmitting(false)
-        updateActiveTurn((current) => ({
-          ...current,
-          status: 'failed',
-          error: '已取消'
-        }))
+        setCurrentMessages((previous) =>
+          previous.map((item) =>
+            item.id === messageId
+              ? {
+                  ...item,
+                  error: true,
+                  content: item.content ? `${item.content}\n\n**[已取消]**` : '**[已取消]**'
+                }
+              : item
+          )
+        )
         message.info('已取消')
         return
       }
@@ -1457,10 +1605,6 @@ const ChatPage: React.FC = () => {
         setCancellingRun(false)
         setPendingApprovalBatch(null)
         setApprovalSubmitting(false)
-        updateActiveTurn((current) => ({
-          ...current,
-          status: current.status === 'failed' ? 'failed' : 'completed'
-        }))
         if (currentSessionId) {
           void loadFileChangesForSession(currentSessionId, { autoOpen: true })
         }
@@ -1468,19 +1612,11 @@ const ChatPage: React.FC = () => {
       }
     })
     return () => {
-      window.api.removeAiRunEventListeners()
+      unsubscribe()
     }
     // AI run listener is intentionally keyed by active run/session identity to avoid resubscribing on UI helper changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [aiRunId, currentSessionId, message, refreshContextUsage])
-
-  const updateSessionTitleIfNeeded = async (userQuery: string): Promise<void> => {
-    if (!currentSessionId || currentMessages.length !== 0) return
-    const currentSession = sessions.find((item) => item.id === currentSessionId)
-    if (!currentSession) return
-    await window.api.chatSessionSave({ ...currentSession, title: userQuery.slice(0, 20) })
-    await loadSessions()
-  }
+  }, [currentSessionId, message, refreshContextUsage])
 
   const handleSend = async (): Promise<void> => {
     if (composerMode === 'ai' && aiRunId) {
@@ -1502,6 +1638,7 @@ const ChatPage: React.FC = () => {
     }
 
     const userQuery = input.trim()
+    const submittedReferences = selectedReferences
     const likelyExecutable =
       /\b(cmd|bash|shell|terminal|command|run)\b/i.test(userQuery) ||
       /终端|命令|脚本|执行|创建文件|删除文件|修改文件/.test(userQuery)
@@ -1519,62 +1656,43 @@ const ChatPage: React.FC = () => {
     setCancellingRun(false)
     setPendingApprovalBatch(null)
     setApprovalSubmitting(false)
-    assistantMsgIdRef.current = null
     lastSubmittedInputRef.current = userQuery
 
-    const userMessage: ChatMessage = {
-      id: crypto.randomUUID(),
-      session_id: currentSessionId,
-      role: 'user',
-      content: userQuery,
-      timestamp: Date.now(),
-      selectedReferences: selectedReferences.length > 0 ? selectedReferences : undefined,
-      error: false
-    }
-
-    setCurrentMessages((previous) => [...previous, userMessage])
-    void window.api.chatMessageSave(userMessage).catch(console.error)
-
-    await updateSessionTitleIfNeeded(userQuery)
-
     try {
-      const assistantMessageId = crypto.randomUUID()
-      assistantMsgIdRef.current = assistantMessageId
-      setAssistantTurns((previous) => ({
-        ...previous,
-        [assistantMessageId]: createAssistantTurn(assistantMessageId)
-      }))
-
-      const assistantMessage: ChatMessage = {
-        id: assistantMessageId,
-        session_id: currentSessionId,
-        role: 'assistant',
-        content: '',
-        timestamp: Date.now()
-      }
-      setCurrentMessages((previous) => [...previous, assistantMessage])
-      assistantArtifactsRef.current[assistantMessageId] = []
-
-      const response = await window.api.aiRunStart({
+      const response = await window.api.chatSubmit({
+        mode: 'ai',
         sessionId: currentSessionId,
         input: userQuery,
-        selectedReferences: selectedReferences.length > 0 ? selectedReferences : undefined,
+        selectedReferences: submittedReferences.length > 0 ? submittedReferences : undefined,
         modelName: selectedModelName,
         workspace: createWorkspaceBinding(selectedWorkspace)
       })
-      if (!response.success || !response.runId) {
+      if (
+        !response.success ||
+        !response.run ||
+        !response.userMessage ||
+        !response.assistantMessage
+      ) {
         setLoading(false)
         emitErrorMessage(response.error || '启动失败')
         return
       }
-      setAiRunId(response.runId)
+      const run = response.run
+      const assistantMessageId = response.assistantMessage.id
+      activeRunMessageIdsRef.current[run.id] = assistantMessageId
+      assistantArtifactsRef.current[assistantMessageId] = []
+      setCurrentMessages((previous) =>
+        appendMessagesDedupe(previous, [response.userMessage, response.assistantMessage])
+      )
+      setAiRunId(run.id)
       setAssistantTurns((previous) => ({
         ...previous,
         [assistantMessageId]: {
-          ...previous[assistantMessageId],
-          runId: response.runId
+          ...(previous[assistantMessageId] || createAssistantTurn(assistantMessageId)),
+          runId: run.id
         }
       }))
+      void loadSessions()
     } catch (error) {
       console.error(error)
       setLoading(false)
@@ -1590,6 +1708,7 @@ const ChatPage: React.FC = () => {
     }
 
     const userQuery = input.trim()
+    const submittedReferences = selectedReferences
     const hasStrictScope = selectedReferences.length > 0 || Boolean(selectedWorkspace)
     if (hasStrictScope && kbScopeDocumentIds.length === 0) {
       message.warning('当前搜索范围没有已索引资料，无法执行纯搜索。')
@@ -1607,58 +1726,25 @@ const ChatPage: React.FC = () => {
     setPendingApprovalBatch(null)
     setApprovalSubmitting(false)
 
-    const userMessage: ChatMessage = {
-      id: crypto.randomUUID(),
-      session_id: currentSessionId,
-      role: 'user',
-      content: userQuery,
-      timestamp: Date.now(),
-      selectedReferences: selectedReferences.length > 0 ? selectedReferences : undefined
-    }
-    setCurrentMessages((previous) => [...previous, userMessage])
-    void window.api.chatMessageSave(userMessage).catch(console.error)
-
-    let assistantMessageId: string | null = null
-    let assistantMessage: ChatMessage | null = null
-
     try {
-      await updateSessionTitleIfNeeded(userQuery)
-      const nextAssistantMessageId = crypto.randomUUID()
-      assistantMessageId = nextAssistantMessageId
-      setAssistantTurns((previous) => ({
-        ...previous,
-        [nextAssistantMessageId]: createSearchAssistantTurn(nextAssistantMessageId)
-      }))
-
-      const nextAssistantMessage: ChatMessage = {
-        id: nextAssistantMessageId,
-        session_id: currentSessionId,
-        role: 'assistant',
-        content: '',
-        timestamp: Date.now()
+      const response = await window.api.chatSubmit({
+        mode: 'search',
+        sessionId: currentSessionId,
+        input: userQuery,
+        selectedReferences: submittedReferences.length > 0 ? submittedReferences : undefined,
+        workspace: createWorkspaceBinding(selectedWorkspace),
+        searchDocumentIds: hasStrictScope ? kbScopeDocumentIds : undefined
+      })
+      if (!response.success || !response.userMessage || !response.assistantMessage) {
+        emitErrorMessage(response.error || '搜索失败')
+        return
       }
-      assistantMessage = nextAssistantMessage
-      setCurrentMessages((previous) => [...previous, nextAssistantMessage])
-
-      const response = await window.api.search(
-        userQuery,
-        'all',
-        hasStrictScope ? kbScopeDocumentIds : undefined
-      )
-      const results = response.results.map(parseIpcResult)
-      const assistantContent =
-        results.length > 0
-          ? `已在当前资料范围中找到 ${results.length} 条结果，右侧可以直接查看命中详情。`
-          : '未在当前资料范围中找到匹配结果。'
-      const completedAssistantMessageId = assistantMessageId
-      const completedAssistantMessage = assistantMessage
-      completedAssistantMessage.content = assistantContent
+      const results = response.results || []
+      const assistantContent = response.content || response.assistantMessage.content
+      const completedAssistantMessageId = response.assistantMessage.id
       setCurrentMessages((previous) =>
-        previous.map((item) =>
-          item.id === completedAssistantMessageId ? completedAssistantMessage : item
-        )
+        appendMessagesDedupe(previous, [response.userMessage, response.assistantMessage])
       )
-      void window.api.chatMessageSave(completedAssistantMessage).catch(console.error)
       setAssistantTurns((previous) => ({
         ...previous,
         [completedAssistantMessageId]: {
@@ -1678,35 +1764,11 @@ const ChatPage: React.FC = () => {
         title: '搜索结果',
         query: userQuery,
         results,
-        tokens: response.tokens
+        tokens: response.tokens || []
       })
+      void loadSessions()
     } catch (error) {
       console.error(error)
-      if (assistantMessageId && assistantMessage) {
-        const failedAssistantMessageId = assistantMessageId
-        const failedAssistantMessage = assistantMessage
-        failedAssistantMessage.content = '搜索失败了，请稍后再试。'
-        setCurrentMessages((previous) =>
-          previous.map((item) =>
-            item.id === failedAssistantMessageId ? failedAssistantMessage : item
-          )
-        )
-        setAssistantTurns((previous) => ({
-          ...previous,
-          [failedAssistantMessageId]: {
-            ...(previous[failedAssistantMessageId] ||
-              createSearchAssistantTurn(failedAssistantMessageId)),
-            status: 'failed',
-            processGroups: completeAssistantProcessGroups(
-              previous[failedAssistantMessageId]?.processGroups ||
-                createSearchAssistantTurn(failedAssistantMessageId).processGroups,
-              'failed'
-            ),
-            finalAnswerMarkdown: '搜索失败了，请稍后再试。',
-            error: '搜索失败了，请稍后再试。'
-          }
-        }))
-      }
       emitErrorMessage('搜索失败')
     } finally {
       setLoading(false)
@@ -2000,7 +2062,7 @@ const ChatPage: React.FC = () => {
         key={messageItem.id}
         messageId={messageItem.id}
         turn={turn}
-        isStreaming={loading && assistantMsgIdRef.current === messageItem.id}
+        isStreaming={loading && Boolean(turn.runId && turn.runId === aiRunId)}
         onOpenFile={(file) => {
           void openFile(file)
         }}

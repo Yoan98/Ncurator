@@ -736,17 +736,17 @@ AI unit / 辅助测试目录：
 ##### `ai-run-service-embedding-preflight`
 
 - 测试类型：`backend`
-- What：验证 `AiRunService` 会在进入 `human` 前完成 embedding preflight，并支撑后续 semantic docx 搜索。
-- Why：embedding 已被定义为 AI run 的基础设施，不应等到 semantic 工具调用时才第一次暴露未就绪问题。
+- What：验证 `AiRunService` 会在进入 `human` 前执行有界 embedding preflight，并支撑后续 semantic docx 搜索。
+- Why：embedding 是 semantic 工具链的基础设施；preflight 应在模型可用时提前完成，但不能无限阻塞 AI run 启动。
 - How：通过 `AiRunService.getInstance().run(...)` 启动真实 run，在 preflight 成功后执行 `docx_search(mode=semantic)`。
 - Oracle：preflight 被调用一次；任务完成；semantic 搜索返回带 score 的真实命中。
-- Not：不验证 preflight 失败收口；该场景由 `ai-run-service-embedding-preflight-failure` 覆盖。
+- Not：不验证 preflight 超时后的工具层降级；该场景由 Workbench 持久化 E2E 和 `kb_search(keyword/auto)` 相关 case 覆盖。
 
 ##### `ai-run-service-embedding-preflight-failure`
 
 - 测试类型：`backend`
 - What：验证 embedding preflight 失败时，`AiRunService` 会在进入 `human` 前直接失败收口。
-- Why：基础服务不可用时继续进入 human graph 会制造后续工具层噪音，应该在入口阶段明确失败。
+- Why：基础服务明确失败时继续进入 human graph 会制造后续工具层噪音，应该在入口阶段明确失败；初始化卡住则由有界 preflight 超时保护。
 - How：注入会抛错的 `ensureEmbeddingReady`，启动一次真实 `AiRunService` run。
 - Oracle：run 状态为 `failed`，错误包含 preflight 失败原因，事件流中没有任何 `human_step`。
 - Not：不验证模型下载进度展示。

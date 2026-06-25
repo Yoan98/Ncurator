@@ -22,6 +22,8 @@ export const LANCE_TABLES = {
   CHAT_MESSAGE: 'chat_message',
   CHAT_CONVERSATION_MEMORY: 'chat_conversation_memory',
   CHAT_SESSION_RESUME_SNAPSHOT: 'chat_session_resume_snapshot',
+  AI_RUN: 'ai_run',
+  AI_RUN_EVENT: 'ai_run_event',
   AI_FILE_CHANGE: 'ai_file_change',
   DOCX_APPLY: 'docx_apply',
   LLM_CONFIG: 'llm_config',
@@ -33,6 +35,7 @@ export type LanceTableName = (typeof LANCE_TABLES)[keyof typeof LANCE_TABLES]
 export class LanceDbCore {
   private db: lancedb.Connection | null = null
   private status: LanceDbCoreStatus = LanceDbCoreStatus.UNINITIALIZED
+  private operationQueue: Promise<void> = Promise.resolve()
 
   public constructor(private readonly dbPath: string = LANCE_DB_PATH) {}
 
@@ -75,17 +78,22 @@ export class LanceDbCore {
 
   public async tableExists(name: string): Promise<boolean> {
     this.assertReady()
-    const names = await this.db!.tableNames()
-    return names.includes(name)
+    return await this.runSerialized(async () => {
+      const names = await this.db!.tableNames()
+      return names.includes(name)
+    })
   }
 
   public async openTable(name: LanceTableName | string) {
     this.assertReady()
-    const names = await this.db!.tableNames()
-    if (!names.includes(String(name))) {
-      throw new Error(`Table not found: ${String(name)}`)
-    }
-    return this.db!.openTable(String(name))
+    return await this.runSerialized(async () => {
+      const names = await this.db!.tableNames()
+      if (!names.includes(String(name))) {
+        throw new Error(`Table not found: ${String(name)}`)
+      }
+      const table = await this.db!.openTable(String(name))
+      return this.createSerializedTable(table)
+    })
   }
 
   public escapeSqlString(value: string): string {
@@ -124,6 +132,55 @@ export class LanceDbCore {
     if (this.status !== LanceDbCoreStatus.READY || !this.db) {
       throw new Error(`LanceDbCore not ready: ${this.status}`)
     }
+  }
+
+  private async runSerialized<T>(operation: () => Promise<T>): Promise<T> {
+    const previous = this.operationQueue
+    let release: () => void = () => undefined
+    this.operationQueue = new Promise<void>((resolve) => {
+      release = resolve
+    })
+
+    await previous.catch(() => undefined)
+    try {
+      return await operation()
+    } finally {
+      release()
+    }
+  }
+
+  private createSerializedTable<TTable extends object>(table: TTable): TTable {
+    return new Proxy(table, {
+      get: (target, property, receiver) => {
+        const value = Reflect.get(target, property, receiver)
+        if (property === 'query' && typeof value === 'function') {
+          return (...args: unknown[]) => this.createSerializedQuery(value.apply(target, args))
+        }
+        if (typeof value !== 'function') return value
+        return (...args: unknown[]) =>
+          this.runSerialized(async () => await Promise.resolve(value.apply(target, args)))
+      }
+    })
+  }
+
+  private createSerializedQuery<TQuery extends object>(query: TQuery): TQuery {
+    return new Proxy(query, {
+      get: (target, property, receiver) => {
+        const value = Reflect.get(target, property, receiver)
+        if (typeof value !== 'function') return value
+        if (property === 'toArray') {
+          return (...args: unknown[]) =>
+            this.runSerialized(async () => await Promise.resolve(value.apply(target, args)))
+        }
+        return (...args: unknown[]) => {
+          const result = value.apply(target, args)
+          if (result && typeof result === 'object' && typeof result.toArray === 'function') {
+            return this.createSerializedQuery(result)
+          }
+          return result
+        }
+      }
+    })
   }
 
   private async ensureTables(): Promise<void> {
@@ -346,6 +403,42 @@ export class LanceDbCore {
           new arrow.Field('human_state_json', new arrow.Utf8()),
           new arrow.Field('error_message', new arrow.Utf8()),
           new arrow.Field('updated_at', new arrow.Int64())
+        ])
+      },
+      {
+        name: LANCE_TABLES.AI_RUN,
+        recreateIfSchemaChanged: true,
+        schema: new arrow.Schema([
+          new arrow.Field('id', new arrow.Utf8()),
+          new arrow.Field('session_id', new arrow.Utf8()),
+          new arrow.Field('user_message_id', new arrow.Utf8()),
+          new arrow.Field('assistant_message_id', new arrow.Utf8()),
+          new arrow.Field('status', new arrow.Utf8()),
+          new arrow.Field('input', new arrow.Utf8()),
+          new arrow.Field('selected_references_json', new arrow.Utf8(), true),
+          new arrow.Field('workspace_json', new arrow.Utf8(), true),
+          new arrow.Field('model_name', new arrow.Utf8(), true),
+          new arrow.Field('partial_answer', new arrow.Utf8()),
+          new arrow.Field('final_answer', new arrow.Utf8(), true),
+          new arrow.Field('error', new arrow.Utf8(), true),
+          new arrow.Field('pending_approval_json', new arrow.Utf8(), true),
+          new arrow.Field('artifacts_json', new arrow.Utf8(), true),
+          new arrow.Field('created_at', new arrow.Int64()),
+          new arrow.Field('updated_at', new arrow.Int64()),
+          new arrow.Field('finished_at', new arrow.Int64(), true)
+        ])
+      },
+      {
+        name: LANCE_TABLES.AI_RUN_EVENT,
+        recreateIfSchemaChanged: true,
+        schema: new arrow.Schema([
+          new arrow.Field('id', new arrow.Utf8()),
+          new arrow.Field('run_id', new arrow.Utf8()),
+          new arrow.Field('session_id', new arrow.Utf8()),
+          new arrow.Field('seq', new arrow.Int64()),
+          new arrow.Field('type', new arrow.Utf8()),
+          new arrow.Field('event_json', new arrow.Utf8()),
+          new arrow.Field('created_at', new arrow.Int64())
         ])
       },
       {

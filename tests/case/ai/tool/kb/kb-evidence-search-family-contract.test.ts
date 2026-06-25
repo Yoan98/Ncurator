@@ -24,7 +24,8 @@ describe('ai tool kb backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['kb'],
-      description: '验证 kb_search 在 auto/semantic/keyword 三种 strategy 下的统一返回结构和范围约束。',
+      description:
+        '验证 kb_search 在 auto/semantic/keyword 三种 strategy 下的统一返回结构和范围约束。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -115,11 +116,15 @@ describe('ai tool kb backend', () => {
           }
         )
 
-        runtime.assertThat(result.ftsOutOfScope.total === 0 && result.ftsOutOfScope.items.length === 0, {
-          name: 'fts-search-rejects-out-of-scope-document-ids',
-          message: 'kb_search(keyword) 在 requested documentIds 完全超出当前工作区时应返回空结果。',
-          data: result.ftsOutOfScope
-        })
+        runtime.assertThat(
+          result.ftsOutOfScope.total === 0 && result.ftsOutOfScope.items.length === 0,
+          {
+            name: 'fts-search-rejects-out-of-scope-document-ids',
+            message:
+              'kb_search(keyword) 在 requested documentIds 完全超出当前工作区时应返回空结果。',
+            data: result.ftsOutOfScope
+          }
+        )
       }
     })
   })

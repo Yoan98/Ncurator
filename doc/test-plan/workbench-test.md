@@ -13,21 +13,21 @@
 
 ### 2.1 当前状态
 
-- 总体登记：`13` 个 e2e case。
-- 当前有效结论：`12 / 13` 有效通过；`browser-use-task-panel` 暂无有效通过结论。
+- 总体登记：`15` 个 e2e case，`1` 个 backend contract case。
+- 当前有效结论：`14 / 15` 个 e2e case 有效通过；`chat-run-service-contract` backend contract 有效通过；`browser-use-task-panel` 暂无有效通过结论。
 
 ### 2.2 按 Suite 汇总
 
 - `conversation`
-  - 登记 case：`4`
-  - 有效通过：`4 / 4`
-  - 检测时间：`2026-06-16 10:32:04 +0800`
-  - 备注：`session-initial-create-and-title`、`send-guard-mode-switch-and-preferences`、`workspace-root-path-required`、`reference-token-lifecycle` 均已通过真实 Electron UI；其中涉及 AI 的 case 使用真实模型，`reference-token-lifecycle` 不启动 AI。
+  - 登记 case：`5`
+  - 有效通过：`5 / 5`
+  - 检测时间：`2026-06-24 12:08:00 +0800`
+  - 备注：`session-initial-create-and-title`、`send-guard-mode-switch-and-preferences`、`workspace-root-path-required`、`reference-token-lifecycle`、`reference-mention-keyboard` 均已通过真实 Electron UI；其中涉及 AI 的 case 使用真实模型，`reference-token-lifecycle` 与 `reference-mention-keyboard` 不启动 AI。
 - `run`
-  - 登记 case：`4`
-  - 有效通过：`3 / 4`
-  - 检测时间：`2026-06-16 12:47:24 +0800`
-  - 备注：`ai-process-stream-and-final-answer`、`approval-batch-flow`、`stop-running-or-approval-run` 已通过真实 Electron UI、真实模型、真实 workspace 索引和真实 AI run；`approval-batch-flow` 在拒绝审批分支中出现多轮模型自纠后收口，当前有效通过但耗时偏长；`browser-use-task-panel` 暂无有效通过结论。
+  - 登记 case：`5` 个 e2e，`1` 个 backend contract
+  - 有效通过：`4 / 5` 个 e2e，`1 / 1` 个 backend contract
+  - 检测时间：e2e `2026-06-25 10:12:10 +0800`；backend `2026-06-25 10:09:14 +0800`
+  - 备注：`ai-process-stream-and-final-answer`、`approval-batch-flow`、`stop-running-or-approval-run`、`run-navigation-snapshot-replay` 已通过真实 Electron UI、真实模型、真实 workspace 索引和真实 AI run；`approval-batch-flow` 在拒绝审批分支中出现多轮模型自纠后收口，当前有效通过但耗时偏长；`chat-run-service-contract` 已通过 backend contract；`browser-use-task-panel` 暂无有效通过结论。
 - `result`
   - 登记 case：`5`
   - 有效通过：`5 / 5`
@@ -55,7 +55,7 @@ Workbench 的回归测试顶层 suite 按用户任务闭环划分，而不是逐
 领域规则：
 
 - `conversation` 验证用户发起任务前后的会话壳、composer、模式、模型 / 工作区偏好、工作目录前置条件与 `@` 参考资料 token。
-- `run` 验证智能模式运行中的过程流、停止、审批、压缩提示和 AI 内置浏览器任务。
+- `run` 验证智能模式运行中的过程流、持久化恢复、停止、审批、压缩提示和 AI 内置浏览器任务。
 - `result` 验证搜索结果、文件预览、修改文件工作区、真实 docx 预览、回退和多文件修改入口。
 - Workbench 回归测试优先使用 `e2e`，因为核心风险集中在 Electron、renderer 状态、IPC、真实 AI 调用、右侧面板和文件系统联动。
 - `backend` 只用于稳定的纯契约测试，例如参考资料候选过滤、搜索范围 payload 或会话 / 修改记录查询契约；不得用 backend case 代替真实 UI 交互断言。
@@ -79,6 +79,7 @@ tests/case/workbench/
     process/
     blocker/
     browser/
+    persistence/
   result/
     search/
     preview/
@@ -123,6 +124,15 @@ tests/case/workbench/
 - Oracle：空白输入、未绑定工作区或发送中不会触发发送，且发送按钮 hover 可见禁用原因，对齐 `WB-COMPOSER-001-AC1` 至 `WB-COMPOSER-001-AC3`、`WB-COMPOSER-005-AC1`；拦截提示明确要求先选择工作区，对齐 `WB-COMPOSER-005-AC2`；切换模式后输入保留且发送路径按新模式执行，对齐 `WB-MODE-001-AC1`、`WB-MODE-001-AC2`；模型搜索、偏好恢复、失效回退、入口图标和“大聪明 / 没头脑”展示符合 `WB-COMPOSER-007-AC1` 至 `WB-COMPOSER-007-AC5`。
 - Not：不验证真实模型回答质量，只验证用户路径和发送前置条件。
 
+#### `reference-mention-keyboard`
+
+- 测试类型：`e2e`
+- What：验证 `@` 候选列表使用方向键移动时，当前高亮项能停在移动后的选项，不会因候选刷新跳回第一项。
+- Why：`@` 候选选择依赖键盘稳定性；高亮项被刷新会导致用户插入错误资料范围。
+- How：通过真实 Settings / Workbench UI 创建并准备真实工作区；在 composer 输入 `@` 打开候选列表，按 `ArrowDown` 后观察 active 候选项。
+- Oracle：候选项数量大于 1；按下方向键后 active 候选项发生变化，并在短暂停留后保持不变，对齐 `WB-SCOPE-002-AC1` 与 `WB-COMPOSER-002-AC2` 的键盘交互口径。
+- Not：不验证 AI run 或底层检索质量。
+
 #### `workspace-root-path-required`
 
 - 测试类型：`e2e`
@@ -151,6 +161,24 @@ tests/case/workbench/
 - How：真实工作区内准备带唯一事实的文件；用户通过 UI 发送自然语言总结请求；等待真实 AI run 完成。
 - Oracle：发送后先出现用户消息和 assistant 占位，对齐 `WB-COMPOSER-003-AC1`；过程事件逐步追加，对齐 `WB-COMPOSER-003-AC2`；本地占位、总结等待层、最终 markdown 和链接行为符合 `WB-COMPOSER-003-AC3`、`WB-COMPOSER-003-AC4`；决策层不展示原始 chain-of-thought，对齐 `WB-COMPOSER-003-AC5`；最终回答包含 workspace 唯一事实并围绕用户诉求收口，对齐 `WB-CORE-005-AC1` 至 `WB-CORE-005-AC3`、`WB-CORE-006-AC1` 至 `WB-CORE-006-AC3`；记录模型、耗时、完成度评分和失败归因。
 - Not：不对最终文案逐字断言，也不把真实模型质量问题误归因为 UI bug。
+
+#### `run-navigation-snapshot-replay`
+
+- 测试类型：`e2e`
+- What：验证真实 AI 输出过程中切到 Settings，完成后回到 Workbench 能通过持久化 snapshot replay 恢复过程流和最终 assistant 回答。
+- Why：Workbench route 切换会导致 renderer 重新挂载；如果运行态只存在 renderer 内存中，用户离开页面后会丢失 AI 过程和最终回答。
+- How：通过 UI 配置真实模型和真实工作区；发送真实 AI 请求，等待过程流出现后切到 Settings；停留到 AI run 完成，再回到 Workbench 读取恢复后的过程流和最终回答。
+- Oracle：切走前过程流已出现；返回 Workbench 后仍能通过 `chatSessionSnapshotGet.runs` replay 看到过程流条目和最终回答，且 run event 包含 `answer_completed` 与 `run_completed`，对齐 `WB-SESSION-002-AC3` 与 `WB-COMPOSER-003-AC7`；记录模型、耗时、完成度评分和失败归因。
+- Not：不覆盖审批等待恢复；审批恢复由 `approval-batch-flow` 和 `chat-run-service-contract` 覆盖。
+
+#### `chat-run-service-contract`
+
+- 测试类型：`backend`
+- What：验证 Main 侧 `ChatRunService` 对智能模式提交、assistant placeholder、AI run 状态、事件日志、审批 snapshot、启动中断恢复和会话删除清理的持久化契约。
+- Why：运行持久化的真相来源已经从 renderer 收敛到 Main；这些后端契约失败时，route 切换、reload、审批恢复和最终消息落库都会失真。
+- How：使用临时 LanceDB 初始化 `StorageService` 与 `ChatRunService`，关闭自动真实 AI 启动，通过 contract 方式提交 AI run 并注入 run event。
+- Oracle：`chatSubmit(ai)` 创建 user message、assistant placeholder 与 `running` run；`answer_completed/run_completed` 后 assistant message、run status、final answer 和 event log 正确；`approval_batch_required` 后 snapshot 返回 `waiting_approval` 与 pending approval；已完成 run 的过程事件可从 snapshot `runs` 恢复，token 级事件不会污染 replay；启动恢复会把遗留 active run 标记为 failed 并写入“运行已中断”；删除会话会同步清理 messages、run 和 event log，对齐 `WB-COMPOSER-003-AC1`、`WB-COMPOSER-003-AC2`、`WB-COMPOSER-003-AC7`、`WB-SESSION-002-AC3`、`WB-SESSION-002-AC4`。
+- Not：不代替真实 UI 对 route 切换、审批点击或模型输出质量的验证。
 
 #### `approval-batch-flow`
 
@@ -184,10 +212,10 @@ tests/case/workbench/
 #### `search-results-open-rules`
 
 - 测试类型：`e2e`
-- What：验证搜索模式发送、搜索占位、右侧搜索结果、网页 / 本地结果打开规则和无可检索资料下的发送拦截。
+- What：验证搜索模式发送、completed assistant 结果摘要、右侧搜索结果、网页 / 本地结果打开规则和无可检索资料下的发送拦截。
 - Why：搜索模式是 Workbench 的非 AI 路径，必须确保不误启动 AI，且右侧结果操作符合用户预期。
 - How：通过 UI 创建并绑定真实工作区，等待本地文件和网页资料真实索引完成；切换搜索模式发送自然语言查询；点击网页结果和本地结果操作图标；再切换到无可检索资料范围发送搜索。
-- Oracle：搜索模式不启动 AI run，对齐 `WB-COMPOSER-004-AC1`；搜索中和搜索成功状态符合 `WB-COMPOSER-004-AC2`、`WB-COMPOSER-004-AC3`；网页结果调用系统浏览器、本地结果进入文件预览且正文区域无动作，对齐 `WB-PANEL-002-AC1`、`WB-PANEL-002-AC2`；无可检索资料时不执行发送并保留当前输入，对齐 `WB-MODE-002-AC1`、`WB-MODE-002-AC2`。
+- Oracle：搜索模式不启动 AI run，对齐 `WB-COMPOSER-004-AC1`；搜索提交期间防重复提交且成功后展示 completed assistant 结果摘要和右侧命中列表，对齐 `WB-COMPOSER-004-AC2`、`WB-COMPOSER-004-AC3`；网页结果调用系统浏览器、本地结果进入文件预览且正文区域无动作，对齐 `WB-PANEL-002-AC1`、`WB-PANEL-002-AC2`；无可检索资料时不执行发送并保留当前输入，对齐 `WB-MODE-002-AC1`、`WB-MODE-002-AC2`。
 - Not：不验证 embedding 召回质量和排序算法。
 
 #### `file-preview-actions`

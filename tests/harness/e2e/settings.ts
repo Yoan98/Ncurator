@@ -98,6 +98,20 @@ export const seedModelConfigs = async (
   )
 }
 
+export const seedActiveModelConfig = async (page: Page, config: LLMConfig): Promise<void> => {
+  await page.evaluate(async (input) => {
+    const saveResponse = await window.api.llmConfigSave(input)
+    if (!saveResponse.success) {
+      throw new Error(saveResponse.error || 'failed to save active llm config fixture')
+    }
+    const activeResponse = await window.api.llmConfigSetActive(input.id)
+    if (!activeResponse.success) {
+      throw new Error(activeResponse.error || 'failed to activate llm config fixture')
+    }
+    window.dispatchEvent(new Event('check-llm-config'))
+  }, config)
+}
+
 export const seedModelCatalogOverride = async (
   page: Page,
   items: readonly ModelInfo[]
@@ -164,7 +178,6 @@ export const waitForFileIndexJobIdle = async (
 ): Promise<{ lastRunningJob?: WorkspaceIndexJobRecord; tree: WorkspaceTreeListResponse }> => {
   const deadline = Date.now() + timeoutMs
   let lastRunningJob: WorkspaceIndexJobRecord | undefined
-  let tree = await readWorkspaceTree(page, workspaceId)
 
   for (;;) {
     const response = await page.evaluate(async (selectedWorkspaceId) => {
@@ -183,7 +196,6 @@ export const waitForFileIndexJobIdle = async (
       }
     }
     lastRunningJob = response.job
-    tree = await readWorkspaceTree(page, workspaceId)
     if (Date.now() >= deadline) {
       throw new Error('file index job did not become idle')
     }
@@ -197,8 +209,10 @@ export const getWorkspaceIndexCounts = async (
   const failedHintLocator = getSettingsLocator(page, importSelectors.workspaceActionableFailedHint)
   return {
     actionableCount: Number(
-      (await getSettingsLocator(page, importSelectors.workspaceActionableIndexCount).textContent()) ||
-        0
+      (await getSettingsLocator(
+        page,
+        importSelectors.workspaceActionableIndexCount
+      ).textContent()) || 0
     ),
     failedHint: (await failedHintLocator.count())
       ? (await failedHintLocator.textContent()) || ''
@@ -209,20 +223,23 @@ export const getWorkspaceIndexCounts = async (
 export const getWebSourceIndexCounts = async (
   page: Page
 ): Promise<{ actionableCount: number; failedHint: string }> => {
-  return await page.evaluate((selectors) => {
-    const actionableCountText = document
-      .querySelector(`[data-testid="${selectors.actionableCount}"]`)
-      ?.textContent?.trim()
-    const failedHint =
-      document.querySelector(`[data-testid="${selectors.failedHint}"]`)?.textContent?.trim() || ''
-    return {
-      actionableCount: Number(actionableCountText || 0),
-      failedHint
+  return await page.evaluate(
+    (selectors) => {
+      const actionableCountText = document
+        .querySelector(`[data-testid="${selectors.actionableCount}"]`)
+        ?.textContent?.trim()
+      const failedHint =
+        document.querySelector(`[data-testid="${selectors.failedHint}"]`)?.textContent?.trim() || ''
+      return {
+        actionableCount: Number(actionableCountText || 0),
+        failedHint
+      }
+    },
+    {
+      actionableCount: importSelectors.webSourceActionableIndexCount,
+      failedHint: importSelectors.webSourceActionableFailedHint
     }
-  }, {
-    actionableCount: importSelectors.webSourceActionableIndexCount,
-    failedHint: importSelectors.webSourceActionableFailedHint
-  })
+  )
 }
 
 export const seedWebSources = async (

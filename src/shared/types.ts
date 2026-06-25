@@ -668,7 +668,7 @@ export interface OpenPathWithApplicationResponse {
   error?: string
 }
 
-export type AiRunStatus = 'running' | 'completed' | 'failed' | 'cancelled'
+export type AiRunStatus = 'running' | 'waiting_approval' | 'completed' | 'failed' | 'cancelled'
 export type RuntimeIssueCode =
   | 'workspace_binding_missing'
   | 'workspace_missing'
@@ -778,17 +778,73 @@ export type AiDraftSnapshotRef = {
 }
 export type AiArtifactRef = AiFileArtifactRef
 
-export type AiRunStartRequest = {
+export type ChatSubmitMode = 'ai' | 'search'
+
+export type ChatSubmitRequest = {
+  mode: ChatSubmitMode
   sessionId: string
   input: string
   selectedReferences?: SelectedReference[]
   modelName?: string
   workspace?: WorkspaceRuntimeBinding
+  searchDocumentIds?: string[]
 }
 
-export type AiRunStartResponse = {
+export type AiRunRecord = {
+  id: string
+  sessionId: string
+  userMessageId: string
+  assistantMessageId: string
+  status: AiRunStatus
+  input: string
+  selectedReferences?: SelectedReference[]
+  workspace?: WorkspaceRuntimeBinding
+  modelName?: string
+  partialAnswer: string
+  finalAnswer?: string
+  error?: string
+  pendingApproval?: Extract<AiRunEvent, { type: 'approval_batch_required' }>
+  artifacts?: AiArtifactRef[]
+  createdAt: number
+  updatedAt: number
+  finishedAt?: number
+}
+
+export type AiRunEventRecord = {
+  id: string
+  runId: string
+  sessionId: string
+  seq: number
+  type: AiRunEvent['type']
+  event: AiRunEvent
+  createdAt: number
+}
+
+export type ChatSessionRunSnapshot = {
+  run: AiRunRecord
+  events: AiRunEvent[]
+  pendingApproval?: Extract<AiRunEvent, { type: 'approval_batch_required' }>
+}
+
+export type ChatSessionSnapshotRequest = {
+  sessionId: string
+}
+
+export type ChatSessionSnapshotResponse = {
+  messages: ChatMessage[]
+  runs?: ChatSessionRunSnapshot[]
+  activeRuns: ChatSessionRunSnapshot[]
+}
+
+export type ChatSubmitResponse = {
   success: boolean
-  runId?: string
+  mode?: ChatSubmitMode
+  userMessage?: ChatMessage
+  assistantMessage?: ChatMessage
+  run?: AiRunRecord
+  results?: SearchResult[]
+  tokens?: string[]
+  content?: string
   error?: string
 }
 

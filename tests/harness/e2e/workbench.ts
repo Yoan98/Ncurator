@@ -73,13 +73,12 @@ export type WorkbenchAiCompletionEvidence = {
 
 export type WorkbenchRunBlockerPolicy = 'fail' | 'auto_approve'
 
-export type WorkbenchRunBlockedResult =
-  {
-    kind: 'approval'
-    event: Extract<AiRunEvent, { type: 'approval_batch_required' }>
-    assistantTextSoFar: string
-    cardText: string
-  }
+export type WorkbenchRunBlockedResult = {
+  kind: 'approval'
+  event: Extract<AiRunEvent, { type: 'approval_batch_required' }>
+  assistantTextSoFar: string
+  cardText: string
+}
 
 export type WorkbenchAiRunOutcome =
   | {
@@ -630,11 +629,13 @@ const waitForSettingsCountAbove = async (
 
 const waitForButtonEnabled = async (locator: Locator): Promise<void> => {
   await locator.waitFor({ state: 'visible' })
-  await locator.page().waitForFunction(
-    (element) => element instanceof HTMLButtonElement && !element.disabled,
-    await locator.elementHandle(),
-    { timeout: WORKBENCH_LONG_E2E_TIMEOUT_MS }
-  )
+  await locator
+    .page()
+    .waitForFunction(
+      (element) => element instanceof HTMLButtonElement && !element.disabled,
+      await locator.elementHandle(),
+      { timeout: WORKBENCH_LONG_E2E_TIMEOUT_MS }
+    )
 }
 
 const readWorkspaceIdFromSettingsCard = async (
@@ -1004,11 +1005,13 @@ export const switchWorkbenchMode = async (
 export const selectWorkbenchModel = async (page: Page, modelName: string): Promise<void> => {
   const modelSelect = getWorkbenchLocator(page, workbenchSelectors.modelSelect)
   await modelSelect.click()
-  await modelSelect.locator('input').fill(modelName)
-  const dropdown = page
-    .locator('.workbench-composer-select-dropdown:not(.ant-select-dropdown-hidden)')
+  const searchInput = page
+    .locator('.workbench-select-menu.workbench-composer-menu input[placeholder="搜索模型"]')
     .last()
-  const options = dropdown.locator('.ant-select-item-option')
+  await searchInput.waitFor({ state: 'visible', timeout: WORKBENCH_MODEL_LIST_TIMEOUT_MS })
+  await searchInput.fill(modelName)
+  const dropdown = page.locator('.workbench-select-menu.workbench-composer-menu').last()
+  const options = dropdown.getByRole('option')
   const modelOption = options.filter({ hasText: modelName }).first()
   await dropdown.waitFor({ state: 'visible' })
   try {
@@ -1242,11 +1245,7 @@ export const waitForWorkbenchApplyRecordStatus = async (
   const panel = getWorkbenchLocator(page, workbenchSelectors.applyPanel)
   await panel.waitFor({ state: 'visible' })
   const expectedText =
-    status === 'reverted'
-      ? '本次 AI 修改已回退。'
-      : status === 'failed'
-        ? '失败'
-        : '回退本次修改'
+    status === 'reverted' ? '本次 AI 修改已回退。' : status === 'failed' ? '失败' : '回退本次修改'
   await page.waitForFunction(
     ({ testId, text }) => {
       const root = document.querySelector(`[data-testid="${testId}"]`)
@@ -1580,9 +1579,7 @@ export const waitForWorkbenchAiRunCompletion = async (
   })
   if (outcome.status === 'blocked') {
     const blockedSummary = describeWorkbenchBlockedResult(outcome.blocked)
-    throw new Error(
-      `AI run blocked: ${blockedSummary.blockerType} - ${blockedSummary.summary}`
-    )
+    throw new Error(`AI run blocked: ${blockedSummary.blockerType} - ${blockedSummary.summary}`)
   }
   return outcome.evidence
 }
@@ -1609,10 +1606,10 @@ export const recordWorkbenchAiEvidence = (
     new Set(
       evidence.events
         .filter(
-          (event): event is Extract<
-            AiRunEvent,
-            { type: 'tool_call_started' | 'tool_call_result' }
-          > => event.type === 'tool_call_started' || event.type === 'tool_call_result'
+          (
+            event
+          ): event is Extract<AiRunEvent, { type: 'tool_call_started' | 'tool_call_result' }> =>
+            event.type === 'tool_call_started' || event.type === 'tool_call_result'
         )
         .map((event) => event.toolName)
     )

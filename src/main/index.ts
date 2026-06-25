@@ -25,6 +25,11 @@ if (!app.isPackaged) {
   loadRootEnvOnce()
 }
 
+const e2eUserDataPath = String(process.env.NCURATOR_USER_DATA_PATH || '').trim()
+if (e2eUserDataPath) {
+  app.setPath('userData', e2eUserDataPath)
+}
+
 const singleInstanceLock = process.env.NCURATOR_E2E_OBSERVER
   ? true
   : app.requestSingleInstanceLock()

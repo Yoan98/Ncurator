@@ -20,7 +20,8 @@ describe('ai human mock-llm backend', () => {
       domain: 'ai',
       suite: 'human',
       groups: ['mock-llm'],
-      description: '验证 AiRunService 会在进入 human 前完成 embedding preflight，并支撑后续 docx 读取。',
+      description:
+        '验证 AiRunService 会在进入 human 前完成 embedding preflight，并支撑后续 docx 读取。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -117,7 +118,7 @@ describe('ai human mock-llm backend', () => {
         )
 
         runtime.assertThat(
-            result.initialEmbeddingStatus === 'uninitialized' &&
+          result.initialEmbeddingStatus === 'uninitialized' &&
             result.ensureReadyCalls === 1 &&
             result.result.status === 'completed' &&
             docxSearchResult.mode === 'semantic' &&
@@ -125,7 +126,8 @@ describe('ai human mock-llm backend', () => {
             typeof docxSearchResult.matches[0]?.score === 'number',
           {
             name: 'ai-run-service-preflights-embedding-before-human',
-            message: 'AiRunService 应在进入 human 前完成 embedding preflight，并让后续 docx semantic 搜索直接可用。',
+            message:
+              'AiRunService 应在进入 human 前完成 embedding preflight，并让后续 docx semantic 搜索直接可用。',
             data: {
               initialEmbeddingStatus: result.initialEmbeddingStatus,
               ensureReadyCalls: result.ensureReadyCalls,

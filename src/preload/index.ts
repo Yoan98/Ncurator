@@ -16,8 +16,7 @@ import {
 import type { DesktopApi, DownloadProgress, SettingsE2EApiOverrides } from './api'
 
 const isE2EFixtureMode = process.env.NCURATOR_E2E_MODE === '1'
-const isE2EObserverEnabled =
-  isE2EFixtureMode || process.env.NCURATOR_E2E_OBSERVER === '1'
+const isE2EObserverEnabled = isE2EFixtureMode || process.env.NCURATOR_E2E_OBSERVER === '1'
 let e2eApiOverrides: SettingsE2EApiOverrides | null = null
 let modelCatalogCallCount = 0
 const downloadProgressListeners = new Set<(progressData: DownloadProgress) => void>()
@@ -42,6 +41,12 @@ const emitE2EAiRunEvent = (event: AiRunEvent): void => {
       detail: event
     })
   )
+}
+
+if (isE2EObserverEnabled) {
+  ipcRenderer.on('ai-run-event', (_event: Electron.IpcRendererEvent, data: AiRunEvent) => {
+    emitE2EAiRunEvent(data)
+  })
 }
 
 const getE2EApiOverrides = (): SettingsE2EApiOverrides | null => {
@@ -254,7 +259,11 @@ const api: DesktopApi = {
   chatSessionSave: (session) => ipcRenderer.invoke('chat-session-save', session),
   chatSessionDelete: (id: string) => ipcRenderer.invoke('chat-session-delete', id),
   chatMessageList: (sessionId: string) => ipcRenderer.invoke('chat-message-list', sessionId),
-  chatMessageSave: (message) => ipcRenderer.invoke('chat-message-save', message),
+  chatSessionSnapshotGet: (payload) => ipcRenderer.invoke('chat-session-snapshot-get', payload),
+  chatSubmit: (payload) => {
+    emitE2EIpcCall('chatSubmit')
+    return ipcRenderer.invoke('chat-submit', payload)
+  },
   llmConfigList: () => {
     emitE2EIpcCall('llmConfigList')
     return ipcRenderer.invoke('llm-config-list')
@@ -289,10 +298,6 @@ const api: DesktopApi = {
   aiRuntimeSettingsGet: () => ipcRenderer.invoke('ai-runtime-settings-get'),
   aiRuntimeSettingsSave: (settings) => ipcRenderer.invoke('ai-runtime-settings-save', settings),
 
-  aiRunStart: (payload) => {
-    emitE2EIpcCall('aiRunStart')
-    return ipcRenderer.invoke('ai-run-start', payload)
-  },
   aiRunCancel: (runId: string) => ipcRenderer.invoke('ai-run-cancel', runId),
   aiRunApprovalBatchDecide: (payload) => {
     emitE2EIpcCall('aiRunApprovalBatchDecide')
@@ -323,12 +328,15 @@ const api: DesktopApi = {
       ipcRenderer.removeListener(APP_UPDATE_STATUS_CHANNEL, listener)
     }
   },
-  onAiRunEvent: (cb: (event: AiRunEvent) => void) =>
-    ipcRenderer.on('ai-run-event', (_event, data) => {
-      emitE2EAiRunEvent(data)
+  onAiRunEvent: (cb: (event: AiRunEvent) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: AiRunEvent): void => {
       cb(data)
-    }),
-  removeAiRunEventListeners: () => ipcRenderer.removeAllListeners('ai-run-event')
+    }
+    ipcRenderer.on('ai-run-event', listener)
+    return () => {
+      ipcRenderer.removeListener('ai-run-event', listener)
+    }
+  }
 }
 
 ipcRenderer.on('download-progress', (_event, data: DownloadProgress) => {

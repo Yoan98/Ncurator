@@ -21,7 +21,8 @@
   - `WebSourceStore`：`web_source`（网页资料来源 identity、网页爬取/索引状态与来源级元数据）
   - `WorkspaceStore`：`workspace_source` / `workspace_file_index`（具名工作空间、可选文件目录绑定、文件索引状态、摘要统计）
   - `WorkspaceIndexJobStore`：`workspace_index_job`（文件/网页检查与索引批次进度）
-  - `ChatStore`：`chat_session` / `chat_message`（会话与消息 CRUD）
+  - `ChatStore`：`chat_session` / `chat_message` / `chat_conversation_memory` / `chat_session_resume_snapshot`（会话、消息、记忆与 human 恢复快照 CRUD）
+  - `AiRunStore`：`ai_run` / `ai_run_event`（Workbench AI run 状态、事件日志与 snapshot replay 数据）
   - `AiFileChangeStore`：`ai_file_change`（AI 本轮实际修改文件记录、统一修改列表与跨能力回退状态）
   - `DocxApplyStore`：`docx_apply`（docx 直接写回记录、checkpoint 与回退状态）
   - `LlmConfigStore`：`llm_config`（配置 CRUD 与激活态切换）
@@ -191,11 +192,12 @@
 
 存储用户的对话会话列表。
 
-| 字段名     | 类型  | 描述         |
-| :--------- | :---- | :----------- |
-| id         | Utf8  | 会话唯一标识 |
-| title      | Utf8  | 会话标题     |
-| created_at | Int64 | 创建时间戳   |
+| 字段名       | 类型  | 描述 |
+| :----------- | :---- | :--- |
+| id           | Utf8  | 会话唯一标识 |
+| title        | Utf8  | 会话标题 |
+| created_at   | Int64 | 创建时间戳 |
+| workspace_id | Utf8  | 会话绑定的工作区 ID |
 
 ### 表: chat_conversation_memory（会话记忆表）
 
@@ -227,15 +229,69 @@
 
 存储会话中的每一条消息记录。
 
-| 字段名     | 类型             | 描述                                     |
-| :--------- | :--------------- | :--------------------------------------- |
-| id         | Utf8             | 消息唯一标识                             |
-| session_id | Utf8             | 关联的会话 ID                            |
-| role       | Utf8             | 角色（'user', 'assistant', 'system'）    |
-| content    | Utf8             | 消息内容                                 |
-| timestamp  | Int64            | 消息时间戳                               |
-| sources    | Utf8（Nullable） | 引用来源（SearchResult[] 的 JSON 字符串） |
-| error      | Boolean（Nullable） | 是否出错                               |
+| 字段名                   | 类型             | 描述 |
+| :----------------------- | :--------------- | :--- |
+| id                       | Utf8             | 消息唯一标识 |
+| session_id               | Utf8             | 关联的会话 ID |
+| role                     | Utf8             | 角色（`user / assistant / system`） |
+| content                  | Utf8             | 消息内容；AI 运行中作为 assistant 当前投影 |
+| timestamp                | Int64            | 消息时间戳 |
+| selected_references_json | Utf8（Nullable） | 用户发送时选中的 `@` 资料范围 JSON |
+| artifacts_json           | Utf8（Nullable） | assistant 关联的文件产物 JSON |
+| error                    | Boolean（Nullable） | 是否出错 |
+
+说明：
+- `chat_message` 保存用户可见消息投影；AI 运行过程、审批等待和 replay 真相来源在 `ai_run` / `ai_run_event`。
+- 搜索模式不创建 `ai_run`，只保存 user message 与 completed assistant summary message。
+
+### 表: ai_run（AI 运行状态表）
+
+存储 Workbench 智能模式每一轮 AI run 的持久化运行状态，以及 assistant message 的投影来源。
+
+| 字段名                   | 类型             | 描述 |
+| :----------------------- | :--------------- | :--- |
+| id                       | Utf8             | run 唯一标识 |
+| session_id               | Utf8             | 所属会话 ID |
+| user_message_id          | Utf8             | 本轮用户消息 ID |
+| assistant_message_id     | Utf8             | 本轮 assistant 占位 / 投影消息 ID |
+| status                   | Utf8             | `running / waiting_approval / completed / failed / cancelled` |
+| input                    | Utf8             | 本轮用户输入 |
+| selected_references_json | Utf8（Nullable） | 本轮选中的 `@` 资料范围 JSON |
+| workspace_json           | Utf8（Nullable） | 本轮工作区绑定 JSON |
+| model_name               | Utf8（Nullable） | 本轮使用模型名 |
+| partial_answer           | Utf8             | 当前已收到的流式回答投影 |
+| final_answer             | Utf8（Nullable） | 最终回答 |
+| error                    | Utf8（Nullable） | 失败或取消原因 |
+| pending_approval_json    | Utf8（Nullable） | 当前等待审批批次 JSON |
+| artifacts_json           | Utf8（Nullable） | 本轮文件产物 JSON |
+| created_at               | Int64            | 创建时间戳 |
+| updated_at               | Int64            | 最近更新时间戳 |
+| finished_at              | Int64（Nullable）| 结束时间戳 |
+
+说明：
+- `ChatRunService` 是 `ai_run` 的唯一写入编排入口；renderer 通过 `chatSubmit`、`chatSessionSnapshotGet` 和 `ai-run-event` 事件渲染投影。
+- `chatSessionSnapshotGet` 返回 `runs` 用于恢复当前会话可展示的 run 过程流与最终投影，返回 `activeRuns` 专门用于继续运行中 / 等待审批的交互状态；历史 replay 会过滤 token 级事件，最终文本以 `ai_run.partial_answer / final_answer` 为准。
+- 应用启动时会把数据库中遗留的 `running / waiting_approval` run 标记为 `failed`，写入“运行已中断，请重新发送消息。”，并清空待审批状态；当前版本不恢复已退出进程的 AI 执行。
+- 删除会话时由 `ChatRunService` 同步清理该会话的 `ai_run` 与 `ai_run_event`，避免遗留 orphan run。
+
+### 表: ai_run_event（AI 运行事件日志表）
+
+存储 AI run 的事件日志，用于 renderer 重新挂载、切路由返回或切会话时 replay 过程流。
+
+| 字段名     | 类型  | 描述 |
+| :--------- | :---- | :--- |
+| id         | Utf8  | 事件记录唯一标识 |
+| run_id     | Utf8  | 所属 run ID |
+| session_id | Utf8  | 所属会话 ID |
+| seq        | Int64 | run 内递增事件序号 |
+| type       | Utf8  | 事件类型，取自 `AiRunEvent.type` |
+| event_json | Utf8  | 完整事件 JSON |
+| created_at | Int64 | 创建时间戳 |
+
+说明：
+- 每个 run event 先写入 `ai_run_event`，再更新 `ai_run` / `chat_message` 投影，最后广播给 renderer。
+- run 内 `seq` 由 `AiRunStore` 维护递增缓存；cache miss 时从历史事件恢复最大序号，避免流式 token 场景每次追加都全量扫描事件表。
+- snapshot replay 只重建展示态，不触发实时 toast。
 
 ### 表: docx_apply（docx 直接写回记录表）
 

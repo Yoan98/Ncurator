@@ -7,10 +7,7 @@ import type {
 } from '../../../../../../shared/types'
 import type { KnowledgeRetrievalContext } from '../../../types'
 import { normalizeForIpc } from '../../../../../utils/serialization'
-import {
-  KB_LIST_DOCUMENTS_TOOL_SPEC,
-  KB_SEARCH_TOOL_SPEC
-} from './toolSpecs'
+import { KB_LIST_DOCUMENTS_TOOL_SPEC, KB_SEARCH_TOOL_SPEC } from './toolSpecs'
 import { withToolLifecycle } from '../utils/lifecycle'
 import { createToolEventEmitter } from '../utils/toolEvents'
 
@@ -116,7 +113,20 @@ export const buildKbCapabilityTools = (input: {
                 prepared.requestedDocumentIds || undefined
               )
             }
-            const { data: vec } = await ctx.embeddingService.embed(prepared.queryText)
+            let vec: Float32Array
+            try {
+              const embedding = await ctx.embeddingService.embed(prepared.queryText)
+              vec = embedding.data
+            } catch (error) {
+              if (prepared.strategy !== 'auto') throw error
+              return await ctx.documentsStore.ftsSearch(
+                prepared.queryText,
+                prepared.limit,
+                prepared.filter,
+                prepared.workspaceId,
+                prepared.requestedDocumentIds || undefined
+              )
+            }
             if (prepared.strategy === 'semantic') {
               return await ctx.documentsStore.vectorSearch(
                 vec,

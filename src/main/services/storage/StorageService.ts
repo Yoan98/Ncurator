@@ -1,4 +1,5 @@
 import { AiFileChangeStore } from './domains/AiFileChangeStore'
+import { AiRunStore } from './domains/AiRunStore'
 import { AiRuntimeSettingsStore } from './domains/AiRuntimeSettingsStore'
 import { LanceDbCore } from './core/LanceDbCore'
 import { ChatStore } from './domains/ChatStore'
@@ -19,6 +20,7 @@ export class StorageService {
   public readonly webSource: WebSourceStore
   public readonly chat: ChatStore
   public readonly aiFileChange: AiFileChangeStore
+  public readonly aiRun: AiRunStore
   public readonly docxApply: DocxApplyStore
   public readonly llm: LlmConfigStore
   public readonly aiRuntimeSettings: AiRuntimeSettingsStore
@@ -32,6 +34,7 @@ export class StorageService {
     this.webSource = new WebSourceStore(this.core)
     this.chat = new ChatStore(this.core)
     this.aiFileChange = new AiFileChangeStore(this.core)
+    this.aiRun = new AiRunStore(this.core)
     this.docxApply = new DocxApplyStore(this.core)
     this.llm = new LlmConfigStore(this.core)
     this.aiRuntimeSettings = new AiRuntimeSettingsStore(this.core)
