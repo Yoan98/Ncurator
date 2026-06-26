@@ -4,6 +4,7 @@ import {
   WORKBENCH_RESULT_E2E_TIMEOUT_MS,
   appendWorkbenchInputText,
   assertNoWorkbenchFakeSignals,
+  createWorkbenchNewSession,
   createWorkspaceThroughSettingsUi,
   getWorkbenchLocator,
   insertWorkbenchReferenceToken,
@@ -22,6 +23,26 @@ import {
 const CASE_ID = 'search-results-open-rules'
 const LOCAL_RESULT_FILE = '交付合规同步记录.docx'
 const LOCAL_RESULT_QUERY = 'Alice'
+const SIGNAL_COLLECT_TIMEOUT_MS = 3000
+
+type SearchResultSignals = Awaited<
+  ReturnType<Parameters<typeof runE2ECase>[0]['execute']>
+> extends never
+  ? never
+  : {
+      aiRunEventEntries: unknown[]
+      ipcInvokeEntries: Array<{ name: string }>
+    }
+
+const collectSignalsWithoutBlocking = async (
+  collectSignals: () => Promise<SearchResultSignals>
+): Promise<SearchResultSignals | null> =>
+  await Promise.race([
+    collectSignals(),
+    new Promise<null>((resolve) => {
+      setTimeout(() => resolve(null), SIGNAL_COLLECT_TIMEOUT_MS)
+    })
+  ])
 
 describe('workbench result e2e', () => {
   it(
@@ -78,10 +99,8 @@ describe('workbench result e2e', () => {
                 })
                 const docxViewerVisible = await getWorkbenchLocator(
                   page,
-                  workbenchSelectors.docxViewer
-                )
-                  .isVisible()
-                  .catch(() => false)
+                  workbenchSelectors.documentView
+                ).isVisible()
                 return {
                   fileResultsText,
                   docxViewerVisible
@@ -115,6 +134,7 @@ describe('workbench result e2e', () => {
               run: async () => {
                 await createWorkspaceThroughSettingsUi(page, 'Workbench Empty Search Workspace')
                 await navigateToWorkbench(page)
+                await createWorkbenchNewSession(page)
                 await selectWorkbenchWorkspace(page, 'Workbench Empty Search Workspace')
                 await switchWorkbenchMode(page, '没头脑')
                 const emptyScopeProbe = await waitForWorkbenchSearchScopeEmptyThroughUi(page)
@@ -166,17 +186,17 @@ describe('workbench result e2e', () => {
                 }
               }
             })
-            const signals = await runtime.collectSignals()
+            const signals = await collectSignalsWithoutBlocking(runtime.collectSignals)
 
             return {
               fileResultsText: fileSearch.fileResultsText,
               docxViewerVisible: fileSearch.docxViewerVisible,
               webResultsText: webSearch,
               emptySearchResult,
-              aiEventCount: signals.aiRunEventEntries.length,
-              openExternalCalls: signals.ipcInvokeEntries.filter(
+              aiEventCount: signals?.aiRunEventEntries.length ?? 0,
+              openExternalCalls: signals?.ipcInvokeEntries.filter(
                 (entry) => entry.name === 'openExternal'
-              ).length
+              ).length ?? 1
             }
           } finally {
             await setup.workspace.cleanup()

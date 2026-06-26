@@ -478,6 +478,9 @@ const ChatPage: React.FC = () => {
   const [sessions, setSessions] = useState<ChatSession[]>([])
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
   const [currentMessages, setCurrentMessages] = useState<ChatMessage[]>([])
+  const [switchingSessionId, setSwitchingSessionId] = useState<string | null>(null)
+  const [hasMoreMessagesBefore, setHasMoreMessagesBefore] = useState(false)
+  const [loadingOlderMessages, setLoadingOlderMessages] = useState(false)
   const [deleteConfirmSession, setDeleteConfirmSession] = useState<ChatSession | null>(null)
   const [deletingSessionIds, setDeletingSessionIds] = useState<Set<string>>(() => new Set())
   const [composerMode, setComposerMode] = useState<WorkbenchMode>(() =>
@@ -490,6 +493,7 @@ const ChatPage: React.FC = () => {
   const [composerContentNodes, setComposerContentNodes] = useState<ChatMessageContentNode[]>([])
   const [selectedReferences, setSelectedReferences] = useState<SelectedReference[]>([])
   const [workspaces, setWorkspaces] = useState<WorkspaceSource[]>([])
+  const [workspacesLoaded, setWorkspacesLoaded] = useState(false)
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(() =>
     readWorkbenchWorkspacePreference(window.localStorage)
   )
@@ -531,6 +535,7 @@ const ChatPage: React.FC = () => {
   const activeRunMessageIdsRef = useRef<Record<string, string>>({})
   const assistantArtifactsRef = useRef<Record<string, AiArtifactRef[]>>({})
   const lastSubmittedInputRef = useRef('')
+  const sessionSwitchRequestRef = useRef(0)
   const sidebarDragStartRef = useRef<{
     pointerId: number
     startX: number
@@ -629,11 +634,50 @@ const ChatPage: React.FC = () => {
     })
   }
 
+  const loadOlderMessages = useCallback(async (): Promise<void> => {
+    if (
+      !currentSessionId ||
+      !hasMoreMessagesBefore ||
+      loadingOlderMessages ||
+      switchingSessionId ||
+      currentMessages.length === 0
+    ) {
+      return
+    }
+    const beforeTimestamp = currentMessages[0]?.timestamp
+    if (!beforeTimestamp) return
+    setLoadingOlderMessages(true)
+    const requestSessionId = currentSessionId
+    try {
+      const opened = await window.api.chatSessionOpen({
+        sessionId: requestSessionId,
+        limit: 50,
+        beforeTimestamp
+      })
+      if (currentSessionId !== requestSessionId) return
+      setHasMoreMessagesBefore(opened.hasMoreBefore)
+      setCurrentMessages((previous) => appendMessagesDedupe(opened.messages, previous))
+    } catch (error) {
+      console.error('Failed to load older messages', error)
+    } finally {
+      if (currentSessionId === requestSessionId) setLoadingOlderMessages(false)
+    }
+  }, [
+    currentMessages,
+    currentSessionId,
+    hasMoreMessagesBefore,
+    loadingOlderMessages,
+    switchingSessionId
+  ])
+
   const handleMessageScroll = (event: React.UIEvent<HTMLDivElement>): void => {
     const scrollElement = event.currentTarget
     const distanceToBottom =
       scrollElement.scrollHeight - scrollElement.scrollTop - scrollElement.clientHeight
     shouldAutoScrollRef.current = distanceToBottom <= SCROLL_BOTTOM_TOLERANCE
+    if (scrollElement.scrollTop <= 80) {
+      void loadOlderMessages()
+    }
   }
 
   const emitSuccessMessage = useCallback(
@@ -722,23 +766,23 @@ const ChatPage: React.FC = () => {
     }
   }, [])
 
-  const loadSessionSnapshot = async (sessionId: string): Promise<void> => {
-    try {
-      const snapshot = await window.api.chatSessionSnapshotGet({ sessionId })
-      setCurrentMessages(snapshot.messages)
+  const hydrateSessionView = (
+    messages: ChatMessage[],
+    runSnapshots: ChatSessionRunSnapshot[],
+    activeRuns: ChatSessionRunSnapshot[]
+  ): void => {
       assistantArtifactsRef.current = {}
       activeRunMessageIdsRef.current = {}
       setAssistantTurns(() => {
         const nextTurns: Record<string, AssistantTurnViewModel> = {}
-        for (const message of snapshot.messages) {
+        for (const message of messages) {
           if (message.artifacts && message.artifacts.length > 0) {
             assistantArtifactsRef.current[message.id] = message.artifacts
           }
           const turn = buildAssistantTurnFromMessage(message)
           if (turn) nextTurns[message.id] = turn
         }
-        const runSnapshots = snapshot.runs || snapshot.activeRuns
-        const activeRunIds = new Set(snapshot.activeRuns.map((item) => item.run.id))
+        const activeRunIds = new Set(activeRuns.map((item) => item.run.id))
         for (const runSnapshot of runSnapshots) {
           if (activeRunIds.has(runSnapshot.run.id)) {
             activeRunMessageIdsRef.current[runSnapshot.run.id] = runSnapshot.run.assistantMessageId
@@ -753,11 +797,11 @@ const ChatPage: React.FC = () => {
         return nextTurns
       })
       const visibleActiveRun =
-        snapshot.activeRuns.find((item) => item.run.status === 'running') || snapshot.activeRuns[0]
+        activeRuns.find((item) => item.run.status === 'running') || activeRuns[0]
       setAiRunId(visibleActiveRun?.run.id || null)
       setLoading(Boolean(visibleActiveRun && visibleActiveRun.run.status === 'running'))
       const approval =
-        snapshot.activeRuns.find((item) => item.pendingApproval && !item.pendingApproval.internal)
+        activeRuns.find((item) => item.pendingApproval && !item.pendingApproval.internal)
           ?.pendingApproval || null
       setPendingApprovalBatch(approval)
       setApprovalCurrentIndex(0)
@@ -765,8 +809,24 @@ const ChatPage: React.FC = () => {
       setApprovalSubmitting(false)
       shouldAutoScrollRef.current = true
       scrollToBottom(true)
+  }
+
+  const loadSessionOpen = async (sessionId: string, requestId: number): Promise<void> => {
+    try {
+      const opened = await window.api.chatSessionOpen({ sessionId, limit: 50 })
+      if (sessionSwitchRequestRef.current !== requestId) return
+      setCurrentMessages(opened.messages)
+      setHasMoreMessagesBefore(opened.hasMoreBefore)
+      hydrateSessionView(opened.messages, opened.activeRuns, opened.activeRuns)
+      setSwitchingSessionId(null)
+
+      void window.api.chatSessionRunSummaries({ sessionId }).then((summary) => {
+        if (sessionSwitchRequestRef.current !== requestId) return
+        hydrateSessionView(opened.messages, summary.runs, opened.activeRuns)
+      })
     } catch (error) {
-      console.error('Failed to load session snapshot', error)
+      if (sessionSwitchRequestRef.current === requestId) setSwitchingSessionId(null)
+      console.error('Failed to open session', error)
     }
   }
 
@@ -801,6 +861,8 @@ const ChatPage: React.FC = () => {
       writeWorkbenchWorkspacePreference(window.localStorage, nextWorkspaceId)
     } catch (error) {
       console.error('Failed to load workspaces', error)
+    } finally {
+      setWorkspacesLoaded(true)
     }
   }, [])
 
@@ -1165,13 +1227,21 @@ const ChatPage: React.FC = () => {
 
   useEffect(() => {
     if (currentSessionId) {
-      let cancelled = false
       const sessionId = currentSessionId
+      const requestId = sessionSwitchRequestRef.current + 1
+      sessionSwitchRequestRef.current = requestId
       const sessionWorkspaceId = currentSession?.workspace_id || null
       if (sessionWorkspaceId && sessionWorkspaceId !== selectedWorkspaceId) {
         setSelectedWorkspaceId(sessionWorkspaceId)
         writeWorkbenchWorkspacePreference(window.localStorage, sessionWorkspaceId)
       }
+      setSwitchingSessionId(sessionId)
+      setCurrentMessages([])
+      setAssistantTurns({})
+      assistantArtifactsRef.current = {}
+      activeRunMessageIdsRef.current = {}
+      setHasMoreMessagesBefore(false)
+      setLoadingOlderMessages(false)
       setLoading(false)
       setAiRunId(null)
       setCancellingRun(false)
@@ -1183,8 +1253,11 @@ const ChatPage: React.FC = () => {
       setApprovalCurrentIndex(0)
       setApprovalDraftDecisions({})
       setApprovalSubmitting(false)
-      void loadSessionSnapshot(sessionId).then(() => {
-        if (cancelled) return
+      setContentPanel(createEmptyPanel())
+      setContentPanelCollapsed(true)
+      resetApplyWorkspaceState()
+      void loadSessionOpen(sessionId, requestId).then(() => {
+        if (sessionSwitchRequestRef.current !== requestId) return
         setContentPanel(createEmptyPanel())
         setContentPanelCollapsed(true)
         resetApplyWorkspaceState()
@@ -1192,11 +1265,17 @@ const ChatPage: React.FC = () => {
       void loadFileChangesForSession(sessionId)
       void refreshContextUsage(sessionId)
       return () => {
-        cancelled = true
+        if (sessionSwitchRequestRef.current === requestId) {
+          sessionSwitchRequestRef.current += 1
+        }
       }
     } else {
+      sessionSwitchRequestRef.current += 1
+      setSwitchingSessionId(null)
       setCurrentMessages([])
       setAssistantTurns({})
+      setHasMoreMessagesBefore(false)
+      setLoadingOlderMessages(false)
       setContextUsage(null)
       setContentPanel(createEmptyPanel())
       setContentPanelCollapsed(true)
@@ -1353,7 +1432,9 @@ const ChatPage: React.FC = () => {
       const messageId = activeRunMessageIdsRef.current[event.runId]
       if (!messageId) {
         if (event.type === 'run_started' && event.sessionId === currentSessionId) {
-          void loadSessionSnapshot(currentSessionId)
+          const requestId = sessionSwitchRequestRef.current + 1
+          sessionSwitchRequestRef.current = requestId
+          void loadSessionOpen(currentSessionId, requestId)
         }
         return
       }
@@ -2038,8 +2119,12 @@ const ChatPage: React.FC = () => {
     return groups
   }, [sessions])
 
+  const sessionSwitching = Boolean(switchingSessionId)
   // 判断是否为新会话（没有消息）
-  const isNewSession = useMemo(() => currentMessages.length === 0, [currentMessages])
+  const isNewSession = useMemo(
+    () => !sessionSwitching && currentMessages.length === 0,
+    [currentMessages, sessionSwitching]
+  )
 
   // 获取平台信息
   const [platform, setPlatform] = useState<string>('darwin')
@@ -2113,6 +2198,9 @@ const ChatPage: React.FC = () => {
           className="flex-1 overflow-y-auto px-2 py-2"
           data-testid={workbenchSelectors.sessionsList}
         >
+          {workspacesLoaded && workspaces.length === 0 ? (
+            <div className="px-3 py-2 text-xs text-[#9B9A97]">暂无工作区</div>
+          ) : null}
           {workspaces.map((workspace) => {
             const workspaceSessions = sessionsByWorkspace.get(workspace.id) || []
             const workspaceCollapsed = collapsedWorkspaceIds.has(workspace.id)
@@ -2298,6 +2386,24 @@ const ChatPage: React.FC = () => {
                   onScroll={handleMessageScroll}
                 >
                   <div className="nc-document">
+                    {sessionSwitching ? (
+                      <div className="space-y-5 py-6" aria-label="正在加载会话">
+                        <div className="h-4 w-32 rounded bg-[#EDEBE7]" />
+                        <div className="space-y-3">
+                          <div className="h-4 w-[78%] rounded bg-[#F1F0ED]" />
+                          <div className="h-4 w-[66%] rounded bg-[#F1F0ED]" />
+                          <div className="h-4 w-[52%] rounded bg-[#F1F0ED]" />
+                        </div>
+                        <div className="h-4 w-24 rounded bg-[#EDEBE7]" />
+                        <div className="space-y-3">
+                          <div className="h-4 w-[84%] rounded bg-[#F1F0ED]" />
+                          <div className="h-4 w-[58%] rounded bg-[#F1F0ED]" />
+                        </div>
+                      </div>
+                    ) : null}
+                    {loadingOlderMessages ? (
+                      <div className="py-3 text-center text-xs text-[#8A8781]">正在加载更早消息</div>
+                    ) : null}
                     {currentMessages.map((messageItem) =>
                       messageItem.role === 'user'
                         ? renderUserMessage(messageItem)

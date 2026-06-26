@@ -31,8 +31,13 @@ import type {
   DocumentListResponse,
   ChunkListResponse,
   ChatSession,
+  ChatRunEventsRequest,
   ChatSessionSnapshotRequest,
   ChatSessionSnapshotResponse,
+  ChatSessionOpenRequest,
+  ChatSessionOpenResponse,
+  ChatSessionRunSummariesRequest,
+  ChatSessionRunSummariesResponse,
   ChatSubmitRequest,
   ChatSubmitResponse,
   AiRuntimeSettings,
@@ -2362,6 +2367,45 @@ export function registerHandlers(services: {
       return []
     }
   })
+
+  ipcMain.handle(
+    'chat-session-open',
+    async (_event, payload: ChatSessionOpenRequest): Promise<ChatSessionOpenResponse> => {
+      try {
+        return await chatRunService.openSession(payload)
+      } catch (e: unknown) {
+        console.error('[CHAT-SESSION-OPEN] Error:', e)
+        return { messages: [], hasMoreBefore: false, activeRuns: [] }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'chat-session-run-summaries',
+    async (
+      _event,
+      payload: ChatSessionRunSummariesRequest
+    ): Promise<ChatSessionRunSummariesResponse> => {
+      try {
+        return await chatRunService.getSessionRunSummaries(payload?.sessionId)
+      } catch (e: unknown) {
+        console.error('[CHAT-SESSION-RUN-SUMMARIES] Error:', e)
+        return { runs: [] }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'chat-run-events-get',
+    async (_event, payload: ChatRunEventsRequest) => {
+      try {
+        return await chatRunService.getRunEvents(payload?.runId)
+      } catch (e: unknown) {
+        console.error('[CHAT-RUN-EVENTS-GET] Error:', e)
+        return { events: [] }
+      }
+    }
+  )
 
   ipcMain.handle(
     'chat-session-snapshot-get',

@@ -11,7 +11,13 @@ import type {
   AppUpdateActionResponse,
   AppUpdateSnapshot,
   ChatMessage,
+  ChatRunEventsRequest,
+  ChatRunEventsResponse,
   ChatSession,
+  ChatSessionOpenRequest,
+  ChatSessionOpenResponse,
+  ChatSessionRunSummariesRequest,
+  ChatSessionRunSummariesResponse,
   ChatSessionSnapshotRequest,
   ChatSessionSnapshotResponse,
   ChatSubmitRequest,
@@ -202,6 +208,11 @@ export type DesktopApi = {
   chatSessionSave: (session: ChatSession) => Promise<{ success: boolean; error?: string }>
   chatSessionDelete: (id: string) => Promise<{ success: boolean; error?: string }>
   chatMessageList: (sessionId: string) => Promise<ChatMessage[]>
+  chatSessionOpen: (payload: ChatSessionOpenRequest) => Promise<ChatSessionOpenResponse>
+  chatSessionRunSummaries: (
+    payload: ChatSessionRunSummariesRequest
+  ) => Promise<ChatSessionRunSummariesResponse>
+  chatRunEventsGet: (payload: ChatRunEventsRequest) => Promise<ChatRunEventsResponse>
   chatSessionSnapshotGet: (
     payload: ChatSessionSnapshotRequest
   ) => Promise<ChatSessionSnapshotResponse>

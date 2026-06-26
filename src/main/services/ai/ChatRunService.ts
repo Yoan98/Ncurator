@@ -31,7 +31,10 @@ import type {
   AiRunCancelResponse,
   AiRunEvent,
   AiRunRecord,
+  ChatRunEventsResponse,
   ChatMessage,
+  ChatSessionOpenResponse,
+  ChatSessionRunSummariesResponse,
   ChatSessionSnapshotResponse,
   ChatSubmitRequest,
   ChatSubmitResponse
@@ -153,22 +156,72 @@ export class ChatRunService {
     const runs = (await this.deps.aiRunStore.listRunsBySession(normalizedSessionId)).filter((run) =>
       messageIds.has(run.assistantMessageId)
     )
-    const runSnapshots = await Promise.all(
-      runs.map(async (run) => {
-        const events = (await this.deps.aiRunStore.listEvents(run.id))
-          .map((record) => record.event)
-          .filter(isSnapshotEvent)
-        return {
-          run,
-          events,
-          pendingApproval: run.pendingApproval
-        }
-      })
-    )
+    const runSnapshots = await Promise.all(runs.map((run) => this.buildRunSnapshot(run)))
     const activeRuns = runSnapshots.filter((snapshot) =>
       ACTIVE_RUN_STATUSES.includes(snapshot.run.status)
     )
     return { messages, runs: runSnapshots, activeRuns }
+  }
+
+  public async openSession(input: {
+    sessionId: string
+    limit?: number
+    beforeTimestamp?: number
+  }): Promise<ChatSessionOpenResponse> {
+    const startedAt = Date.now()
+    const normalizedSessionId = String(input.sessionId || '').trim()
+    if (!normalizedSessionId) return { messages: [], hasMoreBefore: false, activeRuns: [] }
+    const [session, page, activeRunRecords] = await Promise.all([
+      this.deps.chatStore.getChatSession(normalizedSessionId),
+      this.deps.chatStore.getChatMessagesPage({
+        sessionId: normalizedSessionId,
+        limit: input.limit || 50,
+        beforeTimestamp: input.beforeTimestamp
+      }),
+      this.deps.aiRunStore.listRunsBySession(normalizedSessionId, ACTIVE_RUN_STATUSES)
+    ])
+    const activeRuns = await Promise.all(activeRunRecords.map((run) => this.buildRunSnapshot(run)))
+    const response = {
+      session: session || undefined,
+      messages: page.messages,
+      hasMoreBefore: page.hasMoreBefore,
+      activeRuns
+    }
+    this.logSlowChatQuery('chat-session-open', startedAt, {
+      sessionId: normalizedSessionId,
+      messages: response.messages.length,
+      activeRuns: response.activeRuns.length
+    })
+    return response
+  }
+
+  public async getSessionRunSummaries(
+    sessionId: string
+  ): Promise<ChatSessionRunSummariesResponse> {
+    const startedAt = Date.now()
+    const normalizedSessionId = String(sessionId || '').trim()
+    if (!normalizedSessionId) return { runs: [] }
+    const runs = await this.deps.aiRunStore.listRunsBySession(normalizedSessionId)
+    const response = { runs: await Promise.all(runs.map((run) => this.buildRunSnapshot(run, false))) }
+    this.logSlowChatQuery('chat-session-run-summaries', startedAt, {
+      sessionId: normalizedSessionId,
+      runs: response.runs.length
+    })
+    return response
+  }
+
+  public async getRunEvents(runId: string): Promise<ChatRunEventsResponse> {
+    const startedAt = Date.now()
+    const normalizedRunId = String(runId || '').trim()
+    if (!normalizedRunId) return { events: [] }
+    const events = (await this.deps.aiRunStore.listEvents(normalizedRunId))
+      .map((record) => record.event)
+      .filter(isSnapshotEvent)
+    this.logSlowChatQuery('chat-run-events-get', startedAt, {
+      runId: normalizedRunId,
+      events: events.length
+    })
+    return { events }
   }
 
   public async deleteSession(sessionId: string): Promise<void> {
@@ -257,6 +310,45 @@ export class ChatRunService {
     })
 
     return { success: true }
+  }
+
+  private async buildRunSnapshot(run: AiRunRecord, loadEventsFallback = true) {
+    const processEvents = (run.processEvents || []).filter(isSnapshotEvent)
+    const events =
+      processEvents.length > 0 || !loadEventsFallback
+        ? processEvents
+        : (await this.deps.aiRunStore.listEvents(run.id))
+            .map((record) => record.event)
+            .filter(isSnapshotEvent)
+    return {
+      run: {
+        ...run,
+        processEvents: events,
+        eventCount: run.eventCount ?? events.length,
+        visibleEventCount: run.visibleEventCount ?? events.length
+      },
+      events,
+      pendingApproval: run.pendingApproval
+    }
+  }
+
+  private appendProcessEvent(run: AiRunRecord, event: AiRunEvent, now: number): void {
+    if (!isSnapshotEvent(event)) return
+    const currentEvents = run.processEvents || []
+    run.processEvents = [...currentEvents, event]
+    run.eventCount = (run.eventCount || 0) + 1
+    run.visibleEventCount = (run.visibleEventCount || 0) + 1
+    run.lastEventAt = now
+  }
+
+  private logSlowChatQuery(
+    label: string,
+    startedAt: number,
+    metadata: Record<string, unknown>
+  ): void {
+    const durationMs = Date.now() - startedAt
+    if (durationMs < 300 || process.env.NODE_ENV === 'production') return
+    console.debug('[CHAT-PERF]', { label, durationMs, ...metadata })
   }
 
   private async submitSearch(
@@ -369,6 +461,9 @@ export class ChatRunService {
       modelName,
       partialAnswer: '',
       artifacts: [],
+      processEvents: [],
+      eventCount: 0,
+      visibleEventCount: 0,
       createdAt,
       updatedAt: createdAt
     }
@@ -645,6 +740,8 @@ export class ChatRunService {
     const now = Date.now()
     let saveImmediately = event.type !== 'answer_token'
     let assistantMessage: ChatMessage | null = null
+
+    this.appendProcessEvent(run, event, now)
 
     if (event.type === 'answer_token') {
       run.partialAnswer = `${run.partialAnswer || ''}${event.token}`

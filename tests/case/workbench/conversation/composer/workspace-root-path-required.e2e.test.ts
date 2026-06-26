@@ -82,7 +82,13 @@ describe('workbench conversation e2e', () => {
 
           const startedAtMs = Date.now()
           await sendWorkbenchMessage(page, PROMPT)
-          const evidence = await waitForWorkbenchAiRunCompletion(runtime, startedAtMs, env.modelName)
+          const evidence = await waitForWorkbenchAiRunCompletion(
+            runtime,
+            startedAtMs,
+            env.modelName,
+            WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
+            { page, blockerPolicy: 'auto_approve' }
+          )
           recordWorkbenchAiEvidence(runtime, evidence, 0.75)
 
           return {

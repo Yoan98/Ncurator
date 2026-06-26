@@ -1,7 +1,7 @@
 import { AiFileChangeStore } from './domains/AiFileChangeStore'
 import { AiRunStore } from './domains/AiRunStore'
 import { AiRuntimeSettingsStore } from './domains/AiRuntimeSettingsStore'
-import { LanceDbCore } from './core/LanceDbCore'
+import { LanceDbCore, LANCE_TABLES } from './core/LanceDbCore'
 import { ChatStore } from './domains/ChatStore'
 import { DocxApplyStore } from './domains/DocxApplyStore'
 import { DocumentsStore } from './domains/DocumentsStore'
@@ -69,6 +69,18 @@ export class StorageService {
 
   public getLegacyLocalImportMigrationStatus(): LegacyLocalImportMigrationStatus | null {
     return this.legacyLocalImportMigrationStatus
+  }
+
+  public async optimizeChatStorage(): Promise<void> {
+    await this.core.optimizeTables([
+      LANCE_TABLES.CHAT_SESSION,
+      LANCE_TABLES.CHAT_MESSAGE,
+      LANCE_TABLES.CHAT_CONVERSATION_MEMORY,
+      LANCE_TABLES.CHAT_SESSION_RESUME_SNAPSHOT,
+      LANCE_TABLES.AI_RUN,
+      LANCE_TABLES.AI_RUN_EVENT,
+      LANCE_TABLES.AI_FILE_CHANGE
+    ])
   }
 
   public async close(): Promise<void> {

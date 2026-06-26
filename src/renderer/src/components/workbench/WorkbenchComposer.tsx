@@ -646,6 +646,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
       : !canSubmit
         ? submitDisabledReason || '当前还不能发送'
         : ''
+  const composerHint = !showCancel && !loading && !canSubmit ? sendButtonTooltip : ''
 
   return (
     <div className="relative">
@@ -847,7 +848,16 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
             </Tooltip>
           </div>
         </div>
-      </div>
+        </div>
+
+        {composerHint ? (
+          <div
+            className="mt-1 px-1 text-[12px] leading-5 text-[#9B6A1A]"
+            data-testid={workbenchSelectors.composerHint}
+          >
+            {composerHint}
+          </div>
+        ) : null}
 
       {showWorkspaceSelector ? (
         <div className="mt-2 flex min-w-0 items-center px-1">

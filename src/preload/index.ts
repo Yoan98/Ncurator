@@ -259,6 +259,9 @@ const api: DesktopApi = {
   chatSessionSave: (session) => ipcRenderer.invoke('chat-session-save', session),
   chatSessionDelete: (id: string) => ipcRenderer.invoke('chat-session-delete', id),
   chatMessageList: (sessionId: string) => ipcRenderer.invoke('chat-message-list', sessionId),
+  chatSessionOpen: (payload) => ipcRenderer.invoke('chat-session-open', payload),
+  chatSessionRunSummaries: (payload) => ipcRenderer.invoke('chat-session-run-summaries', payload),
+  chatRunEventsGet: (payload) => ipcRenderer.invoke('chat-run-events-get', payload),
   chatSessionSnapshotGet: (payload) => ipcRenderer.invoke('chat-session-snapshot-get', payload),
   chatSubmit: (payload) => {
     emitE2EIpcCall('chatSubmit')

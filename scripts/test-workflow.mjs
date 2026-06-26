@@ -219,7 +219,7 @@ const runVitest = (input) => {
   return runCommandWithFallback({
     env,
     omitNpmEnv: input.configPath.includes('e2e'),
-    preferFallback: input.configPath.includes('e2e'),
+    preferFallback: true,
     primary: {
       bin: PNPM_BIN,
       args: ['exec', 'vitest', ...commandArgs]
@@ -238,6 +238,7 @@ const partitionBackendTestFiles = (testFiles) => ({
 
 const buildE2EApp = () => {
   return runCommandWithFallback({
+    preferFallback: true,
     primary: {
       bin: PNPM_BIN,
       args: ['exec', 'electron-vite', 'build']

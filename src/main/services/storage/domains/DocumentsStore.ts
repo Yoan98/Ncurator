@@ -323,7 +323,7 @@ export class DocumentsStore {
     const docTable = await this.core.openTable(LANCE_TABLES.DOCUMENT)
     const whereClause = this.core.buildInClause('id', resultDocumentIds)
     if (!whereClause) return results
-    const documents = await docTable.query().where(whereClause).toArray()
+    const documents = (await docTable.query().where(whereClause).toArray()) as unknown[]
     const docMap = new Map(
       documents.map((row) => {
         const doc = toDocumentRecord(row)
@@ -392,7 +392,7 @@ export class DocumentsStore {
     const table = await this.core.openTable(LANCE_TABLES.WEB_SOURCE)
     const where = this.core.buildInClause('document_id', webDocumentIds)
     if (!where) return documents
-    const rows = await table.query().where(where).toArray()
+    const rows = (await table.query().where(where).toArray()) as unknown[]
     const webSourceMap = new Map(
       rows.map((row) => {
         const source = toWebSourceRecord(row)

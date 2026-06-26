@@ -817,6 +817,10 @@ export type AiRunRecord = {
   error?: string
   pendingApproval?: Extract<AiRunEvent, { type: 'approval_batch_required' }>
   artifacts?: AiArtifactRef[]
+  processEvents?: AiRunEvent[]
+  eventCount?: number
+  visibleEventCount?: number
+  lastEventAt?: number
   createdAt: number
   updatedAt: number
   finishedAt?: number
@@ -846,6 +850,35 @@ export type ChatSessionSnapshotResponse = {
   messages: ChatMessage[]
   runs?: ChatSessionRunSnapshot[]
   activeRuns: ChatSessionRunSnapshot[]
+}
+
+export type ChatSessionOpenRequest = {
+  sessionId: string
+  limit?: number
+  beforeTimestamp?: number
+}
+
+export type ChatSessionOpenResponse = {
+  session?: ChatSession
+  messages: ChatMessage[]
+  hasMoreBefore: boolean
+  activeRuns: ChatSessionRunSnapshot[]
+}
+
+export type ChatSessionRunSummariesRequest = {
+  sessionId: string
+}
+
+export type ChatSessionRunSummariesResponse = {
+  runs: ChatSessionRunSnapshot[]
+}
+
+export type ChatRunEventsRequest = {
+  runId: string
+}
+
+export type ChatRunEventsResponse = {
+  events: AiRunEvent[]
 }
 
 export type ChatSubmitResponse = {

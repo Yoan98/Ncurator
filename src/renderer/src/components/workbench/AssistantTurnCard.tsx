@@ -461,4 +461,4 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
   )
 }
 
-export default AssistantTurnCard
+export default React.memo(AssistantTurnCard)

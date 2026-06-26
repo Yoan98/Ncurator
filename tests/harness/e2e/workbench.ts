@@ -256,8 +256,17 @@ const readEnv = (name: string): string => {
 const sanitizeCasePathPart = (caseId: string): string => caseId.replace(/[^a-zA-Z0-9-_]/g, '-')
 
 const closeServer = async (server: Server): Promise<void> => {
+  const forceCloseTimer = setTimeout(() => {
+    const closeableServer = server as Server & {
+      closeAllConnections?: () => void
+      closeIdleConnections?: () => void
+    }
+    closeableServer.closeIdleConnections?.()
+    closeableServer.closeAllConnections?.()
+  }, 1000)
   await new Promise<void>((resolve, reject) => {
     server.close((error) => {
+      clearTimeout(forceCloseTimer)
       if (error) {
         reject(error)
         return
@@ -1153,9 +1162,16 @@ export const readWorkbenchSelectedControlText = async (
 ): Promise<string> =>
   (
     (await getWorkbenchLocator(page, testId)
+      .evaluate((element) => {
+        if (!(element instanceof HTMLElement)) return ''
+        return element.title || element.getAttribute('aria-label') || element.textContent || ''
+      })
+      .catch(() => '')) ||
+    (await getWorkbenchLocator(page, testId)
       .locator('.ant-select-selection-item')
       .textContent()
-      .catch(() => '')) || ''
+      .catch(() => '')) ||
+    ''
   ).trim()
 
 export const insertWorkbenchReferenceToken = async (

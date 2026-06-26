@@ -65,6 +65,15 @@ const parseContentNodes = (value: unknown): ChatMessage['contentNodes'] => {
 export class ChatStore {
   public constructor(private readonly core: LanceDbCore) {}
 
+  private async mergeById(tableName: string, row: Record<string, unknown>): Promise<void> {
+    const table = await this.core.openTable(tableName)
+    await table
+      .mergeInsert('id')
+      .whenMatchedUpdateAll()
+      .whenNotMatchedInsertAll()
+      .execute([row])
+  }
+
   public async saveConversationMemory(
     sessionId: string,
     memory: ChatConversationMemory
@@ -151,21 +160,35 @@ export class ChatStore {
   }
 
   public async saveChatSession(session: ChatSession): Promise<void> {
+    await this.mergeById(LANCE_TABLES.CHAT_SESSION, {
+      id: session.id,
+      title: session.title,
+      created_at: session.created_at,
+      workspace_id: session.workspace_id
+    })
+  }
+
+  public async getChatSession(id: string): Promise<ChatSession | null> {
     const table = await this.core.openTable(LANCE_TABLES.CHAT_SESSION)
-    await table.delete(`id = '${this.core.escapeSqlString(session.id)}'`)
-    await table.add([
-      {
-        id: session.id,
-        title: session.title,
-        created_at: session.created_at,
-        workspace_id: session.workspace_id
-      }
-    ])
+    const rows = await table
+      .query()
+      .where(`id = '${this.core.escapeSqlString(id)}'`)
+      .select(['id', 'title', 'created_at', 'workspace_id'])
+      .limit(1)
+      .toArray()
+    const row = rows[0] as ChatSessionRow | undefined
+    if (!row) return null
+    return {
+      id: String(row.id || ''),
+      title: String(row.title || ''),
+      created_at: Number(row.created_at || 0),
+      workspace_id: String(row.workspace_id || '')
+    }
   }
 
   public async getChatSessions(): Promise<ChatSession[]> {
     const table = await this.core.openTable(LANCE_TABLES.CHAT_SESSION)
-    const results = await table.query().toArray()
+    const results = await table.query().select(['id', 'title', 'created_at', 'workspace_id']).toArray()
     return results
       .map((r) => {
         const row = r as ChatSessionRow
@@ -195,23 +218,19 @@ export class ChatStore {
   }
 
   public async saveChatMessage(message: ChatMessage): Promise<void> {
-    const table = await this.core.openTable(LANCE_TABLES.CHAT_MESSAGE)
-    await table.delete(`id = '${this.core.escapeSqlString(message.id)}'`)
-    await table.add([
-      {
-        id: message.id,
-        session_id: message.session_id,
-        role: message.role,
-        content: message.content,
-        timestamp: message.timestamp,
-        content_nodes_json: message.contentNodes ? JSON.stringify(message.contentNodes) : undefined,
-        selected_references_json: message.selectedReferences
-          ? JSON.stringify(message.selectedReferences)
-          : undefined,
-        error: message.error,
-        artifacts_json: message.artifacts ? JSON.stringify(message.artifacts) : undefined
-      }
-    ])
+    await this.mergeById(LANCE_TABLES.CHAT_MESSAGE, {
+      id: message.id,
+      session_id: message.session_id,
+      role: message.role,
+      content: message.content,
+      timestamp: message.timestamp,
+      content_nodes_json: message.contentNodes ? JSON.stringify(message.contentNodes) : undefined,
+      selected_references_json: message.selectedReferences
+        ? JSON.stringify(message.selectedReferences)
+        : undefined,
+      error: message.error,
+      artifacts_json: message.artifacts ? JSON.stringify(message.artifacts) : undefined
+    })
   }
 
   public async getChatMessages(sessionId: string): Promise<ChatMessage[]> {
@@ -219,8 +238,58 @@ export class ChatStore {
     const results = await table
       .query()
       .where(`session_id = '${this.core.escapeSqlString(sessionId)}'`)
+      .select([
+        'id',
+        'session_id',
+        'role',
+        'content',
+        'timestamp',
+        'content_nodes_json',
+        'selected_references_json',
+        'artifacts_json',
+        'error'
+      ])
       .toArray()
-    return results
+    return this.toMessages(results)
+  }
+
+  public async getChatMessagesPage(input: {
+    sessionId: string
+    limit: number
+    beforeTimestamp?: number
+  }): Promise<{ messages: ChatMessage[]; hasMoreBefore: boolean }> {
+    const safeLimit = Math.max(1, Math.min(100, Number(input.limit || 50)))
+    const beforeTimestamp = Number(input.beforeTimestamp)
+    const where = this.core.combineWhere([
+      `session_id = '${this.core.escapeSqlString(input.sessionId)}'`,
+      Number.isFinite(beforeTimestamp) ? `timestamp < ${Math.floor(beforeTimestamp)}` : undefined
+    ])
+    const table = await this.core.openTable(LANCE_TABLES.CHAT_MESSAGE)
+    const results = await table
+      .query()
+      .where(where || 'session_id IS NOT NULL')
+      .select([
+        'id',
+        'session_id',
+        'role',
+        'content',
+        'timestamp',
+        'content_nodes_json',
+        'selected_references_json',
+        'artifacts_json',
+        'error'
+      ])
+      .toArray()
+    const sorted = this.toMessages(results).sort((a, b) => b.timestamp - a.timestamp)
+    const messages = sorted.slice(0, safeLimit)
+    return {
+      messages: messages.sort((a, b) => a.timestamp - b.timestamp),
+      hasMoreBefore: sorted.length > safeLimit
+    }
+  }
+
+  private toMessages(rows: unknown[]): ChatMessage[] {
+    return rows
       .map((r) => {
         const row = r as ChatMessageRow
         return {

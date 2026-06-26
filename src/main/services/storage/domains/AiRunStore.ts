@@ -25,6 +25,10 @@ type AiRunRow = {
   error?: unknown
   pending_approval_json?: unknown
   artifacts_json?: unknown
+  process_events_json?: unknown
+  event_count?: unknown
+  visible_event_count?: unknown
+  last_event_at?: unknown
   created_at?: unknown
   updated_at?: unknown
   finished_at?: unknown
@@ -74,6 +78,44 @@ const normalizeRunStatus = (value: unknown): AiRunStatus => {
   return 'failed'
 }
 
+const RUN_COLUMNS = [
+  'id',
+  'session_id',
+  'user_message_id',
+  'assistant_message_id',
+  'status',
+  'input',
+  'selected_references_json',
+  'workspace_json',
+  'model_name',
+  'partial_answer',
+  'final_answer',
+  'error',
+  'pending_approval_json',
+  'artifacts_json',
+  'process_events_json',
+  'event_count',
+  'visible_event_count',
+  'last_event_at',
+  'created_at',
+  'updated_at',
+  'finished_at'
+]
+
+const EVENT_COLUMNS = ['id', 'run_id', 'session_id', 'seq', 'type', 'event_json', 'created_at']
+
+const shouldPersistEvent = (event: AiRunEvent): boolean =>
+  event.type !== 'answer_token' && event.type !== 'llm_stream_delta'
+
+const getEventTime = (event: AiRunEvent, fallback: number): number => {
+  const record = event as unknown as Record<string, unknown>
+  for (const key of ['createdAt', 'completedAt', 'failedAt', 'decidedAt']) {
+    const value = Number(record[key])
+    if (Number.isFinite(value) && value > 0) return value
+  }
+  return fallback
+}
+
 const toRunRecord = (row: AiRunRow): AiRunRecord => ({
   id: String(row.id || ''),
   sessionId: String(row.session_id || ''),
@@ -89,6 +131,10 @@ const toRunRecord = (row: AiRunRow): AiRunRecord => ({
   error: row.error ? String(row.error) : undefined,
   pendingApproval: parseJsonObject<AiRunRecord['pendingApproval']>(row.pending_approval_json),
   artifacts: parseJsonArray<AiArtifactRef>(row.artifacts_json),
+  processEvents: parseJsonArray<AiRunEvent>(row.process_events_json),
+  eventCount: row.event_count ? Number(row.event_count) : undefined,
+  visibleEventCount: row.visible_event_count ? Number(row.visible_event_count) : undefined,
+  lastEventAt: row.last_event_at ? Number(row.last_event_at) : undefined,
   createdAt: Number(row.created_at || 0),
   updatedAt: Number(row.updated_at || 0),
   finishedAt: row.finished_at ? Number(row.finished_at) : undefined
@@ -116,32 +162,39 @@ export class AiRunStore {
 
   public async saveRun(record: AiRunRecord): Promise<void> {
     const table = await this.core.openTable(LANCE_TABLES.AI_RUN)
-    await table.delete(`id = '${this.core.escapeSqlString(record.id)}'`)
-    await table.add([
-      {
-        id: record.id,
-        session_id: record.sessionId,
-        user_message_id: record.userMessageId,
-        assistant_message_id: record.assistantMessageId,
-        status: record.status,
-        input: record.input,
-        selected_references_json: record.selectedReferences
-          ? JSON.stringify(record.selectedReferences)
-          : undefined,
-        workspace_json: record.workspace ? JSON.stringify(record.workspace) : undefined,
-        model_name: record.modelName,
-        partial_answer: record.partialAnswer,
-        final_answer: record.finalAnswer,
-        error: record.error,
-        pending_approval_json: record.pendingApproval
-          ? JSON.stringify(record.pendingApproval)
-          : undefined,
-        artifacts_json: record.artifacts ? JSON.stringify(record.artifacts) : undefined,
-        created_at: record.createdAt,
-        updated_at: record.updatedAt,
-        finished_at: record.finishedAt
-      }
-    ])
+    await table
+      .mergeInsert('id')
+      .whenMatchedUpdateAll()
+      .whenNotMatchedInsertAll()
+      .execute([
+        {
+          id: record.id,
+          session_id: record.sessionId,
+          user_message_id: record.userMessageId,
+          assistant_message_id: record.assistantMessageId,
+          status: record.status,
+          input: record.input,
+          selected_references_json: record.selectedReferences
+            ? JSON.stringify(record.selectedReferences)
+            : undefined,
+          workspace_json: record.workspace ? JSON.stringify(record.workspace) : undefined,
+          model_name: record.modelName,
+          partial_answer: record.partialAnswer,
+          final_answer: record.finalAnswer,
+          error: record.error,
+          pending_approval_json: record.pendingApproval
+            ? JSON.stringify(record.pendingApproval)
+            : undefined,
+          artifacts_json: record.artifacts ? JSON.stringify(record.artifacts) : undefined,
+          process_events_json: record.processEvents ? JSON.stringify(record.processEvents) : undefined,
+          event_count: record.eventCount,
+          visible_event_count: record.visibleEventCount,
+          last_event_at: record.lastEventAt,
+          created_at: record.createdAt,
+          updated_at: record.updatedAt,
+          finished_at: record.finishedAt
+        }
+      ])
   }
 
   public async getRun(runId: string): Promise<AiRunRecord | null> {
@@ -149,6 +202,8 @@ export class AiRunStore {
     const rows = await table
       .query()
       .where(`id = '${this.core.escapeSqlString(runId)}'`)
+      .select(RUN_COLUMNS)
+      .limit(1)
       .toArray()
     const row = rows[0] as AiRunRow | undefined
     return row ? toRunRecord(row) : null
@@ -163,7 +218,7 @@ export class AiRunStore {
     const statusWhere = this.core.buildInClause('status', statuses)
     const where = this.core.combineWhere([sessionWhere, statusWhere])
     const query = where ? table.query().where(where) : table.query()
-    const rows = await query.toArray()
+    const rows = await query.select(RUN_COLUMNS).toArray()
     return rows.map((row) => toRunRecord(row as AiRunRow)).sort((a, b) => a.createdAt - b.createdAt)
   }
 
@@ -171,7 +226,7 @@ export class AiRunStore {
     const table = await this.core.openTable(LANCE_TABLES.AI_RUN)
     const where = this.core.buildInClause('status', statuses)
     const query = where ? table.query().where(where) : table.query()
-    const rows = await query.toArray()
+    const rows = await query.select(RUN_COLUMNS).toArray()
     return rows.map((row) => toRunRecord(row as AiRunRow)).sort((a, b) => a.createdAt - b.createdAt)
   }
 
@@ -180,20 +235,43 @@ export class AiRunStore {
     sessionId: string
     event: AiRunEvent
   }): Promise<AiRunEventRecord> {
+    const records = await this.appendEvents({
+      runId: input.runId,
+      sessionId: input.sessionId,
+      events: [input.event]
+    })
+    return records[0]
+  }
+
+  public async appendEvents(input: {
+    runId: string
+    sessionId: string
+    events: AiRunEvent[]
+  }): Promise<AiRunEventRecord[]> {
     return await this.withRunEventSeqQueue(input.runId, async () => {
-      const table = await this.core.openTable(LANCE_TABLES.AI_RUN_EVENT)
-      const seq = await this.allocateNextEventSeq(input.runId)
-      const record: AiRunEventRecord = {
+      const now = Date.now()
+      const records = input.events.map((event) => ({
         id: uuidv4(),
         runId: input.runId,
         sessionId: input.sessionId,
-        seq,
-        type: input.event.type,
-        event: input.event,
-        createdAt: Date.now()
+        seq: 0,
+        type: event.type,
+        event,
+        createdAt: getEventTime(event, now)
+      }))
+      const persistedRecords = records.filter((record) => shouldPersistEvent(record.event))
+      if (persistedRecords.length === 0) {
+        return records
       }
-      await table.add([
-        {
+
+      const startSeq = await this.allocateNextEventSeqRange(input.runId, persistedRecords.length)
+      persistedRecords.forEach((record, index) => {
+        record.seq = startSeq + index
+      })
+
+      const table = await this.core.openTable(LANCE_TABLES.AI_RUN_EVENT)
+      await table.add(
+        persistedRecords.map((record) => ({
           id: record.id,
           run_id: record.runId,
           session_id: record.sessionId,
@@ -201,9 +279,9 @@ export class AiRunStore {
           type: record.type,
           event_json: JSON.stringify(record.event),
           created_at: record.createdAt
-        }
-      ])
-      return record
+        }))
+      )
+      return records
     })
   }
 
@@ -212,6 +290,7 @@ export class AiRunStore {
     const rows = await table
       .query()
       .where(`run_id = '${this.core.escapeSqlString(runId)}'`)
+      .select(EVENT_COLUMNS)
       .toArray()
     return rows
       .map((row) => toEventRecord(row as AiRunEventRow))
@@ -232,17 +311,17 @@ export class AiRunStore {
     await runTable.delete(`session_id = '${safeSessionId}'`)
   }
 
-  private async allocateNextEventSeq(runId: string): Promise<number> {
+  private async allocateNextEventSeqRange(runId: string, count: number): Promise<number> {
     const lastSeq = this.lastEventSeqByRun.get(runId)
     if (lastSeq !== undefined) {
       const nextSeq = lastSeq + 1
-      this.lastEventSeqByRun.set(runId, nextSeq)
+      this.lastEventSeqByRun.set(runId, nextSeq + count - 1)
       return nextSeq
     }
 
     const existing = await this.listEvents(runId)
     const nextSeq = existing.reduce((max, event) => Math.max(max, event.seq), 0) + 1
-    this.lastEventSeqByRun.set(runId, nextSeq)
+    this.lastEventSeqByRun.set(runId, nextSeq + count - 1)
     return nextSeq
   }
 

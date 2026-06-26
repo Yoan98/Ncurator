@@ -54,6 +54,12 @@ import {
   ChatMessage,
   ChatSessionSnapshotRequest,
   ChatSessionSnapshotResponse,
+  ChatSessionOpenRequest,
+  ChatSessionOpenResponse,
+  ChatSessionRunSummariesRequest,
+  ChatSessionRunSummariesResponse,
+  ChatRunEventsRequest,
+  ChatRunEventsResponse,
   ChatSubmitRequest,
   ChatSubmitResponse,
   LLMConfig,
@@ -156,6 +162,12 @@ export type {
   ChatMessage,
   ChatSessionSnapshotRequest,
   ChatSessionSnapshotResponse,
+  ChatSessionOpenRequest,
+  ChatSessionOpenResponse,
+  ChatSessionRunSummariesRequest,
+  ChatSessionRunSummariesResponse,
+  ChatRunEventsRequest,
+  ChatRunEventsResponse,
   ChatSubmitRequest,
   ChatSubmitResponse,
   LLMConfig,
@@ -209,7 +221,7 @@ export type {
 export interface TableConfig {
   name: string
   schema: arrow.Schema
-  recreateIfSchemaChanged?: boolean
+  scalarIndexColumns?: string[]
   vectorIndexConfig?: {
     column: string
     options?: Record<string, unknown>
