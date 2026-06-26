@@ -321,6 +321,8 @@ export const fileChangeSummaryItemSchema = z.object({
   capability: z.enum(['docx', 'terminal_exec', 'ppt']),
   operation: z.enum(['created', 'updated']),
   changeCount: z.number().int().min(0),
+  insertCount: z.number().int().min(0),
+  deleteCount: z.number().int().min(0),
   status: z.enum(['applied', 'reverted', 'failed'])
 })
 

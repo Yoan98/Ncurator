@@ -19,6 +19,8 @@ type DocxApplyRow = {
   operation?: PrimitiveRowValue
   final_revision_ref?: PrimitiveRowValue
   change_count?: PrimitiveRowValue
+  insert_count?: PrimitiveRowValue
+  delete_count?: PrimitiveRowValue
   before_exists?: PrimitiveRowValue
   before_snapshot_path?: PrimitiveRowValue
   before_checksum?: PrimitiveRowValue
@@ -75,6 +77,8 @@ const toDocxApplyRecord = (row: DocxApplyRow): DocxApplyRecord => ({
   operation: normalizeOperation(row.operation),
   final_revision_ref: toRequiredString(row.final_revision_ref),
   change_count: toRequiredNumber(row.change_count),
+  insert_count: toRequiredNumber(row.insert_count),
+  delete_count: toRequiredNumber(row.delete_count),
   before_exists: toRequiredBoolean(row.before_exists),
   before_snapshot_path: toOptionalString(row.before_snapshot_path),
   before_checksum: toOptionalString(row.before_checksum),
@@ -110,6 +114,8 @@ const toDocxApplyWriteRow = (record: DocxApplyRecord): WriteRow => ({
   operation: record.operation,
   final_revision_ref: record.final_revision_ref,
   change_count: record.change_count,
+  insert_count: record.insert_count,
+  delete_count: record.delete_count,
   before_exists: record.before_exists,
   before_snapshot_path: record.before_snapshot_path,
   before_checksum: record.before_checksum,

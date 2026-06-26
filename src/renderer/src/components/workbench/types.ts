@@ -157,7 +157,10 @@ export type AssistantTurnApplyTarget = {
   changeId: string
   title: string
   sourcePath?: string
+  operation?: 'created' | 'updated'
   changeCount: number
+  insertCount: number
+  deleteCount: number
   status?: AiFileChangeStatus
 }
 

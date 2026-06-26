@@ -107,6 +107,8 @@ export const recordTerminalArtifacts = async (input: {
           fileName: path.basename(artifact.resolvedPath),
           operation,
           changeCount: 1,
+          insertCount: operation === 'created' ? 1 : 0,
+          deleteCount: 0,
           beforeSnapshotPath: artifact.beforeSnapshotPath,
           beforeChecksum: artifact.beforeChecksum,
           afterChecksum: afterStats.checksum,

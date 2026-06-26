@@ -12,6 +12,7 @@ type DocViewerMetadata = {
 
 type DocViewerDocument = Omit<IDocument, 'fileData'> & {
   file?: File | Blob
+  fileName?: string
   fileData?: string | ArrayBuffer | Blob | File
   metadata?: DocViewerMetadata
 }
@@ -38,25 +39,37 @@ const scrollToAnchor = (container: HTMLDivElement, anchorName?: string): void =>
 const CustomDocxRenderer = ({ mainState }: DocRendererProps) => {
   const currentDocument = mainState.currentDocument as DocViewerDocument | undefined
   const containerRef = useRef<HTMLDivElement | null>(null)
+  const lastRenderedKeyRef = useRef<string | null>(null)
+  const documentFile = currentDocument?.file
+  const documentFileData = currentDocument?.fileData
+  const documentUri = currentDocument?.uri
+  const anchorName = currentDocument?.metadata?.anchorName
+  const renderKey = [documentUri || '', currentDocument?.fileName || '', anchorName || ''].join(
+    '\u0000'
+  )
 
   useEffect(() => {
     const container = containerRef.current
     if (!container || !currentDocument) return
+    if (lastRenderedKeyRef.current === renderKey && container.childNodes.length > 0) {
+      scrollToAnchor(container, anchorName)
+      return
+    }
 
     let cancelled = false
     const renderDocx = async (): Promise<void> => {
-      let file = currentDocument.file
-      if (!file && currentDocument.fileData instanceof Blob) {
-        file = currentDocument.fileData
+      let file = documentFile
+      if (!file && documentFileData instanceof Blob) {
+        file = documentFileData
       }
-      if (!file && currentDocument.fileData instanceof ArrayBuffer) {
-        file = new Blob([currentDocument.fileData], {
+      if (!file && documentFileData instanceof ArrayBuffer) {
+        file = new Blob([documentFileData], {
           type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
         })
       }
-      if (!file && currentDocument.uri) {
+      if (!file && documentUri) {
         try {
-          const response = await fetch(currentDocument.uri)
+          const response = await fetch(documentUri)
           file = await response.blob()
         } catch (error) {
           console.error('Failed to fetch docx', error)
@@ -70,7 +83,8 @@ const CustomDocxRenderer = ({ mainState }: DocRendererProps) => {
       try {
         await previewer.preview(file)
         if (!cancelled) {
-          scrollToAnchor(container, currentDocument.metadata?.anchorName)
+          lastRenderedKeyRef.current = renderKey
+          scrollToAnchor(container, anchorName)
         }
       } catch (error) {
         console.error('Failed to render docx preview', error)
@@ -81,7 +95,7 @@ const CustomDocxRenderer = ({ mainState }: DocRendererProps) => {
     return () => {
       cancelled = true
     }
-  }, [currentDocument])
+  }, [anchorName, currentDocument, documentFile, documentFileData, documentUri, renderKey])
 
   if (!currentDocument) return null
 

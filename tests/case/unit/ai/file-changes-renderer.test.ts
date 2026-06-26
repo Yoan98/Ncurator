@@ -17,6 +17,8 @@ describe('ai unit file changes renderer', () => {
           capability: 'docx',
           operation: 'updated',
           changeCount: 2,
+          insertCount: 1,
+          deleteCount: 1,
           status: 'applied'
         }
       ]
@@ -26,6 +28,8 @@ describe('ai unit file changes renderer', () => {
 
     expect(rendered).toContain('文件：sample.docx')
     expect(rendered).toContain('改动数：2')
+    expect(rendered).toContain('新增：1')
+    expect(rendered).toContain('删除：1')
     expect(rendered).toContain('文件路径：/workspace/sample.docx')
     expect(rendered).toContain('修改记录：change-sample')
   })

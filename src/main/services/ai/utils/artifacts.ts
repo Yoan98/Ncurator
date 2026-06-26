@@ -155,6 +155,8 @@ const toFileChangeSummaryItem = (record: AiFileChangeRecord): FileChangesSummary
   capability: record.capability,
   operation: record.operation,
   changeCount: record.changeCount,
+  insertCount: record.insertCount,
+  deleteCount: record.deleteCount,
   status: record.status
 })
 
@@ -170,6 +172,8 @@ export const toAiFileChangeRecordFromDocxApply = (
   fileName: record.source_name,
   operation: record.operation,
   changeCount: record.change_count,
+  insertCount: record.insert_count,
+  deleteCount: record.delete_count,
   beforeSnapshotPath: record.before_snapshot_path,
   beforeChecksum: record.before_checksum,
   afterChecksum: record.after_checksum,

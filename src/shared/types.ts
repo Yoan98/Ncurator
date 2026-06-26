@@ -545,6 +545,8 @@ export interface AiFileChangeRecord {
   fileName: string
   operation: AiFileChangeOperation
   changeCount: number
+  insertCount: number
+  deleteCount: number
   beforeSnapshotPath?: string
   beforeChecksum?: string
   afterChecksum?: string
@@ -600,6 +602,8 @@ export interface DocxApplyRecord {
   operation: AiFileChangeOperation
   final_revision_ref: string
   change_count: number
+  insert_count: number
+  delete_count: number
   before_exists: boolean
   before_snapshot_path?: string
   before_checksum?: string
@@ -656,6 +660,8 @@ export interface FileChangeSummaryItem {
   capability: AiFileChangeCapability
   operation: AiFileChangeOperation
   changeCount: number
+  insertCount: number
+  deleteCount: number
   status: AiFileChangeStatus
 }
 

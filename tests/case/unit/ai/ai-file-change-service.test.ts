@@ -48,6 +48,8 @@ const createRecord = (input: Partial<AiFileChangeRecord>): AiFileChangeRecord =>
   fileName: input.fileName || 'target.txt',
   operation: input.operation || 'updated',
   changeCount: input.changeCount ?? 1,
+  insertCount: input.insertCount ?? 1,
+  deleteCount: input.deleteCount ?? 0,
   beforeSnapshotPath: input.beforeSnapshotPath,
   beforeChecksum: input.beforeChecksum,
   afterChecksum: input.afterChecksum,

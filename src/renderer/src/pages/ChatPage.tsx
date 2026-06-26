@@ -158,7 +158,10 @@ const artifactToApplyTarget = (
     changeId: artifact.applyId,
     title: artifact.fileName,
     sourcePath: artifact.path,
+    operation: artifact.operation,
     changeCount: 0,
+    insertCount: 0,
+    deleteCount: 0,
     status: 'applied'
   }
 }
@@ -237,7 +240,10 @@ const reduceAssistantTurnByRunEvent = (
             changeId: event.applyId,
             title: event.fileName,
             sourcePath: event.path,
+            operation: event.operation,
             changeCount: 0,
+            insertCount: 0,
+            deleteCount: 0,
             status: 'applied'
           })
         : next.applyTargets
@@ -422,6 +428,8 @@ const fileChangeToDocxApplyRecord = (record: AiFileChangeRecord): DocxApplyRecor
   operation: record.operation,
   final_revision_ref: '',
   change_count: record.changeCount,
+  insert_count: record.insertCount,
+  delete_count: record.deleteCount,
   before_exists: Boolean(record.beforeSnapshotPath),
   before_snapshot_path: record.beforeSnapshotPath,
   before_checksum: record.beforeChecksum,
@@ -1985,6 +1993,14 @@ const ChatPage: React.FC = () => {
 
   const handleApplyRevert = async (): Promise<void> => {
     if (!activeApplyRecord || !currentSessionId || applyReverting) return
+    if (activeApplyRecord.operation === 'created') {
+      setApplyForceConfirm({
+        changeId: activeApplyRecord.id,
+        title: '删除这个新建文件？',
+        content: '这是本次 AI 新建的文件。回退会删除该文件。'
+      })
+      return
+    }
     setApplyReverting(true)
     try {
       const response = await window.api.aiFileChangeRevert({

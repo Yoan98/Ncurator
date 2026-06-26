@@ -2305,6 +2305,8 @@ export function registerHandlers(services: {
                   fileName: docxResponse.record.source_name,
                   operation: docxResponse.record.operation,
                   changeCount: docxResponse.record.change_count,
+                  insertCount: docxResponse.record.insert_count,
+                  deleteCount: docxResponse.record.delete_count,
                   beforeSnapshotPath: docxResponse.record.before_snapshot_path,
                   beforeChecksum: docxResponse.record.before_checksum,
                   afterChecksum: docxResponse.record.after_checksum,

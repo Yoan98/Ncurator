@@ -5,7 +5,10 @@ export const buildApplyTarget = (record: AiFileChangeRecord): AssistantTurnApply
   changeId: record.id,
   title: record.fileName,
   sourcePath: record.path,
+  operation: record.operation,
   changeCount: record.changeCount,
+  insertCount: record.insertCount,
+  deleteCount: record.deleteCount,
   status: record.status
 })
 

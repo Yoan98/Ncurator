@@ -20,6 +20,7 @@ import WorkbenchBrowserPanel from './WorkbenchBrowserPanel'
 import type { SearchWorkbenchTurn, WorkbenchContentPanelState } from './types'
 import { workbenchSelectors } from '../../testing/selectors'
 import { formatWorkspacePathLabel } from './pathDisplay'
+import ChangeCountBadges from './ChangeCountBadges'
 
 type WorkbenchContentPanelProps = {
   state: WorkbenchContentPanelState
@@ -68,6 +69,12 @@ const WorkbenchEmptyPanel: React.FC = () => (
     </div>
   </div>
 )
+
+const getParentPath = (filePath: string): string => {
+  const normalized = filePath.replace(/[/\\]+$/, '')
+  const separatorIndex = Math.max(normalized.lastIndexOf('/'), normalized.lastIndexOf('\\'))
+  return separatorIndex > 0 ? normalized.slice(0, separatorIndex) : filePath
+}
 
 const WorkbenchSearchResultsPanel: React.FC<{
   state: Extract<WorkbenchContentPanelState, { kind: 'search_list' }>
@@ -197,6 +204,10 @@ const WorkbenchDocumentPreviewPanel: React.FC<{
   filePath: string
   documents: FileRenderDocument[]
   mode: 'preview' | 'edit'
+  status?: DocxApplyRecord['status']
+  operation?: DocxApplyRecord['operation']
+  insertCount?: number
+  deleteCount?: number
   testId?: string
   loading?: boolean
   reverting?: boolean
@@ -217,6 +228,10 @@ const WorkbenchDocumentPreviewPanel: React.FC<{
   filePath,
   documents,
   mode,
+  status,
+  operation,
+  insertCount = 0,
+  deleteCount = 0,
   testId,
   loading = false,
   reverting = false,
@@ -233,6 +248,7 @@ const WorkbenchDocumentPreviewPanel: React.FC<{
   onRevealPath,
   onRevert
 }) => {
+  const isDeletedCreatedFile = mode === 'edit' && status === 'reverted' && operation === 'created'
   const pathLabel = useMemo(
     () => formatWorkspacePathLabel(filePath, workspaces, fallbackWorkspaceName),
     [fallbackWorkspaceName, filePath, workspaces]
@@ -241,6 +257,17 @@ const WorkbenchDocumentPreviewPanel: React.FC<{
     mode === 'edit'
       ? 'border-[#E8E7E4] bg-[#F7F7F5] text-[#37352F]'
       : 'border-[#EEEEEC] bg-white text-[#787774]'
+  const revealPath = isDeletedCreatedFile ? getParentPath(filePath) : filePath
+  const revealTitle = isDeletedCreatedFile ? '定位到所在文件夹' : '定位到系统位置'
+  const openTitle = isDeletedCreatedFile ? '文件已删除，不能打开' : '系统默认打开'
+  const revertTitle =
+    status === 'reverted'
+      ? isDeletedCreatedFile
+        ? '已回退，文件已删除'
+        : '已回退，不能重复操作'
+      : operation === 'created'
+        ? '回退会删除这个新建文件'
+        : '回退本次修改'
 
   return (
     <div className="flex h-full min-h-0 flex-col" data-testid={testId}>
@@ -266,38 +293,41 @@ const WorkbenchDocumentPreviewPanel: React.FC<{
             >
               {mode === 'edit' ? '编辑' : '预览'}
             </span>
+            {mode === 'edit' ? (
+              <ChangeCountBadges insertCount={insertCount} deleteCount={deleteCount} />
+            ) : null}
           </div>
           <div className="mt-1 truncate text-xs text-[#B1B0AD]">{pathLabel || filePath}</div>
         </div>
         <div className="flex shrink-0 items-center gap-1">
-          <Tooltip title="定位到系统位置">
+          <Tooltip title={revealTitle}>
             <Button
               type="text"
               size="small"
-              aria-label="定位到系统位置"
+              aria-label={revealTitle}
               icon={<HiFolderOpen className="h-4 w-4" />}
               className="!text-[#787774] hover:!bg-[#F4F4F2] hover:!text-[#37352F]"
               data-testid={workbenchSelectors.applyRevealButton}
-              onClick={() => void onRevealPath(filePath)}
+              onClick={() => void onRevealPath(revealPath)}
             />
           </Tooltip>
-          <Tooltip title="系统默认打开">
+          <Tooltip title={openTitle}>
             <Button
               type="text"
               size="small"
-              aria-label="系统默认打开"
+              aria-label={openTitle}
               icon={<HiArrowTopRightOnSquare className="h-4 w-4" />}
               className="!text-[#787774] hover:!bg-[#F4F4F2] hover:!text-[#37352F] disabled:!text-[#C9C7C2]"
               data-testid={workbenchSelectors.applyOpenSystemButton}
-              disabled={!canOpen}
+              disabled={!canOpen || isDeletedCreatedFile}
               onClick={() => {
-                if (!canOpen) return
+                if (!canOpen || isDeletedCreatedFile) return
                 void onOpenPath(filePath)
               }}
             />
           </Tooltip>
           {mode === 'edit' ? (
-            <Tooltip title="回退本次修改">
+            <Tooltip title={revertTitle}>
               <Button
                 type="text"
                 size="small"
@@ -324,7 +354,14 @@ const WorkbenchDocumentPreviewPanel: React.FC<{
         </div>
       ) : null}
       <div className="min-h-0 flex-1 bg-white" data-testid={workbenchSelectors.documentView}>
-        {loading ? (
+        {isDeletedCreatedFile ? (
+          <div className="flex h-full items-center justify-center">
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description={<span className="text-[#787774]">该文件已随回退删除</span>}
+            />
+          </div>
+        ) : loading ? (
           <div className="flex h-full items-center justify-center">
             <Spin />
           </div>
@@ -412,12 +449,20 @@ const WorkbenchContentPanel: React.FC<WorkbenchContentPanelProps> = ({
               filePath={activeApplyRecord.source_path}
               documents={applyDocuments}
               mode="edit"
+              status={activeApplyRecord.status}
+              operation={activeApplyRecord.operation}
+              insertCount={activeApplyRecord.insert_count}
+              deleteCount={activeApplyRecord.delete_count}
               testId={workbenchSelectors.applyPanel}
               loading={applyLoading}
               reverting={applyReverting}
               canRevert={activeApplyRecord.status === 'applied' && !applyReverting}
               statusMessage={
-                activeApplyRecord.status === 'reverted' ? '本次 AI 修改已回退。' : null
+                activeApplyRecord.status === 'reverted'
+                  ? activeApplyRecord.operation === 'created'
+                    ? '本次新增文件已回退，文件已删除。'
+                    : '本次 AI 修改已回退。'
+                  : null
               }
               errorMessage={activeApplyRecord.status === 'failed' ? activeApplyRecord.error : null}
               emptyText={

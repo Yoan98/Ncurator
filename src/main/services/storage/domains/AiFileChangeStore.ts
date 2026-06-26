@@ -23,6 +23,8 @@ type AiFileChangeRow = {
   file_name?: PrimitiveRowValue
   operation?: PrimitiveRowValue
   change_count?: PrimitiveRowValue
+  insert_count?: PrimitiveRowValue
+  delete_count?: PrimitiveRowValue
   before_snapshot_path?: PrimitiveRowValue
   before_checksum?: PrimitiveRowValue
   after_checksum?: PrimitiveRowValue
@@ -70,6 +72,8 @@ const toRecord = (row: AiFileChangeRow): AiFileChangeRecord => ({
   fileName: toRequiredString(row.file_name),
   operation: normalizeOperation(row.operation),
   changeCount: toRequiredNumber(row.change_count),
+  insertCount: toRequiredNumber(row.insert_count),
+  deleteCount: toRequiredNumber(row.delete_count),
   beforeSnapshotPath: toOptionalString(row.before_snapshot_path),
   beforeChecksum: toOptionalString(row.before_checksum),
   afterChecksum: toOptionalString(row.after_checksum),
@@ -90,6 +94,8 @@ const toWriteRow = (record: AiFileChangeRecord): WriteRow => ({
   file_name: record.fileName,
   operation: record.operation,
   change_count: record.changeCount,
+  insert_count: record.insertCount,
+  delete_count: record.deleteCount,
   before_snapshot_path: record.beforeSnapshotPath,
   before_checksum: record.beforeChecksum,
   after_checksum: record.afterChecksum,

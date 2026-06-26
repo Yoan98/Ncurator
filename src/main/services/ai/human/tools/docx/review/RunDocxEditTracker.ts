@@ -9,11 +9,17 @@ import { materializeDocxProjectedArtifact } from './reviewSerializer'
 import type { RunDocxEditDocument } from './types'
 import { buildDocxChangeSummary, calculateFileStats, fileExists, sanitizeFileName } from './utils'
 import { buildDocxApplyArtifactPaths } from './viewProjection'
+import { projectReviewView } from './viewProjector'
 
 type RunDocxEditState = {
   sessionId: string
   documentBySourcePath: Map<string, RunDocxEditDocument>
   sourcePathByDocId: Map<string, string>
+}
+
+type DocxChangeStats = {
+  insertCount: number
+  deleteCount: number
 }
 
 export class RunDocxEditTracker {
@@ -170,6 +176,7 @@ export class RunDocxEditTracker {
     }
 
     const changeCount = this.countCommittedChanges(replaySession)
+    const changeStats = this.countReviewChanges(replaySession)
     const sourceBuffer = await fs.readFile(sourceArtifactPath)
     const workingBuffer = await fs.readFile(paths.committedArtifactPath)
     await materializeDocxProjectedArtifact({
@@ -230,6 +237,8 @@ export class RunDocxEditTracker {
       operation,
       final_revision_ref: replaySession.activeRevisionRef,
       change_count: changeCount,
+      insert_count: changeStats.insertCount,
+      delete_count: changeStats.deleteCount,
       before_exists: beforeExists,
       before_snapshot_path: beforeSnapshotPath,
       before_checksum: beforeChecksum,
@@ -250,6 +259,21 @@ export class RunDocxEditTracker {
     return [...session.revisionByDocId.values()]
       .filter((revision) => revision.revisionRef !== 'v1' && (revision.ops?.length || 0) > 0)
       .reduce((total, revision) => total + Math.max(1, revision.changedBlocks?.length || 0), 0)
+  }
+
+  private countReviewChanges(session: DocxReplaySession): DocxChangeStats {
+    return projectReviewView(session).reduce<DocxChangeStats>(
+      (stats, node) => {
+        if (node.reviewState === 'inserted' || node.reviewState === 'replaced-new') {
+          stats.insertCount += 1
+        }
+        if (node.reviewState === 'deleted' || node.reviewState === 'replaced-old') {
+          stats.deleteCount += 1
+        }
+        return stats
+      },
+      { insertCount: 0, deleteCount: 0 }
+    )
   }
 
   public buildChangeHighlights(session: DocxReplaySession): string[] {

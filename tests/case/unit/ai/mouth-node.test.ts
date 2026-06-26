@@ -64,6 +64,8 @@ const createBaseContext = (input: {
           fileName: 'report.md',
           operation: 'created',
           changeCount: 1,
+          insertCount: 1,
+          deleteCount: 0,
           createdAt: 1,
           updatedAt: 1
         }

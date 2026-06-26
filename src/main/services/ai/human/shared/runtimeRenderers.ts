@@ -14,7 +14,7 @@ const renderChangedFile = (
   mode: HumanRuntimeRenderMode
 ): string => {
   if (mode === 'fallback_markdown') {
-    return `${file.fileName} (${file.path}) - ${file.capability}, 改动数=${String(file.changeCount)}; changeId=${file.id}`
+    return `${file.fileName} (${file.path}) - ${file.capability}, +${String(file.insertCount)} -${String(file.deleteCount)}; changeId=${file.id}`
   }
 
   return [
@@ -23,6 +23,8 @@ const renderChangedFile = (
     `  - 来源能力：${file.capability}`,
     `  - 操作：${file.operation}`,
     `  - 改动数：${file.changeCount}`,
+    `  - 新增：${file.insertCount}`,
+    `  - 删除：${file.deleteCount}`,
     `  - 修改记录：${file.id}`
   ]
     .join('\n')

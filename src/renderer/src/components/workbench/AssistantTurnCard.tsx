@@ -24,6 +24,7 @@ import type { ParsedNcuratorRefKind, ParsedNcuratorRefResourceType } from '../ma
 import { workbenchSelectors } from '../../testing/selectors'
 import { buildAssistantExecutionSummaryText, resolveAssistantExecutionStatus } from './utils'
 import { formatWorkspacePathLabel } from './pathDisplay'
+import ChangeCountBadges from './ChangeCountBadges'
 
 type AssistantTurnCardProps = {
   messageId: string
@@ -410,6 +411,14 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
                   workspaces,
                   fallbackWorkspaceName
                 )
+                const statusLabel =
+                  apply.status === 'reverted'
+                    ? apply.operation === 'created'
+                      ? '已删除'
+                      : '已回退'
+                    : apply.status === 'failed'
+                      ? '失败'
+                      : null
                 return (
                   <button
                     key={apply.changeId}
@@ -424,8 +433,16 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
                           {pathLabel || apply.title}
                         </div>
                       </div>
-                      <span className="shrink-0 pt-0.5 text-xs font-medium tabular-nums text-[#787774]">
-                        修改 {apply.changeCount} 处
+                      <span className="flex shrink-0 items-center gap-1 pt-0.5">
+                        <ChangeCountBadges
+                          insertCount={apply.insertCount}
+                          deleteCount={apply.deleteCount}
+                        />
+                        {statusLabel ? (
+                          <span className="inline-flex h-5 items-center rounded-[4px] bg-[#F4F4F2] px-1.5 text-[11px] font-medium text-[#787774]">
+                            {statusLabel}
+                          </span>
+                        ) : null}
                       </span>
                     </div>
                   </button>
