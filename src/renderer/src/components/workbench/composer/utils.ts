@@ -78,6 +78,23 @@ export const extractComposerDraftValue = (nodes: ComposerNode[]): ComposerDraftV
   }
 }
 
+export const createComposerNodesFromDraftValue = (draft: ComposerDraftValue): ComposerNode[] => {
+  if (draft.contentNodes.length === 0) {
+    return draft.input ? [createTextNode(draft.input)] : []
+  }
+
+  return normalizeComposerNodes(
+    draft.contentNodes
+      .map((node): ComposerNode | null => {
+        if (node.kind === 'text') {
+          return node.text ? createTextNode(node.text) : null
+        }
+        return createScopeNode(node.reference)
+      })
+      .filter((node): node is ComposerNode => Boolean(node))
+  )
+}
+
 export const pruneComposerNodesByWorkspace = (
   nodes: ComposerNode[],
   workspaceId: string | null

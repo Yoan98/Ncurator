@@ -38,6 +38,7 @@ import AssistantTurnCard from '../components/workbench/AssistantTurnCard'
 import WorkbenchComposer from '../components/workbench/WorkbenchComposer'
 import WorkbenchContentPanel from '../components/workbench/WorkbenchContentPanel'
 import ReferenceInlineToken from '../components/workbench/composer/ReferenceInlineToken'
+import type { ComposerDraftValue } from '../components/workbench/composer/types'
 import {
   WORKBENCH_CONTENT_PANEL_COLLAPSED_STORAGE_KEY,
   WORKBENCH_LEFT_TITLEBAR_COLLAPSED_WIDTH,
@@ -472,6 +473,15 @@ const appendMessagesDedupe = (
   return next.sort((left, right) => left.timestamp - right.timestamp)
 }
 
+const createEmptyComposerDraft = (): ComposerDraftValue => ({
+  input: '',
+  contentNodes: [],
+  selectedReferences: []
+})
+
+const isComposerDraftEmpty = (draft: ComposerDraftValue): boolean =>
+  !draft.input.trim() && draft.contentNodes.length === 0 && draft.selectedReferences.length === 0
+
 const ChatPage: React.FC = () => {
   const { message } = App.useApp()
   const navigate = useNavigate()
@@ -501,7 +511,7 @@ const ChatPage: React.FC = () => {
   const [activeModelConfig, setActiveModelConfig] = useState<LLMConfig | null>(null)
   const [remoteModels, setRemoteModels] = useState<LlmRemoteModel[]>([])
   const [selectedModelName, setSelectedModelName] = useState<string | null>(null)
-  const [composerResetKey, setComposerResetKey] = useState(0)
+  const [composerDraftKey, setComposerDraftKey] = useState('initial')
   const [contextUsage, setContextUsage] = useState<WorkbenchContextUsage | null>(null)
   const [assistantTurns, setAssistantTurns] = useState<Record<string, AssistantTurnViewModel>>({})
   const [contentPanel, setContentPanel] = useState<WorkbenchContentPanelState>(createEmptyPanel())
@@ -536,6 +546,8 @@ const ChatPage: React.FC = () => {
   const assistantArtifactsRef = useRef<Record<string, AiArtifactRef[]>>({})
   const lastSubmittedInputRef = useRef('')
   const sessionSwitchRequestRef = useRef(0)
+  const composerDraftBySessionIdRef = useRef<Record<string, ComposerDraftValue>>({})
+  const composerDraftVersionRef = useRef(0)
   const sidebarDragStartRef = useRef<{
     pointerId: number
     startX: number
@@ -545,6 +557,35 @@ const ChatPage: React.FC = () => {
   const scrollRef = useRef<HTMLDivElement>(null)
   const shouldAutoScrollRef = useRef(true)
   const scrollFrameRef = useRef<number | null>(null)
+
+  const composerDraftValue = useMemo<ComposerDraftValue>(
+    () => ({
+      input,
+      contentNodes: composerContentNodes,
+      selectedReferences
+    }),
+    [composerContentNodes, input, selectedReferences]
+  )
+
+  const saveComposerDraftForSession = useCallback(
+    (sessionId: string | null, draft: ComposerDraftValue): void => {
+      if (!sessionId) return
+      if (isComposerDraftEmpty(draft)) {
+        delete composerDraftBySessionIdRef.current[sessionId]
+        return
+      }
+      composerDraftBySessionIdRef.current[sessionId] = draft
+    },
+    []
+  )
+
+  const applyComposerDraft = useCallback((draft: ComposerDraftValue, reason: string): void => {
+    setInput(draft.input)
+    setComposerContentNodes(draft.contentNodes)
+    setSelectedReferences(draft.selectedReferences)
+    composerDraftVersionRef.current += 1
+    setComposerDraftKey(`${reason}:${composerDraftVersionRef.current}`)
+  }, [])
 
   const kbScopeDocumentIds = useMemo(() => {
     const explicitIds = collectReferenceDocumentIds(selectedReferences)
@@ -1245,10 +1286,10 @@ const ChatPage: React.FC = () => {
       setLoading(false)
       setAiRunId(null)
       setCancellingRun(false)
-      setInput('')
-      setComposerContentNodes([])
-      setSelectedReferences([])
-      setComposerResetKey((value) => value + 1)
+      applyComposerDraft(
+        composerDraftBySessionIdRef.current[sessionId] || createEmptyComposerDraft(),
+        `session:${sessionId}`
+      )
       setPendingApprovalBatch(null)
       setApprovalCurrentIndex(0)
       setApprovalDraftDecisions({})
@@ -1277,6 +1318,7 @@ const ChatPage: React.FC = () => {
       setHasMoreMessagesBefore(false)
       setLoadingOlderMessages(false)
       setContextUsage(null)
+      applyComposerDraft(createEmptyComposerDraft(), 'session:none')
       setContentPanel(createEmptyPanel())
       setContentPanelCollapsed(true)
       resetApplyWorkspaceState()
@@ -1322,6 +1364,7 @@ const ChatPage: React.FC = () => {
         return
       }
       const remainingSessions = sessions.filter((item) => item.id !== id)
+      delete composerDraftBySessionIdRef.current[id]
       setSessions(remainingSessions)
       setCurrentSessionId((current) =>
         current === id ? remainingSessions[0]?.id || null : current
@@ -1679,10 +1722,8 @@ const ChatPage: React.FC = () => {
       return next
     }
 
-    setInput('')
-    setComposerContentNodes([])
-    setSelectedReferences([])
-    setComposerResetKey((value) => value + 1)
+    saveComposerDraftForSession(currentSessionId, createEmptyComposerDraft())
+    applyComposerDraft(createEmptyComposerDraft(), `clear:${currentSessionId}`)
     shouldAutoScrollRef.current = true
     scrollToBottom(true)
     setLoading(true)
@@ -1767,10 +1808,8 @@ const ChatPage: React.FC = () => {
       return
     }
 
-    setInput('')
-    setComposerContentNodes([])
-    setSelectedReferences([])
-    setComposerResetKey((value) => value + 1)
+    saveComposerDraftForSession(currentSessionId, createEmptyComposerDraft())
+    applyComposerDraft(createEmptyComposerDraft(), `clear:${currentSessionId}`)
     shouldAutoScrollRef.current = true
     scrollToBottom(true)
     setLoading(true)
@@ -2094,16 +2133,13 @@ const ChatPage: React.FC = () => {
   }
 
   const handleComposerDraftChange = useCallback(
-    (draft: {
-      input: string
-      contentNodes: ChatMessageContentNode[]
-      selectedReferences: SelectedReference[]
-    }) => {
+    (draft: ComposerDraftValue) => {
       setInput(draft.input)
       setComposerContentNodes(draft.contentNodes)
       setSelectedReferences(draft.selectedReferences)
+      saveComposerDraftForSession(currentSessionId, draft)
     },
-    []
+    [currentSessionId, saveComposerDraftForSession]
   )
 
   // 按工作空间分组会话
@@ -2576,7 +2612,8 @@ const ChatPage: React.FC = () => {
                         )}
                         submitDisabledReason={composerSubmitDisabledReason}
                         showCancel={composerMode === 'ai' && Boolean(aiRunId)}
-                        resetKey={composerResetKey}
+                        draftValue={composerDraftValue}
+                        draftKey={composerDraftKey}
                         contextUsage={contextUsage}
                       />
                     )}

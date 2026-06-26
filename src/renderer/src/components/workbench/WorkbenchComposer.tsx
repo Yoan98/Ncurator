@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Spin, Tooltip } from 'antd'
 import { HiArrowUp, HiCpuChip, HiMagnifyingGlass, HiSparkles, HiStop } from 'react-icons/hi2'
 import type {
@@ -14,6 +14,7 @@ import { COMPOSER_PLACEHOLDER, COMPOSER_REFERENCE_KINDS } from './composer/const
 import ReferenceMentionPanel from './composer/ReferenceMentionPanel'
 import type { ComposerDraftValue, ComposerNode } from './composer/types'
 import {
+  createComposerNodesFromDraftValue,
   createScopeTokenElement,
   extractComposerDraftValue,
   getScopeKey,
@@ -53,25 +54,13 @@ type WorkbenchComposerProps = {
   canSubmit: boolean
   submitDisabledReason?: string | null
   showCancel: boolean
-  resetKey: number
+  draftValue: ComposerDraftValue
+  draftKey: string
   contextUsage?: WorkbenchContextUsage | null
 }
 
 const isTextNode = (value: Node | null): value is Text => value instanceof Text
 const CARET_ANCHOR_ROLE = 'composer-caret-anchor'
-const areComposerNodesEqual = (left: ComposerNode[], right: ComposerNode[]): boolean =>
-  left.length === right.length &&
-  left.every((node, index) => {
-    const peer = right[index]
-    if (!peer || node.kind !== peer.kind) return false
-    if (node.kind === 'text' && peer.kind === 'text') {
-      return node.text === peer.text
-    }
-    if (node.kind === 'scope' && peer.kind === 'scope') {
-      return getScopeKey(node.scope) === getScopeKey(peer.scope)
-    }
-    return false
-  })
 
 const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   mode,
@@ -93,17 +82,20 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   canSubmit,
   submitDisabledReason,
   showCancel,
-  resetKey,
+  draftValue,
+  draftKey,
   contextUsage
 }) => {
   const editorRef = useRef<HTMLSpanElement | null>(null)
   const draftNodesRef = useRef<ComposerNode[]>([])
+  const draftValueRef = useRef<ComposerDraftValue>(draftValue)
   const knownScopesRef = useRef(new Map<string, SelectedReference>())
-  const draftSyncFrameRef = useRef<number | null>(null)
   const mentionRefreshFrameRef = useRef<number | null>(null)
   const mentionQueryRef = useRef<string | null>(null)
   const controlFocusTimeoutRef = useRef<number | null>(null)
+  const compositionGuardTimeoutRef = useRef<number | null>(null)
   const isComposingRef = useRef(false)
+  const compositionJustEndedRef = useRef(false)
   const [mentionQuery, setMentionQuery] = useState<string | null>(null)
   const [mentionOptions, setMentionOptions] = useState<SelectedReference[]>([])
   const [mentionLoading, setMentionLoading] = useState(false)
@@ -115,11 +107,23 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     [selectedWorkspaceId, workspaces]
   )
 
+  useEffect(() => {
+    draftValueRef.current = draftValue
+  }, [draftValue])
+
   const closeMention = useCallback(() => {
     mentionQueryRef.current = null
     setMentionQuery(null)
     setMentionOptions([])
     setMentionActiveIndex(0)
+  }, [])
+
+  const rememberScopes = useCallback((nodes: ComposerNode[]): void => {
+    nodes.forEach((node) => {
+      if (node.kind === 'scope') {
+        knownScopesRef.current.set(getScopeKey(node.scope), node.scope)
+      }
+    })
   }, [])
 
   const ensureEditorHasCaretTarget = useCallback((): void => {
@@ -162,6 +166,22 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     moveCaretToEnd(editor)
   }, [ensureEditorHasCaretTarget])
 
+  const renderDraftNodes = useCallback(
+    (nodes: ComposerNode[], options?: { restoreCaret?: boolean }): void => {
+      const editor = editorRef.current
+      if (!editor) return
+      rememberScopes(nodes)
+      draftNodesRef.current = nodes
+      renderComposerNodesToEditor(editor, nodes)
+      ensureEditorHasCaretTarget()
+      setHasContent(nodes.length > 0)
+      if (options?.restoreCaret && document.activeElement === editor) {
+        moveCaretToEnd(editor)
+      }
+    },
+    [ensureEditorHasCaretTarget, rememberScopes]
+  )
+
   const focusEditor = useCallback(() => {
     const editor = editorRef.current
     if (!editor) return
@@ -197,21 +217,9 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     draftNodesRef.current = nodes
     setHasContent(nodes.length > 0)
     const draft = extractComposerDraftValue(nodes)
-    draft.selectedReferences.forEach((scope) => {
-      knownScopesRef.current.set(getScopeKey(scope), scope)
-    })
+    rememberScopes(nodes)
     onDraftChange(draft)
-  }, [onDraftChange, stripCaretPlaceholderFromEditor])
-
-  const scheduleDraftSyncFromEditor = useCallback(() => {
-    if (draftSyncFrameRef.current !== null) {
-      window.cancelAnimationFrame(draftSyncFrameRef.current)
-    }
-    draftSyncFrameRef.current = window.requestAnimationFrame(() => {
-      draftSyncFrameRef.current = null
-      syncDraftFromEditor()
-    })
-  }, [syncDraftFromEditor])
+  }, [onDraftChange, rememberScopes, stripCaretPlaceholderFromEditor])
 
   const getMentionContext = useCallback((): MentionContext | null => {
     const editor = editorRef.current
@@ -362,30 +370,22 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   )
 
   useEffect(() => {
-    const editor = editorRef.current
-    if (!editor) return
-    draftNodesRef.current = []
-    renderComposerNodesToEditor(editor, [])
-    ensureEditorHasCaretTarget()
-    setHasContent(false)
-    onDraftChange({ input: '', contentNodes: [], selectedReferences: [] })
+    const nextNodes = createComposerNodesFromDraftValue(draftValueRef.current)
+    renderDraftNodes(nextNodes)
     closeMention()
-  }, [closeMention, ensureEditorHasCaretTarget, onDraftChange, resetKey])
+  }, [closeMention, draftKey, renderDraftNodes])
 
   useEffect(() => {
     const editor = editorRef.current
     if (!editor) return
+    if (isComposingRef.current) return
     const currentNodes = readComposerNodesFromEditor(editor, knownScopesRef.current)
     const nextNodes = pruneComposerNodesByWorkspace(currentNodes, selectedWorkspaceId)
     if (nextNodes.length === currentNodes.length) return
-    draftNodesRef.current = nextNodes
-    renderComposerNodesToEditor(editor, nextNodes)
-    if (document.activeElement === editor) {
-      restoreCaretToEnd()
-    }
+    renderDraftNodes(nextNodes, { restoreCaret: true })
     syncDraftFromEditor()
     closeMention()
-  }, [closeMention, restoreCaretToEnd, selectedWorkspaceId, syncDraftFromEditor])
+  }, [closeMention, renderDraftNodes, selectedWorkspaceId, syncDraftFromEditor])
 
   useEffect(() => {
     if (mentionQuery === null) return
@@ -455,29 +455,15 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
       if (mentionRefreshFrameRef.current !== null) {
         window.cancelAnimationFrame(mentionRefreshFrameRef.current)
       }
-      if (draftSyncFrameRef.current !== null) {
-        window.cancelAnimationFrame(draftSyncFrameRef.current)
-      }
       if (controlFocusTimeoutRef.current !== null) {
         window.clearTimeout(controlFocusTimeoutRef.current)
+      }
+      if (compositionGuardTimeoutRef.current !== null) {
+        window.clearTimeout(compositionGuardTimeoutRef.current)
       }
       document.removeEventListener('selectionchange', handleSelectionChange)
     }
   }, [refreshMentionContext])
-
-  useLayoutEffect(() => {
-    const editor = editorRef.current
-    if (!editor) return
-    if (isComposingRef.current) return
-    const expectedNodes = draftNodesRef.current
-    const currentNodes = readComposerNodesFromEditor(editor, knownScopesRef.current)
-    if (areComposerNodesEqual(currentNodes, expectedNodes)) return
-    const shouldRestoreCaret = document.activeElement === editor
-    renderComposerNodesToEditor(editor, expectedNodes)
-    if (shouldRestoreCaret) {
-      moveCaretToEnd(editor)
-    }
-  })
 
   const handleEditorInput = (): void => {
     if (isComposingRef.current) {
@@ -487,7 +473,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
       setHasContent(hasText || hasScopeToken)
       return
     }
-    scheduleDraftSyncFromEditor()
+    syncDraftFromEditor()
     scheduleMentionRefresh()
   }
 
@@ -508,6 +494,10 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
 
   const handleEditorKeyDown = (event: React.KeyboardEvent<HTMLSpanElement>): void => {
     if (event.nativeEvent.isComposing || isComposingRef.current) return
+    if (event.key === 'Enter' && compositionJustEndedRef.current) {
+      event.preventDefault()
+      return
+    }
 
     if (mentionQuery !== null) {
       if (event.key === 'ArrowDown' && mentionOptions.length > 0) {
@@ -698,9 +688,10 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
             }}
             onCompositionStart={() => {
               isComposingRef.current = true
-              if (draftSyncFrameRef.current !== null) {
-                window.cancelAnimationFrame(draftSyncFrameRef.current)
-                draftSyncFrameRef.current = null
+              compositionJustEndedRef.current = false
+              if (compositionGuardTimeoutRef.current !== null) {
+                window.clearTimeout(compositionGuardTimeoutRef.current)
+                compositionGuardTimeoutRef.current = null
               }
               if (mentionRefreshFrameRef.current !== null) {
                 window.cancelAnimationFrame(mentionRefreshFrameRef.current)
@@ -709,7 +700,15 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
             }}
             onCompositionEnd={() => {
               isComposingRef.current = false
-              scheduleDraftSyncFromEditor()
+              compositionJustEndedRef.current = true
+              if (compositionGuardTimeoutRef.current !== null) {
+                window.clearTimeout(compositionGuardTimeoutRef.current)
+              }
+              compositionGuardTimeoutRef.current = window.setTimeout(() => {
+                compositionJustEndedRef.current = false
+                compositionGuardTimeoutRef.current = null
+              }, 120)
+              syncDraftFromEditor()
               scheduleMentionRefresh()
             }}
           ></span>
