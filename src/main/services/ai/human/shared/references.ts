@@ -2,6 +2,16 @@ import type { HumanReference } from '../types'
 
 const normalizePath = (value: string): string => value.trim()
 
+const escapeRefQueryValue = (value: string): string =>
+  value
+    .trim()
+    .replace(/%/g, '%25')
+    .replace(/[\r\n]+/g, ' ')
+    .replace(/&/g, '%26')
+    .replace(/=/g, '%3D')
+    .replace(/ /g, '%20')
+    .replace(/\)/g, '%29')
+
 export type NcuratorRefKind = 'reference' | 'normal'
 export type NcuratorRefResourceType = HumanReference['resourceType']
 
@@ -11,13 +21,13 @@ export const buildNcuratorRefMarkdown = (input: {
   resourceType: NcuratorRefResourceType
   kind: NcuratorRefKind
 }): string => {
-  const params = new URLSearchParams({
-    kind: input.kind,
-    resourceType: input.resourceType,
-    label: input.label,
-    path: normalizePath(input.path)
-  })
-  return `[${input.label}](ncurator://ref?${params.toString()})`
+  const params = [
+    `kind=${input.kind}`,
+    `resourceType=${input.resourceType}`,
+    `label=${escapeRefQueryValue(input.label)}`,
+    `path=${escapeRefQueryValue(normalizePath(input.path))}`
+  ].join('&')
+  return `[${input.label}](ncurator://ref?${params})`
 }
 
 export const NCURATOR_REF_MARKDOWN_FORMAT_EXAMPLE = buildNcuratorRefMarkdown({
