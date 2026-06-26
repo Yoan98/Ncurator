@@ -19,9 +19,11 @@ import type {
   AssistantRichTextSegment,
   AssistantTurnViewModel
 } from './types'
+import type { WorkspaceSource } from '../../../../shared/types'
 import type { ParsedNcuratorRefKind, ParsedNcuratorRefResourceType } from '../markdownReference'
 import { workbenchSelectors } from '../../testing/selectors'
 import { buildAssistantExecutionSummaryText, resolveAssistantExecutionStatus } from './utils'
+import { formatWorkspacePathLabel } from './pathDisplay'
 
 type AssistantTurnCardProps = {
   messageId: string
@@ -29,6 +31,8 @@ type AssistantTurnCardProps = {
   isStreaming?: boolean
   onOpenFile: (file: AssistantArtifactItem) => void
   onOpenApply: (changeId: string) => void
+  workspaces: WorkspaceSource[]
+  fallbackWorkspaceName?: string | null
   onOpenReference: (reference: {
     kind: ParsedNcuratorRefKind
     resourceType: ParsedNcuratorRefResourceType
@@ -301,22 +305,13 @@ const renderArtifactChip = (
   )
 }
 
-const getCompactSourcePath = (sourcePath?: string): string => {
-  if (!sourcePath) return ''
-  const normalized = sourcePath.replace(/\\/g, '/')
-  const workspaceMarker = '/workspace/'
-  const workspaceIndex = normalized.lastIndexOf(workspaceMarker)
-  if (workspaceIndex >= 0) return normalized.slice(workspaceIndex + workspaceMarker.length)
-  const parts = normalized.split('/').filter(Boolean)
-  if (parts.length <= 2) return normalized
-  return parts.slice(-3).join('/')
-}
-
 const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
   messageId,
   turn,
   onOpenFile,
   onOpenApply,
+  workspaces,
+  fallbackWorkspaceName,
   onOpenReference
 }) => {
   const processGroups = useMemo(() => turn?.processGroups || [], [turn?.processGroups])
@@ -410,7 +405,11 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
             </div>
             <div>
               {turn.applyTargets.map((apply) => {
-                const compactPath = getCompactSourcePath(apply.sourcePath)
+                const pathLabel = formatWorkspacePathLabel(
+                  apply.sourcePath,
+                  workspaces,
+                  fallbackWorkspaceName
+                )
                 return (
                   <button
                     key={apply.changeId}
@@ -420,13 +419,10 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
                     className="w-full border-b border-[#F1F0ED] px-3.5 py-2.5 text-left transition-colors duration-200 last:border-b-0 hover:bg-[#F7F7F5]"
                   >
                     <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
+                      <div className="min-w-0 flex-1">
                         <div className="truncate text-[13px] font-medium text-[#37352F]">
-                          {apply.title}
+                          {pathLabel || apply.title}
                         </div>
-                        {compactPath ? (
-                          <div className="mt-1 truncate text-xs text-[#787774]">{compactPath}</div>
-                        ) : null}
                       </div>
                       <span className="shrink-0 pt-0.5 text-xs font-medium tabular-nums text-[#787774]">
                         修改 {apply.changeCount} 处

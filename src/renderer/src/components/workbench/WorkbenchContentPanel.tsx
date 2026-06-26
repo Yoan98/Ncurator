@@ -1,8 +1,9 @@
 ﻿import React, { useMemo } from 'react'
-import { Button, Empty, Tooltip } from 'antd'
+import { Button, Empty, Spin, Tooltip } from 'antd'
 import {
   HiArrowLeft,
   HiArrowTopRightOnSquare,
+  HiArrowUturnLeft,
   HiDocumentText,
   HiEye,
   HiFolderOpen,
@@ -11,21 +12,23 @@ import {
   HiOutlineMagnifyingGlass,
   HiSparkles
 } from 'react-icons/hi2'
-import type { DocxApplyRecord, SearchResult } from '../../../../shared/types'
+import type { DocxApplyRecord, SearchResult, WorkspaceSource } from '../../../../shared/types'
 import TextHighlighter from '../TextHighlighter'
 import { FileRenderViewer } from '../fileRenders'
-import WorkbenchApplyPanel from './WorkbenchApplyPanel'
+import type { FileRenderDocument } from '../fileRenders'
 import WorkbenchBrowserPanel from './WorkbenchBrowserPanel'
 import type { SearchWorkbenchTurn, WorkbenchContentPanelState } from './types'
 import { workbenchSelectors } from '../../testing/selectors'
+import { formatWorkspacePathLabel } from './pathDisplay'
 
 type WorkbenchContentPanelProps = {
   state: WorkbenchContentPanelState
   activeApplyRecord: DocxApplyRecord | null
   applyLoading: boolean
   applyReverting: boolean
+  workspaces: WorkspaceSource[]
+  fallbackWorkspaceName?: string | null
   onOpenSearchResult: (turn: SearchWorkbenchTurn, resultIndex: number) => void
-  onSelectApplyTab: (fileKey: string) => void
   onRevertApply: () => void
   onBackToPanelState: (state: WorkbenchContentPanelState) => void
   onOpenPath: (filePath: string) => Promise<void>
@@ -189,42 +192,82 @@ const WorkbenchSearchResultsPanel: React.FC<{
   )
 }
 
-const WorkbenchFilePreviewPanel: React.FC<{
-  state: Extract<WorkbenchContentPanelState, { kind: 'file_preview' }>
+const WorkbenchDocumentPreviewPanel: React.FC<{
+  fileName: string
+  filePath: string
+  documents: FileRenderDocument[]
+  mode: 'preview' | 'edit'
+  testId?: string
+  loading?: boolean
+  reverting?: boolean
+  canRevert?: boolean
+  canOpen?: boolean
+  statusMessage?: string | null
+  errorMessage?: string | null
+  emptyText?: string
+  workspaces: WorkspaceSource[]
+  fallbackWorkspaceName?: string | null
+  backTarget?: WorkbenchContentPanelState
   onBackToPanelState: (state: WorkbenchContentPanelState) => void
   onOpenPath: (filePath: string) => Promise<void>
   onRevealPath: (filePath: string) => Promise<void>
-}> = ({ state, onBackToPanelState, onOpenPath, onRevealPath }) => {
-  const previewDocuments = useMemo(
-    () => [
-      {
-        filePath: state.file.path,
-        fileName: state.file.fileName,
-        metadata: state.file.pageNumber ? { pageNumber: state.file.pageNumber } : undefined
-      }
-    ],
-    [state.file.fileName, state.file.pageNumber, state.file.path]
+  onRevert?: () => void
+}> = ({
+  fileName,
+  filePath,
+  documents,
+  mode,
+  testId,
+  loading = false,
+  reverting = false,
+  canRevert = false,
+  canOpen = true,
+  statusMessage,
+  errorMessage,
+  emptyText,
+  workspaces,
+  fallbackWorkspaceName,
+  backTarget,
+  onBackToPanelState,
+  onOpenPath,
+  onRevealPath,
+  onRevert
+}) => {
+  const pathLabel = useMemo(
+    () => formatWorkspacePathLabel(filePath, workspaces, fallbackWorkspaceName),
+    [fallbackWorkspaceName, filePath, workspaces]
   )
+  const tagClassName =
+    mode === 'edit'
+      ? 'border-[#E8E7E4] bg-[#F7F7F5] text-[#37352F]'
+      : 'border-[#EEEEEC] bg-white text-[#787774]'
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="flex h-full min-h-0 flex-col" data-testid={testId}>
       <div className="flex shrink-0 items-center gap-3 border-b border-[#EEEEEC] bg-white px-4 py-3">
-        {state.backTarget ? (
+        {backTarget ? (
           <Tooltip title="返回">
             <Button
               type="text"
               size="small"
               aria-label="返回"
               icon={<HiArrowLeft className="h-4 w-4" />}
-              onClick={() => onBackToPanelState(state.backTarget!)}
+              className="!text-[#787774] hover:!bg-[#F4F4F2] hover:!text-[#37352F]"
+              onClick={() => onBackToPanelState(backTarget)}
             />
           </Tooltip>
         ) : null}
         <div className="min-w-0 flex-1">
-          <div className="truncate text-[13px] font-semibold text-[#37352F]">
-            {state.file.fileName}
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="truncate text-[13px] font-semibold text-[#37352F]">{fileName}</div>
+            <span
+              className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] ${tagClassName}`}
+              data-testid={workbenchSelectors.documentPreviewModeTag}
+            >
+              {mode === 'edit' ? '编辑' : '预览'}
+            </span>
           </div>
-          <div className="mt-1 truncate text-xs text-[#B1B0AD]">{state.file.path}</div>
+          <div className="mt-1 truncate text-xs text-[#B1B0AD]">{pathLabel || filePath}</div>
         </div>
         <div className="flex shrink-0 items-center gap-1">
           <Tooltip title="定位到系统位置">
@@ -233,24 +276,61 @@ const WorkbenchFilePreviewPanel: React.FC<{
               size="small"
               aria-label="定位到系统位置"
               icon={<HiFolderOpen className="h-4 w-4" />}
-              onClick={() => void onRevealPath(state.file.path)}
+              className="!text-[#787774] hover:!bg-[#F4F4F2] hover:!text-[#37352F]"
+              data-testid={workbenchSelectors.applyRevealButton}
+              onClick={() => void onRevealPath(filePath)}
             />
           </Tooltip>
-          <Button
-            type="text"
-            size="small"
-            aria-label="系统默认打开"
-            icon={<HiArrowTopRightOnSquare className="h-4 w-4" />}
-            disabled={state.file.isDirectory}
-            onClick={() => {
-              if (state.file.isDirectory) return
-              void onOpenPath(state.file.path)
-            }}
-          />
+          <Tooltip title="系统默认打开">
+            <Button
+              type="text"
+              size="small"
+              aria-label="系统默认打开"
+              icon={<HiArrowTopRightOnSquare className="h-4 w-4" />}
+              className="!text-[#787774] hover:!bg-[#F4F4F2] hover:!text-[#37352F] disabled:!text-[#C9C7C2]"
+              data-testid={workbenchSelectors.applyOpenSystemButton}
+              disabled={!canOpen}
+              onClick={() => {
+                if (!canOpen) return
+                void onOpenPath(filePath)
+              }}
+            />
+          </Tooltip>
+          {mode === 'edit' ? (
+            <Tooltip title="回退本次修改">
+              <Button
+                type="text"
+                size="small"
+                aria-label="回退本次修改"
+                icon={<HiArrowUturnLeft className="h-4 w-4" />}
+                className="!text-[#787774] hover:!bg-[#F4F4F2] hover:!text-[#37352F] disabled:!text-[#C9C7C2]"
+                loading={reverting}
+                disabled={!canRevert}
+                data-testid={workbenchSelectors.applyRevertButton}
+                onClick={onRevert}
+              />
+            </Tooltip>
+          ) : null}
         </div>
       </div>
+      {statusMessage ? (
+        <div className="shrink-0 border-b border-[#EEEEEC] bg-white px-4 py-2.5 text-xs text-[#787774]">
+          {statusMessage}
+        </div>
+      ) : null}
+      {errorMessage ? (
+        <div className="shrink-0 border-b border-[#E7CAC6] bg-white px-4 py-2.5 text-xs text-[#B3261E]">
+          {errorMessage}
+        </div>
+      ) : null}
       <div className="min-h-0 flex-1 bg-white" data-testid={workbenchSelectors.documentView}>
-        <FileRenderViewer documents={previewDocuments} framed={false} />
+        {loading ? (
+          <div className="flex h-full items-center justify-center">
+            <Spin />
+          </div>
+        ) : (
+          <FileRenderViewer documents={documents} framed={false} emptyText={emptyText} />
+        )}
       </div>
     </div>
   )
@@ -261,50 +341,108 @@ const WorkbenchContentPanel: React.FC<WorkbenchContentPanelProps> = ({
   activeApplyRecord,
   applyLoading,
   applyReverting,
+  workspaces,
+  fallbackWorkspaceName,
   onOpenSearchResult,
-  onSelectApplyTab,
   onRevertApply,
   onBackToPanelState,
   onOpenPath,
   onRevealPath
-}) => (
-  <aside
-    className="flex h-full min-h-0 flex-col border-l border-[#EEEEEC] bg-white"
-    data-testid={workbenchSelectors.contentPanel}
-  >
-    <div className="min-h-0 flex-1 overflow-hidden">
-      {state.kind === 'empty' ? <WorkbenchEmptyPanel /> : null}
-      {state.kind === 'search_list' ? (
-        <WorkbenchSearchResultsPanel
-          state={state}
-          onOpenSearchResult={onOpenSearchResult}
-          onRevealPath={onRevealPath}
-        />
-      ) : null}
-      {state.kind === 'file_preview' ? (
-        <WorkbenchFilePreviewPanel
-          state={state}
-          onBackToPanelState={onBackToPanelState}
-          onOpenPath={onOpenPath}
-          onRevealPath={onRevealPath}
-        />
-      ) : null}
-      {state.kind === 'apply_workspace' ? (
-        <WorkbenchApplyPanel
-          record={activeApplyRecord}
-          activeFileKey={state.activeFileKey}
-          loading={applyLoading}
-          reverting={applyReverting}
-          tabs={state.tabs}
-          onSelectTab={onSelectApplyTab}
-          onRevert={onRevertApply}
-          onOpenPath={onOpenPath}
-          onRevealPath={onRevealPath}
-        />
-      ) : null}
-      {state.kind === 'browser' ? <WorkbenchBrowserPanel /> : null}
-    </div>
-  </aside>
-)
+}) => {
+  const previewDocuments = useMemo<FileRenderDocument[]>(
+    () =>
+      state.kind === 'file_preview'
+        ? [
+            {
+              filePath: state.file.path,
+              fileName: state.file.fileName,
+              metadata: state.file.pageNumber ? { pageNumber: state.file.pageNumber } : undefined
+            }
+          ]
+        : [],
+    [state]
+  )
+  const applyDocuments = useMemo<FileRenderDocument[]>(
+    () =>
+      activeApplyRecord?.preview_diff_artifact_path && activeApplyRecord.source_name
+        ? [
+            {
+              filePath: activeApplyRecord.preview_diff_artifact_path,
+              fileName: activeApplyRecord.source_name
+            }
+          ]
+        : [],
+    [activeApplyRecord?.preview_diff_artifact_path, activeApplyRecord?.source_name]
+  )
+  const hasDedicatedPreview = Boolean(activeApplyRecord?.preview_diff_checksum)
+
+  return (
+    <aside
+      className="flex h-full min-h-0 flex-col border-l border-[#EEEEEC] bg-white"
+      data-testid={workbenchSelectors.contentPanel}
+    >
+      <div className="min-h-0 flex-1 overflow-hidden">
+        {state.kind === 'empty' ? <WorkbenchEmptyPanel /> : null}
+        {state.kind === 'search_list' ? (
+          <WorkbenchSearchResultsPanel
+            state={state}
+            onOpenSearchResult={onOpenSearchResult}
+            onRevealPath={onRevealPath}
+          />
+        ) : null}
+        {state.kind === 'file_preview' ? (
+          <WorkbenchDocumentPreviewPanel
+            fileName={state.file.fileName}
+            filePath={state.file.path}
+            documents={previewDocuments}
+            mode="preview"
+            canOpen={!state.file.isDirectory}
+            workspaces={workspaces}
+            fallbackWorkspaceName={fallbackWorkspaceName}
+            backTarget={state.backTarget}
+            onBackToPanelState={onBackToPanelState}
+            onOpenPath={onOpenPath}
+            onRevealPath={onRevealPath}
+          />
+        ) : null}
+        {state.kind === 'apply_workspace' ? (
+          activeApplyRecord ? (
+            <WorkbenchDocumentPreviewPanel
+              fileName={activeApplyRecord.source_name}
+              filePath={activeApplyRecord.source_path}
+              documents={applyDocuments}
+              mode="edit"
+              testId={workbenchSelectors.applyPanel}
+              loading={applyLoading}
+              reverting={applyReverting}
+              canRevert={activeApplyRecord.status === 'applied' && !applyReverting}
+              statusMessage={
+                activeApplyRecord.status === 'reverted' ? '本次 AI 修改已回退。' : null
+              }
+              errorMessage={activeApplyRecord.status === 'failed' ? activeApplyRecord.error : null}
+              emptyText={
+                hasDedicatedPreview ? '当前文件暂时不可预览。' : '当前修改记录没有专用预览稿。'
+              }
+              workspaces={workspaces}
+              fallbackWorkspaceName={fallbackWorkspaceName}
+              onBackToPanelState={onBackToPanelState}
+              onOpenPath={onOpenPath}
+              onRevealPath={onRevealPath}
+              onRevert={onRevertApply}
+            />
+          ) : (
+            <div
+              className="flex h-full items-center justify-center text-sm text-[#9B9A97]"
+              data-testid={workbenchSelectors.applyPanel}
+            >
+              {applyLoading ? <Spin /> : '当前没有 AI 修改记录。'}
+            </div>
+          )
+        ) : null}
+        {state.kind === 'browser' ? <WorkbenchBrowserPanel /> : null}
+      </div>
+    </aside>
+  )
+}
 
 export default WorkbenchContentPanel

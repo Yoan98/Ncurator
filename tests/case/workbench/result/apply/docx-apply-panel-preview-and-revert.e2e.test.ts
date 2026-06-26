@@ -56,6 +56,14 @@ describe('workbench result e2e', () => {
             const afterApplyText = await readDocxPlainText(targetPath)
             const applyEntry = await waitForApplyEntry(page)
             const applyEntryText = ((await applyEntry.textContent()) || '').trim()
+            const applyEntryLines = await applyEntry.evaluate((element) =>
+              element instanceof HTMLElement
+                ? element.innerText
+                    .split('\n')
+                    .map((line) => line.trim())
+                    .filter(Boolean)
+                : []
+            )
             const artifactChipCount = await getWorkbenchLocator(page, workbenchSelectors.page)
               .locator(`[data-testid^="${workbenchSelectors.assistantTurnArtifactPrefix}-"]`)
               .count()
@@ -63,8 +71,21 @@ describe('workbench result e2e', () => {
             await getWorkbenchLocator(page, workbenchSelectors.applyPanel).waitFor({
               state: 'visible'
             })
+            await getWorkbenchLocator(page, workbenchSelectors.docxViewer).waitFor({
+              state: 'visible',
+              timeout: 30_000
+            })
+            await getWorkbenchLocator(page, workbenchSelectors.applyPanel)
+              .getByText(MARKER)
+              .waitFor({ state: 'visible', timeout: 30_000 })
             const applyPanelText = (
               (await getWorkbenchLocator(page, workbenchSelectors.applyPanel).textContent()) || ''
+            ).trim()
+            const modeTagText = (
+              (await getWorkbenchLocator(
+                page,
+                workbenchSelectors.documentPreviewModeTag
+              ).textContent()) || ''
             ).trim()
             const openSystemButtonVisible = await getWorkbenchLocator(
               page,
@@ -84,20 +105,25 @@ describe('workbench result e2e', () => {
             )
               .isVisible()
               .catch(() => false)
-            const docxViewerVisible = await getWorkbenchLocator(page, workbenchSelectors.docxViewer)
-              .isVisible()
-              .catch(() => false)
-            const docxViewerNoHorizontalOverflow = await getWorkbenchLocator(
+            const documentViewVisible = await getWorkbenchLocator(
               page,
-              workbenchSelectors.docxViewer
+              workbenchSelectors.documentView
+            )
+              .evaluate(
+                (element) =>
+                  element instanceof HTMLElement &&
+                  element.offsetWidth > 0 &&
+                  element.offsetHeight > 0 &&
+                  element.getClientRects().length > 0
+              )
+              .catch(() => false)
+            const documentViewNoHorizontalOverflow = await getWorkbenchLocator(
+              page,
+              workbenchSelectors.documentView
             )
               .evaluate((element) => {
                 if (!(element instanceof HTMLElement)) return false
-                const rootFits = element.scrollWidth <= element.clientWidth + 1
-                const renderedPagesFit = Array.from(
-                  element.querySelectorAll<HTMLElement>('.docx-wrapper, section.docx')
-                ).every((node) => node.scrollWidth <= node.clientWidth + 1)
-                return rootFits && renderedPagesFit
+                return element.scrollWidth <= element.clientWidth + 1
               })
               .catch(() => false)
             await getWorkbenchLocator(page, workbenchSelectors.applyRevertButton).click()
@@ -112,14 +138,16 @@ describe('workbench result e2e', () => {
               afterApplyText,
               afterRevertText,
               applyEntryText,
+              applyEntryLines,
               artifactChipCount,
               applyPanelText,
+              modeTagText,
               openSystemButtonVisible,
               revealButtonVisible,
               revertButtonVisible,
               revertedPanelText,
-              docxViewerVisible,
-              docxViewerNoHorizontalOverflow,
+              documentViewVisible,
+              documentViewNoHorizontalOverflow,
               fileArtifactCount: evidence.events.filter((event) => event.type === 'file_artifact')
                 .length
             }
@@ -133,8 +161,12 @@ describe('workbench result e2e', () => {
               result.afterApplyText.includes(MARKER) &&
               result.afterRevertText === result.beforeText &&
               result.applyEntryText.includes('sample-edit.docx') &&
+              result.applyEntryText.includes('Workbench docx-apply-panel-preview-and-revert') &&
+              result.applyEntryLines.filter((line) => line.includes('sample-edit.docx')).length ===
+                1 &&
               !result.applyEntryText.includes('已修改') &&
               result.artifactChipCount === 0 &&
+              result.modeTagText === '编辑' &&
               !result.applyPanelText.includes('已修改') &&
               !result.applyPanelText.includes('其他应用') &&
               !result.applyPanelText.includes('处修改') &&
@@ -142,8 +174,9 @@ describe('workbench result e2e', () => {
               result.revealButtonVisible &&
               result.revertButtonVisible &&
               result.revertedPanelText.includes('已回退') &&
-              result.docxViewerVisible &&
-              result.docxViewerNoHorizontalOverflow &&
+              result.applyPanelText.includes(MARKER) &&
+              result.documentViewVisible &&
+              result.documentViewNoHorizontalOverflow &&
               result.fileArtifactCount >= 1,
             {
               name: 'workbench-docx-apply-preview-revert-real',

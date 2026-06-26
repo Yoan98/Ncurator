@@ -232,7 +232,7 @@ tests/case/workbench/
 - 测试类型：`e2e`
 - What：验证 AI 修改真实 docx 后，assistant 修改文件入口、右侧修改文件工作区、当前记录预览和干净回退闭环。
 - Why：直接写回和回退是 Workbench 文件编辑能力的安全边界，只看 artifact 事件无法证明用户能检查和撤销修改。
-- How：通过 UI 选择真实 docx 资料并发送真实编辑请求；等待 AI 写回；点击 assistant turn 中的修改文件入口；检查右侧默认 tab、状态和预览；执行回退并重新读取文件内容。
+- How：通过 UI 选择真实 docx 资料并发送真实编辑请求；等待 AI 写回；点击 assistant turn 中的修改文件入口；检查右侧文件名、工作区路径、编辑标签、状态和预览；执行回退并重新读取文件内容。
 - Oracle：修改后源文件立即成为 AI 最终净稿且 assistant turn 展示本轮修改文件入口，对齐 `WB-APPLY-002-AC1`；点击入口后右侧进入修改文件工作区并默认加载本轮当前文件记录，对齐 `WB-APPLY-001-AC1`、`WB-APPLY-001-AC3`；未发生后续修改时回退恢复 checkpoint 且记录状态变为 `reverted`，对齐 `WB-APPLY-003-AC1`、`WB-APPLY-003-AC3`；文件预览与修改文件工作区采用预览优先布局，对齐 `WB-PANEL-003-AC1`；记录模型、耗时、完成度评分和失败归因。
 - Not：不验证 docx 编辑算法的所有格式保真细节，该能力归 AI tool docx 测试。
 
@@ -248,8 +248,8 @@ tests/case/workbench/
 #### `multi-file-apply-tabs`
 
 - 测试类型：`e2e`
-- What：验证同一轮 AI 修改多个文件时，assistant turn 和右侧修改文件工作区保留全部入口，并能按文件 tab 切换对应记录。
+- What：验证同一轮 AI 修改多个文件时，assistant turn 保留全部入口；右侧修改文件面板只展示当前点击的单个文件记录。
 - Why：多文件任务如果只保留最新或单个入口，用户无法检查和回退完整结果。
-- How：通过 UI 选择至少两个真实 docx 文件并发送真实多文件编辑请求；等待 AI 写回；分别点击 assistant turn 中不同入口，并在右侧切换文件 tab。
-- Oracle：同一轮多个修改记录都会出现在同一 assistant turn 中，对齐 `WB-APPLY-005-AC1`；打开工作区时默认落到当前文件 tab，对齐 `WB-APPLY-001-AC2`；点击不同入口或 tab 会加载对应记录和预览稿，而不是跳到最新轮次，对齐 `WB-APPLY-005-AC2`；切换 tab 时保留全部本轮入口和各自状态，对齐 `WB-APPLY-005-AC3`；记录模型、耗时、完成度评分和失败归因。
+- How：通过 UI 选择至少两个真实 docx 文件并发送真实多文件编辑请求；等待 AI 写回；分别点击 assistant turn 中不同入口，检查右侧面板只显示被点击文件，并确认不再出现右侧文件 tab。
+- Oracle：同一轮多个修改记录都会出现在同一 assistant turn 中，对齐 `WB-APPLY-005-AC1`；点击哪个修改文件入口，右侧就加载该文件记录，对齐 `WB-APPLY-001-AC2`；点击不同入口会加载对应记录和预览稿，而不是跳到最新轮次，对齐 `WB-APPLY-005-AC2`；全部本轮入口保留在 assistant turn 列表中，对齐 `WB-APPLY-005-AC3`；记录模型、耗时、完成度评分和失败归因。
 - Not：不验证不同 AI 轮次的全部历史筛选 UI，只覆盖同一轮多文件入口和当前轮次隔离。

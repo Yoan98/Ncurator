@@ -189,6 +189,12 @@ describe('workbench result e2e', () => {
               .waitFor({ state: 'visible', timeout: 30_000 })
               .then(() => true)
               .catch(() => false)
+            const docxModeTagText = (
+              (await getWorkbenchLocator(
+                page,
+                workbenchSelectors.documentPreviewModeTag
+              ).textContent()) || ''
+            ).trim()
             const docxPreviewStableWhileTyping =
               await verifyDocxPreviewStaysMountedWhileTyping(page)
             await page.getByRole('button', { name: '系统默认打开' }).last().click()
@@ -213,6 +219,7 @@ describe('workbench result e2e', () => {
             return {
               pdfPageVisible,
               docxViewerVisible,
+              docxModeTagText,
               docxPreviewStableWhileTyping,
               markdownPreviewVisible,
               plainTextPreviewVisible,
@@ -228,6 +235,7 @@ describe('workbench result e2e', () => {
           await runtime.assertThat(
             result.pdfPageVisible &&
               result.docxViewerVisible &&
+              result.docxModeTagText === '预览' &&
               result.docxPreviewStableWhileTyping &&
               result.markdownPreviewVisible &&
               result.plainTextPreviewVisible &&

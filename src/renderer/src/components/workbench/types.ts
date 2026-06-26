@@ -153,16 +153,6 @@ export type AssistantProcessThought = {
   sourceEventType: Extract<AiRunEvent['type'], 'assistant_process_thought'>
 }
 
-export type FileChangeWorkspaceTab = {
-  fileKey: string
-  applyId: string
-  fileName: string
-  sourcePath: string
-  changeCount: number
-  status: AiFileChangeStatus
-  unseen: boolean
-}
-
 export type AssistantTurnApplyTarget = {
   changeId: string
   title: string
@@ -216,8 +206,7 @@ export type WorkbenchContentPanelState =
   | {
       kind: 'apply_workspace'
       title: string
-      tabs: FileChangeWorkspaceTab[]
-      activeFileKey: string | null
+      applyId: string | null
     }
   | {
       kind: 'browser'

@@ -22,10 +22,12 @@ import { loadRootEnvOnce } from '../core/rootEnv'
 import {
   SETTINGS_E2E_TIMEOUT_MS,
   SETTINGS_REAL_WORKSPACE_E2E_TIMEOUT_MS,
+  createRealWorkspaceWithRoot,
   getWorkspaceIndexCounts,
   getSettingsLocator,
   getSettingsPrefixLocator,
-  navigateToSettingsSection
+  navigateToSettingsSection,
+  waitForFileIndexJobIdle
 } from './settings'
 import type { E2ETestRuntime } from './run-e2e-case'
 import type { E2ERuntimeSignals } from './electronApp'
@@ -774,6 +776,29 @@ export const prepareWorkbenchWorkspaceThroughUi = async (
   await selectWorkbenchWorkspace(page, input.workspaceName)
 }
 
+export const prepareWorkbenchWorkspaceDirectly = async (
+  page: Page,
+  input: {
+    workspaceName: string
+    rootPath: string
+  }
+): Promise<void> => {
+  const workspaceResponse = await createRealWorkspaceWithRoot(page, {
+    name: input.workspaceName,
+    rootPath: input.rootPath
+  })
+  const workspaceId = workspaceResponse.workspace!.id
+  const prepareResponse = await page.evaluate(async (selectedWorkspaceId) => {
+    return await window.api.workspacePrepare({ workspaceId: selectedWorkspaceId })
+  }, workspaceId)
+  if (!prepareResponse.success) {
+    throw new Error(prepareResponse.error || 'failed to prepare workspace fixture')
+  }
+  await waitForFileIndexJobIdle(page, workspaceId, WORKBENCH_LONG_E2E_TIMEOUT_MS)
+  await navigateToWorkbench(page)
+  await selectWorkbenchWorkspace(page, input.workspaceName)
+}
+
 export const setupWorkbenchWithTempWorkspace = async (
   page: Page,
   input: {
@@ -789,11 +814,18 @@ export const setupWorkbenchWithTempWorkspace = async (
   if (input.configureModel !== false) {
     await configureLiveModelThroughSettingsUi(page, env)
   }
-  await prepareWorkbenchWorkspaceThroughUi(page, {
-    workspaceName,
-    rootPath: workspace.rootPath,
-    webSourceUrl: input.webSourceUrl
-  })
+  if (input.webSourceUrl) {
+    await prepareWorkbenchWorkspaceThroughUi(page, {
+      workspaceName,
+      rootPath: workspace.rootPath,
+      webSourceUrl: input.webSourceUrl
+    })
+  } else {
+    await prepareWorkbenchWorkspaceDirectly(page, {
+      workspaceName,
+      rootPath: workspace.rootPath
+    })
+  }
   if (input.configureModel !== false) {
     await selectWorkbenchModel(page, env.modelName)
   }
@@ -814,11 +846,18 @@ export const setupWorkbenchWorkspaceOnly = async (
 ): Promise<WorkbenchWorkspaceOnlySetupResult> => {
   const workspace = await createTemporaryWorkbenchWorkspace(input.caseId)
   const workspaceName = input.workspaceName || `Workbench ${input.caseId}`
-  await prepareWorkbenchWorkspaceThroughUi(page, {
-    workspaceName,
-    rootPath: workspace.rootPath,
-    webSourceUrl: input.webSourceUrl
-  })
+  if (input.webSourceUrl) {
+    await prepareWorkbenchWorkspaceThroughUi(page, {
+      workspaceName,
+      rootPath: workspace.rootPath,
+      webSourceUrl: input.webSourceUrl
+    })
+  } else {
+    await prepareWorkbenchWorkspaceDirectly(page, {
+      workspaceName,
+      rootPath: workspace.rootPath
+    })
+  }
   return {
     workspace,
     workspaceName

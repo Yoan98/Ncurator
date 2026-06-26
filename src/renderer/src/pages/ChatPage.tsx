@@ -39,7 +39,6 @@ import WorkbenchComposer from '../components/workbench/WorkbenchComposer'
 import WorkbenchContentPanel from '../components/workbench/WorkbenchContentPanel'
 import ReferenceInlineToken from '../components/workbench/composer/ReferenceInlineToken'
 import {
-  FILE_ORIGIN_LABELS,
   WORKBENCH_CONTENT_PANEL_COLLAPSED_STORAGE_KEY,
   WORKBENCH_LEFT_TITLEBAR_COLLAPSED_WIDTH,
   WORKBENCH_SIDEBAR_DEFAULT_WIDTH,
@@ -51,7 +50,6 @@ import {
 import type {
   AssistantTurnViewModel,
   WorkbenchContextUsage,
-  FileChangeWorkspaceTab,
   SearchWorkbenchTurn,
   WorkbenchContentPanelState,
   WorkbenchFileRef,
@@ -503,7 +501,6 @@ const ChatPage: React.FC = () => {
   const [contextUsage, setContextUsage] = useState<WorkbenchContextUsage | null>(null)
   const [assistantTurns, setAssistantTurns] = useState<Record<string, AssistantTurnViewModel>>({})
   const [contentPanel, setContentPanel] = useState<WorkbenchContentPanelState>(createEmptyPanel())
-  const [applyWorkspaceTabs, setApplyWorkspaceTabs] = useState<FileChangeWorkspaceTab[]>([])
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
     const stored = window.localStorage.getItem(WORKBENCH_SIDEBAR_STORAGE_KEY)
     return stored === 'true'
@@ -671,51 +668,21 @@ const ChatPage: React.FC = () => {
   }, [])
 
   const showApplyWorkspace = useCallback(
-    (tabs: FileChangeWorkspaceTab[], activeFileKey: string | null): void => {
+    (applyId: string | null): void => {
       showContentPanel({
         kind: 'apply_workspace',
         title: '修改的文件',
-        tabs,
-        activeFileKey
+        applyId
       })
     },
     [showContentPanel]
   )
-
-  const sharedHeaderMeta = useMemo(() => {
-    if (contentPanelCollapsed || contentPanel.kind === 'empty') {
-      return null
-    }
-
-    if (contentPanel.kind === 'file_preview') {
-      return {
-        title: contentPanel.file.fileName || contentPanel.title,
-        badge: FILE_ORIGIN_LABELS[contentPanel.file.origin],
-        badgeClassName: 'border-[#EEEEEC] bg-white text-[#787774]'
-      }
-    }
-
-    if (contentPanel.kind === 'apply_workspace' && activeApplyRecord) {
-      return {
-        title: activeApplyRecord.source_name || contentPanel.title,
-        badge: null,
-        badgeClassName: ''
-      }
-    }
-
-    return {
-      title: contentPanel.title,
-      badge: null,
-      badgeClassName: ''
-    }
-  }, [activeApplyRecord, contentPanel, contentPanelCollapsed])
 
   const resetApplyWorkspaceState = (): void => {
     setActiveApplyRecord(null)
     setApplyLoading(false)
     setApplyReverting(false)
     setApplyForceConfirm(null)
-    setApplyWorkspaceTabs([])
   }
 
   const updateTurnForRun = (
@@ -995,20 +962,18 @@ const ChatPage: React.FC = () => {
   const loadApplyRecord = async (input: {
     applyId: string
     detail?: DocxApplyRecord | null
-    tabs?: FileChangeWorkspaceTab[]
-    activeFileKey?: string | null
     openWorkspace?: boolean
   }): Promise<void> => {
     setApplyLoading(true)
     try {
-      const response =
-        input.detail !== undefined
-          ? { record: input.detail }
-          : await window.api.docxApplyGet({ applyId: input.applyId })
-      let nextRecord = response.record || null
+      let nextRecord = input.detail || null
       if (!nextRecord) {
-        const fallback = await window.api.aiFileChangeGet({ changeId: input.applyId })
-        nextRecord = fallback.record ? fileChangeToDocxApplyRecord(fallback.record) : null
+        const fileChange = await window.api.aiFileChangeGet({ changeId: input.applyId })
+        nextRecord = fileChange.record ? fileChangeToDocxApplyRecord(fileChange.record) : null
+      }
+      if (!nextRecord) {
+        const fallback = await window.api.docxApplyGet({ applyId: input.applyId })
+        nextRecord = fallback.record || null
       }
       if (!nextRecord) {
         setActiveApplyRecord(null)
@@ -1018,10 +983,7 @@ const ChatPage: React.FC = () => {
       setActiveApplyRecord(nextRecord)
 
       if (input.openWorkspace) {
-        showApplyWorkspace(
-          input.tabs || applyWorkspaceTabs,
-          input.activeFileKey || nextRecord.source_path || null
-        )
+        showApplyWorkspace(nextRecord.id)
       }
     } catch (error) {
       console.error('Failed to load apply record', error)
@@ -1078,12 +1040,9 @@ const ChatPage: React.FC = () => {
       const preferredRecord = options?.preferredApplyId
         ? allRecords.find((record) => record.id === options.preferredApplyId) || null
         : null
-      const workspaceRecords = preferredRecord
-        ? allRecords.filter((record) => record.runId === preferredRecord.runId)
-        : activeRecords
 
-      if (workspaceRecords.length === 0) {
-        setApplyWorkspaceTabs([])
+      const nextSelectedRecord = preferredRecord || activeRecords[0] || null
+      if (!nextSelectedRecord) {
         setActiveApplyRecord(null)
         setContentPanel((current) =>
           current.kind === 'apply_workspace' ? createEmptyPanel() : current
@@ -1094,83 +1053,24 @@ const ChatPage: React.FC = () => {
         return
       }
 
-      const latestByFileKey = new Map<string, AiFileChangeRecord>()
-      workspaceRecords.forEach((record) => {
-        const fileKey = record.path
-        if (!fileKey || latestByFileKey.has(fileKey)) return
-        latestByFileKey.set(fileKey, record)
-      })
-
-      const currentWorkspaceFileKey =
-        contentPanel.kind === 'apply_workspace'
-          ? contentPanel.activeFileKey
-          : activeApplyRecord?.source_path || null
       const previewFileKey = contentPanel.kind === 'file_preview' ? contentPanel.file.path : null
-      const preferredFileKey = preferredRecord?.path || null
-      const nextTabs = [...latestByFileKey.values()].map((record) => {
-        const fileKey = record.path || record.id
-        const previousTab = applyWorkspaceTabs.find((tab) => tab.fileKey === fileKey)
-        const shouldMarkUnseen =
-          previousTab?.applyId !== record.id &&
-          currentWorkspaceFileKey !== fileKey &&
-          previewFileKey !== fileKey &&
-          preferredFileKey !== fileKey
-
-        return {
-          fileKey,
-          applyId: record.id,
-          fileName: record.fileName,
-          sourcePath: fileKey,
-          changeCount: record.changeCount,
-          status: record.status,
-          unseen: shouldMarkUnseen
-        }
-      })
-
-      const currentWorkspaceSelectionStillAvailable = Boolean(
-        currentWorkspaceFileKey && nextTabs.some((tab) => tab.fileKey === currentWorkspaceFileKey)
-      )
-      const shouldKeepCurrentWorkspaceSelection =
-        contentPanel.kind === 'apply_workspace' &&
-        currentWorkspaceSelectionStillAvailable &&
-        !options?.forceOpenWorkspace &&
-        preferredFileKey !== currentWorkspaceFileKey
-      const nextSelectedFileKey =
-        (shouldKeepCurrentWorkspaceSelection ? currentWorkspaceFileKey : null) ||
-        preferredFileKey ||
-        (currentWorkspaceFileKey && nextTabs.some((tab) => tab.fileKey === currentWorkspaceFileKey)
-          ? currentWorkspaceFileKey
-          : nextTabs[0]?.fileKey || null)
-      const normalizedTabs = nextTabs.map((tab) =>
-        tab.fileKey === nextSelectedFileKey ? { ...tab, unseen: false } : tab
-      )
-      setApplyWorkspaceTabs(normalizedTabs)
-
-      const nextSelectedTab =
-        normalizedTabs.find((tab) => tab.fileKey === nextSelectedFileKey) || normalizedTabs[0]
-      if (!nextSelectedTab) return
-
       if (options?.skipApplyRecordReload) {
+        setActiveApplyRecord(fileChangeToDocxApplyRecord(nextSelectedRecord))
         if (options.forceOpenWorkspace || contentPanel.kind === 'apply_workspace') {
-          showApplyWorkspace(normalizedTabs, nextSelectedTab.fileKey)
+          showApplyWorkspace(nextSelectedRecord.id)
         }
         return
       }
-
-      const nextSelectedRecord = latestByFileKey.get(nextSelectedTab.fileKey) || null
-      if (!nextSelectedRecord) return
 
       const shouldOpenWorkspace =
         Boolean(options?.forceOpenWorkspace) ||
         contentPanel.kind === 'apply_workspace' ||
         (Boolean(options?.autoOpen) &&
           (contentPanel.kind === 'empty' ||
-            (previewFileKey !== null && previewFileKey === nextSelectedTab.fileKey)))
+            (previewFileKey !== null && previewFileKey === nextSelectedRecord.path)))
 
       await loadApplyRecord({
-        applyId: nextSelectedTab.applyId,
-        tabs: normalizedTabs,
-        activeFileKey: nextSelectedTab.fileKey,
+        applyId: nextSelectedRecord.id,
         openWorkspace: shouldOpenWorkspace
       })
     } catch (error) {
@@ -1265,6 +1165,8 @@ const ChatPage: React.FC = () => {
 
   useEffect(() => {
     if (currentSessionId) {
+      let cancelled = false
+      const sessionId = currentSessionId
       const sessionWorkspaceId = currentSession?.workspace_id || null
       if (sessionWorkspaceId && sessionWorkspaceId !== selectedWorkspaceId) {
         setSelectedWorkspaceId(sessionWorkspaceId)
@@ -1281,13 +1183,17 @@ const ChatPage: React.FC = () => {
       setApprovalCurrentIndex(0)
       setApprovalDraftDecisions({})
       setApprovalSubmitting(false)
-      setAssistantTurns({})
-      setContentPanel(createEmptyPanel())
-      setContentPanelCollapsed(true)
-      resetApplyWorkspaceState()
-      void loadSessionSnapshot(currentSessionId)
-      void loadFileChangesForSession(currentSessionId)
-      void refreshContextUsage(currentSessionId)
+      void loadSessionSnapshot(sessionId).then(() => {
+        if (cancelled) return
+        setContentPanel(createEmptyPanel())
+        setContentPanelCollapsed(true)
+        resetApplyWorkspaceState()
+      })
+      void loadFileChangesForSession(sessionId)
+      void refreshContextUsage(sessionId)
+      return () => {
+        cancelled = true
+      }
     } else {
       setCurrentMessages([])
       setAssistantTurns({})
@@ -1296,6 +1202,7 @@ const ChatPage: React.FC = () => {
       setContentPanelCollapsed(true)
       resetApplyWorkspaceState()
     }
+    return undefined
     // Session switch reset must run only when the selected session id changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentSessionId, refreshContextUsage])
@@ -1435,17 +1342,8 @@ const ChatPage: React.FC = () => {
       return
     }
 
-    const nextTab = applyWorkspaceTabs.find((tab) => tab.applyId === changeId) || null
-    const nextTabs = nextTab
-      ? applyWorkspaceTabs.map((tab) =>
-          tab.fileKey === nextTab.fileKey ? { ...tab, unseen: false } : tab
-        )
-      : applyWorkspaceTabs
-    setApplyWorkspaceTabs(nextTabs)
     void loadApplyRecord({
       applyId: changeId,
-      tabs: nextTabs,
-      activeFileKey: nextTab?.fileKey || null,
       openWorkspace: true
     })
   }
@@ -1988,21 +1886,8 @@ const ChatPage: React.FC = () => {
         return
       }
       if (response.record) {
-        const nextTabs = applyWorkspaceTabs.map((tab) =>
-          tab.applyId === response.record!.id
-            ? {
-                ...tab,
-                applyId: response.record!.id,
-                sourcePath: response.record!.path,
-                changeCount: response.record!.changeCount,
-                status: response.record!.status,
-                unseen: false
-              }
-            : tab
-        )
-        setApplyWorkspaceTabs(nextTabs)
         setActiveApplyRecord(fileChangeToDocxApplyRecord(response.record))
-        showApplyWorkspace(nextTabs, response.record.path)
+        showApplyWorkspace(response.record.id)
       }
       emitSuccessMessage('已回退本次修改')
       await loadFileChangesForSession(currentSessionId, {
@@ -2032,21 +1917,8 @@ const ChatPage: React.FC = () => {
         return
       }
       if (forced.record) {
-        const nextTabs = applyWorkspaceTabs.map((tab) =>
-          tab.applyId === forced.record!.id
-            ? {
-                ...tab,
-                applyId: forced.record!.id,
-                sourcePath: forced.record!.path,
-                changeCount: forced.record!.changeCount,
-                status: forced.record!.status,
-                unseen: false
-              }
-            : tab
-        )
-        setApplyWorkspaceTabs(nextTabs)
         setActiveApplyRecord(fileChangeToDocxApplyRecord(forced.record))
-        showApplyWorkspace(nextTabs, forced.record.path)
+        showApplyWorkspace(forced.record.id)
       }
       setApplyForceConfirm(null)
       emitSuccessMessage('已回退本次修改')
@@ -2131,6 +2003,8 @@ const ChatPage: React.FC = () => {
           void openFile(file)
         }}
         onOpenApply={openFileChange}
+        workspaces={workspaces}
+        fallbackWorkspaceName={selectedWorkspace?.name || null}
         onOpenReference={(reference) => {
           void openMarkdownReference(reference)
         }}
@@ -2381,31 +2255,11 @@ const ChatPage: React.FC = () => {
                 aria-hidden="true"
               />
               <div className="nc-topbar-title-region min-w-0 flex-1 bg-white">
-                {currentSession || sharedHeaderMeta ? (
+                {currentSession ? (
                   <div className="flex min-w-0 items-center gap-2 leading-none">
-                    {currentSession ? (
-                      <div className="nc-topbar-title-text truncate text-sm font-semibold leading-none text-[#37352F]">
-                        {currentSession.title}
-                      </div>
-                    ) : null}
-                    {currentSession && sharedHeaderMeta ? (
-                      <span className="nc-topbar-title-text text-[#E0DFDC]">/</span>
-                    ) : null}
-                    {sharedHeaderMeta ? (
-                      <div
-                        className="nc-topbar-title-text truncate text-sm font-semibold leading-none text-[#37352F]"
-                        data-testid={workbenchSelectors.contentPanelTitle}
-                      >
-                        {sharedHeaderMeta.title}
-                      </div>
-                    ) : null}
-                    {sharedHeaderMeta?.badge ? (
-                      <span
-                        className={`rounded-full border px-2.5 py-1 text-[11px] ${sharedHeaderMeta.badgeClassName}`}
-                      >
-                        {sharedHeaderMeta.badge}
-                      </span>
-                    ) : null}
+                    <div className="nc-topbar-title-text truncate text-sm font-semibold leading-none text-[#37352F]">
+                      {currentSession.title}
+                    </div>
                   </div>
                 ) : null}
               </div>
@@ -2658,13 +2512,12 @@ const ChatPage: React.FC = () => {
               style={{
                 width: contentPanelCollapsed
                   ? 0
-                  : contentPanel.kind === 'apply_workspace'
-                    ? 'min(48vw, 780px)'
-                    : contentPanel.kind === 'browser'
-                      ? 'min(52vw, 860px)'
-                      : contentPanel.kind === 'file_preview'
-                        ? 'min(46vw, 740px)'
-                        : 440
+                  : contentPanel.kind === 'browser'
+                    ? 'min(52vw, 860px)'
+                    : contentPanel.kind === 'file_preview' ||
+                        contentPanel.kind === 'apply_workspace'
+                      ? 'min(46vw, 740px)'
+                      : 440
               }}
             >
               <WorkbenchContentPanel
@@ -2672,21 +2525,9 @@ const ChatPage: React.FC = () => {
                 activeApplyRecord={activeApplyRecord}
                 applyLoading={applyLoading}
                 applyReverting={applyReverting}
+                workspaces={workspaces}
+                fallbackWorkspaceName={selectedWorkspace?.name || null}
                 onOpenSearchResult={(turn, resultIndex) => void openSearchResult(turn, resultIndex)}
-                onSelectApplyTab={(fileKey) => {
-                  const nextTab = applyWorkspaceTabs.find((tab) => tab.fileKey === fileKey)
-                  if (!nextTab) return
-                  const nextTabs = applyWorkspaceTabs.map((tab) =>
-                    tab.fileKey === fileKey ? { ...tab, unseen: false } : tab
-                  )
-                  setApplyWorkspaceTabs(nextTabs)
-                  void loadApplyRecord({
-                    applyId: nextTab.applyId,
-                    tabs: nextTabs,
-                    activeFileKey: fileKey,
-                    openWorkspace: true
-                  })
-                }}
                 onRevertApply={() => void handleApplyRevert()}
                 onBackToPanelState={showContentPanel}
                 onOpenPath={openPathOrNotify}
