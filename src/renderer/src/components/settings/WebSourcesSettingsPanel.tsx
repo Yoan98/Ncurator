@@ -1,5 +1,5 @@
 ﻿import React, { useCallback, useEffect, useState } from 'react'
-import { Button, Empty, Input, Modal, Tooltip, message } from 'antd'
+import { Button, Empty, Input, Modal, Popover, Tooltip, message } from 'antd'
 import type {
   WorkspaceIndexJobRecord,
   WebSourceListResponse,
@@ -22,9 +22,15 @@ type WebSourcesSettingsPanelProps = {
   workspaceId: string | null
   workspaceName?: string
   embedded?: boolean
+  hasVectorModel: boolean | null
+  onVectorModelSettingsOpen: () => void
 }
 
-const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({ workspaceId }) => {
+const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
+  workspaceId,
+  hasVectorModel,
+  onVectorModelSettingsOpen
+}) => {
   const [webSources, setWebSources] = useState<WebSourceRecord[]>([])
   const [webLoading, setWebLoading] = useState(false)
   const [webModalVisible, setWebModalVisible] = useState(false)
@@ -152,6 +158,11 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({ works
 
   const handlePrepareWebSources = async (): Promise<void> => {
     if (!workspaceId) return
+    if (hasVectorModel !== true) {
+      message.warning('请先安装向量模型后再更新索引')
+      return
+    }
+
     try {
       const response = await window.api.webSourcesPrepare({ workspaceId })
       if (!response.success) {
@@ -185,6 +196,31 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({ works
       message.error('删除网页失败')
     }
   }
+
+  const vectorModelMissing = hasVectorModel === false
+  const webPrepareDisabled = Boolean(webIndexJob) || hasVectorModel !== true
+  const webPrepareTooltip =
+    hasVectorModel === null
+      ? '正在检查向量模型状态'
+      : vectorModelMissing
+        ? ''
+        : '检查网页变化并更新索引。'
+  const vectorModelRequirementContent = (
+    <div className="w-[220px]">
+      <div className="text-[13px] font-medium text-[#37352F]">先安装向量模型</div>
+      <div className="mt-1 text-[12px] leading-5 text-[#787774]">
+        安装后才能为工作空间更新索引。
+      </div>
+      <Button
+        type="link"
+        size="small"
+        className="mt-2 !h-auto !p-0 !text-[#2F3437]"
+        onClick={onVectorModelSettingsOpen}
+      >
+        去安装
+      </Button>
+    </div>
+  )
 
   return (
     <div
@@ -249,15 +285,35 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({ works
             >
               检查更新
             </Button>
-            <Button
-              type="primary"
-              icon={<HiCircleStack className="h-4 w-4" />}
-              onClick={() => void handlePrepareWebSources()}
-              disabled={Boolean(webIndexJob)}
-              loading={webIndexJob?.action === 'prepare'}
-            >
-              更新索引
-            </Button>
+            <div className="relative min-w-0">
+              <Tooltip title={webPrepareTooltip}>
+                <Button
+                  type="primary"
+                  icon={<HiCircleStack className="h-4 w-4" />}
+                  onClick={() => void handlePrepareWebSources()}
+                  disabled={webPrepareDisabled}
+                  loading={webIndexJob?.action === 'prepare'}
+                  className={`w-full min-w-0 ${vectorModelMissing ? '!pr-9' : ''}`}
+                >
+                  更新索引
+                </Button>
+              </Tooltip>
+              {vectorModelMissing ? (
+                <Popover
+                  trigger={['hover', 'click']}
+                  placement="topRight"
+                  content={vectorModelRequirementContent}
+                >
+                  <button
+                    type="button"
+                    className="absolute right-1 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-[6px] border border-[#EEEEEC] bg-white text-[#9B9A97] transition hover:border-[#DAD8D2] hover:text-[#37352F]"
+                    aria-label="为什么不能更新索引"
+                  >
+                    <HiOutlineQuestionMarkCircle className="h-4 w-4" />
+                  </button>
+                </Popover>
+              ) : null}
+            </div>
           </div>
           <WorkspaceIndexJobProgress
             job={webIndexJob}

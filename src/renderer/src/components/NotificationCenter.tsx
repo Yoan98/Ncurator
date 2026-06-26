@@ -1,6 +1,6 @@
 ﻿import React, { useEffect, useState } from 'react'
 import { Card, Button, Typography } from 'antd'
-import { HiCloudArrowDown, HiOutlineCog6Tooth } from 'react-icons/hi2'
+import { HiOutlineCog6Tooth } from 'react-icons/hi2'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { getActiveConfig } from '../services/llmService'
 
@@ -21,11 +21,9 @@ const NotificationCenter: React.FC = () => {
   const navigate = useNavigate()
   const location = useLocation()
   const [notifications, setNotifications] = useState<NotificationItem[]>([])
-  const [checkingModel, setCheckingModel] = useState(false)
   const [workbenchMode, setWorkbenchMode] = useState<'ai' | 'search'>('search')
 
   const isSettingsPage = location.pathname.startsWith('/settings')
-  const isDownloadPage = location.pathname === '/model-download'
   const isWorkbenchPage = location.pathname === '/'
 
   // Helper to update notifications
@@ -40,49 +38,7 @@ const NotificationCenter: React.FC = () => {
     })
   }
 
-  // 1. Check Model Status
-  useEffect(() => {
-    if (isDownloadPage) {
-      updateNotification('model-missing', null)
-      return
-    }
-
-    const checkModelStatus = async () => {
-      if (checkingModel) return
-      setCheckingModel(true)
-      try {
-        const status = await window.api.getEmbeddingStatus()
-        if (status === 'error' || status === 'uninitialized') {
-          const models = await window.api.getModels()
-          const isDownloaded = models.some((m) => m.isDownloaded)
-          if (!isDownloaded) {
-            updateNotification('model-missing', {
-              id: 'model-missing',
-              title: '缺少向量模型',
-              description: '搜索和对话功能依赖本地向量模型，请先下载模型文件。',
-              icon: <HiCloudArrowDown className="text-xl" />,
-              action: {
-                label: '去下载',
-                onClick: () => navigate('/model-download')
-              }
-            })
-          } else {
-            updateNotification('model-missing', null)
-          }
-        } else {
-          updateNotification('model-missing', null)
-        }
-      } catch (e) {
-        console.error('Failed to check model status', e)
-      } finally {
-        setCheckingModel(false)
-      }
-    }
-
-    checkModelStatus()
-  }, [location.pathname, isDownloadPage])
-
-  // 2. Check LLM Config
+  // Check LLM Config
   useEffect(() => {
     const handleWorkbenchMode = (event: Event) => {
       const detail =
@@ -135,21 +91,21 @@ const NotificationCenter: React.FC = () => {
         updateNotification('llm-config-missing', {
           id: 'llm-config-missing',
           title: '未配置大模型 API',
-            description: '智能回答和对话功能需要配置 LLM API，请先完成配置。',
-            icon: <HiOutlineCog6Tooth className="text-xl" />,
-            action: {
-              label: '去配置',
-              onClick: () => navigate('/settings/model')
-            }
-          })
-        }
+          description: '智能回答和对话功能需要配置 LLM API，请先完成配置。',
+          icon: <HiOutlineCog6Tooth className="text-xl" />,
+          action: {
+            label: '去配置',
+            onClick: () => navigate('/settings/model')
+          }
+        })
+      }
     }
 
     window.addEventListener('check-llm-config', handleCheckEvent)
     return () => {
       window.removeEventListener('check-llm-config', handleCheckEvent)
     }
-  }, [location.pathname, isSettingsPage, isWorkbenchPage, workbenchMode])
+  }, [location.pathname, isSettingsPage, isWorkbenchPage, navigate, workbenchMode])
 
   if (notifications.length === 0) return null
 
@@ -174,7 +130,7 @@ const NotificationCenter: React.FC = () => {
               key="action"
               type="primary"
               size="small"
-              icon={item.id === 'model-missing' ? <HiCloudArrowDown /> : <HiOutlineCog6Tooth />}
+              icon={<HiOutlineCog6Tooth />}
               onClick={() => {
                 updateNotification(item.id, null)
                 item.action.onClick()

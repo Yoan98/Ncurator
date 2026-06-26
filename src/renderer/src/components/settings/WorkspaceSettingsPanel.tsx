@@ -1,5 +1,6 @@
 ﻿import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { Alert, Button, Empty, Input, Modal, Tabs, Tooltip, Tree, message } from 'antd'
+import { Alert, Button, Empty, Input, Modal, Popover, Tabs, Tooltip, Tree, message } from 'antd'
+import { useNavigate } from 'react-router-dom'
 import type {
   WorkspaceIndexJobRecord,
   LegacyLocalImportMigrationStatus,
@@ -29,6 +30,7 @@ import {
 import type { WorkspaceJobMap, WorkspaceTreeMap } from './types'
 
 const WorkspaceSettingsPanel: React.FC = () => {
+  const navigate = useNavigate()
   const [workspaces, setWorkspaces] = useState<WorkspaceListItem[]>([])
   const [workspaceTrees, setWorkspaceTrees] = useState<WorkspaceTreeMap>({})
   const [workspaceTreeSummaries, setWorkspaceTreeSummaries] = useState<
@@ -45,6 +47,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
   const [createWorkspaceName, setCreateWorkspaceName] = useState('')
   const [createSubmitting, setCreateSubmitting] = useState(false)
   const [deleteWorkspaceId, setDeleteWorkspaceId] = useState<string | null>(null)
+  const [hasVectorModel, setHasVectorModel] = useState<boolean | null>(null)
 
   const selectedWorkspace = useMemo(
     () => workspaces.find((workspace) => workspace.id === selectedWorkspaceId) || null,
@@ -126,9 +129,23 @@ const WorkspaceSettingsPanel: React.FC = () => {
     }
   }, [loadWorkspaceTree])
 
+  const loadVectorModelAvailability = useCallback(async (): Promise<void> => {
+    try {
+      const models = await window.api.getModels()
+      setHasVectorModel(models.some((model) => model.isDownloaded))
+    } catch (error) {
+      console.error(error)
+      setHasVectorModel(false)
+    }
+  }, [])
+
   useEffect(() => {
     void loadWorkspaces()
   }, [loadWorkspaces])
+
+  useEffect(() => {
+    void loadVectorModelAvailability()
+  }, [loadVectorModelAvailability])
 
   useEffect(() => {
     void window.api
@@ -282,6 +299,11 @@ const WorkspaceSettingsPanel: React.FC = () => {
   }
 
   const handleWorkspacePrepare = async (workspace: WorkspaceListItem): Promise<void> => {
+    if (hasVectorModel !== true) {
+      message.warning('请先安装向量模型后再更新索引')
+      return
+    }
+
     try {
       const response = await window.api.workspacePrepare({
         workspaceId: workspace.id
@@ -317,6 +339,31 @@ const WorkspaceSettingsPanel: React.FC = () => {
       message.error('移除工作空间失败')
     }
   }
+
+  const vectorModelMissing = hasVectorModel === false
+  const workspacePrepareDisabled = Boolean(selectedWorkspaceIndexJob) || hasVectorModel !== true
+  const workspacePrepareTooltip =
+    hasVectorModel === null
+      ? '正在检查向量模型状态'
+      : vectorModelMissing
+        ? ''
+        : '检查目录变化并更新可索引文件。'
+  const vectorModelRequirementContent = (
+    <div className="w-[220px]">
+      <div className="text-[13px] font-medium text-[#37352F]">先安装向量模型</div>
+      <div className="mt-1 text-[12px] leading-5 text-[#787774]">
+        安装后才能为工作空间更新索引。
+      </div>
+      <Button
+        type="link"
+        size="small"
+        className="mt-2 !h-auto !p-0 !text-[#2F3437]"
+        onClick={() => navigate('/settings/vector')}
+      >
+        去安装
+      </Button>
+    </div>
+  )
 
   return (
     <div
@@ -528,18 +575,38 @@ const WorkspaceSettingsPanel: React.FC = () => {
                                       检查更新
                                     </Button>
                                   </Tooltip>
-                                  <Tooltip title="检查目录变化并更新可索引文件。">
-                                    <Button
-                                      type="primary"
-                                      icon={<HiCircleStack className="h-4 w-4" />}
-                                      onClick={() => void handleWorkspacePrepare(selectedWorkspace)}
-                                      disabled={Boolean(selectedWorkspaceIndexJob)}
-                                      loading={selectedWorkspaceIndexJob?.action === 'prepare'}
-                                      data-testid={importSelectors.workspaceQuickPrepareButton}
-                                    >
-                                      更新索引
-                                    </Button>
-                                  </Tooltip>
+                                  <div className="relative min-w-0">
+                                    <Tooltip title={workspacePrepareTooltip}>
+                                      <Button
+                                        type="primary"
+                                        icon={<HiCircleStack className="h-4 w-4" />}
+                                        onClick={() =>
+                                          void handleWorkspacePrepare(selectedWorkspace)
+                                        }
+                                        disabled={workspacePrepareDisabled}
+                                        loading={selectedWorkspaceIndexJob?.action === 'prepare'}
+                                        className={`w-full min-w-0 ${vectorModelMissing ? '!pr-9' : ''}`}
+                                        data-testid={importSelectors.workspaceQuickPrepareButton}
+                                      >
+                                        更新索引
+                                      </Button>
+                                    </Tooltip>
+                                    {vectorModelMissing ? (
+                                      <Popover
+                                        trigger={['hover', 'click']}
+                                        placement="topRight"
+                                        content={vectorModelRequirementContent}
+                                      >
+                                        <button
+                                          type="button"
+                                          className="absolute right-1 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-[6px] border border-[#EEEEEC] bg-white text-[#9B9A97] transition hover:border-[#DAD8D2] hover:text-[#37352F]"
+                                          aria-label="为什么不能更新索引"
+                                        >
+                                          <HiOutlineQuestionMarkCircle className="h-4 w-4" />
+                                        </button>
+                                      </Popover>
+                                    ) : null}
+                                  </div>
                                 </div>
                                 <WorkspaceIndexJobProgress
                                   job={selectedWorkspaceIndexJob}
@@ -636,6 +703,8 @@ const WorkspaceSettingsPanel: React.FC = () => {
                           workspaceId={selectedWorkspace.id}
                           workspaceName={selectedWorkspace.name}
                           embedded
+                          hasVectorModel={hasVectorModel}
+                          onVectorModelSettingsOpen={() => navigate('/settings/vector')}
                         />
                       )
                     }

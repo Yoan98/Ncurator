@@ -601,7 +601,7 @@ const ChatPage: React.FC = () => {
     [selectedWorkspace]
   )
   const composerSubmitDisabledReason = useMemo(() => {
-    if (!input.trim()) return '输入内容后再发送'
+    if (!input.trim()) return null
     if (!currentSessionId) return '当前会话未就绪'
     if (!selectedWorkspaceReady)
       return `${getWorkspaceRequirementHint(selectedWorkspace)}后再发送消息`
@@ -771,44 +771,44 @@ const ChatPage: React.FC = () => {
     runSnapshots: ChatSessionRunSnapshot[],
     activeRuns: ChatSessionRunSnapshot[]
   ): void => {
-      assistantArtifactsRef.current = {}
-      activeRunMessageIdsRef.current = {}
-      setAssistantTurns(() => {
-        const nextTurns: Record<string, AssistantTurnViewModel> = {}
-        for (const message of messages) {
-          if (message.artifacts && message.artifacts.length > 0) {
-            assistantArtifactsRef.current[message.id] = message.artifacts
-          }
-          const turn = buildAssistantTurnFromMessage(message)
-          if (turn) nextTurns[message.id] = turn
+    assistantArtifactsRef.current = {}
+    activeRunMessageIdsRef.current = {}
+    setAssistantTurns(() => {
+      const nextTurns: Record<string, AssistantTurnViewModel> = {}
+      for (const message of messages) {
+        if (message.artifacts && message.artifacts.length > 0) {
+          assistantArtifactsRef.current[message.id] = message.artifacts
         }
-        const activeRunIds = new Set(activeRuns.map((item) => item.run.id))
-        for (const runSnapshot of runSnapshots) {
-          if (activeRunIds.has(runSnapshot.run.id)) {
-            activeRunMessageIdsRef.current[runSnapshot.run.id] = runSnapshot.run.assistantMessageId
-          }
-          const turn = buildAssistantTurnFromRunSnapshot(runSnapshot)
-          nextTurns[runSnapshot.run.assistantMessageId] = turn
-          if (runSnapshot.run.artifacts && runSnapshot.run.artifacts.length > 0) {
-            assistantArtifactsRef.current[runSnapshot.run.assistantMessageId] =
-              runSnapshot.run.artifacts
-          }
+        const turn = buildAssistantTurnFromMessage(message)
+        if (turn) nextTurns[message.id] = turn
+      }
+      const activeRunIds = new Set(activeRuns.map((item) => item.run.id))
+      for (const runSnapshot of runSnapshots) {
+        if (activeRunIds.has(runSnapshot.run.id)) {
+          activeRunMessageIdsRef.current[runSnapshot.run.id] = runSnapshot.run.assistantMessageId
         }
-        return nextTurns
-      })
-      const visibleActiveRun =
-        activeRuns.find((item) => item.run.status === 'running') || activeRuns[0]
-      setAiRunId(visibleActiveRun?.run.id || null)
-      setLoading(Boolean(visibleActiveRun && visibleActiveRun.run.status === 'running'))
-      const approval =
-        activeRuns.find((item) => item.pendingApproval && !item.pendingApproval.internal)
-          ?.pendingApproval || null
-      setPendingApprovalBatch(approval)
-      setApprovalCurrentIndex(0)
-      setApprovalDraftDecisions({})
-      setApprovalSubmitting(false)
-      shouldAutoScrollRef.current = true
-      scrollToBottom(true)
+        const turn = buildAssistantTurnFromRunSnapshot(runSnapshot)
+        nextTurns[runSnapshot.run.assistantMessageId] = turn
+        if (runSnapshot.run.artifacts && runSnapshot.run.artifacts.length > 0) {
+          assistantArtifactsRef.current[runSnapshot.run.assistantMessageId] =
+            runSnapshot.run.artifacts
+        }
+      }
+      return nextTurns
+    })
+    const visibleActiveRun =
+      activeRuns.find((item) => item.run.status === 'running') || activeRuns[0]
+    setAiRunId(visibleActiveRun?.run.id || null)
+    setLoading(Boolean(visibleActiveRun && visibleActiveRun.run.status === 'running'))
+    const approval =
+      activeRuns.find((item) => item.pendingApproval && !item.pendingApproval.internal)
+        ?.pendingApproval || null
+    setPendingApprovalBatch(approval)
+    setApprovalCurrentIndex(0)
+    setApprovalDraftDecisions({})
+    setApprovalSubmitting(false)
+    shouldAutoScrollRef.current = true
+    scrollToBottom(true)
   }
 
   const loadSessionOpen = async (sessionId: string, requestId: number): Promise<void> => {
@@ -2386,23 +2386,10 @@ const ChatPage: React.FC = () => {
                   onScroll={handleMessageScroll}
                 >
                   <div className="nc-document">
-                    {sessionSwitching ? (
-                      <div className="space-y-5 py-6" aria-label="正在加载会话">
-                        <div className="h-4 w-32 rounded bg-[#EDEBE7]" />
-                        <div className="space-y-3">
-                          <div className="h-4 w-[78%] rounded bg-[#F1F0ED]" />
-                          <div className="h-4 w-[66%] rounded bg-[#F1F0ED]" />
-                          <div className="h-4 w-[52%] rounded bg-[#F1F0ED]" />
-                        </div>
-                        <div className="h-4 w-24 rounded bg-[#EDEBE7]" />
-                        <div className="space-y-3">
-                          <div className="h-4 w-[84%] rounded bg-[#F1F0ED]" />
-                          <div className="h-4 w-[58%] rounded bg-[#F1F0ED]" />
-                        </div>
-                      </div>
-                    ) : null}
                     {loadingOlderMessages ? (
-                      <div className="py-3 text-center text-xs text-[#8A8781]">正在加载更早消息</div>
+                      <div className="py-3 text-center text-xs text-[#8A8781]">
+                        正在加载更早消息
+                      </div>
                     ) : null}
                     {currentMessages.map((messageItem) =>
                       messageItem.role === 'user'
