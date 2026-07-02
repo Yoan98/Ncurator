@@ -37,10 +37,10 @@ const singleInstanceLock = process.env.NCURATOR_E2E_OBSERVER
 function createWindow(): BrowserWindow {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
-    width: 1440,
-    height: 900,
-    minWidth: 1280,
-    minHeight: 820,
+    width: 1200,
+    height: 800,
+    minWidth: 1100,
+    minHeight: 720,
     show: false,
     autoHideMenuBar: true,
     ...(process.platform === 'darwin'
