@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, ipcMain } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, screen } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
@@ -34,13 +34,34 @@ const singleInstanceLock = process.env.NCURATOR_E2E_OBSERVER
   ? true
   : app.requestSingleInstanceLock()
 
+const INITIAL_WINDOW_WIDTH = 1200
+const INITIAL_WINDOW_HEIGHT = 800
+const MIN_WINDOW_WIDTH = 1100
+const MIN_WINDOW_HEIGHT = 720
+
+function getInitialWindowBounds(): { width: number; height: number; x: number; y: number } {
+  const { workArea } = screen.getPrimaryDisplay()
+  const width = Math.min(INITIAL_WINDOW_WIDTH, Math.max(MIN_WINDOW_WIDTH, workArea.width))
+  const height = Math.min(INITIAL_WINDOW_HEIGHT, Math.max(MIN_WINDOW_HEIGHT, workArea.height))
+  const x = workArea.x + Math.max(0, Math.round((workArea.width - width) / 2))
+  const y = workArea.y + Math.max(0, Math.round((workArea.height - height) / 2))
+
+  return {
+    width,
+    height,
+    x,
+    y
+  }
+}
+
 function createWindow(): BrowserWindow {
+  const initialWindowBounds = getInitialWindowBounds()
+
   // Create the browser window.
   const mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 800,
-    minWidth: 1100,
-    minHeight: 720,
+    ...initialWindowBounds,
+    minWidth: MIN_WINDOW_WIDTH,
+    minHeight: MIN_WINDOW_HEIGHT,
     show: false,
     autoHideMenuBar: true,
     ...(process.platform === 'darwin'
