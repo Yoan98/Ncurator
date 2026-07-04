@@ -575,6 +575,12 @@ textarea,
   position: relative;
 }
 
+.nc-settings-header {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-app-region: drag;
+}
+
 .nc-settings-topbar {
   background: rgba(255, 255, 255, 0.94);
   backdrop-filter: blur(10px);

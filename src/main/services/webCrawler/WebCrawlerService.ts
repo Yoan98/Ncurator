@@ -25,7 +25,7 @@ type PendingRequest = {
   timer: NodeJS.Timeout
 }
 
-type WebCrawlerServiceOptions = {
+export type WebCrawlerServiceOptions = {
   sidecarCommand?: SidecarCommand
   sidecarEnv?: NodeJS.ProcessEnv
   appRootPath?: string

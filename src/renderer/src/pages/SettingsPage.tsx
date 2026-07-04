@@ -115,7 +115,7 @@ const SettingsPage: React.FC = () => {
 
       <main className="nc-main-pane nc-settings-main-pane min-w-0 flex-1">
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-6 py-5">
-          <header className="shrink-0 pb-5">
+          <header className="nc-settings-header shrink-0 pb-5">
             <div className="flex items-center gap-2 text-[#37352F]">
               <span className="flex h-8 w-8 items-center justify-center rounded-[6px] border border-[#EEEEEC] bg-white text-[#787774]">
                 {sectionMeta.icon}

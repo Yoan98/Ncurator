@@ -12,7 +12,7 @@ import { globalShortcut } from 'electron'
 import { loadRootEnvOnce } from './utils/rootEnv'
 import { BrowserEmbedService } from './services/browser/BrowserEmbedService'
 import { EMBEDDED_BROWSER_REMOTE_DEBUGGING_PORT } from './services/browser/constants'
-import { ManagedWebCrawlerService } from './services/webCrawler/WebCrawlerService'
+import { createWebCrawlerService } from './services/webCrawler/createWebCrawlerService'
 import { AppUpdateService } from './services/update/AppUpdateService'
 import { APP_ID } from '../shared/constants'
 
@@ -158,7 +158,7 @@ if (!singleInstanceLock) {
     const appUpdateService = new AppUpdateService()
     const browserEmbedService = new BrowserEmbedService(mainWindow)
     const webCrawlerBaseDirectory = join(app.getPath('userData'), 'web-crawler')
-    const webCrawlerService = new ManagedWebCrawlerService({
+    const webCrawlerService = createWebCrawlerService({
       appRootPath: app.getAppPath(),
       isPackaged: app.isPackaged,
       resourcesPath: process.resourcesPath,
