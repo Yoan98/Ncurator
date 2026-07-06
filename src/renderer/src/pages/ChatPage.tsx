@@ -557,6 +557,7 @@ const ChatPage: React.FC = () => {
 
   const activeRunMessageIdsRef = useRef<Record<string, string>>({})
   const assistantArtifactsRef = useRef<Record<string, AiArtifactRef[]>>({})
+  const currentSessionIdRef = useRef<string | null>(null)
   const lastSubmittedInputRef = useRef('')
   const sessionSwitchRequestRef = useRef(0)
   const sessionListHydratedRef = useRef(false)
@@ -581,6 +582,15 @@ const ChatPage: React.FC = () => {
     }),
     [attachments, composerContentNodes, input, selectedReferences]
   )
+  const composerDraftValueRef = useRef<ComposerDraftValue>(composerDraftValue)
+
+  useEffect(() => {
+    currentSessionIdRef.current = currentSessionId
+  }, [currentSessionId])
+
+  useEffect(() => {
+    composerDraftValueRef.current = composerDraftValue
+  }, [composerDraftValue])
 
   const saveComposerDraftForSession = useCallback(
     (sessionId: string | null, draft: ComposerDraftValue): void => {
@@ -846,16 +856,14 @@ const ChatPage: React.FC = () => {
     [emitErrorMessage]
   )
 
-  const loadSessions = useCallback(async (): Promise<void> => {
+  const loadSessions = useCallback(async (): Promise<ChatSession[]> => {
     try {
       const list = await window.api.chatSessionList()
       setSessions(list)
-      if (!sessionListHydratedRef.current && list.length > 0) {
-        setCurrentSessionId((current) => current || list[0].id)
-      }
-      sessionListHydratedRef.current = true
+      return list
     } catch (error) {
       console.error('Failed to load sessions', error)
+      return []
     }
   }, [])
 
@@ -1052,7 +1060,7 @@ const ChatPage: React.FC = () => {
 
   const createNewSession = useCallback(
     (workspaceId?: string): void => {
-      saveComposerDraftForSession(currentSessionId, composerDraftValue)
+      saveComposerDraftForSession(currentSessionIdRef.current, composerDraftValueRef.current)
       sessionSwitchRequestRef.current += 1
       setCurrentSessionId(null)
       setSwitchingSessionId(null)
@@ -1076,20 +1084,8 @@ const ChatPage: React.FC = () => {
       resetApplyWorkspaceState()
       void refreshContextUsage(null)
     },
-    [
-      applyComposerDraft,
-      composerDraftValue,
-      currentSessionId,
-      refreshContextUsage,
-      saveComposerDraftForSession
-    ]
+    [applyComposerDraft, refreshContextUsage, saveComposerDraftForSession]
   )
-
-  const selectSession = (session: ChatSession): void => {
-    saveComposerDraftForSession(currentSessionId, composerDraftValue)
-    setCurrentSessionId(session.id)
-    setSelectedWorkspaceId(session.workspace_id)
-  }
 
   const loadApplyRecord = async (input: {
     applyId: string
@@ -1211,11 +1207,82 @@ const ChatPage: React.FC = () => {
     }
   }
 
+  const openExistingSession = async (
+    session: ChatSession,
+    options?: { saveCurrentDraft?: boolean }
+  ): Promise<void> => {
+    if (session.id === currentSessionIdRef.current && !switchingSessionId) return
+
+    if (options?.saveCurrentDraft !== false) {
+      saveComposerDraftForSession(currentSessionIdRef.current, composerDraftValueRef.current)
+    }
+
+    const requestId = sessionSwitchRequestRef.current + 1
+    sessionSwitchRequestRef.current = requestId
+    currentSessionIdRef.current = session.id
+
+    setCurrentSessionId(session.id)
+    setSelectedWorkspaceId(session.workspace_id)
+    setSwitchingSessionId(session.id)
+    setCurrentMessages([])
+    setAssistantTurns({})
+    assistantArtifactsRef.current = {}
+    activeRunMessageIdsRef.current = {}
+    setHasMoreMessagesBefore(false)
+    setLoadingOlderMessages(false)
+    setLoading(false)
+    setAiRunId(null)
+    setCancellingRun(false)
+    applyComposerDraft(
+      composerDraftBySessionIdRef.current[session.id] || createEmptyComposerDraft(),
+      `session:${session.id}`
+    )
+    setPendingApprovalBatch(null)
+    setApprovalCurrentIndex(0)
+    setApprovalDraftDecisions({})
+    setApprovalSubmitting(false)
+    setContentPanel(createEmptyPanel())
+    setContentPanelCollapsed(true)
+    resetApplyWorkspaceState()
+
+    void loadSessionOpen(session.id, requestId).then(() => {
+      if (sessionSwitchRequestRef.current !== requestId) return
+      setContentPanel(createEmptyPanel())
+      setContentPanelCollapsed(true)
+      resetApplyWorkspaceState()
+    })
+    void loadFileChangesForSession(session.id)
+    void refreshContextUsage(session.id)
+  }
+
+  const adoptCreatedSession = (session: ChatSession): void => {
+    sessionSwitchRequestRef.current += 1
+    currentSessionIdRef.current = session.id
+    setSessions((items) => [session, ...items.filter((item) => item.id !== session.id)])
+    setCurrentSessionId(session.id)
+    setSelectedWorkspaceId(session.workspace_id)
+    setSwitchingSessionId(null)
+    setHasMoreMessagesBefore(false)
+    setLoadingOlderMessages(false)
+    void refreshContextUsage(session.id)
+  }
+
+  const selectSession = (session: ChatSession): void => {
+    void openExistingSession(session)
+  }
+
   useEffect(() => {
-    void loadSessions()
+    void loadSessions().then((list) => {
+      if (sessionListHydratedRef.current) return
+      sessionListHydratedRef.current = true
+      const firstSession = list[0]
+      if (firstSession) void openExistingSession(firstSession, { saveCurrentDraft: false })
+    })
     void loadWorkspaces()
     void loadModelConfigs()
-  }, [loadSessions, loadModelConfigs, loadWorkspaces])
+    // Initial bootstrap is intentionally explicit. Later list refreshes must not reopen sessions.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     const handleModelRefresh = (): void => {
@@ -1290,66 +1357,6 @@ const ChatPage: React.FC = () => {
   }, [contentPanelCollapsed])
 
   useEffect(() => {
-    if (currentSessionId) {
-      const sessionId = currentSessionId
-      const requestId = sessionSwitchRequestRef.current + 1
-      sessionSwitchRequestRef.current = requestId
-      const sessionWorkspaceId = currentSession?.workspace_id || null
-      if (sessionWorkspaceId && sessionWorkspaceId !== selectedWorkspaceId) {
-        setSelectedWorkspaceId(sessionWorkspaceId)
-      }
-      setSwitchingSessionId(sessionId)
-      setCurrentMessages([])
-      setAssistantTurns({})
-      assistantArtifactsRef.current = {}
-      activeRunMessageIdsRef.current = {}
-      setHasMoreMessagesBefore(false)
-      setLoadingOlderMessages(false)
-      setLoading(false)
-      setAiRunId(null)
-      setCancellingRun(false)
-      applyComposerDraft(
-        composerDraftBySessionIdRef.current[sessionId] || createEmptyComposerDraft(),
-        `session:${sessionId}`
-      )
-      setPendingApprovalBatch(null)
-      setApprovalCurrentIndex(0)
-      setApprovalDraftDecisions({})
-      setApprovalSubmitting(false)
-      setContentPanel(createEmptyPanel())
-      setContentPanelCollapsed(true)
-      resetApplyWorkspaceState()
-      void loadSessionOpen(sessionId, requestId).then(() => {
-        if (sessionSwitchRequestRef.current !== requestId) return
-        setContentPanel(createEmptyPanel())
-        setContentPanelCollapsed(true)
-        resetApplyWorkspaceState()
-      })
-      void loadFileChangesForSession(sessionId)
-      void refreshContextUsage(sessionId)
-      return () => {
-        if (sessionSwitchRequestRef.current === requestId) {
-          sessionSwitchRequestRef.current += 1
-        }
-      }
-    } else {
-      sessionSwitchRequestRef.current += 1
-      setSwitchingSessionId(null)
-      setCurrentMessages([])
-      setAssistantTurns({})
-      setHasMoreMessagesBefore(false)
-      setLoadingOlderMessages(false)
-      setContextUsage(null)
-      setContentPanel(createEmptyPanel())
-      setContentPanelCollapsed(true)
-      resetApplyWorkspaceState()
-    }
-    return undefined
-    // Session switch reset must run only when the selected session id changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentSessionId, refreshContextUsage])
-
-  useEffect(() => {
     scrollToBottom()
   }, [assistantTurns, currentMessages, loading, pendingApprovalBatch])
 
@@ -1387,11 +1394,13 @@ const ChatPage: React.FC = () => {
       const remainingSessions = sessions.filter((item) => item.id !== id)
       delete composerDraftBySessionIdRef.current[id]
       setSessions(remainingSessions)
-      const nextSessionId = remainingSessions[0]?.id || null
-      setCurrentSessionId((current) => (current === id ? nextSessionId : current))
-      if (!nextSessionId) {
-        setSelectedWorkspaceId(null)
-        applyComposerDraft(createEmptyComposerDraft(), 'delete:last-session')
+      if (currentSessionIdRef.current === id) {
+        const nextSession = remainingSessions[0] || null
+        if (nextSession) {
+          void openExistingSession(nextSession, { saveCurrentDraft: false })
+        } else {
+          createNewSession()
+        }
       }
       setDeleteConfirmSession(null)
       void loadSessions()
@@ -1498,10 +1507,10 @@ const ChatPage: React.FC = () => {
     const unsubscribe = window.api.onAiRunEvent((event) => {
       const messageId = activeRunMessageIdsRef.current[event.runId]
       if (!messageId) {
-        if (event.type === 'run_started' && event.sessionId === currentSessionId) {
+        if (event.type === 'run_started' && event.sessionId === currentSessionIdRef.current) {
           const requestId = sessionSwitchRequestRef.current + 1
           sessionSwitchRequestRef.current = requestId
-          void loadSessionOpen(currentSessionId, requestId)
+          void loadSessionOpen(event.sessionId, requestId)
         }
         return
       }
@@ -1673,10 +1682,11 @@ const ChatPage: React.FC = () => {
         setCancellingRun(false)
         setPendingApprovalBatch(null)
         setApprovalSubmitting(false)
-        if (currentSessionId) {
-          void loadFileChangesForSession(currentSessionId, { autoOpen: true })
+        const activeSessionId = currentSessionIdRef.current
+        if (activeSessionId) {
+          void loadFileChangesForSession(activeSessionId, { autoOpen: true })
         }
-        void refreshContextUsage(currentSessionId)
+        void refreshContextUsage(activeSessionId)
       }
     })
     return () => {
@@ -1833,9 +1843,7 @@ const ChatPage: React.FC = () => {
       )
       setAiRunId(run.id)
       if (createdSession) {
-        setSessions((items) => [createdSession, ...items])
-        setCurrentSessionId(createdSession.id)
-        setSelectedWorkspaceId(createdSession.workspace_id)
+        adoptCreatedSession(createdSession)
       }
       setAssistantTurns((previous) => {
         const next = removeOptimisticAssistantTurn(previous)
@@ -1913,9 +1921,7 @@ const ChatPage: React.FC = () => {
         appendMessagesDedupe(previous, [response.userMessage, response.assistantMessage])
       )
       if (createdSession) {
-        setSessions((items) => [createdSession, ...items])
-        setCurrentSessionId(createdSession.id)
-        setSelectedWorkspaceId(createdSession.workspace_id)
+        adoptCreatedSession(createdSession)
       }
       setAssistantTurns((previous) => ({
         ...previous,
