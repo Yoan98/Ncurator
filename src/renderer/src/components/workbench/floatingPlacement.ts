@@ -9,6 +9,8 @@ export type FloatingPlacement = {
   placement: 'top' | 'bottom'
 }
 
+export type FloatingPlacementAlign = 'start' | 'end'
+
 export type ResolveFloatingPlacementInput = {
   triggerRect: FloatingPlacementRect
   viewportWidth: number
@@ -18,6 +20,7 @@ export type ResolveFloatingPlacementInput = {
   maxHeight?: number
   minWidth?: number
   maxWidth?: number
+  align?: FloatingPlacementAlign
   gap?: number
   viewportPadding?: number
 }
@@ -37,8 +40,10 @@ export const resolveFloatingPlacement = (
     ? Math.min(constrainedPreferredWidth, input.maxWidth)
     : constrainedPreferredWidth
   const width = Math.min(cappedWidth, maxAvailableWidth)
+  const rawLeft =
+    input.align === 'end' ? input.triggerRect.right - width : input.triggerRect.left
   const left = Math.min(
-    Math.max(viewportPadding, input.triggerRect.left),
+    Math.max(viewportPadding, rawLeft),
     Math.max(viewportPadding, input.viewportWidth - width - viewportPadding)
   )
 

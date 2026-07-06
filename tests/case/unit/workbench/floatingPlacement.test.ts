@@ -58,4 +58,44 @@ describe('workbench floating placement', () => {
 
     expect(placement.maxHeight).toBe(240)
   })
+
+  it('can align the floating width to the trigger right edge', () => {
+    const placement = resolveFloatingPlacement({
+      triggerRect: {
+        top: 620,
+        bottom: 650,
+        left: 1400,
+        right: 1580
+      },
+      viewportWidth: 1800,
+      viewportHeight: 900,
+      preferredWidth: 440,
+      preferredHeight: 320,
+      align: 'end'
+    })
+
+    expect(placement.left).toBe(1140)
+    expect(placement.left + placement.width).toBe(1580)
+  })
+
+  it('keeps a compact model menu below the trigger when it fits', () => {
+    const placement = resolveFloatingPlacement({
+      triggerRect: {
+        top: 435,
+        bottom: 463,
+        left: 907,
+        right: 1087
+      },
+      viewportWidth: 1280,
+      viewportHeight: 800,
+      preferredWidth: 440,
+      preferredHeight: 300,
+      maxHeight: 300,
+      align: 'end'
+    })
+
+    expect(placement.placement).toBe('bottom')
+    expect(placement.top).toBe(471)
+    expect(placement.left + placement.width).toBe(1087)
+  })
 })

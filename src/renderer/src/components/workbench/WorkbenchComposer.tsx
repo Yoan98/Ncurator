@@ -1099,6 +1099,9 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
               selectedWithoutBackground
               minMenuWidth={320}
               maxMenuWidth={440}
+              menuAlign="end"
+              menuPreferredHeight={300}
+              menuMaxHeight={300}
               data-testid={workbenchSelectors.modelSelect}
             />
 

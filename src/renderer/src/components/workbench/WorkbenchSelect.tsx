@@ -10,7 +10,7 @@ import React, {
 import { createPortal } from 'react-dom'
 import { HiCheck, HiChevronDown, HiMagnifyingGlass } from 'react-icons/hi2'
 import type { WorkbenchSelectOption } from './types'
-import { resolveFloatingPlacement } from './floatingPlacement'
+import { resolveFloatingPlacement, type FloatingPlacementAlign } from './floatingPlacement'
 
 type WorkbenchSelectProps = {
   value: string | null
@@ -31,6 +31,9 @@ type WorkbenchSelectProps = {
   noDrag?: boolean
   minMenuWidth?: number
   maxMenuWidth?: number
+  menuAlign?: FloatingPlacementAlign
+  menuPreferredHeight?: number
+  menuMaxHeight?: number
   'data-testid'?: string
 }
 
@@ -52,6 +55,21 @@ const DEFAULT_MENU_POSITION: MenuPosition = {
   maxHeight: 320,
   placement: 'bottom'
 }
+const SEARCH_MENU_HEADER_HEIGHT = 48
+const MENU_VERTICAL_PADDING = 12
+const MENU_OPTION_HEIGHT = 36
+
+const estimateMenuHeight = (input: {
+  optionCount: number
+  searchable: boolean
+  maxHeight: number
+}): number => {
+  const listItemCount = Math.max(1, input.optionCount)
+  const estimatedListHeight = MENU_VERTICAL_PADDING + listItemCount * MENU_OPTION_HEIGHT
+  const estimatedHeight =
+    estimatedListHeight + (input.searchable ? SEARCH_MENU_HEADER_HEIGHT : 0)
+  return Math.min(input.maxHeight, estimatedHeight)
+}
 
 const WorkbenchSelect: React.FC<WorkbenchSelectProps> = ({
   value,
@@ -72,6 +90,9 @@ const WorkbenchSelect: React.FC<WorkbenchSelectProps> = ({
   noDrag = false,
   minMenuWidth,
   maxMenuWidth,
+  menuAlign = 'start',
+  menuPreferredHeight,
+  menuMaxHeight,
   'data-testid': dataTestId
 }) => {
   const rootRef = useRef<HTMLDivElement | null>(null)
@@ -106,21 +127,42 @@ const WorkbenchSelect: React.FC<WorkbenchSelectProps> = ({
     const minimumWidth = minMenuWidth || (compact ? 200 : 240)
     const preferredWidth = Math.max(rect.width, minimumWidth)
     const constrainedWidth = maxMenuWidth ? Math.min(preferredWidth, maxMenuWidth) : preferredWidth
-      const placement = resolveFloatingPlacement({
-        triggerRect: rect,
-        viewportWidth,
-        viewportHeight,
-        preferredWidth: constrainedWidth,
-        preferredHeight: searchable ? 320 + 48 : 320,
-        maxHeight: searchable ? 420 : 320,
-        minWidth: minimumWidth,
-        maxWidth: maxMenuWidth
+    const maxHeight = menuMaxHeight ?? (searchable ? 420 : 320)
+    const preferredHeight =
+      menuPreferredHeight ??
+      estimateMenuHeight({
+        optionCount: filteredOptions.length,
+        searchable,
+        maxHeight
       })
-      setMenuPosition({
-        ...placement,
-        maxHeight: Math.max(120, placement.maxHeight)
-      })
-  }, [compact, maxMenuWidth, minMenuWidth, searchable])
+    const placement = resolveFloatingPlacement({
+      triggerRect: rect,
+      viewportWidth,
+      viewportHeight,
+      preferredWidth: constrainedWidth,
+      preferredHeight,
+      maxHeight,
+      minWidth: minimumWidth,
+      maxWidth: maxMenuWidth,
+      align: menuAlign
+    })
+    setMenuPosition({
+      ...placement,
+      maxHeight: Math.max(
+        120,
+        searchable ? placement.maxHeight - SEARCH_MENU_HEADER_HEIGHT : placement.maxHeight
+      )
+    })
+  }, [
+    compact,
+    maxMenuWidth,
+    menuAlign,
+    menuMaxHeight,
+    menuPreferredHeight,
+    minMenuWidth,
+    filteredOptions.length,
+    searchable
+  ])
 
   useLayoutEffect(() => {
     if (!open) return
