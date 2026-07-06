@@ -76,6 +76,18 @@ const SettingsPage: React.FC = () => {
         style={{ width: sidebarWidth, minWidth: sidebarWidth, flexBasis: sidebarWidth }}
       >
         <div
+          className="nc-settings-left-titlebar-chrome"
+          style={{ width: sidebarWidth }}
+          aria-hidden="true"
+        >
+          <div className="nc-left-titlebar-window-controls" />
+          <div
+            className="nc-left-titlebar-drag"
+            data-testid={settingsSelectors.sidebarDragRegion}
+          />
+        </div>
+
+        <div
           className={`nc-sidebar-window-spacer ${platform === 'darwin' ? 'nc-sidebar-window-spacer-mac' : ''}`}
           aria-hidden="true"
         />
@@ -114,8 +126,13 @@ const SettingsPage: React.FC = () => {
       </aside>
 
       <main className="nc-main-pane nc-settings-main-pane min-w-0 flex-1">
+        <div
+          className="nc-settings-main-titlebar-drag"
+          data-testid={settingsSelectors.mainDragRegion}
+          aria-hidden="true"
+        />
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-6 py-5">
-          <header className="shrink-0 pb-5">
+          <header className="nc-settings-header shrink-0 pb-5">
             <div className="flex items-center gap-2 text-[#37352F]">
               <span className="flex h-8 w-8 items-center justify-center rounded-[6px] border border-[#EEEEEC] bg-white text-[#787774]">
                 {sectionMeta.icon}

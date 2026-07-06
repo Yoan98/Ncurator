@@ -65,6 +65,8 @@ export const importSelectors = {
 
 export const settingsSelectors = {
   page: 'settings-page',
+  mainDragRegion: 'settings-main-drag-region',
+  sidebarDragRegion: 'settings-sidebar-drag-region',
   tabSwitch: 'settings-tab-switch',
   workspacePanel: 'settings-workspace-panel',
   modelPanel: 'settings-model-panel',

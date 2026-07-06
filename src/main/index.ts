@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, ipcMain } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, screen } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
@@ -12,7 +12,7 @@ import { globalShortcut } from 'electron'
 import { loadRootEnvOnce } from './utils/rootEnv'
 import { BrowserEmbedService } from './services/browser/BrowserEmbedService'
 import { EMBEDDED_BROWSER_REMOTE_DEBUGGING_PORT } from './services/browser/constants'
-import { ManagedWebCrawlerService } from './services/webCrawler/WebCrawlerService'
+import { createWebCrawlerService } from './services/webCrawler/createWebCrawlerService'
 import { AppUpdateService } from './services/update/AppUpdateService'
 import { APP_ID } from '../shared/constants'
 
@@ -34,13 +34,34 @@ const singleInstanceLock = process.env.NCURATOR_E2E_OBSERVER
   ? true
   : app.requestSingleInstanceLock()
 
+const INITIAL_WINDOW_WIDTH = 1200
+const INITIAL_WINDOW_HEIGHT = 800
+const MIN_WINDOW_WIDTH = 1100
+const MIN_WINDOW_HEIGHT = 720
+
+function getInitialWindowBounds(): { width: number; height: number; x: number; y: number } {
+  const { workArea } = screen.getPrimaryDisplay()
+  const width = Math.min(INITIAL_WINDOW_WIDTH, Math.max(MIN_WINDOW_WIDTH, workArea.width))
+  const height = Math.min(INITIAL_WINDOW_HEIGHT, Math.max(MIN_WINDOW_HEIGHT, workArea.height))
+  const x = workArea.x + Math.max(0, Math.round((workArea.width - width) / 2))
+  const y = workArea.y + Math.max(0, Math.round((workArea.height - height) / 2))
+
+  return {
+    width,
+    height,
+    x,
+    y
+  }
+}
+
 function createWindow(): BrowserWindow {
+  const initialWindowBounds = getInitialWindowBounds()
+
   // Create the browser window.
   const mainWindow = new BrowserWindow({
-    width: 1440,
-    height: 900,
-    minWidth: 1280,
-    minHeight: 820,
+    ...initialWindowBounds,
+    minWidth: MIN_WINDOW_WIDTH,
+    minHeight: MIN_WINDOW_HEIGHT,
     show: false,
     autoHideMenuBar: true,
     ...(process.platform === 'darwin'
@@ -137,7 +158,7 @@ if (!singleInstanceLock) {
     const appUpdateService = new AppUpdateService()
     const browserEmbedService = new BrowserEmbedService(mainWindow)
     const webCrawlerBaseDirectory = join(app.getPath('userData'), 'web-crawler')
-    const webCrawlerService = new ManagedWebCrawlerService({
+    const webCrawlerService = createWebCrawlerService({
       appRootPath: app.getAppPath(),
       isPackaged: app.isPackaged,
       resourcesPath: process.resourcesPath,
