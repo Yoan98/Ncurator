@@ -34,6 +34,11 @@ type WorkbenchSelectProps = {
   menuAlign?: FloatingPlacementAlign
   menuPreferredHeight?: number
   menuMaxHeight?: number
+  emptyAction?: {
+    label: string
+    icon?: React.ReactNode
+    onClick: () => void
+  }
   'data-testid'?: string
 }
 
@@ -93,6 +98,7 @@ const WorkbenchSelect: React.FC<WorkbenchSelectProps> = ({
   menuAlign = 'start',
   menuPreferredHeight,
   menuMaxHeight,
+  emptyAction,
   'data-testid': dataTestId
 }) => {
   const rootRef = useRef<HTMLDivElement | null>(null)
@@ -345,6 +351,28 @@ const WorkbenchSelect: React.FC<WorkbenchSelectProps> = ({
                       </button>
                     )
                   })
+                ) : emptyAction && options.length === 0 && query.trim().length === 0 ? (
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={false}
+                    className="workbench-select-option"
+                    onClick={() => {
+                      setOpen(false)
+                      emptyAction.onClick()
+                    }}
+                  >
+                    <span className="flex min-w-0 items-center gap-2">
+                      {emptyAction.icon ? (
+                        <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center text-[#787774]">
+                          {emptyAction.icon}
+                        </span>
+                      ) : null}
+                      <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[#37352F]">
+                        {emptyAction.label}
+                      </span>
+                    </span>
+                  </button>
                 ) : (
                   <div className="px-4 py-6 text-center text-[12px] text-[#91918E]">暂无结果</div>
                 )}

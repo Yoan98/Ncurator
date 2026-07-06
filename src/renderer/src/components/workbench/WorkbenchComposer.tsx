@@ -6,6 +6,7 @@ import {
   HiDocumentText,
   HiFolder,
   HiMagnifyingGlass,
+  HiOutlineFolderPlus,
   HiPaperClip,
   HiPhoto,
   HiPlus,
@@ -56,6 +57,7 @@ type WorkbenchComposerProps = {
   workspaces: WorkspaceSource[]
   selectedWorkspaceId: string | null
   onWorkspaceChange: (workspaceId: string) => void
+  onWorkspaceEmptyAction?: () => void
   showWorkspaceSelector?: boolean
   onDraftChange: (draft: ComposerDraftValue) => void
   onSubmit: () => void
@@ -111,6 +113,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   workspaces,
   selectedWorkspaceId,
   onWorkspaceChange,
+  onWorkspaceEmptyAction,
   showWorkspaceSelector = true,
   onDraftChange,
   onSubmit,
@@ -1215,6 +1218,15 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
             menuAlign="start"
             minMenuWidth={240}
             maxMenuWidth={360}
+            emptyAction={
+              workspaces.length === 0 && onWorkspaceEmptyAction
+                ? {
+                    label: '添加工作空间',
+                    icon: <HiOutlineFolderPlus className="h-3.5 w-3.5" />,
+                    onClick: onWorkspaceEmptyAction
+                  }
+                : undefined
+            }
             data-testid={workbenchSelectors.workspaceSelect}
           />
         </div>

@@ -1,5 +1,5 @@
 ﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { App as AntdApp, Button, Modal, Spin } from 'antd'
+import { App as AntdApp, Button, Modal, Spin, Tooltip } from 'antd'
 import {
   HiArrowUp,
   HiCheck,
@@ -9,6 +9,7 @@ import {
   HiClock,
   HiFolder,
   HiOutlineExclamationCircle,
+  HiOutlineFolderPlus,
   HiOutlinePencilSquare,
   HiPlus,
   HiStop,
@@ -495,6 +496,9 @@ const isComposerDraftEmpty = (draft: ComposerDraftValue): boolean =>
 const ChatPage: React.FC = () => {
   const { message } = AntdApp.useApp()
   const navigate = useNavigate()
+  const openWorkspaceSettings = useCallback(() => {
+    navigate('/settings/workspace')
+  }, [navigate])
   const [sessions, setSessions] = useState<ChatSession[]>([])
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
   const [currentMessages, setCurrentMessages] = useState<ChatMessage[]>([])
@@ -2329,8 +2333,20 @@ const ChatPage: React.FC = () => {
           className="flex-1 overflow-y-auto px-2 py-2"
           data-testid={workbenchSelectors.sessionsList}
         >
-          {workspacesLoaded && workspaces.length === 0 ? (
-            <div className="px-3 py-2 text-xs text-[#9B9A97]">暂无工作区</div>
+          {workspacesLoaded ? (
+            <div className="group flex items-center justify-between gap-2 px-3 pb-1 pt-2 text-[12px] font-medium text-[#8F8E8B]">
+              <span className="truncate">工作空间</span>
+              <Tooltip title="添加工作空间" placement="right">
+                <button
+                  type="button"
+                  className="workbench-no-drag flex h-5 w-5 items-center justify-center rounded-[5px] text-[#91918E] opacity-0 transition hover:bg-white hover:text-[#37352F] group-hover:opacity-100"
+                  onClick={openWorkspaceSettings}
+                  aria-label="添加工作空间"
+                >
+                  <HiOutlineFolderPlus className="h-3.5 w-3.5" />
+                </button>
+              </Tooltip>
+            </div>
           ) : null}
           {workspaces.map((workspace) => {
             const workspaceSessions = sessionsByWorkspace.get(workspace.id) || []
@@ -2690,6 +2706,7 @@ const ChatPage: React.FC = () => {
                         workspaces={workspaces}
                         selectedWorkspaceId={selectedWorkspaceId}
                         onWorkspaceChange={handleWorkspaceChange}
+                        onWorkspaceEmptyAction={openWorkspaceSettings}
                         showWorkspaceSelector={isNewSession}
                         onDraftChange={handleComposerDraftChange}
                         onSubmit={() => void handleSend()}
