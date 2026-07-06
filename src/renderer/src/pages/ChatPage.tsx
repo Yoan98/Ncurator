@@ -74,12 +74,9 @@ import {
   reduceAssistantProcessGroups,
   reduceAssistantProcessThoughts,
   readWorkbenchModelPreference,
-  readWorkbenchWorkspacePreference,
   resolveWorkbenchModelSelection,
-  resolveWorkbenchWorkspaceSelection,
   writeWorkbenchModePreference,
-  writeWorkbenchModelPreference,
-  writeWorkbenchWorkspacePreference
+  writeWorkbenchModelPreference
 } from '../components/workbench/utils'
 import {
   groupApplyTargetsByRunId,
@@ -518,9 +515,7 @@ const ChatPage: React.FC = () => {
   const [attachments, setAttachments] = useState<ChatAttachment[]>([])
   const [workspaces, setWorkspaces] = useState<WorkspaceSource[]>([])
   const [workspacesLoaded, setWorkspacesLoaded] = useState(false)
-  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(() =>
-    readWorkbenchWorkspacePreference(window.localStorage)
-  )
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null)
   const [workspaceDocumentIds, setWorkspaceDocumentIds] = useState<string[]>([])
   const [activeModelConfig, setActiveModelConfig] = useState<LLMConfig | null>(null)
   const [remoteModels, setRemoteModels] = useState<LlmRemoteModel[]>([])
@@ -560,6 +555,7 @@ const ChatPage: React.FC = () => {
   const assistantArtifactsRef = useRef<Record<string, AiArtifactRef[]>>({})
   const lastSubmittedInputRef = useRef('')
   const sessionSwitchRequestRef = useRef(0)
+  const sessionListHydratedRef = useRef(false)
   const composerDraftBySessionIdRef = useRef<Record<string, ComposerDraftValue>>({})
   const composerDraftVersionRef = useRef(0)
   const sidebarDragStartRef = useRef<{
@@ -688,18 +684,18 @@ const ChatPage: React.FC = () => {
   )
   const composerSubmitDisabledReason = useMemo(() => {
     if (!input.trim()) return null
-    if (!currentSessionId) return '当前会话未就绪'
+    if (switchingSessionId) return '当前会话未就绪'
     if (!selectedWorkspaceReady)
       return `${getWorkspaceRequirementHint(selectedWorkspace)}后再发送消息`
     if (composerMode === 'ai' && !selectedModelName) return '请先选择可用模型'
     return null
   }, [
     composerMode,
-    currentSessionId,
     input,
     selectedModelName,
     selectedWorkspace,
-    selectedWorkspaceReady
+    selectedWorkspaceReady,
+    switchingSessionId
   ])
 
   const approvalSubmitDisabled = useMemo(() => {
@@ -844,9 +840,10 @@ const ChatPage: React.FC = () => {
     try {
       const list = await window.api.chatSessionList()
       setSessions(list)
-      if (list.length > 0) {
+      if (!sessionListHydratedRef.current && list.length > 0) {
         setCurrentSessionId((current) => current || list[0].id)
       }
+      sessionListHydratedRef.current = true
     } catch (error) {
       console.error('Failed to load sessions', error)
     }
@@ -939,12 +936,9 @@ const ChatPage: React.FC = () => {
     try {
       const response = await window.api.workspaceList()
       setWorkspaces(response.items)
-      const nextWorkspaceId = resolveWorkbenchWorkspaceSelection(
-        response.items,
-        readWorkbenchWorkspacePreference(window.localStorage)
+      setSelectedWorkspaceId((current) =>
+        current && response.items.some((workspace) => workspace.id === current) ? current : null
       )
-      setSelectedWorkspaceId(nextWorkspaceId)
-      writeWorkbenchWorkspacePreference(window.localStorage, nextWorkspaceId)
     } catch (error) {
       console.error('Failed to load workspaces', error)
     } finally {
@@ -1032,7 +1026,6 @@ const ChatPage: React.FC = () => {
 
   const handleWorkspaceChange = useCallback((workspaceId: string | null): void => {
     setSelectedWorkspaceId(workspaceId)
-    writeWorkbenchWorkspacePreference(window.localStorage, workspaceId)
   }, [])
 
   const toggleWorkspaceCollapsed = useCallback((workspaceId: string): void => {
@@ -1047,64 +1040,45 @@ const ChatPage: React.FC = () => {
     })
   }, [])
 
-  const handleNewSessionWorkspaceChange = useCallback(
-    (workspaceId: string): void => {
-      handleWorkspaceChange(workspaceId)
-      if (!currentSession || currentMessages.length > 0) return
-      const nextSession = { ...currentSession, workspace_id: workspaceId }
-      setSessions((items) => items.map((item) => (item.id === nextSession.id ? nextSession : item)))
-      void window.api.chatSessionSave(nextSession).catch(console.error)
-    },
-    [currentMessages.length, currentSession, handleWorkspaceChange]
-  )
-
   const createNewSession = useCallback(
-    async (workspaceId?: string): Promise<void> => {
-      try {
-        const timestamp = Date.now()
-        const targetWorkspaceId =
-          workspaceId ||
-          currentSession?.workspace_id ||
-          selectedWorkspaceId ||
-          (workspaces.length > 0 ? workspaces[0].id : '')
-
-        if (!targetWorkspaceId) {
-          message.warning('请先在设置中创建工作空间')
-          return
-        }
-
-        const nextSession: ChatSession = {
-          id: crypto.randomUUID(),
-          title: '新对话',
-          created_at: timestamp,
-          workspace_id: targetWorkspaceId
-        }
-        await window.api.chatSessionSave(nextSession)
-        await loadSessions()
-        setCurrentSessionId(nextSession.id)
-        if (targetWorkspaceId !== selectedWorkspaceId) {
-          setSelectedWorkspaceId(targetWorkspaceId)
-          writeWorkbenchWorkspacePreference(window.localStorage, targetWorkspaceId)
-        }
-      } catch (error) {
-        console.error(error)
-        emitErrorMessage('创建会话失败')
-      }
+    (workspaceId?: string): void => {
+      saveComposerDraftForSession(currentSessionId, composerDraftValue)
+      sessionSwitchRequestRef.current += 1
+      setCurrentSessionId(null)
+      setSwitchingSessionId(null)
+      setCurrentMessages([])
+      setAssistantTurns({})
+      assistantArtifactsRef.current = {}
+      activeRunMessageIdsRef.current = {}
+      setHasMoreMessagesBefore(false)
+      setLoadingOlderMessages(false)
+      setLoading(false)
+      setAiRunId(null)
+      setCancellingRun(false)
+      setPendingApprovalBatch(null)
+      setApprovalCurrentIndex(0)
+      setApprovalDraftDecisions({})
+      setApprovalSubmitting(false)
+      setSelectedWorkspaceId(workspaceId || null)
+      applyComposerDraft(createEmptyComposerDraft(), `draft:${workspaceId || 'none'}`)
+      setContentPanel(createEmptyPanel())
+      setContentPanelCollapsed(true)
+      resetApplyWorkspaceState()
+      void refreshContextUsage(null)
     },
     [
-      currentSession?.workspace_id,
-      emitErrorMessage,
-      loadSessions,
-      message,
-      selectedWorkspaceId,
-      workspaces
+      applyComposerDraft,
+      composerDraftValue,
+      currentSessionId,
+      refreshContextUsage,
+      saveComposerDraftForSession
     ]
   )
 
   const selectSession = (session: ChatSession): void => {
+    saveComposerDraftForSession(currentSessionId, composerDraftValue)
     setCurrentSessionId(session.id)
     setSelectedWorkspaceId(session.workspace_id)
-    writeWorkbenchWorkspacePreference(window.localStorage, session.workspace_id)
   }
 
   const loadApplyRecord = async (input: {
@@ -1306,12 +1280,6 @@ const ChatPage: React.FC = () => {
   }, [contentPanelCollapsed])
 
   useEffect(() => {
-    if (sessions.length === 0 && workspaces.length > 0 && !currentSessionId) {
-      void createNewSession(workspaces[0].id)
-    }
-  }, [sessions.length, workspaces, currentSessionId, createNewSession])
-
-  useEffect(() => {
     if (currentSessionId) {
       const sessionId = currentSessionId
       const requestId = sessionSwitchRequestRef.current + 1
@@ -1319,7 +1287,6 @@ const ChatPage: React.FC = () => {
       const sessionWorkspaceId = currentSession?.workspace_id || null
       if (sessionWorkspaceId && sessionWorkspaceId !== selectedWorkspaceId) {
         setSelectedWorkspaceId(sessionWorkspaceId)
-        writeWorkbenchWorkspacePreference(window.localStorage, sessionWorkspaceId)
       }
       setSwitchingSessionId(sessionId)
       setCurrentMessages([])
@@ -1363,7 +1330,6 @@ const ChatPage: React.FC = () => {
       setHasMoreMessagesBefore(false)
       setLoadingOlderMessages(false)
       setContextUsage(null)
-      applyComposerDraft(createEmptyComposerDraft(), 'session:none')
       setContentPanel(createEmptyPanel())
       setContentPanelCollapsed(true)
       resetApplyWorkspaceState()
@@ -1411,9 +1377,12 @@ const ChatPage: React.FC = () => {
       const remainingSessions = sessions.filter((item) => item.id !== id)
       delete composerDraftBySessionIdRef.current[id]
       setSessions(remainingSessions)
-      setCurrentSessionId((current) =>
-        current === id ? remainingSessions[0]?.id || null : current
-      )
+      const nextSessionId = remainingSessions[0]?.id || null
+      setCurrentSessionId((current) => (current === id ? nextSessionId : current))
+      if (!nextSessionId) {
+        setSelectedWorkspaceId(null)
+        applyComposerDraft(createEmptyComposerDraft(), 'delete:last-session')
+      }
       setDeleteConfirmSession(null)
       void loadSessions()
     } catch (error) {
@@ -1707,6 +1676,23 @@ const ChatPage: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentSessionId, message, refreshContextUsage])
 
+  const createDraftSessionForSubmit = async (
+    workspace: WorkspaceSource
+  ): Promise<ChatSession | null> => {
+    const nextSession: ChatSession = {
+      id: crypto.randomUUID(),
+      title: '新对话',
+      created_at: Date.now(),
+      workspace_id: workspace.id
+    }
+    const response = await window.api.chatSessionSave(nextSession)
+    if (!response.success) {
+      emitErrorMessage(response.error || '创建会话失败')
+      return null
+    }
+    return nextSession
+  }
+
   const handleSend = async (): Promise<void> => {
     if (composerMode === 'ai' && aiRunId) {
       await handleCancel()
@@ -1716,8 +1702,8 @@ const ChatPage: React.FC = () => {
       await handleSearchSend()
       return
     }
-    if (!input.trim() || !currentSessionId || loading) return
-    if (!selectedWorkspaceReady) {
+    if (!input.trim() || loading) return
+    if (!selectedWorkspaceReady || !selectedWorkspace) {
       message.warning(`${getWorkspaceRequirementHint(selectedWorkspace)}后再发送消息`)
       return
     }
@@ -1736,9 +1722,19 @@ const ChatPage: React.FC = () => {
       setLoading(false)
       return
     }
+    let submitSessionId = currentSessionId
+    let createdSession: ChatSession | null = null
+    if (!submitSessionId) {
+      createdSession = await createDraftSessionForSubmit(selectedWorkspace)
+      if (!createdSession) {
+        setLoading(false)
+        return
+      }
+      submitSessionId = createdSession.id
+    }
     const optimisticUserMessage: ChatMessage = {
       id: `local-user-${crypto.randomUUID()}`,
-      session_id: currentSessionId,
+      session_id: submitSessionId,
       role: 'user',
       content: userQuery,
       timestamp: Date.now(),
@@ -1749,7 +1745,7 @@ const ChatPage: React.FC = () => {
     }
     const optimisticAssistantMessage: ChatMessage = {
       id: `local-assistant-${crypto.randomUUID()}`,
-      session_id: currentSessionId,
+      session_id: submitSessionId,
       role: 'assistant',
       content: '',
       timestamp: optimisticUserMessage.timestamp + 1,
@@ -1775,8 +1771,8 @@ const ChatPage: React.FC = () => {
       return next
     }
 
-    saveComposerDraftForSession(currentSessionId, createEmptyComposerDraft())
-    applyComposerDraft(createEmptyComposerDraft(), `clear:${currentSessionId}`)
+    saveComposerDraftForSession(submitSessionId, createEmptyComposerDraft())
+    applyComposerDraft(createEmptyComposerDraft(), `clear:${submitSessionId}`)
     shouldAutoScrollRef.current = true
     scrollToBottom(true)
     setCancellingRun(false)
@@ -1794,7 +1790,7 @@ const ChatPage: React.FC = () => {
     try {
       const response = await window.api.chatSubmit({
         mode: 'ai',
-        sessionId: currentSessionId,
+        sessionId: submitSessionId,
         input: userQuery,
         contentNodes: submittedContentNodes.length > 0 ? submittedContentNodes : undefined,
         selectedReferences: submittedReferences.length > 0 ? submittedReferences : undefined,
@@ -1811,6 +1807,7 @@ const ChatPage: React.FC = () => {
         setLoading(false)
         setCurrentMessages(removeOptimisticMessages)
         setAssistantTurns(removeOptimisticAssistantTurn)
+        if (createdSession) await window.api.chatSessionDelete(createdSession.id).catch(() => null)
         emitErrorMessage(response.error || '启动失败')
         return
       }
@@ -1825,6 +1822,11 @@ const ChatPage: React.FC = () => {
         ])
       )
       setAiRunId(run.id)
+      if (createdSession) {
+        setSessions((items) => [createdSession, ...items])
+        setCurrentSessionId(createdSession.id)
+        setSelectedWorkspaceId(createdSession.workspace_id)
+      }
       setAssistantTurns((previous) => {
         const next = removeOptimisticAssistantTurn(previous)
         return {
@@ -1841,13 +1843,14 @@ const ChatPage: React.FC = () => {
       setLoading(false)
       setCurrentMessages(removeOptimisticMessages)
       setAssistantTurns(removeOptimisticAssistantTurn)
+      if (createdSession) await window.api.chatSessionDelete(createdSession.id).catch(() => null)
       emitErrorMessage('发送失败')
     }
   }
 
   const handleSearchSend = async (): Promise<void> => {
-    if (!input.trim() || !currentSessionId || loading) return
-    if (!selectedWorkspaceReady) {
+    if (!input.trim() || loading) return
+    if (!selectedWorkspaceReady || !selectedWorkspace) {
       message.warning(`${getWorkspaceRequirementHint(selectedWorkspace)}后再发送消息`)
       return
     }
@@ -1860,9 +1863,16 @@ const ChatPage: React.FC = () => {
       message.warning('当前搜索范围没有已索引资料，无法执行纯搜索。')
       return
     }
+    let submitSessionId = currentSessionId
+    let createdSession: ChatSession | null = null
+    if (!submitSessionId) {
+      createdSession = await createDraftSessionForSubmit(selectedWorkspace)
+      if (!createdSession) return
+      submitSessionId = createdSession.id
+    }
 
-    saveComposerDraftForSession(currentSessionId, createEmptyComposerDraft())
-    applyComposerDraft(createEmptyComposerDraft(), `clear:${currentSessionId}`)
+    saveComposerDraftForSession(submitSessionId, createEmptyComposerDraft())
+    applyComposerDraft(createEmptyComposerDraft(), `clear:${submitSessionId}`)
     shouldAutoScrollRef.current = true
     scrollToBottom(true)
     setLoading(true)
@@ -1874,7 +1884,7 @@ const ChatPage: React.FC = () => {
     try {
       const response = await window.api.chatSubmit({
         mode: 'search',
-        sessionId: currentSessionId,
+        sessionId: submitSessionId,
         input: userQuery,
         contentNodes: submittedContentNodes.length > 0 ? submittedContentNodes : undefined,
         selectedReferences: submittedReferences.length > 0 ? submittedReferences : undefined,
@@ -1882,6 +1892,7 @@ const ChatPage: React.FC = () => {
         searchDocumentIds: hasStrictScope ? kbScopeDocumentIds : undefined
       })
       if (!response.success || !response.userMessage || !response.assistantMessage) {
+        if (createdSession) await window.api.chatSessionDelete(createdSession.id).catch(() => null)
         emitErrorMessage(response.error || '搜索失败')
         return
       }
@@ -1891,6 +1902,11 @@ const ChatPage: React.FC = () => {
       setCurrentMessages((previous) =>
         appendMessagesDedupe(previous, [response.userMessage, response.assistantMessage])
       )
+      if (createdSession) {
+        setSessions((items) => [createdSession, ...items])
+        setCurrentSessionId(createdSession.id)
+        setSelectedWorkspaceId(createdSession.workspace_id)
+      }
       setAssistantTurns((previous) => ({
         ...previous,
         [completedAssistantMessageId]: {
@@ -1915,6 +1931,7 @@ const ChatPage: React.FC = () => {
       void loadSessions()
     } catch (error) {
       console.error(error)
+      if (createdSession) await window.api.chatSessionDelete(createdSession.id).catch(() => null)
       emitErrorMessage('搜索失败')
     } finally {
       setLoading(false)
@@ -2672,10 +2689,7 @@ const ChatPage: React.FC = () => {
                         onModelNameChange={handleModelNameChange}
                         workspaces={workspaces}
                         selectedWorkspaceId={selectedWorkspaceId}
-                        onWorkspaceChange={
-                          isNewSession ? handleNewSessionWorkspaceChange : handleWorkspaceChange
-                        }
-                        onWorkspaceEmptyAction={() => navigate('/settings/workspace')}
+                        onWorkspaceChange={handleWorkspaceChange}
                         showWorkspaceSelector={isNewSession}
                         onDraftChange={handleComposerDraftChange}
                         onSubmit={() => void handleSend()}
@@ -2684,7 +2698,6 @@ const ChatPage: React.FC = () => {
                         cancelling={cancellingRun}
                         canSubmit={Boolean(
                           input.trim() &&
-                          currentSessionId &&
                           selectedWorkspaceReady &&
                           (composerMode === 'search' || selectedModelName)
                         )}

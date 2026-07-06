@@ -1013,7 +1013,7 @@ export const resolveWorkbenchWorkspaceSelection = (
   ) {
     return preferredWorkspaceId
   }
-  return workspaces[0]?.id || null
+  return null
 }
 
 export const readWorkbenchModelPreference = (

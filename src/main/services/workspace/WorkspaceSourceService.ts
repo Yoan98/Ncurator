@@ -249,6 +249,7 @@ export class WorkspaceSourceService {
       const relativePath = path.relative(input.rootPath, absolutePath)
       const normalizedRelativePath = relativePath.split(path.sep).join('/')
       if (!normalizedRelativePath) continue
+      if (!isVisiblePath(normalizedRelativePath)) continue
 
       if (entry.isDirectory()) {
         input.entries.push({

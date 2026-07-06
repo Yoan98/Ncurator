@@ -1,4 +1,6 @@
 import { describe, it } from 'vitest'
+import path from 'node:path'
+import { mkdir, writeFile } from 'node:fs/promises'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 
 describe('settings workspace backend', () => {
@@ -14,6 +16,11 @@ describe('settings workspace backend', () => {
       runMode: 'single',
       execute: async (runtime) => {
         const now = Date.now()
+        await mkdir(path.join(runtime.workspaceRoot, '.git'), { recursive: true })
+        await mkdir(path.join(runtime.workspaceRoot, '工作', '.drafts'), { recursive: true })
+        await writeFile(path.join(runtime.workspaceRoot, '.env'), 'SECRET=hidden\n')
+        await writeFile(path.join(runtime.workspaceRoot, '.git', 'config'), '[core]\n')
+        await writeFile(path.join(runtime.workspaceRoot, '工作', '.drafts', 'hidden.md'), 'hidden\n')
         const scanResult = await runtime.workspaceSourceService.scanWorkspaceTree({
           workspaceId: 'workspace-scan-contract',
           rootPath: runtime.workspaceRoot,
@@ -29,6 +36,27 @@ describe('settings workspace backend', () => {
               now
             })
           )
+        const hiddenDiff = await runtime.workspaceSourceService.diffWorkspaceTreeAgainstIndex({
+          entries: scanResult.entries,
+          records: [
+            {
+              id: 'hidden-env-record',
+              workspace_id: scanResult.workspace.id,
+              relative_path: '.env',
+              absolute_path: path.join(runtime.workspaceRoot, '.env'),
+              name: '.env',
+              file_ext: 'env',
+              size: 14,
+              mtime_ms: now,
+              index_status: 'indexed',
+              document_id: 'hidden-env-doc',
+              indexed_at: now,
+              last_checked_at: now,
+              created_at: now,
+              updated_at: now
+            }
+          ]
+        })
 
         await runtime.storageService.workspace.saveWorkspace(scanResult.workspace)
         await runtime.storageService.workspace.replaceWorkspaceFileIndexRecords(
@@ -37,6 +65,9 @@ describe('settings workspace backend', () => {
         )
 
         const savedWorkspace = await runtime.storageService.workspace.getWorkspaceById(
+          scanResult.workspace.id
+        )
+        const savedRecords = await runtime.storageService.workspace.listWorkspaceFileIndexRecords(
           scanResult.workspace.id
         )
         const fileSummary = await runtime.storageService.workspace.getWorkspaceFileSummary(
@@ -69,7 +100,10 @@ describe('settings workspace backend', () => {
         return {
           activeJob,
           savedWorkspace,
-          fileSummary
+          fileSummary,
+          scannedPaths: scanResult.entries.map((entry) => entry.relative_path),
+          indexedPaths: savedRecords.map((record) => record.relative_path),
+          removedHiddenPaths: hiddenDiff.removed.map((record) => record.relative_path)
         }
       },
       assert: async (result, runtime) => {
@@ -96,6 +130,37 @@ describe('settings workspace backend', () => {
             data: result
           }
         )
+
+        runtime.assertThat(
+          !result.scannedPaths.some((item) =>
+            item
+              .split('/')
+              .filter(Boolean)
+              .some((segment) => segment.startsWith('.'))
+          ) &&
+            !result.indexedPaths.some((item) =>
+              item
+                .split('/')
+                .filter(Boolean)
+                .some((segment) => segment.startsWith('.'))
+            ),
+          {
+            name: 'workspace-scan-skips-hidden-paths-at-source',
+            message:
+              '工作空间扫描应从源头跳过隐藏文件和隐藏目录，避免进入目录树、文件索引和后续知识库准备流程。',
+            data: {
+              scannedPaths: result.scannedPaths,
+              indexedPaths: result.indexedPaths
+            }
+          }
+        )
+
+        runtime.assertThat(result.removedHiddenPaths.includes('.env'), {
+          name: 'workspace-scan-diff-removes-existing-hidden-index-records',
+          message:
+            '如果旧索引里已经有隐藏文件，下次扫描 diff 应把它当作已移除，便于清理旧知识库记录。',
+          data: result.removedHiddenPaths
+        })
       }
     })
   })

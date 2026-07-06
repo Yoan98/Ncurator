@@ -4,6 +4,7 @@ import {
   HiArrowUp,
   HiCpuChip,
   HiDocumentText,
+  HiFolder,
   HiMagnifyingGlass,
   HiPaperClip,
   HiPhoto,
@@ -37,7 +38,6 @@ import {
   renderComposerNodesToEditor
 } from './composer/utils'
 import WorkbenchSelect from './WorkbenchSelect'
-import WorkspaceQuickSelect from './WorkspaceQuickSelect'
 
 type MentionContext = {
   textNode: Text
@@ -56,7 +56,6 @@ type WorkbenchComposerProps = {
   workspaces: WorkspaceSource[]
   selectedWorkspaceId: string | null
   onWorkspaceChange: (workspaceId: string) => void
-  onWorkspaceEmptyAction?: () => void
   showWorkspaceSelector?: boolean
   onDraftChange: (draft: ComposerDraftValue) => void
   onSubmit: () => void
@@ -112,7 +111,6 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   workspaces,
   selectedWorkspaceId,
   onWorkspaceChange,
-  onWorkspaceEmptyAction,
   showWorkspaceSelector = true,
   onDraftChange,
   onSubmit,
@@ -767,6 +765,16 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
       })),
     [activeModelConfig, remoteModels]
   )
+  const workspaceOptions = useMemo<WorkbenchSelectOption[]>(
+    () =>
+      workspaces.map((workspace) => ({
+        value: workspace.id,
+        label: workspace.name,
+        icon: <HiFolder className="h-3.5 w-3.5" />,
+        keywords: [workspace.name, workspace.root_path || '']
+      })),
+    [workspaces]
+  )
   const attachmentMenuItems = useMemo(
     () => [
       {
@@ -1188,17 +1196,25 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
 
       {showWorkspaceSelector ? (
         <div className="mt-2 flex min-w-0 items-center px-1">
-          <WorkspaceQuickSelect
-            selectedWorkspaceId={selectedWorkspaceId}
-            workspaces={workspaces}
-            onWorkspaceChange={(nextValue) => {
+          <WorkbenchSelect
+            value={selectedWorkspaceId}
+            options={workspaceOptions}
+            onChange={(nextValue) => {
               onWorkspaceChange(nextValue)
               focusEditorAfterControlChange()
             }}
-            onEmptyAction={onWorkspaceEmptyAction}
             placeholder="选择工作空间"
+            triggerIcon={<HiFolder className="h-3.5 w-3.5" />}
+            searchable={workspaces.length > 6}
+            searchPlaceholder="搜索工作空间"
+            compact
+            inlineChevron
+            selectedWithoutBackground
             noDrag
             className="max-w-[220px]"
+            menuAlign="start"
+            minMenuWidth={240}
+            maxMenuWidth={360}
             data-testid={workbenchSelectors.workspaceSelect}
           />
         </div>

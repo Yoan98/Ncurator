@@ -5,6 +5,7 @@ import {
   assertNoWorkbenchFakeSignals,
   getWorkbenchLocator,
   sendWorkbenchMessage,
+  selectWorkbenchWorkspace,
   setupWorkbenchWithTempWorkspace,
   waitForWorkbenchAiRunCompletion,
   workbenchSelectors,
@@ -26,16 +27,39 @@ describe('workbench conversation e2e', () => {
       domain: 'workbench',
       suite: 'conversation',
       groups: ['session'],
-      description: '真实 UI 首次进入 Workbench 后创建新会话，首条消息更新标题，第二条消息不再自动改标题。',
+      description:
+        '真实 UI 首次进入 Workbench 后不自动创建会话，用户手动创建后首条消息更新标题，第二条消息不再自动改标题。',
       fixtures: ['tests/fixtures/workspace'],
       launchMode: 'real',
       windowMode: 'visible',
       runMode: 'single',
       execute: async (runtime) => {
         const { page } = runtime
-        const setup = await setupWorkbenchWithTempWorkspace(page, { caseId: CASE_ID })
+        const setupStartedAt = Date.now()
+        const setup = await setupWorkbenchWithTempWorkspace(page, {
+          caseId: CASE_ID,
+          createSession: false
+        })
         try {
           const initialSessionsText = await readSessionListText(page)
+          const autoCreatedSessionCount = await page.evaluate(
+            async (startedAt) =>
+              (await window.api.chatSessionList()).filter(
+                (session) => session.created_at >= startedAt
+              ).length,
+            setupStartedAt
+          )
+          const manualCreateStartedAt = Date.now()
+          await page.getByRole('button', { name: `在 ${setup.workspaceName} 中新建对话` }).click()
+          await selectWorkbenchWorkspace(page, setup.workspaceName)
+          const afterManualCreateSessionsText = await readSessionListText(page)
+          const manuallyCreatedSessionCount = await page.evaluate(
+            async (startedAt) =>
+              (await window.api.chatSessionList()).filter(
+                (session) => session.created_at >= startedAt
+              ).length,
+            manualCreateStartedAt
+          )
           const firstStartedAtMs = Date.now()
           await sendWorkbenchMessage(page, FIRST_PROMPT)
           const firstEvidence = await waitForWorkbenchAiRunCompletion(
@@ -45,6 +69,13 @@ describe('workbench conversation e2e', () => {
           )
           recordWorkbenchAiEvidence(runtime, firstEvidence, 0.8)
           const afterFirstSessionsText = await readSessionListText(page)
+          const afterFirstCreatedSessionCount = await page.evaluate(
+            async (startedAt) =>
+              (await window.api.chatSessionList()).filter(
+                (session) => session.created_at >= startedAt
+              ).length,
+            manualCreateStartedAt
+          )
 
           const secondStartedAtMs = Date.now()
           await sendWorkbenchMessage(page, SECOND_PROMPT)
@@ -58,6 +89,10 @@ describe('workbench conversation e2e', () => {
 
           return {
             initialSessionsText,
+            afterManualCreateSessionsText,
+            autoCreatedSessionCount,
+            manuallyCreatedSessionCount,
+            afterFirstCreatedSessionCount,
             afterFirstSessionsText,
             afterSecondSessionsText,
             firstTitlePrefix: FIRST_PROMPT.slice(0, 20),
@@ -71,7 +106,9 @@ describe('workbench conversation e2e', () => {
       },
       assert: async (result, runtime) => {
         await runtime.assertThat(
-          result.initialSessionsText.includes('新对话') &&
+          result.autoCreatedSessionCount === 0 &&
+            result.manuallyCreatedSessionCount === 0 &&
+            result.afterFirstCreatedSessionCount === 1 &&
             result.afterFirstSessionsText.includes(result.firstTitlePrefix) &&
             result.afterSecondSessionsText.includes(result.firstTitlePrefix) &&
             !result.afterSecondSessionsText.includes(result.secondTitlePrefix) &&
@@ -80,7 +117,7 @@ describe('workbench conversation e2e', () => {
           {
             name: 'workbench-session-title-lifecycle',
             message:
-              'Workbench 首次进入应有“新对话”；第一条真实消息后标题应更新为首条消息摘要，第二条真实消息不应再次自动改写标题，对齐 WB-SESSION-001-AC1、WB-SESSION-001-AC2、WB-SESSION-003-AC1、WB-SESSION-003-AC2。',
+              'Workbench 首次进入、点击新对话和选择工作空间都不应落库；第一条真实消息发送后才应创建会话并更新标题，第二条真实消息不应再次自动改写标题。',
             data: result
           }
         )

@@ -815,6 +815,7 @@ export const setupWorkbenchWithTempWorkspace = async (
     workspaceName?: string
     webSourceUrl?: string
     configureModel?: boolean
+    createSession?: boolean
   }
 ): Promise<WorkbenchSetupResult> => {
   const env = loadWorkbenchLiveModelEnv()
@@ -837,6 +838,10 @@ export const setupWorkbenchWithTempWorkspace = async (
   }
   if (input.configureModel !== false) {
     await selectWorkbenchModel(page, env.modelName)
+  }
+  if (input.createSession !== false) {
+    await page.getByRole('button', { name: `在 ${workspaceName} 中新建对话` }).click()
+    await selectWorkbenchWorkspace(page, workspaceName)
   }
   return {
     env,
@@ -1102,7 +1107,9 @@ export const selectWorkbenchWorkspace = async (
   if (!(await isSelected())) {
     await workspaceSelect.click()
     const workspaceOption = page
-      .locator('.workspace-quick-select-popup [role="option"]')
+      .locator(
+        '.workbench-select-menu [role="option"], .workspace-quick-select-popup [role="option"]'
+      )
       .filter({ hasText: workspaceName })
       .first()
     await workspaceOption.waitFor({ state: 'visible' })
