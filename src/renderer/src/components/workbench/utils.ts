@@ -73,6 +73,9 @@ const isAssistantToolName = (toolName: string): toolName is AssistantToolName =>
   toolName === 'docx_history' ||
   toolName === 'docx_edit' ||
   toolName === 'docx_rollback' ||
+  toolName === 'web_crawl' ||
+  toolName === 'browser_use' ||
+  toolName === 'wait_time' ||
   toolName === 'unnamed'
 
 const normalizeToolName = (toolName: string): AssistantToolName =>
@@ -113,7 +116,7 @@ const truncateMiddle = (value: string, maxLength: number): string => {
 }
 
 const readToolFileLabel = (input?: IpcJsonObject): string => {
-  if (!input) return '目标'
+  if (!input) return '目标文件'
   return (
     readFirstStringValue(input, [
       'fileName',
@@ -125,7 +128,7 @@ const readToolFileLabel = (input?: IpcJsonObject): string => {
       'path',
       'filePath',
       'file_path'
-    ]) || '目标'
+    ]) || '目标文件'
   )
 }
 
@@ -142,10 +145,30 @@ const readCommandLabel = (input?: IpcJsonObject): string => {
   return command ? truncateMiddle(command, 96) : '一条本地命令'
 }
 
+const readWebUrlLabel = (input?: IpcJsonObject): string => {
+  if (!input) return '网页'
+  const url = readStringValue(input, 'url')
+  return url ? truncateMiddle(url, 96) : '网页'
+}
+
+const readInstructionLabel = (input?: IpcJsonObject): string => {
+  if (!input) return '当前页面'
+  const instruction = readStringValue(input, 'instruction')
+  return instruction ? truncateMiddle(instruction, 96) : '当前页面'
+}
+
+const readWaitDurationLabel = (input?: IpcJsonObject): string => {
+  if (!input) return '一段时间'
+  const seconds = (input as Record<string, IpcJsonValue>).seconds
+  if (typeof seconds === 'number' && Number.isFinite(seconds)) return `${String(seconds)} 秒`
+  if (typeof seconds === 'string' && seconds.trim()) return `${seconds.trim()} 秒`
+  return '一段时间'
+}
+
 const readDocxRangeLabel = (input?: IpcJsonObject): string => {
-  if (!input) return '细节'
+  if (!input) return '内容'
   const candidate = (input as Record<string, IpcJsonValue>)['range']
-  if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return '细节'
+  if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return '内容'
   const range = candidate as Record<string, IpcJsonValue>
   if (
     range.type === 'block_index' &&
@@ -155,7 +178,7 @@ const readDocxRangeLabel = (input?: IpcJsonObject): string => {
     return `${String(range.fromBlockIndex)}-${String(range.toBlockIndex)} 区间`
   }
   if (range.type === 'block_ids') return '指定区间'
-  return '细节'
+  return '内容'
 }
 
 const getSkillDisplayName = (skillId?: RuntimeSkillId): string => {
@@ -166,31 +189,35 @@ const getSkillDisplayName = (skillId?: RuntimeSkillId): string => {
   return '新能力'
 }
 
-const getToolSkillKey = (toolName: AssistantToolName): AssistantProcessSkillKey => {
+const getToolUiKind = (toolName?: AssistantToolName): AssistantProcessSkillKey => {
   if (
     toolName === 'docx_outline' ||
     toolName === 'docx_read_blocks' ||
     toolName === 'docx_history' ||
     toolName === 'docx_search'
   ) {
-    return 'docx-reader'
+    return 'docx-read'
   }
-  if (toolName === 'docx_edit' || toolName === 'docx_rollback') return 'docx-writer'
-  if (toolName === 'kb_search' || toolName === 'kb_list_documents') return 'reference-reader'
-  if (toolName === 'terminal_run') return 'terminal-runner'
-  return 'generic-task'
+  if (toolName === 'docx_edit') return 'docx-edit'
+  if (toolName === 'docx_rollback') return 'docx-rollback'
+  if (toolName === 'kb_search' || toolName === 'kb_list_documents') return 'kb'
+  if (toolName === 'terminal_run') return 'terminal'
+  if (toolName === 'web_crawl') return 'web-read'
+  if (toolName === 'browser_use') return 'browser'
+  if (toolName === 'wait_time') return 'wait'
+  return 'generic'
 }
 
 const getDisplaySkillKey = (display: AssistantProcessDisplay): AssistantProcessSkillKey => {
-  if (display.kind === 'tool') return getToolSkillKey(normalizeToolName(display.toolName))
-  return 'generic-task'
+  if (display.kind === 'tool') return getToolUiKind(normalizeToolName(display.toolName))
+  return 'generic'
 }
 
-const getSkillIconKind = (skillKey: AssistantProcessSkillKey): AssistantProcessIconKind => {
-  if (skillKey === 'docx-writer') return 'edit'
-  if (skillKey === 'docx-reader') return 'document'
-  if (skillKey === 'reference-reader') return 'search'
-  if (skillKey === 'terminal-runner') return 'terminal'
+const getToolIconKind = (skillKey: AssistantProcessSkillKey): AssistantProcessIconKind => {
+  if (skillKey === 'docx-edit' || skillKey === 'docx-rollback') return 'edit'
+  if (skillKey === 'docx-read') return 'document'
+  if (skillKey === 'kb' || skillKey === 'web-read' || skillKey === 'browser') return 'search'
+  if (skillKey === 'terminal') return 'terminal'
   return 'default'
 }
 
@@ -199,39 +226,63 @@ const getDisplayIconKind = (display: AssistantProcessDisplay): AssistantProcessI
   if (display.kind === 'learning') return 'learning'
   if (display.kind === 'compaction') return 'compaction'
   if (display.kind === 'finalizing') return 'finalizing'
-  return getSkillIconKind(getDisplaySkillKey(display))
+  return getToolIconKind(getDisplaySkillKey(display))
 }
 
-const getSkillHeaderText = (
+const getToolSummaryText = (
   skillKey: AssistantProcessSkillKey,
-  status: AssistantProcessStatus
+  status: AssistantProcessStatus,
+  count = 1
 ): AssistantRichTextSegment[] => {
-  if (skillKey === 'docx-reader') {
-    if (status === 'running') return sentence(text('俺正在阅读 '), text('docx', true))
-    if (status === 'completed') return sentence(text('俺已阅读完 '), text('docx', true))
-    return sentence(text('阅读 '), text('docx', true), text(' 失败了'))
+  const normalizedCount = String(Math.max(1, count))
+  if (skillKey === 'docx-read') {
+    if (status === 'running') return sentence(text(`正在读取 ${normalizedCount} 个 docx 文件`))
+    if (status === 'completed') return sentence(text(`已读取 ${normalizedCount} 个 docx 文件`))
+    return sentence(text(`读取 ${normalizedCount} 个 docx 文件失败`))
   }
-  if (skillKey === 'docx-writer') {
-    if (status === 'running') return sentence(text('俺正在写 '), text('docx', true))
-    if (status === 'completed') return sentence(text('俺已写完 '), text('docx', true))
-    return sentence(text('写 '), text('docx', true), text(' 失败了'))
+  if (skillKey === 'docx-edit') {
+    if (status === 'running') return sentence(text(`正在编辑 ${normalizedCount} 个 docx 文件`))
+    if (status === 'completed') return sentence(text(`已编辑 ${normalizedCount} 个 docx 文件`))
+    return sentence(text(`编辑 ${normalizedCount} 个 docx 文件失败`))
   }
-  if (skillKey === 'reference-reader') {
-    if (status === 'running') return sentence(text('俺正在查阅资料'))
-    if (status === 'completed') return sentence(text('俺已查阅完资料'))
-    return sentence(text('查阅资料失败了'))
+  if (skillKey === 'docx-rollback') {
+    if (status === 'running')
+      return sentence(text(`正在回退 ${normalizedCount} 个 docx 文件的修改`))
+    if (status === 'completed')
+      return sentence(text(`已回退 ${normalizedCount} 个 docx 文件的修改`))
+    return sentence(text(`回退 ${normalizedCount} 个 docx 文件的修改失败`))
   }
-  if (skillKey === 'terminal-runner') {
-    if (status === 'running') return sentence(text('正在跑神秘代码'))
-    if (status === 'completed') return sentence(text('已跑完神秘代码'))
-    return sentence(text('跑神秘代码失败了'))
+  if (skillKey === 'kb') {
+    if (status === 'running') return sentence(text('正在检索知识库'))
+    if (status === 'completed') return sentence(text('已检索知识库'))
+    return sentence(text('检索知识库失败'))
   }
-  if (status === 'running') return sentence(text('俺正在处理任务'))
-  if (status === 'completed') return sentence(text('俺已处理完任务'))
-  return sentence(text('处理任务失败了'))
+  if (skillKey === 'terminal') {
+    if (status === 'running') return sentence(text('正在执行终端指令'))
+    if (status === 'completed') return sentence(text('已执行终端指令'))
+    return sentence(text('执行终端指令失败'))
+  }
+  if (skillKey === 'web-read') {
+    if (status === 'running') return sentence(text('正在读取网页'))
+    if (status === 'completed') return sentence(text('已读取网页'))
+    return sentence(text('读取网页失败'))
+  }
+  if (skillKey === 'browser') {
+    if (status === 'running') return sentence(text('正在操作浏览器'))
+    if (status === 'completed') return sentence(text('已完成浏览器操作'))
+    return sentence(text('浏览器操作失败'))
+  }
+  if (skillKey === 'wait') {
+    if (status === 'running') return sentence(text('正在等待'))
+    if (status === 'completed') return sentence(text('已完成等待'))
+    return sentence(text('等待失败'))
+  }
+  if (status === 'running') return sentence(text('正在处理任务'))
+  if (status === 'completed') return sentence(text('已处理任务'))
+  return sentence(text('处理任务失败'))
 }
 
-const buildToolNarrative = (
+const getToolItemText = (
   toolName: AssistantToolName,
   status: AssistantProcessStatus,
   input?: IpcJsonObject
@@ -239,61 +290,86 @@ const buildToolNarrative = (
   const fileLabel = readToolFileLabel(input)
   const queryLabel = readToolQueryLabel(input)
   const commandLabel = readCommandLabel(input)
+  const urlLabel = readWebUrlLabel(input)
+  const instructionLabel = readInstructionLabel(input)
+  const waitLabel = readWaitDurationLabel(input)
 
   if (toolName === 'docx_outline') {
     if (status === 'running') {
-      return sentence(text('正在阅读 '), text(fileLabel, true), text(' 文件的结构'))
+      return sentence(text('正在阅读 '), text(fileLabel, true), text(' 的结构'))
     }
     if (status === 'completed') {
-      return sentence(text('已阅读 '), text(fileLabel, true), text(' 文件的结构'))
+      return sentence(text('已阅读 '), text(fileLabel, true), text(' 的结构'))
     }
-    return sentence(text('阅读 '), text(fileLabel, true), text(' 文件的结构失败了'))
+    return sentence(text('阅读 '), text(fileLabel, true), text(' 的结构失败'))
   }
   if (toolName === 'docx_read_blocks') {
     const rangeText = readDocxRangeLabel(input)
-    const targetText = rangeText === '细节' ? ' 文件细节' : ` 文件的 ${rangeText}`
+    const targetText = ` 的${rangeText}`
     if (status === 'running') {
       return sentence(text('正在读取 '), text(fileLabel, true), text(targetText))
     }
     if (status === 'completed') {
       return sentence(text('已读取 '), text(fileLabel, true), text(targetText))
     }
-    return sentence(text('读取 '), text(fileLabel, true), text(`${targetText}失败了`))
+    return sentence(text('读取 '), text(fileLabel, true), text(`${targetText}失败`))
   }
   if (toolName === 'docx_edit') {
+    if (status === 'running') return sentence(text('正在编辑 '), text(fileLabel, true))
+    if (status === 'completed') return sentence(text('已编辑 '), text(fileLabel, true))
+    return sentence(text('编辑 '), text(fileLabel, true), text(' 失败'))
+  }
+  if (toolName === 'docx_rollback') {
     if (status === 'running')
-      return sentence(text('正在编辑 '), text(fileLabel, true), text(' 文件'))
+      return sentence(text('正在回退 '), text(fileLabel, true), text(' 的修改'))
     if (status === 'completed')
-      return sentence(text('已编辑 '), text(fileLabel, true), text(' 文件'))
-    return sentence(text('编辑 '), text(fileLabel, true), text(' 文件失败了'))
+      return sentence(text('已回退 '), text(fileLabel, true), text(' 的修改'))
+    return sentence(text('回退 '), text(fileLabel, true), text(' 的修改失败'))
   }
   if (toolName === 'docx_history') {
     if (status === 'running') {
-      return sentence(text('正在检查 '), text(fileLabel, true), text(' 文件的修改历史'))
+      return sentence(text('正在检查 '), text(fileLabel, true), text(' 的修改历史'))
     }
     if (status === 'completed') {
-      return sentence(text('已检查 '), text(fileLabel, true), text(' 文件的修改历史'))
+      return sentence(text('已检查 '), text(fileLabel, true), text(' 的修改历史'))
     }
-    return sentence(text('检查 '), text(fileLabel, true), text(' 文件的修改历史失败了'))
+    return sentence(text('检查 '), text(fileLabel, true), text(' 的修改历史失败'))
   }
   if (toolName === 'terminal_run') {
-    if (status === 'running') return sentence(text('正在执行 '), text(commandLabel, true))
-    if (status === 'completed') return sentence(text('已执行 '), text(commandLabel, true))
-    return sentence(text('执行 '), text(commandLabel, true), text(' 失败了'))
+    if (status === 'running') return sentence(text('正在执行终端指令：'), text(commandLabel, true))
+    if (status === 'completed') return sentence(text('已执行终端指令：'), text(commandLabel, true))
+    return sentence(text('执行终端指令失败：'), text(commandLabel, true))
   }
   if (toolName === 'kb_search' || toolName === 'docx_search') {
     if (status === 'running') return sentence(text('正在搜索 '), text(queryLabel, true))
     if (status === 'completed') return sentence(text('已搜索 '), text(queryLabel, true))
-    return sentence(text('搜索 '), text(queryLabel, true), text(' 失败了'))
+    return sentence(text('搜索 '), text(queryLabel, true), text(' 失败'))
   }
   if (toolName === 'kb_list_documents') {
     if (status === 'running') return sentence(text('正在查看资料列表'))
     if (status === 'completed') return sentence(text('已查看资料列表'))
-    return sentence(text('查看资料列表失败了'))
+    return sentence(text('查看资料列表失败'))
+  }
+  if (toolName === 'web_crawl') {
+    if (status === 'running') return sentence(text('正在读取网页：'), text(urlLabel, true))
+    if (status === 'completed') return sentence(text('已读取网页：'), text(urlLabel, true))
+    return sentence(text('读取网页失败：'), text(urlLabel, true))
+  }
+  if (toolName === 'browser_use') {
+    if (status === 'running')
+      return sentence(text('正在操作浏览器：'), text(instructionLabel, true))
+    if (status === 'completed')
+      return sentence(text('已完成浏览器操作：'), text(instructionLabel, true))
+    return sentence(text('浏览器操作失败：'), text(instructionLabel, true))
+  }
+  if (toolName === 'wait_time') {
+    if (status === 'running') return sentence(text('正在等待 '), text(waitLabel, true))
+    if (status === 'completed') return sentence(text('已等待 '), text(waitLabel, true))
+    return sentence(text('等待失败'))
   }
   if (status === 'running') return sentence(text('正在处理任务中的一步'))
   if (status === 'completed') return sentence(text('已处理任务中的一步'))
-  return sentence(text('这一步没跑通'))
+  return sentence(text('这一步处理失败'))
 }
 
 const getDisplayGroupText = (
@@ -321,7 +397,7 @@ const getDisplayGroupText = (
     if (status === 'completed') return sentence(text('收尾完成了'))
     return sentence(text('收尾失败了'))
   }
-  return getSkillHeaderText(getDisplaySkillKey(display), status)
+  return getToolSummaryText(getDisplaySkillKey(display), status)
 }
 
 const getDisplayItemText = (
@@ -329,41 +405,16 @@ const getDisplayItemText = (
   status: AssistantProcessStatus
 ): AssistantRichTextSegment[] => {
   if (display.kind === 'tool') {
-    return buildToolNarrative(normalizeToolName(display.toolName), status, display.input)
+    return getToolItemText(normalizeToolName(display.toolName), status, display.input)
   }
   return getDisplayGroupText(display, status)
 }
 
-type ExecutionActionKind = 'docx-read' | 'docx-edit' | 'kb-retrieval' | 'terminal' | 'generic'
-
 type ExecutionActionSummary = {
-  kind: ExecutionActionKind
+  kind: AssistantProcessSkillKey
   iconKind: AssistantProcessIconKind
   fileLabels: Set<string>
   count: number
-}
-
-const getExecutionActionKind = (toolName?: AssistantToolName): ExecutionActionKind => {
-  if (
-    toolName === 'docx_outline' ||
-    toolName === 'docx_read_blocks' ||
-    toolName === 'docx_history' ||
-    toolName === 'docx_search'
-  ) {
-    return 'docx-read'
-  }
-  if (toolName === 'docx_edit' || toolName === 'docx_rollback') return 'docx-edit'
-  if (toolName === 'kb_search' || toolName === 'kb_list_documents') return 'kb-retrieval'
-  if (toolName === 'terminal_run') return 'terminal'
-  return 'generic'
-}
-
-const getExecutionIconKind = (kind: ExecutionActionKind): AssistantProcessIconKind => {
-  if (kind === 'docx-read') return 'document'
-  if (kind === 'docx-edit') return 'edit'
-  if (kind === 'kb-retrieval') return 'search'
-  if (kind === 'terminal') return 'terminal'
-  return 'default'
 }
 
 const getExecutionStatus = (groups: AssistantProcessGroup[]): AssistantProcessStatus => {
@@ -384,66 +435,39 @@ const getExecutionStatus = (groups: AssistantProcessGroup[]): AssistantProcessSt
   return 'completed'
 }
 
-const getExecutionActionOrder = (kind: ExecutionActionKind): number => {
+const getExecutionActionOrder = (kind: AssistantProcessSkillKey): number => {
   if (kind === 'docx-read') return 1
   if (kind === 'docx-edit') return 2
-  if (kind === 'kb-retrieval') return 3
-  if (kind === 'terminal') return 4
-  return 5
-}
-
-const getExecutionActionText = (
-  summary: ExecutionActionSummary,
-  status: AssistantProcessStatus
-): string => {
-  if (summary.kind === 'docx-read') {
-    const verb = status === 'completed' ? '已读取' : status === 'failed' ? '读取' : '正在读取'
-    return `${verb} ${String(summary.fileLabels.size || summary.count || 1)} 个 docx 文件${
-      status === 'failed' ? '失败了' : ''
-    }`
-  }
-  if (summary.kind === 'docx-edit') {
-    const verb = status === 'completed' ? '已编辑' : status === 'failed' ? '编辑' : '正在编辑'
-    return `${verb} ${String(summary.fileLabels.size || summary.count || 1)} 个 docx 文件${
-      status === 'failed' ? '失败了' : ''
-    }`
-  }
-  if (summary.kind === 'kb-retrieval') {
-    if (status === 'completed') return '已检索知识库'
-    if (status === 'failed') return '检索知识库失败了'
-    return '正在检索知识库'
-  }
-  if (summary.kind === 'terminal') {
-    if (status === 'completed') return '已跑完神秘代码'
-    if (status === 'failed') return '跑神秘代码失败了'
-    return '正在跑神秘代码'
-  }
-  if (status === 'completed') return '已处理任务'
-  if (status === 'failed') return '处理任务失败了'
-  return '正在处理任务'
+  if (kind === 'docx-rollback') return 3
+  if (kind === 'kb') return 4
+  if (kind === 'terminal') return 5
+  if (kind === 'web-read') return 6
+  if (kind === 'browser') return 7
+  if (kind === 'wait') return 8
+  return 9
 }
 
 export const buildAssistantExecutionSummaryText = (
   groups: AssistantProcessGroup[]
 ): AssistantRichTextSegment[] => {
-  const summaries = new Map<ExecutionActionKind, ExecutionActionSummary>()
+  const summaries = new Map<AssistantProcessSkillKey, ExecutionActionSummary>()
   for (const group of groups) {
     const entries =
       group.items.length > 0
         ? group.items.map((item) => ({ toolName: item.toolName, targetLabel: item.targetLabel }))
         : [{ toolName: undefined, targetLabel: undefined }]
     for (const entry of entries) {
-      const kind = getExecutionActionKind(entry.toolName)
+      const kind = getToolUiKind(entry.toolName)
       const current =
         summaries.get(kind) ||
         ({
           kind,
-          iconKind: getExecutionIconKind(kind),
+          iconKind: getToolIconKind(kind),
           fileLabels: new Set<string>(),
           count: 0
         } satisfies ExecutionActionSummary)
       current.count += 1
-      if (kind === 'docx-read' || kind === 'docx-edit') {
+      if (kind === 'docx-read' || kind === 'docx-edit' || kind === 'docx-rollback') {
         current.fileLabels.add(entry.targetLabel || group.id)
       }
       summaries.set(kind, current)
@@ -458,9 +482,13 @@ export const buildAssistantExecutionSummaryText = (
 
   return ordered.flatMap((summary, index) => {
     const prefix = index === 0 ? '' : '，'
+    const count = summary.fileLabels.size || summary.count || 1
     return sentence(
       text(prefix, false),
-      text(getExecutionActionText(summary, status), false, summary.iconKind)
+      ...getToolSummaryText(summary.kind, status, count).map((segment) => ({
+        ...segment,
+        iconKind: segment.iconKind || summary.iconKind
+      }))
     )
   })
 }
@@ -596,9 +624,7 @@ const createFileRefFromObject = (
 }
 
 export const getAssistantToolNarrative = (toolName?: string): string =>
-  plainText(
-    getSkillHeaderText(getToolSkillKey(normalizeToolName(String(toolName || ''))), 'running')
-  )
+  plainText(getToolSummaryText(getToolUiKind(normalizeToolName(String(toolName || ''))), 'running'))
 
 export const buildAssistantProcessText = (event: AiRunEvent): string | null => {
   if (event.type === 'assistant_process_group_started') {
@@ -626,7 +652,7 @@ export const createAssistantThinkingGroup = (messageId: string): AssistantProces
   createProcessGroup({
     id: `${messageId}:thinking`,
     kind: 'thinking',
-    skillKey: 'generic-task',
+    skillKey: 'generic',
     iconKind: 'default',
     status: 'running',
     runningText: sentence(text('让俺想想')),
@@ -640,12 +666,12 @@ export const createSearchProcessGroup = (messageId: string): AssistantProcessGro
   createProcessGroup({
     id: `${messageId}:search`,
     kind: 'skill',
-    skillKey: 'reference-reader',
+    skillKey: 'kb',
     iconKind: 'search',
     status: 'running',
-    runningText: getSkillHeaderText('reference-reader', 'running'),
-    completedText: getSkillHeaderText('reference-reader', 'completed'),
-    failedText: getSkillHeaderText('reference-reader', 'failed'),
+    runningText: getToolSummaryText('kb', 'running'),
+    completedText: getToolSummaryText('kb', 'completed'),
+    failedText: getToolSummaryText('kb', 'failed'),
     createdAt: Date.now(),
     sourceEventType: 'thinking'
   })

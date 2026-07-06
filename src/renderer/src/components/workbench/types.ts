@@ -93,6 +93,9 @@ export type AssistantToolName =
   | 'docx_history'
   | 'docx_edit'
   | 'docx_rollback'
+  | 'web_crawl'
+  | 'browser_use'
+  | 'wait_time'
   | 'unnamed'
 
 export type AssistantProcessIconKind =
@@ -113,11 +116,15 @@ export type AssistantProcessGroupKind =
   | 'finalizing'
 
 export type AssistantProcessSkillKey =
-  | 'docx-reader'
-  | 'docx-writer'
-  | 'reference-reader'
-  | 'terminal-runner'
-  | 'generic-task'
+  | 'docx-read'
+  | 'docx-edit'
+  | 'docx-rollback'
+  | 'kb'
+  | 'terminal'
+  | 'web-read'
+  | 'browser'
+  | 'wait'
+  | 'generic'
 
 export type AssistantProcessGroupItem = {
   id: string
