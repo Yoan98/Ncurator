@@ -23,6 +23,19 @@ type FileRenderProps = {
   modalTestId?: string
 }
 
+const getDocumentsSignature = (documents: FileRenderDocument[]): string =>
+  documents
+    .map((document) =>
+      [
+        document.filePath,
+        document.fileName,
+        document.uri,
+        document.fileType,
+        document.metadata ? JSON.stringify(document.metadata) : ''
+      ].join('\u0000')
+    )
+    .join('\u0001')
+
 const usePreparedDocuments = (
   documents: FileRenderDocument[]
 ): { documents: LoadedFileRenderDocument[]; loading: boolean } => {
@@ -30,15 +43,7 @@ const usePreparedDocuments = (
   const [loading, setLoading] = useState(false)
   const latestDocumentsRef = useRef(documents)
   const lastSignatureRef = useRef('')
-  const documentsSignature = documents
-    .map((document) =>
-      [
-        document.filePath,
-        document.fileName,
-        document.metadata ? JSON.stringify(document.metadata) : ''
-      ].join('\u0000')
-    )
-    .join('\u0001')
+  const documentsSignature = getDocumentsSignature(documents)
 
   if (lastSignatureRef.current !== documentsSignature) {
     lastSignatureRef.current = documentsSignature
@@ -114,7 +119,7 @@ const renderers = [
   ...DocViewerRenderers
 ]
 
-export const FileRenderViewer: React.FC<FileRenderViewerProps> = ({
+const FileRenderViewerBase: React.FC<FileRenderViewerProps> = ({
   documents,
   emptyText = '选择一个文件后在这里查看内容。',
   className,
@@ -182,6 +187,15 @@ export const FileRenderViewer: React.FC<FileRenderViewerProps> = ({
     </div>
   )
 }
+
+export const FileRenderViewer = React.memo(
+  FileRenderViewerBase,
+  (previous, next) =>
+    previous.emptyText === next.emptyText &&
+    previous.className === next.className &&
+    previous.framed === next.framed &&
+    getDocumentsSignature(previous.documents) === getDocumentsSignature(next.documents)
+)
 
 const FileRender: React.FC<FileRenderProps> = ({
   open,

@@ -34,7 +34,7 @@ const singleInstanceLock = process.env.NCURATOR_E2E_OBSERVER
   ? true
   : app.requestSingleInstanceLock()
 
-const INITIAL_WINDOW_WIDTH = 1300
+const INITIAL_WINDOW_WIDTH = 1400
 const INITIAL_WINDOW_HEIGHT = 800
 const MIN_WINDOW_WIDTH = 1100
 const MIN_WINDOW_HEIGHT = 720

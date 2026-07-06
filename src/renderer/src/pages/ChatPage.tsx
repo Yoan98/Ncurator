@@ -830,15 +830,21 @@ const ChatPage: React.FC = () => {
     })
   }
 
-  const openPathOrNotify = async (filePath: string): Promise<void> => {
-    const result = await window.api.openPath(filePath)
-    if (!result.success) emitErrorMessage(result.error || '打开失败')
-  }
+  const openPathOrNotify = useCallback(
+    async (filePath: string): Promise<void> => {
+      const result = await window.api.openPath(filePath)
+      if (!result.success) emitErrorMessage(result.error || '打开失败')
+    },
+    [emitErrorMessage]
+  )
 
-  const revealPathOrNotify = async (filePath: string): Promise<void> => {
-    const result = await window.api.revealPath(filePath)
-    if (!result.success) emitErrorMessage(result.error || '定位失败')
-  }
+  const revealPathOrNotify = useCallback(
+    async (filePath: string): Promise<void> => {
+      const result = await window.api.revealPath(filePath)
+      if (!result.success) emitErrorMessage(result.error || '定位失败')
+    },
+    [emitErrorMessage]
+  )
 
   const loadSessions = useCallback(async (): Promise<void> => {
     try {

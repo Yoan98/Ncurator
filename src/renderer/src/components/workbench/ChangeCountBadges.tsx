@@ -3,25 +3,29 @@ import React from 'react'
 type ChangeCountBadgesProps = {
   insertCount: number
   deleteCount: number
+  mode?: 'compact' | 'full'
   className?: string
 }
 
 const ChangeCountBadges: React.FC<ChangeCountBadgesProps> = ({
   insertCount,
   deleteCount,
+  mode = 'full',
   className
 }) => {
-  if (insertCount <= 0 && deleteCount <= 0) return null
+  if (mode === 'compact' && insertCount <= 0 && deleteCount <= 0) return null
+  const showInsertCount = mode === 'full' || insertCount > 0
+  const showDeleteCount = mode === 'full' || deleteCount > 0
 
   return (
-    <span className={`inline-flex shrink-0 items-center gap-1 ${className || ''}`}>
-      {insertCount > 0 ? (
-        <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-[4px] bg-[#E7F6EC] px-1.5 text-[11px] font-semibold leading-none tabular-nums text-[#147A3D]">
+    <span className={`inline-flex shrink-0 items-center gap-1.5 ${className || ''}`}>
+      {showInsertCount ? (
+        <span className="inline-flex items-center text-[11px] font-semibold leading-none tabular-nums text-[#147A3D]">
           +{insertCount}
         </span>
       ) : null}
-      {deleteCount > 0 ? (
-        <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-[4px] bg-[#FDECEC] px-1.5 text-[11px] font-semibold leading-none tabular-nums text-[#B42318]">
+      {showDeleteCount ? (
+        <span className="inline-flex items-center text-[11px] font-semibold leading-none tabular-nums text-[#B42318]">
           -{deleteCount}
         </span>
       ) : null}

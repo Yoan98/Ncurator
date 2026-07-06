@@ -23,8 +23,8 @@ import type { WorkspaceSource } from '../../../../shared/types'
 import type { ParsedNcuratorRefKind, ParsedNcuratorRefResourceType } from '../markdownReference'
 import { workbenchSelectors } from '../../testing/selectors'
 import { buildAssistantExecutionSummaryText, resolveAssistantExecutionStatus } from './utils'
-import { formatWorkspacePathLabel } from './pathDisplay'
 import ChangeCountBadges from './ChangeCountBadges'
+import WorkspacePathLabel from './WorkspacePathLabel'
 
 type AssistantTurnCardProps = {
   messageId: string
@@ -406,11 +406,6 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
             </div>
             <div>
               {turn.applyTargets.map((apply) => {
-                const pathLabel = formatWorkspacePathLabel(
-                  apply.sourcePath,
-                  workspaces,
-                  fallbackWorkspaceName
-                )
                 const statusLabel =
                   apply.status === 'reverted'
                     ? apply.operation === 'created'
@@ -429,9 +424,14 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0 flex-1">
-                        <div className="truncate text-[13px] font-medium text-[#37352F]">
-                          {pathLabel || apply.title}
-                        </div>
+                        <WorkspacePathLabel
+                          filePath={apply.sourcePath || apply.title}
+                          workspaces={workspaces}
+                          fallbackWorkspaceName={fallbackWorkspaceName}
+                          className="text-[13px] font-medium"
+                          fileNameClassName="text-[#37352F]"
+                          prefixClassName="text-[#9B9A97]"
+                        />
                       </div>
                       <span className="flex shrink-0 items-center gap-1 pt-0.5">
                         <ChangeCountBadges

@@ -19,8 +19,8 @@ import type { FileRenderDocument } from '../fileRenders'
 import WorkbenchBrowserPanel from './WorkbenchBrowserPanel'
 import type { SearchWorkbenchTurn, WorkbenchContentPanelState } from './types'
 import { workbenchSelectors } from '../../testing/selectors'
-import { formatWorkspacePathLabel } from './pathDisplay'
 import ChangeCountBadges from './ChangeCountBadges'
+import WorkspacePathLabel from './WorkspacePathLabel'
 
 type WorkbenchContentPanelProps = {
   state: WorkbenchContentPanelState
@@ -199,7 +199,7 @@ const WorkbenchSearchResultsPanel: React.FC<{
   )
 }
 
-const WorkbenchDocumentPreviewPanel: React.FC<{
+type WorkbenchDocumentPreviewPanelProps = {
   fileName: string
   filePath: string
   documents: FileRenderDocument[]
@@ -223,7 +223,9 @@ const WorkbenchDocumentPreviewPanel: React.FC<{
   onOpenPath: (filePath: string) => Promise<void>
   onRevealPath: (filePath: string) => Promise<void>
   onRevert?: () => void
-}> = ({
+}
+
+const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPreviewPanelProps> = ({
   fileName,
   filePath,
   documents,
@@ -249,10 +251,6 @@ const WorkbenchDocumentPreviewPanel: React.FC<{
   onRevert
 }) => {
   const isDeletedCreatedFile = mode === 'edit' && status === 'reverted' && operation === 'created'
-  const pathLabel = useMemo(
-    () => formatWorkspacePathLabel(filePath, workspaces, fallbackWorkspaceName),
-    [fallbackWorkspaceName, filePath, workspaces]
-  )
   const tagClassName =
     mode === 'edit'
       ? 'border-[#E8E7E4] bg-[#F7F7F5] text-[#37352F]'
@@ -297,7 +295,14 @@ const WorkbenchDocumentPreviewPanel: React.FC<{
               <ChangeCountBadges insertCount={insertCount} deleteCount={deleteCount} />
             ) : null}
           </div>
-          <div className="mt-1 truncate text-xs text-[#B1B0AD]">{pathLabel || filePath}</div>
+          <WorkspacePathLabel
+            filePath={filePath}
+            workspaces={workspaces}
+            fallbackWorkspaceName={fallbackWorkspaceName}
+            className="mt-1 text-xs"
+            prefixClassName="text-[#B1B0AD]"
+            fileNameClassName="text-[#787774]"
+          />
         </div>
         <div className="flex shrink-0 items-center gap-1">
           <Tooltip title={revealTitle}>
@@ -373,7 +378,36 @@ const WorkbenchDocumentPreviewPanel: React.FC<{
   )
 }
 
-const WorkbenchContentPanel: React.FC<WorkbenchContentPanelProps> = ({
+const arePreviewPanelPropsEqual = (
+  previous: WorkbenchDocumentPreviewPanelProps,
+  next: WorkbenchDocumentPreviewPanelProps
+): boolean =>
+  previous.fileName === next.fileName &&
+  previous.filePath === next.filePath &&
+  previous.documents === next.documents &&
+  previous.mode === next.mode &&
+  previous.status === next.status &&
+  previous.operation === next.operation &&
+  previous.insertCount === next.insertCount &&
+  previous.deleteCount === next.deleteCount &&
+  previous.testId === next.testId &&
+  previous.loading === next.loading &&
+  previous.reverting === next.reverting &&
+  previous.canRevert === next.canRevert &&
+  previous.canOpen === next.canOpen &&
+  previous.statusMessage === next.statusMessage &&
+  previous.errorMessage === next.errorMessage &&
+  previous.emptyText === next.emptyText &&
+  previous.workspaces === next.workspaces &&
+  previous.fallbackWorkspaceName === next.fallbackWorkspaceName &&
+  previous.backTarget === next.backTarget
+
+const WorkbenchDocumentPreviewPanel = React.memo(
+  WorkbenchDocumentPreviewPanelBase,
+  arePreviewPanelPropsEqual
+)
+
+const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
   state,
   activeApplyRecord,
   applyLoading,
@@ -409,7 +443,7 @@ const WorkbenchContentPanel: React.FC<WorkbenchContentPanelProps> = ({
             }
           ]
         : [],
-    [activeApplyRecord?.preview_diff_artifact_path, activeApplyRecord?.source_name]
+    [activeApplyRecord]
   )
   const hasDedicatedPreview = Boolean(activeApplyRecord?.preview_diff_checksum)
 
@@ -489,5 +523,18 @@ const WorkbenchContentPanel: React.FC<WorkbenchContentPanelProps> = ({
     </aside>
   )
 }
+
+const areContentPanelPropsEqual = (
+  previous: WorkbenchContentPanelProps,
+  next: WorkbenchContentPanelProps
+): boolean =>
+  previous.state === next.state &&
+  previous.activeApplyRecord === next.activeApplyRecord &&
+  previous.applyLoading === next.applyLoading &&
+  previous.applyReverting === next.applyReverting &&
+  previous.workspaces === next.workspaces &&
+  previous.fallbackWorkspaceName === next.fallbackWorkspaceName
+
+const WorkbenchContentPanel = React.memo(WorkbenchContentPanelBase, areContentPanelPropsEqual)
 
 export default WorkbenchContentPanel

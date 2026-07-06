@@ -1,6 +1,10 @@
 import type { WorkspaceSource } from '../../../../shared/types'
 
-const normalizePath = (value: string): string => value.replace(/\\/g, '/').replace(/\/+/g, '/')
+const normalizePath = (value: string): string =>
+  String(value || '')
+    .trim()
+    .replace(/\\/g, '/')
+    .replace(/\/+/g, '/')
 
 const trimSlashes = (value: string): string => value.replace(/^\/+|\/+$/g, '')
 
@@ -44,7 +48,7 @@ export const getWorkspacePathParts = (
     const target = trimSlashes(normalizedFilePath)
     const relativePath = trimSlashes(target.slice(root.length))
     return {
-      workspaceName: matchingWorkspace.workspace.name,
+      workspaceName: String(matchingWorkspace.workspace.name || '').trim(),
       relativePath: relativePath || fileName,
       fileName
     }
@@ -65,5 +69,5 @@ export const formatWorkspacePathLabel = (
   const workspaceName = parts.workspaceName || fallbackWorkspaceName || ''
   if (!workspaceName) return parts.relativePath || parts.fileName
   if (!parts.relativePath) return workspaceName
-  return `${workspaceName} / ${parts.relativePath}`
+  return `${String(workspaceName).trim()}/${parts.relativePath}`
 }
