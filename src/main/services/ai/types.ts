@@ -25,6 +25,7 @@ import type {
   AiRunEventStage,
   AiRunStatus,
   AiFileChangeRecord,
+  ChatAttachment,
   BrainContextBudgetSnapshot,
   ChatConversationMemory,
   ChatSessionResumeSnapshot,
@@ -53,10 +54,7 @@ export type HumanTaskRunner = (
 
 export type AiRunState = z.infer<typeof aiRunStateContractSchema>
 
-export type HumanResumeSnapshot = Pick<
-  HumanState,
-  'memory' | 'skills'
-> & {
+export type HumanResumeSnapshot = Pick<HumanState, 'memory' | 'skills'> & {
   execution: Pick<
     HumanState['execution'],
     'pendingDecisionHint' | 'deliveryGuidanceItems' | 'artifacts' | 'brainSchemaRetryCount'
@@ -78,6 +76,7 @@ export type AiRunStartPayload = {
   sessionId: string
   input: string
   selectedReferences?: SelectedReference[]
+  attachments?: ChatAttachment[]
   modelName?: string
   workspace?: {
     workspaceId: string
@@ -92,6 +91,7 @@ export type AiWorkspaceBinding = NonNullable<AiRunStartPayload['workspace']>
 export type AiReferenceScope = {
   workspace: AiWorkspaceBinding
   selectedReferences: SelectedReference[]
+  attachments: ChatAttachment[]
 }
 
 export type AiApprovalBatchRequest = {

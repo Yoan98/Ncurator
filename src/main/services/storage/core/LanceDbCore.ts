@@ -233,7 +233,8 @@ export class LanceDbCore {
         if (!writeMethods.has(String(property))) {
           return (...args: unknown[]) => Promise.resolve(value.apply(target, args))
         }
-        return (...args: unknown[]) => this.runTableWrite(tableName, async () => await value.apply(target, args))
+        return (...args: unknown[]) =>
+          this.runTableWrite(tableName, async () => await value.apply(target, args))
       }
     })
   }
@@ -250,7 +251,8 @@ export class LanceDbCore {
           return (...args: unknown[]) => Promise.resolve(value.apply(target, args))
         }
         if (property === 'execute') {
-          return (...args: unknown[]) => this.runTableWrite(tableName, async () => await value.apply(target, args))
+          return (...args: unknown[]) =>
+            this.runTableWrite(tableName, async () => await value.apply(target, args))
         }
         return (...args: unknown[]) => {
           const result = value.apply(target, args)
@@ -333,7 +335,10 @@ export class LanceDbCore {
   }
 
   private async createMissingLanceScalarIndexes(
-    table: { listIndices: () => Promise<unknown[]>; createIndex: (column: string) => Promise<void> },
+    table: {
+      listIndices: () => Promise<unknown[]>
+      createIndex: (column: string) => Promise<void>
+    },
     columns: string[]
   ): Promise<void> {
     const indices = await table.listIndices()
@@ -389,7 +394,7 @@ export class LanceDbCore {
           new arrow.Field('file_path', new arrow.Utf8(), true),
           new arrow.Field('created_at', new arrow.Int64()),
           new arrow.Field('import_status', new arrow.Int32())
-        ]),
+        ])
       },
       {
         name: LANCE_TABLES.WEB_SOURCE,
@@ -415,7 +420,7 @@ export class LanceDbCore {
           new arrow.Field('last_error', new arrow.Utf8(), true),
           new arrow.Field('created_at', new arrow.Int64()),
           new arrow.Field('updated_at', new arrow.Int64())
-        ]),
+        ])
       },
       {
         name: LANCE_TABLES.WORKSPACE_SOURCE,
@@ -425,7 +430,7 @@ export class LanceDbCore {
           new arrow.Field('root_path', new arrow.Utf8(), true),
           new arrow.Field('created_at', new arrow.Int64()),
           new arrow.Field('updated_at', new arrow.Int64())
-        ]),
+        ])
       },
       {
         name: LANCE_TABLES.WORKSPACE_FILE_INDEX,
@@ -446,7 +451,7 @@ export class LanceDbCore {
           new arrow.Field('last_error', new arrow.Utf8(), true),
           new arrow.Field('created_at', new arrow.Int64()),
           new arrow.Field('updated_at', new arrow.Int64())
-        ]),
+        ])
       },
       {
         name: LANCE_TABLES.WORKSPACE_INDEX_JOB,
@@ -468,7 +473,7 @@ export class LanceDbCore {
           new arrow.Field('started_at', new arrow.Int64()),
           new arrow.Field('updated_at', new arrow.Int64()),
           new arrow.Field('finished_at', new arrow.Int64(), true)
-        ]),
+        ])
       },
       {
         name: LANCE_TABLES.CHAT_SESSION,
@@ -490,6 +495,7 @@ export class LanceDbCore {
           new arrow.Field('timestamp', new arrow.Int64()),
           new arrow.Field('content_nodes_json', new arrow.Utf8(), true),
           new arrow.Field('selected_references_json', new arrow.Utf8(), true),
+          new arrow.Field('attachments_json', new arrow.Utf8(), true),
           new arrow.Field('artifacts_json', new arrow.Utf8(), true),
           new arrow.Field('error', new arrow.Bool(), true)
         ]),
@@ -529,6 +535,7 @@ export class LanceDbCore {
           new arrow.Field('status', new arrow.Utf8()),
           new arrow.Field('input', new arrow.Utf8()),
           new arrow.Field('selected_references_json', new arrow.Utf8(), true),
+          new arrow.Field('attachments_json', new arrow.Utf8(), true),
           new arrow.Field('workspace_json', new arrow.Utf8(), true),
           new arrow.Field('model_name', new arrow.Utf8(), true),
           new arrow.Field('partial_answer', new arrow.Utf8()),

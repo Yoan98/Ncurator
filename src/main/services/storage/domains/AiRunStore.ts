@@ -5,6 +5,7 @@ import type {
   AiRunEventRecord,
   AiRunRecord,
   AiRunStatus,
+  ChatAttachment,
   SelectedReference,
   WorkspaceRuntimeBinding
 } from '../../../../shared/types'
@@ -18,6 +19,7 @@ type AiRunRow = {
   status?: unknown
   input?: unknown
   selected_references_json?: unknown
+  attachments_json?: unknown
   workspace_json?: unknown
   model_name?: unknown
   partial_answer?: unknown
@@ -86,6 +88,7 @@ const RUN_COLUMNS = [
   'status',
   'input',
   'selected_references_json',
+  'attachments_json',
   'workspace_json',
   'model_name',
   'partial_answer',
@@ -124,6 +127,7 @@ const toRunRecord = (row: AiRunRow): AiRunRecord => ({
   status: normalizeRunStatus(row.status),
   input: String(row.input || ''),
   selectedReferences: parseJsonArray<SelectedReference>(row.selected_references_json),
+  attachments: parseJsonArray<ChatAttachment>(row.attachments_json),
   workspace: parseJsonObject<WorkspaceRuntimeBinding>(row.workspace_json),
   modelName: row.model_name ? String(row.model_name) : undefined,
   partialAnswer: String(row.partial_answer || ''),
@@ -177,6 +181,7 @@ export class AiRunStore {
           selected_references_json: record.selectedReferences
             ? JSON.stringify(record.selectedReferences)
             : undefined,
+          attachments_json: record.attachments ? JSON.stringify(record.attachments) : undefined,
           workspace_json: record.workspace ? JSON.stringify(record.workspace) : undefined,
           model_name: record.modelName,
           partial_answer: record.partialAnswer,
@@ -186,7 +191,9 @@ export class AiRunStore {
             ? JSON.stringify(record.pendingApproval)
             : undefined,
           artifacts_json: record.artifacts ? JSON.stringify(record.artifacts) : undefined,
-          process_events_json: record.processEvents ? JSON.stringify(record.processEvents) : undefined,
+          process_events_json: record.processEvents
+            ? JSON.stringify(record.processEvents)
+            : undefined,
           event_count: record.eventCount,
           visible_event_count: record.visibleEventCount,
           last_event_at: record.lastEventAt,
@@ -325,10 +332,7 @@ export class AiRunStore {
     return nextSeq
   }
 
-  private async withRunEventSeqQueue<T>(
-    runId: string,
-    operation: () => Promise<T>
-  ): Promise<T> {
+  private async withRunEventSeqQueue<T>(runId: string, operation: () => Promise<T>): Promise<T> {
     const previous = this.eventSeqQueues.get(runId) || Promise.resolve()
     const queued = previous.catch(() => undefined).then(operation)
     const tail = queued.catch(() => undefined)

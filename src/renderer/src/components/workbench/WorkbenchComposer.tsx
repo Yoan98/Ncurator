@@ -1,7 +1,19 @@
 ﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Spin, Tooltip } from 'antd'
-import { HiArrowUp, HiCpuChip, HiMagnifyingGlass, HiSparkles, HiStop } from 'react-icons/hi2'
+import { App as AntdApp, Dropdown, Modal, Spin, Tooltip } from 'antd'
+import {
+  HiArrowUp,
+  HiCpuChip,
+  HiDocumentText,
+  HiMagnifyingGlass,
+  HiPaperClip,
+  HiPhoto,
+  HiPlus,
+  HiSparkles,
+  HiStop,
+  HiXMark
+} from 'react-icons/hi2'
 import type {
+  ChatAttachment,
   LLMConfig,
   LlmRemoteModel,
   ReferenceKind,
@@ -61,6 +73,34 @@ type WorkbenchComposerProps = {
 
 const isTextNode = (value: Node | null): value is Text => value instanceof Text
 const CARET_ANCHOR_ROLE = 'composer-caret-anchor'
+const LARGE_FILE_WARNING_BYTES = 10 * 1024 * 1024
+const SUPPORTED_ATTACHMENT_FILE_EXTENSIONS = new Set([
+  'txt',
+  'md',
+  'json',
+  'csv',
+  'docx',
+  'pdf',
+  'ppt',
+  'pptx'
+])
+
+const getAttachmentFileExt = (name: string): string => {
+  const last =
+    String(name || '')
+      .split(/[\\/]/u)
+      .pop() || ''
+  const dotIndex = last.lastIndexOf('.')
+  return dotIndex >= 0
+    ? last
+        .slice(dotIndex + 1)
+        .trim()
+        .toLowerCase()
+    : ''
+}
+
+const isSupportedAttachmentFile = (name: string): boolean =>
+  SUPPORTED_ATTACHMENT_FILE_EXTENSIONS.has(getAttachmentFileExt(name))
 
 const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   mode,
@@ -86,6 +126,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   draftKey,
   contextUsage
 }) => {
+  const { message } = AntdApp.useApp()
   const editorRef = useRef<HTMLSpanElement | null>(null)
   const draftNodesRef = useRef<ComposerNode[]>([])
   const draftValueRef = useRef<ComposerDraftValue>(draftValue)
@@ -96,11 +137,14 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   const compositionGuardTimeoutRef = useRef<number | null>(null)
   const isComposingRef = useRef(false)
   const compositionJustEndedRef = useRef(false)
+  const attachmentPreviewUrlsRef = useRef<Record<string, string>>({})
   const [mentionQuery, setMentionQuery] = useState<string | null>(null)
   const [mentionOptions, setMentionOptions] = useState<SelectedReference[]>([])
   const [mentionLoading, setMentionLoading] = useState(false)
   const [mentionActiveIndex, setMentionActiveIndex] = useState(0)
   const [hasContent, setHasContent] = useState(false)
+  const [previewImage, setPreviewImage] = useState<ChatAttachment | null>(null)
+  const [attachmentPreviewUrls, setAttachmentPreviewUrls] = useState<Record<string, string>>({})
 
   const selectedWorkspace = useMemo(
     () => workspaces.find((workspace) => workspace.id === selectedWorkspaceId) || null,
@@ -109,6 +153,11 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
 
   useEffect(() => {
     draftValueRef.current = draftValue
+    setHasContent(
+      draftValue.contentNodes.length > 0 ||
+        Boolean(draftValue.input.trim()) ||
+        draftValue.attachments.length > 0
+    )
   }, [draftValue])
 
   const closeMention = useCallback(() => {
@@ -174,7 +223,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
       draftNodesRef.current = nodes
       renderComposerNodesToEditor(editor, nodes)
       ensureEditorHasCaretTarget()
-      setHasContent(nodes.length > 0)
+      setHasContent(nodes.length > 0 || draftValueRef.current.attachments.length > 0)
       if (options?.restoreCaret && document.activeElement === editor) {
         moveCaretToEnd(editor)
       }
@@ -217,6 +266,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     draftNodesRef.current = nodes
     setHasContent(nodes.length > 0)
     const draft = extractComposerDraftValue(nodes)
+    draft.attachments = draftValueRef.current.attachments || []
     rememberScopes(nodes)
     onDraftChange(draft)
   }, [onDraftChange, rememberScopes, stripCaretPlaceholderFromEditor])
@@ -485,10 +535,101 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     restoreCaretToEnd()
   }
 
+  const updateAttachments = useCallback(
+    (nextAttachments: ChatAttachment[]): void => {
+      const current = draftValueRef.current
+      const nextDraft: ComposerDraftValue = {
+        ...current,
+        attachments: nextAttachments
+      }
+      draftValueRef.current = nextDraft
+      setHasContent(
+        nextDraft.contentNodes.length > 0 ||
+          Boolean(nextDraft.input.trim()) ||
+          nextDraft.attachments.length > 0
+      )
+      onDraftChange(nextDraft)
+    },
+    [onDraftChange]
+  )
+
+  const appendAttachments = useCallback(
+    (nextItems: ChatAttachment[]): void => {
+      if (nextItems.length === 0) return
+      const accepted: ChatAttachment[] = []
+      nextItems.forEach((item) => {
+        if (item.kind === 'file' && !isSupportedAttachmentFile(item.name)) {
+          message.warning('暂不支持该文件格式')
+          return
+        }
+        if (item.kind === 'file' && Number(item.size || 0) > LARGE_FILE_WARNING_BYTES) {
+          message.warning('文件过大，建议放到工作空间索引里使用')
+        }
+        accepted.push(item)
+      })
+      if (accepted.length === 0) return
+      updateAttachments([...(draftValueRef.current.attachments || []), ...accepted])
+    },
+    [message, updateAttachments]
+  )
+
+  const removeAttachment = useCallback(
+    (attachmentId: string): void => {
+      updateAttachments(
+        (draftValueRef.current.attachments || []).filter((item) => item.id !== attachmentId)
+      )
+    },
+    [updateAttachments]
+  )
+
+  const handlePickImages = useCallback(async (): Promise<void> => {
+    const response = await window.api.attachmentPickImages()
+    if (response.error) message.warning(response.error)
+    if (!response.canceled) appendAttachments(response.items)
+    focusEditorAfterControlChange()
+  }, [appendAttachments, focusEditorAfterControlChange, message])
+
+  const handlePickFiles = useCallback(async (): Promise<void> => {
+    const response = await window.api.attachmentPickFiles()
+    if (response.error) message.warning(response.error)
+    if (!response.canceled) appendAttachments(response.items)
+    focusEditorAfterControlChange()
+  }, [appendAttachments, focusEditorAfterControlChange, message])
+
+  const createAttachmentFromClipboardFile = useCallback(async (file: File) => {
+    const unsafePath = (file as File & { path?: string }).path
+    if (unsafePath) {
+      return {
+        id: crypto.randomUUID(),
+        kind: file.type.startsWith('image/') ? 'image' : 'file',
+        name: file.name || unsafePath.split(/[\\/]/u).pop() || '附件',
+        path: unsafePath,
+        mimeType: file.type,
+        size: file.size,
+        status: 'ready' as const
+      }
+    }
+    const saved = await window.api.attachmentSaveTempFile({
+      name: file.name || (file.type.startsWith('image/') ? 'clipboard.png' : 'clipboard-file'),
+      bytes: new Uint8Array(await file.arrayBuffer()),
+      mimeType: file.type,
+      kind: file.type.startsWith('image/') ? 'image' : 'file'
+    })
+    return saved.attachment || null
+  }, [])
+
   const handleEditorPaste = (event: React.ClipboardEvent<HTMLSpanElement>): void => {
-    event.preventDefault()
+    const files = Array.from(event.clipboardData.files || [])
+    if (files.length > 0) {
+      event.preventDefault()
+      void Promise.all(files.map(createAttachmentFromClipboardFile)).then((items) => {
+        appendAttachments(items.filter((item): item is ChatAttachment => Boolean(item)))
+      })
+      return
+    }
     const pastedText = event.clipboardData.getData('text/plain')
     if (!pastedText) return
+    event.preventDefault()
     insertTextAtSelection(pastedText)
   }
 
@@ -626,6 +767,70 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
       })),
     [activeModelConfig, remoteModels]
   )
+  const attachmentMenuItems = useMemo(
+    () => [
+      {
+        key: 'image',
+        label: '图片',
+        icon: <HiPhoto className="h-4 w-4" />
+      },
+      {
+        key: 'file',
+        label: '文件',
+        icon: <HiPaperClip className="h-4 w-4" />
+      }
+    ],
+    []
+  )
+  const currentAttachments = useMemo(() => draftValue.attachments || [], [draftValue.attachments])
+
+  useEffect(() => {
+    const imageAttachments = currentAttachments.filter((attachment) => attachment.kind === 'image')
+    const imageIds = new Set(imageAttachments.map((attachment) => attachment.id))
+    const nextUrls = { ...attachmentPreviewUrlsRef.current }
+    let changed = false
+
+    Object.entries(nextUrls).forEach(([attachmentId, url]) => {
+      if (imageIds.has(attachmentId)) return
+      URL.revokeObjectURL(url)
+      delete nextUrls[attachmentId]
+      changed = true
+    })
+
+    if (changed) {
+      attachmentPreviewUrlsRef.current = nextUrls
+      setAttachmentPreviewUrls(nextUrls)
+    }
+
+    imageAttachments.forEach((attachment) => {
+      if (attachmentPreviewUrlsRef.current[attachment.id]) return
+      void window.api
+        .readFile(attachment.path)
+        .then((bytes) => {
+          if (attachmentPreviewUrlsRef.current[attachment.id]) return
+          const arrayBuffer = new ArrayBuffer(bytes.byteLength)
+          new Uint8Array(arrayBuffer).set(bytes)
+          const blob = new Blob([arrayBuffer], { type: attachment.mimeType || 'image/png' })
+          const url = URL.createObjectURL(blob)
+          attachmentPreviewUrlsRef.current = {
+            ...attachmentPreviewUrlsRef.current,
+            [attachment.id]: url
+          }
+          setAttachmentPreviewUrls(attachmentPreviewUrlsRef.current)
+        })
+        .catch(() => {
+          // Sending still uses the original file path; preview failure should not block it.
+        })
+    })
+  }, [currentAttachments])
+
+  useEffect(() => {
+    return () => {
+      Object.values(attachmentPreviewUrlsRef.current).forEach((url) => URL.revokeObjectURL(url))
+      attachmentPreviewUrlsRef.current = {}
+    }
+  }, [])
+
   const sendButtonDisabled = showCancel ? cancelling : loading || !canSubmit
   const sendButtonTooltip = showCancel
     ? cancelling
@@ -665,6 +870,73 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
           focusEditor()
         }}
       >
+        {currentAttachments.length > 0 ? (
+          <div className="mb-2 flex max-h-[116px] flex-wrap gap-2 overflow-y-auto pr-1">
+            {currentAttachments.map((attachment) => (
+              <button
+                key={attachment.id}
+                type="button"
+                className="group relative flex max-w-[260px] items-center gap-2 rounded-[8px] border border-[#E5E4E0] bg-white px-2 py-1.5 text-left shadow-[0_1px_2px_rgba(15,15,15,0.04)] transition hover:border-[#D8D7D3]"
+                data-testid={`${workbenchSelectors.attachmentCardPrefix}-${attachment.id}`}
+                onClick={() => {
+                  if (attachment.kind === 'image') {
+                    setPreviewImage(attachment)
+                    return
+                  }
+                  void window.api.openPath(attachment.path)
+                }}
+                title={attachment.name}
+              >
+                {attachment.kind === 'image' ? (
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-[7px] border border-[#EEEEEC] bg-[#F4F4F2] text-[#787774]">
+                    {attachmentPreviewUrls[attachment.id] ? (
+                      <img
+                        src={attachmentPreviewUrls[attachment.id]}
+                        alt={attachment.name}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <HiPhoto className="h-5 w-5" />
+                    )}
+                  </span>
+                ) : (
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[7px] bg-[#F4F4F2] text-[#787774]">
+                    <HiDocumentText className="h-5 w-5" />
+                  </span>
+                )}
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[13px] font-medium leading-5 text-[#37352F]">
+                    {attachment.name}
+                  </span>
+                  <span className="block text-[12px] leading-4 text-[#787774]">
+                    {attachment.kind === 'image' ? '图片' : '文件'}
+                  </span>
+                </span>
+                <span
+                  role="button"
+                  tabIndex={0}
+                  aria-label="移除附件"
+                  className="absolute -right-1.5 -top-1.5 hidden h-5 w-5 items-center justify-center rounded-full bg-[#37352F] text-white shadow group-hover:flex"
+                  data-testid={`${workbenchSelectors.attachmentRemoveButtonPrefix}-${attachment.id}`}
+                  onClick={(event) => {
+                    event.preventDefault()
+                    event.stopPropagation()
+                    removeAttachment(attachment.id)
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key !== 'Enter' && event.key !== ' ') return
+                    event.preventDefault()
+                    event.stopPropagation()
+                    removeAttachment(attachment.id)
+                  }}
+                >
+                  <HiXMark className="h-3.5 w-3.5" />
+                </span>
+              </button>
+            ))}
+          </div>
+        ) : null}
+
         <div className="relative min-h-[46px]">
           <span
             ref={editorRef}
@@ -724,6 +996,32 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
 
         <div className="mx-[-4px] mt-1.5 flex items-center justify-between gap-2 px-1">
           <div className="flex shrink-0 items-center gap-1.5 text-[#91918E]">
+            <Dropdown
+              trigger={['click']}
+              menu={{
+                items: attachmentMenuItems,
+                onClick: ({ key }) => {
+                  if (key === 'image') {
+                    void handlePickImages()
+                    return
+                  }
+                  if (key === 'file') {
+                    void handlePickFiles()
+                  }
+                }
+              }}
+            >
+              <button
+                type="button"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-full text-[#787774] transition hover:bg-[#F4F4F2] hover:text-[#37352F]"
+                aria-label="添加附件"
+                data-testid={workbenchSelectors.attachmentAddButton}
+                onClick={(event) => event.preventDefault()}
+              >
+                <HiPlus className="h-5 w-5" />
+              </button>
+            </Dropdown>
+
             <WorkbenchSelect
               value={mode}
               options={modeOptions}
@@ -858,6 +1156,32 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
           {composerHint}
         </div>
       ) : null}
+
+      <Modal
+        open={Boolean(previewImage)}
+        footer={null}
+        centered
+        width="min(860px, 92vw)"
+        onCancel={() => setPreviewImage(null)}
+        title={previewImage?.name}
+        data-testid={workbenchSelectors.attachmentPreviewModal}
+      >
+        {previewImage ? (
+          <div className="flex max-h-[72vh] items-center justify-center overflow-hidden rounded-[8px] bg-[#F7F7F5]">
+            {attachmentPreviewUrls[previewImage.id] ? (
+              <img
+                src={attachmentPreviewUrls[previewImage.id]}
+                alt={previewImage.name}
+                className="max-h-[72vh] max-w-full object-contain"
+              />
+            ) : (
+              <div className="flex h-[320px] w-full items-center justify-center text-[#787774]">
+                <HiPhoto className="h-8 w-8" />
+              </div>
+            )}
+          </div>
+        ) : null}
+      </Modal>
 
       {showWorkspaceSelector ? (
         <div className="mt-2 flex min-w-0 items-center px-1">

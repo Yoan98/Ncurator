@@ -85,8 +85,11 @@ const api: DesktopApi = {
     }
     return ipcRenderer.invoke('open-external', url)
   },
-  openPath: (filePath: string): Promise<{ success: boolean; error?: string }> =>
-    ipcRenderer.invoke('open-path', filePath),
+  openPath: (filePath: string): Promise<{ success: boolean; error?: string }> => {
+    const safePath = String(filePath || '').trim()
+    emitE2EIpcCall('openPath', safePath)
+    return ipcRenderer.invoke('open-path', filePath)
+  },
   openPathWithApplication: (payload) => ipcRenderer.invoke('open-path-with-application', payload),
   revealPath: (filePath: string): Promise<{ success: boolean; error?: string }> => {
     const safePath = String(filePath || '').trim()
@@ -253,6 +256,11 @@ const api: DesktopApi = {
   },
   getEmbeddingStatus: () => ipcRenderer.invoke('get-embedding-status'),
   readFile: (filePath: string): Promise<Uint8Array> => ipcRenderer.invoke('read-file', filePath),
+  attachmentPickImages: () => ipcRenderer.invoke('attachment-pick-images'),
+  attachmentPickFiles: () => ipcRenderer.invoke('attachment-pick-files'),
+  attachmentSaveTempFile: (payload) => ipcRenderer.invoke('attachment-save-temp-file', payload),
+  attachmentParseFile: (attachment) => ipcRenderer.invoke('attachment-parse-file', attachment),
+  attachmentRecognizeImage: (payload) => ipcRenderer.invoke('attachment-recognize-image', payload),
 
   // Chat & LLM
   chatSessionList: () => ipcRenderer.invoke('chat-session-list'),

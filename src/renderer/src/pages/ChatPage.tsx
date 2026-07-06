@@ -1,5 +1,5 @@
 ﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { App, Button, Modal, Spin } from 'antd'
+import { App as AntdApp, Button, Modal, Spin } from 'antd'
 import {
   HiArrowUp,
   HiCheck,
@@ -20,6 +20,7 @@ import type {
   AiFileChangeRecord,
   AiRunEvent,
   AiRunRecord,
+  ChatAttachment,
   ChatMessage,
   ChatMessageContentNode,
   ChatSession,
@@ -484,14 +485,18 @@ const appendMessagesDedupe = (
 const createEmptyComposerDraft = (): ComposerDraftValue => ({
   input: '',
   contentNodes: [],
-  selectedReferences: []
+  selectedReferences: [],
+  attachments: []
 })
 
 const isComposerDraftEmpty = (draft: ComposerDraftValue): boolean =>
-  !draft.input.trim() && draft.contentNodes.length === 0 && draft.selectedReferences.length === 0
+  !draft.input.trim() &&
+  draft.contentNodes.length === 0 &&
+  draft.selectedReferences.length === 0 &&
+  draft.attachments.length === 0
 
 const ChatPage: React.FC = () => {
-  const { message } = App.useApp()
+  const { message } = AntdApp.useApp()
   const navigate = useNavigate()
   const [sessions, setSessions] = useState<ChatSession[]>([])
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
@@ -510,6 +515,7 @@ const ChatPage: React.FC = () => {
   const [cancellingRun, setCancellingRun] = useState(false)
   const [composerContentNodes, setComposerContentNodes] = useState<ChatMessageContentNode[]>([])
   const [selectedReferences, setSelectedReferences] = useState<SelectedReference[]>([])
+  const [attachments, setAttachments] = useState<ChatAttachment[]>([])
   const [workspaces, setWorkspaces] = useState<WorkspaceSource[]>([])
   const [workspacesLoaded, setWorkspacesLoaded] = useState(false)
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(() =>
@@ -570,9 +576,10 @@ const ChatPage: React.FC = () => {
     () => ({
       input,
       contentNodes: composerContentNodes,
-      selectedReferences
+      selectedReferences,
+      attachments
     }),
-    [composerContentNodes, input, selectedReferences]
+    [attachments, composerContentNodes, input, selectedReferences]
   )
 
   const saveComposerDraftForSession = useCallback(
@@ -591,6 +598,7 @@ const ChatPage: React.FC = () => {
     setInput(draft.input)
     setComposerContentNodes(draft.contentNodes)
     setSelectedReferences(draft.selectedReferences)
+    setAttachments(draft.attachments || [])
     composerDraftVersionRef.current += 1
     setComposerDraftKey(`${reason}:${composerDraftVersionRef.current}`)
   }, [])
@@ -605,6 +613,35 @@ const ChatPage: React.FC = () => {
   const selectedWorkspace = useMemo(
     () => workspaces.find((workspace) => workspace.id === selectedWorkspaceId) || null,
     [selectedWorkspaceId, workspaces]
+  )
+
+  const processAttachmentsForSubmit = useCallback(
+    async (items: ChatAttachment[]): Promise<ChatAttachment[] | null> => {
+      const processed: ChatAttachment[] = []
+      for (const item of items) {
+        if (item.kind === 'image') {
+          const response = await window.api.attachmentRecognizeImage({
+            attachment: item,
+            modelName: selectedModelName || ''
+          })
+          if (!response.success || !response.attachment) {
+            message.warning(response.error || '当前模型不支持图像识别')
+            return null
+          }
+          processed.push(response.attachment)
+          continue
+        }
+
+        const response = await window.api.attachmentParseFile(item)
+        if (!response.success || !response.attachment) {
+          message.warning(response.error || '文件解析失败')
+          return null
+        }
+        processed.push(response.attachment)
+      }
+      return processed
+    },
+    [message, selectedModelName]
   )
 
   useEffect(() => {
@@ -1692,6 +1729,13 @@ const ChatPage: React.FC = () => {
     const userQuery = input.trim()
     const submittedContentNodes = composerContentNodes
     const submittedReferences = selectedReferences
+    const submittedAttachments = attachments
+    setLoading(true)
+    const processedAttachments = await processAttachmentsForSubmit(submittedAttachments)
+    if (!processedAttachments) {
+      setLoading(false)
+      return
+    }
     const optimisticUserMessage: ChatMessage = {
       id: `local-user-${crypto.randomUUID()}`,
       session_id: currentSessionId,
@@ -1700,6 +1744,7 @@ const ChatPage: React.FC = () => {
       timestamp: Date.now(),
       contentNodes: submittedContentNodes.length > 0 ? submittedContentNodes : undefined,
       selectedReferences: submittedReferences.length > 0 ? submittedReferences : undefined,
+      attachments: processedAttachments.length > 0 ? processedAttachments : undefined,
       error: false
     }
     const optimisticAssistantMessage: ChatMessage = {
@@ -1734,7 +1779,6 @@ const ChatPage: React.FC = () => {
     applyComposerDraft(createEmptyComposerDraft(), `clear:${currentSessionId}`)
     shouldAutoScrollRef.current = true
     scrollToBottom(true)
-    setLoading(true)
     setCancellingRun(false)
     setPendingApprovalBatch(null)
     setApprovalSubmitting(false)
@@ -1754,6 +1798,7 @@ const ChatPage: React.FC = () => {
         input: userQuery,
         contentNodes: submittedContentNodes.length > 0 ? submittedContentNodes : undefined,
         selectedReferences: submittedReferences.length > 0 ? submittedReferences : undefined,
+        attachments: processedAttachments.length > 0 ? processedAttachments : undefined,
         modelName: selectedModelName,
         workspace: createWorkspaceBinding(selectedWorkspace)
       })
@@ -2086,6 +2131,22 @@ const ChatPage: React.FC = () => {
       <div key={messageItem.id} className="flex justify-end">
         <div className="min-w-0 max-w-[66%]">
           <div className="min-w-0 rounded-[22px] bg-[#F4F4F2] px-4 py-2.5 text-[14px] leading-6 text-[#37352F] [overflow-wrap:anywhere]">
+            {messageItem.attachments && messageItem.attachments.length > 0 ? (
+              <div className="mb-2 flex flex-wrap gap-1.5">
+                {messageItem.attachments.map((attachment) => (
+                  <button
+                    key={attachment.id}
+                    type="button"
+                    className="inline-flex max-w-[220px] items-center gap-1.5 rounded-[7px] bg-white/80 px-2 py-1 text-[12px] leading-4 text-[#37352F] transition hover:bg-white"
+                    title={attachment.name}
+                    onClick={() => void window.api.openPath(attachment.path)}
+                  >
+                    {attachment.kind === 'image' ? '图片' : '文件'}
+                    <span className="truncate">{attachment.name}</span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
             <div
               className="min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere]"
               data-testid={workbenchSelectors.userMessageReferences}
@@ -2153,6 +2214,7 @@ const ChatPage: React.FC = () => {
       setInput(draft.input)
       setComposerContentNodes(draft.contentNodes)
       setSelectedReferences(draft.selectedReferences)
+      setAttachments(draft.attachments || [])
       saveComposerDraftForSession(currentSessionId, draft)
     },
     [currentSessionId, saveComposerDraftForSession]

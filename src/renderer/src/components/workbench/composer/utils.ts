@@ -74,7 +74,8 @@ export const extractComposerDraftValue = (nodes: ComposerNode[]): ComposerDraftV
   return {
     input,
     contentNodes: normalizedContentNodes,
-    selectedReferences: Array.from(scopeMap.values())
+    selectedReferences: Array.from(scopeMap.values()),
+    attachments: []
   }
 }
 

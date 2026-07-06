@@ -22,6 +22,7 @@ type ChatMessageRow = {
   timestamp?: unknown
   content_nodes_json?: unknown
   selected_references_json?: unknown
+  attachments_json?: unknown
   artifacts_json?: unknown
   error?: unknown
 }
@@ -62,16 +63,22 @@ const parseContentNodes = (value: unknown): ChatMessage['contentNodes'] => {
   }
 }
 
+const parseAttachments = (value: unknown): ChatMessage['attachments'] => {
+  if (!value) return undefined
+  try {
+    const parsed = JSON.parse(String(value))
+    return Array.isArray(parsed) ? parsed : undefined
+  } catch {
+    return undefined
+  }
+}
+
 export class ChatStore {
   public constructor(private readonly core: LanceDbCore) {}
 
   private async mergeById(tableName: string, row: Record<string, unknown>): Promise<void> {
     const table = await this.core.openTable(tableName)
-    await table
-      .mergeInsert('id')
-      .whenMatchedUpdateAll()
-      .whenNotMatchedInsertAll()
-      .execute([row])
+    await table.mergeInsert('id').whenMatchedUpdateAll().whenNotMatchedInsertAll().execute([row])
   }
 
   public async saveConversationMemory(
@@ -188,7 +195,10 @@ export class ChatStore {
 
   public async getChatSessions(): Promise<ChatSession[]> {
     const table = await this.core.openTable(LANCE_TABLES.CHAT_SESSION)
-    const results = await table.query().select(['id', 'title', 'created_at', 'workspace_id']).toArray()
+    const results = await table
+      .query()
+      .select(['id', 'title', 'created_at', 'workspace_id'])
+      .toArray()
     return results
       .map((r) => {
         const row = r as ChatSessionRow
@@ -228,6 +238,7 @@ export class ChatStore {
       selected_references_json: message.selectedReferences
         ? JSON.stringify(message.selectedReferences)
         : undefined,
+      attachments_json: message.attachments ? JSON.stringify(message.attachments) : undefined,
       error: message.error,
       artifacts_json: message.artifacts ? JSON.stringify(message.artifacts) : undefined
     })
@@ -246,6 +257,7 @@ export class ChatStore {
         'timestamp',
         'content_nodes_json',
         'selected_references_json',
+        'attachments_json',
         'artifacts_json',
         'error'
       ])
@@ -276,6 +288,7 @@ export class ChatStore {
         'timestamp',
         'content_nodes_json',
         'selected_references_json',
+        'attachments_json',
         'artifacts_json',
         'error'
       ])
@@ -300,6 +313,7 @@ export class ChatStore {
           timestamp: Number(row.timestamp || 0),
           contentNodes: parseContentNodes(row.content_nodes_json),
           selectedReferences: parseSelectedReferences(row.selected_references_json),
+          attachments: parseAttachments(row.attachments_json),
           artifacts: parseArtifacts(row.artifacts_json),
           error: typeof row.error === 'boolean' ? row.error : undefined
         }

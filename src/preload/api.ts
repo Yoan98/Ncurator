@@ -11,6 +11,11 @@ import type {
   AppUpdateActionResponse,
   AppUpdateSnapshot,
   ChatMessage,
+  ChatAttachment,
+  AttachmentPickResponse,
+  AttachmentProcessResponse,
+  AttachmentSaveTempRequest,
+  AttachmentRecognizeImageRequest,
   ChatRunEventsRequest,
   ChatRunEventsResponse,
   ChatSession,
@@ -204,6 +209,13 @@ export type DesktopApi = {
   getModels: () => Promise<ModelInfo[]>
   getEmbeddingStatus: () => Promise<'uninitialized' | 'initializing' | 'ready' | 'error'>
   readFile: (filePath: string) => Promise<Uint8Array>
+  attachmentPickImages: () => Promise<AttachmentPickResponse>
+  attachmentPickFiles: () => Promise<AttachmentPickResponse>
+  attachmentSaveTempFile: (payload: AttachmentSaveTempRequest) => Promise<AttachmentProcessResponse>
+  attachmentParseFile: (attachment: ChatAttachment) => Promise<AttachmentProcessResponse>
+  attachmentRecognizeImage: (
+    payload: AttachmentRecognizeImageRequest
+  ) => Promise<AttachmentProcessResponse>
   chatSessionList: () => Promise<ChatSession[]>
   chatSessionSave: (session: ChatSession) => Promise<{ success: boolean; error?: string }>
   chatSessionDelete: (id: string) => Promise<{ success: boolean; error?: string }>

@@ -1,4 +1,8 @@
-import type { ChatMessageContentNode, SelectedReference } from '../../../../../shared/types'
+import type {
+  ChatAttachment,
+  ChatMessageContentNode,
+  SelectedReference
+} from '../../../../../shared/types'
 
 export type ComposerTextNode = {
   id: string
@@ -18,4 +22,5 @@ export type ComposerDraftValue = {
   input: string
   contentNodes: ChatMessageContentNode[]
   selectedReferences: SelectedReference[]
+  attachments: ChatAttachment[]
 }

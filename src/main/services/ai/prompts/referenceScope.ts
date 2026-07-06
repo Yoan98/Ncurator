@@ -1,4 +1,4 @@
-import type { KbAvailability, SelectedReference } from '../../../../shared/types'
+import type { ChatAttachment, KbAvailability, SelectedReference } from '../../../../shared/types'
 import type { AiReferenceScope, AiWorkspaceBinding } from '../types'
 
 const KB_AVAILABILITY_LABEL: Record<KbAvailability, string> = {
@@ -30,13 +30,21 @@ const renderSelectedReference = (reference: SelectedReference, index: number): s
 export const buildReferenceScope = (input: {
   workspace: AiWorkspaceBinding
   selectedReferences?: SelectedReference[]
+  attachments?: ChatAttachment[]
 }): AiReferenceScope => {
   const selectedReferences = input.selectedReferences || []
 
   return {
     workspace: input.workspace,
-    selectedReferences
+    selectedReferences,
+    attachments: input.attachments || []
   }
+}
+
+const renderAttachment = (attachment: ChatAttachment, index: number): string => {
+  const contentInfo = String(attachment.contentInfo || '').trim() || '无可用内容信息。'
+  return `第 ${index} 个附件：${attachment.name}
+- 内容信息：${contentInfo}`
 }
 
 export const renderReferenceScopeText = (scope: AiReferenceScope): string => {
@@ -58,9 +66,18 @@ ${scope.selectedReferences.map((reference, index) => renderSelectedReference(ref
       : `用户已选资料：
 - 当前没有用户显式选择的参考资料。`
 
+  const attachmentsText =
+    scope.attachments.length > 0
+      ? `用户选择的附件：
+${scope.attachments.map((attachment, index) => renderAttachment(attachment, index + 1)).join('\n\n')}`
+      : `用户选择的附件：
+- 当前没有用户选择的附件。`
+
   return `${workspaceText}
 
 ${fieldGuideText}
 
-${selectedReferencesText}`
+${selectedReferencesText}
+
+${attachmentsText}`
 }

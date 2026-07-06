@@ -1,6 +1,6 @@
 ﻿import React from 'react'
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { Layout, ConfigProvider, theme } from 'antd'
+import { App as AntdApp, Layout, ConfigProvider, theme } from 'antd'
 import ConversationWorkbenchPage from './pages/ConversationWorkbenchPage'
 import SettingsPage from './pages/SettingsPage'
 import TestPage from './pages/TestPage'
@@ -74,9 +74,12 @@ function App(): React.JSX.Element {
         }
       }}
     >
-      <HashRouter>
-        <MainLayout />
-      </HashRouter>
+      <AntdApp>
+        <HashRouter>
+          <MainLayout />
+          <NotificationCenter />
+        </HashRouter>
+      </AntdApp>
     </ConfigProvider>
   )
 }
@@ -93,7 +96,6 @@ const MainLayout: React.FC = () => (
         <Route path="/test" element={<TestPage />} />
       </Routes>
     </Content>
-    <NotificationCenter />
   </Layout>
 )
 

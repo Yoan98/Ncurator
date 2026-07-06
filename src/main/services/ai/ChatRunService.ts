@@ -195,14 +195,14 @@ export class ChatRunService {
     return response
   }
 
-  public async getSessionRunSummaries(
-    sessionId: string
-  ): Promise<ChatSessionRunSummariesResponse> {
+  public async getSessionRunSummaries(sessionId: string): Promise<ChatSessionRunSummariesResponse> {
     const startedAt = Date.now()
     const normalizedSessionId = String(sessionId || '').trim()
     if (!normalizedSessionId) return { runs: [] }
     const runs = await this.deps.aiRunStore.listRunsBySession(normalizedSessionId)
-    const response = { runs: await Promise.all(runs.map((run) => this.buildRunSnapshot(run, false))) }
+    const response = {
+      runs: await Promise.all(runs.map((run) => this.buildRunSnapshot(run, false)))
+    }
     this.logSlowChatQuery('chat-session-run-summaries', startedAt, {
       sessionId: normalizedSessionId,
       runs: response.runs.length
@@ -356,6 +356,7 @@ export class ChatRunService {
   ): Promise<ChatSubmitResponse> {
     const createdAt = Date.now()
     const normalizedReferences = normalizeSelectedReferences(payload.selectedReferences)
+    const attachments = Array.isArray(payload.attachments) ? payload.attachments : []
     const userMessage: ChatMessage = {
       id: uuidv4(),
       session_id: payload.sessionId,
@@ -363,7 +364,8 @@ export class ChatRunService {
       content: payload.input,
       timestamp: createdAt,
       contentNodes: payload.contentNodes,
-      selectedReferences: normalizedReferences
+      selectedReferences: normalizedReferences,
+      attachments
     }
     await this.saveUserMessageAndTitle(userMessage)
 
@@ -409,6 +411,7 @@ export class ChatRunService {
     payload: ChatSubmitRequest & { mode: 'ai'; sessionId: string; input: string }
   ): Promise<ChatSubmitResponse> {
     const normalizedReferences = normalizeSelectedReferences(payload.selectedReferences)
+    const attachments = Array.isArray(payload.attachments) ? payload.attachments : []
     const normalizedWorkspace = normalizeWorkspaceBinding(payload.workspace)
     const modelName = String(payload.modelName || '').trim()
     if (!modelName) {
@@ -440,6 +443,7 @@ export class ChatRunService {
       timestamp: createdAt,
       contentNodes: payload.contentNodes,
       selectedReferences: normalizedReferences,
+      attachments,
       error: false
     }
     const assistantMessage: ChatMessage = {
@@ -457,6 +461,7 @@ export class ChatRunService {
       status: 'running',
       input: payload.input,
       selectedReferences: normalizedReferences,
+      attachments,
       workspace: normalizedWorkspace,
       modelName,
       partialAnswer: '',
@@ -540,6 +545,7 @@ export class ChatRunService {
           sessionId: run.sessionId,
           input: run.input,
           selectedReferences: run.selectedReferences,
+          attachments: run.attachments,
           modelName: run.modelName,
           workspace: run.workspace
         },

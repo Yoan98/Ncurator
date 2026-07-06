@@ -512,6 +512,45 @@ export type ChatMessageContentNode =
       reference: SelectedReference
     }
 
+export type ChatAttachmentKind = 'image' | 'file'
+export type ChatAttachmentStatus = 'ready' | 'processing' | 'failed'
+
+export type ChatAttachment = {
+  id: string
+  kind: ChatAttachmentKind
+  name: string
+  path: string
+  mimeType?: string
+  size?: number
+  status: ChatAttachmentStatus
+  contentInfo?: string
+  error?: string
+}
+
+export type AttachmentPickResponse = {
+  canceled: boolean
+  items: ChatAttachment[]
+  error?: string
+}
+
+export type AttachmentProcessResponse = {
+  success: boolean
+  attachment?: ChatAttachment
+  error?: string
+}
+
+export type AttachmentSaveTempRequest = {
+  name: string
+  bytes: Uint8Array
+  mimeType?: string
+  kind?: ChatAttachmentKind
+}
+
+export type AttachmentRecognizeImageRequest = {
+  attachment: ChatAttachment
+  modelName: string
+}
+
 export interface ChatMessage {
   id: string
   session_id: string
@@ -520,6 +559,7 @@ export interface ChatMessage {
   timestamp: number
   contentNodes?: ChatMessageContentNode[]
   selectedReferences?: SelectedReference[]
+  attachments?: ChatAttachment[]
   artifacts?: AiArtifactRef[]
   error?: boolean
 }
@@ -803,6 +843,7 @@ export type ChatSubmitRequest = {
   input: string
   contentNodes?: ChatMessageContentNode[]
   selectedReferences?: SelectedReference[]
+  attachments?: ChatAttachment[]
   modelName?: string
   workspace?: WorkspaceRuntimeBinding
   searchDocumentIds?: string[]
@@ -816,6 +857,7 @@ export type AiRunRecord = {
   status: AiRunStatus
   input: string
   selectedReferences?: SelectedReference[]
+  attachments?: ChatAttachment[]
   workspace?: WorkspaceRuntimeBinding
   modelName?: string
   partialAnswer: string

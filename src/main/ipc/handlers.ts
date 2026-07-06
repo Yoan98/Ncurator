@@ -9,6 +9,7 @@ import { StorageService } from '../services/storage/StorageService'
 import { ModelService } from '../services/model/ModelService'
 import { VectorModelDownloadService } from '../services/model/VectorModelDownloadService'
 import { fetchLlmRemoteModels } from '../services/llm/modelCatalog'
+import { AttachmentService } from '../services/attachments/AttachmentService'
 import { ChatRunService } from '../services/ai/ChatRunService'
 import { AiFileChangeService } from '../services/ai/fileChanges/AiFileChangeService'
 import { getAiContextUsage } from '../services/ai/contextUsage'
@@ -40,6 +41,10 @@ import type {
   ChatSessionRunSummariesResponse,
   ChatSubmitRequest,
   ChatSubmitResponse,
+  AttachmentPickResponse,
+  AttachmentProcessResponse,
+  AttachmentSaveTempRequest,
+  AttachmentRecognizeImageRequest,
   AiRuntimeSettings,
   LLMConfig,
   LlmModelListResponse,
@@ -143,6 +148,7 @@ export function registerHandlers(services: {
   const workspaceIndexJobStore = storageService.workspaceIndexJob
   const aiFileChangeService = new AiFileChangeService(storageService.aiFileChange)
   const docxApplyService = new DocxApplyService(storageService.docxApply, aiFileChangeService)
+  const attachmentService = new AttachmentService()
   const chatRunService = new ChatRunService({
     chatStore,
     aiRunStore,
@@ -1519,6 +1525,122 @@ export function registerHandlers(services: {
     }
   })
 
+  ipcMain.handle('attachment-pick-images', async (event): Promise<AttachmentPickResponse> => {
+    try {
+      const dialogOptions: OpenDialogOptions = {
+        title: '选择图片',
+        buttonLabel: '选择图片',
+        properties: ['openFile', 'multiSelections', 'dontAddToRecent'],
+        filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif'] }]
+      }
+      const ownerWindow = BrowserWindow.fromWebContents(event.sender)
+      const result = ownerWindow
+        ? await dialog.showOpenDialog(ownerWindow, dialogOptions)
+        : await dialog.showOpenDialog(dialogOptions)
+      if (result.canceled || result.filePaths.length === 0) return { canceled: true, items: [] }
+      return {
+        canceled: false,
+        items: result.filePaths.map((filePath) =>
+          attachmentService.createAttachmentFromPath({ filePath, kind: 'image' })
+        )
+      }
+    } catch (error) {
+      return { canceled: true, items: [], error: getErrorMessage(error) }
+    }
+  })
+
+  ipcMain.handle('attachment-pick-files', async (event): Promise<AttachmentPickResponse> => {
+    try {
+      const dialogOptions: OpenDialogOptions = {
+        title: '选择文件',
+        buttonLabel: '选择文件',
+        properties: ['openFile', 'multiSelections', 'dontAddToRecent'],
+        filters: [
+          {
+            name: 'Supported Files',
+            extensions: ['txt', 'md', 'json', 'csv', 'docx', 'pdf', 'ppt', 'pptx']
+          }
+        ]
+      }
+      const ownerWindow = BrowserWindow.fromWebContents(event.sender)
+      const result = ownerWindow
+        ? await dialog.showOpenDialog(ownerWindow, dialogOptions)
+        : await dialog.showOpenDialog(dialogOptions)
+      if (result.canceled || result.filePaths.length === 0) return { canceled: true, items: [] }
+      return {
+        canceled: false,
+        items: result.filePaths.map((filePath) =>
+          attachmentService.createAttachmentFromPath({ filePath, kind: 'file' })
+        )
+      }
+    } catch (error) {
+      return { canceled: true, items: [], error: getErrorMessage(error) }
+    }
+  })
+
+  ipcMain.handle(
+    'attachment-save-temp-file',
+    async (_event, payload: AttachmentSaveTempRequest): Promise<AttachmentProcessResponse> => {
+      try {
+        const bytes =
+          payload?.bytes instanceof Uint8Array
+            ? payload.bytes
+            : new Uint8Array(payload?.bytes || [])
+        if (!bytes.byteLength) return { success: false, error: '附件内容为空' }
+        const attachment = await attachmentService.saveTempAttachment({
+          name: payload.name,
+          bytes,
+          mimeType: payload.mimeType,
+          kind: payload.kind
+        })
+        return { success: true, attachment }
+      } catch (error) {
+        return { success: false, error: getErrorMessage(error) }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'attachment-parse-file',
+    async (_event, attachment): Promise<AttachmentProcessResponse> => {
+      try {
+        const parsed = await attachmentService.parseFileAttachment(attachment)
+        return parsed.status === 'failed'
+          ? { success: false, attachment: parsed, error: parsed.error || '文件解析失败' }
+          : { success: true, attachment: parsed }
+      } catch (error) {
+        return { success: false, error: getErrorMessage(error) }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'attachment-recognize-image',
+    async (
+      _event,
+      payload: AttachmentRecognizeImageRequest
+    ): Promise<AttachmentProcessResponse> => {
+      try {
+        const modelName = String(payload?.modelName || '').trim()
+        if (!modelName) return { success: false, error: '当前配置未获取到可用模型' }
+        const config = await llmStore.getActive()
+        if (!config) return { success: false, error: '未配置可用的大模型' }
+        const attachment = await attachmentService.recognizeImageAttachment({
+          attachment: payload.attachment,
+          config: {
+            ...config,
+            model_name: modelName
+          }
+        })
+        return attachment.status === 'failed'
+          ? { success: false, attachment, error: attachment.error || '当前模型不支持图像识别' }
+          : { success: true, attachment }
+      } catch (error) {
+        return { success: false, error: getErrorMessage(error) || '当前模型不支持图像识别' }
+      }
+    }
+  )
+
   ipcMain.handle('workspace-list', async (): Promise<WorkspaceListResponse> => {
     try {
       const workspaces = await workspaceStore.listWorkspaces()
@@ -2397,17 +2519,14 @@ export function registerHandlers(services: {
     }
   )
 
-  ipcMain.handle(
-    'chat-run-events-get',
-    async (_event, payload: ChatRunEventsRequest) => {
-      try {
-        return await chatRunService.getRunEvents(payload?.runId)
-      } catch (e: unknown) {
-        console.error('[CHAT-RUN-EVENTS-GET] Error:', e)
-        return { events: [] }
-      }
+  ipcMain.handle('chat-run-events-get', async (_event, payload: ChatRunEventsRequest) => {
+    try {
+      return await chatRunService.getRunEvents(payload?.runId)
+    } catch (e: unknown) {
+      console.error('[CHAT-RUN-EVENTS-GET] Error:', e)
+      return { events: [] }
     }
-  )
+  })
 
   ipcMain.handle(
     'chat-session-snapshot-get',

@@ -51,4 +51,46 @@ describe('ai unit selected context workspace path', () => {
     expect(text).toContain('文档知识库状态：已索引')
     expect(text).toContain('知识库文档ID：doc-1')
   })
+
+  it('renders user selected attachments with compact content-info template', () => {
+    const text = renderReferenceScopeText(
+      buildReferenceScope({
+        workspace: {
+          workspaceId: 'workspace-1',
+          workspaceName: 'display-name-only',
+          rootPath: '/tmp/real-workspace-root'
+        },
+        selectedReferences: [],
+        attachments: [
+          {
+            id: 'att-1',
+            kind: 'image',
+            name: 'screen.png',
+            path: '/tmp/screen.png',
+            status: 'ready',
+            contentInfo: '页面中有一个上传入口。'
+          },
+          {
+            id: 'att-2',
+            kind: 'file',
+            name: 'README.md',
+            path: '/tmp/README.md',
+            status: 'ready',
+            contentInfo: '项目说明正文。'
+          }
+        ]
+      })
+    )
+
+    expect(text).toContain('用户选择的附件：')
+    expect(text).toContain('第 1 个附件：screen.png')
+    expect(text).toContain('- 内容信息：页面中有一个上传入口。')
+    expect(text).toContain('第 2 个附件：README.md')
+    expect(text).toContain('- 内容信息：项目说明正文。')
+    expect(text).not.toContain('来源：')
+    expect(text).not.toContain('类型：图片')
+    expect(text).not.toContain('格式：')
+    expect(text).not.toContain('大小：')
+    expect(text).not.toContain('识别内容')
+  })
 })
