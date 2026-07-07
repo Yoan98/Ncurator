@@ -29,6 +29,12 @@ def resolve_playwright_local_browsers_path() -> Path:
     return Path(playwright.__file__).resolve().parent / "driver" / "package" / ".local-browsers"
 
 
+def resolve_playwright_driver_path() -> Path:
+    import playwright
+
+    return Path(playwright.__file__).resolve().parent / "driver"
+
+
 def assert_playwright_browser_bundle(local_browsers_path: Path) -> None:
     existing_names = {item.name for item in local_browsers_path.iterdir()} if local_browsers_path.exists() else set()
     missing = [
@@ -44,30 +50,15 @@ def assert_playwright_browser_bundle(local_browsers_path: Path) -> None:
         )
 
 
-def copy_playwright_browser_bundle(sidecar_dist_dir: Path) -> None:
-    source = resolve_playwright_local_browsers_path()
-    assert_playwright_browser_bundle(source)
+def copy_playwright_driver_bundle(sidecar_dist_dir: Path) -> None:
+    source = resolve_playwright_driver_path()
+    assert_playwright_browser_bundle(source / "package" / ".local-browsers")
 
-    target = (
-        sidecar_dist_dir
-        / "_internal"
-        / "playwright"
-        / "driver"
-        / "package"
-        / ".local-browsers"
-    )
+    target = sidecar_dist_dir / "_internal" / "playwright" / "driver"
     if target.exists():
         shutil.rmtree(target)
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.mkdir(parents=True)
-    for item in source.iterdir():
-        if not any(item.name.startswith(prefix) for prefix in BUNDLED_PLAYWRIGHT_BROWSER_PREFIXES):
-            continue
-        destination = target / item.name
-        if item.is_dir():
-            shutil.copytree(item, destination, symlinks=True)
-        else:
-            shutil.copy2(item, destination)
+    shutil.copytree(source, target, symlinks=True)
 
 
 def stash_playwright_browser_bundle(build_path: Path) -> tuple[Path, Path]:
@@ -149,7 +140,7 @@ def main() -> int:
     if not executable_path.exists():
         print(f"Missing built sidecar executable: {executable_path}", file=sys.stderr)
         return 1
-    copy_playwright_browser_bundle(sidecar_dist_dir)
+    copy_playwright_driver_bundle(sidecar_dist_dir)
     return 0
 
 

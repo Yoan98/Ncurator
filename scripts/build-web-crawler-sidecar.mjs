@@ -7,12 +7,15 @@ import { fileURLToPath } from 'node:url'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const SIDECAR_DIR = path.join(ROOT, 'resources', 'web_crawler_sidecar')
+const SIDECAR_SCRIPT_PATH = path.join(SIDECAR_DIR, 'web_crawler_sidecar.py')
 const REQUIREMENTS_PATH = path.join(SIDECAR_DIR, 'requirements.txt')
 const BUILD_SCRIPT_PATH = path.join(ROOT, 'scripts', 'build_web_crawler_sidecar.py')
 const VENV_DIR = path.join(ROOT, '.runvenv', 'web_crawler_sidecar')
 const STAMP_PATH = path.join(VENV_DIR, '.requirements.sha256')
 const PLAYWRIGHT_BROWSER_STAMP_PATH = path.join(VENV_DIR, '.playwright-browser.sha256')
 const PIP_CACHE_DIR = path.join(ROOT, '.pip-cache', 'web_crawler_sidecar')
+const BIN_DIR = path.join(SIDECAR_DIR, 'bin')
+const SOURCE_STAMP_PATH = path.join(BIN_DIR, '.source.sha256')
 
 const pathExists = (targetPath) => fs.existsSync(targetPath)
 
@@ -107,6 +110,13 @@ const ensureVenv = (bootstrapPython) => {
 const computeRequirementsHash = () =>
   crypto.createHash('sha256').update(fs.readFileSync(REQUIREMENTS_PATH)).digest('hex')
 
+const computeSourceHash = () => {
+  const hash = crypto.createHash('sha256')
+  hash.update(fs.readFileSync(SIDECAR_SCRIPT_PATH))
+  hash.update(fs.readFileSync(REQUIREMENTS_PATH))
+  return hash.digest('hex')
+}
+
 const readInstalledRequirementsHash = () =>
   pathExists(STAMP_PATH) ? fs.readFileSync(STAMP_PATH, 'utf8').trim() : ''
 
@@ -153,6 +163,11 @@ const buildSidecar = (pythonPath) => {
   spawnChecked(pythonPath, [BUILD_SCRIPT_PATH])
 }
 
+const writeSourceStamp = () => {
+  fs.mkdirSync(BIN_DIR, { recursive: true })
+  fs.writeFileSync(SOURCE_STAMP_PATH, `${computeSourceHash()}\n`, 'utf8')
+}
+
 const main = () => {
   if (!pathExists(REQUIREMENTS_PATH)) {
     throw new Error(`Missing sidecar requirements: ${REQUIREMENTS_PATH}`)
@@ -163,6 +178,7 @@ const main = () => {
   ensureSidecarDependencies(venvPythonPath)
   ensureBundledPlaywrightBrowser(venvPythonPath)
   buildSidecar(venvPythonPath)
+  writeSourceStamp()
 }
 
 try {
