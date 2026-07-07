@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { WorkspaceSource } from '../../../../src/shared/types'
-import { resolveWorkbenchWorkspaceSelection } from '../../../../src/renderer/src/components/workbench/utils'
+import {
+  createAssistantThinkingGroup,
+  reduceAssistantProcessGroups,
+  resolveWorkbenchWorkspaceSelection
+} from '../../../../src/renderer/src/components/workbench/utils'
 
 const WORKSPACES: WorkspaceSource[] = [
   {
@@ -29,5 +33,17 @@ describe('workbench utils', () => {
     expect(resolveWorkbenchWorkspaceSelection(WORKSPACES, 'workspace-second')).toBe(
       'workspace-second'
     )
+  })
+
+  it('removes stale thinking when a brain thought arrives', () => {
+    const groups = reduceAssistantProcessGroups([createAssistantThinkingGroup('message-1')], {
+      type: 'assistant_process_thought',
+      runId: 'run-1',
+      thoughtId: 'thought-1',
+      text: '已经想好了',
+      createdAt: 2
+    })
+
+    expect(groups.some((group) => group.kind === 'thinking')).toBe(false)
   })
 })

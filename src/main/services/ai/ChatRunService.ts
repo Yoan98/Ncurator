@@ -3,7 +3,6 @@ import { v4 as uuidv4 } from 'uuid'
 import { Jieba } from '@node-rs/jieba'
 import { dict } from '@node-rs/jieba/dict'
 import { AiRunService } from './AiRunService'
-import { emitThinkingStarted } from './events/processEvents'
 import { updateConversationMemoryAfterRun } from './memory'
 import { releaseDocxRunSession } from './human/tools/docx/worker/docxWorkerClient'
 import { normalizeSelectedReferences, normalizeWorkspaceBinding } from './utils/runContext'
@@ -530,7 +529,6 @@ export class ChatRunService {
       createdAt: Date.now(),
       input: run.input
     })
-    emitThinkingStarted({ sendEvent, runId })
     this.deps.docxApplyService.beginRun({
       runId,
       sessionId: run.sessionId,

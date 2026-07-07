@@ -78,8 +78,33 @@ describe('ai human mock-llm backend', () => {
       },
       assert: async (result, runtime) => {
         const decisionHints = filterAiRunEventsByType(result.events, 'decision_hint')
+        const thinkingStarted = result.events.filter(
+          (event) =>
+            event.type === 'assistant_process_group_started' && event.display.kind === 'thinking'
+        )
+        const thinkingCompleted = result.events.filter(
+          (event) =>
+            event.type === 'assistant_process_group_completed' &&
+            event.display.kind === 'thinking'
+        )
+        const schemaHintIndex = result.events.findIndex(
+          (event) =>
+            event.type === 'decision_hint' &&
+            event.source === 'brain' &&
+            event.code === 'brain_output_schema_invalid'
+        )
+        const lastThinkingCompletedBeforeHint = result.events
+          .slice(0, schemaHintIndex)
+          .some(
+            (event) =>
+              event.type === 'assistant_process_group_completed' &&
+              event.display.kind === 'thinking'
+          )
         runtime.assertThat(
           result.output.status === 'completed' &&
+            thinkingStarted.length === 2 &&
+            thinkingCompleted.length === 2 &&
+            lastThinkingCompletedBeforeHint &&
             decisionHints.some(
               (event) =>
                 event.source === 'brain' &&
@@ -94,7 +119,9 @@ describe('ai human mock-llm backend', () => {
             message: 'brain hand plan schema 不合法时，应产出 brain_output_schema_invalid 并继续完成任务。',
             data: {
               output: result.output,
-              decisionHints
+              decisionHints,
+              thinkingStartedCount: thinkingStarted.length,
+              thinkingCompletedCount: thinkingCompleted.length
             }
           }
         )

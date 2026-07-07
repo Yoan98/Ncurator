@@ -170,6 +170,36 @@ describe('ai human mock-llm backend', () => {
         const terminalItemCompleted = processItemCompletedEvents.find(
           (event) => event.itemId === terminalItemStarted?.itemId
         )
+        const thinkingStartedEvents = processGroupStartedEvents.filter(
+          (event) => event.display.kind === 'thinking'
+        )
+        const thinkingCompletedEvents = processGroupCompletedEvents.filter(
+          (event) => event.display?.kind === 'thinking'
+        )
+        const thoughtsHaveClosedThinking = processThoughtEvents.every((thoughtEvent) => {
+          const thoughtIndex = result.events.indexOf(thoughtEvent)
+          let lastThinkingStartedIndex = -1
+          let lastThinkingCompletedIndex = -1
+          for (let index = 0; index < thoughtIndex; index += 1) {
+            const event = result.events[index]
+            if (
+              event.type === 'assistant_process_group_started' &&
+              event.display.kind === 'thinking'
+            ) {
+              lastThinkingStartedIndex = index
+            }
+            if (
+              event.type === 'assistant_process_group_completed' &&
+              event.display?.kind === 'thinking'
+            ) {
+              lastThinkingCompletedIndex = index
+            }
+          }
+          return (
+            lastThinkingStartedIndex >= 0 &&
+            lastThinkingCompletedIndex > lastThinkingStartedIndex
+          )
+        })
 
         runtime.assertThat(
           learningStartedIndex >= 0 &&
@@ -177,6 +207,9 @@ describe('ai human mock-llm backend', () => {
             Boolean(terminalGroupStarted) &&
             Boolean(terminalItemStarted) &&
             Boolean(terminalItemCompleted) &&
+            thinkingStartedEvents.length === processThoughtEvents.length &&
+            thinkingCompletedEvents.length === processThoughtEvents.length &&
+            thoughtsHaveClosedThinking &&
             processThoughtEvents.some((event) => event.text.includes('先学习 docx-read')) &&
             processItemStartedEvents.every((event) => event.display.kind === 'tool'),
           {
@@ -197,6 +230,8 @@ describe('ai human mock-llm backend', () => {
                 groupId: event.groupId,
                 display: event.display
               })),
+              thinkingStartedCount: thinkingStartedEvents.length,
+              thinkingCompletedCount: thinkingCompletedEvents.length,
               processItemsStarted: processItemStartedEvents.map((event) => ({
                 groupId: event.groupId,
                 itemId: event.itemId,

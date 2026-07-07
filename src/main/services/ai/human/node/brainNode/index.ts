@@ -9,6 +9,14 @@ import { formatToolCallSchemaDiagnostic } from '../../toolCallSchema'
 import type { HumanRuntimeCache, HumanState } from '../../types'
 import { applyBrainDecisionTransition, returnToBrainWithDecisionHint } from '../utils/stateTransitions'
 import { getAvailableToolNames } from '../utils/runtimeCache'
+import {
+  emitThinkingCompleted,
+  emitThinkingFailed,
+  emitThinkingStarted
+} from '../../../events/processEvents'
+
+const getErrorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error)
 
 export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCache }) => {
   return async (state: HumanState): Promise<HumanState> => {
@@ -21,8 +29,31 @@ export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
       allowedToolNames: input.ctx.allowedToolNames
     })
     const thoughtDecisionSchema = createHumanThoughtDecisionSchema(availableToolNames)
+    let thinkingOpen = false
+    const completeThinking = (): void => {
+      if (!thinkingOpen) return
+      emitThinkingCompleted({
+        sendEvent: input.ctx.sendEvent,
+        runId: input.ctx.runId
+      })
+      thinkingOpen = false
+    }
+    const failThinking = (error: unknown): void => {
+      if (!thinkingOpen) return
+      emitThinkingFailed({
+        sendEvent: input.ctx.sendEvent,
+        runId: input.ctx.runId,
+        error: getErrorMessage(error)
+      })
+      thinkingOpen = false
+    }
 
     try {
+      emitThinkingStarted({
+        sendEvent: input.ctx.sendEvent,
+        runId: input.ctx.runId
+      })
+      thinkingOpen = true
       const result = await input.ctx.chatStructured({
         caller: 'human.brain',
         taskId: state.task.taskId,
@@ -62,6 +93,7 @@ export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
         thought: parsedThought.thought
       })
 
+      completeThinking()
       return applyBrainDecisionTransition({
         ctx: input.ctx,
         cache: input.cache,
@@ -76,13 +108,16 @@ export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
       })
     } catch (error) {
       if (!(error instanceof ZodError)) {
+        failThinking(error)
         throw error
       }
 
       const retryCount = state.execution.brainSchemaRetryCount || 0
       if (retryCount >= HUMAN_BRAIN_SCHEMA_RETRY_LIMIT) {
+        failThinking(error)
         throw error
       }
+      completeThinking()
 
       const diagnostic = formatToolCallSchemaDiagnostic({
         error,

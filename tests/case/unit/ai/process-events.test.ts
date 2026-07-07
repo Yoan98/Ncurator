@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
+  emitCompactionCompleted,
+  emitLearningCompleted,
   emitToolProcessCompleted,
   emitToolProcessStarted
 } from '../../../../src/main/services/ai/events/processEvents'
@@ -46,5 +48,29 @@ describe('ai process events', () => {
       'run-1:tool:tool-b',
       'run-1:tool:tool-a'
     ])
+  })
+
+  it('does not restart thinking after learning or compaction completes', () => {
+    const events: AiRunEvent[] = []
+    const sendEvent = (event: AiRunEvent): void => {
+      events.push(event)
+    }
+
+    emitLearningCompleted({
+      sendEvent,
+      runId: 'run-1',
+      skillId: 'docx-read'
+    })
+    emitCompactionCompleted({
+      sendEvent,
+      runId: 'run-1'
+    })
+
+    expect(
+      events.some(
+        (event) =>
+          event.type === 'assistant_process_group_started' && event.display.kind === 'thinking'
+      )
+    ).toBe(false)
   })
 })

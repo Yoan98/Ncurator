@@ -64,7 +64,6 @@ import type {
 } from '../components/markdownReference'
 import {
   completeAssistantProcessGroups,
-  createAssistantThinkingGroup,
   createSearchProcessGroup,
   dedupeFileRefs,
   extractReadableFilesFromToolOutput,
@@ -131,7 +130,7 @@ const createAssistantTurn = (messageId: string): AssistantTurnViewModel => ({
   messageId,
   status: 'running',
   processThoughts: [],
-  processGroups: [createAssistantThinkingGroup(messageId)],
+  processGroups: [],
   finalAnswerMarkdown: '',
   artifacts: [],
   applyTargets: [],

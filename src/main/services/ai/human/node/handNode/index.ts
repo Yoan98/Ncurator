@@ -37,7 +37,6 @@ import {
   returnToBrainWithDecisionHint
 } from '../utils/stateTransitions'
 import { getAvailableToolNames } from '../utils/runtimeCache'
-import { emitThinkingStarted } from '../../../events/processEvents'
 
 const isTerminalRunCall = (toolName: string): boolean => toolName === 'terminal_run'
 const isBrowserUseCall = (toolName: string): boolean => toolName === 'browser_use'
@@ -508,10 +507,6 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
       cache: input.cache,
       taskId: state.task.taskId,
       learnedSkillIds
-    })
-    emitThinkingStarted({
-      sendEvent: input.ctx.sendEvent,
-      runId: input.ctx.runId
     })
     input.cache.toolCallCount += results.length
 

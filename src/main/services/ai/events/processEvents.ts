@@ -81,13 +81,28 @@ export const emitThinkingCompleted = (input: {
   })
 }
 
+export const emitThinkingFailed = (input: {
+  sendEvent: SendEvent
+  runId: string
+  error?: string
+  failedAt?: number
+}): void => {
+  input.sendEvent({
+    type: 'assistant_process_group_failed',
+    runId: input.runId,
+    groupId: getThinkingProcessGroupId(input.runId),
+    display: { kind: 'thinking' },
+    error: input.error,
+    failedAt: input.failedAt || Date.now()
+  })
+}
+
 export const emitLearningStarted = (input: {
   sendEvent: SendEvent
   runId: string
   skillId: RuntimeSkillId
   createdAt?: number
 }): void => {
-  emitThinkingCompleted(input)
   input.sendEvent({
     type: 'assistant_process_group_started',
     runId: input.runId,
@@ -111,7 +126,6 @@ export const emitLearningCompleted = (input: {
     display: { kind: 'learning', skillId: input.skillId },
     completedAt: input.completedAt || Date.now()
   })
-  emitThinkingStarted(input)
 }
 
 export const emitToolProcessStarted = (input: {
@@ -127,7 +141,6 @@ export const emitToolProcessStarted = (input: {
     toolName: input.toolName,
     input: input.args
   }
-  emitThinkingCompleted(input)
   input.sendEvent({
     type: 'assistant_process_group_started',
     runId: input.runId,
@@ -194,7 +207,6 @@ export const emitCompactionStarted = (input: {
   runId: string
   createdAt?: number
 }): void => {
-  emitThinkingCompleted(input)
   input.sendEvent({
     type: 'assistant_process_group_started',
     runId: input.runId,
@@ -217,7 +229,6 @@ export const emitCompactionCompleted = (input: {
     display: { kind: 'compaction' },
     completedAt: input.completedAt || Date.now()
   })
-  emitThinkingStarted(input)
 }
 
 export const emitFinalizingStarted = (input: {
@@ -225,7 +236,6 @@ export const emitFinalizingStarted = (input: {
   runId: string
   createdAt?: number
 }): void => {
-  emitThinkingCompleted(input)
   input.sendEvent({
     type: 'assistant_process_group_started',
     runId: input.runId,
