@@ -1140,10 +1140,10 @@ mark {
 
 @keyframes workbenchThinkingFlow {
   0% {
-    background-position: -240% 0;
+    background-position: 100% 0;
   }
   100% {
-    background-position: 240% 0;
+    background-position: 0% 0;
   }
 }
 
@@ -1158,7 +1158,8 @@ mark {
     var(--notion-text-faint) 64%,
     var(--notion-text-faint) 100%
   );
-  background-size: 320% 100%;
+  background-size: 240% 100%;
+  background-repeat: no-repeat;
   background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
