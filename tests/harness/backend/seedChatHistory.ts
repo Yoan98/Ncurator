@@ -13,7 +13,8 @@ export const seedChatHistory = async (input: {
   await input.chatStore.saveChatSession({
     id: input.payload.sessionId,
     title: input.payload.title || input.payload.sessionId,
-    created_at: createdAt
+    created_at: createdAt,
+    workspace_id: ''
   })
 
   for (const message of input.payload.messages) {

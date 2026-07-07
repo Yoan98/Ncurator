@@ -48,6 +48,8 @@ const renderAttachment = (attachment: ChatAttachment, index: number): string => 
 }
 
 export const renderReferenceScopeText = (scope: AiReferenceScope): string => {
+  const selectedReferences = scope.selectedReferences || []
+  const attachments = scope.attachments || []
   const workspaceText = `工作区：
 - 根目录：${scope.workspace.rootPath}
 - 所有本地文件路径、cwd 和新生成的产物路径都必须位于这个工作区内。
@@ -60,16 +62,16 @@ export const renderReferenceScopeText = (scope: AiReferenceScope): string => {
 - 知识库文档ID：这份资料在知识库中的文档标识；没有对应知识库文档时显示为“无”。`
 
   const selectedReferencesText =
-    scope.selectedReferences.length > 0
+    selectedReferences.length > 0
       ? `用户已选资料：
-${scope.selectedReferences.map((reference, index) => renderSelectedReference(reference, index + 1)).join('\n')}`
+${selectedReferences.map((reference, index) => renderSelectedReference(reference, index + 1)).join('\n')}`
       : `用户已选资料：
 - 当前没有用户显式选择的参考资料。`
 
   const attachmentsText =
-    scope.attachments.length > 0
+    attachments.length > 0
       ? `用户选择的附件：
-${scope.attachments.map((attachment, index) => renderAttachment(attachment, index + 1)).join('\n\n')}`
+${attachments.map((attachment, index) => renderAttachment(attachment, index + 1)).join('\n\n')}`
       : `用户选择的附件：
 - 当前没有用户选择的附件。`
 

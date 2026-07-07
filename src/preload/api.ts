@@ -27,6 +27,8 @@ import type {
   ChatSessionSnapshotResponse,
   ChatSubmitRequest,
   ChatSubmitResponse,
+  ChatTurnRetractLatestRequest,
+  ChatTurnRetractLatestResponse,
   ChunkListResponse,
   CreateWorkspaceSourceRequest,
   DeleteWebSourceRequest,
@@ -124,6 +126,8 @@ export type SettingsE2EApiOverrides = {
   webSourceRefreshDelayMs?: number
   revealPathResponseByPath?: Record<string, { success: boolean; error?: string }>
   openExternalResponseByUrl?: Record<string, { success: boolean; error?: string }>
+  attachmentParseFileResponseByName?: Record<string, AttachmentProcessResponse>
+  attachmentRecognizeImageResponseByName?: Record<string, AttachmentProcessResponse>
   modelCatalog?: E2EModelCatalogOverride
   downloadModelResponseByRepoId?: Record<string, E2EDownloadModelResponse>
   downloadProgressEventsByRepoId?: Record<string, DownloadProgress[]>
@@ -229,11 +233,15 @@ export type DesktopApi = {
     payload: ChatSessionSnapshotRequest
   ) => Promise<ChatSessionSnapshotResponse>
   chatSubmit: (payload: ChatSubmitRequest) => Promise<ChatSubmitResponse>
+  chatTurnRetractLatest: (
+    payload: ChatTurnRetractLatestRequest
+  ) => Promise<ChatTurnRetractLatestResponse>
   llmConfigList: () => Promise<LLMConfig[]>
   llmConfigSave: (config: LLMConfig) => Promise<{ success: boolean; error?: string }>
   llmConfigDelete: (id: string) => Promise<{ success: boolean; error?: string }>
   llmConfigSetActive: (id: string) => Promise<{ success: boolean; error?: string }>
   llmConfigModelList: (id: string) => Promise<LlmModelListResponse>
+  isE2EMode: () => boolean
   setE2EApiOverrides: (overrides: SettingsE2EApiOverrides) => void
   clearE2EApiOverrides: () => void
   aiRuntimeSettingsGet: () => Promise<AiRuntimeSettings>

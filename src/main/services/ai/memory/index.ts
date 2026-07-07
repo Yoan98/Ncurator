@@ -1,49 +1,42 @@
 import { z } from 'zod/v4'
-import type { ChatConversationMemory } from '../../../types/store'
 import { createAiLlmExecutor } from '../llmExecutor'
-import type { ChatStore } from '../../storage/domains/ChatStore'
 import type { LlmConfigStore } from '../../storage/domains/LlmConfigStore'
 import { buildConversationMemoryPrompt } from './prompts/conversation'
 import type {
-  AiArtifactRef,
   AiLlmIoRecord,
   AiRunEvent,
   AiRuntimeSettings,
+  ChatMessage,
   LlmRuntimeConfig
 } from '../../../../shared/types'
 import type { AiLlmDriver } from '../llmExecutor'
+import { formatTurns } from '../utils/runContext'
 
 const summarySchema = z.object({
   summary: z.string()
 })
 
-const EMPTY_CONVERSATION_MEMORY: ChatConversationMemory = {
-  summary: ''
-}
+export const CONVERSATION_MEMORY_BATCH_MESSAGES = 12
 
-export const updateConversationMemoryAfterRun = async (input: {
+export const buildConversationMemorySummary = async (input: {
   runId: string
   sessionId: string
-  userInput: string
-  assistantOutput: string
-  artifacts?: AiArtifactRef[]
+  previousSummary: string
+  messages: ChatMessage[]
   runtimeSettings: AiRuntimeSettings
-  chatStore: ChatStore
   llmStore: LlmConfigStore
   modelName: string
   sendEvent: (event: AiRunEvent) => void
   recordLlmIo?: (record: AiLlmIoRecord) => void
   abortSignal?: AbortSignal
   llmDriver?: AiLlmDriver
-}): Promise<void> => {
+}): Promise<string> => {
   const sessionId = String(input.sessionId || '').trim()
-  if (!sessionId) return
-
-  const prev = (await input.chatStore.getConversationMemory(sessionId)) || EMPTY_CONVERSATION_MEMORY
+  if (!sessionId || input.messages.length === 0) return ''
 
   const activeConfig = await input.llmStore.getActive()
   const modelName = String(input.modelName || '').trim()
-  if (!activeConfig || !modelName) return
+  if (!activeConfig || !modelName) return ''
   let cfg: LlmRuntimeConfig = {
     ...activeConfig,
     model_name: modelName
@@ -66,10 +59,8 @@ export const updateConversationMemoryAfterRun = async (input: {
   })
 
   const prompt = buildConversationMemoryPrompt({
-    previousSummary: prev.summary,
-    latestUserMessage: String(input.userInput || ''),
-    latestAssistantMessage: String(input.assistantOutput || ''),
-    latestArtifacts: input.artifacts || []
+    previousSummary: input.previousSummary,
+    turnsText: formatTurns(input.messages)
   })
 
   const result = await llmExecutor.chatStructured({
@@ -81,8 +72,5 @@ export const updateConversationMemoryAfterRun = async (input: {
     temperature: 0.2
   })
 
-  const memory: ChatConversationMemory = {
-    summary: String(result.output.summary || '').trim()
-  }
-  await input.chatStore.saveConversationMemory(sessionId, memory)
+  return String(result.output.summary || '').trim()
 }

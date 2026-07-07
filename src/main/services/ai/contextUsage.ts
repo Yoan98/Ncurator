@@ -17,7 +17,7 @@ export const getAiContextUsage = async (input: {
   updatedAt: number
 }> => {
   const memory = await input.chatStore.getConversationMemory(input.sessionId)
-  const messages = await input.chatStore.getRecentChatMessages(input.sessionId, 12)
+  const messages = await input.chatStore.getMessagesAfterConversationMemory(input.sessionId)
   const baseText = [
     renderConversationMemoryForBrain(memory),
     formatTurns(messages)

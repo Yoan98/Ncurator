@@ -25,14 +25,13 @@ const LOCAL_RESULT_FILE = '交付合规同步记录.docx'
 const LOCAL_RESULT_QUERY = 'Alice'
 const SIGNAL_COLLECT_TIMEOUT_MS = 3000
 
-type SearchResultSignals = Awaited<
-  ReturnType<Parameters<typeof runE2ECase>[0]['execute']>
-> extends never
-  ? never
-  : {
-      aiRunEventEntries: unknown[]
-      ipcInvokeEntries: Array<{ name: string }>
-    }
+type SearchResultSignals =
+  Awaited<ReturnType<Parameters<typeof runE2ECase>[0]['execute']>> extends never
+    ? never
+    : {
+        aiRunEventEntries: unknown[]
+        ipcInvokeEntries: Array<{ name: string }>
+      }
 
 const collectSignalsWithoutBlocking = async (
   collectSignals: () => Promise<SearchResultSignals>
@@ -145,7 +144,10 @@ describe('workbench result e2e', () => {
                     emptyScopeProbe
                   }
                 })
-                const messagesBefore = await getWorkbenchLocator(page, workbenchSelectors.messageList)
+                const messagesBefore = await getWorkbenchLocator(
+                  page,
+                  workbenchSelectors.messageList
+                )
                   .locator('.ant-chat-message')
                   .count()
                 await setWorkbenchInput(page, 'anything')
@@ -161,21 +163,29 @@ describe('workbench result e2e', () => {
                     text: (element.textContent || '').trim()
                   }
                 })
-                await getWorkbenchLocator(page, workbenchSelectors.sendButton).evaluate((element) => {
-                  if (!(element instanceof HTMLButtonElement)) {
-                    throw new Error('workbench send button is not an HTMLButtonElement')
+                await getWorkbenchLocator(page, workbenchSelectors.sendButton).evaluate(
+                  (element) => {
+                    if (!(element instanceof HTMLButtonElement)) {
+                      throw new Error('workbench send button is not an HTMLButtonElement')
+                    }
+                    element.click()
                   }
-                  element.click()
-                })
+                )
                 await page.waitForTimeout(1000)
-                const messagesAfter = await getWorkbenchLocator(page, workbenchSelectors.messageList)
+                const messagesAfter = await getWorkbenchLocator(
+                  page,
+                  workbenchSelectors.messageList
+                )
                   .locator('.ant-chat-message')
                   .count()
                 const draftText = (
                   (await getWorkbenchLocator(page, workbenchSelectors.input).textContent()) || ''
                 ).trim()
                 const rightPanelText = (
-                  (await getWorkbenchLocator(page, workbenchSelectors.contentPanel).textContent()) || ''
+                  (await getWorkbenchLocator(
+                    page,
+                    workbenchSelectors.contentPanel
+                  ).textContent()) || ''
                 ).trim()
                 return {
                   messagesBefore,
@@ -194,9 +204,9 @@ describe('workbench result e2e', () => {
               webResultsText: webSearch,
               emptySearchResult,
               aiEventCount: signals?.aiRunEventEntries.length ?? 0,
-              openExternalCalls: signals?.ipcInvokeEntries.filter(
-                (entry) => entry.name === 'openExternal'
-              ).length ?? 1
+              openExternalCalls:
+                signals?.ipcInvokeEntries.filter((entry) => entry.name === 'openExternal').length ??
+                1
             }
           } finally {
             await setup.workspace.cleanup()

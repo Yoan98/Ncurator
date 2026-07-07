@@ -5,19 +5,12 @@ describe('ai unit conversation memory prompt', () => {
   it('renders semantic system and user sections for conversation memory updates', () => {
     const prompt = buildConversationMemoryPrompt({
       previousSummary: '用户正在整理风险周报。',
-      latestUserMessage: '继续检查风险项。',
-      latestAssistantMessage: '已生成风险项草稿。',
-      latestArtifacts: [
-        {
-          kind: 'file',
-          capability: 'docx',
-          path: '/workspace/risk.docx',
-          fileName: 'risk.docx',
-          operation: 'created',
-          applyId: 'apply-risk',
-          summary: '风险项草稿'
-        }
-      ]
+      turnsText: [
+        'user: 继续检查风险项。',
+        'assistant: 已生成风险项草稿。',
+        'artifacts:',
+        '- file；fileName=risk.docx；summary=风险项草稿'
+      ].join('\n')
     })
 
     expect(prompt.system).toContain('<role>')
@@ -36,11 +29,9 @@ describe('ai unit conversation memory prompt', () => {
     expect(prompt.user).toContain('<conversation_summary_task>')
     expect(prompt.user).toContain('<previous_summary>')
     expect(prompt.user).toContain('用户正在整理风险周报。')
-    expect(prompt.user).toContain('<latest_user_message>')
+    expect(prompt.user).toContain('<new_turns>')
     expect(prompt.user).toContain('继续检查风险项。')
-    expect(prompt.user).toContain('<latest_assistant_message>')
     expect(prompt.user).toContain('已生成风险项草稿。')
-    expect(prompt.user).toContain('<latest_artifacts>')
     expect(prompt.user).toContain('fileName=risk.docx')
     expect(prompt.user).toContain('summary=风险项草稿')
   })

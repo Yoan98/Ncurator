@@ -941,6 +941,21 @@ export type ChatSubmitResponse = {
   error?: string
 }
 
+export type ChatTurnRetractLatestRequest = {
+  sessionId: string
+  userMessageId: string
+}
+
+export type ChatTurnRetractLatestResponse = {
+  success: boolean
+  userMessage?: ChatMessage
+  assistantMessageId?: string
+  runId?: string
+  messages: ChatMessage[]
+  memoryCleared?: boolean
+  error?: string
+}
+
 export type AiRunCancelResponse = {
   success: boolean
   error?: string
@@ -1309,6 +1324,10 @@ export type AiRunEvent = AiRunEventPayload & {
 
 export type ChatConversationMemory = {
   summary: string
+  coveredMessageId: string | null
+  coveredTimestamp: number | null
+  coveredMessageCount: number
+  updatedAt: number
 }
 
 export type ChatConversationMemoryRow = {

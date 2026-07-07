@@ -259,8 +259,30 @@ const api: DesktopApi = {
   attachmentPickImages: () => ipcRenderer.invoke('attachment-pick-images'),
   attachmentPickFiles: () => ipcRenderer.invoke('attachment-pick-files'),
   attachmentSaveTempFile: (payload) => ipcRenderer.invoke('attachment-save-temp-file', payload),
-  attachmentParseFile: (attachment) => ipcRenderer.invoke('attachment-parse-file', attachment),
-  attachmentRecognizeImage: (payload) => ipcRenderer.invoke('attachment-recognize-image', payload),
+  attachmentParseFile: (attachment) => {
+    const name = String(attachment?.name || '').trim()
+    const response = getE2EApiOverrides()?.attachmentParseFileResponseByName?.[name]
+    if (response) {
+      return Promise.resolve({
+        ...response,
+        attachment: response.attachment ? { ...attachment, ...response.attachment } : undefined
+      })
+    }
+    return ipcRenderer.invoke('attachment-parse-file', attachment)
+  },
+  attachmentRecognizeImage: (payload) => {
+    const name = String(payload?.attachment?.name || '').trim()
+    const response = getE2EApiOverrides()?.attachmentRecognizeImageResponseByName?.[name]
+    if (response) {
+      return Promise.resolve({
+        ...response,
+        attachment: response.attachment
+          ? { ...payload.attachment, ...response.attachment }
+          : undefined
+      })
+    }
+    return ipcRenderer.invoke('attachment-recognize-image', payload)
+  },
 
   // Chat & LLM
   chatSessionList: () => ipcRenderer.invoke('chat-session-list'),
@@ -275,6 +297,7 @@ const api: DesktopApi = {
     emitE2EIpcCall('chatSubmit')
     return ipcRenderer.invoke('chat-submit', payload)
   },
+  chatTurnRetractLatest: (payload) => ipcRenderer.invoke('chat-turn-retract-latest', payload),
   llmConfigList: () => {
     emitE2EIpcCall('llmConfigList')
     return ipcRenderer.invoke('llm-config-list')
@@ -296,6 +319,7 @@ const api: DesktopApi = {
     }
     return ipcRenderer.invoke('llm-config-model-list', id)
   },
+  isE2EMode: () => isE2EObserverEnabled,
   setE2EApiOverrides: (overrides) => {
     if (!isE2EFixtureMode) return
     e2eApiOverrides = overrides

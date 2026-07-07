@@ -318,6 +318,25 @@ export class AiRunStore {
     await runTable.delete(`session_id = '${safeSessionId}'`)
   }
 
+  public async deleteRunsByIds(runIds: string[]): Promise<void> {
+    const safeIds = runIds.map((id) => String(id || '').trim()).filter(Boolean)
+    if (safeIds.length === 0) return
+    for (const runId of safeIds) {
+      this.lastEventSeqByRun.delete(runId)
+      this.eventSeqQueues.delete(runId)
+    }
+    const where = this.core.buildInClause('run_id', safeIds)
+    if (where) {
+      const eventTable = await this.core.openTable(LANCE_TABLES.AI_RUN_EVENT)
+      await eventTable.delete(where)
+    }
+    const runWhere = this.core.buildInClause('id', safeIds)
+    if (runWhere) {
+      const runTable = await this.core.openTable(LANCE_TABLES.AI_RUN)
+      await runTable.delete(runWhere)
+    }
+  }
+
   private async allocateNextEventSeqRange(runId: string, count: number): Promise<number> {
     const lastSeq = this.lastEventSeqByRun.get(runId)
     if (lastSeq !== undefined) {

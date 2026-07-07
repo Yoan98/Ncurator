@@ -2,7 +2,6 @@ import type { AiRunContext, AiRunDeps, AiRunStartPayload, CancelledError } from 
 import { createAiLlmExecutor } from './llmExecutor'
 import { buildReferenceScope } from './prompts/referenceScope'
 import { getAiRuntimePlatform } from './utils/platform'
-import { clipText } from './utils/text'
 import {
   formatTurns,
   normalizeSelectedReferences,
@@ -63,20 +62,12 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     driver: deps.llmDriver
   })
 
-  const loadConversationContext: AiRunContext['loadConversationContext'] = async (limits) => {
+  const loadConversationContext: AiRunContext['loadConversationContext'] = async () => {
     checkCancelled()
-    const recentTurns = Math.max(1, Math.min(50, Number(limits?.recentTurns ?? 12)))
-    const maxRecentTurnsChars = Math.max(
-      500,
-      Math.min(20000, Number(limits?.maxRecentTurnsChars ?? 6000))
-    )
-    const maxSummaryChars = Math.max(200, Math.min(8000, Number(limits?.maxSummaryChars ?? 1200)))
-
-    const messages = await deps.chatStore.getRecentChatMessages(payload.sessionId, recentTurns)
-    const recentTurnsText = clipText(formatTurns(messages), maxRecentTurnsChars)
-
     const memory = await deps.chatStore.getConversationMemory(payload.sessionId)
-    const conversationSummaryText = clipText(String(memory?.summary || ''), maxSummaryChars)
+    const messages = await deps.chatStore.getMessagesAfterConversationMemory(payload.sessionId)
+    const recentTurnsText = formatTurns(messages)
+    const conversationSummaryText = String(memory?.summary || '')
 
     return { recentTurnsText, conversationSummaryText }
   }

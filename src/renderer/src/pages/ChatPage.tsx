@@ -7,10 +7,13 @@ import {
   HiChevronLeft,
   HiChevronRight,
   HiClock,
+  HiDocumentText,
   HiFolder,
+  HiOutlineClipboardDocument,
   HiOutlineExclamationCircle,
   HiOutlineFolderPlus,
   HiOutlinePencilSquare,
+  HiPhoto,
   HiPlus,
   HiStop,
   HiTrash,
@@ -89,6 +92,10 @@ import { collectReferenceDocumentIds, pruneReferencesByWorkspace } from '../util
 
 type ApprovalBatchRequiredEvent = Extract<AiRunEvent, { type: 'approval_batch_required' }>
 type ApprovalBatchDecisionAction = 'approve' | 'reject' | 'guide'
+type WorkbenchE2EWindow = Window &
+  typeof globalThis & {
+    __NCURATOR_E2E_SET_WORKBENCH_DRAFT__?: (draft: ComposerDraftValue) => void
+  }
 
 type ApplyForceConfirmState = {
   changeId: string
@@ -116,6 +123,26 @@ const WORKBENCH_NO_DRAG_STYLE = {
 const WORKBENCH_POSITIONED_PANE_STYLE = {
   position: 'relative'
 } as React.CSSProperties
+
+const padTimePart = (value: number): string => String(value).padStart(2, '0')
+
+const formatUserMessageTime = (timestamp: number, now = Date.now()): string => {
+  const date = new Date(timestamp)
+  const time = `${padTimePart(date.getHours())}:${padTimePart(date.getMinutes())}`
+  const ageMs = now - timestamp
+  if (ageMs >= 0 && ageMs < 24 * 60 * 60 * 1000) return time
+
+  const today = new Date(now)
+  today.setHours(0, 0, 0, 0)
+  const messageDay = new Date(timestamp)
+  messageDay.setHours(0, 0, 0, 0)
+  const dayGap = Math.round((today.getTime() - messageDay.getTime()) / (24 * 60 * 60 * 1000))
+  if (dayGap === 1) return `昨天 ${time}`
+  if (dayGap > 1 && dayGap < 7) {
+    return `${['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'][date.getDay()]} ${time}`
+  }
+  return `${date.getFullYear()}/${padTimePart(date.getMonth() + 1)}/${padTimePart(date.getDate())} ${time}`
+}
 
 const clampWorkbenchSidebarWidth = (width: number): number =>
   Math.max(WORKBENCH_SIDEBAR_MIN_WIDTH, Math.min(WORKBENCH_SIDEBAR_MAX_WIDTH, width))
@@ -492,6 +519,21 @@ const isComposerDraftEmpty = (draft: ComposerDraftValue): boolean =>
   draft.selectedReferences.length === 0 &&
   draft.attachments.length === 0
 
+const getUserMessageContentNodes = (messageItem: ChatMessage): ChatMessageContentNode[] =>
+  messageItem.contentNodes && messageItem.contentNodes.length > 0
+    ? messageItem.contentNodes
+    : [
+        ...(messageItem.selectedReferences || []).map(
+          (reference): ChatMessageContentNode => ({ kind: 'reference', reference })
+        ),
+        ...(messageItem.content ? [{ kind: 'text' as const, text: messageItem.content }] : [])
+      ]
+
+const getUserMessagePlainText = (messageItem: ChatMessage): string =>
+  getUserMessageContentNodes(messageItem)
+    .map((node) => (node.kind === 'reference' ? `@${node.reference.name}` : node.text))
+    .join('')
+
 const ChatPage: React.FC = () => {
   const { message } = AntdApp.useApp()
   const navigate = useNavigate()
@@ -525,6 +567,9 @@ const ChatPage: React.FC = () => {
   const [selectedModelName, setSelectedModelName] = useState<string | null>(null)
   const [composerDraftKey, setComposerDraftKey] = useState('initial')
   const [contextUsage, setContextUsage] = useState<WorkbenchContextUsage | null>(null)
+  const [messageAttachmentPreviewUrls, setMessageAttachmentPreviewUrls] = useState<
+    Record<string, string>
+  >({})
   const [assistantTurns, setAssistantTurns] = useState<Record<string, AssistantTurnViewModel>>({})
   const [contentPanel, setContentPanel] = useState<WorkbenchContentPanelState>(createEmptyPanel())
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
@@ -571,6 +616,7 @@ const ChatPage: React.FC = () => {
   const scrollRef = useRef<HTMLDivElement>(null)
   const shouldAutoScrollRef = useRef(true)
   const scrollFrameRef = useRef<number | null>(null)
+  const messageAttachmentPreviewUrlsRef = useRef<Record<string, string>>({})
 
   const composerDraftValue = useMemo<ComposerDraftValue>(
     () => ({
@@ -590,6 +636,55 @@ const ChatPage: React.FC = () => {
   useEffect(() => {
     composerDraftValueRef.current = composerDraftValue
   }, [composerDraftValue])
+
+  useEffect(() => {
+    const imageAttachments = currentMessages
+      .flatMap((messageItem) => messageItem.attachments || [])
+      .filter((attachment) => attachment.kind === 'image')
+    const imageIds = new Set(imageAttachments.map((attachment) => attachment.id))
+    const nextUrls = { ...messageAttachmentPreviewUrlsRef.current }
+    let changed = false
+
+    Object.entries(nextUrls).forEach(([attachmentId, url]) => {
+      if (imageIds.has(attachmentId)) return
+      URL.revokeObjectURL(url)
+      delete nextUrls[attachmentId]
+      changed = true
+    })
+
+    if (changed) {
+      messageAttachmentPreviewUrlsRef.current = nextUrls
+      setMessageAttachmentPreviewUrls(nextUrls)
+    }
+
+    imageAttachments.forEach((attachment) => {
+      if (messageAttachmentPreviewUrlsRef.current[attachment.id]) return
+      void window.api
+        .readFile(attachment.path)
+        .then((bytes) => {
+          if (messageAttachmentPreviewUrlsRef.current[attachment.id]) return
+          const arrayBuffer = new ArrayBuffer(bytes.byteLength)
+          new Uint8Array(arrayBuffer).set(bytes)
+          const blob = new Blob([arrayBuffer], { type: attachment.mimeType || 'image/png' })
+          const url = URL.createObjectURL(blob)
+          messageAttachmentPreviewUrlsRef.current = {
+            ...messageAttachmentPreviewUrlsRef.current,
+            [attachment.id]: url
+          }
+          setMessageAttachmentPreviewUrls(messageAttachmentPreviewUrlsRef.current)
+        })
+        .catch(() => undefined)
+    })
+  }, [currentMessages])
+
+  useEffect(() => {
+    return () => {
+      Object.values(messageAttachmentPreviewUrlsRef.current).forEach((url) =>
+        URL.revokeObjectURL(url)
+      )
+      messageAttachmentPreviewUrlsRef.current = {}
+    }
+  }, [])
 
   const saveComposerDraftForSession = useCallback(
     (sessionId: string | null, draft: ComposerDraftValue): void => {
@@ -611,6 +706,20 @@ const ChatPage: React.FC = () => {
     composerDraftVersionRef.current += 1
     setComposerDraftKey(`${reason}:${composerDraftVersionRef.current}`)
   }, [])
+
+  useEffect(() => {
+    const targetWindow = window as WorkbenchE2EWindow
+    if (!window.api.isE2EMode()) return
+
+    targetWindow.__NCURATOR_E2E_SET_WORKBENCH_DRAFT__ = (draft: ComposerDraftValue): void => {
+      saveComposerDraftForSession(currentSessionIdRef.current, draft)
+      applyComposerDraft(draft, 'e2e')
+    }
+
+    return () => {
+      delete targetWindow.__NCURATOR_E2E_SET_WORKBENCH_DRAFT__
+    }
+  }, [applyComposerDraft, saveComposerDraftForSession])
 
   const kbScopeDocumentIds = useMemo(() => {
     const explicitIds = collectReferenceDocumentIds(selectedReferences)
@@ -685,6 +794,10 @@ const ChatPage: React.FC = () => {
   const currentSession = useMemo(
     () => sessions.find((session) => session.id === currentSessionId) || null,
     [currentSessionId, sessions]
+  )
+  const latestUserMessageId = useMemo(
+    () => [...currentMessages].reverse().find((item) => item.role === 'user')?.id || null,
+    [currentMessages]
   )
 
   const currentApprovalItem = useMemo(() => {
@@ -2149,36 +2262,120 @@ const ChatPage: React.FC = () => {
     }
   }
 
+  const handleCopyUserMessage = async (messageItem: ChatMessage): Promise<void> => {
+    try {
+      await navigator.clipboard.writeText(getUserMessagePlainText(messageItem))
+      emitSuccessMessage('已复制')
+    } catch (error) {
+      console.error(error)
+      emitErrorMessage('复制失败')
+    }
+  }
+
+  const handleEditUserMessage = async (messageItem: ChatMessage): Promise<void> => {
+    if (!currentSessionId || aiRunId || messageItem.id !== latestUserMessageId) return
+    try {
+      const response = await window.api.chatTurnRetractLatest({
+        sessionId: currentSessionId,
+        userMessageId: messageItem.id
+      })
+      if (!response.success || !response.userMessage) {
+        emitErrorMessage(response.error || '无法编辑这条消息')
+        return
+      }
+
+      const userMessage = response.userMessage
+      const draft: ComposerDraftValue = {
+        input: userMessage.content,
+        contentNodes: getUserMessageContentNodes(userMessage),
+        selectedReferences:
+          userMessage.selectedReferences ||
+          getUserMessageContentNodes(userMessage)
+            .filter(
+              (node): node is Extract<ChatMessageContentNode, { kind: 'reference' }> =>
+                node.kind === 'reference'
+            )
+            .map((node) => node.reference),
+        attachments: userMessage.attachments || []
+      }
+      setCurrentMessages(response.messages)
+      if (response.runId) {
+        delete activeRunMessageIdsRef.current[response.runId]
+      }
+      if (response.assistantMessageId) {
+        delete assistantArtifactsRef.current[response.assistantMessageId]
+        setAssistantTurns((previous) => {
+          const next = { ...previous }
+          delete next[response.assistantMessageId!]
+          return next
+        })
+      }
+      saveComposerDraftForSession(currentSessionId, draft)
+      applyComposerDraft(draft, `edit:${userMessage.id}`)
+      shouldAutoScrollRef.current = true
+      emitSuccessMessage('已放回输入框')
+      void refreshContextUsage(currentSessionId)
+    } catch (error) {
+      console.error(error)
+      emitErrorMessage('编辑失败')
+    }
+  }
+
   const renderUserMessage = (messageItem: ChatMessage): React.ReactNode => {
-    const contentNodes: ChatMessageContentNode[] =
-      messageItem.contentNodes && messageItem.contentNodes.length > 0
-        ? messageItem.contentNodes
-        : [
-            ...(messageItem.selectedReferences || []).map(
-              (reference): ChatMessageContentNode => ({ kind: 'reference', reference })
-            ),
-            ...(messageItem.content ? [{ kind: 'text' as const, text: messageItem.content }] : [])
-          ]
+    const contentNodes = getUserMessageContentNodes(messageItem)
+    const canEdit = Boolean(currentSessionId) && !aiRunId && messageItem.id === latestUserMessageId
     return (
-      <div key={messageItem.id} className="flex justify-end">
-        <div className="min-w-0 max-w-[66%]">
+      <div
+        key={messageItem.id}
+        className="group/user-message flex justify-end"
+        data-testid={`${workbenchSelectors.userMessagePrefix}-${messageItem.id}`}
+      >
+        <div className="flex min-w-0 max-w-[66%] flex-col items-end">
+          {messageItem.attachments && messageItem.attachments.length > 0 ? (
+            <div className="mb-2 flex max-w-full flex-wrap justify-end gap-2">
+              {messageItem.attachments.map((attachment) => (
+                <button
+                  key={attachment.id}
+                  type="button"
+                  className={`min-w-0 border border-[#E0DFDC] bg-white text-left shadow-none transition hover:border-[#CFCFCC] ${
+                    attachment.kind === 'image'
+                      ? 'h-[74px] w-[74px] overflow-hidden rounded-[12px] p-0'
+                      : 'flex max-w-[260px] items-center gap-2 rounded-[10px] px-2 py-1.5'
+                  }`}
+                  title={attachment.name}
+                  data-testid={`${workbenchSelectors.userMessageAttachmentPrefix}-${attachment.id}`}
+                  onClick={() => void window.api.openPath(attachment.path)}
+                >
+                  {attachment.kind === 'image' ? (
+                    messageAttachmentPreviewUrls[attachment.id] ? (
+                      <img
+                        src={messageAttachmentPreviewUrls[attachment.id]}
+                        alt={attachment.name}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <span className="flex h-full w-full items-center justify-center bg-[#F4F4F2] text-[#787774]">
+                        <HiPhoto className="h-5 w-5" />
+                      </span>
+                    )
+                  ) : (
+                    <>
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[8px] bg-[#F4F4F2] text-[#787774]">
+                        <HiDocumentText className="h-4 w-4" />
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block truncate text-[13px] font-medium leading-5 text-[#37352F]">
+                          {attachment.name}
+                        </span>
+                        <span className="block text-[12px] leading-4 text-[#787774]">文件</span>
+                      </span>
+                    </>
+                  )}
+                </button>
+              ))}
+            </div>
+          ) : null}
           <div className="min-w-0 rounded-[22px] bg-[#F4F4F2] px-4 py-2.5 text-[14px] leading-6 text-[#37352F] [overflow-wrap:anywhere]">
-            {messageItem.attachments && messageItem.attachments.length > 0 ? (
-              <div className="mb-2 flex flex-wrap gap-1.5">
-                {messageItem.attachments.map((attachment) => (
-                  <button
-                    key={attachment.id}
-                    type="button"
-                    className="inline-flex max-w-[220px] items-center gap-1.5 rounded-[7px] bg-white/80 px-2 py-1 text-[12px] leading-4 text-[#37352F] transition hover:bg-white"
-                    title={attachment.name}
-                    onClick={() => void window.api.openPath(attachment.path)}
-                  >
-                    {attachment.kind === 'image' ? '图片' : '文件'}
-                    <span className="truncate">{attachment.name}</span>
-                  </button>
-                ))}
-              </div>
-            ) : null}
             <div
               className="min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere]"
               data-testid={workbenchSelectors.userMessageReferences}
@@ -2199,6 +2396,36 @@ const ChatPage: React.FC = () => {
                 )
               )}
             </div>
+          </div>
+          <div
+            className="mt-1 flex h-6 items-center justify-end gap-1.5 text-[12px] leading-none text-[#9B9A97] opacity-0 transition-opacity duration-150 group-hover/user-message:opacity-100"
+            data-testid={`${workbenchSelectors.userMessageActionsPrefix}-${messageItem.id}`}
+          >
+            <span>{formatUserMessageTime(messageItem.timestamp)}</span>
+            <Tooltip title="复制">
+              <button
+                type="button"
+                className="inline-flex h-6 w-6 items-center justify-center rounded-[6px] text-[#9B9A97] transition hover:bg-[#F4F4F2] hover:text-[#37352F]"
+                aria-label="复制消息"
+                data-testid={`${workbenchSelectors.userMessageCopyButtonPrefix}-${messageItem.id}`}
+                onClick={() => void handleCopyUserMessage(messageItem)}
+              >
+                <HiOutlineClipboardDocument className="h-4 w-4" />
+              </button>
+            </Tooltip>
+            {canEdit ? (
+              <Tooltip title="编辑">
+                <button
+                  type="button"
+                  className="inline-flex h-6 w-6 items-center justify-center rounded-[6px] text-[#9B9A97] transition hover:bg-[#F4F4F2] hover:text-[#37352F]"
+                  aria-label="编辑消息"
+                  data-testid={`${workbenchSelectors.userMessageEditButtonPrefix}-${messageItem.id}`}
+                  onClick={() => void handleEditUserMessage(messageItem)}
+                >
+                  <HiOutlinePencilSquare className="h-4 w-4" />
+                </button>
+              </Tooltip>
+            ) : null}
           </div>
         </div>
       </div>
@@ -2543,7 +2770,7 @@ const ChatPage: React.FC = () => {
                   ref={scrollRef}
                   onScroll={handleMessageScroll}
                 >
-                  <div className="nc-document">
+                  <div className="nc-document" data-testid={workbenchSelectors.messageList}>
                     {loadingOlderMessages ? (
                       <div className="py-3 text-center text-xs text-[#8A8781]">
                         正在加载更早消息

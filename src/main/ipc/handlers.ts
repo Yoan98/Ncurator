@@ -41,6 +41,8 @@ import type {
   ChatSessionRunSummariesResponse,
   ChatSubmitRequest,
   ChatSubmitResponse,
+  ChatTurnRetractLatestRequest,
+  ChatTurnRetractLatestResponse,
   AttachmentPickResponse,
   AttachmentProcessResponse,
   AttachmentSaveTempRequest,
@@ -2548,6 +2550,21 @@ export function registerHandlers(services: {
       } catch (e: unknown) {
         console.error('[CHAT-SUBMIT] Error:', e)
         return { success: false, error: getErrorMessage(e) }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'chat-turn-retract-latest',
+    async (
+      _event,
+      payload: ChatTurnRetractLatestRequest
+    ): Promise<ChatTurnRetractLatestResponse> => {
+      try {
+        return await chatRunService.retractLatestTurn(payload)
+      } catch (e: unknown) {
+        console.error('[CHAT-TURN-RETRACT-LATEST] Error:', e)
+        return { success: false, messages: [], error: getErrorMessage(e) }
       }
     }
   )

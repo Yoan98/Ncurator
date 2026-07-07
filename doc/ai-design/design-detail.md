@@ -219,9 +219,19 @@ interface HumanTaskOutput {
 }
 
 type ChatConversationMemory = {
-  // 由 AI 在 run 成功后重写的跨任务滚动摘要。
+  // 由后台 conversation.memory batch job 重写的跨任务滚动摘要。
   summary: string
+  // 已纳入 summary 的最后一条 message；为 null 时表示尚未覆盖任何具体消息。
+  coveredMessageId: string | null
+  // covered message 的时间戳；当 message id 不存在时用于恢复边界。
+  coveredTimestamp: number | null
+  // 已纳入 summary 的消息数量。
+  coveredMessageCount: number
+  // memory 写入时间。
+  updatedAt: number
 }
+
+conversation memory 不再在每轮 run 完成后同步更新。`ChatRunService` 在 run 成功完成后后台检查当前 session 的未 covered messages；只有累计达到 12 条 message 时才调用 `conversation.memory` 生成新的完整 summary，并把 covered 边界推进到该 batch 的最后一条 message。后台 job 失败不改变主 run 结果；如果 job 期间 memory 边界或 batch messages 已变化，本次 summary 不写入。
 
 type ChatSessionResumeSnapshot = {
   // 上一次可恢复中断的失败原因。

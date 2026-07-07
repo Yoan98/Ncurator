@@ -1,8 +1,6 @@
 import { describe, it } from 'vitest'
-import { updateConversationMemoryAfterRun } from '../../../../../src/main/services/ai/memory'
 import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
-import { createScriptedStructuredOutputDriver } from '../../../../harness/backend/scriptedStructuredOutputDriver'
 import { buildCompleteTaskDecision } from '../testUtils'
 
 const SESSION_ID = 'conversation-memory-multi-run-session'
@@ -16,7 +14,7 @@ describe('ai human mock-llm backend', () => {
       suite: 'human',
       groups: ['mock-llm'],
       description:
-        '验证同一 session 下多次 run 后 conversation memory 会保留稳定主线、覆盖旧状态，并在下一次 brain prompt 中带入。',
+        '验证同一 session 下已有 covered conversation memory 与后续 recent turns 会在下一次 brain prompt 中共同带入。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -38,50 +36,13 @@ describe('ai human mock-llm backend', () => {
             }
           ],
           memory: {
-            summary: '发布准备主线已建立；当前缺少回滚负责人。'
+            summary:
+              '发布准备主线持续推进；当前状态：回滚负责人候选已更新为 Bob，审批仍未完成；未解决事项：上线窗口冲突待确认；现有产物：回滚负责人草稿、风险跟踪草稿、延期确认记录。',
+            coveredMessageId: 'conversation-memory-seed-assistant',
+            coveredTimestamp: startedAt + 1,
+            coveredMessageCount: 2,
+            updatedAt: startedAt + 1
           }
-        })
-
-        const conversationDriver = createScriptedStructuredOutputDriver({
-          'conversation.memory': [
-            {
-              output: {
-                summary:
-                '发布准备主线持续推进；当前状态：回滚负责人候选为 Alice，审批尚未完成；未解决事项：上线窗口冲突待确认；现有产物：回滚负责人草稿与风险跟踪草稿。'
-              }
-            },
-            {
-              output: {
-                summary:
-                '发布准备主线持续推进；当前状态：回滚负责人候选已更新为 Bob，审批仍未完成；未解决事项：上线窗口冲突待确认；现有产物：回滚负责人草稿、风险跟踪草稿、延期确认记录。'
-              }
-            }
-          ]
-        })
-
-        await updateConversationMemoryAfterRun({
-          runId: runtime.runId,
-          sessionId: SESSION_ID,
-          userInput: '请继续跟进回滚负责人。',
-          assistantOutput: '目前候选负责人是 Alice，但审批还没完成。',
-          artifacts: [
-            {
-              kind: 'file',
-              capability: 'docx',
-              applyId: 'apply-rollback-owner',
-              path: '/workspace/rollback-owner.docx',
-              fileName: 'rollback-owner.docx',
-              operation: 'created',
-              summary: '回滚负责人草稿'
-            }
-          ],
-          runtimeSettings: await runtime.storageService.aiRuntimeSettings.get(),
-          chatStore: runtime.chatStore,
-          llmStore: runtime.llmStore,
-          modelName: 'scripted-llm',
-          sendEvent: (event) => runtime.eventCollector.add(event),
-          recordLlmIo: (record) => runtime.eventCollector.addLlmIo(record),
-          llmDriver: conversationDriver
         })
 
         await runtime.seedChatHistory({
@@ -113,31 +74,6 @@ describe('ai human mock-llm backend', () => {
           ]
         })
 
-        await updateConversationMemoryAfterRun({
-          runId: runtime.runId,
-          sessionId: SESSION_ID,
-          userInput: '请把负责人更新和窗口冲突一并记录。',
-          assistantOutput: '已将负责人更新为 Bob，并记录上线窗口冲突待确认。',
-          artifacts: [
-            {
-              kind: 'file',
-              capability: 'docx',
-              applyId: 'apply-delay-note',
-              path: '/workspace/delay-note.docx',
-              fileName: 'delay-note.docx',
-              operation: 'created',
-              summary: '延期确认记录'
-            }
-          ],
-          runtimeSettings: await runtime.storageService.aiRuntimeSettings.get(),
-          chatStore: runtime.chatStore,
-          llmStore: runtime.llmStore,
-          modelName: 'scripted-llm',
-          sendEvent: (event) => runtime.eventCollector.add(event),
-          recordLlmIo: (record) => runtime.eventCollector.addLlmIo(record),
-          llmDriver: conversationDriver
-        })
-
         const savedMemory = await runtime.chatStore.getConversationMemory(SESSION_ID)
         let promptChecks = {
           summarySeen: false,
@@ -160,10 +96,13 @@ describe('ai human mock-llm backend', () => {
                     user.includes('<recent_turns>') &&
                     user.includes('上线窗口和审批情况有更新吗？') &&
                     user.includes('风险跟踪草稿'),
-                  oldStateCleared: !String(savedMemory?.summary || '').includes('Alice，审批尚未完成')
+                  oldStateCleared: !String(savedMemory?.summary || '').includes(
+                    'Alice，审批尚未完成'
+                  )
                 }
                 return buildCompleteTaskDecision({
-                  summary: '当前负责人候选是 Bob，审批未完成，且上线窗口冲突待确认。下一步先确认窗口，再推进审批。'
+                  summary:
+                    '当前负责人候选是 Bob，审批未完成，且上线窗口冲突待确认。下一步先确认窗口，再推进审批。'
                 })
               }
             ],
@@ -202,7 +141,7 @@ describe('ai human mock-llm backend', () => {
           {
             name: 'conversation-memory-multi-run-summary-and-recall-stay-consistent',
             message:
-              'conversation memory 应在多 run 后保留稳定主线、覆盖旧状态，并在下一次 brain prompt 与最终交付中正确带入。',
+              'conversation memory 应通过 covered 边界后的 recent turns 与既有 summary 共同进入下一次 brain prompt，并在最终交付中正确带入。',
             data: result
           }
         )

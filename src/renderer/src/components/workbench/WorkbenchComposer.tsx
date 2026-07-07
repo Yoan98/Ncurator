@@ -887,7 +887,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
               <button
                 key={attachment.id}
                 type="button"
-                className="group relative flex max-w-[260px] items-center gap-2 rounded-[8px] border border-[#E5E4E0] bg-white px-2 py-1.5 text-left shadow-[0_1px_2px_rgba(15,15,15,0.04)] transition hover:border-[#D8D7D3]"
+                className="group relative flex max-w-[260px] items-center gap-2 rounded-[8px] border border-[#E5E4E0] bg-white px-2 py-1.5 pr-7 text-left shadow-[0_1px_2px_rgba(15,15,15,0.04)] transition hover:border-[#D8D7D3]"
                 data-testid={`${workbenchSelectors.attachmentCardPrefix}-${attachment.id}`}
                 onClick={() => {
                   if (attachment.kind === 'image') {
@@ -912,7 +912,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                   </span>
                 ) : (
                   <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[7px] bg-[#F4F4F2] text-[#787774]">
-                    <HiDocumentText className="h-5 w-5" />
+                    <HiDocumentText className="h-4 w-4" />
                   </span>
                 )}
                 <span className="min-w-0 flex-1">
@@ -927,7 +927,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                   role="button"
                   tabIndex={0}
                   aria-label="移除附件"
-                  className="absolute -right-1.5 -top-1.5 hidden h-5 w-5 items-center justify-center rounded-full bg-[#37352F] text-white shadow group-hover:flex"
+                  className="absolute right-1 top-1 hidden h-[18px] w-[18px] items-center justify-center rounded-full bg-[#37352F] text-white shadow group-hover:flex"
                   data-testid={`${workbenchSelectors.attachmentRemoveButtonPrefix}-${attachment.id}`}
                   onClick={(event) => {
                     event.preventDefault()
@@ -941,7 +941,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                     removeAttachment(attachment.id)
                   }}
                 >
-                  <HiXMark className="h-3.5 w-3.5" />
+                  <HiXMark className="h-3 w-3" />
                 </span>
               </button>
             ))}

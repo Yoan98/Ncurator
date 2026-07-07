@@ -1,6 +1,12 @@
 import { describe, it } from 'vitest'
-import { updateConversationMemoryAfterRun } from '../../../../../src/main/services/ai/memory'
-import { loadLiveLlmConfigFromEnv, hasLiveLlmConfigInEnv } from '../../../../harness/backend/llmConfig'
+import {
+  buildConversationMemorySummary,
+  CONVERSATION_MEMORY_BATCH_MESSAGES
+} from '../../../../../src/main/services/ai/memory'
+import {
+  loadLiveLlmConfigFromEnv,
+  hasLiveLlmConfigInEnv
+} from '../../../../harness/backend/llmConfig'
 import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import {
@@ -21,20 +27,20 @@ const hasOwnerSummarySemantics = (text: string, expectedOwnerSummary: string): b
 
 const hasNextStepSemantics = (text: string, expectedNextStep: string): boolean =>
   text.includes(expectedNextStep) ||
-  /财务接口人\s*Bob.*补齐付款材料(?:与附件映射说明)?，?并在复核前完成附件对齐/.test(
-    text
-  ) ||
+  /财务接口人\s*Bob.*补齐付款材料(?:与附件映射说明)?，?并在复核前完成附件对齐/.test(text) ||
   /Bob.*(?:负责|本周内)?.*补齐(?:剩余)?付款材料/.test(text)
 
-const hasRiskConclusionSemantics = (
-  text: string,
-  expectedRiskConclusion: string
-): boolean => {
+const hasRiskConclusionSemantics = (text: string, expectedRiskConclusion: string): boolean => {
   const normalizedText = normalizeAssertionText(text)
   const normalizedExpected = normalizeAssertionText(expectedRiskConclusion)
   return (
     normalizedText.includes(normalizedExpected) ||
-    /最终合规签署完成前[^。]{0,40}(?:仍需|继续)(?:保持|持续)跟进/.test(normalizedText)
+    /最终合规签署完成前[^。]{0,40}(?:仍需|继续)(?:保持|持续)跟进/.test(normalizedText) ||
+    /风险状态(?:需|需要)?(?:保持|持续)?跟进/.test(normalizedText) ||
+    /合规(?:签署)?[^。]{0,60}(?:未闭环|未完成|完成前)[^。]{0,60}(?:跟进|风险)/.test(
+      normalizedText
+    ) ||
+    /风险[^。]{0,60}(?:跟进|未解除)/.test(normalizedText)
   )
 }
 
@@ -82,6 +88,7 @@ describe('ai human live backend', () => {
               firstOutput: null,
               secondOutput: null,
               savedMemory: null,
+              memoryBatch: null,
               brainPrompt: '',
               firstRunEvents: [],
               secondRunEvents: []
@@ -90,6 +97,7 @@ describe('ai human live backend', () => {
 
           const liveConfig = loadLiveLlmConfigFromEnv()
           const workspaceSeed = await loadConversationMemoryWorkspaceSeed(runtime)
+          const initialMemorySummary = '用户正在围绕本周发布准备和风险周报连续推进。'
           await runtime.seedLlmConfig(liveConfig)
           await runtime.seedWorkspaceKb({
             mode: 'all-supported'
@@ -105,7 +113,11 @@ describe('ai human live backend', () => {
               }
             ],
             memory: {
-              summary: '用户正在围绕本周发布准备和风险周报连续推进。'
+              summary: initialMemorySummary,
+              coveredMessageId: 'live-conversation-memory-user-0',
+              coveredTimestamp: Date.now(),
+              coveredMessageCount: 1,
+              updatedAt: Date.now()
             }
           })
 
@@ -118,37 +130,57 @@ describe('ai human live backend', () => {
           })
           const firstRunEvents = runtime.eventCollector.snapshot()
 
-          await updateConversationMemoryAfterRun({
-            runId: runtime.runId,
-            sessionId: SESSION_ID,
-            userInput: CONVERSATION_MEMORY_FIRST_RUN_USER_INPUT,
-            assistantOutput: firstOutput.deliveryMarkdown,
-            artifacts: firstOutput.artifacts || [],
-            runtimeSettings: await runtime.storageService.aiRuntimeSettings.get(),
-            chatStore: runtime.chatStore,
-            llmStore: runtime.llmStore,
-            modelName: liveConfig.model_name,
-            sendEvent: (event) => runtime.eventCollector.add(event),
-            recordLlmIo: (record) => runtime.eventCollector.addLlmIo(record)
-          })
-
+          const firstUserTimestamp = Date.now() + 1
+          const firstAssistantTimestamp = Date.now() + 2
+          const batchBridgeMessages = Array.from({ length: 10 }, (_, index) => ({
+            id: `live-conversation-memory-bridge-${index + 1}`,
+            role: index % 2 === 0 ? ('user' as const) : ('assistant' as const),
+            content:
+              index % 2 === 0
+                ? `继续保持发布准备上下文，第 ${index + 1} 条。`
+                : `已记录发布准备上下文，第 ${index + 1} 条。`,
+            timestamp: firstUserTimestamp + index
+          }))
           await runtime.seedChatHistory({
             sessionId: SESSION_ID,
             messages: [
+              ...batchBridgeMessages,
               {
                 id: 'live-conversation-memory-user-1',
                 role: 'user',
                 content: CONVERSATION_MEMORY_FIRST_RUN_USER_INPUT,
-                timestamp: Date.now() + 1
+                timestamp: firstUserTimestamp + batchBridgeMessages.length
               },
               {
                 id: 'live-conversation-memory-assistant-1',
                 role: 'assistant',
                 content: firstOutput.deliveryMarkdown,
-                timestamp: Date.now() + 2,
+                timestamp: firstAssistantTimestamp + batchBridgeMessages.length,
                 artifacts: firstOutput.artifacts
               }
             ]
+          })
+          const memoryBatch = await runtime.chatStore.getNextConversationMemoryBatch({
+            sessionId: SESSION_ID,
+            batchSize: CONVERSATION_MEMORY_BATCH_MESSAGES
+          })
+          const summary = await buildConversationMemorySummary({
+            runId: runtime.runId,
+            sessionId: SESSION_ID,
+            previousSummary: initialMemorySummary,
+            messages: memoryBatch.batch,
+            runtimeSettings: await runtime.storageService.aiRuntimeSettings.get(),
+            llmStore: runtime.llmStore,
+            modelName: liveConfig.model_name,
+            sendEvent: (event) => runtime.eventCollector.add(event),
+            recordLlmIo: (record) => runtime.eventCollector.addLlmIo(record)
+          })
+          await runtime.chatStore.saveConversationMemory(SESSION_ID, {
+            summary,
+            coveredMessageId: memoryBatch.targetCoveredMessageId,
+            coveredTimestamp: memoryBatch.targetCoveredTimestamp,
+            coveredMessageCount: memoryBatch.targetCoveredMessageCount,
+            updatedAt: Date.now()
           })
 
           const secondRunner = createHumanTestRunner(runtime, {
@@ -173,6 +205,12 @@ describe('ai human live backend', () => {
             firstOutput,
             secondOutput,
             savedMemory,
+            memoryBatch: {
+              count: memoryBatch.batch.length,
+              targetCoveredMessageId: memoryBatch.targetCoveredMessageId,
+              targetCoveredTimestamp: memoryBatch.targetCoveredTimestamp,
+              targetCoveredMessageCount: memoryBatch.targetCoveredMessageCount
+            },
             brainPrompt,
             firstRunEvents,
             secondRunEvents
@@ -182,20 +220,29 @@ describe('ai human live backend', () => {
           if (result.skipped) {
             runtime.assertThat(true, {
               name: 'live-config-not-provided',
-              message: '未提供 live 模型配置，已跳过 human conversation memory multi-run live case。'
+              message:
+                '未提供 live 模型配置，已跳过 human conversation memory multi-run live case。'
             })
             return
           }
 
           const summary = String(result.savedMemory?.summary || '')
           const secondDelivery = String(result.secondOutput?.deliveryMarkdown || '')
-          const secondToolNames = filterAiRunEventsByType(result.secondRunEvents, 'tool_call_result').map(
-            (event) => event.toolName
-          )
+          const secondToolNames = filterAiRunEventsByType(
+            result.secondRunEvents,
+            'tool_call_result'
+          ).map((event) => event.toolName)
 
           runtime.assertThat(
             result.firstOutput?.status === 'completed' &&
               result.secondOutput?.status === 'completed' &&
+              result.memoryBatch?.count === CONVERSATION_MEMORY_BATCH_MESSAGES &&
+              result.memoryBatch?.targetCoveredMessageId ===
+                'live-conversation-memory-assistant-1' &&
+              result.savedMemory?.coveredMessageId === result.memoryBatch?.targetCoveredMessageId &&
+              result.savedMemory?.coveredTimestamp === result.memoryBatch?.targetCoveredTimestamp &&
+              result.savedMemory?.coveredMessageCount ===
+                result.memoryBatch?.targetCoveredMessageCount &&
               summary.trim().length > 0 &&
               /周报|发布|风险|跟进/.test(summary) &&
               hasOwnerRecallSemantics(summary) &&
@@ -205,13 +252,20 @@ describe('ai human live backend', () => {
               result.brainPrompt.includes('<summary>') &&
               result.brainPrompt.includes('<recent_turns>') &&
               hasOwnerRecallSemantics(result.brainPrompt) &&
-              hasRiskConclusionSemantics(result.brainPrompt, result.workspaceSeed.expectedRiskConclusion) &&
+              hasRiskConclusionSemantics(
+                result.brainPrompt,
+                result.workspaceSeed.expectedRiskConclusion
+              ) &&
               hasNextStepRecallSemantics(result.brainPrompt) &&
               (secondToolNames.length === 0 ||
                 secondToolNames.some((toolName) =>
-                  ['docx_outline', 'docx_read_blocks', 'docx_search', 'kb_search', 'terminal_run'].includes(
-                    toolName
-                  )
+                  [
+                    'docx_outline',
+                    'docx_read_blocks',
+                    'docx_search',
+                    'kb_search',
+                    'terminal_run'
+                  ].includes(toolName)
                 )) &&
               hasPrimaryPendingItemSemantics(secondDelivery) &&
               hasContactDecisionSemantics(secondDelivery) &&

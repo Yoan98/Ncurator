@@ -100,7 +100,7 @@ tests/case/workbench/
 - `pnpm test:workbench:e2e` 是 Workbench UI E2E 回归测试入口。
 - AI case 缺少 `AI_LIVE_BASE_URL`、`AI_LIVE_API_KEY`、`AI_LIVE_PRIMARY_MODEL_NAME` 时必须 preflight fail，不得静默跳过。
 - `conversation / run / result` 是稳定 suite，不因 PRD 小节增删而轻易重排。
-- suite 下的 `session / composer / scope / process / blocker / browser / search / preview / apply` 是 group，只在同一 suite 内用于收敛相近 case。
+- suite 下的 `session / composer / message / scope / process / blocker / browser / search / preview / apply` 是 group，只在同一 suite 内用于收敛相近 case。
 
 ## 5. 回归测试清单
 
@@ -123,6 +123,15 @@ tests/case/workbench/
 - How：通过 UI 配置真实模型和工作区；覆盖空输入、无工作区、发送中、模式切换、模型搜索、切换工作区 / 模型后重进页面，以及缓存候选失效后的回退；真实发送时走真实模型。
 - Oracle：空白输入、未绑定工作区或发送中不会触发发送，且发送按钮 hover 可见禁用原因，对齐 `WB-COMPOSER-001-AC1` 至 `WB-COMPOSER-001-AC3`、`WB-COMPOSER-005-AC1`；拦截提示明确要求先选择工作区，对齐 `WB-COMPOSER-005-AC2`；切换模式后输入保留且发送路径按新模式执行，对齐 `WB-MODE-001-AC1`、`WB-MODE-001-AC2`；模型搜索、偏好恢复、失效回退、入口图标和“大聪明 / 没头脑”展示符合 `WB-COMPOSER-007-AC1` 至 `WB-COMPOSER-007-AC5`。
 - Not：不验证真实模型回答质量，只验证用户路径和发送前置条件。
+
+#### `user-message-actions`
+
+- 测试类型：`e2e`
+- What：验证用户消息 hover 操作、latest turn 编辑撤回、running 态编辑入口隐藏，以及用户消息附件展示。
+- Why：用户编辑上一条消息依赖撤回最新 turn、回填 composer 和附件 UI 协同；任一状态错误都会导致重复发送、误编辑运行中消息或附件被正文挤压遮挡。
+- How：使用真实 Workbench UI 发送一条搜索消息，hover 用户消息并触发复制与编辑；再粘贴图片和文件附件，发送 AI 请求后在 running 状态检查用户消息气泡和附件布局。
+- Oracle：hover 后显示时间、复制和编辑；复制给出成功反馈；编辑会撤回最新 turn 并把原文回填输入框；running 状态不显示编辑；图片/文件附件显示在用户消息气泡上方，输入框附件关闭按钮保持可点击且不被遮挡。
+- Not：不验证模型回答质量；附件解析/图片识别使用 E2E override 保持 UI 行为测试稳定。
 
 #### `reference-mention-keyboard`
 

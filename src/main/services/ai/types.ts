@@ -229,11 +229,7 @@ export type AiRunContext = {
   getLlmConfig: () => Promise<LlmRuntimeConfig>
   browserUseService?: BrowserUseService
   webCrawlerService?: WebCrawlerService
-  loadConversationContext: (limits?: {
-    recentTurns?: number
-    maxRecentTurnsChars?: number
-    maxSummaryChars?: number
-  }) => Promise<{ recentTurnsText: string; conversationSummaryText: string }>
+  loadConversationContext: () => Promise<{ recentTurnsText: string; conversationSummaryText: string }>
   loadConversationMemory: () => Promise<ChatConversationMemory | null>
   trackDocxOpen: (input: {
     docId: string

@@ -81,6 +81,18 @@ export class ChatStore {
     await table.mergeInsert('id').whenMatchedUpdateAll().whenNotMatchedInsertAll().execute([row])
   }
 
+  private isValidConversationMemory(value: unknown): value is ChatConversationMemory {
+    if (!value || typeof value !== 'object') return false
+    const record = value as Partial<ChatConversationMemory>
+    return (
+      typeof record.summary === 'string' &&
+      (typeof record.coveredMessageId === 'string' || record.coveredMessageId === null) &&
+      (typeof record.coveredTimestamp === 'number' || record.coveredTimestamp === null) &&
+      typeof record.coveredMessageCount === 'number' &&
+      typeof record.updatedAt === 'number'
+    )
+  }
+
   public async saveConversationMemory(
     sessionId: string,
     memory: ChatConversationMemory
@@ -92,7 +104,7 @@ export class ChatStore {
       {
         session_id: sessionId,
         memory_json: JSON.stringify(memory),
-        updated_at: Date.now()
+        updated_at: memory.updatedAt || Date.now()
       }
     ])
   }
@@ -104,11 +116,18 @@ export class ChatStore {
     const row = rows?.[0]
     if (!row?.memory_json) return null
     try {
-      return JSON.parse(String(row.memory_json)) as ChatConversationMemory
+      const parsed = JSON.parse(String(row.memory_json))
+      return this.isValidConversationMemory(parsed) ? parsed : null
     } catch (e) {
       void e
       return null
     }
+  }
+
+  public async clearConversationMemory(sessionId: string): Promise<void> {
+    const safeId = this.core.escapeSqlString(sessionId)
+    const table = await this.core.openTable(LANCE_TABLES.CHAT_CONVERSATION_MEMORY)
+    await table.delete(`session_id = '${safeId}'`)
   }
 
   public async saveSessionResumeSnapshot(
@@ -227,6 +246,15 @@ export class ChatStore {
     await resumeTable.delete(`session_id = '${safeId}'`)
   }
 
+  public async deleteChatMessagesByIds(messageIds: string[]): Promise<void> {
+    const safeIds = messageIds.map((id) => String(id || '').trim()).filter(Boolean)
+    if (safeIds.length === 0) return
+    const where = this.core.buildInClause('id', safeIds)
+    if (!where) return
+    const table = await this.core.openTable(LANCE_TABLES.CHAT_MESSAGE)
+    await table.delete(where)
+  }
+
   public async saveChatMessage(message: ChatMessage): Promise<void> {
     await this.mergeById(LANCE_TABLES.CHAT_MESSAGE, {
       id: message.id,
@@ -298,6 +326,60 @@ export class ChatStore {
     return {
       messages: messages.sort((a, b) => a.timestamp - b.timestamp),
       hasMoreBefore: sorted.length > safeLimit
+    }
+  }
+
+  public async getMessagesAfterConversationMemory(sessionId: string): Promise<ChatMessage[]> {
+    const messages = await this.getChatMessages(sessionId)
+    const memory = await this.getConversationMemory(sessionId)
+    if (!memory?.coveredMessageId) return messages
+
+    const coveredIndex = messages.findIndex((message) => message.id === memory.coveredMessageId)
+    if (coveredIndex >= 0) return messages.slice(coveredIndex + 1)
+
+    if (typeof memory.coveredTimestamp === 'number') {
+      return messages.filter((message) => message.timestamp > Number(memory.coveredTimestamp))
+    }
+    return messages
+  }
+
+  public async getNextConversationMemoryBatch(input: {
+    sessionId: string
+    batchSize: number
+  }): Promise<{
+    memory: ChatConversationMemory | null
+    batch: ChatMessage[]
+    targetCoveredMessageId: string | null
+    targetCoveredTimestamp: number | null
+    targetCoveredMessageCount: number
+  }> {
+    const messages = await this.getChatMessages(input.sessionId)
+    const memory = await this.getConversationMemory(input.sessionId)
+    const batchSize = Math.max(1, Math.min(50, Number(input.batchSize || 12)))
+    let startIndex = 0
+
+    if (memory?.coveredMessageId) {
+      const coveredIndex = messages.findIndex((message) => message.id === memory.coveredMessageId)
+      if (coveredIndex >= 0) {
+        startIndex = coveredIndex + 1
+      } else if (typeof memory.coveredTimestamp === 'number') {
+        startIndex = messages.findIndex(
+          (message) => message.timestamp > Number(memory.coveredTimestamp)
+        )
+        if (startIndex < 0) startIndex = messages.length
+      }
+    }
+
+    const batch = messages.slice(startIndex, startIndex + batchSize)
+    const target = batch[batch.length - 1] || null
+    return {
+      memory,
+      batch,
+      targetCoveredMessageId: target?.id || null,
+      targetCoveredTimestamp: target?.timestamp || null,
+      targetCoveredMessageCount: target
+        ? startIndex + batch.length
+        : memory?.coveredMessageCount || 0
     }
   }
 

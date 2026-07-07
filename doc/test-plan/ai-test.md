@@ -835,10 +835,10 @@ AI unit / 辅助测试目录：
 ##### `conversation-memory-multi-run-recall`
 
 - 测试类型：`backend`
-- What：验证同一 `session` 下连续多次 run 后，`conversation memory` 会保留稳定主线、覆盖过时状态，并在下一次真实 `brain` prompt 中带回。
-- Why：跨任务连续性依赖持久 `conversation memory`；如果只能做单次 update happy path，就无法证明旧状态会被覆盖、未解决事项会被保留。
-- How：先 seed 一条发布准备主线；连续两次调用真实 `updateConversationMemoryAfterRun`，分别写入“负责人候选为 Alice”和“负责人更新为 Bob 且上线窗口冲突待确认”；随后启动同一 session 的真实 `human` graph 并检查 prompt 与最终交付。
-- Oracle：保存下来的 `summary` 同时保留当前有效状态、未解决事项和产物状态；后续 `brain` prompt 同时含 `<conversation_summary>` 与 `<recent_turns>`；旧状态不会继续出现；最终交付会提到 Bob、上线窗口冲突和下一步安排。
+- What：验证同一 `session` 下已有 covered `conversation memory` 与 covered 边界后的 recent turns 会在下一次真实 `brain` prompt 中共同带回。
+- Why：跨任务连续性依赖持久 `conversation memory` 与未 covered 最近消息协同工作；只验证单次 summary happy path 无法证明 batch 边界后的内容仍可被召回。
+- How：seed 一条带 `coveredMessageId / coveredTimestamp / coveredMessageCount` 的发布准备 summary，再 seed covered 边界之后的新 user/assistant turns；随后启动同一 session 的真实 `human` graph 并检查 prompt 与最终交付。
+- Oracle：`brain` prompt 同时含 `<conversation_history>`、`<summary>` 与 `<recent_turns>`；summary 中旧状态不会继续出现；recent turns 中的新问题和产物状态可见；最终交付会提到 Bob、上线窗口冲突和下一步安排。
 - Not：不验证 live 模型总结质量；不验证 session 隔离。
 
 ##### `ai-run-service-resume-snapshot`
@@ -929,8 +929,8 @@ AI unit / 辅助测试目录：
 - 测试类型：`backend`
 - What：验证 live 模式下基于真实 workspace 的 conversation memory 会在双 run 间延续关键业务状态，并被后续真实 `brain` 正确带回。
 - Why：真实环境里的会话连续性不能脱离 workspace 语义；如果记忆里提到的对象在工作区中不存在，模型会合理地转去做环境核验，导致样例失真。
-- How：复用风险周报 live 的真实 workspace；第一轮只做“状态梳理，不新建文件”，完成后通过真实 `updateConversationMemoryAfterRun` 写入 session memory；第二轮在同一 session、同一 workspace 下追问“当前最关键的待确认项、应该先找谁、为什么”，允许模型继续读取真实资料。
-- Oracle：`summary` 非空且保留风险主线、负责人、待确认项与下一步；第二轮 `brain` prompt 同时出现 `<conversation_summary>` 与 `<recent_turns>`；即使模型重新读取文件，也不应偏离第一轮形成的连续业务主线；最终交付继续命中负责人、阻塞项和后续动作，并体现第一轮总结对第二轮真实判断的延续影响。
+- How：复用风险周报 live 的真实 workspace；第一轮只做“状态梳理，不新建文件”；随后构造满足 12 条 message 的真实 batch，通过 live `conversation.memory` 调用生成 summary，并保存 covered 边界；第二轮在同一 session、同一 workspace 下追问“当前最关键的待确认项、应该先找谁、为什么”，允许模型继续读取真实资料。
+- Oracle：`summary` 非空且保留风险主线、负责人、待确认项与下一步；保存的 `coveredMessageId / coveredTimestamp / coveredMessageCount` 指向 12-message batch 边界；第二轮 `brain` prompt 同时出现 `<conversation_history>`、`<summary>` 与 `<recent_turns>`；即使模型重新读取文件，也不应偏离第一轮形成的连续业务主线；最终交付继续命中负责人、阻塞项和后续动作，并体现第一轮总结对第二轮真实判断的延续影响。
 - Not：不要求第二轮禁止 reread workspace；不逐字约束 live 模型措辞；不验证 session 隔离。
 
 ##### `human-session-resume-with-new-selection-live`

@@ -30,20 +30,18 @@ export const parseRefHref = (href?: string): ParsedRefLink => {
     const rawKind = params.get('kind')
     const rawResourceType = params.get('resourceType')
     const path = params.get('path') || ''
-    if (!path) {
+    if (
+      !path ||
+      (rawKind !== 'reference' && rawKind !== 'normal') ||
+      (rawResourceType !== 'file' && rawResourceType !== 'web')
+    ) {
       return {
         type: 'normal',
         href
       }
     }
-    const kind: ParsedNcuratorRefKind =
-      rawKind === 'reference' || rawKind === 'normal' ? rawKind : 'normal'
-    const resourceType: ParsedNcuratorRefResourceType =
-      rawResourceType === 'file' || rawResourceType === 'web'
-        ? rawResourceType
-        : /^https?:\/\//i.test(path)
-          ? 'web'
-          : 'file'
+    const kind: ParsedNcuratorRefKind = rawKind
+    const resourceType: ParsedNcuratorRefResourceType = rawResourceType
     const normalizedPath = path.replace(/\\/g, '/')
     const fallbackLabel = normalizedPath.split('/').filter(Boolean).pop() || normalizedPath || path
     const label = params.get('label') || fallbackLabel
