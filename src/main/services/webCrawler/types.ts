@@ -14,19 +14,40 @@ export type WebCrawlerResult = {
   raw: JsonObject
 }
 
+export type WebSearchResultItem = {
+  rank: number
+  title: string
+  url: string
+  snippet?: string
+}
+
+export type WebSearchResult = {
+  query: string
+  results: WebSearchResultItem[]
+  raw: JsonObject
+}
+
 export type WebCrawlerService = {
-  crawl: (input: { url: string; topic?: string }) => Promise<WebCrawlerResult>
+  crawl: (input: { url: string }) => Promise<WebCrawlerResult>
+  search: (input: { query: string }) => Promise<WebSearchResult>
   close: () => Promise<void>
 }
 
-export type WebCrawlerSidecarRequest = {
-  id: string
-  action: 'crawl'
-  input: {
-    url: string
-    topic?: string
-  }
-}
+export type WebCrawlerSidecarRequest =
+  | {
+      id: string
+      action: 'crawl'
+      input: {
+        url: string
+      }
+    }
+  | {
+      id: string
+      action: 'search'
+      input: {
+        query: string
+      }
+    }
 
 export type WebCrawlerSidecarSuccessResponse = {
   id: string

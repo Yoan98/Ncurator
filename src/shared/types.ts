@@ -1002,6 +1002,16 @@ export type BrowserPanelMutationResponse = {
   error?: string
 }
 
+export type BrowserPanelState = {
+  url: string
+  title?: string
+  zoomPercent: number
+}
+
+export type BrowserPanelStateResponse = BrowserPanelMutationResponse & {
+  state?: BrowserPanelState
+}
+
 export type AiContextUsageRequest = {
   sessionId: string
 }

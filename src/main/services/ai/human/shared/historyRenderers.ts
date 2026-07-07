@@ -114,6 +114,15 @@ const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
     previousRevisionRef: true,
     currentRevisionRef: true,
   },
+  web_search: {
+    query: true,
+    results: {
+      rank: true,
+      title: true,
+      url: true,
+      snippet: true
+    }
+  },
   web_crawl: {
     finalUrl: true,
     title: true,

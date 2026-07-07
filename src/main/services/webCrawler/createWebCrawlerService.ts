@@ -2,7 +2,7 @@ import {
   ManagedWebCrawlerService,
   type WebCrawlerServiceOptions
 } from './WebCrawlerService'
-import type { WebCrawlerResult, WebCrawlerService } from './types'
+import type { WebCrawlerResult, WebCrawlerService, WebSearchResult } from './types'
 
 export class UnavailableWebCrawlerService implements WebCrawlerService {
   public readonly reason: string
@@ -13,6 +13,10 @@ export class UnavailableWebCrawlerService implements WebCrawlerService {
 
   public async crawl(): Promise<WebCrawlerResult> {
     throw new Error(`网页抓取服务不可用：${this.reason}`)
+  }
+
+  public async search(): Promise<WebSearchResult> {
+    throw new Error(`网页搜索服务不可用：${this.reason}`)
   }
 
   public async close(): Promise<void> {

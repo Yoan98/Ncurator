@@ -1,6 +1,14 @@
-import React, { useEffect, useRef } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { Button, Tooltip } from 'antd'
-import { HiArrowTopRightOnSquare, HiArrowPath, HiGlobeAlt } from 'react-icons/hi2'
+import {
+  HiArrowPath,
+  HiArrowTopRightOnSquare,
+  HiArrowUturnLeft,
+  HiGlobeAlt,
+  HiMinus,
+  HiPlus
+} from 'react-icons/hi2'
+import type { BrowserPanelState } from '../../../../shared/types'
 import { workbenchSelectors } from '../../testing/selectors'
 
 const notifyBounds = (element: HTMLDivElement | null): void => {
@@ -17,11 +25,23 @@ const notifyBounds = (element: HTMLDivElement | null): void => {
 
 const WorkbenchBrowserPanel: React.FC = () => {
   const viewportRef = useRef<HTMLDivElement | null>(null)
+  const [browserState, setBrowserState] = useState<BrowserPanelState>({
+    url: '',
+    zoomPercent: 100
+  })
 
   useEffect(() => {
     const element = viewportRef.current
     notifyBounds(element)
     void window.api.browserPanelShow()
+    void window.api.browserPanelStateGet().then((response) => {
+      if (response.success && response.state) {
+        setBrowserState(response.state)
+      }
+    })
+    const unsubscribeState = window.api.onBrowserPanelStateChange((state) => {
+      setBrowserState(state)
+    })
 
     const observer = new ResizeObserver(() => notifyBounds(element))
     if (element) observer.observe(element)
@@ -31,11 +51,23 @@ const WorkbenchBrowserPanel: React.FC = () => {
 
     return () => {
       observer.disconnect()
+      unsubscribeState()
       window.removeEventListener('resize', handleWindowChange)
       window.removeEventListener('scroll', handleWindowChange, true)
       void window.api.browserPanelHide()
     }
   }, [])
+
+  const applyStateResponse = async (
+    action: () => Promise<{ success: boolean; state?: BrowserPanelState; error?: string }>
+  ): Promise<void> => {
+    const response = await action()
+    if (response.success && response.state) {
+      setBrowserState(response.state)
+    }
+  }
+
+  const displayUrl = browserState.url.trim() || '等待打开网页'
 
   return (
     <div
@@ -45,9 +77,41 @@ const WorkbenchBrowserPanel: React.FC = () => {
       <div className="flex h-10 shrink-0 items-center justify-between border-b border-[#EEEEEC] px-3">
         <div className="flex min-w-0 items-center gap-2 text-[13px] font-semibold text-[#37352F]">
           <HiGlobeAlt className="h-4 w-4 shrink-0 text-[#787774]" />
-          <span className="truncate">内置浏览器</span>
+          <span className="truncate" title={browserState.url || undefined}>
+            {displayUrl}
+          </span>
         </div>
         <div className="flex shrink-0 items-center gap-1">
+          <Tooltip title="缩小">
+            <Button
+              type="text"
+              size="small"
+              aria-label="缩小"
+              icon={<HiMinus className="h-4 w-4" />}
+              onClick={() => void applyStateResponse(() => window.api.browserPanelZoomOut())}
+            />
+          </Tooltip>
+          <Tooltip title="重置缩放">
+            <Button
+              type="text"
+              size="small"
+              aria-label="重置缩放"
+              className="min-w-12 px-1 text-xs"
+              icon={<HiArrowUturnLeft className="h-3.5 w-3.5" />}
+              onClick={() => void applyStateResponse(() => window.api.browserPanelZoomReset())}
+            >
+              {browserState.zoomPercent}%
+            </Button>
+          </Tooltip>
+          <Tooltip title="放大">
+            <Button
+              type="text"
+              size="small"
+              aria-label="放大"
+              icon={<HiPlus className="h-4 w-4" />}
+              onClick={() => void applyStateResponse(() => window.api.browserPanelZoomIn())}
+            />
+          </Tooltip>
           <Tooltip title="刷新">
             <Button
               type="text"

@@ -6,7 +6,7 @@ import { withToolLifecycle } from '../utils/lifecycle'
 import { createToolEventEmitter } from '../utils/toolEvents'
 import { checkToolResultSize } from '../utils/resultSizeGuard'
 import type { ToolFamilyDefinition } from '../types'
-import { BROWSER_USE_TOOL_SPEC, WEB_CRAWL_TOOL_SPEC } from './toolSpecs'
+import { BROWSER_USE_TOOL_SPEC, WEB_CRAWL_TOOL_SPEC, WEB_SEARCH_TOOL_SPEC } from './toolSpecs'
 
 const webSourceService = new WebSourceService()
 
@@ -45,6 +45,90 @@ export const webToolFamily: ToolFamilyDefinition = {
       taskId
     })
 
+    const webSearch = tool(
+      async (args) =>
+        await withToolLifecycle({
+          emitter: toolEvents,
+          toolName: WEB_SEARCH_TOOL_SPEC.name,
+          args: args as IpcJsonObject,
+          execute: async (session) => {
+            ctx.checkCancelled()
+            const service = ctx.webCrawlerService
+            if (!service) {
+              const payload = { error: 'web_search service unavailable' }
+              session.fail(
+                payload.error,
+                undefined,
+                buildToolResult({
+                  toolName: WEB_SEARCH_TOOL_SPEC.name,
+                  ok: false,
+                  data: payload
+                })
+              )
+              return payload
+            }
+
+            const query = String(args.query || '').trim()
+            try {
+              const result = await service.search({ query })
+              const payload = {
+                query: result.query,
+                results: result.results
+              }
+              const sizeCheck = checkToolResultSize({
+                toolName: WEB_SEARCH_TOOL_SPEC.name,
+                value: payload,
+                modelContextWindowTokens:
+                  ctx.humanRuntimeOverrides?.modelContextWindowTokens ||
+                  DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS
+              })
+              if (sizeCheck.tooLarge) {
+                const tooLargePayload = {
+                  error: 'web_search result too large',
+                  query: result.query,
+                  reason: 'result_too_large',
+                  estimatedTokens: sizeCheck.estimatedTokens,
+                  limit: sizeCheck.limit,
+                  ...(sizeCheck.decisionHint ? { decisionHint: sizeCheck.decisionHint } : {})
+                }
+                session.fail(
+                  tooLargePayload.error,
+                  undefined,
+                  buildToolResult({
+                    toolName: WEB_SEARCH_TOOL_SPEC.name,
+                    ok: false,
+                    data: tooLargePayload
+                  })
+                )
+                return tooLargePayload
+              }
+
+              session.succeed(
+                undefined,
+                buildToolResult({ toolName: WEB_SEARCH_TOOL_SPEC.name, ok: true, data: payload })
+              )
+              return payload
+            } catch (error) {
+              const payload = {
+                error: getErrorMessage(error instanceof Error ? error : new Error(String(error))),
+                query
+              }
+              session.fail(
+                payload.error,
+                undefined,
+                buildToolResult({ toolName: WEB_SEARCH_TOOL_SPEC.name, ok: false, data: payload })
+              )
+              return payload
+            }
+          }
+        }),
+      {
+        name: WEB_SEARCH_TOOL_SPEC.name,
+        description: WEB_SEARCH_TOOL_SPEC.promptSpec.description,
+        schema: WEB_SEARCH_TOOL_SPEC.inputSchema
+      }
+    )
+
     const webCrawl = tool(
       async (args) =>
         await withToolLifecycle({
@@ -68,7 +152,6 @@ export const webToolFamily: ToolFamilyDefinition = {
               return payload
             }
             const rawUrl = String(args.url || '').trim()
-            const topic = typeof args.topic === 'string' && args.topic.trim() ? args.topic.trim() : undefined
             let normalizedUrl = rawUrl
             try {
               normalizedUrl = webSourceService.normalizeUrl(rawUrl).url
@@ -87,8 +170,7 @@ export const webToolFamily: ToolFamilyDefinition = {
 
             try {
               const result = await service.crawl({
-                url: normalizedUrl,
-                ...(topic ? { topic } : {})
+                url: normalizedUrl
               })
               const payload = {
                 finalUrl: result.finalUrl,
@@ -277,6 +359,6 @@ export const webToolFamily: ToolFamilyDefinition = {
       }
     )
 
-    return [webCrawl, browserUse]
+    return [webSearch, webCrawl, browserUse]
   }
 }

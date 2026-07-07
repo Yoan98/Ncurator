@@ -8,7 +8,12 @@ import {
   EMBEDDED_BROWSER_REMOTE_DEBUGGING_PORT,
   EMBEDDED_BROWSER_STAGEHAND_TIMEOUT_MS
 } from './constants'
-import type { BrowserPanelBoundsState, BrowserUseRunInput, BrowserUseRunResult } from './types'
+import type {
+  BrowserPanelBoundsState,
+  BrowserPanelState,
+  BrowserUseRunInput,
+  BrowserUseRunResult
+} from './types'
 import { resolveStagehandModelConfig } from '../llm/stagehandModel'
 
 type StagehandModule = typeof import('@browserbasehq/stagehand')
@@ -103,6 +108,19 @@ const stringifyStagehandExtraction = (value: object): string => {
   return JSON.stringify(value)
 }
 
+const ZOOM_STEP = 0.1
+const MIN_ZOOM_FACTOR = 0.5
+const MAX_ZOOM_FACTOR = 2
+
+const clampZoomFactor = (value: number): number =>
+  Math.min(MAX_ZOOM_FACTOR, Math.max(MIN_ZOOM_FACTOR, value))
+
+const resolveInitialZoomFactor = (width: number): number => {
+  if (width < 720) return 0.85
+  if (width < 960) return 0.9
+  return 1
+}
+
 export class BrowserEmbedService implements BrowserUseService {
   private readonly mainWindow: BrowserWindow
   private view: WebContentsView | null = null
@@ -113,6 +131,8 @@ export class BrowserEmbedService implements BrowserUseService {
     height: 0,
     visible: false
   }
+  private userAdjustedZoom = false
+  private initialZoomApplied = false
 
   public constructor(mainWindow: BrowserWindow) {
     this.mainWindow = mainWindow
@@ -138,6 +158,7 @@ export class BrowserEmbedService implements BrowserUseService {
   public setBounds(bounds: BrowserPanelBoundsState): void {
     this.bounds = bounds
     this.applyBounds()
+    this.applyInitialZoomIfNeeded()
   }
 
   public async navigate(rawUrl: string): Promise<void> {
@@ -158,6 +179,37 @@ export class BrowserEmbedService implements BrowserUseService {
     const url = this.view?.webContents.getURL()
     if (!url) return
     void shell.openExternal(url)
+  }
+
+  public getState(): BrowserPanelState {
+    const webContents = this.view?.webContents
+    if (!webContents || webContents.isDestroyed()) {
+      return {
+        url: '',
+        zoomPercent: 100
+      }
+    }
+    const title = webContents.getTitle().trim()
+    return {
+      url: webContents.getURL(),
+      ...(title ? { title } : {}),
+      zoomPercent: Math.round(webContents.getZoomFactor() * 100)
+    }
+  }
+
+  public zoomIn(): BrowserPanelState {
+    this.setZoomFactor(this.getCurrentZoomFactor() + ZOOM_STEP, true)
+    return this.getState()
+  }
+
+  public zoomOut(): BrowserPanelState {
+    this.setZoomFactor(this.getCurrentZoomFactor() - ZOOM_STEP, true)
+    return this.getState()
+  }
+
+  public zoomReset(): BrowserPanelState {
+    this.setZoomFactor(1, true)
+    return this.getState()
   }
 
   public async run(input: BrowserUseRunInput): Promise<BrowserUseRunResult> {
@@ -184,6 +236,10 @@ export class BrowserEmbedService implements BrowserUseService {
       void this.view?.webContents.loadURL(details.url)
       return { action: 'deny' }
     })
+    this.view.webContents.on('did-navigate', () => this.emitState())
+    this.view.webContents.on('did-navigate-in-page', () => this.emitState())
+    this.view.webContents.on('did-finish-load', () => this.emitState())
+    this.view.webContents.on('page-title-updated', () => this.emitState())
     this.mainWindow.contentView.addChildView(this.view)
     this.applyBounds()
     return this.view
@@ -207,6 +263,33 @@ export class BrowserEmbedService implements BrowserUseService {
           height: 0
         }
     this.view.setBounds(nextBounds)
+  }
+
+  private applyInitialZoomIfNeeded(): void {
+    if (this.initialZoomApplied || this.userAdjustedZoom) return
+    if (!this.bounds.visible || this.bounds.width <= 0) return
+    this.initialZoomApplied = true
+    this.setZoomFactor(resolveInitialZoomFactor(this.bounds.width), false)
+  }
+
+  private getCurrentZoomFactor(): number {
+    const webContents = this.view?.webContents
+    if (!webContents || webContents.isDestroyed()) return 1
+    return webContents.getZoomFactor()
+  }
+
+  private setZoomFactor(value: number, userAdjusted: boolean): void {
+    const view = this.ensureView()
+    if (userAdjusted) {
+      this.userAdjustedZoom = true
+    }
+    view.webContents.setZoomFactor(clampZoomFactor(value))
+    this.emitState()
+  }
+
+  private emitState(): void {
+    if (this.mainWindow.isDestroyed()) return
+    this.mainWindow.webContents.send('browser-panel-state-change', this.getState())
   }
 
   private async runDom(input: BrowserUseRunInput): Promise<BrowserUseRunResult> {

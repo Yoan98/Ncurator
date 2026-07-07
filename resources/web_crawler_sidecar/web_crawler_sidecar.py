@@ -1,18 +1,16 @@
 import asyncio
 import json
 import os
-import re
 import sys
 from typing import Any
-from urllib.parse import urljoin, urlparse
 
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "0")
 
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig
+from ddgs import DDGS
 
 
-MAX_VISITED_PAGES = 3
-MAX_FOLLOW_LINKS = 2
+MAX_SEARCH_RESULTS = 8
 
 
 class CrawlFailure(Exception):
@@ -131,11 +129,11 @@ def build_failure_data(
     return data
 
 
-def flatten_links(value: Any, base_url: str | None = None) -> list[dict[str, str]]:
+def flatten_links(value: Any) -> list[dict[str, str]]:
     if isinstance(value, list):
         items: list[dict[str, str]] = []
         for item in value:
-            items.extend(flatten_links(item, base_url))
+            items.extend(flatten_links(item))
         return items
 
     if not isinstance(value, dict):
@@ -147,56 +145,20 @@ def flatten_links(value: Any, base_url: str | None = None) -> list[dict[str, str
         or read_nested_string(value, "link")
     )
     if href:
-        normalized_href = urljoin(base_url, href) if base_url else href
         text = (
             read_nested_string(value, "text")
             or read_nested_string(value, "title")
             or read_nested_string(value, "context")
         )
-        item = {"href": normalized_href}
+        item = {"href": href}
         if text:
             item["text"] = text
         return [item]
 
     items: list[dict[str, str]] = []
     for nested in value.values():
-        items.extend(flatten_links(nested, base_url))
+        items.extend(flatten_links(nested))
     return items
-
-
-def same_origin(url_a: str, url_b: str) -> bool:
-    parsed_a = urlparse(url_a)
-    parsed_b = urlparse(url_b)
-    return parsed_a.scheme == parsed_b.scheme and parsed_a.netloc == parsed_b.netloc
-
-
-def tokenize_topic(value: str | None) -> set[str]:
-    if not value:
-        return set()
-    words = re.findall(r"[\u4e00-\u9fff]+|[A-Za-z0-9_]+", value.lower())
-    tokens: set[str] = set()
-    for word in words:
-        tokens.add(word)
-        if len(word) > 1 and re.fullmatch(r"[\u4e00-\u9fff]+", word):
-            tokens.update(word[index : index + 2] for index in range(len(word) - 1))
-    return tokens
-
-
-def score_text(text: str, topic_tokens: set[str]) -> int:
-    if not text or not topic_tokens:
-        return 0
-    lowered = text.lower()
-    return sum(1 for token in topic_tokens if token and token in lowered)
-
-
-def score_link(link: dict[str, str], topic_tokens: set[str]) -> int:
-    return score_text(" ".join([link.get("href", ""), link.get("text", "")]), topic_tokens)
-
-
-def score_page(raw: dict[str, Any], topic_tokens: set[str]) -> int:
-    title = read_nested_string(raw, "title") or ""
-    markdown = extract_markdown(raw)
-    return score_text(f"{title}\n{markdown}", topic_tokens)
 
 
 async def crawl_once(crawler: AsyncWebCrawler, url: str) -> dict[str, Any]:
@@ -230,62 +192,51 @@ async def crawl_once(crawler: AsyncWebCrawler, url: str) -> dict[str, Any]:
     return raw_result
 
 
-def read_visited_urls(results: list[dict[str, Any]]) -> set[str]:
-    visited: set[str] = set()
-    for result in results:
-        resolved = resolve_result_url(result)
-        if resolved:
-            visited.add(resolved)
-        requested = read_nested_string(result, "url")
-        if requested:
-            visited.add(requested)
-    return visited
+async def handle_crawl(crawler: AsyncWebCrawler, url: str) -> dict[str, Any]:
+    return {
+        "selected_result": await crawl_once(crawler, url),
+    }
 
 
-async def handle_crawl(
-    crawler: AsyncWebCrawler, url: str, topic: str | None
-) -> dict[str, Any]:
-    visited_results: list[dict[str, Any]] = []
-    topic_tokens = tokenize_topic(topic)
-    seed_result = await crawl_once(crawler, url)
-    visited_results.append(seed_result)
-    selected_result = seed_result
-    selected_score = score_page(seed_result, topic_tokens)
+def normalize_search_result(item: dict[str, Any], rank: int) -> dict[str, Any] | None:
+    title = read_string(item.get("title"))
+    url = read_string(item.get("href")) or read_string(item.get("url"))
+    if not title or not url:
+        return None
+    result: dict[str, Any] = {
+        "rank": rank,
+        "title": title,
+        "url": url,
+    }
+    snippet = read_string(item.get("body")) or read_string(item.get("snippet"))
+    if snippet:
+        result["snippet"] = snippet
+    return result
 
-    if topic_tokens:
-        seed_url = resolve_result_url(seed_result, url) or url
-        seed_links = flatten_links(seed_result.get("links"), seed_url)
-        internal_candidates = [
-            link
-            for link in seed_links
-            if read_string(link.get("href")) and same_origin(seed_url, link.get("href", ""))
-        ]
-        scored_candidates = sorted(
-            internal_candidates,
-            key=lambda link: score_link(link, topic_tokens),
-            reverse=True,
-        )
-        visited_urls = read_visited_urls(visited_results)
-        for link in scored_candidates[:MAX_FOLLOW_LINKS]:
-            if len(visited_results) >= MAX_VISITED_PAGES:
-                break
-            href = link.get("href")
-            if not href or href in visited_urls:
-                continue
-            try:
-                candidate_result = await crawl_once(crawler, href)
-            except CrawlFailure:
-                continue
-            visited_results.append(candidate_result)
-            visited_urls = read_visited_urls(visited_results)
-            candidate_score = score_page(candidate_result, topic_tokens)
-            if candidate_score > selected_score:
-                selected_result = candidate_result
-                selected_score = candidate_score
+
+async def handle_search(query: str) -> dict[str, Any]:
+    def run_search() -> list[dict[str, Any]]:
+        with DDGS() as ddgs:
+            return list(ddgs.text(query, max_results=MAX_SEARCH_RESULTS))
+
+    raw_results = await asyncio.to_thread(run_search)
+    normalized_results: list[dict[str, Any]] = []
+    seen_urls: set[str] = set()
+    for item in raw_results:
+        if not isinstance(item, dict):
+            continue
+        normalized = normalize_search_result(item, len(normalized_results) + 1)
+        if not normalized:
+            continue
+        url = normalized["url"]
+        if url in seen_urls:
+            continue
+        seen_urls.add(url)
+        normalized_results.append(normalized)
 
     return {
-        "selected_result": selected_result,
-        "visited_results": visited_results,
+        "query": query,
+        "results": normalized_results,
     }
 
 
@@ -293,8 +244,7 @@ async def process_requests() -> None:
     browser_config = BrowserConfig(headless=True, verbose=False)
     browser_config.chrome_channel = ""
     browser_config.channel = ""
-    crawler = AsyncWebCrawler(config=browser_config)
-    await crawler.start()
+    crawler: AsyncWebCrawler | None = None
     try:
         for line in sys.stdin:
             message = line.strip()
@@ -310,17 +260,24 @@ async def process_requests() -> None:
                 action = str(request.get("action", "")).strip()
                 if not request_id:
                     raise ValueError("missing request id")
-                if action != "crawl":
+                if action not in {"crawl", "search"}:
                     raise ValueError(f"unsupported action: {action}")
                 input_payload = request.get("input", {})
                 if not isinstance(input_payload, dict):
                     raise ValueError("invalid input payload")
-                url = read_string(input_payload.get("url"))
-                topic = read_string(input_payload.get("topic"))
-                if not url:
-                    raise ValueError("missing crawl url")
-
-                data = await handle_crawl(crawler, url, topic)
+                if action == "crawl":
+                    url = read_string(input_payload.get("url"))
+                    if not url:
+                        raise ValueError("missing crawl url")
+                    if crawler is None:
+                        crawler = AsyncWebCrawler(config=browser_config)
+                        await crawler.start()
+                    data = await handle_crawl(crawler, url)
+                else:
+                    query = read_string(input_payload.get("query"))
+                    if not query:
+                        raise ValueError("missing search query")
+                    data = await handle_search(query)
                 response = {"id": request_id, "ok": True, "data": data}
             except CrawlFailure as error:
                 response = {
@@ -339,7 +296,8 @@ async def process_requests() -> None:
             sys.stdout.write(json.dumps(response, ensure_ascii=False) + "\n")
             sys.stdout.flush()
     finally:
-        await crawler.close()
+        if crawler is not None:
+            await crawler.close()
 
 
 def main() -> None:

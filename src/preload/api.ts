@@ -2,6 +2,8 @@ import type {
   AiRuntimeSettings,
   BrowserPanelBoundsRequest,
   BrowserPanelMutationResponse,
+  BrowserPanelState,
+  BrowserPanelStateResponse,
   AiRunApprovalBatchDecisionRequest,
   AiRunApprovalBatchDecisionResponse,
   AiRunCancelResponse,
@@ -260,6 +262,11 @@ export type DesktopApi = {
   browserPanelHide: () => Promise<BrowserPanelMutationResponse>
   browserPanelReload: () => Promise<BrowserPanelMutationResponse>
   browserPanelOpenExternal: () => Promise<BrowserPanelMutationResponse>
+  browserPanelStateGet: () => Promise<BrowserPanelStateResponse>
+  browserPanelZoomIn: () => Promise<BrowserPanelStateResponse>
+  browserPanelZoomOut: () => Promise<BrowserPanelStateResponse>
+  browserPanelZoomReset: () => Promise<BrowserPanelStateResponse>
+  onBrowserPanelStateChange: (cb: (state: BrowserPanelState) => void) => () => void
   docxApplyGet: (payload: GetDocxApplyRecordRequest) => Promise<GetDocxApplyRecordResponse>
   aiFileChangeList: (
     payload?: ListAiFileChangeRecordsRequest

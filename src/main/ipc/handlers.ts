@@ -55,6 +55,7 @@ import type {
   AiRunApprovalBatchDecisionResponse,
   BrowserPanelBoundsRequest,
   BrowserPanelMutationResponse,
+  BrowserPanelStateResponse,
   GetDocxApplyRecordRequest,
   GetDocxApplyRecordResponse,
   GetAiFileChangeRecordRequest,
@@ -2346,6 +2347,42 @@ export function registerHandlers(services: {
       if (!browserEmbedService) return { success: false, error: 'browser service unavailable' }
       browserEmbedService.openExternal()
       return { success: true }
+    } catch (e) {
+      return { success: false, error: e instanceof Error ? e.message : String(e) }
+    }
+  })
+
+  ipcMain.handle('browser-panel-state-get', async (): Promise<BrowserPanelStateResponse> => {
+    try {
+      if (!browserEmbedService) return { success: false, error: 'browser service unavailable' }
+      return { success: true, state: browserEmbedService.getState() }
+    } catch (e) {
+      return { success: false, error: e instanceof Error ? e.message : String(e) }
+    }
+  })
+
+  ipcMain.handle('browser-panel-zoom-in', async (): Promise<BrowserPanelStateResponse> => {
+    try {
+      if (!browserEmbedService) return { success: false, error: 'browser service unavailable' }
+      return { success: true, state: browserEmbedService.zoomIn() }
+    } catch (e) {
+      return { success: false, error: e instanceof Error ? e.message : String(e) }
+    }
+  })
+
+  ipcMain.handle('browser-panel-zoom-out', async (): Promise<BrowserPanelStateResponse> => {
+    try {
+      if (!browserEmbedService) return { success: false, error: 'browser service unavailable' }
+      return { success: true, state: browserEmbedService.zoomOut() }
+    } catch (e) {
+      return { success: false, error: e instanceof Error ? e.message : String(e) }
+    }
+  })
+
+  ipcMain.handle('browser-panel-zoom-reset', async (): Promise<BrowserPanelStateResponse> => {
+    try {
+      if (!browserEmbedService) return { success: false, error: 'browser service unavailable' }
+      return { success: true, state: browserEmbedService.zoomReset() }
     } catch (e) {
       return { success: false, error: e instanceof Error ? e.message : String(e) }
     }

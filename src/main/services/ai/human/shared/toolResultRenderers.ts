@@ -305,6 +305,31 @@ const renderWebCrawlResult = (obj: JsonObject): string =>
     .filter(Boolean)
     .join('\n')
 
+const renderWebSearchResults = (value: JsonValue | undefined): string => {
+  if (!Array.isArray(value) || value.length === 0) return 'none'
+
+  return value
+    .map((item, index) => {
+      if (!isJsonObject(item)) return renderGenericArrayItem(item, index)
+      return `${index + 1}. ${renderKeyValuePairs([
+        ['rank', readNumberTextField(item, 'rank')],
+        ['title', readStringField(item, 'title')],
+        ['url', readStringField(item, 'url')],
+        ['snippet', readStringField(item, 'snippet')]
+      ])}`
+    })
+    .join('\n')
+}
+
+const renderWebSearchResult = (obj: JsonObject): string =>
+  [
+    renderKeyValuePairs([['query', readStringField(obj, 'query')]]),
+    'results:',
+    renderWebSearchResults(obj.results)
+  ]
+    .filter(Boolean)
+    .join('\n')
+
 const renderDocxCreateResult = (obj: JsonObject): string =>
   [
     renderKeyValuePairs([
@@ -369,6 +394,8 @@ export const renderToolResultDataText = (
       return renderDocxOutlineResult(value)
     case 'docx_history':
       return renderDocxHistoryResult(value)
+    case 'web_search':
+      return renderWebSearchResult(value)
     case 'web_crawl':
       return renderWebCrawlResult(value)
     default:

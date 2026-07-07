@@ -1,5 +1,6 @@
 import type { BrowserUseAction, BrowserUseResult } from '../ai/types'
 import type { LlmRuntimeConfig } from '../../../shared/types'
+import type { BrowserPanelState } from '../../../shared/types'
 
 export type BrowserPanelBoundsState = {
   x: number
@@ -17,3 +18,5 @@ export type BrowserUseRunInput = {
 }
 
 export type BrowserUseRunResult = BrowserUseResult
+
+export type { BrowserPanelState }

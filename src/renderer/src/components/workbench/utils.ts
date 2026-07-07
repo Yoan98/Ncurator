@@ -73,6 +73,7 @@ const isAssistantToolName = (toolName: string): toolName is AssistantToolName =>
   toolName === 'docx_history' ||
   toolName === 'docx_edit' ||
   toolName === 'docx_rollback' ||
+  toolName === 'web_search' ||
   toolName === 'web_crawl' ||
   toolName === 'browser_use' ||
   toolName === 'wait_time' ||
@@ -202,7 +203,7 @@ const getToolUiKind = (toolName?: AssistantToolName): AssistantProcessSkillKey =
   if (toolName === 'docx_rollback') return 'docx-rollback'
   if (toolName === 'kb_search' || toolName === 'kb_list_documents') return 'kb'
   if (toolName === 'terminal_run') return 'terminal'
-  if (toolName === 'web_crawl') return 'web-read'
+  if (toolName === 'web_search' || toolName === 'web_crawl') return 'web-read'
   if (toolName === 'browser_use') return 'browser'
   if (toolName === 'wait_time') return 'wait'
   return 'generic'
@@ -349,6 +350,11 @@ const getToolItemText = (
     if (status === 'running') return sentence(text('正在查看工作空间文档列表'))
     if (status === 'completed') return sentence(text('已查看工作空间文档列表'))
     return sentence(text('查看工作空间文档列表失败'))
+  }
+  if (toolName === 'web_search') {
+    if (status === 'running') return sentence(text('正在搜索网页：'), text(queryLabel, true))
+    if (status === 'completed') return sentence(text('已搜索网页：'), text(queryLabel, true))
+    return sentence(text('搜索网页失败：'), text(queryLabel, true))
   }
   if (toolName === 'web_crawl') {
     if (status === 'running') return sentence(text('正在读取网页：'), text(urlLabel, true))

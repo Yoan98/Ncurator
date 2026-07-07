@@ -3,6 +3,7 @@ import { electronAPI } from '@electron-toolkit/preload'
 import type {
   AiRunEvent,
   AppUpdateSnapshot,
+  BrowserPanelState,
   JsonValue,
   SearchSourceFilter,
   WorkspaceIndexJobRecord
@@ -344,6 +345,10 @@ const api: DesktopApi = {
   browserPanelHide: () => ipcRenderer.invoke('browser-panel-hide'),
   browserPanelReload: () => ipcRenderer.invoke('browser-panel-reload'),
   browserPanelOpenExternal: () => ipcRenderer.invoke('browser-panel-open-external'),
+  browserPanelStateGet: () => ipcRenderer.invoke('browser-panel-state-get'),
+  browserPanelZoomIn: () => ipcRenderer.invoke('browser-panel-zoom-in'),
+  browserPanelZoomOut: () => ipcRenderer.invoke('browser-panel-zoom-out'),
+  browserPanelZoomReset: () => ipcRenderer.invoke('browser-panel-zoom-reset'),
   docxApplyGet: (payload) => ipcRenderer.invoke('docx-apply-get', payload),
   aiFileChangeList: (payload) => ipcRenderer.invoke('ai-file-change-list', payload),
   aiFileChangeGet: (payload) => ipcRenderer.invoke('ai-file-change-get', payload),
@@ -370,6 +375,15 @@ const api: DesktopApi = {
     ipcRenderer.on('ai-run-event', listener)
     return () => {
       ipcRenderer.removeListener('ai-run-event', listener)
+    }
+  },
+  onBrowserPanelStateChange: (cb: (state: BrowserPanelState) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, state: BrowserPanelState): void => {
+      cb(state)
+    }
+    ipcRenderer.on('browser-panel-state-change', listener)
+    return () => {
+      ipcRenderer.removeListener('browser-panel-state-change', listener)
     }
   }
 }

@@ -3,8 +3,11 @@ import type { HumanToolSpec } from '../types'
 import { createStaticExecutionMetaResolver } from '../utils/toolSpecUtils'
 
 export const WEB_CRAWL_SCHEMA = z.object({
-  url: z.string().min(1),
-  topic: z.string().min(1).optional()
+  url: z.string().min(1)
+})
+
+export const WEB_SEARCH_SCHEMA = z.object({
+  query: z.string().min(1)
 })
 
 export const BROWSER_USE_SCHEMA = z.object({
@@ -30,6 +33,24 @@ export const WEB_CRAWL_OUTPUT_SCHEMA = z.union([
     error: z.string(),
     finalUrl: z.string().optional(),
     statusCode: z.number().int().optional()
+  })
+])
+
+export const WEB_SEARCH_OUTPUT_SCHEMA = z.union([
+  z.object({
+    query: z.string(),
+    results: z.array(
+      z.object({
+        rank: z.number().int(),
+        title: z.string(),
+        url: z.string(),
+        snippet: z.string().optional()
+      })
+    )
+  }),
+  z.object({
+    error: z.string(),
+    query: z.string().optional()
   })
 ])
 
@@ -80,14 +101,42 @@ export const WEB_CRAWL_TOOL_SPEC: HumanToolSpec<
   promptSpec: {
     name: 'web_crawl',
     description:
-      '能力：抓取公开网页，并返回当前选中的最相关页面的正文 markdown、标题、发布时间和可继续跟进的链接。\n结果：支持基于 topic 做链接排序，并在必要时少量自动跟进相关页面；因此 finalUrl 可能不同于输入 url，只要返回了 finalUrl/title/markdown，就表示已成功抓取到选中页面正文。\n边界：不执行登录、点击、输入或验证码等浏览器交互。',
-    whenToUse: '适用于需要读取公开网页、基于页面内容继续判断下一步要抓取哪个链接的任务。',
+      '能力：抓取一个明确的公开网页 URL，并返回该网页正文 markdown、标题、发布时间和页面链接。\n结果：返回 finalUrl/title/markdown/links 表示已读取该 URL 对应网页正文。\n边界：不执行全网搜索，不解析搜索结果页，不执行登录、点击、输入或验证码等浏览器交互。',
+    whenToUse: '适用于已经有明确网页 URL，需要读取该网页正文内容的任务。',
     examples: [
       {
-        goal: '读取一个公开网页，并围绕当前主题查找更相关的页面内容',
+        goal: '读取一个公开网页正文',
         args: {
-          url: 'https://example.com',
-          topic: '查询退费规则和到账时限'
+          url: 'https://example.com'
+        }
+      }
+    ]
+  },
+  resolveExecutionMeta: WEB_EXECUTION_META
+}
+
+export const WEB_SEARCH_TOOL_SPEC: HumanToolSpec<
+  z.infer<typeof WEB_SEARCH_SCHEMA>,
+  z.infer<typeof WEB_SEARCH_OUTPUT_SCHEMA>,
+  'web_search',
+  'web-browsing'
+> = {
+  name: 'web_search',
+  familyId: 'web',
+  skillIds: ['web-browsing'],
+  requiresWorkspace: false,
+  inputSchema: WEB_SEARCH_SCHEMA,
+  outputSchema: WEB_SEARCH_OUTPUT_SCHEMA,
+  promptSpec: {
+    name: 'web_search',
+    description:
+      '能力：根据关键词搜索公开网页，并返回候选网页的标题、URL 和摘要。\n结果：返回的是候选网页列表，不是网页正文证据；需要确认具体内容时，应继续使用 web_crawl 读取明确 URL。\n边界：只搜索公开网页，不读取网页正文，不执行登录、点击、输入或验证码等浏览器交互。',
+    whenToUse: '适用于用户只给出问题或关键词、还没有明确网页 URL，但需要查找相关公开网页的任务。',
+    examples: [
+      {
+        goal: '搜索最近 DeepSeek 融资相关公开网页',
+        args: {
+          query: '最近 DeepSeek 融资情况'
         }
       }
     ]
@@ -128,4 +177,4 @@ export const BROWSER_USE_TOOL_SPEC: HumanToolSpec<
   })
 }
 
-export const WEB_TOOL_SPECS = [WEB_CRAWL_TOOL_SPEC, BROWSER_USE_TOOL_SPEC] as const
+export const WEB_TOOL_SPECS = [WEB_SEARCH_TOOL_SPEC, WEB_CRAWL_TOOL_SPEC, BROWSER_USE_TOOL_SPEC] as const

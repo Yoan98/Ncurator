@@ -11,7 +11,7 @@ SIDECAR_SCRIPT = ROOT / "resources" / "web_crawler_sidecar" / "web_crawler_sidec
 OUTPUT_DIR = ROOT / "resources" / "web_crawler_sidecar" / "bin"
 SIDECAR_NAME = "web_crawler_sidecar"
 PYINSTALLER_CONFIG_DIR = ROOT / ".pyinstaller" / "web_crawler_sidecar"
-BUNDLED_PLAYWRIGHT_BROWSER_PREFIXES = ("chromium_headless_shell-", "ffmpeg-")
+BUNDLED_PLAYWRIGHT_BROWSER_PREFIXES = ("chromium-", "chromium_headless_shell-", "ffmpeg-")
 
 
 def platform_name() -> str:
@@ -132,6 +132,8 @@ def main() -> int:
         str(build_path / "spec"),
         "--collect-all",
         "crawl4ai",
+        "--collect-all",
+        "ddgs",
         str(SIDECAR_SCRIPT),
     ]
     env = {

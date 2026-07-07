@@ -9,7 +9,9 @@ import type {
   WebCrawlerResult,
   WebCrawlerService as WebCrawlerServiceContract,
   WebCrawlerSidecarRequest,
-  WebCrawlerSidecarResponse
+  WebCrawlerSidecarResponse,
+  WebSearchResult,
+  WebSearchResultItem
 } from './types'
 
 type SidecarCommand = {
@@ -239,6 +241,40 @@ const normalizeResult = (payload: JsonObject): WebCrawlerResult => {
   }
 }
 
+const normalizeSearchResults = (value: JsonValue | undefined): WebSearchResultItem[] => {
+  if (!Array.isArray(value)) return []
+  const results: WebSearchResultItem[] = []
+  const seenUrls = new Set<string>()
+  for (const item of value) {
+    if (!isObjectRecord(item)) continue
+    const title = readObjectString(item, 'title')
+    const url = readObjectString(item, 'url') || readObjectString(item, 'href')
+    if (!title || !url || seenUrls.has(url)) continue
+    seenUrls.add(url)
+    results.push({
+      rank: readObjectNumber(item, 'rank') || results.length + 1,
+      title,
+      url,
+      ...(readObjectString(item, 'snippet') || readObjectString(item, 'body')
+        ? { snippet: readObjectString(item, 'snippet') || readObjectString(item, 'body') }
+        : {})
+    })
+  }
+  return results
+}
+
+const normalizeSearchResult = (payload: JsonObject): WebSearchResult => {
+  const query = readObjectString(payload, 'query')
+  if (!query) {
+    throw new Error('web crawler sidecar search result missing query')
+  }
+  return {
+    query,
+    results: normalizeSearchResults(payload.results),
+    raw: payload
+  }
+}
+
 const toJsonString = (value: WebCrawlerSidecarRequest): string => `${JSON.stringify(value)}\n`
 
 const getPackagedExecutableName = (): string =>
@@ -302,7 +338,7 @@ const resolveDefaultSidecarCommand = (options: WebCrawlerServiceOptions): Sideca
     const executablePath = resolveDevelopmentSidecarExecutablePath(appRootPath)
     assertExecutableExists(
       executablePath,
-      'missing development web crawler sidecar binary. Run `pnpm run build:sidecar` before using web_crawl'
+      'missing development web crawler sidecar binary. Run `pnpm run build:sidecar` before using web tools'
     )
     return {
       executablePath,
@@ -347,16 +383,26 @@ export class ManagedWebCrawlerService implements WebCrawlerServiceContract {
     )
   }
 
-  public async crawl(input: { url: string; topic?: string }): Promise<WebCrawlerResult> {
+  public async crawl(input: { url: string }): Promise<WebCrawlerResult> {
     const payload = await this.sendRequest({
       id: randomUUID(),
       action: 'crawl',
       input: {
-        url: input.url,
-        ...(input.topic ? { topic: input.topic } : {})
+        url: input.url
       }
     })
     return normalizeResult(payload)
+  }
+
+  public async search(input: { query: string }): Promise<WebSearchResult> {
+    const payload = await this.sendRequest({
+      id: randomUUID(),
+      action: 'search',
+      input: {
+        query: input.query
+      }
+    })
+    return normalizeSearchResult(payload)
   }
 
   public async close(): Promise<void> {

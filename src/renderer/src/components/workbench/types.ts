@@ -93,6 +93,7 @@ export type AssistantToolName =
   | 'docx_history'
   | 'docx_edit'
   | 'docx_rollback'
+  | 'web_search'
   | 'web_crawl'
   | 'browser_use'
   | 'wait_time'

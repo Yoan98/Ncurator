@@ -26,6 +26,17 @@ type WebCrawlResult = {
   }
 }
 
+type WebSearchResult = {
+  query?: string
+  results?: Array<{
+    rank?: number
+    title?: string
+    url?: string
+    snippet?: string
+  }>
+  error?: string
+}
+
 type BrowserUseResult = {
   error?: string
 }
@@ -166,15 +177,73 @@ describe('ai tool web backend', () => {
     })
   })
 
-  it('web-crawl-navigation-contract', async () => {
+  it('web-search-contract', async () => {
     await runBackendCase({
-      caseId: 'web-crawl-navigation-contract',
+      caseId: 'web-search-contract',
       harnessMode: 'tool-real',
       domain: 'ai',
       suite: 'tool',
       groups: ['web-browsing'],
-      description:
-        '验证 web_crawl 在导航页上会基于 topic 自动跟进相关页面，并保留可继续跟进的链接。',
+      description: '验证 web_search 返回结构化候选网页结果。',
+      fixtures: [],
+      runMode: 'single',
+      execute: async (runtime) => {
+        const harness = createWebToolHarness(runtime, {
+          webCrawlerService: {
+            async search(input) {
+              return {
+                query: input.query,
+                results: [
+                  {
+                    rank: 1,
+                    title: 'DeepSeek 510亿A轮融资全解析',
+                    url: 'https://example.com/deepseek-funding',
+                    snippet: 'DeepSeek 完成首轮外部融资 510 亿元。'
+                  }
+                ],
+                raw: {
+                  query: input.query,
+                  results: []
+                }
+              }
+            },
+            async crawl() {
+              throw new Error('crawl should not be called')
+            },
+            async close() {
+              return
+            }
+          }
+        })
+        return await harness.invoke<WebSearchResult>('web_search', {
+          query: '最近 DeepSeek 融资情况'
+        })
+      },
+      assert: async (result, runtime) => {
+        runtime.assertThat(
+          result.query === '最近 DeepSeek 融资情况' &&
+            Array.isArray(result.results) &&
+            result.results.length === 1 &&
+            result.results[0]?.rank === 1 &&
+            result.results[0]?.url === 'https://example.com/deepseek-funding',
+          {
+            name: 'web-search-returns-structured-candidates',
+            message: 'web_search 应返回 query 和结构化候选网页结果。',
+            data: result
+          }
+        )
+      }
+    })
+  })
+
+  it('web-crawl-entry-page-contract', async () => {
+    await runBackendCase({
+      caseId: 'web-crawl-entry-page-contract',
+      harnessMode: 'tool-real',
+      domain: 'ai',
+      suite: 'tool',
+      groups: ['web-browsing'],
+      description: '验证 web_crawl 只读取输入 URL 对应网页，并保留页面链接。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -185,8 +254,7 @@ describe('ai tool web backend', () => {
             webCrawlerService
           })
           return await harness.invoke<WebCrawlResult>('web_crawl', {
-            url: `${server.baseUrl}/`,
-            topic: '灵活就业补贴的申请条件和截止时间'
+            url: `${server.baseUrl}/`
           })
         } finally {
           await webCrawlerService.close()
@@ -195,13 +263,13 @@ describe('ai tool web backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.finalUrl?.endsWith('/policy') === true &&
-            Boolean(result.markdown?.includes('灵活就业人员可申请本次补贴')) &&
+          result.title === '就业服务首页' &&
+            Boolean(result.markdown?.includes('这里汇总了通知公告和办事指南')) &&
             Array.isArray(result.links) &&
-            result.links.some((link) => link.href?.endsWith('/guide')),
+            result.links.some((link) => link.href?.endsWith('/policy')),
           {
-            name: 'web-crawl-follows-relevant-links-from-navigation-page',
-            message: 'web_crawl 在导航页上应能基于 topic 选中更相关页面，并保留可继续跟进的链接。',
+            name: 'web-crawl-reads-entry-page-without-auto-follow',
+            message: 'web_crawl 应读取输入 URL 对应网页并返回页面链接，不再自动跟进其他链接。',
             data: result
           }
         )

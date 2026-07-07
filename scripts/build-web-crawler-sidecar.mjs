@@ -46,9 +46,21 @@ const canRun = (command, args) => {
   return result.status === 0
 }
 
+const canRunSupportedPython = (command, args) =>
+  canRun(command, [
+    ...args,
+    '-c',
+    'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)'
+  ])
+
 const resolveBootstrapPython = () => {
   const override = String(process.env.NCURATOR_SIDECAR_BUILD_PYTHON || '').trim()
   if (override) {
+    if (!canRunSupportedPython(override, [])) {
+      throw new Error(
+        `NCURATOR_SIDECAR_BUILD_PYTHON must point to Python >= 3.10: ${override}`
+      )
+    }
     return {
       command: override,
       args: []
@@ -63,18 +75,21 @@ const resolveBootstrapPython = () => {
           { command: 'python3', args: [] }
         ]
       : [
+          { command: 'python3.12', args: [] },
+          { command: 'python3.11', args: [] },
+          { command: 'python3.10', args: [] },
           { command: 'python3', args: [] },
           { command: 'python', args: [] }
         ]
 
   for (const candidate of candidates) {
-    if (canRun(candidate.command, [...candidate.args, '--version'])) {
+    if (canRunSupportedPython(candidate.command, candidate.args)) {
       return candidate
     }
   }
 
   throw new Error(
-    'No bootstrap Python was found. Set NCURATOR_SIDECAR_BUILD_PYTHON to a usable Python executable.'
+    'No Python >= 3.10 was found. Set NCURATOR_SIDECAR_BUILD_PYTHON to a usable Python executable.'
   )
 }
 
