@@ -346,9 +346,9 @@ const getToolItemText = (
     return sentence(text('搜索 '), text(queryLabel, true), text(' 失败'))
   }
   if (toolName === 'kb_list_documents') {
-    if (status === 'running') return sentence(text('正在查看资料列表'))
-    if (status === 'completed') return sentence(text('已查看资料列表'))
-    return sentence(text('查看资料列表失败'))
+    if (status === 'running') return sentence(text('正在查看工作空间文档列表'))
+    if (status === 'completed') return sentence(text('已查看工作空间文档列表'))
+    return sentence(text('查看工作空间文档列表失败'))
   }
   if (toolName === 'web_crawl') {
     if (status === 'running') return sentence(text('正在读取网页：'), text(urlLabel, true))
