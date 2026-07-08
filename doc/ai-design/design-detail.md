@@ -122,7 +122,7 @@ interface AiRunContext {
   // Workbench 内置浏览器网页操作能力；不存在时相关工具返回真实诊断错误。
   browserUseService?: BrowserUseService
 
-  // 程序化网页抓取能力；供 web_crawl 抓取网页并返回 requestedUrl/finalUrl、fit_markdown 和分组 links 结果。
+  // 程序化网页抓取能力；供 web_crawl 抓取网页并返回 requestedUrl/finalUrl、markdown 和分组 links 结果。
   webCrawlerService?: WebCrawlerService
 
   // 读取最近对话和会话摘要。
@@ -167,7 +167,7 @@ interface AiRunContext {
 
 - 输入固定为 `{ url: string; topic: string }`，其中 `topic` 必填。
 - `topic` 只用于 sidecar 中 links 的 contextual score，不用于正文裁剪策略。
-- AI 阅读的正文固定来自 crawl4ai 的 `fit_markdown`。
+- AI 阅读的正文固定来自 crawl4ai 的 `fit_markdown`，但对 AI 渲染和工具 contract 暴露的字段名统一为 `markdown`。
 - sidecar 原样保留 crawl4ai links 语义；主进程只在给 AI 渲染时裁剪字段，不压平 `internal / external` 分组。
 - 给 AI 的顶层字段固定包含：
   - `requestedUrl`

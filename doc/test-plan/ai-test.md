@@ -23,13 +23,13 @@
   - 检测时间：`2026-06-11 17:16:38 +08:00`
   - 覆盖补充：terminal 回归测试按“安全指令集”语义维护；Windows 路径覆盖 PowerShell 语法、`EncodedCommand` 执行与 UTF-8 输出，macOS 路径覆盖 zsh 语法。
 - `tool / web-browsing`
-  - 通过率：`5 / 5`
-  - 检测时间：`2026-06-11 18:15:55 +08:00`
-- 覆盖补充：`web_crawl` 已通过冻结 sidecar bin 和内置 headless shell 覆盖 `topic` 必填、`fit_markdown`、`requestedUrl/finalUrl`、分组 links 评分、HTTP 失败与结果过大；`browser_use` 已覆盖缺少内置浏览器服务时的真实 diagnostic；`llm_recognize` 已覆盖普通文本透传与底层失败分支。
+  - 通过率：`6 / 6`
+  - 检测时间：`2026-07-08 17:45:49 +08:00`
+  - 覆盖补充：`web_crawl` 已通过冻结 sidecar bin 和内置 headless shell 覆盖 `topic` 必填、`markdown` 字段来源于 `fit_markdown`、`requestedUrl/finalUrl`、分组 links 评分、HTTP 失败与结果过大；`web_search` 已覆盖结构化候选网页结果；`browser_use` 已覆盖缺少内置浏览器服务时的真实 diagnostic。
 - `tool / utility`
-  - 通过率：`1 / 1`
-  - 检测时间：`2026-06-11 17:16:38 +08:00`
-  - 覆盖补充：`wait_time` 等待时长与返回 `waitedMs`。
+  - 通过率：`4 / 4`
+  - 检测时间：`2026-07-08 17:45:49 +08:00`
+  - 覆盖补充：`wait_time` 等待时长与返回 `waitedMs`；`llm_recognize` 已覆盖普通文本透传、无法确认类文本透传与底层失败分支。
 - `tool / hand`
   - 通过率：`9 / 9`
   - 检测时间：`2026-06-11 17:16:38 +08:00`
@@ -611,7 +611,7 @@ AI unit / 辅助测试目录：
 ##### `web-crawl-page-contract`
 
 - 测试类型：`backend`
-- What：验证 `web_crawl` 会返回 `requestedUrl/finalUrl`、标题、`fit_markdown`、发布时间与分组 links。
+- What：验证 `web_crawl` 会返回 `requestedUrl/finalUrl`、标题、`markdown`、发布时间与分组 links；其中 `markdown` 内容来源于 crawl4ai 的 `fit_markdown`。
 - Why：程序级网页抓取是低成本网页能力入口，必须稳定返回可被 brain 继续消费的网页事实和导航线索，同时保留 crawl4ai 的分组 links 与评分语义。
 - How：启动本地 HTTP server，返回文章页 HTML，并通过真实冻结 sidecar bin 返回抓取结果。
 - Oracle：结果包含 `requestedUrl`、`finalUrl`、`title`、`markdown`、`publishedAt`、`links.internal/external`，且 links 项包含 `intrinsicScore/contextualScore/totalScore`。
@@ -649,7 +649,7 @@ AI unit / 辅助测试目录：
 - 测试类型：`backend`
 - What：验证 `llm_recognize` 成功时直接返回普通文本。
 - Why：图像识别能力不要求结构化 JSON，human 需要拿到模型原始可读文本自己决策下一步。
-- How：mock 视觉模型返回普通文本，调用 `llm_recognize(path, instruction)`。
+- How：启动本地 OpenAI-compatible HTTP server 返回普通文本，调用 `llm_recognize(path, instruction)`。
 - Oracle：工具结果直接是字符串，不包额外结构。
 - Not：不验证具体视觉模型质量。
 
@@ -658,7 +658,7 @@ AI unit / 辅助测试目录：
 - 测试类型：`backend`
 - What：验证视觉模型返回“无法确认”类文本时，`llm_recognize` 仍按正常结果透传。
 - Why：无法确认不属于工具失败，而是模型识别结论的一部分。
-- How：mock 视觉模型返回“无法确认”文本，调用 `llm_recognize(path, instruction)`。
+- How：启动本地 OpenAI-compatible HTTP server 返回“无法确认”文本，调用 `llm_recognize(path, instruction)`。
 - Oracle：工具结果仍是成功字符串。
 - Not：不验证 UI 渲染。
 
@@ -667,7 +667,7 @@ AI unit / 辅助测试目录：
 - 测试类型：`backend`
 - What：验证视觉模型底层失败时，`llm_recognize` 返回 error。
 - Why：只有底层调用失败才应进入工具错误路径。
-- How：mock 视觉模型抛错，调用 `llm_recognize(path, instruction)`。
+- How：启动本地 OpenAI-compatible HTTP server 返回失败响应，调用 `llm_recognize(path, instruction)`。
 - Oracle：工具结果返回 `{ error }`。
 - Not：不验证 provider 重试策略。
 

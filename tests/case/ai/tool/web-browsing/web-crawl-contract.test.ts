@@ -193,7 +193,7 @@ describe('ai tool web backend', () => {
           {
             name: 'web-crawl-returns-stable-page-fields',
             message:
-              'web_crawl 应返回 requestedUrl/finalUrl、标题、发布时间、fit_markdown 和带评分的分组 links。',
+              'web_crawl 应返回 requestedUrl/finalUrl、标题、发布时间、markdown 和带评分的分组 links。',
             data: result
           }
         )
