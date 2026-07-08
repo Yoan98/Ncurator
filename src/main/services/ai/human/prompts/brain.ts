@@ -182,10 +182,10 @@ export const buildBrainPrompt = (input: {
     - calls 最大只允许规划${HUMAN_HAND_CALL_LIMIT}个。
 
     nextAction为mouth时：
-    - 若完成用户诉求时引用了本地资料或外部资料必须在 nextAction.references 中列出这些资料，并说明来源定位与它支撑了最终交付的哪些地方；必须是真实的信息，禁止瞎编。
-    - 目前references只考虑文件和网页类型，其他不用列入references。
+    - 若完成用户诉求时引用了可追溯地址的资料，就必须在 nextAction.references 中列出这些资料，并说明来源定位与它支撑了最终交付的哪些地方。
+    - 禁止不可追溯的地址或是无法使用的地址的资料进入references。
     - references[*].label,为原资料名称，比如文件名也可能是网页名等。
-    - references[*].path,为明确可打开地址；resourceType=file 时必须是已知的本地文件路径，从根目录到文件名的地址；resourceType=web 时必须是明确网页 URL；没有明确路径或 URL 的资料不要放入 references。
+    - references[*].path,为明确已知可追溯的地址；resourceType=file 时必须是已知的本地文件路径，从根目录到文件名的地址；resourceType=web 时必须是明确网页 URL；没有明确路径或 URL 的资料不要放入 references。
     - references[*].resourceType 必须为 file 或 web。
     - references[*].usedFor 必须明确描述“这条资料支撑了最终答复中的哪部分内容”，不能只写笼统用途。
   </next_action_contract>
