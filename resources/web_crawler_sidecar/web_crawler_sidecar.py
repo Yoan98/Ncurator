@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import random
 import sys
 from typing import Any
 
@@ -11,6 +12,10 @@ from ddgs import DDGS
 
 
 MAX_SEARCH_RESULTS = 8
+MAX_SEARCH_ATTEMPTS = 3
+SEARCH_RETRY_BASE_DELAY_SECONDS = 0.4
+SEARCH_RETRY_MAX_DELAY_SECONDS = 1.5
+SEARCH_RETRY_JITTER_SECONDS = 0.2
 
 
 class CrawlFailure(Exception):
@@ -214,12 +219,7 @@ def normalize_search_result(item: dict[str, Any], rank: int) -> dict[str, Any] |
     return result
 
 
-async def handle_search(query: str) -> dict[str, Any]:
-    def run_search() -> list[dict[str, Any]]:
-        with DDGS() as ddgs:
-            return list(ddgs.text(query, max_results=MAX_SEARCH_RESULTS))
-
-    raw_results = await asyncio.to_thread(run_search)
+def normalize_search_results(raw_results: list[dict[str, Any]]) -> list[dict[str, Any]]:
     normalized_results: list[dict[str, Any]] = []
     seen_urls: set[str] = set()
     for item in raw_results:
@@ -233,11 +233,49 @@ async def handle_search(query: str) -> dict[str, Any]:
             continue
         seen_urls.add(url)
         normalized_results.append(normalized)
+    return normalized_results
 
-    return {
-        "query": query,
-        "results": normalized_results,
-    }
+
+def run_search_once(query: str) -> list[dict[str, Any]]:
+    with DDGS() as ddgs:
+        return list(ddgs.text(query, max_results=MAX_SEARCH_RESULTS))
+
+
+def resolve_search_retry_delay(attempt: int) -> float:
+    base_delay = min(
+        SEARCH_RETRY_MAX_DELAY_SECONDS,
+        SEARCH_RETRY_BASE_DELAY_SECONDS * (2 ** max(0, attempt - 1)),
+    )
+    return base_delay + random.uniform(0, SEARCH_RETRY_JITTER_SECONDS)
+
+
+def format_search_error(error: Exception | None) -> str:
+    if error is None:
+        return "unknown error"
+    return str(error) or error.__class__.__name__
+
+
+async def handle_search(query: str) -> dict[str, Any]:
+    last_error: Exception | None = None
+    for attempt in range(1, MAX_SEARCH_ATTEMPTS + 1):
+        try:
+            raw_results = await asyncio.to_thread(run_search_once, query)
+            normalized_results = normalize_search_results(raw_results)
+            if normalized_results:
+                return {
+                    "query": query,
+                    "results": normalized_results,
+                }
+            last_error = RuntimeError("web search returned no usable results")
+        except Exception as error:
+            last_error = error
+
+        if attempt < MAX_SEARCH_ATTEMPTS:
+            await asyncio.sleep(resolve_search_retry_delay(attempt))
+
+    raise RuntimeError(
+        f"web search failed after {MAX_SEARCH_ATTEMPTS} attempts: {format_search_error(last_error)}"
+    )
 
 
 async def process_requests() -> None:
