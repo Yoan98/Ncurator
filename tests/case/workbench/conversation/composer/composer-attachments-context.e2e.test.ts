@@ -109,6 +109,11 @@ const waitForAttachmentCardByName = async (
     .waitFor({ state: 'visible' })
 }
 
+const getImageAttachmentCardByName = (page: import('playwright').Page, name: string) =>
+  getWorkbenchPrefixLocator(page, workbenchSelectors.attachmentCardPrefix).filter({
+    has: page.locator(`img[alt="${name}"]`)
+  })
+
 describe('workbench conversation e2e', () => {
   it(
     CASE_ID,
@@ -135,7 +140,8 @@ describe('workbench conversation e2e', () => {
           await page.keyboard.press('Escape')
 
           await pasteImageAttachment(page)
-          await waitForAttachmentCardByName(page, 'qa-image.png')
+          const imageCard = getImageAttachmentCardByName(page, 'qa-image.png')
+          await imageCard.first().waitFor({ state: 'visible' })
           await page.waitForFunction(
             (attachmentName) => {
               const image = Array.from(document.images).find((item) => item.alt === attachmentName)
@@ -149,39 +155,43 @@ describe('workbench conversation e2e', () => {
             'qa-image.png',
             { timeout: 5000 }
           )
-          const imageCard = getWorkbenchPrefixLocator(
-            page,
-            workbenchSelectors.attachmentCardPrefix
-          ).filter({ hasText: 'qa-image.png' })
           await runtime.captureScreenshot({
             name: 'attachment-image-card',
             message: '图片附件应显示在输入框顶部，并展示真实缩略图。'
           })
 
           await imageCard.first().click()
-          await page.locator('.ant-modal').filter({ hasText: 'qa-image.png' }).waitFor({
-            state: 'visible'
-          })
-          const previewVisible = await page
-            .locator('.ant-modal img[alt="qa-image.png"]')
-            .first()
-            .isVisible()
-            .catch(() => false)
+          const previewModal = getWorkbenchLocator(page, workbenchSelectors.attachmentPreviewModal)
+          await previewModal.waitFor({ state: 'visible' })
+          await page.waitForFunction(
+            ({ modalTestId, attachmentName }) => {
+              const image = document.querySelector<HTMLImageElement>(
+                `[data-testid="${modalTestId}"] img[alt="${attachmentName}"]`
+              )
+              if (!image || !image.complete || image.naturalWidth <= 0) return false
+              const rect = image.getBoundingClientRect()
+              return rect.width > 0 && rect.height > 0
+            },
+            {
+              modalTestId: workbenchSelectors.attachmentPreviewModal,
+              attachmentName: 'qa-image.png'
+            },
+            { timeout: 5000 }
+          )
+          const previewVisible = true
           await runtime.captureScreenshot({
             name: 'attachment-image-preview',
             message: '点击图片附件后应打开图片预览弹窗。'
           })
-          await page.locator('.ant-modal-close').first().click()
-          await page.waitForSelector('.ant-modal', { state: 'hidden' })
+          await page.getByRole('button', { name: '关闭图片预览', exact: true }).click()
+          await previewModal.waitFor({ state: 'hidden' })
 
           await imageCard.first().hover()
           await getWorkbenchPrefixLocator(page, workbenchSelectors.attachmentRemoveButtonPrefix)
             .first()
             .click({ force: true })
           const imageRemoved =
-            (await getWorkbenchPrefixLocator(page, workbenchSelectors.attachmentCardPrefix)
-              .filter({ hasText: 'qa-image.png' })
-              .count()) === 0
+            (await getImageAttachmentCardByName(page, 'qa-image.png').count()) === 0
 
           await pasteFileAttachment(page, {
             name: 'qa-notes.md',

@@ -11,7 +11,7 @@ import {
 export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps): AiRunContext => {
   const checkCancelled = () => {
     if (deps.abortSignal?.aborted || deps.isCancelled()) {
-      const e = new Error('cancelled') as CancelledError
+      const e = new Error('已取消') as CancelledError
       e.code = 'CANCELLED'
       throw e
     }
