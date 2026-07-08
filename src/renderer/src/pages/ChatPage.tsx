@@ -754,40 +754,6 @@ const ChatPage: React.FC = () => {
     [selectedWorkspaceId, workspaces]
   )
 
-  const processAttachmentsForSubmit = useCallback(
-    async (
-      items: ChatAttachment[]
-    ): Promise<
-      { success: true; attachments: ChatAttachment[] } | { success: false; error: string }
-    > => {
-      const processed: ChatAttachment[] = []
-      for (const item of items) {
-        if (item.kind === 'image') {
-          const response = await window.api.attachmentRecognizeImage({
-            attachment: item,
-            modelName: selectedModelName || ''
-          })
-          if (!response.success || !response.attachment) {
-            return {
-              success: false,
-              error: response.error || '当前模型无法识别这张图片，请换支持图片识别的模型后再发送。'
-            }
-          }
-          processed.push(response.attachment)
-          continue
-        }
-
-        const response = await window.api.attachmentParseFile(item)
-        if (!response.success || !response.attachment) {
-          return { success: false, error: response.error || '文件解析失败' }
-        }
-        processed.push(response.attachment)
-      }
-      return { success: true, attachments: processed }
-    },
-    [selectedModelName]
-  )
-
   useEffect(() => {
     setSelectedReferences((current) => pruneReferencesByWorkspace(current, selectedWorkspaceId))
   }, [selectedWorkspaceId])
@@ -1852,6 +1818,30 @@ const ChatPage: React.FC = () => {
     return nextSession
   }
 
+  const ensureAttachmentTarget = useCallback(async (): Promise<{
+    sessionId: string
+    workspaceRootPath: string
+  } | null> => {
+    if (!selectedWorkspaceReady || !selectedWorkspace?.root_path) {
+      message.warning(`${getWorkspaceRequirementHint(selectedWorkspace)}后再添加附件`)
+      return null
+    }
+
+    let sessionId = currentSessionIdRef.current
+    if (!sessionId) {
+      const createdSession = await createDraftSessionForSubmit(selectedWorkspace)
+      if (!createdSession) return null
+      sessionId = createdSession.id
+      adoptCreatedSession(createdSession)
+      void loadSessions()
+    }
+
+    return {
+      sessionId,
+      workspaceRootPath: selectedWorkspace.root_path
+    }
+  }, [loadSessions, message, selectedWorkspace, selectedWorkspaceReady])
+
   const handleSend = async (): Promise<void> => {
     if (composerMode === 'ai' && aiRunId) {
       await handleCancel()
@@ -1980,22 +1970,13 @@ const ChatPage: React.FC = () => {
         }
       }
 
-      const processedAttachments = await processAttachmentsForSubmit(submittedAttachments)
-      if (!processedAttachments.success) {
-        failOptimisticSubmit(processedAttachments.error)
-        return
-      }
-
       const response = await window.api.chatSubmit({
         mode: 'ai',
         sessionId: submitSessionId,
         input: userQuery,
         contentNodes: submittedContentNodes.length > 0 ? submittedContentNodes : undefined,
         selectedReferences: submittedReferences.length > 0 ? submittedReferences : undefined,
-        attachments:
-          processedAttachments.attachments.length > 0
-            ? processedAttachments.attachments
-            : undefined,
+        attachments: submittedAttachments.length > 0 ? submittedAttachments : undefined,
         modelName: selectedModelName,
         workspace: createWorkspaceBinding(selectedWorkspace)
       })
@@ -3069,6 +3050,7 @@ const ChatPage: React.FC = () => {
                         draftValue={composerDraftValue}
                         draftKey={composerDraftKey}
                         contextUsage={contextUsage}
+                        requestAttachmentTarget={ensureAttachmentTarget}
                       />
                     )}
 

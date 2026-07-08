@@ -5,14 +5,29 @@ import { createWebCrawlerService } from '../../../../harness/backend/webCrawlerT
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 
 type WebCrawlResult = {
+  requestedUrl?: string
   finalUrl?: string
   title?: string
   markdown?: string
   publishedAt?: string
-  links?: Array<{
-    href?: string
-    text?: string
-  }>
+  links?: {
+    internal?: Array<{
+      href?: string
+      text?: string
+      title?: string
+      intrinsicScore?: number
+      contextualScore?: number
+      totalScore?: number
+    }>
+    external?: Array<{
+      href?: string
+      text?: string
+      title?: string
+      intrinsicScore?: number
+      contextualScore?: number
+      totalScore?: number
+    }>
+  }
   error?: string
   statusCode?: number
   reason?: string
@@ -152,7 +167,8 @@ describe('ai tool web backend', () => {
             webCrawlerService
           })
           return await harness.invoke<WebCrawlResult>('web_crawl', {
-            url: `${server.baseUrl}/policy`
+            url: `${server.baseUrl}/policy`,
+            topic: '灵活就业补贴申报条件和办理指南'
           })
         } finally {
           await webCrawlerService.close()
@@ -161,21 +177,29 @@ describe('ai tool web backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
+          result.requestedUrl?.endsWith('/policy') === true &&
           result.finalUrl?.endsWith('/policy') === true &&
             result.title === '灵活就业补贴申报通知' &&
             result.publishedAt === '2026-06-10' &&
             Boolean(result.markdown?.includes('申报截止时间为 2026-09-30')) &&
-            Array.isArray(result.links) &&
-            result.links.some((link) => link.href?.endsWith('/guide')),
+            Array.isArray(result.links?.internal) &&
+            result.links.internal.some((link) => link.href?.endsWith('/guide')) &&
+            result.links.internal.some(
+              (link) =>
+                typeof link.intrinsicScore === 'number' &&
+                typeof link.contextualScore === 'number' &&
+                typeof link.totalScore === 'number'
+            ),
           {
             name: 'web-crawl-returns-stable-page-fields',
-            message: 'web_crawl 应返回最终 URL、标题、发布时间、正文 markdown 和后续链接。',
+            message:
+              'web_crawl 应返回 requestedUrl/finalUrl、标题、发布时间、fit_markdown 和带评分的分组 links。',
             data: result
           }
         )
       }
     })
-  })
+  }, 30_000)
 
   it('web-search-contract', async () => {
     await runBackendCase({
@@ -254,7 +278,8 @@ describe('ai tool web backend', () => {
             webCrawlerService
           })
           return await harness.invoke<WebCrawlResult>('web_crawl', {
-            url: `${server.baseUrl}/`
+            url: `${server.baseUrl}/`,
+            topic: '就业服务首页相关页面'
           })
         } finally {
           await webCrawlerService.close()
@@ -263,10 +288,11 @@ describe('ai tool web backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
+          result.requestedUrl?.endsWith('/') === true &&
           result.title === '就业服务首页' &&
             Boolean(result.markdown?.includes('这里汇总了通知公告和办事指南')) &&
-            Array.isArray(result.links) &&
-            result.links.some((link) => link.href?.endsWith('/policy')),
+            Array.isArray(result.links?.internal) &&
+            result.links.internal.some((link) => link.href?.endsWith('/policy')),
           {
             name: 'web-crawl-reads-entry-page-without-auto-follow',
             message: 'web_crawl 应读取输入 URL 对应网页并返回页面链接，不再自动跟进其他链接。',
@@ -275,7 +301,7 @@ describe('ai tool web backend', () => {
         )
       }
     })
-  })
+  }, 30_000)
 
   it('web-crawl-http-failure-contract', async () => {
     await runBackendCase({
@@ -295,7 +321,8 @@ describe('ai tool web backend', () => {
             webCrawlerService
           })
           return await harness.invoke<WebCrawlResult>('web_crawl', {
-            url: `${server.baseUrl}/missing`
+            url: `${server.baseUrl}/missing`,
+            topic: '缺失页面'
           })
         } finally {
           await webCrawlerService.close()
@@ -306,16 +333,17 @@ describe('ai tool web backend', () => {
         runtime.assertThat(
           result.error === '网页请求失败：404' &&
             result.statusCode === 404 &&
+            result.requestedUrl?.endsWith('/missing') === true &&
             result.finalUrl?.endsWith('/missing') === true,
           {
             name: 'web-crawl-preserves-http-failure-fields',
-            message: 'web_crawl HTTP 失败时应保留错误文本、最终 URL 和状态码。',
+            message: 'web_crawl HTTP 失败时应保留错误文本、requestedUrl/finalUrl 和状态码。',
             data: result
           }
         )
       }
     })
-  })
+  }, 30_000)
 
   it('web-crawl-too-large-contract', async () => {
     await runBackendCase({
@@ -338,7 +366,8 @@ describe('ai tool web backend', () => {
             }
           })
           return await harness.invoke<WebCrawlResult>('web_crawl', {
-            url: `${server.baseUrl}/large`
+            url: `${server.baseUrl}/large`,
+            topic: '超长补贴通知'
           })
         } finally {
           await webCrawlerService.close()
@@ -349,6 +378,7 @@ describe('ai tool web backend', () => {
         runtime.assertThat(
           result.error === 'web_crawl result too large' &&
             result.reason === 'result_too_large' &&
+            result.requestedUrl?.endsWith('/large') === true &&
             result.finalUrl?.endsWith('/large') === true &&
             result.decisionHint?.code === 'hand_tool_result_too_large',
           {
@@ -359,7 +389,7 @@ describe('ai tool web backend', () => {
         )
       }
     })
-  })
+  }, 30_000)
 
   it('browser-use-service-unavailable-diagnostic', async () => {
     await runBackendCase({

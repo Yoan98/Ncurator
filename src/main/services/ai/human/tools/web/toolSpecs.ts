@@ -3,7 +3,8 @@ import type { HumanToolSpec } from '../types'
 import { createStaticExecutionMetaResolver } from '../utils/toolSpecUtils'
 
 export const WEB_CRAWL_SCHEMA = z.object({
-  url: z.string().min(1)
+  url: z.string().min(1),
+  topic: z.string().min(1)
 })
 
 export const WEB_SEARCH_SCHEMA = z.object({
@@ -18,19 +19,37 @@ export const BROWSER_USE_SCHEMA = z.object({
 
 export const WEB_CRAWL_OUTPUT_SCHEMA = z.union([
   z.object({
+    requestedUrl: z.string(),
     finalUrl: z.string(),
     title: z.string().optional(),
     markdown: z.string(),
-    links: z.array(
-      z.object({
-        href: z.string(),
-        text: z.string().optional()
-      })
-    ),
+    links: z.object({
+      internal: z.array(
+        z.object({
+          href: z.string(),
+          text: z.string().optional(),
+          title: z.string().optional(),
+          intrinsicScore: z.number().optional(),
+          contextualScore: z.number().optional(),
+          totalScore: z.number().optional()
+        })
+      ),
+      external: z.array(
+        z.object({
+          href: z.string(),
+          text: z.string().optional(),
+          title: z.string().optional(),
+          intrinsicScore: z.number().optional(),
+          contextualScore: z.number().optional(),
+          totalScore: z.number().optional()
+        })
+      )
+    }),
     publishedAt: z.string().optional()
   }),
   z.object({
     error: z.string(),
+    requestedUrl: z.string().optional(),
     finalUrl: z.string().optional(),
     statusCode: z.number().int().optional()
   })
@@ -101,13 +120,14 @@ export const WEB_CRAWL_TOOL_SPEC: HumanToolSpec<
   promptSpec: {
     name: 'web_crawl',
     description:
-      '能力：抓取一个明确的公开网页 URL，并返回该网页正文 markdown、标题、发布时间和页面链接。\n结果：返回 finalUrl/title/markdown/links 表示已读取该 URL 对应网页正文。\n边界：不执行全网搜索，不解析搜索结果页，不执行登录、点击、输入或验证码等浏览器交互。',
+      '能力：抓取一个明确的公开网页 URL，并返回正文 markdown、请求前后 URL、发布时间和分组链接。\n结果：返回 requestedUrl/finalUrl/title/markdown/links，links 会包含 internal/external 分组和评分。\n边界：topic 只用于 links 评分，不用于正文裁剪；不执行全网搜索，不解析搜索结果页，不执行登录、点击、输入或验证码等浏览器交互。',
     whenToUse: '适用于已经有明确网页 URL，需要读取该网页正文内容的任务。',
     examples: [
       {
         goal: '读取一个公开网页正文',
         args: {
-          url: 'https://example.com'
+          url: 'https://example.com',
+          topic: '这个页面和补贴申报条件的相关内容'
         }
       }
     ]

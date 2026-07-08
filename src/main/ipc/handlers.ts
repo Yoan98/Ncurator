@@ -43,10 +43,10 @@ import type {
   ChatSubmitResponse,
   ChatTurnRetractLatestRequest,
   ChatTurnRetractLatestResponse,
+  AttachmentPickRequest,
   AttachmentPickResponse,
   AttachmentProcessResponse,
-  AttachmentSaveTempRequest,
-  AttachmentRecognizeImageRequest,
+  AttachmentSaveRequest,
   AiRuntimeSettings,
   LLMConfig,
   LlmModelListResponse,
@@ -1528,8 +1528,16 @@ export function registerHandlers(services: {
     }
   })
 
-  ipcMain.handle('attachment-pick', async (event): Promise<AttachmentPickResponse> => {
+  ipcMain.handle('attachment-pick', async (_event, payload: AttachmentPickRequest): Promise<AttachmentPickResponse> => {
     try {
+      const workspaceRootPath = String(payload?.workspaceRootPath || '').trim()
+      const sessionId = String(payload?.sessionId || '').trim()
+      if (!workspaceRootPath) {
+        return { canceled: true, items: [], error: '请先选择工作区并完成目录绑定' }
+      }
+      if (!sessionId) {
+        return { canceled: true, items: [], error: '当前会话不存在，无法保存附件' }
+      }
       const dialogOptions: OpenDialogOptions = {
         title: '选择附件',
         buttonLabel: '选择附件',
@@ -1537,51 +1545,26 @@ export function registerHandlers(services: {
         filters: [
           {
             name: 'Attachments',
-            extensions: [
-              'png',
-              'jpg',
-              'jpeg',
-              'webp',
-              'gif',
-              'txt',
-              'md',
-              'json',
-              'csv',
-              'docx',
-              'pdf',
-              'ppt',
-              'pptx'
-            ]
+            extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'tif', 'tiff', 'md', 'json', 'docx']
           },
           {
             name: 'Supported Files',
-            extensions: [
-              'png',
-              'jpg',
-              'jpeg',
-              'webp',
-              'gif',
-              'txt',
-              'md',
-              'json',
-              'csv',
-              'docx',
-              'pdf',
-              'ppt',
-              'pptx'
-            ]
+            extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'tif', 'tiff', 'md', 'json', 'docx']
           }
         ]
       }
-      const ownerWindow = BrowserWindow.fromWebContents(event.sender)
-      const result = ownerWindow
-        ? await dialog.showOpenDialog(ownerWindow, dialogOptions)
-        : await dialog.showOpenDialog(dialogOptions)
+      const result = await dialog.showOpenDialog(dialogOptions)
       if (result.canceled || result.filePaths.length === 0) return { canceled: true, items: [] }
       return {
         canceled: false,
-        items: result.filePaths.map((filePath) =>
-          attachmentService.createAttachmentFromPath({ filePath })
+        items: await Promise.all(
+          result.filePaths.map((filePath) =>
+            attachmentService.importAttachmentFromPath({
+              workspaceRootPath,
+              sessionId,
+              sourcePath: filePath
+            })
+          )
         )
       }
     } catch (error) {
@@ -1590,15 +1573,17 @@ export function registerHandlers(services: {
   })
 
   ipcMain.handle(
-    'attachment-save-temp-file',
-    async (_event, payload: AttachmentSaveTempRequest): Promise<AttachmentProcessResponse> => {
+    'attachment-save-file',
+    async (_event, payload: AttachmentSaveRequest): Promise<AttachmentProcessResponse> => {
       try {
         const bytes =
           payload?.bytes instanceof Uint8Array
             ? payload.bytes
             : new Uint8Array(payload?.bytes || [])
         if (!bytes.byteLength) return { success: false, error: '附件内容为空' }
-        const attachment = await attachmentService.saveTempAttachment({
+        const attachment = await attachmentService.saveAttachment({
+          workspaceRootPath: payload.workspaceRootPath,
+          sessionId: payload.sessionId,
           name: payload.name,
           bytes,
           mimeType: payload.mimeType,
@@ -1607,47 +1592,6 @@ export function registerHandlers(services: {
         return { success: true, attachment }
       } catch (error) {
         return { success: false, error: getErrorMessage(error) }
-      }
-    }
-  )
-
-  ipcMain.handle(
-    'attachment-parse-file',
-    async (_event, attachment): Promise<AttachmentProcessResponse> => {
-      try {
-        const parsed = await attachmentService.parseFileAttachment(attachment)
-        return parsed.status === 'failed'
-          ? { success: false, attachment: parsed, error: parsed.error || '文件解析失败' }
-          : { success: true, attachment: parsed }
-      } catch (error) {
-        return { success: false, error: getErrorMessage(error) }
-      }
-    }
-  )
-
-  ipcMain.handle(
-    'attachment-recognize-image',
-    async (
-      _event,
-      payload: AttachmentRecognizeImageRequest
-    ): Promise<AttachmentProcessResponse> => {
-      try {
-        const modelName = String(payload?.modelName || '').trim()
-        if (!modelName) return { success: false, error: '当前配置未获取到可用模型' }
-        const config = await llmStore.getActive()
-        if (!config) return { success: false, error: '未配置可用的大模型' }
-        const attachment = await attachmentService.recognizeImageAttachment({
-          attachment: payload.attachment,
-          config: {
-            ...config,
-            model_name: modelName
-          }
-        })
-        return attachment.status === 'failed'
-          ? { success: false, attachment, error: attachment.error || '当前模型不支持图像识别' }
-          : { success: true, attachment }
-      } catch (error) {
-        return { success: false, error: getErrorMessage(error) || '当前模型不支持图像识别' }
       }
     }
   )

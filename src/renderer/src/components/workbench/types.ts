@@ -96,6 +96,7 @@ export type AssistantToolName =
   | 'web_search'
   | 'web_crawl'
   | 'browser_use'
+  | 'llm_recognize'
   | 'wait_time'
   | 'unnamed'
 
@@ -125,6 +126,7 @@ export type AssistantProcessSkillKey =
   | 'web-search'
   | 'web-crawl'
   | 'browser'
+  | 'image-recognition'
   | 'wait'
   | 'generic'
 

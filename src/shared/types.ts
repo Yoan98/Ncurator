@@ -523,8 +523,12 @@ export type ChatAttachment = {
   mimeType?: string
   size?: number
   status: ChatAttachmentStatus
-  contentInfo?: string
   error?: string
+}
+
+export type AttachmentPickRequest = {
+  workspaceRootPath: string
+  sessionId: string
 }
 
 export type AttachmentPickResponse = {
@@ -539,16 +543,13 @@ export type AttachmentProcessResponse = {
   error?: string
 }
 
-export type AttachmentSaveTempRequest = {
+export type AttachmentSaveRequest = {
+  workspaceRootPath: string
+  sessionId: string
   name: string
   bytes: Uint8Array
   mimeType?: string
   kind?: ChatAttachmentKind
-}
-
-export type AttachmentRecognizeImageRequest = {
-  attachment: ChatAttachment
-  modelName: string
 }
 
 export interface ChatMessage {
@@ -737,6 +738,7 @@ export type RuntimeSkillId =
   | 'terminal'
   | 'docx-read'
   | 'docx-write'
+  | 'image-recognition'
   | 'kb-retrieval'
   | 'web-browsing'
   | 'utility'

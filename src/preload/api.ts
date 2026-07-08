@@ -14,10 +14,10 @@ import type {
   AppUpdateSnapshot,
   ChatMessage,
   ChatAttachment,
+  AttachmentPickRequest,
   AttachmentPickResponse,
   AttachmentProcessResponse,
-  AttachmentSaveTempRequest,
-  AttachmentRecognizeImageRequest,
+  AttachmentSaveRequest,
   ChatRunEventsRequest,
   ChatRunEventsResponse,
   ChatSession,
@@ -129,8 +129,6 @@ export type SettingsE2EApiOverrides = {
   revealPathResponseByPath?: Record<string, { success: boolean; error?: string }>
   openExternalResponseByUrl?: Record<string, { success: boolean; error?: string }>
   attachmentPickResponse?: AttachmentPickResponse
-  attachmentParseFileResponseByName?: Record<string, AttachmentProcessResponse>
-  attachmentRecognizeImageResponseByName?: Record<string, AttachmentProcessResponse>
   modelCatalog?: E2EModelCatalogOverride
   downloadModelResponseByRepoId?: Record<string, E2EDownloadModelResponse>
   downloadProgressEventsByRepoId?: Record<string, DownloadProgress[]>
@@ -216,12 +214,8 @@ export type DesktopApi = {
   getModels: () => Promise<ModelInfo[]>
   getEmbeddingStatus: () => Promise<'uninitialized' | 'initializing' | 'ready' | 'error'>
   readFile: (filePath: string) => Promise<Uint8Array>
-  attachmentPick: () => Promise<AttachmentPickResponse>
-  attachmentSaveTempFile: (payload: AttachmentSaveTempRequest) => Promise<AttachmentProcessResponse>
-  attachmentParseFile: (attachment: ChatAttachment) => Promise<AttachmentProcessResponse>
-  attachmentRecognizeImage: (
-    payload: AttachmentRecognizeImageRequest
-  ) => Promise<AttachmentProcessResponse>
+  attachmentPick: (payload: AttachmentPickRequest) => Promise<AttachmentPickResponse>
+  attachmentSaveFile: (payload: AttachmentSaveRequest) => Promise<AttachmentProcessResponse>
   chatSessionList: () => Promise<ChatSession[]>
   chatSessionSave: (session: ChatSession) => Promise<{ success: boolean; error?: string }>
   chatSessionDelete: (id: string) => Promise<{ success: boolean; error?: string }>

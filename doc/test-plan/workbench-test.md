@@ -43,6 +43,7 @@
 - `file-preview-actions` 当前按生产真实索引能力覆盖 `pdf/docx/md/txt`：`.md`、`.markdown`、`.txt` 必须通过真实索引进入搜索结果，并从搜索结果打开右侧预览。
 - docx apply case 需要真实 docx 输入、真实 AI 编辑、真实写回记录、真实预览和真实回退。
 - `browser-use-task-panel` 需要真实 AI run 触发 `browser_use` 并驱动内置浏览器完成本地网页任务；当前暂无有效通过结论。
+- Workbench 附件链路当前固定保存到 `<workspace>/.ncurator/assets/<sessionId>/`，发送给 AI 时只传附件名称与路径，不再做发送前识图或文件解析。
 
 ## 3. Suite 设计
 
@@ -129,9 +130,18 @@ tests/case/workbench/
 - 测试类型：`e2e`
 - What：验证用户消息 hover 操作、latest turn 编辑撤回、running 态编辑入口隐藏，以及用户消息附件展示。
 - Why：用户编辑上一条消息依赖撤回最新 turn、回填 composer 和附件 UI 协同；任一状态错误都会导致重复发送、误编辑运行中消息或附件被正文挤压遮挡。
-- How：使用真实 Workbench UI 发送一条搜索消息，hover 用户消息并触发复制与编辑；再粘贴图片和文件附件，发送 AI 请求后在 running 状态检查用户消息气泡和附件布局。
-- Oracle：hover 后显示时间、复制和编辑；复制给出成功反馈；编辑会撤回最新 turn 并把原文回填输入框；running 状态不显示编辑；图片/文件附件显示在用户消息气泡上方，输入框附件关闭按钮保持可点击且不被遮挡。
-- Not：不验证模型回答质量；附件解析/图片识别使用 E2E override 保持 UI 行为测试稳定。
+- How：使用真实 Workbench UI 创建工作区与会话，真实粘贴图片和 `md` 附件并发送 AI 请求；hover 用户消息并触发复制与编辑；在 running 状态检查用户消息气泡和附件布局。
+- Oracle：hover 后显示时间、复制和编辑；复制给出成功反馈；编辑会撤回最新 turn 并把原文回填输入框；running 状态不显示编辑；图片和 `md` 附件显示在用户消息气泡上方，文件副标题显示 `MD`，输入框附件关闭按钮保持可点击且不被遮挡。
+- Not：不验证模型回答质量；不再使用附件解析或图片识别 override。
+
+#### `composer-attachments-context`
+
+- 测试类型：`e2e`
+- What：验证 `+` 与粘贴添加附件时，附件会保存到工作区 `.ncurator/assets/<sessionId>/`，并保持图片预览、文件打开、删除、普通文本粘贴和格式提示行为。
+- Why：附件链路已改为“统一落盘到工作区 + 只把路径交给 AI”，必须用回归测试守住真实保存路径和交互行为。
+- How：创建真实工作区，通过一次空附件选择触发 session 建立，再用真实 `attachmentSaveFile` 生成图片和 `md` 附件，通过 `attachmentPickResponse` 模拟系统文件选择返回这些真实附件；另外通过粘贴覆盖不支持格式和大文件 warning。
+- Oracle：图片和 `md` 附件路径都落在 `<workspace>/.ncurator/assets/<sessionId>/`；图片预览可打开；文件副标题显示 `MD`；不支持格式只提示不加入；大文件只提示不拦截；普通文本粘贴仍正常，对齐 `WB-COMPOSER-010-AC2`、`WB-COMPOSER-010-AC3`。
+- Not：不验证系统原生文件选择器本身。
 
 #### `reference-mention-keyboard`
 

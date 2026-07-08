@@ -76,6 +76,7 @@ const isAssistantToolName = (toolName: string): toolName is AssistantToolName =>
   toolName === 'web_search' ||
   toolName === 'web_crawl' ||
   toolName === 'browser_use' ||
+  toolName === 'llm_recognize' ||
   toolName === 'wait_time' ||
   toolName === 'unnamed'
 
@@ -199,6 +200,7 @@ const getSkillDisplayName = (skillId?: RuntimeSkillId): string => {
   if (skillId === 'kb-retrieval') return '资料查阅器'
   if (skillId === 'docx-read') return 'docx 阅读器'
   if (skillId === 'docx-write') return 'docx 写作器'
+  if (skillId === 'image-recognition') return '图像识别'
   return '新能力'
 }
 
@@ -218,6 +220,7 @@ const getToolUiKind = (toolName?: AssistantToolName): AssistantProcessSkillKey =
   if (toolName === 'web_search') return 'web-search'
   if (toolName === 'web_crawl') return 'web-crawl'
   if (toolName === 'browser_use') return 'browser'
+  if (toolName === 'llm_recognize') return 'image-recognition'
   if (toolName === 'wait_time') return 'wait'
   return 'generic'
 }
@@ -234,7 +237,8 @@ const getToolIconKind = (skillKey: AssistantProcessSkillKey): AssistantProcessIc
     skillKey === 'kb' ||
     skillKey === 'web-search' ||
     skillKey === 'web-crawl' ||
-    skillKey === 'browser'
+    skillKey === 'browser' ||
+    skillKey === 'image-recognition'
   ) {
     return 'search'
   }
@@ -326,6 +330,12 @@ const getToolSummaryText = (
     if (status === 'completed') return sentence(text('已完成浏览器操作'))
     if (status === 'partial_failed') return sentence(text('部分浏览器操作失败'))
     return sentence(text('浏览器操作失败'))
+  }
+  if (skillKey === 'image-recognition') {
+    if (status === 'running') return sentence(text('正在识别图片'))
+    if (status === 'completed') return sentence(text('已识别图片'))
+    if (status === 'partial_failed') return sentence(text('部分图片识别失败'))
+    return sentence(text('图片识别失败'))
   }
   if (skillKey === 'wait') {
     if (status === 'running') return sentence(text('正在等待'))
@@ -443,6 +453,12 @@ const getToolItemText = (
     if (status === 'partial_failed')
       return sentence(text('部分浏览器操作失败：'), text(instructionLabel, true))
     return sentence(text('浏览器操作失败：'), text(instructionLabel, true))
+  }
+  if (toolName === 'llm_recognize') {
+    if (status === 'running') return sentence(text('正在识别图片：'), text(fileLabel, true))
+    if (status === 'completed') return sentence(text('已识别图片：'), text(fileLabel, true))
+    if (status === 'partial_failed') return sentence(text('部分图片识别失败：'), text(fileLabel, true))
+    return sentence(text('图片识别失败：'), text(fileLabel, true))
   }
   if (toolName === 'wait_time') {
     if (status === 'running') return sentence(text('正在等待 '), text(waitLabel, true))

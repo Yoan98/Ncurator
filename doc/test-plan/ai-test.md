@@ -25,7 +25,7 @@
 - `tool / web-browsing`
   - 通过率：`5 / 5`
   - 检测时间：`2026-06-11 18:15:55 +08:00`
-  - 覆盖补充：`web_crawl` 已通过冻结 sidecar bin 和内置 headless shell 覆盖当前页抓取、导航页 topic 跟进、HTTP 失败与结果过大；`browser_use` 已覆盖缺少内置浏览器服务时的真实 diagnostic。
+- 覆盖补充：`web_crawl` 已通过冻结 sidecar bin 和内置 headless shell 覆盖 `topic` 必填、`fit_markdown`、`requestedUrl/finalUrl`、分组 links 评分、HTTP 失败与结果过大；`browser_use` 已覆盖缺少内置浏览器服务时的真实 diagnostic；`llm_recognize` 已覆盖普通文本透传与底层失败分支。
 - `tool / utility`
   - 通过率：`1 / 1`
   - 检测时间：`2026-06-11 17:16:38 +08:00`
@@ -611,20 +611,20 @@ AI unit / 辅助测试目录：
 ##### `web-crawl-page-contract`
 
 - 测试类型：`backend`
-- What：验证 `web_crawl` 会返回当前最相关页面的最终 URL、标题、正文 markdown、发布时间与后续链接。
-- Why：程序级网页抓取是低成本网页能力入口，必须稳定返回可被 brain 继续消费的网页事实和导航线索。
+- What：验证 `web_crawl` 会返回 `requestedUrl/finalUrl`、标题、`fit_markdown`、发布时间与分组 links。
+- Why：程序级网页抓取是低成本网页能力入口，必须稳定返回可被 brain 继续消费的网页事实和导航线索，同时保留 crawl4ai 的分组 links 与评分语义。
 - How：启动本地 HTTP server，返回文章页 HTML，并通过真实冻结 sidecar bin 返回抓取结果。
-- Oracle：结果包含 `finalUrl`、`title`、`markdown`、`publishedAt` 和至少一条可继续跟进的链接。
+- Oracle：结果包含 `requestedUrl`、`finalUrl`、`title`、`markdown`、`publishedAt`、`links.internal/external`，且 links 项包含 `intrinsicScore/contextualScore/totalScore`。
 - Not：不验证复杂浏览器交互或外网可达性。
 
-##### `web-crawl-navigation-contract`
+##### `web-crawl-entry-page-contract`
 
 - 测试类型：`backend`
-- What：验证 `web_crawl` 在导航页上会基于 `topic` 跟进更相关页面，并保留可继续跟进的链接。
-- Why：`human` 要能把 `web_crawl` 作为多轮网页判断工具，而不仅是单页正文抓取器。
-- How：启动本地 HTTP server，返回包含通知页和指南页链接的导航页，并通过真实冻结 sidecar bin 执行 topic 驱动抓取。
-- Oracle：结果命中更相关的目标页面正文，同时 links 中仍保留后续可继续抓取的相关链接。
-- Not：不验证无限深爬或搜索引擎级网页发现。
+- What：验证 `web_crawl` 只读取输入 URL 对应网页，并保留该页 links。
+- Why：当前 contract 不再让 `web_crawl` 自己多跳跟进，后续要不要继续探索由 human 自己看 links 决定。
+- How：启动本地 HTTP server，返回包含通知页和指南页链接的入口页，并通过真实冻结 sidecar bin 抓取该页。
+- Oracle：结果命中输入 URL 对应页面正文，同时 links 中保留该页相关链接。
+- Not：不验证自动多跳或搜索引擎级网页发现。
 
 ##### `web-crawl-http-failure-contract`
 
@@ -643,6 +643,33 @@ AI unit / 辅助测试目录：
 - How：启动本地 HTTP server，返回超长正文页，通过真实冻结 sidecar bin 抓取，并把 tool harness 的 `modelContextWindowTokens` 压低到触发阈值。
 - Oracle：结果返回 `web_crawl result too large`，且带有统一 `decisionHint`。
 - Not：不验证压缩摘要或自动截断策略。
+
+##### `llm-recognize-contract`
+
+- 测试类型：`backend`
+- What：验证 `llm_recognize` 成功时直接返回普通文本。
+- Why：图像识别能力不要求结构化 JSON，human 需要拿到模型原始可读文本自己决策下一步。
+- How：mock 视觉模型返回普通文本，调用 `llm_recognize(path, instruction)`。
+- Oracle：工具结果直接是字符串，不包额外结构。
+- Not：不验证具体视觉模型质量。
+
+##### `llm-recognize-uncertain-text-contract`
+
+- 测试类型：`backend`
+- What：验证视觉模型返回“无法确认”类文本时，`llm_recognize` 仍按正常结果透传。
+- Why：无法确认不属于工具失败，而是模型识别结论的一部分。
+- How：mock 视觉模型返回“无法确认”文本，调用 `llm_recognize(path, instruction)`。
+- Oracle：工具结果仍是成功字符串。
+- Not：不验证 UI 渲染。
+
+##### `llm-recognize-bottom-error-contract`
+
+- 测试类型：`backend`
+- What：验证视觉模型底层失败时，`llm_recognize` 返回 error。
+- Why：只有底层调用失败才应进入工具错误路径。
+- How：mock 视觉模型抛错，调用 `llm_recognize(path, instruction)`。
+- Oracle：工具结果返回 `{ error }`。
+- Not：不验证 provider 重试策略。
 
 ##### `browser-use-service-unavailable-diagnostic`
 

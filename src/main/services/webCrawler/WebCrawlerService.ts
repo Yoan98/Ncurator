@@ -6,6 +6,7 @@ import readline from 'node:readline'
 import type { JsonObject, JsonValue } from '../../../shared/types'
 import type {
   WebCrawlerLink,
+  WebCrawlerLinks,
   WebCrawlerResult,
   WebCrawlerService as WebCrawlerServiceContract,
   WebCrawlerSidecarRequest,
@@ -69,35 +70,6 @@ const readNumber = (value: JsonValue | undefined): number | undefined => {
 const readObjectNumber = (obj: JsonObject | undefined, key: string): number | undefined =>
   obj ? readNumber(obj[key]) : undefined
 
-const flattenLinkCollection = (value: JsonValue | undefined): WebCrawlerLink[] => {
-  if (Array.isArray(value)) {
-    return value.flatMap((item) => flattenLinkCollection(item))
-  }
-  if (!isObjectRecord(value)) return []
-
-  const directHref = readObjectString(value, 'href')
-  if (directHref) {
-    return [
-      {
-        href: directHref,
-        ...(readObjectString(value, 'text') ? { text: readObjectString(value, 'text') } : {})
-      }
-    ]
-  }
-
-  return Object.values(value).flatMap((item) => flattenLinkCollection(item))
-}
-
-const normalizeLinks = (value: JsonValue | undefined): WebCrawlerLink[] => {
-  const deduped = new Map<string, WebCrawlerLink>()
-  for (const link of flattenLinkCollection(value)) {
-    if (!deduped.has(link.href)) {
-      deduped.set(link.href, link)
-    }
-  }
-  return [...deduped.values()]
-}
-
 const readMarkdownText = (value: JsonValue | undefined): string | undefined => {
   if (typeof value === 'string' && value.trim()) {
     return value.trim()
@@ -159,37 +131,25 @@ const readErrorMessage = (obj: JsonObject | undefined): string | undefined =>
   || readObjectString(obj, 'message')
 
 class WebCrawlerSidecarError extends Error {
+  public readonly requestedUrl?: string
   public readonly finalUrl?: string
   public readonly statusCode?: number
   public readonly raw?: JsonValue
 
   public constructor(input: {
     message: string
+    requestedUrl?: string
     finalUrl?: string
     statusCode?: number
     raw?: JsonValue
   }) {
     super(input.message)
     this.name = 'WebCrawlerSidecarError'
+    this.requestedUrl = input.requestedUrl
     this.finalUrl = input.finalUrl
     this.statusCode = input.statusCode
     this.raw = input.raw
   }
-}
-
-const selectPrimaryRawResult = (payload: JsonObject): JsonObject | undefined => {
-  const direct =
-    (isObjectRecord(payload.selected_result) && payload.selected_result)
-    || (isObjectRecord(payload.selectedResult) && payload.selectedResult)
-    || (isObjectRecord(payload.result) && payload.result)
-  if (direct) return direct
-
-  const visited = Array.isArray(payload.visited_results)
-    ? payload.visited_results
-    : Array.isArray(payload.visitedResults)
-      ? payload.visitedResults
-      : []
-  return visited.find(isObjectRecord)
 }
 
 const readFinalUrl = (obj: JsonObject | undefined): string | undefined =>
@@ -199,45 +159,119 @@ const readFinalUrl = (obj: JsonObject | undefined): string | undefined =>
   || readObjectString(obj, 'redirectedUrl')
   || readObjectString(obj, 'url')
 
-const normalizeResult = (payload: JsonObject): WebCrawlerResult => {
-  const rawPrimary = selectPrimaryRawResult(payload)
-  if (!rawPrimary) {
-    throw new Error('web crawler sidecar returned no selected result')
-  }
+const readRequestedUrl = (obj: JsonObject | undefined): string | undefined =>
+  readObjectString(obj, 'requested_url')
+  || readObjectString(obj, 'requestedUrl')
+  || readObjectString(obj, 'url')
 
-  const finalUrl = readFinalUrl(rawPrimary)
+const normalizeLinkItem = (value: JsonValue | undefined): WebCrawlerLink | undefined => {
+  if (!isObjectRecord(value)) return undefined
+  const href = readObjectString(value, 'href')
+  if (!href) return undefined
+  const text = readObjectString(value, 'text')
+  const title = readObjectString(value, 'title')
+
+  const baseDomain =
+    readObjectString(value, 'base_domain') || readObjectString(value, 'baseDomain')
+  const headData =
+    (isObjectRecord(value.head_data) && value.head_data)
+    || (isObjectRecord(value.headData) && value.headData)
+    || undefined
+  const headExtractionStatus =
+    readObjectString(value, 'head_extraction_status')
+    || readObjectString(value, 'headExtractionStatus')
+  const headExtractionError =
+    readObjectString(value, 'head_extraction_error')
+    || readObjectString(value, 'headExtractionError')
+  const intrinsicScore =
+    readObjectNumber(value, 'intrinsic_score') ?? readObjectNumber(value, 'intrinsicScore')
+  const contextualScore =
+    readObjectNumber(value, 'contextual_score') ?? readObjectNumber(value, 'contextualScore')
+  const totalScore = readObjectNumber(value, 'total_score') ?? readObjectNumber(value, 'totalScore')
+  const normalizedIntrinsicScore = intrinsicScore ?? 0
+  const normalizedContextualScore = contextualScore ?? 0
+  const normalizedTotalScore =
+    totalScore ?? normalizedIntrinsicScore + normalizedContextualScore
+
+  return {
+    href,
+    ...(text ? { text } : {}),
+    ...(title ? { title } : {}),
+    ...(baseDomain ? { baseDomain } : {}),
+    ...(headData ? { headData } : {}),
+    ...(headExtractionStatus ? { headExtractionStatus } : {}),
+    ...(headExtractionError ? { headExtractionError } : {}),
+    intrinsicScore: normalizedIntrinsicScore,
+    contextualScore: normalizedContextualScore,
+    totalScore: normalizedTotalScore
+  }
+}
+
+const normalizeLinkList = (value: JsonValue | undefined): WebCrawlerLink[] =>
+  Array.isArray(value)
+    ? value
+        .map((item) => normalizeLinkItem(item))
+        .filter((item): item is WebCrawlerLink => Boolean(item))
+    : []
+
+const normalizeLinks = (value: JsonValue | undefined): WebCrawlerLinks => {
+  if (!isObjectRecord(value)) {
+    return {
+      internal: [],
+      external: []
+    }
+  }
+  return {
+    internal: normalizeLinkList(value.internal),
+    external: normalizeLinkList(value.external)
+  }
+}
+
+const normalizeResult = (payload: JsonObject): WebCrawlerResult => {
+  const requestedUrl = readRequestedUrl(payload)
+  if (!requestedUrl) {
+    throw new Error('web crawler sidecar result missing requested url')
+  }
+  const finalUrl = readFinalUrl(payload)
   if (!finalUrl) {
     throw new Error('web crawler sidecar result missing final url')
   }
 
+  const raw = isObjectRecord(payload.raw) ? payload.raw : payload
   const title =
-    readObjectString(rawPrimary, 'title')
-    || readObjectString(isObjectRecord(rawPrimary.metadata) ? rawPrimary.metadata : undefined, 'title')
+    readObjectString(payload, 'title')
+    || readObjectString(isObjectRecord(raw.metadata) ? raw.metadata : undefined, 'title')
   const markdown =
-    readMarkdownText(rawPrimary.markdown)
-    || readObjectString(rawPrimary, 'fit_markdown')
-    || readObjectString(rawPrimary, 'fitMarkdown')
-    || readObjectString(rawPrimary, 'markdown')
-  const publishedAt = readPublishedAt(rawPrimary)
+    readObjectString(payload, 'markdown')
+    || readMarkdownText(payload.markdown)
+    || readMarkdownText(raw.markdown)
+    || readObjectString(raw, 'fit_markdown')
+    || readObjectString(raw, 'fitMarkdown')
+  const publishedAt =
+    readObjectString(payload, 'published_at')
+    || readObjectString(payload, 'publishedAt')
+    || readPublishedAt(raw)
   if (!markdown) {
     throw new WebCrawlerSidecarError({
       message:
-        readErrorMessage(rawPrimary)
+        readErrorMessage(raw)
         || readErrorMessage(payload)
         || 'web crawler sidecar result missing markdown',
+      requestedUrl,
       finalUrl,
-      statusCode: readStatusCode(rawPrimary) || readStatusCode(payload),
+      statusCode: readStatusCode(raw) || readStatusCode(payload),
       raw: payload
     })
   }
 
   return {
+    requestedUrl,
     finalUrl,
     ...(title ? { title } : {}),
     markdown,
-    links: normalizeLinks(rawPrimary.links),
+    links: normalizeLinks(payload.links),
     ...(publishedAt ? { publishedAt } : {}),
-    raw: payload
+    raw
   }
 }
 
@@ -361,6 +395,7 @@ const buildSidecarError = (response: WebCrawlerSidecarResponse): Error => {
   const data = isObjectRecord(response.data) ? response.data : undefined
   return new WebCrawlerSidecarError({
     message: String(response.error || 'web crawler sidecar failed'),
+    requestedUrl: readRequestedUrl(data),
     finalUrl: readFinalUrl(data),
     statusCode: readStatusCode(data),
     raw: response.data
@@ -383,12 +418,13 @@ export class ManagedWebCrawlerService implements WebCrawlerServiceContract {
     )
   }
 
-  public async crawl(input: { url: string }): Promise<WebCrawlerResult> {
+  public async crawl(input: { url: string; topic: string }): Promise<WebCrawlerResult> {
     const payload = await this.sendRequest({
       id: randomUUID(),
       action: 'crawl',
       input: {
-        url: input.url
+        url: input.url,
+        topic: input.topic
       }
     })
     return normalizeResult(payload)

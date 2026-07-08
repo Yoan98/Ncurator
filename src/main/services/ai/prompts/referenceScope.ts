@@ -42,9 +42,8 @@ export const buildReferenceScope = (input: {
 }
 
 const renderAttachment = (attachment: ChatAttachment, index: number): string => {
-  const contentInfo = String(attachment.contentInfo || '').trim() || '无可用内容信息。'
   return `第 ${index} 个附件：${attachment.name}
-- 内容信息：${contentInfo}`
+- 路径：${attachment.path}`
 }
 
 export const renderReferenceScopeText = (scope: AiReferenceScope): string => {

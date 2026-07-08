@@ -1,10 +1,9 @@
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo, Socket } from 'node:net'
-import path from 'node:path'
 import type { Page } from 'playwright'
 import { describe, it } from 'vitest'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
-import { seedActiveModelConfig, setSettingsE2EApiOverrides } from '../../../../harness/e2e/settings'
+import { seedActiveModelConfig } from '../../../../harness/e2e/settings'
 import {
   WORKBENCH_RESULT_E2E_TIMEOUT_MS,
   assertNoWorkbenchFakeSignals,
@@ -154,58 +153,90 @@ const waitForAssistantProcessWithoutGap = async (page: Page, durationMs = 700): 
   )
 }
 
-const setWorkbenchDraftWithAttachments = async (
+const pasteClipboardImageAttachment = async (
   page: Page,
-  attachmentPath: string
+  input: {
+    name: string
+    label: string
+  }
 ): Promise<void> => {
   await page.evaluate(
-    ({ message, filePath }) => {
-      const targetWindow = window as Window & {
-        __NCURATOR_E2E_SET_WORKBENCH_DRAFT__?: (draft: {
-          input: string
-          contentNodes: Array<{ kind: 'text'; text: string }>
-          selectedReferences: []
-          attachments: Array<{
-            id: string
-            kind: 'image' | 'file'
-            name: string
-            path: string
-            mimeType: string
-            size?: number
-            status: 'ready'
-          }>
-        }) => void
+    async ({ inputTestId, fileName, textLabel }) => {
+      const element = document.querySelector(`[data-testid="${inputTestId}"]`)
+      if (!(element instanceof HTMLElement)) {
+        throw new Error('workbench input is not an HTMLElement')
       }
-      const setDraft = targetWindow.__NCURATOR_E2E_SET_WORKBENCH_DRAFT__
-      if (!setDraft) {
-        throw new Error('workbench E2E draft hook is not available')
-      }
-      setDraft({
-        input: message,
-        contentNodes: [{ kind: 'text', text: message }],
-        selectedReferences: [],
-        attachments: [
-          {
-            id: 'picked-message-image',
-            kind: 'image',
-            name: 'message-image.png',
-            path: filePath,
-            mimeType: 'image/png',
-            status: 'ready'
-          },
-          {
-            id: 'picked-message-file',
-            kind: 'file',
-            name: 'message-note.txt',
-            path: filePath,
-            mimeType: 'text/plain',
-            size: 24,
-            status: 'ready'
+      element.focus()
+      const canvas = document.createElement('canvas')
+      canvas.width = 64
+      canvas.height = 64
+      const context = canvas.getContext('2d')
+      if (!context) throw new Error('canvas context not available')
+      context.fillStyle = '#2563EB'
+      context.fillRect(0, 0, 64, 64)
+      context.fillStyle = '#FFFFFF'
+      context.font = 'bold 22px sans-serif'
+      context.fillText(textLabel, 10, 40)
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob((value) => {
+          if (value) {
+            resolve(value)
+            return
           }
-        ]
+          reject(new Error('failed to create png blob'))
+        }, 'image/png')
       })
+      const file = new File([blob], fileName, { type: 'image/png' })
+      const dataTransfer = new DataTransfer()
+      dataTransfer.items.add(file)
+      element.dispatchEvent(
+        new ClipboardEvent('paste', {
+          bubbles: true,
+          cancelable: true,
+          clipboardData: dataTransfer
+        })
+      )
     },
-    { message: RUNNING_MESSAGE, filePath: attachmentPath }
+    {
+      inputTestId: workbenchSelectors.input,
+      fileName: input.name,
+      textLabel: input.label
+    }
+  )
+}
+
+const pasteClipboardFileAttachment = async (
+  page: Page,
+  input: {
+    name: string
+    mimeType: string
+    text: string
+  }
+): Promise<void> => {
+  await page.evaluate(
+    ({ inputTestId, fileName, mimeType, fileText }) => {
+      const element = document.querySelector(`[data-testid="${inputTestId}"]`)
+      if (!(element instanceof HTMLElement)) {
+        throw new Error('workbench input is not an HTMLElement')
+      }
+      element.focus()
+      const file = new File([fileText], fileName, { type: mimeType })
+      const dataTransfer = new DataTransfer()
+      dataTransfer.items.add(file)
+      element.dispatchEvent(
+        new ClipboardEvent('paste', {
+          bubbles: true,
+          cancelable: true,
+          clipboardData: dataTransfer
+        })
+      )
+    },
+    {
+      inputTestId: workbenchSelectors.input,
+      fileName: input.name,
+      mimeType: input.mimeType,
+      fileText: input.text
+    }
   )
 }
 
@@ -236,48 +267,11 @@ describe('workbench conversation e2e', () => {
           try {
             await runtime.step({
               name: 'seed-settings-and-workspace',
-              message: '配置 fake model、附件 override，并创建工作区',
+              message: '配置 fake model，并创建工作区',
               run: async () => {
                 setup = await setupWorkbenchWorkspaceOnly(page, {
                   caseId: CASE_ID,
                   workspaceName: 'Workbench User Message Actions Workspace'
-                })
-                const attachmentPath = path.join(setup.workspace.rootPath, 'human-input.txt')
-                await setSettingsE2EApiOverrides(page, {
-                  llmModelListResponseByConfigId: {
-                    [FAKE_MODEL_ID]: {
-                      success: true,
-                      items: [{ id: FAKE_MODEL_ID, label: FAKE_MODEL_ID }]
-                    }
-                  },
-                  attachmentRecognizeImageResponseByName: {
-                    'message-image.png': {
-                      success: true,
-                      attachment: {
-                        id: 'override-image',
-                        kind: 'image',
-                        name: 'message-image.png',
-                        path: attachmentPath,
-                        mimeType: 'image/png',
-                        status: 'ready',
-                        contentInfo: '蓝底 DS 测试图片'
-                      }
-                    }
-                  },
-                  attachmentParseFileResponseByName: {
-                    'message-note.txt': {
-                      success: true,
-                      attachment: {
-                        id: 'override-file',
-                        kind: 'file',
-                        name: 'message-note.txt',
-                        path: attachmentPath,
-                        mimeType: 'text/plain',
-                        status: 'ready',
-                        contentInfo: 'message attachment facts'
-                      }
-                    }
-                  }
                 })
                 await seedActiveModelConfig(page, {
                   id: FAKE_MODEL_ID,
@@ -294,17 +288,24 @@ describe('workbench conversation e2e', () => {
             })
             await runtime.step({
               name: 'prepare-composer',
-              message: '打开 Workbench、选择工作区并注入带附件 draft',
+              message: '打开 Workbench、选择工作区并粘贴消息附件',
               run: async () => {
                 if (!setup) throw new Error('workspace setup missing')
                 await navigateToWorkbench(page)
                 await createWorkbenchNewSession(page)
                 await selectWorkbenchWorkspace(page, setup.workspaceName)
                 await switchWorkbenchMode(page, '大聪明')
-                await setWorkbenchDraftWithAttachments(
-                  page,
-                  path.join(setup.workspace.rootPath, 'human-input.txt')
-                )
+                await getWorkbenchLocator(page, workbenchSelectors.input).click()
+                await page.keyboard.type(RUNNING_MESSAGE)
+                await pasteClipboardImageAttachment(page, {
+                  name: 'message-image.png',
+                  label: 'DS'
+                })
+                await pasteClipboardFileAttachment(page, {
+                  name: 'message-note.md',
+                  mimeType: 'text/markdown',
+                  text: '# Message Note\n\nmessage attachment facts'
+                })
               }
             })
             const imageComposerCard = getWorkbenchPrefixLocator(
@@ -314,7 +315,7 @@ describe('workbench conversation e2e', () => {
             const fileComposerCard = getWorkbenchPrefixLocator(
               page,
               workbenchSelectors.attachmentCardPrefix
-            ).filter({ hasText: 'message-note.txt' })
+            ).filter({ hasText: 'message-note.md' })
             await imageComposerCard.waitFor({ state: 'visible' })
             await fileComposerCard.waitFor({ state: 'visible' })
             const fileRemoveButton = getWorkbenchPrefixLocator(
@@ -450,8 +451,8 @@ describe('workbench conversation e2e', () => {
               result.removeButtonInsideCard &&
               result.runningEditButtons === 0 &&
               result.messageImageVisible &&
-              result.messageAttachmentTexts.some((text) => text.includes('message-note.txt')) &&
-              result.messageAttachmentTexts.some((text) => text.includes('TXT')) &&
+              result.messageAttachmentTexts.some((text) => text.includes('message-note.md')) &&
+              result.messageAttachmentTexts.some((text) => text.includes('MD')) &&
               result.assistantProcessTextAfterSend.includes('让俺想想') &&
               (result.assistantProcessTextAfterWait.includes('让俺想想') ||
                 result.assistantProcessTextAfterWait.includes('处理中')) &&

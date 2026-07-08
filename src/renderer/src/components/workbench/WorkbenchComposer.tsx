@@ -72,20 +72,16 @@ type WorkbenchComposerProps = {
   draftValue: ComposerDraftValue
   draftKey: string
   contextUsage?: WorkbenchContextUsage | null
+  requestAttachmentTarget: () => Promise<{ sessionId: string; workspaceRootPath: string } | null>
 }
 
 const isTextNode = (value: Node | null): value is Text => value instanceof Text
 const CARET_ANCHOR_ROLE = 'composer-caret-anchor'
 const LARGE_FILE_WARNING_BYTES = 10 * 1024 * 1024
 const SUPPORTED_ATTACHMENT_FILE_EXTENSIONS = new Set([
-  'txt',
   'md',
   'json',
-  'csv',
-  'docx',
-  'pdf',
-  'ppt',
-  'pptx'
+  'docx'
 ])
 
 const getAttachmentFileExt = (name: string): string => {
@@ -128,7 +124,8 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   showCancel,
   draftValue,
   draftKey,
-  contextUsage
+  contextUsage,
+  requestAttachmentTarget
 }) => {
   const { message } = AntdApp.useApp()
   const editorRef = useRef<HTMLSpanElement | null>(null)
@@ -586,33 +583,35 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   )
 
   const handlePickAttachments = useCallback(async (): Promise<void> => {
-    const response = await window.api.attachmentPick()
+    const target = await requestAttachmentTarget()
+    if (!target) {
+      focusEditorAfterControlChange()
+      return
+    }
+    const response = await window.api.attachmentPick(target)
     if (response.error) message.warning(response.error)
     if (!response.canceled) appendAttachments(response.items)
     focusEditorAfterControlChange()
-  }, [appendAttachments, focusEditorAfterControlChange, message])
+  }, [appendAttachments, focusEditorAfterControlChange, message, requestAttachmentTarget])
 
   const createAttachmentFromClipboardFile = useCallback(async (file: File) => {
-    const unsafePath = (file as File & { path?: string }).path
-    if (unsafePath) {
-      return {
-        id: crypto.randomUUID(),
-        kind: file.type.startsWith('image/') ? 'image' : 'file',
-        name: file.name || unsafePath.split(/[\\/]/u).pop() || '附件',
-        path: unsafePath,
-        mimeType: file.type,
-        size: file.size,
-        status: 'ready' as const
-      }
+    const target = await requestAttachmentTarget()
+    if (!target) {
+      return null
     }
-    const saved = await window.api.attachmentSaveTempFile({
+    const saved = await window.api.attachmentSaveFile({
+      workspaceRootPath: target.workspaceRootPath,
+      sessionId: target.sessionId,
       name: file.name || (file.type.startsWith('image/') ? 'clipboard.png' : 'clipboard-file'),
       bytes: new Uint8Array(await file.arrayBuffer()),
       mimeType: file.type,
       kind: file.type.startsWith('image/') ? 'image' : 'file'
     })
+    if (!saved.success && saved.error) {
+      message.warning(saved.error)
+    }
     return saved.attachment || null
-  }, [])
+  }, [message, requestAttachmentTarget])
 
   const handleEditorPaste = (event: React.ClipboardEvent<HTMLSpanElement>): void => {
     const files = Array.from(event.clipboardData.files || [])

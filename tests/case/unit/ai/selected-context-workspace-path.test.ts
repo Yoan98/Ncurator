@@ -67,16 +67,14 @@ describe('ai unit selected context workspace path', () => {
             kind: 'image',
             name: 'screen.png',
             path: '/tmp/screen.png',
-            status: 'ready',
-            contentInfo: '页面中有一个上传入口。'
+            status: 'ready'
           },
           {
             id: 'att-2',
             kind: 'file',
             name: 'README.md',
             path: '/tmp/README.md',
-            status: 'ready',
-            contentInfo: '项目说明正文。'
+            status: 'ready'
           }
         ]
       })
@@ -84,13 +82,13 @@ describe('ai unit selected context workspace path', () => {
 
     expect(text).toContain('用户选择的附件：')
     expect(text).toContain('第 1 个附件：screen.png')
-    expect(text).toContain('- 内容信息：页面中有一个上传入口。')
+    expect(text).toContain('- 路径：/tmp/screen.png')
     expect(text).toContain('第 2 个附件：README.md')
-    expect(text).toContain('- 内容信息：项目说明正文。')
+    expect(text).toContain('- 路径：/tmp/README.md')
     expect(text).not.toContain('来源：')
     expect(text).not.toContain('类型：图片')
     expect(text).not.toContain('格式：')
     expect(text).not.toContain('大小：')
-    expect(text).not.toContain('识别内容')
+    expect(text).not.toContain('内容信息')
   })
 })

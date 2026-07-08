@@ -16,9 +16,26 @@ const isObjectRecord = (value: JsonValue | undefined): value is Record<string, J
 const getErrorMessage = (error: Error): string => error.message || String(error)
 
 type WebCrawlerFailureDetails = Error & {
+  requestedUrl?: string
   finalUrl?: string
   statusCode?: number
 }
+
+const renderLinkForAi = (link: {
+  href: string
+  text?: string
+  title?: string
+  intrinsicScore?: number
+  contextualScore?: number
+  totalScore?: number
+}) => ({
+  href: link.href,
+  ...(link.text ? { text: link.text } : {}),
+  ...(link.title ? { title: link.title } : {}),
+  ...(typeof link.intrinsicScore === 'number' ? { intrinsicScore: link.intrinsicScore } : {}),
+  ...(typeof link.contextualScore === 'number' ? { contextualScore: link.contextualScore } : {}),
+  ...(typeof link.totalScore === 'number' ? { totalScore: link.totalScore } : {})
+})
 
 const buildToolResult = (input: {
   toolName: string
@@ -170,13 +187,18 @@ export const webToolFamily: ToolFamilyDefinition = {
 
             try {
               const result = await service.crawl({
-                url: normalizedUrl
+                url: normalizedUrl,
+                topic: String(args.topic || '').trim()
               })
               const payload = {
+                requestedUrl: result.requestedUrl,
                 finalUrl: result.finalUrl,
                 ...(result.title ? { title: result.title } : {}),
                 markdown: result.markdown,
-                links: result.links,
+                links: {
+                  internal: result.links.internal.map(renderLinkForAi),
+                  external: result.links.external.map(renderLinkForAi)
+                },
                 ...(result.publishedAt ? { publishedAt: result.publishedAt } : {})
               }
               const sizeCheck = checkToolResultSize({
@@ -189,6 +211,7 @@ export const webToolFamily: ToolFamilyDefinition = {
               if (sizeCheck.tooLarge) {
                 const tooLargePayload = {
                   error: 'web_crawl result too large',
+                  requestedUrl: result.requestedUrl,
                   finalUrl: result.finalUrl,
                   reason: 'result_too_large',
                   estimatedTokens: sizeCheck.estimatedTokens,
@@ -216,6 +239,10 @@ export const webToolFamily: ToolFamilyDefinition = {
               const resolvedError: WebCrawlerFailureDetails =
                 error instanceof Error
                   ? Object.assign(error, {
+                      requestedUrl:
+                        typeof (error as WebCrawlerFailureDetails).requestedUrl === 'string'
+                          ? (error as WebCrawlerFailureDetails).requestedUrl
+                          : undefined,
                       finalUrl:
                         typeof (error as WebCrawlerFailureDetails).finalUrl === 'string'
                           ? (error as WebCrawlerFailureDetails).finalUrl
@@ -228,6 +255,7 @@ export const webToolFamily: ToolFamilyDefinition = {
                   : new Error(String(error))
               const payload = {
                 error: getErrorMessage(resolvedError),
+                requestedUrl: resolvedError.requestedUrl || normalizedUrl,
                 finalUrl: resolvedError.finalUrl || normalizedUrl,
                 ...(typeof resolvedError.statusCode === 'number'
                   ? { statusCode: resolvedError.statusCode }

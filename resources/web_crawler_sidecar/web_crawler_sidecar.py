@@ -7,7 +7,9 @@ from typing import Any
 
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "0")
 
-from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig
+from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, LinkPreviewConfig
+from crawl4ai.content_filter_strategy import PruningContentFilter
+from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
 from ddgs import DDGS
 
 
@@ -16,6 +18,9 @@ MAX_SEARCH_ATTEMPTS = 3
 SEARCH_RETRY_BASE_DELAY_SECONDS = 0.4
 SEARCH_RETRY_MAX_DELAY_SECONDS = 1.5
 SEARCH_RETRY_JITTER_SECONDS = 0.2
+FIT_MARKDOWN_THRESHOLD = 0.48
+LINK_PREVIEW_MAX_LINKS = 120
+LINK_PREVIEW_TIMEOUT_SECONDS = 5
 
 
 class CrawlFailure(Exception):
@@ -67,7 +72,7 @@ def read_nested_int(obj: dict[str, Any] | None, key: str) -> int | None:
 
 
 def extract_markdown(raw: dict[str, Any]) -> str:
-    candidates = [raw.get("markdown"), raw.get("fit_markdown"), raw.get("fitMarkdown")]
+    candidates = [raw.get("fit_markdown"), raw.get("fitMarkdown"), raw.get("markdown")]
     for candidate in candidates:
         if isinstance(candidate, str) and candidate.strip():
             return candidate.strip()
@@ -84,6 +89,11 @@ def extract_markdown(raw: dict[str, Any]) -> str:
                 if isinstance(nested_value, str) and nested_value.strip():
                     return nested_value.strip()
     return ""
+
+
+def extract_raw_links(raw: dict[str, Any]) -> dict[str, Any]:
+    links = raw.get("links")
+    return links if isinstance(links, dict) else {"internal": [], "external": []}
 
 
 def resolve_result_url(raw: dict[str, Any], fallback_url: str | None = None) -> str | None:
@@ -123,7 +133,7 @@ def build_failure_data(
     status_code = resolve_status_code(raw)
     data: dict[str, Any] = {
         "raw": raw,
-        "url": requested_url,
+        "requested_url": requested_url,
     }
     if final_url:
         data["final_url"] = final_url
@@ -134,40 +144,65 @@ def build_failure_data(
     return data
 
 
-def flatten_links(value: Any) -> list[dict[str, str]]:
-    if isinstance(value, list):
-        items: list[dict[str, str]] = []
-        for item in value:
-            items.extend(flatten_links(item))
-        return items
-
-    if not isinstance(value, dict):
-        return []
-
-    href = (
-        read_nested_string(value, "href")
-        or read_nested_string(value, "url")
-        or read_nested_string(value, "link")
+def build_crawler_run_config(topic: str) -> CrawlerRunConfig:
+    return CrawlerRunConfig(
+        markdown_generator=DefaultMarkdownGenerator(
+            content_filter=PruningContentFilter(
+                user_query="",
+                threshold=FIT_MARKDOWN_THRESHOLD,
+            )
+        ),
+        score_links=True,
+        link_preview_config=LinkPreviewConfig(
+            include_internal=True,
+            include_external=True,
+            query=topic,
+            max_links=LINK_PREVIEW_MAX_LINKS,
+            timeout=LINK_PREVIEW_TIMEOUT_SECONDS,
+        ),
     )
-    if href:
-        text = (
-            read_nested_string(value, "text")
-            or read_nested_string(value, "title")
-            or read_nested_string(value, "context")
+
+
+def normalize_crawl_success(raw: dict[str, Any], requested_url: str) -> dict[str, Any]:
+    final_url = resolve_result_url(raw, requested_url)
+    if not final_url:
+        raise CrawlFailure(
+            "crawl4ai returned no final url",
+            build_failure_data(raw, requested_url, "crawl4ai returned no final url"),
         )
-        item = {"href": href}
-        if text:
-            item["text"] = text
-        return [item]
 
-    items: list[dict[str, str]] = []
-    for nested in value.values():
-        items.extend(flatten_links(nested))
-    return items
+    result: dict[str, Any] = {
+        "requested_url": requested_url,
+        "final_url": final_url,
+        "markdown": extract_markdown(raw),
+        "links": extract_raw_links(raw),
+        "raw": raw,
+    }
+    title = read_nested_string(raw, "title") or read_nested_string(
+        raw.get("metadata") if isinstance(raw.get("metadata"), dict) else None,
+        "title",
+    )
+    published_at = (
+        read_nested_string(raw, "published_at")
+        or read_nested_string(raw, "publishedAt")
+        or read_nested_string(
+            raw.get("metadata") if isinstance(raw.get("metadata"), dict) else None,
+            "article:published_time",
+        )
+        or read_nested_string(
+            raw.get("metadata") if isinstance(raw.get("metadata"), dict) else None,
+            "published_time",
+        )
+    )
+    if title:
+        result["title"] = title
+    if published_at:
+        result["published_at"] = published_at
+    return result
 
 
-async def crawl_once(crawler: AsyncWebCrawler, url: str) -> dict[str, Any]:
-    result = await crawler.arun(url=url, config=CrawlerRunConfig())
+async def crawl_once(crawler: AsyncWebCrawler, url: str, topic: str) -> dict[str, Any]:
+    result = await crawler.arun(url=url, config=build_crawler_run_config(topic))
     raw_result = to_jsonable(result)
     if not isinstance(raw_result, dict):
         raise CrawlFailure(
@@ -194,13 +229,19 @@ async def crawl_once(crawler: AsyncWebCrawler, url: str) -> dict[str, Any]:
             build_failure_data(raw_result, url, error_message or ""),
         )
 
-    return raw_result
+    normalized = normalize_crawl_success(raw_result, url)
+    markdown = read_string(normalized.get("markdown"))
+    if not markdown:
+        raise CrawlFailure(
+            "web crawl result missing fit_markdown",
+            build_failure_data(raw_result, url, "web crawl result missing fit_markdown"),
+        )
+
+    return normalized
 
 
-async def handle_crawl(crawler: AsyncWebCrawler, url: str) -> dict[str, Any]:
-    return {
-        "selected_result": await crawl_once(crawler, url),
-    }
+async def handle_crawl(crawler: AsyncWebCrawler, url: str, topic: str) -> dict[str, Any]:
+    return await crawl_once(crawler, url, topic)
 
 
 def normalize_search_result(item: dict[str, Any], rank: int) -> dict[str, Any] | None:
@@ -305,12 +346,15 @@ async def process_requests() -> None:
                     raise ValueError("invalid input payload")
                 if action == "crawl":
                     url = read_string(input_payload.get("url"))
+                    topic = read_string(input_payload.get("topic"))
                     if not url:
                         raise ValueError("missing crawl url")
+                    if not topic:
+                        raise ValueError("missing crawl topic")
                     if crawler is None:
                         crawler = AsyncWebCrawler(config=browser_config)
                         await crawler.start()
-                    data = await handle_crawl(crawler, url)
+                    data = await handle_crawl(crawler, url, topic)
                 else:
                     query = read_string(input_payload.get("query"))
                     if not query:

@@ -95,11 +95,20 @@
 ### `web-browsing`
 
 - 类型：builtin
-- 职责：提供网页访问与内置浏览器网页操作能力；程序抓取返回当前最相关网页的正文 markdown、发布时间与后续链接，内置浏览器工具在 Workbench 右侧浏览器面板中读取、观察或执行页面动作。
+- 职责：提供网页访问与内置浏览器网页操作能力；`web_crawl` 固定返回 `requestedUrl / finalUrl / markdown / grouped links`，其中 `markdown` 内容来源于 crawl4ai 的 `fit_markdown`，links 保留 internal / external 分组与评分字段，内置浏览器工具在 Workbench 右侧浏览器面板中读取、观察或执行页面动作。
 - 工具列表：
+  - `web_search`
   - `web_crawl`
   - `browser_use`
-- 适用场景：适用于需要读取公开网页内容、基于网页线索继续判断下一步要抓取哪个链接，或需要在网页界面中完成观察、提取、点击、输入等操作的任务；`browser_use` 首次使用需要用户审核。
+- 适用场景：适用于需要读取公开网页内容、基于网页线索继续判断下一步要抓取哪个链接，或需要在网页界面中完成观察、提取、点击、输入等操作的任务；`web_crawl` 的 `topic` 用于 links 评分，不用于正文裁剪；`browser_use` 首次使用需要用户审核。
+
+### `image-recognition`
+
+- 类型：external
+- 职责：读取工作区内图片路径，并按当前任务给定的 `instruction` 调用大模型做图像理解。
+- 工具列表：
+  - `llm_recognize`
+- 适用场景：适用于用户已经通过附件或工作区提供了图片，human 需要自己决定怎么提问模型来理解图片内容的任务；工具直接返回普通文本，不要求 JSON。
 
 ### `utility`
 

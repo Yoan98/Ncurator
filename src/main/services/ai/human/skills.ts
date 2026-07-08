@@ -40,6 +40,17 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
     whenToUse: '适用于用户要求生成、补充、改写、删除或格式化 docx 内容的任务。',
     toolNames: ['docx_edit', 'docx_rollback']
   },
+  'image-recognition': {
+    skillId: 'image-recognition',
+    familyId: 'utility',
+    source: 'external',
+    countsTowardToolBudget: true,
+    title: '图像识别',
+    description:
+      '能力：读取工作区内图片文件，并基于大模型按给定 instruction 理解图片内容。\n结果：返回模型生成的普通文本结果。\n边界：只负责图像理解，不做 OCR 专项抽取，也不保证模型一定能识别清楚。',
+    whenToUse: '适用于需要让模型直接查看图片并回答图片内容的任务。',
+    toolNames: ['llm_recognize']
+  },
   'kb-retrieval': {
     skillId: 'kb-retrieval',
     familyId: 'kb',

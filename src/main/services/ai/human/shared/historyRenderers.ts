@@ -124,13 +124,28 @@ const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
     }
   },
   web_crawl: {
+    requestedUrl: true,
     finalUrl: true,
     title: true,
     markdown: true,
     publishedAt: true,
     links: {
-      href: true,
-      text: true
+      internal: {
+        href: true,
+        text: true,
+        title: true,
+        intrinsicScore: true,
+        contextualScore: true,
+        totalScore: true
+      },
+      external: {
+        href: true,
+        text: true,
+        title: true,
+        intrinsicScore: true,
+        contextualScore: true,
+        totalScore: true
+      }
     }
   }
 }

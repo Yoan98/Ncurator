@@ -3,13 +3,27 @@ import type { JsonObject, JsonValue } from '../../../shared/types'
 export type WebCrawlerLink = {
   href: string
   text?: string
+  title?: string
+  baseDomain?: string
+  headData?: JsonObject
+  headExtractionStatus?: string
+  headExtractionError?: string
+  intrinsicScore?: number
+  contextualScore?: number
+  totalScore?: number
+}
+
+export type WebCrawlerLinks = {
+  internal: WebCrawlerLink[]
+  external: WebCrawlerLink[]
 }
 
 export type WebCrawlerResult = {
+  requestedUrl: string
   finalUrl: string
   title?: string
   markdown: string
-  links: WebCrawlerLink[]
+  links: WebCrawlerLinks
   publishedAt?: string
   raw: JsonObject
 }
@@ -28,7 +42,7 @@ export type WebSearchResult = {
 }
 
 export type WebCrawlerService = {
-  crawl: (input: { url: string }) => Promise<WebCrawlerResult>
+  crawl: (input: { url: string; topic: string }) => Promise<WebCrawlerResult>
   search: (input: { query: string }) => Promise<WebSearchResult>
   close: () => Promise<void>
 }
@@ -39,6 +53,7 @@ export type WebCrawlerSidecarRequest =
       action: 'crawl'
       input: {
         url: string
+        topic: string
       }
     }
   | {

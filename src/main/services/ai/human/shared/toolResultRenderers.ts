@@ -275,7 +275,7 @@ const renderDocxHistoryResult = (obj: JsonObject): string =>
     .filter(Boolean)
     .join('\n')
 
-const renderWebCrawlLinks = (value: JsonValue | undefined): string => {
+const renderWebCrawlLinkList = (value: JsonValue | undefined): string => {
   if (!Array.isArray(value) || value.length === 0) return 'none'
 
   return value
@@ -283,15 +283,31 @@ const renderWebCrawlLinks = (value: JsonValue | undefined): string => {
       if (!isJsonObject(item)) return renderGenericArrayItem(item, index)
       return `${index + 1}. ${renderKeyValuePairs([
         ['href', readStringField(item, 'href')],
-        ['text', readStringField(item, 'text')]
+        ['text', readStringField(item, 'text')],
+        ['title', readStringField(item, 'title')],
+        ['intrinsicScore', readNumberTextField(item, 'intrinsicScore')],
+        ['contextualScore', readNumberTextField(item, 'contextualScore')],
+        ['totalScore', readNumberTextField(item, 'totalScore')]
       ])}`
     })
     .join('\n')
 }
 
+const renderWebCrawlLinks = (value: JsonValue | undefined): string => {
+  if (!isJsonObject(value)) return 'none'
+
+  return [
+    'internal:',
+    renderWebCrawlLinkList(value.internal),
+    'external:',
+    renderWebCrawlLinkList(value.external)
+  ].join('\n')
+}
+
 const renderWebCrawlResult = (obj: JsonObject): string =>
   [
     renderKeyValuePairs([
+      ['requestedUrl', readStringField(obj, 'requestedUrl')],
       ['finalUrl', readStringField(obj, 'finalUrl')],
       ['title', readStringField(obj, 'title')],
       ['publishedAt', readStringField(obj, 'publishedAt')]

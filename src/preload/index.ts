@@ -257,38 +257,14 @@ const api: DesktopApi = {
   },
   getEmbeddingStatus: () => ipcRenderer.invoke('get-embedding-status'),
   readFile: (filePath: string): Promise<Uint8Array> => ipcRenderer.invoke('read-file', filePath),
-  attachmentPick: () => {
+  attachmentPick: (payload) => {
     const overrides = getE2EApiOverrides()
     if (overrides && hasOverrideKey(overrides, 'attachmentPickResponse')) {
       return Promise.resolve(overrides.attachmentPickResponse || { canceled: true, items: [] })
     }
-    return ipcRenderer.invoke('attachment-pick')
+    return ipcRenderer.invoke('attachment-pick', payload)
   },
-  attachmentSaveTempFile: (payload) => ipcRenderer.invoke('attachment-save-temp-file', payload),
-  attachmentParseFile: (attachment) => {
-    const name = String(attachment?.name || '').trim()
-    const response = getE2EApiOverrides()?.attachmentParseFileResponseByName?.[name]
-    if (response) {
-      return Promise.resolve({
-        ...response,
-        attachment: response.attachment ? { ...attachment, ...response.attachment } : undefined
-      })
-    }
-    return ipcRenderer.invoke('attachment-parse-file', attachment)
-  },
-  attachmentRecognizeImage: (payload) => {
-    const name = String(payload?.attachment?.name || '').trim()
-    const response = getE2EApiOverrides()?.attachmentRecognizeImageResponseByName?.[name]
-    if (response) {
-      return Promise.resolve({
-        ...response,
-        attachment: response.attachment
-          ? { ...payload.attachment, ...response.attachment }
-          : undefined
-      })
-    }
-    return ipcRenderer.invoke('attachment-recognize-image', payload)
-  },
+  attachmentSaveFile: (payload) => ipcRenderer.invoke('attachment-save-file', payload),
 
   // Chat & LLM
   chatSessionList: () => ipcRenderer.invoke('chat-session-list'),

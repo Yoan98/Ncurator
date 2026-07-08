@@ -14,3 +14,4 @@ __pycache__
 .codex-tmp
 .pyinstaller
 resources/web_crawler_sidecar/bin
+design/

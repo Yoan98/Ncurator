@@ -122,7 +122,7 @@ interface AiRunContext {
   // Workbench 内置浏览器网页操作能力；不存在时相关工具返回真实诊断错误。
   browserUseService?: BrowserUseService
 
-  // 程序化网页抓取能力；供 web_crawl 抓取网页并返回正文与链接结果。
+  // 程序化网页抓取能力；供 web_crawl 抓取网页并返回 requestedUrl/finalUrl、fit_markdown 和分组 links 结果。
   webCrawlerService?: WebCrawlerService
 
   // 读取最近对话和会话摘要。
@@ -162,6 +162,37 @@ interface AiRunContext {
   embeddingService: EmbeddingService
 }
 ```
+
+### `web_crawl` contract
+
+- 输入固定为 `{ url: string; topic: string }`，其中 `topic` 必填。
+- `topic` 只用于 sidecar 中 links 的 contextual score，不用于正文裁剪策略。
+- AI 阅读的正文固定来自 crawl4ai 的 `fit_markdown`。
+- sidecar 原样保留 crawl4ai links 语义；主进程只在给 AI 渲染时裁剪字段，不压平 `internal / external` 分组。
+- 给 AI 的顶层字段固定包含：
+  - `requestedUrl`
+  - `finalUrl`
+  - `title`
+  - `publishedAt`
+  - `markdown`
+- 给 AI 的 links 每项字段固定包含：
+  - `href`
+  - `text`
+  - `title`
+  - `intrinsicScore`
+  - `contextualScore`
+  - `totalScore`
+
+### 附件 reference scope contract
+
+- Workbench 附件统一保存到 `<workspace>/.ncurator/assets/<sessionId>/`。
+- 预留 `<workspace>/.ncurator/scripts/` 供后续工具或脚本产物使用。
+- 当前 `brain` 只接收附件的顺序、名称和路径，不再接收发送前预解析摘要。
+- 当前通过 `+` 或粘贴可进入附件链路的类型只包括：
+  - 图片
+  - `docx`
+  - `md`
+  - `json`
 
 #### `AiRunState` 与跨层输出
 
