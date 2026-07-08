@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="badge" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#23261f"/>
+      <stop offset="1" stop-color="#0c0e0b"/>
+    </linearGradient>
+  </defs>
+  <circle cx="512" cy="548" r="368" fill="url(#badge)"/>
+  <path d="M304 418 C374 306 650 306 720 418 L690 544 C604 590 420 590 334 544 Z" fill="#f2e7d0"/>
+  <ellipse cx="498" cy="580" rx="344" ry="84" fill="#f2e7d0" transform="rotate(-4 498 580)"/>
+  <path d="M360 690 C400 850 624 850 664 690" fill="none" stroke="#f2e7d0" stroke-width="66" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M284 906 C400 772 624 772 740 906" fill="none" stroke="#f2e7d0" stroke-width="70" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M418 852 C462 814 494 830 512 872 C530 830 562 814 606 852 C572 908 452 908 418 852 Z" fill="#a77b4b"/>
+  <circle cx="720" cy="284" r="22" fill="#a77b4b"/>
+  <circle cx="790" cy="230" r="16" fill="#727865"/>
+</svg>
