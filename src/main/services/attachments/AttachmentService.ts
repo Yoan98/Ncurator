@@ -44,6 +44,16 @@ type VisionRunnable = {
   ) => Promise<RunnableMessage>
 }
 
+type ImageRecognitionResult =
+  | {
+      ok: true
+      description: string
+    }
+  | {
+      ok: false
+      reason?: string
+    }
+
 const getErrorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error)
 
@@ -87,6 +97,53 @@ const extractMessageText = (content: unknown): string => {
           : ''
     })
     .join('')
+}
+
+const parseImageRecognitionJson = (value: string): ImageRecognitionResult | null => {
+  const text = String(value || '').trim()
+  if (!text) return null
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/iu)
+  const candidate = (fenced?.[1] || text).trim()
+  try {
+    const parsed = JSON.parse(candidate) as Partial<ImageRecognitionResult>
+    if (parsed.ok === true && typeof parsed.description === 'string') {
+      return { ok: true, description: parsed.description }
+    }
+    if (parsed.ok === false) {
+      return {
+        ok: false,
+        reason: typeof parsed.reason === 'string' ? parsed.reason : 'cannot_recognize_image'
+      }
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+
+const IMAGE_RECOGNITION_REJECTION_PATTERNS = [
+  /无法(?:查看|看到|识别|处理|分析|读取).{0,12}(?:图片|图像|照片)/iu,
+  /不能(?:查看|看到|识别|处理|分析|读取).{0,12}(?:图片|图像|照片)/iu,
+  /(?:没有|未)(?:提供|上传|收到).{0,12}(?:图片|图像|照片)/iu,
+  /请(?:上传|提供).{0,12}(?:图片|图像|照片)/iu,
+  /(?:看不到|无法看到|无法访问).{0,12}(?:图片|图像|照片)/iu,
+  /cannot\s+(?:view|see|recognize|process|access|analy[sz]e).{0,24}image/iu,
+  /no\s+image\s+(?:provided|attached|uploaded)/iu,
+  /please\s+(?:upload|provide|attach).{0,24}image/iu
+]
+
+const isRejectedImageRecognitionText = (value: string): boolean => {
+  const text = String(value || '').trim()
+  if (!text) return true
+  return IMAGE_RECOGNITION_REJECTION_PATTERNS.some((pattern) => pattern.test(text))
+}
+
+const resolveImageRecognitionContent = (rawText: string): string => {
+  const parsed = parseImageRecognitionJson(rawText)
+  if (!parsed || !parsed.ok) return ''
+  const description = clipContentInfo(parsed.description)
+  if (isRejectedImageRecognitionText(description)) return ''
+  return description
 }
 
 const ensureTempDir = async (): Promise<void> => {
@@ -238,13 +295,17 @@ export class AttachmentService {
       }) as VisionRunnable
       const result = await model.invoke([
         new SystemMessage(
-          '你只负责识别用户选择的图片内容，并输出简洁、客观的内容信息。不要输出与图片无关的说明。'
+          [
+            '你是图片识别检查器，只能输出 JSON，不要输出 Markdown 或其他文字。',
+            '如果你能真实看到并描述图片，输出 {"ok":true,"description":"简洁、客观的图片内容信息"}。',
+            '如果你看不到图片、不能处理图片、没有收到图片输入，或只能根据文字猜测，输出 {"ok":false,"reason":"cannot_recognize_image"}。'
+          ].join('\n')
         ),
         new HumanMessage({
           content: [
             {
               type: 'text',
-              text: '请识别这张图片，输出能帮助后续完成用户任务的内容信息。只输出内容信息正文。'
+              text: '识别这张图片。只输出 JSON。'
             },
             {
               type: 'image_url',
@@ -255,7 +316,8 @@ export class AttachmentService {
           ]
         })
       ])
-      const contentInfo = clipContentInfo(extractMessageText(result.content))
+      const rawText = extractMessageText(result.content)
+      const contentInfo = resolveImageRecognitionContent(rawText)
       if (!contentInfo) {
         return { ...input.attachment, status: 'failed', error: '当前模型不支持图像识别' }
       }

@@ -399,9 +399,9 @@ const getDisplayGroupText = (
     return sentence(text('上下文整理失败了'))
   }
   if (display.kind === 'finalizing') {
-    if (status === 'running') return sentence(text('基本完成了，让俺收尾下吧'))
-    if (status === 'completed') return sentence(text('收尾完成了'))
-    return sentence(text('收尾失败了'))
+    if (status === 'running') return sentence(text('让俺想想'))
+    if (status === 'completed') return sentence(text('俺想好了'))
+    return sentence(text('俺没想明白'))
   }
   return getToolSummaryText(getDisplaySkillKey(display), status)
 }

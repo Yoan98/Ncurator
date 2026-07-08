@@ -1,5 +1,5 @@
 ﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { App as AntdApp, Dropdown, Modal, Spin, Tooltip } from 'antd'
+import { App as AntdApp, Dropdown, Spin, Tooltip } from 'antd'
 import {
   HiArrowUp,
   HiCpuChip,
@@ -39,6 +39,7 @@ import {
   renderComposerNodesToEditor
 } from './composer/utils'
 import WorkbenchSelect from './WorkbenchSelect'
+import type { ImageLightboxImage } from './ImageLightbox'
 
 type MentionContext = {
   textNode: Text
@@ -62,6 +63,7 @@ type WorkbenchComposerProps = {
   onDraftChange: (draft: ComposerDraftValue) => void
   onSubmit: () => void
   onCancel: () => void
+  onPreviewImage?: (image: ImageLightboxImage) => void
   loading: boolean
   cancelling?: boolean
   canSubmit: boolean
@@ -118,6 +120,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   onDraftChange,
   onSubmit,
   onCancel,
+  onPreviewImage,
   loading,
   cancelling = false,
   canSubmit,
@@ -144,7 +147,6 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   const [mentionLoading, setMentionLoading] = useState(false)
   const [mentionActiveIndex, setMentionActiveIndex] = useState(0)
   const [hasContent, setHasContent] = useState(false)
-  const [previewImage, setPreviewImage] = useState<ChatAttachment | null>(null)
   const [attachmentPreviewUrls, setAttachmentPreviewUrls] = useState<Record<string, string>>({})
 
   const selectedWorkspace = useMemo(
@@ -882,16 +884,21 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
         }}
       >
         {currentAttachments.length > 0 ? (
-          <div className="mb-2 flex max-h-[116px] flex-wrap gap-2 overflow-y-auto pr-1">
+          <div className="mb-2 flex max-h-[88px] gap-2 overflow-x-auto overflow-y-hidden pb-1 pr-1">
             {currentAttachments.map((attachment) => (
               <button
                 key={attachment.id}
                 type="button"
-                className="group relative flex max-w-[260px] items-center gap-2 rounded-[8px] border border-[#E5E4E0] bg-white px-2 py-1.5 pr-7 text-left shadow-[0_1px_2px_rgba(15,15,15,0.04)] transition hover:border-[#D8D7D3]"
+                className={`group relative h-[54px] shrink-0 rounded-[8px] border border-[#E5E4E0] bg-white text-left shadow-[0_1px_2px_rgba(15,15,15,0.04)] transition hover:border-[#D8D7D3] ${
+                  attachment.kind === 'image'
+                    ? 'w-[54px] overflow-hidden p-0'
+                    : 'flex w-[220px] items-center gap-2 px-2 py-1.5 pr-7'
+                }`}
                 data-testid={`${workbenchSelectors.attachmentCardPrefix}-${attachment.id}`}
                 onClick={() => {
                   if (attachment.kind === 'image') {
-                    setPreviewImage(attachment)
+                    const src = attachmentPreviewUrls[attachment.id]
+                    if (src) onPreviewImage?.({ name: attachment.name, src })
                     return
                   }
                   void window.api.openPath(attachment.path)
@@ -899,7 +906,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                 title={attachment.name}
               >
                 {attachment.kind === 'image' ? (
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-[7px] border border-[#EEEEEC] bg-[#F4F4F2] text-[#787774]">
+                  <span className="flex h-full w-full items-center justify-center bg-[#F4F4F2] text-[#787774]">
                     {attachmentPreviewUrls[attachment.id] ? (
                       <img
                         src={attachmentPreviewUrls[attachment.id]}
@@ -915,14 +922,14 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                     <HiDocumentText className="h-4 w-4" />
                   </span>
                 )}
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[13px] font-medium leading-5 text-[#37352F]">
-                    {attachment.name}
+                {attachment.kind === 'file' ? (
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[13px] font-medium leading-5 text-[#37352F]">
+                      {attachment.name}
+                    </span>
+                    <span className="block text-[12px] leading-4 text-[#787774]">文件</span>
                   </span>
-                  <span className="block text-[12px] leading-4 text-[#787774]">
-                    {attachment.kind === 'image' ? '图片' : '文件'}
-                  </span>
-                </span>
+                ) : null}
                 <span
                   role="button"
                   tabIndex={0}
@@ -1170,32 +1177,6 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
           {composerHint}
         </div>
       ) : null}
-
-      <Modal
-        open={Boolean(previewImage)}
-        footer={null}
-        centered
-        width="min(860px, 92vw)"
-        onCancel={() => setPreviewImage(null)}
-        title={previewImage?.name}
-        data-testid={workbenchSelectors.attachmentPreviewModal}
-      >
-        {previewImage ? (
-          <div className="flex max-h-[72vh] items-center justify-center overflow-hidden rounded-[8px] bg-[#F7F7F5]">
-            {attachmentPreviewUrls[previewImage.id] ? (
-              <img
-                src={attachmentPreviewUrls[previewImage.id]}
-                alt={previewImage.name}
-                className="max-h-[72vh] max-w-full object-contain"
-              />
-            ) : (
-              <div className="flex h-[320px] w-full items-center justify-center text-[#787774]">
-                <HiPhoto className="h-8 w-8" />
-              </div>
-            )}
-          </div>
-        ) : null}
-      </Modal>
 
       {showWorkspaceSelector ? (
         <div className="mt-2 flex min-w-0 items-center px-1">

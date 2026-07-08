@@ -310,7 +310,7 @@ export class ChatRunService {
       entry.abortController.abort()
       this.clearProjectionFlush(runId)
       const approval = this.activeApprovals.get(runId)
-      approval?.resolve({ accepted: false, error: 'session deleted' })
+      approval?.resolve({ accepted: false, error: '当前会话已删除' })
       this.activeApprovals.delete(runId)
     }
 
@@ -332,11 +332,11 @@ export class ChatRunService {
   public async cancelRun(runId: string): Promise<AiRunCancelResponse> {
     const normalizedRunId = String(runId || '').trim()
     const entry = this.activeRuns.get(normalizedRunId)
-    if (!entry) return { success: false, error: 'run not found' }
+    if (!entry) return { success: false, error: '当前运行已结束' }
     entry.cancelled = true
     entry.abortController.abort()
     const approval = this.activeApprovals.get(normalizedRunId)
-    approval?.resolve({ accepted: false, error: 'run cancelled' })
+    approval?.resolve({ accepted: false, error: '已取消' })
     this.activeApprovals.delete(normalizedRunId)
     return { success: true }
   }
@@ -349,7 +349,7 @@ export class ChatRunService {
     if (!runId || !batchId) return { success: false, error: 'runId and batchId are required' }
 
     const pending = this.activeApprovals.get(runId)
-    if (!pending) return { success: false, error: 'run not found' }
+    if (!pending) return { success: false, error: '当前运行已结束' }
     if (pending.batchId !== batchId) return { success: false, error: 'approval batch not found' }
 
     const decisions = Array.isArray(payload?.decisions) ? payload.decisions : []
@@ -711,7 +711,7 @@ export class ChatRunService {
       }
     | { accepted: false; error: string }
   > {
-    if (this.activeRuns.get(runId)?.cancelled) return { accepted: false, error: 'run not active' }
+    if (this.activeRuns.get(runId)?.cancelled) return { accepted: false, error: '当前运行已结束' }
     if (this.activeApprovals.has(runId)) {
       return { accepted: false, error: 'approval batch already pending' }
     }

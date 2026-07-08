@@ -42,7 +42,9 @@ import { HiOutlineCog6Tooth } from 'react-icons/hi2'
 import AssistantTurnCard from '../components/workbench/AssistantTurnCard'
 import WorkbenchComposer from '../components/workbench/WorkbenchComposer'
 import WorkbenchContentPanel from '../components/workbench/WorkbenchContentPanel'
+import ImageLightbox from '../components/workbench/ImageLightbox'
 import ReferenceInlineToken from '../components/workbench/composer/ReferenceInlineToken'
+import type { ImageLightboxImage } from '../components/workbench/ImageLightbox'
 import type { ComposerDraftValue } from '../components/workbench/composer/types'
 import {
   WORKBENCH_CONTENT_PANEL_COLLAPSED_STORAGE_KEY,
@@ -67,6 +69,7 @@ import type {
 } from '../components/markdownReference'
 import {
   completeAssistantProcessGroups,
+  createAssistantThinkingGroup,
   createSearchProcessGroup,
   dedupeFileRefs,
   extractReadableFilesFromToolOutput,
@@ -162,6 +165,11 @@ const createAssistantTurn = (messageId: string): AssistantTurnViewModel => ({
   artifacts: [],
   applyTargets: [],
   blockers: []
+})
+
+const createThinkingAssistantTurn = (messageId: string): AssistantTurnViewModel => ({
+  ...createAssistantTurn(messageId),
+  processGroups: [createAssistantThinkingGroup(messageId)]
 })
 
 const createSearchAssistantTurn = (messageId: string): AssistantTurnViewModel => ({
@@ -492,6 +500,16 @@ const delay = (ms: number): Promise<void> =>
     window.setTimeout(resolve, ms)
   })
 
+const normalizeUserFacingError = (value: string): string => {
+  const message = String(value || '').trim()
+  if (!message) return '操作失败'
+  const lower = message.toLowerCase()
+  if (lower === 'cancelled' || lower === 'canceled' || lower === 'run cancelled') return '已取消'
+  if (lower === 'run not active' || lower === 'run not found') return '当前运行已结束'
+  if (lower === 'session deleted') return '当前会话已删除'
+  return message
+}
+
 const appendMessagesDedupe = (
   current: ChatMessage[],
   additions: Array<ChatMessage | undefined>
@@ -570,6 +588,7 @@ const ChatPage: React.FC = () => {
   const [messageAttachmentPreviewUrls, setMessageAttachmentPreviewUrls] = useState<
     Record<string, string>
   >({})
+  const [previewImage, setPreviewImage] = useState<ImageLightboxImage | null>(null)
   const [assistantTurns, setAssistantTurns] = useState<Record<string, AssistantTurnViewModel>>({})
   const [contentPanel, setContentPanel] = useState<WorkbenchContentPanelState>(createEmptyPanel())
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
@@ -602,6 +621,7 @@ const ChatPage: React.FC = () => {
   const activeRunMessageIdsRef = useRef<Record<string, string>>({})
   const assistantArtifactsRef = useRef<Record<string, AiArtifactRef[]>>({})
   const currentSessionIdRef = useRef<string | null>(null)
+  const submitInFlightRef = useRef(false)
   const lastSubmittedInputRef = useRef('')
   const sessionSwitchRequestRef = useRef(0)
   const sessionListHydratedRef = useRef(false)
@@ -734,7 +754,11 @@ const ChatPage: React.FC = () => {
   )
 
   const processAttachmentsForSubmit = useCallback(
-    async (items: ChatAttachment[]): Promise<ChatAttachment[] | null> => {
+    async (
+      items: ChatAttachment[]
+    ): Promise<
+      { success: true; attachments: ChatAttachment[] } | { success: false; error: string }
+    > => {
       const processed: ChatAttachment[] = []
       for (const item of items) {
         if (item.kind === 'image') {
@@ -743,8 +767,10 @@ const ChatPage: React.FC = () => {
             modelName: selectedModelName || ''
           })
           if (!response.success || !response.attachment) {
-            message.warning(response.error || '当前模型不支持图像识别')
-            return null
+            return {
+              success: false,
+              error: response.error || '当前模型无法识别这张图片，请换支持图片识别的模型后再发送。'
+            }
           }
           processed.push(response.attachment)
           continue
@@ -752,14 +778,13 @@ const ChatPage: React.FC = () => {
 
         const response = await window.api.attachmentParseFile(item)
         if (!response.success || !response.attachment) {
-          message.warning(response.error || '文件解析失败')
-          return null
+          return { success: false, error: response.error || '文件解析失败' }
         }
         processed.push(response.attachment)
       }
-      return processed
+      return { success: true, attachments: processed }
     },
-    [message, selectedModelName]
+    [selectedModelName]
   )
 
   useEffect(() => {
@@ -903,12 +928,13 @@ const ChatPage: React.FC = () => {
 
   const emitErrorMessage = useCallback(
     (content: string): void => {
+      const normalized = normalizeUserFacingError(content)
       if (typeof message.error === 'function') {
-        message.error(content)
+        message.error(normalized)
         return
       }
       if (typeof message.open === 'function') {
-        message.open({ type: 'error', content })
+        message.open({ type: 'error', content: normalized })
       }
     },
     [message]
@@ -1722,7 +1748,6 @@ const ChatPage: React.FC = () => {
           setApprovalCurrentIndex(0)
           setApprovalDraftDecisions({})
           setLoading(false)
-          message.warning('审核结果已提交，等待馆长继续决策')
         }
         return
       }
@@ -1747,6 +1772,7 @@ const ChatPage: React.FC = () => {
       }
 
       if (event.type === 'run_failed') {
+        const errorText = normalizeUserFacingError(event.error || '运行失败')
         setLoading(false)
         setAiRunId(null)
         setCancellingRun(false)
@@ -1758,12 +1784,12 @@ const ChatPage: React.FC = () => {
               ? {
                   ...item,
                   error: true,
-                  content: `${item.content || ''}\n\n**[失败]** ${event.error}`
+                  content: `${item.content || ''}\n\n**[失败]** ${errorText}`
                 }
               : item
           )
         )
-        emitErrorMessage(event.error || '运行失败')
+        emitErrorMessage(errorText)
         return
       }
 
@@ -1834,7 +1860,7 @@ const ChatPage: React.FC = () => {
       await handleSearchSend()
       return
     }
-    if (!input.trim() || loading) return
+    if (!input.trim() || loading || submitInFlightRef.current) return
     if (!selectedWorkspaceReady || !selectedWorkspace) {
       message.warning(`${getWorkspaceRequirementHint(selectedWorkspace)}后再发送消息`)
       return
@@ -1848,21 +1874,17 @@ const ChatPage: React.FC = () => {
     const submittedContentNodes = composerContentNodes
     const submittedReferences = selectedReferences
     const submittedAttachments = attachments
-    setLoading(true)
-    const processedAttachments = await processAttachmentsForSubmit(submittedAttachments)
-    if (!processedAttachments) {
-      setLoading(false)
-      return
-    }
     let submitSessionId = currentSessionId
     let createdSession: ChatSession | null = null
     if (!submitSessionId) {
-      createdSession = await createDraftSessionForSubmit(selectedWorkspace)
-      if (!createdSession) {
-        setLoading(false)
-        return
+      createdSession = {
+        id: crypto.randomUUID(),
+        title: '新对话',
+        created_at: Date.now(),
+        workspace_id: selectedWorkspace.id
       }
       submitSessionId = createdSession.id
+      adoptCreatedSession(createdSession)
     }
     const optimisticUserMessage: ChatMessage = {
       id: `local-user-${crypto.randomUUID()}`,
@@ -1872,7 +1894,7 @@ const ChatPage: React.FC = () => {
       timestamp: Date.now(),
       contentNodes: submittedContentNodes.length > 0 ? submittedContentNodes : undefined,
       selectedReferences: submittedReferences.length > 0 ? submittedReferences : undefined,
-      attachments: processedAttachments.length > 0 ? processedAttachments : undefined,
+      attachments: submittedAttachments.length > 0 ? submittedAttachments : undefined,
       error: false
     }
     const optimisticAssistantMessage: ChatMessage = {
@@ -1902,6 +1924,34 @@ const ChatPage: React.FC = () => {
       delete next[optimisticAssistantMessage.id]
       return next
     }
+    const failOptimisticSubmit = (error: string): void => {
+      const normalized = normalizeUserFacingError(error)
+      setLoading(false)
+      setCurrentMessages((previous) =>
+        previous.map((item) =>
+          item.id === optimisticAssistantMessage.id
+            ? { ...item, error: true, content: `**[失败]** ${normalized}` }
+            : item.id === optimisticUserMessage.id
+              ? { ...item, error: true }
+              : item
+        )
+      )
+      setAssistantTurns((previous) => ({
+        ...previous,
+        [optimisticAssistantMessage.id]: {
+          ...(previous[optimisticAssistantMessage.id] ||
+            createThinkingAssistantTurn(optimisticAssistantMessage.id)),
+          status: 'failed',
+          error: normalized,
+          processGroups: completeAssistantProcessGroups(
+            previous[optimisticAssistantMessage.id]?.processGroups ||
+              createThinkingAssistantTurn(optimisticAssistantMessage.id).processGroups,
+            'failed'
+          )
+        }
+      }))
+      emitErrorMessage(normalized)
+    }
 
     saveComposerDraftForSession(submitSessionId, createEmptyComposerDraft())
     applyComposerDraft(createEmptyComposerDraft(), `clear:${submitSessionId}`)
@@ -1916,17 +1966,35 @@ const ChatPage: React.FC = () => {
     )
     setAssistantTurns((previous) => ({
       ...previous,
-      [optimisticAssistantMessage.id]: createAssistantTurn(optimisticAssistantMessage.id)
+      [optimisticAssistantMessage.id]: createThinkingAssistantTurn(optimisticAssistantMessage.id)
     }))
 
+    submitInFlightRef.current = true
     try {
+      if (createdSession) {
+        const sessionResponse = await window.api.chatSessionSave(createdSession)
+        if (!sessionResponse.success) {
+          failOptimisticSubmit(sessionResponse.error || '创建会话失败')
+          return
+        }
+      }
+
+      const processedAttachments = await processAttachmentsForSubmit(submittedAttachments)
+      if (!processedAttachments.success) {
+        failOptimisticSubmit(processedAttachments.error)
+        return
+      }
+
       const response = await window.api.chatSubmit({
         mode: 'ai',
         sessionId: submitSessionId,
         input: userQuery,
         contentNodes: submittedContentNodes.length > 0 ? submittedContentNodes : undefined,
         selectedReferences: submittedReferences.length > 0 ? submittedReferences : undefined,
-        attachments: processedAttachments.length > 0 ? processedAttachments : undefined,
+        attachments:
+          processedAttachments.attachments.length > 0
+            ? processedAttachments.attachments
+            : undefined,
         modelName: selectedModelName,
         workspace: createWorkspaceBinding(selectedWorkspace)
       })
@@ -1936,11 +2004,7 @@ const ChatPage: React.FC = () => {
         !response.userMessage ||
         !response.assistantMessage
       ) {
-        setLoading(false)
-        setCurrentMessages(removeOptimisticMessages)
-        setAssistantTurns(removeOptimisticAssistantTurn)
-        if (createdSession) await window.api.chatSessionDelete(createdSession.id).catch(() => null)
-        emitErrorMessage(response.error || '启动失败')
+        failOptimisticSubmit(response.error || '启动失败')
         return
       }
       const run = response.run
@@ -1954,9 +2018,7 @@ const ChatPage: React.FC = () => {
         ])
       )
       setAiRunId(run.id)
-      if (createdSession) {
-        adoptCreatedSession(createdSession)
-      }
+      setLoading(true)
       setAssistantTurns((previous) => {
         const next = removeOptimisticAssistantTurn(previous)
         return {
@@ -1970,11 +2032,9 @@ const ChatPage: React.FC = () => {
       void loadSessions()
     } catch (error) {
       console.error(error)
-      setLoading(false)
-      setCurrentMessages(removeOptimisticMessages)
-      setAssistantTurns(removeOptimisticAssistantTurn)
-      if (createdSession) await window.api.chatSessionDelete(createdSession.id).catch(() => null)
-      emitErrorMessage('发送失败')
+      failOptimisticSubmit(error instanceof Error ? error.message : '发送失败')
+    } finally {
+      submitInFlightRef.current = false
     }
   }
 
@@ -2274,30 +2334,60 @@ const ChatPage: React.FC = () => {
 
   const handleEditUserMessage = async (messageItem: ChatMessage): Promise<void> => {
     if (!currentSessionId || aiRunId || messageItem.id !== latestUserMessageId) return
+    const targetIndex = currentMessages.findIndex((item) => item.id === messageItem.id)
+    if (targetIndex < 0) return
+    const previousMessages = currentMessages
+    const previousAssistantTurns = assistantTurns
+    const previousAssistantArtifacts = { ...assistantArtifactsRef.current }
+    const previousDraft = composerDraftValueRef.current
+    const followingMessages = currentMessages.slice(targetIndex + 1)
+    const followingAssistantIds = followingMessages
+      .filter((item) => item.role === 'assistant')
+      .map((item) => item.id)
+    const draft: ComposerDraftValue = {
+      input: messageItem.content,
+      contentNodes: getUserMessageContentNodes(messageItem),
+      selectedReferences:
+        messageItem.selectedReferences ||
+        getUserMessageContentNodes(messageItem)
+          .filter(
+            (node): node is Extract<ChatMessageContentNode, { kind: 'reference' }> =>
+              node.kind === 'reference'
+          )
+          .map((node) => node.reference),
+      attachments: messageItem.attachments || []
+    }
+    setCurrentMessages(currentMessages.slice(0, targetIndex))
+    followingAssistantIds.forEach((assistantMessageId) => {
+      delete assistantArtifactsRef.current[assistantMessageId]
+    })
+    setAssistantTurns((previous) => {
+      const next = { ...previous }
+      followingAssistantIds.forEach((assistantMessageId) => {
+        delete next[assistantMessageId]
+      })
+      return next
+    })
+    saveComposerDraftForSession(currentSessionId, draft)
+    applyComposerDraft(draft, `edit:${messageItem.id}`)
+    shouldAutoScrollRef.current = true
     try {
       const response = await window.api.chatTurnRetractLatest({
         sessionId: currentSessionId,
         userMessageId: messageItem.id
       })
       if (!response.success || !response.userMessage) {
+        setCurrentMessages(previousMessages)
+        setAssistantTurns(previousAssistantTurns)
+        assistantArtifactsRef.current = previousAssistantArtifacts
+        if (composerDraftValueRef.current.input === draft.input) {
+          saveComposerDraftForSession(currentSessionId, previousDraft)
+          applyComposerDraft(previousDraft, `edit-failed:${messageItem.id}`)
+        }
         emitErrorMessage(response.error || '无法编辑这条消息')
         return
       }
 
-      const userMessage = response.userMessage
-      const draft: ComposerDraftValue = {
-        input: userMessage.content,
-        contentNodes: getUserMessageContentNodes(userMessage),
-        selectedReferences:
-          userMessage.selectedReferences ||
-          getUserMessageContentNodes(userMessage)
-            .filter(
-              (node): node is Extract<ChatMessageContentNode, { kind: 'reference' }> =>
-                node.kind === 'reference'
-            )
-            .map((node) => node.reference),
-        attachments: userMessage.attachments || []
-      }
       setCurrentMessages(response.messages)
       if (response.runId) {
         delete activeRunMessageIdsRef.current[response.runId]
@@ -2310,13 +2400,16 @@ const ChatPage: React.FC = () => {
           return next
         })
       }
-      saveComposerDraftForSession(currentSessionId, draft)
-      applyComposerDraft(draft, `edit:${userMessage.id}`)
-      shouldAutoScrollRef.current = true
-      emitSuccessMessage('已放回输入框')
       void refreshContextUsage(currentSessionId)
     } catch (error) {
       console.error(error)
+      setCurrentMessages(previousMessages)
+      setAssistantTurns(previousAssistantTurns)
+      assistantArtifactsRef.current = previousAssistantArtifacts
+      if (composerDraftValueRef.current.input === draft.input) {
+        saveComposerDraftForSession(currentSessionId, previousDraft)
+        applyComposerDraft(previousDraft, `edit-failed:${messageItem.id}`)
+      }
       emitErrorMessage('编辑失败')
     }
   }
@@ -2332,19 +2425,26 @@ const ChatPage: React.FC = () => {
       >
         <div className="flex min-w-0 max-w-[66%] flex-col items-end">
           {messageItem.attachments && messageItem.attachments.length > 0 ? (
-            <div className="mb-2 flex max-w-full flex-wrap justify-end gap-2">
+            <div className="mb-2 flex max-w-full flex-nowrap justify-end gap-2 overflow-x-auto pb-1">
               {messageItem.attachments.map((attachment) => (
                 <button
                   key={attachment.id}
                   type="button"
-                  className={`min-w-0 border border-[#E0DFDC] bg-white text-left shadow-none transition hover:border-[#CFCFCC] ${
+                  className={`shrink-0 border border-[#E0DFDC] bg-white text-left shadow-none transition hover:border-[#CFCFCC] ${
                     attachment.kind === 'image'
                       ? 'h-[74px] w-[74px] overflow-hidden rounded-[12px] p-0'
                       : 'flex max-w-[260px] items-center gap-2 rounded-[10px] px-2 py-1.5'
                   }`}
                   title={attachment.name}
                   data-testid={`${workbenchSelectors.userMessageAttachmentPrefix}-${attachment.id}`}
-                  onClick={() => void window.api.openPath(attachment.path)}
+                  onClick={() => {
+                    if (attachment.kind === 'image') {
+                      const src = messageAttachmentPreviewUrls[attachment.id]
+                      if (src) setPreviewImage({ name: attachment.name, src })
+                      return
+                    }
+                    void window.api.openPath(attachment.path)
+                  }}
                 >
                   {attachment.kind === 'image' ? (
                     messageAttachmentPreviewUrls[attachment.id] ? (
@@ -2905,7 +3005,7 @@ const ChatPage: React.FC = () => {
                             <div className="mt-3 flex items-center gap-2 border-t border-[#EEEEEC] px-4 py-4">
                               <input
                                 className="min-w-0 flex-1 rounded-[6px] border border-[#EEEEEC] bg-[#FFFFFF] px-3 py-2 text-sm text-[#37352F] outline-none placeholder:text-[#9B9A97] focus:border-[#37352F] focus:ring-2 focus:ring-[#EFEFED]"
-                                placeholder="告诉馆长该怎么做"
+                                placeholder="告诉 AI 接下来怎么做"
                                 value={
                                   approvalDraftDecisions[currentApprovalItem.itemId]?.message || ''
                                 }
@@ -2949,6 +3049,7 @@ const ChatPage: React.FC = () => {
                         onDraftChange={handleComposerDraftChange}
                         onSubmit={() => void handleSend()}
                         onCancel={() => void handleCancel()}
+                        onPreviewImage={setPreviewImage}
                         loading={loading}
                         cancelling={cancellingRun}
                         canSubmit={Boolean(
@@ -3023,6 +3124,7 @@ const ChatPage: React.FC = () => {
         >
           <p>{applyForceConfirm?.content}</p>
         </Modal>
+        <ImageLightbox image={previewImage} onClose={() => setPreviewImage(null)} />
         <Modal
           open={Boolean(deleteConfirmSession)}
           title="删除这个会话？"

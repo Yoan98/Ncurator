@@ -36,7 +36,7 @@ export const createCancelledAiRunState = (input: {
 }): AiRunState => ({
   ...createInitialAiRunState(input),
   status: 'cancelled',
-  error: 'cancelled'
+  error: '已取消'
 })
 
 export const createFailedAiRunState = (input: {

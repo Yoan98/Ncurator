@@ -273,7 +273,7 @@ describe('workbench conversation e2e', () => {
             const imageComposerCard = getWorkbenchPrefixLocator(
               page,
               workbenchSelectors.attachmentCardPrefix
-            ).filter({ hasText: 'message-image.png' })
+            ).filter({ has: page.locator('img[alt="message-image.png"]') })
             const fileComposerCard = getWorkbenchPrefixLocator(
               page,
               workbenchSelectors.attachmentCardPrefix
@@ -313,6 +313,14 @@ describe('workbench conversation e2e', () => {
               page,
               workbenchSelectors.userMessageAttachmentPrefix
             ).evaluateAll((nodes) => nodes.map((node) => String(node.textContent || '').trim()))
+            const messageImageVisible = await getWorkbenchPrefixLocator(
+              page,
+              workbenchSelectors.userMessageAttachmentPrefix
+            )
+              .filter({ has: page.locator('img[alt="message-image.png"]') })
+              .first()
+              .isVisible()
+              .catch(() => false)
             const bubbleBox = await runningUser
               .locator(`[data-testid="${workbenchSelectors.userMessageReferences}"]`)
               .boundingBox()
@@ -382,6 +390,7 @@ describe('workbench conversation e2e', () => {
               ),
               runningEditButtons,
               messageAttachmentTexts,
+              messageImageVisible,
               attachmentsAboveBubble: Boolean(
                 firstAttachmentBox && bubbleBox && firstAttachmentBox.y < bubbleBox.y
               )
@@ -397,6 +406,7 @@ describe('workbench conversation e2e', () => {
               result.messageCountAfterEdit === 0 &&
               result.removeButtonInsideCard &&
               result.runningEditButtons === 0 &&
+              result.messageImageVisible &&
               result.messageAttachmentTexts.some((text) => text.includes('message-note.txt')) &&
               result.attachmentsAboveBubble,
             {

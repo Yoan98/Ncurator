@@ -34,7 +34,11 @@ import {
   resolveStructuredOutputProfile,
   type NonScriptedStructuredOutputMethod
 } from './structuredOutput'
-import { runLlmCallWithActivity, type LlmCallExecutionResult, type LlmCallStreamObserver } from './utils/structuredChatActivity'
+import {
+  runLlmCallWithActivity,
+  type LlmCallExecutionResult,
+  type LlmCallStreamObserver
+} from './utils/structuredChatActivity'
 
 type TextContentPart = {
   text?: string
@@ -111,9 +115,7 @@ export type AiLlmStructuredDriverResult = {
 }
 
 export type AiLlmDriver = {
-  chatStructured?: (
-    input: AiLlmStructuredDriverInput
-  ) => Promise<AiLlmStructuredDriverResult>
+  chatStructured?: (input: AiLlmStructuredDriverInput) => Promise<AiLlmStructuredDriverResult>
   chatText?: (input: AiLlmTextInvocationInput) => Promise<AiLlmTextDriverResult>
 }
 
@@ -212,7 +214,7 @@ const withAbortTimeout = async <T>(input: {
   const externalAbortPromise = new Promise<never>((_resolve, reject) => {
     if (!input.externalSignal) return
     const onAbort = () => {
-      const cancelledError = new Error('cancelled') as Error & { code?: string }
+      const cancelledError = new Error('已取消') as Error & { code?: string }
       cancelledError.code = 'CANCELLED'
       controller.abort(cancelledError)
       reject(cancelledError)
@@ -228,7 +230,11 @@ const withAbortTimeout = async <T>(input: {
   })
 
   try {
-    return await Promise.race([input.execute(controller.signal), timeoutPromise, externalAbortPromise])
+    return await Promise.race([
+      input.execute(controller.signal),
+      timeoutPromise,
+      externalAbortPromise
+    ])
   } finally {
     if (timeoutId) clearTimeout(timeoutId)
     cleanupAbortListener?.()
@@ -759,7 +765,8 @@ const persistConfigUpdate = async (input: {
   warningPrefix: string
 }): Promise<void> => {
   const changed =
-    input.cfg.preferredStructuredOutputProfile !== input.nextConfig.preferredStructuredOutputProfile ||
+    input.cfg.preferredStructuredOutputProfile !==
+      input.nextConfig.preferredStructuredOutputProfile ||
     input.cfg.preferredTransport !== input.nextConfig.preferredTransport
   if (!changed) return
 
@@ -934,7 +941,8 @@ export const invokeStructuredChat = async <T extends Record<string, unknown>>(
           system: input.system,
           user: input.user,
           temperature: input.temperature,
-          streamingMode: input.streamingMode === 'force_stream' ? 'force_stream' : 'force_non_stream',
+          streamingMode:
+            input.streamingMode === 'force_stream' ? 'force_stream' : 'force_non_stream',
           checkCancelled: () => undefined,
           signal
         }
