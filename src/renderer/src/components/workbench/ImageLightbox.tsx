@@ -51,13 +51,20 @@ const ImageLightbox: React.FC<ImageLightboxProps> = ({ image, onClose }) => {
 
   return (
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center overflow-hidden bg-[#111111]/95"
+      className="fixed inset-0 z-[9999] overflow-hidden bg-[#111111]/95"
       data-testid={workbenchSelectors.attachmentPreviewModal}
       onWheel={(event) => {
         event.preventDefault()
         updateScale(scale + (event.deltaY > 0 ? -0.1 : 0.1))
       }}
     >
+      <button
+        type="button"
+        className="absolute inset-0 z-0 cursor-default"
+        aria-label="关闭图片预览背景"
+        onClick={onClose}
+      />
+
       <div className="absolute right-5 top-5 z-[2] flex items-center gap-3">
         <a
           href={image.src}
@@ -79,56 +86,53 @@ const ImageLightbox: React.FC<ImageLightboxProps> = ({ image, onClose }) => {
         </button>
       </div>
 
-      <button
-        type="button"
-        className="absolute inset-0 z-0 cursor-default"
-        aria-label="关闭图片预览背景"
-        onClick={onClose}
-      />
-
-      <img
-        src={image.src}
-        alt={image.name}
-        draggable={false}
-        className="relative z-[1] max-h-[86vh] max-w-[92vw] select-none object-contain"
-        style={{
-          transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})`,
-          cursor: scale > 1 ? 'grab' : 'default',
-          transition: dragging ? 'none' : 'transform 120ms ease-out'
-        }}
-        onPointerDown={(event) => {
-          if (scale <= 1) return
-          event.currentTarget.setPointerCapture(event.pointerId)
-          dragRef.current = {
-            pointerId: event.pointerId,
-            x: event.clientX,
-            y: event.clientY,
-            startX: offset.x,
-            startY: offset.y
-          }
-          setDragging(true)
-        }}
-        onPointerMove={(event) => {
-          const drag = dragRef.current
-          if (!drag || drag.pointerId !== event.pointerId) return
-          setOffset({
-            x: drag.startX + event.clientX - drag.x,
-            y: drag.startY + event.clientY - drag.y
-          })
-        }}
-        onPointerUp={(event) => {
-          if (dragRef.current?.pointerId === event.pointerId) {
-            dragRef.current = null
-            setDragging(false)
-          }
-        }}
-        onPointerCancel={(event) => {
-          if (dragRef.current?.pointerId === event.pointerId) {
-            dragRef.current = null
-            setDragging(false)
-          }
-        }}
-      />
+      <div className="relative z-[1] flex h-full w-full items-center justify-center px-6 pb-24 pt-20">
+        <div className="flex h-full w-full items-center justify-center overflow-hidden">
+          <img
+            src={image.src}
+            alt={image.name}
+            draggable={false}
+            className="max-h-full max-w-full select-none object-contain"
+            style={{
+              transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})`,
+              cursor: scale > 1 ? 'grab' : 'default',
+              transition: dragging ? 'none' : 'transform 120ms ease-out'
+            }}
+            onPointerDown={(event) => {
+              if (scale <= 1) return
+              event.currentTarget.setPointerCapture(event.pointerId)
+              dragRef.current = {
+                pointerId: event.pointerId,
+                x: event.clientX,
+                y: event.clientY,
+                startX: offset.x,
+                startY: offset.y
+              }
+              setDragging(true)
+            }}
+            onPointerMove={(event) => {
+              const drag = dragRef.current
+              if (!drag || drag.pointerId !== event.pointerId) return
+              setOffset({
+                x: drag.startX + event.clientX - drag.x,
+                y: drag.startY + event.clientY - drag.y
+              })
+            }}
+            onPointerUp={(event) => {
+              if (dragRef.current?.pointerId === event.pointerId) {
+                dragRef.current = null
+                setDragging(false)
+              }
+            }}
+            onPointerCancel={(event) => {
+              if (dragRef.current?.pointerId === event.pointerId) {
+                dragRef.current = null
+                setDragging(false)
+              }
+            }}
+          />
+        </div>
+      </div>
 
       <div className="absolute bottom-6 left-1/2 z-[2] flex -translate-x-1/2 items-center gap-3 rounded-full bg-white px-2 py-1.5 text-[#2F3437] shadow-[0_10px_28px_rgba(0,0,0,0.32)]">
         <button

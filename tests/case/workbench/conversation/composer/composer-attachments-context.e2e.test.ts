@@ -1,5 +1,6 @@
 import { describe, it } from 'vitest'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
+import { setSettingsE2EApiOverrides } from '../../../../harness/e2e/settings'
 import {
   WORKBENCH_RESULT_E2E_TIMEOUT_MS,
   assertNoWorkbenchFakeSignals,
@@ -12,44 +13,6 @@ import {
 } from '../../../../harness/e2e/workbench'
 
 const CASE_ID = 'composer-attachments-context'
-
-const pasteImageAttachment = async (page: import('playwright').Page): Promise<void> => {
-  await getWorkbenchLocator(page, workbenchSelectors.input).evaluate(async (element) => {
-    if (!(element instanceof HTMLElement)) {
-      throw new Error('workbench input is not an HTMLElement')
-    }
-    element.focus()
-    const canvas = document.createElement('canvas')
-    canvas.width = 64
-    canvas.height = 64
-    const context = canvas.getContext('2d')
-    if (!context) throw new Error('canvas context not available')
-    context.fillStyle = '#f97316'
-    context.fillRect(0, 0, 64, 64)
-    context.fillStyle = '#111827'
-    context.font = 'bold 20px sans-serif'
-    context.fillText('QA', 14, 38)
-    const blob = await new Promise<Blob>((resolve, reject) => {
-      canvas.toBlob((value) => {
-        if (value) {
-          resolve(value)
-          return
-        }
-        reject(new Error('failed to create png blob'))
-      }, 'image/png')
-    })
-    const file = new File([blob], 'qa-image.png', { type: 'image/png' })
-    const dataTransfer = new DataTransfer()
-    dataTransfer.items.add(file)
-    element.dispatchEvent(
-      new ClipboardEvent('paste', {
-        bubbles: true,
-        cancelable: true,
-        clipboardData: dataTransfer
-      })
-    )
-  })
-}
 
 const pasteFileAttachment = async (
   page: import('playwright').Page,
@@ -110,8 +73,43 @@ const waitForAttachmentCardByName = async (
 }
 
 const getImageAttachmentCardByName = (page: import('playwright').Page, name: string) =>
-  getWorkbenchPrefixLocator(page, workbenchSelectors.attachmentCardPrefix).filter({
-    has: page.locator(`img[alt="${name}"]`)
+  page.locator(`[data-testid^="${workbenchSelectors.attachmentCardPrefix}-"][title="${name}"]`)
+
+const createTempImageAttachment = async (
+  page: import('playwright').Page
+): Promise<import('../../../../../../src/shared/types').ChatAttachment> =>
+  await page.evaluate(async () => {
+    const canvas = document.createElement('canvas')
+    canvas.width = 64
+    canvas.height = 64
+    const context = canvas.getContext('2d')
+    if (!context) {
+      throw new Error('canvas context not available')
+    }
+    context.fillStyle = '#2563EB'
+    context.fillRect(0, 0, 64, 64)
+    context.fillStyle = '#FFFFFF'
+    context.font = 'bold 22px sans-serif'
+    context.fillText('QA', 12, 40)
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((value) => {
+        if (value) {
+          resolve(value)
+          return
+        }
+        reject(new Error('failed to create png blob'))
+      }, 'image/png')
+    })
+    const saved = await window.api.attachmentSaveTempFile({
+      name: 'qa-image.png',
+      bytes: new Uint8Array(await blob.arrayBuffer()),
+      mimeType: 'image/png',
+      kind: 'image'
+    })
+    if (!saved.attachment) {
+      throw new Error(saved.error || 'failed to create temp image attachment')
+    }
+    return saved.attachment
   })
 
 describe('workbench conversation e2e', () => {
@@ -124,22 +122,33 @@ describe('workbench conversation e2e', () => {
         suite: 'conversation',
         groups: ['composer'],
         description:
-          '对齐附件上下文 PRD：验证输入框加号菜单、图片/文件粘贴、图片预览、文件默认打开、删除、普通文本粘贴、格式和大文件提示。',
+          '对齐附件上下文 PRD：验证统一附件选择、图片预览、文件默认打开、删除、普通文本粘贴、格式和大文件提示。',
         fixtures: ['tests/fixtures/workspace'],
-        launchMode: 'real',
+        launchMode: 'fixture',
         windowMode: 'visible',
         runMode: 'single',
         execute: async (runtime) => {
           const { page } = runtime
           await navigateToWorkbench(page)
-
+          const imageAttachment = await createTempImageAttachment(page)
+          await setSettingsE2EApiOverrides(page, {
+            attachmentPickResponse: {
+              canceled: false,
+              items: [
+                imageAttachment,
+                {
+                  id: 'picked-md-file',
+                  kind: 'file',
+                  name: 'workbench-preview.md',
+                  path: 'tests/fixtures/workspace/workbench-preview.md',
+                  mimeType: 'text/markdown',
+                  size: 128,
+                  status: 'ready'
+                }
+              ]
+            }
+          })
           await getWorkbenchLocator(page, workbenchSelectors.attachmentAddButton).click()
-          const menuItems = await page
-            .locator('.ant-dropdown-menu-item')
-            .evaluateAll((nodes) => nodes.map((node) => String(node.textContent || '').trim()))
-          await page.keyboard.press('Escape')
-
-          await pasteImageAttachment(page)
           const imageCard = getImageAttachmentCardByName(page, 'qa-image.png')
           await imageCard.first().waitFor({ state: 'visible' })
           await page.waitForFunction(
@@ -178,12 +187,19 @@ describe('workbench conversation e2e', () => {
             },
             { timeout: 5000 }
           )
+          const downloadButton = page.getByRole('link', { name: '下载图片', exact: true })
+          const closeButton = page.getByRole('button', { name: '关闭图片预览', exact: true })
+          const zoomButton = page.getByRole('button', { name: '放大', exact: true })
+          const previewImageBox = await previewModal.locator('img[alt="qa-image.png"]').boundingBox()
+          const downloadButtonBox = await downloadButton.boundingBox()
+          const closeButtonBox = await closeButton.boundingBox()
+          const zoomButtonBox = await zoomButton.boundingBox()
           const previewVisible = true
           await runtime.captureScreenshot({
             name: 'attachment-image-preview',
             message: '点击图片附件后应打开图片预览弹窗。'
           })
-          await page.getByRole('button', { name: '关闭图片预览', exact: true }).click()
+          await closeButton.click()
           await previewModal.waitFor({ state: 'hidden' })
 
           await imageCard.first().hover()
@@ -193,16 +209,12 @@ describe('workbench conversation e2e', () => {
           const imageRemoved =
             (await getImageAttachmentCardByName(page, 'qa-image.png').count()) === 0
 
-          await pasteFileAttachment(page, {
-            name: 'qa-notes.md',
-            mimeType: 'text/markdown',
-            text: '# QA Notes\nhello'
-          })
-          await waitForAttachmentCardByName(page, 'qa-notes.md')
-          await getWorkbenchPrefixLocator(page, workbenchSelectors.attachmentCardPrefix)
-            .filter({ hasText: 'qa-notes.md' })
+          const fileCard = getWorkbenchPrefixLocator(page, workbenchSelectors.attachmentCardPrefix)
+            .filter({ hasText: 'workbench-preview.md' })
             .first()
-            .click()
+          await fileCard.waitFor({ state: 'visible' })
+          const fileCardText = (await fileCard.textContent()) || ''
+          await fileCard.click()
           await page.waitForTimeout(500)
 
           await pasteFileAttachment(page, {
@@ -242,9 +254,21 @@ describe('workbench conversation e2e', () => {
           )
 
           return {
-            menuItems,
             previewVisible,
             imageRemoved,
+            downloadButtonVisible: Boolean(downloadButtonBox),
+            closeButtonVisible: Boolean(closeButtonBox),
+            zoomControlBelowImage: Boolean(
+              previewImageBox && zoomButtonBox && zoomButtonBox.y >= previewImageBox.y + previewImageBox.height
+            ),
+            topActionsAboveImage: Boolean(
+              previewImageBox &&
+                downloadButtonBox &&
+                closeButtonBox &&
+                downloadButtonBox.y + downloadButtonBox.height <= previewImageBox.y &&
+                closeButtonBox.y + closeButtonBox.height <= previewImageBox.y
+            ),
+            fileCardText,
             unsupportedMessage,
             unsupportedRejected,
             largeFileMessage,
@@ -255,11 +279,13 @@ describe('workbench conversation e2e', () => {
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
-            result.menuItems.length === 2 &&
-              result.menuItems[0] === '图片' &&
-              result.menuItems[1] === '文件' &&
-              result.previewVisible &&
+            result.previewVisible &&
               result.imageRemoved &&
+              result.downloadButtonVisible &&
+              result.closeButtonVisible &&
+              result.zoomControlBelowImage &&
+              result.topActionsAboveImage &&
+              result.fileCardText.includes('MD') &&
               result.unsupportedMessage.includes('暂不支持该文件格式') &&
               result.unsupportedRejected &&
               result.largeFileMessage.includes('文件过大，建议放到工作空间索引里使用') &&
@@ -268,7 +294,7 @@ describe('workbench conversation e2e', () => {
             {
               name: 'workbench-composer-attachments-prd-flow',
               message:
-                '附件输入应满足 PRD：加号只展示图片/文件，图片可粘贴和预览，文件可粘贴并触发默认打开，不支持格式只提示且不加入，超过 10MB 只提示不拦截，普通文本粘贴仍正常。',
+                '附件输入应满足 PRD：加号直接打开统一附件选择，图片可预览且控件不压图，文件副标题显示扩展名，文件可默认打开，不支持格式只提示且不加入，超过 10MB 只提示不拦截，普通文本粘贴仍正常。',
               data: result
             }
           )

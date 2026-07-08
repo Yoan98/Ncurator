@@ -16,6 +16,7 @@ import {
   setupWorkbenchWorkspaceOnly,
   submitWorkbenchCurrentDraft,
   switchWorkbenchMode,
+  waitForLatestAssistantProcess,
   waitForAntMessageText,
   workbenchSelectors
 } from '../../../../harness/e2e/workbench'
@@ -116,6 +117,42 @@ const latestUserMessage = (page: Page) =>
 
 const latestUserMessageActions = (page: Page) =>
   getWorkbenchPrefixLocator(page, workbenchSelectors.userMessageActionsPrefix).last()
+
+const waitForAssistantProcessWithoutGap = async (page: Page, durationMs = 700): Promise<void> => {
+  await page.waitForFunction(
+    ({ prefix, duration }) => {
+      const stateKey = '__NCURATOR_E2E_PROCESS_VISIBLE_SINCE__'
+      const targetWindow = window as Window & {
+        [stateKey]?: number
+      }
+      const nodes = Array.from(document.querySelectorAll(`[data-testid^="${prefix}-"]`))
+      const visible = nodes.some((node) => {
+        if (!(node instanceof HTMLElement)) return false
+        const style = window.getComputedStyle(node)
+        const rect = node.getBoundingClientRect()
+        return (
+          style.display !== 'none' &&
+          style.visibility !== 'hidden' &&
+          rect.width > 0 &&
+          rect.height > 0
+        )
+      })
+      if (!visible) {
+        delete targetWindow[stateKey]
+        return false
+      }
+      if (!targetWindow[stateKey]) {
+        targetWindow[stateKey] = performance.now()
+      }
+      return performance.now() - targetWindow[stateKey]! >= duration
+    },
+    {
+      prefix: workbenchSelectors.assistantProcessPrefix,
+      duration: durationMs
+    },
+    { timeout: WORKBENCH_RESULT_E2E_TIMEOUT_MS }
+  )
+}
 
 const setWorkbenchDraftWithAttachments = async (
   page: Page,
@@ -297,6 +334,10 @@ describe('workbench conversation e2e', () => {
               { sendButtonTestId: workbenchSelectors.sendButton },
               { timeout: WORKBENCH_RESULT_E2E_TIMEOUT_MS }
             )
+            const assistantProcess = await waitForLatestAssistantProcess(page)
+            const assistantProcessTextAfterSend = (await assistantProcess.textContent()) || ''
+            await waitForAssistantProcessWithoutGap(page)
+            const assistantProcessTextAfterWait = (await assistantProcess.textContent()) || ''
             await page.waitForFunction(
               (input: { prefix: string }) =>
                 document.querySelectorAll(`[data-testid^="${input.prefix}-"]`).length >= 2,
@@ -391,6 +432,8 @@ describe('workbench conversation e2e', () => {
               runningEditButtons,
               messageAttachmentTexts,
               messageImageVisible,
+              assistantProcessTextAfterSend,
+              assistantProcessTextAfterWait,
               attachmentsAboveBubble: Boolean(
                 firstAttachmentBox && bubbleBox && firstAttachmentBox.y < bubbleBox.y
               )
@@ -408,11 +451,15 @@ describe('workbench conversation e2e', () => {
               result.runningEditButtons === 0 &&
               result.messageImageVisible &&
               result.messageAttachmentTexts.some((text) => text.includes('message-note.txt')) &&
+              result.messageAttachmentTexts.some((text) => text.includes('TXT')) &&
+              result.assistantProcessTextAfterSend.includes('让俺想想') &&
+              (result.assistantProcessTextAfterWait.includes('让俺想想') ||
+                result.assistantProcessTextAfterWait.includes('处理中')) &&
               result.attachmentsAboveBubble,
             {
               name: 'workbench-user-message-actions-and-attachments',
               message:
-                '用户消息 hover 后应显示时间/复制/编辑；编辑会撤回 latest turn 并回填输入框；running 中不显示编辑；图片和文件附件应在用户消息气泡上方独立展示，输入框附件关闭按钮无遮挡。',
+                '用户消息 hover 后应显示时间/复制/编辑；编辑会撤回 latest turn 并回填输入框；running 中不显示编辑；发送后 assistant thinking 过程不能闪断；图片和文件附件应在用户消息气泡上方独立展示，文件副标题显示扩展名，输入框附件关闭按钮无遮挡。',
               data: result
             }
           )

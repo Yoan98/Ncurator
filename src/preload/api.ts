@@ -128,6 +128,7 @@ export type SettingsE2EApiOverrides = {
   webSourceRefreshDelayMs?: number
   revealPathResponseByPath?: Record<string, { success: boolean; error?: string }>
   openExternalResponseByUrl?: Record<string, { success: boolean; error?: string }>
+  attachmentPickResponse?: AttachmentPickResponse
   attachmentParseFileResponseByName?: Record<string, AttachmentProcessResponse>
   attachmentRecognizeImageResponseByName?: Record<string, AttachmentProcessResponse>
   modelCatalog?: E2EModelCatalogOverride
@@ -215,8 +216,7 @@ export type DesktopApi = {
   getModels: () => Promise<ModelInfo[]>
   getEmbeddingStatus: () => Promise<'uninitialized' | 'initializing' | 'ready' | 'error'>
   readFile: (filePath: string) => Promise<Uint8Array>
-  attachmentPickImages: () => Promise<AttachmentPickResponse>
-  attachmentPickFiles: () => Promise<AttachmentPickResponse>
+  attachmentPick: () => Promise<AttachmentPickResponse>
   attachmentSaveTempFile: (payload: AttachmentSaveTempRequest) => Promise<AttachmentProcessResponse>
   attachmentParseFile: (attachment: ChatAttachment) => Promise<AttachmentProcessResponse>
   attachmentRecognizeImage: (

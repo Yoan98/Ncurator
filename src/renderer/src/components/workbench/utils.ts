@@ -116,6 +116,18 @@ const truncateMiddle = (value: string, maxLength: number): string => {
   return `${value.slice(0, keep)}…${value.slice(-keep)}`
 }
 
+export const getAttachmentTypeLabel = (name: string): string => {
+  const last = String(name || '')
+    .split(/[\\/]/u)
+    .pop()
+    ?.trim()
+  if (!last) return 'FILE'
+  const dotIndex = last.lastIndexOf('.')
+  if (dotIndex < 0 || dotIndex === last.length - 1) return 'FILE'
+  const ext = last.slice(dotIndex + 1).trim()
+  return ext ? ext.toUpperCase() : 'FILE'
+}
+
 const readToolFileLabel = (input?: IpcJsonObject): string => {
   if (!input) return '目标文件'
   return (

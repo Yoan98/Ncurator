@@ -1,5 +1,5 @@
 ﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { App as AntdApp, Dropdown, Spin, Tooltip } from 'antd'
+import { App as AntdApp, Spin, Tooltip } from 'antd'
 import {
   HiArrowUp,
   HiCpuChip,
@@ -7,7 +7,6 @@ import {
   HiFolder,
   HiMagnifyingGlass,
   HiOutlineFolderPlus,
-  HiPaperClip,
   HiPhoto,
   HiPlus,
   HiSparkles,
@@ -40,6 +39,7 @@ import {
 } from './composer/utils'
 import WorkbenchSelect from './WorkbenchSelect'
 import type { ImageLightboxImage } from './ImageLightbox'
+import { getAttachmentTypeLabel } from './utils'
 
 type MentionContext = {
   textNode: Text
@@ -585,15 +585,8 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     [updateAttachments]
   )
 
-  const handlePickImages = useCallback(async (): Promise<void> => {
-    const response = await window.api.attachmentPickImages()
-    if (response.error) message.warning(response.error)
-    if (!response.canceled) appendAttachments(response.items)
-    focusEditorAfterControlChange()
-  }, [appendAttachments, focusEditorAfterControlChange, message])
-
-  const handlePickFiles = useCallback(async (): Promise<void> => {
-    const response = await window.api.attachmentPickFiles()
+  const handlePickAttachments = useCallback(async (): Promise<void> => {
+    const response = await window.api.attachmentPick()
     if (response.error) message.warning(response.error)
     if (!response.canceled) appendAttachments(response.items)
     focusEditorAfterControlChange()
@@ -780,21 +773,6 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
       })),
     [workspaces]
   )
-  const attachmentMenuItems = useMemo(
-    () => [
-      {
-        key: 'image',
-        label: '图片',
-        icon: <HiPhoto className="h-4 w-4" />
-      },
-      {
-        key: 'file',
-        label: '文件',
-        icon: <HiPaperClip className="h-4 w-4" />
-      }
-    ],
-    []
-  )
   const currentAttachments = useMemo(() => draftValue.attachments || [], [draftValue.attachments])
 
   useEffect(() => {
@@ -927,7 +905,9 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                     <span className="block truncate text-[13px] font-medium leading-5 text-[#37352F]">
                       {attachment.name}
                     </span>
-                    <span className="block text-[12px] leading-4 text-[#787774]">文件</span>
+                    <span className="block text-[12px] font-medium leading-4 text-[#787774]">
+                      {getAttachmentTypeLabel(attachment.name)}
+                    </span>
                   </span>
                 ) : null}
                 <span
@@ -1014,31 +994,17 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
 
         <div className="mx-[-4px] mt-1.5 flex items-center justify-between gap-2 px-1">
           <div className="flex shrink-0 items-center gap-1.5 text-[#91918E]">
-            <Dropdown
-              trigger={['click']}
-              menu={{
-                items: attachmentMenuItems,
-                onClick: ({ key }) => {
-                  if (key === 'image') {
-                    void handlePickImages()
-                    return
-                  }
-                  if (key === 'file') {
-                    void handlePickFiles()
-                  }
-                }
+            <button
+              type="button"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-full text-[#787774] transition hover:bg-[#F4F4F2] hover:text-[#37352F]"
+              aria-label="添加附件"
+              data-testid={workbenchSelectors.attachmentAddButton}
+              onClick={() => {
+                void handlePickAttachments()
               }}
             >
-              <button
-                type="button"
-                className="inline-flex h-7 w-7 items-center justify-center rounded-full text-[#787774] transition hover:bg-[#F4F4F2] hover:text-[#37352F]"
-                aria-label="添加附件"
-                data-testid={workbenchSelectors.attachmentAddButton}
-                onClick={(event) => event.preventDefault()}
-              >
-                <HiPlus className="h-5 w-5" />
-              </button>
-            </Dropdown>
+              <HiPlus className="h-5 w-5" />
+            </button>
 
             <WorkbenchSelect
               value={mode}

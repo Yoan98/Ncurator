@@ -257,8 +257,13 @@ const api: DesktopApi = {
   },
   getEmbeddingStatus: () => ipcRenderer.invoke('get-embedding-status'),
   readFile: (filePath: string): Promise<Uint8Array> => ipcRenderer.invoke('read-file', filePath),
-  attachmentPickImages: () => ipcRenderer.invoke('attachment-pick-images'),
-  attachmentPickFiles: () => ipcRenderer.invoke('attachment-pick-files'),
+  attachmentPick: () => {
+    const overrides = getE2EApiOverrides()
+    if (overrides && hasOverrideKey(overrides, 'attachmentPickResponse')) {
+      return Promise.resolve(overrides.attachmentPickResponse || { canceled: true, items: [] })
+    }
+    return ipcRenderer.invoke('attachment-pick')
+  },
   attachmentSaveTempFile: (payload) => ipcRenderer.invoke('attachment-save-temp-file', payload),
   attachmentParseFile: (attachment) => {
     const name = String(attachment?.name || '').trim()

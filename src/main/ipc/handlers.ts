@@ -1528,40 +1528,48 @@ export function registerHandlers(services: {
     }
   })
 
-  ipcMain.handle('attachment-pick-images', async (event): Promise<AttachmentPickResponse> => {
+  ipcMain.handle('attachment-pick', async (event): Promise<AttachmentPickResponse> => {
     try {
       const dialogOptions: OpenDialogOptions = {
-        title: '选择图片',
-        buttonLabel: '选择图片',
-        properties: ['openFile', 'multiSelections', 'dontAddToRecent'],
-        filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif'] }]
-      }
-      const ownerWindow = BrowserWindow.fromWebContents(event.sender)
-      const result = ownerWindow
-        ? await dialog.showOpenDialog(ownerWindow, dialogOptions)
-        : await dialog.showOpenDialog(dialogOptions)
-      if (result.canceled || result.filePaths.length === 0) return { canceled: true, items: [] }
-      return {
-        canceled: false,
-        items: result.filePaths.map((filePath) =>
-          attachmentService.createAttachmentFromPath({ filePath, kind: 'image' })
-        )
-      }
-    } catch (error) {
-      return { canceled: true, items: [], error: getErrorMessage(error) }
-    }
-  })
-
-  ipcMain.handle('attachment-pick-files', async (event): Promise<AttachmentPickResponse> => {
-    try {
-      const dialogOptions: OpenDialogOptions = {
-        title: '选择文件',
-        buttonLabel: '选择文件',
+        title: '选择附件',
+        buttonLabel: '选择附件',
         properties: ['openFile', 'multiSelections', 'dontAddToRecent'],
         filters: [
           {
+            name: 'Attachments',
+            extensions: [
+              'png',
+              'jpg',
+              'jpeg',
+              'webp',
+              'gif',
+              'txt',
+              'md',
+              'json',
+              'csv',
+              'docx',
+              'pdf',
+              'ppt',
+              'pptx'
+            ]
+          },
+          {
             name: 'Supported Files',
-            extensions: ['txt', 'md', 'json', 'csv', 'docx', 'pdf', 'ppt', 'pptx']
+            extensions: [
+              'png',
+              'jpg',
+              'jpeg',
+              'webp',
+              'gif',
+              'txt',
+              'md',
+              'json',
+              'csv',
+              'docx',
+              'pdf',
+              'ppt',
+              'pptx'
+            ]
           }
         ]
       }
@@ -1573,7 +1581,7 @@ export function registerHandlers(services: {
       return {
         canceled: false,
         items: result.filePaths.map((filePath) =>
-          attachmentService.createAttachmentFromPath({ filePath, kind: 'file' })
+          attachmentService.createAttachmentFromPath({ filePath })
         )
       }
     } catch (error) {

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { WorkspaceSource } from '../../../../src/shared/types'
 import {
   createAssistantThinkingGroup,
+  getAttachmentTypeLabel,
   reduceAssistantProcessGroups,
   resolveWorkbenchWorkspaceSelection
 } from '../../../../src/renderer/src/components/workbench/utils'
@@ -45,5 +46,13 @@ describe('workbench utils', () => {
     })
 
     expect(groups.some((group) => group.kind === 'thinking')).toBe(false)
+  })
+
+  it('formats attachment type labels from file extensions', () => {
+    expect(getAttachmentTypeLabel('report.pdf')).toBe('PDF')
+    expect(getAttachmentTypeLabel('slides.Final.Pptx')).toBe('PPTX')
+    expect(getAttachmentTypeLabel('README')).toBe('FILE')
+    expect(getAttachmentTypeLabel('folder/note.md')).toBe('MD')
+    expect(getAttachmentTypeLabel('folder/file.')).toBe('FILE')
   })
 })

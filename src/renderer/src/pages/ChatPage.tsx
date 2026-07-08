@@ -75,6 +75,7 @@ import {
   extractReadableFilesFromToolOutput,
   extractSearchResultsFromToolOutput,
   formatRelativeTime,
+  getAttachmentTypeLabel,
   getSearchResultFileRef,
   readWorkbenchModePreference,
   reduceAssistantProcessGroups,
@@ -2021,10 +2022,14 @@ const ChatPage: React.FC = () => {
       setLoading(true)
       setAssistantTurns((previous) => {
         const next = removeOptimisticAssistantTurn(previous)
+        const optimisticTurn = previous[optimisticAssistantMessage.id]
         return {
           ...next,
           [assistantMessageId]: {
-            ...(previous[assistantMessageId] || createAssistantTurn(assistantMessageId)),
+            ...(previous[assistantMessageId] ||
+              optimisticTurn ||
+              createThinkingAssistantTurn(assistantMessageId)),
+            messageId: assistantMessageId,
             runId: run.id
           }
         }
@@ -2467,7 +2472,9 @@ const ChatPage: React.FC = () => {
                         <span className="block truncate text-[13px] font-medium leading-5 text-[#37352F]">
                           {attachment.name}
                         </span>
-                        <span className="block text-[12px] leading-4 text-[#787774]">文件</span>
+                        <span className="block text-[12px] leading-4 text-[#787774]">
+                          {getAttachmentTypeLabel(attachment.name)}
+                        </span>
                       </span>
                     </>
                   )}
