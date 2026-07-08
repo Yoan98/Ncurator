@@ -44,7 +44,7 @@ type AssistantTurnCardProps = {
 
 const getProcessStatusClassName = (status: AssistantProcessGroup['status']): string => {
   if (status === 'running') return 'text-[#37352F]'
-  if (status === 'failed') return 'text-[#B3261E]'
+  if (status === 'failed' || status === 'partial_failed') return 'text-[#B3261E]'
   return 'text-[#9B9A97]'
 }
 
@@ -75,12 +75,14 @@ const LayerIcon: React.FC<{ iconKind: AssistantProcessIconKind; className?: stri
 const getGroupText = (group: AssistantProcessGroup): AssistantRichTextSegment[] => {
   if (group.status === 'completed') return group.completedText
   if (group.status === 'failed') return group.failedText
+  if (group.status === 'partial_failed') return group.partialFailedText
   return group.runningText
 }
 
 const getItemText = (item: AssistantProcessGroup['items'][number]): AssistantRichTextSegment[] => {
   if (item.status === 'completed') return item.completedText
   if (item.status === 'failed') return item.failedText
+  if (item.status === 'partial_failed') return item.partialFailedText
   return item.runningText
 }
 
@@ -142,7 +144,14 @@ const AssistantProcessGroupView: React.FC<{ group: AssistantProcessGroup }> = ({
       {group.items.length > 0 ? (
         <div className="mt-1.5 space-y-1.5 pl-4 text-[13px] leading-6 text-[#787774]">
           {group.items.map((item) => (
-            <div key={item.id} className={item.status === 'failed' ? 'text-[#B3261E]' : undefined}>
+            <div
+              key={item.id}
+              className={
+                item.status === 'failed' || item.status === 'partial_failed'
+                  ? 'text-[#B3261E]'
+                  : undefined
+              }
+            >
               {renderSegments(getItemText(item))}
             </div>
           ))}
@@ -255,7 +264,7 @@ const AssistantExecutionGroupView: React.FC<{ groups: AssistantProcessGroup[]; i
       >
         <span
           className={`inline-flex min-w-0 flex-1 items-center gap-1 text-[13px] leading-6 transition-colors duration-200 ${
-            status === 'failed'
+            status === 'failed' || status === 'partial_failed'
               ? 'text-[#B3261E]'
               : isRunning
                 ? 'text-[#37352F]'
@@ -276,7 +285,14 @@ const AssistantExecutionGroupView: React.FC<{ groups: AssistantProcessGroup[]; i
       {items.length > 0 ? (
         <div className="mt-1.5 space-y-1.5 pl-4 text-[13px] leading-6 text-[#787774]">
           {items.map((item) => (
-            <div key={item.id} className={item.status === 'failed' ? 'text-[#B3261E]' : undefined}>
+            <div
+              key={item.id}
+              className={
+                item.status === 'failed' || item.status === 'partial_failed'
+                  ? 'text-[#B3261E]'
+                  : undefined
+              }
+            >
               {renderSegments(getItemText(item))}
             </div>
           ))}

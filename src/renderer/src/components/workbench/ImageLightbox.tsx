@@ -14,6 +14,9 @@ type ImageLightboxProps = {
 
 const clampScale = (value: number): number => Math.max(0.25, Math.min(4, value))
 
+const toolbarButtonClassName =
+  'inline-flex h-11 w-11 items-center justify-center rounded-full bg-white text-[#2F3437] shadow-[0_8px_24px_rgba(0,0,0,0.28)] transition hover:bg-[#F4F4F2]'
+
 const ImageLightbox: React.FC<ImageLightboxProps> = ({ image, onClose }) => {
   const [scale, setScale] = useState(1)
   const [offset, setOffset] = useState({ x: 0, y: 0 })
@@ -66,18 +69,26 @@ const ImageLightbox: React.FC<ImageLightboxProps> = ({ image, onClose }) => {
       />
 
       <div className="absolute right-5 top-5 z-[2] flex items-center gap-3">
-        <a
-          href={image.src}
-          download={image.name}
-          className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-white text-[#2F3437] shadow-[0_8px_24px_rgba(0,0,0,0.28)] transition hover:bg-[#F4F4F2]"
-          aria-label="下载图片"
-          title="下载"
-        >
-          <HiArrowDownTray className="h-5 w-5" />
-        </a>
         <button
           type="button"
-          className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-white text-[#2F3437] shadow-[0_8px_24px_rgba(0,0,0,0.28)] transition hover:bg-[#F4F4F2]"
+          className={toolbarButtonClassName}
+          aria-label="下载图片"
+          title="下载"
+          onClick={() => {
+            const link = document.createElement('a')
+            link.href = image.src
+            link.download = image.name
+            link.rel = 'noopener'
+            document.body.appendChild(link)
+            link.click()
+            link.remove()
+          }}
+        >
+          <HiArrowDownTray className="h-5 w-5" />
+        </button>
+        <button
+          type="button"
+          className={toolbarButtonClassName}
           aria-label="关闭图片预览"
           title="关闭"
           onClick={onClose}

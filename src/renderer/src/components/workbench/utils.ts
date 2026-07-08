@@ -215,7 +215,8 @@ const getToolUiKind = (toolName?: AssistantToolName): AssistantProcessSkillKey =
   if (toolName === 'docx_rollback') return 'docx-rollback'
   if (toolName === 'kb_search' || toolName === 'kb_list_documents') return 'kb'
   if (toolName === 'terminal_run') return 'terminal'
-  if (toolName === 'web_search' || toolName === 'web_crawl') return 'web-read'
+  if (toolName === 'web_search') return 'web-search'
+  if (toolName === 'web_crawl') return 'web-crawl'
   if (toolName === 'browser_use') return 'browser'
   if (toolName === 'wait_time') return 'wait'
   return 'generic'
@@ -229,9 +230,31 @@ const getDisplaySkillKey = (display: AssistantProcessDisplay): AssistantProcessS
 const getToolIconKind = (skillKey: AssistantProcessSkillKey): AssistantProcessIconKind => {
   if (skillKey === 'docx-edit' || skillKey === 'docx-rollback') return 'edit'
   if (skillKey === 'docx-read') return 'document'
-  if (skillKey === 'kb' || skillKey === 'web-read' || skillKey === 'browser') return 'search'
+  if (
+    skillKey === 'kb' ||
+    skillKey === 'web-search' ||
+    skillKey === 'web-crawl' ||
+    skillKey === 'browser'
+  ) {
+    return 'search'
+  }
   if (skillKey === 'terminal') return 'terminal'
   return 'default'
+}
+
+const getMixedStatus = (
+  statuses: AssistantProcessStatus[],
+  fallback: AssistantProcessStatus = 'completed'
+): AssistantProcessStatus => {
+  if (statuses.length === 0) return fallback
+  if (statuses.some((status) => status === 'running')) return 'running'
+  const hasCompleted = statuses.some((status) => status === 'completed')
+  const hasFailed = statuses.some((status) => status === 'failed')
+  const hasPartialFailed = statuses.some((status) => status === 'partial_failed')
+  if (hasPartialFailed) return 'partial_failed'
+  if (hasCompleted && hasFailed) return 'partial_failed'
+  if (hasFailed) return 'failed'
+  return 'completed'
 }
 
 const getDisplayIconKind = (display: AssistantProcessDisplay): AssistantProcessIconKind => {
@@ -251,11 +274,17 @@ const getToolSummaryText = (
   if (skillKey === 'docx-read') {
     if (status === 'running') return sentence(text(`正在读取 ${normalizedCount} 个 docx 文件`))
     if (status === 'completed') return sentence(text(`已读取 ${normalizedCount} 个 docx 文件`))
+    if (status === 'partial_failed') {
+      return sentence(text(`部分读取 ${normalizedCount} 个 docx 文件失败`))
+    }
     return sentence(text(`读取 ${normalizedCount} 个 docx 文件失败`))
   }
   if (skillKey === 'docx-edit') {
     if (status === 'running') return sentence(text(`正在编辑 ${normalizedCount} 个 docx 文件`))
     if (status === 'completed') return sentence(text(`已编辑 ${normalizedCount} 个 docx 文件`))
+    if (status === 'partial_failed') {
+      return sentence(text(`部分编辑 ${normalizedCount} 个 docx 文件失败`))
+    }
     return sentence(text(`编辑 ${normalizedCount} 个 docx 文件失败`))
   }
   if (skillKey === 'docx-rollback') {
@@ -263,35 +292,50 @@ const getToolSummaryText = (
       return sentence(text(`正在回退 ${normalizedCount} 个 docx 文件的修改`))
     if (status === 'completed')
       return sentence(text(`已回退 ${normalizedCount} 个 docx 文件的修改`))
+    if (status === 'partial_failed') {
+      return sentence(text(`部分回退 ${normalizedCount} 个 docx 文件的修改失败`))
+    }
     return sentence(text(`回退 ${normalizedCount} 个 docx 文件的修改失败`))
   }
   if (skillKey === 'kb') {
     if (status === 'running') return sentence(text('正在检索知识库'))
     if (status === 'completed') return sentence(text('已检索知识库'))
+    if (status === 'partial_failed') return sentence(text('部分知识库检索失败'))
     return sentence(text('检索知识库失败'))
   }
   if (skillKey === 'terminal') {
     if (status === 'running') return sentence(text('正在执行终端指令'))
     if (status === 'completed') return sentence(text('已执行终端指令'))
+    if (status === 'partial_failed') return sentence(text('部分终端指令执行失败'))
     return sentence(text('执行终端指令失败'))
   }
-  if (skillKey === 'web-read') {
+  if (skillKey === 'web-search') {
+    if (status === 'running') return sentence(text('正在搜索网页'))
+    if (status === 'completed') return sentence(text('已搜索网页'))
+    if (status === 'partial_failed') return sentence(text('部分网页搜索失败'))
+    return sentence(text('搜索网页失败'))
+  }
+  if (skillKey === 'web-crawl') {
     if (status === 'running') return sentence(text('正在读取网页'))
     if (status === 'completed') return sentence(text('已读取网页'))
+    if (status === 'partial_failed') return sentence(text('部分网页读取失败'))
     return sentence(text('读取网页失败'))
   }
   if (skillKey === 'browser') {
     if (status === 'running') return sentence(text('正在操作浏览器'))
     if (status === 'completed') return sentence(text('已完成浏览器操作'))
+    if (status === 'partial_failed') return sentence(text('部分浏览器操作失败'))
     return sentence(text('浏览器操作失败'))
   }
   if (skillKey === 'wait') {
     if (status === 'running') return sentence(text('正在等待'))
     if (status === 'completed') return sentence(text('已完成等待'))
+    if (status === 'partial_failed') return sentence(text('部分等待失败'))
     return sentence(text('等待失败'))
   }
   if (status === 'running') return sentence(text('正在处理任务'))
   if (status === 'completed') return sentence(text('已处理任务'))
+  if (status === 'partial_failed') return sentence(text('部分任务处理失败'))
   return sentence(text('处理任务失败'))
 }
 
@@ -314,6 +358,9 @@ const getToolItemText = (
     if (status === 'completed') {
       return sentence(text('已阅读 '), text(fileLabel, true), text(' 的结构'))
     }
+    if (status === 'partial_failed') {
+      return sentence(text('部分阅读 '), text(fileLabel, true), text(' 的结构失败'))
+    }
     return sentence(text('阅读 '), text(fileLabel, true), text(' 的结构失败'))
   }
   if (toolName === 'docx_read_blocks') {
@@ -325,11 +372,15 @@ const getToolItemText = (
     if (status === 'completed') {
       return sentence(text('已读取 '), text(fileLabel, true), text(targetText))
     }
+    if (status === 'partial_failed') {
+      return sentence(text('部分读取 '), text(fileLabel, true), text(`${targetText}失败`))
+    }
     return sentence(text('读取 '), text(fileLabel, true), text(`${targetText}失败`))
   }
   if (toolName === 'docx_edit') {
     if (status === 'running') return sentence(text('正在编辑 '), text(fileLabel, true))
     if (status === 'completed') return sentence(text('已编辑 '), text(fileLabel, true))
+    if (status === 'partial_failed') return sentence(text('部分编辑 '), text(fileLabel, true), text(' 失败'))
     return sentence(text('编辑 '), text(fileLabel, true), text(' 失败'))
   }
   if (toolName === 'docx_rollback') {
@@ -337,6 +388,8 @@ const getToolItemText = (
       return sentence(text('正在回退 '), text(fileLabel, true), text(' 的修改'))
     if (status === 'completed')
       return sentence(text('已回退 '), text(fileLabel, true), text(' 的修改'))
+    if (status === 'partial_failed')
+      return sentence(text('部分回退 '), text(fileLabel, true), text(' 的修改失败'))
     return sentence(text('回退 '), text(fileLabel, true), text(' 的修改失败'))
   }
   if (toolName === 'docx_history') {
@@ -346,31 +399,40 @@ const getToolItemText = (
     if (status === 'completed') {
       return sentence(text('已检查 '), text(fileLabel, true), text(' 的修改历史'))
     }
+    if (status === 'partial_failed') {
+      return sentence(text('部分检查 '), text(fileLabel, true), text(' 的修改历史失败'))
+    }
     return sentence(text('检查 '), text(fileLabel, true), text(' 的修改历史失败'))
   }
   if (toolName === 'terminal_run') {
     if (status === 'running') return sentence(text('正在执行终端指令：'), text(commandLabel, true))
     if (status === 'completed') return sentence(text('已执行终端指令：'), text(commandLabel, true))
+    if (status === 'partial_failed')
+      return sentence(text('部分终端指令执行失败：'), text(commandLabel, true))
     return sentence(text('执行终端指令失败：'), text(commandLabel, true))
   }
   if (toolName === 'kb_search' || toolName === 'docx_search') {
     if (status === 'running') return sentence(text('正在搜索 '), text(queryLabel, true))
     if (status === 'completed') return sentence(text('已搜索 '), text(queryLabel, true))
+    if (status === 'partial_failed') return sentence(text('部分搜索失败：'), text(queryLabel, true))
     return sentence(text('搜索 '), text(queryLabel, true), text(' 失败'))
   }
   if (toolName === 'kb_list_documents') {
     if (status === 'running') return sentence(text('正在查看工作空间文档列表'))
     if (status === 'completed') return sentence(text('已查看工作空间文档列表'))
+    if (status === 'partial_failed') return sentence(text('部分查看工作空间文档列表失败'))
     return sentence(text('查看工作空间文档列表失败'))
   }
   if (toolName === 'web_search') {
     if (status === 'running') return sentence(text('正在搜索网页：'), text(queryLabel, true))
     if (status === 'completed') return sentence(text('已搜索网页：'), text(queryLabel, true))
+    if (status === 'partial_failed') return sentence(text('部分网页搜索失败：'), text(queryLabel, true))
     return sentence(text('搜索网页失败：'), text(queryLabel, true))
   }
   if (toolName === 'web_crawl') {
     if (status === 'running') return sentence(text('正在读取网页：'), text(urlLabel, true))
     if (status === 'completed') return sentence(text('已读取网页：'), text(urlLabel, true))
+    if (status === 'partial_failed') return sentence(text('部分网页读取失败：'), text(urlLabel, true))
     return sentence(text('读取网页失败：'), text(urlLabel, true))
   }
   if (toolName === 'browser_use') {
@@ -378,15 +440,19 @@ const getToolItemText = (
       return sentence(text('正在操作浏览器：'), text(instructionLabel, true))
     if (status === 'completed')
       return sentence(text('已完成浏览器操作：'), text(instructionLabel, true))
+    if (status === 'partial_failed')
+      return sentence(text('部分浏览器操作失败：'), text(instructionLabel, true))
     return sentence(text('浏览器操作失败：'), text(instructionLabel, true))
   }
   if (toolName === 'wait_time') {
     if (status === 'running') return sentence(text('正在等待 '), text(waitLabel, true))
     if (status === 'completed') return sentence(text('已等待 '), text(waitLabel, true))
+    if (status === 'partial_failed') return sentence(text('部分等待失败'))
     return sentence(text('等待失败'))
   }
   if (status === 'running') return sentence(text('正在处理任务中的一步'))
   if (status === 'completed') return sentence(text('已处理任务中的一步'))
+  if (status === 'partial_failed') return sentence(text('这一步部分处理失败'))
   return sentence(text('这一步处理失败'))
 }
 
@@ -397,22 +463,27 @@ const getDisplayGroupText = (
   if (display.kind === 'thinking') {
     if (status === 'running') return sentence(text('让俺想想'))
     if (status === 'completed') return sentence(text('俺想好了'))
+    if (status === 'partial_failed') return sentence(text('俺有一部分没想明白'))
     return sentence(text('俺没想明白'))
   }
   if (display.kind === 'learning') {
     const skillName = getSkillDisplayName(display.skillId)
     if (status === 'running') return sentence(text('正在学习 '), text(skillName, true))
     if (status === 'completed') return sentence(text('已学会 '), text(skillName, true))
+    if (status === 'partial_failed')
+      return sentence(text('学习 '), text(skillName, true), text(' 有部分失败'))
     return sentence(text('学习 '), text(skillName, true), text(' 失败了'))
   }
   if (display.kind === 'compaction') {
     if (status === 'running') return sentence(text('东西太多了，让俺整理下'))
     if (status === 'completed') return sentence(text('呼，终于整理好了，累死俺了'))
+    if (status === 'partial_failed') return sentence(text('上下文整理有部分失败'))
     return sentence(text('上下文整理失败了'))
   }
   if (display.kind === 'finalizing') {
     if (status === 'running') return sentence(text('让俺想想'))
     if (status === 'completed') return sentence(text('俺想好了'))
+    if (status === 'partial_failed') return sentence(text('俺还有一部分没想明白'))
     return sentence(text('俺没想明白'))
   }
   return getToolSummaryText(getDisplaySkillKey(display), status)
@@ -433,24 +504,11 @@ type ExecutionActionSummary = {
   iconKind: AssistantProcessIconKind
   fileLabels: Set<string>
   count: number
+  statuses: AssistantProcessStatus[]
 }
 
 const getExecutionStatus = (groups: AssistantProcessGroup[]): AssistantProcessStatus => {
-  if (
-    groups.some(
-      (group) => group.status === 'running' || group.items.some((item) => item.status === 'running')
-    )
-  ) {
-    return 'running'
-  }
-  if (
-    groups.some(
-      (group) => group.status === 'failed' || group.items.some((item) => item.status === 'failed')
-    )
-  ) {
-    return 'failed'
-  }
-  return 'completed'
+  return getMixedStatus(groups.map((group) => group.status))
 }
 
 const getExecutionActionOrder = (kind: AssistantProcessSkillKey): number => {
@@ -459,10 +517,11 @@ const getExecutionActionOrder = (kind: AssistantProcessSkillKey): number => {
   if (kind === 'docx-rollback') return 3
   if (kind === 'kb') return 4
   if (kind === 'terminal') return 5
-  if (kind === 'web-read') return 6
-  if (kind === 'browser') return 7
-  if (kind === 'wait') return 8
-  return 9
+  if (kind === 'web-search') return 6
+  if (kind === 'web-crawl') return 7
+  if (kind === 'browser') return 8
+  if (kind === 'wait') return 9
+  return 10
 }
 
 export const buildAssistantExecutionSummaryText = (
@@ -475,16 +534,18 @@ export const buildAssistantExecutionSummaryText = (
         ? group.items.map((item) => ({ toolName: item.toolName, targetLabel: item.targetLabel }))
         : [{ toolName: undefined, targetLabel: undefined }]
     for (const entry of entries) {
-      const kind = getToolUiKind(entry.toolName)
+      const kind = entry.toolName ? getToolUiKind(entry.toolName) : group.skillKey
       const current =
         summaries.get(kind) ||
         ({
           kind,
           iconKind: getToolIconKind(kind),
           fileLabels: new Set<string>(),
-          count: 0
+          count: 0,
+          statuses: []
         } satisfies ExecutionActionSummary)
       current.count += 1
+      current.statuses.push(group.status)
       if (kind === 'docx-read' || kind === 'docx-edit' || kind === 'docx-rollback') {
         current.fileLabels.add(entry.targetLabel || group.id)
       }
@@ -501,9 +562,10 @@ export const buildAssistantExecutionSummaryText = (
   return ordered.flatMap((summary, index) => {
     const prefix = index === 0 ? '' : '，'
     const count = summary.fileLabels.size || summary.count || 1
+    const summaryStatus = getMixedStatus(summary.statuses, status)
     return sentence(
       text(prefix, false),
-      ...getToolSummaryText(summary.kind, status, count).map((segment) => ({
+      ...getToolSummaryText(summary.kind, summaryStatus, count).map((segment) => ({
         ...segment,
         iconKind: segment.iconKind || summary.iconKind
       }))
@@ -522,6 +584,7 @@ const createProcessGroup = (input: {
   runningText: AssistantRichTextSegment[]
   completedText: AssistantRichTextSegment[]
   failedText: AssistantRichTextSegment[]
+  partialFailedText: AssistantRichTextSegment[]
   items?: AssistantProcessGroupItem[]
   createdAt: number
   sourceEventType: AssistantProcessGroup['sourceEventType']
@@ -535,6 +598,7 @@ const createProcessGroup = (input: {
   runningText: input.runningText,
   completedText: input.completedText,
   failedText: input.failedText,
+  partialFailedText: input.partialFailedText,
   items: input.items || [],
   createdAt: input.createdAt,
   sourceEventType: input.sourceEventType,
@@ -542,9 +606,7 @@ const createProcessGroup = (input: {
 })
 
 const resolveGroupStatus = (items: AssistantProcessGroupItem[]): AssistantProcessStatus => {
-  if (items.some((item) => item.status === 'running')) return 'running'
-  if (items.some((item) => item.status === 'failed')) return 'failed'
-  return 'completed'
+  return getMixedStatus(items.map((item) => item.status))
 }
 
 const upsertProcessGroup = (
@@ -579,6 +641,7 @@ const createDisplayProcessGroup = (input: {
     runningText: getDisplayGroupText(input.display, 'running'),
     completedText: getDisplayGroupText(input.display, 'completed'),
     failedText: getDisplayGroupText(input.display, 'failed'),
+    partialFailedText: getDisplayGroupText(input.display, 'partial_failed'),
     createdAt: input.createdAt,
     sourceEventType: input.sourceEventType,
     skillId: input.display.kind === 'learning' ? input.display.skillId : undefined
@@ -601,6 +664,8 @@ const createDisplayProcessItem = (input: {
     runningText: input.existing?.runningText || getDisplayItemText(input.display, 'running'),
     completedText: input.existing?.completedText || getDisplayItemText(input.display, 'completed'),
     failedText: input.existing?.failedText || getDisplayItemText(input.display, 'failed'),
+    partialFailedText:
+      input.existing?.partialFailedText || getDisplayItemText(input.display, 'partial_failed'),
     createdAt: input.existing?.createdAt || input.createdAt,
     sourceEventType: input.sourceEventType,
     toolName,
@@ -676,6 +741,7 @@ export const createAssistantThinkingGroup = (messageId: string): AssistantProces
     runningText: sentence(text('让俺想想')),
     completedText: sentence(text('俺想好了')),
     failedText: sentence(text('俺没想明白')),
+    partialFailedText: sentence(text('俺有一部分没想明白')),
     createdAt: Date.now(),
     sourceEventType: 'thinking'
   })
@@ -690,6 +756,7 @@ export const createSearchProcessGroup = (messageId: string): AssistantProcessGro
     runningText: getToolSummaryText('kb', 'running'),
     completedText: getToolSummaryText('kb', 'completed'),
     failedText: getToolSummaryText('kb', 'failed'),
+    partialFailedText: getToolSummaryText('kb', 'partial_failed'),
     createdAt: Date.now(),
     sourceEventType: 'thinking'
   })
@@ -777,6 +844,9 @@ const completeProcessGroupById = (
       runningText: display ? getDisplayGroupText(display, 'running') : group.runningText,
       completedText: display ? getDisplayGroupText(display, 'completed') : group.completedText,
       failedText: display ? getDisplayGroupText(display, 'failed') : group.failedText,
+      partialFailedText: display
+        ? getDisplayGroupText(display, 'partial_failed')
+        : group.partialFailedText,
       items: nextItems
     }
   })
@@ -847,6 +917,9 @@ const completeProcessItem = (
           ? getDisplayItemText(input.display, 'completed')
           : item.completedText,
         failedText: input.display ? getDisplayItemText(input.display, 'failed') : item.failedText,
+        partialFailedText: input.display
+          ? getDisplayItemText(input.display, 'partial_failed')
+          : item.partialFailedText,
         sourceEventType: input.sourceEventType
       }
     })

@@ -73,7 +73,7 @@ export type WorkbenchFileRef = {
   isDirectory?: boolean
 }
 
-export type AssistantProcessStatus = 'running' | 'completed' | 'failed'
+export type AssistantProcessStatus = 'running' | 'completed' | 'failed' | 'partial_failed'
 
 export type AssistantProcessSourceEventType = 'thinking' | AiRunEvent['type']
 
@@ -122,7 +122,8 @@ export type AssistantProcessSkillKey =
   | 'docx-rollback'
   | 'kb'
   | 'terminal'
-  | 'web-read'
+  | 'web-search'
+  | 'web-crawl'
   | 'browser'
   | 'wait'
   | 'generic'
@@ -133,6 +134,7 @@ export type AssistantProcessGroupItem = {
   runningText: AssistantRichTextSegment[]
   completedText: AssistantRichTextSegment[]
   failedText: AssistantRichTextSegment[]
+  partialFailedText: AssistantRichTextSegment[]
   createdAt: number
   sourceEventType: AssistantProcessSourceEventType
   toolName?: AssistantToolName
@@ -148,6 +150,7 @@ export type AssistantProcessGroup = {
   runningText: AssistantRichTextSegment[]
   completedText: AssistantRichTextSegment[]
   failedText: AssistantRichTextSegment[]
+  partialFailedText: AssistantRichTextSegment[]
   items: AssistantProcessGroupItem[]
   createdAt: number
   sourceEventType: AssistantProcessSourceEventType

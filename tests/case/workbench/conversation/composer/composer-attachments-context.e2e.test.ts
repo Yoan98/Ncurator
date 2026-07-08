@@ -187,7 +187,7 @@ describe('workbench conversation e2e', () => {
             },
             { timeout: 5000 }
           )
-          const downloadButton = page.getByRole('link', { name: '下载图片', exact: true })
+          const downloadButton = page.getByRole('button', { name: '下载图片', exact: true })
           const closeButton = page.getByRole('button', { name: '关闭图片预览', exact: true })
           const zoomButton = page.getByRole('button', { name: '放大', exact: true })
           const previewImageBox = await previewModal.locator('img[alt="qa-image.png"]').boundingBox()
