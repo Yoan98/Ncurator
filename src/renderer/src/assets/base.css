@@ -1163,7 +1163,7 @@ mark {
   background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-  animation: workbenchThinkingFlow 3.2s linear infinite;
+  animation: workbenchThinkingFlow 1.2s linear infinite;
 }
 
 .workbench-scope-select.ant-select .ant-select-selector {
