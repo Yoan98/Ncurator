@@ -128,12 +128,15 @@ describe('ai tool utility backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['utility'],
-      description: '验证 llm_recognize 成功时直接返回普通文本。',
+      description: '验证 llm_recognize 成功时解析图像识别协议并返回 result。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
         const server = await startOpenAiCompatibleServer({
-          content: '这是一张蓝底截图，中间有白色字母 DS。'
+          content: JSON.stringify({
+            supports_image_recognition: true,
+            result: '这是一张蓝底截图，中间有白色字母 DS。'
+          })
         })
         try {
           await seedActiveConfig(runtime, server.baseUrl)
@@ -151,8 +154,8 @@ describe('ai tool utility backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(result === '这是一张蓝底截图，中间有白色字母 DS。', {
-          name: 'llm-recognize-returns-plain-text',
-          message: 'llm_recognize 成功时应直接返回模型普通文本。',
+          name: 'llm-recognize-returns-protocol-result',
+          message: 'llm_recognize 成功时应返回图像识别协议里的 result。',
           data: result
         })
       }
@@ -166,12 +169,15 @@ describe('ai tool utility backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['utility'],
-      description: '验证 llm_recognize 在模型无法确认时也透传普通文本。',
+      description: '验证 llm_recognize 在模型无法确认图片细节时仍返回协议 result。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
         const server = await startOpenAiCompatibleServer({
-          content: '我无法确认这张图片里的具体品牌，但能看出是一个深色界面截图。'
+          content: JSON.stringify({
+            supports_image_recognition: true,
+            result: '我无法确认这张图片里的具体品牌，但能看出是一个深色界面截图。'
+          })
         })
         try {
           await seedActiveConfig(runtime, server.baseUrl)
@@ -193,8 +199,55 @@ describe('ai tool utility backend', () => {
             result.includes('无法确认') &&
             result.includes('界面截图'),
           {
-            name: 'llm-recognize-passes-through-uncertain-text',
-            message: 'llm_recognize 对无法确认类文本也应按成功结果透传。',
+            name: 'llm-recognize-returns-uncertain-protocol-result',
+            message: 'llm_recognize 对无法确认类文本也应返回协议 result。',
+            data: result
+          }
+        )
+      }
+    })
+  })
+
+  it('llm-recognize-unsupported-vision-contract', async () => {
+    await runBackendCase({
+      caseId: 'llm-recognize-unsupported-vision-contract',
+      harnessMode: 'tool-real',
+      domain: 'ai',
+      suite: 'tool',
+      groups: ['utility'],
+      description: '验证 llm_recognize 在模型声明不支持图像识别时返回固定 error 文案。',
+      fixtures: [],
+      runMode: 'single',
+      execute: async (runtime) => {
+        const server = await startOpenAiCompatibleServer({
+          content: JSON.stringify({
+            supports_image_recognition: false,
+            result: ''
+          })
+        })
+        try {
+          await seedActiveConfig(runtime, server.baseUrl)
+          const imagePath = await writeFixtureImage(runtime.workspaceRoot)
+          const harness = createUtilityToolHarness(runtime, {
+            modelName: 'gpt-5'
+          })
+          return await harness.invoke<{ error?: string }>('llm_recognize', {
+            path: imagePath,
+            instruction: '请描述图片内容。'
+          })
+        } finally {
+          await server.close()
+        }
+      },
+      assert: async (result, runtime) => {
+        runtime.assertThat(
+          typeof result === 'object' &&
+            result !== null &&
+            result.error ===
+              '当前模型 gpt-5 不支持图像识别，请提示用户切换支持图片输入的模型后再试',
+          {
+            name: 'llm-recognize-returns-fixed-unsupported-vision-error',
+            message: '模型协议返回不支持图像识别时，llm_recognize 应返回固定 error 文案。',
             data: result
           }
         )
