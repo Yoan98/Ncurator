@@ -4,37 +4,19 @@ import type {
   WorkspaceFileSummary,
   WorkspaceSource
 } from '../../../types/store'
-import { LanceDbCore, LANCE_TABLES } from '../core/LanceDbCore'
+import type { SqliteCore } from '../sqlite/SqliteCore'
+import {
+  buildInClause,
+  insertOrReplace,
+  toOptionalNumber,
+  toOptionalString,
+  toRequiredNumber,
+  toRequiredString,
+  updateById
+} from '../sqlite/sqliteUtils'
 
-type PrimitiveRowValue = string | number | boolean | null | undefined
-type WorkspaceWriteRow = Record<string, PrimitiveRowValue>
-
-type WorkspaceSourceRow = {
-  id?: PrimitiveRowValue
-  name?: PrimitiveRowValue
-  root_path?: PrimitiveRowValue
-  created_at?: PrimitiveRowValue
-  updated_at?: PrimitiveRowValue
-}
-
-type WorkspaceFileIndexRow = {
-  id?: PrimitiveRowValue
-  workspace_id?: PrimitiveRowValue
-  relative_path?: PrimitiveRowValue
-  absolute_path?: PrimitiveRowValue
-  name?: PrimitiveRowValue
-  file_ext?: PrimitiveRowValue
-  size?: PrimitiveRowValue
-  mtime_ms?: PrimitiveRowValue
-  content_hash?: PrimitiveRowValue
-  index_status?: PrimitiveRowValue
-  document_id?: PrimitiveRowValue
-  indexed_at?: PrimitiveRowValue
-  last_checked_at?: PrimitiveRowValue
-  last_error?: PrimitiveRowValue
-  created_at?: PrimitiveRowValue
-  updated_at?: PrimitiveRowValue
-}
+type WorkspaceSourceRow = Record<string, unknown>
+type WorkspaceFileIndexRow = Record<string, unknown>
 
 const EMPTY_SUMMARY: WorkspaceFileSummary = {
   file_count: 0,
@@ -43,35 +25,12 @@ const EMPTY_SUMMARY: WorkspaceFileSummary = {
   failed_file_count: 0
 }
 
-const toOptionalString = (value: PrimitiveRowValue): string | undefined => {
-  if (value == null) return undefined
-  const next = String(value).trim()
-  return next.length > 0 ? next : undefined
-}
-
-const toRequiredString = (value: PrimitiveRowValue): string => String(value ?? '')
-
-const toOptionalNumber = (value: PrimitiveRowValue): number | undefined => {
-  if (value == null) return undefined
-  const next = Number(value)
-  return Number.isFinite(next) ? next : undefined
-}
-
-const toRequiredNumber = (value: PrimitiveRowValue, fallback = 0): number => {
-  const next = Number(value)
-  return Number.isFinite(next) ? next : fallback
-}
-
-const normalizeIndexStatus = (value: PrimitiveRowValue): WorkspaceFileIndexStatus => {
+const normalizeIndexStatus = (value: unknown): WorkspaceFileIndexStatus => {
   const normalized = String(value ?? '').trim()
-  switch (normalized) {
-    case 'indexing':
-    case 'indexed':
-    case 'failed':
-      return normalized
-    default:
-      return 'needs_index'
+  if (normalized === 'indexing' || normalized === 'indexed' || normalized === 'failed') {
+    return normalized
   }
+  return 'needs_index'
 }
 
 const toWorkspaceSource = (row: WorkspaceSourceRow): WorkspaceSource => ({
@@ -101,27 +60,7 @@ const toWorkspaceFileIndexRecord = (row: WorkspaceFileIndexRow): WorkspaceFileIn
   updated_at: toRequiredNumber(row.updated_at)
 })
 
-const omitUndefined = <T extends Record<string, string | number | boolean | null | undefined>>(
-  value: T
-): Partial<T> => {
-  const next: Partial<T> = {}
-  for (const key of Object.keys(value) as Array<keyof T>) {
-    if (value[key] !== undefined) {
-      next[key] = value[key]
-    }
-  }
-  return next
-}
-
-const toWorkspaceSourceWriteRow = (workspace: WorkspaceSource): WorkspaceWriteRow => ({
-  id: workspace.id,
-  name: workspace.name,
-  root_path: workspace.root_path,
-  created_at: workspace.created_at,
-  updated_at: workspace.updated_at
-})
-
-const toWorkspaceFileIndexWriteRow = (record: WorkspaceFileIndexRecord): WorkspaceWriteRow => ({
+const toWorkspaceFileIndexWriteRow = (record: WorkspaceFileIndexRecord) => ({
   id: record.id,
   workspace_id: record.workspace_id,
   relative_path: record.relative_path,
@@ -141,40 +80,37 @@ const toWorkspaceFileIndexWriteRow = (record: WorkspaceFileIndexRecord): Workspa
 })
 
 export class WorkspaceStore {
-  public constructor(private readonly core: LanceDbCore) {}
+  public constructor(private readonly sqlite: SqliteCore) {}
 
   public async saveWorkspace(workspace: WorkspaceSource): Promise<void> {
-    const table = await this.core.openTable(LANCE_TABLES.WORKSPACE_SOURCE)
-    await table.delete(`id = '${this.core.escapeSqlString(workspace.id)}'`)
-    await table.add([toWorkspaceSourceWriteRow(workspace)])
+    insertOrReplace(this.sqlite, 'workspace_source', {
+      id: workspace.id,
+      name: workspace.name,
+      root_path: workspace.root_path,
+      created_at: workspace.created_at,
+      updated_at: workspace.updated_at
+    })
   }
 
   public async listWorkspaces(): Promise<WorkspaceSource[]> {
-    const table = await this.core.openTable(LANCE_TABLES.WORKSPACE_SOURCE)
-    const rows = (await table.query().toArray()) as WorkspaceSourceRow[]
-    return rows.map(toWorkspaceSource).sort((a, b) => a.created_at - b.created_at)
+    const rows = this.sqlite
+      .prepare('SELECT * FROM workspace_source ORDER BY created_at ASC')
+      .all() as WorkspaceSourceRow[]
+    return rows.map(toWorkspaceSource)
   }
 
   public async getWorkspaceById(id: string): Promise<WorkspaceSource | null> {
-    const table = await this.core.openTable(LANCE_TABLES.WORKSPACE_SOURCE)
-    const rows = (await table
-      .query()
-      .where(`id = '${this.core.escapeSqlString(id)}'`)
-      .limit(1)
-      .toArray()) as WorkspaceSourceRow[]
-    const row = rows[0]
+    const row = this.sqlite.prepare('SELECT * FROM workspace_source WHERE id = ?').get(id) as
+      | WorkspaceSourceRow
+      | undefined
     return row ? toWorkspaceSource(row) : null
   }
 
   public async getWorkspaceByRootPath(rootPath: string): Promise<WorkspaceSource | null> {
     if (!String(rootPath || '').trim()) return null
-    const table = await this.core.openTable(LANCE_TABLES.WORKSPACE_SOURCE)
-    const rows = (await table
-      .query()
-      .where(`root_path = '${this.core.escapeSqlString(rootPath)}'`)
-      .limit(1)
-      .toArray()) as WorkspaceSourceRow[]
-    const row = rows[0]
+    const row = this.sqlite
+      .prepare('SELECT * FROM workspace_source WHERE root_path = ? LIMIT 1')
+      .get(rootPath) as WorkspaceSourceRow | undefined
     return row ? toWorkspaceSource(row) : null
   }
 
@@ -182,74 +118,68 @@ export class WorkspaceStore {
     id: string,
     values: Partial<Pick<WorkspaceSource, 'name' | 'root_path' | 'updated_at'>>
   ): Promise<void> {
-    const nextValues = omitUndefined(values)
-    if (Object.keys(nextValues).length === 0) return
-    const table = await this.core.openTable(LANCE_TABLES.WORKSPACE_SOURCE)
-    await table.update({
-      where: `id = '${this.core.escapeSqlString(id)}'`,
-      values: nextValues
-    })
+    updateById(this.sqlite, 'workspace_source', id, values)
   }
 
   public async deleteWorkspace(id: string): Promise<void> {
-    const safeId = this.core.escapeSqlString(id)
-    const workspaceTable = await this.core.openTable(LANCE_TABLES.WORKSPACE_SOURCE)
-    const fileIndexTable = await this.core.openTable(LANCE_TABLES.WORKSPACE_FILE_INDEX)
-    const webSourceTable = await this.core.openTable(LANCE_TABLES.WEB_SOURCE)
-    const chunkTable = await this.core.openTable(LANCE_TABLES.CHUNK)
-    const documentTable = await this.core.openTable(LANCE_TABLES.DOCUMENT)
-    await workspaceTable.delete(`id = '${safeId}'`)
-    await fileIndexTable.delete(`workspace_id = '${safeId}'`)
-    await webSourceTable.delete(`workspace_id = '${safeId}'`)
-    await chunkTable.delete(`workspace_id = '${safeId}'`)
-    await documentTable.delete(`workspace_id = '${safeId}'`)
+    this.sqlite.transaction(() => {
+      this.sqlite.prepare('DELETE FROM workspace_source WHERE id = ?').run(id)
+      this.sqlite.prepare('DELETE FROM workspace_file_index WHERE workspace_id = ?').run(id)
+      this.sqlite.prepare('DELETE FROM web_source WHERE workspace_id = ?').run(id)
+      this.sqlite.prepare('DELETE FROM document WHERE workspace_id = ?').run(id)
+    })
   }
 
   public async replaceWorkspaceFileIndexRecords(
     workspaceId: string,
     records: WorkspaceFileIndexRecord[]
   ): Promise<void> {
-    await this.deleteWorkspaceFileIndexRecords(workspaceId)
-    if (records.length === 0) return
-    const table = await this.core.openTable(LANCE_TABLES.WORKSPACE_FILE_INDEX)
-    await table.add(records.map(toWorkspaceFileIndexWriteRow))
+    this.sqlite.transaction(() => {
+      this.sqlite.prepare('DELETE FROM workspace_file_index WHERE workspace_id = ?').run(workspaceId)
+      const stmt = this.sqlite.prepare(
+        `
+        INSERT INTO workspace_file_index (
+          id, workspace_id, relative_path, absolute_path, name, file_ext, size, mtime_ms,
+          content_hash, index_status, document_id, indexed_at, last_checked_at, last_error,
+          created_at, updated_at
+        ) VALUES (
+          @id, @workspace_id, @relative_path, @absolute_path, @name, @file_ext, @size, @mtime_ms,
+          @content_hash, @index_status, @document_id, @indexed_at, @last_checked_at, @last_error,
+          @created_at, @updated_at
+        )
+      `
+      )
+      for (const record of records) stmt.run(toWorkspaceFileIndexWriteRow(record))
+    })
   }
 
   public async upsertWorkspaceFileIndexRecords(records: WorkspaceFileIndexRecord[]): Promise<void> {
     if (records.length === 0) return
-    const table = await this.core.openTable(LANCE_TABLES.WORKSPACE_FILE_INDEX)
-    for (const record of records) {
-      await table.delete(`id = '${this.core.escapeSqlString(record.id)}'`)
-    }
-    await table.add(records.map(toWorkspaceFileIndexWriteRow))
+    this.sqlite.transaction(() => {
+      for (const record of records) {
+        insertOrReplace(this.sqlite, 'workspace_file_index', toWorkspaceFileIndexWriteRow(record))
+      }
+    })
   }
 
-  public async listWorkspaceFileIndexRecords(workspaceId: string): Promise<WorkspaceFileIndexRecord[]> {
-    const table = await this.core.openTable(LANCE_TABLES.WORKSPACE_FILE_INDEX)
-    const rows = (await table
-      .query()
-      .where(`workspace_id = '${this.core.escapeSqlString(workspaceId)}'`)
-      .toArray()) as WorkspaceFileIndexRow[]
-    return rows
-      .map(toWorkspaceFileIndexRecord)
-      .sort((a, b) => a.relative_path.localeCompare(b.relative_path))
+  public async listWorkspaceFileIndexRecords(
+    workspaceId: string
+  ): Promise<WorkspaceFileIndexRecord[]> {
+    const rows = this.sqlite
+      .prepare('SELECT * FROM workspace_file_index WHERE workspace_id = ? ORDER BY relative_path ASC')
+      .all(workspaceId) as WorkspaceFileIndexRow[]
+    return rows.map(toWorkspaceFileIndexRecord)
   }
 
   public async getWorkspaceFileIndexRecordByPath(
     workspaceId: string,
     relativePath: string
   ): Promise<WorkspaceFileIndexRecord | null> {
-    const table = await this.core.openTable(LANCE_TABLES.WORKSPACE_FILE_INDEX)
-    const where = this.core.combineWhere([
-      `workspace_id = '${this.core.escapeSqlString(workspaceId)}'`,
-      `relative_path = '${this.core.escapeSqlString(relativePath)}'`
-    ])
-    const rows = (await table
-      .query()
-      .where(where || '')
-      .limit(1)
-      .toArray()) as WorkspaceFileIndexRow[]
-    const row = rows[0]
+    const row = this.sqlite
+      .prepare(
+        'SELECT * FROM workspace_file_index WHERE workspace_id = ? AND relative_path = ? LIMIT 1'
+      )
+      .get(workspaceId, relativePath) as WorkspaceFileIndexRow | undefined
     return row ? toWorkspaceFileIndexRecord(row) : null
   }
 
@@ -271,47 +201,48 @@ export class WorkspaceStore {
       >
     >
   ): Promise<void> {
-    const nextValues = omitUndefined(values)
-    if (Object.keys(nextValues).length === 0) return
-    const table = await this.core.openTable(LANCE_TABLES.WORKSPACE_FILE_INDEX)
-    await table.update({
-      where: `id = '${this.core.escapeSqlString(id)}'`,
-      values: nextValues
-    })
+    updateById(this.sqlite, 'workspace_file_index', id, values)
   }
 
   public async deleteWorkspaceFileIndexRecords(workspaceId: string): Promise<void> {
-    const table = await this.core.openTable(LANCE_TABLES.WORKSPACE_FILE_INDEX)
-    await table.delete(`workspace_id = '${this.core.escapeSqlString(workspaceId)}'`)
+    this.sqlite.prepare('DELETE FROM workspace_file_index WHERE workspace_id = ?').run(workspaceId)
   }
 
   public async deleteWorkspaceFileIndexRecordsByIds(ids: string[]): Promise<void> {
-    const where = this.core.buildInClause('id', ids)
+    const params: Record<string, string | number | null> = {}
+    const where = buildInClause('id', ids, params, 'id')
     if (!where) return
-    const table = await this.core.openTable(LANCE_TABLES.WORKSPACE_FILE_INDEX)
-    await table.delete(where)
+    this.sqlite.prepare(`DELETE FROM workspace_file_index WHERE ${where}`).run(params)
   }
 
   public async listWorkspaceDocumentIds(): Promise<string[]> {
-    const table = await this.core.openTable(LANCE_TABLES.WORKSPACE_FILE_INDEX)
-    const rows = (await table.query().toArray()) as WorkspaceFileIndexRow[]
-    return Array.from(
-      new Set(
-        rows
-          .map((row) => toOptionalString(row.document_id))
-          .filter((documentId): documentId is string => Boolean(documentId))
-      )
-    )
+    const rows = this.sqlite
+      .prepare('SELECT DISTINCT document_id FROM workspace_file_index WHERE document_id IS NOT NULL')
+      .all() as Array<{ document_id?: unknown }>
+    return rows.map((row) => toOptionalString(row.document_id)).filter(Boolean) as string[]
   }
 
   public async getWorkspaceFileSummary(workspaceId: string): Promise<WorkspaceFileSummary> {
-    const records = await this.listWorkspaceFileIndexRecords(workspaceId)
-    return {
-      file_count: records.length,
-      indexed_file_count: records.filter((item) => item.index_status === 'indexed').length,
-      needs_index_count: records.filter((item) => item.index_status === 'needs_index').length,
-      failed_file_count: records.filter((item) => item.index_status === 'failed').length
+    const rows = this.sqlite
+      .prepare(
+        `
+        SELECT index_status, COUNT(*) AS count
+        FROM workspace_file_index
+        WHERE workspace_id = ?
+        GROUP BY index_status
+      `
+      )
+      .all(workspaceId) as Array<{ index_status?: unknown; count?: unknown }>
+    const summary = { ...EMPTY_SUMMARY }
+    for (const row of rows) {
+      const count = toRequiredNumber(row.count)
+      summary.file_count += count
+      const status = normalizeIndexStatus(row.index_status)
+      if (status === 'indexed') summary.indexed_file_count += count
+      else if (status === 'failed') summary.failed_file_count += count
+      else summary.needs_index_count += count
     }
+    return summary
   }
 
   public getEmptySummary(): WorkspaceFileSummary {
@@ -319,17 +250,15 @@ export class WorkspaceStore {
   }
 
   public async failIndexingFileRecords(message: string, now = Date.now()): Promise<number> {
-    const table = await this.core.openTable(LANCE_TABLES.WORKSPACE_FILE_INDEX)
-    const rows = (await table.query().where("index_status = 'indexing'").toArray()) as WorkspaceFileIndexRow[]
-    const records = rows.map(toWorkspaceFileIndexRecord)
-    for (const record of records) {
-      await this.updateWorkspaceFileIndexRecord(record.id, {
-        index_status: 'failed',
-        last_error: message,
-        last_checked_at: now,
-        updated_at: now
-      })
-    }
-    return records.length
+    const result = this.sqlite
+      .prepare(
+        `
+        UPDATE workspace_file_index
+        SET index_status = 'failed', last_error = @message, last_checked_at = @now, updated_at = @now
+        WHERE index_status = 'indexing'
+      `
+      )
+      .run({ message, now })
+    return result.changes
   }
 }

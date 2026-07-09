@@ -1,30 +1,41 @@
 import type {
+  AiArtifactRef,
   ChatConversationMemory,
   ChatMessage,
   ChatSession,
   ChatSessionResumeSnapshot,
   ChatSessionResumeSnapshotRow
 } from '../../../types/store'
-import type { AiArtifactRef } from '../../../types/store'
-import { LanceDbCore, LANCE_TABLES } from '../core/LanceDbCore'
+import type { SqliteCore } from '../sqlite/SqliteCore'
+import {
+  jsonStringify,
+  parseJsonArray,
+  parseJsonObject,
+  toOptionalNumber,
+  toRequiredNumber,
+  toRequiredString
+} from '../sqlite/sqliteUtils'
 
 type ChatSessionRow = {
   id?: unknown
   title?: unknown
   created_at?: unknown
+  updated_at?: unknown
   workspace_id?: unknown
 }
+
 type ChatMessageRow = {
   id?: unknown
   session_id?: unknown
+  seq?: unknown
   role?: unknown
   content?: unknown
-  timestamp?: unknown
   content_nodes_json?: unknown
   selected_references_json?: unknown
   attachments_json?: unknown
   artifacts_json?: unknown
   error?: unknown
+  created_at?: unknown
 }
 
 const toChatRole = (value: unknown): ChatMessage['role'] => {
@@ -33,53 +44,29 @@ const toChatRole = (value: unknown): ChatMessage['role'] => {
   return 'user'
 }
 
-const parseArtifacts = (value: unknown): AiArtifactRef[] | undefined => {
-  if (!value) return undefined
-  try {
-    const parsed = JSON.parse(String(value)) as AiArtifactRef[]
-    return Array.isArray(parsed) ? parsed : undefined
-  } catch {
-    return undefined
-  }
-}
+const toSession = (row: ChatSessionRow): ChatSession => ({
+  id: toRequiredString(row.id),
+  title: toRequiredString(row.title),
+  created_at: toRequiredNumber(row.created_at),
+  workspace_id: toRequiredString(row.workspace_id)
+})
 
-const parseSelectedReferences = (value: unknown): ChatMessage['selectedReferences'] => {
-  if (!value) return undefined
-  try {
-    const parsed = JSON.parse(String(value))
-    return Array.isArray(parsed) ? parsed : undefined
-  } catch {
-    return undefined
-  }
-}
-
-const parseContentNodes = (value: unknown): ChatMessage['contentNodes'] => {
-  if (!value) return undefined
-  try {
-    const parsed = JSON.parse(String(value))
-    return Array.isArray(parsed) ? parsed : undefined
-  } catch {
-    return undefined
-  }
-}
-
-const parseAttachments = (value: unknown): ChatMessage['attachments'] => {
-  if (!value) return undefined
-  try {
-    const parsed = JSON.parse(String(value))
-    return Array.isArray(parsed) ? parsed : undefined
-  } catch {
-    return undefined
-  }
-}
+const toMessage = (row: ChatMessageRow): ChatMessage & { seq?: number } => ({
+  id: toRequiredString(row.id),
+  session_id: toRequiredString(row.session_id),
+  role: toChatRole(row.role),
+  content: toRequiredString(row.content),
+  timestamp: toRequiredNumber(row.created_at),
+  seq: toOptionalNumber(row.seq),
+  contentNodes: parseJsonArray(row.content_nodes_json),
+  selectedReferences: parseJsonArray(row.selected_references_json),
+  attachments: parseJsonArray(row.attachments_json),
+  artifacts: parseJsonArray<AiArtifactRef>(row.artifacts_json),
+  error: row.error === 1 || row.error === true ? true : undefined
+})
 
 export class ChatStore {
-  public constructor(private readonly core: LanceDbCore) {}
-
-  private async mergeById(tableName: string, row: Record<string, unknown>): Promise<void> {
-    const table = await this.core.openTable(tableName)
-    await table.mergeInsert('id').whenMatchedUpdateAll().whenNotMatchedInsertAll().execute([row])
-  }
+  public constructor(private readonly sqlite: SqliteCore) {}
 
   private isValidConversationMemory(value: unknown): value is ChatConversationMemory {
     if (!value || typeof value !== 'object') return false
@@ -97,68 +84,67 @@ export class ChatStore {
     sessionId: string,
     memory: ChatConversationMemory
   ): Promise<void> {
-    const safeId = this.core.escapeSqlString(sessionId)
-    const table = await this.core.openTable(LANCE_TABLES.CHAT_CONVERSATION_MEMORY)
-    await table.delete(`session_id = '${safeId}'`)
-    await table.add([
-      {
+    this.sqlite
+      .prepare(
+        `
+        INSERT OR REPLACE INTO chat_conversation_memory (session_id, memory_json, updated_at)
+        VALUES (@session_id, @memory_json, @updated_at)
+      `
+      )
+      .run({
         session_id: sessionId,
         memory_json: JSON.stringify(memory),
         updated_at: memory.updatedAt || Date.now()
-      }
-    ])
+      })
   }
 
   public async getConversationMemory(sessionId: string): Promise<ChatConversationMemory | null> {
-    const safeId = this.core.escapeSqlString(sessionId)
-    const table = await this.core.openTable(LANCE_TABLES.CHAT_CONVERSATION_MEMORY)
-    const rows = await table.query().where(`session_id = '${safeId}'`).toArray()
-    const row = rows?.[0]
-    if (!row?.memory_json) return null
-    try {
-      const parsed = JSON.parse(String(row.memory_json))
-      return this.isValidConversationMemory(parsed) ? parsed : null
-    } catch (e) {
-      void e
-      return null
-    }
+    const row = this.sqlite
+      .prepare('SELECT memory_json FROM chat_conversation_memory WHERE session_id = ?')
+      .get(sessionId) as { memory_json?: unknown } | undefined
+    const memory = parseJsonObject(row?.memory_json)
+    return this.isValidConversationMemory(memory) ? memory : null
   }
 
   public async clearConversationMemory(sessionId: string): Promise<void> {
-    const safeId = this.core.escapeSqlString(sessionId)
-    const table = await this.core.openTable(LANCE_TABLES.CHAT_CONVERSATION_MEMORY)
-    await table.delete(`session_id = '${safeId}'`)
+    this.sqlite.prepare('DELETE FROM chat_conversation_memory WHERE session_id = ?').run(sessionId)
   }
 
   public async saveSessionResumeSnapshot(
     sessionId: string,
     snapshot: ChatSessionResumeSnapshot
   ): Promise<void> {
-    const safeId = this.core.escapeSqlString(sessionId)
-    const table = await this.core.openTable(LANCE_TABLES.CHAT_SESSION_RESUME_SNAPSHOT)
-    await table.delete(`session_id = '${safeId}'`)
-    await table.add([
-      {
+    this.sqlite
+      .prepare(
+        `
+        INSERT OR REPLACE INTO chat_session_resume_snapshot (
+          session_id, run_id, reason, user_input, selected_references_json, workspace_json,
+          human_state_json, error_message, updated_at
+        ) VALUES (
+          @session_id, @run_id, @reason, @user_input, @selected_references_json, @workspace_json,
+          @human_state_json, @error_message, @updated_at
+        )
+      `
+      )
+      .run({
         session_id: sessionId,
         run_id: snapshot.runId,
         reason: snapshot.reason,
         user_input: snapshot.userInput,
         selected_references_json: JSON.stringify(snapshot.selectedReferences || []),
-        workspace_json: snapshot.workspace ? JSON.stringify(snapshot.workspace) : undefined,
+        workspace_json: jsonStringify(snapshot.workspace),
         human_state_json: JSON.stringify(snapshot.humanState),
         error_message: snapshot.errorMessage,
         updated_at: snapshot.updatedAt
-      }
-    ])
+      })
   }
 
   public async getSessionResumeSnapshot(
     sessionId: string
   ): Promise<ChatSessionResumeSnapshot | null> {
-    const safeId = this.core.escapeSqlString(sessionId)
-    const table = await this.core.openTable(LANCE_TABLES.CHAT_SESSION_RESUME_SNAPSHOT)
-    const rows = await table.query().where(`session_id = '${safeId}'`).toArray()
-    const row = rows?.[0] as ChatSessionResumeSnapshotRow | undefined
+    const row = this.sqlite
+      .prepare('SELECT * FROM chat_session_resume_snapshot WHERE session_id = ?')
+      .get(sessionId) as ChatSessionResumeSnapshotRow | undefined
     if (!row?.human_state_json) return null
     try {
       const selectedReferences = JSON.parse(String(row.selected_references_json || '[]'))
@@ -180,117 +166,122 @@ export class ChatStore {
   }
 
   public async clearSessionResumeSnapshot(sessionId: string): Promise<void> {
-    const safeId = this.core.escapeSqlString(sessionId)
-    const table = await this.core.openTable(LANCE_TABLES.CHAT_SESSION_RESUME_SNAPSHOT)
-    await table.delete(`session_id = '${safeId}'`)
+    this.sqlite
+      .prepare('DELETE FROM chat_session_resume_snapshot WHERE session_id = ?')
+      .run(sessionId)
   }
 
   public async saveChatSession(session: ChatSession): Promise<void> {
-    await this.mergeById(LANCE_TABLES.CHAT_SESSION, {
-      id: session.id,
-      title: session.title,
-      created_at: session.created_at,
-      workspace_id: session.workspace_id
-    })
+    const now = Date.now()
+    this.sqlite
+      .prepare(
+        `
+        INSERT INTO chat_session (id, title, created_at, updated_at, workspace_id)
+        VALUES (@id, @title, @created_at, @updated_at, @workspace_id)
+        ON CONFLICT(id) DO UPDATE SET
+          title = excluded.title,
+          updated_at = excluded.updated_at,
+          workspace_id = excluded.workspace_id
+      `
+      )
+      .run({
+        id: session.id,
+        title: session.title,
+        created_at: session.created_at,
+        updated_at: now,
+        workspace_id: session.workspace_id || ''
+      })
   }
 
   public async getChatSession(id: string): Promise<ChatSession | null> {
-    const table = await this.core.openTable(LANCE_TABLES.CHAT_SESSION)
-    const rows = await table
-      .query()
-      .where(`id = '${this.core.escapeSqlString(id)}'`)
-      .select(['id', 'title', 'created_at', 'workspace_id'])
-      .limit(1)
-      .toArray()
-    const row = rows[0] as ChatSessionRow | undefined
-    if (!row) return null
-    return {
-      id: String(row.id || ''),
-      title: String(row.title || ''),
-      created_at: Number(row.created_at || 0),
-      workspace_id: String(row.workspace_id || '')
-    }
+    const row = this.sqlite
+      .prepare('SELECT id, title, created_at, updated_at, workspace_id FROM chat_session WHERE id = ?')
+      .get(id) as ChatSessionRow | undefined
+    return row ? toSession(row) : null
   }
 
   public async getChatSessions(): Promise<ChatSession[]> {
-    const table = await this.core.openTable(LANCE_TABLES.CHAT_SESSION)
-    const results = await table
-      .query()
-      .select(['id', 'title', 'created_at', 'workspace_id'])
-      .toArray()
-    return results
-      .map((r) => {
-        const row = r as ChatSessionRow
-        return {
-          id: String(row.id || ''),
-          title: String(row.title || ''),
-          created_at: Number(row.created_at || 0),
-          workspace_id: String(row.workspace_id || '')
-        }
-      })
-      .sort((a, b) => b.created_at - a.created_at)
+    const rows = this.sqlite
+      .prepare('SELECT id, title, created_at, updated_at, workspace_id FROM chat_session ORDER BY updated_at DESC, created_at DESC')
+      .all() as ChatSessionRow[]
+    return rows.map(toSession)
   }
 
   public async deleteChatSession(id: string): Promise<void> {
-    const safeId = this.core.escapeSqlString(id)
-    const sessionTable = await this.core.openTable(LANCE_TABLES.CHAT_SESSION)
-    await sessionTable.delete(`id = '${safeId}'`)
-
-    const msgTable = await this.core.openTable(LANCE_TABLES.CHAT_MESSAGE)
-    await msgTable.delete(`session_id = '${safeId}'`)
-
-    const memoryTable = await this.core.openTable(LANCE_TABLES.CHAT_CONVERSATION_MEMORY)
-    await memoryTable.delete(`session_id = '${safeId}'`)
-
-    const resumeTable = await this.core.openTable(LANCE_TABLES.CHAT_SESSION_RESUME_SNAPSHOT)
-    await resumeTable.delete(`session_id = '${safeId}'`)
+    this.sqlite.transaction(() => {
+      this.sqlite.prepare('DELETE FROM chat_session WHERE id = ?').run(id)
+    })
   }
 
   public async deleteChatMessagesByIds(messageIds: string[]): Promise<void> {
-    const safeIds = messageIds.map((id) => String(id || '').trim()).filter(Boolean)
-    if (safeIds.length === 0) return
-    const where = this.core.buildInClause('id', safeIds)
-    if (!where) return
-    const table = await this.core.openTable(LANCE_TABLES.CHAT_MESSAGE)
-    await table.delete(where)
+    const ids = messageIds.map((id) => String(id || '').trim()).filter(Boolean)
+    if (ids.length === 0) return
+    this.sqlite.transaction(() => {
+      const stmt = this.sqlite.prepare('DELETE FROM chat_message WHERE id = ?')
+      for (const id of ids) stmt.run(id)
+    })
   }
 
   public async saveChatMessage(message: ChatMessage): Promise<void> {
-    await this.mergeById(LANCE_TABLES.CHAT_MESSAGE, {
-      id: message.id,
-      session_id: message.session_id,
-      role: message.role,
-      content: message.content,
-      timestamp: message.timestamp,
-      content_nodes_json: message.contentNodes ? JSON.stringify(message.contentNodes) : undefined,
-      selected_references_json: message.selectedReferences
-        ? JSON.stringify(message.selectedReferences)
-        : undefined,
-      attachments_json: message.attachments ? JSON.stringify(message.attachments) : undefined,
-      error: message.error,
-      artifacts_json: message.artifacts ? JSON.stringify(message.artifacts) : undefined
+    this.sqlite.transaction(() => {
+      const existing = this.sqlite
+        .prepare('SELECT seq FROM chat_message WHERE id = ?')
+        .get(message.id) as { seq?: unknown } | undefined
+      const seq =
+        toOptionalNumber(existing?.seq) ||
+        ((this.sqlite
+          .prepare('SELECT COALESCE(MAX(seq), 0) + 1 AS next_seq FROM chat_message WHERE session_id = ?')
+          .get(message.session_id) as { next_seq?: unknown }).next_seq as number)
+      const createdAt = message.timestamp || Date.now()
+
+      this.sqlite
+        .prepare(
+          `
+          INSERT INTO chat_message (
+            id, session_id, seq, role, content, content_nodes_json, selected_references_json,
+            attachments_json, artifacts_json, error, created_at
+          ) VALUES (
+            @id, @session_id, @seq, @role, @content, @content_nodes_json, @selected_references_json,
+            @attachments_json, @artifacts_json, @error, @created_at
+          )
+          ON CONFLICT(id) DO UPDATE SET
+            session_id = excluded.session_id,
+            seq = excluded.seq,
+            role = excluded.role,
+            content = excluded.content,
+            content_nodes_json = excluded.content_nodes_json,
+            selected_references_json = excluded.selected_references_json,
+            attachments_json = excluded.attachments_json,
+            artifacts_json = excluded.artifacts_json,
+            error = excluded.error,
+            created_at = excluded.created_at
+        `
+        )
+        .run({
+          id: message.id,
+          session_id: message.session_id,
+          seq,
+          role: message.role,
+          content: message.content,
+          content_nodes_json: jsonStringify(message.contentNodes),
+          selected_references_json: jsonStringify(message.selectedReferences),
+          attachments_json: jsonStringify(message.attachments),
+          artifacts_json: jsonStringify(message.artifacts),
+          error: message.error ? 1 : null,
+          created_at: createdAt
+        })
+
+      this.sqlite
+        .prepare('UPDATE chat_session SET updated_at = ? WHERE id = ?')
+        .run(createdAt, message.session_id)
     })
   }
 
   public async getChatMessages(sessionId: string): Promise<ChatMessage[]> {
-    const table = await this.core.openTable(LANCE_TABLES.CHAT_MESSAGE)
-    const results = await table
-      .query()
-      .where(`session_id = '${this.core.escapeSqlString(sessionId)}'`)
-      .select([
-        'id',
-        'session_id',
-        'role',
-        'content',
-        'timestamp',
-        'content_nodes_json',
-        'selected_references_json',
-        'attachments_json',
-        'artifacts_json',
-        'error'
-      ])
-      .toArray()
-    return this.toMessages(results)
+    const rows = this.sqlite
+      .prepare('SELECT * FROM chat_message WHERE session_id = ? ORDER BY seq ASC')
+      .all(sessionId) as ChatMessageRow[]
+    return rows.map(toMessage)
   }
 
   public async getChatMessagesPage(input: {
@@ -300,32 +291,27 @@ export class ChatStore {
   }): Promise<{ messages: ChatMessage[]; hasMoreBefore: boolean }> {
     const safeLimit = Math.max(1, Math.min(100, Number(input.limit || 50)))
     const beforeTimestamp = Number(input.beforeTimestamp)
-    const where = this.core.combineWhere([
-      `session_id = '${this.core.escapeSqlString(input.sessionId)}'`,
-      Number.isFinite(beforeTimestamp) ? `timestamp < ${Math.floor(beforeTimestamp)}` : undefined
-    ])
-    const table = await this.core.openTable(LANCE_TABLES.CHAT_MESSAGE)
-    const results = await table
-      .query()
-      .where(where || 'session_id IS NOT NULL')
-      .select([
-        'id',
-        'session_id',
-        'role',
-        'content',
-        'timestamp',
-        'content_nodes_json',
-        'selected_references_json',
-        'attachments_json',
-        'artifacts_json',
-        'error'
-      ])
-      .toArray()
-    const sorted = this.toMessages(results).sort((a, b) => b.timestamp - a.timestamp)
-    const messages = sorted.slice(0, safeLimit)
+    const params = {
+      session_id: input.sessionId,
+      before: Number.isFinite(beforeTimestamp) ? Math.floor(beforeTimestamp) : null,
+      limit: safeLimit + 1
+    }
+    const rows = this.sqlite
+      .prepare(
+        `
+        SELECT * FROM chat_message
+        WHERE session_id = @session_id
+          AND (@before IS NULL OR created_at < @before)
+        ORDER BY seq DESC
+        LIMIT @limit
+      `
+      )
+      .all(params) as ChatMessageRow[]
+    const hasMoreBefore = rows.length > safeLimit
+    const pageRows = rows.slice(0, safeLimit).reverse()
     return {
-      messages: messages.sort((a, b) => a.timestamp - b.timestamp),
-      hasMoreBefore: sorted.length > safeLimit
+      messages: pageRows.map(toMessage),
+      hasMoreBefore
     }
   }
 
@@ -383,30 +369,8 @@ export class ChatStore {
     }
   }
 
-  private toMessages(rows: unknown[]): ChatMessage[] {
-    return rows
-      .map((r) => {
-        const row = r as ChatMessageRow
-        return {
-          id: String(row.id || ''),
-          session_id: String(row.session_id || ''),
-          role: toChatRole(row.role),
-          content: String(row.content || ''),
-          timestamp: Number(row.timestamp || 0),
-          contentNodes: parseContentNodes(row.content_nodes_json),
-          selectedReferences: parseSelectedReferences(row.selected_references_json),
-          attachments: parseAttachments(row.attachments_json),
-          artifacts: parseArtifacts(row.artifacts_json),
-          error: typeof row.error === 'boolean' ? row.error : undefined
-        }
-      })
-      .sort((a, b) => a.timestamp - b.timestamp)
-  }
-
   public async getRecentChatMessages(sessionId: string, limit: number): Promise<ChatMessage[]> {
-    const n = Math.max(1, Math.min(50, Number(limit || 0)))
-    const all = await this.getChatMessages(sessionId)
-    if (all.length <= n) return all
-    return all.slice(all.length - n)
+    const result = await this.getChatMessagesPage({ sessionId, limit })
+    return result.messages
   }
 }

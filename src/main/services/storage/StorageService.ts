@@ -1,7 +1,9 @@
+import path from 'node:path'
 import { AiFileChangeStore } from './domains/AiFileChangeStore'
 import { AiRunStore } from './domains/AiRunStore'
 import { AiRuntimeSettingsStore } from './domains/AiRuntimeSettingsStore'
 import { LanceDbCore, LANCE_TABLES } from './core/LanceDbCore'
+import { SqliteCore } from './sqlite/SqliteCore'
 import { ChatStore } from './domains/ChatStore'
 import { DocxApplyStore } from './domains/DocxApplyStore'
 import { DocumentsStore } from './domains/DocumentsStore'
@@ -9,12 +11,13 @@ import { LlmConfigStore } from './domains/LlmConfigStore'
 import { WebSourceStore } from './domains/WebSourceStore'
 import { WorkspaceIndexJobStore } from './domains/WorkspaceIndexJobStore'
 import { WorkspaceStore } from './domains/WorkspaceStore'
-import { LegacyLocalImportMigration } from './migrations/LegacyLocalImportMigration'
 import type { LegacyLocalImportMigrationStatus } from '../../../shared/types'
 
 export class StorageService {
   private static instance: StorageService
 
+  public readonly sqlite: SqliteCore
+  public readonly vector: LanceDbCore
   public readonly core: LanceDbCore
   public readonly documents: DocumentsStore
   public readonly webSource: WebSourceStore
@@ -28,18 +31,23 @@ export class StorageService {
   public readonly workspaceIndexJob: WorkspaceIndexJobStore
   private legacyLocalImportMigrationStatus: LegacyLocalImportMigrationStatus | null = null
 
-  public constructor(input: { dbPath?: string } = {}) {
-    this.core = new LanceDbCore(input.dbPath)
-    this.documents = new DocumentsStore(this.core)
-    this.webSource = new WebSourceStore(this.core)
-    this.chat = new ChatStore(this.core)
-    this.aiFileChange = new AiFileChangeStore(this.core)
-    this.aiRun = new AiRunStore(this.core)
-    this.docxApply = new DocxApplyStore(this.core)
-    this.llm = new LlmConfigStore(this.core)
-    this.aiRuntimeSettings = new AiRuntimeSettingsStore(this.core)
-    this.workspace = new WorkspaceStore(this.core)
-    this.workspaceIndexJob = new WorkspaceIndexJobStore(this.core)
+  public constructor(input: { dbPath?: string; sqlitePath?: string; vectorPath?: string } = {}) {
+    const sqlitePath =
+      input.sqlitePath ||
+      (input.dbPath ? path.join(path.dirname(input.dbPath), 'app.sqlite') : undefined)
+    this.sqlite = new SqliteCore(sqlitePath)
+    this.vector = new LanceDbCore(input.vectorPath || input.dbPath)
+    this.core = this.vector
+    this.documents = new DocumentsStore(this.sqlite, this.vector)
+    this.webSource = new WebSourceStore(this.sqlite)
+    this.chat = new ChatStore(this.sqlite)
+    this.aiFileChange = new AiFileChangeStore(this.sqlite)
+    this.aiRun = new AiRunStore(this.sqlite)
+    this.docxApply = new DocxApplyStore(this.sqlite)
+    this.llm = new LlmConfigStore(this.sqlite)
+    this.aiRuntimeSettings = new AiRuntimeSettingsStore(this.sqlite)
+    this.workspace = new WorkspaceStore(this.sqlite)
+    this.workspaceIndexJob = new WorkspaceIndexJobStore(this.sqlite)
   }
 
   public static getInstance(): StorageService {
@@ -50,10 +58,14 @@ export class StorageService {
   }
 
   public async initialize(): Promise<void> {
-    await this.core.initialize()
+    this.sqlite.initialize()
+    await this.vector.initialize()
     await this.failInterruptedWorkspaceIndexJobs()
-    const migration = new LegacyLocalImportMigration(this.documents, this.workspace)
-    this.legacyLocalImportMigrationStatus = await migration.run()
+    this.legacyLocalImportMigrationStatus = {
+      hasLegacyLocalImports: false,
+      removedDocumentCount: 0,
+      removedChunkCount: 0
+    }
   }
 
   public async failInterruptedWorkspaceIndexJobs(
@@ -72,18 +84,11 @@ export class StorageService {
   }
 
   public async optimizeChatStorage(): Promise<void> {
-    await this.core.optimizeTables([
-      LANCE_TABLES.CHAT_SESSION,
-      LANCE_TABLES.CHAT_MESSAGE,
-      LANCE_TABLES.CHAT_CONVERSATION_MEMORY,
-      LANCE_TABLES.CHAT_SESSION_RESUME_SNAPSHOT,
-      LANCE_TABLES.AI_RUN,
-      LANCE_TABLES.AI_RUN_EVENT,
-      LANCE_TABLES.AI_FILE_CHANGE
-    ])
+    await this.vector.optimizeTables([LANCE_TABLES.CHUNK])
   }
 
   public async close(): Promise<void> {
-    await this.core.close()
+    await this.vector.close()
+    this.sqlite.close()
   }
 }

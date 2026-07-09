@@ -4,67 +4,26 @@ import type {
   ListDocxApplyRecordsRequest,
   ListDocxApplyRecordsResponse
 } from '../../../../shared/types'
-import { LanceDbCore, LANCE_TABLES } from '../core/LanceDbCore'
+import type { SqliteCore } from '../sqlite/SqliteCore'
+import {
+  buildWhere,
+  fromSqliteBoolean,
+  insertOrReplace,
+  toOptionalNumber,
+  toOptionalString,
+  toRequiredNumber,
+  toRequiredString,
+  updateById
+} from '../sqlite/sqliteUtils'
 
-type PrimitiveRowValue = string | number | boolean | null | undefined
-type WriteRow = Record<string, PrimitiveRowValue>
+type DocxApplyRow = Record<string, unknown>
 
-type DocxApplyRow = {
-  id?: PrimitiveRowValue
-  session_id?: PrimitiveRowValue
-  run_id?: PrimitiveRowValue
-  status?: PrimitiveRowValue
-  source_path?: PrimitiveRowValue
-  source_name?: PrimitiveRowValue
-  operation?: PrimitiveRowValue
-  final_revision_ref?: PrimitiveRowValue
-  change_count?: PrimitiveRowValue
-  insert_count?: PrimitiveRowValue
-  delete_count?: PrimitiveRowValue
-  before_exists?: PrimitiveRowValue
-  before_snapshot_path?: PrimitiveRowValue
-  before_checksum?: PrimitiveRowValue
-  before_byte_size?: PrimitiveRowValue
-  before_modified_at?: PrimitiveRowValue
-  preview_diff_artifact_path?: PrimitiveRowValue
-  preview_diff_checksum?: PrimitiveRowValue
-  preview_diff_byte_size?: PrimitiveRowValue
-  after_checksum?: PrimitiveRowValue
-  after_byte_size?: PrimitiveRowValue
-  after_modified_at?: PrimitiveRowValue
-  created_at?: PrimitiveRowValue
-  updated_at?: PrimitiveRowValue
-  reverted_at?: PrimitiveRowValue
-  last_error?: PrimitiveRowValue
-}
-
-const toOptionalString = (value: PrimitiveRowValue): string | undefined => {
-  if (value == null) return undefined
-  const next = String(value).trim()
-  return next.length > 0 ? next : undefined
-}
-
-const toRequiredString = (value: PrimitiveRowValue): string => String(value ?? '')
-
-const toOptionalNumber = (value: PrimitiveRowValue): number | undefined => {
-  if (value == null) return undefined
-  const next = Number(value)
-  return Number.isFinite(next) ? next : undefined
-}
-
-const toRequiredNumber = (value: PrimitiveRowValue, fallback = 0): number => {
-  const next = Number(value)
-  return Number.isFinite(next) ? next : fallback
-}
-
-const toRequiredBoolean = (value: PrimitiveRowValue): boolean => value === true || value === 'true'
-
-const normalizeStatus = (value: PrimitiveRowValue): DocxApplyStatus => {
+const normalizeStatus = (value: unknown): DocxApplyStatus => {
   const normalized = String(value ?? '').trim()
   return normalized === 'reverted' || normalized === 'failed' ? normalized : 'applied'
 }
 
-const normalizeOperation = (value: PrimitiveRowValue): DocxApplyRecord['operation'] =>
+const normalizeOperation = (value: unknown): DocxApplyRecord['operation'] =>
   value === 'created' ? 'created' : 'updated'
 
 const toDocxApplyRecord = (row: DocxApplyRow): DocxApplyRecord => ({
@@ -79,7 +38,7 @@ const toDocxApplyRecord = (row: DocxApplyRow): DocxApplyRecord => ({
   change_count: toRequiredNumber(row.change_count),
   insert_count: toRequiredNumber(row.insert_count),
   delete_count: toRequiredNumber(row.delete_count),
-  before_exists: toRequiredBoolean(row.before_exists),
+  before_exists: fromSqliteBoolean(row.before_exists),
   before_snapshot_path: toOptionalString(row.before_snapshot_path),
   before_checksum: toOptionalString(row.before_checksum),
   before_byte_size: toOptionalNumber(row.before_byte_size),
@@ -96,15 +55,7 @@ const toDocxApplyRecord = (row: DocxApplyRow): DocxApplyRecord => ({
   error: toOptionalString(row.last_error)
 })
 
-const omitUndefined = <T extends WriteRow>(value: T): Partial<T> => {
-  const next: Partial<T> = {}
-  for (const key of Object.keys(value) as Array<keyof T>) {
-    if (value[key] !== undefined) next[key] = value[key]
-  }
-  return next
-}
-
-const toDocxApplyWriteRow = (record: DocxApplyRecord): WriteRow => ({
+const toDocxApplyWriteRow = (record: DocxApplyRecord) => ({
   id: record.id,
   session_id: record.session_id,
   run_id: record.run_id,
@@ -116,7 +67,7 @@ const toDocxApplyWriteRow = (record: DocxApplyRecord): WriteRow => ({
   change_count: record.change_count,
   insert_count: record.insert_count,
   delete_count: record.delete_count,
-  before_exists: record.before_exists,
+  before_exists: record.before_exists ? 1 : 0,
   before_snapshot_path: record.before_snapshot_path,
   before_checksum: record.before_checksum,
   before_byte_size: record.before_byte_size,
@@ -134,34 +85,46 @@ const toDocxApplyWriteRow = (record: DocxApplyRecord): WriteRow => ({
 })
 
 export class DocxApplyStore {
-  public constructor(private readonly core: LanceDbCore) {}
+  public constructor(private readonly sqlite: SqliteCore) {}
 
   public async saveRecord(record: DocxApplyRecord): Promise<void> {
-    const table = await this.core.openTable(LANCE_TABLES.DOCX_APPLY)
-    await table.delete(`id = '${this.core.escapeSqlString(record.id)}'`)
-    await table.add([omitUndefined(toDocxApplyWriteRow(record))])
+    insertOrReplace(this.sqlite, 'docx_apply', toDocxApplyWriteRow(record))
+  }
+
+  public async updateRecord(
+    id: string,
+    values: Partial<Pick<DocxApplyRecord, 'status' | 'updated_at' | 'reverted_at' | 'error'>>
+  ): Promise<void> {
+    updateById(this.sqlite, 'docx_apply', id, {
+      status: values.status,
+      updated_at: values.updated_at,
+      reverted_at: values.reverted_at,
+      last_error: values.error
+    })
   }
 
   public async listRecords(
     filters?: ListDocxApplyRecordsRequest
   ): Promise<ListDocxApplyRecordsResponse> {
-    const table = await this.core.openTable(LANCE_TABLES.DOCX_APPLY)
-    const where = this.core.combineWhere([
-      filters?.sessionId ? `session_id = '${this.core.escapeSqlString(filters.sessionId)}'` : undefined,
-      filters?.status ? `status = '${this.core.escapeSqlString(filters.status)}'` : undefined
+    const params = {
+      session_id: filters?.sessionId || null,
+      status: filters?.status || null
+    }
+    const where = buildWhere([
+      filters?.sessionId ? 'session_id = @session_id' : undefined,
+      filters?.status ? 'status = @status' : undefined
     ])
-    const rows = (await (where ? table.query().where(where) : table.query()).toArray()) as DocxApplyRow[]
-    const items = rows.map(toDocxApplyRecord).sort((a, b) => b.updated_at - a.updated_at)
+    const rows = this.sqlite
+      .prepare(`SELECT * FROM docx_apply WHERE ${where} ORDER BY updated_at DESC`)
+      .all(params) as DocxApplyRow[]
+    const items = rows.map(toDocxApplyRecord)
     return { items, total: items.length }
   }
 
   public async getRecord(applyId: string): Promise<DocxApplyRecord | null> {
-    const table = await this.core.openTable(LANCE_TABLES.DOCX_APPLY)
-    const rows = (await table
-      .query()
-      .where(`id = '${this.core.escapeSqlString(applyId)}'`)
-      .limit(1)
-      .toArray()) as DocxApplyRow[]
-    return rows[0] ? toDocxApplyRecord(rows[0]) : null
+    const row = this.sqlite.prepare('SELECT * FROM docx_apply WHERE id = ? LIMIT 1').get(applyId) as
+      | DocxApplyRow
+      | undefined
+    return row ? toDocxApplyRecord(row) : null
   }
 }

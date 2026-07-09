@@ -1,375 +1,109 @@
 # NCurator-Desktop 数据库设计
 
-## 存储与检索
-
-- 存储引擎: LanceDB v0.23
-- 全文检索: FTS 基于 `text` 列，Tokenizer 使用 ngram (min:2, max:3)
-- 数据库存储路径: Electron `app.getPath('userData')/lancedb`（见 `src/main/utils/paths.ts` 的 `LANCE_DB_PATH`）
-
-## 代码封装与表操作入口
-
-本项目的数据库访问已做分层封装，避免业务代码直接依赖 LanceDB 连接/表细节。
-
-### 分层结构（Main Process）
-
-- **连接与表初始化（Core）**: `src/main/services/storage/core/LanceDbCore.ts`
-  - 负责连接创建、建表、索引创建、表打开、SQL 字符串转义、常用 where 拼装
-  - 表名常量：`LANCE_TABLES`
-  - 表结构与索引“代码层真相来源”：`getTableConfigs()`
-- **领域表操作（Domains）**: `src/main/services/storage/domains/*Store.ts`
-  - `DocumentsStore`：`document` / `chunk`（导入、分页、混合检索、删除）
-  - `WebSourceStore`：`web_source`（网页资料来源 identity、网页爬取/索引状态与来源级元数据）
-  - `WorkspaceStore`：`workspace_source` / `workspace_file_index`（具名工作空间、可选文件目录绑定、文件索引状态、摘要统计）
-  - `WorkspaceIndexJobStore`：`workspace_index_job`（文件/网页检查与索引批次进度）
-  - `ChatStore`：`chat_session` / `chat_message` / `chat_conversation_memory` / `chat_session_resume_snapshot`（会话、消息、记忆与 human 恢复快照 CRUD）
-  - `AiRunStore`：`ai_run` / `ai_run_event`（Workbench AI run 状态、事件日志与 snapshot replay 数据）
-  - `AiFileChangeStore`：`ai_file_change`（AI 本轮实际修改文件记录、统一修改列表与跨能力回退状态）
-  - `DocxApplyStore`：`docx_apply`（docx 直接写回记录、checkpoint 与回退状态）
-  - `LlmConfigStore`：`llm_config`（配置 CRUD 与激活态切换）
-- **组合根（Facade）**: `src/main/services/storage/StorageService.ts`
-  - 统一持有 `core` 与各 domain store
-  - 应用启动时在 `src/main/index.ts` 调用 `await storageService.initialize()`
-  - 初始化阶段会执行一次旧本地导入清理迁移：清理未绑定当前工作空间文件索引记录的历史本地 file documents
-
-### 约束与最佳实践
-
-- **不要在业务逻辑里直接 `lancedb.connect/openTable/createIndex`**；新增/修改数据库行为优先在 `LanceDbCore` 或对应 `*Store` 内完成。
-- **where 条件中拼接外部输入时必须转义**：使用 `LanceDbCore.escapeSqlString()`；`IN` 条件优先用 `buildInClause()`。
-- **query 搜索条件优先复用**：`LanceDbCore.buildWhereFromQuery(query, fields)`。
-  - 该方法会在检测到“像 SQL 的输入”时直接返回原字符串，用于内部高级筛选；不要把不可信输入当作 SQL 传入。
-- **新增表/索引的入口**：
-  1. 在 `LanceDbCore.ts` 的 `LANCE_TABLES` 与 `getTableConfigs()` 增加配置
-  2. 在 `domains/` 新增或扩展 store，对外提供领域方法
-
-## 表定义
-
-### 表: chunk（文档切片表）
-
-存储文档被切分后的片段及其向量表示。
-
-| 字段名        | 类型                         | 描述                          |
-| :------------ | :--------------------------- | :---------------------------- |
-| vector        | FixedSizeList (768, Float32) | 文本向量 (Embedding)          |
-| text          | Utf8                         | 切片文本内容（建立 FTS 索引） |
-| id            | Utf8                         | 切片唯一标识                  |
-| document_id   | Utf8                         | 关联的文档 ID                 |
-| workspace_id  | Utf8                         | 关联的工作区 ID               |
-| document_name | Utf8                         | 文档名称快照                  |
-| source_type   | Utf8                         | 来源类型（如 'file', 'web'）  |
-| metadata      | Struct                       | 元数据（如页码等）            |
-| created_at    | Int64                        | 创建时间戳                    |
-
-索引配置:
-
-- FTS: 列 `text`，Tokenizer: ngram，min:2，max:3
-
-### 表: document（文档元数据表）
-
-存储原始文档的信息。
-
-| 字段名        | 类型             | 描述                                         |
-| :------------ | :--------------- | :------------------------------------------- |
-| id            | Utf8             | 文档唯一标识                                 |
-| name          | Utf8             | 文件名                                       |
-| source_type   | Utf8             | 来源类型（如 'file', 'web'）                 |
-| workspace_id  | Utf8（Nullable） | 所属工作区 ID                                |
-| file_path     | Utf8（Nullable） | 原始文件路径                                 |
-| created_at    | Int64            | 创建时间戳                                   |
-| import_status | Int32            | 导入状态（1 导入中，2 导入成功，3 导入失败） |
-
-导入状态取值:
-
-- 1: 导入中
-- 2: 导入成功
-- 3: 导入失败
-
-说明：
-- `source_type='file'` 的 document 仅表示“已准备的本地文件索引文档”，其真相来源必须可由 `workspace_file_index.document_id` 反向找到。
-- `source_type='web'` 的 document 由 `web_source.document_id` 绑定到网页资料来源。
-- 当前实现要求本地文档与网页文档都归属于某个工作区，KB 默认检索直接按 `workspace_id` 收口。
-
-### 表: web_source（网页资料来源表）
-
-存储网页资料的来源 identity、网页爬取/索引状态和范围选择元数据。
-
-| 字段名                 | 类型             | 描述                                      |
-| :--------------------- | :--------------- | :---------------------------------------- |
-| id                     | Utf8             | 网页来源唯一标识                          |
-| workspace_id           | Utf8             | 所属工作区 ID                              |
-| identity_kind          | Utf8             | 当前固定为 `normalized_url`               |
-| normalized_url         | Utf8             | URL 规范化后的 identity                   |
-| url                    | Utf8             | 原始/最新 URL                             |
-| title                  | Utf8（Nullable） | 最近一次抓取到的标题                      |
-| document_id            | Utf8（Nullable） | 关联的已准备 document                     |
-| index_status           | Utf8             | 网页状态：`needs_index / crawling / crawl_failed / indexing / indexed / index_failed` |
-| include_selectors_json | Utf8（Nullable） | 抓取 include selectors 的 JSON 字符串     |
-| exclude_selectors_json | Utf8（Nullable） | 抓取 exclude selectors 的 JSON 字符串     |
-| fetched_at             | Int64（Nullable）| 最近抓取完成时间                          |
-| last_checked_at        | Int64（Nullable）| 最近一次检查网页更新的时间                |
-| last_crawled_at        | Int64（Nullable）| 最近一次成功抓取正文的时间                |
-| last_indexed_at        | Int64（Nullable）| 最近一次成功完成网页索引的时间            |
-| etag                   | Utf8（Nullable） | 最近一次检查时记录的 ETag                 |
-| last_modified          | Utf8（Nullable） | 最近一次检查时记录的 Last-Modified        |
-| content_length         | Int64（Nullable）| 最近一次检查时记录的内容长度              |
-| content_hash           | Utf8（Nullable） | 最近一次检查到的正文签名                  |
-| last_error             | Utf8（Nullable） | 最近一次抓取错误                          |
-| created_at             | Int64            | 创建时间戳                                |
-| updated_at             | Int64            | 更新时间戳                                |
-
-说明：
-- `web_source` 不再是全局资源，而是工作区内资源。
-- 同一 `normalized_url` 允许在不同工作区分别存在，各自维护抓取状态与 `document_id` 绑定。
-
-### 表: workspace_source（工作空间容器表）
-
-存储用户配置的具名工作空间，以及该容器当前绑定的可选本地目录。文件数、网页数与索引摘要全部由其他表实时派生，不再缓存在本表。
-
-| 字段名     | 类型             | 描述                           |
-| :--------- | :--------------- | :----------------------------- |
-| id         | Utf8             | 工作空间唯一标识               |
-| name       | Utf8             | 显示名称                       |
-| root_path  | Utf8（Nullable） | 当前工作空间绑定的本地文件目录 |
-| created_at | Int64            | 创建时间戳                     |
-| updated_at | Int64            | 更新时间戳                     |
-
-说明：
-- `workspace_source` 是纯工作空间容器记录，不承担文件摘要、网页数量或索引状态缓存。
-- 用户可先创建具名工作空间，再在文件视图内单独设置或替换 `root_path`。
-
-### 表: workspace_file_index（工作空间文件索引状态表）
-
-存储工作空间下支持索引文件的持久化索引状态；目录树本身运行时直接读取真实文件系统。
-
-| 字段名           | 类型             | 描述                                           |
-| :--------------- | :--------------- | :--------------------------------------------- |
-| id               | Utf8             | 索引记录唯一标识                               |
-| workspace_id     | Utf8             | 所属工作空间                                   |
-| relative_path    | Utf8             | 相对工作空间根路径                             |
-| absolute_path    | Utf8             | 最近一次检查到的绝对路径                       |
-| name             | Utf8             | 文件名                                         |
-| file_ext         | Utf8             | 文件扩展名                                     |
-| size             | Int64（Nullable）| 文件大小                                       |
-| mtime_ms         | Int64（Nullable）| 文件修改时间                                   |
-| content_hash     | Utf8（Nullable） | 最近一次成功索引对应的内容哈希                 |
-| index_status     | Utf8             | `needs_index / indexing / indexed / failed`    |
-| document_id      | Utf8（Nullable） | 关联的已准备 document ID                       |
-| indexed_at       | Int64（Nullable）| 最近一次索引完成时间                           |
-| last_checked_at  | Int64（Nullable）| 最近一次检查目录变化时间                       |
-| last_error       | Utf8（Nullable） | 最近一次文件级索引错误                         |
-| created_at       | Int64            | 创建时间戳                                     |
-| updated_at       | Int64            | 更新时间戳                                     |
-
-### 表: workspace_index_job（工作空间索引批次任务表）
-
-存储工作空间文件/网页检查与索引的持久化批次进度；文件/网页条目状态仍是资料级真相，`workspace_index_job` 只表示当前批次任务进度。
-
-| 字段名          | 类型             | 描述                                                     |
-| :-------------- | :--------------- | :------------------------------------------------------- |
-| id              | Utf8             | 任务唯一标识                                             |
-| workspace_id    | Utf8             | 所属工作空间                                             |
-| source_kind     | Utf8             | 资料类型：`file / web`                                   |
-| action          | Utf8             | 动作：`scan / prepare`                                   |
-| status          | Utf8             | 任务状态：`running / succeeded / failed`                 |
-| phase           | Utf8             | 当前阶段：`scan / crawl / index / complete`              |
-| step_index      | Int64            | 当前步骤序号                                             |
-| step_total      | Int64            | 总步骤数                                                 |
-| total_count     | Int64            | 当前阶段或任务总处理数量                                 |
-| processed_count | Int64            | 当前阶段或任务已处理数量                                 |
-| failed_count    | Int64            | 当前阶段或任务失败数量                                   |
-| target_ids_json | Utf8             | 本次任务目标文件索引记录 ID 或网页来源 ID 的 JSON 字符串 |
-| message         | Utf8（Nullable） | 当前进度文案                                             |
-| last_error      | Utf8（Nullable） | 最近失败原因                                             |
-| started_at      | Int64            | 任务开始时间戳                                           |
-| updated_at      | Int64            | 最近更新时间戳                                           |
-| finished_at     | Int64（Nullable）| 任务结束时间戳                                           |
-
-说明：
-- 同一 `workspace_id + source_kind` 同时只允许一个 `running` 任务；重复启动时返回已有任务。
-- 文件检查/索引和网页检查/索引执行中，页面通过该表恢复按钮禁用和进度条。
-- 应用启动时会把遗留 `running` 任务标记为 `failed`，同时把文件 `indexing` 收敛为 `failed`，网页 `crawling` 收敛为 `crawl_failed`、`indexing` 收敛为 `index_failed`。
-
-### 表: chat_session（对话会话表）
-
-存储用户的对话会话列表。
-
-| 字段名       | 类型  | 描述 |
-| :----------- | :---- | :--- |
-| id           | Utf8  | 会话唯一标识 |
-| title        | Utf8  | 会话标题 |
-| created_at   | Int64 | 创建时间戳 |
-| workspace_id | Utf8  | 会话绑定的工作区 ID |
-
-### 表: chat_conversation_memory（会话记忆表）
-
-存储会话级摘要记忆，用于运行时补充上下文。
-
-| 字段名      | 类型  | 描述 |
-| :---------- | :---- | :--- |
-| session_id  | Utf8  | 关联的会话 ID |
-| memory_json | Utf8  | 记忆 JSON 字符串 |
-| updated_at  | Int64 | 更新时间戳 |
-
-### 表: chat_session_resume_snapshot（会话恢复快照表）
-
-存储同一会话下最近一次可恢复中断的最小 human 语义快照，仅用于 `timeout / network_error` 后的自动恢复。
-
-| 字段名                   | 类型             | 描述 |
-| :----------------------- | :--------------- | :--- |
-| session_id               | Utf8             | 关联的会话 ID；同一会话只保留最新一条 |
-| run_id                   | Utf8             | 触发快照的 run ID |
-| reason                   | Utf8             | 失败原因，固定为 `timeout` 或 `network_error` |
-| user_input               | Utf8             | 上一次中断时的用户输入 |
-| selected_references_json | Utf8             | 资料范围 JSON |
-| workspace_json           | Utf8（Nullable） | 工作区绑定 JSON |
-| human_state_json         | Utf8             | 仅包含恢复必需字段的最小 `HumanState` 片段 JSON |
-| error_message            | Utf8             | 最近失败信息 |
-| updated_at               | Int64            | 更新时间戳 |
-
-### 表: chat_message（对话消息表）
-
-存储会话中的每一条消息记录。
-
-| 字段名                   | 类型             | 描述 |
-| :----------------------- | :--------------- | :--- |
-| id                       | Utf8             | 消息唯一标识 |
-| session_id               | Utf8             | 关联的会话 ID |
-| role                     | Utf8             | 角色（`user / assistant / system`） |
-| content                  | Utf8             | 消息内容；AI 运行中作为 assistant 当前投影 |
-| timestamp                | Int64            | 消息时间戳 |
-| selected_references_json | Utf8（Nullable） | 用户发送时选中的 `@` 资料范围 JSON |
-| artifacts_json           | Utf8（Nullable） | assistant 关联的文件产物 JSON |
-| error                    | Boolean（Nullable） | 是否出错 |
-
-说明：
-- `chat_message` 保存用户可见消息投影；AI 运行过程、审批等待和 replay 真相来源在 `ai_run` / `ai_run_event`。
-- 搜索模式不创建 `ai_run`，只保存 user message 与 completed assistant summary message。
-
-### 表: ai_run（AI 运行状态表）
-
-存储 Workbench 智能模式每一轮 AI run 的持久化运行状态，以及 assistant message 的投影来源。
-
-| 字段名                   | 类型             | 描述 |
-| :----------------------- | :--------------- | :--- |
-| id                       | Utf8             | run 唯一标识 |
-| session_id               | Utf8             | 所属会话 ID |
-| user_message_id          | Utf8             | 本轮用户消息 ID |
-| assistant_message_id     | Utf8             | 本轮 assistant 占位 / 投影消息 ID |
-| status                   | Utf8             | `running / waiting_approval / completed / failed / cancelled` |
-| input                    | Utf8             | 本轮用户输入 |
-| selected_references_json | Utf8（Nullable） | 本轮选中的 `@` 资料范围 JSON |
-| workspace_json           | Utf8（Nullable） | 本轮工作区绑定 JSON |
-| model_name               | Utf8（Nullable） | 本轮使用模型名 |
-| partial_answer           | Utf8             | 当前已收到的流式回答投影 |
-| final_answer             | Utf8（Nullable） | 最终回答 |
-| error                    | Utf8（Nullable） | 失败或取消原因 |
-| pending_approval_json    | Utf8（Nullable） | 当前等待审批批次 JSON |
-| artifacts_json           | Utf8（Nullable） | 本轮文件产物 JSON |
-| created_at               | Int64            | 创建时间戳 |
-| updated_at               | Int64            | 最近更新时间戳 |
-| finished_at              | Int64（Nullable）| 结束时间戳 |
-
-说明：
-- `ChatRunService` 是 `ai_run` 的唯一写入编排入口；renderer 通过 `chatSubmit`、`chatSessionSnapshotGet` 和 `ai-run-event` 事件渲染投影。
-- `chatSessionSnapshotGet` 返回 `runs` 用于恢复当前会话可展示的 run 过程流与最终投影，返回 `activeRuns` 专门用于继续运行中 / 等待审批的交互状态；历史 replay 会过滤 token 级事件，最终文本以 `ai_run.partial_answer / final_answer` 为准。
-- 应用启动时会把数据库中遗留的 `running / waiting_approval` run 标记为 `failed`，写入“运行已中断，请重新发送消息。”，并清空待审批状态；当前版本不恢复已退出进程的 AI 执行。
-- 删除会话时由 `ChatRunService` 同步清理该会话的 `ai_run` 与 `ai_run_event`，避免遗留 orphan run。
-
-### 表: ai_run_event（AI 运行事件日志表）
-
-存储 AI run 的事件日志，用于 renderer 重新挂载、切路由返回或切会话时 replay 过程流。
-
-| 字段名     | 类型  | 描述 |
-| :--------- | :---- | :--- |
-| id         | Utf8  | 事件记录唯一标识 |
-| run_id     | Utf8  | 所属 run ID |
-| session_id | Utf8  | 所属会话 ID |
-| seq        | Int64 | run 内递增事件序号 |
-| type       | Utf8  | 事件类型，取自 `AiRunEvent.type` |
-| event_json | Utf8  | 完整事件 JSON |
-| created_at | Int64 | 创建时间戳 |
-
-说明：
-- 每个 run event 先写入 `ai_run_event`，再更新 `ai_run` / `chat_message` 投影，最后广播给 renderer。
-- run 内 `seq` 由 `AiRunStore` 维护递增缓存；cache miss 时从历史事件恢复最大序号，避免流式 token 场景每次追加都全量扫描事件表。
-- snapshot replay 只重建展示态，不触发实时 toast。
-
-### 表: docx_apply（docx 直接写回记录表）
-
-存储一次 AI 运行中某个 docx 文件的直接写回记录。写回前会保存当前磁盘文件 checkpoint，用于用户回退本次 AI 修改。
-
-说明：`docx_apply` 是 docx 能力的细节表，保留 revision、diff 预览稿和 docx 专属 checkpoint 元数据；Workbench “修改的文件”列表和跨能力回退入口以 `ai_file_change` 为统一来源。
-
-| 字段名                | 类型             | 描述 |
-| :-------------------- | :--------------- | :--- |
-| id                    | Utf8             | AI 修改记录 ID |
-| session_id            | Utf8             | 所属会话 |
-| run_id                | Utf8             | 所属运行 |
-| status                | Utf8             | `applied / reverted / failed` |
-| source_path           | Utf8             | 已直接写回的源文件路径 |
-| source_name           | Utf8             | 源文件名 |
-| operation             | Utf8             | 实际写回语义，`updated` 表示覆盖现有文件，`created` 表示创建新文件 |
-| final_revision_ref    | Utf8             | 本次写回对应的任务内最终 revision |
-| change_count          | Int32            | 变更数量 |
-| before_exists         | Boolean          | 写回前目标文件是否存在 |
-| before_snapshot_path  | Utf8（Nullable） | 写回前 checkpoint 快照路径 |
-| before_checksum       | Utf8（Nullable） | 写回前文件 checksum |
-| before_byte_size      | Int64（Nullable）| 写回前文件大小 |
-| before_modified_at    | Int64（Nullable）| 写回前修改时间 |
-| preview_diff_artifact_path | Utf8       | 系统内 diff 预览稿路径 |
-| preview_diff_checksum | Utf8             | 系统内 diff 预览稿 checksum |
-| preview_diff_byte_size | Int64           | 系统内 diff 预览稿大小 |
-| after_checksum        | Utf8（Nullable） | 写回后文件 checksum |
-| after_byte_size       | Int64（Nullable）| 写回后文件大小 |
-| after_modified_at     | Int64（Nullable）| 写回后修改时间 |
-| created_at            | Int64            | 创建时间 |
-| updated_at            | Int64            | 更新时间 |
-| reverted_at           | Int64（Nullable）| 回退时间 |
-| last_error            | Utf8（Nullable） | 最近错误 |
-
-### 表: ai_file_change（AI 修改文件统一记录表）
-
-存储一次 AI run 中实际写入磁盘的文件记录，是 Workbench 修改文件列表、mouth 修改摘要和跨能力回退入口的统一来源。读过、检索过或仅被引用的文件不进入该表。
-
-| 字段名               | 类型             | 描述 |
-| :------------------- | :--------------- | :--- |
-| id                   | Utf8             | 修改记录 ID |
-| session_id           | Utf8             | 所属会话 |
-| run_id               | Utf8             | 所属运行 |
-| status               | Utf8             | `applied / reverted / failed` |
-| capability           | Utf8             | 写入来源能力，当前为 `docx / terminal_exec / ppt` |
-| path                 | Utf8             | 实际被写入的文件路径 |
-| file_name            | Utf8             | 文件名 |
-| operation            | Utf8             | `created / updated` |
-| change_count         | Int32            | 变更数量；无法精确计数的能力先记录候选文件级数量 |
-| before_snapshot_path | Utf8（Nullable） | 写入前 checkpoint 快照路径 |
-| before_checksum      | Utf8（Nullable） | 写入前 checksum |
-| after_checksum       | Utf8（Nullable） | 写入后 checksum |
-| preview_path         | Utf8（Nullable） | 可预览文件或 diff 预览稿路径 |
-| created_at           | Int64            | 创建时间 |
-| updated_at           | Int64            | 更新时间 |
-| reverted_at          | Int64（Nullable）| 回退时间 |
-| last_error           | Utf8（Nullable） | 最近错误 |
-
-说明：
-
-- `created` 回退时删除目标文件；`updated` 回退时用 `before_snapshot_path` 原子替换目标文件。
-- 回退前默认校验当前文件 checksum 是否等于 `after_checksum`；不一致时 UI 必须提示继续回退会覆盖后续修改。
-- docx apply 会同步写入 `ai_file_change`；docx 差异预览仍从 `docx_apply` 读取。
-- terminal 写入只对声明或系统识别出的候选文件建立写前快照并记录，未识别的隐式副作用不进入该表，也不承诺可回退。
-
-### 表: llm_config（大模型配置表）
-
-存储用户配置的 LLM API 信息。
-
-| 字段名     | 类型    | 描述                                       |
-| :--------- | :------ | :----------------------------------------- |
-| id         | Utf8    | 配置唯一标识                               |
-| providerKind | Utf8 | 服务商适配类型                             |
-| base_url   | Utf8    | API Base URL                               |
-| api_key    | Utf8    | API Key                                    |
-| is_active  | Boolean | 是否为当前激活配置（通常只有一个为 True）  |
-
-## 文档与代码冲突时的处理
-
-- 文档未覆盖当前实现时，以 `LanceDbCore` 的 `LANCE_TABLES` / `getTableConfigs()` 和各 `*Store` 为最终真相源。
-- 修复数据库相关实现时，若发现文档缺项，应在同一变更中同步更新本文件。
+## 存储边界
+
+- SQLite 是业务真相，文件路径为 `userData/app.sqlite`。
+- LanceDB 是可重建的向量索引，文件目录为 `userData/lancedb`。
+- LanceDB 只保存 `vector_chunk`，不再保存会话、消息、run、文档元数据、网页源、工作区状态或配置。
+- 本次重构不兼容旧 LanceDB 业务表，也不迁移旧数据。
+
+## SQLite
+
+SQLite 使用 `better-sqlite3`。启动时 `SqliteCore` 会：
+
+- 打开 `app.sqlite`
+- 设置 `PRAGMA foreign_keys = ON`
+- 设置 `PRAGMA journal_mode = WAL`
+- 设置 `PRAGMA busy_timeout = 5000`
+- 执行未执行的 migration
+
+### Migration 规则
+
+- migration 记录在 `schema_migrations(version, name, applied_at)`。
+- migration 按版本递增执行，每个 migration 都在 SQLite transaction 中执行。
+- migration 失败会阻止启动，并抛出明确错误。
+- 上线后只允许向前迁移，不做自动降级。
+- 新字段用 `ALTER TABLE ADD COLUMN`。
+- 改名或删除字段时，建新表、复制数据、删旧表、rename。
+- 大数据变更需要 migration progress 表或分批 migration，不能在启动时长时间阻塞。
+
+### 业务表
+
+初始 schema 在 `src/main/services/storage/sqlite/migrations/001_initial_schema.ts`。
+
+核心表：
+
+- `chat_session`
+- `chat_message`
+- `chat_conversation_memory`
+- `chat_session_resume_snapshot`
+- `ai_run`
+- `ai_run_event`
+- `ai_file_change`
+- `docx_apply`
+- `workspace_source`
+- `workspace_file_index`
+- `workspace_index_job`
+- `document`
+- `web_source`
+- `llm_config`
+- `ai_runtime_settings`
+
+关键设计：
+
+- `chat_message` 使用会话内 `seq` 做稳定顺序，切换会话默认只取最近 50 条。
+- `ai_run_event` 使用 `run_id + seq` 保证同一个 run 内事件顺序唯一。
+- `ai_run.pending_approval_json` 是待审批卡片的真相来源。
+- 审批同意时，SQLite transaction 会同时插入 decision event、清空 pending approval、把 run 改回 `running`。
+- `document.active_generation_id` 是当前有效索引版本。
+
+## LanceDB
+
+LanceDB 只创建和使用 `vector_chunk`。
+
+字段：
+
+- `id`
+- `document_id`
+- `workspace_id`
+- `source_type`
+- `generation_id`
+- `chunk_index`
+- `text`
+- `document_name`
+- `metadata`
+- `created_at`
+- `vector`
+
+允许操作：
+
+- batch add chunks
+- search chunks
+- 按 `document_id / workspace_id / generation_id` 删除 chunks
+- optimize vector table
+
+不允许操作：
+
+- 高频业务 update
+- 业务状态 mergeInsert
+- 用 LanceDB 保存会话、消息、run、网页源、工作区状态或配置
+
+## Generation 机制
+
+文件和网页索引都用 `generation_id` 保证一致性：
+
+1. SQLite 标记 `document.import_status = indexing`。
+2. 生成新的 `generation_id`。
+3. LanceDB 批量写入新 generation 的 chunks。
+4. 写入成功后，SQLite transaction 切换 `document.active_generation_id`，并标记 indexed。
+5. 后台删除旧 generation chunks。
+6. 如果失败，不切换 `active_generation_id`，旧索引继续可用。
+
+搜索时先从 SQLite 找当前有效 `active_generation_id`，再让 LanceDB 过滤 `workspace_id + source_type + generation_id`。
+
+## 性能约束
+
+- `chatSessionOpen` 首屏只查 session、最近 50 条消息、当前 active runs。
+- 完整 run/event replay、context usage、file change detail 不进入切换首屏关键路径。
+- chunk 写入默认 `128 chunks / batch`，同时限制单批文本总量约 4MB。
+- 优先靠数据库结构和查询路径优化，不把缓存作为主要解法。

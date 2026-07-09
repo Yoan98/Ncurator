@@ -27,6 +27,11 @@ tests/                   # 自动化测试
 
 - 业务编排、领域服务、领域适配层放在 `src/main/services/**`。
 - 不同领域按目录拆分，通过清晰接口交互。
+- 存储入口统一放在 `src/main/services/storage/**`：
+  - `sqlite/**` 放 SQLite core、migration 和通用 SQL helper。
+  - `core/LanceDbCore.ts` 只负责 LanceDB `vector_chunk`。
+  - `domains/**Store.ts` 是业务读写入口；业务状态写 SQLite，向量 chunk 写 LanceDB。
+- Workspace 文件 / 网页索引的 generation 流程放在索引服务和 `DocumentsStore` 中维护，不在 UI 或 IPC handler 中重复实现低层存储细节。
 
 ### `utils/`
 
@@ -79,6 +84,7 @@ tests/                   # 自动化测试
 - `tests/fixtures/workspace/` 是共享工作区输入目录；工作区语义测试统一从这里取样本。
 - `tests/case/ai/**` 只放 AI formal tests。
 - `tests/case/unit/**` 放长期保留、但不进入 formal test-plan 的 unit / helper / schema / prompt 类测试。
+- `tests/case/unit/storage/**` 放 SQLite migration、会话存储、AI run event、审批事务和 LanceDB generation 过滤等存储契约测试。
 - `tests/case/settings/**` 按 settings PRD 模块组织正式测试。
 - `tests/case/kb-search/**` 预留给检索链路测试。
 - `tests/logs/**` 只放每次运行的原始日志；raw logs 之外不再维护测试专用正式分析目录。

@@ -630,6 +630,20 @@ const ChatPage: React.FC = () => {
   const sessionListHydratedRef = useRef(false)
   const composerDraftBySessionIdRef = useRef<Record<string, ComposerDraftValue>>({})
   const composerDraftVersionRef = useRef(0)
+  const loadApplyRecordRef = useRef<
+    (input: { applyId: string; detail?: DocxApplyRecord | null; openWorkspace?: boolean }) => Promise<void>
+  >(async () => {})
+  const loadFileChangesForSessionRef = useRef<
+    (
+      sessionId: string,
+      options?: {
+        preferredApplyId?: string | null
+        autoOpen?: boolean
+        forceOpenWorkspace?: boolean
+        skipApplyRecordReload?: boolean
+      }
+    ) => Promise<void>
+  >(async () => {})
   const sidebarDragStartRef = useRef<{
     pointerId: number
     startX: number
@@ -1229,6 +1243,7 @@ const ChatPage: React.FC = () => {
       setApplyLoading(false)
     }
   }
+  loadApplyRecordRef.current = loadApplyRecord
 
   const loadFileChangesForSession = async (
     sessionId: string,
@@ -1315,6 +1330,7 @@ const ChatPage: React.FC = () => {
       setActiveApplyRecord(null)
     }
   }
+  loadFileChangesForSessionRef.current = loadFileChangesForSession
 
   const openExistingSession = async (
     session: ChatSession,
@@ -1525,7 +1541,7 @@ const ChatPage: React.FC = () => {
     }
   }
 
-  const openFile = async (
+  const openFile = useCallback(async (
     file: WorkbenchFileRef,
     backTarget?: WorkbenchContentPanelState
   ): Promise<void> => {
@@ -1535,34 +1551,56 @@ const ChatPage: React.FC = () => {
       file,
       backTarget
     })
-  }
+  }, [showContentPanel])
 
-  const resolveReferencePathInfo = async (filePath: string): Promise<boolean> => {
+  const resolveReferencePathInfo = useCallback(async (filePath: string): Promise<boolean> => {
     const response = await window.api.pathInfo(filePath)
     return Boolean(response.success && response.isDirectory)
-  }
+  }, [])
 
-  const openMarkdownReference = async (reference: {
-    kind: ParsedNcuratorRefKind
-    resourceType: ParsedNcuratorRefResourceType
-    label: string
-    path: string
-  }): Promise<void> => {
-    if (reference.resourceType === 'web') {
-      const response = await window.api.openExternal(reference.path)
-      if (!response.success) {
-        emitErrorMessage(response.error || '打开链接失败')
+  const openMarkdownReference = useCallback(
+    async (reference: {
+      kind: ParsedNcuratorRefKind
+      resourceType: ParsedNcuratorRefResourceType
+      label: string
+      path: string
+    }): Promise<void> => {
+      if (reference.resourceType === 'web') {
+        const response = await window.api.openExternal(reference.path)
+        if (!response.success) {
+          emitErrorMessage(response.error || '打开链接失败')
+        }
+        return
       }
-      return
-    }
 
-    await openFile({
-      path: reference.path,
-      fileName: reference.label,
-      origin: reference.kind === 'reference' ? 'source' : 'read',
-      isDirectory: await resolveReferencePathInfo(reference.path)
-    })
-  }
+      await openFile({
+        path: reference.path,
+        fileName: reference.label,
+        origin: reference.kind === 'reference' ? 'source' : 'read',
+        isDirectory: await resolveReferencePathInfo(reference.path)
+      })
+    },
+    [emitErrorMessage, openFile, resolveReferencePathInfo]
+  )
+
+  const handleOpenMarkdownReference = useCallback(
+    (reference: {
+      kind: ParsedNcuratorRefKind
+      resourceType: ParsedNcuratorRefResourceType
+      label: string
+      path: string
+    }): void => {
+      void openMarkdownReference(reference)
+    },
+    [openMarkdownReference]
+  )
+
+  const handleOpenAssistantFile = useCallback(
+    (file: WorkbenchFileRef): void => {
+      void openFile(file)
+    },
+    [openFile]
+  )
 
   const openSearchResult = async (
     turn: SearchWorkbenchTurn,
@@ -1597,20 +1635,21 @@ const ChatPage: React.FC = () => {
     })
   }
 
-  const openFileChange = (changeId: string): void => {
-    if (currentSessionId) {
-      void loadFileChangesForSession(currentSessionId, {
+  const openFileChange = useCallback((changeId: string): void => {
+    const activeSessionId = currentSessionIdRef.current
+    if (activeSessionId) {
+      void loadFileChangesForSessionRef.current(activeSessionId, {
         preferredApplyId: changeId,
         forceOpenWorkspace: true
       })
       return
     }
 
-    void loadApplyRecord({
+    void loadApplyRecordRef.current({
       applyId: changeId,
       openWorkspace: true
     })
-  }
+  }, [])
 
   useEffect(() => {
     const unsubscribe = window.api.onAiRunEvent((event) => {
@@ -2533,9 +2572,7 @@ const ChatPage: React.FC = () => {
           <div className="min-w-0 text-[15px] leading-7 text-[#37352F]">
             <MarkdownRenderer
               content={messageItem.content}
-              onOpenReference={(reference) => {
-                void openMarkdownReference(reference)
-              }}
+              onOpenReference={handleOpenMarkdownReference}
             />
           </div>
         </div>
@@ -2548,15 +2585,11 @@ const ChatPage: React.FC = () => {
         messageId={messageItem.id}
         turn={turn}
         isStreaming={loading && Boolean(turn.runId && turn.runId === aiRunId)}
-        onOpenFile={(file) => {
-          void openFile(file)
-        }}
+        onOpenFile={handleOpenAssistantFile}
         onOpenApply={openFileChange}
         workspaces={workspaces}
         fallbackWorkspaceName={selectedWorkspace?.name || null}
-        onOpenReference={(reference) => {
-          void openMarkdownReference(reference)
-        }}
+        onOpenReference={handleOpenMarkdownReference}
       />
     )
   }

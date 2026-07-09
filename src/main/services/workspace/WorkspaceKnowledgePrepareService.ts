@@ -1,4 +1,5 @@
 import path from 'node:path'
+import { v4 as uuidv4 } from 'uuid'
 import type { DocumentsStore } from '../storage/domains/DocumentsStore'
 import type { EmbeddingService } from '../vector/EmbeddingService'
 import { isSupportedLocalFilePath } from '../ingestion/loader'
@@ -61,16 +62,20 @@ export class WorkspaceKnowledgePrepareService {
     }
 
     const now = Date.now()
+    const newGenerationId = uuidv4()
+    let oldGenerationId: string | undefined
     try {
       const existingDocument = await this.deps.documentsStore.getDocumentById(input.documentId)
+      oldGenerationId = existingDocument?.active_generation_id
       if (existingDocument) {
         await this.deps.documentsStore.updateDocumentById(input.documentId, {
           name: input.documentName,
           file_path: input.filePath,
           source_type: 'file',
-          workspace_id: input.workspaceId
+          workspace_id: input.workspaceId,
+          content_hash: contentHash
         })
-        await this.deps.documentsStore.updateDocumentImportStatus(input.documentId, 1)
+        await this.deps.documentsStore.markDocumentIndexing(input.documentId, now)
       } else {
         await this.deps.documentsStore.addDocument({
           id: input.documentId,
@@ -79,25 +84,44 @@ export class WorkspaceKnowledgePrepareService {
           workspace_id: input.workspaceId,
           file_path: input.filePath,
           created_at: input.createdAt || now,
-          import_status: 1
+          updated_at: now,
+          import_status: 1,
+          content_hash: contentHash
         })
       }
-
-      await this.deps.documentsStore.deleteChunksByDocumentIds([input.documentId])
 
       if (indexedDocument.chunks.length > 0) {
         await this.addChunksFromVectorSnapshot({
           chunks: indexedDocument.chunks,
-          vectors: indexedDocument.vectorSnapshot.vectors
+          vectors: indexedDocument.vectorSnapshot.vectors,
+          generationId: newGenerationId
         })
       }
-      await this.deps.documentsStore.updateDocumentImportStatus(input.documentId, 2)
+      await this.deps.documentsStore.activateDocumentGeneration({
+        documentId: input.documentId,
+        generationId: newGenerationId,
+        contentHash,
+        importStatus: 2,
+        updatedAt: Date.now()
+      })
+      if (oldGenerationId && oldGenerationId !== newGenerationId) {
+        void this.deps.documentsStore
+          .deleteChunksByGeneration({
+            documentId: input.documentId,
+            workspaceId: input.workspaceId,
+            generationId: oldGenerationId
+          })
+          .catch((error) => {
+            console.warn('[WORKSPACE-INDEX] failed to cleanup old generation:', error)
+          })
+      }
 
       return {
         documentId: input.documentId,
         filePath: input.filePath,
         fileExt,
         documentName: input.documentName,
+        generationId: newGenerationId,
         contentHash,
         chunkCount: indexedDocument.chunks.length,
         usedCachedSplit,
@@ -109,7 +133,12 @@ export class WorkspaceKnowledgePrepareService {
         }))
       }
     } catch (error) {
-      await this.deps.documentsStore.updateDocumentImportStatus(input.documentId, 3).catch(() => {})
+      await this.deps.documentsStore
+        .markDocumentIndexFailed(
+          input.documentId,
+          error instanceof Error ? error.message : String(error)
+        )
+        .catch(() => {})
       throw new Error(error instanceof Error ? error.message : String(error))
     }
   }
@@ -121,6 +150,7 @@ export class WorkspaceKnowledgePrepareService {
   private async addChunksFromVectorSnapshot(input: {
     chunks: WorkspaceKnowledgeChunkInput[]
     vectors: number[][]
+    generationId: string
   }): Promise<void> {
     for (
       let start = 0;
@@ -136,7 +166,12 @@ export class WorkspaceKnowledgePrepareService {
         .map((vector) => Float32Array.from(vector))
       await this.deps.documentsStore.addChunks({
         vectors: batchVectors,
-        chunks: batchChunks
+        chunks: batchChunks.map((chunk, index) => ({
+          ...chunk,
+          generation_id: input.generationId,
+          chunk_index: start + index
+        })),
+        generationId: input.generationId
       })
     }
   }

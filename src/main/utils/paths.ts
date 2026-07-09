@@ -50,6 +50,7 @@ const resolveElectronUserDataPath = (): string => {
 export const USER_DATA_PATH = E2E_USER_DATA_PATH
   ? path.resolve(E2E_USER_DATA_PATH)
   : resolveElectronUserDataPath()
+export const SQLITE_DB_PATH = path.join(USER_DATA_PATH, 'app.sqlite')
 export const LANCE_DB_PATH = path.join(USER_DATA_PATH, 'lancedb')
 
 export const listModelPathCandidates = (

@@ -7,8 +7,19 @@ import type {
   SearchResult,
   WebSourceRecord
 } from '../../../types/store'
-import { LanceDbCore, LANCE_TABLES } from '../core/LanceDbCore'
 import { asRecord, toNumber, toNumberArray, toOptionalNumber, toOptionalString, toString } from '../../../utils/decoder'
+import { LanceDbCore, LANCE_TABLES } from '../core/LanceDbCore'
+import type { SqliteCore } from '../sqlite/SqliteCore'
+import {
+  buildInClause,
+  buildWhere,
+  insertOrReplace,
+  toRequiredNumber,
+  updateById
+} from '../sqlite/sqliteUtils'
+
+const DEFAULT_CHUNK_BATCH_SIZE = 128
+const DEFAULT_CHUNK_BATCH_MAX_TEXT_BYTES = 4 * 1024 * 1024
 
 type ChunkRow = Record<string, unknown> & {
   id?: unknown
@@ -17,6 +28,8 @@ type ChunkRow = Record<string, unknown> & {
   document_id?: unknown
   workspace_id?: unknown
   source_type?: unknown
+  generation_id?: unknown
+  chunk_index?: unknown
   metadata?: unknown
   created_at?: unknown
   vector?: unknown
@@ -29,7 +42,16 @@ type DocumentRow = Record<string, unknown> & {
   workspace_id?: unknown
   file_path?: unknown
   created_at?: unknown
+  updated_at?: unknown
   import_status?: unknown
+  content_hash?: unknown
+  active_generation_id?: unknown
+  last_error?: unknown
+  source_id?: unknown
+  source_url?: unknown
+  source_title?: unknown
+  normalized_source_url?: unknown
+  fetched_at?: unknown
 }
 
 const normalizeSourceType = (value: unknown): DocumentRecord['source_type'] =>
@@ -53,7 +75,16 @@ const toDocumentRecord = (value: unknown): DocumentRecord => {
     workspace_id: toOptionalString(row.workspace_id),
     file_path: toOptionalString(row.file_path),
     created_at: toNumber(row.created_at),
-    import_status: importStatus
+    import_status: importStatus,
+    content_hash: toOptionalString(row.content_hash),
+    active_generation_id: toOptionalString(row.active_generation_id),
+    updated_at: toOptionalNumber(row.updated_at),
+    last_error: toOptionalString(row.last_error),
+    source_id: toOptionalString(row.source_id),
+    source_url: toOptionalString(row.source_url),
+    source_title: toOptionalString(row.source_title),
+    normalized_source_url: toOptionalString(row.normalized_source_url),
+    fetched_at: toOptionalNumber(row.fetched_at)
   }
 }
 
@@ -73,50 +104,13 @@ const toSearchResult = (value: unknown): SearchResult => {
   }
 }
 
-type WebSourceRow = Record<string, unknown> & {
-  id?: unknown
-  workspace_id?: unknown
-  normalized_url?: unknown
-  url?: unknown
-  title?: unknown
-  document_id?: unknown
-  index_status?: unknown
-  fetched_at?: unknown
-  last_error?: unknown
-  created_at?: unknown
-  updated_at?: unknown
-}
-
-const toWebSourceRecord = (value: unknown): WebSourceRecord => {
-  const row = asRecord(value) as WebSourceRow
-  const rawIndexStatus = toOptionalString(row.index_status)
-  return {
-    id: toString(row.id),
-    workspace_id: toString(row.workspace_id),
-    identity_kind: 'normalized_url',
-    normalized_url: toString(row.normalized_url),
-    url: toString(row.url),
-    title: toOptionalString(row.title),
-    document_id: toOptionalString(row.document_id),
-    index_status:
-      rawIndexStatus === 'crawling' ||
-      rawIndexStatus === 'crawl_failed' ||
-      rawIndexStatus === 'indexing' ||
-      rawIndexStatus === 'indexed' ||
-      rawIndexStatus === 'index_failed'
-        ? rawIndexStatus
-        : 'needs_index',
-    fetched_at: toOptionalNumber(row.fetched_at),
-    last_error: toOptionalString(row.last_error),
-    created_at: toNumber(row.created_at, 0),
-    updated_at: toNumber(row.updated_at, 0)
-  }
-}
-
 export class DocumentsStore {
   private reranker: lancedb.rerankers.RRFReranker | null = null
 
-  public constructor(private readonly core: LanceDbCore) {}
+  public constructor(
+    private readonly sqlite: SqliteCore,
+    private readonly vector: LanceDbCore
+  ) {}
 
   private async getRRFReranker(): Promise<lancedb.rerankers.RRFReranker> {
     if (this.reranker) return this.reranker
@@ -124,18 +118,50 @@ export class DocumentsStore {
     return this.reranker
   }
 
-  private buildChunkWhere(input: {
+  private async getActiveGenerationIds(input: {
     workspaceId?: string
     sourceType?: string
     documentIds?: string[]
-  }): string | undefined {
-    return this.core.combineWhere([
-      input.workspaceId
-        ? `workspace_id = '${this.core.escapeSqlString(input.workspaceId)}'`
-        : undefined,
-      input.sourceType ? `source_type = '${this.core.escapeSqlString(input.sourceType)}'` : undefined,
-      this.core.buildInClause('document_id', input.documentIds)
+  }): Promise<string[]> {
+    const params: Record<string, string | number | null> = {
+      workspace_id: input.workspaceId || null,
+      source_type: input.sourceType || null
+    }
+    const where = buildWhere([
+      input.workspaceId ? 'workspace_id = @workspace_id' : undefined,
+      input.sourceType ? 'source_type = @source_type' : undefined,
+      buildInClause('id', input.documentIds, params, 'document_id'),
+      'active_generation_id IS NOT NULL'
     ])
+    const rows = this.sqlite
+      .prepare(`SELECT active_generation_id FROM document WHERE ${where}`)
+      .all(params) as Array<{ active_generation_id?: unknown }>
+    return Array.from(
+      new Set(rows.map((row) => toOptionalString(row.active_generation_id)).filter(Boolean))
+    ) as string[]
+  }
+
+  private async buildChunkWhere(input: {
+    workspaceId?: string
+    sourceType?: string
+    documentIds?: string[]
+    activeOnly?: boolean
+  }): Promise<string | undefined> {
+    const parts = [
+      input.workspaceId
+        ? `workspace_id = '${this.vector.escapeSqlString(input.workspaceId)}'`
+        : undefined,
+      input.sourceType
+        ? `source_type = '${this.vector.escapeSqlString(input.sourceType)}'`
+        : undefined,
+      this.vector.buildInClause('document_id', input.documentIds)
+    ]
+    if (input.activeOnly !== false) {
+      const generations = await this.getActiveGenerationIds(input)
+      if (generations.length === 0) return 'generation_id = \'__no_active_generation__\''
+      parts.push(this.vector.buildInClause('generation_id', generations))
+    }
+    return this.vector.combineWhere(parts)
   }
 
   private buildDocumentWhere(input: {
@@ -143,61 +169,117 @@ export class DocumentsStore {
     sourceNameQuery?: string
     sourceType?: DocumentRecord['source_type']
     documentIds?: string[]
-  }): string | undefined {
-    const sourceNameQuery = String(input.sourceNameQuery || '').trim()
-    return this.core.combineWhere([
-      input.workspaceId
-        ? `workspace_id = '${this.core.escapeSqlString(input.workspaceId)}'`
-        : undefined,
-      input.sourceType
-        ? `source_type = '${this.core.escapeSqlString(input.sourceType)}'`
-        : undefined,
-      sourceNameQuery
-        ? `name LIKE '%${this.core.escapeSqlString(sourceNameQuery)}%'`
-        : undefined,
-      this.core.buildInClause('id', input.documentIds)
-    ])
+  }): { where: string; params: Record<string, string | number | null> } {
+    const params: Record<string, string | number | null> = {
+      workspace_id: input.workspaceId || null,
+      source_type: input.sourceType || null,
+      source_name_query: input.sourceNameQuery ? `%${input.sourceNameQuery.trim()}%` : null
+    }
+    return {
+      where: buildWhere([
+        input.workspaceId ? 'workspace_id = @workspace_id' : undefined,
+        input.sourceType ? 'source_type = @source_type' : undefined,
+        input.sourceNameQuery?.trim() ? 'name LIKE @source_name_query' : undefined,
+        buildInClause('id', input.documentIds, params, 'document_id')
+      ]),
+      params
+    }
   }
 
   public async addDocument(doc: DocumentRecord): Promise<void> {
-    const table = await this.core.openTable(LANCE_TABLES.DOCUMENT)
-    await table.add([
-      {
-        id: doc.id,
-        name: doc.name,
-        source_type: doc.source_type,
-        workspace_id: doc.workspace_id,
-        file_path: doc.file_path,
-        created_at: doc.created_at,
-        import_status: doc.import_status
-      }
-    ])
+    insertOrReplace(this.sqlite, 'document', {
+      id: doc.id,
+      name: doc.name,
+      source_type: doc.source_type,
+      workspace_id: doc.workspace_id,
+      file_path: doc.file_path,
+      import_status: doc.import_status,
+      content_hash: doc.content_hash,
+      active_generation_id: doc.active_generation_id,
+      created_at: doc.created_at,
+      updated_at: doc.updated_at ?? doc.created_at,
+      last_error: doc.last_error,
+      source_id: doc.source_id,
+      source_url: doc.source_url,
+      source_title: doc.source_title,
+      normalized_source_url: doc.normalized_source_url,
+      fetched_at: doc.fetched_at
+    })
   }
 
   public async updateDocumentImportStatus(id: string, status: number): Promise<void> {
-    const table = await this.core.openTable(LANCE_TABLES.DOCUMENT)
-    await table.update({
-      where: `id = '${this.core.escapeSqlString(id)}'`,
-      values: { import_status: status }
+    updateById(this.sqlite, 'document', id, {
+      import_status: status,
+      updated_at: Date.now(),
+      last_error: status === 3 ? undefined : null
     })
   }
 
   public async updateDocumentById(
     id: string,
-    values: Partial<Pick<DocumentRecord, 'name' | 'file_path' | 'source_type' | 'workspace_id'>>
+    values: Partial<
+      Pick<
+        DocumentRecord,
+        | 'name'
+        | 'file_path'
+        | 'source_type'
+        | 'workspace_id'
+        | 'content_hash'
+        | 'active_generation_id'
+        | 'updated_at'
+        | 'last_error'
+      >
+    >
   ): Promise<void> {
-    const table = await this.core.openTable(LANCE_TABLES.DOCUMENT)
-    await table.update({ where: `id = '${this.core.escapeSqlString(id)}'`, values })
+    updateById(this.sqlite, 'document', id, {
+      name: values.name,
+      file_path: values.file_path,
+      source_type: values.source_type,
+      workspace_id: values.workspace_id,
+      content_hash: values.content_hash,
+      active_generation_id: values.active_generation_id,
+      updated_at: values.updated_at ?? Date.now(),
+      last_error: values.last_error
+    })
+  }
+
+  public async activateDocumentGeneration(input: {
+    documentId: string
+    generationId: string
+    contentHash?: string
+    importStatus?: number
+    updatedAt?: number
+    lastError?: string | null
+  }): Promise<void> {
+    updateById(this.sqlite, 'document', input.documentId, {
+      active_generation_id: input.generationId,
+      content_hash: input.contentHash,
+      import_status: input.importStatus ?? 2,
+      updated_at: input.updatedAt ?? Date.now(),
+      last_error: input.lastError ?? null
+    })
+  }
+
+  public async markDocumentIndexing(id: string, now = Date.now()): Promise<void> {
+    updateById(this.sqlite, 'document', id, {
+      import_status: 1,
+      updated_at: now,
+      last_error: null
+    })
+  }
+
+  public async markDocumentIndexFailed(id: string, error: string, now = Date.now()): Promise<void> {
+    updateById(this.sqlite, 'document', id, {
+      import_status: 3,
+      updated_at: now,
+      last_error: error
+    })
   }
 
   public async getDocumentById(id: string): Promise<DocumentRecord | null> {
-    const table = await this.core.openTable(LANCE_TABLES.DOCUMENT)
-    const rows = await table
-      .query()
-      .where(`id = '${this.core.escapeSqlString(id)}'`)
-      .limit(1)
-      .toArray()
-    const row = rows[0]
+    const row = this.sqlite.prepare('SELECT * FROM document WHERE id = ?').get(id) as
+      | DocumentRow
+      | undefined
     if (!row) return null
     const [document] = await this.attachWebSourceMetadata([toDocumentRecord(row)])
     return document || null
@@ -206,13 +288,9 @@ export class DocumentsStore {
   public async getDocumentByFilePath(filePath: string): Promise<DocumentRecord | null> {
     const normalized = String(filePath || '').trim()
     if (!normalized) return null
-    const table = await this.core.openTable(LANCE_TABLES.DOCUMENT)
-    const rows = await table
-      .query()
-      .where(`file_path = '${this.core.escapeSqlString(normalized)}'`)
-      .limit(1)
-      .toArray()
-    const row = rows[0]
+    const row = this.sqlite.prepare('SELECT * FROM document WHERE file_path = ? LIMIT 1').get(normalized) as
+      | DocumentRow
+      | undefined
     if (!row) return null
     const [document] = await this.attachWebSourceMetadata([toDocumentRecord(row)])
     return document || null
@@ -220,28 +298,73 @@ export class DocumentsStore {
 
   public async deleteChunksByDocumentIds(ids: string[]): Promise<void> {
     if (ids.length === 0) return
-    const table = await this.core.openTable(LANCE_TABLES.CHUNK)
-    const where = this.core.buildInClause('document_id', ids)
+    const table = await this.vector.openTable(LANCE_TABLES.CHUNK)
+    const where = this.vector.buildInClause('document_id', ids)
     if (!where) return
     await table.delete(where)
   }
 
-  public async addChunks(params: { vectors: Float32Array[]; chunks: ChunkInput[] }): Promise<void> {
-    const { vectors, chunks } = params
-    const data = vectors.map((vector, i) => ({
-      vector: Array.from(vector),
-      text: chunks[i].text,
-      id: chunks[i].id,
-      document_id: chunks[i].document_id,
-      workspace_id: chunks[i].workspace_id,
-      document_name: chunks[i].document_name,
-      source_type: chunks[i].source_type,
-      metadata: chunks[i].metadata,
-      created_at: Date.now()
-    }))
+  public async deleteChunksByGeneration(input: {
+    documentId?: string
+    workspaceId?: string
+    generationId: string
+  }): Promise<void> {
+    const table = await this.vector.openTable(LANCE_TABLES.CHUNK)
+    const where = this.vector.combineWhere([
+      input.documentId
+        ? `document_id = '${this.vector.escapeSqlString(input.documentId)}'`
+        : undefined,
+      input.workspaceId
+        ? `workspace_id = '${this.vector.escapeSqlString(input.workspaceId)}'`
+        : undefined,
+      `generation_id = '${this.vector.escapeSqlString(input.generationId)}'`
+    ])
+    if (where) await table.delete(where)
+  }
 
-    const table = await this.core.openTable(LANCE_TABLES.CHUNK)
-    await table.add(data)
+  public async addChunks(params: {
+    vectors: Float32Array[]
+    chunks: Array<ChunkInput & { generation_id?: string; chunk_index?: number }>
+    generationId?: string
+    batchSize?: number
+    maxTextBytes?: number
+  }): Promise<void> {
+    const { vectors, chunks } = params
+    const table = await this.vector.openTable(LANCE_TABLES.CHUNK)
+    const batchSize = Math.max(1, params.batchSize || DEFAULT_CHUNK_BATCH_SIZE)
+    const maxTextBytes = Math.max(1024, params.maxTextBytes || DEFAULT_CHUNK_BATCH_MAX_TEXT_BYTES)
+    let batch: Record<string, unknown>[] = []
+    let batchTextBytes = 0
+
+    const flush = async (): Promise<void> => {
+      if (batch.length === 0) return
+      await table.add(batch)
+      batch = []
+      batchTextBytes = 0
+    }
+
+    for (let index = 0; index < chunks.length; index += 1) {
+      const chunk = chunks[index]
+      const textBytes = Buffer.byteLength(chunk.text || '', 'utf8')
+      if (batch.length >= batchSize || (batch.length > 0 && batchTextBytes + textBytes > maxTextBytes)) {
+        await flush()
+      }
+      batch.push({
+        vector: Array.from(vectors[index]),
+        text: chunk.text,
+        id: chunk.id,
+        document_id: chunk.document_id,
+        workspace_id: chunk.workspace_id,
+        generation_id: chunk.generation_id || params.generationId || '',
+        chunk_index: chunk.chunk_index ?? index,
+        document_name: chunk.document_name,
+        source_type: chunk.source_type,
+        metadata: chunk.metadata,
+        created_at: Date.now()
+      })
+      batchTextBytes += textBytes
+    }
+    await flush()
   }
 
   public async vectorSearch(
@@ -251,9 +374,9 @@ export class DocumentsStore {
     workspaceId?: string,
     documentIds?: string[]
   ): Promise<SearchResult[]> {
-    const table = await this.core.openTable(LANCE_TABLES.CHUNK)
+    const table = await this.vector.openTable(LANCE_TABLES.CHUNK)
     const query = table.query()
-    const where = this.buildChunkWhere({ workspaceId, sourceType, documentIds })
+    const where = await this.buildChunkWhere({ workspaceId, sourceType, documentIds })
     if (where) query.where(where)
     const results = await query.nearestTo(queryVector).distanceType('cosine').limit(limit).toArray()
     return results.map(toSearchResult)
@@ -266,9 +389,9 @@ export class DocumentsStore {
     workspaceId?: string,
     documentIds?: string[]
   ): Promise<SearchResult[]> {
-    const table = await this.core.openTable(LANCE_TABLES.CHUNK)
+    const table = await this.vector.openTable(LANCE_TABLES.CHUNK)
     const q = table.query()
-    const where = this.buildChunkWhere({ workspaceId, sourceType, documentIds })
+    const where = await this.buildChunkWhere({ workspaceId, sourceType, documentIds })
     if (where) q.where(where)
     const results = await q.fullTextSearch(queryText).limit(limit).toArray()
     return results.map(toSearchResult)
@@ -283,9 +406,9 @@ export class DocumentsStore {
     documentIds?: string[]
   ): Promise<SearchResult[]> {
     const reranker = await this.getRRFReranker()
-    const table = await this.core.openTable(LANCE_TABLES.CHUNK)
+    const table = await this.vector.openTable(LANCE_TABLES.CHUNK)
     const q = table.query()
-    const where = this.buildChunkWhere({ workspaceId, sourceType, documentIds })
+    const where = await this.buildChunkWhere({ workspaceId, sourceType, documentIds })
     if (where) q.where(where)
     const results = await q
       .fullTextSearch(queryText)
@@ -314,29 +437,15 @@ export class DocumentsStore {
       documentIds
     )
     if (results.length === 0) return []
-
     const resultDocumentIds = Array.from(
       new Set(results.map((r) => r.document_id).filter(Boolean))
     ) as string[]
     if (resultDocumentIds.length === 0) return results
-
-    const docTable = await this.core.openTable(LANCE_TABLES.DOCUMENT)
-    const whereClause = this.core.buildInClause('id', resultDocumentIds)
-    if (!whereClause) return results
-    const documents = (await docTable.query().where(whereClause).toArray()) as unknown[]
-    const docMap = new Map(
-      documents.map((row) => {
-        const doc = toDocumentRecord(row)
-        return [doc.id, doc] as const
-      })
-    )
-
-    const hydratedDocuments = await this.attachWebSourceMetadata(Array.from(docMap.values()))
-    const hydratedMap = new Map(hydratedDocuments.map((document) => [document.id, document] as const))
-
+    const documents = await this.getDocumentsByIds(resultDocumentIds)
+    const docMap = new Map(documents.map((document) => [document.id, document] as const))
     return results.map((item) => ({
       ...item,
-      document: item.document_id ? hydratedMap.get(item.document_id) : undefined
+      document: item.document_id ? docMap.get(item.document_id) : undefined
     }))
   }
 
@@ -348,39 +457,42 @@ export class DocumentsStore {
     documentIds?: string[]
   }): Promise<DocumentListResponse> {
     const { sourceNameQuery, page, pageSize, workspaceId, documentIds } = params
-    const table = await this.core.openTable(LANCE_TABLES.DOCUMENT)
-
-    const where = this.buildDocumentWhere({ workspaceId, sourceNameQuery, documentIds })
-
-    const total = await table.countRows(where)
+    const { where, params: sqlParams } = this.buildDocumentWhere({
+      workspaceId,
+      sourceNameQuery,
+      documentIds
+    })
+    const totalRow = this.sqlite
+      .prepare(`SELECT COUNT(*) AS count FROM document WHERE ${where}`)
+      .get(sqlParams) as { count?: unknown }
     const skip = Math.max(0, (page - 1) * pageSize)
-
-    const queryBuilder = table.query()
-    if (where) queryBuilder.where(where)
-    const rows = await queryBuilder.limit(pageSize).offset(skip).toArray()
-
+    const rows = this.sqlite
+      .prepare(`SELECT * FROM document WHERE ${where} ORDER BY created_at DESC LIMIT @limit OFFSET @offset`)
+      .all({ ...sqlParams, limit: pageSize, offset: skip }) as DocumentRow[]
     const items = await this.attachWebSourceMetadata(rows.map(toDocumentRecord))
-
-    return { items, total }
+    return { items, total: toRequiredNumber(totalRow.count) }
   }
 
   public async listDocumentsBySourceType(
     sourceType: DocumentRecord['source_type'],
     workspaceId?: string
   ): Promise<DocumentRecord[]> {
-    const table = await this.core.openTable(LANCE_TABLES.DOCUMENT)
-    const where = this.buildDocumentWhere({ sourceType, workspaceId })
-    const rows = await table
-      .query()
-      .where(where || `source_type = '${this.core.escapeSqlString(sourceType)}'`)
-      .toArray()
+    const { where, params } = this.buildDocumentWhere({ sourceType, workspaceId })
+    const rows = this.sqlite
+      .prepare(`SELECT * FROM document WHERE ${where} ORDER BY created_at DESC`)
+      .all(params) as DocumentRow[]
     return await this.attachWebSourceMetadata(rows.map(toDocumentRecord))
   }
 
-  public async listLegacyLocalDocuments(boundDocumentIds: string[]): Promise<DocumentRecord[]> {
-    const fileDocuments = await this.listDocumentsBySourceType('file')
-    const boundIds = new Set(boundDocumentIds.map((id) => String(id).trim()).filter(Boolean))
-    return fileDocuments.filter((document) => !boundIds.has(document.id))
+  public async listLegacyLocalDocuments(_boundDocumentIds: string[]): Promise<DocumentRecord[]> {
+    return []
+  }
+
+  private async getDocumentsByIds(ids: string[]): Promise<DocumentRecord[]> {
+    const params: Record<string, string | number | null> = {}
+    const where = buildWhere([buildInClause('id', ids, params, 'document_id')])
+    const rows = this.sqlite.prepare(`SELECT * FROM document WHERE ${where}`).all(params) as DocumentRow[]
+    return await this.attachWebSourceMetadata(rows.map(toDocumentRecord))
   }
 
   private async attachWebSourceMetadata(documents: DocumentRecord[]): Promise<DocumentRecord[]> {
@@ -388,18 +500,15 @@ export class DocumentsStore {
       .filter((document) => document.source_type === 'web')
       .map((document) => document.id)
     if (webDocumentIds.length === 0) return documents
-
-    const table = await this.core.openTable(LANCE_TABLES.WEB_SOURCE)
-    const where = this.core.buildInClause('document_id', webDocumentIds)
-    if (!where) return documents
-    const rows = (await table.query().where(where).toArray()) as unknown[]
+    const params: Record<string, string | number | null> = {}
+    const where = buildWhere([buildInClause('document_id', webDocumentIds, params, 'document_id')])
+    const rows = this.sqlite.prepare(`SELECT * FROM web_source WHERE ${where}`).all(params) as WebSourceRecord[]
     const webSourceMap = new Map(
       rows.map((row) => {
-        const source = toWebSourceRecord(row)
+        const source = row as WebSourceRecord
         return [source.document_id || '', source] as const
       })
     )
-
     return documents.map((document) => {
       if (document.source_type !== 'web') return document
       const source = webSourceMap.get(document.id)
@@ -425,19 +534,16 @@ export class DocumentsStore {
     documentIds?: string[]
   }): Promise<ChunkListResponse> {
     const { query, page, pageSize, workspaceId, documentIds } = params
-    const table = await this.core.openTable(LANCE_TABLES.CHUNK)
-
-    const where = this.core.combineWhere([
-      this.buildChunkWhere({ workspaceId, documentIds }),
-      this.core.buildWhereFromQuery(query, ['text', 'document_name'])
+    const table = await this.vector.openTable(LANCE_TABLES.CHUNK)
+    const where = this.vector.combineWhere([
+      await this.buildChunkWhere({ workspaceId, documentIds }),
+      this.vector.buildWhereFromQuery(query, ['text', 'document_name'])
     ])
     const total = await table.countRows(where)
     const skip = Math.max(0, (page - 1) * pageSize)
-
     const queryBuilder = table.query()
     if (where && where.trim().length > 0) queryBuilder.where(where)
     const rows = await queryBuilder.limit(pageSize).offset(skip).toArray()
-
     const items = rows.map((item) => {
       const row = asRecord(item) as ChunkRow
       return {
@@ -451,24 +557,21 @@ export class DocumentsStore {
         vector: toNumberArray(row.vector)
       }
     })
-
     return { items, total }
   }
 
   public async dropDocumentsStorage(): Promise<{ existed: boolean }> {
-    const db = this.core.getConnection()
-    const tableNames = await db.tableNames()
-    const existedChunk = tableNames.includes(LANCE_TABLES.CHUNK)
-    const existedDoc = tableNames.includes(LANCE_TABLES.DOCUMENT)
-    if (existedChunk) await db.dropTable(LANCE_TABLES.CHUNK)
-    if (existedDoc) await db.dropTable(LANCE_TABLES.DOCUMENT)
-    return { existed: existedChunk || existedDoc }
+    const deletedDocs = this.sqlite.prepare('DELETE FROM document').run().changes
+    const table = await this.vector.openTable(LANCE_TABLES.CHUNK)
+    const deletedChunks = await table.countRows()
+    await table.delete('id IS NOT NULL')
+    return { existed: deletedDocs > 0 || deletedChunks > 0 }
   }
 
   public async countChunksByDocumentIds(ids: string[]): Promise<number> {
     if (ids.length === 0) return 0
-    const table = await this.core.openTable(LANCE_TABLES.CHUNK)
-    const where = this.core.buildInClause('document_id', ids)
+    const table = await this.vector.openTable(LANCE_TABLES.CHUNK)
+    const where = this.vector.buildInClause('document_id', ids)
     if (!where) return 0
     return await table.countRows(where)
   }
@@ -484,17 +587,13 @@ export class DocumentsStore {
       return { success: false, msg: 'No document IDs provided' }
     }
     try {
-      const chunkTable = await this.core.openTable(LANCE_TABLES.CHUNK)
-      const docTable = await this.core.openTable(LANCE_TABLES.DOCUMENT)
-      let deletedChunks = 0
+      const deletedChunks = await this.countChunksByDocumentIds(ids)
+      await this.deleteChunksByDocumentIds(ids)
       let deletedDocs = 0
-      for (const id of ids) {
-        const safeId = this.core.escapeSqlString(id)
-        deletedChunks += await chunkTable.countRows(`document_id = "${safeId}"`)
-        deletedDocs += await docTable.countRows(`id = "${safeId}"`)
-        await chunkTable.delete(`document_id = "${safeId}"`)
-        await docTable.delete(`id = "${safeId}"`)
-      }
+      this.sqlite.transaction(() => {
+        const stmt = this.sqlite.prepare('DELETE FROM document WHERE id = ?')
+        for (const id of ids) deletedDocs += stmt.run(id).changes
+      })
       return {
         success: true,
         msg: 'Documents deleted successfully',

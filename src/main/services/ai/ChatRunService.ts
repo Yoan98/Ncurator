@@ -204,7 +204,12 @@ export class ChatRunService {
     const startedAt = Date.now()
     const normalizedSessionId = String(sessionId || '').trim()
     if (!normalizedSessionId) return { runs: [] }
-    const runs = await this.deps.aiRunStore.listRunsBySession(normalizedSessionId)
+    const recentMessages = await this.deps.chatStore.getRecentChatMessages(normalizedSessionId, 50)
+    const recentMessageIds = recentMessages.map((message) => message.id)
+    const runs = await this.deps.aiRunStore.listRunsByMessageIds(
+      normalizedSessionId,
+      recentMessageIds
+    )
     const response = {
       runs: await Promise.all(runs.map((run) => this.buildRunSnapshot(run, false)))
     }
@@ -373,13 +378,43 @@ export class ChatRunService {
       seenIds.add(itemId)
     }
 
+    const normalizedDecisions = decisions.map((decision) => ({
+      itemId: String(decision.itemId).trim(),
+      action: decision.action,
+      message: typeof decision.message === 'string' ? decision.message.trim() : undefined
+    }))
+    const decisionEvent: AiRunEvent = {
+      type: 'approval_batch_decision',
+      runId,
+      taskId: pending.taskId,
+      batchId,
+      decisions: normalizedDecisions,
+      decidedAt: Date.now(),
+      internal: pending.internal,
+      stage: pending.stage
+    }
+    const persisted = await this.deps.aiRunStore.decideApprovalBatchTransaction({
+      runId,
+      request: payload,
+      event: decisionEvent
+    })
+    if (!persisted.ok) return { success: false, error: persisted.error || 'approval failed' }
+
+    const entry = this.activeRuns.get(runId)
+    if (entry) {
+      entry.run = {
+        ...entry.run,
+        ...(persisted.run || {}),
+        status: 'running',
+        pendingApproval: undefined
+      }
+    }
+
+    this.activeApprovals.delete(runId)
+    this.broadcastEvent(decisionEvent)
     pending.resolve({
       accepted: true,
-      decisions: decisions.map((decision) => ({
-        itemId: String(decision.itemId).trim(),
-        action: decision.action,
-        message: typeof decision.message === 'string' ? decision.message.trim() : undefined
-      }))
+      decisions: normalizedDecisions
     })
 
     return { success: true }
@@ -407,8 +442,6 @@ export class ChatRunService {
 
   private appendProcessEvent(run: AiRunRecord, event: AiRunEvent, now: number): void {
     if (!isSnapshotEvent(event)) return
-    const currentEvents = run.processEvents || []
-    run.processEvents = [...currentEvents, event]
     run.eventCount = (run.eventCount || 0) + 1
     run.visibleEventCount = (run.visibleEventCount || 0) + 1
     run.lastEventAt = now
@@ -737,22 +770,22 @@ export class ChatRunService {
         stage: request.stage,
         resolve: (result) => {
           this.activeApprovals.delete(runId)
-          void this.queueRunEvent(runId, {
-            type: 'approval_batch_decision',
-            runId,
-            taskId: request.taskId,
-            batchId: request.batchId,
-            decisions: result.accepted
-              ? result.decisions
-              : request.items.map((item) => ({
-                  itemId: item.itemId,
-                  action: 'reject' as const,
-                  message: result.error
-                })),
-            decidedAt: Date.now(),
-            internal: request.internal,
-            stage: request.stage
-          })
+          if (!result.accepted) {
+            void this.queueRunEvent(runId, {
+              type: 'approval_batch_decision',
+              runId,
+              taskId: request.taskId,
+              batchId: request.batchId,
+              decisions: request.items.map((item) => ({
+                itemId: item.itemId,
+                action: 'reject' as const,
+                message: result.error
+              })),
+              decidedAt: Date.now(),
+              internal: request.internal,
+              stage: request.stage
+            })
+          }
           resolve(result)
         }
       })

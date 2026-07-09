@@ -86,6 +86,7 @@ export type WorkspaceKnowledgeIndexResult = {
   filePath: string
   fileExt: string
   documentName: string
+  generationId?: string
   contentHash: string
   chunkCount: number
   usedCachedSplit: boolean

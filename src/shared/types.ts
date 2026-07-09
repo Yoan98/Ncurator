@@ -81,6 +81,8 @@ export interface DocumentRecord {
   file_path?: string
   created_at: number
   import_status: DocumentImportStatus
+  content_hash?: string
+  active_generation_id?: string
   source_id?: string
   source_url?: string
   source_title?: string

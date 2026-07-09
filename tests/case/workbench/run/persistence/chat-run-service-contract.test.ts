@@ -7,7 +7,6 @@ import { CONVERSATION_MEMORY_BATCH_MESSAGES } from '../../../../../src/main/serv
 import { AiFileChangeService } from '../../../../../src/main/services/ai/fileChanges/AiFileChangeService'
 import { DocxApplyService } from '../../../../../src/main/services/ai/human/tools/docx/review/DocxApplyService'
 import { StorageService } from '../../../../../src/main/services/storage/StorageService'
-import { LANCE_TABLES } from '../../../../../src/main/services/storage/core/LanceDbCore'
 import type { EmbeddingService } from '../../../../../src/main/services/vector/EmbeddingService'
 import type {
   AiRunEvent,
@@ -135,16 +134,6 @@ const saveMessages = async (
   }
 }
 
-const addRowsInChunks = async (
-  table: { add: (rows: Array<Record<string, unknown>>) => Promise<void> },
-  rows: Array<Record<string, unknown>>,
-  chunkSize = 5000
-): Promise<void> => {
-  for (let index = 0; index < rows.length; index += chunkSize) {
-    await table.add(rows.slice(index, index + chunkSize))
-  }
-}
-
 const submitAiRun = async ({ storage, service }: TestService) => {
   await seedSession(storage)
   const response = await service.submit({
@@ -168,7 +157,7 @@ afterEach(async () => {
 })
 
 describe('workbench chat run backend', () => {
-  const performanceIt = process.env.NCURATOR_RUN_LANCEDB_CHAT_PERF === '1' ? it : it.skip
+  const performanceIt = process.env.NCURATOR_RUN_SQLITE_CHAT_PERF === '1' ? it : it.skip
 
   it('chat-submit-ai-creates-placeholder-and-run', async () => {
     const setup = await createTestService()
@@ -213,7 +202,7 @@ describe('workbench chat run backend', () => {
     expect(events.map((event) => event.type)).toContain('answer_completed')
     expect(events.map((event) => event.type)).toContain('run_completed')
     expect(events.map((event) => event.type)).not.toContain('answer_token')
-    expect(storedRun?.processEvents?.map((event) => event.type)).toContain('answer_completed')
+    expect(storedRun?.processEvents).toBeUndefined()
   })
 
   it('token-events-are-not-persisted-or-reread-for-seq-allocation', async () => {
@@ -239,7 +228,7 @@ describe('workbench chat run backend', () => {
       runId: run.id
     })
 
-    expect(listEventsSpy).toHaveBeenCalledTimes(1)
+    expect(listEventsSpy).not.toHaveBeenCalled()
     listEventsSpy.mockRestore()
 
     const events = await setup.storage.aiRun.listEvents(run.id)
@@ -533,6 +522,7 @@ describe('workbench chat run backend', () => {
       createdAt: Date.now()
     })
     const listEventsSpy = vi.spyOn(setup.storage.aiRun, 'listEvents')
+    const listRunsByMessageIdsSpy = vi.spyOn(setup.storage.aiRun, 'listRunsByMessageIds')
 
     const opened = await setup.service.openSession({ sessionId: 'session-1', limit: 50 })
 
@@ -541,8 +531,10 @@ describe('workbench chat run backend', () => {
     expect(opened.activeRuns[0].events.map((event) => event.type)).toContain(
       'assistant_process_group_started'
     )
-    expect(listEventsSpy).not.toHaveBeenCalled()
+    expect(listEventsSpy).toHaveBeenCalledTimes(1)
+    expect(listRunsByMessageIdsSpy).not.toHaveBeenCalled()
     listEventsSpy.mockRestore()
+    listRunsByMessageIdsSpy.mockRestore()
   })
 
   it('completed-run-process-events-are-restored-through-session-snapshot', async () => {
@@ -722,7 +714,7 @@ describe('workbench chat run backend', () => {
     expect(events).toEqual([])
   })
 
-  performanceIt('lancedb-chat-session-open-performance-shape', async () => {
+  performanceIt('sqlite-chat-session-open-performance-shape', async () => {
     const setup = await createTestService()
     const startedAt = Date.now()
     const baseTime = Date.now() - 1_000_000
@@ -766,7 +758,13 @@ describe('workbench chat run backend', () => {
           input: 'perf',
           partial_answer: 'done',
           final_answer: 'done',
-          process_events_json: JSON.stringify(events),
+          selected_references_json: null,
+          attachments_json: null,
+          workspace_json: null,
+          model_name: null,
+          error: null,
+          pending_approval_json: null,
+          artifacts_json: null,
           event_count: events.length,
           visible_event_count: events.length,
           last_event_at: baseTime + events.length,
@@ -788,14 +786,55 @@ describe('workbench chat run backend', () => {
       }
     }
 
-    const sessionTable = await setup.storage.core.openTable(LANCE_TABLES.CHAT_SESSION)
-    const messageTable = await setup.storage.core.openTable(LANCE_TABLES.CHAT_MESSAGE)
-    const runTable = await setup.storage.core.openTable(LANCE_TABLES.AI_RUN)
-    const eventTable = await setup.storage.core.openTable(LANCE_TABLES.AI_RUN_EVENT)
-    await sessionTable.add(sessionRows)
-    await messageTable.add(messageRows)
-    await runTable.add(runRows)
-    await addRowsInChunks(eventTable, eventRows)
+    setup.storage.sqlite.transaction(() => {
+      const insertSession = setup.storage.sqlite.prepare(
+        `
+        INSERT INTO chat_session (id, title, created_at, updated_at, workspace_id)
+        VALUES (@id, @title, @created_at, @created_at, @workspace_id)
+      `
+      )
+      const insertMessage = setup.storage.sqlite.prepare(
+        `
+        INSERT INTO chat_message (
+          id, session_id, seq, role, content, created_at
+        ) VALUES (
+          @id, @session_id, @seq, @role, @content, @created_at
+        )
+      `
+      )
+      const insertRun = setup.storage.sqlite.prepare(
+        `
+        INSERT INTO ai_run (
+          id, session_id, user_message_id, assistant_message_id, status, input,
+          selected_references_json, attachments_json, workspace_json, model_name,
+          partial_answer, final_answer, error, pending_approval_json, artifacts_json,
+          event_count, visible_event_count, last_event_at, created_at, updated_at, finished_at
+        ) VALUES (
+          @id, @session_id, @user_message_id, @assistant_message_id, @status, @input,
+          @selected_references_json, @attachments_json, @workspace_json, @model_name,
+          @partial_answer, @final_answer, @error, @pending_approval_json, @artifacts_json,
+          @event_count, @visible_event_count, @last_event_at, @created_at, @updated_at, @finished_at
+        )
+      `
+      )
+      const insertEvent = setup.storage.sqlite.prepare(
+        `
+        INSERT INTO ai_run_event (id, run_id, session_id, seq, type, event_json, created_at)
+        VALUES (@id, @run_id, @session_id, @seq, @type, @event_json, @created_at)
+      `
+      )
+
+      for (const row of sessionRows) insertSession.run(row)
+      for (const [index, row] of messageRows.entries()) {
+        insertMessage.run({
+          ...row,
+          seq: (index % 20) + 1,
+          created_at: row.timestamp
+        })
+      }
+      for (const row of runRows) insertRun.run(row)
+      for (const row of eventRows) insertEvent.run(row)
+    })
 
     const extremeSessionId = 'perf-session-0'
     const extremeRunId = `${extremeSessionId}-extreme-token-run`
@@ -833,7 +872,7 @@ describe('workbench chat run backend', () => {
     const opened = await setup.service.openSession({ sessionId: extremeSessionId, limit: 50 })
     const openDurationMs = Date.now() - openStartedAt
 
-    console.info('[LANCEDB-CHAT-PERF]', {
+    console.info('[SQLITE-CHAT-PERF]', {
       seedDurationMs: snapshotStartedAt - startedAt,
       snapshotDurationMs,
       openDurationMs,

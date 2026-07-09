@@ -779,6 +779,7 @@ export function registerHandlers(services: {
     const existingDocument = source.document_id
       ? await documentsStore.getDocumentById(source.document_id)
       : null
+    const oldGenerationId = existingDocument?.active_generation_id
     if (existingDocument) {
       await documentsStore.updateDocumentById(existingDocument.id, {
         name: source.title || source.url,
@@ -786,8 +787,7 @@ export function registerHandlers(services: {
         source_type: 'web',
         workspace_id: source.workspace_id
       })
-      await documentsStore.updateDocumentImportStatus(existingDocument.id, 1)
-      await documentsStore.deleteChunksByDocumentIds([existingDocument.id])
+      await documentsStore.markDocumentIndexing(existingDocument.id, now)
     } else {
       await documentsStore.addDocument({
         id: nextDocumentId,
@@ -814,7 +814,7 @@ export function registerHandlers(services: {
         excludeSelectors: source.exclude_selectors
       })
     } catch (error) {
-      await documentsStore.updateDocumentImportStatus(nextDocumentId, 3).catch(() => {})
+      await documentsStore.markDocumentIndexFailed(nextDocumentId, getErrorMessage(error)).catch(() => {})
       const failedAt = Date.now()
       const failedSource: WebSourceRecord = {
         ...nextPendingSource,
@@ -845,6 +845,7 @@ export function registerHandlers(services: {
     emitSourceListRefresh(event.sender)
 
     try {
+      const generationId = uuidv4()
       const splitDocs = await ingestionService.processWebText({
         url: source.url,
         title: inspection.title,
@@ -855,7 +856,8 @@ export function registerHandlers(services: {
         name: documentName,
         file_path: source.url,
         source_type: 'web',
-        workspace_id: source.workspace_id
+        workspace_id: source.workspace_id,
+        content_hash: inspection.contentHash
       })
 
       const allSplitDocs = [...splitDocs.bigSplitDocs, ...splitDocs.miniSplitDocs]
@@ -872,6 +874,8 @@ export function registerHandlers(services: {
         workspace_id: source.workspace_id,
         document_name: documentName,
         source_type: 'web',
+        generation_id: generationId,
+        chunk_index: index,
         metadata: {
           page: 1
         }
@@ -879,9 +883,27 @@ export function registerHandlers(services: {
 
       await documentsStore.addChunks({
         vectors: allChunkVectors,
-        chunks
+        chunks,
+        generationId
       })
-      await documentsStore.updateDocumentImportStatus(nextDocumentId, 2)
+      await documentsStore.activateDocumentGeneration({
+        documentId: nextDocumentId,
+        generationId,
+        contentHash: inspection.contentHash,
+        importStatus: 2,
+        updatedAt: Date.now()
+      })
+      if (oldGenerationId && oldGenerationId !== generationId) {
+        void documentsStore
+          .deleteChunksByGeneration({
+            documentId: nextDocumentId,
+            workspaceId: source.workspace_id,
+            generationId: oldGenerationId
+          })
+          .catch((cleanupError) => {
+            console.warn('[WEB-INDEX] failed to cleanup old generation:', cleanupError)
+          })
+      }
 
       const refreshedSource: WebSourceRecord = {
         ...crawlingDoneSource,
@@ -896,7 +918,7 @@ export function registerHandlers(services: {
       emitSourceListRefresh(event.sender)
       return { source: refreshedSource, chunkCount: chunks.length }
     } catch (error) {
-      await documentsStore.updateDocumentImportStatus(nextDocumentId, 3).catch(() => {})
+      await documentsStore.markDocumentIndexFailed(nextDocumentId, getErrorMessage(error)).catch(() => {})
       const failedSource: WebSourceRecord = {
         ...crawlingDoneSource,
         index_status: 'index_failed',
@@ -938,8 +960,7 @@ export function registerHandlers(services: {
         source_type: 'web',
         workspace_id: source.workspace_id
       })
-      await documentsStore.updateDocumentImportStatus(existingDocument.id, 1)
-      await documentsStore.deleteChunksByDocumentIds([existingDocument.id])
+      await documentsStore.markDocumentIndexing(existingDocument.id, now)
     } else {
       await documentsStore.addDocument({
         id: nextDocumentId,
@@ -983,7 +1004,7 @@ export function registerHandlers(services: {
       emitSourceListRefreshToAll()
       return { source: crawlingDoneSource, documentId: nextDocumentId, inspection }
     } catch (error) {
-      await documentsStore.updateDocumentImportStatus(nextDocumentId, 3).catch(() => {})
+      await documentsStore.markDocumentIndexFailed(nextDocumentId, getErrorMessage(error)).catch(() => {})
       const failedAt = Date.now()
       const failedSource: WebSourceRecord = {
         ...nextPendingSource,
@@ -1006,6 +1027,9 @@ export function registerHandlers(services: {
     inspection: Awaited<ReturnType<WebSourceService['inspectUrl']>>
   }): Promise<void> => {
     try {
+      const existingDocument = await documentsStore.getDocumentById(input.documentId)
+      const oldGenerationId = existingDocument?.active_generation_id
+      const generationId = uuidv4()
       const splitDocs = await ingestionService.processWebText({
         url: input.source.url,
         title: input.inspection.title,
@@ -1016,7 +1040,8 @@ export function registerHandlers(services: {
         name: documentName,
         file_path: input.source.url,
         source_type: 'web',
-        workspace_id: input.source.workspace_id
+        workspace_id: input.source.workspace_id,
+        content_hash: input.inspection.contentHash
       })
 
       const allSplitDocs = [...splitDocs.bigSplitDocs, ...splitDocs.miniSplitDocs]
@@ -1033,6 +1058,8 @@ export function registerHandlers(services: {
         workspace_id: input.source.workspace_id,
         document_name: documentName,
         source_type: 'web',
+        generation_id: generationId,
+        chunk_index: index,
         metadata: {
           page: 1
         }
@@ -1040,9 +1067,27 @@ export function registerHandlers(services: {
 
       await documentsStore.addChunks({
         vectors: allChunkVectors,
-        chunks
+        chunks,
+        generationId
       })
-      await documentsStore.updateDocumentImportStatus(input.documentId, 2)
+      await documentsStore.activateDocumentGeneration({
+        documentId: input.documentId,
+        generationId,
+        contentHash: input.inspection.contentHash,
+        importStatus: 2,
+        updatedAt: Date.now()
+      })
+      if (oldGenerationId && oldGenerationId !== generationId) {
+        void documentsStore
+          .deleteChunksByGeneration({
+            documentId: input.documentId,
+            workspaceId: input.source.workspace_id,
+            generationId: oldGenerationId
+          })
+          .catch((cleanupError) => {
+            console.warn('[WEB-INDEX] failed to cleanup old generation:', cleanupError)
+          })
+      }
 
       const indexedAt = Date.now()
       const refreshedSource: WebSourceRecord = {
@@ -1058,7 +1103,7 @@ export function registerHandlers(services: {
       emitSourceListRefresh(input.sender)
       emitSourceListRefreshToAll()
     } catch (error) {
-      await documentsStore.updateDocumentImportStatus(input.documentId, 3).catch(() => {})
+      await documentsStore.markDocumentIndexFailed(input.documentId, getErrorMessage(error)).catch(() => {})
       const failedSource: WebSourceRecord = {
         ...input.source,
         index_status: 'index_failed',

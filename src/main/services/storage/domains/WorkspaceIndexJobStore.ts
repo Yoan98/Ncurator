@@ -5,88 +5,35 @@ import type {
   WorkspaceIndexJobSourceKind,
   WorkspaceIndexJobStatus
 } from '../../../types/store'
-import { LanceDbCore, LANCE_TABLES } from '../core/LanceDbCore'
+import type { SqliteCore } from '../sqlite/SqliteCore'
+import {
+  insertOrReplace,
+  jsonStringify,
+  parseJsonArray,
+  toOptionalNumber,
+  toOptionalString,
+  toRequiredNumber,
+  toRequiredString,
+  updateById
+} from '../sqlite/sqliteUtils'
 
-type PrimitiveRowValue = string | number | boolean | null | undefined
-type WorkspaceIndexJobWriteRow = Record<string, PrimitiveRowValue>
+type WorkspaceIndexJobRow = Record<string, unknown>
 
-type WorkspaceIndexJobRow = {
-  id?: PrimitiveRowValue
-  workspace_id?: PrimitiveRowValue
-  source_kind?: PrimitiveRowValue
-  action?: PrimitiveRowValue
-  status?: PrimitiveRowValue
-  phase?: PrimitiveRowValue
-  step_index?: PrimitiveRowValue
-  step_total?: PrimitiveRowValue
-  total_count?: PrimitiveRowValue
-  processed_count?: PrimitiveRowValue
-  failed_count?: PrimitiveRowValue
-  target_ids_json?: PrimitiveRowValue
-  message?: PrimitiveRowValue
-  last_error?: PrimitiveRowValue
-  started_at?: PrimitiveRowValue
-  updated_at?: PrimitiveRowValue
-  finished_at?: PrimitiveRowValue
-}
-
-const toOptionalString = (value: PrimitiveRowValue): string | undefined => {
-  if (value == null) return undefined
-  const next = String(value).trim()
-  return next.length > 0 ? next : undefined
-}
-
-const toRequiredString = (value: PrimitiveRowValue): string => String(value ?? '')
-
-const toRequiredNumber = (value: PrimitiveRowValue, fallback = 0): number => {
-  const next = Number(value)
-  return Number.isFinite(next) ? next : fallback
-}
-
-const toOptionalNumber = (value: PrimitiveRowValue): number | undefined => {
-  if (value == null) return undefined
-  const next = Number(value)
-  return Number.isFinite(next) ? next : undefined
-}
-
-const normalizeSourceKind = (value: PrimitiveRowValue): WorkspaceIndexJobSourceKind =>
+const normalizeSourceKind = (value: unknown): WorkspaceIndexJobSourceKind =>
   String(value ?? '').trim() === 'web' ? 'web' : 'file'
 
-const normalizeAction = (value: PrimitiveRowValue): WorkspaceIndexJobAction =>
+const normalizeAction = (value: unknown): WorkspaceIndexJobAction =>
   String(value ?? '').trim() === 'scan' ? 'scan' : 'prepare'
 
-const normalizeStatus = (value: PrimitiveRowValue): WorkspaceIndexJobStatus => {
+const normalizeStatus = (value: unknown): WorkspaceIndexJobStatus => {
   const next = String(value ?? '').trim()
   return next === 'succeeded' || next === 'failed' ? next : 'running'
 }
 
-const normalizePhase = (value: PrimitiveRowValue): WorkspaceIndexJobPhase => {
+const normalizePhase = (value: unknown): WorkspaceIndexJobPhase => {
   const next = String(value ?? '').trim()
   if (next === 'crawl' || next === 'index' || next === 'complete') return next
   return 'scan'
-}
-
-const parseTargetIds = (value: PrimitiveRowValue): string[] => {
-  if (typeof value !== 'string' || !value.trim()) return []
-  try {
-    const parsed = JSON.parse(value) as string[]
-    if (!Array.isArray(parsed)) return []
-    return parsed.map((item) => String(item || '').trim()).filter(Boolean)
-  } catch {
-    return []
-  }
-}
-
-const stringifyTargetIds = (value: string[]): string => JSON.stringify(value)
-
-const omitUndefined = <T extends Record<string, PrimitiveRowValue>>(value: T): Partial<T> => {
-  const next: Partial<T> = {}
-  for (const key of Object.keys(value) as Array<keyof T>) {
-    if (value[key] !== undefined) {
-      next[key] = value[key]
-    }
-  }
-  return next
 }
 
 const toWorkspaceIndexJobRecord = (row: WorkspaceIndexJobRow): WorkspaceIndexJobRecord => ({
@@ -101,7 +48,7 @@ const toWorkspaceIndexJobRecord = (row: WorkspaceIndexJobRow): WorkspaceIndexJob
   total_count: toRequiredNumber(row.total_count),
   processed_count: toRequiredNumber(row.processed_count),
   failed_count: toRequiredNumber(row.failed_count),
-  target_ids: parseTargetIds(row.target_ids_json),
+  target_ids: parseJsonArray<string>(row.target_ids_json) || [],
   message: toOptionalString(row.message),
   last_error: toOptionalString(row.last_error),
   started_at: toRequiredNumber(row.started_at),
@@ -109,7 +56,7 @@ const toWorkspaceIndexJobRecord = (row: WorkspaceIndexJobRow): WorkspaceIndexJob
   finished_at: toOptionalNumber(row.finished_at)
 })
 
-const toWorkspaceIndexJobWriteRow = (job: WorkspaceIndexJobRecord): WorkspaceIndexJobWriteRow => ({
+const toWriteRow = (job: WorkspaceIndexJobRecord) => ({
   id: job.id,
   workspace_id: job.workspace_id,
   source_kind: job.source_kind,
@@ -121,7 +68,7 @@ const toWorkspaceIndexJobWriteRow = (job: WorkspaceIndexJobRecord): WorkspaceInd
   total_count: job.total_count,
   processed_count: job.processed_count,
   failed_count: job.failed_count,
-  target_ids_json: stringifyTargetIds(job.target_ids),
+  target_ids_json: jsonStringify(job.target_ids) || '[]',
   message: job.message,
   last_error: job.last_error,
   started_at: job.started_at,
@@ -130,12 +77,10 @@ const toWorkspaceIndexJobWriteRow = (job: WorkspaceIndexJobRecord): WorkspaceInd
 })
 
 export class WorkspaceIndexJobStore {
-  public constructor(private readonly core: LanceDbCore) {}
+  public constructor(private readonly sqlite: SqliteCore) {}
 
   public async saveJob(job: WorkspaceIndexJobRecord): Promise<void> {
-    const table = await this.core.openTable(LANCE_TABLES.WORKSPACE_INDEX_JOB)
-    await table.delete(`id = '${this.core.escapeSqlString(job.id)}'`)
-    await table.add([toWorkspaceIndexJobWriteRow(job)])
+    insertOrReplace(this.sqlite, 'workspace_index_job', toWriteRow(job))
   }
 
   public async updateJob(
@@ -158,7 +103,7 @@ export class WorkspaceIndexJobStore {
       >
     >
   ): Promise<void> {
-    const nextValues = omitUndefined({
+    updateById(this.sqlite, 'workspace_index_job', id, {
       status: values.status,
       phase: values.phase,
       step_index: values.step_index,
@@ -166,28 +111,18 @@ export class WorkspaceIndexJobStore {
       total_count: values.total_count,
       processed_count: values.processed_count,
       failed_count: values.failed_count,
-      target_ids_json: values.target_ids ? stringifyTargetIds(values.target_ids) : undefined,
+      target_ids_json: values.target_ids ? JSON.stringify(values.target_ids) : undefined,
       message: values.message,
       last_error: values.last_error,
       updated_at: values.updated_at,
       finished_at: values.finished_at
     })
-    if (Object.keys(nextValues).length === 0) return
-    const table = await this.core.openTable(LANCE_TABLES.WORKSPACE_INDEX_JOB)
-    await table.update({
-      where: `id = '${this.core.escapeSqlString(id)}'`,
-      values: nextValues
-    })
   }
 
   public async getJobById(id: string): Promise<WorkspaceIndexJobRecord | null> {
-    const table = await this.core.openTable(LANCE_TABLES.WORKSPACE_INDEX_JOB)
-    const rows = (await table
-      .query()
-      .where(`id = '${this.core.escapeSqlString(id)}'`)
-      .limit(1)
-      .toArray()) as WorkspaceIndexJobRow[]
-    const row = rows[0]
+    const row = this.sqlite.prepare('SELECT * FROM workspace_index_job WHERE id = ?').get(id) as
+      | WorkspaceIndexJobRow
+      | undefined
     return row ? toWorkspaceIndexJobRecord(row) : null
   }
 
@@ -195,40 +130,37 @@ export class WorkspaceIndexJobStore {
     workspaceId: string,
     sourceKind: WorkspaceIndexJobSourceKind
   ): Promise<WorkspaceIndexJobRecord | null> {
-    const table = await this.core.openTable(LANCE_TABLES.WORKSPACE_INDEX_JOB)
-    const where = this.core.combineWhere([
-      `workspace_id = '${this.core.escapeSqlString(workspaceId)}'`,
-      `source_kind = '${this.core.escapeSqlString(sourceKind)}'`,
-      "status = 'running'"
-    ])
-    const rows = (await table
-      .query()
-      .where(where || '')
-      .toArray()) as WorkspaceIndexJobRow[]
-    const jobs = rows.map(toWorkspaceIndexJobRecord).sort((a, b) => b.started_at - a.started_at)
-    return jobs[0] || null
+    const row = this.sqlite
+      .prepare(
+        `
+        SELECT * FROM workspace_index_job
+        WHERE workspace_id = ? AND source_kind = ? AND status = 'running'
+        ORDER BY started_at DESC
+        LIMIT 1
+      `
+      )
+      .get(workspaceId, sourceKind) as WorkspaceIndexJobRow | undefined
+    return row ? toWorkspaceIndexJobRecord(row) : null
   }
 
   public async listRunningJobs(): Promise<WorkspaceIndexJobRecord[]> {
-    const table = await this.core.openTable(LANCE_TABLES.WORKSPACE_INDEX_JOB)
-    const rows = (await table
-      .query()
-      .where("status = 'running'")
-      .toArray()) as WorkspaceIndexJobRow[]
-    return rows.map(toWorkspaceIndexJobRecord).sort((a, b) => a.started_at - b.started_at)
+    const rows = this.sqlite
+      .prepare("SELECT * FROM workspace_index_job WHERE status = 'running' ORDER BY started_at ASC")
+      .all() as WorkspaceIndexJobRow[]
+    return rows.map(toWorkspaceIndexJobRecord)
   }
 
   public async failRunningJobs(message: string, now = Date.now()): Promise<number> {
-    const runningJobs = await this.listRunningJobs()
-    for (const job of runningJobs) {
-      await this.updateJob(job.id, {
-        status: 'failed',
-        message,
-        last_error: message,
-        updated_at: now,
-        finished_at: now
-      })
-    }
-    return runningJobs.length
+    const result = this.sqlite
+      .prepare(
+        `
+        UPDATE workspace_index_job
+        SET status = 'failed', message = @message, last_error = @message,
+            updated_at = @now, finished_at = @now
+        WHERE status = 'running'
+      `
+      )
+      .run({ message, now })
+    return result.changes
   }
 }
