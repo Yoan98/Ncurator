@@ -1793,7 +1793,7 @@ const ChatPage: React.FC = () => {
         setApprovalSubmitting(false)
         const activeSessionId = currentSessionIdRef.current
         if (activeSessionId) {
-          void loadFileChangesForSession(activeSessionId, { autoOpen: true })
+          void loadFileChangesForSession(activeSessionId)
         }
         void refreshContextUsage(activeSessionId)
       }

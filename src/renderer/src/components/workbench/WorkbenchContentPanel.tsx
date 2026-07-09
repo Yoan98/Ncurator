@@ -213,7 +213,6 @@ type WorkbenchDocumentPreviewPanelProps = {
   reverting?: boolean
   canRevert?: boolean
   canOpen?: boolean
-  statusMessage?: string | null
   errorMessage?: string | null
   emptyText?: string
   workspaces: WorkspaceSource[]
@@ -239,7 +238,6 @@ const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPreviewPanelP
   reverting = false,
   canRevert = false,
   canOpen = true,
-  statusMessage,
   errorMessage,
   emptyText,
   workspaces,
@@ -266,6 +264,8 @@ const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPreviewPanelP
       : operation === 'created'
         ? '回退会删除这个新建文件'
         : '回退本次修改'
+  const statusBadgeLabel =
+    status === 'reverted' ? (operation === 'created' ? '已删除' : '已回退') : null
 
   return (
     <div className="flex h-full min-h-0 flex-col" data-testid={testId}>
@@ -292,7 +292,14 @@ const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPreviewPanelP
               {mode === 'edit' ? '编辑' : '预览'}
             </span>
             {mode === 'edit' ? (
-              <ChangeCountBadges insertCount={insertCount} deleteCount={deleteCount} />
+              <>
+                <ChangeCountBadges insertCount={insertCount} deleteCount={deleteCount} />
+                {statusBadgeLabel ? (
+                  <span className="inline-flex h-5 shrink-0 items-center rounded-[4px] bg-[#F4F4F2] px-1.5 text-[11px] font-medium text-[#787774]">
+                    {statusBadgeLabel}
+                  </span>
+                ) : null}
+              </>
             ) : null}
           </div>
           <WorkspacePathLabel
@@ -348,11 +355,6 @@ const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPreviewPanelP
           ) : null}
         </div>
       </div>
-      {statusMessage ? (
-        <div className="shrink-0 border-b border-[#EEEEEC] bg-white px-4 py-2.5 text-xs text-[#787774]">
-          {statusMessage}
-        </div>
-      ) : null}
       {errorMessage ? (
         <div className="shrink-0 border-b border-[#E7CAC6] bg-white px-4 py-2.5 text-xs text-[#B3261E]">
           {errorMessage}
@@ -395,7 +397,6 @@ const arePreviewPanelPropsEqual = (
   previous.reverting === next.reverting &&
   previous.canRevert === next.canRevert &&
   previous.canOpen === next.canOpen &&
-  previous.statusMessage === next.statusMessage &&
   previous.errorMessage === next.errorMessage &&
   previous.emptyText === next.emptyText &&
   previous.workspaces === next.workspaces &&
@@ -433,19 +434,25 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
         : [],
     [state]
   )
-  const applyDocuments = useMemo<FileRenderDocument[]>(
-    () =>
-      activeApplyRecord?.preview_diff_artifact_path && activeApplyRecord.source_name
-        ? [
-            {
-              filePath: activeApplyRecord.preview_diff_artifact_path,
-              fileName: activeApplyRecord.source_name
-            }
-          ]
-        : [],
-    [activeApplyRecord]
-  )
   const hasDedicatedPreview = Boolean(activeApplyRecord?.preview_diff_checksum)
+  const applyDocuments = useMemo<FileRenderDocument[]>(() => {
+    if (!activeApplyRecord?.source_name) return []
+    const shouldShowCurrentFile =
+      activeApplyRecord.status === 'reverted' && activeApplyRecord.operation === 'updated'
+    const filePath = shouldShowCurrentFile
+      ? activeApplyRecord.source_path
+      : activeApplyRecord.preview_diff_artifact_path || activeApplyRecord.source_path
+    return [
+      {
+        filePath,
+        fileName: activeApplyRecord.source_name
+      }
+    ]
+  }, [activeApplyRecord])
+  const applyEmptyText =
+    activeApplyRecord?.status === 'reverted' || hasDedicatedPreview
+      ? '当前文件暂时不可预览。'
+      : '当前修改记录没有专用预览稿。'
 
   return (
     <aside
@@ -491,17 +498,8 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
               loading={applyLoading}
               reverting={applyReverting}
               canRevert={activeApplyRecord.status === 'applied' && !applyReverting}
-              statusMessage={
-                activeApplyRecord.status === 'reverted'
-                  ? activeApplyRecord.operation === 'created'
-                    ? '本次新增文件已回退，文件已删除。'
-                    : '本次 AI 修改已回退。'
-                  : null
-              }
               errorMessage={activeApplyRecord.status === 'failed' ? activeApplyRecord.error : null}
-              emptyText={
-                hasDedicatedPreview ? '当前文件暂时不可预览。' : '当前修改记录没有专用预览稿。'
-              }
+              emptyText={applyEmptyText}
               workspaces={workspaces}
               fallbackWorkspaceName={fallbackWorkspaceName}
               onBackToPanelState={onBackToPanelState}
