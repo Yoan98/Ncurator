@@ -29,7 +29,7 @@ describe('ai unit brain decision-hint prompt contract', () => {
 
     state.execution.currentThought = {
       thought: {
-        next: '继续处理 docx 批量写',
+        next: '继续处理 docx 批量写'
       },
       nextAction: {
         action: 'hand',
@@ -38,12 +38,14 @@ describe('ai unit brain decision-hint prompt contract', () => {
             toolName: 'docx_edit',
             args: {
               sourcePath: 'report.docx',
-              actions: [{
-                type: 'insert_blocks',
-                position: 'after',
-                anchorBlockId: 'b:1',
-                blocks: [{ type: 'paragraph', text: '补充内容' }]
-              }]
+              actions: [
+                {
+                  type: 'insert_blocks',
+                  position: 'after',
+                  anchorBlockId: 'b:1',
+                  blocks: [{ type: 'paragraph', text: '补充内容' }]
+                }
+              ]
             }
           }
         ]
@@ -57,9 +59,10 @@ describe('ai unit brain decision-hint prompt contract', () => {
         thought: state.execution.currentThought,
         execution: {
           kind: 'hand',
-          calls: state.execution.currentThought.nextAction.action === 'hand'
-            ? state.execution.currentThought.nextAction.calls
-            : [],
+          calls:
+            state.execution.currentThought.nextAction.action === 'hand'
+              ? state.execution.currentThought.nextAction.calls
+              : [],
           toolResults: [
             {
               toolName: 'docx_edit',
@@ -110,8 +113,10 @@ describe('ai unit brain decision-hint prompt contract', () => {
       ctx: createFakeCtx()
     }).user
 
-    const taskProgressSection = prompt.match(/<task_progress>([\s\S]*?)<\/task_progress>/)?.[1] || ''
-    const correctionHintSection = prompt.match(/<decision_hint>([\s\S]*?)<\/decision_hint>/)?.[1] || ''
+    const taskProgressSection =
+      prompt.match(/<task_progress>([\s\S]*?)<\/task_progress>/)?.[1] || ''
+    const correctionHintSection =
+      prompt.match(/<decision_hint>([\s\S]*?)<\/decision_hint>/)?.[1] || ''
 
     expect(prompt).not.toContain('<latest_round>')
     expect(taskProgressSection).toContain('最新一轮决策如下')
@@ -119,10 +124,14 @@ describe('ai unit brain decision-hint prompt contract', () => {
     expect(taskProgressSection).toContain('继续处理 docx 批量写')
     expect(taskProgressSection).toContain('执行：')
     expect(taskProgressSection).toContain('类型：hand')
-    expect(taskProgressSection).toContain('cannot resolve anchorBlockId=b:1 in current active snapshot')
+    expect(taskProgressSection).toContain(
+      'cannot resolve anchorBlockId=b:1 in current active snapshot'
+    )
     expect(taskProgressSection).not.toContain('上一轮 docx_edit 写入失败')
     expect(correctionHintSection).toContain('刚才尝试修改的 docx 区域命中了定位排版保护')
-    expect(correctionHintSection).toContain('诊断：当前命中复杂定位排版区域：包含“达到反走样。”的区域')
+    expect(correctionHintSection).toContain(
+      '诊断：当前命中复杂定位排版区域：包含“达到反走样。”的区域'
+    )
     expect(correctionHintSection).toContain('不会被自动修改')
   })
 
@@ -138,11 +147,11 @@ describe('ai unit brain decision-hint prompt contract', () => {
     }).system
 
     expect(prompt).toContain('nextAction为mouth时：')
-    expect(prompt).toContain('nextAction.references')
+    expect(prompt).toContain('nextAction.evidenceReferences')
     expect(prompt).toContain('usedFor')
     expect(prompt).toContain('支撑了最终交付的哪些地方')
-    expect(prompt).toContain('references[*].resourceType 必须为 file 或 web')
-    expect(prompt).toContain('没有明确路径或 URL 的资料不要放入 references')
+    expect(prompt).toContain('evidenceReferences[*].resourceType 必须为 file 或 web')
+    expect(prompt).toContain('没有明确路径或 URL 的资料不要放入 evidenceReferences')
   })
 
   it('renders prompt-friendly output shape for hand calls while keeping args generic', () => {

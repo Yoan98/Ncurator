@@ -85,7 +85,19 @@ function createWindow(): BrowserWindow {
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
-    shell.openExternal(details.url)
+    try {
+      const parsed = new URL(details.url)
+      if (parsed.protocol === 'ncurator:') {
+        return { action: 'deny' }
+      }
+      if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+        shell.openExternal(parsed.toString()).catch((error) => {
+          console.error('[WINDOW-OPEN] Failed to open external URL:', error)
+        })
+      }
+    } catch (error) {
+      console.error('[WINDOW-OPEN] Invalid URL:', error)
+    }
     return { action: 'deny' }
   })
 

@@ -1,8 +1,6 @@
 import { z } from 'zod/v4'
 import { aiArtifactRefSchema } from '../schema'
-import {
-  createHandCallsSchema
-} from './toolCallSchema'
+import { createHandCallsSchema } from './toolCallSchema'
 import { jsonObjectSchema, jsonValueSchema, toolResourceContextSchema } from './toolSchemas'
 import {
   AI_TOOL_FAMILY_IDS,
@@ -271,7 +269,7 @@ export const createBrainNextActionSchema = (toolNames: readonly string[]) =>
     z
       .object({
         action: z.literal('mouth'),
-        references: z.array(humanReferenceSchema).optional()
+        evidenceReferences: z.array(humanReferenceSchema).optional()
       })
       .strict()
   ])
@@ -298,7 +296,7 @@ export const brainNextActionSchema = z.discriminatedUnion('action', [
   z
     .object({
       action: z.literal('mouth'),
-      references: z.array(humanReferenceSchema).optional()
+      evidenceReferences: z.array(humanReferenceSchema).optional()
     })
     .strict()
 ])
@@ -357,7 +355,7 @@ export const humanExecutionSchema = z.object({
   lastLearningOutcome: humanLearningOutcomeSchema.optional(),
   artifacts: z.array(aiArtifactRefSchema),
   fileChanges: fileChangesSummarySchema.optional(),
-  references: z.array(humanReferenceSchema).optional(),
+  evidenceReferences: z.array(humanReferenceSchema).optional(),
   contextBudget: z
     .object({
       evaluationId: z.string().min(1),

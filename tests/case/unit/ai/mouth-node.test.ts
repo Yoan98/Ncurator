@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { appendRoundRecord, buildHandExecution } from '../../../../src/main/services/ai/human/memory/rounds'
+import {
+  appendRoundRecord,
+  buildHandExecution
+} from '../../../../src/main/services/ai/human/memory/rounds'
 import { createMouthNode } from '../../../../src/main/services/ai/human/node/mouthNode'
 import { createHumanRuntimeCache } from '../../../../src/main/services/ai/human/node/utils/runtimeCache'
 import { createInitialHumanState } from '../../../../src/main/services/ai/human/state/schema'
@@ -113,7 +116,7 @@ describe('ai unit mouth node', () => {
       },
       nextAction: {
         action: 'mouth',
-        references: [
+        evidenceReferences: [
           {
             label: '深度学习.docx',
             path: '学习笔记/深度学习.docx',
@@ -136,10 +139,12 @@ describe('ai unit mouth node', () => {
               toolName: 'docx_edit',
               args: {
                 sourcePath: '深度学习与图形学复习总结.docx',
-                actions: [{
-                  type: 'create_document',
-                  blocks: [{ type: 'paragraph', text: '总结正文' }]
-                }]
+                actions: [
+                  {
+                    type: 'create_document',
+                    blocks: [{ type: 'paragraph', text: '总结正文' }]
+                  }
+                ]
               }
             }
           ]
@@ -151,10 +156,12 @@ describe('ai unit mouth node', () => {
             toolName: 'docx_edit',
             args: {
               sourcePath: '深度学习与图形学复习总结.docx',
-              actions: [{
-                type: 'create_document',
-                blocks: [{ type: 'paragraph', text: '总结正文' }]
-              }]
+              actions: [
+                {
+                  type: 'create_document',
+                  blocks: [{ type: 'paragraph', text: '总结正文' }]
+                }
+              ]
             }
           }
         ],
@@ -194,7 +201,9 @@ describe('ai unit mouth node', () => {
       capturedUserPrompt.match(/<task_progress>([\s\S]*?)<\/task_progress>/)?.[1] || ''
 
     expect(nextState.memory.taskRun.rounds).toHaveLength(2)
-    expect(nextState.memory.taskRun.rounds.filter((round) => round.execution.kind === 'mouth')).toHaveLength(1)
+    expect(
+      nextState.memory.taskRun.rounds.filter((round) => round.execution.kind === 'mouth')
+    ).toHaveLength(1)
     expect(nextState.memory.taskRun.rounds.at(-1)).toMatchObject({
       thought: initialState.execution.currentThought,
       execution: {
@@ -215,9 +224,9 @@ describe('ai unit mouth node', () => {
       action: 'deliver_result',
       summary: '已完成最终交付'
     })
-    expect(events.some((event) => event.type === 'human_step' && event.action === 'deliver_result')).toBe(
-      true
-    )
+    expect(
+      events.some((event) => event.type === 'human_step' && event.action === 'deliver_result')
+    ).toBe(true)
   })
 
   it('emits finalizing before streaming mouth answer events', async () => {

@@ -6,7 +6,10 @@ import {
   renderBrainRoundSection
 } from '../shared/historyRenderers'
 import { renderTaskProgress } from '../shared/memoryRenderers'
-import { NCURATOR_REF_MARKDOWN_FORMAT_EXAMPLE, renderHumanReferences } from '../shared/references'
+import {
+  NCURATOR_REF_MARKDOWN_FORMAT_EXAMPLE,
+  renderEvidenceReferences
+} from '../shared/references'
 import { renderHumanFileChangeLines } from '../shared/runtimeRenderers'
 import { renderReferenceScopeText } from '../../prompts/referenceScope'
 import type { HumanState } from '../types'
@@ -27,7 +30,7 @@ export const buildMouthPrompt = (input: {
 
     - 当存在file_changes时，必须要提及这些产出的信息。
     - 当delivery_guidance存在时，必须吸收。
-    - 当存在references时，必须吸收其中信息，明确说明引用了哪些资料来分别支撑了哪部分交付内容。
+    - 当存在evidence_references时，必须吸收其中信息，明确说明引用了哪些资料来分别支撑了哪部分交付内容。
 
     - 禁止编造不存在其中的事实。
     - 禁止对客观事实进行改动描述，比如文件名、路径、资料名、工具名、人物职责绑定等已经有明确标识的对象，必须复用原文锚点。
@@ -42,14 +45,14 @@ export const buildMouthPrompt = (input: {
     - round_history：当前任务的历史证据视图，包含已压缩的较早历史和较新的真实轮次记录。
     - delivery_guidance：上游节点明确要求你必须吸收的补充说明。
     - file_changes：本次实际修改的文件记录，用于说明本次最终修改了什么文件。
-    - references：本次任务可被明确引用的资料列表，每条都带有引用用途说明。
+    - evidence_references：本次任务可被明确引用的证据资料列表，每条都带有引用用途说明。
   </context_block_guide>
 
   <output_contract>
     - 只输出最终 markdown 正文，不要输出 JSON 或额外说明。
     - 如果任务结果已经体现在文件、命令结果或其他产物中，默认只总结结果，不要把产物正文或大段原始输出直接作为最终答复主体。
-    - 最终答复中的任何链接,已知路径文件名都必须严格使用 ncurator://ref markdown 格式来输出，方便用户点击查看，样例：${NCURATOR_REF_MARKDOWN_FORMAT_EXAMPLE}
-    - references 中的正文引用片段是证据引用，输出时必须原样使用该链接格式，这样用户才能点击它，禁止修改；其他链接使用相同格式但 kind=normal。
+    - 最终答复里的文件或网页链接必须使用 Markdown 格式：[显示名称](ncurator://ref?kind=normal|reference&resourceType=file|web&label=显示名称&path=文件路径或网页URL)，样例：${NCURATOR_REF_MARKDOWN_FORMAT_EXAMPLE}；
+    - evidence_references 中的正文引用片段是证据引用，输出时必须原样使用该链接格式，禁止修改；其他链接使用相同格式但 kind=normal。
   </output_contract>
 </system>
 `.trim()
@@ -101,9 +104,9 @@ ${renderDeliveryGuidanceItems(input.state.execution.deliveryGuidanceItems)}
 ${renderHumanFileChangeLines(input.state, 'prompt')}
   </file_changes>
 
-  <references>
-${renderHumanReferences(input.state.execution.references)}
-  </references>
+  <evidence_references>
+${renderEvidenceReferences(input.state.execution.evidenceReferences)}
+  </evidence_references>
 </user_context>
 `.trim()
 

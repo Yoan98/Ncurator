@@ -20,7 +20,7 @@ const buildThought = (input: {
   nextAction: HumanThoughtDecision['nextAction']
 }): HumanThoughtDecision => ({
   thought: {
-    next: input.summary,
+    next: input.summary
   },
   nextAction: input.nextAction
 })
@@ -271,7 +271,7 @@ describe('ai unit human memory history', () => {
       ...initialState,
       execution: {
         ...initialState.execution,
-        references: [
+        evidenceReferences: [
           {
             label: 'report.docx',
             path: '/tmp/workspace/report.docx',
@@ -295,7 +295,7 @@ describe('ai unit human memory history', () => {
       createdAt: 3
     })
 
-    expect(nextState.execution.references).toBeUndefined()
+    expect(nextState.execution.evidenceReferences).toBeUndefined()
   })
 
   it('keeps the latest round out of historical rounds and trims the window to twenty rounds', () => {

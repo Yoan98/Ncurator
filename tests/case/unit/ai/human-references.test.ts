@@ -1,18 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import { brainNextActionSchema } from '../../../../src/main/services/ai/human/schema'
 import {
-  buildReferenceMarkdown,
+  buildEvidenceReferenceMarkdown,
   inferReferenceIconKind
 } from '../../../../src/main/services/ai/human/shared/references'
 import { applyBrainDecisionState } from '../../../../src/main/services/ai/human/node/utils/stateTransitionState'
 import { createInitialHumanState } from '../../../../src/main/services/ai/human/state/schema'
 
 describe('ai unit human references', () => {
-  it('accepts references only on mouth nextAction', () => {
+  it('accepts evidence references only on mouth nextAction', () => {
     expect(
       brainNextActionSchema.parse({
         action: 'mouth',
-        references: [
+        evidenceReferences: [
           {
             label: 'report.docx',
             path: '/tmp/workspace/report.docx',
@@ -29,7 +29,7 @@ describe('ai unit human references', () => {
       brainNextActionSchema.parse({
         action: 'learning',
         wantLearnSkillIds: ['docx-read'],
-        references: [
+        evidenceReferences: [
           {
             label: 'report.docx',
             path: '/tmp/workspace/report.docx',
@@ -41,7 +41,7 @@ describe('ai unit human references', () => {
     ).toThrow()
   })
 
-  it('copies brain mouth references into execution state', () => {
+  it('copies brain mouth evidence references into execution state', () => {
     const initialState = createInitialHumanState({
       taskId: 'task-1',
       userInput: '整理结论'
@@ -55,7 +55,7 @@ describe('ai unit human references', () => {
         },
         nextAction: {
           action: 'mouth',
-          references: [
+          evidenceReferences: [
             {
               label: 'report.docx',
               path: '/tmp/workspace/report.docx',
@@ -75,7 +75,7 @@ describe('ai unit human references', () => {
       createdAt: 1
     })
 
-    expect(nextState.execution.references).toEqual([
+    expect(nextState.execution.evidenceReferences).toEqual([
       {
         label: 'report.docx',
         path: '/tmp/workspace/report.docx',
@@ -93,7 +93,7 @@ describe('ai unit human references', () => {
 
   it('builds markdown ref links and infers icon kinds from path', () => {
     expect(
-      buildReferenceMarkdown({
+      buildEvidenceReferenceMarkdown({
         label: 'report.docx',
         path: '/tmp/workspace/report.docx',
         resourceType: 'file',
@@ -106,7 +106,7 @@ describe('ai unit human references', () => {
   })
 
   it('keeps readable unicode in markdown ref links without full URL encoding', () => {
-    const markdown = buildReferenceMarkdown({
+    const markdown = buildEvidenceReferenceMarkdown({
       label: '工作/客户周会纪要.docx',
       path: '/Users/test/work-space/test/workspace/工作/客户周会纪要.docx',
       resourceType: 'file',
@@ -119,7 +119,7 @@ describe('ai unit human references', () => {
   })
 
   it('escapes only query-breaking characters in markdown ref links', () => {
-    const markdown = buildReferenceMarkdown({
+    const markdown = buildEvidenceReferenceMarkdown({
       label: 'A&B=测试.docx',
       path: 'https://example.com/a?x=1&name=测试',
       resourceType: 'web',

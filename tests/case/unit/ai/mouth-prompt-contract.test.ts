@@ -44,7 +44,7 @@ describe('ai unit mouth prompt contract', () => {
       },
       nextAction: {
         action: 'mouth',
-        references: [
+        evidenceReferences: [
           {
             label: '深度学习.docx',
             path: '学习笔记/深度学习.docx',
@@ -54,12 +54,12 @@ describe('ai unit mouth prompt contract', () => {
         ]
       }
     }
-    state.execution.references = [
+    state.execution.evidenceReferences = [
       {
-      label: '深度学习.docx',
-      path: '学习笔记/深度学习.docx',
-      resourceType: 'file',
-      usedFor: '支撑深度学习部分的总结内容'
+        label: '深度学习.docx',
+        path: '学习笔记/深度学习.docx',
+        resourceType: 'file',
+        usedFor: '支撑深度学习部分的总结内容'
       }
     ]
 
@@ -78,10 +78,12 @@ describe('ai unit mouth prompt contract', () => {
                 toolName: 'docx_edit',
                 args: {
                   sourcePath: '深度学习与图形学复习总结.docx',
-                  actions: [{
-                    type: 'create_document',
-                    blocks: [{ type: 'paragraph', text: '总结正文' }]
-                  }]
+                  actions: [
+                    {
+                      type: 'create_document',
+                      blocks: [{ type: 'paragraph', text: '总结正文' }]
+                    }
+                  ]
                 }
               }
             ]
@@ -94,10 +96,12 @@ describe('ai unit mouth prompt contract', () => {
               toolName: 'docx_edit',
               args: {
                 sourcePath: '深度学习与图形学复习总结.docx',
-                actions: [{
-                  type: 'create_document',
-                  blocks: [{ type: 'paragraph', text: '总结正文' }]
-                }]
+                actions: [
+                  {
+                    type: 'create_document',
+                    blocks: [{ type: 'paragraph', text: '总结正文' }]
+                  }
+                ]
               }
             }
           ],
@@ -145,9 +149,12 @@ describe('ai unit mouth prompt contract', () => {
       state,
       ctx: createFakeCtx()
     })
-    const taskProgressSection = prompt.user.match(/<task_progress>([\s\S]*?)<\/task_progress>/)?.[1] || ''
+    const taskProgressSection =
+      prompt.user.match(/<task_progress>([\s\S]*?)<\/task_progress>/)?.[1] || ''
 
-    expect(prompt.system).toContain('task_progress：当前任务已经收敛的全局进度信息，包含待办路径、推进摘要，以及最新一轮判断和执行。')
+    expect(prompt.system).toContain(
+      'task_progress：当前任务已经收敛的全局进度信息，包含待办路径、推进摘要，以及最新一轮判断和执行。'
+    )
     expect(taskProgressSection).toContain('最新一轮决策如下')
     expect(taskProgressSection).toContain('待办路径：')
     expect(taskProgressSection).toContain('推进摘要：')
@@ -159,7 +166,9 @@ describe('ai unit mouth prompt contract', () => {
     expect(taskProgressSection).toContain('类型：mouth')
     expect(taskProgressSection).toContain('动作：组织最终交付')
     expect(taskProgressSection).not.toContain('类型：hand')
-    expect(taskProgressSection).not.toContain('旧 thought.next 不应直接作为 mouth task_progress 主体')
+    expect(taskProgressSection).not.toContain(
+      '旧 thought.next 不应直接作为 mouth task_progress 主体'
+    )
     expect(prompt.user).toContain('深度学习与图形学复习总结.docx')
     expect(prompt.user).toContain('引用资料：深度学习.docx')
     expect(prompt.user).toContain('正文引用片段：[深度学习.docx](ncurator://ref?kind=reference')

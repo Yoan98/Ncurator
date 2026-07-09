@@ -1,7 +1,4 @@
-import {
-  appendRoundRecord,
-  buildPreExecutionBlockedExecution
-} from '../../memory/rounds'
+import { appendRoundRecord, buildPreExecutionBlockedExecution } from '../../memory/rounds'
 import type {
   HumanThoughtDecision,
   HumanResult,
@@ -142,9 +139,9 @@ export const applyBrainDecisionState = (input: {
   createdAt: number
   overrides?: HumanStateOverrides
 }): HumanState => {
-  const references =
+  const evidenceReferences =
     !input.decisionHint && input.thought.nextAction.action === 'mouth'
-      ? input.thought.nextAction.references
+      ? input.thought.nextAction.evidenceReferences
       : undefined
 
   return {
@@ -160,7 +157,7 @@ export const applyBrainDecisionState = (input: {
       status: 'running',
       currentThought: input.thought,
       pendingDecisionHint: input.decisionHint,
-      references
+      evidenceReferences
     },
     memory: {
       ...input.state.memory,
@@ -196,7 +193,8 @@ export const buildHumanResult = (input: {
 }): HumanResult => ({
   status: 'completed',
   deliveryMarkdown: input.deliveryMarkdown,
-  artifacts: input.state.execution.artifacts.length > 0 ? [...input.state.execution.artifacts] : undefined
+  artifacts:
+    input.state.execution.artifacts.length > 0 ? [...input.state.execution.artifacts] : undefined
 })
 
 export const completeHumanTaskState = (input: {
@@ -211,14 +209,14 @@ export const completeHumanTaskState = (input: {
   },
   result: input.result,
   trace: {
-      steps: appendHumanTraceStep({
-        steps: input.state.trace.steps,
-        item: {
-          action: 'deliver_result',
-          publicNarrative: input.result.deliveryMarkdown,
-          resultStatus: 'ok',
-          summary: '已完成最终交付'
-        }
-      })
-    }
+    steps: appendHumanTraceStep({
+      steps: input.state.trace.steps,
+      item: {
+        action: 'deliver_result',
+        publicNarrative: input.result.deliveryMarkdown,
+        resultStatus: 'ok',
+        summary: '已完成最终交付'
+      }
+    })
+  }
 })

@@ -80,7 +80,7 @@ describe('ai unit selected context workspace path', () => {
       })
     )
 
-    expect(text).toContain('用户选择的附件：')
+    expect(text).toContain('用户添加的附件：')
     expect(text).toContain('第 1 个附件：screen.png')
     expect(text).toContain('- 路径：/tmp/screen.png')
     expect(text).toContain('第 2 个附件：README.md')

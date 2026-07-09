@@ -62,17 +62,17 @@ export const renderReferenceScopeText = (scope: AiReferenceScope): string => {
 
   const selectedReferencesText =
     selectedReferences.length > 0
-      ? `用户已选资料：
+      ? `用户指定的参考范围：
 ${selectedReferences.map((reference, index) => renderSelectedReference(reference, index + 1)).join('\n')}`
-      : `用户已选资料：
-- 当前没有用户显式选择的参考资料。`
+      : `用户指定的参考范围：
+- 当前没有用户显式指定的参考范围。`
 
   const attachmentsText =
     attachments.length > 0
-      ? `用户选择的附件：
+      ? `用户添加的附件：
 ${attachments.map((attachment, index) => renderAttachment(attachment, index + 1)).join('\n\n')}`
-      : `用户选择的附件：
-- 当前没有用户选择的附件。`
+      : `用户添加的附件：
+- 当前没有用户添加的附件。`
 
   return `${workspaceText}
 
