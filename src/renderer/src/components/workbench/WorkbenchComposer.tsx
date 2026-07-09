@@ -197,19 +197,9 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     })
   }, [])
 
-  const restoreCaretToEnd = useCallback(() => {
+  const moveEditorCaretToEnd = useCallback(() => {
     const editor = editorRef.current
     if (!editor) return
-    const selection = window.getSelection()
-    if (
-      selection?.rangeCount &&
-      selection.isCollapsed &&
-      isTextNode(selection.anchorNode) &&
-      editor.contains(selection.anchorNode)
-    ) {
-      return
-    }
-
     ensureEditorHasCaretTarget()
     moveCaretToEnd(editor)
   }, [ensureEditorHasCaretTarget])
@@ -230,12 +220,12 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     [ensureEditorHasCaretTarget, rememberScopes]
   )
 
-  const focusEditor = useCallback(() => {
+  const focusEditorAtEnd = useCallback(() => {
     const editor = editorRef.current
     if (!editor) return
     editor.focus()
-    restoreCaretToEnd()
-  }, [restoreCaretToEnd])
+    moveEditorCaretToEnd()
+  }, [moveEditorCaretToEnd])
 
   const focusEditorAfterControlChange = useCallback(() => {
     if (controlFocusTimeoutRef.current !== null) {
@@ -251,11 +241,11 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
         ) {
           activeElement.blur()
         }
-        focusEditor()
+        focusEditorAtEnd()
         controlFocusTimeoutRef.current = null
       }, 80)
     })
-  }, [focusEditor])
+  }, [focusEditorAtEnd])
 
   const syncDraftFromEditor = useCallback(() => {
     const editor = editorRef.current
@@ -353,14 +343,14 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
 
       let selection = window.getSelection()
       if (!selection || !selection.rangeCount) {
-        focusEditor()
+        focusEditorAtEnd()
         selection = window.getSelection()
       }
       if (!selection || !selection.rangeCount) return
 
       const range = selection.getRangeAt(0)
       if (!editor.contains(range.commonAncestorContainer)) {
-        focusEditor()
+        focusEditorAtEnd()
       }
 
       const nextSelection = window.getSelection()
@@ -381,7 +371,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
       syncDraftFromEditor()
       refreshMentionContext()
     },
-    [focusEditor, refreshMentionContext, syncDraftFromEditor]
+    [focusEditorAtEnd, refreshMentionContext, syncDraftFromEditor]
   )
 
   const insertMentionScope = useCallback(
@@ -527,11 +517,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   }
 
   const handleEditorFocus = (): void => {
-    restoreCaretToEnd()
-  }
-
-  const handleEditorMouseUp = (): void => {
-    restoreCaretToEnd()
+    ensureEditorHasCaretTarget()
   }
 
   const updateAttachments = useCallback(
@@ -715,17 +701,9 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
       return
     event.preventDefault()
     previousNode.remove()
-    focusEditor()
     syncDraftFromEditor()
+    ensureEditorHasCaretTarget()
     closeMention()
-  }
-
-  const handleEditorClickCapture = (event: React.MouseEvent<HTMLSpanElement>): void => {
-    const target = event.target
-    if (!(target instanceof HTMLElement)) return
-    if (target.closest('[data-role="scope-token"]')) {
-      restoreCaretToEnd()
-    }
   }
 
   const contextUsagePercent = Math.max(
@@ -879,7 +857,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
             return
           }
           event.preventDefault()
-          focusEditor()
+          focusEditorAtEnd()
         }}
       >
         {currentAttachments.length > 0 ? (
@@ -970,9 +948,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
             onInput={handleEditorInput}
             onKeyDown={handleEditorKeyDown}
             onPaste={handleEditorPaste}
-            onClickCapture={handleEditorClickCapture}
             onFocus={handleEditorFocus}
-            onMouseUp={handleEditorMouseUp}
             onKeyUp={() => {
               if (isComposingRef.current) return
               scheduleMentionRefresh()
