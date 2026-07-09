@@ -68,7 +68,7 @@ export const LLM_RECOGNIZE_TOOL_SPEC: HumanToolSpec<
   promptSpec: {
     name: 'llm_recognize',
     description:
-      '能力：读取指定图片路径，并按 instruction 让大模型理解图片内容。\n结果：直接返回模型输出的普通文本。\n边界：instruction 必填；只做图像理解，不做 OCR 专项结构化抽取。',
+      '能力：读取指定图片路径，并按 instruction 让大模型理解图片内容。\n结果：直接返回模型输出的普通文本。\n边界：instruction 必填；如果模型无法识别,则要停止识别相关任务,继续其他的,禁止继续尝试识别图片。',
     whenToUse: '适用于你已经有图片路径，并且需要按当前任务自己决定怎么向模型询问图片内容的情况。',
     examples: [
       {
