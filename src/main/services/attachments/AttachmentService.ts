@@ -42,7 +42,9 @@ const normalizeExt = (value: string): string =>
 const getExt = (filePath: string): string => normalizeExt(path.extname(filePath))
 
 const normalizeMimeType = (value?: string): string | undefined => {
-  const mimeType = String(value || '').trim().toLowerCase()
+  const mimeType = String(value || '')
+    .trim()
+    .toLowerCase()
   return mimeType || undefined
 }
 
@@ -58,7 +60,10 @@ const isImageMime = (mimeType?: string): boolean =>
     .toLowerCase()
     .startsWith('image/')
 
-const resolveAttachmentKind = (input: { filePath: string; mimeType?: string }): ChatAttachment['kind'] =>
+const resolveAttachmentKind = (input: {
+  filePath: string
+  mimeType?: string
+}): ChatAttachment['kind'] =>
   isImageMime(input.mimeType) || SUPPORTED_IMAGE_EXTENSIONS.has(getExt(input.filePath))
     ? 'image'
     : 'file'
@@ -70,37 +75,39 @@ const isSupportedAttachment = (input: {
   kind?: ChatAttachment['kind']
 }): boolean => {
   const mimeType = normalizeMimeType(input.mimeType)
-  const ext = normalizeExt(input.filePath ? path.extname(input.filePath) : path.extname(input.name || ''))
+  const ext = normalizeExt(
+    input.filePath ? path.extname(input.filePath) : path.extname(input.name || '')
+  )
   if (input.kind === 'image' || isImageMime(mimeType) || SUPPORTED_IMAGE_EXTENSIONS.has(ext)) {
     return true
   }
   return SUPPORTED_FILE_EXTENSIONS.has(ext)
 }
 
-const getWorkspaceAssetsDir = (workspaceRootPath: string, sessionId: string): string =>
+const getWorkspaceAssetsDir = (workspaceRootPath: string, assetBucketId: string): string =>
   path.join(
     path.resolve(String(workspaceRootPath || '').trim()),
     WORKSPACE_RUNTIME_DIR,
     WORKSPACE_ASSETS_DIR,
-    String(sessionId || '').trim()
+    String(assetBucketId || '').trim()
   )
 
 const ensureWorkspaceAttachmentDirs = async (
   workspaceRootPath: string,
-  sessionId: string
+  assetBucketId: string
 ): Promise<string> => {
   const rootPath = path.resolve(String(workspaceRootPath || '').trim())
   if (!rootPath) {
     throw new Error('缺少工作区根目录，无法保存附件')
   }
-  const sessionDir = getWorkspaceAssetsDir(rootPath, sessionId)
+  const assetDir = getWorkspaceAssetsDir(rootPath, assetBucketId)
   await Promise.all([
-    fs.promises.mkdir(sessionDir, { recursive: true }),
+    fs.promises.mkdir(assetDir, { recursive: true }),
     fs.promises.mkdir(path.join(rootPath, WORKSPACE_RUNTIME_DIR, WORKSPACE_SCRIPTS_DIR), {
       recursive: true
     })
   ])
-  return sessionDir
+  return assetDir
 }
 
 const splitFileName = (name: string): { stem: string; extWithDot: string } => {
@@ -159,7 +166,7 @@ export class AttachmentService {
 
   public async saveAttachment(input: {
     workspaceRootPath: string
-    sessionId: string
+    assetBucketId: string
     name: string
     bytes: Uint8Array
     mimeType?: string
@@ -178,7 +185,10 @@ export class AttachmentService {
       throw new Error('暂不支持该文件格式')
     }
 
-    const dirPath = await ensureWorkspaceAttachmentDirs(input.workspaceRootPath, input.sessionId)
+    const dirPath = await ensureWorkspaceAttachmentDirs(
+      input.workspaceRootPath,
+      input.assetBucketId
+    )
     const targetPath = await resolveUniqueTargetPath(dirPath, input.name)
     await fs.promises.writeFile(targetPath, Buffer.from(input.bytes))
     return this.createAttachmentFromPath({
@@ -191,7 +201,7 @@ export class AttachmentService {
 
   public async importAttachmentFromPath(input: {
     workspaceRootPath: string
-    sessionId: string
+    assetBucketId: string
     sourcePath: string
     kind?: ChatAttachment['kind']
     mimeType?: string
@@ -212,7 +222,10 @@ export class AttachmentService {
       throw new Error('暂不支持该文件格式')
     }
 
-    const dirPath = await ensureWorkspaceAttachmentDirs(input.workspaceRootPath, input.sessionId)
+    const dirPath = await ensureWorkspaceAttachmentDirs(
+      input.workspaceRootPath,
+      input.assetBucketId
+    )
     const targetPath = await resolveUniqueTargetPath(dirPath, displayName)
     await fs.promises.copyFile(sourcePath, targetPath)
     return this.createAttachmentFromPath({

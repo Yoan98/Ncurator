@@ -528,7 +528,7 @@ export type ChatAttachment = {
 
 export type AttachmentPickRequest = {
   workspaceRootPath: string
-  sessionId: string
+  assetBucketId: string
 }
 
 export type AttachmentPickResponse = {
@@ -545,7 +545,7 @@ export type AttachmentProcessResponse = {
 
 export type AttachmentSaveRequest = {
   workspaceRootPath: string
-  sessionId: string
+  assetBucketId: string
   name: string
   bytes: Uint8Array
   mimeType?: string

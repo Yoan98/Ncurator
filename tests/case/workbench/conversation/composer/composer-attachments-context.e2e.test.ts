@@ -95,36 +95,30 @@ const resolveWorkspaceBinding = async (
     }
   }, 'Workbench Composer Attachments Workspace')
 
-const resolveLatestSessionId = async (
+const countWorkspaceSessions = async (
   page: import('playwright').Page,
   workspaceId: string
-): Promise<string> => {
-  const deadline = Date.now() + 10000
-  for (;;) {
-    const sessionId = await page.evaluate(async (input) => {
+): Promise<number> =>
+  await page.evaluate(
+    async (input) => {
       const sessions = await window.api.chatSessionList()
-      return sessions.find((item) => item.workspace_id === input.workspaceId)?.id || null
-    }, { workspaceId })
-    if (sessionId) return sessionId
-    if (Date.now() >= deadline) {
-      throw new Error('attachment draft session unavailable')
-    }
-    await page.waitForTimeout(200)
-  }
-}
+      return sessions.filter((item) => item.workspace_id === input.workspaceId).length
+    },
+    { workspaceId }
+  )
 
-const createSessionBackedAttachments = async (
+const createBucketBackedAttachments = async (
   page: import('playwright').Page,
   input: {
-    sessionId: string
+    assetBucketId: string
     workspaceRootPath: string
   }
 ): Promise<{
-  sessionId: string
+  assetBucketId: string
   imageAttachment: import('../../../../../../src/shared/types').ChatAttachment
   fileAttachment: import('../../../../../../src/shared/types').ChatAttachment
 }> =>
-  await page.evaluate(async ({ sessionId, workspaceRootPath }) => {
+  await page.evaluate(async ({ assetBucketId, workspaceRootPath }) => {
     const canvas = document.createElement('canvas')
     canvas.width = 64
     canvas.height = 64
@@ -149,7 +143,7 @@ const createSessionBackedAttachments = async (
 
     const imageSaved = await window.api.attachmentSaveFile({
       workspaceRootPath,
-      sessionId,
+      assetBucketId,
       name: 'qa-image.png',
       bytes: new Uint8Array(await blob.arrayBuffer()),
       mimeType: 'image/png',
@@ -161,7 +155,7 @@ const createSessionBackedAttachments = async (
 
     const fileSaved = await window.api.attachmentSaveFile({
       workspaceRootPath,
-      sessionId,
+      assetBucketId,
       name: 'workbench-preview.md',
       bytes: new TextEncoder().encode('# Preview\n\nAttachment markdown body.'),
       mimeType: 'text/markdown',
@@ -172,7 +166,7 @@ const createSessionBackedAttachments = async (
     }
 
     return {
-      sessionId,
+      assetBucketId,
       imageAttachment: imageSaved.attachment,
       fileAttachment: fileSaved.attachment
     }
@@ -210,9 +204,13 @@ describe('workbench conversation e2e', () => {
               }
             })
             await getWorkbenchLocator(page, workbenchSelectors.attachmentAddButton).click()
-            const sessionId = await resolveLatestSessionId(page, workspaceBinding.workspaceId)
-            const created = await createSessionBackedAttachments(page, {
-              sessionId,
+            const sessionCountAfterEmptyPick = await countWorkspaceSessions(
+              page,
+              workspaceBinding.workspaceId
+            )
+            const assetBucketId = await page.evaluate(() => crypto.randomUUID())
+            const created = await createBucketBackedAttachments(page, {
+              assetBucketId,
               workspaceRootPath: workspaceBinding.workspaceRootPath
             })
             await setSettingsE2EApiOverrides(page, {
@@ -226,12 +224,14 @@ describe('workbench conversation e2e', () => {
             await imageCard.first().waitFor({ state: 'visible' })
             await page.waitForFunction(
               (attachmentName) => {
-                const image = Array.from(document.images).find((item) => item.alt === attachmentName)
+                const image = Array.from(document.images).find(
+                  (item) => item.alt === attachmentName
+                )
                 return Boolean(
                   image &&
-                    image.complete &&
-                    image.naturalWidth === 64 &&
-                    image.src.startsWith('blob:')
+                  image.complete &&
+                  image.naturalWidth === 64 &&
+                  image.src.startsWith('blob:')
                 )
               },
               'qa-image.png',
@@ -243,7 +243,10 @@ describe('workbench conversation e2e', () => {
             })
 
             await imageCard.first().click()
-            const previewModal = getWorkbenchLocator(page, workbenchSelectors.attachmentPreviewModal)
+            const previewModal = getWorkbenchLocator(
+              page,
+              workbenchSelectors.attachmentPreviewModal
+            )
             await previewModal.waitFor({ state: 'visible' })
             await page.waitForFunction(
               ({ modalTestId, attachmentName }) => {
@@ -263,7 +266,9 @@ describe('workbench conversation e2e', () => {
             const downloadButton = page.getByRole('button', { name: '下载图片', exact: true })
             const closeButton = page.getByRole('button', { name: '关闭图片预览', exact: true })
             const zoomButton = page.getByRole('button', { name: '放大', exact: true })
-            const previewImageBox = await previewModal.locator('img[alt="qa-image.png"]').boundingBox()
+            const previewImageBox = await previewModal
+              .locator('img[alt="qa-image.png"]')
+              .boundingBox()
             const downloadButtonBox = await downloadButton.boundingBox()
             const closeButtonBox = await closeButton.boundingBox()
             const zoomButtonBox = await zoomButton.boundingBox()
@@ -282,7 +287,10 @@ describe('workbench conversation e2e', () => {
             const imageRemoved =
               (await getImageAttachmentCardByName(page, 'qa-image.png').count()) === 0
 
-            const fileCard = getWorkbenchPrefixLocator(page, workbenchSelectors.attachmentCardPrefix)
+            const fileCard = getWorkbenchPrefixLocator(
+              page,
+              workbenchSelectors.attachmentCardPrefix
+            )
               .filter({ hasText: 'workbench-preview.md' })
               .first()
             await fileCard.waitFor({ state: 'visible' })
@@ -327,7 +335,8 @@ describe('workbench conversation e2e', () => {
             )
 
             return {
-              sessionId: created.sessionId,
+              assetBucketId: created.assetBucketId,
+              sessionCountAfterEmptyPick,
               imageAttachmentPath: created.imageAttachment.path,
               fileAttachmentPath: created.fileAttachment.path,
               previewVisible,
@@ -336,15 +345,15 @@ describe('workbench conversation e2e', () => {
               closeButtonVisible: Boolean(closeButtonBox),
               zoomControlBelowImage: Boolean(
                 previewImageBox &&
-                  zoomButtonBox &&
-                  zoomButtonBox.y >= previewImageBox.y + previewImageBox.height
+                zoomButtonBox &&
+                zoomButtonBox.y >= previewImageBox.y + previewImageBox.height
               ),
               topActionsAboveImage: Boolean(
                 previewImageBox &&
-                  downloadButtonBox &&
-                  closeButtonBox &&
-                  downloadButtonBox.y + downloadButtonBox.height <= previewImageBox.y &&
-                  closeButtonBox.y + closeButtonBox.height <= previewImageBox.y
+                downloadButtonBox &&
+                closeButtonBox &&
+                downloadButtonBox.y + downloadButtonBox.height <= previewImageBox.y &&
+                closeButtonBox.y + closeButtonBox.height <= previewImageBox.y
               ),
               fileCardText,
               unsupportedMessage,
@@ -364,8 +373,9 @@ describe('workbench conversation e2e', () => {
               result.imageRemoved &&
               result.downloadButtonVisible &&
               result.closeButtonVisible &&
-              result.imageAttachmentPath.includes(`/.ncurator/assets/${result.sessionId}/`) &&
-              result.fileAttachmentPath.includes(`/.ncurator/assets/${result.sessionId}/`) &&
+              result.sessionCountAfterEmptyPick === 0 &&
+              result.imageAttachmentPath.includes(`/.ncurator/assets/${result.assetBucketId}/`) &&
+              result.fileAttachmentPath.includes(`/.ncurator/assets/${result.assetBucketId}/`) &&
               result.zoomControlBelowImage &&
               result.topActionsAboveImage &&
               result.fileCardText.includes('MD') &&
@@ -377,7 +387,7 @@ describe('workbench conversation e2e', () => {
             {
               name: 'workbench-composer-attachments-prd-flow',
               message:
-                '附件输入应满足 PRD：附件保存到工作区 .ncurator/assets/<sessionId>/，图片可预览且控件不压图，文件副标题显示扩展名，文件可默认打开，不支持格式只提示且不加入，超过 10MB 只提示不拦截，普通文本粘贴仍正常。',
+                '附件输入应满足 PRD：附件保存到工作区 .ncurator/assets/<assetBucketId>/，添加附件不创建新会话，图片可预览且控件不压图，文件副标题显示扩展名，文件可默认打开，不支持格式只提示且不加入，超过 10MB 只提示不拦截，普通文本粘贴仍正常。',
               data: result
             }
           )

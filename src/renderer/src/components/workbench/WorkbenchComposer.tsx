@@ -72,17 +72,16 @@ type WorkbenchComposerProps = {
   draftValue: ComposerDraftValue
   draftKey: string
   contextUsage?: WorkbenchContextUsage | null
-  requestAttachmentTarget: () => Promise<{ sessionId: string; workspaceRootPath: string } | null>
+  requestAttachmentTarget: () => Promise<{
+    assetBucketId: string
+    workspaceRootPath: string
+  } | null>
 }
 
 const isTextNode = (value: Node | null): value is Text => value instanceof Text
 const CARET_ANCHOR_ROLE = 'composer-caret-anchor'
 const LARGE_FILE_WARNING_BYTES = 10 * 1024 * 1024
-const SUPPORTED_ATTACHMENT_FILE_EXTENSIONS = new Set([
-  'md',
-  'json',
-  'docx'
-])
+const SUPPORTED_ATTACHMENT_FILE_EXTENSIONS = new Set(['md', 'json', 'docx'])
 
 const getAttachmentFileExt = (name: string): string => {
   const last =
@@ -554,7 +553,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   )
 
   const appendAttachments = useCallback(
-    (nextItems: ChatAttachment[]): void => {
+    (nextItems: ChatAttachment[], assetBucketId?: string | null): void => {
       if (nextItems.length === 0) return
       const accepted: ChatAttachment[] = []
       nextItems.forEach((item) => {
@@ -568,9 +567,21 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
         accepted.push(item)
       })
       if (accepted.length === 0) return
-      updateAttachments([...(draftValueRef.current.attachments || []), ...accepted])
+      const current = draftValueRef.current
+      const nextDraft: ComposerDraftValue = {
+        ...current,
+        assetBucketId: assetBucketId || current.assetBucketId || null,
+        attachments: [...(current.attachments || []), ...accepted]
+      }
+      draftValueRef.current = nextDraft
+      setHasContent(
+        nextDraft.contentNodes.length > 0 ||
+          Boolean(nextDraft.input.trim()) ||
+          nextDraft.attachments.length > 0
+      )
+      onDraftChange(nextDraft)
     },
-    [message, updateAttachments]
+    [message, onDraftChange]
   )
 
   const removeAttachment = useCallback(
@@ -590,35 +601,46 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     }
     const response = await window.api.attachmentPick(target)
     if (response.error) message.warning(response.error)
-    if (!response.canceled) appendAttachments(response.items)
+    if (!response.canceled) appendAttachments(response.items, target.assetBucketId)
     focusEditorAfterControlChange()
   }, [appendAttachments, focusEditorAfterControlChange, message, requestAttachmentTarget])
 
-  const createAttachmentFromClipboardFile = useCallback(async (file: File) => {
-    const target = await requestAttachmentTarget()
-    if (!target) {
-      return null
-    }
-    const saved = await window.api.attachmentSaveFile({
-      workspaceRootPath: target.workspaceRootPath,
-      sessionId: target.sessionId,
-      name: file.name || (file.type.startsWith('image/') ? 'clipboard.png' : 'clipboard-file'),
-      bytes: new Uint8Array(await file.arrayBuffer()),
-      mimeType: file.type,
-      kind: file.type.startsWith('image/') ? 'image' : 'file'
-    })
-    if (!saved.success && saved.error) {
-      message.warning(saved.error)
-    }
-    return saved.attachment || null
-  }, [message, requestAttachmentTarget])
+  const createAttachmentFromClipboardFile = useCallback(
+    async (file: File) => {
+      const target = await requestAttachmentTarget()
+      if (!target) {
+        return null
+      }
+      const saved = await window.api.attachmentSaveFile({
+        workspaceRootPath: target.workspaceRootPath,
+        assetBucketId: target.assetBucketId,
+        name: file.name || (file.type.startsWith('image/') ? 'clipboard.png' : 'clipboard-file'),
+        bytes: new Uint8Array(await file.arrayBuffer()),
+        mimeType: file.type,
+        kind: file.type.startsWith('image/') ? 'image' : 'file'
+      })
+      if (!saved.success && saved.error) {
+        message.warning(saved.error)
+      }
+      return saved.attachment
+        ? { attachment: saved.attachment, assetBucketId: target.assetBucketId }
+        : null
+    },
+    [message, requestAttachmentTarget]
+  )
 
   const handleEditorPaste = (event: React.ClipboardEvent<HTMLSpanElement>): void => {
     const files = Array.from(event.clipboardData.files || [])
     if (files.length > 0) {
       event.preventDefault()
       void Promise.all(files.map(createAttachmentFromClipboardFile)).then((items) => {
-        appendAttachments(items.filter((item): item is ChatAttachment => Boolean(item)))
+        const validItems = items.filter(
+          (item): item is { attachment: ChatAttachment; assetBucketId: string } => Boolean(item)
+        )
+        appendAttachments(
+          validItems.map((item) => item.attachment),
+          validItems[0]?.assetBucketId || null
+        )
       })
       return
     }

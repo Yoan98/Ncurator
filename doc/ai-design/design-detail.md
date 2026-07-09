@@ -185,7 +185,7 @@ interface AiRunContext {
 
 ### 附件 reference scope contract
 
-- Workbench 附件统一保存到 `<workspace>/.ncurator/assets/<sessionId>/`。
+- Workbench 附件统一保存到 `<workspace>/.ncurator/assets/<assetBucketId>/`，`assetBucketId` 是输入草稿 UUID，不依赖会话 ID。
 - 预留 `<workspace>/.ncurator/scripts/` 供后续工具或脚本产物使用。
 - 当前 `brain` 只接收附件的顺序、名称和路径，不再接收发送前预解析摘要。
 - 当前通过 `+` 或粘贴可进入附件链路的类型只包括：

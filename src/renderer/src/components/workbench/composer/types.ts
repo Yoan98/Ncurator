@@ -23,4 +23,5 @@ export type ComposerDraftValue = {
   contentNodes: ChatMessageContentNode[]
   selectedReferences: SelectedReference[]
   attachments: ChatAttachment[]
+  assetBucketId?: string | null
 }

@@ -1528,49 +1528,76 @@ export function registerHandlers(services: {
     }
   })
 
-  ipcMain.handle('attachment-pick', async (_event, payload: AttachmentPickRequest): Promise<AttachmentPickResponse> => {
-    try {
-      const workspaceRootPath = String(payload?.workspaceRootPath || '').trim()
-      const sessionId = String(payload?.sessionId || '').trim()
-      if (!workspaceRootPath) {
-        return { canceled: true, items: [], error: '请先选择工作区并完成目录绑定' }
-      }
-      if (!sessionId) {
-        return { canceled: true, items: [], error: '当前会话不存在，无法保存附件' }
-      }
-      const dialogOptions: OpenDialogOptions = {
-        title: '选择附件',
-        buttonLabel: '选择附件',
-        properties: ['openFile', 'multiSelections', 'dontAddToRecent'],
-        filters: [
-          {
-            name: 'Attachments',
-            extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'tif', 'tiff', 'md', 'json', 'docx']
-          },
-          {
-            name: 'Supported Files',
-            extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'tif', 'tiff', 'md', 'json', 'docx']
-          }
-        ]
-      }
-      const result = await dialog.showOpenDialog(dialogOptions)
-      if (result.canceled || result.filePaths.length === 0) return { canceled: true, items: [] }
-      return {
-        canceled: false,
-        items: await Promise.all(
-          result.filePaths.map((filePath) =>
-            attachmentService.importAttachmentFromPath({
-              workspaceRootPath,
-              sessionId,
-              sourcePath: filePath
-            })
+  ipcMain.handle(
+    'attachment-pick',
+    async (_event, payload: AttachmentPickRequest): Promise<AttachmentPickResponse> => {
+      try {
+        const workspaceRootPath = String(payload?.workspaceRootPath || '').trim()
+        const assetBucketId = String(payload?.assetBucketId || '').trim()
+        if (!workspaceRootPath) {
+          return { canceled: true, items: [], error: '请先选择工作区并完成目录绑定' }
+        }
+        if (!assetBucketId) {
+          return { canceled: true, items: [], error: '附件目录不存在，无法保存附件' }
+        }
+        const dialogOptions: OpenDialogOptions = {
+          title: '选择附件',
+          buttonLabel: '选择附件',
+          properties: ['openFile', 'multiSelections', 'dontAddToRecent'],
+          filters: [
+            {
+              name: 'Attachments',
+              extensions: [
+                'png',
+                'jpg',
+                'jpeg',
+                'webp',
+                'gif',
+                'bmp',
+                'tif',
+                'tiff',
+                'md',
+                'json',
+                'docx'
+              ]
+            },
+            {
+              name: 'Supported Files',
+              extensions: [
+                'png',
+                'jpg',
+                'jpeg',
+                'webp',
+                'gif',
+                'bmp',
+                'tif',
+                'tiff',
+                'md',
+                'json',
+                'docx'
+              ]
+            }
+          ]
+        }
+        const result = await dialog.showOpenDialog(dialogOptions)
+        if (result.canceled || result.filePaths.length === 0) return { canceled: true, items: [] }
+        return {
+          canceled: false,
+          items: await Promise.all(
+            result.filePaths.map((filePath) =>
+              attachmentService.importAttachmentFromPath({
+                workspaceRootPath,
+                assetBucketId,
+                sourcePath: filePath
+              })
+            )
           )
-        )
+        }
+      } catch (error) {
+        return { canceled: true, items: [], error: getErrorMessage(error) }
       }
-    } catch (error) {
-      return { canceled: true, items: [], error: getErrorMessage(error) }
     }
-  })
+  )
 
   ipcMain.handle(
     'attachment-save-file',
@@ -1583,7 +1610,7 @@ export function registerHandlers(services: {
         if (!bytes.byteLength) return { success: false, error: '附件内容为空' }
         const attachment = await attachmentService.saveAttachment({
           workspaceRootPath: payload.workspaceRootPath,
-          sessionId: payload.sessionId,
+          assetBucketId: payload.assetBucketId,
           name: payload.name,
           bytes,
           mimeType: payload.mimeType,

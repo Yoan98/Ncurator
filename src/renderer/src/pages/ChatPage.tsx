@@ -529,7 +529,8 @@ const createEmptyComposerDraft = (): ComposerDraftValue => ({
   input: '',
   contentNodes: [],
   selectedReferences: [],
-  attachments: []
+  attachments: [],
+  assetBucketId: null
 })
 
 const isComposerDraftEmpty = (draft: ComposerDraftValue): boolean =>
@@ -577,6 +578,7 @@ const ChatPage: React.FC = () => {
   const [composerContentNodes, setComposerContentNodes] = useState<ChatMessageContentNode[]>([])
   const [selectedReferences, setSelectedReferences] = useState<SelectedReference[]>([])
   const [attachments, setAttachments] = useState<ChatAttachment[]>([])
+  const [assetBucketId, setAssetBucketId] = useState<string | null>(null)
   const [workspaces, setWorkspaces] = useState<WorkspaceSource[]>([])
   const [workspacesLoaded, setWorkspacesLoaded] = useState(false)
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null)
@@ -644,9 +646,10 @@ const ChatPage: React.FC = () => {
       input,
       contentNodes: composerContentNodes,
       selectedReferences,
-      attachments
+      attachments,
+      assetBucketId
     }),
-    [attachments, composerContentNodes, input, selectedReferences]
+    [assetBucketId, attachments, composerContentNodes, input, selectedReferences]
   )
   const composerDraftValueRef = useRef<ComposerDraftValue>(composerDraftValue)
 
@@ -724,6 +727,7 @@ const ChatPage: React.FC = () => {
     setComposerContentNodes(draft.contentNodes)
     setSelectedReferences(draft.selectedReferences)
     setAttachments(draft.attachments || [])
+    setAssetBucketId(draft.assetBucketId || null)
     composerDraftVersionRef.current += 1
     setComposerDraftKey(`${reason}:${composerDraftVersionRef.current}`)
   }, [])
@@ -1819,7 +1823,7 @@ const ChatPage: React.FC = () => {
   }
 
   const ensureAttachmentTarget = useCallback(async (): Promise<{
-    sessionId: string
+    assetBucketId: string
     workspaceRootPath: string
   } | null> => {
     if (!selectedWorkspaceReady || !selectedWorkspace?.root_path) {
@@ -1827,20 +1831,21 @@ const ChatPage: React.FC = () => {
       return null
     }
 
-    let sessionId = currentSessionIdRef.current
-    if (!sessionId) {
-      const createdSession = await createDraftSessionForSubmit(selectedWorkspace)
-      if (!createdSession) return null
-      sessionId = createdSession.id
-      adoptCreatedSession(createdSession)
-      void loadSessions()
+    let nextAssetBucketId = composerDraftValueRef.current.assetBucketId || assetBucketId
+    if (!nextAssetBucketId) {
+      nextAssetBucketId = crypto.randomUUID()
+      setAssetBucketId(nextAssetBucketId)
+      composerDraftValueRef.current = {
+        ...composerDraftValueRef.current,
+        assetBucketId: nextAssetBucketId
+      }
     }
 
     return {
-      sessionId,
+      assetBucketId: nextAssetBucketId,
       workspaceRootPath: selectedWorkspace.root_path
     }
-  }, [loadSessions, message, selectedWorkspace, selectedWorkspaceReady])
+  }, [assetBucketId, message, selectedWorkspace, selectedWorkspaceReady])
 
   const handleSend = async (): Promise<void> => {
     if (composerMode === 'ai' && aiRunId) {
@@ -2562,6 +2567,7 @@ const ChatPage: React.FC = () => {
       setComposerContentNodes(draft.contentNodes)
       setSelectedReferences(draft.selectedReferences)
       setAttachments(draft.attachments || [])
+      setAssetBucketId(draft.assetBucketId || null)
       saveComposerDraftForSession(currentSessionId, draft)
     },
     [currentSessionId, saveComposerDraftForSession]

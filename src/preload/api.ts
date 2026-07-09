@@ -13,7 +13,6 @@ import type {
   AppUpdateActionResponse,
   AppUpdateSnapshot,
   ChatMessage,
-  ChatAttachment,
   AttachmentPickRequest,
   AttachmentPickResponse,
   AttachmentProcessResponse,
