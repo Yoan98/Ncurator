@@ -436,18 +436,10 @@ const getToolItemText = (
     return sentence(text('查看工作空间文档列表失败'))
   }
   if (toolName === 'web_search') {
-    if (status === 'running') return sentence(text('正在搜索网页：'), text(queryLabel, true))
-    if (status === 'completed') return sentence(text('已搜索网页：'), text(queryLabel, true))
-    if (status === 'partial_failed')
-      return sentence(text('部分网页搜索失败：'), text(queryLabel, true))
-    return sentence(text('搜索网页失败：'), text(queryLabel, true))
+    return sentence(text('搜索网页：'), text(queryLabel, true))
   }
   if (toolName === 'web_crawl') {
-    if (status === 'running') return sentence(text('正在读取网页：'), text(urlLabel, true))
-    if (status === 'completed') return sentence(text('已读取网页：'), text(urlLabel, true))
-    if (status === 'partial_failed')
-      return sentence(text('部分网页读取失败：'), text(urlLabel, true))
-    return sentence(text('读取网页失败：'), text(urlLabel, true))
+    return sentence(text('读取网页：'), text(urlLabel, true))
   }
   if (toolName === 'browser_use') {
     if (browserAction === 'navigate') return sentence(text('打开网页：'), text(urlLabel, true))

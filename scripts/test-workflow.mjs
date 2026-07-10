@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/explicit-function-return-type */
 import { readdir, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -10,6 +11,7 @@ const resolveLocalBin = (name) =>
 const PNPM_BIN = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
 const VITEST_BIN = resolveLocalBin('vitest')
 const ELECTRON_VITE_BIN = resolveLocalBin('electron-vite')
+const NATIVE_SWITCH_SCRIPT = path.join(ROOT, 'scripts', 'switch-better-sqlite3-native.mjs')
 const LIVE_BACKEND_NODE_OLD_SPACE_MB = 8192
 const DEFAULT_E2E_FILE_DELAY_MS = 1000
 const USE_WINDOWS_SHELL = process.platform === 'win32'
@@ -202,6 +204,18 @@ const runCommandWithFallback = (input) => {
   return 1
 }
 
+const switchBetterSqliteNative = (target) => {
+  const result = runSpawn(process.execPath, [NATIVE_SWITCH_SCRIPT, target])
+  reportSpawnFailure(
+    `native switch ${target}`,
+    process.execPath,
+    [NATIVE_SWITCH_SCRIPT, target],
+    result
+  )
+  if (typeof result.status === 'number') return result.status
+  return 1
+}
+
 const runVitest = (input) => {
   const requiresSingleWorker =
     input.configPath.includes('e2e') ||
@@ -290,6 +304,11 @@ const runTypeWorkflow = async (input) => {
   if (testFiles.length === 0) {
     process.stdout.write(`[test-workflow] no tests found for ${formatScope(input)}\n`)
     return 0
+  }
+
+  const nativeCode = switchBetterSqliteNative(input.type === 'e2e' ? 'electron' : 'node')
+  if (nativeCode !== 0) {
+    return nativeCode
   }
 
   if (input.type === 'e2e') {
