@@ -13,8 +13,8 @@
 
 ### 2.1 当前状态
 
-- 总体登记：`20` 个 e2e case，`1` 个 backend contract case。
-- 当前有效结论：`20 / 20` 个 e2e case 有效通过；`chat-run-service-contract` backend contract 有效通过。
+- 总体登记：`23` 个 e2e case，`1` 个 backend contract case。
+- 当前有效结论：`20 / 23` 个 e2e case 已有有效通过；`web-read-from-search-result`、`web-read-direct-url`、`web-search-diagnostic` 已登记为网页能力补充回归，其中新增读取 case 待执行更新结论；`chat-run-service-contract` backend contract 有效通过。
 
 ### 2.2 按 Suite 汇总
 
@@ -24,10 +24,10 @@
   - 检测时间：`2026-07-10 16:26:14 +0800`
   - 备注：`composer-attachments-context`、`composer-text-selection`、`reference-mention-keyboard`、`send-guard-mode-switch-and-preferences`、`workspace-root-path-required`、`user-message-actions`、`reference-token-lifecycle`、`session-delete-confirmation-and-context-ring`、`session-initial-create-and-title` 均已通过真实 Electron UI；涉及 AI 的 case 使用真实模型。
 - `run`
-  - 登记 case：`6` 个 e2e，`1` 个 backend contract
-  - 有效通过：`6 / 6` 个 e2e，`1 / 1` 个 backend contract
+  - 登记 case：`9` 个 e2e，`1` 个 backend contract
+  - 有效通过：`6 / 9` 个 e2e，`1 / 1` 个 backend contract
   - 检测时间：e2e `2026-07-10 17:19:39 +0800`；backend `2026-07-10 16:25:36 +0800`
-  - 备注：`ai-process-stream-and-final-answer`、`approval-batch-flow`、`stop-running-or-approval-run`、`run-navigation-snapshot-replay`、`web-search-diagnostic`、`browser-use-task-panel` 已通过真实 Electron UI、真实模型、真实 workspace 索引和真实 AI run；`chat-run-service-contract` 已通过 backend contract。`browser-use-task-panel` 使用当前用户选择的 `AI_LIVE_*` 配置，不引入 browser 专用模型配置；DashScope / openai-compatible / `deepseek-v4-flash` 已通过 Stagehand deepseek provider 映射、URL 先导航和 browser_use 结果摘要完成回归。
+  - 备注：`ai-process-stream-and-final-answer`、`approval-batch-flow`、`stop-running-or-approval-run`、`run-navigation-snapshot-replay`、`web-search-diagnostic`、`browser-use-task-panel` 已通过真实 Electron UI、真实模型、真实 workspace 索引和真实 AI run；`web-read-from-search-result`、`web-read-direct-url` 为新增网页读取回归，待执行后更新有效结论；`chat-run-service-contract` 已通过 backend contract。`browser-use-task-panel` 使用当前用户选择的 `AI_LIVE_*` 配置，不引入 browser 专用模型配置；DashScope / openai-compatible / `deepseek-v4-flash` 已通过 Stagehand deepseek provider 映射、URL 先导航和 browser_use 结果摘要完成回归。
 - `result`
   - 登记 case：`5`
   - 有效通过：`5 / 5`
@@ -44,6 +44,7 @@
 - `file-preview-actions` 当前按生产真实索引能力覆盖 `pdf/docx/md/txt`：`.md`、`.markdown`、`.txt` 必须通过真实索引进入搜索结果，并从搜索结果打开右侧预览。
 - docx apply case 需要真实 docx 输入、真实 AI 编辑、真实写回记录、真实预览和真实回退。
 - `browser-use-task-panel` 需要真实 AI run 触发 `browser_use` 并驱动内置浏览器完成本地网页任务；当前已使用 DashScope / openai-compatible / `deepseek-v4-flash` 完成有效通过，不能用 fake browser 替代。
+- `web_search` 与 `web_crawl` 需要分开覆盖：搜索 case 只验证候选网页返回；读取 case 必须验证 AI 继续读取网页正文后再回答。
 - Workbench 附件链路当前固定保存到 `<workspace>/.ncurator/assets/<assetBucketId>/`，`assetBucketId` 为输入草稿 UUID，发送给 AI 时只传附件名称与路径，不再做发送前识图或文件解析。
 
 ## 3. Suite 设计
@@ -244,6 +245,33 @@ tests/case/workbench/
 - How：启动本地测试网页；通过真实用户请求让 AI 使用 `browser_use` 操作页面；等待右侧浏览器面板打开、网页输入框被填入、提交按钮被点击，并从真实 browser_use 结果中读到页面结果。
 - Oracle：收到浏览器面板事件后右侧进入内置浏览器状态并随面板 resize 对齐，对齐 `WB-PANEL-004-AC1`；传入 URL 时先导航再执行网页操作，对齐 `WB-PANEL-004-AC2`；切换其他面板或收起时浏览器视图不遮挡其他内容，对齐 `WB-PANEL-004-AC3`；任务完成后真实 browser_use 结果包含本地网页返回的 `BROWSER_TASK_DONE` 和口令，对齐 `WB-PANEL-004-AC4`、`WB-CORE-005-AC1`、`WB-CORE-006-AC1`；记录模型、耗时、完成度评分和失败归因。
 - Not：不验证公网网页稳定性；本 case 使用本地测试网页减少外部波动；不允许用 fake browser 或 fake tool result 替代；不要求 live 模型必须在固定时限内结束整轮最终回答，只要真实内置浏览器已完成输入、点击和结果读取即可判定 browser panel 能力有效。
+
+#### `web-search-diagnostic`
+
+- 测试类型：`e2e`
+- What：验证真实 AI 针对“DeepSeek 最近融资情况”先调用 `web_search`，并拿到结构化候选网页。
+- Why：网页搜索是实时信息入口；如果模型没有调用搜索工具或搜索工具没有返回候选，后续网页读取和回答都会变成编造。
+- How：通过真实 Workbench UI 发送 DeepSeek 融资搜索请求；等待真实 AI run 完成；从 run event 中读取 `web_search` 调用、query 和结果数量。
+- Oracle：run 完成；至少一次 `web_search` query 包含 DeepSeek；最后一次搜索结果 `ok=true` 且候选网页数量大于 0；不出现 fake search / fake AI 信号。
+- Not：不要求读取候选网页正文；正文读取由 `web-read-from-search-result` 覆盖。
+
+#### `web-read-from-search-result`
+
+- 测试类型：`e2e`
+- What：验证真实 AI 先用 `web_search` 搜索 DeepSeek 融资候选网页，再用 `web_crawl` 读取网页正文后总结。
+- Why：搜索结果只是候选列表，不是正文证据；必须守住“搜索后读取正文”的真实网页信息闭环。
+- How：通过真实 Workbench UI 发送“搜索 DeepSeek 最近融资情况并读取最相关网页正文后总结”；等待真实 AI run 完成；检查 `web_search` 与 `web_crawl` 的工具调用和结果。
+- Oracle：run 完成；`web_search` query 包含 DeepSeek 且有候选结果；至少一次 `web_crawl` 成功；最终回答包含 DeepSeek 和融资 / 投资 / funding 相关信息；不出现 fake search / fake crawl / fake AI 信号。
+- Not：不固定具体新闻网页、金额或日期，避免公网搜索结果变化导致误判。
+
+#### `web-read-direct-url`
+
+- 测试类型：`e2e`
+- What：验证用户直接给 URL 时，真实 AI 使用 `web_crawl` 读取网页正文，并回答正文中的唯一口令。
+- Why：直接 URL 读取是网页阅读的最小闭环，不能退化成浏览器点击任务或只复述 URL。
+- How：启动本地 HTTP 页面并写入唯一口令；通过真实 Workbench UI 要求 AI 读取该 URL 正文；等待真实 AI run 完成。
+- Oracle：run 完成；至少一次 `web_crawl` 成功；不调用 `browser_use`；最终回答包含本地网页唯一口令；不出现 fake crawl / fake AI 信号。
+- Not：不验证网页索引入库，也不验证交互式浏览器操作；这些分别由 Settings 网页索引 case 与 `browser-use-task-panel` 覆盖。
 
 ### 5.3 `result`
 

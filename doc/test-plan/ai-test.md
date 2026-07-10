@@ -13,7 +13,7 @@
 ### 2.1 按 Suite / 分类汇总
 
 - `tool / docx`
-  - 通过率：`42 / 42`
+  - 通过率：`43 / 43`
   - 检测时间：`2026-06-11 17:16:38 +08:00`
 - `tool / kb`
   - 通过率：`2 / 2`
@@ -25,7 +25,7 @@
 - `tool / web-browsing`
   - 通过率：`6 / 6`
   - 检测时间：`2026-07-08 17:45:49 +08:00`
-  - 覆盖补充：`web_crawl` 已通过冻结 sidecar bin 和内置 headless shell 覆盖 `topic` 必填、`markdown` 字段来源于 `fit_markdown`、`requestedUrl/finalUrl`、分组 links 评分、HTTP 失败与结果过大；`web_search` 已覆盖结构化候选网页结果；`browser_use` 已覆盖缺少内置浏览器服务时的真实 diagnostic。
+  - 覆盖补充：`web-crawl-contract` 覆盖 `web_crawl` 的 `topic` 必填、`markdown` 字段来源于 `fit_markdown`、`requestedUrl/finalUrl`、分组 links 评分、HTTP 失败与结果过大；同文件覆盖 `web_search` 结构化候选网页结果和 `browser_use` 缺少内置浏览器服务时的真实 diagnostic。
 - `tool / utility`
   - 通过率：`4 / 4`
   - 检测时间：`2026-07-08 17:45:49 +08:00`
@@ -37,7 +37,7 @@
   - 通过率：`22 / 22`
   - 检测时间：`2026-06-11 17:16:38 +08:00`
 - `human / live`
-  - 当前有效结论：`2 / 2`（2026-06-11 定向执行 `web_crawl` live case）
+  - 当前有效结论：`2 / 2`（2026-06-11 定向执行 `web_crawl` live case；重复的 DeepSeek web_search live backend case 已删除，网页搜索改由 Workbench UI E2E 覆盖）
   - 检测时间：`2026-06-11`
   - 样例评分：
     - `human-web-crawl-url-inference-reading-live`：`9.0 / 10`；最近有效执行：`2026-06-11`；依据：模型自行推断官网地址并多次调用 `web_crawl` 完成 CSV 文档整理；主要风险：live 模型稳定性和冷启动耗时。
@@ -56,6 +56,8 @@
 ### 3.1 `tool`
 
 - `tool` 只验证真实生产工具调用，不允许 fake。
+- `tool / docx` 包含 `docx-edit-serial-actions-stability`，用于守住同一次 `docx_edit(actions)` 内插入、替换、删除后的 block 定位稳定性。
+- `tool / web-browsing` 包含 `web-crawl-contract`，用于守住 `web_crawl`、`web_search` 和 `browser_use` 工具契约。
 - 目标：验证 tool 与 `hand` 工具执行守卫在真实生产代码下的输入输出是否正常、合理。
 - 约束：必须真实调用生产工具、真实 store、真实 docx apply service、真实 artifact 流。
 - 禁止：fake `documentsStore`、fake `embeddingService`、fake `resolveDocxOpenTarget`、fake tool result。
