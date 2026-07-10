@@ -216,15 +216,24 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
   }
 
   const groupedModels = useMemo(
-    () =>
-      configs
-        .map((config) => ({
-          config,
-          models: (modelListsByConfigId[config.id] || []).filter((model) =>
+    () => {
+      const customModelName = query.trim()
+      return configs
+        .map((config) => {
+          const models = (modelListsByConfigId[config.id] || []).filter((model) =>
             modelMatchesQuery({ query, config, model })
           )
-        }))
-        .filter((group) => group.models.length > 0),
+          const hasCustomModel =
+            customModelName && !models.some((model) => model.id === customModelName)
+          return {
+            config,
+            models: hasCustomModel
+              ? [...models, { id: customModelName, label: customModelName }]
+              : models
+          }
+        })
+        .filter((group) => group.models.length > 0)
+    },
     [configs, modelListsByConfigId, query]
   )
 
@@ -261,6 +270,8 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
           {view === 'vision' && !query.trim() ? (
             <button
               type="button"
+              role="option"
+              aria-selected={!value.visionModel}
               className={joinClassNames(
                 'workbench-select-option',
                 !value.visionModel ? 'workbench-select-option-selected' : ''
@@ -287,6 +298,8 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
                   <button
                     key={`${group.config.id}:${model.id}`}
                     type="button"
+                    role="option"
+                    aria-selected={selected}
                     className={joinClassNames(
                       'workbench-select-option',
                       selected ? 'workbench-select-option-selected' : ''
