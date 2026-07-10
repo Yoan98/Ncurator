@@ -313,7 +313,7 @@ export const webToolFamily: ToolFamilyDefinition = {
               await service.show()
               const result = await service.run({
                 action,
-                instruction,
+                instruction: instruction || '打开网页',
                 url,
                 llmConfig: await ctx.getLlmConfig()
               })
@@ -345,7 +345,8 @@ export const webToolFamily: ToolFamilyDefinition = {
                 return tooLargePayload
               }
 
-              const ok = result.action !== 'act' || result.success
+              const ok =
+                (result.action !== 'act' && result.action !== 'navigate') || result.success
               if (ok) {
                 session.succeed(
                   undefined,

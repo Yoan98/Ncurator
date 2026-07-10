@@ -38,17 +38,10 @@ export const resolveOpenAICompatibleRuntimeOptions = (
       ? [...options.supportedProviderKinds]
       : OPENAI_COMPATIBLE_PROVIDER_KINDS
 
-  const configuredProviderKind = String(config.providerKind || '').trim()
-  if (configuredProviderKind && !isOpenAICompatibleProviderKind(configuredProviderKind)) {
-    throw new Error(`${consumerName} only supports OpenAI-style providers: received ${configuredProviderKind}`)
-  }
-
-  const providerKind = configuredProviderKind
-    ? configuredProviderKind
-    : resolveLlmProviderKind({
-        providerKind: config.providerKind,
-        baseUrl: config.base_url
-      })
+  const providerKind = resolveLlmProviderKind({
+    providerKind: config.providerKind,
+    baseUrl: config.base_url
+  })
 
   if (!isOpenAICompatibleProviderKind(providerKind)) {
     throw new Error(`${consumerName} only supports OpenAI-style providers: received ${providerKind}`)

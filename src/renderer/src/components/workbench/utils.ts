@@ -327,7 +327,7 @@ const getToolSummaryText = (
   }
   if (skillKey === 'browser') {
     if (status === 'running') return sentence(text('正在操作浏览器'))
-    if (status === 'completed') return sentence(text('已完成浏览器操作'))
+    if (status === 'completed') return sentence(text(`已完成 ${normalizedCount} 次浏览器操作`))
     if (status === 'partial_failed') return sentence(text('部分浏览器操作失败'))
     return sentence(text('浏览器操作失败'))
   }
@@ -359,6 +359,7 @@ const getToolItemText = (
   const commandLabel = readCommandLabel(input)
   const urlLabel = readWebUrlLabel(input)
   const instructionLabel = readInstructionLabel(input)
+  const browserAction = input ? readStringValue(input, 'action') || '' : ''
   const waitLabel = readWaitDurationLabel(input)
 
   if (toolName === 'docx_outline') {
@@ -449,13 +450,11 @@ const getToolItemText = (
     return sentence(text('读取网页失败：'), text(urlLabel, true))
   }
   if (toolName === 'browser_use') {
-    if (status === 'running')
-      return sentence(text('正在操作浏览器：'), text(instructionLabel, true))
-    if (status === 'completed')
-      return sentence(text('已完成浏览器操作：'), text(instructionLabel, true))
-    if (status === 'partial_failed')
-      return sentence(text('部分浏览器操作失败：'), text(instructionLabel, true))
-    return sentence(text('浏览器操作失败：'), text(instructionLabel, true))
+    if (browserAction === 'navigate') return sentence(text('打开网页：'), text(urlLabel, true))
+    if (browserAction === 'observe') return sentence(text('观察页面：'), text(instructionLabel, true))
+    if (browserAction === 'extract') return sentence(text('提取页面内容：'), text(instructionLabel, true))
+    if (browserAction === 'act') return sentence(text('操作页面：'), text(instructionLabel, true))
+    return sentence(text('操作浏览器：'), text(instructionLabel, true))
   }
   if (toolName === 'llm_recognize') {
     if (status === 'running') return sentence(text('正在识别图片：'), text(fileLabel, true))

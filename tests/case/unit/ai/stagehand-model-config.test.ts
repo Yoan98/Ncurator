@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { resolveStagehandModelConfig } from '../../../../src/main/services/llm/stagehandModel'
+import { resolveStagehandRuntimeModel } from '../../../../src/main/services/llm/stagehandModel'
+import { StagehandLangChainClient } from '../../../../src/main/services/llm/stagehandLangChainClient'
 import type { LlmRuntimeConfig } from '../../../../src/shared/types'
 
 const createConfig = (overrides?: Partial<LlmRuntimeConfig>): LlmRuntimeConfig => ({
@@ -13,45 +14,38 @@ const createConfig = (overrides?: Partial<LlmRuntimeConfig>): LlmRuntimeConfig =
 })
 
 describe('stagehand model config', () => {
-  it('maps openai-compatible configs onto the openai provider and keeps the custom base url', () => {
-    const result = resolveStagehandModelConfig(createConfig())
+  it('uses a LangChain client for OpenAI-compatible custom endpoints', () => {
+    const result = resolveStagehandRuntimeModel(createConfig())
 
-    expect(result.providerKind).toBe('openai-compatible')
-    expect(result.provider).toBe('openai')
-    expect(result.model).toEqual({
-      modelName: 'openai/custom-browser-model',
-      apiKey: 'test-key',
-      baseURL: 'https://gateway.example.com/v1'
-    })
+    expect(result.mode).toBe('langchain-client')
+    expect(result.provider).toBe('openai-compatible')
+    if (result.mode !== 'langchain-client') throw new Error('expected langchain client')
+    expect(result.llmClient).toBeInstanceOf(StagehandLangChainClient)
   })
 
-  it('uses the deepseek Stagehand provider for openai-compatible deepseek models', () => {
-    const result = resolveStagehandModelConfig(
+  it('does not infer DeepSeek provider from custom endpoint model names', () => {
+    const result = resolveStagehandRuntimeModel(
       createConfig({
         model_name: 'deepseek-v4-flash'
       })
     )
 
-    expect(result.providerKind).toBe('openai-compatible')
-    expect(result.provider).toBe('deepseek')
-    expect(result.model).toEqual({
-      modelName: 'deepseek/deepseek-v4-flash',
-      apiKey: 'test-key',
-      baseURL: 'https://gateway.example.com/v1'
-    })
+    expect(result.mode).toBe('langchain-client')
+    expect(result.provider).toBe('openai-compatible')
   })
 
-  it('maps deepseek configs onto the deepseek provider without restricting custom model names', () => {
-    const result = resolveStagehandModelConfig(
+  it('maps official DeepSeek endpoint onto the DeepSeek Stagehand provider', () => {
+    const result = resolveStagehandRuntimeModel(
       createConfig({
-        providerKind: 'deepseek',
+        providerKind: 'openai-compatible',
         base_url: 'https://api.deepseek.com',
         model_name: 'deepseek-chat-vNext'
       })
     )
 
-    expect(result.providerKind).toBe('deepseek')
+    expect(result.mode).toBe('stagehand-model')
     expect(result.provider).toBe('deepseek')
+    if (result.mode !== 'stagehand-model') throw new Error('expected stagehand model')
     expect(result.model).toEqual({
       modelName: 'deepseek/deepseek-chat-vNext',
       apiKey: 'test-key',
@@ -59,30 +53,37 @@ describe('stagehand model config', () => {
     })
   })
 
-  it('accepts model names outside Stagehand built-in model aliases', () => {
-    const result = resolveStagehandModelConfig(
+  it('maps official OpenAI endpoint onto the OpenAI Stagehand provider', () => {
+    const result = resolveStagehandRuntimeModel(
       createConfig({
-        providerKind: 'openai',
+        providerKind: 'openai-compatible',
+        base_url: 'https://api.openai.com/v1',
         model_name: 'my-team/custom-stagehand-model'
       })
     )
 
+    expect(result.mode).toBe('stagehand-model')
+    expect(result.provider).toBe('openai')
+    if (result.mode !== 'stagehand-model') throw new Error('expected stagehand model')
     expect(result.model.modelName).toBe('openai/my-team/custom-stagehand-model')
   })
 
-  it('rejects unsupported provider kinds before Stagehand runs', () => {
-    expect(() =>
-      resolveStagehandModelConfig(
-        createConfig({
-          providerKind: 'anthropic' as LlmRuntimeConfig['providerKind']
-        })
-      )
-    ).toThrowError('browser_use only supports OpenAI-style providers: received anthropic')
+  it('ignores stale stored providerKind and resolves provider from base_url', () => {
+    const result = resolveStagehandRuntimeModel(
+      createConfig({
+        providerKind: 'deepseek',
+        base_url: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+        model_name: 'deepseek-v4-flash'
+      })
+    )
+
+    expect(result.mode).toBe('langchain-client')
+    expect(result.provider).toBe('openai-compatible')
   })
 
   it('rejects empty required connection fields with clear diagnostics', () => {
     expect(() =>
-      resolveStagehandModelConfig(
+      resolveStagehandRuntimeModel(
         createConfig({
           model_name: '   '
         })
@@ -90,7 +91,7 @@ describe('stagehand model config', () => {
     ).toThrowError('browser_use requires a non-empty model_name')
 
     expect(() =>
-      resolveStagehandModelConfig(
+      resolveStagehandRuntimeModel(
         createConfig({
           base_url: '   '
         })
@@ -98,7 +99,7 @@ describe('stagehand model config', () => {
     ).toThrowError('browser_use requires a non-empty base_url')
 
     expect(() =>
-      resolveStagehandModelConfig(
+      resolveStagehandRuntimeModel(
         createConfig({
           api_key: '   '
         })

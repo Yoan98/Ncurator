@@ -1128,7 +1128,7 @@ export const selectWorkbenchModel = async (page: Page, modelName: string): Promi
   await page
     .locator('.workbench-select-menu.workbench-composer-menu')
     .last()
-    .getByText('主模型')
+    .getByRole('button', { name: /^主模型/u })
     .click()
   const searchInput = page
     .locator('.workbench-select-menu.workbench-composer-menu input[placeholder="搜索模型"]')

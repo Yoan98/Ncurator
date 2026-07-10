@@ -26,11 +26,11 @@ describe('openai compatible runtime options', () => {
     })
   })
 
-  it('accepts openai, deepseek, and openai-compatible providers', () => {
+  it('resolves official providers from base_url', () => {
     expect(
       resolveOpenAICompatibleRuntimeOptions(
         createConfig({
-          providerKind: 'openai',
+          providerKind: 'openai-compatible',
           base_url: 'https://api.openai.com',
           model_name: 'gpt-4.1-mini'
         }),
@@ -41,7 +41,7 @@ describe('openai compatible runtime options', () => {
     expect(
       resolveOpenAICompatibleRuntimeOptions(
         createConfig({
-          providerKind: 'deepseek',
+          providerKind: 'openai-compatible',
           base_url: 'https://api.deepseek.com',
           model_name: 'deepseek-chat'
         }),
@@ -50,14 +50,15 @@ describe('openai compatible runtime options', () => {
     ).toBe('deepseek')
   })
 
-  it('rejects unsupported provider families early', () => {
-    expect(() =>
+  it('ignores stale stored providerKind and defaults unknown endpoints to OpenAI-compatible', () => {
+    expect(
       resolveOpenAICompatibleRuntimeOptions(
         createConfig({
-          providerKind: 'anthropic' as LlmRuntimeConfig['providerKind']
+          providerKind: 'deepseek',
+          base_url: 'https://gateway.example.com/v1'
         }),
         { consumerName: 'browser_use' }
-      )
-    ).toThrowError('browser_use only supports OpenAI-style providers: received anthropic')
+      ).providerKind
+    ).toBe('openai-compatible')
   })
 })

@@ -14,7 +14,7 @@ import type {
   BrowserUseRunInput,
   BrowserUseRunResult
 } from './types'
-import { resolveStagehandModelConfig } from '../llm/stagehandModel'
+import { resolveStagehandRuntimeModel } from '../llm/stagehandModel'
 
 type StagehandModule = typeof import('@browserbasehq/stagehand')
 type StagehandInstance = InstanceType<StagehandModule['Stagehand']>
@@ -113,31 +113,6 @@ const summarizeObservedActions = (actions: BrowserUseActionItem[]): string => {
   return `发现 ${actions.length} 个可操作元素：${actions
     .map((action) => `${action.method || 'action'} ${action.description}`)
     .join('；')}。`
-}
-
-const isNavigationOnlyAct = (input: BrowserUseRunInput): boolean => {
-  if (input.action !== 'act' || !input.url) return false
-  const normalizedInstruction = input.instruction
-    .toLowerCase()
-    .replaceAll(input.url.toLowerCase(), '')
-    .replace(/https?:\/\/\S+/g, '')
-    .replace(/[\s，。,.、:：；;!！?？"'“”‘’（）()\[\]【】]+/g, '')
-  if (!normalizedInstruction) return true
-  return [
-    '打开网址',
-    '打开网页',
-    '打开页面',
-    '打开url',
-    '导航到',
-    '访问网址',
-    '访问网页',
-    '访问页面',
-    'gotourl',
-    'openurl',
-    'navigate',
-    'navigateto',
-    'visiturl'
-  ].some((phrase) => normalizedInstruction === phrase || normalizedInstruction.includes(phrase))
 }
 
 const ZOOM_STEP = 0.1
@@ -246,14 +221,13 @@ export class BrowserEmbedService implements BrowserUseService {
 
   public async run(input: BrowserUseRunInput): Promise<BrowserUseRunResult> {
     await this.show()
-    if (input.url) {
+    if (input.action === 'navigate') {
+      if (!input.url) throw new Error('browser_use navigate requires url')
       await this.navigate(input.url)
-    }
-    if (isNavigationOnlyAct(input)) {
       const view = this.ensureView()
       await waitForWebContentsLoad(view.webContents)
       return {
-        action: 'act',
+        action: 'navigate',
         url: view.webContents.getURL(),
         title: view.webContents.getTitle(),
         summary: '已导航到目标页面。',
@@ -261,6 +235,9 @@ export class BrowserEmbedService implements BrowserUseService {
         message: 'Navigation completed',
         pageState: await this.readPageState()
       }
+    }
+    if (input.url) {
+      await this.navigate(input.url)
     }
     return await this.runDom(input)
   }
@@ -342,13 +319,15 @@ export class BrowserEmbedService implements BrowserUseService {
     await waitForWebContentsLoad(view.webContents)
     const stagehandModule = await import('@browserbasehq/stagehand')
     const cdpUrl = await this.getCdpWebSocketUrl()
-    const modelConfig = resolveStagehandModelConfig(input.llmConfig)
+    const runtimeModel = resolveStagehandRuntimeModel(input.llmConfig)
     const stagehand = new stagehandModule.Stagehand({
       env: 'LOCAL',
       disablePino: true,
       verbose: 0,
       disableAPI: true,
-      model: modelConfig.model,
+      ...(runtimeModel.mode === 'stagehand-model'
+        ? { model: runtimeModel.model }
+        : { llmClient: runtimeModel.llmClient }),
       localBrowserLaunchOptions: {
         cdpUrl,
         connectTimeoutMs: 20_000

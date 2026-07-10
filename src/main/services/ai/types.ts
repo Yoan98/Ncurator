@@ -129,7 +129,7 @@ export type AiTerminalApprovalFallback = {
   stage?: AiRunEventStage
 }
 
-export type BrowserUseAction = 'extract' | 'observe' | 'act'
+export type BrowserUseAction = 'navigate' | 'extract' | 'observe' | 'act'
 
 export type BrowserUseActionItem = {
   description: string
@@ -137,6 +137,15 @@ export type BrowserUseActionItem = {
 }
 
 export type BrowserUseResult =
+  | {
+      action: 'navigate'
+      url: string
+      title?: string
+      summary?: string
+      success: boolean
+      message: string
+      pageState?: string
+    }
   | {
       action: 'extract'
       url: string
