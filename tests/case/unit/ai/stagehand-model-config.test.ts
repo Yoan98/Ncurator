@@ -15,14 +15,29 @@ const createConfig = (overrides?: Partial<LlmRuntimeConfig>): LlmRuntimeConfig =
 })
 
 describe('stagehand model config', () => {
-  it('passes openai-compatible configs through Stagehand custom model options', () => {
+  it('maps openai-compatible configs onto the openai provider and keeps the custom base url', () => {
     const result = resolveStagehandModelConfig(createConfig())
 
     expect(result.providerKind).toBe('openai-compatible')
     expect(result.provider).toBe('openai')
     expect(result.model).toEqual({
-      modelName: 'custom-browser-model',
-      provider: 'openai',
+      modelName: 'openai/custom-browser-model',
+      apiKey: 'test-key',
+      baseURL: 'https://gateway.example.com/v1'
+    })
+  })
+
+  it('uses the deepseek Stagehand provider for openai-compatible deepseek models', () => {
+    const result = resolveStagehandModelConfig(
+      createConfig({
+        model_name: 'deepseek-v4-flash'
+      })
+    )
+
+    expect(result.providerKind).toBe('openai-compatible')
+    expect(result.provider).toBe('deepseek')
+    expect(result.model).toEqual({
+      modelName: 'deepseek/deepseek-v4-flash',
       apiKey: 'test-key',
       baseURL: 'https://gateway.example.com/v1'
     })

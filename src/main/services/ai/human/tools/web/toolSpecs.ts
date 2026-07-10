@@ -75,7 +75,8 @@ export const WEB_SEARCH_OUTPUT_SCHEMA = z.union([
 
 const browserUseBaseOutputSchema = z.object({
   url: z.string(),
-  title: z.string().optional()
+  title: z.string().optional(),
+  summary: z.string().optional()
 })
 
 export const BROWSER_USE_OUTPUT_SCHEMA = z.union([

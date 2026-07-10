@@ -21,6 +21,17 @@ const BROWSER_PANEL_WAIT_TIMEOUT_MS = 180_000
 const BROWSER_TASK_COMPLETION_TIMEOUT_MS = 240_000
 const BROWSER_USE_FAILURE_LIMIT = 2
 
+const readBrowserUseResultText = (event: Extract<AiRunEvent, { type: 'tool_call_result' }>): string => {
+  const data = event.result?.data
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return ''
+  const parts: string[] = []
+  for (const key of ['content', 'pageState', 'summary', 'message']) {
+    const value = (data as Record<string, unknown>)[key]
+    if (typeof value === 'string') parts.push(value)
+  }
+  return parts.join('\n')
+}
+
 const isApprovalBatchRequiredEvent = (
   event: AiRunEvent
 ): event is Extract<AiRunEvent, { type: 'approval_batch_required' }> =>
@@ -105,6 +116,13 @@ const waitForBrowserTaskCompletion = async (
     }
 
     const runCompleted = events.find((event) => event.type === 'run_completed')
+    const browserTaskDoneText = events
+      .filter(
+        (event): event is Extract<AiRunEvent, { type: 'tool_call_result' }> =>
+          event.type === 'tool_call_result' && event.toolName === 'browser_use'
+      )
+      .map(readBrowserUseResultText)
+      .find((text) => text.includes('BROWSER_TASK_DONE') && text.includes(TASK_CODE))
     if (runCompleted?.type === 'run_completed') {
       const finalAnswerText =
         events
@@ -114,6 +132,22 @@ const waitForBrowserTaskCompletion = async (
           )
           .map((event) => event.text)
           .at(-1) || ''
+      return {
+        modelName,
+        durationMs: Date.now() - startedAtMs,
+        events,
+        finalAnswerText
+      }
+    }
+    if (browserTaskDoneText) {
+      const finalAnswerText =
+        events
+          .filter(
+            (event): event is Extract<AiRunEvent, { type: 'answer_completed' }> =>
+              event.type === 'answer_completed'
+          )
+          .map((event) => event.text)
+          .at(-1) || browserTaskDoneText
       return {
         modelName,
         durationMs: Date.now() - startedAtMs,

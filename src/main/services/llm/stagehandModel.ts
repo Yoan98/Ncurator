@@ -13,8 +13,7 @@ export type StagehandModelConfig = {
   providerKind: StagehandSupportedProviderKind
   provider: StagehandProvider
   model: StagehandClientOptions & {
-    modelName: string
-    provider?: StagehandProvider
+    modelName: `${StagehandProvider}/${string}`
   }
 }
 
@@ -24,23 +23,27 @@ const STAGEHAND_PROVIDER_MAP: Record<StagehandSupportedProviderKind, StagehandPr
   'openai-compatible': 'openai'
 }
 
+const inferOpenAICompatibleStagehandProvider = (modelName: string): StagehandProvider => {
+  const normalizedModelName = modelName.trim().toLowerCase()
+  if (normalizedModelName.startsWith('deepseek') || normalizedModelName.includes('/deepseek')) {
+    return 'deepseek'
+  }
+  return 'openai'
+}
+
 export const resolveStagehandModelConfig = (config: LlmRuntimeConfig): StagehandModelConfig => {
   const runtimeOptions = resolveOpenAICompatibleRuntimeOptions(config, {
     consumerName: 'browser_use'
   })
   const providerKind = runtimeOptions.providerKind
-  const provider = STAGEHAND_PROVIDER_MAP[providerKind]
-  const modelName =
+  const provider =
     providerKind === 'openai-compatible'
-      ? runtimeOptions.modelName
-      : `${provider}/${runtimeOptions.modelName}`
+      ? inferOpenAICompatibleStagehandProvider(runtimeOptions.modelName)
+      : STAGEHAND_PROVIDER_MAP[providerKind]
   const model: StagehandModelConfig['model'] = {
-    modelName,
+    modelName: `${provider}/${runtimeOptions.modelName}`,
     apiKey: runtimeOptions.apiKey,
     baseURL: runtimeOptions.baseURL
-  }
-  if (providerKind === 'openai-compatible') {
-    model.provider = 'openai'
   }
   return {
     providerKind,

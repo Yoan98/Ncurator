@@ -108,6 +108,38 @@ const stringifyStagehandExtraction = (value: object): string => {
   return JSON.stringify(value)
 }
 
+const summarizeObservedActions = (actions: BrowserUseActionItem[]): string => {
+  if (actions.length === 0) return '未发现可操作元素。'
+  return `发现 ${actions.length} 个可操作元素：${actions
+    .map((action) => `${action.method || 'action'} ${action.description}`)
+    .join('；')}。`
+}
+
+const isNavigationOnlyAct = (input: BrowserUseRunInput): boolean => {
+  if (input.action !== 'act' || !input.url) return false
+  const normalizedInstruction = input.instruction
+    .toLowerCase()
+    .replaceAll(input.url.toLowerCase(), '')
+    .replace(/https?:\/\/\S+/g, '')
+    .replace(/[\s，。,.、:：；;!！?？"'“”‘’（）()\[\]【】]+/g, '')
+  if (!normalizedInstruction) return true
+  return [
+    '打开网址',
+    '打开网页',
+    '打开页面',
+    '打开url',
+    '导航到',
+    '访问网址',
+    '访问网页',
+    '访问页面',
+    'gotourl',
+    'openurl',
+    'navigate',
+    'navigateto',
+    'visiturl'
+  ].some((phrase) => normalizedInstruction === phrase || normalizedInstruction.includes(phrase))
+}
+
 const ZOOM_STEP = 0.1
 const MIN_ZOOM_FACTOR = 0.5
 const MAX_ZOOM_FACTOR = 2
@@ -217,6 +249,19 @@ export class BrowserEmbedService implements BrowserUseService {
     if (input.url) {
       await this.navigate(input.url)
     }
+    if (isNavigationOnlyAct(input)) {
+      const view = this.ensureView()
+      await waitForWebContentsLoad(view.webContents)
+      return {
+        action: 'act',
+        url: view.webContents.getURL(),
+        title: view.webContents.getTitle(),
+        summary: '已导航到目标页面。',
+        success: true,
+        message: 'Navigation completed',
+        pageState: await this.readPageState()
+      }
+    }
     return await this.runDom(input)
   }
 
@@ -321,19 +366,22 @@ export class BrowserEmbedService implements BrowserUseService {
           action: 'extract',
           url: page.url(),
           title,
+          summary: '已提取当前页面文本内容。',
           content: stringifyStagehandExtraction(result)
         }
       }
       if (input.action === 'observe') {
         const actions = await stagehand.observe(input.instruction, { page })
+        const mappedActions = actions.map((action): BrowserUseActionItem => ({
+          description: action.description,
+          method: action.method
+        }))
         return {
           action: 'observe',
           url: page.url(),
           title,
-          actions: actions.map((action): BrowserUseActionItem => ({
-            description: action.description,
-            method: action.method
-          }))
+          summary: summarizeObservedActions(mappedActions),
+          actions: mappedActions
         }
       }
 
@@ -342,6 +390,7 @@ export class BrowserEmbedService implements BrowserUseService {
         action: 'act',
         url: page.url(),
         title: await page.title(),
+        summary: result.success ? '页面操作已执行。' : `页面操作未完成：${result.message}`,
         success: result.success,
         message: result.message,
         pageState: await this.readPageState()

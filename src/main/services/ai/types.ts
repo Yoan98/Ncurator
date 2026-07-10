@@ -134,18 +134,21 @@ export type BrowserUseResult =
       action: 'extract'
       url: string
       title?: string
+      summary?: string
       content: string
     }
   | {
       action: 'observe'
       url: string
       title?: string
+      summary?: string
       actions: BrowserUseActionItem[]
     }
   | {
       action: 'act'
       url: string
       title?: string
+      summary?: string
       success: boolean
       message: string
       pageState?: string
