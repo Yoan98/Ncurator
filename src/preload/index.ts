@@ -129,7 +129,8 @@ const api: DesktopApi = {
     return ipcRenderer.invoke('web-source-refresh', payload)
   },
   webSourceDelete: (payload) => ipcRenderer.invoke('web-source-delete', payload),
-  legacyLocalImportMigrationStatus: () => ipcRenderer.invoke('legacy-local-import-migration-status'),
+  legacyLocalImportMigrationStatus: () =>
+    ipcRenderer.invoke('legacy-local-import-migration-status'),
   listChunks: (payload) => ipcRenderer.invoke('list-chunks', payload),
   deleteDocuments: (
     ids: string[]
@@ -196,7 +197,6 @@ const api: DesktopApi = {
   },
   llmConfigSave: (config) => ipcRenderer.invoke('llm-config-save', config),
   llmConfigDelete: (id: string) => ipcRenderer.invoke('llm-config-delete', id),
-  llmConfigSetActive: (id: string) => ipcRenderer.invoke('llm-config-set-active', id),
   llmConfigModelList: (id: string) => {
     emitE2EIpcCall('llmConfigModelList', id)
     return ipcRenderer.invoke('llm-config-model-list', id)

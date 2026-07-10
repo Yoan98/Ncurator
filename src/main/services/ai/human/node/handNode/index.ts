@@ -46,6 +46,11 @@ const readTerminalCommandArg = (args: JsonObject): string | undefined =>
     ? args.command.trim()
     : undefined
 
+const readCommandExplanationArg = (args: JsonObject): string | undefined =>
+  typeof args.commandExplanation === 'string' && args.commandExplanation.trim().length > 0
+    ? args.commandExplanation.trim()
+    : undefined
+
 const readBrowserUseApprovalText = (args: JsonObject): string => {
   const action = typeof args.action === 'string' && args.action.trim() ? args.action.trim() : 'use'
   const instruction =
@@ -115,6 +120,7 @@ const collectApprovalBatchItems = (input: {
   order: number
   toolName: string
   command: string
+  commandExplanation: string
   reason: string
 }> => {
   return input.calls.flatMap((call, index) => {
@@ -126,6 +132,7 @@ const collectApprovalBatchItems = (input: {
           order: index,
           toolName: call.toolName,
           command: readBrowserUseApprovalText(call.args),
+          commandExplanation: '使用内置浏览器执行网页操作。',
           reason: '首次使用内置浏览器网页操作能力'
         }
       ]
@@ -142,6 +149,7 @@ const collectApprovalBatchItems = (input: {
           order: index,
           toolName: call.toolName,
           command,
+          commandExplanation: readCommandExplanationArg(call.args) || '执行这条终端指令。',
           reason: safePolicy.reason
         }
       ]
@@ -420,13 +428,13 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
     }
 
     const parsedCalls = parsedCallsResult.calls
-      const approvalItems = collectApprovalBatchItems({
-        runId: input.ctx.runId,
-        taskId: state.task.taskId,
-        calls: parsedCalls,
-        platform: input.ctx.platform,
-        cache: input.cache
-      })
+    const approvalItems = collectApprovalBatchItems({
+      runId: input.ctx.runId,
+      taskId: state.task.taskId,
+      calls: parsedCalls,
+      platform: input.ctx.platform,
+      cache: input.cache
+    })
     const invalidPlanDecisionHint = validateCalls(parsedCalls)
     if (invalidPlanDecisionHint) {
       return returnToBrainWithDecisionHint({

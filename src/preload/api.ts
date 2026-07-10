@@ -201,7 +201,6 @@ export type DesktopApi = {
   llmConfigList: () => Promise<LLMConfig[]>
   llmConfigSave: (config: LLMConfig) => Promise<{ success: boolean; error?: string }>
   llmConfigDelete: (id: string) => Promise<{ success: boolean; error?: string }>
-  llmConfigSetActive: (id: string) => Promise<{ success: boolean; error?: string }>
   llmConfigModelList: (id: string) => Promise<LlmModelListResponse>
   isE2EMode: () => boolean
   aiRuntimeSettingsGet: () => Promise<AiRuntimeSettings>

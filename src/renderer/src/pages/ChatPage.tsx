@@ -33,6 +33,7 @@ import type {
   LLMConfig,
   LlmRemoteModel,
   SelectedReference,
+  WorkbenchModelSelection,
   WorkspaceSource,
   WorkspaceRuntimeBinding
 } from '../../../shared/types'
@@ -81,7 +82,6 @@ import {
   reduceAssistantProcessGroups,
   reduceAssistantProcessThoughts,
   readWorkbenchModelPreference,
-  resolveWorkbenchModelSelection,
   writeWorkbenchModePreference,
   writeWorkbenchModelPreference
 } from '../components/workbench/utils'
@@ -583,9 +583,14 @@ const ChatPage: React.FC = () => {
   const [workspacesLoaded, setWorkspacesLoaded] = useState(false)
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null)
   const [workspaceDocumentIds, setWorkspaceDocumentIds] = useState<string[]>([])
-  const [activeModelConfig, setActiveModelConfig] = useState<LLMConfig | null>(null)
-  const [remoteModels, setRemoteModels] = useState<LlmRemoteModel[]>([])
-  const [selectedModelName, setSelectedModelName] = useState<string | null>(null)
+  const [modelConfigs, setModelConfigs] = useState<LLMConfig[]>([])
+  const [modelListsByConfigId, setModelListsByConfigId] = useState<
+    Record<string, LlmRemoteModel[]>
+  >({})
+  const [modelSelection, setModelSelection] = useState<WorkbenchModelSelection>(
+    () =>
+      readWorkbenchModelPreference(window.localStorage) || { mainModel: null, visionModel: null }
+  )
   const [composerDraftKey, setComposerDraftKey] = useState('initial')
   const [contextUsage, setContextUsage] = useState<WorkbenchContextUsage | null>(null)
   const [messageAttachmentPreviewUrls, setMessageAttachmentPreviewUrls] = useState<
@@ -631,7 +636,11 @@ const ChatPage: React.FC = () => {
   const composerDraftBySessionIdRef = useRef<Record<string, ComposerDraftValue>>({})
   const composerDraftVersionRef = useRef(0)
   const loadApplyRecordRef = useRef<
-    (input: { applyId: string; detail?: DocxApplyRecord | null; openWorkspace?: boolean }) => Promise<void>
+    (input: {
+      applyId: string
+      detail?: DocxApplyRecord | null
+      openWorkspace?: boolean
+    }) => Promise<void>
   >(async () => {})
   const loadFileChangesForSessionRef = useRef<
     (
@@ -823,12 +832,12 @@ const ChatPage: React.FC = () => {
     if (switchingSessionId) return '当前会话未就绪'
     if (!selectedWorkspaceReady)
       return `${getWorkspaceRequirementHint(selectedWorkspace)}后再发送消息`
-    if (composerMode === 'ai' && !selectedModelName) return '请先选择可用模型'
+    if (composerMode === 'ai' && !modelSelection.mainModel) return '请先选择主模型'
     return null
   }, [
     composerMode,
     input,
-    selectedModelName,
+    modelSelection.mainModel,
     selectedWorkspace,
     selectedWorkspaceReady,
     switchingSessionId
@@ -1090,75 +1099,67 @@ const ChatPage: React.FC = () => {
   const loadModelConfigs = useCallback(async (): Promise<void> => {
     try {
       const list = await window.api.llmConfigList()
-      const activeConfig = list.find((config) => config.is_active) || list[0] || null
-      setActiveModelConfig(activeConfig)
-      if (!activeConfig) {
-        setRemoteModels([])
-        setSelectedModelName(null)
+      setModelConfigs(list)
+      if (list.length === 0) {
+        setModelListsByConfigId({})
+        setModelSelection({ mainModel: null, visionModel: null })
+        writeWorkbenchModelPreference(window.localStorage, null)
         return
       }
-      const fallbackModelName = activeConfig.default_model?.trim() || null
-      const fallbackModels: LlmRemoteModel[] = fallbackModelName
-        ? [{ id: fallbackModelName, label: fallbackModelName }]
-        : []
-      setRemoteModels(fallbackModels)
-      setSelectedModelName(fallbackModelName)
-      const response = await window.api.llmConfigModelList(activeConfig.id)
-      const items = response.success && response.items.length > 0 ? response.items : fallbackModels
-      setRemoteModels(items)
-      const nextModelName = resolveWorkbenchModelSelection({
-        configId: activeConfig.id,
-        models: items,
-        defaultModelName: activeConfig.default_model,
-        preference: readWorkbenchModelPreference(window.localStorage)
-      })
-      setSelectedModelName(nextModelName)
+
+      const entries = await Promise.all(
+        list.map(async (config) => {
+          try {
+            const response = await window.api.llmConfigModelList(config.id)
+            const items = response.success ? response.items : []
+            return [config.id, items] as const
+          } catch {
+            return [config.id, []] as const
+          }
+        })
+      )
+      const nextLists = Object.fromEntries(entries)
+      setModelListsByConfigId(nextLists)
+
+      const preference = readWorkbenchModelPreference(window.localStorage)
+      const hasModel = (model: WorkbenchModelSelection['mainModel']): boolean =>
+        Boolean(
+          model?.configId &&
+          model.modelName &&
+          nextLists[model.configId]?.some((item) => item.id === model.modelName)
+        )
+      const firstConfigWithModel = list.find((config) => (nextLists[config.id] || []).length > 0)
+      const firstModel = firstConfigWithModel
+        ? {
+            configId: firstConfigWithModel.id,
+            modelName: nextLists[firstConfigWithModel.id][0]?.id || ''
+          }
+        : null
+      const nextSelection: WorkbenchModelSelection = {
+        mainModel: hasModel(preference?.mainModel || null)
+          ? preference?.mainModel || null
+          : firstModel,
+        visionModel: hasModel(preference?.visionModel || null)
+          ? preference?.visionModel || null
+          : null
+      }
+      setModelSelection(nextSelection)
       writeWorkbenchModelPreference(
         window.localStorage,
-        nextModelName
-          ? {
-              configId: activeConfig.id,
-              modelName: nextModelName
-            }
-          : null
+        nextSelection.mainModel ? nextSelection : null
       )
     } catch (error) {
       console.error('Failed to load llm configs', error)
-      setActiveModelConfig(null)
-      setRemoteModels([])
-      setSelectedModelName(null)
+      setModelConfigs([])
+      setModelListsByConfigId({})
+      setModelSelection({ mainModel: null, visionModel: null })
     }
   }, [])
 
-  const handleModelNameChange = useCallback(
-    (modelName: string): void => {
-      setSelectedModelName(modelName)
-      writeWorkbenchModelPreference(
-        window.localStorage,
-        activeModelConfig
-          ? {
-              configId: activeModelConfig.id,
-              modelName
-            }
-          : null
-      )
-      if (!activeModelConfig || activeModelConfig.default_model === modelName) return
-
-      const nextConfig: LLMConfig = {
-        ...activeModelConfig,
-        default_model: modelName
-      }
-      setActiveModelConfig(nextConfig)
-      void window.api.llmConfigSave(nextConfig).then((response) => {
-        if (!response.success) {
-          emitErrorMessage(response.error || '默认模型保存失败')
-          return
-        }
-        window.dispatchEvent(new Event('check-llm-config'))
-      })
-    },
-    [activeModelConfig, emitErrorMessage]
-  )
+  const handleModelSelectionChange = useCallback((selection: WorkbenchModelSelection): void => {
+    setModelSelection(selection)
+    writeWorkbenchModelPreference(window.localStorage, selection.mainModel ? selection : null)
+  }, [])
 
   const handleModeChange = useCallback((mode: WorkbenchMode): void => {
     setComposerMode(mode)
@@ -1541,17 +1542,17 @@ const ChatPage: React.FC = () => {
     }
   }
 
-  const openFile = useCallback(async (
-    file: WorkbenchFileRef,
-    backTarget?: WorkbenchContentPanelState
-  ): Promise<void> => {
-    showContentPanel({
-      kind: 'file_preview',
-      title: '文档查看',
-      file,
-      backTarget
-    })
-  }, [showContentPanel])
+  const openFile = useCallback(
+    async (file: WorkbenchFileRef, backTarget?: WorkbenchContentPanelState): Promise<void> => {
+      showContentPanel({
+        kind: 'file_preview',
+        title: '文档查看',
+        file,
+        backTarget
+      })
+    },
+    [showContentPanel]
+  )
 
   const resolveReferencePathInfo = useCallback(async (filePath: string): Promise<boolean> => {
     const response = await window.api.pathInfo(filePath)
@@ -1900,8 +1901,8 @@ const ChatPage: React.FC = () => {
       message.warning(`${getWorkspaceRequirementHint(selectedWorkspace)}后再发送消息`)
       return
     }
-    if (!selectedModelName) {
-      message.warning('当前配置未获取到可用模型，请先在「大模型」中打开模型列表获取模型')
+    if (!modelSelection.mainModel) {
+      message.warning('请先在输入框右下角选择主模型')
       return
     }
 
@@ -2021,7 +2022,8 @@ const ChatPage: React.FC = () => {
         contentNodes: submittedContentNodes.length > 0 ? submittedContentNodes : undefined,
         selectedReferences: submittedReferences.length > 0 ? submittedReferences : undefined,
         attachments: submittedAttachments.length > 0 ? submittedAttachments : undefined,
-        modelName: selectedModelName,
+        mainModel: modelSelection.mainModel,
+        visionModel: modelSelection.visionModel || undefined,
         workspace: createWorkspaceBinding(selectedWorkspace)
       })
       if (
@@ -2990,7 +2992,7 @@ const ChatPage: React.FC = () => {
                               </div>
                             </div>
                             <p className="mx-5 mt-3 text-[13px] leading-6 text-[#787774]">
-                              当前运行需要你授权本地操作。
+                              {currentApprovalItem.commandExplanation}
                             </p>
                             <code className="mx-5 mt-3 block max-h-[min(34vh,320px)] overflow-auto whitespace-pre-wrap break-words rounded-[6px] border border-[#EEEEEC] bg-[#F4F4F2] px-3.5 py-3 font-mono text-[13px] leading-6 text-[#2F3437] [overflow-wrap:anywhere]">
                               {currentApprovalItem.command}
@@ -3064,10 +3066,10 @@ const ChatPage: React.FC = () => {
                       <WorkbenchComposer
                         mode={composerMode}
                         onModeChange={handleModeChange}
-                        activeModelConfig={activeModelConfig}
-                        remoteModels={remoteModels}
-                        selectedModelName={selectedModelName}
-                        onModelNameChange={handleModelNameChange}
+                        modelConfigs={modelConfigs}
+                        modelListsByConfigId={modelListsByConfigId}
+                        modelSelection={modelSelection}
+                        onModelSelectionChange={handleModelSelectionChange}
                         workspaces={workspaces}
                         selectedWorkspaceId={selectedWorkspaceId}
                         onWorkspaceChange={handleWorkspaceChange}
@@ -3082,7 +3084,7 @@ const ChatPage: React.FC = () => {
                         canSubmit={Boolean(
                           input.trim() &&
                           selectedWorkspaceReady &&
-                          (composerMode === 'search' || selectedModelName)
+                          (composerMode === 'search' || modelSelection.mainModel)
                         )}
                         submitDisabledReason={composerSubmitDisabledReason}
                         showCancel={composerMode === 'ai' && Boolean(aiRunId)}

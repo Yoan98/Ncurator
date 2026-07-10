@@ -294,15 +294,21 @@ export const waitForAntMessage = async (page: Page, text: string): Promise<void>
 
 export const createModelConfigThroughSettingsUi = async (
   page: Page,
-  input: { baseUrl: string; apiKey: string }
+  input: { name?: string; baseUrl: string; apiKey: string }
 ): Promise<void> => {
   await navigateToSettingsSection(page, 'model')
   await getSettingsLocator(page, settingsSelectors.modelAddButton).click()
+  await getSettingsLocator(page, settingsSelectors.modelNameInput).fill(input.name || input.baseUrl)
   await getSettingsLocator(page, settingsSelectors.modelBaseUrlInput).waitFor({ state: 'visible' })
-  await getSettingsLocator(page, settingsSelectors.modelBaseUrlInput).locator('input').fill(input.baseUrl)
+  await getSettingsLocator(page, settingsSelectors.modelBaseUrlInput)
+    .locator('input')
+    .fill(input.baseUrl)
   await getSettingsLocator(page, settingsSelectors.modelApiKeyInput).fill(input.apiKey)
   await getSettingsLocator(page, settingsSelectors.modelSaveButton).click()
-  await page.locator('tbody tr').filter({ hasText: input.baseUrl }).waitFor({ state: 'visible' })
+  await page
+    .locator('tbody tr')
+    .filter({ hasText: input.name || input.baseUrl })
+    .waitFor({ state: 'visible' })
 }
 
 export const createWorkspaceThroughSettingsUi = async (

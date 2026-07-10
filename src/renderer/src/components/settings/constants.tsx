@@ -25,7 +25,7 @@ export const SETTINGS_SECTION_META: Record<SettingsSectionValue, SettingsSection
     value: 'model',
     label: '大模型',
     title: '大模型',
-    description: '配置默认对话模型、API Key 和当前启用入口。',
+    description: '管理可用的大模型服务、API Key 和模型列表。',
     path: '/settings/model',
     icon: <HiSparkles className="h-5 w-5" />
   },

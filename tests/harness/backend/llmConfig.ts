@@ -13,7 +13,12 @@ const readEnv = (name: string): string => {
 
 const canDefaultToOpenAiBaseUrl = (modelName: string): boolean => {
   const normalized = modelName.trim().toLowerCase()
-  return normalized.startsWith('gpt-') || normalized.startsWith('o1') || normalized.startsWith('o3') || normalized.startsWith('o4')
+  return (
+    normalized.startsWith('gpt-') ||
+    normalized.startsWith('o1') ||
+    normalized.startsWith('o3') ||
+    normalized.startsWith('o4')
+  )
 }
 
 const resolveLiveModelName = (): string =>
@@ -52,14 +57,13 @@ export const loadLiveLlmConfigFromEnv = (): LiveLlmConfig => {
 
   return {
     id: 'ai-live-config',
+    name: 'AI Live',
     providerKind: resolveLlmProviderKind({
       providerKind: readEnv('AI_LIVE_PROVIDER_KIND'),
       baseUrl
     }),
     base_url: baseUrl,
     model_name: modelName,
-    api_key: apiKey,
-    is_active: true,
-    default_model: modelName
+    api_key: apiKey
   }
 }

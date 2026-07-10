@@ -42,7 +42,7 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
   },
   'image-recognition': {
     skillId: 'image-recognition',
-    familyId: 'utility',
+    familyId: 'image-recognition',
     source: 'external',
     countsTowardToolBudget: true,
     title: '图像识别',

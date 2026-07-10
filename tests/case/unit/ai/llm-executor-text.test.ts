@@ -15,12 +15,11 @@ import type { AiLlmIoRecord, AiRunEvent, LlmRuntimeConfig } from '../../../../sr
 
 const baseConfig: LlmRuntimeConfig = {
   id: 'cfg-1',
+  name: 'Unit Config',
   providerKind: 'openai',
   base_url: 'https://example.test/v1',
   model_name: 'gpt-5',
-  api_key: 'test-key',
-  is_active: true,
-  default_model: 'gpt-5'
+  api_key: 'test-key'
 }
 
 describe('ai unit llm executor text path', () => {
@@ -31,10 +30,11 @@ describe('ai unit llm executor text path', () => {
   it('falls back from completions to responses and persists the resolved text transport', async () => {
     const events: AiRunEvent[] = []
     const llmIoRecords: AiLlmIoRecord[] = []
-    const saveConfig = vi.fn(async (_cfg: LlmRuntimeConfig) => undefined)
+    const saveConfig = vi.fn(async () => undefined)
 
     createChatModelMock.mockImplementation(
-      (_cfg: LlmRuntimeConfig, options?: { transport?: 'completions' | 'responses' }) => {
+      (cfg: LlmRuntimeConfig, options?: { transport?: 'completions' | 'responses' }) => {
+        void cfg
         const transport = options?.transport ?? 'responses'
         return {
           invoke: async () => {
@@ -115,7 +115,7 @@ describe('ai unit llm executor text path', () => {
   it('forwards streamed text deltas through the observer and records stream metadata', async () => {
     const events: AiRunEvent[] = []
     const llmIoRecords: AiLlmIoRecord[] = []
-    const saveConfig = vi.fn(async (_cfg: LlmRuntimeConfig) => undefined)
+    const saveConfig = vi.fn(async () => undefined)
     const answerChunks: string[] = []
 
     const driver: AiLlmDriver = {
@@ -187,7 +187,7 @@ describe('ai unit llm executor text path', () => {
   it('fails early when a streamed response stalls on blank deltas', async () => {
     const events: AiRunEvent[] = []
     const llmIoRecords: AiLlmIoRecord[] = []
-    const saveConfig = vi.fn(async (_cfg: LlmRuntimeConfig) => undefined)
+    const saveConfig = vi.fn(async () => undefined)
 
     createChatModelMock.mockImplementation(() => ({
       invoke: async () => ({

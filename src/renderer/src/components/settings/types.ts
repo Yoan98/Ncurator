@@ -7,7 +7,7 @@ import type {
 
 export type SettingsSectionValue = 'model' | 'workspace' | 'vector' | 'app'
 
-export type LlmConfigFormValues = Pick<LLMConfig, 'providerKind' | 'base_url' | 'api_key'>
+export type LlmConfigFormValues = Pick<LLMConfig, 'name' | 'providerKind' | 'base_url' | 'api_key'>
 
 export type FlatModelOption = { value: string; label: string }
 export type GroupedModelOption = { label: string; options: FlatModelOption[] }

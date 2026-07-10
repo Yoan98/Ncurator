@@ -33,6 +33,8 @@ type AiRunRow = {
   attachments_json?: unknown
   workspace_json?: unknown
   model_name?: unknown
+  main_model_json?: unknown
+  vision_model_json?: unknown
   partial_answer?: unknown
   final_answer?: unknown
   error?: unknown
@@ -93,6 +95,8 @@ const toRunRecord = (row: AiRunRow): AiRunRecord => ({
   attachments: parseJsonArray<ChatAttachment>(row.attachments_json),
   workspace: parseJsonObject<WorkspaceRuntimeBinding>(row.workspace_json),
   modelName: row.model_name ? String(row.model_name) : undefined,
+  mainModel: parseJsonObject<AiRunRecord['mainModel']>(row.main_model_json),
+  visionModel: parseJsonObject<AiRunRecord['visionModel']>(row.vision_model_json),
   partialAnswer: toRequiredString(row.partial_answer),
   finalAnswer: row.final_answer ? String(row.final_answer) : undefined,
   error: row.error ? String(row.error) : undefined,
@@ -133,11 +137,13 @@ export class AiRunStore {
         INSERT INTO ai_run (
           id, session_id, user_message_id, assistant_message_id, status, input,
           selected_references_json, attachments_json, workspace_json, model_name,
+          main_model_json, vision_model_json,
           partial_answer, final_answer, error, pending_approval_json, artifacts_json,
           event_count, visible_event_count, last_event_at, created_at, updated_at, finished_at
         ) VALUES (
           @id, @session_id, @user_message_id, @assistant_message_id, @status, @input,
           @selected_references_json, @attachments_json, @workspace_json, @model_name,
+          @main_model_json, @vision_model_json,
           @partial_answer, @final_answer, @error, @pending_approval_json, @artifacts_json,
           @event_count, @visible_event_count, @last_event_at, @created_at, @updated_at, @finished_at
         )
@@ -151,6 +157,8 @@ export class AiRunStore {
           attachments_json = excluded.attachments_json,
           workspace_json = excluded.workspace_json,
           model_name = excluded.model_name,
+          main_model_json = excluded.main_model_json,
+          vision_model_json = excluded.vision_model_json,
           partial_answer = excluded.partial_answer,
           final_answer = excluded.final_answer,
           error = excluded.error,
@@ -174,6 +182,8 @@ export class AiRunStore {
         attachments_json: jsonStringify(record.attachments),
         workspace_json: jsonStringify(record.workspace),
         model_name: record.modelName || null,
+        main_model_json: jsonStringify(record.mainModel),
+        vision_model_json: jsonStringify(record.visionModel),
         partial_answer: record.partialAnswer || '',
         final_answer: record.finalAnswer || null,
         error: record.error || null,
@@ -270,7 +280,9 @@ export class AiRunStore {
 
       this.sqlite.transaction(() => {
         const nextSeqRow = this.sqlite
-          .prepare('SELECT COALESCE(MAX(seq), 0) + 1 AS next_seq FROM ai_run_event WHERE run_id = ?')
+          .prepare(
+            'SELECT COALESCE(MAX(seq), 0) + 1 AS next_seq FROM ai_run_event WHERE run_id = ?'
+          )
           .get(input.runId) as { next_seq?: unknown }
         const startSeq = toRequiredNumber(nextSeqRow.next_seq, 1)
         const insert = this.sqlite.prepare(
@@ -302,9 +314,9 @@ export class AiRunStore {
     event: AiRunEvent
   }): Promise<{ ok: boolean; run?: AiRunRecord; error?: string }> {
     return this.sqlite.transaction(() => {
-      const runRow = this.sqlite
-        .prepare('SELECT * FROM ai_run WHERE id = ?')
-        .get(input.runId) as AiRunRow | undefined
+      const runRow = this.sqlite.prepare('SELECT * FROM ai_run WHERE id = ?').get(input.runId) as
+        | AiRunRow
+        | undefined
       if (!runRow) return { ok: false, error: 'run not found' }
       const run = toRunRecord(runRow)
       if (run.status !== 'waiting_approval' || !run.pendingApproval) {
@@ -368,9 +380,7 @@ export class AiRunStore {
     const rows = this.sqlite
       .prepare('SELECT * FROM ai_run_event WHERE run_id = ? ORDER BY seq ASC')
       .all(runId) as AiRunEventRow[]
-    return rows
-      .map(toEventRecord)
-      .filter((record): record is AiRunEventRecord => record !== null)
+    return rows.map(toEventRecord).filter((record): record is AiRunEventRecord => record !== null)
   }
 
   public async deleteRunsBySession(sessionId: string): Promise<void> {

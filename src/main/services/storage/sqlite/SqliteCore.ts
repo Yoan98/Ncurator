@@ -77,9 +77,11 @@ export class SqliteCore {
     const applied = new Set(appliedRows.map((row) => Number(row.version)))
     const applyMigration = db.transaction((migration: Migration) => {
       db.exec(migration.sql)
-      db.prepare(
-        'INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)'
-      ).run(migration.version, migration.name, Date.now())
+      db.prepare('INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)').run(
+        migration.version,
+        migration.name,
+        Date.now()
+      )
     })
 
     for (const migration of MIGRATIONS) {

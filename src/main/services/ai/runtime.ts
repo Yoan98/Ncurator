@@ -24,17 +24,21 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
   const normalizedReferences = normalizeSelectedReferences(payload.selectedReferences)
   const platform = getAiRuntimePlatform()
 
-  const getRequestedConfig = async () => {
-    const modelName = String(payload.modelName || '').trim()
-    if (!modelName)
-      throw new Error('当前配置未获取到可用模型，请先在「大模型」中打开模型列表获取模型')
-    const cfg = await deps.llmStore.getActive()
-    if (!cfg) throw new Error('未配置可用的大模型，请先在「大模型配置」中设置并启用一个模型')
+  const getModelConfig = async (selection: typeof payload.mainModel, label: string) => {
+    const configId = String(selection?.configId || '').trim()
+    const modelName = String(selection?.modelName || '').trim()
+    if (!configId || !modelName) {
+      throw new Error(`请先选择${label}`)
+    }
+    const cfg = await deps.llmStore.getById(configId)
+    if (!cfg) throw new Error(`${label}对应的大模型配置不存在，请重新选择`)
     return {
       ...cfg,
       model_name: modelName
     }
   }
+
+  const getRequestedConfig = async () => getModelConfig(payload.mainModel, '主模型')
   let requestedConfigPromise: ReturnType<typeof getRequestedConfig> | undefined
 
   const loadRequestedConfig = async () => {
@@ -46,6 +50,16 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     nextConfig: Awaited<ReturnType<typeof getRequestedConfig>>
   ) => {
     requestedConfigPromise = Promise.resolve(nextConfig)
+  }
+
+  let requestedVisionConfigPromise: ReturnType<typeof getRequestedConfig> | undefined
+
+  const loadRequestedVisionConfig = async () => {
+    requestedVisionConfigPromise ||= getModelConfig(
+      payload.visionModel || payload.mainModel,
+      payload.visionModel ? '视觉模型' : '主模型'
+    )
+    return await requestedVisionConfigPromise
   }
 
   const llmExecutor = createAiLlmExecutor({
@@ -94,6 +108,7 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     recordLlmIo: deps.recordLlmIo,
     requestApprovalBatch: deps.requestApprovalBatch,
     getLlmConfig: loadRequestedConfig,
+    getVisionLlmConfig: loadRequestedVisionConfig,
     browserUseService: deps.browserUseService,
     webCrawlerService: deps.webCrawlerService,
     loadConversationContext,

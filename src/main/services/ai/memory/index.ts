@@ -25,6 +25,7 @@ export const buildConversationMemorySummary = async (input: {
   messages: ChatMessage[]
   runtimeSettings: AiRuntimeSettings
   llmStore: LlmConfigStore
+  modelConfigId: string
   modelName: string
   sendEvent: (event: AiRunEvent) => void
   recordLlmIo?: (record: AiLlmIoRecord) => void
@@ -34,11 +35,13 @@ export const buildConversationMemorySummary = async (input: {
   const sessionId = String(input.sessionId || '').trim()
   if (!sessionId || input.messages.length === 0) return ''
 
-  const activeConfig = await input.llmStore.getActive()
+  const configId = String(input.modelConfigId || '').trim()
   const modelName = String(input.modelName || '').trim()
-  if (!activeConfig || !modelName) return ''
+  if (!configId || !modelName) return ''
+  const config = await input.llmStore.getById(configId)
+  if (!config) return ''
   let cfg: LlmRuntimeConfig = {
-    ...activeConfig,
+    ...config,
     model_name: modelName
   }
 

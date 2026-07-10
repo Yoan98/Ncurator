@@ -519,11 +519,12 @@ export class ChatRunService {
     const normalizedReferences = normalizeSelectedReferences(payload.selectedReferences)
     const attachments = Array.isArray(payload.attachments) ? payload.attachments : []
     const normalizedWorkspace = normalizeWorkspaceBinding(payload.workspace)
-    const modelName = String(payload.modelName || '').trim()
-    if (!modelName) {
+    const mainModel = payload.mainModel || null
+    const modelName = String(mainModel?.modelName || '').trim()
+    if (!mainModel?.configId || !modelName) {
       return {
         success: false,
-        error: '当前配置未获取到可用模型，请先在「大模型」中打开模型列表获取模型'
+        error: '请先在输入框右下角选择主模型'
       }
     }
     if (!normalizedWorkspace) {
@@ -570,6 +571,8 @@ export class ChatRunService {
       attachments,
       workspace: normalizedWorkspace,
       modelName,
+      mainModel,
+      visionModel: payload.visionModel || undefined,
       partialAnswer: '',
       artifacts: [],
       processEvents: [],
@@ -651,7 +654,8 @@ export class ChatRunService {
           input: run.input,
           selectedReferences: run.selectedReferences,
           attachments: run.attachments,
-          modelName: run.modelName,
+          mainModel: run.mainModel,
+          visionModel: run.visionModel,
           workspace: run.workspace
         },
         {
@@ -702,6 +706,7 @@ export class ChatRunService {
         runId,
         sessionId: run.sessionId,
         runtimeSettings,
+        modelConfigId: run.mainModel?.configId || '',
         modelName: run.modelName || '',
         sendEvent
       })
@@ -796,6 +801,7 @@ export class ChatRunService {
     runId: string
     sessionId: string
     runtimeSettings: Awaited<ReturnType<AiRuntimeSettingsStore['get']>>
+    modelConfigId: string
     modelName: string
     sendEvent: (event: AiRunEvent) => void
   }): Promise<void> | null {
@@ -831,6 +837,7 @@ export class ChatRunService {
     runId: string
     sessionId: string
     runtimeSettings: Awaited<ReturnType<AiRuntimeSettingsStore['get']>>
+    modelConfigId: string
     modelName: string
     sendEvent: (event: AiRunEvent) => void
   }): Promise<void> {
@@ -851,6 +858,7 @@ export class ChatRunService {
         messages: batch.batch,
         runtimeSettings: input.runtimeSettings,
         llmStore: this.deps.llmStore,
+        modelConfigId: input.modelConfigId,
         modelName: input.modelName,
         sendEvent: input.sendEvent,
         recordLlmIo: this.deps.recordLlmIo

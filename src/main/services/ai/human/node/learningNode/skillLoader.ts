@@ -13,7 +13,8 @@ const TOOL_FAMILY_BUILDERS: Record<
   kb: TOOL_FAMILY_DEFINITIONS.kb.buildTools,
   docx: TOOL_FAMILY_DEFINITIONS.docx.buildTools,
   web: TOOL_FAMILY_DEFINITIONS.web.buildTools,
-  utility: TOOL_FAMILY_DEFINITIONS.utility.buildTools
+  utility: TOOL_FAMILY_DEFINITIONS.utility.buildTools,
+  'image-recognition': TOOL_FAMILY_DEFINITIONS['image-recognition'].buildTools
 }
 
 const ensureFamilyTools = (input: {

@@ -1,18 +1,19 @@
-import { randomUUID } from 'node:crypto'
 import path from 'node:path'
 import { createHumanGraphRunner } from '../../../src/main/services/ai/human/graph/humanGraph'
 import { AiFileChangeService } from '../../../src/main/services/ai/fileChanges/AiFileChangeService'
 import { DocxApplyService } from '../../../src/main/services/ai/human/tools/docx/review/DocxApplyService'
 import { createAiRunContext } from '../../../src/main/services/ai/runtime'
 import { runAiRuntimePreflight } from '../../../src/main/services/ai/runtimePreflight'
-import type { AiApprovalBatchRequest, AiApprovalBatchResult } from '../../../src/main/services/ai/types'
+import type {
+  AiApprovalBatchRequest,
+  AiApprovalBatchResult
+} from '../../../src/main/services/ai/types'
 import type { AiRunContext } from '../../../src/main/services/ai/types'
 import { ModelService } from '../../../src/main/services/model/ModelService'
 import { StorageService } from '../../../src/main/services/storage/StorageService'
 import { EmbeddingService } from '../../../src/main/services/vector/EmbeddingService'
 import { ensureEmbeddingReady } from '../../../src/main/services/vector/ensureEmbeddingReady'
 import { WorkspaceKnowledgePrepareService } from '../../../src/main/services/workspace/WorkspaceKnowledgePrepareService'
-import type { WebCrawlerService } from '../../../src/main/services/webCrawler/types'
 import { WorkspaceSourceService } from '../../../src/main/services/workspace/WorkspaceSourceService'
 import type { AiRuntimeSettings } from '../../../src/shared/types'
 import type { BackendHarnessMode, CreateAiRunContextInput, LiveLlmConfig } from './test-types'
@@ -21,12 +22,11 @@ import { createScriptedStructuredOutputDriver } from './scriptedStructuredOutput
 
 const SCRIPTED_LLM_CONFIG: LiveLlmConfig = {
   id: 'mock-llm-scripted',
+  name: 'Mock LLM',
   providerKind: 'openai-compatible',
   base_url: 'https://scripted.local/v1',
   model_name: 'scripted-llm',
-  api_key: 'scripted',
-  is_active: true,
-  default_model: 'scripted-llm'
+  api_key: 'scripted'
 }
 
 const DEFAULT_RUNTIME_SETTINGS: AiRuntimeSettings = {
@@ -46,6 +46,9 @@ const resolveRuntimeModelName = (input: {
 
   return input.mode === 'mock-llm' ? SCRIPTED_LLM_CONFIG.model_name : undefined
 }
+
+const resolveRuntimeConfigId = (mode: BackendHarnessMode): string =>
+  mode === 'mock-llm' ? SCRIPTED_LLM_CONFIG.id : 'ai-live-config'
 
 const buildApprovalResolver = (
   policy: CreateAiRunContextInput['approvalPolicy']
@@ -86,7 +89,9 @@ export type RealAiDepsFactory = {
   docxApplyService: DocxApplyService
   ensureEmbeddingReady: () => Promise<void>
   createAiRunContext: (input?: CreateAiRunContextInput) => AiRunContext
-  createHumanTaskRunner: (input?: CreateAiRunContextInput) => ReturnType<typeof createHumanGraphRunner>
+  createHumanTaskRunner: (
+    input?: CreateAiRunContextInput
+  ) => ReturnType<typeof createHumanGraphRunner>
   seedLlmConfig: (config: LiveLlmConfig) => Promise<void>
   close: () => Promise<void>
 }
@@ -115,9 +120,9 @@ export const createRealAiDepsFactory = async (input: {
   const docxApplyService = new DocxApplyService(storageService.docxApply, aiFileChangeService)
 
   const seedLlmConfig = async (config: LiveLlmConfig): Promise<void> => {
-    const { model_name: _modelName, ...persistedConfig } = config
+    const { model_name, ...persistedConfig } = config
+    void model_name
     await storageService.llm.save(persistedConfig)
-    await storageService.llm.setActive(config.id)
   }
 
   if (input.mode === 'mock-llm') {
@@ -134,9 +139,7 @@ export const createRealAiDepsFactory = async (input: {
   const createContext = (contextInput: CreateAiRunContextInput = {}): AiRunContext => {
     const llmScript = contextInput.llmScript || contextInput.structuredOutputScript
     if (input.mode !== 'mock-llm' && llmScript) {
-      throw new Error(
-        `llmScript is only allowed in mock-llm mode; mode=${input.mode}`
-      )
+      throw new Error(`llmScript is only allowed in mock-llm mode; mode=${input.mode}`)
     }
 
     const bindWorkspace = contextInput.bindWorkspace !== false
@@ -152,11 +155,15 @@ export const createRealAiDepsFactory = async (input: {
         sessionId: contextInput.sessionId || 'test-session',
         input: contextInput.userInput || '请处理当前测试任务。',
         selectedReferences: contextInput.selectedReferences,
-        modelName: resolveRuntimeModelName({
-          mode: input.mode,
-          explicitModelName: contextInput.modelName,
-          defaultModelName: input.runtimeModelName
-        }),
+        mainModel: {
+          configId: resolveRuntimeConfigId(input.mode),
+          modelName:
+            resolveRuntimeModelName({
+              mode: input.mode,
+              explicitModelName: contextInput.modelName,
+              defaultModelName: input.runtimeModelName
+            }) || ''
+        },
         workspace: bindWorkspace
           ? {
               workspaceId: 'test-workspace',
@@ -211,9 +218,7 @@ export const createRealAiDepsFactory = async (input: {
           })
           return decision
         },
-        llmDriver: llmScript
-          ? createScriptedStructuredOutputDriver(llmScript)
-          : undefined,
+        llmDriver: llmScript ? createScriptedStructuredOutputDriver(llmScript) : undefined,
         webCrawlerService: contextInput.webCrawlerService
       }
     )

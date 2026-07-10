@@ -468,11 +468,20 @@ export type AiStructuredOutputProfile = PreferredStructuredOutputProfile | 'scri
 
 export interface LLMConfig {
   id: string
+  name: string
   providerKind: LlmProviderKind
   base_url: string
   api_key: string
-  is_active: boolean
-  default_model: string
+}
+
+export type WorkbenchSelectedModel = {
+  configId: string
+  modelName: string
+}
+
+export type WorkbenchModelSelection = {
+  mainModel: WorkbenchSelectedModel | null
+  visionModel: WorkbenchSelectedModel | null
 }
 
 export type LlmRuntimeConfig = LLMConfig & {
@@ -848,7 +857,8 @@ export type ChatSubmitRequest = {
   contentNodes?: ChatMessageContentNode[]
   selectedReferences?: SelectedReference[]
   attachments?: ChatAttachment[]
-  modelName?: string
+  mainModel?: WorkbenchSelectedModel
+  visionModel?: WorkbenchSelectedModel
   workspace?: WorkspaceRuntimeBinding
   searchDocumentIds?: string[]
 }
@@ -864,6 +874,8 @@ export type AiRunRecord = {
   attachments?: ChatAttachment[]
   workspace?: WorkspaceRuntimeBinding
   modelName?: string
+  mainModel?: WorkbenchSelectedModel
+  visionModel?: WorkbenchSelectedModel
   partialAnswer: string
   finalAnswer?: string
   error?: string
@@ -970,6 +982,7 @@ export type AiApprovalBatchItem = {
   order: number
   toolName: string
   command: string
+  commandExplanation: string
   reason: string
 }
 

@@ -55,6 +55,8 @@ CREATE TABLE IF NOT EXISTS ai_run (
   attachments_json TEXT,
   workspace_json TEXT,
   model_name TEXT,
+  main_model_json TEXT,
+  vision_model_json TEXT,
   partial_answer TEXT NOT NULL DEFAULT '',
   final_answer TEXT,
   error TEXT,
@@ -239,11 +241,10 @@ CREATE INDEX IF NOT EXISTS idx_web_source_document ON web_source(document_id);
 
 CREATE TABLE IF NOT EXISTS llm_config (
   id TEXT PRIMARY KEY,
+  name TEXT NOT NULL DEFAULT '',
   providerKind TEXT NOT NULL,
   base_url TEXT NOT NULL,
-  api_key TEXT NOT NULL,
-  is_active INTEGER NOT NULL DEFAULT 0,
-  default_model TEXT NOT NULL DEFAULT ''
+  api_key TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS ai_runtime_settings (

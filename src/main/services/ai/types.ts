@@ -77,7 +77,14 @@ export type AiRunStartPayload = {
   input: string
   selectedReferences?: SelectedReference[]
   attachments?: ChatAttachment[]
-  modelName?: string
+  mainModel?: {
+    configId: string
+    modelName: string
+  }
+  visionModel?: {
+    configId: string
+    modelName: string
+  }
   workspace?: {
     workspaceId: string
     workspaceName: string
@@ -230,9 +237,13 @@ export type AiRunContext = {
   recordLlmIo?: (record: AiLlmIoRecord) => void
   requestApprovalBatch: (request: AiApprovalBatchRequest) => Promise<AiApprovalBatchResult>
   getLlmConfig: () => Promise<LlmRuntimeConfig>
+  getVisionLlmConfig: () => Promise<LlmRuntimeConfig>
   browserUseService?: BrowserUseService
   webCrawlerService?: WebCrawlerService
-  loadConversationContext: () => Promise<{ recentTurnsText: string; conversationSummaryText: string }>
+  loadConversationContext: () => Promise<{
+    recentTurnsText: string
+    conversationSummaryText: string
+  }>
   loadConversationMemory: () => Promise<ChatConversationMemory | null>
   trackDocxOpen: (input: {
     docId: string

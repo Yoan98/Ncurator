@@ -4,6 +4,7 @@ import type {
   AiFileChangeStatus,
   RuntimeSkillId,
   SearchResult,
+  WorkbenchModelSelection,
   WorkspaceSource
 } from '../../../../shared/types'
 
@@ -11,10 +12,7 @@ export type WorkbenchMode = 'ai' | 'search'
 
 export type WorkbenchPreferenceStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>
 
-export type WorkbenchModelPreference = {
-  configId: string
-  modelName: string
-}
+export type WorkbenchModelPreference = WorkbenchModelSelection
 
 export type WorkbenchContextUsage = {
   contextWindowTokens: number

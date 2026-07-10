@@ -814,7 +814,9 @@ export function registerHandlers(services: {
         excludeSelectors: source.exclude_selectors
       })
     } catch (error) {
-      await documentsStore.markDocumentIndexFailed(nextDocumentId, getErrorMessage(error)).catch(() => {})
+      await documentsStore
+        .markDocumentIndexFailed(nextDocumentId, getErrorMessage(error))
+        .catch(() => {})
       const failedAt = Date.now()
       const failedSource: WebSourceRecord = {
         ...nextPendingSource,
@@ -918,7 +920,9 @@ export function registerHandlers(services: {
       emitSourceListRefresh(event.sender)
       return { source: refreshedSource, chunkCount: chunks.length }
     } catch (error) {
-      await documentsStore.markDocumentIndexFailed(nextDocumentId, getErrorMessage(error)).catch(() => {})
+      await documentsStore
+        .markDocumentIndexFailed(nextDocumentId, getErrorMessage(error))
+        .catch(() => {})
       const failedSource: WebSourceRecord = {
         ...crawlingDoneSource,
         index_status: 'index_failed',
@@ -1004,7 +1008,9 @@ export function registerHandlers(services: {
       emitSourceListRefreshToAll()
       return { source: crawlingDoneSource, documentId: nextDocumentId, inspection }
     } catch (error) {
-      await documentsStore.markDocumentIndexFailed(nextDocumentId, getErrorMessage(error)).catch(() => {})
+      await documentsStore
+        .markDocumentIndexFailed(nextDocumentId, getErrorMessage(error))
+        .catch(() => {})
       const failedAt = Date.now()
       const failedSource: WebSourceRecord = {
         ...nextPendingSource,
@@ -1103,7 +1109,9 @@ export function registerHandlers(services: {
       emitSourceListRefresh(input.sender)
       emitSourceListRefreshToAll()
     } catch (error) {
-      await documentsStore.markDocumentIndexFailed(input.documentId, getErrorMessage(error)).catch(() => {})
+      await documentsStore
+        .markDocumentIndexFailed(input.documentId, getErrorMessage(error))
+        .catch(() => {})
       const failedSource: WebSourceRecord = {
         ...input.source,
         index_status: 'index_failed',
@@ -2655,16 +2663,6 @@ export function registerHandlers(services: {
       return { success: true }
     } catch (e: unknown) {
       console.error('[LLM-CONFIG-DELETE] Error:', e)
-      return { success: false, error: getErrorMessage(e) }
-    }
-  })
-
-  ipcMain.handle('llm-config-set-active', async (_event, id: string) => {
-    try {
-      await llmStore.setActive(id)
-      return { success: true }
-    } catch (e: unknown) {
-      console.error('[LLM-CONFIG-SET-ACTIVE] Error:', e)
       return { success: false, error: getErrorMessage(e) }
     }
   })

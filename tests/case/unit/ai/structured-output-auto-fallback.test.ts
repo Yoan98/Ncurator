@@ -41,12 +41,11 @@ const schema = z.object({
 
 const cfg = {
   id: 'cfg-1',
+  name: 'Structured Output Config',
   providerKind: 'openai',
   base_url: 'https://example.test/v1',
   model_name: 'gpt-5',
-  api_key: 'test-key',
-  is_active: true,
-  default_model: 'gpt-5'
+  api_key: 'test-key'
 } as const
 
 const baseInput = {

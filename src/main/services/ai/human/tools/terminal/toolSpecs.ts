@@ -11,6 +11,7 @@ import { getAiRuntimePlatform } from '../../../utils/platform'
 
 export const TERMINAL_RUN_SCHEMA = z.object({
   command: z.string().min(1),
+  commandExplanation: z.string().min(1),
   cwd: z.string().optional()
 })
 
@@ -54,6 +55,7 @@ export const createTerminalRunPromptSpec = (
         goal: '列出工作目录下的文件',
         args: {
           command: exampleCommand,
+          commandExplanation: '列出当前工作目录下的文件和文件夹。',
           cwd: '.'
         }
       }

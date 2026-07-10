@@ -1,5 +1,6 @@
 import type { AiToolFamilyId, ToolFamilyDefinition } from './types'
 import { docxToolFamily } from './docx'
+import { imageRecognitionToolFamily } from './imageRecognition'
 import { buildKbCapabilityTools } from './kb/retrievalTools'
 import { terminalToolFamily } from './terminal'
 import { utilityToolFamily } from './utility'
@@ -15,7 +16,8 @@ export const TOOL_FAMILY_DEFINITIONS: Record<AiToolFamilyId, ToolFamilyDefinitio
   kb: kbToolFamily,
   docx: docxToolFamily,
   web: webToolFamily,
-  utility: utilityToolFamily
+  utility: utilityToolFamily,
+  'image-recognition': imageRecognitionToolFamily
 }
 
 export const getToolFamilyDefinition = (familyId: AiToolFamilyId): ToolFamilyDefinition =>

@@ -1,4 +1,11 @@
-export const AI_TOOL_FAMILY_IDS = ['terminal', 'kb', 'docx', 'web', 'utility'] as const
+export const AI_TOOL_FAMILY_IDS = [
+  'terminal',
+  'kb',
+  'docx',
+  'web',
+  'utility',
+  'image-recognition'
+] as const
 
 export const BUILTIN_RUNTIME_SKILL_IDS = [
   'terminal',

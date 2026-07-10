@@ -1,5 +1,5 @@
 import { writeFile } from 'node:fs/promises'
-import { createServer, type Server } from 'node:http'
+import { createServer } from 'node:http'
 import type { AddressInfo, Socket } from 'node:net'
 import path from 'node:path'
 import { describe, it } from 'vitest'
@@ -105,12 +105,11 @@ const seedActiveConfig = async (
 ): Promise<void> => {
   await runtime.seedLlmConfig({
     id: 'cfg-llm-recognize',
+    name: '图像识别测试配置',
     providerKind: 'openai-compatible',
     base_url: baseUrl,
     model_name: 'gpt-5',
-    api_key: 'test-key',
-    is_active: true,
-    default_model: 'gpt-5'
+    api_key: 'test-key'
   })
 }
 
@@ -120,7 +119,7 @@ const writeFixtureImage = async (workspaceRoot: string): Promise<string> => {
   return imagePath
 }
 
-describe('ai tool utility backend', () => {
+describe('ai tool image recognition backend', () => {
   it('llm-recognize-contract', async () => {
     await runBackendCase({
       caseId: 'llm-recognize-contract',
@@ -195,9 +194,7 @@ describe('ai tool utility backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          typeof result === 'string' &&
-            result.includes('无法确认') &&
-            result.includes('界面截图'),
+          typeof result === 'string' && result.includes('无法确认') && result.includes('界面截图'),
           {
             name: 'llm-recognize-returns-uncertain-protocol-result',
             message: 'llm_recognize 对无法确认类文本也应返回协议 result。',

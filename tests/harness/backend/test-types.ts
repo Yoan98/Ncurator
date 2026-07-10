@@ -20,12 +20,11 @@ import type {
   AiLlmUsage,
   JsonObject,
   JsonValue,
-  LLMConfig,
   LlmRuntimeConfig,
   SelectedReference
 } from '../../../src/shared/types'
 import type { EventCollector } from '../core/eventCollector'
-import type { TestDomain, TestType, TestLogEvent, TestRunMeta } from '../core/run-log-contract'
+import type { TestDomain, TestType, TestLogEvent } from '../core/run-log-contract'
 
 export type { TestDomain, TestType, TestLogEvent, TestRunMeta } from '../core/run-log-contract'
 
@@ -76,11 +75,9 @@ export type StructuredOutputScript = LlmScript
 
 export type LiveLlmConfig = Pick<
   LlmRuntimeConfig,
-  'providerKind' | 'base_url' | 'model_name' | 'api_key'
+  'name' | 'providerKind' | 'base_url' | 'model_name' | 'api_key'
 > & {
   id: string
-  is_active: true
-  default_model: string
 }
 
 export type TestRunMode = 'single' | 'repeatable'

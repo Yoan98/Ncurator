@@ -25,8 +25,7 @@ import {
   getWorkspaceIndexCounts,
   getSettingsLocator,
   getSettingsPrefixLocator,
-  navigateToSettingsSection,
-  waitForFileIndexJobIdle
+  navigateToSettingsSection
 } from './settings'
 import type { E2ETestRuntime } from './run-e2e-case'
 import type { E2ERuntimeSignals } from './electronApp'
@@ -432,6 +431,7 @@ export const configureLiveModelThroughSettingsUi = async (
 ): Promise<void> => {
   await navigateToSettingsSection(page, 'model')
   await getSettingsLocator(page, settingsSelectors.modelAddButton).click()
+  await getSettingsLocator(page, settingsSelectors.modelNameInput).fill('Live Model')
   await getSettingsLocator(page, settingsSelectors.modelBaseUrlInput).waitFor({
     state: 'visible'
   })
@@ -440,7 +440,7 @@ export const configureLiveModelThroughSettingsUi = async (
     .fill(env.baseUrl)
   await getSettingsLocator(page, settingsSelectors.modelApiKeyInput).fill(env.apiKey)
   await getSettingsLocator(page, settingsSelectors.modelSaveButton).click()
-  await getSettingsLocator(page, settingsSelectors.modelSummaryCurrent).waitFor({
+  await page.locator('tbody tr').filter({ hasText: 'Live Model' }).waitFor({
     state: 'visible'
   })
 
@@ -948,7 +948,10 @@ export const setupWorkbenchWorkspaceOnly = async (
   }
 }
 
-const pasteWorkbenchTextThroughSystemClipboard = async (page: Page, value: string): Promise<void> => {
+const pasteWorkbenchTextThroughSystemClipboard = async (
+  page: Page,
+  value: string
+): Promise<void> => {
   const wroteClipboard = await page
     .evaluate(async (text) => {
       try {
@@ -1122,6 +1125,11 @@ export const switchWorkbenchMode = async (
 export const selectWorkbenchModel = async (page: Page, modelName: string): Promise<void> => {
   const modelSelect = getWorkbenchLocator(page, workbenchSelectors.modelSelect)
   await modelSelect.click()
+  await page
+    .locator('.workbench-select-menu.workbench-composer-menu')
+    .last()
+    .getByText('主模型')
+    .click()
   const searchInput = page
     .locator('.workbench-select-menu.workbench-composer-menu input[placeholder="搜索模型"]')
     .last()

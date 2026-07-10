@@ -4,9 +4,9 @@ import type {
   IpcJsonArray,
   IpcJsonObject,
   IpcJsonValue,
-  LlmRemoteModel,
   RuntimeSkillId,
   SearchResult,
+  WorkbenchSelectedModel,
   WorkspaceSource
 } from '../../../../shared/types'
 import {
@@ -390,7 +390,8 @@ const getToolItemText = (
   if (toolName === 'docx_edit') {
     if (status === 'running') return sentence(text('正在编辑 '), text(fileLabel, true))
     if (status === 'completed') return sentence(text('已编辑 '), text(fileLabel, true))
-    if (status === 'partial_failed') return sentence(text('部分编辑 '), text(fileLabel, true), text(' 失败'))
+    if (status === 'partial_failed')
+      return sentence(text('部分编辑 '), text(fileLabel, true), text(' 失败'))
     return sentence(text('编辑 '), text(fileLabel, true), text(' 失败'))
   }
   if (toolName === 'docx_rollback') {
@@ -436,13 +437,15 @@ const getToolItemText = (
   if (toolName === 'web_search') {
     if (status === 'running') return sentence(text('正在搜索网页：'), text(queryLabel, true))
     if (status === 'completed') return sentence(text('已搜索网页：'), text(queryLabel, true))
-    if (status === 'partial_failed') return sentence(text('部分网页搜索失败：'), text(queryLabel, true))
+    if (status === 'partial_failed')
+      return sentence(text('部分网页搜索失败：'), text(queryLabel, true))
     return sentence(text('搜索网页失败：'), text(queryLabel, true))
   }
   if (toolName === 'web_crawl') {
     if (status === 'running') return sentence(text('正在读取网页：'), text(urlLabel, true))
     if (status === 'completed') return sentence(text('已读取网页：'), text(urlLabel, true))
-    if (status === 'partial_failed') return sentence(text('部分网页读取失败：'), text(urlLabel, true))
+    if (status === 'partial_failed')
+      return sentence(text('部分网页读取失败：'), text(urlLabel, true))
     return sentence(text('读取网页失败：'), text(urlLabel, true))
   }
   if (toolName === 'browser_use') {
@@ -457,7 +460,8 @@ const getToolItemText = (
   if (toolName === 'llm_recognize') {
     if (status === 'running') return sentence(text('正在识别图片：'), text(fileLabel, true))
     if (status === 'completed') return sentence(text('已识别图片：'), text(fileLabel, true))
-    if (status === 'partial_failed') return sentence(text('部分图片识别失败：'), text(fileLabel, true))
+    if (status === 'partial_failed')
+      return sentence(text('部分图片识别失败：'), text(fileLabel, true))
     return sentence(text('图片识别失败：'), text(fileLabel, true))
   }
   if (toolName === 'wait_time') {
@@ -1155,11 +1159,15 @@ export const readWorkbenchModelPreference = (
   const raw = storage.getItem(WORKBENCH_PREFERENCE_MODEL_STORAGE_KEY)
   if (!raw) return null
   try {
-    const parsed = JSON.parse(raw) as { configId?: string; modelName?: string }
-    if (!parsed.configId || !parsed.modelName) return null
+    const parsed = JSON.parse(raw) as {
+      mainModel?: WorkbenchSelectedModel | null
+      visionModel?: WorkbenchSelectedModel | null
+    }
+    if (!parsed.mainModel?.configId || !parsed.mainModel.modelName) return null
     return {
-      configId: parsed.configId,
-      modelName: parsed.modelName
+      mainModel: parsed.mainModel,
+      visionModel:
+        parsed.visionModel?.configId && parsed.visionModel.modelName ? parsed.visionModel : null
     }
   } catch {
     return null
@@ -1175,29 +1183,4 @@ export const writeWorkbenchModelPreference = (
     return
   }
   storage.setItem(WORKBENCH_PREFERENCE_MODEL_STORAGE_KEY, JSON.stringify(preference))
-}
-
-export const resolveWorkbenchModelSelection = (input: {
-  configId: string
-  models: LlmRemoteModel[]
-  defaultModelName?: string | null
-  preference: WorkbenchModelPreference | null
-}): string | null => {
-  const { configId, defaultModelName, models, preference } = input
-  const preferredModelName =
-    preference?.configId === configId ? preference.modelName : defaultModelName || null
-  if (preferredModelName && models.some((model) => model.id === preferredModelName)) {
-    return preferredModelName
-  }
-  if (
-    defaultModelName &&
-    preferredModelName !== defaultModelName &&
-    models.some((model) => model.id === defaultModelName)
-  ) {
-    return defaultModelName
-  }
-  if (defaultModelName && models.length === 0) {
-    return defaultModelName
-  }
-  return models[0]?.id || null
 }

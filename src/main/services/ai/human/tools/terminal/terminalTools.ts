@@ -208,6 +208,7 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
         execute: async (session) => {
           input.ctx.checkCancelled()
           const command = String(args.command || '').trim()
+          const commandExplanation = String(args.commandExplanation || '').trim()
           if (!command) {
             const emptyResult = buildFailure({
               reason: 'invalid_input',
@@ -292,6 +293,7 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
                   order: 0,
                   toolName: terminalRunToolSpec.name,
                   command,
+                  commandExplanation: commandExplanation || '执行这条终端指令。',
                   reason: safePolicy.reason
                 }
               ]

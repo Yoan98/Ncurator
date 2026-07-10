@@ -2,7 +2,6 @@
 import { App as AntdApp, Spin, Tooltip } from 'antd'
 import {
   HiArrowUp,
-  HiCpuChip,
   HiDocumentText,
   HiFolder,
   HiMagnifyingGlass,
@@ -19,6 +18,7 @@ import type {
   LlmRemoteModel,
   ReferenceKind,
   SelectedReference,
+  WorkbenchModelSelection,
   WorkspaceSource
 } from '../../../../shared/types'
 import { workbenchSelectors } from '../../testing/selectors'
@@ -38,6 +38,7 @@ import {
   renderComposerNodesToEditor
 } from './composer/utils'
 import WorkbenchSelect from './WorkbenchSelect'
+import WorkbenchModelSelector from './WorkbenchModelSelector'
 import type { ImageLightboxImage } from './ImageLightbox'
 import { getAttachmentTypeLabel } from './utils'
 
@@ -51,10 +52,10 @@ type MentionContext = {
 type WorkbenchComposerProps = {
   mode: WorkbenchMode
   onModeChange: (mode: WorkbenchMode) => void
-  activeModelConfig: LLMConfig | null
-  remoteModels: LlmRemoteModel[]
-  selectedModelName: string | null
-  onModelNameChange: (modelName: string) => void
+  modelConfigs: LLMConfig[]
+  modelListsByConfigId: Record<string, LlmRemoteModel[]>
+  modelSelection: WorkbenchModelSelection
+  onModelSelectionChange: (selection: WorkbenchModelSelection) => void
   workspaces: WorkspaceSource[]
   selectedWorkspaceId: string | null
   onWorkspaceChange: (workspaceId: string) => void
@@ -103,10 +104,10 @@ const isSupportedAttachmentFile = (name: string): boolean =>
 const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   mode,
   onModeChange,
-  activeModelConfig,
-  remoteModels,
-  selectedModelName,
-  onModelNameChange,
+  modelConfigs,
+  modelListsByConfigId,
+  modelSelection,
+  onModelSelectionChange,
   workspaces,
   selectedWorkspaceId,
   onWorkspaceChange,
@@ -751,17 +752,6 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     ],
     []
   )
-  const modelOptions = useMemo<WorkbenchSelectOption[]>(
-    () =>
-      remoteModels.map((model) => ({
-        value: model.id,
-        label: model.label || model.id,
-        icon: <HiCpuChip className="h-3.5 w-3.5" />,
-        description: activeModelConfig ? `${activeModelConfig.base_url} · ${model.id}` : model.id,
-        keywords: [model.label || model.id, model.id, activeModelConfig?.base_url || '']
-      })),
-    [activeModelConfig, remoteModels]
-  )
   const workspaceOptions = useMemo<WorkbenchSelectOption[]>(
     () =>
       workspaces.map((workspace) => ({
@@ -1061,28 +1051,14 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
               </div>
             </Tooltip>
 
-            <WorkbenchSelect
-              value={selectedModelName}
-              options={modelOptions}
-              onChange={(nextValue) => {
-                onModelNameChange(nextValue)
-                focusEditorAfterControlChange()
-              }}
-              placeholder={activeModelConfig ? '选择模型' : '模型'}
-              triggerIcon={<HiCpuChip className="h-3.5 w-3.5" />}
-              compact
-              searchable
-              searchPlaceholder="搜索模型"
+            <WorkbenchModelSelector
+              configs={modelConfigs}
+              modelListsByConfigId={modelListsByConfigId}
+              value={modelSelection}
+              onChange={onModelSelectionChange}
+              onAfterChange={focusEditorAfterControlChange}
               noDrag
               className="workbench-composer-model-select"
-              triggerClassName="workbench-composer-pill workbench-composer-model-pill"
-              menuClassName="workbench-composer-menu"
-              selectedWithoutBackground
-              minMenuWidth={320}
-              maxMenuWidth={440}
-              menuAlign="end"
-              menuPreferredHeight={300}
-              menuMaxHeight={300}
               data-testid={workbenchSelectors.modelSelect}
             />
 

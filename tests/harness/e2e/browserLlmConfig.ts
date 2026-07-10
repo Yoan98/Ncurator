@@ -39,14 +39,13 @@ export const loadBrowserE2ELlmConfigFromEnv = (): LlmRuntimeConfig => {
 
   return {
     id: 'browser-e2e-config',
+    name: 'Browser E2E',
     providerKind: resolveLlmProviderKind({
       providerKind: readEnv('AI_LIVE_PROVIDER_KIND'),
       baseUrl
     }),
     base_url: baseUrl,
     api_key: apiKey,
-    is_active: true,
-    default_model: modelName,
     model_name: modelName
   }
 }

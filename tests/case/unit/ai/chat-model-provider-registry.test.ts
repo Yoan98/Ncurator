@@ -1,16 +1,18 @@
 import { describe, expect, it } from 'vitest'
-import { createChatModel, getSupportedTransportsForConfig } from '../../../../src/main/services/llm/chatModel'
+import {
+  createChatModel,
+  getSupportedTransportsForConfig
+} from '../../../../src/main/services/llm/chatModel'
 import { AI_LLM_CALL_TIMEOUT_MS } from '../../../../src/main/services/ai/constants'
 import type { LlmRuntimeConfig } from '../../../../src/shared/types'
 
 const buildConfig = (input: Partial<LlmRuntimeConfig>): LlmRuntimeConfig => ({
   id: 'cfg',
+  name: 'Provider Registry Config',
   providerKind: 'openai-compatible',
   base_url: 'https://example.test/v1',
   model_name: 'test-model',
   api_key: 'test-key',
-  is_active: true,
-  default_model: 'test-model',
   ...input
 })
 

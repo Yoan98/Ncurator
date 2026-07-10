@@ -1,4 +1,5 @@
 import { DOCX_TOOL_SPECS } from './docx/toolSpecs'
+import { IMAGE_RECOGNITION_TOOL_SPECS } from './imageRecognition/toolSpecs'
 import { KB_TOOL_SPECS } from './kb/toolSpecs'
 import { UTILITY_TOOL_SPECS } from './utility/toolSpecs'
 import { WEB_TOOL_SPECS } from './web/toolSpecs'
@@ -15,12 +16,15 @@ export const ALL_TOOL_SPECS = [
   ...KB_TOOL_SPECS,
   ...DOCX_TOOL_SPECS,
   ...WEB_TOOL_SPECS,
-  ...UTILITY_TOOL_SPECS
+  ...UTILITY_TOOL_SPECS,
+  ...IMAGE_RECOGNITION_TOOL_SPECS
 ] as const
 
 type AnyToolSpec = (typeof ALL_TOOL_SPECS)[number]
 
-const TOOL_SPEC_BY_NAME = new Map<string, AnyToolSpec>(ALL_TOOL_SPECS.map((spec) => [spec.name, spec]))
+const TOOL_SPEC_BY_NAME = new Map<string, AnyToolSpec>(
+  ALL_TOOL_SPECS.map((spec) => [spec.name, spec])
+)
 const TOOL_SPECS_BY_FAMILY = new Map<AiToolFamilyId, AnyToolSpec[]>()
 
 for (const spec of ALL_TOOL_SPECS) {
@@ -52,5 +56,6 @@ export const listAllToolNames = (): string[] => [...TOOL_SPEC_BY_NAME.keys()]
 export const listToolNamesByFamily = (familyId: AiToolFamilyId): string[] =>
   [...(TOOL_SPECS_BY_FAMILY.get(familyId) || [])].map((spec) => spec.name)
 
-export const listToolSpecsByFamily = (familyId: AiToolFamilyId): HumanToolSpec[] =>
-  [...(TOOL_SPECS_BY_FAMILY.get(familyId) || [])]
+export const listToolSpecsByFamily = (familyId: AiToolFamilyId): HumanToolSpec[] => [
+  ...(TOOL_SPECS_BY_FAMILY.get(familyId) || [])
+]

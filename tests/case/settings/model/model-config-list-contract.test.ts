@@ -4,20 +4,18 @@ import { runBackendCase } from '../../../harness/backend/run-backend-case'
 
 const MODEL_FIXTURES: readonly LLMConfig[] = [
   {
-    id: 'model-active',
+    id: 'model-openai',
+    name: '公司 OpenAI',
     providerKind: 'openai',
     base_url: 'https://api.openai.com/v1',
-    api_key: 'sk-active',
-    is_active: true,
-    default_model: 'gpt-4o'
+    api_key: 'sk-openai'
   },
   {
-    id: 'model-standby',
+    id: 'model-deepseek',
+    name: 'DeepSeek 配置',
     providerKind: 'deepseek',
     base_url: 'https://api.deepseek.com',
-    api_key: 'sk-standby',
-    is_active: false,
-    default_model: 'deepseek-chat'
+    api_key: 'sk-deepseek'
   }
 ]
 
@@ -28,7 +26,7 @@ describe('settings model backend', () => {
       harnessMode: 'tool-real',
       domain: 'settings',
       suite: 'model',
-      description: '模型连接配置列表查询可返回全部配置，并唯一识别当前激活配置。',
+      description: '模型连接配置列表查询可返回全部可用服务配置。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -37,12 +35,10 @@ describe('settings model backend', () => {
         }
 
         const list = await runtime.storageService.llm.list()
-        const activeConfig = await runtime.storageService.llm.getActive()
 
         return {
           listIds: list.map((item) => item.id).sort(),
-          activeIds: list.filter((item) => item.is_active).map((item) => item.id),
-          activeConfigId: activeConfig?.id || null,
+          names: list.map((item) => item.name).sort(),
           baseUrls: list.map((item) => item.base_url).sort(),
           providerKinds: list.map((item) => item.providerKind).sort()
         }
@@ -72,13 +68,10 @@ describe('settings model backend', () => {
         )
 
         runtime.assertThat(
-          result.activeIds.length === 1 &&
-            result.activeIds[0] === 'model-active' &&
-            result.activeConfigId === 'model-active',
+          JSON.stringify(result.names) === JSON.stringify(['DeepSeek 配置', '公司 OpenAI']),
           {
-            name: 'model-config-list-identifies-single-active-config',
-            message:
-              '配置列表中应存在唯一当前激活配置，并能直接支撑摘要当前态识别，对齐 SET-MODEL-001-AC2。',
+            name: 'model-config-list-preserves-config-names',
+            message: '配置列表应保留用户填写的配置名称，用于工作台模型选择按配置分组。',
             data: result
           }
         )

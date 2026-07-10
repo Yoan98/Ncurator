@@ -1,18 +1,7 @@
 ﻿import React, { useEffect, useMemo, useState } from 'react'
-import {
-  AutoComplete,
-  Button,
-  Form,
-  Input,
-  Modal,
-  Popconfirm,
-  Space,
-  Table,
-  Tag,
-  message
-} from 'antd'
+import { AutoComplete, Button, Form, Input, Modal, Popconfirm, Space, Table, message } from 'antd'
 import type { TableColumnsType } from 'antd'
-import { HiArrowPath, HiCheckCircle, HiPencil, HiPlus, HiTrash } from 'react-icons/hi2'
+import { HiArrowPath, HiPencil, HiPlus, HiTrash } from 'react-icons/hi2'
 import type { LLMConfig, LlmRemoteModel } from '../../../../shared/types'
 import { inferLlmProviderKind } from '../../../../shared/llmProvider'
 import { PROVIDER_OPTIONS } from './constants'
@@ -40,6 +29,8 @@ const getProviderLabel = (config: Pick<LLMConfig, 'providerKind' | 'base_url'>):
   if (config.providerKind === 'deepseek') return 'DeepSeek'
   return 'OpenAI Compatible'
 }
+
+const getConfigName = (config: LLMConfig): string => config.name?.trim() || getProviderLabel(config)
 
 const ModelSettingsPanel: React.FC = () => {
   const [configs, setConfigs] = useState<LLMConfig[]>([])
@@ -70,10 +61,6 @@ const ModelSettingsPanel: React.FC = () => {
     void loadConfigs()
   }, [])
 
-  const activeConfig = useMemo(
-    () => configs.find((config) => config.is_active) || configs[0] || null,
-    [configs]
-  )
   const modelListConfig = useMemo(
     () => configs.find((config) => config.id === modelListConfigId) || null,
     [configs, modelListConfigId]
@@ -152,36 +139,15 @@ const ModelSettingsPanel: React.FC = () => {
     }
   }
 
-  const handleActivate = async (id: string): Promise<void> => {
-    try {
-      const response = await window.api.llmConfigSetActive(id)
-      if (!response.success) {
-        const errorMessage = response.error || '切换失败'
-        setActionError(errorMessage)
-        message.error(errorMessage)
-        return
-      }
-      setActionError(null)
-      message.success('已切换当前配置')
-      await loadConfigs()
-      window.dispatchEvent(new Event('check-llm-config'))
-    } catch (error) {
-      console.error(error)
-      setActionError('切换失败')
-      message.error('切换失败')
-    }
-  }
-
   const handleSave = async (): Promise<void> => {
     try {
       const values = await form.validateFields()
       const nextConfig: LLMConfig = {
         id: editingConfig ? editingConfig.id : crypto.randomUUID(),
+        name: values.name.trim(),
         providerKind: values.providerKind || inferLlmProviderKind(values.base_url),
         base_url: values.base_url,
-        api_key: values.api_key,
-        is_active: editingConfig ? editingConfig.is_active : configs.length === 0,
-        default_model: editingConfig?.default_model || ''
+        api_key: values.api_key
       }
 
       const response = await window.api.llmConfigSave(nextConfig)
@@ -200,10 +166,6 @@ const ModelSettingsPanel: React.FC = () => {
       message.success(editingConfig ? '配置已更新' : '配置已添加')
       setIsModalOpen(false)
       await loadConfigs()
-
-      if (nextConfig.is_active) {
-        window.dispatchEvent(new Event('check-llm-config'))
-      }
     } catch (error) {
       console.error(error)
     }
@@ -216,14 +178,8 @@ const ModelSettingsPanel: React.FC = () => {
       width: 360,
       render: (_value, record) => (
         <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="font-medium text-[#37352F]">{getProviderLabel(record)}</span>
-            {record.is_active ? (
-              <Tag color="#37352F" icon={<HiCheckCircle className="inline" />}>
-                当前使用
-              </Tag>
-            ) : null}
-          </div>
+          <div className="font-medium text-[#37352F]">{getConfigName(record)}</div>
+          <div className="text-[12px] text-[#9B9A97]">{getProviderLabel(record)}</div>
           <div className="truncate text-[12px] text-[#787774]">{record.base_url}</div>
         </div>
       )
@@ -233,7 +189,11 @@ const ModelSettingsPanel: React.FC = () => {
       dataIndex: 'api_key',
       key: 'api_key',
       width: 120,
-      render: (text: string) => <Tag>{maskApiKey(text)}</Tag>
+      render: (text: string) => (
+        <span className="rounded-[6px] border border-[#EEEEEC] bg-[#F4F4F2] px-2 py-1 text-[12px] text-[#37352F]">
+          {maskApiKey(text)}
+        </span>
+      )
     },
     {
       title: '模型列表',
@@ -268,17 +228,6 @@ const ModelSettingsPanel: React.FC = () => {
       width: 160,
       render: (_value, record) => (
         <Space size="small">
-          {!record.is_active ? (
-            <Button
-              type="link"
-              size="small"
-              onClick={() => void handleActivate(record.id)}
-              className="!text-[#37352F]"
-              data-testid={`${settingsSelectors.modelActivateButtonPrefix}-${record.id}`}
-            >
-              启用
-            </Button>
-          ) : null}
           <Button
             type="text"
             size="small"
@@ -313,18 +262,9 @@ const ModelSettingsPanel: React.FC = () => {
     >
       <section className="shrink-0 px-1 pt-1">
         <div className="flex flex-wrap items-center justify-end gap-2">
-          {activeConfig ? (
-            <Tag
-              className="!m-0 rounded-full border-[#EEEEEC] bg-[#F4F4F2] px-3 py-1 text-[12px] text-[#37352F]"
-              data-testid={settingsSelectors.modelSummaryCurrent}
-            >
-              当前 {getProviderLabel(activeConfig)}
-              {activeConfig.default_model ? ` · ${activeConfig.default_model}` : ''}
-            </Tag>
-          ) : null}
-          <Tag className="!m-0 rounded-full border-[#EEEEEC] bg-white px-3 py-1 text-[12px] text-[#787774]">
+          <span className="rounded-full border border-[#EEEEEC] bg-white px-3 py-1 text-[12px] text-[#787774]">
             共 {configs.length} 个配置
-          </Tag>
+          </span>
           <Button
             type="primary"
             icon={<HiPlus className="h-4 w-4" />}
@@ -366,6 +306,18 @@ const ModelSettingsPanel: React.FC = () => {
         className="[&_.ant-modal-content]:!rounded-[8px]"
       >
         <Form form={form} layout="vertical" className="pt-4">
+          <Form.Item
+            name="name"
+            label="配置名称"
+            rules={[{ required: true, message: '请输入配置名称' }]}
+          >
+            <Input
+              size="large"
+              placeholder="例如：公司 OpenAI"
+              data-testid={settingsSelectors.modelNameInput}
+            />
+          </Form.Item>
+
           <Form.Item
             name="providerKind"
             hidden
@@ -429,7 +381,7 @@ const ModelSettingsPanel: React.FC = () => {
       </Modal>
 
       <Modal
-        title={modelListConfig ? `${getProviderLabel(modelListConfig)} 可用模型` : '可用模型'}
+        title={modelListConfig ? `${getConfigName(modelListConfig)} 可用模型` : '可用模型'}
         open={Boolean(modelListConfig)}
         footer={
           modelListConfig ? (
@@ -451,12 +403,8 @@ const ModelSettingsPanel: React.FC = () => {
         {modelListConfig ? (
           <div className="flex flex-col gap-3 pt-2">
             <div className="rounded-[8px] border border-[#EFEFED] bg-[#F7F7F5] px-3 py-2 text-[12px] text-[#787774]">
-              <div className="font-medium text-[#37352F]">{modelListConfig.base_url}</div>
-              {modelListConfig.default_model ? (
-                <div className="mt-1">默认模型：{modelListConfig.default_model}</div>
-              ) : (
-                <div className="mt-1">尚未选择默认模型</div>
-              )}
+              <div className="font-medium text-[#37352F]">{getConfigName(modelListConfig)}</div>
+              <div className="mt-1">{modelListConfig.base_url}</div>
             </div>
             {modelListByConfigId[modelListConfig.id]?.error ? (
               <div className="rounded-[8px] border border-[#E7CAC6] bg-[#F8EBE9] px-3 py-2 text-[12px] text-[#B3261E]">
@@ -475,9 +423,6 @@ const ModelSettingsPanel: React.FC = () => {
                   <span className="min-w-0 truncate text-[13px] text-[#37352F]">
                     {model.label || model.id}
                   </span>
-                  {model.id === modelListConfig.default_model ? (
-                    <Tag className="!m-0 border-[#EEEEEC] bg-[#F4F4F2] text-[#37352F]">默认</Tag>
-                  ) : null}
                 </div>
               ))}
               {modelListByConfigId[modelListConfig.id]?.loading ? (

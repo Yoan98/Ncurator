@@ -8,8 +8,6 @@ const createConfig = (overrides?: Partial<LlmRuntimeConfig>): LlmRuntimeConfig =
   providerKind: 'openai-compatible',
   base_url: 'https://gateway.example.com/chat/completions',
   api_key: 'test-key',
-  is_active: true,
-  default_model: 'unused-default-model',
   model_name: 'custom-model',
   ...overrides
 })
