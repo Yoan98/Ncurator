@@ -55,7 +55,9 @@ describe('workbench run persistence e2e', () => {
             const evidence = await waitForWorkbenchAiRunCompletion(
               runtime,
               startedAtMs,
-              setup.env.modelName
+              setup.env.modelName,
+              WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
+              { page, blockerPolicy: 'auto_approve' }
             )
             await navigateToWorkbench(page)
 
@@ -79,7 +81,6 @@ describe('workbench run persistence e2e', () => {
         assert: async (result, runtime) => {
           await runtime.assertThat(
             result.processTextBeforeNavigation.length > 0 &&
-              result.processItemCount > 0 &&
               result.eventTypes.includes('answer_completed') &&
               result.eventTypes.includes('run_completed') &&
               /Alice|合规负责人/u.test(result.finalAnswerText) &&

@@ -1,43 +1,19 @@
-import type { Page } from 'playwright'
 import { describe, it } from 'vitest'
-import type { WorkspaceTreeListResponse } from '../../../../../src/shared/types'
 import { importSelectors } from '../../../../../src/renderer/src/testing/selectors'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
-  SETTINGS_E2E_TIMEOUT_MS,
-  createFixtureWorkspace,
+  SETTINGS_REAL_WORKSPACE_E2E_TIMEOUT_MS,
+  createRealWorkspaceWithRoot,
   getSettingsLocator,
   getWorkspaceIndexCounts,
-  navigateToSettingsSection
+  navigateToSettingsSection,
+  waitForFileIndexJobIdle
 } from '../../../../harness/e2e/settings'
-
-const waitForWorkspaceTree = async (
-  page: Page,
-  workspaceId: string,
-  predicate: (response: WorkspaceTreeListResponse) => boolean,
-  timeoutMs = 5000
-): Promise<WorkspaceTreeListResponse> => {
-  const deadline = Date.now() + timeoutMs
-  let lastResponse = await page.evaluate(async (selectedWorkspaceId) => {
-    return await window.api.workspaceTree({
-      workspaceId: String(selectedWorkspaceId || ''),
-      includeUnsupported: true
-    })
-  }, workspaceId)
-
-  while (!predicate(lastResponse)) {
-    if (Date.now() >= deadline) return lastResponse
-    await page.waitForTimeout(200)
-    lastResponse = await page.evaluate(async (selectedWorkspaceId) => {
-      return await window.api.workspaceTree({
-        workspaceId: String(selectedWorkspaceId || ''),
-        includeUnsupported: true
-      })
-    }, workspaceId)
-  }
-
-  return lastResponse
-}
+import {
+  cleanupRealWorkspace,
+  createWorkspaceWithFiles,
+  toSupportedFileStatuses
+} from './realWorkspaceHelpers'
 
 describe('settings workspace e2e', () => {
   it('workspace-detail-status-and-error', async () => {
@@ -48,48 +24,55 @@ describe('settings workspace e2e', () => {
       groups: ['files'],
       description: '文件 tab 持续展示需索引/失败摘要，并在索引失败后保留文件级错误状态。',
       fixtures: [],
+      launchMode: 'real',
       runMode: 'single',
       execute: async (runtime) => {
         const { page } = runtime
-        let workspaceId = ''
+        let workspaceRoot = ''
 
-        await runtime.step({
-          name: 'seed-failing-workspace',
-          message: '创建一条 prepare 会失败的 fixture 工作空间，并进入工作空间页。',
-          run: async () => {
-            const workspace = await createFixtureWorkspace(page, {
-              rootPath: '/tmp/ncurator-e2e-settings-workspace-prepare-fail',
-              name: '失败工作区'
-            })
-            workspaceId = workspace.workspace!.id
-            await navigateToSettingsSection(page, 'workspace')
+        try {
+          workspaceRoot = await createWorkspaceWithFiles('workspace-detail-status-and-error', [
+            {
+              relativePath: 'docs/broken.docx',
+              content: 'not a valid docx archive'
+            }
+          ])
+          const workspace = await createRealWorkspaceWithRoot(page, {
+            name: '失败工作区',
+            rootPath: workspaceRoot
+          })
+          const workspaceId = workspace.workspace!.id
+
+          await runtime.step({
+            name: 'trigger-real-prepare-error',
+            message: '通过 UI 点击更新索引，让真实坏 docx 文件进入文件级失败状态。',
+            run: async () => {
+              await navigateToSettingsSection(page, 'workspace')
+              await getSettingsLocator(page, importSelectors.workspaceQuickPrepareButton).waitFor({
+                state: 'visible'
+              })
+              await getSettingsLocator(page, importSelectors.workspaceQuickPrepareButton).click()
+            }
+          })
+
+          const result = await waitForFileIndexJobIdle(page, workspaceId)
+          const counts = await getWorkspaceIndexCounts(page)
+          const treeText =
+            (await getSettingsLocator(page, importSelectors.workspaceTree).textContent()) || ''
+          const failedItems = toSupportedFileStatuses(result.tree).filter(
+            (item) => item.status === 'failed'
+          )
+
+          return {
+            summary: result.tree.summary,
+            counts,
+            treeText,
+            failedItems
           }
-        })
-
-        await runtime.step({
-          name: 'trigger-prepare-error',
-          message: '点击更新索引，让 fixture 返回失败状态和文件级错误。',
-          run: async () => {
-            await getSettingsLocator(page, importSelectors.workspaceQuickPrepareButton).click()
+        } finally {
+          if (workspaceRoot) {
+            await cleanupRealWorkspace(workspaceRoot)
           }
-        })
-        const treeResponse = await waitForWorkspaceTree(
-          page,
-          workspaceId,
-          (response) => response.summary.failed_file_count === 1
-        )
-        const counts = await getWorkspaceIndexCounts(page)
-
-        return {
-          summary: treeResponse.summary,
-          counts,
-          treeText: (await getSettingsLocator(page, importSelectors.workspaceTree).textContent()) || '',
-          failedItems: treeResponse.items
-            .filter((item) => item.kind === 'file' && item.index_status === 'failed')
-            .map((item) => ({
-              name: item.name,
-              lastError: item.last_error || ''
-            }))
         }
       },
       assert: async (result, runtime) => {
@@ -108,8 +91,8 @@ describe('settings workspace e2e', () => {
 
         await runtime.assertThat(
           result.failedItems.length === 1 &&
-            result.failedItems[0]?.name === 'brief.txt' &&
-            result.failedItems[0]?.lastError.includes('E2E fixture prepare failed'),
+            result.failedItems[0]?.name === 'broken.docx' &&
+            result.failedItems[0]?.lastError.length > 0,
           {
             name: 'file-level-failure-state-is-preserved',
             message:
@@ -126,5 +109,5 @@ describe('settings workspace e2e', () => {
         })
       }
     })
-  }, SETTINGS_E2E_TIMEOUT_MS)
+  }, SETTINGS_REAL_WORKSPACE_E2E_TIMEOUT_MS)
 })

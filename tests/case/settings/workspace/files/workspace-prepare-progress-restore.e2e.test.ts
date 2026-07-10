@@ -2,11 +2,19 @@ import { describe, it } from 'vitest'
 import { importSelectors } from '../../../../../src/renderer/src/testing/selectors'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
-  SETTINGS_E2E_TIMEOUT_MS,
-  createFixtureWorkspace,
+  SETTINGS_REAL_WORKSPACE_E2E_TIMEOUT_MS,
+  createRealWorkspaceWithRoot,
   getSettingsLocator,
-  navigateToSettingsSection
+  navigateToSettingsSection,
+  waitForFileIndexJobIdle
 } from '../../../../harness/e2e/settings'
+import { cleanupRealWorkspace, createWorkspaceWithFiles } from './realWorkspaceHelpers'
+
+const createSlowEnoughInvalidDocxFiles = (): Array<{ relativePath: string; content: string }> =>
+  Array.from({ length: 120 }, (_, index) => ({
+    relativePath: `docs/broken-${String(index + 1).padStart(3, '0')}.docx`,
+    content: `not a valid docx archive ${index + 1}`
+  }))
 
 describe('settings workspace e2e', () => {
   it(
@@ -19,83 +27,81 @@ describe('settings workspace e2e', () => {
         groups: ['files'],
         description: '文件索引执行中离开并返回工作空间页后，应恢复持久化进度块和按钮禁用状态。',
         fixtures: [],
+        launchMode: 'real',
         runMode: 'single',
         execute: async (runtime) => {
           const { page } = runtime
-          let workspaceId = ''
-          let restoredProgressVisible = false
-          let restoredButtonsDisabled = false
-          let restoredActiveJob = false
+          let workspaceRoot = ''
 
-          await runtime.step({
-            name: 'seed-delayed-workspace',
-            message: '创建带 prepare 延迟的 fixture 工作空间，并触发文件索引。',
-            run: async () => {
-              const workspace = await createFixtureWorkspace(page, {
-                rootPath: '/tmp/ncurator-e2e-settings-workspace-prepare-delay-restore',
-                name: '文件进度恢复工作区'
-              })
-              workspaceId = workspace.workspace!.id
-              await navigateToSettingsSection(page, 'workspace')
-              await getSettingsLocator(page, importSelectors.workspaceQuickPrepareButton).click()
-              await getSettingsLocator(page, importSelectors.workspaceIndexJobProgress).waitFor({
-                state: 'visible'
-              })
-            }
-          })
-
-          await runtime.step({
-            name: 'restore-progress-after-route-change',
-            message: '切到其他设置页再返回工作空间页，确认 active job 进度仍可恢复。',
-            run: async () => {
-              await navigateToSettingsSection(page, 'model')
-              await navigateToSettingsSection(page, 'workspace')
-              await getSettingsLocator(page, importSelectors.workspaceIndexJobProgress).waitFor({
-                state: 'visible'
-              })
-              const activeJobResponse = await page.evaluate(async (selectedWorkspaceId) => {
-                return await window.api.workspaceIndexJobGet({
-                  workspaceId: String(selectedWorkspaceId || ''),
-                  sourceKind: 'file'
-                })
-              }, workspaceId)
-              restoredProgressVisible = await getSettingsLocator(
-                page,
-                importSelectors.workspaceIndexJobProgress
-              ).isVisible()
-              restoredButtonsDisabled =
-                (await getSettingsLocator(
-                  page,
-                  importSelectors.workspaceQuickScanButton
-                ).isDisabled()) &&
-                (await getSettingsLocator(
-                  page,
-                  importSelectors.workspaceQuickPrepareButton
-                ).isDisabled())
-              restoredActiveJob =
-                activeJobResponse.success && activeJobResponse.job?.status === 'running'
-            }
-          })
-
-          await page.waitForFunction(async (selectedWorkspaceId) => {
-            const response = await window.api.workspaceTree({
-              workspaceId: String(selectedWorkspaceId || ''),
-              includeUnsupported: true
+          try {
+            workspaceRoot = await createWorkspaceWithFiles(
+              'workspace-prepare-progress-restore',
+              createSlowEnoughInvalidDocxFiles()
+            )
+            const workspace = await createRealWorkspaceWithRoot(page, {
+              name: '文件进度恢复工作区',
+              rootPath: workspaceRoot
             })
-            return response.summary.indexed_file_count === 1
-          }, workspaceId)
+            const workspaceId = workspace.workspace!.id
 
-          return {
-            restoredProgressVisible,
-            restoredButtonsDisabled,
-            restoredActiveJob
+            await runtime.step({
+              name: 'start-real-prepare',
+              message: '通过 UI 对真实多文件工作区启动索引，并等待进度块出现。',
+              run: async () => {
+                await navigateToSettingsSection(page, 'workspace')
+                await getSettingsLocator(page, importSelectors.workspaceQuickPrepareButton).click()
+                await getSettingsLocator(page, importSelectors.workspaceIndexJobProgress).waitFor({
+                  state: 'visible'
+                })
+              }
+            })
+
+            let restoredProgressVisible = false
+            let restoredButtonsDisabled = false
+
+            await runtime.step({
+              name: 'restore-progress-after-route-change',
+              message: '切到其他设置页再返回工作空间页，确认 running job 进度仍可恢复。',
+              run: async () => {
+                await navigateToSettingsSection(page, 'model')
+                await navigateToSettingsSection(page, 'workspace')
+                await getSettingsLocator(page, importSelectors.workspaceIndexJobProgress).waitFor({
+                  state: 'visible'
+                })
+                restoredProgressVisible = await getSettingsLocator(
+                  page,
+                  importSelectors.workspaceIndexJobProgress
+                ).isVisible()
+                restoredButtonsDisabled =
+                  (await getSettingsLocator(
+                    page,
+                    importSelectors.workspaceQuickScanButton
+                  ).isDisabled()) &&
+                  (await getSettingsLocator(
+                    page,
+                    importSelectors.workspaceQuickPrepareButton
+                  ).isDisabled())
+              }
+            })
+
+            const idle = await waitForFileIndexJobIdle(page, workspaceId)
+
+            return {
+              restoredProgressVisible,
+              restoredButtonsDisabled,
+              failedFileCount: idle.tree.summary.failed_file_count
+            }
+          } finally {
+            if (workspaceRoot) {
+              await cleanupRealWorkspace(workspaceRoot)
+            }
           }
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
             result.restoredProgressVisible &&
               result.restoredButtonsDisabled &&
-              result.restoredActiveJob,
+              result.failedFileCount > 0,
             {
               name: 'file-progress-restores-after-return',
               message:
@@ -106,6 +112,6 @@ describe('settings workspace e2e', () => {
         }
       })
     },
-    SETTINGS_E2E_TIMEOUT_MS
+    SETTINGS_REAL_WORKSPACE_E2E_TIMEOUT_MS
   )
 })

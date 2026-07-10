@@ -33,8 +33,9 @@ describe('settings workspace e2e', () => {
 
         await runtime.step({
           name: 'open-workspace-page',
-          message: '进入工作空间页并等待第一条工作空间详情完成渲染。',
+          message: '重新进入工作空间页并等待详情区完成渲染。',
           run: async () => {
+            await navigateToSettingsSection(page, 'model')
             await navigateToSettingsSection(page, 'workspace')
             await getSettingsLocator(page, importSelectors.workspaceList).waitFor({
               state: 'visible'
@@ -44,30 +45,31 @@ describe('settings workspace e2e', () => {
               .first()
               .waitFor({ state: 'visible' })
             await getSettingsLocator(page, importSelectors.workspaceDetail)
-              .getByText('第一个工作空间')
+              .getByRole('tab', { name: /文件/u })
               .waitFor({ state: 'visible' })
           }
         })
 
-        const firstWorkspaceCardText =
-          (await getSettingsPrefixLocator(page, importSelectors.workspaceCardPrefix)
-            .filter({ hasText: '第一个工作空间' })
-            .first()
-            .textContent()) || ''
+        const firstWorkspaceCard = getSettingsPrefixLocator(page, importSelectors.workspaceCardPrefix)
+          .filter({ hasText: '第一个工作空间' })
+          .first()
+        const firstWorkspaceCardText = (await firstWorkspaceCard.textContent()) || ''
+        const firstWorkspaceCardClass = (await firstWorkspaceCard.getAttribute('class')) || ''
         const detailText =
           (await getSettingsLocator(page, importSelectors.workspaceDetail).textContent()) || ''
 
         return {
           firstWorkspaceCardText,
+          firstWorkspaceCardClass,
           detailText,
-          firstWorkspaceVisible: detailText.includes('第一个工作空间'),
+          firstWorkspaceSelected: firstWorkspaceCardClass.includes('nc-sidebar-item-active'),
           fileTabVisible: await page.getByRole('tab', { name: /文件/u }).isVisible(),
           webTabVisible: await page.getByRole('tab', { name: /网页/u }).isVisible()
         }
       },
       assert: async (result, runtime) => {
         await runtime.assertThat(
-          result.firstWorkspaceVisible && result.fileTabVisible && result.webTabVisible,
+          result.firstWorkspaceSelected && result.fileTabVisible && result.webTabVisible,
           {
             name: 'workspace-page-loads-list-and-detail',
             message:
@@ -76,12 +78,16 @@ describe('settings workspace e2e', () => {
           }
         )
 
-        await runtime.assertThat(result.firstWorkspaceCardText.includes('第一个工作空间'), {
+        await runtime.assertThat(
+          result.firstWorkspaceCardText.includes('第一个工作空间') &&
+            result.firstWorkspaceCardText.includes('0'),
+          {
           name: 'workspace-defaults-to-first-item',
           message:
             '未显式选中时应默认落到第一条工作空间，并能在左侧展示当前工作空间，对齐 SET-WORKSPACE-001-AC2。',
           data: result
-        })
+          }
+        )
       }
     })
   }, SETTINGS_E2E_TIMEOUT_MS)

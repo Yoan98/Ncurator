@@ -6,6 +6,7 @@ import {
   createFixtureWorkspace,
   navigateToSettingsSection,
   seedWebSources,
+  startLocalSettingsHttpServer,
   waitForWebIndexJobIdle,
   workspaceCardLocator
 } from '../../../../harness/e2e/settings'
@@ -27,50 +28,60 @@ describe('settings workspace web e2e', () => {
           let workspaceId = ''
           let progressVisible = false
           let buttonsDisabled = false
-
-          await runtime.step({
-            name: 'seed-web-source',
-            message: '预置工作区与一条网页资料，进入网页 tab。',
-            run: async () => {
-              const workspace = await createFixtureWorkspace(page, {
-                rootPath: '/tmp/settings-web-scan-summary-refresh',
-                name: '网页检查工作区'
-              })
-              workspaceId = workspace.workspace!.id
-              await seedWebSources(page, workspaceId, ['https://example.com/scan-summary-refresh'])
-              await navigateToSettingsSection(page, 'workspace')
-              await workspaceCardLocator(page, workspaceId).click()
-              await page.getByRole('tab', { name: '网页 1' }).click()
+          const httpServer = await startLocalSettingsHttpServer({
+            '/scan-summary-refresh': {
+              body: '<html><head><title>Scan Summary</title></head><body>Local scan summary fixture.</body></html>',
+              delayMs: 800
             }
           })
 
-          await runtime.step({
-            name: 'scan-web-sources',
-            message: '点击检查更新，确认网页状态与摘要切换到可索引。',
-            run: async () => {
-              await page.getByRole('button', { name: '检查更新' }).click()
-              await page.getByTestId(importSelectors.webSourceIndexJobProgress).waitFor({
-                state: 'visible'
-              })
-              progressVisible = true
-              buttonsDisabled =
-                (await page.getByRole('button', { name: '检查更新' }).isDisabled()) &&
-                (await page.getByRole('button', { name: '更新索引' }).isDisabled())
-              await waitForWebIndexJobIdle(page, workspaceId)
-            }
-          })
-
-          const webList = await page.evaluate(async (selectedWorkspaceId) => {
-            return await window.api.webSourceList({
-              workspaceId: String(selectedWorkspaceId || '')
+          try {
+            await runtime.step({
+              name: 'seed-web-source',
+              message: '预置工作区与一条本地网页资料，进入网页 tab。',
+              run: async () => {
+                const workspace = await createFixtureWorkspace(page, {
+                  rootPath: '/tmp/settings-web-scan-summary-refresh',
+                  name: '网页检查工作区'
+                })
+                workspaceId = workspace.workspace!.id
+                await seedWebSources(page, workspaceId, [httpServer.url('/scan-summary-refresh')])
+                await navigateToSettingsSection(page, 'workspace')
+                await workspaceCardLocator(page, workspaceId).click()
+                await page.getByRole('tab', { name: '网页 1' }).click()
+              }
             })
-          }, workspaceId)
 
-          return {
-            progressVisible,
-            buttonsDisabled,
-            summary: webList.summary,
-            statuses: webList.items.map((item) => item.index_status)
+            await runtime.step({
+              name: 'scan-web-sources',
+              message: '点击检查更新，确认网页状态与摘要切换到可索引。',
+              run: async () => {
+                await page.getByRole('button', { name: '检查更新' }).click()
+                await page.getByTestId(importSelectors.webSourceIndexJobProgress).waitFor({
+                  state: 'visible'
+                })
+                progressVisible = true
+                buttonsDisabled =
+                  (await page.getByRole('button', { name: '检查更新' }).isDisabled()) &&
+                  (await page.getByRole('button', { name: '更新索引' }).isDisabled())
+                await waitForWebIndexJobIdle(page, workspaceId)
+              }
+            })
+
+            const webList = await page.evaluate(async (selectedWorkspaceId) => {
+              return await window.api.webSourceList({
+                workspaceId: String(selectedWorkspaceId || '')
+              })
+            }, workspaceId)
+
+            return {
+              progressVisible,
+              buttonsDisabled,
+              summary: webList.summary,
+              statuses: webList.items.map((item) => item.index_status)
+            }
+          } finally {
+            await httpServer.close()
           }
         },
         assert: async (result, runtime) => {

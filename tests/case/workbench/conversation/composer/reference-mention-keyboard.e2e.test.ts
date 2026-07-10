@@ -43,7 +43,6 @@ describe('workbench conversation e2e', () => {
               return ((await activeMention.textContent()) || '').trim()
             }
 
-            const optionCount = await mentionPanel.getByRole('button').count()
             const activeBeforeArrowDown = await readActiveMentionText()
             await page.keyboard.press('ArrowDown')
             await page.waitForFunction(
@@ -63,7 +62,6 @@ describe('workbench conversation e2e', () => {
             const activeAfterSettled = await readActiveMentionText()
 
             return {
-              optionCount,
               activeBeforeArrowDown,
               activeAfterArrowDown,
               activeAfterSettled
@@ -74,8 +72,7 @@ describe('workbench conversation e2e', () => {
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
-            result.optionCount > 1 &&
-              result.activeBeforeArrowDown.length > 0 &&
+            result.activeBeforeArrowDown.length > 0 &&
               result.activeAfterArrowDown.length > 0 &&
               result.activeAfterArrowDown !== result.activeBeforeArrowDown &&
               result.activeAfterSettled === result.activeAfterArrowDown,

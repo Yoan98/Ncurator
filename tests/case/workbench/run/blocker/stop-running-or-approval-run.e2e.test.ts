@@ -37,6 +37,17 @@ describe('workbench run e2e', () => {
             name: 'run_started_for_stop',
             matches: (event) => event.type === 'run_started'
           })
+          await getWorkbenchLocator(page, workbenchSelectors.sendButton).waitFor({
+            state: 'visible'
+          })
+          await page.waitForFunction(
+            (testId) => {
+              const button = document.querySelector(`[data-testid="${testId}"]`)
+              return button?.getAttribute('aria-label')?.includes('停止') ?? false
+            },
+            workbenchSelectors.sendButton,
+            { timeout: 10_000 }
+          )
           const stopLabelDuringRun =
             (await getWorkbenchLocator(page, workbenchSelectors.sendButton).getAttribute(
               'aria-label'
@@ -46,6 +57,14 @@ describe('workbench run e2e', () => {
             name: 'run_cancelled',
             matches: (event) => event.type === 'run_cancelled'
           })
+          await page.waitForFunction(
+            (testId) => {
+              const button = document.querySelector(`[data-testid="${testId}"]`)
+              return !(button?.getAttribute('aria-label') || '').includes('停止')
+            },
+            workbenchSelectors.sendButton,
+            { timeout: 10_000 }
+          )
           const labelAfterCancel =
             (await getWorkbenchLocator(page, workbenchSelectors.sendButton).getAttribute(
               'aria-label'
@@ -56,6 +75,14 @@ describe('workbench run e2e', () => {
             '请使用终端命令在当前工作区创建 stop-approval-waiting.txt，内容写 should-not-execute-before-stop。'
           )
           await getApprovalCard(page).waitFor({ state: 'visible' })
+          await page.waitForFunction(
+            (testId) => {
+              const button = document.querySelector(`[data-testid="${testId}"]`)
+              return button?.getAttribute('aria-label')?.includes('停止') ?? false
+            },
+            workbenchSelectors.sendButton,
+            { timeout: 10_000 }
+          )
           const stopButtonVisibleDuringApproval = await getWorkbenchLocator(
             page,
             workbenchSelectors.sendButton

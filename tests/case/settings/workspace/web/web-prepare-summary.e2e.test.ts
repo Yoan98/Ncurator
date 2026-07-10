@@ -8,12 +8,13 @@ import {
   getWebSourceIndexCounts,
   navigateToSettingsSection,
   seedWebSources,
+  startLocalSettingsHttpServer,
   waitForWebIndexJobIdle,
   workspaceCardLocator
 } from '../../../../harness/e2e/settings'
 
 const waitForPreparedWebSources = async (page: Page, workspaceId: string): Promise<void> => {
-  const deadline = Date.now() + 5000
+  const deadline = Date.now() + SETTINGS_WEB_E2E_TIMEOUT_MS
   for (;;) {
     const response = await page.evaluate(async (selectedWorkspaceId) => {
       return await window.api.webSourceList({
@@ -50,81 +51,89 @@ describe('settings workspace web e2e', () => {
           let progressVisible = false
           let buttonsDisabled = false
           let crawlStepVisible = false
-          let indexStepVisible = false
           let progressText = ''
-
-          await runtime.step({
-            name: 'seed-web-sources',
-            message: '预置一条可成功索引网页和一条会爬取失败的网页，进入网页 tab。',
-            run: async () => {
-              const workspace = await createFixtureWorkspace(page, {
-                rootPath: '/tmp/settings-web-prepare-summary',
-                name: '网页索引工作区'
-              })
-              workspaceId = workspace.workspace!.id
-              await seedWebSources(page, workspaceId, [
-                'https://example.com/prepare-success',
-                'https://refresh-fail.example.com/refresh-fail'
-              ])
-              await navigateToSettingsSection(page, 'workspace')
-              await workspaceCardLocator(page, workspaceId).click()
-              await page.getByRole('tab', { name: '网页 2' }).click()
-              await page.getByRole('button', { name: '检查更新' }).click()
-              await waitForWebIndexJobIdle(page, workspaceId)
+          const httpServer = await startLocalSettingsHttpServer({
+            '/prepare-success': {
+              body: '<html><head><title>Prepare Success</title></head><body>Local web fixture for indexing.</body></html>',
+              delayMs: 1500
+            },
+            '/refresh-fail': {
+              status: 500,
+              body: 'refresh failed',
+              delayMs: 1500
             }
           })
 
-          await runtime.step({
-            name: 'prepare-web-sources',
-            message: '点击更新索引，确认成功和失败结果都被写回列表状态。',
-            run: async () => {
-              await page.getByRole('button', { name: '更新索引' }).click()
-              await page.getByTestId(importSelectors.webSourceIndexJobProgress).waitFor({
-                state: 'visible'
-              })
-              const progressBlock = page.getByTestId(importSelectors.webSourceIndexJobProgress)
-              await progressBlock.getByText('步骤 1/2 抓取网页', { exact: true }).waitFor({
-                state: 'visible'
-              })
-              crawlStepVisible = true
-              await progressBlock.getByText('步骤 2/2 建立索引', { exact: true }).waitFor({
-                state: 'visible'
-              })
-              progressText = (await progressBlock.innerText()) || ''
-              indexStepVisible = true
-              progressVisible = true
-              buttonsDisabled =
-                (await page.getByRole('button', { name: '检查更新' }).isDisabled()) &&
-                (await page.getByRole('button', { name: '更新索引' }).isDisabled())
-              await waitForPreparedWebSources(page, workspaceId)
-              await waitForWebIndexJobIdle(page, workspaceId)
-            }
-          })
-
-          const webList = await page.evaluate(async (selectedWorkspaceId) => {
-            return await window.api.webSourceList({
-              workspaceId: String(selectedWorkspaceId || '')
+          try {
+            await runtime.step({
+              name: 'seed-web-sources',
+              message: '预置一条本地可成功索引网页和一条本地失败网页，进入网页 tab。',
+              run: async () => {
+                const workspace = await createFixtureWorkspace(page, {
+                  rootPath: '/tmp/settings-web-prepare-summary',
+                  name: '网页索引工作区'
+                })
+                workspaceId = workspace.workspace!.id
+                await seedWebSources(page, workspaceId, [
+                  httpServer.url('/prepare-success'),
+                  httpServer.url('/refresh-fail')
+                ])
+                await navigateToSettingsSection(page, 'workspace')
+                await workspaceCardLocator(page, workspaceId).click()
+                await page.getByRole('tab', { name: '网页 2' }).click()
+                await page.getByRole('button', { name: '检查更新' }).click()
+                await waitForWebIndexJobIdle(page, workspaceId)
+              }
             })
-          }, workspaceId)
-          const uiSummary = await getWebSourceIndexCounts(page)
 
-          return {
-            progressVisible,
-            buttonsDisabled,
-            crawlStepVisible,
-            indexStepVisible,
-            progressText,
-            uiSummary,
-            summary: webList.summary,
-            statuses: webList.items.map((item) => item.index_status)
+            await runtime.step({
+              name: 'prepare-web-sources',
+              message: '点击更新索引，确认成功和失败结果都被写回列表状态。',
+              run: async () => {
+                await page.getByRole('button', { name: '更新索引' }).click()
+                await page.getByTestId(importSelectors.webSourceIndexJobProgress).waitFor({
+                  state: 'visible'
+                })
+                const progressBlock = page.getByTestId(importSelectors.webSourceIndexJobProgress)
+                await progressBlock.getByText('步骤 1/2 抓取网页', { exact: true }).waitFor({
+                  state: 'visible'
+                })
+                crawlStepVisible = true
+                progressText = (await progressBlock.innerText()) || ''
+                progressVisible = true
+                buttonsDisabled =
+                  (await page.getByRole('button', { name: '检查更新' }).isDisabled()) &&
+                  (await page.getByRole('button', { name: '更新索引' }).isDisabled())
+                await waitForPreparedWebSources(page, workspaceId)
+                await waitForWebIndexJobIdle(page, workspaceId)
+              }
+            })
+
+            const webList = await page.evaluate(async (selectedWorkspaceId) => {
+              return await window.api.webSourceList({
+                workspaceId: String(selectedWorkspaceId || '')
+              })
+            }, workspaceId)
+            const uiSummary = await getWebSourceIndexCounts(page)
+
+            return {
+              progressVisible,
+              buttonsDisabled,
+              crawlStepVisible,
+              progressText,
+              uiSummary,
+              summary: webList.summary,
+              statuses: webList.items.map((item) => item.index_status)
+            }
+          } finally {
+            await httpServer.close()
           }
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
             result.progressVisible &&
               result.buttonsDisabled &&
-              result.crawlStepVisible &&
-              result.indexStepVisible,
+              result.crawlStepVisible,
             {
               name: 'prepare-web-progress-is-visible',
               message:

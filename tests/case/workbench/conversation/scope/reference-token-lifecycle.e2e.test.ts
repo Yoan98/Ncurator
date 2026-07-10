@@ -81,7 +81,16 @@ describe('workbench conversation e2e', () => {
 
             await appendWorkbenchInputText(page, '@')
             const mentionPanel = getWorkbenchLocator(page, workbenchSelectors.mentionPanel)
-            const mentionPanelText = await waitForWorkbenchMentionPanelText(page)
+            await waitForWorkbenchMentionPanelText(page)
+            await page.waitForFunction(
+              (testId: string) => {
+                const panel = document.querySelector(`[data-testid="${testId}"]`)
+                return Boolean(panel?.querySelector('button'))
+              },
+              workbenchSelectors.mentionPanel,
+              { timeout: WORKBENCH_RESULT_E2E_TIMEOUT_MS }
+            )
+            const mentionPanelText = ((await mentionPanel.textContent()) || '').trim()
             const fileGroupVisible = await mentionPanel.getByText('文件').isVisible()
             const webGroupVisible = await mentionPanel.getByText('网页').isVisible()
             const legacyDirectoryGroupVisible = await mentionPanel
@@ -207,6 +216,7 @@ describe('workbench conversation e2e', () => {
             const afterDelete = await getWorkbenchReferenceTokenTexts(page)
 
             await createFixtureWorkspace(page, { name: 'Workbench Empty Scope Workspace' })
+            await navigateToWorkbench(page)
             await createWorkbenchNewSession(page)
             await selectWorkbenchWorkspace(page, 'Workbench Empty Scope Workspace')
             const afterWorkspaceSwitch = await getWorkbenchReferenceTokenTexts(page)

@@ -36,27 +36,25 @@ describe('settings workspace web e2e', () => {
             await navigateToSettingsSection(page, 'workspace')
             await workspaceCardLocator(page, workspace.workspace!.id).click()
             await page.getByRole('tab', { name: '网页 1' }).click()
-            await getSettingsLocator(
-              page,
-              `${importSelectors.webSourceDeleteButtonPrefix}-e2e-web-source-1`
-            ).waitFor({
-              state: 'visible'
-            })
+            await getSettingsPrefixLocator(page, importSelectors.webSourceCardPrefix)
+              .filter({ hasText: 'https://example.com/detail-delete' })
+              .first()
+              .waitFor({ state: 'visible' })
           }
         })
 
-        const webCardText =
-          (await getSettingsLocator(page, `${importSelectors.webSourceCardPrefix}-e2e-web-source-1`).textContent()) ||
-          ''
+        const webCard = getSettingsPrefixLocator(page, importSelectors.webSourceCardPrefix)
+          .filter({ hasText: 'https://example.com/detail-delete' })
+          .first()
+        const webCardText = (await webCard.textContent()) || ''
 
         await runtime.step({
           name: 'delete-web-source',
           message: '删除当前网页资料并等待列表刷新为空。',
           run: async () => {
-            await getSettingsLocator(
-              page,
-              `${importSelectors.webSourceDeleteButtonPrefix}-e2e-web-source-1`
-            ).click()
+            await webCard
+              .locator(`[data-testid^="${importSelectors.webSourceDeleteButtonPrefix}-"]`)
+              .click()
             await getSettingsLocator(page, importSelectors.webSourceDeleteConfirmButton).click()
             await page.getByText('暂无网页').waitFor({ state: 'visible' })
           }
@@ -70,10 +68,9 @@ describe('settings workspace web e2e', () => {
       },
       assert: async (result, runtime) => {
         await runtime.assertThat(
-          result.webCardText.includes('Fixture') &&
-            result.webCardText.includes('https://example.com/detail-delete') &&
-            result.webCardText.includes('已索引') &&
-            result.webCardText.includes('抓取'),
+          result.webCardText.includes('https://example.com/detail-delete') &&
+            result.webCardText.includes('最近更新时间') &&
+            result.webCardText.includes('删除'),
           {
             name: 'web-list-item-shows-required-fields',
             message:

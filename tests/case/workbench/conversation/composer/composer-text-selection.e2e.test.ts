@@ -1,7 +1,7 @@
 import { describe, it } from 'vitest'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
-  WORKBENCH_E2E_TIMEOUT_MS,
+  WORKBENCH_LONG_E2E_TIMEOUT_MS,
   assertNoWorkbenchFakeSignals,
   getWorkbenchLocator,
   setWorkbenchInput,
@@ -109,6 +109,6 @@ describe('workbench conversation e2e', () => {
         }
       })
     },
-    WORKBENCH_E2E_TIMEOUT_MS
+    WORKBENCH_LONG_E2E_TIMEOUT_MS
   )
 })

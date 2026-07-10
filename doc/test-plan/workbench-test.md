@@ -13,26 +13,26 @@
 
 ### 2.1 当前状态
 
-- 总体登记：`15` 个 e2e case，`1` 个 backend contract case。
-- 当前有效结论：`14 / 15` 个 e2e case 有效通过；`chat-run-service-contract` backend contract 有效通过；`browser-use-task-panel` 暂无有效通过结论。
+- 总体登记：`20` 个 e2e case，`1` 个 backend contract case。
+- 当前有效结论：`19 / 20` 个 e2e case 有效通过；`chat-run-service-contract` backend contract 有效通过；`browser-use-task-panel` 因当前 live 模型配置不兼容 Stagehand 暂无有效通过结论。
 
 ### 2.2 按 Suite 汇总
 
 - `conversation`
-  - 登记 case：`5`
-  - 有效通过：`5 / 5`
-  - 检测时间：`2026-06-24 12:08:00 +0800`
-  - 备注：`session-initial-create-and-title`、`send-guard-mode-switch-and-preferences`、`workspace-root-path-required`、`reference-token-lifecycle`、`reference-mention-keyboard` 均已通过真实 Electron UI；其中涉及 AI 的 case 使用真实模型，`reference-token-lifecycle` 与 `reference-mention-keyboard` 不启动 AI。
+  - 登记 case：`9`
+  - 有效通过：`9 / 9`
+  - 检测时间：`2026-07-10 16:26:14 +0800`
+  - 备注：`composer-attachments-context`、`composer-text-selection`、`reference-mention-keyboard`、`send-guard-mode-switch-and-preferences`、`workspace-root-path-required`、`user-message-actions`、`reference-token-lifecycle`、`session-delete-confirmation-and-context-ring`、`session-initial-create-and-title` 均已通过真实 Electron UI；涉及 AI 的 case 使用真实模型。
 - `run`
-  - 登记 case：`5` 个 e2e，`1` 个 backend contract
-  - 有效通过：`4 / 5` 个 e2e，`1 / 1` 个 backend contract
-  - 检测时间：e2e `2026-06-25 10:12:10 +0800`；backend `2026-06-25 10:09:14 +0800`
-  - 备注：`ai-process-stream-and-final-answer`、`approval-batch-flow`、`stop-running-or-approval-run`、`run-navigation-snapshot-replay` 已通过真实 Electron UI、真实模型、真实 workspace 索引和真实 AI run；`approval-batch-flow` 在拒绝审批分支中出现多轮模型自纠后收口，当前有效通过但耗时偏长；`chat-run-service-contract` 已通过 backend contract；`browser-use-task-panel` 暂无有效通过结论。
+  - 登记 case：`6` 个 e2e，`1` 个 backend contract
+  - 有效通过：`5 / 6` 个 e2e，`1 / 1` 个 backend contract
+  - 检测时间：e2e `2026-07-10 16:26:14 +0800`；backend `2026-07-10 16:25:36 +0800`
+  - 备注：`ai-process-stream-and-final-answer`、`approval-batch-flow`、`stop-running-or-approval-run`、`run-navigation-snapshot-replay`、`web-search-diagnostic` 已通过真实 Electron UI、真实模型、真实 workspace 索引和真实 AI run；`chat-run-service-contract` 已通过 backend contract；`browser-use-task-panel` 当前被外部模型配置阻塞：现有 `AI_LIVE_*` 使用 DashScope / openai-compatible / `deepseek-v4-flash`，普通 LLM 调用可用，但 Stagehand `browser_use` 调用返回 `Bad Request`，需要换成 Stagehand 兼容的 OpenAI 或 DeepSeek 浏览器模型配置后再回归。
 - `result`
   - 登记 case：`5`
   - 有效通过：`5 / 5`
-  - 检测时间：`2026-06-16 09:23:50 +0800`
-  - 备注：`search-results-open-rules` 已通过；当前 `result` suite 五条 case 均已形成真实有效通过结论。
+  - 检测时间：`2026-07-10 16:26:14 +0800`
+  - 备注：`docx-apply-force-revert-warning`、`docx-apply-panel-preview-and-revert`、`multi-file-apply-tabs`、`file-preview-actions`、`search-results-open-rules` 均已通过真实 Electron UI；`multi-file-apply-tabs` 使用两个真实小 docx 副本降低 live 模型处理大文档时的非确定性，仍覆盖真实多文件写回入口和右侧单文件面板切换。
 
 ### 2.3 当前边界
 
@@ -43,7 +43,7 @@
 - Workbench UI E2E 回归测试需要真实索引完成信号和 UI 可见状态作为等待条件；IPC observer 和 job 查询只能作为辅助证据，不能用来造业务状态。
 - `file-preview-actions` 当前按生产真实索引能力覆盖 `pdf/docx/md/txt`：`.md`、`.markdown`、`.txt` 必须通过真实索引进入搜索结果，并从搜索结果打开右侧预览。
 - docx apply case 需要真实 docx 输入、真实 AI 编辑、真实写回记录、真实预览和真实回退。
-- `browser-use-task-panel` 需要真实 AI run 触发 `browser_use` 并驱动内置浏览器完成本地网页任务；当前暂无有效通过结论。
+- `browser-use-task-panel` 需要真实 AI run 触发 `browser_use` 并驱动内置浏览器完成本地网页任务；当前暂无有效通过结论。阻塞原因不是 fake 测试缺失，而是当前 `AI_LIVE_*` 模型配置与 Stagehand schema 不兼容，`browser_use` 工具返回 `Bad Request`；不能用 fake browser 替代。
 - Workbench 附件链路当前固定保存到 `<workspace>/.ncurator/assets/<assetBucketId>/`，`assetBucketId` 为输入草稿 UUID，发送给 AI 时只传附件名称与路径，不再做发送前识图或文件解析。
 
 ## 3. Suite 设计
@@ -243,7 +243,7 @@ tests/case/workbench/
 - Why：内置浏览器是 Electron 与 AI run 深度联动场景，仅 backend 或静态事件无法覆盖视口嵌入、导航和最终收口问题。
 - How：启动本地测试网页；通过真实用户请求让 AI 使用 `browser_use` 操作页面；等待右侧浏览器面板、网页结果和最终 assistant 输出。
 - Oracle：收到浏览器面板事件后右侧进入内置浏览器状态并随面板 resize 对齐，对齐 `WB-PANEL-004-AC1`；传入 URL 时先导航再执行网页操作，对齐 `WB-PANEL-004-AC2`；切换其他面板或收起时浏览器视图不遮挡其他内容，对齐 `WB-PANEL-004-AC3`；任务完成后最终 assistant 输出使用网页操作结果并与右侧浏览器状态形成闭环，对齐 `WB-PANEL-004-AC4`、`WB-CORE-005-AC1`、`WB-CORE-006-AC1`；记录模型、耗时、完成度评分和失败归因。
-- Not：不验证公网网页稳定性；本 case 使用本地测试网页减少外部波动。
+- Not：不验证公网网页稳定性；本 case 使用本地测试网页减少外部波动；不允许用 fake browser 或 fake tool result 替代。当前 live 配置为 DashScope / openai-compatible 时 Stagehand 返回 `Bad Request`，需切换到 Stagehand 兼容模型后再执行有效回归。
 
 ### 5.3 `result`
 

@@ -6,6 +6,7 @@ export default defineConfig({
     exclude: ['tests/**/*.e2e.test.ts', 'tests/harness/**', 'tests/fixtures/**', 'tests/logs/**'],
     environment: 'node',
     globals: true,
+    fileParallelism: false,
     testTimeout: 900_000,
     hookTimeout: 900_000,
     passWithNoTests: false

@@ -167,8 +167,14 @@ const api: DesktopApi = {
   },
   getEmbeddingStatus: () => ipcRenderer.invoke('get-embedding-status'),
   readFile: (filePath: string): Promise<Uint8Array> => ipcRenderer.invoke('read-file', filePath),
-  attachmentPick: (payload) => ipcRenderer.invoke('attachment-pick', payload),
-  attachmentSaveFile: (payload) => ipcRenderer.invoke('attachment-save-file', payload),
+  attachmentPick: (payload) => {
+    emitE2EIpcCall('attachmentPick')
+    return ipcRenderer.invoke('attachment-pick', payload)
+  },
+  attachmentSaveFile: (payload) => {
+    emitE2EIpcCall('attachmentSaveFile')
+    return ipcRenderer.invoke('attachment-save-file', payload)
+  },
 
   // Chat & LLM
   chatSessionList: () => ipcRenderer.invoke('chat-session-list'),

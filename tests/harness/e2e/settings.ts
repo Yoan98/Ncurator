@@ -1,5 +1,7 @@
 import { execFile } from 'node:child_process'
 import { mkdir, writeFile } from 'node:fs/promises'
+import { createServer, type Server } from 'node:http'
+import type { AddressInfo } from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
 import { promisify } from 'node:util'
@@ -19,7 +21,7 @@ export type SettingsPageTarget = 'model' | 'workspace' | 'vector'
 
 export const SETTINGS_E2E_TIMEOUT_MS = 30_000
 export const SETTINGS_REAL_WORKSPACE_E2E_TIMEOUT_MS = 180_000
-export const SETTINGS_WEB_E2E_TIMEOUT_MS = SETTINGS_E2E_TIMEOUT_MS
+export const SETTINGS_WEB_E2E_TIMEOUT_MS = 120_000
 const execFileAsync = promisify(execFile)
 const MACOS_ELECTRON_BUNDLE_ID = 'com.github.Electron'
 const MACOS_ELECTRON_PROCESS_NAME = 'Electron'
@@ -102,6 +104,12 @@ type WorkspaceCreateUiResponse = {
   error?: string
 }
 
+export type LocalSettingsHttpServer = {
+  origin: string
+  url: (pathname?: string) => string
+  close: () => Promise<void>
+}
+
 const byTestId = (testId: string): string => `[data-testid="${testId}"]`
 
 const byTestIdPrefix = (testIdPrefix: string): string => `[data-testid^="${testIdPrefix}-"]`
@@ -122,6 +130,64 @@ const SETTINGS_TARGET_SELECTORS: Record<SettingsPageTarget, string> = {
   model: settingsSelectors.page,
   workspace: settingsSelectors.page,
   vector: vectorSelectors.page
+}
+
+const closeServer = async (server: Server): Promise<void> => {
+  await new Promise<void>((resolve, reject) => {
+    server.close((error) => {
+      if (error) reject(error)
+      else resolve()
+    })
+  })
+}
+
+export const startLocalSettingsHttpServer = async (
+  routes: Record<string, { status?: number; body: string; contentType?: string; delayMs?: number }>
+): Promise<LocalSettingsHttpServer> => {
+  const server = createServer((request, response) => {
+    const pathname = new URL(request.url || '/', 'http://127.0.0.1').pathname
+    const route = routes[pathname] || routes['/']
+    if (!route) {
+      response.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' })
+      response.end('not found')
+      return
+    }
+    const respond = (): void => {
+      response.writeHead(route.status || 200, {
+        'content-type': route.contentType || 'text/html; charset=utf-8',
+        'cache-control': 'no-store'
+      })
+      response.end(route.body)
+    }
+    if (route.delayMs && route.delayMs > 0) {
+      setTimeout(respond, route.delayMs)
+      return
+    }
+    respond()
+  })
+
+  await new Promise<void>((resolve, reject) => {
+    server.once('error', reject)
+    server.listen(0, '127.0.0.1', () => {
+      server.off('error', reject)
+      resolve()
+    })
+  })
+
+  const address = server.address()
+  if (!address || typeof address === 'string') {
+    await closeServer(server)
+    throw new Error('failed to start local settings http server')
+  }
+
+  const origin = `http://127.0.0.1:${String((address as AddressInfo).port)}`
+  return {
+    origin,
+    url: (pathname = '/') => `${origin}${pathname.startsWith('/') ? pathname : `/${pathname}`}`,
+    close: async () => {
+      await closeServer(server)
+    }
+  }
 }
 
 export const getSettingsLocator = (page: Page, testId: string): Locator =>
@@ -416,8 +482,12 @@ export const getWebSourceIndexCounts = async (
   )
 }
 
-export const waitForWebIndexJobIdle = async (page: Page, workspaceId: string): Promise<void> => {
-  const deadline = Date.now() + 5000
+export const waitForWebIndexJobIdle = async (
+  page: Page,
+  workspaceId: string,
+  timeoutMs = SETTINGS_WEB_E2E_TIMEOUT_MS
+): Promise<void> => {
+  const deadline = Date.now() + timeoutMs
   for (;;) {
     const response = await page.evaluate(async (selectedWorkspaceId) => {
       return await window.api.workspaceIndexJobGet({

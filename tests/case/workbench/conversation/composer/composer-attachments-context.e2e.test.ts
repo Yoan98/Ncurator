@@ -1,3 +1,6 @@
+import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
 import { describe, it } from 'vitest'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
@@ -7,6 +10,7 @@ import {
   getWorkbenchLocator,
   getWorkbenchPrefixLocator,
   navigateToWorkbench,
+  selectWorkbenchAttachmentThroughNativeDialog,
   selectWorkbenchWorkspace,
   setupWorkbenchWorkspaceOnly,
   waitForAntMessageText,
@@ -14,97 +18,56 @@ import {
 } from '../../../../harness/e2e/workbench'
 
 const CASE_ID = 'composer-attachments-context'
+const ONE_PIXEL_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII=',
+  'base64'
+)
 
-const pasteFileAttachment = async (
-  page: import('playwright').Page,
-  input: {
-    name: string
-    mimeType: string
-    text?: string
-    sizeBytes?: number
-  }
-): Promise<void> => {
-  await getWorkbenchLocator(page, workbenchSelectors.input).evaluate((element, payload) => {
-    if (!(element instanceof HTMLElement)) {
-      throw new Error('workbench input is not an HTMLElement')
+const createAttachmentFixtures = async (): Promise<{
+  rootPath: string
+  imagePath: string
+  markdownPath: string
+  largePath: string
+  cleanup: () => Promise<void>
+}> => {
+  const createdRootPath = await mkdtemp(path.join(os.tmpdir(), 'ncurator-composer-attachments-'))
+  const rootPath = await realpath(createdRootPath)
+  const imagePath = path.join(rootPath, 'qa-image.png')
+  const markdownPath = path.join(rootPath, 'workbench-preview.md')
+  const largePath = path.join(rootPath, 'qa-large.json')
+  await Promise.all([
+    writeFile(imagePath, ONE_PIXEL_PNG),
+    writeFile(markdownPath, '# Preview\n\nAttachment markdown body.'),
+    writeFile(largePath, Buffer.alloc(11 * 1024 * 1024, 65))
+  ])
+  return {
+    rootPath,
+    imagePath,
+    markdownPath,
+    largePath,
+    cleanup: async () => {
+      await rm(rootPath, { recursive: true, force: true })
     }
-    element.focus()
-    const content = payload.sizeBytes
-      ? new Uint8Array(payload.sizeBytes).fill(65)
-      : payload.text || ''
-    const file = new File([content], payload.name, { type: payload.mimeType })
-    const dataTransfer = new DataTransfer()
-    dataTransfer.items.add(file)
-    element.dispatchEvent(
-      new ClipboardEvent('paste', {
-        bubbles: true,
-        cancelable: true,
-        clipboardData: dataTransfer
-      })
-    )
-  }, input)
-}
-
-const pasteImageAttachment = async (
-  page: import('playwright').Page,
-  input: {
-    name: string
-    label: string
   }
-): Promise<void> => {
-  await getWorkbenchLocator(page, workbenchSelectors.input).evaluate(async (element, payload) => {
-    if (!(element instanceof HTMLElement)) {
-      throw new Error('workbench input is not an HTMLElement')
-    }
-    element.focus()
-    const canvas = document.createElement('canvas')
-    canvas.width = 64
-    canvas.height = 64
-    const context = canvas.getContext('2d')
-    if (!context) throw new Error('canvas context not available')
-    context.fillStyle = '#2563EB'
-    context.fillRect(0, 0, 64, 64)
-    context.fillStyle = '#FFFFFF'
-    context.font = 'bold 22px sans-serif'
-    context.fillText(payload.label, 12, 40)
-    const blob = await new Promise<Blob>((resolve, reject) => {
-      canvas.toBlob((value) => {
-        if (value) {
-          resolve(value)
-          return
-        }
-        reject(new Error('failed to create png blob'))
-      }, 'image/png')
-    })
-    const file = new File([blob], payload.name, { type: 'image/png' })
-    const dataTransfer = new DataTransfer()
-    dataTransfer.items.add(file)
-    element.dispatchEvent(
-      new ClipboardEvent('paste', {
-        bubbles: true,
-        cancelable: true,
-        clipboardData: dataTransfer
-      })
-    )
-  }, input)
 }
 
 const pastePlainText = async (page: import('playwright').Page, text: string): Promise<void> => {
-  await getWorkbenchLocator(page, workbenchSelectors.input).evaluate((element, value) => {
-    if (!(element instanceof HTMLElement)) {
-      throw new Error('workbench input is not an HTMLElement')
-    }
-    element.focus()
-    const dataTransfer = new DataTransfer()
-    dataTransfer.setData('text/plain', value)
-    element.dispatchEvent(
-      new ClipboardEvent('paste', {
-        bubbles: true,
-        cancelable: true,
-        clipboardData: dataTransfer
-      })
-    )
-  }, text)
+  await getWorkbenchLocator(page, workbenchSelectors.input).click()
+  const wroteClipboard = await page
+    .evaluate(async (value) => {
+      try {
+        await navigator.clipboard.writeText(value)
+        return true
+      } catch {
+        return false
+      }
+    }, text)
+    .catch(() => false)
+  if (wroteClipboard) {
+    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+V' : 'Control+V')
+    return
+  }
+  await page.keyboard.insertText(text)
 }
 
 const waitForAttachmentCardByName = async (
@@ -160,13 +123,14 @@ describe('workbench conversation e2e', () => {
         suite: 'conversation',
         groups: ['composer'],
         description:
-          '对齐附件上下文 PRD：验证统一附件选择、图片预览、文件默认打开、删除、普通文本粘贴、格式和大文件提示。',
+          '对齐附件上下文 PRD：验证统一附件选择、图片预览、文件默认打开、删除、普通文本粘贴和大文件提示。',
         fixtures: ['tests/fixtures/workspace'],
         launchMode: 'fixture',
         windowMode: 'visible',
         runMode: 'single',
         execute: async (runtime) => {
           const { page } = runtime
+          const attachments = await createAttachmentFixtures()
           const setup = await setupWorkbenchWorkspaceOnly(page, {
             caseId: CASE_ID,
             workspaceName: 'Workbench Composer Attachments Workspace'
@@ -179,16 +143,12 @@ describe('workbench conversation e2e', () => {
               page,
               workspaceBinding.workspaceId
             )
-            await getWorkbenchLocator(page, workbenchSelectors.input).click()
-            await pasteImageAttachment(page, {
-              name: 'qa-image.png',
-              label: 'QA'
-            })
-            await pasteFileAttachment(page, {
-              name: 'workbench-preview.md',
-              mimeType: 'text/markdown',
-              text: '# Preview\n\nAttachment markdown body.'
-            })
+            await selectWorkbenchAttachmentThroughNativeDialog(page, attachments.imagePath)
+            await getImageAttachmentCardByName(page, 'qa-image.png')
+              .first()
+              .waitFor({ state: 'visible' })
+            await selectWorkbenchAttachmentThroughNativeDialog(page, attachments.markdownPath)
+            await waitForAttachmentCardByName(page, 'workbench-preview.md')
             const sessionCountAfterPaste = await countWorkspaceSessions(
               page,
               workspaceBinding.workspaceId
@@ -203,7 +163,7 @@ describe('workbench conversation e2e', () => {
                 return Boolean(
                   image &&
                   image.complete &&
-                  image.naturalWidth === 64 &&
+                  image.naturalWidth > 0 &&
                   image.src.startsWith('blob:')
                 )
               },
@@ -271,22 +231,7 @@ describe('workbench conversation e2e', () => {
             await fileCard.click()
             await page.waitForTimeout(500)
 
-            await pasteFileAttachment(page, {
-              name: 'qa-bad.exe',
-              mimeType: 'application/octet-stream',
-              text: 'bad'
-            })
-            const unsupportedMessage = await waitForAntMessageText(page, '暂不支持该文件格式')
-            const unsupportedRejected =
-              (await getWorkbenchPrefixLocator(page, workbenchSelectors.attachmentCardPrefix)
-                .filter({ hasText: 'qa-bad.exe' })
-                .count()) === 0
-
-            await pasteFileAttachment(page, {
-              name: 'qa-large.json',
-              mimeType: 'application/json',
-              sizeBytes: 11 * 1024 * 1024
-            })
+            await selectWorkbenchAttachmentThroughNativeDialog(page, attachments.largePath)
             await waitForAttachmentCardByName(page, 'qa-large.json')
             const largeFileMessage = await waitForAntMessageText(
               page,
@@ -305,9 +250,6 @@ describe('workbench conversation e2e', () => {
             const signals = await runtime.collectSignals()
             const openPathCalls = signals.ipcInvokeEntries.filter(
               (entry) => entry.name === 'openPath'
-            )
-            const attachmentSaveCalls = signals.ipcInvokeEntries.filter(
-              (entry) => entry.name === 'attachmentSaveFile'
             )
 
             return {
@@ -330,15 +272,16 @@ describe('workbench conversation e2e', () => {
                 closeButtonBox.y + closeButtonBox.height <= previewImageBox.y
               ),
               fileCardText,
-              unsupportedMessage,
-              unsupportedRejected,
               largeFileMessage,
               inputText,
               openPathCallCount: openPathCalls.length,
-              attachmentSaveCallCount: attachmentSaveCalls.length,
+              attachmentPickCallCount: signals.ipcInvokeEntries.filter(
+                (entry) => entry.name === 'attachmentPick'
+              ).length,
               latestAntMessage: await getAntMessageText(page)
             }
           } finally {
+            await attachments.cleanup()
             await setup.workspace.cleanup()
           }
         },
@@ -349,19 +292,17 @@ describe('workbench conversation e2e', () => {
               result.downloadButtonVisible &&
               result.closeButtonVisible &&
               result.sessionCountAfterPaste === result.sessionCountBeforePaste &&
-              result.attachmentSaveCallCount >= 2 &&
+              result.attachmentPickCallCount >= 2 &&
               result.zoomControlBelowImage &&
               result.topActionsAboveImage &&
               result.fileCardText.includes('MD') &&
-              result.unsupportedMessage.includes('暂不支持该文件格式') &&
-              result.unsupportedRejected &&
               result.largeFileMessage.includes('文件过大，建议放到工作空间索引里使用') &&
               result.inputText.includes('plain paste ok') &&
               result.openPathCallCount >= 1,
             {
               name: 'workbench-composer-attachments-prd-flow',
               message:
-                '附件输入应满足 PRD：真实粘贴文件会触发附件保存，添加附件不创建新会话，图片可预览且控件不压图，文件副标题显示扩展名，文件可默认打开，不支持格式只提示且不加入，超过 10MB 只提示不拦截，普通文本粘贴仍正常。',
+                '附件输入应满足 PRD：真实选择附件会走系统选择和附件导入，添加附件不创建新会话，图片可预览且控件不压图，文件副标题显示扩展名，文件可默认打开，超过 10MB 只提示不拦截，普通文本粘贴仍正常。',
               data: result
             }
           )

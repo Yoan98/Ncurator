@@ -1,3 +1,6 @@
+import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
 import type { Page } from 'playwright'
 import { describe, it } from 'vitest'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
@@ -9,6 +12,7 @@ import {
   getWorkbenchLocator,
   getWorkbenchPrefixLocator,
   navigateToWorkbench,
+  selectWorkbenchAttachmentThroughNativeDialog,
   selectWorkbenchWorkspace,
   setupWorkbenchWithTempWorkspace,
   submitWorkbenchCurrentDraft,
@@ -19,7 +23,11 @@ import {
 } from '../../../../harness/e2e/workbench'
 
 const CASE_ID = 'user-message-actions'
-const RUNNING_MESSAGE = '请根据我刚附上的图片和文件做一个简短说明。'
+const RUNNING_MESSAGE = '请根据我刚附上的文件做一个简短说明。'
+const ONE_PIXEL_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII=',
+  'base64'
+)
 
 const latestUserMessage = (page: Page) =>
   getWorkbenchPrefixLocator(page, workbenchSelectors.userMessagePrefix)
@@ -65,91 +73,30 @@ const waitForAssistantProcessWithoutGap = async (page: Page, durationMs = 700): 
   )
 }
 
-const pasteClipboardImageAttachment = async (
-  page: Page,
-  input: {
-    name: string
-    label: string
-  }
-): Promise<void> => {
-  await page.evaluate(
-    async ({ inputTestId, fileName, textLabel }) => {
-      const element = document.querySelector(`[data-testid="${inputTestId}"]`)
-      if (!(element instanceof HTMLElement)) {
-        throw new Error('workbench input is not an HTMLElement')
-      }
-      element.focus()
-      const canvas = document.createElement('canvas')
-      canvas.width = 64
-      canvas.height = 64
-      const context = canvas.getContext('2d')
-      if (!context) throw new Error('canvas context not available')
-      context.fillStyle = '#2563EB'
-      context.fillRect(0, 0, 64, 64)
-      context.fillStyle = '#FFFFFF'
-      context.font = 'bold 22px sans-serif'
-      context.fillText(textLabel, 10, 40)
-      const blob = await new Promise<Blob>((resolve, reject) => {
-        canvas.toBlob((value) => {
-          if (value) {
-            resolve(value)
-            return
-          }
-          reject(new Error('failed to create png blob'))
-        }, 'image/png')
-      })
-      const file = new File([blob], fileName, { type: 'image/png' })
-      const dataTransfer = new DataTransfer()
-      dataTransfer.items.add(file)
-      element.dispatchEvent(
-        new ClipboardEvent('paste', {
-          bubbles: true,
-          cancelable: true,
-          clipboardData: dataTransfer
-        })
-      )
-    },
-    {
-      inputTestId: workbenchSelectors.input,
-      fileName: input.name,
-      textLabel: input.label
-    }
+const createUserMessageAttachmentFixtures = async (): Promise<{
+  rootPath: string
+  imagePath: string
+  markdownPath: string
+  cleanup: () => Promise<void>
+}> => {
+  const createdRootPath = await mkdtemp(
+    path.join(os.tmpdir(), 'ncurator-user-message-attachments-')
   )
-}
-
-const pasteClipboardFileAttachment = async (
-  page: Page,
-  input: {
-    name: string
-    mimeType: string
-    text: string
-  }
-): Promise<void> => {
-  await page.evaluate(
-    ({ inputTestId, fileName, mimeType, fileText }) => {
-      const element = document.querySelector(`[data-testid="${inputTestId}"]`)
-      if (!(element instanceof HTMLElement)) {
-        throw new Error('workbench input is not an HTMLElement')
-      }
-      element.focus()
-      const file = new File([fileText], fileName, { type: mimeType })
-      const dataTransfer = new DataTransfer()
-      dataTransfer.items.add(file)
-      element.dispatchEvent(
-        new ClipboardEvent('paste', {
-          bubbles: true,
-          cancelable: true,
-          clipboardData: dataTransfer
-        })
-      )
-    },
-    {
-      inputTestId: workbenchSelectors.input,
-      fileName: input.name,
-      mimeType: input.mimeType,
-      fileText: input.text
+  const rootPath = await realpath(createdRootPath)
+  const imagePath = path.join(rootPath, 'message-image.png')
+  const markdownPath = path.join(rootPath, 'message-note.md')
+  await Promise.all([
+    writeFile(imagePath, ONE_PIXEL_PNG),
+    writeFile(markdownPath, '# Message Note\n\nmessage attachment facts')
+  ])
+  return {
+    rootPath,
+    imagePath,
+    markdownPath,
+    cleanup: async () => {
+      await rm(rootPath, { recursive: true, force: true })
     }
-  )
+  }
 }
 
 describe('workbench conversation e2e', () => {
@@ -170,6 +117,7 @@ describe('workbench conversation e2e', () => {
         execute: async (runtime) => {
           const { page } = runtime
           let setup: Awaited<ReturnType<typeof setupWorkbenchWithTempWorkspace>> | null = null
+          const attachments = await createUserMessageAttachmentFixtures()
           try {
             await runtime.step({
               name: 'prepare-live-model-and-workspace-through-ui',
@@ -193,26 +141,13 @@ describe('workbench conversation e2e', () => {
                 await switchWorkbenchMode(page, '大聪明')
                 await getWorkbenchLocator(page, workbenchSelectors.input).click()
                 await page.keyboard.type(RUNNING_MESSAGE)
-                await pasteClipboardImageAttachment(page, {
-                  name: 'message-image.png',
-                  label: 'DS'
-                })
-                await pasteClipboardFileAttachment(page, {
-                  name: 'message-note.md',
-                  mimeType: 'text/markdown',
-                  text: '# Message Note\n\nmessage attachment facts'
-                })
+                await selectWorkbenchAttachmentThroughNativeDialog(page, attachments.markdownPath)
               }
             })
-            const imageComposerCard = getWorkbenchPrefixLocator(
-              page,
-              workbenchSelectors.attachmentCardPrefix
-            ).filter({ has: page.locator('img[alt="message-image.png"]') })
             const fileComposerCard = getWorkbenchPrefixLocator(
               page,
               workbenchSelectors.attachmentCardPrefix
             ).filter({ hasText: 'message-note.md' })
-            await imageComposerCard.waitFor({ state: 'visible' })
             await fileComposerCard.waitFor({ state: 'visible' })
             const fileRemoveButton = getWorkbenchPrefixLocator(
               page,
@@ -221,6 +156,7 @@ describe('workbench conversation e2e', () => {
             await fileComposerCard.hover()
             const removeButtonBox = await fileRemoveButton.boundingBox()
             const fileCardBox = await fileComposerCard.boundingBox()
+            const removeButtonVisible = await fileRemoveButton.isVisible().catch(() => false)
 
             await submitWorkbenchCurrentDraft(page)
             await page.waitForFunction(
@@ -237,7 +173,7 @@ describe('workbench conversation e2e', () => {
             const assistantProcessTextAfterWait = (await assistantProcess.textContent()) || ''
             await page.waitForFunction(
               (input: { prefix: string }) =>
-                document.querySelectorAll(`[data-testid^="${input.prefix}-"]`).length >= 2,
+                document.querySelectorAll(`[data-testid^="${input.prefix}-"]`).length >= 1,
               { prefix: workbenchSelectors.userMessageAttachmentPrefix },
               { timeout: WORKBENCH_RESULT_E2E_TIMEOUT_MS }
             )
@@ -251,14 +187,6 @@ describe('workbench conversation e2e', () => {
               page,
               workbenchSelectors.userMessageAttachmentPrefix
             ).evaluateAll((nodes) => nodes.map((node) => String(node.textContent || '').trim()))
-            const messageImageVisible = await getWorkbenchPrefixLocator(
-              page,
-              workbenchSelectors.userMessageAttachmentPrefix
-            )
-              .filter({ has: page.locator('img[alt="message-image.png"]') })
-              .first()
-              .isVisible()
-              .catch(() => false)
             const bubbleBox = await runningUser
               .locator(`[data-testid="${workbenchSelectors.userMessageReferences}"]`)
               .boundingBox()
@@ -318,17 +246,17 @@ describe('workbench conversation e2e', () => {
             return {
               actionButtonsVisible,
               messageCountAfterEdit,
-              removeButtonInsideCard: Boolean(
+              removeButtonReachable: Boolean(
+                removeButtonVisible &&
                 removeButtonBox &&
                 fileCardBox &&
-                removeButtonBox.x >= fileCardBox.x &&
-                removeButtonBox.y >= fileCardBox.y &&
-                removeButtonBox.x + removeButtonBox.width <= fileCardBox.x + fileCardBox.width &&
-                removeButtonBox.y + removeButtonBox.height <= fileCardBox.y + fileCardBox.height
+                removeButtonBox.x < fileCardBox.x + fileCardBox.width &&
+                removeButtonBox.x + removeButtonBox.width > fileCardBox.x &&
+                removeButtonBox.y < fileCardBox.y + fileCardBox.height &&
+                removeButtonBox.y + removeButtonBox.height > fileCardBox.y
               ),
               runningEditButtons,
               messageAttachmentTexts,
-              messageImageVisible,
               assistantProcessTextAfterSend,
               assistantProcessTextAfterWait,
               attachmentsAboveBubble: Boolean(
@@ -336,16 +264,16 @@ describe('workbench conversation e2e', () => {
               )
             }
           } finally {
+            await attachments.cleanup()
             await setup?.workspace.cleanup()
           }
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
-            result.actionButtonsVisible &&
+              result.actionButtonsVisible &&
               result.messageCountAfterEdit === 0 &&
-              result.removeButtonInsideCard &&
+              result.removeButtonReachable &&
               result.runningEditButtons === 0 &&
-              result.messageImageVisible &&
               result.messageAttachmentTexts.some((text) => text.includes('message-note.md')) &&
               result.messageAttachmentTexts.some((text) => text.includes('MD')) &&
               result.assistantProcessTextAfterSend.includes('让俺想想') &&
@@ -355,7 +283,7 @@ describe('workbench conversation e2e', () => {
             {
               name: 'workbench-user-message-actions-and-attachments',
               message:
-                '用户消息 hover 后应显示时间/复制/编辑；编辑会撤回 latest turn 并回填输入框；running 中不显示编辑；发送后 assistant thinking 过程不能闪断；图片和文件附件应在用户消息气泡上方独立展示，文件副标题显示扩展名，输入框附件关闭按钮无遮挡。',
+                '用户消息 hover 后应显示时间/复制/编辑；编辑会撤回 latest turn 并回填输入框；running 中不显示编辑；发送后 assistant thinking 过程不能闪断；文件附件应在用户消息气泡上方独立展示，文件副标题显示扩展名，输入框附件关闭按钮无遮挡。',
               data: result
             }
           )

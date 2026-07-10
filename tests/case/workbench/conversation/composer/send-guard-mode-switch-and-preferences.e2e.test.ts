@@ -97,7 +97,9 @@ describe('workbench conversation e2e', () => {
           const evidence = await waitForWorkbenchAiRunCompletion(
             runtime,
             startedAtMs,
-            env.modelName
+            env.modelName,
+            WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
+            { page, blockerPolicy: 'auto_approve' }
           )
           recordWorkbenchAiEvidence(runtime, evidence, 0.75)
 

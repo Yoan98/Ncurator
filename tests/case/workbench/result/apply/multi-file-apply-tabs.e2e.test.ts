@@ -1,3 +1,4 @@
+import { copyFile } from 'node:fs/promises'
 import path from 'node:path'
 import type { Page } from 'playwright'
 import { describe, it } from 'vitest'
@@ -24,10 +25,11 @@ import {
 } from '../../../../harness/e2e/workbench'
 
 const CASE_ID = 'multi-file-apply-tabs'
-const FIRST_FILE = '人工智能探究课堂PRD.docx'
-const SECOND_FILE = '交互式探究学习案例：产业转移.docx'
+const FIRST_FILE = 'multi-apply-first.docx'
+const SECOND_FILE = 'multi-apply-second.docx'
 const FIRST_MARKER = 'cedar-multi-apply-prd-141'
 const SECOND_MARKER = 'cedar-multi-apply-case-242'
+const SOURCE_FILE = 'sample-edit.docx'
 
 const waitForApplyPanelFile = async (
   page: Parameters<typeof getWorkbenchLocator>[0],
@@ -57,6 +59,11 @@ const setupMultiFileApplyWorkspace = async (
   const env = loadWorkbenchLiveModelEnv()
   const workspace = await createTemporaryWorkbenchWorkspace(CASE_ID)
   const workspaceName = `Workbench ${CASE_ID}`
+  const sourcePath = path.join(workspace.rootPath, SOURCE_FILE)
+  await Promise.all([
+    copyFile(sourcePath, path.join(workspace.rootPath, FIRST_FILE)),
+    copyFile(sourcePath, path.join(workspace.rootPath, SECOND_FILE))
+  ])
 
   await configureLiveModelThroughSettingsUi(page, env)
   await prepareWorkbenchWorkspaceThroughUi(page, {
@@ -102,7 +109,7 @@ describe('workbench result e2e', () => {
             const startedAtMs = Date.now()
             await sendWorkbenchMessage(
               page,
-              `请直接修改我刚选中的两份 docx：在 ${FIRST_FILE} 文末新增“${FIRST_MARKER}”；在 ${SECOND_FILE} 文末新增“${SECOND_MARKER}”。请分别写回原文件，不要新建文件。`
+              `请只完成这两个写回动作：1. 修改我刚选中的 ${FIRST_FILE}，只在文末新增一段“${FIRST_MARKER}”；2. 修改我刚选中的 ${SECOND_FILE}，只在文末新增一段“${SECOND_MARKER}”。请分别写回原文件，不要新建文件。两个文件都写回后，立即回复“已写回”，不要继续读取、复核、解释或追加其他操作。`
             )
             const evidence = await waitForWorkbenchAiRunCompletion(
               runtime,

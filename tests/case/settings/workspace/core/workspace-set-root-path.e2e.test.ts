@@ -1,9 +1,7 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import type { Page } from 'playwright'
 import { describe, it } from 'vitest'
-import type { WorkspaceTreeListResponse } from '../../../../../src/shared/types'
 import { importSelectors } from '../../../../../src/renderer/src/testing/selectors'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
@@ -14,33 +12,7 @@ import {
   navigateToSettingsSection
 } from '../../../../harness/e2e/settings'
 
-const waitForWorkspaceTree = async (
-  page: Page,
-  workspaceId: string,
-  predicate: (response: WorkspaceTreeListResponse) => boolean,
-  timeoutMs = 5000
-): Promise<WorkspaceTreeListResponse> => {
-  const deadline = Date.now() + timeoutMs
-  let lastResponse = await page.evaluate(async (selectedWorkspaceId) => {
-    return await window.api.workspaceTree({
-      workspaceId: String(selectedWorkspaceId || ''),
-      includeUnsupported: true
-    })
-  }, workspaceId)
-
-  while (!predicate(lastResponse)) {
-    if (Date.now() >= deadline) return lastResponse
-    await page.waitForTimeout(200)
-    lastResponse = await page.evaluate(async (selectedWorkspaceId) => {
-      return await window.api.workspaceTree({
-        workspaceId: String(selectedWorkspaceId || ''),
-        includeUnsupported: true
-      })
-    }, workspaceId)
-  }
-
-  return lastResponse
-}
+const normalizeVisibleText = (value: string): string => value.replace(/\s+/g, '')
 
 describe('settings workspace e2e', () => {
   it('workspace-set-root-path', async () => {
@@ -55,19 +27,18 @@ describe('settings workspace e2e', () => {
       execute: async (runtime) => {
         const { page } = runtime
         const targetRootPath = await mkdtemp(path.join(os.tmpdir(), 'settings-workspace-set-root-'))
+        const displayedRootPath = await realpath(targetRootPath)
         await mkdir(path.join(targetRootPath, 'docs'), { recursive: true })
         await writeFile(path.join(targetRootPath, 'docs', 'brief.txt'), 'hello workspace', 'utf8')
-        let workspaceId = ''
 
         try {
           await runtime.step({
             name: 'create-empty-workspace',
             message: '通过 UI 创建未绑定目录的工作空间。',
             run: async () => {
-              const workspace = await createFixtureWorkspace(page, {
+              await createFixtureWorkspace(page, {
                 name: '待绑定目录工作区'
               })
-              workspaceId = workspace.workspace!.id
               await navigateToSettingsSection(page, 'workspace')
             }
           })
@@ -77,24 +48,51 @@ describe('settings workspace e2e', () => {
             message: '通过原生目录选择器绑定真实目录，确认右侧目录与目录树都同步刷新。',
             run: async () => {
               await bindWorkspaceRootThroughSettingsUi(page, targetRootPath)
-              await getSettingsLocator(page, importSelectors.workspaceDetail)
-                .getByText(targetRootPath, { exact: true })
-                .waitFor({ state: 'visible' })
+              await page.waitForFunction(
+                (input: { detailTestId: string; cardPrefix: string; rootPathAliases: string[] }) => {
+                  const normalize = (value: string): string => value.replace(/\s+/g, '')
+                  const nodes = [
+                    document.querySelector(`[data-testid="${input.detailTestId}"]`),
+                    ...Array.from(
+                      document.querySelectorAll(`[data-testid^="${input.cardPrefix}-"]`)
+                    )
+                  ].filter((node): node is HTMLElement => node instanceof HTMLElement)
+                  const text = normalize(nodes.map((node) => node.innerText).join('\n'))
+                  return input.rootPathAliases.some((alias) => text.includes(normalize(alias)))
+                },
+                {
+                  detailTestId: importSelectors.workspaceDetail,
+                  cardPrefix: importSelectors.workspaceCardPrefix,
+                  rootPathAliases: [targetRootPath, displayedRootPath]
+                }
+              )
+              const tree = getSettingsLocator(page, importSelectors.workspaceTree)
+              const docsNode = tree.locator('.ant-tree-treenode').filter({ hasText: 'docs' }).first()
+              await docsNode.waitFor({ state: 'visible' })
+              await docsNode.locator('.ant-tree-switcher').click()
+              await tree.getByText('brief.txt').waitFor({ state: 'visible' })
             }
           })
 
           const detailText =
             (await getSettingsLocator(page, importSelectors.workspaceDetail).textContent()) || ''
-          const treeResponse = await waitForWorkspaceTree(
-            page,
-            workspaceId,
-            (response) => response.items.some((item) => item.name === 'brief.txt')
-          )
+          const cardText =
+            (await page
+              .locator(`[data-testid^="${importSelectors.workspaceCardPrefix}-"]`)
+              .first()
+              .textContent()) || ''
+          const treeText = (await getSettingsLocator(page, importSelectors.workspaceTree).textContent()) || ''
+          const rootPathAliases = [targetRootPath, displayedRootPath].map(normalizeVisibleText)
+          const normalizedWorkspaceText = normalizeVisibleText(`${cardText}\n${detailText}`)
 
           return {
             detailText,
-            rootPathVisible: detailText.includes(targetRootPath),
-            treeHasFixtureFile: treeResponse.items.some((item) => item.name === 'brief.txt')
+            cardText,
+            treeText,
+            rootPathVisible: rootPathAliases.some((alias) =>
+              normalizedWorkspaceText.includes(alias)
+            ),
+            treeHasFixtureFile: treeText.includes('brief.txt')
           }
         } finally {
           await rm(targetRootPath, { recursive: true, force: true })

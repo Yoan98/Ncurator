@@ -4,6 +4,7 @@ import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
   SETTINGS_E2E_TIMEOUT_MS,
   getSettingsLocator,
+  getSettingsPrefixLocator,
   navigateToSettingsSection
 } from '../../../../harness/e2e/settings'
 
@@ -20,6 +21,7 @@ describe('settings workspace e2e', () => {
       execute: async (runtime) => {
         const { page } = runtime
         let emptyNameBlocked = false
+        let createModalVisibleAfterEmptySubmit = false
 
         await runtime.step({
           name: 'open-empty-workspace-page',
@@ -39,6 +41,10 @@ describe('settings workspace e2e', () => {
           run: async () => {
             await getSettingsLocator(page, importSelectors.createWorkspaceConfirmButton).click()
             emptyNameBlocked = true
+            createModalVisibleAfterEmptySubmit = await getSettingsLocator(
+              page,
+              importSelectors.createWorkspaceNameInput
+            ).isVisible()
           }
         })
 
@@ -50,12 +56,12 @@ describe('settings workspace e2e', () => {
               '新工作空间'
             )
             await getSettingsLocator(page, importSelectors.createWorkspaceConfirmButton).click()
-            await getSettingsLocator(
-              page,
-              `${importSelectors.workspaceCardPrefix}-e2e-import-workspace-1`
-            ).waitFor({ state: 'visible' })
+            await getSettingsPrefixLocator(page, importSelectors.workspaceCardPrefix)
+              .filter({ hasText: '新工作空间' })
+              .first()
+              .waitFor({ state: 'visible' })
             await getSettingsLocator(page, importSelectors.workspaceDetail)
-              .getByRole('heading', { name: '新工作空间' })
+              .getByRole('tab', { name: /文件/u })
               .waitFor({ state: 'visible' })
           }
         })
@@ -65,17 +71,21 @@ describe('settings workspace e2e', () => {
 
         return {
           emptyNameBlocked,
-          createModalStillVisible: await getSettingsLocator(
+          createModalStillVisible: createModalVisibleAfterEmptySubmit,
+          workspaceCardCount: await getSettingsPrefixLocator(
             page,
-            importSelectors.createWorkspaceNameInput
-          ).isVisible(),
-          workspaceCardCount: await getSettingsLocator(page, importSelectors.workspaceList)
-            .locator('button')
-            .count(),
-          createdWorkspaceVisible: await getSettingsLocator(page, importSelectors.workspaceDetail)
-            .getByRole('heading', { name: '新工作空间' })
+            importSelectors.workspaceCardPrefix
+          ).count(),
+          createdWorkspaceVisible: await getSettingsPrefixLocator(
+            page,
+            importSelectors.workspaceCardPrefix
+          )
+            .filter({ hasText: '新工作空间' })
+            .first()
             .isVisible(),
-          showsUnboundRootHint: detailText.includes('未设置工作文件地址')
+          showsUnboundRootHint:
+            detailText.includes('设置工作文件地址') ||
+            detailText.includes('设置后才能在 Workbench 中发送任务')
         }
       },
       assert: async (result, runtime) => {

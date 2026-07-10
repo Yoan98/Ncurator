@@ -116,7 +116,9 @@ describe('settings model e2e', () => {
           })
 
           successText = (await getSettingsLocator(page, settingsSelectors.modelTable).textContent()) || ''
-          await page.locator('.ant-modal-close').click()
+          await getSettingsLocator(page, settingsSelectors.modelListModal)
+            .locator('.ant-modal-close')
+            .click()
           await page.getByText('gpt-4o-mini').waitFor({ state: 'hidden' })
 
           await runtime.step({

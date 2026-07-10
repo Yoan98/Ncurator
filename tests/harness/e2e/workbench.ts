@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { cp, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { cp, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import os from 'node:os'
@@ -169,6 +169,20 @@ on run argv
       delay 1.0
       key code 36
       set keyStatus to "sent"
+      delay 0.4
+      set candidateButtons to {"选择此目录", "选择", "打开", "Choose", "Open"}
+      repeat with candidateButton in candidateButtons
+        try
+          click button (candidateButton as text) of sheet 1 of window 1 of targetProcess
+          set keyStatus to "sent-clicked-" & (candidateButton as text)
+          exit repeat
+        end try
+        try
+          click button (candidateButton as text) of window 1 of targetProcess
+          set keyStatus to "sent-clicked-" & (candidateButton as text)
+          exit repeat
+        end try
+      end repeat
     end tell
   else
     set keyStatus to "skipped-not-frontmost"
@@ -326,9 +340,10 @@ export const loadWorkbenchLiveModelEnv = (): WorkbenchLiveModelEnv => {
 export const createTemporaryWorkbenchWorkspace = async (
   caseId: string
 ): Promise<TemporaryWorkbenchWorkspace> => {
-  const rootPath = await mkdtemp(
+  const createdRootPath = await mkdtemp(
     path.join(os.tmpdir(), `ncurator-workbench-${sanitizeCasePathPart(caseId)}-`)
   )
+  const rootPath = await realpath(createdRootPath)
   await cp(path.resolve(WORKBENCH_FIXTURE_ROOT), rootPath, {
     recursive: true,
     force: true
@@ -549,56 +564,139 @@ export const bindWorkspaceRootThroughSettingsUi = async (
         { timeout: timeoutMs }
       )
       .then(() => true)
-      .catch(() => false)
+      .catch(async () => {
+        return await page
+          .evaluate(async (expectedRootPath) => {
+            const normalize = (value: string): string => value.replace(/\/+$/u, '')
+            const expected = normalize(String(expectedRootPath || '').trim())
+            const response = await window.api.workspaceList()
+            return response.items.some(
+              (workspace) => normalize(String(workspace.root_path || '').trim()) === expected
+            )
+          }, rootPath)
+          .catch(() => false)
+      })
 
   for (let attempt = 1; attempt <= 3; attempt += 1) {
     const electronProcessId = await readElectronProcessId(page)
     await rootPathButton.click()
     await page.waitForTimeout(1500)
-    const strategies: NativeDirectoryDialogStrategy[] = [
-      'applescript-paste',
-      'applescript-type',
-      'swift'
-    ]
-    for (const [strategyIndex, strategy] of strategies.entries()) {
-      if (strategyIndex > 0) {
-        const reopened = await rootPathButton
-          .click({
-            timeout: 1000
-          })
-          .then(() => true)
-          .catch(() => false)
-        if (reopened) {
-          await page.waitForTimeout(1500)
-        }
-      }
-      try {
-        const output = await selectDirectoryInNativeDialog(rootPath, electronProcessId, strategy)
-        const selected = await waitForSelectedRootPath(
-          strategy.startsWith('applescript') ? 6000 : 10_000
-        )
-        diagnostics.push({
-          strategy: output.strategy,
-          selected,
-          stdout: output.stdout.trim(),
-          stderr: output.stderr.trim()
-        })
-        if (selected) return
-      } catch (error) {
-        diagnostics.push({
-          strategy,
-          selected: false,
-          stdout: '',
-          stderr: '',
-          error: error instanceof Error ? error.message : String(error)
-        })
-      }
+    try {
+      const output = await selectDirectoryInNativeDialog(
+        rootPath,
+        electronProcessId,
+        'applescript-paste'
+      )
+      const selected = await waitForSelectedRootPath(10_000)
+      diagnostics.push({
+        strategy: output.strategy,
+        selected,
+        stdout: output.stdout.trim(),
+        stderr: output.stderr.trim()
+      })
+      if (selected) return
+    } catch (error) {
+      diagnostics.push({
+        strategy: 'applescript-paste',
+        selected: false,
+        stdout: '',
+        stderr: '',
+        error: error instanceof Error ? error.message : String(error)
+      })
     }
   }
 
   throw new Error(
     [
       `failed to select workspace root path through native dialog: ${rootPath}`,
+      `diagnostics=${JSON.stringify(diagnostics)}`
+    ].join('\n')
+  )
+}
+
+export const selectWorkbenchAttachmentThroughNativeDialog = async (
+  page: Page,
+  filePath: string
+): Promise<void> => {
+  const addButton = getWorkbenchLocator(page, workbenchSelectors.attachmentAddButton)
+  const fileName = path.basename(filePath)
+  await page.bringToFront()
+  await addButton.waitFor({ state: 'visible' })
+  const diagnostics: NativeDirectoryDialogDiagnostics[] = []
+  const strategies: NativeDirectoryDialogStrategy[] = [
+    'applescript-paste',
+    'applescript-type',
+    'swift'
+  ]
+
+  for (const [strategyIndex, strategy] of strategies.entries()) {
+    if (strategyIndex === 0) {
+      await addButton.click()
+    } else {
+      const reopened = await addButton
+        .click({
+          timeout: 1000
+        })
+        .then(() => true)
+        .catch(() => false)
+      if (!reopened) {
+        diagnostics.push({
+          strategy,
+          selected: false,
+          stdout: '',
+          stderr: '',
+          error: 'failed to reopen attachment picker'
+        })
+        continue
+      }
+    }
+    await page.waitForTimeout(1500)
+    try {
+      const electronProcessId = await readElectronProcessId(page)
+      const output = await selectDirectoryInNativeDialog(filePath, electronProcessId, strategy)
+      const selected = await page
+        .waitForFunction(
+          (input: { cardPrefix: string; fileName: string }) => {
+            const cards = Array.from(
+              document.querySelectorAll(`[data-testid^="${input.cardPrefix}-"]`)
+            )
+            return cards.some((card) => {
+              if (!(card instanceof HTMLElement)) return false
+              return (
+                card.innerText.includes(input.fileName) ||
+                card.getAttribute('title') === input.fileName
+              )
+            })
+          },
+          {
+            cardPrefix: workbenchSelectors.attachmentCardPrefix,
+            fileName
+          },
+          { timeout: 30_000 }
+        )
+        .then(() => true)
+        .catch(() => false)
+      diagnostics.push({
+        strategy: output.strategy,
+        selected,
+        stdout: output.stdout.trim(),
+        stderr: output.stderr.trim()
+      })
+      if (selected) return
+    } catch (error) {
+      diagnostics.push({
+        strategy,
+        selected: false,
+        stdout: '',
+        stderr: '',
+        error: error instanceof Error ? error.message : String(error)
+      })
+    }
+  }
+
+  throw new Error(
+    [
+      `failed to select attachment through native dialog: ${filePath}`,
       `diagnostics=${JSON.stringify(diagnostics)}`
     ].join('\n')
   )
@@ -840,6 +938,24 @@ export const setupWorkbenchWorkspaceOnly = async (
   }
 }
 
+const pasteWorkbenchTextThroughSystemClipboard = async (page: Page, value: string): Promise<void> => {
+  const wroteClipboard = await page
+    .evaluate(async (text) => {
+      try {
+        await navigator.clipboard.writeText(text)
+        return true
+      } catch {
+        return false
+      }
+    }, value)
+    .catch(() => false)
+  if (wroteClipboard) {
+    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+V' : 'Control+V')
+    return
+  }
+  await page.keyboard.insertText(value)
+}
+
 export const setWorkbenchInput = async (page: Page, value: string): Promise<void> => {
   const input = getWorkbenchLocator(page, workbenchSelectors.input)
   const selectAllInput = async (): Promise<void> => {
@@ -856,23 +972,6 @@ export const setWorkbenchInput = async (page: Page, value: string): Promise<void
       selection?.addRange(range)
     })
   }
-  const pasteText = async (text: string): Promise<void> => {
-    await input.evaluate((element, textToPaste) => {
-      if (!(element instanceof HTMLElement)) {
-        throw new Error('workbench input is not an HTMLElement')
-      }
-      element.focus()
-      const dataTransfer = new DataTransfer()
-      dataTransfer.setData('text/plain', textToPaste)
-      const event = new ClipboardEvent('paste', {
-        bubbles: true,
-        cancelable: true,
-        clipboardData: dataTransfer
-      })
-      element.dispatchEvent(event)
-    }, text)
-  }
-
   await selectAllInput()
   await page.keyboard.press('Backspace')
   await page.waitForFunction((testId: string) => {
@@ -884,7 +983,8 @@ export const setWorkbenchInput = async (page: Page, value: string): Promise<void
   if (!value) return
 
   for (let attempt = 1; attempt <= 3; attempt += 1) {
-    await pasteText(value)
+    await input.click()
+    await pasteWorkbenchTextThroughSystemClipboard(page, value)
     const typed = await page
       .waitForFunction(
         (inputValue: { testId: string; expected: string }) => {
@@ -925,20 +1025,7 @@ export const appendWorkbenchInputText = async (page: Page, value: string): Promi
     selection?.removeAllRanges()
     selection?.addRange(range)
   })
-  await input.evaluate((element, textToPaste) => {
-    if (!(element instanceof HTMLElement)) {
-      throw new Error('workbench input is not an HTMLElement')
-    }
-    element.focus()
-    const dataTransfer = new DataTransfer()
-    dataTransfer.setData('text/plain', textToPaste)
-    const event = new ClipboardEvent('paste', {
-      bubbles: true,
-      cancelable: true,
-      clipboardData: dataTransfer
-    })
-    element.dispatchEvent(event)
-  }, value)
+  await pasteWorkbenchTextThroughSystemClipboard(page, value)
 }
 
 export const submitWorkbenchCurrentDraft = async (page: Page): Promise<void> => {
@@ -1254,7 +1341,7 @@ export const waitForWorkbenchApplyPanelReady = async (page: Page): Promise<Locat
       if (text.includes('当前没有 AI 修改记录。')) return true
       if (text.includes('当前文件暂时不可预览。')) return true
       if (text.includes('当前修改记录没有专用预览稿。')) return true
-      if (text.includes('本次 AI 修改已回退。')) return true
+      if (text.includes('本次 AI 修改已回退。') || text.includes('已回退')) return true
       if (root.querySelector(`[data-testid="${revertButtonTestId}"]`)) return true
       return Boolean(root.querySelector(`[data-testid="${docxViewerTestId}"]`))
     },
@@ -1274,7 +1361,7 @@ export const waitForWorkbenchApplyRecordStatus = async (
 ): Promise<Locator> => {
   const panel = getWorkbenchLocator(page, workbenchSelectors.applyPanel)
   await panel.waitFor({ state: 'visible' })
-  const expectedText = status === 'reverted' ? '本次 AI 修改已回退。' : '失败'
+  const expectedText = status === 'reverted' ? '已回退' : '失败'
   await page.waitForFunction(
     ({ testId, text, status, revertButtonTestId }) => {
       const root = document.querySelector(`[data-testid="${testId}"]`)
