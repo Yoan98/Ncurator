@@ -61,6 +61,10 @@
   --ui-radius-overlay: 8px;
   --ui-radius-composer: 12px;
   --ui-transition: 160ms ease;
+  --ui-tooltip-bg: #ffffff;
+  --ui-tooltip-text: var(--notion-text);
+  --ui-tooltip-border: var(--notion-line-strong);
+  --ui-tooltip-shadow: 0 10px 28px rgba(15, 15, 15, 0.1);
   --app-sidebar-width: 240px;
   --app-sidebar-collapsed-width: 0px;
   --app-sidebar-mac-window-spacer-height: 36px;
@@ -361,6 +365,32 @@ textarea,
   position: relative;
   z-index: 2;
   overflow: hidden;
+}
+
+.ant-tooltip {
+  max-width: 280px !important;
+}
+
+.ant-tooltip .ant-tooltip-inner {
+  min-height: 0 !important;
+  padding: 8px 10px !important;
+  border: 1px solid var(--ui-tooltip-border) !important;
+  border-radius: var(--ui-radius-overlay) !important;
+  background: var(--ui-tooltip-bg) !important;
+  color: var(--ui-tooltip-text) !important;
+  box-shadow: var(--ui-tooltip-shadow) !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  line-height: 20px !important;
+}
+
+.ant-tooltip .ant-tooltip-arrow {
+  --antd-arrow-background-color: var(--ui-tooltip-bg) !important;
+}
+
+.ant-tooltip .ant-tooltip-arrow::before {
+  background: var(--ui-tooltip-bg) !important;
+  border: 1px solid var(--ui-tooltip-border) !important;
 }
 
 .nc-sidebar-window-spacer {

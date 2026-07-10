@@ -70,6 +70,14 @@ function App(): React.JSX.Element {
             borderRadiusSM: 6,
             defaultBg: '#F4F4F2',
             defaultColor: '#787774'
+          },
+          Tooltip: {
+            borderRadius: 8,
+            fontSize: 12,
+            lineHeight: 1.6667,
+            paddingSM: 8,
+            paddingXS: 6,
+            boxShadowSecondary: '0 10px 28px rgba(15, 15, 15, 0.10)'
           }
         }
       }}

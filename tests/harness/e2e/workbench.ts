@@ -126,7 +126,7 @@ on run argv
 
   tell application "System Events"
     set beforeFrontmost to name of first application process whose frontmost is true
-    repeat 40 times
+    repeat 12 times
       set targetProcesses to application processes whose unix id is targetPid
       if (count of targetProcesses) is 0 then
         set targetProcesses to application processes whose bundle identifier is targetBundleId
@@ -142,33 +142,37 @@ on run argv
         try
           perform action "AXRaise" of window 1 of targetProcess
         end try
-        delay 0.15
+        delay 0.05
         if (name of first application process whose frontmost is true) is targetProcessName then
           exit repeat
         end if
       end if
-      delay 0.1
+      delay 0.05
     end repeat
-    delay 0.4
+    delay 0.1
     set afterFrontmost to name of first application process whose frontmost is true
   end tell
 
   if targetProcessName is not "" and afterFrontmost is targetProcessName then
     tell application "System Events"
       key code 5 using {command down, shift down}
-      delay 1.0
+      repeat 12 times
+        delay 0.05
+        try
+          if exists sheet 1 of window 1 of targetProcess then exit repeat
+        end try
+      end repeat
+      delay 0.2
       if inputMode is "type" then
         keystroke targetPath
       else
         set the clipboard to targetPath
         key code 9 using {command down}
       end if
-      delay 0.4
-      key code 36
-      delay 1.0
+      delay 0.15
       key code 36
       set keyStatus to "sent"
-      delay 0.4
+      delay 0.8
       set candidateButtons to {"选择此目录", "选择", "打开", "Choose", "Open"}
       repeat with candidateButton in candidateButtons
         try
@@ -182,6 +186,8 @@ on run argv
           exit repeat
         end try
       end repeat
+      delay 0.1
+      key code 36
     end tell
   else
     set keyStatus to "skipped-not-frontmost"
@@ -224,18 +230,18 @@ if let app = targetApp {
   app.activate(options: [.activateAllWindows])
 }
 
-Thread.sleep(forTimeInterval: 1.2)
+Thread.sleep(forTimeInterval: 0.25)
 NSPasteboard.general.clearContents()
 NSPasteboard.general.setString(targetPath, forType: .string)
 
 postKey(5, [.maskCommand, .maskShift])
-Thread.sleep(forTimeInterval: 1.0)
-postKey(9, [.maskCommand])
-Thread.sleep(forTimeInterval: 0.4)
-postKey(36)
-Thread.sleep(forTimeInterval: 1.2)
-postKey(36)
 Thread.sleep(forTimeInterval: 0.6)
+postKey(9, [.maskCommand])
+Thread.sleep(forTimeInterval: 0.15)
+postKey(36)
+Thread.sleep(forTimeInterval: 0.8)
+postKey(36)
+Thread.sleep(forTimeInterval: 0.15)
 
 let afterFrontmost = NSWorkspace.shared.frontmostApplication?.localizedName ?? ""
 print("frontmost-before=\\(beforeFrontmost); frontmost-after=\\(afterFrontmost); target-app=\\(targetApp?.localizedName ?? "none")")
@@ -577,17 +583,17 @@ export const bindWorkspaceRootThroughSettingsUi = async (
           .catch(() => false)
       })
 
-  for (let attempt = 1; attempt <= 3; attempt += 1) {
+  for (let attempt = 1; attempt <= 4; attempt += 1) {
     const electronProcessId = await readElectronProcessId(page)
     await rootPathButton.click()
-    await page.waitForTimeout(1500)
+    await page.waitForTimeout(250)
     try {
       const output = await selectDirectoryInNativeDialog(
         rootPath,
         electronProcessId,
         'applescript-paste'
       )
-      const selected = await waitForSelectedRootPath(10_000)
+      const selected = await waitForSelectedRootPath(4_000)
       diagnostics.push({
         strategy: output.strategy,
         selected,

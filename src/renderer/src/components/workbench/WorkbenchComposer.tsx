@@ -1011,15 +1011,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
           </div>
 
           <div className="flex min-w-0 items-center gap-2">
-            <Tooltip
-              title={contextUsageTooltip}
-              color="#FFFFFF"
-              overlayInnerStyle={{
-                color: '#37352F',
-                border: '1px solid #E0DFDC',
-                boxShadow: '0 10px 28px rgba(15, 15, 15, 0.12)'
-              }}
-            >
+            <Tooltip title={contextUsageTooltip}>
               <div
                 className="workbench-context-ring relative inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full"
                 aria-label={contextUsageTitle}
@@ -1063,15 +1055,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
               data-testid={workbenchSelectors.modelSelect}
             />
 
-            <Tooltip
-              title={sendButtonDisabled ? sendButtonTooltip : ''}
-              color="#F4F4F2"
-              overlayInnerStyle={{
-                color: '#37352F',
-                border: '1px solid #E0DFDC',
-                boxShadow: '0 8px 24px rgba(15, 15, 15, 0.08)'
-              }}
-            >
+            <Tooltip title={sendButtonDisabled ? sendButtonTooltip : ''}>
               <span className="inline-flex h-7 w-7 shrink-0">
                 <button
                   type="button"
