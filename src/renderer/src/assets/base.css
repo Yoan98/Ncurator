@@ -806,13 +806,13 @@ textarea,
 
 .workbench-composer-model-select {
   width: fit-content;
-  max-width: 180px;
+  max-width: min(360px, calc(100vw - 96px));
 }
 
 .workbench-composer-model-pill {
   @apply min-w-0;
   width: fit-content;
-  max-width: 180px;
+  max-width: min(360px, calc(100vw - 96px));
 }
 
 .workbench-composer-pill.workbench-select-trigger-open {
