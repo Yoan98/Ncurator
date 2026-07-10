@@ -15,13 +15,14 @@ const createConfig = (overrides?: Partial<LlmRuntimeConfig>): LlmRuntimeConfig =
 })
 
 describe('stagehand model config', () => {
-  it('maps openai-compatible configs onto the openai provider and normalizes the base url', () => {
+  it('passes openai-compatible configs through Stagehand custom model options', () => {
     const result = resolveStagehandModelConfig(createConfig())
 
     expect(result.providerKind).toBe('openai-compatible')
     expect(result.provider).toBe('openai')
-    expect(result.modelName).toBe('openai/custom-browser-model')
-    expect(result.clientOptions).toEqual({
+    expect(result.model).toEqual({
+      modelName: 'custom-browser-model',
+      provider: 'openai',
       apiKey: 'test-key',
       baseURL: 'https://gateway.example.com/v1'
     })
@@ -38,8 +39,8 @@ describe('stagehand model config', () => {
 
     expect(result.providerKind).toBe('deepseek')
     expect(result.provider).toBe('deepseek')
-    expect(result.modelName).toBe('deepseek/deepseek-chat-vNext')
-    expect(result.clientOptions).toEqual({
+    expect(result.model).toEqual({
+      modelName: 'deepseek/deepseek-chat-vNext',
       apiKey: 'test-key',
       baseURL: 'https://api.deepseek.com/v1'
     })
@@ -53,7 +54,7 @@ describe('stagehand model config', () => {
       })
     )
 
-    expect(result.modelName).toBe('openai/my-team/custom-stagehand-model')
+    expect(result.model.modelName).toBe('openai/my-team/custom-stagehand-model')
   })
 
   it('rejects unsupported provider kinds before Stagehand runs', () => {

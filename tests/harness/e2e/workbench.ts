@@ -895,20 +895,25 @@ export const setupWorkbenchWithTempWorkspace = async (
   const env = loadWorkbenchLiveModelEnv()
   const workspace = await createTemporaryWorkbenchWorkspace(input.caseId)
   const workspaceName = input.workspaceName || `Workbench ${input.caseId}`
-  if (input.configureModel !== false) {
-    await configureLiveModelThroughSettingsUi(page, env)
-  }
-  await prepareWorkbenchWorkspaceThroughUi(page, {
-    workspaceName,
-    rootPath: workspace.rootPath,
-    webSourceUrl: input.webSourceUrl
-  })
-  if (input.configureModel !== false) {
-    await selectWorkbenchModel(page, env.modelName)
-  }
-  if (input.createSession !== false) {
-    await page.getByRole('button', { name: `在 ${workspaceName} 中新建对话` }).click()
-    await selectWorkbenchWorkspace(page, workspaceName)
+  try {
+    if (input.configureModel !== false) {
+      await configureLiveModelThroughSettingsUi(page, env)
+    }
+    await prepareWorkbenchWorkspaceThroughUi(page, {
+      workspaceName,
+      rootPath: workspace.rootPath,
+      webSourceUrl: input.webSourceUrl
+    })
+    if (input.configureModel !== false) {
+      await selectWorkbenchModel(page, env.modelName)
+    }
+    if (input.createSession !== false) {
+      await page.getByRole('button', { name: `在 ${workspaceName} 中新建对话` }).click()
+      await selectWorkbenchWorkspace(page, workspaceName)
+    }
+  } catch (error) {
+    await workspace.cleanup()
+    throw error
   }
   return {
     env,
@@ -927,11 +932,16 @@ export const setupWorkbenchWorkspaceOnly = async (
 ): Promise<WorkbenchWorkspaceOnlySetupResult> => {
   const workspace = await createTemporaryWorkbenchWorkspace(input.caseId)
   const workspaceName = input.workspaceName || `Workbench ${input.caseId}`
-  await prepareWorkbenchWorkspaceThroughUi(page, {
-    workspaceName,
-    rootPath: workspace.rootPath,
-    webSourceUrl: input.webSourceUrl
-  })
+  try {
+    await prepareWorkbenchWorkspaceThroughUi(page, {
+      workspaceName,
+      rootPath: workspace.rootPath,
+      webSourceUrl: input.webSourceUrl
+    })
+  } catch (error) {
+    await workspace.cleanup()
+    throw error
+  }
   return {
     workspace,
     workspaceName

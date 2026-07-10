@@ -303,10 +303,7 @@ export class BrowserEmbedService implements BrowserUseService {
       disablePino: true,
       verbose: 0,
       disableAPI: true,
-      model: {
-        modelName: modelConfig.modelName,
-        ...modelConfig.clientOptions
-      },
+      model: modelConfig.model,
       localBrowserLaunchOptions: {
         cdpUrl,
         connectTimeoutMs: 20_000
