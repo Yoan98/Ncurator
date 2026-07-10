@@ -13,8 +13,8 @@
 
 ### 2.1 当前状态
 
-- 总体登记：`23` 个 e2e case，`1` 个 backend contract case。
-- 当前有效结论：`20 / 23` 个 e2e case 已有有效通过；`web-read-from-search-result`、`web-read-direct-url`、`web-search-diagnostic` 已登记为网页能力补充回归，其中新增读取 case 待执行更新结论；`chat-run-service-contract` backend contract 有效通过。
+- 总体登记：`22` 个 e2e case，`1` 个 backend contract case。
+- 当前有效结论：`22 / 22` 个 e2e case 已有有效通过；`chat-run-service-contract` backend contract 有效通过。
 
 ### 2.2 按 Suite 汇总
 
@@ -24,10 +24,10 @@
   - 检测时间：`2026-07-10 16:26:14 +0800`
   - 备注：`composer-attachments-context`、`composer-text-selection`、`reference-mention-keyboard`、`send-guard-mode-switch-and-preferences`、`workspace-root-path-required`、`user-message-actions`、`reference-token-lifecycle`、`session-delete-confirmation-and-context-ring`、`session-initial-create-and-title` 均已通过真实 Electron UI；涉及 AI 的 case 使用真实模型。
 - `run`
-  - 登记 case：`9` 个 e2e，`1` 个 backend contract
-  - 有效通过：`6 / 9` 个 e2e，`1 / 1` 个 backend contract
-  - 检测时间：e2e `2026-07-10 17:19:39 +0800`；backend `2026-07-10 16:25:36 +0800`
-  - 备注：`ai-process-stream-and-final-answer`、`approval-batch-flow`、`stop-running-or-approval-run`、`run-navigation-snapshot-replay`、`web-search-diagnostic`、`browser-use-task-panel` 已通过真实 Electron UI、真实模型、真实 workspace 索引和真实 AI run；`web-read-from-search-result`、`web-read-direct-url` 为新增网页读取回归，待执行后更新有效结论；`chat-run-service-contract` 已通过 backend contract。`browser-use-task-panel` 使用当前用户选择的 `AI_LIVE_*` 配置，不引入 browser 专用模型配置；DashScope / openai-compatible / `deepseek-v4-flash` 已通过 Stagehand deepseek provider 映射、URL 先导航和 browser_use 结果摘要完成回归。
+  - 登记 case：`8` 个 e2e，`1` 个 backend contract
+  - 有效通过：`8 / 8` 个 e2e，`1 / 1` 个 backend contract
+  - 检测时间：e2e `2026-07-10 19:30:08 +0800`；backend `2026-07-10 16:25:36 +0800`
+  - 备注：`ai-process-stream-and-final-answer`、`approval-batch-flow`、`stop-running-or-approval-run`、`run-navigation-snapshot-replay`、`web-search-diagnostic`、`web-read-from-search-result`、`web-read-direct-url`、`browser-use-task-panel` 已通过真实 Electron UI、真实模型、真实 workspace 索引和真实 AI run；`chat-run-service-contract` 已通过 backend contract。`browser-use-task-panel` 使用当前用户选择的 `AI_LIVE_*` 配置，不引入 browser 专用模型配置；DashScope / openai-compatible / `deepseek-v4-flash` 已通过 Stagehand 官方 provider 与 `StagehandLangChainClient` 两条路径、显式 `navigate` 和 browser_use 结果摘要完成回归。
 - `result`
   - 登记 case：`5`
   - 有效通过：`5 / 5`
@@ -43,7 +43,7 @@
 - Workbench UI E2E 回归测试需要真实索引完成信号和 UI 可见状态作为等待条件；IPC observer 和 job 查询只能作为辅助证据，不能用来造业务状态。
 - `file-preview-actions` 当前按生产真实索引能力覆盖 `pdf/docx/md/txt`：`.md`、`.markdown`、`.txt` 必须通过真实索引进入搜索结果，并从搜索结果打开右侧预览。
 - docx apply case 需要真实 docx 输入、真实 AI 编辑、真实写回记录、真实预览和真实回退。
-- `browser-use-task-panel` 需要真实 AI run 触发 `browser_use` 并驱动内置浏览器完成本地网页任务；当前已使用 DashScope / openai-compatible / `deepseek-v4-flash` 完成有效通过，不能用 fake browser 替代。
+- `browser-use-task-panel` 需要真实 AI run 触发 `browser_use` 并驱动内置浏览器完成本地网页任务；当前已使用 DashScope / openai-compatible / `deepseek-v4-flash` 覆盖 Stagehand 官方 provider 与 `StagehandLangChainClient` 路径，不能用 fake browser 替代。
 - `web_search` 与 `web_crawl` 需要分开覆盖：搜索 case 只验证候选网页返回；读取 case 必须验证 AI 继续读取网页正文后再回答。
 - Workbench 附件链路当前固定保存到 `<workspace>/.ncurator/assets/<assetBucketId>/`，`assetBucketId` 为输入草稿 UUID，发送给 AI 时只传附件名称与路径，不再做发送前识图或文件解析。
 
@@ -118,6 +118,15 @@ tests/case/workbench/
 - Oracle：没有历史会话时页面自动进入“新对话”，对齐 `WB-SESSION-001-AC1`、`WB-SESSION-001-AC2`；第一条用户消息后标题变为消息摘要，对齐 `WB-SESSION-003-AC1`；第二条消息不会再次自动改写标题，对齐 `WB-SESSION-003-AC2`；涉及 AI 的发送记录模型、耗时、完成度评分和失败归因。
 - Not：不验证标题手动编辑，也不验证会话列表视觉样式。
 
+#### `session-delete-confirmation-and-context-ring`
+
+- 测试类型：`e2e`
+- What：验证会话删除确认、取消 / 确认删除，以及输入框上下文圆圈 hover 信息。
+- Why：会话删除是高风险操作，必须避免误删；上下文圆圈用于提示当前运行上下文，展示错误会误导用户。
+- How：通过真实 Workbench UI 创建会话并发送真实请求；打开删除确认，分别覆盖取消和确认；hover 输入框上下文圆圈读取提示。
+- Oracle：取消删除时会话保留；确认删除后会话从列表消失；上下文圆圈 hover 能展示当前工作区、模型或相关上下文提示。
+- Not：不验证历史会话批量管理和跨设备同步。
+
 #### `send-guard-mode-switch-and-preferences`
 
 - 测试类型：`e2e`
@@ -144,6 +153,15 @@ tests/case/workbench/
 - How：创建真实工作区，通过真实粘贴图片和 `md` 文件触发产品附件保存逻辑；另外通过粘贴覆盖不支持格式和大文件 warning。
 - Oracle：真实粘贴会触发附件保存；添加附件后没有真实会话；图片预览可打开；文件副标题显示 `MD`；不支持格式只提示不加入；大文件只提示不拦截；普通文本粘贴仍正常，对齐 `WB-COMPOSER-010-AC2`、`WB-COMPOSER-010-AC3`。
 - Not：不验证系统原生文件选择器本身；不通过 `attachmentPickResponse` 或直接 `attachmentSaveFile` 伪造附件结果。
+
+#### `composer-text-selection`
+
+- 测试类型：`e2e`
+- What：验证输入框鼠标松开后保留用户已框选文字，不会把光标强制移动到末尾。
+- Why：用户编辑长输入时需要稳定选择文本；如果 selection 被重置，会造成误删、误改或无法替换选中文本。
+- How：在真实 Workbench composer 中输入多段文本，用鼠标框选中间文字并松开，读取 selection 状态。
+- Oracle：鼠标松开后选区仍覆盖原选中文字，selection 不被自动折叠到输入末尾。
+- Not：不验证系统输入法和浏览器原生 selection 的全部边界。
 
 #### `reference-mention-keyboard`
 
@@ -209,24 +227,6 @@ tests/case/workbench/
 - How：通过真实用户请求诱导 AI 产生需要审批的 terminal 操作；分别覆盖全同意、任一拒绝、填写指导输入和不操作期间保持等待。
 - Oracle：整批同意后按原 serial 顺序继续，对齐 `WB-BLOCKER-001-AC1`；任一拒绝或填写指导输入时本批命令 0 执行并回到后续 AI 决策，对齐 `WB-BLOCKER-001-AC2`；指导输入不作为独立第三按钮，对齐 `WB-BLOCKER-001-AC3`；审批不因固定超时自动失败，对齐 `WB-BLOCKER-001-AC4`；记录模型、耗时、完成度评分和失败归因。
 - Not：不验证 terminal 工具安全指令集本身，该能力归 AI tool 测试。
-
-#### `approval-switch-session-consistency`
-
-- 测试类型：`e2e`
-- What：验证审批同意后立刻切换到其他会话，再切回原会话时，不再显示旧审批卡片。
-- Why：审批状态已经由 SQLite transaction 管理；如果 UI 恢复仍读到旧 pending approval，用户会误以为还需要重复审批，但后台 run 已经继续执行。
-- How：触发真实审批等待，点击同意后马上切换会话，再切回原会话。
-- Oracle：切回后原会话不显示旧审批卡片，run 已从 `waiting_approval` 回到运行或完成状态，对齐 `WB-BLOCKER-001-AC1` 与会话恢复一致性要求。
-- Not：不验证 terminal 工具本身执行结果；只验证审批状态持久化和会话切换恢复。
-
-#### `chat-session-open-light-path`
-
-- 测试类型：`backend`
-- What：验证打开会话首屏只加载 session、最近 50 条消息和 active runs，不触发全量 run/event/context usage 查询。
-- Why：会话切换卡顿的主要风险来自首屏路径过重，而不是单次 SQLite 查询本身。
-- How：构造包含大量历史消息、run event 和 context usage 的会话，调用 `chatSessionOpen` 并观察 store 调用或返回范围。
-- Oracle：返回最近 50 条消息且 seq 正序；只恢复 running / waiting approval runs；完整 event replay、context usage、file changes detail 不在首屏路径执行。
-- Not：不验证前端滚动分页和详情展开；这些属于独立 UI 交互。
 
 #### `stop-running-or-approval-run`
 

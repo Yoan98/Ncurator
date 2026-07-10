@@ -91,15 +91,25 @@ const renderSegments = (
   options?: { shimmer?: boolean }
 ): React.ReactNode => (
   <span className={options?.shimmer ? 'workbench-thinking-shimmer' : undefined}>
-    {segments.map((segment, index) => (
-      <span
-        key={`${segment.text}-${index}`}
-        className={`inline-flex items-center gap-1 ${segment.emphasis ? 'font-semibold text-[#37352F]' : ''}`}
-      >
-        {segment.iconKind ? <LayerIcon iconKind={segment.iconKind} /> : null}
-        {segment.text}
-      </span>
-    ))}
+    {segments.map((segment, index) => {
+      const textClassName = segment.emphasis ? 'font-semibold text-[#37352F]' : ''
+      if (!segment.iconKind) {
+        return (
+          <span key={`${segment.text}-${index}`} className={textClassName}>
+            {segment.text}
+          </span>
+        )
+      }
+      return (
+        <span
+          key={`${segment.text}-${index}`}
+          className={`inline-flex items-center gap-1 ${textClassName}`}
+        >
+          <LayerIcon iconKind={segment.iconKind} />
+          {segment.text}
+        </span>
+      )
+    })}
   </span>
 )
 

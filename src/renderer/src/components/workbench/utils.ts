@@ -351,7 +351,7 @@ const getToolSummaryText = (
 
 const getToolItemText = (
   toolName: AssistantToolName,
-  status: AssistantProcessStatus,
+  _status: AssistantProcessStatus,
   input?: IpcJsonObject
 ): AssistantRichTextSegment[] => {
   const fileLabel = readToolFileLabel(input)
@@ -363,77 +363,32 @@ const getToolItemText = (
   const waitLabel = readWaitDurationLabel(input)
 
   if (toolName === 'docx_outline') {
-    if (status === 'running') {
-      return sentence(text('正在阅读 '), text(fileLabel, true), text(' 的结构'))
-    }
-    if (status === 'completed') {
-      return sentence(text('已阅读 '), text(fileLabel, true), text(' 的结构'))
-    }
-    if (status === 'partial_failed') {
-      return sentence(text('部分阅读 '), text(fileLabel, true), text(' 的结构失败'))
-    }
-    return sentence(text('阅读 '), text(fileLabel, true), text(' 的结构失败'))
+    return sentence(text('阅读文档结构：'), text(fileLabel, true))
   }
   if (toolName === 'docx_read_blocks') {
     const rangeText = readDocxRangeLabel(input)
-    const targetText = ` 的${rangeText}`
-    if (status === 'running') {
-      return sentence(text('正在读取 '), text(fileLabel, true), text(targetText))
-    }
-    if (status === 'completed') {
-      return sentence(text('已读取 '), text(fileLabel, true), text(targetText))
-    }
-    if (status === 'partial_failed') {
-      return sentence(text('部分读取 '), text(fileLabel, true), text(`${targetText}失败`))
-    }
-    return sentence(text('读取 '), text(fileLabel, true), text(`${targetText}失败`))
+    return sentence(text('读取文档内容：'), text(fileLabel, true), text(` ${rangeText}`))
   }
   if (toolName === 'docx_edit') {
-    if (status === 'running') return sentence(text('正在编辑 '), text(fileLabel, true))
-    if (status === 'completed') return sentence(text('已编辑 '), text(fileLabel, true))
-    if (status === 'partial_failed')
-      return sentence(text('部分编辑 '), text(fileLabel, true), text(' 失败'))
-    return sentence(text('编辑 '), text(fileLabel, true), text(' 失败'))
+    return sentence(text('编辑文档：'), text(fileLabel, true))
   }
   if (toolName === 'docx_rollback') {
-    if (status === 'running')
-      return sentence(text('正在回退 '), text(fileLabel, true), text(' 的修改'))
-    if (status === 'completed')
-      return sentence(text('已回退 '), text(fileLabel, true), text(' 的修改'))
-    if (status === 'partial_failed')
-      return sentence(text('部分回退 '), text(fileLabel, true), text(' 的修改失败'))
-    return sentence(text('回退 '), text(fileLabel, true), text(' 的修改失败'))
+    return sentence(text('回退文档修改：'), text(fileLabel, true))
   }
   if (toolName === 'docx_history') {
-    if (status === 'running') {
-      return sentence(text('正在检查 '), text(fileLabel, true), text(' 的修改历史'))
-    }
-    if (status === 'completed') {
-      return sentence(text('已检查 '), text(fileLabel, true), text(' 的修改历史'))
-    }
-    if (status === 'partial_failed') {
-      return sentence(text('部分检查 '), text(fileLabel, true), text(' 的修改历史失败'))
-    }
-    return sentence(text('检查 '), text(fileLabel, true), text(' 的修改历史失败'))
+    return sentence(text('检查修改历史：'), text(fileLabel, true))
   }
   if (toolName === 'terminal_run') {
-    if (status === 'running') return sentence(text('正在执行终端指令：'), text(commandLabel, true))
-    if (status === 'completed') return sentence(text('已执行终端指令：'), text(commandLabel, true))
-    if (status === 'partial_failed')
-      return sentence(text('部分终端指令执行失败：'), text(commandLabel, true))
-    return sentence(text('执行终端指令失败：'), text(commandLabel, true))
+    return sentence(text('执行命令：'), text(commandLabel, true))
   }
   if (toolName === 'kb_search' || toolName === 'docx_search') {
-    if (status === 'running') return sentence(text('正在搜索 '), text(queryLabel, true))
-    if (status === 'completed') return sentence(text('已搜索 '), text(queryLabel, true))
-    if (status === 'partial_failed') return sentence(text('部分搜索失败：'), text(queryLabel, true))
-    return sentence(text('搜索 '), text(queryLabel, true), text(' 失败'))
+    return sentence(
+      text(toolName === 'docx_search' ? '搜索文档：' : '搜索知识库：'),
+      text(queryLabel, true)
+    )
   }
   if (toolName === 'kb_list_documents') {
-    if (status === 'running') return sentence(text('正在查看工作空间文档列表'))
-    if (status === 'completed') return sentence(text('已查看工作空间文档列表'))
-    if (status === 'partial_failed') return sentence(text('部分查看工作空间文档列表失败'))
-    return sentence(text('查看工作空间文档列表失败'))
+    return sentence(text('查看工作空间文档列表'))
   }
   if (toolName === 'web_search') {
     return sentence(text('搜索网页：'), text(queryLabel, true))
@@ -449,22 +404,12 @@ const getToolItemText = (
     return sentence(text('操作浏览器：'), text(instructionLabel, true))
   }
   if (toolName === 'llm_recognize') {
-    if (status === 'running') return sentence(text('正在识别图片：'), text(fileLabel, true))
-    if (status === 'completed') return sentence(text('已识别图片：'), text(fileLabel, true))
-    if (status === 'partial_failed')
-      return sentence(text('部分图片识别失败：'), text(fileLabel, true))
-    return sentence(text('图片识别失败：'), text(fileLabel, true))
+    return sentence(text('识别图片：'), text(fileLabel, true))
   }
   if (toolName === 'wait_time') {
-    if (status === 'running') return sentence(text('正在等待 '), text(waitLabel, true))
-    if (status === 'completed') return sentence(text('已等待 '), text(waitLabel, true))
-    if (status === 'partial_failed') return sentence(text('部分等待失败'))
-    return sentence(text('等待失败'))
+    return sentence(text('等待：'), text(waitLabel, true))
   }
-  if (status === 'running') return sentence(text('正在处理任务中的一步'))
-  if (status === 'completed') return sentence(text('已处理任务中的一步'))
-  if (status === 'partial_failed') return sentence(text('这一步部分处理失败'))
-  return sentence(text('这一步处理失败'))
+  return sentence(text('处理任务中的一步'))
 }
 
 const getDisplayGroupText = (

@@ -27,6 +27,7 @@ type WorkbenchSelectProps = {
   selectedWithoutBackground?: boolean
   rail?: boolean
   inlineChevron?: boolean
+  hideChevron?: boolean
   disabled?: boolean
   noDrag?: boolean
   minMenuWidth?: number
@@ -71,8 +72,7 @@ const estimateMenuHeight = (input: {
 }): number => {
   const listItemCount = Math.max(1, input.optionCount)
   const estimatedListHeight = MENU_VERTICAL_PADDING + listItemCount * MENU_OPTION_HEIGHT
-  const estimatedHeight =
-    estimatedListHeight + (input.searchable ? SEARCH_MENU_HEADER_HEIGHT : 0)
+  const estimatedHeight = estimatedListHeight + (input.searchable ? SEARCH_MENU_HEADER_HEIGHT : 0)
   return Math.min(input.maxHeight, estimatedHeight)
 }
 
@@ -91,6 +91,7 @@ const WorkbenchSelect: React.FC<WorkbenchSelectProps> = ({
   selectedWithoutBackground = false,
   rail = false,
   inlineChevron = false,
+  hideChevron = false,
   disabled = false,
   noDrag = false,
   minMenuWidth,
@@ -260,7 +261,7 @@ const WorkbenchSelect: React.FC<WorkbenchSelectProps> = ({
             </span>
           ) : null}
           <span className="truncate">{triggerLabel}</span>
-          {inlineChevron ? (
+          {inlineChevron && !hideChevron ? (
             <HiChevronDown
               className={joinClassNames(
                 'h-3.5 w-3.5 shrink-0 transition-transform duration-150',
@@ -269,14 +270,14 @@ const WorkbenchSelect: React.FC<WorkbenchSelectProps> = ({
             />
           ) : null}
         </span>
-        {inlineChevron ? null : (
+        {!inlineChevron && !hideChevron ? (
           <HiChevronDown
             className={joinClassNames(
               'h-3.5 w-3.5 shrink-0 transition-transform duration-150',
               open ? 'rotate-180' : ''
             )}
           />
-        )}
+        ) : null}
       </button>
 
       {open

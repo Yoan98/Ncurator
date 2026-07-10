@@ -15,9 +15,9 @@ import {
   HiChevronRight,
   HiCpuChip,
   HiMagnifyingGlass,
-  HiPhoto,
   HiQuestionMarkCircle
 } from 'react-icons/hi2'
+import { PiEyesFill } from 'react-icons/pi'
 import type {
   LLMConfig,
   LlmRemoteModel,
@@ -50,7 +50,7 @@ type MenuPosition = {
 
 const DEFAULT_POSITION: MenuPosition = {
   left: 0,
-  width: 360,
+  width: 320,
   maxHeight: 360
 }
 
@@ -137,10 +137,10 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
       triggerRect: rect,
       viewportWidth: window.innerWidth,
       viewportHeight: window.innerHeight,
-      preferredWidth: 380,
+      preferredWidth: 320,
       preferredHeight: 360,
-      minWidth: 340,
-      maxWidth: 460,
+      minWidth: 300,
+      maxWidth: 360,
       maxHeight: 420,
       align: 'end'
     })
@@ -215,27 +215,24 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
     onAfterChange?.()
   }
 
-  const groupedModels = useMemo(
-    () => {
-      const customModelName = query.trim()
-      return configs
-        .map((config) => {
-          const models = (modelListsByConfigId[config.id] || []).filter((model) =>
-            modelMatchesQuery({ query, config, model })
-          )
-          const hasCustomModel =
-            customModelName && !models.some((model) => model.id === customModelName)
-          return {
-            config,
-            models: hasCustomModel
-              ? [...models, { id: customModelName, label: customModelName }]
-              : models
-          }
-        })
-        .filter((group) => group.models.length > 0)
-    },
-    [configs, modelListsByConfigId, query]
-  )
+  const groupedModels = useMemo(() => {
+    const customModelName = query.trim()
+    return configs
+      .map((config) => {
+        const models = (modelListsByConfigId[config.id] || []).filter((model) =>
+          modelMatchesQuery({ query, config, model })
+        )
+        const hasCustomModel =
+          customModelName && !models.some((model) => model.id === customModelName)
+        return {
+          config,
+          models: hasCustomModel
+            ? [...models, { id: customModelName, label: customModelName }]
+            : models
+        }
+      })
+      .filter((group) => group.models.length > 0)
+  }, [configs, modelListsByConfigId, query])
 
   const renderModelList = (): React.ReactNode => {
     const currentSelection = view === 'main' ? value.mainModel : value.visionModel
@@ -357,17 +354,11 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
             <span className="truncate">{mainLabel}</span>
             {value.visionModel ? (
               <span className="ml-1 inline-flex h-5 shrink-0 items-center gap-1 rounded-full bg-[#F4F4F2] px-1.5 text-[11px] font-semibold text-[#787774]">
-                <HiPhoto className="h-3 w-3" />
+                <PiEyesFill className="h-3 w-3" />
                 {visionInitial ? <span>{visionInitial}</span> : null}
               </span>
             ) : null}
           </span>
-          <HiChevronRight
-            className={joinClassNames(
-              'h-3.5 w-3.5 shrink-0 transition-transform duration-150',
-              open ? 'rotate-90' : ''
-            )}
-          />
         </button>
       </Tooltip>
       {open

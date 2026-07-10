@@ -52,13 +52,17 @@ const readCommandExplanationArg = (args: JsonObject): string | undefined =>
     : undefined
 
 const readBrowserUseApprovalText = (args: JsonObject): string => {
-  const action = typeof args.action === 'string' && args.action.trim() ? args.action.trim() : 'use'
+  const action = typeof args.action === 'string' && args.action.trim() ? args.action.trim() : ''
   const instruction =
     typeof args.instruction === 'string' && args.instruction.trim()
       ? args.instruction.trim()
       : '使用内置浏览器'
-  const url = typeof args.url === 'string' && args.url.trim() ? ` url=${args.url.trim()}` : ''
-  return `browser_use ${action}: ${instruction}${url}`
+  const url = typeof args.url === 'string' && args.url.trim() ? args.url.trim() : ''
+  if (action === 'navigate') return `打开网页：${url || instruction}`
+  if (action === 'observe') return `观察页面：${instruction}`
+  if (action === 'extract') return `提取页面内容：${instruction}`
+  if (action === 'act') return `操作页面：${instruction}`
+  return `操作浏览器：${instruction}`
 }
 
 type ParsedHandCall = {

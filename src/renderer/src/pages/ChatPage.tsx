@@ -3000,7 +3000,7 @@ const ChatPage: React.FC = () => {
                             <div className="mx-2 mt-3 space-y-1">
                               <button
                                 type="button"
-                                className="grid min-h-11 w-full grid-cols-[28px_1fr_auto] items-center rounded-[6px] px-3 text-left text-[13px] text-[#37352F] shadow-[inset_3px_0_0_#37352F,inset_0_0_0_1px_#EEEEEC] hover:bg-[#F4F4F2]"
+                                className="grid min-h-11 w-full grid-cols-[1fr_auto] items-center rounded-[6px] px-3 text-left text-[13px] text-[#37352F] shadow-[inset_3px_0_0_#37352F,inset_0_0_0_1px_#EEEEEC] hover:bg-[#F4F4F2]"
                                 onClick={() =>
                                   void handleApprovalDecision({
                                     itemId: currentApprovalItem.itemId,
@@ -3010,13 +3010,12 @@ const ChatPage: React.FC = () => {
                                 disabled={approvalSubmitting}
                                 data-testid={chatSelectors.approvalBatchApproveButton}
                               >
-                                <span className="text-[#9B9A97]">1.</span>
                                 <span>允许本次操作</span>
                                 <HiCheck className="h-4 w-4" />
                               </button>
                               <button
                                 type="button"
-                                className="grid min-h-11 w-full grid-cols-[28px_1fr_auto] items-center rounded-[6px] px-3 text-left text-[13px] text-[#787774] hover:bg-[#F4F4F2]"
+                                className="grid min-h-11 w-full grid-cols-[1fr_auto] items-center rounded-[6px] px-3 text-left text-[13px] text-[#787774] hover:bg-[#F4F4F2]"
                                 onClick={() =>
                                   void handleApprovalDecision({
                                     itemId: currentApprovalItem.itemId,
@@ -3026,7 +3025,6 @@ const ChatPage: React.FC = () => {
                                 disabled={approvalSubmitting}
                                 data-testid={chatSelectors.approvalBatchDenyButton}
                               >
-                                <span className="text-[#9B9A97]">2.</span>
                                 <span>拒绝本次操作</span>
                                 <HiXMark className="h-4 w-4 text-[#B3261E]" />
                               </button>

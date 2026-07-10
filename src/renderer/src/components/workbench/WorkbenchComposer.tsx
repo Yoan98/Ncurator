@@ -1003,6 +1003,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
               placeholder="模式"
               compact
               noDrag
+              hideChevron
               triggerClassName="workbench-composer-pill workbench-composer-mode-pill"
               menuClassName="workbench-composer-menu"
               data-testid={workbenchSelectors.modeSwitch}
@@ -1132,6 +1133,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
             searchPlaceholder="搜索工作空间"
             compact
             inlineChevron
+            hideChevron
             selectedWithoutBackground
             noDrag
             className="max-w-[220px]"
