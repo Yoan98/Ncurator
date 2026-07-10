@@ -80,6 +80,8 @@ tests/                   # 自动化测试
 ## 6. 测试目录规则
 
 - `tests/harness/**` 只放可复用的测试基础设施，不承载旧 suite 治理逻辑或旧分析文档契约。
+- `tests/harness/e2e/**` 只允许封装点击、输入、等待 UI、原生目录选择自动化、真实临时文件 / 目录、本地 HTTP 服务、截图、raw log 读取和 IPC observer。
+- `tests/harness/e2e/**` 不允许提供 preload override、直接创建业务状态、直接写 store、假模型、假搜索结果、假下载进度、假 AI 事件或假附件选择结果。
 - `tests/fixtures/**` 只放长期复用的输入样本，不混入运行产物。
 - `tests/fixtures/workspace/` 是共享工作区输入目录；工作区语义测试统一从这里取样本。
 - `tests/case/ai/**` 只放 AI formal tests。

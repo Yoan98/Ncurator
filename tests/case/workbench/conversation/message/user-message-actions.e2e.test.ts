@@ -1,10 +1,8 @@
-import { createServer, type Server } from 'node:http'
-import type { AddressInfo, Socket } from 'node:net'
 import type { Page } from 'playwright'
 import { describe, it } from 'vitest'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
-import { seedActiveModelConfig } from '../../../../harness/e2e/settings'
 import {
+  WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
   WORKBENCH_RESULT_E2E_TIMEOUT_MS,
   assertNoWorkbenchFakeSignals,
   createWorkbenchNewSession,
@@ -12,7 +10,7 @@ import {
   getWorkbenchPrefixLocator,
   navigateToWorkbench,
   selectWorkbenchWorkspace,
-  setupWorkbenchWorkspaceOnly,
+  setupWorkbenchWithTempWorkspace,
   submitWorkbenchCurrentDraft,
   switchWorkbenchMode,
   waitForLatestAssistantProcess,
@@ -22,92 +20,6 @@ import {
 
 const CASE_ID = 'user-message-actions'
 const RUNNING_MESSAGE = '请根据我刚附上的图片和文件做一个简短说明。'
-const FAKE_MODEL_ID = 'workbench-user-message-actions-model'
-
-type LocalOpenAiServer = {
-  baseUrl: string
-  close: () => Promise<void>
-}
-
-const startHangingOpenAiServer = async (): Promise<LocalOpenAiServer> => {
-  const sockets = new Set<Socket>()
-  const server = createServer((request, response) => {
-    if (request.method === 'POST' && (request.url || '').includes('/chat/completions')) {
-      request.resume()
-      response.writeHead(200, {
-        'content-type': 'text/event-stream; charset=utf-8',
-        'cache-control': 'no-cache',
-        connection: 'keep-alive'
-      })
-      response.write(
-        `data: ${JSON.stringify({
-          id: `chatcmpl-${CASE_ID}`,
-          object: 'chat.completion.chunk',
-          created: Math.floor(Date.now() / 1000),
-          model: FAKE_MODEL_ID,
-          choices: [
-            {
-              index: 0,
-              delta: { role: 'assistant', content: '处理中' },
-              finish_reason: null
-            }
-          ]
-        })}\n\n`
-      )
-      const keepAlive = setInterval(() => {
-        response.write(': keep-alive\n\n')
-      }, 100)
-      response.on('close', () => {
-        clearInterval(keepAlive)
-      })
-      return
-    }
-
-    response.writeHead(404, {
-      'content-type': 'application/json; charset=utf-8'
-    })
-    response.end(JSON.stringify({ error: { message: 'not found' } }))
-  })
-  server.on('connection', (socket) => {
-    sockets.add(socket)
-    socket.on('close', () => sockets.delete(socket))
-  })
-
-  await new Promise<void>((resolve, reject) => {
-    server.once('error', reject)
-    server.listen(0, '127.0.0.1', () => {
-      server.off('error', reject)
-      resolve()
-    })
-  })
-  const address = server.address()
-  if (!address || typeof address === 'string') {
-    await closeServerAndSockets(server, sockets)
-    throw new Error('failed to start local OpenAI-compatible server')
-  }
-
-  return {
-    baseUrl: `http://127.0.0.1:${String((address as AddressInfo).port)}/v1`,
-    close: async () => {
-      await closeServerAndSockets(server, sockets)
-    }
-  }
-}
-
-const closeServerAndSockets = async (server: Server, sockets: Set<Socket>): Promise<void> => {
-  for (const socket of sockets) {
-    socket.destroy()
-  }
-  await new Promise<void>((resolve, reject) => {
-    server.close((error) => {
-      if (error) {
-        reject(error)
-        return
-      }
-      resolve()
-    })
-  })
-}
 
 const latestUserMessage = (page: Page) =>
   getWorkbenchPrefixLocator(page, workbenchSelectors.userMessagePrefix)
@@ -252,37 +164,21 @@ describe('workbench conversation e2e', () => {
         description:
           '验证用户消息 hover 操作、latest turn 编辑撤回、running 态隐藏编辑，以及用户消息附件独立展示和输入框附件关闭按钮无遮挡。',
         fixtures: ['tests/fixtures/workspace'],
-        launchMode: 'fixture',
+        launchMode: 'real',
         windowMode: 'visible',
         runMode: 'single',
         execute: async (runtime) => {
           const { page } = runtime
-          await runtime.step({
-            name: 'start-local-openai-server',
-            message: '启动本地 OpenAI-compatible fake server',
-            run: async () => null
-          })
-          const openAiServer = await startHangingOpenAiServer()
-          let setup: Awaited<ReturnType<typeof setupWorkbenchWorkspaceOnly>> | null = null
+          let setup: Awaited<ReturnType<typeof setupWorkbenchWithTempWorkspace>> | null = null
           try {
             await runtime.step({
-              name: 'seed-settings-and-workspace',
-              message: '配置 fake model，并创建工作区',
+              name: 'prepare-live-model-and-workspace-through-ui',
+              message: '通过 Settings UI 配置 live 模型，并创建真实工作区。',
               run: async () => {
-                setup = await setupWorkbenchWorkspaceOnly(page, {
+                setup = await setupWorkbenchWithTempWorkspace(page, {
                   caseId: CASE_ID,
-                  workspaceName: 'Workbench User Message Actions Workspace'
-                })
-                await seedActiveModelConfig(page, {
-                  id: FAKE_MODEL_ID,
-                  providerKind: 'openai-compatible',
-                  base_url: openAiServer.baseUrl,
-                  api_key: 'test-key',
-                  is_active: true,
-                  default_model: FAKE_MODEL_ID
-                })
-                await page.evaluate(() => {
-                  window.dispatchEvent(new Event('check-llm-config'))
+                  workspaceName: 'Workbench User Message Actions Workspace',
+                  createSession: false
                 })
               }
             })
@@ -440,7 +336,6 @@ describe('workbench conversation e2e', () => {
               )
             }
           } finally {
-            await openAiServer.close()
             await setup?.workspace.cleanup()
           }
         },
@@ -468,6 +363,6 @@ describe('workbench conversation e2e', () => {
         }
       })
     },
-    WORKBENCH_RESULT_E2E_TIMEOUT_MS
+    WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS
   )
 })

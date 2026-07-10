@@ -1,32 +1,12 @@
 import { describe, it } from 'vitest'
-import type { LLMConfig } from '../../../../src/shared/types'
 import { settingsSelectors } from '../../../../src/renderer/src/testing/selectors'
 import { runE2ECase } from '../../../harness/e2e/run-e2e-case'
 import {
   SETTINGS_E2E_TIMEOUT_MS,
+  createModelConfigThroughSettingsUi,
   getSettingsLocator,
-  navigateToSettingsSection,
-  seedModelConfigs
+  navigateToSettingsSection
 } from '../../../harness/e2e/settings'
-
-const SEEDED_CONFIGS: readonly LLMConfig[] = [
-  {
-    id: 'model-current',
-    providerKind: 'openai',
-    base_url: 'https://api.openai.com/v1',
-    api_key: 'sk-current',
-    is_active: true,
-    default_model: 'gpt-4o'
-  },
-  {
-    id: 'model-next',
-    providerKind: 'deepseek',
-    base_url: 'https://api.deepseek.com',
-    api_key: 'sk-next',
-    is_active: false,
-    default_model: 'deepseek-chat'
-  }
-]
 
 describe('settings model e2e', () => {
   it('model-active-config-change-event', async () => {
@@ -41,10 +21,17 @@ describe('settings model e2e', () => {
         const { page } = runtime
 
         await runtime.step({
-          name: 'seed-configs',
-          message: '预置一个当前配置和一个备用配置。',
+          name: 'create-configs-through-ui',
+          message: '通过 UI 创建当前配置和备用配置。',
           run: async () => {
-            await seedModelConfigs(page, SEEDED_CONFIGS)
+            await createModelConfigThroughSettingsUi(page, {
+              baseUrl: 'https://api.openai.com/v1',
+              apiKey: 'sk-current'
+            })
+            await createModelConfigThroughSettingsUi(page, {
+              baseUrl: 'https://api.deepseek.com/v1',
+              apiKey: 'sk-next'
+            })
           }
         })
 
@@ -53,16 +40,17 @@ describe('settings model e2e', () => {
           message: '打开当前激活配置并保存，触发一次配置变更事件。',
           run: async () => {
             await navigateToSettingsSection(page, 'model')
-            await getSettingsLocator(
-              page,
-              `${settingsSelectors.modelEditButtonPrefix}-${SEEDED_CONFIGS[0].id}`
-            ).click()
-            await getSettingsLocator(page, settingsSelectors.modelApiKeyInput).fill('sk-current-edited')
-            await getSettingsLocator(page, settingsSelectors.modelSaveButton).click()
             await page
               .locator('tbody tr')
-              .filter({ hasText: '****ited' })
-              .waitFor({ state: 'visible' })
+              .filter({ hasText: 'https://api.openai.com/v1' })
+              .locator('button')
+              .nth(1)
+              .click()
+            await getSettingsLocator(page, settingsSelectors.modelApiKeyInput).fill('sk-current-edited')
+            await getSettingsLocator(page, settingsSelectors.modelSaveButton).click()
+            await page.locator('tbody tr').filter({ hasText: '****ited' }).waitFor({
+              state: 'visible'
+            })
           }
         })
 
@@ -70,10 +58,11 @@ describe('settings model e2e', () => {
           name: 'switch-active-config',
           message: '切换到备用配置，触发第二次配置变更事件。',
           run: async () => {
-            await getSettingsLocator(
-              page,
-              `${settingsSelectors.modelActivateButtonPrefix}-${SEEDED_CONFIGS[1].id}`
-            ).click()
+            await page
+              .locator('tbody tr')
+              .filter({ hasText: 'https://api.deepseek.com/v1' })
+              .getByText('启用')
+              .click()
             await page.waitForFunction(
               (selector) => {
                 const host = document.querySelector(selector)
@@ -94,7 +83,7 @@ describe('settings model e2e', () => {
             (await getSettingsLocator(page, settingsSelectors.modelSummaryCurrent).textContent()) || '',
           currentRowHasTag: await page
             .locator('tbody tr')
-            .filter({ hasText: 'https://api.deepseek.com' })
+            .filter({ hasText: 'https://api.deepseek.com/v1' })
             .getByText('当前使用')
             .isVisible()
         }
@@ -123,5 +112,5 @@ describe('settings model e2e', () => {
         )
       }
     })
-  }, SETTINGS_E2E_TIMEOUT_MS)
+  }, SETTINGS_E2E_TIMEOUT_MS * 2)
 })

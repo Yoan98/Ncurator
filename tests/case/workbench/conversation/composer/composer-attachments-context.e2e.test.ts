@@ -1,6 +1,5 @@
 import { describe, it } from 'vitest'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
-import { setSettingsE2EApiOverrides } from '../../../../harness/e2e/settings'
 import {
   WORKBENCH_RESULT_E2E_TIMEOUT_MS,
   assertNoWorkbenchFakeSignals,
@@ -34,6 +33,50 @@ const pasteFileAttachment = async (
       ? new Uint8Array(payload.sizeBytes).fill(65)
       : payload.text || ''
     const file = new File([content], payload.name, { type: payload.mimeType })
+    const dataTransfer = new DataTransfer()
+    dataTransfer.items.add(file)
+    element.dispatchEvent(
+      new ClipboardEvent('paste', {
+        bubbles: true,
+        cancelable: true,
+        clipboardData: dataTransfer
+      })
+    )
+  }, input)
+}
+
+const pasteImageAttachment = async (
+  page: import('playwright').Page,
+  input: {
+    name: string
+    label: string
+  }
+): Promise<void> => {
+  await getWorkbenchLocator(page, workbenchSelectors.input).evaluate(async (element, payload) => {
+    if (!(element instanceof HTMLElement)) {
+      throw new Error('workbench input is not an HTMLElement')
+    }
+    element.focus()
+    const canvas = document.createElement('canvas')
+    canvas.width = 64
+    canvas.height = 64
+    const context = canvas.getContext('2d')
+    if (!context) throw new Error('canvas context not available')
+    context.fillStyle = '#2563EB'
+    context.fillRect(0, 0, 64, 64)
+    context.fillStyle = '#FFFFFF'
+    context.font = 'bold 22px sans-serif'
+    context.fillText(payload.label, 12, 40)
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((value) => {
+        if (value) {
+          resolve(value)
+          return
+        }
+        reject(new Error('failed to create png blob'))
+      }, 'image/png')
+    })
+    const file = new File([blob], payload.name, { type: 'image/png' })
     const dataTransfer = new DataTransfer()
     dataTransfer.items.add(file)
     element.dispatchEvent(
@@ -107,71 +150,6 @@ const countWorkspaceSessions = async (
     { workspaceId }
   )
 
-const createBucketBackedAttachments = async (
-  page: import('playwright').Page,
-  input: {
-    assetBucketId: string
-    workspaceRootPath: string
-  }
-): Promise<{
-  assetBucketId: string
-  imageAttachment: import('../../../../../../src/shared/types').ChatAttachment
-  fileAttachment: import('../../../../../../src/shared/types').ChatAttachment
-}> =>
-  await page.evaluate(async ({ assetBucketId, workspaceRootPath }) => {
-    const canvas = document.createElement('canvas')
-    canvas.width = 64
-    canvas.height = 64
-    const context = canvas.getContext('2d')
-    if (!context) {
-      throw new Error('canvas context not available')
-    }
-    context.fillStyle = '#2563EB'
-    context.fillRect(0, 0, 64, 64)
-    context.fillStyle = '#FFFFFF'
-    context.font = 'bold 22px sans-serif'
-    context.fillText('QA', 12, 40)
-    const blob = await new Promise<Blob>((resolve, reject) => {
-      canvas.toBlob((value) => {
-        if (value) {
-          resolve(value)
-          return
-        }
-        reject(new Error('failed to create png blob'))
-      }, 'image/png')
-    })
-
-    const imageSaved = await window.api.attachmentSaveFile({
-      workspaceRootPath,
-      assetBucketId,
-      name: 'qa-image.png',
-      bytes: new Uint8Array(await blob.arrayBuffer()),
-      mimeType: 'image/png',
-      kind: 'image'
-    })
-    if (!imageSaved.attachment) {
-      throw new Error(imageSaved.error || 'failed to save image attachment')
-    }
-
-    const fileSaved = await window.api.attachmentSaveFile({
-      workspaceRootPath,
-      assetBucketId,
-      name: 'workbench-preview.md',
-      bytes: new TextEncoder().encode('# Preview\n\nAttachment markdown body.'),
-      mimeType: 'text/markdown',
-      kind: 'file'
-    })
-    if (!fileSaved.attachment) {
-      throw new Error(fileSaved.error || 'failed to save markdown attachment')
-    }
-
-    return {
-      assetBucketId,
-      imageAttachment: imageSaved.attachment,
-      fileAttachment: fileSaved.attachment
-    }
-  }, input)
-
 describe('workbench conversation e2e', () => {
   it(
     CASE_ID,
@@ -197,29 +175,24 @@ describe('workbench conversation e2e', () => {
             const workspaceBinding = await resolveWorkspaceBinding(page)
             await navigateToWorkbench(page)
             await selectWorkbenchWorkspace(page, setup.workspaceName)
-            await setSettingsE2EApiOverrides(page, {
-              attachmentPickResponse: {
-                canceled: true,
-                items: []
-              }
-            })
-            await getWorkbenchLocator(page, workbenchSelectors.attachmentAddButton).click()
-            const sessionCountAfterEmptyPick = await countWorkspaceSessions(
+            const sessionCountBeforePaste = await countWorkspaceSessions(
               page,
               workspaceBinding.workspaceId
             )
-            const assetBucketId = await page.evaluate(() => crypto.randomUUID())
-            const created = await createBucketBackedAttachments(page, {
-              assetBucketId,
-              workspaceRootPath: workspaceBinding.workspaceRootPath
+            await getWorkbenchLocator(page, workbenchSelectors.input).click()
+            await pasteImageAttachment(page, {
+              name: 'qa-image.png',
+              label: 'QA'
             })
-            await setSettingsE2EApiOverrides(page, {
-              attachmentPickResponse: {
-                canceled: false,
-                items: [created.imageAttachment, created.fileAttachment]
-              }
+            await pasteFileAttachment(page, {
+              name: 'workbench-preview.md',
+              mimeType: 'text/markdown',
+              text: '# Preview\n\nAttachment markdown body.'
             })
-            await getWorkbenchLocator(page, workbenchSelectors.attachmentAddButton).click()
+            const sessionCountAfterPaste = await countWorkspaceSessions(
+              page,
+              workspaceBinding.workspaceId
+            )
             const imageCard = getImageAttachmentCardByName(page, 'qa-image.png')
             await imageCard.first().waitFor({ state: 'visible' })
             await page.waitForFunction(
@@ -333,12 +306,13 @@ describe('workbench conversation e2e', () => {
             const openPathCalls = signals.ipcInvokeEntries.filter(
               (entry) => entry.name === 'openPath'
             )
+            const attachmentSaveCalls = signals.ipcInvokeEntries.filter(
+              (entry) => entry.name === 'attachmentSaveFile'
+            )
 
             return {
-              assetBucketId: created.assetBucketId,
-              sessionCountAfterEmptyPick,
-              imageAttachmentPath: created.imageAttachment.path,
-              fileAttachmentPath: created.fileAttachment.path,
+              sessionCountBeforePaste,
+              sessionCountAfterPaste,
               previewVisible,
               imageRemoved,
               downloadButtonVisible: Boolean(downloadButtonBox),
@@ -361,6 +335,7 @@ describe('workbench conversation e2e', () => {
               largeFileMessage,
               inputText,
               openPathCallCount: openPathCalls.length,
+              attachmentSaveCallCount: attachmentSaveCalls.length,
               latestAntMessage: await getAntMessageText(page)
             }
           } finally {
@@ -373,9 +348,8 @@ describe('workbench conversation e2e', () => {
               result.imageRemoved &&
               result.downloadButtonVisible &&
               result.closeButtonVisible &&
-              result.sessionCountAfterEmptyPick === 0 &&
-              result.imageAttachmentPath.includes(`/.ncurator/assets/${result.assetBucketId}/`) &&
-              result.fileAttachmentPath.includes(`/.ncurator/assets/${result.assetBucketId}/`) &&
+              result.sessionCountAfterPaste === result.sessionCountBeforePaste &&
+              result.attachmentSaveCallCount >= 2 &&
               result.zoomControlBelowImage &&
               result.topActionsAboveImage &&
               result.fileCardText.includes('MD') &&
@@ -387,7 +361,7 @@ describe('workbench conversation e2e', () => {
             {
               name: 'workbench-composer-attachments-prd-flow',
               message:
-                '附件输入应满足 PRD：附件保存到工作区 .ncurator/assets/<assetBucketId>/，添加附件不创建新会话，图片可预览且控件不压图，文件副标题显示扩展名，文件可默认打开，不支持格式只提示且不加入，超过 10MB 只提示不拦截，普通文本粘贴仍正常。',
+                '附件输入应满足 PRD：真实粘贴文件会触发附件保存，添加附件不创建新会话，图片可预览且控件不压图，文件副标题显示扩展名，文件可默认打开，不支持格式只提示且不加入，超过 10MB 只提示不拦截，普通文本粘贴仍正常。',
               data: result
             }
           )

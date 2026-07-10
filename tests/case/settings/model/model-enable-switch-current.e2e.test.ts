@@ -1,32 +1,12 @@
 import { describe, it } from 'vitest'
-import type { LLMConfig } from '../../../../src/shared/types'
 import { settingsSelectors } from '../../../../src/renderer/src/testing/selectors'
 import { runE2ECase } from '../../../harness/e2e/run-e2e-case'
 import {
   SETTINGS_E2E_TIMEOUT_MS,
+  createModelConfigThroughSettingsUi,
   getSettingsLocator,
-  navigateToSettingsSection,
-  seedModelConfigs
+  navigateToSettingsSection
 } from '../../../harness/e2e/settings'
-
-const SEEDED_CONFIGS: readonly LLMConfig[] = [
-  {
-    id: 'model-active',
-    providerKind: 'openai',
-    base_url: 'https://api.openai.com/v1',
-    api_key: 'sk-active-config',
-    is_active: true,
-    default_model: 'gpt-4o'
-  },
-  {
-    id: 'model-next',
-    providerKind: 'deepseek',
-    base_url: 'https://api.deepseek.com',
-    api_key: 'sk-next-config',
-    is_active: false,
-    default_model: 'deepseek-chat'
-  }
-]
 
 describe('settings model e2e', () => {
   it('model-enable-switch-current', async () => {
@@ -41,29 +21,30 @@ describe('settings model e2e', () => {
         const { page } = runtime
 
         await runtime.step({
-          name: 'seed-configs',
-          message: '通过 IPC 预置一条当前配置和一条待启用配置。',
+          name: 'create-configs-through-ui',
+          message: '通过 UI 创建当前配置和备用配置。',
           run: async () => {
-            await seedModelConfigs(page, SEEDED_CONFIGS)
+            await createModelConfigThroughSettingsUi(page, {
+              baseUrl: 'https://api.openai.com/v1',
+              apiKey: 'sk-active-config'
+            })
+            await createModelConfigThroughSettingsUi(page, {
+              baseUrl: 'https://api.deepseek.com/v1',
+              apiKey: 'sk-next-config'
+            })
           }
         })
 
         await runtime.step({
           name: 'switch-current-config',
-          message: '进入大模型页并启用待启用配置。',
+          message: '进入大模型页并启用备用配置。',
           run: async () => {
             await navigateToSettingsSection(page, 'model')
-            await page.waitForFunction(
-              (selector) => {
-                const host = document.querySelector(selector)
-                return host instanceof HTMLElement && host.innerText.includes('OpenAI')
-              },
-              `[data-testid="${settingsSelectors.modelSummaryCurrent}"]`
-            )
-            await getSettingsLocator(
-              page,
-              `${settingsSelectors.modelActivateButtonPrefix}-model-next`
-            ).click()
+            await page
+              .locator('tbody tr')
+              .filter({ hasText: 'https://api.deepseek.com/v1' })
+              .getByText('启用')
+              .click()
             await page.waitForFunction(
               (selector) => {
                 const host = document.querySelector(selector)
@@ -78,13 +59,14 @@ describe('settings model e2e', () => {
           (await getSettingsLocator(page, settingsSelectors.modelSummaryCurrent).textContent()) || ''
         const activeRowHasTag = await page
           .locator('tbody tr')
-          .filter({ hasText: 'https://api.deepseek.com' })
+          .filter({ hasText: 'https://api.deepseek.com/v1' })
           .getByText('当前使用')
           .isVisible()
-        const previousRowCanActivate = await getSettingsLocator(
-          page,
-          `${settingsSelectors.modelActivateButtonPrefix}-model-active`
-        ).isVisible()
+        const previousRowCanActivate = await page
+          .locator('tbody tr')
+          .filter({ hasText: 'https://api.openai.com/v1' })
+          .getByText('启用')
+          .isVisible()
 
         return {
           summaryCurrentText,
@@ -106,5 +88,5 @@ describe('settings model e2e', () => {
         )
       }
     })
-  }, SETTINGS_E2E_TIMEOUT_MS)
+  }, SETTINGS_E2E_TIMEOUT_MS * 2)
 })

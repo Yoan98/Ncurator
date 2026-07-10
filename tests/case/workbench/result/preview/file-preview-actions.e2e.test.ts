@@ -9,6 +9,7 @@ import {
   getWorkbenchLocator,
   insertWorkbenchReferenceToken,
   navigateToWorkbench,
+  prepareWorkbenchWorkspaceThroughUi,
   selectWorkbenchWorkspace,
   setWorkbenchInput,
   submitWorkbenchCurrentDraft,
@@ -16,10 +17,6 @@ import {
   waitForWorkbenchSearchResults,
   workbenchSelectors
 } from '../../../../harness/e2e/workbench'
-import {
-  createRealWorkspaceWithRoot,
-  waitForFileIndexJobIdle
-} from '../../../../harness/e2e/settings'
 
 const CASE_ID = 'file-preview-actions'
 
@@ -31,36 +28,10 @@ const setupPreviewWorkspace = async (
 }> => {
   const workspace = await createTemporaryWorkbenchWorkspace(CASE_ID)
   const workspaceName = `Workbench ${CASE_ID}`
-  const response = await createRealWorkspaceWithRoot(page, {
-    name: workspaceName,
+  await prepareWorkbenchWorkspaceThroughUi(page, {
+    workspaceName,
     rootPath: workspace.rootPath
   })
-  const workspaceId = response.workspace!.id
-  const prepareResponse = await page.evaluate(async (selectedWorkspaceId) => {
-    return await window.api.workspacePrepare({ workspaceId: selectedWorkspaceId })
-  }, workspaceId)
-  if (!prepareResponse.success) {
-    throw new Error(prepareResponse.error || 'failed to prepare workspace fixture')
-  }
-  const prepared = await waitForFileIndexJobIdle(page, workspaceId, WORKBENCH_LONG_E2E_TIMEOUT_MS)
-  const requiredStatuses = prepared.tree.items
-    .filter(
-      (item) =>
-        item.kind === 'file' &&
-        ['workbench-preview.md', 'human-input.txt'].includes(item.relative_path)
-    )
-    .map((item) => ({
-      relativePath: item.relative_path,
-      status: item.index_status,
-      documentId: item.document_id,
-      lastError: item.last_error
-    }))
-  if (
-    requiredStatuses.length !== 2 ||
-    requiredStatuses.some((item) => item.status !== 'indexed' || !item.documentId)
-  ) {
-    throw new Error(`md/txt fixture indexing failed: ${JSON.stringify(requiredStatuses)}`)
-  }
   await navigateToWorkbench(page)
   await selectWorkbenchWorkspace(page, workspaceName)
   return {

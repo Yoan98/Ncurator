@@ -18,7 +18,6 @@ describe('settings model e2e', () => {
       runMode: 'single',
       execute: async (runtime) => {
         const { page } = runtime
-        let createdConfigId = ''
         let validationBlocked = false
 
         await runtime.step({
@@ -56,12 +55,10 @@ describe('settings model e2e', () => {
               'sk-create-edit'
             )
             await getSettingsLocator(page, settingsSelectors.modelSaveButton).click()
-            await page.locator('tbody tr').filter({ hasText: 'https://api.openai.com/v1' }).waitFor({ state: 'visible' })
-            createdConfigId = await page.evaluate(async () => {
-              const configs = await window.api.llmConfigList()
-              const config = configs.find((item) => item.api_key === 'sk-create-edit')
-              return config?.id || ''
-            })
+            await page
+              .locator('tbody tr')
+              .filter({ hasText: 'https://api.openai.com/v1' })
+              .waitFor({ state: 'visible' })
           }
         })
 
@@ -69,10 +66,12 @@ describe('settings model e2e', () => {
           name: 'open-edit-form',
           message: '打开刚创建配置的编辑弹窗，检查表单预填。',
           run: async () => {
-            await getSettingsLocator(
-              page,
-              `${settingsSelectors.modelEditButtonPrefix}-${createdConfigId}`
-            ).click()
+            await page
+              .locator('tbody tr')
+              .filter({ hasText: 'https://api.openai.com/v1' })
+              .locator('button')
+              .nth(1)
+              .click()
             await getSettingsLocator(page, settingsSelectors.modelBaseUrlInput).waitFor({
               state: 'visible'
             })

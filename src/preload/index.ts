@@ -14,12 +14,10 @@ import {
   APP_UPDATE_INSTALL_CHANNEL,
   APP_UPDATE_STATUS_CHANNEL
 } from '../shared/constants'
-import type { DesktopApi, DownloadProgress, SettingsE2EApiOverrides } from './api'
+import type { DesktopApi, DownloadProgress } from './api'
 
 const isE2EFixtureMode = process.env.NCURATOR_E2E_MODE === '1'
 const isE2EObserverEnabled = isE2EFixtureMode || process.env.NCURATOR_E2E_OBSERVER === '1'
-let e2eApiOverrides: SettingsE2EApiOverrides | null = null
-let modelCatalogCallCount = 0
 const downloadProgressListeners = new Set<(progressData: DownloadProgress) => void>()
 const workspaceIndexJobProgressListeners = new Set<(job: WorkspaceIndexJobRecord) => void>()
 
@@ -44,31 +42,16 @@ const emitE2EAiRunEvent = (event: AiRunEvent): void => {
   )
 }
 
-if (isE2EObserverEnabled) {
-  ipcRenderer.on('ai-run-event', (_event: Electron.IpcRendererEvent, data: AiRunEvent) => {
-    emitE2EAiRunEvent(data)
-  })
-}
-
-const getE2EApiOverrides = (): SettingsE2EApiOverrides | null => {
-  if (!isE2EFixtureMode) return null
-  return e2eApiOverrides
-}
-
-const hasOverrideKey = <T extends object>(input: T, key: keyof SettingsE2EApiOverrides): boolean =>
-  Object.prototype.hasOwnProperty.call(input, key)
-
-const waitForMs = async (ms: number): Promise<void> => {
-  if (ms <= 0) return
-  await new Promise<void>((resolve) => {
-    window.setTimeout(resolve, ms)
-  })
-}
-
 const emitDownloadProgress = (payload: DownloadProgress): void => {
   for (const listener of downloadProgressListeners) {
     listener(payload)
   }
+}
+
+if (isE2EObserverEnabled) {
+  ipcRenderer.on('ai-run-event', (_event: Electron.IpcRendererEvent, data: AiRunEvent) => {
+    emitE2EAiRunEvent(data)
+  })
 }
 
 // Custom APIs for renderer
@@ -78,12 +61,7 @@ const api: DesktopApi = {
   ingestWebs: (payload): Promise<{ success: boolean; created?: number; error?: string }> =>
     ipcRenderer.invoke('ingest-webs', payload),
   openExternal: (url: string): Promise<{ success: boolean; error?: string }> => {
-    const overrides = getE2EApiOverrides()
-    const response = overrides?.openExternalResponseByUrl?.[String(url || '').trim()]
     emitE2EIpcCall('openExternal', String(url || '').trim())
-    if (response) {
-      return Promise.resolve(response)
-    }
     return ipcRenderer.invoke('open-external', url)
   },
   openPath: (filePath: string): Promise<{ success: boolean; error?: string }> => {
@@ -94,19 +72,11 @@ const api: DesktopApi = {
   openPathWithApplication: (payload) => ipcRenderer.invoke('open-path-with-application', payload),
   revealPath: (filePath: string): Promise<{ success: boolean; error?: string }> => {
     const safePath = String(filePath || '').trim()
-    const response = getE2EApiOverrides()?.revealPathResponseByPath?.[safePath]
     emitE2EIpcCall('revealPath', safePath)
-    if (response) {
-      return Promise.resolve(response)
-    }
     return ipcRenderer.invoke('reveal-path', filePath)
   },
   pathInfo: (filePath: string) => ipcRenderer.invoke('path-info', filePath),
   pickDirectory: () => {
-    const overrides = getE2EApiOverrides()
-    if (overrides && hasOverrideKey(overrides, 'pickDirectoryResponse')) {
-      return Promise.resolve(overrides.pickDirectoryResponse || { canceled: true })
-    }
     emitE2EIpcCall('pickDirectory')
     return ipcRenderer.invoke('pick-directory')
   },
@@ -120,25 +90,11 @@ const api: DesktopApi = {
   hybridSearch: (query: string, sourceType?: SearchSourceFilter, documentIds?: string[]) =>
     ipcRenderer.invoke('hybrid-search', query, sourceType, documentIds),
   listDocuments: (payload) => ipcRenderer.invoke('list-documents', payload),
-  workspaceList: () => {
-    const overrides = getE2EApiOverrides()
-    if (overrides && hasOverrideKey(overrides, 'workspaceListResponse')) {
-      return Promise.resolve(overrides.workspaceListResponse || { items: [], total: 0 })
-    }
-    return ipcRenderer.invoke('workspace-list')
-  },
+  workspaceList: () => ipcRenderer.invoke('workspace-list'),
   workspaceCreate: (payload) => ipcRenderer.invoke('workspace-create', payload),
   workspaceSetRootPath: (payload) => ipcRenderer.invoke('workspace-set-root-path', payload),
   workspaceDelete: (workspaceId: string) => ipcRenderer.invoke('workspace-delete', workspaceId),
-  workspaceTree: (payload) => {
-    const overrides = getE2EApiOverrides()
-    const workspaceId = String(payload?.workspaceId || '').trim()
-    const response = overrides?.workspaceTreeResponseByWorkspaceId?.[workspaceId]
-    if (response) {
-      return Promise.resolve(response)
-    }
-    return ipcRenderer.invoke('workspace-tree', payload)
-  },
+  workspaceTree: (payload) => ipcRenderer.invoke('workspace-tree', payload),
   workspaceScan: (payload) => {
     emitE2EIpcCall('workspaceScan', {
       workspaceId: String(payload.workspaceId || '').trim()
@@ -170,17 +126,10 @@ const api: DesktopApi = {
       workspaceId: String(payload.workspaceId || '').trim(),
       webSourceId: String(payload.webSourceId || '').trim()
     })
-    await waitForMs(getE2EApiOverrides()?.webSourceRefreshDelayMs || 0)
     return ipcRenderer.invoke('web-source-refresh', payload)
   },
   webSourceDelete: (payload) => ipcRenderer.invoke('web-source-delete', payload),
-  legacyLocalImportMigrationStatus: () => {
-    const overrides = getE2EApiOverrides()
-    if (overrides && hasOverrideKey(overrides, 'legacyLocalImportMigrationStatus')) {
-      return Promise.resolve(overrides.legacyLocalImportMigrationStatus ?? null)
-    }
-    return ipcRenderer.invoke('legacy-local-import-migration-status')
-  },
+  legacyLocalImportMigrationStatus: () => ipcRenderer.invoke('legacy-local-import-migration-status'),
   listChunks: (payload) => ipcRenderer.invoke('list-chunks', payload),
   deleteDocuments: (
     ids: string[]
@@ -198,16 +147,6 @@ const api: DesktopApi = {
   downloadModel: async (repoId: string): Promise<{ success: boolean; error?: string }> => {
     const safeRepoId = String(repoId || '').trim()
     emitE2EIpcCall('downloadModel', safeRepoId)
-    const overrides = getE2EApiOverrides()
-    const response = overrides?.downloadModelResponseByRepoId?.[safeRepoId]
-    const progressEvents = overrides?.downloadProgressEventsByRepoId?.[safeRepoId] || []
-    if (response) {
-      for (const event of progressEvents) {
-        await waitForMs(overrides?.downloadProgressDelayMs || 0)
-        emitDownloadProgress(event)
-      }
-      return response
-    }
     return ipcRenderer.invoke('download-model', repoId)
   },
   onDownloadProgress: (cb) => {
@@ -216,54 +155,19 @@ const api: DesktopApi = {
   removeDownloadProgressListeners: () => {
     downloadProgressListeners.clear()
   },
-  getActiveDownload: () => {
-    const overrides = getE2EApiOverrides()
-    if (overrides && hasOverrideKey(overrides, 'activeDownloadSnapshot')) {
-      return Promise.resolve(overrides.activeDownloadSnapshot ?? null)
-    }
-    return ipcRenderer.invoke('get-active-download')
-  },
+  getActiveDownload: () => ipcRenderer.invoke('get-active-download'),
   deleteModel: (repoId: string): Promise<{ success: boolean; error?: string }> => {
     const safeRepoId = String(repoId || '').trim()
     emitE2EIpcCall('deleteModel', safeRepoId)
-    const response = getE2EApiOverrides()?.deleteModelResponseByRepoId?.[safeRepoId]
-    if (response) {
-      return Promise.resolve(response)
-    }
     return ipcRenderer.invoke('delete-model', repoId)
   },
   getModels: () => {
     emitE2EIpcCall('getModels')
-    const modelCatalog = getE2EApiOverrides()?.modelCatalog
-    if (modelCatalog?.sequence && modelCatalog.sequence.length > 0) {
-      const nextEntry =
-        modelCatalog.sequence[Math.min(modelCatalogCallCount, modelCatalog.sequence.length - 1)]
-      modelCatalogCallCount += 1
-      if (nextEntry?.error) {
-        return Promise.reject(new Error(nextEntry.error))
-      }
-      if (nextEntry?.items) {
-        return Promise.resolve(nextEntry.items)
-      }
-      return Promise.resolve([])
-    }
-    if (modelCatalog?.error) {
-      return Promise.reject(new Error(modelCatalog.error))
-    }
-    if (modelCatalog?.items) {
-      return Promise.resolve(modelCatalog.items)
-    }
     return ipcRenderer.invoke('get-models')
   },
   getEmbeddingStatus: () => ipcRenderer.invoke('get-embedding-status'),
   readFile: (filePath: string): Promise<Uint8Array> => ipcRenderer.invoke('read-file', filePath),
-  attachmentPick: (payload) => {
-    const overrides = getE2EApiOverrides()
-    if (overrides && hasOverrideKey(overrides, 'attachmentPickResponse')) {
-      return Promise.resolve(overrides.attachmentPickResponse || { canceled: true, items: [] })
-    }
-    return ipcRenderer.invoke('attachment-pick', payload)
-  },
+  attachmentPick: (payload) => ipcRenderer.invoke('attachment-pick', payload),
   attachmentSaveFile: (payload) => ipcRenderer.invoke('attachment-save-file', payload),
 
   // Chat & LLM
@@ -285,33 +189,13 @@ const api: DesktopApi = {
     return ipcRenderer.invoke('llm-config-list')
   },
   llmConfigSave: (config) => ipcRenderer.invoke('llm-config-save', config),
-  llmConfigDelete: (id: string) => {
-    const response = getE2EApiOverrides()?.llmConfigDeleteResponseById?.[String(id || '').trim()]
-    if (response) {
-      return Promise.resolve(response)
-    }
-    return ipcRenderer.invoke('llm-config-delete', id)
-  },
+  llmConfigDelete: (id: string) => ipcRenderer.invoke('llm-config-delete', id),
   llmConfigSetActive: (id: string) => ipcRenderer.invoke('llm-config-set-active', id),
   llmConfigModelList: (id: string) => {
     emitE2EIpcCall('llmConfigModelList', id)
-    const response = getE2EApiOverrides()?.llmModelListResponseByConfigId?.[String(id || '').trim()]
-    if (response) {
-      return Promise.resolve(response)
-    }
     return ipcRenderer.invoke('llm-config-model-list', id)
   },
   isE2EMode: () => isE2EObserverEnabled,
-  setE2EApiOverrides: (overrides) => {
-    if (!isE2EFixtureMode) return
-    e2eApiOverrides = overrides
-    modelCatalogCallCount = 0
-  },
-  clearE2EApiOverrides: () => {
-    if (!isE2EFixtureMode) return
-    e2eApiOverrides = null
-    modelCatalogCallCount = 0
-  },
   aiRuntimeSettingsGet: () => ipcRenderer.invoke('ai-runtime-settings-get'),
   aiRuntimeSettingsSave: (settings) => ipcRenderer.invoke('ai-runtime-settings-save', settings),
 

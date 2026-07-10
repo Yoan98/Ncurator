@@ -42,13 +42,13 @@ import type {
   ListWorkspaceTreeRequest,
   LLMConfig,
   LlmModelListResponse,
-  PickDirectoryResponse,
   PrepareWorkspaceRequest,
   RefreshWebSourceRequest,
   SearchResponse,
   SearchResult,
   SearchSourceFilter,
   PickApplicationResponse,
+  PickDirectoryResponse,
   OpenPathWithApplicationRequest,
   OpenPathWithApplicationResponse,
   PrepareWebSourcesRequest,
@@ -101,39 +101,6 @@ export type ActiveDownloadSnapshot = {
   totalFiles: number
   completedFiles: number
   updatedAt: number
-}
-
-export type E2EDownloadModelResponse = {
-  success: boolean
-  error?: string
-}
-
-export type E2EModelCatalogOverride = {
-  items?: ModelInfo[]
-  error?: string
-  sequence?: Array<{
-    items?: ModelInfo[]
-    error?: string
-  }>
-}
-
-export type SettingsE2EApiOverrides = {
-  pickDirectoryResponse?: PickDirectoryResponse
-  workspaceListResponse?: WorkspaceListResponse
-  workspaceTreeResponseByWorkspaceId?: Record<string, WorkspaceTreeListResponse>
-  legacyLocalImportMigrationStatus?: LegacyLocalImportMigrationStatus | null
-  llmConfigDeleteResponseById?: Record<string, { success: boolean; error?: string }>
-  llmModelListResponseByConfigId?: Record<string, LlmModelListResponse>
-  webSourceRefreshDelayMs?: number
-  revealPathResponseByPath?: Record<string, { success: boolean; error?: string }>
-  openExternalResponseByUrl?: Record<string, { success: boolean; error?: string }>
-  attachmentPickResponse?: AttachmentPickResponse
-  modelCatalog?: E2EModelCatalogOverride
-  downloadModelResponseByRepoId?: Record<string, E2EDownloadModelResponse>
-  downloadProgressEventsByRepoId?: Record<string, DownloadProgress[]>
-  downloadProgressDelayMs?: number
-  activeDownloadSnapshot?: ActiveDownloadSnapshot | null
-  deleteModelResponseByRepoId?: Record<string, { success: boolean; error?: string }>
 }
 
 export type PathInfoResponse = {
@@ -237,8 +204,6 @@ export type DesktopApi = {
   llmConfigSetActive: (id: string) => Promise<{ success: boolean; error?: string }>
   llmConfigModelList: (id: string) => Promise<LlmModelListResponse>
   isE2EMode: () => boolean
-  setE2EApiOverrides: (overrides: SettingsE2EApiOverrides) => void
-  clearE2EApiOverrides: () => void
   aiRuntimeSettingsGet: () => Promise<AiRuntimeSettings>
   aiRuntimeSettingsSave: (
     settings: AiRuntimeSettings

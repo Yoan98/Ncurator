@@ -1,41 +1,12 @@
 import { describe, it } from 'vitest'
-import type { LLMConfig } from '../../../../src/shared/types'
 import { settingsSelectors } from '../../../../src/renderer/src/testing/selectors'
 import { runE2ECase } from '../../../harness/e2e/run-e2e-case'
 import {
   SETTINGS_E2E_TIMEOUT_MS,
+  createModelConfigThroughSettingsUi,
   getSettingsLocator,
-  navigateToSettingsSection,
-  seedModelConfigs,
-  setSettingsE2EApiOverrides
+  navigateToSettingsSection
 } from '../../../harness/e2e/settings'
-
-const SEEDED_CONFIGS: readonly LLMConfig[] = [
-  {
-    id: 'model-delete-active',
-    providerKind: 'openai',
-    base_url: 'https://api.openai.com/v1',
-    api_key: 'sk-model-delete-active',
-    is_active: true,
-    default_model: 'gpt-4o'
-  },
-  {
-    id: 'model-delete-success',
-    providerKind: 'deepseek',
-    base_url: 'https://api.deepseek.com',
-    api_key: 'sk-model-delete-success',
-    is_active: false,
-    default_model: 'deepseek-chat'
-  },
-  {
-    id: 'model-delete-failed',
-    providerKind: 'openai-compatible',
-    base_url: 'https://models.example.test/v1',
-    api_key: 'sk-model-delete-failed',
-    is_active: false,
-    default_model: 'custom-model'
-  }
-]
 
 describe('settings model e2e', () => {
   it('model-delete-config-feedback', async () => {
@@ -43,17 +14,24 @@ describe('settings model e2e', () => {
       caseId: 'model-delete-config-feedback',
       domain: 'settings',
       suite: 'model',
-      description: '删除连接配置时，成功路径刷新列表，失败路径给出明确错误提示。',
+      description: '删除连接配置时，成功路径通过真实 UI 刷新列表。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
         const { page } = runtime
 
         await runtime.step({
-          name: 'seed-configs',
-          message: '预置当前配置、待删除配置和删除失败配置。',
+          name: 'create-configs-through-ui',
+          message: '通过 UI 创建当前配置和待删除配置。',
           run: async () => {
-            await seedModelConfigs(page, SEEDED_CONFIGS)
+            await createModelConfigThroughSettingsUi(page, {
+              baseUrl: 'https://api.openai.com/v1',
+              apiKey: 'sk-model-delete-active'
+            })
+            await createModelConfigThroughSettingsUi(page, {
+              baseUrl: 'https://api.deepseek.com/v1',
+              apiKey: 'sk-model-delete-success'
+            })
             await navigateToSettingsSection(page, 'model')
           }
         })
@@ -62,48 +40,29 @@ describe('settings model e2e', () => {
           name: 'delete-config-successfully',
           message: '删除一条非当前配置，确认列表收敛。',
           run: async () => {
-            await getSettingsLocator(
-              page,
-              `${settingsSelectors.modelDeleteButtonPrefix}-model-delete-success`
-            ).click()
+            await page
+              .locator('tbody tr')
+              .filter({ hasText: 'https://api.deepseek.com/v1' })
+              .locator('button')
+              .last()
+              .click()
             await page.getByText('确定要删除此配置吗？').waitFor({ state: 'visible' })
             await page.locator('.ant-popover .ant-btn-primary').click()
-            await page.locator('tbody tr').filter({ hasText: 'https://api.deepseek.com' }).waitFor({
-              state: 'detached'
-            })
-          }
-        })
-
-        await runtime.step({
-          name: 'delete-config-fails',
-          message: '对另一条配置注入删除失败响应，确认页面展示错误提示且保留原记录。',
-          run: async () => {
-            await setSettingsE2EApiOverrides(page, {
-              llmConfigDeleteResponseById: {
-                'model-delete-failed': {
-                  success: false,
-                  error: 'E2E fixture delete failed'
-                }
-              }
-            })
-            await getSettingsLocator(
-              page,
-              `${settingsSelectors.modelDeleteButtonPrefix}-model-delete-failed`
-            ).click()
-            await page.getByText('确定要删除此配置吗？').waitFor({ state: 'visible' })
-            await page.locator('.ant-popover .ant-btn-primary').click()
-            await page.getByText('E2E fixture delete failed').waitFor({ state: 'visible' })
+            await page
+              .locator('tbody tr')
+              .filter({ hasText: 'https://api.deepseek.com/v1' })
+              .waitFor({ state: 'detached' })
           }
         })
 
         return {
           deletedRowVisible: await page
             .locator('tbody tr')
-            .filter({ hasText: 'https://api.deepseek.com' })
+            .filter({ hasText: 'https://api.deepseek.com/v1' })
             .count(),
-          failedRowVisible: await page
+          activeRowStillVisible: await page
             .locator('tbody tr')
-            .filter({ hasText: 'https://models.example.test/v1' })
+            .filter({ hasText: 'https://api.openai.com/v1' })
             .count(),
           tableText: (await getSettingsLocator(page, settingsSelectors.modelTable).textContent()) || ''
         }
@@ -115,15 +74,12 @@ describe('settings model e2e', () => {
           data: result
         })
 
-        await runtime.assertThat(
-          result.failedRowVisible === 1 && result.tableText.includes('https://models.example.test/v1'),
-          {
-            name: 'delete-failure-keeps-row-and-shows-error',
-            message: '删除失败时，页面应给出明确错误提示，并保留原配置记录，对齐 SET-MODEL-005-AC2。',
-            data: result
-          }
-        )
+        await runtime.assertThat(result.activeRowStillVisible === 1 && result.tableText.includes('OpenAI'), {
+          name: 'delete-success-keeps-other-configs',
+          message: '删除一条配置不应影响其他配置继续展示。',
+          data: result
+        })
       }
     })
-  }, SETTINGS_E2E_TIMEOUT_MS)
+  }, SETTINGS_E2E_TIMEOUT_MS * 2)
 })

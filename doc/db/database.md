@@ -17,6 +17,17 @@ SQLite 使用 `better-sqlite3`。启动时 `SqliteCore` 会：
 - 设置 `PRAGMA busy_timeout = 5000`
 - 执行未执行的 migration
 
+### Native 依赖
+
+`better-sqlite3` 是 native 模块，Node backend 测试和 Electron e2e 使用的 ABI 不同。
+
+规则：
+
+- 跑 backend / unit 测试前，如遇到 `NODE_MODULE_VERSION` 不匹配，执行 `pnpm rebuild better-sqlite3`，让模块匹配当前 Node。
+- 跑 Electron e2e 或打包前，执行 `NCURATOR_REBUILD_NATIVE=1 node scripts/postinstall.mjs`，让模块匹配 Electron。
+- 两个 rebuild 会覆盖同一个 `.node` 文件，所以不能假设一次 rebuild 同时满足 Node 和 Electron。
+- CI 或本地完整回归应按“Node backend rebuild -> backend 测试 -> Electron rebuild -> e2e 测试”的顺序执行。
+
 ### Migration 规则
 
 - migration 记录在 `schema_migrations(version, name, applied_at)`。

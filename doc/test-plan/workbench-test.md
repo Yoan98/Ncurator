@@ -36,10 +36,11 @@
 
 ### 2.3 当前边界
 
-- Workbench UI E2E 回归测试通过脚本在 case 运行时把 `tests/fixtures/workspace` 复制到临时目录；非 Settings 目录选择器专项测试可使用生产 IPC 创建工作区、绑定目录并触发真实索引，以避免 macOS 原生目录选择器偶发卡死，但不得回退到 fake `pickDirectoryResponse`、固定 document id 或伪造搜索结果。
+- Workbench UI E2E 回归测试通过脚本在 case 运行时把 `tests/fixtures/workspace` 复制到临时目录，并默认通过 Settings UI 创建工作区、绑定真实目录、检查更新和更新索引。
+- Workbench 正式 e2e 不允许直接调用 `workspacePrepare`、直接写模型配置、fake model、fake search、fake docx、fake AI event、fake attachment pick 或固定 document id。
 - Workbench e2e 的 workspace 文件索引允许在测试环境通过 `NCURATOR_WORKSPACE_KNOWLEDGE_CACHE=1` 启用真实 split / vector 缓存；缓存只按文件内容 hash、扩展名、splitter 参数和 embedding model 复用计算结果，不替代 workspace 文件记录、document id、搜索结果或 UI 状态。
 - Workbench 模型选择 helper 已改为通过真实下拉搜索选择 `AI_LIVE_PRIMARY_MODEL_NAME`；`ai-process-stream-and-final-answer` 已验证 `deepseek-v4-flash` 可通过真实 UI 搜索选中。
-- Workbench UI E2E 回归测试需要真实索引完成信号和 UI 可见状态作为等待条件；不得再读取内部 store 或注入 fixed document id 来制造搜索结果。
+- Workbench UI E2E 回归测试需要真实索引完成信号和 UI 可见状态作为等待条件；IPC observer 和 job 查询只能作为辅助证据，不能用来造业务状态。
 - `file-preview-actions` 当前按生产真实索引能力覆盖 `pdf/docx/md/txt`：`.md`、`.markdown`、`.txt` 必须通过真实索引进入搜索结果，并从搜索结果打开右侧预览。
 - docx apply case 需要真实 docx 输入、真实 AI 编辑、真实写回记录、真实预览和真实回退。
 - `browser-use-task-panel` 需要真实 AI run 触发 `browser_use` 并驱动内置浏览器完成本地网页任务；当前暂无有效通过结论。
@@ -139,9 +140,9 @@ tests/case/workbench/
 - 测试类型：`e2e`
 - What：验证 `+` 与粘贴添加附件时，附件会保存到工作区 `.ncurator/assets/<assetBucketId>/`，不会提前创建真实会话，并保持图片预览、文件打开、删除、普通文本粘贴和格式提示行为。
 - Why：附件链路已改为“统一落盘到工作区 + 只把路径交给 AI”，必须用回归测试守住真实保存路径和交互行为。
-- How：创建真实工作区，通过一次空附件选择验证不会触发 session 建立，再用真实 `attachmentSaveFile` 生成图片和 `md` 附件，通过 `attachmentPickResponse` 模拟系统文件选择返回这些真实附件；另外通过粘贴覆盖不支持格式和大文件 warning。
-- Oracle：图片和 `md` 附件路径都落在 `<workspace>/.ncurator/assets/<assetBucketId>/`；添加附件后没有真实会话；图片预览可打开；文件副标题显示 `MD`；不支持格式只提示不加入；大文件只提示不拦截；普通文本粘贴仍正常，对齐 `WB-COMPOSER-010-AC2`、`WB-COMPOSER-010-AC3`。
-- Not：不验证系统原生文件选择器本身。
+- How：创建真实工作区，通过真实粘贴图片和 `md` 文件触发产品附件保存逻辑；另外通过粘贴覆盖不支持格式和大文件 warning。
+- Oracle：真实粘贴会触发附件保存；添加附件后没有真实会话；图片预览可打开；文件副标题显示 `MD`；不支持格式只提示不加入；大文件只提示不拦截；普通文本粘贴仍正常，对齐 `WB-COMPOSER-010-AC2`、`WB-COMPOSER-010-AC3`。
+- Not：不验证系统原生文件选择器本身；不通过 `attachmentPickResponse` 或直接 `attachmentSaveFile` 伪造附件结果。
 
 #### `reference-mention-keyboard`
 
@@ -207,6 +208,24 @@ tests/case/workbench/
 - How：通过真实用户请求诱导 AI 产生需要审批的 terminal 操作；分别覆盖全同意、任一拒绝、填写指导输入和不操作期间保持等待。
 - Oracle：整批同意后按原 serial 顺序继续，对齐 `WB-BLOCKER-001-AC1`；任一拒绝或填写指导输入时本批命令 0 执行并回到后续 AI 决策，对齐 `WB-BLOCKER-001-AC2`；指导输入不作为独立第三按钮，对齐 `WB-BLOCKER-001-AC3`；审批不因固定超时自动失败，对齐 `WB-BLOCKER-001-AC4`；记录模型、耗时、完成度评分和失败归因。
 - Not：不验证 terminal 工具安全指令集本身，该能力归 AI tool 测试。
+
+#### `approval-switch-session-consistency`
+
+- 测试类型：`e2e`
+- What：验证审批同意后立刻切换到其他会话，再切回原会话时，不再显示旧审批卡片。
+- Why：审批状态已经由 SQLite transaction 管理；如果 UI 恢复仍读到旧 pending approval，用户会误以为还需要重复审批，但后台 run 已经继续执行。
+- How：触发真实审批等待，点击同意后马上切换会话，再切回原会话。
+- Oracle：切回后原会话不显示旧审批卡片，run 已从 `waiting_approval` 回到运行或完成状态，对齐 `WB-BLOCKER-001-AC1` 与会话恢复一致性要求。
+- Not：不验证 terminal 工具本身执行结果；只验证审批状态持久化和会话切换恢复。
+
+#### `chat-session-open-light-path`
+
+- 测试类型：`backend`
+- What：验证打开会话首屏只加载 session、最近 50 条消息和 active runs，不触发全量 run/event/context usage 查询。
+- Why：会话切换卡顿的主要风险来自首屏路径过重，而不是单次 SQLite 查询本身。
+- How：构造包含大量历史消息、run event 和 context usage 的会话，调用 `chatSessionOpen` 并观察 store 调用或返回范围。
+- Oracle：返回最近 50 条消息且 seq 正序；只恢复 running / waiting approval runs；完整 event replay、context usage、file changes detail 不在首屏路径执行。
+- Not：不验证前端滚动分页和详情展开；这些属于独立 UI 交互。
 
 #### `stop-running-or-approval-run`
 

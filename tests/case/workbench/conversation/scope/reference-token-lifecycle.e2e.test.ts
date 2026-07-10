@@ -11,6 +11,7 @@ import {
   getWorkbenchReferenceTokenTexts,
   insertWorkbenchReferenceToken,
   navigateToWorkbench,
+  prepareWorkbenchWorkspaceThroughUi,
   removeFirstWorkbenchReferenceToken,
   selectWorkbenchWorkspace,
   startLocalWorkbenchHttpServer,
@@ -20,37 +21,9 @@ import {
   waitForWorkbenchSearchScopeEmptyThroughUi,
   workbenchSelectors
 } from '../../../../harness/e2e/workbench'
-import {
-  createFixtureWorkspace,
-  createRealWorkspaceWithRoot,
-  seedWebSources,
-  waitForFileIndexJobIdle
-} from '../../../../harness/e2e/settings'
+import { createFixtureWorkspace } from '../../../../harness/e2e/settings'
 
 const CASE_ID = 'reference-token-lifecycle'
-
-const waitForWebSourceIndexJobIdle = async (
-  page: import('playwright').Page,
-  workspaceId: string
-): Promise<void> => {
-  const deadline = Date.now() + WORKBENCH_RESULT_E2E_TIMEOUT_MS
-  for (;;) {
-    const response = await page.evaluate(async (selectedWorkspaceId) => {
-      return await window.api.workspaceIndexJobGet({
-        workspaceId: selectedWorkspaceId,
-        sourceKind: 'web'
-      })
-    }, workspaceId)
-    if (!response.success) {
-      throw new Error(response.error || 'failed to read web index job')
-    }
-    if (!response.job) return
-    if (Date.now() >= deadline) {
-      throw new Error('web source index job did not become idle')
-    }
-    await page.waitForTimeout(500)
-  }
-}
 
 const setupScopeWorkspace = async (
   page: import('playwright').Page,
@@ -63,62 +36,11 @@ const setupScopeWorkspace = async (
   workspaceName: string
 }> => {
   const workspace = await createTemporaryWorkbenchWorkspace(CASE_ID)
-  const response = await createRealWorkspaceWithRoot(page, {
-    name: input.workspaceName,
-    rootPath: workspace.rootPath
+  await prepareWorkbenchWorkspaceThroughUi(page, {
+    workspaceName: input.workspaceName,
+    rootPath: workspace.rootPath,
+    webSourceUrl: input.webSourceUrl
   })
-  const workspaceId = response.workspace!.id
-
-  const prepareFilesResponse = await page.evaluate(async (selectedWorkspaceId) => {
-    return await window.api.workspacePrepare({ workspaceId: selectedWorkspaceId })
-  }, workspaceId)
-  if (!prepareFilesResponse.success) {
-    throw new Error(prepareFilesResponse.error || 'failed to prepare workspace files')
-  }
-  const filePrepared = await waitForFileIndexJobIdle(
-    page,
-    workspaceId,
-    WORKBENCH_RESULT_E2E_TIMEOUT_MS
-  )
-  const textFileStatuses = filePrepared.tree.items
-    .filter(
-      (item) =>
-        item.kind === 'file' &&
-        ['workbench-preview.md', 'human-input.txt'].includes(item.relative_path)
-    )
-    .map((item) => ({
-      relativePath: item.relative_path,
-      status: item.index_status,
-      documentId: item.document_id,
-      lastError: item.last_error
-    }))
-  if (
-    textFileStatuses.length !== 2 ||
-    textFileStatuses.some((item) => item.status !== 'indexed' || !item.documentId)
-  ) {
-    throw new Error(`md/txt fixture indexing failed: ${JSON.stringify(textFileStatuses)}`)
-  }
-
-  await seedWebSources(page, workspaceId, [input.webSourceUrl])
-  const prepareWebResponse = await page.evaluate(async (selectedWorkspaceId) => {
-    return await window.api.webSourcesPrepare({ workspaceId: selectedWorkspaceId })
-  }, workspaceId)
-  if (!prepareWebResponse.success) {
-    throw new Error(prepareWebResponse.error || 'failed to prepare web source')
-  }
-  await waitForWebSourceIndexJobIdle(page, workspaceId)
-  const webSourceList = await page.evaluate(async (selectedWorkspaceId) => {
-    return await window.api.webSourceList({ workspaceId: selectedWorkspaceId })
-  }, workspaceId)
-  const indexedWebSource = webSourceList.items.find(
-    (item) => item.url === input.webSourceUrl && item.index_status === 'indexed'
-  )
-  if (!indexedWebSource) {
-    throw new Error(`web source indexing failed: ${JSON.stringify(webSourceList.items)}`)
-  }
-
-  await navigateToWorkbench(page)
-  await selectWorkbenchWorkspace(page, input.workspaceName)
 
   return {
     workspace,

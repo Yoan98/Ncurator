@@ -5,7 +5,7 @@
 - 本计划用于定义 Settings 用户可见能力的回归测试范围。
 - Settings 回归测试统一对齐 [settings.md](/Users/test/work-space/NCurator-Desktop/doc/prd/settings.md)，新增、调整或验收结论都应引用对应的 `SET-*` 需求编号与验收编号。
 - 新增或调整测试、runner、raw logs、UI E2E 回归规则与真实 AI / live 断言规则，统一遵循 `doc/test.md`。
-- Settings UI E2E 回归测试必须通过真实 UI 完成模型配置、工作区目录绑定、网页资料管理和向量模型操作；不得用 preload override、内部 IPC、脚本化目录选择或脚本化下载进度替代产品结果。
+- Settings UI E2E 回归测试必须通过真实 UI 完成模型配置、工作区目录绑定、网页资料管理和向量模型入口操作；不得用 preload override、内部 IPC、脚本化目录选择返回值或脚本化下载进度替代产品结果。
 
 ## 2. 执行摘要
 
@@ -13,29 +13,29 @@
 
 - `model`
   - 登记 case：`8`
-  - 当前有效结论：`1 / 1`（backend）；e2e 暂无完整有效通过结论。
-  - 检测时间：`2026-06-11 17:16:38 +08:00`
-  - 备注：`model-config-list-contract` backend 有效通过；使用 preload override 或内部 API 预置数据的 model e2e 不计入当前有效通过。
+  - 当前有效结论：`1 / 1`（backend）；e2e 待本轮真实 UI 回归确认。
+  - 检测时间：backend `2026-07-09 19:08:20 +08:00`
+  - 备注：model e2e 已改为通过 UI 新增、编辑、启用、删除；远端模型列表使用本地 HTTP 服务真实响应。
 - `workspace / core`
   - 登记 case：`6`
-  - 当前有效结论：`1 / 1`（backend）；e2e 暂无完整有效通过结论。
-  - 检测时间：`2026-06-11 17:16:38 +08:00`
-  - 备注：`workspace-remove-source-contract` backend 有效通过；使用 preload override、内部 API 或脚本化目录选择的 workspace core e2e 不计入当前有效通过。
+  - 当前有效结论：`1 / 1`（backend）；e2e 待本轮真实 UI 回归确认。
+  - 检测时间：backend `2026-07-09 19:08:20 +08:00`
+  - 备注：workspace core e2e 已改为 UI 创建工作区、原生目录选择绑定真实目录、UI 删除。
 - `workspace / files`
   - 登记 case：`12`
-  - 当前有效结论：`5 / 5`（backend） / `1 / 1`（真实 workspace e2e）；其余 e2e 暂无完整有效通过结论。
-  - 检测时间：`2026-06-11 17:16:38 +08:00`
-  - 备注：backend contract 与 `workspace-prepare-real-fixture-refresh` 有效通过；使用 fake workspace fixture、内部 API 或脚本化 job 状态的 e2e 不计入当前有效通过。
+  - 当前有效结论：`5 / 5`（backend）；e2e 待本轮真实 UI 回归确认。
+  - 检测时间：backend `2026-07-09 19:08:20 +08:00`
+  - 备注：文件 e2e 通过真实目录、真实文件和 UI 触发扫描 / 更新索引。
 - `workspace / web`
   - 登记 case：`7`
-  - 当前有效结论：暂无完整有效通过结论。
-  - 检测时间：`2026-06-03 13:12:07 +08:00`
-  - 备注：现有 web e2e 多处通过内部 API 预置网页资料，不计入当前有效通过。
+  - 当前有效结论：e2e 待本轮真实 UI 回归确认。
+  - 检测时间：待更新
+  - 备注：web e2e 已改为 UI 添加 URL；本地 HTTP 服务可作为真实网页输入。
 - `vector`
-  - 登记 case：`7`
-  - 当前有效结论：`2 / 2`（backend）；e2e 暂无完整有效通过结论。
-  - 检测时间：`2026-06-11 17:16:38 +08:00`
-  - 备注：`vector-download-single-task-contract`、`vector-download-startup-resume-contract` backend 有效通过；使用脚本化模型目录、下载结果或下载进度的 vector e2e 不计入当前有效通过。
+  - 登记 case：`3`
+  - 当前有效结论：`2 / 2`（backend）；e2e 待本轮真实 UI 回归确认。
+  - 检测时间：backend `2026-07-09 19:08:20 +08:00`
+  - 备注：vector e2e 只保留真实目录页入口；下载进度、结果、恢复、删除反馈属于 backend contract 或手动下载链路，不再用假进度冒充 e2e。
 
 ## 3. Suite 设计
 
@@ -138,7 +138,7 @@ Settings 的回归测试顶层 suite 直接对齐 PRD 模块：
 - 测试类型：`e2e`
 - What：验证工作空间页打开后会自动初始化列表和详情，并默认选中第一条工作空间。
 - Why：后续文件 / 网页管理都依赖首屏默认选中，如果这里失效，详情区会表现成“无从下手”。
-- How：注入两条工作空间列表项和文件树响应，进入工作空间页并等待第一条详情渲染完成。
+- How：通过 UI 创建两个工作空间，进入工作空间页并等待第一条详情渲染完成。
 - Oracle：页面打开后列表和详情区会自动完成初始化，对齐 `SET-WORKSPACE-001-AC1`；第一条工作空间自动成为当前选中项，且左侧同时表达文件数与网页数，对齐 `SET-WORKSPACE-001-AC2`、`SET-WORKSPACE-005-AC4`。
 - Not：不验证添加或移除工作空间的后续选中回退策略。
 
@@ -178,14 +178,14 @@ Settings 的回归测试顶层 suite 直接对齐 PRD 模块：
 - Oracle：移除成功后，该工作空间从列表中消失，对齐 `SET-WORKSPACE-006-AC2`；详情区不会继续显示已删除工作空间的陈旧数据。
 - Not：不验证其他消费页面中的范围清理展示；只覆盖 Settings 页内可见结果。
 
-#### `workspace-empty-tree-legacy-hints`
+#### `workspace-empty-tree-state`
 
 - 测试类型：`e2e`
-- What：验证无工作空间、文件树为空和旧本地导入残留三类提示都能明确展示。
+- What：验证无工作空间和文件树为空两类提示都能明确展示。
 - Why：这些都是首屏阻塞状态，需要直接解释“现在为什么不能继续”。
-- How：分别构造空工作空间列表、空目录树响应和旧导入迁移提醒。
-- Oracle：没有工作空间时，列表和详情区都给出明确空态，对齐 `SET-WORKSPACE-007-AC1`；当前目录没有可显示文件时，目录树区域给出空态，对齐 `SET-WORKSPACE-007-AC2`；检测到旧本地导入数据时，页面顶部出现迁移清理提醒，对齐 `SET-WORKSPACE-007-AC3`。
-- Not：不验证迁移清理动作本身的执行结果；这里只验证提示出现。
+- How：先进入无工作空间的 Settings 工作空间页，再通过 UI 创建一个未绑定目录的空工作区。
+- Oracle：没有工作空间时，列表和详情区都给出明确空态，对齐 `SET-WORKSPACE-007-AC1`；当前目录没有可显示文件时，目录树区域给出空态，对齐 `SET-WORKSPACE-007-AC2`。
+- Not：不验证旧本地导入提示；旧数据清理属于 backend / 启动迁移契约，不用假 e2e 制造。
 
 ### 4.3 `workspace / files`
 
@@ -358,7 +358,7 @@ Settings 的回归测试顶层 suite 直接对齐 PRD 模块：
 - 测试类型：`e2e`
 - What：验证点击“打开”按钮时，会通过系统浏览器打开原网页地址。
 - Why：如果这里误打开本地索引副本或失去外链能力，网页资料的原始上下文就被切断了。
-- How：为目标 URL 注入 `openExternal` 成功响应并触发打开动作。
+- How：通过 UI 添加目标 URL，在网页 tab 点击打开按钮，用 IPC observer 辅助确认 `openExternal` 收到原始 URL。
 - Oracle：触发 `openExternal(originalUrl)`，对齐 `SET-WEB-005-AC2`。
 - Not：不验证系统浏览器窗口是否真的出现在前台，也不验证不同操作系统的外链打开体验。
 
@@ -367,11 +367,11 @@ Settings 的回归测试顶层 suite 直接对齐 PRD 模块：
 #### `vector-model-catalog-load`
 
 - 测试类型：`e2e`
-- What：验证向量模型页打开后，模型列表能成功加载并区分已安装模型与可下载模型；失败时给出明确错误提示。
+- What：验证向量模型页打开后，真实模型目录能加载，并展示下载或已安装状态。
 - Why：向量模型是检索能力的基础依赖，如果列表加载状态不清晰，用户无法判断是否还需要下载模型。
-- How：分别覆盖模型列表加载成功和失败两条路径。
-- Oracle：加载成功后，可区分已安装模型与可下载模型，并看到名称、说明与标签等信息，对齐 `SET-VECTOR-001-AC1`；加载失败时页面给出明确错误提示，对齐 `SET-VECTOR-001-AC2`。
-- Not：不验证真实 HuggingFace 网络请求和模型文件完整性。
+- How：打开 Settings 向量模型页，等待真实模型目录渲染。
+- Oracle：页面至少展示一个模型卡片，且每个模型有下载按钮或已安装标识，对齐 `SET-VECTOR-001-AC1`。
+- Not：不验证下载进度、下载成功、下载失败和删除反馈；这些不能再通过假进度 e2e 验证。
 
 #### `vector-download-single-task-contract`
 
@@ -382,24 +382,6 @@ Settings 的回归测试顶层 suite 直接对齐 PRD 模块：
 - Oracle：已有下载任务时，新的下载入口不可继续触发新任务，对齐 `SET-VECTOR-002-AC1`。
 - Not：不验证真实下载速度、网络失败和磁盘写入完整性。
 
-#### `vector-download-progress`
-
-- 测试类型：`e2e`
-- What：验证向量模型下载过程中展示百分比、当前文件和文件完成数。
-- Why：下载模型通常耗时较长，缺少进度反馈会让用户误判页面卡死。
-- How：注入下载进度事件序列，触发下载并观察页面进度展示。
-- Oracle：下载过程中界面持续更新当前文件、完成数和总进度，对齐 `SET-VECTOR-002-AC2`。
-- Not：不验证下载结束后的安装状态；该部分由 `vector-download-result-feedback` 覆盖。
-
-#### `vector-download-result-feedback`
-
-- 测试类型：`e2e`
-- What：验证向量模型下载完成后刷新列表状态，下载失败时展示失败原因并退出下载中状态。
-- Why：用户需要明确知道模型是否已经可用；失败不收敛会让后续检索配置处于不确定状态。
-- How：分别注入下载成功和下载失败响应，观察模型卡片状态与错误反馈。
-- Oracle：下载完成后，对应模型显示为已安装，对齐 `SET-VECTOR-003-AC1`；下载失败时界面提示失败原因并退出下载中状态，对齐 `SET-VECTOR-003-AC2`。
-- Not：不验证真实 provider 侧文件列表变化，也不验证跨会话缓存复用。
-
 #### `vector-download-startup-resume-contract`
 
 - 测试类型：`backend`
@@ -409,20 +391,4 @@ Settings 的回归测试顶层 suite 直接对齐 PRD 模块：
 - Oracle：服务初始化后自动恢复同一模型下载并持续上报进度，对齐 `SET-VECTOR-002-AC4`。
 - Not：不验证真实网络环境下的跨版本兼容；这里只覆盖本地快照恢复与同步。
 
-#### `vector-download-navigation-resume`
-
-- 测试类型：`e2e`
-- What：验证用户离开向量模型页后再次进入时，仍可恢复后台进行中的下载进度。
-- Why：下载不能依赖页面生命周期；用户切页后返回不应误判下载中断或重新开始。
-- How：预置一条后台下载中的任务快照，进入向量模型页观察进度，切到其他 Settings 页面后再返回向量模型页。
-- Oracle：再次进入页面时，当前文件、完成数和总进度都能恢复展示，对齐 `SET-VECTOR-002-AC3`。
-- Not：不验证应用重启后的自动恢复；该场景由 `vector-download-startup-resume-contract` 覆盖。
-
-#### `vector-delete-feedback`
-
-- 测试类型：`e2e`
-- What：验证已安装模型删除前需要二次确认，取消删除时保持原状态，确认后成功切回可下载状态，失败时保留已安装状态并展示错误。
-- Why：删除操作需要给用户明确确认和结果反馈；取消确认或删除失败都不能让模型状态失真。
-- How：分别覆盖删除确认弹窗出现、取消删除、确认删除成功、确认删除失败四条路径，观察卡片状态和反馈提示。
-- Oracle：删除成功后，对应模型回到可下载状态，对齐 `SET-VECTOR-004-AC1`；删除失败时展示失败原因并保留已安装状态，对齐 `SET-VECTOR-004-AC2`；删除前出现确认弹窗，对齐 `SET-VECTOR-004-AC3`；取消确认后保持已安装状态且不进入删除中状态，对齐 `SET-VECTOR-004-AC4`。
-- Not：不验证删除后磁盘占用的真实变化；这里只覆盖 Settings 页面可见状态与反馈。
+下载进度、下载结果、页面切换恢复和删除反馈不再登记为正式 e2e。它们需要真实大文件下载环境，短期由 `vector-download-single-task-contract` 和 `vector-download-startup-resume-contract` 覆盖服务契约，必要时另建真实下载手动回归。

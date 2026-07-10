@@ -3,7 +3,6 @@ import type { Page } from 'playwright'
 import { describe, it } from 'vitest'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
-  WORKBENCH_LONG_E2E_TIMEOUT_MS,
   WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
   assertNoWorkbenchFakeSignals,
   configureLiveModelThroughSettingsUi,
@@ -13,6 +12,7 @@ import {
   insertWorkbenchReferenceToken,
   loadWorkbenchLiveModelEnv,
   navigateToWorkbench,
+  prepareWorkbenchWorkspaceThroughUi,
   readDocxPlainText,
   recordWorkbenchAiEvidence,
   selectWorkbenchModel,
@@ -22,10 +22,6 @@ import {
   waitForWorkbenchAiRunCompletion,
   workbenchSelectors
 } from '../../../../harness/e2e/workbench'
-import {
-  createRealWorkspaceWithRoot,
-  waitForFileIndexJobIdle
-} from '../../../../harness/e2e/settings'
 
 const CASE_ID = 'multi-file-apply-tabs'
 const FIRST_FILE = '人工智能探究课堂PRD.docx'
@@ -63,18 +59,10 @@ const setupMultiFileApplyWorkspace = async (
   const workspaceName = `Workbench ${CASE_ID}`
 
   await configureLiveModelThroughSettingsUi(page, env)
-  const workspaceResponse = await createRealWorkspaceWithRoot(page, {
-    name: workspaceName,
+  await prepareWorkbenchWorkspaceThroughUi(page, {
+    workspaceName,
     rootPath: workspace.rootPath
   })
-  const workspaceId = workspaceResponse.workspace!.id
-  const prepareResponse = await page.evaluate(async (selectedWorkspaceId) => {
-    return await window.api.workspacePrepare({ workspaceId: selectedWorkspaceId })
-  }, workspaceId)
-  if (!prepareResponse.success) {
-    throw new Error(prepareResponse.error || 'failed to prepare workspace fixture')
-  }
-  await waitForFileIndexJobIdle(page, workspaceId, WORKBENCH_LONG_E2E_TIMEOUT_MS)
   await navigateToWorkbench(page)
   await selectWorkbenchWorkspace(page, workspaceName)
   await selectWorkbenchModel(page, env.modelName)
