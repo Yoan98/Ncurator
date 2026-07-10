@@ -1409,6 +1409,41 @@ const readAssistantTextSoFar = async (page: Page): Promise<string> => {
   )
 }
 
+const waitForApprovalItemIndex = async (
+  page: Page,
+  expectedOneBasedIndex: number,
+  options?: { timeoutMs?: number }
+): Promise<boolean> => {
+  try {
+    await page.waitForFunction(
+      (testId: string, expectedIndex: number) => {
+        const root = document.querySelector(`[data-testid="${testId}"]`)
+        return Boolean(root?.textContent?.includes(`审批 ${expectedIndex} /`))
+      },
+      chatSelectors.approvalBatchCard,
+      expectedOneBasedIndex,
+      { timeout: options?.timeoutMs || WORKBENCH_E2E_TIMEOUT_MS }
+    )
+    return true
+  } catch {
+    return false
+  }
+}
+
+const moveToApprovalItemIndex = async (
+  page: Page,
+  expectedOneBasedIndex: number
+): Promise<void> => {
+  if (await waitForApprovalItemIndex(page, expectedOneBasedIndex, { timeoutMs: 1_000 })) return
+  const nextButton = getWorkbenchLocator(page, chatSelectors.approvalBatchNextButton)
+  await nextButton.waitFor({ state: 'visible', timeout: WORKBENCH_E2E_TIMEOUT_MS })
+  await nextButton.click()
+  const moved = await waitForApprovalItemIndex(page, expectedOneBasedIndex)
+  if (!moved) {
+    throw new Error(`approval card did not move to item ${expectedOneBasedIndex}`)
+  }
+}
+
 const describeWorkbenchBlockedResult = (
   blocked: WorkbenchRunBlockedResult
 ): { blockerType: string; summary: string; data: JsonValue } => {
@@ -1452,15 +1487,7 @@ const autoApproveWorkbenchApprovalBatch = async (
     })
     await getWorkbenchLocator(page, chatSelectors.approvalBatchApproveButton).click()
     if (index < totalItems - 1) {
-      await page.waitForFunction(
-        (testId: string, expectedIndex: number) => {
-          const root = document.querySelector(`[data-testid="${testId}"]`)
-          return Boolean(root?.textContent?.includes(`审批 ${expectedIndex} /`))
-        },
-        chatSelectors.approvalBatchCard,
-        index + 2,
-        { timeout: WORKBENCH_E2E_TIMEOUT_MS }
-      )
+      await moveToApprovalItemIndex(page, index + 2)
     }
   }
 }
@@ -1569,15 +1596,7 @@ export const decideWorkbenchApprovalBatch = async (
     )
     await button.click()
     if (index < input.event.items.length - 1) {
-      await page.waitForFunction(
-        (testId: string, expectedIndex: number) => {
-          const root = document.querySelector(`[data-testid="${testId}"]`)
-          return Boolean(root?.textContent?.includes(`审批 ${expectedIndex} /`))
-        },
-        chatSelectors.approvalBatchCard,
-        index + 2,
-        { timeout: WORKBENCH_E2E_TIMEOUT_MS }
-      )
+      await moveToApprovalItemIndex(page, index + 2)
     }
   }
 
