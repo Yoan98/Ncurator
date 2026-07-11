@@ -23,6 +23,14 @@ def platform_name() -> str:
     return "web_crawler_sidecar"
 
 
+def long_path(path: Path) -> str:
+    """Return an extended-length path string on Windows to bypass the MAX_PATH (260 char) limit."""
+    text = str(path)
+    if platform.system().lower().startswith("windows") and not text.startswith("\\\\?\\"):
+        text = "\\\\?\\" + os.path.abspath(text)
+    return text
+
+
 def resolve_playwright_local_browsers_path() -> Path:
     import playwright
 
@@ -56,9 +64,9 @@ def copy_playwright_driver_bundle(sidecar_dist_dir: Path) -> None:
 
     target = sidecar_dist_dir / "_internal" / "playwright" / "driver"
     if target.exists():
-        shutil.rmtree(target)
+        shutil.rmtree(long_path(target))
     target.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(source, target, symlinks=True)
+    shutil.copytree(long_path(source), long_path(target), symlinks=True)
 
 
 def stash_playwright_browser_bundle(build_path: Path) -> tuple[Path, Path]:
@@ -67,9 +75,9 @@ def stash_playwright_browser_bundle(build_path: Path) -> tuple[Path, Path]:
 
     stash = build_path / "playwright-local-browsers-stash"
     if stash.exists():
-        shutil.rmtree(stash)
+        shutil.rmtree(long_path(stash))
     stash.parent.mkdir(parents=True, exist_ok=True)
-    shutil.move(str(source), str(stash))
+    shutil.move(long_path(source), long_path(stash))
     return source, stash
 
 
@@ -78,9 +86,9 @@ def restore_playwright_browser_bundle(stashed_bundle: tuple[Path, Path]) -> None
     if not stash.exists():
         return
     if source.exists():
-        shutil.rmtree(source)
+        shutil.rmtree(long_path(source))
     source.parent.mkdir(parents=True, exist_ok=True)
-    shutil.move(str(stash), str(source))
+    shutil.move(long_path(stash), long_path(source))
 
 
 def main() -> int:
@@ -102,9 +110,9 @@ def main() -> int:
     build_path = ROOT / ".codex-tmp" / "web_crawler_sidecar_build"
     sidecar_dist_dir = OUTPUT_DIR / SIDECAR_NAME
     if sidecar_dist_dir.exists():
-        shutil.rmtree(sidecar_dist_dir)
+        shutil.rmtree(long_path(sidecar_dist_dir))
     if build_path.exists():
-        shutil.rmtree(build_path)
+        shutil.rmtree(long_path(build_path))
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     command = [
         sys.executable,
