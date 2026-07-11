@@ -207,7 +207,7 @@ const ModelSettingsPanel: React.FC = () => {
             ? '获取失败'
             : state?.loadedAt !== undefined
               ? `${state.items.length} 个模型`
-              : '未获取'
+              : '查看'
         return (
           <Button
             type="link"
@@ -330,7 +330,7 @@ const ModelSettingsPanel: React.FC = () => {
             name="base_url"
             label="模型服务地址"
             rules={[{ required: true, message: '请输入模型服务地址' }]}
-            help="选择常用地址，或填写模型服务提供的 API Base URL"
+            help="填写模型服务提供的 API Base URL"
           >
             <AutoComplete
               defaultActiveFirstOption

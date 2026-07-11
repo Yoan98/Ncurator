@@ -70,6 +70,9 @@
   --app-sidebar-mac-window-spacer-height: 36px;
   --workbench-titlebar-height: 52px;
   --workbench-left-titlebar-collapsed-width: 170px;
+  /* Windows 自绘窗口按钮区宽度，供标题栏与右侧安全区共用，保证折叠图标不被遮挡 */
+  --windows-titlebar-button-width: 48px;
+  --windows-window-controls-width: calc(var(--windows-titlebar-button-width) * 3);
 }
 
 body {
@@ -277,12 +280,14 @@ textarea,
 }
 
 .windows-titlebar {
-  @apply fixed right-0 top-0 z-50 flex h-12 select-none items-center gap-0 rounded-tr-[18px] bg-white/90 pl-2 backdrop-blur-[10px];
+  @apply fixed right-0 top-0 z-50 flex select-none items-stretch gap-0 overflow-hidden rounded-tr-[18px] bg-white/90 backdrop-blur-[10px];
+  width: var(--windows-window-controls-width);
+  height: var(--workbench-titlebar-height);
   -webkit-app-region: no-drag;
 }
 
 .windows-titlebar-button {
-  @apply flex h-12 w-12 items-center justify-center text-[#787774] transition-colors hover:bg-[#F4F4F2];
+  @apply flex flex-1 items-center justify-center text-[#787774] transition-colors hover:bg-[#F4F4F2];
 }
 
 .windows-titlebar-close:hover {
@@ -488,6 +493,14 @@ textarea,
   height: 100%;
   transition: width 180ms ease;
   pointer-events: none;
+}
+
+/* Windows 自绘窗口按钮预留区，把折叠图标顶到 min/max/close 左侧，避免被遮挡 */
+.nc-topbar-window-controls-safe-zone {
+  flex: 0 0 var(--windows-window-controls-width);
+  height: 100%;
+  pointer-events: none;
+  -webkit-app-region: no-drag;
 }
 
 .nc-topbar-title-region {

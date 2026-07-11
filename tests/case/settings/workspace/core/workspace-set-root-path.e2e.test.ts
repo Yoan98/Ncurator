@@ -21,7 +21,7 @@ describe('settings workspace e2e', () => {
       domain: 'settings',
       suite: 'workspace',
       groups: ['core'],
-      description: '文件 tab 内可以为当前工作空间设置工作文件地址并立即刷新目录树。',
+      description: '文件 tab 内可以为当前工作空间设置工作目录并立即刷新目录树。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -102,7 +102,7 @@ describe('settings workspace e2e', () => {
         await runtime.assertThat(result.rootPathVisible && result.treeHasFixtureFile, {
           name: 'set-root-path-refreshes-detail',
           message:
-            '点击“设置工作文件地址”后，应为当前工作空间绑定目录，并立即刷新当前目录树内容，对齐 SET-WORKSPACE-006-AC1、SET-WORKSPACE-008-AC3。',
+            '点击“设置工作目录”后，应为当前工作空间绑定目录，并立即刷新当前目录树内容，对齐 SET-WORKSPACE-006-AC1、SET-WORKSPACE-008-AC3。',
           data: result
         })
       }

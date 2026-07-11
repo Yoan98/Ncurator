@@ -84,7 +84,7 @@ describe('settings workspace e2e', () => {
             .first()
             .isVisible(),
           showsUnboundRootHint:
-            detailText.includes('设置工作文件地址') ||
+            detailText.includes('设置工作目录') ||
             detailText.includes('设置后才能在 Workbench 中发送任务')
         }
       },

@@ -272,10 +272,10 @@ const WorkspaceSettingsPanel: React.FC = () => {
       rootPath: selection.path.trim()
     })
     if (!response.success) {
-      message.error(response.error || '设置工作文件地址失败')
+      message.error(response.error || '设置工作目录失败')
       return
     }
-    message.success('工作文件地址已设置')
+    message.success('工作目录已设置')
     await loadWorkspaces()
     await reloadSelectedWorkspaceTree()
   }
@@ -524,8 +524,8 @@ const WorkspaceSettingsPanel: React.FC = () => {
                                   onClick={() => void handleSetWorkspaceRootPath(selectedWorkspace)}
                                 >
                                   {selectedWorkspace.root_path
-                                    ? '更换工作文件地址'
-                                    : '设置工作文件地址'}
+                                    ? '更换工作目录'
+                                    : '设置工作目录'}
                                 </Button>
                               </section>
 

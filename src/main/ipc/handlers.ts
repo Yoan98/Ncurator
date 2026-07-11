@@ -350,7 +350,7 @@ export function registerHandlers(services: {
     try {
       const currentWorkspace = await workspaceStore.getWorkspaceById(workspaceId)
       if (!currentWorkspace) throw new Error('workspace not found')
-      if (!currentWorkspace.root_path) throw new Error('请先设置工作文件地址')
+      if (!currentWorkspace.root_path) throw new Error('请先设置工作目录')
 
       const existingRecords = await workspaceStore.listWorkspaceFileIndexRecords(workspaceId)
       const now = Date.now()
@@ -519,7 +519,7 @@ export function registerHandlers(services: {
     try {
       const currentWorkspace = await workspaceStore.getWorkspaceById(workspaceId)
       if (!currentWorkspace) throw new Error('workspace not found')
-      if (!currentWorkspace.root_path) throw new Error('请先设置工作文件地址')
+      if (!currentWorkspace.root_path) throw new Error('请先设置工作目录')
 
       const prepareStartedAt = Date.now()
       const { targets, recordMap, added, updated, removed } = await collectFilePrepareTargets({
@@ -1814,7 +1814,7 @@ export function registerHandlers(services: {
           return { success: false, error: 'workspace not found' }
         }
         if (!currentWorkspace.root_path) {
-          return { success: false, error: '请先设置工作文件地址' }
+          return { success: false, error: '请先设置工作目录' }
         }
 
         const jobKey = getWorkspaceIndexJobKey(workspaceId, 'file')
@@ -1858,7 +1858,7 @@ export function registerHandlers(services: {
           return { success: false, error: 'workspace not found' }
         }
         if (!currentWorkspace.root_path) {
-          return { success: false, error: '请先设置工作文件地址' }
+          return { success: false, error: '请先设置工作目录' }
         }
 
         const jobKey = getWorkspaceIndexJobKey(workspaceId, 'file')

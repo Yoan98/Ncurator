@@ -1,8 +1,9 @@
 /* eslint-disable react-refresh/only-export-components */
-import type { LlmProviderKind } from '../../../../shared/types'
+import type { LlmProviderId, LlmProviderKind } from '../../../../shared/types'
 import type { ReactNode } from 'react'
 import type { SettingsSectionMeta, SettingsSectionValue } from './types'
 import { HiArrowPath, HiCloudArrowDown, HiOutlineRectangleStack, HiSparkles } from 'react-icons/hi2'
+import { LLM_PROVIDER_REGISTRY } from '../../../../shared/llmProvider'
 
 import openaiLogo from '../../assets/img/openai.png'
 import qianwenLogo from '../../assets/img/qianwen.png'
@@ -10,6 +11,13 @@ import doubaoLogo from '../../assets/img/doubao.png'
 import deepseekLogo from '../../assets/img/deepseek.png'
 import kimiLogo from '../../assets/img/kimi.png'
 import guijiliudongLogo from '../../assets/img/guijiliudong.png'
+import openrouterLogo from '../../assets/img/openrouter.png'
+import zhipuLogo from '../../assets/img/zhipu.png'
+import qianfanLogo from '../../assets/img/qianfan.png'
+import hunyuanLogo from '../../assets/img/hunyuan.png'
+import minimaxLogo from '../../assets/img/minimax.png'
+import yiLogo from '../../assets/img/yi.png'
+import nvidiaLogo from '../../assets/img/nvidia.png'
 
 export const SETTINGS_SECTION_ORDER: SettingsSectionValue[] = [
   'model',
@@ -86,56 +94,35 @@ export const APP_MENU_ITEMS = [
   }
 ] as const
 
+const PROVIDER_LOGO_MAP: Partial<Record<LlmProviderId, ReactNode>> = {
+  openai: <img src={openaiLogo} alt="OpenAI" className="w-4 h-4" />,
+  deepseek: <img src={deepseekLogo} alt="DeepSeek" className="w-4 h-4" />,
+  dashscope: <img src={qianwenLogo} alt="Qianwen" className="w-4 h-4" />,
+  volcengine: <img src={doubaoLogo} alt="Doubao" className="w-4 h-4" />,
+  moonshot: <img src={kimiLogo} alt="Kimi" className="w-4 h-4" />,
+  siliconflow: <img src={guijiliudongLogo} alt="SiliconFlow" className="w-4 h-4" />,
+  openrouter: <img src={openrouterLogo} alt="OpenRouter" className="w-4 h-4" />,
+  zhipu: <img src={zhipuLogo} alt="Zhipu AI" className="w-4 h-4" />,
+  'baidu-qianfan': <img src={qianfanLogo} alt="Baidu Qianfan" className="w-4 h-4" />,
+  'tencent-hunyuan': <img src={hunyuanLogo} alt="Tencent Hunyuan" className="w-4 h-4" />,
+  minimax: <img src={minimaxLogo} alt="MiniMax" className="w-4 h-4" />,
+  yi: <img src={yiLogo} alt="Yi" className="w-4 h-4" />,
+  'nvidia-nim': <img src={nvidiaLogo} alt="NVIDIA NIM" className="w-4 h-4" />
+}
+
 export const PROVIDER_OPTIONS: Array<{
   label: string
   providerKind: LlmProviderKind
   value: string
   icon: ReactNode
   desc: string
-}> = [
-  {
-    label: 'OpenAI',
-    providerKind: 'openai',
-    value: 'https://api.openai.com/v1',
-    icon: <img src={openaiLogo} alt="OpenAI" className="w-4 h-4" />,
-    desc: '官方 API'
-  },
-  {
-    label: '阿里云百炼 (通义千问)',
-    providerKind: 'openai-compatible',
-    value: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-    icon: <img src={qianwenLogo} alt="Qianwen" className="w-4 h-4" />,
-    desc: '官方 API'
-  },
-  {
-    label: '火山引擎 (豆包)',
-    providerKind: 'openai-compatible',
-    value: 'https://ark.cn-beijing.volces.com/api/v3',
-    icon: <img src={doubaoLogo} alt="Doubao" className="w-4 h-4" />,
-    desc: '官方 API'
-  },
-  {
-    label: 'DeepSeek',
-    providerKind: 'deepseek',
-    value: 'https://api.deepseek.com',
-    icon: <img src={deepseekLogo} alt="DeepSeek" className="w-4 h-4" />,
-    desc: '官方 API'
-  },
-  {
-    label: 'Kimi(Moonshot)',
-    providerKind: 'openai-compatible',
-    value: 'https://api.moonshot.cn/v1',
-    icon: <img src={kimiLogo} alt="Kimi" className="w-4 h-4" />,
-    desc: '官方 API'
-  },
-  {
-    label: '硅基流动 (SiliconFlow)',
-    providerKind: 'openai-compatible',
-    value: 'https://api.siliconflow.cn/v1',
-    icon: <img src={guijiliudongLogo} alt="SiliconFlow" className="w-4 h-4" />,
-    desc: '官方 API'
-  }
-] as const
+}> = LLM_PROVIDER_REGISTRY.map((provider) => ({
+  label: provider.label,
+  providerKind: provider.providerKind,
+  value: provider.defaultBaseUrl,
+  icon: PROVIDER_LOGO_MAP[provider.id] ?? <HiSparkles className="w-4 h-4 text-[#9B9A97]" />,
+  desc: provider.official ? '官方 API' : 'OpenAI 兼容'
+}))
 
 export const MODEL_MAPPING: Record<string, { value: string; label: string }[]> = {
   'https://api.openai.com/v1': [

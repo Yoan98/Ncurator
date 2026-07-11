@@ -69,7 +69,7 @@ export const validateSelectedReferencesForRun = async (params: {
           type: 'runtime_issue',
           runId: params.runId,
           code: 'workspace_path_unavailable',
-          message: '当前工作空间尚未设置工作文件地址。',
+          message: '当前工作空间尚未设置工作目录。',
           workspaceId,
           createdAt: getNow()
         })

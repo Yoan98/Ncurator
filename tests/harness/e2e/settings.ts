@@ -355,7 +355,7 @@ export const bindWorkspaceRootThroughSettingsUi = async (
 ): Promise<void> => {
   await navigateToSettingsSection(page, 'workspace')
   const rootPathButton = page
-    .getByRole('button', { name: /设置工作文件地址|更换工作文件地址/u })
+    .getByRole('button', { name: /设置工作目录|更换工作目录/u })
     .first()
   await page.bringToFront()
   await rootPathButton.waitFor({ state: 'visible' })

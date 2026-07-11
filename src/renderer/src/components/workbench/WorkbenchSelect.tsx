@@ -28,6 +28,7 @@ type WorkbenchSelectProps = {
   rail?: boolean
   inlineChevron?: boolean
   hideChevron?: boolean
+  hideTriggerIcon?: boolean
   disabled?: boolean
   noDrag?: boolean
   minMenuWidth?: number
@@ -92,6 +93,7 @@ const WorkbenchSelect: React.FC<WorkbenchSelectProps> = ({
   rail = false,
   inlineChevron = false,
   hideChevron = false,
+  hideTriggerIcon = false,
   disabled = false,
   noDrag = false,
   minMenuWidth,
@@ -255,7 +257,7 @@ const WorkbenchSelect: React.FC<WorkbenchSelectProps> = ({
         }}
       >
         <span className="flex min-w-0 flex-1 items-center gap-2">
-          {triggerIconNode ? (
+          {!hideTriggerIcon && triggerIconNode ? (
             <span className="flex h-4 w-4 shrink-0 items-center justify-center">
               {triggerIconNode}
             </span>

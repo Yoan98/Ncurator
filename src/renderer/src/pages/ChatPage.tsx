@@ -2888,6 +2888,10 @@ const ChatPage: React.FC = () => {
                 data-testid={workbenchSelectors.contentPanelToggle}
                 aria-label={contentPanelCollapsed ? '展开右侧栏' : '收起右侧栏'}
               />
+
+              {platform === 'win32' ? (
+                <div className="nc-topbar-window-controls-safe-zone" aria-hidden="true" />
+              ) : null}
             </div>
           ) : null}
 

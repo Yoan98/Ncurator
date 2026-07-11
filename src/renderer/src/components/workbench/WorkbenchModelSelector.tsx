@@ -34,6 +34,7 @@ type WorkbenchModelSelectorProps = {
   onAfterChange?: () => void
   disabled?: boolean
   noDrag?: boolean
+  hideTriggerIcon?: boolean
   className?: string
   'data-testid'?: string
 }
@@ -103,6 +104,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
   onAfterChange,
   disabled = false,
   noDrag = false,
+  hideTriggerIcon = false,
   className,
   'data-testid': dataTestId
 }) => {
@@ -350,7 +352,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
           }}
         >
           <span className="flex min-w-0 flex-1 items-center gap-2">
-            <HiCpuChip className="h-3.5 w-3.5 shrink-0" />
+            {!hideTriggerIcon ? <HiCpuChip className="h-3.5 w-3.5 shrink-0" /> : null}
             <span className="truncate">{mainLabel}</span>
             {value.visionModel ? (
               <span className="ml-1 inline-flex h-5 shrink-0 items-center gap-1 rounded-full bg-[#F4F4F2] px-1.5 text-[11px] font-semibold text-[#787774]">
@@ -403,7 +405,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
                   >
                     <span className="flex min-w-0 flex-1 items-center gap-1.5">
                       <span className="text-[13px] font-semibold text-[#37352F]">视觉模型</span>
-                      <Tooltip title="用于识别图片。未选择时，会自动使用主模型。">
+                      <Tooltip title="用于识别图片等视觉内容。并非所有模型都支持视觉，请选择正确的。">
                         <HiQuestionMarkCircle className="h-3.5 w-3.5 text-[#9B9A97]" />
                       </Tooltip>
                     </span>

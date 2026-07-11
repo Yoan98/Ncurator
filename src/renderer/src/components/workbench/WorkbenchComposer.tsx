@@ -1004,6 +1004,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
               compact
               noDrag
               hideChevron
+              hideTriggerIcon
               triggerClassName="workbench-composer-pill workbench-composer-mode-pill"
               menuClassName="workbench-composer-menu"
               data-testid={workbenchSelectors.modeSwitch}
@@ -1051,6 +1052,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
               onChange={onModelSelectionChange}
               onAfterChange={focusEditorAfterControlChange}
               noDrag
+              hideTriggerIcon
               className="workbench-composer-model-select"
               data-testid={workbenchSelectors.modelSelect}
             />
