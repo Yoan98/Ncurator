@@ -422,7 +422,7 @@ textarea,
 }
 
 .nc-settings-back-row {
-  @apply rounded-[6px] px-2.5 py-2 text-[#37352F] transition-colors hover:bg-[#EFEFEE];
+  @apply relative z-[101] rounded-[6px] px-2.5 py-2 text-[#37352F] transition-colors hover:bg-[#EFEFEE];
 }
 
 .nc-sidebar-nav-row {
