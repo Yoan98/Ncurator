@@ -132,7 +132,6 @@ export function registerHandlers(services: {
   recordLlmIo?: (record: AiLlmIoRecord) => void
 }) {
   const {
-    ingestionService,
     embeddingService,
     storageService,
     modelService,
@@ -779,7 +778,6 @@ export function registerHandlers(services: {
     const existingDocument = source.document_id
       ? await documentsStore.getDocumentById(source.document_id)
       : null
-    const oldGenerationId = existingDocument?.active_generation_id
     if (existingDocument) {
       await documentsStore.updateDocumentById(existingDocument.id, {
         name: source.title || source.url,
@@ -847,69 +845,21 @@ export function registerHandlers(services: {
     emitSourceListRefresh(event.sender)
 
     try {
-      const generationId = uuidv4()
-      const splitDocs = await ingestionService.processWebText({
-        url: source.url,
-        title: inspection.title,
-        text: inspection.text
-      })
-      const documentName = splitDocs.title?.trim() || source.url
-      await documentsStore.updateDocumentById(nextDocumentId, {
-        name: documentName,
-        file_path: source.url,
-        source_type: 'web',
-        workspace_id: source.workspace_id,
-        content_hash: inspection.contentHash
-      })
-
-      const allSplitDocs = [...splitDocs.bigSplitDocs, ...splitDocs.miniSplitDocs]
-      const allChunkVectors: Float32Array[] = []
-      for (const doc of allSplitDocs) {
-        const { data: vector } = await embeddingService.embed(doc.pageContent)
-        allChunkVectors.push(vector)
-      }
-
-      const chunks = allChunkVectors.map((_, index) => ({
-        text: allSplitDocs[index].pageContent,
-        id: uuidv4(),
-        document_id: nextDocumentId,
-        workspace_id: source.workspace_id,
-        document_name: documentName,
-        source_type: 'web',
-        generation_id: generationId,
-        chunk_index: index,
-        metadata: {
-          page: 1
-        }
-      }))
-
-      await documentsStore.addChunks({
-        vectors: allChunkVectors,
-        chunks,
-        generationId
-      })
-      await documentsStore.activateDocumentGeneration({
+      const documentName = inspection.title?.trim() || source.url
+      const indexed = await workspaceKnowledgePrepareService.indexWebText({
+        sourceType: 'web',
+        workspaceId: source.workspace_id,
         documentId: nextDocumentId,
-        generationId,
+        documentName,
+        sourceUrl: source.url,
+        rawText: inspection.text,
         contentHash: inspection.contentHash,
-        importStatus: 2,
-        updatedAt: Date.now()
+        cache: createWorkspaceKnowledgeCache() || undefined
       })
-      if (oldGenerationId && oldGenerationId !== generationId) {
-        void documentsStore
-          .deleteChunksByGeneration({
-            documentId: nextDocumentId,
-            workspaceId: source.workspace_id,
-            generationId: oldGenerationId
-          })
-          .catch((cleanupError) => {
-            console.warn('[WEB-INDEX] failed to cleanup old generation:', cleanupError)
-          })
-      }
 
       const refreshedSource: WebSourceRecord = {
         ...crawlingDoneSource,
-        title: documentName,
+        title: indexed.documentName,
         index_status: 'indexed',
         fetched_at: Date.now(),
         last_indexed_at: Date.now(),
@@ -918,7 +868,7 @@ export function registerHandlers(services: {
       }
       await webSourceStore.saveWebSource(refreshedSource)
       emitSourceListRefresh(event.sender)
-      return { source: refreshedSource, chunkCount: chunks.length }
+      return { source: refreshedSource, chunkCount: indexed.chunkCount }
     } catch (error) {
       await documentsStore
         .markDocumentIndexFailed(nextDocumentId, getErrorMessage(error))
@@ -1033,72 +983,22 @@ export function registerHandlers(services: {
     inspection: Awaited<ReturnType<WebSourceService['inspectUrl']>>
   }): Promise<void> => {
     try {
-      const existingDocument = await documentsStore.getDocumentById(input.documentId)
-      const oldGenerationId = existingDocument?.active_generation_id
-      const generationId = uuidv4()
-      const splitDocs = await ingestionService.processWebText({
-        url: input.source.url,
-        title: input.inspection.title,
-        text: input.inspection.text
-      })
-      const documentName = splitDocs.title?.trim() || input.source.url
-      await documentsStore.updateDocumentById(input.documentId, {
-        name: documentName,
-        file_path: input.source.url,
-        source_type: 'web',
-        workspace_id: input.source.workspace_id,
-        content_hash: input.inspection.contentHash
-      })
-
-      const allSplitDocs = [...splitDocs.bigSplitDocs, ...splitDocs.miniSplitDocs]
-      const allChunkVectors: Float32Array[] = []
-      for (const doc of allSplitDocs) {
-        const { data: vector } = await embeddingService.embed(doc.pageContent)
-        allChunkVectors.push(vector)
-      }
-
-      const chunks = allChunkVectors.map((_, index) => ({
-        text: allSplitDocs[index].pageContent,
-        id: uuidv4(),
-        document_id: input.documentId,
-        workspace_id: input.source.workspace_id,
-        document_name: documentName,
-        source_type: 'web',
-        generation_id: generationId,
-        chunk_index: index,
-        metadata: {
-          page: 1
-        }
-      }))
-
-      await documentsStore.addChunks({
-        vectors: allChunkVectors,
-        chunks,
-        generationId
-      })
-      await documentsStore.activateDocumentGeneration({
+      const documentName = input.inspection.title?.trim() || input.source.url
+      const indexed = await workspaceKnowledgePrepareService.indexWebText({
+        sourceType: 'web',
+        workspaceId: input.source.workspace_id,
         documentId: input.documentId,
-        generationId,
+        documentName,
+        sourceUrl: input.source.url,
+        rawText: input.inspection.text,
         contentHash: input.inspection.contentHash,
-        importStatus: 2,
-        updatedAt: Date.now()
+        cache: createWorkspaceKnowledgeCache() || undefined
       })
-      if (oldGenerationId && oldGenerationId !== generationId) {
-        void documentsStore
-          .deleteChunksByGeneration({
-            documentId: input.documentId,
-            workspaceId: input.source.workspace_id,
-            generationId: oldGenerationId
-          })
-          .catch((cleanupError) => {
-            console.warn('[WEB-INDEX] failed to cleanup old generation:', cleanupError)
-          })
-      }
 
       const indexedAt = Date.now()
       const refreshedSource: WebSourceRecord = {
         ...input.source,
-        title: documentName,
+        title: indexed.documentName,
         index_status: 'indexed',
         fetched_at: indexedAt,
         last_indexed_at: indexedAt,

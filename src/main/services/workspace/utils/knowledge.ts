@@ -50,11 +50,37 @@ export const buildWorkspaceKnowledgeSplitSnapshot = async (input: {
   }
 }
 
+/** 网页正文源的 split 快照：走 processWebText，产出与文件一致的结构 */
+export const buildWorkspaceKnowledgeSplitSnapshotFromText = async (input: {
+  ingestionService: IngestionService
+  url: string
+  title?: string
+  text: string
+  contentHash: string
+  fileExt?: string
+}): Promise<WorkspaceKnowledgeSplitSnapshot> => {
+  const splitDocs = await input.ingestionService.processWebText({
+    url: input.url,
+    title: input.title,
+    text: input.text
+  })
+  const allSplitDocs = [...splitDocs.bigSplitDocs, ...splitDocs.miniSplitDocs]
+  return {
+    contentHash: input.contentHash,
+    fileExt: input.fileExt || '.html',
+    chunks: allSplitDocs.map((doc) => ({
+      text: doc.pageContent,
+      page: Number(doc.metadata.loc?.pageNumber || 1)
+    }))
+  }
+}
+
 export const buildWorkspaceKnowledgeChunks = (input: {
   workspaceId: string
   documentId: string
   documentName: string
   contentHash: string
+  sourceType?: 'file' | 'web'
   chunks: WorkspaceKnowledgeChunkSnapshot[]
 }): WorkspaceKnowledgeChunkInput[] =>
   input.chunks.map((chunk, index) => ({
@@ -67,7 +93,7 @@ export const buildWorkspaceKnowledgeChunks = (input: {
     document_id: input.documentId,
     workspace_id: input.workspaceId,
     document_name: input.documentName,
-    source_type: 'file',
+    source_type: input.sourceType || 'file',
     metadata: {
       page: chunk.page
     }

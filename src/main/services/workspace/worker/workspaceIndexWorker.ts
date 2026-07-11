@@ -1,18 +1,86 @@
-import { parentPort } from 'node:worker_threads'
+import { parentPort, workerData } from 'node:worker_threads'
 import path from 'node:path'
 import { IngestionService, isSupportedLocalFilePath } from '../../ingestion/loader'
 import { EmbeddingService } from '../../vector/EmbeddingService'
 import {
   buildWorkspaceKnowledgeChunks,
   buildWorkspaceKnowledgeSplitSnapshot,
+  buildWorkspaceKnowledgeSplitSnapshotFromText,
   buildWorkspaceKnowledgeVectors,
   computeWorkspaceFileContentHash
 } from '../utils/knowledge'
 import type {
   WorkspaceIndexWorkerRequest,
   WorkspaceIndexWorkerResponse,
-  WorkspaceKnowledgePrepareWorkerResult
+  WorkspaceKnowledgePrepareWorkerInput,
+  WorkspaceKnowledgePrepareWorkerResult,
+  WorkspaceKnowledgeSplitSnapshot
 } from '../types'
+
+const workerModelsPath: string | undefined =
+  workerData && typeof workerData === 'object' && typeof workerData.modelsPath === 'string'
+    ? workerData.modelsPath
+    : undefined
+
+let workerEmbeddingService: EmbeddingService | null = null
+
+const getWorkerEmbeddingService = (): EmbeddingService => {
+  if (workerModelsPath) {
+    if (!workerEmbeddingService) {
+      workerEmbeddingService = new EmbeddingService({ modelsPath: workerModelsPath })
+    }
+    return workerEmbeddingService
+  }
+  return EmbeddingService.getInstance()
+}
+
+type PreparedSource = {
+  filePath: string
+  fileExt: string
+  contentHash: string
+  sourceType: 'file' | 'web'
+  splitSnapshot: WorkspaceKnowledgeSplitSnapshot
+}
+
+const prepareSplitSnapshot = async (
+  input: WorkspaceKnowledgePrepareWorkerInput
+): Promise<PreparedSource> => {
+  if (input.sourceType === 'web') {
+    const fileExt = '.html'
+    const splitSnapshot =
+      input.cachedSplit ||
+      (await buildWorkspaceKnowledgeSplitSnapshotFromText({
+        ingestionService: IngestionService.getInstance(),
+        url: input.sourceUrl,
+        title: input.documentName,
+        text: input.rawText,
+        contentHash: input.contentHash,
+        fileExt
+      }))
+    return {
+      filePath: input.sourceUrl,
+      fileExt,
+      contentHash: input.contentHash,
+      sourceType: 'web',
+      splitSnapshot
+    }
+  }
+
+  if (!isSupportedLocalFilePath(input.filePath)) {
+    throw new Error(`Unsupported file type: ${input.filePath}`)
+  }
+  const contentHash = await computeWorkspaceFileContentHash(input.filePath)
+  const fileExt = path.extname(input.filePath).toLowerCase()
+  const splitSnapshot =
+    input.cachedSplit ||
+    (await buildWorkspaceKnowledgeSplitSnapshot({
+      ingestionService: IngestionService.getInstance(),
+      filePath: input.filePath,
+      contentHash,
+      fileExt
+    }))
+  return { filePath: input.filePath, fileExt, contentHash, sourceType: 'file', splitSnapshot }
+}
 
 export const handleWorkspaceIndexWorkerRequest = async (
   request: WorkspaceIndexWorkerRequest
@@ -23,20 +91,8 @@ export const handleWorkspaceIndexWorkerRequest = async (
     }
 
     const input = request.payload
-    if (!isSupportedLocalFilePath(input.filePath)) {
-      throw new Error(`Unsupported file type: ${input.filePath}`)
-    }
-
-    const contentHash = await computeWorkspaceFileContentHash(input.filePath)
-    const fileExt = path.extname(input.filePath).toLowerCase()
-    const splitSnapshot =
-      input.cachedSplit ||
-      (await buildWorkspaceKnowledgeSplitSnapshot({
-        ingestionService: IngestionService.getInstance(),
-        filePath: input.filePath,
-        contentHash,
-        fileExt
-      }))
+    const { filePath, fileExt, contentHash, sourceType, splitSnapshot } =
+      await prepareSplitSnapshot(input)
 
     const hasUsableCachedVectors =
       Boolean(input.cachedVectors) &&
@@ -47,11 +103,11 @@ export const handleWorkspaceIndexWorkerRequest = async (
         vectorSnapshot = {
           contentHash,
           fileExt,
-          modelName: EmbeddingService.getInstance().getModelName(),
+          modelName: getWorkerEmbeddingService().getModelName(),
           vectors: []
         }
       } else {
-        const embeddingService = EmbeddingService.getInstance()
+        const embeddingService = getWorkerEmbeddingService()
         if (embeddingService.getStatus() !== 'ready') {
           await embeddingService.initialize()
         }
@@ -76,7 +132,7 @@ export const handleWorkspaceIndexWorkerRequest = async (
 
     const payload: WorkspaceKnowledgePrepareWorkerResult = {
       documentId: input.documentId,
-      filePath: input.filePath,
+      filePath,
       fileExt,
       documentName: input.documentName,
       contentHash,
@@ -88,6 +144,7 @@ export const handleWorkspaceIndexWorkerRequest = async (
         documentId: input.documentId,
         documentName: input.documentName,
         contentHash,
+        sourceType,
         chunks: splitSnapshot.chunks
       })
     }

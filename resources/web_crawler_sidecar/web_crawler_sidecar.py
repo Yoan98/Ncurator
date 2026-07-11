@@ -382,7 +382,18 @@ async def process_requests() -> None:
             await crawler.close()
 
 
+def configure_stdio_utf8() -> None:
+    # On zh-CN Windows the interpreter defaults stdio to GBK (cp936). Node writes
+    # requests as UTF-8, so non-ASCII queries get mis-decoded into lone surrogates
+    # and every search fails with UnicodeEncodeError. Force UTF-8 on both streams.
+    for stream in (sys.stdin, sys.stdout):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if callable(reconfigure):
+            reconfigure(encoding="utf-8")
+
+
 def main() -> None:
+    configure_stdio_utf8()
     asyncio.run(process_requests())
 
 

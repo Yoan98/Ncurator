@@ -1,0 +1,112 @@
+import { describe, expect, it } from 'vitest'
+import {
+  buildNcuratorRefMarkdown,
+  encodeNcuratorRefValue,
+  parseNcuratorRefHref,
+  type NcuratorRefResourceType
+} from '../../../../src/shared/ncuratorRef'
+
+/**
+ * Extract the link destination from a `[label](dest)` string.
+ * Safe because the codec percent-encodes every literal `(`/`)` inside values,
+ * so the only bare parens are the ones delimiting the destination.
+ */
+const extractHref = (markdown: string): string =>
+  markdown.slice(markdown.indexOf('](') + 2, markdown.lastIndexOf(')'))
+
+/**
+ * The exact CommonMark rule that corrupted Windows paths: inside a link
+ * destination, a backslash before ASCII punctuation escapes (drops) the
+ * backslash. If the encoder is correct there are no bare backslashes left, so
+ * this must be a no-op on the destination.
+ */
+const commonmarkUnescapeDestination = (dest: string): string =>
+  dest.replace(/\\(.)/g, (match, char: string) => (/[!-/:-@[-`{-~]/.test(char) ? char : match))
+
+describe('ai unit ncurator ref codec', () => {
+  const cases: Array<{
+    name: string
+    label: string
+    path: string
+    resourceType: NcuratorRefResourceType
+  }> = [
+    {
+      name: 'windows path with dot-prefixed hidden dir (the reported bug)',
+      label: '交互式探究学习案例：产业转移.docx',
+      path: 'D:\\1-work-space\\test\\workspace\\.ncurator\\assets\\d6fd02d9-b641-4a73-b047-0f286e2e5072\\交互式探究学习案例：产业转移.docx',
+      resourceType: 'file'
+    },
+    {
+      name: 'windows path with balanced parens and a space',
+      label: '报告 (v2).docx',
+      path: 'D:\\a\\b (v2)\\报告.docx',
+      resourceType: 'file'
+    },
+    {
+      name: 'windows path ending in a lone close paren',
+      label: 'end).docx',
+      path: 'D:\\weird\\end).docx',
+      resourceType: 'file'
+    },
+    {
+      name: 'mac path with ampersand and space',
+      label: 'report & draft.docx',
+      path: '/Users/x/notes/report & draft.docx',
+      resourceType: 'file'
+    },
+    {
+      name: 'path with plus, equals and hash',
+      label: 'e#f.docx',
+      path: 'C:\\a+b\\c=d\\e#f.docx',
+      resourceType: 'file'
+    },
+    {
+      name: 'unicode mac path with slashes preserved',
+      label: '客户周会纪要.docx',
+      path: '/tmp/工作/客户周会纪要.docx',
+      resourceType: 'file'
+    },
+    {
+      name: 'web url with query parameters',
+      label: '审批规则',
+      path: 'https://example.com/a?x=1&name=测试',
+      resourceType: 'web'
+    }
+  ]
+
+  it.each(cases)('round-trips build -> parse for $name', ({ label, path, resourceType }) => {
+    const markdown = buildNcuratorRefMarkdown({ label, path, resourceType, kind: 'reference' })
+    const href = extractHref(markdown)
+
+    // CommonMark must not alter the destination we produced.
+    expect(commonmarkUnescapeDestination(href)).toBe(href)
+
+    const parsed = parseNcuratorRefHref(href)
+    expect(parsed).toEqual({
+      type: 'reference',
+      kind: 'reference',
+      resourceType,
+      label,
+      path
+    })
+  })
+
+  it('encodes every character CommonMark or URLSearchParams would break on', () => {
+    const encoded = encodeNcuratorRefValue('D:\\a (b)\\c&d=e+f#g<h>i j.docx')
+    // none of these survive as literals inside a link destination / query value
+    expect(encoded).not.toMatch(/[\\()<>&=+#\s]/)
+    // decodes back cleanly
+    expect(decodeURIComponent(encoded)).toBe('D:\\a (b)\\c&d=e+f#g<h>i j.docx')
+  })
+
+  it('keeps CJK text and path separators human-readable', () => {
+    const encoded = encodeNcuratorRefValue('/Users/test/工作/客户周会纪要.docx')
+    expect(encoded).toBe('/Users/test/工作/客户周会纪要.docx')
+    expect(encoded).not.toContain('%')
+  })
+
+  it('falls back to normal link when kind is missing', () => {
+    const href = 'ncurator://ref?resourceType=file&path=%2Ftmp%2Fa.docx'
+    expect(parseNcuratorRefHref(href)).toEqual({ type: 'normal', href })
+  })
+})

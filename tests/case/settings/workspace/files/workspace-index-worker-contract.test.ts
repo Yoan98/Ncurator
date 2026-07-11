@@ -230,7 +230,7 @@ parentPort.on('message', (request) => {
         })
         let exitError = ''
         try {
-          await exitClient.prepareFile({
+          await exitClient.prepareSource({
             workspaceId: 'workspace-index-worker-contract',
             documentId: 'exit-worker-document',
             filePath: workerFilePath,
@@ -239,7 +239,7 @@ parentPort.on('message', (request) => {
         } catch (error) {
           exitError = error instanceof Error ? error.message : String(error)
         }
-        const exitRecovery = await exitClient.prepareFile({
+        const exitRecovery = await exitClient.prepareSource({
           workspaceId: 'workspace-index-worker-contract',
           documentId: 'exit-worker-document-retry',
           filePath: workerFilePath,

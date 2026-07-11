@@ -577,6 +577,48 @@ describe('workbench chat run backend', () => {
     expect(snapshot.runs?.[0].events.map((event) => event.type)).not.toContain('answer_token')
   })
 
+  it('completed-run-process-events-are-restored-through-run-summaries', async () => {
+    // Switching back to a conversation goes through getSessionRunSummaries, whose
+    // snapshots must re-hydrate a completed run's events from the ai_run_event table
+    // (run.processEvents is empty when loaded from storage).
+    const setup = await createTestService()
+    const run = await submitAiRun(setup)
+    const service = setup.service as ChatRunServicePrivate
+
+    await service.queueRunEvent(run.id, {
+      type: 'assistant_process_group_started',
+      runId: run.id,
+      groupId: `${run.id}:thinking`,
+      kind: 'thinking',
+      display: { kind: 'thinking' },
+      createdAt: Date.now()
+    })
+    await service.queueRunEvent(run.id, {
+      type: 'answer_token',
+      runId: run.id,
+      token: 'partial'
+    })
+    await service.queueRunEvent(run.id, {
+      type: 'answer_completed',
+      runId: run.id,
+      text: 'final'
+    })
+    await service.queueRunEvent(run.id, {
+      type: 'run_completed',
+      runId: run.id
+    })
+
+    const summaries = await setup.service.getSessionRunSummaries('session-1')
+
+    expect(summaries.runs).toHaveLength(1)
+    expect(summaries.runs[0].run.status).toBe('completed')
+    expect(summaries.runs[0].events.map((event) => event.type)).toContain(
+      'assistant_process_group_started'
+    )
+    expect(summaries.runs[0].events.map((event) => event.type)).toContain('answer_completed')
+    expect(summaries.runs[0].events.map((event) => event.type)).not.toContain('answer_token')
+  })
+
   it('startup-recovery-marks-interrupted-runs-failed', async () => {
     const setup = await createTestService()
     await seedSession(setup.storage)

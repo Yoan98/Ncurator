@@ -5,7 +5,7 @@ import path from 'path'
 const E2E_USER_DATA_PATH = String(process.env.NCURATOR_USER_DATA_PATH || '').trim()
 const E2E_MODELS_PATH = String(process.env.NCURATOR_MODELS_PATH || '').trim()
 const FALLBACK_USER_DATA_PATH = path.join(os.tmpdir(), 'ncurator-user-data')
-const KNOWN_DARWIN_USER_DATA_DIRS = ['ncurator', 'ncurator-desktop'] as const
+const KNOWN_USER_DATA_DIRS = ['ncurator', 'ncurator-desktop'] as const
 
 const isEphemeralPath = (targetPath: string, tmpDir: string = os.tmpdir()): boolean => {
   const normalizedTarget = path.resolve(targetPath)
@@ -33,10 +33,17 @@ export const listKnownPersistentUserDataPaths = (
   platform: NodeJS.Platform = process.platform,
   homeDir: string = os.homedir()
 ): string[] => {
-  if (platform !== 'darwin') return []
-  return KNOWN_DARWIN_USER_DATA_DIRS.map((dirName) =>
-    path.join(homeDir, 'Library', 'Application Support', dirName)
-  )
+  if (platform === 'darwin') {
+    return KNOWN_USER_DATA_DIRS.map((dirName) =>
+      path.join(homeDir, 'Library', 'Application Support', dirName)
+    )
+  }
+  if (platform === 'win32') {
+    return KNOWN_USER_DATA_DIRS.map((dirName) =>
+      path.join(homeDir, 'AppData', 'Roaming', dirName)
+    )
+  }
+  return []
 }
 
 const resolveElectronUserDataPath = (): string => {

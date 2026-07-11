@@ -211,7 +211,7 @@ export class ChatRunService {
       recentMessageIds
     )
     const response = {
-      runs: await Promise.all(runs.map((run) => this.buildRunSnapshot(run, false)))
+      runs: await Promise.all(runs.map((run) => this.buildRunSnapshot(run)))
     }
     this.logSlowChatQuery('chat-session-run-summaries', startedAt, {
       sessionId: normalizedSessionId,
@@ -420,11 +420,11 @@ export class ChatRunService {
     return { success: true }
   }
 
-  private async buildRunSnapshot(run: AiRunRecord, loadEventsFallback = true) {
-    const processEvents = (run.processEvents || []).filter(isSnapshotEvent)
+  private async buildRunSnapshot(run: AiRunRecord) {
+    const inlineEvents = (run.processEvents || []).filter(isSnapshotEvent)
     const events =
-      processEvents.length > 0 || !loadEventsFallback
-        ? processEvents
+      inlineEvents.length > 0
+        ? inlineEvents
         : (await this.deps.aiRunStore.listEvents(run.id))
             .map((record) => record.event)
             .filter(isSnapshotEvent)

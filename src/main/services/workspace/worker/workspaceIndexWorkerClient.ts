@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import { Worker } from 'node:worker_threads'
 import { fileURLToPath } from 'node:url'
+import { MODELS_PATH } from '../../../utils/paths'
 import { WORKSPACE_INDEX_WORKER_TIMEOUT_MS } from '../constants'
 import type {
   WorkspaceIndexWorkerClientOptions,
@@ -37,7 +38,8 @@ export class WorkspaceIndexWorkerClient {
       throw new Error(`workspace index worker entry not found: ${workerPath}`)
     }
     const worker = new Worker(this.workerUrl, {
-      name: 'workspace-index-worker'
+      name: 'workspace-index-worker',
+      workerData: { modelsPath: MODELS_PATH }
     })
     worker.on('message', (response: WorkspaceIndexWorkerResponse) => {
       const pending = this.pending.get(response.requestId)
@@ -108,7 +110,7 @@ export class WorkspaceIndexWorkerClient {
     })
   }
 
-  public async prepareFile(
+  public async prepareSource(
     input: WorkspaceKnowledgePrepareWorkerInput
   ): Promise<WorkspaceKnowledgePrepareWorkerResult> {
     const response = await this.call(input)

@@ -288,6 +288,7 @@ textarea,
 
 .windows-titlebar-button {
   @apply flex flex-1 items-center justify-center text-[#787774] transition-colors hover:bg-[#F4F4F2];
+  -webkit-app-region: no-drag;
 }
 
 .windows-titlebar-close:hover {
@@ -370,6 +371,22 @@ textarea,
   position: relative;
   z-index: 2;
   overflow: hidden;
+}
+
+/* antd 弹层渲染在 document.body 的 portal 里，落在 app-shell 容器外，
+   在 Windows 上需显式 no-drag，否则点击会被顶部拖拽区吞掉 */
+.ant-popover,
+.ant-popconfirm,
+.ant-dropdown,
+.ant-select-dropdown,
+.ant-cascader-dropdown,
+.ant-mentions-dropdown,
+.ant-modal-root,
+.ant-modal-wrap,
+.ant-message,
+.ant-notification,
+.ant-tooltip {
+  -webkit-app-region: no-drag;
 }
 
 .ant-tooltip {
@@ -646,7 +663,6 @@ textarea,
   z-index: 4;
   user-select: none;
   -webkit-user-select: none;
-  -webkit-app-region: drag;
 }
 
 .nc-settings-topbar {

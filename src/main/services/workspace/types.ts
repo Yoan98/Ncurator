@@ -41,7 +41,7 @@ export type WorkspaceKnowledgeChunkInput = {
   document_id: string
   workspace_id: string
   document_name: string
-  source_type: 'file'
+  source_type: 'file' | 'web'
   metadata: { page: number }
 }
 
@@ -59,6 +59,19 @@ export type WorkspaceKnowledgeCache = {
   saveVectorSnapshot: (snapshot: WorkspaceKnowledgeVectorSnapshot) => Promise<void>
 }
 
+/** 网页正文源：已抓好的文本，无本地文件路径 */
+export type WorkspaceKnowledgeWebInput = {
+  sourceType: 'web'
+  workspaceId: string
+  documentId: string
+  documentName: string
+  sourceUrl: string
+  rawText: string
+  contentHash: string
+  createdAt?: number
+  cache?: WorkspaceKnowledgeCache
+}
+
 export type WorkspaceKnowledgeIndexInput = {
   workspaceId: string
   documentId: string
@@ -68,14 +81,28 @@ export type WorkspaceKnowledgeIndexInput = {
   cache?: WorkspaceKnowledgeCache
 }
 
-export type WorkspaceKnowledgePrepareWorkerInput = {
-  workspaceId: string
-  documentId: string
-  filePath: string
-  documentName: string
-  cachedSplit?: WorkspaceKnowledgeSplitSnapshot | null
-  cachedVectors?: WorkspaceKnowledgeVectorSnapshot | null
-}
+/** worker 入参：文件源（读本地文件）或网页源（直传文本） */
+export type WorkspaceKnowledgePrepareWorkerInput =
+  | {
+      sourceType?: 'file'
+      workspaceId: string
+      documentId: string
+      filePath: string
+      documentName: string
+      cachedSplit?: WorkspaceKnowledgeSplitSnapshot | null
+      cachedVectors?: WorkspaceKnowledgeVectorSnapshot | null
+    }
+  | {
+      sourceType: 'web'
+      workspaceId: string
+      documentId: string
+      documentName: string
+      sourceUrl: string
+      rawText: string
+      contentHash: string
+      cachedSplit?: WorkspaceKnowledgeSplitSnapshot | null
+      cachedVectors?: WorkspaceKnowledgeVectorSnapshot | null
+    }
 
 export type WorkspaceKnowledgeIndexedChunk = WorkspaceKnowledgeChunkSnapshot & {
   id: string

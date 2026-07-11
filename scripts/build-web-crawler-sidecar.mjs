@@ -143,10 +143,25 @@ const ensureSidecarDependencies = (pythonPath) => {
   fs.writeFileSync(STAMP_PATH, `${expectedHash}\n`, 'utf8')
 }
 
+const PLAYWRIGHT_BROWSER_CHECK_SNIPPET = [
+  'import pathlib',
+  'import playwright',
+  "base = pathlib.Path(playwright.__file__).resolve().parent / 'driver' / 'package' / '.local-browsers'",
+  "prefixes = ('chromium-', 'chromium_headless_shell-', 'ffmpeg-')",
+  'names = {item.name for item in base.iterdir()} if base.exists() else set()',
+  'ok = all(any(name.startswith(prefix) for name in names) for prefix in prefixes)',
+  'raise SystemExit(0 if ok else 1)'
+].join('\n')
+
+const hasBundledPlaywrightBrowser = (pythonPath) =>
+  canRun(pythonPath, ['-c', PLAYWRIGHT_BROWSER_CHECK_SNIPPET])
+
 const ensureBundledPlaywrightBrowser = (pythonPath) => {
   const expectedHash = computeRequirementsHash()
   const installedHash = readInstalledPlaywrightBrowserHash()
-  if (expectedHash === installedHash) {
+  // The stamp alone is not enough: an interrupted build can wipe the browser
+  // bundle from the venv while the stamp still claims it is installed.
+  if (expectedHash === installedHash && hasBundledPlaywrightBrowser(pythonPath)) {
     return
   }
 

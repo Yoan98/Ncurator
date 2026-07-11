@@ -121,7 +121,12 @@ const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
       title: true,
       url: true,
       snippet: true
-    }
+    },
+    error: true,
+    reason: true,
+    decisionHint: true,
+    estimatedTokens: true,
+    limit: true
   },
   web_crawl: {
     requestedUrl: true,
@@ -129,6 +134,13 @@ const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
     title: true,
     markdown: true,
     publishedAt: true,
+    error: true,
+    reason: true,
+    decisionHint: true,
+    estimatedTokens: true,
+    limit: true,
+    statusCode: true,
+    url: true,
     links: {
       internal: {
         href: true,

@@ -22,6 +22,7 @@ import { loadRootEnvOnce } from '../core/rootEnv'
 import {
   SETTINGS_E2E_TIMEOUT_MS,
   SETTINGS_REAL_WORKSPACE_E2E_TIMEOUT_MS,
+  bindWorkspaceRootThroughIpc,
   getWorkspaceIndexCounts,
   getSettingsLocator,
   getSettingsPrefixLocator,
@@ -582,6 +583,16 @@ export const bindWorkspaceRootThroughSettingsUi = async (
           }, rootPath)
           .catch(() => false)
       })
+
+  if (process.platform !== 'darwin') {
+    // Native directory dialog automation is implemented for macOS only; other
+    // platforms bind through the same IPC the dialog flow ends up calling.
+    await bindWorkspaceRootThroughIpc(page, rootPath)
+    if (await waitForSelectedRootPath(8_000)) return
+    throw new Error(
+      `workspace root was bound through ipc but not reflected in settings ui: ${rootPath}`
+    )
+  }
 
   for (let attempt = 1; attempt <= 4; attempt += 1) {
     const electronProcessId = await readElectronProcessId(page)

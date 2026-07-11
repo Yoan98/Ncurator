@@ -91,6 +91,15 @@ def restore_playwright_browser_bundle(stashed_bundle: tuple[Path, Path]) -> None
     shutil.move(long_path(stash), long_path(source))
 
 
+def recover_stranded_playwright_browser_bundle(build_path: Path) -> None:
+    # An interrupted build can leave the only copy of the browsers in the stash;
+    # move it back before the build dir (and the stash with it) gets wiped.
+    stash = build_path / "playwright-local-browsers-stash"
+    if not stash.exists():
+        return
+    restore_playwright_browser_bundle((resolve_playwright_local_browsers_path(), stash))
+
+
 def main() -> int:
     if not SIDECAR_SCRIPT.exists():
         print(f"Missing sidecar script: {SIDECAR_SCRIPT}", file=sys.stderr)
@@ -111,6 +120,7 @@ def main() -> int:
     sidecar_dist_dir = OUTPUT_DIR / SIDECAR_NAME
     if sidecar_dist_dir.exists():
         shutil.rmtree(long_path(sidecar_dist_dir))
+    recover_stranded_playwright_browser_bundle(build_path)
     if build_path.exists():
         shutil.rmtree(long_path(build_path))
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)

@@ -1,41 +1,15 @@
 import type { HumanReference } from '../types'
+import {
+  buildNcuratorRefMarkdown as buildSharedNcuratorRefMarkdown,
+  NCURATOR_REF_MARKDOWN_FORMAT_EXAMPLE,
+  type NcuratorRefKind,
+  type NcuratorRefResourceType
+} from '../../../../../shared/ncuratorRef'
 
-const normalizePath = (value: string): string => value.trim()
+export { NCURATOR_REF_MARKDOWN_FORMAT_EXAMPLE }
+export type { NcuratorRefKind, NcuratorRefResourceType }
 
-const escapeRefQueryValue = (value: string): string =>
-  value
-    .trim()
-    .replace(/%/g, '%25')
-    .replace(/[\r\n]+/g, ' ')
-    .replace(/&/g, '%26')
-    .replace(/=/g, '%3D')
-    .replace(/ /g, '%20')
-    .replace(/\)/g, '%29')
-
-export type NcuratorRefKind = 'reference' | 'normal'
-export type NcuratorRefResourceType = HumanReference['resourceType']
-
-export const buildNcuratorRefMarkdown = (input: {
-  label: string
-  path: string
-  resourceType: NcuratorRefResourceType
-  kind: NcuratorRefKind
-}): string => {
-  const params = [
-    `kind=${input.kind}`,
-    `resourceType=${input.resourceType}`,
-    `label=${escapeRefQueryValue(input.label)}`,
-    `path=${escapeRefQueryValue(normalizePath(input.path))}`
-  ].join('&')
-  return `[${input.label}](ncurator://ref?${params})`
-}
-
-export const NCURATOR_REF_MARKDOWN_FORMAT_EXAMPLE = buildNcuratorRefMarkdown({
-  label: '资料名称',
-  path: '/workspace/资料.docx',
-  resourceType: 'file',
-  kind: 'reference'
-})
+export const buildNcuratorRefMarkdown = buildSharedNcuratorRefMarkdown
 
 export const buildEvidenceReferenceMarkdown = (reference: HumanReference): string =>
   buildNcuratorRefMarkdown({ ...reference, kind: 'reference' })

@@ -6,7 +6,9 @@ import { isSupportedLocalFilePath } from '../ingestion/loader'
 import type {
   WorkspaceKnowledgeChunkInput,
   WorkspaceKnowledgeIndexInput,
-  WorkspaceKnowledgeIndexResult
+  WorkspaceKnowledgeIndexResult,
+  WorkspaceKnowledgePrepareWorkerResult,
+  WorkspaceKnowledgeWebInput
 } from './types'
 import { WORKSPACE_CHUNK_WRITE_BATCH_SIZE } from './constants'
 import { computeWorkspaceFileContentHash } from './utils/knowledge'
@@ -30,10 +32,7 @@ export class WorkspaceKnowledgePrepareService {
     const contentHash = await this.computeContentHash(input.filePath)
     const fileExt = path.extname(input.filePath).toLowerCase()
     const cachedSplit = input.cache
-      ? await input.cache.loadSplitSnapshot({
-          contentHash,
-          fileExt
-        })
+      ? await input.cache.loadSplitSnapshot({ contentHash, fileExt })
       : null
     const cachedVectors = input.cache
       ? await input.cache.loadVectorSnapshot({
@@ -42,7 +41,8 @@ export class WorkspaceKnowledgePrepareService {
           modelName: this.deps.embeddingService.getModelName()
         })
       : null
-    const indexedDocument = await getWorkspaceIndexWorkerClient().prepareFile({
+    const indexedDocument = await getWorkspaceIndexWorkerClient().prepareSource({
+      sourceType: 'file',
       workspaceId: input.workspaceId,
       documentId: input.documentId,
       filePath: input.filePath,
@@ -50,16 +50,104 @@ export class WorkspaceKnowledgePrepareService {
       cachedSplit,
       cachedVectors
     })
-    const usedCachedSplit = Boolean(cachedSplit)
+
+    await this.persistCacheSnapshots({ indexedDocument, cache: input.cache, cachedSplit, cachedVectors })
+
+    return await this.writeIndexedDocument({
+      indexedDocument,
+      workspaceId: input.workspaceId,
+      documentId: input.documentId,
+      documentName: input.documentName,
+      filePath: input.filePath,
+      sourceType: 'file',
+      contentHash,
+      fileExt,
+      createdAt: input.createdAt,
+      usedCachedSplit: Boolean(cachedSplit),
+      cachedVectors
+    })
+  }
+
+  public async indexWebText(
+    input: WorkspaceKnowledgeWebInput
+  ): Promise<WorkspaceKnowledgeIndexResult> {
+    const contentHash = input.contentHash
+    const fileExt = '.html'
+    const cachedSplit = input.cache
+      ? await input.cache.loadSplitSnapshot({ contentHash, fileExt })
+      : null
+    const cachedVectors = input.cache
+      ? await input.cache.loadVectorSnapshot({
+          contentHash,
+          fileExt,
+          modelName: this.deps.embeddingService.getModelName()
+        })
+      : null
+    const indexedDocument = await getWorkspaceIndexWorkerClient().prepareSource({
+      sourceType: 'web',
+      workspaceId: input.workspaceId,
+      documentId: input.documentId,
+      documentName: input.documentName,
+      sourceUrl: input.sourceUrl,
+      rawText: input.rawText,
+      contentHash,
+      cachedSplit,
+      cachedVectors
+    })
+
+    await this.persistCacheSnapshots({ indexedDocument, cache: input.cache, cachedSplit, cachedVectors })
+
+    return await this.writeIndexedDocument({
+      indexedDocument,
+      workspaceId: input.workspaceId,
+      documentId: input.documentId,
+      documentName: input.documentName,
+      filePath: input.sourceUrl,
+      sourceType: 'web',
+      contentHash,
+      fileExt,
+      createdAt: input.createdAt,
+      usedCachedSplit: Boolean(cachedSplit),
+      cachedVectors
+    })
+  }
+
+  private async persistCacheSnapshots(input: {
+    indexedDocument: WorkspaceKnowledgePrepareWorkerResult
+    cache?: WorkspaceKnowledgeIndexInput['cache']
+    cachedSplit: unknown
+    cachedVectors: { vectors: number[][] } | null
+  }): Promise<void> {
+    if (!input.cache) return
+    const usedCachedSplit = Boolean(input.cachedSplit)
     const usedCachedVectors =
-      Boolean(cachedVectors) &&
-      cachedVectors?.vectors.length === indexedDocument.splitSnapshot.chunks.length
-    if (!usedCachedSplit && input.cache) {
-      await input.cache.saveSplitSnapshot(indexedDocument.splitSnapshot)
+      Boolean(input.cachedVectors) &&
+      input.cachedVectors?.vectors.length === input.indexedDocument.splitSnapshot.chunks.length
+    if (!usedCachedSplit) {
+      await input.cache.saveSplitSnapshot(input.indexedDocument.splitSnapshot)
     }
-    if (!usedCachedVectors && input.cache) {
-      await input.cache.saveVectorSnapshot(indexedDocument.vectorSnapshot)
+    if (!usedCachedVectors) {
+      await input.cache.saveVectorSnapshot(input.indexedDocument.vectorSnapshot)
     }
+  }
+
+  private async writeIndexedDocument(input: {
+    indexedDocument: WorkspaceKnowledgePrepareWorkerResult
+    workspaceId: string
+    documentId: string
+    documentName: string
+    filePath: string
+    sourceType: 'file' | 'web'
+    contentHash: string
+    fileExt: string
+    createdAt?: number
+    usedCachedSplit: boolean
+    cachedVectors: { vectors: number[][] } | null
+  }): Promise<WorkspaceKnowledgeIndexResult> {
+    const indexedDocument = input.indexedDocument
+    const usedCachedVectors =
+      Boolean(input.cachedVectors) &&
+      input.cachedVectors?.vectors.length === indexedDocument.splitSnapshot.chunks.length
 
     const now = Date.now()
     const newGenerationId = uuidv4()
@@ -71,22 +159,22 @@ export class WorkspaceKnowledgePrepareService {
         await this.deps.documentsStore.updateDocumentById(input.documentId, {
           name: input.documentName,
           file_path: input.filePath,
-          source_type: 'file',
+          source_type: input.sourceType,
           workspace_id: input.workspaceId,
-          content_hash: contentHash
+          content_hash: input.contentHash
         })
         await this.deps.documentsStore.markDocumentIndexing(input.documentId, now)
       } else {
         await this.deps.documentsStore.addDocument({
           id: input.documentId,
           name: input.documentName,
-          source_type: 'file',
+          source_type: input.sourceType,
           workspace_id: input.workspaceId,
           file_path: input.filePath,
           created_at: input.createdAt || now,
           updated_at: now,
           import_status: 1,
-          content_hash: contentHash
+          content_hash: input.contentHash
         })
       }
 
@@ -100,7 +188,7 @@ export class WorkspaceKnowledgePrepareService {
       await this.deps.documentsStore.activateDocumentGeneration({
         documentId: input.documentId,
         generationId: newGenerationId,
-        contentHash,
+        contentHash: input.contentHash,
         importStatus: 2,
         updatedAt: Date.now()
       })
@@ -119,12 +207,12 @@ export class WorkspaceKnowledgePrepareService {
       return {
         documentId: input.documentId,
         filePath: input.filePath,
-        fileExt,
+        fileExt: input.fileExt,
         documentName: input.documentName,
         generationId: newGenerationId,
-        contentHash,
+        contentHash: input.contentHash,
         chunkCount: indexedDocument.chunks.length,
-        usedCachedSplit,
+        usedCachedSplit: input.usedCachedSplit,
         usedCachedVectors,
         chunks: indexedDocument.chunks.map((chunk) => ({
           id: chunk.id,
@@ -152,15 +240,8 @@ export class WorkspaceKnowledgePrepareService {
     vectors: number[][]
     generationId: string
   }): Promise<void> {
-    for (
-      let start = 0;
-      start < input.chunks.length;
-      start += WORKSPACE_CHUNK_WRITE_BATCH_SIZE
-    ) {
-      const batchChunks = input.chunks.slice(
-        start,
-        start + WORKSPACE_CHUNK_WRITE_BATCH_SIZE
-      )
+    for (let start = 0; start < input.chunks.length; start += WORKSPACE_CHUNK_WRITE_BATCH_SIZE) {
+      const batchChunks = input.chunks.slice(start, start + WORKSPACE_CHUNK_WRITE_BATCH_SIZE)
       const batchVectors = input.vectors
         .slice(start, start + batchChunks.length)
         .map((vector) => Float32Array.from(vector))

@@ -349,11 +349,41 @@ export const createWorkspaceThroughSettingsUi = async (
   return await readWorkspaceIdFromSettingsCard(page, workspaceName)
 }
 
+export const bindWorkspaceRootThroughIpc = async (page: Page, rootPath: string): Promise<void> => {
+  const response = await page.evaluate(async (targetRootPath) => {
+    const list = await window.api.workspaceList()
+    const pending = list.items.filter((item) => !String(item.root_path || '').trim())
+    if (pending.length !== 1) {
+      return {
+        success: false,
+        error: `expected exactly one workspace without a root path, found ${String(pending.length)}`
+      }
+    }
+    return await window.api.workspaceSetRootPath({
+      workspaceId: pending[0].id,
+      rootPath: targetRootPath
+    })
+  }, rootPath)
+  if (!response.success) {
+    throw new Error(`failed to bind workspace root through ipc: ${response.error || 'unknown error'}`)
+  }
+}
+
 export const bindWorkspaceRootThroughSettingsUi = async (
   page: Page,
   rootPath: string
 ): Promise<void> => {
   await navigateToSettingsSection(page, 'workspace')
+  if (process.platform !== 'darwin') {
+    // Native directory dialog automation is implemented for macOS only; other
+    // platforms bind through the same IPC the dialog flow ends up calling.
+    await bindWorkspaceRootThroughIpc(page, rootPath)
+    await navigateToSettingsSection(page, 'workspace')
+    if (await waitForWorkspaceRootPathVisible(page, rootPath)) return
+    throw new Error(
+      `workspace root was bound through ipc but not reflected in settings ui: ${rootPath}`
+    )
+  }
   const rootPathButton = page
     .getByRole('button', { name: /设置工作目录|更换工作目录/u })
     .first()
