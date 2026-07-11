@@ -312,7 +312,6 @@ const ModelSettingsPanel: React.FC = () => {
             rules={[{ required: true, message: '请输入配置名称' }]}
           >
             <Input
-              size="large"
               placeholder="例如：公司 OpenAI"
               data-testid={settingsSelectors.modelNameInput}
             />
@@ -330,24 +329,20 @@ const ModelSettingsPanel: React.FC = () => {
             name="base_url"
             label="模型服务地址"
             rules={[{ required: true, message: '请输入模型服务地址' }]}
-            help="填写模型服务提供的 API Base URL"
           >
             <AutoComplete
               defaultActiveFirstOption
-              placeholder="https://api.openai.com/v1"
+              placeholder="填写模型服务提供的 API Base URL"
               allowClear
               data-testid={settingsSelectors.modelBaseUrlInput}
               options={PROVIDER_OPTIONS.map((provider) => ({
                 value: provider.value,
                 label: (
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="flex h-5 w-5 items-center justify-center">
-                        {provider.icon}
-                      </div>
-                      <span className="font-medium text-[#37352F]">{provider.label}</span>
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-5 w-5 items-center justify-center">
+                      {provider.icon}
                     </div>
-                    <span className="text-xs text-[#9B9A97]">{provider.desc}</span>
+                    <span className="font-medium text-[#37352F]">{provider.label}</span>
                   </div>
                 )
               }))}
@@ -372,7 +367,6 @@ const ModelSettingsPanel: React.FC = () => {
             rules={[{ required: true, message: '请输入 API Key' }]}
           >
             <Input.Password
-              size="large"
               placeholder="sk-..."
               data-testid={settingsSelectors.modelApiKeyInput}
             />
