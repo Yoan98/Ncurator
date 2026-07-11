@@ -86,6 +86,12 @@ export const settingsSelectors = {
   modelDeleteButtonPrefix: 'settings-model-delete-button'
 } as const
 
+export const windowSelectors = {
+  minimizeButton: 'window-minimize-button',
+  maximizeButton: 'window-maximize-button',
+  closeButton: 'window-close-button'
+} as const
+
 export const vectorSelectors = {
   page: 'vector-page',
   list: 'vector-model-list',

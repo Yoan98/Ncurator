@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import jsPreviewDocx from '@js-preview/docx'
 import type { DocRendererProps, IDocument } from 'react-doc-viewer'
 import '@js-preview/docx/lib/index.css'
@@ -40,6 +40,7 @@ const CustomDocxRenderer = ({ mainState }: DocRendererProps) => {
   const currentDocument = mainState.currentDocument as DocViewerDocument | undefined
   const containerRef = useRef<HTMLDivElement | null>(null)
   const lastRenderedKeyRef = useRef<string | null>(null)
+  const [renderError, setRenderError] = useState<string | null>(null)
   const documentFile = currentDocument?.file
   const documentFileData = currentDocument?.fileData
   const documentUri = currentDocument?.uri
@@ -58,6 +59,7 @@ const CustomDocxRenderer = ({ mainState }: DocRendererProps) => {
 
     let cancelled = false
     const renderDocx = async (): Promise<void> => {
+      setRenderError(null)
       let file = documentFile
       if (!file && documentFileData instanceof Blob) {
         file = documentFileData
@@ -73,10 +75,18 @@ const CustomDocxRenderer = ({ mainState }: DocRendererProps) => {
           file = await response.blob()
         } catch (error) {
           console.error('Failed to fetch docx', error)
+          if (!cancelled) {
+            setRenderError(error instanceof Error ? error.message : '读取 docx 预览数据失败')
+          }
           return
         }
       }
-      if (!file || cancelled) return
+      if (!file || cancelled) {
+        if (!file && !cancelled) {
+          setRenderError('缺少 docx 预览数据')
+        }
+        return
+      }
 
       container.innerHTML = ''
       const previewer = jsPreviewDocx.init(container)
@@ -88,6 +98,9 @@ const CustomDocxRenderer = ({ mainState }: DocRendererProps) => {
         }
       } catch (error) {
         console.error('Failed to render docx preview', error)
+        if (!cancelled) {
+          setRenderError(error instanceof Error ? error.message : 'docx 渲染失败')
+        }
       }
     }
 
@@ -101,10 +114,18 @@ const CustomDocxRenderer = ({ mainState }: DocRendererProps) => {
 
   return (
     <div
-      ref={containerRef}
-      className="docx-content h-full w-full overflow-auto bg-[#F7F7F5] px-3 py-3"
+      className="relative h-full w-full bg-[#F7F7F5]"
       data-testid={workbenchSelectors.docxViewer}
-    />
+    >
+      <div ref={containerRef} className="docx-content h-full w-full overflow-auto px-3 py-3" />
+      {renderError ? (
+        <div className="absolute inset-0 flex items-center justify-center bg-[#F7F7F5] px-6 text-center text-sm text-[#787774]">
+          <span className="max-w-[460px] whitespace-pre-wrap break-words">
+            {`docx 预览渲染失败：${renderError}`}
+          </span>
+        </div>
+      ) : null}
+    </div>
   )
 }
 

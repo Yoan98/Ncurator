@@ -24,11 +24,17 @@ export type ParsedNcuratorRef =
       path: string
     }
   | {
+      type: 'invalid'
+      href: string
+      reason: string
+    }
+  | {
       type: 'normal'
       href?: string
     }
 
 const REF_PREFIX = 'ncurator://ref?'
+const REF_QUERY_KEYS = ['kind', 'resourceType', 'label', 'path'] as const
 
 /**
  * Characters that must be percent-encoded inside a ref value:
@@ -91,18 +97,65 @@ export const NCURATOR_REF_MARKDOWN_FORMAT_EXAMPLE = buildNcuratorRefMarkdown({
   kind: 'reference'
 })
 
+const decodeRefValue = (value: string): string => {
+  const plusSafeValue = value.replace(/\+/g, '%2B')
+  try {
+    return decodeURIComponent(plusSafeValue)
+  } catch {
+    return value
+  }
+}
+
+const parseRefQuery = (query: string): Partial<Record<(typeof REF_QUERY_KEYS)[number], string>> => {
+  const fields: Partial<Record<(typeof REF_QUERY_KEYS)[number], string>> = {}
+  let cursor = 0
+
+  while (cursor < query.length) {
+    while (query[cursor] === '&') cursor += 1
+    if (cursor >= query.length) break
+
+    const equalsIndex = query.indexOf('=', cursor)
+    if (equalsIndex === -1) break
+    const key = query.slice(cursor, equalsIndex)
+    const typedKey = REF_QUERY_KEYS.find((candidate) => candidate === key)
+    const valueStart = equalsIndex + 1
+    let valueEnd = query.length
+
+    for (const candidate of REF_QUERY_KEYS) {
+      const marker = `&${candidate}=`
+      const markerIndex = query.indexOf(marker, valueStart)
+      if (markerIndex !== -1 && markerIndex < valueEnd) {
+        valueEnd = markerIndex
+      }
+    }
+
+    if (typedKey) {
+      fields[typedKey] = decodeRefValue(query.slice(valueStart, valueEnd))
+    }
+    cursor = valueEnd + 1
+  }
+
+  return fields
+}
+
+const normalizeRefPath = (path: string): string =>
+  path
+    .trim()
+    .replace(/^\/([a-zA-Z]:[\\/])/, '$1')
+    .replace(/^([a-zA-Z]:)(?![\\/])/, '$1/')
+
 export const parseNcuratorRefHref = (href?: string): ParsedNcuratorRef => {
   if (!href?.startsWith(REF_PREFIX)) {
     return { type: 'normal', href }
   }
 
   try {
-    const params = new URLSearchParams(href.slice(REF_PREFIX.length))
-    const rawKind = params.get('kind')
-    const rawResourceType = params.get('resourceType')
-    const path = params.get('path') || ''
+    const params = parseRefQuery(href.slice(REF_PREFIX.length))
+    const rawKind = params.kind
+    const rawResourceType = params.resourceType
+    const path = normalizeRefPath(params.path || '')
     if (!path || (rawKind !== 'reference' && rawKind !== 'normal')) {
-      return { type: 'normal', href }
+      return { type: 'invalid', href, reason: !path ? 'missing_path' : 'invalid_kind' }
     }
     const inferredResourceType: NcuratorRefResourceType = /^https?:\/\//i.test(path)
       ? 'web'
@@ -113,7 +166,7 @@ export const parseNcuratorRefHref = (href?: string): ParsedNcuratorRef => {
         : inferredResourceType
     const normalizedPath = path.replace(/\\/g, '/')
     const fallbackLabel = normalizedPath.split('/').filter(Boolean).pop() || normalizedPath || path
-    const label = params.get('label') || fallbackLabel
+    const label = params.label || fallbackLabel
     return {
       type: 'reference',
       kind: rawKind,
@@ -122,6 +175,85 @@ export const parseNcuratorRefHref = (href?: string): ParsedNcuratorRef => {
       path
     }
   } catch {
-    return { type: 'normal', href }
+    return { type: 'invalid', href, reason: 'parse_failed' }
   }
+}
+
+const isEscapedAt = (value: string, index: number): boolean => {
+  let slashCount = 0
+  for (let cursor = index - 1; cursor >= 0 && value[cursor] === '\\'; cursor -= 1) {
+    slashCount += 1
+  }
+  return slashCount % 2 === 1
+}
+
+const findMarkdownLinkTextEnd = (markdown: string, startIndex: number): number => {
+  for (let cursor = startIndex + 1; cursor < markdown.length; cursor += 1) {
+    if (markdown[cursor] === ']' && !isEscapedAt(markdown, cursor)) return cursor
+  }
+  return -1
+}
+
+const findMarkdownDestinationEnd = (markdown: string, startIndex: number): number => {
+  let depth = 0
+  for (let cursor = startIndex; cursor < markdown.length; cursor += 1) {
+    const char = markdown[cursor]
+    if (isEscapedAt(markdown, cursor)) continue
+    if (char === '(') {
+      depth += 1
+      continue
+    }
+    if (char === ')') {
+      if (depth === 0) return cursor
+      depth -= 1
+    }
+  }
+  return -1
+}
+
+export const normalizeNcuratorRefMarkdownLinks = (markdown: string): string => {
+  let output = ''
+  let cursor = 0
+
+  while (cursor < markdown.length) {
+    const linkTextStart = markdown.indexOf('[', cursor)
+    if (linkTextStart === -1) {
+      output += markdown.slice(cursor)
+      break
+    }
+
+    output += markdown.slice(cursor, linkTextStart)
+    const linkTextEnd = findMarkdownLinkTextEnd(markdown, linkTextStart)
+    const destinationStart = linkTextEnd + 2
+    if (
+      linkTextEnd === -1 ||
+      markdown[linkTextEnd + 1] !== '(' ||
+      !markdown.startsWith(REF_PREFIX, destinationStart)
+    ) {
+      output += markdown[linkTextStart]
+      cursor = linkTextStart + 1
+      continue
+    }
+
+    const destinationEnd = findMarkdownDestinationEnd(markdown, destinationStart)
+    if (destinationEnd === -1) {
+      output += markdown.slice(linkTextStart)
+      break
+    }
+
+    const destination = markdown.slice(destinationStart, destinationEnd)
+    const parsed = parseNcuratorRefHref(destination)
+    output +=
+      parsed.type === 'reference'
+        ? buildNcuratorRefMarkdown({
+            kind: parsed.kind,
+            resourceType: parsed.resourceType,
+            label: parsed.label,
+            path: parsed.path
+          })
+        : markdown.slice(linkTextStart, destinationEnd + 1)
+    cursor = destinationEnd + 1
+  }
+
+  return output
 }

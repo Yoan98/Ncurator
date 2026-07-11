@@ -35,7 +35,17 @@ const indentLines = (value: string, level: number): string =>
     .map((line) => `${'  '.repeat(level)}${line}`)
     .join('\n')
 
-const renderPlatformText = (ctx: AiRunContext): string => `当前 terminal 平台：${ctx.platform}`
+const renderLocalEnvironmentText = (ctx: AiRunContext): string => {
+  const now = new Date()
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'unknown'
+  return `
+<platform>${ctx.platform}</platform>
+<current_time>
+  <iso>${now.toISOString()}</iso>
+  <timezone>${timezone}</timezone>
+</current_time>
+`.trim()
+}
 
 const renderSkillCatalogToolSpecLine = (input: {
   spec: HumanToolSpec
@@ -194,7 +204,7 @@ export const buildBrainPrompt = (input: {
     - task_goal：用户的任务诉求。
     - reference_scope：当前工作区、默认知识范围、显式缩圈范围和可用边界。
     - search_strategy：当前任务默认遵循的检索思路提示。
-    - terminal_platform：当前 terminal 所在平台；如果你决定使用命令行，应据此选择命令语法。
+    - local_environment：当前本机运行环境；platform当前用户电脑平台，current_time 是当前系统时间。
     - conversation_history：当前会话历史视图。
     - summary：当前会话中跨任务仍有效的滚动摘要，用于理解用户在同一窗口里的连续主线、稳定偏好与当前状态。
     - recent_turns：最近几轮真实对话内容与产物，用于判断用户刚刚说了什么、你刚刚交付了什么。
@@ -333,9 +343,9 @@ ${input.state.task.userInput}
 ${renderReferenceScopeText(input.ctx.referenceScope)}
   </reference_scope>
 
-  <terminal_platform>
-${renderPlatformText(input.ctx)}
-  </terminal_platform>
+  <local_environment>
+${renderLocalEnvironmentText(input.ctx)}
+  </local_environment>
 
   <conversation_history>
     <summary>

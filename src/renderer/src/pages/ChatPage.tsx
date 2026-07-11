@@ -128,6 +128,9 @@ const WORKBENCH_POSITIONED_PANE_STYLE = {
   position: 'relative'
 } as React.CSSProperties
 
+const detectRendererPlatform = (): string =>
+  navigator.platform.toLowerCase().includes('win') ? 'win32' : 'darwin'
+
 const padTimePart = (value: number): string => String(value).padStart(2, '0')
 
 const formatUserMessageTime = (timestamp: number, now = Date.now()): string => {
@@ -2629,9 +2632,9 @@ const ChatPage: React.FC = () => {
   )
 
   // 获取平台信息
-  const [platform, setPlatform] = useState<string>('darwin')
+  const [platform, setPlatform] = useState<string>(() => detectRendererPlatform())
   useEffect(() => {
-    setPlatform(navigator.platform.toLowerCase().includes('win') ? 'win32' : 'darwin')
+    setPlatform(detectRendererPlatform())
   }, [])
 
   return (

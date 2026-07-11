@@ -1,5 +1,6 @@
 import React from 'react'
 import { HiMinus, HiStop, HiXMark } from 'react-icons/hi2'
+import { windowSelectors } from '../testing/selectors'
 
 const WindowsTitleBar: React.FC = () => {
   const handleMinimize = (): void => {
@@ -18,6 +19,7 @@ const WindowsTitleBar: React.FC = () => {
     <div className="windows-titlebar">
       <button
         type="button"
+        data-testid={windowSelectors.minimizeButton}
         className="windows-titlebar-button"
         onClick={handleMinimize}
         aria-label="最小化"
@@ -26,6 +28,7 @@ const WindowsTitleBar: React.FC = () => {
       </button>
       <button
         type="button"
+        data-testid={windowSelectors.maximizeButton}
         className="windows-titlebar-button"
         onClick={handleMaximize}
         aria-label="最大化"
@@ -34,6 +37,7 @@ const WindowsTitleBar: React.FC = () => {
       </button>
       <button
         type="button"
+        data-testid={windowSelectors.closeButton}
         className="windows-titlebar-button windows-titlebar-close"
         onClick={handleClose}
         aria-label="关闭"

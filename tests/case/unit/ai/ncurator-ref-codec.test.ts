@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildNcuratorRefMarkdown,
   encodeNcuratorRefValue,
+  normalizeNcuratorRefMarkdownLinks,
   parseNcuratorRefHref,
   type NcuratorRefResourceType
 } from '../../../../src/shared/ncuratorRef'
@@ -105,8 +106,53 @@ describe('ai unit ncurator ref codec', () => {
     expect(encoded).not.toContain('%')
   })
 
-  it('falls back to normal link when kind is missing', () => {
+  it('marks malformed ncurator links invalid when kind is missing', () => {
     const href = 'ncurator://ref?resourceType=file&path=%2Ftmp%2Fa.docx'
-    expect(parseNcuratorRefHref(href)).toEqual({ type: 'normal', href })
+    expect(parseNcuratorRefHref(href)).toEqual({ type: 'invalid', href, reason: 'invalid_kind' })
+  })
+
+  it('parses raw windows paths emitted without canonical encoding', () => {
+    const rawPath =
+      'D:\\1-work-space\\test\\workspace\\.ncurator\\assets\\d6fd02d9-b641-4a73-b047-0f286e2e5072\\交互式探究学习案例：产业转移.docx'
+    const href = `ncurator://ref?kind=reference&resourceType=file&label=交互式探究学习案例：产业转移.docx&path=${rawPath}`
+
+    expect(parseNcuratorRefHref(href)).toEqual({
+      type: 'reference',
+      kind: 'reference',
+      resourceType: 'file',
+      label: '交互式探究学习案例：产业转移.docx',
+      path: rawPath
+    })
+  })
+
+  it('normalizes raw markdown links before CommonMark can consume path backslashes', () => {
+    const rawPath =
+      'D:\\1-work-space\\test\\workspace\\.ncurator\\assets\\d6fd02d9-b641-4a73-b047-0f286e2e5072\\交互式探究学习案例：产业转移.docx'
+    const markdown = `[交互式探究学习案例：产业转移.docx](ncurator://ref?kind=reference&resourceType=file&label=交互式探究学习案例：产业转移.docx&path=${rawPath})`
+    const normalized = normalizeNcuratorRefMarkdownLinks(markdown)
+    const href = extractHref(normalized)
+
+    expect(href).toContain('%5C.ncurator%5Cassets')
+    expect(commonmarkUnescapeDestination(href)).toBe(href)
+    expect(parseNcuratorRefHref(href)).toEqual({
+      type: 'reference',
+      kind: 'reference',
+      resourceType: 'file',
+      label: '交互式探究学习案例：产业转移.docx',
+      path: rawPath
+    })
+  })
+
+  it('parses browser-normalized windows paths without a leading slash', () => {
+    const href =
+      'ncurator://ref?kind=reference&resourceType=file&label=报告.docx&path=/D:/work/a%20(b)/报告.docx'
+
+    expect(parseNcuratorRefHref(href)).toEqual({
+      type: 'reference',
+      kind: 'reference',
+      resourceType: 'file',
+      label: '报告.docx',
+      path: 'D:/work/a (b)/报告.docx'
+    })
   })
 })

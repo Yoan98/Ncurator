@@ -5,7 +5,7 @@ import type { AiRunContext } from '../../../../src/main/services/ai/types'
 
 const createFakeCtx = (): AiRunContext =>
   ({
-    platform: 'darwin',
+    platform: 'macos',
     runId: 'run-1',
     workspace: {
       id: 'ws-1',
@@ -21,6 +21,24 @@ const createFakeCtx = (): AiRunContext =>
   }) as AiRunContext
 
 describe('ai unit brain decision-hint prompt contract', () => {
+  it('renders local environment with platform and current system time', () => {
+    const state = createInitialHumanState({
+      taskId: 'task-1',
+      userInput: '检查当前环境'
+    })
+
+    const prompt = buildBrainPrompt({
+      state,
+      ctx: createFakeCtx()
+    }).user
+    const section = prompt.match(/<local_environment>([\s\S]*?)<\/local_environment>/)?.[1] || ''
+
+    expect(prompt).not.toContain('<terminal_platform>')
+    expect(section).toContain('<platform>macos</platform>')
+    expect(section).toMatch(/<iso>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z<\/iso>/)
+    expect(section).toMatch(/<timezone>[^<]+<\/timezone>/)
+  })
+
   it('renders current decision hint in decision_hint and keeps latest execution in task_progress', () => {
     const state = createInitialHumanState({
       taskId: 'task-1',
@@ -248,8 +266,10 @@ describe('ai unit brain decision-hint prompt contract', () => {
     expect(deliveryExampleSection).toContain(
       '{"thought":{"next":"审批驳回是否保留原文件已经确认，当前证据足够进入最终交付。","todolist":[{"item":"确认审批驳回时是否保留原文件","status":"done"},{"item":"检查是否已经满足用户诉求并能进入最终交付","status":"done"}],"progressionSummary":"-当前任务的用户诉求是关于审批驳回时是否保留原文件，已经确认审批驳回时会保留原文件，当前证据足够进入最终交付。\\n-每个todolist项的推进理解：'
     )
-    expect(prompt.user).toContain('- 输入结构：\n    { command: string, cwd?: string }')
-    expect(prompt.user).toContain('{"command":"ls .","cwd":"."}')
+    expect(prompt.user).toContain('{ command: string, commandExplanation: string, cwd?: string }')
+    expect(prompt.user).toContain(
+      '{"command":"ls .","commandExplanation":"列出当前工作目录下的文件和文件夹。","cwd":"."}'
+    )
     expect(prompt.user).toContain(
       '- 输入结构：\n    { queryText: string, strategy?: "auto" | "semantic" | "keyword", limit?: integer, sourceType?: "all" | "file" | "web", documentIds?: Array<string> }'
     )

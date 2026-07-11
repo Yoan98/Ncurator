@@ -22,8 +22,9 @@ describe('ai unit markdown reference helpers', () => {
         'ncurator://ref?label=%E6%8A%A5%E5%91%8A.docx&path=%2Ftmp%2Fworkspace%2Freport.docx'
       )
     ).toEqual({
-      type: 'normal',
-      href: 'ncurator://ref?label=%E6%8A%A5%E5%91%8A.docx&path=%2Ftmp%2Fworkspace%2Freport.docx'
+      type: 'invalid',
+      href: 'ncurator://ref?label=%E6%8A%A5%E5%91%8A.docx&path=%2Ftmp%2Fworkspace%2Freport.docx',
+      reason: 'invalid_kind'
     })
   })
 
@@ -57,6 +58,22 @@ describe('ai unit markdown reference helpers', () => {
     expect(parseRefHref('https://openai.com')).toEqual({
       type: 'normal',
       href: 'https://openai.com'
+    })
+  })
+
+  it('parses raw windows ncurator href values from rendered markdown', () => {
+    const path =
+      'D:\\1-work-space\\test\\workspace\\.ncurator\\assets\\abc\\交互式探究学习案例：产业转移.docx'
+    expect(
+      parseRefHref(
+        `ncurator://ref?kind=reference&resourceType=file&label=交互式探究学习案例：产业转移.docx&path=${path}`
+      )
+    ).toEqual({
+      type: 'reference',
+      kind: 'reference',
+      resourceType: 'file',
+      label: '交互式探究学习案例：产业转移.docx',
+      path
     })
   })
 })

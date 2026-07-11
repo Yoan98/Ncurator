@@ -36,11 +36,19 @@ const getDocumentsSignature = (documents: FileRenderDocument[]): string =>
     )
     .join('\u0001')
 
+const getPreviewErrorMessage = (error: unknown): string =>
+  error instanceof Error
+    ? error.message
+    : typeof error === 'string'
+      ? error
+      : '未知错误'
+
 const usePreparedDocuments = (
   documents: FileRenderDocument[]
-): { documents: LoadedFileRenderDocument[]; loading: boolean } => {
+): { documents: LoadedFileRenderDocument[]; loading: boolean; errorMessage: string | null } => {
   const [loadedDocuments, setLoadedDocuments] = useState<LoadedFileRenderDocument[]>([])
   const [loading, setLoading] = useState(false)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const latestDocumentsRef = useRef(documents)
   const lastSignatureRef = useRef('')
   const documentsSignature = getDocumentsSignature(documents)
@@ -63,6 +71,7 @@ const usePreparedDocuments = (
       cleanupUrls()
       setLoadedDocuments([])
       setLoading(false)
+      setErrorMessage(null)
       return cleanupUrls
     }
 
@@ -70,6 +79,7 @@ const usePreparedDocuments = (
 
     const loadDocuments = async (): Promise<void> => {
       setLoading(true)
+      setErrorMessage(null)
       cleanupUrls()
 
       try {
@@ -82,6 +92,7 @@ const usePreparedDocuments = (
         )
         if (!cancelled) {
           setLoadedDocuments(validDocuments)
+          setErrorMessage(null)
         } else {
           cleanupUrls()
         }
@@ -89,6 +100,7 @@ const usePreparedDocuments = (
         console.error('Failed to load file preview', error)
         if (!cancelled) {
           setLoadedDocuments([])
+          setErrorMessage(getPreviewErrorMessage(error))
         }
       } finally {
         if (!cancelled) {
@@ -107,7 +119,8 @@ const usePreparedDocuments = (
 
   return {
     documents: loadedDocuments,
-    loading
+    loading,
+    errorMessage
   }
 }
 
@@ -125,7 +138,7 @@ const FileRenderViewerBase: React.FC<FileRenderViewerProps> = ({
   className,
   framed = true
 }) => {
-  const { documents: loadedDocuments, loading } = usePreparedDocuments(documents)
+  const { documents: loadedDocuments, loading, errorMessage } = usePreparedDocuments(documents)
   const surfaceClassName = framed
     ? `rounded-[8px] border border-[#EEEEEC] bg-white ${className || ''}`
     : `bg-white ${className || ''}`
@@ -164,7 +177,14 @@ const FileRenderViewerBase: React.FC<FileRenderViewerProps> = ({
           framed ? 'rounded-[8px] border border-[#EEEEEC] bg-white' : 'bg-white'
         } ${className || ''}`}
       >
-        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="文件暂时无法预览" />
+        <Empty
+          image={Empty.PRESENTED_IMAGE_SIMPLE}
+          description={
+            <span className="max-w-[420px] whitespace-pre-wrap break-words text-[#787774]">
+              {errorMessage ? `文件暂时无法预览：${errorMessage}` : '文件暂时无法预览'}
+            </span>
+          }
+        />
       </div>
     )
   }

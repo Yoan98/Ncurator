@@ -658,6 +658,10 @@ textarea,
   -webkit-app-region: drag;
 }
 
+.nc-app-shell-windows .nc-settings-main-titlebar-drag {
+  right: var(--windows-window-controls-width);
+}
+
 .nc-settings-header {
   position: relative;
   z-index: 4;
@@ -1102,6 +1106,15 @@ mark {
 
 .markdown-body .markdown-reference-link:hover {
   opacity: 0.92;
+}
+
+.markdown-body .markdown-reference-link-invalid,
+.markdown-body .markdown-reference-link-invalid .markdown-reference-icon {
+  color: #b3261e;
+}
+
+.markdown-body .markdown-reference-link-invalid:hover {
+  color: #8c1d18;
 }
 
 .markdown-body .markdown-inline-code,

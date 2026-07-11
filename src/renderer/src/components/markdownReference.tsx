@@ -2,6 +2,7 @@ import React from 'react'
 import { FileTextOutlined, GlobalOutlined } from '@ant-design/icons'
 import {
   parseNcuratorRefHref,
+  normalizeNcuratorRefMarkdownLinks,
   type NcuratorRefKind,
   type NcuratorRefResourceType,
   type ParsedNcuratorRef
@@ -12,6 +13,7 @@ export type ParsedNcuratorRefResourceType = NcuratorRefResourceType
 export type ParsedRefLink = ParsedNcuratorRef
 
 export const parseRefHref = parseNcuratorRefHref
+export const normalizeRefMarkdownLinks = normalizeNcuratorRefMarkdownLinks
 
 export const renderReferenceIcon = (input: {
   kind: ParsedNcuratorRefKind

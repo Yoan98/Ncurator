@@ -36,11 +36,14 @@ const getLegacySection = (search: string): SettingsSectionValue => {
 const clampSettingsSidebarWidth = (width: number): number =>
   Math.min(WORKBENCH_SIDEBAR_MAX_WIDTH, Math.max(WORKBENCH_SIDEBAR_MIN_WIDTH, width))
 
+const detectRendererPlatform = (): string =>
+  navigator.platform.toLowerCase().includes('win') ? 'win32' : 'darwin'
+
 const SettingsPage: React.FC = () => {
   const location = useLocation()
   const params = useParams<{ section?: string }>()
   const currentSection = normalizeSettingsSection(params.section)
-  const [platform, setPlatform] = useState<string>('darwin')
+  const [platform, setPlatform] = useState<string>(() => detectRendererPlatform())
   const [sidebarWidth] = useState<number>(() => {
     const stored = window.localStorage.getItem(WORKBENCH_SIDEBAR_WIDTH_STORAGE_KEY)
     return clampSettingsSidebarWidth(
@@ -53,7 +56,7 @@ const SettingsPage: React.FC = () => {
   )
 
   useEffect(() => {
-    setPlatform(navigator.platform.toLowerCase().includes('win') ? 'win32' : 'darwin')
+    setPlatform(detectRendererPlatform())
   }, [])
 
   if (!params.section) {

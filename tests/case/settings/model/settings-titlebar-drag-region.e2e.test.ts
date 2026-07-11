@@ -1,5 +1,8 @@
 import { describe, it } from 'vitest'
-import { settingsSelectors } from '../../../../src/renderer/src/testing/selectors'
+import {
+  settingsSelectors,
+  windowSelectors
+} from '../../../../src/renderer/src/testing/selectors'
 import { runE2ECase } from '../../../harness/e2e/run-e2e-case'
 import {
   SETTINGS_E2E_TIMEOUT_MS,
@@ -20,6 +23,12 @@ type DragRegionSnapshot = {
   } | null
   mainHitTestId: string | null
   sidebarHitTestId: string | null
+  windowButtonHitTestId: string | null
+  windowButton: {
+    appRegion: string
+    pointerEvents: string
+    rect: { x: number; y: number; width: number; height: number }
+  } | null
   addModalVisible: boolean
 }
 
@@ -78,6 +87,13 @@ describe('settings model e2e', () => {
                 sidebar.rect.y + 10
               )
             : null
+          const windowButton = readRegion(selectors.window.closeButton)
+          const windowButtonHit = windowButton
+            ? document.elementFromPoint(
+                windowButton.rect.x + Math.floor(windowButton.rect.width / 2),
+                windowButton.rect.y + Math.floor(windowButton.rect.height / 2)
+              )
+            : null
 
           return {
             main,
@@ -85,9 +101,12 @@ describe('settings model e2e', () => {
             mainHitTestId: mainHit instanceof HTMLElement ? mainHit.dataset.testid || null : null,
             sidebarHitTestId:
               sidebarHit instanceof HTMLElement ? sidebarHit.dataset.testid || null : null,
+            windowButton,
+            windowButtonHitTestId:
+              windowButtonHit instanceof HTMLElement ? windowButtonHit.dataset.testid || null : null,
             addModalVisible: false
           }
-        }, settingsSelectors)
+        }, { ...settingsSelectors, window: windowSelectors })
 
         await runtime.step({
           name: 'verify-actions-not-blocked',
@@ -129,6 +148,20 @@ describe('settings model e2e', () => {
           {
             name: 'sidebar-titlebar-hit-target-is-draggable',
             message: '设置页侧栏顶部避开系统按钮后，也应保留可拖动窗口区域。',
+            data: result
+          }
+        )
+
+        await runtime.assertThat(
+          result.windowButton?.appRegion === 'no-drag' &&
+            result.windowButton.pointerEvents !== 'none' &&
+            result.main !== null &&
+            result.main.rect.x + result.main.rect.width <= result.windowButton.rect.x &&
+            (result.windowButtonHitTestId === windowSelectors.closeButton ||
+              result.windowButtonHitTestId === null),
+          {
+            name: 'windows-titlebar-buttons-are-not-covered-by-drag-region',
+            message: 'Windows 右上角窗口按钮所在区域不能被设置页拖拽层覆盖。',
             data: result
           }
         )

@@ -1,4 +1,5 @@
 ﻿import React from 'react'
+import { message } from 'antd'
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
@@ -8,6 +9,7 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import {
   parseRefHref,
+  normalizeRefMarkdownLinks,
   renderReferenceIcon,
   type ParsedNcuratorRefKind,
   type ParsedNcuratorRefResourceType
@@ -36,6 +38,8 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   className,
   onOpenReference
 }) => {
+  const normalizedContent = React.useMemo(() => normalizeRefMarkdownLinks(content), [content])
+
   return (
     <div className={`markdown-body ${className || ''}`}>
       <ReactMarkdown
@@ -110,6 +114,29 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
               )
             }
 
+            if (parsed.type === 'invalid') {
+              return (
+                <a
+                  href={href}
+                  className="markdown-reference-link markdown-reference-link-invalid"
+                  title="引用链接格式无效，无法打开"
+                  data-ref-invalid-reason={parsed.reason}
+                  onClick={(event) => {
+                    event.preventDefault()
+                    void message.warning('引用链接格式无效，无法打开')
+                  }}
+                >
+                  <span className="markdown-reference-icon">
+                    {renderReferenceIcon({
+                      kind: 'reference',
+                      resourceType: 'file'
+                    })}
+                  </span>
+                  <span className="min-w-0 break-words [overflow-wrap:anywhere]">{children}</span>
+                </a>
+              )
+            }
+
             return (
               <a
                 href={href}
@@ -132,7 +159,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
           td: ({ children }) => <td>{children}</td>
         }}
       >
-        {content}
+        {normalizedContent}
       </ReactMarkdown>
     </div>
   )
