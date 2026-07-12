@@ -1,5 +1,5 @@
 import { describe, it } from 'vitest'
-import type { AiRunEvent } from '../../../../../src/shared/types'
+import type { AiRunEvent, JsonValue } from '../../../../../src/shared/types'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
   WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
@@ -20,13 +20,70 @@ const TASK_CODE = 'cedar-browser-731'
 const BROWSER_PANEL_WAIT_TIMEOUT_MS = 180_000
 const BROWSER_TASK_COMPLETION_TIMEOUT_MS = 240_000
 const BROWSER_USE_FAILURE_LIMIT = 2
+const DEPRECATED_BROWSER_USE_FIELDS = [
+  'summary',
+  'content',
+  'pageState',
+  'outcome',
+  'pageText',
+  'selector',
+  'cacheStatus'
+]
+
+const isObjectRecord = (value: JsonValue | undefined): value is Record<string, JsonValue> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+
+const readToolInputString = (
+  event: Extract<AiRunEvent, { type: 'tool_call_started' }>,
+  key: string
+): string => {
+  const input = event.input as JsonValue
+  if (!isObjectRecord(input)) return ''
+  const value = input[key]
+  return typeof value === 'string' ? value : ''
+}
+
+const hasDeprecatedBrowserUseField = (
+  value: JsonValue | undefined,
+  isRoot = true
+): boolean => {
+  if (Array.isArray(value)) return value.some((item) => hasDeprecatedBrowserUseField(item, false))
+  if (!isObjectRecord(value)) return false
+  return Object.entries(value).some(([key, child]) => {
+    if (isRoot && (key === 'url' || key === 'title' || key === 'success' || key === 'message')) {
+      return true
+    }
+    if (DEPRECATED_BROWSER_USE_FIELDS.includes(key)) return true
+    return hasDeprecatedBrowserUseField(child, false)
+  })
+}
+
+const isBrowserUseDataContract = (data: JsonValue | undefined): boolean => {
+  if (!isObjectRecord(data)) return false
+  const action = data.action
+  if (action !== 'navigate' && action !== 'observe' && action !== 'act' && action !== 'extract') {
+    return typeof data.error === 'string'
+  }
+  if (!isObjectRecord(data.page) || typeof data.page.url !== 'string') return false
+  if ('title' in data.page && typeof data.page.title !== 'string') return false
+  if (action === 'navigate') return data.result === null
+  if (!isObjectRecord(data.result)) return false
+  if (action === 'extract') return typeof data.result.extracted === 'string'
+  if (action === 'observe') return Array.isArray(data.result.actions)
+  return (
+    typeof data.result.success === 'boolean' &&
+    typeof data.result.message === 'string' &&
+    typeof data.result.actionDescription === 'string' &&
+    Array.isArray(data.result.actions)
+  )
+}
 
 const readBrowserUseResultText = (event: Extract<AiRunEvent, { type: 'tool_call_result' }>): string => {
   const data = event.result?.data
-  if (!data || typeof data !== 'object' || Array.isArray(data)) return ''
+  if (!isObjectRecord(data) || !isObjectRecord(data.result)) return ''
   const parts: string[] = []
-  for (const key of ['content', 'pageState', 'summary', 'message']) {
-    const value = (data as Record<string, unknown>)[key]
+  for (const key of ['extracted', 'message', 'actionDescription']) {
+    const value = data.result[key]
     if (typeof value === 'string') parts.push(value)
   }
   return parts.join('\n')
@@ -179,9 +236,9 @@ describe('workbench run e2e', () => {
         const { page } = runtime
         const server = await startLocalWorkbenchHttpServer(`<!doctype html>
           <title>Workbench Browser Task</title>
-          <label>任务口令 <input id="task-code" aria-label="任务口令" /></label>
-          <button id="submit-task">提交任务</button>
-          <output id="task-result">等待提交</output>
+          <label>Task code <input id="task-code" aria-label="Task code" /></label>
+          <button id="submit-task">Submit task</button>
+          <output id="task-result">Waiting for submit</output>
           <script>
             document.querySelector('#submit-task').addEventListener('click', () => {
               document.querySelector('#task-result').textContent = 'BROWSER_TASK_DONE:' + document.querySelector('#task-code').value
@@ -192,7 +249,7 @@ describe('workbench run e2e', () => {
           const startedAtMs = Date.now()
           await sendWorkbenchMessage(
             page,
-            `请使用右侧内置浏览器打开 ${server.url}，在“任务口令”输入框填入 ${TASK_CODE}，点击“提交任务”，然后告诉我页面显示的完整结果。不要只抓取源码，必须实际操作页面。`
+            `Use the right embedded browser to complete this page task. Use browser_use navigate to open ${server.url}, use observe to inspect the form controls, then do not combine form actions: use one act to fill the Task code input with ${TASK_CODE}, use another act to click Submit task, then use extract to read the full displayed result. Tell me the exact result text.`
           )
 
           await waitForBrowserPanelOpenedWithApproval(runtime)
@@ -202,18 +259,64 @@ describe('workbench run e2e', () => {
           await getWorkbenchLocator(page, workbenchSelectors.browserViewport).waitFor({
             state: 'visible'
           })
+          const browserPanel = getWorkbenchLocator(page, workbenchSelectors.browserPanel)
+          const zoomResetText =
+            (await browserPanel.locator('button').filter({ hasText: /%/u }).first().textContent()) ||
+            ''
+          const browserBackButtonCount = await browserPanel
+            .getByRole('button', { name: /返回|back/i })
+            .count()
           const evidence = await waitForBrowserTaskCompletion(
             runtime,
             startedAtMs,
             setup.env.modelName
           )
           recordWorkbenchAiEvidence(runtime, evidence, 0.8)
+          const browserStarts = evidence.events.filter(
+            (event): event is Extract<AiRunEvent, { type: 'tool_call_started' }> =>
+              event.type === 'tool_call_started' && event.toolName === 'browser_use'
+          )
+          const browserResults = evidence.events.filter(
+            (event): event is Extract<AiRunEvent, { type: 'tool_call_result' }> =>
+              event.type === 'tool_call_result' && event.toolName === 'browser_use'
+          )
+          const browserData = browserResults.map((event) => event.result?.data)
 
           return {
             finalAnswerText: evidence.finalAnswerText,
             eventTypes: evidence.events.map((event) => event.type),
-            usedBrowserTool: evidence.events.some(
-              (event) => event.type === 'tool_call_result' && event.toolName === 'browser_use'
+            zoomResetText,
+            browserBackButtonCount,
+            browserActions: browserStarts.map((event) => readToolInputString(event, 'action')),
+            browserResultContractValid:
+              browserData.length > 0 && browserData.every(isBrowserUseDataContract),
+            deprecatedBrowserUseFieldsAbsent: browserData.every(
+              (data) => !hasDeprecatedBrowserUseField(data)
+            ),
+            observeResultVisible: browserData.some(
+              (data) =>
+                isObjectRecord(data) &&
+                data.action === 'observe' &&
+                isObjectRecord(data.result) &&
+                Array.isArray(data.result.actions)
+            ),
+            actResultVisible: browserData.some(
+              (data) =>
+                isObjectRecord(data) &&
+                data.action === 'act' &&
+                isObjectRecord(data.result) &&
+                typeof data.result.success === 'boolean' &&
+                typeof data.result.message === 'string' &&
+                typeof data.result.actionDescription === 'string' &&
+                Array.isArray(data.result.actions)
+            ),
+            extractResultVisible: browserData.some(
+              (data) =>
+                isObjectRecord(data) &&
+                data.action === 'extract' &&
+                isObjectRecord(data.result) &&
+                typeof data.result.extracted === 'string' &&
+                data.result.extracted.includes('BROWSER_TASK_DONE')
             )
           }
         } finally {
@@ -224,7 +327,17 @@ describe('workbench run e2e', () => {
       assert: async (result, runtime) => {
         await runtime.assertThat(
           result.eventTypes.includes('browser_panel_opened') &&
-            result.usedBrowserTool &&
+            result.browserActions.includes('navigate') &&
+            result.browserActions.includes('observe') &&
+            result.browserActions.includes('act') &&
+            result.browserActions.includes('extract') &&
+            result.browserResultContractValid &&
+            result.deprecatedBrowserUseFieldsAbsent &&
+            result.observeResultVisible &&
+            result.actResultVisible &&
+            result.extractResultVisible &&
+            /%/u.test(result.zoomResetText) &&
+            result.browserBackButtonCount === 0 &&
             /BROWSER_TASK_DONE/u.test(result.finalAnswerText) &&
             result.finalAnswerText.includes(TASK_CODE),
           {

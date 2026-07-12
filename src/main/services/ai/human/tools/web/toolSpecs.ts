@@ -90,35 +90,52 @@ export const WEB_SEARCH_OUTPUT_SCHEMA = z.union([
   })
 ])
 
-const browserUseBaseOutputSchema = z.object({
+const browserUsePageOutputSchema = z.object({
   url: z.string(),
-  title: z.string().optional(),
-  summary: z.string().optional()
+  title: z.string().optional()
+})
+
+const browserActionCandidateOutputSchema = z.object({
+  description: z.string(),
+  method: z.string().optional(),
+  arguments: z.array(z.string()).optional()
 })
 
 export const BROWSER_USE_OUTPUT_SCHEMA = z.union([
-  browserUseBaseOutputSchema.extend({
-    success: z.boolean(),
-    message: z.string(),
-    pageState: z.string().optional()
-  }),
-  browserUseBaseOutputSchema.extend({
-    content: z.string()
-  }),
-  browserUseBaseOutputSchema.extend({
-    actions: z.array(
-      z.object({
-        description: z.string(),
-        method: z.string().optional()
+  z.discriminatedUnion('action', [
+    z.object({
+      action: z.literal('navigate'),
+      page: browserUsePageOutputSchema,
+      result: z.null()
+    }),
+    z.object({
+      action: z.literal('extract'),
+      page: browserUsePageOutputSchema,
+      result: z.object({
+        extracted: z.string()
       })
-    )
-  }),
-  browserUseBaseOutputSchema.extend({
-    success: z.boolean(),
-    message: z.string(),
-    pageState: z.string().optional()
-  }),
+    }),
+    z.object({
+      action: z.literal('observe'),
+      page: browserUsePageOutputSchema,
+      result: z.object({
+        actions: z.array(browserActionCandidateOutputSchema)
+      })
+    }),
+    z.object({
+      action: z.literal('act'),
+      page: browserUsePageOutputSchema,
+      result: z.object({
+        success: z.boolean(),
+        message: z.string(),
+        actionDescription: z.string(),
+        actions: z.array(browserActionCandidateOutputSchema)
+      })
+    })
+  ]),
   z.object({
+    action: z.enum(['navigate', 'extract', 'observe', 'act']).optional(),
+    page: browserUsePageOutputSchema.optional(),
     error: z.string()
   })
 ])

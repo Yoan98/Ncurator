@@ -131,43 +131,53 @@ export type AiTerminalApprovalFallback = {
 
 export type BrowserUseAction = 'navigate' | 'extract' | 'observe' | 'act'
 
-export type BrowserUseActionItem = {
+export type BrowserUsePage = {
+  url: string
+  title?: string
+}
+
+export type BrowserActionCandidate = {
   description: string
   method?: string
+  arguments?: string[]
+}
+
+export type BrowserUseActResult = {
+  success: boolean
+  message: string
+  actionDescription: string
+  actions: BrowserActionCandidate[]
 }
 
 export type BrowserUseResult =
   | {
       action: 'navigate'
-      url: string
-      title?: string
-      summary?: string
-      success: boolean
-      message: string
-      pageState?: string
+      page: BrowserUsePage
+      result: null
     }
   | {
       action: 'extract'
-      url: string
-      title?: string
-      summary?: string
-      content: string
+      page: BrowserUsePage
+      result: {
+        extracted: string
+      }
     }
   | {
       action: 'observe'
-      url: string
-      title?: string
-      summary?: string
-      actions: BrowserUseActionItem[]
+      page: BrowserUsePage
+      result: {
+        actions: BrowserActionCandidate[]
+      }
     }
   | {
       action: 'act'
-      url: string
-      title?: string
-      summary?: string
-      success: boolean
-      message: string
-      pageState?: string
+      page: BrowserUsePage
+      result: BrowserUseActResult
+    }
+  | {
+      action?: BrowserUseAction
+      page?: BrowserUsePage
+      error: string
     }
 
 export type BrowserUseService = {

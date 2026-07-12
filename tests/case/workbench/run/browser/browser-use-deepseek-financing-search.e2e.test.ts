@@ -14,6 +14,15 @@ import {
 const CASE_ID = 'browser-use-deepseek-financing-search'
 const PROMPT = '用浏览器搜索下最近deepseek的融资'
 const SEARCH_E2E_TIMEOUT_MS = 300_000
+const DEPRECATED_BROWSER_USE_FIELDS = [
+  'summary',
+  'content',
+  'pageState',
+  'outcome',
+  'pageText',
+  'selector',
+  'cacheStatus'
+]
 
 const isObjectRecord = (value: JsonValue | undefined): value is Record<string, JsonValue> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -28,19 +37,54 @@ const readToolInputString = (
   return typeof value === 'string' ? value : ''
 }
 
+const hasDeprecatedBrowserUseField = (
+  value: JsonValue | undefined,
+  isRoot = true
+): boolean => {
+  if (Array.isArray(value)) return value.some((item) => hasDeprecatedBrowserUseField(item, false))
+  if (!isObjectRecord(value)) return false
+  return Object.entries(value).some(([key, child]) => {
+    if (isRoot && (key === 'url' || key === 'title' || key === 'success' || key === 'message')) {
+      return true
+    }
+    if (DEPRECATED_BROWSER_USE_FIELDS.includes(key)) return true
+    return hasDeprecatedBrowserUseField(child, false)
+  })
+}
+
+const isBrowserUseDataContract = (data: JsonValue | undefined): boolean => {
+  if (!isObjectRecord(data)) return false
+  const action = data.action
+  if (action !== 'navigate' && action !== 'observe' && action !== 'act' && action !== 'extract') {
+    return typeof data.error === 'string'
+  }
+  if (!isObjectRecord(data.page) || typeof data.page.url !== 'string') return false
+  if ('title' in data.page && typeof data.page.title !== 'string') return false
+  if (action === 'navigate') return data.result === null
+  if (!isObjectRecord(data.result)) return false
+  if (action === 'extract') return typeof data.result.extracted === 'string'
+  if (action === 'observe') return Array.isArray(data.result.actions)
+  return (
+    typeof data.result.success === 'boolean' &&
+    typeof data.result.message === 'string' &&
+    typeof data.result.actionDescription === 'string' &&
+    Array.isArray(data.result.actions)
+  )
+}
+
 const readBrowserUseResultText = (
   event: Extract<AiRunEvent, { type: 'tool_call_result' }>
 ): string => {
   const data = event.result?.data
-  if (!isObjectRecord(data)) return ''
+  if (!isObjectRecord(data) || !isObjectRecord(data.result)) return ''
   const parts: string[] = []
-  for (const key of ['summary', 'message', 'content', 'pageState']) {
-    const value = data[key]
+  for (const key of ['extracted', 'message', 'actionDescription']) {
+    const value = data.result[key]
     if (typeof value === 'string' && value.trim()) {
       parts.push(value.trim())
     }
   }
-  const actions = data.actions
+  const actions = data.result.actions
   if (Array.isArray(actions)) {
     parts.push(JSON.stringify(actions))
   }
@@ -169,6 +213,7 @@ describe('workbench run e2e', () => {
                 event.type === 'tool_call_result' && event.toolName === 'browser_use'
             )
             const browserTexts = browserResults.map(readBrowserUseResultText).filter(Boolean)
+            const browserData = browserResults.map((event) => event.result?.data)
 
             return {
               status: evidence.status,
@@ -176,6 +221,11 @@ describe('workbench run e2e', () => {
               finalAnswerText: evidence.finalAnswerText,
               eventTypes: evidence.events.map((event) => event.type),
               browserActions: browserStarts.map((event) => readToolInputString(event, 'action')),
+              browserResultContractValid:
+                browserData.length > 0 && browserData.every(isBrowserUseDataContract),
+              deprecatedBrowserUseFieldsAbsent: browserData.every(
+                (data) => !hasDeprecatedBrowserUseField(data)
+              ),
               browserInstructions: browserStarts.map((event) =>
                 readToolInputString(event, 'instruction')
               ),
@@ -184,11 +234,23 @@ describe('workbench run e2e', () => {
                 ...browserResults
                   .map((event) => {
                     const data = event.result?.data
-                    return isObjectRecord(data) && typeof data.url === 'string' ? data.url : ''
+                    return isObjectRecord(data) &&
+                      isObjectRecord(data.page) &&
+                      typeof data.page.url === 'string'
+                      ? data.page.url
+                      : ''
                   })
                   .filter(Boolean)
               ],
               browserResultTexts: browserTexts.slice(-6),
+              hasExtractedBrowserText: browserData.some(
+                (data) =>
+                  isObjectRecord(data) &&
+                  data.action === 'extract' &&
+                  isObjectRecord(data.result) &&
+                  typeof data.result.extracted === 'string' &&
+                  data.result.extracted.trim().length > 0
+              ),
               browserErrors: browserResults.map((event) => event.error || '').filter(Boolean)
             }
           } finally {
@@ -201,7 +263,11 @@ describe('workbench run e2e', () => {
               result.eventTypes.includes('run_completed') &&
               result.browserActions.length > 0 &&
               result.browserActions.some((action) => action === 'navigate') &&
-              result.browserActions.some((action) => action === 'extract' || action === 'act') &&
+              result.browserActions.some((action) => action === 'observe' || action === 'act') &&
+              result.browserActions.some((action) => action === 'extract') &&
+              result.browserResultContractValid &&
+              result.deprecatedBrowserUseFieldsAbsent &&
+              result.hasExtractedBrowserText &&
               result.browserUrls.some((url) => /baidu|bing|google|sogou|so\.com/i.test(url)) &&
               /deepseek/i.test(result.finalAnswerText) &&
               /融资|投资|估值|fund|financ/i.test(result.finalAnswerText) &&

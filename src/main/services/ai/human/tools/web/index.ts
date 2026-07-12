@@ -345,8 +345,20 @@ export const webToolFamily: ToolFamilyDefinition = {
                 return tooLargePayload
               }
 
-              const ok =
-                (result.action !== 'act' && result.action !== 'navigate') || result.success
+              if ('error' in result) {
+                session.fail(
+                  result.error,
+                  undefined,
+                  buildToolResult({
+                    toolName: BROWSER_USE_TOOL_SPEC.name,
+                    ok: false,
+                    data: payload
+                  })
+                )
+                return payload
+              }
+
+              const ok = result.action !== 'act' || result.result.success
               if (ok) {
                 session.succeed(
                   undefined,
@@ -354,7 +366,7 @@ export const webToolFamily: ToolFamilyDefinition = {
                 )
               } else {
                 session.fail(
-                  result.message,
+                  result.result.message,
                   undefined,
                   buildToolResult({
                     toolName: BROWSER_USE_TOOL_SPEC.name,

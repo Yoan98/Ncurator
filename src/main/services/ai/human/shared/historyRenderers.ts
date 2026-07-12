@@ -159,6 +159,25 @@ const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
         totalScore: true
       }
     }
+  },
+  browser_use: {
+    action: true,
+    page: {
+      url: true,
+      title: true
+    },
+    result: {
+      extracted: true,
+      actions: {
+        description: true,
+        method: true,
+        arguments: true
+      },
+      success: true,
+      message: true,
+      actionDescription: true
+    },
+    error: true
   }
 }
 
@@ -186,6 +205,10 @@ const filterValueByWhitelist = (
     if (fieldValue === undefined) return
     if (rule === true) {
       reduced[key] = fieldValue
+      return
+    }
+    if (fieldValue === null) {
+      reduced[key] = null
       return
     }
     const nestedValue = filterValueByWhitelist(fieldValue, rule)

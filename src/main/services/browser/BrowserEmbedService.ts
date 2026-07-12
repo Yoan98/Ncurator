@@ -1,7 +1,7 @@
 import { shell, WebContentsView } from 'electron'
 import type { BrowserWindow, Rectangle, WebContents } from 'electron'
 import { z } from 'zod/v4'
-import type { BrowserUseActionItem, BrowserUseService } from '../ai/types'
+import type { BrowserActionCandidate, BrowserUsePage, BrowserUseService } from '../ai/types'
 import {
   EMBEDDED_BROWSER_NAVIGATION_TIMEOUT_MS,
   EMBEDDED_BROWSER_PARTITION,
@@ -104,16 +104,23 @@ const loadWebContentsUrl = async (webContents: WebContents, url: string): Promis
 
 const stringifyStagehandExtraction = (value: object): string => {
   if ('extraction' in value && typeof value.extraction === 'string') return value.extraction
-  if ('pageText' in value && typeof value.pageText === 'string') return value.pageText
   return JSON.stringify(value)
 }
 
-const summarizeObservedActions = (actions: BrowserUseActionItem[]): string => {
-  if (actions.length === 0) return '未发现可操作元素。'
-  return `发现 ${actions.length} 个可操作元素：${actions
-    .map((action) => `${action.method || 'action'} ${action.description}`)
-    .join('；')}。`
-}
+const toBrowserActionCandidate = (action: {
+  description: string
+  method?: string
+  arguments?: string[]
+}): BrowserActionCandidate => ({
+  description: action.description,
+  ...(action.method ? { method: action.method } : {}),
+  ...(action.arguments ? { arguments: action.arguments } : {})
+})
+
+const toBrowserUsePage = (url: string, title?: string): BrowserUsePage => ({
+  url,
+  ...(title && title.trim() ? { title: title.trim() } : {})
+})
 
 const ZOOM_STEP = 0.1
 const MIN_ZOOM_FACTOR = 0.5
@@ -228,12 +235,8 @@ export class BrowserEmbedService implements BrowserUseService {
       await waitForWebContentsLoad(view.webContents)
       return {
         action: 'navigate',
-        url: view.webContents.getURL(),
-        title: view.webContents.getTitle(),
-        summary: '已导航到目标页面。',
-        success: true,
-        message: 'Navigation completed',
-        pageState: await this.readPageState()
+        page: toBrowserUsePage(view.webContents.getURL(), view.webContents.getTitle()),
+        result: null
       }
     }
     if (input.url) {
@@ -343,36 +346,33 @@ export class BrowserEmbedService implements BrowserUseService {
         const result = await stagehand.extract(input.instruction, { page })
         return {
           action: 'extract',
-          url: page.url(),
-          title,
-          summary: '已提取当前页面文本内容。',
-          content: stringifyStagehandExtraction(result)
+          page: toBrowserUsePage(page.url(), title),
+          result: {
+            extracted: stringifyStagehandExtraction(result)
+          }
         }
       }
       if (input.action === 'observe') {
         const actions = await stagehand.observe(input.instruction, { page })
-        const mappedActions = actions.map((action): BrowserUseActionItem => ({
-          description: action.description,
-          method: action.method
-        }))
         return {
           action: 'observe',
-          url: page.url(),
-          title,
-          summary: summarizeObservedActions(mappedActions),
-          actions: mappedActions
+          page: toBrowserUsePage(page.url(), title),
+          result: {
+            actions: actions.map(toBrowserActionCandidate)
+          }
         }
       }
 
       const result = await stagehand.act(input.instruction, { page })
       return {
         action: 'act',
-        url: page.url(),
-        title: await page.title(),
-        summary: result.success ? '页面操作已执行。' : `页面操作未完成：${result.message}`,
-        success: result.success,
-        message: result.message,
-        pageState: await this.readPageState()
+        page: toBrowserUsePage(page.url(), await page.title()),
+        result: {
+          success: result.success,
+          message: result.message,
+          actionDescription: result.actionDescription,
+          actions: result.actions.map(toBrowserActionCandidate)
+        }
       }
     } finally {
       await this.closeStagehand(stagehand)
@@ -411,22 +411,4 @@ export class BrowserEmbedService implements BrowserUseService {
     return payload.webSocketDebuggerUrl
   }
 
-  private async getTitle(): Promise<string | undefined> {
-    const view = this.ensureView()
-    const title = await view.webContents.getTitle()
-    return title.trim() || undefined
-  }
-
-  private async readPageState(): Promise<string> {
-    const view = this.ensureView()
-    const title = await this.getTitle()
-    const url = view.webContents.getURL()
-    const bodyText = await view.webContents.executeJavaScript(
-      'document.body ? document.body.innerText.slice(0, 4000) : ""',
-      true
-    )
-    return [`url=${url}`, title ? `title=${title}` : undefined, String(bodyText || '').trim()]
-      .filter((item): item is string => Boolean(item))
-      .join('\n')
-  }
 }
