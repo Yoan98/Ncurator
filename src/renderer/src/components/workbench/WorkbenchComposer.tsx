@@ -1062,6 +1062,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
 
             {mode === 'ai' ? (
               <span className="inline-flex items-center gap-0.5">
+                <span className="mx-1 h-4 w-px shrink-0 bg-[#E5E4E0]" aria-hidden="true" />
                 <WorkbenchSelect
                   value={aiPreference}
                   options={aiPreferenceOptions}
@@ -1073,7 +1074,6 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                   compact
                   noDrag
                   hideChevron
-                  hideTriggerIcon
                   triggerClassName="workbench-composer-pill"
                   menuClassName="workbench-composer-menu"
                   minMenuWidth={220}

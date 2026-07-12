@@ -349,7 +349,11 @@ const WorkbenchSelect: React.FC<WorkbenchSelectProps> = ({
                         </span>
                         <span className="flex shrink-0 items-center gap-1.5 text-[#787774]">
                           {option.trailing}
-                          {selected ? <HiCheck className="h-3.5 w-3.5 text-[#37352F]" /> : null}
+                          {selected ? (
+                            <HiCheck className="h-3.5 w-3.5 text-[#37352F]" />
+                          ) : option.trailing ? (
+                            <span className="h-3.5 w-3.5" aria-hidden="true" />
+                          ) : null}
                         </span>
                       </button>
                     )
