@@ -596,6 +596,10 @@ export interface ChatSession {
   workspace_id: string
 }
 
+export interface ChatSessionListItem extends ChatSession {
+  isRunning: boolean
+}
+
 export type AiFileChangeStatus = 'applied' | 'reverted' | 'failed'
 export type AiFileChangeCapability = 'docx' | 'terminal_exec' | 'ppt'
 export type AiFileChangeOperation = 'created' | 'updated'

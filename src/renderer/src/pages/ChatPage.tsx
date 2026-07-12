@@ -28,6 +28,7 @@ import type {
   ChatMessage,
   ChatMessageContentNode,
   ChatSession,
+  ChatSessionListItem,
   ChatSessionRunSnapshot,
   DocxApplyRecord,
   LLMConfig,
@@ -566,7 +567,7 @@ const ChatPage: React.FC = () => {
   const openWorkspaceSettings = useCallback(() => {
     navigate('/settings/workspace')
   }, [navigate])
-  const [sessions, setSessions] = useState<ChatSession[]>([])
+  const [sessions, setSessions] = useState<ChatSessionListItem[]>([])
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
   const [currentMessages, setCurrentMessages] = useState<ChatMessage[]>([])
   const [switchingSessionId, setSwitchingSessionId] = useState<string | null>(null)
@@ -636,6 +637,7 @@ const ChatPage: React.FC = () => {
   const [approvalSubmitting, setApprovalSubmitting] = useState(false)
 
   const activeRunMessageIdsRef = useRef<Record<string, string>>({})
+  const activeRunSessionIdsRef = useRef<Record<string, string>>({})
   const assistantArtifactsRef = useRef<Record<string, AiArtifactRef[]>>({})
   const currentSessionIdRef = useRef<string | null>(null)
   const submitInFlightRef = useRef(false)
@@ -762,6 +764,12 @@ const ChatPage: React.FC = () => {
     setAssetBucketId(draft.assetBucketId || null)
     composerDraftVersionRef.current += 1
     setComposerDraftKey(`${reason}:${composerDraftVersionRef.current}`)
+  }, [])
+
+  const setSessionRunningState = useCallback((sessionId: string, isRunning: boolean): void => {
+    setSessions((items) =>
+      items.map((item) => (item.id === sessionId ? { ...item, isRunning } : item))
+    )
   }, [])
 
   useEffect(() => {
@@ -997,7 +1005,7 @@ const ChatPage: React.FC = () => {
     [emitErrorMessage]
   )
 
-  const loadSessions = useCallback(async (): Promise<ChatSession[]> => {
+  const loadSessions = useCallback(async (): Promise<ChatSessionListItem[]> => {
     try {
       const list = await window.api.chatSessionList()
       setSessions(list)
@@ -1026,6 +1034,7 @@ const ChatPage: React.FC = () => {
       }
       const activeRunIds = new Set(activeRuns.map((item) => item.run.id))
       for (const runSnapshot of runSnapshots) {
+        activeRunSessionIdsRef.current[runSnapshot.run.id] = runSnapshot.run.sessionId
         if (activeRunIds.has(runSnapshot.run.id)) {
           activeRunMessageIdsRef.current[runSnapshot.run.id] = runSnapshot.run.assistantMessageId
         }
@@ -1398,7 +1407,10 @@ const ChatPage: React.FC = () => {
   const adoptCreatedSession = (session: ChatSession): void => {
     sessionSwitchRequestRef.current += 1
     currentSessionIdRef.current = session.id
-    setSessions((items) => [session, ...items.filter((item) => item.id !== session.id)])
+    setSessions((items) => [
+      { ...session, isRunning: false },
+      ...items.filter((item) => item.id !== session.id)
+    ])
     setCurrentSessionId(session.id)
     setSelectedWorkspaceId(session.workspace_id)
     setSwitchingSessionId(null)
@@ -1668,6 +1680,25 @@ const ChatPage: React.FC = () => {
 
   useEffect(() => {
     const unsubscribe = window.api.onAiRunEvent((event) => {
+      if (event.type === 'run_started') {
+        activeRunSessionIdsRef.current[event.runId] = event.sessionId
+        setSessionRunningState(event.sessionId, true)
+      }
+
+      if (
+        event.type === 'run_completed' ||
+        event.type === 'run_failed' ||
+        event.type === 'run_cancelled' ||
+        (!event.internal && (event.type === 'runtime_issue' || event.type === 'workspace_required'))
+      ) {
+        const sessionId = activeRunSessionIdsRef.current[event.runId]
+        if (sessionId) {
+          setSessionRunningState(sessionId, false)
+          delete activeRunSessionIdsRef.current[event.runId]
+        }
+        void loadSessions()
+      }
+
       const messageId = activeRunMessageIdsRef.current[event.runId]
       if (!messageId) {
         if (event.type === 'run_started' && event.sessionId === currentSessionIdRef.current) {
@@ -1857,7 +1888,7 @@ const ChatPage: React.FC = () => {
     }
     // AI run listener is intentionally keyed by active run/session identity to avoid resubscribing on UI helper changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentSessionId, message, refreshContextUsage])
+  }, [currentSessionId, loadSessions, message, refreshContextUsage, setSessionRunningState])
 
   const createDraftSessionForSubmit = async (
     workspace: WorkspaceSource
@@ -2053,6 +2084,7 @@ const ChatPage: React.FC = () => {
       const run = response.run
       const assistantMessageId = response.assistantMessage.id
       activeRunMessageIdsRef.current[run.id] = assistantMessageId
+      activeRunSessionIdsRef.current[run.id] = run.sessionId
       assistantArtifactsRef.current[assistantMessageId] = []
       setCurrentMessages((previous) =>
         appendMessagesDedupe(removeOptimisticMessages(previous), [
@@ -2062,6 +2094,7 @@ const ChatPage: React.FC = () => {
       )
       setAiRunId(run.id)
       setLoading(true)
+      setSessionRunningState(run.sessionId, true)
       setAssistantTurns((previous) => {
         const next = removeOptimisticAssistantTurn(previous)
         const optimisticTurn = previous[optimisticAssistantMessage.id]
@@ -2625,7 +2658,7 @@ const ChatPage: React.FC = () => {
 
   // 按工作空间分组会话
   const sessionsByWorkspace = useMemo(() => {
-    const groups = new Map<string, ChatSession[]>()
+    const groups = new Map<string, ChatSessionListItem[]>()
     sessions.forEach((session) => {
       const wsId = session.workspace_id || ''
       if (!groups.has(wsId)) {
@@ -2793,9 +2826,18 @@ const ChatPage: React.FC = () => {
                           <div className="min-w-0 flex-1 truncate text-[13px] font-medium text-[#37352F]">
                             {session.title}
                           </div>
-                          <div className="flex shrink-0 items-center gap-1 text-[11px] text-[#91918E] group-hover:hidden">
-                            <HiClock className="h-3 w-3" />
-                            <span>{formatRelativeTime(session.created_at)}</span>
+                          <div className="flex h-4 shrink-0 items-center gap-1 text-[11px] text-[#91918E] group-hover:hidden">
+                            {session.isRunning ? (
+                              <span
+                                className="nc-session-running-spinner"
+                                aria-label="任务运行中"
+                              />
+                            ) : (
+                              <>
+                                <HiClock className="h-3 w-3" />
+                                <span>{formatRelativeTime(session.created_at)}</span>
+                              </>
+                            )}
                           </div>
                           <Button
                             type="text"

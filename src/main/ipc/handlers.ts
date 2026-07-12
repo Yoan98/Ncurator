@@ -32,6 +32,7 @@ import type {
   DocumentListResponse,
   ChunkListResponse,
   ChatSession,
+  ChatSessionListItem,
   ChatRunEventsRequest,
   ChatSessionSnapshotRequest,
   ChatSessionSnapshotResponse,
@@ -2427,9 +2428,17 @@ export function registerHandlers(services: {
 
   // === Chat & LLM Handlers ===
 
-  ipcMain.handle('chat-session-list', async () => {
+  ipcMain.handle('chat-session-list', async (): Promise<ChatSessionListItem[]> => {
     try {
-      return await chatStore.getChatSessions()
+      const [sessions, activeSessionIds] = await Promise.all([
+        chatStore.getChatSessions(),
+        aiRunStore.listSessionIdsByRunStatuses(['running', 'waiting_approval'])
+      ])
+      const activeSessionIdSet = new Set(activeSessionIds)
+      return sessions.map((session) => ({
+        ...session,
+        isRunning: activeSessionIdSet.has(session.id)
+      }))
     } catch (e: unknown) {
       console.error('[CHAT-SESSION-LIST] Error:', e)
       return []

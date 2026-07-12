@@ -305,7 +305,8 @@ const WorkbenchSelect: React.FC<WorkbenchSelectProps> = ({
   )
 
   const triggerLabel = selectedOption?.triggerLabel || selectedOption?.label || placeholder
-  const triggerIconNode = selectedOption?.icon || triggerIcon
+  const triggerIconNode = selectedOption?.triggerIcon || selectedOption?.icon || triggerIcon
+  const triggerSuffixNode = selectedOption?.triggerSuffix || null
 
   return (
     <div
@@ -342,7 +343,12 @@ const WorkbenchSelect: React.FC<WorkbenchSelectProps> = ({
               {triggerIconNode}
             </span>
           ) : null}
-          <span className="truncate">{triggerLabel}</span>
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span className="truncate">{triggerLabel}</span>
+            {triggerSuffixNode ? (
+              <span className="flex shrink-0 items-center">{triggerSuffixNode}</span>
+            ) : null}
+          </span>
           {inlineChevron && !hideChevron ? (
             <HiChevronDown
               className={joinClassNames(

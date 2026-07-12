@@ -27,6 +27,8 @@ export type WorkbenchSelectOption = {
   value: string
   label: string
   triggerLabel?: string
+  triggerIcon?: ReactNode
+  triggerSuffix?: ReactNode
   icon?: ReactNode
   description?: string
   keywords?: string[]

@@ -20,6 +20,7 @@ import type {
   ChatRunEventsRequest,
   ChatRunEventsResponse,
   ChatSession,
+  ChatSessionListItem,
   ChatSessionOpenRequest,
   ChatSessionOpenResponse,
   ChatSessionRunSummariesRequest,
@@ -182,7 +183,7 @@ export type DesktopApi = {
   readFile: (filePath: string) => Promise<Uint8Array>
   attachmentPick: (payload: AttachmentPickRequest) => Promise<AttachmentPickResponse>
   attachmentSaveFile: (payload: AttachmentSaveRequest) => Promise<AttachmentProcessResponse>
-  chatSessionList: () => Promise<ChatSession[]>
+  chatSessionList: () => Promise<ChatSessionListItem[]>
   chatSessionSave: (session: ChatSession) => Promise<{ success: boolean; error?: string }>
   chatSessionDelete: (id: string) => Promise<{ success: boolean; error?: string }>
   chatMessageList: (sessionId: string) => Promise<ChatMessage[]>

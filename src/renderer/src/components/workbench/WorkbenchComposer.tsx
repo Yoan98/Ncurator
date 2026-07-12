@@ -1,7 +1,6 @@
 ﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { App as AntdApp, Spin, Tooltip } from 'antd'
 import {
-  HiAdjustmentsHorizontal,
   HiArrowUp,
   HiCircleStack,
   HiDocumentText,
@@ -11,11 +10,11 @@ import {
   HiPhoto,
   HiPlus,
   HiQuestionMarkCircle,
-  HiShieldCheck,
   HiSparkles,
   HiStop,
   HiXMark
 } from 'react-icons/hi2'
+import { FaCircle } from 'react-icons/fa'
 import type {
   ChatAttachment,
   LLMConfig,
@@ -111,6 +110,14 @@ const getAttachmentFileExt = (name: string): string => {
 
 const isSupportedAttachmentFile = (name: string): boolean =>
   SUPPORTED_ATTACHMENT_FILE_EXTENSIONS.has(getAttachmentFileExt(name))
+
+const PreferenceDots: React.FC<{ count: 1 | 2 }> = ({ count }) => (
+  <span className="inline-flex items-center gap-0.5 text-[#787774]">
+    {Array.from({ length: count }).map((_, index) => (
+      <FaCircle key={index} className="h-1.5 w-1.5" />
+    ))}
+  </span>
+)
 
 const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   mode,
@@ -794,8 +801,15 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
           {
             value: 'local_sources_relaxed',
             label: '宽松',
-            triggerLabel: '本地资料 · 宽松',
-            icon: <HiAdjustmentsHorizontal className="h-3.5 w-3.5" />,
+            triggerLabel: '本地资料',
+            triggerIcon: <HiCircleStack className="h-3.5 w-3.5" />,
+            triggerSuffix: (
+              <span className="inline-flex items-center gap-1">
+                <span className="text-[#B5B3AD]">·</span>
+                <PreferenceDots count={1} />
+              </span>
+            ),
+            icon: <PreferenceDots count={1} />,
             description: 'AI 会优先依据本地资料推进任务',
             trailing: (
               <Tooltip title="AI 会优先依据知识库和本地资料内容推进任务">
@@ -813,8 +827,15 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
           {
             value: 'local_sources_strict',
             label: '严谨',
-            triggerLabel: '本地资料 · 严谨',
-            icon: <HiShieldCheck className="h-3.5 w-3.5" />,
+            triggerLabel: '本地资料',
+            triggerIcon: <HiCircleStack className="h-3.5 w-3.5" />,
+            triggerSuffix: (
+              <span className="inline-flex items-center gap-1">
+                <span className="text-[#B5B3AD]">·</span>
+                <PreferenceDots count={2} />
+              </span>
+            ),
+            icon: <PreferenceDots count={2} />,
             description: 'AI 只能依据本地资料推进任务',
             trailing: (
               <Tooltip title="AI 必须只能依据知识库和本地资料内容推进任务，禁止使用其他信息与模型能力本身的信息">

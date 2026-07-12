@@ -246,6 +246,15 @@ export class AiRunStore {
     return rows.map(toRunRecord)
   }
 
+  public async listSessionIdsByRunStatuses(statuses: AiRunStatus[]): Promise<string[]> {
+    const params: Record<string, string | number | null> = {}
+    const where = buildWhere([buildInClause('status', statuses, params, 'status')])
+    const rows = this.sqlite
+      .prepare(`SELECT DISTINCT session_id FROM ai_run WHERE ${where}`)
+      .all(params) as Array<{ session_id?: unknown }>
+    return rows.map((row) => toRequiredString(row.session_id)).filter(Boolean)
+  }
+
   public async appendEvent(input: {
     runId: string
     sessionId: string

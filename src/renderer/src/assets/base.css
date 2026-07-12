@@ -495,6 +495,23 @@ textarea,
   @apply bg-[#EFEFEE] text-[#37352F];
 }
 
+.nc-session-running-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  flex: 0 0 12px;
+  border: 2px solid #d8d7d3;
+  border-top-color: #37352f;
+  border-radius: 9999px;
+  animation: nc-session-running-spin 0.8s linear infinite;
+}
+
+@keyframes nc-session-running-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .nc-topbar {
   @apply flex shrink-0 items-center justify-between border-b border-[#EEEEEC] bg-white px-4;
   position: relative;
