@@ -41,6 +41,7 @@ const kbSearchResultItemSchema = z.object({
   document_name: z.string(),
   document_id: z.string().optional(),
   source_type: z.string().optional(),
+  file_path: z.string().optional(),
   source_url: z.string().optional(),
   metadata: z.union([z.string(), jsonObjectSchema]).optional(),
   _distance: z.number().optional(),

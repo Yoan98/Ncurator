@@ -25,13 +25,16 @@ export const seedKbFixture = async (input: {
 
   for (const document of input.documents) {
     const workspaceId = String(document.workspaceId || 'test-workspace').trim()
+    const sourceType = document.sourceType || 'file'
+    const filePath =
+      document.filePath || (sourceType === 'file' ? `/workspace/${document.name}` : undefined)
     const generationId = `seed-${document.id}`
     await input.documentsStore.addDocument({
       id: document.id,
       name: document.name,
-      source_type: document.sourceType || 'file',
+      source_type: sourceType,
       workspace_id: workspaceId,
-      file_path: document.filePath,
+      file_path: filePath,
       created_at: document.createdAt || Date.now(),
       import_status: 2,
       active_generation_id: generationId,
@@ -44,7 +47,7 @@ export const seedKbFixture = async (input: {
       document_id: document.id,
       workspace_id: workspaceId,
       document_name: document.name,
-      source_type: document.sourceType || 'file',
+      source_type: sourceType,
       generation_id: generationId,
       metadata: {
         page: chunk.page || 1

@@ -7,6 +7,7 @@ type KbListDocumentsResult = {
     id: string
     name: string
     source_type: 'file' | 'web'
+    file_path?: string
     source_url?: string
   }>
   total: number
@@ -28,6 +29,7 @@ describe('ai tool kb backend', () => {
           {
             id: 'doc-1',
             name: 'AI Tool Guide.md',
+            filePath: '/workspace/AI Tool Guide.md',
             chunks: [
               {
                 id: 'chunk-1',
@@ -121,7 +123,10 @@ describe('ai tool kb backend', () => {
         runtime.assertThat(
           result.sourceNameFiltered.total === 1 &&
             result.sourceNameFiltered.items[0]?.id === 'doc-1' &&
-            result.sourceNameFiltered.items[0]?.name === 'AI Tool Guide.md',
+            result.sourceNameFiltered.items[0]?.name === 'AI Tool Guide.md' &&
+            result.sourceNameFiltered.items[0]?.source_type === 'file' &&
+            result.sourceNameFiltered.items[0]?.file_path === '/workspace/AI Tool Guide.md' &&
+            !result.sourceNameFiltered.items[0]?.source_url,
           {
             name: 'list-documents-supports-source-name-filter',
             message: 'kb_list_documents 应支持按 sourceNameQuery 过滤并返回稳定字段。',

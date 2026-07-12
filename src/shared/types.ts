@@ -405,6 +405,7 @@ export interface SearchResult {
   document_name: string
   document_id?: string
   source_type?: string
+  file_path?: string
   source_url?: string
   // IPC 传输时为 JSON string，后端存储时为对象
   metadata?:

@@ -61,6 +61,7 @@ const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
     items: {
       document_name: true,
       source_type: true,
+      file_path: true,
       source_url: true,
       text: true
     }
@@ -70,6 +71,7 @@ const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
       id: true,
       name: true,
       source_type: true,
+      file_path: true,
       source_url: true
     },
     total: true

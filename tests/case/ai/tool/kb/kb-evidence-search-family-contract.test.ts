@@ -8,6 +8,7 @@ type KbSearchRow = {
   document_id?: string
   document_name: string
   source_type?: string
+  file_path?: string
   source_url?: string
   _score?: number
 }
@@ -34,6 +35,7 @@ describe('ai tool kb backend', () => {
           {
             id: 'doc-1',
             name: 'AI Tool Guide.md',
+            filePath: '/workspace/AI Tool Guide.md',
             chunks: [
               {
                 id: 'chunk-1',
@@ -97,6 +99,12 @@ describe('ai tool kb backend', () => {
           limit: 5,
           documentIds: ['doc-3']
         })
+        const fileHit = await harness.invoke<KbSearchResult>('kb_search', {
+          queryText: 'approval denied unchanged files',
+          strategy: 'keyword',
+          limit: 5,
+          documentIds: ['doc-1']
+        })
         const webHit = await harness.invoke<KbSearchResult>('kb_search', {
           queryText: 'LangChain createAgent model tools',
           strategy: 'keyword',
@@ -108,6 +116,7 @@ describe('ai tool kb backend', () => {
           hybridInScope,
           vectorSubset,
           ftsOutOfScope,
+          fileHit,
           webHit
         }
       },
@@ -147,6 +156,23 @@ describe('ai tool kb backend', () => {
             message:
               'kb_search(keyword) 在 requested documentIds 完全超出当前工作区时应返回空结果。',
             data: result.ftsOutOfScope
+          }
+        )
+
+        runtime.assertThat(
+          result.fileHit.total >= 1 &&
+            result.fileHit.items.some(
+              (row) =>
+                row.document_id === 'doc-1' &&
+                row.source_type === 'file' &&
+                row.file_path === '/workspace/AI Tool Guide.md' &&
+                !row.source_url
+            ),
+          {
+            name: 'kb-search-preserves-file-source-path',
+            message:
+              'kb_search should expose source_type and file_path so AI can cite file knowledge as a local path.',
+            data: result.fileHit
           }
         )
 

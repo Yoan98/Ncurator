@@ -1,6 +1,7 @@
 import { tool } from '@langchain/core/tools'
 import type {
   AiToolCallResult,
+  DocumentRecord,
   JsonObject,
   JsonValue,
   SearchResult
@@ -49,9 +50,16 @@ const resolveRequestedDocumentIds = (requestedIds: string[] | undefined): string
   return toStringIdList(requestedIds)
 }
 
-const isHttpUrl = (value: string | undefined): boolean => /^https?:\/\//i.test(value || '')
+const assertDocumentHasSourceLocation = (document: DocumentRecord): void => {
+  if (document.source_type === 'file' && !document.file_path?.trim()) {
+    throw new Error(`KB document is missing file_path: ${document.name} (${document.id})`)
+  }
+  if (document.source_type === 'web' && !document.source_url?.trim()) {
+    throw new Error(`KB web document is missing source_url: ${document.name} (${document.id})`)
+  }
+}
 
-const enrichSearchRowsWithSourceUrl = async (
+const enrichSearchRowsWithSourceLocation = async (
   ctx: KnowledgeRetrievalContext,
   rows: SearchResult[]
 ): Promise<SearchResult[]> => {
@@ -70,19 +78,25 @@ const enrichSearchRowsWithSourceUrl = async (
 
   return rows.map((row) => {
     const document = row.document_id ? documentMap.get(row.document_id) : undefined
-    if (!document) return row
-    const sourceUrl =
-      document.source_url ||
-      (document.source_type === 'web' && isHttpUrl(document.file_path)
-        ? document.file_path
-        : undefined)
+    if (!document) {
+      throw new Error(`KB search result is missing source document metadata: ${row.document_id}`)
+    }
+    assertDocumentHasSourceLocation(document)
 
     return {
       ...row,
       source_type: document.source_type || row.source_type,
-      source_url: sourceUrl
+      file_path: document.source_type === 'file' ? document.file_path : undefined,
+      source_url: document.source_type === 'web' ? document.source_url : undefined
     }
   })
+}
+
+const validateDocumentListSourceLocations = <T extends { items: DocumentRecord[] }>(
+  response: T
+): T => {
+  response.items.forEach(assertDocumentHasSourceLocation)
+  return response
 }
 
 export const buildKbCapabilityTools = (input: {
@@ -181,7 +195,7 @@ export const buildKbCapabilityTools = (input: {
               prepared.requestedDocumentIds || undefined
             )
           })()
-          const enrichedRows = await enrichSearchRowsWithSourceUrl(ctx, rows)
+          const enrichedRows = await enrichSearchRowsWithSourceLocation(ctx, rows)
           const normalized = enrichedRows.map(normalizeForIpc)
           const payload = {
             items: normalized,
@@ -248,13 +262,15 @@ export const buildKbCapabilityTools = (input: {
             return empty
           }
 
-          const normalized = await ctx.documentsStore.listDocuments({
-            sourceNameQuery,
-            page,
-            pageSize,
-            workspaceId,
-            documentIds: requestedDocumentIds || undefined
-          })
+          const normalized = validateDocumentListSourceLocations(
+            await ctx.documentsStore.listDocuments({
+              sourceNameQuery,
+              page,
+              pageSize,
+              workspaceId,
+              documentIds: requestedDocumentIds || undefined
+            })
+          )
           session.succeed(
             undefined,
             buildKbResult({
