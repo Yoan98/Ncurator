@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import type {
+  AiPreference,
   AiRunEvent,
   AiFileChangeStatus,
   RuntimeSkillId,
@@ -9,6 +10,7 @@ import type {
 } from '../../../../shared/types'
 
 export type WorkbenchMode = 'ai' | 'search'
+export type WorkbenchAiPreference = AiPreference
 
 export type WorkbenchPreferenceStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>
 

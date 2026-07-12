@@ -26,6 +26,7 @@ import type {
   AiApprovalBatchItem,
   AiArtifactRef,
   AiLlmIoRecord,
+  AiPreference,
   AiRunApprovalBatchDecisionRequest,
   AiRunApprovalBatchDecisionResponse,
   AiRunCancelResponse,
@@ -98,6 +99,9 @@ const PARTIAL_SAVE_DELAY_MS = 500
 
 const getErrorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error)
+
+const normalizeAiPreference = (value: unknown): AiPreference =>
+  value === 'knowledge_base' ? 'knowledge_base' : 'default'
 
 const appendArtifact = (artifacts: AiArtifactRef[] | undefined, artifact: AiArtifactRef) => {
   const current = artifacts || []
@@ -523,6 +527,7 @@ export class ChatRunService {
     const normalizedWorkspace = normalizeWorkspaceBinding(payload.workspace)
     const mainModel = payload.mainModel || null
     const modelName = String(mainModel?.modelName || '').trim()
+    const preference = normalizeAiPreference(payload.preference)
     if (!mainModel?.configId || !modelName) {
       return {
         success: false,
@@ -575,6 +580,7 @@ export class ChatRunService {
       modelName,
       mainModel,
       visionModel: payload.visionModel || undefined,
+      preference,
       partialAnswer: '',
       artifacts: [],
       processEvents: [],
@@ -658,6 +664,7 @@ export class ChatRunService {
           attachments: run.attachments,
           mainModel: run.mainModel,
           visionModel: run.visionModel,
+          preference: run.preference,
           workspace: run.workspace
         },
         {

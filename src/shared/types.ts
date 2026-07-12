@@ -870,9 +870,11 @@ export type AiDraftSnapshotRef = {
 export type AiArtifactRef = AiFileArtifactRef
 
 export type ChatSubmitMode = 'ai' | 'search'
+export type AiPreference = 'default' | 'knowledge_base'
 
 export type ChatSubmitRequest = {
   mode: ChatSubmitMode
+  preference?: AiPreference
   sessionId: string
   input: string
   contentNodes?: ChatMessageContentNode[]
@@ -897,6 +899,7 @@ export type AiRunRecord = {
   modelName?: string
   mainModel?: WorkbenchSelectedModel
   visionModel?: WorkbenchSelectedModel
+  preference?: AiPreference
   partialAnswer: string
   finalAnswer?: string
   error?: string

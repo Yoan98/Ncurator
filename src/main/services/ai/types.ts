@@ -20,6 +20,7 @@ import type {
   AiLlmIoRecord,
   AiLlmStreamingMode,
   AiLlmUsage,
+  AiPreference,
   AiRunFailureCode,
   AiRuntimeSettings,
   AiRunEvent,
@@ -86,6 +87,7 @@ export type AiRunStartPayload = {
     configId: string
     modelName: string
   }
+  preference?: AiPreference
   workspace?: {
     workspaceId: string
     workspaceName: string
@@ -217,6 +219,7 @@ export type AiRunContext = {
   runId: string
   sessionId: string
   platform: AiRuntimePlatform
+  preference: AiPreference
   referenceScope: AiReferenceScope
   allowedToolNames?: string[]
   humanRuntimeOverrides?: {

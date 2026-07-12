@@ -111,6 +111,7 @@ export const workbenchSelectors = {
   page: 'workbench-page',
   sidebar: 'workbench-sidebar',
   modeSwitch: 'workbench-mode-switch',
+  aiPreferenceSwitch: 'workbench-ai-preference-switch',
   sessionsList: 'workbench-sessions-list',
   sessionItemPrefix: 'workbench-session-item',
   sessionDeleteButtonPrefix: 'workbench-session-delete-button',

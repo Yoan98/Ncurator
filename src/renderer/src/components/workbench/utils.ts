@@ -10,6 +10,7 @@ import type {
   WorkspaceSource
 } from '../../../../shared/types'
 import {
+  WORKBENCH_PREFERENCE_AI_PREFERENCE_STORAGE_KEY,
   WORKBENCH_PREFERENCE_MODE_STORAGE_KEY,
   WORKBENCH_PREFERENCE_MODEL_STORAGE_KEY,
   WORKBENCH_PREFERENCE_WORKSPACE_STORAGE_KEY
@@ -23,6 +24,7 @@ import type {
   AssistantProcessStatus,
   AssistantRichTextSegment,
   AssistantToolName,
+  WorkbenchAiPreference,
   WorkbenchFileRef,
   WorkbenchMode,
   WorkbenchModelPreference,
@@ -48,6 +50,9 @@ const isIpcJsonObject = (value: IpcJsonValue): value is IpcJsonObject => {
 
 const isWorkbenchMode = (value: string | null): value is WorkbenchMode =>
   value === 'ai' || value === 'search'
+
+const isWorkbenchAiPreference = (value: string | null): value is WorkbenchAiPreference =>
+  value === 'default' || value === 'knowledge_base'
 
 const readStringField = (value: IpcJsonObject, key: string): string | undefined => {
   const record = value as Record<string, IpcJsonValue>
@@ -1067,6 +1072,20 @@ export const writeWorkbenchModePreference = (
   mode: WorkbenchMode
 ): void => {
   storage.setItem(WORKBENCH_PREFERENCE_MODE_STORAGE_KEY, mode)
+}
+
+export const readWorkbenchAiPreference = (
+  storage: WorkbenchPreferenceStorage
+): WorkbenchAiPreference => {
+  const stored = storage.getItem(WORKBENCH_PREFERENCE_AI_PREFERENCE_STORAGE_KEY)
+  return isWorkbenchAiPreference(stored) ? stored : 'default'
+}
+
+export const writeWorkbenchAiPreference = (
+  storage: WorkbenchPreferenceStorage,
+  preference: WorkbenchAiPreference
+): void => {
+  storage.setItem(WORKBENCH_PREFERENCE_AI_PREFERENCE_STORAGE_KEY, preference)
 }
 
 export const readWorkbenchWorkspacePreference = (

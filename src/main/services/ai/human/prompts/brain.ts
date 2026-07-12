@@ -47,6 +47,9 @@ const renderLocalEnvironmentText = (ctx: AiRunContext): string => {
 `.trim()
 }
 
+const renderPreferenceText = (preference: AiRunContext['preference']): string =>
+  preference === 'knowledge_base' ? '优先使用知识库内容作为依据推进' : '无'
+
 const renderSkillCatalogToolSpecLine = (input: {
   spec: HumanToolSpec
   skillLabels: string[]
@@ -202,6 +205,7 @@ export const buildBrainPrompt = (input: {
 
   <context_block_guide>
     - task_goal：用户的任务诉求。
+    - preference：当前用户对 AI 推进方式的偏好；若为“无”，则不施加额外偏好。
     - reference_scope：当前工作区、默认知识范围、显式缩圈范围和可用边界。
     - search_strategy：当前任务默认遵循的检索思路提示。
     - local_environment：当前本机运行环境；platform当前用户电脑平台，current_time 是当前系统时间。
@@ -338,6 +342,10 @@ ${JSON.stringify({
   <task_goal>
 ${input.state.task.userInput}
   </task_goal>
+
+  <preference>
+${renderPreferenceText(input.ctx.preference)}
+  </preference>
 
   <reference_scope>
 ${renderReferenceScopeText(input.ctx.referenceScope)}

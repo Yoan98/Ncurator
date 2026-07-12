@@ -62,6 +62,7 @@ import type {
   SearchWorkbenchTurn,
   WorkbenchContentPanelState,
   WorkbenchFileRef,
+  WorkbenchAiPreference,
   WorkbenchMode
 } from '../components/workbench/types'
 import type {
@@ -78,10 +79,12 @@ import {
   formatRelativeTime,
   getAttachmentTypeLabel,
   getSearchResultFileRef,
+  readWorkbenchAiPreference,
   readWorkbenchModePreference,
   reduceAssistantProcessGroups,
   reduceAssistantProcessThoughts,
   readWorkbenchModelPreference,
+  writeWorkbenchAiPreference,
   writeWorkbenchModePreference,
   writeWorkbenchModelPreference
 } from '../components/workbench/utils'
@@ -573,6 +576,9 @@ const ChatPage: React.FC = () => {
   const [deletingSessionIds, setDeletingSessionIds] = useState<Set<string>>(() => new Set())
   const [composerMode, setComposerMode] = useState<WorkbenchMode>(() =>
     readWorkbenchModePreference(window.localStorage)
+  )
+  const [composerAiPreference, setComposerAiPreference] = useState<WorkbenchAiPreference>(() =>
+    readWorkbenchAiPreference(window.localStorage)
   )
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -1167,6 +1173,11 @@ const ChatPage: React.FC = () => {
   const handleModeChange = useCallback((mode: WorkbenchMode): void => {
     setComposerMode(mode)
     writeWorkbenchModePreference(window.localStorage, mode)
+  }, [])
+
+  const handleAiPreferenceChange = useCallback((preference: WorkbenchAiPreference): void => {
+    setComposerAiPreference(preference)
+    writeWorkbenchAiPreference(window.localStorage, preference)
   }, [])
 
   const handleWorkspaceChange = useCallback((workspaceId: string | null): void => {
@@ -2022,6 +2033,7 @@ const ChatPage: React.FC = () => {
         mode: 'ai',
         sessionId: submitSessionId,
         input: userQuery,
+        preference: composerAiPreference,
         contentNodes: submittedContentNodes.length > 0 ? submittedContentNodes : undefined,
         selectedReferences: submittedReferences.length > 0 ? submittedReferences : undefined,
         attachments: submittedAttachments.length > 0 ? submittedAttachments : undefined,
@@ -3071,6 +3083,8 @@ const ChatPage: React.FC = () => {
                       <WorkbenchComposer
                         mode={composerMode}
                         onModeChange={handleModeChange}
+                        aiPreference={composerAiPreference}
+                        onAiPreferenceChange={handleAiPreferenceChange}
                         modelConfigs={modelConfigs}
                         modelListsByConfigId={modelListsByConfigId}
                         modelSelection={modelSelection}

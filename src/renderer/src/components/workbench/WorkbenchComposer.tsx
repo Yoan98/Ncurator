@@ -2,12 +2,14 @@
 import { App as AntdApp, Spin, Tooltip } from 'antd'
 import {
   HiArrowUp,
+  HiCircleStack,
   HiDocumentText,
   HiFolder,
   HiMagnifyingGlass,
   HiOutlineFolderPlus,
   HiPhoto,
   HiPlus,
+  HiQuestionMarkCircle,
   HiSparkles,
   HiStop,
   HiXMark
@@ -22,7 +24,12 @@ import type {
   WorkspaceSource
 } from '../../../../shared/types'
 import { workbenchSelectors } from '../../testing/selectors'
-import type { WorkbenchContextUsage, WorkbenchMode, WorkbenchSelectOption } from './types'
+import type {
+  WorkbenchAiPreference,
+  WorkbenchContextUsage,
+  WorkbenchMode,
+  WorkbenchSelectOption
+} from './types'
 import { COMPOSER_PLACEHOLDER, COMPOSER_REFERENCE_KINDS } from './composer/constants'
 import ReferenceMentionPanel from './composer/ReferenceMentionPanel'
 import type { ComposerDraftValue, ComposerNode } from './composer/types'
@@ -52,6 +59,8 @@ type MentionContext = {
 type WorkbenchComposerProps = {
   mode: WorkbenchMode
   onModeChange: (mode: WorkbenchMode) => void
+  aiPreference: WorkbenchAiPreference
+  onAiPreferenceChange: (preference: WorkbenchAiPreference) => void
   modelConfigs: LLMConfig[]
   modelListsByConfigId: Record<string, LlmRemoteModel[]>
   modelSelection: WorkbenchModelSelection
@@ -104,6 +113,8 @@ const isSupportedAttachmentFile = (name: string): boolean =>
 const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   mode,
   onModeChange,
+  aiPreference,
+  onAiPreferenceChange,
   modelConfigs,
   modelListsByConfigId,
   modelSelection,
@@ -752,6 +763,45 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     ],
     []
   )
+  const aiPreferenceOptions = useMemo<WorkbenchSelectOption[]>(
+    () => [
+      {
+        value: 'default',
+        label: '默认',
+        icon: <HiSparkles className="h-3.5 w-3.5" />,
+        description: 'AI 自主判断如何推进任务',
+        trailing: (
+          <Tooltip title="AI 自主判断如何推进任务">
+            <span
+              className="inline-flex h-5 w-5 items-center justify-center rounded-full text-[#9B9A97] transition hover:bg-[#EFEFED] hover:text-[#37352F]"
+              aria-label="默认偏好说明"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <HiQuestionMarkCircle className="h-3.5 w-3.5" />
+            </span>
+          </Tooltip>
+        )
+      },
+      {
+        value: 'knowledge_base',
+        label: '知识库',
+        icon: <HiCircleStack className="h-3.5 w-3.5" />,
+        description: 'AI 会优先根据知识库内容作为依据来推进任务',
+        trailing: (
+          <Tooltip title="AI 会优先根据知识库内容作为依据来推进任务">
+            <span
+              className="inline-flex h-5 w-5 items-center justify-center rounded-full text-[#9B9A97] transition hover:bg-[#EFEFED] hover:text-[#37352F]"
+              aria-label="知识库偏好说明"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <HiQuestionMarkCircle className="h-3.5 w-3.5" />
+            </span>
+          </Tooltip>
+        )
+      }
+    ],
+    []
+  )
   const workspaceOptions = useMemo<WorkbenchSelectOption[]>(
     () =>
       workspaces.map((workspace) => ({
@@ -1009,6 +1059,28 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
               menuClassName="workbench-composer-menu"
               data-testid={workbenchSelectors.modeSwitch}
             />
+
+            {mode === 'ai' ? (
+              <span className="inline-flex items-center gap-0.5">
+                <WorkbenchSelect
+                  value={aiPreference}
+                  options={aiPreferenceOptions}
+                  onChange={(nextValue) => {
+                    onAiPreferenceChange(nextValue as WorkbenchAiPreference)
+                    focusEditorAfterControlChange()
+                  }}
+                  placeholder="偏好"
+                  compact
+                  noDrag
+                  hideChevron
+                  hideTriggerIcon
+                  triggerClassName="workbench-composer-pill"
+                  menuClassName="workbench-composer-menu"
+                  minMenuWidth={220}
+                  data-testid={workbenchSelectors.aiPreferenceSwitch}
+                />
+              </span>
+            ) : null}
           </div>
 
           <div className="flex min-w-0 items-center gap-2">

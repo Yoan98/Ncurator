@@ -8,6 +8,10 @@ import {
   normalizeSelectedReferences,
   normalizeWorkspaceBinding
 } from './utils/runContext'
+import type { AiPreference } from '../../../shared/types'
+
+const normalizeAiPreference = (value: unknown): AiPreference =>
+  value === 'knowledge_base' ? 'knowledge_base' : 'default'
 
 export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps): AiRunContext => {
   const checkCancelled = () => {
@@ -24,6 +28,7 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
   }
   const normalizedReferences = normalizeSelectedReferences(payload.selectedReferences)
   const platform = getAiRuntimePlatform()
+  const preference = normalizeAiPreference(payload.preference)
 
   const getModelConfig = async (
     selection: typeof payload.mainModel,
@@ -113,6 +118,7 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     runId: payload.runId,
     sessionId: payload.sessionId,
     platform,
+    preference,
     referenceScope: buildReferenceScope({
       workspace: normalizedWorkspace,
       selectedReferences: normalizedReferences,
