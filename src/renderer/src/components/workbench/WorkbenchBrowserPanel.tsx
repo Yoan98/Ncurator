@@ -3,7 +3,6 @@ import { Button, Tooltip } from 'antd'
 import {
   HiArrowPath,
   HiArrowTopRightOnSquare,
-  HiArrowUturnLeft,
   HiGlobeAlt,
   HiMinus,
   HiPlus
@@ -97,7 +96,6 @@ const WorkbenchBrowserPanel: React.FC = () => {
               size="small"
               aria-label="重置缩放"
               className="min-w-12 px-1 text-xs"
-              icon={<HiArrowUturnLeft className="h-3.5 w-3.5" />}
               onClick={() => void applyStateResponse(() => window.api.browserPanelZoomReset())}
             >
               {browserState.zoomPercent}%
