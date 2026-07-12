@@ -8,7 +8,7 @@ import React, {
   useState
 } from 'react'
 import { createPortal } from 'react-dom'
-import { HiCheck, HiChevronDown, HiMagnifyingGlass } from 'react-icons/hi2'
+import { HiCheck, HiChevronDown, HiChevronRight, HiMagnifyingGlass } from 'react-icons/hi2'
 import type { WorkbenchSelectOption } from './types'
 import { resolveFloatingPlacement, type FloatingPlacementAlign } from './floatingPlacement'
 
@@ -53,6 +53,14 @@ type MenuPosition = {
   placement: 'top' | 'bottom'
 }
 
+type SubmenuState = {
+  parentValue: string
+  options: WorkbenchSelectOption[]
+  top: number
+  left: number
+  width: number
+}
+
 const joinClassNames = (...parts: Array<string | false | null | undefined>): string =>
   parts.filter(Boolean).join(' ')
 
@@ -65,6 +73,8 @@ const DEFAULT_MENU_POSITION: MenuPosition = {
 const SEARCH_MENU_HEADER_HEIGHT = 48
 const MENU_VERTICAL_PADDING = 12
 const MENU_OPTION_HEIGHT = 36
+const SUBMENU_WIDTH = 220
+const SUBMENU_GAP = 6
 
 const estimateMenuHeight = (input: {
   optionCount: number
@@ -76,6 +86,24 @@ const estimateMenuHeight = (input: {
   const estimatedHeight = estimatedListHeight + (input.searchable ? SEARCH_MENU_HEADER_HEIGHT : 0)
   return Math.min(input.maxHeight, estimatedHeight)
 }
+
+const findSelectedOption = (
+  options: WorkbenchSelectOption[],
+  value: string | null
+): WorkbenchSelectOption | null => {
+  for (const option of options) {
+    if (option.value === value) return option
+    const child = option.children ? findSelectedOption(option.children, value) : null
+    if (child) return child
+  }
+  return null
+}
+
+const hasSelectedChild = (option: WorkbenchSelectOption, value: string | null): boolean =>
+  Boolean(option.children?.some((child) => child.value === value || hasSelectedChild(child, value)))
+
+const getFirstEnabledChild = (option: WorkbenchSelectOption): WorkbenchSelectOption | null =>
+  option.children?.find((child) => !child.disabled) || null
 
 const WorkbenchSelect: React.FC<WorkbenchSelectProps> = ({
   value,
@@ -107,14 +135,16 @@ const WorkbenchSelect: React.FC<WorkbenchSelectProps> = ({
   const rootRef = useRef<HTMLDivElement | null>(null)
   const triggerRef = useRef<HTMLButtonElement | null>(null)
   const menuRef = useRef<HTMLDivElement | null>(null)
+  const submenuRef = useRef<HTMLDivElement | null>(null)
   const searchInputRef = useRef<HTMLInputElement | null>(null)
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [menuPosition, setMenuPosition] = useState<MenuPosition>(DEFAULT_MENU_POSITION)
+  const [submenu, setSubmenu] = useState<SubmenuState | null>(null)
   const listboxId = useId()
 
   const selectedOption = useMemo(
-    () => options.find((option) => option.value === value) || null,
+    () => findSelectedOption(options, value),
     [options, value]
   )
 
@@ -122,7 +152,20 @@ const WorkbenchSelect: React.FC<WorkbenchSelectProps> = ({
     const normalizedQuery = query.trim().toLowerCase()
     if (!normalizedQuery) return options
     return options.filter((option) => {
-      const fields = [option.label, option.description || '', ...(option.keywords || [])]
+      const childFields =
+        option.children?.flatMap((child) => [
+          child.label,
+          child.description || '',
+          child.triggerLabel || '',
+          ...(child.keywords || [])
+        ]) || []
+      const fields = [
+        option.label,
+        option.triggerLabel || '',
+        option.description || '',
+        ...(option.keywords || []),
+        ...childFields
+      ]
       return fields.some((field) => field.toLowerCase().includes(normalizedQuery))
     })
   }, [options, query])
@@ -186,15 +229,18 @@ const WorkbenchSelect: React.FC<WorkbenchSelectProps> = ({
       if (!(target instanceof Node)) return
       if (rootRef.current?.contains(target)) return
       if (menuRef.current?.contains(target)) return
+      if (submenuRef.current?.contains(target)) return
       setOpen(false)
     }
 
     const handleResize = (): void => {
       updateMenuPosition()
+      setSubmenu(null)
     }
 
     const handleKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
+        setSubmenu(null)
         setOpen(false)
         triggerRef.current?.focus()
       }
@@ -215,6 +261,7 @@ const WorkbenchSelect: React.FC<WorkbenchSelectProps> = ({
   useEffect(() => {
     if (!open) {
       setQuery('')
+      setSubmenu(null)
       return
     }
     if (!searchable) return
@@ -224,7 +271,40 @@ const WorkbenchSelect: React.FC<WorkbenchSelectProps> = ({
     })
   }, [open, searchable])
 
-  const triggerLabel = selectedOption?.label || placeholder
+  const openSubmenu = useCallback((option: WorkbenchSelectOption, trigger: HTMLElement): void => {
+    if (!option.children || option.children.length === 0) {
+      setSubmenu(null)
+      return
+    }
+    const rect = trigger.getBoundingClientRect()
+    const estimatedHeight = MENU_VERTICAL_PADDING + option.children.length * MENU_OPTION_HEIGHT
+    const top = Math.max(8, Math.min(rect.top, window.innerHeight - estimatedHeight - 8))
+    const rightLeft = rect.right + SUBMENU_GAP
+    const left =
+      rightLeft + SUBMENU_WIDTH <= window.innerWidth - 8
+        ? rightLeft
+        : Math.max(8, rect.left - SUBMENU_WIDTH - SUBMENU_GAP)
+    setSubmenu({
+      parentValue: option.value,
+      options: option.children,
+      top,
+      left,
+      width: SUBMENU_WIDTH
+    })
+  }, [])
+
+  const handleOptionSelect = useCallback(
+    (option: WorkbenchSelectOption): void => {
+      if (option.disabled) return
+      const child = option.children ? getFirstEnabledChild(option) : null
+      onChange(child?.value || option.value)
+      setSubmenu(null)
+      setOpen(false)
+    },
+    [onChange]
+  )
+
+  const triggerLabel = selectedOption?.triggerLabel || selectedOption?.label || placeholder
   const triggerIconNode = selectedOption?.icon || triggerIcon
 
   return (
@@ -316,26 +396,32 @@ const WorkbenchSelect: React.FC<WorkbenchSelectProps> = ({
                 {filteredOptions.length > 0 ? (
                   filteredOptions.map((option) => {
                     const selected = option.value === value
+                    const childSelected = hasSelectedChild(option, value)
+                    const hasChildren = Boolean(option.children?.length)
+                    const trailing = hasChildren ? (
+                      <HiChevronRight className="h-3.5 w-3.5 text-[#9B9A97]" />
+                    ) : (
+                      option.trailing
+                    )
                     return (
                       <button
                         key={option.value}
                         type="button"
                         role="option"
-                        aria-selected={selected}
+                        aria-selected={selected || childSelected}
                         disabled={option.disabled}
                         className={joinClassNames(
                           'workbench-select-option',
-                          selected ? 'workbench-select-option-selected' : '',
-                          selected && selectedWithoutBackground
+                          selected || childSelected ? 'workbench-select-option-selected' : '',
+                          (selected || childSelected) && selectedWithoutBackground
                             ? 'workbench-select-option-selected-plain'
                             : '',
                           option.disabled ? 'workbench-select-option-disabled' : ''
                         )}
-                        onClick={() => {
-                          if (option.disabled) return
-                          onChange(option.value)
-                          setOpen(false)
+                        onMouseEnter={(event) => {
+                          openSubmenu(option, event.currentTarget)
                         }}
+                        onClick={() => handleOptionSelect(option)}
                       >
                         <span className="flex min-w-0 items-center gap-2">
                           {option.icon ? (
@@ -348,10 +434,10 @@ const WorkbenchSelect: React.FC<WorkbenchSelectProps> = ({
                           </span>
                         </span>
                         <span className="flex shrink-0 items-center gap-1.5 text-[#787774]">
-                          {option.trailing}
+                          {trailing}
                           {selected ? (
                             <HiCheck className="h-3.5 w-3.5 text-[#37352F]" />
-                          ) : option.trailing ? (
+                          ) : trailing && !hasChildren ? (
                             <span className="h-3.5 w-3.5" aria-hidden="true" />
                           ) : null}
                         </span>
@@ -383,6 +469,68 @@ const WorkbenchSelect: React.FC<WorkbenchSelectProps> = ({
                 ) : (
                   <div className="px-4 py-6 text-center text-[12px] text-[#91918E]">暂无结果</div>
                 )}
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
+      {open && submenu
+        ? createPortal(
+            <div
+              ref={submenuRef}
+              role="listbox"
+              className={joinClassNames('workbench-select-menu', menuClassName)}
+              data-workbench-select-root="true"
+              data-workbench-select-submenu-parent={submenu.parentValue}
+              style={{
+                position: 'fixed',
+                top: submenu.top,
+                left: submenu.left,
+                width: submenu.width,
+                zIndex: 1001
+              }}
+            >
+              <div className="py-1.5">
+                {submenu.options.map((option) => {
+                  const selected = option.value === value
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      role="option"
+                      aria-selected={selected}
+                      disabled={option.disabled}
+                      className={joinClassNames(
+                        'workbench-select-option',
+                        selected ? 'workbench-select-option-selected' : '',
+                        selected && selectedWithoutBackground
+                          ? 'workbench-select-option-selected-plain'
+                          : '',
+                        option.disabled ? 'workbench-select-option-disabled' : ''
+                      )}
+                      onClick={() => handleOptionSelect(option)}
+                    >
+                      <span className="flex min-w-0 items-center gap-2">
+                        {option.icon ? (
+                          <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center text-[#787774]">
+                            {option.icon}
+                          </span>
+                        ) : null}
+                        <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[#37352F]">
+                          {option.label}
+                        </span>
+                      </span>
+                      <span className="flex shrink-0 items-center gap-1.5 text-[#787774]">
+                        {option.trailing}
+                        {selected ? (
+                          <HiCheck className="h-3.5 w-3.5 text-[#37352F]" />
+                        ) : option.trailing ? (
+                          <span className="h-3.5 w-3.5" aria-hidden="true" />
+                        ) : null}
+                      </span>
+                    </button>
+                  )
+                })}
               </div>
             </div>,
             document.body

@@ -101,7 +101,7 @@ const getErrorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error)
 
 const normalizeAiPreference = (value: unknown): AiPreference =>
-  value === 'knowledge_base' ? 'knowledge_base' : 'default'
+  value === 'local_sources_relaxed' || value === 'local_sources_strict' ? value : 'default'
 
 const appendArtifact = (artifacts: AiArtifactRef[] | undefined, artifact: AiArtifactRef) => {
   const current = artifacts || []

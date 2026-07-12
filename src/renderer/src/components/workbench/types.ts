@@ -26,11 +26,13 @@ export type WorkbenchContextUsage = {
 export type WorkbenchSelectOption = {
   value: string
   label: string
+  triggerLabel?: string
   icon?: ReactNode
   description?: string
   keywords?: string[]
   trailing?: ReactNode
   disabled?: boolean
+  children?: WorkbenchSelectOption[]
 }
 
 export type WorkspaceQuickSelectProps = {

@@ -11,7 +11,7 @@ import {
 import type { AiPreference } from '../../../shared/types'
 
 const normalizeAiPreference = (value: unknown): AiPreference =>
-  value === 'knowledge_base' ? 'knowledge_base' : 'default'
+  value === 'local_sources_relaxed' || value === 'local_sources_strict' ? value : 'default'
 
 export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps): AiRunContext => {
   const checkCancelled = () => {

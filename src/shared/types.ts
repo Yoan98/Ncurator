@@ -870,7 +870,7 @@ export type AiDraftSnapshotRef = {
 export type AiArtifactRef = AiFileArtifactRef
 
 export type ChatSubmitMode = 'ai' | 'search'
-export type AiPreference = 'default' | 'knowledge_base'
+export type AiPreference = 'default' | 'local_sources_relaxed' | 'local_sources_strict'
 
 export type ChatSubmitRequest = {
   mode: ChatSubmitMode

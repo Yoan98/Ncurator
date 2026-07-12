@@ -52,7 +52,7 @@ const isWorkbenchMode = (value: string | null): value is WorkbenchMode =>
   value === 'ai' || value === 'search'
 
 const isWorkbenchAiPreference = (value: string | null): value is WorkbenchAiPreference =>
-  value === 'default' || value === 'knowledge_base'
+  value === 'default' || value === 'local_sources_relaxed' || value === 'local_sources_strict'
 
 const readStringField = (value: IpcJsonObject, key: string): string | undefined => {
   const record = value as Record<string, IpcJsonValue>
