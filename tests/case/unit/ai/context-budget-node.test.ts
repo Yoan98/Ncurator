@@ -6,8 +6,16 @@ import {
   appendRoundRecord,
   buildLearningExecution
 } from '../../../../src/main/services/ai/human/memory/rounds'
+import {
+  CONTEXT_COMPACTION_TRIGGER_RATIO,
+  DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS
+} from '../../../../src/main/services/ai/human/constants'
 import type { AiRunContext } from '../../../../src/main/services/ai/types'
 import type { AiRunEvent } from '../../../../src/shared/types'
+
+const DEFAULT_COMPACTION_TRIGGER_TOKENS = Math.floor(
+  DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS * CONTEXT_COMPACTION_TRIGGER_RATIO
+)
 
 const createBaseContext = (events: AiRunEvent[]): AiRunContext =>
   ({
@@ -70,8 +78,8 @@ describe('ai unit context budget node', () => {
     expect(nextState.execution.contextBudget).toMatchObject({
       basis: 'initial',
       budgetTokens: 0,
-      contextWindowTokens: 100000,
-      compactionTriggerTokens: 80000,
+      contextWindowTokens: DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS,
+      compactionTriggerTokens: DEFAULT_COMPACTION_TRIGGER_TOKENS,
       hasCompressibleHistory: false,
       usageAvailable: false,
       evaluationId: expect.any(String)
@@ -218,7 +226,7 @@ describe('ai unit context budget node', () => {
         budgetTokens: 0,
         usageAvailable: false,
         hasCompressibleHistory: false,
-        contextWindowTokens: 100000
+        contextWindowTokens: DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS
       }
     })
   })
@@ -247,7 +255,7 @@ describe('ai unit context budget node', () => {
         basis: 'post_compaction',
         budgetTokens: 0,
         usageAvailable: false,
-        contextWindowTokens: 100000
+        contextWindowTokens: DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS
       }
     })
   })
