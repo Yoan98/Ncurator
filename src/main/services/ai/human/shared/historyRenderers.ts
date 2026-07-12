@@ -60,13 +60,17 @@ const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
   kb_search: {
     items: {
       document_name: true,
+      source_type: true,
+      source_url: true,
       text: true
     }
   },
   kb_list_documents: {
     items: {
       id: true,
-      name: true
+      name: true,
+      source_type: true,
+      source_url: true
     },
     total: true
   },

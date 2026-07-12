@@ -49,6 +49,42 @@ const resolveRequestedDocumentIds = (requestedIds: string[] | undefined): string
   return toStringIdList(requestedIds)
 }
 
+const isHttpUrl = (value: string | undefined): boolean => /^https?:\/\//i.test(value || '')
+
+const enrichSearchRowsWithSourceUrl = async (
+  ctx: KnowledgeRetrievalContext,
+  rows: SearchResult[]
+): Promise<SearchResult[]> => {
+  const documentIds = Array.from(
+    new Set(rows.map((row) => String(row.document_id || '').trim()).filter(Boolean))
+  )
+  if (documentIds.length === 0) return rows
+
+  const documents = await ctx.documentsStore.listDocuments({
+    page: 1,
+    pageSize: Math.min(MAX_LIST_PAGE_SIZE, documentIds.length),
+    workspaceId: String(ctx.workspace?.workspaceId || '').trim() || undefined,
+    documentIds
+  })
+  const documentMap = new Map(documents.items.map((document) => [document.id, document] as const))
+
+  return rows.map((row) => {
+    const document = row.document_id ? documentMap.get(row.document_id) : undefined
+    if (!document) return row
+    const sourceUrl =
+      document.source_url ||
+      (document.source_type === 'web' && isHttpUrl(document.file_path)
+        ? document.file_path
+        : undefined)
+
+    return {
+      ...row,
+      source_type: document.source_type || row.source_type,
+      source_url: sourceUrl
+    }
+  })
+}
+
 export const buildKbCapabilityTools = (input: {
   ctx: KnowledgeRetrievalContext
   runId: string
@@ -145,7 +181,8 @@ export const buildKbCapabilityTools = (input: {
               prepared.requestedDocumentIds || undefined
             )
           })()
-          const normalized = rows.map(normalizeForIpc)
+          const enrichedRows = await enrichSearchRowsWithSourceUrl(ctx, rows)
+          const normalized = enrichedRows.map(normalizeForIpc)
           const payload = {
             items: normalized,
             total: normalized.length

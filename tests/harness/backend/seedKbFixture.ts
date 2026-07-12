@@ -25,6 +25,7 @@ export const seedKbFixture = async (input: {
 
   for (const document of input.documents) {
     const workspaceId = String(document.workspaceId || 'test-workspace').trim()
+    const generationId = `seed-${document.id}`
     await input.documentsStore.addDocument({
       id: document.id,
       name: document.name,
@@ -32,7 +33,9 @@ export const seedKbFixture = async (input: {
       workspace_id: workspaceId,
       file_path: document.filePath,
       created_at: document.createdAt || Date.now(),
-      import_status: 3
+      import_status: 2,
+      active_generation_id: generationId,
+      source_url: document.sourceUrl
     })
 
     const chunks = document.chunks.map((chunk) => ({
@@ -42,6 +45,7 @@ export const seedKbFixture = async (input: {
       workspace_id: workspaceId,
       document_name: document.name,
       source_type: document.sourceType || 'file',
+      generation_id: generationId,
       metadata: {
         page: chunk.page || 1
       }

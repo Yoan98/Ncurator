@@ -805,14 +805,13 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
             triggerIcon: <HiCircleStack className="h-3.5 w-3.5" />,
             triggerSuffix: (
               <span className="inline-flex items-center gap-1">
-                <span className="text-[#B5B3AD]">·</span>
                 <PreferenceDots count={1} />
               </span>
             ),
             icon: <PreferenceDots count={1} />,
-            description: 'AI 会优先依据本地资料推进任务',
+            description: '优先依据本地资料推进任务',
             trailing: (
-              <Tooltip title="AI 会优先依据知识库和本地资料内容推进任务">
+              <Tooltip title="优先依据本地资料内容推进任务">
                 <span
                   className="inline-flex h-5 w-5 items-center justify-center rounded-full text-[#9B9A97] transition hover:bg-[#EFEFED] hover:text-[#37352F]"
                   aria-label="本地资料宽松模式说明"
@@ -831,14 +830,13 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
             triggerIcon: <HiCircleStack className="h-3.5 w-3.5" />,
             triggerSuffix: (
               <span className="inline-flex items-center gap-1">
-                <span className="text-[#B5B3AD]">·</span>
                 <PreferenceDots count={2} />
               </span>
             ),
             icon: <PreferenceDots count={2} />,
             description: 'AI 只能依据本地资料推进任务',
             trailing: (
-              <Tooltip title="AI 必须只能依据知识库和本地资料内容推进任务，禁止使用其他信息与模型能力本身的信息">
+              <Tooltip title="完全只根据本地资料的内容推进任务">
                 <span
                   className="inline-flex h-5 w-5 items-center justify-center rounded-full text-[#9B9A97] transition hover:bg-[#EFEFED] hover:text-[#37352F]"
                   aria-label="本地资料严谨模式说明"

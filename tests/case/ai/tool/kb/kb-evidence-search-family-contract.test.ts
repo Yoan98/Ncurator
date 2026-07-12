@@ -8,6 +8,7 @@ type KbSearchRow = {
   document_id?: string
   document_name: string
   source_type?: string
+  source_url?: string
   _score?: number
 }
 
@@ -43,10 +44,24 @@ describe('ai tool kb backend', () => {
           {
             id: 'doc-2',
             name: 'Release Checklist.md',
+            createdAt: 200,
             chunks: [
               {
                 id: 'chunk-2',
                 text: 'Terminal artifacts must be declared and recorded.'
+              }
+            ]
+          },
+          {
+            id: 'doc-web',
+            name: 'LangChain overview - Docs by LangChain',
+            sourceType: 'web',
+            sourceUrl: 'https://docs.langchain.com/oss/javascript/langchain/overview',
+            createdAt: 100,
+            chunks: [
+              {
+                id: 'chunk-web',
+                text: 'LangChain provides createAgent for creating an agent with model and tools.'
               }
             ]
           },
@@ -82,11 +97,18 @@ describe('ai tool kb backend', () => {
           limit: 5,
           documentIds: ['doc-3']
         })
+        const webHit = await harness.invoke<KbSearchResult>('kb_search', {
+          queryText: 'LangChain createAgent model tools',
+          strategy: 'keyword',
+          limit: 5,
+          documentIds: ['doc-web']
+        })
 
         return {
           hybridInScope,
           vectorSubset,
-          ftsOutOfScope
+          ftsOutOfScope,
+          webHit
         }
       },
       assert: async (result, runtime) => {
@@ -94,7 +116,9 @@ describe('ai tool kb backend', () => {
           result.hybridInScope.total >= 1 &&
             result.hybridInScope.items.every(
               (row) =>
-                (row.document_id === 'doc-1' || row.document_id === 'doc-2') &&
+                (row.document_id === 'doc-1' ||
+                  row.document_id === 'doc-2' ||
+                  row.document_id === 'doc-web') &&
                 typeof row.document_name === 'string' &&
                 typeof row.text === 'string'
             ) &&
@@ -123,6 +147,22 @@ describe('ai tool kb backend', () => {
             message:
               'kb_search(keyword) 在 requested documentIds 完全超出当前工作区时应返回空结果。',
             data: result.ftsOutOfScope
+          }
+        )
+
+        runtime.assertThat(
+          result.webHit.total >= 1 &&
+            result.webHit.items.some(
+              (row) =>
+                row.document_id === 'doc-web' &&
+                row.source_type === 'web' &&
+                row.source_url === 'https://docs.langchain.com/oss/javascript/langchain/overview'
+            ),
+          {
+            name: 'kb-search-preserves-web-source-url',
+            message:
+              'kb_search should expose source_type and source_url so AI can cite web knowledge as a URL.',
+            data: result.webHit
           }
         )
       }

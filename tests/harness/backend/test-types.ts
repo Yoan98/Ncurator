@@ -99,6 +99,7 @@ export type SeedKbDocumentInput = {
   workspaceId?: string
   sourceType?: 'file' | 'web'
   filePath?: string
+  sourceUrl?: string
   createdAt?: number
   chunks: readonly SeedKbChunkInput[]
 }

@@ -7,6 +7,7 @@ type KbListDocumentsResult = {
     id: string
     name: string
     source_type: 'file' | 'web'
+    source_url?: string
   }>
   total: number
 }
@@ -45,6 +46,18 @@ describe('ai tool kb backend', () => {
             ]
           },
           {
+            id: 'doc-web',
+            name: 'LangChain overview - Docs by LangChain',
+            sourceType: 'web',
+            sourceUrl: 'https://docs.langchain.com/oss/javascript/langchain/overview',
+            chunks: [
+              {
+                id: 'chunk-web',
+                text: 'LangChain overview document covers createAgent and tools.'
+              }
+            ]
+          },
+          {
             id: 'doc-3',
             name: 'Archive Notes.md',
             workspaceId: 'other-workspace',
@@ -64,6 +77,9 @@ describe('ai tool kb backend', () => {
           sourceNameFiltered: await harness.invoke<KbListDocumentsResult>('kb_list_documents', {
             sourceNameQuery: 'Guide'
           }),
+          webFiltered: await harness.invoke<KbListDocumentsResult>('kb_list_documents', {
+            sourceNameQuery: 'LangChain'
+          }),
           requestedSubset: await harness.invoke<KbListDocumentsResult>('kb_list_documents', {
             documentIds: ['doc-2', 'doc-3']
           }),
@@ -74,8 +90,10 @@ describe('ai tool kb backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.allInScope.total === 2 &&
-            result.allInScope.items.map((item) => item.id).join(',') === 'doc-1,doc-2',
+          result.allInScope.total === 3 &&
+            ['doc-1', 'doc-2', 'doc-web'].every((id) =>
+              result.allInScope.items.some((item) => item.id === id)
+            ),
           {
             name: 'list-documents-honors-run-scope',
             message: 'kb_list_documents 默认应只返回当前工作区范围内的文档。',
@@ -83,6 +101,20 @@ describe('ai tool kb backend', () => {
               ids: result.allInScope.items.map((item) => item.id),
               total: result.allInScope.total
             }
+          }
+        )
+
+        runtime.assertThat(
+          result.webFiltered.total === 1 &&
+            result.webFiltered.items[0]?.id === 'doc-web' &&
+            result.webFiltered.items[0]?.source_type === 'web' &&
+            result.webFiltered.items[0]?.source_url ===
+              'https://docs.langchain.com/oss/javascript/langchain/overview',
+          {
+            name: 'list-documents-preserves-web-source-url',
+            message:
+              'kb_list_documents should expose source_type and source_url for web knowledge documents.',
+            data: result.webFiltered
           }
         )
 
