@@ -1,25 +1,13 @@
+import { jsonrepair } from 'jsonrepair'
 import type {
   AiStructuredOutputMethod,
-  AiStructuredOutputProfile,
   AiStructuredOutputTransport,
-  PreferredStructuredOutputProfile
+  StructuredOutputMode,
+  StructuredOutputStrategy
 } from '../../../shared/types'
 
 export const NATIVE_STRUCTURED_OUTPUT_METHODS = ['jsonSchema', 'jsonMode'] as const
 export const STRUCTURED_OUTPUT_METHODS = [...NATIVE_STRUCTURED_OUTPUT_METHODS, 'promptJson'] as const
-export const COMPLETIONS_STRUCTURED_OUTPUT_PROFILES = [
-  'completions:jsonSchema',
-  'completions:jsonMode',
-  'completions:promptJson'
-] as const
-export const RESPONSES_STRUCTURED_OUTPUT_PROFILES = [
-  'responses:jsonSchema',
-  'responses:promptJson'
-] as const
-export const STRUCTURED_OUTPUT_PROFILES = [
-  ...COMPLETIONS_STRUCTURED_OUTPUT_PROFILES,
-  ...RESPONSES_STRUCTURED_OUTPUT_PROFILES
-] as const
 
 export type NativeStructuredOutputMethod = (typeof NATIVE_STRUCTURED_OUTPUT_METHODS)[number]
 export type NonScriptedStructuredOutputMethod = Exclude<AiStructuredOutputMethod, 'scripted'>
@@ -46,35 +34,10 @@ export type StructuredOutputErrorAnalysis = {
   methodUnsupported: boolean
 }
 
-export type StructuredOutputProfileMetadata = {
+export type StructuredOutputStrategyMetadata = {
   transport: AiStructuredOutputTransport
+  mode: StructuredOutputMode
   method: NonScriptedStructuredOutputMethod
-}
-
-const STRUCTURED_OUTPUT_PROFILE_METADATA: Record<
-  PreferredStructuredOutputProfile,
-  StructuredOutputProfileMetadata
-> = {
-  'completions:jsonSchema': {
-    transport: 'completions',
-    method: 'jsonSchema'
-  },
-  'completions:jsonMode': {
-    transport: 'completions',
-    method: 'jsonMode'
-  },
-  'completions:promptJson': {
-    transport: 'completions',
-    method: 'promptJson'
-  },
-  'responses:jsonSchema': {
-    transport: 'responses',
-    method: 'jsonSchema'
-  },
-  'responses:promptJson': {
-    transport: 'responses',
-    method: 'promptJson'
-  }
 }
 
 const getObject = (value: unknown): ErrorObject | undefined =>
@@ -365,50 +328,91 @@ export const isStructuredOutputMethodUnsupportedError = (
   error: unknown
 ): boolean => classifyStructuredOutputError({ error, transport: 'completions', method }).methodUnsupported
 
-export const buildStructuredOutputProfile = (
-  transport: AiStructuredOutputTransport,
+export const modeToStructuredOutputMethod = (
+  mode: StructuredOutputMode
+): NonScriptedStructuredOutputMethod => {
+  if (mode === 'json_schema') return 'jsonSchema'
+  if (mode === 'json_object') return 'jsonMode'
+  return 'promptJson'
+}
+
+export const methodToStructuredOutputMode = (
   method: NonScriptedStructuredOutputMethod
-): PreferredStructuredOutputProfile => {
-  if (transport === 'completions') {
-    if (method === 'jsonSchema') return 'completions:jsonSchema'
-    if (method === 'jsonMode') return 'completions:jsonMode'
-    if (method === 'promptJson') return 'completions:promptJson'
-    throw new Error(`structured_output_invalid_profile_combo:${transport}:${method}`)
-  }
-
-  if (method === 'jsonSchema') return 'responses:jsonSchema'
-  if (method === 'promptJson') return 'responses:promptJson'
-  throw new Error(`structured_output_invalid_profile_combo:${transport}:${method}`)
+): StructuredOutputMode => {
+  if (method === 'jsonSchema') return 'json_schema'
+  if (method === 'jsonMode') return 'json_object'
+  return 'prompt_json'
 }
 
-export const resolveStructuredOutputProfile = (
-  profile: PreferredStructuredOutputProfile
-): StructuredOutputProfileMetadata => STRUCTURED_OUTPUT_PROFILE_METADATA[profile]
+export const formatStructuredOutputStrategy = (strategy: StructuredOutputStrategy): string =>
+  `${strategy.transport}/${strategy.mode}`
 
-export const buildStructuredOutputAttemptOrder = (
-  preferredProfile?: PreferredStructuredOutputProfile
-): PreferredStructuredOutputProfile[] => {
-  if (!preferredProfile) {
-    return [...STRUCTURED_OUTPUT_PROFILES]
+export const resolveStructuredOutputStrategy = (
+  strategy: StructuredOutputStrategy
+): StructuredOutputStrategyMetadata => {
+  const method = modeToStructuredOutputMethod(strategy.mode)
+  if (!isStructuredOutputStrategyCompatible(strategy)) {
+    throw new Error(`structured_output_invalid_strategy:${formatStructuredOutputStrategy(strategy)}`)
   }
-  return [
-    preferredProfile,
-    ...STRUCTURED_OUTPUT_PROFILES.filter((profile) => profile !== preferredProfile)
-  ]
+  return {
+    ...strategy,
+    method
+  }
 }
 
-export const getTransportBoundaryIndex = (
-  attemptOrder: PreferredStructuredOutputProfile[],
-  startIndex: number
-): number => {
-  const currentTransport = resolveStructuredOutputProfile(attemptOrder[startIndex]).transport
-  let nextIndex = startIndex
-  while (nextIndex + 1 < attemptOrder.length) {
-    const nextTransport = resolveStructuredOutputProfile(attemptOrder[nextIndex + 1]).transport
-    if (nextTransport !== currentTransport) break
-    nextIndex += 1
-  }
-  return nextIndex
+const STRUCTURED_OUTPUT_TRANSPORT_PREFERENCE: AiStructuredOutputTransport[] = [
+  'responses',
+  'completions'
+]
+const STRUCTURED_OUTPUT_MODE_PREFERENCE: StructuredOutputMode[] = [
+  'json_schema',
+  'json_object',
+  'prompt_json'
+]
+
+export const isStructuredOutputStrategyCompatible = (
+  strategy: StructuredOutputStrategy
+): boolean => {
+  if (strategy.transport === 'responses') return strategy.mode !== 'json_object'
+  return true
+}
+
+const strategyKey = (strategy: StructuredOutputStrategy): string =>
+  `${strategy.transport}:${strategy.mode}`
+
+export const buildStructuredOutputStrategyAttemptOrder = (input: {
+  supportedTransports: readonly AiStructuredOutputTransport[]
+  preferredStrategy?: StructuredOutputStrategy
+  supportedModes?: readonly StructuredOutputMode[]
+}): StructuredOutputStrategy[] => {
+  const supportedTransportSet = new Set(input.supportedTransports)
+  const supportedModeSet = new Set(input.supportedModes || STRUCTURED_OUTPUT_MODE_PREFERENCE)
+  const strategies = STRUCTURED_OUTPUT_TRANSPORT_PREFERENCE.flatMap((transport) =>
+    STRUCTURED_OUTPUT_MODE_PREFERENCE.map((mode) => ({ transport, mode }))
+  ).filter(
+    (strategy) =>
+      supportedTransportSet.has(strategy.transport) &&
+      supportedModeSet.has(strategy.mode) &&
+      isStructuredOutputStrategyCompatible(strategy)
+  )
+
+  const ordered = input.preferredStrategy
+    ? [input.preferredStrategy, ...strategies]
+    : strategies
+  const seen = new Set<string>()
+  return ordered.filter((strategy) => {
+    if (
+      !supportedTransportSet.has(strategy.transport) ||
+      !supportedModeSet.has(strategy.mode) ||
+      !isStructuredOutputStrategyCompatible(strategy)
+    ) {
+      return false
+    }
+    const key = strategyKey(strategy)
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
 }
 
 export const extractTextContent = (content: unknown): string => {
@@ -453,50 +457,36 @@ export const normalizePromptJsonText = (raw: string): string => {
     .trim()
 }
 
-export const parsePromptJsonOutput = (raw: string): Record<string, unknown> => {
-  const normalized = normalizePromptJsonText(raw)
-  if (!normalized) {
-    throw new Error('prompt_json_empty_response')
-  }
-
-  const parsed = JSON.parse(normalized) as unknown
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw new Error('prompt_json_non_object_response')
-  }
-
-  return parsed as Record<string, unknown>
-}
-
-export const parseJsonObjectText = (raw: string): Record<string, unknown> => {
-  const normalized = normalizePromptJsonText(raw)
-  if (!normalized) {
-    throw new Error('structured_output_empty_response')
-  }
-
+const parseJsonObject = (normalized: string): Record<string, unknown> => {
   const parsed = JSON.parse(normalized) as unknown
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
     throw new Error('structured_output_non_object_response')
   }
-
   return parsed as Record<string, unknown>
 }
 
-export const resolveResultProfile = (input: {
-  method: AiStructuredOutputMethod
-  transport?: AiStructuredOutputTransport
-  profile?: AiStructuredOutputProfile
-}): AiStructuredOutputProfile => {
-  if (input.profile) {
-    return input.profile
+const parseRepairableJsonObjectText = (raw: string, emptyCode: string): Record<string, unknown> => {
+  const normalized = normalizePromptJsonText(raw)
+  if (!normalized) {
+    throw new Error(emptyCode)
   }
 
-  if (input.method === 'scripted') {
-    return 'scripted'
+  try {
+    return parseJsonObject(normalized)
+  } catch (error) {
+    try {
+      return parseJsonObject(jsonrepair(normalized))
+    } catch {
+      throw error
+    }
   }
-
-  if (input.transport) {
-    return buildStructuredOutputProfile(input.transport, input.method)
-  }
-
-  throw new Error('structured_output_driver_missing_profile')
 }
+
+export const parsePromptJsonOutput = (raw: string): Record<string, unknown> => {
+  return parseRepairableJsonObjectText(raw, 'prompt_json_empty_response')
+}
+
+export const parseJsonObjectText = (raw: string): Record<string, unknown> => {
+  return parseRepairableJsonObjectText(raw, 'structured_output_empty_response')
+}
+

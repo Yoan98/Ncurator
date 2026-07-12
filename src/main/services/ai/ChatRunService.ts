@@ -14,6 +14,7 @@ import type { DocumentsStore } from '../storage/domains/DocumentsStore'
 import type { ChatStore } from '../storage/domains/ChatStore'
 import type { AiRunStore } from '../storage/domains/AiRunStore'
 import type { LlmConfigStore } from '../storage/domains/LlmConfigStore'
+import type { LlmStrategyPreferenceStore } from '../storage/domains/LlmStrategyPreferenceStore'
 import type { AiRuntimeSettingsStore } from '../storage/domains/AiRuntimeSettingsStore'
 import type { WorkspaceStore } from '../storage/domains/WorkspaceStore'
 import type { WebSourceStore } from '../storage/domains/WebSourceStore'
@@ -75,6 +76,7 @@ type ChatRunServiceDeps = {
   documentsStore: DocumentsStore
   embeddingService: EmbeddingService
   llmStore: LlmConfigStore
+  llmStrategyPreferenceStore: LlmStrategyPreferenceStore
   aiRuntimeSettingsStore: AiRuntimeSettingsStore
   workspaceStore: WorkspaceStore
   webSourceStore: WebSourceStore
@@ -661,6 +663,7 @@ export class ChatRunService {
         {
           runtimeSettings,
           llmStore: this.deps.llmStore,
+          llmStrategyPreferenceStore: this.deps.llmStrategyPreferenceStore,
           chatStore: this.deps.chatStore,
           documentsStore: this.deps.documentsStore,
           embeddingService: this.deps.embeddingService,

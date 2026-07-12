@@ -3,6 +3,7 @@ import { Tooltip } from 'antd'
 import {
   HiChevronDown,
   HiChevronRight,
+  HiArrowPath,
   HiOutlineAcademicCap,
   HiOutlineArchiveBox,
   HiOutlineCommandLine,
@@ -55,6 +56,7 @@ const getLayerIconClassName = (iconKind: AssistantProcessIconKind): string => {
   if (iconKind === 'edit') return 'text-[#787774]'
   if (iconKind === 'search') return 'text-[#787774]'
   if (iconKind === 'terminal') return 'text-[#787774]'
+  if (iconKind === 'retry') return 'text-[#787774]'
   return 'text-[#9B9A97]'
 }
 
@@ -69,6 +71,7 @@ const LayerIcon: React.FC<{ iconKind: AssistantProcessIconKind; className?: stri
   if (iconKind === 'edit') return <HiOutlinePencilSquare className={iconClassName} />
   if (iconKind === 'search') return <HiOutlineMagnifyingGlass className={iconClassName} />
   if (iconKind === 'terminal') return <HiOutlineCommandLine className={iconClassName} />
+  if (iconKind === 'retry') return <HiArrowPath className={iconClassName} />
   return <HiOutlineDocumentText className={iconClassName} />
 }
 
@@ -127,7 +130,8 @@ const AssistantProcessThoughtView: React.FC<{ thought: AssistantProcessThought }
 const AssistantProcessGroupView: React.FC<{ group: AssistantProcessGroup }> = ({ group }) => {
   const isRunning = group.status === 'running'
   const groupText = getGroupText(group)
-  const shouldShowIcon = group.kind === 'learning' || group.kind === 'compaction'
+  const shouldShowIcon =
+    group.kind === 'learning' || group.kind === 'compaction' || group.kind === 'retry'
   return (
     <details
       className="group/process"

@@ -103,6 +103,7 @@ export type AssistantProcessIconKind =
   | 'terminal'
   | 'document'
   | 'edit'
+  | 'retry'
   | 'learning'
   | 'compaction'
   | 'finalizing'
@@ -111,6 +112,7 @@ export type AssistantProcessIconKind =
 export type AssistantProcessGroupKind =
   | 'thinking'
   | 'skill'
+  | 'retry'
   | 'learning'
   | 'compaction'
   | 'finalizing'

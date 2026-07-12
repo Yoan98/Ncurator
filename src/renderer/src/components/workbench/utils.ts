@@ -264,6 +264,7 @@ const getMixedStatus = (
 const getDisplayIconKind = (display: AssistantProcessDisplay): AssistantProcessIconKind => {
   if (display.kind === 'thinking') return 'default'
   if (display.kind === 'learning') return 'learning'
+  if (display.kind === 'retry') return 'retry'
   if (display.kind === 'compaction') return 'compaction'
   if (display.kind === 'finalizing') return 'finalizing'
   return getToolIconKind(getDisplaySkillKey(display))
@@ -430,6 +431,13 @@ const getDisplayGroupText = (
       return sentence(text('学习 '), text(skillName, true), text(' 有部分失败'))
     return sentence(text('学习 '), text(skillName, true), text(' 失败了'))
   }
+  if (display.kind === 'retry') {
+    const progress = `${display.attempt}/${display.maxAttempts}`
+    if (status === 'running') return sentence(text(`正在重试 ${progress}`))
+    if (status === 'completed') return sentence(text(`已重试 ${progress}`))
+    if (status === 'partial_failed') return sentence(text(`部分重试失败 ${progress}`))
+    return sentence(text(`重试失败 ${progress}`))
+  }
   if (display.kind === 'compaction') {
     if (status === 'running') return sentence(text('东西太多了，让俺整理下'))
     if (status === 'completed') return sentence(text('呼，终于整理好了，累死俺了'))
@@ -451,6 +459,9 @@ const getDisplayItemText = (
 ): AssistantRichTextSegment[] => {
   if (display.kind === 'tool') {
     return getToolItemText(normalizeToolName(display.toolName), status, display.input)
+  }
+  if (display.kind === 'retry') {
+    return sentence(text(display.message || ''))
   }
   return getDisplayGroupText(display, status)
 }

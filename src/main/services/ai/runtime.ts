@@ -1,3 +1,4 @@
+import type { LlmRuntimeConfig } from '../../../shared/types'
 import type { AiRunContext, AiRunDeps, AiRunStartPayload, CancelledError } from './types'
 import { createAiLlmExecutor } from './llmExecutor'
 import { buildReferenceScope } from './prompts/referenceScope'
@@ -24,7 +25,10 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
   const normalizedReferences = normalizeSelectedReferences(payload.selectedReferences)
   const platform = getAiRuntimePlatform()
 
-  const getModelConfig = async (selection: typeof payload.mainModel, label: string) => {
+  const getModelConfig = async (
+    selection: typeof payload.mainModel,
+    label: string
+  ): Promise<LlmRuntimeConfig> => {
     const configId = String(selection?.configId || '').trim()
     const modelName = String(selection?.modelName || '').trim()
     if (!configId || !modelName) {
@@ -32,10 +36,16 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     }
     const cfg = await deps.llmStore.getById(configId)
     if (!cfg) throw new Error(`${label}对应的大模型配置不存在，请重新选择`)
+    const preference = await deps.llmStrategyPreferenceStore.get({
+      configId,
+      modelName
+    })
     return {
       ...cfg,
-      model_name: modelName
-    }
+      model_name: modelName,
+      preferredTransport: preference?.preferredTransport,
+      preferredStructuredOutputMode: preference?.preferredStructuredOutputMode
+    } satisfies LlmRuntimeConfig
   }
 
   const getRequestedConfig = async () => getModelConfig(payload.mainModel, '主模型')
@@ -46,10 +56,18 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     return await requestedConfigPromise
   }
 
-  const saveRequestedConfig = async (
-    nextConfig: Awaited<ReturnType<typeof getRequestedConfig>>
-  ) => {
+  const saveRequestedConfig = async (nextConfig: LlmRuntimeConfig) => {
     requestedConfigPromise = Promise.resolve(nextConfig)
+    if (nextConfig.preferredTransport && nextConfig.preferredStructuredOutputMode) {
+      await deps.llmStrategyPreferenceStore.save({
+        configId: nextConfig.id,
+        modelName: nextConfig.model_name,
+        strategy: {
+          transport: nextConfig.preferredTransport,
+          mode: nextConfig.preferredStructuredOutputMode
+        }
+      })
+    }
   }
 
   let requestedVisionConfigPromise: ReturnType<typeof getRequestedConfig> | undefined

@@ -153,7 +153,6 @@ export const createScriptedStructuredOutputDriver = (script: LlmScript): AiLlmDr
           output: resolved,
           rawText,
           method: 'scripted',
-          fallbackChain: ['scripted'],
           usage: estimateScriptedUsage({
             system: input.system,
             user: input.user,
@@ -193,7 +192,6 @@ export const createScriptedStructuredOutputDriver = (script: LlmScript): AiLlmDr
           output: step.output,
           rawText,
           method: 'scripted',
-          fallbackChain: ['scripted'],
           usage: step.usage || estimateScriptedUsage({
             system: input.system,
             user: input.user,
@@ -217,7 +215,6 @@ export const createScriptedStructuredOutputDriver = (script: LlmScript): AiLlmDr
           output: resolved,
           rawText: step.text,
           method: 'scripted',
-          fallbackChain: ['scripted'],
           usage: step.usage || estimateScriptedUsage({
             system: input.system,
             user: input.user,

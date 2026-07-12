@@ -11,7 +11,8 @@ const resolveLocalBin = (name) =>
 const PNPM_BIN = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
 const VITEST_BIN = resolveLocalBin('vitest')
 const ELECTRON_VITE_BIN = resolveLocalBin('electron-vite')
-const NATIVE_SWITCH_SCRIPT = path.join(ROOT, 'scripts', 'switch-better-sqlite3-native.mjs')
+const NATIVE_PREPARE_SCRIPT = path.join(ROOT, 'scripts', 'prepare-better-sqlite3-native.mjs')
+const BETTER_SQLITE_NATIVE_BINDING_ENV = 'NCURATOR_BETTER_SQLITE3_NATIVE_BINDING'
 const LIVE_BACKEND_NODE_OLD_SPACE_MB = 8192
 const DEFAULT_E2E_FILE_DELAY_MS = 1000
 const USE_WINDOWS_SHELL = process.platform === 'win32'
@@ -135,7 +136,7 @@ const appendNodeOption = (existing, option) => {
   return current.includes(option) ? current : `${current} ${option}`.trim()
 }
 
-const buildCommandEnv = (overrides, options = {}) => {
+const buildCommandEnv = (overrides = {}, options = {}) => {
   const env = {}
   for (const [key, value] of Object.entries(process.env)) {
     if (options.omitNpmEnv && key.startsWith('npm_')) continue
@@ -204,16 +205,39 @@ const runCommandWithFallback = (input) => {
   return 1
 }
 
-const switchBetterSqliteNative = (target) => {
-  const result = runSpawn(process.execPath, [NATIVE_SWITCH_SCRIPT, target])
+const prepareBetterSqliteNative = (target) => {
+  const result = runSpawn(process.execPath, [NATIVE_PREPARE_SCRIPT, 'ensure', target])
   reportSpawnFailure(
-    `native switch ${target}`,
+    `native prepare ${target}`,
     process.execPath,
-    [NATIVE_SWITCH_SCRIPT, target],
+    [NATIVE_PREPARE_SCRIPT, 'ensure', target],
     result
   )
   if (typeof result.status === 'number') return result.status
   return 1
+}
+
+const resolveBetterSqliteNativeBinding = (target) => {
+  const result = spawnSync(process.execPath, [NATIVE_PREPARE_SCRIPT, 'path', target], {
+    cwd: ROOT,
+    encoding: 'utf8',
+    shell: USE_WINDOWS_SHELL,
+    env: buildCommandEnv(undefined)
+  })
+  reportSpawnFailure(
+    `native path ${target}`,
+    process.execPath,
+    [NATIVE_PREPARE_SCRIPT, 'path', target],
+    result
+  )
+  if (result.status !== 0) {
+    return { ok: false, env: {} }
+  }
+  const nativeBinding = String(result.stdout || '').trim().split(/\r?\n/u).at(-1) || ''
+  return {
+    ok: nativeBinding.length > 0,
+    env: nativeBinding ? { [BETTER_SQLITE_NATIVE_BINDING_ENV]: nativeBinding } : {}
+  }
 }
 
 const runVitest = (input) => {
@@ -226,9 +250,10 @@ const runVitest = (input) => {
         NODE_OPTIONS: appendNodeOption(
           process.env.NODE_OPTIONS,
           `--max-old-space-size=${String(LIVE_BACKEND_NODE_OLD_SPACE_MB)}`
-        )
+        ),
+        ...input.env
       }
-    : undefined
+    : input.env
   const commandArgs = ['run', '--config', input.configPath, ...extraArgs, ...input.testFiles]
   return runCommandWithFallback({
     env,
@@ -250,8 +275,9 @@ const partitionBackendTestFiles = (testFiles) => ({
   liveFiles: testFiles.filter((filePath) => isLiveBackendFile(filePath))
 })
 
-const buildE2EApp = () => {
+const buildE2EApp = (env) => {
   return runCommandWithFallback({
+    env,
     preferFallback: true,
     primary: {
       bin: PNPM_BIN,
@@ -269,7 +295,7 @@ const formatScope = (input) =>
     .filter(Boolean)
     .join(' ')
 
-const runE2ETestFilesSerially = async (testFiles, requestedDelayMs) => {
+const runE2ETestFilesSerially = async (testFiles, requestedDelayMs, env) => {
   const e2eFileDelayMs = requestedDelayMs > 0 ? requestedDelayMs : DEFAULT_E2E_FILE_DELAY_MS
   let exitCode = 0
 
@@ -280,7 +306,8 @@ const runE2ETestFilesSerially = async (testFiles, requestedDelayMs) => {
     )
     const code = runVitest({
       configPath: 'vitest.e2e.config.mts',
-      testFiles: [testFile]
+      testFiles: [testFile],
+      env
     })
     if (code !== 0) {
       process.stdout.write(
@@ -306,13 +333,18 @@ const runTypeWorkflow = async (input) => {
     return 0
   }
 
-  const nativeCode = switchBetterSqliteNative(input.type === 'e2e' ? 'electron' : 'node')
+  const nativeTarget = input.type === 'e2e' ? 'electron' : 'node'
+  const nativeCode = prepareBetterSqliteNative(nativeTarget)
   if (nativeCode !== 0) {
     return nativeCode
   }
+  const nativeBinding = resolveBetterSqliteNativeBinding(nativeTarget)
+  if (!nativeBinding.ok) {
+    return 1
+  }
 
   if (input.type === 'e2e') {
-    const buildCode = buildE2EApp()
+    const buildCode = buildE2EApp(nativeBinding.env)
     if (buildCode !== 0) {
       return buildCode
     }
@@ -330,11 +362,13 @@ const runTypeWorkflow = async (input) => {
       const groups = [
         {
           configPath: 'vitest.backend.config.mts',
-          testFiles: nonLiveFiles
+          testFiles: nonLiveFiles,
+          env: nativeBinding.env
         },
         {
           configPath: 'vitest.backend.live.config.mts',
-          testFiles: liveFiles
+          testFiles: liveFiles,
+          env: nativeBinding.env
         }
       ].filter((group) => group.testFiles.length > 0)
 
@@ -345,7 +379,7 @@ const runTypeWorkflow = async (input) => {
         }
       }
     } else {
-      const code = await runE2ETestFilesSerially(testFiles, input.runDelayMs)
+      const code = await runE2ETestFilesSerially(testFiles, input.runDelayMs, nativeBinding.env)
       if (code !== 0) {
         exitCode = code
       }

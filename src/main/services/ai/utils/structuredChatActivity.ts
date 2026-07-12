@@ -6,13 +6,19 @@ import type {
   AiLlmStreamingMode,
   AiLlmUsage,
   AiStructuredOutputMethod,
-  AiStructuredOutputProfile,
   AiStructuredOutputTransport,
   BrainContextBudgetSnapshot,
   JsonObject,
   JsonValue,
-  LlmProviderKind
+  LlmProviderKind,
+  StructuredOutputMode,
+  StructuredOutputStrategy
 } from '../../../../shared/types'
+import {
+  emitLlmRetryProcessCompleted,
+  emitLlmRetryProcessFailed,
+  emitLlmRetryProcessStarted
+} from '../events/processEvents'
 import { classifyLlmFailureCode } from './runFailure'
 
 export type LlmCallStreamObserver = {
@@ -41,12 +47,30 @@ export type LlmCallExecutionResult<T> = {
   rawText?: string
   method?: AiStructuredOutputMethod
   transport?: AiStructuredOutputTransport
-  profile?: AiStructuredOutputProfile
-  fallbackChain?: AiStructuredOutputProfile[]
+  structuredOutputMode?: StructuredOutputMode
+  strategy?: StructuredOutputStrategy
+  fallbackStrategies?: StructuredOutputStrategy[]
   streamed?: boolean
   usage?: AiLlmUsage
   responseMetadata?: JsonObject
   usageMetadata?: JsonObject
+}
+
+type LlmCallRetryDecision = {
+  retryable: boolean
+  message: string
+}
+
+const sleep = async (ms: number): Promise<void> =>
+  await new Promise((resolve) => setTimeout(resolve, ms))
+
+const reasonFromError = (error: unknown): string =>
+  error instanceof Error && error.message.trim() ? error.message.trim() : String(error || 'unknown')
+
+const readRawTextFromError = (error: unknown): string | undefined => {
+  if (!error || typeof error !== 'object') return undefined
+  const rawText = (error as { rawText?: unknown }).rawText
+  return typeof rawText === 'string' && rawText ? rawText : undefined
 }
 
 const resolveBaseUrlHost = (baseUrl: string): string => {
@@ -90,6 +114,8 @@ export const runLlmCallWithActivity = async <T>(input: {
   telemetry: LlmCallTelemetry
   onTextDelta?: (text: string) => void
   execute: (observer: LlmCallStreamObserver, callId: string) => Promise<LlmCallExecutionResult<T>>
+  maxAttempts?: number
+  classifyRetry?: (error: unknown) => LlmCallRetryDecision
 }): Promise<LlmCallExecutionResult<T>> => {
   const startedAt = Date.now()
   const baseUrlHost = resolveBaseUrlHost(input.telemetry.baseUrl)
@@ -170,14 +196,49 @@ export const runLlmCallWithActivity = async <T>(input: {
   observer.onStart?.()
 
   try {
-    const result = await input.execute(observer, callId)
+    const maxAttempts = Math.max(1, Math.floor(input.maxAttempts || 1))
+    let attempt = 1
+    let retryGroupStarted = false
+    let result: LlmCallExecutionResult<T> | undefined
+    for (;;) {
+      try {
+        result = await input.execute(observer, callId)
+        if (retryGroupStarted) {
+          emitLlmRetryProcessCompleted({
+            sendEvent: input.ctx.sendEvent,
+            runId: input.runId,
+            callId
+          })
+        }
+        break
+      } catch (error) {
+        const retry = input.classifyRetry?.(error) || { retryable: false, message: reasonFromError(error) }
+        if (!retry.retryable || attempt >= maxAttempts) {
+          if (retryGroupStarted) {
+            emitLlmRetryProcessFailed({
+              sendEvent: input.ctx.sendEvent,
+              runId: input.runId,
+              callId,
+              error: retry.message
+            })
+          }
+          throw error
+        }
+        attempt += 1
+        retryGroupStarted = true
+        emitLlmRetryProcessStarted({
+          sendEvent: input.ctx.sendEvent,
+          runId: input.runId,
+          callId,
+          attempt,
+          maxAttempts,
+          message: retry.message
+        })
+        await sleep(Math.min(1_500, 250 * attempt))
+      }
+    }
+    if (!result) throw new Error('llm_call_missing_result')
     const durationMs = Date.now() - startedAt
-    const fallbackChain =
-      result.fallbackChain && result.fallbackChain.length > 0
-        ? result.fallbackChain
-        : result.profile
-          ? [result.profile]
-          : []
     const rawText = result.rawText ?? (latestRawText || undefined)
     observer.onComplete?.({ rawText })
     const streamed = Boolean(result.streamed || chunkCount > 0)
@@ -199,8 +260,9 @@ export const runLlmCallWithActivity = async <T>(input: {
         durationMs,
         method: result.method,
         transport: result.transport,
-        profile: result.profile,
-        fallbackChain,
+        structuredOutputMode: result.structuredOutputMode,
+        strategy: result.strategy,
+        fallbackStrategies: result.fallbackStrategies,
         streamed,
         chunkCount,
         firstTokenLatencyMs,
@@ -230,8 +292,9 @@ export const runLlmCallWithActivity = async <T>(input: {
       usageMetadata: result.usageMetadata,
       method: result.method,
       transport: result.transport,
-      profile: result.profile,
-      fallbackChain,
+      structuredOutputMode: result.structuredOutputMode,
+      strategy: result.strategy,
+      fallbackStrategies: result.fallbackStrategies,
       streamingMode: input.telemetry.streamingMode,
       contextBudgetSnapshot,
       streamed,
@@ -245,9 +308,10 @@ export const runLlmCallWithActivity = async <T>(input: {
     return result
   } catch (error) {
     const durationMs = Date.now() - startedAt
-    const reason = error instanceof Error && error.message.trim() ? error.message.trim() : String(error || 'unknown')
+    const reason = reasonFromError(error)
     const reasonCode = classifyLlmFailureCode(error)
     const normalizedError = error instanceof Error ? error : new Error(reason)
+    const failedRawText = readRawTextFromError(error) || latestRawText || undefined
     observer.onError?.(normalizedError)
     const firstTokenLatencyMs = firstTokenAt ? firstTokenAt - startedAt : undefined
 
@@ -283,10 +347,10 @@ export const runLlmCallWithActivity = async <T>(input: {
       baseUrlHost,
       system: input.system,
       user: input.user,
-      rawText: latestRawText || undefined,
+      rawText: failedRawText,
       stablePrefixHash,
       dynamicContextHash,
-      fallbackChain: [],
+      fallbackStrategies: [],
       streamingMode: input.telemetry.streamingMode,
       contextBudgetSnapshot,
       streamed: chunkCount > 0,

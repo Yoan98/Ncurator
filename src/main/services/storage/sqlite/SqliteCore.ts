@@ -21,6 +21,53 @@ const MIGRATIONS: Migration[] = [
   }
 ]
 
+const BETTER_SQLITE_NATIVE_BINDING_ENV = 'NCURATOR_BETTER_SQLITE3_NATIVE_BINDING'
+
+const resolveRuntimeNativeDirName = (): string => {
+  const runtime = process.versions.electron ? 'electron' : 'node'
+  return `${runtime}-v${process.versions.modules}-${process.platform}-${process.arch}`
+}
+
+const resolveBetterSqliteNativeBinding = (): string => {
+  const envBinding = String(process.env[BETTER_SQLITE_NATIVE_BINDING_ENV] || '').trim()
+  if (envBinding) {
+    if (!fs.existsSync(envBinding)) {
+      throw new Error(`${BETTER_SQLITE_NATIVE_BINDING_ENV} does not exist: ${envBinding}`)
+    }
+    return envBinding
+  }
+
+  const dirName = resolveRuntimeNativeDirName()
+  const processWithResources = process as NodeJS.Process & { resourcesPath?: string }
+  const candidates = [
+    processWithResources.resourcesPath
+      ? path.join(
+          processWithResources.resourcesPath,
+          'native',
+          'better-sqlite3',
+          dirName,
+          'better_sqlite3.node'
+        )
+      : '',
+    path.join(
+      process.cwd(),
+      'node_modules',
+      '.native-cache',
+      'better-sqlite3',
+      dirName,
+      'better_sqlite3.node'
+    )
+  ].filter(Boolean)
+
+  const found = candidates.find((candidate) => fs.existsSync(candidate))
+  if (!found) {
+    throw new Error(
+      `better-sqlite3 native binding not found for ${dirName}; checked ${candidates.join(', ')}`
+    )
+  }
+  return found
+}
+
 export class SqliteCore {
   private db: SqliteDatabase | null = null
 
@@ -29,7 +76,9 @@ export class SqliteCore {
   public initialize(): void {
     if (this.db) return
     fs.mkdirSync(path.dirname(this.dbPath), { recursive: true })
-    const db = new Database(this.dbPath)
+    const db = new Database(this.dbPath, {
+      nativeBinding: resolveBetterSqliteNativeBinding()
+    })
     db.pragma('foreign_keys = ON')
     db.pragma('journal_mode = WAL')
     db.pragma('busy_timeout = 5000')

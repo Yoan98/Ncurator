@@ -44,8 +44,6 @@ describe('ai unit structured chat activity', () => {
           ok: true
         },
         method: 'scripted',
-        profile: 'scripted',
-        fallbackChain: ['scripted'],
         usage: {
           inputTokens: 100,
           outputTokens: 10,
@@ -69,8 +67,6 @@ describe('ai unit structured chat activity', () => {
     expect(events.filter((event) => event.type === 'activity')).toHaveLength(2)
     expect(llmIoRecords).toHaveLength(1)
     expect(llmIoRecords[0]?.method).toBe('scripted')
-    expect(llmIoRecords[0]?.profile).toBe('scripted')
-    expect(llmIoRecords[0]?.fallbackChain).toEqual(['scripted'])
     expect(llmIoRecords[0]).toMatchObject({
       caller: 'human.brain',
       schemaName: 'human_brain_decision',
@@ -259,5 +255,69 @@ describe('ai unit structured chat activity', () => {
         reason: 'error'
       }
     })
+  })
+
+  it('emits retry process events with the provider error message', async () => {
+    const events: AiRunEvent[] = []
+    let callCount = 0
+
+    const result = await runLlmCallWithActivity({
+      ctx: {
+        runId: 'run-4',
+        sendEvent: (event) => events.push(event)
+      },
+      runId: 'run-4',
+      system: 'system prompt',
+      user: 'user prompt',
+      telemetry: {
+        actionType: 'llm_text_output',
+        caller: 'human.mouth',
+        schemaName: 'human_mouth_markdown',
+        modelName: 'scripted-llm',
+        baseUrl: 'https://scripted.local/v1',
+        streamingMode: 'force_non_stream'
+      },
+      maxAttempts: 3,
+      classifyRetry: (error) => ({
+        retryable: error instanceof Error && error.message.includes('429'),
+        message: 'Rate limit exceeded'
+      }),
+      execute: async () => {
+        callCount += 1
+        if (callCount === 1) {
+          throw new Error('429 Rate limit exceeded')
+        }
+        return {
+          output: 'ok',
+          rawText: 'ok'
+        }
+      }
+    })
+
+    expect(result.output).toBe('ok')
+    expect(callCount).toBe(2)
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: 'assistant_process_group_started',
+        kind: 'retry',
+        display: {
+          kind: 'retry',
+          attempt: 2,
+          maxAttempts: 3,
+          message: 'Rate limit exceeded'
+        }
+      })
+    )
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: 'assistant_process_item_started',
+        display: {
+          kind: 'retry',
+          attempt: 2,
+          maxAttempts: 3,
+          message: 'Rate limit exceeded'
+        }
+      })
+    )
   })
 })

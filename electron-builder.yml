@@ -12,9 +12,14 @@ files:
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
   - '!{.codex-tmp,.pip-cache,.pyinstaller,.runvenv}/**'
   - '!resources/web_crawler_sidecar/**'
+  - '!resources/native/**'
 extraResources:
   - from: resources/web_crawler_sidecar/bin
     to: web_crawler_sidecar/bin
+    filter:
+      - '**/*'
+  - from: resources/native
+    to: native
     filter:
       - '**/*'
 win:

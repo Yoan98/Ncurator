@@ -37,6 +37,7 @@ const waitForWebContentsLoad = async (webContents: WebContents): Promise<void> =
     const cleanup = (): void => {
       clearTimeout(timeout)
       webContents.removeListener('did-finish-load', onDone)
+      webContents.removeListener('did-stop-loading', onDone)
       webContents.removeListener('did-fail-load', onFail)
     }
     const onDone = (): void => {
@@ -48,6 +49,7 @@ const waitForWebContentsLoad = async (webContents: WebContents): Promise<void> =
       reject(new Error(errorDescription || 'browser navigation failed'))
     }
     webContents.once('did-finish-load', onDone)
+    webContents.once('did-stop-loading', onDone)
     webContents.once('did-fail-load', onFail)
   })
 }
@@ -61,8 +63,6 @@ const loadWebContentsUrl = async (webContents: WebContents, url: string): Promis
 
     const cleanup = (): void => {
       clearTimeout(timeout)
-      webContents.removeListener('dom-ready', onDone)
-      webContents.removeListener('did-navigate', onDone)
       webContents.removeListener('did-finish-load', onDone)
       webContents.removeListener('did-stop-loading', onDone)
       webContents.removeListener('did-fail-load', onFail)
@@ -91,8 +91,6 @@ const loadWebContentsUrl = async (webContents: WebContents, url: string): Promis
       finish(new Error(errorDescription || 'browser navigation failed'))
     }
 
-    webContents.once('dom-ready', onDone)
-    webContents.once('did-navigate', onDone)
     webContents.once('did-finish-load', onDone)
     webContents.once('did-stop-loading', onDone)
     webContents.on('did-fail-load', onFail)

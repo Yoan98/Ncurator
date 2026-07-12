@@ -21,7 +21,7 @@ if (existsSync(electronInstall)) {
 }
 
 if (process.env.NCURATOR_REBUILD_NATIVE === '1') {
-  run(process.execPath, [path.join(root, 'scripts', 'rebuild-better-sqlite3-electron.mjs')])
+  run(process.execPath, [path.join(root, 'scripts', 'prepare-better-sqlite3-native.mjs'), 'prepare'])
 } else {
-  console.log('[postinstall] skip native rebuild; set NCURATOR_REBUILD_NATIVE=1 to run it')
+  console.log('[postinstall] skip native prepare; set NCURATOR_REBUILD_NATIVE=1 to run it')
 }

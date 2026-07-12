@@ -189,4 +189,9 @@ export const inferLlmProviderKind = (baseUrl: string): LlmProviderKind => {
 export const resolveLlmProviderKind = (input: {
   providerKind?: string
   baseUrl: string
-}): LlmProviderKind => inferLlmProviderKind(input.baseUrl)
+}): LlmProviderKind => {
+  if (isLlmProviderKind(input.providerKind)) {
+    return input.providerKind
+  }
+  throw new Error('llm_config_invalid_provider_kind')
+}

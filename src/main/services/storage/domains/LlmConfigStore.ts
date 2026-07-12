@@ -1,5 +1,5 @@
 import type { LLMConfig } from '../../../types/store'
-import { resolveLlmProviderKind } from '../../../../shared/llmProvider'
+import { isLlmProviderKind } from '../../../../shared/llmProvider'
 import type { SqliteCore } from '../sqlite/SqliteCore'
 import { insertOrReplace } from '../sqlite/sqliteUtils'
 
@@ -11,16 +11,19 @@ type LlmConfigRow = {
   api_key?: unknown
 }
 
-const toConfig = (row: LlmConfigRow): LLMConfig => ({
-  id: String(row.id || ''),
-  name: String(row.name || ''),
-  providerKind: resolveLlmProviderKind({
-    providerKind: String(row.providerKind || ''),
-    baseUrl: String(row.base_url || '')
-  }),
-  base_url: String(row.base_url || ''),
-  api_key: String(row.api_key || '')
-})
+const toConfig = (row: LlmConfigRow): LLMConfig => {
+  const providerKind = String(row.providerKind || '').trim()
+  if (!isLlmProviderKind(providerKind)) {
+    throw new Error(`llm_config_invalid_provider_kind:${String(row.id || '')}`)
+  }
+  return {
+    id: String(row.id || ''),
+    name: String(row.name || ''),
+    providerKind,
+    base_url: String(row.base_url || ''),
+    api_key: String(row.api_key || '')
+  }
+}
 
 export class LlmConfigStore {
   public constructor(private readonly sqlite: SqliteCore) {}

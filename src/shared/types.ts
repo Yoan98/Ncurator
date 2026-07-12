@@ -456,6 +456,11 @@ export interface DocumentListResponse {
 
 export type AiStructuredOutputTransport = 'completions' | 'responses'
 export type AiStructuredOutputMethod = 'jsonSchema' | 'jsonMode' | 'promptJson' | 'scripted'
+export type StructuredOutputMode = 'json_schema' | 'json_object' | 'prompt_json'
+export type StructuredOutputStrategy = {
+  transport: AiStructuredOutputTransport
+  mode: StructuredOutputMode
+}
 export type AiLlmStreamingMode = 'force_stream' | 'force_non_stream'
 export type LlmProviderKind = 'openai' | 'deepseek' | 'openai-compatible'
 export type LlmProviderId =
@@ -474,14 +479,6 @@ export type LlmProviderId =
   | 'nvidia-nim'
   | 'local'
   | 'custom'
-export type PreferredStructuredOutputProfile =
-  | 'completions:jsonSchema'
-  | 'completions:jsonMode'
-  | 'completions:promptJson'
-  | 'responses:jsonSchema'
-  | 'responses:promptJson'
-export type AiStructuredOutputProfile = PreferredStructuredOutputProfile | 'scripted'
-
 export interface LLMConfig {
   id: string
   name: string
@@ -502,8 +499,8 @@ export type WorkbenchModelSelection = {
 
 export type LlmRuntimeConfig = LLMConfig & {
   model_name: string
-  preferredStructuredOutputProfile?: PreferredStructuredOutputProfile
   preferredTransport?: AiStructuredOutputTransport
+  preferredStructuredOutputMode?: StructuredOutputMode
 }
 
 export type LlmRemoteModel = {
@@ -774,9 +771,16 @@ export type AssistantProcessDisplay =
   | { kind: 'thinking' }
   | { kind: 'learning'; skillId: RuntimeSkillId }
   | { kind: 'tool'; toolName: string; input: IpcJsonObject }
+  | { kind: 'retry'; attempt: number; maxAttempts: number; message: string }
   | { kind: 'compaction' }
   | { kind: 'finalizing' }
-export type AssistantProcessKind = 'thinking' | 'skill' | 'learning' | 'compaction' | 'finalizing'
+export type AssistantProcessKind =
+  | 'thinking'
+  | 'skill'
+  | 'learning'
+  | 'retry'
+  | 'compaction'
+  | 'finalizing'
 export type AiToolCallDiagnostic = {
   message: string
 }
@@ -825,8 +829,9 @@ export type AiLlmIoRecord = {
   usageMetadata?: JsonObject
   method?: AiStructuredOutputMethod
   transport?: AiStructuredOutputTransport
-  profile?: AiStructuredOutputProfile
-  fallbackChain: AiStructuredOutputProfile[]
+  structuredOutputMode?: StructuredOutputMode
+  strategy?: StructuredOutputStrategy
+  fallbackStrategies?: StructuredOutputStrategy[]
   streamingMode?: AiLlmStreamingMode
   contextBudgetSnapshot?: BrainContextBudgetSnapshot
   streamed?: boolean
@@ -1071,8 +1076,9 @@ export interface AiActivityDetails {
   durationMs?: number
   method?: AiStructuredOutputMethod
   transport?: AiStructuredOutputTransport
-  profile?: AiStructuredOutputProfile
-  fallbackChain?: AiStructuredOutputProfile[]
+  structuredOutputMode?: StructuredOutputMode
+  strategy?: StructuredOutputStrategy
+  fallbackStrategies?: StructuredOutputStrategy[]
   streamingMode?: AiLlmStreamingMode
   streamed?: boolean
   chunkCount?: number

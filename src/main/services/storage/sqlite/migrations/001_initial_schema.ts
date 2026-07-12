@@ -247,6 +247,15 @@ CREATE TABLE IF NOT EXISTS llm_config (
   api_key TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS llm_strategy_preference (
+  config_id TEXT NOT NULL,
+  model_name TEXT NOT NULL,
+  preferred_transport TEXT NOT NULL,
+  preferred_structured_output_mode TEXT NOT NULL,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY (config_id, model_name)
+);
+
 CREATE TABLE IF NOT EXISTS ai_runtime_settings (
   id TEXT PRIMARY KEY,
   llmStreamingMode TEXT NOT NULL,
