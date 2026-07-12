@@ -49,10 +49,10 @@ const renderLocalEnvironmentText = (ctx: AiRunContext): string => {
 
 const renderPreferenceText = (preference: AiRunContext['preference']): string => {
   if (preference === 'local_sources_relaxed') {
-    return '优先使用知识库和本地资料内容作为依据推进任务'
+    return '优先使用本地知识库和本地资料内容作为依据推进任务'
   }
   if (preference === 'local_sources_strict') {
-    return '必须只能使用知识库和本地资料内容作为依据来推进任务，禁止使用其他信息与模型能力本身的信息'
+    return '必须只能使用本地知识库和本地资料内容作为依据来推进任务，禁止使用其他信息与模型能力本身的信息'
   }
   return '无'
 }
