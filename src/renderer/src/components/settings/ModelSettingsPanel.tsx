@@ -297,6 +297,7 @@ const ModelSettingsPanel: React.FC = () => {
       <Modal
         title={editingConfig ? '编辑配置' : '新增配置'}
         open={isModalOpen}
+        maskClosable={false}
         onOk={() => void handleSave()}
         onCancel={() => setIsModalOpen(false)}
         width={520}
@@ -377,6 +378,7 @@ const ModelSettingsPanel: React.FC = () => {
       <Modal
         title={modelListConfig ? `${getConfigName(modelListConfig)} 可用模型` : '可用模型'}
         open={Boolean(modelListConfig)}
+        maskClosable={false}
         footer={
           modelListConfig ? (
             <Button

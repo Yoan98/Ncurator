@@ -726,6 +726,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
       <Modal
         title="移除工作空间"
         open={Boolean(deleteWorkspaceId)}
+        maskClosable={false}
         onCancel={() => setDeleteWorkspaceId(null)}
         onOk={() => void handleDeleteWorkspace()}
         okText="移除"
@@ -745,6 +746,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
       <Modal
         title="添加工作空间"
         open={createModalVisible}
+        maskClosable={false}
         confirmLoading={createSubmitting}
         onCancel={() => {
           setCreateModalVisible(false)

@@ -404,6 +404,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
       <Modal
         title="添加网页"
         open={webModalVisible}
+        maskClosable={false}
         confirmLoading={webSubmitting}
         onCancel={() => setWebModalVisible(false)}
         onOk={() => void handleWebImport()}
@@ -437,6 +438,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
       <Modal
         title="删除网页"
         open={Boolean(deleteWebSource)}
+        maskClosable={false}
         onCancel={() => setDeleteWebSource(null)}
         onOk={() => void handleDeleteWebSource()}
         okText="删除"
