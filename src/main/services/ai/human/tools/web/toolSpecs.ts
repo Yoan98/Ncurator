@@ -203,7 +203,7 @@ export const BROWSER_USE_TOOL_SPEC: HumanToolSpec<
     name: 'browser_use',
     description:
       '能力：操作应用的右侧内置浏览器，支持 navigate、extract、observe、act 四类网页操作。\n规则：只是打开 URL 必须使用 navigate；观察按钮、输入框和可点击元素等使用 observe；提取页面正文或结果等使用 extract；点击、输入、提交、选择等使用 act；\n结果：navigate 返回导航结果与页面状态；extract 返回页面内容；observe 返回可见动作；act 返回动作执行结果与页面状态。\n边界：extract、observe、act 使用页面 DOM 与浏览器上下文完成操作；',
-    whenToUse: '适用于需要在网页界面中读取、观察或执行动作的任务。',
+    whenToUse: '适用于需要通过浏览器完成的任务。',
     examples: [
       {
         goal: '打开一个网页',
