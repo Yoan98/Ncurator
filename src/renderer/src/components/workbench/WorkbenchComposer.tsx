@@ -1,6 +1,7 @@
 ﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { App as AntdApp, Spin, Tooltip } from 'antd'
 import {
+  HiAdjustmentsHorizontal,
   HiArrowUp,
   HiCircleStack,
   HiDocumentText,
@@ -10,6 +11,7 @@ import {
   HiPhoto,
   HiPlus,
   HiQuestionMarkCircle,
+  HiShieldCheck,
   HiSparkles,
   HiStop,
   HiXMark
@@ -793,7 +795,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
             value: 'local_sources_relaxed',
             label: '宽松',
             triggerLabel: '本地资料 · 宽松',
-            icon: <HiCircleStack className="h-3.5 w-3.5" />,
+            icon: <HiAdjustmentsHorizontal className="h-3.5 w-3.5" />,
             description: 'AI 会优先依据本地资料推进任务',
             trailing: (
               <Tooltip title="AI 会优先依据知识库和本地资料内容推进任务">
@@ -812,7 +814,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
             value: 'local_sources_strict',
             label: '严谨',
             triggerLabel: '本地资料 · 严谨',
-            icon: <HiCircleStack className="h-3.5 w-3.5" />,
+            icon: <HiShieldCheck className="h-3.5 w-3.5" />,
             description: 'AI 只能依据本地资料推进任务',
             trailing: (
               <Tooltip title="AI 必须只能依据知识库和本地资料内容推进任务，禁止使用其他信息与模型能力本身的信息">

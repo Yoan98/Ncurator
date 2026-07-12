@@ -398,11 +398,6 @@ const WorkbenchSelect: React.FC<WorkbenchSelectProps> = ({
                     const selected = option.value === value
                     const childSelected = hasSelectedChild(option, value)
                     const hasChildren = Boolean(option.children?.length)
-                    const trailing = hasChildren ? (
-                      <HiChevronRight className="h-3.5 w-3.5 text-[#9B9A97]" />
-                    ) : (
-                      option.trailing
-                    )
                     return (
                       <button
                         key={option.value}
@@ -423,22 +418,26 @@ const WorkbenchSelect: React.FC<WorkbenchSelectProps> = ({
                         }}
                         onClick={() => handleOptionSelect(option)}
                       >
-                        <span className="flex min-w-0 items-center gap-2">
+                        <span className="flex min-w-0 flex-1 items-center gap-2">
                           {option.icon ? (
                             <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center text-[#787774]">
                               {option.icon}
                             </span>
                           ) : null}
-                          <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[#37352F]">
+                          <span className="min-w-0 truncate text-[13px] font-medium text-[#37352F]">
                             {option.label}
                           </span>
+                          {!hasChildren && option.trailing ? (
+                            <span className="ml-0.5 flex shrink-0 items-center text-[#787774]">
+                              {option.trailing}
+                            </span>
+                          ) : null}
                         </span>
                         <span className="flex shrink-0 items-center gap-1.5 text-[#787774]">
-                          {trailing}
-                          {selected ? (
+                          {hasChildren ? (
+                            <HiChevronRight className="h-3.5 w-3.5 text-[#9B9A97]" />
+                          ) : selected ? (
                             <HiCheck className="h-3.5 w-3.5 text-[#37352F]" />
-                          ) : trailing && !hasChildren ? (
-                            <span className="h-3.5 w-3.5" aria-hidden="true" />
                           ) : null}
                         </span>
                       </button>
@@ -510,22 +509,24 @@ const WorkbenchSelect: React.FC<WorkbenchSelectProps> = ({
                       )}
                       onClick={() => handleOptionSelect(option)}
                     >
-                      <span className="flex min-w-0 items-center gap-2">
+                      <span className="flex min-w-0 flex-1 items-center gap-2">
                         {option.icon ? (
                           <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center text-[#787774]">
                             {option.icon}
                           </span>
                         ) : null}
-                        <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[#37352F]">
+                        <span className="min-w-0 truncate text-[13px] font-medium text-[#37352F]">
                           {option.label}
                         </span>
+                        {option.trailing ? (
+                          <span className="ml-0.5 flex shrink-0 items-center text-[#787774]">
+                            {option.trailing}
+                          </span>
+                        ) : null}
                       </span>
                       <span className="flex shrink-0 items-center gap-1.5 text-[#787774]">
-                        {option.trailing}
                         {selected ? (
                           <HiCheck className="h-3.5 w-3.5 text-[#37352F]" />
-                        ) : option.trailing ? (
-                          <span className="h-3.5 w-3.5" aria-hidden="true" />
                         ) : null}
                       </span>
                     </button>
