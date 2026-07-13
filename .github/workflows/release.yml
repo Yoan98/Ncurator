@@ -17,6 +17,9 @@ jobs:
       tag: ${{ steps.release.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+          fetch-depth: 0
 
       - name: Validate release version
         id: release
@@ -33,6 +36,15 @@ jobs:
             echo "Release tag $tag does not match package.json version v$package_version" >&2
             exit 1
           fi
+          if [ "$(git cat-file -t "$tag")" != "tag" ]; then
+            echo "Release tag $tag must be an annotated tag with release notes" >&2
+            exit 1
+          fi
+          release_notes="$(git for-each-ref --format='%(contents)' "refs/tags/$tag")"
+          if [ -z "${release_notes//[[:space:]]/}" ]; then
+            echo "Release tag $tag does not contain release notes" >&2
+            exit 1
+          fi
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
   build-macos-x64:
@@ -42,6 +54,8 @@ jobs:
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate-release.outputs.tag }}
 
       - name: Use HTTPS for GitHub dependencies
         run: |
@@ -83,6 +97,8 @@ jobs:
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate-release.outputs.tag }}
 
       - name: Use HTTPS for GitHub dependencies
         run: |
@@ -124,6 +140,8 @@ jobs:
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate-release.outputs.tag }}
 
       - name: Use HTTPS for GitHub dependencies
         run: |
@@ -171,6 +189,9 @@ jobs:
       RELEASE_TAG: ${{ needs.validate-release.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate-release.outputs.tag }}
+          fetch-depth: 0
 
       - uses: actions/download-artifact@v4
         with:
@@ -178,6 +199,13 @@ jobs:
 
       - name: Merge macOS update metadata
         run: node scripts/merge-latest-mac-yml.mjs release-artifacts
+
+      - name: Prepare release notes from annotated tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          git for-each-ref --format='%(contents)' "refs/tags/$RELEASE_TAG" > "$RUNNER_TEMP/release-notes.md"
+          test -s "$RUNNER_TEMP/release-notes.md"
 
       - name: Publish release assets
         shell: bash
@@ -190,20 +218,79 @@ jobs:
           if ! gh release view "$tag" --repo "$RELEASE_REPOSITORY" >/dev/null 2>&1; then
             gh release create "$tag" \
               --repo "$RELEASE_REPOSITORY" \
-              --title "$tag" \
-              --notes "Ncurator $tag"
+              --title "Ncurator $tag" \
+              --notes-file "$RUNNER_TEMP/release-notes.md"
+          else
+            gh release edit "$tag" \
+              --repo "$RELEASE_REPOSITORY" \
+              --title "Ncurator $tag" \
+              --notes-file "$RUNNER_TEMP/release-notes.md"
           fi
           gh release delete-asset "$tag" builder-debug.yml --repo "$RELEASE_REPOSITORY" --yes >/dev/null 2>&1 || true
           find release-artifacts -type f \
             \( -name '*.dmg' -o -name '*.zip' -o -name '*.exe' -o -name '*.blockmap' -o -name 'latest.yml' -o -name 'latest-mac.yml' \) \
             -print0 | xargs -0 gh release upload "$tag" --repo "$RELEASE_REPOSITORY" --clobber
 
-      - name: Publish installers to Cloudflare R2
+      - name: Validate Cloudflare R2 configuration
         shell: bash
         run: |
           set -euo pipefail
+          test -n "$AWS_ACCESS_KEY_ID"
+          test -n "$AWS_SECRET_ACCESS_KEY"
           test -n "$R2_ACCOUNT_ID"
           test -n "$R2_BUCKET_NAME"
+          test "${R2_PUBLIC_BASE_URL%/}" = "https://download.ncurator.com"
+
+      - name: Upload versioned installers to Cloudflare R2
+        shell: bash
+        run: |
+          set -euo pipefail
+          endpoint="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          version="${RELEASE_TAG#v}"
+          declare -A assets=(
+            [Ncurator-mac-arm64.dmg]="release-artifacts/macos-arm64-artifacts/Ncurator-mac-arm64.dmg"
+            [Ncurator-mac-x64.dmg]="release-artifacts/macos-x64-artifacts/Ncurator-mac-x64.dmg"
+            [Ncurator-windows-x64.exe]="release-artifacts/windows-artifacts/Ncurator-windows-x64.exe"
+          )
+          for asset in "${!assets[@]}"; do
+            download_name="${asset/Ncurator-/Ncurator-${version}-}"
+            aws s3 cp "${assets[$asset]}" \
+              "s3://${R2_BUCKET_NAME}/releases/${RELEASE_TAG}/$asset" \
+              --endpoint-url "$endpoint" \
+              --region auto \
+              --content-type application/octet-stream \
+              --content-disposition "attachment; filename=$download_name" \
+              --cache-control 'public, max-age=31536000, immutable' \
+              --no-progress
+          done
+
+      - name: Verify versioned Cloudflare R2 downloads
+        shell: bash
+        run: |
+          set -euo pipefail
+          base_url="${R2_PUBLIC_BASE_URL%/}"
+          version="${RELEASE_TAG#v}"
+          declare -A assets=(
+            [Ncurator-mac-arm64.dmg]="release-artifacts/macos-arm64-artifacts/Ncurator-mac-arm64.dmg"
+            [Ncurator-mac-x64.dmg]="release-artifacts/macos-x64-artifacts/Ncurator-mac-x64.dmg"
+            [Ncurator-windows-x64.exe]="release-artifacts/windows-artifacts/Ncurator-windows-x64.exe"
+          )
+          for asset in "${!assets[@]}"; do
+            expected_size="$(stat -c '%s' "${assets[$asset]}")"
+            expected_name="${asset/Ncurator-/Ncurator-${version}-}"
+            headers="$(curl --fail --silent --show-error --location --head \
+              "$base_url/releases/$RELEASE_TAG/$asset")"
+            actual_size="$(printf '%s\n' "$headers" | tr -d '\r' | awk 'tolower($1)=="content-length:" {value=$2} END {print value}')"
+            disposition="$(printf '%s\n' "$headers" | tr -d '\r' | sed -n 's/^[Cc]ontent-[Dd]isposition: *//p' | tail -1)"
+            test "$actual_size" = "$expected_size"
+            test "$disposition" = "attachment; filename=$expected_name"
+            printf '%s %s bytes, filename %s verified\n' "$asset" "$actual_size" "$expected_name"
+          done
+
+      - name: Promote installers to Cloudflare R2 latest
+        shell: bash
+        run: |
+          set -euo pipefail
           endpoint="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
           version="${RELEASE_TAG#v}"
           declare -A assets=(
@@ -223,7 +310,7 @@ jobs:
               --no-progress
           done
 
-      - name: Verify Cloudflare R2 downloads
+      - name: Verify latest Cloudflare R2 downloads
         shell: bash
         run: |
           set -euo pipefail

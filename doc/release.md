@@ -1,86 +1,93 @@
 # Ncurator 发版说明
 
-## 1. 发布仓库
+## 1. 三个发布位置的职责
 
-- 发布仓库：`Yoan98/Ncurator`
-- 发布仓库类型：公开仓库
-- 源码仓库 GitHub Actions Secret：`NCURATOR_RELEASE_TOKEN`
-- 应用内更新源：GitHub Releases
+- 源码仓库 `Yoan98/Ncurator-Desktop`：保存源码、Tag 和 GitHub Actions。
+- 公共 Release 仓库 `Yoan98/Ncurator`：保存安装包和自动更新文件，供应用内更新使用。
+- Cloudflare R2 `https://download.ncurator.com`：保存官网安装包，供用户首次下载安装。
 
-`NCURATOR_RELEASE_TOKEN` 只给 GitHub Actions 上传 Release 产物使用，不会被打进应用，也不会暴露给用户端。
+官网不直接使用 GitHub Release 下载链接。应用内自动更新目前仍然使用 GitHub Release，两者不要混用。
+
+`NCURATOR_RELEASE_TOKEN` 只供 GitHub Actions 向公共 Release 仓库上传文件，不会被打进应用。
 
 ## 2. 发布产物
 
-Windows 发布：
+Windows：
 
-- `Ncurator-windows-x64.exe`
-- `latest.yml`
-- `*.blockmap`
+- `Ncurator-windows-x64.exe`：官网安装包。
+- `latest.yml` 和 `*.blockmap`：应用内自动更新文件。
 
-macOS 发布：
+macOS：
 
-- `Ncurator-mac-x64.dmg`
-- `Ncurator-mac-arm64.dmg`
-- `Ncurator-mac-x64.zip`
-- `Ncurator-mac-arm64.zip`
-- `latest-mac.yml`
-- `*.blockmap`
+- `Ncurator-mac-x64.dmg`：Intel Mac 官网安装包。
+- `Ncurator-mac-arm64.dmg`：Apple 芯片 Mac 官网安装包。
+- `Ncurator-mac-x64.zip`、`Ncurator-mac-arm64.zip`、`latest-mac.yml` 和 `*.blockmap`：应用内自动更新文件。
 
-macOS 的 `dmg` 给用户首次安装使用，`zip` 给自动更新使用。Electron macOS 自动更新底层使用 Squirrel.Mac，它要求更新包是 zip，不使用 dmg 作为更新包。
+macOS 的 `dmg` 用于首次安装，`zip` 用于应用内自动更新。CI 会分别构建 Intel 和 Apple 芯片版本，再合并更新信息。
 
-macOS x64 和 arm64 在 CI 中分开打包，因为网页抓取 sidecar 会按 runner CPU 架构构建。发布 job 会在上传前合并两边生成的 `latest-mac.yml`，确保同一个更新元数据同时包含 Intel 与 Apple Silicon 产物。
+## 3. 官网固定下载地址
 
-官网使用以下固定链接。发布新版本后不需要修改：
+官网始终使用下面三个地址，发布新版本后不用修改官网：
 
-- Apple 芯片 Mac：`https://github.com/Yoan98/Ncurator/releases/latest/download/Ncurator-mac-arm64.dmg`
-- Intel 芯片 Mac：`https://github.com/Yoan98/Ncurator/releases/latest/download/Ncurator-mac-x64.dmg`
-- Windows 64 位：`https://github.com/Yoan98/Ncurator/releases/latest/download/Ncurator-windows-x64.exe`
+- Apple 芯片 Mac：`https://download.ncurator.com/releases/latest/Ncurator-mac-arm64.dmg`
+- Intel 芯片 Mac：`https://download.ncurator.com/releases/latest/Ncurator-mac-x64.dmg`
+- Windows 64 位：`https://download.ncurator.com/releases/latest/Ncurator-windows-x64.exe`
 
-## 3. 正常发版流程
+每个版本也有不会变化的独立地址，例如：
 
-1. 修改 `package.json` 的 `version`，例如改为 `0.1.1`。
-2. 提交版本变更。
-3. 创建并推送同版本 tag：
+`https://download.ncurator.com/releases/v0.1.1/Ncurator-windows-x64.exe`
+
+版本目录使用长期缓存，不能覆盖旧版本。`latest` 目录只缓存 5 分钟，可以指向新版本。
+
+## 4. Release 文案
+
+Release 文案不保存到仓库文件中。每次发布前由 Codex 根据本次改动生成简短、面向用户的中文文案。
+
+文案保存在源码仓库的 Annotated Tag（带说明的 Tag）里。发布工作流会读取 Tag 正文，并创建或更新公共 Release 的标题和正文。
+
+必须使用 Annotated Tag，普通 Tag 会被工作流拒绝。
+
+示例：
 
 ```bash
-git tag v0.1.1
+git tag -a v0.1.1 -F /tmp/ncurator-v0.1.1-release-notes.md
 git push origin v0.1.1
 ```
 
-4. GitHub Actions 自动构建 macOS 和 Windows 安装包。
-5. 构建完成后，发布 workflow 会把所有产物上传到 `Yoan98/Ncurator` 的 GitHub Release。
-6. 已安装旧版本的用户会通过应用内更新拿到新版本。
+临时文案文件只用于创建 Tag，不提交到仓库。
 
-tag 版本必须和 `package.json` 里的版本一致，例如 `package.json` 是 `0.1.1`，tag 就用 `v0.1.1`。工作流会自动检查，不一致时停止发布。
+## 5. 正常发版流程
 
-## 4. 用户端更新流程
+1. 完成本次功能和测试。
+2. 修改 `package.json` 的 `version`。
+3. 提交并推送源码。
+4. 生成本版本的中文用户文案。
+5. 创建同版本的 Annotated Tag 并推送，例如 `package.json` 是 `0.1.1`，Tag 必须是 `v0.1.1`。
+6. GitHub Actions 分别构建 macOS Intel、macOS Apple 芯片和 Windows 安装包。
+7. CI 将完整安装包和更新文件发布到 `Yoan98/Ncurator`。
+8. CI 先上传并验证 R2 的版本目录，验证成功后才更新并验证 `latest` 目录。
 
-- 打包后的应用启动几秒后会自动检查更新。
-- 用户也可以打开 `设置 -> 应用更新`，点击 `检查更新`。
-- 如果发现新版本，应用会在后台下载更新包。
-- 下载完成后，用户点击 `重启安装`，应用会退出并安装新版本。
-- 如果更新已下载但用户没有立刻点击安装，退出应用时更新器也可以在退出阶段完成安装。
+如果 Tag 版本、`package.json` 版本或 Tag 文案不符合要求，发布会直接停止。
 
-## 5. 当前免费发布方案的限制
+## 6. R2 验证和回滚
 
-- macOS 应用没有 Apple 公证，首次安装时可能需要用户在系统设置里手动允许打开。
-- Windows 应用没有代码签名证书，SmartScreen 可能会显示未知发布者提示。
-- 更新包会通过更新元数据中的 `sha512` 校验，下载内容被篡改时不会继续安装。
-- 当前更新文件托管在 GitHub Releases。中国大陆网络环境下，下载速度和稳定性可能不如国内对象存储或 CDN。
+上传后，CI 会检查三个安装包的文件大小和下载文件名。只有版本目录全部验证成功，才会更新官网的 `latest`。
 
-## 6. 后续可升级方案
+如果正式发布流程中的 R2 同步失败，可以手动运行 `Sync Release to Cloudflare R2`，输入要恢复的 Tag。这个流程同样会先验证版本目录，再更新 `latest`。
 
-如果国内用户反馈 GitHub 下载不稳定，可以把更新源从 GitHub Releases 切到通用静态更新源：
+需要回滚官网时，手动同步上一个正常版本的 Tag 即可。版本目录不会被删除，公共 GitHub Release 和应用内更新不会自动跟着回滚。
 
-- 阿里云 OSS + CDN
-- 腾讯云 COS + CDN
-- 七牛云对象存储
-- 自己的服务器静态文件目录
+## 7. 应用内更新
 
-这类方案仍然可以保留 GitHub Actions 打包，只是在最后一步把产物同步到国内存储，并把 `electron-builder.yml` 的 `publish` 改为 `generic` 更新源。
+- 打包后的应用会自动检查更新。
+- 用户也可以在 `设置 -> 应用更新` 手动检查。
+- 找到新版本后，应用在后台下载 GitHub Release 中的更新包。
+- 下载完成后，用户可以点击重启安装。
 
-商业化后再补：
+应用内更新仍走 GitHub，不走 `download.ncurator.com`。以后如果要迁移，必须同时修改 electron-builder 发布配置和更新服务，不能只替换官网链接。
 
-- Apple Developer ID + notarization
-- Windows 代码签名证书
-- 国内 CDN 正式更新通道
+## 8. 当前签名限制
+
+- macOS 还没有 Apple 公证，首次打开时可能需要用户在系统设置中允许。
+- Windows 还没有代码签名证书，SmartScreen 可能提示未知发布者。
+- 自动更新文件会通过 `sha512` 校验，校验失败不会安装。

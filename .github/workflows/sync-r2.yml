@@ -4,9 +4,8 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'GitHub Release tag to sync, for example v0.1.0'
+        description: 'GitHub Release tag to sync, for example v0.1.1'
         required: true
-        default: 'v0.1.0'
 
 jobs:
   sync-release:
@@ -18,6 +17,7 @@ jobs:
       R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
       R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
       R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
+      RELEASE_TAG: ${{ inputs.tag }}
     steps:
       - name: Validate R2 configuration
         shell: bash
@@ -27,12 +27,11 @@ jobs:
           test -n "$AWS_SECRET_ACCESS_KEY"
           test -n "$R2_ACCOUNT_ID"
           test -n "$R2_BUCKET_NAME"
-          test -n "$R2_PUBLIC_BASE_URL"
+          test "${R2_PUBLIC_BASE_URL%/}" = "https://download.ncurator.com"
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
 
       - name: Download installers from GitHub Release
         shell: bash
-        env:
-          RELEASE_TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
           mkdir -p release-assets
@@ -47,10 +46,52 @@ jobs:
           done
           ls -lh release-assets
 
-      - name: Upload installers to R2
+      - name: Upload versioned installers to R2
         shell: bash
-        env:
-          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          endpoint="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          version="${RELEASE_TAG#v}"
+          for asset in \
+            Ncurator-mac-arm64.dmg \
+            Ncurator-mac-x64.dmg \
+            Ncurator-windows-x64.exe
+          do
+            download_name="${asset/Ncurator-/Ncurator-${version}-}"
+            aws s3 cp "release-assets/$asset" \
+              "s3://${R2_BUCKET_NAME}/releases/${RELEASE_TAG}/$asset" \
+              --endpoint-url "$endpoint" \
+              --region auto \
+              --content-type application/octet-stream \
+              --content-disposition "attachment; filename=$download_name" \
+              --cache-control 'public, max-age=31536000, immutable' \
+              --no-progress
+          done
+
+      - name: Verify versioned public download URLs
+        shell: bash
+        run: |
+          set -euo pipefail
+          base_url="${R2_PUBLIC_BASE_URL%/}"
+          version="${RELEASE_TAG#v}"
+          for asset in \
+            Ncurator-mac-arm64.dmg \
+            Ncurator-mac-x64.dmg \
+            Ncurator-windows-x64.exe
+          do
+            expected_size="$(stat -c '%s' "release-assets/$asset")"
+            expected_name="${asset/Ncurator-/Ncurator-${version}-}"
+            headers="$(curl --fail --silent --show-error --location --head \
+              "$base_url/releases/$RELEASE_TAG/$asset")"
+            actual_size="$(printf '%s\n' "$headers" | tr -d '\r' | awk 'tolower($1)=="content-length:" {value=$2} END {print value}')"
+            disposition="$(printf '%s\n' "$headers" | tr -d '\r' | sed -n 's/^[Cc]ontent-[Dd]isposition: *//p' | tail -1)"
+            test "$actual_size" = "$expected_size"
+            test "$disposition" = "attachment; filename=$expected_name"
+            printf '%s %s bytes, filename %s verified\n' "$asset" "$actual_size" "$expected_name"
+          done
+
+      - name: Promote installers to R2 latest
+        shell: bash
         run: |
           set -euo pipefail
           endpoint="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
@@ -71,10 +112,8 @@ jobs:
               --no-progress
           done
 
-      - name: Verify public download URLs
+      - name: Verify latest public download URLs
         shell: bash
-        env:
-          RELEASE_TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
           base_url="${R2_PUBLIC_BASE_URL%/}"
