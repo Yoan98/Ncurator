@@ -154,6 +154,7 @@ jobs:
 
   publish-release:
     runs-on: ubuntu-latest
+    environment: ncuratore
     needs:
       - validate-release
       - build-macos-x64
@@ -162,6 +163,11 @@ jobs:
     env:
       GH_TOKEN: ${{ secrets.NCURATOR_RELEASE_TOKEN }}
       RELEASE_REPOSITORY: Yoan98/Ncurator
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+      R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+      R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
     steps:
       - uses: actions/checkout@v4
 
@@ -190,3 +196,45 @@ jobs:
           find release-artifacts -type f \
             \( -name '*.dmg' -o -name '*.zip' -o -name '*.exe' -o -name '*.blockmap' -o -name 'latest.yml' -o -name 'latest-mac.yml' \) \
             -print0 | xargs -0 gh release upload "$tag" --repo "$RELEASE_REPOSITORY" --clobber
+
+      - name: Publish installers to Cloudflare R2
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$R2_ACCOUNT_ID"
+          test -n "$R2_BUCKET_NAME"
+          endpoint="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          declare -A assets=(
+            [Ncurator-mac-arm64.dmg]="release-artifacts/macos-arm64-artifacts/Ncurator-mac-arm64.dmg"
+            [Ncurator-mac-x64.dmg]="release-artifacts/macos-x64-artifacts/Ncurator-mac-x64.dmg"
+            [Ncurator-windows-x64.exe]="release-artifacts/windows-artifacts/Ncurator-windows-x64.exe"
+          )
+          for asset in "${!assets[@]}"; do
+            aws s3 cp "${assets[$asset]}" \
+              "s3://${R2_BUCKET_NAME}/releases/latest/$asset" \
+              --endpoint-url "$endpoint" \
+              --region auto \
+              --content-type application/octet-stream \
+              --content-disposition "attachment; filename=$asset" \
+              --cache-control 'public, max-age=300' \
+              --no-progress
+          done
+
+      - name: Verify Cloudflare R2 downloads
+        shell: bash
+        run: |
+          set -euo pipefail
+          base_url="${R2_PUBLIC_BASE_URL%/}"
+          declare -A assets=(
+            [Ncurator-mac-arm64.dmg]="release-artifacts/macos-arm64-artifacts/Ncurator-mac-arm64.dmg"
+            [Ncurator-mac-x64.dmg]="release-artifacts/macos-x64-artifacts/Ncurator-mac-x64.dmg"
+            [Ncurator-windows-x64.exe]="release-artifacts/windows-artifacts/Ncurator-windows-x64.exe"
+          )
+          for asset in "${!assets[@]}"; do
+            expected_size="$(stat -c '%s' "${assets[$asset]}")"
+            headers="$(curl --fail --silent --show-error --location --head \
+              "$base_url/releases/latest/$asset")"
+            actual_size="$(printf '%s\n' "$headers" | tr -d '\r' | awk 'tolower($1)=="content-length:" {value=$2} END {print value}')"
+            test "$actual_size" = "$expected_size"
+            printf '%s %s bytes verified\n' "$asset" "$actual_size"
+          done
