@@ -13,22 +13,28 @@
 
 Windows 发布：
 
-- `Ncurator-<version>-setup-x64.exe`
+- `Ncurator-windows-x64.exe`
 - `latest.yml`
 - `*.blockmap`
 
 macOS 发布：
 
-- `Ncurator-<version>-x64.dmg`
-- `Ncurator-<version>-arm64.dmg`
-- `Ncurator-<version>-mac-x64.zip`
-- `Ncurator-<version>-mac-arm64.zip`
+- `Ncurator-mac-x64.dmg`
+- `Ncurator-mac-arm64.dmg`
+- `Ncurator-mac-x64.zip`
+- `Ncurator-mac-arm64.zip`
 - `latest-mac.yml`
 - `*.blockmap`
 
 macOS 的 `dmg` 给用户首次安装使用，`zip` 给自动更新使用。Electron macOS 自动更新底层使用 Squirrel.Mac，它要求更新包是 zip，不使用 dmg 作为更新包。
 
 macOS x64 和 arm64 在 CI 中分开打包，因为网页抓取 sidecar 会按 runner CPU 架构构建。发布 job 会在上传前合并两边生成的 `latest-mac.yml`，确保同一个更新元数据同时包含 Intel 与 Apple Silicon 产物。
+
+官网使用以下固定链接。发布新版本后不需要修改：
+
+- Apple 芯片 Mac：`https://github.com/Yoan98/Ncurator/releases/latest/download/Ncurator-mac-arm64.dmg`
+- Intel 芯片 Mac：`https://github.com/Yoan98/Ncurator/releases/latest/download/Ncurator-mac-x64.dmg`
+- Windows 64 位：`https://github.com/Yoan98/Ncurator/releases/latest/download/Ncurator-windows-x64.exe`
 
 ## 3. 正常发版流程
 
@@ -45,7 +51,7 @@ git push origin v0.1.1
 5. 构建完成后，发布 workflow 会把所有产物上传到 `Yoan98/Ncurator` 的 GitHub Release。
 6. 已安装旧版本的用户会通过应用内更新拿到新版本。
 
-tag 版本必须和 `package.json` 里的版本一致，例如 `package.json` 是 `0.1.1`，tag 就用 `v0.1.1`。
+tag 版本必须和 `package.json` 里的版本一致，例如 `package.json` 是 `0.1.1`，tag 就用 `v0.1.1`。工作流会自动检查，不一致时停止发布。
 
 ## 4. 用户端更新流程
 

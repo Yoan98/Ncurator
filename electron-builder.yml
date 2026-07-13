@@ -1,6 +1,6 @@
 appId: com.yoan.ncurator
 productName: Ncurator
-artifactName: ${productName}-${version}-${os}-${arch}.${ext}
+artifactName: ${productName}-${os}-${arch}.${ext}
 directories:
   buildResources: build
 files:
@@ -30,12 +30,13 @@ win:
       arch:
         - x64
 nsis:
-  artifactName: ${productName}-${version}-setup-${arch}.${ext}
+  artifactName: ${productName}-windows-${arch}.${ext}
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always
 mac:
   icon: build/icon.icns
+  artifactName: ${productName}-mac-${arch}.${ext}
   target:
     - dmg
     - zip
@@ -47,7 +48,7 @@ mac:
     - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
   notarize: false
 dmg:
-  artifactName: ${productName}-${version}-${arch}.${ext}
+  artifactName: ${productName}-mac-${arch}.${ext}
 linux:
   icon: build/icon.png
   target:
