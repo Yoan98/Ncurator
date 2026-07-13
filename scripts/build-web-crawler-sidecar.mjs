@@ -73,9 +73,9 @@ const resolveBootstrapPython = () => {
   const candidates =
     process.platform === 'win32'
       ? [
-          { command: 'py', args: ['-3'] },
           { command: 'python', args: [] },
-          { command: 'python3', args: [] }
+          { command: 'python3', args: [] },
+          { command: 'py', args: ['-3'] }
         ]
       : [
           { command: 'python3.12', args: [] },
