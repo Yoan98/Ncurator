@@ -168,6 +168,7 @@ jobs:
       R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
       R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
       R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
+      RELEASE_TAG: ${{ needs.validate-release.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
 
@@ -204,18 +205,20 @@ jobs:
           test -n "$R2_ACCOUNT_ID"
           test -n "$R2_BUCKET_NAME"
           endpoint="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          version="${RELEASE_TAG#v}"
           declare -A assets=(
             [Ncurator-mac-arm64.dmg]="release-artifacts/macos-arm64-artifacts/Ncurator-mac-arm64.dmg"
             [Ncurator-mac-x64.dmg]="release-artifacts/macos-x64-artifacts/Ncurator-mac-x64.dmg"
             [Ncurator-windows-x64.exe]="release-artifacts/windows-artifacts/Ncurator-windows-x64.exe"
           )
           for asset in "${!assets[@]}"; do
+            download_name="${asset/Ncurator-/Ncurator-${version}-}"
             aws s3 cp "${assets[$asset]}" \
               "s3://${R2_BUCKET_NAME}/releases/latest/$asset" \
               --endpoint-url "$endpoint" \
               --region auto \
               --content-type application/octet-stream \
-              --content-disposition "attachment; filename=$asset" \
+              --content-disposition "attachment; filename=$download_name" \
               --cache-control 'public, max-age=300' \
               --no-progress
           done
@@ -225,6 +228,7 @@ jobs:
         run: |
           set -euo pipefail
           base_url="${R2_PUBLIC_BASE_URL%/}"
+          version="${RELEASE_TAG#v}"
           declare -A assets=(
             [Ncurator-mac-arm64.dmg]="release-artifacts/macos-arm64-artifacts/Ncurator-mac-arm64.dmg"
             [Ncurator-mac-x64.dmg]="release-artifacts/macos-x64-artifacts/Ncurator-mac-x64.dmg"
@@ -232,9 +236,12 @@ jobs:
           )
           for asset in "${!assets[@]}"; do
             expected_size="$(stat -c '%s' "${assets[$asset]}")"
+            expected_name="${asset/Ncurator-/Ncurator-${version}-}"
             headers="$(curl --fail --silent --show-error --location --head \
               "$base_url/releases/latest/$asset")"
             actual_size="$(printf '%s\n' "$headers" | tr -d '\r' | awk 'tolower($1)=="content-length:" {value=$2} END {print value}')"
+            disposition="$(printf '%s\n' "$headers" | tr -d '\r' | sed -n 's/^[Cc]ontent-[Dd]isposition: *//p' | tail -1)"
             test "$actual_size" = "$expected_size"
-            printf '%s %s bytes verified\n' "$asset" "$actual_size"
+            test "$disposition" = "attachment; filename=$expected_name"
+            printf '%s %s bytes, filename %s verified\n' "$asset" "$actual_size" "$expected_name"
           done
