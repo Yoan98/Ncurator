@@ -16,9 +16,9 @@ import {
   computeWorkspaceFileContentHash,
   createWorkspaceEmbeddingBatches
 } from '../../../../../src/main/services/workspace/utils/knowledge'
-import { handleWorkspaceIndexWorkerRequest } from '../../../../../src/main/services/workspace/worker/workspaceIndexWorker'
-import { WorkspaceIndexWorkerClient } from '../../../../../src/main/services/workspace/worker/workspaceIndexWorkerClient'
-import type { WorkspaceIndexWorkerRequest } from '../../../../../src/main/services/workspace/types'
+import { handleWorkspacePrepareWorkerRequest } from '../../../../../src/main/services/workspace/worker/workspacePrepareWorker'
+import { WorkspacePrepareWorkerClient } from '../../../../../src/main/services/workspace/worker/workspacePrepareWorkerClient'
+import type { WorkspacePrepareWorkerRequest } from '../../../../../src/main/services/workspace/types'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 
 const createChunk = (length: number, page: number): { text: string; page: number } => ({
@@ -62,16 +62,14 @@ describe('settings workspace backend', () => {
 
         const workerFilePath = path.join(runtime.workspaceRoot, 'cached-worker.docx')
         await fs.writeFile(workerFilePath, 'cached worker contract file')
-        const workerRequest: WorkspaceIndexWorkerRequest = {
+        const workerContentHash = await computeWorkspaceFileContentHash(workerFilePath)
+        const workerRequest: WorkspacePrepareWorkerRequest = {
           requestId: 'worker-contract-success',
-          action: 'prepare_file',
+          action: 'prepare_source',
           payload: {
-            workspaceId: 'workspace-index-worker-contract',
-            documentId: 'worker-contract-document',
             filePath: workerFilePath,
-            documentName: 'cached-worker.docx',
             cachedSplit: {
-              contentHash: 'cached-hash',
+              contentHash: workerContentHash,
               fileExt: '.docx',
               chunks: [
                 {
@@ -79,16 +77,10 @@ describe('settings workspace backend', () => {
                   page: 1
                 }
               ]
-            },
-            cachedVectors: {
-              contentHash: 'cached-hash',
-              fileExt: '.docx',
-              modelName: 'cached-model',
-              vectors: [[0.1, 0.2, 0.3]]
             }
           }
         }
-        const workerSuccess = await handleWorkspaceIndexWorkerRequest(workerRequest)
+        const workerSuccess = await handleWorkspacePrepareWorkerRequest(workerRequest)
         const pdfFilePath = path.join(runtime.workspaceRoot, '学习笔记', '深度学习.pdf')
         const pdfContentHash = await computeWorkspaceFileContentHash(pdfFilePath)
         const pdfSplitSnapshot = await buildWorkspaceKnowledgeSplitSnapshot({
@@ -129,59 +121,37 @@ describe('settings workspace backend', () => {
           contentHash: textContentHash,
           fileExt: '.txt'
         })
-        const markdownWorkerSuccess = await handleWorkspaceIndexWorkerRequest({
+        const markdownWorkerSuccess = await handleWorkspacePrepareWorkerRequest({
           requestId: 'worker-contract-markdown-success',
-          action: 'prepare_file',
+          action: 'prepare_source',
           payload: {
-            workspaceId: 'workspace-index-worker-contract',
-            documentId: 'worker-contract-markdown-document',
             filePath: markdownFilePath,
-            documentName: 'indexed-notes.md',
-            cachedSplit: markdownSplitSnapshot,
-            cachedVectors: {
-              contentHash: markdownContentHash,
-              fileExt: '.md',
-              modelName: 'cached-model',
-              vectors: markdownSplitSnapshot.chunks.map(() => [0.1, 0.2, 0.3])
-            }
+            cachedSplit: markdownSplitSnapshot
           }
         })
         const emptyTextFilePath = path.join(runtime.workspaceRoot, 'empty-notes.txt')
         await fs.writeFile(emptyTextFilePath, ' \n\t', 'utf8')
-        const emptyTextWorkerSuccess = await handleWorkspaceIndexWorkerRequest({
+        const emptyTextWorkerSuccess = await handleWorkspacePrepareWorkerRequest({
           requestId: 'worker-contract-empty-text-success',
-          action: 'prepare_file',
+          action: 'prepare_source',
           payload: {
-            workspaceId: 'workspace-index-worker-contract',
-            documentId: 'worker-contract-empty-text-document',
-            filePath: emptyTextFilePath,
-            documentName: 'empty-notes.txt'
+            filePath: emptyTextFilePath
           }
         })
-        const pdfWorkerSuccess = await handleWorkspaceIndexWorkerRequest({
+        const pdfWorkerSuccess = await handleWorkspacePrepareWorkerRequest({
           requestId: 'worker-contract-pdf-success',
-          action: 'prepare_file',
+          action: 'prepare_source',
           payload: {
-            workspaceId: 'workspace-index-worker-contract',
-            documentId: 'worker-contract-pdf-document',
             filePath: pdfFilePath,
-            documentName: '深度学习.pdf',
-            cachedSplit: pdfSplitSnapshot,
-            cachedVectors: {
-              contentHash: pdfContentHash,
-              fileExt: '.pdf',
-              modelName: 'cached-model',
-              vectors: pdfSplitSnapshot.chunks.map(() => [0.1, 0.2, 0.3])
-            }
+            cachedSplit: pdfSplitSnapshot
           }
         })
-        const workerFailure = await handleWorkspaceIndexWorkerRequest({
+        const workerFailure = await handleWorkspacePrepareWorkerRequest({
           ...workerRequest,
           requestId: 'worker-contract-error',
           payload: {
             ...workerRequest.payload,
-            filePath: path.join(runtime.workspaceRoot, 'unsupported.js'),
-            documentName: 'unsupported.js'
+            filePath: path.join(runtime.workspaceRoot, 'unsupported.js')
           }
         })
         const exitWorkerPath = path.join(runtime.workspaceRoot, 'workspace-exit-worker.js')
@@ -200,50 +170,36 @@ parentPort.on('message', (request) => {
   }
   parentPort.postMessage({
     requestId: request.requestId,
+    action: 'prepare_source',
     ok: true,
     payload: {
-      documentId: request.payload.documentId,
       filePath: request.payload.filePath,
       fileExt: '.docx',
-      documentName: request.payload.documentName,
       contentHash: 'exit-recovery-hash',
-      chunkCount: 0,
+      sourceType: 'file',
       splitSnapshot: {
         contentHash: 'exit-recovery-hash',
         fileExt: '.docx',
         chunks: []
-      },
-      vectorSnapshot: {
-        contentHash: 'exit-recovery-hash',
-        fileExt: '.docx',
-        modelName: 'exit-recovery-model',
-        vectors: []
-      },
-      chunks: []
+      }
     }
   })
 })
 `
         )
-        const exitClient = new WorkspaceIndexWorkerClient({
+        const exitClient = new WorkspacePrepareWorkerClient({
           workerUrl: pathToFileURL(exitWorkerPath)
         })
         let exitError = ''
         try {
           await exitClient.prepareSource({
-            workspaceId: 'workspace-index-worker-contract',
-            documentId: 'exit-worker-document',
-            filePath: workerFilePath,
-            documentName: 'cached-worker.docx'
+            filePath: workerFilePath
           })
         } catch (error) {
           exitError = error instanceof Error ? error.message : String(error)
         }
         const exitRecovery = await exitClient.prepareSource({
-          workspaceId: 'workspace-index-worker-contract',
-          documentId: 'exit-worker-document-retry',
-          filePath: workerFilePath,
-          documentName: 'cached-worker.docx'
+          filePath: workerFilePath
         })
 
         return {
@@ -331,8 +287,8 @@ parentPort.on('message', (request) => {
         runtime.assertThat(
           result.markdownWorkerSuccess.ok &&
             result.markdownWorkerSuccess.payload?.fileExt === '.md' &&
-            result.markdownWorkerSuccess.payload.chunkCount > 0 &&
-            result.markdownWorkerSuccess.payload.chunks.some((chunk) =>
+            result.markdownWorkerSuccess.payload.splitSnapshot.chunks.length > 0 &&
+            result.markdownWorkerSuccess.payload.splitSnapshot.chunks.some((chunk) =>
               chunk.text.includes('cedar-md-index-118')
             ),
           {
@@ -345,8 +301,7 @@ parentPort.on('message', (request) => {
         runtime.assertThat(
           result.emptyTextWorkerSuccess.ok &&
             result.emptyTextWorkerSuccess.payload?.fileExt === '.txt' &&
-            result.emptyTextWorkerSuccess.payload.chunkCount === 0 &&
-            result.emptyTextWorkerSuccess.payload.vectorSnapshot.vectors.length === 0,
+            result.emptyTextWorkerSuccess.payload.splitSnapshot.chunks.length === 0,
           {
             name: 'empty-text-file-indexes-without-embedding',
             message: '空 md/txt 应收敛为 0 chunk 索引结果，不应因 embedding 未就绪导致文件级失败。',
@@ -356,12 +311,11 @@ parentPort.on('message', (request) => {
 
         runtime.assertThat(
           result.workerSuccess.ok &&
-            result.workerSuccess.payload?.chunkCount === 1 &&
-            result.workerSuccess.payload.vectorSnapshot.vectors.length === 1,
+            result.workerSuccess.payload?.splitSnapshot.chunks.length === 1,
           {
-            name: 'worker-success-returns-main-process-persistable-payload',
+            name: 'worker-success-returns-main-process-split-payload',
             message:
-              'worker 成功时应返回 split/chunks/vectors，供 main process 后续写 DocumentStore 与 LanceDB。',
+              'worker 成功时只返回 split chunks，向量推理由独立 embedding runtime 负责。',
             data: result
           }
         )
@@ -369,8 +323,10 @@ parentPort.on('message', (request) => {
         runtime.assertThat(
           result.pdfWorkerSuccess.ok &&
             result.pdfWorkerSuccess.payload?.fileExt === '.pdf' &&
-            result.pdfWorkerSuccess.payload.chunkCount > 0 &&
-            result.pdfWorkerSuccess.payload.chunks.some((chunk) => chunk.text.includes('深度学习')),
+            result.pdfWorkerSuccess.payload.splitSnapshot.chunks.length > 0 &&
+            result.pdfWorkerSuccess.payload.splitSnapshot.chunks.some((chunk) =>
+              chunk.text.includes('深度学习')
+            ),
           {
             name: 'worker-pdf-success-uses-supported-loader-version',
             message:
@@ -390,7 +346,7 @@ parentPort.on('message', (request) => {
         )
 
         runtime.assertThat(
-          result.exitError.includes('workspace index worker exited with code 1') &&
+          result.exitError.includes('workspace prepare worker exited with code 1') &&
             result.exitRecovery.contentHash === 'exit-recovery-hash',
           {
             name: 'worker-exit-fails-current-file-and-rebuilds-for-next-file',

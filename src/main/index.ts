@@ -1,10 +1,15 @@
 import { app, shell, BrowserWindow, ipcMain, screen } from 'electron'
 import { join } from 'path'
+import { fileURLToPath } from 'node:url'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { registerHandlers } from './ipc/handlers'
 import { IngestionService } from './services/ingestion/loader'
-import { EmbeddingService } from './services/vector/EmbeddingService'
+import {
+  DEFAULT_EMBEDDING_MODEL_NAME,
+  EmbeddingService
+} from './services/vector/EmbeddingService'
+import { EmbeddingRuntimeClient } from './services/vector/runtime/EmbeddingRuntimeClient'
 import { StorageService } from './services/storage/StorageService'
 import { ModelService } from './services/model/ModelService'
 import { VectorModelDownloadService } from './services/model/VectorModelDownloadService'
@@ -15,6 +20,7 @@ import { EMBEDDED_BROWSER_REMOTE_DEBUGGING_PORT } from './services/browser/const
 import { createWebCrawlerService } from './services/webCrawler/createWebCrawlerService'
 import { AppUpdateService } from './services/update/AppUpdateService'
 import { APP_ID } from '../shared/constants'
+import { MODELS_PATH } from './utils/paths'
 
 app.commandLine.appendSwitch(
   'remote-debugging-port',
@@ -152,7 +158,15 @@ if (!singleInstanceLock) {
 
     // Initialize services
     const ingestionService = IngestionService.getInstance()
-    const embeddingService = EmbeddingService.getInstance()
+    const embeddingRuntimeClient = new EmbeddingRuntimeClient({
+      entryPath: fileURLToPath(new URL('./embeddingRuntimeProcess.js', import.meta.url)),
+      modelsPath: MODELS_PATH,
+      modelName: DEFAULT_EMBEDDING_MODEL_NAME
+    })
+    const embeddingService = new EmbeddingService({
+      executor: embeddingRuntimeClient,
+      modelName: DEFAULT_EMBEDDING_MODEL_NAME
+    })
     const storageService = StorageService.getInstance()
     const modelService = ModelService.getInstance()
     const vectorModelDownloadService = VectorModelDownloadService.getInstance({
@@ -194,6 +208,7 @@ if (!singleInstanceLock) {
     app.on('before-quit', () => {
       void storageService.failInterruptedWorkspaceIndexJobs()
       void webCrawlerService.close()
+      void embeddingService.close()
     })
 
     vectorModelDownloadService

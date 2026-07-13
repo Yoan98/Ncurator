@@ -7,6 +7,8 @@ import type {
   ModelDownloadProgressReporter
 } from '../../../../src/main/services/model/ModelService'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
+import { MODELS_PATH } from '../../../../src/main/utils/paths'
+import { TransformersEmbeddingExecutor } from '../../../../src/main/services/vector/runtime/TransformersEmbeddingExecutor'
 
 const REPO_A = 'jinaai/jina-embeddings-v2-base-zh'
 const REPO_B = 'jinaai/jina-embeddings-v2-base-zh-secondary'
@@ -32,7 +34,12 @@ describe('settings vector backend', () => {
       runMode: 'single',
       execute: async () => {
         const modelService = ModelService.getInstance()
-        const embeddingService = EmbeddingService.getInstance()
+        const embeddingService = new EmbeddingService({
+          executor: new TransformersEmbeddingExecutor({
+            modelsPath: MODELS_PATH,
+            modelName: REPO_A
+          })
+        })
         const service = VectorModelDownloadService.getInstance({
           modelService,
           embeddingService

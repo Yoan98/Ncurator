@@ -5,6 +5,7 @@ import { MODELS_PATH } from '../../../../src/main/utils/paths'
 import { EmbeddingService } from '../../../../src/main/services/vector/EmbeddingService'
 import { ModelService } from '../../../../src/main/services/model/ModelService'
 import { VectorModelDownloadService } from '../../../../src/main/services/model/VectorModelDownloadService'
+import { TransformersEmbeddingExecutor } from '../../../../src/main/services/vector/runtime/TransformersEmbeddingExecutor'
 import type {
   ModelDownloadProgress,
   ModelDownloadProgressReporter
@@ -52,7 +53,12 @@ describe('settings vector backend', () => {
       execute: async () => {
         ;(VectorModelDownloadService as VectorModelDownloadServiceStatics).instance = null
         const modelService = ModelService.getInstance()
-        const embeddingService = EmbeddingService.getInstance()
+        const embeddingService = new EmbeddingService({
+          executor: new TransformersEmbeddingExecutor({
+            modelsPath: MODELS_PATH,
+            modelName: SNAPSHOT_REPO_ID
+          })
+        })
         const service = VectorModelDownloadService.getInstance({
           modelService,
           embeddingService

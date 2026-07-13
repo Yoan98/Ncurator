@@ -28,7 +28,7 @@
     "start": "electron-vite preview",
     "dev": "node scripts/prepare-better-sqlite3-native.mjs ensure electron && node scripts/ensure-web-crawler-sidecar.mjs && electron-vite dev",
     "dev:no-sidecar": "node scripts/prepare-better-sqlite3-native.mjs ensure electron && electron-vite dev",
-    "build": "node scripts/prepare-better-sqlite3-native.mjs ensure node && tsc --noEmit -p tsconfig.node.json --composite false && tsc --noEmit -p tsconfig.web.json --composite false && node scripts/build-web-crawler-sidecar.mjs && node scripts/prepare-better-sqlite3-native.mjs export-electron-resource && electron-vite build",
+    "build": "node scripts/prepare-better-sqlite3-native.mjs ensure node && tsc --noEmit -p tsconfig.node.json --composite false && tsc --noEmit -p tsconfig.web.json --composite false && node scripts/build-web-crawler-sidecar.mjs && node scripts/prepare-better-sqlite3-native.mjs export-electron-resource && electron-vite build && node scripts/verify-runtime-bundles.mjs",
     "postinstall": "node scripts/postinstall.mjs",
     "build:unpack": "pnpm run build && electron-builder --dir",
     "build:win": "pnpm run build && electron-builder --win --x64 --publish never",

@@ -22,6 +22,8 @@ extraResources:
     to: native
     filter:
       - '**/*'
+asarUnpack:
+  - '**/node_modules/onnxruntime-node/**/*'
 win:
   icon: build/icon.ico
   executableName: Ncurator
@@ -31,6 +33,9 @@ win:
         - x64
 nsis:
   artifactName: ${productName}-windows-${arch}.${ext}
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  perMachine: false
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always

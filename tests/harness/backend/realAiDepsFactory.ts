@@ -12,9 +12,11 @@ import type { AiRunContext } from '../../../src/main/services/ai/types'
 import { ModelService } from '../../../src/main/services/model/ModelService'
 import { StorageService } from '../../../src/main/services/storage/StorageService'
 import { EmbeddingService } from '../../../src/main/services/vector/EmbeddingService'
+import { TransformersEmbeddingExecutor } from '../../../src/main/services/vector/runtime/TransformersEmbeddingExecutor'
 import { ensureEmbeddingReady } from '../../../src/main/services/vector/ensureEmbeddingReady'
 import { WorkspaceKnowledgePrepareService } from '../../../src/main/services/workspace/WorkspaceKnowledgePrepareService'
 import { WorkspaceSourceService } from '../../../src/main/services/workspace/WorkspaceSourceService'
+import { MODELS_PATH } from '../../../src/main/utils/paths'
 import type { AiRuntimeSettings } from '../../../src/shared/types'
 import type { BackendHarnessMode, CreateAiRunContextInput, LiveLlmConfig } from './test-types'
 import type { EventCollector } from '../core/eventCollector'
@@ -108,7 +110,12 @@ export const createRealAiDepsFactory = async (input: {
   })
   await storageService.initialize()
 
-  const embeddingService = new EmbeddingService()
+  const embeddingService = new EmbeddingService({
+    executor: new TransformersEmbeddingExecutor({
+      modelsPath: MODELS_PATH,
+      modelName: 'jinaai/jina-embeddings-v2-base-zh'
+    })
+  })
   const modelService = ModelService.getInstance()
   const workspaceSourceService = new WorkspaceSourceService()
   const workspaceKnowledgePrepareService = new WorkspaceKnowledgePrepareService({

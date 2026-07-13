@@ -81,27 +81,20 @@ export type WorkspaceKnowledgeIndexInput = {
   cache?: WorkspaceKnowledgeCache
 }
 
-/** worker 入参：文件源（读本地文件）或网页源（直传文本） */
-export type WorkspaceKnowledgePrepareWorkerInput =
+/** 文件解析 worker 入参：只负责读取和切分，不负责向量推理 */
+export type WorkspacePrepareWorkerInput =
   | {
       sourceType?: 'file'
-      workspaceId: string
-      documentId: string
       filePath: string
-      documentName: string
       cachedSplit?: WorkspaceKnowledgeSplitSnapshot | null
-      cachedVectors?: WorkspaceKnowledgeVectorSnapshot | null
     }
   | {
       sourceType: 'web'
-      workspaceId: string
-      documentId: string
       documentName: string
       sourceUrl: string
       rawText: string
       contentHash: string
       cachedSplit?: WorkspaceKnowledgeSplitSnapshot | null
-      cachedVectors?: WorkspaceKnowledgeVectorSnapshot | null
     }
 
 export type WorkspaceKnowledgeIndexedChunk = WorkspaceKnowledgeChunkSnapshot & {
@@ -121,7 +114,7 @@ export type WorkspaceKnowledgeIndexResult = {
   chunks: WorkspaceKnowledgeIndexedChunk[]
 }
 
-export type WorkspaceKnowledgePrepareWorkerResult = Omit<
+export type WorkspaceKnowledgePreparedDocument = Omit<
   WorkspaceKnowledgeIndexResult,
   'usedCachedSplit' | 'usedCachedVectors' | 'chunks'
 > & {
@@ -130,32 +123,36 @@ export type WorkspaceKnowledgePrepareWorkerResult = Omit<
   chunks: WorkspaceKnowledgeChunkInput[]
 }
 
-export type WorkspaceIndexWorkerRequest = {
-  requestId: string
-  action: 'prepare_file'
-  payload: WorkspaceKnowledgePrepareWorkerInput
+export type WorkspacePreparedSource = {
+  filePath: string
+  fileExt: string
+  contentHash: string
+  sourceType: 'file' | 'web'
+  splitSnapshot: WorkspaceKnowledgeSplitSnapshot
 }
 
-export type WorkspaceIndexWorkerResponse = {
+export type WorkspacePrepareWorkerRequest = {
   requestId: string
+  action: 'prepare_source'
+  payload: WorkspacePrepareWorkerInput
+}
+
+export type WorkspacePrepareWorkerResponse = {
+  requestId: string
+  action: 'prepare_source'
   ok: boolean
-  payload?: WorkspaceKnowledgePrepareWorkerResult
+  payload?: WorkspacePreparedSource
   error?: string
 }
 
-export type WorkspaceIndexWorkerPendingRequest = {
-  resolve: (response: WorkspaceIndexWorkerResponse) => void
+export type WorkspacePrepareWorkerPendingRequest = {
+  resolve: (response: WorkspacePrepareWorkerResponse) => void
   reject: (error: Error) => void
   timeout: NodeJS.Timeout
 }
 
-export type WorkspaceIndexWorkerRequestHandler = (
-  request: WorkspaceIndexWorkerRequest
-) => Promise<WorkspaceIndexWorkerResponse>
-
-export type WorkspaceIndexWorkerClientOptions = {
+export type WorkspacePrepareWorkerClientOptions = {
   workerUrl?: URL
-  fallbackHandler?: WorkspaceIndexWorkerRequestHandler
 }
 
 export type WorkspaceTreeScanResult = {

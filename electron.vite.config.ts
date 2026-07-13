@@ -9,8 +9,11 @@ export default defineConfig({
       rollupOptions: {
         input: {
           index: resolve('src/main/index.ts'),
-          workspaceIndexWorker: resolve(
-            'src/main/services/workspace/worker/workspaceIndexWorker.ts'
+          workspacePrepareWorker: resolve(
+            'src/main/services/workspace/worker/workspacePrepareWorker.ts'
+          ),
+          embeddingRuntimeProcess: resolve(
+            'src/main/services/vector/runtime/embeddingRuntimeProcess.ts'
           )
         }
       }
