@@ -186,4 +186,7 @@ jobs:
               --title "$tag" \
               --notes "Ncurator $tag"
           fi
-          find release-artifacts -type f -print0 | xargs -0 gh release upload "$tag" --repo "$RELEASE_REPOSITORY" --clobber
+          gh release delete-asset "$tag" builder-debug.yml --repo "$RELEASE_REPOSITORY" --yes >/dev/null 2>&1 || true
+          find release-artifacts -type f \
+            \( -name '*.dmg' -o -name '*.zip' -o -name '*.exe' -o -name '*.blockmap' -o -name 'latest.yml' -o -name 'latest-mac.yml' \) \
+            -print0 | xargs -0 gh release upload "$tag" --repo "$RELEASE_REPOSITORY" --clobber
