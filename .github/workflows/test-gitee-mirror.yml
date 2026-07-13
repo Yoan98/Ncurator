@@ -72,20 +72,27 @@ jobs:
           status="$(curl --silent --output release.json --write-out '%{http_code}' \
             --get --data-urlencode "access_token=$GITEE_ACCESS_TOKEN" "$release_url")"
           if [ "$status" = "404" ]; then
+            node - <<'NODE'
+            const fs = require('node:fs')
+            fs.writeFileSync('create-release.json', JSON.stringify({
+              tag_name: process.env.RELEASE_TAG,
+              name: process.env.RELEASE_TAG,
+              body: `Ncurator ${process.env.RELEASE_TAG}`,
+              target_commitish: 'master',
+              prerelease: false
+            }))
+            NODE
             curl --fail --silent --show-error \
               --request POST \
-              --form "access_token=$GITEE_ACCESS_TOKEN" \
-              --form "tag_name=$RELEASE_TAG" \
-              --form "name=$RELEASE_TAG" \
-              --form "body=Ncurator $RELEASE_TAG" \
-              --form "target_commitish=master" \
-              "https://gitee.com/api/v5/repos/$GITEE_OWNER/$GITEE_REPO/releases" \
+              --header 'Content-Type: application/json' \
+              --data '@create-release.json' \
+              "https://gitee.com/api/v5/repos/$GITEE_OWNER/$GITEE_REPO/releases?access_token=$GITEE_ACCESS_TOKEN" \
               --output release.json
           elif [ "$status" != "200" ]; then
             cat release.json
             exit 1
           fi
-          release_id="$(node -e "const x=require('./release.json');const r=x.data||x;if(!r?.id){console.error(x.message||JSON.stringify(x));process.exit(1)}process.stdout.write(String(r.id))")"
+          release_id="$(node -e "const x=require('./release.json');const r=x?.data||x;if(!r?.id){console.error(x?.message||JSON.stringify(x));process.exit(1)}process.stdout.write(String(r.id))")"
           test -n "$release_id"
           echo "release_id=$release_id" >> "$GITHUB_OUTPUT"
 
