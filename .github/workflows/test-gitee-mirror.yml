@@ -52,6 +52,22 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          tag_url="https://gitee.com/api/v5/repos/$GITEE_OWNER/$GITEE_REPO/tags/$RELEASE_TAG"
+          tag_status="$(curl --silent --output tag.json --write-out '%{http_code}' \
+            --get --data-urlencode "access_token=$GITEE_ACCESS_TOKEN" "$tag_url")"
+          if [ "$tag_status" = "404" ]; then
+            curl --fail --silent --show-error \
+              --request POST \
+              --form "access_token=$GITEE_ACCESS_TOKEN" \
+              --form "refs=master" \
+              --form "tag_name=$RELEASE_TAG" \
+              --form "tag_message=Ncurator $RELEASE_TAG" \
+              "https://gitee.com/api/v5/repos/$GITEE_OWNER/$GITEE_REPO/tags" \
+              --output tag.json
+          elif [ "$tag_status" != "200" ]; then
+            cat tag.json
+            exit 1
+          fi
           release_url="https://gitee.com/api/v5/repos/$GITEE_OWNER/$GITEE_REPO/releases/tags/$RELEASE_TAG"
           status="$(curl --silent --output release.json --write-out '%{http_code}' \
             --get --data-urlencode "access_token=$GITEE_ACCESS_TOKEN" "$release_url")"
@@ -69,7 +85,7 @@ jobs:
             cat release.json
             exit 1
           fi
-          release_id="$(node -p "require('./release.json').id")"
+          release_id="$(node -e "const x=require('./release.json');const r=x.data||x;if(!r?.id){console.error(x.message||JSON.stringify(x));process.exit(1)}process.stdout.write(String(r.id))")"
           test -n "$release_id"
           echo "release_id=$release_id" >> "$GITHUB_OUTPUT"
 
