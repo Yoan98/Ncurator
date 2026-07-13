@@ -26,7 +26,7 @@ describe('openai compatible runtime options', () => {
     })
   })
 
-  it('resolves official providers from base_url', () => {
+  it('keeps the explicitly stored provider kind for official base urls', () => {
     expect(
       resolveOpenAICompatibleRuntimeOptions(
         createConfig({
@@ -36,7 +36,7 @@ describe('openai compatible runtime options', () => {
         }),
         { consumerName: 'browser_use' }
       ).providerKind
-    ).toBe('openai')
+    ).toBe('openai-compatible')
 
     expect(
       resolveOpenAICompatibleRuntimeOptions(
@@ -47,10 +47,10 @@ describe('openai compatible runtime options', () => {
         }),
         { consumerName: 'browser_use' }
       ).providerKind
-    ).toBe('deepseek')
+    ).toBe('openai-compatible')
   })
 
-  it('ignores stale stored providerKind and defaults unknown endpoints to OpenAI-compatible', () => {
+  it('keeps an explicitly stored provider kind for custom endpoints', () => {
     expect(
       resolveOpenAICompatibleRuntimeOptions(
         createConfig({
@@ -59,6 +59,6 @@ describe('openai compatible runtime options', () => {
         }),
         { consumerName: 'browser_use' }
       ).providerKind
-    ).toBe('openai-compatible')
+    ).toBe('deepseek')
   })
 })

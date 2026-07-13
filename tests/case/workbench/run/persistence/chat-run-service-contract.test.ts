@@ -138,9 +138,13 @@ const submitAiRun = async ({ storage, service }: TestService) => {
   await seedSession(storage)
   const response = await service.submit({
     mode: 'ai',
+    preference: 'local_sources_strict',
     sessionId: 'session-1',
     input: '生成测试回答',
-    modelName: 'mock-model',
+    mainModel: {
+      configId: 'mock-config',
+      modelName: 'mock-model'
+    },
     workspace: {
       workspaceId: 'workspace-1',
       workspaceName: 'workspace-1',
@@ -170,6 +174,7 @@ describe('workbench chat run backend', () => {
     expect(messages[1].content).toBe('')
     expect(storedRun?.status).toBe('running')
     expect(storedRun?.assistantMessageId).toBe(messages[1].id)
+    expect(run.preference).toBe('local_sources_strict')
   })
 
   it('run-events-update-assistant-message-run-and-event-log', async () => {

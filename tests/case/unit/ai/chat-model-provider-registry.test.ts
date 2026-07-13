@@ -19,7 +19,9 @@ const buildConfig = (input: Partial<LlmRuntimeConfig>): LlmRuntimeConfig => ({
 describe('ai unit chat model provider registry', () => {
   it('allows responses fallback only for OpenAI provider configs', () => {
     expect(
-      getSupportedTransportsForConfig(buildConfig({ base_url: 'https://api.openai.com/v1' }))
+      getSupportedTransportsForConfig(
+        buildConfig({ providerKind: 'openai', base_url: 'https://api.openai.com/v1' })
+      )
     ).toEqual(['responses', 'completions'])
     expect(
       getSupportedTransportsForConfig(buildConfig({ base_url: 'https://api.deepseek.com/v1' }))
@@ -30,8 +32,16 @@ describe('ai unit chat model provider registry', () => {
   })
 
   it('creates provider-specific chat model classes', () => {
-    expect(createChatModel(buildConfig({ base_url: 'https://api.openai.com/v1' })).constructor.name).toBe('ChatOpenAI')
-    expect(createChatModel(buildConfig({ base_url: 'https://api.deepseek.com/v1' })).constructor.name).toBe('ChatDeepSeek')
+    expect(
+      createChatModel(
+        buildConfig({ providerKind: 'openai', base_url: 'https://api.openai.com/v1' })
+      ).constructor.name
+    ).toBe('ChatOpenAI')
+    expect(
+      createChatModel(
+        buildConfig({ providerKind: 'deepseek', base_url: 'https://api.deepseek.com/v1' })
+      ).constructor.name
+    ).toBe('ChatDeepSeek')
     expect(
       createChatModel(buildConfig({ providerKind: 'openai-compatible' })).constructor.name
     ).toBe('ChatOpenAI')

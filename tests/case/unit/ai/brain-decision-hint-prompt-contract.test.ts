@@ -3,10 +3,11 @@ import { buildBrainPrompt } from '../../../../src/main/services/ai/human/prompts
 import { createInitialHumanState } from '../../../../src/main/services/ai/human/state/schema'
 import type { AiRunContext } from '../../../../src/main/services/ai/types'
 
-const createFakeCtx = (): AiRunContext =>
+const createFakeCtx = (preference: AiRunContext['preference'] = 'default'): AiRunContext =>
   ({
     platform: 'macos',
     runId: 'run-1',
+    preference,
     workspace: {
       id: 'ws-1',
       rootPath: '/tmp/workspace'
@@ -21,6 +22,30 @@ const createFakeCtx = (): AiRunContext =>
   }) as AiRunContext
 
 describe('ai unit brain decision-hint prompt contract', () => {
+  it('renders default, relaxed and strict local source preferences', () => {
+    const state = createInitialHumanState({
+      taskId: 'task-preference',
+      userInput: '按当前偏好处理'
+    })
+
+    const defaultPrompt = buildBrainPrompt({ state, ctx: createFakeCtx('default') }).user
+    const relaxedPrompt = buildBrainPrompt({
+      state,
+      ctx: createFakeCtx('local_sources_relaxed')
+    }).user
+    const strictPrompt = buildBrainPrompt({
+      state,
+      ctx: createFakeCtx('local_sources_strict')
+    }).user
+
+    const defaultPreference =
+      defaultPrompt.match(/<preference>([\s\S]*?)<\/preference>/)?.[1].trim() || ''
+    expect(defaultPreference).toBe('无')
+    expect(relaxedPrompt).toContain('优先使用知识库内容和工作区文件内容作为依据来推进任务')
+    expect(strictPrompt).toContain('必须只能使用知识库内容和工作区文件内容作为依据来推进任务')
+    expect(strictPrompt).toContain('禁止使用其他信息与模型能力本身的信息')
+  })
+
   it('renders local environment with platform and current system time', () => {
     const state = createInitialHumanState({
       taskId: 'task-1',

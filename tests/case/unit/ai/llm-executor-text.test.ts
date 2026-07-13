@@ -298,7 +298,7 @@ describe('ai unit llm executor text path', () => {
     setTimeout(() => controller.abort(), 0)
 
     await expect(pending).rejects.toMatchObject({
-      message: 'cancelled',
+      message: '已取消',
       code: 'CANCELLED'
     })
   })

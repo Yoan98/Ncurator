@@ -55,7 +55,8 @@ describe('ai tool hand backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['hand'],
-      description: '验证 hand 的工具调用上限收敛，以及非 artifact 工具不会覆盖已有 execution.artifacts。',
+      description:
+        '验证 hand 的工具调用上限收敛，以及非 artifact 工具不会覆盖已有 execution.artifacts。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -101,7 +102,8 @@ describe('ai tool hand backend', () => {
             learnedSkillIds: [],
             toolName: 'terminal_run',
             args: {
-              command: isWindows ? 'New-Item -ItemType File -Path first.txt' : 'touch first.txt'
+              command: isWindows ? 'New-Item -ItemType File -Path first.txt' : 'touch first.txt',
+              commandExplanation: '创建测试文件，用于验证 terminal 产物与后续工具结果合并。'
             }
           })
         )
@@ -146,7 +148,8 @@ describe('ai tool hand backend', () => {
             result.secondState.execution.lastToolResults?.[0]?.toolName === 'docx_read_blocks',
           {
             name: 'runtime-artifacts-are-preserved-when-next-tool-has-no-artifact',
-            message: '后续没有 artifact 的工具执行后，execution.artifacts 应保留已有 terminal 产物而不是被覆盖。',
+            message:
+              '后续没有 artifact 的工具执行后，execution.artifacts 应保留已有 terminal 产物而不是被覆盖。',
             data: {
               artifacts: result.secondState.execution.artifacts,
               lastToolUseResults: result.secondState.execution.lastToolResults
@@ -163,7 +166,8 @@ describe('ai tool hand backend', () => {
             ),
           {
             name: 'tool-limit-produces-converging-decision-hint',
-            message: '超过 hardActionLimit 后，hand 应写入强制收尾型 decisionHint、追加交付说明，并保留当前工具结果。',
+            message:
+              '超过 hardActionLimit 后，hand 应写入强制收尾型 decisionHint、追加交付说明，并保留当前工具结果。',
             data: {
               decisionHint: result.secondState.execution.pendingDecisionHint,
               lastToolUseResults: result.secondState.execution.lastToolResults,

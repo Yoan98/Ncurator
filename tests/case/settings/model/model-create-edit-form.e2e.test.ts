@@ -21,6 +21,8 @@ describe('settings model e2e', () => {
         execute: async (runtime) => {
           const { page } = runtime
           let validationBlocked = false
+          let createMaskClickPreservedForm = false
+          let editMaskClickPreservedForm = false
 
           await runtime.step({
             name: 'open-create-form',
@@ -31,6 +33,16 @@ describe('settings model e2e', () => {
               await getSettingsLocator(page, settingsSelectors.modelBaseUrlInput).waitFor({
                 state: 'visible'
               })
+              await getSettingsLocator(page, settingsSelectors.modelNameInput).fill('遮罩保留输入')
+              await page
+                .locator('.ant-modal-wrap')
+                .last()
+                .click({ position: { x: 8, y: 8 } })
+              createMaskClickPreservedForm =
+                (await getSettingsLocator(page, settingsSelectors.modelNameInput).isVisible()) &&
+                (await getSettingsLocator(page, settingsSelectors.modelNameInput).inputValue()) ===
+                  '遮罩保留输入'
+              await getSettingsLocator(page, settingsSelectors.modelNameInput).clear()
             }
           })
 
@@ -77,6 +89,14 @@ describe('settings model e2e', () => {
               await getSettingsLocator(page, settingsSelectors.modelBaseUrlInput).waitFor({
                 state: 'visible'
               })
+              await page
+                .locator('.ant-modal-wrap')
+                .last()
+                .click({ position: { x: 8, y: 8 } })
+              editMaskClickPreservedForm =
+                (await getSettingsLocator(page, settingsSelectors.modelNameInput).isVisible()) &&
+                (await getSettingsLocator(page, settingsSelectors.modelNameInput).inputValue()) ===
+                  '创建编辑测试'
             }
           })
 
@@ -89,6 +109,8 @@ describe('settings model e2e', () => {
               (await getSettingsLocator(page, settingsSelectors.modelApiKeyInput).isVisible()) &&
               !(await getSettingsLocator(page, settingsSelectors.modelProviderInput).isVisible()),
             validationBlocked,
+            createMaskClickPreservedForm,
+            editMaskClickPreservedForm,
             editPrefill: {
               name: await getSettingsLocator(page, settingsSelectors.modelNameInput).inputValue(),
               baseUrl: await getSettingsLocator(page, settingsSelectors.modelBaseUrlInput)
@@ -114,6 +136,16 @@ describe('settings model e2e', () => {
             message: '必填字段为空时保存应被拦截，不能直接提交成功，对齐 SET-MODEL-002-AC3。',
             data: result
           })
+
+          await runtime.assertThat(
+            result.createMaskClickPreservedForm && result.editMaskClickPreservedForm,
+            {
+              name: 'model-dialog-mask-click-keeps-form-open',
+              message:
+                '新增和编辑大模型配置时，点击弹窗遮罩不应关闭表单或清空输入，对齐 SET-MODEL-002-AC6。',
+              data: result
+            }
+          )
 
           await runtime.assertThat(
             result.editPrefill.name === '创建编辑测试' &&

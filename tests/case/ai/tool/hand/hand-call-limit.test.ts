@@ -23,7 +23,13 @@ describe('ai tool hand backend', () => {
         const ctx = runtime.createAiRunContext()
         const cache = createHumanRuntimeCache()
 
-        ensureSkillTools({ cache, ctx, runId: runtime.runId, taskId: runtime.taskId, skillId: 'terminal' })
+        ensureSkillTools({
+          cache,
+          ctx,
+          runId: runtime.runId,
+          taskId: runtime.taskId,
+          skillId: 'terminal'
+        })
 
         const handNode = createHandNode({ ctx, cache })
         const state = await handNode({
@@ -45,7 +51,8 @@ describe('ai tool hand backend', () => {
                 calls: Array.from({ length: HUMAN_HAND_CALL_LIMIT + 1 }, () => ({
                   toolName: 'terminal_run',
                   args: {
-                    command: isWindows ? 'Get-Location' : 'pwd'
+                    command: isWindows ? 'Get-Location' : 'pwd',
+                    commandExplanation: '读取当前工作目录，用于验证 hand 单轮调用数量上限。'
                   }
                 }))
               }
@@ -59,7 +66,8 @@ describe('ai tool hand backend', () => {
         runtime.assertThat(
           result.state.execution.pendingDecisionHint?.code === 'hand_call_limit_exceeded' &&
             result.state.execution.pendingDecisionHint.detail.limit === HUMAN_HAND_CALL_LIMIT &&
-            result.state.execution.pendingDecisionHint.detail.callCount === HUMAN_HAND_CALL_LIMIT + 1 &&
+            result.state.execution.pendingDecisionHint.detail.callCount ===
+              HUMAN_HAND_CALL_LIMIT + 1 &&
             result.state.execution.lastToolResults === undefined,
           {
             name: 'hand-call-limit-blocks-oversized-calls-before-execution',

@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
-import { readdir, stat } from 'node:fs/promises'
+import { readFile, readdir, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { spawnSync } from 'node:child_process'
 
@@ -107,6 +107,17 @@ const isLiveBackendFile = (filePath) =>
   filePath.includes(`${path.sep}live${path.sep}`) && !isE2EFile(filePath)
 const toCaseId = (filePath) => path.basename(filePath).replace(/\.e2e\.test\.ts$|\.test\.ts$/u, '')
 
+const fileContainsCaseId = async (filePath, caseId) => {
+  if (toCaseId(filePath) === caseId) return true
+  const source = await readFile(filePath, 'utf8')
+  return source.includes(caseId)
+}
+
+const fileDeclaresCaseId = async (filePath, caseId) => {
+  const source = await readFile(filePath, 'utf8')
+  return source.includes(`caseId: '${caseId}'`) || source.includes(`caseId: "${caseId}"`)
+}
+
 const findTestFiles = async (input) => {
   const scopeDir = resolveScopeDir(input)
   try {
@@ -117,16 +128,22 @@ const findTestFiles = async (input) => {
   }
 
   const allFiles = await walk(scopeDir)
-  return allFiles
+  const candidates = allFiles
     .filter((filePath) => filePath.endsWith('.test.ts'))
     .filter((filePath) => {
       if (!input.type) return true
       return input.type === 'e2e' ? isE2EFile(filePath) : !isE2EFile(filePath)
     })
-    .filter((filePath) => {
-      if (!input.caseId) return true
-      return toCaseId(filePath) === input.caseId
-    })
+  if (!input.caseId) return candidates.sort()
+  const matches = await Promise.all(
+    candidates.map(async (filePath) => ({
+      filePath,
+      matches: await fileContainsCaseId(filePath, input.caseId)
+    }))
+  )
+  return matches
+    .filter((item) => item.matches)
+    .map((item) => item.filePath)
     .sort()
 }
 
@@ -233,7 +250,11 @@ const resolveBetterSqliteNativeBinding = (target) => {
   if (result.status !== 0) {
     return { ok: false, env: {} }
   }
-  const nativeBinding = String(result.stdout || '').trim().split(/\r?\n/u).at(-1) || ''
+  const nativeBinding =
+    String(result.stdout || '')
+      .trim()
+      .split(/\r?\n/u)
+      .at(-1) || ''
   return {
     ok: nativeBinding.length > 0,
     env: nativeBinding ? { [BETTER_SQLITE_NATIVE_BINDING_ENV]: nativeBinding } : {}
@@ -254,7 +275,15 @@ const runVitest = (input) => {
         ...input.env
       }
     : input.env
-  const commandArgs = ['run', '--config', input.configPath, ...extraArgs, ...input.testFiles]
+  const caseArgs = input.testNamePattern ? ['--testNamePattern', input.testNamePattern] : []
+  const commandArgs = [
+    'run',
+    '--config',
+    input.configPath,
+    ...extraArgs,
+    ...caseArgs,
+    ...input.testFiles
+  ]
   return runCommandWithFallback({
     env,
     omitNpmEnv: input.configPath.includes('e2e'),
@@ -295,7 +324,7 @@ const formatScope = (input) =>
     .filter(Boolean)
     .join(' ')
 
-const runE2ETestFilesSerially = async (testFiles, requestedDelayMs, env) => {
+const runE2ETestFilesSerially = async (testFiles, requestedDelayMs, env, testNamePattern) => {
   const e2eFileDelayMs = requestedDelayMs > 0 ? requestedDelayMs : DEFAULT_E2E_FILE_DELAY_MS
   let exitCode = 0
 
@@ -307,7 +336,8 @@ const runE2ETestFilesSerially = async (testFiles, requestedDelayMs, env) => {
     const code = runVitest({
       configPath: 'vitest.e2e.config.mts',
       testFiles: [testFile],
-      env
+      env,
+      testNamePattern
     })
     if (code !== 0) {
       process.stdout.write(
@@ -334,6 +364,17 @@ const runTypeWorkflow = async (input) => {
   }
 
   const nativeTarget = input.type === 'e2e' ? 'electron' : 'node'
+  const shouldFilterByTestName =
+    Boolean(input.caseId) &&
+    input.domain !== 'unit' &&
+    (input.type === 'e2e' ||
+      testFiles.some((filePath) => toCaseId(filePath) !== input.caseId) ||
+      (
+        await Promise.all(
+          testFiles.map(async (filePath) => await fileDeclaresCaseId(filePath, input.caseId))
+        )
+      ).some(Boolean))
+  const testNamePattern = shouldFilterByTestName ? input.caseId : ''
   const nativeCode = prepareBetterSqliteNative(nativeTarget)
   if (nativeCode !== 0) {
     return nativeCode
@@ -363,12 +404,14 @@ const runTypeWorkflow = async (input) => {
         {
           configPath: 'vitest.backend.config.mts',
           testFiles: nonLiveFiles,
-          env: nativeBinding.env
+          env: nativeBinding.env,
+          testNamePattern
         },
         {
           configPath: 'vitest.backend.live.config.mts',
           testFiles: liveFiles,
-          env: nativeBinding.env
+          env: nativeBinding.env,
+          testNamePattern
         }
       ].filter((group) => group.testFiles.length > 0)
 
@@ -379,7 +422,12 @@ const runTypeWorkflow = async (input) => {
         }
       }
     } else {
-      const code = await runE2ETestFilesSerially(testFiles, input.runDelayMs, nativeBinding.env)
+      const code = await runE2ETestFilesSerially(
+        testFiles,
+        input.runDelayMs,
+        nativeBinding.env,
+        testNamePattern
+      )
       if (code !== 0) {
         exitCode = code
       }

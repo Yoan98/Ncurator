@@ -3,10 +3,7 @@ import path from 'node:path'
 import { describe, it } from 'vitest'
 import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
-import {
-  buildCompleteTaskDecision,
-  filterAiRunEventsByType
-} from '../../human/testUtils'
+import { buildCompleteTaskDecision, filterAiRunEventsByType } from '../../human/testUtils'
 
 describe('ai tool hand backend', () => {
   it('hand-terminal-approval-batch', async () => {
@@ -50,13 +47,15 @@ describe('ai tool hand backend', () => {
                       {
                         toolName: 'terminal_run',
                         args: {
-                          command: 'cp allowed.txt allowed-copy.txt'
+                          command: 'cp allowed.txt allowed-copy.txt',
+                          commandExplanation: '复制测试文件，用于验证多命令审批批次的原子阻断。'
                         }
                       },
                       {
                         toolName: 'terminal_run',
                         args: {
-                          command: 'mkdir blocked-dir'
+                          command: 'mkdir blocked-dir',
+                          commandExplanation: '创建测试目录，用于验证审批未全部通过时整批不执行。'
                         }
                       }
                     ]
@@ -73,7 +72,8 @@ describe('ai tool hand backend', () => {
               {
                 output: {
                   summary: '审批批次已阻断执行。',
-                  deliveryMarkdown: '# Approval Batch Blocked\n\n本轮审批未全部同意，相关命令未执行。'
+                  deliveryMarkdown:
+                    '# Approval Batch Blocked\n\n本轮审批未全部同意，相关命令未执行。'
                 }
               }
             ]
@@ -99,11 +99,19 @@ describe('ai tool hand backend', () => {
         }
       },
       assert: async (result, runtime) => {
-        const approvalRequiredEvents = filterAiRunEventsByType(result.events, 'approval_batch_required')
-        const approvalDecisionEvents = filterAiRunEventsByType(result.events, 'approval_batch_decision')
+        const approvalRequiredEvents = filterAiRunEventsByType(
+          result.events,
+          'approval_batch_required'
+        )
+        const approvalDecisionEvents = filterAiRunEventsByType(
+          result.events,
+          'approval_batch_decision'
+        )
         const toolStartedEvents = filterAiRunEventsByType(result.events, 'tool_call_started')
         const decisionHints = filterAiRunEventsByType(result.events, 'decision_hint')
-        const blockedHint = decisionHints.find((event) => event.code === 'terminal_approval_blocked')
+        const blockedHint = decisionHints.find(
+          (event) => event.code === 'terminal_approval_blocked'
+        )
 
         runtime.assertThat(
           result.output.status === 'completed' &&
@@ -125,7 +133,8 @@ describe('ai tool hand backend', () => {
             ),
           {
             name: 'serial-terminal-approval-batch-blocks-before-execution',
-            message: 'calls 中需审批 terminal 应先整批审核；只要未全部同意，本批 0 执行并回流 terminal_approval_blocked。',
+            message:
+              'calls 中需审批 terminal 应先整批审核；只要未全部同意，本批 0 执行并回流 terminal_approval_blocked。',
             data: {
               approvalRequiredEvents,
               approvalDecisionEvents,

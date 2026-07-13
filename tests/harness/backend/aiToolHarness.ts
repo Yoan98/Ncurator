@@ -17,6 +17,7 @@ import { releaseDocxRunSession } from '../../../src/main/services/ai/human/tools
 import { DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS } from '../../../src/main/services/ai/human/constants'
 import { buildKbCapabilityTools } from '../../../src/main/services/ai/human/tools/kb/retrievalTools'
 import { buildTerminalCapabilityTools } from '../../../src/main/services/ai/human/tools/terminal/terminalTools'
+import { imageRecognitionToolFamily } from '../../../src/main/services/ai/human/tools/imageRecognition'
 import { utilityToolFamily } from '../../../src/main/services/ai/human/tools/utility'
 import { webToolFamily } from '../../../src/main/services/ai/human/tools/web'
 import { createHumanRuntimeCache } from '../../../src/main/services/ai/human/node/utils/runtimeCache'
@@ -55,9 +56,16 @@ const createToolInvoker = (tools: readonly ToolLike[]) => {
         name === 'docx_outline' && !('ranges' in args)
           ? {
               ...args,
-              ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: Number.MAX_SAFE_INTEGER }]
+              ranges: [
+                { type: 'block_index', fromBlockIndex: 0, toBlockIndex: Number.MAX_SAFE_INTEGER }
+              ]
             }
-          : args
+          : name === 'terminal_run' && !('commandExplanation' in args)
+            ? {
+                ...args,
+                commandExplanation: '执行当前测试用例声明的终端命令。'
+              }
+            : args
       return (await tool.invoke(normalizedArgs)) as TResult
     }
   }
@@ -78,8 +86,7 @@ export const createDocxToolHarness = (
     workspaceRootPath: runtime.workspaceRoot,
     safePreviewChars: 1400,
     modelContextWindowTokens:
-      ctx.humanRuntimeOverrides?.modelContextWindowTokens ||
-      DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS,
+      ctx.humanRuntimeOverrides?.modelContextWindowTokens || DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS,
     emitActivity: (activity) => {
       activities.push(activity)
     }
@@ -186,6 +193,27 @@ export const createUtilityToolHarness = (
   }
 }
 
+export const createImageRecognitionToolHarness = (
+  runtime: BackendTestRuntime,
+  contextInput: CreateAiRunContextInput = {}
+) => {
+  const ctx = runtime.createAiRunContext(contextInput)
+  const cache = createHumanRuntimeCache()
+
+  return {
+    ...createToolInvoker(
+      imageRecognitionToolFamily.buildTools({
+        ctx,
+        cache,
+        runId: runtime.runId,
+        sessionId: contextInput.sessionId || 'test-session',
+        taskId: runtime.taskId
+      }) as readonly ToolLike[]
+    ),
+    ctx
+  }
+}
+
 export type TestDocxHeadingLevel = 1 | 2 | 3
 
 export type TestDocxRun = {
@@ -250,10 +278,7 @@ const createTextRun = (run: TestDocxRun): TextRun =>
     color: run.color
   })
 
-const createParagraph = (
-  paragraph: TestDocxParagraph,
-  heading?: HeadingLevel
-): Paragraph =>
+const createParagraph = (paragraph: TestDocxParagraph, heading?: HeadingLevel): Paragraph =>
   new Paragraph({
     heading,
     style: paragraph.style,

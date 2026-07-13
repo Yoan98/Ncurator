@@ -3,7 +3,7 @@ import { createServer } from 'node:http'
 import type { AddressInfo, Socket } from 'node:net'
 import path from 'node:path'
 import { describe, it } from 'vitest'
-import { createUtilityToolHarness } from '../../../../harness/backend/aiToolHarness'
+import { createImageRecognitionToolHarness } from '../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 
 type LocalOpenAiServer = {
@@ -104,7 +104,7 @@ const seedActiveConfig = async (
   baseUrl: string
 ): Promise<void> => {
   await runtime.seedLlmConfig({
-    id: 'cfg-llm-recognize',
+    id: 'ai-live-config',
     name: '图像识别测试配置',
     providerKind: 'openai-compatible',
     base_url: baseUrl,
@@ -140,7 +140,7 @@ describe('ai tool image recognition backend', () => {
         try {
           await seedActiveConfig(runtime, server.baseUrl)
           const imagePath = await writeFixtureImage(runtime.workspaceRoot)
-          const harness = createUtilityToolHarness(runtime, {
+          const harness = createImageRecognitionToolHarness(runtime, {
             modelName: 'gpt-5'
           })
           return await harness.invoke<string>('llm_recognize', {
@@ -181,7 +181,7 @@ describe('ai tool image recognition backend', () => {
         try {
           await seedActiveConfig(runtime, server.baseUrl)
           const imagePath = await writeFixtureImage(runtime.workspaceRoot)
-          const harness = createUtilityToolHarness(runtime, {
+          const harness = createImageRecognitionToolHarness(runtime, {
             modelName: 'gpt-5'
           })
           return await harness.invoke<string>('llm_recognize', {
@@ -225,7 +225,7 @@ describe('ai tool image recognition backend', () => {
         try {
           await seedActiveConfig(runtime, server.baseUrl)
           const imagePath = await writeFixtureImage(runtime.workspaceRoot)
-          const harness = createUtilityToolHarness(runtime, {
+          const harness = createImageRecognitionToolHarness(runtime, {
             modelName: 'gpt-5'
           })
           return await harness.invoke<{ error?: string }>('llm_recognize', {
@@ -270,7 +270,7 @@ describe('ai tool image recognition backend', () => {
         try {
           await seedActiveConfig(runtime, server.baseUrl)
           const imagePath = await writeFixtureImage(runtime.workspaceRoot)
-          const harness = createUtilityToolHarness(runtime, {
+          const harness = createImageRecognitionToolHarness(runtime, {
             modelName: 'gpt-5'
           })
           return await harness.invoke<{ error?: string }>('llm_recognize', {

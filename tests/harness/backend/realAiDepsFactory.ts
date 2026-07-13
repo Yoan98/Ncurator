@@ -175,6 +175,7 @@ export const createRealAiDepsFactory = async (input: {
       {
         runtimeSettings,
         llmStore: storageService.llm,
+        llmStrategyPreferenceStore: storageService.llmStrategyPreference,
         chatStore: storageService.chat,
         documentsStore: storageService.documents,
         embeddingService,

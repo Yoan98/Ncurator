@@ -34,10 +34,10 @@ describe('stagehand model config', () => {
     expect(result.provider).toBe('openai-compatible')
   })
 
-  it('maps official DeepSeek endpoint onto the DeepSeek Stagehand provider', () => {
+  it('maps an explicit DeepSeek provider onto the DeepSeek Stagehand provider', () => {
     const result = resolveStagehandRuntimeModel(
       createConfig({
-        providerKind: 'openai-compatible',
+        providerKind: 'deepseek',
         base_url: 'https://api.deepseek.com',
         model_name: 'deepseek-chat-vNext'
       })
@@ -53,10 +53,10 @@ describe('stagehand model config', () => {
     })
   })
 
-  it('maps official OpenAI endpoint onto the OpenAI Stagehand provider', () => {
+  it('maps an explicit OpenAI provider onto the OpenAI Stagehand provider', () => {
     const result = resolveStagehandRuntimeModel(
       createConfig({
-        providerKind: 'openai-compatible',
+        providerKind: 'openai',
         base_url: 'https://api.openai.com/v1',
         model_name: 'my-team/custom-stagehand-model'
       })
@@ -68,7 +68,7 @@ describe('stagehand model config', () => {
     expect(result.model.modelName).toBe('openai/my-team/custom-stagehand-model')
   })
 
-  it('ignores stale stored providerKind and resolves provider from base_url', () => {
+  it('keeps the explicit provider kind even when using a custom compatible base url', () => {
     const result = resolveStagehandRuntimeModel(
       createConfig({
         providerKind: 'deepseek',
@@ -77,8 +77,10 @@ describe('stagehand model config', () => {
       })
     )
 
-    expect(result.mode).toBe('langchain-client')
-    expect(result.provider).toBe('openai-compatible')
+    expect(result.mode).toBe('stagehand-model')
+    expect(result.provider).toBe('deepseek')
+    if (result.mode !== 'stagehand-model') throw new Error('expected stagehand model')
+    expect(result.model.baseURL).toBe('https://dashscope.aliyuncs.com/compatible-mode/v1')
   })
 
   it('rejects empty required connection fields with clear diagnostics', () => {

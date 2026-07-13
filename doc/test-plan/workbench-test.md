@@ -13,21 +13,21 @@
 
 ### 2.1 当前状态
 
-- 总体登记：`22` 个 e2e case，`1` 个 backend contract case。
-- 当前有效结论：`22 / 22` 个 e2e case 已有有效通过；`chat-run-service-contract` backend contract 有效通过。
+- 总体登记：`23` 个 e2e case，`1` 个 backend contract case。
+- 当前有效结论：最近一轮功能与用例对齐后待重新执行；不得继续把 2026-07-10 的结果视为覆盖 2026-07-12 至 2026-07-13 新增行为的当前结论。
 
 ### 2.2 按 Suite 汇总
 
 - `conversation`
   - 登记 case：`9`
-  - 有效通过：`9 / 9`
-  - 检测时间：`2026-07-10 16:26:14 +0800`
-  - 备注：`composer-attachments-context`、`composer-text-selection`、`reference-mention-keyboard`、`send-guard-mode-switch-and-preferences`、`workspace-root-path-required`、`user-message-actions`、`reference-token-lifecycle`、`session-delete-confirmation-and-context-ring`、`session-initial-create-and-title` 均已通过真实 Electron UI；涉及 AI 的 case 使用真实模型。
+  - 当前有效结论：待本轮回归。
+  - 最近历史检测时间：`2026-07-10 16:26:14 +0800`
+  - 备注：本轮需新增验证 AI 推进偏好、会话运行标记和使用帮助入口；旧的 `9 / 9` 不能覆盖这些新增断言。
 - `run`
-  - 登记 case：`8` 个 e2e，`1` 个 backend contract
-  - 有效通过：`8 / 8` 个 e2e，`1 / 1` 个 backend contract
-  - 检测时间：e2e `2026-07-10 19:30:08 +0800`；backend `2026-07-10 16:25:36 +0800`
-  - 备注：`ai-process-stream-and-final-answer`、`approval-batch-flow`、`stop-running-or-approval-run`、`run-navigation-snapshot-replay`、`web-search-diagnostic`、`web-read-from-search-result`、`web-read-direct-url`、`browser-use-task-panel` 已通过真实 Electron UI、真实模型、真实 workspace 索引和真实 AI run；`chat-run-service-contract` 已通过 backend contract。`browser-use-task-panel` 使用当前用户选择的 `AI_LIVE_*` 配置，不引入 browser 专用模型配置；DashScope / openai-compatible / `deepseek-v4-flash` 已通过 Stagehand 官方 provider 与 `StagehandLangChainClient` 两条路径、显式 `navigate` 和 browser_use 结果摘要完成回归。
+  - 登记 case：`9` 个 e2e，`1` 个 backend contract
+  - 当前有效结论：backend contract `1 / 1`；e2e 待本轮回归。
+  - 检测时间：backend `2026-07-13 13:08:55 +08:00`；e2e 最近历史检测时间 `2026-07-10 19:30:08 +0800`
+  - 备注：新增 `browser-use-deepseek-financing-search`，同时 `browser_use` 输出 schema 已调整；当前环境缺少 `AI_LIVE_*` 配置，无法形成最新 e2e 有效结论。
 - `result`
   - 登记 case：`5`
   - 有效通过：`5 / 5`
@@ -112,10 +112,10 @@ tests/case/workbench/
 #### `session-initial-create-and-title`
 
 - 测试类型：`e2e`
-- What：验证首次进入 Workbench 时会自动创建初始会话，并在第一条用户消息真实发送后更新默认标题，第二条消息不再自动改写标题。
-- Why：会话初始化和标题更新是 Workbench 最早的可见状态；失败时用户会看到空会话或无法区分任务主线。
-- How：通过 Settings UI 新增真实模型配置；通过 Settings UI 创建并绑定真实工作区；进入 Workbench 后发送真实自然语言请求，再继续发送第二条真实请求。
-- Oracle：没有历史会话时页面自动进入“新对话”，对齐 `WB-SESSION-001-AC1`、`WB-SESSION-001-AC2`；第一条用户消息后标题变为消息摘要，对齐 `WB-SESSION-003-AC1`；第二条消息不会再次自动改写标题，对齐 `WB-SESSION-003-AC2`；涉及 AI 的发送记录模型、耗时、完成度评分和失败归因。
+- What：验证首次进入 Workbench 时只展示可输入草稿态，第一条用户消息真实发送后才创建会话并生成标题，第二条消息不再自动改写标题；同时验证使用帮助入口可见且可访问。
+- Why：会话初始化和标题更新是 Workbench 最早的可见状态；如果草稿态提前落库会产生空会话，如果帮助入口缺失则用户无法快速进入官方手册。
+- How：通过 Settings UI 新增真实模型配置；通过 Settings UI 创建并绑定真实工作区；进入 Workbench 后检查帮助入口和会话记录数量，发送两条真实自然语言请求。
+- Oracle：没有历史会话时页面提供可操作草稿态，进入页面、点击新对话和选择工作区都不创建真实会话，对齐 `WB-SESSION-001-AC1`、`WB-SESSION-001-AC2`；第一条消息发送后才创建会话并以消息前 20 个字符为标题，对齐 `WB-SESSION-001-AC3`、`WB-SESSION-003-AC1`；第二条消息不会再次自动改写标题，对齐 `WB-SESSION-003-AC2`；帮助入口可见并具有“查看使用帮助”可访问名称，对齐 `WB-COMPOSER-011-AC1`。
 - Not：不验证标题手动编辑，也不验证会话列表视觉样式。
 
 #### `session-delete-confirmation-and-context-ring`
@@ -130,10 +130,10 @@ tests/case/workbench/
 #### `send-guard-mode-switch-and-preferences`
 
 - 测试类型：`e2e`
-- What：验证发送前置条件、模式切换保留输入、模型 / 工作区偏好恢复和失效回退。
-- Why：Workbench 的任务入口依赖这些基础交互；任一状态失真都会导致用户无法发起任务或把任务发到错误上下文。
-- How：通过 UI 配置真实模型和工作区；覆盖空输入、无工作区、发送中、模式切换、模型搜索、切换工作区 / 模型后重进页面，以及缓存候选失效后的回退；真实发送时走真实模型。
-- Oracle：空白输入、未绑定工作区或发送中不会触发发送，且发送按钮 hover 可见禁用原因，对齐 `WB-COMPOSER-001-AC1` 至 `WB-COMPOSER-001-AC3`、`WB-COMPOSER-005-AC1`；拦截提示明确要求先选择工作区，对齐 `WB-COMPOSER-005-AC2`；切换模式后输入保留且发送路径按新模式执行，对齐 `WB-MODE-001-AC1`、`WB-MODE-001-AC2`；模型搜索、偏好恢复、失效回退、入口图标和“大聪明 / 没头脑”展示符合 `WB-COMPOSER-007-AC1` 至 `WB-COMPOSER-007-AC5`。
+- What：验证发送前置条件、模式切换保留输入、模型 / 工作区 / AI 推进偏好恢复和失效回退。
+- Why：Workbench 的任务入口依赖这些基础交互；任一状态失真都会导致用户无法发起任务、把任务发到错误上下文或使用错误资料边界。
+- How：通过 UI 配置真实模型和工作区；覆盖无工作区、模式切换、模型搜索、模型 / 工作区选择、AI 推进偏好二级菜单、搜索模式隐藏偏好入口和重新进入页面后的恢复；真实发送时走真实模型。
+- Oracle：未绑定工作区不会触发发送，对齐 `WB-COMPOSER-001-AC1`、`WB-COMPOSER-005-AC1`；切换模式后输入保留且发送路径按新模式执行，对齐 `WB-MODE-001-AC1`、`WB-MODE-001-AC2`；模型和工作区恢复符合 `WB-COMPOSER-007-AC1` 至 `WB-COMPOSER-007-AC5`；可选择并恢复“本地资料·严谨”，搜索模式隐藏偏好入口且切回后保留选择，对齐 `WB-COMPOSER-007-AC2`、`WB-COMPOSER-007-AC6`、`WB-COMPOSER-007-AC7`。
 - Not：不验证真实模型回答质量，只验证用户路径和发送前置条件。
 
 #### `user-message-actions`
@@ -216,7 +216,7 @@ tests/case/workbench/
 - What：验证 Main 侧 `ChatRunService` 对智能模式提交、assistant placeholder、AI run 状态、事件日志、审批 snapshot、启动中断恢复和会话删除清理的持久化契约。
 - Why：运行持久化的真相来源已经从 renderer 收敛到 Main；这些后端契约失败时，route 切换、reload、审批恢复和最终消息落库都会失真。
 - How：使用临时 LanceDB 初始化 `StorageService` 与 `ChatRunService`，关闭自动真实 AI 启动，通过 contract 方式提交 AI run 并注入 run event。
-- Oracle：`chatSubmit(ai)` 创建 user message、assistant placeholder 与 `running` run；`answer_completed/run_completed` 后 assistant message、run status、final answer 和 event log 正确；`approval_batch_required` 后 snapshot 返回 `waiting_approval` 与 pending approval；已完成 run 的过程事件可从 snapshot `runs` 恢复，token 级事件不会污染 replay；启动恢复会把遗留 active run 标记为 failed 并写入“运行已中断”；删除会话会同步清理 messages、run 和 event log，对齐 `WB-COMPOSER-003-AC1`、`WB-COMPOSER-003-AC2`、`WB-COMPOSER-003-AC7`、`WB-SESSION-002-AC3`、`WB-SESSION-002-AC4`。
+- Oracle：`chatSubmit(ai)` 创建 user message、assistant placeholder 与 `running` run，并把当前 AI 推进偏好带入本次 run 上下文，对齐 `WB-COMPOSER-007-AC8`；`answer_completed/run_completed` 后 assistant message、run status、final answer 和 event log 正确；`approval_batch_required` 后 snapshot 返回 `waiting_approval` 与 pending approval；已完成 run 的过程事件可从 snapshot `runs` 恢复，token 级事件不会污染 replay；启动恢复会把遗留 active run 标记为 failed 并写入“运行已中断”；删除会话会同步清理 messages、run 和 event log，对齐 `WB-COMPOSER-003-AC1`、`WB-COMPOSER-003-AC2`、`WB-COMPOSER-003-AC7`、`WB-SESSION-002-AC3`、`WB-SESSION-002-AC4`。
 - Not：不代替真实 UI 对 route 切换、审批点击或模型输出质量的验证。
 
 #### `approval-batch-flow`
@@ -234,7 +234,7 @@ tests/case/workbench/
 - What：验证智能模式运行中底部发送按钮切换为停止图标，并能取消普通长任务和审批等待中的运行。
 - Why：用户需要可靠中断长任务；审批等待时停止若不能释放等待，会造成运行态卡死。
 - How：发送真实长任务请求和真实审批等待请求；运行中点击底部停止图标并观察运行态、审批态和反馈。
-- Oracle：运行中发送按钮切换为停止图标且不显示独立取消按钮，对齐 `WB-COMPOSER-006-AC1`；点击停止后当前运行结束并给出已取消反馈，对齐 `WB-COMPOSER-006-AC2`；审批等待时点击停止也结束 run，对齐 `WB-COMPOSER-006-AC3`；记录模型、耗时、完成度评分和失败归因。
+- Oracle：运行中发送按钮切换为停止图标且不显示独立取消按钮，对齐 `WB-COMPOSER-006-AC1`；当前会话列表项显示“任务运行中”，取消后标记消失，对齐 `WB-SESSION-002-AC5`；点击停止后当前运行结束并给出已取消反馈，对齐 `WB-COMPOSER-006-AC2`；审批等待时点击停止也结束 run，对齐 `WB-COMPOSER-006-AC3`；记录模型、耗时、完成度评分和失败归因。
 - Not：不验证后端 abort signal 在每个 AI 节点内部的细节。
 
 #### `browser-use-task-panel`
@@ -245,6 +245,15 @@ tests/case/workbench/
 - How：启动本地测试网页；通过真实用户请求让 AI 使用 `browser_use` 操作页面；等待右侧浏览器面板打开、网页输入框被填入、提交按钮被点击，并从真实 browser_use 结果中读到页面结果。
 - Oracle：收到浏览器面板事件后右侧进入内置浏览器状态并随面板 resize 对齐，对齐 `WB-PANEL-004-AC1`；传入 URL 时先导航再执行网页操作，对齐 `WB-PANEL-004-AC2`；切换其他面板或收起时浏览器视图不遮挡其他内容，对齐 `WB-PANEL-004-AC3`；任务完成后真实 browser_use 结果包含本地网页返回的 `BROWSER_TASK_DONE` 和口令，对齐 `WB-PANEL-004-AC4`、`WB-CORE-005-AC1`、`WB-CORE-006-AC1`；记录模型、耗时、完成度评分和失败归因。
 - Not：不验证公网网页稳定性；本 case 使用本地测试网页减少外部波动；不允许用 fake browser 或 fake tool result 替代；不要求 live 模型必须在固定时限内结束整轮最终回答，只要真实内置浏览器已完成输入、点击和结果读取即可判定 browser panel 能力有效。
+
+#### `browser-use-deepseek-financing-search`
+
+- 测试类型：`e2e`
+- What：验证真实 AI 使用 `browser_use` 完成公网搜索页导航、观察、操作、抽取，并基于抽取内容回答 DeepSeek 最近融资问题；同时守住新的 browser_use 输出 schema。
+- Why：本地网页 case 能验证浏览器面板和交互，但不能验证公网搜索页链路；输出 schema 变更后也需要真实 AI run 防止旧字段继续泄漏。
+- How：通过真实 Workbench UI 发送“用浏览器搜索下最近deepseek的融资”，等待 `navigate / observe 或 act / extract` 链路和最终回答；检查工具结果只使用 `action/page/result/error` 新结构。
+- Oracle：run 完成；至少出现 `navigate`、`observe` 或 `act`、`extract`；结果满足新 schema 且不包含废弃字段；访问真实搜索引擎页面；最终回答包含 DeepSeek 和融资相关信息；不出现 fake browser / fake AI 信号。
+- Not：不固定融资金额、日期或搜索引擎；该 case 受公网和搜索引擎页面变化影响，失败时必须结合 raw logs 区分产品回归与外部波动。
 
 #### `web-search-diagnostic`
 

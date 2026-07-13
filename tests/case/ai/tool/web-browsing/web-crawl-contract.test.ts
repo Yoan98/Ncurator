@@ -178,7 +178,7 @@ describe('ai tool web backend', () => {
       assert: async (result, runtime) => {
         runtime.assertThat(
           result.requestedUrl?.endsWith('/policy') === true &&
-          result.finalUrl?.endsWith('/policy') === true &&
+            result.finalUrl?.endsWith('/policy') === true &&
             result.title === '灵活就业补贴申报通知' &&
             result.publishedAt === '2026-06-10' &&
             Boolean(result.markdown?.includes('申报截止时间为 2026-09-30')) &&
@@ -199,7 +199,7 @@ describe('ai tool web backend', () => {
         )
       }
     })
-  }, 30_000)
+  })
 
   it('web-search-contract', async () => {
     await runBackendCase({
@@ -289,7 +289,7 @@ describe('ai tool web backend', () => {
       assert: async (result, runtime) => {
         runtime.assertThat(
           result.requestedUrl?.endsWith('/') === true &&
-          result.title === '就业服务首页' &&
+            result.title === '就业服务首页' &&
             Boolean(result.markdown?.includes('这里汇总了通知公告和办事指南')) &&
             Array.isArray(result.links?.internal) &&
             result.links.internal.some((link) => link.href?.endsWith('/policy')),
@@ -301,7 +301,7 @@ describe('ai tool web backend', () => {
         )
       }
     })
-  }, 30_000)
+  })
 
   it('web-crawl-http-failure-contract', async () => {
     await runBackendCase({
@@ -343,7 +343,7 @@ describe('ai tool web backend', () => {
         )
       }
     })
-  }, 30_000)
+  })
 
   it('web-crawl-too-large-contract', async () => {
     await runBackendCase({
@@ -389,7 +389,7 @@ describe('ai tool web backend', () => {
         )
       }
     })
-  }, 30_000)
+  })
 
   it('browser-use-service-unavailable-diagnostic', async () => {
     await runBackendCase({

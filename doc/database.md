@@ -31,6 +31,7 @@ SQLite 保存主要业务数据：
 - 工作区源、文件索引任务和文档元数据。
 - 网页源。
 - LLM 配置和 AI runtime 设置。
+- 按模型记录的结构化输出策略偏好。
 
 关键规则：
 
@@ -52,12 +53,16 @@ SQLite 保存主要业务数据：
 
 ## Native 依赖
 
-`better-sqlite3` 是 native 模块，Node backend 测试和 Electron e2e 使用的 ABI 不同。
+`better-sqlite3` 是 native 模块，Node backend 测试和 Electron e2e 使用的 ABI 不同。项目通过独立缓存保存两套 native binding，不再反复覆盖 `node_modules` 中的同一个 `.node` 文件。
 
-- 跑 backend 或 unit 测试前，如遇到 `NODE_MODULE_VERSION` 不匹配，执行 `pnpm rebuild better-sqlite3`。
-- 跑 Electron e2e 或打包前，执行 `NCURATOR_REBUILD_NATIVE=1 node scripts/postinstall.mjs`。
-- 两个 rebuild 会覆盖同一个 `.node` 文件，不能假设一次 rebuild 同时满足 Node 和 Electron。
-- 完整回归建议顺序是：Node backend rebuild -> backend 测试 -> Electron rebuild -> e2e 测试。
+- `pnpm native:prepare`：准备当前平台的 Node 与 Electron binding。
+- `pnpm native:node`：只准备 Node binding。
+- `pnpm native:electron`：只准备 Electron binding。
+- `pnpm native:status`：查看缓存和资源状态。
+- `scripts/test-workflow.mjs` 会按 backend / e2e 类型自动准备并注入正确 binding，正常执行回归时不需要手动 rebuild。
+- 打包流程会准备 Electron binding 并导出到 `resources/native/better-sqlite3/**`。
+
+当前项目尚未发布，开发和测试环境允许删除本地数据库并重新创建，因此发布前可以直接整理 `001_initial_schema`。首次正式发布后必须冻结已经发布的 migration；届时新增表或字段必须增加更高版本 migration，不能只修改已执行的旧 migration。
 
 ## LanceDB
 

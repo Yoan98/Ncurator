@@ -64,7 +64,7 @@ tests/
   - `suite` 下可选子目录。
   - 只有同一 `suite` 内确实需要继续分层时才创建。
 - `case`
-  - 最终测试文件，对应唯一 `caseId` 与唯一日志目录。
+  - 最终测试定义，对应唯一 `caseId` 与唯一日志目录；一个文件可以包含多个紧密相关的 case。
 - `type`
   - 测试类型只通过文件名体现。
   - 普通测试默认视为 `backend`；文件名包含 `.e2e.test.ts` 时视为 `e2e`。
@@ -76,7 +76,7 @@ tests/
 - 新增任何测试文件前，必须先与用户确认目标分类。
 - `doc/test-plan/**` 是回归 case 的唯一规格来源；新增、修改或补齐回归 case 时，必须先更新对应测试计划，再修改测试代码。
 - `tests/case/<domain>/**` 只能放已登记的回归 case；`tests/case/unit/**` 不进入回归计划和领域执行摘要。
-- 每个回归 `caseId` 都必须稳定映射到唯一测试文件与唯一日志目录。
+- 每个回归 `caseId` 都必须稳定映射到唯一测试定义与唯一日志目录。一个测试文件可以承载多个紧密相关的 case，但 `--case <caseId>` 必须能只执行目标 case。
 
 ### 3.2 回归 case 共享字段
 
@@ -193,7 +193,7 @@ runner 支持的过滤参数：
 - E2E runner 直接调用本地 Vitest binary，不经 `pnpm exec`；启动 Vitest 子进程和 harness 启动 Electron 时都会过滤 `npm_*` 环境变量，只保留系统环境与 `NCURATOR_E2E_*` 等项目测试变量，避免 npm lifecycle 变量影响 macOS Electron 原生注册。
 - 如果需要继续收窄到某个 `suite`、`group` 或单条 `case`，统一通过 runner 参数过滤。
 - `--group` 只在目标 `suite` 确实存在额外子目录时使用；如果 case 直接位于 `suite` 根目录，则不需要 `--group`。
-- `better-sqlite3` native 模块需要区分 Node ABI 和 Electron ABI。backend / unit 测试前使用 `pnpm rebuild better-sqlite3`；Electron e2e 前使用 `NCURATOR_REBUILD_NATIVE=1 node scripts/postinstall.mjs`。两个步骤会覆盖同一个 native 文件，完整回归必须按顺序切换。
+- `better-sqlite3` native 模块需要区分 Node ABI 和 Electron ABI。runner 会通过 `scripts/prepare-better-sqlite3-native.mjs` 自动准备对应缓存，并通过 `NCURATOR_BETTER_SQLITE3_NATIVE_BINDING` 注入本次测试使用的 binding；正常回归不需要手动 rebuild 或覆盖 `node_modules` 中的 native 文件。
 
 ### 4.3 读取与分析 raw logs
 

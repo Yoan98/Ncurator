@@ -12,27 +12,31 @@
 
 ### 2.1 按 Suite / 分类汇总
 
+- `tool` 完整回归：`69 / 69`
+  - 检测时间：`2026-07-13 13:04:39 +08:00`
+  - 执行命令：`pnpm test:ai:tool`
 - `tool / docx`
-  - 通过率：`43 / 43`
-  - 检测时间：`2026-06-11 17:16:38 +08:00`
+  - 通过率：`42 / 42`
+  - 检测时间：`2026-07-13 13:04:39 +08:00`
 - `tool / kb`
   - 通过率：`2 / 2`
-  - 检测时间：`2026-06-11 17:16:38 +08:00`
+  - 检测时间：`2026-07-13 13:04:39 +08:00`
+  - 覆盖补充：文件路径与网页来源 URL 返回契约已通过。
 - `tool / terminal`
   - 通过率：`5 / 5`
-  - 检测时间：`2026-06-11 17:16:38 +08:00`
-  - 覆盖补充：terminal 回归测试按“安全指令集”语义维护；Windows 路径覆盖 PowerShell 语法、`EncodedCommand` 执行与 UTF-8 输出，macOS 路径覆盖 zsh 语法。
+  - 检测时间：`2026-07-13 13:04:39 +08:00`
+  - 覆盖补充：terminal 回归测试按“安全指令集”语义维护，调用参数包含 `command` 与 `commandExplanation`；Windows 路径覆盖 PowerShell 语法、`EncodedCommand` 执行与 UTF-8 输出，macOS 路径覆盖 zsh 语法。
 - `tool / web-browsing`
   - 通过率：`6 / 6`
-  - 检测时间：`2026-07-08 17:45:49 +08:00`
-  - 覆盖补充：`web-crawl-contract` 覆盖 `web_crawl` 的 `topic` 必填、`markdown` 字段来源于 `fit_markdown`、`requestedUrl/finalUrl`、分组 links 评分、HTTP 失败与结果过大；同文件覆盖 `web_search` 结构化候选网页结果和 `browser_use` 缺少内置浏览器服务时的真实 diagnostic。
+  - 检测时间：`2026-07-13 13:04:39 +08:00`
+  - 覆盖补充：`web-crawl-contract` 覆盖 `web_crawl` 的 `topic` 必填、`markdown` 字段来源于 `fit_markdown`、`requestedUrl/finalUrl`、分组 links 评分、HTTP 失败与结果过大；同文件覆盖 `web_search` 结构化候选网页结果和 `browser_use` 缺少内置浏览器服务时的真实 diagnostic；用例使用全局 15 分钟回归超时，不再单独写死 30 秒。
 - `tool / utility`
-  - 通过率：`4 / 4`
-  - 检测时间：`2026-07-08 17:45:49 +08:00`
+  - 通过率：`5 / 5`
+  - 检测时间：`2026-07-13 13:04:39 +08:00`
   - 覆盖补充：`wait_time` 等待时长与返回 `waitedMs`；`llm_recognize` 已覆盖普通文本透传、无法确认类文本透传与底层失败分支。
 - `tool / hand`
   - 通过率：`9 / 9`
-  - 检测时间：`2026-06-11 17:16:38 +08:00`
+  - 检测时间：`2026-07-13 13:04:39 +08:00`
 - `human / mock-llm`
   - 通过率：`22 / 22`
   - 检测时间：`2026-06-11 17:16:38 +08:00`
@@ -549,7 +553,7 @@ AI unit / 辅助测试目录：
 - What：验证 `kb_list_documents` 在当前工作区默认范围内的真实列表、`sourceNameQuery` 文档名过滤与缩圈契约。
 - Why：KB 资料发现必须真实调用生产检索存储。
 - How：通过真实 `DocumentsStore.addDocument / addChunks` 导入多工作区 fixture 后执行列表查询。
-- Oracle：结果默认只包含当前工作区文档，`documentIds` 只做进一步缩圈，空结果与非空结果都稳定可断言。
+- Oracle：结果默认只包含当前工作区文档，`documentIds` 只做进一步缩圈，空结果与非空结果都稳定可断言；文件资料返回 `source_type=file` 与真实 `file_path`，网页资料返回 `source_type=web` 与真实 `source_url`。
 - Not：不验证问答文案。
 
 ##### `kb-evidence-search-family-contract`
@@ -558,7 +562,7 @@ AI unit / 辅助测试目录：
 - What：验证 `kb_search` 在不同 strategy 下的统一真实检索契约。
 - Why：KB tool family 必须显式覆盖每个回归工具。
 - How：对多工作区真实 seed 数据分别执行三种检索，并覆盖 `documentIds` 缩圈。
-- Oracle：三种检索都返回稳定 `rows`，默认受当前工作区约束，且遵守 `documentIds` 缩圈语义。
+- Oracle：三种检索都返回稳定 `rows`，默认受当前工作区约束，且遵守 `documentIds` 缩圈语义；文件命中保留 `source_type=file` 与 `file_path`，网页命中保留 `source_type=web` 与 `source_url`，供最终引用生成可追溯地址。
 - Not：不比较召回优劣。
 
 #### terminal 类别

@@ -543,9 +543,7 @@ export const bindWorkspaceRootThroughSettingsUi = async (
   page: Page,
   rootPath: string
 ): Promise<void> => {
-  const rootPathButton = page
-    .getByRole('button', { name: /设置工作目录|更换工作目录/u })
-    .first()
+  const rootPathButton = page.getByRole('button', { name: /设置工作目录|更换工作目录/u }).first()
   await page.bringToFront()
   await rootPathButton.waitFor({ state: 'visible' })
   const diagnostics: NativeDirectoryDialogDiagnostics[] = []
@@ -1137,6 +1135,45 @@ export const switchWorkbenchMode = async (
     .first()
   await option.waitFor({ state: 'visible' })
   await option.click()
+}
+
+export const selectWorkbenchAiPreference = async (
+  page: Page,
+  preferenceLabel: '默认' | '宽松' | '严谨'
+): Promise<void> => {
+  await getWorkbenchLocator(page, workbenchSelectors.aiPreferenceSwitch).click()
+  const menu = page.locator('.workbench-select-menu.workbench-composer-menu').last()
+  if (preferenceLabel === '默认') {
+    await menu.getByRole('option').filter({ hasText: '默认' }).first().click()
+    return
+  }
+  const localSourcesOption = menu.getByRole('option').filter({ hasText: '本地资料' }).first()
+  await localSourcesOption.hover()
+  const submenu = page.locator(
+    '.workbench-select-menu[data-workbench-select-submenu-parent="local_sources"]'
+  )
+  await submenu.waitFor({ state: 'visible' })
+  await submenu.getByRole('option').filter({ hasText: preferenceLabel }).first().click()
+}
+
+export const readWorkbenchAiPreferenceSelection = async (page: Page): Promise<string> => {
+  await getWorkbenchLocator(page, workbenchSelectors.aiPreferenceSwitch).click()
+  const menu = page.locator('.workbench-select-menu.workbench-composer-menu').last()
+  const selectedDefault = menu.getByRole('option').filter({ hasText: '默认' }).first()
+  if ((await selectedDefault.getAttribute('aria-selected')) === 'true') {
+    await page.keyboard.press('Escape')
+    return '默认'
+  }
+  const localSourcesOption = menu.getByRole('option').filter({ hasText: '本地资料' }).first()
+  await localSourcesOption.hover()
+  const submenu = page.locator(
+    '.workbench-select-menu[data-workbench-select-submenu-parent="local_sources"]'
+  )
+  await submenu.waitFor({ state: 'visible' })
+  const selectedLabel =
+    (await submenu.locator('[role="option"][aria-selected="true"]').textContent()) || ''
+  await page.keyboard.press('Escape')
+  return selectedLabel.trim()
 }
 
 export const selectWorkbenchModel = async (page: Page, modelName: string): Promise<void> => {

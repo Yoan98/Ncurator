@@ -4,7 +4,10 @@ import {
   renderTaskProgress
 } from '../../../../src/main/services/ai/human/shared/memoryRenderers'
 import { createInitialHumanState } from '../../../../src/main/services/ai/human/state/schema'
-import { appendRoundRecord, buildHandExecution } from '../../../../src/main/services/ai/human/memory/rounds'
+import {
+  appendRoundRecord,
+  buildHandExecution
+} from '../../../../src/main/services/ai/human/memory/rounds'
 import {
   renderBrainRoundExecutionOnly,
   renderBrainRoundSection
@@ -149,10 +152,12 @@ describe('ai unit human memory renderers', () => {
               toolName: 'docx_edit',
               args: {
                 sourcePath: 'draft.docx',
-                actions: [{
-                  type: 'create_document',
-                  blocks: [{ type: 'paragraph', text: '...' }]
-                }]
+                actions: [
+                  {
+                    type: 'create_document',
+                    blocks: [{ type: 'paragraph', text: '...' }]
+                  }
+                ]
               }
             }
           ]
@@ -164,10 +169,12 @@ describe('ai unit human memory renderers', () => {
             toolName: 'docx_edit',
             args: {
               sourcePath: 'draft.docx',
-              actions: [{
-                type: 'create_document',
-                blocks: [{ type: 'paragraph', text: '...' }]
-              }]
+              actions: [
+                {
+                  type: 'create_document',
+                  blocks: [{ type: 'paragraph', text: '...' }]
+                }
+              ]
             }
           }
         ],
@@ -289,7 +296,7 @@ describe('ai unit human memory renderers', () => {
     expect(rendered).toContain('"id":"workspace-file-doc-1"')
     expect(rendered).toContain('"name":"图形学.docx"')
     expect(rendered).toContain('"total":1')
-    expect(rendered).not.toContain('file_path')
+    expect(rendered).toContain('"file_path":"/tmp/workspace/学习笔记/图形学.docx"')
   })
 
   it('renders unconfigured tool results with fallback minimal fields only', () => {
