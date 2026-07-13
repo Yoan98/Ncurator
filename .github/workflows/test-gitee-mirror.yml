@@ -19,16 +19,6 @@ jobs:
           set -euo pipefail
           test -n "$GITEE_ACCESS_TOKEN"
 
-      - name: Download package from GitHub Release
-        shell: bash
-        run: |
-          set -euo pipefail
-          curl --fail --location --retry 3 \
-            --output "$ASSET_NAME" \
-            "https://github.com/Yoan98/Ncurator/releases/download/$RELEASE_TAG/$ASSET_NAME"
-          test -s "$ASSET_NAME"
-          ls -lh "$ASSET_NAME"
-
       - name: Initialize empty Gitee repository
         shell: bash
         run: |
@@ -72,22 +62,21 @@ jobs:
           status="$(curl --silent --output release.json --write-out '%{http_code}' \
             --get --data-urlencode "access_token=$GITEE_ACCESS_TOKEN" "$release_url")"
           if [ "$status" = "404" ]; then
-            node - <<'NODE'
-            const fs = require('node:fs')
-            fs.writeFileSync('create-release.json', JSON.stringify({
-              tag_name: process.env.RELEASE_TAG,
-              name: process.env.RELEASE_TAG,
-              body: `Ncurator ${process.env.RELEASE_TAG}`,
-              target_commitish: 'master',
-              prerelease: false
-            }))
-            NODE
-            curl --fail --silent --show-error \
+            create_status="$(curl --silent --show-error \
               --request POST \
-              --header 'Content-Type: application/json' \
-              --data '@create-release.json' \
-              "https://gitee.com/api/v5/repos/$GITEE_OWNER/$GITEE_REPO/releases?access_token=$GITEE_ACCESS_TOKEN" \
-              --output release.json
+              --data-urlencode "access_token=$GITEE_ACCESS_TOKEN" \
+              --data-urlencode "tag_name=$RELEASE_TAG" \
+              --data-urlencode "name=$RELEASE_TAG" \
+              --data-urlencode "body=Ncurator $RELEASE_TAG" \
+              --data-urlencode "target_commitish=master" \
+              --data-urlencode "prerelease=false" \
+              --output release.json \
+              --write-out '%{http_code}' \
+              "https://gitee.com/api/v5/repos/$GITEE_OWNER/$GITEE_REPO/releases")"
+            if [ "$create_status" != "201" ]; then
+              cat release.json
+              exit 1
+            fi
           elif [ "$status" != "200" ]; then
             cat release.json
             exit 1
@@ -95,6 +84,16 @@ jobs:
           release_id="$(node -e "const x=require('./release.json');const r=x?.data||x;if(!r?.id){console.error(x?.message||JSON.stringify(x));process.exit(1)}process.stdout.write(String(r.id))")"
           test -n "$release_id"
           echo "release_id=$release_id" >> "$GITHUB_OUTPUT"
+
+      - name: Download package from GitHub Release
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 \
+            --output "$ASSET_NAME" \
+            "https://github.com/Yoan98/Ncurator/releases/download/$RELEASE_TAG/$ASSET_NAME"
+          test -s "$ASSET_NAME"
+          ls -lh "$ASSET_NAME"
 
       - name: Upload Windows package to Gitee Release
         shell: bash
