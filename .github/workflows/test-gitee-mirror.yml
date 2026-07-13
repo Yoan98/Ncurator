@@ -42,10 +42,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          tag_url="https://gitee.com/api/v5/repos/$GITEE_OWNER/$GITEE_REPO/tags/$RELEASE_TAG"
-          tag_status="$(curl --silent --output tag.json --write-out '%{http_code}' \
-            --get --data-urlencode "access_token=$GITEE_ACCESS_TOKEN" "$tag_url")"
-          if [ "$tag_status" = "404" ]; then
+          curl --fail --silent --show-error \
+            --get --data-urlencode "access_token=$GITEE_ACCESS_TOKEN" \
+            --data-urlencode "per_page=100" \
+            "https://gitee.com/api/v5/repos/$GITEE_OWNER/$GITEE_REPO/tags" \
+            --output tags.json
+          tag_exists="$(node -e "const x=require('./tags.json');process.stdout.write(x.some(t=>t.name===process.env.RELEASE_TAG)?'yes':'no')")"
+          if [ "$tag_exists" = "no" ]; then
             curl --fail --silent --show-error \
               --request POST \
               --form "access_token=$GITEE_ACCESS_TOKEN" \
@@ -54,9 +57,6 @@ jobs:
               --form "tag_message=Ncurator $RELEASE_TAG" \
               "https://gitee.com/api/v5/repos/$GITEE_OWNER/$GITEE_REPO/tags" \
               --output tag.json
-          elif [ "$tag_status" != "200" ]; then
-            cat tag.json
-            exit 1
           fi
           release_url="https://gitee.com/api/v5/repos/$GITEE_OWNER/$GITEE_REPO/releases/tags/$RELEASE_TAG"
           status="$(curl --silent --output release.json --write-out '%{http_code}' \
