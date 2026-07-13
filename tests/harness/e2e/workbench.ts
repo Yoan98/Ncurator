@@ -120,6 +120,7 @@ on run argv
   set targetProcessName to ""
   set targetProcessCount to 0
   set keyStatus to "not-run"
+  set clickedConfirmButton to false
 
   try
     tell application id targetBundleId to activate
@@ -179,16 +180,20 @@ on run argv
         try
           click button (candidateButton as text) of sheet 1 of window 1 of targetProcess
           set keyStatus to "sent-clicked-" & (candidateButton as text)
+          set clickedConfirmButton to true
           exit repeat
         end try
         try
           click button (candidateButton as text) of window 1 of targetProcess
           set keyStatus to "sent-clicked-" & (candidateButton as text)
+          set clickedConfirmButton to true
           exit repeat
         end try
       end repeat
-      delay 0.1
-      key code 36
+      if clickedConfirmButton is false then
+        key code 36
+        set keyStatus to "sent-return-fallback"
+      end if
     end tell
   else
     set keyStatus to "skipped-not-frontmost"
@@ -593,6 +598,7 @@ export const bindWorkspaceRootThroughSettingsUi = async (
   }
 
   for (let attempt = 1; attempt <= 4; attempt += 1) {
+    if (attempt > 1 && (await waitForSelectedRootPath(1_000))) return
     const electronProcessId = await readElectronProcessId(page)
     await rootPathButton.click()
     await page.waitForTimeout(250)
@@ -602,7 +608,7 @@ export const bindWorkspaceRootThroughSettingsUi = async (
         electronProcessId,
         'applescript-paste'
       )
-      const selected = await waitForSelectedRootPath(4_000)
+      const selected = await waitForSelectedRootPath(12_000)
       diagnostics.push({
         strategy: output.strategy,
         selected,

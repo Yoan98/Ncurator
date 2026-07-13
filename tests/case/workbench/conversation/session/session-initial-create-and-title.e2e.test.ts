@@ -77,7 +77,8 @@ describe('workbench conversation e2e', () => {
             const firstEvidence = await waitForWorkbenchAiRunCompletion(
               runtime,
               firstStartedAtMs,
-              setup.env.modelName
+              setup.env.modelName,
+              { page, blockerPolicy: 'auto_approve' }
             )
             recordWorkbenchAiEvidence(runtime, firstEvidence, 0.8)
             const afterFirstSessionsText = await readSessionListText(page)
@@ -94,7 +95,8 @@ describe('workbench conversation e2e', () => {
             const secondEvidence = await waitForWorkbenchAiRunCompletion(
               runtime,
               secondStartedAtMs,
-              setup.env.modelName
+              setup.env.modelName,
+              { page, blockerPolicy: 'auto_approve' }
             )
             recordWorkbenchAiEvidence(runtime, secondEvidence, 0.8)
             const afterSecondSessionsText = await readSessionListText(page)

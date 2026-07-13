@@ -40,6 +40,7 @@ on run argv
   set targetProcessName to ""
   set targetProcessCount to 0
   set keyStatus to "not-run"
+  set clickedConfirmButton to false
 
   try
     tell application id targetBundleId to activate
@@ -95,16 +96,20 @@ on run argv
         try
           click button (candidateButton as text) of sheet 1 of window 1 of targetProcess
           set keyStatus to "sent-clicked-" & (candidateButton as text)
+          set clickedConfirmButton to true
           exit repeat
         end try
         try
           click button (candidateButton as text) of window 1 of targetProcess
           set keyStatus to "sent-clicked-" & (candidateButton as text)
+          set clickedConfirmButton to true
           exit repeat
         end try
       end repeat
-      delay 0.1
-      key code 36
+      if clickedConfirmButton is false then
+        key code 36
+        set keyStatus to "sent-return-fallback"
+      end if
     end tell
   else
     set keyStatus to "skipped-not-frontmost"
@@ -254,7 +259,7 @@ const selectDirectoryInNativeDialog = async (
 const waitForWorkspaceRootPathVisible = async (
   page: Page,
   rootPath: string,
-  timeoutMs = 4000
+  timeoutMs = 12_000
 ): Promise<boolean> =>
   await page
     .waitForFunction(
@@ -365,7 +370,9 @@ export const bindWorkspaceRootThroughIpc = async (page: Page, rootPath: string):
     })
   }, rootPath)
   if (!response.success) {
-    throw new Error(`failed to bind workspace root through ipc: ${response.error || 'unknown error'}`)
+    throw new Error(
+      `failed to bind workspace root through ipc: ${response.error || 'unknown error'}`
+    )
   }
 }
 
@@ -384,13 +391,12 @@ export const bindWorkspaceRootThroughSettingsUi = async (
       `workspace root was bound through ipc but not reflected in settings ui: ${rootPath}`
     )
   }
-  const rootPathButton = page
-    .getByRole('button', { name: /设置工作目录|更换工作目录/u })
-    .first()
+  const rootPathButton = page.getByRole('button', { name: /设置工作目录|更换工作目录/u }).first()
   await page.bringToFront()
   await rootPathButton.waitFor({ state: 'visible' })
   const diagnostics: string[] = []
   for (let attempt = 1; attempt <= 4; attempt += 1) {
+    if (attempt > 1 && (await waitForWorkspaceRootPathVisible(page, rootPath, 1000))) return
     const electronProcessId = await readElectronProcessId(page)
     await rootPathButton.click()
     await page.waitForTimeout(250)

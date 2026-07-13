@@ -82,12 +82,10 @@ import {
   getAttachmentTypeLabel,
   getSearchResultFileRef,
   readWorkbenchAiPreference,
-  readWorkbenchModePreference,
   reduceAssistantProcessGroups,
   reduceAssistantProcessThoughts,
   readWorkbenchModelPreference,
   writeWorkbenchAiPreference,
-  writeWorkbenchModePreference,
   writeWorkbenchModelPreference
 } from '../components/workbench/utils'
 import {
@@ -98,6 +96,7 @@ import { chatSelectors, workbenchSelectors } from '../testing/selectors'
 import WindowsTitleBar from '../components/WindowsTitleBar'
 import SidebarPanelIcon from '../components/SidebarPanelIcon'
 import { collectReferenceDocumentIds, pruneReferencesByWorkspace } from '../utils/reference'
+import { useWorkbenchMode } from '../contexts/WorkbenchModeContext'
 
 type ApprovalBatchRequiredEvent = Extract<AiRunEvent, { type: 'approval_batch_required' }>
 type ApprovalBatchDecisionAction = 'approve' | 'reject' | 'guide'
@@ -578,9 +577,7 @@ const ChatPage: React.FC = () => {
   const [loadingOlderMessages, setLoadingOlderMessages] = useState(false)
   const [deleteConfirmSession, setDeleteConfirmSession] = useState<ChatSession | null>(null)
   const [deletingSessionIds, setDeletingSessionIds] = useState<Set<string>>(() => new Set())
-  const [composerMode, setComposerMode] = useState<WorkbenchMode>(() =>
-    readWorkbenchModePreference(window.localStorage)
-  )
+  const { mode: composerMode, setMode: setComposerMode } = useWorkbenchMode()
   const [composerAiPreference, setComposerAiPreference] = useState<WorkbenchAiPreference>(() =>
     readWorkbenchAiPreference(window.localStorage)
   )
@@ -1182,10 +1179,12 @@ const ChatPage: React.FC = () => {
     writeWorkbenchModelPreference(window.localStorage, selection.mainModel ? selection : null)
   }, [])
 
-  const handleModeChange = useCallback((mode: WorkbenchMode): void => {
-    setComposerMode(mode)
-    writeWorkbenchModePreference(window.localStorage, mode)
-  }, [])
+  const handleModeChange = useCallback(
+    (mode: WorkbenchMode): void => {
+      setComposerMode(mode)
+    },
+    [setComposerMode]
+  )
 
   const handleAiPreferenceChange = useCallback((preference: WorkbenchAiPreference): void => {
     setComposerAiPreference(preference)
@@ -1440,16 +1439,6 @@ const ChatPage: React.FC = () => {
   }, [])
 
   useEffect(() => {
-    const handleModelRefresh = (): void => {
-      void loadModelConfigs()
-    }
-    window.addEventListener('check-llm-config', handleModelRefresh)
-    return () => {
-      window.removeEventListener('check-llm-config', handleModelRefresh)
-    }
-  }, [loadModelConfigs])
-
-  useEffect(() => {
     const refreshSources = (): void => {
       void loadWorkspaces()
     }
@@ -1523,12 +1512,6 @@ const ChatPage: React.FC = () => {
     },
     []
   )
-
-  useEffect(() => {
-    window.dispatchEvent(
-      new CustomEvent('workbench-mode-change', { detail: { mode: composerMode } })
-    )
-  }, [composerMode])
 
   const requestDeleteSession = (event: React.MouseEvent, session: ChatSession): void => {
     event.stopPropagation()

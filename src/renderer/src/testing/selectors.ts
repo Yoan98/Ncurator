@@ -109,6 +109,7 @@ export const vectorSelectors = {
 
 export const workbenchSelectors = {
   page: 'workbench-page',
+  llmConfigMissingNotification: 'workbench-llm-config-missing-notification',
   sidebar: 'workbench-sidebar',
   modeSwitch: 'workbench-mode-switch',
   aiPreferenceSwitch: 'workbench-ai-preference-switch',

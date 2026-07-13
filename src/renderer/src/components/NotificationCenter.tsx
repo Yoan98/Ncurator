@@ -3,6 +3,8 @@ import { Card, Button, Typography } from 'antd'
 import { HiOutlineCog6Tooth } from 'react-icons/hi2'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { getActiveConfig } from '../services/llmService'
+import { useWorkbenchMode } from '../contexts/WorkbenchModeContext'
+import { workbenchSelectors } from '../testing/selectors'
 
 const { Text } = Typography
 
@@ -21,7 +23,7 @@ const NotificationCenter: React.FC = () => {
   const navigate = useNavigate()
   const location = useLocation()
   const [notifications, setNotifications] = useState<NotificationItem[]>([])
-  const [workbenchMode, setWorkbenchMode] = useState<'ai' | 'search'>('search')
+  const { mode: workbenchMode } = useWorkbenchMode()
 
   const isSettingsPage = location.pathname.startsWith('/settings')
   const isWorkbenchPage = location.pathname === '/'
@@ -38,31 +40,16 @@ const NotificationCenter: React.FC = () => {
     })
   }
 
-  // Check LLM Config
-  useEffect(() => {
-    const handleWorkbenchMode = (event: Event) => {
-      const detail =
-        event instanceof CustomEvent && event.detail && typeof event.detail === 'object'
-          ? event.detail
-          : null
-      const mode = detail && 'mode' in detail ? String(detail.mode || '').trim() : ''
-      setWorkbenchMode(mode === 'ai' ? 'ai' : 'search')
-    }
-
-    window.addEventListener('workbench-mode-change', handleWorkbenchMode)
-    return () => {
-      window.removeEventListener('workbench-mode-change', handleWorkbenchMode)
-    }
-  }, [])
-
   useEffect(() => {
     if (isSettingsPage) {
       updateNotification('llm-config-missing', null)
       return
     }
 
+    let disposed = false
     const checkLLMConfig = async () => {
       const config = await getActiveConfig()
+      if (disposed) return
       if (!config) {
         if (isWorkbenchPage && workbenchMode === 'ai') {
           updateNotification('llm-config-missing', {
@@ -83,27 +70,9 @@ const NotificationCenter: React.FC = () => {
       }
     }
 
-    checkLLMConfig()
-
-    const handleCheckEvent = async () => {
-      const config = await getActiveConfig()
-      if (!config) {
-        updateNotification('llm-config-missing', {
-          id: 'llm-config-missing',
-          title: '未配置大模型 API',
-          description: '智能回答和对话功能需要配置 LLM API，请先完成配置。',
-          icon: <HiOutlineCog6Tooth className="text-xl" />,
-          action: {
-            label: '去配置',
-            onClick: () => navigate('/settings/model')
-          }
-        })
-      }
-    }
-
-    window.addEventListener('check-llm-config', handleCheckEvent)
+    void checkLLMConfig()
     return () => {
-      window.removeEventListener('check-llm-config', handleCheckEvent)
+      disposed = true
     }
   }, [location.pathname, isSettingsPage, isWorkbenchPage, navigate, workbenchMode])
 
@@ -114,6 +83,11 @@ const NotificationCenter: React.FC = () => {
       {notifications.map((item) => (
         <Card
           key={item.id}
+          data-testid={
+            item.id === 'llm-config-missing'
+              ? workbenchSelectors.llmConfigMissingNotification
+              : undefined
+          }
           className="w-80 shadow-none border-[#37352F]/20 !bg-white/95 backdrop-blur-md pointer-events-auto animate-slide-in-right"
           size="small"
           actions={[

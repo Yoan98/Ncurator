@@ -6,6 +6,7 @@ import SettingsPage from './pages/SettingsPage'
 import TestPage from './pages/TestPage'
 import ModelDownloadPage from './pages/ModelDownloadPage'
 import NotificationCenter from './components/NotificationCenter'
+import { WorkbenchModeProvider } from './contexts/WorkbenchModeProvider'
 
 const { Content } = Layout
 
@@ -83,10 +84,12 @@ function App(): React.JSX.Element {
       }}
     >
       <AntdApp>
-        <HashRouter>
-          <MainLayout />
-          <NotificationCenter />
-        </HashRouter>
+        <WorkbenchModeProvider>
+          <HashRouter>
+            <MainLayout />
+            <NotificationCenter />
+          </HashRouter>
+        </WorkbenchModeProvider>
       </AntdApp>
     </ConfigProvider>
   )
