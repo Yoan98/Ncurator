@@ -43,6 +43,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Use HTTPS for GitHub dependencies
+        run: git config --global url."https://github.com/".insteadOf git@github.com:
+
       - uses: pnpm/action-setup@v4
 
       - uses: actions/setup-node@v4
@@ -76,6 +79,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Use HTTPS for GitHub dependencies
+        run: git config --global url."https://github.com/".insteadOf git@github.com:
+
       - uses: pnpm/action-setup@v4
 
       - uses: actions/setup-node@v4
@@ -108,6 +114,9 @@ jobs:
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
     steps:
       - uses: actions/checkout@v4
+
+      - name: Use HTTPS for GitHub dependencies
+        run: git config --global url."https://github.com/".insteadOf git@github.com:
 
       - uses: pnpm/action-setup@v4
 
