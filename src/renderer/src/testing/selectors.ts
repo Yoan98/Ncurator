@@ -121,6 +121,7 @@ export const workbenchSelectors = {
   newSessionButton: 'workbench-new-session-button',
   sessionsToggle: 'workbench-sessions-toggle',
   sidebarResizer: 'workbench-sidebar-resizer',
+  settingsHelpButton: 'workbench-settings-help-button',
   topbar: 'workbench-topbar',
   emptyDragRegion: 'workbench-empty-drag-region',
   topbarDragRegion: 'workbench-topbar-drag-region',

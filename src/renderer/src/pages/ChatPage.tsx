@@ -13,6 +13,7 @@ import {
   HiOutlineExclamationCircle,
   HiOutlineFolderPlus,
   HiOutlinePencilSquare,
+  HiOutlineQuestionMarkCircle,
   HiPhoto,
   HiPlus,
   HiStop,
@@ -502,6 +503,8 @@ const hasWorkspaceRootPath = (
 
 const getWorkspaceRequirementHint = (workspace: WorkspaceSource | null): string =>
   workspace ? '当前工作区未设置文件目录，请前往 设置 > 工作空间 绑定地址' : '请先选择工作区'
+
+const USER_MANUAL_URL = 'https://www.ncurator.com/zh/manual'
 
 const delay = (ms: number): Promise<void> =>
   new Promise((resolve) => {
@@ -2861,15 +2864,28 @@ const ChatPage: React.FC = () => {
         </div>
 
         <div className="px-2 py-2">
-          <button
-            type="button"
-            onClick={() => navigate('/settings/model')}
-            className="nc-sidebar-nav-row"
-            aria-label="设置"
-          >
-            <HiOutlineCog6Tooth className="h-[18px] w-[18px] shrink-0 text-[#787774]" />
-            <span>设置</span>
-          </button>
+          <div className="flex items-center">
+            <button
+              type="button"
+              onClick={() => navigate('/settings/model')}
+              className="nc-sidebar-nav-row flex-1"
+              aria-label="设置"
+            >
+              <HiOutlineCog6Tooth className="h-[18px] w-[18px] shrink-0 text-[#787774]" />
+              <span>设置</span>
+            </button>
+            <Tooltip title="查看使用帮助" placement="right">
+              <button
+                type="button"
+                className="nc-manual-help-button"
+                onClick={() => void window.api.openExternal(USER_MANUAL_URL)}
+                aria-label="查看使用帮助"
+                data-testid={workbenchSelectors.settingsHelpButton}
+              >
+                <HiOutlineQuestionMarkCircle className="h-4 w-4" />
+              </button>
+            </Tooltip>
+          </div>
         </div>
         <div
           className="nc-sidebar-resizer workbench-no-drag"
