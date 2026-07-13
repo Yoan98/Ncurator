@@ -14,25 +14,27 @@
 ### 2.1 当前状态
 
 - 总体登记：`23` 个 e2e case，`1` 个 backend contract case。
-- 当前有效结论：最近一轮功能与用例对齐后待重新执行；不得继续把 2026-07-10 的结果视为覆盖 2026-07-12 至 2026-07-13 新增行为的当前结论。
+- 当前有效结论：e2e `21 / 23` 通过，`2 / 23` 阻断；backend contract `1 / 1` 通过。
+- 检测时间：`2026-07-13 15:13:08 +08:00`。
+- 本轮模型配置由根目录 `.env` 通过 `loadRootEnvOnce()` 自动读取，无需手工 export。
 
 ### 2.2 按 Suite 汇总
 
 - `conversation`
   - 登记 case：`9`
-  - 当前有效结论：待本轮回归。
-  - 最近历史检测时间：`2026-07-10 16:26:14 +0800`
-  - 备注：本轮需新增验证 AI 推进偏好、会话运行标记和使用帮助入口；旧的 `9 / 9` 不能覆盖这些新增断言。
+  - 当前有效结论：`9 / 9`。
+  - 检测时间：`2026-07-13 14:32:02 +08:00`
+  - 备注：AI 推进偏好、会话首次落库与标题、会话运行标记、使用帮助入口均已通过真实模型 UI 回归；`session-initial-create-and-title` 对无关终端审批自动同意，避免偏离会话生命周期的验证目标。
 - `run`
   - 登记 case：`9` 个 e2e，`1` 个 backend contract
-  - 当前有效结论：backend contract `1 / 1`；e2e 待本轮回归。
-  - 检测时间：backend `2026-07-13 13:08:55 +08:00`；e2e 最近历史检测时间 `2026-07-10 19:30:08 +0800`
-  - 备注：新增 `browser-use-deepseek-financing-search`，同时 `browser_use` 输出 schema 已调整；当前环境缺少 `AI_LIVE_*` 配置，无法形成最新 e2e 有效结论。
+  - 当前有效结论：backend contract `1 / 1`；e2e `8 / 9` 通过，`1 / 9` 阻断。
+  - 检测时间：backend `2026-07-13 13:08:55 +08:00`；e2e `2026-07-13 15:13:08 +08:00`
+  - 备注：`browser-use-deepseek-financing-search` 阻断；真实模型完成了 `web_search + web_crawl` 并正确回答融资信息，但没有遵循用户“用浏览器搜索”的明确要求调用 `browser_use`，未满足右侧内置浏览器闭环验收。
 - `result`
   - 登记 case：`5`
-  - 有效通过：`5 / 5`
-  - 检测时间：`2026-07-10 16:26:14 +0800`
-  - 备注：`docx-apply-force-revert-warning`、`docx-apply-panel-preview-and-revert`、`multi-file-apply-tabs`、`file-preview-actions`、`search-results-open-rules` 均已通过真实 Electron UI；`multi-file-apply-tabs` 使用两个真实小 docx 副本降低 live 模型处理大文档时的非确定性，仍覆盖真实多文件写回入口和右侧单文件面板切换。
+  - 当前有效结论：`4 / 5` 通过，`1 / 5` 阻断。
+  - 检测时间：`2026-07-13 15:00:00 +08:00`
+  - 备注：3 个 docx apply 用例与 `file-preview-actions` 通过。`search-results-open-rules` 连续两次在真实查询向量推理阶段触发 Electron `SIGSEGV`；macOS 崩溃栈定位于 `onnxruntime_binding.node -> InferenceSessionWrap::Run -> OrtValueToNapiValue`，属于生产 embedding / ONNX native 运行时问题。
 
 ### 2.3 当前边界
 
