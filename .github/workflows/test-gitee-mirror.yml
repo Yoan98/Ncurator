@@ -1,0 +1,97 @@
+name: Test Gitee Release Mirror
+
+on:
+  workflow_dispatch:
+
+jobs:
+  upload-windows-package:
+    runs-on: ubuntu-latest
+    env:
+      GITEE_ACCESS_TOKEN: ${{ secrets.GITEE_ACCESS_TOKEN }}
+      GITEE_OWNER: uncle-stingy
+      GITEE_REPO: ncurator
+      RELEASE_TAG: v0.1.0
+      ASSET_NAME: Ncurator-windows-x64.exe
+    steps:
+      - name: Check Gitee token
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$GITEE_ACCESS_TOKEN"
+
+      - name: Download package from GitHub Release
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 \
+            --output "$ASSET_NAME" \
+            "https://github.com/Yoan98/Ncurator/releases/download/$RELEASE_TAG/$ASSET_NAME"
+          test -s "$ASSET_NAME"
+          ls -lh "$ASSET_NAME"
+
+      - name: Initialize empty Gitee repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          repo_json="$(curl --fail --silent --show-error \
+            "https://gitee.com/api/v5/repos/$GITEE_OWNER/$GITEE_REPO")"
+          default_branch="$(printf '%s' "$repo_json" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>process.stdout.write(JSON.parse(s).default_branch||''))")"
+          if [ -z "$default_branch" ]; then
+            readme_content="$(printf '# Ncurator Release Mirror\n\nNcurator 国内安装包镜像。\n' | base64 -w 0)"
+            curl --fail --silent --show-error \
+              --request POST \
+              --form "access_token=$GITEE_ACCESS_TOKEN" \
+              --form "content=$readme_content" \
+              --form "message=Initialize release mirror" \
+              "https://gitee.com/api/v5/repos/$GITEE_OWNER/$GITEE_REPO/contents/README.md" \
+              >/dev/null
+          fi
+
+      - name: Create or find Gitee Release
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          release_url="https://gitee.com/api/v5/repos/$GITEE_OWNER/$GITEE_REPO/releases/tags/$RELEASE_TAG"
+          status="$(curl --silent --output release.json --write-out '%{http_code}' \
+            --get --data-urlencode "access_token=$GITEE_ACCESS_TOKEN" "$release_url")"
+          if [ "$status" = "404" ]; then
+            curl --fail --silent --show-error \
+              --request POST \
+              --form "access_token=$GITEE_ACCESS_TOKEN" \
+              --form "tag_name=$RELEASE_TAG" \
+              --form "name=$RELEASE_TAG" \
+              --form "body=Ncurator $RELEASE_TAG" \
+              --form "target_commitish=master" \
+              "https://gitee.com/api/v5/repos/$GITEE_OWNER/$GITEE_REPO/releases" \
+              --output release.json
+          elif [ "$status" != "200" ]; then
+            cat release.json
+            exit 1
+          fi
+          release_id="$(node -p "require('./release.json').id")"
+          test -n "$release_id"
+          echo "release_id=$release_id" >> "$GITHUB_OUTPUT"
+
+      - name: Upload Windows package to Gitee Release
+        shell: bash
+        run: |
+          set -euo pipefail
+          release_id="${{ steps.release.outputs.release_id }}"
+          assets_url="https://gitee.com/api/v5/repos/$GITEE_OWNER/$GITEE_REPO/releases/$release_id/attach_files"
+          curl --fail --silent --show-error \
+            --request POST \
+            --form "access_token=$GITEE_ACCESS_TOKEN" \
+            --form "file=@$ASSET_NAME" \
+            "$assets_url" \
+            --output uploaded-asset.json
+          node - <<'NODE'
+          const asset = require('./uploaded-asset.json')
+          console.log(JSON.stringify({
+            id: asset.id,
+            name: asset.name,
+            size: asset.size,
+            browser_download_url: asset.browser_download_url
+          }, null, 2))
+          if (!asset.id || asset.name !== process.env.ASSET_NAME) process.exit(1)
+          NODE
