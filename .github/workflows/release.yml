@@ -1,4 +1,4 @@
-name: Release Desktop
+name: Build Windows Release
 
 on:
   push:
@@ -7,490 +7,81 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag, for example v0.1.0'
+        description: 'Release tag, for example v0.1.3'
         required: true
 
 jobs:
-  validate-release:
-    runs-on: ubuntu-latest
-    outputs:
-      tag: ${{ steps.release.outputs.tag }}
+  build-windows:
+    runs-on: windows-latest
+    environment: ncuratore
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+      R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+      R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
           fetch-depth: 0
 
-      - name: Validate release version
-        id: release
+      - name: Use HTTPS for GitHub dependencies
+        shell: bash
+        run: |
+          git config --global url."https://github.com/".insteadOf git@github.com:
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Validate release tag and R2 configuration
         shell: bash
         run: |
           set -euo pipefail
-          package_version="$(node -p "require('./package.json').version")"
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             tag="${{ inputs.tag }}"
           else
-            tag="${GITHUB_REF_NAME}"
+            tag="$GITHUB_REF_NAME"
           fi
-          if [ "$tag" != "v$package_version" ]; then
-            echo "Release tag $tag does not match package.json version v$package_version" >&2
-            exit 1
-          fi
-          if [ "$(git cat-file -t "$tag")" != "tag" ]; then
-            echo "Release tag $tag must be an annotated tag with release notes" >&2
-            exit 1
-          fi
-          release_notes="$(git for-each-ref --format='%(contents)' "refs/tags/$tag")"
-          if [ -z "${release_notes//[[:space:]]/}" ]; then
-            echo "Release tag $tag does not contain release notes" >&2
-            exit 1
-          fi
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
-
-  build-macos-x64:
-    needs: validate-release
-    runs-on: macos-15-intel
-    environment: ncuratore
-    env:
-      CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
-      CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
-      CSC_IDENTITY_AUTO_DISCOVERY: 'true'
-      MAC_CSC_CERT_BASE64: ${{ secrets.MAC_CSC_CERT_BASE64 }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.validate-release.outputs.tag }}
-
-      - name: Use HTTPS for GitHub dependencies
-        run: |
-          git config --global url."https://github.com/".insteadOf git@github.com:
-
-      - uses: pnpm/action-setup@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Verify macOS runner architecture
-        shell: bash
-        run: |
-          test "$(uname -m)" = "x86_64"
-
-      - name: Prepare stable macOS update identity
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -n "$CSC_LINK"
-          test -n "$CSC_KEY_PASSWORD"
-          test -n "$MAC_CSC_CERT_BASE64"
-          certificate="$RUNNER_TEMP/ncurator-update-signing.cer"
-          printf '%s' "$MAC_CSC_CERT_BASE64" | base64 --decode > "$certificate"
-          sudo security add-trusted-cert \
-            -d \
-            -r trustRoot \
-            -p codeSign \
-            -k /Library/Keychains/System.keychain \
-            "$certificate"
-
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm run build:mac:release:x64
-
-      - name: Verify stable macOS update signature
-        shell: bash
-        run: |
-          set -euo pipefail
-          app_path="$(find dist -maxdepth 2 -type d -name Ncurator.app -print -quit)"
-          test -n "$app_path"
-          codesign --verify --deep --strict --verbose=2 "$app_path"
-          signature="$(codesign -d -r- --verbose=4 "$app_path" 2>&1)"
-          grep -q '^Authority=.' <<< "$signature"
-          grep -q 'designated => .*identifier "com.yoan.ncurator"' <<< "$signature"
-          if grep -q '^Signature=adhoc$' <<< "$signature"; then
-            echo 'macOS release must not use an ad-hoc signature' >&2
-            exit 1
-          fi
-          if grep -q 'designated => .*cdhash' <<< "$signature"; then
-            echo 'macOS designated requirement must remain stable across versions' >&2
-            exit 1
-          fi
-          grep -E '^(Authority=|designated =>)' <<< "$signature" \
-            > dist/mac-update-signature.txt
-          cat dist/mac-update-signature.txt
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: macos-x64-artifacts
-          path: |
-            dist/*.dmg
-            dist/*.zip
-            dist/*.yml
-            dist/*.blockmap
-            dist/mac-update-signature.txt
-          if-no-files-found: error
-
-  build-macos-arm64:
-    needs: validate-release
-    runs-on: macos-15
-    environment: ncuratore
-    env:
-      CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
-      CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
-      CSC_IDENTITY_AUTO_DISCOVERY: 'true'
-      MAC_CSC_CERT_BASE64: ${{ secrets.MAC_CSC_CERT_BASE64 }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.validate-release.outputs.tag }}
-
-      - name: Use HTTPS for GitHub dependencies
-        run: |
-          git config --global url."https://github.com/".insteadOf git@github.com:
-
-      - uses: pnpm/action-setup@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Verify macOS runner architecture
-        shell: bash
-        run: |
-          test "$(uname -m)" = "arm64"
-
-      - name: Prepare stable macOS update identity
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -n "$CSC_LINK"
-          test -n "$CSC_KEY_PASSWORD"
-          test -n "$MAC_CSC_CERT_BASE64"
-          certificate="$RUNNER_TEMP/ncurator-update-signing.cer"
-          printf '%s' "$MAC_CSC_CERT_BASE64" | base64 --decode > "$certificate"
-          sudo security add-trusted-cert \
-            -d \
-            -r trustRoot \
-            -p codeSign \
-            -k /Library/Keychains/System.keychain \
-            "$certificate"
-
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm run build:mac:release:arm64
-
-      - name: Verify stable macOS update signature
-        shell: bash
-        run: |
-          set -euo pipefail
-          app_path="$(find dist -maxdepth 2 -type d -name Ncurator.app -print -quit)"
-          test -n "$app_path"
-          codesign --verify --deep --strict --verbose=2 "$app_path"
-          signature="$(codesign -d -r- --verbose=4 "$app_path" 2>&1)"
-          grep -q '^Authority=.' <<< "$signature"
-          grep -q 'designated => .*identifier "com.yoan.ncurator"' <<< "$signature"
-          if grep -q '^Signature=adhoc$' <<< "$signature"; then
-            echo 'macOS release must not use an ad-hoc signature' >&2
-            exit 1
-          fi
-          if grep -q 'designated => .*cdhash' <<< "$signature"; then
-            echo 'macOS designated requirement must remain stable across versions' >&2
-            exit 1
-          fi
-          grep -E '^(Authority=|designated =>)' <<< "$signature" \
-            > dist/mac-update-signature.txt
-          cat dist/mac-update-signature.txt
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: macos-arm64-artifacts
-          path: |
-            dist/*.dmg
-            dist/*.zip
-            dist/*.yml
-            dist/*.blockmap
-            dist/mac-update-signature.txt
-          if-no-files-found: error
-
-  build-windows:
-    needs: validate-release
-    runs-on: windows-latest
-    env:
-      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.validate-release.outputs.tag }}
-
-      - name: Use HTTPS for GitHub dependencies
-        run: |
-          git config --global url."https://github.com/".insteadOf git@github.com:
-
-      - uses: pnpm/action-setup@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm run build:win
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: windows-artifacts
-          path: |
-            dist/*.exe
-            dist/*.yml
-            dist/*.blockmap
-          if-no-files-found: error
-
-  publish-release:
-    runs-on: ubuntu-latest
-    environment: ncuratore
-    needs:
-      - validate-release
-      - build-macos-x64
-      - build-macos-arm64
-      - build-windows
-    env:
-      GH_TOKEN: ${{ secrets.NCURATOR_RELEASE_TOKEN }}
-      RELEASE_REPOSITORY: Yoan98/Ncurator
-      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
-      R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
-      R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
-      RELEASE_TAG: ${{ needs.validate-release.outputs.tag }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.validate-release.outputs.tag }}
-          fetch-depth: 0
-
-      - uses: actions/download-artifact@v4
-        with:
-          path: release-artifacts
-
-      - name: Merge macOS update metadata
-        run: node scripts/merge-latest-mac-yml.mjs release-artifacts
-
-      - name: Verify both macOS architectures use the same update identity
-        shell: bash
-        run: |
-          set -euo pipefail
-          cmp \
-            release-artifacts/macos-x64-artifacts/mac-update-signature.txt \
-            release-artifacts/macos-arm64-artifacts/mac-update-signature.txt
-
-      - name: Prepare release notes from annotated tag
-        shell: bash
-        run: |
-          set -euo pipefail
-          git for-each-ref --format='%(contents)' "refs/tags/$RELEASE_TAG" > "$RUNNER_TEMP/release-notes.md"
-          test -s "$RUNNER_TEMP/release-notes.md"
-
-      - name: Publish release assets
-        shell: bash
-        run: |
-          set -euo pipefail
-          tag="${{ needs.validate-release.outputs.tag }}"
-          test -f release-artifacts/macos-arm64-artifacts/Ncurator-mac-arm64.dmg
-          test -f release-artifacts/macos-x64-artifacts/Ncurator-mac-x64.dmg
-          test -f release-artifacts/windows-artifacts/Ncurator-windows-x64.exe
-          if ! gh release view "$tag" --repo "$RELEASE_REPOSITORY" >/dev/null 2>&1; then
-            gh release create "$tag" \
-              --repo "$RELEASE_REPOSITORY" \
-              --title "Ncurator $tag" \
-              --notes-file "$RUNNER_TEMP/release-notes.md"
-          else
-            gh release edit "$tag" \
-              --repo "$RELEASE_REPOSITORY" \
-              --title "Ncurator $tag" \
-              --notes-file "$RUNNER_TEMP/release-notes.md"
-          fi
-          gh release delete-asset "$tag" builder-debug.yml --repo "$RELEASE_REPOSITORY" --yes >/dev/null 2>&1 || true
-          find release-artifacts -type f \
-            \( -name '*.dmg' -o -name '*.zip' -o -name '*.exe' -o -name '*.blockmap' -o -name 'latest.yml' -o -name 'latest-mac.yml' \) \
-            -print0 | xargs -0 gh release upload "$tag" --repo "$RELEASE_REPOSITORY" --clobber
-
-      - name: Validate Cloudflare R2 configuration
-        shell: bash
-        run: |
-          set -euo pipefail
+          package_version="$(node -p "require('./package.json').version")"
+          test "$tag" = "v$package_version"
+          test "$(git cat-file -t "$tag")" = "tag"
           test -n "$AWS_ACCESS_KEY_ID"
           test -n "$AWS_SECRET_ACCESS_KEY"
           test -n "$R2_ACCOUNT_ID"
           test -n "$R2_BUCKET_NAME"
           test "${R2_PUBLIC_BASE_URL%/}" = "https://download.ncurator.com"
+          aws --version
+          echo "RELEASE_TAG=$tag" >> "$GITHUB_ENV"
 
-      - name: Prepare R2 update metadata
-        run: |
-          node scripts/prepare-r2-update-metadata.mjs \
-            release-artifacts \
-            r2-update-metadata \
-            "$RELEASE_TAG"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run build:win
 
-      - name: Upload versioned update assets to Cloudflare R2
+      - name: Upload Windows release directly to Cloudflare R2
         shell: bash
         run: |
           set -euo pipefail
-          endpoint="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
-          while IFS= read -r -d '' source; do
-            asset="$(basename "$source")"
-            aws s3 cp "$source" \
-              "s3://${R2_BUCKET_NAME}/updates/${RELEASE_TAG}/$asset" \
-              --endpoint-url "$endpoint" \
-              --region auto \
-              --cache-control 'public, max-age=31536000, immutable' \
-              --no-progress
-          done < <(find release-artifacts -type f \
-            \( -name '*.dmg' -o -name '*.zip' -o -name '*.exe' -o -name '*.blockmap' \) \
-            -print0)
+          mkdir -p release-status
+          node scripts/create-release-fragment.mjs \
+            dist \
+            release-status/windows-x64.json \
+            "$RELEASE_TAG" \
+            windows-x64
+          node scripts/upload-r2-release-fragment.mjs \
+            dist \
+            release-status/windows-x64.json
 
-      - name: Verify versioned R2 update assets
+      - name: Release summary
         shell: bash
         run: |
-          set -euo pipefail
-          base_url="${R2_PUBLIC_BASE_URL%/}"
-          while IFS= read -r -d '' source; do
-            asset="$(basename "$source")"
-            expected_size="$(stat -c '%s' "$source")"
-            actual_size="$(curl --fail --silent --show-error --head \
-              "$base_url/updates/$RELEASE_TAG/$asset" \
-              | tr -d '\r' \
-              | awk 'tolower($1)=="content-length:" {value=$2} END {print value}')"
-            test "$actual_size" = "$expected_size"
-          done < <(find release-artifacts -type f \
-            \( -name '*.dmg' -o -name '*.zip' -o -name '*.exe' -o -name '*.blockmap' \) \
-            -print0)
-
-      - name: Promote R2 update metadata
-        shell: bash
-        run: |
-          set -euo pipefail
-          endpoint="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
-          for metadata in latest.yml latest-mac.yml; do
-            aws s3 cp "r2-update-metadata/$metadata" \
-              "s3://${R2_BUCKET_NAME}/updates/latest/$metadata" \
-              --endpoint-url "$endpoint" \
-              --region auto \
-              --content-type application/yaml \
-              --cache-control 'no-store' \
-              --no-progress
-          done
-
-      - name: Verify latest R2 update metadata
-        shell: bash
-        run: |
-          set -euo pipefail
-          base_url="${R2_PUBLIC_BASE_URL%/}"
-          for metadata in latest.yml latest-mac.yml; do
-            content="$(curl --fail --silent --show-error \
-              "$base_url/updates/latest/$metadata?noCache=${GITHUB_RUN_ID}")"
-            grep -F "version: ${RELEASE_TAG#v}" <<< "$content"
-            grep -F "../${RELEASE_TAG}/" <<< "$content"
-          done
-
-      - name: Upload versioned installers to Cloudflare R2
-        shell: bash
-        run: |
-          set -euo pipefail
-          endpoint="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
-          version="${RELEASE_TAG#v}"
-          declare -A assets=(
-            [Ncurator-mac-arm64.dmg]="release-artifacts/macos-arm64-artifacts/Ncurator-mac-arm64.dmg"
-            [Ncurator-mac-x64.dmg]="release-artifacts/macos-x64-artifacts/Ncurator-mac-x64.dmg"
-            [Ncurator-windows-x64.exe]="release-artifacts/windows-artifacts/Ncurator-windows-x64.exe"
-          )
-          for asset in "${!assets[@]}"; do
-            download_name="${asset/Ncurator-/Ncurator-${version}-}"
-            aws s3 cp "${assets[$asset]}" \
-              "s3://${R2_BUCKET_NAME}/releases/${RELEASE_TAG}/$asset" \
-              --endpoint-url "$endpoint" \
-              --region auto \
-              --content-type application/octet-stream \
-              --content-disposition "attachment; filename=$download_name" \
-              --cache-control 'public, max-age=31536000, immutable' \
-              --no-progress
-          done
-
-      - name: Verify versioned Cloudflare R2 downloads
-        shell: bash
-        run: |
-          set -euo pipefail
-          base_url="${R2_PUBLIC_BASE_URL%/}"
-          version="${RELEASE_TAG#v}"
-          declare -A assets=(
-            [Ncurator-mac-arm64.dmg]="release-artifacts/macos-arm64-artifacts/Ncurator-mac-arm64.dmg"
-            [Ncurator-mac-x64.dmg]="release-artifacts/macos-x64-artifacts/Ncurator-mac-x64.dmg"
-            [Ncurator-windows-x64.exe]="release-artifacts/windows-artifacts/Ncurator-windows-x64.exe"
-          )
-          for asset in "${!assets[@]}"; do
-            expected_size="$(stat -c '%s' "${assets[$asset]}")"
-            expected_name="${asset/Ncurator-/Ncurator-${version}-}"
-            headers="$(curl --fail --silent --show-error --location --head \
-              "$base_url/releases/$RELEASE_TAG/$asset")"
-            actual_size="$(printf '%s\n' "$headers" | tr -d '\r' | awk 'tolower($1)=="content-length:" {value=$2} END {print value}')"
-            disposition="$(printf '%s\n' "$headers" | tr -d '\r' | sed -n 's/^[Cc]ontent-[Dd]isposition: *//p' | tail -1)"
-            test "$actual_size" = "$expected_size"
-            test "$disposition" = "attachment; filename=$expected_name"
-            printf '%s %s bytes, filename %s verified\n' "$asset" "$actual_size" "$expected_name"
-          done
-
-      - name: Promote installers to Cloudflare R2 latest
-        shell: bash
-        run: |
-          set -euo pipefail
-          endpoint="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
-          version="${RELEASE_TAG#v}"
-          declare -A assets=(
-            [Ncurator-mac-arm64.dmg]="release-artifacts/macos-arm64-artifacts/Ncurator-mac-arm64.dmg"
-            [Ncurator-mac-x64.dmg]="release-artifacts/macos-x64-artifacts/Ncurator-mac-x64.dmg"
-            [Ncurator-windows-x64.exe]="release-artifacts/windows-artifacts/Ncurator-windows-x64.exe"
-          )
-          for asset in "${!assets[@]}"; do
-            download_name="${asset/Ncurator-/Ncurator-${version}-}"
-            aws s3 cp "${assets[$asset]}" \
-              "s3://${R2_BUCKET_NAME}/releases/latest/$asset" \
-              --endpoint-url "$endpoint" \
-              --region auto \
-              --content-type application/octet-stream \
-              --content-disposition "attachment; filename=$download_name" \
-              --cache-control 'public, max-age=300' \
-              --no-progress
-          done
-
-      - name: Verify latest Cloudflare R2 downloads
-        shell: bash
-        run: |
-          set -euo pipefail
-          base_url="${R2_PUBLIC_BASE_URL%/}"
-          version="${RELEASE_TAG#v}"
-          declare -A assets=(
-            [Ncurator-mac-arm64.dmg]="release-artifacts/macos-arm64-artifacts/Ncurator-mac-arm64.dmg"
-            [Ncurator-mac-x64.dmg]="release-artifacts/macos-x64-artifacts/Ncurator-mac-x64.dmg"
-            [Ncurator-windows-x64.exe]="release-artifacts/windows-artifacts/Ncurator-windows-x64.exe"
-          )
-          for asset in "${!assets[@]}"; do
-            expected_size="$(stat -c '%s' "${assets[$asset]}")"
-            expected_name="${asset/Ncurator-/Ncurator-${version}-}"
-            headers="$(curl --fail --silent --show-error --location --head \
-              "$base_url/releases/latest/$asset")"
-            actual_size="$(printf '%s\n' "$headers" | tr -d '\r' | awk 'tolower($1)=="content-length:" {value=$2} END {print value}')"
-            disposition="$(printf '%s\n' "$headers" | tr -d '\r' | sed -n 's/^[Cc]ontent-[Dd]isposition: *//p' | tail -1)"
-            test "$actual_size" = "$expected_size"
-            test "$disposition" = "attachment; filename=$expected_name"
-            printf '%s %s bytes, filename %s verified\n' "$asset" "$actual_size" "$expected_name"
-          done
+          echo "Windows $RELEASE_TAG uploaded to Cloudflare R2." >> "$GITHUB_STEP_SUMMARY"
+          echo "The local macOS release command will publish latest metadata after both Mac builds are ready." >> "$GITHUB_STEP_SUMMARY"

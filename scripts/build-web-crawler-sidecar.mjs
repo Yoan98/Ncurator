@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/explicit-function-return-type */
 import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -10,7 +11,11 @@ const SIDECAR_DIR = path.join(ROOT, 'resources', 'web_crawler_sidecar')
 const SIDECAR_SCRIPT_PATH = path.join(SIDECAR_DIR, 'web_crawler_sidecar.py')
 const REQUIREMENTS_PATH = path.join(SIDECAR_DIR, 'requirements.txt')
 const BUILD_SCRIPT_PATH = path.join(ROOT, 'scripts', 'build_web_crawler_sidecar.py')
-const VENV_DIR = path.join(ROOT, '.runvenv', 'web_crawler_sidecar')
+const VENV_DIR = path.join(
+  ROOT,
+  '.runvenv',
+  `web_crawler_sidecar-${process.platform}-${process.arch}`
+)
 const STAMP_PATH = path.join(VENV_DIR, '.requirements.sha256')
 const PLAYWRIGHT_BROWSER_STAMP_PATH = path.join(VENV_DIR, '.playwright-browser.sha256')
 const PIP_CACHE_DIR = path.join(ROOT, '.pip-cache', 'web_crawler_sidecar')
@@ -60,9 +65,7 @@ const resolveBootstrapPython = () => {
   const override = String(process.env.NCURATOR_SIDECAR_BUILD_PYTHON || '').trim()
   if (override) {
     if (!canRunSupportedPython(override, [])) {
-      throw new Error(
-        `NCURATOR_SIDECAR_BUILD_PYTHON must point to Python >= 3.10: ${override}`
-      )
+      throw new Error(`NCURATOR_SIDECAR_BUILD_PYTHON must point to Python >= 3.10: ${override}`)
     }
     return {
       command: override,

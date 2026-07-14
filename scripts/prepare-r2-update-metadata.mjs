@@ -14,7 +14,7 @@ if (!inputDirectory || !outputDirectory || !/^v\d+\.\d+\.\d+$/u.test(releaseTag)
 const rewriteMetadata = (content) =>
   content.replace(
     /^(\s*(?:- url:|path:)\s+)([^\s/][^\s]*)$/gmu,
-    (_line, prefix, assetName) => `${prefix}../${releaseTag}/${assetName}`
+    (_line, prefix, assetName) => `${prefix}../../artifacts/${releaseTag}/${assetName}`
   )
 
 await mkdir(outputDirectory, { recursive: true })
@@ -24,7 +24,7 @@ for (const fileName of ['latest.yml', 'latest-mac.yml']) {
   const outputPath = path.join(outputDirectory, fileName)
   const content = await readFile(inputPath, 'utf8')
   const rewritten = rewriteMetadata(content)
-  if (!rewritten.includes(`../${releaseTag}/`)) {
+  if (!rewritten.includes(`../../artifacts/${releaseTag}/`)) {
     throw new Error(`${fileName} does not contain rewritten release asset URLs`)
   }
   await writeFile(outputPath, rewritten, 'utf8')

@@ -42,7 +42,7 @@ describe('R2 update metadata', () => {
 
     const windowsMetadata = await readFile(path.join(outputDirectory, 'latest.yml'), 'utf8')
     const macMetadata = await readFile(path.join(outputDirectory, 'latest-mac.yml'), 'utf8')
-    expect(windowsMetadata).toContain('../v0.1.1/Ncurator-windows-x64.exe')
-    expect(macMetadata).toContain('../v0.1.1/Ncurator-mac-arm64.zip')
+    expect(windowsMetadata).toContain('../../artifacts/v0.1.1/Ncurator-windows-x64.exe')
+    expect(macMetadata).toContain('../../artifacts/v0.1.1/Ncurator-mac-arm64.zip')
   })
 })

@@ -12,13 +12,36 @@ describe('app update publish config', () => {
     expect(config).not.toMatch(/publish:\s*\n\s*provider:\s*github/u)
   })
 
-  it('requires one stable macOS signing identity before publishing update files', async () => {
+  it('builds Windows directly into R2 without GitHub artifacts', async () => {
     const workflow = await readFile(path.resolve('.github/workflows/release.yml'), 'utf8')
 
-    expect(workflow).toContain('MAC_CSC_CERT_BASE64')
-    expect(workflow).toContain('build:mac:release:x64')
-    expect(workflow).toContain('build:mac:release:arm64')
-    expect(workflow).toContain('macOS release must not use an ad-hoc signature')
-    expect(workflow).toContain('Verify both macOS architectures use the same update identity')
+    expect(workflow).toContain('runs-on: windows-latest')
+    expect(workflow).toContain('upload-r2-release-fragment.mjs')
+    expect(workflow).not.toContain('actions/upload-artifact')
+    expect(workflow).not.toContain('runs-on: macos-')
+    expect(workflow).not.toContain('publish-release')
+  })
+
+  it('requires local Rosetta builds and stable macOS signatures', async () => {
+    const localRelease = await readFile(path.resolve('scripts/release-macos-local.mjs'), 'utf8')
+    const signatureVerifier = await readFile(
+      path.resolve('scripts/verify-mac-update-signature.mjs'),
+      'utf8'
+    )
+
+    expect(localRelease).toContain('NCURATOR_X64_NODE')
+    expect(localRelease).toContain('NCURATOR_X64_PYTHON')
+    expect(localRelease).toContain("'-x86_64'")
+    expect(signatureVerifier).toContain('macOS release must not use an ad-hoc signature')
+    expect(signatureVerifier).toContain('macOS designated requirement must remain stable')
+  })
+
+  it('keeps only R2 as the release binary source', async () => {
+    const finalizeScript = await readFile(path.resolve('scripts/finalize-r2-release.mjs'), 'utf8')
+
+    expect(finalizeScript).toContain('releases/latest.json')
+    expect(finalizeScript).toContain('cleanupOldObjects')
+    expect(finalizeScript).not.toContain('gh release upload')
+    await expect(readFile(path.resolve('.github/workflows/sync-r2.yml'), 'utf8')).rejects.toThrow()
   })
 })
