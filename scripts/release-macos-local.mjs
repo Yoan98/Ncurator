@@ -69,9 +69,14 @@ const validatePreflight = async () => {
   ) {
     throw new Error('R2_PUBLIC_BASE_URL must be https://download.ncurator.com')
   }
-  await execFileAsync('aws', ['--version']).catch(() => {
+  const defaultToolRoot = path.join(process.env.HOME || '', '.ncurator', 'release-tools')
+  const awsExecutable =
+    String(process.env.NCURATOR_AWS_CLI || '').trim() ||
+    path.join(defaultToolRoot, 'awscli', 'bin', 'aws')
+  await execFileAsync(awsExecutable, ['--version']).catch(() => {
     throw new Error('AWS CLI is not installed; install it before starting a local release')
   })
+  process.env.NCURATOR_AWS_CLI = awsExecutable
 
   const { stdout: tagType } = await execFileAsync('git', ['cat-file', '-t', releaseTag], {
     cwd: ROOT
@@ -94,8 +99,12 @@ const validatePreflight = async () => {
     )
   }
 
-  const x64Node = String(process.env.NCURATOR_X64_NODE || '').trim()
-  const x64Python = String(process.env.NCURATOR_X64_PYTHON || '').trim()
+  const x64Node =
+    String(process.env.NCURATOR_X64_NODE || '').trim() ||
+    path.join(defaultToolRoot, 'node-x64', 'bin', 'node')
+  const x64Python =
+    String(process.env.NCURATOR_X64_PYTHON || '').trim() ||
+    path.join(defaultToolRoot, 'python-x64', 'bin', 'python3')
   await assertExecutable(x64Node, 'NCURATOR_X64_NODE')
   await assertExecutable(x64Python, 'NCURATOR_X64_PYTHON')
   const { stdout: nodeArch } = await execFileAsync('/usr/bin/arch', [

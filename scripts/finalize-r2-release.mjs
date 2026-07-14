@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
 import { execFile } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
@@ -35,12 +36,15 @@ for (const name of [
 const endpoint = `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`
 const bucket = process.env.R2_BUCKET_NAME
 const publicBaseUrl = String(process.env.R2_PUBLIC_BASE_URL).replace(/\/$/u, '')
+const localAws = path.join(os.homedir(), '.ncurator', 'release-tools', 'awscli', 'bin', 'aws')
+const awsExecutable =
+  String(process.env.NCURATOR_AWS_CLI || '').trim() || (existsSync(localAws) ? localAws : 'aws')
 if (publicBaseUrl !== 'https://download.ncurator.com') {
   throw new Error(`unexpected R2 public URL: ${publicBaseUrl}`)
 }
 
 const aws = async (awsArgs, options = {}) =>
-  execFileAsync('aws', [...awsArgs, '--endpoint-url', endpoint, '--region', 'auto'], {
+  execFileAsync(awsExecutable, [...awsArgs, '--endpoint-url', endpoint, '--region', 'auto'], {
     maxBuffer: 20 * 1024 * 1024,
     ...options
   })

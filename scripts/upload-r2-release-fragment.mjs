@@ -1,6 +1,8 @@
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
 import { execFile } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
+import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 import { promisify } from 'node:util'
@@ -32,9 +34,12 @@ if (fragment.schemaVersion !== 1 || !/^v\d+\.\d+\.\d+$/u.test(fragment.tag)) {
 const endpoint = `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`
 const bucket = process.env.R2_BUCKET_NAME
 const publicBaseUrl = String(process.env.R2_PUBLIC_BASE_URL).replace(/\/$/u, '')
+const localAws = path.join(os.homedir(), '.ncurator', 'release-tools', 'awscli', 'bin', 'aws')
+const awsExecutable =
+  String(process.env.NCURATOR_AWS_CLI || '').trim() || (existsSync(localAws) ? localAws : 'aws')
 
 const aws = async (args) =>
-  execFileAsync('aws', [...args, '--endpoint-url', endpoint, '--region', 'auto'], {
+  execFileAsync(awsExecutable, [...args, '--endpoint-url', endpoint, '--region', 'auto'], {
     maxBuffer: 10 * 1024 * 1024
   })
 
