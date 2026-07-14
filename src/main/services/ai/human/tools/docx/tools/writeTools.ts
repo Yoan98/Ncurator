@@ -17,15 +17,8 @@ import type {
 } from '../types'
 import type { DocxToolRuntime } from '../runtime'
 import { DOCX_POST_WRITE_READBACK_WINDOW_POLICY } from '../writeReadbackPolicy'
-import {
-  DOCX_EDIT_TOOL_SPEC,
-  DOCX_ROLLBACK_TOOL_SPEC,
-} from '../toolSpecs'
-import {
-  createDocxTool,
-  finalizeDocxToolFailure,
-  finalizeDocxToolSuccess
-} from './workerTool'
+import { DOCX_EDIT_TOOL_SPEC } from '../toolSpecs'
+import { createDocxTool, finalizeDocxToolFailure, finalizeDocxToolSuccess } from './workerTool'
 import type { DocxToolFailure } from '../runtime'
 import { createDocxFile } from '../utils/createDocxFile'
 
@@ -48,7 +41,8 @@ const headingStyle = (level: number): string => `Heading${String(level)}`
 
 const blockSpecFromCreateBlock = (block: DocxCreateBlock): DocxParagraphSpec | DocxTableSpec => {
   if (block.type === 'table') return tableSpecFromRows(block.rows)
-  if (block.type === 'heading') return paragraphSpecFromText(block.text, headingStyle(block.level || 1))
+  if (block.type === 'heading')
+    return paragraphSpecFromText(block.text, headingStyle(block.level || 1))
   return paragraphSpecFromText(block.text)
 }
 
@@ -59,7 +53,8 @@ const buildEditSummary = (input: {
   warnings: string[]
 }): string => {
   const base = `${input.actionLabel} 完成`
-  const changed = input.changedBlocks.length > 0 ? `，共 ${String(input.changedBlocks.length)} 处变更` : ''
+  const changed =
+    input.changedBlocks.length > 0 ? `，共 ${String(input.changedBlocks.length)} 处变更` : ''
   const warnings = input.warnings.length > 0 ? `，${String(input.warnings.length)} 条警告` : ''
   return `${base}${changed}${warnings}`
 }
@@ -223,7 +218,10 @@ const buildDeletedReadbackRegions = (input: {
     const targetIndex = getOutlineBlockIndex(input.previousOutlineBlocks, targetBlockId)
     if (targetIndex < 0) continue
     const startIndex = Math.max(0, targetIndex - input.beforeBlockCount)
-    const endIndex = Math.min(input.previousOutlineBlocks.length - 1, targetIndex + input.afterBlockCount)
+    const endIndex = Math.min(
+      input.previousOutlineBlocks.length - 1,
+      targetIndex + input.afterBlockCount
+    )
     const candidateBlockIds = input.previousOutlineBlocks
       .slice(startIndex, endIndex + 1)
       .map((block) => block.blockId)
@@ -269,25 +267,31 @@ const buildPostWriteReadback = async (input: {
       continue
     }
     if (target.action === 'delete_block') {
-      regions.push(...buildDeletedReadbackRegions({
-        previousOutlineBlocks,
-        currentOutlineBlocks,
+      regions.push(
+        ...buildDeletedReadbackRegions({
+          previousOutlineBlocks,
+          currentOutlineBlocks,
+          targetBlockIds: target.targetBlockIds,
+          beforeBlockCount: policy.beforeBlockCount,
+          afterBlockCount: policy.afterBlockCount
+        })
+      )
+      continue
+    }
+    regions.push(
+      ...buildCurrentOutlineReadbackRegions({
+        outlineBlocks: currentOutlineBlocks,
         targetBlockIds: target.targetBlockIds,
         beforeBlockCount: policy.beforeBlockCount,
         afterBlockCount: policy.afterBlockCount
-      }))
-      continue
-    }
-    regions.push(...buildCurrentOutlineReadbackRegions({
-      outlineBlocks: currentOutlineBlocks,
-      targetBlockIds: target.targetBlockIds,
-      beforeBlockCount: policy.beforeBlockCount,
-      afterBlockCount: policy.afterBlockCount
-    }))
+      })
+    )
   }
   regions = mergeReadbackRegions(currentOutlineBlocks, regions)
 
-  const indexByBlockId = new Map(currentOutlineBlocks.map((block, index) => [block.blockId, index] as const))
+  const indexByBlockId = new Map(
+    currentOutlineBlocks.map((block, index) => [block.blockId, index] as const)
+  )
   const indexRegions = regions
     .map((region) => {
       const fromBlockIndex = indexByBlockId.get(region.startBlockId)
@@ -317,7 +321,9 @@ const documentExists = async (sourcePath: string): Promise<boolean> => {
   }
 }
 
-const buildCreateTargetTempPaths = async (sourcePath: string): Promise<{
+const buildCreateTargetTempPaths = async (
+  sourcePath: string
+): Promise<{
   baselinePath: string
   workingPath: string
 }> => {
@@ -438,7 +444,8 @@ type WriteToolResult = {
 }
 
 const actionLabel = (action: DocxEditAction): string => {
-  if (action.type === 'insert_blocks') return `${action.type}.${action.position}.${String(action.blocks.length)}`
+  if (action.type === 'insert_blocks')
+    return `${action.type}.${action.position}.${String(action.blocks.length)}`
   if (action.type === 'delete_blocks') return `${action.type}.${String(action.blockIds.length)}`
   return action.type
 }
@@ -481,9 +488,8 @@ type ApplySerialEditResult =
       readbackTargets: BatchReadbackTarget[]
     }
 
-const isDocxToolFailure = (
-  value: SerialActionTarget | DocxToolFailure
-): value is DocxToolFailure => 'ok' in value && value.ok === false
+const isDocxToolFailure = (value: SerialActionTarget | DocxToolFailure): value is DocxToolFailure =>
+  'ok' in value && value.ok === false
 
 const bindStableTarget = (input: {
   runtime: DocxToolRuntime
@@ -659,7 +665,9 @@ const resolveSerialTargetBlockIds = (input: {
   toolName: string
   toolCallId: string
   sourcePath: string
-  session: Parameters<DocxToolRuntime['resolveLiveBlockIdsFromStableLocatorsInSession']>[0]['session']
+  session: Parameters<
+    DocxToolRuntime['resolveLiveBlockIdsFromStableLocatorsInSession']
+  >[0]['session']
   target: SerialActionTarget
   allowDeleted?: boolean
 }): string[] | DocxToolFailure => {
@@ -696,7 +704,9 @@ const buildSerialActionOps = async (input: {
   sourcePath: string
   currentDocId: string
   currentRevisionRef: string
-  session: Parameters<DocxToolRuntime['resolveLiveBlockIdsFromStableLocatorsInSession']>[0]['session']
+  session: Parameters<
+    DocxToolRuntime['resolveLiveBlockIdsFromStableLocatorsInSession']
+  >[0]['session']
   action: CompiledSerialAction
 }): Promise<
   | {
@@ -764,11 +774,13 @@ const buildSerialActionOps = async (input: {
     if (!Array.isArray(blockIds)) return { failure: blockIds }
     const blockId = blockIds[0]
     return {
-      ops: [{
-        type: 'replace_block',
-        blockId,
-        content: blockSpecFromCreateBlock(action.block)
-      }],
+      ops: [
+        {
+          type: 'replace_block',
+          blockId,
+          content: blockSpecFromCreateBlock(action.block)
+        }
+      ],
       readbackTarget: {
         action: 'replace_block',
         targetBlockIds: [blockId]
@@ -797,13 +809,15 @@ const buildSerialActionOps = async (input: {
       blockIds
     })
     return {
-      ops: [{
-        type: 'replace_text',
-        query: action.query,
-        replace: action.replace,
-        replaceAll: true,
-        blockIds
-      }],
+      ops: [
+        {
+          type: 'replace_text',
+          query: action.query,
+          replace: action.replace,
+          replaceAll: true,
+          blockIds
+        }
+      ],
       readbackTarget: {
         action: 'replace_text',
         targetBlockIds
@@ -827,12 +841,14 @@ const buildSerialActionOps = async (input: {
     if (!Array.isArray(blockIds)) return { failure: blockIds }
     const blockId = blockIds[0]
     return {
-      ops: [{
-        type: 'style_text',
-        blockId,
-        query: action.query,
-        style: action.style
-      }],
+      ops: [
+        {
+          type: 'style_text',
+          blockId,
+          query: action.query,
+          style: action.style
+        }
+      ],
       readbackTarget: {
         action: 'style_text',
         targetBlockIds: [blockId]
@@ -856,11 +872,13 @@ const buildSerialActionOps = async (input: {
     if (!Array.isArray(cellBlockIds)) return { failure: cellBlockIds }
     const cellBlockId = cellBlockIds[0]
     return {
-      ops: [{
-        type: 'update_table_cell',
-        blockId: cellBlockId,
-        content: [paragraphSpecFromText(action.text)]
-      }],
+      ops: [
+        {
+          type: 'update_table_cell',
+          blockId: cellBlockId,
+          content: [paragraphSpecFromText(action.text)]
+        }
+      ],
       readbackTarget: {
         action: 'update_table_cell',
         targetBlockIds: [cellBlockId]
@@ -909,16 +927,21 @@ const resolveCreatedBlocksForSingleAction = async (input: {
   ops: DocxOp[]
 }): Promise<DocxCreatedBlock[][]> => {
   const createdBlocksByOp = input.ops.map((): DocxCreatedBlock[] => [])
-  const insertOpIndex = input.ops.findIndex((op) => op.type === 'insert_after' || op.type === 'insert_before')
+  const insertOpIndex = input.ops.findIndex(
+    (op) => op.type === 'insert_after' || op.type === 'insert_before'
+  )
   if (insertOpIndex < 0) return createdBlocksByOp
   const insertOp = input.ops[insertOpIndex]
-  if (insertOp.type !== 'insert_after' && insertOp.type !== 'insert_before') return createdBlocksByOp
+  if (insertOp.type !== 'insert_after' && insertOp.type !== 'insert_before')
+    return createdBlocksByOp
 
   const beforeBlocks = await fetchOutlineBlocks(input.runtime, input.previousDocId)
   const afterBlocks = await fetchOutlineBlocks(input.runtime, input.nextDocId)
   const beforeBodyBlocks = bodyBlocksOnly(beforeBlocks)
   const afterBodyBlocks = bodyBlocksOnly(afterBlocks)
-  const anchorIndex = beforeBodyBlocks.findIndex((block) => block.blockId === insertOp.anchorBlockId)
+  const anchorIndex = beforeBodyBlocks.findIndex(
+    (block) => block.blockId === insertOp.anchorBlockId
+  )
   if (anchorIndex < 0) return createdBlocksByOp
 
   const startIndex = insertOp.type === 'insert_before' ? anchorIndex : anchorIndex + 1
@@ -1381,15 +1404,17 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
           })
         } finally {
           await Promise.all(
-            [tempPaths.baselinePath, tempPaths.workingPath, path.dirname(tempPaths.baselinePath)].map(
-              async (targetPath) => {
-                try {
-                  await fs.rm(targetPath, { recursive: true, force: true })
-                } catch {
-                  return
-                }
+            [
+              tempPaths.baselinePath,
+              tempPaths.workingPath,
+              path.dirname(tempPaths.baselinePath)
+            ].map(async (targetPath) => {
+              try {
+                await fs.rm(targetPath, { recursive: true, force: true })
+              } catch {
+                return
               }
-            )
+            })
           )
         }
       }
@@ -1460,85 +1485,12 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
         activity: {
           actionType: DOCX_EDIT_TOOL_SPEC.activityActionType!,
           startedSummary: `执行 docx_edit: ${args.actions.map((action) => action.type).join(', ')}`,
-          buildCompletedSummary: () => `docx_edit 完成: ${args.actions.map((action) => action.type).join(', ')}`
+          buildCompletedSummary: () =>
+            `docx_edit 完成: ${args.actions.map((action) => action.type).join(', ')}`
         }
       })
     }
   })
 
-  const docxRollbackTool = createDocxTool({
-    runtime,
-    name: DOCX_ROLLBACK_TOOL_SPEC.name,
-    description: DOCX_ROLLBACK_TOOL_SPEC.description,
-    schema: DOCX_ROLLBACK_TOOL_SPEC.inputSchema,
-    onError: ({ message }) => {
-      runtime.input.emitActivity({
-        actionType: DOCX_ROLLBACK_TOOL_SPEC.activityActionType!,
-        status: 'failed',
-        summary: `回退失败: ${message}`
-      })
-    },
-    execute: async ({ args, toolName, toolCallId }) => {
-      const sessionResult = await runtime.ensureReplaySession({
-        toolName,
-        toolCallId,
-        sourcePath: args.sourcePath
-      })
-      if ('failure' in sessionResult) return sessionResult.failure
-
-      const resolved = runtime.resolveRevisionRollbackTarget(
-        sessionResult.sourcePath,
-        args.revisionRef,
-        undefined
-      )
-      if (!resolved.ok) {
-        return finalizeDocxToolFailure({
-          runtime,
-          failure: runtime.emitFailure({
-            toolName,
-            toolCallId,
-            reason: 'invalid_input',
-            error: resolved.error,
-            resourceContext: runtime.buildResourceContext({
-              sourcePath: sessionResult.sourcePath,
-              effectKind: 'rolled_back',
-              currentRevisionRef: sessionResult.currentRevisionRef
-            })
-          }),
-          activity: {
-            actionType: DOCX_ROLLBACK_TOOL_SPEC.activityActionType!
-          }
-        })
-      }
-
-      const revisionState = await runtime.activateRevision({
-        sourcePath: sessionResult.sourcePath,
-        targetDocId: resolved.targetDocId,
-        targetRevisionRef: resolved.targetRevisionRef
-      })
-      const result = {
-        sourcePath: sessionResult.sourcePath,
-        previousRevisionRef: revisionState.previousRevisionRef,
-        currentRevisionRef: revisionState.currentRevisionRef
-      }
-      return finalizeDocxToolSuccess({
-        runtime,
-        toolName,
-        toolCallId,
-        result,
-        outputPreview: result,
-        draftDocId: resolved.targetDocId,
-        activity: {
-          actionType: DOCX_ROLLBACK_TOOL_SPEC.activityActionType!,
-          startedSummary: `准备回退到 ${args.revisionRef}`,
-          buildCompletedSummary: () => `已切回修订 ${resolved.targetRevisionRef}`
-        }
-      })
-    }
-  })
-
-  return [
-    docxEditTool,
-    docxRollbackTool
-  ]
+  return [docxEditTool]
 }

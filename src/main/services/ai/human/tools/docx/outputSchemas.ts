@@ -207,21 +207,6 @@ export const docxReadBlocksOutputSchema = docxBaseOutputSchema.extend({
   blocks: z.array(docxDetailedBlockOutputSchema)
 })
 
-export const docxHistoryOutputSchema = docxBaseOutputSchema.extend({
-  sourcePath: z.string(),
-  currentRevisionRef: z.string(),
-  revisions: z.array(
-    z.object({
-      revisionRef: z.string(),
-      parentRevisionRef: z.string().optional(),
-      createdAt: z.number(),
-      isCurrent: z.boolean(),
-      summary: z.string(),
-      changedBlocks: z.array(docxChangedBlockOutputSchema)
-    })
-  )
-})
-
 export const docxWriteOutputSchema = docxBaseOutputSchema.extend({
   sourcePath: z.string(),
   previousRevisionRef: z.string(),
@@ -230,10 +215,4 @@ export const docxWriteOutputSchema = docxBaseOutputSchema.extend({
   createdBlocks: z.array(docxCreatedBlockOutputSchema),
   warnings: z.array(z.string()),
   postWriteReadback: docxPostWriteReadbackOutputSchema
-})
-
-export const docxRollbackOutputSchema = docxBaseOutputSchema.extend({
-  sourcePath: z.string(),
-  previousRevisionRef: z.string(),
-  currentRevisionRef: z.string()
 })

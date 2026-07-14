@@ -10,7 +10,6 @@ import {
   docxEditSchema,
   docxHeadingEditActionSchema,
   docxHeadingEditSchema,
-  docxHistoryRequestSchema,
   docxOutlineRequestSchema,
   docxParagraphEditActionSchema,
   docxParagraphEditSchema,
@@ -18,7 +17,6 @@ import {
   docxSearchRequestSchema,
   docOpSchema,
   docxSearchModeSchema,
-  docxRollbackRequestSchema,
   docxTableEditActionSchema,
   docxTableEditSchema,
   docxTextEditSchema,
@@ -74,7 +72,10 @@ export type DocxOutlineCellBlock = {
   text: string
 }
 
-export type DocxOutlineBlock = DocxOutlineParagraphBlock | DocxOutlineTableBlock | DocxOutlineCellBlock
+export type DocxOutlineBlock =
+  | DocxOutlineParagraphBlock
+  | DocxOutlineTableBlock
+  | DocxOutlineCellBlock
 
 export type DocxDetailedParagraphBlock = {
   blockId: string
@@ -173,9 +174,6 @@ export type DocxTableEditRequest = z.infer<typeof docxTableEditSchema>
 export type DocxTextEditRequest = z.infer<typeof docxTextEditSchema>
 export type DocxTextStyle = z.infer<typeof docxTextStyleSchema>
 export type DocxTextStyleEditRequest = z.infer<typeof docxTextStyleEditSchema>
-export type DocxHistoryRequest = z.infer<typeof docxHistoryRequestSchema>
-export type DocxRollbackRequest = z.infer<typeof docxRollbackRequestSchema>
-
 export type DocxSearchMatch = {
   blockId: string
   blockIndex: number

@@ -27,15 +27,13 @@ describe('ai tool docx backend', () => {
             }),
             editInvalidPath: await harness.invoke<DocxFailureResult>('docx_edit', {
               sourcePath: 'missing.docx',
-              actions: [{
-                type: 'replace_text',
-                query: 'hello',
-                replace: 'hi'
-              }]
-            }),
-            rollbackInvalidPath: await harness.invoke<DocxFailureResult>('docx_rollback', {
-              sourcePath: 'missing.docx',
-              revisionRef: 'v1'
+              actions: [
+                {
+                  type: 'replace_text',
+                  query: 'hello',
+                  replace: 'hi'
+                }
+              ]
             }),
             trackedSourceCount: harness.state.replaySessionBySourcePath.size
           }
@@ -45,12 +43,9 @@ describe('ai tool docx backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          [
-            result.outlineInvalidPath,
-            result.readInvalidPath,
-            result.editInvalidPath,
-            result.rollbackInvalidPath
-          ].every((item) => item.ok === false),
+          [result.outlineInvalidPath, result.readInvalidPath, result.editInvalidPath].every(
+            (item) => item.ok === false
+          ),
           {
             name: 'docx-tools-fail-fast-on-invalid-source-path',
             message: '自动 open 模式下，docx 工具遇到无效 sourcePath 仍应明确失败，不生成新修订。',
@@ -58,16 +53,13 @@ describe('ai tool docx backend', () => {
           }
         )
 
-        runtime.assertThat(
-          result.trackedSourceCount === 0,
-          {
-            name: 'docx-precondition-failures-do-not-pollute-runtime-state',
-            message: '前置条件失败后，不应生成新修订，也不应污染当前 run 状态。',
-            data: {
-              trackedSourceCount: result.trackedSourceCount
-            }
+        runtime.assertThat(result.trackedSourceCount === 0, {
+          name: 'docx-precondition-failures-do-not-pollute-runtime-state',
+          message: '前置条件失败后，不应生成新修订，也不应污染当前 run 状态。',
+          data: {
+            trackedSourceCount: result.trackedSourceCount
           }
-        )
+        })
       }
     })
   })

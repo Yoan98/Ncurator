@@ -104,22 +104,7 @@ const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
     toBlockIndex: true,
     blocks: DOCX_BLOCK_WHITELIST
   },
-  docx_history: {
-    sourcePath: true,
-    currentRevisionRef: true,
-    revisions: {
-      revisionRef: true,
-      parentRevisionRef: true,
-      summary: true,
-      isCurrent: true
-    }
-  },
   docx_edit: DOCX_WRITE_RESULT_WHITELIST,
-  docx_rollback: {
-    sourcePath: true,
-    previousRevisionRef: true,
-    currentRevisionRef: true,
-  },
   web_search: {
     query: true,
     results: {
@@ -190,7 +175,8 @@ const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
 const renderJsonValue = (value: JsonValue | JsonObject | undefined): string =>
   value === undefined ? 'none' : JSON.stringify(value)
 
-const toJsonValue = (value: JsonValue | undefined): JsonValue => value === undefined ? null : value
+const toJsonValue = (value: JsonValue | undefined): JsonValue =>
+  value === undefined ? null : value
 
 const filterValueByWhitelist = (
   value: JsonValue | undefined,
@@ -305,18 +291,19 @@ const renderBrainRoundExecution = (record: HumanRoundRecord): string => {
     case 'pre_execution_blocked':
       return ['- 类型：blocked', '- 结果：系统在执行前阻断，本轮未进入真实执行。'].join('\n')
     case 'learning':
-      return renderLearningExecution(record as HumanRoundRecord & {
-        execution: Extract<HumanRoundRecord['execution'], { kind: 'learning' }>
-      })
+      return renderLearningExecution(
+        record as HumanRoundRecord & {
+          execution: Extract<HumanRoundRecord['execution'], { kind: 'learning' }>
+        }
+      )
     case 'hand':
-      return renderHandExecution(record as HumanRoundRecord & {
-        execution: Extract<HumanRoundRecord['execution'], { kind: 'hand' }>
-      })
+      return renderHandExecution(
+        record as HumanRoundRecord & {
+          execution: Extract<HumanRoundRecord['execution'], { kind: 'hand' }>
+        }
+      )
     case 'mouth':
-      return [
-        '- 类型：mouth',
-        '- 动作：组织最终交付'
-      ].join('\n')
+      return ['- 类型：mouth', '- 动作：组织最终交付'].join('\n')
   }
 }
 

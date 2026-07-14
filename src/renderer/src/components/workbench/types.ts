@@ -94,9 +94,7 @@ export type AssistantToolName =
   | 'docx_outline'
   | 'docx_search'
   | 'docx_read_blocks'
-  | 'docx_history'
   | 'docx_edit'
-  | 'docx_rollback'
   | 'web_search'
   | 'web_crawl'
   | 'browser_use'
@@ -126,7 +124,6 @@ export type AssistantProcessGroupKind =
 export type AssistantProcessSkillKey =
   | 'docx-read'
   | 'docx-edit'
-  | 'docx-rollback'
   | 'kb'
   | 'terminal'
   | 'web-search'

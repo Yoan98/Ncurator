@@ -75,9 +75,7 @@ const isAssistantToolName = (toolName: string): toolName is AssistantToolName =>
   toolName === 'docx_outline' ||
   toolName === 'docx_search' ||
   toolName === 'docx_read_blocks' ||
-  toolName === 'docx_history' ||
   toolName === 'docx_edit' ||
-  toolName === 'docx_rollback' ||
   toolName === 'web_search' ||
   toolName === 'web_crawl' ||
   toolName === 'browser_use' ||
@@ -213,13 +211,11 @@ const getToolUiKind = (toolName?: AssistantToolName): AssistantProcessSkillKey =
   if (
     toolName === 'docx_outline' ||
     toolName === 'docx_read_blocks' ||
-    toolName === 'docx_history' ||
     toolName === 'docx_search'
   ) {
     return 'docx-read'
   }
   if (toolName === 'docx_edit') return 'docx-edit'
-  if (toolName === 'docx_rollback') return 'docx-rollback'
   if (toolName === 'kb_search' || toolName === 'kb_list_documents') return 'kb'
   if (toolName === 'terminal_run') return 'terminal'
   if (toolName === 'web_search') return 'web-search'
@@ -236,7 +232,7 @@ const getDisplaySkillKey = (display: AssistantProcessDisplay): AssistantProcessS
 }
 
 const getToolIconKind = (skillKey: AssistantProcessSkillKey): AssistantProcessIconKind => {
-  if (skillKey === 'docx-edit' || skillKey === 'docx-rollback') return 'edit'
+  if (skillKey === 'docx-edit') return 'edit'
   if (skillKey === 'docx-read') return 'document'
   if (
     skillKey === 'kb' ||
@@ -296,16 +292,6 @@ const getToolSummaryText = (
       return sentence(text(`部分编辑 ${normalizedCount} 个 docx 文件失败`))
     }
     return sentence(text(`编辑 ${normalizedCount} 个 docx 文件失败`))
-  }
-  if (skillKey === 'docx-rollback') {
-    if (status === 'running')
-      return sentence(text(`正在回退 ${normalizedCount} 个 docx 文件的修改`))
-    if (status === 'completed')
-      return sentence(text(`已回退 ${normalizedCount} 个 docx 文件的修改`))
-    if (status === 'partial_failed') {
-      return sentence(text(`部分回退 ${normalizedCount} 个 docx 文件的修改失败`))
-    }
-    return sentence(text(`回退 ${normalizedCount} 个 docx 文件的修改失败`))
   }
   if (skillKey === 'kb') {
     if (status === 'running') return sentence(text('正在检索知识库'))
@@ -378,12 +364,6 @@ const getToolItemText = (
   if (toolName === 'docx_edit') {
     return sentence(text('编辑文档：'), text(fileLabel, true))
   }
-  if (toolName === 'docx_rollback') {
-    return sentence(text('回退文档修改：'), text(fileLabel, true))
-  }
-  if (toolName === 'docx_history') {
-    return sentence(text('检查修改历史：'), text(fileLabel, true))
-  }
   if (toolName === 'terminal_run') {
     return sentence(text('执行命令：'), text(commandLabel, true))
   }
@@ -404,8 +384,10 @@ const getToolItemText = (
   }
   if (toolName === 'browser_use') {
     if (browserAction === 'navigate') return sentence(text('打开网页：'), text(urlLabel, true))
-    if (browserAction === 'observe') return sentence(text('观察页面：'), text(instructionLabel, true))
-    if (browserAction === 'extract') return sentence(text('提取页面内容：'), text(instructionLabel, true))
+    if (browserAction === 'observe')
+      return sentence(text('观察页面：'), text(instructionLabel, true))
+    if (browserAction === 'extract')
+      return sentence(text('提取页面内容：'), text(instructionLabel, true))
     if (browserAction === 'act') return sentence(text('操作页面：'), text(instructionLabel, true))
     return sentence(text('操作浏览器：'), text(instructionLabel, true))
   }
@@ -486,14 +468,13 @@ const getExecutionStatus = (groups: AssistantProcessGroup[]): AssistantProcessSt
 const getExecutionActionOrder = (kind: AssistantProcessSkillKey): number => {
   if (kind === 'docx-read') return 1
   if (kind === 'docx-edit') return 2
-  if (kind === 'docx-rollback') return 3
-  if (kind === 'kb') return 4
-  if (kind === 'terminal') return 5
-  if (kind === 'web-search') return 6
-  if (kind === 'web-crawl') return 7
-  if (kind === 'browser') return 8
-  if (kind === 'wait') return 9
-  return 10
+  if (kind === 'kb') return 3
+  if (kind === 'terminal') return 4
+  if (kind === 'web-search') return 5
+  if (kind === 'web-crawl') return 6
+  if (kind === 'browser') return 7
+  if (kind === 'wait') return 8
+  return 9
 }
 
 export const buildAssistantExecutionSummaryText = (
@@ -518,7 +499,7 @@ export const buildAssistantExecutionSummaryText = (
         } satisfies ExecutionActionSummary)
       current.count += 1
       current.statuses.push(group.status)
-      if (kind === 'docx-read' || kind === 'docx-edit' || kind === 'docx-rollback') {
+      if (kind === 'docx-read' || kind === 'docx-edit') {
         current.fileLabels.add(entry.targetLabel || group.id)
       }
       summaries.set(kind, current)

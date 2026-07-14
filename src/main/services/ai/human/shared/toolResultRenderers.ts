@@ -47,21 +47,21 @@ const renderGenericArrayItem = (value: JsonValue, index: number): string => {
 
   if (isJsonObject(value)) {
     const name =
-      readStringField(value, 'blockId')
-      || readStringField(value, 'document_name')
-      || readStringField(value, 'name')
-      || readStringField(value, 'id')
-      || readStringField(value, 'docId')
+      readStringField(value, 'blockId') ||
+      readStringField(value, 'document_name') ||
+      readStringField(value, 'name') ||
+      readStringField(value, 'id') ||
+      readStringField(value, 'docId')
     const text =
-      readStringField(value, 'text')
-      || readStringField(value, 'preview')
-      || readStringField(value, 'summary')
-      || readStringField(value, 'message')
-      || readStringField(value, 'error')
-      || readStringField(value, 'stdout')
-      || readStringField(value, 'stderr')
-      || readStringField(value, 'beforeText')
-      || readStringField(value, 'afterText')
+      readStringField(value, 'text') ||
+      readStringField(value, 'preview') ||
+      readStringField(value, 'summary') ||
+      readStringField(value, 'message') ||
+      readStringField(value, 'error') ||
+      readStringField(value, 'stdout') ||
+      readStringField(value, 'stderr') ||
+      readStringField(value, 'beforeText') ||
+      readStringField(value, 'afterText')
 
     const inline = renderKeyValuePairs([
       ['name', name],
@@ -118,7 +118,9 @@ const renderDocxParagraphs = (value: JsonValue | undefined): string => {
     .map((item, index) => {
       if (!isJsonObject(item)) return renderGenericArrayItem(item, index)
       const blockLine = renderDocxBlockLine(item, index)
-      const runs = Array.isArray(item.runs) ? `\n  runs:\n${renderDocxParagraphRuns(item.runs)}` : ''
+      const runs = Array.isArray(item.runs)
+        ? `\n  runs:\n${renderDocxParagraphRuns(item.runs)}`
+        : ''
       return `${blockLine}${runs}`
     })
     .join('\n')
@@ -153,10 +155,10 @@ const renderDocxBlockLine = (value: JsonValue, index: number): string => {
   const type = readStringField(value, 'type')
   const blockIndex = readNumberField(value, 'blockIndex')
   const text =
-    readStringField(value, 'text')
-    || readStringField(value, 'summary')
-    || readStringField(value, 'message')
-    || ''
+    readStringField(value, 'text') ||
+    readStringField(value, 'summary') ||
+    readStringField(value, 'message') ||
+    ''
   const extra =
     renderKeyValuePairs([
       ['type', type],
@@ -181,9 +183,7 @@ const renderDocxBlockLine = (value: JsonValue, index: number): string => {
 }
 
 const renderDocxBlocks = (value: JsonValue | undefined): string =>
-  Array.isArray(value) && value.length > 0
-    ? value.map(renderDocxBlockLine).join('\n')
-    : 'none'
+  Array.isArray(value) && value.length > 0 ? value.map(renderDocxBlockLine).join('\n') : 'none'
 
 const renderDocxSearchMatches = (value: JsonValue | undefined): string => {
   if (!Array.isArray(value) || value.length === 0) return 'none'
@@ -201,22 +201,6 @@ const renderDocxSearchMatches = (value: JsonValue | undefined): string => {
           ['blockIndex', typeof blockIndex === 'number' ? String(blockIndex) : undefined]
         ]) || undefined
       return `- ${blockId}${meta ? `（${meta}）` : ''}：${text}`
-    })
-    .join('\n')
-}
-
-const renderDocxRevisions = (value: JsonValue | undefined): string => {
-  if (!Array.isArray(value) || value.length === 0) return 'none'
-
-  return value
-    .map((item, index) => {
-      if (!isJsonObject(item)) return renderGenericArrayItem(item, index)
-      return `- ${renderKeyValuePairs([
-        ['revisionRef', readStringField(item, 'revisionRef')],
-        ['docId', readStringField(item, 'docId')],
-        ['parentRevisionRef', readStringField(item, 'parentRevisionRef')],
-        ['summary', readStringField(item, 'summary')]
-      ])}`
     })
     .join('\n')
 }
@@ -259,18 +243,6 @@ const renderDocxOutlineResult = (obj: JsonObject): string =>
     ]),
     'blocks:',
     renderDocxBlocks(obj.blocks)
-  ]
-    .filter(Boolean)
-    .join('\n')
-
-const renderDocxHistoryResult = (obj: JsonObject): string =>
-  [
-    renderKeyValuePairs([
-      ['sourcePath', readStringField(obj, 'sourcePath')],
-      ['currentRevisionRef', readStringField(obj, 'currentRevisionRef')]
-    ]),
-    'revisions:',
-    renderDocxRevisions(obj.revisions)
   ]
     .filter(Boolean)
     .join('\n')
@@ -350,7 +322,12 @@ const renderDocxCreateResult = (obj: JsonObject): string =>
   [
     renderKeyValuePairs([
       ['sourcePath', readStringField(obj, 'sourcePath')],
-      ['warnings', Array.isArray(obj.warnings) && obj.warnings.length > 0 ? String(obj.warnings.length) : undefined]
+      [
+        'warnings',
+        Array.isArray(obj.warnings) && obj.warnings.length > 0
+          ? String(obj.warnings.length)
+          : undefined
+      ]
     ]),
     'postWriteReadback:',
     renderDocxPostWriteReadback(obj.postWriteReadback)
@@ -408,8 +385,6 @@ export const renderToolResultDataText = (
       return renderDocxSearchResult(value)
     case 'docx_outline':
       return renderDocxOutlineResult(value)
-    case 'docx_history':
-      return renderDocxHistoryResult(value)
     case 'web_search':
       return renderWebSearchResult(value)
     case 'web_crawl':
@@ -424,9 +399,8 @@ export const renderToolDiagnosticText = (result: ToolCallResult): string => {
   return `；diagnostic=${result.diagnostic.message.trim()}`
 }
 
-export const buildToolCallDisplayText = (
-  result: Pick<ToolCallResult, 'toolName' | 'ok'>
-): string => `调用工具 ${result.toolName}（${result.ok ? '成功' : '失败'}）`
+export const buildToolCallDisplayText = (result: Pick<ToolCallResult, 'toolName' | 'ok'>): string =>
+  `调用工具 ${result.toolName}（${result.ok ? '成功' : '失败'}）`
 
 export const resolveToolResultErrorText = (
   result: Pick<ToolCallResult, 'data'> & { diagnostic?: ToolCallResult['diagnostic'] }
@@ -437,10 +411,10 @@ export const resolveToolResultErrorText = (
 
   if (isJsonObject(result.data)) {
     const explicit =
-      readStringField(result.data, 'error')
-      || readStringField(result.data, 'message')
-      || readStringField(result.data, 'stdout')
-      || readStringField(result.data, 'stderr')
+      readStringField(result.data, 'error') ||
+      readStringField(result.data, 'message') ||
+      readStringField(result.data, 'stdout') ||
+      readStringField(result.data, 'stderr')
     if (explicit) return explicit
   }
 

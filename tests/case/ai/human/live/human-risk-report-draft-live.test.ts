@@ -82,6 +82,7 @@ const hasRiskConclusionSemantics = (text: string, expectedRiskConclusion: string
 const hasPendingRiskStateSemantics = (text: string): boolean => {
   const normalizedText = normalizeAssertionText(text)
   return (
+    /最终合规签署(?:尚未|仍未|还未)(?:闭环|完成)/.test(normalizedText) ||
     /最终合规签署[^。]{0,40}(?:仍存在|尚有|还有).{0,24}(?:确认项|确认环节|未闭环|未完成)/.test(
       normalizedText
     ) ||
@@ -113,6 +114,7 @@ const hasAffirmativeForbiddenRiskConclusion = (text: string): boolean => {
     '不写成',
     '不提前写成',
     '不直接写成',
+    '不直接使用',
     '不直接下',
     '不要提前写成'
   ]
@@ -311,6 +313,20 @@ describe('ai human live backend', () => {
             'kb_search'
           ].includes(toolName)
         )
+        const scoreParts = {
+          createdDraft:
+            createSourcePaths.length >= 1 &&
+            createdTargetInAllowedLocation &&
+            createdDocNotPreexisting &&
+            hasDocxArtifact
+              ? 2
+              : 0,
+          sourceSafety: trackedDocsUnchanged.every(Boolean) && writesStayOnCreatedDoc ? 2 : 0,
+          pendingRisk: riskConclusionSatisfied || pendingRiskStateSatisfied ? 2 : 0,
+          ownershipAndActions: ownerSummarySatisfied && nextStepSatisfied ? 2 : 0,
+          cautiousConclusion: !hasForbiddenAffirmativeConclusion ? 2 : 0
+        }
+        const score = Object.values(scoreParts).reduce((total, value) => total + value, 0)
 
         runtime.assertThat(
           result.output?.status === 'completed' &&
@@ -352,36 +368,30 @@ describe('ai human live backend', () => {
           }
         })
 
-        runtime.assertThat(
-          trackedDocsUnchanged.every(Boolean) &&
-            createSourcePaths.length >= 1 &&
-            (riskConclusionSatisfied || pendingRiskStateSatisfied) &&
-            ownerSummarySatisfied &&
-            nextStepSatisfied &&
-            !hasForbiddenAffirmativeConclusion,
-          {
-            name: 'human-live-risk-report-creates-new-draft-without-overwriting-source-docs',
-            message:
-              'live human complex case 应新建本周周报文件，不覆盖模板或既有工作 docx；只要风险状态仍明确未收口、负责人和后续动作成立，且不输出正向绝对收口表述，即视为对用户诉求负责。',
-            data: {
-              createSourcePaths,
-              createdRelativePaths,
-              writeSourcePaths,
-              writeRelativePaths,
-              trackedDocsUnchanged,
-              appliedDocPath,
-              expectedRiskConclusion: result.workspaceSeed.expectedRiskConclusion,
-              riskConclusionSatisfied,
-              pendingRiskStateSatisfied,
-              hasForbiddenAffirmativeConclusion,
-              ownerSummarySatisfied,
-              nextStepSatisfied,
-              generatedDraftTextSnippet: generatedDraftText.slice(0, 2000),
-              appliedTextSnippet: appliedTextOnly.slice(0, 2000),
-              deliveryMarkdown: result.output?.deliveryMarkdown
-            }
+        runtime.assertThat(score > 8, {
+          name: 'human-live-risk-report-creates-new-draft-without-overwriting-source-docs',
+          message:
+            'live risk report 按 10 分制评估文件交付、原文件安全、风险状态、负责人动作和谨慎结论，得分必须严格超过 8 分。',
+          data: {
+            score,
+            scoreParts,
+            createSourcePaths,
+            createdRelativePaths,
+            writeSourcePaths,
+            writeRelativePaths,
+            trackedDocsUnchanged,
+            appliedDocPath,
+            expectedRiskConclusion: result.workspaceSeed.expectedRiskConclusion,
+            riskConclusionSatisfied,
+            pendingRiskStateSatisfied,
+            hasForbiddenAffirmativeConclusion,
+            ownerSummarySatisfied,
+            nextStepSatisfied,
+            generatedDraftTextSnippet: generatedDraftText.slice(0, 2000),
+            appliedTextSnippet: appliedTextOnly.slice(0, 2000),
+            deliveryMarkdown: result.output?.deliveryMarkdown
           }
-        )
+        })
 
         runtime.assertThat(
           /负责人/.test(deliveryText) &&

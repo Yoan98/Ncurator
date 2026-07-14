@@ -15,7 +15,8 @@ describe('ai human mock-llm backend', () => {
       domain: 'ai',
       suite: 'human',
       groups: ['mock-llm'],
-      description: '验证 learning 会持续记录 active tool 数，并在预算未超限时保留当前已学习 skill。',
+      description:
+        '验证 learning 会持续记录 active tool 数，并在预算未超限时保留当前已学习 skill。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -84,14 +85,13 @@ describe('ai human mock-llm backend', () => {
             latestLearningStep.availableToolNames.includes('docx_outline') &&
             latestLearningStep.availableToolNames.includes('docx_search') &&
             latestLearningStep.availableToolNames.includes('docx_read_blocks') &&
-            latestLearningStep.availableToolNames.includes('docx_history') &&
             latestLearningStep.availableToolNames.includes('docx_edit') &&
-            latestLearningStep.availableToolNames.includes('docx_rollback') &&
-            latestLearningStep.summary.includes('当前 active tools=6') &&
+            latestLearningStep.summary.includes('当前 active tools=4') &&
             !latestLearningStep.summary.includes('已淘汰最早学习的 skill='),
           {
             name: 'learning-tracks-active-tool-count-under-budget',
-            message: 'learning 在预算未超限时应保留当前 skill，并把 active tool 数反映到 learning summary 中。',
+            message:
+              'learning 在预算未超限时应保留当前 skill，并把 active tool 数反映到 learning summary 中。',
             data: {
               learnedSkillIds: latestLearningStep?.learnedSkillIds,
               effectiveSkillIds: latestLearningStep?.effectiveSkillIds,

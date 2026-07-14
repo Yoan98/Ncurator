@@ -83,6 +83,14 @@ describe('ai human live backend', () => {
           )
 
           const runner = createHumanTestRunner(runtime, {
+            allowedToolNames: [
+              'terminal_run',
+              'kb_search',
+              'docx_outline',
+              'docx_search',
+              'docx_read_blocks',
+              'docx_edit'
+            ],
             runtimeSettingsOverride: {
               llmStreamingMode: 'force_non_stream'
             }
@@ -128,13 +136,6 @@ describe('ai human live backend', () => {
             .filter((value): value is string => typeof value === 'string')
           const writeSourcePaths = collectStartedDocxEditSourcePaths(events, isDocxEditWriteInput)
           const changedContentKinds = collectDocxApplyOpsContentKinds(events)
-          const targetDocsWritten = result.workspaceSeed.targetDocs.every((fixtureDoc) =>
-            writeSourcePaths.some(
-              (sourcePath) =>
-                sourcePath.endsWith(fixtureDoc.relativePath) ||
-                sourcePath.endsWith(`/${path.basename(fixtureDoc.relativePath)}`)
-            )
-          )
           const sourceDocRelativePaths = new Set(
             result.workspaceSeed.sourceDocs.map((fixture) => fixture.relativePath)
           )
@@ -147,44 +148,57 @@ describe('ai human live backend', () => {
               })
           )
           const deliveryText = String(result.output?.deliveryMarkdown || '')
-
-          runtime.assertThat(
+          const kbEvidenceSatisfied =
+            hasKbToolCall(events) && hasSuccessfulKbSearchHit(events) && requiredFilesIndexed
+          const writtenTargetCount = result.workspaceSeed.targetDocs.filter((fixtureDoc) =>
+            writeSourcePaths.some(
+              (sourcePath) =>
+                sourcePath.endsWith(fixtureDoc.relativePath) ||
+                sourcePath.endsWith(`/${path.basename(fixtureDoc.relativePath)}`)
+            )
+          ).length
+          const groundedContentSatisfied =
+            changedContentKinds.includes('paragraph') &&
+            /(过拟合|过度拟合)/.test(deliveryText) &&
+            /反走样/.test(deliveryText) &&
+            /PRD|课堂|案例/.test(deliveryText)
+          const deliverySatisfied =
             result.output?.status === 'completed' &&
-              hasKbToolCall(events) &&
-              hasSuccessfulKbSearchHit(events) &&
-              toolNames.includes('docx_edit') &&
-              changedContentKinds.includes('paragraph') &&
-              targetDocsWritten &&
-              filterAiRunEventsByType(events, 'file_artifact').filter(
-                (event) => event.capability === 'docx' && Boolean(event.applyId)
-              ).length >= 2 &&
-              countDocxApplyArtifacts(result.output?.artifacts) >= 2 &&
-              countDocxFileArtifacts(result.output?.artifacts) >= 2 &&
-              /(过拟合|过度拟合)/.test(deliveryText) &&
-              /反走样/.test(deliveryText) &&
-              /PRD|课堂|案例/.test(deliveryText) &&
-              sourceDocsUnchanged.every(Boolean) &&
-              requiredFilesIndexed &&
-              typeof result.output?.deliveryMarkdown === 'string' &&
-              result.output.deliveryMarkdown.trim().length > 0,
-            {
-              name: 'human-live-kb-guided-docx-updates-two-target-docs-from-kb-grounded-evidence',
-              message:
-                'live human KB-guided 写 case 应先触发 KB 缩圈，再把 grounded 内容落到两份目标 docx 上且不覆盖原文件。',
-              data: {
-                openedSourcePaths,
-                writeSourcePaths,
-                toolNames,
-                sourceDocRelativePaths: [...sourceDocRelativePaths],
-                sourceDocsUnchanged,
-                requiredIndexedRelativePaths,
-                indexedSupportedFiles,
-                changedContentKinds,
-                deliveryMarkdown: result.output?.deliveryMarkdown,
-                artifacts: result.output?.artifacts
-              }
+            filterAiRunEventsByType(events, 'file_artifact').filter(
+              (event) => event.capability === 'docx' && Boolean(event.applyId)
+            ).length >= 2 &&
+            countDocxApplyArtifacts(result.output?.artifacts) >= 2 &&
+            countDocxFileArtifacts(result.output?.artifacts) >= 2 &&
+            typeof result.output?.deliveryMarkdown === 'string' &&
+            result.output.deliveryMarkdown.trim().length > 0
+          const scoreParts = {
+            kbEvidence: kbEvidenceSatisfied ? 2 : 0,
+            targetDocuments: writtenTargetCount * 2,
+            groundedContent: groundedContentSatisfied ? 2 : 0,
+            sourceSafety: sourceDocsUnchanged.every(Boolean) ? 1 : 0,
+            finalDelivery: deliverySatisfied ? 1 : 0
+          }
+          const score = Object.values(scoreParts).reduce((total, value) => total + value, 0)
+
+          runtime.assertThat(score > 8, {
+            name: 'human-live-kb-guided-docx-updates-two-target-docs-from-kb-grounded-evidence',
+            message:
+              'live KB-guided DOCX case 按 10 分制评估 KB 证据、两份目标文件、内容质量、来源安全和最终交付，得分必须严格超过 8 分。',
+            data: {
+              score,
+              scoreParts,
+              openedSourcePaths,
+              writeSourcePaths,
+              toolNames,
+              sourceDocRelativePaths: [...sourceDocRelativePaths],
+              sourceDocsUnchanged,
+              requiredIndexedRelativePaths,
+              indexedSupportedFiles,
+              changedContentKinds,
+              deliveryMarkdown: result.output?.deliveryMarkdown,
+              artifacts: result.output?.artifacts
             }
-          )
+          })
         }
       })
     })

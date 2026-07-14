@@ -27,7 +27,7 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
     description:
       '能力：读取 sourcePath 对应 docx 的结构、内容块、检索结果和任务内修订历史。\n结果：返回块级索引、正文内容、匹配信息或 revision 信息。\n边界：只读取 docx 内容与当前任务内编辑状态，不直接覆盖源文件。',
     whenToUse: '适用于需要读取或理解 docx 内容与修订状态的任务。',
-    toolNames: ['docx_outline', 'docx_search', 'docx_read_blocks', 'docx_history']
+    toolNames: ['docx_outline', 'docx_search', 'docx_read_blocks']
   },
   'docx-write': {
     skillId: 'docx-write',
@@ -38,7 +38,7 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
     description:
       '能力：创建新的 Word 文档，或修改已有 Word 文档中的段落、标题、表格、文本和样式。\n结果：写入后返回相邻区域的详细回读信息，方便检查写入效果或继续下一步编辑。\n边界：只能使用读取工具或写后回读返回的真实 blockId，不要推算 blockId；复杂定位排版区域可能只能给人工修改建议。',
     whenToUse: '适用于用户要求生成、补充、改写、删除或格式化 docx 内容的任务。',
-    toolNames: ['docx_edit', 'docx_rollback']
+    toolNames: ['docx_edit']
   },
   'image-recognition': {
     skillId: 'image-recognition',

@@ -4,18 +4,14 @@ import type { RuntimeSkillId } from '../../types'
 import type { HumanToolSpec } from '../types'
 import {
   docxEditSchema,
-  docxHistoryRequestSchema,
   docxOutlineRequestSchema,
   docxReadRequestSchema,
-  docxSearchRequestSchema,
-  docxRollbackRequestSchema
+  docxSearchRequestSchema
 } from './schemas'
 import { createStaticExecutionMetaResolver, readStringArg } from '../utils/toolSpecUtils'
 import {
-  docxHistoryOutputSchema,
   docxOutlineOutputSchema,
   docxReadBlocksOutputSchema,
-  docxRollbackOutputSchema,
   docxSearchOutputSchema,
   docxWriteOutputSchema
 } from './outputSchemas'
@@ -286,38 +282,6 @@ export const DOCX_READ_TOOL_SPEC = {
   'docx-read'
 >
 
-export const DOCX_HISTORY_TOOL_SPEC = {
-  name: 'docx_history',
-  familyId: 'docx',
-  requiresWorkspace: true,
-  description: '查看当前任务中这份 docx 的编辑记录。',
-  skillIds: ['docx-read'],
-  inputSchema: docxHistoryRequestSchema,
-  outputSchema: docxHistoryOutputSchema,
-  promptSpec: {
-    name: 'docx_history',
-    description:
-      '能力：查看 sourcePath 对应 docx 在当前任务中的编辑记录。\n结果：返回每次编辑的标识、摘要和当前所在状态。\n边界：这是当前任务内的编辑记录，不是 Word 原生修订记录。',
-    whenToUse: '适用于需要确认这份 docx 之前做过哪些编辑，或准备回到某次编辑状态的任务。',
-    examples: [
-      {
-        goal: '查看最近几个 docx 修订及各自改动摘要',
-        args: {
-          sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
-          limit: 5
-        }
-      }
-    ]
-  },
-  resolveExecutionMeta: createDocxReadExecutionMeta(),
-  activityActionType: 'docx_history'
-} satisfies DocxToolSpec<
-  z.infer<typeof docxHistoryRequestSchema>,
-  z.infer<typeof docxHistoryOutputSchema>,
-  'docx_history',
-  'docx-read'
->
-
 export const DOCX_EDIT_TOOL_SPEC = {
   name: 'docx_edit',
   familyId: 'docx',
@@ -385,46 +349,13 @@ export const DOCX_EDIT_TOOL_SPEC = {
   'docx-write'
 >
 
-export const DOCX_ROLLBACK_TOOL_SPEC = {
-  name: 'docx_rollback',
-  familyId: 'docx',
-  requiresWorkspace: true,
-  description: '把当前 docx 任务内编辑状态回到某次 revision。',
-  skillIds: ['docx-write'],
-  inputSchema: docxRollbackRequestSchema,
-  outputSchema: docxRollbackOutputSchema,
-  promptSpec: {
-    name: 'docx_rollback',
-    description:
-      '能力：根据 docx_history 返回的 revisionRef，把 sourcePath 对应 docx 的任务内编辑状态回到某次 revision。\n结果：返回回退后的编辑状态。\n边界：只切换当前任务内状态，不直接覆盖源文件。',
-    whenToUse: '适用于发现前一次或某几次 docx 修改不合适，需要回到较早编辑状态的任务。',
-    examples: [
-      {
-        goal: '把当前任务内编辑状态回退到指定修订',
-        args: {
-          sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
-          revisionRef: 'v2'
-        }
-      }
-    ]
-  },
-  resolveExecutionMeta: createDocxMutatingExecutionMeta(),
-  activityActionType: 'docx_rollback'
-} satisfies DocxToolSpec<
-  z.infer<typeof docxRollbackRequestSchema>,
-  z.infer<typeof docxRollbackOutputSchema>,
-  'docx_rollback',
-  'docx-write'
->
-
 export const DOCX_READ_TOOL_SPECS = [
   DOCX_OUTLINE_TOOL_SPEC,
   DOCX_SEARCH_TOOL_SPEC,
-  DOCX_READ_TOOL_SPEC,
-  DOCX_HISTORY_TOOL_SPEC
+  DOCX_READ_TOOL_SPEC
 ] as const
 
-export const DOCX_WRITE_TOOL_SPECS = [DOCX_EDIT_TOOL_SPEC, DOCX_ROLLBACK_TOOL_SPEC] as const
+export const DOCX_WRITE_TOOL_SPECS = [DOCX_EDIT_TOOL_SPEC] as const
 
 export const DOCX_TOOL_SPECS = [...DOCX_READ_TOOL_SPECS, ...DOCX_WRITE_TOOL_SPECS] as const
 

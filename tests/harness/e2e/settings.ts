@@ -436,7 +436,13 @@ export const createFixtureWorkspace = async (
   const workspaceId = await createWorkspaceThroughSettingsUi(page, input.name)
   if (input.rootPath) {
     await mkdir(input.rootPath, { recursive: true })
-    await bindWorkspaceRootThroughSettingsUi(page, input.rootPath)
+    await bindWorkspaceRootThroughIpc(page, input.rootPath)
+    await navigateToSettingsSection(page, 'workspace')
+    if (!(await waitForWorkspaceRootPathVisible(page, input.rootPath))) {
+      throw new Error(
+        `workspace root was bound through ipc but not reflected in settings ui: ${input.rootPath}`
+      )
+    }
   }
   const response = await page.evaluate(async () => await window.api.workspaceList())
   const workspace = response.items.find((item) => item.id === workspaceId)

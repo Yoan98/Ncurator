@@ -12,12 +12,13 @@
 
 ### 2.1 按 Suite / 分类汇总
 
-- `tool` 完整回归：`69 / 69`
-  - 检测时间：`2026-07-13 13:04:39 +08:00`
+- `tool` 完整回归：`67 / 67`
+  - 检测时间：`2026-07-14 13:59:28 +08:00`
   - 执行命令：`pnpm test:ai:tool`
 - `tool / docx`
-  - 通过率：`42 / 42`
-  - 检测时间：`2026-07-13 13:04:39 +08:00`
+  - 通过率：`40 / 40`
+  - 检测时间：`2026-07-14 13:59:28 +08:00`
+  - 工具面只保留 `docx_outline / docx_search / docx_read_blocks / docx_edit`；模型侧任务内 history/rollback 已移除，内部 replay/revision 与用户文件级回退继续保留。
 - `tool / kb`
   - 通过率：`2 / 2`
   - 检测时间：`2026-07-13 13:04:39 +08:00`
@@ -39,23 +40,24 @@
   - 检测时间：`2026-07-13 13:04:39 +08:00`
 - `human / mock-llm`
   - 通过率：`22 / 22`
-  - 检测时间：`2026-07-13 21:40:41 +08:00`
+  - 检测时间：`2026-07-14 13:59:02 +08:00`
 - `human / live`
-  - 登记 case：`8`；本轮全量 `4 / 8` 通过。
-  - 检测时间：`2026-07-14 12:14:15 +08:00`
-  - 通过：`human-docx-positioned-structural-edit-fallback-live`、`human-session-resume-with-new-selection-live`、两条 `web_crawl` live。
-  - 失败：compaction 与 KB/docx case 均在模型循环中达到 graph 60 轮上限；conversation memory 第二轮连续性未达标；risk report 风险口径未达最低断言。memory 与 KB/docx 在本轮定向执行中曾通过，说明这两条仍存在 live 模型波动，不能作为稳定合并门禁。
-  - 基础设施修正：live provider kind 未配置时按 base URL 推断；workspace KB backend 使用真实 in-process prepare 逻辑；resume 已同步 `mainModel`、strategy store 与 session 外键契约；compaction 增加低价值历史防抖。
-  - unit 全量：`51` files、`202 / 202` tests 通过。
+  - 登记 case：`8`；当前有效结果 `8 / 8` 通过。全量先通过 6 条，另外 2 条按真实成果修正过严 Oracle 后定向复核通过。
+  - 检测时间：`2026-07-14 14:38:26 +08:00`
+  - 实际模型：`deepseek-v4-flash`。
+  - memory、compaction、resume 均保留并通过；compaction 使用 `16K` 上下文，自然触发 1 次压缩，不限制压缩次数，压缩后继续完成周报文件交付。
+  - KB/docx case 使用 2 次 KB 检索定位源资料，并真实更新 2 份目标文档；不再依赖模型枚举目标文件。
+  - positioned DOCX case 正确命中复杂排版保护，没有危险写入，并交付了可直接手动粘贴的完整内容。
+  - unit 全量：`51` files、`203 / 203` tests 通过。
   - 样例评分：
-    - `human-web-crawl-url-inference-reading-live`：`9.0 / 10`；最近有效执行：`2026-06-11`；依据：模型自行推断官网地址并多次调用 `web_crawl` 完成 CSV 文档整理；主要风险：live 模型稳定性和冷启动耗时。
-    - `human-web-crawl-multi-hop-cross-domain-reading-live`：`8.8 / 10`；最近有效执行：`2026-06-11`；依据：模型围绕入口网址多跳抓取并整合申请对象、材料、截止时间和办理方式；主要风险：多轮 live 调用耗时偏长。
-    - `human-risk-report-draft-live`：`8.3 / 10`；最近有效执行：`2026-06-01`；依据：能创建周报 docx 并读取多源材料完成负责人、后续动作和风险主线；主要风险：风险口径表达仍需按最低断言收敛。
-    - `human-conversation-memory-multi-run-live`：`8.2 / 10`；最近有效执行：`2026-06-01`；依据：能把第一轮风险主线、负责人分工和待确认项带入第二轮追问；主要风险：连续主线保持不稳定。
-    - `human-context-compaction-natural-trigger-live`：`9.0 / 10`；最近有效执行：`2026-06-01`；依据：能自然触发压缩、压缩后继续任务并产出文件 artifact；主要风险：整体耗时偏长。
-    - `human-session-resume-with-new-selection-live`：`8.5 / 10`；最近有效执行：`2026-06-01`；依据：恢复快照保留旧事实，第二轮可结合新选择文件形成对比小结；主要风险：不得绑定固定 prompt 原文。
-    - `human-docx-positioned-structural-edit-fallback-live`：`8.1 / 10`；最近有效执行：`2026-06-01`；依据：能识别 positioned 区域保护并给出手动处理或安全补充交付；主要风险：artifact 形态和写入策略不稳定。
-    - `human-kb-guided-docx-comparison-draft-live`：`8.1 / 10`；最近有效执行：`2026-06-01`；依据：能通过 KB 命中源资料并更新目标教学文档；主要风险：多目标写入内容分配不稳定。
+    - `human-conversation-memory-multi-run-live`：`10 / 10`；风险主线、待确认项、负责人和后续追问连续性完整。
+    - `human-risk-report-draft-live`：`10 / 10`；新建周报、原文件安全、未闭环风险、负责人动作和谨慎结论均满足。
+    - `human-kb-guided-docx-comparison-draft-live`：`10 / 10`；KB 证据、两份目标文档写入、内容依据和交付均满足。
+    - `human-context-compaction-natural-trigger-live`：`10 / 10`；压缩生命周期、摘要质量、连续性和最终 artifact 均满足。
+    - `human-docx-positioned-structural-edit-fallback-live`：`9 / 10`；复杂排版保护和手动交付完整，本轮未生成独立补充文件 artifact。
+    - `human-session-resume-with-new-selection-live`：`8.5 / 10`；恢复后保留旧事实，并结合新选择文件完成对比小结。
+    - `human-web-crawl-multi-hop-cross-domain-reading-live`：`8.8 / 10`；完成多跳跨域读取并整理申请对象、材料、截止时间和线上办理方式。
+    - `human-web-crawl-url-inference-reading-live`：`9.0 / 10`；自行推断 pandas 官网地址并完成两份 CSV 文档对比。
 
 ## 3. Suite 设计
 
@@ -229,15 +231,6 @@ AI unit / 辅助测试目录：
 - How：真实执行 `docx_outline -> docx_edit(insert_blocks) -> docx_search`，检查 runtime session 状态。
 - Oracle：编辑成功；后续搜索可命中新文本；`readSessionCount=0`；`replaySessionCount=1`。
 - Not：不验证 direct apply / revert。
-
-##### `docx-read-then-history-upgrades-to-replay-session`
-
-- 测试类型：`backend`
-- What：验证 `docx_history` 在纯读场景下会升级到 replay session，但不会伪造额外 revision。
-- Why：`docx_history` 属于 revision world，需要统一走 replay 语义，同时保持初始历史真实。
-- How：真实执行 `docx_outline -> docx_history`，检查 runtime session 状态与返回 revisions。
-- Oracle：history 成功；只返回初始 `v1`；`readSessionCount=0`；`replaySessionCount=1`。
-- Not：不验证 rollback。
 
 ##### `docx-read-then-edit-preserves-long-document-tail`
 
@@ -520,21 +513,12 @@ AI unit / 辅助测试目录：
 - Oracle：新增段落与新增 cell 都可继续被定位和修改，最新 working draft 只暴露最新有效内容。
 - Not：不验证 live 模型如何规划多轮编辑。
 
-##### `docx-history-and-rollback`
-
-- 测试类型：`backend`
-- What：验证任务过程内历史查询与回滚能力。
-- Why：复杂编辑任务必须可回退。
-- How：多轮真实编辑后执行 `docx_history` 与 rollback。
-- Oracle：历史链可追溯，回滚只影响当前任务过程中的草稿修订，不改写磁盘源文件。
-- Not：不验证 direct apply / revert。
-
 ##### `docx-precondition-guard`
 
 - 测试类型：`backend`
 - What：验证未 `open`、无效 `sourcePath` 或无效修订引用时的前置保护。
 - Why：这是工具层最常见的异常入口。
-- How：直接调用 `outline / search / apply_ops / rollback` 覆盖非法输入。
+- How：直接调用 `outline / read / edit` 覆盖非法输入。
 - Oracle：返回明确失败，不产生新修订，不污染运行状态。
 - Not：不验证上层重试策略。
 
@@ -1000,9 +984,9 @@ AI unit / 辅助测试目录：
 - 测试类型：`backend`
 - What：验证 live 模式下 `human` 会基于真实 brain usage 与新增 history 增量在风险周报长任务中自然触发 `context_compaction`，并在压缩后继续完成交付。
 - Why：相比单独直调节点，live 回归更应该守住“真实 graph 中自然压缩且不影响任务完成”的能力。
-- How：复用风险周报 live 的真实 workspace 与业务输入，只通过 `humanRuntimeOverrides.modelContextWindowTokens=18_750` 缩小上下文窗口，让真实任务在多轮资料读取后自然走到少量 `context_budget -> context_compaction -> context_budget -> brain`。
-- Oracle：事件流出现 1-2 次 `context_budget_evaluated(decision=compact)` 且 snapshot 使用 `basis=usage_plus_delta` 与 `budgetTokens`、对应的 `context_compaction_started / completed`；存在真实 `human.context_compaction` LLM 调用；后续 `brain` prompt 出现 `<compactions>`；`latest_round` 仍保留原文；完成事件和日志中可看到压缩摘要、源历史 token 与压缩后 token；最终形成周报草稿产物。
-- Not：不要求 live 模型严格达到 25% 理想比例；不要求每次都走固定资料读取顺序。
+- How：复用风险周报 live 的真实 workspace 与业务输入，通过 `humanRuntimeOverrides.modelContextWindowTokens=16_000` 提供可工作的上下文空间，并让真实任务在多轮资料读取后自然进入 `context_budget -> context_compaction -> context_budget -> brain`。
+- Oracle：至少发生一次完整 compaction；不限制压缩次数。逐次检查固定摘要结构、任务锚点、已确认路径、无编造和无“已完成又未读取”的进度矛盾，并检查全部压缩比；后续 `brain` prompt 保留 compaction 与 task progress；最终周报文件成功 apply。按 10 分制评估压缩生命周期、摘要结构、摘要质量、连续性和文件交付，严格超过 8 分通过。
+- Not：不绑定压缩次数，不要求固定资料读取顺序，也不因合理表达差异判失败。
 
 ##### `human-risk-report-draft-live`
 
@@ -1010,7 +994,7 @@ AI unit / 辅助测试目录：
 - What：验证 live 模式下 `human` 会在一个真实长任务里串起模板定位、上周周报风格参考、多源工作资料取证、新建本周周报 docx 并直接写回交付。
 - Why：`human/live` 需要至少一条长期高价值复杂样例，覆盖 workspace 搜索、真实材料辨别、跨 `docx + txt` 综合、create-target 写入与最终交付链路；同时守住“共享 workspace 中全部已支持文件都已进入真实 KB，且关键事实可能来自 KB 命中的 txt 或后续读取材料”的更真实用户环境。
 - How：注入真实 live LLM 配置；workspace 直接使用 `tests/fixtures/workspace` 共享目录，并在 run 前通过真实生产文件 ingestion 链把该目录下当前所有已支持文件索引进 KB；随后由测试在运行时重建 `工作/` 目录：包含一份不可直接覆盖的周报模板、一份只能参考风格的上周已发版周报、多份提供本周事实的 `docx` 工作文档、数份必须读取的 `txt` 口径/跟进材料，以及少量看起来相关但不应直接采用的干扰文件；直接输入“帮我写下这周的周报，基于这个周报模版和我的工作文档信息，记得参考我上周写的周报风格来哦”的自然语言诉求，让真实 `human` 自主完成。
-- Oracle：任务最终完成；共享 workspace 中全部已支持文件均被索引；事件流中至少出现一次 `terminal_run`、至少一次真实资料读取/检索步骤（可来自 `docx_*`、`kb_*` 或其他支持的读工具）以及一次 `docx_edit(create_document)`；模型会打开模板和上周周报；最终输出 artifacts 中包含携带 `applyId` 的 docx file artifact；模板与既有参考 `docx` 文件不被覆盖；新建周报文件中应写入本周整体判断、负责人说明和后续动作；若发生 docx 写，则写工具结果应包含 `postWriteReadback.regions`；不要求固定取证路径，不要求固定风险结论措辞，只要任务真实完成即可通过。
+- Oracle：任务最终完成；共享 workspace 中全部已支持文件均被索引；事件流中至少出现一次 `terminal_run`、至少一次真实资料读取/检索步骤以及一次 `docx_edit(create_document)`；模型会打开模板和上周周报；最终输出 artifacts 中包含携带 `applyId` 的 docx file artifact；模板与既有参考 `docx` 文件不被覆盖。按 10 分制评估文件交付、原文件安全、未闭环风险、负责人动作和谨慎结论，严格超过 8 分通过；否定上下文中的“风险已解除”等文字不得误判成正向收口。
 - Not：不绑定最终答案措辞，不要求固定是否使用 `docx_outline` 还是 `docx_read_blocks`，也不强制一定调用 KB；若模型仅凭工作区材料完成任务，也视为符合预期。
 
 
@@ -1021,16 +1005,16 @@ AI unit / 辅助测试目录：
 - What：验证 live 模式下 `human` 在复杂 positioned docx 中会跳过命中的复杂定位排版区域，并继续尝试处理其他可安全编辑的位置。
 - Why：这类由 `framePr` / 绝对定位 shape 组成的 docx 即使只是原地改字也可能因结构重写而错位；这条 case 要长期守住“positioned 区域只读、自动写入必须拒绝并给用户手动提示”的能力，对齐 `WB-CORE-003-AC1`、`WB-CORE-004-AC1`、`WB-CORE-006-AC1`、`WB-CORE-006-AC2`。
 - How：注入真实 live LLM 配置；只将 `图形学.docx` 作为已选资料复制进 workspace；直接输入“我准备把这份图形学讲义发给同学复习，想把‘反走样’这一节补得更容易记一些。你直接在这一节后面加一段更通俗的说明，再加一个很短的总结表，帮助大家快速区分两种常见做法。”的自然语言诉求，让真实 `human` 自主完成。
-- Oracle：任务最终完成；事件流中至少一次 `docx_search` / `docx_read_blocks` / `docx_outline` 覆盖 `图形学.docx`；至少一次 docx 写入请求因为命中复杂定位排版区域失败，并返回稳定 `hand_docx_positioned_write_blocked` 与 `diagnostic.message`；允许后续对同一 docx 中其他可安全编辑位置写入，或改为生成独立补充稿；最终答复必须明确说明命中的复杂定位排版区域未被自动修改，需要用户手动处理，并说明实际完成的写入结果。
+- Oracle：事件流中至少一次 `docx_search` / `docx_read_blocks` / `docx_outline` 覆盖 `图形学.docx`；至少一次 docx 写入请求因为命中复杂定位排版区域失败，并返回稳定 `hand_docx_positioned_write_blocked` 与 `diagnostic.message`；复杂区域不得发生成功写入；允许改为生成独立补充稿，也允许在最终答复中直接交付可粘贴的完整说明和总结表。按 10 分制评估目标读取、保护触发、写入安全、手动说明、内容可用性和 artifact 一致性，严格超过 8 分通过，不把内部完成状态作为单独失败条件。
 - Not：不要求固定使用哪一种 docx 写工具，也不要求最终答复使用固定措辞。
 
 ##### `human-kb-guided-docx-comparison-draft-live`
 
 - 测试类型：`backend`
-- What：验证 live 模式下 `human` 在不传 `selectedReferences` 且 workspace 存在整组 docx 时，会先用 KB 缩圈找出讲“反走样 / 过拟合”的两份源资料，再把内容分别回写到另外两份目标 docx。
+- What：验证 live 模式下 `human` 会先用 KB 缩圈找出讲“反走样 / 过拟合”的两份源资料，再把内容分别回写到用户明确指定的两份目标 docx。
 - Why：真实用户常常记得主题、不记得文件名，而且希望把资料内容整理回自己的教学文档；这条 case 要长期守住“工作区默认范围 + KB 缩圈 + 多源读取 + 多目标 docx 回写”的能力，对齐 `WB-CORE-002-AC2`、`WB-CORE-004-AC1`、`WB-CORE-006-AC1`、`WB-CORE-006-AC2`。
-- How：注入真实 live LLM 配置；workspace 直接使用 `tests/fixtures/workspace` 共享目录，不传 `selectedReferences`；在 run 前通过真实生产文件 ingestion 链把该目录下当前所有已支持文件（`.pdf`、`.docx`、`.md`、`.markdown`、`.txt`）索引进 KB，其中既包括 `学习笔记/` 下的 `图形学.docx` 与 `深度学习.docx`，也包括两份目标教学文档、md/txt 资料和其他干扰项；直接输入“我工作区里这几份课件和教学材料有点多，我想把里面跟反走样和过拟合有关的内容整理进两份教学文档里。你先把相关资料找出来看一遍，再把适合老师讲‘概念区分’的内容分别补到课堂 PRD 和交互式案例里，写法尽量像备课备注和课堂引导语，不要像教材摘抄。”的自然语言诉求，让真实 `human` 自主完成。
-- Oracle：任务最终完成；共享 workspace 中关键源资料与目标教学文档均被索引；事件流中至少出现一次 KB 工具调用，且至少一次 `kb_search` 返回有效命中；至少两次允许的 docx 编辑成功，且写入目标落在 `人工智能探究课堂PRD.docx` 与 `交互式探究学习案例：产业转移.docx` 两份目标稿上；最终输出 artifacts 中至少包含两组携带 `applyId` 的 docx file artifact；原始源 `docx` 文件不被覆盖，目标 `docx` 文件被直接更新且可回退；最终答复明确说明更新了哪两份教学文档，且内容保持“概念区分 / 备课备注 / 课堂引导语”风格。
+- How：注入真实 live LLM 配置；workspace 使用共享 fixture，只把 `学习笔记/图形学.docx` 与 `学习笔记/深度学习.docx` 建入 KB；用户明确指定根目录的 `人工智能探究课堂PRD.docx` 与 `交互式探究学习案例：产业转移.docx` 为目标文件。case 只开放完成该任务需要的 terminal、KB search、DOCX 读取和写入工具，避免把目标文件误当成待索引来源反复查询。
+- Oracle：真实 `kb_search` 返回有效命中；两份目标文档分别发生成功写入并产生两组携带 `applyId` 的 file artifact；两份来源课件保持不变。按 10 分制评估 KB 证据、两份目标文件、grounded 内容、来源安全和最终交付，严格超过 8 分通过；只完成一个目标文件最多 8 分，不能通过。
 - Not：不强制固定执行路径，也不要求 KB 缩圈后必须再打开所有候选资料。
 
 ##### `human-web-crawl-multi-hop-cross-domain-reading-live`

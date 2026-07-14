@@ -5,17 +5,17 @@
 - 本计划用于定义 Settings 用户可见能力的回归测试范围。
 - Settings 回归测试统一对齐 [settings.md](/Users/test/work-space/NCurator-Desktop/doc/prd/settings.md)，新增、调整或验收结论都应引用对应的 `SET-*` 需求编号与验收编号。
 - 新增或调整测试、runner、raw logs、UI E2E 回归规则与真实 AI / live 断言规则，统一遵循 `doc/test.md`。
-- Settings UI E2E 回归测试必须通过真实 UI 完成模型配置、工作区目录绑定、网页资料管理和向量模型入口操作；不得用 preload override、内部 IPC、脚本化目录选择返回值或脚本化下载进度替代产品结果。
+- Settings UI E2E 的被测行为必须通过真实 UI 完成；目录绑定本身由 `workspace-set-root-path` 独立覆盖。其他索引/Web case 可通过真实 IPC 建立目录绑定前置状态，但不得用 IPC 替代当前 case 要验证的按钮、进度、索引结果或页面刷新。
 
 ## 2. 执行摘要
 
 ### 2.1 按 Suite 汇总
 
-- 当前代码登记：backend `12` 个 case 文件，e2e `22` 个 case。
-- 本轮结果：backend `23 / 23` tests 通过；Settings 全量 e2e 前 `9` 条通过，第 `10` 条 `workspace-remove-from-list` 启动超时后停止。
-  - 检测时间：`2026-07-14 09:56:21 +08:00`
-  - 本次清理涉及的 e2e：`model-create-edit-form`、`workspace-add-selection-flow`、`web-add-sources-dialog`、`web-prepare-summary` 均通过；`workspace-prepare-refresh` 因 Chrome 持续占用前台焦点，无法操作 macOS 原生目录选择框，属于环境阻断。
-  - `app-update-panel` 已在本轮全量 Settings e2e 的前 9 条中通过。
+- 当前代码登记：backend `13` 个 case 文件、`26` 个 test；e2e `22` 个 case。
+- 本轮结果：backend `26 / 26` tests 通过；Settings 全量 e2e `22 / 22` 通过。
+  - 检测时间：`2026-07-14 14:07:57 +08:00`
+  - `workspace-remove-from-list` 与 `workspace-prepare-refresh` 均已连续 3 次通过；非目录选择 case 使用真实 IPC 建立目录绑定前置状态，当前 case 的删除、刷新、进度和索引结果仍由 UI 验证。
+  - 独立的原生目录选择 case `workspace-set-root-path` 通过。
 - `model`
   - 登记 case：backend `1`，e2e `5`。
   - 本轮涉及的 `model-create-edit-form` 已通过。
@@ -31,7 +31,7 @@
 - `vector`
   - 登记 case：backend `2`，e2e `1`。
 - `update`
-  - 登记 case：backend `3`，e2e `1`。
+  - 登记 case：backend `4`，e2e `1`。
   - 本轮 backend 与 `app-update-panel` e2e 均通过；真实安装升级不进入日常门禁，执行方式见 [app-update-test.md](/Users/test/work-space/NCurator-Desktop/doc/app-update-test.md)。
 
 ## 3. Suite 设计
@@ -202,7 +202,7 @@ Settings 的回归测试顶层 suite 直接对齐 PRD 模块：
 - 测试类型：`e2e`
 - What：验证点击“更新索引”后，文件状态会刷新为已索引并同步更新摘要。
 - Why：这是“索引已经可用”的核心用户反馈链路。
-- How：复制共享 workspace fixture 的隔离副本并通过真实 UI 绑定，触发更新索引，读取刷新后的文件树和全部支持文件状态。
+- How：复制共享 workspace fixture 的隔离副本，在 setup 阶段通过真实 IPC 绑定目录；随后通过 Settings UI 触发更新索引，读取刷新后的文件树和全部支持文件状态。原生目录选择由 `workspace-set-root-path` 单独覆盖。
 - Oracle：更新索引过程中出现持久化总进度，且检查更新/更新索引按钮同时禁用，对齐 `SET-WORKSPACE-004-AC3`；共享 fixture 中全部支持文件真实进入处理范围，对齐 `SET-WORKSPACE-004-AC1`；更新后所有支持文件收敛为 `indexed / failed`，摘要和节点状态同步刷新，对齐 `SET-WORKSPACE-004-AC2`。
 - Not：不验证向量内容质量和搜索召回结果。
 

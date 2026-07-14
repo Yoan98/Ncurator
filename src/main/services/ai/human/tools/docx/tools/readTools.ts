@@ -2,18 +2,14 @@ import type { StructuredToolInterface } from '@langchain/core/tools'
 import type { JsonObject } from '../../../../../../../shared/types'
 import { buildSemanticMatches, splitEmbeddingRows } from '../semanticSearch'
 import type { DocxToolRuntime } from '../runtime'
-import type { DocxDetailedBlock, DocxOutlineBlock, DocxReadSession, DocxSearchMatch } from '../types'
-import {
-  DOCX_HISTORY_TOOL_SPEC,
-  DOCX_OUTLINE_TOOL_SPEC,
-  DOCX_READ_TOOL_SPEC,
-  DOCX_SEARCH_TOOL_SPEC
-} from '../toolSpecs'
-import {
-  createDocxTool,
-  finalizeDocxToolFailure,
-  finalizeDocxToolSuccess
-} from './workerTool'
+import type {
+  DocxDetailedBlock,
+  DocxOutlineBlock,
+  DocxReadSession,
+  DocxSearchMatch
+} from '../types'
+import { DOCX_OUTLINE_TOOL_SPEC, DOCX_READ_TOOL_SPEC, DOCX_SEARCH_TOOL_SPEC } from '../toolSpecs'
+import { createDocxTool, finalizeDocxToolFailure, finalizeDocxToolSuccess } from './workerTool'
 import { HUMAN_TOOL_RESULT_TOKEN_LIMIT_RATIO } from '../../../constants'
 
 const MAX_SEARCH_MATCHES = 20
@@ -239,7 +235,9 @@ const executeWorkerSearch = async (input: {
   }
 }
 
-const buildLiteralSearchAttempts = (query: string): Array<{ query: string; appliedAliases: AppliedAlias[] }> => {
+const buildLiteralSearchAttempts = (
+  query: string
+): Array<{ query: string; appliedAliases: AppliedAlias[] }> => {
   const normalizedQuery = query.trim()
   const aliases = DOCX_LITERAL_ALIAS_FALLBACKS[normalizedQuery] || []
   return [
@@ -323,7 +321,9 @@ const buildResultTooLargeFailure = (input: {
   })
 
 const toOutlineRange = (
-  range: { type: 'percent'; fromPercent: number; toPercent: number } | { type: 'block_index'; fromBlockIndex: number; toBlockIndex: number },
+  range:
+    | { type: 'percent'; fromPercent: number; toPercent: number }
+    | { type: 'block_index'; fromBlockIndex: number; toBlockIndex: number },
   totalBlockCount: number
 ): { fromBlockIndex: number; toBlockIndex: number } => {
   if (range.type === 'block_index') {
@@ -334,7 +334,10 @@ const toOutlineRange = (
   }
   const fromPercent = Math.max(0, Math.min(100, range.fromPercent))
   const toPercent = Math.max(0, Math.min(100, range.toPercent))
-  const fromBlockIndex = Math.max(0, Math.floor((Math.min(fromPercent, toPercent) / 100) * totalBlockCount))
+  const fromBlockIndex = Math.max(
+    0,
+    Math.floor((Math.min(fromPercent, toPercent) / 100) * totalBlockCount)
+  )
   const toBlockIndex = Math.max(
     0,
     Math.ceil((Math.max(fromPercent, toPercent) / 100) * totalBlockCount) - 1
@@ -582,7 +585,8 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
           activity: {
             actionType: DOCX_SEARCH_TOOL_SPEC.activityActionType!,
             startedSummary: `搜索文档: ${sessionResult.sourcePath}`,
-            buildCompletedSummary: (output) => `文档搜索完成：${String(output.returnedMatchCount)} 个命中`
+            buildCompletedSummary: (output) =>
+              `文档搜索完成：${String(output.returnedMatchCount)} 个命中`
           }
         })
       }
@@ -648,7 +652,8 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
         activity: {
           actionType: DOCX_SEARCH_TOOL_SPEC.activityActionType!,
           startedSummary: `搜索文档: ${sessionResult.sourcePath}`,
-          buildCompletedSummary: (output) => `文档搜索完成：${String(output.returnedMatchCount)} 个命中`
+          buildCompletedSummary: (output) =>
+            `文档搜索完成：${String(output.returnedMatchCount)} 个命中`
         }
       })
     }
@@ -745,62 +750,5 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
     }
   })
 
-  const docxHistoryTool = createDocxTool({
-    runtime,
-    name: DOCX_HISTORY_TOOL_SPEC.name,
-    description: DOCX_HISTORY_TOOL_SPEC.description,
-    schema: DOCX_HISTORY_TOOL_SPEC.inputSchema,
-    onError: ({ message }) => {
-      runtime.input.emitActivity({
-        actionType: DOCX_HISTORY_TOOL_SPEC.activityActionType!,
-        status: 'failed',
-        summary: message
-      })
-    },
-    execute: async ({ args, toolName, toolCallId }) => {
-      runtime.input.ctx.checkCancelled()
-      const sessionResult = await runtime.ensureReplaySession({
-        toolName,
-        toolCallId,
-        sourcePath: args.sourcePath
-      })
-      if ('failure' in sessionResult) return sessionResult.failure
-
-      const revisions = runtime.buildRevisionHistory(
-        sessionResult.sourcePath,
-        Math.max(1, Number(args.limit || 10))
-      )
-      const result = {
-        sourcePath: sessionResult.sourcePath,
-        currentRevisionRef: sessionResult.currentRevisionRef,
-        revisions: revisions.map((revision) => ({
-          revisionRef: revision.revisionRef,
-          parentRevisionRef: revision.parentRevisionRef,
-          createdAt: revision.createdAt,
-          isCurrent: revision.isCurrent,
-          summary: revision.summary || '',
-          changedBlocks: revision.changedBlocks || []
-        }))
-      }
-      return finalizeDocxToolSuccess({
-        runtime,
-        toolName,
-        toolCallId,
-        result,
-        outputPreview: {
-          sourcePath: result.sourcePath,
-          currentRevisionRef: result.currentRevisionRef,
-          revisionCount: result.revisions.length
-        },
-        draftDocId: sessionResult.docId,
-        activity: {
-          actionType: DOCX_HISTORY_TOOL_SPEC.activityActionType!,
-          startedSummary: `查看修订历史: ${sessionResult.sourcePath}`,
-          buildCompletedSummary: (output) => `修订历史返回 ${String(output.revisions.length)} 项`
-        }
-      })
-    }
-  })
-
-  return [docxOutlineTool, docxSearchTool, docxReadTool, docxHistoryTool]
+  return [docxOutlineTool, docxSearchTool, docxReadTool]
 }

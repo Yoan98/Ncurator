@@ -248,7 +248,7 @@
   - `WB-COMPOSER-009-AC3` assistant 最终 markdown 输出默认无独立背景卡片，保持在过程流下方。
   - `WB-COMPOSER-009-AC4` 用户消息以右对齐紧凑气泡展示，不再使用过宽过高的大块白底样式。
   - `WB-COMPOSER-009-AC5` 执行层 header 按同一轮工具调用聚合展示操作与数量，例如读取类 docx 工具展示“正在读取 1 个 docx 文件”，编辑类 docx 工具展示“正在编辑 1 个 docx 文件”，知识库工具展示“正在检索知识库”，terminal 工具展示“正在跑神秘代码”；完成后对应更新为完成态文案。
-  - `WB-COMPOSER-009-AC6` 展开后的工具句子只展示动作和对象，不重复展示运行状态；状态只由执行层 header 表达。示例：`docx_outline` 展示“阅读文档结构：xx”；`docx_read_blocks` 展示“读取文档内容：xx 范围”；`docx_edit` 展示“编辑文档：xx”；`docx_history` 展示“检查修改历史：xx”；`terminal_run` 展示“执行命令：xxxx”；`web_search` 展示“搜索网页：query”；`browser_use` 按动作展示“打开网页 / 观察页面 / 提取页面内容 / 操作页面：对象”。
+  - `WB-COMPOSER-009-AC6` 展开后的工具句子只展示动作和对象，不重复展示运行状态；状态只由执行层 header 表达。示例：`docx_outline` 展示“阅读文档结构：xx”；`docx_read_blocks` 展示“读取文档内容：xx 范围”；`docx_edit` 展示“编辑文档：xx”；`terminal_run` 展示“执行命令：xxxx”；`web_search` 展示“搜索网页：query”；`browser_use` 按动作展示“打开网页 / 观察页面 / 提取页面内容 / 操作页面：对象”。
   - `WB-COMPOSER-009-AC7` 文件名、query、命令和技能名使用独立强调样式展示，不使用书名号包装。
   - `WB-COMPOSER-009-AC8` 学习步骤使用技能通用名称展示，例如 `docx 阅读器`、`docx 写作器`、`资料查阅器`、`命令执行器`；运行中展示“正在学习 xx 技能”，完成后展示“已学会 xx 技能”。
   - `WB-COMPOSER-009-AC9` 执行层 header、学习层和压缩层展示对应图标；展开后的每条工具句子不展示图标，也不渲染前置小圆点或“AI 思路”类图标。

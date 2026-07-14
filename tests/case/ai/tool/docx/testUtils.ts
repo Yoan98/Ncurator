@@ -183,25 +183,6 @@ export type DocxMutationResult = {
   }
 }
 
-export type DocxHistoryResult = {
-  sourcePath: string
-  currentRevisionRef: string
-  revisions: Array<{
-    revisionRef: string
-    parentRevisionRef?: string
-    createdAt: number
-    isCurrent: boolean
-    summary: string
-    changedBlocks: DocxChangedBlock[]
-  }>
-}
-
-export type DocxRollbackResult = {
-  sourcePath: string
-  currentRevisionRef: string
-  previousRevisionRef: string
-}
-
 export type DocxFailureResult = {
   error: string
   warnings: string[]

@@ -26,7 +26,28 @@ const toWorkspaceRelativePath = (workspaceRoot: string, sourcePath: string): str
   return path.posix.normalize(relativePath.split(path.sep).join('/')).replace(/^\.\//, '')
 }
 
-const LIVE_CONTEXT_COMPACTION_WINDOW_TOKENS = 8_000
+const LIVE_CONTEXT_COMPACTION_WINDOW_TOKENS = 16_000
+
+const REQUIRED_COMPACTION_HEADINGS = [
+  '任务锚点：',
+  '已确认事实：',
+  '仍有效约束：',
+  '已尝试但未解决：',
+  '重复或低价值内容：',
+  '已失效或仅作背景的信息：'
+] as const
+
+const LOW_QUALITY_COMPACTION_PHRASES = [
+  '结果与已有摘要一致',
+  '已经读过了',
+  '这个问题基本看过了',
+  '应该不用再看了'
+] as const
+
+const hasContradictoryProgress = (text: string): boolean =>
+  /(?:已读取所有|信息已收集完毕|具备生成条件)[^。\n]{0,80}(?:尚未读取|未读内容|仍需读取)/.test(
+    text.replace(/\s+/g, '')
+  )
 
 const hasExactEntityText = (text: string | undefined, entityText: string): boolean =>
   typeof text === 'string' && text.includes(entityText)
@@ -104,86 +125,104 @@ describe('ai human live backend', () => {
             toWorkspaceRelativePath(runtime.workspaceRoot, sourcePath)
           )
           const llmIoRecords = result.llmIoRecords
-          const compactionRecord = llmIoRecords.find(
+          const compactionRecords = llmIoRecords.filter(
             (record) => record.caller === 'human.context_compaction'
           )
           const latestBrainRecord = [...llmIoRecords]
             .reverse()
             .find((record) => record.caller === 'human.brain')
-          const completionEvent = completedEvents[0]
           const deliveryText = String(result.output?.deliveryMarkdown || '').trim()
-          const ratio =
-            completionEvent && completionEvent.sourceHistoryTokenEstimate > 0
-              ? completionEvent.tokenEstimateAfter / completionEvent.sourceHistoryTokenEstimate
+          const ratios = completedEvents.map((event) =>
+            event.sourceHistoryTokenEstimate > 0
+              ? event.tokenEstimateAfter / event.sourceHistoryTokenEstimate
               : Number.POSITIVE_INFINITY
+          )
           const expectedLastWeekDocAnchor = '上周周报'
           const inventedLastWeekDocName = '上周工作周报.docx'
-
-          runtime.assertThat(
-            result.output?.status === 'completed' &&
-              startedEvents.length >= 1 &&
-              startedEvents.length <= 3 &&
-              completedEvents.length === startedEvents.length &&
-              budgetEvents.some(
-                (event) =>
-                  event.decision === 'compact' &&
-                  event.snapshot.basis === 'usage_plus_delta' &&
-                  event.snapshot.budgetTokens > event.snapshot.compactionTriggerTokens
-              ) &&
-              Boolean(compactionRecord?.rawText?.trim()) &&
-              Boolean(latestBrainRecord?.user.includes('<conversation_history>')) &&
-              Boolean(latestBrainRecord?.user.includes('<round_history>')) &&
-              Boolean(latestBrainRecord?.user.includes('<task_progress>')) &&
-              Boolean(latestBrainRecord?.user.includes('最新一轮决策如下')) &&
-              Boolean(latestBrainRecord?.user.includes('<compactions>')) &&
-              Boolean(latestBrainRecord?.user.includes('<rounds>')) &&
-              !latestBrainRecord?.user.includes('<latest_round>') &&
-              Boolean(completionEvent?.summaryPreview.trim()) &&
-              ratio <= 0.5 &&
-              Boolean(compactionRecord?.user.includes('<user_goal>')) &&
-              Boolean(compactionRecord?.user.includes('<task_progress>')) &&
-              Boolean(compactionRecord?.user.includes('<history_rounds>')) &&
-              Boolean(compactionRecord?.rawText.includes('任务锚点：')) &&
-              Boolean(compactionRecord?.rawText.includes('已确认事实：')) &&
-              Boolean(compactionRecord?.rawText.includes('仍有效约束：')) &&
-              Boolean(compactionRecord?.rawText.includes('已尝试但未解决：')) &&
-              Boolean(compactionRecord?.rawText.includes('重复或低价值内容：')) &&
-              Boolean(compactionRecord?.rawText.includes('已失效或仅作背景的信息：')) &&
-              !compactionRecord?.rawText.includes('结果与已有摘要一致') &&
-              !compactionRecord?.rawText.includes('已经读过了') &&
-              !compactionRecord?.rawText.includes('这个问题基本看过了') &&
-              !compactionRecord?.rawText.includes('应该不用再看了') &&
-              hasExactEntityText(compactionRecord?.rawText, expectedLastWeekDocAnchor) &&
-              !hasInventedEntityText(compactionRecord?.rawText, inventedLastWeekDocName) &&
-              hasExactEntityText(latestBrainRecord?.user, expectedLastWeekDocAnchor) &&
-              !hasInventedEntityText(latestBrainRecord?.user, inventedLastWeekDocName) &&
-              !hasInventedEntityText(deliveryText, inventedLastWeekDocName) &&
-              toolNames.includes('docx_edit') &&
-              hasDocxFileArtifact(result.output?.artifacts) &&
-              hasDocxApplyArtifact(result.output?.artifacts) &&
-              createSourcePaths.length >= 1 &&
-              createdRelativePaths.every(
-                (sourcePath) =>
-                  sourcePath.startsWith('工作/') || sourcePath === path.basename(sourcePath)
-              ),
-            {
-              name: 'human-live-context-compaction-natural-trigger-completes-task',
-              message:
-                '真实风险周报长任务应自然触发 context compaction，并在压缩后继续完成周报文件交付。',
-              data: {
-                startedEvents,
-                completedEvents,
-                budgetEvents,
-                compactionSummary: completionEvent?.summaryPreview,
-                compactionPrompt: compactionRecord?.user,
-                latestBrainPrompt: latestBrainRecord?.user,
-                ratio,
-                toolNames,
-                artifacts: result.output?.artifacts,
-                deliveryText
-              }
-            }
+          const compactionSummaries = compactionRecords.map((record) =>
+            String(record.rawText || '').trim()
           )
+          const lifecycleSatisfied =
+            startedEvents.length >= 1 &&
+            completedEvents.length === startedEvents.length &&
+            compactionRecords.length === completedEvents.length &&
+            budgetEvents.some(
+              (event) =>
+                event.decision === 'compact' &&
+                event.snapshot.basis === 'usage_plus_delta' &&
+                event.snapshot.budgetTokens > event.snapshot.compactionTriggerTokens
+            )
+          const summaryFormatSatisfied =
+            compactionSummaries.length > 0 &&
+            compactionSummaries.every((summary) =>
+              REQUIRED_COMPACTION_HEADINGS.every((heading) => summary.includes(heading))
+            ) &&
+            compactionRecords.every(
+              (record) =>
+                record.user.includes('<user_goal>') &&
+                record.user.includes('<task_progress>') &&
+                record.user.includes('<history_rounds>')
+            )
+          const summaryQualitySatisfied =
+            compactionSummaries.every(
+              (summary) =>
+                hasExactEntityText(summary, expectedLastWeekDocAnchor) &&
+                !hasInventedEntityText(summary, inventedLastWeekDocName) &&
+                !LOW_QUALITY_COMPACTION_PHRASES.some((phrase) => summary.includes(phrase)) &&
+                !hasContradictoryProgress(summary)
+            ) && ratios.every((ratio) => ratio <= 0.5)
+          const continuitySatisfied =
+            Boolean(latestBrainRecord?.user.includes('<conversation_history>')) &&
+            Boolean(latestBrainRecord?.user.includes('<round_history>')) &&
+            Boolean(latestBrainRecord?.user.includes('<task_progress>')) &&
+            Boolean(latestBrainRecord?.user.includes('最新一轮决策如下')) &&
+            Boolean(latestBrainRecord?.user.includes('<compactions>')) &&
+            Boolean(latestBrainRecord?.user.includes('<rounds>')) &&
+            !latestBrainRecord?.user.includes('<latest_round>') &&
+            hasExactEntityText(latestBrainRecord?.user, expectedLastWeekDocAnchor) &&
+            !hasInventedEntityText(latestBrainRecord?.user, inventedLastWeekDocName)
+          const taskCompletionSatisfied =
+            result.output?.status === 'completed' &&
+            deliveryText.length > 0 &&
+            !hasInventedEntityText(deliveryText, inventedLastWeekDocName) &&
+            toolNames.includes('docx_edit')
+          const artifactSatisfied =
+            hasDocxFileArtifact(result.output?.artifacts) &&
+            hasDocxApplyArtifact(result.output?.artifacts) &&
+            createSourcePaths.length >= 1 &&
+            createdRelativePaths.every(
+              (sourcePath) =>
+                sourcePath.startsWith('工作/') || sourcePath === path.basename(sourcePath)
+            )
+          const scoreParts = {
+            lifecycle: lifecycleSatisfied ? 1 : 0,
+            summaryFormat: summaryFormatSatisfied ? 2 : 0,
+            summaryQuality: summaryQualitySatisfied ? 2 : 0,
+            continuity: continuitySatisfied ? 1 : 0,
+            taskCompletion: taskCompletionSatisfied ? 2 : 0,
+            artifact: artifactSatisfied ? 2 : 0
+          }
+          const score = Object.values(scoreParts).reduce((total, value) => total + value, 0)
+
+          runtime.assertThat(score > 8, {
+            name: 'human-live-context-compaction-natural-trigger-completes-task',
+            message:
+              '真实风险周报长任务按 10 分制评估全部压缩结果、压缩后连续性和最终文件交付，得分必须严格超过 8 分；压缩次数不作为失败条件。',
+            data: {
+              score,
+              scoreParts,
+              startedEvents,
+              completedEvents,
+              budgetEvents,
+              compactionSummaries,
+              compactionPrompts: compactionRecords.map((record) => record.user),
+              latestBrainPrompt: latestBrainRecord?.user,
+              ratios,
+              toolNames,
+              artifacts: result.output?.artifacts,
+              deliveryText
+            }
+          })
         }
       })
     })

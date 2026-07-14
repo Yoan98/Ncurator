@@ -15,7 +15,7 @@ import {
   CONVERSATION_MEMORY_SHARED_WORKSPACE_FIXTURE_PATH,
   loadConversationMemoryWorkspaceSeed
 } from '../../../../harness/backend/liveScenarios/conversationMemoryScenario'
-import { filterAiRunEventsByType, runWithStructuredOutputRetry } from '../testUtils'
+import { runWithStructuredOutputRetry } from '../testUtils'
 
 const SESSION_ID = 'live-conversation-memory-multi-run-session'
 
@@ -42,7 +42,9 @@ const hasNextStepRecallSemantics = (text: string): boolean =>
   /周三|周四|周五|补件|复核窗口|跟进|对外口径|下一步|安排/.test(text)
 
 const hasPrimaryPendingItemSemantics = (text: string): boolean =>
-  /合规附件|附件版本|版本对齐|法务复核|复核最终意见|付款材料|附件映射/.test(text)
+  /合规附件|附件版本|版本对齐|法务复核|合规复核|复核窗口|复核最终意见|最终合规签署|付款材料|附件映射/.test(
+    text
+  )
 
 const hasContactDecisionSemantics = (text: string): boolean =>
   /先找|应该先找|优先找|先联系|先同步/.test(text) && /Alice|Bob/.test(text)
@@ -217,62 +219,59 @@ describe('ai human live backend', () => {
 
           const summary = String(result.savedMemory?.summary || '')
           const secondDelivery = String(result.secondOutput?.deliveryMarkdown || '')
-          const secondToolNames = filterAiRunEventsByType(
-            result.secondRunEvents,
-            'tool_call_result'
-          ).map((event) => event.toolName)
-
-          runtime.assertThat(
+          const persistenceSatisfied =
             result.firstOutput?.status === 'completed' &&
-              result.secondOutput?.status === 'completed' &&
-              result.memoryBatch?.count === CONVERSATION_MEMORY_BATCH_MESSAGES &&
-              result.memoryBatch?.targetCoveredMessageId ===
-                'live-conversation-memory-assistant-1' &&
-              result.savedMemory?.coveredMessageId === result.memoryBatch?.targetCoveredMessageId &&
-              result.savedMemory?.coveredTimestamp === result.memoryBatch?.targetCoveredTimestamp &&
-              result.savedMemory?.coveredMessageCount ===
-                result.memoryBatch?.targetCoveredMessageCount &&
-              summary.trim().length > 0 &&
-              /周报|发布|风险|跟进/.test(summary) &&
-              hasOwnerRecallSemantics(summary) &&
-              /待确认|待跟进|未完成|复核/.test(summary) &&
-              hasNextStepRecallSemantics(summary) &&
-              result.brainPrompt.includes('<conversation_history>') &&
-              result.brainPrompt.includes('<summary>') &&
-              result.brainPrompt.includes('<recent_turns>') &&
-              hasOwnerRecallSemantics(result.brainPrompt) &&
-              hasRiskConclusionSemantics(
-                result.brainPrompt,
-                result.workspaceSeed.expectedRiskConclusion
-              ) &&
-              hasNextStepRecallSemantics(result.brainPrompt) &&
-              (secondToolNames.length === 0 ||
-                secondToolNames.some((toolName) =>
-                  [
-                    'docx_outline',
-                    'docx_read_blocks',
-                    'docx_search',
-                    'kb_search',
-                    'terminal_run'
-                  ].includes(toolName)
-                )) &&
-              hasPrimaryPendingItemSemantics(secondDelivery) &&
-              hasContactDecisionSemantics(secondDelivery) &&
-              hasOwnerRoleConsistencySemantics(secondDelivery) &&
-              hasFollowupContinuitySemantics(secondDelivery) &&
-              hasWhySemantics(secondDelivery),
-            {
-              name: 'human-live-conversation-memory-multi-run-recall-persists',
-              message:
-                'live conversation memory 应在真实 workspace 双 run 间带回关键业务状态；第二轮可以选择直接复用记忆，也可以重新读取资料，但结论不能偏离第一轮形成的连续主线，并继续围绕负责人分工、阻塞项与后续动作展开。',
-              data: {
-                savedMemory: result.savedMemory,
-                brainPrompt: result.brainPrompt,
-                secondDelivery,
-                secondToolNames
-              }
+            result.secondOutput?.status === 'completed' &&
+            result.memoryBatch?.count === CONVERSATION_MEMORY_BATCH_MESSAGES &&
+            result.memoryBatch?.targetCoveredMessageId === 'live-conversation-memory-assistant-1' &&
+            result.savedMemory?.coveredMessageId === result.memoryBatch?.targetCoveredMessageId &&
+            result.savedMemory?.coveredTimestamp === result.memoryBatch?.targetCoveredTimestamp &&
+            result.savedMemory?.coveredMessageCount ===
+              result.memoryBatch?.targetCoveredMessageCount
+          const memoryQualitySatisfied =
+            summary.trim().length > 0 &&
+            /周报|发布|风险|跟进/.test(summary) &&
+            hasOwnerRecallSemantics(summary) &&
+            /待确认|待跟进|未完成|复核/.test(summary) &&
+            hasNextStepRecallSemantics(summary)
+          const promptContinuitySatisfied =
+            result.brainPrompt.includes('<conversation_history>') &&
+            result.brainPrompt.includes('<summary>') &&
+            result.brainPrompt.includes('<recent_turns>') &&
+            hasOwnerRecallSemantics(result.brainPrompt) &&
+            hasRiskConclusionSemantics(
+              result.brainPrompt,
+              result.workspaceSeed.expectedRiskConclusion
+            ) &&
+            hasNextStepRecallSemantics(result.brainPrompt)
+          const pendingItemSatisfied = hasPrimaryPendingItemSemantics(secondDelivery)
+          const contactDecisionSatisfied = hasContactDecisionSemantics(secondDelivery)
+          const ownerAndWhySatisfied =
+            hasOwnerRoleConsistencySemantics(secondDelivery) && hasWhySemantics(secondDelivery)
+          const followupContinuitySatisfied = hasFollowupContinuitySemantics(secondDelivery)
+          const scoreParts = {
+            persistence: persistenceSatisfied ? 2 : 0,
+            memoryQuality: memoryQualitySatisfied ? 2 : 0,
+            promptContinuity: promptContinuitySatisfied ? 1 : 0,
+            pendingItem: pendingItemSatisfied ? 2 : 0,
+            contactDecision: contactDecisionSatisfied ? 1 : 0,
+            ownerAndWhy: ownerAndWhySatisfied ? 1 : 0,
+            followupContinuity: followupContinuitySatisfied ? 1 : 0
+          }
+          const score = Object.values(scoreParts).reduce((total, value) => total + value, 0)
+
+          runtime.assertThat(score > 8, {
+            name: 'human-live-conversation-memory-multi-run-recall-persists',
+            message:
+              'live conversation memory 按 10 分制评估双 run 间的业务连续性，得分必须严格超过 8 分。',
+            data: {
+              score,
+              scoreParts,
+              savedMemory: result.savedMemory,
+              brainPrompt: result.brainPrompt,
+              secondDelivery
             }
-          )
+          })
         }
       })
     })

@@ -112,7 +112,7 @@ tests/
 - 测试准备只允许创建真实输入数据，例如真实文件、真实 docx、真实 PDF、真实工作区目录、真实本地 HTTP 页面或真实网页 URL；不得用 fixture 直接替代产品运行结果。
 - `tests/fixtures/**` 只能作为真实输入数据来源，不得作为搜索结果、AI 事件、artifact、docx 修改记录、模型返回或 renderer 状态的替身。
 - UI e2e 回归测试禁止使用 fake / mock / stub 替代被测产品结果，包括 fake model、fake search、fake docx、脚本化 AI 事件、脚本化 artifact、直接写 renderer 状态、直接写业务 store 或直接调用内部 IPC 来绕过用户可见操作。
-- 正式 UI e2e 禁止使用 `setE2EApiOverrides`、preload override、直接 `window.api.*` 创建业务状态、直接写 store、假下载进度、假搜索结果、假 AI 事件或假附件选择结果。
+- 正式 UI e2e 禁止使用 `setE2EApiOverrides`、preload override、直接写 store、假下载进度、假搜索结果、假 AI 事件或假附件选择结果。与当前 case 被测行为无关、且已有独立真实 UI case 覆盖的前置状态，允许通过真实 `window.api.*` 建立；不得用该方式替代当前 case 要验证的用户操作和产品结果。
 - 测试 helper 可以做用户同等可见的点击、输入、选择、等待、截图、读取 raw logs 和读取输出文件；不得在被测行为上替代 UI、Electron 或后端真实实现。
 - 测试 helper 可以创建真实输入，例如临时目录、真实文件、本地 HTTP 服务、剪贴板文件、原生目录选择自动化；这些输入必须再通过 UI 或产品真实处理链路进入系统。
 - 涉及真实 AI 调用的 UI e2e 必须使用测试计划声明的 live 环境变量或真实应用配置；缺少配置时必须 preflight fail，不得静默跳过，也不得回落到 mock LLM。

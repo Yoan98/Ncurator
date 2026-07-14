@@ -20,12 +20,11 @@ export const getSkillKeyFromToolName = (toolName: string): string => {
   if (
     toolName === 'docx_outline' ||
     toolName === 'docx_read_blocks' ||
-    toolName === 'docx_history' ||
     toolName === 'docx_search'
   ) {
     return 'docx-reader'
   }
-  if (toolName === 'docx_edit' || toolName === 'docx_rollback') return 'docx-writer'
+  if (toolName === 'docx_edit') return 'docx-writer'
   if (toolName === 'kb_search' || toolName === 'kb_list_documents') return 'reference-reader'
   if (toolName === 'terminal_run' || toolName === 'terminal') return 'terminal-runner'
   return 'generic-task'

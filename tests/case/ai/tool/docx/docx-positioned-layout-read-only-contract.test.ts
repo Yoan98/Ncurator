@@ -1,11 +1,8 @@
 import { describe, it } from 'vitest'
+import path from 'node:path'
 import { createDocxToolHarness } from '../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
-import type {
-  DocxFailureResult,
-  DocxHistoryResult,
-  DocxReadResult
-} from './testUtils'
+import type { DocxFailureResult, DocxReadResult } from './testUtils'
 
 type PositionedOutlineResult = {
   sourcePath: string
@@ -60,66 +57,70 @@ describe('ai tool docx backend', () => {
             throw new Error('expected non-empty text from positioned paragraph block')
           }
 
-          const historyBefore = await harness.invoke<DocxHistoryResult>('docx_history', {
+          const paragraphInsertFailure = await harness.invoke<DocxFailureResult>('docx_edit', {
             sourcePath: outline.sourcePath,
-            limit: 10
-          })
-          const paragraphInsertFailure = await harness.invoke<DocxFailureResult>(
-            'docx_edit',
-            {
-              sourcePath: outline.sourcePath,
-              actions: [{
+            actions: [
+              {
                 type: 'insert_blocks',
                 position: 'after',
                 anchorBlockId: positionedParagraph.blockId,
                 blocks: [{ type: 'paragraph', text: '补充说明：这里不应自动插入。' }]
-              }]
-            }
-          )
+              }
+            ]
+          })
           const textEditFailure = await harness.invoke<DocxFailureResult>('docx_edit', {
             sourcePath: outline.sourcePath,
-            actions: [{
-              type: 'replace_text',
-              query,
-              replace: `${query}（修改）`,
-              blockIds: [positionedParagraph.blockId]
-            }]
+            actions: [
+              {
+                type: 'replace_text',
+                query,
+                replace: `${query}（修改）`,
+                blockIds: [positionedParagraph.blockId]
+              }
+            ]
           })
           const textStyleFailure = await harness.invoke<DocxFailureResult>('docx_edit', {
             sourcePath: outline.sourcePath,
-            actions: [{
-              type: 'style_text',
-              blockId: positionedParagraph.blockId,
-              query,
-              style: {
-              bold: true
-            }
-            }]
+            actions: [
+              {
+                type: 'style_text',
+                blockId: positionedParagraph.blockId,
+                query,
+                style: {
+                  bold: true
+                }
+              }
+            ]
           })
           const tableInsertFailure = await harness.invoke<DocxFailureResult>('docx_edit', {
             sourcePath: outline.sourcePath,
-            actions: [{
-              type: 'insert_blocks',
-              position: 'after',
-              anchorBlockId: positionedParagraph.blockId,
-              blocks: [{ type: 'table', rows: [['问题类型', '核心原因']] }]
-            }]
+            actions: [
+              {
+                type: 'insert_blocks',
+                position: 'after',
+                anchorBlockId: positionedParagraph.blockId,
+                blocks: [{ type: 'table', rows: [['问题类型', '核心原因']] }]
+              }
+            ]
           })
-          const historyAfter = await harness.invoke<DocxHistoryResult>('docx_history', {
-            sourcePath: outline.sourcePath,
-            limit: 10
-          })
+          const replaySession = harness.state.replaySessionBySourcePath.get(
+            path.resolve(outline.sourcePath)
+          )
 
           return {
             outline,
             positionedParagraph,
             readPositionedParagraph,
-            historyBefore,
             paragraphInsertFailure,
             textEditFailure,
             textStyleFailure,
             tableInsertFailure,
-            historyAfter
+            replayRevisionState: replaySession
+              ? {
+                  activeRevisionRef: replaySession.activeRevisionRef,
+                  revisionCount: replaySession.revisionByDocId.size
+                }
+              : null
           }
         } finally {
           await harness.release()
@@ -154,14 +155,14 @@ describe('ai tool docx backend', () => {
         )
 
         runtime.assertThat(
-          result.historyBefore.currentRevisionRef === result.historyAfter.currentRevisionRef &&
-            result.historyBefore.revisions.length === result.historyAfter.revisions.length,
+          result.replayRevisionState?.activeRevisionRef === result.outline.currentRevisionRef &&
+            result.replayRevisionState.revisionCount === 1,
           {
             name: 'positioned-layout-failures-do-not-create-new-revisions',
             message: 'positioned 写入失败后不应产生新的修订。',
             data: {
-              historyBefore: result.historyBefore,
-              historyAfter: result.historyAfter
+              outlineRevisionRef: result.outline.currentRevisionRef,
+              replayRevisionState: result.replayRevisionState
             }
           }
         )

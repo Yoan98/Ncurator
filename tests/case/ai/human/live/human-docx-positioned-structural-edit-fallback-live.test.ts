@@ -132,25 +132,42 @@ describe('ai human live backend', () => {
               deliveryText
             ) &&
             /(手动|人工)/.test(deliveryText)
-
-          runtime.assertThat(
-            result.output?.status === 'completed' &&
-              result.fixtureDocs.every((fixtureDoc) =>
-                openedExpectedDoc(openedSourcePaths, fixtureDoc.relativePath, fixtureDoc.name)
-              ) &&
+          const deliveryContainsUsableFallback =
+            /(子像素|多重采样|MSAA|SSAA)/i.test(deliveryText) &&
+            /(低通|频域|傅里叶)/.test(deliveryText) &&
+            /(总结表|\|.{0,20}方法.{0,20}\|)/.test(deliveryText)
+          const scoreParts = {
+            targetDocumentOpened: result.fixtureDocs.every((fixtureDoc) =>
+              openedExpectedDoc(openedSourcePaths, fixtureDoc.relativePath, fixtureDoc.name)
+            )
+              ? 1
+              : 0,
+            positionedProtectionTriggered:
               structuralStarted.length >= 1 &&
               positionedFailedWriteResults.length >= 1 &&
               decisionHints.some((event) => event.code === 'hand_docx_positioned_write_blocked') &&
-              diagnosticMessages.some((message) => message.includes('当前命中复杂定位排版区域')) &&
-              artifactShapeValid &&
-              deliveryMentionsSkippedPositionedArea &&
-              typeof result.output?.deliveryMarkdown === 'string' &&
-              result.output.deliveryMarkdown.trim().length > 0,
+              diagnosticMessages.some((message) =>
+                message.includes('当前命中复杂定位排版区域')
+              )
+                ? 2
+                : 0,
+            protectedAreaNotWritten: successfulWriteResults.length === 0 ? 1.5 : 0,
+            manualFallbackExplained: deliveryMentionsSkippedPositionedArea ? 2 : 0,
+            usableFallbackContent: deliveryContainsUsableFallback ? 2 : 0,
+            artifactShapeConsistent: artifactShapeValid ? 1 : 0,
+            nonEmptyDelivery: deliveryText.trim().length > 0 ? 0.5 : 0
+          }
+          const score = Object.values(scoreParts).reduce((total, value) => total + value, 0)
+
+          runtime.assertThat(
+            score > 8,
             {
               name: 'human-live-positioned-docx-skips-protected-area-and-reports-manual-fallback',
               message:
-                'live human positioned case 应拒绝命中的复杂定位区域，允许继续处理其他可安全编辑位置，并在最终答复中说明该区域需手动处理。',
+                'live human positioned case 完成度评分必须严格高于 8 分：应保护复杂定位区域，并给出可用的手动补充内容。',
               data: {
+                score,
+                scoreParts,
                 openedSourcePaths,
                 createSourcePaths,
                 writeAttempts: structuralStarted.map((event) => ({

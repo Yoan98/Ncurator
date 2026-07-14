@@ -102,28 +102,36 @@ export const docxCreateSchema = z.object({
   blocks: z.array(docxCreateBlockSchema).optional()
 })
 
-export const docxEditCreateDocumentActionSchema = z.object({
-  type: z.literal('create_document'),
-  blocks: z.array(docxCreateBlockSchema).optional()
-}).strict()
+export const docxEditCreateDocumentActionSchema = z
+  .object({
+    type: z.literal('create_document'),
+    blocks: z.array(docxCreateBlockSchema).optional()
+  })
+  .strict()
 
 export const docxOutlineRangeSchema = z.discriminatedUnion('type', [
-  z.object({
-    type: z.literal('percent'),
-    fromPercent: z.number().min(0).max(100),
-    toPercent: z.number().min(0).max(100)
-  }).strict(),
-  z.object({
-    type: z.literal('block_index'),
-    fromBlockIndex: z.number().int().min(0),
-    toBlockIndex: z.number().int().min(0)
-  }).strict()
+  z
+    .object({
+      type: z.literal('percent'),
+      fromPercent: z.number().min(0).max(100),
+      toPercent: z.number().min(0).max(100)
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal('block_index'),
+      fromBlockIndex: z.number().int().min(0),
+      toBlockIndex: z.number().int().min(0)
+    })
+    .strict()
 ])
 
-export const docxOutlineRequestSchema = z.object({
-  sourcePath: z.string().min(1),
-  ranges: z.array(docxOutlineRangeSchema).min(1)
-}).strict()
+export const docxOutlineRequestSchema = z
+  .object({
+    sourcePath: z.string().min(1),
+    ranges: z.array(docxOutlineRangeSchema).min(1)
+  })
+  .strict()
 
 export const docxSearchRequestSchema = z.object({
   sourcePath: z.string().min(1),
@@ -137,32 +145,37 @@ export const docxSearchRequestSchema = z.object({
 })
 
 export const docxReadRangeSchema = z.discriminatedUnion('type', [
-  z.object({
-    type: z.literal('block_index'),
-    fromBlockIndex: z.number().int().min(0),
-    toBlockIndex: z.number().int().min(0)
-  }).strict(),
-  z.object({
-    type: z.literal('block_ids'),
-    blockIds: z.array(z.string().min(1)).min(1)
-  }).strict()
+  z
+    .object({
+      type: z.literal('block_index'),
+      fromBlockIndex: z.number().int().min(0),
+      toBlockIndex: z.number().int().min(0)
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal('block_ids'),
+      blockIds: z.array(z.string().min(1)).min(1)
+    })
+    .strict()
 ])
 
-export const docxReadRequestSchema = z.object({
-  sourcePath: z.string().min(1),
-  range: docxReadRangeSchema
-}).strict()
+export const docxReadRequestSchema = z
+  .object({
+    sourcePath: z.string().min(1),
+    range: docxReadRangeSchema
+  })
+  .strict()
 
-export const docxParagraphEditActionSchema = z.enum([
-  'insert_before',
-  'insert_after'
-])
+export const docxParagraphEditActionSchema = z.enum(['insert_before', 'insert_after'])
 
-const docxParagraphEditInsertBaseSchema = z.object({
-  sourcePath: z.string().min(1),
-  anchorBlockId: z.string().min(1),
-  paragraphs: z.array(z.string()).min(1)
-}).strict()
+const docxParagraphEditInsertBaseSchema = z
+  .object({
+    sourcePath: z.string().min(1),
+    anchorBlockId: z.string().min(1),
+    paragraphs: z.array(z.string()).min(1)
+  })
+  .strict()
 
 export const docxParagraphEditSchema = z.discriminatedUnion('action', [
   docxParagraphEditInsertBaseSchema.extend({
@@ -173,26 +186,33 @@ export const docxParagraphEditSchema = z.discriminatedUnion('action', [
   })
 ])
 
-const docxEditInsertBlocksActionSchema = z.object({
-  type: z.literal('insert_blocks'),
-  position: z.enum(['before', 'after']),
-  anchorBlockId: z.string().min(1),
-  blocks: z.array(docxCreateBlockSchema).min(1)
-}).strict()
+const docxEditInsertBlocksActionSchema = z
+  .object({
+    type: z.literal('insert_blocks'),
+    position: z.enum(['before', 'after']),
+    anchorBlockId: z.string().min(1),
+    blocks: z.array(docxCreateBlockSchema).min(1)
+  })
+  .strict()
 
-export const docxHeadingEditActionSchema = z.enum([
-  'insert_before',
-  'insert_after'
-])
+export const docxHeadingEditActionSchema = z.enum(['insert_before', 'insert_after'])
 
-const docxHeadingEditInsertBaseSchema = z.object({
-  sourcePath: z.string().min(1),
-  anchorBlockId: z.string().min(1),
-  headings: z.array(z.object({
-    level: z.number().int().min(1).max(6),
-    text: z.string().min(1)
-  }).strict()).min(1)
-}).strict()
+const docxHeadingEditInsertBaseSchema = z
+  .object({
+    sourcePath: z.string().min(1),
+    anchorBlockId: z.string().min(1),
+    headings: z
+      .array(
+        z
+          .object({
+            level: z.number().int().min(1).max(6),
+            text: z.string().min(1)
+          })
+          .strict()
+      )
+      .min(1)
+  })
+  .strict()
 
 export const docxHeadingEditSchema = z.discriminatedUnion('action', [
   docxHeadingEditInsertBaseSchema.extend({
@@ -203,23 +223,23 @@ export const docxHeadingEditSchema = z.discriminatedUnion('action', [
   })
 ])
 
-export const docxTableEditActionSchema = z.enum([
-  'insert_before',
-  'insert_after',
-  'update_cell'
-])
+export const docxTableEditActionSchema = z.enum(['insert_before', 'insert_after', 'update_cell'])
 
-const docxTableInsertSchema = z.object({
-  sourcePath: z.string().min(1),
-  anchorBlockId: z.string().min(1),
-  rows: z.array(z.array(z.string()).min(1)).min(1)
-}).strict()
+const docxTableInsertSchema = z
+  .object({
+    sourcePath: z.string().min(1),
+    anchorBlockId: z.string().min(1),
+    rows: z.array(z.array(z.string()).min(1)).min(1)
+  })
+  .strict()
 
-const docxTableUpdateCellSchema = z.object({
-  sourcePath: z.string().min(1),
-  cellBlockId: z.string().min(1),
-  text: z.string()
-}).strict()
+const docxTableUpdateCellSchema = z
+  .object({
+    sourcePath: z.string().min(1),
+    cellBlockId: z.string().min(1),
+    text: z.string()
+  })
+  .strict()
 
 export const docxTableEditSchema = z.discriminatedUnion('action', [
   docxTableInsertSchema.extend({
@@ -233,11 +253,13 @@ export const docxTableEditSchema = z.discriminatedUnion('action', [
   })
 ])
 
-const docxEditUpdateTableCellActionSchema = z.object({
-  type: z.literal('update_table_cell'),
-  cellBlockId: z.string().min(1),
-  text: z.string()
-}).strict()
+const docxEditUpdateTableCellActionSchema = z
+  .object({
+    type: z.literal('update_table_cell'),
+    cellBlockId: z.string().min(1),
+    text: z.string()
+  })
+  .strict()
 
 export const docxTextEditSchema = z.object({
   sourcePath: z.string().min(1),
@@ -246,28 +268,36 @@ export const docxTextEditSchema = z.object({
   blockIds: z.array(z.string().min(1)).optional()
 })
 
-const docxEditReplaceBlockActionSchema = z.object({
-  type: z.literal('replace_block'),
-  blockId: z.string().min(1),
-  block: docxCreateBlockSchema
-}).strict()
+const docxEditReplaceBlockActionSchema = z
+  .object({
+    type: z.literal('replace_block'),
+    blockId: z.string().min(1),
+    block: docxCreateBlockSchema
+  })
+  .strict()
 
-const docxEditReplaceTextActionSchema = z.object({
-  type: z.literal('replace_text'),
-  query: z.string().min(1),
-  replace: z.string(),
-  blockIds: z.array(z.string().min(1)).optional()
-}).strict()
+const docxEditReplaceTextActionSchema = z
+  .object({
+    type: z.literal('replace_text'),
+    query: z.string().min(1),
+    replace: z.string(),
+    blockIds: z.array(z.string().min(1)).optional()
+  })
+  .strict()
 
-export const docxDeleteSchema = z.object({
-  sourcePath: z.string().min(1),
-  blockIds: z.array(z.string().min(1)).min(1)
-}).strict()
+export const docxDeleteSchema = z
+  .object({
+    sourcePath: z.string().min(1),
+    blockIds: z.array(z.string().min(1)).min(1)
+  })
+  .strict()
 
-const docxEditDeleteBlocksActionSchema = z.object({
-  type: z.literal('delete_blocks'),
-  blockIds: z.array(z.string().min(1)).min(1)
-}).strict()
+const docxEditDeleteBlocksActionSchema = z
+  .object({
+    type: z.literal('delete_blocks'),
+    blockIds: z.array(z.string().min(1)).min(1)
+  })
+  .strict()
 
 export const docxTextStyleEditSchema = z.object({
   sourcePath: z.string().min(1),
@@ -276,12 +306,14 @@ export const docxTextStyleEditSchema = z.object({
   style: docxTextStyleSchema
 })
 
-const docxEditStyleTextActionSchema = z.object({
-  type: z.literal('style_text'),
-  blockId: z.string().min(1),
-  query: z.string().min(1),
-  style: docxTextStyleSchema
-}).strict()
+const docxEditStyleTextActionSchema = z
+  .object({
+    type: z.literal('style_text'),
+    blockId: z.string().min(1),
+    query: z.string().min(1),
+    style: docxTextStyleSchema
+  })
+  .strict()
 
 export const docxEditActionSchema = z.discriminatedUnion('type', [
   docxEditCreateDocumentActionSchema,
@@ -293,17 +325,9 @@ export const docxEditActionSchema = z.discriminatedUnion('type', [
   docxEditDeleteBlocksActionSchema
 ])
 
-export const docxEditSchema = z.object({
-  sourcePath: z.string().min(1),
-  actions: z.array(docxEditActionSchema).min(1)
-}).strict()
-
-export const docxHistoryRequestSchema = z.object({
-  sourcePath: z.string().min(1),
-  limit: z.number().int().min(1).max(100).optional()
-})
-
-export const docxRollbackRequestSchema = z.object({
-  sourcePath: z.string().min(1),
-  revisionRef: z.string().min(1)
-})
+export const docxEditSchema = z
+  .object({
+    sourcePath: z.string().min(1),
+    actions: z.array(docxEditActionSchema).min(1)
+  })
+  .strict()

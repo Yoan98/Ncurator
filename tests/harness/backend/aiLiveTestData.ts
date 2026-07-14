@@ -30,7 +30,7 @@ export const HUMAN_DOCX_POSITIONED_STRUCTURAL_EDIT_FALLBACK_USER_INPUT =
   '我准备把这份图形学讲义发给同学复习，想把“反走样”这一节补得更容易记一些。你直接在这一节后面加一段更通俗的说明，再加一个很短的总结表，帮助大家快速区分两种常见做法。'
 
 export const HUMAN_KB_GUIDED_DOCX_COMPARISON_DRAFT_USER_INPUT =
-  '我工作区里课件和教学材料有点多，我忘了哪两份课件专门讲过反走样和过拟合。你先在工作区知识库里搜索并缩小资料范围，只能依据工作区里实际写到的内容，再把适合老师讲“概念区分”的内容分别补到课堂 PRD 和交互式案例里，写法尽量像备课备注和课堂引导语，不要像教材摘抄。'
+  '我工作区里课件和教学材料有点多，我忘了哪两份课件专门讲过反走样和过拟合。你先在工作区知识库里搜索并缩小资料范围，只能依据工作区里实际写到的内容，再把适合老师讲“概念区分”的内容分别补到工作区根目录的“人工智能探究课堂PRD.docx”和“交互式探究学习案例：产业转移.docx”里。两个目标文件不需要从知识库查找，写法尽量像备课备注和课堂引导语，不要像教材摘抄。'
 
 export const buildHumanWebCrawlMultiHopCrossDomainUserInput = (entryUrl: string): string =>
   `帮我基于这个网站整理杭州灵活就业补贴的申请说明：${entryUrl}。我需要知道谁可以申请、需要哪些材料、截止时间和线上办理方式。`
