@@ -233,13 +233,19 @@ const normalizeBundledPlaywrightSymlinks = () => {
   }
   const browserRoot = browserRoots[0]
   const marker = `${path.sep}.local-browsers${path.sep}`
+  const cacheSourceValue = String(process.env.NCURATOR_SIDECAR_BROWSER_CACHE || '').trim()
+  const cacheSource = cacheSourceValue ? path.resolve(cacheSourceValue) : ''
   for (const symlinkPath of symlinks) {
     const target = fs.readlinkSync(symlinkPath)
     if (!path.isAbsolute(target)) continue
     const markerIndex = target.lastIndexOf(marker)
-    if (markerIndex < 0) continue
+    const isCachedTarget =
+      cacheSource && (target === cacheSource || target.startsWith(`${cacheSource}${path.sep}`))
+    if (markerIndex < 0 && !isCachedTarget) continue
 
-    const suffix = target.slice(markerIndex + marker.length)
+    const suffix = isCachedTarget
+      ? path.relative(cacheSource, target)
+      : target.slice(markerIndex + marker.length)
     const bundledTarget = path.join(browserRoot, suffix)
     if (!pathExists(bundledTarget)) {
       throw new Error(`bundled Playwright symlink target does not exist: ${bundledTarget}`)
