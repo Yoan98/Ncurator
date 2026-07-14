@@ -117,7 +117,7 @@ describe('settings workspace web e2e', () => {
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(result.webManagementEmbedded && result.workspaceRoutePreserved, {
-            name: 'workspace-detail-contains-web-management',
+            name: 'web-management-stays-in-workspace-detail',
             message:
               '网页资料列表和添加入口应直接位于当前工作空间详情中，并保持在工作空间设置路由，对齐 SET-WORKSPACE-005-AC3、SET-WEB-001-AC3。',
             data: result

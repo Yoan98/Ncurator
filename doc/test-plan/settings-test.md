@@ -12,7 +12,7 @@
 ### 2.1 按 Suite 汇总
 
 - 当前代码登记：backend `12` 个 case 文件，e2e `22` 个 case。
-- 本轮结果：backend `19 / 19` tests 通过；Settings 全量 e2e 前 `9` 条通过，第 `10` 条 `workspace-remove-from-list` 启动超时后停止。
+- 本轮结果：backend `23 / 23` tests 通过；Settings 全量 e2e 前 `9` 条通过，第 `10` 条 `workspace-remove-from-list` 启动超时后停止。
   - 检测时间：`2026-07-14 09:56:21 +08:00`
   - 本次清理涉及的 e2e：`model-create-edit-form`、`workspace-add-selection-flow`、`web-add-sources-dialog`、`web-prepare-summary` 均通过；`workspace-prepare-refresh` 因 Chrome 持续占用前台焦点，无法操作 macOS 原生目录选择框，属于环境阻断。
   - `app-update-panel` 已在本轮全量 Settings e2e 的前 9 条中通过。
