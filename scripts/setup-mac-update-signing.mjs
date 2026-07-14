@@ -33,7 +33,9 @@ try {
     '/usr/bin/codesign',
     '-T',
     '/usr/bin/security'
-  ])
+  ]).catch((error) => {
+    if (!String(error?.stderr || '').includes('already exists')) throw error
+  })
   await execFileAsync(
     '/usr/bin/openssl',
     [
@@ -51,7 +53,6 @@ try {
   )
   await execFileAsync('/usr/bin/security', [
     'add-trusted-cert',
-    '-d',
     '-r',
     'trustRoot',
     '-p',
