@@ -20,27 +20,6 @@ const isE2EFixtureMode = process.env.NCURATOR_E2E_MODE === '1'
 const isE2EObserverEnabled = isE2EFixtureMode || process.env.NCURATOR_E2E_OBSERVER === '1'
 const downloadProgressListeners = new Set<(progressData: DownloadProgress) => void>()
 const workspaceIndexJobProgressListeners = new Set<(job: WorkspaceIndexJobRecord) => void>()
-const appUpdateFixtureListeners = new Set<(snapshot: AppUpdateSnapshot) => void>()
-const APP_UPDATE_E2E_SET_SNAPSHOT_EVENT = 'ncurator-e2e-app-update-set-snapshot'
-
-let appUpdateFixtureSnapshot: AppUpdateSnapshot = {
-  status: 'idle',
-  currentVersion: '0.1.0',
-  isPackaged: true,
-  updateSupported: true,
-  platform: process.platform
-}
-
-const waitForAppUpdateFixtureStep = async (): Promise<void> => {
-  await new Promise<void>((resolve) => setTimeout(resolve, 250))
-}
-
-const setAppUpdateFixtureSnapshot = (snapshot: AppUpdateSnapshot): void => {
-  appUpdateFixtureSnapshot = { ...snapshot }
-  for (const listener of appUpdateFixtureListeners) {
-    listener({ ...appUpdateFixtureSnapshot })
-  }
-}
 
 const emitE2EIpcCall = (name: string, payload?: JsonValue): void => {
   if (!isE2EObserverEnabled) return
@@ -72,18 +51,6 @@ const emitDownloadProgress = (payload: DownloadProgress): void => {
 if (isE2EObserverEnabled) {
   ipcRenderer.on('ai-run-event', (_event: Electron.IpcRendererEvent, data: AiRunEvent) => {
     emitE2EAiRunEvent(data)
-  })
-}
-
-if (isE2EFixtureMode) {
-  window.addEventListener(APP_UPDATE_E2E_SET_SNAPSHOT_EVENT, (event) => {
-    const detail = (event as CustomEvent<string>).detail
-    if (typeof detail !== 'string') return
-    try {
-      setAppUpdateFixtureSnapshot(JSON.parse(detail) as AppUpdateSnapshot)
-    } catch (error) {
-      console.error('Failed to apply app update E2E snapshot', error)
-    }
   })
 }
 
@@ -265,74 +232,16 @@ const api: DesktopApi = {
     emitE2EIpcCall('aiFileChangeRevert')
     return ipcRenderer.invoke('ai-file-change-revert', payload)
   },
-  appUpdateGetSnapshot: () =>
-    isE2EFixtureMode
-      ? Promise.resolve({ ...appUpdateFixtureSnapshot })
-      : ipcRenderer.invoke(APP_UPDATE_GET_SNAPSHOT_CHANNEL),
+  appUpdateGetSnapshot: () => ipcRenderer.invoke(APP_UPDATE_GET_SNAPSHOT_CHANNEL),
   appUpdateCheck: async () => {
     emitE2EIpcCall('appUpdateCheck')
-    if (!isE2EFixtureMode) {
-      return await ipcRenderer.invoke(APP_UPDATE_CHECK_CHANNEL)
-    }
-
-    setAppUpdateFixtureSnapshot({
-      ...appUpdateFixtureSnapshot,
-      status: 'checking',
-      error: undefined
-    })
-    await waitForAppUpdateFixtureStep()
-    setAppUpdateFixtureSnapshot({
-      ...appUpdateFixtureSnapshot,
-      status: 'available',
-      availableVersion: '0.1.1',
-      releaseName: 'v0.1.1',
-      releaseDate: '2026-07-13T08:00:00.000Z'
-    })
-    await waitForAppUpdateFixtureStep()
-    setAppUpdateFixtureSnapshot({
-      ...appUpdateFixtureSnapshot,
-      status: 'downloading',
-      progressPercent: 42,
-      transferredBytes: 42 * 1024 * 1024,
-      totalBytes: 100 * 1024 * 1024,
-      bytesPerSecond: 8 * 1024 * 1024
-    })
-    await waitForAppUpdateFixtureStep()
-    setAppUpdateFixtureSnapshot({
-      ...appUpdateFixtureSnapshot,
-      status: 'downloaded',
-      progressPercent: 100,
-      transferredBytes: 100 * 1024 * 1024
-    })
-    return {
-      success: true,
-      snapshot: { ...appUpdateFixtureSnapshot }
-    }
+    return await ipcRenderer.invoke(APP_UPDATE_CHECK_CHANNEL)
   },
   appUpdateInstall: async () => {
     emitE2EIpcCall('appUpdateInstall')
-    if (!isE2EFixtureMode) {
-      return await ipcRenderer.invoke(APP_UPDATE_INSTALL_CHANNEL)
-    }
-    if (appUpdateFixtureSnapshot.status !== 'downloaded') {
-      return {
-        success: false,
-        snapshot: { ...appUpdateFixtureSnapshot },
-        error: '更新包尚未下载完成'
-      }
-    }
-    return {
-      success: true,
-      snapshot: { ...appUpdateFixtureSnapshot }
-    }
+    return await ipcRenderer.invoke(APP_UPDATE_INSTALL_CHANNEL)
   },
   onAppUpdateStatus: (cb: (snapshot: AppUpdateSnapshot) => void) => {
-    if (isE2EFixtureMode) {
-      appUpdateFixtureListeners.add(cb)
-      return () => {
-        appUpdateFixtureListeners.delete(cb)
-      }
-    }
     const listener = (_event: Electron.IpcRendererEvent, snapshot: AppUpdateSnapshot): void => {
       cb(snapshot)
     }

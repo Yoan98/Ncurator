@@ -4,6 +4,10 @@ import { readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 import { promisify } from 'node:util'
+import {
+  assertWindowsReleaseRouteAvailable,
+  inspectLocalWindowsRelease
+} from './windows-release-common.mjs'
 
 const execFileAsync = promisify(execFile)
 const ROOT = process.cwd()
@@ -15,19 +19,24 @@ const valueAfter = (name) => {
 const version = valueAfter('--version') || ''
 const releaseTag = `v${version}`
 const notes = valueAfter('--notes') || `Ncurator ${releaseTag}`
+const forceLocal = args.includes('--local-only')
+const forceActions = args.includes('--actions')
+const pnpmExecutable = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
 
 if (!/^\d+\.\d+\.\d+$/u.test(version)) {
   throw new Error(
-    'usage: node scripts/prepare-desktop-release.mjs --version <1.2.3> [--notes <text>]'
+    'usage: node scripts/prepare-desktop-release.mjs --version <1.2.3> [--notes <text>] [--local-only|--actions]'
   )
 }
+if (forceLocal && forceActions) throw new Error('--local-only and --actions cannot be combined')
 
 const run = (command, commandArgs) =>
   new Promise((resolve, reject) => {
     const child = spawn(command, commandArgs, {
       cwd: ROOT,
       env: process.env,
-      stdio: 'inherit'
+      stdio: 'inherit',
+      shell: process.platform === 'win32' && /\.(cmd|bat)$/iu.test(command)
     })
     child.once('error', reject)
     child.once('exit', (code, signal) => {
@@ -50,14 +59,10 @@ const branch = (
 ).stdout.trim()
 if (branch !== 'main') throw new Error(`desktop releases must be prepared on main, not ${branch}`)
 
-await execFileAsync('git', ['diff', '--quiet', '--', 'package.json'], { cwd: ROOT }).catch(() => {
-  throw new Error('package.json has uncommitted changes')
-})
-await execFileAsync('git', ['diff', '--cached', '--quiet', '--', 'package.json'], {
+const { stdout: worktreeStatus } = await execFileAsync('git', ['status', '--porcelain'], {
   cwd: ROOT
-}).catch(() => {
-  throw new Error('package.json has staged changes')
 })
+if (worktreeStatus.trim()) throw new Error('desktop releases require a clean worktree')
 
 const packagePath = path.join(ROOT, 'package.json')
 const packageJson = JSON.parse(await readFile(packagePath, 'utf8'))
@@ -72,12 +77,19 @@ const tagExists = await execFileAsync('git', ['rev-parse', '--verify', '--quiet'
   .catch(() => false)
 if (tagExists) throw new Error(`tag already exists: ${releaseTag}`)
 
+const localInspection = forceActions ? undefined : await inspectLocalWindowsRelease(ROOT)
+await assertWindowsReleaseRouteAvailable({
+  root: ROOT,
+  forceLocal,
+  forceActions,
+  localInspection
+})
+
+await run(pnpmExecutable, ['typecheck'])
+await run(pnpmExecutable, ['test:update:backend'])
+
 packageJson.version = version
 await writeFile(packagePath, `${JSON.stringify(packageJson, null, 2)}\n`, 'utf8')
-
-await run('pnpm', ['typecheck'])
-await run('pnpm', ['test:update:unit'])
-await run('pnpm', ['test:update:e2e'])
 await run('git', ['add', '--', 'package.json'])
 await run('git', ['commit', '-m', `release: prepare ${releaseTag}`])
 await run('git', ['tag', '-a', releaseTag, '-m', notes])
@@ -85,3 +97,8 @@ await run('git', ['push', 'origin', 'main'])
 await run('git', ['push', 'origin', releaseTag])
 
 process.stdout.write(`[release] prepared and pushed ${releaseTag}\n`)
+
+const routeArgs = [path.join(ROOT, 'scripts', 'route-windows-release.mjs'), '--tag', releaseTag]
+if (forceLocal) routeArgs.push('--local-only')
+if (forceActions) routeArgs.push('--actions')
+await run(process.execPath, routeArgs)

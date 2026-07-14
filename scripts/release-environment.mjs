@@ -1,6 +1,8 @@
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
-import { readFile } from 'node:fs/promises'
+import { access, readFile } from 'node:fs/promises'
+import os from 'node:os'
 import path from 'node:path'
+import process from 'node:process'
 
 export const loadReleaseEnvironment = async (root) => {
   const filePath = path.join(root, '.env')
@@ -29,5 +31,23 @@ export const loadReleaseEnvironment = async (root) => {
   }
   if (!process.env.AWS_SECRET_ACCESS_KEY && process.env.R2_SECRET_ACCESS_KEY) {
     process.env.AWS_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY
+  }
+
+  if (process.platform === 'win32' && !process.env.NCURATOR_AWS_CLI) {
+    const candidates = [
+      process.env.ProgramFiles
+        ? path.join(process.env.ProgramFiles, 'Amazon', 'AWSCLIV2', 'aws.exe')
+        : '',
+      path.join(os.homedir(), '.ncurator', 'release-tools', 'awscli', 'aws.exe')
+    ].filter(Boolean)
+    for (const candidate of candidates) {
+      const exists = await access(candidate)
+        .then(() => true)
+        .catch(() => false)
+      if (exists) {
+        process.env.NCURATOR_AWS_CLI = candidate
+        break
+      }
+    }
   }
 }

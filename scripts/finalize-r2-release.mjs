@@ -157,62 +157,6 @@ const cleanupOldObjects = async () => {
   }
 }
 
-const createGithubRelease = async (manifest) => {
-  const token = String(process.env.NCURATOR_RELEASE_TOKEN || '').trim()
-  if (!token) {
-    process.stdout.write(
-      '[release] NCURATOR_RELEASE_TOKEN is not set; skipped GitHub Release notes\n'
-    )
-    return
-  }
-  const repository = String(process.env.RELEASE_REPOSITORY || 'Yoan98/Ncurator')
-  const installerLines = [
-    ['Apple 芯片 Mac', manifest.downloads.macArm64],
-    ['Intel Mac', manifest.downloads.macX64],
-    ['Windows 64 位', manifest.downloads.windowsX64]
-  ]
-    .map(([label, file]) => `- [${label}](${file.url}) — sha512: \`${file.sha512}\``)
-    .join('\n')
-  const body = `所有安装包均由 Cloudflare R2 提供下载。\n\n${installerLines}\n`
-  const headers = {
-    Accept: 'application/vnd.github+json',
-    Authorization: `Bearer ${token}`,
-    'X-GitHub-Api-Version': '2022-11-28',
-    'Content-Type': 'application/json'
-  }
-  const releaseUrl = `https://api.github.com/repos/${repository}/releases/tags/${releaseTag}`
-  const existing = await fetch(releaseUrl, { headers })
-  if (existing.status !== 404 && !existing.ok) {
-    throw new Error(
-      `GitHub Release lookup failed: HTTP ${existing.status} ${await existing.text()}`
-    )
-  }
-  const payload = {
-    tag_name: releaseTag,
-    name: `Ncurator ${releaseTag}`,
-    body,
-    draft: false,
-    prerelease: false
-  }
-  const response =
-    existing.status === 404
-      ? await fetch(`https://api.github.com/repos/${repository}/releases`, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify(payload)
-        })
-      : await fetch((await existing.json()).url, {
-          method: 'PATCH',
-          headers,
-          body: JSON.stringify(payload)
-        })
-  if (!response.ok) {
-    throw new Error(
-      `GitHub Release update failed: HTTP ${response.status} ${await response.text()}`
-    )
-  }
-}
-
 try {
   const [windows, macArm64, macX64] = await Promise.all([
     downloadFragment('windows-x64'),
@@ -281,7 +225,6 @@ try {
   const manifestPath = path.join(workDirectory, 'latest.json')
   await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8')
 
-  await createGithubRelease(manifest)
   await uploadLatestFile(
     path.join(metadataOutput, 'latest.yml'),
     'updates/latest/latest.yml',
