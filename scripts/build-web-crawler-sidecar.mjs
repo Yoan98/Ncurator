@@ -159,12 +159,42 @@ const PLAYWRIGHT_BROWSER_CHECK_SNIPPET = [
 const hasBundledPlaywrightBrowser = (pythonPath) =>
   canRun(pythonPath, ['-c', PLAYWRIGHT_BROWSER_CHECK_SNIPPET])
 
+const resolveBundledPlaywrightBrowserDirectory = (pythonPath) => {
+  const result = spawnSync(
+    pythonPath,
+    [
+      '-c',
+      "import pathlib, playwright; print(pathlib.Path(playwright.__file__).resolve().parent / 'driver' / 'package' / '.local-browsers')"
+    ],
+    { cwd: ROOT, encoding: 'utf8' }
+  )
+  if (result.error || result.status !== 0 || !result.stdout.trim()) {
+    throw new Error('could not locate the bundled Playwright browser directory')
+  }
+  return result.stdout.trim()
+}
+
+const restoreBundledPlaywrightBrowserCache = (pythonPath) => {
+  const source = String(process.env.NCURATOR_SIDECAR_BROWSER_CACHE || '').trim()
+  if (!source || !pathExists(source)) return false
+
+  const target = resolveBundledPlaywrightBrowserDirectory(pythonPath)
+  fs.rmSync(target, { recursive: true, force: true })
+  fs.cpSync(source, target, { recursive: true, force: true })
+  return hasBundledPlaywrightBrowser(pythonPath)
+}
+
 const ensureBundledPlaywrightBrowser = (pythonPath) => {
   const expectedHash = computeRequirementsHash()
   const installedHash = readInstalledPlaywrightBrowserHash()
   // The stamp alone is not enough: an interrupted build can wipe the browser
   // bundle from the venv while the stamp still claims it is installed.
   if (expectedHash === installedHash && hasBundledPlaywrightBrowser(pythonPath)) {
+    return
+  }
+
+  if (restoreBundledPlaywrightBrowserCache(pythonPath)) {
+    fs.writeFileSync(PLAYWRIGHT_BROWSER_STAMP_PATH, `${expectedHash}\n`, 'utf8')
     return
   }
 

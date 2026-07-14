@@ -75,6 +75,7 @@ const validatePreflight = async () => {
     throw new Error('R2_PUBLIC_BASE_URL must be https://download.ncurator.com')
   }
   const defaultToolRoot = path.join(process.env.HOME || '', '.ncurator', 'release-tools')
+  const sidecarBrowserCacheRoot = path.join(defaultToolRoot, 'sidecar-browser-cache')
   const awsExecutable =
     String(process.env.NCURATOR_AWS_CLI || '').trim() ||
     path.join(defaultToolRoot, 'awscli', 'bin', 'aws')
@@ -129,7 +130,12 @@ const validatePreflight = async () => {
     throw new Error('NCURATOR_X64_PYTHON is not an x64 Python binary')
   }
   const { stdout: pnpmPath } = await execFileAsync('/usr/bin/which', ['pnpm'])
-  return { x64Node, x64Python, pnpmPath: pnpmPath.trim() }
+  return {
+    x64Node,
+    x64Python,
+    pnpmPath: pnpmPath.trim(),
+    sidecarBrowserCacheRoot
+  }
 }
 
 const extractTag = async (archivePath, directory) => {
@@ -176,14 +182,21 @@ try {
 
   process.stdout.write(`[release] building ${releaseTag} for macOS arm64\n`)
   await run(preflight.pnpmPath, ['install', '--frozen-lockfile'], { cwd: armSource })
-  await run(preflight.pnpmPath, ['run', 'build:mac:release:arm64'], { cwd: armSource })
+  await run(preflight.pnpmPath, ['run', 'build:mac:release:arm64'], {
+    cwd: armSource,
+    env: {
+      ...process.env,
+      NCURATOR_SIDECAR_BROWSER_CACHE: path.join(preflight.sidecarBrowserCacheRoot, 'darwin-arm64')
+    }
+  })
   await createAndUploadFragment(armSource, 'macos-arm64')
 
   process.stdout.write(`[release] building ${releaseTag} for macOS x64 under Rosetta\n`)
   const x64Environment = {
     ...process.env,
     PATH: `${path.dirname(preflight.x64Node)}:${process.env.PATH || ''}`,
-    NCURATOR_SIDECAR_BUILD_PYTHON: preflight.x64Python
+    NCURATOR_SIDECAR_BUILD_PYTHON: preflight.x64Python,
+    NCURATOR_SIDECAR_BROWSER_CACHE: path.join(preflight.sidecarBrowserCacheRoot, 'darwin-x64')
   }
   await run(
     '/usr/bin/arch',
