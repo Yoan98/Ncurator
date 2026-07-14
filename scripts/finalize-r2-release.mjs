@@ -36,7 +36,7 @@ for (const name of [
 }
 
 const endpoint = `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`
-const bucket = process.env.R2_BUCKET_NAME
+const bucket = String(process.env.R2_BUCKET_NAME).replace(/^\/+|\/+$/gu, '')
 const publicBaseUrl = String(process.env.R2_PUBLIC_BASE_URL).replace(/\/$/u, '')
 const localAws = path.join(os.homedir(), '.ncurator', 'release-tools', 'awscli', 'bin', 'aws')
 const awsExecutable =
@@ -141,7 +141,9 @@ const cleanupOldObjects = async () => {
     'release-status/',
     'updates/v',
     'releases/v',
-    'releases/latest/'
+    'releases/latest/',
+    '/artifacts/',
+    '/release-status/'
   ]) {
     for (const key of await listKeys(prefix)) {
       if (key.startsWith(`artifacts/${releaseTag}/`)) continue

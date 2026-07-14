@@ -34,7 +34,7 @@ if (fragment.schemaVersion !== 1 || !/^v\d+\.\d+\.\d+$/u.test(fragment.tag)) {
 }
 
 const endpoint = `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`
-const bucket = process.env.R2_BUCKET_NAME
+const bucket = String(process.env.R2_BUCKET_NAME).replace(/^\/+|\/+$/gu, '')
 const publicBaseUrl = String(process.env.R2_PUBLIC_BASE_URL).replace(/\/$/u, '')
 const localAws = path.join(os.homedir(), '.ncurator', 'release-tools', 'awscli', 'bin', 'aws')
 const awsExecutable =
