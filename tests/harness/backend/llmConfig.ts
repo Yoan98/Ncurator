@@ -1,7 +1,7 @@
 import type { LiveLlmConfig } from './test-types'
 import { loadRootEnvOnce } from '../core/rootEnv'
 import { normalizeOpenAIBaseUrl } from '../../../src/shared/llmBaseUrl'
-import { resolveLlmProviderKind } from '../../../src/shared/llmProvider'
+import { inferLlmProviderKind, resolveLlmProviderKind } from '../../../src/shared/llmProvider'
 
 const DEFAULT_OPENAI_BASE_URL = 'https://api.openai.com/v1'
 const DEFAULT_PRIMARY_MODEL_NAME = 'gpt-5'
@@ -59,7 +59,7 @@ export const loadLiveLlmConfigFromEnv = (): LiveLlmConfig => {
     id: 'ai-live-config',
     name: 'AI Live',
     providerKind: resolveLlmProviderKind({
-      providerKind: readEnv('AI_LIVE_PROVIDER_KIND'),
+      providerKind: readEnv('AI_LIVE_PROVIDER_KIND') || inferLlmProviderKind(baseUrl),
       baseUrl
     }),
     base_url: baseUrl,

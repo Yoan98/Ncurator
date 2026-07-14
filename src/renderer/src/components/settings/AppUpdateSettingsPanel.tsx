@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { Alert, Button, Progress, Space, Tag, message } from 'antd'
 import { HiArrowPath, HiCheckCircle, HiExclamationTriangle, HiRocketLaunch } from 'react-icons/hi2'
 import type { AppUpdateSnapshot, AppUpdateStatus } from '../../../../shared/types'
+import { settingsSelectors } from '../../testing/selectors'
 
 const STATUS_META: Record<AppUpdateStatus, { label: string; className: string }> = {
   idle: { label: '待检查', className: 'border-[#EEEEEC] text-[#787774]' },
@@ -22,7 +23,7 @@ const formatBytes = (bytes: number | undefined): string => {
 const getStatusText = (snapshot: AppUpdateSnapshot | null): string => {
   if (!snapshot) return '正在读取更新状态'
   if (!snapshot.updateSupported) {
-    return snapshot.isPackaged ? '当前系统暂不支持自动更新' : '开发模式不会检查自动更新'
+    return snapshot.unsupportedReason || '当前系统暂不支持自动更新'
   }
   if (snapshot.status === 'downloaded') return '更新已下载，重启后完成安装'
   if (snapshot.status === 'downloading') return '正在下载更新包'
@@ -105,12 +106,21 @@ const AppUpdateSettingsPanel: React.FC = () => {
   }
 
   return (
-    <div className="h-full overflow-auto bg-white px-1 py-1">
+    <div
+      className="h-full overflow-auto bg-white px-1 py-1"
+      data-testid={settingsSelectors.appUpdatePanel}
+    >
       <div className="flex flex-col gap-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <div className="text-[13px] text-[#787774]">
-              当前版本 <span className="font-medium text-[#37352F]">{snapshot?.currentVersion || '-'}</span>
+              当前版本{' '}
+              <span
+                className="font-medium text-[#37352F]"
+                data-testid={settingsSelectors.appUpdateCurrentVersion}
+              >
+                {snapshot?.currentVersion || '-'}
+              </span>
             </div>
             <Tag className={`m-0 rounded-full border bg-white px-3 py-1 ${statusMeta.className}`}>
               {statusMeta.label}
@@ -122,6 +132,7 @@ const AppUpdateSettingsPanel: React.FC = () => {
               loading={checking || snapshot?.status === 'checking'}
               disabled={checkDisabled}
               onClick={handleCheck}
+              data-testid={settingsSelectors.appUpdateCheckButton}
             >
               检查更新
             </Button>
@@ -131,6 +142,7 @@ const AppUpdateSettingsPanel: React.FC = () => {
               loading={installing}
               disabled={installDisabled}
               onClick={handleInstall}
+              data-testid={settingsSelectors.appUpdateInstallButton}
             >
               重启安装
             </Button>
@@ -138,6 +150,7 @@ const AppUpdateSettingsPanel: React.FC = () => {
         </div>
 
         <Alert
+          data-testid={settingsSelectors.appUpdateStatus}
           showIcon
           type={
             snapshot?.status === 'error'
@@ -162,7 +175,12 @@ const AppUpdateSettingsPanel: React.FC = () => {
           <div className="grid gap-3 text-[13px] text-[#2F3437] sm:grid-cols-2">
             <div>
               <div className="text-[#787774]">可用版本</div>
-              <div className="mt-1 font-medium text-[#37352F]">{snapshot.availableVersion}</div>
+              <div
+                className="mt-1 font-medium text-[#37352F]"
+                data-testid={settingsSelectors.appUpdateAvailableVersion}
+              >
+                {snapshot.availableVersion}
+              </div>
             </div>
             <div>
               <div className="text-[#787774]">发布时间</div>
@@ -172,7 +190,7 @@ const AppUpdateSettingsPanel: React.FC = () => {
         ) : null}
 
         {snapshot?.status === 'downloading' || snapshot?.status === 'downloaded' ? (
-          <div>
+          <div data-testid={settingsSelectors.appUpdateProgress}>
             <Progress
               percent={progressPercent}
               status={snapshot.status === 'downloaded' ? 'success' : 'active'}

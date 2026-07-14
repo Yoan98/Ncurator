@@ -66,6 +66,5 @@ appImage:
   artifactName: ${name}-${version}.${ext}
 npmRebuild: false
 publish:
-  provider: github
-  owner: Yoan98
-  repo: Ncurator
+  provider: generic
+  url: https://download.ncurator.com/updates/latest

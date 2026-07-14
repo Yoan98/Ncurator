@@ -1,18 +1,21 @@
 import type {
   HumanThoughtDecision,
-  HumanState,
   HumanThought,
   RuntimeSkillId
 } from '../../../../src/main/services/ai/human/types'
-import type { AiArtifactRef, AiRunEvent, JsonArray, JsonObject, JsonValue } from '../../../../src/shared/types'
+import type {
+  AiArtifactRef,
+  AiRunEvent,
+  JsonArray,
+  JsonObject,
+  JsonValue
+} from '../../../../src/shared/types'
 
 export const filterAiRunEventsByType = <TType extends AiRunEvent['type']>(
   events: readonly AiRunEvent[],
   type: TType
 ): Extract<AiRunEvent, { type: TType }>[] =>
-  events.filter(
-    (event): event is Extract<AiRunEvent, { type: TType }> => event.type === type
-  )
+  events.filter((event): event is Extract<AiRunEvent, { type: TType }> => event.type === type)
 
 export const summarizeHumanSteps = (events: readonly AiRunEvent[]): string[] =>
   filterAiRunEventsByType(events, 'human_step').map((event) => {
@@ -20,16 +23,20 @@ export const summarizeHumanSteps = (events: readonly AiRunEvent[]): string[] =>
     return `${stage}:${event.action}`
   })
 
-const buildThoughtMetadata = (input: { summary: string } & Partial<HumanThought>): HumanThought => ({
+const buildThoughtMetadata = (
+  input: { summary: string } & Partial<HumanThought>
+): HumanThought => ({
   next: input.next || input.summary,
   todolist: input.todolist,
   progressionSummary: input.progressionSummary
 })
 
-export const buildLearnSkillsDecision = (input: {
-  skillIds: RuntimeSkillId[]
-  summary: string
-} & Partial<HumanThought>): HumanThoughtDecision => ({
+export const buildLearnSkillsDecision = (
+  input: {
+    skillIds: RuntimeSkillId[]
+    summary: string
+  } & Partial<HumanThought>
+): HumanThoughtDecision => ({
   thought: buildThoughtMetadata(input),
   nextAction: {
     action: 'learning',
@@ -37,26 +44,38 @@ export const buildLearnSkillsDecision = (input: {
   }
 })
 
-export const buildToolDecision = (input: {
-  toolName: string
-  args: JsonObject
-  summary: string
-} & Partial<HumanThought>): HumanThoughtDecision => ({
+export const buildToolDecision = (
+  input: {
+    toolName: string
+    args: JsonObject
+    summary: string
+  } & Partial<HumanThought>
+): HumanThoughtDecision => ({
   thought: buildThoughtMetadata(input),
   nextAction: {
     action: 'hand',
     calls: [
       {
         toolName: input.toolName,
-        args: input.args
+        args:
+          input.toolName === 'terminal_run' &&
+          typeof input.args.command === 'string' &&
+          typeof input.args.commandExplanation !== 'string'
+            ? {
+                ...input.args,
+                commandExplanation: `执行测试命令：${input.args.command}`
+              }
+            : input.args
       }
     ]
   }
 })
 
-export const buildCompleteTaskDecision = (input: {
-  summary: string
-} & Partial<HumanThought>): HumanThoughtDecision => ({
+export const buildCompleteTaskDecision = (
+  input: {
+    summary: string
+  } & Partial<HumanThought>
+): HumanThoughtDecision => ({
   thought: buildThoughtMetadata(input),
   nextAction: {
     action: 'mouth'
@@ -73,7 +92,9 @@ export const filterToolCallStartedEventsByName = (
   events: readonly AiRunEvent[],
   toolName: string
 ): Extract<AiRunEvent, { type: 'tool_call_started' }>[] =>
-  filterAiRunEventsByType(events, 'tool_call_started').filter((event) => event.toolName === toolName)
+  filterAiRunEventsByType(events, 'tool_call_started').filter(
+    (event) => event.toolName === toolName
+  )
 
 export const collectStartedToolInputs = (
   events: readonly AiRunEvent[],
@@ -120,7 +141,9 @@ export const collectStartedDocxEditSourcePaths = (
     .filter((value): value is string => typeof value === 'string')
 
 export const hasKbToolCall = (events: readonly AiRunEvent[]): boolean =>
-  filterAiRunEventsByType(events, 'tool_call_result').some((event) => event.toolName.startsWith('kb_'))
+  filterAiRunEventsByType(events, 'tool_call_result').some((event) =>
+    event.toolName.startsWith('kb_')
+  )
 
 export const hasDocxApplyArtifact = (artifacts: readonly AiArtifactRef[] | undefined): boolean =>
   Array.isArray(artifacts) &&
@@ -145,53 +168,13 @@ export const countDocxApplyArtifacts = (artifacts: readonly AiArtifactRef[] | un
 
 export const hasDocxFileArtifact = (artifacts: readonly AiArtifactRef[] | undefined): boolean =>
   Array.isArray(artifacts) &&
-  artifacts.some(
-    (artifact) =>
-      artifact.kind === 'file' &&
-      artifact.capability === 'docx'
-  )
+  artifacts.some((artifact) => artifact.kind === 'file' && artifact.capability === 'docx')
 
 export const countDocxFileArtifacts = (artifacts: readonly AiArtifactRef[] | undefined): number =>
   Array.isArray(artifacts)
-    ? artifacts.filter(
-        (artifact) =>
-          artifact.kind === 'file' &&
-          artifact.capability === 'docx'
-      ).length
+    ? artifacts.filter((artifact) => artifact.kind === 'file' && artifact.capability === 'docx')
+        .length
     : 0
-
-const DOCX_WRITE_TOOL_NAMES = [
-  'docx_edit',
-  'docx_rollback'
-] as const
-
-type DocxWriteToolName = (typeof DOCX_WRITE_TOOL_NAMES)[number]
-
-type DocxChangedBlockPreview = {
-  blockId?: string
-  beforeText?: string
-  afterText?: string
-}
-
-type DocxMutationResultPreview = {
-  changedBlocks?: DocxChangedBlockPreview[]
-}
-
-export const isDocxWriteToolName = (toolName: string): toolName is DocxWriteToolName =>
-  DOCX_WRITE_TOOL_NAMES.includes(toolName as DocxWriteToolName)
-
-export const hasDocxWriteToolCall = (events: readonly AiRunEvent[]): boolean =>
-  filterAiRunEventsByType(events, 'tool_call_result').some((event) => isDocxWriteToolName(event.toolName))
-
-export const collectDocxWriteChangedBlocks = (
-  events: readonly AiRunEvent[]
-): DocxChangedBlockPreview[] =>
-  filterAiRunEventsByType(events, 'tool_call_result')
-    .filter((event) => isDocxWriteToolName(event.toolName))
-    .flatMap((event) => {
-      const mutation = (event.result?.data as DocxMutationResultPreview | undefined) || {}
-      return mutation.changedBlocks || []
-    })
 
 const isJsonObject = (value: JsonValue | undefined): value is JsonObject =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -306,31 +289,3 @@ export const collectToolDiagnosticMessages = (
     .filter((event) => (toolName ? event.toolName === toolName : true))
     .map((event) => event.result?.diagnostic?.message)
     .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
-
-export const readToolCallInput = <TValue extends JsonObject>(
-  events: readonly AiRunEvent[],
-  toolName: string,
-  index = -1
-): TValue => {
-  const matches = filterToolCallStartedEventsByName(events, toolName)
-  const resolvedIndex = index < 0 ? matches.length + index : index
-  const event = matches[resolvedIndex]
-  if (!event) {
-    throw new Error(`tool_call_started not found for ${toolName} at index ${String(index)}`)
-  }
-  return event.input as TValue
-}
-
-export const readSingleToolResultData = <TValue extends JsonValue>(
-  state: HumanState,
-  toolName?: string
-): TValue => {
-  const result = state.execution.lastToolResults?.[0]
-  if (!result) {
-    throw new Error('execution.lastToolResults is empty')
-  }
-  if (toolName && result.toolName !== toolName) {
-    throw new Error(`expected tool result ${toolName}, received ${result.toolName}`)
-  }
-  return result.data as TValue
-}

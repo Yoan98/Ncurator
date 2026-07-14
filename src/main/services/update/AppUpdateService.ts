@@ -1,4 +1,5 @@
 import { app, BrowserWindow, ipcMain } from 'electron'
+import { spawnSync } from 'node:child_process'
 import { autoUpdater } from 'electron-updater'
 import type { ProgressInfo, UpdateDownloadedEvent, UpdateInfo } from 'electron-updater'
 import {
@@ -9,8 +10,45 @@ import {
 } from '../../../shared/constants'
 import type { AppUpdateActionResponse, AppUpdateSnapshot } from '../../../shared/types'
 
-const SUPPORTED_UPDATE_PLATFORMS = new Set<NodeJS.Platform>(['darwin', 'win32'])
+const MAC_UPDATE_SIGNATURE_ERROR = 'macOS 自动更新需要有效的 Developer ID 签名'
 const STARTUP_UPDATE_CHECK_DELAY_MS = 5000
+const UPDATE_BUSY_STATUSES = new Set<AppUpdateSnapshot['status']>([
+  'checking',
+  'available',
+  'downloading'
+])
+
+type AppUpdateDependencies = {
+  app: Pick<typeof app, 'getVersion'> & { readonly isPackaged: boolean }
+  updater: typeof autoUpdater
+  ipc: Pick<typeof ipcMain, 'handle'>
+  getWindows: typeof BrowserWindow.getAllWindows
+  platform: NodeJS.Platform
+  schedule: (callback: () => void, delayMs: number) => ReturnType<typeof setTimeout>
+  macCodeSignatureValid: () => boolean
+}
+
+const hasValidMacCodeSignature = (): boolean => {
+  const result = spawnSync('/usr/bin/codesign', ['-dv', '--verbose=2', process.execPath], {
+    encoding: 'utf8'
+  })
+  const output = `${result.stdout || ''}\n${result.stderr || ''}`
+  return (
+    result.status === 0 &&
+    /Authority=Developer ID Application:/u.test(output) &&
+    /TeamIdentifier=(?!not set\b)\S+/u.test(output)
+  )
+}
+
+const createDefaultDependencies = (): AppUpdateDependencies => ({
+  app,
+  updater: autoUpdater,
+  ipc: ipcMain,
+  getWindows: () => BrowserWindow.getAllWindows(),
+  platform: process.platform,
+  schedule: (callback, delayMs) => setTimeout(callback, delayMs),
+  macCodeSignatureValid: hasValidMacCodeSignature
+})
 
 const getUpdateErrorMessage = (error: Error | string): string =>
   error instanceof Error ? error.message : error
@@ -21,12 +59,17 @@ const normalizeOptionalText = (value: string | null | undefined): string | undef
 export class AppUpdateService {
   private initialized = false
   private checking = false
-  private snapshot: AppUpdateSnapshot = {
-    status: 'idle',
-    currentVersion: app.getVersion(),
-    isPackaged: app.isPackaged,
-    updateSupported: app.isPackaged && SUPPORTED_UPDATE_PLATFORMS.has(process.platform),
-    platform: process.platform
+  private readonly dependencies: AppUpdateDependencies
+  private readonly unsupportedReason: string | undefined
+  private snapshot: AppUpdateSnapshot
+
+  constructor(dependencies: Partial<AppUpdateDependencies> = {}) {
+    this.dependencies = {
+      ...createDefaultDependencies(),
+      ...dependencies
+    }
+    this.unsupportedReason = this.resolveUnsupportedReason()
+    this.snapshot = this.createSnapshot({ status: 'idle' })
   }
 
   initialize(): void {
@@ -39,15 +82,16 @@ export class AppUpdateService {
       return
     }
 
-    autoUpdater.logger = console
-    autoUpdater.autoDownload = true
-    autoUpdater.autoInstallOnAppQuit = true
+    const { updater } = this.dependencies
+    updater.logger = console
+    updater.autoDownload = true
+    updater.autoInstallOnAppQuit = true
 
-    autoUpdater.on('checking-for-update', () => {
+    updater.on('checking-for-update', () => {
       this.setSnapshot({ status: 'checking', error: undefined })
     })
 
-    autoUpdater.on('update-available', (info: UpdateInfo) => {
+    updater.on('update-available', (info: UpdateInfo) => {
       this.setSnapshot({
         status: 'available',
         availableVersion: info.version,
@@ -57,7 +101,8 @@ export class AppUpdateService {
       })
     })
 
-    autoUpdater.on('update-not-available', (info: UpdateInfo) => {
+    updater.on('update-not-available', (info: UpdateInfo) => {
+      this.checking = false
       this.setSnapshot({
         status: 'not-available',
         availableVersion: info.version,
@@ -71,7 +116,7 @@ export class AppUpdateService {
       })
     })
 
-    autoUpdater.on('download-progress', (progress: ProgressInfo) => {
+    updater.on('download-progress', (progress: ProgressInfo) => {
       this.setSnapshot({
         status: 'downloading',
         progressPercent: progress.percent,
@@ -82,7 +127,8 @@ export class AppUpdateService {
       })
     })
 
-    autoUpdater.on('update-downloaded', (event: UpdateDownloadedEvent) => {
+    updater.on('update-downloaded', (event: UpdateDownloadedEvent) => {
+      this.checking = false
       this.setSnapshot({
         status: 'downloaded',
         availableVersion: event.version,
@@ -93,7 +139,7 @@ export class AppUpdateService {
       })
     })
 
-    autoUpdater.on('error', (error: Error) => {
+    updater.on('error', (error: Error) => {
       this.checking = false
       this.setSnapshot({
         status: 'error',
@@ -104,15 +150,15 @@ export class AppUpdateService {
 
   checkForUpdatesOnLaunch(): void {
     if (!this.snapshot.updateSupported) return
-    setTimeout(() => {
+    this.dependencies.schedule(() => {
       void this.checkForUpdates()
     }, STARTUP_UPDATE_CHECK_DELAY_MS)
   }
 
   private registerIpcHandlers(): void {
-    ipcMain.handle(APP_UPDATE_GET_SNAPSHOT_CHANNEL, () => this.snapshot)
-    ipcMain.handle(APP_UPDATE_CHECK_CHANNEL, () => this.checkForUpdates())
-    ipcMain.handle(APP_UPDATE_INSTALL_CHANNEL, () => this.quitAndInstall())
+    this.dependencies.ipc.handle(APP_UPDATE_GET_SNAPSHOT_CHANNEL, () => this.snapshot)
+    this.dependencies.ipc.handle(APP_UPDATE_CHECK_CHANNEL, () => this.checkForUpdates())
+    this.dependencies.ipc.handle(APP_UPDATE_INSTALL_CHANNEL, () => this.quitAndInstall())
   }
 
   private async checkForUpdates(): Promise<AppUpdateActionResponse> {
@@ -120,11 +166,11 @@ export class AppUpdateService {
       return {
         success: false,
         snapshot: this.snapshot,
-        error: app.isPackaged ? '当前系统暂不支持自动更新' : '开发模式不会检查自动更新'
+        error: this.snapshot.unsupportedReason || '当前系统暂不支持自动更新'
       }
     }
 
-    if (this.checking || this.snapshot.status === 'downloading') {
+    if (this.checking || UPDATE_BUSY_STATUSES.has(this.snapshot.status)) {
       return {
         success: true,
         snapshot: this.snapshot
@@ -135,7 +181,14 @@ export class AppUpdateService {
     this.setSnapshot({ status: 'checking', error: undefined })
 
     try {
-      await autoUpdater.checkForUpdates()
+      await this.dependencies.updater.checkForUpdates()
+      if (this.snapshot.status === 'error') {
+        return {
+          success: false,
+          snapshot: this.snapshot,
+          error: this.snapshot.error || '检查更新失败'
+        }
+      }
       return {
         success: true,
         snapshot: this.snapshot
@@ -162,7 +215,7 @@ export class AppUpdateService {
       }
     }
 
-    autoUpdater.quitAndInstall(false, true)
+    this.dependencies.updater.quitAndInstall(false, true)
     return {
       success: true,
       snapshot: this.snapshot
@@ -170,19 +223,39 @@ export class AppUpdateService {
   }
 
   private setSnapshot(patch: Partial<AppUpdateSnapshot>): void {
-    this.snapshot = {
+    this.snapshot = this.createSnapshot({
       ...this.snapshot,
-      ...patch,
-      currentVersion: app.getVersion(),
-      isPackaged: app.isPackaged,
-      updateSupported: app.isPackaged && SUPPORTED_UPDATE_PLATFORMS.has(process.platform),
-      platform: process.platform
-    }
+      ...patch
+    })
     this.emitSnapshot()
   }
 
+  private createSnapshot(
+    snapshot: Pick<AppUpdateSnapshot, 'status'> & Partial<AppUpdateSnapshot>
+  ): AppUpdateSnapshot {
+    const { app: electronApp, platform } = this.dependencies
+    return {
+      ...snapshot,
+      currentVersion: electronApp.getVersion(),
+      isPackaged: electronApp.isPackaged,
+      updateSupported: this.unsupportedReason === undefined,
+      unsupportedReason: this.unsupportedReason,
+      platform
+    }
+  }
+
+  private resolveUnsupportedReason(): string | undefined {
+    const { app: electronApp, platform, macCodeSignatureValid } = this.dependencies
+    if (!electronApp.isPackaged) return '开发模式不会检查自动更新'
+    if (platform === 'win32') return undefined
+    if (platform === 'darwin') {
+      return macCodeSignatureValid() ? undefined : MAC_UPDATE_SIGNATURE_ERROR
+    }
+    return '当前系统暂不支持自动更新'
+  }
+
   private emitSnapshot(): void {
-    for (const window of BrowserWindow.getAllWindows()) {
+    for (const window of this.dependencies.getWindows()) {
       if (!window.isDestroyed()) {
         window.webContents.send(APP_UPDATE_STATUS_CHANNEL, this.snapshot)
       }

@@ -49,6 +49,7 @@ export interface AppUpdateSnapshot {
   currentVersion: string
   isPackaged: boolean
   updateSupported: boolean
+  unsupportedReason?: string
   platform: AppRuntimePlatform
   availableVersion?: string
   releaseName?: string

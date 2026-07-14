@@ -17,6 +17,7 @@ const buildDeps = async (
     controller,
     deps: {
       runtimeSettings,
+      llmStrategyPreferenceStore: runtime.storageService.llmStrategyPreference,
       llmStore: runtime.llmStore,
       chatStore: runtime.chatStore,
       documentsStore: runtime.documentsStore,
@@ -63,8 +64,26 @@ describe('ai human mock-llm backend', () => {
             },
             {
               error: 'llm_call_timeout'
+            },
+            {
+              error: 'llm_call_timeout'
+            },
+            {
+              error: 'llm_call_timeout'
+            },
+            {
+              error: 'llm_call_timeout'
+            },
+            {
+              error: 'llm_call_timeout'
             }
           ]
+        })
+        await runtime.chatStore.saveChatSession({
+          id: SESSION_ID,
+          title: 'timeout resume snapshot test',
+          created_at: Date.now(),
+          workspace_id: 'test-workspace'
         })
         const { deps: timeoutDeps } = await buildDeps(runtime, timeoutDriver)
         const timeoutResult = await AiRunService.getInstance().run(
@@ -72,7 +91,10 @@ describe('ai human mock-llm backend', () => {
             runId: `${runtime.runId}-timeout`,
             sessionId: SESSION_ID,
             input: '先学一个 skill，然后继续处理任务。',
-            modelName: 'scripted-llm',
+            mainModel: {
+              configId: 'mock-llm-scripted',
+              modelName: 'scripted-llm'
+            },
             selectedReferences: [
               {
                 kind: 'file',
@@ -123,7 +145,15 @@ describe('ai human mock-llm backend', () => {
             runId: `${runtime.runId}-resume`,
             sessionId: SESSION_ID,
             input: '继续',
-            modelName: 'scripted-llm'
+            mainModel: {
+              configId: 'mock-llm-scripted',
+              modelName: 'scripted-llm'
+            },
+            workspace: {
+              workspaceId: 'test-workspace',
+              workspaceName: 'test-workspace',
+              rootPath: runtime.workspaceRoot
+            }
           },
           secondDeps
         )
@@ -137,13 +167,22 @@ describe('ai human mock-llm backend', () => {
             }
           ]
         })
+        await runtime.chatStore.saveChatSession({
+          id: `${SESSION_ID}-network`,
+          title: 'network resume snapshot test',
+          created_at: Date.now(),
+          workspace_id: 'test-workspace'
+        })
         const { deps: networkDeps } = await buildDeps(runtime, networkDriver)
         const networkResult = await AiRunService.getInstance().run(
           {
             runId: `${runtime.runId}-network`,
             sessionId: `${SESSION_ID}-network`,
             input: '触发网络错误恢复',
-            modelName: 'scripted-llm',
+            mainModel: {
+              configId: 'mock-llm-scripted',
+              modelName: 'scripted-llm'
+            },
             workspace: {
               workspaceId: 'test-workspace',
               workspaceName: 'test-workspace',
@@ -152,7 +191,9 @@ describe('ai human mock-llm backend', () => {
           },
           networkDeps
         )
-        const networkSnapshot = await runtime.chatStore.getSessionResumeSnapshot(`${SESSION_ID}-network`)
+        const networkSnapshot = await runtime.chatStore.getSessionResumeSnapshot(
+          `${SESSION_ID}-network`
+        )
 
         const ordinaryDriver = createScriptedStructuredOutputDriver({
           'human.brain': [
@@ -161,13 +202,22 @@ describe('ai human mock-llm backend', () => {
             }
           ]
         })
+        await runtime.chatStore.saveChatSession({
+          id: `${SESSION_ID}-error`,
+          title: 'ordinary error snapshot test',
+          created_at: Date.now(),
+          workspace_id: 'test-workspace'
+        })
         const { deps: ordinaryDeps } = await buildDeps(runtime, ordinaryDriver)
         const ordinaryResult = await AiRunService.getInstance().run(
           {
             runId: `${runtime.runId}-error`,
             sessionId: `${SESSION_ID}-error`,
             input: '触发普通错误',
-            modelName: 'scripted-llm',
+            mainModel: {
+              configId: 'mock-llm-scripted',
+              modelName: 'scripted-llm'
+            },
             workspace: {
               workspaceId: 'test-workspace',
               workspaceName: 'test-workspace',
@@ -176,7 +226,9 @@ describe('ai human mock-llm backend', () => {
           },
           ordinaryDeps
         )
-        const ordinarySnapshot = await runtime.chatStore.getSessionResumeSnapshot(`${SESSION_ID}-error`)
+        const ordinarySnapshot = await runtime.chatStore.getSessionResumeSnapshot(
+          `${SESSION_ID}-error`
+        )
 
         return {
           timeoutResult,
@@ -194,13 +246,14 @@ describe('ai human mock-llm backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-            result.timeoutResult.status === 'failed' &&
+          result.timeoutResult.status === 'failed' &&
             result.timeoutResult.failureCode === 'timeout' &&
             result.timeoutResult.resumeSnapshotSaved === true &&
             result.timeoutSnapshot?.reason === 'timeout' &&
             result.timeoutSnapshot.selectedReferences.length === 1 &&
             result.timeoutSnapshot.workspace?.rootPath === runtime.workspaceRoot &&
-            result.timeoutSnapshot.humanState.skills?.learnedSkillIds?.includes('docx-read') === true &&
+            result.timeoutSnapshot.humanState.skills?.learnedSkillIds?.includes('docx-read') ===
+              true &&
             result.resumedResult.status === 'completed' &&
             result.resumedResult.finalDeliveryMarkdown?.includes('恢复快照') === true &&
             result.clearedSnapshot === null &&

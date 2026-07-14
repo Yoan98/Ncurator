@@ -84,10 +84,10 @@ Settings 的回归测试顶层 suite 直接对齐 PRD 模块：
 #### `model-create-edit-form`
 
 - 测试类型：`e2e`
-- What：验证新增和编辑连接配置的表单内容、预填逻辑与必填校验。
+- What：验证新增和编辑连接配置的表单内容、预填逻辑、必填校验，以及空列表中第一条配置的普通服务语义。
 - Why：连接配置是后续 workbench 可用性的前提，一旦表单字段、预填或校验失真，用户很容易保存出不可用配置。
-- How：分别进入新增和编辑流；新增流检查表单字段，编辑流检查预填；再覆盖缺少必填字段时点击保存的路径。
-- Oracle：新增表单可填写配置名称、模型服务地址和 API Key，对齐 `SET-MODEL-002-AC1`；编辑现有配置时表单带出当前值，对齐 `SET-MODEL-002-AC2`；必填字段不完整时保存被拦截，对齐 `SET-MODEL-002-AC3`；新增和编辑弹窗点击遮罩后保持打开且输入不丢失，对齐 `SET-MODEL-002-AC6`。
+- How：从空配置列表进入新增流，检查表单字段、必填校验和首次保存后的列表语义；再进入编辑流检查预填。
+- Oracle：新增表单可填写配置名称、模型服务地址和 API Key，对齐 `SET-MODEL-002-AC1`；第一条配置保存后作为普通可用服务展示，不产生默认、当前或启用状态，对齐 `SET-MODEL-001-AC1`、`SET-MODEL-001-AC2`；编辑现有配置时表单带出当前值，对齐 `SET-MODEL-002-AC2`；必填字段不完整时保存被拦截，对齐 `SET-MODEL-002-AC3`；新增和编辑弹窗点击遮罩后保持打开且输入不丢失，对齐 `SET-MODEL-002-AC6`。
 - Not：不验证 workbench 模型选择。
 
 #### `model-remote-list-refresh`
@@ -99,14 +99,6 @@ Settings 的回归测试顶层 suite 直接对齐 PRD 模块：
 - Oracle：获取模型列表成功后，配置列表展示模型数量且弹窗展示具体模型，对齐 `SET-MODEL-002-AC4`；失败时列表和弹窗展示明确错误提示，对齐 `SET-MODEL-002-AC5`。
 - Not：不验证模型列表持久化；当前模型列表仅作为展示和 workbench 下拉来源。
 
-#### `model-first-config-saves-service`
-
-- 测试类型：`e2e`
-- What：验证当配置列表为空时，新增第一条配置后会作为可用服务展示。
-- Why：第一条配置保存后应立即进入可用服务列表，但不产生默认、启用或当前状态。
-- How：以空配置列表进入新增流，保存第一条有效连接配置。
-- Oracle：第一条配置保存成功后出现在配置列表中，对齐 `SET-MODEL-001-AC1` 和 `SET-MODEL-001-AC2`。
-- Not：不验证 workbench 是否自动选择该模型。
 
 #### `model-delete-config-feedback`
 
@@ -140,10 +132,10 @@ Settings 的回归测试顶层 suite 直接对齐 PRD 模块：
 #### `workspace-add-selection-flow`
 
 - 测试类型：`e2e`
-- What：验证添加工作空间时按名称创建空容器，并在成功后自动切换到新工作空间。
+- What：验证无工作空间和未绑定目录时的空状态，以及按名称创建空容器后自动切换到新工作空间。
 - Why：工作空间已从“目录快照”改为“具名容器”，首个创建动作必须反映这一语义。
-- How：进入空工作空间页，覆盖空名称提交和有效名称提交两条路径。
-- Oracle：名称为空时不允许提交，对齐 `SET-WORKSPACE-002-AC1`；点击遮罩后弹窗保持打开且输入不丢失，对齐 `SET-WORKSPACE-002-AC3`；创建成功后，新工作空间立即进入列表并成为当前选中项，对齐 `SET-WORKSPACE-002-AC2`。
+- How：进入无工作空间页面检查列表和详情空状态，覆盖空名称提交和有效名称提交，再检查新建未绑定工作空间的文件区空状态。
+- Oracle：没有工作空间时显示明确选择提示，对齐 `SET-WORKSPACE-007-AC1`；名称为空时不允许提交，对齐 `SET-WORKSPACE-002-AC1`；点击遮罩后弹窗保持打开且输入不丢失，对齐 `SET-WORKSPACE-002-AC3`；创建成功后，新工作空间立即进入列表并成为当前选中项，对齐 `SET-WORKSPACE-002-AC2`；未绑定目录时文件区显示明确空态，对齐 `SET-WORKSPACE-007-AC2`。
 - Not：不验证创建后自动扫描或自动索引；该需求未在 PRD 中定义。
 
 #### `workspace-set-root-path`
@@ -173,16 +165,6 @@ Settings 的回归测试顶层 suite 直接对齐 PRD 模块：
 - Oracle：移除成功后，该工作空间从列表中消失，对齐 `SET-WORKSPACE-006-AC2`；详情区不会继续显示已删除工作空间的陈旧数据。
 - Not：不验证其他消费页面中的范围清理展示；只覆盖 Settings 页内可见结果。
 
-#### `workspace-empty-tree-state`
-
-- 测试类型：`e2e`
-- What：验证无工作空间和文件树为空两类提示都能明确展示。
-- Why：这些都是首屏阻塞状态，需要直接解释“现在为什么不能继续”。
-- How：先进入无工作空间的 Settings 工作空间页，再通过 UI 创建一个未绑定目录的空工作区。
-- Oracle：没有工作空间时，列表和详情区都给出明确空态，对齐 `SET-WORKSPACE-007-AC1`；当前目录没有可显示文件时，目录树区域给出空态，对齐 `SET-WORKSPACE-007-AC2`。
-- Not：不验证旧本地导入提示；旧数据清理属于 backend / 启动迁移契约，不用假 e2e 制造。
-
-### 4.3 `workspace / files`
 
 #### `workspace-index-job-store-contract`
 
@@ -225,18 +207,10 @@ Settings 的回归测试顶层 suite 直接对齐 PRD 模块：
 - 测试类型：`e2e`
 - What：验证点击“更新索引”后，文件状态会刷新为已索引并同步更新摘要。
 - Why：这是“索引已经可用”的核心用户反馈链路。
-- How：创建一条带索引延迟的 fixture 工作空间，触发更新索引并读取刷新后的文件树响应。
-- Oracle：更新索引过程中出现持久化总进度，且检查更新/更新索引按钮同时禁用，对齐 `SET-WORKSPACE-004-AC3`；更新成功后，`indexed / needs_index` 摘要和节点状态同步刷新，对齐 `SET-WORKSPACE-004-AC2`。
+- How：复制共享 workspace fixture 的隔离副本并通过真实 UI 绑定，触发更新索引，读取刷新后的文件树和全部支持文件状态。
+- Oracle：更新索引过程中出现持久化总进度，且检查更新/更新索引按钮同时禁用，对齐 `SET-WORKSPACE-004-AC3`；共享 fixture 中全部支持文件真实进入处理范围，对齐 `SET-WORKSPACE-004-AC1`；更新后所有支持文件收敛为 `indexed / failed`，摘要和节点状态同步刷新，对齐 `SET-WORKSPACE-004-AC2`。
 - Not：不验证向量内容质量和搜索召回结果。
 
-#### `workspace-prepare-real-fixture-refresh`
-
-- 测试类型：`e2e`
-- What：验证 Settings 页面点击“更新索引”时，会对共享真实工作区 fixture 中的支持文件执行真实索引链路，并完成状态收敛。
-- Why：现有文件索引 E2E 需要覆盖真实 docx 加载、切分、embedding 与本地索引写入；该链路是用户手动点击更新索引时最容易出现闪退的真实风险面。
-- How：把 `tests/fixtures/workspace` 原样复制到隔离临时目录，创建工作空间并绑定该目录，从 Settings 文件 tab 点击“更新索引”，轮询持久化 job、摘要和文件节点状态。
-- Oracle：更新索引执行中出现持久化进度且两个索引操作按钮禁用，对齐 `SET-WORKSPACE-004-AC3`；任务结束后应用仍存活，支持文件状态收敛为 `indexed / failed`，文件摘要同步刷新，对齐 `SET-WORKSPACE-004-AC1`、`SET-WORKSPACE-004-AC2`。
-- Not：不验证检索召回排序和向量语义质量；只验证真实文件索引链路不会停留在执行中或导致页面不可用。
 
 #### `workspace-prepare-failed-retry`
 
@@ -294,40 +268,24 @@ Settings 的回归测试顶层 suite 直接对齐 PRD 模块：
 
 ### 4.4 `workspace / web`
 
-#### `workspace-detail-contains-web-management`
-
-- 测试类型：`e2e`
-- What：验证网页资料管理直接内嵌在当前工作空间详情区内，并与文件 tab 平级切换。
-- Why：网页不再从属于文件区域；如果这里退回旧布局，交互心智会再次偏向文件主视角。
-- How：创建工作区和网页资料，进入工作空间详情并切到网页 tab。
-- Oracle：网页 tab 内直接出现索引状态面板、列表和添加入口，对齐 `SET-WORKSPACE-005-AC3`、`SET-WEB-001-AC3`；整个操作停留在 `/settings/workspace` 内完成，对齐 `SET-WORKSPACE-005-AC3`。
-- Not：不验证网页列表项的打开和删除动作；这些由独立 case 覆盖。
 
 #### `web-add-sources-dialog`
 
 - 测试类型：`e2e`
-- What：验证网页资料添加弹窗支持空输入校验、多行 URL 提交和成功后的清空收尾。
+- What：验证网页资料管理内嵌在工作空间详情中，并验证添加弹窗的空输入校验、多行 URL 提交和成功后的清空收尾。
 - Why：这是网页资料进入系统的主入口。
-- How：进入网页 tab，覆盖空输入提交、多行 URL 提交和再次打开弹窗三条路径。
-- Oracle：输入为空时提交被拦截，对齐 `SET-WEB-002-AC1`；点击遮罩后弹窗保持打开且已输入 URL 不丢失，对齐 `SET-WEB-002-AC4`；多行 URL 提交后，网页资料进入当前工作区列表，对齐 `SET-WEB-002-AC2`；提交成功后弹窗关闭且输入被清空，对齐 `SET-WEB-002-AC3`。
+- How：进入工作空间详情的网页 tab，确认列表和添加入口保持在 `/settings/workspace`，再覆盖空输入提交、多行 URL 提交和再次打开弹窗三条路径。
+- Oracle：网页管理位于工作空间详情且不跳转独立路由，对齐 `SET-WORKSPACE-005-AC3`、`SET-WEB-001-AC3`；输入为空时提交被拦截，对齐 `SET-WEB-002-AC1`；点击遮罩后弹窗保持打开且已输入 URL 不丢失，对齐 `SET-WEB-002-AC4`；多行 URL 提交后，网页资料进入当前工作区列表，对齐 `SET-WEB-002-AC2`；提交成功后弹窗关闭且输入被清空，对齐 `SET-WEB-002-AC3`。
 - Not：不验证 URL 抓取内容质量，也不验证 include/exclude selector 的解析效果。
 
-#### `web-scan-summary-refresh`
-
-- 测试类型：`e2e`
-- What：验证点击“检查更新”后，网页状态会刷新为需索引，并同步更新摘要统计。
-- Why：网页和文件一样，需要先判断“内容是否变了”再决定是否重建索引。
-- How：预置一条已索引网页，执行“检查更新”并读取刷新后的网页列表。
-- Oracle：检查执行中出现持久化进度，且检查更新/更新索引按钮同时禁用，对齐 `SET-WEB-003-AC1`；检查成功后，网页列表状态与需索引摘要同步刷新，对齐 `SET-WEB-003-AC2`。
-- Not：不验证真实网页 HTTP 缓存头、正文 diff 算法和网络失败分支。
 
 #### `web-prepare-summary`
 
 - 测试类型：`e2e`
-- What：验证点击“更新索引”后，网页会区分成功索引与爬取失败，并刷新摘要统计。
+- What：验证网页“检查更新 → 更新索引”完整链路会先刷新可索引状态，再区分成功索引与爬取失败并刷新摘要。
 - Why：网页索引是“爬取 + 建索引”两阶段链路，失败类型必须可区分。
 - How：预置一条成功网页和一条带失败标记的网页，先执行“检查更新”，再执行“更新索引”。
-- Oracle：更新索引执行中出现抓取/索引分阶段进度，且检查更新/更新索引按钮同时禁用，对齐 `SET-WEB-004-AC4`；成功处理的网页转为已索引，对齐 `SET-WEB-004-AC2`；失败网页被标记为爬取失败，失败数量同步更新，对齐 `SET-WEB-004-AC3`。
+- Oracle：检查更新执行中出现进度且两个按钮禁用，完成后网页进入 `needs_index`，对齐 `SET-WEB-003-AC1`、`SET-WEB-003-AC2`；更新索引执行中出现抓取/索引分阶段进度，且两个按钮继续禁用，对齐 `SET-WEB-004-AC4`；成功网页转为已索引，对齐 `SET-WEB-004-AC2`；失败网页被标记为爬取失败，失败数量同步更新，对齐 `SET-WEB-004-AC3`。
 - Not：不验证真实网页正文切块、embedding 写入质量和索引失败以外的网络细节。
 
 #### `web-prepare-progress-restore`

@@ -25,6 +25,7 @@ describe('settings workspace e2e', () => {
           let emptyNameBlocked = false
           let createModalVisibleAfterEmptySubmit = false
           let maskClickPreservedInput = false
+          let noWorkspaceDetailPromptVisible = false
 
           await runtime.step({
             name: 'open-empty-workspace-page',
@@ -34,6 +35,8 @@ describe('settings workspace e2e', () => {
               await getSettingsLocator(page, importSelectors.workspaceEmptyState).waitFor({
                 state: 'visible'
               })
+              await page.getByText('选择一个工作空间').waitFor({ state: 'visible' })
+              noWorkspaceDetailPromptVisible = await page.getByText('选择一个工作空间').isVisible()
               await getSettingsLocator(page, importSelectors.createWorkspaceButton).click()
               await getSettingsLocator(page, importSelectors.createWorkspaceNameInput).fill(
                 '遮罩保留工作空间'
@@ -83,6 +86,7 @@ describe('settings workspace e2e', () => {
               await getSettingsLocator(page, importSelectors.workspaceDetail)
                 .getByRole('tab', { name: /文件/u })
                 .waitFor({ state: 'visible' })
+              await page.getByText('当前目录没有可显示文件').waitFor({ state: 'visible' })
             }
           })
 
@@ -93,6 +97,8 @@ describe('settings workspace e2e', () => {
             emptyNameBlocked,
             createModalStillVisible: createModalVisibleAfterEmptySubmit,
             maskClickPreservedInput,
+            noWorkspaceDetailPromptVisible,
+            emptyTreeVisible: await page.getByText('当前目录没有可显示文件').isVisible(),
             workspaceCardCount: await getSettingsPrefixLocator(
               page,
               importSelectors.workspaceCardPrefix
@@ -110,6 +116,16 @@ describe('settings workspace e2e', () => {
           }
         },
         assert: async (result, runtime) => {
+          await runtime.assertThat(
+            result.noWorkspaceDetailPromptVisible && result.emptyTreeVisible,
+            {
+              name: 'workspace-empty-states-remain-explicit',
+              message:
+                '没有工作空间时详情区应显示选择提示，创建未绑定目录的工作空间后文件区应显示明确空态，对齐 SET-WORKSPACE-007-AC1、SET-WORKSPACE-007-AC2。',
+              data: result
+            }
+          )
+
           await runtime.assertThat(result.emptyNameBlocked && result.createModalStillVisible, {
             name: 'empty-name-is-blocked',
             message: '工作空间名称为空时不允许提交创建，对齐 SET-WORKSPACE-002-AC1。',

@@ -111,6 +111,39 @@ describe('ai unit ncurator ref codec', () => {
     expect(parseNcuratorRefHref(href)).toEqual({ type: 'invalid', href, reason: 'invalid_kind' })
   })
 
+  it('infers file resource type when resourceType is missing', () => {
+    expect(
+      parseNcuratorRefHref(
+        'ncurator://ref?kind=reference&label=报告.docx&path=/tmp/workspace/report.docx'
+      )
+    ).toEqual({
+      type: 'reference',
+      kind: 'reference',
+      resourceType: 'file',
+      label: '报告.docx',
+      path: '/tmp/workspace/report.docx'
+    })
+  })
+
+  it('infers web resource type when resourceType is missing and path is a URL', () => {
+    expect(
+      parseNcuratorRefHref('ncurator://ref?kind=normal&label=OpenAI&path=https://openai.com')
+    ).toEqual({
+      type: 'reference',
+      kind: 'normal',
+      resourceType: 'web',
+      label: 'OpenAI',
+      path: 'https://openai.com'
+    })
+  })
+
+  it('passes through normal href values', () => {
+    expect(parseNcuratorRefHref('https://openai.com')).toEqual({
+      type: 'normal',
+      href: 'https://openai.com'
+    })
+  })
+
   it('parses raw windows paths emitted without canonical encoding', () => {
     const rawPath =
       'D:\\1-work-space\\test\\workspace\\.ncurator\\assets\\d6fd02d9-b641-4a73-b047-0f286e2e5072\\交互式探究学习案例：产业转移.docx'

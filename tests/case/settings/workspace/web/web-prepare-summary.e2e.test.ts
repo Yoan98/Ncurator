@@ -52,15 +52,28 @@ describe('settings workspace web e2e', () => {
           let buttonsDisabled = false
           let crawlStepVisible = false
           let progressText = ''
+          let scanProgressVisible = false
+          let scanButtonsDisabled = false
+          let scanSummary: { needs_index_count: number } | null = null
+          let scanStatuses: string[] = []
           const httpServer = await startLocalSettingsHttpServer({
             '/prepare-success': {
               body: '<html><head><title>Prepare Success</title></head><body>Local web fixture for indexing.</body></html>',
               delayMs: 1500
             },
             '/refresh-fail': {
-              status: 500,
-              body: 'refresh failed',
-              delayMs: 1500
+              body: '<html><head><title>Refresh First Pass</title></head><body>Available during scan.</body></html>',
+              responses: [
+                {
+                  body: '<html><head><title>Refresh First Pass</title></head><body>Available during scan.</body></html>',
+                  delayMs: 1500
+                },
+                {
+                  status: 500,
+                  body: 'refresh failed during prepare',
+                  delayMs: 1500
+                }
+              ]
             }
           })
 
@@ -82,7 +95,21 @@ describe('settings workspace web e2e', () => {
                 await workspaceCardLocator(page, workspaceId).click()
                 await page.getByRole('tab', { name: '网页 2' }).click()
                 await page.getByRole('button', { name: '检查更新' }).click()
+                await page.getByTestId(importSelectors.webSourceIndexJobProgress).waitFor({
+                  state: 'visible'
+                })
+                scanProgressVisible = true
+                scanButtonsDisabled =
+                  (await page.getByRole('button', { name: '检查更新' }).isDisabled()) &&
+                  (await page.getByRole('button', { name: '更新索引' }).isDisabled())
                 await waitForWebIndexJobIdle(page, workspaceId)
+                const scanResult = await page.evaluate(async (selectedWorkspaceId) => {
+                  return await window.api.webSourceList({
+                    workspaceId: String(selectedWorkspaceId || '')
+                  })
+                }, workspaceId)
+                scanSummary = scanResult.summary
+                scanStatuses = scanResult.items.map((item) => item.index_status)
               }
             })
 
@@ -121,6 +148,10 @@ describe('settings workspace web e2e', () => {
               buttonsDisabled,
               crawlStepVisible,
               progressText,
+              scanProgressVisible,
+              scanButtonsDisabled,
+              scanSummary,
+              scanStatuses,
               uiSummary,
               summary: webList.summary,
               statuses: webList.items.map((item) => item.index_status)
@@ -131,9 +162,20 @@ describe('settings workspace web e2e', () => {
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
-            result.progressVisible &&
-              result.buttonsDisabled &&
-              result.crawlStepVisible,
+            result.scanProgressVisible &&
+              result.scanButtonsDisabled &&
+              result.scanSummary?.needs_index_count === 2 &&
+              result.scanStatuses.every((status) => status === 'needs_index'),
+            {
+              name: 'web-scan-refreshes-summary-before-prepare',
+              message:
+                '检查更新时应展示进度、禁用两个索引按钮，并把两条网页资料刷新为可索引状态，对齐 SET-WEB-003-AC1、SET-WEB-003-AC2。',
+              data: result
+            }
+          )
+
+          await runtime.assertThat(
+            result.progressVisible && result.buttonsDisabled && result.crawlStepVisible,
             {
               name: 'prepare-web-progress-is-visible',
               message:

@@ -28,7 +28,10 @@ describe('ai human mock-llm backend', () => {
             runId: runtime.runId,
             sessionId: 'human-only-session',
             input: '请学习一个 skill，调用一次工具，然后直接给出最终答复。',
-            modelName: 'scripted-llm',
+            mainModel: {
+              configId: 'mock-llm-scripted',
+              modelName: 'scripted-llm'
+            },
             workspace: {
               workspaceId: 'test-workspace',
               workspaceName: 'test-workspace',
@@ -37,6 +40,7 @@ describe('ai human mock-llm backend', () => {
           },
           {
             runtimeSettings,
+            llmStrategyPreferenceStore: runtime.storageService.llmStrategyPreference,
             llmStore: runtime.llmStore,
             chatStore: runtime.chatStore,
             documentsStore: runtime.documentsStore,
@@ -136,17 +140,14 @@ describe('ai human mock-llm backend', () => {
           }
         )
 
-        runtime.assertThat(
-          answerCompletedEvents.length === 1 && runCompletedEvents.length === 0,
-          {
-            name: 'ai-run-service-leaves-run-lifecycle-to-ipc-layer',
-            message: 'AiRunService 本身应只产出 human 结果，不直接发 run_completed 事件。',
-            data: {
-              answerCompletedCount: answerCompletedEvents.length,
-              runCompletedCount: runCompletedEvents.length
-            }
+        runtime.assertThat(answerCompletedEvents.length === 1 && runCompletedEvents.length === 0, {
+          name: 'ai-run-service-leaves-run-lifecycle-to-ipc-layer',
+          message: 'AiRunService 本身应只产出 human 结果，不直接发 run_completed 事件。',
+          data: {
+            answerCompletedCount: answerCompletedEvents.length,
+            runCompletedCount: runCompletedEvents.length
           }
-        )
+        })
 
         const learningStartedIndex = result.events.findIndex(
           (event) =>
@@ -196,8 +197,7 @@ describe('ai human mock-llm backend', () => {
             }
           }
           return (
-            lastThinkingStartedIndex >= 0 &&
-            lastThinkingCompletedIndex > lastThinkingStartedIndex
+            lastThinkingStartedIndex >= 0 && lastThinkingCompletedIndex > lastThinkingStartedIndex
           )
         })
 

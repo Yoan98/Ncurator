@@ -372,31 +372,3 @@ export const writeTestDocxFile = async (
     blocks.map((block) => toRichBlock(block))
   )
 }
-
-export const writeWorkbenchSampleDocx = async (
-  workspaceRoot: string,
-  fileName: string
-): Promise<string> => {
-  return await writeTestDocxFile(workspaceRoot, fileName, [
-    {
-      type: 'heading',
-      text: 'NCurator Weekly Report',
-      level: 1
-    },
-    {
-      type: 'paragraph',
-      text: 'Hello team. Project status is on track.'
-    },
-    {
-      type: 'paragraph',
-      text: 'Risk summary: monitor integration edge cases.'
-    },
-    {
-      type: 'table',
-      rows: [
-        ['Topic', 'Owner'],
-        ['Risk', 'Alice']
-      ]
-    }
-  ])
-}

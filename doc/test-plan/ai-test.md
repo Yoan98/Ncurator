@@ -41,14 +41,12 @@
   - 通过率：`22 / 22`
   - 检测时间：`2026-06-11 17:16:38 +08:00`
 - `human / live`
-  - 当前有效结论：`2 / 2`（2026-06-11 定向执行 `web_crawl` live case；重复的 DeepSeek web_search live backend case 已删除，网页搜索改由 Workbench UI E2E 覆盖）
+  - 登记 case：`8`；当前最近有效结论为 2026-06-11 定向执行的 `web_crawl` live `2 / 2`，其余代表性 memory、resume、compaction 与 docx 交付 case 保留并按需全量复验。
   - 检测时间：`2026-06-11`
   - 样例评分：
     - `human-web-crawl-url-inference-reading-live`：`9.0 / 10`；最近有效执行：`2026-06-11`；依据：模型自行推断官网地址并多次调用 `web_crawl` 完成 CSV 文档整理；主要风险：live 模型稳定性和冷启动耗时。
     - `human-web-crawl-multi-hop-cross-domain-reading-live`：`8.8 / 10`；最近有效执行：`2026-06-11`；依据：模型围绕入口网址多跳抓取并整合申请对象、材料、截止时间和办理方式；主要风险：多轮 live 调用耗时偏长。
     - `human-risk-report-draft-live`：`8.3 / 10`；最近有效执行：`2026-06-01`；依据：能创建周报 docx 并读取多源材料完成负责人、后续动作和风险主线；主要风险：风险口径表达仍需按最低断言收敛。
-    - `human-docx-cause-remedy-reading-live`：`8.4 / 10`；最近有效执行：`2026-06-01`；依据：能读取两份已选课件并讲清过拟合与反走样核心事实；主要风险：结构化输出超时。
-    - `human-docx-cross-source-summary-draft-live`：`8.0 / 10`；最近有效执行：`2026-06-01`；依据：能创建跨源总结 docx 并形成可交付文件；主要风险：目标路径和资料读取方式不稳定。
     - `human-conversation-memory-multi-run-live`：`8.2 / 10`；最近有效执行：`2026-06-01`；依据：能把第一轮风险主线、负责人分工和待确认项带入第二轮追问；主要风险：连续主线保持不稳定。
     - `human-context-compaction-natural-trigger-live`：`9.0 / 10`；最近有效执行：`2026-06-01`；依据：能自然触发压缩、压缩后继续任务并产出文件 artifact；主要风险：整体耗时偏长。
     - `human-session-resume-with-new-selection-live`：`8.5 / 10`；最近有效执行：`2026-06-01`；依据：恢复快照保留旧事实，第二轮可结合新选择文件形成对比小结；主要风险：不得绑定固定 prompt 原文。
@@ -623,6 +621,15 @@ AI unit / 辅助测试目录：
 - Oracle：结果包含 `requestedUrl`、`finalUrl`、`title`、`markdown`、`publishedAt`、`links.internal/external`，且 links 项包含 `intrinsicScore/contextualScore/totalScore`。
 - Not：不验证复杂浏览器交互或外网可达性。
 
+##### `web-search-contract`
+
+- 测试类型：`backend`
+- What：验证 `web_search` 返回 query 与结构化候选网页结果。
+- Why：网页搜索负责提供后续可读取的候选入口，不能只返回不可追踪的拼接文本。
+- How：通过真实 web tool harness 调用 `web_search`，使用可控搜索服务返回候选页面。
+- Oracle：结果保留原 query，候选项包含稳定 rank、标题和 URL，且第一条结果指向预期页面。
+- Not：不验证候选页面正文读取；正文读取由 `web_crawl` 与 Workbench 网页读取 case 覆盖。
+
 ##### `web-crawl-entry-page-contract`
 
 - 测试类型：`backend`
@@ -667,6 +674,15 @@ AI unit / 辅助测试目录：
 - How：启动本地 OpenAI-compatible HTTP server 返回“无法确认”文本，调用 `llm_recognize(path, instruction)`。
 - Oracle：工具结果仍是成功字符串。
 - Not：不验证 UI 渲染。
+
+##### `llm-recognize-unsupported-vision-contract`
+
+- 测试类型：`backend`
+- What：验证模型协议明确声明不支持图像识别时，`llm_recognize` 返回稳定错误结果。
+- Why：不支持图片输入属于模型能力边界，必须与普通“无法确认”文本和底层调用失败区分。
+- How：启动本地 OpenAI-compatible HTTP server，返回 `supports_image_recognition=false`，再调用 `llm_recognize`。
+- Oracle：工具结果返回包含当前模型名的固定不支持图像识别错误，提示用户切换模型。
+- Not：不验证 UI 中的模型切换操作。
 
 ##### `llm-recognize-bottom-error-contract`
 
@@ -993,23 +1009,7 @@ AI unit / 辅助测试目录：
 - Oracle：任务最终完成；共享 workspace 中全部已支持文件均被索引；事件流中至少出现一次 `terminal_run`、至少一次真实资料读取/检索步骤（可来自 `docx_*`、`kb_*` 或其他支持的读工具）以及一次 `docx_edit(create_document)`；模型会打开模板和上周周报；最终输出 artifacts 中包含携带 `applyId` 的 docx file artifact；模板与既有参考 `docx` 文件不被覆盖；新建周报文件中应写入本周整体判断、负责人说明和后续动作；若发生 docx 写，则写工具结果应包含 `postWriteReadback.regions`；不要求固定取证路径，不要求固定风险结论措辞，只要任务真实完成即可通过。
 - Not：不绑定最终答案措辞，不要求固定是否使用 `docx_outline` 还是 `docx_read_blocks`，也不强制一定调用 KB；若模型仅凭工作区材料完成任务，也视为符合预期。
 
-##### `human-docx-cause-remedy-reading-live`
 
-- 测试类型：`backend`
-- What：验证 live 模式下 `human` 会基于两份已选 `docx` 做跨文件精读，并准确回答“过拟合 / 反走样”的成因与处理思路；同时工作区存在其他 docx 干扰项也不会偏题。
-- Why：真实用户在复习场景里经常已经选中了资料，但 workspace 中通常不止这两份文档；这条 case 要长期守住“已选资料范围优先 + 跨文件准确回答”的能力，对齐 `WB-CORE-002-AC2`、`WB-CORE-004-AC1`、`WB-CORE-006-AC1`、`WB-CORE-006-AC2`。
-- How：注入真实 live LLM 配置；把 `tests/fixtures/workspace` 共享目录复制进 workspace，其中只将 `学习笔记/深度学习.docx` 与 `学习笔记/图形学.docx` 作为已选资料；直接输入“我这两天复习的时候老把这两个概念混了。你就按我刚选的这两份课件，帮我讲清楚：过拟合和反走样分别是什么、为什么会出现、一般怎么处理。别自己补课外内容，哪份资料没写你就直接告诉我没写。”的自然语言诉求，让真实 `human` 自主完成。
-- Oracle：任务最终完成；事件流中至少出现一次 `docx_search`，并且至少两次 `docx_read_blocks` / `docx_outline` / `docx_search` 覆盖两份已选目标文档；最终回答同时命中“过拟合”的定义/成因事实组，并对处理办法给出文档内事实或明确说明“没写”；同时命中“反走样”的成因/处理事实组；不出现 docx 编辑工具；回答不应明显被 workspace 里的其他 docx 干扰。
-- Not：不要求固定回答结构，也不对最终文案做逐字断言。
-
-##### `human-docx-cross-source-summary-draft-live`
-
-- 测试类型：`backend`
-- What：验证 live 模式下 `human` 会读取两份已选课件，自主创建一份新的总结 docx，并把跨源总结写进去。
-- Why：真实用户常见诉求不只是“口头总结”或“补现有主稿”，也包括“新建一份能直接发出去的总结报告”；这条 case 要长期守住跨源读取、单目标写入与不覆盖原文件的能力，对齐 `WB-CORE-002-AC2`、`WB-CORE-003-AC1`、`WB-CORE-004-AC1`、`WB-CORE-006-AC1`、`WB-CORE-006-AC2`。
-- How：注入真实 live LLM 配置；把 `深度学习.docx` 与 `图形学.docx` 作为已选资料复制进 workspace；直接输入“帮我基于我刚选的这两个文件，生成一个给同学复习用的 Word 总结文件，文件名就叫《深度学习与图形学复习总结》。里面把关键概念、出现原因和常见处理方式整理清楚；哪份资料没写你就直接说明没写。”的自然语言诉求，让真实 `human` 自主完成。
-- Oracle：任务最终完成；事件流中至少两次 `docx_search` / `docx_read_blocks` / `docx_outline` 覆盖两份源资料；至少出现一次 `docx_edit(create_document)`；最终输出 artifacts 中包含携带 `applyId` 的 docx file artifact；两份原始源 `docx` 文件未被覆盖；创建目标只应落在 `深度学习与图形学复习总结.docx` 上且目标文件在 run 完成后存在；最终答复应包含“过拟合/过度拟合”与“反走样”两个主题。
-- Not：不要求固定总结结构，也不要求一定生成表格。
 
 ##### `human-docx-positioned-structural-edit-fallback-live`
 

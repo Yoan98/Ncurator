@@ -1,10 +1,7 @@
 import { describe, it } from 'vitest'
 import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
-import {
-  buildCompleteTaskDecision,
-  filterAiRunEventsByType
-} from '../testUtils'
+import { buildCompleteTaskDecision, filterAiRunEventsByType } from '../testUtils'
 
 describe('ai human mock-llm backend', () => {
   it('multi-tool-collaboration', async () => {
@@ -45,7 +42,8 @@ describe('ai human mock-llm backend', () => {
                       {
                         toolName: 'terminal_run',
                         args: {
-                          command: 'pwd'
+                          command: 'pwd',
+                          commandExplanation: '读取当前测试工作区路径'
                         }
                       },
                       {

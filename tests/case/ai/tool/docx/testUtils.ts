@@ -1,4 +1,7 @@
-import type { DocxChangedBlock, DocxOutlineBlock } from '../../../../../src/main/services/ai/human/tools/docx/types'
+import type {
+  DocxChangedBlock,
+  DocxOutlineBlock
+} from '../../../../../src/main/services/ai/human/tools/docx/types'
 
 export type DocxOutlineResult = {
   sourcePath: string
@@ -234,9 +237,6 @@ export const findParagraphBlockIndexByText = (
     (block) => block.type === 'paragraph' && block.text.includes(textFragment)
   ).blockIndex
 
-export const findTableBlockId = (blocks: readonly DocxOutlineResult['blocks']): string =>
-  findOutlineBlock(blocks, (block) => block.type === 'table').blockId
-
 export const findTableCellBlockIdByText = (
   blocks: readonly DocxOutlineResult['blocks'],
   textFragment: string
@@ -245,12 +245,3 @@ export const findTableCellBlockIdByText = (
     blocks,
     (block) => block.type === 'table_cell' && block.text.includes(textFragment)
   ).blockId
-
-export const findTableCellBlockIndexByText = (
-  blocks: readonly DocxOutlineResult['blocks'],
-  textFragment: string
-): number =>
-  findOutlineBlock(
-    blocks,
-    (block) => block.type === 'table_cell' && block.text.includes(textFragment)
-  ).blockIndex

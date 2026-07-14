@@ -3,10 +3,10 @@
 ## 1. 三个发布位置的职责
 
 - 源码仓库 `Yoan98/Ncurator-Desktop`：保存源码、Tag 和 GitHub Actions。
-- 公共 Release 仓库 `Yoan98/Ncurator`：保存安装包和自动更新文件，供应用内更新使用。
-- Cloudflare R2 `https://download.ncurator.com`：保存官网安装包，供用户首次下载安装。
+- 公共 Release 仓库 `Yoan98/Ncurator`：保存完整发布归档，也作为 R2 同步来源。
+- Cloudflare R2 `https://download.ncurator.com`：保存官网安装包和应用内自动更新文件。
 
-官网不直接使用 GitHub Release 下载链接。应用内自动更新目前仍然使用 GitHub Release，两者不要混用。
+官网安装包使用 R2 的 `releases/latest`，应用内自动更新使用 R2 的 `updates/latest`。
 
 `NCURATOR_RELEASE_TOKEN` 只供 GitHub Actions 向公共 Release 仓库上传文件，不会被打进应用。
 
@@ -79,15 +79,23 @@ git push origin v0.1.1
 
 ## 7. 应用内更新
 
-- 打包后的应用会自动检查更新。
+- Windows 打包应用会自动检查更新。
+- macOS 只有通过 Developer ID 正式签名后才启用自动更新。
 - 用户也可以在 `设置 -> 应用更新` 手动检查。
-- 找到新版本后，应用在后台下载 GitHub Release 中的更新包。
+- 找到新版本后，应用从 `https://download.ncurator.com/updates/latest` 下载更新包。
 - 下载完成后，用户可以点击重启安装。
 
-应用内更新仍走 GitHub，不走 `download.ncurator.com`。以后如果要迁移，必须同时修改 electron-builder 发布配置和更新服务，不能只替换官网链接。
+未签名的 macOS 构建会直接显示签名原因，不会先下载完整更新包再安装失败。
 
 ## 8. 当前签名限制
 
-- macOS 还没有 Apple 公证，首次打开时可能需要用户在系统设置中允许。
+- macOS 还没有 Developer ID 签名和 Apple 公证，因此当前不会启用自动更新，首次打开时也可能需要用户在系统设置中允许。
 - Windows 还没有代码签名证书，SmartScreen 可能提示未知发布者。
 - 自动更新文件会通过 `sha512` 校验，校验失败不会安装。
+
+启用 macOS 自动更新时，在 GitHub Actions Environment `ncuratore` 中配置：
+
+- `MAC_CSC_LINK`：Developer ID Application 证书的 base64 内容或安全下载地址。
+- `MAC_CSC_KEY_PASSWORD`：证书密码。
+
+CI 检测到证书后会自动签名。应用运行时也会检查 Developer ID，签名有效才启用 macOS 自动更新。

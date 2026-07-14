@@ -40,7 +40,10 @@ describe('ai human mock-llm backend', () => {
             runId: runtime.runId,
             sessionId: 'embedding-preflight-session',
             input: '请读取 docx，找到反走样相关内容。',
-            modelName: 'scripted-llm',
+            mainModel: {
+              configId: 'mock-llm-scripted',
+              modelName: 'scripted-llm'
+            },
             workspace: {
               workspaceId: 'test-workspace',
               workspaceName: 'test-workspace',
@@ -49,6 +52,7 @@ describe('ai human mock-llm backend', () => {
           },
           {
             runtimeSettings,
+            llmStrategyPreferenceStore: runtime.storageService.llmStrategyPreference,
             llmStore: runtime.llmStore,
             chatStore: runtime.chatStore,
             documentsStore: runtime.documentsStore,
@@ -157,7 +161,10 @@ describe('ai human mock-llm backend', () => {
             runId: runtime.runId,
             sessionId: 'embedding-preflight-failure-session',
             input: '这轮不应该进入 human。',
-            modelName: 'scripted-llm',
+            mainModel: {
+              configId: 'mock-llm-scripted',
+              modelName: 'scripted-llm'
+            },
             workspace: {
               workspaceId: 'test-workspace',
               workspaceName: 'test-workspace',
@@ -166,6 +173,7 @@ describe('ai human mock-llm backend', () => {
           },
           {
             runtimeSettings,
+            llmStrategyPreferenceStore: runtime.storageService.llmStrategyPreference,
             llmStore: runtime.llmStore,
             chatStore: runtime.chatStore,
             documentsStore: runtime.documentsStore,

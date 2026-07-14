@@ -17,7 +17,7 @@ import {
   vectorSelectors
 } from '../../../src/renderer/src/testing/selectors'
 
-export type SettingsPageTarget = 'model' | 'workspace' | 'vector'
+export type SettingsPageTarget = 'model' | 'workspace' | 'vector' | 'app'
 
 export const SETTINGS_E2E_TIMEOUT_MS = 30_000
 export const SETTINGS_REAL_WORKSPACE_E2E_TIMEOUT_MS = 180_000
@@ -135,6 +135,17 @@ export type LocalSettingsHttpServer = {
   close: () => Promise<void>
 }
 
+type LocalSettingsHttpResponse = {
+  status?: number
+  body: string
+  contentType?: string
+  delayMs?: number
+}
+
+type LocalSettingsHttpRoute = LocalSettingsHttpResponse & {
+  responses?: readonly LocalSettingsHttpResponse[]
+}
+
 const byTestId = (testId: string): string => `[data-testid="${testId}"]`
 
 const byTestIdPrefix = (testIdPrefix: string): string => `[data-testid^="${testIdPrefix}-"]`
@@ -142,19 +153,22 @@ const byTestIdPrefix = (testIdPrefix: string): string => `[data-testid^="${testI
 const SETTINGS_TARGET_HEADINGS: Record<SettingsPageTarget, string> = {
   model: '大模型',
   workspace: '工作空间',
-  vector: '向量模型'
+  vector: '向量模型',
+  app: '应用更新'
 }
 
 const SETTINGS_TARGET_HASHES: Record<SettingsPageTarget, string> = {
   model: '#/settings/model',
   workspace: '#/settings/workspace',
-  vector: '#/model-download'
+  vector: '#/model-download',
+  app: '#/settings/app'
 }
 
 const SETTINGS_TARGET_SELECTORS: Record<SettingsPageTarget, string> = {
   model: settingsSelectors.page,
   workspace: settingsSelectors.page,
-  vector: vectorSelectors.page
+  vector: vectorSelectors.page,
+  app: settingsSelectors.appUpdatePanel
 }
 
 const closeServer = async (server: Server): Promise<void> => {
@@ -167,8 +181,9 @@ const closeServer = async (server: Server): Promise<void> => {
 }
 
 export const startLocalSettingsHttpServer = async (
-  routes: Record<string, { status?: number; body: string; contentType?: string; delayMs?: number }>
+  routes: Record<string, LocalSettingsHttpRoute>
 ): Promise<LocalSettingsHttpServer> => {
+  const requestCounts = new Map<string, number>()
   const server = createServer((request, response) => {
     const pathname = new URL(request.url || '/', 'http://127.0.0.1').pathname
     const route = routes[pathname] || routes['/']
@@ -177,15 +192,20 @@ export const startLocalSettingsHttpServer = async (
       response.end('not found')
       return
     }
+    const requestCount = requestCounts.get(pathname) || 0
+    requestCounts.set(pathname, requestCount + 1)
+    const routeResponse = route.responses?.length
+      ? route.responses[Math.min(requestCount, route.responses.length - 1)]
+      : route
     const respond = (): void => {
-      response.writeHead(route.status || 200, {
-        'content-type': route.contentType || 'text/html; charset=utf-8',
+      response.writeHead(routeResponse.status || 200, {
+        'content-type': routeResponse.contentType || 'text/html; charset=utf-8',
         'cache-control': 'no-store'
       })
-      response.end(route.body)
+      response.end(routeResponse.body)
     }
-    if (route.delayMs && route.delayMs > 0) {
-      setTimeout(respond, route.delayMs)
+    if (routeResponse.delayMs && routeResponse.delayMs > 0) {
+      setTimeout(respond, routeResponse.delayMs)
       return
     }
     respond()
@@ -307,12 +327,6 @@ export const navigateToSettingsSection = async (
   }, SETTINGS_TARGET_HASHES[section])
   await getSettingsLocator(page, SETTINGS_TARGET_SELECTORS[section]).waitFor({ state: 'visible' })
   await page.getByRole('heading', { name: SETTINGS_TARGET_HEADINGS[section] }).first().waitFor({
-    state: 'visible'
-  })
-}
-
-export const waitForAntMessage = async (page: Page, text: string): Promise<void> => {
-  await page.locator('.ant-message').getByText(text).last().waitFor({
     state: 'visible'
   })
 }
@@ -567,6 +581,3 @@ export const waitForWebIndexJobIdle = async (
 
 export const workspaceCardLocator = (page: Page, workspaceId: string): Locator =>
   getSettingsLocator(page, `${importSelectors.workspaceCardPrefix}-${workspaceId}`)
-
-export const webSourceCardLocator = (page: Page, webSourceId: string): Locator =>
-  getSettingsLocator(page, `${importSelectors.webSourceCardPrefix}-${webSourceId}`)

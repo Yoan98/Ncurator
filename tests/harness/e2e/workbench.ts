@@ -1383,15 +1383,6 @@ export const removeFirstWorkbenchReferenceToken = async (page: Page): Promise<vo
   })
 }
 
-export const waitForLatestAssistantFinalAnswer = async (page: Page): Promise<Locator> => {
-  const locator = getWorkbenchPrefixLocator(
-    page,
-    workbenchSelectors.assistantFinalAnswerPrefix
-  ).last()
-  await locator.waitFor({ state: 'visible' })
-  return locator
-}
-
 export const waitForLatestAssistantProcess = async (page: Page): Promise<Locator> => {
   const locator = getWorkbenchPrefixLocator(page, workbenchSelectors.assistantProcessPrefix).last()
   await locator.waitFor({ state: 'visible' })

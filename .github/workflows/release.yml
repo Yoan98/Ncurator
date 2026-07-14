@@ -50,8 +50,11 @@ jobs:
   build-macos-x64:
     needs: validate-release
     runs-on: macos-15-intel
+    environment: ncuratore
     env:
-      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+      CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+      CSC_IDENTITY_AUTO_DISCOVERY: ${{ secrets.MAC_CSC_LINK != '' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -93,8 +96,11 @@ jobs:
   build-macos-arm64:
     needs: validate-release
     runs-on: macos-15
+    environment: ncuratore
     env:
-      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+      CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+      CSC_IDENTITY_AUTO_DISCOVERY: ${{ secrets.MAC_CSC_LINK != '' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -240,6 +246,74 @@ jobs:
           test -n "$R2_ACCOUNT_ID"
           test -n "$R2_BUCKET_NAME"
           test "${R2_PUBLIC_BASE_URL%/}" = "https://download.ncurator.com"
+
+      - name: Prepare R2 update metadata
+        run: |
+          node scripts/prepare-r2-update-metadata.mjs \
+            release-artifacts \
+            r2-update-metadata \
+            "$RELEASE_TAG"
+
+      - name: Upload versioned update assets to Cloudflare R2
+        shell: bash
+        run: |
+          set -euo pipefail
+          endpoint="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          while IFS= read -r -d '' source; do
+            asset="$(basename "$source")"
+            aws s3 cp "$source" \
+              "s3://${R2_BUCKET_NAME}/updates/${RELEASE_TAG}/$asset" \
+              --endpoint-url "$endpoint" \
+              --region auto \
+              --cache-control 'public, max-age=31536000, immutable' \
+              --no-progress
+          done < <(find release-artifacts -type f \
+            \( -name '*.dmg' -o -name '*.zip' -o -name '*.exe' -o -name '*.blockmap' \) \
+            -print0)
+
+      - name: Verify versioned R2 update assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          base_url="${R2_PUBLIC_BASE_URL%/}"
+          while IFS= read -r -d '' source; do
+            asset="$(basename "$source")"
+            expected_size="$(stat -c '%s' "$source")"
+            actual_size="$(curl --fail --silent --show-error --head \
+              "$base_url/updates/$RELEASE_TAG/$asset" \
+              | tr -d '\r' \
+              | awk 'tolower($1)=="content-length:" {value=$2} END {print value}')"
+            test "$actual_size" = "$expected_size"
+          done < <(find release-artifacts -type f \
+            \( -name '*.dmg' -o -name '*.zip' -o -name '*.exe' -o -name '*.blockmap' \) \
+            -print0)
+
+      - name: Promote R2 update metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          endpoint="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          for metadata in latest.yml latest-mac.yml; do
+            aws s3 cp "r2-update-metadata/$metadata" \
+              "s3://${R2_BUCKET_NAME}/updates/latest/$metadata" \
+              --endpoint-url "$endpoint" \
+              --region auto \
+              --content-type application/yaml \
+              --cache-control 'no-store' \
+              --no-progress
+          done
+
+      - name: Verify latest R2 update metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          base_url="${R2_PUBLIC_BASE_URL%/}"
+          for metadata in latest.yml latest-mac.yml; do
+            content="$(curl --fail --silent --show-error \
+              "$base_url/updates/latest/$metadata?noCache=${GITHUB_RUN_ID}")"
+            grep -F "version: ${RELEASE_TAG#v}" <<< "$content"
+            grep -F "../${RELEASE_TAG}/" <<< "$content"
+          done
 
       - name: Upload versioned installers to Cloudflare R2
         shell: bash

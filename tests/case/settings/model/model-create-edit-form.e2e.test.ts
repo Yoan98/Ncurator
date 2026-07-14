@@ -23,6 +23,7 @@ describe('settings model e2e', () => {
           let validationBlocked = false
           let createMaskClickPreservedForm = false
           let editMaskClickPreservedForm = false
+          let createdRowText = ''
 
           await runtime.step({
             name: 'open-create-form',
@@ -74,6 +75,11 @@ describe('settings model e2e', () => {
                 .locator('tbody tr')
                 .filter({ hasText: 'https://api.openai.com/v1' })
                 .waitFor({ state: 'visible' })
+              createdRowText =
+                (await page
+                  .locator('tbody tr')
+                  .filter({ hasText: 'https://api.openai.com/v1' })
+                  .textContent()) || ''
             }
           })
 
@@ -111,6 +117,7 @@ describe('settings model e2e', () => {
             validationBlocked,
             createMaskClickPreservedForm,
             editMaskClickPreservedForm,
+            createdRowText,
             editPrefill: {
               name: await getSettingsLocator(page, settingsSelectors.modelNameInput).inputValue(),
               baseUrl: await getSettingsLocator(page, settingsSelectors.modelBaseUrlInput)
@@ -155,6 +162,17 @@ describe('settings model e2e', () => {
               name: 'edit-form-prefills-existing-values',
               message:
                 '编辑现有配置时，表单应带出当前连接信息，而不是打开空表单，对齐 SET-MODEL-002-AC2。',
+              data: result
+            }
+          )
+
+          await runtime.assertThat(
+            result.createdRowText.includes('创建编辑测试') &&
+              !/默认|当前|启用/u.test(result.createdRowText),
+            {
+              name: 'first-config-remains-an-ordinary-service',
+              message:
+                '空列表中的第一条连接配置保存后应作为普通可用服务展示，不自动产生默认、当前或启用状态，对齐 SET-MODEL-001-AC1、SET-MODEL-001-AC2。',
               data: result
             }
           )

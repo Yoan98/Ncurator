@@ -28,6 +28,8 @@ describe('settings workspace web e2e', () => {
           let emptyWarningShown = false
           let modalClosedAfterSubmit = false
           let maskClickPreservedInput = false
+          let webManagementEmbedded = false
+          let workspaceRoutePreserved = false
 
           await runtime.step({
             name: 'open-add-dialog',
@@ -40,6 +42,16 @@ describe('settings workspace web e2e', () => {
               await navigateToSettingsSection(page, 'workspace')
               await workspaceCardLocator(page, workspace.workspace!.id).click()
               await page.getByRole('tab', { name: '网页 0' }).click()
+              webManagementEmbedded =
+                (await getSettingsLocator(page, importSelectors.workspaceDetail).isVisible()) &&
+                (await getSettingsLocator(page, importSelectors.webSourceSection).isVisible()) &&
+                (await getSettingsLocator(page, importSelectors.webSourceList).isVisible()) &&
+                (await getSettingsLocator(
+                  page,
+                  importSelectors.webSourceOpenModalButton
+                ).isVisible())
+              workspaceRoutePreserved =
+                (await page.evaluate(() => window.location.hash)) === '#/settings/workspace'
               await getSettingsLocator(page, importSelectors.webSourceOpenModalButton).click()
               await urlTextarea.waitFor({ state: 'visible' })
               await urlTextarea.fill('https://example.com/mask-preserved')
@@ -94,6 +106,8 @@ describe('settings workspace web e2e', () => {
             emptyWarningShown,
             modalClosedAfterSubmit,
             maskClickPreservedInput,
+            webManagementEmbedded,
+            workspaceRoutePreserved,
             cardCount: await getSettingsPrefixLocator(
               page,
               importSelectors.webSourceCardPrefix
@@ -102,6 +116,13 @@ describe('settings workspace web e2e', () => {
           }
         },
         assert: async (result, runtime) => {
+          await runtime.assertThat(result.webManagementEmbedded && result.workspaceRoutePreserved, {
+            name: 'workspace-detail-contains-web-management',
+            message:
+              '网页资料列表和添加入口应直接位于当前工作空间详情中，并保持在工作空间设置路由，对齐 SET-WORKSPACE-005-AC3、SET-WEB-001-AC3。',
+            data: result
+          })
+
           await runtime.assertThat(result.emptyWarningShown, {
             name: 'empty-submit-is-blocked',
             message: '输入为空时，提交应被拦截，并提示至少输入一个 URL，对齐 SET-WEB-002-AC1。',

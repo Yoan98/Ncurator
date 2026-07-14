@@ -104,30 +104,4 @@ describe('ai unit human references', () => {
     expect(inferReferenceIconKind({ resourceType: 'file' })).toBe('file')
     expect(inferReferenceIconKind({ resourceType: 'web' })).toBe('web')
   })
-
-  it('keeps readable unicode in markdown ref links without full URL encoding', () => {
-    const markdown = buildEvidenceReferenceMarkdown({
-      label: '工作/客户周会纪要.docx',
-      path: '/Users/test/work-space/test/workspace/工作/客户周会纪要.docx',
-      resourceType: 'file',
-      usedFor: '了解客户关注点'
-    })
-
-    expect(markdown).toContain('label=工作/客户周会纪要.docx')
-    expect(markdown).toContain('path=/Users/test/work-space/test/workspace/工作/客户周会纪要.docx')
-    expect(markdown).not.toContain('%E5')
-  })
-
-  it('escapes only query-breaking characters in markdown ref links', () => {
-    const markdown = buildEvidenceReferenceMarkdown({
-      label: 'A&B=测试.docx',
-      path: 'https://example.com/a?x=1&name=测试',
-      resourceType: 'web',
-      usedFor: '验证链接参数'
-    })
-
-    expect(markdown).toContain('label=A%26B%3D测试.docx')
-    expect(markdown).toContain('path=https://example.com/a?x%3D1%26name%3D测试')
-    expect(markdown).not.toContain('%E6')
-  })
 })

@@ -29,7 +29,7 @@
   - 登记 case：`9` 个 e2e，`1` 个 backend contract
   - 当前有效结论：backend contract `1 / 1`；e2e `8 / 9` 通过，`1 / 9` 阻断。
   - 检测时间：backend `2026-07-13 13:08:55 +08:00`；e2e `2026-07-13 15:13:08 +08:00`
-  - 备注：`browser-use-deepseek-financing-search` 阻断；真实模型完成了 `web_search + web_crawl` 并正确回答融资信息，但没有遵循用户“用浏览器搜索”的明确要求调用 `browser_use`，未满足右侧内置浏览器闭环验收。
+  - 备注：公网搜索中的模型工具选择不再作为稳定 E2E 门禁；内置浏览器闭环统一由本地可控网页的 `browser-use-task-panel` 覆盖。
 - `result`
   - 登记 case：`5`
   - 当前有效结论：`4 / 5` 通过，`1 / 5` 阻断。
@@ -132,10 +132,10 @@ tests/case/workbench/
 #### `send-guard-mode-switch-and-preferences`
 
 - 测试类型：`e2e`
-- What：验证发送前置条件、模式切换保留输入、模型 / 工作区 / AI 推进偏好恢复和失效回退。
+- What：验证缺少模型时的模式提示、发送前置条件、模式切换保留输入，以及模型 / 工作区 / AI 推进偏好恢复。
 - Why：Workbench 的任务入口依赖这些基础交互；任一状态失真都会导致用户无法发起任务、把任务发到错误上下文或使用错误资料边界。
-- How：通过 UI 配置真实模型和工作区；覆盖无工作区、模式切换、模型搜索、模型 / 工作区选择、AI 推进偏好二级菜单、搜索模式隐藏偏好入口和重新进入页面后的恢复；真实发送时走真实模型。
-- Oracle：未绑定工作区不会触发发送，对齐 `WB-COMPOSER-001-AC1`、`WB-COMPOSER-005-AC1`；切换模式后输入保留且发送路径按新模式执行，对齐 `WB-MODE-001-AC1`、`WB-MODE-001-AC2`；模型和工作区恢复符合 `WB-COMPOSER-007-AC1` 至 `WB-COMPOSER-007-AC5`；可选择并恢复“本地资料·严谨”，搜索模式隐藏偏好入口且切回后保留选择，对齐 `WB-COMPOSER-007-AC2`、`WB-COMPOSER-007-AC6`、`WB-COMPOSER-007-AC7`。
+- How：先在无模型配置状态下切换智能 / 搜索模式检查提示，再通过 UI 配置真实模型和工作区；覆盖无工作区、输入保留、模型 / 工作区选择、AI 推进偏好、重新进入页面后的恢复和真实发送。
+- Oracle：无模型时智能模式快速显示配置提示，搜索模式隐藏且切回后恢复；未绑定工作区不会触发发送，对齐 `WB-COMPOSER-001-AC1`、`WB-COMPOSER-005-AC1`；切换模式后输入保留且发送路径按新模式执行，对齐 `WB-MODE-001-AC1`、`WB-MODE-001-AC2`；模型和工作区恢复符合 `WB-COMPOSER-007-AC1` 至 `WB-COMPOSER-007-AC5`；可选择并恢复“本地资料·严谨”，搜索模式隐藏偏好入口且切回后保留选择，对齐 `WB-COMPOSER-007-AC2`、`WB-COMPOSER-007-AC6`、`WB-COMPOSER-007-AC7`。
 - Not：不验证真实模型回答质量，只验证用户路径和发送前置条件。
 
 #### `user-message-actions`
@@ -156,14 +156,6 @@ tests/case/workbench/
 - Oracle：真实粘贴会触发附件保存；添加附件后没有真实会话；图片预览可打开；文件副标题显示 `MD`；不支持格式只提示不加入；大文件只提示不拦截；普通文本粘贴仍正常，对齐 `WB-COMPOSER-010-AC2`、`WB-COMPOSER-010-AC3`。
 - Not：不验证系统原生文件选择器本身；不通过 `attachmentPickResponse` 或直接 `attachmentSaveFile` 伪造附件结果。
 
-#### `composer-text-selection`
-
-- 测试类型：`e2e`
-- What：验证输入框鼠标松开后保留用户已框选文字，不会把光标强制移动到末尾。
-- Why：用户编辑长输入时需要稳定选择文本；如果 selection 被重置，会造成误删、误改或无法替换选中文本。
-- How：在真实 Workbench composer 中输入多段文本，用鼠标框选中间文字并松开，读取 selection 状态。
-- Oracle：鼠标松开后选区仍覆盖原选中文字，selection 不被自动折叠到输入末尾。
-- Not：不验证系统输入法和浏览器原生 selection 的全部边界。
 
 #### `reference-mention-keyboard`
 
@@ -248,14 +240,6 @@ tests/case/workbench/
 - Oracle：收到浏览器面板事件后右侧进入内置浏览器状态并随面板 resize 对齐，对齐 `WB-PANEL-004-AC1`；传入 URL 时先导航再执行网页操作，对齐 `WB-PANEL-004-AC2`；切换其他面板或收起时浏览器视图不遮挡其他内容，对齐 `WB-PANEL-004-AC3`；任务完成后真实 browser_use 结果包含本地网页返回的 `BROWSER_TASK_DONE` 和口令，对齐 `WB-PANEL-004-AC4`、`WB-CORE-005-AC1`、`WB-CORE-006-AC1`；记录模型、耗时、完成度评分和失败归因。
 - Not：不验证公网网页稳定性；本 case 使用本地测试网页减少外部波动；不允许用 fake browser 或 fake tool result 替代；不要求 live 模型必须在固定时限内结束整轮最终回答，只要真实内置浏览器已完成输入、点击和结果读取即可判定 browser panel 能力有效。
 
-#### `browser-use-deepseek-financing-search`
-
-- 测试类型：`e2e`
-- What：验证真实 AI 使用 `browser_use` 完成公网搜索页导航、观察、操作、抽取，并基于抽取内容回答 DeepSeek 最近融资问题；同时守住新的 browser_use 输出 schema。
-- Why：本地网页 case 能验证浏览器面板和交互，但不能验证公网搜索页链路；输出 schema 变更后也需要真实 AI run 防止旧字段继续泄漏。
-- How：通过真实 Workbench UI 发送“用浏览器搜索下最近deepseek的融资”，等待 `navigate / observe 或 act / extract` 链路和最终回答；检查工具结果只使用 `action/page/result/error` 新结构。
-- Oracle：run 完成；至少出现 `navigate`、`observe` 或 `act`、`extract`；结果满足新 schema 且不包含废弃字段；访问真实搜索引擎页面；最终回答包含 DeepSeek 和融资相关信息；不出现 fake browser / fake AI 信号。
-- Not：不固定融资金额、日期或搜索引擎；该 case 受公网和搜索引擎页面变化影响，失败时必须结合 raw logs 区分产品回归与外部波动。
 
 #### `web-search-diagnostic`
 

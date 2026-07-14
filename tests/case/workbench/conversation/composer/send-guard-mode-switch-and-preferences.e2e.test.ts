@@ -43,6 +43,28 @@ describe('workbench conversation e2e', () => {
         runMode: 'single',
         execute: async (runtime) => {
           const { page } = runtime
+          const missingModelNotification = getWorkbenchLocator(
+            page,
+            workbenchSelectors.llmConfigMissingNotification
+          )
+          const missingModelStartedAt = Date.now()
+          await missingModelNotification.waitFor({ state: 'visible', timeout: 1500 })
+          const missingModelInitialDelayMs = Date.now() - missingModelStartedAt
+          const missingModelInitialText = (
+            (await missingModelNotification.textContent()) || ''
+          ).trim()
+
+          await switchWorkbenchMode(page, '没头脑')
+          await missingModelNotification.waitFor({ state: 'hidden' })
+          const missingModelHiddenInSearch = !(await missingModelNotification
+            .isVisible()
+            .catch(() => false))
+
+          const missingModelReturnedAt = Date.now()
+          await switchWorkbenchMode(page, '大聪明')
+          await missingModelNotification.waitFor({ state: 'visible', timeout: 1500 })
+          const missingModelReturnDelayMs = Date.now() - missingModelReturnedAt
+
           const env = loadWorkbenchLiveModelEnv()
           const workspace = await createTemporaryWorkbenchWorkspace(CASE_ID)
           try {
@@ -124,6 +146,10 @@ describe('workbench conversation e2e', () => {
             recordWorkbenchAiEvidence(runtime, evidence, 0.75)
 
             return {
+              missingModelInitialDelayMs,
+              missingModelReturnDelayMs,
+              missingModelInitialText,
+              missingModelHiddenInSearch,
               disabledWithoutWorkspace,
               searchModeInputText,
               aiModeInputText,
@@ -144,6 +170,19 @@ describe('workbench conversation e2e', () => {
           }
         },
         assert: async (result, runtime) => {
+          await runtime.assertThat(
+            result.missingModelInitialDelayMs < 1500 &&
+              result.missingModelReturnDelayMs < 1500 &&
+              result.missingModelInitialText.includes('未配置大模型 API') &&
+              result.missingModelHiddenInSearch,
+            {
+              name: 'missing-llm-notification-follows-mode-state',
+              message:
+                '没有模型配置时智能模式应快速提示，搜索模式应隐藏提示，切回智能模式后应再次显示。',
+              data: result
+            }
+          )
+
           await runtime.assertThat(
             result.disabledWithoutWorkspace &&
               result.searchModeInputText.includes(DRAFT_TEXT) &&

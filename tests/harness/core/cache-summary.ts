@@ -1,4 +1,4 @@
-import type { AiLlmIoRecord, JsonObject } from '../../../src/shared/types'
+import type { AiLlmIoRecord } from '../../../src/shared/types'
 
 export type CacheSummaryBucket = {
   calls: number
@@ -82,6 +82,3 @@ export const buildCacheSummary = (records: readonly AiLlmIoRecord[]): CacheSumma
     )
   }
 }
-
-export const cacheSummaryToJson = (summary: CacheSummary): JsonObject =>
-  JSON.parse(JSON.stringify(summary)) as JsonObject

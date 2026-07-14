@@ -3,38 +3,8 @@ import path from 'node:path'
 import type { SelectedReference } from '../../../src/shared/types'
 import type { BackendTestRuntime, WorkspaceKbSeedResult } from './test-types'
 
-export const HUMAN_RISK_REPORT_DRAFT_USER_INPUT =
-  '帮我写下这周的工作周报文件，基于我工作目录下的所有文件信息，记得参考我上周写的周报风格来哦'
-
 export const SHARED_WORKSPACE_FIXTURE_PATH = 'tests/fixtures/workspace' as const
 const WORKSPACE_LEARNING_FIXTURE_DIR = `${SHARED_WORKSPACE_FIXTURE_PATH}/学习笔记`
-const WORKSPACE_WORK_FIXTURE_DIR = `${SHARED_WORKSPACE_FIXTURE_PATH}/工作`
-
-export const RISK_REPORT_LAST_WEEK_REPORT_FIXTURE_PATH =
-  `${WORKSPACE_WORK_FIXTURE_DIR}/上周周报-已发版.docx` as const
-export const RISK_REPORT_CLIENT_MEETING_FIXTURE_PATH =
-  `${WORKSPACE_WORK_FIXTURE_DIR}/客户周会纪要.docx` as const
-export const RISK_REPORT_DELIVERY_SYNC_FIXTURE_PATH =
-  `${WORKSPACE_WORK_FIXTURE_DIR}/交付合规同步记录.docx` as const
-export const RISK_REPORT_VENDOR_UPDATE_FIXTURE_PATH =
-  `${WORKSPACE_WORK_FIXTURE_DIR}/供应商接口补件说明.docx` as const
-export const RISK_REPORT_LEGAL_REVIEW_FIXTURE_PATH =
-  `${WORKSPACE_WORK_FIXTURE_DIR}/法务复核意见.docx` as const
-export const RISK_REPORT_TEAM_STANDUP_FIXTURE_PATH =
-  `${WORKSPACE_WORK_FIXTURE_DIR}/团队站会记录.docx` as const
-export const RISK_REPORT_Q2_REVIEW_FIXTURE_PATH =
-  `${WORKSPACE_WORK_FIXTURE_DIR}/Q2阶段复盘.docx` as const
-export const RISK_REPORT_STYLE_NOTE_FIXTURE_PATH =
-  `${WORKSPACE_WORK_FIXTURE_DIR}/对外口径确认.txt` as const
-export const RISK_REPORT_FINANCE_NOTE_FIXTURE_PATH =
-  `${WORKSPACE_WORK_FIXTURE_DIR}/财务与付款材料跟进.txt` as const
-export const RISK_REPORT_SCHEDULE_NOTE_FIXTURE_PATH =
-  `${WORKSPACE_WORK_FIXTURE_DIR}/本周排期更新.txt` as const
-export const RISK_REPORT_TEMP_NOTE_FIXTURE_PATH =
-  `${WORKSPACE_WORK_FIXTURE_DIR}/临时备注.txt` as const
-
-const toWorkspaceRelativePath = (runtime: BackendTestRuntime, absolutePath: string): string =>
-  path.relative(runtime.workspaceRoot, absolutePath).split(path.sep).join('/')
 
 export const DOCX_READING_FIXTURE_PATHS = [
   `${WORKSPACE_LEARNING_FIXTURE_DIR}/深度学习.docx`,
@@ -50,21 +20,11 @@ export const DOCX_MULTI_EDIT_FIXTURE_PATHS = [
   `${SHARED_WORKSPACE_FIXTURE_PATH}/交互式探究学习案例：产业转移.docx`
 ] as const
 
-export const DOCX_CROSS_SOURCE_SUMMARY_FIXTURE_PATHS = DOCX_READING_FIXTURE_PATHS
-
-export const DOCX_CROSS_SOURCE_SUMMARY_REPORT_RELATIVE_PATH = '深度学习与图形学复习总结.docx'
-
 export const DOCX_ALL_FIXTURE_PATHS = [
   ...DOCX_READING_FIXTURE_PATHS,
   ...DOCX_MULTI_EDIT_FIXTURE_PATHS,
   `${SHARED_WORKSPACE_FIXTURE_PATH}/sample-edit.docx`
 ] as const
-
-export const HUMAN_DOCX_CAUSE_REMEDY_READING_USER_INPUT =
-  '我这两天复习的时候老把这两个概念混了。你就按我刚选的这两份课件，帮我讲清楚：过拟合和反走样分别是什么、为什么会出现、一般怎么处理。别自己补课外内容，哪份资料没写你就直接告诉我没写。'
-
-export const HUMAN_DOCX_CROSS_SOURCE_SUMMARY_USER_INPUT =
-  '帮我基于我刚选的这两个文件，生成一个给同学复习用的总结文件。按照关键概念、出现原因和常见处理方式整理清楚。'
 
 export const HUMAN_DOCX_POSITIONED_STRUCTURAL_EDIT_FALLBACK_USER_INPUT =
   '我准备把这份图形学讲义发给同学复习，想把“反走样”这一节补得更容易记一些。你直接在这一节后面加一段更通俗的说明，再加一个很短的总结表，帮助大家快速区分两种常见做法。'
@@ -72,31 +32,11 @@ export const HUMAN_DOCX_POSITIONED_STRUCTURAL_EDIT_FALLBACK_USER_INPUT =
 export const HUMAN_KB_GUIDED_DOCX_COMPARISON_DRAFT_USER_INPUT =
   '我工作区里课件和教学材料有点多，我忘了哪两份课件专门讲过反走样和过拟合。你先把相关资料找出来看一遍，只能依据工作区里实际写到的内容，再把适合老师讲“概念区分”的内容分别补到课堂 PRD 和交互式案例里，写法尽量像备课备注和课堂引导语，不要像教材摘抄。'
 
-export const HUMAN_KB_GUIDED_DOCX_READING_USER_INPUT =
-  '我工作区里应该有两份课件分别讲过过拟合和反走样，但我忘了文件名。你先帮我找出来，再告诉我这两个问题一般怎么处理。'
-
 export const buildHumanWebCrawlMultiHopCrossDomainUserInput = (entryUrl: string): string =>
   `帮我基于这个网站整理杭州灵活就业补贴的申请说明：${entryUrl}。我需要知道谁可以申请、需要哪些材料、截止时间和线上办理方式。`
 
 export const HUMAN_WEB_CRAWL_URL_INFERENCE_USER_INPUT =
   '帮我基于 pandas 官网文档分别看下 read_csv 和 DataFrame.to_csv 这两个条目，说明它们分别是做什么的，以及最直接的使用区别。不要用终端命令，也不要打开浏览器操作。'
-
-type RiskReportTrackedFile = {
-  workspacePath: string
-  relativePath: string
-  bytes: Uint8Array
-}
-
-export type RiskReportWorkspaceSeed = {
-  lastWeekReportRelativePath: string
-  expectedRiskConclusion: string
-  expectedOwnerSummary: string
-  expectedNextStep: string
-  relevantDocxRelativePaths: string[]
-  relevantTxtRelativePaths: string[]
-  preexistingDocxRelativePaths: string[]
-  trackedDocFiles: RiskReportTrackedFile[]
-}
 
 export type SelectedDocxFixture = {
   sourcePath: string
@@ -180,112 +120,3 @@ export const buildKbGuidedDocxWorkspaceSeed = async (
   targetDocs: resolveSelectedDocxFixtures(runtime, DOCX_MULTI_EDIT_FIXTURE_PATHS),
   trackedDocs: await captureDocxFixtureBytes(runtime, DOCX_ALL_FIXTURE_PATHS)
 })
-
-const captureWorkspaceFiles = async (
-  runtime: BackendTestRuntime,
-  fixturePaths: readonly string[]
-): Promise<RiskReportTrackedFile[]> =>
-  await Promise.all(
-    fixturePaths.map(async (fixturePath) => {
-      const workspacePath = runtime.getFixtureWorkspacePath(fixturePath)
-      return {
-        workspacePath,
-        relativePath: toWorkspaceRelativePath(runtime, workspacePath),
-        bytes: await fs.readFile(workspacePath)
-      }
-    })
-  )
-
-export const loadRiskReportWorkspaceSeed = async (
-  runtime: BackendTestRuntime
-): Promise<RiskReportWorkspaceSeed> => {
-  const expectedRiskConclusion = '在最终合规签署完成前，当前风险状态仍需保持跟进。'
-  const expectedOwnerSummary = '最终复核窗口由合规负责人 Alice 牵头。'
-  const expectedNextStep = '财务接口人 Bob 本周内补齐付款材料，并在复核前完成附件对齐。'
-  const lastWeekReportRelativePath = toWorkspaceRelativePath(
-    runtime,
-    runtime.getFixtureWorkspacePath(RISK_REPORT_LAST_WEEK_REPORT_FIXTURE_PATH)
-  )
-  const clientMeetingRelativePath = toWorkspaceRelativePath(
-    runtime,
-    runtime.getFixtureWorkspacePath(RISK_REPORT_CLIENT_MEETING_FIXTURE_PATH)
-  )
-  const deliverySyncRelativePath = toWorkspaceRelativePath(
-    runtime,
-    runtime.getFixtureWorkspacePath(RISK_REPORT_DELIVERY_SYNC_FIXTURE_PATH)
-  )
-  const vendorUpdateRelativePath = toWorkspaceRelativePath(
-    runtime,
-    runtime.getFixtureWorkspacePath(RISK_REPORT_VENDOR_UPDATE_FIXTURE_PATH)
-  )
-  const legalReviewRelativePath = toWorkspaceRelativePath(
-    runtime,
-    runtime.getFixtureWorkspacePath(RISK_REPORT_LEGAL_REVIEW_FIXTURE_PATH)
-  )
-  const styleNoteRelativePath = toWorkspaceRelativePath(
-    runtime,
-    runtime.getFixtureWorkspacePath(RISK_REPORT_STYLE_NOTE_FIXTURE_PATH)
-  )
-  const financeNoteRelativePath = toWorkspaceRelativePath(
-    runtime,
-    runtime.getFixtureWorkspacePath(RISK_REPORT_FINANCE_NOTE_FIXTURE_PATH)
-  )
-  const scheduleNoteRelativePath = toWorkspaceRelativePath(
-    runtime,
-    runtime.getFixtureWorkspacePath(RISK_REPORT_SCHEDULE_NOTE_FIXTURE_PATH)
-  )
-  const teamStandupRelativePath = toWorkspaceRelativePath(
-    runtime,
-    runtime.getFixtureWorkspacePath(RISK_REPORT_TEAM_STANDUP_FIXTURE_PATH)
-  )
-  const q2ReviewRelativePath = toWorkspaceRelativePath(
-    runtime,
-    runtime.getFixtureWorkspacePath(RISK_REPORT_Q2_REVIEW_FIXTURE_PATH)
-  )
-  const preexistingDocxRelativePaths = [
-    lastWeekReportRelativePath,
-    clientMeetingRelativePath,
-    deliverySyncRelativePath,
-    vendorUpdateRelativePath,
-    legalReviewRelativePath,
-    teamStandupRelativePath,
-    q2ReviewRelativePath
-  ]
-  const trackedDocFiles = await captureWorkspaceFiles(runtime, [
-    RISK_REPORT_LAST_WEEK_REPORT_FIXTURE_PATH,
-    RISK_REPORT_CLIENT_MEETING_FIXTURE_PATH,
-    RISK_REPORT_DELIVERY_SYNC_FIXTURE_PATH,
-    RISK_REPORT_VENDOR_UPDATE_FIXTURE_PATH,
-    RISK_REPORT_LEGAL_REVIEW_FIXTURE_PATH,
-    RISK_REPORT_TEAM_STANDUP_FIXTURE_PATH,
-    RISK_REPORT_Q2_REVIEW_FIXTURE_PATH
-  ])
-
-  return {
-    lastWeekReportRelativePath,
-    expectedRiskConclusion,
-    expectedOwnerSummary,
-    expectedNextStep,
-    relevantDocxRelativePaths: [
-      clientMeetingRelativePath,
-      deliverySyncRelativePath,
-      vendorUpdateRelativePath,
-      legalReviewRelativePath
-    ],
-    relevantTxtRelativePaths: [
-      styleNoteRelativePath,
-      financeNoteRelativePath,
-      scheduleNoteRelativePath
-    ],
-    preexistingDocxRelativePaths,
-    trackedDocFiles
-  }
-}
-
-export const hasUnchangedFileBytes = async (
-  filePath: string,
-  expectedBytes: Uint8Array
-): Promise<boolean> => {
-  const currentBytes = await fs.readFile(filePath)
-  return Buffer.compare(currentBytes, Buffer.from(expectedBytes)) === 0
-}

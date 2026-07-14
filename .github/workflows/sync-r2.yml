@@ -19,6 +19,8 @@ jobs:
       R2_PUBLIC_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}
       RELEASE_TAG: ${{ inputs.tag }}
     steps:
+      - uses: actions/checkout@v4
+
       - name: Validate R2 configuration
         shell: bash
         run: |
@@ -30,21 +32,100 @@ jobs:
           test "${R2_PUBLIC_BASE_URL%/}" = "https://download.ncurator.com"
           [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
 
-      - name: Download installers from GitHub Release
+      - name: Download update assets from GitHub Release
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p release-assets
           for asset in \
+            latest.yml \
+            latest-mac.yml \
             Ncurator-mac-arm64.dmg \
+            Ncurator-mac-arm64.dmg.blockmap \
+            Ncurator-mac-arm64.zip \
+            Ncurator-mac-arm64.zip.blockmap \
             Ncurator-mac-x64.dmg \
-            Ncurator-windows-x64.exe
+            Ncurator-mac-x64.dmg.blockmap \
+            Ncurator-mac-x64.zip \
+            Ncurator-mac-x64.zip.blockmap \
+            Ncurator-windows-x64.exe \
+            Ncurator-windows-x64.exe.blockmap
           do
             curl --fail --location --retry 3 \
               --output "release-assets/$asset" \
               "https://github.com/Yoan98/Ncurator/releases/download/$RELEASE_TAG/$asset"
           done
           ls -lh release-assets
+
+      - name: Prepare R2 update metadata
+        run: |
+          node scripts/prepare-r2-update-metadata.mjs \
+            release-assets \
+            r2-update-metadata \
+            "$RELEASE_TAG"
+
+      - name: Upload versioned update assets to R2
+        shell: bash
+        run: |
+          set -euo pipefail
+          endpoint="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          for source in release-assets/*; do
+            asset="$(basename "$source")"
+            case "$asset" in
+              latest.yml|latest-mac.yml) continue ;;
+            esac
+            aws s3 cp "$source" \
+              "s3://${R2_BUCKET_NAME}/updates/${RELEASE_TAG}/$asset" \
+              --endpoint-url "$endpoint" \
+              --region auto \
+              --cache-control 'public, max-age=31536000, immutable' \
+              --no-progress
+          done
+
+      - name: Verify versioned R2 update assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          base_url="${R2_PUBLIC_BASE_URL%/}"
+          for source in release-assets/*; do
+            asset="$(basename "$source")"
+            case "$asset" in
+              latest.yml|latest-mac.yml) continue ;;
+            esac
+            expected_size="$(stat -c '%s' "$source")"
+            actual_size="$(curl --fail --silent --show-error --head \
+              "$base_url/updates/$RELEASE_TAG/$asset" \
+              | tr -d '\r' \
+              | awk 'tolower($1)=="content-length:" {value=$2} END {print value}')"
+            test "$actual_size" = "$expected_size"
+          done
+
+      - name: Promote R2 update metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          endpoint="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          for metadata in latest.yml latest-mac.yml; do
+            aws s3 cp "r2-update-metadata/$metadata" \
+              "s3://${R2_BUCKET_NAME}/updates/latest/$metadata" \
+              --endpoint-url "$endpoint" \
+              --region auto \
+              --content-type application/yaml \
+              --cache-control 'no-store' \
+              --no-progress
+          done
+
+      - name: Verify latest R2 update metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          base_url="${R2_PUBLIC_BASE_URL%/}"
+          for metadata in latest.yml latest-mac.yml; do
+            content="$(curl --fail --silent --show-error \
+              "$base_url/updates/latest/$metadata?noCache=${GITHUB_RUN_ID}")"
+            grep -F "version: ${RELEASE_TAG#v}" <<< "$content"
+            grep -F "../${RELEASE_TAG}/" <<< "$content"
+          done
 
       - name: Upload versioned installers to R2
         shell: bash
