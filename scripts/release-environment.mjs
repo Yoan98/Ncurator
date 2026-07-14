@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 
 export const loadReleaseEnvironment = async (root) => {
-  const filePath = path.join(root, '.env.release.local')
+  const filePath = path.join(root, '.env')
   const content = await readFile(filePath, 'utf8').catch((error) => {
     if (error?.code === 'ENOENT') return ''
     throw error
@@ -22,5 +22,12 @@ export const loadReleaseEnvironment = async (root) => {
       value = value.slice(1, -1)
     }
     if (!process.env[name]) process.env[name] = value
+  }
+
+  if (!process.env.AWS_ACCESS_KEY_ID && process.env.R2_ACCESS_KEY_ID) {
+    process.env.AWS_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID
+  }
+  if (!process.env.AWS_SECRET_ACCESS_KEY && process.env.R2_SECRET_ACCESS_KEY) {
+    process.env.AWS_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY
   }
 }

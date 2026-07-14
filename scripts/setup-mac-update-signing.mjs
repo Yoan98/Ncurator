@@ -14,7 +14,7 @@ if (process.platform !== 'darwin') throw new Error('macOS signing setup must run
 const p12Path = String(process.env.CSC_LINK || '').trim()
 const password = String(process.env.CSC_KEY_PASSWORD || '')
 if (!p12Path || !password) {
-  throw new Error('CSC_LINK and CSC_KEY_PASSWORD must be configured in .env.release.local')
+  throw new Error('CSC_LINK and CSC_KEY_PASSWORD must be configured in .env')
 }
 
 const keychain = path.join(os.homedir(), 'Library', 'Keychains', 'login.keychain-db')
@@ -34,7 +34,10 @@ try {
     '-T',
     '/usr/bin/security'
   ]).catch((error) => {
-    if (!String(error?.stderr || '').includes('already exists')) throw error
+    const stderr = String(error?.stderr || '')
+    if (!stderr.includes('already exists')) {
+      throw new Error(`failed to import macOS signing certificate: ${stderr.trim()}`)
+    }
   })
   await execFileAsync(
     '/usr/bin/openssl',
