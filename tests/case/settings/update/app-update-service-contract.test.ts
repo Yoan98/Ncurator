@@ -328,16 +328,16 @@ describe('AppUpdateService contract', () => {
 
   it('explains why an unsigned macOS build cannot auto update', async () => {
     Object.defineProperty(process, 'platform', { value: 'darwin' })
-    const service = new AppUpdateService({ macCodeSignatureValid: () => false })
+    const service = new AppUpdateService({ macUpdateSignatureValid: () => false })
     service.initialize()
 
     const response = (await getIpcHandler(APP_UPDATE_CHECK_CHANNEL)()) as AppUpdateActionResponse
     expect(response).toMatchObject({
       success: false,
-      error: 'macOS 自动更新需要有效的 Developer ID 签名',
+      error: 'macOS 自动更新需要固定的非 ad-hoc 代码签名',
       snapshot: {
         updateSupported: false,
-        unsupportedReason: 'macOS 自动更新需要有效的 Developer ID 签名',
+        unsupportedReason: 'macOS 自动更新需要固定的非 ad-hoc 代码签名',
         platform: 'darwin'
       }
     })
@@ -346,7 +346,7 @@ describe('AppUpdateService contract', () => {
 
   it('enables automatic updates for a signed macOS build', () => {
     Object.defineProperty(process, 'platform', { value: 'darwin' })
-    const service = new AppUpdateService({ macCodeSignatureValid: () => true })
+    const service = new AppUpdateService({ macUpdateSignatureValid: () => true })
     service.initialize()
 
     const snapshot = getIpcHandler(APP_UPDATE_GET_SNAPSHOT_CHANNEL)() as AppUpdateSnapshot

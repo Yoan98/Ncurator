@@ -11,4 +11,14 @@ describe('app update publish config', () => {
     )
     expect(config).not.toMatch(/publish:\s*\n\s*provider:\s*github/u)
   })
+
+  it('requires one stable macOS signing identity before publishing update files', async () => {
+    const workflow = await readFile(path.resolve('.github/workflows/release.yml'), 'utf8')
+
+    expect(workflow).toContain('MAC_CSC_CERT_BASE64')
+    expect(workflow).toContain('build:mac:release:x64')
+    expect(workflow).toContain('build:mac:release:arm64')
+    expect(workflow).toContain('macOS release must not use an ad-hoc signature')
+    expect(workflow).toContain('Verify both macOS architectures use the same update identity')
+  })
 })

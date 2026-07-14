@@ -10,6 +10,7 @@ import type {
   WorkspaceKnowledgePreparedDocument,
   WorkspaceKnowledgeVectorSnapshot,
   WorkspacePreparedSource,
+  WorkspacePrepareWorkerInput,
   WorkspaceKnowledgeWebInput
 } from './types'
 import { WORKSPACE_CHUNK_WRITE_BATCH_SIZE } from './constants'
@@ -27,8 +28,18 @@ export class WorkspaceKnowledgePrepareService {
     private readonly deps: {
       embeddingService: EmbeddingService
       documentsStore: DocumentsStore
+      prepareSource?: (input: WorkspacePrepareWorkerInput) => Promise<WorkspacePreparedSource>
     }
   ) {}
+
+  private async prepareSource(
+    input: WorkspacePrepareWorkerInput
+  ): Promise<WorkspacePreparedSource> {
+    if (this.deps.prepareSource) {
+      return await this.deps.prepareSource(input)
+    }
+    return await this.workerClient.prepareSource(input)
+  }
 
   public async indexLocalFile(
     input: WorkspaceKnowledgeIndexInput
@@ -49,7 +60,7 @@ export class WorkspaceKnowledgePrepareService {
           modelName: this.deps.embeddingService.getModelName()
         })
       : null
-    const preparedSource = await this.workerClient.prepareSource({
+    const preparedSource = await this.prepareSource({
       sourceType: 'file',
       filePath: input.filePath,
       cachedSplit
@@ -101,7 +112,7 @@ export class WorkspaceKnowledgePrepareService {
           modelName: this.deps.embeddingService.getModelName()
         })
       : null
-    const preparedSource = await this.workerClient.prepareSource({
+    const preparedSource = await this.prepareSource({
       sourceType: 'web',
       documentName: input.documentName,
       sourceUrl: input.sourceUrl,
@@ -154,9 +165,9 @@ export class WorkspaceKnowledgePrepareService {
   ): boolean {
     return Boolean(
       cachedVectors &&
-        cachedVectors.contentHash === preparedSource.contentHash &&
-        cachedVectors.modelName === this.deps.embeddingService.getModelName() &&
-        cachedVectors.vectors.length === preparedSource.splitSnapshot.chunks.length
+      cachedVectors.contentHash === preparedSource.contentHash &&
+      cachedVectors.modelName === this.deps.embeddingService.getModelName() &&
+      cachedVectors.vectors.length === preparedSource.splitSnapshot.chunks.length
     )
   }
 

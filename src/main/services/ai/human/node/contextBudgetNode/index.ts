@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import type { BrainContextBudgetSnapshot } from '../../../../../../shared/types'
 import type { AiRunContext } from '../../../types'
 import {
+  CONTEXT_COMPACTION_MIN_SOURCE_RATIO,
   CONTEXT_COMPACTION_TRIGGER_RATIO,
   DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS
 } from '../../constants'
@@ -45,7 +46,8 @@ const buildBudgetSnapshot = (input: {
     }
   }
 
-  const lastBrainRoundCount = input.cache.lastBrainRoundCount ?? input.state.memory.taskRun.rounds.length
+  const lastBrainRoundCount =
+    input.cache.lastBrainRoundCount ?? input.state.memory.taskRun.rounds.length
   const newRounds = input.state.memory.taskRun.rounds.slice(lastBrainRoundCount)
   const deltaTokenEstimate = estimateTextTokens(renderBrainRoundSection(newRounds))
   return {
@@ -61,10 +63,7 @@ const buildBudgetSnapshot = (input: {
   }
 }
 
-export const createContextBudgetNode = (input: {
-  ctx: AiRunContext
-  cache: HumanRuntimeCache
-}) => {
+export const createContextBudgetNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCache }) => {
   return async (state: HumanState): Promise<HumanState> => {
     input.ctx.checkCancelled()
     input.cache.currentState = state
@@ -77,6 +76,10 @@ export const createContextBudgetNode = (input: {
     )
     const targetRounds = getCompressibleHistoryRounds(state)
     const hasCompressibleHistory = targetRounds.length > 0
+    const compressibleTokenEstimate = estimateTextTokens(renderBrainRoundSection(targetRounds))
+    const minimumCompressibleTokens = Math.floor(
+      contextWindowTokens * CONTEXT_COMPACTION_MIN_SOURCE_RATIO
+    )
     const contextBudgetSnapshot = buildBudgetSnapshot({
       cache: input.cache,
       state,
@@ -87,7 +90,8 @@ export const createContextBudgetNode = (input: {
     const shouldCompact =
       contextBudgetSnapshot.usageAvailable &&
       contextBudgetSnapshot.budgetTokens > compactionTriggerTokens &&
-      hasCompressibleHistory
+      hasCompressibleHistory &&
+      compressibleTokenEstimate >= minimumCompressibleTokens
     const createdAt = Date.now()
     const decision = shouldCompact ? 'compact' : 'continue'
     input.ctx.sendEvent({

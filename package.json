@@ -39,6 +39,8 @@
     "build:mac": "pnpm run build && electron-builder --mac --publish never",
     "build:mac:x64": "pnpm run build && electron-builder --mac --x64 --publish never",
     "build:mac:arm64": "pnpm run build && electron-builder --mac --arm64 --publish never",
+    "build:mac:release:x64": "pnpm run build && electron-builder --mac --x64 --publish never --config.forceCodeSigning=true",
+    "build:mac:release:arm64": "pnpm run build && electron-builder --mac --arm64 --publish never --config.forceCodeSigning=true",
     "build:linux": "pnpm run build && electron-builder --linux",
     "native:node": "node scripts/prepare-better-sqlite3-native.mjs ensure node",
     "native:electron": "node scripts/prepare-better-sqlite3-native.mjs ensure electron",

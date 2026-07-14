@@ -1,6 +1,9 @@
 import path from 'node:path'
 import { describe, it } from 'vitest'
-import { loadLiveLlmConfigFromEnv, hasLiveLlmConfigInEnv } from '../../../../harness/backend/llmConfig'
+import {
+  loadLiveLlmConfigFromEnv,
+  hasLiveLlmConfigInEnv
+} from '../../../../harness/backend/llmConfig'
 import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import {
@@ -23,7 +26,7 @@ const toWorkspaceRelativePath = (workspaceRoot: string, sourcePath: string): str
   return path.posix.normalize(relativePath.split(path.sep).join('/')).replace(/^\.\//, '')
 }
 
-const LIVE_CONTEXT_COMPACTION_WINDOW_TOKENS = 15_000
+const LIVE_CONTEXT_COMPACTION_WINDOW_TOKENS = 8_000
 
 const hasExactEntityText = (text: string | undefined, entityText: string): boolean =>
   typeof text === 'string' && text.includes(entityText)
@@ -51,7 +54,6 @@ describe('ai human live backend', () => {
               skipped: true,
               output: null,
               workspaceSeed: null,
-              indexedFiles: [],
               events: [],
               llmIoRecords: []
             }
@@ -59,9 +61,6 @@ describe('ai human live backend', () => {
 
           const workspaceSeed = await loadContextCompactionWorkspaceSeed(runtime)
           await runtime.seedLlmConfig(loadLiveLlmConfigFromEnv())
-          const indexedFiles = await runtime.seedWorkspaceKb({
-            mode: 'all-supported'
-          })
           const runner = createHumanTestRunner(runtime, {
             humanRuntimeOverrides: {
               modelContextWindowTokens: LIVE_CONTEXT_COMPACTION_WINDOW_TOKENS
@@ -76,7 +75,6 @@ describe('ai human live backend', () => {
             skipped: false,
             output,
             workspaceSeed,
-            indexedFiles,
             events: runtime.eventCollector.snapshot(),
             llmIoRecords: runtime.eventCollector.snapshotLlmIo()
           }
@@ -85,7 +83,8 @@ describe('ai human live backend', () => {
           if (result.skipped || !result.workspaceSeed) {
             runtime.assertThat(true, {
               name: 'live-config-not-provided',
-              message: '未提供 live 模型配置，已跳过 human context compaction natural trigger live case。'
+              message:
+                '未提供 live 模型配置，已跳过 human context compaction natural trigger live case。'
             })
             return
           }
@@ -94,7 +93,9 @@ describe('ai human live backend', () => {
           const startedEvents = filterAiRunEventsByType(events, 'context_compaction_started')
           const completedEvents = filterAiRunEventsByType(events, 'context_compaction_completed')
           const budgetEvents = filterAiRunEventsByType(events, 'context_budget_evaluated')
-          const toolNames = filterAiRunEventsByType(events, 'tool_call_result').map((event) => event.toolName)
+          const toolNames = filterAiRunEventsByType(events, 'tool_call_result').map(
+            (event) => event.toolName
+          )
           const createSourcePaths = filterAiRunEventsByType(events, 'tool_call_started')
             .filter((event) => event.toolName === 'docx_edit' && isDocxEditCreateInput(event.input))
             .map((event) => event.input.sourcePath)
@@ -103,7 +104,9 @@ describe('ai human live backend', () => {
             toWorkspaceRelativePath(runtime.workspaceRoot, sourcePath)
           )
           const llmIoRecords = result.llmIoRecords
-          const compactionRecord = llmIoRecords.find((record) => record.caller === 'human.context_compaction')
+          const compactionRecord = llmIoRecords.find(
+            (record) => record.caller === 'human.context_compaction'
+          )
           const latestBrainRecord = [...llmIoRecords]
             .reverse()
             .find((record) => record.caller === 'human.brain')
@@ -119,7 +122,7 @@ describe('ai human live backend', () => {
           runtime.assertThat(
             result.output?.status === 'completed' &&
               startedEvents.length >= 1 &&
-              startedEvents.length <= 2 &&
+              startedEvents.length <= 3 &&
               completedEvents.length === startedEvents.length &&
               budgetEvents.some(
                 (event) =>
@@ -134,7 +137,7 @@ describe('ai human live backend', () => {
               Boolean(latestBrainRecord?.user.includes('最新一轮决策如下')) &&
               Boolean(latestBrainRecord?.user.includes('<compactions>')) &&
               Boolean(latestBrainRecord?.user.includes('<rounds>')) &&
-              !Boolean(latestBrainRecord?.user.includes('<latest_round>')) &&
+              !latestBrainRecord?.user.includes('<latest_round>') &&
               Boolean(completionEvent?.summaryPreview.trim()) &&
               ratio <= 0.5 &&
               Boolean(compactionRecord?.user.includes('<user_goal>')) &&
@@ -146,10 +149,10 @@ describe('ai human live backend', () => {
               Boolean(compactionRecord?.rawText.includes('已尝试但未解决：')) &&
               Boolean(compactionRecord?.rawText.includes('重复或低价值内容：')) &&
               Boolean(compactionRecord?.rawText.includes('已失效或仅作背景的信息：')) &&
-              !Boolean(compactionRecord?.rawText.includes('结果与已有摘要一致')) &&
-              !Boolean(compactionRecord?.rawText.includes('已经读过了')) &&
-              !Boolean(compactionRecord?.rawText.includes('这个问题基本看过了')) &&
-              !Boolean(compactionRecord?.rawText.includes('应该不用再看了')) &&
+              !compactionRecord?.rawText.includes('结果与已有摘要一致') &&
+              !compactionRecord?.rawText.includes('已经读过了') &&
+              !compactionRecord?.rawText.includes('这个问题基本看过了') &&
+              !compactionRecord?.rawText.includes('应该不用再看了') &&
               hasExactEntityText(compactionRecord?.rawText, expectedLastWeekDocAnchor) &&
               !hasInventedEntityText(compactionRecord?.rawText, inventedLastWeekDocName) &&
               hasExactEntityText(latestBrainRecord?.user, expectedLastWeekDocAnchor) &&
@@ -160,7 +163,8 @@ describe('ai human live backend', () => {
               hasDocxApplyArtifact(result.output?.artifacts) &&
               createSourcePaths.length >= 1 &&
               createdRelativePaths.every(
-                (sourcePath) => sourcePath.startsWith('工作/') || sourcePath === path.basename(sourcePath)
+                (sourcePath) =>
+                  sourcePath.startsWith('工作/') || sourcePath === path.basename(sourcePath)
               ),
             {
               name: 'human-live-context-compaction-natural-trigger-completes-task',

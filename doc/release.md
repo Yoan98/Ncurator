@@ -80,22 +80,77 @@ git push origin v0.1.1
 ## 7. 应用内更新
 
 - Windows 打包应用会自动检查更新。
-- macOS 只有通过 Developer ID 正式签名后才启用自动更新。
+- macOS 使用一张长期固定的自签名代码证书建立更新身份，不依赖付费 Developer ID。
 - 用户也可以在 `设置 -> 应用更新` 手动检查。
 - 找到新版本后，应用从 `https://download.ncurator.com/updates/latest` 下载更新包。
 - 下载完成后，用户可以点击重启安装。
 
-未签名的 macOS 构建会直接显示签名原因，不会先下载完整更新包再安装失败。
+macOS 发布包必须满足以下条件：
+
+- 不是 ad-hoc 签名。
+- Intel 和 Apple 芯片版本使用同一张证书。
+- 所有后续版本继续使用同一张证书和 `com.yoan.ncurator` Bundle ID。
+- CI 中 `codesign --verify --deep --strict` 校验通过。
+- designated requirement 不能退化成随版本变化的 `cdhash`。
+
+不满足任一条件时 CI 会停止发布，应用运行时也会关闭 macOS 自动更新，不会先下载完整更新包再安装失败。
+
+当前还没有公开用户，因此第一个公开版本必须直接使用这张固定证书。只要首版开始保持同一身份，就不需要设计旧版迁移流程。
 
 ## 8. 当前签名限制
 
-- macOS 还没有 Developer ID 签名和 Apple 公证，因此当前不会启用自动更新，首次打开时也可能需要用户在系统设置中允许。
+- macOS 没有 Developer ID 和 Apple 公证，因此首次打开时仍可能需要用户右键选择“打开”或在系统设置中允许。
+- 自签名证书只用于保证 Ncurator 新旧版本属于同一更新身份，不能让 Gatekeeper 把应用识别为受 Apple 信任的开发者。
 - Windows 还没有代码签名证书，SmartScreen 可能提示未知发布者。
-- 自动更新文件会通过 `sha512` 校验，校验失败不会安装。
+- 自动更新文件通过 HTTPS 从 R2 下载，并进行 `sha512` 与 macOS 代码签名双重校验；任一校验失败都不会安装。
 
-启用 macOS 自动更新时，在 GitHub Actions Environment `ncuratore` 中配置：
+## 9. macOS 自签名证书
 
-- `MAC_CSC_LINK`：Developer ID Application 证书的 base64 内容或安全下载地址。
+在首个公开版本发布前，只创建一次长期证书：
+
+1. 在 macOS“钥匙串访问 -> 证书助理 -> 创建证书”中创建自签名根证书。
+2. 名称固定为 `Ncurator Update Signing`，证书类型选择“代码签名”，有效期建议设置为 20 年。
+3. 导出包含私钥的 `.p12`，并设置强密码。
+4. 另外导出不含私钥的公开 `.cer`。
+5. 将 `.p12`、密码和公开证书写入 GitHub Actions Environment `ncuratore` 的 Secrets。
+
+Secrets：
+
+- `MAC_CSC_LINK`：`.p12` 的 base64 内容或安全下载地址。
 - `MAC_CSC_KEY_PASSWORD`：证书密码。
+- `MAC_CSC_CERT_BASE64`：公开 `.cer` 的 base64 内容。
 
-CI 检测到证书后会自动签名。应用运行时也会检查 Developer ID，签名有效才启用 macOS 自动更新。
+`.p12` 和私钥禁止提交到仓库。公开 `.cer` 可以公开，但当前只通过 Secret 提供给临时 CI runner。
+
+这张证书是现有安装进入后续自动更新的根身份：
+
+- 不得重新生成同名证书替换。
+- 不得丢失 `.p12` 和密码，必须离线备份。
+- 两个 macOS 架构和所有版本必须使用同一个 `.p12`。
+- 如果更换证书，已经安装的用户将无法直接自动更新，需要重新下载安装。
+
+CI 会临时信任公开证书，让构建工具可以使用自签名身份；runner 销毁后不会留下证书。用户电脑不需要安装这张证书。
+
+## 10. R2 自动更新目录
+
+客户端只访问 Cloudflare R2，不从 GitHub 拉取更新：
+
+- Windows 元数据：`https://download.ncurator.com/updates/latest/latest.yml`
+- macOS 元数据：`https://download.ncurator.com/updates/latest/latest-mac.yml`
+- 版本化更新包：`https://download.ncurator.com/updates/vX.Y.Z/*`
+
+发布顺序固定为：
+
+1. 上传带版本号的更新包到 `updates/vX.Y.Z`，使用长期不可变缓存。
+2. 从公网地址校验文件大小。
+3. 最后更新 `updates/latest` 元数据，使用 `no-store`。
+4. 再从公网读取最新元数据，确认版本号和版本化下载地址正确。
+
+`updates/latest` 只保存很小的入口元数据，实际安装包始终从不可变的版本目录下载，避免 CDN 缓存把新旧文件混在一起。
+
+## 11. 自动更新测试
+
+- 单元测试和模拟 E2E 可以随功能开发执行。
+- 真实更新测试不设置成每次发版自动执行，只在明确要求测试时运行，例如 `pnpm test:update:real -- --source-version 0.1.1 --expected-version 0.1.2`。
+- 真实测试必须使用固定自签名证书构建旧版本，并从 R2 下载已经发布的新版本。
+- 真实测试验证版本发现、完整下载、`sha512`、签名替换、重启版本和用户数据保留。

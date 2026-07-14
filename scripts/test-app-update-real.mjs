@@ -1,7 +1,6 @@
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
-import { execFile, spawn } from 'node:child_process'
+import { execFile } from 'node:child_process'
 import { access, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
-import { createServer } from 'node:http'
 import net from 'node:net'
 import path from 'node:path'
 import process from 'node:process'
@@ -10,17 +9,14 @@ import { _electron as electron } from 'playwright'
 
 const execFileAsync = promisify(execFile)
 const ROOT = process.cwd()
-const DEFAULT_SOURCE_VERSION = '0.1.0'
-const DEFAULT_EXPECTED_VERSION = '0.1.1'
 const DEFAULT_TIMEOUT_MS = 45 * 60 * 1000
 
 const parseArgs = (argv) => {
   const result = {
     sourceApp: '',
-    sourceVersion: DEFAULT_SOURCE_VERSION,
-    expectedVersion: DEFAULT_EXPECTED_VERSION,
-    timeoutMs: DEFAULT_TIMEOUT_MS,
-    githubReleaseTag: ''
+    sourceVersion: '',
+    expectedVersion: '',
+    timeoutMs: DEFAULT_TIMEOUT_MS
   }
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -30,7 +26,6 @@ const parseArgs = (argv) => {
     else if (key === '--source-version' && value) result.sourceVersion = value
     else if (key === '--expected-version' && value) result.expectedVersion = value
     else if (key === '--timeout-ms' && value) result.timeoutMs = Number(value)
-    else if (key === '--github-release-tag' && value) result.githubReleaseTag = value
     else continue
     index += 1
   }
@@ -39,6 +34,22 @@ const parseArgs = (argv) => {
 }
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
+const validateVersionPair = (sourceVersion, expectedVersion) => {
+  const parseVersion = (version) => {
+    const match = version.match(/^(\d+)\.(\d+)\.(\d+)$/u)
+    return match ? match.slice(1).map(Number) : undefined
+  }
+  const source = parseVersion(sourceVersion)
+  const expected = parseVersion(expectedVersion)
+  if (!source || !expected) {
+    throw new Error('必须显式传入 --source-version 和 --expected-version，例如 0.1.1 -> 0.1.2')
+  }
+  const comparison = expected.findIndex((value, index) => value !== source[index])
+  if (comparison < 0 || expected[comparison] < source[comparison]) {
+    throw new Error('expected-version 必须高于 source-version')
+  }
+}
 
 const allocatePort = async () => {
   const server = net.createServer()
@@ -54,74 +65,6 @@ const allocatePort = async () => {
   return address.port
 }
 
-const startGitHubReleaseProxy = async (releaseTag) => {
-  if (!/^v\d+\.\d+\.\d+$/u.test(releaseTag)) {
-    throw new Error(`GitHub Release Tag 不合法：${releaseTag}`)
-  }
-  const releaseApiUrl = `https://api.github.com/repos/Yoan98/Ncurator/releases/tags/${releaseTag}`
-  const { stdout: releaseJson } = await execFileAsync(
-    '/usr/bin/curl',
-    ['--fail', '--silent', '--show-error', '--retry', '3', '--max-time', '60', releaseApiUrl],
-    { maxBuffer: 5 * 1024 * 1024 }
-  )
-  const release = JSON.parse(releaseJson)
-  const assets = new Map(release.assets.map((asset) => [asset.name, asset]))
-  const activeDownloads = new Set()
-  const server = createServer(async (request, response) => {
-    const assetName = path.basename(new URL(request.url || '/', 'http://127.0.0.1').pathname)
-    const asset = assets.get(assetName)
-    if (!asset) {
-      response.writeHead(404).end()
-      return
-    }
-    const curlArgs = [
-      '--fail',
-      '--location',
-      '--silent',
-      '--show-error',
-      '--retry',
-      '3',
-      '--header',
-      'Accept: application/octet-stream',
-      asset.url
-    ]
-    const download = spawn('/usr/bin/curl', curlArgs, { stdio: ['ignore', 'pipe', 'pipe'] })
-    activeDownloads.add(download)
-    let stderr = ''
-    download.stderr.on('data', (chunk) => {
-      stderr += String(chunk)
-    })
-    response.writeHead(200, {
-      'content-type': asset.content_type || 'application/octet-stream',
-      'content-length': String(asset.size),
-      'cache-control': 'no-store'
-    })
-    download.stdout.pipe(response)
-    download.once('close', (code) => {
-      activeDownloads.delete(download)
-      if (code !== 0 && !response.destroyed) response.destroy(new Error(stderr || `curl ${code}`))
-    })
-    response.once('close', () => {
-      if (!download.killed && !response.writableFinished) download.kill('SIGTERM')
-    })
-  })
-  await new Promise((resolve, reject) => {
-    server.once('error', reject)
-    server.listen(0, '127.0.0.1', resolve)
-  })
-  const address = server.address()
-  if (!address || typeof address === 'string') throw new Error('无法启动 GitHub Release 测试代理')
-  return {
-    url: `http://127.0.0.1:${address.port}`,
-    close: async () => {
-      for (const download of activeDownloads) download.kill('SIGTERM')
-      await new Promise((resolve, reject) =>
-        server.close((error) => (error ? reject(error) : resolve()))
-      )
-    }
-  }
-}
-
 const readBundleVersion = async (appPath) => {
   const plistPath = path.join(appPath, 'Contents', 'Info.plist')
   const { stdout } = await execFileAsync('/usr/libexec/PlistBuddy', [
@@ -130,13 +73,6 @@ const readBundleVersion = async (appPath) => {
     plistPath
   ])
   return stdout.trim()
-}
-
-const setBundleVersion = async (appPath, version) => {
-  const plistPath = path.join(appPath, 'Contents', 'Info.plist')
-  for (const key of ['CFBundleShortVersionString', 'CFBundleVersion']) {
-    await execFileAsync('/usr/libexec/PlistBuddy', ['-c', `Set :${key} ${version}`, plistPath])
-  }
 }
 
 const readGenericUpdateUrl = async () => {
@@ -150,13 +86,23 @@ const readGenericUpdateUrl = async () => {
   return publishBlock[1]
 }
 
-const writeUpdateConfig = async (appPath, updateUrl) => {
+const readEmbeddedUpdateUrl = async (appPath) => {
   const configPath = path.join(appPath, 'Contents', 'Resources', 'app-update.yml')
-  await writeFile(
-    configPath,
-    `provider: generic\nurl: ${updateUrl}\nupdaterCacheDirName: ncurator-updater\n`,
-    'utf8'
-  )
+  const config = await readFile(configPath, 'utf8')
+  const match = config.match(/^url:\s*(\S+)$/mu)
+  if (!match?.[1]) throw new Error('测试 App 缺少自动更新地址')
+  return match[1]
+}
+
+const verifyStableMacSignature = async (appPath) => {
+  await execFileAsync('/usr/bin/codesign', ['--verify', '--deep', '--strict', appPath])
+  const { stderr } = await execFileAsync('/usr/bin/codesign', ['-d', '-r-', '--verbose=4', appPath])
+  if (/^Signature=adhoc$/mu.test(stderr) || /designated => .*cdhash\b/mu.test(stderr)) {
+    throw new Error('真实更新测试要求固定的非 ad-hoc macOS 签名')
+  }
+  if (!/^Authority=.+$/mu.test(stderr)) {
+    throw new Error('真实更新测试没有找到 macOS 签名身份')
+  }
 }
 
 const resolveBuiltAppPath = async (outputPath) => {
@@ -186,15 +132,13 @@ const buildOldApp = async ({ outputPath, version, logs }) => {
       '--dir',
       '--publish',
       'never',
+      '--config.forceCodeSigning=true',
       `--config.extraMetadata.version=${version}`,
       `--config.directories.output=${outputPath}`
     ],
     {
       cwd: ROOT,
-      env: {
-        ...process.env,
-        CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-      },
+      env: process.env,
       maxBuffer: 10 * 1024 * 1024
     }
   )
@@ -279,6 +223,7 @@ const main = async () => {
   }
 
   const options = parseArgs(process.argv.slice(2))
+  validateVersionPair(options.sourceVersion, options.expectedVersion)
   const runId = new Date().toISOString().replace(/[:.]/g, '-')
   const reportDir = path.join(ROOT, 'tests', 'logs', 'settings', 'update', 'real', runId)
   const runtimeDir = path.join(ROOT, '.codex-tmp', 'app-update-real', runId)
@@ -291,8 +236,8 @@ const main = async () => {
   const statusHistory = []
   const startedAt = new Date().toISOString()
   let firstLaunch
-  let releaseProxy
   let report
+  let updateUrl = 'production'
 
   await mkdir(reportDir, { recursive: true })
   await mkdir(userDataPath, { recursive: true })
@@ -300,10 +245,7 @@ const main = async () => {
   await writeFile(markerPath, `created=${startedAt}\n`, 'utf8')
 
   try {
-    releaseProxy = options.githubReleaseTag
-      ? await startGitHubReleaseProxy(options.githubReleaseTag)
-      : undefined
-    const updateUrl = releaseProxy?.url || (await readGenericUpdateUrl())
+    updateUrl = await readGenericUpdateUrl()
     const sourceApp =
       options.sourceApp ||
       (await buildOldApp({
@@ -314,8 +256,11 @@ const main = async () => {
     options.sourceApp = sourceApp
     process.stdout.write(`[update-real] 克隆测试 App：${sourceApp}\n`)
     await execFileAsync('/bin/cp', ['-cR', sourceApp, testAppPath])
-    await setBundleVersion(testAppPath, options.sourceVersion)
-    await writeUpdateConfig(testAppPath, updateUrl)
+    await verifyStableMacSignature(testAppPath)
+    const embeddedUpdateUrl = await readEmbeddedUpdateUrl(testAppPath)
+    if (embeddedUpdateUrl !== updateUrl) {
+      throw new Error(`测试 App 更新地址不正确：${embeddedUpdateUrl}`)
+    }
     const preparedVersion = await readBundleVersion(testAppPath)
     if (preparedVersion !== options.sourceVersion) {
       throw new Error(`测试旧版本准备失败：${preparedVersion}`)
@@ -404,14 +349,13 @@ const main = async () => {
       expectedVersion: options.expectedVersion,
       statusHistory,
       sourceApp: options.sourceApp,
-      updateUrl: releaseProxy?.url || 'production',
+      updateUrl,
       error: error instanceof Error ? error.message : String(error)
     }
     process.exitCode = 1
   } finally {
     await firstLaunch?.electronApp.close().catch(() => undefined)
     await terminateTestApp(testAppPath)
-    await releaseProxy?.close().catch(() => undefined)
     await writeFile(path.join(reportDir, 'process.log'), `${logs.join('\n')}\n`, 'utf8')
     await writeFile(
       path.join(reportDir, 'report.json'),

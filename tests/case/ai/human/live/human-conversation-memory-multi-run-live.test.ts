@@ -21,15 +21,6 @@ const SESSION_ID = 'live-conversation-memory-multi-run-session'
 
 const normalizeAssertionText = (text: string): string => text.replace(/\s+/g, '')
 
-const hasOwnerSummarySemantics = (text: string, expectedOwnerSummary: string): boolean =>
-  text.includes(expectedOwnerSummary) ||
-  /(?:最终复核窗口|最终合规复核|复核窗口).*(?:合规负责人\s*)?Alice.*(?:牵头|协调|把控)/.test(text)
-
-const hasNextStepSemantics = (text: string, expectedNextStep: string): boolean =>
-  text.includes(expectedNextStep) ||
-  /财务接口人\s*Bob.*补齐付款材料(?:与附件映射说明)?，?并在复核前完成附件对齐/.test(text) ||
-  /Bob.*(?:负责|本周内)?.*补齐(?:剩余)?付款材料/.test(text)
-
 const hasRiskConclusionSemantics = (text: string, expectedRiskConclusion: string): boolean => {
   const normalizedText = normalizeAssertionText(text)
   const normalizedExpected = normalizeAssertionText(expectedRiskConclusion)
@@ -99,9 +90,6 @@ describe('ai human live backend', () => {
           const workspaceSeed = await loadConversationMemoryWorkspaceSeed(runtime)
           const initialMemorySummary = '用户正在围绕本周发布准备和风险周报连续推进。'
           await runtime.seedLlmConfig(liveConfig)
-          await runtime.seedWorkspaceKb({
-            mode: 'all-supported'
-          })
           await runtime.seedChatHistory({
             sessionId: SESSION_ID,
             messages: [
@@ -171,6 +159,7 @@ describe('ai human live backend', () => {
             messages: memoryBatch.batch,
             runtimeSettings: await runtime.storageService.aiRuntimeSettings.get(),
             llmStore: runtime.llmStore,
+            modelConfigId: liveConfig.id,
             modelName: liveConfig.model_name,
             sendEvent: (event) => runtime.eventCollector.add(event),
             recordLlmIo: (record) => runtime.eventCollector.addLlmIo(record)

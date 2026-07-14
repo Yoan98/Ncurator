@@ -2,7 +2,10 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { describe, it } from 'vitest'
 import type { AiRunEvent, JsonObject, JsonValue } from '../../../../../src/shared/types'
-import { loadLiveLlmConfigFromEnv, hasLiveLlmConfigInEnv } from '../../../../harness/backend/llmConfig'
+import {
+  loadLiveLlmConfigFromEnv,
+  hasLiveLlmConfigInEnv
+} from '../../../../harness/backend/llmConfig'
 import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import {
@@ -31,10 +34,7 @@ const hasSuccessfulKbSearchHit = (events: readonly AiRunEvent[]): boolean =>
     if (!isJsonObject(data)) return false
     const total = data.total
     const items = data.items
-    return (
-      (typeof total === 'number' && total > 0) ||
-      (Array.isArray(items) && items.length > 0)
-    )
+    return (typeof total === 'number' && total > 0) || (Array.isArray(items) && items.length > 0)
   })
 
 describe('ai human live backend', () => {
@@ -46,12 +46,11 @@ describe('ai human live backend', () => {
         domain: 'ai',
         suite: 'human',
         groups: ['live'],
-        description: '验证 live 模式下 human 会先用 KB 缩圈定位相关课件，再把内容回写到另外两份目标 docx。',
+        description:
+          '验证 live 模式下 human 会先用 KB 缩圈定位相关课件，再把内容回写到另外两份目标 docx。',
         fixtures: [SHARED_WORKSPACE_FIXTURE_PATH],
         runMode: 'single',
-        runtimeModelName: hasLiveLlmConfigInEnv()
-          ? loadLiveLlmConfigFromEnv().model_name
-          : null,
+        runtimeModelName: hasLiveLlmConfigInEnv() ? loadLiveLlmConfigFromEnv().model_name : null,
         execute: async (runtime) => {
           if (!hasLiveLlmConfigInEnv()) {
             return {
@@ -66,8 +65,22 @@ describe('ai human live backend', () => {
           await runtime.seedLlmConfig(loadLiveLlmConfigFromEnv())
           const workspaceSeed = await buildKbGuidedDocxWorkspaceSeed(runtime)
           const indexedFiles = await runtime.seedWorkspaceKb({
-            mode: 'all-supported'
+            mode: 'include-only',
+            relativePaths: workspaceSeed.sourceDocs.map((fixture) => fixture.relativePath)
           })
+          const indexedSupportedFiles = indexedFiles.filter(
+            (file) => file.supported && file.status === 'indexed'
+          )
+          runtime.assertThat(
+            workspaceSeed.sourceDocs.every((fixture) =>
+              indexedSupportedFiles.some((file) => file.relativePath === fixture.relativePath)
+            ),
+            {
+              name: 'human-live-kb-guided-source-docs-indexed',
+              message: 'KB-guided live case 的两份来源课件必须先完成索引。',
+              data: { indexedFiles }
+            }
+          )
 
           const runner = createHumanTestRunner(runtime, {
             runtimeSettingsOverride: {
@@ -91,7 +104,8 @@ describe('ai human live backend', () => {
           if (result.skipped || !result.workspaceSeed) {
             runtime.assertThat(true, {
               name: 'live-config-not-provided',
-              message: '未提供 live 模型配置，已跳过 human live KB-guided docx comparison draft case。'
+              message:
+                '未提供 live 模型配置，已跳过 human live KB-guided docx comparison draft case。'
             })
             return
           }
@@ -102,10 +116,9 @@ describe('ai human live backend', () => {
           const indexedSupportedFiles = result.indexedFiles.filter(
             (file) => file.supported && file.status === 'indexed'
           )
-          const requiredIndexedRelativePaths = [
-            ...result.workspaceSeed.sourceDocs,
-            ...result.workspaceSeed.targetDocs
-          ].map((fixture) => fixture.relativePath)
+          const requiredIndexedRelativePaths = result.workspaceSeed.sourceDocs.map(
+            (fixture) => fixture.relativePath
+          )
           const requiredFilesIndexed = requiredIndexedRelativePaths.every((relativePath) =>
             indexedSupportedFiles.some((file) => file.relativePath === relativePath)
           )
@@ -115,13 +128,12 @@ describe('ai human live backend', () => {
             .filter((value): value is string => typeof value === 'string')
           const writeSourcePaths = collectStartedDocxEditSourcePaths(events, isDocxEditWriteInput)
           const changedContentKinds = collectDocxApplyOpsContentKinds(events)
-          const targetDocsWritten = result.workspaceSeed.targetDocs.every(
-            (fixtureDoc) =>
-              writeSourcePaths.some(
-                (sourcePath) =>
-                  sourcePath.endsWith(fixtureDoc.relativePath) ||
-                  sourcePath.endsWith(`/${path.basename(fixtureDoc.relativePath)}`)
-              )
+          const targetDocsWritten = result.workspaceSeed.targetDocs.every((fixtureDoc) =>
+            writeSourcePaths.some(
+              (sourcePath) =>
+                sourcePath.endsWith(fixtureDoc.relativePath) ||
+                sourcePath.endsWith(`/${path.basename(fixtureDoc.relativePath)}`)
+            )
           )
           const sourceDocRelativePaths = new Set(
             result.workspaceSeed.sourceDocs.map((fixture) => fixture.relativePath)
@@ -130,8 +142,8 @@ describe('ai human live backend', () => {
             result.workspaceSeed.trackedDocs
               .filter((fixture) => sourceDocRelativePaths.has(fixture.relativePath))
               .map(async (fixture) => {
-              const currentBytes = await fs.readFile(fixture.workspacePath)
-              return Buffer.compare(currentBytes, Buffer.from(fixture.bytes)) === 0
+                const currentBytes = await fs.readFile(fixture.workspacePath)
+                return Buffer.compare(currentBytes, Buffer.from(fixture.bytes)) === 0
               })
           )
           const deliveryText = String(result.output?.deliveryMarkdown || '')
@@ -157,7 +169,8 @@ describe('ai human live backend', () => {
               result.output.deliveryMarkdown.trim().length > 0,
             {
               name: 'human-live-kb-guided-docx-updates-two-target-docs-from-kb-grounded-evidence',
-              message: 'live human KB-guided 写 case 应先触发 KB 缩圈，再把 grounded 内容落到两份目标 docx 上且不覆盖原文件。',
+              message:
+                'live human KB-guided 写 case 应先触发 KB 缩圈，再把 grounded 内容落到两份目标 docx 上且不覆盖原文件。',
               data: {
                 openedSourcePaths,
                 writeSourcePaths,

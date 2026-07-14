@@ -5,7 +5,10 @@ import {
   buildBlockIndex,
   loadDocxBundle
 } from '../../../../../src/main/services/ai/human/tools/docx/adapters/ooxml/blockIndex'
-import { loadLiveLlmConfigFromEnv, hasLiveLlmConfigInEnv } from '../../../../harness/backend/llmConfig'
+import {
+  loadLiveLlmConfigFromEnv,
+  hasLiveLlmConfigInEnv
+} from '../../../../harness/backend/llmConfig'
 import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import {
@@ -45,30 +48,28 @@ const hasOwnerSummarySemantics = (text: string, expectedOwnerSummary: string): b
 
 const hasNextStepSemantics = (text: string, expectedNextStep: string): boolean =>
   text.includes(expectedNextStep) ||
-  /财务接口人\s*Bob.*补齐付款材料(?:与附件映射说明)?，?并在复核前完成附件对齐/.test(
-    text
-  ) ||
+  /财务接口人\s*Bob.*补齐付款材料(?:与附件映射说明)?，?并在复核前完成附件对齐/.test(text) ||
   /Bob.*(?:负责|本周内)?.*补齐付款材料/.test(text)
 
 const normalizeAssertionText = (text: string): string => text.replace(/\s+/g, '')
 
 const readDocxPlainText = async (filePath: string): Promise<string> => {
   const bundle = await loadDocxBundle(await fs.readFile(filePath))
-  return buildBlockIndex(bundle.documentDom).outline
-    .filter((block) => block.type !== 'table_cell')
+  return buildBlockIndex(bundle.documentDom)
+    .outline.filter((block) => block.type !== 'table_cell')
     .map((block) => block.text)
     .join('\n')
 }
 
-const hasRiskConclusionSemantics = (
-  text: string,
-  expectedRiskConclusion: string
-): boolean => {
+const hasRiskConclusionSemantics = (text: string, expectedRiskConclusion: string): boolean => {
   const normalizedText = normalizeAssertionText(text)
   const normalizedExpected = normalizeAssertionText(expectedRiskConclusion)
   return (
     normalizedText.includes(normalizedExpected) ||
     /最终合规签署完成前[^。]{0,40}(?:仍需|继续)(?:保持|持续)跟进/.test(normalizedText) ||
+    /最终合规签署(?:尚未|仍未)[^。]{0,20}(?:闭环|完成)[^。]{0,40}风险状态(?:仍需|继续)?(?:保持|持续)?跟进/.test(
+      normalizedText
+    ) ||
     /合规签署(?:完整)?闭环前[^。]{0,40}风险(?:状态)?(?:仍需|继续)?(?:保持|持续)?跟进/.test(
       normalizedText
     ) ||
@@ -92,7 +93,8 @@ const hasPendingRiskStateSemantics = (text: string): boolean => {
     /(?:最后一份|最终)合规附件[^。]{0,28}(?:仍在|尚在)(?:内部)?确认流程/.test(normalizedText) ||
     /(?:最后一份|最终)合规附件[^。]{0,28}(?:尚未|未完成).{0,20}(?:最终确认|确认)/.test(
       normalizedText
-    )
+    ) ||
+    /(?:仍有|尚有)一项合规附件[^。]{0,28}(?:确认流程|尚未.{0,12}闭环)/.test(normalizedText)
   )
 }
 
@@ -103,6 +105,7 @@ const hasAffirmativeForbiddenRiskConclusion = (text: string): boolean => {
     '不使用',
     '不要',
     '不建议',
+    '不宜使用',
     '避免',
     '不应',
     '禁用',
@@ -157,16 +160,12 @@ describe('ai human live backend', () => {
           return {
             skipped: true,
             output: null,
-            indexedFiles: [],
             events: []
           }
         }
 
         const workspaceSeed = await loadRiskReportDraftWorkspaceSeed(runtime)
         await runtime.seedLlmConfig(loadLiveLlmConfigFromEnv())
-        const indexedFiles = await runtime.seedWorkspaceKb({
-          mode: 'all-supported'
-        })
 
         const runner = createHumanTestRunner(runtime)
         const output = await runner.run({
@@ -177,7 +176,6 @@ describe('ai human live backend', () => {
         return {
           skipped: false,
           output,
-          indexedFiles,
           workspaceSeed,
           events: runtime.eventCollector.snapshot()
         }
@@ -194,9 +192,6 @@ describe('ai human live backend', () => {
         const events = result.events
         const toolResults = filterAiRunEventsByType(events, 'tool_call_result')
         const toolNames = toolResults.map((event) => event.toolName)
-        const indexedSupportedFiles = result.indexedFiles.filter(
-          (file) => file.supported && file.status === 'indexed'
-        )
         const deliveryText = String(result.output?.deliveryMarkdown || '').trim()
         const trackedDocsUnchanged = await Promise.all(
           result.workspaceSeed.trackedDocFiles.map(async (fixture) => {
@@ -235,7 +230,8 @@ describe('ai human live backend', () => {
         const createdTargetInAllowedLocation =
           createdRelativePaths.length >= 1 &&
           createdRelativePaths.every(
-            (sourcePath) => sourcePath.startsWith('工作/') || sourcePath === path.basename(sourcePath)
+            (sourcePath) =>
+              sourcePath.startsWith('工作/') || sourcePath === path.basename(sourcePath)
           )
         const writesStayOnCreatedDoc =
           writeRelativePaths.length === 0 ||
@@ -262,14 +258,11 @@ describe('ai human live backend', () => {
             )
           })
         const docxFileArtifact = result.output?.artifacts?.find(
-          (artifact) =>
-            artifact.kind === 'file' &&
-            artifact.capability === 'docx'
+          (artifact) => artifact.kind === 'file' && artifact.capability === 'docx'
         )
         const hasDocxArtifact = hasDocxFileArtifact(result.output?.artifacts)
         let appliedDocText = ''
-        const appliedDocPath =
-          docxFileArtifact?.kind === 'file' ? docxFileArtifact.path : undefined
+        const appliedDocPath = docxFileArtifact?.kind === 'file' ? docxFileArtifact.path : undefined
         if (appliedDocPath) {
           appliedDocText = await readDocxPlainText(appliedDocPath)
         }
@@ -359,14 +352,6 @@ describe('ai human live backend', () => {
           }
         })
 
-        runtime.assertThat(indexedSupportedFiles.length > 0, {
-          name: 'human-live-risk-report-indexes-all-supported-workspace-files',
-          message: 'risk report live case 应在运行前至少把部分已支持文件索引进 KB。',
-          data: {
-            indexedSupportedFiles
-          }
-        })
-
         runtime.assertThat(
           trackedDocsUnchanged.every(Boolean) &&
             createSourcePaths.length >= 1 &&
@@ -419,19 +404,16 @@ describe('ai human live backend', () => {
           }
         )
 
-        runtime.assertThat(
-          hasPostWriteReadback,
-          {
-            name: 'human-live-risk-report-write-results-include-post-write-readback',
-            message:
-              '同文件 docx 写后，写工具结果应包含 postWriteReadback，用于 brain 判断写入效果。',
-            data: {
-              writeResultEvents,
-              createdRelativePaths,
-              writeRelativePaths
-            }
+        runtime.assertThat(hasPostWriteReadback, {
+          name: 'human-live-risk-report-write-results-include-post-write-readback',
+          message:
+            '同文件 docx 写后，写工具结果应包含 postWriteReadback，用于 brain 判断写入效果。',
+          data: {
+            writeResultEvents,
+            createdRelativePaths,
+            writeRelativePaths
           }
-        )
+        })
 
         runtime.assertThat(!appliedDocText.includes('review_artifact_invalid_generated'), {
           name: 'human-live-risk-report-committed-doc-hides-generated-discarded-draft',

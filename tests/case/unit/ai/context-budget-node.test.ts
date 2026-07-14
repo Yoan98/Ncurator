@@ -84,9 +84,7 @@ describe('ai unit context budget node', () => {
       usageAvailable: false,
       evaluationId: expect.any(String)
     })
-    const event = events.find(
-      (item) => item.type === 'context_budget_evaluated'
-    )
+    const event = events.find((item) => item.type === 'context_budget_evaluated')
     expect(event).toMatchObject({
       type: 'context_budget_evaluated',
       runId: 'run-1',
@@ -118,7 +116,7 @@ describe('ai unit context budget node', () => {
                 state: baseState,
                 thought: {
                   thought: {
-                    next: '第一轮先学习 docx-read。'
+                    next: `第一轮先学习 docx-read。${'需要保留的长历史。'.repeat(40)}`
                   },
                   nextAction: {
                     action: 'learning',
@@ -182,9 +180,7 @@ describe('ai unit context budget node', () => {
     const nextState = await smallWindowNode(roundState)
 
     expect(nextState.execution.stage).toBe('context_compaction')
-    const event = events.find(
-      (item) => item.type === 'context_budget_evaluated'
-    )
+    const event = events.find((item) => item.type === 'context_budget_evaluated')
     expect(event).toMatchObject({
       type: 'context_budget_evaluated',
       decision: 'compact',
@@ -215,9 +211,7 @@ describe('ai unit context budget node', () => {
     const nextState = await node(state)
 
     expect(nextState.execution.stage).toBe('brain')
-    const budgetEvent = events.find(
-      (item) => item.type === 'context_budget_evaluated'
-    )
+    const budgetEvent = events.find((item) => item.type === 'context_budget_evaluated')
     expect(budgetEvent).toMatchObject({
       type: 'context_budget_evaluated',
       decision: 'continue',
@@ -228,6 +222,82 @@ describe('ai unit context budget node', () => {
         hasCompressibleHistory: false,
         contextWindowTokens: DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS
       }
+    })
+  })
+
+  it('does not compact when the available round history is too small to reduce context', async () => {
+    const events: AiRunEvent[] = []
+    const ctx = createBaseContext(events)
+    const cache = createHumanRuntimeCache()
+    const baseState = createInitialHumanState({
+      taskId: 'task-small-history',
+      userInput: '请继续当前任务。'
+    })
+    const firstTaskRun = appendRoundRecord({
+      state: baseState,
+      thought: {
+        thought: { next: '继续。' },
+        nextAction: { action: 'learning', wantLearnSkillIds: ['docx-read'] }
+      },
+      execution: buildLearningExecution({
+        learningOutcome: {
+          requestedSkillIds: ['docx-read'],
+          loadedSkillIds: ['docx-read'],
+          skippedDuplicateSkillIds: [],
+          skippedUnknownSkillIds: [],
+          evictedSkillIds: [],
+          activeToolCount: 4
+        }
+      }),
+      createdAt: 1
+    })
+    const firstRoundState = {
+      ...baseState,
+      memory: {
+        ...baseState.memory,
+        taskRun: firstTaskRun
+      }
+    }
+    const secondTaskRun = appendRoundRecord({
+      state: firstRoundState,
+      thought: {
+        thought: { next: '完成。' },
+        nextAction: { action: 'learning', wantLearnSkillIds: ['docx-write'] }
+      },
+      execution: buildLearningExecution({
+        learningOutcome: {
+          requestedSkillIds: ['docx-write'],
+          loadedSkillIds: ['docx-write'],
+          skippedDuplicateSkillIds: [],
+          skippedUnknownSkillIds: [],
+          evictedSkillIds: [],
+          activeToolCount: 8
+        }
+      }),
+      createdAt: 2
+    })
+    const roundState = {
+      ...firstRoundState,
+      memory: {
+        ...firstRoundState.memory,
+        taskRun: secondTaskRun
+      }
+    }
+    const node = createContextBudgetNode({
+      ctx: {
+        ...ctx,
+        humanRuntimeOverrides: { modelContextWindowTokens: 10_000 }
+      },
+      cache
+    })
+    cache.lastBrainInputTokens = 9_000
+    cache.lastBrainRoundCount = 1
+
+    const nextState = await node(roundState)
+
+    expect(nextState.execution.stage).toBe('brain')
+    expect(events.find((event) => event.type === 'context_budget_evaluated')).toMatchObject({
+      decision: 'continue'
     })
   })
 
@@ -245,9 +315,7 @@ describe('ai unit context budget node', () => {
     const nextState = await node(state)
 
     expect(nextState.execution.stage).toBe('brain')
-    const budgetEvent = events.find(
-      (item) => item.type === 'context_budget_evaluated'
-    )
+    const budgetEvent = events.find((item) => item.type === 'context_budget_evaluated')
     expect(budgetEvent).toMatchObject({
       type: 'context_budget_evaluated',
       decision: 'continue',

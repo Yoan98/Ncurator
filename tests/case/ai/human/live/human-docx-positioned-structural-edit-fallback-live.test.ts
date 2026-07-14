@@ -1,5 +1,8 @@
 import { describe, it } from 'vitest'
-import { loadLiveLlmConfigFromEnv, hasLiveLlmConfigInEnv } from '../../../../harness/backend/llmConfig'
+import {
+  loadLiveLlmConfigFromEnv,
+  hasLiveLlmConfigInEnv
+} from '../../../../harness/backend/llmConfig'
 import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import {
@@ -44,9 +47,7 @@ describe('ai human live backend', () => {
           '验证 live 模式下 human 在复杂 positioned docx 中命中写入需求时不会自动编辑，而是优雅回退并给出手动补充建议。',
         fixtures: [SHARED_WORKSPACE_FIXTURE_PATH],
         runMode: 'single',
-        runtimeModelName: hasLiveLlmConfigInEnv()
-          ? loadLiveLlmConfigFromEnv().model_name
-          : null,
+        runtimeModelName: hasLiveLlmConfigInEnv() ? loadLiveLlmConfigFromEnv().model_name : null,
         execute: async (runtime) => {
           if (!hasLiveLlmConfigInEnv()) {
             return {
@@ -81,7 +82,8 @@ describe('ai human live backend', () => {
           if (result.skipped) {
             runtime.assertThat(true, {
               name: 'live-config-not-provided',
-              message: '未提供 live 模型配置，已跳过 human live positioned structural edit fallback case。'
+              message:
+                '未提供 live 模型配置，已跳过 human live positioned structural edit fallback case。'
             })
             return
           }
@@ -120,11 +122,15 @@ describe('ai human live backend', () => {
             )
           const artifactShapeValid =
             createSourcePaths.length === 0 ||
-            (createdIndependentSupplement && docxApplyArtifactCount >= 1 && docxFileArtifactCount >= 1)
+            (createdIndependentSupplement &&
+              docxApplyArtifactCount >= 1 &&
+              docxFileArtifactCount >= 1)
           const deliveryText = String(result.output?.deliveryMarkdown || '')
           const deliveryMentionsSkippedPositionedArea =
             /(复杂定位|定位排版|版式|排版)/.test(deliveryText) &&
-            /(未.{0,12}自动|没有.{0,12}自动|没法自动|无法自动|不能自动|跳过)/.test(deliveryText) &&
+            /(未.{0,12}自动|没有.{0,12}自动|没法自动|无法自动|不能自动|暂不支持.{0,4}自动|跳过)/.test(
+              deliveryText
+            ) &&
             /(手动|人工)/.test(deliveryText)
 
           runtime.assertThat(
@@ -134,9 +140,7 @@ describe('ai human live backend', () => {
               ) &&
               structuralStarted.length >= 1 &&
               positionedFailedWriteResults.length >= 1 &&
-              decisionHints.some(
-                (event) => event.code === 'hand_docx_positioned_write_blocked'
-              ) &&
+              decisionHints.some((event) => event.code === 'hand_docx_positioned_write_blocked') &&
               diagnosticMessages.some((message) => message.includes('当前命中复杂定位排版区域')) &&
               artifactShapeValid &&
               deliveryMentionsSkippedPositionedArea &&

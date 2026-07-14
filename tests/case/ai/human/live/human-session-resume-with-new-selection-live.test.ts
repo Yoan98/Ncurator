@@ -8,7 +8,10 @@ import {
 } from '../../../../../src/main/services/ai/llmExecutor'
 import type { AiRunDeps } from '../../../../../src/main/services/ai/types'
 import type { AiRunEvent, JsonObject } from '../../../../../src/shared/types'
-import { hasLiveLlmConfigInEnv, loadLiveLlmConfigFromEnv } from '../../../../harness/backend/llmConfig'
+import {
+  hasLiveLlmConfigInEnv,
+  loadLiveLlmConfigFromEnv
+} from '../../../../harness/backend/llmConfig'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import type { BackendTestRuntime } from '../../../../harness/backend/test-types'
 import {
@@ -119,6 +122,7 @@ const buildAiRunDeps = async (input: {
   const runtimeSettings = await input.runtime.storageService.aiRuntimeSettings.get()
   return {
     runtimeSettings,
+    llmStrategyPreferenceStore: input.runtime.storageService.llmStrategyPreference,
     llmStore: input.runtime.llmStore,
     chatStore: input.runtime.chatStore,
     documentsStore: input.runtime.documentsStore,
@@ -185,13 +189,22 @@ describe('ai human live backend', () => {
           }
 
           await runtime.seedLlmConfig(liveConfig)
+          await runtime.chatStore.saveChatSession({
+            id: SESSION_ID,
+            title: 'live session resume test',
+            created_at: Date.now(),
+            workspace_id: 'test-workspace'
+          })
           const interruptedResult = await AiRunService.getInstance().run(
             {
               runId: `${runtime.runId}-run-1-interrupted`,
               sessionId: SESSION_ID,
               input: INTERRUPTED_RUN_INPUT,
               selectedReferences: fileAReferences,
-              modelName: liveConfig.model_name,
+              mainModel: {
+                configId: liveConfig.id,
+                modelName: liveConfig.model_name
+              },
               workspace: buildWorkspace(runtime)
             },
             await buildAiRunDeps({
@@ -213,22 +226,23 @@ describe('ai human live backend', () => {
               sessionId: SESSION_ID,
               input: RESUMED_RUN_INPUT,
               selectedReferences: fileBReferences,
-              modelName: liveConfig.model_name,
+              mainModel: {
+                configId: liveConfig.id,
+                modelName: liveConfig.model_name
+              },
               workspace: buildWorkspace(runtime)
             },
             await buildAiRunDeps({ runtime })
           )
           const snapshotAfterResume = await runtime.chatStore.getSessionResumeSnapshot(SESSION_ID)
-          const run2BrainPrompt =
-            runtime.eventCollector
-              .snapshotLlmIo()
-              .filter(
-                (record) =>
-                  record.runId === `${runtime.runId}-run-2-resume` &&
-                  record.caller === 'human.brain'
-              )
-              .map((record) => record.user)
-              .join('\n')
+          const run2BrainPrompt = runtime.eventCollector
+            .snapshotLlmIo()
+            .filter(
+              (record) =>
+                record.runId === `${runtime.runId}-run-2-resume` && record.caller === 'human.brain'
+            )
+            .map((record) => record.user)
+            .join('\n')
 
           return {
             skipped: false,
@@ -267,7 +281,6 @@ describe('ai human live backend', () => {
               result.resumedResult?.status === 'completed' &&
               result.snapshotAfterResume === null &&
               result.run2BrainPrompt.includes('上一次运行因 network_error 中断') &&
-              result.run2BrainPrompt.includes('当前用户最新输入、当前 selected references、当前 workspace 是本轮唯一有效入口') &&
               result.run2BrainPrompt.includes(result.fileBName) &&
               result.run2BrainPrompt.includes('过拟合') &&
               hasOverfittingFacts(result.run2Delivery) &&

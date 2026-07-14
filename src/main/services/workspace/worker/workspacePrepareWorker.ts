@@ -13,7 +13,9 @@ import type {
   WorkspacePrepareWorkerResponse
 } from '../types'
 
-const prepareSource = async (input: WorkspacePrepareWorkerInput): Promise<WorkspacePreparedSource> => {
+export const prepareWorkspaceSource = async (
+  input: WorkspacePrepareWorkerInput
+): Promise<WorkspacePreparedSource> => {
   if (input.sourceType === 'web') {
     const fileExt = '.html'
     const splitSnapshot =
@@ -61,7 +63,7 @@ export const handleWorkspacePrepareWorkerRequest = async (
       requestId: request.requestId,
       action: 'prepare_source',
       ok: true,
-      payload: await prepareSource(request.payload)
+      payload: await prepareWorkspaceSource(request.payload)
     }
   } catch (error) {
     return {

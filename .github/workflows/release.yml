@@ -54,7 +54,8 @@ jobs:
     env:
       CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
       CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
-      CSC_IDENTITY_AUTO_DISCOVERY: ${{ secrets.MAC_CSC_LINK != '' }}
+      CSC_IDENTITY_AUTO_DISCOVERY: 'true'
+      MAC_CSC_CERT_BASE64: ${{ secrets.MAC_CSC_CERT_BASE64 }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -80,8 +81,46 @@ jobs:
         run: |
           test "$(uname -m)" = "x86_64"
 
+      - name: Prepare stable macOS update identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$CSC_LINK"
+          test -n "$CSC_KEY_PASSWORD"
+          test -n "$MAC_CSC_CERT_BASE64"
+          certificate="$RUNNER_TEMP/ncurator-update-signing.cer"
+          printf '%s' "$MAC_CSC_CERT_BASE64" | base64 --decode > "$certificate"
+          sudo security add-trusted-cert \
+            -d \
+            -r trustRoot \
+            -p codeSign \
+            -k /Library/Keychains/System.keychain \
+            "$certificate"
+
       - run: pnpm install --frozen-lockfile
-      - run: pnpm run build:mac:x64
+      - run: pnpm run build:mac:release:x64
+
+      - name: Verify stable macOS update signature
+        shell: bash
+        run: |
+          set -euo pipefail
+          app_path="$(find dist -maxdepth 2 -type d -name Ncurator.app -print -quit)"
+          test -n "$app_path"
+          codesign --verify --deep --strict --verbose=2 "$app_path"
+          signature="$(codesign -d -r- --verbose=4 "$app_path" 2>&1)"
+          grep -q '^Authority=.' <<< "$signature"
+          grep -q 'designated => .*identifier "com.yoan.ncurator"' <<< "$signature"
+          if grep -q '^Signature=adhoc$' <<< "$signature"; then
+            echo 'macOS release must not use an ad-hoc signature' >&2
+            exit 1
+          fi
+          if grep -q 'designated => .*cdhash' <<< "$signature"; then
+            echo 'macOS designated requirement must remain stable across versions' >&2
+            exit 1
+          fi
+          grep -E '^(Authority=|designated =>)' <<< "$signature" \
+            > dist/mac-update-signature.txt
+          cat dist/mac-update-signature.txt
 
       - uses: actions/upload-artifact@v4
         with:
@@ -91,6 +130,7 @@ jobs:
             dist/*.zip
             dist/*.yml
             dist/*.blockmap
+            dist/mac-update-signature.txt
           if-no-files-found: error
 
   build-macos-arm64:
@@ -100,7 +140,8 @@ jobs:
     env:
       CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
       CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
-      CSC_IDENTITY_AUTO_DISCOVERY: ${{ secrets.MAC_CSC_LINK != '' }}
+      CSC_IDENTITY_AUTO_DISCOVERY: 'true'
+      MAC_CSC_CERT_BASE64: ${{ secrets.MAC_CSC_CERT_BASE64 }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -126,8 +167,46 @@ jobs:
         run: |
           test "$(uname -m)" = "arm64"
 
+      - name: Prepare stable macOS update identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$CSC_LINK"
+          test -n "$CSC_KEY_PASSWORD"
+          test -n "$MAC_CSC_CERT_BASE64"
+          certificate="$RUNNER_TEMP/ncurator-update-signing.cer"
+          printf '%s' "$MAC_CSC_CERT_BASE64" | base64 --decode > "$certificate"
+          sudo security add-trusted-cert \
+            -d \
+            -r trustRoot \
+            -p codeSign \
+            -k /Library/Keychains/System.keychain \
+            "$certificate"
+
       - run: pnpm install --frozen-lockfile
-      - run: pnpm run build:mac:arm64
+      - run: pnpm run build:mac:release:arm64
+
+      - name: Verify stable macOS update signature
+        shell: bash
+        run: |
+          set -euo pipefail
+          app_path="$(find dist -maxdepth 2 -type d -name Ncurator.app -print -quit)"
+          test -n "$app_path"
+          codesign --verify --deep --strict --verbose=2 "$app_path"
+          signature="$(codesign -d -r- --verbose=4 "$app_path" 2>&1)"
+          grep -q '^Authority=.' <<< "$signature"
+          grep -q 'designated => .*identifier "com.yoan.ncurator"' <<< "$signature"
+          if grep -q '^Signature=adhoc$' <<< "$signature"; then
+            echo 'macOS release must not use an ad-hoc signature' >&2
+            exit 1
+          fi
+          if grep -q 'designated => .*cdhash' <<< "$signature"; then
+            echo 'macOS designated requirement must remain stable across versions' >&2
+            exit 1
+          fi
+          grep -E '^(Authority=|designated =>)' <<< "$signature" \
+            > dist/mac-update-signature.txt
+          cat dist/mac-update-signature.txt
 
       - uses: actions/upload-artifact@v4
         with:
@@ -137,6 +216,7 @@ jobs:
             dist/*.zip
             dist/*.yml
             dist/*.blockmap
+            dist/mac-update-signature.txt
           if-no-files-found: error
 
   build-windows:
@@ -205,6 +285,14 @@ jobs:
 
       - name: Merge macOS update metadata
         run: node scripts/merge-latest-mac-yml.mjs release-artifacts
+
+      - name: Verify both macOS architectures use the same update identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmp \
+            release-artifacts/macos-x64-artifacts/mac-update-signature.txt \
+            release-artifacts/macos-arm64-artifacts/mac-update-signature.txt
 
       - name: Prepare release notes from annotated tag
         shell: bash

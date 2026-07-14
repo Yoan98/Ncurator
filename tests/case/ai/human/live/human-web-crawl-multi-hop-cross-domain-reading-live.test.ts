@@ -1,5 +1,8 @@
 import { describe, it } from 'vitest'
-import { loadLiveLlmConfigFromEnv, hasLiveLlmConfigInEnv } from '../../../../harness/backend/llmConfig'
+import {
+  loadLiveLlmConfigFromEnv,
+  hasLiveLlmConfigInEnv
+} from '../../../../harness/backend/llmConfig'
 import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
 import { createWebCrawlerService } from '../../../../harness/backend/webCrawlerTestUtils'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
@@ -33,12 +36,11 @@ describe('ai human live backend', () => {
         domain: 'ai',
         suite: 'human',
         groups: ['live'],
-        description: '验证 live 模式下 human 会围绕入口网址持续多次调用 web_crawl，跨域并多跳整理灵活就业补贴申请说明。',
+        description:
+          '验证 live 模式下 human 会围绕入口网址持续多次调用 web_crawl，跨域并多跳整理灵活就业补贴申请说明。',
         fixtures: [],
         runMode: 'single',
-        runtimeModelName: hasLiveLlmConfigInEnv()
-          ? loadLiveLlmConfigFromEnv().model_name
-          : null,
+        runtimeModelName: hasLiveLlmConfigInEnv() ? loadLiveLlmConfigFromEnv().model_name : null,
         execute: async (runtime) => {
           if (!hasLiveLlmConfigInEnv()) {
             return {
@@ -76,7 +78,8 @@ describe('ai human live backend', () => {
           if (result.skipped || !result.site) {
             runtime.assertThat(true, {
               name: 'live-config-not-provided',
-              message: '未提供 live 模型配置，已跳过 human web crawl multi-hop cross-domain live case。'
+              message:
+                '未提供 live 模型配置，已跳过 human web crawl multi-hop cross-domain live case。'
             })
             return
           }
@@ -97,25 +100,26 @@ describe('ai human live backend', () => {
           const deliveryText = String(result.output?.deliveryMarkdown || '')
 
           runtime.assertThat(
-            result.output?.status === 'completed'
-              && startedUrls.length >= 4
-              && successfulFinalUrls.length >= 4
-              && includesUrl(startedUrls, result.site.entryUrl)
-              && includesUrl(successfulFinalUrls, result.site.employmentHubUrl)
-              && includesUrl(successfulFinalUrls, result.site.noticeUrl)
-              && includesUrl(exploredUrls, result.site.guideUrl)
-              && includesUrl(successfulFinalUrls, result.site.applyUrl)
-              && visitedHosts.includes('127.0.0.1')
-              && visitedHosts.includes('localhost')
-              && !startedToolNames.includes('browser_use')
-              && !startedToolNames.includes('terminal_run')
-              && /(灵活就业人员|杭州.*灵活就业.*可申请)/.test(deliveryText)
-              && /(身份证|社保缴费证明|申请表)/.test(deliveryText)
-              && /(2026-09-30|2026 年 9 月 30 日|2026年09月30日|2026年9月30日)/.test(deliveryText)
-              && /(在线提交申请|线上申请|灵活就业补贴申报)/.test(deliveryText),
+            result.output?.status === 'completed' &&
+              startedUrls.length >= 4 &&
+              successfulFinalUrls.length >= 4 &&
+              includesUrl(startedUrls, result.site.entryUrl) &&
+              includesUrl(successfulFinalUrls, result.site.employmentHubUrl) &&
+              includesUrl(successfulFinalUrls, result.site.noticeUrl) &&
+              includesUrl(exploredUrls, result.site.guideUrl) &&
+              includesUrl(successfulFinalUrls, result.site.applyUrl) &&
+              visitedHosts.includes('127.0.0.1') &&
+              visitedHosts.includes('localhost') &&
+              !startedToolNames.includes('browser_use') &&
+              !startedToolNames.includes('terminal_run') &&
+              /(灵活就业人员|杭州.*灵活就业.*可申请)/.test(deliveryText) &&
+              /(身份证|社保缴费证明|申请表)/.test(deliveryText) &&
+              /(2026-09-30|2026 年 9 月 30 日|2026年09月30日|2026年9月30日)/.test(deliveryText) &&
+              /(在线提交申请|线上申请|灵活就业补贴申报)/.test(deliveryText),
             {
               name: 'human-live-web-crawl-multi-hop-cross-domain-reading',
-              message: 'live human 应围绕入口网址多次调用 web_crawl，跨域并多跳完成申请对象、材料、截止时间和线上办理方式整理。',
+              message:
+                'live human 应围绕入口网址多次调用 web_crawl，跨域并多跳完成申请对象、材料、截止时间和线上办理方式整理。',
               data: {
                 startedUrls,
                 exploredUrls,

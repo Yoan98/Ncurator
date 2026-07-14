@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain } from 'electron'
 import { spawnSync } from 'node:child_process'
+import path from 'node:path'
 import { autoUpdater } from 'electron-updater'
 import type { ProgressInfo, UpdateDownloadedEvent, UpdateInfo } from 'electron-updater'
 import {
@@ -10,7 +11,7 @@ import {
 } from '../../../shared/constants'
 import type { AppUpdateActionResponse, AppUpdateSnapshot } from '../../../shared/types'
 
-const MAC_UPDATE_SIGNATURE_ERROR = 'macOS 自动更新需要有效的 Developer ID 签名'
+const MAC_UPDATE_SIGNATURE_ERROR = 'macOS 自动更新需要固定的非 ad-hoc 代码签名'
 const STARTUP_UPDATE_CHECK_DELAY_MS = 5000
 const UPDATE_BUSY_STATUSES = new Set<AppUpdateSnapshot['status']>([
   'checking',
@@ -25,18 +26,34 @@ type AppUpdateDependencies = {
   getWindows: typeof BrowserWindow.getAllWindows
   platform: NodeJS.Platform
   schedule: (callback: () => void, delayMs: number) => ReturnType<typeof setTimeout>
-  macCodeSignatureValid: () => boolean
+  macUpdateSignatureValid: () => boolean
 }
 
-const hasValidMacCodeSignature = (): boolean => {
-  const result = spawnSync('/usr/bin/codesign', ['-dv', '--verbose=2', process.execPath], {
+const resolveMacAppBundlePath = (): string => {
+  const executableMarker = `${path.sep}Contents${path.sep}MacOS${path.sep}`
+  const markerIndex = process.execPath.lastIndexOf(executableMarker)
+  return markerIndex < 0 ? process.execPath : process.execPath.slice(0, markerIndex)
+}
+
+const hasStableMacUpdateSignature = (): boolean => {
+  const appBundlePath = resolveMacAppBundlePath()
+  const verification = spawnSync(
+    '/usr/bin/codesign',
+    ['--verify', '--deep', '--strict', appBundlePath],
+    { encoding: 'utf8' }
+  )
+  const signature = spawnSync('/usr/bin/codesign', ['-d', '-r-', '--verbose=4', appBundlePath], {
     encoding: 'utf8'
   })
-  const output = `${result.stdout || ''}\n${result.stderr || ''}`
+  const output = `${signature.stdout || ''}\n${signature.stderr || ''}`
+
   return (
-    result.status === 0 &&
-    /Authority=Developer ID Application:/u.test(output) &&
-    /TeamIdentifier=(?!not set\b)\S+/u.test(output)
+    verification.status === 0 &&
+    signature.status === 0 &&
+    !/^Signature=adhoc$/mu.test(output) &&
+    /^Authority=.+$/mu.test(output) &&
+    /designated => .*identifier "com\.yoan\.ncurator"/mu.test(output) &&
+    !/designated => .*cdhash\b/mu.test(output)
   )
 }
 
@@ -47,7 +64,7 @@ const createDefaultDependencies = (): AppUpdateDependencies => ({
   getWindows: () => BrowserWindow.getAllWindows(),
   platform: process.platform,
   schedule: (callback, delayMs) => setTimeout(callback, delayMs),
-  macCodeSignatureValid: hasValidMacCodeSignature
+  macUpdateSignatureValid: hasStableMacUpdateSignature
 })
 
 const getUpdateErrorMessage = (error: Error | string): string =>
@@ -245,11 +262,11 @@ export class AppUpdateService {
   }
 
   private resolveUnsupportedReason(): string | undefined {
-    const { app: electronApp, platform, macCodeSignatureValid } = this.dependencies
+    const { app: electronApp, platform, macUpdateSignatureValid } = this.dependencies
     if (!electronApp.isPackaged) return '开发模式不会检查自动更新'
     if (platform === 'win32') return undefined
     if (platform === 'darwin') {
-      return macCodeSignatureValid() ? undefined : MAC_UPDATE_SIGNATURE_ERROR
+      return macUpdateSignatureValid() ? undefined : MAC_UPDATE_SIGNATURE_ERROR
     }
     return '当前系统暂不支持自动更新'
   }

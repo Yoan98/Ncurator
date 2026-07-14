@@ -7,6 +7,7 @@ import {
 } from '../../../src/main/utils/constant'
 import { WorkspaceKnowledgePrepareService } from '../../../src/main/services/workspace/WorkspaceKnowledgePrepareService'
 import { WorkspaceSourceService } from '../../../src/main/services/workspace/WorkspaceSourceService'
+import { prepareWorkspaceSource } from '../../../src/main/services/workspace/worker/workspacePrepareWorker'
 import type {
   WorkspaceKnowledgeCache,
   WorkspaceKnowledgeSplitSnapshot,
@@ -20,7 +21,13 @@ import type {
 } from './test-types'
 
 const WORKSPACE_KB_CACHE_SCHEMA_VERSION = 1
-const WORKSPACE_KB_CACHE_ROOT = path.resolve(process.cwd(), 'tests', '.cache', 'kb-fixtures', 'workspace')
+const WORKSPACE_KB_CACHE_ROOT = path.resolve(
+  process.cwd(),
+  'tests',
+  '.cache',
+  'kb-fixtures',
+  'workspace'
+)
 const TEST_WORKSPACE_ID = 'test-workspace'
 
 type PersistedWorkspaceSplitCache = {
@@ -44,7 +51,14 @@ type WorkspaceKbSeedExecutionResult = {
 }
 
 const normalizeRelativePath = (value: string): string =>
-  path.posix.normalize(String(value || '').trim().split(path.sep).join('/')).replace(/^\/+/, '')
+  path.posix
+    .normalize(
+      String(value || '')
+        .trim()
+        .split(path.sep)
+        .join('/')
+    )
+    .replace(/^\/+/, '')
 
 const toDocumentId = (relativePath: string): string =>
   `workspace-file-${createHash('sha1').update(normalizeRelativePath(relativePath)).digest('hex')}`
@@ -205,7 +219,8 @@ export const seedWorkspaceKb = async (input: {
   const cache = new WorkspaceKbFixtureCache()
   const prepareService = new WorkspaceKnowledgePrepareService({
     embeddingService: input.runtime.embeddingService,
-    documentsStore: input.runtime.documentsStore
+    documentsStore: input.runtime.documentsStore,
+    prepareSource: prepareWorkspaceSource
   })
 
   const scan = await workspaceService.scanWorkspaceTree({
