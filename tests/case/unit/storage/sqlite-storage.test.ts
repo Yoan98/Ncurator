@@ -2,7 +2,12 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { AiRunEvent, AiRunRecord, ChatMessage, ChatSession } from '../../../../src/shared/types'
+import type {
+  AiRunEvent,
+  AiRunRecord,
+  ChatMessage,
+  ChatSession
+} from '../../../../src/shared/types'
 import { LanceDbCore } from '../../../../src/main/services/storage/core/LanceDbCore'
 import { ChatStore } from '../../../../src/main/services/storage/domains/ChatStore'
 import { AiRunStore } from '../../../../src/main/services/storage/domains/AiRunStore'
@@ -140,7 +145,9 @@ const createSession = (id = 'session-1'): ChatSession => ({
   workspace_id: 'workspace-1'
 })
 
-const createMessage = (input: Partial<ChatMessage> & { id: string; timestamp: number }): ChatMessage => ({
+const createMessage = (
+  input: Partial<ChatMessage> & { id: string; timestamp: number }
+): ChatMessage => ({
   id: input.id,
   session_id: input.session_id || 'session-1',
   role: input.role || 'user',
@@ -232,6 +239,18 @@ describe('sqlite storage core and stores', () => {
     expect(runs).toHaveLength(1)
     expect(runs[0].status).toBe('waiting_approval')
     expect(runs[0].pendingApproval?.batchId).toBe('batch-1')
+  })
+
+  it('tracks completed sessions as unread until viewed after completion', async () => {
+    await aiRunStore.saveRun(
+      createRun({ status: 'completed', createdAt: 10, updatedAt: 20, finishedAt: 20 })
+    )
+
+    expect(await chatStore.listUnreadCompletedSessionIds()).toEqual(['session-1'])
+
+    await chatStore.markChatSessionViewed('session-1', 21)
+
+    expect(await chatStore.listUnreadCompletedSessionIds()).toEqual([])
   })
 
   it('commits approval decision, clears pending approval, and keeps event seq unique', async () => {

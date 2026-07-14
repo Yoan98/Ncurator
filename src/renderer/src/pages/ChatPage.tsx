@@ -1410,7 +1410,7 @@ const ChatPage: React.FC = () => {
     sessionSwitchRequestRef.current += 1
     currentSessionIdRef.current = session.id
     setSessions((items) => [
-      { ...session, isRunning: false },
+      { ...session, isRunning: false, hasUnreadCompletion: false },
       ...items.filter((item) => item.id !== session.id)
     ])
     setCurrentSessionId(session.id)
@@ -1421,7 +1421,13 @@ const ChatPage: React.FC = () => {
     void refreshContextUsage(session.id)
   }
 
-  const selectSession = (session: ChatSession): void => {
+  const selectSession = (session: ChatSessionListItem): void => {
+    setSessions((items) =>
+      items.map((item) => (item.id === session.id ? { ...item, hasUnreadCompletion: false } : item))
+    )
+    void window.api.chatSessionMarkViewed(session.id).then((response) => {
+      if (!response.success) void loadSessions()
+    })
     void openExistingSession(session)
   }
 
@@ -2817,6 +2823,11 @@ const ChatPage: React.FC = () => {
                               <span
                                 className="nc-session-running-spinner"
                                 aria-label="任务运行中"
+                              />
+                            ) : session.hasUnreadCompletion ? (
+                              <span
+                                className="nc-session-unread-dot"
+                                aria-label="任务已完成，未查看"
                               />
                             ) : (
                               <>

@@ -506,6 +506,15 @@ textarea,
   animation: nc-session-running-spin 0.8s linear infinite;
 }
 
+.nc-session-unread-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  background: #2f9bff;
+  border-radius: 9999px;
+}
+
 @keyframes nc-session-running-spin {
   to {
     transform: rotate(360deg);

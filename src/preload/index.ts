@@ -213,6 +213,7 @@ const api: DesktopApi = {
   // Chat & LLM
   chatSessionList: () => ipcRenderer.invoke('chat-session-list'),
   chatSessionSave: (session) => ipcRenderer.invoke('chat-session-save', session),
+  chatSessionMarkViewed: (id: string) => ipcRenderer.invoke('chat-session-mark-viewed', id),
   chatSessionDelete: (id: string) => ipcRenderer.invoke('chat-session-delete', id),
   chatMessageList: (sessionId: string) => ipcRenderer.invoke('chat-message-list', sessionId),
   chatSessionOpen: (payload) => ipcRenderer.invoke('chat-session-open', payload),

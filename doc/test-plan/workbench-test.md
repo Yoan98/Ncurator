@@ -13,28 +13,25 @@
 
 ### 2.1 当前状态
 
-- 总体登记：`23` 个 e2e case，`1` 个 backend contract case。
-- 当前有效结论：e2e `21 / 23` 通过，`2 / 23` 阻断；backend contract `1 / 1` 通过。
-- 检测时间：`2026-07-13 15:13:08 +08:00`。
+- 总体登记：`21` 个 e2e case，`1` 个 backend contract case。
+- 当前有效结论：e2e `21 / 21` 通过；backend contract `15 / 15` tests 通过。
+- 检测时间：`2026-07-14 10:20:20 +08:00`。
 - 本轮模型配置由根目录 `.env` 通过 `loadRootEnvOnce()` 自动读取，无需手工 export。
 
 ### 2.2 按 Suite 汇总
 
 - `conversation`
-  - 登记 case：`9`
-  - 当前有效结论：`9 / 9`。
-  - 检测时间：`2026-07-13 14:32:02 +08:00`
-  - 备注：AI 推进偏好、会话首次落库与标题、会话运行标记、使用帮助入口均已通过真实模型 UI 回归；`session-initial-create-and-title` 对无关终端审批自动同意，避免偏离会话生命周期的验证目标。
+  - 登记 case：`8`
+  - 当前有效结论：`8 / 8`。
+  - 备注：缺模型提示已合并到 `send-guard-mode-switch-and-preferences`；纯文本选区行为已下沉 unit。
 - `run`
-  - 登记 case：`9` 个 e2e，`1` 个 backend contract
-  - 当前有效结论：backend contract `1 / 1`；e2e `8 / 9` 通过，`1 / 9` 阻断。
-  - 检测时间：backend `2026-07-13 13:08:55 +08:00`；e2e `2026-07-13 15:13:08 +08:00`
+  - 登记 case：`8` 个 e2e，`1` 个 backend contract
+  - 当前有效结论：backend contract `15 / 15` tests；e2e `8 / 8`。
   - 备注：公网搜索中的模型工具选择不再作为稳定 E2E 门禁；内置浏览器闭环统一由本地可控网页的 `browser-use-task-panel` 覆盖。
 - `result`
   - 登记 case：`5`
-  - 当前有效结论：`4 / 5` 通过，`1 / 5` 阻断。
-  - 检测时间：`2026-07-13 15:00:00 +08:00`
-  - 备注：3 个 docx apply 用例与 `file-preview-actions` 通过。`search-results-open-rules` 连续两次在真实查询向量推理阶段触发 Electron `SIGSEGV`；macOS 崩溃栈定位于 `onnxruntime_binding.node -> InferenceSessionWrap::Run -> OrtValueToNapiValue`，属于生产 embedding / ONNX native 运行时问题。
+  - 当前有效结论：`5 / 5`。
+  - 备注：3 个 docx apply、文件预览和搜索结果打开规则均通过。
 
 ### 2.3 当前边界
 

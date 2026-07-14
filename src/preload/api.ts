@@ -185,6 +185,7 @@ export type DesktopApi = {
   attachmentSaveFile: (payload: AttachmentSaveRequest) => Promise<AttachmentProcessResponse>
   chatSessionList: () => Promise<ChatSessionListItem[]>
   chatSessionSave: (session: ChatSession) => Promise<{ success: boolean; error?: string }>
+  chatSessionMarkViewed: (id: string) => Promise<{ success: boolean; error?: string }>
   chatSessionDelete: (id: string) => Promise<{ success: boolean; error?: string }>
   chatMessageList: (sessionId: string) => Promise<ChatMessage[]>
   chatSessionOpen: (payload: ChatSessionOpenRequest) => Promise<ChatSessionOpenResponse>

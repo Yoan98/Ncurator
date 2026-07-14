@@ -39,10 +39,14 @@
   - 检测时间：`2026-07-13 13:04:39 +08:00`
 - `human / mock-llm`
   - 通过率：`22 / 22`
-  - 检测时间：`2026-06-11 17:16:38 +08:00`
+  - 检测时间：`2026-07-13 21:40:41 +08:00`
 - `human / live`
-  - 登记 case：`8`；当前最近有效结论为 2026-06-11 定向执行的 `web_crawl` live `2 / 2`，其余代表性 memory、resume、compaction 与 docx 交付 case 保留并按需全量复验。
-  - 检测时间：`2026-06-11`
+  - 登记 case：`8`；本轮全量 `4 / 8` 通过。
+  - 检测时间：`2026-07-14 12:14:15 +08:00`
+  - 通过：`human-docx-positioned-structural-edit-fallback-live`、`human-session-resume-with-new-selection-live`、两条 `web_crawl` live。
+  - 失败：compaction 与 KB/docx case 均在模型循环中达到 graph 60 轮上限；conversation memory 第二轮连续性未达标；risk report 风险口径未达最低断言。memory 与 KB/docx 在本轮定向执行中曾通过，说明这两条仍存在 live 模型波动，不能作为稳定合并门禁。
+  - 基础设施修正：live provider kind 未配置时按 base URL 推断；workspace KB backend 使用真实 in-process prepare 逻辑；resume 已同步 `mainModel`、strategy store 与 session 外键契约；compaction 增加低价值历史防抖。
+  - unit 全量：`51` files、`202 / 202` tests 通过。
   - 样例评分：
     - `human-web-crawl-url-inference-reading-live`：`9.0 / 10`；最近有效执行：`2026-06-11`；依据：模型自行推断官网地址并多次调用 `web_crawl` 完成 CSV 文档整理；主要风险：live 模型稳定性和冷启动耗时。
     - `human-web-crawl-multi-hop-cross-domain-reading-live`：`8.8 / 10`；最近有效执行：`2026-06-11`；依据：模型围绕入口网址多跳抓取并整合申请对象、材料、截止时间和办理方式；主要风险：多轮 live 调用耗时偏长。

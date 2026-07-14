@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS chat_session (
   title TEXT NOT NULL,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL,
+  last_viewed_at INTEGER NOT NULL,
   workspace_id TEXT NOT NULL DEFAULT ''
 );
 

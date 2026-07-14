@@ -11,35 +11,28 @@
 
 ### 2.1 按 Suite 汇总
 
-- 本轮累计回归：backend `9 / 9`，e2e `26 / 26`。
-  - 检测时间：`2026-07-13 13:18:30 +08:00`
-  - 执行说明：全量 e2e 运行中 `workspace-prepare-progress-restore` 曾因 macOS 原生目录选择框偶发失焦中断；定向重跑与 `workspace / files` 整组重跑均通过，未发现生产逻辑缺口。
-  - 稳定性修正：macOS 原生目录框点击“选择此目录”后不再多发一次回车；目录绑定结果等待由 4 秒提升到 12 秒，重试前会再次检查绑定状态，避免重复打开目录选择框。
+- 当前代码登记：backend `12` 个 case 文件，e2e `22` 个 case。
+- 本轮结果：backend `19 / 19` tests 通过；Settings 全量 e2e 前 `9` 条通过，第 `10` 条 `workspace-remove-from-list` 启动超时后停止。
+  - 检测时间：`2026-07-14 09:56:21 +08:00`
+  - 本次清理涉及的 e2e：`model-create-edit-form`、`workspace-add-selection-flow`、`web-add-sources-dialog`、`web-prepare-summary` 均通过；`workspace-prepare-refresh` 因 Chrome 持续占用前台焦点，无法操作 macOS 原生目录选择框，属于环境阻断。
+  - `app-update-panel` 已在本轮全量 Settings e2e 的前 9 条中通过。
 - `model`
-  - 登记 case：`7`
-  - 当前有效结论：backend `1 / 1`，e2e `6 / 6`。
-  - 检测时间：`2026-07-13 13:12:26 +08:00`
-  - 备注：新增和编辑弹窗遮罩保护已通过；`settings-titlebar-drag-region` 已按平台对齐，Windows 自绘按钮断言仅在 Windows 执行。
+  - 登记 case：backend `1`，e2e `5`。
+  - 本轮涉及的 `model-create-edit-form` 已通过。
 - `workspace / core`
-  - 登记 case：`6`
-  - 当前有效结论：backend `1 / 1`，e2e `5 / 5`。
-  - 检测时间：`2026-07-13 13:13:06 +08:00`
-  - 备注：创建工作空间弹窗遮罩保护已纳入完整 UI 回归并通过。
+  - 登记 case：backend `1`，e2e `4`。
+  - 本轮涉及的 `workspace-add-selection-flow` 已通过；`workspace-remove-from-list` 本轮启动超时。
 - `workspace / files`
-  - 登记 case：`12`
-  - 当前有效结论：backend `5 / 5`，e2e `7 / 7`。
-  - 检测时间：`2026-07-13 13:16:45 +08:00`
-  - 备注：文件 e2e 通过真实目录、真实文件和 UI 触发扫描 / 更新索引；原生目录框偶发失焦后，定向与整组重跑均通过。
+  - 登记 case：backend `5`，e2e `6`。
+  - `workspace-prepare-refresh` 已合并真实 fixture 全量索引断言；本轮被 macOS 原生窗口焦点阻断。
 - `workspace / web`
-  - 登记 case：`7`
-  - 当前有效结论：e2e `7 / 7`。
-  - 检测时间：`2026-07-13 13:18:30 +08:00`
-  - 备注：添加网页弹窗遮罩保护已纳入整组 UI 回归并通过。
+  - 登记 case：e2e `5`。
+  - 本轮涉及的 `web-add-sources-dialog`、`web-prepare-summary` 均通过。
 - `vector`
-  - 登记 case：`3`
-  - 当前有效结论：backend `2 / 2`，e2e `1 / 1`。
-  - 检测时间：`2026-07-13 13:12:30 +08:00`
-  - 备注：vector e2e 只保留真实目录页入口；下载进度、结果、恢复、删除反馈属于 backend contract 或手动下载链路，不再用假进度冒充 e2e。
+  - 登记 case：backend `2`，e2e `1`。
+- `update`
+  - 登记 case：backend `3`，e2e `1`。
+  - 本轮 backend 与 `app-update-panel` e2e 均通过；真实安装升级不进入日常门禁，执行方式见 [app-update-test.md](/Users/test/work-space/NCurator-Desktop/doc/app-update-test.md)。
 
 ## 3. Suite 设计
 
@@ -48,12 +41,14 @@ Settings 的回归测试顶层 suite 直接对齐 PRD 模块：
 1. `model`
 2. `workspace`
 3. `vector`
+4. `update`
 
 领域规则：
 
 - `model` 验证大模型可用服务配置的加载、创建、编辑、删除和远端模型列表刷新。
 - `workspace` 验证工作空间容器及其下属 `files`、`web` 两类子区域的页面行为和 backend / IPC 支撑契约。
 - `vector` 属于 Settings 产品域，但页面位于独立路由 `/model-download`，测试目录与 runner 仍统一归入 `tests/case/settings/vector/**`。
+- `update` 覆盖应用更新服务、发布配置、R2 元数据和设置页面；真实下载安装单独按 `doc/app-update-test.md` 执行。
 - `workspace` 在这里是 Settings 下的 suite，不是独立测试 domain；其下统一按 `core / files / web` 组织子区域。
 - `workspace` 当前测试语义基于“具名工作空间容器 + 文件 tab + 网页 tab”，不再保留旧的“创建即绑定目录 / 全局状态 / 三种索引处理模式 / 打开路径 / 网页本地筛选”模型。
 - `workspace` 相关回归测试默认复用 `tests/fixtures/workspace` 作为共享输入目录。
@@ -345,3 +340,41 @@ Settings 的回归测试顶层 suite 直接对齐 PRD 模块：
 - Not：不验证真实网络环境下的跨版本兼容；这里只覆盖本地快照恢复与同步。
 
 下载进度、下载结果、页面切换恢复和删除反馈不再登记为正式 e2e。它们需要真实大文件下载环境，短期由 `vector-download-single-task-contract` 和 `vector-download-startup-resume-contract` 覆盖服务契约，必要时另建真实下载手动回归。
+
+### 4.6 `update`
+
+#### `app-update-service-contract`
+
+- 测试类型：`backend`
+- What：验证更新检查、下载、安装、错误、重复检查保护、启动检查和平台/签名开关。
+- Why：自动更新涉及应用替换，必须先用稳定契约守住状态机和安全边界。
+- How：使用受控 updater 事件覆盖有更新、已是最新版、下载完成、校验失败、未下载先安装、开发环境和未签名 macOS 等分支。
+- Oracle：状态、错误和安装调用与 updater 事件一致；开发环境、不支持平台和未签名 macOS 不会误启用自动更新。
+- Not：不下载真实安装包，不验证应用替换。
+
+#### `app-update-publish-config`
+
+- 测试类型：`backend`
+- What：验证发布配置使用直接下载源，并要求稳定的 macOS 签名身份。
+- Why：更新源或签名配置错误会导致客户端能发现版本但无法安全安装。
+- How：读取打包与发布配置，检查 provider、下载地址和签名约束。
+- Oracle：发布产物指向预期直连 feed；macOS 发布前必须具备唯一稳定签名身份。
+- Not：不执行打包、上传和真实签名。
+
+#### `r2-update-metadata-contract`
+
+- 测试类型：`backend`
+- What：验证 R2 最新版本元数据指向不可变的版本化产物。
+- Why：可变文件名容易被缓存污染，导致客户端拿到元数据与安装包不一致。
+- How：生成并读取 latest 元数据，核对版本、文件名和下载路径。
+- Oracle：latest 元数据只引用带版本的不可变文件，且各字段与发布产物一致。
+- Not：不访问真实 R2，也不验证 CDN 缓存刷新。
+
+#### `app-update-panel`
+
+- 测试类型：`e2e`
+- What：验证设置页应用更新面板的检查、下载和安装入口状态。
+- Why：用户需要从页面明确看到是否有更新、当前进度、失败原因和下一步操作。
+- How：通过受控更新服务状态打开应用更新面板，覆盖检查、可下载、下载完成和错误展示。
+- Oracle：页面按钮、状态和错误信息与主进程更新状态一致，未完成下载时不会提供安装动作。
+- Not：不下载真实更新包；真实升级按 [app-update-test.md](/Users/test/work-space/NCurator-Desktop/doc/app-update-test.md) 单独执行。

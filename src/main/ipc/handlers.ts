@@ -2430,14 +2430,17 @@ export function registerHandlers(services: {
 
   ipcMain.handle('chat-session-list', async (): Promise<ChatSessionListItem[]> => {
     try {
-      const [sessions, activeSessionIds] = await Promise.all([
+      const [sessions, activeSessionIds, unreadCompletedSessionIds] = await Promise.all([
         chatStore.getChatSessions(),
-        aiRunStore.listSessionIdsByRunStatuses(['running', 'waiting_approval'])
+        aiRunStore.listSessionIdsByRunStatuses(['running', 'waiting_approval']),
+        chatStore.listUnreadCompletedSessionIds()
       ])
       const activeSessionIdSet = new Set(activeSessionIds)
+      const unreadCompletedSessionIdSet = new Set(unreadCompletedSessionIds)
       return sessions.map((session) => ({
         ...session,
-        isRunning: activeSessionIdSet.has(session.id)
+        isRunning: activeSessionIdSet.has(session.id),
+        hasUnreadCompletion: unreadCompletedSessionIdSet.has(session.id)
       }))
     } catch (e: unknown) {
       console.error('[CHAT-SESSION-LIST] Error:', e)
@@ -2451,6 +2454,16 @@ export function registerHandlers(services: {
       return { success: true }
     } catch (e: unknown) {
       console.error('[CHAT-SESSION-SAVE] Error:', e)
+      return { success: false, error: getErrorMessage(e) }
+    }
+  })
+
+  ipcMain.handle('chat-session-mark-viewed', async (_event, id: string) => {
+    try {
+      await chatStore.markChatSessionViewed(id)
+      return { success: true }
+    } catch (e: unknown) {
+      console.error('[CHAT-SESSION-MARK-VIEWED] Error:', e)
       return { success: false, error: getErrorMessage(e) }
     }
   })

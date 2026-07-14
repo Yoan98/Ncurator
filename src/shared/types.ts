@@ -601,6 +601,7 @@ export interface ChatSession {
 
 export interface ChatSessionListItem extends ChatSession {
   isRunning: boolean
+  hasUnreadCompletion: boolean
 }
 
 export type AiFileChangeStatus = 'applied' | 'reverted' | 'failed'

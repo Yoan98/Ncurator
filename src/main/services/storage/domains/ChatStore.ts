@@ -21,6 +21,7 @@ type ChatSessionRow = {
   title?: unknown
   created_at?: unknown
   updated_at?: unknown
+  last_viewed_at?: unknown
   workspace_id?: unknown
 }
 
@@ -176,8 +177,8 @@ export class ChatStore {
     this.sqlite
       .prepare(
         `
-        INSERT INTO chat_session (id, title, created_at, updated_at, workspace_id)
-        VALUES (@id, @title, @created_at, @updated_at, @workspace_id)
+        INSERT INTO chat_session (id, title, created_at, updated_at, last_viewed_at, workspace_id)
+        VALUES (@id, @title, @created_at, @updated_at, @last_viewed_at, @workspace_id)
         ON CONFLICT(id) DO UPDATE SET
           title = excluded.title,
           updated_at = excluded.updated_at,
@@ -189,20 +190,47 @@ export class ChatStore {
         title: session.title,
         created_at: session.created_at,
         updated_at: now,
+        last_viewed_at: session.created_at,
         workspace_id: session.workspace_id || ''
       })
   }
 
+  public async markChatSessionViewed(sessionId: string, viewedAt = Date.now()): Promise<void> {
+    this.sqlite
+      .prepare('UPDATE chat_session SET last_viewed_at = ? WHERE id = ?')
+      .run(viewedAt, sessionId)
+  }
+
+  public async listUnreadCompletedSessionIds(): Promise<string[]> {
+    const rows = this.sqlite
+      .prepare(
+        `
+        SELECT DISTINCT session.id
+        FROM chat_session AS session
+        INNER JOIN ai_run AS run ON run.session_id = session.id
+        WHERE run.status = 'completed'
+          AND run.finished_at IS NOT NULL
+          AND run.finished_at > session.last_viewed_at
+      `
+      )
+      .all() as Array<{ id?: unknown }>
+    return rows.map((row) => toRequiredString(row.id)).filter(Boolean)
+  }
+
   public async getChatSession(id: string): Promise<ChatSession | null> {
     const row = this.sqlite
-      .prepare('SELECT id, title, created_at, updated_at, workspace_id FROM chat_session WHERE id = ?')
+      .prepare(
+        'SELECT id, title, created_at, updated_at, workspace_id FROM chat_session WHERE id = ?'
+      )
       .get(id) as ChatSessionRow | undefined
     return row ? toSession(row) : null
   }
 
   public async getChatSessions(): Promise<ChatSession[]> {
     const rows = this.sqlite
-      .prepare('SELECT id, title, created_at, updated_at, workspace_id FROM chat_session ORDER BY updated_at DESC, created_at DESC')
+      .prepare(
+        'SELECT id, title, created_at, updated_at, workspace_id FROM chat_session ORDER BY updated_at DESC, created_at DESC'
+      )
       .all() as ChatSessionRow[]
     return rows.map(toSession)
   }
@@ -229,9 +257,13 @@ export class ChatStore {
         .get(message.id) as { seq?: unknown } | undefined
       const seq =
         toOptionalNumber(existing?.seq) ||
-        ((this.sqlite
-          .prepare('SELECT COALESCE(MAX(seq), 0) + 1 AS next_seq FROM chat_message WHERE session_id = ?')
-          .get(message.session_id) as { next_seq?: unknown }).next_seq as number)
+        ((
+          this.sqlite
+            .prepare(
+              'SELECT COALESCE(MAX(seq), 0) + 1 AS next_seq FROM chat_message WHERE session_id = ?'
+            )
+            .get(message.session_id) as { next_seq?: unknown }
+        ).next_seq as number)
       const createdAt = message.timestamp || Date.now()
 
       this.sqlite
