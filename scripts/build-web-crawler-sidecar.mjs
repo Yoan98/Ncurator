@@ -211,6 +211,44 @@ const buildSidecar = (pythonPath) => {
   spawnChecked(pythonPath, [BUILD_SCRIPT_PATH])
 }
 
+const normalizeBundledPlaywrightSymlinks = () => {
+  const browserRoots = []
+  const symlinks = []
+  const walk = (directory) => {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      const entryPath = path.join(directory, entry.name)
+      if (entry.isSymbolicLink()) symlinks.push(entryPath)
+      else if (entry.isDirectory()) {
+        if (entry.name === '.local-browsers') browserRoots.push(entryPath)
+        walk(entryPath)
+      }
+    }
+  }
+  walk(BIN_DIR)
+
+  if (browserRoots.length !== 1) {
+    throw new Error(
+      `expected one bundled Playwright browser directory, found ${browserRoots.length}`
+    )
+  }
+  const browserRoot = browserRoots[0]
+  const marker = `${path.sep}.local-browsers${path.sep}`
+  for (const symlinkPath of symlinks) {
+    const target = fs.readlinkSync(symlinkPath)
+    if (!path.isAbsolute(target)) continue
+    const markerIndex = target.lastIndexOf(marker)
+    if (markerIndex < 0) continue
+
+    const suffix = target.slice(markerIndex + marker.length)
+    const bundledTarget = path.join(browserRoot, suffix)
+    if (!pathExists(bundledTarget)) {
+      throw new Error(`bundled Playwright symlink target does not exist: ${bundledTarget}`)
+    }
+    fs.unlinkSync(symlinkPath)
+    fs.symlinkSync(path.relative(path.dirname(symlinkPath), bundledTarget), symlinkPath)
+  }
+}
+
 const writeSourceStamp = () => {
   fs.mkdirSync(BIN_DIR, { recursive: true })
   fs.writeFileSync(SOURCE_STAMP_PATH, `${computeSourceHash()}\n`, 'utf8')
@@ -226,6 +264,7 @@ const main = () => {
   ensureSidecarDependencies(venvPythonPath)
   ensureBundledPlaywrightBrowser(venvPythonPath)
   buildSidecar(venvPythonPath)
+  normalizeBundledPlaywrightSymlinks()
   writeSourceStamp()
 }
 
