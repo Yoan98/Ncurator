@@ -6,6 +6,8 @@ import type {
   BrowserPanelStateResponse,
   AiRunApprovalBatchDecisionRequest,
   AiRunApprovalBatchDecisionResponse,
+  AiRunUserTakeoverConfirmRequest,
+  AiRunUserTakeoverConfirmResponse,
   AiRunCancelResponse,
   AiContextUsageRequest,
   AiContextUsageResponse,
@@ -213,6 +215,9 @@ export type DesktopApi = {
   aiRunApprovalBatchDecide: (
     payload: AiRunApprovalBatchDecisionRequest
   ) => Promise<AiRunApprovalBatchDecisionResponse>
+  aiRunUserTakeoverConfirm: (
+    payload: AiRunUserTakeoverConfirmRequest
+  ) => Promise<AiRunUserTakeoverConfirmResponse>
   aiContextUsageGet: (payload: AiContextUsageRequest) => Promise<AiContextUsageResponse>
   browserPanelSetBounds: (
     payload: BrowserPanelBoundsRequest

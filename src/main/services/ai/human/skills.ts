@@ -82,7 +82,7 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
     description:
       '能力：提供任务执行中的通用辅助动作。\n结果：返回辅助动作的客观执行结果。\n边界：不读取或修改用户内容。',
     whenToUse: '适用于需要通用辅助能力的任务。',
-    toolNames: ['wait_time']
+    toolNames: ['wait_time', 'wait_for_user_takeover']
   }
 }
 

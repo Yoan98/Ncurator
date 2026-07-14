@@ -131,6 +131,7 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     sendEvent: deps.sendEvent,
     recordLlmIo: deps.recordLlmIo,
     requestApprovalBatch: deps.requestApprovalBatch,
+    requestUserTakeover: deps.requestUserTakeover,
     getLlmConfig: loadRequestedConfig,
     getVisionLlmConfig: loadRequestedVisionConfig,
     browserUseService: deps.browserUseService,

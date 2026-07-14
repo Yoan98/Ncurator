@@ -30,6 +30,8 @@ import type {
   AiRunApprovalBatchDecisionRequest,
   AiRunApprovalBatchDecisionResponse,
   AiRunCancelResponse,
+  AiRunUserTakeoverConfirmRequest,
+  AiRunUserTakeoverConfirmResponse,
   AiRunEvent,
   AiRunRecord,
   ChatRunEventsResponse,
@@ -60,6 +62,12 @@ type ActiveApproval = {
         }
       | { accepted: false; error: string }
   ) => void
+}
+
+type ActiveUserTakeover = {
+  requestId: string
+  taskId: string
+  resolve: (result: { confirmed: true } | { confirmed: false; error: string }) => void
 }
 
 type ActiveRun = {
@@ -93,7 +101,11 @@ type ChatRunServiceDeps = {
 }
 
 const jieba = Jieba.withDict(dict)
-const ACTIVE_RUN_STATUSES: AiRunRecord['status'][] = ['running', 'waiting_approval']
+const ACTIVE_RUN_STATUSES: AiRunRecord['status'][] = [
+  'running',
+  'waiting_approval',
+  'waiting_user_takeover'
+]
 const INTERRUPTED_RUN_MESSAGE = '运行已中断，请重新发送消息。'
 const PARTIAL_SAVE_DELAY_MS = 500
 
@@ -118,6 +130,7 @@ const isSnapshotEvent = (event: AiRunEvent): boolean =>
 export class ChatRunService {
   private readonly activeRuns = new Map<string, ActiveRun>()
   private readonly activeApprovals = new Map<string, ActiveApproval>()
+  private readonly activeUserTakeovers = new Map<string, ActiveUserTakeover>()
   private readonly conversationMemoryJobs = new Map<string, Promise<void>>()
 
   public constructor(private readonly deps: ChatRunServiceDeps) {}
@@ -133,6 +146,7 @@ export class ChatRunService {
         partialAnswer: run.partialAnswer || INTERRUPTED_RUN_MESSAGE,
         finalAnswer: run.finalAnswer || INTERRUPTED_RUN_MESSAGE,
         pendingApproval: undefined,
+        pendingUserTakeover: undefined,
         updatedAt: now,
         finishedAt: now
       }
@@ -323,6 +337,9 @@ export class ChatRunService {
       const approval = this.activeApprovals.get(runId)
       approval?.resolve({ accepted: false, error: '当前会话已删除' })
       this.activeApprovals.delete(runId)
+      const takeover = this.activeUserTakeovers.get(runId)
+      takeover?.resolve({ confirmed: false, error: '当前会话已删除' })
+      this.activeUserTakeovers.delete(runId)
     }
 
     await Promise.all(affectedRuns.map(([, entry]) => entry.eventQueue.catch(() => {})))
@@ -349,6 +366,41 @@ export class ChatRunService {
     const approval = this.activeApprovals.get(normalizedRunId)
     approval?.resolve({ accepted: false, error: '已取消' })
     this.activeApprovals.delete(normalizedRunId)
+    const takeover = this.activeUserTakeovers.get(normalizedRunId)
+    takeover?.resolve({ confirmed: false, error: '已取消' })
+    this.activeUserTakeovers.delete(normalizedRunId)
+    return { success: true }
+  }
+
+  public async confirmUserTakeover(
+    payload: AiRunUserTakeoverConfirmRequest
+  ): Promise<AiRunUserTakeoverConfirmResponse> {
+    const runId = String(payload?.runId || '').trim()
+    const requestId = String(payload?.requestId || '').trim()
+    if (!runId || !requestId) return { success: false, error: 'runId and requestId are required' }
+
+    const pending = this.activeUserTakeovers.get(runId)
+    if (!pending) return { success: false, error: '当前运行已结束' }
+    if (pending.requestId !== requestId) return { success: false, error: 'user takeover not found' }
+
+    const confirmedEvent: AiRunEvent = {
+      type: 'user_takeover_confirmed',
+      runId,
+      taskId: pending.taskId,
+      requestId,
+      confirmedAt: Date.now()
+    }
+    this.activeUserTakeovers.delete(runId)
+    try {
+      await this.queueRunEvent(runId, confirmedEvent)
+    } catch (error) {
+      this.activeUserTakeovers.set(runId, pending)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      }
+    }
+    pending.resolve({ confirmed: true })
     return { success: true }
   }
 
@@ -442,7 +494,8 @@ export class ChatRunService {
         visibleEventCount: run.visibleEventCount ?? events.length
       },
       events,
-      pendingApproval: run.pendingApproval
+      pendingApproval: run.pendingApproval,
+      pendingUserTakeover: run.pendingUserTakeover
     }
   }
 
@@ -686,6 +739,7 @@ export class ChatRunService {
           sendEvent,
           recordLlmIo: this.deps.recordLlmIo,
           requestApprovalBatch: async (request) => await this.requestApprovalBatch(runId, request),
+          requestUserTakeover: async (request) => await this.requestUserTakeover(runId, request),
           browserUseService: this.deps.browserUseService,
           webCrawlerService: this.deps.webCrawlerService
         }
@@ -737,6 +791,9 @@ export class ChatRunService {
       const approval = this.activeApprovals.get(runId)
       approval?.resolve({ accepted: false, error: 'run closed' })
       this.activeApprovals.delete(runId)
+      const takeover = this.activeUserTakeovers.get(runId)
+      takeover?.resolve({ confirmed: false, error: 'run closed' })
+      this.activeUserTakeovers.delete(runId)
       await this.flushRunEvents(runId)
       this.clearProjectionFlush(runId)
       this.activeRuns.delete(runId)
@@ -803,6 +860,48 @@ export class ChatRunService {
           }
           resolve(result)
         }
+      })
+    })
+  }
+
+  private async requestUserTakeover(
+    runId: string,
+    request: {
+      taskId: string
+      requestId: string
+      message: string
+    }
+  ): Promise<{ confirmed: true } | { confirmed: false; error: string }> {
+    if (this.activeRuns.get(runId)?.cancelled) {
+      return { confirmed: false, error: '当前运行已结束' }
+    }
+    if (this.activeUserTakeovers.has(runId)) {
+      return { confirmed: false, error: 'user takeover already pending' }
+    }
+    const message = String(request.message || '').trim()
+    if (!message || message.length > 30) {
+      return { confirmed: false, error: 'message must contain 1 to 30 characters' }
+    }
+
+    return await new Promise((resolve) => {
+      this.activeUserTakeovers.set(runId, {
+        requestId: request.requestId,
+        taskId: request.taskId,
+        resolve
+      })
+      void this.queueRunEvent(runId, {
+        type: 'user_takeover_required',
+        runId,
+        taskId: request.taskId,
+        requestId: request.requestId,
+        message,
+        createdAt: Date.now()
+      }).catch((error) => {
+        this.activeUserTakeovers.delete(runId)
+        resolve({
+          confirmed: false,
+          error: error instanceof Error ? error.message : String(error)
+        })
       })
     })
   }
@@ -975,15 +1074,25 @@ export class ChatRunService {
       run.status = 'running'
       run.pendingApproval = undefined
       run.updatedAt = now
+    } else if (event.type === 'user_takeover_required') {
+      run.status = 'waiting_user_takeover'
+      run.pendingUserTakeover = event
+      run.updatedAt = now
+    } else if (event.type === 'user_takeover_confirmed') {
+      run.status = 'running'
+      run.pendingUserTakeover = undefined
+      run.updatedAt = now
     } else if (event.type === 'run_completed') {
       run.status = run.status === 'failed' || run.status === 'cancelled' ? run.status : 'completed'
       run.pendingApproval = undefined
+      run.pendingUserTakeover = undefined
       run.updatedAt = now
       run.finishedAt = now
       assistantMessage = this.buildAssistantMessage(run, run.finalAnswer || run.partialAnswer)
     } else if (event.type === 'run_failed') {
       run.status = 'failed'
       run.pendingApproval = undefined
+      run.pendingUserTakeover = undefined
       run.error = event.error
       run.updatedAt = now
       run.finishedAt = now
@@ -994,6 +1103,7 @@ export class ChatRunService {
     } else if (event.type === 'run_cancelled') {
       run.status = 'cancelled'
       run.pendingApproval = undefined
+      run.pendingUserTakeover = undefined
       run.error = '已取消'
       run.updatedAt = now
       run.finishedAt = now
@@ -1004,6 +1114,8 @@ export class ChatRunService {
       (event.type === 'runtime_issue' || event.type === 'workspace_required')
     ) {
       run.status = 'failed'
+      run.pendingApproval = undefined
+      run.pendingUserTakeover = undefined
       run.error = event.type === 'runtime_issue' ? event.message : event.reason
       run.updatedAt = now
       saveImmediately = true

@@ -25,6 +25,10 @@ type TestService = {
 
 type ChatRunServicePrivate = ChatRunService & {
   queueRunEvent: (runId: string, event: AiRunEvent) => Promise<void>
+  requestUserTakeover: (
+    runId: string,
+    request: { taskId: string; requestId: string; message: string }
+  ) => Promise<{ confirmed: true } | { confirmed: false; error: string }>
   scheduleConversationMemoryUpdate: (input: {
     runId: string
     sessionId: string
@@ -206,6 +210,37 @@ describe('workbench chat run backend', () => {
     expect(events.map((event) => event.type)).toContain('run_completed')
     expect(events.map((event) => event.type)).not.toContain('answer_token')
     expect(storedRun?.processEvents).toBeUndefined()
+  })
+
+  it('user-takeover-pauses-persists-and-resumes-the-run', async () => {
+    const setup = await createTestService()
+    const run = await submitAiRun(setup)
+    const service = setup.service as ChatRunServicePrivate
+
+    const takeoverResult = service.requestUserTakeover(run.id, {
+      taskId: 'task-1',
+      requestId: 'takeover-1',
+      message: '请在右侧浏览器完成登录'
+    })
+
+    await waitForCondition(() =>
+      setup.events.some((event) => event.type === 'user_takeover_required')
+    )
+    const waitingRun = await setup.storage.aiRun.getRun(run.id)
+    expect(waitingRun?.status).toBe('waiting_user_takeover')
+    expect(waitingRun?.pendingUserTakeover?.requestId).toBe('takeover-1')
+
+    const response = await setup.service.confirmUserTakeover({
+      runId: run.id,
+      requestId: 'takeover-1'
+    })
+    expect(response).toEqual({ success: true })
+    await expect(takeoverResult).resolves.toEqual({ confirmed: true })
+
+    const resumedRun = await setup.storage.aiRun.getRun(run.id)
+    expect(resumedRun?.status).toBe('running')
+    expect(resumedRun?.pendingUserTakeover).toBeUndefined()
+    expect(setup.events.map((event) => event.type)).toContain('user_takeover_confirmed')
   })
 
   it('token-events-are-not-persisted-or-reread-for-seq-allocation', async () => {

@@ -758,7 +758,13 @@ export interface OpenPathWithApplicationResponse {
   error?: string
 }
 
-export type AiRunStatus = 'running' | 'waiting_approval' | 'completed' | 'failed' | 'cancelled'
+export type AiRunStatus =
+  | 'running'
+  | 'waiting_approval'
+  | 'waiting_user_takeover'
+  | 'completed'
+  | 'failed'
+  | 'cancelled'
 export type RuntimeIssueCode =
   | 'workspace_binding_missing'
   | 'workspace_missing'
@@ -912,6 +918,7 @@ export type AiRunRecord = {
   finalAnswer?: string
   error?: string
   pendingApproval?: Extract<AiRunEvent, { type: 'approval_batch_required' }>
+  pendingUserTakeover?: Extract<AiRunEvent, { type: 'user_takeover_required' }>
   artifacts?: AiArtifactRef[]
   processEvents?: AiRunEvent[]
   eventCount?: number
@@ -936,6 +943,7 @@ export type ChatSessionRunSnapshot = {
   run: AiRunRecord
   events: AiRunEvent[]
   pendingApproval?: Extract<AiRunEvent, { type: 'approval_batch_required' }>
+  pendingUserTakeover?: Extract<AiRunEvent, { type: 'user_takeover_required' }>
 }
 
 export type ChatSessionSnapshotRequest = {
@@ -1031,6 +1039,16 @@ export type AiRunApprovalBatchDecisionRequest = {
 }
 
 export type AiRunApprovalBatchDecisionResponse = {
+  success: boolean
+  error?: string
+}
+
+export type AiRunUserTakeoverConfirmRequest = {
+  runId: string
+  requestId: string
+}
+
+export type AiRunUserTakeoverConfirmResponse = {
   success: boolean
   error?: string
 }
@@ -1298,6 +1316,21 @@ type AiRunEventPayload =
       batchId: string
       decisions: AiApprovalBatchDecision[]
       decidedAt: number
+    }
+  | {
+      type: 'user_takeover_required'
+      runId: string
+      taskId: string
+      requestId: string
+      message: string
+      createdAt: number
+    }
+  | {
+      type: 'user_takeover_confirmed'
+      runId: string
+      taskId: string
+      requestId: string
+      confirmedAt: number
     }
   | {
       type: 'llm_stream_delta'

@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import type { Page } from 'playwright'
+import type { ElectronApplication } from 'playwright'
 import type { JsonValue } from '../../../src/shared/types'
 import {
   TEST_LOG_SCHEMA_VERSION,
@@ -53,6 +54,7 @@ export type E2ETestRuntime = {
   runId: string
   taskId: string
   page: Page
+  electronApp: ElectronApplication
   recordEvent: (input: Omit<TestLogEvent, 'ts'>) => void
   signal: (input: {
     name: string
@@ -243,19 +245,14 @@ export const runE2ECase = async <TResult>(
     streamingLogWriter.appendTimelineEvent(event)
   }
 
-  const appendRuntimeEventOnce = (
-    entry: E2ERuntimeSignals['aiRunEventEntries'][number]
-  ): void => {
+  const appendRuntimeEventOnce = (entry: E2ERuntimeSignals['aiRunEventEntries'][number]): void => {
     const key = getRuntimeEventKey(entry)
     if (emittedRuntimeEventKeys.has(key)) return
     emittedRuntimeEventKeys.add(key)
     streamingLogWriter.appendRuntimeEvent(entry.event)
   }
 
-  const pushSignalEventOnce = (input: {
-    source: string
-    event: TestLogEvent
-  }): void => {
+  const pushSignalEventOnce = (input: { source: string; event: TestLogEvent }): void => {
     const key = getTimelineSignalKey({
       source: input.source,
       ts: input.event.ts,
@@ -365,6 +362,7 @@ export const runE2ECase = async <TResult>(
     runId,
     taskId,
     page: app.page,
+    electronApp: app.electronApp,
     recordEvent,
     signal,
     step: async (input) => {

@@ -123,6 +123,20 @@ export type AiApprovalBatchResult =
       error: string
     }
 
+export type AiUserTakeoverRequest = {
+  runId: string
+  taskId: string
+  requestId: string
+  message: string
+}
+
+export type AiUserTakeoverResult =
+  | { confirmed: true }
+  | {
+      confirmed: false
+      error: string
+    }
+
 export type AiTerminalApprovalFallback = {
   runId: string
   taskId: string
@@ -210,6 +224,7 @@ export type AiRunDeps = {
   sendEvent: (event: AiRunEvent) => void
   recordLlmIo?: (record: AiLlmIoRecord) => void
   requestApprovalBatch: (request: AiApprovalBatchRequest) => Promise<AiApprovalBatchResult>
+  requestUserTakeover: (request: AiUserTakeoverRequest) => Promise<AiUserTakeoverResult>
   llmDriver?: AiLlmDriver
   browserUseService?: BrowserUseService
   webCrawlerService?: WebCrawlerService
@@ -260,6 +275,7 @@ export type AiRunContext = {
   sendEvent: (event: AiRunEvent) => void
   recordLlmIo?: (record: AiLlmIoRecord) => void
   requestApprovalBatch: (request: AiApprovalBatchRequest) => Promise<AiApprovalBatchResult>
+  requestUserTakeover: (request: AiUserTakeoverRequest) => Promise<AiUserTakeoverResult>
   getLlmConfig: () => Promise<LlmRuntimeConfig>
   getVisionLlmConfig: () => Promise<LlmRuntimeConfig>
   browserUseService?: BrowserUseService

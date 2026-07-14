@@ -62,6 +62,7 @@ CREATE TABLE IF NOT EXISTS ai_run (
   final_answer TEXT,
   error TEXT,
   pending_approval_json TEXT,
+  pending_user_takeover_json TEXT,
   artifacts_json TEXT,
   event_count INTEGER,
   visible_event_count INTEGER,

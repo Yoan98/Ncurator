@@ -39,6 +39,7 @@ type AiRunRow = {
   final_answer?: unknown
   error?: unknown
   pending_approval_json?: unknown
+  pending_user_takeover_json?: unknown
   artifacts_json?: unknown
   event_count?: unknown
   visible_event_count?: unknown
@@ -63,6 +64,7 @@ const normalizeRunStatus = (value: unknown): AiRunStatus => {
   if (
     status === 'running' ||
     status === 'waiting_approval' ||
+    status === 'waiting_user_takeover' ||
     status === 'completed' ||
     status === 'failed' ||
     status === 'cancelled'
@@ -77,7 +79,7 @@ const shouldPersistEvent = (event: AiRunEvent): boolean =>
 
 const getEventTime = (event: AiRunEvent, fallback: number): number => {
   const record = event as unknown as Record<string, unknown>
-  for (const key of ['createdAt', 'completedAt', 'failedAt', 'decidedAt']) {
+  for (const key of ['createdAt', 'completedAt', 'failedAt', 'decidedAt', 'confirmedAt']) {
     const value = Number(record[key])
     if (Number.isFinite(value) && value > 0) return value
   }
@@ -101,6 +103,9 @@ const toRunRecord = (row: AiRunRow): AiRunRecord => ({
   finalAnswer: row.final_answer ? String(row.final_answer) : undefined,
   error: row.error ? String(row.error) : undefined,
   pendingApproval: parseJsonObject<AiRunRecord['pendingApproval']>(row.pending_approval_json),
+  pendingUserTakeover: parseJsonObject<AiRunRecord['pendingUserTakeover']>(
+    row.pending_user_takeover_json
+  ),
   artifacts: parseJsonArray<AiArtifactRef>(row.artifacts_json),
   processEvents: undefined,
   eventCount: toOptionalNumber(row.event_count),
@@ -138,13 +143,15 @@ export class AiRunStore {
           id, session_id, user_message_id, assistant_message_id, status, input,
           selected_references_json, attachments_json, workspace_json, model_name,
           main_model_json, vision_model_json,
-          partial_answer, final_answer, error, pending_approval_json, artifacts_json,
+          partial_answer, final_answer, error, pending_approval_json, pending_user_takeover_json,
+          artifacts_json,
           event_count, visible_event_count, last_event_at, created_at, updated_at, finished_at
         ) VALUES (
           @id, @session_id, @user_message_id, @assistant_message_id, @status, @input,
           @selected_references_json, @attachments_json, @workspace_json, @model_name,
           @main_model_json, @vision_model_json,
-          @partial_answer, @final_answer, @error, @pending_approval_json, @artifacts_json,
+          @partial_answer, @final_answer, @error, @pending_approval_json,
+          @pending_user_takeover_json, @artifacts_json,
           @event_count, @visible_event_count, @last_event_at, @created_at, @updated_at, @finished_at
         )
         ON CONFLICT(id) DO UPDATE SET
@@ -163,6 +170,7 @@ export class AiRunStore {
           final_answer = excluded.final_answer,
           error = excluded.error,
           pending_approval_json = excluded.pending_approval_json,
+          pending_user_takeover_json = excluded.pending_user_takeover_json,
           artifacts_json = excluded.artifacts_json,
           event_count = excluded.event_count,
           visible_event_count = excluded.visible_event_count,
@@ -188,6 +196,7 @@ export class AiRunStore {
         final_answer: record.finalAnswer || null,
         error: record.error || null,
         pending_approval_json: jsonStringify(record.pendingApproval),
+        pending_user_takeover_json: jsonStringify(record.pendingUserTakeover),
         artifacts_json: jsonStringify(record.artifacts),
         event_count: record.eventCount ?? null,
         visible_event_count: record.visibleEventCount ?? null,
