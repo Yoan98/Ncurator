@@ -4,9 +4,11 @@ import { access, mkdir, readdir, rm } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 import { promisify } from 'node:util'
+import { loadReleaseEnvironment } from './release-environment.mjs'
 
 const execFileAsync = promisify(execFile)
 const ROOT = process.cwd()
+await loadReleaseEnvironment(ROOT)
 const args = process.argv.slice(2)
 const valueAfter = (name) => {
   const index = args.indexOf(name)
@@ -63,6 +65,9 @@ const validatePreflight = async () => {
     if (!String(process.env[name] || '').trim()) {
       throw new Error(`missing environment variable: ${name}`)
     }
+  }
+  if (process.env.CSC_LINK && !process.env.CSC_IDENTITY_AUTO_DISCOVERY) {
+    process.env.CSC_IDENTITY_AUTO_DISCOVERY = 'true'
   }
   if (
     String(process.env.R2_PUBLIC_BASE_URL).replace(/\/$/u, '') !== 'https://download.ncurator.com'

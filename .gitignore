@@ -2,6 +2,7 @@ node_modules
 dist
 out
 .env
+.env.release.local
 .DS_Store
 .eslintcache
 *.log*

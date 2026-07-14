@@ -6,9 +6,11 @@ import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 import { promisify } from 'node:util'
+import { loadReleaseEnvironment } from './release-environment.mjs'
 
 const execFileAsync = promisify(execFile)
 const ROOT = process.cwd()
+await loadReleaseEnvironment(ROOT)
 const args = process.argv.slice(2)
 const valueAfter = (name) => {
   const index = args.indexOf(name)

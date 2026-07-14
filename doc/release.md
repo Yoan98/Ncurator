@@ -45,15 +45,14 @@ Mac 需要：
 - 配置 R2 环境变量；
 - 如需自动创建 GitHub Release，配置 `NCURATOR_RELEASE_TOKEN`。
 
+复制 `.env.release.example` 为 `.env.release.local`，只在本机填写 R2、GitHub Release 和 P12 信息。该文件已加入 `.gitignore`。
+
+默认本地工具目录是 `~/.ncurator/release-tools`。也可以用 `NCURATOR_X64_NODE`、`NCURATOR_X64_PYTHON` 和 `NCURATOR_AWS_CLI` 指定其他路径。
+
+首次导入签名证书：
+
 ```bash
-export NCURATOR_X64_NODE=/path/to/x64/node
-export NCURATOR_X64_PYTHON=/path/to/x64/python3
-export AWS_ACCESS_KEY_ID=...
-export AWS_SECRET_ACCESS_KEY=...
-export R2_ACCOUNT_ID=...
-export R2_BUCKET_NAME=...
-export R2_PUBLIC_BASE_URL=https://download.ncurator.com
-export NCURATOR_RELEASE_TOKEN=...
+pnpm release:signing:setup
 ```
 
 敏感值不要写入仓库。
