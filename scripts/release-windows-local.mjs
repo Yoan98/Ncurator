@@ -20,9 +20,12 @@ const valueAfter = (name) => {
 }
 const releaseTag = valueAfter('--tag') || ''
 const keepWork = args.includes('--keep-work')
+const reuseWork = args.includes('--reuse-work')
 
 if (!/^v\d+\.\d+\.\d+$/u.test(releaseTag)) {
-  throw new Error('usage: node scripts/release-windows-local.mjs --tag <v1.2.3> [--keep-work]')
+  throw new Error(
+    'usage: node scripts/release-windows-local.mjs --tag <v1.2.3> [--keep-work] [--reuse-work]'
+  )
 }
 
 const run = (command, commandArgs, options = {}) =>
@@ -69,16 +72,29 @@ if (existing) {
   process.exit(0)
 }
 
-const workDirectory = path.join(os.tmpdir(), `ncw-${releaseTag}`)
+const workDirectory = path.join(path.parse(ROOT).root, '.ncurator-release', releaseTag)
 const archivePath = path.join(workDirectory, 'source.zip')
 const sourceDirectory = path.join(workDirectory, 'source')
 
-await rm(workDirectory, { recursive: true, force: true })
-await mkdir(sourceDirectory, { recursive: true })
+let completed = false
 
 try {
-  await run('git', ['archive', '--format=zip', '--output', archivePath, releaseTag])
-  await run('tar', ['-xf', archivePath, '-C', sourceDirectory])
+  if (reuseWork) {
+    const workPackageJson = JSON.parse(
+      await readFile(path.join(sourceDirectory, 'package.json'), 'utf8').catch(() => {
+        throw new Error(`reusable Windows release work was not found: ${sourceDirectory}`)
+      })
+    )
+    if (workPackageJson.version !== taggedVersion) {
+      throw new Error(`reusable Windows release work does not match ${releaseTag}`)
+    }
+    process.stdout.write(`[release] reusing Windows work directory ${workDirectory}\n`)
+  } else {
+    await rm(workDirectory, { recursive: true, force: true })
+    await mkdir(sourceDirectory, { recursive: true })
+    await run('git', ['archive', '--format=zip', '--output', archivePath, releaseTag])
+    await run('tar', ['-xf', archivePath, '-C', sourceDirectory])
+  }
 
   const releaseEnvironment = {
     ...process.env,
@@ -121,8 +137,15 @@ try {
 
   const fragment = JSON.parse(await readFile(fragmentPath, 'utf8'))
   await verifyPublicReleaseFragment(fragment, publicBaseUrl)
+  completed = true
   process.stdout.write(`[release] Windows ${releaseTag} uploaded and verified\n`)
 } finally {
-  if (keepWork) process.stdout.write(`[release] kept work directory ${workDirectory}\n`)
-  else await rm(workDirectory, { recursive: true, force: true })
+  if (keepWork || !completed) {
+    process.stdout.write(`[release] kept work directory ${workDirectory}\n`)
+    if (!completed) {
+      process.stdout.write(
+        `[release] retry with: pnpm release:win -- --tag ${releaseTag} --reuse-work\n`
+      )
+    }
+  } else await rm(workDirectory, { recursive: true, force: true })
 }

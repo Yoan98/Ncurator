@@ -32,7 +32,8 @@ describe('app update publish config', () => {
     expect(router).toContain("route === 'local'")
     expect(router).toContain('dispatchWindowsRelease')
     expect(localRelease).toContain("'--format=zip'")
-    expect(localRelease).toContain('os.tmpdir()')
+    expect(localRelease).toContain("'.ncurator-release'")
+    expect(localRelease).toContain("args.includes('--reuse-work')")
     expect(localRelease).toContain("['run', 'build:win']")
     expect(localRelease).toContain('upload-r2-release-fragment.mjs')
 

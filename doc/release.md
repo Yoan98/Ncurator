@@ -147,7 +147,7 @@ pnpm release:mac -- --tag v0.1.4
 pnpm release:r2:finalize -- --tag v0.1.4
 ```
 
-Windows fragment 已存在且远端文件完整时，本地和 Actions 共用的脚本会直接跳过重复构建。Windows 正式源码会导出到系统临时目录下的短路径，避免 Python 和 pnpm 深层依赖触发 Windows 路径长度限制。调试 Windows 临时源码时可以给 `release:win` 添加 `--keep-work`；调试最终汇总时可添加 `--keep-old`。
+Windows fragment 已存在且远端文件完整时，本地和 Actions 共用的脚本会直接跳过重复构建。Windows 正式源码会导出到当前工作区所在盘的 `.ncurator-release/vX.Y.Z` 短路径，避免 Python 和 pnpm 深层依赖触发 Windows 路径长度限制，并保持 pnpm store 同盘复用。失败时脚本自动保留现场，可以添加 `--reuse-work` 从保留的依赖和 sidecar 继续；成功后如需保留现场可添加 `--keep-work`。调试最终汇总时可添加 `--keep-old`。
 
 查询一个版本的跨平台状态：
 
