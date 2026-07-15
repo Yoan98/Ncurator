@@ -46,6 +46,20 @@ if (!inputDirectory || !outputPath || !/^v\d+\.\d+\.\d+$/u.test(releaseTag)) {
 const definition = definitions[platform]
 if (!definition) throw new Error(`unsupported release platform: ${platform}`)
 
+const expectedAuditPlatform = platform.startsWith('macos-') ? 'darwin' : 'win32'
+const expectedAuditArch = platform.endsWith('-arm64') ? 'arm64' : 'x64'
+const auditPath = path.join(inputDirectory, 'package-audit.json')
+const audit = JSON.parse(await readFile(auditPath, 'utf8'))
+if (
+  audit.schemaVersion !== 1 ||
+  audit.platform !== expectedAuditPlatform ||
+  audit.arch !== expectedAuditArch ||
+  !Array.isArray(audit.applications) ||
+  audit.applications.length === 0
+) {
+  throw new Error(`package security audit does not match ${platform}: ${auditPath}`)
+}
+
 const version = releaseTag.slice(1)
 const sha512 = async (filePath) =>
   createHash('sha512')
@@ -79,6 +93,17 @@ await writeFile(
       createdAt: new Date().toISOString(),
       files,
       metadata,
+      audit: {
+        generatedAt: audit.generatedAt,
+        platform: audit.platform,
+        arch: audit.arch,
+        applications: audit.applications.map((application) => ({
+          root: application.root,
+          totalBytes: application.totalBytes,
+          archiveBytes: application.archiveBytes,
+          archiveFileCount: application.archiveFileCount
+        }))
+      },
       ...(signature ? { signature } : {})
     },
     null,

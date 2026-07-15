@@ -6,6 +6,8 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   main: {
     build: {
+      minify: 'esbuild',
+      sourcemap: false,
       rollupOptions: {
         input: {
           index: resolve('src/main/index.ts'),
@@ -19,7 +21,12 @@ export default defineConfig({
       }
     }
   },
-  preload: {},
+  preload: {
+    build: {
+      minify: 'esbuild',
+      sourcemap: false
+    }
+  },
   renderer: {
     resolve: {
       alias: {
@@ -27,6 +34,10 @@ export default defineConfig({
       }
     },
     plugins: [react(), tailwindcss()],
+    build: {
+      minify: 'esbuild',
+      sourcemap: false
+    },
     css: {
       preprocessorOptions: {
         less: {

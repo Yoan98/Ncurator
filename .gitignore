@@ -15,4 +15,5 @@ __pycache__
 .pyinstaller
 resources/web_crawler_sidecar/bin
 resources/native
+release-stage
 design/

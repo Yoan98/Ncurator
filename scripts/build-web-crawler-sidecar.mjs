@@ -11,6 +11,7 @@ const SIDECAR_DIR = path.join(ROOT, 'resources', 'web_crawler_sidecar')
 const SIDECAR_SCRIPT_PATH = path.join(SIDECAR_DIR, 'web_crawler_sidecar.py')
 const REQUIREMENTS_PATH = path.join(SIDECAR_DIR, 'requirements.txt')
 const BUILD_SCRIPT_PATH = path.join(ROOT, 'scripts', 'build_web_crawler_sidecar.py')
+const THIS_SCRIPT_PATH = fileURLToPath(import.meta.url)
 const VENV_DIR = path.join(
   ROOT,
   '.runvenv',
@@ -21,6 +22,7 @@ const PLAYWRIGHT_BROWSER_STAMP_PATH = path.join(VENV_DIR, '.playwright-browser.s
 const PIP_CACHE_DIR = path.join(ROOT, '.pip-cache', 'web_crawler_sidecar')
 const BIN_DIR = path.join(SIDECAR_DIR, 'bin')
 const SOURCE_STAMP_PATH = path.join(BIN_DIR, '.source.sha256')
+const SIDECAR_RUNTIME_LAYOUT_VERSION = 'headless-shell-v1'
 
 const pathExists = (targetPath) => fs.existsSync(targetPath)
 
@@ -110,14 +112,48 @@ const ensureVenv = (bootstrapPython) => {
   return venvPythonPath
 }
 
-const computeRequirementsHash = () =>
-  crypto.createHash('sha256').update(fs.readFileSync(REQUIREMENTS_PATH)).digest('hex')
+const computeRequirementsHash = () => {
+  const hash = crypto.createHash('sha256')
+  hash.update(fs.readFileSync(REQUIREMENTS_PATH))
+  hash.update(SIDECAR_RUNTIME_LAYOUT_VERSION)
+  return hash.digest('hex')
+}
 
 const computeSourceHash = () => {
   const hash = crypto.createHash('sha256')
   hash.update(fs.readFileSync(SIDECAR_SCRIPT_PATH))
   hash.update(fs.readFileSync(REQUIREMENTS_PATH))
+  hash.update(fs.readFileSync(BUILD_SCRIPT_PATH))
+  hash.update(fs.readFileSync(THIS_SCRIPT_PATH))
+  hash.update(SIDECAR_RUNTIME_LAYOUT_VERSION)
   return hash.digest('hex')
+}
+
+const hasCurrentBuiltSidecar = () => {
+  if (!pathExists(SOURCE_STAMP_PATH)) return false
+  if (fs.readFileSync(SOURCE_STAMP_PATH, 'utf8').trim() !== computeSourceHash()) return false
+  const executableName =
+    process.platform === 'win32' ? 'web_crawler_sidecar.exe' : 'web_crawler_sidecar'
+  if (!pathExists(path.join(BIN_DIR, 'web_crawler_sidecar', executableName))) return false
+
+  const browserRoots = []
+  const walk = (directory) => {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      const entryPath = path.join(directory, entry.name)
+      if (entry.isDirectory()) {
+        if (entry.name === '.local-browsers') browserRoots.push(entryPath)
+        else walk(entryPath)
+      }
+    }
+  }
+  walk(BIN_DIR)
+  if (browserRoots.length !== 1) return false
+  const browserNames = fs.readdirSync(browserRoots[0])
+  return (
+    !browserNames.some((name) => name.startsWith('chromium-')) &&
+    browserNames.some((name) => name.startsWith('chromium_headless_shell-')) &&
+    browserNames.some((name) => name.startsWith('ffmpeg-'))
+  )
 }
 
 const readInstalledRequirementsHash = () =>
@@ -150,9 +186,10 @@ const PLAYWRIGHT_BROWSER_CHECK_SNIPPET = [
   'import pathlib',
   'import playwright',
   "base = pathlib.Path(playwright.__file__).resolve().parent / 'driver' / 'package' / '.local-browsers'",
-  "prefixes = ('chromium-', 'chromium_headless_shell-', 'ffmpeg-')",
+  "prefixes = ('chromium_headless_shell-', 'ffmpeg-')",
   'names = {item.name for item in base.iterdir()} if base.exists() else set()',
-  'ok = all(any(name.startswith(prefix) for name in names) for prefix in prefixes)',
+  "has_full_chromium = any(name.startswith('chromium-') for name in names)",
+  'ok = not has_full_chromium and all(any(name.startswith(prefix) for name in names) for prefix in prefixes)',
   'raise SystemExit(0 if ok else 1)'
 ].join('\n')
 
@@ -181,6 +218,11 @@ const restoreBundledPlaywrightBrowserCache = (pythonPath) => {
   const target = resolveBundledPlaywrightBrowserDirectory(pythonPath)
   fs.rmSync(target, { recursive: true, force: true })
   fs.cpSync(source, target, { recursive: true, force: true })
+  for (const entry of fs.readdirSync(target)) {
+    if (entry.startsWith('chromium-')) {
+      fs.rmSync(path.join(target, entry), { recursive: true, force: true })
+    }
+  }
   return hasBundledPlaywrightBrowser(pythonPath)
 }
 
@@ -203,7 +245,9 @@ const ensureBundledPlaywrightBrowser = (pythonPath) => {
     PLAYWRIGHT_BROWSERS_PATH: '0',
     PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT: '300000'
   }
-  spawnChecked(pythonPath, ['-m', 'playwright', 'install', 'chromium'], { env: browserEnv })
+  spawnChecked(pythonPath, ['-m', 'playwright', 'install', '--only-shell', 'chromium'], {
+    env: browserEnv
+  })
   fs.writeFileSync(PLAYWRIGHT_BROWSER_STAMP_PATH, `${expectedHash}\n`, 'utf8')
 }
 
@@ -263,6 +307,11 @@ const writeSourceStamp = () => {
 const main = () => {
   if (!pathExists(REQUIREMENTS_PATH)) {
     throw new Error(`Missing sidecar requirements: ${REQUIREMENTS_PATH}`)
+  }
+
+  if (hasCurrentBuiltSidecar()) {
+    process.stdout.write(`[sidecar] current ${process.platform}-${process.arch} bundle reused\n`)
+    return
   }
 
   const bootstrapPython = resolveBootstrapPython()

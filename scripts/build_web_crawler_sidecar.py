@@ -11,7 +11,7 @@ SIDECAR_SCRIPT = ROOT / "resources" / "web_crawler_sidecar" / "web_crawler_sidec
 OUTPUT_DIR = ROOT / "resources" / "web_crawler_sidecar" / "bin"
 SIDECAR_NAME = "web_crawler_sidecar"
 PYINSTALLER_CONFIG_DIR = ROOT / ".pyinstaller" / "web_crawler_sidecar"
-BUNDLED_PLAYWRIGHT_BROWSER_PREFIXES = ("chromium-", "chromium_headless_shell-", "ffmpeg-")
+BUNDLED_PLAYWRIGHT_BROWSER_PREFIXES = ("chromium_headless_shell-", "ffmpeg-")
 
 
 def platform_name() -> str:
@@ -45,6 +45,8 @@ def resolve_playwright_driver_path() -> Path:
 
 def assert_playwright_browser_bundle(local_browsers_path: Path) -> None:
     existing_names = {item.name for item in local_browsers_path.iterdir()} if local_browsers_path.exists() else set()
+    if any(name.startswith("chromium-") for name in existing_names):
+        raise RuntimeError("Full Chromium must not be bundled; install Chromium with --only-shell")
     missing = [
         prefix
         for prefix in BUNDLED_PLAYWRIGHT_BROWSER_PREFIXES
@@ -67,6 +69,29 @@ def copy_playwright_driver_bundle(sidecar_dist_dir: Path) -> None:
         shutil.rmtree(long_path(target))
     target.parent.mkdir(parents=True, exist_ok=True)
     shutil.copytree(long_path(source), long_path(target), symlinks=True)
+
+
+def prune_non_runtime_files(sidecar_dist_dir: Path) -> None:
+    removable_extensions = {".map", ".ts", ".tsx", ".mts", ".cts", ".py", ".pyc", ".pyo"}
+    removable_directories = {"__pycache__", "tests", "test", "docs", "doc", "examples", "example", "types"}
+    patchright_dir = sidecar_dist_dir / "_internal" / "patchright"
+    if patchright_dir.exists():
+        shutil.rmtree(long_path(patchright_dir))
+
+    for current, directories, files in os.walk(sidecar_dist_dir, topdown=True):
+        current_path = Path(current)
+        kept_directories = []
+        for name in directories:
+            candidate = current_path / name
+            if name.lower() in removable_directories:
+                shutil.rmtree(long_path(candidate))
+            else:
+                kept_directories.append(name)
+        directories[:] = kept_directories
+        for name in files:
+            candidate = current_path / name
+            if candidate.suffix.lower() in removable_extensions:
+                candidate.unlink()
 
 
 def stash_playwright_browser_bundle(build_path: Path) -> tuple[Path, Path]:
@@ -139,10 +164,16 @@ def main() -> int:
         str(build_path / "work"),
         "--specpath",
         str(build_path / "spec"),
-        "--collect-all",
+        "--collect-submodules",
         "crawl4ai",
-        "--collect-all",
+        "--collect-data",
+        "crawl4ai",
+        "--collect-submodules",
         "ddgs",
+        "--collect-data",
+        "ddgs",
+        "--exclude-module",
+        "patchright",
         str(SIDECAR_SCRIPT),
     ]
     env = {
@@ -159,6 +190,7 @@ def main() -> int:
         print(f"Missing built sidecar executable: {executable_path}", file=sys.stderr)
         return 1
     copy_playwright_driver_bundle(sidecar_dist_dir)
+    prune_non_runtime_files(sidecar_dist_dir)
     return 0
 
 

@@ -64,7 +64,12 @@ jobs:
           echo "RELEASE_TAG=$tag" >> "$GITHUB_ENV"
 
       - run: pnpm install --frozen-lockfile
-      - run: pnpm run build:win
+      - name: Build and security-audit Windows package
+        run: pnpm run build:win
+
+      - name: Add package audit to workflow summary
+        shell: bash
+        run: node scripts/print-package-audit-summary.mjs dist/package-audit.json >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload Windows release directly to Cloudflare R2
         shell: bash

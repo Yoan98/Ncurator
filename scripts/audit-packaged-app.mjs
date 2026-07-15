@@ -1,0 +1,130 @@
+/* eslint-disable @typescript-eslint/explicit-function-return-type */
+import fs from 'node:fs'
+import path from 'node:path'
+import process from 'node:process'
+import { listPackage, extractFile, getRawHeader } from '@electron/asar'
+import {
+  assertMinimalPackageJson,
+  assertSafePackagePaths,
+  auditPackageDirectory,
+  scanTextForSecrets
+} from './package-content-policy.mjs'
+
+const inputDirectory = path.resolve(process.argv[2] || 'dist')
+const reportPath = path.join(inputDirectory, 'package-audit.json')
+
+const findFiles = (directory, predicate) => {
+  const result = []
+  const walk = (current) => {
+    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+      const entryPath = path.join(current, entry.name)
+      if (entry.isDirectory()) walk(entryPath)
+      else if (entry.isFile() && predicate(entryPath)) result.push(entryPath)
+    }
+  }
+  walk(directory)
+  return result
+}
+
+const findApplicationRoot = (archivePath) => {
+  let current = path.dirname(archivePath)
+  while (current !== path.dirname(current)) {
+    if (current.endsWith('.app')) return current
+    current = path.dirname(current)
+  }
+  return path.dirname(path.dirname(archivePath))
+}
+
+const listArchiveFiles = (archivePath) => {
+  const files = []
+  const walk = (node, parent = '') => {
+    for (const [name, entry] of Object.entries(node.files || {})) {
+      const relativePath = parent ? `${parent}/${name}` : name
+      if (entry.files) walk(entry, relativePath)
+      else
+        files.push({
+          relativePath,
+          size: Number(entry.size || 0),
+          unpacked: Boolean(entry.unpacked)
+        })
+    }
+  }
+  walk(getRawHeader(archivePath).header)
+  return files
+}
+
+const formatBytes = (bytes) => `${(bytes / 1024 / 1024).toFixed(1)} MiB`
+
+if (!fs.existsSync(inputDirectory)) throw new Error(`package output not found: ${inputDirectory}`)
+
+const archives = findFiles(inputDirectory, (filePath) => path.basename(filePath) === 'app.asar')
+if (archives.length === 0) throw new Error(`no packaged app.asar found under ${inputDirectory}`)
+
+const applications = []
+for (const archivePath of archives) {
+  const archiveEntries = listPackage(archivePath).map((entry) => entry.replace(/^\//u, ''))
+  assertSafePackagePaths(archiveEntries)
+  const archiveRoots = [...new Set(archiveEntries.map((entry) => entry.split('/')[0]))].sort()
+  const unexpectedRoots = archiveRoots.filter(
+    (name) => !['node_modules', 'out', 'package.json'].includes(name)
+  )
+  if (unexpectedRoots.length > 0) {
+    throw new Error(`unexpected app.asar root entries: ${unexpectedRoots.join(', ')}`)
+  }
+
+  const packagedPackageJson = JSON.parse(extractFile(archivePath, 'package.json').toString('utf8'))
+  assertMinimalPackageJson(packagedPackageJson, `${archivePath}:package.json`)
+
+  const archiveFiles = listArchiveFiles(archivePath)
+  for (const item of archiveFiles) {
+    if (!item.relativePath.startsWith('out/') || item.size > 25 * 1024 * 1024) continue
+    if (!/\.(?:js|cjs|mjs|json|html|css)$/u.test(item.relativePath)) continue
+    const source = extractFile(archivePath, item.relativePath).toString('utf8')
+    scanTextForSecrets(source, `${archivePath}:${item.relativePath}`)
+  }
+
+  const appRoot = findApplicationRoot(archivePath)
+  const directoryAudit = auditPackageDirectory(appRoot)
+  const totalBytes = directoryAudit.files.reduce((sum, item) => sum + item.size, 0)
+  const topFiles = [...directoryAudit.files]
+    .sort((left, right) => right.size - left.size)
+    .slice(0, 30)
+    .map((item) => ({ path: item.relativePath, bytes: item.size }))
+  applications.push({
+    root: path.relative(inputDirectory, appRoot) || '.',
+    archive: path.relative(inputDirectory, archivePath),
+    totalBytes,
+    archiveBytes: fs.statSync(archivePath).size,
+    archiveFileCount: archiveFiles.length,
+    unpackedPayloadBytes: archiveFiles
+      .filter((item) => item.unpacked)
+      .reduce((sum, item) => sum + item.size, 0),
+    topFiles
+  })
+  process.stdout.write(
+    `[package] audit passed: ${path.basename(appRoot)} ${formatBytes(totalBytes)}, app.asar ${formatBytes(fs.statSync(archivePath).size)}\n`
+  )
+}
+
+const installerExtensions = new Set(['.dmg', '.zip', '.exe', '.appimage', '.deb', '.snap'])
+const installers = fs
+  .readdirSync(inputDirectory, { withFileTypes: true })
+  .filter(
+    (entry) => entry.isFile() && installerExtensions.has(path.extname(entry.name).toLowerCase())
+  )
+  .map((entry) => ({
+    name: entry.name,
+    bytes: fs.statSync(path.join(inputDirectory, entry.name)).size
+  }))
+  .sort((left, right) => right.bytes - left.bytes)
+
+const report = {
+  schemaVersion: 1,
+  generatedAt: new Date().toISOString(),
+  platform: process.platform,
+  arch: process.arch,
+  applications,
+  installers
+}
+fs.writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`, 'utf8')
+process.stdout.write(`[package] audit report: ${reportPath}\n`)

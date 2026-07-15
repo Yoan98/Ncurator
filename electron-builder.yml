@@ -2,28 +2,25 @@ appId: com.yoan.ncurator
 productName: Ncurator
 artifactName: ${productName}-${os}-${arch}.${ext}
 directories:
+  app: release-stage/app
   buildResources: build
 files:
-  - '!**/.vscode/*'
-  - '!src/*'
-  - '!electron.vite.config.{js,ts,mjs,cjs}'
-  - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
-  - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
-  - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
-  - '!{.codex-tmp,.pip-cache,.pyinstaller,.runvenv}/**'
-  - '!resources/web_crawler_sidecar/**'
-  - '!resources/native/**'
+  - 'out/**/*'
+  - 'package.json'
+  - '!**/*.map'
+  - '!**/*.{ts,tsx,mts,cts,py,pyc,pyo,c,cc,cpp,h,hpp,pdb}'
+  - '!**/{test,tests,__tests__,doc,docs,example,examples,benchmark,benchmarks,scripts}/**/*'
 extraResources:
-  - from: resources/web_crawler_sidecar/bin
+  - from: release-stage/app/resources/web_crawler_sidecar/bin
     to: web_crawler_sidecar/bin
     filter:
       - '**/*'
-  - from: resources/native
+  - from: release-stage/app/resources/native
     to: native
     filter:
       - '**/*'
 asarUnpack:
-  - '**/node_modules/onnxruntime-node/**/*'
+  - '**/node_modules/onnxruntime-node/bin/napi-v3/**/*'
 win:
   icon: build/icon.ico
   executableName: Ncurator
@@ -42,10 +39,17 @@ nsis:
 mac:
   icon: build/icon.icns
   artifactName: ${productName}-mac-${arch}.${ext}
+  # @electron/osx-sign 会把部分二进制格式的数据文件误判成可执行文件。
+  # 这些资源由外层 bundle 签名保护；Mach-O、.node、.dylib 和 .so 不在忽略范围内。
+  signIgnore:
+    - '\.(?:asar|bin|dat|icns|nib|pak|png|ttf|zip)$'
+    - '/\.jekyll-metadata$'
+  # 当前使用项目自建的更新签名证书，不使用 Apple 时间戳服务。
+  timestamp: none
   target:
     - dmg
     - zip
-  entitlementsInherit: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.inherit.plist
   extendInfo:
     - NSCameraUsageDescription: Application requests access to the device's camera.
     - NSMicrophoneUsageDescription: Application requests access to the device's microphone.

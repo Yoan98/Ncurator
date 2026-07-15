@@ -28,6 +28,24 @@ describe('release fragment', () => {
       'version: 0.1.3\npath: Ncurator-windows-x64.exe\n',
       'utf8'
     )
+    await writeFile(
+      path.join(input, 'package-audit.json'),
+      `${JSON.stringify({
+        schemaVersion: 1,
+        generatedAt: '2026-07-15T00:00:00.000Z',
+        platform: 'win32',
+        arch: 'x64',
+        applications: [
+          {
+            root: 'win-unpacked',
+            totalBytes: 1_000,
+            archiveBytes: 500,
+            archiveFileCount: 20
+          }
+        ]
+      })}\n`,
+      'utf8'
+    )
 
     await execFileAsync(process.execPath, [
       path.resolve('scripts/create-release-fragment.mjs'),
@@ -41,6 +59,19 @@ describe('release fragment', () => {
     expect(fragment.tag).toBe('v0.1.3')
     expect(fragment.platform).toBe('windows-x64')
     expect(fragment.metadata).toContain('version: 0.1.3')
+    expect(fragment.audit).toEqual({
+      generatedAt: '2026-07-15T00:00:00.000Z',
+      platform: 'win32',
+      arch: 'x64',
+      applications: [
+        {
+          root: 'win-unpacked',
+          totalBytes: 1_000,
+          archiveBytes: 500,
+          archiveFileCount: 20
+        }
+      ]
+    })
     expect(fragment.files).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -51,5 +82,22 @@ describe('release fragment', () => {
         })
       ])
     )
+  })
+
+  it('rejects release assets without a package security audit', async () => {
+    temporaryDirectory = await mkdtemp(path.join(os.tmpdir(), 'ncurator-release-fragment-'))
+    const input = path.join(temporaryDirectory, 'input')
+    const output = path.join(temporaryDirectory, 'windows.json')
+    await mkdir(input, { recursive: true })
+
+    await expect(
+      execFileAsync(process.execPath, [
+        path.resolve('scripts/create-release-fragment.mjs'),
+        input,
+        output,
+        'v0.1.3',
+        'windows-x64'
+      ])
+    ).rejects.toThrow(/package-audit\.json/u)
   })
 })
