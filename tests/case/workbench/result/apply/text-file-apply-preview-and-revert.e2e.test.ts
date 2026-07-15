@@ -59,12 +59,10 @@ describe('workbench result e2e', () => {
               state: 'visible',
               timeout: 30_000
             })
-            const normalPreviewMode = (
-              (await getWorkbenchLocator(
-                page,
-                workbenchSelectors.documentPreviewModeTag
-              ).textContent()) || ''
-            ).trim()
+            const normalPreviewModeTagCount = await getWorkbenchLocator(
+              page,
+              workbenchSelectors.documentPreviewModeTag
+            ).count()
 
             await switchWorkbenchMode(page, '大聪明')
             await insertWorkbenchReferenceToken(page, 'workbench-preview.md')
@@ -91,12 +89,10 @@ describe('workbench result e2e', () => {
             await removedLines.first().waitFor({ state: 'visible' })
             await addedLines.first().waitFor({ state: 'visible' })
             const diffText = ((await diffViewer.textContent()) || '').trim()
-            const editMode = (
-              (await getWorkbenchLocator(
-                page,
-                workbenchSelectors.documentPreviewModeTag
-              ).textContent()) || ''
-            ).trim()
+            const editModeTagCount = await getWorkbenchLocator(
+              page,
+              workbenchSelectors.documentPreviewModeTag
+            ).count()
             const hasOldLineNumber = await removedLines
               .first()
               .getAttribute('data-old-line')
@@ -117,6 +113,17 @@ describe('workbench result e2e', () => {
             const omittedLineLabels = await diffViewer
               .locator('[data-diff-omitted-count]')
               .allTextContents()
+            const omittedCountBeforeExpand = omittedLineLabels.length
+            if (omittedCountBeforeExpand > 0) {
+              await diffViewer.locator('[data-diff-omitted-count]').first().click()
+            }
+            const omittedCountAfterExpand = await diffViewer
+              .locator('[data-diff-omitted-count]')
+              .count()
+            await page.getByRole('button', { name: '显示工作区文件' }).click()
+            const currentSessionChangeMarkers = page.locator('[title="查看当前会话中的 AI 修改"]')
+            await currentSessionChangeMarkers.first().waitFor({ state: 'visible', timeout: 10_000 })
+            const currentSessionChangeMarkerCount = await currentSessionChangeMarkers.count()
 
             await getWorkbenchLocator(page, workbenchSelectors.applyRevertButton).click()
             await waitForWorkbenchApplyRecordStatus(page, 'reverted')
@@ -124,8 +131,8 @@ describe('workbench result e2e', () => {
             const diffStillVisible = await diffViewer.isVisible().catch(() => false)
 
             return {
-              normalPreviewMode,
-              editMode,
+              normalPreviewModeTagCount,
+              editModeTagCount,
               afterApply,
               diffText,
               hasOldLineNumber,
@@ -134,6 +141,9 @@ describe('workbench result e2e', () => {
               resourceTabCount,
               standaloneArtifactCount,
               omittedLineLabels,
+              omittedCountBeforeExpand,
+              omittedCountAfterExpand,
+              currentSessionChangeMarkerCount,
               restoredBytes: afterRevertBytes.equals(beforeBytes),
               diffStillVisible
             }
@@ -143,8 +153,8 @@ describe('workbench result e2e', () => {
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
-            result.normalPreviewMode === '预览' &&
-              result.editMode === '编辑' &&
+            result.normalPreviewModeTagCount === 0 &&
+              result.editModeTagCount === 0 &&
               result.afterApply.includes('DiffPreview') &&
               result.afterApply.includes('cedar-text-diff-884') &&
               result.diffText.includes('Preview') &&
@@ -155,6 +165,8 @@ describe('workbench result e2e', () => {
               result.resourceTabCount === 1 &&
               result.standaloneArtifactCount === 0 &&
               result.omittedLineLabels.some((label) => label.includes('行未修改')) &&
+              result.omittedCountAfterExpand < result.omittedCountBeforeExpand &&
+              result.currentSessionChangeMarkerCount >= 1 &&
               result.restoredBytes &&
               result.diffStillVisible,
             {

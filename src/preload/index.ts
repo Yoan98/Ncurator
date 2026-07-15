@@ -130,6 +130,7 @@ const api: DesktopApi = {
   workspaceSetRootPath: (payload) => ipcRenderer.invoke('workspace-set-root-path', payload),
   workspaceDelete: (workspaceId: string) => ipcRenderer.invoke('workspace-delete', workspaceId),
   workspaceTree: (payload) => ipcRenderer.invoke('workspace-tree', payload),
+  workspaceDirectoryList: (payload) => ipcRenderer.invoke('workspace-directory-list', payload),
   workspaceScan: (payload) => {
     emitE2EIpcCall('workspaceScan', {
       workspaceId: String(payload.workspaceId || '').trim()
@@ -252,17 +253,27 @@ const api: DesktopApi = {
   },
   aiContextUsageGet: (payload) => ipcRenderer.invoke('ai-context-usage-get', payload),
   browserPanelSetBounds: (payload) => ipcRenderer.invoke('browser-panel-set-bounds', payload),
-  browserPanelShow: () => ipcRenderer.invoke('browser-panel-show'),
+  browserTabList: (payload) => ipcRenderer.invoke('browser-tab-list', payload),
+  browserTabCreate: (payload) => ipcRenderer.invoke('browser-tab-create', payload),
+  browserTabActivate: (payload) => ipcRenderer.invoke('browser-tab-activate', payload),
+  browserTabClose: (payload) => ipcRenderer.invoke('browser-tab-close', payload),
+  browserTabNavigate: (payload) => ipcRenderer.invoke('browser-tab-navigate', payload),
+  browserTabBack: (payload) => ipcRenderer.invoke('browser-tab-back', payload),
+  browserTabForward: (payload) => ipcRenderer.invoke('browser-tab-forward', payload),
+  browserPanelShow: (payload) => ipcRenderer.invoke('browser-panel-show', payload),
   browserPanelHide: () => ipcRenderer.invoke('browser-panel-hide'),
-  browserPanelReload: () => ipcRenderer.invoke('browser-panel-reload'),
-  browserPanelOpenExternal: () => ipcRenderer.invoke('browser-panel-open-external'),
-  browserPanelStateGet: () => ipcRenderer.invoke('browser-panel-state-get'),
-  browserPanelZoomIn: () => ipcRenderer.invoke('browser-panel-zoom-in'),
-  browserPanelZoomOut: () => ipcRenderer.invoke('browser-panel-zoom-out'),
-  browserPanelZoomReset: () => ipcRenderer.invoke('browser-panel-zoom-reset'),
+  browserPanelSetOccluded: (occluded) => ipcRenderer.invoke('browser-panel-occluded', occluded),
+  browserPanelReload: (payload) => ipcRenderer.invoke('browser-panel-reload', payload),
+  browserPanelStop: (payload) => ipcRenderer.invoke('browser-panel-stop', payload),
+  browserPanelOpenExternal: (payload) => ipcRenderer.invoke('browser-panel-open-external', payload),
+  browserPanelStateGet: (payload) => ipcRenderer.invoke('browser-panel-state-get', payload),
+  browserPanelZoomIn: (payload) => ipcRenderer.invoke('browser-panel-zoom-in', payload),
+  browserPanelZoomOut: (payload) => ipcRenderer.invoke('browser-panel-zoom-out', payload),
+  browserPanelZoomReset: (payload) => ipcRenderer.invoke('browser-panel-zoom-reset', payload),
   docxApplyGet: (payload) => ipcRenderer.invoke('docx-apply-get', payload),
   aiFileChangeList: (payload) => ipcRenderer.invoke('ai-file-change-list', payload),
   aiFileChangeGet: (payload) => ipcRenderer.invoke('ai-file-change-get', payload),
+  aiFileChangeSessionDiff: (payload) => ipcRenderer.invoke('ai-file-change-session-diff', payload),
   aiFileChangeRevert: (payload) => {
     emitE2EIpcCall('aiFileChangeRevert')
     return ipcRenderer.invoke('ai-file-change-revert', payload)

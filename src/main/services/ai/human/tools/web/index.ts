@@ -304,14 +304,17 @@ export const webToolFamily: ToolFamilyDefinition = {
             const instruction = String(args.instruction || '').trim()
             const url = typeof args.url === 'string' ? args.url.trim() : undefined
             try {
+              const browserTab = await service.ensureAutomationTab(ctx.sessionId)
               ctx.sendEvent({
                 type: 'browser_panel_opened',
                 runId,
                 taskId,
+                browserTabId: browserTab.id,
                 createdAt: Date.now()
               })
-              await service.show()
+              await service.show(browserTab.id)
               const result = await service.run({
+                tabId: browserTab.id,
                 action,
                 instruction: instruction || '打开网页',
                 url,

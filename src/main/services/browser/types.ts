@@ -11,6 +11,7 @@ export type BrowserPanelBoundsState = {
 }
 
 export type BrowserUseRunInput = {
+  tabId: string
   action: BrowserUseAction
   instruction: string
   url?: string

@@ -35,6 +35,8 @@ import {
   PickFileResponse,
   DeleteWorkspaceSourceResponse,
   ListWorkspaceTreeRequest,
+  ListWorkspaceDirectoryRequest,
+  WorkspaceDirectoryListResponse,
   ScanWorkspaceRequest,
   PrepareWorkspaceRequest,
   WorkspaceJobResponse,
@@ -95,6 +97,12 @@ import {
   BrowserPanelBoundsRequest,
   BrowserPanelMutationResponse,
   BrowserPanelStateResponse,
+  BrowserTabCreateRequest,
+  BrowserTabCreateResponse,
+  BrowserTabListRequest,
+  BrowserTabListResponse,
+  BrowserTabMutationRequest,
+  BrowserTabNavigateRequest,
   JsonObject,
   JsonValue,
   ChatConversationMemory,
@@ -116,6 +124,8 @@ import {
   GetAiFileChangeRecordResponse,
   RevertAiFileChangeRequest,
   RevertAiFileChangeResponse,
+  BuildSessionFileDiffRequest,
+  BuildSessionFileDiffResponse,
   ChatSessionResumeSnapshotRow
 } from '../../shared/types'
 
@@ -215,6 +225,12 @@ export type {
   BrowserPanelBoundsRequest,
   BrowserPanelMutationResponse,
   BrowserPanelStateResponse,
+  BrowserTabCreateRequest,
+  BrowserTabCreateResponse,
+  BrowserTabListRequest,
+  BrowserTabListResponse,
+  BrowserTabMutationRequest,
+  BrowserTabNavigateRequest,
   JsonObject,
   JsonValue,
   ChatConversationMemory,
@@ -236,7 +252,11 @@ export type {
   GetAiFileChangeRecordResponse,
   RevertAiFileChangeRequest,
   RevertAiFileChangeResponse,
-  ChatSessionResumeSnapshotRow
+  ChatSessionResumeSnapshotRow,
+  ListWorkspaceDirectoryRequest,
+  WorkspaceDirectoryListResponse,
+  BuildSessionFileDiffRequest,
+  BuildSessionFileDiffResponse
 }
 
 /**

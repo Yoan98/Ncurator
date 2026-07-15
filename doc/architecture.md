@@ -84,7 +84,11 @@ Apply Review 负责 AI 修改文件后的统一记录、预览和回退入口。
 
 ### Workbench Resource Workspace
 
-Workbench 右侧由资源 Tab 和内容渲染两层组成。Tab 状态按会话保存在 Renderer 内存中，目前只承载文件和内置浏览器；文件按标准化路径去重，普通预览与修改 diff 共用同一个文件 Tab，浏览器固定为单例 Tab。搜索结果是临时面板状态，不占用资源 Tab。切换文件 Tab 会重新选择对应渲染状态；切换离开浏览器只隐藏 `WebContentsView`，不会销毁页面。
+Workbench 右侧是独立资源工作台，由资源 Tab、紧凑上下文工具栏和内容区组成。文件按标准化路径去重，普通预览与修改 diff 共用同一个文件 Tab；文件列表通过目录级 IPC 懒加载，并把当前会话仍生效的 AI 修改记录投影为 Diff 标记。点击标记时，普通文本以会话首个 checkpoint 到当前文件生成累计 Diff。
+
+浏览器由 `BrowserEmbedService` 管理多个 Tab runtime，每个 Tab 持有独立 `WebContentsView` 和导航历史，全部使用 `persist:ncurator-browser` 共享登录、站点存储和缓存。非活动视图只隐藏不销毁；标签历史序列化到 userData，重启后使用 Electron `navigationHistory.restore` 懒恢复。Stagehand 连接应用 CDP 端点后，以 Electron WebContents 对应的 DevTools targetId 匹配 Stagehand Page，禁止使用 URL 作为多标签身份。Renderer 浮层打开期间通过 occluded 状态隐藏活动原生视图，避免原生层覆盖菜单。
+
+文本 Diff artifact 除结构化 hunk 外保存不可变修改后行，用于点击展开“N 行未修改”；大文件仍由 Renderer 虚拟列表控制实际 DOM 行数。
 
 ## AI 架构
 

@@ -147,12 +147,10 @@ describe('workbench result e2e', () => {
             const afterFirstEntryText = (
               (await getWorkbenchLocator(page, workbenchSelectors.applyPanel).textContent()) || ''
             ).trim()
-            const firstModeTagText = (
-              (await getWorkbenchLocator(
-                page,
-                workbenchSelectors.documentPreviewModeTag
-              ).textContent()) || ''
-            ).trim()
+            const firstModeTagCount = await getWorkbenchLocator(
+              page,
+              workbenchSelectors.documentPreviewModeTag
+            ).count()
             await secondEntry.click()
             await waitForApplyPanelFile(page, SECOND_FILE)
             const afterSecondEntryText = (
@@ -184,7 +182,7 @@ describe('workbench result e2e', () => {
               afterFirstEntryText,
               afterSecondEntryText,
               afterFirstEntryAgainText,
-              firstModeTagText,
+              firstModeTagCount,
               applyPanelCount,
               resourceTabCount,
               fileArtifactCount: evidence.events.filter((event) => event.type === 'file_artifact')
@@ -212,7 +210,7 @@ describe('workbench result e2e', () => {
               !result.afterSecondEntryText.includes(FIRST_FILE) &&
               result.afterFirstEntryAgainText.includes(FIRST_FILE) &&
               !result.afterFirstEntryAgainText.includes(SECOND_FILE) &&
-              result.firstModeTagText === '编辑' &&
+              result.firstModeTagCount === 0 &&
               result.applyPanelCount === 1 &&
               result.resourceTabCount === 2,
             {

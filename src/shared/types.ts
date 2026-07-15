@@ -346,6 +346,17 @@ export interface ListWorkspaceTreeRequest {
   includeUnsupported?: boolean
 }
 
+export interface ListWorkspaceDirectoryRequest {
+  workspaceId: string
+  relativePath?: string
+}
+
+export interface WorkspaceDirectoryListResponse {
+  items: WorkspaceTreeEntry[]
+  total: number
+  error?: string
+}
+
 export interface WorkspaceJobResponse {
   success: boolean
   workspaceId?: string
@@ -629,6 +640,8 @@ export interface TextFileDiffArtifact {
   version: 1
   oldLineCount: number
   newLineCount: number
+  /** Immutable post-change lines used to expand folded unchanged regions. */
+  afterLines?: string[]
   hunks: TextFileDiffHunk[]
 }
 
@@ -651,6 +664,17 @@ export interface AiFileChangeRecord {
   createdAt: number
   updatedAt: number
   revertedAt?: number
+  error?: string
+  isSessionAggregate?: boolean
+}
+
+export interface BuildSessionFileDiffRequest {
+  sessionId: string
+  filePath: string
+}
+
+export interface BuildSessionFileDiffResponse {
+  record?: AiFileChangeRecord
   error?: string
 }
 
@@ -1086,6 +1110,7 @@ export type BrowserPanelBounds = {
 }
 
 export type BrowserPanelBoundsRequest = BrowserPanelBounds & {
+  tabId: string
   visible: boolean
 }
 
@@ -1094,15 +1119,45 @@ export type BrowserPanelMutationResponse = {
   error?: string
 }
 
-export type BrowserPanelState = {
+export type BrowserTabState = {
+  id: string
+  ownerId: string
   url: string
   title?: string
   zoomPercent: number
+  canGoBack: boolean
+  canGoForward: boolean
+  isLoading: boolean
 }
 
 export type BrowserPanelStateResponse = BrowserPanelMutationResponse & {
-  state?: BrowserPanelState
+  state?: BrowserTabState
 }
+
+export type BrowserTabListRequest = {
+  ownerId: string
+}
+
+export type BrowserTabListResponse = BrowserPanelMutationResponse & {
+  tabs: BrowserTabState[]
+}
+
+export type BrowserTabCreateRequest = {
+  ownerId: string
+}
+
+export type BrowserTabMutationRequest = {
+  tabId: string
+}
+
+export type BrowserTabNavigateRequest = BrowserTabMutationRequest & {
+  url: string
+}
+
+export type BrowserTabCreateResponse = BrowserPanelStateResponse
+
+/** @deprecated Use BrowserTabState. */
+export type BrowserPanelState = BrowserTabState
 
 export type AiContextUsageRequest = {
   sessionId: string
@@ -1232,6 +1287,7 @@ type AiRunEventPayload =
       type: 'browser_panel_opened'
       runId: string
       taskId?: string
+      browserTabId: string
       createdAt: number
     }
   | {

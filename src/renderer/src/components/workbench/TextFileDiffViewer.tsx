@@ -8,7 +8,7 @@ const ROW_HEIGHT = 28
 const OVERSCAN_ROWS = 24
 
 type DiffRow =
-  | { kind: 'separator'; key: string; count: number }
+  | { kind: 'separator'; key: string; count: number; newStart: number }
   | {
       kind: 'line'
       key: string
@@ -41,6 +41,9 @@ const parseDiffArtifact = (value: unknown): TextFileDiffArtifact => {
     artifact.version !== 1 ||
     typeof artifact.oldLineCount !== 'number' ||
     typeof artifact.newLineCount !== 'number' ||
+    (artifact.afterLines !== undefined &&
+      (!Array.isArray(artifact.afterLines) ||
+        !artifact.afterLines.every((line) => typeof line === 'string'))) ||
     !Array.isArray(artifact.hunks)
   ) {
     throw new Error('文本 diff 数据格式无效')
@@ -60,7 +63,10 @@ const parseDiffArtifact = (value: unknown): TextFileDiffArtifact => {
   return value as TextFileDiffArtifact
 }
 
-const flattenDiffRows = (artifact: TextFileDiffArtifact): DiffRow[] => {
+const flattenDiffRows = (
+  artifact: TextFileDiffArtifact,
+  expandedSeparators: ReadonlySet<string>
+): DiffRow[] => {
   const rows: DiffRow[] = []
   let previousOldEnd = 1
   let previousNewEnd = 1
@@ -69,11 +75,26 @@ const flattenDiffRows = (artifact: TextFileDiffArtifact): DiffRow[] => {
     const newGap = Math.max(0, hunk.newStart - previousNewEnd)
     const omittedCount = Math.min(oldGap, newGap)
     if (omittedCount > 0) {
-      rows.push({
-        kind: 'separator',
-        key: `separator-${hunkIndex}`,
-        count: omittedCount
-      })
+      const key = `separator-${hunkIndex}`
+      if (expandedSeparators.has(key) && artifact.afterLines) {
+        for (let offset = 0; offset < omittedCount; offset += 1) {
+          const lineNumber = previousNewEnd + offset
+          rows.push({
+            kind: 'line',
+            key: `${key}-line-${String(lineNumber)}`,
+            hunkIndex: -1,
+            lineIndex: -1,
+            line: {
+              type: 'context',
+              oldLine: previousOldEnd + offset,
+              newLine: lineNumber,
+              text: artifact.afterLines[lineNumber - 1] || ''
+            }
+          })
+        }
+      } else {
+        rows.push({ kind: 'separator', key, count: omittedCount, newStart: previousNewEnd })
+      }
     }
     hunk.lines.forEach((line, lineIndex) => {
       rows.push({
@@ -91,7 +112,26 @@ const flattenDiffRows = (artifact: TextFileDiffArtifact): DiffRow[] => {
   const trailingNewGap = Math.max(0, artifact.newLineCount - previousNewEnd + 1)
   const trailingCount = Math.min(trailingOldGap, trailingNewGap)
   if (trailingCount > 0) {
-    rows.push({ kind: 'separator', key: 'separator-trailing', count: trailingCount })
+    const key = 'separator-trailing'
+    if (expandedSeparators.has(key) && artifact.afterLines) {
+      for (let offset = 0; offset < trailingCount; offset += 1) {
+        const lineNumber = previousNewEnd + offset
+        rows.push({
+          kind: 'line',
+          key: `${key}-line-${String(lineNumber)}`,
+          hunkIndex: -1,
+          lineIndex: -1,
+          line: {
+            type: 'context',
+            oldLine: previousOldEnd + offset,
+            newLine: lineNumber,
+            text: artifact.afterLines[lineNumber - 1] || ''
+          }
+        })
+      }
+    } else {
+      rows.push({ kind: 'separator', key, count: trailingCount, newStart: previousNewEnd })
+    }
   }
   return rows
 }
@@ -149,7 +189,10 @@ const DiffLineRow = ({
   artifact: TextFileDiffArtifact
 }) => {
   const { line } = row
-  const pairedLine = findPairedLine(artifact.hunks[row.hunkIndex]?.lines || [], row.lineIndex)
+  const pairedLine =
+    row.hunkIndex >= 0
+      ? findPairedLine(artifact.hunks[row.hunkIndex]?.lines || [], row.lineIndex)
+      : undefined
   const backgroundClass =
     line.type === 'remove'
       ? 'bg-[#FFF1F0] text-[#7D2520]'
@@ -188,10 +231,12 @@ export const TextFileDiffViewer = ({ previewPath }: { previewPath: string }) => 
   const viewportRef = useRef<HTMLDivElement | null>(null)
   const [scrollTop, setScrollTop] = useState(0)
   const [viewportHeight, setViewportHeight] = useState(600)
+  const [expandedSeparators, setExpandedSeparators] = useState<Set<string>>(() => new Set())
 
   useEffect(() => {
     let cancelled = false
     setState({ status: 'loading' })
+    setExpandedSeparators(new Set())
     void window.api
       .readFile(previewPath)
       .then((bytes) => {
@@ -223,8 +268,8 @@ export const TextFileDiffViewer = ({ previewPath }: { previewPath: string }) => 
   }, [state.status])
 
   const rows = useMemo(
-    () => (state.status === 'ready' ? flattenDiffRows(state.artifact) : []),
-    [state]
+    () => (state.status === 'ready' ? flattenDiffRows(state.artifact, expandedSeparators) : []),
+    [expandedSeparators, state]
   )
 
   if (state.status === 'loading') {
@@ -271,13 +316,17 @@ export const TextFileDiffViewer = ({ previewPath }: { previewPath: string }) => 
         >
           {visibleRows.map((row) =>
             row.kind === 'separator' ? (
-              <div
+              <button
+                type="button"
                 key={row.key}
-                className="h-7 border-y border-[#E9E8E5] bg-[#F7F7F5] px-4 font-mono text-[12px] leading-7 text-[#787774]"
+                className="block h-7 w-full border-y border-[#E9E8E5] bg-[#F7F7F5] px-4 text-left font-mono text-[12px] leading-7 text-[#787774] transition-colors hover:bg-[#EFEFEC] hover:text-[#37352F] disabled:cursor-default"
                 data-diff-omitted-count={row.count}
+                disabled={!state.artifact.afterLines}
+                title={state.artifact.afterLines ? '点击展开未修改内容' : undefined}
+                onClick={() => setExpandedSeparators((current) => new Set(current).add(row.key))}
               >
-                {row.count} 行未修改
-              </div>
+                › {row.count} 行未修改
+              </button>
             ) : (
               <DiffLineRow key={row.key} row={row} artifact={state.artifact} />
             )

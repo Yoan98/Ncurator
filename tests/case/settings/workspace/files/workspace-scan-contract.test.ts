@@ -17,10 +17,15 @@ describe('settings workspace backend', () => {
       execute: async (runtime) => {
         const now = Date.now()
         await mkdir(path.join(runtime.workspaceRoot, '.git'), { recursive: true })
+        await mkdir(path.join(runtime.workspaceRoot, 'node_modules'), { recursive: true })
         await mkdir(path.join(runtime.workspaceRoot, '工作', '.drafts'), { recursive: true })
         await writeFile(path.join(runtime.workspaceRoot, '.env'), 'SECRET=hidden\n')
         await writeFile(path.join(runtime.workspaceRoot, '.git', 'config'), '[core]\n')
-        await writeFile(path.join(runtime.workspaceRoot, '工作', '.drafts', 'hidden.md'), 'hidden\n')
+        await writeFile(path.join(runtime.workspaceRoot, 'node_modules', 'noise.js'), 'noise\n')
+        await writeFile(
+          path.join(runtime.workspaceRoot, '工作', '.drafts', 'hidden.md'),
+          'hidden\n'
+        )
         const scanResult = await runtime.workspaceSourceService.scanWorkspaceTree({
           workspaceId: 'workspace-scan-contract',
           rootPath: runtime.workspaceRoot,
@@ -96,6 +101,15 @@ describe('settings workspace backend', () => {
           scanResult.workspace.id,
           'file'
         )
+        const rootDirectory = await runtime.workspaceSourceService.listDirectory({
+          workspaceId: scanResult.workspace.id,
+          rootPath: runtime.workspaceRoot
+        })
+        const nestedDirectory = await runtime.workspaceSourceService.listDirectory({
+          workspaceId: scanResult.workspace.id,
+          rootPath: runtime.workspaceRoot,
+          relativePath: '工作'
+        })
 
         return {
           activeJob,
@@ -103,7 +117,9 @@ describe('settings workspace backend', () => {
           fileSummary,
           scannedPaths: scanResult.entries.map((entry) => entry.relative_path),
           indexedPaths: savedRecords.map((record) => record.relative_path),
-          removedHiddenPaths: hiddenDiff.removed.map((record) => record.relative_path)
+          removedHiddenPaths: hiddenDiff.removed.map((record) => record.relative_path),
+          rootDirectoryPaths: rootDirectory.map((entry) => entry.relative_path),
+          nestedDirectoryPaths: nestedDirectory.map((entry) => entry.relative_path)
         }
       },
       assert: async (result, runtime) => {
@@ -115,6 +131,18 @@ describe('settings workspace backend', () => {
             name: 'workspace-scan-creates-persistent-job',
             message:
               '检查目录变化应具备可用于页面恢复的持久化 job 信息，对齐 SET-WORKSPACE-003-AC1、SET-WORKSPACE-003-AC3。',
+            data: result
+          }
+        )
+
+        runtime.assertThat(
+          !result.rootDirectoryPaths.some((item) => item.startsWith('.')) &&
+            !result.rootDirectoryPaths.some((item) => item.startsWith('node_modules')) &&
+            result.rootDirectoryPaths.includes('工作') &&
+            !result.nestedDirectoryPaths.some((item) => item.includes('.drafts')),
+          {
+            name: 'workspace-directory-list-is-lazy-and-filters-noise',
+            message: 'Workbench 文件列表应按目录读取直接子级，并默认隐藏内部目录和依赖噪音。',
             data: result
           }
         )

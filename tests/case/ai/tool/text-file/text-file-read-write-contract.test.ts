@@ -103,6 +103,7 @@ describe('ai tool text-file backend', () => {
           configChangeCount: configRecord?.changeCount,
           replayed: artifact ? replayDiff(original, artifact) : null,
           artifactVersion: artifact?.version,
+          expandableAfterLines: artifact?.afterLines,
           hunkCount: artifact?.hunks.length,
           fileArtifactCount: textFileArtifacts.length,
           configApplyIds
@@ -126,6 +127,7 @@ describe('ai tool text-file backend', () => {
             result.configChangeCount === 4 &&
             result.replayed === result.finalContent &&
             result.artifactVersion === 1 &&
+            result.expandableAfterLines?.join('\n') === result.finalContent &&
             result.hunkCount === 2 &&
             result.fileArtifactCount === 3 &&
             result.configApplyIds.length === 2 &&

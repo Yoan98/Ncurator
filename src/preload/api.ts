@@ -4,6 +4,12 @@ import type {
   BrowserPanelMutationResponse,
   BrowserPanelState,
   BrowserPanelStateResponse,
+  BrowserTabCreateRequest,
+  BrowserTabCreateResponse,
+  BrowserTabListRequest,
+  BrowserTabListResponse,
+  BrowserTabMutationRequest,
+  BrowserTabNavigateRequest,
   AiRunApprovalBatchDecisionRequest,
   AiRunApprovalBatchDecisionResponse,
   AiRunUserTakeoverConfirmRequest,
@@ -43,6 +49,7 @@ import type {
   ListReferenceItemsRequest,
   ListWebSourcesRequest,
   ListWorkspaceTreeRequest,
+  ListWorkspaceDirectoryRequest,
   LLMConfig,
   LlmModelListResponse,
   PrepareWorkspaceRequest,
@@ -70,13 +77,16 @@ import type {
   ListAiFileChangeRecordsResponse,
   RevertAiFileChangeRequest,
   RevertAiFileChangeResponse,
+  BuildSessionFileDiffRequest,
+  BuildSessionFileDiffResponse,
   WorkspaceIndexJobGetRequest,
   WorkspaceIndexJobRecord,
   WorkspaceIndexJobResponse,
   WorkspaceJobResponse,
   WorkspaceListResponse,
   WorkspaceMutationResponse,
-  WorkspaceTreeListResponse
+  WorkspaceTreeListResponse,
+  WorkspaceDirectoryListResponse
 } from '../shared/types'
 
 export type ModelInfo = {
@@ -156,6 +166,9 @@ export type DesktopApi = {
   workspaceSetRootPath: (payload: SetWorkspaceRootPathRequest) => Promise<WorkspaceMutationResponse>
   workspaceDelete: (workspaceId: string) => Promise<DeleteWorkspaceSourceResponse>
   workspaceTree: (payload: ListWorkspaceTreeRequest) => Promise<WorkspaceTreeListResponse>
+  workspaceDirectoryList: (
+    payload: ListWorkspaceDirectoryRequest
+  ) => Promise<WorkspaceDirectoryListResponse>
   workspaceScan: (payload: { workspaceId: string }) => Promise<WorkspaceJobResponse>
   workspacePrepare: (payload: PrepareWorkspaceRequest) => Promise<WorkspaceJobResponse>
   workspaceIndexJobGet: (payload: WorkspaceIndexJobGetRequest) => Promise<WorkspaceIndexJobResponse>
@@ -224,20 +237,34 @@ export type DesktopApi = {
   browserPanelSetBounds: (
     payload: BrowserPanelBoundsRequest
   ) => Promise<BrowserPanelMutationResponse>
-  browserPanelShow: () => Promise<BrowserPanelMutationResponse>
+  browserTabList: (payload: BrowserTabListRequest) => Promise<BrowserTabListResponse>
+  browserTabCreate: (payload: BrowserTabCreateRequest) => Promise<BrowserTabCreateResponse>
+  browserTabActivate: (payload: BrowserTabMutationRequest) => Promise<BrowserPanelStateResponse>
+  browserTabClose: (payload: BrowserTabMutationRequest) => Promise<BrowserPanelMutationResponse>
+  browserTabNavigate: (payload: BrowserTabNavigateRequest) => Promise<BrowserPanelStateResponse>
+  browserTabBack: (payload: BrowserTabMutationRequest) => Promise<BrowserPanelStateResponse>
+  browserTabForward: (payload: BrowserTabMutationRequest) => Promise<BrowserPanelStateResponse>
+  browserPanelShow: (payload: BrowserTabMutationRequest) => Promise<BrowserPanelMutationResponse>
   browserPanelHide: () => Promise<BrowserPanelMutationResponse>
-  browserPanelReload: () => Promise<BrowserPanelMutationResponse>
-  browserPanelOpenExternal: () => Promise<BrowserPanelMutationResponse>
-  browserPanelStateGet: () => Promise<BrowserPanelStateResponse>
-  browserPanelZoomIn: () => Promise<BrowserPanelStateResponse>
-  browserPanelZoomOut: () => Promise<BrowserPanelStateResponse>
-  browserPanelZoomReset: () => Promise<BrowserPanelStateResponse>
+  browserPanelSetOccluded: (occluded: boolean) => Promise<BrowserPanelMutationResponse>
+  browserPanelReload: (payload: BrowserTabMutationRequest) => Promise<BrowserPanelMutationResponse>
+  browserPanelStop: (payload: BrowserTabMutationRequest) => Promise<BrowserPanelMutationResponse>
+  browserPanelOpenExternal: (
+    payload: BrowserTabMutationRequest
+  ) => Promise<BrowserPanelMutationResponse>
+  browserPanelStateGet: (payload: BrowserTabMutationRequest) => Promise<BrowserPanelStateResponse>
+  browserPanelZoomIn: (payload: BrowserTabMutationRequest) => Promise<BrowserPanelStateResponse>
+  browserPanelZoomOut: (payload: BrowserTabMutationRequest) => Promise<BrowserPanelStateResponse>
+  browserPanelZoomReset: (payload: BrowserTabMutationRequest) => Promise<BrowserPanelStateResponse>
   onBrowserPanelStateChange: (cb: (state: BrowserPanelState) => void) => () => void
   docxApplyGet: (payload: GetDocxApplyRecordRequest) => Promise<GetDocxApplyRecordResponse>
   aiFileChangeList: (
     payload?: ListAiFileChangeRecordsRequest
   ) => Promise<ListAiFileChangeRecordsResponse>
   aiFileChangeGet: (payload: GetAiFileChangeRecordRequest) => Promise<GetAiFileChangeRecordResponse>
+  aiFileChangeSessionDiff: (
+    payload: BuildSessionFileDiffRequest
+  ) => Promise<BuildSessionFileDiffResponse>
   aiFileChangeRevert: (payload: RevertAiFileChangeRequest) => Promise<RevertAiFileChangeResponse>
   appUpdateGetSnapshot: () => Promise<AppUpdateSnapshot>
   appUpdateCheck: () => Promise<AppUpdateActionResponse>

@@ -14,6 +14,10 @@ import { ChatRunService } from '../services/ai/ChatRunService'
 import { AiFileChangeService } from '../services/ai/fileChanges/AiFileChangeService'
 import { getAiContextUsage } from '../services/ai/contextUsage'
 import { DocxApplyService } from '../services/ai/human/tools/docx/review/DocxApplyService'
+import {
+  countTextFileDiffLines,
+  createTextFileDiffArtifact
+} from '../services/ai/human/tools/textFile/textDiff'
 import type { AiLlmIoRecord } from '../../shared/types'
 import {
   buildWebReferenceItem,
@@ -59,6 +63,12 @@ import type {
   BrowserPanelBoundsRequest,
   BrowserPanelMutationResponse,
   BrowserPanelStateResponse,
+  BrowserTabCreateRequest,
+  BrowserTabCreateResponse,
+  BrowserTabListRequest,
+  BrowserTabListResponse,
+  BrowserTabMutationRequest,
+  BrowserTabNavigateRequest,
   GetDocxApplyRecordRequest,
   GetDocxApplyRecordResponse,
   GetAiFileChangeRecordRequest,
@@ -67,10 +77,14 @@ import type {
   ListAiFileChangeRecordsResponse,
   RevertAiFileChangeRequest,
   RevertAiFileChangeResponse,
+  BuildSessionFileDiffRequest,
+  BuildSessionFileDiffResponse,
   CreateWorkspaceSourceRequest,
   DeleteWorkspaceSourceResponse,
   ListReferenceItemsRequest,
   ListWorkspaceTreeRequest,
+  ListWorkspaceDirectoryRequest,
+  WorkspaceDirectoryListResponse,
   OpenPathWithApplicationRequest,
   OpenPathWithApplicationResponse,
   PrepareWebSourcesRequest,
@@ -1727,6 +1741,32 @@ export function registerHandlers(services: {
   )
 
   ipcMain.handle(
+    'workspace-directory-list',
+    async (
+      _event,
+      payload: ListWorkspaceDirectoryRequest
+    ): Promise<WorkspaceDirectoryListResponse> => {
+      try {
+        const workspaceId = String(payload?.workspaceId || '').trim()
+        const workspace = await workspaceStore.getWorkspaceById(workspaceId)
+        if (!workspace?.root_path) return { items: [], total: 0, error: '当前工作区没有文件目录' }
+        const items = await workspaceService.listDirectory({
+          workspaceId,
+          rootPath: workspace.root_path,
+          relativePath: payload?.relativePath
+        })
+        return { items, total: items.length }
+      } catch (error) {
+        return {
+          items: [],
+          total: 0,
+          error: error instanceof Error ? error.message : String(error)
+        }
+      }
+    }
+  )
+
+  ipcMain.handle(
     'workspace-scan',
     async (event, payload: { workspaceId: string }): Promise<WorkspaceJobResponse> => {
       try {
@@ -2255,7 +2295,7 @@ export function registerHandlers(services: {
     async (_event, payload: BrowserPanelBoundsRequest): Promise<BrowserPanelMutationResponse> => {
       try {
         if (!browserEmbedService) return { success: false, error: 'browser service unavailable' }
-        browserEmbedService.setBounds({
+        browserEmbedService.setBounds(String(payload?.tabId || ''), {
           x: Number(payload?.x || 0),
           y: Number(payload?.y || 0),
           width: Number(payload?.width || 0),
@@ -2269,15 +2309,74 @@ export function registerHandlers(services: {
     }
   )
 
-  ipcMain.handle('browser-panel-show', async (): Promise<BrowserPanelMutationResponse> => {
-    try {
-      if (!browserEmbedService) return { success: false, error: 'browser service unavailable' }
-      await browserEmbedService.show()
-      return { success: true }
-    } catch (e) {
-      return { success: false, error: e instanceof Error ? e.message : String(e) }
+  ipcMain.handle(
+    'browser-tab-list',
+    async (_event, payload: BrowserTabListRequest): Promise<BrowserTabListResponse> => {
+      try {
+        if (!browserEmbedService)
+          return { success: false, tabs: [], error: 'browser service unavailable' }
+        return { success: true, tabs: browserEmbedService.listTabs(String(payload?.ownerId || '')) }
+      } catch (e) {
+        return { success: false, tabs: [], error: e instanceof Error ? e.message : String(e) }
+      }
     }
-  })
+  )
+
+  ipcMain.handle(
+    'browser-tab-create',
+    async (_event, payload: BrowserTabCreateRequest): Promise<BrowserTabCreateResponse> => {
+      try {
+        if (!browserEmbedService) return { success: false, error: 'browser service unavailable' }
+        return {
+          success: true,
+          state: await browserEmbedService.createTab(String(payload?.ownerId || ''))
+        }
+      } catch (e) {
+        return { success: false, error: e instanceof Error ? e.message : String(e) }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'browser-tab-activate',
+    async (_event, payload: BrowserTabMutationRequest): Promise<BrowserPanelStateResponse> => {
+      try {
+        if (!browserEmbedService) return { success: false, error: 'browser service unavailable' }
+        return {
+          success: true,
+          state: browserEmbedService.activateTab(String(payload?.tabId || ''))
+        }
+      } catch (e) {
+        return { success: false, error: e instanceof Error ? e.message : String(e) }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'browser-tab-close',
+    async (_event, payload: BrowserTabMutationRequest): Promise<BrowserPanelMutationResponse> => {
+      try {
+        if (!browserEmbedService) return { success: false, error: 'browser service unavailable' }
+        await browserEmbedService.closeTab(String(payload?.tabId || ''))
+        return { success: true }
+      } catch (e) {
+        return { success: false, error: e instanceof Error ? e.message : String(e) }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'browser-panel-show',
+    async (_event, payload?: BrowserTabMutationRequest): Promise<BrowserPanelMutationResponse> => {
+      try {
+        if (!browserEmbedService) return { success: false, error: 'browser service unavailable' }
+        await browserEmbedService.show(String(payload?.tabId || ''))
+        return { success: true }
+      } catch (e) {
+        return { success: false, error: e instanceof Error ? e.message : String(e) }
+      }
+    }
+  )
 
   ipcMain.handle('browser-panel-hide', async (): Promise<BrowserPanelMutationResponse> => {
     try {
@@ -2289,61 +2388,142 @@ export function registerHandlers(services: {
     }
   })
 
-  ipcMain.handle('browser-panel-reload', async (): Promise<BrowserPanelMutationResponse> => {
-    try {
-      if (!browserEmbedService) return { success: false, error: 'browser service unavailable' }
-      browserEmbedService.reload()
-      return { success: true }
-    } catch (e) {
-      return { success: false, error: e instanceof Error ? e.message : String(e) }
+  ipcMain.handle(
+    'browser-panel-occluded',
+    async (_event, occluded: boolean): Promise<BrowserPanelMutationResponse> => {
+      try {
+        if (!browserEmbedService) return { success: false, error: 'browser service unavailable' }
+        browserEmbedService.setOccluded(occluded === true)
+        return { success: true }
+      } catch (e) {
+        return { success: false, error: e instanceof Error ? e.message : String(e) }
+      }
     }
-  })
+  )
 
-  ipcMain.handle('browser-panel-open-external', async (): Promise<BrowserPanelMutationResponse> => {
-    try {
-      if (!browserEmbedService) return { success: false, error: 'browser service unavailable' }
-      browserEmbedService.openExternal()
-      return { success: true }
-    } catch (e) {
-      return { success: false, error: e instanceof Error ? e.message : String(e) }
+  ipcMain.handle(
+    'browser-tab-navigate',
+    async (_event, payload: BrowserTabNavigateRequest): Promise<BrowserPanelStateResponse> => {
+      try {
+        if (!browserEmbedService) return { success: false, error: 'browser service unavailable' }
+        await browserEmbedService.navigate(String(payload?.url || ''), String(payload?.tabId || ''))
+        return { success: true, state: browserEmbedService.getState(String(payload?.tabId || '')) }
+      } catch (e) {
+        return { success: false, error: e instanceof Error ? e.message : String(e) }
+      }
     }
-  })
+  )
 
-  ipcMain.handle('browser-panel-state-get', async (): Promise<BrowserPanelStateResponse> => {
-    try {
-      if (!browserEmbedService) return { success: false, error: 'browser service unavailable' }
-      return { success: true, state: browserEmbedService.getState() }
-    } catch (e) {
-      return { success: false, error: e instanceof Error ? e.message : String(e) }
+  ipcMain.handle(
+    'browser-tab-back',
+    async (_event, payload: BrowserTabMutationRequest): Promise<BrowserPanelStateResponse> => {
+      try {
+        if (!browserEmbedService) return { success: false, error: 'browser service unavailable' }
+        return { success: true, state: browserEmbedService.goBack(String(payload?.tabId || '')) }
+      } catch (e) {
+        return { success: false, error: e instanceof Error ? e.message : String(e) }
+      }
     }
-  })
+  )
 
-  ipcMain.handle('browser-panel-zoom-in', async (): Promise<BrowserPanelStateResponse> => {
-    try {
-      if (!browserEmbedService) return { success: false, error: 'browser service unavailable' }
-      return { success: true, state: browserEmbedService.zoomIn() }
-    } catch (e) {
-      return { success: false, error: e instanceof Error ? e.message : String(e) }
+  ipcMain.handle(
+    'browser-tab-forward',
+    async (_event, payload: BrowserTabMutationRequest): Promise<BrowserPanelStateResponse> => {
+      try {
+        if (!browserEmbedService) return { success: false, error: 'browser service unavailable' }
+        return { success: true, state: browserEmbedService.goForward(String(payload?.tabId || '')) }
+      } catch (e) {
+        return { success: false, error: e instanceof Error ? e.message : String(e) }
+      }
     }
-  })
+  )
 
-  ipcMain.handle('browser-panel-zoom-out', async (): Promise<BrowserPanelStateResponse> => {
-    try {
-      if (!browserEmbedService) return { success: false, error: 'browser service unavailable' }
-      return { success: true, state: browserEmbedService.zoomOut() }
-    } catch (e) {
-      return { success: false, error: e instanceof Error ? e.message : String(e) }
+  ipcMain.handle(
+    'browser-panel-reload',
+    async (_event, payload: BrowserTabMutationRequest): Promise<BrowserPanelMutationResponse> => {
+      try {
+        if (!browserEmbedService) return { success: false, error: 'browser service unavailable' }
+        browserEmbedService.reload(String(payload?.tabId || ''))
+        return { success: true }
+      } catch (e) {
+        return { success: false, error: e instanceof Error ? e.message : String(e) }
+      }
     }
-  })
+  )
 
-  ipcMain.handle('browser-panel-zoom-reset', async (): Promise<BrowserPanelStateResponse> => {
-    try {
-      if (!browserEmbedService) return { success: false, error: 'browser service unavailable' }
-      return { success: true, state: browserEmbedService.zoomReset() }
-    } catch (e) {
-      return { success: false, error: e instanceof Error ? e.message : String(e) }
+  ipcMain.handle(
+    'browser-panel-stop',
+    async (_event, payload: BrowserTabMutationRequest): Promise<BrowserPanelMutationResponse> => {
+      try {
+        if (!browserEmbedService) return { success: false, error: 'browser service unavailable' }
+        browserEmbedService.stop(String(payload?.tabId || ''))
+        return { success: true }
+      } catch (e) {
+        return { success: false, error: e instanceof Error ? e.message : String(e) }
+      }
     }
-  })
+  )
+
+  ipcMain.handle(
+    'browser-panel-open-external',
+    async (_event, payload: BrowserTabMutationRequest): Promise<BrowserPanelMutationResponse> => {
+      try {
+        if (!browserEmbedService) return { success: false, error: 'browser service unavailable' }
+        browserEmbedService.openExternal(String(payload?.tabId || ''))
+        return { success: true }
+      } catch (e) {
+        return { success: false, error: e instanceof Error ? e.message : String(e) }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'browser-panel-state-get',
+    async (_event, payload: BrowserTabMutationRequest): Promise<BrowserPanelStateResponse> => {
+      try {
+        if (!browserEmbedService) return { success: false, error: 'browser service unavailable' }
+        return { success: true, state: browserEmbedService.getState(String(payload?.tabId || '')) }
+      } catch (e) {
+        return { success: false, error: e instanceof Error ? e.message : String(e) }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'browser-panel-zoom-in',
+    async (_event, payload: BrowserTabMutationRequest): Promise<BrowserPanelStateResponse> => {
+      try {
+        if (!browserEmbedService) return { success: false, error: 'browser service unavailable' }
+        return { success: true, state: browserEmbedService.zoomIn(String(payload?.tabId || '')) }
+      } catch (e) {
+        return { success: false, error: e instanceof Error ? e.message : String(e) }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'browser-panel-zoom-out',
+    async (_event, payload: BrowserTabMutationRequest): Promise<BrowserPanelStateResponse> => {
+      try {
+        if (!browserEmbedService) return { success: false, error: 'browser service unavailable' }
+        return { success: true, state: browserEmbedService.zoomOut(String(payload?.tabId || '')) }
+      } catch (e) {
+        return { success: false, error: e instanceof Error ? e.message : String(e) }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'browser-panel-zoom-reset',
+    async (_event, payload: BrowserTabMutationRequest): Promise<BrowserPanelStateResponse> => {
+      try {
+        if (!browserEmbedService) return { success: false, error: 'browser service unavailable' }
+        return { success: true, state: browserEmbedService.zoomReset(String(payload?.tabId || '')) }
+      } catch (e) {
+        return { success: false, error: e instanceof Error ? e.message : String(e) }
+      }
+    }
+  )
 
   ipcMain.handle(
     'ai-run-approval-batch-decide',
@@ -2403,6 +2583,63 @@ export function registerHandlers(services: {
       } catch (e: unknown) {
         console.error('[AI-FILE-CHANGE-GET] Error:', e)
         return { error: getErrorMessage(e) }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'ai-file-change-session-diff',
+    async (_event, payload: BuildSessionFileDiffRequest): Promise<BuildSessionFileDiffResponse> => {
+      try {
+        const sessionId = String(payload?.sessionId || '').trim()
+        const filePath = path.resolve(String(payload?.filePath || '').trim())
+        const response = await aiFileChangeService.listRecords({ sessionId, status: 'applied' })
+        const comparable = process.platform === 'win32' ? filePath.toLowerCase() : filePath
+        const records = response.items
+          .filter((record) => {
+            const recordPath = path.resolve(record.path)
+            return (
+              (process.platform === 'win32' ? recordPath.toLowerCase() : recordPath) === comparable
+            )
+          })
+          .sort((left, right) => left.createdAt - right.createdAt)
+        const first = records[0]
+        const latest = records[records.length - 1]
+        if (!first || !latest) return { error: '当前会话没有这个文件的修改记录' }
+        if (latest.capability !== 'text_file') return { record: latest }
+        const before =
+          first.operation === 'created'
+            ? ''
+            : first.beforeSnapshotPath
+              ? new TextDecoder('utf-8', { fatal: true }).decode(
+                  fs.readFileSync(first.beforeSnapshotPath)
+                )
+              : ''
+        const after = new TextDecoder('utf-8', { fatal: true }).decode(fs.readFileSync(filePath))
+        const artifact = createTextFileDiffArtifact({ before, after })
+        const counts = countTextFileDiffLines(artifact)
+        const previewRoot = path.dirname(latest.previewPath || filePath)
+        const previewPath = path.join(
+          previewRoot,
+          `session-${sessionId}-${path.basename(filePath)}.text-diff.json`
+        )
+        fs.mkdirSync(previewRoot, { recursive: true })
+        fs.writeFileSync(previewPath, `${JSON.stringify(artifact)}\n`, 'utf8')
+        return {
+          record: {
+            ...latest,
+            id: `session:${sessionId}:${filePath}`,
+            previewPath,
+            beforeSnapshotPath: first.beforeSnapshotPath,
+            operation: first.operation,
+            insertCount: counts.insertCount,
+            deleteCount: counts.deleteCount,
+            changeCount: counts.insertCount + counts.deleteCount,
+            isSessionAggregate: true
+          }
+        }
+      } catch (error) {
+        return { error: error instanceof Error ? error.message : String(error) }
       }
     }
   )

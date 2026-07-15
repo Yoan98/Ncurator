@@ -27,10 +27,12 @@ const splitPathForDisplay = (
   const directoryPath = relativePath.endsWith(fileName)
     ? relativePath.slice(0, Math.max(0, relativePath.length - fileName.length)).replace(/\/+$/g, '')
     : ''
-  const prefix = [workspaceName, directoryPath].filter(Boolean).join('/')
+  const prefix = [workspaceName, ...directoryPath.split('/').filter(Boolean)]
+    .filter(Boolean)
+    .join(' > ')
   return {
     label: formatWorkspacePathLabel(filePath, workspaces, fallbackWorkspaceName),
-    prefix: prefix ? `${prefix}/` : '',
+    prefix: prefix ? `${prefix} > ` : '',
     fileName
   }
 }

@@ -94,11 +94,11 @@ describe('workbench conversation e2e', () => {
           await runtime.assertThat(
             result.dragRegion?.appRegion === 'drag' &&
               result.dragRegion.pointerEvents === 'auto' &&
-              Math.round(result.dragRegion.rect.height) === 52 &&
+              Math.round(result.dragRegion.rect.height) === 44 &&
               result.dragRegion.hitTestId === workbenchSelectors.emptyDragRegion,
             {
               name: 'empty-titlebar-remains-draggable',
-              message: 'The empty conversation must retain a usable 52px window drag target.',
+              message: 'The empty conversation must retain a usable 44px window drag target.',
               data: result
             }
           )

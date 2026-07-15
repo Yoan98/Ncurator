@@ -10,6 +10,7 @@ type WorkbenchTabBarProps = {
   onCloseTab: (tabId: string) => void
   onAddFileTab: () => void
   onAddBrowserTab: () => void
+  onMenuOpenChange?: (open: boolean) => void
 }
 
 const getTabIcon = (tab: WorkbenchResourceTab) =>
@@ -25,7 +26,8 @@ const WorkbenchTabBar = ({
   onActivateTab,
   onCloseTab,
   onAddFileTab,
-  onAddBrowserTab
+  onAddBrowserTab,
+  onMenuOpenChange
 }: WorkbenchTabBarProps) => {
   const menuItems: MenuProps['items'] = [
     {
@@ -44,7 +46,7 @@ const WorkbenchTabBar = ({
 
   return (
     <div
-      className="flex h-12 shrink-0 items-center border-b border-[#EEEEEC] bg-white px-2"
+      className="nc-resource-tabbar workbench-no-drag flex h-11 shrink-0 items-center border-b border-[#EEEEEC] bg-white px-2"
       data-testid={workbenchSelectors.resourceTabBar}
     >
       <div className="min-w-0 flex-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -54,7 +56,7 @@ const WorkbenchTabBar = ({
             return (
               <Tooltip key={tab.id} title={tab.filePath || tab.title} mouseEnterDelay={0.5}>
                 <div
-                  className={`group flex h-9 min-w-[116px] max-w-[220px] items-center gap-2 rounded-[10px] px-3 text-left text-[13px] transition-colors ${
+                  className={`group flex h-8 min-w-[108px] max-w-[200px] items-center gap-2 rounded-[8px] px-2.5 text-left text-[13px] transition-colors ${
                     active
                       ? 'bg-[#F2F2F0] font-medium text-[#37352F]'
                       : 'text-[#787774] hover:bg-[#F7F7F5] hover:text-[#37352F]'
@@ -89,10 +91,15 @@ const WorkbenchTabBar = ({
           })}
         </div>
       </div>
-      <Dropdown menu={{ items: menuItems }} trigger={['click']} placement="bottomRight">
+      <Dropdown
+        menu={{ items: menuItems }}
+        trigger={['click']}
+        placement="bottomRight"
+        onOpenChange={onMenuOpenChange}
+      >
         <button
           type="button"
-          className="ml-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-[9px] text-[#787774] hover:bg-[#F4F4F2] hover:text-[#37352F]"
+          className="ml-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-[7px] text-[#787774] hover:bg-[#F4F4F2] hover:text-[#37352F]"
           aria-label="新增标签页"
           data-testid={workbenchSelectors.resourceTabAddButton}
         >

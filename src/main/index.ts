@@ -5,10 +5,7 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { registerHandlers } from './ipc/handlers'
 import { IngestionService } from './services/ingestion/loader'
-import {
-  DEFAULT_EMBEDDING_MODEL_NAME,
-  EmbeddingService
-} from './services/vector/EmbeddingService'
+import { DEFAULT_EMBEDDING_MODEL_NAME, EmbeddingService } from './services/vector/EmbeddingService'
 import { EmbeddingRuntimeClient } from './services/vector/runtime/EmbeddingRuntimeClient'
 import { StorageService } from './services/storage/StorageService'
 import { ModelService } from './services/model/ModelService'
@@ -182,7 +179,11 @@ if (!singleInstanceLock) {
 
     const mainWindow = createWindow()
     const appUpdateService = new AppUpdateService()
-    const browserEmbedService = new BrowserEmbedService(mainWindow)
+    const browserEmbedService = new BrowserEmbedService(
+      mainWindow,
+      join(app.getPath('userData'), 'browser-tabs.json')
+    )
+    await browserEmbedService.initialize()
     const webCrawlerBaseDirectory = join(app.getPath('userData'), 'web-crawler')
     const webCrawlerService = createWebCrawlerService({
       appRootPath: app.getAppPath(),
@@ -209,6 +210,7 @@ if (!singleInstanceLock) {
       void storageService.failInterruptedWorkspaceIndexJobs()
       void webCrawlerService.close()
       void embeddingService.close()
+      void browserEmbedService.dispose()
     })
 
     vectorModelDownloadService

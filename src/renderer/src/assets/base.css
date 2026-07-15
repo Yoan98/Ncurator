@@ -68,7 +68,7 @@
   --app-sidebar-width: 240px;
   --app-sidebar-collapsed-width: 0px;
   --app-sidebar-mac-window-spacer-height: 36px;
-  --workbench-titlebar-height: 52px;
+  --workbench-titlebar-height: 44px;
   --workbench-left-titlebar-collapsed-width: 170px;
   /* Windows 自绘窗口按钮区宽度，供标题栏与右侧安全区共用，保证折叠图标不被遮挡 */
   --windows-titlebar-button-width: 48px;
@@ -621,6 +621,10 @@ textarea,
   user-select: none;
   -webkit-user-select: none;
   -webkit-app-region: no-drag;
+}
+
+.nc-app-shell-windows .nc-resource-tabbar {
+  padding-right: calc(var(--windows-window-controls-width) + 8px);
 }
 
 .nc-topbar-collapsed-safe-zone {
