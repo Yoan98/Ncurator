@@ -3,6 +3,7 @@ import { docxToolFamily } from './docx'
 import { imageRecognitionToolFamily } from './imageRecognition'
 import { buildKbCapabilityTools } from './kb/retrievalTools'
 import { terminalToolFamily } from './terminal'
+import { textFileToolFamily } from './textFile'
 import { utilityToolFamily } from './utility'
 import { webToolFamily } from './web'
 
@@ -13,6 +14,7 @@ export const kbToolFamily: ToolFamilyDefinition = {
 
 export const TOOL_FAMILY_DEFINITIONS: Record<AiToolFamilyId, ToolFamilyDefinition> = {
   terminal: terminalToolFamily,
+  'text-file': textFileToolFamily,
   kb: kbToolFamily,
   docx: docxToolFamily,
   web: webToolFamily,

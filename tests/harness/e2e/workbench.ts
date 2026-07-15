@@ -1403,7 +1403,7 @@ export const waitForWorkbenchApplyPanelReady = async (page: Page): Promise<Locat
   const panel = getWorkbenchLocator(page, workbenchSelectors.applyPanel)
   await panel.waitFor({ state: 'visible' })
   await page.waitForFunction(
-    ({ panelTestId, docxViewerTestId, revertButtonTestId }) => {
+    ({ panelTestId, docxViewerTestId, textDiffViewerTestId, revertButtonTestId }) => {
       const root = document.querySelector(`[data-testid="${panelTestId}"]`)
       if (!(root instanceof HTMLElement)) return false
       const text = root.innerText.trim()
@@ -1412,11 +1412,15 @@ export const waitForWorkbenchApplyPanelReady = async (page: Page): Promise<Locat
       if (text.includes('当前修改记录没有专用预览稿。')) return true
       if (text.includes('本次 AI 修改已回退。') || text.includes('已回退')) return true
       if (root.querySelector(`[data-testid="${revertButtonTestId}"]`)) return true
-      return Boolean(root.querySelector(`[data-testid="${docxViewerTestId}"]`))
+      return Boolean(
+        root.querySelector(`[data-testid="${docxViewerTestId}"]`) ||
+        root.querySelector(`[data-testid="${textDiffViewerTestId}"]`)
+      )
     },
     {
       panelTestId: workbenchSelectors.applyPanel,
       docxViewerTestId: workbenchSelectors.docxViewer,
+      textDiffViewerTestId: workbenchSelectors.textDiffViewer,
       revertButtonTestId: workbenchSelectors.applyRevertButton
     },
     { timeout: WORKBENCH_LONG_E2E_TIMEOUT_MS }

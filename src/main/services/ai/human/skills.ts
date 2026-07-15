@@ -18,6 +18,17 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
     whenToUse: '适用于需要使用当前 workspace 终端能力的任务。',
     toolNames: ['terminal_run']
   },
+  'text-file': {
+    skillId: 'text-file',
+    familyId: 'text-file',
+    source: 'builtin',
+    countsTowardToolBudget: false,
+    title: 'text-file',
+    description:
+      '能力：读取和写入 Markdown、TXT、代码等 UTF-8 普通文本文件。\n结果：读取返回文本内容和行范围；写入返回简短执行结果，并记录可查看、可回退的文件修改。\n边界：不处理二进制文件；精确编辑要求 oldText 唯一；replaceAll 会替换全部精确匹配。',
+    whenToUse: '适用于需要查看、创建、改写或精确修改普通文本文件的任务。',
+    toolNames: ['file_read', 'file_write']
+  },
   'docx-read': {
     skillId: 'docx-read',
     familyId: 'docx',

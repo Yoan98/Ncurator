@@ -68,6 +68,9 @@ importers:
       cheerio:
         specifier: ^1.2.0
         version: 1.2.0
+      diff:
+        specifier: ^9.0.0
+        version: 9.0.0
       docx:
         specifier: ^9.5.1
         version: 9.6.0
@@ -3322,6 +3325,10 @@ packages:
 
   dfa@1.2.0:
     resolution: {integrity: sha512-ED3jP8saaweFTjeGX8HQPjeC1YYyZs98jGNZx6IiBvxW7JG5v492kamAQB3m2wop07CvU/RQmzcKr6bgcC5D/Q==}
+
+  diff@9.0.0:
+    resolution: {integrity: sha512-svtcdpS8CgJyqAjEQIXdb3OjhFVVYjzGAPO8WGCmRbrml64SPw/jJD4GoE98aR7r25A0XcgrK3F02yw9R/vhQw==}
+    engines: {node: '>=0.3.1'}
 
   dingbat-to-unicode@1.0.1:
     resolution: {integrity: sha512-98l0sW87ZT58pU4i61wa2OHwxbiYSbuxsCBozaVnYX2iCnr3bLM3fIes1/ej7h1YdOKuKt/MLs706TVnALA65w==}
@@ -9883,6 +9890,8 @@ snapshots:
   devtools-protocol@0.0.1464554: {}
 
   dfa@1.2.0: {}
+
+  diff@9.0.0: {}
 
   dingbat-to-unicode@1.0.1: {}
 

@@ -13,9 +13,9 @@
 
 ### 2.1 当前状态
 
-- 总体登记：`21` 个 e2e case，`1` 个 backend contract case。
-- 当前有效结论：e2e `21 / 21` 通过；backend contract `15 / 15` tests 通过。
-- 检测时间：`2026-07-14 10:20:20 +08:00`。
+- 总体登记：`22` 个 e2e case，`1` 个 backend contract case。
+- 当前有效结论：历史全量 e2e `21 / 21` 通过；本轮定向通过 `file-preview-actions`、`text-file-apply-preview-and-revert`、`multi-file-apply-tabs`、`browser-use-task-panel`，并通过 Workbench unit `23 / 23`；未重跑全部 Workbench suite。
+- 检测时间：`2026-07-15 +08:00`。
 - 本轮模型配置由根目录 `.env` 通过 `loadRootEnvOnce()` 自动读取，无需手工 export。
 
 ### 2.2 按 Suite 汇总
@@ -27,11 +27,11 @@
 - `run`
   - 登记 case：`8` 个 e2e，`1` 个 backend contract
   - 当前有效结论：backend contract `15 / 15` tests；e2e `8 / 8`。
-  - 备注：公网搜索中的模型工具选择不再作为稳定 E2E 门禁；内置浏览器闭环统一由本地可控网页的 `browser-use-task-panel` 覆盖。
+  - 备注：`browser-use-task-panel` 本轮真实模型定向通过，覆盖文件 / 浏览器 Tab 共存、浏览器单例和页面状态保留。
 - `result`
-  - 登记 case：`5`
-  - 当前有效结论：`5 / 5`。
-  - 备注：3 个 docx apply、文件预览和搜索结果打开规则均通过。
+  - 登记 case：`6`
+  - 当前有效结论：`text-file-apply-preview-and-revert` 与 `multi-file-apply-tabs` 本轮真实模型定向通过。
+  - 备注：`file-preview-actions` 本轮定向通过，覆盖四个真实文件 Tab、旧 Tab 切回和 pdf/docx/md/txt 真实预览。
 
 ### 2.3 当前边界
 
@@ -40,9 +40,10 @@
 - Workbench e2e 的 workspace 文件索引允许在测试环境通过 `NCURATOR_WORKSPACE_KNOWLEDGE_CACHE=1` 启用真实 split / vector 缓存；缓存只按文件内容 hash、扩展名、splitter 参数和 embedding model 复用计算结果，不替代 workspace 文件记录、document id、搜索结果或 UI 状态。
 - Workbench 模型选择 helper 已改为通过真实下拉搜索选择 `AI_LIVE_PRIMARY_MODEL_NAME`；`ai-process-stream-and-final-answer` 已验证 `deepseek-v4-flash` 可通过真实 UI 搜索选中。
 - Workbench UI E2E 回归测试需要真实索引完成信号和 UI 可见状态作为等待条件；IPC observer 和 job 查询只能作为辅助证据，不能用来造业务状态。
-- `file-preview-actions` 当前按生产真实索引能力覆盖 `pdf/docx/md/txt`：`.md`、`.markdown`、`.txt` 必须通过真实索引进入搜索结果，并从搜索结果打开右侧预览。
+- `file-preview-actions` 当前按生产真实索引能力覆盖 `pdf/docx/md/txt`：连续打开的文件要分别保留为资源 Tab，并能切回旧 Tab；`.log` 与代码等其他 UTF-8 文件的纯文本 fallback 由 `file-render-utils` unit case 直接覆盖。
 - docx apply case 需要真实 docx 输入、真实 AI 编辑、真实写回记录、真实预览和真实回退。
-- `browser-use-task-panel` 需要真实 AI run 触发 `browser_use` 并驱动内置浏览器完成本地网页任务；当前已使用 DashScope / openai-compatible / `deepseek-v4-flash` 覆盖 Stagehand 官方 provider 与 `StagehandLangChainClient` 路径，不能用 fake browser 替代。
+- text-file apply case 需要真实 Markdown 或代码文件、真实 `file_write`、真实结构化 diff、独立 `TextFileDiffViewer` 和按原始 bytes 回退。
+- `browser-use-task-panel` 需要真实 AI run 触发 `browser_use` 并驱动内置浏览器完成本地网页任务；同时验证已打开文件 Tab 保留、浏览器 Tab 单例复用、切换文件后网页状态不销毁，不能用 fake browser 替代。
 - `web_search` 与 `web_crawl` 需要分开覆盖：搜索 case 只验证候选网页返回；读取 case 必须验证 AI 继续读取网页正文后再回答。
 - Workbench 附件链路当前固定保存到 `<workspace>/.ncurator/runtime/assets/<assetBucketId>/`，`assetBucketId` 为输入草稿 UUID，发送给 AI 时只传附件名称与路径，不再做发送前识图或文件解析。
 
@@ -58,7 +59,7 @@ Workbench 的回归测试顶层 suite 按用户任务闭环划分，而不是逐
 
 - `conversation` 验证用户发起任务前后的会话壳、composer、模式、模型 / 工作区偏好、工作目录前置条件与 `@` 参考资料 token。
 - `run` 验证智能模式运行中的过程流、持久化恢复、停止、审批、压缩提示和 AI 内置浏览器任务。
-- `result` 验证搜索结果、文件预览、修改文件工作区、真实 docx 预览、回退和多文件修改入口。
+- `result` 验证搜索结果、普通文件预览、修改文件工作区、真实 docx 预览、文本 diff、回退和多文件修改入口。
 - Workbench 回归测试优先使用 `e2e`，因为核心风险集中在 Electron、renderer 状态、IPC、真实 AI 调用、右侧面板和文件系统联动。
 - `backend` 只用于稳定的纯契约测试，例如参考资料候选过滤、搜索范围 payload 或会话 / 修改记录查询契约；不得用 backend case 代替真实 UI 交互断言。
 - 涉及 AI 的 case 必须记录模型、耗时、完成度评分和失败归因；Oracle 继续引用 [workbench.md](/Users/test/work-space/NCurator-Desktop/doc/prd/workbench.md) 的需求编号与验收编号。
@@ -231,10 +232,10 @@ tests/case/workbench/
 #### `browser-use-task-panel`
 
 - 测试类型：`e2e`
-- What：验证 AI 通过内置浏览器完成网页任务时，右侧浏览器面板、页面导航和真实网页操作结果形成闭环。
+- What：验证 AI 通过内置浏览器完成网页任务时，文件 / 浏览器 Tab、页面导航、资源复用和真实网页操作结果形成闭环。
 - Why：内置浏览器是 Electron 与 AI run 深度联动场景，仅 backend 或静态事件无法覆盖视口嵌入、导航和最终收口问题。
-- How：启动本地测试网页；通过真实用户请求让 AI 使用 `browser_use` 操作页面；等待右侧浏览器面板打开、网页输入框被填入、提交按钮被点击，并从真实 browser_use 结果中读到页面结果。
-- Oracle：收到浏览器面板事件后右侧进入内置浏览器状态并随面板 resize 对齐，对齐 `WB-PANEL-004-AC1`；传入 URL 时先导航再执行网页操作，对齐 `WB-PANEL-004-AC2`；切换其他面板或收起时浏览器视图不遮挡其他内容，对齐 `WB-PANEL-004-AC3`；任务完成后真实 browser_use 结果包含本地网页返回的 `BROWSER_TASK_DONE` 和口令，对齐 `WB-PANEL-004-AC4`、`WB-CORE-005-AC1`、`WB-CORE-006-AC1`；记录模型、耗时、完成度评分和失败归因。
+- How：先打开真实 Markdown 文件，再启动本地测试网页；通过真实用户请求让 AI 使用 `browser_use` 操作页面；重复从 `+` 菜单打开浏览器；任务完成后切回文件再切回浏览器。
+- Oracle：文件和浏览器共存为两个资源 Tab，对齐 `WB-PANEL-001-AC1`；重复打开浏览器仍只有一个 Tab，对齐 `WB-PANEL-001-AC4`；切换文件后浏览器 URL 保持且再次显示原页面，对齐 `WB-PANEL-004-AC3`；真实 browser_use 结果包含 `BROWSER_TASK_DONE` 和口令，对齐 `WB-PANEL-004-AC4`、`WB-CORE-005-AC1`、`WB-CORE-006-AC1`。
 - Not：不验证公网网页稳定性；本 case 使用本地测试网页减少外部波动；不允许用 fake browser 或 fake tool result 替代；不要求 live 模型必须在固定时限内结束整轮最终回答，只要真实内置浏览器已完成输入、点击和结果读取即可判定 browser panel 能力有效。
 
 
@@ -279,11 +280,20 @@ tests/case/workbench/
 #### `file-preview-actions`
 
 - 测试类型：`e2e`
-- What：验证右侧普通文件预览态的预览优先布局、定位文件、系统打开入口、PDF 命中定位，以及 Markdown / 纯文本预览。
+- What：验证右侧普通文件预览态、多个文件 Tab、定位文件、系统打开入口、PDF 命中定位，以及 Markdown / 纯文本预览。
 - Why：右侧面板是用户消费搜索 / 引用结果的主要区域，预览布局错误会直接阻断阅读。
-- How：从真实搜索结果打开真实 pdf、docx、md、txt 文件；检查右侧工具条、预览主体、返回路径、PDF 命中页定位、Markdown 标题 / 列表 / 表格 / 代码块渲染，以及纯文本换行保留。
-- Oracle：普通文件打开后右侧主体用于预览且工具条提供定位文件和系统打开，对齐 `WB-PANEL-003-AC1`；PDF 搜索命中打开后保留整份 PDF 可滚动内容并定位到命中页，对齐 `WB-PANEL-003-AC3`；md/txt 必须来自真实索引搜索命中，并打开同一右侧文件预览面板。
+- How：从真实搜索结果连续打开真实 pdf、docx、md、txt 文件；检查预览内容和工具条；确认产生四个文件 Tab，再切回 Markdown Tab。
+- Oracle：普通文件预览和工具条对齐 `WB-PANEL-003-AC1`；PDF 命中页对齐 `WB-PANEL-003-AC3`；四个文件分别保留且旧 Tab 可恢复，对齐 `WB-PANEL-001-AC1`；md/txt 来自真实索引搜索命中。
 - Not：不验证系统文件管理器或系统默认应用本身是否成功打开；不伪造 md/txt 搜索结果或右侧预览状态。
+
+#### `text-file-apply-preview-and-revert`
+
+- 测试类型：`e2e`
+- What：验证同一个 Markdown 文件在普通预览时正常渲染，在 AI 修改记录中使用独立文本 diff，并能恢复原始 bytes。
+- Why：普通预览和修改预览是两种不同语义；如果共用文件渲染器，用户看不到本次具体增加和删除内容。
+- How：先从真实搜索结果打开 Markdown 普通预览；再通过真实 AI 调用 `replaceAll` 和 `edit` 修改该文件；点击 assistant 修改入口检查 `TextFileDiffViewer`；最后执行回退。
+- Oracle：普通预览与修改 diff 共用一个文件 Tab，对齐 `WB-PANEL-001-AC2`；diff 每行只有一个行号列并显示“N 行未修改”，对齐 `WB-PANEL-003-AC5`；回答底部无重复 artifact 文件标签；回退后 bytes 与原始输入一致，历史 diff 仍保留。
+- Not：不验证 unified diff 字符串；UI 只消费结构化 diff artifact。
 
 #### `docx-apply-panel-preview-and-revert`
 
@@ -306,8 +316,8 @@ tests/case/workbench/
 #### `multi-file-apply-tabs`
 
 - 测试类型：`e2e`
-- What：验证同一轮 AI 修改多个文件时，assistant turn 保留全部入口；右侧修改文件面板只展示当前点击的单个文件记录。
+- What：验证同一轮 AI 修改多个文件时，assistant turn 保留全部入口；右侧为每个文件保留资源 Tab，并可切回旧文件。
 - Why：多文件任务如果只保留最新或单个入口，用户无法检查和回退完整结果。
-- How：通过 UI 选择至少两个真实 docx 文件并发送真实多文件编辑请求；等待 AI 写回；分别点击 assistant turn 中不同入口，检查右侧面板只显示被点击文件，并确认不再出现右侧文件 tab。
-- Oracle：同一轮多个修改记录都会出现在同一 assistant turn 中，对齐 `WB-APPLY-005-AC1`；点击哪个修改文件入口，右侧就加载该文件记录，对齐 `WB-APPLY-001-AC2`；点击不同入口会加载对应记录和预览稿，而不是跳到最新轮次，对齐 `WB-APPLY-005-AC2`；全部本轮入口保留在 assistant turn 列表中，对齐 `WB-APPLY-005-AC3`；记录模型、耗时、完成度评分和失败归因。
+- How：通过 UI 选择至少两个真实 docx 文件并发送真实多文件编辑请求；分别点击两个修改入口，确认生成两个文件 Tab，再点击第一个 Tab 恢复其记录。
+- Oracle：多个修改入口对齐 `WB-APPLY-005-AC1`；点击入口加载对应记录并新增或激活文件 Tab，对齐 `WB-PANEL-001-AC1`、`WB-APPLY-005-AC2`；切回旧 Tab 后仍显示对应记录；全部入口继续保留。
 - Not：不验证不同 AI 轮次的全部历史筛选 UI，只覆盖同一轮多文件入口和当前轮次隔离。

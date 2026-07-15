@@ -17,6 +17,7 @@ import { releaseDocxRunSession } from '../../../src/main/services/ai/human/tools
 import { DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS } from '../../../src/main/services/ai/human/constants'
 import { buildKbCapabilityTools } from '../../../src/main/services/ai/human/tools/kb/retrievalTools'
 import { buildTerminalCapabilityTools } from '../../../src/main/services/ai/human/tools/terminal/terminalTools'
+import { buildTextFileCapabilityTools } from '../../../src/main/services/ai/human/tools/textFile'
 import { imageRecognitionToolFamily } from '../../../src/main/services/ai/human/tools/imageRecognition'
 import { utilityToolFamily } from '../../../src/main/services/ai/human/tools/utility'
 import { webToolFamily } from '../../../src/main/services/ai/human/tools/web'
@@ -116,6 +117,7 @@ export const createTerminalToolHarness = (
     cache,
     runId: runtime.runId,
     taskId: runtime.taskId,
+    sessionId: contextInput.sessionId || 'test-session',
     workspaceRootPath: runtime.workspaceRoot,
     timeoutMs: Math.max(100, Number(options.timeoutMs || 3000)),
     maxOutputChars: Math.max(256, Number(options.maxOutputChars || 4000)),
@@ -129,6 +131,32 @@ export const createTerminalToolHarness = (
     ...createToolInvoker(built.tools as readonly ToolLike[]),
     ctx,
     state: built.state,
+    activities
+  }
+}
+
+export const createTextFileToolHarness = (
+  runtime: BackendTestRuntime,
+  contextInput: CreateAiRunContextInput = {}
+) => {
+  const ctx = runtime.createAiRunContext(contextInput)
+  const cache = createHumanRuntimeCache()
+  const activities: CapturedToolActivity[] = []
+  const built = buildTextFileCapabilityTools({
+    ctx,
+    cache,
+    runId: runtime.runId,
+    sessionId: contextInput.sessionId || 'test-session',
+    taskId: runtime.taskId,
+    workspaceRootPath: runtime.workspaceRoot,
+    emitActivity: (activity) => {
+      activities.push(activity)
+    }
+  })
+
+  return {
+    ...createToolInvoker(built.tools as readonly ToolLike[]),
+    ctx,
     activities
   }
 }

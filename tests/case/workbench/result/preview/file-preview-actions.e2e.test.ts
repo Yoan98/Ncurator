@@ -7,6 +7,7 @@ import {
   assertNoWorkbenchFakeSignals,
   createTemporaryWorkbenchWorkspace,
   getWorkbenchLocator,
+  getWorkbenchPrefixLocator,
   insertWorkbenchReferenceToken,
   navigateToWorkbench,
   prepareWorkbenchWorkspaceThroughUi,
@@ -185,6 +186,13 @@ describe('workbench result e2e', () => {
             const textResults = await waitForWorkbenchSearchResults(page)
             await openSearchPreview(page, textResults, 'human-input.txt')
             const plainTextPreviewVisible = await waitForPlainTextPreview(page)
+            const resourceTabs = getWorkbenchPrefixLocator(
+              page,
+              workbenchSelectors.resourceTabPrefix
+            )
+            const resourceTabCount = await resourceTabs.count()
+            await resourceTabs.filter({ hasText: 'workbench-preview.md' }).first().click()
+            const reopenedMarkdownVisible = await waitForMarkdownPreview(page)
             const signals = await runtime.collectSignals()
 
             return {
@@ -194,6 +202,8 @@ describe('workbench result e2e', () => {
               docxPreviewStableWhileTyping,
               markdownPreviewVisible,
               plainTextPreviewVisible,
+              reopenedMarkdownVisible,
+              resourceTabCount,
               revealPathCalls: signals.ipcInvokeEntries.filter(
                 (entry) => entry.name === 'revealPath'
               ).length
@@ -210,6 +220,8 @@ describe('workbench result e2e', () => {
               result.docxPreviewStableWhileTyping &&
               result.markdownPreviewVisible &&
               result.plainTextPreviewVisible &&
+              result.reopenedMarkdownVisible &&
+              result.resourceTabCount === 4 &&
               result.revealPathCalls >= 1,
             {
               name: 'workbench-file-preview-actions-real',

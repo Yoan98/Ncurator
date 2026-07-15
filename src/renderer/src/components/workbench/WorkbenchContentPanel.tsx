@@ -12,19 +12,23 @@ import {
   HiOutlineMagnifyingGlass,
   HiSparkles
 } from 'react-icons/hi2'
-import type { DocxApplyRecord, SearchResult, WorkspaceSource } from '../../../../shared/types'
+import type { AiFileChangeRecord, SearchResult, WorkspaceSource } from '../../../../shared/types'
 import TextHighlighter from '../TextHighlighter'
 import { FileRenderViewer } from '../fileRenders'
 import type { FileRenderDocument } from '../fileRenders'
 import WorkbenchBrowserPanel from './WorkbenchBrowserPanel'
-import type { SearchWorkbenchTurn, WorkbenchContentPanelState } from './types'
+import type { SearchWorkbenchTurn, WorkbenchContentPanelState, WorkbenchResourceTab } from './types'
 import { workbenchSelectors } from '../../testing/selectors'
 import ChangeCountBadges from './ChangeCountBadges'
 import WorkspacePathLabel from './WorkspacePathLabel'
+import { TextFileDiffViewer } from './TextFileDiffViewer'
+import WorkbenchTabBar from './WorkbenchTabBar'
 
 type WorkbenchContentPanelProps = {
   state: WorkbenchContentPanelState
-  activeApplyRecord: DocxApplyRecord | null
+  tabs: WorkbenchResourceTab[]
+  activeTabId: string | null
+  activeApplyRecord: AiFileChangeRecord | null
   applyLoading: boolean
   applyReverting: boolean
   workspaces: WorkspaceSource[]
@@ -34,6 +38,10 @@ type WorkbenchContentPanelProps = {
   onBackToPanelState: (state: WorkbenchContentPanelState) => void
   onOpenPath: (filePath: string) => Promise<void>
   onRevealPath: (filePath: string) => Promise<void>
+  onActivateTab: (tabId: string) => void
+  onCloseTab: (tabId: string) => void
+  onAddFileTab: () => void
+  onAddBrowserTab: () => void
 }
 
 const createSearchTurnSnapshot = (
@@ -200,12 +208,12 @@ const WorkbenchSearchResultsPanel: React.FC<{
 }
 
 type WorkbenchDocumentPreviewPanelProps = {
-  fileName: string
   filePath: string
   documents: FileRenderDocument[]
+  content?: React.ReactNode
   mode: 'preview' | 'edit'
-  status?: DocxApplyRecord['status']
-  operation?: DocxApplyRecord['operation']
+  status?: AiFileChangeRecord['status']
+  operation?: AiFileChangeRecord['operation']
   insertCount?: number
   deleteCount?: number
   testId?: string
@@ -225,9 +233,9 @@ type WorkbenchDocumentPreviewPanelProps = {
 }
 
 const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPreviewPanelProps> = ({
-  fileName,
   filePath,
   documents,
+  content,
   mode,
   status,
   operation,
@@ -284,7 +292,14 @@ const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPreviewPanelP
         ) : null}
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-2">
-            <div className="truncate text-[13px] font-semibold text-[#37352F]">{fileName}</div>
+            <WorkspacePathLabel
+              filePath={filePath}
+              workspaces={workspaces}
+              fallbackWorkspaceName={fallbackWorkspaceName}
+              className="min-w-0 text-[13px] font-semibold"
+              prefixClassName="text-[#787774]"
+              fileNameClassName="text-[#37352F]"
+            />
             <span
               className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] ${tagClassName}`}
               data-testid={workbenchSelectors.documentPreviewModeTag}
@@ -302,14 +317,6 @@ const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPreviewPanelP
               </>
             ) : null}
           </div>
-          <WorkspacePathLabel
-            filePath={filePath}
-            workspaces={workspaces}
-            fallbackWorkspaceName={fallbackWorkspaceName}
-            className="mt-1 text-xs"
-            prefixClassName="text-[#B1B0AD]"
-            fileNameClassName="text-[#787774]"
-          />
         </div>
         <div className="flex shrink-0 items-center gap-1">
           <Tooltip title={revealTitle}>
@@ -361,7 +368,7 @@ const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPreviewPanelP
         </div>
       ) : null}
       <div className="min-h-0 flex-1 bg-white" data-testid={workbenchSelectors.documentView}>
-        {isDeletedCreatedFile ? (
+        {isDeletedCreatedFile && !content ? (
           <div className="flex h-full items-center justify-center">
             <Empty
               image={Empty.PRESENTED_IMAGE_SIMPLE}
@@ -372,6 +379,8 @@ const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPreviewPanelP
           <div className="flex h-full items-center justify-center">
             <Spin />
           </div>
+        ) : content ? (
+          content
         ) : (
           <FileRenderViewer documents={documents} framed={false} emptyText={emptyText} />
         )}
@@ -384,9 +393,9 @@ const arePreviewPanelPropsEqual = (
   previous: WorkbenchDocumentPreviewPanelProps,
   next: WorkbenchDocumentPreviewPanelProps
 ): boolean =>
-  previous.fileName === next.fileName &&
   previous.filePath === next.filePath &&
   previous.documents === next.documents &&
+  previous.content === next.content &&
   previous.mode === next.mode &&
   previous.status === next.status &&
   previous.operation === next.operation &&
@@ -410,6 +419,8 @@ const WorkbenchDocumentPreviewPanel = React.memo(
 
 const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
   state,
+  tabs,
+  activeTabId,
   activeApplyRecord,
   applyLoading,
   applyReverting,
@@ -419,7 +430,11 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
   onRevertApply,
   onBackToPanelState,
   onOpenPath,
-  onRevealPath
+  onRevealPath,
+  onActivateTab,
+  onCloseTab,
+  onAddFileTab,
+  onAddBrowserTab
 }) => {
   const previewDocuments = useMemo<FileRenderDocument[]>(
     () =>
@@ -434,21 +449,28 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
         : [],
     [state]
   )
-  const hasDedicatedPreview = Boolean(activeApplyRecord?.preview_diff_checksum)
+  const hasDedicatedPreview = Boolean(activeApplyRecord?.previewPath)
   const applyDocuments = useMemo<FileRenderDocument[]>(() => {
-    if (!activeApplyRecord?.source_name) return []
+    if (!activeApplyRecord || activeApplyRecord.capability === 'text_file') return []
     const shouldShowCurrentFile =
       activeApplyRecord.status === 'reverted' && activeApplyRecord.operation === 'updated'
     const filePath = shouldShowCurrentFile
-      ? activeApplyRecord.source_path
-      : activeApplyRecord.preview_diff_artifact_path || activeApplyRecord.source_path
+      ? activeApplyRecord.path
+      : activeApplyRecord.previewPath || activeApplyRecord.path
     return [
       {
         filePath,
-        fileName: activeApplyRecord.source_name
+        fileName: activeApplyRecord.fileName
       }
     ]
   }, [activeApplyRecord])
+  const applyContent = useMemo(
+    () =>
+      activeApplyRecord?.capability === 'text_file' && activeApplyRecord.previewPath ? (
+        <TextFileDiffViewer previewPath={activeApplyRecord.previewPath} />
+      ) : undefined,
+    [activeApplyRecord]
+  )
   const applyEmptyText =
     activeApplyRecord?.status === 'reverted' || hasDedicatedPreview
       ? '当前文件暂时不可预览。'
@@ -459,6 +481,14 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
       className="flex h-full min-h-0 flex-col border-l border-[#EEEEEC] bg-white"
       data-testid={workbenchSelectors.contentPanel}
     >
+      <WorkbenchTabBar
+        tabs={tabs}
+        activeTabId={activeTabId}
+        onActivateTab={onActivateTab}
+        onCloseTab={onCloseTab}
+        onAddFileTab={onAddFileTab}
+        onAddBrowserTab={onAddBrowserTab}
+      />
       <div className="min-h-0 flex-1 overflow-hidden">
         {state.kind === 'empty' ? <WorkbenchEmptyPanel /> : null}
         {state.kind === 'search_list' ? (
@@ -470,7 +500,6 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
         ) : null}
         {state.kind === 'file_preview' ? (
           <WorkbenchDocumentPreviewPanel
-            fileName={state.file.fileName}
             filePath={state.file.path}
             documents={previewDocuments}
             mode="preview"
@@ -486,14 +515,14 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
         {state.kind === 'apply_workspace' ? (
           activeApplyRecord ? (
             <WorkbenchDocumentPreviewPanel
-              fileName={activeApplyRecord.source_name}
-              filePath={activeApplyRecord.source_path}
+              filePath={activeApplyRecord.path}
               documents={applyDocuments}
+              content={applyContent}
               mode="edit"
               status={activeApplyRecord.status}
               operation={activeApplyRecord.operation}
-              insertCount={activeApplyRecord.insert_count}
-              deleteCount={activeApplyRecord.delete_count}
+              insertCount={activeApplyRecord.insertCount}
+              deleteCount={activeApplyRecord.deleteCount}
               testId={workbenchSelectors.applyPanel}
               loading={applyLoading}
               reverting={applyReverting}
@@ -527,6 +556,8 @@ const areContentPanelPropsEqual = (
   next: WorkbenchContentPanelProps
 ): boolean =>
   previous.state === next.state &&
+  previous.tabs === next.tabs &&
+  previous.activeTabId === next.activeTabId &&
   previous.activeApplyRecord === next.activeApplyRecord &&
   previous.applyLoading === next.applyLoading &&
   previous.applyReverting === next.applyReverting &&

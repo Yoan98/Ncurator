@@ -321,6 +321,12 @@ export interface PickDirectoryResponse {
   error?: string
 }
 
+export interface PickFileResponse {
+  canceled: boolean
+  path?: string
+  error?: string
+}
+
 export interface DeleteWorkspaceSourceResponse {
   success: boolean
   deletedWorkspaceId?: string
@@ -605,8 +611,26 @@ export interface ChatSessionListItem extends ChatSession {
 }
 
 export type AiFileChangeStatus = 'applied' | 'reverted' | 'failed'
-export type AiFileChangeCapability = 'docx' | 'terminal_exec' | 'ppt'
+export type AiFileChangeCapability = 'docx' | 'text_file' | 'terminal_exec' | 'ppt'
 export type AiFileChangeOperation = 'created' | 'updated'
+
+export type TextFileDiffLine =
+  | { type: 'context'; oldLine: number; newLine: number; text: string }
+  | { type: 'remove'; oldLine: number; text: string }
+  | { type: 'add'; newLine: number; text: string }
+
+export interface TextFileDiffHunk {
+  oldStart: number
+  newStart: number
+  lines: TextFileDiffLine[]
+}
+
+export interface TextFileDiffArtifact {
+  version: 1
+  oldLineCount: number
+  newLineCount: number
+  hunks: TextFileDiffHunk[]
+}
 
 export interface AiFileChangeRecord {
   id: string
@@ -774,6 +798,7 @@ export type RuntimeIssueCode =
   | 'llm_usage_unavailable'
 export type RuntimeSkillId =
   | 'terminal'
+  | 'text-file'
   | 'docx-read'
   | 'docx-write'
   | 'image-recognition'
@@ -865,7 +890,7 @@ export type AiRuntimeSettings = {
   llmStreamingMode: AiLlmStreamingMode
 }
 
-export type AiFileArtifactCapability = 'terminal_exec' | 'docx'
+export type AiFileArtifactCapability = 'terminal_exec' | 'docx' | 'text_file'
 export type AiFileArtifactOperation = AiFileChangeOperation
 export type AiFileArtifactRef = {
   kind: 'file'

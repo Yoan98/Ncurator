@@ -4,14 +4,20 @@ import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
   WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
   type WorkbenchAiCompletionEvidence,
+  appendWorkbenchInputText,
   assertNoWorkbenchFakeSignals,
   collectWorkbenchAiRunEvents,
   decideWorkbenchApprovalBatch,
   getWorkbenchLocator,
+  getWorkbenchPrefixLocator,
+  insertWorkbenchReferenceToken,
   recordWorkbenchAiEvidence,
   sendWorkbenchMessage,
   setupWorkbenchWithTempWorkspace,
   startLocalWorkbenchHttpServer,
+  submitWorkbenchCurrentDraft,
+  switchWorkbenchMode,
+  waitForWorkbenchSearchResults,
   workbenchSelectors
 } from '../../../../harness/e2e/workbench'
 
@@ -43,10 +49,7 @@ const readToolInputString = (
   return typeof value === 'string' ? value : ''
 }
 
-const hasDeprecatedBrowserUseField = (
-  value: JsonValue | undefined,
-  isRoot = true
-): boolean => {
+const hasDeprecatedBrowserUseField = (value: JsonValue | undefined, isRoot = true): boolean => {
   if (Array.isArray(value)) return value.some((item) => hasDeprecatedBrowserUseField(item, false))
   if (!isObjectRecord(value)) return false
   return Object.entries(value).some(([key, child]) => {
@@ -78,7 +81,9 @@ const isBrowserUseDataContract = (data: JsonValue | undefined): boolean => {
   )
 }
 
-const readBrowserUseResultText = (event: Extract<AiRunEvent, { type: 'tool_call_result' }>): string => {
+const readBrowserUseResultText = (
+  event: Extract<AiRunEvent, { type: 'tool_call_result' }>
+): string => {
   const data = event.result?.data
   if (!isObjectRecord(data) || !isObjectRecord(data.result)) return ''
   const parts: string[] = []
@@ -221,20 +226,23 @@ const waitForBrowserTaskCompletion = async (
 }
 
 describe('workbench run e2e', () => {
-  it(CASE_ID, async () => {
-    await runE2ECase({
-      caseId: CASE_ID,
-      domain: 'workbench',
-      suite: 'run',
-      groups: ['browser'],
-      description: '真实 AI 使用 browser_use 操作本地网页，验证右侧浏览器面板、网页结果和最终回答闭环。',
-      fixtures: ['tests/fixtures/workspace'],
-      launchMode: 'real',
-      windowMode: 'visible',
-      runMode: 'single',
-      execute: async (runtime) => {
-        const { page } = runtime
-        const server = await startLocalWorkbenchHttpServer(`<!doctype html>
+  it(
+    CASE_ID,
+    async () => {
+      await runE2ECase({
+        caseId: CASE_ID,
+        domain: 'workbench',
+        suite: 'run',
+        groups: ['browser'],
+        description:
+          '真实 AI 使用 browser_use 操作本地网页，验证右侧浏览器面板、网页结果和最终回答闭环。',
+        fixtures: ['tests/fixtures/workspace'],
+        launchMode: 'real',
+        windowMode: 'visible',
+        runMode: 'single',
+        execute: async (runtime) => {
+          const { page } = runtime
+          const server = await startLocalWorkbenchHttpServer(`<!doctype html>
           <title>Workbench Browser Task</title>
           <label>Task code <input id="task-code" aria-label="Task code" /></label>
           <button id="submit-task">Submit task</button>
@@ -244,111 +252,184 @@ describe('workbench run e2e', () => {
               document.querySelector('#task-result').textContent = 'BROWSER_TASK_DONE:' + document.querySelector('#task-code').value
             })
           </script>`)
-        const setup = await setupWorkbenchWithTempWorkspace(page, { caseId: CASE_ID })
-        try {
-          const startedAtMs = Date.now()
-          await sendWorkbenchMessage(
-            page,
-            `Use the right embedded browser to complete this page task. Use browser_use navigate to open ${server.url}, use observe to inspect the form controls, then do not combine form actions: use one act to fill the Task code input with ${TASK_CODE}, use another act to click Submit task, then use extract to read the full displayed result. Tell me the exact result text.`
-          )
+          const setup = await setupWorkbenchWithTempWorkspace(page, { caseId: CASE_ID })
+          try {
+            await switchWorkbenchMode(page, '没头脑')
+            await insertWorkbenchReferenceToken(page, 'workbench-preview.md')
+            await appendWorkbenchInputText(page, 'cedar-markdown-preview-442')
+            await submitWorkbenchCurrentDraft(page)
+            const previewResults = await waitForWorkbenchSearchResults(page)
+            await previewResults
+              .locator('div')
+              .filter({ hasText: 'workbench-preview.md' })
+              .first()
+              .getByRole('button', { name: '预览文件' })
+              .click()
+            await getWorkbenchLocator(page, workbenchSelectors.markdownViewer).waitFor({
+              state: 'visible',
+              timeout: 30_000
+            })
 
-          await waitForBrowserPanelOpenedWithApproval(runtime)
-          await getWorkbenchLocator(page, workbenchSelectors.browserPanel).waitFor({
-            state: 'visible'
-          })
-          await getWorkbenchLocator(page, workbenchSelectors.browserViewport).waitFor({
-            state: 'visible'
-          })
-          const browserPanel = getWorkbenchLocator(page, workbenchSelectors.browserPanel)
-          const zoomResetText =
-            (await browserPanel.locator('button').filter({ hasText: /%/u }).first().textContent()) ||
-            ''
-          const browserBackButtonCount = await browserPanel
-            .getByRole('button', { name: /返回|back/i })
-            .count()
-          const evidence = await waitForBrowserTaskCompletion(
-            runtime,
-            startedAtMs,
-            setup.env.modelName
-          )
-          recordWorkbenchAiEvidence(runtime, evidence, 0.8)
-          const browserStarts = evidence.events.filter(
-            (event): event is Extract<AiRunEvent, { type: 'tool_call_started' }> =>
-              event.type === 'tool_call_started' && event.toolName === 'browser_use'
-          )
-          const browserResults = evidence.events.filter(
-            (event): event is Extract<AiRunEvent, { type: 'tool_call_result' }> =>
-              event.type === 'tool_call_result' && event.toolName === 'browser_use'
-          )
-          const browserData = browserResults.map((event) => event.result?.data)
-
-          return {
-            finalAnswerText: evidence.finalAnswerText,
-            eventTypes: evidence.events.map((event) => event.type),
-            zoomResetText,
-            browserBackButtonCount,
-            browserActions: browserStarts.map((event) => readToolInputString(event, 'action')),
-            browserResultContractValid:
-              browserData.length > 0 && browserData.every(isBrowserUseDataContract),
-            deprecatedBrowserUseFieldsAbsent: browserData.every(
-              (data) => !hasDeprecatedBrowserUseField(data)
-            ),
-            observeResultVisible: browserData.some(
-              (data) =>
-                isObjectRecord(data) &&
-                data.action === 'observe' &&
-                isObjectRecord(data.result) &&
-                Array.isArray(data.result.actions)
-            ),
-            actResultVisible: browserData.some(
-              (data) =>
-                isObjectRecord(data) &&
-                data.action === 'act' &&
-                isObjectRecord(data.result) &&
-                typeof data.result.success === 'boolean' &&
-                typeof data.result.message === 'string' &&
-                typeof data.result.actionDescription === 'string' &&
-                Array.isArray(data.result.actions)
-            ),
-            extractResultVisible: browserData.some(
-              (data) =>
-                isObjectRecord(data) &&
-                data.action === 'extract' &&
-                isObjectRecord(data.result) &&
-                typeof data.result.extracted === 'string' &&
-                data.result.extracted.includes('BROWSER_TASK_DONE')
+            await switchWorkbenchMode(page, '大聪明')
+            const startedAtMs = Date.now()
+            await sendWorkbenchMessage(
+              page,
+              `Use the right embedded browser to complete this page task. Use browser_use navigate to open ${server.url}, use observe to inspect the form controls, then do not combine form actions: use one act to fill the Task code input with ${TASK_CODE}, use another act to click Submit task, then use extract to read the full displayed result. Tell me the exact result text.`
             )
+
+            await waitForBrowserPanelOpenedWithApproval(runtime)
+            await getWorkbenchLocator(page, workbenchSelectors.browserPanel).waitFor({
+              state: 'visible'
+            })
+            await getWorkbenchLocator(page, workbenchSelectors.browserViewport).waitFor({
+              state: 'visible'
+            })
+            const resourceTabs = getWorkbenchPrefixLocator(
+              page,
+              workbenchSelectors.resourceTabPrefix
+            )
+            const initialResourceTabCount = await resourceTabs.count()
+            const initialBrowserTabCount = await resourceTabs.filter({ hasText: '浏览器' }).count()
+            await getWorkbenchLocator(page, workbenchSelectors.resourceTabAddButton).click()
+            const openFileMenuItemVisible = await page
+              .getByRole('menuitem', { name: '打开文件' })
+              .isVisible()
+            await page.getByRole('menuitem', { name: '浏览器' }).click()
+            const resourceTabCountAfterReopen = await resourceTabs.count()
+            const browserTabCountAfterReopen = await resourceTabs
+              .filter({ hasText: '浏览器' })
+              .count()
+            const browserPanel = getWorkbenchLocator(page, workbenchSelectors.browserPanel)
+            const zoomResetText =
+              (await browserPanel
+                .locator('button')
+                .filter({ hasText: /%/u })
+                .first()
+                .textContent()) || ''
+            const browserBackButtonCount = await browserPanel
+              .getByRole('button', { name: /返回|back/i })
+              .count()
+            const evidence = await waitForBrowserTaskCompletion(
+              runtime,
+              startedAtMs,
+              setup.env.modelName
+            )
+            recordWorkbenchAiEvidence(runtime, evidence, 0.8)
+            const browserStarts = evidence.events.filter(
+              (event): event is Extract<AiRunEvent, { type: 'tool_call_started' }> =>
+                event.type === 'tool_call_started' && event.toolName === 'browser_use'
+            )
+            const browserResults = evidence.events.filter(
+              (event): event is Extract<AiRunEvent, { type: 'tool_call_result' }> =>
+                event.type === 'tool_call_result' && event.toolName === 'browser_use'
+            )
+            const browserData = browserResults.map((event) => event.result?.data)
+            await resourceTabs.filter({ hasText: 'workbench-preview.md' }).first().click()
+            const fileTabRestored = await getWorkbenchLocator(
+              page,
+              workbenchSelectors.markdownViewer
+            )
+              .waitFor({ state: 'visible', timeout: 30_000 })
+              .then(() => true)
+              .catch(() => false)
+            const browserStateWhileHidden = await page.evaluate(async () =>
+              window.api.browserPanelStateGet()
+            )
+            await resourceTabs.filter({ hasText: '浏览器' }).first().click()
+            await getWorkbenchLocator(page, workbenchSelectors.browserViewport).waitFor({
+              state: 'visible'
+            })
+            const browserStateAfterRestore = await page.evaluate(async () =>
+              window.api.browserPanelStateGet()
+            )
+
+            return {
+              finalAnswerText: evidence.finalAnswerText,
+              eventTypes: evidence.events.map((event) => event.type),
+              zoomResetText,
+              browserBackButtonCount,
+              initialResourceTabCount,
+              initialBrowserTabCount,
+              openFileMenuItemVisible,
+              resourceTabCountAfterReopen,
+              browserTabCountAfterReopen,
+              fileTabRestored,
+              browserUrlPreserved:
+                browserStateWhileHidden.success &&
+                browserStateAfterRestore.success &&
+                browserStateWhileHidden.state?.url === server.url &&
+                browserStateAfterRestore.state?.url === server.url,
+              browserActions: browserStarts.map((event) => readToolInputString(event, 'action')),
+              browserResultContractValid:
+                browserData.length > 0 && browserData.every(isBrowserUseDataContract),
+              deprecatedBrowserUseFieldsAbsent: browserData.every(
+                (data) => !hasDeprecatedBrowserUseField(data)
+              ),
+              observeResultVisible: browserData.some(
+                (data) =>
+                  isObjectRecord(data) &&
+                  data.action === 'observe' &&
+                  isObjectRecord(data.result) &&
+                  Array.isArray(data.result.actions)
+              ),
+              actResultVisible: browserData.some(
+                (data) =>
+                  isObjectRecord(data) &&
+                  data.action === 'act' &&
+                  isObjectRecord(data.result) &&
+                  typeof data.result.success === 'boolean' &&
+                  typeof data.result.message === 'string' &&
+                  typeof data.result.actionDescription === 'string' &&
+                  Array.isArray(data.result.actions)
+              ),
+              extractResultVisible: browserData.some(
+                (data) =>
+                  isObjectRecord(data) &&
+                  data.action === 'extract' &&
+                  isObjectRecord(data.result) &&
+                  typeof data.result.extracted === 'string' &&
+                  data.result.extracted.includes('BROWSER_TASK_DONE')
+              )
+            }
+          } finally {
+            await setup.workspace.cleanup()
+            await server.close()
           }
-        } finally {
-          await setup.workspace.cleanup()
-          await server.close()
+        },
+        assert: async (result, runtime) => {
+          await runtime.assertThat(
+            result.eventTypes.includes('browser_panel_opened') &&
+              result.browserActions.includes('navigate') &&
+              result.browserActions.includes('observe') &&
+              result.browserActions.includes('act') &&
+              result.browserActions.includes('extract') &&
+              result.browserResultContractValid &&
+              result.deprecatedBrowserUseFieldsAbsent &&
+              result.observeResultVisible &&
+              result.actResultVisible &&
+              result.extractResultVisible &&
+              result.initialResourceTabCount === 2 &&
+              result.initialBrowserTabCount === 1 &&
+              result.openFileMenuItemVisible &&
+              result.resourceTabCountAfterReopen === 2 &&
+              result.browserTabCountAfterReopen === 1 &&
+              result.fileTabRestored &&
+              result.browserUrlPreserved &&
+              /%/u.test(result.zoomResetText) &&
+              result.browserBackButtonCount === 0 &&
+              /BROWSER_TASK_DONE/u.test(result.finalAnswerText) &&
+              result.finalAnswerText.includes(TASK_CODE),
+            {
+              name: 'workbench-browser-use-panel-real',
+              message:
+                '真实 browser_use 任务应复用唯一浏览器 Tab，保留已打开文件和网页状态，并完成网页操作与最终回答闭环，对齐 WB-PANEL-004-AC1 至 WB-PANEL-004-AC4、WB-CORE-005、WB-CORE-006。',
+              data: result
+            }
+          )
+          await assertNoWorkbenchFakeSignals(runtime)
         }
-      },
-      assert: async (result, runtime) => {
-        await runtime.assertThat(
-          result.eventTypes.includes('browser_panel_opened') &&
-            result.browserActions.includes('navigate') &&
-            result.browserActions.includes('observe') &&
-            result.browserActions.includes('act') &&
-            result.browserActions.includes('extract') &&
-            result.browserResultContractValid &&
-            result.deprecatedBrowserUseFieldsAbsent &&
-            result.observeResultVisible &&
-            result.actResultVisible &&
-            result.extractResultVisible &&
-            /%/u.test(result.zoomResetText) &&
-            result.browserBackButtonCount === 0 &&
-            /BROWSER_TASK_DONE/u.test(result.finalAnswerText) &&
-            result.finalAnswerText.includes(TASK_CODE),
-          {
-            name: 'workbench-browser-use-panel-real',
-            message:
-              '真实 browser_use 任务应打开右侧内置浏览器、操作本地网页并在最终回答中回收网页操作结果，对齐 WB-PANEL-004-AC1 至 WB-PANEL-004-AC4、WB-CORE-005、WB-CORE-006。',
-            data: result
-          }
-        )
-        await assertNoWorkbenchFakeSignals(runtime)
-      }
-    })
-  }, WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS)
+      })
+    },
+    WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS
+  )
 })

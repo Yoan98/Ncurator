@@ -158,7 +158,12 @@ describe('workbench result e2e', () => {
             const afterSecondEntryText = (
               (await getWorkbenchLocator(page, workbenchSelectors.applyPanel).textContent()) || ''
             ).trim()
-            await firstEntry.click()
+            const resourceTabs = getWorkbenchPrefixLocator(
+              page,
+              workbenchSelectors.resourceTabPrefix
+            )
+            const resourceTabCount = await resourceTabs.count()
+            await resourceTabs.filter({ hasText: FIRST_FILE }).first().click()
             await waitForApplyPanelFile(page, FIRST_FILE)
             const afterFirstEntryAgainText = (
               (await getWorkbenchLocator(page, workbenchSelectors.applyPanel).textContent()) || ''
@@ -167,9 +172,6 @@ describe('workbench result e2e', () => {
               page,
               workbenchSelectors.applyPanel
             ).count()
-            const legacyTabsCount = await page
-              .locator('[data-testid="workbench-apply-tabs"]')
-              .count()
 
             return {
               firstBeforeText,
@@ -184,7 +186,7 @@ describe('workbench result e2e', () => {
               afterFirstEntryAgainText,
               firstModeTagText,
               applyPanelCount,
-              legacyTabsCount,
+              resourceTabCount,
               fileArtifactCount: evidence.events.filter((event) => event.type === 'file_artifact')
                 .length
             }
@@ -212,11 +214,11 @@ describe('workbench result e2e', () => {
               !result.afterFirstEntryAgainText.includes(SECOND_FILE) &&
               result.firstModeTagText === '编辑' &&
               result.applyPanelCount === 1 &&
-              result.legacyTabsCount === 0,
+              result.resourceTabCount === 2,
             {
               name: 'workbench-multi-file-apply-single-preview-real',
               message:
-                '同一轮 AI 修改多个 docx 时，assistant turn 应保留多个修改入口；右侧只展示当前点击的文件记录，不再提供右侧文件 tab，对齐 WB-APPLY-005、WB-APPLY-001。',
+                '同一轮 AI 修改多个文件时，右侧应为每个文件保留一个 tab，并能直接切换回已打开文件。',
               data: result
             }
           )

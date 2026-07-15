@@ -370,6 +370,7 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
             taskId: input.taskId,
             stepId,
             candidates: preparedArtifactCandidates,
+            workspaceRootPath: input.workspaceRootPath,
             emitActivity: input.emitActivity
           })
 

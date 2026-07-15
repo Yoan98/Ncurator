@@ -1,14 +1,10 @@
 import { z } from 'zod/v4'
-import type {
-  AiArtifactRef,
-  AiRunFailureCode,
-  AiFileArtifactRef
-} from '../../../shared/types'
+import type { AiArtifactRef, AiRunFailureCode, AiFileArtifactRef } from '../../../shared/types'
 import { AI_RUN_STATUSES } from './constants'
 
 export const aiFileArtifactRefSchema: z.ZodType<AiFileArtifactRef> = z.object({
   kind: z.literal('file'),
-  capability: z.enum(['terminal_exec', 'docx']),
+  capability: z.enum(['terminal_exec', 'docx', 'text_file']),
   path: z.string().min(1),
   fileName: z.string().min(1),
   operation: z.enum(['created', 'updated']),

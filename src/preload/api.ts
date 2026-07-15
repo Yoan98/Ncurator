@@ -52,6 +52,7 @@ import type {
   SearchSourceFilter,
   PickApplicationResponse,
   PickDirectoryResponse,
+  PickFileResponse,
   OpenPathWithApplicationRequest,
   OpenPathWithApplicationResponse,
   PrepareWebSourcesRequest,
@@ -124,6 +125,7 @@ export type DesktopApi = {
   revealPath: (filePath: string) => Promise<{ success: boolean; error?: string }>
   pathInfo: (filePath: string) => Promise<PathInfoResponse>
   pickDirectory: () => Promise<PickDirectoryResponse>
+  pickFile: (defaultPath?: string) => Promise<PickFileResponse>
   search: (
     query: string,
     sourceType?: SearchSourceFilter,
