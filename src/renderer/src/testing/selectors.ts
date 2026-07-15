@@ -83,14 +83,7 @@ export const settingsSelectors = {
   modelListButtonPrefix: 'settings-model-list-button',
   modelListModal: 'settings-model-list-modal',
   modelListRetryButton: 'settings-model-list-retry-button',
-  modelDeleteButtonPrefix: 'settings-model-delete-button',
-  appUpdatePanel: 'settings-app-update-panel',
-  appUpdateStatus: 'settings-app-update-status',
-  appUpdateCurrentVersion: 'settings-app-update-current-version',
-  appUpdateAvailableVersion: 'settings-app-update-available-version',
-  appUpdateCheckButton: 'settings-app-update-check-button',
-  appUpdateInstallButton: 'settings-app-update-install-button',
-  appUpdateProgress: 'settings-app-update-progress'
+  modelDeleteButtonPrefix: 'settings-model-delete-button'
 } as const
 
 export const windowSelectors = {
@@ -130,6 +123,11 @@ export const workbenchSelectors = {
   sessionsToggle: 'workbench-sessions-toggle',
   sidebarResizer: 'workbench-sidebar-resizer',
   settingsHelpButton: 'workbench-settings-help-button',
+  updateButton: 'workbench-update-button',
+  updateButtonLabel: 'workbench-update-button-label',
+  updateRestartModal: 'workbench-update-restart-modal',
+  updateRestartNowButton: 'workbench-update-restart-now-button',
+  updateRestartLaterButton: 'workbench-update-restart-later-button',
   topbar: 'workbench-topbar',
   emptyDragRegion: 'workbench-empty-drag-region',
   topbarDragRegion: 'workbench-topbar-drag-region',

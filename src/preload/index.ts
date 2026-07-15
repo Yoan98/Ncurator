@@ -10,6 +10,7 @@ import type {
 } from '../shared/types'
 import {
   APP_UPDATE_CHECK_CHANNEL,
+  APP_UPDATE_DOWNLOAD_CHANNEL,
   APP_UPDATE_GET_SNAPSHOT_CHANNEL,
   APP_UPDATE_INSTALL_CHANNEL,
   APP_UPDATE_STATUS_CHANNEL
@@ -288,6 +289,32 @@ const api: DesktopApi = {
       availableVersion: '0.1.1',
       releaseName: 'v0.1.1',
       releaseDate: '2026-07-13T08:00:00.000Z'
+    })
+    return {
+      success: true,
+      snapshot: { ...appUpdateFixtureSnapshot }
+    }
+  },
+  appUpdateDownload: async () => {
+    emitE2EIpcCall('appUpdateDownload')
+    if (!isE2EFixtureMode) {
+      return await ipcRenderer.invoke(APP_UPDATE_DOWNLOAD_CHANNEL)
+    }
+    if (
+      appUpdateFixtureSnapshot.status !== 'available' &&
+      !(appUpdateFixtureSnapshot.status === 'error' && appUpdateFixtureSnapshot.availableVersion)
+    ) {
+      return {
+        success: false,
+        snapshot: { ...appUpdateFixtureSnapshot },
+        error: '当前没有可下载的更新'
+      }
+    }
+    setAppUpdateFixtureSnapshot({
+      ...appUpdateFixtureSnapshot,
+      status: 'downloading',
+      progressPercent: 0,
+      error: undefined
     })
     await waitForAppUpdateFixtureStep()
     setAppUpdateFixtureSnapshot({

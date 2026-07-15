@@ -241,6 +241,7 @@ export type DesktopApi = {
   aiFileChangeRevert: (payload: RevertAiFileChangeRequest) => Promise<RevertAiFileChangeResponse>
   appUpdateGetSnapshot: () => Promise<AppUpdateSnapshot>
   appUpdateCheck: () => Promise<AppUpdateActionResponse>
+  appUpdateDownload: () => Promise<AppUpdateActionResponse>
   appUpdateInstall: () => Promise<AppUpdateActionResponse>
   onAppUpdateStatus: (cb: (snapshot: AppUpdateSnapshot) => void) => () => void
   pickApplication: () => Promise<PickApplicationResponse>

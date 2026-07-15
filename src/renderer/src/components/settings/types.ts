@@ -5,7 +5,7 @@ import type {
   WorkspaceTreeEntry
 } from '../../../../shared/types'
 
-export type SettingsSectionValue = 'model' | 'workspace' | 'vector' | 'app'
+export type SettingsSectionValue = 'model' | 'workspace' | 'vector'
 
 export type LlmConfigFormValues = Pick<LLMConfig, 'name' | 'providerKind' | 'base_url' | 'api_key'>
 
