@@ -298,6 +298,19 @@ Mac 命令会：
 7. 可选创建只含 R2 链接的 GitHub Release；
 8. 清理 R2 旧版本。
 
+### 只发布 Mac 更新通道
+
+Windows 暂时无法构建时，可以只发布两个 Mac 架构：
+
+```bash
+pnpm release:mac:only -- --tag v0.1.4
+```
+
+该命令仍会构建、签名、审计并上传 macOS arm64 和 x64，但只更新
+`updates/latest/latest-mac.yml`。它不会修改 Windows 更新元数据、跨平台
+`releases/latest.json`、GitHub Release，也不会清理旧版本。恢复全平台发布后，仍需执行正常的
+`release:mac` 或 `release:r2:finalize`。
+
 ## 单阶段重试
 
 版本创建后，各阶段都按不可变 Tag 重试，不能修改或重建 Tag：

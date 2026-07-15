@@ -30,6 +30,7 @@ describe('app update publish config', () => {
     expect(packageJson.scripts['release:win']).toContain('release-windows-local.mjs')
     expect(packageJson.scripts['release:win:auto']).toContain('route-windows-release.mjs')
     expect(packageJson.scripts['release:doctor']).toContain('release-doctor.mjs')
+    expect(packageJson.scripts['release:mac:only']).toContain('--mac-only')
     expect(packageJson.scripts['build:win']).toContain('prepare-electron-builder-windows.mjs')
     expect(packageJson.scripts['build:win']).toContain('package:audit')
     expect(router).toContain("route === 'local'")
@@ -54,6 +55,21 @@ describe('app update publish config', () => {
     expect(windowsToolCache).toContain("'x', '-snl-'")
     expect(windowsToolCache).toContain('SHA512 verification failed')
     expect(releaseEnvironment).toContain("'Amazon', 'AWSCLIV2', 'aws.exe'")
+  })
+
+  it('can publish only the Mac update channel without changing Windows latest metadata', async () => {
+    const macRelease = await readFile(path.resolve('scripts/release-macos-local.mjs'), 'utf8')
+    const macFinalize = await readFile(
+      path.resolve('scripts/finalize-r2-macos-release.mjs'),
+      'utf8'
+    )
+
+    expect(macRelease).toContain("args.includes('--mac-only')")
+    expect(macRelease).toContain('finalize-r2-macos-release.mjs')
+    expect(macFinalize).toContain('updates/latest/latest-mac.yml')
+    expect(macFinalize).not.toContain('updates/latest/latest.yml')
+    expect(macFinalize).not.toContain('releases/latest.json')
+    expect(macFinalize).not.toContain('cleanupOldObjects')
   })
 
   it('keeps simulated update E2E available without making it a release blocker', async () => {

@@ -17,6 +17,7 @@ const valueAfter = (name) => {
 const releaseTag = valueAfter('--tag') || ''
 const keepWork = args.includes('--keep-work')
 const keepOld = args.includes('--keep-old')
+const macOnly = args.includes('--mac-only')
 
 if (process.platform !== 'darwin' || process.arch !== 'arm64') {
   throw new Error('local macOS release must run on an Apple Silicon Mac')
@@ -210,12 +211,9 @@ try {
   )
   await createAndUploadFragment(x64Source, 'macos-x64')
 
-  const finalizeArgs = [
-    path.join(armSource, 'scripts', 'finalize-r2-release.mjs'),
-    '--tag',
-    releaseTag
-  ]
-  if (keepOld) finalizeArgs.push('--keep-old')
+  const finalizeScript = macOnly ? 'finalize-r2-macos-release.mjs' : 'finalize-r2-release.mjs'
+  const finalizeArgs = [path.join(armSource, 'scripts', finalizeScript), '--tag', releaseTag]
+  if (keepOld && !macOnly) finalizeArgs.push('--keep-old')
   await run(process.execPath, finalizeArgs, { cwd: armSource })
 } finally {
   if (keepWork) process.stdout.write(`[release] kept work directory ${workDirectory}\n`)
