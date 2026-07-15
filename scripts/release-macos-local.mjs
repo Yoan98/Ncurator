@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
 import { execFile, spawn } from 'node:child_process'
 import { access, mkdir, readdir, rm } from 'node:fs/promises'
+import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 import { promisify } from 'node:util'
@@ -77,6 +78,7 @@ const validatePreflight = async () => {
   }
   const defaultToolRoot = path.join(process.env.HOME || '', '.ncurator', 'release-tools')
   const sidecarBrowserCacheRoot = path.join(defaultToolRoot, 'sidecar-browser-cache')
+  const sidecarPipCacheRoot = path.join(defaultToolRoot, 'sidecar-pip-cache')
   const awsExecutable =
     String(process.env.NCURATOR_AWS_CLI || '').trim() ||
     path.join(defaultToolRoot, 'awscli', 'bin', 'aws')
@@ -135,7 +137,8 @@ const validatePreflight = async () => {
     x64Node,
     x64Python,
     pnpmPath: pnpmPath.trim(),
-    sidecarBrowserCacheRoot
+    sidecarBrowserCacheRoot,
+    sidecarPipCacheRoot
   }
 }
 
@@ -168,7 +171,11 @@ const createAndUploadFragment = async (sourceDirectory, platform) => {
 }
 
 const preflight = await validatePreflight()
-const workDirectory = path.join(ROOT, '.codex-tmp', 'desktop-release', releaseTag)
+const workRoot = path.resolve(
+  String(process.env.NCURATOR_RELEASE_WORK_ROOT || '').trim() ||
+    path.join(os.tmpdir(), 'ncurator-macos-release')
+)
+const workDirectory = path.join(workRoot, releaseTag)
 const archivePath = path.join(workDirectory, 'source.tar')
 const armSource = path.join(workDirectory, 'arm64')
 const x64Source = path.join(workDirectory, 'x64')
@@ -187,7 +194,8 @@ try {
     cwd: armSource,
     env: {
       ...process.env,
-      NCURATOR_SIDECAR_BROWSER_CACHE: path.join(preflight.sidecarBrowserCacheRoot, 'darwin-arm64')
+      NCURATOR_SIDECAR_BROWSER_CACHE: path.join(preflight.sidecarBrowserCacheRoot, 'darwin-arm64'),
+      NCURATOR_SIDECAR_PIP_CACHE: path.join(preflight.sidecarPipCacheRoot, 'darwin-arm64')
     }
   })
   await createAndUploadFragment(armSource, 'macos-arm64')
@@ -196,8 +204,10 @@ try {
   const x64Environment = {
     ...process.env,
     PATH: `${path.dirname(preflight.x64Node)}:${process.env.PATH || ''}`,
+    PIP_CERT: String(process.env.PIP_CERT || '').trim() || '/private/etc/ssl/cert.pem',
     NCURATOR_SIDECAR_BUILD_PYTHON: preflight.x64Python,
-    NCURATOR_SIDECAR_BROWSER_CACHE: path.join(preflight.sidecarBrowserCacheRoot, 'darwin-x64')
+    NCURATOR_SIDECAR_BROWSER_CACHE: path.join(preflight.sidecarBrowserCacheRoot, 'darwin-x64'),
+    NCURATOR_SIDECAR_PIP_CACHE: path.join(preflight.sidecarPipCacheRoot, 'darwin-x64')
   }
   await run(
     '/usr/bin/arch',

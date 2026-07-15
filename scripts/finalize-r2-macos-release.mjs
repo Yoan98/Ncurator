@@ -7,6 +7,7 @@ import process from 'node:process'
 import { promisify } from 'node:util'
 import { loadReleaseEnvironment } from './release-environment.mjs'
 import { assertReleaseFragment } from './release-fragment-contract.mjs'
+import { fetchWithRetry } from './release-http.mjs'
 import { resolveAwsExecutable } from './windows-release-common.mjs'
 
 const execFileAsync = promisify(execFile)
@@ -121,8 +122,9 @@ try {
     '--no-progress'
   ])
 
-  const response = await fetch(
-    `${publicBaseUrl}/updates/latest/latest-mac.yml?release=${Date.now()}`
+  const response = await fetchWithRetry(
+    `${publicBaseUrl}/updates/latest/latest-mac.yml?release=${Date.now()}`,
+    { cache: 'no-store' }
   )
   if (!response.ok) throw new Error(`latest-mac.yml verification failed: ${response.status}`)
   const publicMetadata = await response.text()

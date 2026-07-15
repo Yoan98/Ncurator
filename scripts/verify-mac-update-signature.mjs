@@ -1,7 +1,11 @@
+/* eslint-disable @typescript-eslint/explicit-function-return-type */
 import { execFile } from 'node:child_process'
-import { writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
 import process from 'node:process'
 import { promisify } from 'node:util'
+import { _electron as electron } from 'playwright'
 
 const execFileAsync = promisify(execFile)
 const [appPath = '', outputPath = ''] = process.argv.slice(2)
@@ -33,6 +37,48 @@ if (!/^Authority=.+$/mu.test(signatureDetails)) {
 if (!/designated => .*identifier "com\.yoan\.ncurator"/mu.test(signatureDetails)) {
   throw new Error('macOS release has an unexpected designated requirement')
 }
+
+const verifyPackagedAppLaunch = async () => {
+  const runtimeDirectory = await mkdtemp(path.join(os.tmpdir(), 'ncurator-launch-check-'))
+  const userDataDirectory = path.join(runtimeDirectory, 'user-data')
+  const homeDirectory = path.join(runtimeDirectory, 'home')
+  await mkdir(userDataDirectory, { recursive: true })
+  await mkdir(homeDirectory, { recursive: true })
+  const executable = path.join(appPath, 'Contents', 'MacOS', 'Ncurator')
+  let output = ''
+  let electronApp
+
+  try {
+    electronApp = await electron.launch({
+      executablePath: executable,
+      env: {
+        ...process.env,
+        HOME: homeDirectory,
+        NCURATOR_E2E_OBSERVER: '1',
+        NCURATOR_E2E_WINDOW_MODE: 'background',
+        NCURATOR_USER_DATA_PATH: userDataDirectory
+      },
+      timeout: 60_000
+    })
+    const child = electronApp.process()
+    child?.stdout?.on('data', (chunk) => {
+      output += String(chunk)
+    })
+    child?.stderr?.on('data', (chunk) => {
+      output += String(chunk)
+    })
+    const page = await electronApp.firstWindow({ timeout: 60_000 })
+    await page.waitForFunction(() => Boolean(window.api), undefined, { timeout: 60_000 })
+    process.stdout.write('[release] packaged macOS app launch verification passed\n')
+  } catch (error) {
+    throw new Error(`packaged macOS app did not become ready: ${String(error)}\n${output}`)
+  } finally {
+    await electronApp?.close().catch(() => undefined)
+    await rm(runtimeDirectory, { recursive: true, force: true })
+  }
+}
+
+await verifyPackagedAppLaunch()
 
 const identity = signatureDetails
   .split('\n')

@@ -80,6 +80,38 @@ const installRuntimeDependencies = () => {
   }
 }
 
+const collectInstalledTopLevelDependencies = () => {
+  const nodeModules = path.join(STAGE_DIR, 'node_modules')
+  const packageDirectories = []
+  for (const entry of fs.readdirSync(nodeModules, { withFileTypes: true })) {
+    if (!entry.isDirectory() || entry.name.startsWith('.')) continue
+    const entryPath = path.join(nodeModules, entry.name)
+    if (!entry.name.startsWith('@')) {
+      packageDirectories.push(entryPath)
+      continue
+    }
+    for (const scopedEntry of fs.readdirSync(entryPath, { withFileTypes: true })) {
+      if (scopedEntry.isDirectory()) packageDirectories.push(path.join(entryPath, scopedEntry.name))
+    }
+  }
+
+  const dependencies = {}
+  for (const directory of packageDirectories) {
+    const packageJsonPath = path.join(directory, 'package.json')
+    if (!fs.existsSync(packageJsonPath)) continue
+    const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'))
+    const name = String(packageJson.name || '').trim()
+    const version = String(packageJson.version || '').trim()
+    if (!name || !version) {
+      throw new Error(`installed runtime package has invalid metadata: ${directory}`)
+    }
+    dependencies[name] = version
+  }
+  return Object.fromEntries(
+    Object.entries(dependencies).sort(([left], [right]) => left.localeCompare(right))
+  )
+}
+
 const REMOVE_DIRECTORY_NAMES = new Set([
   '.changeset',
   '.circleci',
@@ -159,6 +191,9 @@ const isLegalNotice = (name) =>
   /^(?:license|licence|notice|copying)(?:[._-].*)?$/u.test(name) ||
   /^(?:apache2?|bsd|mit)$/u.test(name)
 
+const isDocumentationFile = (name) =>
+  /^(?:readme|changelog|history)(?:\.(?:adoc|md|markdown|rst|txt))?$/u.test(name)
+
 const shouldRemoveFile = (filePath) => {
   const name = path.basename(filePath).toLowerCase()
   if (isLegalNotice(name)) return false
@@ -166,10 +201,7 @@ const shouldRemoveFile = (filePath) => {
   return (
     /\.(?:spec|test)\.[^.]+$/u.test(name) ||
     /^tsconfig(?:\.[^.]+)?\.json$/u.test(name) ||
-    name === 'readme' ||
-    name.startsWith('readme.') ||
-    name.startsWith('changelog.') ||
-    name.startsWith('history.') ||
+    isDocumentationFile(name) ||
     name === '.npmignore' ||
     name === '.ds_store' ||
     name === '.editorconfig' ||
@@ -401,6 +433,11 @@ const main = () => {
   writeStageLockfile(runtimeDependencies)
 
   installRuntimeDependencies()
+  const packagedDependencies = collectInstalledTopLevelDependencies()
+  fs.writeFileSync(
+    path.join(STAGE_DIR, 'package.json'),
+    `${JSON.stringify({ ...stagePackage, dependencies: packagedDependencies }, null, 2)}\n`
+  )
   fs.rmSync(path.join(STAGE_DIR, 'pnpm-lock.yaml'), { force: true })
   pruneCompiledOutput()
   pruneNodeModules()
@@ -416,7 +453,7 @@ const main = () => {
   if (audit.status !== 0) throw new Error('staging package security audit failed')
 
   process.stdout.write(
-    `[package] staging ready for ${process.platform}-${process.arch}; runtime roots: ${runtimePackageNames.join(', ')}\n`
+    `[package] staging ready for ${process.platform}-${process.arch}; runtime roots: ${runtimePackageNames.join(', ')}; packaged dependencies: ${String(Object.keys(packagedDependencies).length)}\n`
   )
 }
 

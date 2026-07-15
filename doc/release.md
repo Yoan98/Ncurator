@@ -75,8 +75,9 @@ R2 凭据、GitHub Token 和签名证书只能保存在本机安全环境或 Git
 6. 删除旧 `dist` 和旧 staging；
 7. 根据编译产物生成最小生产 `package.json`；
 8. 使用主锁文件离线安装运行时依赖；
-9. 删除测试、文档、源码、Source Map 和错误平台二进制；
-10. 执行 staging 安全审计。
+9. 根据实际安装结果写入完整的生产依赖闭包，防止打包器漏掉被提升的间接依赖；
+10. 删除测试、文档、源码、Source Map 和错误平台二进制；
+11. 执行 staging 安全审计。
 
 electron-builder 完成后，`pnpm run package:audit` 检查真实 `.app` 或 `win-unpacked`。最终审计会验证：
 
@@ -88,6 +89,8 @@ electron-builder 完成后，`pnpm run package:audit` 检查真实 `.app` 或 `w
 - sidecar 没有完整 Chromium、Patchright 和 Python 源码；
 - ONNX Runtime 和 native prebuild 只保留当前平台与架构；
 - 生成 `dist/package-audit.json`，记录安装目录、`app.asar` 和安装包体积。
+
+macOS 正式产物还必须真实启动到窗口和 preload API 就绪。只通过文件审计、`codesign --verify` 或存在进程都不算可发布。
 
 所有正式构建命令都包含最终审计。体积硬预算暂不启用，等 macOS arm64、macOS x64、Windows x64 都完成实测后再设置。
 
@@ -233,7 +236,7 @@ pnpm release:signing:setup
 
 当前 macOS 使用项目自建的 `Ncurator Update Signing`，并设置 `timestamp: none`，因为 Apple 时间戳服务不接受该证书。这套签名用于保证两个架构更新包来自同一发布方，不等同于 Apple Developer ID 公证。
 
-自建证书没有 Apple Team ID。sidecar 需要加载内置 Python Framework，因此子进程使用 `build/entitlements.mac.inherit.plist` 关闭 library validation；顶层 App 不使用这个例外。修改签名后必须真实运行打包后的 sidecar，不能只看 `codesign --verify`。
+自建证书没有 Apple Team ID。macOS 会把不同签名对象视为不同 Team，因此顶层 App 和子进程都必须使用 `build/entitlements.mac.inherit.plist` 关闭 library validation，否则 dyld 会拒绝加载 Electron Framework 或 sidecar 的 Python Framework。正式发布在生成 fragment 前必须真实启动打包后的 App；不能只看 `codesign --verify`。
 
 以后迁移 Apple Developer ID 时必须一起完成：
 

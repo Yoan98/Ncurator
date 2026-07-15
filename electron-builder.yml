@@ -19,6 +19,8 @@ extraResources:
     to: native
     filter:
       - '**/*'
+  - from: build/app-update.yml
+    to: app-update.yml
 asarUnpack:
   - '**/node_modules/onnxruntime-node/bin/napi-v3/**/*'
 win:
@@ -49,6 +51,9 @@ mac:
   target:
     - dmg
     - zip
+  # 自建证书没有 Apple Team ID。顶层进程和子进程都必须关闭 library validation，
+  # 否则 dyld 会拒绝加载已经签名的 Electron Framework。
+  entitlements: build/entitlements.mac.inherit.plist
   entitlementsInherit: build/entitlements.mac.inherit.plist
   extendInfo:
     - NSCameraUsageDescription: Application requests access to the device's camera.

@@ -85,7 +85,16 @@ describe('app update publish config', () => {
     expect(prepareRelease).not.toContain('test:update:e2e')
   })
 
+  it('keeps the complete installed production dependency closure', async () => {
+    const packageStage = await readFile(path.resolve('scripts/prepare-package-stage.mjs'), 'utf8')
+
+    expect(packageStage).toContain('collectInstalledTopLevelDependencies')
+    expect(packageStage).toContain('dependencies: packagedDependencies')
+    expect(packageStage).not.toContain("name.startsWith('history.')")
+  })
+
   it('requires local Rosetta builds and stable macOS signatures', async () => {
+    const builderConfig = await readFile(path.resolve('electron-builder.yml'), 'utf8')
     const localRelease = await readFile(path.resolve('scripts/release-macos-local.mjs'), 'utf8')
     const signatureVerifier = await readFile(
       path.resolve('scripts/verify-mac-update-signature.mjs'),
@@ -95,8 +104,13 @@ describe('app update publish config', () => {
     expect(localRelease).toContain('NCURATOR_X64_NODE')
     expect(localRelease).toContain('NCURATOR_X64_PYTHON')
     expect(localRelease).toContain("'-x86_64'")
+    expect(localRelease).toContain("path.join(os.tmpdir(), 'ncurator-macos-release')")
+    expect(localRelease).toContain('NCURATOR_SIDECAR_PIP_CACHE')
+    expect(builderConfig).toContain('entitlements: build/entitlements.mac.inherit.plist')
+    expect(builderConfig).toContain('from: build/app-update.yml')
     expect(signatureVerifier).toContain('macOS release must not use an ad-hoc signature')
     expect(signatureVerifier).toContain('macOS designated requirement must remain stable')
+    expect(signatureVerifier).toContain('packaged macOS app launch verification passed')
   })
 
   it('keeps only R2 as the release binary source', async () => {

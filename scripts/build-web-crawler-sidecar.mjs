@@ -19,7 +19,10 @@ const VENV_DIR = path.join(
 )
 const STAMP_PATH = path.join(VENV_DIR, '.requirements.sha256')
 const PLAYWRIGHT_BROWSER_STAMP_PATH = path.join(VENV_DIR, '.playwright-browser.sha256')
-const PIP_CACHE_DIR = path.join(ROOT, '.pip-cache', 'web_crawler_sidecar')
+const PIP_CACHE_DIR = path.resolve(
+  String(process.env.NCURATOR_SIDECAR_PIP_CACHE || '').trim() ||
+    path.join(ROOT, '.pip-cache', 'web_crawler_sidecar')
+)
 const BIN_DIR = path.join(SIDECAR_DIR, 'bin')
 const SOURCE_STAMP_PATH = path.join(BIN_DIR, '.source.sha256')
 const SIDECAR_RUNTIME_LAYOUT_VERSION = 'headless-shell-v1'

@@ -8,6 +8,7 @@ import process from 'node:process'
 import { promisify } from 'node:util'
 import { loadReleaseEnvironment } from './release-environment.mjs'
 import { assertReleaseFragment } from './release-fragment-contract.mjs'
+import { fetchWithRetry } from './release-http.mjs'
 
 const execFileAsync = promisify(execFile)
 await loadReleaseEnvironment(process.cwd())
@@ -85,7 +86,10 @@ for (const file of fragment.files) {
     throw new Error(`R2 verification failed: ${key}`)
   }
 
-  const publicResponse = await fetch(`${publicBaseUrl}/${key}`, { method: 'HEAD' })
+  const publicResponse = await fetchWithRetry(`${publicBaseUrl}/${key}`, {
+    method: 'HEAD',
+    cache: 'no-store'
+  })
   if (!publicResponse.ok || Number(publicResponse.headers.get('content-length')) !== file.size) {
     throw new Error(`public R2 verification failed: ${key}`)
   }
