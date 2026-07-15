@@ -1,6 +1,14 @@
 packages:
   - .
 
+supportedArchitectures:
+  os:
+    - darwin
+    - win32
+  cpu:
+    - arm64
+    - x64
+
 allowBuilds:
   '@google/genai': true
   better-sqlite3: true

@@ -113,6 +113,10 @@ pnpm run package:audit:summary
 - macOS x64：在同一台 Mac 的 Rosetta x64 Node/Python 环境构建。
 - GitHub Actions 不响应 Tag push，不保存安装包 Artifact，也不构建 macOS 或 Linux。
 
+`pnpm-workspace.yaml` 固定记录 macOS arm64、macOS x64 和 Windows x64 的可选原生依赖。打包时再按当前 OS/CPU 删除不兼容包，不能只用开发机架构生成锁文件。
+
+当前 Intel Mac 依赖 `@lancedb/lancedb 0.22.3`，这是项目已验证且包含 `darwin-x64` 原生包的稳定版本。升级 LanceDB 前必须先确认 npm 中同时存在 arm64、x64 和 Windows x64 对应包，并重新执行三个架构的真实启动测试。
+
 Windows GitHub Actions 只允许手动 `workflow_dispatch`，并按 Tag 设置 concurrency。工作流步骤固定为：
 
 1. 检出输入的 annotated Tag；

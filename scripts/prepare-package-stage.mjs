@@ -260,6 +260,22 @@ const stripSourceMapReferences = () => {
 const pruneNodeModules = () => {
   const nodeModules = path.join(STAGE_DIR, 'node_modules')
   const targetPrebuildDirectory = `${process.platform}-${process.arch}`
+  const supportsCurrentTarget = (values, current) => {
+    if (!Array.isArray(values) || values.length === 0) return true
+    const normalized = values.map((value) => String(value).trim()).filter(Boolean)
+    if (normalized.includes(`!${current}`)) return false
+    const allowed = normalized.filter((value) => !value.startsWith('!'))
+    return allowed.length === 0 || allowed.includes(current)
+  }
+  const isIncompatiblePackage = (directory) => {
+    const packageJsonPath = path.join(directory, 'package.json')
+    if (!fs.existsSync(packageJsonPath)) return false
+    const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'))
+    return (
+      !supportsCurrentTarget(packageJson.os, process.platform) ||
+      !supportsCurrentTarget(packageJson.cpu, process.arch)
+    )
+  }
   const prunePlatformPrebuilds = (directory) => {
     for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
       if (!entry.isDirectory()) continue
@@ -281,6 +297,10 @@ const pruneNodeModules = () => {
       const lowerName = entry.name.toLowerCase()
       if (entry.isSymbolicLink()) continue
       if (entry.isDirectory()) {
+        if (isIncompatiblePackage(entryPath)) {
+          fs.rmSync(entryPath, { recursive: true, force: true })
+          continue
+        }
         if (lowerName === 'prebuilds') {
           prunePlatformPrebuilds(entryPath)
         }
@@ -433,15 +453,15 @@ const main = () => {
   writeStageLockfile(runtimeDependencies)
 
   installRuntimeDependencies()
+  fs.rmSync(path.join(STAGE_DIR, 'pnpm-lock.yaml'), { force: true })
+  pruneCompiledOutput()
+  pruneNodeModules()
+  pruneStagedResources()
   const packagedDependencies = collectInstalledTopLevelDependencies()
   fs.writeFileSync(
     path.join(STAGE_DIR, 'package.json'),
     `${JSON.stringify({ ...stagePackage, dependencies: packagedDependencies }, null, 2)}\n`
   )
-  fs.rmSync(path.join(STAGE_DIR, 'pnpm-lock.yaml'), { force: true })
-  pruneCompiledOutput()
-  pruneNodeModules()
-  pruneStagedResources()
   stripSourceMapReferences()
 
   const audit = spawnSync(

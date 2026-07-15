@@ -86,11 +86,23 @@ describe('app update publish config', () => {
   })
 
   it('keeps the complete installed production dependency closure', async () => {
+    const packageJson = JSON.parse(await readFile(path.resolve('package.json'), 'utf8'))
     const packageStage = await readFile(path.resolve('scripts/prepare-package-stage.mjs'), 'utf8')
 
     expect(packageStage).toContain('collectInstalledTopLevelDependencies')
     expect(packageStage).toContain('dependencies: packagedDependencies')
+    expect(packageStage).toContain('isIncompatiblePackage')
     expect(packageStage).not.toContain("name.startsWith('history.')")
+
+    const workspaceConfig = await readFile(path.resolve('pnpm-workspace.yaml'), 'utf8')
+    expect(workspaceConfig).toContain('supportedArchitectures:')
+    expect(workspaceConfig).toContain('- win32')
+    expect(workspaceConfig).toContain('- x64')
+    expect(packageJson.dependencies['@lancedb/lancedb']).toBe('0.22.3')
+
+    const lockfile = await readFile(path.resolve('pnpm-lock.yaml'), 'utf8')
+    expect(lockfile).toContain("'@lancedb/lancedb-darwin-x64@0.22.3':")
+    expect(lockfile).toContain("'@lancedb/lancedb-win32-x64-msvc@0.22.3':")
   })
 
   it('requires local Rosetta builds and stable macOS signatures', async () => {
