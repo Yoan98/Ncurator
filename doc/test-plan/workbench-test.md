@@ -44,7 +44,7 @@
 - docx apply case 需要真实 docx 输入、真实 AI 编辑、真实写回记录、真实预览和真实回退。
 - `browser-use-task-panel` 需要真实 AI run 触发 `browser_use` 并驱动内置浏览器完成本地网页任务；当前已使用 DashScope / openai-compatible / `deepseek-v4-flash` 覆盖 Stagehand 官方 provider 与 `StagehandLangChainClient` 路径，不能用 fake browser 替代。
 - `web_search` 与 `web_crawl` 需要分开覆盖：搜索 case 只验证候选网页返回；读取 case 必须验证 AI 继续读取网页正文后再回答。
-- Workbench 附件链路当前固定保存到 `<workspace>/.ncurator/assets/<assetBucketId>/`，`assetBucketId` 为输入草稿 UUID，发送给 AI 时只传附件名称与路径，不再做发送前识图或文件解析。
+- Workbench 附件链路当前固定保存到 `<workspace>/.ncurator/runtime/assets/<assetBucketId>/`，`assetBucketId` 为输入草稿 UUID，发送给 AI 时只传附件名称与路径，不再做发送前识图或文件解析。
 
 ## 3. Suite 设计
 
@@ -147,7 +147,7 @@ tests/case/workbench/
 #### `composer-attachments-context`
 
 - 测试类型：`e2e`
-- What：验证 `+` 与粘贴添加附件时，附件会保存到工作区 `.ncurator/assets/<assetBucketId>/`，不会提前创建真实会话，并保持图片预览、文件打开、删除、普通文本粘贴和格式提示行为。
+- What：验证 `+` 与粘贴添加附件时，附件会保存到工作区 `.ncurator/runtime/assets/<assetBucketId>/`，不会提前创建真实会话，并保持图片预览、文件打开、删除、普通文本粘贴和格式提示行为。
 - Why：附件链路已改为“统一落盘到工作区 + 只把路径交给 AI”，必须用回归测试守住真实保存路径和交互行为。
 - How：创建真实工作区，通过真实粘贴图片和 `md` 文件触发产品附件保存逻辑；另外通过粘贴覆盖不支持格式和大文件 warning。
 - Oracle：真实粘贴会触发附件保存；添加附件后没有真实会话；图片预览可打开；文件副标题显示 `MD`；不支持格式只提示不加入；大文件只提示不拦截；普通文本粘贴仍正常，对齐 `WB-COMPOSER-010-AC2`、`WB-COMPOSER-010-AC3`。

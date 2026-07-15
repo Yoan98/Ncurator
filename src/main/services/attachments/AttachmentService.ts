@@ -3,7 +3,8 @@ import path from 'path'
 import { v4 as uuidv4 } from 'uuid'
 import type { ChatAttachment } from '../../../shared/types'
 
-const WORKSPACE_RUNTIME_DIR = '.ncurator'
+const WORKSPACE_NCURATOR_DIR = '.ncurator'
+const WORKSPACE_RUNTIME_DIR = 'runtime'
 const WORKSPACE_ASSETS_DIR = 'assets'
 const WORKSPACE_SCRIPTS_DIR = 'scripts'
 
@@ -84,10 +85,16 @@ const isSupportedAttachment = (input: {
   return SUPPORTED_FILE_EXTENSIONS.has(ext)
 }
 
-const getWorkspaceAssetsDir = (workspaceRootPath: string, assetBucketId: string): string =>
+const getWorkspaceRuntimeDir = (workspaceRootPath: string): string =>
   path.join(
     path.resolve(String(workspaceRootPath || '').trim()),
-    WORKSPACE_RUNTIME_DIR,
+    WORKSPACE_NCURATOR_DIR,
+    WORKSPACE_RUNTIME_DIR
+  )
+
+const getWorkspaceAssetsDir = (workspaceRootPath: string, assetBucketId: string): string =>
+  path.join(
+    getWorkspaceRuntimeDir(workspaceRootPath),
     WORKSPACE_ASSETS_DIR,
     String(assetBucketId || '').trim()
   )
@@ -103,7 +110,7 @@ const ensureWorkspaceAttachmentDirs = async (
   const assetDir = getWorkspaceAssetsDir(rootPath, assetBucketId)
   await Promise.all([
     fs.promises.mkdir(assetDir, { recursive: true }),
-    fs.promises.mkdir(path.join(rootPath, WORKSPACE_RUNTIME_DIR, WORKSPACE_SCRIPTS_DIR), {
+    fs.promises.mkdir(path.join(getWorkspaceRuntimeDir(rootPath), WORKSPACE_SCRIPTS_DIR), {
       recursive: true
     })
   ])

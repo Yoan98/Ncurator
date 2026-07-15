@@ -34,7 +34,7 @@ describe('ai unit ncurator ref codec', () => {
     {
       name: 'windows path with dot-prefixed hidden dir (the reported bug)',
       label: '交互式探究学习案例：产业转移.docx',
-      path: 'D:\\1-work-space\\test\\workspace\\.ncurator\\assets\\d6fd02d9-b641-4a73-b047-0f286e2e5072\\交互式探究学习案例：产业转移.docx',
+      path: 'D:\\1-work-space\\test\\workspace\\.ncurator\\runtime\\assets\\d6fd02d9-b641-4a73-b047-0f286e2e5072\\交互式探究学习案例：产业转移.docx',
       resourceType: 'file'
     },
     {
@@ -146,7 +146,7 @@ describe('ai unit ncurator ref codec', () => {
 
   it('parses raw windows paths emitted without canonical encoding', () => {
     const rawPath =
-      'D:\\1-work-space\\test\\workspace\\.ncurator\\assets\\d6fd02d9-b641-4a73-b047-0f286e2e5072\\交互式探究学习案例：产业转移.docx'
+      'D:\\1-work-space\\test\\workspace\\.ncurator\\runtime\\assets\\d6fd02d9-b641-4a73-b047-0f286e2e5072\\交互式探究学习案例：产业转移.docx'
     const href = `ncurator://ref?kind=reference&resourceType=file&label=交互式探究学习案例：产业转移.docx&path=${rawPath}`
 
     expect(parseNcuratorRefHref(href)).toEqual({
@@ -160,12 +160,12 @@ describe('ai unit ncurator ref codec', () => {
 
   it('normalizes raw markdown links before CommonMark can consume path backslashes', () => {
     const rawPath =
-      'D:\\1-work-space\\test\\workspace\\.ncurator\\assets\\d6fd02d9-b641-4a73-b047-0f286e2e5072\\交互式探究学习案例：产业转移.docx'
+      'D:\\1-work-space\\test\\workspace\\.ncurator\\runtime\\assets\\d6fd02d9-b641-4a73-b047-0f286e2e5072\\交互式探究学习案例：产业转移.docx'
     const markdown = `[交互式探究学习案例：产业转移.docx](ncurator://ref?kind=reference&resourceType=file&label=交互式探究学习案例：产业转移.docx&path=${rawPath})`
     const normalized = normalizeNcuratorRefMarkdownLinks(markdown)
     const href = extractHref(normalized)
 
-    expect(href).toContain('%5C.ncurator%5Cassets')
+    expect(href).toContain('%5C.ncurator%5Cruntime%5Cassets')
     expect(commonmarkUnescapeDestination(href)).toBe(href)
     expect(parseNcuratorRefHref(href)).toEqual({
       type: 'reference',
