@@ -217,6 +217,30 @@ const waitForUpdateDownload = async (page, timeoutMs, statusHistory) => {
   throw new Error(`等待更新下载超时（${String(timeoutMs)}ms）`)
 }
 
+const waitForUpdateAvailable = async (page, timeoutMs, statusHistory) => {
+  const deadline = Date.now() + timeoutMs
+  let previousStatus = ''
+
+  while (Date.now() < deadline) {
+    const snapshot = await page.evaluate(() => window.api.appUpdateGetSnapshot())
+    if (snapshot.status !== previousStatus) {
+      statusHistory.push({
+        at: new Date().toISOString(),
+        status: snapshot.status,
+        currentVersion: snapshot.currentVersion,
+        availableVersion: snapshot.availableVersion,
+        error: snapshot.error
+      })
+      process.stdout.write(`[update-real] ${snapshot.status}\n`)
+      previousStatus = snapshot.status
+    }
+    if (snapshot.status === 'available' || snapshot.status === 'error') return snapshot
+    await delay(1000)
+  }
+
+  throw new Error(`等待发现新版本超时（${String(timeoutMs)}ms）`)
+}
+
 const main = async () => {
   if (process.platform !== 'darwin') {
     throw new Error('当前真实升级脚本只支持 macOS；Windows 需要在 Windows 测试机执行')
@@ -280,6 +304,21 @@ const main = async () => {
     }
 
     await firstLaunch.page.evaluate(() => window.api.appUpdateCheck())
+    const availableSnapshot = await waitForUpdateAvailable(
+      firstLaunch.page,
+      options.timeoutMs,
+      statusHistory
+    )
+    if (availableSnapshot.status === 'error') {
+      throw new Error(availableSnapshot.error || '真实更新检查失败')
+    }
+    if (availableSnapshot.availableVersion !== options.expectedVersion) {
+      throw new Error(`线上目标版本不符合预期：${availableSnapshot.availableVersion || '未知版本'}`)
+    }
+
+    await firstLaunch.page.evaluate(() => {
+      void window.api.appUpdateDownload()
+    })
     const downloadedSnapshot = await waitForUpdateDownload(
       firstLaunch.page,
       options.timeoutMs,
@@ -290,7 +329,7 @@ const main = async () => {
     }
     if (downloadedSnapshot.availableVersion !== options.expectedVersion) {
       throw new Error(
-        `线上目标版本不符合预期：${downloadedSnapshot.availableVersion || '未知版本'}`
+        `下载完成版本不符合预期：${downloadedSnapshot.availableVersion || '未知版本'}`
       )
     }
 

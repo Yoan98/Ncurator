@@ -98,6 +98,7 @@ import WindowsTitleBar from '../components/WindowsTitleBar'
 import SidebarPanelIcon from '../components/SidebarPanelIcon'
 import { collectReferenceDocumentIds, pruneReferencesByWorkspace } from '../utils/reference'
 import { useWorkbenchMode } from '../contexts/WorkbenchModeContext'
+import SidebarUpdateControl from '../components/update/SidebarUpdateControl'
 
 type ApprovalBatchRequiredEvent = Extract<AiRunEvent, { type: 'approval_batch_required' }>
 type UserTakeoverRequiredEvent = Extract<AiRunEvent, { type: 'user_takeover_required' }>
@@ -2963,6 +2964,7 @@ const ChatPage: React.FC = () => {
               <HiOutlineCog6Tooth className="h-[18px] w-[18px] shrink-0 text-[#787774]" />
               <span>设置</span>
             </button>
+            <SidebarUpdateControl />
             <Tooltip title="查看使用帮助" placement="right">
               <button
                 type="button"
