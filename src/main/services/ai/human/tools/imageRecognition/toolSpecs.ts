@@ -35,7 +35,7 @@ export const LLM_RECOGNIZE_TOOL_SPEC: HumanToolSpec<
       {
         goal: '识别截图里主要展示了什么',
         args: {
-          path: '/workspace/.ncurator/assets/session-1/screen.png',
+          path: '/workspace/.ncurator/runtime/assets/session-1/screen.png',
           instruction: '请概括这张截图的主要内容，并指出用户接下来最可能要做的操作。'
         }
       }

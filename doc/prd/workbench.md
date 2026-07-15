@@ -256,10 +256,10 @@
 
 #### WB-COMPOSER-010 附件保存与传递规则
 
-- 系统行为：用户通过 `+` 或粘贴添加附件时，附件统一保存到当前工作区的 `<workspace>/.ncurator/assets/<assetBucketId>/`；`assetBucketId` 是当前输入草稿生成的 UUID，和会话 ID 解耦，添加附件不会提前创建新会话。发送给 AI 的附件上下文只保留顺序、名称和路径，不再自动做图片识别、文件解析或内容摘要注入。
+- 系统行为：用户通过 `+` 或粘贴添加附件时，附件统一保存到当前工作区的 `<workspace>/.ncurator/runtime/assets/<assetBucketId>/`；`assetBucketId` 是当前输入草稿生成的 UUID，和会话 ID 解耦，添加附件不会提前创建新会话。发送给 AI 的附件上下文只保留顺序、名称和路径，不再自动做图片识别、文件解析或内容摘要注入。
 - 验收：
   - `WB-COMPOSER-010-AC1` 未绑定可用工作区时，不允许添加附件，并提示先选择工作区或完成目录绑定。
-  - `WB-COMPOSER-010-AC2` 已绑定工作区后，`+` 和粘贴添加的附件都会保存到 `<workspace>/.ncurator/assets/<assetBucketId>/`，且不会提前创建真实会话。
+  - `WB-COMPOSER-010-AC2` 已绑定工作区后，`+` 和粘贴添加的附件都会保存到 `<workspace>/.ncurator/runtime/assets/<assetBucketId>/`，且不会提前创建真实会话。
   - `WB-COMPOSER-010-AC3` 当前附件支持范围只有图片、`docx`、`md`、`json`；其他格式提示不支持且不加入附件列表。
   - `WB-COMPOSER-010-AC4` 发送给 AI 的附件上下文只包含顺序、名称和路径，不包含发送前预解析摘要。
 

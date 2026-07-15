@@ -35,12 +35,12 @@ describe('workbench markdown renderer reference links', () => {
   })
 
   it('opens raw windows ncurator file references with the original path', async () => {
-    const { default: MarkdownRenderer } = await import(
-      '../../../../src/renderer/src/components/MarkdownRenderer'
-    )
+    const { default: MarkdownRenderer } =
+      await import('../../../../src/renderer/src/components/MarkdownRenderer')
     const onOpenReference = vi.fn()
-    const fileName = '\u4ea4\u4e92\u5f0f\u63a2\u7a76\u5b66\u4e60\u6848\u4f8b\uff1a\u4ea7\u4e1a\u8f6c\u79fb.docx'
-    const filePath = `D:\\1-work-space\\test\\workspace\\.ncurator\\assets\\d6fd02d9-b641-4a73-b047-0f286e2e5072\\${fileName}`
+    const fileName =
+      '\u4ea4\u4e92\u5f0f\u63a2\u7a76\u5b66\u4e60\u6848\u4f8b\uff1a\u4ea7\u4e1a\u8f6c\u79fb.docx'
+    const filePath = `D:\\1-work-space\\test\\workspace\\.ncurator\\runtime\\assets\\d6fd02d9-b641-4a73-b047-0f286e2e5072\\${fileName}`
     const content = `[${fileName}](ncurator://ref?kind=reference&resourceType=file&label=${fileName}&path=${filePath})`
 
     await act(async () => {

@@ -15,6 +15,7 @@ import type {
   BrowserUseRunResult
 } from './types'
 import { resolveStagehandRuntimeModel } from '../llm/stagehandModel'
+import { BrowserActionVisualizer } from './BrowserActionVisualizer'
 
 type StagehandModule = typeof import('@browserbasehq/stagehand')
 type StagehandInstance = InstanceType<StagehandModule['Stagehand']>
@@ -361,7 +362,20 @@ export class BrowserEmbedService implements BrowserUseService {
         }
       }
 
-      const result = await stagehand.act(input.instruction, { page })
+      const visualizer = new BrowserActionVisualizer()
+      await visualizer.prepare(page)
+      const visualListener = (event: unknown): void => {
+        visualizer.handleFlowEvent(page, event)
+      }
+      stagehand.bus.on('*', visualListener)
+      let result: Awaited<ReturnType<StagehandInstance['act']>>
+      try {
+        result = await stagehand.act(input.instruction, { page })
+      } finally {
+        stagehand.bus.off('*', visualListener)
+        await visualizer.flush()
+        await visualizer.hide(page)
+      }
       return {
         action: 'act',
         page: toBrowserUsePage(page.url(), await page.title()),
