@@ -1,10 +1,10 @@
 # 自动更新测试说明
 
-自动更新分为三层测试。
+自动更新分为三层测试。模拟页面 E2E 用于验证界面状态和 IPC，不代替真实安装升级。
 
 ## 1. 快速测试
 
-运行单元测试和模拟 E2E：
+运行后端契约测试和模拟页面 E2E：
 
 ```bash
 pnpm test:update
@@ -13,11 +13,11 @@ pnpm test:update
 也可以分开运行：
 
 ```bash
-pnpm test:update:unit
+pnpm test:update:backend
 pnpm test:update:e2e
 ```
 
-单元测试验证主进程的更新状态、错误处理和安装调用。模拟 E2E 验证应用更新页面，不会下载真实更新包。
+后端测试验证主进程更新状态、发布配置、R2 元数据和 release fragment。模拟 E2E 验证页面按钮、进度、错误提示和 IPC，不下载真实更新包，也不作为正式发布的阻塞门禁。
 
 ## 2. 真实升级测试
 
@@ -48,14 +48,6 @@ pnpm test:update:real -- \
   --source-version 0.1.0 \
   --expected-version 0.1.1
 ```
-
-需要单独诊断 GitHub Release 文件时，可以启动本地元数据代理：
-
-```bash
-pnpm test:update:real -- --github-release-tag v0.1.1
-```
-
-这个参数只用于区分“更新安装逻辑”和“正式 R2 更新源”问题，不能代替正式更新源测试。
 
 报告保存在：
 

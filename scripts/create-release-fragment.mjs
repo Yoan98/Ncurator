@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto'
 import { readFile, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
+import { assertPackageAudit, assertReleaseFragment } from './release-fragment-contract.mjs'
 
 const [inputDirectory = '', outputPath = '', releaseTag = '', platform = ''] = process.argv.slice(2)
 
@@ -46,19 +47,9 @@ if (!inputDirectory || !outputPath || !/^v\d+\.\d+\.\d+$/u.test(releaseTag)) {
 const definition = definitions[platform]
 if (!definition) throw new Error(`unsupported release platform: ${platform}`)
 
-const expectedAuditPlatform = platform.startsWith('macos-') ? 'darwin' : 'win32'
-const expectedAuditArch = platform.endsWith('-arm64') ? 'arm64' : 'x64'
 const auditPath = path.join(inputDirectory, 'package-audit.json')
 const audit = JSON.parse(await readFile(auditPath, 'utf8'))
-if (
-  audit.schemaVersion !== 1 ||
-  audit.platform !== expectedAuditPlatform ||
-  audit.arch !== expectedAuditArch ||
-  !Array.isArray(audit.applications) ||
-  audit.applications.length === 0
-) {
-  throw new Error(`package security audit does not match ${platform}: ${auditPath}`)
-}
+assertPackageAudit(audit, platform, `package security audit ${auditPath}`)
 
 const version = releaseTag.slice(1)
 const sha512 = async (filePath) =>
@@ -82,32 +73,27 @@ const signature = definition.signature
   ? (await readFile(path.join(inputDirectory, definition.signature), 'utf8')).trim()
   : undefined
 
-await writeFile(
-  outputPath,
-  `${JSON.stringify(
-    {
-      schemaVersion: 1,
-      tag: releaseTag,
-      version,
-      platform,
-      createdAt: new Date().toISOString(),
-      files,
-      metadata,
-      audit: {
-        generatedAt: audit.generatedAt,
-        platform: audit.platform,
-        arch: audit.arch,
-        applications: audit.applications.map((application) => ({
-          root: application.root,
-          totalBytes: application.totalBytes,
-          archiveBytes: application.archiveBytes,
-          archiveFileCount: application.archiveFileCount
-        }))
-      },
-      ...(signature ? { signature } : {})
-    },
-    null,
-    2
-  )}\n`,
-  'utf8'
-)
+const fragment = {
+  schemaVersion: 2,
+  tag: releaseTag,
+  version,
+  platform,
+  createdAt: new Date().toISOString(),
+  files,
+  metadata,
+  audit: {
+    schemaVersion: audit.schemaVersion,
+    generatedAt: audit.generatedAt,
+    platform: audit.platform,
+    arch: audit.arch,
+    applications: audit.applications.map((application) => ({
+      root: application.root,
+      totalBytes: application.totalBytes,
+      archiveBytes: application.archiveBytes,
+      archiveFileCount: application.archiveFileCount
+    }))
+  },
+  ...(signature ? { signature } : {})
+}
+assertReleaseFragment(fragment, { tag: releaseTag, platform })
+await writeFile(outputPath, `${JSON.stringify(fragment, null, 2)}\n`, 'utf8')

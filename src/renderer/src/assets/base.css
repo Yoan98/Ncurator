@@ -573,6 +573,11 @@ textarea,
   pointer-events: none;
 }
 
+/* Keep the draggable hit target physically outside the custom Windows controls. */
+.nc-app-shell-windows .nc-main-empty-titlebar {
+  right: var(--windows-window-controls-width);
+}
+
 .nc-main-empty-titlebar-safe-zone {
   flex: 0 0 auto;
   height: 100%;

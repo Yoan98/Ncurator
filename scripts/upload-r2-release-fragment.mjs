@@ -7,6 +7,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { promisify } from 'node:util'
 import { loadReleaseEnvironment } from './release-environment.mjs'
+import { assertReleaseFragment } from './release-fragment-contract.mjs'
 
 const execFileAsync = promisify(execFile)
 await loadReleaseEnvironment(process.cwd())
@@ -29,9 +30,7 @@ if (!inputDirectory || !fragmentPath) {
 }
 
 const fragment = JSON.parse(await readFile(fragmentPath, 'utf8'))
-if (fragment.schemaVersion !== 1 || !/^v\d+\.\d+\.\d+$/u.test(fragment.tag)) {
-  throw new Error('invalid release fragment')
-}
+assertReleaseFragment(fragment)
 
 const endpoint = `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`
 const bucket = String(process.env.R2_BUCKET_NAME).replace(/^\/+|\/+$/gu, '')

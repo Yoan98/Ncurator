@@ -5,6 +5,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { promisify } from 'node:util'
 import { afterEach, describe, expect, it } from 'vitest'
+import { assertReleaseFragment } from '../../../../scripts/release-fragment-contract.mjs'
 
 const execFileAsync = promisify(execFile)
 let temporaryDirectory = ''
@@ -56,10 +57,12 @@ describe('release fragment', () => {
     ])
 
     const fragment = JSON.parse(await readFile(output, 'utf8'))
+    expect(fragment.schemaVersion).toBe(2)
     expect(fragment.tag).toBe('v0.1.3')
     expect(fragment.platform).toBe('windows-x64')
     expect(fragment.metadata).toContain('version: 0.1.3')
     expect(fragment.audit).toEqual({
+      schemaVersion: 1,
       generatedAt: '2026-07-15T00:00:00.000Z',
       platform: 'win32',
       arch: 'x64',
@@ -99,5 +102,67 @@ describe('release fragment', () => {
         'windows-x64'
       ])
     ).rejects.toThrow(/package-audit\.json/u)
+  })
+
+  it('rejects old, mismatched, unsafe, or forged release fragments', () => {
+    const validFragment = {
+      schemaVersion: 2,
+      tag: 'v0.1.3',
+      version: '0.1.3',
+      platform: 'windows-x64',
+      createdAt: '2026-07-15T00:00:00.000Z',
+      files: [
+        {
+          name: 'Ncurator-windows-x64.exe',
+          role: 'installer',
+          size: 100,
+          sha512: createHash('sha512').update('installer').digest('base64')
+        }
+      ],
+      metadata: 'version: 0.1.3\npath: Ncurator-windows-x64.exe\n',
+      audit: {
+        schemaVersion: 1,
+        generatedAt: '2026-07-15T00:00:00.000Z',
+        platform: 'win32',
+        arch: 'x64',
+        applications: [
+          {
+            root: 'win-unpacked',
+            totalBytes: 1_000,
+            archiveBytes: 500,
+            archiveFileCount: 20
+          }
+        ]
+      }
+    }
+
+    expect(() => assertReleaseFragment(validFragment)).not.toThrow()
+    expect(() => assertReleaseFragment({ ...validFragment, schemaVersion: 1 })).toThrow(
+      /schemaVersion must be 2/u
+    )
+    expect(() =>
+      assertReleaseFragment({
+        ...validFragment,
+        audit: { ...validFragment.audit, arch: 'arm64' }
+      })
+    ).toThrow(/expected win32-x64/u)
+    expect(() =>
+      assertReleaseFragment({
+        ...validFragment,
+        files: [{ ...validFragment.files[0], name: '../Ncurator.exe' }]
+      })
+    ).toThrow(/plain filename/u)
+    expect(() =>
+      assertReleaseFragment({
+        ...validFragment,
+        files: [{ ...validFragment.files[0], name: '..\\Ncurator.exe' }]
+      })
+    ).toThrow(/plain filename/u)
+    expect(() =>
+      assertReleaseFragment({
+        ...validFragment,
+        files: [{ ...validFragment.files[0], sha512: 'not-a-sha512' }]
+      })
+    ).toThrow(/invalid sha512/u)
   })
 })

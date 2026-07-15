@@ -1,14 +1,15 @@
 name: Build Windows Release
 
 on:
-  push:
-    tags:
-      - 'v*.*.*'
   workflow_dispatch:
     inputs:
       tag:
         description: 'Release tag, for example v0.1.3'
         required: true
+
+concurrency:
+  group: windows-release-${{ inputs.tag }}
+  cancel-in-progress: false
 
 jobs:
   build-windows:
@@ -24,7 +25,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+          ref: ${{ inputs.tag }}
           fetch-depth: 0
 
       - name: Use HTTPS for GitHub dependencies
@@ -47,11 +48,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            tag="${{ inputs.tag }}"
-          else
-            tag="$GITHUB_REF_NAME"
-          fi
+          tag="${{ inputs.tag }}"
           package_version="$(node -p "require('./package.json').version")"
           test "$tag" = "v$package_version"
           test "$(git cat-file -t "$tag")" = "tag"

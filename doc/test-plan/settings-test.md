@@ -11,8 +11,8 @@
 
 ### 2.1 按 Suite 汇总
 
-- 当前代码登记：backend `13` 个 case 文件、`26` 个 test；e2e `22` 个 case。
-- 本轮结果：backend `26 / 26` tests 通过；Settings 全量 e2e `22 / 22` 通过。
+- 当前代码登记：backend `13` 个 case 文件、`27` 个 test；e2e `22` 个 case。
+- 最近一次记录：backend `27 / 27` tests 通过；Settings 全量 e2e 需要在合并后重新执行。
   - 检测时间：`2026-07-14 14:07:57 +08:00`
   - `workspace-remove-from-list` 与 `workspace-prepare-refresh` 均已连续 3 次通过；非目录选择 case 使用真实 IPC 建立目录绑定前置状态，当前 case 的删除、刷新、进度和索引结果仍由 UI 验证。
   - 独立的原生目录选择 case `workspace-set-root-path` 通过。
@@ -32,7 +32,7 @@
   - 登记 case：backend `2`，e2e `1`。
 - `update`
   - 登记 case：backend `4`，e2e `1`。
-  - 本轮 backend 与 `app-update-panel` e2e 均通过；真实安装升级不进入日常门禁，执行方式见 [app-update-test.md](/Users/test/work-space/NCurator-Desktop/doc/app-update-test.md)。
+  - 模拟页面 E2E 验证界面状态和 IPC；真实安装升级不进入日常门禁，执行方式见 [app-update-test.md](/Users/test/work-space/NCurator-Desktop/doc/app-update-test.md)。
 
 ## 3. Suite 设计
 
@@ -93,7 +93,6 @@ Settings 的回归测试顶层 suite 直接对齐 PRD 模块：
 - How：准备一条连接配置，通过真实模型列表接口或真实本地 HTTP 服务分别覆盖成功和失败响应，在列表中打开模型列表并触发重新获取。
 - Oracle：获取模型列表成功后，配置列表展示模型数量且弹窗展示具体模型，对齐 `SET-MODEL-002-AC4`；失败时列表和弹窗展示明确错误提示，对齐 `SET-MODEL-002-AC5`。
 - Not：不验证模型列表持久化；当前模型列表仅作为展示和 workbench 下拉来源。
-
 
 #### `model-delete-config-feedback`
 
@@ -160,7 +159,6 @@ Settings 的回归测试顶层 suite 直接对齐 PRD 模块：
 - Oracle：移除成功后，该工作空间从列表中消失，对齐 `SET-WORKSPACE-006-AC2`；详情区不会继续显示已删除工作空间的陈旧数据。
 - Not：不验证其他消费页面中的范围清理展示；只覆盖 Settings 页内可见结果。
 
-
 #### `workspace-index-job-store-contract`
 
 - 测试类型：`backend`
@@ -205,7 +203,6 @@ Settings 的回归测试顶层 suite 直接对齐 PRD 模块：
 - How：复制共享 workspace fixture 的隔离副本，在 setup 阶段通过真实 IPC 绑定目录；随后通过 Settings UI 触发更新索引，读取刷新后的文件树和全部支持文件状态。原生目录选择由 `workspace-set-root-path` 单独覆盖。
 - Oracle：更新索引过程中出现持久化总进度，且检查更新/更新索引按钮同时禁用，对齐 `SET-WORKSPACE-004-AC3`；共享 fixture 中全部支持文件真实进入处理范围，对齐 `SET-WORKSPACE-004-AC1`；更新后所有支持文件收敛为 `indexed / failed`，摘要和节点状态同步刷新，对齐 `SET-WORKSPACE-004-AC2`。
 - Not：不验证向量内容质量和搜索召回结果。
-
 
 #### `workspace-prepare-failed-retry`
 
@@ -263,7 +260,6 @@ Settings 的回归测试顶层 suite 直接对齐 PRD 模块：
 
 ### 4.4 `workspace / web`
 
-
 #### `web-add-sources-dialog`
 
 - 测试类型：`e2e`
@@ -272,7 +268,6 @@ Settings 的回归测试顶层 suite 直接对齐 PRD 模块：
 - How：进入工作空间详情的网页 tab，确认列表和添加入口保持在 `/settings/workspace`，再覆盖空输入提交、多行 URL 提交和再次打开弹窗三条路径。
 - Oracle：网页管理位于工作空间详情且不跳转独立路由，对齐 `SET-WORKSPACE-005-AC3`、`SET-WEB-001-AC3`；输入为空时提交被拦截，对齐 `SET-WEB-002-AC1`；点击遮罩后弹窗保持打开且已输入 URL 不丢失，对齐 `SET-WEB-002-AC4`；多行 URL 提交后，网页资料进入当前工作区列表，对齐 `SET-WEB-002-AC2`；提交成功后弹窗关闭且输入被清空，对齐 `SET-WEB-002-AC3`。
 - Not：不验证 URL 抓取内容质量，也不验证 include/exclude selector 的解析效果。
-
 
 #### `web-prepare-summary`
 

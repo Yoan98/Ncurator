@@ -7,8 +7,9 @@
 - `ncurator-logo.svg`：主源文件，后续想继续调整 logo 时用它。
 - `ncurator-logo-small.svg`：小尺寸专用源文件，适合生成 16-64px 小图标。
 - `ncurator-logo-1024.png`：主 PNG 图标，适合应用内展示和高清场景。
+- `ncurator-logo-windows-1024.png`：Windows 专用母版，有效图形占画布约 96%。
 - `ncurator-logo.icns`：macOS 应用图标。
-- `ncurator-logo.ico`：Windows 应用图标。
+- `ncurator-logo.ico`：从 Windows 专用母版生成的多尺寸应用图标。
 
 ## PNG 尺寸
 
@@ -41,6 +42,8 @@
 - Windows 使用 `build/icon.ico`
 - macOS 使用 `build/icon.icns`
 - Linux 使用 `build/icon.png`
+
+Windows 与 macOS 使用不同的安全留白比例。Windows ICO 包含 16、20、24、32、40、48、64、128 和 256px 图层，避免任务栏按带宽留白的 macOS 图标再次缩小。
 
 ## 设计说明
 

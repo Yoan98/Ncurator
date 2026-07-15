@@ -7,6 +7,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { promisify } from 'node:util'
 import { loadReleaseEnvironment } from './release-environment.mjs'
+import { assertReleaseFragment } from './release-fragment-contract.mjs'
 
 const execFileAsync = promisify(execFile)
 const ROOT = process.cwd()
@@ -71,13 +72,11 @@ const downloadFragment = async (platform) => {
 }
 
 const verifyFragment = async (fragment, expectedPlatform) => {
-  if (
-    fragment.schemaVersion !== 1 ||
-    fragment.tag !== releaseTag ||
-    fragment.platform !== expectedPlatform
-  ) {
-    throw new Error(`invalid ${expectedPlatform} release fragment`)
-  }
+  assertReleaseFragment(fragment, {
+    tag: releaseTag,
+    platform: expectedPlatform,
+    label: `${expectedPlatform} release fragment`
+  })
   for (const file of fragment.files) {
     const key = `artifacts/${releaseTag}/${file.name}`
     const { stdout } = await aws([
@@ -160,9 +159,7 @@ const cleanupOldObjects = async () => {
 const createGithubRelease = async (manifest) => {
   const token = String(process.env.NCURATOR_RELEASE_TOKEN || '').trim()
   if (!token) {
-    process.stdout.write(
-      '[release] NCURATOR_RELEASE_TOKEN is not set; skipped GitHub Release notes\n'
-    )
+    process.stdout.write('[release] NCURATOR_RELEASE_TOKEN is not set; skipped GitHub Release\n')
     return
   }
   const repository = String(process.env.RELEASE_REPOSITORY || 'Yoan98/Ncurator')
@@ -281,7 +278,6 @@ try {
   const manifestPath = path.join(workDirectory, 'latest.json')
   await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8')
 
-  await createGithubRelease(manifest)
   await uploadLatestFile(
     path.join(metadataOutput, 'latest.yml'),
     'updates/latest/latest.yml',
@@ -320,6 +316,9 @@ try {
     throw new Error('latest R2 metadata does not match the release tag')
   }
 
+  await createGithubRelease(manifest).catch((error) => {
+    process.stderr.write(`[release] optional GitHub Release failed: ${error.message}\n`)
+  })
   if (!keepOld) await cleanupOldObjects()
   process.stdout.write(`[release] ${releaseTag} is live on Cloudflare R2\n`)
 } finally {
