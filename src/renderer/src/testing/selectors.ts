@@ -169,6 +169,7 @@ export const workbenchSelectors = {
   documentPreviewModeTag: 'workbench-document-preview-mode-tag',
   markdownViewer: 'workbench-markdown-viewer',
   plainTextViewer: 'workbench-plain-text-viewer',
+  textDiffViewer: 'workbench-text-diff-viewer',
   applyPanel: 'workbench-apply-panel',
   applyOpenSystemButton: 'workbench-apply-open-system-button',
   applyRevealButton: 'workbench-apply-reveal-button',

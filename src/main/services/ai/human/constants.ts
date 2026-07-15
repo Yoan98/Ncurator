@@ -1,5 +1,6 @@
 export const AI_TOOL_FAMILY_IDS = [
   'terminal',
+  'text-file',
   'kb',
   'docx',
   'web',
@@ -9,6 +10,7 @@ export const AI_TOOL_FAMILY_IDS = [
 
 export const BUILTIN_RUNTIME_SKILL_IDS = [
   'terminal',
+  'text-file',
   'kb-retrieval',
   'web-browsing',
   'utility'

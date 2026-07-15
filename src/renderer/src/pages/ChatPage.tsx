@@ -31,7 +31,6 @@ import type {
   ChatSession,
   ChatSessionListItem,
   ChatSessionRunSnapshot,
-  DocxApplyRecord,
   LLMConfig,
   LlmRemoteModel,
   SelectedReference,
@@ -486,31 +485,6 @@ const sortFileChangeRecords = (items: AiFileChangeRecord[]): AiFileChangeRecord[
   })
 }
 
-const fileChangeToDocxApplyRecord = (record: AiFileChangeRecord): DocxApplyRecord => ({
-  id: record.id,
-  session_id: record.sessionId,
-  run_id: record.runId,
-  status: record.status,
-  source_path: record.path,
-  source_name: record.fileName,
-  operation: record.operation,
-  final_revision_ref: '',
-  change_count: record.changeCount,
-  insert_count: record.insertCount,
-  delete_count: record.deleteCount,
-  before_exists: Boolean(record.beforeSnapshotPath),
-  before_snapshot_path: record.beforeSnapshotPath,
-  before_checksum: record.beforeChecksum,
-  preview_diff_artifact_path: record.previewPath || record.path,
-  preview_diff_checksum: '',
-  preview_diff_byte_size: 0,
-  after_checksum: record.afterChecksum,
-  created_at: record.createdAt,
-  updated_at: record.updatedAt,
-  reverted_at: record.revertedAt,
-  error: record.error
-})
-
 const createWorkspaceBinding = (
   workspace: WorkspaceSource | null
 ): WorkspaceRuntimeBinding | undefined =>
@@ -650,7 +624,7 @@ const ChatPage: React.FC = () => {
     return stored === null ? true : stored === 'true'
   })
 
-  const [activeApplyRecord, setActiveApplyRecord] = useState<DocxApplyRecord | null>(null)
+  const [activeApplyRecord, setActiveApplyRecord] = useState<AiFileChangeRecord | null>(null)
   const [applyLoading, setApplyLoading] = useState(false)
   const [applyReverting, setApplyReverting] = useState(false)
   const [applyForceConfirm, setApplyForceConfirm] = useState<ApplyForceConfirmState | null>(null)
@@ -680,7 +654,7 @@ const ChatPage: React.FC = () => {
   const loadApplyRecordRef = useRef<
     (input: {
       applyId: string
-      detail?: DocxApplyRecord | null
+      detail?: AiFileChangeRecord | null
       openWorkspace?: boolean
     }) => Promise<void>
   >(async () => {})
@@ -1281,7 +1255,7 @@ const ChatPage: React.FC = () => {
 
   const loadApplyRecord = async (input: {
     applyId: string
-    detail?: DocxApplyRecord | null
+    detail?: AiFileChangeRecord | null
     openWorkspace?: boolean
   }): Promise<void> => {
     setApplyLoading(true)
@@ -1289,11 +1263,7 @@ const ChatPage: React.FC = () => {
       let nextRecord = input.detail || null
       if (!nextRecord) {
         const fileChange = await window.api.aiFileChangeGet({ changeId: input.applyId })
-        nextRecord = fileChange.record ? fileChangeToDocxApplyRecord(fileChange.record) : null
-      }
-      if (!nextRecord) {
-        const fallback = await window.api.docxApplyGet({ applyId: input.applyId })
-        nextRecord = fallback.record || null
+        nextRecord = fileChange.record || null
       }
       if (!nextRecord) {
         setActiveApplyRecord(null)
@@ -1376,7 +1346,7 @@ const ChatPage: React.FC = () => {
 
       const previewFileKey = contentPanel.kind === 'file_preview' ? contentPanel.file.path : null
       if (options?.skipApplyRecordReload) {
-        setActiveApplyRecord(fileChangeToDocxApplyRecord(nextSelectedRecord))
+        setActiveApplyRecord(nextSelectedRecord)
         if (options.forceOpenWorkspace || contentPanel.kind === 'apply_workspace') {
           showApplyWorkspace(nextSelectedRecord.id)
         }
@@ -2439,7 +2409,7 @@ const ChatPage: React.FC = () => {
         return
       }
       if (response.record) {
-        setActiveApplyRecord(fileChangeToDocxApplyRecord(response.record))
+        setActiveApplyRecord(response.record)
         showApplyWorkspace(response.record.id)
       }
       emitSuccessMessage('已回退本次修改')
@@ -2470,7 +2440,7 @@ const ChatPage: React.FC = () => {
         return
       }
       if (forced.record) {
-        setActiveApplyRecord(fileChangeToDocxApplyRecord(forced.record))
+        setActiveApplyRecord(forced.record)
         showApplyWorkspace(forced.record.id)
       }
       setApplyForceConfirm(null)

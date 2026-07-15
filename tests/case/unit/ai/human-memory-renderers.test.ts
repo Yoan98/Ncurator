@@ -236,6 +236,44 @@ describe('ai unit human memory renderers', () => {
     expect(rendered).not.toContain('ignoredBlockField')
   })
 
+  it('keeps file_read content in brain history', () => {
+    const initialState = createInitialHumanState({
+      taskId: 'task-history-file-read',
+      userInput: '读取配置文件'
+    })
+    const call = {
+      toolName: 'file_read',
+      args: { sourcePath: 'config.ts' }
+    }
+    const taskRun = appendRoundRecord({
+      state: initialState,
+      thought: {
+        thought: { next: '读取配置文件' },
+        nextAction: { action: 'hand', calls: [call] }
+      },
+      execution: buildHandExecution({
+        calls: [call],
+        toolResults: [
+          {
+            toolName: 'file_read',
+            ok: true,
+            data: {
+              sourcePath: 'config.ts',
+              content: 'const timeout = 1000',
+              startLine: 1,
+              endLine: 1,
+              totalLines: 1
+            }
+          }
+        ]
+      })
+    })
+
+    const rendered = renderBrainRoundSection(taskRun.rounds)
+    expect(rendered).toContain('"content":"const timeout = 1000"')
+    expect(rendered).toContain('"totalLines":1')
+  })
+
   it('renders kb_list_documents result ids in round history', () => {
     const initialState = createInitialHumanState({
       taskId: 'task-history-kb-list-documents',

@@ -8,11 +8,13 @@ import {
   TERMINAL_RUN_TOOL_SPEC,
   TERMINAL_TOOL_SPECS
 } from './terminal/toolSpecs'
+import { TEXT_FILE_TOOL_SPECS } from './textFile/toolSpecs'
 import type { AiToolFamilyId, HumanToolSpec } from './types'
 import type { AiRuntimePlatform } from '../../types'
 
 export const ALL_TOOL_SPECS = [
   ...TERMINAL_TOOL_SPECS,
+  ...TEXT_FILE_TOOL_SPECS,
   ...KB_TOOL_SPECS,
   ...DOCX_TOOL_SPECS,
   ...WEB_TOOL_SPECS,

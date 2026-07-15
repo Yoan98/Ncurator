@@ -48,6 +48,18 @@ const FALLBACK_TOOL_HISTORY_WHITELIST: NestedWhitelistConfig = {
 }
 
 const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
+  file_read: {
+    sourcePath: true,
+    content: true,
+    startLine: true,
+    endLine: true,
+    totalLines: true,
+    error: true,
+    reason: true,
+    decisionHint: true,
+    estimatedTokens: true,
+    limit: true
+  },
   terminal_run: {
     stdout: true,
     stderr: true,

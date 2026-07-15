@@ -19,6 +19,10 @@
   - 通过率：`40 / 40`
   - 检测时间：`2026-07-14 13:59:28 +08:00`
   - 工具面只保留 `docx_outline / docx_search / docx_read_blocks / docx_edit`；模型侧任务内 history/rollback 已移除，内部 replay/revision 与用户文件级回退继续保留。
+- `tool / text-file`
+  - 通过率：`2 / 2`
+  - 检测时间：`2026-07-15 +08:00`
+  - 覆盖补充：`file_read` 行范围与总行数；`file_write` 的 create、rewrite、唯一 edit、replaceAll、原子失败、BOM/CRLF 保持、结构化 diff 重放和修改记录。
 - `tool / kb`
   - 通过率：`2 / 2`
   - 检测时间：`2026-07-13 13:04:39 +08:00`
@@ -42,7 +46,7 @@
   - 通过率：`22 / 22`
   - 检测时间：`2026-07-14 13:59:02 +08:00`
 - `human / live`
-  - 登记 case：`8`；当前有效结果 `8 / 8` 通过。全量先通过 6 条，另外 2 条按真实成果修正过严 Oracle 后定向复核通过。
+  - 登记 case：`9`；当前有效结果 `9 / 9` 通过，其中 `human-text-file-read-write-live` 已于 `2026-07-15` 使用真实模型定向通过。
   - 检测时间：`2026-07-14 14:38:26 +08:00`
   - 实际模型：`deepseek-v4-flash`。
   - memory、compaction、resume 均保留并通过；compaction 使用 `16K` 上下文，自然触发 1 次压缩，不限制压缩次数，压缩后继续完成周报文件交付。
@@ -58,6 +62,7 @@
     - `human-session-resume-with-new-selection-live`：`8.5 / 10`；恢复后保留旧事实，并结合新选择文件完成对比小结。
     - `human-web-crawl-multi-hop-cross-domain-reading-live`：`8.8 / 10`；完成多跳跨域读取并整理申请对象、材料、截止时间和线上办理方式。
     - `human-web-crawl-url-inference-reading-live`：`9.0 / 10`；自行推断 pandas 官网地址并完成两份 CSV 文档对比。
+    - `human-text-file-read-write-live`：通过；真实调用 `replaceAll`、唯一 `edit` 和回读，最终文件与工具结果边界均满足。
 
 ## 3. Suite 设计
 
@@ -65,6 +70,7 @@
 
 - `tool` 只验证真实生产工具调用，不允许 fake。
 - `tool / docx` 包含 `docx-edit-serial-actions-stability`，用于守住同一次 `docx_edit(actions)` 内插入、替换、删除后的 block 定位稳定性。
+- `tool / text-file` 覆盖普通文本读取、四种写入 action、修改记录、结构化 diff 与回退前置数据。
 - `tool / web-browsing` 包含 `web-crawl-contract`，用于守住 `web_crawl`、`web_search` 和 `browser_use` 工具契约。
 - 目标：验证 tool 与 `hand` 工具执行守卫在真实生产代码下的输入输出是否正常、合理。
 - 约束：必须真实调用生产工具、真实 store、真实 docx apply service、真实 artifact 流。
@@ -530,6 +536,26 @@ AI unit / 辅助测试目录：
 - How：对带损坏关系引用的真实 docx 执行 `docx_edit(replace_text)` 或结构编辑 action。
 - Oracle：`apply_ops` 直接失败，且当前文档会话的修订引用不会推进到无效修订。
 - Not：不验证上层如何决定重试或放弃。
+
+#### text-file 类别
+
+##### `text-file-read-write-contract`
+
+- 测试类型：`backend`
+- What：验证普通文本创建、范围读取、多个唯一编辑、replaceAll、AI-facing 简短结果、修改记录和结构化 diff。
+- Why：普通文本工具是代码、Markdown 和配置文件处理的基础，必须保证 AI 不需要生成或解析 unified diff。
+- How：真实调用 `file_read/file_write`，连续执行 create、edit、replaceAll，再从统一修改记录读取 diff artifact 并用 before 内容重放。
+- Oracle：文件内容正确；结果只包含简短文本；每次写入产生 `text_file` 修改记录与 artifact；结构化 diff 重放等于真实 after。
+- Not：不验证 Workbench 视觉样式。
+
+##### `text-file-atomic-guards-and-format-preservation`
+
+- 测试类型：`backend`
+- What：验证 edit 多匹配失败、replaceAll 全部非重叠替换、不递归替换和 BOM/CRLF 保持。
+- Why：歧义匹配或部分落盘会直接损坏用户代码，格式漂移会制造无关 diff。
+- How：对真实 BOM/CRLF 文件执行歧义 edit、成功 replaceAll 和无匹配 replaceAll，并逐次比较 bytes。
+- Oracle：失败时 bytes 不变；成功替换次数准确；新内容中的 oldText 不会被再次递归替换；BOM 与 CRLF 保持。
+- Not：不支持正则 replaceAll。
 
 #### kb 类别
 
@@ -1034,6 +1060,15 @@ AI unit / 辅助测试目录：
 - How：不向用户输入提供 URL，只给“基于 pandas 官网文档分别说明 `read_csv` 和 `DataFrame.to_csv` 及其最直接使用区别”的自然语言诉求；要求模型自行判断官网地址并通过 `web_crawl` 读取官网文档页面完成整理。
 - Oracle：任务最终完成；事件流中至少两次调用 `web_crawl`；调用 URL 落在 `pandas.pydata.org` 官网文档域名上；最终答复同时说明 `read_csv` 与 `to_csv` 的用途，并概括它们一个偏读取 CSV、一个偏写出 CSV 的直接区别；不出现 `browser_use` 或 `terminal_run`。
 - Not：不要求复杂跨域或深链路，也不要求模型第一次就命中最终文档页，只要最终能自行推断官网地址并完成整理即可。
+
+##### `human-text-file-read-write-live`
+
+- 测试类型：`backend`
+- What：验证 live 模型读取代码文件后，使用 `replaceAll` 修改统一关键词、使用 `edit` 修改唯一块，并回读确认。
+- Why：工具契约正确不等于模型会正确选择 action；必须验证真实模型能区分唯一编辑和全部替换。
+- How：只开放 `file_read/file_write`，准备包含两处 `OLD_API_URL` 和一处 timeout 的真实 TypeScript 文件，要求全部改名并精确修改 timeout。
+- Oracle：任务完成；至少一次 `replaceAll` 参数正确、一次 `edit` 参数有效；最终文件无旧关键词；写入工具结果不包含 diff、previewPath 或 unified patch。
+- Not：不要求固定调用轮数，不验证 Workbench UI。
 
 ## 6. 验收口径
 

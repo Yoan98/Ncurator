@@ -9,7 +9,13 @@ import type {
   ListAiFileChangeRecordsResponse
 } from '../../../../shared/types'
 import type { SqliteCore } from '../sqlite/SqliteCore'
-import { buildWhere, insertOrReplace, toOptionalString, toRequiredNumber, toRequiredString } from '../sqlite/sqliteUtils'
+import {
+  buildWhere,
+  insertOrReplace,
+  toOptionalString,
+  toRequiredNumber,
+  toRequiredString
+} from '../sqlite/sqliteUtils'
 
 type AiFileChangeRow = Record<string, unknown>
 
@@ -20,7 +26,9 @@ const normalizeStatus = (value: unknown): AiFileChangeStatus => {
 
 const normalizeCapability = (value: unknown): AiFileChangeCapability => {
   const normalized = String(value ?? '').trim()
-  if (normalized === 'terminal_exec' || normalized === 'ppt') return normalized
+  if (normalized === 'text_file' || normalized === 'terminal_exec' || normalized === 'ppt') {
+    return normalized
+  }
   return 'docx'
 }
 

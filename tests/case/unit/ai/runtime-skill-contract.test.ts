@@ -9,6 +9,7 @@ describe('ai unit runtime skill contract', () => {
   it('exposes builtin skills', () => {
     expect(listBuiltinSkillDefinitions().map((definition) => definition.skillId)).toEqual([
       'terminal',
+      'text-file',
       'kb-retrieval',
       'web-browsing',
       'utility'
@@ -23,6 +24,7 @@ describe('ai unit runtime skill contract', () => {
   it('includes builtin skills in effective skills before any external learning', () => {
     expect(getEffectiveLearnedSkillIds([])).toEqual([
       'terminal',
+      'text-file',
       'kb-retrieval',
       'web-browsing',
       'utility'

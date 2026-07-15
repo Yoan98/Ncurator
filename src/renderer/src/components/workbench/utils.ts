@@ -70,6 +70,8 @@ const readNestedObject = (value: IpcJsonObject, key: string): IpcJsonObject | un
 
 const isAssistantToolName = (toolName: string): toolName is AssistantToolName =>
   toolName === 'terminal_run' ||
+  toolName === 'file_read' ||
+  toolName === 'file_write' ||
   toolName === 'kb_search' ||
   toolName === 'kb_list_documents' ||
   toolName === 'docx_outline' ||
@@ -200,6 +202,7 @@ const readDocxRangeLabel = (input?: IpcJsonObject): string => {
 
 const getSkillDisplayName = (skillId?: RuntimeSkillId): string => {
   if (skillId === 'terminal') return '命令执行器'
+  if (skillId === 'text-file') return '文本文件编辑器'
   if (skillId === 'kb-retrieval') return '资料查阅器'
   if (skillId === 'docx-read') return 'docx 阅读器'
   if (skillId === 'docx-write') return 'docx 写作器'
@@ -216,6 +219,7 @@ const getToolUiKind = (toolName?: AssistantToolName): AssistantProcessSkillKey =
     return 'docx-read'
   }
   if (toolName === 'docx_edit') return 'docx-edit'
+  if (toolName === 'file_read' || toolName === 'file_write') return 'text-file'
   if (toolName === 'kb_search' || toolName === 'kb_list_documents') return 'kb'
   if (toolName === 'terminal_run') return 'terminal'
   if (toolName === 'web_search') return 'web-search'
@@ -234,6 +238,7 @@ const getDisplaySkillKey = (display: AssistantProcessDisplay): AssistantProcessS
 const getToolIconKind = (skillKey: AssistantProcessSkillKey): AssistantProcessIconKind => {
   if (skillKey === 'docx-edit') return 'edit'
   if (skillKey === 'docx-read') return 'document'
+  if (skillKey === 'text-file') return 'edit'
   if (
     skillKey === 'kb' ||
     skillKey === 'web-search' ||
@@ -292,6 +297,14 @@ const getToolSummaryText = (
       return sentence(text(`部分编辑 ${normalizedCount} 个 docx 文件失败`))
     }
     return sentence(text(`编辑 ${normalizedCount} 个 docx 文件失败`))
+  }
+  if (skillKey === 'text-file') {
+    if (status === 'running') return sentence(text(`正在处理 ${normalizedCount} 个文本文件`))
+    if (status === 'completed') return sentence(text(`已处理 ${normalizedCount} 个文本文件`))
+    if (status === 'partial_failed') {
+      return sentence(text(`部分处理 ${normalizedCount} 个文本文件失败`))
+    }
+    return sentence(text(`处理 ${normalizedCount} 个文本文件失败`))
   }
   if (skillKey === 'kb') {
     if (status === 'running') return sentence(text('正在检索知识库'))
@@ -363,6 +376,12 @@ const getToolItemText = (
   }
   if (toolName === 'docx_edit') {
     return sentence(text('编辑文档：'), text(fileLabel, true))
+  }
+  if (toolName === 'file_read') {
+    return sentence(text('读取文本文件：'), text(fileLabel, true))
+  }
+  if (toolName === 'file_write') {
+    return sentence(text('编辑文本文件：'), text(fileLabel, true))
   }
   if (toolName === 'terminal_run') {
     return sentence(text('执行命令：'), text(commandLabel, true))
@@ -468,13 +487,14 @@ const getExecutionStatus = (groups: AssistantProcessGroup[]): AssistantProcessSt
 const getExecutionActionOrder = (kind: AssistantProcessSkillKey): number => {
   if (kind === 'docx-read') return 1
   if (kind === 'docx-edit') return 2
-  if (kind === 'kb') return 3
-  if (kind === 'terminal') return 4
-  if (kind === 'web-search') return 5
-  if (kind === 'web-crawl') return 6
-  if (kind === 'browser') return 7
-  if (kind === 'wait') return 8
-  return 9
+  if (kind === 'text-file') return 3
+  if (kind === 'kb') return 4
+  if (kind === 'terminal') return 5
+  if (kind === 'web-search') return 6
+  if (kind === 'web-crawl') return 7
+  if (kind === 'browser') return 8
+  if (kind === 'wait') return 9
+  return 10
 }
 
 export const buildAssistantExecutionSummaryText = (

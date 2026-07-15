@@ -89,6 +89,8 @@ export type AssistantRichTextSegment = {
 
 export type AssistantToolName =
   | 'terminal_run'
+  | 'file_read'
+  | 'file_write'
   | 'kb_search'
   | 'kb_list_documents'
   | 'docx_outline'
@@ -124,6 +126,7 @@ export type AssistantProcessGroupKind =
 export type AssistantProcessSkillKey =
   | 'docx-read'
   | 'docx-edit'
+  | 'text-file'
   | 'kb'
   | 'terminal'
   | 'web-search'

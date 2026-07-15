@@ -13,8 +13,8 @@
 
 ### 2.1 当前状态
 
-- 总体登记：`21` 个 e2e case，`1` 个 backend contract case。
-- 当前有效结论：e2e `21 / 21` 通过；backend contract `15 / 15` tests 通过。
+- 总体登记：`22` 个 e2e case，`1` 个 backend contract case。
+- 当前有效结论：已有 e2e `21 / 21` 通过；新增文本 diff e2e 等待下一轮真实模型全量；backend contract `15 / 15` tests 通过。
 - 检测时间：`2026-07-14 10:20:20 +08:00`。
 - 本轮模型配置由根目录 `.env` 通过 `loadRootEnvOnce()` 自动读取，无需手工 export。
 
@@ -29,9 +29,9 @@
   - 当前有效结论：backend contract `15 / 15` tests；e2e `8 / 8`。
   - 备注：公网搜索中的模型工具选择不再作为稳定 E2E 门禁；内置浏览器闭环统一由本地可控网页的 `browser-use-task-panel` 覆盖。
 - `result`
-  - 登记 case：`5`
-  - 当前有效结论：`5 / 5`。
-  - 备注：3 个 docx apply、文件预览和搜索结果打开规则均通过。
+  - 登记 case：`6`
+  - 当前有效结论：已有 `5 / 5` 通过；新增 `text-file-apply-preview-and-revert` 等待下一轮真实模型执行。
+  - 备注：覆盖 3 个 docx apply、普通文件预览、文本 diff 修改与回退、搜索结果打开规则。
 
 ### 2.3 当前边界
 
@@ -42,6 +42,7 @@
 - Workbench UI E2E 回归测试需要真实索引完成信号和 UI 可见状态作为等待条件；IPC observer 和 job 查询只能作为辅助证据，不能用来造业务状态。
 - `file-preview-actions` 当前按生产真实索引能力覆盖 `pdf/docx/md/txt`：`.md`、`.markdown`、`.txt` 必须通过真实索引进入搜索结果，并从搜索结果打开右侧预览。
 - docx apply case 需要真实 docx 输入、真实 AI 编辑、真实写回记录、真实预览和真实回退。
+- text-file apply case 需要真实 Markdown 或代码文件、真实 `file_write`、真实结构化 diff、独立 `TextFileDiffViewer` 和按原始 bytes 回退。
 - `browser-use-task-panel` 需要真实 AI run 触发 `browser_use` 并驱动内置浏览器完成本地网页任务；当前已使用 DashScope / openai-compatible / `deepseek-v4-flash` 覆盖 Stagehand 官方 provider 与 `StagehandLangChainClient` 路径，不能用 fake browser 替代。
 - `web_search` 与 `web_crawl` 需要分开覆盖：搜索 case 只验证候选网页返回；读取 case 必须验证 AI 继续读取网页正文后再回答。
 - Workbench 附件链路当前固定保存到 `<workspace>/.ncurator/runtime/assets/<assetBucketId>/`，`assetBucketId` 为输入草稿 UUID，发送给 AI 时只传附件名称与路径，不再做发送前识图或文件解析。
@@ -58,7 +59,7 @@ Workbench 的回归测试顶层 suite 按用户任务闭环划分，而不是逐
 
 - `conversation` 验证用户发起任务前后的会话壳、composer、模式、模型 / 工作区偏好、工作目录前置条件与 `@` 参考资料 token。
 - `run` 验证智能模式运行中的过程流、持久化恢复、停止、审批、压缩提示和 AI 内置浏览器任务。
-- `result` 验证搜索结果、文件预览、修改文件工作区、真实 docx 预览、回退和多文件修改入口。
+- `result` 验证搜索结果、普通文件预览、修改文件工作区、真实 docx 预览、文本 diff、回退和多文件修改入口。
 - Workbench 回归测试优先使用 `e2e`，因为核心风险集中在 Electron、renderer 状态、IPC、真实 AI 调用、右侧面板和文件系统联动。
 - `backend` 只用于稳定的纯契约测试，例如参考资料候选过滤、搜索范围 payload 或会话 / 修改记录查询契约；不得用 backend case 代替真实 UI 交互断言。
 - 涉及 AI 的 case 必须记录模型、耗时、完成度评分和失败归因；Oracle 继续引用 [workbench.md](/Users/test/work-space/NCurator-Desktop/doc/prd/workbench.md) 的需求编号与验收编号。
@@ -284,6 +285,15 @@ tests/case/workbench/
 - How：从真实搜索结果打开真实 pdf、docx、md、txt 文件；检查右侧工具条、预览主体、返回路径、PDF 命中页定位、Markdown 标题 / 列表 / 表格 / 代码块渲染，以及纯文本换行保留。
 - Oracle：普通文件打开后右侧主体用于预览且工具条提供定位文件和系统打开，对齐 `WB-PANEL-003-AC1`；PDF 搜索命中打开后保留整份 PDF 可滚动内容并定位到命中页，对齐 `WB-PANEL-003-AC3`；md/txt 必须来自真实索引搜索命中，并打开同一右侧文件预览面板。
 - Not：不验证系统文件管理器或系统默认应用本身是否成功打开；不伪造 md/txt 搜索结果或右侧预览状态。
+
+#### `text-file-apply-preview-and-revert`
+
+- 测试类型：`e2e`
+- What：验证同一个 Markdown 文件在普通预览时正常渲染，在 AI 修改记录中使用独立文本 diff，并能恢复原始 bytes。
+- Why：普通预览和修改预览是两种不同语义；如果共用文件渲染器，用户看不到本次具体增加和删除内容。
+- How：先从真实搜索结果打开 Markdown 普通预览；再通过真实 AI 调用 `replaceAll` 和 `edit` 修改该文件；点击 assistant 修改入口检查 `TextFileDiffViewer`；最后执行回退。
+- Oracle：普通预览标签为“预览”且使用 Markdown renderer，对齐 `WB-PANEL-003-AC1`、`WB-PANEL-003-AC4`；修改记录标签为“编辑”，可见红色删除行、绿色新增行和新旧行号，对齐 `WB-APPLY-001-AC1`、`WB-APPLY-002-AC3`；回退后 bytes 与原始输入一致，历史 diff 仍可查看并显示回退状态，对齐 `WB-APPLY-003-AC1`、`WB-APPLY-003-AC3`。
+- Not：不验证 unified diff 字符串；UI 只消费结构化 diff artifact。
 
 #### `docx-apply-panel-preview-and-revert`
 

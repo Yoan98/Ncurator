@@ -10,6 +10,7 @@ const TOOL_FAMILY_BUILDERS: Record<
   (input: ToolFamilyBuildInput) => StructuredToolInterface[]
 > = {
   terminal: TOOL_FAMILY_DEFINITIONS.terminal.buildTools,
+  'text-file': TOOL_FAMILY_DEFINITIONS['text-file'].buildTools,
   kb: TOOL_FAMILY_DEFINITIONS.kb.buildTools,
   docx: TOOL_FAMILY_DEFINITIONS.docx.buildTools,
   web: TOOL_FAMILY_DEFINITIONS.web.buildTools,

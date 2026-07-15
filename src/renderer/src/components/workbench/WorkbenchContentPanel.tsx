@@ -12,7 +12,7 @@ import {
   HiOutlineMagnifyingGlass,
   HiSparkles
 } from 'react-icons/hi2'
-import type { DocxApplyRecord, SearchResult, WorkspaceSource } from '../../../../shared/types'
+import type { AiFileChangeRecord, SearchResult, WorkspaceSource } from '../../../../shared/types'
 import TextHighlighter from '../TextHighlighter'
 import { FileRenderViewer } from '../fileRenders'
 import type { FileRenderDocument } from '../fileRenders'
@@ -21,10 +21,11 @@ import type { SearchWorkbenchTurn, WorkbenchContentPanelState } from './types'
 import { workbenchSelectors } from '../../testing/selectors'
 import ChangeCountBadges from './ChangeCountBadges'
 import WorkspacePathLabel from './WorkspacePathLabel'
+import { TextFileDiffViewer } from './TextFileDiffViewer'
 
 type WorkbenchContentPanelProps = {
   state: WorkbenchContentPanelState
-  activeApplyRecord: DocxApplyRecord | null
+  activeApplyRecord: AiFileChangeRecord | null
   applyLoading: boolean
   applyReverting: boolean
   workspaces: WorkspaceSource[]
@@ -203,9 +204,10 @@ type WorkbenchDocumentPreviewPanelProps = {
   fileName: string
   filePath: string
   documents: FileRenderDocument[]
+  content?: React.ReactNode
   mode: 'preview' | 'edit'
-  status?: DocxApplyRecord['status']
-  operation?: DocxApplyRecord['operation']
+  status?: AiFileChangeRecord['status']
+  operation?: AiFileChangeRecord['operation']
   insertCount?: number
   deleteCount?: number
   testId?: string
@@ -228,6 +230,7 @@ const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPreviewPanelP
   fileName,
   filePath,
   documents,
+  content,
   mode,
   status,
   operation,
@@ -361,7 +364,7 @@ const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPreviewPanelP
         </div>
       ) : null}
       <div className="min-h-0 flex-1 bg-white" data-testid={workbenchSelectors.documentView}>
-        {isDeletedCreatedFile ? (
+        {isDeletedCreatedFile && !content ? (
           <div className="flex h-full items-center justify-center">
             <Empty
               image={Empty.PRESENTED_IMAGE_SIMPLE}
@@ -372,6 +375,8 @@ const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPreviewPanelP
           <div className="flex h-full items-center justify-center">
             <Spin />
           </div>
+        ) : content ? (
+          content
         ) : (
           <FileRenderViewer documents={documents} framed={false} emptyText={emptyText} />
         )}
@@ -387,6 +392,7 @@ const arePreviewPanelPropsEqual = (
   previous.fileName === next.fileName &&
   previous.filePath === next.filePath &&
   previous.documents === next.documents &&
+  previous.content === next.content &&
   previous.mode === next.mode &&
   previous.status === next.status &&
   previous.operation === next.operation &&
@@ -434,21 +440,28 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
         : [],
     [state]
   )
-  const hasDedicatedPreview = Boolean(activeApplyRecord?.preview_diff_checksum)
+  const hasDedicatedPreview = Boolean(activeApplyRecord?.previewPath)
   const applyDocuments = useMemo<FileRenderDocument[]>(() => {
-    if (!activeApplyRecord?.source_name) return []
+    if (!activeApplyRecord || activeApplyRecord.capability === 'text_file') return []
     const shouldShowCurrentFile =
       activeApplyRecord.status === 'reverted' && activeApplyRecord.operation === 'updated'
     const filePath = shouldShowCurrentFile
-      ? activeApplyRecord.source_path
-      : activeApplyRecord.preview_diff_artifact_path || activeApplyRecord.source_path
+      ? activeApplyRecord.path
+      : activeApplyRecord.previewPath || activeApplyRecord.path
     return [
       {
         filePath,
-        fileName: activeApplyRecord.source_name
+        fileName: activeApplyRecord.fileName
       }
     ]
   }, [activeApplyRecord])
+  const applyContent = useMemo(
+    () =>
+      activeApplyRecord?.capability === 'text_file' && activeApplyRecord.previewPath ? (
+        <TextFileDiffViewer previewPath={activeApplyRecord.previewPath} />
+      ) : undefined,
+    [activeApplyRecord]
+  )
   const applyEmptyText =
     activeApplyRecord?.status === 'reverted' || hasDedicatedPreview
       ? '当前文件暂时不可预览。'
@@ -486,14 +499,15 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
         {state.kind === 'apply_workspace' ? (
           activeApplyRecord ? (
             <WorkbenchDocumentPreviewPanel
-              fileName={activeApplyRecord.source_name}
-              filePath={activeApplyRecord.source_path}
+              fileName={activeApplyRecord.fileName}
+              filePath={activeApplyRecord.path}
               documents={applyDocuments}
+              content={applyContent}
               mode="edit"
               status={activeApplyRecord.status}
               operation={activeApplyRecord.operation}
-              insertCount={activeApplyRecord.insert_count}
-              deleteCount={activeApplyRecord.delete_count}
+              insertCount={activeApplyRecord.insertCount}
+              deleteCount={activeApplyRecord.deleteCount}
               testId={workbenchSelectors.applyPanel}
               loading={applyLoading}
               reverting={applyReverting}

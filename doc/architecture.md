@@ -74,9 +74,13 @@ Retrieval 负责文档索引、向量检索、全文检索和结果融合。检�
 
 Docx Runtime 负责 Word 文档读取、搜索、编辑、任务内回滚、写回和用户回退。它通过 AI 工具暴露能力，但底层由 runtime、worker 和 OOXML adapter 分层完成。
 
+### Text File Runtime
+
+Text File Runtime 通过 builtin `text-file` skill 提供 `file_read` 和 `file_write`。它负责 UTF-8 普通文本读取、创建、完整改写、唯一文本编辑和全部精确匹配替换。写入先完成全部校验，再通过同目录临时文件原子替换；写入前保存 bytes checkpoint，写入后根据真实 before/after 生成结构化行级 diff。
+
 ### Apply Review
 
-Apply Review 负责 AI 修改文件后的统一记录、预览和回退入口。Docx 写回会同步写入统一文件修改记录，UI 以统一记录展示用户可见的变更。
+Apply Review 负责 AI 修改文件后的统一记录、预览和回退入口。Docx 与 Text File Runtime 都写入统一文件修改记录。Renderer 根据记录 capability 路由：docx 使用文档预览，`text_file` 使用独立文本 diff，普通文件预览仍使用文件渲染器。用户回退依赖完整 checkpoint，不依赖 diff 反向计算。
 
 ## AI 架构
 
@@ -133,6 +137,8 @@ AI 能力通过 skill 和 tool 两层表达：
 
 skill 不按目录强行拆分，也不等同于工具数量。一个 skill 可以对应多个 tool，多个 skill 也可以共享同一实现域。
 
+`text-file` 是 builtin skill，默认提供普通文本读写能力。AI-facing 的写入结果只返回简短成功文本；结构化 diff、快照路径和 checksum 只进入内部修改记录，不进入模型工具结果。
+
 ### 会话连续性
 
 run 完成后，系统会基于本轮用户输入、最终答复和产物更新 conversation summary。下一次 run 会读取最近消息和 summary，形成跨轮连续性。
@@ -178,6 +184,17 @@ flowchart TD
 - 写回永远从 committed view 落盘。
 - checkpoint 是用户回退真相，revision 是 AI 任务内编辑历史，二者不能互相替代。
 
+## 普通文本文件架构
+
+普通文本文件链路不使用 unified diff 作为 AI 输入或输出：
+
+1. `file_read` 解码 UTF-8 文本，并返回指定行范围和总行数。
+2. `file_write` 按 action 校验完整输入；`edit` 的每个 `oldText` 必须唯一且互不重叠，`replaceAll` 对一个非空 `oldText` 执行全部非重叠精确替换。
+3. 后端保留原始 BOM、换行风格和文件权限，写入前再次检查文件未发生变化。
+4. 写入成功后保存完整 before snapshot，并通过 `diff` 库把真实 before/after 转为带行号的结构化 hunks。
+5. Workbench 的 `TextFileDiffViewer` 读取结构化 diff，展示新增、删除、上下文和词级变化；大 diff 使用虚拟列表。
+6. 回退更新文件时恢复原始 bytes；回退新建文件时删除目标，历史 diff 保留用于查看。
+
 ## 存储架构
 
 存储架构遵循一个原则：业务状态只有一个真相。
@@ -206,6 +223,6 @@ flowchart TD
 2. Main 创建 run，并读取会话上下文和工作区状态。
 3. AI Runtime 通过 human graph 推进 brain、learning、hand、mouth。
 4. 需要资料时进入 Retrieval，读取 SQLite 元数据并检索 LanceDB。
-5. 需要 docx 能力时进入 Docx Runtime，读取或编辑当前文档状态。
-6. 文件写回后记录统一修改记录，供 UI 展示和回退。
+5. 需要 docx 能力时进入 Docx Runtime；需要普通文本能力时进入 Text File Runtime。
+6. 文件写回后记录统一修改记录和对应预览，供 UI 展示和回退。
 7. 最终答复和事件流通过 IPC 回到 Renderer 展示。
