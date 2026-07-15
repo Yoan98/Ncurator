@@ -21,6 +21,18 @@ const getFileType = (filename: string): string => {
   return filename.split('.').pop()?.toLowerCase() || ''
 }
 
+const resolveUtf8TextFileType = (bytes: ArrayBuffer, fileType: string): string => {
+  if (fileType === 'pdf' || fileType === 'docx' || fileType === 'md' || fileType === 'markdown') {
+    return fileType
+  }
+  try {
+    new TextDecoder('utf-8', { fatal: true }).decode(bytes)
+    return 'txt'
+  } catch {
+    return fileType
+  }
+}
+
 const getFileName = (document: FileRenderDocument): string => {
   if (document.fileName) return document.fileName
   if (document.file instanceof File && document.file.name) return document.file.name
@@ -80,13 +92,15 @@ export const prepareFileRenderDocument = async (
 
   if (sourceBlob) {
     const file = createFileFromBlob(sourceBlob, fileName)
-    const previewFileData = fileType === 'pdf' ? await sourceBlob.arrayBuffer() : fileData
+    const blobBytes = await sourceBlob.arrayBuffer()
+    const resolvedFileType = resolveUtf8TextFileType(blobBytes, fileType)
+    const previewFileData = resolvedFileType === 'pdf' ? blobBytes : fileData
     return {
       ...document,
       uri: document.uri || createObjectUrl(file, createdUrls),
       fileData: previewFileData,
       fileName,
-      fileType,
+      fileType: resolvedFileType,
       file,
       metadata: document.metadata
     }
@@ -94,16 +108,18 @@ export const prepareFileRenderDocument = async (
 
   if (document.filePath) {
     const buffer = await window.api.readFile(document.filePath)
-    const previewFileData = fileType === 'pdf' ? copyBytesToArrayBuffer(buffer) : fileData
-    const file = new File([previewFileData || copyBytesToArrayBuffer(buffer)], fileName, {
-      type: getMimeType(fileName)
+    const bufferArray = copyBytesToArrayBuffer(buffer)
+    const resolvedFileType = resolveUtf8TextFileType(bufferArray, fileType)
+    const previewFileData = resolvedFileType === 'pdf' ? bufferArray : fileData
+    const file = new File([previewFileData || bufferArray], fileName, {
+      type: resolvedFileType === 'txt' ? 'text/plain' : getMimeType(fileName)
     })
     return {
       ...document,
       uri: createObjectUrl(file, createdUrls),
       fileData: previewFileData,
       fileName,
-      fileType,
+      fileType: resolvedFileType,
       file,
       metadata: document.metadata
     }

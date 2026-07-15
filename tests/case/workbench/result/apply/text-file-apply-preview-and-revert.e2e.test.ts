@@ -7,6 +7,7 @@ import {
   assertNoWorkbenchFakeSignals,
   appendWorkbenchInputText,
   getWorkbenchLocator,
+  getWorkbenchPrefixLocator,
   insertWorkbenchReferenceToken,
   recordWorkbenchAiEvidence,
   sendWorkbenchMessage,
@@ -104,6 +105,18 @@ describe('workbench result e2e', () => {
               .first()
               .getAttribute('data-new-line')
               .then((value) => Boolean(value))
+            const addedRowColumnCount = await addedLines.first().locator(':scope > span').count()
+            const resourceTabCount = await getWorkbenchPrefixLocator(
+              page,
+              workbenchSelectors.resourceTabPrefix
+            ).count()
+            const standaloneArtifactCount = await getWorkbenchPrefixLocator(
+              page,
+              workbenchSelectors.assistantTurnArtifactPrefix
+            ).count()
+            const omittedLineLabels = await diffViewer
+              .locator('[data-diff-omitted-count]')
+              .allTextContents()
 
             await getWorkbenchLocator(page, workbenchSelectors.applyRevertButton).click()
             await waitForWorkbenchApplyRecordStatus(page, 'reverted')
@@ -117,6 +130,10 @@ describe('workbench result e2e', () => {
               diffText,
               hasOldLineNumber,
               hasNewLineNumber,
+              addedRowColumnCount,
+              resourceTabCount,
+              standaloneArtifactCount,
+              omittedLineLabels,
               restoredBytes: afterRevertBytes.equals(beforeBytes),
               diffStillVisible
             }
@@ -134,6 +151,10 @@ describe('workbench result e2e', () => {
               result.diffText.includes('DiffPreview') &&
               result.hasOldLineNumber &&
               result.hasNewLineNumber &&
+              result.addedRowColumnCount === 3 &&
+              result.resourceTabCount === 1 &&
+              result.standaloneArtifactCount === 0 &&
+              result.omittedLineLabels.some((label) => label.includes('行未修改')) &&
               result.restoredBytes &&
               result.diffStillVisible,
             {

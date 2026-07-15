@@ -80,7 +80,11 @@ Text File Runtime 通过 builtin `text-file` skill 提供 `file_read` 和 `file_
 
 ### Apply Review
 
-Apply Review 负责 AI 修改文件后的统一记录、预览和回退入口。Docx 与 Text File Runtime 都写入统一文件修改记录。Renderer 根据记录 capability 路由：docx 使用文档预览，`text_file` 使用独立文本 diff，普通文件预览仍使用文件渲染器。用户回退依赖完整 checkpoint，不依赖 diff 反向计算。
+Apply Review 负责 AI 修改文件后的统一记录、预览和回退入口。Docx、Text File Runtime 和 terminal 识别出的 UTF-8 文件修改都写入统一文件修改记录。Renderer 根据记录 capability 路由：docx 使用文档预览，`text_file` 使用独立文本 diff，普通文件预览仍使用文件渲染器。用户回退依赖完整 checkpoint，不依赖 diff 反向计算。
+
+### Workbench Resource Workspace
+
+Workbench 右侧由资源 Tab 和内容渲染两层组成。Tab 状态按会话保存在 Renderer 内存中，目前只承载文件和内置浏览器；文件按标准化路径去重，普通预览与修改 diff 共用同一个文件 Tab，浏览器固定为单例 Tab。搜索结果是临时面板状态，不占用资源 Tab。切换文件 Tab 会重新选择对应渲染状态；切换离开浏览器只隐藏 `WebContentsView`，不会销毁页面。
 
 ## AI 架构
 
@@ -192,8 +196,11 @@ flowchart TD
 2. `file_write` 按 action 校验完整输入；`edit` 的每个 `oldText` 必须唯一且互不重叠，`replaceAll` 对一个非空 `oldText` 执行全部非重叠精确替换。
 3. 后端保留原始 BOM、换行风格和文件权限，写入前再次检查文件未发生变化。
 4. 写入成功后保存完整 before snapshot，并通过 `diff` 库把真实 before/after 转为带行号的结构化 hunks。
-5. Workbench 的 `TextFileDiffViewer` 读取结构化 diff，展示新增、删除、上下文和词级变化；大 diff 使用虚拟列表。
+5. Workbench 的 `TextFileDiffViewer` 读取结构化 diff，使用单行号列展示新增、删除、上下文和词级变化，hunk 间用“N 行未修改”收起；大 diff 使用虚拟列表。
 6. 回退更新文件时恢复原始 bytes；回退新建文件时删除目标，历史 diff 保留用于查看。
+7. terminal 执行前后若识别到 UTF-8 文件发生变化，复用同一结构化 diff 与修改记录链路；无法严格解码的产物保持 `terminal_exec`。
+
+普通文件预览先保留 PDF、DOCX 和 Markdown 的专用渲染；其他文件严格 UTF-8 解码成功后统一进入纯文本渲染，因此 `.log`、代码、JSON、HTML 等普通文本无需逐个维护扩展名白名单。解码失败时不进入纯文本渲染，避免误展示二进制内容。
 
 ## 存储架构
 

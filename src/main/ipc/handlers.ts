@@ -75,6 +75,7 @@ import type {
   OpenPathWithApplicationResponse,
   PrepareWebSourcesRequest,
   PickDirectoryResponse,
+  PickFileResponse,
   PickApplicationResponse,
   ReferenceItemListResponse,
   ScanWebSourcesRequest,
@@ -1450,6 +1451,25 @@ export function registerHandlers(services: {
       if (result.canceled || result.filePaths.length === 0) {
         return { canceled: true }
       }
+      return { canceled: false, path: result.filePaths[0] }
+    } catch (error) {
+      return { canceled: true, error: getErrorMessage(error) }
+    }
+  })
+
+  ipcMain.handle('pick-file', async (event, defaultPath?: string): Promise<PickFileResponse> => {
+    try {
+      const dialogOptions: OpenDialogOptions = {
+        title: '打开文件',
+        buttonLabel: '打开',
+        defaultPath: String(defaultPath || '').trim() || undefined,
+        properties: ['openFile', 'dontAddToRecent']
+      }
+      const ownerWindow = BrowserWindow.fromWebContents(event.sender)
+      const result = ownerWindow
+        ? await dialog.showOpenDialog(ownerWindow, dialogOptions)
+        : await dialog.showOpenDialog(dialogOptions)
+      if (result.canceled || result.filePaths.length === 0) return { canceled: true }
       return { canceled: false, path: result.filePaths[0] }
     } catch (error) {
       return { canceled: true, error: getErrorMessage(error) }

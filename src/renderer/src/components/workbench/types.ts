@@ -234,3 +234,19 @@ export type WorkbenchContentPanelState =
       kind: 'browser'
       title: string
     }
+
+export type WorkbenchResourceTab = {
+  id: string
+  kind: 'file' | 'browser'
+  title: string
+  filePath?: string
+  state: Extract<
+    WorkbenchContentPanelState,
+    { kind: 'file_preview' | 'apply_workspace' | 'browser' }
+  >
+}
+
+export type WorkbenchTabWorkspaceState = {
+  tabs: WorkbenchResourceTab[]
+  activeTabId: string | null
+}

@@ -4,11 +4,11 @@ import { Empty, Spin } from 'antd'
 import type { TextFileDiffArtifact, TextFileDiffLine } from '../../../../shared/types'
 import { workbenchSelectors } from '../../testing/selectors'
 
-const ROW_HEIGHT = 26
+const ROW_HEIGHT = 28
 const OVERSCAN_ROWS = 24
 
 type DiffRow =
-  | { kind: 'separator'; key: string }
+  | { kind: 'separator'; key: string; count: number }
   | {
       kind: 'line'
       key: string
@@ -62,8 +62,19 @@ const parseDiffArtifact = (value: unknown): TextFileDiffArtifact => {
 
 const flattenDiffRows = (artifact: TextFileDiffArtifact): DiffRow[] => {
   const rows: DiffRow[] = []
+  let previousOldEnd = 1
+  let previousNewEnd = 1
   artifact.hunks.forEach((hunk, hunkIndex) => {
-    if (hunkIndex > 0) rows.push({ kind: 'separator', key: `separator-${hunkIndex}` })
+    const oldGap = Math.max(0, hunk.oldStart - previousOldEnd)
+    const newGap = Math.max(0, hunk.newStart - previousNewEnd)
+    const omittedCount = Math.min(oldGap, newGap)
+    if (omittedCount > 0) {
+      rows.push({
+        kind: 'separator',
+        key: `separator-${hunkIndex}`,
+        count: omittedCount
+      })
+    }
     hunk.lines.forEach((line, lineIndex) => {
       rows.push({
         kind: 'line',
@@ -73,7 +84,15 @@ const flattenDiffRows = (artifact: TextFileDiffArtifact): DiffRow[] => {
         line
       })
     })
+    previousOldEnd = hunk.oldStart + hunk.lines.filter((line) => line.type !== 'add').length
+    previousNewEnd = hunk.newStart + hunk.lines.filter((line) => line.type !== 'remove').length
   })
+  const trailingOldGap = Math.max(0, artifact.oldLineCount - previousOldEnd + 1)
+  const trailingNewGap = Math.max(0, artifact.newLineCount - previousNewEnd + 1)
+  const trailingCount = Math.min(trailingOldGap, trailingNewGap)
+  if (trailingCount > 0) {
+    rows.push({ kind: 'separator', key: 'separator-trailing', count: trailingCount })
+  }
   return rows
 }
 
@@ -140,19 +159,23 @@ const DiffLineRow = ({
   const marker = line.type === 'remove' ? '−' : line.type === 'add' ? '+' : ' '
   const oldLine = line.type === 'add' ? '' : String(line.oldLine)
   const newLine = line.type === 'remove' ? '' : String(line.newLine)
+  const displayLine = line.type === 'remove' ? oldLine : newLine
+  const railClass =
+    line.type === 'remove'
+      ? 'border-l-[#D92D20]'
+      : line.type === 'add'
+        ? 'border-l-[#12A150]'
+        : 'border-l-transparent'
 
   return (
     <div
-      className={`grid h-[26px] min-w-max grid-cols-[48px_48px_24px_1fr] border-b border-[#F3F2F0] font-mono text-[12px] leading-[26px] ${backgroundClass}`}
+      className={`grid h-7 min-w-max grid-cols-[56px_28px_1fr] border-b border-l-4 border-[#F3F2F0] font-mono text-[12px] leading-7 ${backgroundClass} ${railClass}`}
       data-diff-line-type={line.type}
       data-old-line={oldLine}
       data-new-line={newLine}
     >
       <span className="select-none border-r border-[#E9E8E5] px-2 text-right text-[#9B9A97]">
-        {oldLine}
-      </span>
-      <span className="select-none border-r border-[#E9E8E5] px-2 text-right text-[#9B9A97]">
-        {newLine}
+        {displayLine}
       </span>
       <span className="select-none text-center">{marker}</span>
       <span className="whitespace-pre pr-6 [tab-size:2]">{renderLineText(line, pairedLine)}</span>
@@ -250,9 +273,10 @@ export const TextFileDiffViewer = ({ previewPath }: { previewPath: string }) => 
             row.kind === 'separator' ? (
               <div
                 key={row.key}
-                className="h-[26px] border-y border-[#E9E8E5] bg-[#F7F7F5] px-4 font-mono text-[12px] leading-[26px] text-[#9B9A97]"
+                className="h-7 border-y border-[#E9E8E5] bg-[#F7F7F5] px-4 font-mono text-[12px] leading-7 text-[#787774]"
+                data-diff-omitted-count={row.count}
               >
-                ···
+                {row.count} 行未修改
               </div>
             ) : (
               <DiffLineRow key={row.key} row={row} artifact={state.artifact} />

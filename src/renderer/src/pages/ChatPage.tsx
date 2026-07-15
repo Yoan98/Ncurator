@@ -64,6 +64,8 @@ import type {
   SearchWorkbenchTurn,
   WorkbenchContentPanelState,
   WorkbenchFileRef,
+  WorkbenchResourceTab,
+  WorkbenchTabWorkspaceState,
   WorkbenchAiPreference,
   WorkbenchMode
 } from '../components/workbench/types'
@@ -164,6 +166,21 @@ const createEmptyPanel = (): WorkbenchContentPanelState => ({
   title: '',
   description: ''
 })
+
+const EMPTY_TAB_WORKSPACE: WorkbenchTabWorkspaceState = {
+  tabs: [],
+  activeTabId: null
+}
+
+const getFileTabId = (filePath: string, platform: string): string => {
+  const normalized = filePath.replace(/\\/g, '/').replace(/\/+$/, '')
+  return `file:${platform === 'win32' ? normalized.toLowerCase() : normalized}`
+}
+
+const getFileTabTitle = (filePath: string): string => {
+  const normalized = filePath.replace(/\\/g, '/').replace(/\/+$/, '')
+  return normalized.split('/').filter(Boolean).pop() || normalized || '文件'
+}
 
 const createAssistantTurn = (messageId: string): AssistantTurnViewModel => ({
   messageId,
@@ -610,6 +627,7 @@ const ChatPage: React.FC = () => {
   const [previewImage, setPreviewImage] = useState<ImageLightboxImage | null>(null)
   const [assistantTurns, setAssistantTurns] = useState<Record<string, AssistantTurnViewModel>>({})
   const [contentPanel, setContentPanel] = useState<WorkbenchContentPanelState>(createEmptyPanel())
+  const [tabWorkspaces, setTabWorkspaces] = useState<Record<string, WorkbenchTabWorkspaceState>>({})
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
     const stored = window.localStorage.getItem(WORKBENCH_SIDEBAR_STORAGE_KEY)
     return stored === 'true'
@@ -679,6 +697,9 @@ const ChatPage: React.FC = () => {
   const shouldAutoScrollRef = useRef(true)
   const scrollFrameRef = useRef<number | null>(null)
   const messageAttachmentPreviewUrlsRef = useRef<Record<string, string>>({})
+
+  const tabWorkspaceKey = currentSessionId || '__draft__'
+  const tabWorkspace = tabWorkspaces[tabWorkspaceKey] || EMPTY_TAB_WORKSPACE
 
   const composerDraftValue = useMemo<ComposerDraftValue>(
     () => ({
@@ -956,20 +977,67 @@ const ChatPage: React.FC = () => {
     [message]
   )
 
-  const showContentPanel = useCallback((nextState: WorkbenchContentPanelState): void => {
-    setContentPanel(nextState)
-    setContentPanelCollapsed(false)
-  }, [])
+  const updateCurrentTabWorkspace = useCallback(
+    (updater: (current: WorkbenchTabWorkspaceState) => WorkbenchTabWorkspaceState): void => {
+      setTabWorkspaces((current) => ({
+        ...current,
+        [tabWorkspaceKey]: updater(current[tabWorkspaceKey] || EMPTY_TAB_WORKSPACE)
+      }))
+    },
+    [tabWorkspaceKey]
+  )
+
+  const showContentPanel = useCallback(
+    (nextState: WorkbenchContentPanelState): void => {
+      setContentPanel(nextState)
+      if (nextState.kind === 'empty' || nextState.kind === 'search_list') {
+        updateCurrentTabWorkspace((current) => ({ ...current, activeTabId: null }))
+      }
+      setContentPanelCollapsed(false)
+    },
+    [updateCurrentTabWorkspace]
+  )
+
+  const openResourceTab = useCallback(
+    (tab: WorkbenchResourceTab): void => {
+      updateCurrentTabWorkspace((current) => {
+        const existingIndex = current.tabs.findIndex((item) => item.id === tab.id)
+        const tabs =
+          existingIndex < 0
+            ? [...current.tabs, tab]
+            : current.tabs.map((item, index) => (index === existingIndex ? tab : item))
+        return { tabs, activeTabId: tab.id }
+      })
+      setContentPanel(tab.state)
+      setContentPanelCollapsed(false)
+    },
+    [updateCurrentTabWorkspace]
+  )
+
+  const openBrowserTab = useCallback((): void => {
+    openResourceTab({
+      id: 'browser:main',
+      kind: 'browser',
+      title: '浏览器',
+      state: { kind: 'browser', title: '内置浏览器' }
+    })
+  }, [openResourceTab])
 
   const showApplyWorkspace = useCallback(
-    (applyId: string | null): void => {
-      showContentPanel({
-        kind: 'apply_workspace',
-        title: '修改的文件',
-        applyId
+    (record: AiFileChangeRecord): void => {
+      openResourceTab({
+        id: getFileTabId(record.path, detectRendererPlatform()),
+        kind: 'file',
+        title: record.fileName || getFileTabTitle(record.path),
+        filePath: record.path,
+        state: {
+          kind: 'apply_workspace',
+          title: '修改的文件',
+          applyId: record.id
+        }
       })
     },
-    [showContentPanel]
+    [openResourceTab]
   )
 
   const resetApplyWorkspaceState = (): void => {
@@ -1068,10 +1136,7 @@ const ChatPage: React.FC = () => {
     setPendingUserTakeover(userTakeover)
     setUserTakeoverConfirming(false)
     if (userTakeover) {
-      showContentPanel({
-        kind: 'browser',
-        title: '内置浏览器'
-      })
+      openBrowserTab()
     }
     shouldAutoScrollRef.current = true
     scrollToBottom(true)
@@ -1226,6 +1291,7 @@ const ChatPage: React.FC = () => {
     (workspaceId?: string): void => {
       saveComposerDraftForSession(currentSessionIdRef.current, composerDraftValueRef.current)
       sessionSwitchRequestRef.current += 1
+      currentSessionIdRef.current = null
       setCurrentSessionId(null)
       setSwitchingSessionId(null)
       setCurrentMessages([])
@@ -1245,6 +1311,10 @@ const ChatPage: React.FC = () => {
       setUserTakeoverConfirming(false)
       setSelectedWorkspaceId(workspaceId || null)
       applyComposerDraft(createEmptyComposerDraft(), `draft:${workspaceId || 'none'}`)
+      setTabWorkspaces((current) => ({
+        ...current,
+        __draft__: EMPTY_TAB_WORKSPACE
+      }))
       setContentPanel(createEmptyPanel())
       setContentPanelCollapsed(true)
       resetApplyWorkspaceState()
@@ -1273,7 +1343,7 @@ const ChatPage: React.FC = () => {
       setActiveApplyRecord(nextRecord)
 
       if (input.openWorkspace) {
-        showApplyWorkspace(nextRecord.id)
+        showApplyWorkspace(nextRecord)
       }
     } catch (error) {
       console.error('Failed to load apply record', error)
@@ -1348,7 +1418,7 @@ const ChatPage: React.FC = () => {
       if (options?.skipApplyRecordReload) {
         setActiveApplyRecord(nextSelectedRecord)
         if (options.forceOpenWorkspace || contentPanel.kind === 'apply_workspace') {
-          showApplyWorkspace(nextSelectedRecord.id)
+          showApplyWorkspace(nextSelectedRecord)
         }
         return
       }
@@ -1413,9 +1483,19 @@ const ChatPage: React.FC = () => {
 
     void loadSessionOpen(session.id, requestId).then(() => {
       if (sessionSwitchRequestRef.current !== requestId) return
-      setContentPanel(createEmptyPanel())
-      setContentPanelCollapsed(true)
-      resetApplyWorkspaceState()
+      const savedWorkspace = tabWorkspaces[session.id]
+      const activeTab = savedWorkspace?.tabs.find((tab) => tab.id === savedWorkspace.activeTabId)
+      if (!activeTab) {
+        setContentPanel(createEmptyPanel())
+        setContentPanelCollapsed(true)
+        resetApplyWorkspaceState()
+        return
+      }
+      setContentPanel(activeTab.state)
+      setContentPanelCollapsed(false)
+      if (activeTab.state.kind === 'apply_workspace' && activeTab.state.applyId) {
+        void loadApplyRecordRef.current({ applyId: activeTab.state.applyId })
+      }
     })
     void loadFileChangesForSession(session.id)
     void refreshContextUsage(session.id)
@@ -1577,14 +1657,21 @@ const ChatPage: React.FC = () => {
 
   const openFile = useCallback(
     async (file: WorkbenchFileRef, backTarget?: WorkbenchContentPanelState): Promise<void> => {
-      showContentPanel({
+      const state: Extract<WorkbenchContentPanelState, { kind: 'file_preview' }> = {
         kind: 'file_preview',
         title: '文档查看',
         file,
         backTarget
+      }
+      openResourceTab({
+        id: getFileTabId(file.path, detectRendererPlatform()),
+        kind: 'file',
+        title: file.fileName || getFileTabTitle(file.path),
+        filePath: file.path,
+        state
       })
     },
-    [showContentPanel]
+    [openResourceTab]
   )
 
   const resolveReferencePathInfo = useCallback(async (filePath: string): Promise<boolean> => {
@@ -1627,13 +1714,6 @@ const ChatPage: React.FC = () => {
       void openMarkdownReference(reference)
     },
     [openMarkdownReference]
-  )
-
-  const handleOpenAssistantFile = useCallback(
-    (file: WorkbenchFileRef): void => {
-      void openFile(file)
-    },
-    [openFile]
   )
 
   const openSearchResult = async (
@@ -1684,6 +1764,68 @@ const ChatPage: React.FC = () => {
       openWorkspace: true
     })
   }, [])
+
+  const activateResourceTab = useCallback(
+    (tabId: string): void => {
+      const tab = tabWorkspace.tabs.find((item) => item.id === tabId)
+      if (!tab) return
+      updateCurrentTabWorkspace((current) => ({ ...current, activeTabId: tabId }))
+      setContentPanel(tab.state)
+      setContentPanelCollapsed(false)
+      if (tab.state.kind === 'apply_workspace' && tab.state.applyId) {
+        void loadApplyRecordRef.current({ applyId: tab.state.applyId })
+      }
+    },
+    [tabWorkspace.tabs, updateCurrentTabWorkspace]
+  )
+
+  const closeResourceTab = useCallback(
+    (tabId: string): void => {
+      const closedIndex = tabWorkspace.tabs.findIndex((item) => item.id === tabId)
+      if (closedIndex < 0) return
+      const tabs = tabWorkspace.tabs.filter((item) => item.id !== tabId)
+      let nextActiveId = tabWorkspace.activeTabId
+      let nextTab: WorkbenchResourceTab | undefined
+      if (tabWorkspace.activeTabId === tabId) {
+        nextTab = tabs[Math.min(closedIndex, tabs.length - 1)]
+        nextActiveId = nextTab?.id || null
+      }
+      setTabWorkspaces((current) => ({
+        ...current,
+        [tabWorkspaceKey]: { tabs, activeTabId: nextActiveId }
+      }))
+      if (tabWorkspace.activeTabId !== tabId) return
+      if (!nextTab) {
+        setContentPanel(createEmptyPanel())
+        resetApplyWorkspaceState()
+        return
+      }
+      setContentPanel(nextTab.state)
+      if (nextTab.state.kind === 'apply_workspace' && nextTab.state.applyId) {
+        void loadApplyRecordRef.current({ applyId: nextTab.state.applyId })
+      }
+    },
+    [tabWorkspace, tabWorkspaceKey]
+  )
+
+  const addBrowserTab = useCallback((): void => {
+    openBrowserTab()
+  }, [openBrowserTab])
+
+  const addFileTab = useCallback((): void => {
+    void window.api.pickFile(selectedWorkspace?.root_path).then((response) => {
+      if (response.error) {
+        emitErrorMessage(response.error)
+        return
+      }
+      if (response.canceled || !response.path) return
+      void openFile({
+        path: response.path,
+        fileName: getFileTabTitle(response.path),
+        origin: 'preview'
+      })
+    })
+  }, [emitErrorMessage, openFile, selectedWorkspace?.root_path])
 
   useEffect(() => {
     const unsubscribe = window.api.onAiRunEvent((event) => {
@@ -1738,10 +1880,7 @@ const ChatPage: React.FC = () => {
       }
 
       if (event.type === 'browser_panel_opened') {
-        showContentPanel({
-          kind: 'browser',
-          title: '内置浏览器'
-        })
+        openBrowserTab()
         return
       }
 
@@ -1823,10 +1962,7 @@ const ChatPage: React.FC = () => {
         setLoading(false)
         setUserTakeoverConfirming(false)
         setPendingUserTakeover(event)
-        showContentPanel({
-          kind: 'browser',
-          title: '内置浏览器'
-        })
+        openBrowserTab()
         return
       }
 
@@ -2410,7 +2546,7 @@ const ChatPage: React.FC = () => {
       }
       if (response.record) {
         setActiveApplyRecord(response.record)
-        showApplyWorkspace(response.record.id)
+        showApplyWorkspace(response.record)
       }
       emitSuccessMessage('已回退本次修改')
       await loadFileChangesForSession(currentSessionId, {
@@ -2441,7 +2577,7 @@ const ChatPage: React.FC = () => {
       }
       if (forced.record) {
         setActiveApplyRecord(forced.record)
-        showApplyWorkspace(forced.record.id)
+        showApplyWorkspace(forced.record)
       }
       setApplyForceConfirm(null)
       emitSuccessMessage('已回退本次修改')
@@ -2692,7 +2828,6 @@ const ChatPage: React.FC = () => {
         messageId={messageItem.id}
         turn={turn}
         isStreaming={loading && Boolean(turn.runId && turn.runId === aiRunId)}
-        onOpenFile={handleOpenAssistantFile}
         onOpenApply={openFileChange}
         workspaces={workspaces}
         fallbackWorkspaceName={selectedWorkspace?.name || null}
@@ -3261,18 +3396,13 @@ const ChatPage: React.FC = () => {
               className="min-h-0 overflow-hidden transition-[width] duration-200"
               data-testid={workbenchSelectors.contentPanelShell}
               style={{
-                width: contentPanelCollapsed
-                  ? 0
-                  : contentPanel.kind === 'browser'
-                    ? 'min(52vw, 860px)'
-                    : contentPanel.kind === 'file_preview' ||
-                        contentPanel.kind === 'apply_workspace'
-                      ? 'min(46vw, 740px)'
-                      : 440
+                width: contentPanelCollapsed ? 0 : 'min(48vw, 780px)'
               }}
             >
               <WorkbenchContentPanel
                 state={contentPanel}
+                tabs={tabWorkspace.tabs}
+                activeTabId={tabWorkspace.activeTabId}
                 activeApplyRecord={activeApplyRecord}
                 applyLoading={applyLoading}
                 applyReverting={applyReverting}
@@ -3283,6 +3413,10 @@ const ChatPage: React.FC = () => {
                 onBackToPanelState={showContentPanel}
                 onOpenPath={openPathOrNotify}
                 onRevealPath={revealPathOrNotify}
+                onActivateTab={activateResourceTab}
+                onCloseTab={closeResourceTab}
+                onAddFileTab={addFileTab}
+                onAddBrowserTab={addBrowserTab}
               />
             </div>
           </div>

@@ -1,5 +1,4 @@
 ﻿import React, { useMemo } from 'react'
-import { Tooltip } from 'antd'
 import {
   HiChevronDown,
   HiChevronRight,
@@ -13,7 +12,6 @@ import {
 } from 'react-icons/hi2'
 import MarkdownRenderer from '../MarkdownRenderer'
 import type {
-  AssistantArtifactItem,
   AssistantProcessGroup,
   AssistantProcessIconKind,
   AssistantProcessThought,
@@ -31,7 +29,6 @@ type AssistantTurnCardProps = {
   messageId: string
   turn?: AssistantTurnViewModel
   isStreaming?: boolean
-  onOpenFile: (file: AssistantArtifactItem) => void
   onOpenApply: (changeId: string) => void
   workspaces: WorkspaceSource[]
   fallbackWorkspaceName?: string | null
@@ -316,30 +313,9 @@ const AssistantExecutionGroupView: React.FC<{ groups: AssistantProcessGroup[]; i
   )
 }
 
-const renderArtifactChip = (
-  file: AssistantArtifactItem,
-  onOpenFile: (file: AssistantArtifactItem) => void
-): React.ReactNode => {
-  const testIdSuffix = (file.applyId || file.path).replace(/[^a-zA-Z0-9_-]/g, '-')
-  return (
-    <Tooltip key={`${file.origin}-${file.path}-${file.applyId || ''}`} title={file.path}>
-      <button
-        type="button"
-        onClick={() => onOpenFile(file)}
-        data-testid={`${workbenchSelectors.assistantTurnArtifactPrefix}-${testIdSuffix}`}
-        className="ui-hover-lift inline-flex max-w-full items-center gap-2 rounded-full border border-[#EEEEEC] bg-white px-3 py-1.5 text-left text-xs text-[#787774] hover:border-[#37352F] hover:text-[#37352F]"
-      >
-        <HiOutlineDocumentText className="h-3.5 w-3.5 shrink-0" />
-        <span className="truncate">{file.fileName}</span>
-      </button>
-    </Tooltip>
-  )
-}
-
 const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
   messageId,
   turn,
-  onOpenFile,
   onOpenApply,
   workspaces,
   fallbackWorkspaceName,
@@ -349,18 +325,6 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
   const processThoughts = useMemo(() => turn?.processThoughts || [], [turn?.processThoughts])
   const finalAnswerMarkdown = turn?.finalAnswerMarkdown || ''
   const hasFinalAnswer = finalAnswerMarkdown.trim().length > 0
-  const visibleArtifacts = useMemo(() => {
-    if (!turn) return []
-    const applyIds = new Set(turn.applyTargets.map((target) => target.changeId))
-    const applyPaths = new Set(
-      turn.applyTargets
-        .map((target) => target.sourcePath)
-        .filter((path): path is string => Boolean(path))
-    )
-    return turn.artifacts.filter(
-      (file) => !(file.applyId && applyIds.has(file.applyId)) && !applyPaths.has(file.path)
-    )
-  }, [turn])
   const timeline = useMemo(
     () =>
       buildAssistantTimeline({
@@ -479,12 +443,6 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
                 )
               })}
             </div>
-          </div>
-        ) : null}
-
-        {visibleArtifacts.length > 0 ? (
-          <div className="flex flex-wrap gap-2">
-            {visibleArtifacts.map((file) => renderArtifactChip(file, onOpenFile))}
           </div>
         ) : null}
 

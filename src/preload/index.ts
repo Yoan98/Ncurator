@@ -113,6 +113,7 @@ const api: DesktopApi = {
     emitE2EIpcCall('pickDirectory')
     return ipcRenderer.invoke('pick-directory')
   },
+  pickFile: (defaultPath?: string) => ipcRenderer.invoke('pick-file', defaultPath),
   pickApplication: () => ipcRenderer.invoke('pick-application'),
   search: (query: string, sourceType?: SearchSourceFilter, documentIds?: string[]) =>
     ipcRenderer.invoke('search', query, sourceType, documentIds),

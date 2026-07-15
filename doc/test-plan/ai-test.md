@@ -29,8 +29,8 @@
   - 覆盖补充：文件路径与网页来源 URL 返回契约已通过。
 - `tool / terminal`
   - 通过率：`5 / 5`
-  - 检测时间：`2026-07-13 13:04:39 +08:00`
-  - 覆盖补充：terminal 回归测试按“安全指令集”语义维护，调用参数包含 `command` 与 `commandExplanation`；Windows 路径覆盖 PowerShell 语法、`EncodedCommand` 执行与 UTF-8 输出，macOS 路径覆盖 zsh 语法。
+  - 检测时间：`2026-07-15 +08:00`
+  - 覆盖补充：terminal 回归测试按“安全指令集”语义维护；UTF-8 文件修改会生成 `text_file` 修改记录和结构化 diff，并保证 `file_artifact.applyId` 与修改记录一致；非文本产物保持 `terminal_exec`。
 - `tool / web-browsing`
   - 通过率：`6 / 6`
   - 检测时间：`2026-07-13 13:04:39 +08:00`
@@ -618,10 +618,10 @@ AI unit / 辅助测试目录：
 ##### `terminal-inline-edit-artifact-contract`
 
 - 测试类型：`backend`
-- What：验证安全 inline edit 会生成可继续消费的 artifact。
-- Why：terminal 修改路径必须产出稳定 artifact。
-- How：对测试文件执行真实 inline edit 命令并读取返回产物。
-- Oracle：artifact 信息完整，修改结果与磁盘状态一致。
+- What：验证安全 inline edit 修改 UTF-8 文件后，会生成统一文本修改记录、结构化 diff 和可继续消费的 artifact。
+- Why：terminal 修改文本不能只给出一个普通文件产物，否则右侧无法显示本次改动，也无法复用统一回退链路。
+- How：对测试文件执行真实 inline edit，读取修改记录和 diff artifact，并核对运行事件中的 `file_artifact`。
+- Oracle：文件结果与磁盘一致；修改记录 capability 为 `text_file`；diff 可重放为真实新内容；`file_artifact.applyId` 与修改记录 ID 一致。
 - Not：不验证上层审批流。
 
 #### web-browsing 类别

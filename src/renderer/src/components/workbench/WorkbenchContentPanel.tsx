@@ -17,14 +17,17 @@ import TextHighlighter from '../TextHighlighter'
 import { FileRenderViewer } from '../fileRenders'
 import type { FileRenderDocument } from '../fileRenders'
 import WorkbenchBrowserPanel from './WorkbenchBrowserPanel'
-import type { SearchWorkbenchTurn, WorkbenchContentPanelState } from './types'
+import type { SearchWorkbenchTurn, WorkbenchContentPanelState, WorkbenchResourceTab } from './types'
 import { workbenchSelectors } from '../../testing/selectors'
 import ChangeCountBadges from './ChangeCountBadges'
 import WorkspacePathLabel from './WorkspacePathLabel'
 import { TextFileDiffViewer } from './TextFileDiffViewer'
+import WorkbenchTabBar from './WorkbenchTabBar'
 
 type WorkbenchContentPanelProps = {
   state: WorkbenchContentPanelState
+  tabs: WorkbenchResourceTab[]
+  activeTabId: string | null
   activeApplyRecord: AiFileChangeRecord | null
   applyLoading: boolean
   applyReverting: boolean
@@ -35,6 +38,10 @@ type WorkbenchContentPanelProps = {
   onBackToPanelState: (state: WorkbenchContentPanelState) => void
   onOpenPath: (filePath: string) => Promise<void>
   onRevealPath: (filePath: string) => Promise<void>
+  onActivateTab: (tabId: string) => void
+  onCloseTab: (tabId: string) => void
+  onAddFileTab: () => void
+  onAddBrowserTab: () => void
 }
 
 const createSearchTurnSnapshot = (
@@ -201,7 +208,6 @@ const WorkbenchSearchResultsPanel: React.FC<{
 }
 
 type WorkbenchDocumentPreviewPanelProps = {
-  fileName: string
   filePath: string
   documents: FileRenderDocument[]
   content?: React.ReactNode
@@ -227,7 +233,6 @@ type WorkbenchDocumentPreviewPanelProps = {
 }
 
 const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPreviewPanelProps> = ({
-  fileName,
   filePath,
   documents,
   content,
@@ -287,7 +292,14 @@ const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPreviewPanelP
         ) : null}
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-2">
-            <div className="truncate text-[13px] font-semibold text-[#37352F]">{fileName}</div>
+            <WorkspacePathLabel
+              filePath={filePath}
+              workspaces={workspaces}
+              fallbackWorkspaceName={fallbackWorkspaceName}
+              className="min-w-0 text-[13px] font-semibold"
+              prefixClassName="text-[#787774]"
+              fileNameClassName="text-[#37352F]"
+            />
             <span
               className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] ${tagClassName}`}
               data-testid={workbenchSelectors.documentPreviewModeTag}
@@ -305,14 +317,6 @@ const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPreviewPanelP
               </>
             ) : null}
           </div>
-          <WorkspacePathLabel
-            filePath={filePath}
-            workspaces={workspaces}
-            fallbackWorkspaceName={fallbackWorkspaceName}
-            className="mt-1 text-xs"
-            prefixClassName="text-[#B1B0AD]"
-            fileNameClassName="text-[#787774]"
-          />
         </div>
         <div className="flex shrink-0 items-center gap-1">
           <Tooltip title={revealTitle}>
@@ -389,7 +393,6 @@ const arePreviewPanelPropsEqual = (
   previous: WorkbenchDocumentPreviewPanelProps,
   next: WorkbenchDocumentPreviewPanelProps
 ): boolean =>
-  previous.fileName === next.fileName &&
   previous.filePath === next.filePath &&
   previous.documents === next.documents &&
   previous.content === next.content &&
@@ -416,6 +419,8 @@ const WorkbenchDocumentPreviewPanel = React.memo(
 
 const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
   state,
+  tabs,
+  activeTabId,
   activeApplyRecord,
   applyLoading,
   applyReverting,
@@ -425,7 +430,11 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
   onRevertApply,
   onBackToPanelState,
   onOpenPath,
-  onRevealPath
+  onRevealPath,
+  onActivateTab,
+  onCloseTab,
+  onAddFileTab,
+  onAddBrowserTab
 }) => {
   const previewDocuments = useMemo<FileRenderDocument[]>(
     () =>
@@ -472,6 +481,14 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
       className="flex h-full min-h-0 flex-col border-l border-[#EEEEEC] bg-white"
       data-testid={workbenchSelectors.contentPanel}
     >
+      <WorkbenchTabBar
+        tabs={tabs}
+        activeTabId={activeTabId}
+        onActivateTab={onActivateTab}
+        onCloseTab={onCloseTab}
+        onAddFileTab={onAddFileTab}
+        onAddBrowserTab={onAddBrowserTab}
+      />
       <div className="min-h-0 flex-1 overflow-hidden">
         {state.kind === 'empty' ? <WorkbenchEmptyPanel /> : null}
         {state.kind === 'search_list' ? (
@@ -483,7 +500,6 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
         ) : null}
         {state.kind === 'file_preview' ? (
           <WorkbenchDocumentPreviewPanel
-            fileName={state.file.fileName}
             filePath={state.file.path}
             documents={previewDocuments}
             mode="preview"
@@ -499,7 +515,6 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
         {state.kind === 'apply_workspace' ? (
           activeApplyRecord ? (
             <WorkbenchDocumentPreviewPanel
-              fileName={activeApplyRecord.fileName}
               filePath={activeApplyRecord.path}
               documents={applyDocuments}
               content={applyContent}
@@ -541,6 +556,8 @@ const areContentPanelPropsEqual = (
   next: WorkbenchContentPanelProps
 ): boolean =>
   previous.state === next.state &&
+  previous.tabs === next.tabs &&
+  previous.activeTabId === next.activeTabId &&
   previous.activeApplyRecord === next.activeApplyRecord &&
   previous.applyLoading === next.applyLoading &&
   previous.applyReverting === next.applyReverting &&

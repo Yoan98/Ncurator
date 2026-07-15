@@ -117,6 +117,7 @@ export const createTerminalToolHarness = (
     cache,
     runId: runtime.runId,
     taskId: runtime.taskId,
+    sessionId: contextInput.sessionId || 'test-session',
     workspaceRootPath: runtime.workspaceRoot,
     timeoutMs: Math.max(100, Number(options.timeoutMs || 3000)),
     maxOutputChars: Math.max(256, Number(options.maxOutputChars || 4000)),

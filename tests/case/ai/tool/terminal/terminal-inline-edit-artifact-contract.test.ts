@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
+import type { TextFileDiffArtifact } from '../../../../../src/shared/types'
 import { createTerminalToolHarness } from '../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import { filterEventsByType } from '../testHelpers'
@@ -35,28 +36,40 @@ describe('ai tool terminal backend', () => {
 
         const harness = createTerminalToolHarness(runtime)
 
+        const updateExisting = await harness.invoke<TerminalRunCommandResult>('terminal_run', {
+          command: isWindows
+            ? 'Copy-Item -LiteralPath replacement.txt -Destination notes.txt'
+            : 'cp replacement.txt notes.txt'
+        })
+        const createNew = await harness.invoke<TerminalRunCommandResult>('terminal_run', {
+          command: isWindows
+            ? 'New-Item -ItemType File -Path generated/output.txt'
+            : 'touch generated/output.txt'
+        })
+        const records = await harness.ctx.listFileChangeRecords({ runId: runtime.runId })
+        const notesRecord = records.find((record) => record.fileName === 'notes.txt')
+        const textDiff = notesRecord?.previewPath
+          ? (JSON.parse(await fs.readFile(notesRecord.previewPath, 'utf8')) as TextFileDiffArtifact)
+          : null
         return {
-          updateExisting: await harness.invoke<TerminalRunCommandResult>('terminal_run', {
-            command: isWindows
-              ? 'Copy-Item -LiteralPath replacement.txt -Destination notes.txt'
-              : 'cp replacement.txt notes.txt'
-          }),
-          createNew: await harness.invoke<TerminalRunCommandResult>('terminal_run', {
-            command: isWindows
-              ? 'New-Item -ItemType File -Path generated/output.txt'
-              : 'touch generated/output.txt'
-          }),
+          updateExisting,
+          createNew,
           notesContent: await fs.readFile(path.join(runtime.workspaceRoot, 'notes.txt'), 'utf8'),
           createdExists: await fs
             .access(path.join(runtime.workspaceRoot, 'generated', 'output.txt'))
             .then(() => true)
             .catch(() => false),
-          events: runtime.eventCollector.snapshot()
+          events: runtime.eventCollector.snapshot(),
+          records,
+          textDiff
         }
       },
       assert: async (result, runtime) => {
         const approvalEvents = filterEventsByType(result.events, 'approval_batch_required')
         const artifactEvents = filterEventsByType(result.events, 'file_artifact')
+        const notesRecord = result.records.find((record) => record.fileName === 'notes.txt')
+        const notesEvent = artifactEvents.find((event) => event.fileName === 'notes.txt')
+        const textDiffLines = result.textDiff?.hunks.flatMap((hunk) => hunk.lines) || []
 
         runtime.assertThat(
           !('reason' in result.updateExisting) &&
@@ -100,6 +113,23 @@ describe('ai tool terminal backend', () => {
                 path: event.path,
                 operation: event.operation
               }))
+            }
+          }
+        )
+
+        runtime.assertThat(
+          notesRecord?.capability === 'text_file' &&
+            Boolean(notesRecord.previewPath) &&
+            notesEvent?.applyId === notesRecord.id &&
+            notesEvent.capability === 'text_file' &&
+            textDiffLines.some((line) => line.type === 'remove' && line.text === 'before') &&
+            textDiffLines.some((line) => line.type === 'add' && line.text === 'after'),
+          {
+            name: 'terminal-text-artifact-uses-text-diff-record',
+            message: '终端修改 UTF-8 文件后应生成文本 diff，并让 artifact 与修改记录共用 applyId。',
+            data: {
+              notesRecord,
+              notesEvent
             }
           }
         )

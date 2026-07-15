@@ -321,6 +321,12 @@ export interface PickDirectoryResponse {
   error?: string
 }
 
+export interface PickFileResponse {
+  canceled: boolean
+  path?: string
+  error?: string
+}
+
 export interface DeleteWorkspaceSourceResponse {
   success: boolean
   deletedWorkspaceId?: string
