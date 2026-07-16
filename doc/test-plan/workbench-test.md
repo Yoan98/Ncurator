@@ -187,7 +187,7 @@ tests/case/workbench/
 - What：验证空会话输入区布局、右侧默认无占位折叠、标签栏密度与折叠入口、Tab 溢出滚动、加号菜单文案、浏览器缩放菜单和地址栏“前往”按钮。
 - Why：右侧资源工作台和聊天输入区共享窗口高度与标题栏命中区域，普通功能测试无法发现输入框被推出窗口、折叠按钮放错区域、Tab 无法滚动或原生浏览器遮挡浮层等视觉交互回归。
 - How：直接进入无历史会话的真实 Workbench，先确认右侧 shell 不存在并测量空会话输入区位置；展开后连续创建八个真实浏览器 Tab，使用鼠标滚轮触发横向滚动并检查折叠 / 展开；打开浏览器更多菜单检查三段式缩放控件和地址栏“前往”按钮。
-- Oracle：空会话输入区居中且右侧 shell 不占宽度，对齐 `WB-COMPOSER-009-AC11`、`WB-PANEL-001-AC8`；标签栏和浏览器工具栏均为 44px，标签栏无下边线；折叠按钮位于右侧栏且不进入拖拽命中区；八个 Tab 溢出后滚轮可横向滚动；加号菜单显示“文件 / 浏览器”，缩放控件同排，地址栏显示“前往”按钮，浮层触发原生视图避让。
+- Oracle：空会话输入区居中且右侧 shell 不占宽度；展开和折叠保留约 200ms 动画，折叠动画结束后 shell 才卸载；折叠态按钮位于主标题栏并在展开后隐藏；悬浮按钮不产生 document 横纵溢出；标签栏和浏览器工具栏均为 44px，标签栏无下边线；八个 Tab 溢出后滚轮可横向滚动；加号菜单显示“文件 / 浏览器”，缩放控件同排，地址栏显示“前往”按钮，浮层触发原生视图避让。
 - Not：不验证公网网页、模型回答质量或系统窗口按钮本身；Stagehand targetId、共享持久分区和历史恢复继续由 `browser-use-task-panel` 覆盖。
 
 ### 5.2 `run`
@@ -242,8 +242,8 @@ tests/case/workbench/
 - 测试类型：`e2e`
 - What：验证 AI 通过内置浏览器完成网页任务时，文件 / 多浏览器 Tab、独立页面导航、持久站点数据和真实网页操作结果形成闭环。
 - Why：内置浏览器是 Electron 与 AI run 深度联动场景，仅 backend 或静态事件无法覆盖视口嵌入、导航和最终收口问题。
-- How：先打开真实 Markdown 文件，再从 `+` 连续创建两个浏览器标签并让它们访问本地测试页；两个标签使用相同 URL 但写入不同页面状态；切换标签验证各自前进后退历史；通过真实用户请求让 AI 使用 `browser_use` 操作当前标签；任务完成后切回文件再切回浏览器，并重启应用检查标签历史恢复。
-- Oracle：文件和多个浏览器 Tab 可共存，对齐 `WB-PANEL-001-AC1`；两个浏览器标签历史独立但 Cookie / LocalStorage 共享，对齐 `WB-PANEL-004-AC6`；同 URL 下 Stagehand 只改变事件指定 targetId 页面，对齐 `WB-PANEL-004-AC5`；切换文件后浏览器 URL 和页面状态保持，对齐 `WB-PANEL-004-AC3`；重启后标签历史可恢复；菜单打开时不被原生视图遮挡，对齐 `WB-PANEL-004-AC7`；真实 browser_use 结果包含 `BROWSER_TASK_DONE` 和口令。
+- How：先打开真实 Markdown 文件，再让 AI 使用 `browser_use` 操作本地测试页；AI Run 仍在进行时，用户通过 `+` 新建另一个浏览器标签，验证后续 observe / act / extract 不会跟随 UI 活动标签漂移；任务完成后切回文件再切回浏览器，检查网页状态保持。
+- Oracle：文件和多个浏览器 Tab 可共存，对齐 `WB-PANEL-001-AC1`；同一轮 AI Run 始终绑定首次取得的 browserTabId，用户新建或切换标签不会让 Stagehand 串页；切换文件后浏览器 URL 和页面状态保持，对齐 `WB-PANEL-004-AC3`；菜单打开时不被原生视图遮挡，对齐 `WB-PANEL-004-AC7`；真实 browser_use 结果包含 `BROWSER_TASK_DONE` 和口令。
 - Not：不验证公网网页稳定性；本 case 使用本地测试网页减少外部波动；不允许用 fake browser 或 fake tool result 替代；不要求 live 模型必须在固定时限内结束整轮最终回答，只要真实内置浏览器已完成输入、点击和结果读取即可判定 browser panel 能力有效。
 
 #### `web-search-diagnostic`
@@ -299,7 +299,7 @@ tests/case/workbench/
 - What：验证同一个 Markdown 文件在普通预览时正常渲染，在 AI 修改记录中使用独立文本 diff，并能恢复原始 bytes。
 - Why：普通预览和修改预览是两种不同语义；如果共用文件渲染器，用户看不到本次具体增加和删除内容。
 - How：先从真实搜索结果打开 Markdown 普通预览；再通过真实 AI 调用 `replaceAll` 和 `edit` 修改该文件；点击 assistant 修改入口检查 `TextFileDiffViewer`；最后执行回退。
-- Oracle：普通预览与修改 diff 共用一个文件 Tab；file_artifact 已产生但 Run 尚未结束时不展示修改入口，Run 完成后从 assistant 修改入口打开并切到“本会话改动”；文本 Diff 只展示该 Run 修改批次，不生成会话累计 Diff；首次打开后缓存 version 2 hunks 且不含完整 `afterLines`；“N 行未修改”可从不可变 after 对象展开；回退后 bytes 与原始输入一致且有效改动标记消失。
+- Oracle：普通预览与修改 diff 共用一个文件 Tab；file_artifact 已产生但 Run 尚未结束时不展示修改入口；Run 完成后 assistant 修改文件入口使用 `工作区/目录/文件`，右侧工具栏使用 `工作区 > 目录 > 文件`；从入口打开时文件列表切到“本会话改动”并选中对应文件；文本 Diff 只展示该 Run 修改批次，不生成会话累计 Diff；Diff 行背景覆盖整个可见及可滚动画布宽度；首次打开后缓存 version 2 hunks 且不含完整 `afterLines`；“N 行未修改”可从不可变 after 对象展开；回退后 bytes 与原始输入一致且有效改动标记消失。
 - Not：不验证 unified diff 字符串；UI 只消费结构化 diff artifact。
 
 #### `terminal-background-service-flow`

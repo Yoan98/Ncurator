@@ -53,6 +53,12 @@ type WebSearchResult = {
 }
 
 type BrowserUseResult = {
+  action?: 'navigate' | 'observe' | 'act' | 'extract'
+  page?: {
+    url: string
+    title?: string
+  }
+  result?: unknown
   error?: string
 }
 
@@ -414,6 +420,81 @@ describe('ai tool web backend', () => {
           message: 'browser_use 缺少内置浏览器服务时应通过工具结果返回真实错误。',
           data: result
         })
+      }
+    })
+  })
+
+  it('browser-use-keeps-one-tab-for-the-whole-run', async () => {
+    await runBackendCase({
+      caseId: 'browser-use-keeps-one-tab-for-the-whole-run',
+      harnessMode: 'tool-real',
+      domain: 'ai',
+      suite: 'tool',
+      groups: ['web-browsing'],
+      description: '验证同一轮 AI Run 的多次 browser_use 调用始终使用首次绑定的浏览器标签。',
+      fixtures: [],
+      runMode: 'single',
+      execute: async (runtime) => {
+        const ensuredTabIds = ['automation-tab-a', 'ui-active-tab-b']
+        const shownTabIds: string[] = []
+        let ensureCallCount = 0
+        const harness = createWebToolHarness(runtime, {
+          sessionId: 'browser-tab-binding-session',
+          browserUseService: {
+            async ensureAutomationTab() {
+              const id = ensuredTabIds[Math.min(ensureCallCount, ensuredTabIds.length - 1)]
+              ensureCallCount += 1
+              return { id }
+            },
+            async show(tabId) {
+              if (tabId) shownTabIds.push(tabId)
+            },
+            async navigate() {
+              return
+            },
+            async run(input) {
+              return {
+                action: input.action,
+                page: { url: 'https://example.com/task' },
+                result:
+                  input.action === 'extract'
+                    ? { extracted: 'done' }
+                    : input.action === 'observe'
+                      ? { actions: [] }
+                      : input.action === 'act'
+                        ? {
+                            success: true,
+                            message: 'done',
+                            actionDescription: input.instruction,
+                            actions: []
+                          }
+                        : null
+              }
+            }
+          }
+        })
+        const first = await harness.invoke<BrowserUseResult>('browser_use', {
+          action: 'navigate',
+          instruction: '打开任务页',
+          url: 'https://example.com/task'
+        })
+        const second = await harness.invoke<BrowserUseResult>('browser_use', {
+          action: 'extract',
+          instruction: '读取结果'
+        })
+        return { first, second, ensureCallCount, shownTabIds }
+      },
+      assert: async (result, runtime) => {
+        runtime.assertThat(
+          result.ensureCallCount === 1 &&
+            result.shownTabIds.length === 2 &&
+            result.shownTabIds.every((tabId) => tabId === 'automation-tab-a'),
+          {
+            name: 'browser-use-run-keeps-initial-tab-binding',
+            message: '同一轮 Run 不应因 UI 活动标签变化而切换 browser_use 的目标标签。',
+            data: result
+          }
+        )
       }
     })
   })

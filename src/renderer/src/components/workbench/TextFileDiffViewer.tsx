@@ -210,16 +210,18 @@ const DiffLineRow = ({
 
   return (
     <div
-      className={`grid h-7 min-w-max grid-cols-[56px_28px_1fr] border-b border-l-4 border-[#F3F2F0] font-mono text-[12px] leading-7 ${backgroundClass} ${railClass}`}
+      className={`flex h-7 w-full min-w-max border-b border-l-4 border-[#F3F2F0] font-mono text-[12px] leading-7 ${backgroundClass} ${railClass}`}
       data-diff-line-type={line.type}
       data-old-line={oldLine}
       data-new-line={newLine}
     >
-      <span className="select-none border-r border-[#E9E8E5] px-2 text-right text-[#9B9A97]">
+      <span className="w-14 shrink-0 select-none border-r border-[#E9E8E5] px-2 text-right text-[#9B9A97]">
         {displayLine}
       </span>
-      <span className="select-none text-center">{marker}</span>
-      <span className="whitespace-pre pr-6 [tab-size:2]">{renderLineText(line, pairedLine)}</span>
+      <span className="w-7 shrink-0 select-none text-center">{marker}</span>
+      <span className="min-w-max flex-1 whitespace-pre pr-6 [tab-size:2]">
+        {renderLineText(line, pairedLine)}
+      </span>
     </div>
   )
 }
@@ -330,9 +332,9 @@ export const TextFileDiffViewer = ({
       data-testid={workbenchSelectors.textDiffViewer}
       onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}
     >
-      <div className="relative min-w-max" style={{ height: rows.length * ROW_HEIGHT }}>
+      <div className="relative w-max min-w-full" style={{ height: rows.length * ROW_HEIGHT }}>
         <div
-          className="absolute right-0 left-0"
+          className="absolute inset-x-0 w-full min-w-full"
           style={{ transform: `translateY(${String(startIndex * ROW_HEIGHT)}px)` }}
         >
           {visibleRows.map((row) =>

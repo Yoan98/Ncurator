@@ -432,6 +432,7 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
                           className="text-[13px] font-medium"
                           fileNameClassName="text-[#37352F]"
                           prefixClassName="text-[#9B9A97]"
+                          separator="/"
                         />
                       </div>
                       <span className="flex shrink-0 items-center gap-1 pt-0.5">

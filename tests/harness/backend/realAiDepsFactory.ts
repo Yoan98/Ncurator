@@ -245,6 +245,7 @@ export const createRealAiDepsFactory = async (input: {
           return { confirmed: true }
         },
         llmDriver: llmScript ? createScriptedStructuredOutputDriver(llmScript) : undefined,
+        browserUseService: contextInput.browserUseService,
         webCrawlerService: contextInput.webCrawlerService
       }
     )

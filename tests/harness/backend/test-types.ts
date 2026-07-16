@@ -1,7 +1,8 @@
 import type {
   AiApprovalBatchRequest,
   AiApprovalBatchResult,
-  AiRunContext
+  AiRunContext,
+  BrowserUseService
 } from '../../../src/main/services/ai/types'
 import type { HumanTaskRunner } from '../../../src/main/services/ai/types'
 import type { DocxApplyService } from '../../../src/main/services/ai/human/tools/docx/review/DocxApplyService'
@@ -173,6 +174,7 @@ export type CreateAiRunContextInput = {
   }
   llmScript?: LlmScript
   structuredOutputScript?: StructuredOutputScript
+  browserUseService?: BrowserUseService
   webCrawlerService?: WebCrawlerService
 }
 

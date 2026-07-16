@@ -643,6 +643,8 @@ const ChatPage: React.FC = () => {
   })
   const [collapsedWorkspaceIds, setCollapsedWorkspaceIds] = useState<Set<string>>(() => new Set())
   const [contentPanelCollapsed, setContentPanelCollapsed] = useState(true)
+  const [contentPanelShellMounted, setContentPanelShellMounted] = useState(false)
+  const [contentPanelShellVisible, setContentPanelShellVisible] = useState(false)
 
   const [activeApplyRecord, setActiveApplyRecord] = useState<AiFileChangeRecord | null>(null)
   const [fileChangeRecords, setFileChangeRecords] = useState<AiFileChangeRecord[]>([])
@@ -1658,6 +1660,35 @@ const ChatPage: React.FC = () => {
   useEffect(() => {
     scrollToBottom()
   }, [assistantTurns, currentMessages, loading, pendingApprovalBatch, pendingUserTakeover])
+
+  useEffect(() => {
+    let firstFrame: number | null = null
+    let secondFrame: number | null = null
+    let finishTimer: number | null = null
+
+    if (contentPanelCollapsed) {
+      setContentPanelShellVisible(false)
+      void window.api.browserPanelHide()
+      finishTimer = window.setTimeout(() => setContentPanelShellMounted(false), 220)
+    } else {
+      setContentPanelShellMounted(true)
+      void window.api.browserPanelSetOccluded(true)
+      firstFrame = window.requestAnimationFrame(() => {
+        secondFrame = window.requestAnimationFrame(() => {
+          setContentPanelShellVisible(true)
+          finishTimer = window.setTimeout(() => {
+            void window.api.browserPanelSetOccluded(false)
+          }, 220)
+        })
+      })
+    }
+
+    return () => {
+      if (firstFrame !== null) window.cancelAnimationFrame(firstFrame)
+      if (secondFrame !== null) window.cancelAnimationFrame(secondFrame)
+      if (finishTimer !== null) window.clearTimeout(finishTimer)
+    }
+  }, [contentPanelCollapsed])
 
   useEffect(
     () => () => {
@@ -3223,6 +3254,22 @@ const ChatPage: React.FC = () => {
                   className="nc-main-empty-titlebar-drag-region"
                   data-testid={workbenchSelectors.emptyDragRegion}
                 />
+                {contentPanelCollapsed && !contentPanelShellMounted ? (
+                  <button
+                    type="button"
+                    className="nc-content-panel-titlebar-toggle workbench-no-drag"
+                    style={WORKBENCH_NO_DRAG_REGION_STYLE}
+                    title="展开右侧栏"
+                    onClick={() => {
+                      setContentPanelShellMounted(true)
+                      setContentPanelCollapsed(false)
+                    }}
+                    data-testid={workbenchSelectors.contentPanelToggle}
+                    aria-label="展开右侧栏"
+                  >
+                    <SidebarPanelIcon className="h-4 w-4" variant="expand" />
+                  </button>
+                ) : null}
               </div>
             ) : null}
             {!isNewSession ? (
@@ -3250,6 +3297,23 @@ const ChatPage: React.FC = () => {
                   data-testid={workbenchSelectors.topbarDragRegion}
                   aria-hidden="true"
                 />
+
+                {contentPanelCollapsed && !contentPanelShellMounted ? (
+                  <button
+                    type="button"
+                    className="nc-content-panel-titlebar-toggle workbench-no-drag"
+                    style={WORKBENCH_NO_DRAG_REGION_STYLE}
+                    title="展开右侧栏"
+                    onClick={() => {
+                      setContentPanelShellMounted(true)
+                      setContentPanelCollapsed(false)
+                    }}
+                    data-testid={workbenchSelectors.contentPanelToggle}
+                    aria-label="展开右侧栏"
+                  >
+                    <SidebarPanelIcon className="h-4 w-4" variant="expand" />
+                  </button>
+                ) : null}
 
                 {platform === 'win32' && contentPanelCollapsed ? (
                   <div className="nc-topbar-window-controls-safe-zone" aria-hidden="true" />
@@ -3491,52 +3555,50 @@ const ChatPage: React.FC = () => {
             </div>
           </div>
 
-          {!contentPanelCollapsed ? (
+          {contentPanelShellMounted ? (
             <div
-              className="min-h-0 shrink-0 overflow-hidden"
+              className="min-h-0 shrink-0 overflow-hidden transition-[width] duration-200 ease-out"
               data-testid={workbenchSelectors.contentPanelShell}
-              style={{ width: 'min(48vw, 780px)' }}
+              data-panel-visible={contentPanelShellVisible ? 'true' : 'false'}
+              style={{ width: contentPanelShellVisible ? 'min(48vw, 780px)' : 0 }}
             >
-              <WorkbenchContentPanel
-                state={contentPanel}
-                tabs={tabWorkspace.tabs}
-                activeTabId={tabWorkspace.activeTabId}
-                activeApplyRecord={activeApplyRecord}
-                applyLoading={applyLoading}
-                applyReverting={applyReverting}
-                workspaces={workspaces}
-                fallbackWorkspaceName={selectedWorkspace?.name || null}
-                selectedWorkspace={selectedWorkspace || null}
-                fileChangeRecords={fileChangeRecords}
-                onOpenSearchResult={(turn, resultIndex) => void openSearchResult(turn, resultIndex)}
-                onRevertApply={() => void handleApplyRevert()}
-                onBackToPanelState={showContentPanel}
-                onOpenPath={openPathOrNotify}
-                onRevealPath={revealPathOrNotify}
-                onActivateTab={activateResourceTab}
-                onCloseTab={closeResourceTab}
-                onAddFileTab={addFileTab}
-                onAddBrowserTab={addBrowserTab}
-                onCollapse={() => setContentPanelCollapsed(true)}
-                onBrowserStateChange={handleBrowserStateChange}
-                onOpenWorkspaceFile={openWorkspaceFile}
-                onOpenWorkspaceChange={openWorkspaceChange}
-              />
-            </div>
-          ) : null}
-          {contentPanelCollapsed ? (
-            <Tooltip title="展开右侧栏" placement="left">
-              <button
-                type="button"
-                className="nc-content-panel-restore workbench-no-drag"
-                style={WORKBENCH_NO_DRAG_REGION_STYLE}
-                onClick={() => setContentPanelCollapsed(false)}
-                data-testid={workbenchSelectors.contentPanelToggle}
-                aria-label="展开右侧栏"
+              <div
+                className="h-full transition-[transform,opacity] duration-200 ease-out"
+                style={{
+                  width: 'min(48vw, 780px)',
+                  transform: contentPanelShellVisible ? 'translateX(0)' : 'translateX(24px)',
+                  opacity: contentPanelShellVisible ? 1 : 0
+                }}
               >
-                <SidebarPanelIcon className="h-4 w-4" variant="expand" />
-              </button>
-            </Tooltip>
+                <WorkbenchContentPanel
+                  state={contentPanel}
+                  tabs={tabWorkspace.tabs}
+                  activeTabId={tabWorkspace.activeTabId}
+                  activeApplyRecord={activeApplyRecord}
+                  applyLoading={applyLoading}
+                  applyReverting={applyReverting}
+                  workspaces={workspaces}
+                  fallbackWorkspaceName={selectedWorkspace?.name || null}
+                  selectedWorkspace={selectedWorkspace || null}
+                  fileChangeRecords={fileChangeRecords}
+                  onOpenSearchResult={(turn, resultIndex) =>
+                    void openSearchResult(turn, resultIndex)
+                  }
+                  onRevertApply={() => void handleApplyRevert()}
+                  onBackToPanelState={showContentPanel}
+                  onOpenPath={openPathOrNotify}
+                  onRevealPath={revealPathOrNotify}
+                  onActivateTab={activateResourceTab}
+                  onCloseTab={closeResourceTab}
+                  onAddFileTab={addFileTab}
+                  onAddBrowserTab={addBrowserTab}
+                  onCollapse={() => setContentPanelCollapsed(true)}
+                  onBrowserStateChange={handleBrowserStateChange}
+                  onOpenWorkspaceFile={openWorkspaceFile}
+                  onOpenWorkspaceChange={openWorkspaceChange}
+                />
+              </div>
+            </div>
           ) : null}
         </div>
         <Modal

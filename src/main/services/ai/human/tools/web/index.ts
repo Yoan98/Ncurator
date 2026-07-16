@@ -61,6 +61,7 @@ export const webToolFamily: ToolFamilyDefinition = {
       runId,
       taskId
     })
+    let automationBrowserTabPromise: Promise<{ id: string }> | null = null
 
     const webSearch = tool(
       async (args) =>
@@ -304,7 +305,14 @@ export const webToolFamily: ToolFamilyDefinition = {
             const instruction = String(args.instruction || '').trim()
             const url = typeof args.url === 'string' ? args.url.trim() : undefined
             try {
-              const browserTab = await service.ensureAutomationTab(ctx.sessionId)
+              automationBrowserTabPromise ||= service.ensureAutomationTab(ctx.sessionId)
+              let browserTab: { id: string }
+              try {
+                browserTab = await automationBrowserTabPromise
+              } catch (error) {
+                automationBrowserTabPromise = null
+                throw error
+              }
               ctx.sendEvent({
                 type: 'browser_panel_opened',
                 runId,
