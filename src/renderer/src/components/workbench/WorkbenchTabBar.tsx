@@ -170,17 +170,16 @@ const WorkbenchTabBar = ({
           <HiPlus className="h-5 w-5" />
         </button>
       </Dropdown>
-      <Tooltip title="收起右侧栏">
-        <button
-          type="button"
-          className="ml-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-[7px] text-[#787774] hover:bg-[#F4F4F2] hover:text-[#37352F]"
-          aria-label="收起右侧栏"
-          data-testid={workbenchSelectors.contentPanelToggle}
-          onClick={onCollapse}
-        >
-          <SidebarPanelIcon className="h-4 w-4" variant="collapse" />
-        </button>
-      </Tooltip>
+      <button
+        type="button"
+        className="ml-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-[7px] text-[#787774] hover:bg-[#F4F4F2] hover:text-[#37352F]"
+        aria-label="收起右侧栏"
+        title="收起右侧栏"
+        data-testid={workbenchSelectors.contentPanelToggle}
+        onClick={onCollapse}
+      >
+        <SidebarPanelIcon className="h-4 w-4" variant="collapse" />
+      </button>
     </div>
   )
 }

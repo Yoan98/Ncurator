@@ -9,12 +9,14 @@ type WorkspacePathLabelProps = {
   className?: string
   prefixClassName?: string
   fileNameClassName?: string
+  separator?: ' > ' | '/'
 }
 
 const splitPathForDisplay = (
   filePath: string | undefined,
   workspaces: WorkspaceSource[],
-  fallbackWorkspaceName?: string | null
+  fallbackWorkspaceName?: string | null,
+  separator: ' > ' | '/' = ' > '
 ): {
   label: string
   prefix: string
@@ -29,10 +31,10 @@ const splitPathForDisplay = (
     : ''
   const prefix = [workspaceName, ...directoryPath.split('/').filter(Boolean)]
     .filter(Boolean)
-    .join(' > ')
+    .join(separator)
   return {
     label: formatWorkspacePathLabel(filePath, workspaces, fallbackWorkspaceName),
-    prefix: prefix ? `${prefix} > ` : '',
+    prefix: prefix ? `${prefix}${separator}` : '',
     fileName
   }
 }
@@ -43,11 +45,12 @@ const WorkspacePathLabel: React.FC<WorkspacePathLabelProps> = ({
   fallbackWorkspaceName,
   className,
   prefixClassName,
-  fileNameClassName
+  fileNameClassName,
+  separator = ' > '
 }) => {
   const display = useMemo(
-    () => splitPathForDisplay(filePath, workspaces, fallbackWorkspaceName),
-    [fallbackWorkspaceName, filePath, workspaces]
+    () => splitPathForDisplay(filePath, workspaces, fallbackWorkspaceName, separator),
+    [fallbackWorkspaceName, filePath, separator, workspaces]
   )
 
   if (!display.prefix) {

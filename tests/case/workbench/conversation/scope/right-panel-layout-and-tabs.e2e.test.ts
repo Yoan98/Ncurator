@@ -142,7 +142,15 @@ describe('workbench conversation e2e', () => {
           )
           await page.keyboard.press('Escape')
 
-          await getWorkbenchLocator(page, workbenchSelectors.contentPanelToggle).click()
+          const collapseToggle = getWorkbenchLocator(page, workbenchSelectors.contentPanelToggle)
+          await collapseToggle.hover()
+          const hoverOverflow = await page.evaluate(() => ({
+            horizontal: document.documentElement.scrollWidth > window.innerWidth,
+            vertical: document.documentElement.scrollHeight > window.innerHeight
+          }))
+          await collapseToggle.click()
+          const shellPresentDuringExit =
+            (await getWorkbenchLocator(page, workbenchSelectors.contentPanelShell).count()) === 1
           await page.waitForFunction((testId) => {
             const shell = document.querySelector(`[data-testid="${testId}"]`)
             return shell === null
@@ -152,6 +160,10 @@ describe('workbench conversation e2e', () => {
             workbenchSelectors.contentPanelToggle
           ).evaluate((element) => window.innerWidth - element.getBoundingClientRect().right)
           await getWorkbenchLocator(page, workbenchSelectors.contentPanelToggle).click()
+          await page.waitForFunction((testId) => {
+            const shell = document.querySelector(`[data-testid="${testId}"]`)
+            return shell instanceof HTMLElement && shell.getBoundingClientRect().width > 100
+          }, workbenchSelectors.contentPanelShell)
 
           return {
             emptyLayout,
@@ -162,6 +174,8 @@ describe('workbench conversation e2e', () => {
             chromeLayout,
             zoomLayout,
             browserGoButtonVisible,
+            hoverOverflow,
+            shellPresentDuringExit,
             restoreButtonRightOffset
           }
         },
@@ -198,6 +212,9 @@ describe('workbench conversation e2e', () => {
           await runtime.assertThat(
             result.zoomLayout.length === 3 &&
               result.browserGoButtonVisible &&
+              !result.hoverOverflow.horizontal &&
+              !result.hoverOverflow.vertical &&
+              result.shellPresentDuringExit &&
               result.zoomLayout.every(
                 (button) =>
                   Math.abs(button.top - result.zoomLayout[0].top) < 1 &&

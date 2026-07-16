@@ -632,12 +632,11 @@ textarea,
   z-index: 4;
 }
 
-.nc-content-panel-restore {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  z-index: 8;
+.nc-content-panel-titlebar-toggle {
+  position: relative;
+  z-index: 5;
   display: inline-flex;
+  flex: 0 0 28px;
   width: 28px;
   height: 28px;
   align-items: center;
@@ -645,22 +644,21 @@ textarea,
   color: #787774;
   border: 0;
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.94);
+  background: transparent;
   cursor: pointer;
+  margin-right: 8px;
+  pointer-events: auto;
+  -webkit-app-region: no-drag;
   transition:
     color 150ms ease,
     background-color 150ms ease;
 }
 
-.nc-content-panel-restore:hover,
-.nc-content-panel-restore:focus-visible {
+.nc-content-panel-titlebar-toggle:hover,
+.nc-content-panel-titlebar-toggle:focus-visible {
   color: #37352f;
   background: #f4f4f2;
   outline: none;
-}
-
-.nc-app-shell-windows .nc-content-panel-restore {
-  right: calc(var(--windows-window-controls-width) + 8px);
 }
 
 .nc-topbar-collapsed-safe-zone {
