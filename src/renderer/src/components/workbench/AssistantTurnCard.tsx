@@ -5,9 +5,15 @@ import {
   HiArrowPath,
   HiOutlineAcademicCap,
   HiOutlineArchiveBox,
+  HiOutlineBolt,
+  HiOutlineBookOpen,
+  HiOutlineClock,
   HiOutlineCommandLine,
+  HiOutlineCursorArrowRays,
   HiOutlineDocumentText,
+  HiOutlineGlobeAlt,
   HiOutlineMagnifyingGlass,
+  HiOutlinePhoto,
   HiOutlinePencilSquare
 } from 'react-icons/hi2'
 import MarkdownRenderer from '../MarkdownRenderer'
@@ -23,6 +29,7 @@ import type { ParsedNcuratorRefKind, ParsedNcuratorRefResourceType } from '../ma
 import { workbenchSelectors } from '../../testing/selectors'
 import {
   buildAssistantExecutionSummaryText,
+  resolveAssistantExecutionIcon,
   resolveAssistantExecutionStatus,
   shouldShowAssistantApplyTargets
 } from './utils'
@@ -56,6 +63,12 @@ const getLayerIconClassName = (iconKind: AssistantProcessIconKind): string => {
   if (iconKind === 'document') return 'text-[#787774]'
   if (iconKind === 'edit') return 'text-[#787774]'
   if (iconKind === 'search') return 'text-[#787774]'
+  if (iconKind === 'browser') return 'text-[#787774]'
+  if (iconKind === 'wait') return 'text-[#787774]'
+  if (iconKind === 'web') return 'text-[#787774]'
+  if (iconKind === 'image') return 'text-[#787774]'
+  if (iconKind === 'knowledge') return 'text-[#787774]'
+  if (iconKind === 'workflow') return 'text-[#787774]'
   if (iconKind === 'terminal') return 'text-[#787774]'
   if (iconKind === 'retry') return 'text-[#787774]'
   return 'text-[#9B9A97]'
@@ -71,6 +84,12 @@ const LayerIcon: React.FC<{ iconKind: AssistantProcessIconKind; className?: stri
   if (iconKind === 'document') return <HiOutlineDocumentText className={iconClassName} />
   if (iconKind === 'edit') return <HiOutlinePencilSquare className={iconClassName} />
   if (iconKind === 'search') return <HiOutlineMagnifyingGlass className={iconClassName} />
+  if (iconKind === 'browser') return <HiOutlineCursorArrowRays className={iconClassName} />
+  if (iconKind === 'wait') return <HiOutlineClock className={iconClassName} />
+  if (iconKind === 'web') return <HiOutlineGlobeAlt className={iconClassName} />
+  if (iconKind === 'image') return <HiOutlinePhoto className={iconClassName} />
+  if (iconKind === 'knowledge') return <HiOutlineBookOpen className={iconClassName} />
+  if (iconKind === 'workflow') return <HiOutlineBolt className={iconClassName} />
   if (iconKind === 'terminal') return <HiOutlineCommandLine className={iconClassName} />
   if (iconKind === 'retry') return <HiArrowPath className={iconClassName} />
   return <HiOutlineDocumentText className={iconClassName} />
@@ -96,7 +115,7 @@ const renderSegments = (
 ): React.ReactNode => (
   <span className={options?.shimmer ? 'workbench-thinking-shimmer' : undefined}>
     {segments.map((segment, index) => {
-      const textClassName = segment.emphasis ? 'font-semibold text-[#37352F]' : ''
+      const textClassName = segment.emphasis ? 'text-[#37352F]' : ''
       if (!segment.iconKind) {
         return (
           <span key={`${segment.text}-${index}`} className={textClassName}>
@@ -157,7 +176,7 @@ const AssistantProcessGroupView: React.FC<{ group: AssistantProcessGroup }> = ({
         </span>
       </summary>
       {group.items.length > 0 ? (
-        <div className="mt-1.5 space-y-1.5 pl-4 text-[13px] leading-6 text-[#787774]">
+        <div className="mt-1 space-y-0.5 pl-5 text-[13px] leading-[22px] text-[#787774]">
           {group.items.map((item) => (
             <div
               key={item.id}
@@ -267,6 +286,7 @@ const AssistantExecutionGroupView: React.FC<{ groups: AssistantProcessGroup[]; i
     .flatMap((group) => group.items)
     .sort((left, right) => left.createdAt - right.createdAt)
   const summaryText = buildAssistantExecutionSummaryText(groups)
+  const iconKind = resolveAssistantExecutionIcon(groups)
   return (
     <details
       className="group/execution"
@@ -286,6 +306,7 @@ const AssistantExecutionGroupView: React.FC<{ groups: AssistantProcessGroup[]; i
                 : 'text-[#9B9A97] group-hover/execution:text-[#37352F]'
           }`}
         >
+          <LayerIcon iconKind={iconKind} />
           <span className={isRunning ? 'font-medium' : undefined}>
             {renderSegments(summaryText, { shimmer: isRunning })}
           </span>
@@ -298,7 +319,7 @@ const AssistantExecutionGroupView: React.FC<{ groups: AssistantProcessGroup[]; i
         </span>
       </summary>
       {items.length > 0 ? (
-        <div className="mt-1.5 space-y-1.5 pl-4 text-[13px] leading-6 text-[#787774]">
+        <div className="mt-1 space-y-0.5 pl-5 text-[13px] leading-[22px] text-[#787774]">
           {items.map((item) => (
             <div
               key={item.id}
@@ -353,7 +374,7 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
             }`}
             data-testid={`${workbenchSelectors.assistantProcessPrefix}-${messageId}`}
           >
-            <div className="space-y-3">
+            <div className="space-y-2">
               {timeline.map((entry) => {
                 if (entry.kind === 'decision') {
                   return <AssistantProcessThoughtView key={entry.id} thought={entry.thought} />

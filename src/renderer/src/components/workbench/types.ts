@@ -3,6 +3,7 @@ import type {
   AiPreference,
   AiRunEvent,
   AiFileChangeStatus,
+  IpcJsonObject,
   RuntimeSkillId,
   SearchResult,
   WorkbenchModelSelection,
@@ -108,6 +109,12 @@ export type AssistantToolName =
 
 export type AssistantProcessIconKind =
   | 'search'
+  | 'browser'
+  | 'wait'
+  | 'web'
+  | 'image'
+  | 'knowledge'
+  | 'workflow'
   | 'terminal'
   | 'document'
   | 'edit'
@@ -150,6 +157,7 @@ export type AssistantProcessGroupItem = {
   sourceEventType: AssistantProcessSourceEventType
   toolName?: AssistantToolName
   targetLabel?: string
+  input?: IpcJsonObject
 }
 
 export type AssistantProcessGroup = {

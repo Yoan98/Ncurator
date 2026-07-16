@@ -108,9 +108,11 @@ describe('workbench utils', () => {
       createProcessGroup('crawl', 'web-crawl', 'failed')
     ]
 
-    expect(buildAssistantExecutionSummaryText(groups).map((item) => item.text).join('')).toBe(
-      '已搜索网页，读取网页失败'
-    )
+    expect(
+      buildAssistantExecutionSummaryText(groups)
+        .map((item) => item.text)
+        .join('')
+    ).toBe('已搜索网页但读取网页失败')
   })
 
   it('uses partial failure text when the same web tool type has mixed results', () => {
@@ -120,8 +122,10 @@ describe('workbench utils', () => {
     ]
 
     expect(resolveAssistantExecutionStatus(groups)).toBe('partial_failed')
-    expect(buildAssistantExecutionSummaryText(groups).map((item) => item.text).join('')).toBe(
-      '部分网页读取失败'
-    )
+    expect(
+      buildAssistantExecutionSummaryText(groups)
+        .map((item) => item.text)
+        .join('')
+    ).toBe('部分网页读取失败')
   })
 })

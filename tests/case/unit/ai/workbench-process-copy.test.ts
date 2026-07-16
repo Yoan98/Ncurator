@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { AiRunEvent } from '../../../../src/shared/types'
 import {
+  buildAssistantExecutionSummaryText,
   reduceAssistantProcessGroups,
+  resolveAssistantExecutionIcon,
   shouldShowAssistantApplyTargets
 } from '../../../../src/renderer/src/components/workbench/utils'
 
@@ -49,24 +51,43 @@ describe('workbench assistant process copy', () => {
     expect(write?.iconKind).toBe('edit')
     expect(read?.completedText.map((segment) => segment.text).join('')).toBe('已读取 1 个文件')
     expect(write?.completedText.map((segment) => segment.text).join('')).toBe('已编辑 1 个文件')
-    expect(itemText('file_read', { sourcePath: '/tmp/readme.md' })).toContain('读取文件：')
-    expect(itemText('file_write', { sourcePath: '/tmp/readme.md' })).toContain('编辑文件：')
+    expect(itemText('file_read', { sourcePath: '/tmp/readme.md' })).toContain(
+      '读取文件 /tmp/readme.md'
+    )
+    expect(itemText('file_write', { sourcePath: '/tmp/readme.md' })).toContain(
+      '编辑文件 /tmp/readme.md'
+    )
     expect(itemText('file_read', { sourcePath: '/tmp/readme.md' })).not.toContain('文本文件')
   })
 
-  it('removes only observe, extract and act prefixes', () => {
+  it('writes browser actions as complete natural-language sentences', () => {
     expect(itemText('browser_use', { action: 'observe', instruction: '检查所有按钮' })).toBe(
-      '检查所有按钮'
+      '查看页面并检查所有按钮'
     )
     expect(itemText('browser_use', { action: 'extract', instruction: '读取结果区域' })).toBe(
-      '读取结果区域'
+      '从页面中读取结果区域'
     )
     expect(itemText('browser_use', { action: 'act', instruction: '点击提交按钮' })).toBe(
-      '点击提交按钮'
+      '在页面上点击提交按钮'
     )
     expect(itemText('browser_use', { action: 'navigate', url: 'https://example.com' })).toContain(
-      '打开网页：'
+      '打开网页 https://example.com'
     )
+  })
+
+  it('combines browser actions and waits into one sentence with one mixed-tool icon', () => {
+    const groups = [
+      ...reduceTool('browser_use', { action: 'navigate', url: 'https://example.com' }),
+      ...reduceTool('browser_use', { action: 'act', instruction: '点击提交按钮' }),
+      ...reduceTool('wait_time', { seconds: '1' })
+    ]
+
+    expect(
+      buildAssistantExecutionSummaryText(groups)
+        .map((item) => item.text)
+        .join('')
+    ).toBe('已操作浏览器 2 次并等待 1 秒')
+    expect(resolveAssistantExecutionIcon(groups)).toBe('workflow')
   })
 
   it('shows apply targets only after the run reaches a terminal state', () => {

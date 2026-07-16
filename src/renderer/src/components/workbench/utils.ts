@@ -245,15 +245,12 @@ const getToolIconKind = (skillKey: AssistantProcessSkillKey): AssistantProcessIc
   if (skillKey === 'docx-read') return 'document'
   if (skillKey === 'file-read') return 'document'
   if (skillKey === 'file-write') return 'edit'
-  if (
-    skillKey === 'kb' ||
-    skillKey === 'web-search' ||
-    skillKey === 'web-crawl' ||
-    skillKey === 'browser' ||
-    skillKey === 'image-recognition'
-  ) {
-    return 'search'
-  }
+  if (skillKey === 'kb') return 'knowledge'
+  if (skillKey === 'web-search') return 'search'
+  if (skillKey === 'web-crawl') return 'web'
+  if (skillKey === 'browser') return 'browser'
+  if (skillKey === 'image-recognition') return 'image'
+  if (skillKey === 'wait') return 'wait'
   if (skillKey === 'terminal') return 'terminal'
   return 'default'
 }
@@ -346,7 +343,7 @@ const getToolSummaryText = (
   }
   if (skillKey === 'browser') {
     if (status === 'running') return sentence(text('正在操作浏览器'))
-    if (status === 'completed') return sentence(text(`已完成 ${normalizedCount} 次浏览器操作`))
+    if (status === 'completed') return sentence(text(`已操作浏览器 ${normalizedCount} 次`))
     if (status === 'partial_failed') return sentence(text('部分浏览器操作失败'))
     return sentence(text('浏览器操作失败'))
   }
@@ -358,7 +355,7 @@ const getToolSummaryText = (
   }
   if (skillKey === 'wait') {
     if (status === 'running') return sentence(text('正在等待'))
-    if (status === 'completed') return sentence(text('已完成等待'))
+    if (status === 'completed') return sentence(text('已等待'))
     if (status === 'partial_failed') return sentence(text('部分等待失败'))
     return sentence(text('等待失败'))
   }
@@ -382,63 +379,60 @@ const getToolItemText = (
   const waitLabel = readWaitDurationLabel(input)
 
   if (toolName === 'docx_outline') {
-    return sentence(text('阅读文档结构：'), text(fileLabel, true))
+    return sentence(text('查看文档 '), text(fileLabel), text(' 的结构'))
   }
   if (toolName === 'docx_read_blocks') {
     const rangeText = readDocxRangeLabel(input)
-    return sentence(text('读取文档内容：'), text(fileLabel, true), text(` ${rangeText}`))
+    return sentence(text('读取文档 '), text(fileLabel), text(` ${rangeText}`))
   }
   if (toolName === 'docx_edit') {
-    return sentence(text('编辑文档：'), text(fileLabel, true))
+    return sentence(text('编辑文档 '), text(fileLabel))
   }
   if (toolName === 'file_read') {
-    return sentence(text('读取文件：'), text(fileLabel, true))
+    return sentence(text('读取文件 '), text(fileLabel))
   }
   if (toolName === 'file_write') {
-    return sentence(text('编辑文件：'), text(fileLabel, true))
+    return sentence(text('编辑文件 '), text(fileLabel))
   }
   if (toolName === 'terminal_run') {
-    return sentence(text('执行命令：'), text(commandLabel, true))
+    return sentence(text('执行命令 '), text(commandLabel))
   }
   if (toolName === 'terminal_read') {
     return sentence(
-      text('读取终端：'),
-      text(readStringValue(input || {}, 'terminalId') || '终端', true)
+      text('读取终端 '),
+      text(readStringValue(input || {}, 'terminalId') || '运行结果')
     )
   }
   if (toolName === 'terminal_stop') {
-    return sentence(
-      text('停止终端：'),
-      text(readStringValue(input || {}, 'terminalId') || '终端', true)
-    )
+    return sentence(text('停止终端 '), text(readStringValue(input || {}, 'terminalId') || '任务'))
   }
   if (toolName === 'kb_search' || toolName === 'docx_search') {
     return sentence(
-      text(toolName === 'docx_search' ? '搜索文档：' : '搜索知识库：'),
-      text(queryLabel, true)
+      text(toolName === 'docx_search' ? '在文档中搜索 ' : '在知识库中搜索 '),
+      text(queryLabel)
     )
   }
   if (toolName === 'kb_list_documents') {
     return sentence(text('查看工作空间文档列表'))
   }
   if (toolName === 'web_search') {
-    return sentence(text('搜索网页：'), text(queryLabel, true))
+    return sentence(text('搜索网页 '), text(queryLabel))
   }
   if (toolName === 'web_crawl') {
-    return sentence(text('读取网页：'), text(urlLabel, true))
+    return sentence(text('读取网页 '), text(urlLabel))
   }
   if (toolName === 'browser_use') {
-    if (browserAction === 'navigate') return sentence(text('打开网页：'), text(urlLabel, true))
-    if (browserAction === 'observe') return sentence(text(instructionLabel, true))
-    if (browserAction === 'extract') return sentence(text(instructionLabel, true))
-    if (browserAction === 'act') return sentence(text(instructionLabel, true))
-    return sentence(text('操作浏览器：'), text(instructionLabel, true))
+    if (browserAction === 'navigate') return sentence(text('打开网页 '), text(urlLabel))
+    if (browserAction === 'observe') return sentence(text('查看页面并'), text(instructionLabel))
+    if (browserAction === 'extract') return sentence(text('从页面中'), text(instructionLabel))
+    if (browserAction === 'act') return sentence(text('在页面上'), text(instructionLabel))
+    return sentence(text('操作浏览器 '), text(instructionLabel))
   }
   if (toolName === 'llm_recognize') {
-    return sentence(text('识别图片：'), text(fileLabel, true))
+    return sentence(text('识别图片 '), text(fileLabel))
   }
   if (toolName === 'wait_time') {
-    return sentence(text('等待：'), text(waitLabel, true))
+    return sentence(text('等待 '), text(waitLabel))
   }
   return sentence(text('处理任务中的一步'))
 }
@@ -498,27 +492,14 @@ const getDisplayItemText = (
 
 type ExecutionActionSummary = {
   kind: AssistantProcessSkillKey
-  iconKind: AssistantProcessIconKind
   fileLabels: Set<string>
   count: number
   statuses: AssistantProcessStatus[]
+  waitLabels: Set<string>
 }
 
 const getExecutionStatus = (groups: AssistantProcessGroup[]): AssistantProcessStatus => {
   return getMixedStatus(groups.map((group) => group.status))
-}
-
-const getExecutionActionOrder = (kind: AssistantProcessSkillKey): number => {
-  if (kind === 'docx-read') return 1
-  if (kind === 'docx-edit') return 2
-  if (kind === 'file-read' || kind === 'file-write') return 3
-  if (kind === 'kb') return 4
-  if (kind === 'terminal') return 5
-  if (kind === 'web-search') return 6
-  if (kind === 'web-crawl') return 7
-  if (kind === 'browser') return 8
-  if (kind === 'wait') return 9
-  return 10
 }
 
 export const buildAssistantExecutionSummaryText = (
@@ -528,46 +509,75 @@ export const buildAssistantExecutionSummaryText = (
   for (const group of groups) {
     const entries =
       group.items.length > 0
-        ? group.items.map((item) => ({ toolName: item.toolName, targetLabel: item.targetLabel }))
-        : [{ toolName: undefined, targetLabel: undefined }]
+        ? group.items.map((item) => ({
+            toolName: item.toolName,
+            targetLabel: item.targetLabel,
+            input: item.input
+          }))
+        : [{ toolName: undefined, targetLabel: undefined, input: undefined }]
     for (const entry of entries) {
       const kind = entry.toolName ? getToolUiKind(entry.toolName) : group.skillKey
       const current =
         summaries.get(kind) ||
         ({
           kind,
-          iconKind: getToolIconKind(kind),
           fileLabels: new Set<string>(),
           count: 0,
-          statuses: []
+          statuses: [],
+          waitLabels: new Set<string>()
         } satisfies ExecutionActionSummary)
       current.count += 1
       current.statuses.push(group.status)
       if (kind === 'docx-read' || kind === 'docx-edit') {
         current.fileLabels.add(entry.targetLabel || group.id)
       }
+      if (kind === 'wait') current.waitLabels.add(readWaitDurationLabel(entry.input))
       summaries.set(kind, current)
     }
   }
 
   const status = getExecutionStatus(groups)
-  const ordered = [...summaries.values()].sort(
-    (left, right) => getExecutionActionOrder(left.kind) - getExecutionActionOrder(right.kind)
-  )
-  if (ordered.length === 0) return sentence(text('正在处理任务', false, 'default'))
+  const ordered = [...summaries.values()]
+  if (ordered.length === 0) return sentence(text('正在处理任务'))
+
+  const totalCount = ordered.reduce((sum, summary) => sum + summary.count, 0)
+  if (ordered.length > 3) {
+    if (status === 'running') return sentence(text(`正在执行 ${totalCount} 项操作`))
+    if (status === 'completed') return sentence(text(`已完成 ${totalCount} 项操作`))
+    if (status === 'partial_failed') return sentence(text(`${totalCount} 项操作中有部分失败`))
+    return sentence(text(`${totalCount} 项操作执行失败`))
+  }
 
   return ordered.flatMap((summary, index) => {
-    const prefix = index === 0 ? '' : '，'
     const count = summary.fileLabels.size || summary.count || 1
     const summaryStatus = getMixedStatus(summary.statuses, status)
-    return sentence(
-      text(prefix, false),
-      ...getToolSummaryText(summary.kind, summaryStatus, count).map((segment) => ({
-        ...segment,
-        iconKind: segment.iconKind || summary.iconKind
-      }))
-    )
+    const prefix =
+      index === 0
+        ? ''
+        : summaryStatus === 'failed' || summaryStatus === 'partial_failed'
+          ? '但'
+          : '并'
+    if (summary.kind === 'wait' && summary.waitLabels.size === 1) {
+      const waitLabel = [...summary.waitLabels][0]
+      if (summaryStatus === 'running') return sentence(text(prefix), text(`正在等待 ${waitLabel}`))
+      if (summaryStatus === 'completed') return sentence(text(prefix), text(`等待 ${waitLabel}`))
+    }
+    return sentence(text(prefix), ...getToolSummaryText(summary.kind, summaryStatus, count))
   })
+}
+
+export const resolveAssistantExecutionIcon = (
+  groups: AssistantProcessGroup[]
+): AssistantProcessIconKind => {
+  const kinds = new Set(
+    groups.flatMap((group) =>
+      group.items.length > 0
+        ? group.items.map((item) => (item.toolName ? getToolUiKind(item.toolName) : group.skillKey))
+        : [group.skillKey]
+    )
+  )
+  if (kinds.size !== 1) return 'workflow'
+  return getToolIconKind([...kinds][0] || 'generic')
 }
 
 export const resolveAssistantExecutionStatus = getExecutionStatus
@@ -666,6 +676,8 @@ const createDisplayProcessItem = (input: {
     createdAt: input.existing?.createdAt || input.createdAt,
     sourceEventType: input.sourceEventType,
     toolName,
+    input:
+      input.existing?.input || (input.display.kind === 'tool' ? input.display.input : undefined),
     targetLabel:
       input.existing?.targetLabel ||
       (input.display.kind === 'tool' ? readToolFileLabel(input.display.input) : undefined)
