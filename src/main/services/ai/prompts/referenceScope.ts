@@ -51,8 +51,7 @@ export const renderReferenceScopeText = (scope: AiReferenceScope): string => {
   const attachments = scope.attachments || []
   const workspaceText = `工作区：
 - 根目录：${scope.workspace.rootPath}
-- 所有本地文件路径、cwd 和新生成的产物路径都必须位于这个工作区内。
-- 如果没有显式指定 cwd，默认从工作区根目录开始。`
+- 所有本地文件路径和新生成的产物路径都必须位于这个工作区内。`
 
   const fieldGuideText = `字段说明：
 - 类型：资料来源类型，目前支持本地文件、本地目录、网页资料。

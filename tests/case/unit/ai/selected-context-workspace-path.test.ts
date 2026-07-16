@@ -5,7 +5,7 @@ import {
 } from '../../../../src/main/services/ai/prompts/referenceScope'
 
 describe('ai unit selected context workspace path', () => {
-  it('renders workspace rootPath instead of workspaceName in reference scope text', () => {
+  it('renders workspace rootPath and boundary without legacy cwd guidance', () => {
     const text = renderReferenceScopeText(
       buildReferenceScope({
         workspace: {
@@ -19,7 +19,10 @@ describe('ai unit selected context workspace path', () => {
 
     expect(text).toContain('工作区：')
     expect(text).toContain('- 根目录：/tmp/real-workspace-root')
+    expect(text).toContain('所有本地文件路径和新生成的产物路径都必须位于这个工作区内。')
     expect(text).not.toContain('display-name-only')
+    expect(text).not.toContain('cwd')
+    expect(text).not.toContain('显式指定 cwd')
   })
 
   it('renders selected references and direct kb narrowing pairs when user explicitly selected inputs', () => {
