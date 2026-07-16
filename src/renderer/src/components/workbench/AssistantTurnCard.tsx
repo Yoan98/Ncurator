@@ -79,20 +79,21 @@ const LayerIcon: React.FC<{ iconKind: AssistantProcessIconKind; className?: stri
   className
 }) => {
   const iconClassName = `h-4 w-4 shrink-0 ${getLayerIconClassName(iconKind)} ${className || ''}`
-  if (iconKind === 'learning') return <HiOutlineAcademicCap className={iconClassName} />
-  if (iconKind === 'compaction') return <HiOutlineArchiveBox className={iconClassName} />
-  if (iconKind === 'document') return <HiOutlineDocumentText className={iconClassName} />
-  if (iconKind === 'edit') return <HiOutlinePencilSquare className={iconClassName} />
-  if (iconKind === 'search') return <HiOutlineMagnifyingGlass className={iconClassName} />
-  if (iconKind === 'browser') return <HiOutlineCursorArrowRays className={iconClassName} />
-  if (iconKind === 'wait') return <HiOutlineClock className={iconClassName} />
-  if (iconKind === 'web') return <HiOutlineGlobeAlt className={iconClassName} />
-  if (iconKind === 'image') return <HiOutlinePhoto className={iconClassName} />
-  if (iconKind === 'knowledge') return <HiOutlineBookOpen className={iconClassName} />
-  if (iconKind === 'workflow') return <HiOutlineBolt className={iconClassName} />
-  if (iconKind === 'terminal') return <HiOutlineCommandLine className={iconClassName} />
-  if (iconKind === 'retry') return <HiArrowPath className={iconClassName} />
-  return <HiOutlineDocumentText className={iconClassName} />
+  const iconProps = { className: iconClassName, 'data-process-icon-kind': iconKind }
+  if (iconKind === 'learning') return <HiOutlineAcademicCap {...iconProps} />
+  if (iconKind === 'compaction') return <HiOutlineArchiveBox {...iconProps} />
+  if (iconKind === 'document') return <HiOutlineDocumentText {...iconProps} />
+  if (iconKind === 'edit') return <HiOutlinePencilSquare {...iconProps} />
+  if (iconKind === 'search') return <HiOutlineMagnifyingGlass {...iconProps} />
+  if (iconKind === 'browser') return <HiOutlineCursorArrowRays {...iconProps} />
+  if (iconKind === 'wait') return <HiOutlineClock {...iconProps} />
+  if (iconKind === 'web') return <HiOutlineGlobeAlt {...iconProps} />
+  if (iconKind === 'image') return <HiOutlinePhoto {...iconProps} />
+  if (iconKind === 'knowledge') return <HiOutlineBookOpen {...iconProps} />
+  if (iconKind === 'workflow') return <HiOutlineBolt {...iconProps} />
+  if (iconKind === 'terminal') return <HiOutlineCommandLine {...iconProps} />
+  if (iconKind === 'retry') return <HiArrowPath {...iconProps} />
+  return <HiOutlineDocumentText {...iconProps} />
 }
 
 const getGroupText = (group: AssistantProcessGroup): AssistantRichTextSegment[] => {

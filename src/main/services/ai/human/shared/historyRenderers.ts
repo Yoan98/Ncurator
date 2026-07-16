@@ -63,7 +63,6 @@ const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
   terminal_run: {
     terminalId: true,
     terminalStatus: true,
-    currentTerminalPath: true,
     output: true,
     outputCursor: true,
     stdout: true,
@@ -77,7 +76,6 @@ const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
   terminal_read: {
     terminalId: true,
     terminalStatus: true,
-    currentTerminalPath: true,
     output: true,
     outputCursor: true,
     exitCode: true,
@@ -86,9 +84,7 @@ const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
   terminal_stop: {
     terminalId: true,
     terminalStatus: true,
-    currentTerminalPath: true,
     stopped: true,
-    forced: true,
     error: true
   },
   kb_search: {

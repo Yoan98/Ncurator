@@ -277,7 +277,7 @@ describe('workbench run e2e', () => {
             const startedAtMs = Date.now()
             await sendWorkbenchMessage(
               page,
-              `Use the right embedded browser to complete this page task. Use browser_use navigate to open ${server.url}, use observe to inspect the form controls, then do not combine form actions: use one act to fill the Task code input with ${TASK_CODE}, use another act to click Submit task, then use extract to read the full displayed result. Tell me the exact result text.`
+              `Use the right embedded browser to complete this page task. Use browser_use navigate to open ${server.url}, use observe to inspect the form controls, then do not combine form actions: use one act to fill the Task code input with ${TASK_CODE}, call wait_time exactly once for 1 second, use another act to click Submit task, then use extract to read the full displayed result. Tell me the exact result text.`
             )
 
             await waitForBrowserPanelOpenedWithApproval(runtime)
@@ -325,10 +325,34 @@ describe('workbench run e2e', () => {
                 event.type === 'tool_call_result' && event.toolName === 'browser_use'
             )
             const browserData = browserResults.map((event) => event.result?.data)
+            const waitStarts = evidence.events.filter(
+              (event): event is Extract<AiRunEvent, { type: 'tool_call_started' }> =>
+                event.type === 'tool_call_started' && event.toolName === 'wait_time'
+            )
             const processItemTexts = await getWorkbenchPrefixLocator(
               page,
               workbenchSelectors.assistantProcessItemPrefix
             ).allTextContents()
+            const processBlocks = getWorkbenchPrefixLocator(
+              page,
+              workbenchSelectors.assistantProcessItemPrefix
+            )
+            const executionSummaryTexts = await processBlocks.locator('summary').allTextContents()
+            const executionIconKinds = await processBlocks
+              .locator('summary [data-process-icon-kind]')
+              .evaluateAll((icons) =>
+                icons.map((icon) => icon.getAttribute('data-process-icon-kind') || '')
+              )
+            await processBlocks.evaluateAll((blocks) => {
+              for (const block of blocks) {
+                if (block.querySelector('summary + div')) block.setAttribute('open', '')
+              }
+            })
+            const browserExecutionItems = processBlocks.locator('summary + div > div')
+            const browserExecutionItemTexts = await browserExecutionItems.allTextContents()
+            const browserExecutionItemFontWeights = await browserExecutionItems.evaluateAll(
+              (items) => items.map((item) => window.getComputedStyle(item).fontWeight)
+            )
             await resourceTabs.filter({ hasText: 'workbench-preview.md' }).first().click()
             const fileTabRestored = await getWorkbenchLocator(
               page,
@@ -367,6 +391,11 @@ describe('workbench run e2e', () => {
                 browserStateWhileHidden.state?.url === server.url &&
                 browserStateAfterRestore.state?.url === server.url,
               browserActions: browserStarts.map((event) => readToolInputString(event, 'action')),
+              waitCallCount: waitStarts.length,
+              executionSummaryTexts,
+              executionIconKinds,
+              browserExecutionItemTexts,
+              browserExecutionItemFontWeights,
               redundantBrowserActionPrefixesAbsent: processItemTexts.every(
                 (text) =>
                   !text.includes('观察页面：') &&
@@ -416,6 +445,18 @@ describe('workbench run e2e', () => {
               result.browserActions.includes('observe') &&
               result.browserActions.includes('act') &&
               result.browserActions.includes('extract') &&
+              result.waitCallCount === 1 &&
+              result.executionSummaryTexts.some((text) => text.includes('已操作浏览器')) &&
+              result.executionSummaryTexts.some((text) => text.includes('等待 1 秒')) &&
+              result.executionSummaryTexts.every((text) => !text.includes('，')) &&
+              (result.executionIconKinds.includes('workflow') ||
+                (result.executionIconKinds.includes('browser') &&
+                  result.executionIconKinds.includes('wait'))) &&
+              result.browserExecutionItemTexts.length > 0 &&
+              result.browserExecutionItemTexts.every((text) => !text.includes('：')) &&
+              result.browserExecutionItemFontWeights.every(
+                (weight) => Number.parseInt(weight, 10) < 600
+              ) &&
               result.browserResultContractValid &&
               result.redundantBrowserActionPrefixesAbsent &&
               result.deprecatedBrowserUseFieldsAbsent &&

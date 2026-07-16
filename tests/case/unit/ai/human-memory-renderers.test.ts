@@ -137,6 +137,7 @@ describe('ai unit human memory renderers', () => {
     )
     expect(text).toContain('"output":"latest release status"')
     expect(text).not.toContain('returnReason')
+    expect(text).not.toContain('currentTerminalPath')
     expect(text).not.toContain('args=')
     expect(text).not.toContain('result:')
     expect(text).not.toContain('旧 thought.next 不应直接作为 task_progress 主体')
