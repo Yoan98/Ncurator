@@ -752,6 +752,8 @@ export class ChatRunService {
         {
           runId,
           sessionId: run.sessionId,
+          userMessageId: run.userMessageId,
+          assistantMessageId: run.assistantMessageId,
           input: run.input,
           selectedReferences: run.selectedReferences,
           attachments: run.attachments,

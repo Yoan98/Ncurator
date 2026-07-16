@@ -95,15 +95,15 @@ const WorkbenchTabBar = ({
       className="nc-resource-tabbar workbench-no-drag flex h-11 shrink-0 items-center bg-white px-2"
       data-testid={workbenchSelectors.resourceTabBar}
     >
-      <div className="relative min-w-0 flex-1">
+      <div className="relative min-w-0 flex-1 self-stretch">
         <div
           ref={scrollRef}
-          className="min-w-0 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          className="h-full min-w-0 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
           data-testid={workbenchSelectors.resourceTabScroller}
           onScroll={updateScrollEdges}
           onWheel={handleWheel}
         >
-          <div className="flex min-w-max items-center gap-1">
+          <div className="flex h-full w-max min-w-full items-center gap-1">
             {tabs.map((tab) => {
               const active = tab.id === activeTabId
               return (
@@ -146,6 +146,11 @@ const WorkbenchTabBar = ({
                 </Tooltip>
               )
             })}
+            <div
+              className="nc-resource-tabbar-drag-region"
+              data-testid={workbenchSelectors.resourceTabDragRegion}
+              aria-hidden="true"
+            />
           </div>
         </div>
         {scrollEdges.left ? (

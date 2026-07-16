@@ -4,7 +4,7 @@ import { createAiLlmExecutor } from './llmExecutor'
 import { buildReferenceScope } from './prompts/referenceScope'
 import { getAiRuntimePlatform } from './utils/platform'
 import {
-  formatTurns,
+  formatPreviousTurns,
   normalizeSelectedReferences,
   normalizeWorkspaceBinding
 } from './utils/runContext'
@@ -103,7 +103,11 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     checkCancelled()
     const memory = await deps.chatStore.getConversationMemory(payload.sessionId)
     const messages = await deps.chatStore.getMessagesAfterConversationMemory(payload.sessionId)
-    const recentTurnsText = formatTurns(messages)
+    const recentTurnsText = formatPreviousTurns({
+      messages,
+      currentUserMessageId: payload.userMessageId,
+      currentAssistantMessageId: payload.assistantMessageId
+    })
     const conversationSummaryText = String(memory?.summary || '')
 
     return { recentTurnsText, conversationSummaryText }

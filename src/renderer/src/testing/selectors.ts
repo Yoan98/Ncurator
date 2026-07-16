@@ -158,6 +158,7 @@ export const workbenchSelectors = {
   contentPanelToggle: 'workbench-content-panel-toggle',
   resourceTabBar: 'workbench-resource-tab-bar',
   resourceTabScroller: 'workbench-resource-tab-scroller',
+  resourceTabDragRegion: 'workbench-resource-tab-drag-region',
   resourceTabPrefix: 'workbench-resource-item',
   resourceTabAddButton: 'workbench-resource-tab-add-button',
   documentToolbar: 'workbench-document-toolbar',

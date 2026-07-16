@@ -632,6 +632,16 @@ textarea,
   z-index: 4;
 }
 
+.nc-resource-tabbar-drag-region {
+  align-self: stretch;
+  flex: 1 1 0;
+  min-width: 0;
+  pointer-events: auto;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-app-region: drag;
+}
+
 .nc-content-panel-titlebar-toggle {
   position: relative;
   z-index: 5;

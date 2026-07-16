@@ -76,6 +76,8 @@ export type AiRuntimePlatform = 'macos' | 'windows'
 export type AiRunStartPayload = {
   runId: string
   sessionId: string
+  userMessageId: string
+  assistantMessageId: string
   input: string
   selectedReferences?: SelectedReference[]
   attachments?: ChatAttachment[]

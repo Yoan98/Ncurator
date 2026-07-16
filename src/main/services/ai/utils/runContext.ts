@@ -112,3 +112,15 @@ export const formatTurns = (messages: ChatMessage[]): string =>
       return `${role}: ${content}${artifactText}`
     })
     .join('\n')
+
+export const formatPreviousTurns = (input: {
+  messages: ChatMessage[]
+  currentUserMessageId: string
+  currentAssistantMessageId: string
+}): string => {
+  const currentRunMessageIds = new Set([
+    input.currentUserMessageId,
+    input.currentAssistantMessageId
+  ])
+  return formatTurns(input.messages.filter((message) => !currentRunMessageIds.has(message.id)))
+}

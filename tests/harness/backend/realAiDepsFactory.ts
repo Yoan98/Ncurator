@@ -160,6 +160,8 @@ export const createRealAiDepsFactory = async (input: {
       {
         runId: input.runId,
         sessionId: contextInput.sessionId || 'test-session',
+        userMessageId: `test-user-message-${input.runId}`,
+        assistantMessageId: `test-assistant-message-${input.runId}`,
         input: contextInput.userInput || '请处理当前测试任务。',
         selectedReferences: contextInput.selectedReferences,
         mainModel: {

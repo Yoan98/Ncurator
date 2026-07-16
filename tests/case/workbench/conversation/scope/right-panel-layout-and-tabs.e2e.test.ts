@@ -1,4 +1,5 @@
 import { describe, it } from 'vitest'
+import { windowSelectors } from '../../../../../src/renderer/src/testing/selectors'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
   WORKBENCH_E2E_TIMEOUT_MS,
@@ -20,7 +21,7 @@ describe('workbench conversation e2e', () => {
         suite: 'conversation',
         groups: ['scope'],
         description:
-          '验证空会话输入区、右侧折叠入口、资源 Tab 横向滚动、紧凑工具栏和浏览器缩放菜单。',
+          '验证空会话输入区、右侧动态 Tab 拖拽区、横向滚动、窗口按钮避让和浏览器缩放菜单。',
         fixtures: [],
         launchMode: 'real',
         windowMode: 'visible',
@@ -73,12 +74,128 @@ describe('workbench conversation e2e', () => {
             .getByRole('menuitem', { name: '打开文件', exact: true })
             .count()
           await page.getByRole('menuitem', { name: '浏览器', exact: true }).click()
+
+          const tabs = getWorkbenchPrefixLocator(page, workbenchSelectors.resourceTabPrefix)
+          await tabs.first().waitFor({ state: 'visible' })
+          const readTabDragLayout = async () =>
+            await page.evaluate(
+              (selectors) => {
+                const tabbar = document.querySelector(
+                  `[data-testid="${selectors.workbench.resourceTabBar}"]`
+                )
+                const scroller = document.querySelector(
+                  `[data-testid="${selectors.workbench.resourceTabScroller}"]`
+                )
+                const dragRegion = document.querySelector(
+                  `[data-testid="${selectors.workbench.resourceTabDragRegion}"]`
+                )
+                const addButton = document.querySelector(
+                  `[data-testid="${selectors.workbench.resourceTabAddButton}"]`
+                )
+                const toggle = document.querySelector(
+                  `[data-testid="${selectors.workbench.contentPanelToggle}"]`
+                )
+                if (
+                  !(tabbar instanceof HTMLElement) ||
+                  !(scroller instanceof HTMLElement) ||
+                  !(dragRegion instanceof HTMLElement) ||
+                  !(addButton instanceof HTMLElement) ||
+                  !(toggle instanceof HTMLElement)
+                ) {
+                  return null
+                }
+
+                const dragRect = dragRegion.getBoundingClientRect()
+                const addRect = addButton.getBoundingClientRect()
+                const toggleRect = toggle.getBoundingClientRect()
+                const hit =
+                  dragRect.width > 2
+                    ? document.elementFromPoint(
+                        dragRect.left + dragRect.width / 2,
+                        dragRect.top + dragRect.height / 2
+                      )
+                    : null
+                const controls = [
+                  selectors.window.minimizeButton,
+                  selectors.window.maximizeButton,
+                  selectors.window.closeButton
+                ]
+                  .map((testId) => {
+                    const element = document.querySelector(`[data-testid="${testId}"]`)
+                    if (!(element instanceof HTMLElement)) return null
+                    const rect = element.getBoundingClientRect()
+                    return {
+                      left: rect.left,
+                      right: rect.right,
+                      appRegion: getComputedStyle(element).getPropertyValue('-webkit-app-region'),
+                      hitTestId:
+                        document
+                          .elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)
+                          ?.closest<HTMLElement>('[data-testid]')?.dataset.testid || null
+                    }
+                  })
+                  .filter((control): control is NonNullable<typeof control> => control !== null)
+
+                return {
+                  platform: navigator.userAgent.toLowerCase().includes('windows')
+                    ? 'win32'
+                    : 'other',
+                  tabbarHeight: tabbar.getBoundingClientRect().height,
+                  appRegion: getComputedStyle(dragRegion).getPropertyValue('-webkit-app-region'),
+                  pointerEvents: getComputedStyle(dragRegion).pointerEvents,
+                  dragWidth: dragRect.width,
+                  dragHeight: dragRect.height,
+                  dragRight: dragRect.right,
+                  hitTestId: hit?.closest<HTMLElement>('[data-testid]')?.dataset.testid || null,
+                  addLeft: addRect.left,
+                  addRight: addRect.right,
+                  toggleLeft: toggleRect.left,
+                  toggleRight: toggleRect.right,
+                  scrollWidth: scroller.scrollWidth,
+                  clientWidth: scroller.clientWidth,
+                  controls
+                }
+              },
+              { workbench: workbenchSelectors, window: windowSelectors }
+            )
+
+          await page.waitForFunction((testId) => {
+            const element = document.querySelector(`[data-testid="${testId}"]`)
+            return element instanceof HTMLElement && element.getBoundingClientRect().width > 40
+          }, workbenchSelectors.resourceTabDragRegion)
+          const sparseDragLayout = await readTabDragLayout()
+
           for (let index = 0; index < 7; index += 1) {
             await addButton.click()
             await page.getByRole('menuitem', { name: '浏览器', exact: true }).click()
           }
 
-          const tabs = getWorkbenchPrefixLocator(page, workbenchSelectors.resourceTabPrefix)
+          await tabs.nth(7).waitFor({ state: 'visible' })
+          await page.waitForFunction((testId) => {
+            const element = document.querySelector(`[data-testid="${testId}"]`)
+            return element instanceof HTMLElement && element.getBoundingClientRect().width <= 1
+          }, workbenchSelectors.resourceTabDragRegion)
+          const denseDragLayout = await readTabDragLayout()
+
+          for (let index = 7; index >= 1; index -= 1) {
+            await tabs.nth(index).locator('button[aria-label^="关闭 "]').click()
+            await page.waitForFunction(
+              (input) =>
+                document.querySelectorAll(`[data-testid^="${input.prefix}-"]`).length ===
+                input.count,
+              { prefix: workbenchSelectors.resourceTabPrefix, count: index }
+            )
+          }
+          await page.waitForFunction((testId) => {
+            const element = document.querySelector(`[data-testid="${testId}"]`)
+            return element instanceof HTMLElement && element.getBoundingClientRect().width > 40
+          }, workbenchSelectors.resourceTabDragRegion)
+          const recoveredDragLayout = await readTabDragLayout()
+
+          for (let index = 0; index < 7; index += 1) {
+            await addButton.click()
+            await page.getByRole('menuitem', { name: '浏览器', exact: true }).click()
+          }
           await tabs.nth(7).waitFor({ state: 'visible' })
           await tabs.first().click()
           const scroller = getWorkbenchLocator(page, workbenchSelectors.resourceTabScroller)
@@ -171,6 +288,9 @@ describe('workbench conversation e2e', () => {
             fileMenuLabelVisible,
             legacyFileMenuLabelCount,
             tabCount: await tabs.count(),
+            sparseDragLayout,
+            denseDragLayout,
+            recoveredDragLayout,
             chromeLayout,
             zoomLayout,
             browserGoButtonVisible,
@@ -180,6 +300,14 @@ describe('workbench conversation e2e', () => {
           }
         },
         assert: async (result, runtime) => {
+          const windowsControlsSafe =
+            result.sparseDragLayout?.platform !== 'win32' ||
+            (result.sparseDragLayout.controls.length === 3 &&
+              result.sparseDragLayout.controls.every(
+                (control) => control.appRegion === 'no-drag' && control.hitTestId !== null
+              ) &&
+              result.sparseDragLayout.toggleRight <= result.sparseDragLayout.controls[0].left)
+
           await runtime.assertThat(
             result.emptyLayout !== null &&
               result.initialShellCount === 0 &&
@@ -191,6 +319,35 @@ describe('workbench conversation e2e', () => {
               name: 'empty-composer-remains-centered',
               message: '空会话输入框必须位于主工作区中部，且居中容器占据可用高度。',
               data: result.emptyLayout
+            }
+          )
+          await runtime.assertThat(
+            result.sparseDragLayout !== null &&
+              result.sparseDragLayout.appRegion === 'drag' &&
+              result.sparseDragLayout.pointerEvents === 'auto' &&
+              Math.round(result.sparseDragLayout.tabbarHeight) === 44 &&
+              Math.round(result.sparseDragLayout.dragHeight) === 44 &&
+              result.sparseDragLayout.dragWidth > 40 &&
+              result.sparseDragLayout.hitTestId === workbenchSelectors.resourceTabDragRegion &&
+              result.sparseDragLayout.dragRight <= result.sparseDragLayout.addLeft &&
+              result.sparseDragLayout.addRight <= result.sparseDragLayout.toggleLeft &&
+              result.denseDragLayout !== null &&
+              result.denseDragLayout.appRegion === 'drag' &&
+              result.denseDragLayout.dragWidth <= 1 &&
+              result.denseDragLayout.scrollWidth > result.denseDragLayout.clientWidth &&
+              result.recoveredDragLayout !== null &&
+              result.recoveredDragLayout.dragWidth > 40 &&
+              result.recoveredDragLayout.hitTestId === workbenchSelectors.resourceTabDragRegion &&
+              windowsControlsSafe,
+            {
+              name: 'right-panel-empty-space-is-dynamically-draggable',
+              message:
+                '右侧 Tab 后的空白区必须可拖拽；Tab 溢出时拖拽区应收缩，关闭 Tab 后应自动恢复，并避开 Windows 窗口按钮。',
+              data: {
+                sparse: result.sparseDragLayout,
+                dense: result.denseDragLayout,
+                recovered: result.recoveredDragLayout
+              }
             }
           )
           await runtime.assertThat(
