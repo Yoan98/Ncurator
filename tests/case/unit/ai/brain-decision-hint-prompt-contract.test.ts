@@ -59,17 +59,26 @@ describe('ai unit brain decision-hint prompt contract', () => {
       ctx: createFakeCtx()
     }).user
     const section = prompt.match(/<local_environment>([\s\S]*?)<\/local_environment>/)?.[1] || ''
+    const localEnvironment = JSON.parse(section)
 
-    expect(prompt).not.toContain('<terminal_platform>')
-    expect(section).toContain('<platform>macos</platform>')
-    expect(section).toMatch(/<iso>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z<\/iso>/)
-    expect(section).toMatch(/<timezone>[^<]+<\/timezone>/)
-    const terminalJson =
-      section.match(/<terminal_environment>([\s\S]*?)<\/terminal_environment>/)?.[1] || ''
-    expect(JSON.parse(terminalJson)).toEqual({
-      new_terminal_default_path: '/tmp/workspace',
-      terminals: []
+    expect(localEnvironment).toMatchObject({
+      platform: 'macos',
+      current_time: {
+        timezone: expect.any(String)
+      },
+      terminal_state: {
+        new_terminal_default_path: '/tmp/workspace',
+        terminals: []
+      }
     })
+    expect(localEnvironment.current_time.utc_iso).toMatch(
+      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/
+    )
+    expect(localEnvironment.current_time.local_iso).toMatch(
+      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}[+-]\d{2}:\d{2}$/
+    )
+    expect(section).not.toContain('terminal_environment')
+    expect(section).not.toContain('current_terminal_path')
   })
 
   it('renders current decision hint in decision_hint and keeps latest execution in task_progress', () => {

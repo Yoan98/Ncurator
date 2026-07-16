@@ -82,7 +82,7 @@ Text File Runtime 通过 builtin `text-file` skill 提供 `file_read` 和 `file_
 
 Terminal Runtime 由 `TerminalSessionManager` 和 `terminal_run / terminal_read / terminal_stop` 组成。Manager 位于 Main Process，按 chat session 与 workspace 隔离持久 PTY，会话可跨单个 AI run 保留。每个终端维护 terminalId、当前路径、运行状态、当前命令、输出环形缓冲区和绝对输出游标。terminal_run 固定等待后让出控制权，不终止仍在运行的命令；terminal_read 增量读取；terminal_stop 通过 Ctrl+C、宽限期和强制终止收口。删除聊天、取消所属 run 和应用退出会清理托管进程。
 
-Brain 的 `local_environment` 在 `<terminal_environment>` 中嵌入格式化 JSON，只包含新终端默认路径和各终端的 id、状态、当前路径、当前命令与开始时间，不注入完整日志或环境变量。工具说明只声明能力、结果和边界，不返回下一步建议字段。terminal_run 输入不包含 cwd；已有终端的当前路径是执行和工作空间边界判断的基准。
+Brain 的 `local_environment` 整体使用格式化 JSON，其中 `current_time` 同时提供 UTC ISO 时间、本地 ISO 时间和时区，`terminal_state` 只包含新终端默认路径和各终端的 id、状态、当前路径、当前命令与开始时间，不注入完整日志或环境变量。工具说明只声明能力、结果和边界，不返回下一步建议字段。terminal_run 输入不包含 cwd；已有终端的当前路径是执行和工作空间边界判断的基准。
 
 ### Apply Review
 

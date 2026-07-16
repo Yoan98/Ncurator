@@ -66,9 +66,50 @@ describe('ai run context conversation history', () => {
       currentAssistantMessageId: 'current-assistant'
     })
 
-    expect(recentTurnsText).toContain('user: 创建贪吃蛇游戏')
-    expect(recentTurnsText).toContain('assistant: 游戏已经创建完成。')
-    expect(recentTurnsText).toContain('fileName=snake.html')
-    expect(recentTurnsText).not.toContain('增加暂停功能')
+    expect(JSON.parse(recentTurnsText)).toEqual([
+      {
+        turn_index: 1,
+        user_message: '创建贪吃蛇游戏',
+        assistant_message: '游戏已经创建完成。',
+        artifacts: [
+          {
+            kind: 'file',
+            path: '/workspace/snake.html',
+            fileName: 'snake.html',
+            summary: 'text file created: snake.html'
+          }
+        ]
+      }
+    ])
+  })
+
+  it('separates multiple completed user and assistant turns', () => {
+    const recentTurnsText = formatPreviousTurns({
+      messages: [
+        message({ id: 'user-1', role: 'user', content: '第一轮问题' }),
+        message({ id: 'assistant-1', role: 'assistant', content: '第一轮回答\n包含 Markdown。' }),
+        message({ id: 'user-2', role: 'user', content: '第二轮问题' }),
+        message({ id: 'assistant-2', role: 'assistant', content: '第二轮回答' }),
+        message({ id: 'current-user', role: 'user', content: '当前问题' }),
+        message({ id: 'current-assistant', role: 'assistant', content: '' })
+      ],
+      currentUserMessageId: 'current-user',
+      currentAssistantMessageId: 'current-assistant'
+    })
+
+    expect(JSON.parse(recentTurnsText)).toEqual([
+      {
+        turn_index: 1,
+        user_message: '第一轮问题',
+        assistant_message: '第一轮回答\n包含 Markdown。',
+        artifacts: []
+      },
+      {
+        turn_index: 2,
+        user_message: '第二轮问题',
+        assistant_message: '第二轮回答',
+        artifacts: []
+      }
+    ])
   })
 })

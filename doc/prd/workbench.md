@@ -413,7 +413,7 @@
 
 #### WB-TERMINAL-001 持久终端会话
 
-- 系统行为：terminal 使用由 Main Process 托管的持久终端会话。新终端从当前 workspace 根目录启动；已有空闲终端可通过 `terminalId` 继续执行并保留当前路径；运行中的终端不能接受新命令。命令超过固定等待时间后工具返回 `command_still_running`，进程继续运行，可通过 `terminal_read` 增量读取，通过 `terminal_stop` 停止或关闭。工具输入不接收 `cwd`，Brain 的 `local_environment` 以 JSON 提供新终端默认路径和各终端当前路径、状态与当前命令。
+- 系统行为：terminal 使用由 Main Process 托管的持久终端会话。新终端从当前 workspace 根目录启动；已有空闲终端可通过 `terminalId` 继续执行并保留当前路径；运行中的终端不能接受新命令。命令超过固定等待时间后工具返回 `command_still_running`，进程继续运行，可通过 `terminal_read` 增量读取，通过 `terminal_stop` 停止或关闭。工具输入不接收 `cwd`，Brain 的 `local_environment` 整体以 JSON 提供平台、当前时间和 `terminal_state`；终端状态包含新终端默认路径和各终端当前路径、状态与当前命令。
 - 验收：
   - `WB-TERMINAL-001-AC1` 同一 terminalId 连续执行时保留 `cd` 后当前路径；不传 terminalId 会创建从 workspace 根目录开始的新终端。
   - `WB-TERMINAL-001-AC2` 长命令固定让出控制权但不被误判为失败；terminal_read 只返回游标后的增量输出和客观状态。

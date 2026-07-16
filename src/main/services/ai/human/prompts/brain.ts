@@ -39,31 +39,41 @@ const indentLines = (value: string, level: number): string =>
 export const renderLocalEnvironmentText = (ctx: AiRunContext): string => {
   const now = new Date()
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'unknown'
-  const terminalEnvironment = {
-    new_terminal_default_path: ctx.workspace?.rootPath || null,
-    terminals: terminalSessionManager
-      .list({
-        chatSessionId: ctx.sessionId,
-        workspaceId: ctx.workspace?.workspaceId
-      })
-      .map((terminal) => ({
-        terminal_id: terminal.terminalId,
-        status: terminal.status,
-        current_terminal_path: terminal.currentTerminalPath,
-        current_command: terminal.currentCommand,
-        started_at: terminal.startedAt ? new Date(terminal.startedAt).toISOString() : null
-      }))
-  }
-  return `
-<platform>${ctx.platform}</platform>
-<current_time>
-  <iso>${now.toISOString()}</iso>
-  <timezone>${timezone}</timezone>
-</current_time>
-<terminal_environment>
-${JSON.stringify(terminalEnvironment, null, 2)}
-</terminal_environment>
-`.trim()
+  const offsetMinutes = -now.getTimezoneOffset()
+  const offsetSign = offsetMinutes >= 0 ? '+' : '-'
+  const offsetHours = String(Math.floor(Math.abs(offsetMinutes) / 60)).padStart(2, '0')
+  const offsetRemainderMinutes = String(Math.abs(offsetMinutes) % 60).padStart(2, '0')
+  const localIso = new Date(now.getTime() + offsetMinutes * 60_000)
+    .toISOString()
+    .replace('Z', `${offsetSign}${offsetHours}:${offsetRemainderMinutes}`)
+
+  return JSON.stringify(
+    {
+      platform: ctx.platform,
+      current_time: {
+        utc_iso: now.toISOString(),
+        timezone,
+        local_iso: localIso
+      },
+      terminal_state: {
+        new_terminal_default_path: ctx.workspace?.rootPath || null,
+        terminals: terminalSessionManager
+          .list({
+            chatSessionId: ctx.sessionId,
+            workspaceId: ctx.workspace?.workspaceId
+          })
+          .map((terminal) => ({
+            terminal_id: terminal.terminalId,
+            status: terminal.status,
+            current_path: terminal.currentTerminalPath,
+            current_command: terminal.currentCommand,
+            started_at: terminal.startedAt ? new Date(terminal.startedAt).toISOString() : null
+          }))
+      }
+    },
+    null,
+    2
+  )
 }
 
 const renderPreferenceText = (preference: AiRunContext['preference']): string => {
@@ -233,10 +243,10 @@ export const buildBrainPrompt = (input: {
     - preference：当前用户对 AI 推进方式的偏好；若为“无”，则不施加额外偏好。
     - reference_scope：当前工作区、默认知识范围、显式缩圈范围和可用边界。
     - search_strategy：当前任务默认遵循的检索思路提示。
-    - local_environment：当前本机运行环境；platform 是当前用户电脑平台，current_time 是当前系统时间，terminal_environment 是当前会话的终端状态与每个终端当前所在路径。
+    - local_environment：当前本机运行环境，内容是 JSON；platform 是当前用户电脑平台，current_time 是当前系统时间，terminal_state 是当前会话的终端状态与每个终端当前所在路径。
     - conversation_history：当前会话历史视图。
     - summary：当前会话中跨任务仍有效的滚动摘要，用于理解用户在同一窗口里的连续主线、稳定偏好与当前状态。
-    - recent_turns：最近几轮真实对话内容与产物，用于判断用户刚刚说了什么、你刚刚交付了什么。
+    - recent_turns：最近几轮已经完成且尚未被会话压缩的真实对话，不包含当前正在执行的任务。
     - round_history：当前任务的历史证据视图。
     - compactions：已压缩的较早历史，用于保留仍相关的客观事实、失败路径、重复尝试与背景信息。
     - rounds：最近未压缩的历史轮次，用于查看较新的判断、执行与结果轨迹。

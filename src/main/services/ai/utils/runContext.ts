@@ -74,15 +74,17 @@ export const normalizeSelectedReferences = (
     })
     .filter((reference) => {
       if (reference.kind === 'web') {
-        return Boolean(reference.workspaceId && reference.webSourceId && reference.name && reference.url)
+        return Boolean(
+          reference.workspaceId && reference.webSourceId && reference.name && reference.url
+        )
       }
 
       return Boolean(
         reference.workspaceId &&
-          reference.nodeId &&
-          reference.name &&
-          reference.relativePath &&
-          reference.absolutePath
+        reference.nodeId &&
+        reference.name &&
+        reference.relativePath &&
+        reference.absolutePath
       )
     })
 
@@ -122,5 +124,40 @@ export const formatPreviousTurns = (input: {
     input.currentUserMessageId,
     input.currentAssistantMessageId
   ])
-  return formatTurns(input.messages.filter((message) => !currentRunMessageIds.has(message.id)))
+  const messages = input.messages.filter((message) => !currentRunMessageIds.has(message.id))
+  const turns: Array<{
+    turn_index: number
+    user_message: string | null
+    assistant_message: string | null
+    artifacts: AiArtifactRef[]
+  }> = []
+
+  for (const message of messages) {
+    if (message.role === 'user') {
+      turns.push({
+        turn_index: turns.length + 1,
+        user_message: message.content,
+        assistant_message: null,
+        artifacts: []
+      })
+      continue
+    }
+
+    if (message.role === 'assistant') {
+      const latestTurn = turns.at(-1)
+      if (!latestTurn || latestTurn.assistant_message !== null) {
+        turns.push({
+          turn_index: turns.length + 1,
+          user_message: null,
+          assistant_message: message.content,
+          artifacts: message.artifacts || []
+        })
+      } else {
+        latestTurn.assistant_message = message.content
+        latestTurn.artifacts = message.artifacts || []
+      }
+    }
+  }
+
+  return turns.length > 0 ? JSON.stringify(turns, null, 2) : ''
 }
