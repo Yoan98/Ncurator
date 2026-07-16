@@ -51,6 +51,17 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
     whenToUse: '适用于用户要求生成、补充、改写、删除或格式化 docx 内容的任务。',
     toolNames: ['docx_edit']
   },
+  'pdf-read': {
+    skillId: 'pdf-read',
+    familyId: 'pdf',
+    source: 'external',
+    countsTowardToolBudget: true,
+    title: 'pdf-read',
+    description:
+      '能力：读取工作区内 PDF 的文档信息、页级文本、检索结果，并将指定页面渲染为图片。\n结果：返回 PDF 元数据、页码、正文、匹配位置或页面图片路径。\n边界：只读取 PDF，不修改源文件；文本结果取决于 PDF 文本层，页面图片不包含识别结果。',
+    whenToUse: '适用于需要阅读 PDF 文本、搜索 PDF 内容或查看 PDF 页面图形的任务。',
+    toolNames: ['pdf_inspect', 'pdf_search', 'pdf_read_pages', 'pdf_render_pages']
+  },
   'image-recognition': {
     skillId: 'image-recognition',
     familyId: 'image-recognition',

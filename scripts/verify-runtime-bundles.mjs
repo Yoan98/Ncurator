@@ -15,6 +15,7 @@ const assertNoImports = (label, graph, forbidden) => {
 
 const mainGraph = readBundleGraph(path.join(mainOutDir, 'index.js'))
 const prepareWorkerGraph = readBundleGraph(path.join(mainOutDir, 'workspacePrepareWorker.js'))
+const pdfWorkerGraph = readBundleGraph(path.join(mainOutDir, 'pdfWorker.js'))
 const embeddingRuntimeGraph = readBundleGraph(path.join(mainOutDir, 'embeddingRuntimeProcess.js'))
 
 assertNoImports('Electron main process', mainGraph, [
@@ -22,6 +23,11 @@ assertNoImports('Electron main process', mainGraph, [
   'onnxruntime-node'
 ])
 assertNoImports('Workspace prepare worker', prepareWorkerGraph, [
+  'electron',
+  '@huggingface/transformers',
+  'onnxruntime-node'
+])
+assertNoImports('PDF worker', pdfWorkerGraph, [
   'electron',
   '@huggingface/transformers',
   'onnxruntime-node'

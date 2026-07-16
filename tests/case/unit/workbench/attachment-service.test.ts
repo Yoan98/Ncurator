@@ -68,4 +68,19 @@ describe('attachment service runtime directories', () => {
     expect(second.path).toBe(path.join(bucketPath, 'reference-1.json'))
     await expect(fs.readFile(second.path, 'utf8')).resolves.toBe('{"ready":true}')
   })
+
+  it('accepts PDF attachments and assigns application/pdf', async () => {
+    const attachment = await service.saveAttachment({
+      workspaceRootPath,
+      assetBucketId: 'bucket-pdf',
+      name: 'lecture.pdf',
+      bytes: Buffer.from('%PDF-1.7\n')
+    })
+
+    expect(attachment.kind).toBe('file')
+    expect(attachment.mimeType).toBe('application/pdf')
+    expect(attachment.path).toBe(
+      path.join(workspaceRootPath, '.ncurator', 'runtime', 'assets', 'bucket-pdf', 'lecture.pdf')
+    )
+  })
 })

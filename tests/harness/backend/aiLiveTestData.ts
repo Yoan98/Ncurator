@@ -15,6 +15,11 @@ export const DOCX_POSITIONED_FIXTURE_PATHS = [
   `${WORKSPACE_LEARNING_FIXTURE_DIR}/图形学.docx`
 ] as const
 
+export const PDF_READING_FIXTURE_PATH = `${WORKSPACE_LEARNING_FIXTURE_DIR}/深度学习.pdf` as const
+
+export const HUMAN_PDF_VISUAL_READING_USER_INPUT =
+  '请只根据我选中的《深度学习.pdf》回答两个问题：1. 用通俗的话说明第1页流程图里 inputs、parameters、architecture、predictions、labels、loss 和 update 是怎么形成训练闭环的；2. 结合第9页 Proper fit 和 Overfit 对比图，说明两条曲线有什么直观区别，以及为什么右边属于过度拟合。'
+
 export const DOCX_MULTI_EDIT_FIXTURE_PATHS = [
   `${SHARED_WORKSPACE_FIXTURE_PATH}/人工智能探究课堂PRD.docx`,
   `${SHARED_WORKSPACE_FIXTURE_PATH}/交互式探究学习案例：产业转移.docx`
@@ -101,6 +106,25 @@ export const buildSelectedDocxFixtureReferences = (
   indexedFiles: readonly WorkspaceKbSeedResult[] = []
 ): SelectedReference[] =>
   buildSelectedDocxReferences(resolveSelectedDocxFixtures(runtime, fixturePaths), indexedFiles)
+
+export const buildSelectedPdfFixtureReference = (
+  runtime: BackendTestRuntime,
+  fixturePath: string = PDF_READING_FIXTURE_PATH
+): SelectedReference => {
+  const workspacePath = runtime.getFixtureWorkspacePath(fixturePath)
+  const relativePath = path.relative(runtime.workspaceRoot, workspacePath).split(path.sep).join('/')
+  return {
+    kind: 'file',
+    workspaceId: 'test-workspace',
+    nodeId: 'fixture-pdf-1',
+    name: path.basename(workspacePath),
+    relativePath,
+    absolutePath: workspacePath,
+    fileExt: '.pdf',
+    kbDocumentIds: [],
+    kbAvailability: 'not_indexed'
+  }
+}
 
 export const captureDocxFixtureBytes = async (
   runtime: BackendTestRuntime,

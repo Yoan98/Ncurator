@@ -31,6 +31,19 @@ const resolveLiveBaseUrl = (modelName: string): string => {
   return normalizeOpenAIBaseUrl(rawBaseUrl)
 }
 
+const resolveLiveVisionModelName = (primaryConfig: LiveLlmConfig): string => {
+  const explicit = readEnv('AI_LIVE_VISION_MODEL_NAME')
+  if (explicit) return explicit
+  try {
+    if (new URL(primaryConfig.base_url).hostname.endsWith('dashscope.aliyuncs.com')) {
+      return 'qwen3-vl-flash'
+    }
+  } catch {
+    // 交给主配置校验报告无效 URL。
+  }
+  return primaryConfig.model_name
+}
+
 export const hasLiveLlmConfigInEnv = (): boolean => {
   const modelName = resolveLiveModelName()
   const baseUrl = resolveLiveBaseUrl(modelName)
@@ -60,6 +73,26 @@ export const loadLiveLlmConfigFromEnv = (): LiveLlmConfig => {
     name: 'AI Live',
     providerKind: resolveLlmProviderKind({
       providerKind: readEnv('AI_LIVE_PROVIDER_KIND') || inferLlmProviderKind(baseUrl),
+      baseUrl
+    }),
+    base_url: baseUrl,
+    model_name: modelName,
+    api_key: apiKey
+  }
+}
+
+export const loadLiveVisionLlmConfigFromEnv = (): LiveLlmConfig => {
+  const primaryConfig = loadLiveLlmConfigFromEnv()
+  const baseUrl = normalizeOpenAIBaseUrl(
+    readEnv('AI_LIVE_VISION_BASE_URL') || primaryConfig.base_url
+  )
+  const apiKey = readEnv('AI_LIVE_VISION_API_KEY') || primaryConfig.api_key
+  const modelName = resolveLiveVisionModelName(primaryConfig)
+  return {
+    id: 'ai-live-vision-config',
+    name: 'AI Live Vision',
+    providerKind: resolveLlmProviderKind({
+      providerKind: readEnv('AI_LIVE_VISION_PROVIDER_KIND') || inferLlmProviderKind(baseUrl),
       baseUrl
     }),
     base_url: baseUrl,

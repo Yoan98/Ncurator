@@ -14,12 +14,15 @@ import {
 } from 'docx'
 import { buildDocxCapabilityTools } from '../../../src/main/services/ai/human/tools/docx'
 import { releaseDocxRunSession } from '../../../src/main/services/ai/human/tools/docx/worker/docxWorkerClient'
+import { AiRunResourceManager } from '../../../src/main/services/ai/run/AiRunResourceManager'
 import { DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS } from '../../../src/main/services/ai/human/constants'
 import { buildKbCapabilityTools } from '../../../src/main/services/ai/human/tools/kb/retrievalTools'
 import { buildTerminalCapabilityTools } from '../../../src/main/services/ai/human/tools/terminal/terminalTools'
 import { TerminalSessionManager } from '../../../src/main/services/ai/human/tools/terminal/TerminalSessionManager'
 import { buildTextFileCapabilityTools } from '../../../src/main/services/ai/human/tools/textFile'
 import { imageRecognitionToolFamily } from '../../../src/main/services/ai/human/tools/imageRecognition'
+import { buildPdfCapabilityTools } from '../../../src/main/services/ai/human/tools/pdf'
+import { releasePdfRunSession } from '../../../src/main/services/pdf/worker/pdfWorkerClient'
 import { utilityToolFamily } from '../../../src/main/services/ai/human/tools/utility'
 import { webToolFamily } from '../../../src/main/services/ai/human/tools/web'
 import { createHumanRuntimeCache } from '../../../src/main/services/ai/human/node/utils/runtimeCache'
@@ -79,6 +82,9 @@ export const createDocxToolHarness = (
   const ctx = runtime.createAiRunContext(contextInput)
   const cache = createHumanRuntimeCache()
   const activities: CapturedToolActivity[] = []
+  const resourceManager = new AiRunResourceManager([
+    { id: 'docx', releaseRun: releaseDocxRunSession }
+  ])
   const built = buildDocxCapabilityTools({
     ctx,
     cache,
@@ -99,7 +105,7 @@ export const createDocxToolHarness = (
     state: built.state,
     activities,
     async release(): Promise<void> {
-      await releaseDocxRunSession(runtime.runId)
+      await resourceManager.releaseRun(runtime.runId)
     }
   }
 }
@@ -166,6 +172,39 @@ export const createTextFileToolHarness = (
     ...createToolInvoker(built.tools as readonly ToolLike[]),
     ctx,
     activities
+  }
+}
+
+export const createPdfToolHarness = (
+  runtime: BackendTestRuntime,
+  contextInput: CreateAiRunContextInput = {}
+) => {
+  const ctx = runtime.createAiRunContext(contextInput)
+  const cache = createHumanRuntimeCache()
+  const activities: CapturedToolActivity[] = []
+  const resourceManager = new AiRunResourceManager([
+    { id: 'pdf', releaseRun: releasePdfRunSession }
+  ])
+  const built = buildPdfCapabilityTools({
+    ctx,
+    cache,
+    runId: runtime.runId,
+    sessionId: contextInput.sessionId || 'test-session',
+    taskId: runtime.taskId,
+    workspaceRootPath: runtime.workspaceRoot,
+    safePreviewChars: 1400,
+    modelContextWindowTokens:
+      ctx.humanRuntimeOverrides?.modelContextWindowTokens || DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS,
+    emitActivity: (activity) => activities.push(activity)
+  })
+
+  return {
+    ...createToolInvoker(built.tools as readonly ToolLike[]),
+    ctx,
+    activities,
+    async release(): Promise<void> {
+      await resourceManager.releaseRun(runtime.runId)
+    }
   }
 }
 

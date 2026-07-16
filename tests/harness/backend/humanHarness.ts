@@ -1,5 +1,8 @@
 import { createHumanGraphRunner } from '../../../src/main/services/ai/human/graph/humanGraph'
 import { runAiRuntimePreflight } from '../../../src/main/services/ai/runtimePreflight'
+import { AiRunResourceManager } from '../../../src/main/services/ai/run/AiRunResourceManager'
+import { releaseDocxRunSession } from '../../../src/main/services/ai/human/tools/docx/worker/docxWorkerClient'
+import { releasePdfRunSession } from '../../../src/main/services/pdf/worker/pdfWorkerClient'
 import type {
   HumanRunDispatchOptions,
   HumanTaskInput,
@@ -15,6 +18,10 @@ export const createHumanTestRunner = (
     ...contextInput
   })
   const run = createHumanGraphRunner({ ctx })
+  const resourceManager = new AiRunResourceManager([
+    { id: 'docx', releaseRun: releaseDocxRunSession },
+    { id: 'pdf', releaseRun: releasePdfRunSession }
+  ])
 
   return {
     ctx,
@@ -23,7 +30,11 @@ export const createHumanTestRunner = (
       await runAiRuntimePreflight({
         ensureEmbeddingReady: runtime.ensureEmbeddingReady
       })
-      return await run(taskInput, dispatchOptions) as HumanTaskOutput
+      try {
+        return (await run(taskInput, dispatchOptions)) as HumanTaskOutput
+      } finally {
+        await resourceManager.releaseRun(runtime.runId)
+      }
     }
   }
 }

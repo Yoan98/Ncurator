@@ -14,6 +14,7 @@ export default defineConfig({
           workspacePrepareWorker: resolve(
             'src/main/services/workspace/worker/workspacePrepareWorker.ts'
           ),
+          pdfWorker: resolve('src/main/services/pdf/worker/pdfWorker.ts'),
           embeddingRuntimeProcess: resolve(
             'src/main/services/vector/runtime/embeddingRuntimeProcess.ts'
           )

@@ -3,6 +3,7 @@ export const AI_TOOL_FAMILY_IDS = [
   'text-file',
   'kb',
   'docx',
+  'pdf',
   'web',
   'utility',
   'image-recognition'
@@ -16,7 +17,12 @@ export const BUILTIN_RUNTIME_SKILL_IDS = [
   'utility'
 ] as const
 
-export const EXTERNAL_RUNTIME_SKILL_IDS = ['docx-read', 'docx-write', 'image-recognition'] as const
+export const EXTERNAL_RUNTIME_SKILL_IDS = [
+  'docx-read',
+  'docx-write',
+  'pdf-read',
+  'image-recognition'
+] as const
 
 export const LEARNABLE_RUNTIME_SKILL_IDS = EXTERNAL_RUNTIME_SKILL_IDS
 

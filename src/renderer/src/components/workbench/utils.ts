@@ -80,6 +80,10 @@ const isAssistantToolName = (toolName: string): toolName is AssistantToolName =>
   toolName === 'docx_search' ||
   toolName === 'docx_read_blocks' ||
   toolName === 'docx_edit' ||
+  toolName === 'pdf_inspect' ||
+  toolName === 'pdf_search' ||
+  toolName === 'pdf_read_pages' ||
+  toolName === 'pdf_render_pages' ||
   toolName === 'web_search' ||
   toolName === 'web_crawl' ||
   toolName === 'browser_use' ||
@@ -208,6 +212,7 @@ const getSkillDisplayName = (skillId?: RuntimeSkillId): string => {
   if (skillId === 'kb-retrieval') return '资料查阅器'
   if (skillId === 'docx-read') return 'docx 阅读器'
   if (skillId === 'docx-write') return 'docx 写作器'
+  if (skillId === 'pdf-read') return 'PDF 阅读器'
   if (skillId === 'image-recognition') return '图像识别'
   return '新能力'
 }
@@ -223,6 +228,14 @@ const getToolUiKind = (toolName?: AssistantToolName): AssistantProcessSkillKey =
   if (toolName === 'docx_edit') return 'docx-edit'
   if (toolName === 'file_read') return 'file-read'
   if (toolName === 'file_write') return 'file-write'
+  if (
+    toolName === 'pdf_inspect' ||
+    toolName === 'pdf_search' ||
+    toolName === 'pdf_read_pages' ||
+    toolName === 'pdf_render_pages'
+  ) {
+    return 'pdf-read'
+  }
   if (toolName === 'kb_search' || toolName === 'kb_list_documents') return 'kb'
   if (toolName === 'terminal_run' || toolName === 'terminal_read' || toolName === 'terminal_stop') {
     return 'terminal'
@@ -242,7 +255,7 @@ const getDisplaySkillKey = (display: AssistantProcessDisplay): AssistantProcessS
 
 const getToolIconKind = (skillKey: AssistantProcessSkillKey): AssistantProcessIconKind => {
   if (skillKey === 'docx-edit') return 'edit'
-  if (skillKey === 'docx-read') return 'document'
+  if (skillKey === 'docx-read' || skillKey === 'pdf-read') return 'document'
   if (skillKey === 'file-read') return 'document'
   if (skillKey === 'file-write') return 'edit'
   if (skillKey === 'kb') return 'knowledge'
@@ -316,6 +329,13 @@ const getToolSummaryText = (
       return sentence(text(`部分编辑 ${normalizedCount} 个文件失败`))
     }
     return sentence(text(`编辑 ${normalizedCount} 个文件失败`))
+  }
+  if (skillKey === 'pdf-read') {
+    if (status === 'running') return sentence(text(`正在读取 ${normalizedCount} 个 PDF 文件`))
+    if (status === 'completed') return sentence(text(`已读取 ${normalizedCount} 个 PDF 文件`))
+    if (status === 'partial_failed')
+      return sentence(text(`部分读取 ${normalizedCount} 个 PDF 文件失败`))
+    return sentence(text(`读取 ${normalizedCount} 个 PDF 文件失败`))
   }
   if (skillKey === 'kb') {
     if (status === 'running') return sentence(text('正在检索知识库'))
@@ -394,6 +414,15 @@ const getToolItemText = (
   if (toolName === 'file_write') {
     return sentence(text('编辑文件 '), text(fileLabel))
   }
+  if (toolName === 'pdf_inspect') {
+    return sentence(text('查看 PDF 信息 '), text(fileLabel))
+  }
+  if (toolName === 'pdf_read_pages') {
+    return sentence(text('读取 PDF 页面 '), text(fileLabel))
+  }
+  if (toolName === 'pdf_render_pages') {
+    return sentence(text('渲染 PDF 页面 '), text(fileLabel))
+  }
   if (toolName === 'terminal_run') {
     return sentence(text('执行命令 '), text(commandLabel))
   }
@@ -406,9 +435,9 @@ const getToolItemText = (
   if (toolName === 'terminal_stop') {
     return sentence(text('停止终端 '), text(readStringValue(input || {}, 'terminalId') || '任务'))
   }
-  if (toolName === 'kb_search' || toolName === 'docx_search') {
+  if (toolName === 'kb_search' || toolName === 'docx_search' || toolName === 'pdf_search') {
     return sentence(
-      text(toolName === 'docx_search' ? '在文档中搜索 ' : '在知识库中搜索 '),
+      text(toolName === 'kb_search' ? '在知识库中搜索 ' : '在文档中搜索 '),
       text(queryLabel)
     )
   }

@@ -166,6 +166,10 @@ export type CreateAiRunContextInput = {
   allowedToolNames?: string[]
   runtimeSettingsOverride?: Partial<AiRuntimeSettings>
   modelName?: string
+  visionModel?: {
+    configId: string
+    modelName: string
+  }
   approvalPolicy?: ApprovalPolicy | ApprovalResolver
   checkCancelledOverride?: () => void
   humanRuntimeOverrides?: {

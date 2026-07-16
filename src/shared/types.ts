@@ -821,6 +821,7 @@ export type RuntimeSkillId =
   | 'text-file'
   | 'docx-read'
   | 'docx-write'
+  | 'pdf-read'
   | 'image-recognition'
   | 'kb-retrieval'
   | 'web-browsing'

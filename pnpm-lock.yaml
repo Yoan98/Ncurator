@@ -47,6 +47,9 @@ importers:
       '@langchain/textsplitters':
         specifier: ^1.0.1
         version: 1.0.1(@langchain/core@1.1.44(@opentelemetry/api@1.9.0)(openai@6.36.0(ws@8.21.0(bufferutil@4.1.0))(zod@4.3.6)))
+      '@napi-rs/canvas':
+        specifier: 0.1.80
+        version: 0.1.80
       '@node-rs/jieba':
         specifier: ^2.0.1
         version: 2.0.1
@@ -8240,7 +8243,6 @@ snapshots:
       '@napi-rs/canvas-linux-x64-gnu': 0.1.80
       '@napi-rs/canvas-linux-x64-musl': 0.1.80
       '@napi-rs/canvas-win32-x64-msvc': 0.1.80
-    optional: true
 
   '@napi-rs/wasm-runtime@0.2.12':
     dependencies:

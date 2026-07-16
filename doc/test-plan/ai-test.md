@@ -12,47 +12,52 @@
 
 ### 2.1 按 Suite / 分类汇总
 
-- `tool` 完整回归：`67 / 67`
-  - 检测时间：`2026-07-14 13:59:28 +08:00`
+- `tool` 完整回归：`77 / 77`
+  - 检测时间：`2026-07-16 19:07:56 +08:00`
   - 执行命令：`pnpm test:ai:tool`
 - `tool / docx`
   - 通过率：`40 / 40`
-  - 检测时间：`2026-07-14 13:59:28 +08:00`
+  - 检测时间：`2026-07-16 19:07:56 +08:00`
   - 工具面只保留 `docx_outline / docx_search / docx_read_blocks / docx_edit`；模型侧任务内 history/rollback 已移除，内部 replay/revision 与用户文件级回退继续保留。
 - `tool / text-file`
   - 通过率：`2 / 2`
-  - 检测时间：`2026-07-15 +08:00`
+  - 检测时间：`2026-07-16 19:07:56 +08:00`
   - 覆盖补充：`file_read` 行范围与总行数；`file_write` 的 create、rewrite、唯一 edit、replaceAll、原子失败、BOM/CRLF 保持、结构化 diff 重放和修改记录。
+- `tool / pdf`
+  - 通过率：`4 / 4`
+  - 检测时间：`2026-07-16 19:07:56 +08:00`
+  - 新增 `pdf_inspect / pdf_search / pdf_read_pages / pdf_render_pages`，只负责 PDF 信息、文本层和页面渲染。
+  - 页面 PNG 写入 `.ncurator/runtime/assets/<uuid>/page-N.png`，不作为文件修改或普通 artifact；图片理解由 `llm_recognize` 独立完成。
 - `tool / kb`
   - 通过率：`2 / 2`
-  - 检测时间：`2026-07-13 13:04:39 +08:00`
+  - 检测时间：`2026-07-16 19:07:56 +08:00`
   - 覆盖补充：文件路径与网页来源 URL 返回契约已通过。
 - `tool / terminal`
   - 通过率：`6 / 6`
-  - 检测时间：`2026-07-16 +08:00`
+  - 检测时间：`2026-07-16 19:07:56 +08:00`
   - 覆盖补充：terminal 回归测试按“安全指令集”语义维护；持久终端覆盖 cwd 保持、多终端、长命令让出、增量读取和停止；terminal 不根据命令文本猜测文件产物，文件变化统一由顶层 Run 扫描捕获。
 - `tool / web-browsing`
-  - 通过率：`6 / 6`
-  - 检测时间：`2026-07-13 13:04:39 +08:00`
+  - 通过率：`7 / 7`
+  - 检测时间：`2026-07-16 19:07:56 +08:00`
   - 覆盖补充：`web-crawl-contract` 覆盖 `web_crawl` 的 `topic` 必填、`markdown` 字段来源于 `fit_markdown`、`requestedUrl/finalUrl`、分组 links 评分、HTTP 失败与结果过大；同文件覆盖 `web_search` 结构化候选网页结果和 `browser_use` 缺少内置浏览器服务时的真实 diagnostic；用例使用全局 15 分钟回归超时，不再单独写死 30 秒。
 - `tool / utility`
-  - 通过率：`5 / 5`
-  - 检测时间：`2026-07-13 13:04:39 +08:00`
+  - 通过率：`7 / 7`
+  - 检测时间：`2026-07-16 19:07:56 +08:00`
   - 覆盖补充：`wait_time` 等待时长与返回 `waitedMs`；`llm_recognize` 已覆盖普通文本透传、无法确认类文本透传与底层失败分支。
 - `tool / hand`
   - 通过率：`9 / 9`
-  - 检测时间：`2026-07-13 13:04:39 +08:00`
+  - 检测时间：`2026-07-16 19:07:56 +08:00`
 - `human / mock-llm`
-  - 通过率：`22 / 22`
-  - 检测时间：`2026-07-14 13:59:02 +08:00`
+  - 通过率：`23 / 23`
+  - 检测时间：`2026-07-16 19:08:37 +08:00`
 - `human / live`
-  - 登记 case：`10`；当前有效结果 `10 / 10` 通过，其中 `human-terminal-preview-service-live` 已于 `2026-07-16` 使用真实模型定向通过。
-  - 检测时间：`2026-07-16 10:04:01 +08:00`
-  - 实际模型：`deepseek-v4-flash`。
+  - 登记 case：`11`；当前有效结果 `11 / 11` 通过，其中 `human-terminal-preview-service-live` 已于 `2026-07-16` 使用真实模型定向通过。
+  - 最近定向检测：`human-pdf-visual-reading-live` 于 `2026-07-16 19:11:47 +08:00` 通过；其他 live case 沿用各自最近有效结果。
+  - 实际主模型：`deepseek-v4-flash`；PDF 图像识别模型：`qwen3-vl-flash`。
   - memory、compaction、resume 均保留并通过；compaction 使用 `16K` 上下文，自然触发 1 次压缩，不限制压缩次数，压缩后继续完成周报文件交付。
   - KB/docx case 使用 2 次 KB 检索定位源资料，并真实更新 2 份目标文档；不再依赖模型枚举目标文件。
   - positioned DOCX case 正确命中复杂排版保护，没有危险写入，并交付了可直接手动粘贴的完整内容。
-  - unit 全量：`51` files、`203 / 203` tests 通过。
+  - AI unit：`45` files、`197 / 197` tests 通过；检测时间：`2026-07-16 19:05:58 +08:00`。
   - 样例评分：
     - `human-conversation-memory-multi-run-live`：`10 / 10`；风险主线、待确认项、负责人和后续追问连续性完整。
     - `human-risk-report-draft-live`：`10 / 10`；新建周报、原文件安全、未闭环风险、负责人动作和谨慎结论均满足。
@@ -64,6 +69,7 @@
     - `human-web-crawl-url-inference-reading-live`：`9.0 / 10`；自行推断 pandas 官网地址并完成两份 CSV 文档对比。
     - `human-text-file-read-write-live`：通过；真实调用 `replaceAll`、唯一 `edit` 和回读，最终文件与工具结果边界均满足。
     - `human-terminal-preview-service-live`：`10 / 10`；真实进入子目录启动预览服务，完成页面访问、增量日志读取、正常停止、终端关闭和端口释放。
+    - `human-pdf-visual-reading-live`：`10 / 10`；PDF 文本读取和页面渲染成功，第 1、9 页均完成真实图像识别，识别失败为 0，未调用 terminal、KB 或 docx，未产生普通 artifact，源 PDF 保持不变。
 
 ## 3. Suite 设计
 
@@ -72,6 +78,7 @@
 - `tool` 只验证真实生产工具调用，不允许 fake。
 - `tool / docx` 包含 `docx-edit-serial-actions-stability`，用于守住同一次 `docx_edit(actions)` 内插入、替换、删除后的 block 定位稳定性。
 - `tool / text-file` 覆盖普通文本读取、四种写入 action、修改记录、结构化 diff 与回退前置数据。
+- `tool / pdf` 使用真实 `深度学习.pdf`，覆盖元数据、页级正文、literal/regex 搜索、页面 PNG、工作区边界、损坏文件和结果大小限制。
 - `tool / web-browsing` 包含 `web-crawl-contract`，用于守住 `web_crawl`、`web_search` 和 `browser_use` 工具契约。
 - 目标：验证 tool 与 `hand` 工具执行守卫在真实生产代码下的输入输出是否正常、合理。
 - 约束：必须真实调用生产工具、真实 store、真实 docx apply service、真实 artifact 流。
@@ -97,6 +104,7 @@
 
 - AI backend 回归 case 必须使用生产 `createAiRunContext` 作为唯一 runtime 入口。
 - 回归 harness 必须使用真实 `StorageService / DocumentsStore / ChatStore / DocxApplyStore / LlmConfigStore / DocxApplyService / EmbeddingService`。
+- 每个 AI run 的 DOCX、PDF 及未来其他文档 worker 资源统一通过 `AiRunResourceManager` 在 run 结束时释放；资源释放失败不能覆盖任务结果。
 - `mock-llm` 统一通过 scripted LLM driver 固定 LLM 输出；除 LLM 输出外，其余全部真实。
 - `live` 统一通过真实 `LlmConfigStore` 注入 live 配置，并走生产统一 LLM executor。
 - 凡是会进入 `human` 的回归 run，必须在进入 `human` 前完成 embedding 基础服务 preflight；不允许把 embedding 初始化推迟到某个工具调用时才暴露。
@@ -557,6 +565,35 @@ AI unit / 辅助测试目录：
 - How：对真实 BOM/CRLF 文件执行歧义 edit、成功 replaceAll 和无匹配 replaceAll，并逐次比较 bytes。
 - Oracle：失败时 bytes 不变；成功替换次数准确；新内容中的 oldText 不会被再次递归替换；BOM 与 CRLF 保持。
 - Not：不支持正则 replaceAll。
+
+#### pdf 类别
+
+##### `pdf-inspect-read-search-contract`
+
+- 测试类型：`backend`
+- What：验证真实 PDF 的元数据、页级文本和搜索结果。
+- Why：守住 PDF 文本阅读的基础契约。
+- How：对 `深度学习.pdf` 执行 `pdf_inspect -> pdf_read_pages -> pdf_search`。
+- Oracle：页数为 11，标题为“深度学习”，正文没有 NUL，且“过度拟合”能命中第 8 或第 9 页。
+- Not：不识别页面图片。
+
+##### `pdf-render-pages-runtime-assets-contract`
+
+- 测试类型：`backend`
+- What：验证指定页面会被渲染为可供其他工具使用的 PNG。
+- Why：PDF 与图像识别需要通过普通图片路径解耦协作。
+- How：渲染第 1、9 页并检查文件路径、PNG 文件头、源文件哈希和事件。
+- Oracle：路径为 `.ncurator/runtime/assets/<uuid>/page-N.png`；图片真实存在；源 PDF 不变；不产生普通 artifact。
+- Not：不在 PDF 工具内部做图像识别。
+
+##### `pdf-failure-boundary-contract`
+
+- 测试类型：`backend`
+- What：验证 PDF 输入边界会明确失败。
+- Why：防止路径逃逸、伪 PDF、非法 regex 和越界页码进入不确定状态。
+- How：分别传入越界页码、非法 regex、错误文件头以及指向工作区外的符号链接。
+- Oracle：每种输入都返回明确失败，不读取工作区外文件。
+- Not：不做密码破解或损坏文件修复。
 
 #### kb 类别
 
@@ -1050,6 +1087,15 @@ AI unit / 辅助测试目录：
 - How：注入真实 live LLM 配置；workspace 使用共享 fixture，只把 `学习笔记/图形学.docx` 与 `学习笔记/深度学习.docx` 建入 KB；用户明确指定根目录的 `人工智能探究课堂PRD.docx` 与 `交互式探究学习案例：产业转移.docx` 为目标文件。case 只开放完成该任务需要的 terminal、KB search、DOCX 读取和写入工具，避免把目标文件误当成待索引来源反复查询。
 - Oracle：真实 `kb_search` 返回有效命中；两份目标文档分别发生成功写入并产生两组携带 `applyId` 的 file artifact；两份来源课件保持不变。按 10 分制评估 KB 证据、两份目标文件、grounded 内容、来源安全和最终交付，严格超过 8 分通过；只完成一个目标文件最多 8 分，不能通过。
 - Not：不强制固定执行路径，也不要求 KB 缩圈后必须再打开所有候选资料。
+
+##### `human-pdf-visual-reading-live`
+
+- 测试类型：`backend / live`
+- What：验证真实模型会自主组合 PDF 文本读取、页面渲染和通用图像识别。
+- Why：PDF 工具不内置图片理解，必须验证工具解耦后 AI 仍能完成图文结合阅读。
+- How：只选择 `深度学习.pdf`，询问第 1 页训练闭环和第 9 页 Proper fit / Overfit 图形差异，仅开放 PDF 四个工具与 `llm_recognize`。
+- Oracle：任务完成；调用 `pdf_read_pages`、包含第 9 页的 `pdf_render_pages` 和 `llm_recognize`；第 9 页图像识别必须成功且全部图像识别失败数为 0；识别路径来自 render 输出并位于 `.ncurator/runtime/assets/<uuid>/page-9.png`；不调用 terminal、KB、docx；最终答复同时说明训练闭环和两组曲线差异，不能用“无法识别图片”等内容绕过；源 PDF 不变。
+- Not：不固定工具调用顺序和最终措辞，不要求把 PDF 页面图片登记为 artifact。
 
 ##### `human-web-crawl-multi-hop-cross-domain-reading-live`
 

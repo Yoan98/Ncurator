@@ -135,6 +135,87 @@ const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
     blocks: DOCX_BLOCK_WHITELIST
   },
   docx_edit: DOCX_WRITE_RESULT_WHITELIST,
+  pdf_inspect: {
+    sourcePath: true,
+    pageCount: true,
+    metadata: {
+      title: true,
+      author: true,
+      subject: true,
+      keywords: true,
+      creator: true,
+      producer: true,
+      creationDate: true,
+      modificationDate: true
+    },
+    outline: {
+      title: true,
+      pageNumber: true,
+      depth: true
+    },
+    encrypted: true,
+    warnings: true
+  },
+  pdf_search: {
+    sourcePath: true,
+    pageCount: true,
+    query: true,
+    mode: true,
+    pageRange: {
+      fromPage: true,
+      toPage: true
+    },
+    totalMatchCount: true,
+    returnedMatchCount: true,
+    matches: {
+      pageNumber: true,
+      matchedText: true,
+      snippet: true,
+      start: true,
+      end: true
+    },
+    pagesWithNoTextCount: true,
+    pagesWithSuspiciousTextCount: true,
+    warnings: true,
+    error: true,
+    reason: true,
+    decisionHint: true
+  },
+  pdf_read_pages: {
+    sourcePath: true,
+    pageCount: true,
+    pages: {
+      pageNumber: true,
+      text: true,
+      charCount: true,
+      textStatus: true,
+      imageCount: true,
+      width: true,
+      height: true,
+      rotation: true,
+      warnings: true
+    },
+    warnings: true,
+    error: true,
+    reason: true,
+    decisionHint: true
+  },
+  pdf_render_pages: {
+    sourcePath: true,
+    pageCount: true,
+    assetBucketId: true,
+    images: {
+      pageNumber: true,
+      path: true,
+      mimeType: true,
+      width: true,
+      height: true
+    },
+    warnings: true,
+    error: true,
+    reason: true,
+    decisionHint: true
+  },
   web_search: {
     query: true,
     results: {

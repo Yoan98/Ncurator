@@ -129,4 +129,51 @@ describe('ai unit human tool result renderers', () => {
     expect(rendered).not.toContain('currentRevisionRef')
     expect(rendered).not.toContain('createdBlocks')
   })
+
+  it('renders PDF page text, search snippets and rendered image paths', () => {
+    const readRendered = renderToolResultDataText({
+      toolName: 'pdf_read_pages',
+      data: {
+        sourcePath: '/workspace/深度学习.pdf',
+        pageCount: 11,
+        pages: [
+          {
+            pageNumber: 1,
+            textStatus: 'available',
+            charCount: 42,
+            imageCount: 1,
+            text: 'inputs parameters architecture predictions labels loss update'
+          }
+        ]
+      }
+    })
+    const searchRendered = renderToolResultDataText({
+      toolName: 'pdf_search',
+      data: {
+        sourcePath: '/workspace/深度学习.pdf',
+        pageCount: 11,
+        query: '过度拟合',
+        mode: 'literal',
+        totalMatchCount: 1,
+        returnedMatchCount: 1,
+        matches: [{ pageNumber: 9, matchedText: '过度拟合', snippet: '右图属于过度拟合' }]
+      }
+    })
+    const imagePath = '/workspace/.ncurator/runtime/assets/uuid/page-9.png'
+    const renderRendered = renderToolResultDataText({
+      toolName: 'pdf_render_pages',
+      data: {
+        sourcePath: '/workspace/深度学习.pdf',
+        pageCount: 11,
+        assetBucketId: 'uuid',
+        images: [{ pageNumber: 9, path: imagePath, mimeType: 'image/png', width: 100, height: 200 }]
+      }
+    })
+
+    expect(readRendered).toContain('page 1')
+    expect(readRendered).toContain('architecture')
+    expect(searchRendered).toContain('pageNumber=9')
+    expect(searchRendered).toContain('右图属于过度拟合')
+    expect(renderRendered).toContain(imagePath)
+  })
 })

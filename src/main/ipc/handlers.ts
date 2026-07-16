@@ -16,6 +16,7 @@ import { AiFileChangeService } from '../services/ai/fileChanges/AiFileChangeServ
 import { getAiContextUsage } from '../services/ai/contextUsage'
 import { DocxApplyService } from '../services/ai/human/tools/docx/review/DocxApplyService'
 import { releaseDocxRunSession } from '../services/ai/human/tools/docx/worker/docxWorkerClient'
+import { releasePdfRunSession } from '../services/pdf/worker/pdfWorkerClient'
 import type { AiLlmIoRecord } from '../../shared/types'
 import {
   buildWebReferenceItem,
@@ -167,7 +168,8 @@ export function registerHandlers(services: {
   const docxApplyService = new DocxApplyService(storageService.docxApply, aiFileChangeService)
   const attachmentService = new AttachmentService()
   const runResourceManager = new AiRunResourceManager([
-    { id: 'docx', releaseRun: releaseDocxRunSession }
+    { id: 'docx', releaseRun: releaseDocxRunSession },
+    { id: 'pdf', releaseRun: releasePdfRunSession }
   ])
   const chatRunService = new ChatRunService({
     chatStore,
@@ -1537,7 +1539,8 @@ export function registerHandlers(services: {
                 'tiff',
                 'md',
                 'json',
-                'docx'
+                'docx',
+                'pdf'
               ]
             },
             {
@@ -1553,7 +1556,8 @@ export function registerHandlers(services: {
                 'tiff',
                 'md',
                 'json',
-                'docx'
+                'docx',
+                'pdf'
               ]
             }
           ]

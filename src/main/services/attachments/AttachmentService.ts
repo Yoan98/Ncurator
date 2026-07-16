@@ -2,11 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import { v4 as uuidv4 } from 'uuid'
 import type { ChatAttachment } from '../../../shared/types'
-
-const WORKSPACE_NCURATOR_DIR = '.ncurator'
-const WORKSPACE_RUNTIME_DIR = 'runtime'
-const WORKSPACE_ASSETS_DIR = 'assets'
-const WORKSPACE_SCRIPTS_DIR = 'scripts'
+import { ensureWorkspaceAssetBucket } from '../assets/WorkspaceAssetService'
 
 const SUPPORTED_IMAGE_EXTENSIONS = new Set([
   'png',
@@ -18,7 +14,7 @@ const SUPPORTED_IMAGE_EXTENSIONS = new Set([
   'tif',
   'tiff'
 ])
-const SUPPORTED_FILE_EXTENSIONS = new Set(['docx', 'md', 'json'])
+const SUPPORTED_FILE_EXTENSIONS = new Set(['docx', 'pdf', 'md', 'json'])
 
 const MIME_BY_EXTENSION: Record<string, string> = {
   png: 'image/png',
@@ -31,6 +27,7 @@ const MIME_BY_EXTENSION: Record<string, string> = {
   tiff: 'image/tiff',
   md: 'text/markdown',
   json: 'application/json',
+  pdf: 'application/pdf',
   docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 }
 
@@ -83,38 +80,6 @@ const isSupportedAttachment = (input: {
     return true
   }
   return SUPPORTED_FILE_EXTENSIONS.has(ext)
-}
-
-const getWorkspaceRuntimeDir = (workspaceRootPath: string): string =>
-  path.join(
-    path.resolve(String(workspaceRootPath || '').trim()),
-    WORKSPACE_NCURATOR_DIR,
-    WORKSPACE_RUNTIME_DIR
-  )
-
-const getWorkspaceAssetsDir = (workspaceRootPath: string, assetBucketId: string): string =>
-  path.join(
-    getWorkspaceRuntimeDir(workspaceRootPath),
-    WORKSPACE_ASSETS_DIR,
-    String(assetBucketId || '').trim()
-  )
-
-const ensureWorkspaceAttachmentDirs = async (
-  workspaceRootPath: string,
-  assetBucketId: string
-): Promise<string> => {
-  const rootPath = path.resolve(String(workspaceRootPath || '').trim())
-  if (!rootPath) {
-    throw new Error('缺少工作区根目录，无法保存附件')
-  }
-  const assetDir = getWorkspaceAssetsDir(rootPath, assetBucketId)
-  await Promise.all([
-    fs.promises.mkdir(assetDir, { recursive: true }),
-    fs.promises.mkdir(path.join(getWorkspaceRuntimeDir(rootPath), WORKSPACE_SCRIPTS_DIR), {
-      recursive: true
-    })
-  ])
-  return assetDir
 }
 
 const splitFileName = (name: string): { stem: string; extWithDot: string } => {
@@ -192,10 +157,7 @@ export class AttachmentService {
       throw new Error('暂不支持该文件格式')
     }
 
-    const dirPath = await ensureWorkspaceAttachmentDirs(
-      input.workspaceRootPath,
-      input.assetBucketId
-    )
+    const dirPath = await ensureWorkspaceAssetBucket(input.workspaceRootPath, input.assetBucketId)
     const targetPath = await resolveUniqueTargetPath(dirPath, input.name)
     await fs.promises.writeFile(targetPath, Buffer.from(input.bytes))
     return this.createAttachmentFromPath({
@@ -229,10 +191,7 @@ export class AttachmentService {
       throw new Error('暂不支持该文件格式')
     }
 
-    const dirPath = await ensureWorkspaceAttachmentDirs(
-      input.workspaceRootPath,
-      input.assetBucketId
-    )
+    const dirPath = await ensureWorkspaceAssetBucket(input.workspaceRootPath, input.assetBucketId)
     const targetPath = await resolveUniqueTargetPath(dirPath, displayName)
     await fs.promises.copyFile(sourcePath, targetPath)
     return this.createAttachmentFromPath({

@@ -1,6 +1,7 @@
 import { DOCX_TOOL_SPECS } from './docx/toolSpecs'
 import { IMAGE_RECOGNITION_TOOL_SPECS } from './imageRecognition/toolSpecs'
 import { KB_TOOL_SPECS } from './kb/toolSpecs'
+import { PDF_TOOL_SPECS } from './pdf/toolSpecs'
 import { UTILITY_TOOL_SPECS } from './utility/toolSpecs'
 import { WEB_TOOL_SPECS } from './web/toolSpecs'
 import {
@@ -17,6 +18,7 @@ export const ALL_TOOL_SPECS = [
   ...TEXT_FILE_TOOL_SPECS,
   ...KB_TOOL_SPECS,
   ...DOCX_TOOL_SPECS,
+  ...PDF_TOOL_SPECS,
   ...WEB_TOOL_SPECS,
   ...UTILITY_TOOL_SPECS,
   ...IMAGE_RECOGNITION_TOOL_SPECS

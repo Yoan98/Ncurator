@@ -284,6 +284,79 @@ describe('ai unit human memory renderers', () => {
     expect(rendered).toContain('"totalLines":1')
   })
 
+  it('keeps PDF page text and rendered image paths in brain history', () => {
+    const initialState = createInitialHumanState({
+      taskId: 'task-history-pdf',
+      userInput: '阅读 PDF 图文'
+    })
+    const imagePath = '/workspace/.ncurator/runtime/assets/uuid/page-9.png'
+    const calls = [
+      {
+        toolName: 'pdf_read_pages',
+        args: {
+          sourcePath: '/workspace/深度学习.pdf',
+          selection: { type: 'page_numbers', pageNumbers: [9] }
+        }
+      },
+      {
+        toolName: 'pdf_render_pages',
+        args: { sourcePath: '/workspace/深度学习.pdf', pageNumbers: [9] }
+      }
+    ]
+    const taskRun = appendRoundRecord({
+      state: initialState,
+      thought: {
+        thought: { next: '读取 PDF 页面并渲染图片' },
+        nextAction: { action: 'hand', calls }
+      },
+      execution: buildHandExecution({
+        calls,
+        toolResults: [
+          {
+            toolName: 'pdf_read_pages',
+            ok: true,
+            data: {
+              sourcePath: '/workspace/深度学习.pdf',
+              pageCount: 11,
+              pages: [
+                {
+                  pageNumber: 9,
+                  text: '过度拟合会让训练与验证表现差距变大',
+                  charCount: 19,
+                  textStatus: 'available',
+                  imageCount: 1
+                }
+              ]
+            }
+          },
+          {
+            toolName: 'pdf_render_pages',
+            ok: true,
+            data: {
+              sourcePath: '/workspace/深度学习.pdf',
+              pageCount: 11,
+              assetBucketId: 'uuid',
+              images: [
+                {
+                  pageNumber: 9,
+                  path: imagePath,
+                  mimeType: 'image/png',
+                  width: 1224,
+                  height: 1584
+                }
+              ]
+            }
+          }
+        ]
+      })
+    })
+
+    const rendered = renderBrainRoundSection(taskRun.rounds)
+    expect(rendered).toContain('过度拟合会让训练与验证表现差距变大')
+    expect(rendered).toContain(imagePath)
+    expect(rendered).toContain('"pageNumber":9')
+  })
+
   it('renders kb_list_documents result ids in round history', () => {
     const initialState = createInitialHumanState({
       taskId: 'task-history-kb-list-documents',

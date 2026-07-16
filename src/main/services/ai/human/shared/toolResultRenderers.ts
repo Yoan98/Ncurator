@@ -248,6 +248,103 @@ const renderDocxOutlineResult = (obj: JsonObject): string =>
     .filter(Boolean)
     .join('\n')
 
+const renderPdfPageList = (value: JsonValue | undefined): string => {
+  if (!Array.isArray(value) || value.length === 0) return 'none'
+  return value
+    .map((item, index) => {
+      if (!isJsonObject(item)) return renderGenericArrayItem(item, index)
+      return [
+        `page ${readNumberTextField(item, 'pageNumber') || String(index + 1)}：${renderKeyValuePairs(
+          [
+            ['textStatus', readStringField(item, 'textStatus')],
+            ['charCount', readNumberTextField(item, 'charCount')],
+            ['imageCount', readNumberTextField(item, 'imageCount')]
+          ]
+        )}`,
+        readStringField(item, 'text') || '(no text)'
+      ].join('\n')
+    })
+    .join('\n\n')
+}
+
+const renderPdfSearchMatches = (value: JsonValue | undefined): string => {
+  if (!Array.isArray(value) || value.length === 0) return 'none'
+  return value
+    .map((item, index) => {
+      if (!isJsonObject(item)) return renderGenericArrayItem(item, index)
+      return `${index + 1}. ${renderKeyValuePairs([
+        ['pageNumber', readNumberTextField(item, 'pageNumber')],
+        ['matchedText', readStringField(item, 'matchedText')],
+        ['snippet', readStringField(item, 'snippet')]
+      ])}`
+    })
+    .join('\n')
+}
+
+const renderPdfImages = (value: JsonValue | undefined): string => {
+  if (!Array.isArray(value) || value.length === 0) return 'none'
+  return value
+    .map((item, index) => {
+      if (!isJsonObject(item)) return renderGenericArrayItem(item, index)
+      return `${index + 1}. ${renderKeyValuePairs([
+        ['pageNumber', readNumberTextField(item, 'pageNumber')],
+        ['path', readStringField(item, 'path')],
+        ['mimeType', readStringField(item, 'mimeType')],
+        ['width', readNumberTextField(item, 'width')],
+        ['height', readNumberTextField(item, 'height')]
+      ])}`
+    })
+    .join('\n')
+}
+
+const renderPdfInspectResult = (obj: JsonObject): string =>
+  [
+    renderKeyValuePairs([
+      ['sourcePath', readStringField(obj, 'sourcePath')],
+      ['pageCount', readNumberTextField(obj, 'pageCount')],
+      ['encrypted', renderPrimitive(obj.encrypted)]
+    ]),
+    'metadata:',
+    isJsonObject(obj.metadata) ? renderGenericObject(obj.metadata) : 'none',
+    'outline:',
+    Array.isArray(obj.outline) ? renderGenericArray(obj.outline) : 'none'
+  ].join('\n')
+
+const renderPdfSearchResult = (obj: JsonObject): string =>
+  [
+    renderKeyValuePairs([
+      ['sourcePath', readStringField(obj, 'sourcePath')],
+      ['pageCount', readNumberTextField(obj, 'pageCount')],
+      ['query', readStringField(obj, 'query')],
+      ['mode', readStringField(obj, 'mode')],
+      ['returnedMatchCount', readNumberTextField(obj, 'returnedMatchCount')],
+      ['totalMatchCount', readNumberTextField(obj, 'totalMatchCount')]
+    ]),
+    'matches:',
+    renderPdfSearchMatches(obj.matches)
+  ].join('\n')
+
+const renderPdfReadPagesResult = (obj: JsonObject): string =>
+  [
+    renderKeyValuePairs([
+      ['sourcePath', readStringField(obj, 'sourcePath')],
+      ['pageCount', readNumberTextField(obj, 'pageCount')]
+    ]),
+    'pages:',
+    renderPdfPageList(obj.pages)
+  ].join('\n')
+
+const renderPdfRenderPagesResult = (obj: JsonObject): string =>
+  [
+    renderKeyValuePairs([
+      ['sourcePath', readStringField(obj, 'sourcePath')],
+      ['pageCount', readNumberTextField(obj, 'pageCount')],
+      ['assetBucketId', readStringField(obj, 'assetBucketId')]
+    ]),
+    'images:',
+    renderPdfImages(obj.images)
+  ].join('\n')
+
 const renderWebCrawlLinkList = (value: JsonValue | undefined): string => {
   if (!Array.isArray(value) || value.length === 0) return 'none'
 
@@ -386,6 +483,14 @@ export const renderToolResultDataText = (
       return renderDocxSearchResult(value)
     case 'docx_outline':
       return renderDocxOutlineResult(value)
+    case 'pdf_inspect':
+      return renderPdfInspectResult(value)
+    case 'pdf_search':
+      return renderPdfSearchResult(value)
+    case 'pdf_read_pages':
+      return renderPdfReadPagesResult(value)
+    case 'pdf_render_pages':
+      return renderPdfRenderPagesResult(value)
     case 'web_search':
       return renderWebSearchResult(value)
     case 'web_crawl':

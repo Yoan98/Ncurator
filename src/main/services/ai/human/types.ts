@@ -3,6 +3,7 @@ import type { JsonObject } from '../../../../shared/types'
 import type { z } from 'zod/v4'
 import type { AiToolFamilyId } from './tools/types'
 import type { DocxToolRuntime } from './tools/docx/runtime'
+import type { PdfToolRuntime } from './tools/pdf/runtime'
 import {
   HUMAN_ROUND_EXECUTION_KINDS,
   HUMAN_SKILL_SOURCES,
@@ -105,6 +106,7 @@ export type HumanRuntimeCache = {
   familyToolsets: Partial<Record<AiToolFamilyId, StructuredToolInterface[]>>
   skillToolsets: Partial<Record<RuntimeSkillId, StructuredToolInterface[]>>
   docxRuntime?: DocxToolRuntime
+  pdfRuntime?: PdfToolRuntime
   approvedTerminalCommandCounts?: Map<string, number>
   approvedBrowserUseTaskIds?: Set<string>
   toolCallCount: number
