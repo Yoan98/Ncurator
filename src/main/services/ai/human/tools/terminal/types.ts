@@ -40,18 +40,6 @@ export type TerminalCapabilityToolsRuntimeState = {
   stepIndex: number
 }
 
-export type ArtifactCandidate = {
-  resolvedPath: string
-  summary: string
-  requestedOperation?: AiFileArtifactOperation
-  existedBefore: boolean
-}
-
-export type PreparedArtifactCandidate = ArtifactCandidate & {
-  beforeSnapshotPath?: string
-  beforeChecksum?: string
-}
-
 export type TerminalCommandAnalysis = {
   resourceKey: string
   artifactCandidates: TerminalArtifactCandidate[]

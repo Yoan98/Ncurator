@@ -622,8 +622,9 @@ export interface ChatSessionListItem extends ChatSession {
 }
 
 export type AiFileChangeStatus = 'applied' | 'reverted' | 'failed'
-export type AiFileChangeCapability = 'docx' | 'text_file' | 'terminal_exec' | 'ppt'
-export type AiFileChangeOperation = 'created' | 'updated'
+export type AiFileChangeCapability = 'docx' | 'text_file' | 'terminal_exec' | 'ppt' | 'excel'
+export type AiFileChangeOperation = 'created' | 'updated' | 'deleted' | 'renamed'
+export type AiFileChangeSource = 'workspace_scan' | 'text_tool' | 'docx_tool'
 
 export type TextFileDiffLine =
   | { type: 'context'; oldLine: number; newLine: number; text: string }
@@ -637,11 +638,9 @@ export interface TextFileDiffHunk {
 }
 
 export interface TextFileDiffArtifact {
-  version: 1
+  version: 2
   oldLineCount: number
   newLineCount: number
-  /** Immutable post-change lines used to expand folded unchanged regions. */
-  afterLines?: string[]
   hunks: TextFileDiffHunk[]
 }
 
@@ -654,27 +653,24 @@ export interface AiFileChangeRecord {
   path: string
   fileName: string
   operation: AiFileChangeOperation
+  source?: AiFileChangeSource
+  beforePath?: string
+  afterPath?: string
   changeCount: number
   insertCount: number
   deleteCount: number
   beforeSnapshotPath?: string
+  afterSnapshotPath?: string
+  beforeObjectHash?: string
+  afterObjectHash?: string
+  previewArtifactHash?: string
   beforeChecksum?: string
   afterChecksum?: string
   previewPath?: string
+  runSummary?: string
   createdAt: number
   updatedAt: number
   revertedAt?: number
-  error?: string
-  isSessionAggregate?: boolean
-}
-
-export interface BuildSessionFileDiffRequest {
-  sessionId: string
-  filePath: string
-}
-
-export interface BuildSessionFileDiffResponse {
-  record?: AiFileChangeRecord
   error?: string
 }
 

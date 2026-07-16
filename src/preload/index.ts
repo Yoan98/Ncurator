@@ -273,7 +273,6 @@ const api: DesktopApi = {
   docxApplyGet: (payload) => ipcRenderer.invoke('docx-apply-get', payload),
   aiFileChangeList: (payload) => ipcRenderer.invoke('ai-file-change-list', payload),
   aiFileChangeGet: (payload) => ipcRenderer.invoke('ai-file-change-get', payload),
-  aiFileChangeSessionDiff: (payload) => ipcRenderer.invoke('ai-file-change-session-diff', payload),
   aiFileChangeRevert: (payload) => {
     emitE2EIpcCall('aiFileChangeRevert')
     return ipcRenderer.invoke('ai-file-change-revert', payload)

@@ -176,7 +176,7 @@ export type AssistantTurnApplyTarget = {
   changeId: string
   title: string
   sourcePath?: string
-  operation?: 'created' | 'updated'
+  operation?: 'created' | 'updated' | 'deleted' | 'renamed'
   changeCount: number
   insertCount: number
   deleteCount: number
@@ -190,7 +190,7 @@ export type AssistantTurnBlocker = {
 }
 
 export type AssistantArtifactItem = WorkbenchFileRef & {
-  operation?: 'created' | 'updated'
+  operation?: 'created' | 'updated' | 'deleted' | 'renamed'
 }
 
 export type AssistantTurnViewModel = {

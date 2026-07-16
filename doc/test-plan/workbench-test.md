@@ -184,10 +184,10 @@ tests/case/workbench/
 #### `right-panel-layout-and-tabs`
 
 - 测试类型：`e2e`
-- What：验证空会话输入区布局、右侧标签栏密度与折叠入口、Tab 溢出滚动、加号菜单文案和浏览器缩放菜单。
+- What：验证空会话输入区布局、右侧默认无占位折叠、标签栏密度与折叠入口、Tab 溢出滚动、加号菜单文案、浏览器缩放菜单和地址栏“前往”按钮。
 - Why：右侧资源工作台和聊天输入区共享窗口高度与标题栏命中区域，普通功能测试无法发现输入框被推出窗口、折叠按钮放错区域、Tab 无法滚动或原生浏览器遮挡浮层等视觉交互回归。
-- How：直接进入无历史会话的真实 Workbench，先测量空会话输入区位置，再连续创建八个真实浏览器 Tab，使用鼠标滚轮触发横向滚动并检查折叠 / 展开；打开浏览器更多菜单检查三段式缩放控件。
-- Oracle：空会话输入区居中，对齐 `WB-COMPOSER-009-AC11`；标签栏和浏览器工具栏均为 44px，标签栏无下边线；折叠按钮位于右侧栏且不进入拖拽命中区，对齐 `WB-PANEL-001-AC6`；八个 Tab 溢出后滚轮可横向滚动，对齐 `WB-PANEL-001-AC7`；加号菜单显示“文件 / 浏览器”，缩放控件同排，浮层触发原生视图避让，对齐 `WB-PANEL-001-AC4`、`WB-PANEL-004-AC7`、`WB-PANEL-004-AC8`。
+- How：直接进入无历史会话的真实 Workbench，先确认右侧 shell 不存在并测量空会话输入区位置；展开后连续创建八个真实浏览器 Tab，使用鼠标滚轮触发横向滚动并检查折叠 / 展开；打开浏览器更多菜单检查三段式缩放控件和地址栏“前往”按钮。
+- Oracle：空会话输入区居中且右侧 shell 不占宽度，对齐 `WB-COMPOSER-009-AC11`、`WB-PANEL-001-AC8`；标签栏和浏览器工具栏均为 44px，标签栏无下边线；折叠按钮位于右侧栏且不进入拖拽命中区；八个 Tab 溢出后滚轮可横向滚动；加号菜单显示“文件 / 浏览器”，缩放控件同排，地址栏显示“前往”按钮，浮层触发原生视图避让。
 - Not：不验证公网网页、模型回答质量或系统窗口按钮本身；Stagehand targetId、共享持久分区和历史恢复继续由 `browser-use-task-panel` 覆盖。
 
 ### 5.2 `run`
@@ -287,10 +287,10 @@ tests/case/workbench/
 #### `file-preview-actions`
 
 - 测试类型：`e2e`
-- What：验证右侧普通文件预览态、工作区懒加载文件列表、多个文件 Tab、定位文件、系统打开入口、PDF 命中定位，以及 Markdown / 纯文本预览。
+- What：验证右侧普通文件预览态、“全部 / 本会话改动”文件模式、稳定选中态、多个文件 Tab、定位文件、系统打开入口、PDF 命中定位，以及 Markdown / 纯文本预览。
 - Why：右侧面板是用户消费搜索 / 引用结果的主要区域，预览布局错误会直接阻断阅读。
 - How：从真实搜索结果连续打开真实 pdf、docx、md、txt 文件；检查预览内容和工具条；确认产生四个文件 Tab，再切回 Markdown Tab。
-- Oracle：加号创建“文件”标签且不调用系统文件选择器，对齐 `WB-PANEL-001-AC4`；目录展开按需读取子级；普通文件预览和 44px 工具条对齐 `WB-PANEL-003-AC1`；路径使用 `>` 面包屑且无“预览 / 编辑”标签；PDF 命中页对齐 `WB-PANEL-003-AC3`；四个文件分别保留且旧 Tab 可恢复。
+- Oracle：加号创建“文件”标签且不调用系统文件选择器；默认进入“全部”，目录展开按需读取子级，修改文件有标记但点击后仍是正常预览；当前文件有稳定浅灰选中态；普通文件预览和 44px 工具条对齐 `WB-PANEL-003-AC1`；路径使用 `>` 面包屑且无“预览 / 编辑”标签；四个文件分别保留且旧 Tab 可恢复。
 - Not：不验证系统文件管理器或系统默认应用本身是否成功打开；不伪造 md/txt 搜索结果或右侧预览状态。
 
 #### `text-file-apply-preview-and-revert`
@@ -299,8 +299,17 @@ tests/case/workbench/
 - What：验证同一个 Markdown 文件在普通预览时正常渲染，在 AI 修改记录中使用独立文本 diff，并能恢复原始 bytes。
 - Why：普通预览和修改预览是两种不同语义；如果共用文件渲染器，用户看不到本次具体增加和删除内容。
 - How：先从真实搜索结果打开 Markdown 普通预览；再通过真实 AI 调用 `replaceAll` 和 `edit` 修改该文件；点击 assistant 修改入口检查 `TextFileDiffViewer`；最后执行回退。
-- Oracle：普通预览与修改 diff 共用一个文件 Tab，对齐 `WB-PANEL-001-AC2`；文件树只标记当前会话仍生效的 AI 修改，文本文件展示 `+N -N` 并打开累计 Diff，对齐 `WB-PANEL-003-AC7`；diff 每行只有一个行号列并显示可点击的“N 行未修改”，点击后出现真实上下文行，对齐 `WB-PANEL-003-AC5`、`WB-PANEL-003-AC6`；回退后 bytes 与原始输入一致且文件树标记消失。
+- Oracle：普通预览与修改 diff 共用一个文件 Tab；从 assistant 修改入口打开时文件列表切到“本会话改动”并选中对应文件；文本 Diff 只展示该 Run 修改批次，不生成会话累计 Diff；首次打开后缓存 version 2 hunks 且不含完整 `afterLines`；“N 行未修改”从不可变 after 对象展开；回退后 bytes 与原始输入一致且有效改动标记消失。
 - Not：不验证 unified diff 字符串；UI 只消费结构化 diff artifact。
+
+#### `workspace-change-tracker`
+
+- 测试类型：`backend`
+- What：验证统一 Run 前后扫描、内容寻址对象库、延迟文本 Diff 和删除 / 重命名回退。
+- Why：终端、脚本和内部文件工具必须共享同一变化真相，不能依赖命令字符串猜测产物。
+- How：Run 基线后分别执行文本修改、新增、删除和重命名；完成扫描后检查 `FileRevision`、对象哈希和来源；首次读取文本记录后检查 Diff 缓存；分别回退删除和重命名。
+- Oracle：四种操作均被捕获；相同内容对象去重；扫描前记录没有文本 preview，首次读取后生成 version 2 hunks 且无 `afterLines`；删除回退恢复文件，重命名回退恢复原路径；`.ncurator`、`.git`、`node_modules` 等内部目录不进入变化列表。
+- Not：不验证 PPT / Excel Diff；本期只验证预留 adapter 不影响统一数据模型。
 
 #### `docx-apply-panel-preview-and-revert`
 
@@ -308,7 +317,7 @@ tests/case/workbench/
 - What：验证 AI 修改真实 docx 后，assistant 修改文件入口、右侧修改文件工作区、当前记录预览和干净回退闭环。
 - Why：直接写回和回退是 Workbench 文件编辑能力的安全边界，只看 artifact 事件无法证明用户能检查和撤销修改。
 - How：通过 UI 选择真实 docx 资料并发送真实编辑请求；等待 AI 写回；点击 assistant turn 中的修改文件入口；检查右侧文件面包屑、无模式标签状态和预览；执行回退并重新读取文件内容。
-- Oracle：修改后源文件立即成为 AI 最终净稿且 assistant turn 展示本轮修改文件入口，对齐 `WB-APPLY-002-AC1`；点击入口后右侧进入修改文件工作区并默认加载本轮当前文件记录，对齐 `WB-APPLY-001-AC1`、`WB-APPLY-001-AC3`；未发生后续修改时回退恢复 checkpoint 且记录状态变为 `reverted`，对齐 `WB-APPLY-003-AC1`、`WB-APPLY-003-AC3`；文件预览与修改文件工作区采用预览优先布局，对齐 `WB-PANEL-003-AC1`；记录模型、耗时、完成度评分和失败归因。
+- Oracle：修改后源文件立即成为 AI 最终净稿且 assistant turn 展示本轮修改文件入口；点击入口后右侧进入“本会话改动”、选中对应文件并展示 Review Docx；Review Docx 继续保留段落、表格、图片、字体和页面结构；未发生后续修改时回退恢复 before 对象且记录状态变为 `reverted`；记录模型、耗时、完成度评分和失败归因。
 - Not：不验证 docx 编辑算法的所有格式保真细节，该能力归 AI tool docx 测试。
 
 #### `docx-apply-force-revert-warning`

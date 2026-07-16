@@ -14,10 +14,6 @@ import { ChatRunService } from '../services/ai/ChatRunService'
 import { AiFileChangeService } from '../services/ai/fileChanges/AiFileChangeService'
 import { getAiContextUsage } from '../services/ai/contextUsage'
 import { DocxApplyService } from '../services/ai/human/tools/docx/review/DocxApplyService'
-import {
-  countTextFileDiffLines,
-  createTextFileDiffArtifact
-} from '../services/ai/human/tools/textFile/textDiff'
 import type { AiLlmIoRecord } from '../../shared/types'
 import {
   buildWebReferenceItem,
@@ -77,8 +73,6 @@ import type {
   ListAiFileChangeRecordsResponse,
   RevertAiFileChangeRequest,
   RevertAiFileChangeResponse,
-  BuildSessionFileDiffRequest,
-  BuildSessionFileDiffResponse,
   CreateWorkspaceSourceRequest,
   DeleteWorkspaceSourceResponse,
   ListReferenceItemsRequest,
@@ -2583,63 +2577,6 @@ export function registerHandlers(services: {
       } catch (e: unknown) {
         console.error('[AI-FILE-CHANGE-GET] Error:', e)
         return { error: getErrorMessage(e) }
-      }
-    }
-  )
-
-  ipcMain.handle(
-    'ai-file-change-session-diff',
-    async (_event, payload: BuildSessionFileDiffRequest): Promise<BuildSessionFileDiffResponse> => {
-      try {
-        const sessionId = String(payload?.sessionId || '').trim()
-        const filePath = path.resolve(String(payload?.filePath || '').trim())
-        const response = await aiFileChangeService.listRecords({ sessionId, status: 'applied' })
-        const comparable = process.platform === 'win32' ? filePath.toLowerCase() : filePath
-        const records = response.items
-          .filter((record) => {
-            const recordPath = path.resolve(record.path)
-            return (
-              (process.platform === 'win32' ? recordPath.toLowerCase() : recordPath) === comparable
-            )
-          })
-          .sort((left, right) => left.createdAt - right.createdAt)
-        const first = records[0]
-        const latest = records[records.length - 1]
-        if (!first || !latest) return { error: '当前会话没有这个文件的修改记录' }
-        if (latest.capability !== 'text_file') return { record: latest }
-        const before =
-          first.operation === 'created'
-            ? ''
-            : first.beforeSnapshotPath
-              ? new TextDecoder('utf-8', { fatal: true }).decode(
-                  fs.readFileSync(first.beforeSnapshotPath)
-                )
-              : ''
-        const after = new TextDecoder('utf-8', { fatal: true }).decode(fs.readFileSync(filePath))
-        const artifact = createTextFileDiffArtifact({ before, after })
-        const counts = countTextFileDiffLines(artifact)
-        const previewRoot = path.dirname(latest.previewPath || filePath)
-        const previewPath = path.join(
-          previewRoot,
-          `session-${sessionId}-${path.basename(filePath)}.text-diff.json`
-        )
-        fs.mkdirSync(previewRoot, { recursive: true })
-        fs.writeFileSync(previewPath, `${JSON.stringify(artifact)}\n`, 'utf8')
-        return {
-          record: {
-            ...latest,
-            id: `session:${sessionId}:${filePath}`,
-            previewPath,
-            beforeSnapshotPath: first.beforeSnapshotPath,
-            operation: first.operation,
-            insertCount: counts.insertCount,
-            deleteCount: counts.deleteCount,
-            changeCount: counts.insertCount + counts.deleteCount,
-            isSessionAggregate: true
-          }
-        }
-      } catch (error) {
-        return { error: error instanceof Error ? error.message : String(error) }
       }
     }
   )

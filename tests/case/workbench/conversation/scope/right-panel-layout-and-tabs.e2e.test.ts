@@ -52,6 +52,10 @@ describe('workbench conversation e2e', () => {
             page,
             workbenchSelectors.contentPanelToggle
           )
+          const initialShellCount = await getWorkbenchLocator(
+            page,
+            workbenchSelectors.contentPanelShell
+          ).count()
           if ((await initialPanelToggle.getAttribute('aria-label')) === '展开右侧栏') {
             await initialPanelToggle.click()
             await page.waitForFunction((testId) => {
@@ -120,6 +124,9 @@ describe('workbench conversation e2e', () => {
           }, workbenchSelectors)
 
           const browserPanel = getWorkbenchLocator(page, workbenchSelectors.browserPanel)
+          const browserGoButtonVisible = await browserPanel
+            .getByRole('button', { name: '前往' })
+            .isVisible()
           await browserPanel.getByRole('button', { name: '更多浏览器操作' }).click()
           const zoomControls = getWorkbenchLocator(page, workbenchSelectors.browserZoomControls)
           await zoomControls.waitFor({ state: 'visible' })
@@ -138,7 +145,7 @@ describe('workbench conversation e2e', () => {
           await getWorkbenchLocator(page, workbenchSelectors.contentPanelToggle).click()
           await page.waitForFunction((testId) => {
             const shell = document.querySelector(`[data-testid="${testId}"]`)
-            return shell instanceof HTMLElement && shell.getBoundingClientRect().width < 1
+            return shell === null
           }, workbenchSelectors.contentPanelShell)
           const restoreButtonRightOffset = await getWorkbenchLocator(
             page,
@@ -148,17 +155,20 @@ describe('workbench conversation e2e', () => {
 
           return {
             emptyLayout,
+            initialShellCount,
             fileMenuLabelVisible,
             legacyFileMenuLabelCount,
             tabCount: await tabs.count(),
             chromeLayout,
             zoomLayout,
+            browserGoButtonVisible,
             restoreButtonRightOffset
           }
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
             result.emptyLayout !== null &&
+              result.initialShellCount === 0 &&
               result.emptyLayout.shellDisplay === 'flex' &&
               Math.abs(result.emptyLayout.inputCenterY - result.emptyLayout.mainCenterY) <
                 result.emptyLayout.mainHeight * 0.25 &&
@@ -187,6 +197,7 @@ describe('workbench conversation e2e', () => {
           )
           await runtime.assertThat(
             result.zoomLayout.length === 3 &&
+              result.browserGoButtonVisible &&
               result.zoomLayout.every(
                 (button) =>
                   Math.abs(button.top - result.zoomLayout[0].top) < 1 &&

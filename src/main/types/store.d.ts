@@ -124,8 +124,6 @@ import {
   GetAiFileChangeRecordResponse,
   RevertAiFileChangeRequest,
   RevertAiFileChangeResponse,
-  BuildSessionFileDiffRequest,
-  BuildSessionFileDiffResponse,
   ChatSessionResumeSnapshotRow
 } from '../../shared/types'
 
@@ -254,9 +252,7 @@ export type {
   RevertAiFileChangeResponse,
   ChatSessionResumeSnapshotRow,
   ListWorkspaceDirectoryRequest,
-  WorkspaceDirectoryListResponse,
-  BuildSessionFileDiffRequest,
-  BuildSessionFileDiffResponse
+  WorkspaceDirectoryListResponse
 }
 
 /**

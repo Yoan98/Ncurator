@@ -39,6 +39,7 @@ import type {
   WorkspaceSource,
   WorkspaceRuntimeBinding
 } from '../../../shared/types'
+import { USER_MANUAL_URL } from '../../../shared/constants'
 import MarkdownRenderer from '../components/MarkdownRenderer'
 import { useNavigate } from 'react-router-dom'
 import { HiOutlineCog6Tooth } from 'react-icons/hi2'
@@ -51,7 +52,6 @@ import ReferenceInlineToken from '../components/workbench/composer/ReferenceInli
 import type { ImageLightboxImage } from '../components/workbench/ImageLightbox'
 import type { ComposerDraftValue } from '../components/workbench/composer/types'
 import {
-  WORKBENCH_CONTENT_PANEL_COLLAPSED_STORAGE_KEY,
   WORKBENCH_LEFT_TITLEBAR_COLLAPSED_WIDTH,
   WORKBENCH_SIDEBAR_DEFAULT_WIDTH,
   WORKBENCH_SIDEBAR_MAX_WIDTH,
@@ -523,8 +523,6 @@ const hasWorkspaceRootPath = (
 const getWorkspaceRequirementHint = (workspace: WorkspaceSource | null): string =>
   workspace ? '当前工作区未设置文件目录，请前往 设置 > 工作空间 绑定地址' : '请先选择工作区'
 
-const USER_MANUAL_URL = 'https://www.ncurator.com/zh/manual'
-
 const delay = (ms: number): Promise<void> =>
   new Promise((resolve) => {
     window.setTimeout(resolve, ms)
@@ -639,10 +637,7 @@ const ChatPage: React.FC = () => {
     return clampWorkbenchSidebarWidth(stored ? Number(stored) : WORKBENCH_SIDEBAR_DEFAULT_WIDTH)
   })
   const [collapsedWorkspaceIds, setCollapsedWorkspaceIds] = useState<Set<string>>(() => new Set())
-  const [contentPanelCollapsed, setContentPanelCollapsed] = useState<boolean>(() => {
-    const stored = window.localStorage.getItem(WORKBENCH_CONTENT_PANEL_COLLAPSED_STORAGE_KEY)
-    return stored === null ? true : stored === 'true'
-  })
+  const [contentPanelCollapsed, setContentPanelCollapsed] = useState(true)
 
   const [activeApplyRecord, setActiveApplyRecord] = useState<AiFileChangeRecord | null>(null)
   const [fileChangeRecords, setFileChangeRecords] = useState<AiFileChangeRecord[]>([])
@@ -1393,6 +1388,9 @@ const ChatPage: React.FC = () => {
       }
 
       setActiveApplyRecord(nextRecord)
+      setFileChangeRecords((current) =>
+        current.map((record) => (record.id === nextRecord.id ? nextRecord : record))
+      )
 
       if (input.openWorkspace) {
         showApplyWorkspace(nextRecord)
@@ -1546,10 +1544,7 @@ const ChatPage: React.FC = () => {
         return
       }
       setContentPanel(activeTab.state)
-      setContentPanelCollapsed(false)
-      if (activeTab.kind === 'browser' && activeTab.browserTabId) {
-        void window.api.browserTabActivate({ tabId: activeTab.browserTabId })
-      }
+      setContentPanelCollapsed(true)
       if (
         activeTab.state.kind === 'apply_workspace' &&
         activeTab.state.applyId &&
@@ -1654,13 +1649,6 @@ const ChatPage: React.FC = () => {
       }
     }
   }, [])
-
-  useEffect(() => {
-    window.localStorage.setItem(
-      WORKBENCH_CONTENT_PANEL_COLLAPSED_STORAGE_KEY,
-      String(contentPanelCollapsed)
-    )
-  }, [contentPanelCollapsed])
 
   useEffect(() => {
     scrollToBottom()
@@ -1930,27 +1918,15 @@ const ChatPage: React.FC = () => {
   }, [openResourceTab])
 
   const openWorkspaceFile = useCallback(
-    (filePath: string, fileName: string, applyId?: string): void => {
-      if (applyId) {
-        const sessionId = currentSessionIdRef.current
-        if (sessionId) {
-          void window.api.aiFileChangeSessionDiff({ sessionId, filePath }).then((response) => {
-            if (!response.record) {
-              emitErrorMessage(response.error || '无法生成当前会话 Diff')
-              return
-            }
-            setActiveApplyRecord(response.record)
-            showApplyWorkspace(response.record)
-          })
-          return
-        }
-        void loadApplyRecordRef.current({ applyId, openWorkspace: true })
-        return
-      }
+    (filePath: string, fileName: string): void => {
       void openFile({ path: filePath, fileName, origin: 'preview' })
     },
-    [emitErrorMessage, openFile, showApplyWorkspace]
+    [openFile]
   )
+
+  const openWorkspaceChange = useCallback((changeId: string): void => {
+    void loadApplyRecordRef.current({ applyId: changeId, openWorkspace: true })
+  }, [])
 
   useEffect(() => {
     const unsubscribe = window.api.onAiRunEvent((event) => {
@@ -3510,14 +3486,12 @@ const ChatPage: React.FC = () => {
             </div>
           </div>
 
-          <div
-            className="min-h-0 overflow-hidden transition-[width] duration-200"
-            data-testid={workbenchSelectors.contentPanelShell}
-            style={{
-              width: contentPanelCollapsed ? 0 : 'min(48vw, 780px)'
-            }}
-          >
-            {!contentPanelCollapsed ? (
+          {!contentPanelCollapsed ? (
+            <div
+              className="min-h-0 shrink-0 overflow-hidden"
+              data-testid={workbenchSelectors.contentPanelShell}
+              style={{ width: 'min(48vw, 780px)' }}
+            >
               <WorkbenchContentPanel
                 state={contentPanel}
                 tabs={tabWorkspace.tabs}
@@ -3541,9 +3515,10 @@ const ChatPage: React.FC = () => {
                 onCollapse={() => setContentPanelCollapsed(true)}
                 onBrowserStateChange={handleBrowserStateChange}
                 onOpenWorkspaceFile={openWorkspaceFile}
+                onOpenWorkspaceChange={openWorkspaceChange}
               />
-            ) : null}
-          </div>
+            </div>
+          ) : null}
           {contentPanelCollapsed ? (
             <Tooltip title="展开右侧栏" placement="left">
               <button

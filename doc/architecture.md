@@ -76,19 +76,21 @@ Docx Runtime 负责 Word 文档读取、搜索、编辑、任务内回滚、写�
 
 ### Text File Runtime
 
-Text File Runtime 通过 builtin `text-file` skill 提供 `file_read` 和 `file_write`。它负责 UTF-8 普通文本读取、创建、完整改写、唯一文本编辑和全部精确匹配替换。写入先完成全部校验，再通过同目录临时文件原子替换；写入前保存 bytes checkpoint，写入后根据真实 before/after 生成结构化行级 diff。
+Text File Runtime 通过 builtin `text-file` skill 提供 `file_read` 和 `file_write`。它负责 UTF-8 普通文本读取、创建、完整改写、唯一文本编辑和全部精确匹配替换。写入先完成全部校验，再通过同目录临时文件原子替换。工具只提供写入语义和专用元数据，文件变化统一由 Run 前后工作区扫描确认。
 
 ### Apply Review
 
-Apply Review 负责 AI 修改文件后的统一记录、预览和回退入口。Docx、Text File Runtime 和 terminal 识别出的 UTF-8 文件修改都写入统一文件修改记录。Renderer 根据记录 capability 路由：docx 使用文档预览，`text_file` 使用独立文本 diff，普通文件预览仍使用文件渲染器。用户回退依赖完整 checkpoint，不依赖 diff 反向计算。
+Apply Review 由两层组成：`WorkspaceChangeTracker` 在每个 Run 前后扫描工作区，统一确认新增、修改、删除和重命名；格式 adapter 只决定变化如何预览。内容写入 `.ncurator/objects/sha256` 对象库并按哈希去重，SQLite 只保存对象哈希、路径、Run、会话和预览元数据。用户回退依赖完整 before 对象，不依赖 diff 反向计算。
 
 ### Workbench Resource Workspace
 
-Workbench 右侧是独立资源工作台，由资源 Tab、紧凑上下文工具栏和内容区组成。文件按标准化路径去重，普通预览与修改 diff 共用同一个文件 Tab；文件列表通过目录级 IPC 懒加载，并把当前会话仍生效的 AI 修改记录投影为 Diff 标记。点击标记时，普通文本以会话首个 checkpoint 到当前文件生成累计 Diff。
+Workbench 右侧是按需渲染的独立资源工作台，由资源 Tab、紧凑上下文工具栏和内容区组成。折叠时 shell 不进入布局。文件列表分为“全部”和“本会话改动”：“全部”只打开当前工作区文件的正常预览；“本会话改动”聚合逻辑文件，但每次点击展示独立 Run 修改批次。普通预览与修改预览共用同一个文件 Tab。
 
 浏览器由 `BrowserEmbedService` 管理多个 Tab runtime，每个 Tab 持有独立 `WebContentsView` 和导航历史，全部使用 `persist:ncurator-browser` 共享登录、站点存储和缓存。非活动视图只隐藏不销毁；标签历史序列化到 userData，重启后使用 Electron `navigationHistory.restore` 懒恢复。Stagehand 连接应用 CDP 端点后，以 Electron WebContents 对应的 DevTools targetId 匹配 Stagehand Page，禁止使用 URL 作为多标签身份。Renderer 浮层打开期间通过 occluded 状态隐藏活动原生视图，避免原生层覆盖菜单。
 
-文本 Diff artifact 除结构化 hunk 外保存不可变修改后行，用于点击展开“N 行未修改”；大文件仍由 Renderer 虚拟列表控制实际 DOM 行数。
+文本 Diff adapter 在首次打开时读取不可变 before/after 对象，生成只包含结构化 hunks 的 version 2 artifact 并缓存。“N 行未修改”展开时直接读取不可变 after 对象，不在 artifact 中重复保存完整行。大文件仍由 Renderer 虚拟列表控制实际 DOM 行数。
+
+Docx adapter 保存 before 对象、committed Docx 和 Review Docx。只有 Docx 工具拥有语义操作时才生成 Review Docx；终端直接修改的 Docx 仅提供 before/after 文件版本切换。`PptDiffAdapter` 与 `ExcelDiffAdapter` 仅预留契约和注释，本期不实现。
 
 ## AI 架构
 
@@ -199,10 +201,10 @@ flowchart TD
 1. `file_read` 解码 UTF-8 文本，并返回指定行范围和总行数。
 2. `file_write` 按 action 校验完整输入；`edit` 的每个 `oldText` 必须唯一且互不重叠，`replaceAll` 对一个非空 `oldText` 执行全部非重叠精确替换。
 3. 后端保留原始 BOM、换行风格和文件权限，写入前再次检查文件未发生变化。
-4. 写入成功后保存完整 before snapshot，并通过 `diff` 库把真实 before/after 转为带行号的结构化 hunks。
-5. Workbench 的 `TextFileDiffViewer` 读取结构化 diff，使用单行号列展示新增、删除、上下文和词级变化，hunk 间用“N 行未修改”收起；大 diff 使用虚拟列表。
+4. Run 结束扫描将真实 before/after 内容保存为不可变对象；首次打开修改预览时通过 `diff` 库生成带行号的结构化 hunks 并缓存。
+5. Workbench 的 `TextFileDiffViewer` 读取结构化 diff，使用单行号列展示新增、删除、上下文和词级变化，hunk 间用“N 行未修改”收起；展开时读取 after 对象，大 diff 使用虚拟列表。
 6. 回退更新文件时恢复原始 bytes；回退新建文件时删除目标，历史 diff 保留用于查看。
-7. terminal 执行前后若识别到 UTF-8 文件发生变化，复用同一结构化 diff 与修改记录链路；无法严格解码的产物保持 `terminal_exec`。
+7. terminal 不猜测文件产物；顶层 Run 扫描捕获其所有工作区变化。文本进入同一 Diff adapter，无法严格解码的产物保持 `terminal_exec` 并使用前后版本预览。
 
 普通文件预览先保留 PDF、DOCX 和 Markdown 的专用渲染；其他文件严格 UTF-8 解码成功后统一进入纯文本渲染，因此 `.log`、代码、JSON、HTML 等普通文本无需逐个维护扩展名白名单。解码失败时不进入纯文本渲染，避免误展示二进制内容。
 

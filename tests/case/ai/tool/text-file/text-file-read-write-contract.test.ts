@@ -1,22 +1,8 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { describe, it } from 'vitest'
-import type { TextFileDiffArtifact } from '../../../../../src/shared/types'
 import { createTextFileToolHarness } from '../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
-
-const replayDiff = (before: string, artifact: TextFileDiffArtifact): string => {
-  const lines = before.length === 0 ? [] : before.split('\n')
-  let lineOffset = 0
-  for (const hunk of artifact.hunks) {
-    const oldLineCount = hunk.lines.filter((line) => line.type !== 'add').length
-    const nextLines = hunk.lines.filter((line) => line.type !== 'remove').map((line) => line.text)
-    const start = hunk.oldStart - 1 + lineOffset
-    lines.splice(start, oldLineCount, ...nextLines)
-    lineOffset += nextLines.length - oldLineCount
-  }
-  return lines.join('\n')
-}
 
 describe('ai tool text-file backend', () => {
   it('text-file-read-write-contract', async () => {
@@ -80,11 +66,6 @@ describe('ai tool text-file backend', () => {
         const finalContent = await fs.readFile(sourcePath, 'utf-8')
         const records = await harness.ctx.listFileChangeRecords({ runId: runtime.runId })
         const configRecord = records.find((record) => record.path === sourcePath)
-        const artifact = configRecord?.previewPath
-          ? (JSON.parse(
-              await fs.readFile(configRecord.previewPath, 'utf-8')
-            ) as TextFileDiffArtifact)
-          : null
         const textFileArtifacts = runtime.eventCollector
           .snapshot()
           .filter((event) => event.type === 'file_artifact' && event.capability === 'text_file')
@@ -101,10 +82,7 @@ describe('ai tool text-file backend', () => {
           recordCount: records.length,
           configCapability: configRecord?.capability,
           configChangeCount: configRecord?.changeCount,
-          replayed: artifact ? replayDiff(original, artifact) : null,
-          artifactVersion: artifact?.version,
-          expandableAfterLines: artifact?.afterLines,
-          hunkCount: artifact?.hunks.length,
+          hasEagerPreview: Boolean(configRecord?.previewPath),
           fileArtifactCount: textFileArtifacts.length,
           configApplyIds
         }
@@ -125,16 +103,13 @@ describe('ai tool text-file backend', () => {
             result.recordCount === 2 &&
             result.configCapability === 'text_file' &&
             result.configChangeCount === 4 &&
-            result.replayed === result.finalContent &&
-            result.artifactVersion === 1 &&
-            result.expandableAfterLines?.join('\n') === result.finalContent &&
-            result.hunkCount === 2 &&
+            result.hasEagerPreview === false &&
             result.fileArtifactCount === 3 &&
             result.configApplyIds.length === 2 &&
             new Set(result.configApplyIds).size === 1,
           {
             name: 'text-file-read-write-result-and-diff',
-            message: '文本工具应返回约定结果、写入正确内容，并生成可重放的结构化 diff 修改记录。',
+            message: '文本工具应写入正确内容并保存修改元数据，Diff 延迟到首次预览生成。',
             data: result
           }
         )

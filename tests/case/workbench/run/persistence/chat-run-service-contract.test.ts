@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -17,6 +17,7 @@ import type {
 } from '../../../../../src/shared/types'
 
 type TestService = {
+  workspaceRoot: string
   storage: StorageService
   service: ChatRunService
   events: AiRunEvent[]
@@ -61,6 +62,8 @@ const createTestService = async (options?: {
   conversationMemorySummaryBuilder?: TestConversationMemorySummaryBuilder
 }): Promise<TestService> => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'ncurator-chat-run-'))
+  const workspaceRoot = path.join(root, 'workspace')
+  await mkdir(workspaceRoot)
   tempRoots.push(root)
   const storage = new StorageService({
     dbPath: path.join(root, 'lancedb')
@@ -101,7 +104,7 @@ const createTestService = async (options?: {
           .join('\n')
       })
   })
-  return { storage, service, events, memorySummaryCalls }
+  return { workspaceRoot, storage, service, events, memorySummaryCalls }
 }
 
 const seedSession = async (storage: StorageService): Promise<ChatSession> => {
@@ -138,7 +141,7 @@ const saveMessages = async (
   }
 }
 
-const submitAiRun = async ({ storage, service }: TestService) => {
+const submitAiRun = async ({ workspaceRoot, storage, service }: TestService) => {
   await seedSession(storage)
   const response = await service.submit({
     mode: 'ai',
@@ -152,7 +155,7 @@ const submitAiRun = async ({ storage, service }: TestService) => {
     workspace: {
       workspaceId: 'workspace-1',
       workspaceName: 'workspace-1',
-      rootPath: '/tmp'
+      rootPath: workspaceRoot
     }
   })
   expect(response.success).toBe(true)

@@ -200,7 +200,7 @@ const WorkbenchBrowserPanel: React.FC<WorkbenchBrowserPanelProps> = ({ tabId, on
           </button>
         </Tooltip>
         <form
-          className="mx-1 min-w-0 flex-1"
+          className="relative mx-1 min-w-0 flex-1"
           onSubmit={(event) => {
             event.preventDefault()
             void navigate()
@@ -213,8 +213,18 @@ const WorkbenchBrowserPanel: React.FC<WorkbenchBrowserPanelProps> = ({ tabId, on
             placeholder="输入 URL"
             aria-label="浏览器地址"
             autoFocus={!state.url}
-            className="h-7 w-full rounded-[7px] border border-transparent bg-[#F7F7F5] px-3 text-center text-[13px] text-[#37352F] outline-none placeholder:text-[#9B9A97] focus:border-[#E0DFDC] focus:bg-white focus:text-left"
+            className="h-7 w-full rounded-[7px] border border-transparent bg-[#F7F7F5] pr-8 pl-3 text-left text-[13px] text-[#37352F] outline-none placeholder:text-[#9B9A97] focus:border-[#E0DFDC] focus:bg-white"
           />
+          <Tooltip title="前往">
+            <button
+              type="submit"
+              className="absolute top-0 right-0 flex h-7 w-7 items-center justify-center rounded-[6px] text-[#787774] hover:bg-[#ECECE9] hover:text-[#37352F] disabled:text-[#C9C7C2]"
+              aria-label="前往"
+              disabled={!address.trim()}
+            >
+              <HiArrowRight className="h-4 w-4" />
+            </button>
+          </Tooltip>
         </form>
         <Popover
           content={menuContent}

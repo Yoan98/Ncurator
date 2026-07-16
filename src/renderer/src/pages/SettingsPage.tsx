@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { NavLink, Navigate, useLocation, useParams } from 'react-router-dom'
-import { HiArrowLeft } from 'react-icons/hi2'
+import { HiArrowLeft, HiOutlineQuestionMarkCircle } from 'react-icons/hi2'
+import { USER_MANUAL_URL } from '../../../shared/constants'
 import ModelSettingsPanel from '../components/settings/ModelSettingsPanel'
 import VectorModelSettingsPanel from '../components/settings/VectorModelSettingsPanel'
 import WorkspaceSettingsPanel from '../components/settings/WorkspaceSettingsPanel'
@@ -121,6 +122,18 @@ const SettingsPage: React.FC = () => {
                 </NavLink>
               )
             })}
+            <button
+              type="button"
+              className="nc-sidebar-item flex items-center gap-2.5 px-2.5 py-2"
+              onClick={() => void window.api.openExternal(USER_MANUAL_URL)}
+              aria-label="查看使用帮助"
+              data-testid={settingsSelectors.helpButton}
+            >
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center text-[#787774]">
+                <HiOutlineQuestionMarkCircle className="h-5 w-5" />
+              </span>
+              <span className="truncate text-[13px] font-medium">使用帮助</span>
+            </button>
           </div>
         </div>
       </aside>

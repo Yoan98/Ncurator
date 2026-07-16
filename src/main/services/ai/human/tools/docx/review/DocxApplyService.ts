@@ -41,7 +41,9 @@ export class DocxApplyService {
     this.editTracker.registerDocxOpen(input)
   }
 
-  public registerDocxChanges(input: Parameters<RunDocxEditTracker['registerDocxChanges']>[0]): void {
+  public registerDocxChanges(
+    input: Parameters<RunDocxEditTracker['registerDocxChanges']>[0]
+  ): void {
     this.editTracker.registerDocxChanges(input)
   }
 
@@ -50,11 +52,7 @@ export class DocxApplyService {
     workspaceRootPath: string
   }): Promise<DocxApplyRecord[]> {
     const records = await this.editTracker.applyRunEdits(input)
-    await Promise.all(
-      records.map((record) =>
-        this.aiFileChangeService?.saveRecord(toAiFileChangeRecordFromDocxApply(record))
-      )
-    )
+    await Promise.all(records.map((record) => this.saveAiFileChangeRecord(record)))
     return records
   }
 
@@ -64,9 +62,7 @@ export class DocxApplyService {
     return await this.docxApplyStore.listRecords(request)
   }
 
-  public async getRecord(
-    request: GetDocxApplyRecordRequest
-  ): Promise<GetDocxApplyRecordResponse> {
+  public async getRecord(request: GetDocxApplyRecordRequest): Promise<GetDocxApplyRecordResponse> {
     const record = await this.docxApplyStore.getRecord(request.applyId)
     return record ? { record } : { error: 'docx apply record not found' }
   }
@@ -125,7 +121,7 @@ export class DocxApplyService {
         error: undefined
       }
       await this.docxApplyStore.saveRecord(reverted)
-      await this.aiFileChangeService?.saveRecord(toAiFileChangeRecordFromDocxApply(reverted))
+      await this.saveAiFileChangeRecord(reverted)
       return { success: true, record: reverted }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
@@ -136,9 +132,27 @@ export class DocxApplyService {
         error: message
       }
       await this.docxApplyStore.saveRecord(failed)
-      await this.aiFileChangeService?.saveRecord(toAiFileChangeRecordFromDocxApply(failed))
+      await this.saveAiFileChangeRecord(failed)
       return { success: false, record: failed, error: message }
     }
+  }
+
+  private async saveAiFileChangeRecord(record: DocxApplyRecord): Promise<void> {
+    if (!this.aiFileChangeService) return
+    const projected = toAiFileChangeRecordFromDocxApply(record)
+    const existing = await this.aiFileChangeService.getRecord({ changeId: record.id })
+    await this.aiFileChangeService.saveRecord(
+      existing.record
+        ? {
+            ...projected,
+            ...existing.record,
+            status: projected.status,
+            updatedAt: projected.updatedAt,
+            revertedAt: projected.revertedAt,
+            error: projected.error
+          }
+        : projected
+    )
   }
 
   public async resolveDocxOpenTarget(sourcePath: string): Promise<ResolvedDocxOpenTarget> {

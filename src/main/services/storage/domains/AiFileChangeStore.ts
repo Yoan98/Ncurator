@@ -2,6 +2,7 @@ import type {
   AiFileChangeCapability,
   AiFileChangeOperation,
   AiFileChangeRecord,
+  AiFileChangeSource,
   AiFileChangeStatus,
   GetAiFileChangeRecordRequest,
   GetAiFileChangeRecordResponse,
@@ -26,14 +27,26 @@ const normalizeStatus = (value: unknown): AiFileChangeStatus => {
 
 const normalizeCapability = (value: unknown): AiFileChangeCapability => {
   const normalized = String(value ?? '').trim()
-  if (normalized === 'text_file' || normalized === 'terminal_exec' || normalized === 'ppt') {
+  if (
+    normalized === 'text_file' ||
+    normalized === 'terminal_exec' ||
+    normalized === 'ppt' ||
+    normalized === 'excel'
+  ) {
     return normalized
   }
   return 'docx'
 }
 
-const normalizeOperation = (value: unknown): AiFileChangeOperation =>
-  value === 'created' ? 'created' : 'updated'
+const normalizeOperation = (value: unknown): AiFileChangeOperation => {
+  if (value === 'created' || value === 'deleted' || value === 'renamed') return value
+  return 'updated'
+}
+
+const normalizeSource = (value: unknown): AiFileChangeSource | undefined => {
+  if (value === 'workspace_scan' || value === 'text_tool' || value === 'docx_tool') return value
+  return undefined
+}
 
 const toRecord = (row: AiFileChangeRow): AiFileChangeRecord => ({
   id: toRequiredString(row.id),
@@ -44,13 +57,21 @@ const toRecord = (row: AiFileChangeRow): AiFileChangeRecord => ({
   path: toRequiredString(row.path),
   fileName: toRequiredString(row.file_name),
   operation: normalizeOperation(row.operation),
+  source: normalizeSource(row.source),
+  beforePath: toOptionalString(row.before_path),
+  afterPath: toOptionalString(row.after_path),
   changeCount: toRequiredNumber(row.change_count),
   insertCount: toRequiredNumber(row.insert_count),
   deleteCount: toRequiredNumber(row.delete_count),
   beforeSnapshotPath: toOptionalString(row.before_snapshot_path),
+  afterSnapshotPath: toOptionalString(row.after_snapshot_path),
+  beforeObjectHash: toOptionalString(row.before_object_hash),
+  afterObjectHash: toOptionalString(row.after_object_hash),
+  previewArtifactHash: toOptionalString(row.preview_artifact_hash),
   beforeChecksum: toOptionalString(row.before_checksum),
   afterChecksum: toOptionalString(row.after_checksum),
   previewPath: toOptionalString(row.preview_path),
+  runSummary: toOptionalString(row.run_summary),
   createdAt: toRequiredNumber(row.created_at),
   updatedAt: toRequiredNumber(row.updated_at),
   revertedAt: toRequiredNumber(row.reverted_at) || undefined,
@@ -66,13 +87,21 @@ const toWriteRow = (record: AiFileChangeRecord) => ({
   path: record.path,
   file_name: record.fileName,
   operation: record.operation,
+  source: record.source,
+  before_path: record.beforePath,
+  after_path: record.afterPath,
   change_count: record.changeCount,
   insert_count: record.insertCount,
   delete_count: record.deleteCount,
   before_snapshot_path: record.beforeSnapshotPath,
+  after_snapshot_path: record.afterSnapshotPath,
+  before_object_hash: record.beforeObjectHash,
+  after_object_hash: record.afterObjectHash,
+  preview_artifact_hash: record.previewArtifactHash,
   before_checksum: record.beforeChecksum,
   after_checksum: record.afterChecksum,
   preview_path: record.previewPath,
+  run_summary: record.runSummary,
   created_at: record.createdAt,
   updated_at: record.updatedAt,
   reverted_at: record.revertedAt,

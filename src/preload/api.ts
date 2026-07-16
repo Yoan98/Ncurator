@@ -77,8 +77,6 @@ import type {
   ListAiFileChangeRecordsResponse,
   RevertAiFileChangeRequest,
   RevertAiFileChangeResponse,
-  BuildSessionFileDiffRequest,
-  BuildSessionFileDiffResponse,
   WorkspaceIndexJobGetRequest,
   WorkspaceIndexJobRecord,
   WorkspaceIndexJobResponse,
@@ -262,9 +260,6 @@ export type DesktopApi = {
     payload?: ListAiFileChangeRecordsRequest
   ) => Promise<ListAiFileChangeRecordsResponse>
   aiFileChangeGet: (payload: GetAiFileChangeRecordRequest) => Promise<GetAiFileChangeRecordResponse>
-  aiFileChangeSessionDiff: (
-    payload: BuildSessionFileDiffRequest
-  ) => Promise<BuildSessionFileDiffResponse>
   aiFileChangeRevert: (payload: RevertAiFileChangeRequest) => Promise<RevertAiFileChangeResponse>
   appUpdateGetSnapshot: () => Promise<AppUpdateSnapshot>
   appUpdateCheck: () => Promise<AppUpdateActionResponse>

@@ -28,6 +28,7 @@ SQLite 保存主要业务数据：
 - AI run、run event 和审批状态。
 - AI 文件修改记录。
 - Docx apply 记录。
+- 文件内容和预览 artifact 的 SHA-256 对象引用；实际对象保存在工作区 `.ncurator/objects/sha256`，相同内容只存一份。
 - 工作区源、文件索引任务和文档元数据。
 - 网页源。
 - LLM 配置和 AI runtime 设置。

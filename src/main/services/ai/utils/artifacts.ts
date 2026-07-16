@@ -9,7 +9,7 @@ import type {
   DocxApplyRecord,
   FileChangesSummary,
   JsonObject,
-  JsonValue,
+  JsonValue
 } from '../../../../shared/types'
 import type { ToolCallResult } from '../human/types'
 
@@ -31,7 +31,9 @@ const readArtifactOperation = (
   fallback: AiFileArtifactOperation
 ): AiFileArtifactOperation => {
   const value = input[key]
-  return value === 'created' || value === 'updated' ? value : fallback
+  return value === 'created' || value === 'updated' || value === 'deleted' || value === 'renamed'
+    ? value
+    : fallback
 }
 
 const createFileArtifactRef = (input: {
@@ -71,7 +73,8 @@ const extractTerminalArtifacts = (result: ToolCallResult): AiArtifactRef[] => {
   })
 }
 
-const getArtifactKey = (artifact: AiArtifactRef): string => `file:${artifact.path}:${artifact.applyId || ''}`
+const getArtifactKey = (artifact: AiArtifactRef): string =>
+  `file:${artifact.path}:${artifact.applyId || ''}`
 
 export const mergeArtifactRefs = (
   ...groups: Array<readonly AiArtifactRef[] | undefined>
@@ -139,7 +142,9 @@ export const appendDocxApplyArtifactsAndEmitEvents = (input: {
 export const buildFileChangesSummaryFromDocxApplyRecords = (
   records: readonly DocxApplyRecord[]
 ): FileChangesSummary => ({
-  changed_files: records.map((record) => toFileChangeSummaryItem(toAiFileChangeRecordFromDocxApply(record)))
+  changed_files: records.map((record) =>
+    toFileChangeSummaryItem(toAiFileChangeRecordFromDocxApply(record))
+  )
 })
 
 export const buildFileChangesSummaryFromFileChangeRecords = (
@@ -148,7 +153,9 @@ export const buildFileChangesSummaryFromFileChangeRecords = (
   changed_files: records.map(toFileChangeSummaryItem)
 })
 
-const toFileChangeSummaryItem = (record: AiFileChangeRecord): FileChangesSummary['changed_files'][number] => ({
+const toFileChangeSummaryItem = (
+  record: AiFileChangeRecord
+): FileChangesSummary['changed_files'][number] => ({
   id: record.id,
   fileName: record.fileName,
   path: record.path,
@@ -160,9 +167,7 @@ const toFileChangeSummaryItem = (record: AiFileChangeRecord): FileChangesSummary
   status: record.status
 })
 
-export const toAiFileChangeRecordFromDocxApply = (
-  record: DocxApplyRecord
-): AiFileChangeRecord => ({
+export const toAiFileChangeRecordFromDocxApply = (record: DocxApplyRecord): AiFileChangeRecord => ({
   id: record.id,
   sessionId: record.session_id,
   runId: record.run_id,
@@ -171,6 +176,9 @@ export const toAiFileChangeRecordFromDocxApply = (
   path: record.source_path,
   fileName: record.source_name,
   operation: record.operation,
+  source: 'docx_tool',
+  beforePath: record.operation === 'updated' ? record.source_path : undefined,
+  afterPath: record.source_path,
   changeCount: record.change_count,
   insertCount: record.insert_count,
   deleteCount: record.delete_count,

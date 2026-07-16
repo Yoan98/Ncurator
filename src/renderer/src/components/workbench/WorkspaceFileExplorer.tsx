@@ -13,36 +13,58 @@ import type {
 } from '../../../../shared/types'
 import ChangeCountBadges from './ChangeCountBadges'
 import { workbenchSelectors } from '../../testing/selectors'
+import {
+  groupSessionFileChanges,
+  normalizeFileChangePath as normalizePath
+} from './fileChangeGroups'
+
+export type WorkspaceFileExplorerMode = 'all' | 'changed'
 
 type WorkspaceFileExplorerProps = {
   workspace: WorkspaceSource | null
   changeRecords: AiFileChangeRecord[]
-  onOpenFile: (entry: WorkspaceTreeEntry, change?: AiFileChangeRecord) => void
+  mode: WorkspaceFileExplorerMode
+  activeFilePath?: string | null
+  activeChangeId?: string | null
+  onModeChange: (mode: WorkspaceFileExplorerMode) => void
+  onOpenFile: (entry: WorkspaceTreeEntry) => void
+  onOpenChange: (change: AiFileChangeRecord) => void
 }
 
-const normalizePath = (value: string): string =>
-  value.replace(/\\/g, '/').replace(/\/+$/g, '').toLowerCase()
+const getRelativePath = (workspace: WorkspaceSource | null, filePath: string): string => {
+  const root = normalizePath(workspace?.root_path || '')
+  const normalized = filePath.replace(/\\/g, '/')
+  return root && normalizePath(normalized).startsWith(`${root}/`)
+    ? normalized.slice(
+        (workspace?.root_path || '').replace(/\\/g, '/').replace(/\/+$/g, '').length + 1
+      )
+    : normalized
+}
 
 const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
   workspace,
   changeRecords,
-  onOpenFile
+  mode,
+  activeFilePath,
+  activeChangeId,
+  onModeChange,
+  onOpenFile,
+  onOpenChange
 }) => {
   const [childrenByPath, setChildrenByPath] = useState<Record<string, WorkspaceTreeEntry[]>>({})
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
   const [loading, setLoading] = useState<Set<string>>(() => new Set())
   const [query, setQuery] = useState('')
 
+  const activeChanges = useMemo(() => groupSessionFileChanges(changeRecords), [changeRecords])
+
   const changesByPath = useMemo(() => {
     const map = new Map<string, AiFileChangeRecord>()
-    ;[...changeRecords]
-      .sort((left, right) => right.updatedAt - left.updatedAt)
-      .forEach((record) => {
-        const key = normalizePath(record.path)
-        if (!map.has(key) && record.status === 'applied') map.set(key, record)
-      })
+    activeChanges.forEach(({ latest, paths }) => {
+      paths.forEach((value) => map.set(value, latest))
+    })
     return map
-  }, [changeRecords])
+  }, [activeChanges])
 
   const loadDirectory = useCallback(
     async (relativePath: string): Promise<void> => {
@@ -69,13 +91,13 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
   }, [loadDirectory, workspace])
 
   const toggleDirectory = (entry: WorkspaceTreeEntry): void => {
-    const path = entry.relative_path
+    const entryPath = entry.relative_path
     setExpanded((current) => {
       const next = new Set(current)
-      next.has(path) ? next.delete(path) : next.add(path)
+      next.has(entryPath) ? next.delete(entryPath) : next.add(entryPath)
       return next
     })
-    void loadDirectory(path)
+    void loadDirectory(entryPath)
   }
 
   const renderEntries = (parentPath: string, depth: number): React.ReactNode => {
@@ -87,14 +109,23 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
       const change = changesByPath.get(normalizePath(entry.absolute_path))
       const visible =
         !normalizedQuery || entry.relative_path.toLowerCase().includes(normalizedQuery)
+      const selected =
+        !isDirectory &&
+        Boolean(activeFilePath) &&
+        normalizePath(entry.absolute_path) === normalizePath(activeFilePath || '')
       return (
         <React.Fragment key={entry.id}>
           <button
             type="button"
-            className={`group flex h-7 w-full items-center gap-1.5 pr-2 text-left text-[13px] transition-colors hover:bg-[#F4F4F2] ${visible ? '' : 'hidden'}`}
+            className={`relative flex h-7 w-full items-center gap-1.5 pr-2 text-left text-[13px] transition-colors ${
+              selected
+                ? 'bg-[#EEEEEB] font-medium text-[#2F2E2A] before:absolute before:inset-y-1 before:left-0 before:w-0.5 before:bg-[#787774]'
+                : 'text-[#57554F] hover:bg-[#F4F4F2]'
+            } ${visible ? '' : 'hidden'}`}
             style={{ paddingLeft: 8 + depth * 14 }}
             title={entry.relative_path}
-            onClick={() => (isDirectory ? toggleDirectory(entry) : onOpenFile(entry, change))}
+            aria-current={selected ? 'page' : undefined}
+            onClick={() => (isDirectory ? toggleDirectory(entry) : onOpenFile(entry))}
           >
             <span className="flex h-5 w-4 shrink-0 items-center justify-center text-[#91918E]">
               {isDirectory ? (
@@ -110,12 +141,9 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
             ) : (
               <HiDocumentText className="h-4 w-4 shrink-0 text-[#91918E]" />
             )}
-            <span className="min-w-0 flex-1 truncate text-[#37352F]">{entry.name}</span>
+            <span className="min-w-0 flex-1 truncate">{entry.name}</span>
             {change ? (
-              <span
-                title="当前会话 AI 修改，点击查看修改内容"
-                data-testid={`${workbenchSelectors.workspaceFileChangePrefix}-${change.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`}
-              >
+              <span title="当前会话中已修改">
                 {change.insertCount > 0 || change.deleteCount > 0 ? (
                   <ChangeCountBadges
                     insertCount={change.insertCount}
@@ -142,10 +170,38 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
     )
   }
 
+  const normalizedQuery = query.trim().toLowerCase()
+  const filteredChanges = activeChanges.filter(({ latest }) =>
+    getRelativePath(workspace, latest.afterPath || latest.beforePath || latest.path)
+      .toLowerCase()
+      .includes(normalizedQuery)
+  )
+
   return (
     <div className="flex h-full min-h-0 flex-col border-l border-[#EEEEEC] bg-white">
+      <div className="shrink-0 px-2 pt-2">
+        <div
+          className="grid h-8 grid-cols-2 rounded-[6px] bg-[#F3F3F1] p-0.5"
+          data-testid={workbenchSelectors.workspaceExplorerModeSwitch}
+        >
+          <button
+            type="button"
+            className={`rounded-[5px] text-[12px] font-medium ${mode === 'all' ? 'bg-white text-[#37352F] shadow-sm' : 'text-[#787774] hover:text-[#37352F]'}`}
+            onClick={() => onModeChange('all')}
+          >
+            全部
+          </button>
+          <button
+            type="button"
+            className={`rounded-[5px] text-[12px] font-medium ${mode === 'changed' ? 'bg-white text-[#37352F] shadow-sm' : 'text-[#787774] hover:text-[#37352F]'}`}
+            onClick={() => onModeChange('changed')}
+          >
+            本会话改动 {activeChanges.length}
+          </button>
+        </div>
+      </div>
       <div className="shrink-0 p-2">
-        <label className="flex h-8 items-center gap-2 rounded-[7px] border border-[#E0DFDC] px-2.5 text-[#91918E]">
+        <label className="flex h-8 items-center gap-2 rounded-[6px] border border-[#E0DFDC] px-2.5 text-[#91918E]">
           <HiOutlineMagnifyingGlass className="h-4 w-4 shrink-0" />
           <input
             value={query}
@@ -156,10 +212,59 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
         </label>
       </div>
       <div className="min-h-0 flex-1 overflow-auto pb-2">
-        {loading.has('') && !childrenByPath[''] ? (
-          <div className="px-3 py-2 text-xs text-[#91918E]">正在读取文件…</div>
+        {mode === 'all' ? (
+          loading.has('') && !childrenByPath[''] ? (
+            <div className="px-3 py-2 text-xs text-[#91918E]">正在读取文件…</div>
+          ) : (
+            renderEntries('', 0)
+          )
+        ) : filteredChanges.length > 0 ? (
+          filteredChanges.map(({ latest, records, paths }) => {
+            const selected =
+              latest.id === activeChangeId ||
+              (Boolean(activeFilePath) && paths.has(normalizePath(activeFilePath || '')))
+            const displayPath = getRelativePath(
+              workspace,
+              latest.afterPath || latest.beforePath || latest.path
+            )
+            return (
+              <button
+                type="button"
+                key={latest.id}
+                className={`relative flex h-9 w-full items-center gap-2 px-2 text-left text-[13px] transition-colors ${selected ? 'bg-[#EEEEEB] font-medium text-[#2F2E2A] before:absolute before:inset-y-1 before:left-0 before:w-0.5 before:bg-[#787774]' : 'text-[#57554F] hover:bg-[#F4F4F2]'}`}
+                aria-current={selected ? 'page' : undefined}
+                data-testid={`${workbenchSelectors.workspaceFileChangePrefix}-${latest.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`}
+                onClick={() => onOpenChange(latest)}
+              >
+                <HiDocumentText className="h-4 w-4 shrink-0 text-[#91918E]" />
+                <span className="min-w-0 flex-1 truncate" title={displayPath}>
+                  {displayPath}
+                </span>
+                {latest.insertCount > 0 || latest.deleteCount > 0 ? (
+                  <ChangeCountBadges
+                    insertCount={latest.insertCount}
+                    deleteCount={latest.deleteCount}
+                    mode="compact"
+                  />
+                ) : (
+                  <span className="shrink-0 text-[11px] text-[#787774]">
+                    {latest.operation === 'deleted'
+                      ? '已删除'
+                      : latest.operation === 'renamed'
+                        ? '已重命名'
+                        : '已改'}
+                  </span>
+                )}
+                {records.length > 1 ? (
+                  <span className="shrink-0 text-[11px] tabular-nums text-[#9B9A97]">
+                    {records.length} 次
+                  </span>
+                ) : null}
+              </button>
+            )
+          })
         ) : (
-          renderEntries('', 0)
+          <div className="px-3 py-8 text-center text-xs text-[#91918E]">本会话暂无文件改动</div>
         )}
       </div>
     </div>

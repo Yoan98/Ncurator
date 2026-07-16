@@ -334,21 +334,14 @@ const writeTextFile = async (
       buildInput.runId
     )
     const beforeSnapshotPath = recordBeforeSnapshotPath
-    const previewPath =
-      existingRecord?.previewPath || path.join(artifactRoot, `${operationId}.text-diff.json`)
     const afterChecksum = calculateBufferChecksum(afterBuffer)
     let targetWritten = false
-    let previousPreviewBuffer: Buffer | undefined
 
     try {
       await fs.mkdir(artifactRoot, { recursive: true })
-      if (existingRecord?.previewPath) {
-        previousPreviewBuffer = await fs.readFile(existingRecord.previewPath).catch(() => undefined)
-      }
       if (!existingRecord && beforeBuffer && beforeSnapshotPath) {
         await fs.writeFile(beforeSnapshotPath, beforeBuffer)
       }
-      await fs.writeFile(previewPath, `${JSON.stringify(diffArtifact)}\n`, 'utf-8')
 
       if (args.action === 'create') {
         await fs.writeFile(sourcePath, afterBuffer, { flag: 'wx', mode: 0o644 })
@@ -376,13 +369,15 @@ const writeTextFile = async (
         path: sourcePath,
         fileName: path.basename(sourcePath),
         operation,
+        source: 'text_tool',
+        beforePath: operation === 'updated' ? sourcePath : undefined,
+        afterPath: sourcePath,
         changeCount: (existingRecord?.changeCount || 0) + changeCount,
         insertCount,
         deleteCount,
         beforeSnapshotPath,
         beforeChecksum: recordBeforeChecksum,
         afterChecksum,
-        previewPath,
         createdAt: existingRecord?.createdAt || now,
         updatedAt: now
       }
@@ -419,11 +414,6 @@ const writeTextFile = async (
         } else {
           await fs.rm(sourcePath, { force: true }).catch(() => undefined)
         }
-      }
-      if (previousPreviewBuffer) {
-        await fs.writeFile(previewPath, previousPreviewBuffer).catch(() => undefined)
-      } else {
-        await fs.rm(previewPath, { force: true }).catch(() => undefined)
       }
       if (!existingRecord && beforeSnapshotPath)
         await fs.rm(beforeSnapshotPath, { force: true }).catch(() => undefined)

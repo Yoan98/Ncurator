@@ -6,7 +6,6 @@ export const WORKBENCH_SIDEBAR_DEFAULT_WIDTH = 240
 export const WORKBENCH_SIDEBAR_MIN_WIDTH = 220
 export const WORKBENCH_SIDEBAR_MAX_WIDTH = 320
 export const WORKBENCH_LEFT_TITLEBAR_COLLAPSED_WIDTH = 170
-export const WORKBENCH_CONTENT_PANEL_COLLAPSED_STORAGE_KEY = 'workbench.content-panel.collapsed.v2'
 export const WORKBENCH_PREFERENCE_MODE_STORAGE_KEY = 'workbench.preference.mode'
 export const WORKBENCH_PREFERENCE_AI_PREFERENCE_STORAGE_KEY = 'workbench.preference.ai-preference'
 export const WORKBENCH_PREFERENCE_MODEL_STORAGE_KEY = 'workbench.preference.model'

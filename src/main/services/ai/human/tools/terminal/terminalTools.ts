@@ -9,13 +9,7 @@ import { withToolLifecycle } from '../utils/lifecycle'
 import { createToolEventEmitter } from '../utils/toolEvents'
 import type { CapabilityActivityInput } from '../types'
 import {
-  mergeArtifactCandidates,
-  prepareTerminalArtifactCandidates,
-  recordTerminalArtifacts
-} from './terminalArtifacts'
-import {
   analyzeSafeTerminalCommandPolicy,
-  analyzeTerminalCommand,
   checkWorkspaceBoundary,
   resolveTerminalCwd
 } from './commandPolicy'
@@ -270,11 +264,6 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
             return boundaryError
           }
 
-          const analysis = analyzeTerminalCommand({
-            command,
-            cwd: args.cwd,
-            platform: input.ctx.platform
-          })
           const safePolicy = analyzeSafeTerminalCommandPolicy(command, input.ctx.platform)
           const approvedByHand = consumeApprovedTerminalCommand({
             cache: input.cache,
@@ -320,18 +309,6 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
             }
           }
 
-          const artifactCandidates = mergeArtifactCandidates({
-            commandCandidates: analysis.artifactCandidates,
-            expectedArtifacts: [],
-            cwd,
-            workspaceRootPath: input.workspaceRootPath
-          })
-          const preparedArtifactCandidates = await prepareTerminalArtifactCandidates({
-            candidates: artifactCandidates,
-            runId: input.runId,
-            workspaceRootPath: input.workspaceRootPath
-          })
-
           state.stepIndex += 1
           const stepId = randomUUID()
           emitTerminalStepStarted({
@@ -361,17 +338,6 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
             exitCode: result.exitCode,
             timedOut: result.timedOut,
             timeoutMs: input.timeoutMs
-          })
-
-          const artifacts = await recordTerminalArtifacts({
-            ctx: input.ctx,
-            runId: input.runId,
-            sessionId: input.sessionId,
-            taskId: input.taskId,
-            stepId,
-            candidates: preparedArtifactCandidates,
-            workspaceRootPath: input.workspaceRootPath,
-            emitActivity: input.emitActivity
           })
 
           emitTerminalStepCompletion({
@@ -404,13 +370,13 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
             stderr: outputQuality.unusable ? '' : result.stderr,
             exitCode: result.exitCode,
             timedOut: result.timedOut,
-            artifacts
+            artifacts: []
           } as {
             stdout: string
             stderr: string
             exitCode: number | null
             timedOut: boolean
-            artifacts: typeof artifacts
+            artifacts: never[]
             error?: string
             reason?: 'failed' | 'result_too_large' | 'result_unusable'
             estimatedTokens?: number
