@@ -3,6 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ChatRunService } from '../../../../../src/main/services/ai/ChatRunService'
+import { AiRunResourceManager } from '../../../../../src/main/services/ai/run/AiRunResourceManager'
 import { CONVERSATION_MEMORY_BATCH_MESSAGES } from '../../../../../src/main/services/ai/memory'
 import { AiFileChangeService } from '../../../../../src/main/services/ai/fileChanges/AiFileChangeService'
 import { DocxApplyService } from '../../../../../src/main/services/ai/human/tools/docx/review/DocxApplyService'
@@ -88,6 +89,7 @@ const createTestService = async (options?: {
     ensureEmbeddingReady: async () => await new Promise<never>(() => {}),
     docxApplyService,
     aiFileChangeService,
+    runResourceManager: new AiRunResourceManager(),
     broadcastEvent: (event) => {
       events.push(event)
     },

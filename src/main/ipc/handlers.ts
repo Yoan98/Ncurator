@@ -11,9 +11,11 @@ import { VectorModelDownloadService } from '../services/model/VectorModelDownloa
 import { fetchLlmRemoteModels } from '../services/llm/modelCatalog'
 import { AttachmentService } from '../services/attachments/AttachmentService'
 import { ChatRunService } from '../services/ai/ChatRunService'
+import { AiRunResourceManager } from '../services/ai/run/AiRunResourceManager'
 import { AiFileChangeService } from '../services/ai/fileChanges/AiFileChangeService'
 import { getAiContextUsage } from '../services/ai/contextUsage'
 import { DocxApplyService } from '../services/ai/human/tools/docx/review/DocxApplyService'
+import { releaseDocxRunSession } from '../services/ai/human/tools/docx/worker/docxWorkerClient'
 import type { AiLlmIoRecord } from '../../shared/types'
 import {
   buildWebReferenceItem,
@@ -164,6 +166,9 @@ export function registerHandlers(services: {
   const aiFileChangeService = new AiFileChangeService(storageService.aiFileChange)
   const docxApplyService = new DocxApplyService(storageService.docxApply, aiFileChangeService)
   const attachmentService = new AttachmentService()
+  const runResourceManager = new AiRunResourceManager([
+    { id: 'docx', releaseRun: releaseDocxRunSession }
+  ])
   const chatRunService = new ChatRunService({
     chatStore,
     aiRunStore,
@@ -182,6 +187,7 @@ export function registerHandlers(services: {
     },
     docxApplyService,
     aiFileChangeService,
+    runResourceManager,
     browserUseService: browserEmbedService,
     webCrawlerService,
     recordLlmIo: services.recordLlmIo

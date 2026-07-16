@@ -4,8 +4,8 @@ import { Jieba } from '@node-rs/jieba'
 import { dict } from '@node-rs/jieba/dict'
 import { AiRunService } from './AiRunService'
 import { buildConversationMemorySummary, CONVERSATION_MEMORY_BATCH_MESSAGES } from './memory'
-import { releaseDocxRunSession } from './human/tools/docx/worker/docxWorkerClient'
 import { terminalSessionManager } from './human/tools/terminal/TerminalSessionManager'
+import type { AiRunResourceManager } from './run/AiRunResourceManager'
 import { normalizeSelectedReferences, normalizeWorkspaceBinding } from './utils/runContext'
 import { validateSelectedReferencesForRun } from '../sourceScope/validation'
 import { normalizeForIpc } from '../../utils/serialization'
@@ -93,6 +93,7 @@ type ChatRunServiceDeps = {
   ensureEmbeddingReady: () => Promise<void>
   docxApplyService: DocxApplyService
   aiFileChangeService: AiFileChangeService
+  runResourceManager: AiRunResourceManager
   browserUseService?: BrowserEmbedService
   webCrawlerService?: WebCrawlerService
   recordLlmIo?: (record: AiLlmIoRecord) => void
@@ -841,7 +842,7 @@ export class ChatRunService {
         })
       }
       this.deps.aiFileChangeService.discardRunTracking(runId)
-      await releaseDocxRunSession(runId)
+      await this.deps.runResourceManager.releaseRun(runId)
       const approval = this.activeApprovals.get(runId)
       approval?.resolve({ accepted: false, error: 'run closed' })
       this.activeApprovals.delete(runId)
