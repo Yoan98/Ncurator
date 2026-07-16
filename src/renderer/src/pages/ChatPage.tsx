@@ -1759,11 +1759,6 @@ const ChatPage: React.FC = () => {
     [openResourceTab]
   )
 
-  const resolveReferencePathInfo = useCallback(async (filePath: string): Promise<boolean> => {
-    const response = await window.api.pathInfo(filePath)
-    return Boolean(response.success && response.isDirectory)
-  }, [])
-
   const openMarkdownReference = useCallback(
     async (reference: {
       kind: ParsedNcuratorRefKind
@@ -1782,11 +1777,10 @@ const ChatPage: React.FC = () => {
       await openFile({
         path: reference.path,
         fileName: reference.label,
-        origin: reference.kind === 'reference' ? 'source' : 'read',
-        isDirectory: await resolveReferencePathInfo(reference.path)
+        origin: reference.kind === 'reference' ? 'source' : 'read'
       })
     },
-    [emitErrorMessage, openFile, resolveReferencePathInfo]
+    [emitErrorMessage, openFile]
   )
 
   const handleOpenMarkdownReference = useCallback(

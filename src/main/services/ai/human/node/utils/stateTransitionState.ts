@@ -139,11 +139,6 @@ export const applyBrainDecisionState = (input: {
   createdAt: number
   overrides?: HumanStateOverrides
 }): HumanState => {
-  const evidenceReferences =
-    !input.decisionHint && input.thought.nextAction.action === 'mouth'
-      ? input.thought.nextAction.evidenceReferences
-      : undefined
-
   return {
     ...input.state,
     ...input.overrides,
@@ -157,7 +152,7 @@ export const applyBrainDecisionState = (input: {
       status: 'running',
       currentThought: input.thought,
       pendingDecisionHint: input.decisionHint,
-      evidenceReferences
+      evidenceReferences: undefined
     },
     memory: {
       ...input.state.memory,

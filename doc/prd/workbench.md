@@ -60,7 +60,7 @@
 - 直接写回：AI 工具将最终 docx 或普通文本结果写入源文件或创建目标文件的流程。
 - 修改记录：一次 AI run 中实际创建或更新的文件记录，提供打开文件与回退本次修改入口；当前包括 docx 直接写回和可识别的 terminal 文件改动，后续写类能力接入同一记录。
 - 回退本次修改：基于写回前 checkpoint 恢复文件；新建文件回退时删除目标文件，若文件在 AI 写回后又被修改，需提示用户确认会丢失后续修改。
-- 内部引用链接：assistant markdown 中的 `ncurator://ref` 链接；任何可点击文件或网页链接都必须使用该格式，`kind=reference` 表示 brain 指定的证据引用，`kind=normal` 表示普通可点击文件或网页链接，`resourceType=file/web` 决定打开右侧文件预览或系统浏览器。
+- 内部引用链接：assistant markdown 中的 `ncurator://ref` 链接；文件或网页引用都必须使用该格式，`kind=reference` 表示 brain 指定的证据引用，`kind=normal` 表示普通资源链接，`resourceType=file/web` 表示 brain 声明的资源类型。证据引用在进入 mouth 前由主进程检查一次可访问性，并写入必填字段 `accessStatus=accessible/unavailable`。`accessible` 保持现有文件或网页链接样式并可点击；`unavailable` 仍作为证据保留，但统一淡化为无图标、不可点击的文本。可访问性不在渲染或点击阶段重复检查，旧的、缺少 `accessStatus` 的内部引用协议不再兼容。
 - AI 推进偏好：智能模式下用户对资料使用边界的附加约束，界面选项包括“默认”“本地资料·宽松”“本地资料·严谨”。当前“本地资料”范围包含当前工作区知识库资料、工作区文件和显式参考资料。宽松模式优先使用这些资料，资料不足时允许补充模型知识或外部网页；严谨模式只能把这些资料作为事实依据，资料不足时必须明确说明，不得把模型知识、外部搜索或浏览器结果伪装成资料内事实。
 
 ## 7. 需求规则
@@ -188,6 +188,7 @@
   - `WB-COMPOSER-003-AC5` 决策层文本来自 `assistant_process_thought` 中经过 schema 约束的 `thought.next`，不得展示模型原始 chain-of-thought；决策层出现时，当前思考层必须立即隐藏，即使下一步执行正等待审批。
   - `WB-COMPOSER-003-AC6` 过程流使用用户可理解的分层文案，不直接暴露内部 tool 名或底层事件名；同一轮执行中的多个工具调用合并为一个执行层 header，展开后每个工具按其入参生成一句自然语言说明。
   - `WB-COMPOSER-003-AC7` AI 输出中切到 Settings 或触发 renderer 重新挂载后，回到 Workbench 能通过 snapshot replay 恢复过程流、partial answer、最终回答或等待审批状态。
+  - `WB-COMPOSER-003-AC8` brain 仍负责生成证据引用的名称、地址、资源类型与用途；进入 mouth 前，Main 对引用地址并行去重检查并写入必填的 `accessStatus`。可访问引用保持原有文件或网页链接交互；不可访问引用不得删除，必须显示为无资源图标、不可点击的淡化文本。renderer 渲染和用户点击时均不再次检查可访问性。
 
 #### WB-COMPOSER-004 搜索模式发送路径
 

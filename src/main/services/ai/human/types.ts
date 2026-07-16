@@ -33,6 +33,7 @@ import {
   humanTaskInputSchema,
   humanTaskOutputSchema,
   humanTraceStepSchema,
+  brainEvidenceReferenceSchema,
   humanReferenceSchema,
   fileChangesSummarySchema,
   fileChangeSummaryItemSchema,
@@ -74,6 +75,7 @@ export type HumanTodoItemStatus = z.infer<typeof humanTodoItemStatusSchema>
 export type HumanTodoItem = z.infer<typeof humanTodoItemSchema>
 export type HumanThoughtDecision = z.infer<typeof humanThoughtDecisionSchema>
 export type DeliveryGuidanceItem = z.infer<typeof deliveryGuidanceItemSchema>
+export type BrainEvidenceReference = z.infer<typeof brainEvidenceReferenceSchema>
 export type HumanReference = z.infer<typeof humanReferenceSchema>
 
 export type ToolCallParam = z.infer<typeof toolCallParamSchema>

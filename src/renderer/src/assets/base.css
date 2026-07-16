@@ -1304,6 +1304,15 @@ mark {
   opacity: 0.92;
 }
 
+.markdown-body .markdown-reference-unavailable {
+  display: inline;
+  color: #91918e;
+  opacity: 0.72;
+  cursor: default;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
 .markdown-body .markdown-reference-link-invalid,
 .markdown-body .markdown-reference-link-invalid .markdown-reference-icon {
   color: #b3261e;

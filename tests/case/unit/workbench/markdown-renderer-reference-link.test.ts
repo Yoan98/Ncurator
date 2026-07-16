@@ -41,7 +41,7 @@ describe('workbench markdown renderer reference links', () => {
     const fileName =
       '\u4ea4\u4e92\u5f0f\u63a2\u7a76\u5b66\u4e60\u6848\u4f8b\uff1a\u4ea7\u4e1a\u8f6c\u79fb.docx'
     const filePath = `D:\\1-work-space\\test\\workspace\\.ncurator\\runtime\\assets\\d6fd02d9-b641-4a73-b047-0f286e2e5072\\${fileName}`
-    const content = `[${fileName}](ncurator://ref?kind=reference&resourceType=file&label=${fileName}&path=${filePath})`
+    const content = `[${fileName}](ncurator://ref?kind=reference&resourceType=file&accessStatus=accessible&label=${fileName}&path=${filePath})`
 
     await act(async () => {
       root.render(
@@ -62,5 +62,31 @@ describe('workbench markdown renderer reference links', () => {
       label: fileName,
       path: filePath
     })
+  })
+
+  it('renders unavailable evidence as muted text without an icon or click action', async () => {
+    const { default: MarkdownRenderer } =
+      await import('../../../../src/renderer/src/components/MarkdownRenderer')
+    const onOpenReference = vi.fn()
+    const content =
+      '[lsof 端口检查结果](ncurator://ref?kind=reference&resourceType=file&accessStatus=unavailable&label=lsof%20端口检查结果&path=/tmp/workspace)'
+
+    await act(async () => {
+      root.render(
+        React.createElement(MarkdownRenderer, {
+          content,
+          onOpenReference
+        })
+      )
+    })
+
+    const unavailable = container.querySelector<HTMLElement>('.markdown-reference-unavailable')
+    expect(unavailable?.textContent).toBe('lsof 端口检查结果')
+    expect(unavailable?.getAttribute('data-ref-access-status')).toBe('unavailable')
+    expect(unavailable?.querySelector('.markdown-reference-icon')).toBeNull()
+    expect(container.querySelector('.markdown-reference-link')).toBeNull()
+
+    unavailable?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }))
+    expect(onOpenReference).not.toHaveBeenCalled()
   })
 })

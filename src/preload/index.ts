@@ -109,7 +109,6 @@ const api: DesktopApi = {
     emitE2EIpcCall('revealPath', safePath)
     return ipcRenderer.invoke('reveal-path', filePath)
   },
-  pathInfo: (filePath: string) => ipcRenderer.invoke('path-info', filePath),
   pickDirectory: () => {
     emitE2EIpcCall('pickDirectory')
     return ipcRenderer.invoke('pick-directory')

@@ -85,6 +85,19 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
             const parsed = parseRefHref(href)
             if (parsed.type === 'reference') {
               const label = parsed.label || String(children)
+              if (parsed.accessStatus === 'unavailable') {
+                return (
+                  <span
+                    className="markdown-reference-unavailable"
+                    data-ref-path={parsed.path}
+                    data-ref-kind={parsed.kind}
+                    data-ref-resource-type={parsed.resourceType}
+                    data-ref-access-status={parsed.accessStatus}
+                  >
+                    <span className="min-w-0 break-words [overflow-wrap:anywhere]">{children}</span>
+                  </span>
+                )
+              }
               return (
                 <a
                   href={href}
@@ -92,6 +105,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
                   data-ref-path={parsed.path}
                   data-ref-kind={parsed.kind}
                   data-ref-resource-type={parsed.resourceType}
+                  data-ref-access-status={parsed.accessStatus}
                   onClick={(event) => {
                     if (!onOpenReference) return
                     event.preventDefault()

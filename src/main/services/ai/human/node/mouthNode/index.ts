@@ -10,6 +10,7 @@ import {
   mergeArtifactRefs
 } from '../../../utils/artifacts'
 import { emitFinalizingStarted } from '../../../events/processEvents'
+import { resolveEvidenceReferenceAccess } from '../../shared/evidenceReferenceAccess'
 
 export const createMouthNode = (input: {
   ctx: AiRunContext
@@ -37,11 +38,20 @@ export const createMouthNode = (input: {
     const fileChangeRecords = await input.ctx.listFileChangeRecords({ runId: input.ctx.runId })
     const fileChanges = buildFileChangesSummaryFromFileChangeRecords(fileChangeRecords)
     const history = await input.ctx.loadConversationContext()
+    const pendingEvidenceReferences =
+      stateWithMouthRound.execution.currentThought?.nextAction.action === 'mouth'
+        ? stateWithMouthRound.execution.currentThought.nextAction.evidenceReferences
+        : undefined
+    const evidenceReferences = await resolveEvidenceReferenceAccess({
+      references: pendingEvidenceReferences,
+      workspaceRootPath: input.ctx.workspace?.rootPath
+    })
     const promptState: HumanState = {
       ...stateWithMouthRound,
       execution: {
         ...stateWithMouthRound.execution,
-        fileChanges
+        fileChanges,
+        evidenceReferences
       }
     }
     input.cache.currentState = promptState
@@ -100,7 +110,9 @@ export const createMouthNode = (input: {
 
     const deliveryMarkdown =
       String(rawDeliveryMarkdown || '').trim() ||
-      ['# 处理结果', '', promptState.execution.currentThought?.thought.next || '任务结束'].join('\n')
+      ['# 处理结果', '', promptState.execution.currentThought?.thought.next || '任务结束'].join(
+        '\n'
+      )
 
     return completeHumanTask({
       ctx: input.ctx,

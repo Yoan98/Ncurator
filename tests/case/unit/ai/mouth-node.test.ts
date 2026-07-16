@@ -218,6 +218,16 @@ describe('ai unit mouth node', () => {
     expect(capturedUserPrompt).toContain('文件：report.md')
     expect(capturedUserPrompt).toContain('来源能力：terminal_exec')
     expect(capturedUserPrompt).toContain('修改记录：terminal-change-1')
+    expect(capturedUserPrompt).toContain('accessStatus=unavailable')
+    expect(nextState.execution.evidenceReferences).toEqual([
+      {
+        label: '深度学习.docx',
+        path: '/tmp/workspace/学习笔记/深度学习.docx',
+        resourceType: 'file',
+        usedFor: '支撑深度学习部分的总结内容',
+        accessStatus: 'unavailable'
+      }
+    ])
     expect(nextState.execution.status).toBe('completed')
     expect(nextState.result?.deliveryMarkdown).toBe('# 最终交付\n\n总结文件已经整理完毕。')
     expect(nextState.trace.steps.at(-1)).toMatchObject({

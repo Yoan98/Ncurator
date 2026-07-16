@@ -245,11 +245,15 @@ export const humanThoughtSchema = z.object({
   progressionSummary: z.string().optional()
 })
 
-export const humanReferenceSchema = z.object({
+export const brainEvidenceReferenceSchema = z.object({
   label: z.string().min(1),
   path: z.string().min(1),
   resourceType: z.enum(['file', 'web']),
   usedFor: z.string().min(1)
+})
+
+export const humanReferenceSchema = brainEvidenceReferenceSchema.extend({
+  accessStatus: z.enum(['accessible', 'unavailable'])
 })
 
 export const createBrainNextActionSchema = (toolNames: readonly string[]) =>
@@ -269,7 +273,7 @@ export const createBrainNextActionSchema = (toolNames: readonly string[]) =>
     z
       .object({
         action: z.literal('mouth'),
-        evidenceReferences: z.array(humanReferenceSchema).optional()
+        evidenceReferences: z.array(brainEvidenceReferenceSchema).optional()
       })
       .strict()
   ])
@@ -296,7 +300,7 @@ export const brainNextActionSchema = z.discriminatedUnion('action', [
   z
     .object({
       action: z.literal('mouth'),
-      evidenceReferences: z.array(humanReferenceSchema).optional()
+      evidenceReferences: z.array(brainEvidenceReferenceSchema).optional()
     })
     .strict()
 ])

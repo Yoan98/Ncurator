@@ -1427,19 +1427,6 @@ export function registerHandlers(services: {
     }
   })
 
-  ipcMain.handle('path-info', async (_event, rawPath: string) => {
-    try {
-      const value = String(rawPath || '').trim()
-      if (!value) return { success: false, error: 'path is required' }
-      const resolved = path.resolve(value)
-      if (!fs.existsSync(resolved)) return { success: false, error: 'path not found' }
-      const stat = fs.statSync(resolved)
-      return { success: true, isDirectory: stat.isDirectory() }
-    } catch (error) {
-      return { success: false, error: getErrorMessage(error) }
-    }
-  })
-
   ipcMain.handle('pick-directory', async (event): Promise<PickDirectoryResponse> => {
     try {
       const dialogOptions: OpenDialogOptions = {

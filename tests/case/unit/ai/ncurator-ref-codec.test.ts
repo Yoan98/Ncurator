@@ -76,7 +76,13 @@ describe('ai unit ncurator ref codec', () => {
   ]
 
   it.each(cases)('round-trips build -> parse for $name', ({ label, path, resourceType }) => {
-    const markdown = buildNcuratorRefMarkdown({ label, path, resourceType, kind: 'reference' })
+    const markdown = buildNcuratorRefMarkdown({
+      label,
+      path,
+      resourceType,
+      accessStatus: 'accessible',
+      kind: 'reference'
+    })
     const href = extractHref(markdown)
 
     // CommonMark must not alter the destination we produced.
@@ -87,6 +93,7 @@ describe('ai unit ncurator ref codec', () => {
       type: 'reference',
       kind: 'reference',
       resourceType,
+      accessStatus: 'accessible',
       label,
       path
     })
@@ -111,29 +118,22 @@ describe('ai unit ncurator ref codec', () => {
     expect(parseNcuratorRefHref(href)).toEqual({ type: 'invalid', href, reason: 'invalid_kind' })
   })
 
-  it('infers file resource type when resourceType is missing', () => {
-    expect(
-      parseNcuratorRefHref(
-        'ncurator://ref?kind=reference&label=报告.docx&path=/tmp/workspace/report.docx'
-      )
-    ).toEqual({
-      type: 'reference',
-      kind: 'reference',
-      resourceType: 'file',
-      label: '报告.docx',
-      path: '/tmp/workspace/report.docx'
+  it('rejects links when resourceType is missing', () => {
+    const href =
+      'ncurator://ref?kind=reference&accessStatus=accessible&label=报告.docx&path=/tmp/workspace/report.docx'
+    expect(parseNcuratorRefHref(href)).toEqual({
+      type: 'invalid',
+      href,
+      reason: 'invalid_resource_type'
     })
   })
 
-  it('infers web resource type when resourceType is missing and path is a URL', () => {
-    expect(
-      parseNcuratorRefHref('ncurator://ref?kind=normal&label=OpenAI&path=https://openai.com')
-    ).toEqual({
-      type: 'reference',
-      kind: 'normal',
-      resourceType: 'web',
-      label: 'OpenAI',
-      path: 'https://openai.com'
+  it('rejects links when accessStatus is missing', () => {
+    const href = 'ncurator://ref?kind=normal&resourceType=web&label=OpenAI&path=https://openai.com'
+    expect(parseNcuratorRefHref(href)).toEqual({
+      type: 'invalid',
+      href,
+      reason: 'invalid_access_status'
     })
   })
 
@@ -147,12 +147,13 @@ describe('ai unit ncurator ref codec', () => {
   it('parses raw windows paths emitted without canonical encoding', () => {
     const rawPath =
       'D:\\1-work-space\\test\\workspace\\.ncurator\\runtime\\assets\\d6fd02d9-b641-4a73-b047-0f286e2e5072\\交互式探究学习案例：产业转移.docx'
-    const href = `ncurator://ref?kind=reference&resourceType=file&label=交互式探究学习案例：产业转移.docx&path=${rawPath}`
+    const href = `ncurator://ref?kind=reference&resourceType=file&accessStatus=accessible&label=交互式探究学习案例：产业转移.docx&path=${rawPath}`
 
     expect(parseNcuratorRefHref(href)).toEqual({
       type: 'reference',
       kind: 'reference',
       resourceType: 'file',
+      accessStatus: 'accessible',
       label: '交互式探究学习案例：产业转移.docx',
       path: rawPath
     })
@@ -161,7 +162,7 @@ describe('ai unit ncurator ref codec', () => {
   it('normalizes raw markdown links before CommonMark can consume path backslashes', () => {
     const rawPath =
       'D:\\1-work-space\\test\\workspace\\.ncurator\\runtime\\assets\\d6fd02d9-b641-4a73-b047-0f286e2e5072\\交互式探究学习案例：产业转移.docx'
-    const markdown = `[交互式探究学习案例：产业转移.docx](ncurator://ref?kind=reference&resourceType=file&label=交互式探究学习案例：产业转移.docx&path=${rawPath})`
+    const markdown = `[交互式探究学习案例：产业转移.docx](ncurator://ref?kind=reference&resourceType=file&accessStatus=accessible&label=交互式探究学习案例：产业转移.docx&path=${rawPath})`
     const normalized = normalizeNcuratorRefMarkdownLinks(markdown)
     const href = extractHref(normalized)
 
@@ -171,6 +172,7 @@ describe('ai unit ncurator ref codec', () => {
       type: 'reference',
       kind: 'reference',
       resourceType: 'file',
+      accessStatus: 'accessible',
       label: '交互式探究学习案例：产业转移.docx',
       path: rawPath
     })
@@ -178,12 +180,13 @@ describe('ai unit ncurator ref codec', () => {
 
   it('parses browser-normalized windows paths without a leading slash', () => {
     const href =
-      'ncurator://ref?kind=reference&resourceType=file&label=报告.docx&path=/D:/work/a%20(b)/报告.docx'
+      'ncurator://ref?kind=reference&resourceType=file&accessStatus=unavailable&label=报告.docx&path=/D:/work/a%20(b)/报告.docx'
 
     expect(parseNcuratorRefHref(href)).toEqual({
       type: 'reference',
       kind: 'reference',
       resourceType: 'file',
+      accessStatus: 'unavailable',
       label: '报告.docx',
       path: 'D:/work/a (b)/报告.docx'
     })

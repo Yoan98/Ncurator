@@ -18,7 +18,7 @@ export const buildNormalLinkMarkdown = (input: {
   label: string
   path: string
   resourceType: NcuratorRefResourceType
-}): string => buildNcuratorRefMarkdown({ ...input, kind: 'normal' })
+}): string => buildNcuratorRefMarkdown({ ...input, accessStatus: 'accessible', kind: 'normal' })
 
 export const renderEvidenceReferences = (
   evidenceReferences: HumanReference[] | undefined

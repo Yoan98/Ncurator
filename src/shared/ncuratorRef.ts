@@ -14,12 +14,14 @@
 
 export type NcuratorRefKind = 'reference' | 'normal'
 export type NcuratorRefResourceType = 'file' | 'web'
+export type NcuratorRefAccessStatus = 'accessible' | 'unavailable'
 
 export type ParsedNcuratorRef =
   | {
       type: 'reference'
       kind: NcuratorRefKind
       resourceType: NcuratorRefResourceType
+      accessStatus: NcuratorRefAccessStatus
       label: string
       path: string
     }
@@ -34,7 +36,7 @@ export type ParsedNcuratorRef =
     }
 
 const REF_PREFIX = 'ncurator://ref?'
-const REF_QUERY_KEYS = ['kind', 'resourceType', 'label', 'path'] as const
+const REF_QUERY_KEYS = ['kind', 'resourceType', 'accessStatus', 'label', 'path'] as const
 
 /**
  * Characters that must be percent-encoded inside a ref value:
@@ -79,11 +81,13 @@ export const buildNcuratorRefMarkdown = (input: {
   label: string
   path: string
   resourceType: NcuratorRefResourceType
+  accessStatus: NcuratorRefAccessStatus
   kind: NcuratorRefKind
 }): string => {
   const query = [
     `kind=${input.kind}`,
     `resourceType=${input.resourceType}`,
+    `accessStatus=${input.accessStatus}`,
     `label=${encodeNcuratorRefValue(input.label)}`,
     `path=${encodeNcuratorRefValue(input.path)}`
   ].join('&')
@@ -94,6 +98,7 @@ export const NCURATOR_REF_MARKDOWN_FORMAT_EXAMPLE = buildNcuratorRefMarkdown({
   label: '资料名称',
   path: '/workspace/资料.docx',
   resourceType: 'file',
+  accessStatus: 'accessible',
   kind: 'reference'
 })
 
@@ -153,24 +158,26 @@ export const parseNcuratorRefHref = (href?: string): ParsedNcuratorRef => {
     const params = parseRefQuery(href.slice(REF_PREFIX.length))
     const rawKind = params.kind
     const rawResourceType = params.resourceType
+    const rawAccessStatus = params.accessStatus
     const path = normalizeRefPath(params.path || '')
-    if (!path || (rawKind !== 'reference' && rawKind !== 'normal')) {
-      return { type: 'invalid', href, reason: !path ? 'missing_path' : 'invalid_kind' }
+    if (!path) return { type: 'invalid', href, reason: 'missing_path' }
+    if (rawKind !== 'reference' && rawKind !== 'normal') {
+      return { type: 'invalid', href, reason: 'invalid_kind' }
     }
-    const inferredResourceType: NcuratorRefResourceType = /^https?:\/\//i.test(path)
-      ? 'web'
-      : 'file'
-    const resourceType: NcuratorRefResourceType =
-      rawResourceType === 'file' || rawResourceType === 'web'
-        ? rawResourceType
-        : inferredResourceType
+    if (rawResourceType !== 'file' && rawResourceType !== 'web') {
+      return { type: 'invalid', href, reason: 'invalid_resource_type' }
+    }
+    if (rawAccessStatus !== 'accessible' && rawAccessStatus !== 'unavailable') {
+      return { type: 'invalid', href, reason: 'invalid_access_status' }
+    }
     const normalizedPath = path.replace(/\\/g, '/')
     const fallbackLabel = normalizedPath.split('/').filter(Boolean).pop() || normalizedPath || path
     const label = params.label || fallbackLabel
     return {
       type: 'reference',
       kind: rawKind,
-      resourceType,
+      resourceType: rawResourceType,
+      accessStatus: rawAccessStatus,
       label,
       path
     }
@@ -248,6 +255,7 @@ export const normalizeNcuratorRefMarkdownLinks = (markdown: string): string => {
         ? buildNcuratorRefMarkdown({
             kind: parsed.kind,
             resourceType: parsed.resourceType,
+            accessStatus: parsed.accessStatus,
             label: parsed.label,
             path: parsed.path
           })

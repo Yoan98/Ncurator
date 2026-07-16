@@ -59,7 +59,8 @@ describe('ai unit mouth prompt contract', () => {
         label: '深度学习.docx',
         path: '学习笔记/深度学习.docx',
         resourceType: 'file',
-        usedFor: '支撑深度学习部分的总结内容'
+        usedFor: '支撑深度学习部分的总结内容',
+        accessStatus: 'accessible'
       }
     ]
 
@@ -173,5 +174,6 @@ describe('ai unit mouth prompt contract', () => {
     expect(prompt.user).toContain('引用资料：深度学习.docx')
     expect(prompt.user).toContain('正文引用片段：[深度学习.docx](ncurator://ref?kind=reference')
     expect(prompt.user).toContain('resourceType=file')
+    expect(prompt.user).toContain('accessStatus=accessible')
   })
 })
