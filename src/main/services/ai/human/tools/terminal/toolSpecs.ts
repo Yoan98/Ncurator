@@ -39,13 +39,7 @@ export const TERMINAL_RUN_OUTPUT_SCHEMA = z.object({
   currentTerminalPath: z.string(),
   output: z.string(),
   outputCursor: z.number().int().nonnegative(),
-  exitCode: z.number().int().nullable(),
-  artifacts: z.array(
-    z.object({
-      path: z.string(),
-      operation: z.string()
-    })
-  )
+  exitCode: z.number().int().nullable()
 })
 
 export const TERMINAL_READ_OUTPUT_SCHEMA = z.object({
@@ -97,7 +91,7 @@ export const createTerminalRunToolSpec = (
   outputSchema: TERMINAL_RUN_OUTPUT_SCHEMA,
   promptSpec: {
     name: 'terminal_run',
-    description: `能力：在当前 workspace 内新建持久终端或在指定空闲终端中执行命令；命令超过固定等待时间后会返回 running 状态，进程继续运行。\n结果：返回终端状态、当前路径、增量输出、输出游标、退出码和已完成的文件产物。\n边界：${platform === 'windows' ? 'Windows 终端使用 PowerShell。' : 'macOS 终端使用 zsh。'}安全指令集包含 ${getSafeCommandGuidance(platform)}；安全集外命令需要用户审批；运行中的终端不能接受新命令；禁止通过 shell 后台符号绕过终端会话管理。`,
+    description: `能力：在当前 workspace 内新建持久终端或在指定空闲终端中执行命令；命令超过固定等待时间后会返回 running 状态，进程继续运行。\n结果：返回终端状态、当前路径、增量输出、输出游标和退出码。\n边界：${platform === 'windows' ? 'Windows 终端使用 PowerShell。' : 'macOS 终端使用 zsh。'}安全指令集包含 ${getSafeCommandGuidance(platform)}；安全集外命令需要用户审批；运行中的终端不能接受新命令；禁止通过 shell 后台符号绕过终端会话管理。`,
     whenToUse: '适用于需要执行终端命令的任务。',
     examples: []
   },

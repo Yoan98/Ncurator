@@ -17,7 +17,7 @@ import {
   vectorSelectors
 } from '../../../src/renderer/src/testing/selectors'
 
-export type SettingsPageTarget = 'model' | 'workspace' | 'vector' | 'app'
+export type SettingsPageTarget = 'model' | 'workspace' | 'vector'
 
 export const SETTINGS_E2E_TIMEOUT_MS = 30_000
 export const SETTINGS_REAL_WORKSPACE_E2E_TIMEOUT_MS = 180_000
@@ -153,22 +153,19 @@ const byTestIdPrefix = (testIdPrefix: string): string => `[data-testid^="${testI
 const SETTINGS_TARGET_HEADINGS: Record<SettingsPageTarget, string> = {
   model: '大模型',
   workspace: '工作空间',
-  vector: '向量模型',
-  app: '应用更新'
+  vector: '向量模型'
 }
 
 const SETTINGS_TARGET_HASHES: Record<SettingsPageTarget, string> = {
   model: '#/settings/model',
   workspace: '#/settings/workspace',
-  vector: '#/model-download',
-  app: '#/settings/app'
+  vector: '#/model-download'
 }
 
 const SETTINGS_TARGET_SELECTORS: Record<SettingsPageTarget, string> = {
   model: settingsSelectors.page,
   workspace: settingsSelectors.page,
-  vector: vectorSelectors.page,
-  app: settingsSelectors.appUpdatePanel
+  vector: vectorSelectors.page
 }
 
 const closeServer = async (server: Server): Promise<void> => {

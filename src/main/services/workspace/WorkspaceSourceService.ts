@@ -1,10 +1,7 @@
 import fs from 'fs/promises'
 import path from 'path'
 import crypto from 'crypto'
-import type {
-  WorkspaceFileIndexRecord,
-  WorkspaceTreeEntry
-} from '../../../shared/types'
+import type { WorkspaceFileIndexRecord, WorkspaceTreeEntry } from '../../../shared/types'
 import type {
   WorkspaceTreeEntryDiff,
   WorkspaceTreeScanResult,
@@ -55,6 +52,62 @@ const isVisiblePath = (relativePath: string): boolean =>
     .some((segment) => segment.startsWith('.'))
 
 export class WorkspaceSourceService {
+  public async listDirectory(input: {
+    workspaceId: string
+    rootPath: string
+    relativePath?: string
+  }): Promise<WorkspaceTreeEntry[]> {
+    const { normalizedRootPath } = await this.normalizeWorkspaceRoot(input.rootPath)
+    const relativePath = String(input.relativePath || '')
+      .replace(/\\/g, '/')
+      .replace(/^\/+|\/+$/g, '')
+    const currentPath = path.resolve(normalizedRootPath, relativePath)
+    if (!isSameOrNestedPath(currentPath, normalizedRootPath)) {
+      throw new Error('目录不在当前工作区内')
+    }
+    const dirEntries = await fs.readdir(currentPath, { withFileTypes: true })
+    const ignoredNames = new Set(['node_modules', '.git', '.cache', '.next'])
+    const visible = dirEntries
+      .filter((entry) => !entry.name.startsWith('.') && !ignoredNames.has(entry.name))
+      .sort((left, right) => {
+        if (left.isDirectory() !== right.isDirectory()) return left.isDirectory() ? -1 : 1
+        return left.name.localeCompare(right.name)
+      })
+    const entries: WorkspaceTreeEntry[] = []
+    for (const entry of visible) {
+      if (!entry.isDirectory() && !entry.isFile()) continue
+      const childRelativePath = [relativePath, entry.name].filter(Boolean).join('/')
+      const absolutePath = path.join(currentPath, entry.name)
+      const base = {
+        id: toEntryId(
+          input.workspaceId,
+          entry.isDirectory() ? 'directory' : 'file',
+          childRelativePath
+        ),
+        workspace_id: input.workspaceId,
+        parent_id: toParentId(input.workspaceId, relativePath),
+        kind: entry.isDirectory() ? ('directory' as const) : ('file' as const),
+        name: entry.name,
+        relative_path: childRelativePath,
+        absolute_path: absolutePath,
+        supported_for_index: entry.isFile() && isSupportedLocalFilePath(absolutePath)
+      }
+      if (entry.isDirectory()) {
+        entries.push(base)
+        continue
+      }
+      const stat = await fs.stat(absolutePath)
+      const fileExt = path.extname(entry.name).toLowerCase()
+      entries.push({
+        ...base,
+        file_ext: fileExt.slice(1) || undefined,
+        size: stat.size,
+        mtime_ms: Math.trunc(stat.mtimeMs)
+      })
+    }
+    return entries
+  }
+
   public async normalizeWorkspaceRoot(inputPath: string): Promise<WorkspaceValidationResult> {
     const requestedPath = String(inputPath || '').trim()
     if (!requestedPath) {
@@ -129,7 +182,9 @@ export class WorkspaceSourceService {
       (entry) => entry.kind === 'file' && entry.supported_for_index
     )
     const entryMap = new Map(supportedEntries.map((entry) => [entry.relative_path, entry] as const))
-    const recordMap = new Map(input.records.map((record) => [record.relative_path, record] as const))
+    const recordMap = new Map(
+      input.records.map((record) => [record.relative_path, record] as const)
+    )
 
     const diff: WorkspaceTreeEntryDiff = {
       added: [],
@@ -216,7 +271,9 @@ export class WorkspaceSourceService {
     entries: WorkspaceTreeEntry[]
     records: WorkspaceFileIndexRecord[]
   }): WorkspaceTreeEntry[] {
-    const recordMap = new Map(input.records.map((record) => [record.relative_path, record] as const))
+    const recordMap = new Map(
+      input.records.map((record) => [record.relative_path, record] as const)
+    )
     return input.entries
       .filter((entry) => isVisiblePath(entry.relative_path))
       .map((entry) => {

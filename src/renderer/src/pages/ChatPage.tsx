@@ -25,6 +25,7 @@ import type {
   AiFileChangeRecord,
   AiRunEvent,
   AiRunRecord,
+  BrowserTabState,
   ChatAttachment,
   ChatMessage,
   ChatMessageContentNode,
@@ -38,6 +39,7 @@ import type {
   WorkspaceSource,
   WorkspaceRuntimeBinding
 } from '../../../shared/types'
+import { USER_MANUAL_URL } from '../../../shared/constants'
 import MarkdownRenderer from '../components/MarkdownRenderer'
 import { useNavigate } from 'react-router-dom'
 import { HiOutlineCog6Tooth } from 'react-icons/hi2'
@@ -50,7 +52,6 @@ import ReferenceInlineToken from '../components/workbench/composer/ReferenceInli
 import type { ImageLightboxImage } from '../components/workbench/ImageLightbox'
 import type { ComposerDraftValue } from '../components/workbench/composer/types'
 import {
-  WORKBENCH_CONTENT_PANEL_COLLAPSED_STORAGE_KEY,
   WORKBENCH_LEFT_TITLEBAR_COLLAPSED_WIDTH,
   WORKBENCH_SIDEBAR_DEFAULT_WIDTH,
   WORKBENCH_SIDEBAR_MAX_WIDTH,
@@ -99,6 +100,7 @@ import WindowsTitleBar from '../components/WindowsTitleBar'
 import SidebarPanelIcon from '../components/SidebarPanelIcon'
 import { collectReferenceDocumentIds, pruneReferencesByWorkspace } from '../utils/reference'
 import { useWorkbenchMode } from '../contexts/WorkbenchModeContext'
+import SidebarUpdateControl from '../components/update/SidebarUpdateControl'
 
 type ApprovalBatchRequiredEvent = Extract<AiRunEvent, { type: 'approval_batch_required' }>
 type UserTakeoverRequiredEvent = Extract<AiRunEvent, { type: 'user_takeover_required' }>
@@ -526,8 +528,6 @@ const hasWorkspaceRootPath = (
 const getWorkspaceRequirementHint = (workspace: WorkspaceSource | null): string =>
   workspace ? '当前工作区未设置文件目录，请前往 设置 > 工作空间 绑定地址' : '请先选择工作区'
 
-const USER_MANUAL_URL = 'https://www.ncurator.com/zh/manual'
-
 const delay = (ms: number): Promise<void> =>
   new Promise((resolve) => {
     window.setTimeout(resolve, ms)
@@ -642,12 +642,10 @@ const ChatPage: React.FC = () => {
     return clampWorkbenchSidebarWidth(stored ? Number(stored) : WORKBENCH_SIDEBAR_DEFAULT_WIDTH)
   })
   const [collapsedWorkspaceIds, setCollapsedWorkspaceIds] = useState<Set<string>>(() => new Set())
-  const [contentPanelCollapsed, setContentPanelCollapsed] = useState<boolean>(() => {
-    const stored = window.localStorage.getItem(WORKBENCH_CONTENT_PANEL_COLLAPSED_STORAGE_KEY)
-    return stored === null ? true : stored === 'true'
-  })
+  const [contentPanelCollapsed, setContentPanelCollapsed] = useState(true)
 
   const [activeApplyRecord, setActiveApplyRecord] = useState<AiFileChangeRecord | null>(null)
+  const [fileChangeRecords, setFileChangeRecords] = useState<AiFileChangeRecord[]>([])
   const [applyLoading, setApplyLoading] = useState(false)
   const [applyReverting, setApplyReverting] = useState(false)
   const [applyForceConfirm, setApplyForceConfirm] = useState<ApplyForceConfirmState | null>(null)
@@ -705,6 +703,38 @@ const ChatPage: React.FC = () => {
 
   const tabWorkspaceKey = currentSessionId || '__draft__'
   const tabWorkspace = tabWorkspaces[tabWorkspaceKey] || EMPTY_TAB_WORKSPACE
+
+  useEffect(() => {
+    let cancelled = false
+    void window.api.browserTabList({ ownerId: tabWorkspaceKey }).then((response) => {
+      if (cancelled || !response.success || response.tabs.length === 0) return
+      setTabWorkspaces((current) => {
+        const workspace = current[tabWorkspaceKey] || EMPTY_TAB_WORKSPACE
+        const knownIds = new Set(workspace.tabs.map((tab) => tab.id))
+        const restoredTabs: WorkbenchResourceTab[] = response.tabs
+          .filter((browser) => !knownIds.has(`browser:${browser.id}`))
+          .map((browser) => ({
+            id: `browser:${browser.id}`,
+            kind: 'browser',
+            browserTabId: browser.id,
+            title: browser.title || (browser.url ? browser.url : '新标签页'),
+            state: {
+              kind: 'browser',
+              title: browser.title || (browser.url ? browser.url : '新标签页'),
+              browserTabId: browser.id
+            }
+          }))
+        if (restoredTabs.length === 0) return current
+        return {
+          ...current,
+          [tabWorkspaceKey]: { ...workspace, tabs: [...workspace.tabs, ...restoredTabs] }
+        }
+      })
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [tabWorkspaceKey])
 
   const composerDraftValue = useMemo<ComposerDraftValue>(
     () => ({
@@ -1019,14 +1049,30 @@ const ChatPage: React.FC = () => {
     [updateCurrentTabWorkspace]
   )
 
-  const openBrowserTab = useCallback((): void => {
-    openResourceTab({
-      id: 'browser:main',
-      kind: 'browser',
-      title: '浏览器',
-      state: { kind: 'browser', title: '内置浏览器' }
-    })
-  }, [openResourceTab])
+  const openBrowserTab = useCallback(
+    async (existingTabId?: string): Promise<void> => {
+      const response = existingTabId
+        ? await window.api.browserPanelStateGet({ tabId: existingTabId })
+        : await window.api.browserTabCreate({ ownerId: currentSessionIdRef.current || '__draft__' })
+      if (!response.success || !response.state) {
+        emitErrorMessage(response.error || '无法创建浏览器标签')
+        return
+      }
+      const browser = response.state
+      openResourceTab({
+        id: `browser:${browser.id}`,
+        kind: 'browser',
+        browserTabId: browser.id,
+        title: browser.title || '新标签页',
+        state: {
+          kind: 'browser',
+          title: browser.title || '新标签页',
+          browserTabId: browser.id
+        }
+      })
+    },
+    [emitErrorMessage, openResourceTab]
+  )
 
   const showApplyWorkspace = useCallback(
     (record: AiFileChangeRecord): void => {
@@ -1323,6 +1369,7 @@ const ChatPage: React.FC = () => {
       setContentPanel(createEmptyPanel())
       setContentPanelCollapsed(true)
       resetApplyWorkspaceState()
+      setFileChangeRecords([])
       void refreshContextUsage(null)
     },
     [applyComposerDraft, refreshContextUsage, saveComposerDraftForSession]
@@ -1346,6 +1393,9 @@ const ChatPage: React.FC = () => {
       }
 
       setActiveApplyRecord(nextRecord)
+      setFileChangeRecords((current) =>
+        current.map((record) => (record.id === nextRecord.id ? nextRecord : record))
+      )
 
       if (input.openWorkspace) {
         showApplyWorkspace(nextRecord)
@@ -1390,6 +1440,7 @@ const ChatPage: React.FC = () => {
       }
 
       const applyTargetsByRunId = groupApplyTargetsByRunId(allRecords)
+      setFileChangeRecords(allRecords)
 
       setAssistantTurns((previous) => {
         const nextTurns: Record<string, AssistantTurnViewModel> = { ...previous }
@@ -1442,6 +1493,7 @@ const ChatPage: React.FC = () => {
     } catch (error) {
       console.error('Failed to load file change records', error)
       setActiveApplyRecord(null)
+      setFileChangeRecords([])
     }
   }
   loadFileChangesForSessionRef.current = loadFileChangesForSession
@@ -1497,8 +1549,12 @@ const ChatPage: React.FC = () => {
         return
       }
       setContentPanel(activeTab.state)
-      setContentPanelCollapsed(false)
-      if (activeTab.state.kind === 'apply_workspace' && activeTab.state.applyId) {
+      setContentPanelCollapsed(true)
+      if (
+        activeTab.state.kind === 'apply_workspace' &&
+        activeTab.state.applyId &&
+        !activeTab.state.applyId.startsWith('session:')
+      ) {
         void loadApplyRecordRef.current({ applyId: activeTab.state.applyId })
       }
     })
@@ -1598,13 +1654,6 @@ const ChatPage: React.FC = () => {
       }
     }
   }, [])
-
-  useEffect(() => {
-    window.localStorage.setItem(
-      WORKBENCH_CONTENT_PANEL_COLLAPSED_STORAGE_KEY,
-      String(contentPanelCollapsed)
-    )
-  }, [contentPanelCollapsed])
 
   useEffect(() => {
     scrollToBottom()
@@ -1777,7 +1826,14 @@ const ChatPage: React.FC = () => {
       updateCurrentTabWorkspace((current) => ({ ...current, activeTabId: tabId }))
       setContentPanel(tab.state)
       setContentPanelCollapsed(false)
-      if (tab.state.kind === 'apply_workspace' && tab.state.applyId) {
+      if (tab.kind === 'browser' && tab.browserTabId) {
+        void window.api.browserTabActivate({ tabId: tab.browserTabId })
+      }
+      if (
+        tab.state.kind === 'apply_workspace' &&
+        tab.state.applyId &&
+        !tab.state.applyId.startsWith('session:')
+      ) {
         void loadApplyRecordRef.current({ applyId: tab.state.applyId })
       }
     },
@@ -1788,6 +1844,10 @@ const ChatPage: React.FC = () => {
     (tabId: string): void => {
       const closedIndex = tabWorkspace.tabs.findIndex((item) => item.id === tabId)
       if (closedIndex < 0) return
+      const closedTab = tabWorkspace.tabs[closedIndex]
+      if (closedTab?.kind === 'browser' && closedTab.browserTabId) {
+        void window.api.browserTabClose({ tabId: closedTab.browserTabId })
+      }
       const tabs = tabWorkspace.tabs.filter((item) => item.id !== tabId)
       let nextActiveId = tabWorkspace.activeTabId
       let nextTab: WorkbenchResourceTab | undefined
@@ -1806,7 +1866,11 @@ const ChatPage: React.FC = () => {
         return
       }
       setContentPanel(nextTab.state)
-      if (nextTab.state.kind === 'apply_workspace' && nextTab.state.applyId) {
+      if (
+        nextTab.state.kind === 'apply_workspace' &&
+        nextTab.state.applyId &&
+        !nextTab.state.applyId.startsWith('session:')
+      ) {
         void loadApplyRecordRef.current({ applyId: nextTab.state.applyId })
       }
     },
@@ -1814,23 +1878,60 @@ const ChatPage: React.FC = () => {
   )
 
   const addBrowserTab = useCallback((): void => {
-    openBrowserTab()
+    void openBrowserTab()
   }, [openBrowserTab])
 
-  const addFileTab = useCallback((): void => {
-    void window.api.pickFile(selectedWorkspace?.root_path).then((response) => {
-      if (response.error) {
-        emitErrorMessage(response.error)
-        return
-      }
-      if (response.canceled || !response.path) return
-      void openFile({
-        path: response.path,
-        fileName: getFileTabTitle(response.path),
-        origin: 'preview'
+  const handleBrowserStateChange = useCallback(
+    (browser: BrowserTabState): void => {
+      const resourceId = `browser:${browser.id}`
+      const title = browser.title || (browser.url ? browser.url : '新标签页')
+      setTabWorkspaces((current) => {
+        const workspace = current[tabWorkspaceKey]
+        if (!workspace) return current
+        return {
+          ...current,
+          [tabWorkspaceKey]: {
+            ...workspace,
+            tabs: workspace.tabs.map((tab) =>
+              tab.id === resourceId
+                ? {
+                    ...tab,
+                    title,
+                    state: { kind: 'browser', title, browserTabId: browser.id }
+                  }
+                : tab
+            )
+          }
+        }
       })
+      setContentPanel((current) =>
+        current.kind === 'browser' && current.browserTabId === browser.id
+          ? { ...current, title }
+          : current
+      )
+    },
+    [tabWorkspaceKey]
+  )
+
+  const addFileTab = useCallback((): void => {
+    openResourceTab({
+      id: 'file:launcher',
+      kind: 'file',
+      title: '打开文件',
+      state: { kind: 'file_launcher', title: '打开文件' }
     })
-  }, [emitErrorMessage, openFile, selectedWorkspace?.root_path])
+  }, [openResourceTab])
+
+  const openWorkspaceFile = useCallback(
+    (filePath: string, fileName: string): void => {
+      void openFile({ path: filePath, fileName, origin: 'preview' })
+    },
+    [openFile]
+  )
+
+  const openWorkspaceChange = useCallback((changeId: string): void => {
+    void loadApplyRecordRef.current({ applyId: changeId, openWorkspace: true })
+  }, [])
 
   useEffect(() => {
     const unsubscribe = window.api.onAiRunEvent((event) => {
@@ -1885,7 +1986,7 @@ const ChatPage: React.FC = () => {
       }
 
       if (event.type === 'browser_panel_opened') {
-        openBrowserTab()
+        void openBrowserTab(event.browserTabId)
         return
       }
 
@@ -3073,6 +3174,7 @@ const ChatPage: React.FC = () => {
               <HiOutlineCog6Tooth className="h-[18px] w-[18px] shrink-0 text-[#787774]" />
               <span>设置</span>
             </button>
+            <SidebarUpdateControl />
             <Tooltip title="查看使用帮助" placement="right">
               <button
                 type="button"
@@ -3104,305 +3206,296 @@ const ChatPage: React.FC = () => {
       </aside>
 
       <div className="nc-main-pane min-w-0 flex-1" style={WORKBENCH_POSITIONED_PANE_STYLE}>
-        {isNewSession ? (
-          <div className="nc-main-empty-titlebar" aria-hidden="true">
-            <div
-              className="nc-main-empty-titlebar-safe-zone"
-              style={{
-                width: sidebarCollapsed ? WORKBENCH_LEFT_TITLEBAR_COLLAPSED_WIDTH : 0
-              }}
-            />
-            <div
-              className="nc-main-empty-titlebar-drag-region"
-              data-testid={workbenchSelectors.emptyDragRegion}
-            />
-          </div>
-        ) : null}
-        <div className="flex h-full min-h-0 flex-col">
-          {!isNewSession ? (
-            <div className="nc-topbar" data-testid={workbenchSelectors.topbar}>
+        <div className="flex h-full min-h-0 overflow-hidden">
+          <div className="relative flex min-w-0 flex-1 flex-col">
+            {isNewSession ? (
               <div
-                className="nc-topbar-collapsed-safe-zone"
-                style={{
-                  width: sidebarCollapsed ? WORKBENCH_LEFT_TITLEBAR_COLLAPSED_WIDTH : 0
-                }}
+                className={`nc-main-empty-titlebar ${contentPanelCollapsed ? 'nc-main-empty-titlebar-window-safe' : ''}`}
                 aria-hidden="true"
-              />
-              <div className="nc-topbar-title-region min-w-0 flex-1 bg-white">
-                {currentSession ? (
-                  <div className="flex min-w-0 items-center gap-2 leading-none">
-                    <div className="nc-topbar-title-text truncate text-sm font-semibold leading-none text-[#37352F]">
-                      {currentSession.title}
+              >
+                <div
+                  className="nc-main-empty-titlebar-safe-zone"
+                  style={{
+                    width: sidebarCollapsed ? WORKBENCH_LEFT_TITLEBAR_COLLAPSED_WIDTH : 0
+                  }}
+                />
+                <div
+                  className="nc-main-empty-titlebar-drag-region"
+                  data-testid={workbenchSelectors.emptyDragRegion}
+                />
+              </div>
+            ) : null}
+            {!isNewSession ? (
+              <div className="nc-topbar" data-testid={workbenchSelectors.topbar}>
+                <div
+                  className="nc-topbar-collapsed-safe-zone"
+                  style={{
+                    width: sidebarCollapsed ? WORKBENCH_LEFT_TITLEBAR_COLLAPSED_WIDTH : 0
+                  }}
+                  aria-hidden="true"
+                />
+                <div className="nc-topbar-title-region min-w-0 flex-1 bg-white">
+                  {currentSession ? (
+                    <div className="flex min-w-0 items-center gap-2 leading-none">
+                      <div className="nc-topbar-title-text truncate text-sm font-semibold leading-none text-[#37352F]">
+                        {currentSession.title}
+                      </div>
                     </div>
-                  </div>
+                  ) : null}
+                </div>
+
+                <div
+                  className="nc-topbar-drag-spacer"
+                  style={WORKBENCH_DRAG_REGION_STYLE}
+                  data-testid={workbenchSelectors.topbarDragRegion}
+                  aria-hidden="true"
+                />
+
+                {platform === 'win32' && contentPanelCollapsed ? (
+                  <div className="nc-topbar-window-controls-safe-zone" aria-hidden="true" />
                 ) : null}
               </div>
+            ) : null}
 
-              <div
-                className="nc-topbar-drag-spacer"
-                style={WORKBENCH_DRAG_REGION_STYLE}
-                data-testid={workbenchSelectors.topbarDragRegion}
-                aria-hidden="true"
-              />
-
-              <Button
-                type="text"
-                size="small"
-                icon={
-                  <SidebarPanelIcon
-                    className="h-4 w-4"
-                    variant={contentPanelCollapsed ? 'expand' : 'collapse'}
-                  />
-                }
-                className="workbench-no-drag !flex !h-7 !w-7 !items-center !justify-center !rounded-[6px] !border-0 !bg-transparent !p-0 !shadow-none !text-[#91918E] hover:!bg-transparent hover:!text-[#37352F]"
-                style={WORKBENCH_NO_DRAG_REGION_STYLE}
-                onClick={() => setContentPanelCollapsed((previous) => !previous)}
-                data-testid={workbenchSelectors.contentPanelToggle}
-                aria-label={contentPanelCollapsed ? '展开右侧栏' : '收起右侧栏'}
-              />
-
-              {platform === 'win32' ? (
-                <div className="nc-topbar-window-controls-safe-zone" aria-hidden="true" />
-              ) : null}
-            </div>
-          ) : null}
-
-          <div className="flex min-h-0 flex-1 overflow-hidden">
-            <div className="min-w-0 flex-1">
-              <div className="flex h-full min-h-0 flex-col">
-                <div
-                  className={`nc-document-scroll ${isNewSession ? '!hidden' : ''}`}
-                  ref={scrollRef}
-                  onScroll={handleMessageScroll}
-                >
-                  <div className="nc-document" data-testid={workbenchSelectors.messageList}>
-                    {loadingOlderMessages ? (
-                      <div className="py-3 text-center text-xs text-[#8A8781]">
-                        正在加载更早消息
-                      </div>
-                    ) : null}
-                    {currentMessages.map((messageItem) =>
-                      messageItem.role === 'user'
-                        ? renderUserMessage(messageItem)
-                        : renderAssistantMessage(messageItem)
-                    )}
+            <div className="flex min-h-0 flex-1 overflow-hidden">
+              <div className="flex h-full min-h-0 min-w-0 flex-1">
+                <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
+                  <div
+                    className={`nc-document-scroll ${isNewSession ? '!hidden' : ''}`}
+                    ref={scrollRef}
+                    onScroll={handleMessageScroll}
+                  >
+                    <div className="nc-document" data-testid={workbenchSelectors.messageList}>
+                      {loadingOlderMessages ? (
+                        <div className="py-3 text-center text-xs text-[#8A8781]">
+                          正在加载更早消息
+                        </div>
+                      ) : null}
+                      {currentMessages.map((messageItem) =>
+                        messageItem.role === 'user'
+                          ? renderUserMessage(messageItem)
+                          : renderAssistantMessage(messageItem)
+                      )}
+                    </div>
                   </div>
-                </div>
 
-                <div
-                  className={`nc-floating-composer-shell ${
-                    isNewSession ? 'flex flex-1 items-center justify-center pb-[18vh]' : ''
-                  }`}
-                >
-                  <div className="mx-auto w-full max-w-[760px]">
-                    {isNewSession ? (
-                      <div className="mb-8 flex items-center justify-center text-center text-[28px] font-normal tracking-[-0.02em] text-[#37352F]">
-                        <span>
-                          {composerMode === 'search' ? '俺只会搜索本地资料！！' : '找俺干啥？'}
-                        </span>
-                      </div>
-                    ) : null}
-                    {composerMode === 'ai' && pendingUserTakeover ? (
-                      <UserTakeoverPanel
-                        message={pendingUserTakeover.message}
-                        confirming={userTakeoverConfirming}
-                        cancelling={cancellingRun}
-                        onConfirm={() => void handleUserTakeoverConfirm()}
-                        onCancel={() => void handleCancel()}
-                      />
-                    ) : composerMode === 'ai' && pendingApprovalBatch ? (
-                      <div
-                        className="min-w-0 overflow-hidden rounded-[12px] border border-[#E0DFDC] bg-[#FFFFFF] shadow-[0_8px_24px_rgba(15,15,15,0.08)]"
-                        data-testid={chatSelectors.approvalBatchCard}
-                      >
-                        {pendingApprovalBatch && currentApprovalItem ? (
-                          <div>
-                            <div className="flex items-center justify-between gap-3 px-5 pt-4">
-                              <div className="flex min-w-0 items-center gap-2">
-                                <div className="min-w-0">
-                                  <div className="text-[15px] font-semibold text-[#37352F]">
-                                    需要确认此操作
-                                  </div>
-                                  <div className="text-xs text-[#9B9A97]">
-                                    审批 {approvalCurrentIndex + 1} /{' '}
-                                    {pendingApprovalBatch.items.length}
+                  <div
+                    className={`nc-floating-composer-shell ${
+                      isNewSession ? 'flex flex-1 items-center justify-center pb-[18vh]' : ''
+                    }`}
+                    data-testid={workbenchSelectors.composerShell}
+                  >
+                    <div className="mx-auto w-full max-w-[760px]">
+                      {isNewSession ? (
+                        <div className="mb-8 flex items-center justify-center text-center text-[28px] font-normal tracking-[-0.02em] text-[#37352F]">
+                          <span>
+                            {composerMode === 'search' ? '俺只会搜索本地资料！！' : '找俺干啥？'}
+                          </span>
+                        </div>
+                      ) : null}
+                      {composerMode === 'ai' && pendingUserTakeover ? (
+                        <UserTakeoverPanel
+                          message={pendingUserTakeover.message}
+                          confirming={userTakeoverConfirming}
+                          cancelling={cancellingRun}
+                          onConfirm={() => void handleUserTakeoverConfirm()}
+                          onCancel={() => void handleCancel()}
+                        />
+                      ) : composerMode === 'ai' && pendingApprovalBatch ? (
+                        <div
+                          className="min-w-0 overflow-hidden rounded-[12px] border border-[#E0DFDC] bg-[#FFFFFF] shadow-[0_8px_24px_rgba(15,15,15,0.08)]"
+                          data-testid={chatSelectors.approvalBatchCard}
+                        >
+                          {pendingApprovalBatch && currentApprovalItem ? (
+                            <div>
+                              <div className="flex items-center justify-between gap-3 px-5 pt-4">
+                                <div className="flex min-w-0 items-center gap-2">
+                                  <div className="min-w-0">
+                                    <div className="text-[15px] font-semibold text-[#37352F]">
+                                      需要确认此操作
+                                    </div>
+                                    <div className="text-xs text-[#9B9A97]">
+                                      审批 {approvalCurrentIndex + 1} /{' '}
+                                      {pendingApprovalBatch.items.length}
+                                    </div>
                                   </div>
                                 </div>
+                                <div className="flex items-center gap-1">
+                                  <Button
+                                    type="text"
+                                    size="small"
+                                    icon={<HiChevronLeft className="h-4 w-4" />}
+                                    disabled={approvalCurrentIndex <= 0 || approvalSubmitting}
+                                    onClick={() =>
+                                      setApprovalCurrentIndex((current) => Math.max(0, current - 1))
+                                    }
+                                    data-testid={chatSelectors.approvalBatchPrevButton}
+                                  />
+                                  <Button
+                                    type="text"
+                                    size="small"
+                                    icon={<HiChevronRight className="h-4 w-4" />}
+                                    disabled={
+                                      approvalCurrentIndex >=
+                                        pendingApprovalBatch.items.length - 1 || approvalSubmitting
+                                    }
+                                    onClick={() =>
+                                      setApprovalCurrentIndex((current) =>
+                                        Math.min(pendingApprovalBatch.items.length - 1, current + 1)
+                                      )
+                                    }
+                                    data-testid={chatSelectors.approvalBatchNextButton}
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => void handleCancel()}
+                                    disabled={cancellingRun}
+                                    className={`ml-1 inline-flex h-8 w-8 items-center justify-center rounded-[6px] text-white transition ${
+                                      cancellingRun
+                                        ? 'bg-[#E0DFDC]'
+                                        : 'bg-[#B3261E] hover:bg-[#8F3028]'
+                                    }`}
+                                    data-testid={workbenchSelectors.sendButton}
+                                    aria-label="停止本次运行"
+                                  >
+                                    {cancellingRun ? (
+                                      <Spin size="small" />
+                                    ) : (
+                                      <HiStop className="h-4 w-4" />
+                                    )}
+                                  </button>
+                                </div>
                               </div>
-                              <div className="flex items-center gap-1">
-                                <Button
-                                  type="text"
-                                  size="small"
-                                  icon={<HiChevronLeft className="h-4 w-4" />}
-                                  disabled={approvalCurrentIndex <= 0 || approvalSubmitting}
-                                  onClick={() =>
-                                    setApprovalCurrentIndex((current) => Math.max(0, current - 1))
-                                  }
-                                  data-testid={chatSelectors.approvalBatchPrevButton}
-                                />
-                                <Button
-                                  type="text"
-                                  size="small"
-                                  icon={<HiChevronRight className="h-4 w-4" />}
-                                  disabled={
-                                    approvalCurrentIndex >= pendingApprovalBatch.items.length - 1 ||
-                                    approvalSubmitting
-                                  }
-                                  onClick={() =>
-                                    setApprovalCurrentIndex((current) =>
-                                      Math.min(pendingApprovalBatch.items.length - 1, current + 1)
-                                    )
-                                  }
-                                  data-testid={chatSelectors.approvalBatchNextButton}
-                                />
+                              <p className="mx-5 mt-3 text-[13px] leading-6 text-[#787774]">
+                                {currentApprovalItem.commandExplanation}
+                              </p>
+                              <code className="mx-5 mt-3 block max-h-[min(34vh,320px)] overflow-auto whitespace-pre-wrap break-words rounded-[6px] border border-[#EEEEEC] bg-[#F4F4F2] px-3.5 py-3 font-mono text-[13px] leading-6 text-[#2F3437] [overflow-wrap:anywhere]">
+                                {currentApprovalItem.command}
+                              </code>
+                              <div className="mx-2 mt-3 space-y-1">
                                 <button
                                   type="button"
-                                  onClick={() => void handleCancel()}
-                                  disabled={cancellingRun}
-                                  className={`ml-1 inline-flex h-8 w-8 items-center justify-center rounded-[6px] text-white transition ${
-                                    cancellingRun
-                                      ? 'bg-[#E0DFDC]'
-                                      : 'bg-[#B3261E] hover:bg-[#8F3028]'
-                                  }`}
-                                  data-testid={workbenchSelectors.sendButton}
-                                  aria-label="停止本次运行"
+                                  className="grid min-h-11 w-full grid-cols-[1fr_auto] items-center rounded-[6px] px-3 text-left text-[13px] text-[#37352F] shadow-[inset_3px_0_0_#37352F,inset_0_0_0_1px_#EEEEEC] hover:bg-[#F4F4F2]"
+                                  onClick={() =>
+                                    void handleApprovalDecision({
+                                      itemId: currentApprovalItem.itemId,
+                                      action: 'approve'
+                                    })
+                                  }
+                                  disabled={approvalSubmitting}
+                                  data-testid={chatSelectors.approvalBatchApproveButton}
                                 >
-                                  {cancellingRun ? (
-                                    <Spin size="small" />
-                                  ) : (
-                                    <HiStop className="h-4 w-4" />
-                                  )}
+                                  <span>允许本次操作</span>
+                                  <HiCheck className="h-4 w-4" />
+                                </button>
+                                <button
+                                  type="button"
+                                  className="grid min-h-11 w-full grid-cols-[1fr_auto] items-center rounded-[6px] px-3 text-left text-[13px] text-[#787774] hover:bg-[#F4F4F2]"
+                                  onClick={() =>
+                                    void handleApprovalDecision({
+                                      itemId: currentApprovalItem.itemId,
+                                      action: 'reject'
+                                    })
+                                  }
+                                  disabled={approvalSubmitting}
+                                  data-testid={chatSelectors.approvalBatchDenyButton}
+                                >
+                                  <span>拒绝本次操作</span>
+                                  <HiXMark className="h-4 w-4 text-[#B3261E]" />
                                 </button>
                               </div>
+                              <div className="mt-3 flex items-center gap-2 border-t border-[#EEEEEC] px-4 py-4">
+                                <input
+                                  className="min-w-0 flex-1 rounded-[6px] border border-[#EEEEEC] bg-[#FFFFFF] px-3 py-2 text-sm text-[#37352F] outline-none placeholder:text-[#9B9A97] focus:border-[#37352F] focus:ring-2 focus:ring-[#EFEFED]"
+                                  placeholder="告诉 AI 接下来怎么做"
+                                  value={
+                                    approvalDraftDecisions[currentApprovalItem.itemId]?.message ||
+                                    ''
+                                  }
+                                  onChange={(event) =>
+                                    setApprovalGuideMessage(
+                                      currentApprovalItem.itemId,
+                                      event.target.value
+                                    )
+                                  }
+                                  disabled={approvalSubmitting}
+                                  data-testid={chatSelectors.approvalBatchGuideInput}
+                                />
+                                <Button
+                                  type="primary"
+                                  className="!flex !h-9 !items-center !gap-1 !rounded-full !border-[#37352F] !bg-[#37352F] !text-white hover:!bg-[#2F3437] disabled:!border-[#EEEEEC] disabled:!bg-[#F4F4F2] disabled:!text-[#9B9A97]"
+                                  icon={<HiArrowUp className="h-4 w-4" />}
+                                  onClick={() => void handleApprovalBatchSubmit()}
+                                  loading={approvalSubmitting}
+                                  disabled={approvalSubmitDisabled}
+                                  data-testid={chatSelectors.approvalBatchSubmitButton}
+                                >
+                                  提交
+                                </Button>
+                              </div>
                             </div>
-                            <p className="mx-5 mt-3 text-[13px] leading-6 text-[#787774]">
-                              {currentApprovalItem.commandExplanation}
-                            </p>
-                            <code className="mx-5 mt-3 block max-h-[min(34vh,320px)] overflow-auto whitespace-pre-wrap break-words rounded-[6px] border border-[#EEEEEC] bg-[#F4F4F2] px-3.5 py-3 font-mono text-[13px] leading-6 text-[#2F3437] [overflow-wrap:anywhere]">
-                              {currentApprovalItem.command}
-                            </code>
-                            <div className="mx-2 mt-3 space-y-1">
-                              <button
-                                type="button"
-                                className="grid min-h-11 w-full grid-cols-[1fr_auto] items-center rounded-[6px] px-3 text-left text-[13px] text-[#37352F] shadow-[inset_3px_0_0_#37352F,inset_0_0_0_1px_#EEEEEC] hover:bg-[#F4F4F2]"
-                                onClick={() =>
-                                  void handleApprovalDecision({
-                                    itemId: currentApprovalItem.itemId,
-                                    action: 'approve'
-                                  })
-                                }
-                                disabled={approvalSubmitting}
-                                data-testid={chatSelectors.approvalBatchApproveButton}
-                              >
-                                <span>允许本次操作</span>
-                                <HiCheck className="h-4 w-4" />
-                              </button>
-                              <button
-                                type="button"
-                                className="grid min-h-11 w-full grid-cols-[1fr_auto] items-center rounded-[6px] px-3 text-left text-[13px] text-[#787774] hover:bg-[#F4F4F2]"
-                                onClick={() =>
-                                  void handleApprovalDecision({
-                                    itemId: currentApprovalItem.itemId,
-                                    action: 'reject'
-                                  })
-                                }
-                                disabled={approvalSubmitting}
-                                data-testid={chatSelectors.approvalBatchDenyButton}
-                              >
-                                <span>拒绝本次操作</span>
-                                <HiXMark className="h-4 w-4 text-[#B3261E]" />
-                              </button>
-                            </div>
-                            <div className="mt-3 flex items-center gap-2 border-t border-[#EEEEEC] px-4 py-4">
-                              <input
-                                className="min-w-0 flex-1 rounded-[6px] border border-[#EEEEEC] bg-[#FFFFFF] px-3 py-2 text-sm text-[#37352F] outline-none placeholder:text-[#9B9A97] focus:border-[#37352F] focus:ring-2 focus:ring-[#EFEFED]"
-                                placeholder="告诉 AI 接下来怎么做"
-                                value={
-                                  approvalDraftDecisions[currentApprovalItem.itemId]?.message || ''
-                                }
-                                onChange={(event) =>
-                                  setApprovalGuideMessage(
-                                    currentApprovalItem.itemId,
-                                    event.target.value
-                                  )
-                                }
-                                disabled={approvalSubmitting}
-                                data-testid={chatSelectors.approvalBatchGuideInput}
-                              />
-                              <Button
-                                type="primary"
-                                className="!flex !h-9 !items-center !gap-1 !rounded-full !border-[#37352F] !bg-[#37352F] !text-white hover:!bg-[#2F3437] disabled:!border-[#EEEEEC] disabled:!bg-[#F4F4F2] disabled:!text-[#9B9A97]"
-                                icon={<HiArrowUp className="h-4 w-4" />}
-                                onClick={() => void handleApprovalBatchSubmit()}
-                                loading={approvalSubmitting}
-                                disabled={approvalSubmitDisabled}
-                                data-testid={chatSelectors.approvalBatchSubmitButton}
-                              >
-                                提交
-                              </Button>
-                            </div>
-                          </div>
-                        ) : null}
-                      </div>
-                    ) : (
-                      <WorkbenchComposer
-                        mode={composerMode}
-                        onModeChange={handleModeChange}
-                        aiPreference={composerAiPreference}
-                        onAiPreferenceChange={handleAiPreferenceChange}
-                        modelConfigs={modelConfigs}
-                        modelListsByConfigId={modelListsByConfigId}
-                        modelSelection={modelSelection}
-                        onModelSelectionChange={handleModelSelectionChange}
-                        workspaces={workspaces}
-                        selectedWorkspaceId={selectedWorkspaceId}
-                        onWorkspaceChange={handleWorkspaceChange}
-                        onWorkspaceEmptyAction={openWorkspaceSettings}
-                        showWorkspaceSelector={isNewSession}
-                        onDraftChange={handleComposerDraftChange}
-                        onSubmit={() => void handleSend()}
-                        onCancel={() => void handleCancel()}
-                        onPreviewImage={setPreviewImage}
-                        loading={loading}
-                        cancelling={cancellingRun}
-                        canSubmit={Boolean(
-                          input.trim() &&
-                          selectedWorkspaceReady &&
-                          (composerMode === 'search' || modelSelection.mainModel)
-                        )}
-                        submitDisabledReason={composerSubmitDisabledReason}
-                        showCancel={composerMode === 'ai' && Boolean(aiRunId)}
-                        draftValue={composerDraftValue}
-                        draftKey={composerDraftKey}
-                        contextUsage={contextUsage}
-                        requestAttachmentTarget={ensureAttachmentTarget}
-                      />
-                    )}
+                          ) : null}
+                        </div>
+                      ) : (
+                        <WorkbenchComposer
+                          mode={composerMode}
+                          onModeChange={handleModeChange}
+                          aiPreference={composerAiPreference}
+                          onAiPreferenceChange={handleAiPreferenceChange}
+                          modelConfigs={modelConfigs}
+                          modelListsByConfigId={modelListsByConfigId}
+                          modelSelection={modelSelection}
+                          onModelSelectionChange={handleModelSelectionChange}
+                          workspaces={workspaces}
+                          selectedWorkspaceId={selectedWorkspaceId}
+                          onWorkspaceChange={handleWorkspaceChange}
+                          onWorkspaceEmptyAction={openWorkspaceSettings}
+                          showWorkspaceSelector={isNewSession}
+                          onDraftChange={handleComposerDraftChange}
+                          onSubmit={() => void handleSend()}
+                          onCancel={() => void handleCancel()}
+                          onPreviewImage={setPreviewImage}
+                          loading={loading}
+                          cancelling={cancellingRun}
+                          canSubmit={Boolean(
+                            input.trim() &&
+                            selectedWorkspaceReady &&
+                            (composerMode === 'search' || modelSelection.mainModel)
+                          )}
+                          submitDisabledReason={composerSubmitDisabledReason}
+                          showCancel={composerMode === 'ai' && Boolean(aiRunId)}
+                          draftValue={composerDraftValue}
+                          draftKey={composerDraftKey}
+                          contextUsage={contextUsage}
+                          requestAttachmentTarget={ensureAttachmentTarget}
+                        />
+                      )}
 
-                    {composerMode === 'search' &&
-                    selectedReferences.some(
-                      (reference) =>
-                        reference.kind === 'directory' && reference.kbAvailability === 'partial'
-                    ) ? (
-                      <div
-                        className="nc-notice nc-notice-warning mt-3"
-                        data-testid={workbenchSelectors.referenceSearchWarning}
-                      >
-                        <HiOutlineExclamationCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                        <span>当前搜索范围包含部分可检索目录，搜索只会覆盖其已索引子文件。</span>
-                      </div>
-                    ) : null}
+                      {composerMode === 'search' &&
+                      selectedReferences.some(
+                        (reference) =>
+                          reference.kind === 'directory' && reference.kbAvailability === 'partial'
+                      ) ? (
+                        <div
+                          className="nc-notice nc-notice-warning mt-3"
+                          data-testid={workbenchSelectors.referenceSearchWarning}
+                        >
+                          <HiOutlineExclamationCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                          <span>当前搜索范围包含部分可检索目录，搜索只会覆盖其已索引子文件。</span>
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
+          </div>
 
+          {!contentPanelCollapsed ? (
             <div
-              className="min-h-0 overflow-hidden transition-[width] duration-200"
+              className="min-h-0 shrink-0 overflow-hidden"
               data-testid={workbenchSelectors.contentPanelShell}
-              style={{
-                width: contentPanelCollapsed ? 0 : 'min(48vw, 780px)'
-              }}
+              style={{ width: 'min(48vw, 780px)' }}
             >
               <WorkbenchContentPanel
                 state={contentPanel}
@@ -3413,6 +3506,8 @@ const ChatPage: React.FC = () => {
                 applyReverting={applyReverting}
                 workspaces={workspaces}
                 fallbackWorkspaceName={selectedWorkspace?.name || null}
+                selectedWorkspace={selectedWorkspace || null}
+                fileChangeRecords={fileChangeRecords}
                 onOpenSearchResult={(turn, resultIndex) => void openSearchResult(turn, resultIndex)}
                 onRevertApply={() => void handleApplyRevert()}
                 onBackToPanelState={showContentPanel}
@@ -3422,9 +3517,27 @@ const ChatPage: React.FC = () => {
                 onCloseTab={closeResourceTab}
                 onAddFileTab={addFileTab}
                 onAddBrowserTab={addBrowserTab}
+                onCollapse={() => setContentPanelCollapsed(true)}
+                onBrowserStateChange={handleBrowserStateChange}
+                onOpenWorkspaceFile={openWorkspaceFile}
+                onOpenWorkspaceChange={openWorkspaceChange}
               />
             </div>
-          </div>
+          ) : null}
+          {contentPanelCollapsed ? (
+            <Tooltip title="展开右侧栏" placement="left">
+              <button
+                type="button"
+                className="nc-content-panel-restore workbench-no-drag"
+                style={WORKBENCH_NO_DRAG_REGION_STYLE}
+                onClick={() => setContentPanelCollapsed(false)}
+                data-testid={workbenchSelectors.contentPanelToggle}
+                aria-label="展开右侧栏"
+              >
+                <SidebarPanelIcon className="h-4 w-4" variant="expand" />
+              </button>
+            </Tooltip>
+          ) : null}
         </div>
         <Modal
           open={Boolean(applyForceConfirm)}

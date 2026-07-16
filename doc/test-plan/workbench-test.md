@@ -27,7 +27,7 @@
 - `run`
   - 登记 case：`8` 个 e2e，`1` 个 backend contract
   - 当前有效结论：backend contract `15 / 15` tests；e2e `8 / 8`。
-  - 备注：`browser-use-task-panel` 本轮真实模型定向通过，覆盖文件 / 浏览器 Tab 共存、浏览器单例和页面状态保留。
+  - 备注：浏览器现已升级为多 Tab；后续 `browser-use-task-panel` 必须覆盖独立历史、共享持久登录分区和 Stagehand targetId 精确选页。
 - `result`
   - 登记 case：`6`
   - 当前有效结论：`text-file-apply-preview-and-revert` 与 `multi-file-apply-tabs` 本轮真实模型定向通过。
@@ -43,7 +43,7 @@
 - `file-preview-actions` 当前按生产真实索引能力覆盖 `pdf/docx/md/txt`：连续打开的文件要分别保留为资源 Tab，并能切回旧 Tab；`.log` 与代码等其他 UTF-8 文件的纯文本 fallback 由 `file-render-utils` unit case 直接覆盖。
 - docx apply case 需要真实 docx 输入、真实 AI 编辑、真实写回记录、真实预览和真实回退。
 - text-file apply case 需要真实 Markdown 或代码文件、真实 `file_write`、真实结构化 diff、独立 `TextFileDiffViewer` 和按原始 bytes 回退。
-- `browser-use-task-panel` 需要真实 AI run 触发 `browser_use` 并驱动内置浏览器完成本地网页任务；同时验证已打开文件 Tab 保留、浏览器 Tab 单例复用、切换文件后网页状态不销毁，不能用 fake browser 替代。
+- `browser-use-task-panel` 需要真实 AI run 触发 `browser_use` 并驱动内置浏览器完成本地网页任务；同时验证多个浏览器 Tab 独立历史、共享持久站点数据、切换文件后网页状态不销毁，以及同 URL 标签不会让 Stagehand 串页，不能用 fake browser 替代。
 - `web_search` 与 `web_crawl` 需要分开覆盖：搜索 case 只验证候选网页返回；读取 case 必须验证 AI 继续读取网页正文后再回答。
 - Workbench 附件链路当前固定保存到 `<workspace>/.ncurator/runtime/assets/<assetBucketId>/`，`assetBucketId` 为输入草稿 UUID，发送给 AI 时只传附件名称与路径，不再做发送前识图或文件解析。
 
@@ -181,6 +181,15 @@ tests/case/workbench/
 - Oracle：候选来源符合当前工作区和模式，对齐 `WB-SCOPE-001-AC1`、`WB-SCOPE-001-AC2`；token 插入、共存和删除后发送参数符合 `WB-SCOPE-002-AC1` 至 `WB-SCOPE-002-AC3`；重复候选和跨工作区清理符合 `WB-SCOPE-003-AC1`、`WB-SCOPE-003-AC2`；空候选提示符合 `WB-SCOPE-004-AC1`、`WB-SCOPE-004-AC2`。
 - Not：不验证底层 KB 检索排序质量，也不验证 Settings 工作区资料配置细节。
 
+#### `right-panel-layout-and-tabs`
+
+- 测试类型：`e2e`
+- What：验证空会话输入区布局、右侧默认无占位折叠、标签栏密度与折叠入口、Tab 溢出滚动、加号菜单文案、浏览器缩放菜单和地址栏“前往”按钮。
+- Why：右侧资源工作台和聊天输入区共享窗口高度与标题栏命中区域，普通功能测试无法发现输入框被推出窗口、折叠按钮放错区域、Tab 无法滚动或原生浏览器遮挡浮层等视觉交互回归。
+- How：直接进入无历史会话的真实 Workbench，先确认右侧 shell 不存在并测量空会话输入区位置；展开后连续创建八个真实浏览器 Tab，使用鼠标滚轮触发横向滚动并检查折叠 / 展开；打开浏览器更多菜单检查三段式缩放控件和地址栏“前往”按钮。
+- Oracle：空会话输入区居中且右侧 shell 不占宽度，对齐 `WB-COMPOSER-009-AC11`、`WB-PANEL-001-AC8`；标签栏和浏览器工具栏均为 44px，标签栏无下边线；折叠按钮位于右侧栏且不进入拖拽命中区；八个 Tab 溢出后滚轮可横向滚动；加号菜单显示“文件 / 浏览器”，缩放控件同排，地址栏显示“前往”按钮，浮层触发原生视图避让。
+- Not：不验证公网网页、模型回答质量或系统窗口按钮本身；Stagehand targetId、共享持久分区和历史恢复继续由 `browser-use-task-panel` 覆盖。
+
 ### 5.2 `run`
 
 #### `ai-process-stream-and-final-answer`
@@ -231,10 +240,10 @@ tests/case/workbench/
 #### `browser-use-task-panel`
 
 - 测试类型：`e2e`
-- What：验证 AI 通过内置浏览器完成网页任务时，文件 / 浏览器 Tab、页面导航、资源复用和真实网页操作结果形成闭环。
+- What：验证 AI 通过内置浏览器完成网页任务时，文件 / 多浏览器 Tab、独立页面导航、持久站点数据和真实网页操作结果形成闭环。
 - Why：内置浏览器是 Electron 与 AI run 深度联动场景，仅 backend 或静态事件无法覆盖视口嵌入、导航和最终收口问题。
-- How：先打开真实 Markdown 文件，再启动本地测试网页；通过真实用户请求让 AI 使用 `browser_use` 操作页面；重复从 `+` 菜单打开浏览器；任务完成后切回文件再切回浏览器。
-- Oracle：文件和浏览器共存为两个资源 Tab，对齐 `WB-PANEL-001-AC1`；重复打开浏览器仍只有一个 Tab，对齐 `WB-PANEL-001-AC4`；切换文件后浏览器 URL 保持且再次显示原页面，对齐 `WB-PANEL-004-AC3`；真实 browser_use 结果包含 `BROWSER_TASK_DONE` 和口令，对齐 `WB-PANEL-004-AC4`、`WB-CORE-005-AC1`、`WB-CORE-006-AC1`。
+- How：先打开真实 Markdown 文件，再从 `+` 连续创建两个浏览器标签并让它们访问本地测试页；两个标签使用相同 URL 但写入不同页面状态；切换标签验证各自前进后退历史；通过真实用户请求让 AI 使用 `browser_use` 操作当前标签；任务完成后切回文件再切回浏览器，并重启应用检查标签历史恢复。
+- Oracle：文件和多个浏览器 Tab 可共存，对齐 `WB-PANEL-001-AC1`；两个浏览器标签历史独立但 Cookie / LocalStorage 共享，对齐 `WB-PANEL-004-AC6`；同 URL 下 Stagehand 只改变事件指定 targetId 页面，对齐 `WB-PANEL-004-AC5`；切换文件后浏览器 URL 和页面状态保持，对齐 `WB-PANEL-004-AC3`；重启后标签历史可恢复；菜单打开时不被原生视图遮挡，对齐 `WB-PANEL-004-AC7`；真实 browser_use 结果包含 `BROWSER_TASK_DONE` 和口令。
 - Not：不验证公网网页稳定性；本 case 使用本地测试网页减少外部波动；不允许用 fake browser 或 fake tool result 替代；不要求 live 模型必须在固定时限内结束整轮最终回答，只要真实内置浏览器已完成输入、点击和结果读取即可判定 browser panel 能力有效。
 
 #### `web-search-diagnostic`
@@ -272,16 +281,16 @@ tests/case/workbench/
 - What：验证搜索模式发送、completed assistant 结果摘要、右侧搜索结果、网页 / 本地结果打开规则和无可检索资料下的发送拦截。
 - Why：搜索模式是 Workbench 的非 AI 路径，必须确保不误启动 AI，且右侧结果操作符合用户预期。
 - How：通过 UI 创建并绑定真实工作区，等待本地文件和网页资料真实索引完成；切换搜索模式发送自然语言查询；点击网页结果和本地结果操作图标；再切换到无可检索资料范围发送搜索。
-- Oracle：搜索模式不启动 AI run，对齐 `WB-COMPOSER-004-AC1`；搜索提交期间防重复提交且成功后展示 completed assistant 结果摘要和右侧命中列表，对齐 `WB-COMPOSER-004-AC2`、`WB-COMPOSER-004-AC3`；网页结果调用系统浏览器、本地结果进入文件预览且正文区域无动作，对齐 `WB-PANEL-002-AC1`、`WB-PANEL-002-AC2`；无可检索资料时不执行发送并保留当前输入，对齐 `WB-MODE-002-AC1`、`WB-MODE-002-AC2`。
+- Oracle：搜索模式不启动 AI run，对齐 `WB-COMPOSER-004-AC1`；搜索提交期间防重复提交且成功后展示 completed assistant 结果摘要和右侧命中列表，对齐 `WB-COMPOSER-004-AC2`、`WB-COMPOSER-004-AC3`；有消息后消息区独立滚动且输入区固定底部，对齐 `WB-COMPOSER-009-AC11`；搜索会话显示合法知识库过程，新建干净智能会话不继承该文案，对齐 `WB-COMPOSER-009-AC12`；网页结果调用系统浏览器、本地结果进入文件预览且正文区域无动作，对齐 `WB-PANEL-002-AC1`、`WB-PANEL-002-AC2`；无可检索资料时不执行发送并保留当前输入，对齐 `WB-MODE-002-AC1`、`WB-MODE-002-AC2`。
 - Not：不验证 embedding 召回质量和排序算法。
 
 #### `file-preview-actions`
 
 - 测试类型：`e2e`
-- What：验证右侧普通文件预览态、多个文件 Tab、定位文件、系统打开入口、PDF 命中定位，以及 Markdown / 纯文本预览。
+- What：验证右侧普通文件预览态、“全部 / 本会话改动”文件模式、稳定选中态、多个文件 Tab、定位文件、系统打开入口、PDF 命中定位，以及 Markdown / 纯文本预览。
 - Why：右侧面板是用户消费搜索 / 引用结果的主要区域，预览布局错误会直接阻断阅读。
 - How：从真实搜索结果连续打开真实 pdf、docx、md、txt 文件；检查预览内容和工具条；确认产生四个文件 Tab，再切回 Markdown Tab。
-- Oracle：普通文件预览和工具条对齐 `WB-PANEL-003-AC1`；PDF 命中页对齐 `WB-PANEL-003-AC3`；四个文件分别保留且旧 Tab 可恢复，对齐 `WB-PANEL-001-AC1`；md/txt 来自真实索引搜索命中。
+- Oracle：加号创建“文件”标签且不调用系统文件选择器；默认进入“全部”，目录展开按需读取子级，修改文件有标记但点击后仍是正常预览；当前文件有稳定浅灰选中态；普通文件预览和 44px 工具条对齐 `WB-PANEL-003-AC1`；路径使用 `>` 面包屑且无“预览 / 编辑”标签；四个文件分别保留且旧 Tab 可恢复。
 - Not：不验证系统文件管理器或系统默认应用本身是否成功打开；不伪造 md/txt 搜索结果或右侧预览状态。
 
 #### `text-file-apply-preview-and-revert`
@@ -290,7 +299,7 @@ tests/case/workbench/
 - What：验证同一个 Markdown 文件在普通预览时正常渲染，在 AI 修改记录中使用独立文本 diff，并能恢复原始 bytes。
 - Why：普通预览和修改预览是两种不同语义；如果共用文件渲染器，用户看不到本次具体增加和删除内容。
 - How：先从真实搜索结果打开 Markdown 普通预览；再通过真实 AI 调用 `replaceAll` 和 `edit` 修改该文件；点击 assistant 修改入口检查 `TextFileDiffViewer`；最后执行回退。
-- Oracle：普通预览与修改 diff 共用一个文件 Tab，对齐 `WB-PANEL-001-AC2`；file_artifact 已产生但 run 尚未结束时不展示修改入口，run_completed 后再展示；diff 每行只有一个行号列并显示“N 行未修改”，对齐 `WB-PANEL-003-AC5`；回答底部无重复 artifact 文件标签；回退后 bytes 与原始输入一致，历史 diff 仍保留。
+- Oracle：普通预览与修改 diff 共用一个文件 Tab；file_artifact 已产生但 Run 尚未结束时不展示修改入口，Run 完成后从 assistant 修改入口打开并切到“本会话改动”；文本 Diff 只展示该 Run 修改批次，不生成会话累计 Diff；首次打开后缓存 version 2 hunks 且不含完整 `afterLines`；“N 行未修改”可从不可变 after 对象展开；回退后 bytes 与原始输入一致且有效改动标记消失。
 - Not：不验证 unified diff 字符串；UI 只消费结构化 diff artifact。
 
 #### `terminal-background-service-flow`
@@ -302,13 +311,22 @@ tests/case/workbench/
 - Oracle：事件包含 terminal_command_yielded、terminal_command_stopped、terminal_run、terminal_stop 和 browser_use；最终答复包含页面唯一标记；任务结束后真实端口不可访问；不存在 fake AI/tool/browser 信号。
 - Not：不依赖公网，不允许测试进程替 AI 启动目标 HTTP 服务。
 
+#### `workspace-change-tracker`
+
+- 测试类型：`backend`
+- What：验证统一 Run 前后扫描、内容寻址对象库、延迟文本 Diff 和删除 / 重命名回退。
+- Why：终端、脚本和内部文件工具必须共享同一变化真相，不能依赖命令字符串猜测产物。
+- How：Run 基线后分别执行文本修改、新增、删除和重命名；完成扫描后检查 `FileRevision`、对象哈希和来源；首次读取文本记录后检查 Diff 缓存；分别回退删除和重命名。
+- Oracle：四种操作均被捕获；相同内容对象去重；扫描前记录没有文本 preview，首次读取后生成 version 2 hunks 且无 `afterLines`；删除回退恢复文件，重命名回退恢复原路径；`.ncurator`、`.git`、`node_modules` 等内部目录不进入变化列表。
+- Not：不验证 PPT / Excel Diff；本期只验证预留 adapter 不影响统一数据模型。
+
 #### `docx-apply-panel-preview-and-revert`
 
 - 测试类型：`e2e`
 - What：验证 AI 修改真实 docx 后，assistant 修改文件入口、右侧修改文件工作区、当前记录预览和干净回退闭环。
 - Why：直接写回和回退是 Workbench 文件编辑能力的安全边界，只看 artifact 事件无法证明用户能检查和撤销修改。
-- How：通过 UI 选择真实 docx 资料并发送真实编辑请求；等待 AI 写回；点击 assistant turn 中的修改文件入口；检查右侧文件名、工作区路径、编辑标签、状态和预览；执行回退并重新读取文件内容。
-- Oracle：修改后源文件立即成为 AI 最终净稿且 assistant turn 展示本轮修改文件入口，对齐 `WB-APPLY-002-AC1`；点击入口后右侧进入修改文件工作区并默认加载本轮当前文件记录，对齐 `WB-APPLY-001-AC1`、`WB-APPLY-001-AC3`；未发生后续修改时回退恢复 checkpoint 且记录状态变为 `reverted`，对齐 `WB-APPLY-003-AC1`、`WB-APPLY-003-AC3`；文件预览与修改文件工作区采用预览优先布局，对齐 `WB-PANEL-003-AC1`；记录模型、耗时、完成度评分和失败归因。
+- How：通过 UI 选择真实 docx 资料并发送真实编辑请求；等待 AI 写回；点击 assistant turn 中的修改文件入口；检查右侧文件面包屑、无模式标签状态和预览；执行回退并重新读取文件内容。
+- Oracle：修改后源文件立即成为 AI 最终净稿且 assistant turn 展示本轮修改文件入口；点击入口后右侧进入“本会话改动”、选中对应文件并展示 Review Docx；Review Docx 继续保留段落、表格、图片、字体和页面结构；未发生后续修改时回退恢复 before 对象且记录状态变为 `reverted`；记录模型、耗时、完成度评分和失败归因。
 - Not：不验证 docx 编辑算法的所有格式保真细节，该能力归 AI tool docx 测试。
 
 #### `docx-apply-force-revert-warning`

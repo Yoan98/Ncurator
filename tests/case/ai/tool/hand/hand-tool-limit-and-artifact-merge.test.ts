@@ -1,3 +1,4 @@
+import path from 'node:path'
 import { describe, it } from 'vitest'
 import { createHandNode } from '../../../../../src/main/services/ai/human/node/handNode'
 import { ensureSkillTools } from '../../../../../src/main/services/ai/human/node/learningNode/skillLoader'
@@ -108,6 +109,16 @@ describe('ai tool hand backend', () => {
           })
         )
 
+        const existingArtifact: AiArtifactRef = {
+          kind: 'file',
+          capability: 'docx',
+          path: path.join(runtime.workspaceRoot, 'artifact-merge.docx'),
+          fileName: 'artifact-merge.docx',
+          operation: 'updated',
+          applyId: 'existing-docx-change',
+          summary: '已有的文档修改记录'
+        }
+
         const secondState = await handNode({
           ...buildHandState({
             taskId: runtime.taskId,
@@ -118,7 +129,7 @@ describe('ai tool hand backend', () => {
               sourcePath: 'artifact-merge.docx',
               range: { type: 'block_ids', blockIds: ['b:1'] }
             },
-            previousArtifacts: firstState.execution.artifacts
+            previousArtifacts: [existingArtifact]
           }),
           trace: firstState.trace
         })
@@ -129,27 +140,22 @@ describe('ai tool hand backend', () => {
         }
       },
       assert: async (result, runtime) => {
-        runtime.assertThat(
-          result.firstState.execution.artifacts.length === 1 &&
-            result.firstState.execution.artifacts[0]?.kind === 'file' &&
-            result.firstState.execution.artifacts[0]?.capability === 'terminal_exec',
-          {
-            name: 'runtime-artifacts-grow-after-first-tool',
-            message: '第一次工具执行后，execution.artifacts 应记录 terminal 产物。',
-            data: result.firstState.execution.artifacts
-          }
-        )
+        runtime.assertThat(result.firstState.execution.artifacts.length === 0, {
+          name: 'terminal-defers-artifacts-to-run-tracker',
+          message: 'terminal 工具不应直接生成 artifact，文件变化由顶层 Run 扫描统一捕获。',
+          data: result.firstState.execution.artifacts
+        })
 
         runtime.assertThat(
           result.secondState.execution.artifacts.length === 1 &&
             result.secondState.execution.artifacts.some(
-              (artifact) => artifact.kind === 'file' && artifact.capability === 'terminal_exec'
+              (artifact) => artifact.kind === 'file' && artifact.applyId === 'existing-docx-change'
             ) &&
             result.secondState.execution.lastToolResults?.[0]?.toolName === 'docx_read_blocks',
           {
             name: 'runtime-artifacts-are-preserved-when-next-tool-has-no-artifact',
             message:
-              '后续没有 artifact 的工具执行后，execution.artifacts 应保留已有 terminal 产物而不是被覆盖。',
+              '后续没有 artifact 的工具执行后，execution.artifacts 应保留已有产物而不是被覆盖。',
             data: {
               artifacts: result.secondState.execution.artifacts,
               lastToolUseResults: result.secondState.execution.lastToolResults

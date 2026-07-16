@@ -180,7 +180,11 @@ if (!singleInstanceLock) {
 
     const mainWindow = createWindow()
     const appUpdateService = new AppUpdateService()
-    const browserEmbedService = new BrowserEmbedService(mainWindow)
+    const browserEmbedService = new BrowserEmbedService(
+      mainWindow,
+      join(app.getPath('userData'), 'browser-tabs.json')
+    )
+    await browserEmbedService.initialize()
     const webCrawlerBaseDirectory = join(app.getPath('userData'), 'web-crawler')
     const webCrawlerService = createWebCrawlerService({
       appRootPath: app.getAppPath(),
@@ -208,6 +212,7 @@ if (!singleInstanceLock) {
       void storageService.failInterruptedWorkspaceIndexJobs()
       void webCrawlerService.close()
       void embeddingService.close()
+      void browserEmbedService.dispose()
     })
 
     vectorModelDownloadService

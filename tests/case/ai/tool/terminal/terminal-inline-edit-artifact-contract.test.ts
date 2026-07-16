@@ -1,169 +1,83 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { describe, expect, it } from 'vitest'
-import type { TextFileDiffArtifact } from '../../../../../src/shared/types'
+import { describe, it } from 'vitest'
 import { createTerminalToolHarness } from '../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import { filterEventsByType } from '../testHelpers'
-import { readCapturedRunLog } from '../logHelpers'
 
 type TerminalRunCommandResult = {
   terminalId: string
-  artifacts: Array<{ path: string; operation: 'created' | 'updated' }>
+  reason?: string
 }
 
 const isWindows = process.platform === 'win32'
-const normalizeArtifactPath = (value: string): string => value.replace(/\\/g, '/')
 
 describe('ai tool terminal backend', () => {
   it('terminal-inline-edit-artifact-contract', async () => {
-    let runId = ''
-
     await runBackendCase({
       caseId: 'terminal-inline-edit-artifact-contract',
       harnessMode: 'tool-real',
       domain: 'ai',
       suite: 'tool',
       groups: ['terminal'],
-      description: '验证文本更新类命令的 mutating 审批路径与 artifact 识别。',
+      description: '验证终端只执行命令，文件变化统一交给 Run 结束扫描捕获。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
-        runId = runtime.runId
         const sourceDir = path.join(runtime.workspaceRoot, 'generated')
         await fs.mkdir(sourceDir, { recursive: true })
         await fs.writeFile(path.join(runtime.workspaceRoot, 'notes.txt'), 'before\n')
         await fs.writeFile(path.join(runtime.workspaceRoot, 'replacement.txt'), 'after\n')
-
         const harness = createTerminalToolHarness(runtime)
-
-        const updateExisting = await harness.invoke<TerminalRunCommandResult>('terminal_run', {
-          command: isWindows
-            ? 'Copy-Item -LiteralPath replacement.txt -Destination notes.txt'
-            : 'cp replacement.txt notes.txt'
-        })
-        const createNew = await harness.invoke<TerminalRunCommandResult>('terminal_run', {
-          terminalId: updateExisting.terminalId,
-          command: isWindows
-            ? 'New-Item -ItemType File -Path generated/output.txt'
-            : 'touch generated/output.txt'
-        })
-        const records = await harness.ctx.listFileChangeRecords({ runId: runtime.runId })
-        const notesRecord = records.find((record) => record.fileName === 'notes.txt')
-        const textDiff = notesRecord?.previewPath
-          ? (JSON.parse(await fs.readFile(notesRecord.previewPath, 'utf8')) as TextFileDiffArtifact)
-          : null
-        const result = {
-          updateExisting,
-          createNew,
-          notesContent: await fs.readFile(path.join(runtime.workspaceRoot, 'notes.txt'), 'utf8'),
-          createdExists: await fs
-            .access(path.join(runtime.workspaceRoot, 'generated', 'output.txt'))
-            .then(() => true)
-            .catch(() => false),
-          events: runtime.eventCollector.snapshot(),
-          records,
-          textDiff
+        try {
+          const updateExisting = await harness.invoke<TerminalRunCommandResult>('terminal_run', {
+            command: isWindows
+              ? 'Copy-Item -LiteralPath replacement.txt -Destination notes.txt'
+              : 'cp replacement.txt notes.txt'
+          })
+          const createNew = await harness.invoke<TerminalRunCommandResult>('terminal_run', {
+            terminalId: updateExisting.terminalId,
+            command: isWindows
+              ? 'New-Item -ItemType File -Path generated/output.txt'
+              : 'touch generated/output.txt'
+          })
+          return {
+            updateExisting,
+            createNew,
+            notesContent: await fs.readFile(path.join(runtime.workspaceRoot, 'notes.txt'), 'utf8'),
+            createdExists: await fs
+              .access(path.join(runtime.workspaceRoot, 'generated', 'output.txt'))
+              .then(() => true)
+              .catch(() => false),
+            records: await harness.ctx.listFileChangeRecords({ runId: runtime.runId }),
+            artifactEvents: filterEventsByType(runtime.eventCollector.snapshot(), 'file_artifact'),
+            approvalEvents: filterEventsByType(
+              runtime.eventCollector.snapshot(),
+              'approval_batch_required'
+            )
+          }
+        } finally {
+          await harness.release()
         }
-        await harness.release()
-        return result
       },
       assert: async (result, runtime) => {
-        const approvalEvents = filterEventsByType(result.events, 'approval_batch_required')
-        const artifactEvents = filterEventsByType(result.events, 'file_artifact')
-        const notesRecord = result.records.find((record) => record.fileName === 'notes.txt')
-        const notesEvent = artifactEvents.find((event) => event.fileName === 'notes.txt')
-        const textDiffLines = result.textDiff?.hunks.flatMap((hunk) => hunk.lines) || []
-
         runtime.assertThat(
-          !('reason' in result.updateExisting) &&
-            !('reason' in result.createNew) &&
-            approvalEvents.length === 2 &&
+          !result.updateExisting.reason &&
+            !result.createNew.reason &&
+            result.approvalEvents.length === 2 &&
             result.notesContent === 'after\n' &&
-            result.createdExists,
+            result.createdExists &&
+            !Object.hasOwn(result.updateExisting, 'artifacts') &&
+            !Object.hasOwn(result.createNew, 'artifacts') &&
+            result.records.length === 0 &&
+            result.artifactEvents.length === 0,
           {
-            name: 'mutating-terminal-commands-require-approval',
-            message: '文本更新与创建文件命令应被当成 mutating，并走审批后执行。',
-            data: {
-              approvals: approvalEvents.map((event) => ({
-                command: event.items[0]?.command,
-                reason: event.items[0]?.reason
-              })),
-              notesContent: result.notesContent,
-              createdExists: result.createdExists
-            }
-          }
-        )
-
-        runtime.assertThat(
-          result.updateExisting.artifacts.some(
-            (artifact) =>
-              artifact.operation === 'updated' &&
-              normalizeArtifactPath(artifact.path).endsWith('/notes.txt')
-          ) &&
-            result.createNew.artifacts.some(
-              (artifact) =>
-                artifact.operation === 'created' &&
-                normalizeArtifactPath(artifact.path).endsWith('/generated/output.txt')
-            ) &&
-            artifactEvents.length >= 2,
-          {
-            name: 'mutating-terminal-commands-record-artifacts',
-            message: 'terminal_run 应识别并结构化返回更新/创建的目标文件 artifact。',
-            data: {
-              updateArtifacts: result.updateExisting.artifacts,
-              createArtifacts: result.createNew.artifacts,
-              artifactEvents: artifactEvents.map((event) => ({
-                path: event.path,
-                operation: event.operation
-              }))
-            }
-          }
-        )
-
-        runtime.assertThat(
-          notesRecord?.capability === 'text_file' &&
-            Boolean(notesRecord.previewPath) &&
-            notesEvent?.applyId === notesRecord.id &&
-            notesEvent.capability === 'text_file' &&
-            textDiffLines.some((line) => line.type === 'remove' && line.text === 'before') &&
-            textDiffLines.some((line) => line.type === 'add' && line.text === 'after'),
-          {
-            name: 'terminal-text-artifact-uses-text-diff-record',
-            message: '终端修改 UTF-8 文件后应生成文本 diff，并让 artifact 与修改记录共用 applyId。',
-            data: {
-              notesRecord,
-              notesEvent
-            }
+            name: 'terminal-defers-workspace-change-capture',
+            message: '终端工具不得根据命令文本猜测文件产物，变化由顶层 Run 扫描统一捕获。',
+            data: result
           }
         )
       }
     })
-
-    const captured = await readCapturedRunLog({
-      scope: 'ai/tool/terminal',
-      caseId: 'terminal-inline-edit-artifact-contract',
-      runId
-    })
-    const copiedArtifacts = await Promise.all(
-      captured.artifacts.items.map((item) =>
-        fs.readFile(path.join(captured.logDir, item.path), 'utf8')
-      )
-    )
-
-    expect(captured.meta.stats.artifacts).toBe(2)
-    expect(captured.artifacts.items).toHaveLength(2)
-    expect(captured.artifacts.items.map((item) => item.fileName)).toEqual(
-      expect.arrayContaining(['notes.txt', 'output.txt'])
-    )
-    expect(
-      captured.artifacts.items.every(
-        (item) =>
-          item.path.startsWith('artifacts/file-artifacts/') &&
-          (!item.fileName || !item.path.includes(item.fileName))
-      )
-    ).toBe(true)
-    expect(copiedArtifacts).toContain('after\n')
-    expect(copiedArtifacts).toContain('')
   })
 })

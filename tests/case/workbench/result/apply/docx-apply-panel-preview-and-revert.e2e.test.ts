@@ -81,12 +81,10 @@ describe('workbench result e2e', () => {
             const applyPanelText = (
               (await getWorkbenchLocator(page, workbenchSelectors.applyPanel).textContent()) || ''
             ).trim()
-            const modeTagText = (
-              (await getWorkbenchLocator(
-                page,
-                workbenchSelectors.documentPreviewModeTag
-              ).textContent()) || ''
-            ).trim()
+            const modeTagCount = await getWorkbenchLocator(
+              page,
+              workbenchSelectors.documentPreviewModeTag
+            ).count()
             const openSystemButtonVisible = await getWorkbenchLocator(
               page,
               workbenchSelectors.applyOpenSystemButton
@@ -141,7 +139,7 @@ describe('workbench result e2e', () => {
               applyEntryLines,
               artifactChipCount,
               applyPanelText,
-              modeTagText,
+              modeTagCount,
               openSystemButtonVisible,
               revealButtonVisible,
               revertButtonVisible,
@@ -166,7 +164,7 @@ describe('workbench result e2e', () => {
                 1 &&
               !result.applyEntryText.includes('已修改') &&
               result.artifactChipCount === 0 &&
-              result.modeTagText === '编辑' &&
+              result.modeTagCount === 0 &&
               !result.applyPanelText.includes('已修改') &&
               !result.applyPanelText.includes('其他应用') &&
               !result.applyPanelText.includes('处修改') &&

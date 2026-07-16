@@ -198,9 +198,11 @@ export type BrowserUseResult =
     }
 
 export type BrowserUseService = {
-  show: () => Promise<void>
-  navigate: (url: string) => Promise<void>
+  ensureAutomationTab: (ownerId: string) => Promise<{ id: string }>
+  show: (tabId?: string) => Promise<void>
+  navigate: (url: string, tabId?: string) => Promise<void>
   run: (input: {
+    tabId: string
     action: BrowserUseAction
     instruction: string
     url?: string

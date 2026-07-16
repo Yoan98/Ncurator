@@ -161,12 +161,10 @@ describe('workbench result e2e', () => {
               .waitFor({ state: 'visible', timeout: 30_000 })
               .then(() => true)
               .catch(() => false)
-            const docxModeTagText = (
-              (await getWorkbenchLocator(
-                page,
-                workbenchSelectors.documentPreviewModeTag
-              ).textContent()) || ''
-            ).trim()
+            const docxModeTagCount = await getWorkbenchLocator(
+              page,
+              workbenchSelectors.documentPreviewModeTag
+            ).count()
             const docxPreviewStableWhileTyping =
               await verifyDocxPreviewStaysMountedWhileTyping(page)
             await page.getByRole('button', { name: '系统默认打开' }).last().click()
@@ -193,16 +191,29 @@ describe('workbench result e2e', () => {
             const resourceTabCount = await resourceTabs.count()
             await resourceTabs.filter({ hasText: 'workbench-preview.md' }).first().click()
             const reopenedMarkdownVisible = await waitForMarkdownPreview(page)
+            await getWorkbenchLocator(page, workbenchSelectors.resourceTabAddButton).click()
+            await page.getByRole('menuitem', { name: '文件', exact: true }).click()
+            const fileLauncherVisible = await page
+              .getByText('从右侧工作区文件列表中选择')
+              .waitFor({ state: 'visible', timeout: 10_000 })
+              .then(() => true)
+              .catch(() => false)
+            const workspaceFileFilterVisible = await page
+              .getByPlaceholder('筛选文件…')
+              .isVisible()
+              .catch(() => false)
             const signals = await runtime.collectSignals()
 
             return {
               pdfPageVisible,
               docxViewerVisible,
-              docxModeTagText,
+              docxModeTagCount,
               docxPreviewStableWhileTyping,
               markdownPreviewVisible,
               plainTextPreviewVisible,
               reopenedMarkdownVisible,
+              fileLauncherVisible,
+              workspaceFileFilterVisible,
               resourceTabCount,
               revealPathCalls: signals.ipcInvokeEntries.filter(
                 (entry) => entry.name === 'revealPath'
@@ -216,11 +227,13 @@ describe('workbench result e2e', () => {
           await runtime.assertThat(
             result.pdfPageVisible &&
               result.docxViewerVisible &&
-              result.docxModeTagText === '预览' &&
+              result.docxModeTagCount === 0 &&
               result.docxPreviewStableWhileTyping &&
               result.markdownPreviewVisible &&
               result.plainTextPreviewVisible &&
               result.reopenedMarkdownVisible &&
+              result.fileLauncherVisible &&
+              result.workspaceFileFilterVisible &&
               result.resourceTabCount === 4 &&
               result.revealPathCalls >= 1,
             {

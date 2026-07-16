@@ -292,25 +292,23 @@ describe('workbench run e2e', () => {
               workbenchSelectors.resourceTabPrefix
             )
             const initialResourceTabCount = await resourceTabs.count()
-            const initialBrowserTabCount = await resourceTabs.filter({ hasText: '浏览器' }).count()
+            const openedEvent = (await collectWorkbenchAiRunEvents(runtime))
+              .filter(
+                (event): event is Extract<AiRunEvent, { type: 'browser_panel_opened' }> =>
+                  event.type === 'browser_panel_opened'
+              )
+              .at(-1)
+            if (!openedEvent) throw new Error('browser_panel_opened event is missing')
             await getWorkbenchLocator(page, workbenchSelectors.resourceTabAddButton).click()
             const openFileMenuItemVisible = await page
-              .getByRole('menuitem', { name: '打开文件' })
+              .getByRole('menuitem', { name: '文件', exact: true })
               .isVisible()
             await page.getByRole('menuitem', { name: '浏览器' }).click()
+            await resourceTabs.nth(2).waitFor({ state: 'visible', timeout: 10_000 })
             const resourceTabCountAfterReopen = await resourceTabs.count()
-            const browserTabCountAfterReopen = await resourceTabs
-              .filter({ hasText: '浏览器' })
-              .count()
             const browserPanel = getWorkbenchLocator(page, workbenchSelectors.browserPanel)
-            const zoomResetText =
-              (await browserPanel
-                .locator('button')
-                .filter({ hasText: /%/u })
-                .first()
-                .textContent()) || ''
             const browserBackButtonCount = await browserPanel
-              .getByRole('button', { name: /返回|back/i })
+              .getByRole('button', { name: /后退|back/i })
               .count()
             const evidence = await waitForBrowserTaskCompletion(
               runtime,
@@ -339,27 +337,29 @@ describe('workbench run e2e', () => {
               .waitFor({ state: 'visible', timeout: 30_000 })
               .then(() => true)
               .catch(() => false)
-            const browserStateWhileHidden = await page.evaluate(async () =>
-              window.api.browserPanelStateGet()
+            const browserStateWhileHidden = await page.evaluate(
+              async (tabId) => window.api.browserPanelStateGet({ tabId }),
+              openedEvent.browserTabId
             )
-            await resourceTabs.filter({ hasText: '浏览器' }).first().click()
+            await getWorkbenchLocator(
+              page,
+              `${workbenchSelectors.resourceTabPrefix}-browser-${openedEvent.browserTabId}`
+            ).click()
             await getWorkbenchLocator(page, workbenchSelectors.browserViewport).waitFor({
               state: 'visible'
             })
-            const browserStateAfterRestore = await page.evaluate(async () =>
-              window.api.browserPanelStateGet()
+            const browserStateAfterRestore = await page.evaluate(
+              async (tabId) => window.api.browserPanelStateGet({ tabId }),
+              openedEvent.browserTabId
             )
 
             return {
               finalAnswerText: evidence.finalAnswerText,
               eventTypes: evidence.events.map((event) => event.type),
-              zoomResetText,
               browserBackButtonCount,
               initialResourceTabCount,
-              initialBrowserTabCount,
               openFileMenuItemVisible,
               resourceTabCountAfterReopen,
-              browserTabCountAfterReopen,
               fileTabRestored,
               browserUrlPreserved:
                 browserStateWhileHidden.success &&
@@ -423,20 +423,17 @@ describe('workbench run e2e', () => {
               result.actResultVisible &&
               result.extractResultVisible &&
               result.initialResourceTabCount === 2 &&
-              result.initialBrowserTabCount === 1 &&
               result.openFileMenuItemVisible &&
-              result.resourceTabCountAfterReopen === 2 &&
-              result.browserTabCountAfterReopen === 1 &&
+              result.resourceTabCountAfterReopen === 3 &&
               result.fileTabRestored &&
               result.browserUrlPreserved &&
-              /%/u.test(result.zoomResetText) &&
-              result.browserBackButtonCount === 0 &&
+              result.browserBackButtonCount === 1 &&
               /BROWSER_TASK_DONE/u.test(result.finalAnswerText) &&
               result.finalAnswerText.includes(TASK_CODE),
             {
               name: 'workbench-browser-use-panel-real',
               message:
-                '真实 browser_use 任务应复用唯一浏览器 Tab，保留已打开文件和网页状态，并完成网页操作与最终回答闭环，对齐 WB-PANEL-004-AC1 至 WB-PANEL-004-AC4、WB-CORE-005、WB-CORE-006。',
+                '真实 browser_use 任务应允许新增独立浏览器 Tab，保留已打开文件和原网页状态，并完成网页操作与最终回答闭环。',
               data: result
             }
           )

@@ -28,9 +28,9 @@
   - 检测时间：`2026-07-13 13:04:39 +08:00`
   - 覆盖补充：文件路径与网页来源 URL 返回契约已通过。
 - `tool / terminal`
-  - 通过率：`5 / 5`
-  - 检测时间：`2026-07-15 +08:00`
-  - 覆盖补充：terminal 回归测试按“安全指令集”语义维护；UTF-8 文件修改会生成 `text_file` 修改记录和结构化 diff，并保证 `file_artifact.applyId` 与修改记录一致；非文本产物保持 `terminal_exec`。
+  - 通过率：`6 / 6`
+  - 检测时间：`2026-07-16 +08:00`
+  - 覆盖补充：terminal 回归测试按“安全指令集”语义维护；持久终端覆盖 cwd 保持、多终端、长命令让出、增量读取和停止；terminal 不根据命令文本猜测文件产物，文件变化统一由顶层 Run 扫描捕获。
 - `tool / web-browsing`
   - 通过率：`6 / 6`
   - 检测时间：`2026-07-13 13:04:39 +08:00`
@@ -619,11 +619,11 @@ AI unit / 辅助测试目录：
 ##### `terminal-inline-edit-artifact-contract`
 
 - 测试类型：`backend`
-- What：验证安全 inline edit 修改 UTF-8 文件后，会生成统一文本修改记录、结构化 diff 和可继续消费的 artifact。
-- Why：terminal 修改文本不能只给出一个普通文件产物，否则右侧无法显示本次改动，也无法复用统一回退链路。
-- How：对测试文件执行真实 inline edit，读取修改记录和 diff artifact，并核对运行事件中的 `file_artifact`。
-- Oracle：文件结果与磁盘一致；修改记录 capability 为 `text_file`；diff 可重放为真实新内容；`file_artifact.applyId` 与修改记录 ID 一致。
-- Not：不验证上层审批流。
+- What：验证 terminal 只执行真实文件命令，不根据命令字符串直接生成修改记录或 artifact。
+- Why：terminal、脚本和内部文件工具必须共享 Run 前后扫描这一套文件变化真相，避免重复记录和漏记无法静态分析的命令。
+- How：通过 terminal 修改已有文件并创建新文件，检查工具结果、文件结果、工具期修改记录和 `file_artifact` 事件。
+- Oracle：命令真实生效并经过审批；terminal 工具结果不包含 `artifacts`；工具执行阶段没有修改记录或 `file_artifact`，后续由顶层 Run 扫描统一捕获。
+- Not：不在工具级 case 重复验证 WorkspaceChangeTracker；统一扫描由对应 tracker 和 Workbench 测试覆盖。
 
 ##### `terminal-persistent-session-contract`
 
@@ -789,8 +789,8 @@ AI unit / 辅助测试目录：
 - 测试类型：`backend`
 - What：验证 `hand` 的工具次数限制与 artifact 合并行为。
 - Why：这是工具执行层的关键边界。
-- How：先执行会产生 file artifact 的 terminal 工具，再在保留既有 artifact 的情况下执行不产生 artifact 的 docx read，并触发 hardActionLimit 收敛。
-- Oracle：已有 artifact 不被后续无 artifact 工具覆盖；超过 hardActionLimit 后产生 `hand_tool_limit_exceeded` decision hint、交付说明和当前工具结果。
+- How：先执行不会直接产生 artifact 的 terminal 工具，再向后续状态注入已有 docx artifact，执行不产生 artifact 的 docx read，并触发 hardActionLimit 收敛。
+- Oracle：terminal artifact 延迟到顶层 Run 扫描；显式已有 artifact 不被后续无 artifact 工具覆盖；超过 hardActionLimit 后产生 `hand_tool_limit_exceeded` decision hint、交付说明和当前工具结果。
 - Not：不验证 `human` 全链路。
 
 ### 5.2 `human`

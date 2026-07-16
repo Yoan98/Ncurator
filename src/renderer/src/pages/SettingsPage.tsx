@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { NavLink, Navigate, useLocation, useParams } from 'react-router-dom'
-import { HiArrowLeft } from 'react-icons/hi2'
-import AppUpdateSettingsPanel from '../components/settings/AppUpdateSettingsPanel'
+import { HiArrowLeft, HiOutlineQuestionMarkCircle } from 'react-icons/hi2'
+import { USER_MANUAL_URL } from '../../../shared/constants'
 import ModelSettingsPanel from '../components/settings/ModelSettingsPanel'
 import VectorModelSettingsPanel from '../components/settings/VectorModelSettingsPanel'
 import WorkspaceSettingsPanel from '../components/settings/WorkspaceSettingsPanel'
@@ -20,7 +20,7 @@ const normalizeSettingsSection = (value: string | undefined): SettingsSectionVal
   if (!value) return null
   if (value === 'web-sources') return 'workspace'
   if (value === 'model-download') return 'vector'
-  if (value === 'model' || value === 'workspace' || value === 'vector' || value === 'app') {
+  if (value === 'model' || value === 'workspace' || value === 'vector') {
     return value
   }
   return null
@@ -46,9 +46,7 @@ const SettingsPage: React.FC = () => {
   const [platform, setPlatform] = useState<string>(() => detectRendererPlatform())
   const [sidebarWidth] = useState<number>(() => {
     const stored = window.localStorage.getItem(WORKBENCH_SIDEBAR_WIDTH_STORAGE_KEY)
-    return clampSettingsSidebarWidth(
-      stored ? Number(stored) : WORKBENCH_SIDEBAR_DEFAULT_WIDTH
-    )
+    return clampSettingsSidebarWidth(stored ? Number(stored) : WORKBENCH_SIDEBAR_DEFAULT_WIDTH)
   })
   const sectionMeta = useMemo(
     () => (currentSection ? SETTINGS_SECTION_META[currentSection] : null),
@@ -124,6 +122,18 @@ const SettingsPage: React.FC = () => {
                 </NavLink>
               )
             })}
+            <button
+              type="button"
+              className="nc-sidebar-item flex items-center gap-2.5 px-2.5 py-2"
+              onClick={() => void window.api.openExternal(USER_MANUAL_URL)}
+              aria-label="查看使用帮助"
+              data-testid={settingsSelectors.helpButton}
+            >
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center text-[#787774]">
+                <HiOutlineQuestionMarkCircle className="h-5 w-5" />
+              </span>
+              <span className="truncate text-[13px] font-medium">使用帮助</span>
+            </button>
           </div>
         </div>
       </aside>
@@ -155,7 +165,6 @@ const SettingsPage: React.FC = () => {
             {currentSection === 'workspace' ? <WorkspaceSettingsPanel /> : null}
             {currentSection === 'model' ? <ModelSettingsPanel /> : null}
             {currentSection === 'vector' ? <VectorModelSettingsPanel /> : null}
-            {currentSection === 'app' ? <AppUpdateSettingsPanel /> : null}
           </div>
         </div>
       </main>

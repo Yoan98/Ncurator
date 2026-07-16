@@ -179,7 +179,7 @@ export type AssistantTurnApplyTarget = {
   changeId: string
   title: string
   sourcePath?: string
-  operation?: 'created' | 'updated'
+  operation?: 'created' | 'updated' | 'deleted' | 'renamed'
   changeCount: number
   insertCount: number
   deleteCount: number
@@ -193,7 +193,7 @@ export type AssistantTurnBlocker = {
 }
 
 export type AssistantArtifactItem = WorkbenchFileRef & {
-  operation?: 'created' | 'updated'
+  operation?: 'created' | 'updated' | 'deleted' | 'renamed'
 }
 
 export type AssistantTurnViewModel = {
@@ -230,6 +230,10 @@ export type WorkbenchContentPanelState =
       backTarget?: WorkbenchContentPanelState
     }
   | {
+      kind: 'file_launcher'
+      title: string
+    }
+  | {
       kind: 'apply_workspace'
       title: string
       applyId: string | null
@@ -237,6 +241,7 @@ export type WorkbenchContentPanelState =
   | {
       kind: 'browser'
       title: string
+      browserTabId: string
     }
 
 export type WorkbenchResourceTab = {
@@ -244,9 +249,10 @@ export type WorkbenchResourceTab = {
   kind: 'file' | 'browser'
   title: string
   filePath?: string
+  browserTabId?: string
   state: Extract<
     WorkbenchContentPanelState,
-    { kind: 'file_preview' | 'apply_workspace' | 'browser' }
+    { kind: 'file_preview' | 'file_launcher' | 'apply_workspace' | 'browser' }
   >
 }
 

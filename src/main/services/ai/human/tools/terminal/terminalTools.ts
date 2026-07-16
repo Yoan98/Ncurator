@@ -9,22 +9,12 @@ import { withToolLifecycle } from '../utils/lifecycle'
 import { createToolEventEmitter } from '../utils/toolEvents'
 import type { CapabilityActivityInput } from '../types'
 import {
-  mergeArtifactCandidates,
-  prepareTerminalArtifactCandidates,
-  recordTerminalArtifacts
-} from './terminalArtifacts'
-import {
   analyzeSafeTerminalCommandPolicy,
-  analyzeTerminalCommand,
   checkWorkspaceBoundary,
   parseTerminalCommandTokens
 } from './commandPolicy'
 import { inspectTerminalOutputQuality } from './terminalExec'
-import type {
-  PreparedArtifactCandidate,
-  TerminalCapabilityToolsInput,
-  TerminalCapabilityToolsRuntimeState
-} from './types'
+import type { TerminalCapabilityToolsInput, TerminalCapabilityToolsRuntimeState } from './types'
 import {
   createTerminalRunToolSpec,
   TERMINAL_READ_TOOL_SPEC,
@@ -41,8 +31,6 @@ type PendingTerminalCommand = {
   stepIndex: number
   command: string
   cwd: string
-  candidates: PreparedArtifactCandidate[]
-  workspaceRootPath: string
   emitActivity: (activity: CapabilityActivityInput) => void
   finalized: boolean
 }
@@ -211,26 +199,12 @@ const emitTerminalStepCompleted = (input: PendingTerminalCommand, exitCode: numb
   input.emitActivity({ actionType: 'terminal_exec', status: 'failed', summary: error })
 }
 
-const finalizeCommand = async (input: {
-  commandId: string
-  exitCode: number
-}): Promise<Array<{ path: string; operation: 'created' | 'updated' }>> => {
+const finalizeCommand = async (input: { commandId: string; exitCode: number }): Promise<void> => {
   const pending = pendingCommands.get(input.commandId)
-  if (!pending || pending.finalized) return []
+  if (!pending || pending.finalized) return
   pending.finalized = true
-  const artifacts = await recordTerminalArtifacts({
-    ctx: pending.ctx,
-    runId: pending.runId,
-    sessionId: pending.sessionId,
-    taskId: pending.taskId,
-    stepId: pending.stepId,
-    candidates: pending.candidates,
-    workspaceRootPath: pending.workspaceRootPath,
-    emitActivity: pending.emitActivity
-  })
   emitTerminalStepCompleted(pending, input.exitCode)
   pendingCommands.delete(input.commandId)
-  return artifacts
 }
 
 const readSessionCwd = (input: TerminalCapabilityToolsInput, terminalId?: string): string => {
@@ -367,7 +341,6 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
             return failure
           }
 
-          const analysis = analyzeTerminalCommand({ command, cwd, platform: input.ctx.platform })
           const safePolicy = analyzeSafeTerminalCommandPolicy(command, input.ctx.platform)
           const approvedByHand = consumeApprovedTerminalCommand({ cache: input.cache, command })
           if (safePolicy.executionPolicy !== 'safe_allowed' && !approvedByHand) {
@@ -409,17 +382,6 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
               return failure
             }
           }
-
-          const candidates = await prepareTerminalArtifactCandidates({
-            candidates: mergeArtifactCandidates({
-              commandCandidates: analysis.artifactCandidates,
-              expectedArtifacts: [],
-              cwd,
-              workspaceRootPath: input.workspaceRootPath
-            }),
-            runId: input.runId,
-            workspaceRootPath: input.workspaceRootPath
-          })
 
           state.stepIndex += 1
           const stepId = randomUUID()
@@ -474,8 +436,6 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
             stepIndex: state.stepIndex,
             command,
             cwd,
-            candidates,
-            workspaceRootPath: input.workspaceRootPath,
             emitActivity: input.emitActivity,
             finalized: false
           })
@@ -510,13 +470,15 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
               })
           }
 
-          const artifacts =
-            result.returnReason === 'command_completed' || result.returnReason === 'terminal_closed'
-              ? await finalizeCommand({
-                  commandId: result.commandId,
-                  exitCode: result.exitCode ?? 1
-                })
-              : []
+          if (
+            result.returnReason === 'command_completed' ||
+            result.returnReason === 'terminal_closed'
+          ) {
+            await finalizeCommand({
+              commandId: result.commandId,
+              exitCode: result.exitCode ?? 1
+            })
+          }
           const guarded = applyOutputGuards({
             toolName: terminalRunToolSpec.name,
             output: result.output,
@@ -524,7 +486,7 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
             ratio: input.aiResultTokenLimitRatio
           })
           const { commandId: _commandId, ...publicResult } = result
-          const payload = { ...publicResult, output: guarded.output, artifacts }
+          const payload = { ...publicResult, output: guarded.output }
           if (!guarded.ok) {
             const failurePayload = { ...payload, ...guarded }
             session.fail(

@@ -68,7 +68,7 @@
   --app-sidebar-width: 240px;
   --app-sidebar-collapsed-width: 0px;
   --app-sidebar-mac-window-spacer-height: 36px;
-  --workbench-titlebar-height: 52px;
+  --workbench-titlebar-height: 44px;
   --workbench-left-titlebar-collapsed-width: 170px;
   /* Windows 自绘窗口按钮区宽度，供标题栏与右侧安全区共用，保证折叠图标不被遮挡 */
   --windows-titlebar-button-width: 48px;
@@ -495,6 +495,98 @@ textarea,
   @apply bg-[#EFEFEE] text-[#37352F];
 }
 
+.nc-sidebar-update-button {
+  position: relative;
+  display: inline-flex;
+  min-width: 54px;
+  height: 27px;
+  margin-right: 8px;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px solid #cfe0fa;
+  border-radius: 999px;
+  background: #edf4ff;
+  box-shadow:
+    0 1px 2px rgba(38, 91, 164, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  padding: 0 11px;
+  color: #2867b2;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    color 150ms ease,
+    background-color 150ms ease,
+    border-color 150ms ease,
+    box-shadow 150ms ease,
+    transform 150ms ease;
+  animation: nc-sidebar-update-enter 180ms ease-out both;
+}
+
+.nc-sidebar-update-button:not(:disabled):hover {
+  border-color: #b7cff3;
+  background: #e2edff;
+  box-shadow:
+    0 3px 8px rgba(38, 91, 164, 0.13),
+    inset 0 1px 0 rgba(255, 255, 255, 0.76);
+  transform: translateY(-1px);
+}
+
+.nc-sidebar-update-button:not(:disabled):active {
+  box-shadow: 0 1px 2px rgba(38, 91, 164, 0.1);
+  transform: translateY(0) scale(0.98);
+}
+
+.nc-sidebar-update-button:focus-visible {
+  outline: 2px solid rgba(47, 111, 237, 0.24);
+  outline-offset: 2px;
+}
+
+.nc-sidebar-update-button:disabled {
+  cursor: default;
+}
+
+.nc-sidebar-update-button-ready {
+  border-color: #2f6fed;
+  background: #2f6fed;
+  color: #ffffff;
+  box-shadow: 0 2px 7px rgba(47, 111, 237, 0.22);
+}
+
+.nc-sidebar-update-button-ready:not(:disabled):hover {
+  border-color: #2863d8;
+  background: #2863d8;
+  box-shadow: 0 4px 10px rgba(47, 111, 237, 0.26);
+}
+
+.nc-sidebar-update-button-error {
+  border-color: #f0c9c2;
+  background: #fff1ef;
+  color: #a33a2a;
+}
+
+.nc-sidebar-update-progress {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  background: #d2e4ff;
+  transition: width 220ms ease-out;
+}
+
+@keyframes nc-sidebar-update-enter {
+  from {
+    opacity: 0;
+    transform: translateX(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
 .nc-session-running-spinner {
   display: inline-block;
   width: 12px;
@@ -529,6 +621,46 @@ textarea,
   user-select: none;
   -webkit-user-select: none;
   -webkit-app-region: no-drag;
+}
+
+.nc-app-shell-windows .nc-resource-tabbar {
+  padding-right: calc(var(--windows-window-controls-width) + 8px);
+}
+
+.nc-resource-tabbar {
+  position: relative;
+  z-index: 4;
+}
+
+.nc-content-panel-restore {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 8;
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  color: #787774;
+  border: 0;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.94);
+  cursor: pointer;
+  transition:
+    color 150ms ease,
+    background-color 150ms ease;
+}
+
+.nc-content-panel-restore:hover,
+.nc-content-panel-restore:focus-visible {
+  color: #37352f;
+  background: #f4f4f2;
+  outline: none;
+}
+
+.nc-app-shell-windows .nc-content-panel-restore {
+  right: calc(var(--windows-window-controls-width) + 8px);
 }
 
 .nc-topbar-collapsed-safe-zone {
@@ -574,7 +706,7 @@ textarea,
 }
 
 /* Keep the draggable hit target physically outside the custom Windows controls. */
-.nc-app-shell-windows .nc-main-empty-titlebar {
+.nc-app-shell-windows .nc-main-empty-titlebar-window-safe {
   right: var(--windows-window-controls-width);
 }
 

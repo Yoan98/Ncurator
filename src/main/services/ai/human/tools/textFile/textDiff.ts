@@ -84,7 +84,7 @@ export const createTextFileDiffArtifact = (input: {
   })
 
   return {
-    version: 1,
+    version: 2,
     oldLineCount: splitTextLines(input.before).length,
     newLineCount: splitTextLines(input.after).length,
     hunks

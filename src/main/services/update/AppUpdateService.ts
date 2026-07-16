@@ -5,6 +5,7 @@ import { autoUpdater } from 'electron-updater'
 import type { ProgressInfo, UpdateDownloadedEvent, UpdateInfo } from 'electron-updater'
 import {
   APP_UPDATE_CHECK_CHANNEL,
+  APP_UPDATE_DOWNLOAD_CHANNEL,
   APP_UPDATE_GET_SNAPSHOT_CHANNEL,
   APP_UPDATE_INSTALL_CHANNEL,
   APP_UPDATE_STATUS_CHANNEL
@@ -13,10 +14,12 @@ import type { AppUpdateActionResponse, AppUpdateSnapshot } from '../../../shared
 
 const MAC_UPDATE_SIGNATURE_ERROR = 'macOS 自动更新需要固定的非 ad-hoc 代码签名'
 const STARTUP_UPDATE_CHECK_DELAY_MS = 5000
+const PERIODIC_UPDATE_CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000
 const UPDATE_BUSY_STATUSES = new Set<AppUpdateSnapshot['status']>([
   'checking',
   'available',
-  'downloading'
+  'downloading',
+  'downloaded'
 ])
 
 type AppUpdateDependencies = {
@@ -26,6 +29,7 @@ type AppUpdateDependencies = {
   getWindows: typeof BrowserWindow.getAllWindows
   platform: NodeJS.Platform
   schedule: (callback: () => void, delayMs: number) => ReturnType<typeof setTimeout>
+  repeat: (callback: () => void, intervalMs: number) => ReturnType<typeof setInterval>
   macUpdateSignatureValid: () => boolean
 }
 
@@ -64,6 +68,7 @@ const createDefaultDependencies = (): AppUpdateDependencies => ({
   getWindows: () => BrowserWindow.getAllWindows(),
   platform: process.platform,
   schedule: (callback, delayMs) => setTimeout(callback, delayMs),
+  repeat: (callback, intervalMs) => setInterval(callback, intervalMs),
   macUpdateSignatureValid: hasStableMacUpdateSignature
 })
 
@@ -101,7 +106,7 @@ export class AppUpdateService {
 
     const { updater } = this.dependencies
     updater.logger = console
-    updater.autoDownload = true
+    updater.autoDownload = false
     updater.autoInstallOnAppQuit = true
 
     updater.on('checking-for-update', () => {
@@ -170,11 +175,15 @@ export class AppUpdateService {
     this.dependencies.schedule(() => {
       void this.checkForUpdates()
     }, STARTUP_UPDATE_CHECK_DELAY_MS)
+    this.dependencies.repeat(() => {
+      void this.checkForUpdates()
+    }, PERIODIC_UPDATE_CHECK_INTERVAL_MS)
   }
 
   private registerIpcHandlers(): void {
     this.dependencies.ipc.handle(APP_UPDATE_GET_SNAPSHOT_CHANNEL, () => this.snapshot)
     this.dependencies.ipc.handle(APP_UPDATE_CHECK_CHANNEL, () => this.checkForUpdates())
+    this.dependencies.ipc.handle(APP_UPDATE_DOWNLOAD_CHANNEL, () => this.downloadUpdate())
     this.dependencies.ipc.handle(APP_UPDATE_INSTALL_CHANNEL, () => this.quitAndInstall())
   }
 
@@ -220,6 +229,47 @@ export class AppUpdateService {
       }
     } finally {
       this.checking = false
+    }
+  }
+
+  private async downloadUpdate(): Promise<AppUpdateActionResponse> {
+    if (!this.snapshot.updateSupported) {
+      return {
+        success: false,
+        snapshot: this.snapshot,
+        error: this.snapshot.unsupportedReason || '当前系统暂不支持自动更新'
+      }
+    }
+
+    if (this.snapshot.status === 'downloading' || this.snapshot.status === 'downloaded') {
+      return { success: true, snapshot: this.snapshot }
+    }
+
+    const canRetryFailedDownload =
+      this.snapshot.status === 'error' && Boolean(this.snapshot.availableVersion)
+    if (this.snapshot.status !== 'available' && !canRetryFailedDownload) {
+      return {
+        success: false,
+        snapshot: this.snapshot,
+        error: '当前没有可下载的更新'
+      }
+    }
+
+    this.setSnapshot({ status: 'downloading', progressPercent: 0, error: undefined })
+    try {
+      await this.dependencies.updater.downloadUpdate()
+      if (this.snapshot.status === 'error') {
+        return {
+          success: false,
+          snapshot: this.snapshot,
+          error: this.snapshot.error || '下载更新失败'
+        }
+      }
+      return { success: true, snapshot: this.snapshot }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      this.setSnapshot({ status: 'error', error: errorMessage })
+      return { success: false, snapshot: this.snapshot, error: errorMessage }
     }
   }
 

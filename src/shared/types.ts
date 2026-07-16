@@ -346,6 +346,17 @@ export interface ListWorkspaceTreeRequest {
   includeUnsupported?: boolean
 }
 
+export interface ListWorkspaceDirectoryRequest {
+  workspaceId: string
+  relativePath?: string
+}
+
+export interface WorkspaceDirectoryListResponse {
+  items: WorkspaceTreeEntry[]
+  total: number
+  error?: string
+}
+
 export interface WorkspaceJobResponse {
   success: boolean
   workspaceId?: string
@@ -611,8 +622,9 @@ export interface ChatSessionListItem extends ChatSession {
 }
 
 export type AiFileChangeStatus = 'applied' | 'reverted' | 'failed'
-export type AiFileChangeCapability = 'docx' | 'text_file' | 'terminal_exec' | 'ppt'
-export type AiFileChangeOperation = 'created' | 'updated'
+export type AiFileChangeCapability = 'docx' | 'text_file' | 'terminal_exec' | 'ppt' | 'excel'
+export type AiFileChangeOperation = 'created' | 'updated' | 'deleted' | 'renamed'
+export type AiFileChangeSource = 'workspace_scan' | 'text_tool' | 'docx_tool'
 
 export type TextFileDiffLine =
   | { type: 'context'; oldLine: number; newLine: number; text: string }
@@ -626,7 +638,7 @@ export interface TextFileDiffHunk {
 }
 
 export interface TextFileDiffArtifact {
-  version: 1
+  version: 2
   oldLineCount: number
   newLineCount: number
   hunks: TextFileDiffHunk[]
@@ -641,13 +653,21 @@ export interface AiFileChangeRecord {
   path: string
   fileName: string
   operation: AiFileChangeOperation
+  source?: AiFileChangeSource
+  beforePath?: string
+  afterPath?: string
   changeCount: number
   insertCount: number
   deleteCount: number
   beforeSnapshotPath?: string
+  afterSnapshotPath?: string
+  beforeObjectHash?: string
+  afterObjectHash?: string
+  previewArtifactHash?: string
   beforeChecksum?: string
   afterChecksum?: string
   previewPath?: string
+  runSummary?: string
   createdAt: number
   updatedAt: number
   revertedAt?: number
@@ -1086,6 +1106,7 @@ export type BrowserPanelBounds = {
 }
 
 export type BrowserPanelBoundsRequest = BrowserPanelBounds & {
+  tabId: string
   visible: boolean
 }
 
@@ -1094,15 +1115,45 @@ export type BrowserPanelMutationResponse = {
   error?: string
 }
 
-export type BrowserPanelState = {
+export type BrowserTabState = {
+  id: string
+  ownerId: string
   url: string
   title?: string
   zoomPercent: number
+  canGoBack: boolean
+  canGoForward: boolean
+  isLoading: boolean
 }
 
 export type BrowserPanelStateResponse = BrowserPanelMutationResponse & {
-  state?: BrowserPanelState
+  state?: BrowserTabState
 }
+
+export type BrowserTabListRequest = {
+  ownerId: string
+}
+
+export type BrowserTabListResponse = BrowserPanelMutationResponse & {
+  tabs: BrowserTabState[]
+}
+
+export type BrowserTabCreateRequest = {
+  ownerId: string
+}
+
+export type BrowserTabMutationRequest = {
+  tabId: string
+}
+
+export type BrowserTabNavigateRequest = BrowserTabMutationRequest & {
+  url: string
+}
+
+export type BrowserTabCreateResponse = BrowserPanelStateResponse
+
+/** @deprecated Use BrowserTabState. */
+export type BrowserPanelState = BrowserTabState
 
 export type AiContextUsageRequest = {
   sessionId: string
@@ -1232,6 +1283,7 @@ type AiRunEventPayload =
       type: 'browser_panel_opened'
       runId: string
       taskId?: string
+      browserTabId: string
       createdAt: number
     }
   | {

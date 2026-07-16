@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => {
     return updater
   })
   updater.checkForUpdates = vi.fn()
+  updater.downloadUpdate = vi.fn()
   updater.quitAndInstall = vi.fn()
   updater.autoDownload = false
   updater.autoInstallOnAppQuit = false
@@ -59,6 +60,7 @@ vi.mock('electron-updater', () => ({
 
 import {
   APP_UPDATE_CHECK_CHANNEL,
+  APP_UPDATE_DOWNLOAD_CHANNEL,
   APP_UPDATE_GET_SNAPSHOT_CHANNEL,
   APP_UPDATE_INSTALL_CHANNEL
 } from '../../../../src/shared/constants'
@@ -88,6 +90,7 @@ describe('AppUpdateService contract', () => {
     mocks.ipcHandlers.clear()
     mocks.windowSend.mockReset()
     vi.mocked(mocks.updater.checkForUpdates as () => Promise<unknown>).mockReset()
+    vi.mocked(mocks.updater.downloadUpdate as () => Promise<unknown>).mockReset()
     vi.mocked(mocks.updater.quitAndInstall as () => void).mockReset()
     ;(mocks.updater.on as ReturnType<typeof vi.fn>).mockClear()
     mocks.updater.autoDownload = false
@@ -99,7 +102,7 @@ describe('AppUpdateService contract', () => {
     Object.defineProperty(process, 'platform', { value: originalPlatform })
   })
 
-  it('checks, downloads and installs an available update', async () => {
+  it('checks, downloads on request and installs an available update', async () => {
     const checkForUpdates = vi.mocked(mocks.updater.checkForUpdates as () => Promise<unknown>)
     checkForUpdates.mockImplementation(async () => {
       emitUpdaterEvent('checking-for-update')
@@ -108,45 +111,104 @@ describe('AppUpdateService contract', () => {
         releaseName: 'v0.1.1',
         releaseDate: '2026-07-13T08:00:00.000Z'
       })
-      emitUpdaterEvent('download-progress', {
-        percent: 42,
-        transferred: 42,
-        total: 100,
-        bytesPerSecond: 8
-      })
-      emitUpdaterEvent('update-downloaded', {
-        version: '0.1.1',
-        releaseName: 'v0.1.1',
-        releaseDate: '2026-07-13T08:00:00.000Z'
-      })
       return null
     })
+    vi.mocked(mocks.updater.downloadUpdate as () => Promise<unknown>).mockImplementation(
+      async () => {
+        emitUpdaterEvent('download-progress', {
+          percent: 42,
+          transferred: 42,
+          total: 100,
+          bytesPerSecond: 8
+        })
+        emitUpdaterEvent('update-downloaded', {
+          version: '0.1.1',
+          releaseName: 'v0.1.1',
+          releaseDate: '2026-07-13T08:00:00.000Z'
+        })
+        return null
+      }
+    )
 
     const service = new AppUpdateService()
     service.initialize()
 
-    const response = (await getIpcHandler(APP_UPDATE_CHECK_CHANNEL)()) as AppUpdateActionResponse
+    const checkResponse = (await getIpcHandler(
+      APP_UPDATE_CHECK_CHANNEL
+    )()) as AppUpdateActionResponse
+
+    expect(mocks.updater.autoDownload).toBe(false)
+    expect(mocks.updater.autoInstallOnAppQuit).toBe(true)
+    expect(checkResponse).toMatchObject({
+      success: true,
+      snapshot: {
+        status: 'available',
+        currentVersion: '0.1.0',
+        availableVersion: '0.1.1'
+      }
+    })
+
+    const downloadResponse = (await getIpcHandler(
+      APP_UPDATE_DOWNLOAD_CHANNEL
+    )()) as AppUpdateActionResponse
     const snapshot = getIpcHandler(APP_UPDATE_GET_SNAPSHOT_CHANNEL)() as AppUpdateSnapshot
 
-    expect(mocks.updater.autoDownload).toBe(true)
-    expect(mocks.updater.autoInstallOnAppQuit).toBe(true)
-    expect(response).toMatchObject({
+    expect(downloadResponse).toMatchObject({
       success: true,
       snapshot: {
         status: 'downloaded',
-        currentVersion: '0.1.0',
         availableVersion: '0.1.1',
         progressPercent: 100
       }
     })
+    expect(mocks.updater.downloadUpdate).toHaveBeenCalledOnce()
     expect(snapshot.status).toBe('downloaded')
     expect(
       mocks.windowSend.mock.calls.map((call) => (call[1] as AppUpdateSnapshot).status)
-    ).toEqual(['checking', 'checking', 'available', 'downloading', 'downloaded'])
+    ).toEqual(['checking', 'checking', 'available', 'downloading', 'downloading', 'downloaded'])
 
     const installResponse = getIpcHandler(APP_UPDATE_INSTALL_CHANNEL)() as AppUpdateActionResponse
     expect(installResponse.success).toBe(true)
     expect(mocks.updater.quitAndInstall).toHaveBeenCalledWith(false, true)
+  })
+
+  it('refuses downloads before an update is available', async () => {
+    const service = new AppUpdateService()
+    service.initialize()
+
+    const response = (await getIpcHandler(APP_UPDATE_DOWNLOAD_CHANNEL)()) as AppUpdateActionResponse
+
+    expect(response).toMatchObject({ success: false, error: '当前没有可下载的更新' })
+    expect(mocks.updater.downloadUpdate).not.toHaveBeenCalled()
+  })
+
+  it('keeps the available version so a failed download can be retried', async () => {
+    vi.mocked(mocks.updater.checkForUpdates as () => Promise<unknown>).mockImplementation(
+      async () => {
+        emitUpdaterEvent('update-available', { version: '0.1.1' })
+        return null
+      }
+    )
+    vi.mocked(mocks.updater.downloadUpdate as () => Promise<unknown>)
+      .mockRejectedValueOnce(new Error('download interrupted'))
+      .mockImplementationOnce(async () => {
+        emitUpdaterEvent('update-downloaded', { version: '0.1.1' })
+        return null
+      })
+
+    const service = new AppUpdateService()
+    service.initialize()
+    await getIpcHandler(APP_UPDATE_CHECK_CHANNEL)()
+
+    const failed = (await getIpcHandler(APP_UPDATE_DOWNLOAD_CHANNEL)()) as AppUpdateActionResponse
+    expect(failed).toMatchObject({
+      success: false,
+      snapshot: { status: 'error', availableVersion: '0.1.1' }
+    })
+
+    const retried = (await getIpcHandler(APP_UPDATE_DOWNLOAD_CHANNEL)()) as AppUpdateActionResponse
+    expect(retried).toMatchObject({ success: true, snapshot: { status: 'downloaded' } })
+    expect(mocks.updater.downloadUpdate).toHaveBeenCalledTimes(2)
   })
 
   it('reports that the packaged app is already up to date', async () => {
@@ -260,23 +322,37 @@ describe('AppUpdateService contract', () => {
     await firstResponsePromise
   })
 
-  it('runs the startup update check once after the configured delay', async () => {
+  it('checks after startup and repeats every four hours', async () => {
     const schedule =
       vi.fn<(callback: () => void, delayMs: number) => ReturnType<typeof setTimeout>>()
     schedule.mockImplementation((callback) => {
       callback()
       return 1 as unknown as ReturnType<typeof setTimeout>
     })
-    vi.mocked(mocks.updater.checkForUpdates as () => Promise<unknown>).mockResolvedValue(null)
+    const repeat =
+      vi.fn<(callback: () => void, intervalMs: number) => ReturnType<typeof setInterval>>()
+    repeat.mockReturnValue(2 as unknown as ReturnType<typeof setInterval>)
+    vi.mocked(mocks.updater.checkForUpdates as () => Promise<unknown>).mockImplementation(
+      async () => {
+        emitUpdaterEvent('update-not-available', { version: '0.1.0' })
+        return null
+      }
+    )
 
-    const service = new AppUpdateService({ schedule })
+    const service = new AppUpdateService({ schedule, repeat })
     service.initialize()
     service.checkForUpdatesOnLaunch()
 
     expect(schedule).toHaveBeenCalledOnce()
     expect(schedule.mock.calls[0]?.[1]).toBe(5000)
+    expect(repeat).toHaveBeenCalledOnce()
+    expect(repeat.mock.calls[0]?.[1]).toBe(4 * 60 * 60 * 1000)
     await vi.waitFor(() => {
       expect(mocks.updater.checkForUpdates).toHaveBeenCalledOnce()
+    })
+    repeat.mock.calls[0]?.[0]()
+    await vi.waitFor(() => {
+      expect(mocks.updater.checkForUpdates).toHaveBeenCalledTimes(2)
     })
   })
 
@@ -286,7 +362,7 @@ describe('AppUpdateService contract', () => {
     service.initialize()
 
     expect(mocks.updater.on).toHaveBeenCalledTimes(6)
-    expect(mocks.ipcHandlers.size).toBe(3)
+    expect(mocks.ipcHandlers.size).toBe(4)
   })
 
   it('keeps automatic updates disabled in development mode', async () => {

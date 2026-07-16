@@ -10,6 +10,7 @@ import type {
 } from '../shared/types'
 import {
   APP_UPDATE_CHECK_CHANNEL,
+  APP_UPDATE_DOWNLOAD_CHANNEL,
   APP_UPDATE_GET_SNAPSHOT_CHANNEL,
   APP_UPDATE_INSTALL_CHANNEL,
   APP_UPDATE_STATUS_CHANNEL
@@ -129,6 +130,7 @@ const api: DesktopApi = {
   workspaceSetRootPath: (payload) => ipcRenderer.invoke('workspace-set-root-path', payload),
   workspaceDelete: (workspaceId: string) => ipcRenderer.invoke('workspace-delete', workspaceId),
   workspaceTree: (payload) => ipcRenderer.invoke('workspace-tree', payload),
+  workspaceDirectoryList: (payload) => ipcRenderer.invoke('workspace-directory-list', payload),
   workspaceScan: (payload) => {
     emitE2EIpcCall('workspaceScan', {
       workspaceId: String(payload.workspaceId || '').trim()
@@ -251,14 +253,23 @@ const api: DesktopApi = {
   },
   aiContextUsageGet: (payload) => ipcRenderer.invoke('ai-context-usage-get', payload),
   browserPanelSetBounds: (payload) => ipcRenderer.invoke('browser-panel-set-bounds', payload),
-  browserPanelShow: () => ipcRenderer.invoke('browser-panel-show'),
+  browserTabList: (payload) => ipcRenderer.invoke('browser-tab-list', payload),
+  browserTabCreate: (payload) => ipcRenderer.invoke('browser-tab-create', payload),
+  browserTabActivate: (payload) => ipcRenderer.invoke('browser-tab-activate', payload),
+  browserTabClose: (payload) => ipcRenderer.invoke('browser-tab-close', payload),
+  browserTabNavigate: (payload) => ipcRenderer.invoke('browser-tab-navigate', payload),
+  browserTabBack: (payload) => ipcRenderer.invoke('browser-tab-back', payload),
+  browserTabForward: (payload) => ipcRenderer.invoke('browser-tab-forward', payload),
+  browserPanelShow: (payload) => ipcRenderer.invoke('browser-panel-show', payload),
   browserPanelHide: () => ipcRenderer.invoke('browser-panel-hide'),
-  browserPanelReload: () => ipcRenderer.invoke('browser-panel-reload'),
-  browserPanelOpenExternal: () => ipcRenderer.invoke('browser-panel-open-external'),
-  browserPanelStateGet: () => ipcRenderer.invoke('browser-panel-state-get'),
-  browserPanelZoomIn: () => ipcRenderer.invoke('browser-panel-zoom-in'),
-  browserPanelZoomOut: () => ipcRenderer.invoke('browser-panel-zoom-out'),
-  browserPanelZoomReset: () => ipcRenderer.invoke('browser-panel-zoom-reset'),
+  browserPanelSetOccluded: (occluded) => ipcRenderer.invoke('browser-panel-occluded', occluded),
+  browserPanelReload: (payload) => ipcRenderer.invoke('browser-panel-reload', payload),
+  browserPanelStop: (payload) => ipcRenderer.invoke('browser-panel-stop', payload),
+  browserPanelOpenExternal: (payload) => ipcRenderer.invoke('browser-panel-open-external', payload),
+  browserPanelStateGet: (payload) => ipcRenderer.invoke('browser-panel-state-get', payload),
+  browserPanelZoomIn: (payload) => ipcRenderer.invoke('browser-panel-zoom-in', payload),
+  browserPanelZoomOut: (payload) => ipcRenderer.invoke('browser-panel-zoom-out', payload),
+  browserPanelZoomReset: (payload) => ipcRenderer.invoke('browser-panel-zoom-reset', payload),
   docxApplyGet: (payload) => ipcRenderer.invoke('docx-apply-get', payload),
   aiFileChangeList: (payload) => ipcRenderer.invoke('ai-file-change-list', payload),
   aiFileChangeGet: (payload) => ipcRenderer.invoke('ai-file-change-get', payload),
@@ -288,6 +299,32 @@ const api: DesktopApi = {
       availableVersion: '0.1.1',
       releaseName: 'v0.1.1',
       releaseDate: '2026-07-13T08:00:00.000Z'
+    })
+    return {
+      success: true,
+      snapshot: { ...appUpdateFixtureSnapshot }
+    }
+  },
+  appUpdateDownload: async () => {
+    emitE2EIpcCall('appUpdateDownload')
+    if (!isE2EFixtureMode) {
+      return await ipcRenderer.invoke(APP_UPDATE_DOWNLOAD_CHANNEL)
+    }
+    if (
+      appUpdateFixtureSnapshot.status !== 'available' &&
+      !(appUpdateFixtureSnapshot.status === 'error' && appUpdateFixtureSnapshot.availableVersion)
+    ) {
+      return {
+        success: false,
+        snapshot: { ...appUpdateFixtureSnapshot },
+        error: '当前没有可下载的更新'
+      }
+    }
+    setAppUpdateFixtureSnapshot({
+      ...appUpdateFixtureSnapshot,
+      status: 'downloading',
+      progressPercent: 0,
+      error: undefined
     })
     await waitForAppUpdateFixtureStep()
     setAppUpdateFixtureSnapshot({
