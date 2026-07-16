@@ -14,9 +14,9 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
     countsTowardToolBudget: false,
     title: 'terminal',
     description:
-      '能力：在当前 workspace 边界内执行单条终端命令。\n结果：返回命令输出、退出状态和可识别的工作区文件产物。\n边界：命令是否可直接执行与是否需要审批由终端命令策略决定。',
+      '能力：在当前 workspace 边界内使用可持续的终端会话执行、读取和停止命令。\n结果：返回终端状态、当前路径、增量输出、退出状态和可识别的工作区文件产物。\n边界：命令是否可直接执行与是否需要审批由终端命令策略决定。',
     whenToUse: '适用于需要使用当前 workspace 终端能力的任务。',
-    toolNames: ['terminal_run']
+    toolNames: ['terminal_run', 'terminal_read', 'terminal_stop']
   },
   'text-file': {
     skillId: 'text-file',

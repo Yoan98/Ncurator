@@ -5,6 +5,7 @@ import { dict } from '@node-rs/jieba/dict'
 import { AiRunService } from './AiRunService'
 import { buildConversationMemorySummary, CONVERSATION_MEMORY_BATCH_MESSAGES } from './memory'
 import { releaseDocxRunSession } from './human/tools/docx/worker/docxWorkerClient'
+import { terminalSessionManager } from './human/tools/terminal/TerminalSessionManager'
 import { normalizeSelectedReferences, normalizeWorkspaceBinding } from './utils/runContext'
 import { validateSelectedReferencesForRun } from '../sourceScope/validation'
 import { normalizeForIpc } from '../../utils/serialization'
@@ -343,6 +344,7 @@ export class ChatRunService {
     }
 
     await Promise.all(affectedRuns.map(([, entry]) => entry.eventQueue.catch(() => {})))
+    await terminalSessionManager.closeByChatSession(normalizedSessionId)
     await this.deps.chatStore.deleteChatSession(normalizedSessionId)
     await this.deps.aiRunStore.deleteRunsBySession(normalizedSessionId)
   }
@@ -363,6 +365,7 @@ export class ChatRunService {
     if (!entry) return { success: false, error: '当前运行已结束' }
     entry.cancelled = true
     entry.abortController.abort()
+    await terminalSessionManager.stopByRun(normalizedRunId)
     const approval = this.activeApprovals.get(normalizedRunId)
     approval?.resolve({ accepted: false, error: '已取消' })
     this.activeApprovals.delete(normalizedRunId)

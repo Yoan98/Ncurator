@@ -6,8 +6,7 @@ import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import { filterEventsByType } from '../testHelpers'
 
 type TerminalRunCommandResult = {
-  stdout: string
-  stderr: string
+  output: string
   reason?: 'workspace_required' | 'result_too_large' | 'result_unusable' | 'failed'
   error?: string
 }
@@ -38,13 +37,18 @@ describe('ai tool terminal backend', () => {
 
         const harness = createTerminalToolHarness(runtime)
 
-        return {
-          firstSearch: await harness.invoke<TerminalRunCommandResult>('terminal_run', {
+        const firstSearch = await harness.invoke<TerminalRunCommandResult & { terminalId: string }>(
+          'terminal_run',
+          {
             command: isWindows
               ? 'Get-ChildItem -Path notes -Recurse -File | Select-String -Pattern "Approval denied"'
               : 'grep -R -n "Approval denied" notes'
-          }),
+          }
+        )
+        const result = {
+          firstSearch,
           secondSearch: await harness.invoke<TerminalRunCommandResult>('terminal_run', {
+            terminalId: firstSearch.terminalId,
             command: isWindows
               ? 'Get-ChildItem -Path notes -Recurse -File | Select-String -Pattern "artifacts"'
               : 'grep -R -n "artifacts" notes'
@@ -56,14 +60,14 @@ describe('ai tool terminal backend', () => {
           }),
           events: runtime.eventCollector.snapshot()
         }
+        await harness.release()
+        return result
       },
       assert: async (result, runtime) => {
         const approvalEvents = filterEventsByType(result.events, 'approval_batch_required')
 
         runtime.assertThat(
-          !result.firstSearch.reason &&
-            !result.secondSearch.reason &&
-            approvalEvents.length === 0,
+          !result.firstSearch.reason && !result.secondSearch.reason && approvalEvents.length === 0,
           {
             name: 'search-commands-stay-safe',
             message: '安全文本搜索指令应直接成功执行，不触发审批。',
@@ -76,15 +80,15 @@ describe('ai tool terminal backend', () => {
         )
 
         runtime.assertThat(
-          result.firstSearch.stdout.includes('release.md') &&
-            result.secondSearch.stdout.includes('Terminal artifacts must be recorded.') &&
+          result.firstSearch.output.includes('release.md') &&
+            result.secondSearch.output.includes('Terminal artifacts must be recorded.') &&
             result.boundaryRejected.reason === 'workspace_required',
           {
             name: 'search-commands-honor-boundary-checks',
             message: '文本搜索应正确返回命中结果，并在越界路径参数下于执行前拒绝。',
             data: {
-              firstSearch: result.firstSearch.stdout,
-              secondSearch: result.secondSearch.stdout,
+              firstSearch: result.firstSearch.output,
+              secondSearch: result.secondSearch.output,
               boundaryRejected: result.boundaryRejected
             }
           }

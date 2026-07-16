@@ -89,6 +89,8 @@ export type AssistantRichTextSegment = {
 
 export type AssistantToolName =
   | 'terminal_run'
+  | 'terminal_read'
+  | 'terminal_stop'
   | 'file_read'
   | 'file_write'
   | 'kb_search'
@@ -126,7 +128,8 @@ export type AssistantProcessGroupKind =
 export type AssistantProcessSkillKey =
   | 'docx-read'
   | 'docx-edit'
-  | 'text-file'
+  | 'file-read'
+  | 'file-write'
   | 'kb'
   | 'terminal'
   | 'web-search'
@@ -197,6 +200,7 @@ export type AssistantTurnViewModel = {
   messageId: string
   runId?: string
   status: 'running' | 'completed' | 'failed'
+  runFinished: boolean
   processThoughts: AssistantProcessThought[]
   processGroups: AssistantProcessGroup[]
   finalAnswerMarkdown: string

@@ -78,6 +78,12 @@ Docx Runtime 负责 Word 文档读取、搜索、编辑、任务内回滚、写�
 
 Text File Runtime 通过 builtin `text-file` skill 提供 `file_read` 和 `file_write`。它负责 UTF-8 普通文本读取、创建、完整改写、唯一文本编辑和全部精确匹配替换。写入先完成全部校验，再通过同目录临时文件原子替换；写入前保存 bytes checkpoint，写入后根据真实 before/after 生成结构化行级 diff。
 
+### Terminal Runtime
+
+Terminal Runtime 由 `TerminalSessionManager` 和 `terminal_run / terminal_read / terminal_stop` 组成。Manager 位于 Main Process，按 chat session 与 workspace 隔离持久 PTY，会话可跨单个 AI run 保留。每个终端维护 terminalId、当前路径、运行状态、当前命令、输出环形缓冲区和绝对输出游标。terminal_run 固定等待后让出控制权，不终止仍在运行的命令；terminal_read 增量读取；terminal_stop 通过 Ctrl+C、宽限期和强制终止收口。删除聊天、取消所属 run 和应用退出会清理托管进程。
+
+Brain 的 `local_environment` 在 `<terminal_environment>` 中嵌入格式化 JSON，只包含新终端默认路径和各终端的 id、状态、当前路径、当前命令与开始时间，不注入完整日志或环境变量。工具说明只声明能力、结果和边界，不返回下一步建议字段。terminal_run 输入不包含 cwd；已有终端的当前路径是执行和工作空间边界判断的基准。
+
 ### Apply Review
 
 Apply Review 负责 AI 修改文件后的统一记录、预览和回退入口。Docx、Text File Runtime 和 terminal 识别出的 UTF-8 文件修改都写入统一文件修改记录。Renderer 根据记录 capability 路由：docx 使用文档预览，`text_file` 使用独立文本 diff，普通文件预览仍使用文件渲染器。用户回退依赖完整 checkpoint，不依赖 diff 反向计算。

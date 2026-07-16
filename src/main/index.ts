@@ -5,10 +5,7 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { registerHandlers } from './ipc/handlers'
 import { IngestionService } from './services/ingestion/loader'
-import {
-  DEFAULT_EMBEDDING_MODEL_NAME,
-  EmbeddingService
-} from './services/vector/EmbeddingService'
+import { DEFAULT_EMBEDDING_MODEL_NAME, EmbeddingService } from './services/vector/EmbeddingService'
 import { EmbeddingRuntimeClient } from './services/vector/runtime/EmbeddingRuntimeClient'
 import { StorageService } from './services/storage/StorageService'
 import { ModelService } from './services/model/ModelService'
@@ -21,6 +18,7 @@ import { createWebCrawlerService } from './services/webCrawler/createWebCrawlerS
 import { AppUpdateService } from './services/update/AppUpdateService'
 import { APP_ID } from '../shared/constants'
 import { MODELS_PATH } from './utils/paths'
+import { terminalSessionManager } from './services/ai/human/tools/terminal/TerminalSessionManager'
 
 app.commandLine.appendSwitch(
   'remote-debugging-port',
@@ -206,6 +204,7 @@ if (!singleInstanceLock) {
     appUpdateService.checkForUpdatesOnLaunch()
 
     app.on('before-quit', () => {
+      void terminalSessionManager.dispose()
       void storageService.failInterruptedWorkspaceIndexJobs()
       void webCrawlerService.close()
       void embeddingService.close()

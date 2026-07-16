@@ -12,6 +12,7 @@ const PNPM_BIN = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
 const VITEST_BIN = resolveLocalBin('vitest')
 const ELECTRON_VITE_BIN = resolveLocalBin('electron-vite')
 const NATIVE_PREPARE_SCRIPT = path.join(ROOT, 'scripts', 'prepare-better-sqlite3-native.mjs')
+const NODE_PTY_NATIVE_PREPARE_SCRIPT = path.join(ROOT, 'scripts', 'prepare-node-pty-native.mjs')
 const BETTER_SQLITE_NATIVE_BINDING_ENV = 'NCURATOR_BETTER_SQLITE3_NATIVE_BINDING'
 const LIVE_BACKEND_NODE_OLD_SPACE_MB = 8192
 const DEFAULT_E2E_FILE_DELAY_MS = 1000
@@ -234,6 +235,18 @@ const prepareBetterSqliteNative = (target) => {
   return 1
 }
 
+const prepareNodePtyNative = (target) => {
+  const result = runSpawn(process.execPath, [NODE_PTY_NATIVE_PREPARE_SCRIPT, 'ensure', target])
+  reportSpawnFailure(
+    `node-pty native prepare ${target}`,
+    process.execPath,
+    [NODE_PTY_NATIVE_PREPARE_SCRIPT, 'ensure', target],
+    result
+  )
+  if (typeof result.status === 'number') return result.status
+  return 1
+}
+
 const resolveBetterSqliteNativeBinding = (target) => {
   const result = spawnSync(process.execPath, [NATIVE_PREPARE_SCRIPT, 'path', target], {
     cwd: ROOT,
@@ -378,6 +391,10 @@ const runTypeWorkflow = async (input) => {
   const nativeCode = prepareBetterSqliteNative(nativeTarget)
   if (nativeCode !== 0) {
     return nativeCode
+  }
+  const nodePtyNativeCode = prepareNodePtyNative(nativeTarget)
+  if (nodePtyNativeCode !== 0) {
+    return nodePtyNativeCode
   }
   const nativeBinding = resolveBetterSqliteNativeBinding(nativeTarget)
   if (!nativeBinding.ok) {

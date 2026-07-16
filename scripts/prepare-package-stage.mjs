@@ -80,6 +80,15 @@ const installRuntimeDependencies = () => {
   }
 }
 
+const installPreparedNodePtyNative = () => {
+  const source = path.join(ROOT, 'node_modules', 'node-pty', 'build', 'Release')
+  const target = path.join(STAGE_DIR, 'node_modules', 'node-pty', 'build', 'Release')
+  assertDirectory(source, 'prepared node-pty native release')
+  fs.rmSync(target, { recursive: true, force: true })
+  fs.mkdirSync(path.dirname(target), { recursive: true })
+  fs.cpSync(source, target, { recursive: true, force: true })
+}
+
 const collectInstalledTopLevelDependencies = () => {
   const nodeModules = path.join(STAGE_DIR, 'node_modules')
   const packageDirectories = []
@@ -453,6 +462,7 @@ const main = () => {
   writeStageLockfile(runtimeDependencies)
 
   installRuntimeDependencies()
+  if (runtimePackageNames.includes('node-pty')) installPreparedNodePtyNative()
   fs.rmSync(path.join(STAGE_DIR, 'pnpm-lock.yaml'), { force: true })
   pruneCompiledOutput()
   pruneNodeModules()

@@ -17,6 +17,7 @@ import { releaseDocxRunSession } from '../../../src/main/services/ai/human/tools
 import { DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS } from '../../../src/main/services/ai/human/constants'
 import { buildKbCapabilityTools } from '../../../src/main/services/ai/human/tools/kb/retrievalTools'
 import { buildTerminalCapabilityTools } from '../../../src/main/services/ai/human/tools/terminal/terminalTools'
+import { TerminalSessionManager } from '../../../src/main/services/ai/human/tools/terminal/TerminalSessionManager'
 import { buildTextFileCapabilityTools } from '../../../src/main/services/ai/human/tools/textFile'
 import { imageRecognitionToolFamily } from '../../../src/main/services/ai/human/tools/imageRecognition'
 import { utilityToolFamily } from '../../../src/main/services/ai/human/tools/utility'
@@ -39,9 +40,8 @@ export type CapturedToolActivity = {
 }
 
 type TerminalToolHarnessOptions = {
-  timeoutMs?: number
+  yieldMs?: number
   maxOutputChars?: number
-  safePreviewChars?: number
 }
 
 const createToolInvoker = (tools: readonly ToolLike[]) => {
@@ -112,6 +112,10 @@ export const createTerminalToolHarness = (
   const ctx = runtime.createAiRunContext(contextInput)
   const cache = createHumanRuntimeCache()
   const activities: CapturedToolActivity[] = []
+  const sessionManager = new TerminalSessionManager({
+    yieldMs: Math.max(50, Number(options.yieldMs || 3000)),
+    maxOutputChars: Math.max(1024, Number(options.maxOutputChars || 120_000))
+  })
   const built = buildTerminalCapabilityTools({
     ctx,
     cache,
@@ -119,9 +123,9 @@ export const createTerminalToolHarness = (
     taskId: runtime.taskId,
     sessionId: contextInput.sessionId || 'test-session',
     workspaceRootPath: runtime.workspaceRoot,
-    timeoutMs: Math.max(100, Number(options.timeoutMs || 3000)),
-    maxOutputChars: Math.max(256, Number(options.maxOutputChars || 4000)),
-    safePreviewChars: Math.max(64, Number(options.safePreviewChars || 400)),
+    workspaceId: ctx.workspace?.workspaceId || 'test-workspace',
+    sessionManager,
+    aiResultTokenLimitRatio: 0.25,
     emitActivity: (activity) => {
       activities.push(activity)
     }
@@ -131,7 +135,11 @@ export const createTerminalToolHarness = (
     ...createToolInvoker(built.tools as readonly ToolLike[]),
     ctx,
     state: built.state,
-    activities
+    activities,
+    sessionManager,
+    async release(): Promise<void> {
+      await sessionManager.dispose()
+    }
   }
 }
 

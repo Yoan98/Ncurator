@@ -6,7 +6,7 @@ import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import { filterEventsByType } from '../testHelpers'
 
 type TerminalRunCommandResult = {
-  stdout: string
+  output: string
   reason?: string
 }
 
@@ -34,34 +34,43 @@ describe('ai tool terminal backend', () => {
 
         const harness = createTerminalToolHarness(runtime)
 
-        return {
-          list: await harness.invoke<TerminalRunCommandResult>('terminal_run', {
+        const list = await harness.invoke<TerminalRunCommandResult & { terminalId: string }>(
+          'terminal_run',
+          {
             command: isWindows
               ? 'Get-ChildItem -LiteralPath materials -Recurse -Force'
               : 'ls -R materials'
-          }),
+          }
+        )
+        const result = {
+          list,
           recursiveFind: await harness.invoke<TerminalRunCommandResult>('terminal_run', {
+            terminalId: list.terminalId,
             command: isWindows
               ? 'Get-ChildItem -LiteralPath materials -Recurse -File'
               : 'find materials -type f'
           }),
           safeEcho: await harness.invoke<TerminalRunCommandResult>('terminal_run', {
+            terminalId: list.terminalId,
             command: isWindows ? 'Write-Output "terminal safe check"' : 'echo terminal safe check'
           }),
           read: await harness.invoke<TerminalRunCommandResult>('terminal_run', {
+            terminalId: list.terminalId,
             command: isWindows
               ? 'Get-Content -LiteralPath materials/nested/daily-note.txt'
               : 'cat materials/nested/daily-note.txt'
           }),
           events: runtime.eventCollector.snapshot()
         }
+        await harness.release()
+        return result
       },
       assert: async (result, runtime) => {
         const approvalEvents = filterEventsByType(result.events, 'approval_batch_required')
         const stepErrors = filterEventsByType(result.events, 'terminal_step_error')
 
         runtime.assertThat(
-            !result.list.reason &&
+          !result.list.reason &&
             !result.recursiveFind.reason &&
             !result.safeEcho.reason &&
             !result.read.reason &&
@@ -84,11 +93,11 @@ describe('ai tool terminal backend', () => {
         )
 
         runtime.assertThat(
-          result.list.stdout.includes('daily-note.txt') &&
-            result.recursiveFind.stdout.includes('daily-note.txt') &&
-            result.safeEcho.stdout.includes('terminal safe check') &&
-            result.read.stdout.includes('alpha') &&
-            result.read.stdout.includes('gamma'),
+          result.list.output.includes('daily-note.txt') &&
+            result.recursiveFind.output.includes('daily-note.txt') &&
+            result.safeEcho.output.includes('terminal safe check') &&
+            result.read.output.includes('alpha') &&
+            result.read.output.includes('gamma'),
           {
             name: 'safe-shell-inspection-returns-stable-output',
             message: 'terminal_run 应为目录浏览与文本读取返回可消费的稳定输出。',

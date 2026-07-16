@@ -252,7 +252,10 @@ describe('workbench run e2e', () => {
               document.querySelector('#task-result').textContent = 'BROWSER_TASK_DONE:' + document.querySelector('#task-code').value
             })
           </script>`)
-          const setup = await setupWorkbenchWithTempWorkspace(page, { caseId: CASE_ID })
+          const setup = await setupWorkbenchWithTempWorkspace(page, {
+            caseId: CASE_ID,
+            rootBindingMode: 'ipc'
+          })
           try {
             await switchWorkbenchMode(page, '没头脑')
             await insertWorkbenchReferenceToken(page, 'workbench-preview.md')
@@ -324,6 +327,10 @@ describe('workbench run e2e', () => {
                 event.type === 'tool_call_result' && event.toolName === 'browser_use'
             )
             const browserData = browserResults.map((event) => event.result?.data)
+            const processItemTexts = await getWorkbenchPrefixLocator(
+              page,
+              workbenchSelectors.assistantProcessItemPrefix
+            ).allTextContents()
             await resourceTabs.filter({ hasText: 'workbench-preview.md' }).first().click()
             const fileTabRestored = await getWorkbenchLocator(
               page,
@@ -360,6 +367,12 @@ describe('workbench run e2e', () => {
                 browserStateWhileHidden.state?.url === server.url &&
                 browserStateAfterRestore.state?.url === server.url,
               browserActions: browserStarts.map((event) => readToolInputString(event, 'action')),
+              redundantBrowserActionPrefixesAbsent: processItemTexts.every(
+                (text) =>
+                  !text.includes('观察页面：') &&
+                  !text.includes('提取页面内容：') &&
+                  !text.includes('操作页面：')
+              ),
               browserResultContractValid:
                 browserData.length > 0 && browserData.every(isBrowserUseDataContract),
               deprecatedBrowserUseFieldsAbsent: browserData.every(
@@ -404,6 +417,7 @@ describe('workbench run e2e', () => {
               result.browserActions.includes('act') &&
               result.browserActions.includes('extract') &&
               result.browserResultContractValid &&
+              result.redundantBrowserActionPrefixesAbsent &&
               result.deprecatedBrowserUseFieldsAbsent &&
               result.observeResultVisible &&
               result.actResultVisible &&

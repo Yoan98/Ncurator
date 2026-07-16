@@ -4,10 +4,7 @@ import {
   analyzeTerminalCommand
 } from '../../../../src/main/services/ai/human/tools/terminal/commandPolicy'
 import { buildWindowsPowerShellEncodedCommand } from '../../../../src/main/services/ai/human/tools/terminal/terminalExec'
-import {
-  createTerminalRunPromptSpec,
-  createTerminalRunToolSpec
-} from '../../../../src/main/services/ai/human/tools/terminal/toolSpecs'
+import { createTerminalRunToolSpec } from '../../../../src/main/services/ai/human/tools/terminal/toolSpecs'
 
 describe('ai unit terminal command policy', () => {
   it('allows macos commands from the platform safe command set', () => {
@@ -20,9 +17,9 @@ describe('ai unit terminal command policy', () => {
     expect(analyzeSafeTerminalCommandPolicy('find . -type f', 'macos').executionPolicy).toBe(
       'safe_allowed'
     )
-    expect(analyzeSafeTerminalCommandPolicy('cat notes.txt | head -10', 'macos').executionPolicy).toBe(
-      'safe_allowed'
-    )
+    expect(
+      analyzeSafeTerminalCommandPolicy('cat notes.txt | head -10', 'macos').executionPolicy
+    ).toBe('safe_allowed')
     expect(
       analyzeSafeTerminalCommandPolicy("cat '学习笔记/深度学习.pdf' | strings | head -500", 'macos')
         .executionPolicy
@@ -37,7 +34,8 @@ describe('ai unit terminal command policy', () => {
       'safe_allowed'
     )
     expect(
-      analyzeSafeTerminalCommandPolicy('Get-ChildItem -LiteralPath notes', 'windows').executionPolicy
+      analyzeSafeTerminalCommandPolicy('Get-ChildItem -LiteralPath notes', 'windows')
+        .executionPolicy
     ).toBe('safe_allowed')
     expect(
       analyzeSafeTerminalCommandPolicy(
@@ -54,9 +52,9 @@ describe('ai unit terminal command policy', () => {
     expect(analyzeSafeTerminalCommandPolicy('python3 -c "print(1)"', 'macos').executionPolicy).toBe(
       'approval_required'
     )
-    expect(analyzeSafeTerminalCommandPolicy('node -e "console.log(1)"', 'macos').executionPolicy).toBe(
-      'approval_required'
-    )
+    expect(
+      analyzeSafeTerminalCommandPolicy('node -e "console.log(1)"', 'macos').executionPolicy
+    ).toBe('approval_required')
   })
 
   it('maps safe terminal commands without artifacts to read_only execution metadata', () => {
@@ -97,15 +95,15 @@ describe('ai unit terminal command policy', () => {
   })
 
   it('renders terminal prompt specs by platform', () => {
-    const windowsPrompt = createTerminalRunPromptSpec('windows')
-    const macosPrompt = createTerminalRunPromptSpec('macos')
+    const macosPrompt = createTerminalRunToolSpec('macos').promptSpec
+    const windowsPrompt = createTerminalRunToolSpec('windows').promptSpec
 
     expect(windowsPrompt.description).toContain('PowerShell')
     expect(windowsPrompt.description).not.toContain('zsh')
-    expect(windowsPrompt.examples[0]?.args.command).toBe('Get-ChildItem -LiteralPath .')
+    expect(windowsPrompt.examples).toEqual([])
     expect(macosPrompt.description).toContain('zsh')
     expect(macosPrompt.description).not.toContain('PowerShell')
-    expect(macosPrompt.examples[0]?.args.command).toBe('ls .')
+    expect(macosPrompt.examples).toEqual([])
   })
 
   it('builds windows powershell encoded commands with utf8 prelude', () => {

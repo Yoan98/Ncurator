@@ -70,6 +70,8 @@ const readNestedObject = (value: IpcJsonObject, key: string): IpcJsonObject | un
 
 const isAssistantToolName = (toolName: string): toolName is AssistantToolName =>
   toolName === 'terminal_run' ||
+  toolName === 'terminal_read' ||
+  toolName === 'terminal_stop' ||
   toolName === 'file_read' ||
   toolName === 'file_write' ||
   toolName === 'kb_search' ||
@@ -202,7 +204,7 @@ const readDocxRangeLabel = (input?: IpcJsonObject): string => {
 
 const getSkillDisplayName = (skillId?: RuntimeSkillId): string => {
   if (skillId === 'terminal') return '命令执行器'
-  if (skillId === 'text-file') return '文本文件编辑器'
+  if (skillId === 'text-file') return '文件编辑器'
   if (skillId === 'kb-retrieval') return '资料查阅器'
   if (skillId === 'docx-read') return 'docx 阅读器'
   if (skillId === 'docx-write') return 'docx 写作器'
@@ -219,9 +221,12 @@ const getToolUiKind = (toolName?: AssistantToolName): AssistantProcessSkillKey =
     return 'docx-read'
   }
   if (toolName === 'docx_edit') return 'docx-edit'
-  if (toolName === 'file_read' || toolName === 'file_write') return 'text-file'
+  if (toolName === 'file_read') return 'file-read'
+  if (toolName === 'file_write') return 'file-write'
   if (toolName === 'kb_search' || toolName === 'kb_list_documents') return 'kb'
-  if (toolName === 'terminal_run') return 'terminal'
+  if (toolName === 'terminal_run' || toolName === 'terminal_read' || toolName === 'terminal_stop') {
+    return 'terminal'
+  }
   if (toolName === 'web_search') return 'web-search'
   if (toolName === 'web_crawl') return 'web-crawl'
   if (toolName === 'browser_use') return 'browser'
@@ -238,7 +243,8 @@ const getDisplaySkillKey = (display: AssistantProcessDisplay): AssistantProcessS
 const getToolIconKind = (skillKey: AssistantProcessSkillKey): AssistantProcessIconKind => {
   if (skillKey === 'docx-edit') return 'edit'
   if (skillKey === 'docx-read') return 'document'
-  if (skillKey === 'text-file') return 'edit'
+  if (skillKey === 'file-read') return 'document'
+  if (skillKey === 'file-write') return 'edit'
   if (
     skillKey === 'kb' ||
     skillKey === 'web-search' ||
@@ -298,13 +304,21 @@ const getToolSummaryText = (
     }
     return sentence(text(`编辑 ${normalizedCount} 个 docx 文件失败`))
   }
-  if (skillKey === 'text-file') {
-    if (status === 'running') return sentence(text(`正在处理 ${normalizedCount} 个文本文件`))
-    if (status === 'completed') return sentence(text(`已处理 ${normalizedCount} 个文本文件`))
+  if (skillKey === 'file-read') {
+    if (status === 'running') return sentence(text(`正在读取 ${normalizedCount} 个文件`))
+    if (status === 'completed') return sentence(text(`已读取 ${normalizedCount} 个文件`))
     if (status === 'partial_failed') {
-      return sentence(text(`部分处理 ${normalizedCount} 个文本文件失败`))
+      return sentence(text(`部分读取 ${normalizedCount} 个文件失败`))
     }
-    return sentence(text(`处理 ${normalizedCount} 个文本文件失败`))
+    return sentence(text(`读取 ${normalizedCount} 个文件失败`))
+  }
+  if (skillKey === 'file-write') {
+    if (status === 'running') return sentence(text(`正在编辑 ${normalizedCount} 个文件`))
+    if (status === 'completed') return sentence(text(`已编辑 ${normalizedCount} 个文件`))
+    if (status === 'partial_failed') {
+      return sentence(text(`部分编辑 ${normalizedCount} 个文件失败`))
+    }
+    return sentence(text(`编辑 ${normalizedCount} 个文件失败`))
   }
   if (skillKey === 'kb') {
     if (status === 'running') return sentence(text('正在检索知识库'))
@@ -378,13 +392,25 @@ const getToolItemText = (
     return sentence(text('编辑文档：'), text(fileLabel, true))
   }
   if (toolName === 'file_read') {
-    return sentence(text('读取文本文件：'), text(fileLabel, true))
+    return sentence(text('读取文件：'), text(fileLabel, true))
   }
   if (toolName === 'file_write') {
-    return sentence(text('编辑文本文件：'), text(fileLabel, true))
+    return sentence(text('编辑文件：'), text(fileLabel, true))
   }
   if (toolName === 'terminal_run') {
     return sentence(text('执行命令：'), text(commandLabel, true))
+  }
+  if (toolName === 'terminal_read') {
+    return sentence(
+      text('读取终端：'),
+      text(readStringValue(input || {}, 'terminalId') || '终端', true)
+    )
+  }
+  if (toolName === 'terminal_stop') {
+    return sentence(
+      text('停止终端：'),
+      text(readStringValue(input || {}, 'terminalId') || '终端', true)
+    )
   }
   if (toolName === 'kb_search' || toolName === 'docx_search') {
     return sentence(
@@ -403,11 +429,9 @@ const getToolItemText = (
   }
   if (toolName === 'browser_use') {
     if (browserAction === 'navigate') return sentence(text('打开网页：'), text(urlLabel, true))
-    if (browserAction === 'observe')
-      return sentence(text('观察页面：'), text(instructionLabel, true))
-    if (browserAction === 'extract')
-      return sentence(text('提取页面内容：'), text(instructionLabel, true))
-    if (browserAction === 'act') return sentence(text('操作页面：'), text(instructionLabel, true))
+    if (browserAction === 'observe') return sentence(text(instructionLabel, true))
+    if (browserAction === 'extract') return sentence(text(instructionLabel, true))
+    if (browserAction === 'act') return sentence(text(instructionLabel, true))
     return sentence(text('操作浏览器：'), text(instructionLabel, true))
   }
   if (toolName === 'llm_recognize') {
@@ -487,7 +511,7 @@ const getExecutionStatus = (groups: AssistantProcessGroup[]): AssistantProcessSt
 const getExecutionActionOrder = (kind: AssistantProcessSkillKey): number => {
   if (kind === 'docx-read') return 1
   if (kind === 'docx-edit') return 2
-  if (kind === 'text-file') return 3
+  if (kind === 'file-read' || kind === 'file-write') return 3
   if (kind === 'kb') return 4
   if (kind === 'terminal') return 5
   if (kind === 'web-search') return 6
@@ -974,6 +998,11 @@ export const reduceAssistantProcessGroups = (
 
   return current
 }
+
+export const shouldShowAssistantApplyTargets = (input: {
+  runFinished: boolean
+  applyTargetCount: number
+}): boolean => input.runFinished && input.applyTargetCount > 0
 
 export const dedupeFileRefs = (items: WorkbenchFileRef[]): WorkbenchFileRef[] => {
   const seen = new Set<string>()

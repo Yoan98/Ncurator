@@ -9,8 +9,7 @@ import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 type TerminalRunCommandResult = {
   reason?: 'result_unusable'
   error?: string
-  stdout: string
-  stderr: string
+  output: string
   decisionHint?: {
     code: 'hand_tool_result_unusable'
     detail: {
@@ -37,7 +36,8 @@ describe('ai tool terminal backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['terminal'],
-      description: '验证 terminal_run 读到明显二进制/结构化文档输出时会省略原始输出并返回 decision hint。',
+      description:
+        '验证 terminal_run 读到明显二进制/结构化文档输出时会省略原始输出并返回 decision hint。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -48,14 +48,21 @@ describe('ai tool terminal backend', () => {
         await fs.writeFile(`${runtime.workspaceRoot}/notes.txt`, 'alpha\nbeta\n')
         const harness = createTerminalToolHarness(runtime)
 
-        return {
-          docxRead: await harness.invoke<TerminalRunCommandResult>('terminal_run', {
+        const docxRead = await harness.invoke<TerminalRunCommandResult & { terminalId: string }>(
+          'terminal_run',
+          {
             command: isWindows ? 'Get-Content -LiteralPath report.docx' : 'cat report.docx'
-          }),
+          }
+        )
+        const result = {
+          docxRead,
           textRead: await harness.invoke<TerminalRunCommandResult>('terminal_run', {
+            terminalId: docxRead.terminalId,
             command: isWindows ? 'Get-Content -LiteralPath notes.txt' : 'cat notes.txt'
           })
         }
+        await harness.release()
+        return result
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
@@ -63,19 +70,19 @@ describe('ai tool terminal backend', () => {
             result.docxRead.error === 'terminal result unusable' &&
             result.docxRead.decisionHint?.code === 'hand_tool_result_unusable' &&
             result.docxRead.decisionHint.detail.matchedSignatures.length > 0 &&
-            !result.docxRead.stdout.includes('PK') &&
-            !result.docxRead.stderr.includes('PK'),
+            !result.docxRead.output.includes('PK'),
           {
             name: 'terminal-docx-binary-output-is-omitted',
-            message: 'terminal_run 读取 docx 后应省略不可消费输出，并给出 hand_tool_result_unusable。',
+            message:
+              'terminal_run 读取 docx 后应省略不可消费输出，并给出 hand_tool_result_unusable。',
             data: result.docxRead
           }
         )
 
         runtime.assertThat(
           !result.textRead.reason &&
-            result.textRead.stdout.includes('alpha') &&
-            result.textRead.stdout.includes('beta'),
+            result.textRead.output.includes('alpha') &&
+            result.textRead.output.includes('beta'),
           {
             name: 'terminal-normal-text-output-is-preserved',
             message: '普通文本输出不应被不可消费输出检测误伤。',

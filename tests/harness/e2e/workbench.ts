@@ -597,17 +597,19 @@ export const bindWorkspaceRootThroughSettingsUi = async (
     )
   }
 
-  for (let attempt = 1; attempt <= 4; attempt += 1) {
-    if (attempt > 1 && (await waitForSelectedRootPath(1_000))) return
+  const strategies: NativeDirectoryDialogStrategy[] = [
+    'applescript-paste',
+    'applescript-type',
+    'swift'
+  ]
+
+  for (const [strategyIndex, strategy] of strategies.entries()) {
+    if (strategyIndex > 0 && (await waitForSelectedRootPath(1_000))) return
     const electronProcessId = await readElectronProcessId(page)
     await rootPathButton.click()
     await page.waitForTimeout(250)
     try {
-      const output = await selectDirectoryInNativeDialog(
-        rootPath,
-        electronProcessId,
-        'applescript-paste'
-      )
+      const output = await selectDirectoryInNativeDialog(rootPath, electronProcessId, strategy)
       const selected = await waitForSelectedRootPath(12_000)
       diagnostics.push({
         strategy: output.strategy,
@@ -618,7 +620,7 @@ export const bindWorkspaceRootThroughSettingsUi = async (
       if (selected) return
     } catch (error) {
       diagnostics.push({
-        strategy: 'applescript-paste',
+        strategy,
         selected: false,
         stdout: '',
         stderr: '',
@@ -889,11 +891,16 @@ export const prepareWorkbenchWorkspaceThroughUi = async (
     workspaceName: string
     rootPath: string
     webSourceUrl?: string
+    rootBindingMode?: 'ui' | 'ipc'
   }
 ): Promise<void> => {
   await createWorkspaceThroughSettingsUi(page, input.workspaceName)
   const workspaceId = await readWorkspaceIdFromSettingsCard(page, input.workspaceName)
-  await bindWorkspaceRootThroughSettingsUi(page, input.rootPath)
+  if (input.rootBindingMode === 'ipc') {
+    await bindWorkspaceRootThroughIpc(page, input.rootPath)
+  } else {
+    await bindWorkspaceRootThroughSettingsUi(page, input.rootPath)
+  }
   await prepareSelectedWorkspaceFilesThroughSettingsUi(page, workspaceId)
   if (input.webSourceUrl) {
     await addWebSourceThroughSettingsUi(page, input.webSourceUrl)
@@ -911,6 +918,7 @@ export const setupWorkbenchWithTempWorkspace = async (
     webSourceUrl?: string
     configureModel?: boolean
     createSession?: boolean
+    rootBindingMode?: 'ui' | 'ipc'
   }
 ): Promise<WorkbenchSetupResult> => {
   const env = loadWorkbenchLiveModelEnv()
@@ -923,7 +931,8 @@ export const setupWorkbenchWithTempWorkspace = async (
     await prepareWorkbenchWorkspaceThroughUi(page, {
       workspaceName,
       rootPath: workspace.rootPath,
-      webSourceUrl: input.webSourceUrl
+      webSourceUrl: input.webSourceUrl,
+      rootBindingMode: input.rootBindingMode
     })
     if (input.configureModel !== false) {
       await selectWorkbenchModel(page, env.modelName)

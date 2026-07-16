@@ -16,6 +16,7 @@ import {
   switchWorkbenchMode,
   waitForApplyEntry,
   waitForWorkbenchAiRunCompletion,
+  waitForWorkbenchAiEvent,
   waitForWorkbenchApplyRecordStatus,
   waitForWorkbenchSearchResults,
   workbenchSelectors
@@ -39,7 +40,10 @@ describe('workbench result e2e', () => {
         runMode: 'single',
         execute: async (runtime) => {
           const { page } = runtime
-          const setup = await setupWorkbenchWithTempWorkspace(page, { caseId: CASE_ID })
+          const setup = await setupWorkbenchWithTempWorkspace(page, {
+            caseId: CASE_ID,
+            rootBindingMode: 'ipc'
+          })
           try {
             const targetPath = path.join(setup.workspace.rootPath, 'workbench-preview.md')
             const beforeBytes = await fs.readFile(targetPath)
@@ -71,15 +75,25 @@ describe('workbench result e2e', () => {
             const startedAtMs = Date.now()
             await sendWorkbenchMessage(
               page,
-              '请直接修改 workbench-preview.md：使用 replaceAll 把所有 Preview 改为 DiffPreview，再把唯一的 cedar-markdown-preview-442 精确改成 cedar-text-diff-884。完成后读取确认。'
+              '请直接修改 workbench-preview.md：使用 replaceAll 把所有 Preview 改为 DiffPreview，再把唯一的 cedar-markdown-preview-442 精确改成 cedar-text-diff-884。写入完成后必须先等待 5 秒，再读取文件确认。'
             )
-            const evidence = await waitForWorkbenchAiRunCompletion(
+            const completionPromise = waitForWorkbenchAiRunCompletion(
               runtime,
               startedAtMs,
               setup.env.modelName,
               WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
               { page, blockerPolicy: 'auto_approve' }
             )
+            await waitForWorkbenchAiEvent(runtime, {
+              name: 'text_file_artifact_before_run_completion',
+              matches: (event) =>
+                event.type === 'file_artifact' && event.fileName === 'workbench-preview.md'
+            })
+            const applyEntryCountDuringRun = await getWorkbenchPrefixLocator(
+              page,
+              workbenchSelectors.assistantTurnApplyPrefix
+            ).count()
+            const evidence = await completionPromise
             recordWorkbenchAiEvidence(runtime, evidence, 0.8)
             const afterApply = await fs.readFile(targetPath, 'utf-8')
             const applyEntry = await waitForApplyEntry(page)
@@ -134,6 +148,7 @@ describe('workbench result e2e', () => {
               resourceTabCount,
               standaloneArtifactCount,
               omittedLineLabels,
+              applyEntryCountDuringRun,
               restoredBytes: afterRevertBytes.equals(beforeBytes),
               diffStillVisible
             }
@@ -154,6 +169,7 @@ describe('workbench result e2e', () => {
               result.addedRowColumnCount === 3 &&
               result.resourceTabCount === 1 &&
               result.standaloneArtifactCount === 0 &&
+              result.applyEntryCountDuringRun === 0 &&
               result.omittedLineLabels.some((label) => label.includes('行未修改')) &&
               result.restoredBytes &&
               result.diffStillVisible,

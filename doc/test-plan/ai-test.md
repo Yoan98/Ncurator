@@ -46,8 +46,8 @@
   - 通过率：`22 / 22`
   - 检测时间：`2026-07-14 13:59:02 +08:00`
 - `human / live`
-  - 登记 case：`9`；当前有效结果 `9 / 9` 通过，其中 `human-text-file-read-write-live` 已于 `2026-07-15` 使用真实模型定向通过。
-  - 检测时间：`2026-07-14 14:38:26 +08:00`
+  - 登记 case：`10`；当前有效结果 `10 / 10` 通过，其中 `human-terminal-preview-service-live` 已于 `2026-07-16` 使用真实模型定向通过。
+  - 检测时间：`2026-07-16 10:04:01 +08:00`
   - 实际模型：`deepseek-v4-flash`。
   - memory、compaction、resume 均保留并通过；compaction 使用 `16K` 上下文，自然触发 1 次压缩，不限制压缩次数，压缩后继续完成周报文件交付。
   - KB/docx case 使用 2 次 KB 检索定位源资料，并真实更新 2 份目标文档；不再依赖模型枚举目标文件。
@@ -63,6 +63,7 @@
     - `human-web-crawl-multi-hop-cross-domain-reading-live`：`8.8 / 10`；完成多跳跨域读取并整理申请对象、材料、截止时间和线上办理方式。
     - `human-web-crawl-url-inference-reading-live`：`9.0 / 10`；自行推断 pandas 官网地址并完成两份 CSV 文档对比。
     - `human-text-file-read-write-live`：通过；真实调用 `replaceAll`、唯一 `edit` 和回读，最终文件与工具结果边界均满足。
+    - `human-terminal-preview-service-live`：`10 / 10`；真实进入子目录启动预览服务，完成页面访问、增量日志读取、正常停止、终端关闭和端口释放。
 
 ## 3. Suite 设计
 
@@ -624,6 +625,15 @@ AI unit / 辅助测试目录：
 - Oracle：文件结果与磁盘一致；修改记录 capability 为 `text_file`；diff 可重放为真实新内容；`file_artifact.applyId` 与修改记录 ID 一致。
 - Not：不验证上层审批流。
 
+##### `terminal-persistent-session-contract`
+
+- 测试类型：`backend`
+- What：验证真实 PTY 持久终端保留当前路径、长命令让出控制权、增量读取和停止。
+- Why：后台服务和长任务不能继续依赖单次 shell 超时或系统孤儿进程。
+- How：在同一 terminalId 中真实执行 cd、pwd 和持续输出命令，同时新开第二终端；使用 terminal_read 读取输出并用 terminal_stop 停止。
+- Oracle：同一终端保留路径，新终端从 workspace 根目录启动；长命令返回 command_still_running 且进程仍在；读取能取得真实增量输出；停止后终端回到 idle 且无子进程残留。
+- Not：不验证 Workbench 浏览器联动，该能力由真实 e2e 覆盖。
+
 #### web-browsing 类别
 
 ##### `web-crawl-page-contract`
@@ -1023,8 +1033,6 @@ AI unit / 辅助测试目录：
 - Oracle：任务最终完成；共享 workspace 中全部已支持文件均被索引；事件流中至少出现一次 `terminal_run`、至少一次真实资料读取/检索步骤以及一次 `docx_edit(create_document)`；模型会打开模板和上周周报；最终输出 artifacts 中包含携带 `applyId` 的 docx file artifact；模板与既有参考 `docx` 文件不被覆盖。按 10 分制评估文件交付、原文件安全、未闭环风险、负责人动作和谨慎结论，严格超过 8 分通过；否定上下文中的“风险已解除”等文字不得误判成正向收口。
 - Not：不绑定最终答案措辞，不要求固定是否使用 `docx_outline` 还是 `docx_read_blocks`，也不强制一定调用 KB；若模型仅凭工作区材料完成任务，也视为符合预期。
 
-
-
 ##### `human-docx-positioned-structural-edit-fallback-live`
 
 - 测试类型：`backend`
@@ -1069,6 +1077,15 @@ AI unit / 辅助测试目录：
 - How：只开放 `file_read/file_write`，准备包含两处 `OLD_API_URL` 和一处 timeout 的真实 TypeScript 文件，要求全部改名并精确修改 timeout。
 - Oracle：任务完成；至少一次 `replaceAll` 参数正确、一次 `edit` 参数有效；最终文件无旧关键词；写入工具结果不包含 diff、previewPath 或 unified patch。
 - Not：不要求固定调用轮数，不验证 Workbench UI。
+
+##### `human-terminal-preview-service-live`
+
+- 测试类型：`backend`
+- What：验证 live 模型能在项目子目录启动临时 HTTP 预览服务，真实访问页面、读取服务日志并彻底停止服务。
+- Why：工具契约正确不代表模型能理解 `command_still_running`，也不代表它会在完成检查后主动清理长时间运行的进程。
+- How：在临时 workspace 的 `preview-site` 中创建带唯一标记的页面，为用户提供一个随机空闲端口；用户只描述“进入目录启动预览、确认页面、检查请求日志、用完关闭”的真实诉求，不指定工具或命令。仅开放三个 terminal 工具，由真实模型自主决策。
+- Oracle：服务命令在 `preview-site` 中运行并返回 `command_still_running`；模型使用 `terminal_read` 读取服务终端，页面标记出现在真实终端结果和最终答复中；模型使用 `terminal_stop(closeTerminal=true)` 停止并关闭服务终端；端口最终不可访问；工具结果不包含 `availableActions` 或内部 `commandId`。
+- Not：不绑定 Python、curl 等具体命令，不要求固定工具调用轮数，不验证 Workbench UI 或公网访问。
 
 ## 6. 验收口径
 

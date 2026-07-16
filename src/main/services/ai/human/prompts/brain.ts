@@ -25,6 +25,7 @@ import type { HumanToolSpec } from '../tools/types'
 import type { AiRuntimePlatform } from '../../types'
 import { renderDecisionHintForBrain } from './decisionHints'
 import { getAvailableToolNames } from '../node/utils/runtimeCache'
+import { terminalSessionManager } from '../tools/terminal/TerminalSessionManager'
 
 const renderToolExample = (example: ToolPromptExample, index: number): string =>
   `${index + 1}. ${example.goal}\n${JSON.stringify(example.args)}`
@@ -35,15 +36,33 @@ const indentLines = (value: string, level: number): string =>
     .map((line) => `${'  '.repeat(level)}${line}`)
     .join('\n')
 
-const renderLocalEnvironmentText = (ctx: AiRunContext): string => {
+export const renderLocalEnvironmentText = (ctx: AiRunContext): string => {
   const now = new Date()
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'unknown'
+  const terminalEnvironment = {
+    new_terminal_default_path: ctx.workspace?.rootPath || null,
+    terminals: terminalSessionManager
+      .list({
+        chatSessionId: ctx.sessionId,
+        workspaceId: ctx.workspace?.workspaceId
+      })
+      .map((terminal) => ({
+        terminal_id: terminal.terminalId,
+        status: terminal.status,
+        current_terminal_path: terminal.currentTerminalPath,
+        current_command: terminal.currentCommand,
+        started_at: terminal.startedAt ? new Date(terminal.startedAt).toISOString() : null
+      }))
+  }
   return `
 <platform>${ctx.platform}</platform>
 <current_time>
   <iso>${now.toISOString()}</iso>
   <timezone>${timezone}</timezone>
 </current_time>
+<terminal_environment>
+${JSON.stringify(terminalEnvironment, null, 2)}
+</terminal_environment>
 `.trim()
 }
 
@@ -65,7 +84,7 @@ const renderSkillCatalogToolSpecLine = (input: {
     renderToolInputSchemaForPrompt(input.spec.inputSchema, { compact: true }),
     2
   )
-  const examples = indentLines(input.spec.promptSpec.examples.map(renderToolExample).join('\n'), 2)
+  const examples = input.spec.promptSpec.examples.map(renderToolExample).join('\n')
   const ownerSkills = input.skillLabels.join('、') || 'none'
 
   return `
@@ -75,8 +94,7 @@ const renderSkillCatalogToolSpecLine = (input: {
   - 适用时机：${input.spec.promptSpec.whenToUse}
   - 输入结构：
 ${inputSchemaText}
-  - 示例：
-${examples}
+${examples ? `  - 示例：\n${indentLines(examples, 2)}` : ''}
 `.trim()
 }
 
@@ -215,7 +233,7 @@ export const buildBrainPrompt = (input: {
     - preference：当前用户对 AI 推进方式的偏好；若为“无”，则不施加额外偏好。
     - reference_scope：当前工作区、默认知识范围、显式缩圈范围和可用边界。
     - search_strategy：当前任务默认遵循的检索思路提示。
-    - local_environment：当前本机运行环境；platform当前用户电脑平台，current_time 是当前系统时间。
+    - local_environment：当前本机运行环境；platform 是当前用户电脑平台，current_time 是当前系统时间，terminal_environment 是当前会话的终端状态与每个终端当前所在路径。
     - conversation_history：当前会话历史视图。
     - summary：当前会话中跨任务仍有效的滚动摘要，用于理解用户在同一窗口里的连续主线、稳定偏好与当前状态。
     - recent_turns：最近几轮真实对话内容与产物，用于判断用户刚刚说了什么、你刚刚交付了什么。
@@ -287,7 +305,8 @@ ${JSON.stringify({
       {
         toolName: 'terminal_run',
         args: {
-          command: input.ctx.platform === 'windows' ? 'Get-Location' : 'pwd'
+          command: input.ctx.platform === 'windows' ? 'Get-Location' : 'pwd',
+          commandExplanation: '读取当前终端所在路径。'
         }
       }
     ]

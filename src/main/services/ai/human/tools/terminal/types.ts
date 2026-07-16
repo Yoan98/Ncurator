@@ -1,24 +1,7 @@
 import type { AiFileArtifactOperation } from '../../../../../../shared/types'
 import type { TerminalToolContext } from '../../../types'
 import type { WorkspaceCapabilityBuildInput } from '../types'
-
-export type TerminalCommandInput = {
-  command: string
-  cwd: string
-  timeoutMs: number
-  captureHardLimitChars: number
-}
-
-export type TerminalCommandResult = {
-  command: string
-  cwd: string
-  stdout: string
-  stderr: string
-  exitCode: number | null
-  signal: NodeJS.Signals | null
-  timedOut: boolean
-  durationMs: number
-}
+import type { TerminalSessionManager } from './TerminalSessionManager'
 
 export type TerminalCommandSegment = {
   text: string
@@ -31,8 +14,8 @@ export type TerminalArtifactCandidate = {
 }
 
 export type TerminalCapabilityToolsInput = WorkspaceCapabilityBuildInput<TerminalToolContext> & {
-  timeoutMs: number
-  captureHardLimitChars: number
+  workspaceId: string
+  sessionManager: TerminalSessionManager
   aiResultTokenLimitRatio: number
 }
 
@@ -64,14 +47,3 @@ export type TerminalSafePolicyResult = {
   matchedRuleId?: string
   reason: string
 }
-
-export type ResolvedCwd =
-  | {
-      ok: true
-      cwd: string
-    }
-  | {
-      ok: false
-      code: 'workspace_required' | 'invalid_input'
-      error: string
-    }

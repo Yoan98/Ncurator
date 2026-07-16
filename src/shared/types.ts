@@ -1268,6 +1268,31 @@ type AiRunEventPayload =
       completedAt: number
     }
   | {
+      type: 'terminal_command_yielded'
+      runId: string
+      taskId: string
+      terminalId: string
+      commandId: string
+      currentTerminalPath: string
+      outputCursor: number
+      createdAt: number
+    }
+  | {
+      type: 'terminal_command_stopped'
+      runId: string
+      taskId: string
+      terminalId: string
+      forced: boolean
+      createdAt: number
+    }
+  | {
+      type: 'terminal_session_closed'
+      runId: string
+      taskId: string
+      terminalId: string
+      createdAt: number
+    }
+  | {
       type: 'activity'
       runId: string
       taskId?: string

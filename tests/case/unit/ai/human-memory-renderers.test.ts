@@ -70,7 +70,8 @@ describe('ai unit human memory renderers', () => {
             {
               toolName: 'terminal_run',
               args: {
-                command: 'cat release-note.txt'
+                command: 'cat release-note.txt',
+                commandExplanation: '读取发布状态文件。'
               }
             }
           ]
@@ -81,7 +82,8 @@ describe('ai unit human memory renderers', () => {
           {
             toolName: 'terminal_run',
             args: {
-              command: 'cat release-note.txt'
+              command: 'cat release-note.txt',
+              commandExplanation: '读取发布状态文件。'
             }
           }
         ],
@@ -90,9 +92,14 @@ describe('ai unit human memory renderers', () => {
             toolName: 'terminal_run',
             ok: true,
             data: {
-              stdout: 'latest release status',
-              exitCode: 0,
-              timedOut: false
+              terminalId: 'term-1',
+              commandId: 'command-1',
+              terminalStatus: 'idle',
+              returnReason: 'command_completed',
+              currentTerminalPath: '/tmp/workspace',
+              output: 'latest release status',
+              outputCursor: 21,
+              exitCode: 0
             }
           }
         ]
@@ -125,9 +132,10 @@ describe('ai unit human memory renderers', () => {
     expect(text).toContain('先读取 release-note.txt 确认最新状态')
     expect(text).toContain('类型：hand')
     expect(text).toContain('latest release status')
-    expect(text).toContain('参数：{"command":"cat release-note.txt"}')
-    expect(text).toContain('返回：{"stdout":"latest release status","exitCode":0,"timedOut":false}')
-    expect(text).toContain('"stdout":"latest release status"')
+    expect(text).toContain(
+      '参数：{"command":"cat release-note.txt","commandExplanation":"读取发布状态文件。"}'
+    )
+    expect(text).toContain('"output":"latest release status"')
     expect(text).not.toContain('args=')
     expect(text).not.toContain('result:')
     expect(text).not.toContain('旧 thought.next 不应直接作为 task_progress 主体')

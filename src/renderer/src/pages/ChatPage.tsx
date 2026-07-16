@@ -185,6 +185,7 @@ const getFileTabTitle = (filePath: string): string => {
 const createAssistantTurn = (messageId: string): AssistantTurnViewModel => ({
   messageId,
   status: 'running',
+  runFinished: false,
   processThoughts: [],
   processGroups: [],
   finalAnswerMarkdown: '',
@@ -201,6 +202,7 @@ const createThinkingAssistantTurn = (messageId: string): AssistantTurnViewModel 
 const createSearchAssistantTurn = (messageId: string): AssistantTurnViewModel => ({
   messageId,
   status: 'running',
+  runFinished: false,
   processThoughts: [],
   processGroups: [createSearchProcessGroup(messageId)],
   finalAnswerMarkdown: '',
@@ -231,6 +233,7 @@ const buildAssistantTurnFromMessage = (message: ChatMessage): AssistantTurnViewM
   return {
     messageId: message.id,
     status: message.error ? 'failed' : 'completed',
+    runFinished: true,
     processThoughts: [],
     processGroups: [],
     finalAnswerMarkdown: message.content,
@@ -363,22 +366,22 @@ const reduceAssistantTurnByRunEvent = (
     next = {
       ...next,
       finalAnswerMarkdown: event.text,
-      status: 'completed',
       processGroups: completeAssistantProcessGroups(next.processGroups)
     }
   }
 
   if (event.type === 'run_failed') {
-    next = { ...next, status: 'failed', error: event.error }
+    next = { ...next, status: 'failed', runFinished: true, error: event.error }
   }
 
   if (event.type === 'run_cancelled') {
-    next = { ...next, status: 'failed', error: '已取消' }
+    next = { ...next, status: 'failed', runFinished: true, error: '已取消' }
   }
 
   if (event.type === 'run_completed') {
     next = {
       ...next,
+      runFinished: true,
       status: next.status === 'failed' ? 'failed' : 'completed'
     }
   }
@@ -401,6 +404,8 @@ const applyRunRecordToTurn = (
     ...turn,
     runId: run.id,
     status,
+    runFinished:
+      run.status === 'completed' || run.status === 'failed' || run.status === 'cancelled',
     processGroups:
       run.status === 'completed' || Boolean(getRunMessageContent(run))
         ? completeAssistantProcessGroups(turn.processGroups)

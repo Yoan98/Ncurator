@@ -23,6 +23,7 @@ extraResources:
     to: app-update.yml
 asarUnpack:
   - '**/node_modules/onnxruntime-node/bin/napi-v3/**/*'
+  - '**/node_modules/node-pty/build/Release/**/*'
 win:
   icon: build/icon.ico
   executableName: Ncurator

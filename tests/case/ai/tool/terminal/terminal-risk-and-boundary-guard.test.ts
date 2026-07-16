@@ -34,7 +34,7 @@ describe('ai tool terminal backend', () => {
           approvalPolicy: 'deny-all'
         })
 
-        return {
+        const result = {
           unsafeDenied: await harness.invoke<TerminalRunCommandResult>('terminal_run', {
             command: isWindows ? 'Remove-Item -Recurse -Force guarded' : 'rm -rf guarded'
           }),
@@ -59,6 +59,8 @@ describe('ai tool terminal backend', () => {
             .catch(() => false),
           events: runtime.eventCollector.snapshot()
         }
+        await harness.release()
+        return result
       },
       assert: async (result, runtime) => {
         const approvalEvents = filterEventsByType(result.events, 'approval_batch_required')

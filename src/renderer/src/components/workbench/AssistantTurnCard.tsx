@@ -21,7 +21,11 @@ import type {
 import type { WorkspaceSource } from '../../../../shared/types'
 import type { ParsedNcuratorRefKind, ParsedNcuratorRefResourceType } from '../markdownReference'
 import { workbenchSelectors } from '../../testing/selectors'
-import { buildAssistantExecutionSummaryText, resolveAssistantExecutionStatus } from './utils'
+import {
+  buildAssistantExecutionSummaryText,
+  resolveAssistantExecutionStatus,
+  shouldShowAssistantApplyTargets
+} from './utils'
 import ChangeCountBadges from './ChangeCountBadges'
 import WorkspacePathLabel from './WorkspacePathLabel'
 
@@ -384,7 +388,10 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
           </div>
         ) : null}
 
-        {turn.applyTargets.length > 0 ? (
+        {shouldShowAssistantApplyTargets({
+          runFinished: turn.runFinished,
+          applyTargetCount: turn.applyTargets.length
+        }) ? (
           <div className="overflow-hidden rounded-[8px] border border-[#E5E4E0] bg-white">
             <div className="flex items-center gap-3 border-b border-[#EEEEEC] px-3.5 py-3">
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[6px] bg-[#F4F4F2] text-[#787774]">

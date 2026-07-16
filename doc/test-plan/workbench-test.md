@@ -154,7 +154,6 @@ tests/case/workbench/
 - Oracle：真实粘贴会触发附件保存；添加附件后没有真实会话；图片预览可打开；文件副标题显示 `MD`；不支持格式只提示不加入；大文件只提示不拦截；普通文本粘贴仍正常，对齐 `WB-COMPOSER-010-AC2`、`WB-COMPOSER-010-AC3`。
 - Not：不验证系统原生文件选择器本身；不通过 `attachmentPickResponse` 或直接 `attachmentSaveFile` 伪造附件结果。
 
-
 #### `reference-mention-keyboard`
 
 - 测试类型：`e2e`
@@ -238,7 +237,6 @@ tests/case/workbench/
 - Oracle：文件和浏览器共存为两个资源 Tab，对齐 `WB-PANEL-001-AC1`；重复打开浏览器仍只有一个 Tab，对齐 `WB-PANEL-001-AC4`；切换文件后浏览器 URL 保持且再次显示原页面，对齐 `WB-PANEL-004-AC3`；真实 browser_use 结果包含 `BROWSER_TASK_DONE` 和口令，对齐 `WB-PANEL-004-AC4`、`WB-CORE-005-AC1`、`WB-CORE-006-AC1`。
 - Not：不验证公网网页稳定性；本 case 使用本地测试网页减少外部波动；不允许用 fake browser 或 fake tool result 替代；不要求 live 模型必须在固定时限内结束整轮最终回答，只要真实内置浏览器已完成输入、点击和结果读取即可判定 browser panel 能力有效。
 
-
 #### `web-search-diagnostic`
 
 - 测试类型：`e2e`
@@ -292,8 +290,17 @@ tests/case/workbench/
 - What：验证同一个 Markdown 文件在普通预览时正常渲染，在 AI 修改记录中使用独立文本 diff，并能恢复原始 bytes。
 - Why：普通预览和修改预览是两种不同语义；如果共用文件渲染器，用户看不到本次具体增加和删除内容。
 - How：先从真实搜索结果打开 Markdown 普通预览；再通过真实 AI 调用 `replaceAll` 和 `edit` 修改该文件；点击 assistant 修改入口检查 `TextFileDiffViewer`；最后执行回退。
-- Oracle：普通预览与修改 diff 共用一个文件 Tab，对齐 `WB-PANEL-001-AC2`；diff 每行只有一个行号列并显示“N 行未修改”，对齐 `WB-PANEL-003-AC5`；回答底部无重复 artifact 文件标签；回退后 bytes 与原始输入一致，历史 diff 仍保留。
+- Oracle：普通预览与修改 diff 共用一个文件 Tab，对齐 `WB-PANEL-001-AC2`；file_artifact 已产生但 run 尚未结束时不展示修改入口，run_completed 后再展示；diff 每行只有一个行号列并显示“N 行未修改”，对齐 `WB-PANEL-003-AC5`；回答底部无重复 artifact 文件标签；回退后 bytes 与原始输入一致，历史 diff 仍保留。
 - Not：不验证 unified diff 字符串；UI 只消费结构化 diff artifact。
+
+#### `terminal-background-service-flow`
+
+- 测试类型：`e2e`
+- What：验证真实 AI 使用持久终端启动本地 HTTP 服务、让出控制权、通过内置浏览器验证页面并停止服务。
+- Why：这是持久终端、多终端决策、浏览器联动和进程清理的完整用户路径，静态事件或 fake tool result 无法覆盖。
+- How：在真实临时 workspace 创建带唯一标记的 HTML；通过可见 Electron Workbench 发送请求，真实审批 terminal 命令，使用真实 PTY 启动 Python HTTP server，真实 browser_use 打开页面，最后 terminal_stop。
+- Oracle：事件包含 terminal_command_yielded、terminal_command_stopped、terminal_run、terminal_stop 和 browser_use；最终答复包含页面唯一标记；任务结束后真实端口不可访问；不存在 fake AI/tool/browser 信号。
+- Not：不依赖公网，不允许测试进程替 AI 启动目标 HTTP 服务。
 
 #### `docx-apply-panel-preview-and-revert`
 

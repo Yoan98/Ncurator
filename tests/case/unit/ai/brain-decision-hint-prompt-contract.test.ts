@@ -7,9 +7,11 @@ const createFakeCtx = (preference: AiRunContext['preference'] = 'default'): AiRu
   ({
     platform: 'macos',
     runId: 'run-1',
+    sessionId: 'session-1',
     preference,
     workspace: {
-      id: 'ws-1',
+      workspaceId: 'ws-1',
+      workspaceName: '测试工作区',
       rootPath: '/tmp/workspace'
     },
     referenceScope: {
@@ -62,6 +64,12 @@ describe('ai unit brain decision-hint prompt contract', () => {
     expect(section).toContain('<platform>macos</platform>')
     expect(section).toMatch(/<iso>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z<\/iso>/)
     expect(section).toMatch(/<timezone>[^<]+<\/timezone>/)
+    const terminalJson =
+      section.match(/<terminal_environment>([\s\S]*?)<\/terminal_environment>/)?.[1] || ''
+    expect(JSON.parse(terminalJson)).toEqual({
+      new_terminal_default_path: '/tmp/workspace',
+      terminals: []
+    })
   })
 
   it('renders current decision hint in decision_hint and keeps latest execution in task_progress', () => {
@@ -286,15 +294,17 @@ describe('ai unit brain decision-hint prompt contract', () => {
       '{"thought":{"next":"当前缺少读取 docx 的能力说明，先补齐读取能力再继续判断资料内容。","todolist":[{"item":"补齐读取 docx 的能力说明","status":"todo"},{"item":"检查是否已经满足用户诉求并能进入最终交付","status":"todo"}],"progressionSummary":"-当前任务的用户诉求是关于审批驳回时是否保留原文件，但缺少读取 docx 的能力说明，无法判断资料内容。\\n-每个todolist项的推进理解：'
     )
     expect(toolPlanExampleSection).toContain(
-      '{"thought":{"next":"当前缺少工作区文件事实，先读取当前目录建立资料范围。"},"nextAction":{"action":"hand","calls":[{"toolName":"terminal_run","args":{"command":"pwd"}}]}}'
+      '{"thought":{"next":"当前缺少工作区文件事实，先读取当前目录建立资料范围。"},"nextAction":{"action":"hand","calls":[{"toolName":"terminal_run","args":{"command":"pwd","commandExplanation":"读取当前终端所在路径。"}}]}}'
     )
     expect(deliveryExampleSection).toContain(
       '{"thought":{"next":"审批驳回是否保留原文件已经确认，当前证据足够进入最终交付。","todolist":[{"item":"确认审批驳回时是否保留原文件","status":"done"},{"item":"检查是否已经满足用户诉求并能进入最终交付","status":"done"}],"progressionSummary":"-当前任务的用户诉求是关于审批驳回时是否保留原文件，已经确认审批驳回时会保留原文件，当前证据足够进入最终交付。\\n-每个todolist项的推进理解：'
     )
-    expect(prompt.user).toContain('{ command: string, commandExplanation: string, cwd?: string }')
     expect(prompt.user).toContain(
-      '{"command":"ls .","commandExplanation":"列出当前工作目录下的文件和文件夹。","cwd":"."}'
+      '{ command: string, commandExplanation: string, terminalId?: string }'
     )
+    expect(prompt.user).not.toContain('cwd?: string')
+    expect(prompt.user).toContain('工具 terminal_read')
+    expect(prompt.user).toContain('工具 terminal_stop')
     expect(prompt.user).toContain(
       '- 输入结构：\n    { queryText: string, strategy?: "auto" | "semantic" | "keyword", limit?: integer, sourceType?: "all" | "file" | "web", documentIds?: Array<string> }'
     )

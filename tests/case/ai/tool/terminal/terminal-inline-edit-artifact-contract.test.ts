@@ -8,6 +8,7 @@ import { filterEventsByType } from '../testHelpers'
 import { readCapturedRunLog } from '../logHelpers'
 
 type TerminalRunCommandResult = {
+  terminalId: string
   artifacts: Array<{ path: string; operation: 'created' | 'updated' }>
 }
 
@@ -42,6 +43,7 @@ describe('ai tool terminal backend', () => {
             : 'cp replacement.txt notes.txt'
         })
         const createNew = await harness.invoke<TerminalRunCommandResult>('terminal_run', {
+          terminalId: updateExisting.terminalId,
           command: isWindows
             ? 'New-Item -ItemType File -Path generated/output.txt'
             : 'touch generated/output.txt'
@@ -51,7 +53,7 @@ describe('ai tool terminal backend', () => {
         const textDiff = notesRecord?.previewPath
           ? (JSON.parse(await fs.readFile(notesRecord.previewPath, 'utf8')) as TextFileDiffArtifact)
           : null
-        return {
+        const result = {
           updateExisting,
           createNew,
           notesContent: await fs.readFile(path.join(runtime.workspaceRoot, 'notes.txt'), 'utf8'),
@@ -63,6 +65,8 @@ describe('ai tool terminal backend', () => {
           records,
           textDiff
         }
+        await harness.release()
+        return result
       },
       assert: async (result, runtime) => {
         const approvalEvents = filterEventsByType(result.events, 'approval_batch_required')

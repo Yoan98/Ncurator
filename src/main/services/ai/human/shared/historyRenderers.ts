@@ -61,12 +61,35 @@ const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
     limit: true
   },
   terminal_run: {
+    terminalId: true,
+    terminalStatus: true,
+    returnReason: true,
+    currentTerminalPath: true,
+    output: true,
+    outputCursor: true,
     stdout: true,
     stderr: true,
-    exitCode: true,
     timedOut: true,
+    exitCode: true,
     estimatedTokens: true,
     limit: true,
+    error: true
+  },
+  terminal_read: {
+    terminalId: true,
+    terminalStatus: true,
+    currentTerminalPath: true,
+    output: true,
+    outputCursor: true,
+    exitCode: true,
+    error: true
+  },
+  terminal_stop: {
+    terminalId: true,
+    terminalStatus: true,
+    currentTerminalPath: true,
+    stopped: true,
+    forced: true,
     error: true
   },
   kb_search: {

@@ -247,8 +247,8 @@
   - `WB-COMPOSER-009-AC2` assistant 过程流和最终输出左边缘与底部 composer 内容 rail 对齐。
   - `WB-COMPOSER-009-AC3` assistant 最终 markdown 输出默认无独立背景卡片，保持在过程流下方。
   - `WB-COMPOSER-009-AC4` 用户消息以右对齐紧凑气泡展示，不再使用过宽过高的大块白底样式。
-  - `WB-COMPOSER-009-AC5` 执行层 header 按同一轮工具调用聚合展示操作与数量，例如读取类 docx 工具展示“正在读取 1 个 docx 文件”，编辑类 docx 工具展示“正在编辑 1 个 docx 文件”，普通文本读写工具展示“正在处理 1 个文本文件”，知识库工具展示“正在检索知识库”，terminal 工具展示“正在执行终端指令”；完成后对应更新为完成态文案。
-  - `WB-COMPOSER-009-AC6` 展开后的工具句子只展示动作和对象，不重复展示运行状态；状态只由执行层 header 表达。示例：`docx_outline` 展示“阅读文档结构：xx”；`docx_read_blocks` 展示“读取文档内容：xx 范围”；`docx_edit` 展示“编辑文档：xx”；`file_read` 展示“读取文本文件：xx”；`file_write` 展示“编辑文本文件：xx”；`terminal_run` 展示“执行命令：xxxx”；`web_search` 展示“搜索网页：query”；`browser_use` 按动作展示“打开网页 / 观察页面 / 提取页面内容 / 操作页面：对象”。
+  - `WB-COMPOSER-009-AC5` 执行层 header 按同一轮工具调用聚合展示操作与数量，例如读取类 docx 工具展示“正在读取 1 个 docx 文件”，编辑类 docx 工具展示“正在编辑 1 个 docx 文件”，`file_read` 展示“正在读取 1 个文件”，`file_write` 展示“正在编辑 1 个文件”，知识库工具展示“正在检索知识库”，terminal 工具展示“正在执行终端指令”；完成后对应更新为完成态文案。读取文件使用阅读图标，编辑文件使用编辑图标。
+  - `WB-COMPOSER-009-AC6` 展开后的工具句子只展示动作和对象，不重复展示运行状态；状态只由执行层 header 表达。示例：`docx_outline` 展示“阅读文档结构：xx”；`docx_read_blocks` 展示“读取文档内容：xx 范围”；`docx_edit` 展示“编辑文档：xx”；`file_read` 展示“读取文件：xx”；`file_write` 展示“编辑文件：xx”；`terminal_run` 展示“执行命令：xxxx”；`web_search` 展示“搜索网页：query”；`browser_use navigate` 保留“打开网页：对象”，`observe / extract / act` 直接展示指令内容，不添加固定动作前缀。
   - `WB-COMPOSER-009-AC7` 文件名、query、命令和技能名使用独立强调样式展示，不使用书名号包装。
   - `WB-COMPOSER-009-AC8` 学习步骤使用技能通用名称展示，例如 `docx 阅读器`、`docx 写作器`、`资料查阅器`、`命令执行器`；运行中展示“正在学习 xx 技能”，完成后展示“已学会 xx 技能”。
   - `WB-COMPOSER-009-AC9` 执行层 header、学习层和压缩层展示对应图标；展开后的每条工具句子不展示图标，也不渲染前置小圆点或“AI 思路”类图标。
@@ -390,8 +390,18 @@
 - 验收：
   - `WB-APPLY-002-AC1` 修改现有 `docx` 后，源文件立即变为 AI 最终净稿，assistant turn 展示本轮“修改的文件”入口。
   - `WB-APPLY-002-AC2` 新建 `docx` 后，目标文件立即存在，assistant turn 展示本轮“修改的文件”入口。
-  - `WB-APPLY-002-AC3` 创建或修改普通文本文件后，目标文件立即更新，assistant turn 展示本轮“修改的文件”入口，右侧可查看由真实写入前后内容计算的文本 diff。
+  - `WB-APPLY-002-AC3` 创建或修改普通文本文件后，目标文件立即更新并生成修改记录；运行期间不展示修改入口，收到 `run_completed / run_failed / run_cancelled` 后 assistant turn 才展示本轮“修改的文件”，右侧可查看由真实写入前后内容计算的文本 diff。`answer_completed` 不视为 run 已结束。
   - `WB-APPLY-002-AC4` 普通文本 `edit` 的每个 `oldText` 必须唯一且互不重叠；`replaceAll` 替换一个 `oldText` 的全部非重叠精确匹配；失败时文件保持原样。
+
+#### WB-TERMINAL-001 持久终端会话
+
+- 系统行为：terminal 使用由 Main Process 托管的持久终端会话。新终端从当前 workspace 根目录启动；已有空闲终端可通过 `terminalId` 继续执行并保留当前路径；运行中的终端不能接受新命令。命令超过固定等待时间后工具返回 `command_still_running`，进程继续运行，可通过 `terminal_read` 增量读取，通过 `terminal_stop` 停止或关闭。工具输入不接收 `cwd`，Brain 的 `local_environment` 以 JSON 提供新终端默认路径和各终端当前路径、状态与当前命令。
+- 验收：
+  - `WB-TERMINAL-001-AC1` 同一 terminalId 连续执行时保留 `cd` 后当前路径；不传 terminalId 会创建从 workspace 根目录开始的新终端。
+  - `WB-TERMINAL-001-AC2` 长命令固定让出控制权但不被误判为失败；terminal_read 只返回游标后的增量输出和客观状态。
+  - `WB-TERMINAL-001-AC3` terminal_stop 先中断前台命令，必要时强制结束完整进程树；删除会话、取消所属 run 或退出应用不会遗留进程。
+  - `WB-TERMINAL-001-AC4` terminal_run 继续遵守命令审批和 workspace 边界；terminal_read 与 terminal_stop 不能访问其他会话或 workspace 的终端。
+  - `WB-TERMINAL-001-AC5` shell 后台符号、nohup 或 Start-Process 不能绕过持久终端管理。
 
 #### WB-APPLY-003 回退本次 AI 修改
 
