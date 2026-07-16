@@ -298,7 +298,7 @@ describe('workbench run e2e', () => {
             if (!openedEvent) throw new Error('browser_panel_opened event is missing')
             await getWorkbenchLocator(page, workbenchSelectors.resourceTabAddButton).click()
             const openFileMenuItemVisible = await page
-              .getByRole('menuitem', { name: '打开文件' })
+              .getByRole('menuitem', { name: '文件', exact: true })
               .isVisible()
             await page.getByRole('menuitem', { name: '浏览器' }).click()
             await resourceTabs.nth(2).waitFor({ state: 'visible', timeout: 10_000 })

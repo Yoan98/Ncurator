@@ -181,6 +181,15 @@ tests/case/workbench/
 - Oracle：候选来源符合当前工作区和模式，对齐 `WB-SCOPE-001-AC1`、`WB-SCOPE-001-AC2`；token 插入、共存和删除后发送参数符合 `WB-SCOPE-002-AC1` 至 `WB-SCOPE-002-AC3`；重复候选和跨工作区清理符合 `WB-SCOPE-003-AC1`、`WB-SCOPE-003-AC2`；空候选提示符合 `WB-SCOPE-004-AC1`、`WB-SCOPE-004-AC2`。
 - Not：不验证底层 KB 检索排序质量，也不验证 Settings 工作区资料配置细节。
 
+#### `right-panel-layout-and-tabs`
+
+- 测试类型：`e2e`
+- What：验证空会话输入区布局、右侧标签栏密度与折叠入口、Tab 溢出滚动、加号菜单文案和浏览器缩放菜单。
+- Why：右侧资源工作台和聊天输入区共享窗口高度与标题栏命中区域，普通功能测试无法发现输入框被推出窗口、折叠按钮放错区域、Tab 无法滚动或原生浏览器遮挡浮层等视觉交互回归。
+- How：直接进入无历史会话的真实 Workbench，先测量空会话输入区位置，再连续创建八个真实浏览器 Tab，使用鼠标滚轮触发横向滚动并检查折叠 / 展开；打开浏览器更多菜单检查三段式缩放控件。
+- Oracle：空会话输入区居中，对齐 `WB-COMPOSER-009-AC11`；标签栏和浏览器工具栏均为 44px，标签栏无下边线；折叠按钮位于右侧栏且不进入拖拽命中区，对齐 `WB-PANEL-001-AC6`；八个 Tab 溢出后滚轮可横向滚动，对齐 `WB-PANEL-001-AC7`；加号菜单显示“文件 / 浏览器”，缩放控件同排，浮层触发原生视图避让，对齐 `WB-PANEL-001-AC4`、`WB-PANEL-004-AC7`、`WB-PANEL-004-AC8`。
+- Not：不验证公网网页、模型回答质量或系统窗口按钮本身；Stagehand targetId、共享持久分区和历史恢复继续由 `browser-use-task-panel` 覆盖。
+
 ### 5.2 `run`
 
 #### `ai-process-stream-and-final-answer`
@@ -272,7 +281,7 @@ tests/case/workbench/
 - What：验证搜索模式发送、completed assistant 结果摘要、右侧搜索结果、网页 / 本地结果打开规则和无可检索资料下的发送拦截。
 - Why：搜索模式是 Workbench 的非 AI 路径，必须确保不误启动 AI，且右侧结果操作符合用户预期。
 - How：通过 UI 创建并绑定真实工作区，等待本地文件和网页资料真实索引完成；切换搜索模式发送自然语言查询；点击网页结果和本地结果操作图标；再切换到无可检索资料范围发送搜索。
-- Oracle：搜索模式不启动 AI run，对齐 `WB-COMPOSER-004-AC1`；搜索提交期间防重复提交且成功后展示 completed assistant 结果摘要和右侧命中列表，对齐 `WB-COMPOSER-004-AC2`、`WB-COMPOSER-004-AC3`；网页结果调用系统浏览器、本地结果进入文件预览且正文区域无动作，对齐 `WB-PANEL-002-AC1`、`WB-PANEL-002-AC2`；无可检索资料时不执行发送并保留当前输入，对齐 `WB-MODE-002-AC1`、`WB-MODE-002-AC2`。
+- Oracle：搜索模式不启动 AI run，对齐 `WB-COMPOSER-004-AC1`；搜索提交期间防重复提交且成功后展示 completed assistant 结果摘要和右侧命中列表，对齐 `WB-COMPOSER-004-AC2`、`WB-COMPOSER-004-AC3`；有消息后消息区独立滚动且输入区固定底部，对齐 `WB-COMPOSER-009-AC11`；搜索会话显示合法知识库过程，新建干净智能会话不继承该文案，对齐 `WB-COMPOSER-009-AC12`；网页结果调用系统浏览器、本地结果进入文件预览且正文区域无动作，对齐 `WB-PANEL-002-AC1`、`WB-PANEL-002-AC2`；无可检索资料时不执行发送并保留当前输入，对齐 `WB-MODE-002-AC1`、`WB-MODE-002-AC2`。
 - Not：不验证 embedding 召回质量和排序算法。
 
 #### `file-preview-actions`
@@ -281,7 +290,7 @@ tests/case/workbench/
 - What：验证右侧普通文件预览态、工作区懒加载文件列表、多个文件 Tab、定位文件、系统打开入口、PDF 命中定位，以及 Markdown / 纯文本预览。
 - Why：右侧面板是用户消费搜索 / 引用结果的主要区域，预览布局错误会直接阻断阅读。
 - How：从真实搜索结果连续打开真实 pdf、docx、md、txt 文件；检查预览内容和工具条；确认产生四个文件 Tab，再切回 Markdown Tab。
-- Oracle：加号创建“打开文件”标签且不调用系统文件选择器，对齐 `WB-PANEL-001-AC4`；目录展开按需读取子级；普通文件预览和工具条对齐 `WB-PANEL-003-AC1`；路径使用 `>` 面包屑且无“预览 / 编辑”标签；PDF 命中页对齐 `WB-PANEL-003-AC3`；四个文件分别保留且旧 Tab 可恢复。
+- Oracle：加号创建“文件”标签且不调用系统文件选择器，对齐 `WB-PANEL-001-AC4`；目录展开按需读取子级；普通文件预览和 44px 工具条对齐 `WB-PANEL-003-AC1`；路径使用 `>` 面包屑且无“预览 / 编辑”标签；PDF 命中页对齐 `WB-PANEL-003-AC3`；四个文件分别保留且旧 Tab 可恢复。
 - Not：不验证系统文件管理器或系统默认应用本身是否成功打开；不伪造 md/txt 搜索结果或右侧预览状态。
 
 #### `text-file-apply-preview-and-revert`
@@ -290,7 +299,7 @@ tests/case/workbench/
 - What：验证同一个 Markdown 文件在普通预览时正常渲染，在 AI 修改记录中使用独立文本 diff，并能恢复原始 bytes。
 - Why：普通预览和修改预览是两种不同语义；如果共用文件渲染器，用户看不到本次具体增加和删除内容。
 - How：先从真实搜索结果打开 Markdown 普通预览；再通过真实 AI 调用 `replaceAll` 和 `edit` 修改该文件；点击 assistant 修改入口检查 `TextFileDiffViewer`；最后执行回退。
-- Oracle：普通预览与修改 diff 共用一个文件 Tab，对齐 `WB-PANEL-001-AC2`；文件树只标记当前会话仍生效的 AI 修改并打开累计 Diff，对齐 `WB-PANEL-003-AC7`；diff 每行只有一个行号列并显示可点击的“N 行未修改”，点击后出现真实上下文行，对齐 `WB-PANEL-003-AC5`、`WB-PANEL-003-AC6`；回退后 bytes 与原始输入一致且文件树标记消失。
+- Oracle：普通预览与修改 diff 共用一个文件 Tab，对齐 `WB-PANEL-001-AC2`；文件树只标记当前会话仍生效的 AI 修改，文本文件展示 `+N -N` 并打开累计 Diff，对齐 `WB-PANEL-003-AC7`；diff 每行只有一个行号列并显示可点击的“N 行未修改”，点击后出现真实上下文行，对齐 `WB-PANEL-003-AC5`、`WB-PANEL-003-AC6`；回退后 bytes 与原始输入一致且文件树标记消失。
 - Not：不验证 unified diff 字符串；UI 只消费结构化 diff artifact。
 
 #### `docx-apply-panel-preview-and-revert`

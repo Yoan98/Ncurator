@@ -3225,22 +3225,25 @@ const ChatPage: React.FC = () => {
       </aside>
 
       <div className="nc-main-pane min-w-0 flex-1" style={WORKBENCH_POSITIONED_PANE_STYLE}>
-        {isNewSession ? (
-          <div className="nc-main-empty-titlebar" aria-hidden="true">
-            <div
-              className="nc-main-empty-titlebar-safe-zone"
-              style={{
-                width: sidebarCollapsed ? WORKBENCH_LEFT_TITLEBAR_COLLAPSED_WIDTH : 0
-              }}
-            />
-            <div
-              className="nc-main-empty-titlebar-drag-region"
-              data-testid={workbenchSelectors.emptyDragRegion}
-            />
-          </div>
-        ) : null}
         <div className="flex h-full min-h-0 overflow-hidden">
-          <div className="flex min-w-0 flex-1 flex-col">
+          <div className="relative flex min-w-0 flex-1 flex-col">
+            {isNewSession ? (
+              <div
+                className={`nc-main-empty-titlebar ${contentPanelCollapsed ? 'nc-main-empty-titlebar-window-safe' : ''}`}
+                aria-hidden="true"
+              >
+                <div
+                  className="nc-main-empty-titlebar-safe-zone"
+                  style={{
+                    width: sidebarCollapsed ? WORKBENCH_LEFT_TITLEBAR_COLLAPSED_WIDTH : 0
+                  }}
+                />
+                <div
+                  className="nc-main-empty-titlebar-drag-region"
+                  data-testid={workbenchSelectors.emptyDragRegion}
+                />
+              </div>
+            ) : null}
             {!isNewSession ? (
               <div className="nc-topbar" data-testid={workbenchSelectors.topbar}>
                 <div
@@ -3267,31 +3270,15 @@ const ChatPage: React.FC = () => {
                   aria-hidden="true"
                 />
 
-                <Button
-                  type="text"
-                  size="small"
-                  icon={
-                    <SidebarPanelIcon
-                      className="h-4 w-4"
-                      variant={contentPanelCollapsed ? 'expand' : 'collapse'}
-                    />
-                  }
-                  className="workbench-no-drag !flex !h-7 !w-7 !items-center !justify-center !rounded-[6px] !border-0 !bg-transparent !p-0 !shadow-none !text-[#91918E] hover:!bg-transparent hover:!text-[#37352F]"
-                  style={WORKBENCH_NO_DRAG_REGION_STYLE}
-                  onClick={() => setContentPanelCollapsed((previous) => !previous)}
-                  data-testid={workbenchSelectors.contentPanelToggle}
-                  aria-label={contentPanelCollapsed ? '展开右侧栏' : '收起右侧栏'}
-                />
-
                 {platform === 'win32' && contentPanelCollapsed ? (
                   <div className="nc-topbar-window-controls-safe-zone" aria-hidden="true" />
                 ) : null}
               </div>
             ) : null}
 
-            <div className="min-h-0 flex-1 overflow-hidden">
-              <div className="min-w-0 flex-1">
-                <div className="flex h-full min-h-0 flex-col">
+            <div className="flex min-h-0 flex-1 overflow-hidden">
+              <div className="flex h-full min-h-0 min-w-0 flex-1">
+                <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
                   <div
                     className={`nc-document-scroll ${isNewSession ? '!hidden' : ''}`}
                     ref={scrollRef}
@@ -3315,6 +3302,7 @@ const ChatPage: React.FC = () => {
                     className={`nc-floating-composer-shell ${
                       isNewSession ? 'flex flex-1 items-center justify-center pb-[18vh]' : ''
                     }`}
+                    data-testid={workbenchSelectors.composerShell}
                   >
                     <div className="mx-auto w-full max-w-[760px]">
                       {isNewSession ? (
@@ -3529,30 +3517,47 @@ const ChatPage: React.FC = () => {
               width: contentPanelCollapsed ? 0 : 'min(48vw, 780px)'
             }}
           >
-            <WorkbenchContentPanel
-              state={contentPanel}
-              tabs={tabWorkspace.tabs}
-              activeTabId={tabWorkspace.activeTabId}
-              activeApplyRecord={activeApplyRecord}
-              applyLoading={applyLoading}
-              applyReverting={applyReverting}
-              workspaces={workspaces}
-              fallbackWorkspaceName={selectedWorkspace?.name || null}
-              selectedWorkspace={selectedWorkspace || null}
-              fileChangeRecords={fileChangeRecords}
-              onOpenSearchResult={(turn, resultIndex) => void openSearchResult(turn, resultIndex)}
-              onRevertApply={() => void handleApplyRevert()}
-              onBackToPanelState={showContentPanel}
-              onOpenPath={openPathOrNotify}
-              onRevealPath={revealPathOrNotify}
-              onActivateTab={activateResourceTab}
-              onCloseTab={closeResourceTab}
-              onAddFileTab={addFileTab}
-              onAddBrowserTab={addBrowserTab}
-              onBrowserStateChange={handleBrowserStateChange}
-              onOpenWorkspaceFile={openWorkspaceFile}
-            />
+            {!contentPanelCollapsed ? (
+              <WorkbenchContentPanel
+                state={contentPanel}
+                tabs={tabWorkspace.tabs}
+                activeTabId={tabWorkspace.activeTabId}
+                activeApplyRecord={activeApplyRecord}
+                applyLoading={applyLoading}
+                applyReverting={applyReverting}
+                workspaces={workspaces}
+                fallbackWorkspaceName={selectedWorkspace?.name || null}
+                selectedWorkspace={selectedWorkspace || null}
+                fileChangeRecords={fileChangeRecords}
+                onOpenSearchResult={(turn, resultIndex) => void openSearchResult(turn, resultIndex)}
+                onRevertApply={() => void handleApplyRevert()}
+                onBackToPanelState={showContentPanel}
+                onOpenPath={openPathOrNotify}
+                onRevealPath={revealPathOrNotify}
+                onActivateTab={activateResourceTab}
+                onCloseTab={closeResourceTab}
+                onAddFileTab={addFileTab}
+                onAddBrowserTab={addBrowserTab}
+                onCollapse={() => setContentPanelCollapsed(true)}
+                onBrowserStateChange={handleBrowserStateChange}
+                onOpenWorkspaceFile={openWorkspaceFile}
+              />
+            ) : null}
           </div>
+          {contentPanelCollapsed ? (
+            <Tooltip title="展开右侧栏" placement="left">
+              <button
+                type="button"
+                className="nc-content-panel-restore workbench-no-drag"
+                style={WORKBENCH_NO_DRAG_REGION_STYLE}
+                onClick={() => setContentPanelCollapsed(false)}
+                data-testid={workbenchSelectors.contentPanelToggle}
+                aria-label="展开右侧栏"
+              >
+                <SidebarPanelIcon className="h-4 w-4" variant="expand" />
+              </button>
+            </Tooltip>
+          ) : null}
         </div>
         <Modal
           open={Boolean(applyForceConfirm)}

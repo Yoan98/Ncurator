@@ -192,7 +192,7 @@ describe('workbench result e2e', () => {
             await resourceTabs.filter({ hasText: 'workbench-preview.md' }).first().click()
             const reopenedMarkdownVisible = await waitForMarkdownPreview(page)
             await getWorkbenchLocator(page, workbenchSelectors.resourceTabAddButton).click()
-            await page.getByRole('menuitem', { name: '打开文件' }).click()
+            await page.getByRole('menuitem', { name: '文件', exact: true }).click()
             const fileLauncherVisible = await page
               .getByText('从右侧工作区文件列表中选择')
               .waitFor({ state: 'visible', timeout: 10_000 })

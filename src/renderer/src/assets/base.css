@@ -627,6 +627,42 @@ textarea,
   padding-right: calc(var(--windows-window-controls-width) + 8px);
 }
 
+.nc-resource-tabbar {
+  position: relative;
+  z-index: 4;
+}
+
+.nc-content-panel-restore {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 8;
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  color: #787774;
+  border: 0;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.94);
+  cursor: pointer;
+  transition:
+    color 150ms ease,
+    background-color 150ms ease;
+}
+
+.nc-content-panel-restore:hover,
+.nc-content-panel-restore:focus-visible {
+  color: #37352f;
+  background: #f4f4f2;
+  outline: none;
+}
+
+.nc-app-shell-windows .nc-content-panel-restore {
+  right: calc(var(--windows-window-controls-width) + 8px);
+}
+
 .nc-topbar-collapsed-safe-zone {
   flex: 0 0 auto;
   height: 100%;
@@ -670,7 +706,7 @@ textarea,
 }
 
 /* Keep the draggable hit target physically outside the custom Windows controls. */
-.nc-app-shell-windows .nc-main-empty-titlebar {
+.nc-app-shell-windows .nc-main-empty-titlebar-window-safe {
   right: var(--windows-window-controls-width);
 }
 

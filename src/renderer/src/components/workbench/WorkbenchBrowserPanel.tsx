@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { Dropdown, Tooltip, type MenuProps } from 'antd'
+import { Popover, Tooltip } from 'antd'
 import {
   HiArrowLeft,
   HiArrowPath,
@@ -47,6 +47,7 @@ const WorkbenchBrowserPanel: React.FC<WorkbenchBrowserPanelProps> = ({ tabId, on
   const [state, setState] = useState<BrowserTabState>(() => createEmptyState(tabId))
   const [address, setAddress] = useState('')
   const [error, setError] = useState('')
+  const [menuOpen, setMenuOpen] = useState(false)
 
   const applyState = useCallback(
     (next: BrowserTabState): void => {
@@ -77,6 +78,7 @@ const WorkbenchBrowserPanel: React.FC<WorkbenchBrowserPanelProps> = ({ tabId, on
       unsubscribe()
       window.removeEventListener('resize', handleWindowChange)
       window.removeEventListener('scroll', handleWindowChange, true)
+      void window.api.browserPanelSetOccluded(false)
       void window.api.browserPanelHide()
     }
   }, [applyState, tabId])
@@ -96,40 +98,66 @@ const WorkbenchBrowserPanel: React.FC<WorkbenchBrowserPanelProps> = ({ tabId, on
     await runStateAction(() => window.api.browserTabNavigate({ tabId, url }))
   }
 
-  const menuItems: MenuProps['items'] = [
-    {
-      key: 'zoom-out',
-      icon: <HiMinus className="h-4 w-4" />,
-      label: `缩小（${state.zoomPercent}%）`,
-      onClick: () => void runStateAction(() => window.api.browserPanelZoomOut({ tabId }))
-    },
-    {
-      key: 'zoom-reset',
-      label: '恢复 100%',
-      onClick: () => void runStateAction(() => window.api.browserPanelZoomReset({ tabId }))
-    },
-    {
-      key: 'zoom-in',
-      icon: <HiPlus className="h-4 w-4" />,
-      label: '放大',
-      onClick: () => void runStateAction(() => window.api.browserPanelZoomIn({ tabId }))
-    },
-    { type: 'divider' },
-    {
-      key: 'external',
-      icon: <HiArrowTopRightOnSquare className="h-4 w-4" />,
-      label: '在系统浏览器中打开',
-      disabled: !state.url,
-      onClick: () => void window.api.browserPanelOpenExternal({ tabId })
-    }
-  ]
+  const menuContent = (
+    <div
+      className="w-[260px] rounded-[10px] border border-[#E6E5E1] bg-white p-1.5 shadow-[0_10px_30px_rgba(15,15,15,0.12)]"
+      data-testid={workbenchSelectors.browserMenu}
+    >
+      <div className="flex h-10 items-center justify-between gap-3 px-2">
+        <span className="text-[13px] text-[#57554F]">页面缩放</span>
+        <div
+          className="flex h-7 items-center overflow-hidden rounded-[7px] border border-[#E0DFDC] bg-white"
+          data-testid={workbenchSelectors.browserZoomControls}
+        >
+          <button
+            type="button"
+            className="flex h-full w-7 items-center justify-center text-[#787774] hover:bg-[#F4F4F2] hover:text-[#37352F]"
+            aria-label="缩小页面"
+            onClick={() => void runStateAction(() => window.api.browserPanelZoomOut({ tabId }))}
+          >
+            <HiMinus className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            className="h-full min-w-[52px] border-x border-[#E0DFDC] px-2 text-[12px] font-medium tabular-nums text-[#57554F] hover:bg-[#F4F4F2]"
+            aria-label="恢复页面缩放为 100%"
+            onClick={() => void runStateAction(() => window.api.browserPanelZoomReset({ tabId }))}
+          >
+            {state.zoomPercent}%
+          </button>
+          <button
+            type="button"
+            className="flex h-full w-7 items-center justify-center text-[#787774] hover:bg-[#F4F4F2] hover:text-[#37352F]"
+            aria-label="放大页面"
+            onClick={() => void runStateAction(() => window.api.browserPanelZoomIn({ tabId }))}
+          >
+            <HiPlus className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
+      <div className="my-1 h-px bg-[#EEEEEC]" />
+      <button
+        type="button"
+        className="flex h-9 w-full items-center gap-2 rounded-[7px] px-2 text-left text-[13px] text-[#57554F] hover:bg-[#F4F4F2] disabled:text-[#C9C7C2]"
+        disabled={!state.url}
+        onClick={() => {
+          setMenuOpen(false)
+          void window.api.browserPanelSetOccluded(false)
+          void window.api.browserPanelOpenExternal({ tabId })
+        }}
+      >
+        <HiArrowTopRightOnSquare className="h-4 w-4" />
+        在系统浏览器中打开
+      </button>
+    </div>
+  )
 
   return (
     <div
       className="flex h-full min-h-0 flex-col bg-white"
       data-testid={workbenchSelectors.browserPanel}
     >
-      <div className="flex h-9 shrink-0 items-center gap-1 border-b border-[#EEEEEC] px-2">
+      <div className="flex h-11 shrink-0 items-center gap-1 border-b border-[#EEEEEC] px-2">
         <Tooltip title="后退">
           <button
             type="button"
@@ -188,11 +216,17 @@ const WorkbenchBrowserPanel: React.FC<WorkbenchBrowserPanelProps> = ({ tabId, on
             className="h-7 w-full rounded-[7px] border border-transparent bg-[#F7F7F5] px-3 text-center text-[13px] text-[#37352F] outline-none placeholder:text-[#9B9A97] focus:border-[#E0DFDC] focus:bg-white focus:text-left"
           />
         </form>
-        <Dropdown
-          menu={{ items: menuItems }}
+        <Popover
+          content={menuContent}
           trigger={['click']}
           placement="bottomRight"
-          onOpenChange={(open) => void window.api.browserPanelSetOccluded(open)}
+          open={menuOpen}
+          arrow={false}
+          overlayInnerStyle={{ padding: 0, background: 'transparent', boxShadow: 'none' }}
+          onOpenChange={(open) => {
+            setMenuOpen(open)
+            void window.api.browserPanelSetOccluded(open)
+          }}
         >
           <button
             type="button"
@@ -201,7 +235,7 @@ const WorkbenchBrowserPanel: React.FC<WorkbenchBrowserPanelProps> = ({ tabId, on
           >
             <HiEllipsisVertical className="h-4 w-4" />
           </button>
-        </Dropdown>
+        </Popover>
       </div>
       {error ? (
         <div className="shrink-0 border-b border-[#E7CAC6] px-3 py-1.5 text-xs text-[#B3261E]">

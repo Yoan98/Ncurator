@@ -123,7 +123,37 @@ describe('workbench result e2e', () => {
                   .first()
                   .getByRole('button', { name: '打开网页' })
                   .click()
-                return webResultsText
+                const populatedLayout = await page.evaluate((selectors) => {
+                  const messageList = document.querySelector(
+                    `[data-testid="${selectors.messageList}"]`
+                  )
+                  const composerShell = document.querySelector(
+                    `[data-testid="${selectors.composerShell}"]`
+                  )
+                  const main = document.querySelector('.nc-main-pane')
+                  const scroll = messageList?.parentElement
+                  if (
+                    !(composerShell instanceof HTMLElement) ||
+                    !(scroll instanceof HTMLElement) ||
+                    !(main instanceof HTMLElement)
+                  ) {
+                    return null
+                  }
+                  const mainRect = main.getBoundingClientRect()
+                  const composerRect = composerShell.getBoundingClientRect()
+                  const scrollRect = scroll.getBoundingClientRect()
+                  return {
+                    composerInsideViewport: composerRect.bottom <= mainRect.bottom + 1,
+                    messageAreaEndsBeforeComposer: scrollRect.bottom <= composerRect.top + 1,
+                    messageOverflowY: getComputedStyle(scroll).overflowY,
+                    composerFlexShrink: getComputedStyle(composerShell).flexShrink
+                  }
+                }, workbenchSelectors)
+                return {
+                  webResultsText,
+                  populatedLayout,
+                  legitimateSearchTextVisible: await page.getByText('已检索知识库').isVisible()
+                }
               }
             })
 
@@ -187,12 +217,17 @@ describe('workbench result e2e', () => {
                     workbenchSelectors.contentPanel
                   ).textContent()) || ''
                 ).trim()
+                await switchWorkbenchMode(page, '大聪明')
+                const cleanAiSessionKnowledgeTextCount = await page
+                  .getByText('已检索知识库')
+                  .count()
                 return {
                   messagesBefore,
                   messagesAfter,
                   sendButtonStateBefore,
                   draftText,
-                  rightPanelText
+                  rightPanelText,
+                  cleanAiSessionKnowledgeTextCount
                 }
               }
             })
@@ -201,7 +236,9 @@ describe('workbench result e2e', () => {
             return {
               fileResultsText: fileSearch.fileResultsText,
               docxViewerVisible: fileSearch.docxViewerVisible,
-              webResultsText: webSearch,
+              webResultsText: webSearch.webResultsText,
+              populatedLayout: webSearch.populatedLayout,
+              legitimateSearchTextVisible: webSearch.legitimateSearchTextVisible,
               emptySearchResult,
               aiEventCount: signals?.aiRunEventEntries.length ?? 0,
               openExternalCalls:
@@ -220,6 +257,12 @@ describe('workbench result e2e', () => {
               result.docxViewerVisible &&
               /cedar-search-888/u.test(result.webResultsText) &&
               result.openExternalCalls >= 1 &&
+              result.populatedLayout?.composerInsideViewport &&
+              result.populatedLayout.messageAreaEndsBeforeComposer &&
+              result.populatedLayout.messageOverflowY === 'auto' &&
+              result.populatedLayout.composerFlexShrink === '0' &&
+              result.legitimateSearchTextVisible &&
+              result.emptySearchResult.cleanAiSessionKnowledgeTextCount === 0 &&
               result.emptySearchResult.messagesBefore === result.emptySearchResult.messagesAfter &&
               result.emptySearchResult.draftText.includes('anything') &&
               result.emptySearchResult.rightPanelText.includes('右侧暂无内容'),

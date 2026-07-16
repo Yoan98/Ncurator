@@ -6,12 +6,12 @@ import {
   HiArrowUturnLeft,
   HiDocumentText,
   HiEye,
-  HiFolder,
   HiFolderOpen,
   HiGlobeAlt,
   HiMapPin,
   HiOutlineMagnifyingGlass,
-  HiSparkles
+  HiSparkles,
+  HiOutlineQueueList
 } from 'react-icons/hi2'
 import type {
   AiFileChangeRecord,
@@ -51,6 +51,7 @@ type WorkbenchContentPanelProps = {
   onCloseTab: (tabId: string) => void
   onAddFileTab: () => void
   onAddBrowserTab: () => void
+  onCollapse: () => void
   onBrowserStateChange: (state: BrowserTabState) => void
   onOpenWorkspaceFile: (filePath: string, fileName: string, applyId?: string) => void
 }
@@ -288,7 +289,10 @@ const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPreviewPanelP
 
   return (
     <div className="flex h-full min-h-0 flex-col" data-testid={testId}>
-      <div className="flex h-9 shrink-0 items-center gap-2 border-b border-[#EEEEEC] bg-white px-3">
+      <div
+        className="flex h-11 shrink-0 items-center gap-2 border-b border-[#EEEEEC] bg-white px-3"
+        data-testid={workbenchSelectors.documentToolbar}
+      >
         {backTarget ? (
           <Tooltip title="返回">
             <Button
@@ -330,8 +334,9 @@ const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPreviewPanelP
                 type="text"
                 size="small"
                 aria-label={explorerOpen ? '收起工作区文件' : '显示工作区文件'}
-                icon={<HiFolder className="h-4 w-4" />}
+                icon={<HiOutlineQueueList className="h-4 w-4" />}
                 className={`!text-[#787774] hover:!bg-[#F4F4F2] hover:!text-[#37352F] ${explorerOpen ? '!bg-[#F4F4F2] !text-[#37352F]' : ''}`}
+                data-testid={workbenchSelectors.workspaceExplorerToggle}
                 onClick={onToggleExplorer}
               />
             </Tooltip>
@@ -454,6 +459,7 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
   onCloseTab,
   onAddFileTab,
   onAddBrowserTab,
+  onCollapse,
   onBrowserStateChange,
   onOpenWorkspaceFile
 }) => {
@@ -514,6 +520,7 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
         onCloseTab={onCloseTab}
         onAddFileTab={onAddFileTab}
         onAddBrowserTab={onAddBrowserTab}
+        onCollapse={onCollapse}
         onMenuOpenChange={(open) => void window.api.browserPanelSetOccluded(open)}
       />
       <div className="min-h-0 flex-1 overflow-hidden">

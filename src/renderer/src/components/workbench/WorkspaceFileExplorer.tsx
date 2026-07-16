@@ -4,14 +4,15 @@ import {
   HiChevronRight,
   HiDocumentText,
   HiFolder,
-  HiOutlineMagnifyingGlass,
-  HiArrowsRightLeft
+  HiOutlineMagnifyingGlass
 } from 'react-icons/hi2'
 import type {
   AiFileChangeRecord,
   WorkspaceSource,
   WorkspaceTreeEntry
 } from '../../../../shared/types'
+import ChangeCountBadges from './ChangeCountBadges'
+import { workbenchSelectors } from '../../testing/selectors'
 
 type WorkspaceFileExplorerProps = {
   workspace: WorkspaceSource | null
@@ -111,8 +112,19 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
             )}
             <span className="min-w-0 flex-1 truncate text-[#37352F]">{entry.name}</span>
             {change ? (
-              <span title="查看当前会话中的 AI 修改">
-                <HiArrowsRightLeft className="h-4 w-4 shrink-0 text-[#2F5F8F]" />
+              <span
+                title="当前会话 AI 修改，点击查看修改内容"
+                data-testid={`${workbenchSelectors.workspaceFileChangePrefix}-${change.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`}
+              >
+                {change.insertCount > 0 || change.deleteCount > 0 ? (
+                  <ChangeCountBadges
+                    insertCount={change.insertCount}
+                    deleteCount={change.deleteCount}
+                    mode="compact"
+                  />
+                ) : (
+                  <span className="text-[11px] font-medium text-[#787774]">已改</span>
+                )}
               </span>
             ) : null}
           </button>
