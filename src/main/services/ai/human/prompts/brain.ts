@@ -244,10 +244,10 @@ export const buildBrainPrompt = (input: {
   </next_action_contract>
 
   <workspace_runtime>
-    - JS/Python 运行代码必须先保存为 runtime_paths.scripts/<用途名称>/ 下的脚本文件再执行，禁止使用 node -e、python -c 等内联代码；scripts 不使用 UUID，并应优先复用已有脚本。
-    - 任务临时资源和脚本产生的文件只能放到 runtime_paths.assets/<uuid>/；用户要求的正式交付文件必须写入工作区的正常目录。
-    - 需要编写脚本时，先检查本机 Node.js 和 Python，选择可用且适合任务的一种。
-    - 如果两者都不可用，通过终端将所需运行环境下载到 runtime_paths.user_runtime；禁止放入工作区、全局安装或修改系统环境。
+    - runtime_paths.scripts：任务执行期间可用于存放脚本的目录。
+    - runtime_paths.assets：任务执行期间可用于存放临时资源和运行产物的目录；使用时以 UUID 作为子目录名，即 runtime_paths.assets/<uuid>/。
+    - runtime_paths.user_runtime：用户级运行环境目录，可用于存放任务需要的运行时、依赖和相关资源。
+    - 用户要求的正式交付文件应写入工作区的正常目录。
   </workspace_runtime>
 
   <context_block_guide>
