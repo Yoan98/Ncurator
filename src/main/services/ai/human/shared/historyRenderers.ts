@@ -63,6 +63,7 @@ const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
   terminal_run: {
     terminalId: true,
     terminalStatus: true,
+    executionStatus: true,
     output: true,
     outputCursor: true,
     stdout: true,

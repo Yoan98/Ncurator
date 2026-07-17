@@ -89,4 +89,37 @@ describe('workbench markdown renderer reference links', () => {
     unavailable?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }))
     expect(onOpenReference).not.toHaveBeenCalled()
   })
+
+  it('renders historical evidence without accessStatus using the same unavailable UI', async () => {
+    const { default: MarkdownRenderer } =
+      await import('../../../../src/renderer/src/components/MarkdownRenderer')
+    const onOpenReference = vi.fn()
+    const content =
+      '[历史证据](ncurator://ref?kind=reference&resourceType=file&label=历史证据&path=/tmp/report.docx)'
+
+    await act(async () => {
+      root.render(React.createElement(MarkdownRenderer, { content, onOpenReference }))
+    })
+
+    const unavailable = container.querySelector<HTMLElement>('.markdown-reference-unavailable')
+    expect(unavailable?.textContent).toBe('历史证据')
+    expect(unavailable?.getAttribute('data-ref-access-status')).toBe('unavailable')
+    expect(container.querySelector('.markdown-reference-icon')).toBeNull()
+    expect(container.querySelector('a')).toBeNull()
+    expect(onOpenReference).not.toHaveBeenCalled()
+  })
+
+  it('does not invent a resource icon for a genuinely invalid link', async () => {
+    const { default: MarkdownRenderer } =
+      await import('../../../../src/renderer/src/components/MarkdownRenderer')
+    const content =
+      '[损坏引用](ncurator://ref?kind=broken&resourceType=file&label=损坏引用&path=/tmp/report.docx)'
+
+    await act(async () => {
+      root.render(React.createElement(MarkdownRenderer, { content }))
+    })
+
+    expect(container.querySelector('.markdown-reference-link-invalid')).not.toBeNull()
+    expect(container.querySelector('.markdown-reference-icon')).toBeNull()
+  })
 })

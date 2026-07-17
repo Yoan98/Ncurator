@@ -37,6 +37,7 @@ export const TERMINAL_RUN_OUTPUT_SCHEMA = z.object({
     'terminal_closed'
   ]),
   currentTerminalPath: z.string(),
+  executionStatus: z.enum(['running', 'completed', 'cancelled']),
   output: z.string(),
   outputCursor: z.number().int().nonnegative(),
   exitCode: z.number().int().nullable()

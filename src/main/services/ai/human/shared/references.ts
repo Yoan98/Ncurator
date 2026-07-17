@@ -18,7 +18,7 @@ export const buildNormalLinkMarkdown = (input: {
   label: string
   path: string
   resourceType: NcuratorRefResourceType
-}): string => buildNcuratorRefMarkdown({ ...input, accessStatus: 'accessible', kind: 'normal' })
+}): string => buildNcuratorRefMarkdown({ ...input, kind: 'normal' })
 
 export const renderEvidenceReferences = (
   evidenceReferences: HumanReference[] | undefined
@@ -34,7 +34,3 @@ export const renderEvidenceReferences = (
 
 const inferReferenceSourceText = (resourceType: HumanReference['resourceType']): string =>
   resourceType === 'web' ? '网页资料' : '用户本地资料'
-
-export const inferReferenceIconKind = (input: {
-  resourceType: HumanReference['resourceType']
-}): 'web' | 'file' => (input.resourceType === 'web' ? 'web' : 'file')

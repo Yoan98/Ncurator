@@ -128,12 +128,48 @@ describe('ai unit ncurator ref codec', () => {
     })
   })
 
-  it('rejects links when accessStatus is missing', () => {
-    const href = 'ncurator://ref?kind=normal&resourceType=web&label=OpenAI&path=https://openai.com'
+  it('treats historical evidence without accessStatus as unavailable', () => {
+    const href =
+      'ncurator://ref?kind=reference&resourceType=file&label=历史报告&path=/tmp/report.docx'
     expect(parseNcuratorRefHref(href)).toEqual({
-      type: 'invalid',
-      href,
-      reason: 'invalid_access_status'
+      type: 'reference',
+      kind: 'reference',
+      resourceType: 'file',
+      accessStatus: 'unavailable',
+      label: '历史报告',
+      path: '/tmp/report.docx'
+    })
+  })
+
+  it('treats unknown evidence accessStatus as unavailable', () => {
+    const href =
+      'ncurator://ref?kind=reference&resourceType=web&accessStatus=unknown&label=旧网页&path=https://example.com/old'
+    expect(parseNcuratorRefHref(href)).toEqual({
+      type: 'reference',
+      kind: 'reference',
+      resourceType: 'web',
+      accessStatus: 'unavailable',
+      label: '旧网页',
+      path: 'https://example.com/old'
+    })
+  })
+
+  it('parses normal resource links without accessStatus', () => {
+    const markdown = buildNcuratorRefMarkdown({
+      kind: 'normal',
+      resourceType: 'web',
+      label: 'OpenAI',
+      path: 'https://openai.com'
+    })
+    const href = extractHref(markdown)
+
+    expect(href).not.toContain('accessStatus')
+    expect(parseNcuratorRefHref(href)).toEqual({
+      type: 'reference',
+      kind: 'normal',
+      resourceType: 'web',
+      label: 'OpenAI',
+      path: 'https://openai.com'
     })
   })
 

@@ -1306,8 +1306,8 @@ mark {
 
 .markdown-body .markdown-reference-unavailable {
   display: inline;
-  color: #91918e;
-  opacity: 0.72;
+  color: var(--notion-accent-blue);
+  opacity: 0.45;
   cursor: default;
   text-decoration: none;
   overflow-wrap: anywhere;

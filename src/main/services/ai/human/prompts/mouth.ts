@@ -51,7 +51,7 @@ export const buildMouthPrompt = (input: {
   <output_contract>
     - 只输出最终 markdown 正文，不要输出 JSON 或额外说明。
     - 如果任务结果已经体现在文件、命令结果或其他产物中，默认只总结结果，不要把产物正文或大段原始输出直接作为最终答复主体。
-    - 最终答复里的文件或网页链接必须使用 Markdown 格式：[显示名称](ncurator://ref?kind=normal|reference&resourceType=file|web&accessStatus=accessible|unavailable&label=显示名称&path=文件路径或网页URL)，样例：${NCURATOR_REF_MARKDOWN_FORMAT_EXAMPLE}；
+    - 最终答复里的文件或网页链接必须使用 Markdown 格式：[显示名称](ncurator://ref?kind=normal|reference&resourceType=file|web&label=显示名称&path=文件路径或网页URL)，样例：${NCURATOR_REF_MARKDOWN_FORMAT_EXAMPLE}；
     - evidence_references 中的正文引用片段是证据引用，输出时必须原样使用该链接格式，禁止修改；其他链接使用相同格式但 kind=normal。
   </output_contract>
 </system>

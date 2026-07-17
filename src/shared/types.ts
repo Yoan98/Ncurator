@@ -1305,6 +1305,7 @@ type AiRunEventPayload =
       stepIndex: number
       command: string
       cwd: string
+      executionStatus: 'completed' | 'cancelled'
       exitCode: number | null
       timedOut: boolean
       completedAt: number

@@ -85,7 +85,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
             const parsed = parseRefHref(href)
             if (parsed.type === 'reference') {
               const label = parsed.label || String(children)
-              if (parsed.accessStatus === 'unavailable') {
+              if (parsed.kind === 'reference' && parsed.accessStatus === 'unavailable') {
                 return (
                   <span
                     className="markdown-reference-unavailable"
@@ -105,7 +105,9 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
                   data-ref-path={parsed.path}
                   data-ref-kind={parsed.kind}
                   data-ref-resource-type={parsed.resourceType}
-                  data-ref-access-status={parsed.accessStatus}
+                  data-ref-access-status={
+                    parsed.kind === 'reference' ? parsed.accessStatus : undefined
+                  }
                   onClick={(event) => {
                     if (!onOpenReference) return
                     event.preventDefault()
@@ -140,12 +142,6 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
                     void message.warning('引用链接格式无效，无法打开')
                   }}
                 >
-                  <span className="markdown-reference-icon">
-                    {renderReferenceIcon({
-                      kind: 'reference',
-                      resourceType: 'file'
-                    })}
-                  </span>
                   <span className="min-w-0 break-words [overflow-wrap:anywhere]">{children}</span>
                 </a>
               )

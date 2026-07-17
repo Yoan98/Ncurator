@@ -19,9 +19,16 @@ export type NcuratorRefAccessStatus = 'accessible' | 'unavailable'
 export type ParsedNcuratorRef =
   | {
       type: 'reference'
-      kind: NcuratorRefKind
+      kind: 'reference'
       resourceType: NcuratorRefResourceType
       accessStatus: NcuratorRefAccessStatus
+      label: string
+      path: string
+    }
+  | {
+      type: 'reference'
+      kind: 'normal'
+      resourceType: NcuratorRefResourceType
       label: string
       path: string
     }
@@ -77,20 +84,25 @@ export const encodeNcuratorRefValue = (value: string): string =>
 const escapeMarkdownLinkText = (text: string): string =>
   text.trim().replace(/[\\[\]]/g, (char) => `\\${char}`)
 
-export const buildNcuratorRefMarkdown = (input: {
+type NcuratorRefBuildInput = {
   label: string
   path: string
   resourceType: NcuratorRefResourceType
-  accessStatus: NcuratorRefAccessStatus
-  kind: NcuratorRefKind
-}): string => {
+} & (
+  | { kind: 'reference'; accessStatus: NcuratorRefAccessStatus }
+  | { kind: 'normal'; accessStatus?: never }
+)
+
+export const buildNcuratorRefMarkdown = (input: NcuratorRefBuildInput): string => {
   const query = [
     `kind=${input.kind}`,
     `resourceType=${input.resourceType}`,
-    `accessStatus=${input.accessStatus}`,
+    input.kind === 'reference' ? `accessStatus=${input.accessStatus}` : undefined,
     `label=${encodeNcuratorRefValue(input.label)}`,
     `path=${encodeNcuratorRefValue(input.path)}`
-  ].join('&')
+  ]
+    .filter((part): part is string => Boolean(part))
+    .join('&')
   return `[${escapeMarkdownLinkText(input.label)}](${REF_PREFIX}${query})`
 }
 
@@ -167,20 +179,25 @@ export const parseNcuratorRefHref = (href?: string): ParsedNcuratorRef => {
     if (rawResourceType !== 'file' && rawResourceType !== 'web') {
       return { type: 'invalid', href, reason: 'invalid_resource_type' }
     }
-    if (rawAccessStatus !== 'accessible' && rawAccessStatus !== 'unavailable') {
-      return { type: 'invalid', href, reason: 'invalid_access_status' }
-    }
     const normalizedPath = path.replace(/\\/g, '/')
     const fallbackLabel = normalizedPath.split('/').filter(Boolean).pop() || normalizedPath || path
     const label = params.label || fallbackLabel
-    return {
-      type: 'reference',
-      kind: rawKind,
-      resourceType: rawResourceType,
-      accessStatus: rawAccessStatus,
-      label,
-      path
-    }
+    return rawKind === 'reference'
+      ? {
+          type: 'reference',
+          kind: rawKind,
+          resourceType: rawResourceType,
+          accessStatus: rawAccessStatus === 'accessible' ? 'accessible' : 'unavailable',
+          label,
+          path
+        }
+      : {
+          type: 'reference',
+          kind: rawKind,
+          resourceType: rawResourceType,
+          label,
+          path
+        }
   } catch {
     return { type: 'invalid', href, reason: 'parse_failed' }
   }
@@ -252,13 +269,20 @@ export const normalizeNcuratorRefMarkdownLinks = (markdown: string): string => {
     const parsed = parseNcuratorRefHref(destination)
     output +=
       parsed.type === 'reference'
-        ? buildNcuratorRefMarkdown({
-            kind: parsed.kind,
-            resourceType: parsed.resourceType,
-            accessStatus: parsed.accessStatus,
-            label: parsed.label,
-            path: parsed.path
-          })
+        ? parsed.kind === 'reference'
+          ? buildNcuratorRefMarkdown({
+              kind: parsed.kind,
+              resourceType: parsed.resourceType,
+              accessStatus: parsed.accessStatus,
+              label: parsed.label,
+              path: parsed.path
+            })
+          : buildNcuratorRefMarkdown({
+              kind: parsed.kind,
+              resourceType: parsed.resourceType,
+              label: parsed.label,
+              path: parsed.path
+            })
         : markdown.slice(linkTextStart, destinationEnd + 1)
     cursor = destinationEnd + 1
   }

@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { brainNextActionSchema } from '../../../../src/main/services/ai/human/schema'
-import {
-  buildEvidenceReferenceMarkdown,
-  inferReferenceIconKind
-} from '../../../../src/main/services/ai/human/shared/references'
+import { buildEvidenceReferenceMarkdown } from '../../../../src/main/services/ai/human/shared/references'
 import { applyBrainDecisionState } from '../../../../src/main/services/ai/human/node/utils/stateTransitionState'
 import { createInitialHumanState } from '../../../../src/main/services/ai/human/state/schema'
 
@@ -82,7 +79,7 @@ describe('ai unit human references', () => {
     })
   })
 
-  it('builds markdown ref links and infers icon kinds from path', () => {
+  it('builds evidence markdown with the resolved access status', () => {
     expect(
       buildEvidenceReferenceMarkdown({
         label: 'report.docx',
@@ -92,8 +89,5 @@ describe('ai unit human references', () => {
         accessStatus: 'accessible'
       })
     ).toContain('accessStatus=accessible')
-
-    expect(inferReferenceIconKind({ resourceType: 'file' })).toBe('file')
-    expect(inferReferenceIconKind({ resourceType: 'web' })).toBe('web')
   })
 })

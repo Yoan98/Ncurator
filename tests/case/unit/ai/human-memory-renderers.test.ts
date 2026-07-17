@@ -95,6 +95,7 @@ describe('ai unit human memory renderers', () => {
               terminalId: 'term-1',
               commandId: 'command-1',
               terminalStatus: 'idle',
+              executionStatus: 'completed',
               returnReason: 'command_completed',
               currentTerminalPath: '/tmp/workspace',
               output: 'latest release status',
@@ -136,6 +137,7 @@ describe('ai unit human memory renderers', () => {
       '参数：{"command":"cat release-note.txt","commandExplanation":"读取发布状态文件。"}'
     )
     expect(text).toContain('"output":"latest release status"')
+    expect(text).toContain('"executionStatus":"completed"')
     expect(text).not.toContain('returnReason')
     expect(text).not.toContain('currentTerminalPath')
     expect(text).not.toContain('args=')

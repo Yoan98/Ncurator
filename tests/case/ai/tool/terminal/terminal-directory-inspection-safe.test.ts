@@ -8,6 +8,8 @@ import { filterEventsByType } from '../testHelpers'
 type TerminalRunCommandResult = {
   output: string
   reason?: string
+  executionStatus?: 'running' | 'completed' | 'cancelled' | 'not_executed'
+  exitCode?: number | null
 }
 
 const isWindows = process.platform === 'win32'
@@ -60,6 +62,12 @@ describe('ai tool terminal backend', () => {
               ? 'Get-Content -LiteralPath materials/nested/daily-note.txt'
               : 'cat materials/nested/daily-note.txt'
           }),
+          noMatch: await harness.invoke<TerminalRunCommandResult>('terminal_run', {
+            terminalId: list.terminalId,
+            command: isWindows
+              ? 'Select-String -Path materials/nested/daily-note.txt -Pattern missing-value -Quiet'
+              : 'grep -q missing-value materials/nested/daily-note.txt'
+          }),
           events: runtime.eventCollector.snapshot()
         }
         await harness.release()
@@ -68,12 +76,15 @@ describe('ai tool terminal backend', () => {
       assert: async (result, runtime) => {
         const approvalEvents = filterEventsByType(result.events, 'approval_batch_required')
         const stepErrors = filterEventsByType(result.events, 'terminal_step_error')
+        const stepResults = filterEventsByType(result.events, 'terminal_step_result')
+        const toolResults = filterEventsByType(result.events, 'tool_call_result')
 
         runtime.assertThat(
           !result.list.reason &&
             !result.recursiveFind.reason &&
             !result.safeEcho.reason &&
             !result.read.reason &&
+            !result.noMatch.reason &&
             approvalEvents.length === 0 &&
             stepErrors.length === 0,
           {
@@ -88,6 +99,32 @@ describe('ai tool terminal backend', () => {
                 result.safeEcho.reason,
                 result.read.reason
               ]
+            }
+          }
+        )
+
+        runtime.assertThat(
+          result.noMatch.executionStatus === 'completed' &&
+            result.noMatch.exitCode === 1 &&
+            stepResults.some(
+              (event) => event.executionStatus === 'completed' && event.exitCode === 1
+            ) &&
+            toolResults.some(
+              (event) =>
+                event.toolName === 'terminal_run' &&
+                event.result?.ok === true &&
+                event.result.data &&
+                typeof event.result.data === 'object' &&
+                !Array.isArray(event.result.data) &&
+                event.result.data.exitCode === 1
+            ),
+          {
+            name: 'nonzero-exit-is-a-completed-command-result',
+            message: '命令自然退出时即使退出码非零，也应记录为执行完成并把退出码交给 brain 判断。',
+            data: {
+              noMatch: result.noMatch,
+              stepResults,
+              toolResults: toolResults.map((event) => event.result)
             }
           }
         )

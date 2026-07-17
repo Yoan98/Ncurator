@@ -8,6 +8,7 @@ import { filterEventsByType } from '../testHelpers'
 type TerminalRunCommandResult = {
   reason?: 'approval_denied' | 'workspace_required' | 'invalid_input' | 'failed'
   error?: string
+  executionStatus?: 'not_executed'
 }
 
 const isWindows = process.platform === 'win32'
@@ -65,9 +66,20 @@ describe('ai tool terminal backend', () => {
       assert: async (result, runtime) => {
         const approvalEvents = filterEventsByType(result.events, 'approval_batch_required')
         const stepStarted = filterEventsByType(result.events, 'terminal_step_started')
+        const stepErrors = filterEventsByType(result.events, 'terminal_step_error')
+        const toolResults = filterEventsByType(result.events, 'tool_call_result')
+        const approvalDeniedToolResults = toolResults.filter(
+          (event) =>
+            event.toolName === 'terminal_run' &&
+            event.result?.data &&
+            typeof event.result.data === 'object' &&
+            !Array.isArray(event.result.data) &&
+            event.result.data.reason === 'approval_denied'
+        )
 
         runtime.assertThat(
           result.unsafeDenied.reason === 'approval_denied' &&
+            result.unsafeDenied.executionStatus === 'not_executed' &&
             approvalEvents.some((event) =>
               event.items.some(
                 (item) =>
@@ -75,7 +87,10 @@ describe('ai tool terminal backend', () => {
                   (isWindows ? 'Remove-Item -Recurse -Force guarded' : 'rm -rf guarded')
               )
             ) &&
-            result.guardedStillExists,
+            result.guardedStillExists &&
+            approvalDeniedToolResults.length === 2 &&
+            approvalDeniedToolResults.every((event) => event.result?.ok === true) &&
+            stepErrors.length === 0,
           {
             name: 'unsafe-commands-stop-at-approval',
             message: '安全集外 terminal 命令应先触发审批；审批拒绝后不得产生副作用。',
@@ -85,6 +100,8 @@ describe('ai tool terminal backend', () => {
                 command: event.items[0]?.command,
                 reason: event.items[0]?.reason
               })),
+              approvalDeniedToolResults,
+              stepErrors,
               guardedStillExists: result.guardedStillExists
             }
           }
@@ -92,6 +109,7 @@ describe('ai tool terminal backend', () => {
 
         runtime.assertThat(
           result.unlistedWriteDenied.reason === 'approval_denied' &&
+            result.unlistedWriteDenied.executionStatus === 'not_executed' &&
             result.blockedDirExists === false &&
             approvalEvents.some((event) =>
               event.items.some(

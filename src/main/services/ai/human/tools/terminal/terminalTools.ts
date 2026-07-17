@@ -162,29 +162,35 @@ const emitTerminalStepStarted = (input: {
   })
 }
 
-const emitTerminalStepCompleted = (input: PendingTerminalCommand, exitCode: number): void => {
-  if (exitCode === 0) {
-    input.ctx.sendEvent({
-      type: 'terminal_step_result',
-      runId: input.runId,
-      taskId: input.taskId,
-      stepId: input.stepId,
-      stepIndex: input.stepIndex,
-      command: input.command,
-      cwd: input.cwd,
-      exitCode,
-      timedOut: false,
-      completedAt: Date.now()
-    })
-    input.emitActivity({
-      actionType: 'terminal_exec',
-      status: 'completed',
-      summary: `${input.command} -> success`
-    })
-    return
-  }
+const emitTerminalStepCompleted = (
+  input: PendingTerminalCommand,
+  exitCode: number,
+  executionStatus: 'completed' | 'cancelled'
+): void => {
+  input.ctx.sendEvent({
+    type: 'terminal_step_result',
+    runId: input.runId,
+    taskId: input.taskId,
+    stepId: input.stepId,
+    stepIndex: input.stepIndex,
+    command: input.command,
+    cwd: input.cwd,
+    executionStatus,
+    exitCode,
+    timedOut: false,
+    completedAt: Date.now()
+  })
+  input.emitActivity({
+    actionType: 'terminal_exec',
+    status: 'completed',
+    summary:
+      executionStatus === 'cancelled'
+        ? `${input.command} -> cancelled`
+        : `${input.command} -> exit ${String(exitCode)}`
+  })
+}
 
-  const error = `command exited with code ${String(exitCode)}`
+const emitTerminalStepFailed = (input: PendingTerminalCommand, error: string): void => {
   input.ctx.sendEvent({
     type: 'terminal_step_error',
     runId: input.runId,
@@ -199,12 +205,24 @@ const emitTerminalStepCompleted = (input: PendingTerminalCommand, exitCode: numb
   input.emitActivity({ actionType: 'terminal_exec', status: 'failed', summary: error })
 }
 
-const finalizeCommand = async (input: { commandId: string; exitCode: number }): Promise<void> => {
+const finalizeCommand = async (input: {
+  commandId: string
+  exitCode: number
+  executionStatus?: 'completed' | 'cancelled'
+}): Promise<void> => {
   const pending = pendingCommands.get(input.commandId)
   if (!pending || pending.finalized) return
   pending.finalized = true
-  emitTerminalStepCompleted(pending, input.exitCode)
+  emitTerminalStepCompleted(pending, input.exitCode, input.executionStatus || 'completed')
   pendingCommands.delete(input.commandId)
+}
+
+const failCommand = (commandId: string, error: unknown): void => {
+  const pending = pendingCommands.get(commandId)
+  if (!pending || pending.finalized) return
+  pending.finalized = true
+  emitTerminalStepFailed(pending, error instanceof Error ? error.message : String(error))
+  pendingCommands.delete(commandId)
 }
 
 const readSessionCwd = (input: TerminalCapabilityToolsInput, terminalId?: string): string => {
@@ -366,20 +384,20 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
               approval.decisions.length === 1 &&
               approval.decisions[0]?.action === 'approve'
             if (!approved) {
-              const failure = buildFailure({
+              const notExecuted = {
+                executionStatus: 'not_executed' as const,
                 reason: 'approval_denied',
-                error: `command requires approval preflight: ${safePolicy.reason}`
-              })
-              session.fail(
-                failure.error,
+                output: ''
+              }
+              session.succeed(
                 undefined,
                 buildTerminalToolResult({
                   toolName: terminalRunToolSpec.name,
-                  ok: false,
-                  data: failure
+                  ok: true,
+                  data: notExecuted
                 })
               )
-              return failure
+              return notExecuted
             }
           }
 
@@ -461,13 +479,7 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
               .then(async (exitCode) => {
                 await finalizeCommand({ commandId: result.commandId, exitCode })
               })
-              .catch((error) => {
-                input.emitActivity({
-                  actionType: 'terminal_exec',
-                  status: 'failed',
-                  summary: error instanceof Error ? error.message : String(error)
-                })
-              })
+              .catch((error) => failCommand(result.commandId, error))
           }
 
           if (
@@ -485,8 +497,21 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
             modelContextWindowTokens,
             ratio: input.aiResultTokenLimitRatio
           })
-          const { commandId: _commandId, ...publicResult } = result
-          const payload = { ...publicResult, output: guarded.output }
+          const publicResult = {
+            terminalId: result.terminalId,
+            terminalStatus: result.terminalStatus,
+            returnReason: result.returnReason,
+            currentTerminalPath: result.currentTerminalPath,
+            outputCursor: result.outputCursor,
+            exitCode: result.exitCode
+          }
+          const executionStatus =
+            result.returnReason === 'command_still_running'
+              ? ('running' as const)
+              : result.returnReason === 'command_stopped'
+                ? ('cancelled' as const)
+                : ('completed' as const)
+          const payload = { ...publicResult, executionStatus, output: guarded.output }
           if (!guarded.ok) {
             const failurePayload = { ...payload, ...guarded }
             session.fail(
@@ -500,24 +525,6 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
             )
             return failurePayload
           }
-          if (result.returnReason !== 'command_still_running' && result.exitCode !== 0) {
-            const failurePayload = {
-              ...payload,
-              reason: 'failed',
-              error: `command exited with code ${String(result.exitCode)}`
-            }
-            session.fail(
-              failurePayload.error,
-              undefined,
-              buildTerminalToolResult({
-                toolName: terminalRunToolSpec.name,
-                ok: false,
-                data: failurePayload
-              })
-            )
-            return failurePayload
-          }
-
           session.succeed(
             undefined,
             buildTerminalToolResult({
@@ -652,7 +659,11 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
                 !value.finalized
             )
             if (pending) {
-              await finalizeCommand({ commandId: pending[0], exitCode: 130 })
+              await finalizeCommand({
+                commandId: pending[0],
+                exitCode: 130,
+                executionStatus: 'cancelled'
+              })
             }
             session.succeed(
               undefined,
