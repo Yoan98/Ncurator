@@ -7,6 +7,7 @@ const require = createRequire(import.meta.url)
 const root = process.cwd()
 const nodePtyRoot = path.dirname(require.resolve('node-pty/package.json', { paths: [root] }))
 const releaseDir = path.join(nodePtyRoot, 'build', 'Release')
+const prebuildDir = path.join(nodePtyRoot, 'prebuilds', `${process.platform}-${process.arch}`)
 const cacheRoot = path.join(root, 'node_modules', '.native-cache', 'node-pty')
 const currentTargetPath = path.join(cacheRoot, 'current-target.txt')
 
@@ -87,6 +88,10 @@ const restoreCachedRelease = (target) => {
 }
 
 const ensure = (target) => {
+  if (hasNativeRelease(prebuildDir)) {
+    console.log(`[node-pty-native] ready prebuild ${process.platform}-${process.arch}`)
+    return
+  }
   mkdirSync(cacheRoot, { recursive: true })
   const currentTarget = existsSync(currentTargetPath)
     ? readFileSync(currentTargetPath, 'utf8').trim()
@@ -114,7 +119,9 @@ if (command === 'ensure') {
   ensure('electron')
 } else if (command === 'status') {
   console.log(
-    existsSync(currentTargetPath)
+    hasNativeRelease(prebuildDir)
+      ? `[node-pty-native] ready prebuild ${process.platform}-${process.arch}`
+      : existsSync(currentTargetPath)
       ? readFileSync(currentTargetPath, 'utf8').trim()
       : '[node-pty-native] no current target'
   )

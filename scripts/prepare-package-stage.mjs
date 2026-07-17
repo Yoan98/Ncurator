@@ -81,6 +81,21 @@ const installRuntimeDependencies = () => {
 }
 
 const installPreparedNodePtyNative = () => {
+  const prebuildDirectory = `${process.platform}-${process.arch}`
+  const prebuildSource = path.join(ROOT, 'node_modules', 'node-pty', 'prebuilds', prebuildDirectory)
+  if (fs.existsSync(prebuildSource)) {
+    const prebuildTarget = path.join(
+      STAGE_DIR,
+      'node_modules',
+      'node-pty',
+      'prebuilds',
+      prebuildDirectory
+    )
+    fs.rmSync(prebuildTarget, { recursive: true, force: true })
+    fs.mkdirSync(path.dirname(prebuildTarget), { recursive: true })
+    fs.cpSync(prebuildSource, prebuildTarget, { recursive: true, force: true })
+    return
+  }
   const source = path.join(ROOT, 'node_modules', 'node-pty', 'build', 'Release')
   const target = path.join(STAGE_DIR, 'node_modules', 'node-pty', 'build', 'Release')
   assertDirectory(source, 'prepared node-pty native release')
