@@ -2,13 +2,13 @@ import { describe, expect, it } from 'vitest'
 import { renderDeliveryGuidanceForMouth } from '../../../../src/main/services/ai/human/prompts/deliveryGuidance'
 
 describe('ai unit human delivery guidance prompt', () => {
-  it('renders positioned docx guidance for mouth from diagnostic', () => {
+  it('renders positioned docx guidance for mouth from error', () => {
     const guidance = renderDeliveryGuidanceForMouth({
       code: 'hand_docx_positioned_write_blocked',
       detail: {
         toolName: 'docx_edit',
         sourcePath: '/workspace/学习笔记/图形学.docx',
-        diagnostic: '当前命中复杂定位排版区域：包含“达到反走样。”的区域，暂不支持自动编辑。'
+        error: '当前命中复杂定位排版区域：包含“达到反走样。”的区域，暂不支持自动编辑。'
       }
     })
 

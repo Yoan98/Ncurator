@@ -45,7 +45,7 @@ describe('ai human mock-llm backend', () => {
               },
               {
                 output: buildToolDecision({
-                  toolName: 'docx_outline',
+                  toolName: 'docx_read_outline',
                   args: {
                     sourcePath: 'docx-read-fact-exposure.docx',
                     ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 229 }]

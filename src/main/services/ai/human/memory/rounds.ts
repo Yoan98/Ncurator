@@ -1,7 +1,4 @@
 import { extractArtifactRefsFromToolResult, extractArtifactRefsFromToolResults } from '../../utils/artifacts'
-import {
-  renderToolDiagnosticText
-} from '../shared/toolResultRenderers'
 import type {
   HumanHistoryToolResult,
   HumanLearningOutcome,
@@ -23,12 +20,10 @@ const trimRoundHistory = (
   rounds.slice(-HUMAN_HISTORY_LIMITS.rounds)
 
 export const buildHistoryToolResult = (result: ToolCallResult): HumanHistoryToolResult => {
-  const diagnosticText = renderToolDiagnosticText(result).replace(/^；/, '').trim() || undefined
   return {
     toolName: result.toolName,
     ok: result.ok,
     data: result.data,
-    diagnosticText,
     resourceContext: result.resourceContext,
     artifactRefs: (() => {
       const refs = extractArtifactRefsFromToolResult(result)

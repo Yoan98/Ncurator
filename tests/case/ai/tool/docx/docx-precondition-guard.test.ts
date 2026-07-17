@@ -18,7 +18,7 @@ describe('ai tool docx backend', () => {
         const harness = createDocxToolHarness(runtime)
         try {
           return {
-            outlineInvalidPath: await harness.invoke<DocxFailureResult>('docx_outline', {
+            outlineInvalidPath: await harness.invoke<DocxFailureResult>('docx_read_outline', {
               sourcePath: 'missing.docx'
             }),
             readInvalidPath: await harness.invoke<DocxFailureResult>('docx_read_blocks', {

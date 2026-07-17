@@ -27,7 +27,7 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
     description:
       '能力：读取和写入 Markdown、TXT、代码等 UTF-8 普通文本文件。\n结果：读取返回文本内容和行范围；写入返回简短执行结果，并记录可查看、可回退的文件修改。\n边界：不处理二进制文件；精确编辑要求 oldText 唯一；replaceAll 会替换全部精确匹配。',
     whenToUse: '适用于需要查看、创建、改写或精确修改普通文本文件的任务。',
-    toolNames: ['file_read', 'file_edit']
+    toolNames: ['text_file_read', 'text_file_edit']
   },
   'docx-read': {
     skillId: 'docx-read',
@@ -38,7 +38,7 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
     description:
       '能力：读取 sourcePath 对应 docx 的结构、内容块、检索结果和任务内修订历史。\n结果：返回块级索引、正文内容、匹配信息或 revision 信息。\n边界：只读取 docx 内容与当前任务内编辑状态，不直接覆盖源文件。',
     whenToUse: '适用于需要读取或理解 docx 内容与修订状态的任务。',
-    toolNames: ['docx_outline', 'docx_search', 'docx_read_blocks']
+    toolNames: ['docx_read_outline', 'docx_search', 'docx_read_blocks']
   },
   'docx-write': {
     skillId: 'docx-write',
@@ -71,7 +71,7 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
     description:
       '能力：读取工作区内 PPTX 的页面结构、页面内容和搜索结果，并将指定页面渲染为图片。\n结果：返回页面提纲、元素信息、匹配位置或页面图片路径。\n边界：只读取 PPTX，不修改源文件。',
     whenToUse: '适用于需要理解、定位或检查 PowerPoint 内容与视觉效果的任务。',
-    toolNames: ['ppt_outline', 'ppt_read_slides', 'ppt_search', 'ppt_render']
+    toolNames: ['ppt_read_outline', 'ppt_read_slides', 'ppt_search', 'ppt_render_slides']
   },
   'ppt-write': {
     skillId: 'ppt-write',
@@ -93,7 +93,7 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
     description:
       '能力：读取工作区内图片文件，并基于大模型按给定 instruction 理解图片内容。\n结果：返回模型生成的普通文本结果。\n边界：只负责图像理解，不做 OCR 专项抽取，也不保证模型一定能识别清楚。',
     whenToUse: '适用于需要让模型直接查看图片并回答图片内容的任务。',
-    toolNames: ['llm_recognize']
+    toolNames: ['image_analyze']
   },
   'kb-retrieval': {
     skillId: 'kb-retrieval',

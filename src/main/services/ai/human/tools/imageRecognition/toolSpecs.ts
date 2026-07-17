@@ -2,34 +2,34 @@ import { z } from 'zod/v4'
 import type { HumanToolSpec } from '../types'
 import { createStaticExecutionMetaResolver } from '../utils/toolSpecUtils'
 
-export const LLM_RECOGNIZE_SCHEMA = z.object({
+export const IMAGE_ANALYZE_SCHEMA = z.object({
   path: z.string().min(1),
   instruction: z.string().min(1)
 })
 
-export const LLM_RECOGNIZE_OUTPUT_SCHEMA = z.union([
+export const IMAGE_ANALYZE_OUTPUT_SCHEMA = z.union([
   z.string().min(1),
   z.object({
     error: z.string()
   })
 ])
 
-export const LLM_RECOGNIZE_TOOL_SPEC: HumanToolSpec<
-  z.infer<typeof LLM_RECOGNIZE_SCHEMA>,
-  z.infer<typeof LLM_RECOGNIZE_OUTPUT_SCHEMA>,
-  'llm_recognize',
+export const IMAGE_ANALYZE_TOOL_SPEC: HumanToolSpec<
+  z.infer<typeof IMAGE_ANALYZE_SCHEMA>,
+  z.infer<typeof IMAGE_ANALYZE_OUTPUT_SCHEMA>,
+  'image_analyze',
   'image-recognition'
 > = {
-  name: 'llm_recognize',
+  name: 'image_analyze',
   familyId: 'image-recognition',
   skillIds: ['image-recognition'],
   requiresWorkspace: true,
-  inputSchema: LLM_RECOGNIZE_SCHEMA,
-  outputSchema: LLM_RECOGNIZE_OUTPUT_SCHEMA,
+  inputSchema: IMAGE_ANALYZE_SCHEMA,
+  outputSchema: IMAGE_ANALYZE_OUTPUT_SCHEMA,
   promptSpec: {
-    name: 'llm_recognize',
+    name: 'image_analyze',
     description:
-      '能力：读取指定图片路径，并按 instruction 让大模型理解图片内容。\n结果：直接返回模型输出的普通文本。\n边界：instruction 必填；如果模型无法识别,则要停止识别相关任务,继续其他的,禁止继续尝试识别图片。',
+      '能力：读取指定图片，并按 instruction 让大模型分析图片内容。\n结果：返回图片分析文本，无法识别时返回 error。',
     whenToUse: '适用于你已经有图片路径，并且需要按当前任务自己决定怎么向模型询问图片内容的情况。',
     examples: [
       {
@@ -47,4 +47,4 @@ export const LLM_RECOGNIZE_TOOL_SPEC: HumanToolSpec<
   })
 }
 
-export const IMAGE_RECOGNITION_TOOL_SPECS = [LLM_RECOGNIZE_TOOL_SPEC] as const
+export const IMAGE_RECOGNITION_TOOL_SPECS = [IMAGE_ANALYZE_TOOL_SPEC] as const

@@ -99,7 +99,7 @@ describe('ai human mock-llm backend', () => {
           const runner = createHumanTestRunner(runtime, {
             modelName: 'gpt-5',
             selectedReferences: [reference],
-            allowedToolNames: ['pdf_read_pages', 'pdf_render_pages', 'llm_recognize'],
+            allowedToolNames: ['pdf_read_pages', 'pdf_render_pages', 'image_analyze'],
             structuredOutputScript: {
               'human.brain': [
                 {
@@ -139,7 +139,7 @@ describe('ai human mock-llm backend', () => {
                   if (!imagePath)
                     throw new Error('rendered page-9 image path missing from brain prompt')
                   return buildToolDecision({
-                    toolName: 'llm_recognize',
+                    toolName: 'image_analyze',
                     args: {
                       path: imagePath,
                       instruction: '说明 Proper fit 和 Overfit 两组曲线的直观差异。'
@@ -180,7 +180,7 @@ describe('ai human mock-llm backend', () => {
           .filter((event) => event.toolName === 'pdf_render_pages' && event.result?.ok === true)
           .flatMap((event) => renderedPathsFromData(event.result?.data))
         const recognizePaths = starts
-          .filter((event) => event.toolName === 'llm_recognize')
+          .filter((event) => event.toolName === 'image_analyze')
           .map((event) => event.input.path)
           .filter((value): value is string => typeof value === 'string')
 
@@ -191,13 +191,13 @@ describe('ai human mock-llm backend', () => {
             recognizePaths.some((imagePath) => renderPaths.includes(imagePath)) &&
             toolResults.some(
               (event) =>
-                event.toolName === 'llm_recognize' &&
+                event.toolName === 'image_analyze' &&
                 event.result?.ok === true &&
                 JSON.stringify(event.result.data).includes('验证曲线')
             ),
           {
             name: 'pdf-render-path-feeds-generic-image-recognition',
-            message: 'PDF 渲染结果中的真实图片路径应进入下一轮 brain，并交给 llm_recognize。',
+            message: 'PDF 渲染结果中的真实图片路径应进入下一轮 brain，并交给 image_analyze。',
             data: { renderPaths, recognizePaths }
           }
         )

@@ -8,7 +8,7 @@ import { createChatModel } from '../../../../llm/chatModel'
 import { withToolLifecycle } from '../utils/lifecycle'
 import { createToolEventEmitter } from '../utils/toolEvents'
 import type { ToolFamilyDefinition } from '../types'
-import { LLM_RECOGNIZE_TOOL_SPEC } from './toolSpecs'
+import { IMAGE_ANALYZE_TOOL_SPEC } from './toolSpecs'
 
 type VisionRunnable = {
   invoke: (input: HumanMessage[]) => Promise<{ content: unknown }>
@@ -112,7 +112,7 @@ export const imageRecognitionToolFamily: ToolFamilyDefinition = {
       async (args) =>
         await withToolLifecycle({
           emitter: toolEvents,
-          toolName: LLM_RECOGNIZE_TOOL_SPEC.name,
+          toolName: IMAGE_ANALYZE_TOOL_SPEC.name,
           args: args as IpcJsonObject,
           execute: async (session) => {
             ctx.checkCancelled()
@@ -121,7 +121,7 @@ export const imageRecognitionToolFamily: ToolFamilyDefinition = {
             if (!sourcePath || !instruction) {
               const payload = { error: 'path 和 instruction 不能为空' }
               session.fail(payload.error, undefined, {
-                toolName: LLM_RECOGNIZE_TOOL_SPEC.name,
+                toolName: IMAGE_ANALYZE_TOOL_SPEC.name,
                 ok: false,
                 data: payload
               })
@@ -136,7 +136,7 @@ export const imageRecognitionToolFamily: ToolFamilyDefinition = {
             ) {
               const payload = { error: '图片路径必须位于当前工作区内' }
               session.fail(payload.error, undefined, {
-                toolName: LLM_RECOGNIZE_TOOL_SPEC.name,
+                toolName: IMAGE_ANALYZE_TOOL_SPEC.name,
                 ok: false,
                 data: payload
               })
@@ -173,7 +173,7 @@ export const imageRecognitionToolFamily: ToolFamilyDefinition = {
               if (!protocolResult) {
                 const payload = { error: '模型没有按图像识别协议返回结果' }
                 session.fail(payload.error, undefined, {
-                  toolName: LLM_RECOGNIZE_TOOL_SPEC.name,
+                  toolName: IMAGE_ANALYZE_TOOL_SPEC.name,
                   ok: false,
                   data: payload
                 })
@@ -184,7 +184,7 @@ export const imageRecognitionToolFamily: ToolFamilyDefinition = {
                   error: `当前模型 ${config.model_name} 不支持图像识别，请提示用户切换支持图片输入的模型后再试`
                 }
                 session.fail(payload.error, undefined, {
-                  toolName: LLM_RECOGNIZE_TOOL_SPEC.name,
+                  toolName: IMAGE_ANALYZE_TOOL_SPEC.name,
                   ok: false,
                   data: payload
                 })
@@ -193,14 +193,14 @@ export const imageRecognitionToolFamily: ToolFamilyDefinition = {
               if (!protocolResult.result) {
                 const payload = { error: '模型没有返回可用的图像识别结果' }
                 session.fail(payload.error, undefined, {
-                  toolName: LLM_RECOGNIZE_TOOL_SPEC.name,
+                  toolName: IMAGE_ANALYZE_TOOL_SPEC.name,
                   ok: false,
                   data: payload
                 })
                 return payload
               }
               session.succeed(undefined, {
-                toolName: LLM_RECOGNIZE_TOOL_SPEC.name,
+                toolName: IMAGE_ANALYZE_TOOL_SPEC.name,
                 ok: true,
                 data: protocolResult.result
               })
@@ -210,7 +210,7 @@ export const imageRecognitionToolFamily: ToolFamilyDefinition = {
                 error: error instanceof Error ? error.message || '图像识别失败' : String(error)
               }
               session.fail(payload.error, undefined, {
-                toolName: LLM_RECOGNIZE_TOOL_SPEC.name,
+                toolName: IMAGE_ANALYZE_TOOL_SPEC.name,
                 ok: false,
                 data: payload
               })
@@ -219,9 +219,9 @@ export const imageRecognitionToolFamily: ToolFamilyDefinition = {
           }
         }),
       {
-        name: LLM_RECOGNIZE_TOOL_SPEC.name,
-        description: LLM_RECOGNIZE_TOOL_SPEC.promptSpec.description,
-        schema: LLM_RECOGNIZE_TOOL_SPEC.inputSchema
+        name: IMAGE_ANALYZE_TOOL_SPEC.name,
+        description: IMAGE_ANALYZE_TOOL_SPEC.promptSpec.description,
+        schema: IMAGE_ANALYZE_TOOL_SPEC.inputSchema
       }
     )
 

@@ -5,7 +5,7 @@ import { applyThoughtPatch } from '../../memory/thoughtMemory'
 import { buildBrainPrompt } from '../../prompts/brain'
 import { createHumanThoughtDecisionSchema } from '../../schema'
 import { assertExternalLearnedSkillIds } from '../../skills'
-import { formatToolCallSchemaDiagnostic } from '../../toolCallSchema'
+import { formatToolCallSchemaError } from '../../toolCallSchema'
 import type { HumanRuntimeCache, HumanState } from '../../types'
 import { applyBrainDecisionTransition, returnToBrainWithDecisionHint } from '../utils/stateTransitions'
 import { getAvailableToolNames } from '../utils/runtimeCache'
@@ -119,7 +119,7 @@ export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
       }
       completeThinking()
 
-      const diagnostic = formatToolCallSchemaDiagnostic({
+      const schemaError = formatToolCallSchemaError({
         error,
         pathPrefix: 'nextAction.calls'
       })
@@ -131,7 +131,7 @@ export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
         decisionHint: {
           code: 'brain_output_schema_invalid',
           detail: {
-            issues: diagnostic.issues
+            issues: schemaError.issues
           }
         },
         overrides: {

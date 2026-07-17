@@ -26,7 +26,7 @@ describe('ai tool docx backend', () => {
 
         const harness = createDocxToolHarness(runtime)
         try {
-          const outlineBefore = await harness.invoke<DocxOutlineResult>('docx_outline', {
+          const outlineBefore = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
             sourcePath: 'created-blocks-insert-range.docx',
             ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 19 }],
 
@@ -45,7 +45,7 @@ describe('ai tool docx backend', () => {
               blocks: [{ type: 'paragraph', text: 'Inserted paragraph.' }]
             }]
           })
-          const outlineAfter = await harness.invoke<DocxOutlineResult>('docx_outline', {
+          const outlineAfter = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
             sourcePath: inserted.sourcePath,
             ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 19 }],
 

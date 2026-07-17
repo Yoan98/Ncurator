@@ -31,12 +31,7 @@ const readDocxEditFailureHint = (input: {
   const dataError = data && typeof data === 'object' && !Array.isArray(data)
     ? asString((data as JsonObject).error)
     : undefined
-  const diagnosticMessage = asString(input.result.diagnostic?.message)
-  const error =
-    dataError
-    || diagnosticMessage
-    || 'docx_edit failed'
-  const diagnostic = diagnosticMessage && diagnosticMessage !== error ? diagnosticMessage : undefined
+  const error = dataError || 'docx_edit failed'
   if (isDocxPositionedLayoutProtectionMessage(error)) {
     const toolResultHint = data && typeof data === 'object' && !Array.isArray(data)
       ? (data as { decisionHint?: HumanDecisionHint }).decisionHint
@@ -50,7 +45,7 @@ const readDocxEditFailureHint = (input: {
         toolName: 'docx_edit',
         sourcePath: asString(args?.sourcePath),
         action: readDocxEditActionTypes(args),
-        diagnostic: diagnostic || error
+        error
       }
     }
   }
@@ -60,8 +55,7 @@ const readDocxEditFailureHint = (input: {
       toolName: 'docx_edit',
       sourcePath: asString(args?.sourcePath),
       action: readDocxEditActionTypes(args),
-      error,
-      diagnostic
+      error
     }
   }
 }
@@ -102,7 +96,6 @@ export const deriveHandFollowupSignals = (input: {
     decisionHint:
       groupedFailureHints.workspaceBoundaryHint
       || groupedFailureHints.callInvalidHint
-      || groupedFailureHints.toolRuntimeFailedHint
   }
 }
 

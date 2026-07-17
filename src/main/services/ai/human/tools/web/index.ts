@@ -10,9 +10,6 @@ import { BROWSER_USE_TOOL_SPEC, WEB_CRAWL_TOOL_SPEC, WEB_SEARCH_TOOL_SPEC } from
 
 const webSourceService = new WebSourceService()
 
-const isObjectRecord = (value: JsonValue | undefined): value is Record<string, JsonValue> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value)
-
 const getErrorMessage = (error: Error): string => error.message || String(error)
 
 type WebCrawlerFailureDetails = Error & {
@@ -44,13 +41,7 @@ const buildToolResult = (input: {
 }): AiToolCallResult => ({
   toolName: input.toolName,
   ok: input.ok,
-  data: input.data,
-  diagnostic:
-    input.ok || !isObjectRecord(input.data)
-      ? undefined
-      : typeof input.data.error === 'string' && input.data.error.trim()
-        ? { message: input.data.error.trim() }
-        : undefined
+  data: input.data
 })
 
 export const webToolFamily: ToolFamilyDefinition = {
@@ -104,7 +95,6 @@ export const webToolFamily: ToolFamilyDefinition = {
                 const tooLargePayload = {
                   error: 'web_search result too large',
                   query: result.query,
-                  reason: 'result_too_large',
                   estimatedTokens: sizeCheck.estimatedTokens,
                   limit: sizeCheck.limit,
                   ...(sizeCheck.decisionHint ? { decisionHint: sizeCheck.decisionHint } : {})
@@ -214,7 +204,6 @@ export const webToolFamily: ToolFamilyDefinition = {
                   error: 'web_crawl result too large',
                   requestedUrl: result.requestedUrl,
                   finalUrl: result.finalUrl,
-                  reason: 'result_too_large',
                   estimatedTokens: sizeCheck.estimatedTokens,
                   limit: sizeCheck.limit,
                   ...(sizeCheck.decisionHint ? { decisionHint: sizeCheck.decisionHint } : {})
@@ -339,7 +328,6 @@ export const webToolFamily: ToolFamilyDefinition = {
               if (sizeCheck.tooLarge) {
                 const tooLargePayload = {
                   error: 'browser_use result too large',
-                  reason: 'result_too_large',
                   estimatedTokens: sizeCheck.estimatedTokens,
                   limit: sizeCheck.limit,
                   ...(sizeCheck.decisionHint ? { decisionHint: sizeCheck.decisionHint } : {})

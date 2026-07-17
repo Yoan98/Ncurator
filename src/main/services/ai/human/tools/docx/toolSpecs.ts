@@ -183,15 +183,15 @@ const DOCX_EDIT_DELETE_BLOCKS_EXAMPLE: JsonObject = {
   ]
 }
 
-export const DOCX_OUTLINE_TOOL_SPEC = {
-  name: 'docx_outline',
+export const DOCX_READ_OUTLINE_TOOL_SPEC = {
+  name: 'docx_read_outline',
   familyId: 'docx',
   requiresWorkspace: true,
   skillIds: ['docx-read'],
   inputSchema: docxOutlineRequestSchema,
   outputSchema: docxOutlineOutputSchema,
   promptSpec: {
-    name: 'docx_outline',
+    name: 'docx_read_outline',
     description:
       '能力：按 percent 或 blockIndex 范围读取指定 docx 的块级 outline。\n结果：返回范围内每个块的文本内容、块级定位信息和结构类型信息。\n边界：返回块级文本与结构概览，不包含 runs 或表格单元格内的详细段落结构。',
     whenToUse: '适用于需要 docx 块级 outline 信息的任务。',
@@ -206,11 +206,11 @@ export const DOCX_OUTLINE_TOOL_SPEC = {
     ]
   },
   resolveExecutionMeta: createDocxReadExecutionMeta(),
-  activityActionType: 'docx_outline'
+  activityActionType: 'docx_read_outline'
 } satisfies DocxToolSpec<
   z.infer<typeof docxOutlineRequestSchema>,
   z.infer<typeof docxOutlineOutputSchema>,
-  'docx_outline',
+  'docx_read_outline',
   'docx-read'
 >
 
@@ -297,7 +297,7 @@ export const DOCX_EDIT_TOOL_SPEC = {
       'action type=update_table_cell：替换指定表格单元格的文本。',
       'action type=delete_blocks：删除一个或多个完整 block。',
       '结果：返回写入后的编辑状态，以及所有 action 完成后的相邻区域详细回读信息（postWriteReadback字段），它代表着修改后最新的 docx 内容结构。',
-      '边界：所有 blockId、anchorBlockId、cellBlockId、blockIds 必须来自 docx_outline、docx_search、docx_read_blocks 或 postWriteReadback 返回的真实结果，禁止推算新 blockId；禁止在同一次 actions 内引用本次刚创建、尚未回读的新 blockId。'
+      '边界：所有 blockId、anchorBlockId、cellBlockId、blockIds 必须来自 docx_read_outline、docx_search、docx_read_blocks 或 postWriteReadback 返回的真实结果，禁止推算新 blockId；禁止在同一次 actions 内引用本次刚创建、尚未回读的新 blockId。'
     ].join('\n'),
     whenToUse: '适用于需要创建或修改 docx 内容的任务。',
     examples: [
@@ -345,7 +345,7 @@ export const DOCX_EDIT_TOOL_SPEC = {
 >
 
 export const DOCX_READ_TOOL_SPECS = [
-  DOCX_OUTLINE_TOOL_SPEC,
+  DOCX_READ_OUTLINE_TOOL_SPEC,
   DOCX_SEARCH_TOOL_SPEC,
   DOCX_READ_TOOL_SPEC
 ] as const

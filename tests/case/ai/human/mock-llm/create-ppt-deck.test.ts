@@ -67,7 +67,7 @@ describe('ai human mock-llm backend', () => {
               },
               {
                 output: buildToolDecision({
-                  toolName: 'ppt_outline',
+                  toolName: 'ppt_read_outline',
                   args: {
                     sourcePath,
                     ranges: [{ type: 'percent', fromPercent: 0, toPercent: 100 }]
@@ -116,7 +116,7 @@ describe('ai human mock-llm backend', () => {
         runtime.assertThat(
           result.output.status === 'completed' &&
             startedTools.filter((event) => event.toolName === 'ppt_edit').length === 2 &&
-            startedTools.some((event) => event.toolName === 'ppt_outline') &&
+            startedTools.some((event) => event.toolName === 'ppt_read_outline') &&
             pptArtifacts.length === 1 &&
             Boolean(pptArtifacts[0]!.applyId) &&
             fileEvents.length === 1 &&
@@ -126,7 +126,7 @@ describe('ai human mock-llm backend', () => {
           {
             name: 'human-ppt-run-uses-two-tools-and-commits-once',
             message:
-              'human 应通过 ppt_edit 逐页创建、ppt_outline 回读，并在 run 结束时只交付一个 PPT 文件记录。',
+              'human 应通过 ppt_edit 逐页创建、ppt_read_outline 回读，并在 run 结束时只交付一个 PPT 文件记录。',
             data: {
               tools: startedTools.map((event) => event.toolName),
               pptArtifacts,

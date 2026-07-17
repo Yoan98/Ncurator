@@ -4,7 +4,7 @@ import { executeToolCall } from '../../../../src/main/services/ai/human/node/han
 import type { HumanRuntimeCache } from '../../../../src/main/services/ai/human/types'
 
 const createStubAiRunContext = (): AiRunContext => ({
-  runId: 'run-tool-diagnostic',
+  runId: 'run-tool-error',
   referenceScope: {
     workspace: {
       workspaceId: 'workspace-1',
@@ -54,20 +54,21 @@ const createRuntimeCache = (): HumanRuntimeCache => ({
   toolCallCount: 0
 })
 
-describe('ai unit human tool executor diagnostic', () => {
-  it('preserves the raw schema validation message in diagnostic.message', async () => {
+describe('ai unit human tool executor error', () => {
+  it('preserves the raw schema validation message in data.error', async () => {
     const result = await executeToolCall({
       ctx: createStubAiRunContext(),
       cache: createRuntimeCache(),
-      taskId: 'task-tool-diagnostic',
+      taskId: 'task-tool-error',
       learnedSkillIds: [],
       toolName: 'terminal_run',
       args: {}
     })
 
     expect(result.ok).toBe(false)
-    expect(result.diagnostic?.message).toBeTruthy()
-    expect(result.diagnostic?.message).toContain('command')
-    expect(result.diagnostic?.message).not.toContain('missingArgs')
+    expect(result.data.error).toBeTruthy()
+    expect(result.data.error).toContain('command')
+    expect(result.data.error).not.toContain('missingArgs')
+    expect(result).not.toHaveProperty('diagnostic')
   })
 })

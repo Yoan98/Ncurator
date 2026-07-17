@@ -8,7 +8,7 @@ import type {
   DocxReadSession,
   DocxSearchMatch
 } from '../types'
-import { DOCX_OUTLINE_TOOL_SPEC, DOCX_READ_TOOL_SPEC, DOCX_SEARCH_TOOL_SPEC } from '../toolSpecs'
+import { DOCX_READ_OUTLINE_TOOL_SPEC, DOCX_READ_TOOL_SPEC, DOCX_SEARCH_TOOL_SPEC } from '../toolSpecs'
 import { createDocxTool, finalizeDocxToolFailure, finalizeDocxToolSuccess } from './workerTool'
 import { HUMAN_TOOL_RESULT_TOKEN_LIMIT_RATIO } from '../../../constants'
 
@@ -374,12 +374,12 @@ const mergeOutlineRanges = (
 export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInterface[] => {
   const docxOutlineTool = createDocxTool({
     runtime,
-    name: DOCX_OUTLINE_TOOL_SPEC.name,
-    description: DOCX_OUTLINE_TOOL_SPEC.promptSpec.description,
-    schema: DOCX_OUTLINE_TOOL_SPEC.inputSchema,
+    name: DOCX_READ_OUTLINE_TOOL_SPEC.name,
+    description: DOCX_READ_OUTLINE_TOOL_SPEC.promptSpec.description,
+    schema: DOCX_READ_OUTLINE_TOOL_SPEC.inputSchema,
     onError: ({ message }) => {
       runtime.input.emitActivity({
-        actionType: DOCX_OUTLINE_TOOL_SPEC.activityActionType!,
+        actionType: DOCX_READ_OUTLINE_TOOL_SPEC.activityActionType!,
         status: 'failed',
         summary: message
       })
@@ -427,7 +427,7 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
               estimatedTokens
             }),
             activity: {
-              actionType: DOCX_OUTLINE_TOOL_SPEC.activityActionType!
+              actionType: DOCX_READ_OUTLINE_TOOL_SPEC.activityActionType!
             }
           })
         }
@@ -449,7 +449,7 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
           },
           draftDocId: sessionResult.docId,
           activity: {
-            actionType: DOCX_OUTLINE_TOOL_SPEC.activityActionType!,
+            actionType: DOCX_READ_OUTLINE_TOOL_SPEC.activityActionType!,
             startedSummary: `提取结构: ${sessionResult.sourcePath}`,
             buildCompletedSummary: (output) => `结构提取完成：${String(output.blocks.length)} 个块`
           }
@@ -470,7 +470,7 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
             })
           }),
           activity: {
-            actionType: DOCX_OUTLINE_TOOL_SPEC.activityActionType!
+            actionType: DOCX_READ_OUTLINE_TOOL_SPEC.activityActionType!
           }
         })
       }

@@ -33,7 +33,6 @@ export type PdfToolFailure = {
   ok: false
   error: string
   warnings: string[]
-  reason: string
   decisionHint?: JsonObject
   resourceContext?: PdfToolResourceContext
 }
@@ -84,8 +83,7 @@ const buildPdfToolCallResult = (input: {
   toolName: input.toolName,
   ok: input.ok,
   data: input.data,
-  resourceContext: input.resourceContext,
-  diagnostic: input.ok || !input.error ? undefined : { message: input.error }
+  resourceContext: input.resourceContext
 })
 
 export const createPdfToolRuntime = (input: PdfCapabilityToolsInput): PdfToolRuntime => {
@@ -157,7 +155,6 @@ export const createPdfToolRuntime = (input: PdfCapabilityToolsInput): PdfToolRun
       ok: false,
       error: params.error,
       warnings: params.warnings || [],
-      reason: params.reason,
       decisionHint: params.decisionHint,
       resourceContext: params.resourceContext
     }

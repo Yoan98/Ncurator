@@ -7,7 +7,6 @@ import { filterEventsByType } from '../testHelpers'
 
 type TerminalRunCommandResult = {
   output: string
-  reason?: 'workspace_required' | 'result_too_large' | 'result_unusable' | 'failed'
   error?: string
 }
 
@@ -67,7 +66,7 @@ describe('ai tool terminal backend', () => {
         const approvalEvents = filterEventsByType(result.events, 'approval_batch_required')
 
         runtime.assertThat(
-          !result.firstSearch.reason && !result.secondSearch.reason && approvalEvents.length === 0,
+          !result.firstSearch.error && !result.secondSearch.error && approvalEvents.length === 0,
           {
             name: 'search-commands-stay-safe',
             message: '安全文本搜索指令应直接成功执行，不触发审批。',
@@ -82,7 +81,7 @@ describe('ai tool terminal backend', () => {
         runtime.assertThat(
           result.firstSearch.output.includes('release.md') &&
             result.secondSearch.output.includes('Terminal artifacts must be recorded.') &&
-            result.boundaryRejected.reason === 'workspace_required',
+            result.boundaryRejected.error.includes('workspace boundary check failed'),
           {
             name: 'search-commands-honor-boundary-checks',
             message: '文本搜索应正确返回命中结果，并在越界路径参数下于执行前拒绝。',

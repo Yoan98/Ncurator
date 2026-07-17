@@ -18,7 +18,7 @@ export const getFinalizingProcessGroupId = (runId: string): string => `${runId}:
 
 export const getSkillKeyFromToolName = (toolName: string): string => {
   if (
-    toolName === 'docx_outline' ||
+    toolName === 'docx_read_outline' ||
     toolName === 'docx_read_blocks' ||
     toolName === 'docx_search'
   ) {

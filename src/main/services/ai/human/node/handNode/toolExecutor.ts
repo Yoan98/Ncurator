@@ -73,22 +73,6 @@ const summarizeObjectPayload = (toolName: string, payload: JsonObject): string |
   return undefined
 }
 
-const inferDiagnosticMessage = (input: {
-  message: string
-  payload?: JsonObject
-}): string | undefined => {
-  const explicit = input.payload?.diagnostic
-  if (isJsonObject(explicit) && typeof explicit.message === 'string' && explicit.message.trim()) {
-    return explicit.message.trim()
-  }
-
-  if (input.message.trim()) {
-    return input.message.trim()
-  }
-
-  return undefined
-}
-
 const resolvePayloadMessage = (toolName: string, payload: JsonObject): string =>
   typeof payload.error === 'string'
     ? payload.error
@@ -101,7 +85,9 @@ const normalizeToolCallResult = (
   payload: JsonValue
 ): ToolCallResult => {
   if (isJsonObject(payload)) {
-    const ok = payload.ok !== false && payload.success !== false
+    const explicitError =
+      typeof payload.error === 'string' && payload.error.trim() ? payload.error.trim() : undefined
+    const ok = payload.ok !== false && payload.success !== false && !explicitError
     const payloadMessage = resolvePayloadMessage(toolName, payload)
     const {
       ok: _ignoredOk,
@@ -109,15 +95,10 @@ const normalizeToolCallResult = (
       code: _ignoredCode,
       summary: _ignoredSummary,
       resourceContext: candidateResourceContext,
-      diagnostic: _ignoredDiagnostic,
       ...data
     } = payload
 
-    return {
-      toolName,
-      ok,
-      data,
-      resourceContext: (() => {
+    const resourceContext = (() => {
         const candidate = candidateResourceContext
         if (
           isJsonObject(candidate) &&
@@ -141,16 +122,23 @@ const normalizeToolCallResult = (
           }
         }
         return undefined
-      })(),
-      diagnostic: ok
-        ? undefined
-        : (() => {
-            const diagnosticMessage = inferDiagnosticMessage({
-              message: payloadMessage,
-              payload
-            })
-            return diagnosticMessage ? { message: diagnosticMessage } : undefined
-          })()
+      })()
+    if (ok) {
+      return {
+        toolName,
+        ok: true,
+        data,
+        resourceContext
+      }
+    }
+    return {
+      toolName,
+      ok: false,
+      data: {
+        ...data,
+        error: explicitError || payloadMessage || `${toolName} failed`
+      },
+      resourceContext
     }
   }
 
@@ -215,9 +203,6 @@ export const executeToolCall = async (input: {
       ok: false,
       data: {
         error: `当前未学习可执行工具 ${input.toolName}。`
-      },
-      diagnostic: {
-        message: `当前未学习可执行工具 ${input.toolName}。`
       }
     }
     return await withToolLifecycle({
@@ -245,9 +230,6 @@ export const executeToolCall = async (input: {
       ok: false,
       data: {
         error: message
-      },
-      diagnostic: {
-        message
       }
     }
   }

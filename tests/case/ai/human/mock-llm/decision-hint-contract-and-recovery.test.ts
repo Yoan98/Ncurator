@@ -44,7 +44,7 @@ describe('ai human mock-llm backend', () => {
         const positionedSourcePath = runtime.getFixtureWorkspacePath(POSITIONED_DOCX_FIXTURE_PATH)
         const largeSourcePath = runtime.getFixtureWorkspacePath(LARGE_DOCX_FIXTURE_PATH)
         const docxHarness = createDocxToolHarness(runtime)
-        const positionedOutline = await docxHarness.invoke<DocxOutlineResultPreview>('docx_outline', {
+        const positionedOutline = await docxHarness.invoke<DocxOutlineResultPreview>('docx_read_outline', {
           sourcePath: positionedSourcePath,
           ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 80 }]
         })
@@ -118,7 +118,7 @@ describe('ai human mock-llm backend', () => {
               },
               {
                 output: buildToolDecision({
-                  toolName: 'docx_outline',
+                  toolName: 'docx_read_outline',
                   args: {
                     sourcePath: largeSourcePath,
                     ranges: [{ type: 'percent', fromPercent: 0, toPercent: 100 }]
@@ -199,8 +199,8 @@ describe('ai human mock-llm backend', () => {
             event.code === 'hand_docx_positioned_write_blocked' &&
             event.detail?.toolName === 'docx_edit' &&
             event.detail?.sourcePath === result.positionedSourcePath &&
-            typeof event.detail?.diagnostic === 'string' &&
-            event.detail.diagnostic.includes('复杂定位排版区域')
+            typeof event.detail?.error === 'string' &&
+            event.detail.error.includes('复杂定位排版区域')
         )
         const hasToolLimitExceeded = decisionHints.some(
           (event) =>

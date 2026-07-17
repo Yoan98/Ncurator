@@ -26,7 +26,7 @@ describe('ai tool docx backend', () => {
 
         const harness = createDocxToolHarness(runtime)
         try {
-          const beforeOutline = await harness.invoke<DocxOutlineResult>('docx_outline', {
+          const beforeOutline = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
             sourcePath: 'outline-percent-after-write.docx',
             ranges: [{ type: 'percent', fromPercent: 0, toPercent: 100 }]
           })
@@ -42,7 +42,7 @@ describe('ai tool docx backend', () => {
             }]
           })
 
-          const afterOutline = await harness.invoke<DocxOutlineResult>('docx_outline', {
+          const afterOutline = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
             sourcePath: 'outline-percent-after-write.docx',
             ranges: [{ type: 'percent', fromPercent: 0, toPercent: 100 }]
           })

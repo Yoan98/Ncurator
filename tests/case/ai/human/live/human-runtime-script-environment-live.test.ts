@@ -177,7 +177,7 @@ describe.skipIf(process.platform !== 'darwin')('ai human live backend', () => {
           const sessionId = 'human-runtime-script-assets-live-session'
           const runner = createHumanTestRunner(runtime, {
             sessionId,
-            allowedToolNames: ['terminal_run', 'terminal_read', 'terminal_stop', 'file_edit'],
+            allowedToolNames: ['terminal_run', 'terminal_read', 'terminal_stop', 'text_file_edit'],
             humanRuntimeOverrides: { hardActionLimit: 14 }
           })
           try {

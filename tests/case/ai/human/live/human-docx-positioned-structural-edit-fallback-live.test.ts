@@ -15,7 +15,7 @@ import {
 import {
   countDocxApplyArtifacts,
   countDocxFileArtifacts,
-  collectToolDiagnosticMessages,
+  collectToolErrorMessages,
   filterAiRunEventsByType,
   isDocxEditCreateInput,
   isDocxEditWriteInput,
@@ -109,10 +109,16 @@ describe('ai human live backend', () => {
           const successfulWriteResults = writeResults.filter((event) => event.result?.ok === true)
           const failedWriteResults = writeResults.filter((event) => event.result?.ok === false)
           const positionedFailedWriteResults = failedWriteResults.filter((event) =>
-            String(event.result?.diagnostic?.message || '').includes('当前命中复杂定位排版区域')
+            String(
+              event.result?.data &&
+              typeof event.result.data === 'object' &&
+              !Array.isArray(event.result.data)
+                ? event.result.data.error
+                : ''
+            ).includes('当前命中复杂定位排版区域')
           )
           const decisionHints = filterAiRunEventsByType(events, 'decision_hint')
-          const diagnosticMessages = collectToolDiagnosticMessages(events)
+          const errorMessages = collectToolErrorMessages(events)
           const docxApplyArtifactCount = countDocxApplyArtifacts(result.output?.artifacts)
           const docxFileArtifactCount = countDocxFileArtifacts(result.output?.artifacts)
           const createdIndependentSupplement =
@@ -146,7 +152,7 @@ describe('ai human live backend', () => {
               structuralStarted.length >= 1 &&
               positionedFailedWriteResults.length >= 1 &&
               decisionHints.some((event) => event.code === 'hand_docx_positioned_write_blocked') &&
-              diagnosticMessages.some((message) =>
+              errorMessages.some((message) =>
                 message.includes('当前命中复杂定位排版区域')
               )
                 ? 2
@@ -184,7 +190,12 @@ describe('ai human live backend', () => {
                 successfulWriteResultCount: successfulWriteResults.length,
                 failedWriteResults: failedWriteResults.map((event) => ({
                   toolName: event.toolName,
-                  diagnostic: event.result?.diagnostic?.message
+                  error:
+                    event.result?.data &&
+                    typeof event.result.data === 'object' &&
+                    !Array.isArray(event.result.data)
+                      ? event.result.data.error
+                      : undefined
                 })),
                 decisionHints,
                 docxApplyArtifactCount,

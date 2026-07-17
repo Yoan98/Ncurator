@@ -201,7 +201,7 @@ describe('ai human live backend', () => {
             return Buffer.compare(currentBytes, Buffer.from(fixture.bytes)) === 0
           })
         )
-        const openedSourcePaths = collectStartedToolStringArgs(events, 'docx_outline', 'sourcePath')
+        const openedSourcePaths = collectStartedToolStringArgs(events, 'docx_read_outline', 'sourcePath')
           .concat(collectStartedToolStringArgs(events, 'docx_read_blocks', 'sourcePath'))
           .concat(collectStartedToolStringArgs(events, 'docx_search', 'sourcePath'))
         const createSourcePaths = collectStartedDocxEditSourcePaths(events, isDocxEditCreateInput)
@@ -306,7 +306,7 @@ describe('ai human live backend', () => {
           /已生成|已创建|已修改|文件/.test(deliveryText) || hasDocxArtifact
         const hasResearchReadStep = toolNames.some((toolName) =>
           [
-            'docx_outline',
+            'docx_read_outline',
             'docx_read_blocks',
             'docx_search',
             'kb_list_documents',

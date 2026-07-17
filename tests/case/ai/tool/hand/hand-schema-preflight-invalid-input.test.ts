@@ -13,7 +13,7 @@ describe('ai tool hand backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['hand'],
-      description: '验证 hand preflight schema 失败时稳定返回 invalid_input，并保留具体 diagnostic。',
+      description: '验证 hand preflight schema 失败时稳定返回具体 error。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -73,13 +73,13 @@ describe('ai tool hand backend', () => {
         const toolResult = result.state.execution.lastToolResults?.[0]
         runtime.assertThat(
           toolResult?.ok === false &&
-            typeof toolResult.diagnostic?.message === 'string' &&
-            toolResult.diagnostic.message.includes('calls[0].args') &&
+            typeof toolResult.data?.error === 'string' &&
+            toolResult.data.error.includes('calls[0].args') &&
             result.state.execution.pendingDecisionHint?.code === 'hand_call_invalid' &&
             result.state.execution.pendingDecisionHint.detail.invalidCalls[0]?.callIndex === 0,
           {
             name: 'hand-schema-preflight-invalid-input',
-            message: 'hand preflight schema 失败时应返回 invalid_input、保留具体 schema diagnostic，并提升为 hand_call_invalid。',
+            message: 'hand preflight schema 失败时应保留具体 schema error，并提升为 hand_call_invalid。',
             data: {
               toolResult,
               pendingDecisionHint: result.state.execution.pendingDecisionHint

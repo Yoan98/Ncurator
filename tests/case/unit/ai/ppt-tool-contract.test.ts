@@ -15,17 +15,17 @@ import { renderLatexToSvg } from '../../../../src/main/services/ai/human/tools/p
 describe('ai unit ppt tool contract', () => {
   it('splits ppt reading and writing into two skills and five prefixed tools', () => {
     expect(SKILL_DEFINITIONS['ppt-read'].toolNames).toEqual([
-      'ppt_outline',
+      'ppt_read_outline',
       'ppt_read_slides',
       'ppt_search',
-      'ppt_render'
+      'ppt_render_slides'
     ])
     expect(SKILL_DEFINITIONS['ppt-write'].toolNames).toEqual(['ppt_edit'])
     expect(PPT_TOOL_SPECS.map((spec) => spec.name)).toEqual([
-      'ppt_outline',
+      'ppt_read_outline',
       'ppt_read_slides',
       'ppt_search',
-      'ppt_render',
+      'ppt_render_slides',
       'ppt_edit'
     ])
   })

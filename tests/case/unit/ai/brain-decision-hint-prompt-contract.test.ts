@@ -136,8 +136,7 @@ describe('ai unit brain decision-hint prompt contract', () => {
               ok: false,
               data: {
                 error: 'cannot resolve anchorBlockId=b:1 in current active snapshot'
-              },
-              diagnosticText: 'cannot resolve anchorBlockId=b:1 in current active snapshot'
+              }
             }
           ],
           decisionHint: {
@@ -146,8 +145,7 @@ describe('ai unit brain decision-hint prompt contract', () => {
               toolName: 'docx_edit',
               sourcePath: 'report.docx',
               action: 'insert_blocks',
-              error: 'cannot resolve anchorBlockId=b:1 in current active snapshot',
-              diagnostic: 'cannot resolve anchorBlockId=b:1 in current active snapshot'
+              error: 'cannot resolve anchorBlockId=b:1 in current active snapshot'
             }
           }
         }
@@ -160,7 +158,7 @@ describe('ai unit brain decision-hint prompt contract', () => {
         toolName: 'docx_edit',
         sourcePath: 'report.docx',
         action: 'insert_blocks',
-        diagnostic: '当前命中复杂定位排版区域：包含“达到反走样。”的区域，暂不支持自动编辑'
+        error: '当前命中复杂定位排版区域：包含“达到反走样。”的区域，暂不支持自动编辑'
       }
     }
 
@@ -197,7 +195,7 @@ describe('ai unit brain decision-hint prompt contract', () => {
     expect(taskProgressSection).not.toContain('上一轮 docx_edit 写入失败')
     expect(correctionHintSection).toContain('刚才尝试修改的 docx 区域命中了定位排版保护')
     expect(correctionHintSection).toContain(
-      '诊断：当前命中复杂定位排版区域：包含“达到反走样。”的区域'
+      '错误：当前命中复杂定位排版区域：包含“达到反走样。”的区域'
     )
     expect(correctionHintSection).toContain('不会被自动修改')
   })
@@ -318,6 +316,8 @@ describe('ai unit brain decision-hint prompt contract', () => {
     expect(prompt.user).toContain(
       '{ command: string, commandExplanation: string, terminalId?: string }'
     )
+    expect(prompt.user).not.toContain('适用时机：')
+    expect(prompt.user).not.toContain('适用于需要执行终端命令的任务。')
     expect(prompt.user).not.toContain('cwd?: string')
     expect(prompt.user).toContain('工具 terminal_read')
     expect(prompt.user).toContain('工具 terminal_stop')

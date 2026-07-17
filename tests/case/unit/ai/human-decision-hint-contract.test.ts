@@ -38,7 +38,7 @@ const HINT_FIXTURES: Record<(typeof HUMAN_DECISION_HINT_CODES)[number], HumanDec
   hand_call_limit_exceeded: {
     code: 'hand_call_limit_exceeded',
     detail: {
-      offendingToolNames: ['terminal_run', 'docx_outline', 'docx_read_blocks', 'kb_search', 'docx_edit', 'docx_outline'],
+      offendingToolNames: ['terminal_run', 'docx_read_outline', 'docx_read_blocks', 'kb_search', 'docx_edit', 'docx_read_outline'],
       callCount: 6,
       limit: 5
     }
@@ -49,8 +49,7 @@ const HINT_FIXTURES: Record<(typeof HUMAN_DECISION_HINT_CODES)[number], HumanDec
       toolName: 'docx_edit',
       sourcePath: 'report.docx',
       action: 'insert_blocks',
-      error: 'cannot resolve anchorBlockId=b:99 in current active snapshot',
-      diagnostic: 'cannot resolve anchorBlockId=b:99 in current active snapshot'
+      error: 'cannot resolve anchorBlockId=b:99 in current active snapshot'
     }
   },
   hand_docx_positioned_write_blocked: {
@@ -59,7 +58,7 @@ const HINT_FIXTURES: Record<(typeof HUMAN_DECISION_HINT_CODES)[number], HumanDec
       toolName: 'docx_edit',
       sourcePath: 'graphics.docx',
       action: 'insert_blocks',
-      diagnostic: '当前命中复杂定位排版区域：包含“达到反走样。”的区域，暂不支持自动编辑'
+      error: '当前命中复杂定位排版区域：包含“达到反走样。”的区域，暂不支持自动编辑'
     }
   },
   hand_tool_limit_near_exhausted: {
@@ -79,7 +78,7 @@ const HINT_FIXTURES: Record<(typeof HUMAN_DECISION_HINT_CODES)[number], HumanDec
   hand_tool_result_too_large: {
     code: 'hand_tool_result_too_large',
     detail: {
-      toolName: 'docx_outline',
+      toolName: 'docx_read_outline',
       estimatedTokens: 6049,
       limit: 6000
     }
@@ -88,7 +87,6 @@ const HINT_FIXTURES: Record<(typeof HUMAN_DECISION_HINT_CODES)[number], HumanDec
     code: 'hand_tool_result_unusable',
     detail: {
       toolName: 'terminal_run',
-      reason: 'non_text_output',
       totalChars: 1200,
       nulCount: 3,
       replacementCharCount: 40,
@@ -133,18 +131,6 @@ const HINT_FIXTURES: Record<(typeof HUMAN_DECISION_HINT_CODES)[number], HumanDec
       ]
     }
   },
-  hand_tool_runtime_failed: {
-    code: 'hand_tool_runtime_failed',
-    detail: {
-      failedCalls: [
-        {
-          callIndex: 0,
-          toolName: 'docx_read_blocks',
-          message: 'ENOENT: no such file or directory, open missing.docx'
-        }
-      ]
-    }
-  },
   brain_todolist_incomplete: {
     code: 'brain_todolist_incomplete',
     detail: {
@@ -169,19 +155,18 @@ describe('ai unit human decision hint contract', () => {
     }
   )
 
-  it('does not repeat identical docx edit error and diagnostic text', () => {
+  it('renders a docx edit error once', () => {
     const rendered = renderDecisionHintForBrain({
       code: 'hand_docx_edit_failed',
       detail: {
         toolName: 'docx_edit',
         sourcePath: 'report.docx',
         action: 'create_document',
-        error: 'docx_edit(create_document) will not overwrite an existing file: report.docx',
-        diagnostic: 'docx_edit(create_document) will not overwrite an existing file: report.docx'
+        error: 'docx_edit(create_document) will not overwrite an existing file: report.docx'
       }
     })
 
     expect(rendered).toContain('错误：docx_edit(create_document) will not overwrite an existing file: report.docx。')
-    expect(rendered).not.toContain('诊断：docx_edit(create_document) will not overwrite an existing file: report.docx。')
+    expect(rendered.match(/docx_edit\(create_document\) will not overwrite an existing file: report\.docx/g)).toHaveLength(1)
   })
 })

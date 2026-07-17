@@ -8,7 +8,7 @@ const renderPositionedDocxGuidance = (
 ): string => {
   const sourcePath = toDisplaySourcePath(hint.detail.sourcePath)
   return [
-    `最终交付时必须说明：${sourcePath} 中${hint.detail.diagnostic}`,
+    `最终交付时必须说明：${sourcePath} 中${hint.detail.error}`,
     'AI 未自动修改该区域，需要用户手动按建议内容处理这部分版式区域。',
     '如果后续已经在其他可安全编辑的位置完成了修改，也要同时说明实际写入位置。'
   ].join('')

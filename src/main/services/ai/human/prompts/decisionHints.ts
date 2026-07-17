@@ -38,10 +38,7 @@ export const renderDecisionHintForBrain = (hint: HumanDecisionHint): string => {
         '上一轮 docx_edit 写入失败，需要根据失败信息调整后续方案。',
         hint.detail.sourcePath ? `文件：${hint.detail.sourcePath}。` : undefined,
         hint.detail.action ? `actions：${hint.detail.action}。` : undefined,
-        `错误：${hint.detail.error}。`,
-        hint.detail.diagnostic && hint.detail.diagnostic !== hint.detail.error
-          ? `诊断：${hint.detail.diagnostic}。`
-          : undefined
+        `错误：${hint.detail.error}。`
       ]
         .filter(Boolean)
         .join('\n')
@@ -50,7 +47,7 @@ export const renderDecisionHintForBrain = (hint: HumanDecisionHint): string => {
         '刚才尝试修改的 docx 区域命中了定位排版保护。',
         '按系统设计，这类定位区域不会被自动修改。',
         '这处位置本轮未改动，但仍可继续处理文档中其他可修改的位置。',
-        `诊断：${hint.detail.diagnostic}。`
+        `错误：${hint.detail.error}。`
       ].join('')
     case 'hand_tool_limit_near_exhausted':
       return `累计工具调用次数已接近当前上限。当前为 ${String(hint.detail.toolCallCount)}，上限为 ${String(hint.detail.limit)}。后续应尽快收尾，只保留完成最终交付所必需的动作。`
@@ -76,13 +73,6 @@ export const renderDecisionHintForBrain = (hint: HumanDecisionHint): string => {
       return [
         '上一轮 hand 工具调用命中了工作区边界保护，因此相关调用没有执行。',
         ...hint.detail.blockedCalls.map(
-          (item) => `calls[${String(item.callIndex)}] 的工具 \`${item.toolName}\`：${item.message}`
-        )
-      ].join('\n')
-    case 'hand_tool_runtime_failed':
-      return [
-        '上一轮 hand 工具调用执行失败，需要根据失败信息调整后续方案。',
-        ...hint.detail.failedCalls.map(
           (item) => `calls[${String(item.callIndex)}] 的工具 \`${item.toolName}\`：${item.message}`
         )
       ].join('\n')

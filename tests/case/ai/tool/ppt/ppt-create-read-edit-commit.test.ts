@@ -41,7 +41,7 @@ describe('ai tool ppt backend', () => {
           sourcePath,
           action: { type: 'insert_slide', html: detailHtml }
         })
-        const overview = await harness.invoke<JsonObject>('ppt_outline', {
+        const overview = await harness.invoke<JsonObject>('ppt_read_outline', {
           sourcePath,
           ranges: [{ type: 'percent', fromPercent: 0, toPercent: 100 }]
         })
@@ -57,7 +57,7 @@ describe('ai tool ppt backend', () => {
             slideIds: [firstSlideId, '/ppt/slides/missing.xml']
           }
         })
-        const overviewAfterFailedDelete = await harness.invoke<JsonObject>('ppt_outline', {
+        const overviewAfterFailedDelete = await harness.invoke<JsonObject>('ppt_read_outline', {
           sourcePath,
           ranges: [{ type: 'slide_index', fromSlideIndex: 1, toSlideIndex: 2 }]
         })
@@ -69,7 +69,7 @@ describe('ai tool ppt backend', () => {
           sourcePath,
           query: '客户反馈周期'
         })
-        const rendered = await harness.invoke<JsonObject>('ppt_render', {
+        const rendered = await harness.invoke<JsonObject>('ppt_render_slides', {
           sourcePath,
           ranges: [{ type: 'slide_index', fromSlideIndex: 2, toSlideIndex: 2 }]
         })

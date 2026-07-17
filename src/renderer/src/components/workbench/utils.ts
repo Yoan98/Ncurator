@@ -72,11 +72,11 @@ const isAssistantToolName = (toolName: string): toolName is AssistantToolName =>
   toolName === 'terminal_run' ||
   toolName === 'terminal_read' ||
   toolName === 'terminal_stop' ||
-  toolName === 'file_read' ||
-  toolName === 'file_edit' ||
+  toolName === 'text_file_read' ||
+  toolName === 'text_file_edit' ||
   toolName === 'kb_search' ||
   toolName === 'kb_list_documents' ||
-  toolName === 'docx_outline' ||
+  toolName === 'docx_read_outline' ||
   toolName === 'docx_search' ||
   toolName === 'docx_read_blocks' ||
   toolName === 'docx_edit' ||
@@ -84,15 +84,15 @@ const isAssistantToolName = (toolName: string): toolName is AssistantToolName =>
   toolName === 'pdf_search' ||
   toolName === 'pdf_read_pages' ||
   toolName === 'pdf_render_pages' ||
-  toolName === 'ppt_outline' ||
+  toolName === 'ppt_read_outline' ||
   toolName === 'ppt_read_slides' ||
   toolName === 'ppt_search' ||
-  toolName === 'ppt_render' ||
+  toolName === 'ppt_render_slides' ||
   toolName === 'ppt_edit' ||
   toolName === 'web_search' ||
   toolName === 'web_crawl' ||
   toolName === 'browser_use' ||
-  toolName === 'llm_recognize' ||
+  toolName === 'image_analyze' ||
   toolName === 'wait_time' ||
   toolName === 'unnamed'
 
@@ -226,15 +226,15 @@ const getSkillDisplayName = (skillId?: RuntimeSkillId): string => {
 
 const getToolUiKind = (toolName?: AssistantToolName): AssistantProcessSkillKey => {
   if (
-    toolName === 'docx_outline' ||
+    toolName === 'docx_read_outline' ||
     toolName === 'docx_read_blocks' ||
     toolName === 'docx_search'
   ) {
     return 'docx-read'
   }
   if (toolName === 'docx_edit') return 'docx-edit'
-  if (toolName === 'file_read') return 'file-read'
-  if (toolName === 'file_edit') return 'file-edit'
+  if (toolName === 'text_file_read') return 'file-read'
+  if (toolName === 'text_file_edit') return 'file-edit'
   if (
     toolName === 'pdf_inspect' ||
     toolName === 'pdf_search' ||
@@ -244,10 +244,10 @@ const getToolUiKind = (toolName?: AssistantToolName): AssistantProcessSkillKey =
     return 'pdf-read'
   }
   if (
-    toolName === 'ppt_outline' ||
+    toolName === 'ppt_read_outline' ||
     toolName === 'ppt_read_slides' ||
     toolName === 'ppt_search' ||
-    toolName === 'ppt_render' ||
+    toolName === 'ppt_render_slides' ||
     toolName === 'ppt_edit'
   ) {
     return 'ppt'
@@ -259,7 +259,7 @@ const getToolUiKind = (toolName?: AssistantToolName): AssistantProcessSkillKey =
   if (toolName === 'web_search') return 'web-search'
   if (toolName === 'web_crawl') return 'web-crawl'
   if (toolName === 'browser_use') return 'browser'
-  if (toolName === 'llm_recognize') return 'image-recognition'
+  if (toolName === 'image_analyze') return 'image-recognition'
   if (toolName === 'wait_time') return 'wait'
   return 'generic'
 }
@@ -421,7 +421,7 @@ const getToolItemText = (
   const browserAction = input ? readStringValue(input, 'action') || '' : ''
   const waitLabel = readWaitDurationLabel(input)
 
-  if (toolName === 'docx_outline') {
+  if (toolName === 'docx_read_outline') {
     return sentence(text('查看文档 '), text(fileLabel), text(' 的结构'))
   }
   if (toolName === 'docx_read_blocks') {
@@ -431,10 +431,10 @@ const getToolItemText = (
   if (toolName === 'docx_edit') {
     return sentence(text('编辑文档 '), text(fileLabel))
   }
-  if (toolName === 'file_read') {
+  if (toolName === 'text_file_read') {
     return sentence(text('读取文件 '), text(fileLabel))
   }
-  if (toolName === 'file_edit') {
+  if (toolName === 'text_file_edit') {
     return sentence(text('编辑文件 '), text(fileLabel))
   }
   if (toolName === 'pdf_inspect') {
@@ -446,10 +446,10 @@ const getToolItemText = (
   if (toolName === 'pdf_render_pages') {
     return sentence(text('渲染 PDF 页面 '), text(fileLabel))
   }
-  if (toolName === 'ppt_outline') return sentence(text('阅读 PPT 结构 '), text(fileLabel))
+  if (toolName === 'ppt_read_outline') return sentence(text('阅读 PPT 结构 '), text(fileLabel))
   if (toolName === 'ppt_read_slides') return sentence(text('读取 PPT 页面 '), text(fileLabel))
   if (toolName === 'ppt_search') return sentence(text('搜索 PPT '), text(queryLabel))
-  if (toolName === 'ppt_render') return sentence(text('渲染 PPT 页面 '), text(fileLabel))
+  if (toolName === 'ppt_render_slides') return sentence(text('渲染 PPT 页面 '), text(fileLabel))
   if (toolName === 'ppt_edit') return sentence(text('编辑 PPT '), text(fileLabel))
   if (toolName === 'terminal_run') {
     return sentence(text('执行命令 '), text(commandLabel))
@@ -485,7 +485,7 @@ const getToolItemText = (
     if (browserAction === 'act') return sentence(text('在页面上'), text(instructionLabel))
     return sentence(text('操作浏览器 '), text(instructionLabel))
   }
-  if (toolName === 'llm_recognize') {
+  if (toolName === 'image_analyze') {
     return sentence(text('识别图片 '), text(fileLabel))
   }
   if (toolName === 'wait_time') {

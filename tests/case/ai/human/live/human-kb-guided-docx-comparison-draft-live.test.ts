@@ -86,7 +86,7 @@ describe('ai human live backend', () => {
             allowedToolNames: [
               'terminal_run',
               'kb_search',
-              'docx_outline',
+              'docx_read_outline',
               'docx_search',
               'docx_read_blocks',
               'docx_edit'

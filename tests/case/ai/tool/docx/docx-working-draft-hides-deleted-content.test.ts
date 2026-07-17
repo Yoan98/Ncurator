@@ -30,7 +30,7 @@ describe('ai tool docx backend', () => {
 
         const harness = createDocxToolHarness(runtime)
         try {
-          const outline = await harness.invoke<DocxOutlineResult>('docx_outline', {
+          const outline = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
             sourcePath: 'working-draft-delete.docx',
             ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 19 }]
           })

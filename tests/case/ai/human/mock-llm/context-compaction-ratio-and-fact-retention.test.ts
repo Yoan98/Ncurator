@@ -148,14 +148,12 @@ const buildStateWithCompactionHistory = (runtime: BackendTestRuntime) => {
               toolName: 'terminal_run',
               ok: false,
               data: {
+                error: '失败原因：审批未完成，系统禁止继续发布。',
                 stdout: '',
                 stderr: '发布失败：审批未完成，系统禁止继续发布。',
                 command: 'release --publish',
                 exitCode: 2,
                 timedOut: false
-              },
-              diagnostic: {
-                message: '失败原因：审批未完成，系统禁止继续发布。'
               }
             }
           ]

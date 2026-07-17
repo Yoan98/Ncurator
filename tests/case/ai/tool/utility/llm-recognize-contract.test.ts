@@ -127,7 +127,7 @@ describe('ai tool image recognition backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['utility'],
-      description: '验证 llm_recognize 成功时解析图像识别协议并返回 result。',
+      description: '验证 image_analyze 成功时解析图像识别协议并返回 result。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -143,7 +143,7 @@ describe('ai tool image recognition backend', () => {
           const harness = createImageRecognitionToolHarness(runtime, {
             modelName: 'gpt-5'
           })
-          return await harness.invoke<string>('llm_recognize', {
+          return await harness.invoke<string>('image_analyze', {
             path: imagePath,
             instruction: '请描述图片内容。'
           })
@@ -154,7 +154,7 @@ describe('ai tool image recognition backend', () => {
       assert: async (result, runtime) => {
         runtime.assertThat(result === '这是一张蓝底截图，中间有白色字母 DS。', {
           name: 'llm-recognize-returns-protocol-result',
-          message: 'llm_recognize 成功时应返回图像识别协议里的 result。',
+          message: 'image_analyze 成功时应返回图像识别协议里的 result。',
           data: result
         })
       }
@@ -168,7 +168,7 @@ describe('ai tool image recognition backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['utility'],
-      description: '验证 llm_recognize 在模型无法确认图片细节时仍返回协议 result。',
+      description: '验证 image_analyze 在模型无法确认图片细节时仍返回协议 result。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -184,7 +184,7 @@ describe('ai tool image recognition backend', () => {
           const harness = createImageRecognitionToolHarness(runtime, {
             modelName: 'gpt-5'
           })
-          return await harness.invoke<string>('llm_recognize', {
+          return await harness.invoke<string>('image_analyze', {
             path: imagePath,
             instruction: '请尽量描述图片内容，不确定的地方直接说明。'
           })
@@ -197,7 +197,7 @@ describe('ai tool image recognition backend', () => {
           typeof result === 'string' && result.includes('无法确认') && result.includes('界面截图'),
           {
             name: 'llm-recognize-returns-uncertain-protocol-result',
-            message: 'llm_recognize 对无法确认类文本也应返回协议 result。',
+            message: 'image_analyze 对无法确认类文本也应返回协议 result。',
             data: result
           }
         )
@@ -212,7 +212,7 @@ describe('ai tool image recognition backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['utility'],
-      description: '验证 llm_recognize 在模型声明不支持图像识别时返回固定 error 文案。',
+      description: '验证 image_analyze 在模型声明不支持图像识别时返回固定 error 文案。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -228,7 +228,7 @@ describe('ai tool image recognition backend', () => {
           const harness = createImageRecognitionToolHarness(runtime, {
             modelName: 'gpt-5'
           })
-          return await harness.invoke<{ error?: string }>('llm_recognize', {
+          return await harness.invoke<{ error?: string }>('image_analyze', {
             path: imagePath,
             instruction: '请描述图片内容。'
           })
@@ -244,7 +244,7 @@ describe('ai tool image recognition backend', () => {
               '当前模型 gpt-5 不支持图像识别，请提示用户切换支持图片输入的模型后再试',
           {
             name: 'llm-recognize-returns-fixed-unsupported-vision-error',
-            message: '模型协议返回不支持图像识别时，llm_recognize 应返回固定 error 文案。',
+            message: '模型协议返回不支持图像识别时，image_analyze 应返回固定 error 文案。',
             data: result
           }
         )
@@ -259,7 +259,7 @@ describe('ai tool image recognition backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['utility'],
-      description: '验证 llm_recognize 底层失败时返回 error 结果。',
+      description: '验证 image_analyze 底层失败时返回 error 结果。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -273,7 +273,7 @@ describe('ai tool image recognition backend', () => {
           const harness = createImageRecognitionToolHarness(runtime, {
             modelName: 'gpt-5'
           })
-          return await harness.invoke<{ error?: string }>('llm_recognize', {
+          return await harness.invoke<{ error?: string }>('image_analyze', {
             path: imagePath,
             instruction: '请描述图片内容。'
           })
@@ -289,7 +289,7 @@ describe('ai tool image recognition backend', () => {
             result.error.trim().length > 0,
           {
             name: 'llm-recognize-returns-error-on-bottom-failure',
-            message: 'llm_recognize 只有底层调用失败时才应返回 error。',
+            message: 'image_analyze 只有底层调用失败时才应返回 error。',
             data: result
           }
         )

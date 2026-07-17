@@ -64,9 +64,6 @@ export type RequireReplaySessionResult =
     }
   | { failure: DocxToolFailure }
 
-const isToolResultRecord = (value: AiToolCallResult['data']): value is JsonObject =>
-  typeof value === 'object' && value !== null && !Array.isArray(value)
-
 export const buildDocxToolCallResult = (input: {
   toolName: string
   ok: boolean
@@ -76,13 +73,7 @@ export const buildDocxToolCallResult = (input: {
   toolName: input.toolName,
   ok: input.ok,
   data: input.data,
-  resourceContext: input.resourceContext,
-  diagnostic:
-    input.ok || !isToolResultRecord(input.data)
-      ? undefined
-      : typeof input.data.error === 'string' && input.data.error.trim()
-        ? { message: input.data.error.trim() }
-        : undefined
+  resourceContext: input.resourceContext
 })
 
 export type DocxToolFailure = {
@@ -91,7 +82,6 @@ export type DocxToolFailure = {
   warnings: string[]
   decisionHint?: JsonObject
   resourceContext?: DocxToolResourceContext
-  reason?: string
 }
 
 export type DocxToolRuntime = {
@@ -263,8 +253,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     error: params.error,
     warnings: params.warnings || [],
     decisionHint: params.decisionHint,
-    resourceContext: params.resourceContext,
-    reason: params.reason
+    resourceContext: params.resourceContext
   })
 
   const emitFailure = (params: {

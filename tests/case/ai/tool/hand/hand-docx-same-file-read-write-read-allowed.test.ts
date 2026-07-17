@@ -49,7 +49,7 @@ describe('ai tool hand backend', () => {
                 action: 'hand',
                 calls: [
                   {
-                    toolName: 'docx_outline',
+                    toolName: 'docx_read_outline',
                     args: {
                       sourcePath: 'same-file-read-write-read.docx',
                       ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 10 }]
@@ -89,7 +89,7 @@ describe('ai tool hand backend', () => {
           result.state.execution.pendingDecisionHint === undefined &&
             results.length === 3 &&
             results.map((item) => item.toolName).join(',') ===
-              'docx_outline,docx_edit,docx_read_blocks' &&
+              'docx_read_outline,docx_edit,docx_read_blocks' &&
             results.every((item) => item.ok) &&
             typeof results[2]?.data === 'object' &&
             results[2]?.data !== null &&

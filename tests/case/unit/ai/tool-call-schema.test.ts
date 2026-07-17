@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createToolCallSchema, formatToolCallSchemaDiagnostic } from '../../../../src/main/services/ai/human/toolCallSchema'
+import { createToolCallSchema, formatToolCallSchemaError } from '../../../../src/main/services/ai/human/toolCallSchema'
 
 describe('ai unit tool call schema', () => {
   it('accepts a valid docx_edit create_document call and rejects nested args wrappers', () => {
@@ -47,13 +47,13 @@ describe('ai unit tool call schema', () => {
     expect(nested.success).toBe(false)
     if (nested.success) return
 
-    const diagnostic = formatToolCallSchemaDiagnostic({
+    const schemaError = formatToolCallSchemaError({
       error: nested.error,
       pathPrefix: 'nextAction.calls[1].args'
     })
 
-    expect(diagnostic.summary).toBe('tool call schema invalid')
-    expect(diagnostic.issues[0]?.path).toContain('nextAction.calls[1].args')
-    expect(diagnostic.message).toContain('tool call schema invalid')
+    expect(schemaError.summary).toBe('tool call schema invalid')
+    expect(schemaError.issues[0]?.path).toContain('nextAction.calls[1].args')
+    expect(schemaError.message).toContain('tool call schema invalid')
   })
 })

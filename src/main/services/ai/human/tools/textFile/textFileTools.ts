@@ -16,8 +16,8 @@ import { withToolLifecycle } from '../utils/lifecycle'
 import { checkToolResultSize } from '../utils/resultSizeGuard'
 import { createToolEventEmitter } from '../utils/toolEvents'
 import {
-  FILE_EDIT_TOOL_SPEC,
-  FILE_READ_TOOL_SPEC,
+  TEXT_FILE_EDIT_TOOL_SPEC,
+  TEXT_FILE_READ_TOOL_SPEC,
   type FileEditInput,
   type FileReadInput,
   type FileReadOutput
@@ -452,7 +452,7 @@ const readTextFile = async (
     totalLines
   }
   const sizeCheck = checkToolResultSize({
-    toolName: FILE_READ_TOOL_SPEC.name,
+    toolName: TEXT_FILE_READ_TOOL_SPEC.name,
     value: payload,
     modelContextWindowTokens:
       buildInput.ctx.humanRuntimeOverrides?.modelContextWindowTokens ||
@@ -460,11 +460,10 @@ const readTextFile = async (
   })
   if (sizeCheck.tooLarge) {
     const error = new Error(
-      `file_read result is too large (${sizeCheck.estimatedTokens} estimated tokens, limit ${sizeCheck.limit}).`
+      `text_file_read result is too large (${sizeCheck.estimatedTokens} estimated tokens, limit ${sizeCheck.limit}).`
     ) as TextFileToolFailure
     error.resultData = {
       error: error.message,
-      reason: 'result_too_large',
       estimatedTokens: sizeCheck.estimatedTokens,
       limit: sizeCheck.limit,
       ...(sizeCheck.decisionHint ? { decisionHint: sizeCheck.decisionHint } : {})
@@ -487,22 +486,22 @@ export const buildTextFileCapabilityTools = (
     async (rawArgs) => {
       const args = rawArgs as FileReadInput
       safeEmitActivity(buildInput, {
-        actionType: 'file_read',
+        actionType: 'text_file_read',
         status: 'started',
         summary: args.sourcePath
       })
       return await withToolLifecycle({
         emitter: toolEvents,
-        toolName: FILE_READ_TOOL_SPEC.name,
+        toolName: TEXT_FILE_READ_TOOL_SPEC.name,
         args: args as IpcJsonObject,
         execute: async (session) => {
           const payload = await readTextFile(buildInput, args)
           session.succeed(
             undefined,
-            toToolResult({ toolName: FILE_READ_TOOL_SPEC.name, ok: true, data: payload })
+            toToolResult({ toolName: TEXT_FILE_READ_TOOL_SPEC.name, ok: true, data: payload })
           )
           safeEmitActivity(buildInput, {
-            actionType: 'file_read',
+            actionType: 'text_file_read',
             status: 'completed',
             summary: args.sourcePath
           })
@@ -514,13 +513,13 @@ export const buildTextFileCapabilityTools = (
             error.message,
             undefined,
             toToolResult({
-              toolName: FILE_READ_TOOL_SPEC.name,
+              toolName: TEXT_FILE_READ_TOOL_SPEC.name,
               ok: false,
               data: failure.resultData || { error: error.message }
             })
           )
           safeEmitActivity(buildInput, {
-            actionType: 'file_read',
+            actionType: 'text_file_read',
             status: 'failed',
             summary: error.message
           })
@@ -528,9 +527,9 @@ export const buildTextFileCapabilityTools = (
       })
     },
     {
-      name: FILE_READ_TOOL_SPEC.name,
-      description: FILE_READ_TOOL_SPEC.promptSpec.description,
-      schema: FILE_READ_TOOL_SPEC.inputSchema
+      name: TEXT_FILE_READ_TOOL_SPEC.name,
+      description: TEXT_FILE_READ_TOOL_SPEC.promptSpec.description,
+      schema: TEXT_FILE_READ_TOOL_SPEC.inputSchema
     }
   )
 
@@ -538,26 +537,26 @@ export const buildTextFileCapabilityTools = (
     async (rawArgs) => {
       const args = rawArgs as FileEditInput
       safeEmitActivity(buildInput, {
-        actionType: 'file_edit',
+        actionType: 'text_file_edit',
         status: 'started',
         summary: `${args.action}: ${args.sourcePath}`
       })
       return await withToolLifecycle({
         emitter: toolEvents,
-        toolName: FILE_EDIT_TOOL_SPEC.name,
+        toolName: TEXT_FILE_EDIT_TOOL_SPEC.name,
         args: args as IpcJsonObject,
         execute: async (session) => {
           const applied = await editTextFile(buildInput, args)
           session.succeed(
             undefined,
             toToolResult({
-              toolName: FILE_EDIT_TOOL_SPEC.name,
+              toolName: TEXT_FILE_EDIT_TOOL_SPEC.name,
               ok: true,
               data: applied.message
             })
           )
           safeEmitActivity(buildInput, {
-            actionType: 'file_edit',
+            actionType: 'text_file_edit',
             status: 'completed',
             summary: applied.message
           })
@@ -568,13 +567,13 @@ export const buildTextFileCapabilityTools = (
             error.message,
             undefined,
             toToolResult({
-              toolName: FILE_EDIT_TOOL_SPEC.name,
+              toolName: TEXT_FILE_EDIT_TOOL_SPEC.name,
               ok: false,
               data: { error: error.message }
             })
           )
           safeEmitActivity(buildInput, {
-            actionType: 'file_edit',
+            actionType: 'text_file_edit',
             status: 'failed',
             summary: error.message
           })
@@ -582,9 +581,9 @@ export const buildTextFileCapabilityTools = (
       })
     },
     {
-      name: FILE_EDIT_TOOL_SPEC.name,
-      description: FILE_EDIT_TOOL_SPEC.promptSpec.description,
-      schema: FILE_EDIT_TOOL_SPEC.inputSchema
+      name: TEXT_FILE_EDIT_TOOL_SPEC.name,
+      description: TEXT_FILE_EDIT_TOOL_SPEC.promptSpec.description,
+      schema: TEXT_FILE_EDIT_TOOL_SPEC.inputSchema
     }
   )
 

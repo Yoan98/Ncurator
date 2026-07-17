@@ -14,7 +14,7 @@ describe('ai tool docx backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['docx'],
-      description: '验证 docx_outline 的 block_index 范围可以翻到长文档后半段。',
+      description: '验证 docx_read_outline 的 block_index 范围可以翻到长文档后半段。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -29,7 +29,7 @@ describe('ai tool docx backend', () => {
 
         const harness = createDocxToolHarness(runtime)
         try {
-          return await harness.invoke<DocxOutlineResult>('docx_outline', {
+          return await harness.invoke<DocxOutlineResult>('docx_read_outline', {
             sourcePath: 'outline-pagination.docx',
             ranges: [{ type: 'block_index', fromBlockIndex: 70, toBlockIndex: 79 }]
           })

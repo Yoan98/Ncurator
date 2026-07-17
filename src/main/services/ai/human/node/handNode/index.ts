@@ -19,7 +19,7 @@ import {
 import { buildToolCallDisplayText } from '../../shared/toolResultRenderers'
 import { assertExternalLearnedSkillIds } from '../../skills'
 import { analyzeSafeTerminalCommandPolicy } from '../../tools/terminal/commandPolicy'
-import { createToolCallSchema, formatToolCallSchemaDiagnostic } from '../../toolCallSchema'
+import { createToolCallSchema, formatToolCallSchemaError } from '../../toolCallSchema'
 import type {
   HandCallList,
   HumanRuntimeCache,
@@ -294,7 +294,7 @@ const buildSchemaInvalidResult = (input: {
   error: unknown
   callIndex: number
 }): ToolCallResult => {
-  const diagnostic = formatToolCallSchemaDiagnostic({
+  const schemaError = formatToolCallSchemaError({
     error: input.error,
     pathPrefix: `calls[${String(input.callIndex)}].args`
   })
@@ -303,10 +303,7 @@ const buildSchemaInvalidResult = (input: {
     toolName: input.toolName,
     ok: false,
     data: {
-      error: diagnostic.message
-    },
-    diagnostic: {
-      message: diagnostic.message
+      error: schemaError.message
     }
   }
 }
@@ -384,16 +381,19 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
       const decisionHint = buildHandCallInvalidHint(
         results.map((result) => ({
           callIndex: Number(
-            String(result.diagnostic?.message || '').match(
+            String(
+              result.data && typeof result.data === 'object' && !Array.isArray(result.data)
+                ? result.data.error
+                : ''
+            ).match(
               /^tool call schema invalid\ncalls\[(\d+)\]\.args:/
             )?.[1] || 0
           ),
           toolName: result.toolName,
           message: String(
-            result.diagnostic?.message ||
-              (result.data && typeof result.data === 'object' && !Array.isArray(result.data)
-                ? result.data.error
-                : '') ||
+            (result.data && typeof result.data === 'object' && !Array.isArray(result.data)
+              ? result.data.error
+              : '') ||
               ''
           ).trim()
         }))

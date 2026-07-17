@@ -60,7 +60,7 @@ export type ToolCallSchemaIssue = {
   message: string
 }
 
-export type ToolCallSchemaDiagnostic = {
+export type ToolCallSchemaError = {
   summary: string
   issues: ToolCallSchemaIssue[]
   guidance: string
@@ -80,10 +80,10 @@ const formatIssuePath = (path: readonly (string | number)[], prefix?: string): s
   return full || prefix || 'unknown'
 }
 
-export const formatToolCallSchemaDiagnostic = (input: {
+export const formatToolCallSchemaError = (input: {
   error: unknown
   pathPrefix?: string
-}): ToolCallSchemaDiagnostic => {
+}): ToolCallSchemaError => {
   const issues =
     input.error instanceof ZodError
       ? input.error.issues

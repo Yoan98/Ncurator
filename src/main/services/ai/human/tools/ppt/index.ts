@@ -14,19 +14,19 @@ import {
 } from './schemas'
 import {
   PPT_EDIT_TOOL_SPEC,
-  PPT_OUTLINE_TOOL_SPEC,
+  PPT_READ_OUTLINE_TOOL_SPEC,
   PPT_READ_SLIDES_TOOL_SPEC,
-  PPT_RENDER_TOOL_SPEC,
+  PPT_RENDER_SLIDES_TOOL_SPEC,
   PPT_SEARCH_TOOL_SPEC
 } from './toolSpecs'
 
-type PptToolName = 'ppt_outline' | 'ppt_read_slides' | 'ppt_search' | 'ppt_render' | 'ppt_edit'
+type PptToolName = 'ppt_read_outline' | 'ppt_read_slides' | 'ppt_search' | 'ppt_render_slides' | 'ppt_edit'
 
 const ACTIVITY_SUMMARY: Record<PptToolName, string> = {
-  ppt_outline: '读取 PPT 提纲',
+  ppt_read_outline: '读取 PPT 提纲',
   ppt_read_slides: '读取 PPT 页面',
   ppt_search: '搜索 PPT',
-  ppt_render: '渲染 PPT 页面',
+  ppt_render_slides: '渲染 PPT 页面',
   ppt_edit: '编辑 PPT'
 }
 
@@ -76,8 +76,7 @@ export const buildPptCapabilityTools = (input: Parameters<typeof createPptToolRu
               session.fail(String(failure.error || 'ppt tool failed'), undefined, {
                 toolName: params.name,
                 ok: false,
-                data: failure,
-                diagnostic: { message: String(failure.error || 'ppt tool failed') }
+                data: failure
               })
               input.emitActivity({
                 actionType: params.name,
@@ -95,8 +94,8 @@ export const buildPptCapabilityTools = (input: Parameters<typeof createPptToolRu
     runtime,
     tools: [
       createTool({
-        name: 'ppt_outline',
-        description: PPT_OUTLINE_TOOL_SPEC.promptSpec.description,
+        name: 'ppt_read_outline',
+        description: PPT_READ_OUTLINE_TOOL_SPEC.promptSpec.description,
         schema: pptOutlineSchema,
         execute: runtime.outline
       }),
@@ -113,8 +112,8 @@ export const buildPptCapabilityTools = (input: Parameters<typeof createPptToolRu
         execute: runtime.search
       }),
       createTool({
-        name: 'ppt_render',
-        description: PPT_RENDER_TOOL_SPEC.promptSpec.description,
+        name: 'ppt_render_slides',
+        description: PPT_RENDER_SLIDES_TOOL_SPEC.promptSpec.description,
         schema: pptRenderSchema,
         execute: runtime.render
       }),

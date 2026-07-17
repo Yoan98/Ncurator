@@ -12,7 +12,7 @@ import {
   pptToolOutputSchema
 } from './schemas'
 
-type PptToolName = 'ppt_outline' | 'ppt_read_slides' | 'ppt_search' | 'ppt_render' | 'ppt_edit'
+type PptToolName = 'ppt_read_outline' | 'ppt_read_slides' | 'ppt_search' | 'ppt_render_slides' | 'ppt_edit'
 
 type PptToolSpec<
   TArgs extends JsonObject,
@@ -27,15 +27,15 @@ const readExecutionMeta = createStaticExecutionMetaResolver({
   defaultResourceKey: 'ppt'
 })
 
-export const PPT_OUTLINE_TOOL_SPEC = {
-  name: 'ppt_outline',
+export const PPT_READ_OUTLINE_TOOL_SPEC = {
+  name: 'ppt_read_outline',
   familyId: 'ppt',
   requiresWorkspace: true,
   skillIds: ['ppt-read'],
   inputSchema: pptOutlineSchema,
   outputSchema: pptToolOutputSchema,
   promptSpec: {
-    name: 'ppt_outline',
+    name: 'ppt_read_outline',
     description:
       '能力：按百分比或页码区间读取指定 PPTX 的页面提纲。\n结果：返回页面总数，以及每页的 slideIndex、slideId、标题、文本摘要和元素数量。\n边界：只返回页面级概览，不返回元素详情；slideIndex 从 1 开始，不修改文件。',
     whenToUse: '适用于了解 PPTX 整体结构或定位后续需要精读的页面。',
@@ -50,7 +50,7 @@ export const PPT_OUTLINE_TOOL_SPEC = {
     ]
   },
   resolveExecutionMeta: readExecutionMeta
-} satisfies PptToolSpec<z.infer<typeof pptOutlineSchema>, 'ppt_outline', 'ppt-read'>
+} satisfies PptToolSpec<z.infer<typeof pptOutlineSchema>, 'ppt_read_outline', 'ppt-read'>
 
 export const PPT_READ_SLIDES_TOOL_SPEC = {
   name: 'ppt_read_slides',
@@ -99,15 +99,15 @@ export const PPT_SEARCH_TOOL_SPEC = {
   resolveExecutionMeta: readExecutionMeta
 } satisfies PptToolSpec<z.infer<typeof pptSearchSchema>, 'ppt_search', 'ppt-read'>
 
-export const PPT_RENDER_TOOL_SPEC = {
-  name: 'ppt_render',
+export const PPT_RENDER_SLIDES_TOOL_SPEC = {
+  name: 'ppt_render_slides',
   familyId: 'ppt',
   requiresWorkspace: true,
   skillIds: ['ppt-read'],
   inputSchema: pptRenderSchema,
   outputSchema: pptToolOutputSchema,
   promptSpec: {
-    name: 'ppt_render',
+    name: 'ppt_render_slides',
     description:
       '能力：将指定 PPTX 页面渲染为 PNG 图片。\n结果：返回每页的图片路径、slideId、slideIndex 和尺寸。\n边界：只生成页面预览，不修改演示文稿，不识别或解释图片内容。',
     whenToUse: '适用于需要检查页面实际视觉效果的任务。',
@@ -122,7 +122,7 @@ export const PPT_RENDER_TOOL_SPEC = {
     ]
   },
   resolveExecutionMeta: readExecutionMeta
-} satisfies PptToolSpec<z.infer<typeof pptRenderSchema>, 'ppt_render', 'ppt-read'>
+} satisfies PptToolSpec<z.infer<typeof pptRenderSchema>, 'ppt_render_slides', 'ppt-read'>
 
 const createHtml =
   '<section data-ppt-slide style="position:relative;width:1920px;height:1080px"><h1 style="position:absolute;left:120px;top:120px;width:1680px;height:120px;font-size:64px">季度复盘</h1></section>'
@@ -169,10 +169,10 @@ export const PPT_EDIT_TOOL_SPEC = {
 } satisfies PptToolSpec<z.infer<typeof pptEditSchema>, 'ppt_edit', 'ppt-write'>
 
 export const PPT_READ_TOOL_SPECS = [
-  PPT_OUTLINE_TOOL_SPEC,
+  PPT_READ_OUTLINE_TOOL_SPEC,
   PPT_READ_SLIDES_TOOL_SPEC,
   PPT_SEARCH_TOOL_SPEC,
-  PPT_RENDER_TOOL_SPEC
+  PPT_RENDER_SLIDES_TOOL_SPEC
 ] as const
 
 export const PPT_WRITE_TOOL_SPECS = [PPT_EDIT_TOOL_SPEC] as const

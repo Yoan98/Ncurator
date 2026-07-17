@@ -58,7 +58,14 @@ export const emitToolCallResult = (input: {
     toolCallId: input.toolCallId,
     toolName: input.toolName,
     ok: input.result?.ok !== false && !input.error,
-    error: input.error || input.result?.diagnostic?.message
+    error:
+      input.error ||
+      (input.result?.data &&
+      typeof input.result.data === 'object' &&
+      !Array.isArray(input.result.data) &&
+      typeof input.result.data.error === 'string'
+        ? input.result.data.error
+        : undefined)
   })
   input.ctx.sendEvent({
     type: 'tool_call_result',

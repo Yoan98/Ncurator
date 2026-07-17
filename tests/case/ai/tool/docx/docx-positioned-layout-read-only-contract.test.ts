@@ -33,7 +33,7 @@ describe('ai tool docx backend', () => {
         const harness = createDocxToolHarness(runtime)
         try {
           const sourcePath = runtime.getFixtureWorkspacePath(POSITIONED_FIXTURE_PATH)
-          const outline = await harness.invoke<PositionedOutlineResult>('docx_outline', {
+          const outline = await harness.invoke<PositionedOutlineResult>('docx_read_outline', {
             sourcePath,
             ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 80 }]
           })

@@ -32,7 +32,7 @@ describe('ai tool docx backend', () => {
         )
         const harness = createDocxToolHarness(runtime)
         try {
-          const outline = await harness.invoke<DocxOutlineResult>('docx_outline', {
+          const outline = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
             sourcePath: 'long-tail-upgrade.docx',
             ranges: [{ type: 'block_index', fromBlockIndex: 5098, toBlockIndex: 5107 }]
           })

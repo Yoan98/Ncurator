@@ -281,11 +281,14 @@ export const readLatestToolResultDataFromEvents = <TValue>(
   return event.result.data as TValue
 }
 
-export const collectToolDiagnosticMessages = (
+export const collectToolErrorMessages = (
   events: readonly AiRunEvent[],
   toolName?: string
 ): string[] =>
   filterAiRunEventsByType(events, 'tool_call_result')
     .filter((event) => (toolName ? event.toolName === toolName : true))
-    .map((event) => event.result?.diagnostic?.message)
+    .map((event) => {
+      const data = event.result?.data
+      return data && typeof data === 'object' && !Array.isArray(data) ? data.error : undefined
+    })
     .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)

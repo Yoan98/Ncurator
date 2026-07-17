@@ -6,7 +6,6 @@ import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import { filterEventsByType } from '../testHelpers'
 
 type TerminalRunCommandResult = {
-  reason?: 'approval_denied' | 'workspace_required' | 'invalid_input' | 'failed'
   error?: string
   executionStatus?: 'not_executed'
 }
@@ -135,8 +134,8 @@ describe('ai tool terminal backend', () => {
         )
 
         runtime.assertThat(
-          result.relativeEscape.reason === 'workspace_required' &&
-            result.absoluteEscape.reason === 'workspace_required' &&
+          result.relativeEscape.error.includes('workspace boundary check failed') &&
+            result.absoluteEscape.error.includes('workspace boundary check failed') &&
             stepStarted.length === 0,
           {
             name: 'workspace-boundary-rejects-escaped-paths-before-execution',

@@ -18,21 +18,21 @@ describe('ai process events', () => {
       sendEvent,
       runId: 'run-1',
       toolCallId: 'tool-a',
-      toolName: 'docx_outline',
+      toolName: 'docx_read_outline',
       args: { sourcePath: '/tmp/report.docx' }
     })
     emitToolProcessStarted({
       sendEvent,
       runId: 'run-1',
       toolCallId: 'tool-b',
-      toolName: 'docx_outline',
+      toolName: 'docx_read_outline',
       args: { sourcePath: '/tmp/notes.docx' }
     })
     emitToolProcessCompleted({
       sendEvent,
       runId: 'run-1',
       toolCallId: 'tool-a',
-      toolName: 'docx_outline',
+      toolName: 'docx_read_outline',
       ok: true
     })
 

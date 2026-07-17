@@ -5,7 +5,6 @@ import {
 } from '../../../../src/main/services/ai/human/node/handNode/followupSignals'
 import {
   buildHandCallInvalidHint,
-  buildHandToolRuntimeFailedHint,
   buildHandWorkspaceBoundaryBlockedHint,
   deriveGroupedHandFailureHints
 } from '../../../../src/main/services/ai/human/node/handNode/decisionHints'
@@ -44,7 +43,7 @@ describe('ai unit hand decision hints', () => {
     })
   })
 
-  it('groups workspace boundary and runtime failures separately', () => {
+  it('groups workspace boundary failures without repeating generic runtime errors', () => {
     const grouped = deriveGroupedHandFailureHints({
       calls: [
         {
@@ -66,9 +65,6 @@ describe('ai unit hand decision hints', () => {
         {
           toolName: 'terminal_run',
           ok: false,
-          diagnostic: {
-            message: 'workspace boundary check failed: relative path escapes workspace boundary: ../secret.txt'
-          },
           data: {
             error: 'workspace boundary check failed: relative path escapes workspace boundary: ../secret.txt'
           }
@@ -76,9 +72,6 @@ describe('ai unit hand decision hints', () => {
         {
           toolName: 'docx_read_blocks',
           ok: false,
-          diagnostic: {
-            message: 'ENOENT: no such file or directory, open missing.docx'
-          },
           data: {
             error: 'ENOENT: no such file or directory, open missing.docx'
           }
@@ -95,15 +88,7 @@ describe('ai unit hand decision hints', () => {
         }
       ])
     )
-    expect(grouped.toolRuntimeFailedHint).toEqual(
-      buildHandToolRuntimeFailedHint([
-        {
-          callIndex: 1,
-          toolName: 'docx_read_blocks',
-          message: 'ENOENT: no such file or directory, open missing.docx'
-        }
-      ])
-    )
+    expect(grouped).not.toHaveProperty('toolRuntimeFailedHint')
   })
 
   it('promotes unusable terminal output hint to the next brain round', () => {
@@ -111,7 +96,6 @@ describe('ai unit hand decision hints', () => {
       code: 'hand_tool_result_unusable' as const,
       detail: {
         toolName: 'terminal_run',
-        reason: 'non_text_output' as const,
         totalChars: 200,
         nulCount: 1,
         replacementCharCount: 0,
@@ -134,11 +118,8 @@ describe('ai unit hand decision hints', () => {
         {
           toolName: 'terminal_run',
           ok: false,
-          diagnostic: {
-            message: 'terminal result unusable'
-          },
           data: {
-            reason: 'result_unusable',
+            error: 'terminal result unusable',
             decisionHint
           }
         }

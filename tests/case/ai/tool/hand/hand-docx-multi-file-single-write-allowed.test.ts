@@ -86,7 +86,7 @@ describe('ai tool hand backend', () => {
           cache,
           taskId: runtime.taskId,
           learnedSkillIds: ['docx-read', 'docx-write'],
-          toolName: 'docx_outline',
+          toolName: 'docx_read_outline',
           args: {
             sourcePath: 'multi-file-a.docx',
             ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 10 }]
@@ -97,7 +97,7 @@ describe('ai tool hand backend', () => {
           cache,
           taskId: runtime.taskId,
           learnedSkillIds: ['docx-read', 'docx-write'],
-          toolName: 'docx_outline',
+          toolName: 'docx_read_outline',
           args: {
             sourcePath: 'multi-file-b.docx',
             ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 10 }]

@@ -40,7 +40,7 @@ describe('ai tool docx backend', () => {
 
         const harness = createDocxToolHarness(runtime)
         try {
-          const outlineBefore = await harness.invoke<DocxOutlineResult>('docx_outline', {
+          const outlineBefore = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
             sourcePath: 'structural-op-behavior.docx',
             ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 49 }],
 
@@ -55,7 +55,7 @@ describe('ai tool docx backend', () => {
               replace: 'Anchor text updated.'
             }]
           })
-          const outlineAfterReplace = await harness.invoke<DocxOutlineResult>('docx_outline', {
+          const outlineAfterReplace = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
             sourcePath: replaceResult.sourcePath,
             ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 49 }],
 
@@ -80,7 +80,7 @@ describe('ai tool docx backend', () => {
               blocks: [{ type: 'table', rows: [['反走样', '过拟合']] }]
             }]
           })
-          const outlineAfterInsert = await harness.invoke<DocxOutlineResult>('docx_outline', {
+          const outlineAfterInsert = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
             sourcePath: insertTable.sourcePath,
             ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 79 }],
 

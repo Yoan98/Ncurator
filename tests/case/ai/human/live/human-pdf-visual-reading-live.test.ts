@@ -71,7 +71,7 @@ describe('ai human live backend', () => {
               'pdf_search',
               'pdf_read_pages',
               'pdf_render_pages',
-              'llm_recognize'
+              'image_analyze'
             ]
           })
           const output = await runner.run({
@@ -102,24 +102,24 @@ describe('ai human live backend', () => {
             .filter((event) => event.toolName === 'pdf_render_pages' && event.result?.ok === true)
             .flatMap((event) => readRenderedImagePaths(event.result?.data))
           const recognizePaths = starts
-            .filter((event) => event.toolName === 'llm_recognize')
+            .filter((event) => event.toolName === 'image_analyze')
             .map((event) => event.input.path)
             .filter((value): value is string => typeof value === 'string')
           const successfulRecognizeCallIds = new Set(
             results
-              .filter((event) => event.toolName === 'llm_recognize' && event.result?.ok === true)
+              .filter((event) => event.toolName === 'image_analyze' && event.result?.ok === true)
               .map((event) => event.toolCallId)
           )
           const successfulRecognizePaths = starts
             .filter(
               (event) =>
-                event.toolName === 'llm_recognize' &&
+                event.toolName === 'image_analyze' &&
                 successfulRecognizeCallIds.has(event.toolCallId)
             )
             .map((event) => event.input.path)
             .filter((value): value is string => typeof value === 'string')
           const failedRecognizeCount = results.filter(
-            (event) => event.toolName === 'llm_recognize' && event.result?.ok === false
+            (event) => event.toolName === 'image_analyze' && event.result?.ok === false
           ).length
           const delivery = String(result.output?.deliveryMarkdown || '')
           const page9Path = renderPaths.find(
@@ -136,7 +136,7 @@ describe('ai human live backend', () => {
             result.output?.status === 'completed' &&
               toolNames.includes('pdf_read_pages') &&
               toolNames.includes('pdf_render_pages') &&
-              toolNames.includes('llm_recognize') &&
+              toolNames.includes('image_analyze') &&
               Boolean(page9Path) &&
               recognizePaths.some((imagePath) => renderPaths.includes(imagePath)) &&
               successfulRecognizePaths.some(

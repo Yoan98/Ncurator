@@ -45,17 +45,26 @@ export const toolCallParamSchema = z.object({
   args: jsonObjectSchema
 })
 
-export const toolCallDiagnosticSchema = z.object({
-  message: z.string().min(1)
-})
+const failedToolCallDataSchema = z
+  .object({
+    error: z.string().min(1)
+  })
+  .catchall(jsonValueSchema)
 
-export const toolCallResultSchema = z.object({
-  toolName: z.string().min(1),
-  ok: z.boolean(),
-  data: jsonValueSchema.optional(),
-  diagnostic: toolCallDiagnosticSchema.optional(),
-  resourceContext: toolResourceContextSchema.optional()
-})
+export const toolCallResultSchema = z.discriminatedUnion('ok', [
+  z.object({
+    toolName: z.string().min(1),
+    ok: z.literal(true),
+    data: jsonValueSchema.optional(),
+    resourceContext: toolResourceContextSchema.optional()
+  }),
+  z.object({
+    toolName: z.string().min(1),
+    ok: z.literal(false),
+    data: failedToolCallDataSchema,
+    resourceContext: toolResourceContextSchema.optional()
+  })
+])
 
 export const handCallsSchema = z.array(toolCallParamSchema).min(1).max(HUMAN_HAND_CALL_LIMIT)
 
@@ -110,8 +119,7 @@ export const humanDecisionHintSchema = z.discriminatedUnion('code', [
       toolName: z.literal('docx_edit'),
       sourcePath: z.string().min(1).optional(),
       action: z.string().min(1).optional(),
-      error: z.string().min(1),
-      diagnostic: z.string().min(1).optional()
+      error: z.string().min(1)
     })
   }),
   z.object({
@@ -120,7 +128,7 @@ export const humanDecisionHintSchema = z.discriminatedUnion('code', [
       toolName: z.literal('docx_edit'),
       sourcePath: z.string().min(1).optional(),
       action: z.string().min(1).optional(),
-      diagnostic: z.string().min(1)
+      error: z.string().min(1)
     })
   }),
   z.object({
@@ -149,7 +157,6 @@ export const humanDecisionHintSchema = z.discriminatedUnion('code', [
     code: z.literal('hand_tool_result_unusable'),
     detail: z.object({
       toolName: z.string().min(1),
-      reason: z.literal('non_text_output'),
       totalChars: z.number().int().min(0),
       nulCount: z.number().int().min(0),
       replacementCharCount: z.number().int().min(0),
@@ -206,20 +213,6 @@ export const humanDecisionHintSchema = z.discriminatedUnion('code', [
         )
         .min(1)
     })
-  }),
-  z.object({
-    code: z.literal('hand_tool_runtime_failed'),
-    detail: z.object({
-      failedCalls: z
-        .array(
-          z.object({
-            callIndex: z.number().int().min(0),
-            toolName: z.string().min(1),
-            message: z.string().min(1)
-          })
-        )
-        .min(1)
-    })
   })
 ])
 
@@ -227,7 +220,6 @@ export const humanHistoryToolResultSchema = z.object({
   toolName: z.string().min(1),
   ok: z.boolean(),
   data: jsonValueSchema.optional(),
-  diagnosticText: z.string().optional(),
   artifactRefs: z.array(aiArtifactRefSchema).optional(),
   resourceContext: toolResourceContextSchema.optional()
 })

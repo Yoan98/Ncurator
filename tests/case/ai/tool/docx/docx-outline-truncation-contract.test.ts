@@ -15,7 +15,7 @@ describe('ai tool docx backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['docx'],
-      description: '验证 docx_outline 会明确暴露截断事实，而不是只返回原始计数。',
+      description: '验证 docx_read_outline 会明确暴露截断事实，而不是只返回原始计数。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -30,12 +30,12 @@ describe('ai tool docx backend', () => {
 
         const harness = createDocxToolHarness(runtime)
         try {
-          const outline = await harness.invoke<DocxOutlineResult>('docx_outline', {
+          const outline = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
             sourcePath: 'outline-truncation.docx',
             ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 9 }]
           })
           const outlineEvent = filterAiRunEventsByType(runtime.eventCollector.snapshot(), 'tool_call_result')
-            .filter((event) => event.toolName === 'docx_outline')
+            .filter((event) => event.toolName === 'docx_read_outline')
             .at(-1)
 
           return {

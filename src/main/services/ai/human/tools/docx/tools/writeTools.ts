@@ -348,18 +348,18 @@ const failIfPositionedBlock = async (input: {
   if (block.layoutMode !== 'positioned') {
     return null
   }
-  const diagnostic = buildPositionedDiagnostic(block)
+  const error = buildPositionedDiagnostic(block)
   return input.runtime.emitFailure({
     toolName: input.toolName,
     toolCallId: input.toolCallId,
     reason: 'invalid_input',
-    error: diagnostic,
+    error,
     decisionHint: {
       code: 'hand_docx_positioned_write_blocked',
       detail: {
         toolName: 'docx_edit',
         sourcePath: input.sourcePath,
-        diagnostic
+        error
       }
     },
     draftDocId: input.docId,

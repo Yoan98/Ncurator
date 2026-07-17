@@ -481,7 +481,7 @@ export const renderToolResultDataText = (
       return renderDocxReadResult(value)
     case 'docx_search':
       return renderDocxSearchResult(value)
-    case 'docx_outline':
+    case 'docx_read_outline':
       return renderDocxOutlineResult(value)
     case 'pdf_inspect':
       return renderPdfInspectResult(value)
@@ -500,21 +500,12 @@ export const renderToolResultDataText = (
   }
 }
 
-export const renderToolDiagnosticText = (result: ToolCallResult): string => {
-  if (!result.diagnostic) return ''
-  return `；diagnostic=${result.diagnostic.message.trim()}`
-}
-
 export const buildToolCallDisplayText = (result: Pick<ToolCallResult, 'toolName' | 'ok'>): string =>
   `调用工具 ${result.toolName}（${result.ok ? '成功' : '失败'}）`
 
 export const resolveToolResultErrorText = (
-  result: Pick<ToolCallResult, 'data'> & { diagnostic?: ToolCallResult['diagnostic'] }
+  result: Pick<ToolCallResult, 'data'>
 ): string => {
-  if (result.diagnostic?.message.trim()) {
-    return result.diagnostic.message.trim()
-  }
-
   if (isJsonObject(result.data)) {
     const explicit =
       readStringField(result.data, 'error') ||

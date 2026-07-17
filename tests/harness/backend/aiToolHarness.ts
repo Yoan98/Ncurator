@@ -58,7 +58,7 @@ const createToolInvoker = (tools: readonly ToolLike[]) => {
         throw new Error(`tool not found: ${name}`)
       }
       const normalizedArgs =
-        name === 'docx_outline' && !('ranges' in args)
+        name === 'docx_read_outline' && !('ranges' in args)
           ? {
               ...args,
               ranges: [

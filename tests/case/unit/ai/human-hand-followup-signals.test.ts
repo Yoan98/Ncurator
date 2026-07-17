@@ -6,7 +6,7 @@ describe('ai unit hand followup signals', () => {
     const signals = deriveHandFollowupSignals({
       calls: [
         {
-          toolName: 'docx_outline',
+          toolName: 'docx_read_outline',
           args: {
             sourcePath: 'oversized.docx',
             ranges: [{ type: 'percent', fromPercent: 0, toPercent: 100 }]
@@ -15,14 +15,14 @@ describe('ai unit hand followup signals', () => {
       ],
       results: [
         {
-          toolName: 'docx_outline',
+          toolName: 'docx_read_outline',
           ok: false,
           data: {
             error: 'docx result too large',
             decisionHint: {
               code: 'hand_tool_result_too_large',
               detail: {
-                toolName: 'docx_outline',
+                toolName: 'docx_read_outline',
                 estimatedTokens: 6049,
                 limit: 6000
               }
@@ -35,7 +35,7 @@ describe('ai unit hand followup signals', () => {
     expect(signals.decisionHint).toEqual({
       code: 'hand_tool_result_too_large',
       detail: {
-        toolName: 'docx_outline',
+        toolName: 'docx_read_outline',
         estimatedTokens: 6049,
         limit: 6000
       }
@@ -65,9 +65,6 @@ describe('ai unit hand followup signals', () => {
           ok: false,
           data: {
             error: 'cannot resolve anchorBlockId=b:26 in current active snapshot'
-          },
-          diagnostic: {
-            message: 'cannot resolve anchorBlockId=b:26 in current active snapshot'
           }
         }
       ]
@@ -79,8 +76,7 @@ describe('ai unit hand followup signals', () => {
         toolName: 'docx_edit',
         sourcePath: 'graphics.docx',
         action: 'insert_blocks',
-        error: 'cannot resolve anchorBlockId=b:26 in current active snapshot',
-        diagnostic: undefined
+        error: 'cannot resolve anchorBlockId=b:26 in current active snapshot'
       }
     })
     expect(signals.deliveryGuidance).toBeUndefined()
@@ -108,9 +104,6 @@ describe('ai unit hand followup signals', () => {
           ok: false,
           data: {
             error: '当前命中复杂定位排版区域，暂不支持自动编辑，以避免预览修订和版式叠加导致错位；你可以手动按建议内容调整该处。'
-          },
-          diagnostic: {
-            message: '当前命中复杂定位排版区域，暂不支持自动编辑，以避免预览修订和版式叠加导致错位；你可以手动按建议内容调整该处。'
           }
         }
       ]
@@ -122,13 +115,13 @@ describe('ai unit hand followup signals', () => {
         toolName: 'docx_edit',
         sourcePath: 'graphics.docx',
         action: 'insert_blocks',
-        diagnostic: '当前命中复杂定位排版区域，暂不支持自动编辑，以避免预览修订和版式叠加导致错位；你可以手动按建议内容调整该处。'
+        error: '当前命中复杂定位排版区域，暂不支持自动编辑，以避免预览修订和版式叠加导致错位；你可以手动按建议内容调整该处。'
       }
     })
     expect(signals.deliveryGuidance).toBeUndefined()
   })
 
-  it('preserves positioned docx diagnostic from tool result decision hint', () => {
+  it('preserves positioned docx error from tool result decision hint', () => {
     const signals = deriveHandFollowupSignals({
       calls: [
         {
@@ -155,12 +148,9 @@ describe('ai unit hand followup signals', () => {
               detail: {
                 toolName: 'docx_edit',
                 sourcePath: 'graphics.docx',
-                diagnostic: '当前命中复杂定位排版区域：包含“达到反走样。”的区域，暂不支持自动编辑，以避免预览修订和版式叠加导致错位；你可以手动按建议内容调整该处。'
+                error: '当前命中复杂定位排版区域：包含“达到反走样。”的区域，暂不支持自动编辑，以避免预览修订和版式叠加导致错位；你可以手动按建议内容调整该处。'
               }
             }
-          },
-          diagnostic: {
-            message: '当前命中复杂定位排版区域，暂不支持自动编辑，以避免预览修订和版式叠加导致错位；你可以手动按建议内容调整该处。'
           }
         }
       ]
@@ -171,7 +161,7 @@ describe('ai unit hand followup signals', () => {
       detail: {
         toolName: 'docx_edit',
         sourcePath: 'graphics.docx',
-        diagnostic: '当前命中复杂定位排版区域：包含“达到反走样。”的区域，暂不支持自动编辑，以避免预览修订和版式叠加导致错位；你可以手动按建议内容调整该处。'
+        error: '当前命中复杂定位排版区域：包含“达到反走样。”的区域，暂不支持自动编辑，以避免预览修订和版式叠加导致错位；你可以手动按建议内容调整该处。'
       }
     })
     expect(signals.deliveryGuidance).toBeUndefined()

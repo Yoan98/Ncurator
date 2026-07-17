@@ -32,7 +32,7 @@ describe('ai human live backend', () => {
             return { skipped: true, output: null, events: [], file: null }
           await runtime.seedLlmConfig(loadLiveLlmConfigFromEnv())
           const runner = createHumanTestRunner(runtime, {
-            allowedToolNames: ['ppt_outline', 'ppt_edit'],
+            allowedToolNames: ['ppt_read_outline', 'ppt_edit'],
             runtimeSettingsOverride: { llmStreamingMode: 'force_non_stream' }
           })
           const output = await runner.run({

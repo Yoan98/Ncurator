@@ -28,7 +28,7 @@ describe('ai tool ppt professional editing', () => {
           sourcePath,
           action: { type: 'create_presentation', html: baseHtml }
         })
-        const outline = await harness.invoke<JsonObject>('ppt_outline', {
+        const outline = await harness.invoke<JsonObject>('ppt_read_outline', {
           sourcePath,
           ranges: [{ type: 'percent', fromPercent: 0, toPercent: 100 }]
         })

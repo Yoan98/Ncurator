@@ -192,7 +192,7 @@ describe('ai human mock-llm backend', () => {
               },
               {
                 output: buildToolDecision({
-                  toolName: 'docx_outline',
+                  toolName: 'docx_read_outline',
                   args: {
                     sourcePath: 'complex-structured-edit.docx',
                     ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 59 }]
@@ -203,7 +203,7 @@ describe('ai human mock-llm backend', () => {
               () => {
                 const outlineResult = readLatestToolResultDataFromEvents<DocxOutlineResult>(
                   runtime.eventCollector.snapshot(),
-                  'docx_outline'
+                  'docx_read_outline'
                 )
                 const anchorBlockId = findParagraphBlockIdByText(
                   outlineResult.blocks,
@@ -238,7 +238,7 @@ describe('ai human mock-llm backend', () => {
                   throw new Error('paragraph edit did not return createdBlocks')
                 }
                 return buildToolDecision({
-                  toolName: 'docx_outline',
+                  toolName: 'docx_read_outline',
                   args: {
                     sourcePath: 'complex-structured-edit.docx',
                     ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 79 }]
@@ -279,7 +279,7 @@ describe('ai human mock-llm backend', () => {
               },
               {
                 output: buildToolDecision({
-                  toolName: 'docx_outline',
+                  toolName: 'docx_read_outline',
                   args: {
                     sourcePath: 'complex-structured-edit.docx',
                     ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 79 }]
@@ -327,7 +327,7 @@ describe('ai human mock-llm backend', () => {
         )
         const outlineResult = readLatestToolResultDataFromEvents<DocxOutlineResult>(
           toolResults,
-          'docx_outline'
+          'docx_read_outline'
         )
         const contentKinds = collectDocxApplyOpsContentKinds(result.events)
 

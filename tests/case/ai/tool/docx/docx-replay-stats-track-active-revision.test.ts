@@ -26,7 +26,7 @@ describe('ai tool docx backend', () => {
 
         const harness = createDocxToolHarness(runtime)
         try {
-          const initialOutline = await harness.invoke<DocxOutlineResult>('docx_outline', {
+          const initialOutline = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
             sourcePath: 'replay-stats-active-revision.docx',
             ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 20 }]
           })
@@ -55,7 +55,7 @@ describe('ai tool docx backend', () => {
           const statsAfterRewrite =
             harness.state.replaySessionBySourcePath.get(rewriteResult.sourcePath)?.stats
 
-          const finalOutline = await harness.invoke<DocxOutlineResult>('docx_outline', {
+          const finalOutline = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
             sourcePath: 'replay-stats-active-revision.docx',
             ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 20 }]
           })

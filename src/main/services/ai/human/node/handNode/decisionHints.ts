@@ -1,4 +1,5 @@
 import type { HandCallList, HumanDecisionHint, ToolCallResult } from '../../types'
+import { resolveToolResultErrorText } from '../../shared/toolResultRenderers'
 
 type IndexedResult = {
   callIndex: number
@@ -17,9 +18,6 @@ const INVALID_INPUT_PATTERNS = ['tool call schema invalid', 'invalid_input', 'em
 
 const hasPattern = (value: string, patterns: readonly string[]): boolean =>
   patterns.some((pattern) => value.includes(pattern))
-
-const readDiagnosticMessage = (result: ToolCallResult): string =>
-  String(result.diagnostic?.message || '').trim()
 
 const buildIndexedResult = (input: {
   callIndex: number
@@ -47,30 +45,18 @@ export const buildHandWorkspaceBoundaryBlockedHint = (
   }
 })
 
-export const buildHandToolRuntimeFailedHint = (
-  items: IndexedResult[]
-): Extract<HumanDecisionHint, { code: 'hand_tool_runtime_failed' }> => ({
-  code: 'hand_tool_runtime_failed',
-  detail: {
-    failedCalls: items
-  }
-})
-
 export const deriveGroupedHandFailureHints = (input: {
   calls: HandCallList
   results: readonly ToolCallResult[]
 }): {
   callInvalidHint?: Extract<HumanDecisionHint, { code: 'hand_call_invalid' }>
   workspaceBoundaryHint?: Extract<HumanDecisionHint, { code: 'hand_workspace_boundary_blocked' }>
-  toolRuntimeFailedHint?: Extract<HumanDecisionHint, { code: 'hand_tool_runtime_failed' }>
 } => {
   const invalidCalls: IndexedResult[] = []
   const blockedCalls: IndexedResult[] = []
-  const failedCalls: IndexedResult[] = []
-
   input.results.forEach((result, callIndex) => {
     if (result.ok) return
-    const message = readDiagnosticMessage(result)
+    const message = resolveToolResultErrorText(result)
     if (!message) return
 
     if (hasPattern(message, WORKSPACE_BOUNDARY_PATTERNS)) {
@@ -83,14 +69,11 @@ export const deriveGroupedHandFailureHints = (input: {
       return
     }
 
-    failedCalls.push(buildIndexedResult({ callIndex, result, message }))
   })
 
   return {
     callInvalidHint: invalidCalls.length > 0 ? buildHandCallInvalidHint(invalidCalls) : undefined,
     workspaceBoundaryHint:
-      blockedCalls.length > 0 ? buildHandWorkspaceBoundaryBlockedHint(blockedCalls) : undefined,
-    toolRuntimeFailedHint:
-      failedCalls.length > 0 ? buildHandToolRuntimeFailedHint(failedCalls) : undefined
+      blockedCalls.length > 0 ? buildHandWorkspaceBoundaryBlockedHint(blockedCalls) : undefined
   }
 }

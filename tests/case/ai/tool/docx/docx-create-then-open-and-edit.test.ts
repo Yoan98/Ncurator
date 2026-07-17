@@ -42,7 +42,7 @@ describe('ai tool docx backend', () => {
               ]
             }]
           })
-          const outline = await harness.invoke<DocxOutlineResult>('docx_outline', {
+          const outline = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
             sourcePath,
             ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 20 }]
           })

@@ -30,7 +30,6 @@ type WebCrawlResult = {
   }
   error?: string
   statusCode?: number
-  reason?: string
   decisionHint?: {
     code: string
     detail: {
@@ -383,7 +382,6 @@ describe('ai tool web backend', () => {
       assert: async (result, runtime) => {
         runtime.assertThat(
           result.error === 'web_crawl result too large' &&
-            result.reason === 'result_too_large' &&
             result.requestedUrl?.endsWith('/large') === true &&
             result.finalUrl?.endsWith('/large') === true &&
             result.decisionHint?.code === 'hand_tool_result_too_large',
@@ -397,14 +395,14 @@ describe('ai tool web backend', () => {
     })
   })
 
-  it('browser-use-service-unavailable-diagnostic', async () => {
+  it('browser-use-service-unavailable-error', async () => {
     await runBackendCase({
-      caseId: 'browser-use-service-unavailable-diagnostic',
+      caseId: 'browser-use-service-unavailable-error',
       harnessMode: 'tool-real',
       domain: 'ai',
       suite: 'tool',
       groups: ['web-browsing'],
-      description: '验证 browser_use 在缺少内置浏览器服务时返回真实 diagnostic。',
+      description: '验证 browser_use 在缺少内置浏览器服务时返回真实 error。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -416,7 +414,7 @@ describe('ai tool web backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(result.error === 'browser_use service unavailable', {
-          name: 'browser-use-missing-service-returns-diagnostic',
+          name: 'browser-use-missing-service-returns-error',
           message: 'browser_use 缺少内置浏览器服务时应通过工具结果返回真实错误。',
           data: result
         })

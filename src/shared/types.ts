@@ -843,9 +843,6 @@ export type AssistantProcessKind =
   | 'retry'
   | 'compaction'
   | 'finalizing'
-export type AiToolCallDiagnostic = {
-  message: string
-}
 export type AiToolResourceContext = {
   family: string
   sourcePath?: string
@@ -857,7 +854,6 @@ export type AiToolCallResult = {
   toolName: string
   ok: boolean
   data?: JsonValue
-  diagnostic?: AiToolCallDiagnostic
   resourceContext?: AiToolResourceContext
 }
 export type BrainContextBudgetSnapshot = {

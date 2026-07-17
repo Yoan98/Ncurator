@@ -62,7 +62,7 @@ describe('ai tool docx backend', () => {
 
         const harness = createDocxToolHarness(runtime)
         try {
-          const outline = await harness.invoke<DocxOutlineResult>('docx_outline', {
+          const outline = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
             sourcePath: 'complex-ops.docx',
             ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 49 }]
           })
@@ -127,7 +127,7 @@ describe('ai tool docx backend', () => {
             sourcePath: 'complex-ops.docx',
             range: { type: 'block_ids', blockIds: [searchAfter.matches[0]!.blockId] }
           })
-          const finalOutline = await harness.invoke<DocxOutlineResult>('docx_outline', {
+          const finalOutline = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
             sourcePath: 'complex-ops.docx',
             ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 79 }]
           })

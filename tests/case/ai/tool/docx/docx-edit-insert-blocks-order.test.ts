@@ -29,7 +29,7 @@ describe('ai tool docx backend', () => {
 
         const harness = createDocxToolHarness(runtime)
         try {
-          const before = await harness.invoke<DocxOutlineResult>('docx_outline', {
+          const before = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
             sourcePath: 'insert-blocks-order.docx',
             ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 10 }]
           })
@@ -48,7 +48,7 @@ describe('ai tool docx backend', () => {
             ]
             }]
           })
-          const after = await harness.invoke<DocxOutlineResult>('docx_outline', {
+          const after = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
             sourcePath: 'insert-blocks-order.docx',
             ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 20 }]
           })
@@ -99,7 +99,7 @@ describe('ai tool docx backend', () => {
 
         const harness = createDocxToolHarness(runtime)
         try {
-          const before = await harness.invoke<DocxOutlineResult>('docx_outline', {
+          const before = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
             sourcePath: 'batch-multi-insert.docx',
             ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 10 }]
           })
@@ -128,7 +128,7 @@ describe('ai tool docx backend', () => {
               }
             ]
           })
-          const after = await harness.invoke<DocxOutlineResult>('docx_outline', {
+          const after = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
             sourcePath: 'batch-multi-insert.docx',
             ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 20 }]
           })

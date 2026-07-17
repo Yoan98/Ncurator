@@ -55,7 +55,7 @@ describe('ai tool docx backend', () => {
         const harness = createDocxToolHarness(runtime)
         try {
           harness.ctx.beginDocxApplyRun()
-          const outlineBefore = await harness.invoke<DocxOutlineResult>('docx_outline', {
+          const outlineBefore = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
             sourcePath: 'insert-after-no-duplicate-tail.docx',
             ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 49 }]
           })

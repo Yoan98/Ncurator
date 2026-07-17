@@ -95,14 +95,13 @@ const FALLBACK_TOOL_HISTORY_WHITELIST: NestedWhitelistConfig = {
 }
 
 const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
-  file_read: {
+  text_file_read: {
     sourcePath: true,
     content: true,
     startLine: true,
     endLine: true,
     totalLines: true,
     error: true,
-    reason: true,
     decisionHint: true,
     estimatedTokens: true,
     limit: true
@@ -154,7 +153,7 @@ const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
     },
     total: true
   },
-  docx_outline: {
+  docx_read_outline: {
     sourcePath: true,
     currentRevisionRef: true,
     totalBlockCount: true,
@@ -183,10 +182,10 @@ const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
     blocks: DOCX_BLOCK_WHITELIST
   },
   docx_edit: DOCX_WRITE_RESULT_WHITELIST,
-  ppt_outline: PPT_RESULT_WHITELIST,
+  ppt_read_outline: PPT_RESULT_WHITELIST,
   ppt_read_slides: PPT_RESULT_WHITELIST,
   ppt_search: PPT_RESULT_WHITELIST,
-  ppt_render: PPT_RESULT_WHITELIST,
+  ppt_render_slides: PPT_RESULT_WHITELIST,
   ppt_edit: PPT_RESULT_WHITELIST,
   pdf_inspect: {
     sourcePath: true,
@@ -231,7 +230,6 @@ const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
     pagesWithSuspiciousTextCount: true,
     warnings: true,
     error: true,
-    reason: true,
     decisionHint: true
   },
   pdf_read_pages: {
@@ -250,7 +248,6 @@ const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
     },
     warnings: true,
     error: true,
-    reason: true,
     decisionHint: true
   },
   pdf_render_pages: {
@@ -266,7 +263,6 @@ const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
     },
     warnings: true,
     error: true,
-    reason: true,
     decisionHint: true
   },
   web_search: {
@@ -278,7 +274,6 @@ const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
       snippet: true
     },
     error: true,
-    reason: true,
     decisionHint: true,
     estimatedTokens: true,
     limit: true
@@ -290,7 +285,6 @@ const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
     markdown: true,
     publishedAt: true,
     error: true,
-    reason: true,
     decisionHint: true,
     estimatedTokens: true,
     limit: true,
@@ -379,7 +373,12 @@ const buildToolHistoryReturnValue = (result: HumanHistoryToolResult): JsonValue 
   }
 
   const config = TOOL_HISTORY_WHITELIST_BY_NAME[result.toolName] || FALLBACK_TOOL_HISTORY_WHITELIST
-  return toJsonValue(filterValueByWhitelist(result.data, config) ?? {})
+  const filteredValue = filterValueByWhitelist(result.data, config)
+  const filtered = isJsonObject(filteredValue) ? filteredValue : {}
+  if (typeof result.data.error === 'string' && result.data.error.trim()) {
+    filtered.error = result.data.error
+  }
+  return toJsonValue(filtered)
 }
 
 const buildBrainToolAttemptText = (input: {
@@ -389,8 +388,7 @@ const buildBrainToolAttemptText = (input: {
   [
     `- 工具：\`${input.result.toolName}\``,
     `  参数：${renderJsonValue(input.call?.args)}`,
-    `  返回：${renderJsonValue(buildToolHistoryReturnValue(input.result))}`,
-    input.result.diagnosticText ? `  诊断：\n${input.result.diagnosticText}` : undefined
+    `  返回：${renderJsonValue(buildToolHistoryReturnValue(input.result))}`
   ]
     .filter(Boolean)
     .join('\n')

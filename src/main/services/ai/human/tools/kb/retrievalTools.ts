@@ -24,7 +24,7 @@ const buildKbResult = (input: {
   toolName: string
   data: unknown
   ok?: boolean
-  diagnosticMessage?: string
+  error?: string
 }): AiToolCallResult => {
   const data = (() => {
     try {
@@ -34,14 +34,18 @@ const buildKbResult = (input: {
     }
   })()
 
+  const normalizedData =
+    input.ok === false && input.error
+      ? {
+          ...(data && typeof data === 'object' && !Array.isArray(data) ? data : {}),
+          error: input.error
+        }
+      : data
+
   return {
     toolName: input.toolName,
     ok: input.ok ?? true,
-    data,
-    diagnostic:
-      input.ok === false && input.diagnosticMessage
-        ? { message: input.diagnosticMessage }
-        : undefined
+    data: normalizedData
   }
 }
 
@@ -221,7 +225,7 @@ export const buildKbCapabilityTools = (input: {
                 items: [],
                 total: 0
               },
-              diagnosticMessage: error.message
+              error: error.message
             })
           )
         }
@@ -291,7 +295,7 @@ export const buildKbCapabilityTools = (input: {
                 items: [],
                 total: 0
               },
-              diagnosticMessage: error.message
+              error: error.message
             })
           )
         }

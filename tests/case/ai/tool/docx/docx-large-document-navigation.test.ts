@@ -37,7 +37,7 @@ describe('ai tool docx backend', () => {
 
         const harness = createDocxToolHarness(runtime)
         try {
-          const outline = await harness.invoke<DocxOutlineResult>('docx_outline', {
+          const outline = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
             sourcePath: 'large-navigation.docx',
             ranges: [{ type: 'block_index', fromBlockIndex: 70, toBlockIndex: 79 }]
           })

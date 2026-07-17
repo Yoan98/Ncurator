@@ -31,7 +31,7 @@ describe('ai tool docx backend', () => {
 
         const harness = createDocxToolHarness(runtime)
         try {
-          const before = await harness.invoke<DocxOutlineResult>('docx_outline', {
+          const before = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
             sourcePath: 'serial-drift-insert.docx',
             ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 10 }]
           })
@@ -53,7 +53,7 @@ describe('ai tool docx backend', () => {
               }
             ]
           })
-          const after = await harness.invoke<DocxOutlineResult>('docx_outline', {
+          const after = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
             sourcePath: edited.sourcePath,
             ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 10 }]
           })
@@ -104,7 +104,7 @@ describe('ai tool docx backend', () => {
 
         const harness = createDocxToolHarness(runtime)
         try {
-          const before = await harness.invoke<DocxOutlineResult>('docx_outline', {
+          const before = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
             sourcePath: 'serial-successor.docx',
             ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 10 }]
           })
@@ -125,7 +125,7 @@ describe('ai tool docx backend', () => {
               }
             ]
           })
-          const after = await harness.invoke<DocxOutlineResult>('docx_outline', {
+          const after = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
             sourcePath: edited.sourcePath,
             ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 10 }]
           })
@@ -174,7 +174,7 @@ describe('ai tool docx backend', () => {
 
         const harness = createDocxToolHarness(runtime)
         try {
-          const before = await harness.invoke<DocxOutlineResult>('docx_outline', {
+          const before = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
             sourcePath: 'serial-delete-failure.docx',
             ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 10 }]
           })
@@ -193,7 +193,7 @@ describe('ai tool docx backend', () => {
               }
             ]
           })
-          const after = await harness.invoke<DocxOutlineResult>('docx_outline', {
+          const after = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
             sourcePath: before.sourcePath,
             ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 10 }]
           })

@@ -7,14 +7,12 @@ import {
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 
 type TerminalRunCommandResult = {
-  reason?: 'result_unusable'
   error?: string
   output: string
   decisionHint?: {
     code: 'hand_tool_result_unusable'
     detail: {
       toolName: string
-      reason: 'non_text_output'
       totalChars: number
       nulCount: number
       replacementCharCount: number
@@ -66,8 +64,7 @@ describe('ai tool terminal backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.docxRead.reason === 'result_unusable' &&
-            result.docxRead.error === 'terminal result unusable' &&
+          result.docxRead.error === 'terminal result unusable' &&
             result.docxRead.decisionHint?.code === 'hand_tool_result_unusable' &&
             result.docxRead.decisionHint.detail.matchedSignatures.length > 0 &&
             !result.docxRead.output.includes('PK'),
@@ -80,7 +77,7 @@ describe('ai tool terminal backend', () => {
         )
 
         runtime.assertThat(
-          !result.textRead.reason &&
+          !result.textRead.error &&
             result.textRead.output.includes('alpha') &&
             result.textRead.output.includes('beta'),
           {

@@ -160,7 +160,7 @@ export const WEB_CRAWL_TOOL_SPEC: HumanToolSpec<
   promptSpec: {
     name: 'web_crawl',
     description:
-      '能力：抓取一个明确的公开网页 URL，并返回正文 markdown、请求前后 URL、发布时间和分组链接。\n结果：返回 requestedUrl/finalUrl/title/markdown/links，links 会包含 internal/external 分组和评分。\n边界：topic 只用于 links 评分，不用于正文裁剪；不执行全网搜索，不解析搜索结果页，不执行登录、点击、输入或验证码等浏览器交互。',
+      '能力：抓取一个明确的公开网页 URL，获得正文内容。\n结果：返回 requestedUrl/finalUrl/title/markdown/links，links 会包含 internal/external 分组和评分。\n边界：topic 只用于 links 评分，不用于正文裁剪；不执行全网搜索，不解析搜索结果页，不执行登录、点击、输入或验证码等浏览器交互。',
     whenToUse: '适用于已经有明确网页 URL，需要读取该网页正文内容的任务。',
     examples: [
       {
@@ -190,7 +190,7 @@ export const WEB_SEARCH_TOOL_SPEC: HumanToolSpec<
   promptSpec: {
     name: 'web_search',
     description:
-      '能力：根据关键词搜索公开网页，并返回候选网页的标题、URL 和摘要。\n结果：返回的是候选网页列表，不是网页正文证据；需要确认具体内容时，应继续使用 web_crawl 读取明确 URL。\n边界：只搜索公开网页，不读取网页正文，不执行登录、点击、输入或验证码等浏览器交互。',
+      '能力：根据关键词搜索公开网页。\n结果：返回候选网页的标题、URL 和摘要；候选列表不包含网页正文。\n边界：只搜索公开网页，不读取网页正文或执行浏览器交互。',
     whenToUse: '适用于用户只给出问题或关键词、还没有明确网页 URL，但需要查找相关公开网页的任务。',
     examples: [
       {
@@ -219,7 +219,7 @@ export const BROWSER_USE_TOOL_SPEC: HumanToolSpec<
   promptSpec: {
     name: 'browser_use',
     description:
-      '能力：操作浏览器，支持 navigate、extract、observe、act 四类网页操作。\n规则：只是打开 URL 必须使用 navigate；观察按钮、输入框和可点击元素等使用 observe；提取页面正文或结果等使用 extract；点击、输入、提交、选择等使用 act；\n结果：navigate 返回导航结果与页面状态；extract 返回页面内容；observe 返回可见动作；act 返回动作执行结果与页面状态。\n边界：extract、observe、act 使用页面 DOM 与浏览器上下文完成操作；',
+      '能力：操作浏览器；action=navigate 打开 URL，action=extract 提取页面内容，action=observe 返回可见的交互动作，action=act 执行点击、输入、提交或选择。\n结果：返回当前页面信息，以及对应 action 的提取内容、可见动作或执行结果。\n边界：extract、observe 和 act 使用当前页面 DOM 与浏览器上下文。',
     whenToUse: '适用于需要通过操作浏览器完成的任务或是用户要求使用浏览器的。',
     examples: [
       {

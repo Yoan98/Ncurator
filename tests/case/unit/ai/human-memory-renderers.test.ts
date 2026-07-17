@@ -219,9 +219,6 @@ describe('ai unit human memory renderers', () => {
                   }
                 ]
               }
-            },
-            diagnostic: {
-              message: 'write verified'
             }
           }
         ]
@@ -241,20 +238,20 @@ describe('ai unit human memory renderers', () => {
     expect(rendered).not.toContain('previousRevisionRef')
     expect(rendered).not.toContain('currentRevisionRef')
     expect(rendered).not.toContain('createdBlocks')
-    expect(rendered).toContain('诊断：\ndiagnostic=write verified')
+    expect(rendered).not.toContain('诊断：')
     expect(rendered).not.toContain('ignoredTopLevelField')
     expect(rendered).not.toContain('ignoredObjectField')
     expect(rendered).not.toContain('ignoredRegionField')
     expect(rendered).not.toContain('ignoredBlockField')
   })
 
-  it('keeps file_read content in brain history', () => {
+  it('keeps text_file_read content in brain history', () => {
     const initialState = createInitialHumanState({
       taskId: 'task-history-file-read',
       userInput: '读取配置文件'
     })
     const call = {
-      toolName: 'file_read',
+      toolName: 'text_file_read',
       args: { sourcePath: 'config.ts' }
     }
     const taskRun = appendRoundRecord({
@@ -267,7 +264,7 @@ describe('ai unit human memory renderers', () => {
         calls: [call],
         toolResults: [
           {
-            toolName: 'file_read',
+            toolName: 'text_file_read',
             ok: true,
             data: {
               sourcePath: 'config.ts',
@@ -436,7 +433,7 @@ describe('ai unit human memory renderers', () => {
           action: 'hand',
           calls: [
             {
-              toolName: 'ppt_outline',
+              toolName: 'ppt_read_outline',
               args: {
                 sourcePath: '季度复盘.pptx',
                 ranges: [{ type: 'percent', fromPercent: 0, toPercent: 100 }]
@@ -448,7 +445,7 @@ describe('ai unit human memory renderers', () => {
       execution: buildHandExecution({
         calls: [
           {
-            toolName: 'ppt_outline',
+            toolName: 'ppt_read_outline',
             args: {
               sourcePath: '季度复盘.pptx',
               ranges: [{ type: 'percent', fromPercent: 0, toPercent: 100 }]
@@ -457,7 +454,7 @@ describe('ai unit human memory renderers', () => {
         ],
         toolResults: [
           {
-            toolName: 'ppt_outline',
+            toolName: 'ppt_read_outline',
             ok: true,
             data: {
               sourcePath: '季度复盘.pptx',

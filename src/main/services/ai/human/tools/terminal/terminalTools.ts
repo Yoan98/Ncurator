@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { tool } from '@langchain/core/tools'
-import type { AiToolCallResult, JsonObject, IpcJsonObject } from '../../../../../../shared/types'
+import type { AiToolCallResult, IpcJsonObject } from '../../../../../../shared/types'
 import type { TerminalToolContext } from '../../../types'
 import { getUserRuntimeDir } from '../../../../assets/WorkspaceAssetService'
 import { DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS } from '../../constants'
@@ -38,9 +38,6 @@ type PendingTerminalCommand = {
 
 const pendingCommands = new Map<string, PendingTerminalCommand>()
 
-const isJsonObjectRecord = (value: AiToolCallResult['data']): value is JsonObject =>
-  typeof value === 'object' && value !== null && !Array.isArray(value)
-
 const buildTerminalToolResult = (input: {
   toolName: string
   ok: boolean
@@ -48,19 +45,10 @@ const buildTerminalToolResult = (input: {
 }): AiToolCallResult => ({
   toolName: input.toolName,
   ok: input.ok,
-  data: input.data,
-  diagnostic:
-    input.ok || !isJsonObjectRecord(input.data)
-      ? undefined
-      : typeof input.data.error === 'string' && input.data.error.trim()
-        ? { message: input.data.error.trim() }
-        : undefined
+  data: input.data
 })
 
-const buildFailure = <TReason extends string>(input: { reason: TReason; error: string }) => ({
-  reason: input.reason,
-  error: input.error
-})
+const buildFailure = (input: { error: string }) => ({ error: input.error })
 
 const buildResultTooLargeDecisionHint = (input: {
   toolName: string
@@ -82,7 +70,6 @@ const buildResultUnusableDecisionHint = (input: {
   code: 'hand_tool_result_unusable',
   detail: {
     toolName: input.toolName,
-    reason: 'non_text_output',
     totalChars: input.quality.totalChars,
     nulCount: input.quality.nulCount,
     replacementCharCount: input.quality.replacementCharCount,
@@ -247,7 +234,6 @@ const applyOutputGuards = (input: {
       ok: false
       output: string
       error: string
-      reason: 'result_too_large' | 'result_unusable'
       decisionHint: HumanDecisionHint
       estimatedTokens?: number
       limit?: number
@@ -258,7 +244,6 @@ const applyOutputGuards = (input: {
       ok: false,
       output: '[terminal output omitted: unusable non-text content detected]',
       error: 'terminal result unusable',
-      reason: 'result_unusable',
       decisionHint: buildResultUnusableDecisionHint({ toolName: input.toolName, quality })
     }
   }
@@ -272,7 +257,6 @@ const applyOutputGuards = (input: {
       ok: false,
       output: '',
       error: 'terminal result too large',
-      reason: 'result_too_large',
       estimatedTokens,
       limit,
       decisionHint: buildResultTooLargeDecisionHint({
@@ -309,7 +293,7 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
           const commandExplanation = String(args.commandExplanation || '').trim()
           const terminalId = String(args.terminalId || '').trim() || undefined
           if (!command) {
-            const failure = buildFailure({ reason: 'invalid_input', error: 'empty command' })
+            const failure = buildFailure({ error: 'empty command' })
             session.fail(
               failure.error,
               undefined,
@@ -323,7 +307,6 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
           }
           if (hasDetachedExecution(command, input.ctx.platform)) {
             const failure = buildFailure({
-              reason: 'invalid_input',
               error: 'detached shell execution is not supported in persistent terminals'
             })
             session.fail(
@@ -346,7 +329,6 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
           )
           if (!boundary.ok) {
             const failure = buildFailure({
-              reason: 'workspace_required',
               error: `workspace boundary check failed: ${boundary.reason}`
             })
             session.fail(
@@ -435,7 +417,7 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
             })
           } catch (error) {
             const message = error instanceof Error ? error.message : String(error)
-            const failure = buildFailure({ reason: 'invalid_input', error: message })
+            const failure = buildFailure({ error: message })
             session.fail(
               message,
               undefined,
@@ -504,8 +486,6 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
           const publicResult = {
             terminalId: result.terminalId,
             terminalStatus: result.terminalStatus,
-            returnReason: result.returnReason,
-            currentTerminalPath: result.currentTerminalPath,
             outputCursor: result.outputCursor,
             exitCode: result.exitCode
           }
@@ -578,7 +558,13 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
               modelContextWindowTokens,
               ratio: input.aiResultTokenLimitRatio
             })
-            const payload = { ...result, output: guarded.output }
+            const payload = {
+              terminalId: result.terminalId,
+              terminalStatus: result.terminalStatus,
+              output: guarded.output,
+              outputCursor: result.outputCursor,
+              exitCode: result.exitCode
+            }
             if (!guarded.ok) {
               const failurePayload = { ...payload, ...guarded }
               session.fail(
@@ -603,7 +589,7 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
             return payload
           } catch (error) {
             const message = error instanceof Error ? error.message : String(error)
-            const failure = buildFailure({ reason: 'invalid_input', error: message })
+            const failure = buildFailure({ error: message })
             session.fail(
               message,
               undefined,
@@ -669,18 +655,24 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
                 executionStatus: 'cancelled'
               })
             }
+            const payload = {
+              terminalId: result.terminalId,
+              terminalStatus: result.terminalStatus,
+              stopped: result.stopped,
+              forced: result.forced
+            }
             session.succeed(
               undefined,
               buildTerminalToolResult({
                 toolName: TERMINAL_STOP_TOOL_SPEC.name,
                 ok: true,
-                data: result
+                data: payload
               })
             )
-            return result
+            return payload
           } catch (error) {
             const message = error instanceof Error ? error.message : String(error)
-            const failure = buildFailure({ reason: 'invalid_input', error: message })
+            const failure = buildFailure({ error: message })
             session.fail(
               message,
               undefined,

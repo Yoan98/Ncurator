@@ -19,13 +19,13 @@ const OLD_DOCX_WRITE_TOOL_NAMES = [
 describe('ai unit docx tool contract', () => {
   it('only exposes content reading tools and docx_edit', () => {
     expect(DOCX_READ_TOOL_SPECS.map((spec) => spec.name)).toEqual([
-      'docx_outline',
+      'docx_read_outline',
       'docx_search',
       'docx_read_blocks'
     ])
     expect(DOCX_WRITE_TOOL_SPECS.map((spec) => spec.name)).toEqual(['docx_edit'])
     expect(SKILL_DEFINITIONS['docx-read'].toolNames).toEqual([
-      'docx_outline',
+      'docx_read_outline',
       'docx_search',
       'docx_read_blocks'
     ])

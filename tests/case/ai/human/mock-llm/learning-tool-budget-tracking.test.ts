@@ -82,7 +82,7 @@ describe('ai human mock-llm backend', () => {
             latestLearningStep.availableToolNames.includes('terminal_run') &&
             latestLearningStep.availableToolNames.includes('kb_list_documents') &&
             latestLearningStep.availableToolNames.includes('kb_search') &&
-            latestLearningStep.availableToolNames.includes('docx_outline') &&
+            latestLearningStep.availableToolNames.includes('docx_read_outline') &&
             latestLearningStep.availableToolNames.includes('docx_search') &&
             latestLearningStep.availableToolNames.includes('docx_read_blocks') &&
             latestLearningStep.availableToolNames.includes('docx_edit') &&
