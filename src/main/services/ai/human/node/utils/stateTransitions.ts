@@ -16,7 +16,6 @@ import {
   applyBrainDecisionState,
   buildHumanResult,
   completeHumanTaskState,
-  resolveBrainDecisionHint,
   returnToBrainAfterTraceState,
   returnToBrainState,
   type HumanStateOverrides,
@@ -98,20 +97,12 @@ export const applyBrainDecisionTransition = (input: {
   state: HumanState
   thought: HumanThoughtDecision
   thoughtMemory: HumanThought
-  decisionHint?: HumanDecisionHint
   overrides?: HumanStateOverrides
 }): HumanState => {
-  const decisionHint = resolveBrainDecisionHint({
-    state: input.state,
-    thought: input.thought,
-    thoughtMemory: input.thoughtMemory,
-    decisionHint: input.decisionHint
-  })
   const nextState = applyBrainDecisionState({
     state: input.state,
     thought: input.thought,
     thoughtMemory: input.thoughtMemory,
-    decisionHint,
     createdAt: Date.now(),
     overrides: input.overrides
   })
@@ -128,15 +119,6 @@ export const applyBrainDecisionTransition = (input: {
     runId: input.ctx.runId,
     text: input.thought.thought.next
   })
-
-  if (decisionHint) {
-    emitDecisionHint({
-      ctx: input.ctx,
-      taskId: input.state.task.taskId,
-      source: 'brain',
-      decisionHint
-    })
-  }
 
   return nextState
 }

@@ -24,12 +24,11 @@ import {
   renderBrainOutputSchemaForPrompt,
   renderToolInputSchemaForPrompt
 } from '../tools/schemaPromptRenderer'
-import { createHumanThoughtDecisionSchema } from '../schema'
+import { humanThoughtDecisionPromptSchema } from '../schema'
 import type { HumanState } from '../types'
 import type { HumanToolSpec } from '../tools/types'
 import type { AiRuntimePlatform } from '../../types'
 import { renderDecisionHintForBrain } from './decisionHints'
-import { getAvailableToolNames } from '../node/utils/runtimeCache'
 import { terminalSessionManager } from '../tools/terminal/TerminalSessionManager'
 
 const indentLines = (value: string, level: number): string =>
@@ -128,7 +127,6 @@ const renderSkillCatalogSection = (
   const renderSkillLine = (definition: ReturnType<typeof getSkillDefinition>): string =>
     [
       `- ${definition.skillId}：${definition.description}`,
-      `  - 适用场景：${definition.whenToUse}`,
       definition.source === 'builtin' ? '' : `  - learning 时填写：${definition.skillId}`
     ].join('\n')
   const learnableSkillLines = listExternalSkillDefinitions()
@@ -173,11 +171,7 @@ export const buildBrainPrompt = (input: {
   recentTurnsText?: string
 }) => {
   const latestRound = getLastRoundFocus(input.state)
-  const availableToolNames = getAvailableToolNames({
-    learnedSkillIds: input.state.skills.learnedSkillIds,
-    allowedToolNames: input.ctx.allowedToolNames
-  })
-  const thoughtDecisionSchema = createHumanThoughtDecisionSchema(availableToolNames)
+  const thoughtDecisionSchema = humanThoughtDecisionPromptSchema
   const outputShapeText = indentLines(
     renderBrainOutputSchemaForPrompt(thoughtDecisionSchema, { compact: true }),
     1

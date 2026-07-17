@@ -1,19 +1,7 @@
-import type { JsonObject } from '../../../../../../shared/types'
 import { z } from 'zod/v4'
 import type { HumanToolSpec } from '../types'
 import { createStaticExecutionMetaResolver } from '../utils/toolSpecUtils'
 import { jsonObjectSchema } from '../../toolSchemas'
-
-const KB_SEARCH_EXAMPLE: JsonObject = {
-  queryText: 'approval denied terminal artifact requirement',
-  strategy: 'auto',
-  limit: 3
-}
-
-const KB_LIST_DOCUMENTS_EXAMPLE: JsonObject = {
-  page: 1,
-  pageSize: 5
-}
 
 const KB_EXECUTION_META = createStaticExecutionMetaResolver({
   mutability: 'read_only',
@@ -97,15 +85,7 @@ export const KB_SEARCH_TOOL_SPEC: HumanToolSpec<
   outputSchema: KB_SEARCH_OUTPUT_SCHEMA,
   promptSpec: {
     name: 'kb_search',
-    description:
-      '能力：在当前用户工作区知识库中按查询词或语义语句检索相关内容片段。\n结果：返回命中证据、来源文档与内容块信息。\n边界：检索范围来自已经建立索引的工作区知识库内容。',
-    whenToUse: '适用于需要使用工作区知识库内容检索能力的任务。',
-    examples: [
-      {
-        goal: '在当前工作区知识库中检索 approval denied 相关规范',
-        args: KB_SEARCH_EXAMPLE
-      }
-    ]
+    description: '在工作区知识库中按查询词或语义语句检索内容片段，并返回命中证据、来源文档与内容块信息。'
   },
   resolveExecutionMeta: KB_EXECUTION_META
 }
@@ -124,15 +104,7 @@ export const KB_LIST_DOCUMENTS_TOOL_SPEC: HumanToolSpec<
   outputSchema: KB_LIST_DOCUMENTS_OUTPUT_SCHEMA,
   promptSpec: {
     name: 'kb_list_documents',
-    description:
-      '能力：查询当前工作区知识库中已建立索引的文档列表，并支持按文档名过滤。\n结果：返回可检索文档的分页列表。\n边界：只反映已经进入知识库索引的文档。',
-    whenToUse: '适用于需要查看工作区知识库可检索文档列表的任务。',
-    examples: [
-      {
-        goal: '先列出当前工作区中已经可被知识库检索的文档',
-        args: KB_LIST_DOCUMENTS_EXAMPLE
-      }
-    ]
+    description: '查询工作区知识库中已建立索引的文档并支持按文档名过滤，并返回可检索文档的分页列表。'
   },
   resolveExecutionMeta: KB_EXECUTION_META
 }

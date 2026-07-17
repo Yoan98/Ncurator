@@ -6,15 +6,14 @@ import {
 } from '../../../../src/main/services/ai/human/tools/registry'
 
 describe('ai unit tool prompt contract', () => {
-  it('requires every declared tool example to match its schema', () => {
-    const invalidExamples = ALL_TOOL_SPECS.flatMap((spec) =>
-      spec.promptSpec.examples.flatMap((example, index) => {
-        const result = spec.inputSchema.safeParse(example.args)
-        return result.success ? [] : [`${spec.name}#${String(index + 1)}`]
+  it('keeps tool prompts to one capability-and-result sentence without usage teaching', () => {
+    ALL_TOOL_SPECS.forEach((spec) => {
+      expect(spec.promptSpec).toEqual({
+        name: spec.name,
+        description: expect.any(String)
       })
-    )
-
-    expect(invalidExamples).toEqual([])
+      expect(spec.promptSpec.description).not.toMatch(/能力：|结果：|边界：|\n/)
+    })
   })
 
   it('uses the new unambiguous tool names without compatibility aliases', () => {

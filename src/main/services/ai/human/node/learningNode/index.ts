@@ -69,6 +69,35 @@ const buildLearningOutcome = (input: {
   activeToolCount: input.activeToolCount
 })
 
+const renderLearningResult = (outcome: HumanLearningOutcome): string => {
+  const loaded = outcome.loadedSkillIds
+  const duplicates = outcome.skippedDuplicateSkillIds
+  const unknown = outcome.skippedUnknownSkillIds
+  if (loaded.length > 0) {
+    const details = [
+      `已加载技能 ${loaded.map((item) => `\`${item}\``).join('、')}`,
+      duplicates.length > 0
+        ? `已存在技能 ${duplicates.map((item) => `\`${item}\``).join('、')}`
+        : undefined,
+      unknown.length > 0 ? `未识别技能 ${unknown.map((item) => `\`${item}\``).join('、')}` : undefined,
+      outcome.evictedSkillIds.length > 0
+        ? `为满足活动工具数量上限，已移除技能 ${outcome.evictedSkillIds.map((item) => `\`${item}\``).join('、')}`
+        : undefined
+    ].filter(Boolean)
+    return `学习${duplicates.length > 0 || unknown.length > 0 ? '部分' : ''}成功，${details.join('；')}。`
+  }
+  if (duplicates.length > 0 && unknown.length === 0) {
+    return `学习失败，请求的技能 ${duplicates.map((item) => `\`${item}\``).join('、')} 已经加载，本轮没有获得新能力。`
+  }
+  if (unknown.length > 0 && duplicates.length === 0) {
+    return `学习失败，未识别请求的技能 ${unknown.map((item) => `\`${item}\``).join('、')}。`
+  }
+  if (duplicates.length > 0 || unknown.length > 0) {
+    return `学习失败，本轮没有加载新技能；${duplicates.length > 0 ? `技能 ${duplicates.map((item) => `\`${item}\``).join('、')} 已经存在` : ''}${duplicates.length > 0 && unknown.length > 0 ? '；' : ''}${unknown.length > 0 ? `技能 ${unknown.map((item) => `\`${item}\``).join('、')} 未被识别` : ''}。`
+  }
+  return '学习失败，学习请求中没有可加载的技能。'
+}
+
 export const createLearningNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCache }) => {
   return async (state: HumanState): Promise<HumanState> => {
     input.ctx.checkCancelled()
@@ -79,7 +108,12 @@ export const createLearningNode = (input: { ctx: AiRunContext; cache: HumanRunti
       return returnToBrain(state)
     }
 
-    const requestedSkillIds = dedupeInOrder(state.execution.currentThought.nextAction.wantLearnSkillIds)
+    const rawRequestedSkillIds = state.execution.currentThought.nextAction.wantLearnSkillIds
+    const requestedSkillIds = dedupeInOrder(
+      Array.isArray(rawRequestedSkillIds)
+        ? rawRequestedSkillIds.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+        : []
+    )
     const effectiveLearnedSkillIds = getEffectiveLearnedSkillIds(state.skills.learnedSkillIds)
     const duplicateSkillIds = requestedSkillIds.filter(
       (skillId): skillId is HumanLearningOutcome['skippedDuplicateSkillIds'][number] =>
@@ -111,6 +145,7 @@ export const createLearningNode = (input: { ctx: AiRunContext; cache: HumanRunti
         duplicateSkillIds,
         unknownSkillIds
       })
+      const learningResult = renderLearningResult(lastLearningOutcome)
 
       return returnToBrainWithDecisionHint({
         ctx: input.ctx,
@@ -127,6 +162,7 @@ export const createLearningNode = (input: { ctx: AiRunContext; cache: HumanRunti
               state,
               execution: buildLearningExecution({
                 learningOutcome: lastLearningOutcome,
+                result: learningResult,
                 decisionHint: noEffectDecisionHint
               })
             })
@@ -155,6 +191,7 @@ export const createLearningNode = (input: { ctx: AiRunContext; cache: HumanRunti
         duplicateSkillIds,
         unknownSkillIds
       })
+      const learningResult = '学习失败，加载请求中的技能后会超过当前活动工具数量上限。'
       return returnToBrainWithDecisionHint({
         ctx: input.ctx,
         state,
@@ -170,6 +207,7 @@ export const createLearningNode = (input: { ctx: AiRunContext; cache: HumanRunti
               state,
               execution: buildLearningExecution({
                 learningOutcome: lastLearningOutcome,
+                result: learningResult,
                 decisionHint: noEffectDecisionHint
               })
             })
@@ -204,6 +242,7 @@ export const createLearningNode = (input: { ctx: AiRunContext; cache: HumanRunti
       evictedSkillIds: fittedLearnedSkills.evictedSkillIds,
       activeToolCount: fittedLearnedSkills.activeToolCount
     })
+    const learningResult = renderLearningResult(lastLearningOutcome)
     const nextState = returnToBrainAfterTrace({
       ctx: input.ctx,
       cache: input.cache,
@@ -233,7 +272,8 @@ export const createLearningNode = (input: { ctx: AiRunContext; cache: HumanRunti
           taskRun: appendDecisionRound({
             state,
             execution: buildLearningExecution({
-              learningOutcome: lastLearningOutcome
+              learningOutcome: lastLearningOutcome,
+              result: learningResult
             })
           })
         }

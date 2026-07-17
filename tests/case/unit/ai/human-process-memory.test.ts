@@ -7,11 +7,7 @@ import {
   getCompressibleHistoryRounds,
   getRecentHistoryRounds
 } from '../../../../src/main/services/ai/human/memory/rounds'
-import { applyThoughtPatch } from '../../../../src/main/services/ai/human/memory/thoughtMemory'
-import {
-  applyBrainDecisionState,
-  resolveBrainDecisionHint
-} from '../../../../src/main/services/ai/human/node/utils/stateTransitionState'
+import { applyBrainDecisionState } from '../../../../src/main/services/ai/human/node/utils/stateTransitionState'
 import { createInitialHumanState } from '../../../../src/main/services/ai/human/state/schema'
 import type { HumanThoughtDecision } from '../../../../src/main/services/ai/human/types'
 
@@ -26,7 +22,7 @@ const buildThought = (input: {
 })
 
 describe('ai unit human memory history', () => {
-  it('records a pre_execution_blocked round when brain is sent back before execution', () => {
+  it('routes mouth validation to the mouth node without creating a brain round', () => {
     const initialState = createInitialHumanState({
       taskId: 'task-1',
       userInput: '请结束任务'
@@ -50,27 +46,11 @@ describe('ai unit human memory history', () => {
           }
         ]
       },
-      decisionHint: {
-        code: 'brain_todolist_incomplete',
-        detail: {
-          pendingItems: ['完成最终交付前的剩余事项']
-        }
-      },
       createdAt: 1
     })
 
-    expect(nextState.memory.taskRun.rounds).toHaveLength(1)
-    expect(nextState.memory.taskRun.rounds[0]).toMatchObject({
-      roundId: 1,
-      createdAt: 1,
-      thought,
-      execution: {
-        kind: 'pre_execution_blocked',
-        decisionHint: {
-          code: 'brain_todolist_incomplete'
-        }
-      }
-    })
+    expect(nextState.execution.stage).toBe('mouth')
+    expect(nextState.memory.taskRun.rounds).toHaveLength(0)
   })
 
   it('allows mouth when the remaining todolist items are blocked by tool limit exhaustion', () => {
@@ -107,11 +87,7 @@ describe('ai unit human memory history', () => {
         }
       ]
     }
-    const decisionHint = resolveBrainDecisionHint({
-      state: stateWithToolLimit,
-      thought,
-      thoughtMemory
-    })
+    const decisionHint = undefined
 
     const nextState = applyBrainDecisionState({
       state: stateWithToolLimit,
@@ -127,7 +103,7 @@ describe('ai unit human memory history', () => {
     expect(nextState.memory.taskRun.rounds).toHaveLength(0)
   })
 
-  it('keeps returning the hard tool-limit hint when brain tries not to enter mouth after exhaustion', () => {
+  it('routes hand after exhaustion so hand records the rejected attempt', () => {
     const initialState = createInitialHumanState({
       taskId: 'task-tool-limit-hard-stop',
       userInput: '超过工具预算后应直接收尾'
@@ -162,16 +138,18 @@ describe('ai unit human memory history', () => {
       }
     }
 
-    const decisionHint = resolveBrainDecisionHint({
+    const nextState = applyBrainDecisionState({
       state: stateWithToolLimit,
       thought,
-      thoughtMemory: initialState.memory.thought
+      thoughtMemory: initialState.memory.thought,
+      createdAt: 3
     })
 
-    expect(decisionHint).toEqual(hardLimitHint)
+    expect(nextState.execution.stage).toBe('hand')
+    expect(nextState.execution.pendingDecisionHint).toBeUndefined()
   })
 
-  it('marks the final remaining todo in the mouth-blocked decision hint', () => {
+  it('does not create the mouth-blocked decision hint in brain', () => {
     const initialState = createInitialHumanState({
       taskId: 'task-final-check',
       userInput: '请最终交付'
@@ -192,18 +170,15 @@ describe('ai unit human memory history', () => {
       ]
     }
 
-    const decisionHint = resolveBrainDecisionHint({
+    const nextState = applyBrainDecisionState({
       state: initialState,
       thought,
-      thoughtMemory
+      thoughtMemory,
+      createdAt: 4
     })
 
-    expect(decisionHint).toEqual({
-      code: 'brain_todolist_incomplete',
-      detail: {
-        pendingItems: ['检查是否已经满足用户诉求并能进入最终交付']
-      }
-    })
+    expect(nextState.execution.stage).toBe('mouth')
+    expect(nextState.execution.pendingDecisionHint).toBeUndefined()
   })
 
   it('allows ai to freely rewrite todolist without transition validation', () => {
@@ -250,16 +225,14 @@ describe('ai unit human memory history', () => {
       }
     }
 
-    const decisionHint = resolveBrainDecisionHint({
+    const nextState = applyBrainDecisionState({
       state: stateWithPreviousTodo,
       thought,
-      thoughtMemory: applyThoughtPatch({
-        memory: stateWithPreviousTodo.memory.thought,
-        thought: thought.thought
-      })
+      thoughtMemory: thought.thought,
+      createdAt: 5
     })
 
-    expect(decisionHint).toBeUndefined()
+    expect(nextState.execution.stage).toBe('learning')
   })
 
   it('clears stale execution references when next action is not mouth', () => {

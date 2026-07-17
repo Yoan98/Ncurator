@@ -1,5 +1,4 @@
 import type { StructuredToolInterface } from '@langchain/core/tools'
-import type { JsonObject } from '../../../../shared/types'
 import type { z } from 'zod/v4'
 import type { AiToolFamilyId } from './tools/types'
 import type { DocxToolRuntime } from './tools/docx/runtime'
@@ -55,16 +54,9 @@ export type HumanStepResultStatus = (typeof HUMAN_STEP_RESULT_STATUSES)[number]
 export type HumanSkillSource = (typeof HUMAN_SKILL_SOURCES)[number]
 export type HumanRoundExecutionKind = (typeof HUMAN_ROUND_EXECUTION_KINDS)[number]
 
-export type ToolPromptExample = {
-  goal: string
-  args: JsonObject
-}
-
 export type ToolPromptSpec = {
   name: string
   description: string
-  whenToUse: string
-  examples: ToolPromptExample[]
 }
 
 export type SkillDefinitionBase = z.infer<typeof skillDefinitionBaseSchema>

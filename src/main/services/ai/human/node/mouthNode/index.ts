@@ -3,7 +3,7 @@ import type { HumanRuntimeCache, HumanState } from '../../types'
 import { appendDecisionRound, buildMouthExecution } from '../../memory/rounds'
 import { buildMouthPrompt } from '../../prompts/mouth'
 import { assertExternalLearnedSkillIds } from '../../skills'
-import { completeHumanTask } from '../utils/stateTransitions'
+import { completeHumanTask, returnToBrainWithDecisionHint } from '../utils/stateTransitions'
 import {
   appendDocxApplyArtifactsAndEmitEvents,
   appendFileChangeArtifactsAndEmitEvents,
@@ -12,6 +12,7 @@ import {
 } from '../../../utils/artifacts'
 import { emitFinalizingStarted } from '../../../events/processEvents'
 import { resolveEvidenceReferenceAccess } from '../../shared/evidenceReferenceAccess'
+import { brainEvidenceReferenceSchema } from '../../schema'
 
 export const createMouthNode = (input: {
   ctx: AiRunContext
@@ -23,13 +24,50 @@ export const createMouthNode = (input: {
     assertExternalLearnedSkillIds(state.skills.learnedSkillIds)
     input.cache.currentState = state
 
+    if (!state.execution.currentThought || state.execution.currentThought.nextAction.action !== 'mouth') {
+      return {
+        ...state,
+        execution: {
+          ...state.execution,
+          stage: 'fault',
+          pendingFault: { result: '决策失败，mouth 节点没有收到可读取的交付决策。' }
+        }
+      }
+    }
+
+    const pendingItems = (state.memory.thought.todolist || [])
+      .filter((item) => item.status === 'todo')
+      .map((item) => item.item)
+    if (pendingItems.length > 0) {
+      const decisionHint = {
+        code: 'brain_todolist_incomplete' as const,
+        detail: { pendingItems }
+      }
+      const result = `交付失败，todolist 中仍有未完成事项：${pendingItems.join('、')}。`
+      return returnToBrainWithDecisionHint({
+        ctx: input.ctx,
+        state,
+        source: 'brain',
+        decisionHint,
+        overrides: {
+          memory: {
+            ...state.memory,
+            taskRun: appendDecisionRound({
+              state,
+              execution: buildMouthExecution({ result, decisionHint })
+            })
+          }
+        }
+      })
+    }
+
     const stateWithMouthRound: HumanState = {
       ...state,
       memory: {
         ...state.memory,
         taskRun: appendDecisionRound({
           state,
-          execution: buildMouthExecution()
+          execution: buildMouthExecution({ result: '已完成最终交付。' })
         })
       }
     }
@@ -40,10 +78,14 @@ export const createMouthNode = (input: {
     const fileChangeRecords = await input.ctx.listFileChangeRecords({ runId: input.ctx.runId })
     const fileChanges = buildFileChangesSummaryFromFileChangeRecords(fileChangeRecords)
     const history = await input.ctx.loadConversationContext()
-    const pendingEvidenceReferences =
+    const rawEvidenceReferences =
       stateWithMouthRound.execution.currentThought?.nextAction.action === 'mouth'
         ? stateWithMouthRound.execution.currentThought.nextAction.evidenceReferences
         : undefined
+    const parsedEvidenceReferences = brainEvidenceReferenceSchema.array().safeParse(rawEvidenceReferences)
+    const pendingEvidenceReferences = parsedEvidenceReferences.success
+      ? parsedEvidenceReferences.data
+      : undefined
     const evidenceReferences = await resolveEvidenceReferenceAccess({
       references: pendingEvidenceReferences,
       workspaceRootPath: input.ctx.workspace?.rootPath

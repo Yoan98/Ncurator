@@ -32,7 +32,7 @@ describe('ai unit mouth prompt contract', () => {
       todolist: [
         {
           item: '核对最终产物',
-          status: 'todo'
+          status: 'done'
         }
       ],
       progressionSummary: '总结文件已写入完成，正在准备最终交付。'
@@ -141,7 +141,7 @@ describe('ai unit mouth prompt contract', () => {
         thought: state.execution.currentThought,
         execution: {
           kind: 'mouth',
-          action: 'deliver_result'
+          result: '已完成最终交付。'
         }
       }
     ]
@@ -165,7 +165,7 @@ describe('ai unit mouth prompt contract', () => {
     expect(taskProgressSection).toContain('总结文件已写入完成，正在准备最终交付。')
     expect(taskProgressSection).toContain('复习总结文件已生成完毕，基于现有结果组织最终交付')
     expect(taskProgressSection).toContain('类型：mouth')
-    expect(taskProgressSection).toContain('动作：组织最终交付')
+    expect(taskProgressSection).toContain('结果：已完成最终交付。')
     expect(taskProgressSection).not.toContain('类型：hand')
     expect(taskProgressSection).not.toContain(
       '旧 thought.next 不应直接作为 mouth task_progress 主体'

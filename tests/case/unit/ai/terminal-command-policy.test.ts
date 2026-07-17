@@ -155,16 +155,13 @@ describe('ai unit terminal command policy', () => {
     })
   })
 
-  it('renders terminal prompt specs by platform', () => {
+  it('renders concise terminal prompt specs without platform usage guidance', () => {
     const macosPrompt = createTerminalRunToolSpec('macos').promptSpec
     const windowsPrompt = createTerminalRunToolSpec('windows').promptSpec
 
-    expect(windowsPrompt.description).toContain('PowerShell')
-    expect(windowsPrompt.description).not.toContain('zsh')
-    expect(windowsPrompt.examples).toEqual([])
-    expect(macosPrompt.description).toContain('zsh')
-    expect(macosPrompt.description).not.toContain('PowerShell')
-    expect(macosPrompt.examples).toEqual([])
+    expect(windowsPrompt).toEqual(macosPrompt)
+    expect(windowsPrompt.description).toContain('执行命令')
+    expect(windowsPrompt.description).toContain('返回')
   })
 
   it('builds windows powershell encoded commands with utf8 prelude', () => {

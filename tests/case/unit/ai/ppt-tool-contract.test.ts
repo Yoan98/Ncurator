@@ -96,7 +96,7 @@ describe('ai unit ppt tool contract', () => {
   it('keeps the edit prompt concise and does not teach runtime asset workflow', () => {
     expect(PPT_EDIT_TOOL_SPEC.promptSpec.description).not.toContain('先保存')
     expect(PPT_EDIT_TOOL_SPEC.promptSpec.description).not.toContain('runtime/assets')
-    expect(PPT_EDIT_TOOL_SPEC.promptSpec.examples).toHaveLength(1)
+    expect(PPT_EDIT_TOOL_SPEC.promptSpec).not.toHaveProperty('examples')
   })
 
   it('renders latex fallback as a standalone svg image', () => {

@@ -31,8 +31,7 @@ export const buildHumanResumeSnapshot = (state: HumanState): HumanResumeSnapshot
   execution: {
     pendingDecisionHint: state.execution.pendingDecisionHint,
     deliveryGuidanceItems: state.execution.deliveryGuidanceItems,
-    artifacts: state.execution.artifacts,
-    brainSchemaRetryCount: state.execution.brainSchemaRetryCount
+    artifacts: state.execution.artifacts
   }
 })
 
@@ -76,8 +75,7 @@ export const restoreHumanStateFromResumeSnapshot = (input: {
         }
       },
       deliveryGuidanceItems: snapshot.execution?.deliveryGuidanceItems,
-      artifacts: snapshot.execution?.artifacts || [],
-      brainSchemaRetryCount: snapshot.execution?.brainSchemaRetryCount
+      artifacts: snapshot.execution?.artifacts || []
     },
     result: undefined,
     trace: createDefaultHumanTrace()

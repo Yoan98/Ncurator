@@ -32,19 +32,14 @@ export const buildHistoryToolResult = (result: ToolCallResult): HumanHistoryTool
   }
 }
 
-export const buildPreExecutionBlockedExecution = (
-  decisionHint: HumanDecisionHint
-): Extract<HumanRoundExecution, { kind: 'pre_execution_blocked' }> => ({
-  kind: 'pre_execution_blocked',
-  decisionHint
-})
-
 export const buildLearningExecution = (input: {
   learningOutcome: HumanLearningOutcome
+  result: string
   decisionHint?: HumanDecisionHint
 }): Extract<HumanRoundExecution, { kind: 'learning' }> => ({
   kind: 'learning',
   learningOutcome: input.learningOutcome,
+  result: input.result,
   decisionHint: input.decisionHint
 })
 
@@ -63,9 +58,22 @@ export const buildHandExecution = (input: {
   }
 }
 
-export const buildMouthExecution = (): Extract<HumanRoundExecution, { kind: 'mouth' }> => ({
+export const buildMouthExecution = (input: {
+  result: string
+  decisionHint?: HumanDecisionHint
+}): Extract<HumanRoundExecution, { kind: 'mouth' }> => ({
   kind: 'mouth',
-  action: 'deliver_result'
+  result: input.result,
+  decisionHint: input.decisionHint
+})
+
+export const buildFaultExecution = (input: {
+  result: string
+  decisionHint?: HumanDecisionHint
+}): Extract<HumanRoundExecution, { kind: 'fault' }> => ({
+  kind: 'fault',
+  result: input.result,
+  decisionHint: input.decisionHint
 })
 
 export const appendRoundRecord = (input: {

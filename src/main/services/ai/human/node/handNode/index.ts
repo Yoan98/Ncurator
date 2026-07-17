@@ -9,7 +9,6 @@ import type { AiRunContext } from '../../../types'
 import { extractArtifactRefsFromToolResults, mergeArtifactRefs } from '../../../utils/artifacts'
 import {
   appendDecisionRound,
-  buildPreExecutionBlockedExecution,
   buildHandExecution
 } from '../../memory/rounds'
 import {
@@ -321,11 +320,13 @@ const parseHandCalls = (input: {
   )
 
   const parsedCalls: ParsedHandCall[] = []
-  const invalidResults: ToolCallResult[] = []
+  const validationResults: ToolCallResult[] = []
+  let hasInvalidCall = false
   for (const [index, call] of input.calls.entries()) {
     const parsed = toolCallSchema.safeParse(call)
     if (!parsed.success) {
-      invalidResults.push(
+      hasInvalidCall = true
+      validationResults.push(
         buildSchemaInvalidResult({
           toolName: call.toolName,
           error: parsed.error,
@@ -335,6 +336,14 @@ const parseHandCalls = (input: {
       continue
     }
 
+    validationResults.push({
+      toolName: call.toolName,
+      ok: false,
+      data: {
+        error: `tool call not executed\ncalls[${String(index)}]: 同批次存在不合法调用，本调用未执行`
+      }
+    })
+
     const data = parsed.data as { toolName: string; args: JsonObject }
     parsedCalls.push({
       toolName: data.toolName,
@@ -342,10 +351,10 @@ const parseHandCalls = (input: {
     })
   }
 
-  if (invalidResults.length > 0) {
+  if (hasInvalidCall) {
     return {
       ok: false,
-      results: invalidResults
+      results: validationResults
     }
   }
 
@@ -370,7 +379,53 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
       return returnToBrain(state)
     }
 
-    const { calls } = state.execution.currentThought.nextAction
+    const rawCalls = state.execution.currentThought.nextAction.calls
+    const calls: HandCallList = Array.isArray(rawCalls)
+      ? rawCalls.flatMap((call) => {
+          if (!call || typeof call !== 'object' || Array.isArray(call)) return []
+          const candidate = call as Record<string, unknown>
+          if (typeof candidate.toolName !== 'string' || !candidate.toolName.trim()) return []
+          if (!candidate.args || typeof candidate.args !== 'object' || Array.isArray(candidate.args)) return []
+          return [{ toolName: candidate.toolName, args: candidate.args as JsonObject }]
+        })
+      : []
+    if (calls.length === 0) {
+      const result: ToolCallResult = {
+        toolName: 'hand',
+        ok: false,
+        data: { error: 'tool call schema invalid\ncalls: 必须包含至少一个具有 toolName 和 args 对象的调用' }
+      }
+      const decisionHint = buildHandCallInvalidHint([
+        { callIndex: 0, toolName: 'hand', message: String(result.data.error) }
+      ])
+      return returnToBrainAfterTrace({
+        ctx: input.ctx,
+        cache: input.cache,
+        state,
+        source: 'hand',
+        traceItems: [
+          {
+            action: 'call_tool',
+            publicNarrative: buildToolCallDisplayText(result),
+            resultStatus: 'error',
+            toolName: result.toolName,
+            summary: buildToolCallDisplayText(result)
+          }
+        ],
+        stage: 'human_hand',
+        decisionHint,
+        overrides: {
+          execution: { lastToolResults: [result] },
+          memory: {
+            ...state.memory,
+            taskRun: appendDecisionRound({
+              state,
+              execution: buildHandExecution({ calls, toolResults: [result], decisionHint })
+            })
+          }
+        }
+      })
+    }
     const parsedCallsResult = parseHandCalls({
       calls,
       learnedSkillIds: state.skills.learnedSkillIds,
@@ -379,7 +434,15 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
     if (!parsedCallsResult.ok) {
       const results = parsedCallsResult.results
       const decisionHint = buildHandCallInvalidHint(
-        results.map((result) => ({
+        results
+          .filter((result) =>
+            String(
+              result.data && typeof result.data === 'object' && !Array.isArray(result.data)
+                ? result.data.error
+                : ''
+            ).startsWith('tool call schema invalid')
+          )
+          .map((result) => ({
           callIndex: Number(
             String(
               result.data && typeof result.data === 'object' && !Array.isArray(result.data)
@@ -441,6 +504,13 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
     })
     const invalidPlanDecisionHint = validateCalls(parsedCalls)
     if (invalidPlanDecisionHint) {
+      const results: ToolCallResult[] = parsedCalls.map((call) => ({
+        toolName: call.toolName,
+        ok: false,
+        data: {
+          error: `tool call not executed\n本轮 calls 数量为 ${String(parsedCalls.length)}，超过单轮上限 ${String(HUMAN_HAND_CALL_LIMIT)}`
+        }
+      }))
       return returnToBrainWithDecisionHint({
         ctx: input.ctx,
         state,
@@ -453,7 +523,7 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
               state,
               execution: buildHandExecution({
                 calls,
-                toolResults: [],
+                toolResults: results,
                 decisionHint: invalidPlanDecisionHint
               })
             })
@@ -483,6 +553,11 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
           decisions: approvalBatchResult.decisions,
           approvalItems
         })
+        const results: ToolCallResult[] = parsedCalls.map((call) => ({
+          toolName: call.toolName,
+          ok: false,
+          data: { error: 'tool call not executed\n本轮审批未全部通过，批次中的调用均未执行' }
+        }))
         return returnToBrainWithDecisionHint({
           ctx: input.ctx,
           state,
@@ -493,7 +568,7 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
               ...state.memory,
               taskRun: appendDecisionRound({
                 state,
-                execution: buildPreExecutionBlockedExecution(decisionHint)
+              execution: buildHandExecution({ calls, toolResults: results, decisionHint })
               })
             }
           }

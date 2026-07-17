@@ -5,7 +5,7 @@ import { applyBrainDecisionState } from '../../../../src/main/services/ai/human/
 import { createInitialHumanState } from '../../../../src/main/services/ai/human/state/schema'
 
 describe('ai unit human references', () => {
-  it('accepts evidence references only on mouth nextAction', () => {
+  it('leaves evidence reference validation to the target node', () => {
     expect(
       brainNextActionSchema.parse({
         action: 'mouth',
@@ -35,7 +35,7 @@ describe('ai unit human references', () => {
           }
         ]
       })
-    ).toThrow()
+    ).not.toThrow()
   })
 
   it('keeps brain references pending until mouth resolves access status', () => {

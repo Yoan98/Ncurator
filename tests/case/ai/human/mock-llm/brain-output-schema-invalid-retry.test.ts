@@ -18,6 +18,7 @@ describe('ai human mock-llm backend', () => {
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
+        let retryBrainPrompt = ''
         const runner = createHumanTestRunner(runtime, {
           structuredOutputScript: {
             'human.brain': [
@@ -49,8 +50,9 @@ describe('ai human mock-llm backend', () => {
                   }
                 }
               },
-              {
-                output: buildCompleteTaskDecision({
+              (input) => {
+                retryBrainPrompt = input.user
+                return buildCompleteTaskDecision({
                   summary: '收到 decision_hint 后直接收尾。'
                 })
               }
@@ -73,7 +75,8 @@ describe('ai human mock-llm backend', () => {
 
         return {
           output,
-          events: runtime.eventCollector.snapshot()
+          events: runtime.eventCollector.snapshot(),
+          retryBrainPrompt
         }
       },
       assert: async (result, runtime) => {
@@ -90,8 +93,8 @@ describe('ai human mock-llm backend', () => {
         const schemaHintIndex = result.events.findIndex(
           (event) =>
             event.type === 'decision_hint' &&
-            event.source === 'brain' &&
-            event.code === 'brain_output_schema_invalid'
+            event.source === 'hand' &&
+            event.code === 'hand_call_invalid'
         )
         const lastThinkingCompletedBeforeHint = result.events
           .slice(0, schemaHintIndex)
@@ -105,23 +108,26 @@ describe('ai human mock-llm backend', () => {
             thinkingStarted.length === 2 &&
             thinkingCompleted.length === 2 &&
             lastThinkingCompletedBeforeHint &&
+            result.retryBrainPrompt.includes('- 类型：hand') &&
+            result.retryBrainPrompt.includes('- 工具：`docx_edit`') &&
+            result.retryBrainPrompt.includes('参数：') &&
+            result.retryBrainPrompt.includes('返回：') &&
+            result.retryBrainPrompt.includes('<decision_hint>') &&
             decisionHints.some(
               (event) =>
-                event.source === 'brain' &&
-                event.code === 'brain_output_schema_invalid' &&
-                Array.isArray((event.detail as { issues?: unknown[] })?.issues) &&
-                ((event.detail as { issues?: Array<{ path: string }> }).issues || []).some((issue) =>
-                  issue.path.includes('nextAction.calls')
-                )
+                event.source === 'hand' &&
+                event.code === 'hand_call_invalid' &&
+                Array.isArray((event.detail as { invalidCalls?: unknown[] })?.invalidCalls)
             ),
           {
-            name: 'brain-schema-invalid-produces-decision-hint',
-            message: 'brain hand plan schema 不合法时，应产出 brain_output_schema_invalid 并继续完成任务。',
+            name: 'hand-schema-invalid-produces-record-then-decision-hint',
+            message: 'brain 的 hand plan 不合法时，应先进入 hand 产生失败调用记录，再产出 hand_call_invalid 并继续完成任务。',
             data: {
               output: result.output,
               decisionHints,
               thinkingStartedCount: thinkingStarted.length,
-              thinkingCompletedCount: thinkingCompleted.length
+              thinkingCompletedCount: thinkingCompleted.length,
+              retryBrainPrompt: result.retryBrainPrompt
             }
           }
         )

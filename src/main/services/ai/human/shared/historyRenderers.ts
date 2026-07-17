@@ -402,10 +402,9 @@ const renderLearningExecution = (
   }
 ): string =>
   [
-    `- 类型：learning；学习：${renderQuotedNames(record.execution.learningOutcome.requestedSkillIds)}；学习成功：${renderQuotedNames(record.execution.learningOutcome.loadedSkillIds)}`,
-    record.execution.learningOutcome.skippedUnknownSkillIds.length > 0
-      ? `- 未识别：${renderQuotedNames(record.execution.learningOutcome.skippedUnknownSkillIds)}`
-      : undefined
+    '- 类型：learning',
+    `- 学习：${renderQuotedNames(record.execution.learningOutcome.requestedSkillIds)}`,
+    `- 结果：${record.execution.result}`
   ]
     .filter(Boolean)
     .join('\n')
@@ -450,8 +449,6 @@ const renderHandExecution = (
 
 const renderBrainRoundExecution = (record: HumanRoundRecord): string => {
   switch (record.execution.kind) {
-    case 'pre_execution_blocked':
-      return ['- 类型：blocked', '- 结果：系统在执行前阻断，本轮未进入真实执行。'].join('\n')
     case 'learning':
       return renderLearningExecution(
         record as HumanRoundRecord & {
@@ -465,7 +462,9 @@ const renderBrainRoundExecution = (record: HumanRoundRecord): string => {
         }
       )
     case 'mouth':
-      return ['- 类型：mouth', '- 动作：组织最终交付'].join('\n')
+      return ['- 类型：mouth', `- 结果：${record.execution.result}`].join('\n')
+    case 'fault':
+      return ['- 类型：fault', `- 结果：${record.execution.result}`].join('\n')
   }
 }
 

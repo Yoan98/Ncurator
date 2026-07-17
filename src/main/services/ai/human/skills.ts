@@ -13,9 +13,7 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
     source: 'builtin',
     countsTowardToolBudget: false,
     title: 'terminal',
-    description:
-      '能力：在当前 workspace 和允许的用户级 runtime 边界内使用可持续的终端会话执行、读取和停止命令。\n结果：返回终端状态、当前路径、增量输出、退出状态和可识别的工作区文件产物。\n边界：命令是否可直接执行与是否需要审批由终端命令策略决定。',
-    whenToUse: '适用于需要使用终端能力的任务。',
+    description: '使用持久终端会话执行、读取和停止命令，并返回终端状态、当前路径、增量输出、退出状态和工作区文件产物。',
     toolNames: ['terminal_run', 'terminal_read', 'terminal_stop']
   },
   'text-file': {
@@ -24,9 +22,7 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
     source: 'builtin',
     countsTowardToolBudget: false,
     title: 'text-file',
-    description:
-      '能力：读取和写入 Markdown、TXT、代码等 UTF-8 普通文本文件。\n结果：读取返回文本内容和行范围；写入返回简短执行结果，并记录可查看、可回退的文件修改。\n边界：不处理二进制文件；精确编辑要求 oldText 唯一；replaceAll 会替换全部精确匹配。',
-    whenToUse: '适用于需要查看、创建、改写或精确修改普通文本文件的任务。',
+    description: '读取和写入 Markdown、TXT、代码等 UTF-8 普通文本文件，并返回文本、行范围、执行结果和文件修改记录。',
     toolNames: ['text_file_read', 'text_file_edit']
   },
   'docx-read': {
@@ -35,9 +31,7 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
     source: 'external',
     countsTowardToolBudget: true,
     title: 'docx-read',
-    description:
-      '能力：读取 sourcePath 对应 docx 的结构、内容块、检索结果和任务内修订历史。\n结果：返回块级索引、正文内容、匹配信息或 revision 信息。\n边界：只读取 docx 内容与当前任务内编辑状态，不直接覆盖源文件。',
-    whenToUse: '适用于需要读取或理解 docx 内容与修订状态的任务。',
+    description: '读取 docx 的结构、内容块、检索结果和任务内修订历史，并返回块级索引、正文、匹配信息或 revision 信息。',
     toolNames: ['docx_read_outline', 'docx_search', 'docx_read_blocks']
   },
   'docx-write': {
@@ -46,9 +40,7 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
     source: 'external',
     countsTowardToolBudget: true,
     title: 'docx-write',
-    description:
-      '能力：创建新的 Word 文档，或修改已有 Word 文档中的段落、标题、表格、文本和样式。\n结果：写入后返回相邻区域的详细回读信息，方便检查写入效果或继续下一步编辑。\n边界：只能使用读取工具或写后回读返回的真实 blockId，不要推算 blockId；复杂定位排版区域可能只能给人工修改建议。',
-    whenToUse: '适用于用户要求生成、补充、改写、删除或格式化 docx 内容的任务。',
+    description: '创建或修改 Word 文档中的段落、标题、表格、文本和样式，并返回写入状态和相邻区域的详细回读信息。',
     toolNames: ['docx_edit']
   },
   'pdf-read': {
@@ -57,9 +49,7 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
     source: 'external',
     countsTowardToolBudget: true,
     title: 'pdf-read',
-    description:
-      '能力：读取工作区内 PDF 的文档信息、页级文本、检索结果，并将指定页面渲染为图片。\n结果：返回 PDF 元数据、页码、正文、匹配位置或页面图片路径。\n边界：只读取 PDF，不修改源文件；文本结果取决于 PDF 文本层，页面图片不包含识别结果。',
-    whenToUse: '适用于需要阅读 PDF 文本、搜索 PDF 内容或查看 PDF 页面图形的任务。',
+    description: '读取 PDF 文档信息、页级文本和检索结果或将页面渲染为图片，并返回元数据、正文、匹配位置或图片路径。',
     toolNames: ['pdf_inspect', 'pdf_search', 'pdf_read_pages', 'pdf_render_pages']
   },
   'ppt-read': {
@@ -68,9 +58,7 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
     source: 'external',
     countsTowardToolBudget: true,
     title: 'ppt-read',
-    description:
-      '能力：读取工作区内 PPTX 的页面结构、页面内容和搜索结果，并将指定页面渲染为图片。\n结果：返回页面提纲、元素信息、匹配位置或页面图片路径。\n边界：只读取 PPTX，不修改源文件。',
-    whenToUse: '适用于需要理解、定位或检查 PowerPoint 内容与视觉效果的任务。',
+    description: '读取 PPTX 的页面结构、内容和搜索结果或将页面渲染为图片，并返回页面提纲、元素、匹配位置或图片路径。',
     toolNames: ['ppt_read_outline', 'ppt_read_slides', 'ppt_search', 'ppt_render_slides']
   },
   'ppt-write': {
@@ -79,9 +67,7 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
     source: 'external',
     countsTowardToolBudget: true,
     title: 'ppt-write',
-    description:
-      '能力：创建或编辑工作区内 PPTX 的页面和元素。\n结果：返回写入结果、变化页面回读和布局警告。\n边界：编辑已有内容时必须使用读取工具返回的真实 slideId 和 elementId。',
-    whenToUse: '适用于需要创建、修改、插入、复制、移动或删除 PowerPoint 内容的任务。',
+    description: '创建或编辑 PPTX 页面和元素，并返回写入结果、变化页面回读和布局警告。',
     toolNames: ['ppt_edit']
   },
   'image-recognition': {
@@ -90,9 +76,7 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
     source: 'external',
     countsTowardToolBudget: true,
     title: '图像识别',
-    description:
-      '能力：读取工作区内图片文件，并基于大模型按给定 instruction 理解图片内容。\n结果：返回模型生成的普通文本结果。\n边界：只负责图像理解，不做 OCR 专项抽取，也不保证模型一定能识别清楚。',
-    whenToUse: '适用于需要让模型直接查看图片并回答图片内容的任务。',
+    description: '读取图片并按 instruction 分析图片内容，并返回模型生成的文本结果。',
     toolNames: ['image_analyze']
   },
   'kb-retrieval': {
@@ -101,9 +85,7 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
     source: 'builtin',
     countsTowardToolBudget: false,
     title: 'kb-retrieval',
-    description:
-      '能力：查询当前工作区知识库中已建立索引的文档列表，或按查询词、语义语句检索相关内容片段。\n结果：返回命中证据、来源文档与内容块信息。\n边界：检索基本单位是内容块，不是整份文档。',
-    whenToUse: '适用于需要使用工作区知识库检索能力的任务。',
+    description: '查询工作区知识库的已索引文档或检索相关内容片段，并返回命中证据、来源文档与内容块信息。',
     toolNames: ['kb_list_documents', 'kb_search']
   },
   'web-browsing': {
@@ -112,9 +94,7 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
     source: 'builtin',
     countsTowardToolBudget: false,
     title: 'web-browsing',
-    description:
-      '能力：根据关键词搜索公开网页、抓取明确网页 URL 并返回正文 markdown，或操作内置浏览器执行网页阅读、观察和页面动作。\n结果：搜索返回候选网页列表；抓取返回明确网页正文、标题、发布时间与页面链接；浏览器操作返回可见动作或动作执行结果。\n边界：网页抓取只支持明确公开 http/https URL；搜索结果不是正文证据；内置浏览器操作会显示在该应用的右侧浏览器面板，首次使用需要用户审核。',
-    whenToUse: '适用于需要访问网页、读取网页内容或操作网页界面的任务。',
+    description: '搜索公开网页、抓取网页正文或操作内置浏览器，并返回候选网页、正文与页面链接或浏览器动作结果。',
     toolNames: ['web_search', 'web_crawl', 'browser_use']
   },
   utility: {
@@ -123,9 +103,7 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
     source: 'builtin',
     countsTowardToolBudget: false,
     title: 'utility',
-    description:
-      '能力：提供任务执行中的通用辅助动作。\n结果：返回辅助动作的客观执行结果。\n边界：不读取或修改用户内容。',
-    whenToUse: '适用于需要通用辅助能力的任务。',
+    description: '执行任务中的通用辅助动作，并返回对应的客观执行结果。',
     toolNames: ['wait_time', 'wait_for_user_takeover']
   }
 }

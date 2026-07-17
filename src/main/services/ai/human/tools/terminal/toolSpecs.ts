@@ -2,8 +2,7 @@ import { z } from 'zod/v4'
 import type { HumanToolSpec } from '../types'
 import {
   analyzeSafeTerminalCommandPolicy,
-  analyzeTerminalCommand,
-  getSafeCommandGuidance
+  analyzeTerminalCommand
 } from './commandPolicy'
 import { readStringArg } from '../utils/toolSpecUtils'
 import type { AiRuntimePlatform } from '../../../types'
@@ -83,9 +82,7 @@ export const createTerminalRunToolSpec = (
   outputSchema: TERMINAL_RUN_OUTPUT_SCHEMA,
   promptSpec: {
     name: 'terminal_run',
-    description: `能力：在终端内执行命令；terminalId 未提供时创建持久终端，提供时在指定空闲终端中执行；\n结果：返回 terminalId、终端状态、执行状态、增量输出、输出游标和退出码。\n边界：${platform === 'windows' ? 'Windows 终端使用 PowerShell。' : 'macOS 终端使用 zsh。'}安全指令集包含 ${getSafeCommandGuidance(platform)}；安全集外命令需要用户审批；运行中的终端不能接受新命令；shell 后台符号不在终端会话管理范围内。`,
-    whenToUse: '适用于需要执行终端命令的任务。',
-    examples: []
+    description: '在持久终端中执行命令，并返回 terminalId、终端状态、执行状态、增量输出、输出游标和退出码。'
   },
   resolveExecutionMeta: (args) => {
     const command = readStringArg(args, 'command') || ''
@@ -107,10 +104,7 @@ export const TERMINAL_READ_TOOL_SPEC: TerminalReadToolSpec = {
   outputSchema: TERMINAL_READ_OUTPUT_SCHEMA,
   promptSpec: {
     name: 'terminal_read',
-    description:
-      '能力：读取指定持久终端从输出游标开始的增量输出和当前状态。\n结果：返回 terminalId、终端状态、增量输出、最新输出游标和退出码。\n边界：只读取当前会话中的终端，不执行命令。',
-    whenToUse: '适用于读取已有终端的状态或输出。',
-    examples: []
+    description: '读取持久终端从输出游标开始的增量输出和状态，并返回 terminalId、终端状态、增量输出、最新游标和退出码。'
   },
   resolveExecutionMeta: () => ({ mutability: 'read_only' })
 }
@@ -124,10 +118,7 @@ export const TERMINAL_STOP_TOOL_SPEC: TerminalStopToolSpec = {
   outputSchema: TERMINAL_STOP_OUTPUT_SCHEMA,
   promptSpec: {
     name: 'terminal_stop',
-    description:
-      '能力：停止指定持久终端中的当前命令，并可同时关闭终端。\n结果：返回 terminalId、停止结果、是否强制终止和终端状态。\n边界：只操作当前会话中的终端。',
-    whenToUse: '适用于停止已有终端中的命令或关闭终端。',
-    examples: []
+    description: '停止持久终端中的当前命令并可同时关闭终端，并返回 terminalId、停止结果、是否强制终止和终端状态。'
   },
   resolveExecutionMeta: () => ({ mutability: 'mutating' })
 }

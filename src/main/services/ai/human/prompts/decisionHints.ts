@@ -59,7 +59,7 @@ export const renderDecisionHintForBrain = (hint: HumanDecisionHint): string => {
       return `上一轮 ${hint.detail.toolName} 返回结果不可消费，系统已省略原始输出。检测到非文本/二进制特征：totalChars=${String(hint.detail.totalChars)}，nulCount=${String(hint.detail.nulCount)}，replacementCharRatio=${String(hint.detail.replacementCharRatio)}，controlCharRatio=${String(hint.detail.controlCharRatio)}，matchedSignatures=${renderStringList(hint.detail.matchedSignatures)}。`
     case 'brain_output_schema_invalid':
       return [
-        '上一轮 hand 工具调用计划的输出结构不合法，因此本轮没有进入执行。',
+        '上一轮决策输出结构不合法，因此没有进入可执行节点。',
         ...hint.detail.issues.map((issue) => `${issue.path}：${issue.message}`)
       ].join('\n')
     case 'hand_call_invalid':

@@ -1,6 +1,5 @@
 import { z } from 'zod/v4'
 import { aiArtifactRefSchema } from '../schema'
-import { createHandCallsSchema } from './toolCallSchema'
 import { jsonObjectSchema, jsonValueSchema, toolResourceContextSchema } from './toolSchemas'
 import {
   AI_TOOL_FAMILY_IDS,
@@ -11,7 +10,6 @@ import {
   HUMAN_STATUSES,
   HUMAN_STEP_ACTIONS,
   HUMAN_STEP_RESULT_STATUSES,
-  HUMAN_HAND_CALL_LIMIT,
   HUMAN_DECISION_HINT_CODES,
   RUNTIME_SKILL_IDS
 } from './constants'
@@ -36,8 +34,7 @@ export const skillDefinitionBaseSchema = z.object({
   countsTowardToolBudget: z.boolean(),
   title: z.string().min(1),
   description: z.string().min(1),
-  toolNames: z.array(z.string().min(1)),
-  whenToUse: z.string().min(1)
+  toolNames: z.array(z.string().min(1))
 })
 
 export const toolCallParamSchema = z.object({
@@ -66,7 +63,7 @@ export const toolCallResultSchema = z.discriminatedUnion('ok', [
   })
 ])
 
-export const handCallsSchema = z.array(toolCallParamSchema).min(1).max(HUMAN_HAND_CALL_LIMIT)
+export const handCallsSchema = z.array(toolCallParamSchema)
 
 export const humanLearningOutcomeSchema = z.object({
   requestedSkillIds: z.array(z.string().min(1)),
@@ -248,54 +245,42 @@ export const humanReferenceSchema = brainEvidenceReferenceSchema.extend({
   accessStatus: z.enum(['accessible', 'unavailable'])
 })
 
-export const createBrainNextActionSchema = (toolNames: readonly string[]) =>
-  z.discriminatedUnion('action', [
-    z
-      .object({
-        action: z.literal('learning'),
-        wantLearnSkillIds: z.array(z.string().min(1)).min(1)
-      })
-      .strict(),
-    z
-      .object({
-        action: z.literal('hand'),
-        calls: createHandCallsSchema(toolNames)
-      })
-      .strict(),
-    z
-      .object({
-        action: z.literal('mouth'),
-        evidenceReferences: z.array(brainEvidenceReferenceSchema).optional()
-      })
-      .strict()
-  ])
+export const learningNextActionSchema = z.object({
+  action: z.literal('learning'),
+  wantLearnSkillIds: z.array(z.string().min(1)).min(1)
+})
 
-export const createHumanThoughtDecisionSchema = (toolNames: readonly string[]) =>
-  z.object({
-    thought: humanThoughtSchema,
-    nextAction: createBrainNextActionSchema(toolNames)
+export const handNextActionSchema = z.object({
+  action: z.literal('hand'),
+  calls: handCallsSchema
+})
+
+export const mouthNextActionSchema = z.object({
+  action: z.literal('mouth'),
+  evidenceReferences: z.array(brainEvidenceReferenceSchema).optional()
+})
+
+export const brainNextActionSchema = z
+  .object({
+    action: z.string().min(1)
   })
+  .catchall(jsonValueSchema)
 
-export const brainNextActionSchema = z.discriminatedUnion('action', [
-  z
-    .object({
-      action: z.literal('learning'),
-      wantLearnSkillIds: z.array(z.string().min(1)).min(1)
-    })
-    .strict(),
-  z
-    .object({
-      action: z.literal('hand'),
-      calls: handCallsSchema
-    })
-    .strict(),
-  z
-    .object({
-      action: z.literal('mouth'),
-      evidenceReferences: z.array(brainEvidenceReferenceSchema).optional()
-    })
-    .strict()
+export const brainPromptNextActionSchema = z.discriminatedUnion('action', [
+  learningNextActionSchema,
+  handNextActionSchema,
+  mouthNextActionSchema
 ])
+
+export const humanThoughtDecisionPromptSchema = z.object({
+  thought: humanThoughtSchema,
+  nextAction: brainPromptNextActionSchema
+})
+
+export const createBrainNextActionSchema = (_toolNames: readonly string[] = []) => brainNextActionSchema
+
+export const createHumanThoughtDecisionSchema = (_toolNames: readonly string[] = []) =>
+  humanThoughtDecisionSchema
 
 export const humanThoughtDecisionSchema = z.object({
   thought: humanThoughtSchema,
@@ -344,8 +329,13 @@ export const humanExecutionSchema = z.object({
   stage: humanStageSchema,
   status: humanStatusSchema,
   currentThought: humanThoughtDecisionSchema.optional(),
+  pendingFault: z
+    .object({
+      result: z.string().min(1),
+      issues: z.array(z.object({ path: z.string().min(1), message: z.string().min(1) })).optional()
+    })
+    .optional(),
   pendingDecisionHint: humanDecisionHintSchema.optional(),
-  brainSchemaRetryCount: z.number().int().min(0).optional(),
   deliveryGuidanceItems: z.array(deliveryGuidanceItemSchema).optional(),
   lastToolResults: z.array(toolCallResultSchema).optional(),
   lastLearningOutcome: humanLearningOutcomeSchema.optional(),
@@ -369,12 +359,9 @@ export const humanExecutionSchema = z.object({
 
 export const humanRoundExecutionSchema = z.discriminatedUnion('kind', [
   z.object({
-    kind: z.literal('pre_execution_blocked'),
-    decisionHint: humanDecisionHintSchema
-  }),
-  z.object({
     kind: z.literal('learning'),
     learningOutcome: humanLearningOutcomeSchema,
+    result: z.string().min(1),
     decisionHint: humanDecisionHintSchema.optional()
   }),
   z.object({
@@ -386,7 +373,13 @@ export const humanRoundExecutionSchema = z.discriminatedUnion('kind', [
   }),
   z.object({
     kind: z.literal('mouth'),
-    action: z.literal('deliver_result')
+    result: z.string().min(1),
+    decisionHint: humanDecisionHintSchema.optional()
+  }),
+  z.object({
+    kind: z.literal('fault'),
+    result: z.string().min(1),
+    decisionHint: humanDecisionHintSchema.optional()
   })
 ])
 

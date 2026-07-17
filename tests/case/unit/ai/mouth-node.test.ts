@@ -104,7 +104,7 @@ describe('ai unit mouth node', () => {
       todolist: [
         {
           item: '核对最终产物',
-          status: 'todo'
+          status: 'done'
         }
       ],
       progressionSummary: '总结文件已写入完成，正在准备最终交付。'
@@ -208,12 +208,12 @@ describe('ai unit mouth node', () => {
       thought: initialState.execution.currentThought,
       execution: {
         kind: 'mouth',
-        action: 'deliver_result'
+        result: '已完成最终交付。'
       }
     })
     expect(taskProgressSection).toContain('复习总结文件已生成完毕，基于现有结果组织最终交付')
     expect(taskProgressSection).toContain('类型：mouth')
-    expect(taskProgressSection).toContain('动作：组织最终交付')
+    expect(taskProgressSection).toContain('结果：已完成最终交付。')
     expect(taskProgressSection).not.toContain('类型：hand')
     expect(capturedUserPrompt).toContain('文件：report.md')
     expect(capturedUserPrompt).toContain('来源能力：terminal_exec')

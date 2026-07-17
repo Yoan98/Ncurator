@@ -29,17 +29,7 @@ export const IMAGE_ANALYZE_TOOL_SPEC: HumanToolSpec<
   promptSpec: {
     name: 'image_analyze',
     description:
-      '能力：读取指定图片，并按 instruction 让大模型分析图片内容。\n结果：返回图片分析文本，无法识别时返回 error。',
-    whenToUse: '适用于你已经有图片路径，并且需要按当前任务自己决定怎么向模型询问图片内容的情况。',
-    examples: [
-      {
-        goal: '识别截图里主要展示了什么',
-        args: {
-          path: '/workspace/.ncurator/runtime/assets/session-1/screen.png',
-          instruction: '请概括这张截图的主要内容，并指出用户接下来最可能要做的操作。'
-        }
-      }
-    ]
+      '读取指定图片，并按 instruction 让大模型分析图片内容。\n结果：返回图片分析文本，无法识别时返回 error。'
   },
   resolveExecutionMeta: createStaticExecutionMetaResolver({
     mutability: 'read_only',

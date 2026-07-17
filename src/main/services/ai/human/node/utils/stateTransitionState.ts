@@ -1,4 +1,3 @@
-import { appendRoundRecord, buildPreExecutionBlockedExecution } from '../../memory/rounds'
 import type {
   HumanThoughtDecision,
   HumanResult,
@@ -91,51 +90,22 @@ export const returnToBrainAfterTraceState = (input: {
   })
 }
 
-export const resolveBrainDecisionHint = (input: {
-  state: HumanState
-  thought: HumanThoughtDecision
-  thoughtMemory: HumanThought
-  decisionHint?: HumanDecisionHint
-}): HumanDecisionHint | undefined => {
-  if (input.decisionHint) return input.decisionHint
-
-  if (input.state.execution.pendingDecisionHint?.code === 'hand_tool_limit_exceeded') {
-    return input.thought.nextAction.action === 'mouth'
-      ? undefined
-      : input.state.execution.pendingDecisionHint
-  }
-
-  if (input.thought.nextAction.action !== 'mouth') return undefined
-
-  const pendingItems = (input.thoughtMemory.todolist || [])
-    .filter((item) => item.status === 'todo')
-    .map((item) => item.item)
-
-  return pendingItems.length > 0
-    ? {
-        code: 'brain_todolist_incomplete',
-        detail: { pendingItems }
-      }
-    : undefined
-}
-
 const resolveBrainNextStage = (input: {
-  decisionHint?: HumanDecisionHint
   thought: HumanThoughtDecision
 }): HumanState['execution']['stage'] => {
-  if (input.decisionHint) return 'brain'
   return input.thought.nextAction.action === 'learning'
     ? 'learning'
     : input.thought.nextAction.action === 'hand'
       ? 'hand'
-      : 'mouth'
+      : input.thought.nextAction.action === 'mouth'
+        ? 'mouth'
+        : 'fault'
 }
 
 export const applyBrainDecisionState = (input: {
   state: HumanState
   thought: HumanThoughtDecision
   thoughtMemory: HumanThought
-  decisionHint?: HumanDecisionHint
   createdAt: number
   overrides?: HumanStateOverrides
 }): HumanState => {
@@ -146,27 +116,27 @@ export const applyBrainDecisionState = (input: {
       ...input.state.execution,
       ...input.overrides?.execution,
       stage: resolveBrainNextStage({
-        decisionHint: input.decisionHint,
         thought: input.thought
       }),
       status: 'running',
       currentThought: input.thought,
-      pendingDecisionHint: input.decisionHint,
+      pendingDecisionHint: undefined,
+      pendingFault:
+        input.thought.nextAction.action === 'learning' ||
+        input.thought.nextAction.action === 'hand' ||
+        input.thought.nextAction.action === 'mouth'
+          ? undefined
+          : {
+              result: `决策失败，无法识别 \`nextAction.action\` 的值 \`${input.thought.nextAction.action}\`。`
+            },
       evidenceReferences: undefined
     },
     memory: {
       ...input.state.memory,
       thought: input.thoughtMemory,
-      taskRun: input.decisionHint
-        ? appendRoundRecord({
-            state: input.state,
-            thought: input.thought,
-            execution: buildPreExecutionBlockedExecution(input.decisionHint),
-            createdAt: input.createdAt
-          })
-        : {
-            ...input.state.memory.taskRun
-          }
+      taskRun: {
+        ...input.state.memory.taskRun
+      }
     },
     trace: {
       steps: appendHumanTraceStep({

@@ -1,14 +1,11 @@
 import { ZodError } from 'zod/v4'
 import type { AiRunContext } from '../../../types'
-import { HUMAN_BRAIN_SCHEMA_RETRY_LIMIT } from '../../constants'
 import { applyThoughtPatch } from '../../memory/thoughtMemory'
 import { buildBrainPrompt } from '../../prompts/brain'
 import { createHumanThoughtDecisionSchema } from '../../schema'
 import { assertExternalLearnedSkillIds } from '../../skills'
-import { formatToolCallSchemaError } from '../../toolCallSchema'
 import type { HumanRuntimeCache, HumanState } from '../../types'
-import { applyBrainDecisionTransition, returnToBrainWithDecisionHint } from '../utils/stateTransitions'
-import { getAvailableToolNames } from '../utils/runtimeCache'
+import { applyBrainDecisionTransition } from '../utils/stateTransitions'
 import {
   emitThinkingCompleted,
   emitThinkingFailed,
@@ -24,11 +21,7 @@ export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
     assertExternalLearnedSkillIds(state.skills.learnedSkillIds)
     input.cache.currentState = state
     const history = await input.ctx.loadConversationContext()
-    const availableToolNames = getAvailableToolNames({
-      learnedSkillIds: state.skills.learnedSkillIds,
-      allowedToolNames: input.ctx.allowedToolNames
-    })
-    const thoughtDecisionSchema = createHumanThoughtDecisionSchema(availableToolNames)
+    const thoughtDecisionSchema = createHumanThoughtDecisionSchema()
     let thinkingOpen = false
     const completeThinking = (): void => {
       if (!thinkingOpen) return
@@ -100,46 +93,40 @@ export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
         state,
         thought: parsedThought,
         thoughtMemory,
-        overrides: {
-          execution: {
-            brainSchemaRetryCount: 0
-          }
-        }
+        overrides: {}
       })
     } catch (error) {
-      if (!(error instanceof ZodError)) {
+      const errorMessage = getErrorMessage(error)
+      const isDecisionProtocolError =
+        error instanceof ZodError ||
+        error instanceof SyntaxError ||
+        errorMessage.includes('structured_output_') ||
+        errorMessage.includes('prompt_json_')
+      if (!isDecisionProtocolError) {
         failThinking(error)
         throw error
       }
 
-      const retryCount = state.execution.brainSchemaRetryCount || 0
-      if (retryCount >= HUMAN_BRAIN_SCHEMA_RETRY_LIMIT) {
-        failThinking(error)
-        throw error
-      }
       completeThinking()
-
-      const schemaError = formatToolCallSchemaError({
-        error,
-        pathPrefix: 'nextAction.calls'
-      })
-
-      return returnToBrainWithDecisionHint({
-        ctx: input.ctx,
-        state,
-        source: 'brain',
-        decisionHint: {
-          code: 'brain_output_schema_invalid',
-          detail: {
-            issues: schemaError.issues
-          }
-        },
-        overrides: {
-          execution: {
-            brainSchemaRetryCount: retryCount + 1
-          }
+      const issues =
+        error instanceof ZodError
+          ? error.issues.slice(0, 3).map((issue) => ({
+              path: issue.path.length > 0 ? issue.path.join('.') : 'output',
+              message: issue.message
+            }))
+          : [{ path: 'output', message: errorMessage }]
+      return {
+        ...state,
+        execution: {
+          ...state.execution,
+          stage: 'fault',
+          pendingFault: {
+            result: '决策失败，输出无法解析为可路由的决策结构。',
+            issues
+          },
+          pendingDecisionHint: undefined
         }
-      })
+      }
     }
   }
 }
