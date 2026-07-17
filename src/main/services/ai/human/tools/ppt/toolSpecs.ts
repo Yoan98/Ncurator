@@ -100,7 +100,7 @@ export const PPT_EDIT_TOOL_SPEC = {
   promptSpec: {
     name: 'ppt_edit',
     description: [
-      '能力：创建或修改 PPTX。每次调用执行一个 action。',
+      '创建或修改 PPTX。每次调用执行一个 action。',
       'action type=create_presentation：新建 PPTX，并使用 HTML 创建第一页；目标文件不能已存在。',
       'action type=insert_slide：使用 HTML 在指定页面前插入一页；不指定 beforeSlideId 时追加到末尾。',
       'action type=delete_slides：删除一个或多个指定页面。',
@@ -110,8 +110,7 @@ export const PPT_EDIT_TOOL_SPEC = {
       'action type=edit_elements：修改指定页面内的元素。',
       'action type=set_notes：设置指定页面的讲者备注。',
       '页面 HTML 支持内联 CSS、文本、形状、工作区本地图片、SVG、表格、图表和 data-pptx-latex 公式。',
-      '结果：返回变化页面的 changedSlideIds、postWriteReadback 和布局警告。',
-      '边界：每次只能执行一个 action；操作已有页面或元素时，slideId 和 elementId 必须来自 PPT 读取工具或 postWriteReadback 的真实结果；创建或插入页面时，HTML 只能包含一张 1920x1080 页面，并以 data-ppt-slide 为唯一根节点；action 失败时回滚本次修改。'
+      '返回变化页面的 changedSlideIds、postWriteReadback 和布局警告。'
     ].join('\n')
   },
   resolveExecutionMeta: createStaticExecutionMetaResolver({

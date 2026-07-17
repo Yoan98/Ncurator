@@ -28,8 +28,7 @@ export const IMAGE_ANALYZE_TOOL_SPEC: HumanToolSpec<
   outputSchema: IMAGE_ANALYZE_OUTPUT_SCHEMA,
   promptSpec: {
     name: 'image_analyze',
-    description:
-      '读取指定图片，并按 instruction 让大模型分析图片内容。\n结果：返回图片分析文本，无法识别时返回 error。'
+    description: '读取图片并按 instruction 交给大模型分析，并返回图片分析文本或 error。'
   },
   resolveExecutionMeta: createStaticExecutionMetaResolver({
     mutability: 'read_only',
