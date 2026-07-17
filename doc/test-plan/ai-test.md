@@ -1135,6 +1135,26 @@ AI unit / 辅助测试目录：
 
 ## 6. 验收口径
 
+### PPT 回归
+
+#### `ppt-create-read-edit-commit`
+
+- 测试类型：`backend / tool`
+- What：验证逐页创建、读取、编辑、写后回读、Run 末一次写回和页面级 diff。
+- Oracle：正式文件提交前不存在；提交后可解析且页面内容正确；同一文件只生成一条修改记录。
+
+#### `ppt-professional-element-edit`
+
+- 测试类型：`backend / tool`
+- What：验证元素位置、样式、图层、复制、线条、图片、表格、图表和公式更新。
+- Oracle：操作成功；`postWriteReadback` 返回可继续使用的真实 elementId；最终 pptx 可解析。
+
+#### `create-ppt-deck` 与 `human-create-ppt-deck-live`
+
+- 测试类型：`mock-llm / live`
+- What：验证 AI 能学习 `ppt-read / ppt-write`，自主逐页创建并交付 PPT。
+- Oracle：至少两次 `ppt_edit`；最终文件可解析且内容正确；只产生一个 PPT 修改记录和文件交付。
+
 - `tool` suite 必须持续守住真实工具输入输出、审批边界和 artifact 契约。
 - `human/mock-llm` 必须覆盖 `AiRunService -> human` 入口、`brain / learning / hand / mouth` 主链、memory 延续、decision hint 收敛与复杂工具协作。
 - `human/live` 必须至少保留 1 条简单任务和 1 条复杂任务回归 case。

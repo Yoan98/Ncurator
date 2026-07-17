@@ -302,6 +302,13 @@ tests/case/workbench/
 - Oracle：普通预览与修改 diff 共用一个文件 Tab；file_artifact 已产生但 Run 尚未结束时不展示修改入口；Run 完成后 assistant 修改文件入口使用 `工作区/目录/文件`，右侧工具栏使用 `工作区 > 目录 > 文件`；从入口打开时文件列表切到“本会话改动”并选中对应文件；文本 Diff 只展示该 Run 修改批次，不生成会话累计 Diff；Diff 行背景覆盖整个可见及可滚动画布宽度；首次打开后缓存 version 2 hunks 且不含完整 `afterLines`；“N 行未修改”可从不可变 after 对象展开；回退后 bytes 与原始输入一致且有效改动标记消失。
 - Not：不验证 unified diff 字符串；UI 只消费结构化 diff artifact。
 
+#### `ppt-create-diff-and-revert`
+
+- 测试类型：`e2e / live`
+- What：验证真实 AI 创建两页 PPT 后，用户可打开页面级左右 diff、切换缩略图模式并回撤文件。
+- Oracle：只产生一个 PPT 修改记录；pptx 可解析；左右差异区和缩略图可见；全部页与变化页切换有效；回撤后新建文件被删除。
+- Not：不逐字断言最终回答，不对页面审美打分。
+
 #### `terminal-background-service-flow`
 
 - 测试类型：`e2e`

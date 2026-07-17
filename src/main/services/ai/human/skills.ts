@@ -62,6 +62,28 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
     whenToUse: '适用于需要阅读 PDF 文本、搜索 PDF 内容或查看 PDF 页面图形的任务。',
     toolNames: ['pdf_inspect', 'pdf_search', 'pdf_read_pages', 'pdf_render_pages']
   },
+  'ppt-read': {
+    skillId: 'ppt-read',
+    familyId: 'ppt',
+    source: 'external',
+    countsTowardToolBudget: true,
+    title: 'ppt-read',
+    description:
+      '能力：读取工作区内 PPTX 的页面结构、页面内容和搜索结果，并将指定页面渲染为图片。\n结果：返回页面提纲、元素信息、匹配位置或页面图片路径。\n边界：只读取 PPTX，不修改源文件。',
+    whenToUse: '适用于需要理解、定位或检查 PowerPoint 内容与视觉效果的任务。',
+    toolNames: ['ppt_outline', 'ppt_read_slides', 'ppt_search', 'ppt_render']
+  },
+  'ppt-write': {
+    skillId: 'ppt-write',
+    familyId: 'ppt',
+    source: 'external',
+    countsTowardToolBudget: true,
+    title: 'ppt-write',
+    description:
+      '能力：创建或编辑工作区内 PPTX 的页面和元素。\n结果：返回写入结果、变化页面回读和布局警告。\n边界：编辑已有内容时必须使用读取工具返回的真实 slideId 和 elementId。',
+    whenToUse: '适用于需要创建、修改、插入、复制、移动或删除 PowerPoint 内容的任务。',
+    toolNames: ['ppt_edit']
+  },
   'image-recognition': {
     skillId: 'image-recognition',
     familyId: 'image-recognition',

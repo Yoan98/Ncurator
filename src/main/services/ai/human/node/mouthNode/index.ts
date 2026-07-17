@@ -6,6 +6,7 @@ import { assertExternalLearnedSkillIds } from '../../skills'
 import { completeHumanTask } from '../utils/stateTransitions'
 import {
   appendDocxApplyArtifactsAndEmitEvents,
+  appendFileChangeArtifactsAndEmitEvents,
   buildFileChangesSummaryFromFileChangeRecords,
   mergeArtifactRefs
 } from '../../../utils/artifacts'
@@ -35,6 +36,7 @@ export const createMouthNode = (input: {
     input.cache.currentState = stateWithMouthRound
 
     const docxApplyRecords = await input.ctx.applyDocxRunEdits()
+    const pptApplyRecords = (await input.cache.pptRuntime?.commitAll()) || []
     const fileChangeRecords = await input.ctx.listFileChangeRecords({ runId: input.ctx.runId })
     const fileChanges = buildFileChangesSummaryFromFileChangeRecords(fileChangeRecords)
     const history = await input.ctx.loadConversationContext()
@@ -89,7 +91,7 @@ export const createMouthNode = (input: {
         : undefined
     })
 
-    const artifacts =
+    const docxArtifacts =
       docxApplyRecords.length > 0
         ? appendDocxApplyArtifactsAndEmitEvents({
             existingArtifacts: stateWithMouthRound.execution.artifacts,
@@ -99,6 +101,16 @@ export const createMouthNode = (input: {
             taskId: state.task.taskId
           })
         : mergeArtifactRefs(stateWithMouthRound.execution.artifacts)
+    const artifacts =
+      pptApplyRecords.length > 0
+        ? appendFileChangeArtifactsAndEmitEvents({
+            existingArtifacts: docxArtifacts,
+            records: pptApplyRecords,
+            sendEvent: input.ctx.sendEvent,
+            runId: input.ctx.runId,
+            taskId: state.task.taskId
+          })
+        : docxArtifacts
     const readyState: HumanState = {
       ...promptState,
       execution: {

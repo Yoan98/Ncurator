@@ -29,6 +29,7 @@ import { workbenchSelectors } from '../../testing/selectors'
 import ChangeCountBadges from './ChangeCountBadges'
 import WorkspacePathLabel from './WorkspacePathLabel'
 import { TextFileDiffViewer } from './TextFileDiffViewer'
+import PptDiffViewer from './PptDiffViewer'
 import WorkbenchTabBar from './WorkbenchTabBar'
 import WorkspaceFileExplorer, { type WorkspaceFileExplorerMode } from './WorkspaceFileExplorer'
 import { groupSessionFileChanges } from './fileChangeGroups'
@@ -573,7 +574,9 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
   }, [activeApplyRecord, binaryVersion])
   const applyContent = useMemo(
     () =>
-      activeApplyRecord?.capability === 'text_file' && activeApplyRecord.previewPath ? (
+      activeApplyRecord?.capability === 'ppt' && activeApplyRecord.previewPath ? (
+        <PptDiffViewer record={activeApplyRecord} />
+      ) : activeApplyRecord?.capability === 'text_file' && activeApplyRecord.previewPath ? (
         <TextFileDiffViewer
           previewPath={activeApplyRecord.previewPath}
           afterSnapshotPath={activeApplyRecord.afterSnapshotPath}

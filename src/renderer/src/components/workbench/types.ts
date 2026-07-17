@@ -73,7 +73,7 @@ export type WorkbenchFileRef = {
   origin: WorkbenchFileOrigin
   summary?: string
   applyId?: string
-  format?: 'docx'
+  format?: 'docx' | 'pptx'
   pageNumber?: number
   isDirectory?: boolean
 }
@@ -104,6 +104,11 @@ export type AssistantToolName =
   | 'pdf_search'
   | 'pdf_read_pages'
   | 'pdf_render_pages'
+  | 'ppt_outline'
+  | 'ppt_read_slides'
+  | 'ppt_search'
+  | 'ppt_render'
+  | 'ppt_edit'
   | 'web_search'
   | 'web_crawl'
   | 'browser_use'
@@ -142,6 +147,7 @@ export type AssistantProcessSkillKey =
   | 'file-read'
   | 'file-write'
   | 'pdf-read'
+  | 'ppt'
   | 'kb'
   | 'terminal'
   | 'web-search'

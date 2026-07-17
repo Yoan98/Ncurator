@@ -8,6 +8,9 @@ export default defineConfig({
     build: {
       minify: 'esbuild',
       sourcemap: false,
+      externalizeDeps: {
+        exclude: ['pptx-kit']
+      },
       rollupOptions: {
         input: {
           index: resolve('src/main/index.ts'),

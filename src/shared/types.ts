@@ -822,6 +822,8 @@ export type RuntimeSkillId =
   | 'docx-read'
   | 'docx-write'
   | 'pdf-read'
+  | 'ppt-read'
+  | 'ppt-write'
   | 'image-recognition'
   | 'kb-retrieval'
   | 'web-browsing'
@@ -911,7 +913,7 @@ export type AiRuntimeSettings = {
   llmStreamingMode: AiLlmStreamingMode
 }
 
-export type AiFileArtifactCapability = 'terminal_exec' | 'docx' | 'text_file'
+export type AiFileArtifactCapability = 'terminal_exec' | 'docx' | 'ppt' | 'excel' | 'text_file'
 export type AiFileArtifactOperation = AiFileChangeOperation
 export type AiFileArtifactRef = {
   kind: 'file'
@@ -924,7 +926,7 @@ export type AiFileArtifactRef = {
 }
 export type AiDraftSnapshotRef = {
   draftSnapshotId: string
-  format?: 'docx'
+  format?: 'docx' | 'pptx'
   sourcePath?: string
 }
 export type AiArtifactRef = AiFileArtifactRef

@@ -22,6 +22,7 @@ import { TerminalSessionManager } from '../../../src/main/services/ai/human/tool
 import { buildTextFileCapabilityTools } from '../../../src/main/services/ai/human/tools/textFile'
 import { imageRecognitionToolFamily } from '../../../src/main/services/ai/human/tools/imageRecognition'
 import { buildPdfCapabilityTools } from '../../../src/main/services/ai/human/tools/pdf'
+import { buildPptCapabilityTools } from '../../../src/main/services/ai/human/tools/ppt'
 import { releasePdfRunSession } from '../../../src/main/services/pdf/worker/pdfWorkerClient'
 import { utilityToolFamily } from '../../../src/main/services/ai/human/tools/utility'
 import { webToolFamily } from '../../../src/main/services/ai/human/tools/web'
@@ -107,6 +108,30 @@ export const createDocxToolHarness = (
     async release(): Promise<void> {
       await resourceManager.releaseRun(runtime.runId)
     }
+  }
+}
+
+export const createPptToolHarness = (
+  runtime: BackendTestRuntime,
+  contextInput: CreateAiRunContextInput = {}
+) => {
+  const ctx = runtime.createAiRunContext(contextInput)
+  const cache = createHumanRuntimeCache()
+  const activities: CapturedToolActivity[] = []
+  const built = buildPptCapabilityTools({
+    ctx,
+    cache,
+    runId: runtime.runId,
+    sessionId: contextInput.sessionId || 'test-session',
+    taskId: runtime.taskId,
+    workspaceRootPath: runtime.workspaceRoot,
+    emitActivity: (activity) => activities.push(activity)
+  })
+  return {
+    ...createToolInvoker(built.tools as readonly ToolLike[]),
+    ctx,
+    runtime: built.runtime,
+    activities
   }
 }
 

@@ -422,6 +422,74 @@ describe('ai unit human memory renderers', () => {
     expect(rendered).toContain('"file_path":"/tmp/workspace/学习笔记/图形学.docx"')
   })
 
+  it('keeps ppt page count and slide text in round history', () => {
+    const initialState = createInitialHumanState({
+      taskId: 'task-history-ppt-overview',
+      userInput: '创建两页 PPT'
+    })
+
+    const taskRun = appendRoundRecord({
+      state: initialState,
+      thought: {
+        thought: { next: '确认 PPT 页面内容' },
+        nextAction: {
+          action: 'hand',
+          calls: [
+            {
+              toolName: 'ppt_outline',
+              args: {
+                sourcePath: '季度复盘.pptx',
+                ranges: [{ type: 'percent', fromPercent: 0, toPercent: 100 }]
+              }
+            }
+          ]
+        }
+      },
+      execution: buildHandExecution({
+        calls: [
+          {
+            toolName: 'ppt_outline',
+            args: {
+              sourcePath: '季度复盘.pptx',
+              ranges: [{ type: 'percent', fromPercent: 0, toPercent: 100 }]
+            }
+          }
+        ],
+        toolResults: [
+          {
+            toolName: 'ppt_outline',
+            ok: true,
+            data: {
+              sourcePath: '季度复盘.pptx',
+              slideCount: 2,
+              slides: [
+                {
+                  slideId: '/ppt/slides/slide1.xml',
+                  slideIndex: 1,
+                  text: '增长引擎'
+                },
+                {
+                  slideId: '/ppt/slides/slide2.xml',
+                  slideIndex: 2,
+                  text: '下一步行动'
+                }
+              ],
+              internalDraftState: 'drop-me'
+            }
+          }
+        ]
+      }),
+      createdAt: 1
+    })
+
+    const rendered = renderBrainRoundSection(taskRun.rounds)
+
+    expect(rendered).toContain('"slideCount":2')
+    expect(rendered).toContain('"text":"增长引擎"')
+    expect(rendered).toContain('"text":"下一步行动"')
+    expect(rendered).not.toContain('internalDraftState')
+  })
+
   it('renders unconfigured tool results with fallback minimal fields only', () => {
     const initialState = createInitialHumanState({
       taskId: 'task-history-fallback',

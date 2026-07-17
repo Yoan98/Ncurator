@@ -406,12 +406,13 @@
 
 #### WB-APPLY-002 AI 修改完成后直接写回
 
-- 系统行为：受支持 `docx` 和普通文本写任务完成后直接写回源文件或创建目标文件，并生成修改记录。普通文本支持 `create`、`rewrite`、唯一非重叠 `edit` 和精确 `replaceAll`；任一校验失败时不产生部分写入。
+- 系统行为：受支持 `docx`、`pptx` 和普通文本写任务完成后直接写回源文件或创建目标文件，并生成修改记录。普通文本支持 `create`、`rewrite`、唯一非重叠 `edit` 和精确 `replaceAll`；任一校验失败时不产生部分写入。
 - 验收：
   - `WB-APPLY-002-AC1` 修改现有 `docx` 后，源文件立即变为 AI 最终净稿，assistant turn 展示本轮“修改的文件”入口。
   - `WB-APPLY-002-AC2` 新建 `docx` 后，目标文件立即存在，assistant turn 展示本轮“修改的文件”入口。
   - `WB-APPLY-002-AC3` 创建或修改普通文本文件后，目标文件立即更新并生成修改记录；运行期间不展示修改入口，收到 `run_completed / run_failed / run_cancelled` 后 assistant turn 才展示本轮“修改的文件”，右侧可查看由真实写入前后内容计算的文本 diff。`answer_completed` 不视为 run 已结束。
   - `WB-APPLY-002-AC4` 普通文本 `edit` 的每个 `oldText` 必须唯一且互不重叠；`replaceAll` 替换一个 `oldText` 的全部非重叠精确匹配；失败时文件保持原样。
+  - `WB-APPLY-002-AC5` 同一次 AI Run 对同一个 pptx 的多次逐页编辑只生成一条修改记录，加减数量按变化页计算。
 
 #### WB-TERMINAL-001 持久终端会话
 
@@ -432,7 +433,7 @@
   - `WB-APPLY-003-AC3` 回退成功后，右侧修改的文件工作区应刷新记录状态；普通文本历史 diff 继续保留并标记“已回退”或“已删除”，避免丢失本次修改记录。
   - `WB-APPLY-003-AC4` 终端通过 Shell、Python、Node 或其他程序造成的文件变化均由 Run 结束扫描捕获；终端修改的文本可生成普通行级 Diff，终端直接修改的 Docx 等二进制文件只提供修改前/修改后版本，不伪造语义审阅标记。
   - `WB-APPLY-003-AC5` Docx 工具修改保存 before、committed 和 Review Docx；Review Docx 继续由现有 Docx Renderer 渲染并保留段落、表格、图片、字体和页面结构。
-  - `WB-APPLY-003-AC6` PPT 与 Excel 本期只在类型、架构文档和 adapter 契约中预留扩展点，不提供空壳 Diff UI。
+  - `WB-APPLY-003-AC6` PPT 修改记录提供页面级差异预览；Excel 本期只预留扩展点，不提供空壳 Diff UI。
 
 #### WB-APPLY-004 后续修改后的强制回退
 
@@ -449,6 +450,31 @@
   - `WB-APPLY-005-AC1` 同一轮任务生成的多个修改记录都会出现在同一 assistant turn 的修改的文件列表中。
   - `WB-APPLY-005-AC2` 点击不同修改记录入口时，右侧会加载对应修改记录；有 diff 预览的记录展示对应预览稿，而不是按源文件跳到最新轮次。
   - `WB-APPLY-005-AC3` 同一轮多文件修改的全部入口保留在 assistant turn 列表中，不因切换当前文件而丢失其他文件的检查或回退入口。
+
+### 8.9 PPT 创建、编辑与差异预览
+
+#### WB-PPT-001 AI 创建和编辑 PPT
+
+- 系统行为：AI 通过 `ppt-read` 和 `ppt-write` 完成 pptx 读取、创建和编辑。读取工具为 `ppt_outline / ppt_read_slides / ppt_search / ppt_render`，写入工具为 `ppt_edit`。新建演示文稿和插入页面时，每次调用只接收一个 1920x1080 页面 HTML，并转换为可编辑 PPT 元素。任务结束时一次写回最终文件。
+- 验收：
+  - `WB-PPT-001-AC1` AI 可自行新建 pptx，不依赖用户点击新建入口。
+  - `WB-PPT-001-AC2` 新建演示文稿或插入页面时，单次调用只允许一个页面 HTML，不接受页面数组。
+  - `WB-PPT-001-AC3` 文本、形状、图片、SVG、表格、图表和公式按支持类型转换，不把整页默认导出为截图。
+  - `WB-PPT-001-AC4` AI 可使用真实 slideId 和 elementId 继续编辑已有页面和元素。
+  - `WB-PPT-001-AC5` 公式由 LaTeX 渲染为 SVG；公式整体可移动和缩放，内部字符暂不承诺可编辑。
+  - `WB-PPT-001-AC6` `ppt_outline` 支持 percent 和 slide_index；`ppt_read_slides` 与 `ppt_render` 支持 slide_index 和 slide_ids；`ppt_search` 使用可选 `scope.slideIds`。
+  - `WB-PPT-001-AC7` `ppt_edit` 返回变化页面的 `postWriteReadback`；移动或删除页面时返回附近页面顺序。
+  - `WB-PPT-001-AC8` 元素编辑支持文字、位置、样式、图层、复制、删除、新增、图片、表格、图表和公式更新。
+
+#### WB-PPT-002 PPT 单页左右差异预览
+
+- 系统行为：用户打开 pptx 修改记录后，主区域左侧显示当前页修改前画面，右侧显示同一页修改后画面；最右侧显示缩略图。点击缩略图或滚动时左右同步切页。
+- 验收：
+  - `WB-PPT-002-AC1` 主区域始终按左旧右新一次各显示一页。
+  - `WB-PPT-002-AC2` 缩略图支持只看变化页和查看全部页两种图标模式，默认只看变化页。
+  - `WB-PPT-002-AC3` 变化页通过边框和新增、删除、移动图标标记，不显示文字差异说明。
+  - `WB-PPT-002-AC4` 新增页左侧为空；删除页右侧为空。
+  - `WB-PPT-002-AC5` 点击缩略图或滚动后，左右主区域与当前缩略图保持同步。
 
 ## 9. 非目标
 

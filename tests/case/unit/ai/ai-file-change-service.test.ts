@@ -161,6 +161,42 @@ describe('ai file change service', () => {
     expect(reopened.record?.previewPath).toBe(opened.record?.previewPath)
   })
 
+  it('preserves specialist PPT capability and diff preview after workspace scan', async () => {
+    const targetPath = path.join(tempDir, 'deck.pptx')
+    const previewPath = path.join(tempDir, '.ncurator', 'runtime', 'ppt-diff.json')
+    await service.beginRunTracking({
+      runId: 'ppt-run',
+      sessionId: 'session-1',
+      workspaceRootPath: tempDir,
+      runSummary: '创建演示文稿'
+    })
+    await fs.writeFile(targetPath, 'ppt bytes')
+    await fs.mkdir(path.dirname(previewPath), { recursive: true })
+    await fs.writeFile(previewPath, JSON.stringify({ version: 1, slides: [] }))
+    await service.saveRecord(
+      createRecord({
+        id: 'ppt-change',
+        runId: 'ppt-run',
+        capability: 'ppt',
+        path: targetPath,
+        fileName: 'deck.pptx',
+        operation: 'created',
+        previewPath
+      })
+    )
+
+    const completed = await service.finishRunTracking('ppt-run')
+
+    expect(completed).toHaveLength(1)
+    expect(completed[0]?.record.id).toBe('ppt-change')
+    expect(completed[0]?.record.capability).toBe('ppt')
+    expect(completed[0]?.record.previewPath).toBeTruthy()
+    const manifest = JSON.parse(
+      await fs.readFile(completed[0]!.record.previewPath!, 'utf8')
+    ) as Record<string, unknown>
+    expect(manifest.version).toBe(1)
+  })
+
   it('captures create delete and rename in one run', async () => {
     const deletedPath = path.join(tempDir, 'deleted.txt')
     const renamedBeforePath = path.join(tempDir, 'before-name.txt')

@@ -4,6 +4,7 @@ export const AI_TOOL_FAMILY_IDS = [
   'kb',
   'docx',
   'pdf',
+  'ppt',
   'web',
   'utility',
   'image-recognition'
@@ -21,6 +22,8 @@ export const EXTERNAL_RUNTIME_SKILL_IDS = [
   'docx-read',
   'docx-write',
   'pdf-read',
+  'ppt-read',
+  'ppt-write',
   'image-recognition'
 ] as const
 

@@ -246,7 +246,8 @@ const buildAssistantTurnFromMessage = (message: ChatMessage): AssistantTurnViewM
       summary: artifact.summary,
       applyId: artifact.applyId,
       operation: artifact.operation,
-      format: artifact.capability === 'docx' ? 'docx' : undefined
+      format:
+        artifact.capability === 'docx' ? 'docx' : artifact.capability === 'ppt' ? 'pptx' : undefined
     })),
     applyTargets: artifacts
       .map(artifactToApplyTarget)
@@ -296,7 +297,8 @@ const reduceAssistantTurnByRunEvent = (
           summary: event.summary,
           applyId: event.applyId,
           operation: event.operation,
-          format: event.capability === 'docx' ? 'docx' : undefined
+          format:
+            event.capability === 'docx' ? 'docx' : event.capability === 'ppt' ? 'pptx' : undefined
         }
       ]),
       applyTargets: event.applyId
@@ -422,7 +424,12 @@ const applyRunRecordToTurn = (
         summary: artifact.summary,
         applyId: artifact.applyId,
         operation: artifact.operation,
-        format: artifact.capability === 'docx' ? ('docx' as const) : undefined
+        format:
+          artifact.capability === 'docx'
+            ? ('docx' as const)
+            : artifact.capability === 'ppt'
+              ? ('pptx' as const)
+              : undefined
       }))
     ]),
     applyTargets: artifacts

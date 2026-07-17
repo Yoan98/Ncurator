@@ -196,6 +196,10 @@ export const workbenchSelectors = {
   inspectorTitle: 'workbench-inspector-title',
   applyRevertButton: 'workbench-apply-revert-button',
   docxViewer: 'workbench-docx-viewer',
+  pptDiffViewer: 'workbench-ppt-diff-viewer',
+  pptDiffBefore: 'workbench-ppt-diff-before',
+  pptDiffAfter: 'workbench-ppt-diff-after',
+  pptDiffThumbnails: 'workbench-ppt-diff-thumbnails',
   referenceAiWarning: 'workbench-reference-ai-warning',
   referenceSearchWarning: 'workbench-reference-search-warning'
 } as const

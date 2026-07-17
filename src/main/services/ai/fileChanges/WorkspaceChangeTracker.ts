@@ -180,9 +180,7 @@ const inferCapability = (
   after: WorkspaceObject | undefined,
   specialist: AiFileChangeRecord | undefined
 ): AiFileChangeCapability => {
-  if (specialist?.capability === 'docx' || specialist?.capability === 'text_file') {
-    return specialist.capability
-  }
+  if (specialist) return specialist.capability
   const extension = path.extname(after?.absolutePath || before?.absolutePath || '').toLowerCase()
   if (TEXT_EXTENSIONS.has(extension)) return 'text_file'
   return 'terminal_exec'
@@ -294,7 +292,7 @@ export class WorkspaceChangeTracker {
           : undefined)
       if (specialist) matchedExistingIds.add(specialist.id)
       const now = Date.now()
-      let previewPath = specialist?.capability === 'docx' ? specialist.previewPath : undefined
+      let previewPath = specialist?.previewPath
       let previewArtifactHash: string | undefined
       if (previewPath) {
         const previewObject = await objectStore.putFile(previewPath).catch(() => undefined)
@@ -354,7 +352,3 @@ export class WorkspaceChangeTracker {
     return completed
   }
 }
-
-// Reserved extension points. PPT and Excel previews are intentionally not implemented yet.
-export type PptDiffAdapter = never
-export type ExcelDiffAdapter = never

@@ -14,6 +14,7 @@ const TOOL_FAMILY_BUILDERS: Record<
   kb: TOOL_FAMILY_DEFINITIONS.kb.buildTools,
   docx: TOOL_FAMILY_DEFINITIONS.docx.buildTools,
   pdf: TOOL_FAMILY_DEFINITIONS.pdf.buildTools,
+  ppt: TOOL_FAMILY_DEFINITIONS.ppt.buildTools,
   web: TOOL_FAMILY_DEFINITIONS.web.buildTools,
   utility: TOOL_FAMILY_DEFINITIONS.utility.buildTools,
   'image-recognition': TOOL_FAMILY_DEFINITIONS['image-recognition'].buildTools

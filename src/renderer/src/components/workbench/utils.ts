@@ -84,6 +84,11 @@ const isAssistantToolName = (toolName: string): toolName is AssistantToolName =>
   toolName === 'pdf_search' ||
   toolName === 'pdf_read_pages' ||
   toolName === 'pdf_render_pages' ||
+  toolName === 'ppt_outline' ||
+  toolName === 'ppt_read_slides' ||
+  toolName === 'ppt_search' ||
+  toolName === 'ppt_render' ||
+  toolName === 'ppt_edit' ||
   toolName === 'web_search' ||
   toolName === 'web_crawl' ||
   toolName === 'browser_use' ||
@@ -213,6 +218,8 @@ const getSkillDisplayName = (skillId?: RuntimeSkillId): string => {
   if (skillId === 'docx-read') return 'docx 阅读器'
   if (skillId === 'docx-write') return 'docx 写作器'
   if (skillId === 'pdf-read') return 'PDF 阅读器'
+  if (skillId === 'ppt-read') return 'PPT 阅读器'
+  if (skillId === 'ppt-write') return 'PPT 编辑器'
   if (skillId === 'image-recognition') return '图像识别'
   return '新能力'
 }
@@ -236,6 +243,15 @@ const getToolUiKind = (toolName?: AssistantToolName): AssistantProcessSkillKey =
   ) {
     return 'pdf-read'
   }
+  if (
+    toolName === 'ppt_outline' ||
+    toolName === 'ppt_read_slides' ||
+    toolName === 'ppt_search' ||
+    toolName === 'ppt_render' ||
+    toolName === 'ppt_edit'
+  ) {
+    return 'ppt'
+  }
   if (toolName === 'kb_search' || toolName === 'kb_list_documents') return 'kb'
   if (toolName === 'terminal_run' || toolName === 'terminal_read' || toolName === 'terminal_stop') {
     return 'terminal'
@@ -255,7 +271,7 @@ const getDisplaySkillKey = (display: AssistantProcessDisplay): AssistantProcessS
 
 const getToolIconKind = (skillKey: AssistantProcessSkillKey): AssistantProcessIconKind => {
   if (skillKey === 'docx-edit') return 'edit'
-  if (skillKey === 'docx-read' || skillKey === 'pdf-read') return 'document'
+  if (skillKey === 'docx-read' || skillKey === 'pdf-read' || skillKey === 'ppt') return 'document'
   if (skillKey === 'file-read') return 'document'
   if (skillKey === 'file-write') return 'edit'
   if (skillKey === 'kb') return 'knowledge'
@@ -336,6 +352,13 @@ const getToolSummaryText = (
     if (status === 'partial_failed')
       return sentence(text(`部分读取 ${normalizedCount} 个 PDF 文件失败`))
     return sentence(text(`读取 ${normalizedCount} 个 PDF 文件失败`))
+  }
+  if (skillKey === 'ppt') {
+    if (status === 'running') return sentence(text(`正在处理 ${normalizedCount} 个 PPT 文件`))
+    if (status === 'completed') return sentence(text(`已处理 ${normalizedCount} 个 PPT 文件`))
+    if (status === 'partial_failed')
+      return sentence(text(`部分处理 ${normalizedCount} 个 PPT 文件失败`))
+    return sentence(text(`处理 ${normalizedCount} 个 PPT 文件失败`))
   }
   if (skillKey === 'kb') {
     if (status === 'running') return sentence(text('正在检索知识库'))
@@ -423,6 +446,11 @@ const getToolItemText = (
   if (toolName === 'pdf_render_pages') {
     return sentence(text('渲染 PDF 页面 '), text(fileLabel))
   }
+  if (toolName === 'ppt_outline') return sentence(text('阅读 PPT 结构 '), text(fileLabel))
+  if (toolName === 'ppt_read_slides') return sentence(text('读取 PPT 页面 '), text(fileLabel))
+  if (toolName === 'ppt_search') return sentence(text('搜索 PPT '), text(queryLabel))
+  if (toolName === 'ppt_render') return sentence(text('渲染 PPT 页面 '), text(fileLabel))
+  if (toolName === 'ppt_edit') return sentence(text('编辑 PPT '), text(fileLabel))
   if (toolName === 'terminal_run') {
     return sentence(text('执行命令 '), text(commandLabel))
   }
@@ -557,7 +585,7 @@ export const buildAssistantExecutionSummaryText = (
         } satisfies ExecutionActionSummary)
       current.count += 1
       current.statuses.push(group.status)
-      if (kind === 'docx-read' || kind === 'docx-edit') {
+      if (kind === 'docx-read' || kind === 'docx-edit' || kind === 'ppt') {
         current.fileLabels.add(entry.targetLabel || group.id)
       }
       if (kind === 'wait') current.waitLabels.add(readWaitDurationLabel(entry.input))

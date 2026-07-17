@@ -1423,13 +1423,15 @@ export const waitForWorkbenchApplyPanelReady = async (page: Page): Promise<Locat
       if (root.querySelector(`[data-testid="${revertButtonTestId}"]`)) return true
       return Boolean(
         root.querySelector(`[data-testid="${docxViewerTestId}"]`) ||
-        root.querySelector(`[data-testid="${textDiffViewerTestId}"]`)
+        root.querySelector(`[data-testid="${textDiffViewerTestId}"]`) ||
+        root.querySelector(`[data-testid="${pptDiffViewerTestId}"]`)
       )
     },
     {
       panelTestId: workbenchSelectors.applyPanel,
       docxViewerTestId: workbenchSelectors.docxViewer,
       textDiffViewerTestId: workbenchSelectors.textDiffViewer,
+      pptDiffViewerTestId: workbenchSelectors.pptDiffViewer,
       revertButtonTestId: workbenchSelectors.applyRevertButton
     },
     { timeout: WORKBENCH_LONG_E2E_TIMEOUT_MS }
@@ -1443,20 +1445,20 @@ export const waitForWorkbenchApplyRecordStatus = async (
 ): Promise<Locator> => {
   const panel = getWorkbenchLocator(page, workbenchSelectors.applyPanel)
   await panel.waitFor({ state: 'visible' })
-  const expectedText = status === 'reverted' ? '已回退' : '失败'
+  const expectedTexts = status === 'reverted' ? ['已回退', '已删除'] : ['失败']
   await page.waitForFunction(
-    ({ testId, text, status, revertButtonTestId }) => {
+    ({ testId, texts, status, revertButtonTestId }) => {
       const root = document.querySelector(`[data-testid="${testId}"]`)
       if (!(root instanceof HTMLElement)) return false
       if (status === 'applied') {
         const button = root.querySelector(`[data-testid="${revertButtonTestId}"]`)
         return button instanceof HTMLButtonElement && !button.disabled
       }
-      return root.innerText.includes(text)
+      return texts.some((text) => root.innerText.includes(text))
     },
     {
       testId: workbenchSelectors.applyPanel,
-      text: expectedText,
+      texts: expectedTexts,
       status,
       revertButtonTestId: workbenchSelectors.applyRevertButton
     },

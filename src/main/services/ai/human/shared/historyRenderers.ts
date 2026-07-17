@@ -42,6 +42,53 @@ const DOCX_WRITE_RESULT_WHITELIST: NestedWhitelistConfig = {
   }
 }
 
+const PPT_SLIDE_WHITELIST: NestedWhitelistConfig = {
+  slideId: true,
+  slideIndex: true,
+  title: true,
+  text: true,
+  notes: true,
+  matchedText: true,
+  source: true,
+  elementCount: true,
+  elements: {
+    elementId: true,
+    type: true,
+    zIndex: true,
+    bounds: true,
+    text: true,
+    latex: true,
+    style: true,
+    details: true
+  }
+}
+
+const PPT_RESULT_WHITELIST: NestedWhitelistConfig = {
+  ok: true,
+  sourcePath: true,
+  slideCount: true,
+  changedSlideIds: true,
+  slides: PPT_SLIDE_WHITELIST,
+  matches: PPT_SLIDE_WHITELIST,
+  totalMatchCount: true,
+  returnedMatchCount: true,
+  assetBucketId: true,
+  images: {
+    slideId: true,
+    slideIndex: true,
+    path: true,
+    mimeType: true,
+    width: true,
+    height: true
+  },
+  postWriteReadback: {
+    slides: PPT_SLIDE_WHITELIST,
+    outlineWindow: PPT_SLIDE_WHITELIST
+  },
+  warnings: true,
+  error: true
+}
+
 const FALLBACK_TOOL_HISTORY_WHITELIST: NestedWhitelistConfig = {
   message: true,
   error: true
@@ -136,6 +183,11 @@ const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
     blocks: DOCX_BLOCK_WHITELIST
   },
   docx_edit: DOCX_WRITE_RESULT_WHITELIST,
+  ppt_outline: PPT_RESULT_WHITELIST,
+  ppt_read_slides: PPT_RESULT_WHITELIST,
+  ppt_search: PPT_RESULT_WHITELIST,
+  ppt_render: PPT_RESULT_WHITELIST,
+  ppt_edit: PPT_RESULT_WHITELIST,
   pdf_inspect: {
     sourcePath: true,
     pageCount: true,

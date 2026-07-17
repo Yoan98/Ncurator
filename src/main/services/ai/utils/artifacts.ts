@@ -139,6 +139,44 @@ export const appendDocxApplyArtifactsAndEmitEvents = (input: {
   return nextArtifacts
 }
 
+export const appendFileChangeArtifactsAndEmitEvents = (input: {
+  existingArtifacts?: readonly AiArtifactRef[]
+  records: readonly AiFileChangeRecord[]
+  sendEvent: (event: AiRunEvent) => void
+  runId: string
+  taskId: string
+}): AiArtifactRef[] => {
+  const nextArtifacts = mergeArtifactRefs(
+    input.existingArtifacts,
+    ...input.records.map((record) => [
+      createFileArtifactRef({
+        capability: record.capability,
+        artifactPath: record.path,
+        operation: record.operation,
+        applyId: record.id,
+        summary: `${record.capability} applied: ${record.fileName}`
+      })
+    ])
+  )
+
+  input.records.forEach((record) => {
+    input.sendEvent({
+      type: 'file_artifact',
+      runId: input.runId,
+      taskId: input.taskId,
+      artifactId: uuidv4(),
+      capability: record.capability,
+      path: record.path,
+      fileName: record.fileName,
+      operation: record.operation,
+      applyId: record.id,
+      summary: `${record.capability} applied: ${record.fileName}`,
+      createdAt: Date.now()
+    })
+  })
+  return nextArtifacts
+}
+
 export const buildFileChangesSummaryFromDocxApplyRecords = (
   records: readonly DocxApplyRecord[]
 ): FileChangesSummary => ({
