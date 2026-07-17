@@ -50,6 +50,9 @@ if (!definition) throw new Error(`unsupported release platform: ${platform}`)
 const auditPath = path.join(inputDirectory, 'package-audit.json')
 const audit = JSON.parse(await readFile(auditPath, 'utf8'))
 assertPackageAudit(audit, platform, `package security audit ${auditPath}`)
+if (platform.startsWith('macos-') && !['passed', 'warning'].includes(audit.sizeBudget?.status)) {
+  throw new Error(`macOS package size budget is missing or failed: ${auditPath}`)
+}
 
 const version = releaseTag.slice(1)
 const sha512 = async (filePath) =>
@@ -91,7 +94,8 @@ const fragment = {
       totalBytes: application.totalBytes,
       archiveBytes: application.archiveBytes,
       archiveFileCount: application.archiveFileCount
-    }))
+    })),
+    ...(audit.sizeBudget ? { sizeBudget: audit.sizeBudget } : {})
   },
   ...(signature ? { signature } : {})
 }

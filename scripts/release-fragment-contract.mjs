@@ -11,6 +11,7 @@ const ASSET_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*$/u
 
 const isNonEmptyString = (value) => typeof value === 'string' && value.trim().length > 0
 const isPositiveInteger = (value) => Number.isSafeInteger(value) && value > 0
+const isFiniteNumber = (value) => typeof value === 'number' && Number.isFinite(value)
 const isValidDate = (value) => isNonEmptyString(value) && !Number.isNaN(Date.parse(value))
 
 const fail = (label, reason) => {
@@ -34,6 +35,33 @@ export const assertPackageAudit = (audit, platform, label = 'package audit') => 
     if (!isPositiveInteger(application.totalBytes)) fail(label, 'invalid installed size')
     if (!isPositiveInteger(application.archiveBytes)) fail(label, 'invalid app.asar size')
     if (!isPositiveInteger(application.archiveFileCount)) fail(label, 'invalid app.asar file count')
+  }
+  if (audit.sizeBudget) {
+    if (!['passed', 'warning', 'not-configured'].includes(audit.sizeBudget.status)) {
+      fail(label, 'package size budget did not pass')
+    }
+    const expectedBudgetPlatform = `${expected.platform}-${expected.arch}`
+    if (audit.sizeBudget.platform !== expectedBudgetPlatform) {
+      fail(label, `expected size budget platform ${expectedBudgetPlatform}`)
+    }
+    if (!Array.isArray(audit.sizeBudget.metrics)) fail(label, 'size budget metrics are missing')
+    const metricNames = new Set()
+    for (const metric of audit.sizeBudget.metrics) {
+      if (!isNonEmptyString(metric?.name)) fail(label, 'size budget metric name is missing')
+      if (metricNames.has(metric.name)) fail(label, `duplicate size budget metric ${metric.name}`)
+      metricNames.add(metric.name)
+      if (!['passed', 'warning'].includes(metric.status)) fail(label, 'size budget metric failed')
+      if (!isPositiveInteger(metric.actualBytes)) fail(label, 'invalid actual package size')
+      if (!isPositiveInteger(metric.baselineBytes)) fail(label, 'invalid baseline package size')
+      if (!isPositiveInteger(metric.hardLimitBytes)) fail(label, 'invalid package size hard limit')
+      if (!isFiniteNumber(metric.growthPercent)) fail(label, 'invalid package size growth')
+    }
+    if (expected.platform === 'darwin') {
+      for (const requiredName of ['installedApp', 'appAsar', 'dmg', 'zip']) {
+        if (!metricNames.has(requiredName))
+          fail(label, `missing size budget metric ${requiredName}`)
+      }
+    }
   }
   return audit
 }

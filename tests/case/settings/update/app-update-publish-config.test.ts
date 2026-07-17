@@ -112,6 +112,10 @@ describe('app update publish config', () => {
       path.resolve('scripts/verify-mac-update-signature.mjs'),
       'utf8'
     )
+    const runtimeSignatureVerifier = await readFile(
+      path.resolve('src/main/services/update/utils/macUpdateSignature.ts'),
+      'utf8'
+    )
 
     expect(localRelease).toContain('NCURATOR_X64_NODE')
     expect(localRelease).toContain('NCURATOR_X64_PYTHON')
@@ -123,6 +127,27 @@ describe('app update publish config', () => {
     expect(signatureVerifier).toContain('macOS release must not use an ad-hoc signature')
     expect(signatureVerifier).toContain('macOS designated requirement must remain stable')
     expect(signatureVerifier).toContain('packaged macOS app launch verification passed')
+    expect(signatureVerifier).toContain("'--deep'")
+    expect(runtimeSignatureVerifier).toContain("['-d', '-r-', '--verbose=4'")
+    expect(runtimeSignatureVerifier).not.toContain("'--deep'")
+  })
+
+  it('enforces approved macOS package size budgets before publishing', async () => {
+    const config = JSON.parse(
+      await readFile(path.resolve('build/package-size-budgets.json'), 'utf8')
+    )
+    const packageAudit = await readFile(path.resolve('scripts/audit-packaged-app.mjs'), 'utf8')
+    const releaseFragment = await readFile(
+      path.resolve('scripts/create-release-fragment.mjs'),
+      'utf8'
+    )
+
+    expect(config.warningGrowthPercent).toBe(3)
+    expect(config.failureGrowthPercent).toBe(8)
+    expect(config.platforms['darwin-arm64']).toBeTruthy()
+    expect(config.platforms['darwin-x64']).toBeTruthy()
+    expect(packageAudit).toContain('package size budget failed')
+    expect(releaseFragment).toContain('macOS package size budget is missing or failed')
   })
 
   it('keeps only R2 as the release binary source', async () => {

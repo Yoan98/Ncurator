@@ -2,7 +2,10 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { TerminalSessionManager } from '../../../../src/main/services/ai/human/tools/terminal/TerminalSessionManager'
+import {
+  TerminalSessionManager,
+  type TerminalCommandResult
+} from '../../../../src/main/services/ai/human/tools/terminal/TerminalSessionManager'
 
 const managers: TerminalSessionManager[] = []
 const tempRoots: string[] = []
@@ -35,6 +38,29 @@ const writeCommandStub = async (
     `#!/bin/sh\nprintf '%s\\n' '${output}'\nexit ${String(exitCode)}\n`
   )
   await fs.chmod(commandPath, 0o755)
+}
+
+const finishCommand = async (
+  manager: TerminalSessionManager,
+  result: TerminalCommandResult,
+  chatSessionId: string,
+  workspaceId: string
+) => {
+  const exitCode =
+    result.exitCode ??
+    (await manager.waitForCommand({
+      terminalId: result.terminalId,
+      commandId: result.commandId,
+      chatSessionId,
+      workspaceId
+    }))
+  const read = manager.read({
+    terminalId: result.terminalId,
+    chatSessionId,
+    workspaceId,
+    outputCursor: 0
+  })
+  return { exitCode, output: read.output }
 }
 
 afterEach(async () => {
@@ -142,11 +168,13 @@ describe.skipIf(process.platform === 'win32')('terminal session manager', () => 
       runId: 'run-env',
       command: 'python3 --version'
     })
+    const nodeCompleted = await finishCommand(manager, nodeResult, 'chat-env', 'workspace-env')
+    const pythonCompleted = await finishCommand(manager, pythonResult, 'chat-env', 'workspace-env')
 
-    expect(nodeResult.exitCode).toBe(0)
-    expect(nodeResult.output).toContain('v22.0.0')
-    expect(pythonResult.exitCode).toBe(127)
-    expect(pythonResult.output).toContain('python unavailable')
+    expect(nodeCompleted.exitCode).toBe(0)
+    expect(nodeCompleted.output).toContain('v22.0.0')
+    expect(pythonCompleted.exitCode).toBe(127)
+    expect(pythonCompleted.output).toContain('python unavailable')
     expect(process.execPath).not.toBe(path.join(binRoot, 'node'))
   })
 
@@ -173,10 +201,22 @@ describe.skipIf(process.platform === 'win32')('terminal session manager', () => 
       runId: 'run-python',
       command: 'python3 --version'
     })
+    const nodeCompleted = await finishCommand(
+      manager,
+      nodeResult,
+      'chat-python',
+      'workspace-python'
+    )
+    const pythonCompleted = await finishCommand(
+      manager,
+      pythonResult,
+      'chat-python',
+      'workspace-python'
+    )
 
-    expect(nodeResult.exitCode).toBe(127)
-    expect(pythonResult.exitCode).toBe(0)
-    expect(pythonResult.output).toContain('Python 3.12.0')
+    expect(nodeCompleted.exitCode).toBe(127)
+    expect(pythonCompleted.exitCode).toBe(0)
+    expect(pythonCompleted.output).toContain('Python 3.12.0')
   })
 
   it('can expose a terminal profile without Node or Python', async () => {
@@ -202,9 +242,16 @@ describe.skipIf(process.platform === 'win32')('terminal session manager', () => 
       runId: 'run-empty',
       command: 'python3 --version'
     })
+    const nodeCompleted = await finishCommand(manager, nodeResult, 'chat-empty', 'workspace-empty')
+    const pythonCompleted = await finishCommand(
+      manager,
+      pythonResult,
+      'chat-empty',
+      'workspace-empty'
+    )
 
-    expect(nodeResult.exitCode).toBe(127)
-    expect(pythonResult.exitCode).toBe(127)
+    expect(nodeCompleted.exitCode).toBe(127)
+    expect(pythonCompleted.exitCode).toBe(127)
   })
 
   it('yields a running command, exposes incremental output, and stops it', async () => {

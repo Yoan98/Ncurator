@@ -5,7 +5,10 @@ import os from 'node:os'
 import path from 'node:path'
 import { promisify } from 'node:util'
 import { afterEach, describe, expect, it } from 'vitest'
-import { assertReleaseFragment } from '../../../../scripts/release-fragment-contract.mjs'
+import {
+  assertPackageAudit,
+  assertReleaseFragment
+} from '../../../../scripts/release-fragment-contract.mjs'
 
 const execFileAsync = promisify(execFile)
 let temporaryDirectory = ''
@@ -164,5 +167,45 @@ describe('release fragment', () => {
         files: [{ ...validFragment.files[0], sha512: 'not-a-sha512' }]
       })
     ).toThrow(/invalid sha512/u)
+    expect(() =>
+      assertReleaseFragment({
+        ...validFragment,
+        audit: {
+          ...validFragment.audit,
+          sizeBudget: {
+            status: 'failed',
+            platform: 'win32-x64',
+            metrics: []
+          }
+        }
+      })
+    ).toThrow(/package size budget did not pass/u)
+  })
+
+  it('requires all four macOS size metrics before publishing', () => {
+    expect(() =>
+      assertPackageAudit(
+        {
+          schemaVersion: 1,
+          generatedAt: '2026-07-17T00:00:00.000Z',
+          platform: 'darwin',
+          arch: 'arm64',
+          applications: [
+            {
+              root: 'mac-arm64/Ncurator.app',
+              totalBytes: 1_000,
+              archiveBytes: 500,
+              archiveFileCount: 20
+            }
+          ],
+          sizeBudget: {
+            status: 'passed',
+            platform: 'darwin-arm64',
+            metrics: []
+          }
+        },
+        'macos-arm64'
+      )
+    ).toThrow(/missing size budget metric installedApp/u)
   })
 })

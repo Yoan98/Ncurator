@@ -1,6 +1,4 @@
 import { app, BrowserWindow, ipcMain } from 'electron'
-import { spawnSync } from 'node:child_process'
-import path from 'node:path'
 import { autoUpdater } from 'electron-updater'
 import type { ProgressInfo, UpdateDownloadedEvent, UpdateInfo } from 'electron-updater'
 import {
@@ -11,8 +9,9 @@ import {
   APP_UPDATE_STATUS_CHANNEL
 } from '../../../shared/constants'
 import type { AppUpdateActionResponse, AppUpdateSnapshot } from '../../../shared/types'
+import { MAC_UPDATE_SIGNATURE_ERROR } from './constants'
+import { hasStableMacUpdateSignature } from './utils/macUpdateSignature'
 
-const MAC_UPDATE_SIGNATURE_ERROR = 'macOS 自动更新需要固定的非 ad-hoc 代码签名'
 const STARTUP_UPDATE_CHECK_DELAY_MS = 5000
 const PERIODIC_UPDATE_CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000
 const UPDATE_BUSY_STATUSES = new Set<AppUpdateSnapshot['status']>([
@@ -31,34 +30,6 @@ type AppUpdateDependencies = {
   schedule: (callback: () => void, delayMs: number) => ReturnType<typeof setTimeout>
   repeat: (callback: () => void, intervalMs: number) => ReturnType<typeof setInterval>
   macUpdateSignatureValid: () => boolean
-}
-
-const resolveMacAppBundlePath = (): string => {
-  const executableMarker = `${path.sep}Contents${path.sep}MacOS${path.sep}`
-  const markerIndex = process.execPath.lastIndexOf(executableMarker)
-  return markerIndex < 0 ? process.execPath : process.execPath.slice(0, markerIndex)
-}
-
-const hasStableMacUpdateSignature = (): boolean => {
-  const appBundlePath = resolveMacAppBundlePath()
-  const verification = spawnSync(
-    '/usr/bin/codesign',
-    ['--verify', '--deep', '--strict', appBundlePath],
-    { encoding: 'utf8' }
-  )
-  const signature = spawnSync('/usr/bin/codesign', ['-d', '-r-', '--verbose=4', appBundlePath], {
-    encoding: 'utf8'
-  })
-  const output = `${signature.stdout || ''}\n${signature.stderr || ''}`
-
-  return (
-    verification.status === 0 &&
-    signature.status === 0 &&
-    !/^Signature=adhoc$/mu.test(output) &&
-    /^Authority=.+$/mu.test(output) &&
-    /designated => .*identifier "com\.yoan\.ncurator"/mu.test(output) &&
-    !/designated => .*cdhash\b/mu.test(output)
-  )
 }
 
 const createDefaultDependencies = (): AppUpdateDependencies => ({

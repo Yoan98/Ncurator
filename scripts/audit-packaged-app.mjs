@@ -9,9 +9,11 @@ import {
   auditPackageDirectory,
   scanTextForSecrets
 } from './package-content-policy.mjs'
+import { evaluatePackageSizeBudget, loadPackageSizeBudgetConfig } from './package-size-budget.mjs'
 
 const inputDirectory = path.resolve(process.argv[2] || 'dist')
 const reportPath = path.join(inputDirectory, 'package-audit.json')
+const sizeBudgetPath = path.resolve('build/package-size-budgets.json')
 
 const findFiles = (directory, predicate) => {
   const result = []
@@ -126,5 +128,17 @@ const report = {
   applications,
   installers
 }
+report.sizeBudget = evaluatePackageSizeBudget(report, loadPackageSizeBudgetConfig(sizeBudgetPath))
 fs.writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`, 'utf8')
 process.stdout.write(`[package] audit report: ${reportPath}\n`)
+for (const metric of report.sizeBudget.metrics) {
+  if (metric.status === 'passed') continue
+  process.stdout.write(
+    `[package] size budget ${metric.status}: ${metric.label} ${formatBytes(metric.actualBytes)}, ` +
+      `baseline ${formatBytes(metric.baselineBytes)}, growth ${metric.growthPercent.toFixed(1)}%, ` +
+      `hard limit ${formatBytes(metric.hardLimitBytes)}\n`
+  )
+}
+if (report.sizeBudget.status === 'failed') {
+  throw new Error(`package size budget failed for ${report.sizeBudget.platform}`)
+}

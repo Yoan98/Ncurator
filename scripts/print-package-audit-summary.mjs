@@ -22,6 +22,17 @@ for (const installer of report.installers || []) {
     `| Installer/update | ${installer.name} | ${formatSize(installer.bytes)} |\n`
   )
 }
-process.stdout.write(
-  '\nThe source, secret and forbidden-file audit passed. Numeric size budgets are not enabled yet.\n'
-)
+process.stdout.write('\nThe source, secret and forbidden-file audit passed.\n')
+if (!report.sizeBudget || report.sizeBudget.status === 'not-configured') {
+  process.stdout.write('Numeric size budgets are not configured for this platform.\n')
+} else {
+  process.stdout.write(`\n## Package size budget: ${report.sizeBudget.status}\n\n`)
+  process.stdout.write('| Item | Current | Baseline | Growth | Hard limit | Status |\n')
+  process.stdout.write('| --- | ---: | ---: | ---: | ---: | --- |\n')
+  for (const metric of report.sizeBudget.metrics || []) {
+    process.stdout.write(
+      `| ${metric.label} | ${formatSize(metric.actualBytes)} | ${formatSize(metric.baselineBytes)} | ` +
+        `${Number(metric.growthPercent).toFixed(1)}% | ${formatSize(metric.hardLimitBytes)} | ${metric.status} |\n`
+    )
+  }
+}

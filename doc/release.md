@@ -90,9 +90,11 @@ electron-builder 完成后，`pnpm run package:audit` 检查真实 `.app` 或 `w
 - ONNX Runtime 和 native prebuild 只保留当前平台与架构；
 - 生成 `dist/package-audit.json`，记录安装目录、`app.asar` 和安装包体积。
 
+macOS 体积审计使用 `build/package-size-budgets.json` 中独立的 arm64、x64 基线。相比基线增长超过 3% 时输出警告，增长超过 8% 或超过硬上限时审计失败。审计失败或缺少体积结果的 macOS 产物不能生成发布 fragment，也不能上传。
+
 macOS 正式产物还必须真实启动到窗口和 preload API 就绪。只通过文件审计、`codesign --verify` 或存在进程都不算可发布。
 
-所有正式构建命令都包含最终审计。体积硬预算暂不启用，等 macOS arm64、macOS x64、Windows x64 都完成实测后再设置。
+所有正式构建命令都包含最终审计。macOS 已启用体积硬预算；Windows 等完成稳定版本实测后再设置独立基线。
 
 常用构建命令：
 
@@ -239,6 +241,8 @@ pnpm release:signing:setup
 ```
 
 当前 macOS 使用项目自建的 `Ncurator Update Signing`，并设置 `timestamp: none`，因为 Apple 时间戳服务不接受该证书。这套签名用于保证两个架构更新包来自同一发布方，不等同于 Apple Developer ID 公证。
+
+应用启动时只读取顶层 App 的签名身份和 designated requirement，用于判断自动更新是否可用，不执行耗时的 `codesign --verify --deep`。完整的 `--deep --strict` 验签只在正式发布阶段执行，随后还必须真实启动打包后的 App。
 
 自建证书没有 Apple Team ID。macOS 会把不同签名对象视为不同 Team，因此顶层 App 和子进程都必须使用 `build/entitlements.mac.inherit.plist` 关闭 library validation，否则 dyld 会拒绝加载 Electron Framework 或 sidecar 的 Python Framework。正式发布在生成 fragment 前必须真实启动打包后的 App；不能只看 `codesign --verify`。
 
