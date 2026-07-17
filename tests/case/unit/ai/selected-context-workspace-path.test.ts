@@ -19,7 +19,9 @@ describe('ai unit selected context workspace path', () => {
 
     expect(text).toContain('工作区：')
     expect(text).toContain('- 根目录：/tmp/real-workspace-root')
-    expect(text).toContain('所有本地文件路径和新生成的产物路径都必须位于这个工作区内。')
+    expect(text).toContain(
+      '除系统明确提供的用户级 runtime 路径外，所有任务文件和新生成的产物都必须位于这个工作区内。'
+    )
     expect(text).not.toContain('display-name-only')
     expect(text).not.toContain('cwd')
     expect(text).not.toContain('显式指定 cwd')

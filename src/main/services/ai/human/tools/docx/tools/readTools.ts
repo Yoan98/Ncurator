@@ -375,7 +375,7 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
   const docxOutlineTool = createDocxTool({
     runtime,
     name: DOCX_OUTLINE_TOOL_SPEC.name,
-    description: DOCX_OUTLINE_TOOL_SPEC.description,
+    description: DOCX_OUTLINE_TOOL_SPEC.promptSpec.description,
     schema: DOCX_OUTLINE_TOOL_SPEC.inputSchema,
     onError: ({ message }) => {
       runtime.input.emitActivity({
@@ -480,7 +480,7 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
   const docxSearchTool = createDocxTool({
     runtime,
     name: DOCX_SEARCH_TOOL_SPEC.name,
-    description: DOCX_SEARCH_TOOL_SPEC.description,
+    description: DOCX_SEARCH_TOOL_SPEC.promptSpec.description,
     schema: DOCX_SEARCH_TOOL_SPEC.inputSchema,
     onError: ({ message }) => {
       runtime.input.emitActivity({
@@ -662,7 +662,7 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
   const docxReadTool = createDocxTool({
     runtime,
     name: DOCX_READ_TOOL_SPEC.name,
-    description: DOCX_READ_TOOL_SPEC.description,
+    description: DOCX_READ_TOOL_SPEC.promptSpec.description,
     schema: DOCX_READ_TOOL_SPEC.inputSchema,
     onError: ({ message }) => {
       runtime.input.emitActivity({

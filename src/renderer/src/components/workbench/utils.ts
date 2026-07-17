@@ -73,7 +73,7 @@ const isAssistantToolName = (toolName: string): toolName is AssistantToolName =>
   toolName === 'terminal_read' ||
   toolName === 'terminal_stop' ||
   toolName === 'file_read' ||
-  toolName === 'file_write' ||
+  toolName === 'file_edit' ||
   toolName === 'kb_search' ||
   toolName === 'kb_list_documents' ||
   toolName === 'docx_outline' ||
@@ -234,7 +234,7 @@ const getToolUiKind = (toolName?: AssistantToolName): AssistantProcessSkillKey =
   }
   if (toolName === 'docx_edit') return 'docx-edit'
   if (toolName === 'file_read') return 'file-read'
-  if (toolName === 'file_write') return 'file-write'
+  if (toolName === 'file_edit') return 'file-edit'
   if (
     toolName === 'pdf_inspect' ||
     toolName === 'pdf_search' ||
@@ -273,7 +273,7 @@ const getToolIconKind = (skillKey: AssistantProcessSkillKey): AssistantProcessIc
   if (skillKey === 'docx-edit') return 'edit'
   if (skillKey === 'docx-read' || skillKey === 'pdf-read' || skillKey === 'ppt') return 'document'
   if (skillKey === 'file-read') return 'document'
-  if (skillKey === 'file-write') return 'edit'
+  if (skillKey === 'file-edit') return 'edit'
   if (skillKey === 'kb') return 'knowledge'
   if (skillKey === 'web-search') return 'search'
   if (skillKey === 'web-crawl') return 'web'
@@ -338,7 +338,7 @@ const getToolSummaryText = (
     }
     return sentence(text(`读取 ${normalizedCount} 个文件失败`))
   }
-  if (skillKey === 'file-write') {
+  if (skillKey === 'file-edit') {
     if (status === 'running') return sentence(text(`正在编辑 ${normalizedCount} 个文件`))
     if (status === 'completed') return sentence(text(`已编辑 ${normalizedCount} 个文件`))
     if (status === 'partial_failed') {
@@ -434,7 +434,7 @@ const getToolItemText = (
   if (toolName === 'file_read') {
     return sentence(text('读取文件 '), text(fileLabel))
   }
-  if (toolName === 'file_write') {
+  if (toolName === 'file_edit') {
     return sentence(text('编辑文件 '), text(fileLabel))
   }
   if (toolName === 'pdf_inspect') {

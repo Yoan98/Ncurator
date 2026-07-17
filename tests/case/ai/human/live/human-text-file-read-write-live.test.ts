@@ -39,7 +39,7 @@ describe('ai human live backend', () => {
           )
           await runtime.seedLlmConfig(loadLiveLlmConfigFromEnv())
           const runner = createHumanTestRunner(runtime, {
-            allowedToolNames: ['file_read', 'file_write']
+            allowedToolNames: ['file_read', 'file_edit']
           })
           const output = await runner.run({
             taskId: runtime.taskId,
@@ -63,10 +63,10 @@ describe('ai human live backend', () => {
           }
 
           const starts = filterAiRunEventsByType(result.events, 'tool_call_started')
-          const writes = starts.filter((event) => event.toolName === 'file_write')
+          const writes = starts.filter((event) => event.toolName === 'file_edit')
           const resultText = JSON.stringify(
             filterAiRunEventsByType(result.events, 'tool_call_result')
-              .filter((event) => event.toolName === 'file_write')
+              .filter((event) => event.toolName === 'file_edit')
               .map((event) => event.result?.data)
           )
           runtime.assertThat(

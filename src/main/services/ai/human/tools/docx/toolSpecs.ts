@@ -36,7 +36,6 @@ type DocxToolSpec<
   TName extends string = string,
   TSkillId extends RuntimeSkillId = RuntimeSkillId
 > = HumanToolSpec<TArgs, TOutput, TName, TSkillId> & {
-  description: string
   activityActionType?: string
 }
 
@@ -188,14 +187,13 @@ export const DOCX_OUTLINE_TOOL_SPEC = {
   name: 'docx_outline',
   familyId: 'docx',
   requiresWorkspace: true,
-  description: '读取 docx 的整体结构提纲。',
   skillIds: ['docx-read'],
   inputSchema: docxOutlineRequestSchema,
   outputSchema: docxOutlineOutputSchema,
   promptSpec: {
     name: 'docx_outline',
     description:
-      '能力：按 percent 或 blockIndex 范围读取 sourcePath 对应 docx 的块级 outline。\n结果：返回范围内每个块的文本内容、块级定位信息和结构类型信息。\n边界：返回块级文本与结构概览，不包含 runs 或表格单元格内的详细段落结构。',
+      '能力：按 percent 或 blockIndex 范围读取指定 docx 的块级 outline。\n结果：返回范围内每个块的文本内容、块级定位信息和结构类型信息。\n边界：返回块级文本与结构概览，不包含 runs 或表格单元格内的详细段落结构。',
     whenToUse: '适用于需要 docx 块级 outline 信息的任务。',
     examples: [
       {
@@ -220,14 +218,13 @@ export const DOCX_SEARCH_TOOL_SPEC = {
   name: 'docx_search',
   familyId: 'docx',
   requiresWorkspace: true,
-  description: '在 docx 中定位相关内容，支持 literal / regex / semantic 三种模式。',
   skillIds: ['docx-read'],
   inputSchema: docxSearchRequestSchema,
   outputSchema: docxSearchOutputSchema,
   promptSpec: {
     name: 'docx_search',
     description:
-      '能力：在 sourcePath 对应 docx 中按 literal、regex 或 semantic 模式检索块级文本。\n结果：返回匹配块的文本、匹配位置和相关性信息。\n边界：semantic 检索依赖 embedding runtime；返回命中数量受上限限制。',
+      '能力：在指定 docx 中按 literal、regex 或 semantic 模式检索块级文本。\n结果：返回匹配块的文本、匹配位置和相关性信息。\n边界：semantic 检索依赖 embedding runtime；返回命中数量受上限限制。',
     whenToUse: '适用于需要检索 docx 块级文本内容的任务。',
     examples: [
       {
@@ -257,14 +254,13 @@ export const DOCX_READ_TOOL_SPEC = {
   name: 'docx_read_blocks',
   familyId: 'docx',
   requiresWorkspace: true,
-  description: '按 blockIndex 区间或 blockIds 精读 docx 内容。',
   skillIds: ['docx-read'],
   inputSchema: docxReadRequestSchema,
   outputSchema: docxReadBlocksOutputSchema,
   promptSpec: {
     name: 'docx_read_blocks',
     description:
-      '能力：按 blockId 集合或 blockIndex 闭区间读取 sourcePath 对应 docx 的详细块内容。\n结果：返回块内更细的内容结构，包括段落 runs、表格单元格和单元格段落信息。\n边界：读取指定块的详细结构，不改变 docx 内容。',
+      '能力：按 blockId 集合或 blockIndex 闭区间读取指定 docx 的详细块内容。\n结果：返回块内更细的内容结构，包括段落 runs、表格单元格和单元格段落信息。\n边界：读取指定块的详细结构，不改变 docx 内容。',
     whenToUse: '适用于需要 docx 指定块详细内容的任务。',
     examples: [
       {
@@ -286,7 +282,6 @@ export const DOCX_EDIT_TOOL_SPEC = {
   name: 'docx_edit',
   familyId: 'docx',
   requiresWorkspace: true,
-  description: '创建或修改 docx 内容，并返回写入后的相邻区域回读。',
   skillIds: ['docx-write'],
   inputSchema: docxEditSchema,
   outputSchema: docxWriteOutputSchema,

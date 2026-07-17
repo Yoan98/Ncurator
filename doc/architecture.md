@@ -76,7 +76,7 @@ Docx Runtime 负责 Word 文档读取、搜索、编辑、任务内回滚、写�
 
 ### Text File Runtime
 
-Text File Runtime 通过 builtin `text-file` skill 提供 `file_read` 和 `file_write`。它负责 UTF-8 普通文本读取、创建、完整改写、唯一文本编辑和全部精确匹配替换。写入先完成全部校验，再通过同目录临时文件原子替换。工具只提供写入语义和专用元数据，文件变化统一由 Run 前后工作区扫描确认。
+Text File Runtime 通过 builtin `text-file` skill 提供 `file_read` 和 `file_edit`。它负责 UTF-8 普通文本读取、创建、完整改写、唯一文本编辑和全部精确匹配替换。写入先完成全部校验，再通过同目录临时文件原子替换。工具只提供写入语义和专用元数据，文件变化统一由 Run 前后工作区扫描确认。
 
 ### Terminal Runtime
 
@@ -205,7 +205,7 @@ flowchart TD
 普通文本文件链路不使用 unified diff 作为 AI 输入或输出：
 
 1. `file_read` 解码 UTF-8 文本，并返回指定行范围和总行数。
-2. `file_write` 按 action 校验完整输入；`edit` 的每个 `oldText` 必须唯一且互不重叠，`replaceAll` 对一个非空 `oldText` 执行全部非重叠精确替换。
+2. `file_edit` 按 action 校验完整输入；`edit` 的每个 `oldText` 必须唯一且互不重叠，`replaceAll` 对一个非空 `oldText` 执行全部非重叠精确替换。
 3. 后端保留原始 BOM、换行风格和文件权限，写入前再次检查文件未发生变化。
 4. Run 结束扫描将真实 before/after 内容保存为不可变对象；首次打开修改预览时通过 `diff` 库生成带行号的结构化 hunks 并缓存。
 5. Workbench 的 `TextFileDiffViewer` 读取结构化 diff，使用单行号列展示新增、删除、上下文和词级变化，hunk 间用“N 行未修改”收起；展开时读取 after 对象，大 diff 使用虚拟列表。

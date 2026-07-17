@@ -96,7 +96,7 @@ export const buildPdfReadTools = (runtime: PdfToolRuntime): StructuredToolInterf
       }),
     {
       name: PDF_INSPECT_TOOL_SPEC.name,
-      description: PDF_INSPECT_TOOL_SPEC.description,
+      description: PDF_INSPECT_TOOL_SPEC.promptSpec.description,
       schema: PDF_INSPECT_TOOL_SPEC.inputSchema
     }
   )
@@ -157,7 +157,7 @@ export const buildPdfReadTools = (runtime: PdfToolRuntime): StructuredToolInterf
       }),
     {
       name: PDF_SEARCH_TOOL_SPEC.name,
-      description: PDF_SEARCH_TOOL_SPEC.description,
+      description: PDF_SEARCH_TOOL_SPEC.promptSpec.description,
       schema: PDF_SEARCH_TOOL_SPEC.inputSchema
     }
   )
@@ -220,7 +220,7 @@ export const buildPdfReadTools = (runtime: PdfToolRuntime): StructuredToolInterf
       }),
     {
       name: PDF_READ_PAGES_TOOL_SPEC.name,
-      description: PDF_READ_PAGES_TOOL_SPEC.description,
+      description: PDF_READ_PAGES_TOOL_SPEC.promptSpec.description,
       schema: PDF_READ_PAGES_TOOL_SPEC.inputSchema
     }
   )
@@ -270,7 +270,7 @@ export const buildPdfReadTools = (runtime: PdfToolRuntime): StructuredToolInterf
       }),
     {
       name: PDF_RENDER_PAGES_TOOL_SPEC.name,
-      description: PDF_RENDER_PAGES_TOOL_SPEC.description,
+      description: PDF_RENDER_PAGES_TOOL_SPEC.promptSpec.description,
       schema: PDF_RENDER_PAGES_TOOL_SPEC.inputSchema
     }
   )

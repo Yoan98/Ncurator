@@ -1,3 +1,4 @@
+import os from 'node:os'
 import path from 'node:path'
 import type { AiRuntimePlatform } from '../../../types'
 import { getAiRuntimePlatform } from '../../../utils/platform'
@@ -411,11 +412,20 @@ const collectBoundaryPathTokens = (tokens: string[]): string[] => {
 }
 
 export const isPathInsideRoot = (candidatePath: string, rootPath: string) => {
-  const root = path.resolve(rootPath)
-  const candidate = path.resolve(candidatePath)
-  const rel = path.relative(root, candidate)
-  return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel))
+  const useWindowsPaths =
+    /^[a-z]:[\\/]/i.test(candidatePath) ||
+    /^[a-z]:[\\/]/i.test(rootPath) ||
+    /^\\\\/.test(candidatePath) ||
+    /^\\\\/.test(rootPath)
+  const pathApi = useWindowsPaths ? path.win32 : path
+  const root = pathApi.resolve(rootPath)
+  const candidate = pathApi.resolve(candidatePath)
+  const rel = pathApi.relative(root, candidate)
+  return rel === '' || (!rel.startsWith('..') && !pathApi.isAbsolute(rel))
 }
+
+export const isPathInsideAnyRoot = (candidatePath: string, rootPaths: readonly string[]): boolean =>
+  rootPaths.some((rootPath) => isPathInsideRoot(candidatePath, rootPath))
 
 export const resolveWorkspacePath = (input: {
   rawPath: string
@@ -432,11 +442,14 @@ export const resolveWorkspacePath = (input: {
 
 export const checkWorkspaceBoundary = (
   command: string,
-  rootPath: string,
+  rootPaths: string | readonly string[],
   platform: AiRuntimePlatform = getAiRuntimePlatform()
 ): { ok: true } | { ok: false; reason: string } => {
-  if (!rootPath) {
-    return { ok: false, reason: 'workspace root path is missing' }
+  const allowedRootPaths = (Array.isArray(rootPaths) ? rootPaths : [rootPaths])
+    .map((rootPath) => String(rootPath || '').trim())
+    .filter(Boolean)
+  if (allowedRootPaths.length === 0) {
+    return { ok: false, reason: 'allowed root path is missing' }
   }
 
   for (const segment of parseTerminalCommandSegments(command, {
@@ -446,13 +459,16 @@ export const checkWorkspaceBoundary = (
       if (isRelativeEscapeToken(candidatePath)) {
         return { ok: false, reason: `relative path escapes workspace boundary: ${candidatePath}` }
       }
+      const expandedCandidatePath = /^~[\\/]/.test(candidatePath)
+        ? path.join(os.homedir(), candidatePath.slice(2))
+        : candidatePath
       if (
-        (candidatePath.startsWith('/') ||
-          /^[a-z]:[\\/]/i.test(candidatePath) ||
-          /^\\\\/.test(candidatePath)) &&
-        !isPathInsideRoot(candidatePath, rootPath)
+        (expandedCandidatePath.startsWith('/') ||
+          /^[a-z]:[\\/]/i.test(expandedCandidatePath) ||
+          /^\\\\/.test(expandedCandidatePath)) &&
+        !isPathInsideAnyRoot(expandedCandidatePath, allowedRootPaths)
       ) {
-        return { ok: false, reason: `path out of workspace boundary: ${candidatePath}` }
+        return { ok: false, reason: `path out of allowed boundary: ${candidatePath}` }
       }
     }
   }

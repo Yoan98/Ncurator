@@ -46,7 +46,7 @@ const itemText = (toolName: string, input: Record<string, string>) =>
 describe('workbench assistant process copy', () => {
   it('separates file read and write wording and icons', () => {
     const read = reduceTool('file_read', { sourcePath: '/tmp/readme.md' })[0]
-    const write = reduceTool('file_write', { sourcePath: '/tmp/readme.md' })[0]
+    const write = reduceTool('file_edit', { sourcePath: '/tmp/readme.md' })[0]
     expect(read?.iconKind).toBe('document')
     expect(write?.iconKind).toBe('edit')
     expect(read?.completedText.map((segment) => segment.text).join('')).toBe('已读取 1 个文件')
@@ -54,7 +54,7 @@ describe('workbench assistant process copy', () => {
     expect(itemText('file_read', { sourcePath: '/tmp/readme.md' })).toContain(
       '读取文件 /tmp/readme.md'
     )
-    expect(itemText('file_write', { sourcePath: '/tmp/readme.md' })).toContain(
+    expect(itemText('file_edit', { sourcePath: '/tmp/readme.md' })).toContain(
       '编辑文件 /tmp/readme.md'
     )
     expect(itemText('file_read', { sourcePath: '/tmp/readme.md' })).not.toContain('文本文件')

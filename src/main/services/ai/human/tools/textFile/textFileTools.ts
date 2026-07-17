@@ -16,11 +16,11 @@ import { withToolLifecycle } from '../utils/lifecycle'
 import { checkToolResultSize } from '../utils/resultSizeGuard'
 import { createToolEventEmitter } from '../utils/toolEvents'
 import {
+  FILE_EDIT_TOOL_SPEC,
   FILE_READ_TOOL_SPEC,
-  FILE_WRITE_TOOL_SPEC,
+  type FileEditInput,
   type FileReadInput,
-  type FileReadOutput,
-  type FileWriteInput
+  type FileReadOutput
 } from './toolSpecs'
 import { countTextFileDiffLines, createTextFileDiffArtifact } from './textDiff'
 import {
@@ -36,7 +36,7 @@ type TextFileToolFailure = Error & {
   resultData?: JsonObject
 }
 
-type AppliedWrite = {
+type AppliedEdit = {
   message: string
   record: AiFileChangeRecord
 }
@@ -103,7 +103,7 @@ const applyReplacements = (content: string, replacements: MatchedReplacement[]):
 
 const applyUniqueEdits = (
   content: string,
-  edits: Extract<FileWriteInput, { action: 'edit' }>['edits'],
+  edits: Extract<FileEditInput, { action: 'edit' }>['edits'],
   sourcePath: string
 ): { content: string; changeCount: number } => {
   const replacements: MatchedReplacement[] = edits.map((edit, editIndex) => {
@@ -199,8 +199,8 @@ const atomicReplaceFile = async (input: {
   }
 }
 
-const buildWriteMessage = (input: {
-  action: FileWriteInput['action']
+const buildEditMessage = (input: {
+  action: FileEditInput['action']
   sourcePath: string
   changeCount: number
 }): string => {
@@ -212,10 +212,10 @@ const buildWriteMessage = (input: {
   return `Replaced ${input.changeCount} occurrences in ${input.sourcePath}.`
 }
 
-const writeTextFile = async (
+const editTextFile = async (
   buildInput: WorkspaceCapabilityBuildInput,
-  args: FileWriteInput
-): Promise<AppliedWrite> => {
+  args: FileEditInput
+): Promise<AppliedEdit> => {
   const allowMissing = args.action === 'create'
   const sourcePath = await resolveSafeTextFilePath({
     sourcePath: args.sourcePath,
@@ -395,7 +395,7 @@ const writeTextFile = async (
       })
 
       return {
-        message: buildWriteMessage({
+        message: buildEditMessage({
           action: args.action,
           sourcePath: args.sourcePath,
           changeCount
@@ -534,30 +534,30 @@ export const buildTextFileCapabilityTools = (
     }
   )
 
-  const fileWrite = tool(
+  const fileEdit = tool(
     async (rawArgs) => {
-      const args = rawArgs as FileWriteInput
+      const args = rawArgs as FileEditInput
       safeEmitActivity(buildInput, {
-        actionType: 'file_write',
+        actionType: 'file_edit',
         status: 'started',
         summary: `${args.action}: ${args.sourcePath}`
       })
       return await withToolLifecycle({
         emitter: toolEvents,
-        toolName: FILE_WRITE_TOOL_SPEC.name,
+        toolName: FILE_EDIT_TOOL_SPEC.name,
         args: args as IpcJsonObject,
         execute: async (session) => {
-          const applied = await writeTextFile(buildInput, args)
+          const applied = await editTextFile(buildInput, args)
           session.succeed(
             undefined,
             toToolResult({
-              toolName: FILE_WRITE_TOOL_SPEC.name,
+              toolName: FILE_EDIT_TOOL_SPEC.name,
               ok: true,
               data: applied.message
             })
           )
           safeEmitActivity(buildInput, {
-            actionType: 'file_write',
+            actionType: 'file_edit',
             status: 'completed',
             summary: applied.message
           })
@@ -568,13 +568,13 @@ export const buildTextFileCapabilityTools = (
             error.message,
             undefined,
             toToolResult({
-              toolName: FILE_WRITE_TOOL_SPEC.name,
+              toolName: FILE_EDIT_TOOL_SPEC.name,
               ok: false,
               data: { error: error.message }
             })
           )
           safeEmitActivity(buildInput, {
-            actionType: 'file_write',
+            actionType: 'file_edit',
             status: 'failed',
             summary: error.message
           })
@@ -582,11 +582,11 @@ export const buildTextFileCapabilityTools = (
       })
     },
     {
-      name: FILE_WRITE_TOOL_SPEC.name,
-      description: FILE_WRITE_TOOL_SPEC.promptSpec.description,
-      schema: FILE_WRITE_TOOL_SPEC.inputSchema
+      name: FILE_EDIT_TOOL_SPEC.name,
+      description: FILE_EDIT_TOOL_SPEC.promptSpec.description,
+      schema: FILE_EDIT_TOOL_SPEC.inputSchema
     }
   )
 
-  return { tools: [fileRead, fileWrite] }
+  return { tools: [fileRead, fileEdit] }
 }

@@ -22,7 +22,7 @@
 - `tool / text-file`
   - 通过率：`2 / 2`
   - 检测时间：`2026-07-16 19:07:56 +08:00`
-  - 覆盖补充：`file_read` 行范围与总行数；`file_write` 的 create、rewrite、唯一 edit、replaceAll、原子失败、BOM/CRLF 保持、结构化 diff 重放和修改记录。
+  - 覆盖补充：`file_read` 行范围与总行数；`file_edit` 的 create、rewrite、唯一 edit、replaceAll、原子失败、BOM/CRLF 保持、结构化 diff 重放和修改记录。
 - `tool / pdf`
   - 通过率：`4 / 4`
   - 检测时间：`2026-07-16 19:07:56 +08:00`
@@ -553,7 +553,7 @@ AI unit / 辅助测试目录：
 - 测试类型：`backend`
 - What：验证普通文本创建、范围读取、多个唯一编辑、replaceAll、AI-facing 简短结果、修改记录和结构化 diff。
 - Why：普通文本工具是代码、Markdown 和配置文件处理的基础，必须保证 AI 不需要生成或解析 unified diff。
-- How：真实调用 `file_read/file_write`，连续执行 create、edit、replaceAll，再从统一修改记录读取 diff artifact 并用 before 内容重放。
+- How：真实调用 `file_read/file_edit`，连续执行 create、edit、replaceAll，再从统一修改记录读取 diff artifact 并用 before 内容重放。
 - Oracle：文件内容正确；结果只包含简短文本；每次写入产生 `text_file` 修改记录与 artifact；结构化 diff 重放等于真实 after。
 - Not：不验证 Workbench 视觉样式。
 
@@ -1120,7 +1120,7 @@ AI unit / 辅助测试目录：
 - 测试类型：`backend`
 - What：验证 live 模型读取代码文件后，使用 `replaceAll` 修改统一关键词、使用 `edit` 修改唯一块，并回读确认。
 - Why：工具契约正确不等于模型会正确选择 action；必须验证真实模型能区分唯一编辑和全部替换。
-- How：只开放 `file_read/file_write`，准备包含两处 `OLD_API_URL` 和一处 timeout 的真实 TypeScript 文件，要求全部改名并精确修改 timeout。
+- How：只开放 `file_read/file_edit`，准备包含两处 `OLD_API_URL` 和一处 timeout 的真实 TypeScript 文件，要求全部改名并精确修改 timeout。
 - Oracle：任务完成；至少一次 `replaceAll` 参数正确、一次 `edit` 参数有效；最终文件无旧关键词；写入工具结果不包含 diff、previewPath 或 unified patch。
 - Not：不要求固定调用轮数，不验证 Workbench UI。
 

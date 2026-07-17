@@ -1,11 +1,7 @@
 import { describe, it } from 'vitest'
 import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
-import {
-  buildCompleteTaskDecision,
-  buildToolDecision,
-  filterAiRunEventsByType
-} from '../testUtils'
+import { buildCompleteTaskDecision, buildToolDecision, filterAiRunEventsByType } from '../testUtils'
 
 const isWindows = process.platform === 'win32'
 
@@ -65,15 +61,24 @@ describe('ai human mock-llm backend', () => {
       assert: async (result, runtime) => {
         const toolResults = filterAiRunEventsByType(result.events, 'tool_call_result')
         const failedResult = toolResults.find((event) => event.toolName === 'terminal_run')
+        const terminalData = failedResult?.result?.data
+        const exitCode =
+          typeof terminalData === 'object' &&
+          terminalData !== null &&
+          !Array.isArray(terminalData) &&
+          typeof terminalData.exitCode === 'number'
+            ? terminalData.exitCode
+            : null
 
         runtime.assertThat(
           result.output.status === 'completed' &&
             Boolean(failedResult) &&
-            failedResult?.result?.ok === false &&
-            failedResult.result?.code !== 'ok',
+            failedResult?.result?.ok === true &&
+            exitCode !== null &&
+            exitCode !== 0,
           {
             name: 'human-recovers-from-real-tool-failure',
-            message: '真实工具失败后，human 仍应继续走到 mouth 并输出最终结果。',
+            message: '终端命令非零退出后，human 仍应识别失败事实并继续完成最终交付。',
             data: failedResult
           }
         )

@@ -1,5 +1,10 @@
 import type { AiRunContext } from '../../types'
 import { renderReferenceScopeText } from '../../prompts/referenceScope'
+import {
+  getUserRuntimeDir,
+  getWorkspaceAssetsRootDir,
+  getWorkspaceScriptsRootDir
+} from '../../../assets/WorkspaceAssetService'
 import { HUMAN_HAND_CALL_LIMIT } from '../constants'
 import { getLastRoundFocus, getRecentHistoryRounds } from '../memory/rounds'
 import {
@@ -20,15 +25,12 @@ import {
   renderToolInputSchemaForPrompt
 } from '../tools/schemaPromptRenderer'
 import { createHumanThoughtDecisionSchema } from '../schema'
-import type { HumanState, ToolPromptExample } from '../types'
+import type { HumanState } from '../types'
 import type { HumanToolSpec } from '../tools/types'
 import type { AiRuntimePlatform } from '../../types'
 import { renderDecisionHintForBrain } from './decisionHints'
 import { getAvailableToolNames } from '../node/utils/runtimeCache'
 import { terminalSessionManager } from '../tools/terminal/TerminalSessionManager'
-
-const renderToolExample = (example: ToolPromptExample, index: number): string =>
-  `${index + 1}. ${example.goal}\n${JSON.stringify(example.args)}`
 
 const indentLines = (value: string, level: number): string =>
   value
@@ -69,6 +71,11 @@ export const renderLocalEnvironmentText = (ctx: AiRunContext): string => {
             current_command: terminal.currentCommand,
             started_at: terminal.startedAt ? new Date(terminal.startedAt).toISOString() : null
           }))
+      },
+      runtime_paths: {
+        assets: ctx.workspace ? getWorkspaceAssetsRootDir(ctx.workspace.rootPath) : null,
+        scripts: ctx.workspace ? getWorkspaceScriptsRootDir(ctx.workspace.rootPath) : null,
+        user_runtime: getUserRuntimeDir()
       }
     },
     null,
@@ -94,7 +101,6 @@ const renderSkillCatalogToolSpecLine = (input: {
     renderToolInputSchemaForPrompt(input.spec.inputSchema, { compact: true }),
     2
   )
-  const examples = input.spec.promptSpec.examples.map(renderToolExample).join('\n')
   const ownerSkills = input.skillLabels.join('、') || 'none'
 
   return `
@@ -104,7 +110,6 @@ const renderSkillCatalogToolSpecLine = (input: {
   - 适用时机：${input.spec.promptSpec.whenToUse}
   - 输入结构：
 ${inputSchemaText}
-${examples ? `  - 示例：\n${indentLines(examples, 2)}` : ''}
 `.trim()
 }
 
@@ -226,7 +231,7 @@ export const buildBrainPrompt = (input: {
     nextAction为hand时：
     - calls 必须是完整合法的可执行计划，系统会按顺序串行执行。
     - calls[*].toolName：必须严格使用当前工具说明里的精确名称。
-    - calls[*].args：必须是对象；其中真实字段、必填参数和参数层级，必须严格遵守 skill_catalog 中对应工具的输入结构与示例。
+    - calls[*].args：必须是对象；其中真实字段、必填参数和参数层级，必须严格遵守 skill_catalog 中对应工具的输入结构与工具说明。
     - calls 最大只允许规划${HUMAN_HAND_CALL_LIMIT}个。
 
     nextAction为mouth时：
@@ -238,12 +243,19 @@ export const buildBrainPrompt = (input: {
     - evidenceReferences[*].usedFor 必须明确描述“这条资料支撑了最终答复中的哪部分内容”，不能只写笼统用途。
   </next_action_contract>
 
+  <workspace_runtime>
+    - JS/Python 运行代码必须先保存为 runtime_paths.scripts/<用途名称>/ 下的脚本文件再执行，禁止使用 node -e、python -c 等内联代码；scripts 不使用 UUID，并应优先复用已有脚本。
+    - 任务临时资源和脚本产生的文件只能放到 runtime_paths.assets/<uuid>/；用户要求的正式交付文件必须写入工作区的正常目录。
+    - 需要编写脚本时，先检查本机 Node.js 和 Python，选择可用且适合任务的一种。
+    - 如果两者都不可用，通过终端将所需运行环境下载到 runtime_paths.user_runtime；禁止放入工作区、全局安装或修改系统环境。
+  </workspace_runtime>
+
   <context_block_guide>
     - task_goal：用户的任务诉求。
     - preference：当前用户对 AI 推进方式的偏好；若为“无”，则不施加额外偏好。
     - reference_scope：当前工作区、默认知识范围、显式缩圈范围和可用边界。
     - search_strategy：当前任务默认遵循的检索思路提示。
-    - local_environment：当前本机运行环境，内容是 JSON；platform 是当前用户电脑平台，current_time 是当前系统时间，terminal_state 是当前会话的终端状态与每个终端当前所在路径。
+    - local_environment：当前本机运行环境，内容是 JSON；platform 是当前用户电脑平台，current_time 是当前系统时间，terminal_state 是当前会话的终端状态，runtime_paths 是工作区临时目录和用户级运行环境目录。
     - conversation_history：当前会话历史视图。
     - summary：当前会话中跨任务仍有效的滚动摘要，用于理解用户在同一窗口里的连续主线、稳定偏好与当前状态。
     - recent_turns：最近几轮已经完成且尚未被会话压缩的真实对话，不包含当前正在执行的任务。

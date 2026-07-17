@@ -1181,7 +1181,7 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
   const docxEditTool = createDocxTool({
     runtime,
     name: DOCX_EDIT_TOOL_SPEC.name,
-    description: DOCX_EDIT_TOOL_SPEC.description,
+    description: DOCX_EDIT_TOOL_SPEC.promptSpec.description,
     schema: DOCX_EDIT_TOOL_SPEC.inputSchema,
     onError: ({ message }) => {
       runtime.input.emitActivity({

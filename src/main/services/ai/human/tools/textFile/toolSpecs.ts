@@ -14,7 +14,7 @@ const fileEditSchema = z.object({
   newText: z.string()
 })
 
-export const FILE_WRITE_SCHEMA = z.discriminatedUnion('action', [
+export const FILE_EDIT_SCHEMA = z.discriminatedUnion('action', [
   z.object({
     sourcePath: z.string().min(1),
     action: z.literal('create'),
@@ -46,7 +46,7 @@ export const FILE_READ_OUTPUT_SCHEMA = z.object({
   totalLines: z.number().int().min(1)
 })
 
-export const FILE_WRITE_OUTPUT_SCHEMA = z.string().min(1)
+export const FILE_EDIT_OUTPUT_SCHEMA = z.string().min(1)
 
 const fileResourceKey = (args: JsonObject): string | undefined => readStringArg(args, 'sourcePath')
 
@@ -65,7 +65,7 @@ export const FILE_READ_TOOL_SPEC: HumanToolSpec<
   promptSpec: {
     name: 'file_read',
     description:
-      '能力：读取 sourcePath 对应的 UTF-8 普通文本文件，可通过 startLine 和 lineCount 指定行范围。\n结果：返回文本内容、实际起止行和文件总行数。\n边界：startLine 从 1 开始；不处理目录、二进制文件或无效 UTF-8 文件；',
+      '能力：读取指定的 UTF-8 普通文本文件，可通过 startLine 和 lineCount 指定行范围。\n结果：返回文本内容、实际起止行和文件总行数。\n边界：startLine 从 1 开始；不处理目录、二进制文件或无效 UTF-8 文件；',
     whenToUse: '适用于需要获取 Markdown、TXT、配置或代码文件文本内容的任务。',
     examples: [
       {
@@ -84,22 +84,29 @@ export const FILE_READ_TOOL_SPEC: HumanToolSpec<
   })
 }
 
-export const FILE_WRITE_TOOL_SPEC: HumanToolSpec<
-  z.infer<typeof FILE_WRITE_SCHEMA>,
-  z.infer<typeof FILE_WRITE_OUTPUT_SCHEMA>,
-  'file_write',
+export const FILE_EDIT_TOOL_SPEC: HumanToolSpec<
+  z.infer<typeof FILE_EDIT_SCHEMA>,
+  z.infer<typeof FILE_EDIT_OUTPUT_SCHEMA>,
+  'file_edit',
   'text-file'
 > = {
-  name: 'file_write',
+  name: 'file_edit',
   familyId: 'text-file',
   skillIds: ['text-file'],
   requiresWorkspace: true,
-  inputSchema: FILE_WRITE_SCHEMA,
-  outputSchema: FILE_WRITE_OUTPUT_SCHEMA,
+  inputSchema: FILE_EDIT_SCHEMA,
+  outputSchema: FILE_EDIT_OUTPUT_SCHEMA,
   promptSpec: {
-    name: 'file_write',
-    description:
-      '能力：通过 create 创建文本文件，通过 rewrite 完整改写，通过 edit 执行一个或多个精确且唯一的文本修改，通过 replaceAll 替换全部精确匹配。\n结果：成功时返回包含文件路径和实际修改数量的简短文本，并记录可查看、可回退的文件修改。\n边界：只处理 UTF-8 普通文本；create 不覆盖已有文件；rewrite、edit 和 replaceAll 要求文件已存在；edit 的每个 oldText 必须恰好匹配一次且互不重叠；replaceAll 的 oldText 必须至少匹配一次；任一校验失败都不会写入文件。',
+    name: 'file_edit',
+    description: [
+      '能力：创建或修改 UTF-8 普通文本文件。每次调用执行一个 action。',
+      'action=create：创建新文件并写入完整内容，不覆盖已有文件。',
+      'action=rewrite：使用新内容完整改写已有文件。',
+      'action=edit：对已有文件执行一个或多个精确文本修改；每个 oldText 必须恰好匹配一次。',
+      'action=replaceAll：把已有文件中 oldText 的全部精确匹配替换为 newText。',
+      '结果：返回文件路径和实际修改数量，并记录可查看、可回退的文件修改。',
+      '边界：只处理 UTF-8 普通文本；rewrite、edit 和 replaceAll 要求文件已存在；edit 的多项修改不能重叠；replaceAll 必须至少匹配一次；修改已有文件时保留原有 BOM、换行风格和文件权限；任一校验或写入失败都不会保留部分修改。'
+    ].join('\n'),
     whenToUse: '适用于需要创建、完整改写或精确修改普通文本文件的任务。',
     examples: [
       {
@@ -146,8 +153,8 @@ export const FILE_WRITE_TOOL_SPEC: HumanToolSpec<
   })
 }
 
-export const TEXT_FILE_TOOL_SPECS = [FILE_READ_TOOL_SPEC, FILE_WRITE_TOOL_SPEC] as const
+export const TEXT_FILE_TOOL_SPECS = [FILE_READ_TOOL_SPEC, FILE_EDIT_TOOL_SPEC] as const
 
 export type FileReadInput = z.infer<typeof FILE_READ_SCHEMA>
 export type FileReadOutput = z.infer<typeof FILE_READ_OUTPUT_SCHEMA>
-export type FileWriteInput = z.infer<typeof FILE_WRITE_SCHEMA>
+export type FileEditInput = z.infer<typeof FILE_EDIT_SCHEMA>

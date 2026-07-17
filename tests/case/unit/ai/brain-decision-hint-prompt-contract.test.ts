@@ -1,3 +1,5 @@
+import os from 'node:os'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { buildBrainPrompt } from '../../../../src/main/services/ai/human/prompts/brain'
 import { createInitialHumanState } from '../../../../src/main/services/ai/human/state/schema'
@@ -69,6 +71,11 @@ describe('ai unit brain decision-hint prompt contract', () => {
       terminal_state: {
         new_terminal_default_path: '/tmp/workspace',
         terminals: []
+      },
+      runtime_paths: {
+        assets: path.join('/tmp/workspace', '.ncurator', 'runtime', 'assets'),
+        scripts: path.join('/tmp/workspace', '.ncurator', 'runtime', 'scripts'),
+        user_runtime: path.join(os.homedir(), '.ncurator', 'runtime')
       }
     })
     expect(localEnvironment.current_time.utc_iso).toMatch(
@@ -214,6 +221,30 @@ describe('ai unit brain decision-hint prompt contract', () => {
     expect(prompt).toContain('没有明确路径或 URL 的资料不要放入 evidenceReferences')
   })
 
+  it('renders the concise workspace runtime contract', () => {
+    const state = createInitialHumanState({
+      taskId: 'task-runtime',
+      userInput: '生成一个临时脚本'
+    })
+
+    const prompt = buildBrainPrompt({
+      state,
+      ctx: createFakeCtx()
+    }).system
+
+    expect(prompt).toContain('<workspace_runtime>')
+    expect(prompt).toContain(
+      'JS/Python 运行代码必须先保存为 runtime_paths.scripts/<用途名称>/ 下的脚本文件再执行'
+    )
+    expect(prompt).toContain('禁止使用 node -e、python -c 等内联代码')
+    expect(prompt).toContain('任务临时资源和脚本产生的文件只能放到 runtime_paths.assets/<uuid>/')
+    expect(prompt).toContain('先检查本机 Node.js 和 Python')
+    expect(prompt).toContain('下载到 runtime_paths.user_runtime')
+    expect(prompt).toContain('禁止放入工作区、全局安装或修改系统环境')
+    expect(prompt).not.toContain('ELECTRON_RUN_AS_NODE')
+    expect(prompt).not.toContain('Shell 脚本')
+  })
+
   it('renders prompt-friendly output shape for hand calls while keeping args generic', () => {
     const state = createInitialHumanState({
       taskId: 'task-shape',
@@ -281,7 +312,7 @@ describe('ai unit brain decision-hint prompt contract', () => {
     expect(prompt.user).not.toContain('这段不应作为 thought 区块正文出现')
   })
 
-  it('renders compact json examples and compact tool input schema in brain prompt', () => {
+  it('renders output examples and compact tool schemas without tool examples', () => {
     const state = createInitialHumanState({
       taskId: 'task-4',
       userInput: '继续处理资料'
@@ -317,6 +348,10 @@ describe('ai unit brain decision-hint prompt contract', () => {
     expect(prompt.user).toContain(
       '- 输入结构：\n    { queryText: string, strategy?: "auto" | "semantic" | "keyword", limit?: integer, sourceType?: "all" | "file" | "web", documentIds?: Array<string> }'
     )
+    expect(prompt.user).not.toContain('- 示例：')
+    expect(prompt.user).not.toContain('最近 DeepSeek 融资情况')
+    expect(prompt.system).toContain('输入结构与工具说明')
+    expect(prompt.system).not.toContain('输入结构与示例')
     expect(prompt.user).not.toContain('{\n        command: string\n        cwd?: string\n      }')
     expect(prompt.user).not.toContain('{\n      "command": "ls 工作"')
   })

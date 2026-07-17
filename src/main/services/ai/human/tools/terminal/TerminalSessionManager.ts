@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto'
 import * as pty from 'node-pty'
 import type { IPty } from 'node-pty'
 import type { AiRuntimePlatform } from '../../../types'
-import { isPathInsideRoot } from './commandPolicy'
+import { isPathInsideAnyRoot } from './commandPolicy'
 
 export type TerminalSessionStatus = 'idle' | 'running' | 'stopping' | 'closed'
 export type TerminalCommandReturnReason =
@@ -65,6 +65,7 @@ type ManagedTerminalSession = {
   chatSessionId: string
   workspaceId: string
   workspaceRootPath: string
+  allowedRootPaths: string[]
   platform: AiRuntimePlatform
   process: IPty
   status: TerminalSessionStatus
@@ -89,6 +90,7 @@ export type TerminalSessionManagerOptions = {
   maxSessionsPerChat?: number
   idleTtlMs?: number
   runningTtlMs?: number
+  environment?: Record<string, string>
 }
 
 const READY_MARKER = '__NCURATOR_READY__'
@@ -98,7 +100,7 @@ const DONE_PREFIX = '__NCURATOR_DONE:'
 const DONE_SUFFIX = '__'
 const ANSI_PATTERN =
   // eslint-disable-next-line no-control-regex
-  /[\u001B\u009B][[\]()#;?]*(?:(?:(?:[a-zA-Z\d]*(?:;[-a-zA-Z\d\/#&.:=?%@~_]+)*)?\u0007)|(?:(?:\d{1,4}(?:[;:]\d{0,4})*)?[\dA-PR-TZcf-nq-uy=><~]))/g
+  /[\u001B\u009B][[\]()#;?]*(?:(?:(?:[a-zA-Z\d]*(?:;[-a-zA-Z\d/#&.:=?%@~_]+)*)?\u0007)|(?:(?:\d{1,4}(?:[;:]\d{0,4})*)?[\dA-PR-TZcf-nq-uy=><~]))/g
 
 const stripTerminalControlText = (value: string): string =>
   value.replace(ANSI_PATTERN, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n')
@@ -119,12 +121,13 @@ const buildShellStart = (platform: AiRuntimePlatform) =>
     ? { executable: 'powershell.exe', args: ['-NoLogo', '-NoProfile'] }
     : { executable: '/bin/zsh', args: ['-f'] }
 
-const buildTerminalEnv = (): Record<string, string> => ({
+const buildTerminalEnv = (overrides?: Record<string, string>): Record<string, string> => ({
   ...Object.fromEntries(
     Object.entries(process.env).filter(
       (entry): entry is [string, string] => typeof entry[1] === 'string'
     )
   ),
+  ...overrides,
   TERM: 'xterm-256color',
   PS1: '',
   PROMPT: '',
@@ -204,6 +207,7 @@ export class TerminalSessionManager {
   private readonly maxSessionsPerChat: number
   private readonly idleTtlMs: number
   private readonly runningTtlMs: number
+  private readonly environment?: Record<string, string>
   private readonly cleanupTimer: ReturnType<typeof setInterval>
 
   public constructor(options: TerminalSessionManagerOptions = {}) {
@@ -213,6 +217,7 @@ export class TerminalSessionManager {
     this.maxSessionsPerChat = Math.max(1, Number(options.maxSessionsPerChat || 3))
     this.idleTtlMs = Math.max(1000, Number(options.idleTtlMs || 30 * 60 * 1000))
     this.runningTtlMs = Math.max(1000, Number(options.runningTtlMs || 2 * 60 * 60 * 1000))
+    this.environment = options.environment
     this.cleanupTimer = setInterval(() => this.pruneExpiredSessions(), 60_000)
     this.cleanupTimer.unref?.()
   }
@@ -239,6 +244,7 @@ export class TerminalSessionManager {
     chatSessionId: string
     workspaceId: string
     workspaceRootPath: string
+    userRuntimeRootPath?: string
     platform: AiRuntimePlatform
     runId: string
     command: string
@@ -438,12 +444,21 @@ export class TerminalSessionManager {
     chatSessionId: string
     workspaceId: string
     workspaceRootPath: string
+    userRuntimeRootPath?: string
     platform: AiRuntimePlatform
   }): Promise<ManagedTerminalSession> {
     const activeCount = this.list({ chatSessionId: input.chatSessionId }).length
     if (activeCount >= this.maxSessionsPerChat) throw new Error('terminal_session_limit_reached')
 
     const rootPath = path.resolve(input.workspaceRootPath)
+    const allowedRootPaths = Array.from(
+      new Set(
+        [rootPath, input.userRuntimeRootPath]
+          .map((root) => String(root || '').trim())
+          .filter(Boolean)
+          .map((root) => path.resolve(root))
+      )
+    )
     const ready = createDeferred()
     const shell = buildShellStart(input.platform)
     const terminalProcess = pty.spawn(shell.executable, shell.args, {
@@ -451,13 +466,14 @@ export class TerminalSessionManager {
       cols: 120,
       rows: 30,
       cwd: rootPath,
-      env: buildTerminalEnv()
+      env: buildTerminalEnv(this.environment)
     })
     const session: ManagedTerminalSession = {
       terminalId: randomUUID(),
       chatSessionId: input.chatSessionId,
       workspaceId: input.workspaceId,
       workspaceRootPath: rootPath,
+      allowedRootPaths,
       platform: input.platform,
       process: terminalProcess,
       status: 'idle',
@@ -561,7 +577,7 @@ export class TerminalSessionManager {
         const encodedCwd = session.protocolBuffer.slice(CWD_PREFIX.length, endIndex)
         session.protocolBuffer = session.protocolBuffer.slice(endIndex + DONE_SUFFIX.length)
         const nextPath = decodeCwd(encodedCwd)
-        if (nextPath && isPathInsideRoot(nextPath, session.workspaceRootPath)) {
+        if (nextPath && isPathInsideAnyRoot(nextPath, session.allowedRootPaths)) {
           session.currentTerminalPath = path.resolve(nextPath)
         }
         continue
@@ -587,7 +603,7 @@ export class TerminalSessionManager {
       if (!command || command.commandId !== commandId) continue
 
       const nextPath = decodeCwd(encodedCwd || '')
-      if (nextPath && isPathInsideRoot(nextPath, session.workspaceRootPath)) {
+      if (nextPath && isPathInsideAnyRoot(nextPath, session.allowedRootPaths)) {
         session.currentTerminalPath = path.resolve(nextPath)
       }
       const exitCode = Number(exitCodeText)

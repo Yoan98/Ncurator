@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import fs from 'node:fs/promises'
+import os from 'node:os'
 import path from 'node:path'
 
 const WORKSPACE_NCURATOR_DIR = '.ncurator'
@@ -23,6 +24,12 @@ export const getWorkspaceRuntimeDir = (workspaceRootPath: string): string =>
 export const getWorkspaceAssetsRootDir = (workspaceRootPath: string): string =>
   path.join(getWorkspaceRuntimeDir(workspaceRootPath), WORKSPACE_ASSETS_DIR)
 
+export const getWorkspaceScriptsRootDir = (workspaceRootPath: string): string =>
+  path.join(getWorkspaceRuntimeDir(workspaceRootPath), WORKSPACE_SCRIPTS_DIR)
+
+export const getUserRuntimeDir = (): string =>
+  path.join(os.homedir(), WORKSPACE_NCURATOR_DIR, WORKSPACE_RUNTIME_DIR)
+
 export const getWorkspaceAssetBucketDir = (
   workspaceRootPath: string,
   assetBucketId: string
@@ -38,7 +45,7 @@ export const ensureWorkspaceRuntimeDirs = async (workspaceRootPath: string): Pro
   const runtimeDir = getWorkspaceRuntimeDir(workspaceRootPath)
   await Promise.all([
     fs.mkdir(path.join(runtimeDir, WORKSPACE_ASSETS_DIR), { recursive: true }),
-    fs.mkdir(path.join(runtimeDir, WORKSPACE_SCRIPTS_DIR), { recursive: true })
+    fs.mkdir(getWorkspaceScriptsRootDir(workspaceRootPath), { recursive: true })
   ])
 }
 

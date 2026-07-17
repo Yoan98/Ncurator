@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   analyzeSafeTerminalCommandPolicy,
-  analyzeTerminalCommand
+  analyzeTerminalCommand,
+  checkWorkspaceBoundary
 } from '../../../../src/main/services/ai/human/tools/terminal/commandPolicy'
 import { buildWindowsPowerShellEncodedCommand } from '../../../../src/main/services/ai/human/tools/terminal/terminalExec'
 import { createTerminalRunToolSpec } from '../../../../src/main/services/ai/human/tools/terminal/toolSpecs'
@@ -92,6 +93,66 @@ describe('ai unit terminal command policy', () => {
     expect(analyzeSafeTerminalCommandPolicy('ls & rm -rf tmp', 'macos').executionPolicy).toBe(
       'approval_required'
     )
+  })
+
+  it('allows workspace and user runtime paths while rejecting other absolute paths', () => {
+    const workspaceRoot = '/tmp/workspace'
+    const userRuntimeRoot = '/Users/test/.ncurator/runtime'
+
+    expect(
+      checkWorkspaceBoundary(
+        'mkdir -p /tmp/workspace/.ncurator/runtime/scripts/report',
+        [workspaceRoot, userRuntimeRoot],
+        'macos'
+      )
+    ).toEqual({ ok: true })
+    expect(
+      checkWorkspaceBoundary(
+        'mkdir -p /Users/test/.ncurator/runtime/node',
+        [workspaceRoot, userRuntimeRoot],
+        'macos'
+      )
+    ).toEqual({ ok: true })
+    expect(
+      checkWorkspaceBoundary(
+        'cat /Users/test/Documents/private.txt',
+        [workspaceRoot, userRuntimeRoot],
+        'macos'
+      )
+    ).toEqual({
+      ok: false,
+      reason: 'path out of allowed boundary: /Users/test/Documents/private.txt'
+    })
+    expect(
+      checkWorkspaceBoundary(
+        'cat ~/Documents/private.txt',
+        [workspaceRoot, userRuntimeRoot],
+        'macos'
+      ).ok
+    ).toBe(false)
+  })
+
+  it('supports the same two-root boundary on windows', () => {
+    const workspaceRoot = 'C:\\workspaces\\demo'
+    const userRuntimeRoot = 'C:\\Users\\test\\.ncurator\\runtime'
+
+    expect(
+      checkWorkspaceBoundary(
+        'New-Item -ItemType Directory -Path C:\\Users\\test\\.ncurator\\runtime\\python',
+        [workspaceRoot, userRuntimeRoot],
+        'windows'
+      )
+    ).toEqual({ ok: true })
+    expect(
+      checkWorkspaceBoundary(
+        'Get-Content C:\\Users\\test\\Documents\\private.txt',
+        [workspaceRoot, userRuntimeRoot],
+        'windows'
+      )
+    ).toEqual({
+      ok: false,
+      reason: 'path out of allowed boundary: C:\\Users\\test\\Documents\\private.txt'
+    })
   })
 
   it('renders terminal prompt specs by platform', () => {
