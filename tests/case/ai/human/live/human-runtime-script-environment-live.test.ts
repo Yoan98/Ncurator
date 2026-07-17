@@ -87,14 +87,18 @@ describe.skipIf(process.platform !== 'darwin')('ai human live backend', () => {
               }
             }
 
-            const previousPath = process.env.PATH
             const sessionId = `human-runtime-script-${profile}-session`
-            process.env.PATH = await createRuntimeProfilePath(profile)
+            const runtimeProfilePath = await createRuntimeProfilePath(profile)
             await runtime.seedLlmConfig(loadLiveLlmConfigFromEnv())
             const runner = createHumanTestRunner(runtime, {
               sessionId,
               allowedToolNames: ['terminal_run', 'terminal_read', 'terminal_stop', 'file_edit'],
-              humanRuntimeOverrides: { hardActionLimit: 14 }
+              humanRuntimeOverrides: {
+                hardActionLimit: 14,
+                terminalEnvironment: {
+                  PATH: runtimeProfilePath
+                }
+              }
             })
 
             try {
@@ -126,7 +130,6 @@ describe.skipIf(process.platform !== 'darwin')('ai human live backend', () => {
                 assetContents
               }
             } finally {
-              process.env.PATH = previousPath
               await terminalSessionManager.closeByChatSession(sessionId)
             }
           },

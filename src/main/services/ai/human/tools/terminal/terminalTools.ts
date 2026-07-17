@@ -427,6 +427,7 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
               workspaceId: input.workspaceId,
               workspaceRootPath: input.workspaceRootPath,
               userRuntimeRootPath,
+              environment: input.ctx.humanRuntimeOverrides?.terminalEnvironment,
               platform: input.ctx.platform,
               runId: input.runId,
               command,

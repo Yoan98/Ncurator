@@ -245,6 +245,7 @@ export class TerminalSessionManager {
     workspaceId: string
     workspaceRootPath: string
     userRuntimeRootPath?: string
+    environment?: Record<string, string>
     platform: AiRuntimePlatform
     runId: string
     command: string
@@ -445,6 +446,7 @@ export class TerminalSessionManager {
     workspaceId: string
     workspaceRootPath: string
     userRuntimeRootPath?: string
+    environment?: Record<string, string>
     platform: AiRuntimePlatform
   }): Promise<ManagedTerminalSession> {
     const activeCount = this.list({ chatSessionId: input.chatSessionId }).length
@@ -466,7 +468,10 @@ export class TerminalSessionManager {
       cols: 120,
       rows: 30,
       cwd: rootPath,
-      env: buildTerminalEnv(this.environment)
+      env: buildTerminalEnv({
+        ...this.environment,
+        ...input.environment
+      })
     })
     const session: ManagedTerminalSession = {
       terminalId: randomUUID(),

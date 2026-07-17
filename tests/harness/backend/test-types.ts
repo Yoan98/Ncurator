@@ -175,6 +175,7 @@ export type CreateAiRunContextInput = {
   humanRuntimeOverrides?: {
     hardActionLimit?: number
     modelContextWindowTokens?: number
+    terminalEnvironment?: Record<string, string>
   }
   llmScript?: LlmScript
   structuredOutputScript?: StructuredOutputScript

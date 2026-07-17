@@ -244,6 +244,7 @@ export type AiRunContext = {
   humanRuntimeOverrides?: {
     hardActionLimit?: number
     modelContextWindowTokens?: number
+    terminalEnvironment?: Record<string, string>
   }
   workspace?: {
     workspaceId: string
