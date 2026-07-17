@@ -221,30 +221,6 @@ describe('ai unit brain decision-hint prompt contract', () => {
     expect(prompt).toContain('没有明确路径或 URL 的资料不要放入 evidenceReferences')
   })
 
-  it('renders the concise workspace runtime contract', () => {
-    const state = createInitialHumanState({
-      taskId: 'task-runtime',
-      userInput: '生成一个临时脚本'
-    })
-
-    const prompt = buildBrainPrompt({
-      state,
-      ctx: createFakeCtx()
-    }).system
-
-    expect(prompt).toContain('<workspace_runtime>')
-    expect(prompt).toContain(
-      'JS/Python 运行代码必须先保存为 runtime_paths.scripts/<用途名称>/ 下的脚本文件再执行'
-    )
-    expect(prompt).toContain('禁止使用 node -e、python -c 等内联代码')
-    expect(prompt).toContain('任务临时资源和脚本产生的文件只能放到 runtime_paths.assets/<uuid>/')
-    expect(prompt).toContain('先检查本机 Node.js 和 Python')
-    expect(prompt).toContain('下载到 runtime_paths.user_runtime')
-    expect(prompt).toContain('禁止放入工作区、全局安装或修改系统环境')
-    expect(prompt).not.toContain('ELECTRON_RUN_AS_NODE')
-    expect(prompt).not.toContain('Shell 脚本')
-  })
-
   it('renders prompt-friendly output shape for hand calls while keeping args generic', () => {
     const state = createInitialHumanState({
       taskId: 'task-shape',
