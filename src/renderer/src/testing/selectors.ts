@@ -186,6 +186,7 @@ export const workbenchSelectors = {
   applyPanel: 'workbench-apply-panel',
   applyOpenSystemButton: 'workbench-apply-open-system-button',
   applyRevealButton: 'workbench-apply-reveal-button',
+  docxPreviewModeToggle: 'workbench-docx-preview-mode-toggle',
   browserPanel: 'workbench-browser-panel',
   browserViewport: 'workbench-browser-viewport',
   browserMenu: 'workbench-browser-menu',

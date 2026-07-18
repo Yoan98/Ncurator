@@ -7,16 +7,12 @@ import { buildBlockIndex, loadDocxBundle } from '../adapters/ooxml/blockIndex'
 import type { IndexedNode } from '../adapters/ooxml/types'
 import { validateDocxBuffer } from '../adapters/ooxml/validator'
 import { createBlockElementFromSpec } from '../utils/specDom'
-import type {
-  DocxBlockSpec,
-  DocxReplayNode,
-  DocxReplaySession
-} from '../types'
+import type { DocxBlockSpec, DocxReplayNode, DocxReplaySession } from '../types'
 import { projectCommittedView, projectReviewView } from './viewProjector'
 
 const WORD_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
 
-type RevisionKind = 'inserted' | 'deleted' | 'formatted'
+type RevisionKind = 'inserted' | 'deleted'
 
 const ensureDirForFile = async (filePath: string): Promise<void> => {
   await fs.mkdir(path.dirname(filePath), { recursive: true })
@@ -44,6 +40,12 @@ const getOrCreateChild = (node: Element, localName: string): Element => {
 
 const styleRunForRevision = (run: Element, kind: RevisionKind): void => {
   const rPr = getOrCreateChild(run, 'rPr')
+  childElements(rPr)
+    .filter(
+      (child) =>
+        child.localName === 'color' || child.localName === 'shd' || child.localName === 'strike'
+    )
+    .forEach((child) => rPr.removeChild(child))
   if (kind === 'deleted') {
     const strike = run.ownerDocument.createElementNS(WORD_NS, 'w:strike')
     const color = run.ownerDocument.createElementNS(WORD_NS, 'w:color')
@@ -53,14 +55,6 @@ const styleRunForRevision = (run: Element, kind: RevisionKind): void => {
     rPr.appendChild(strike)
     rPr.appendChild(color)
     rPr.appendChild(shade)
-    return
-  }
-
-  if (kind === 'formatted') {
-    const shade = firstChildElement(rPr, 'shd') || run.ownerDocument.createElementNS(WORD_NS, 'w:shd')
-    setWordAttribute(shade, 'val', 'clear')
-    setWordAttribute(shade, 'fill', 'CFFAFE')
-    if (!shade.parentNode) rPr.appendChild(shade)
     return
   }
 
@@ -126,7 +120,7 @@ const applyFormattedMarker = (element: Element, query?: string): void => {
       ? runs.filter((run) => getRunText(run).includes(normalizedQuery))
       : runs
   const targetRuns = matchedRuns.length > 0 ? matchedRuns : runs
-  targetRuns.forEach((run) => styleRunForRevision(run, 'formatted'))
+  targetRuns.forEach((run) => styleRunForRevision(run, 'inserted'))
 }
 
 const getBody = (doc: Document): Element => {
@@ -170,33 +164,49 @@ const isRenderableIndexedNode = (
 const resolveElementForNode = (input: {
   shellDocument: Document
   node: DocxReplayNode
+  session: DocxReplaySession
   currentIndex: ReturnType<typeof buildBlockIndex>
   sourceIndex: ReturnType<typeof buildBlockIndex>
-}): Element => {
+}): { element: Element; reconstructed: boolean } => {
   const shouldUseSourceView =
     input.node.reviewState === 'deleted' || input.node.reviewState === 'replaced-old'
 
   if (!shouldUseSourceView) {
     const currentBlockId = input.node.currentBlockId || input.node.blockId
-    const currentNode = currentBlockId ? input.currentIndex.nodesById.get(currentBlockId) : undefined
+    const currentSnapshotBlock = currentBlockId
+      ? input.session.activeSnapshot.blockById.get(currentBlockId)
+      : undefined
+    const currentInternalBlockId = currentSnapshotBlock
+      ? input.currentIndex.bodyBlockIds[currentSnapshotBlock.blockIndex]
+      : currentBlockId
+    const currentNode = currentInternalBlockId
+      ? input.currentIndex.nodesById.get(currentInternalBlockId)
+      : undefined
     const renderableCurrentNode = isRenderableIndexedNode(currentNode) ? currentNode : null
     if (renderableCurrentNode) {
-      return cloneElement(renderableCurrentNode.node)
+      return { element: cloneElement(renderableCurrentNode.node), reconstructed: false }
     }
   }
 
   const sourceBlockId = input.node.sourceBlockId || input.node.blockId
-  const sourceNode = sourceBlockId ? input.sourceIndex.nodesById.get(sourceBlockId) : undefined
+  const sourceSnapshotBlock = sourceBlockId
+    ? input.session.sourceSnapshot.blockById.get(sourceBlockId)
+    : undefined
+  const sourceInternalBlockId = sourceSnapshotBlock
+    ? input.sourceIndex.bodyBlockIds[sourceSnapshotBlock.blockIndex]
+    : sourceBlockId
+  const sourceNode = sourceInternalBlockId
+    ? input.sourceIndex.nodesById.get(sourceInternalBlockId)
+    : undefined
   const renderableSourceNode = isRenderableIndexedNode(sourceNode) ? sourceNode : null
   if (renderableSourceNode) {
-    return cloneElement(renderableSourceNode.node)
+    return { element: cloneElement(renderableSourceNode.node), reconstructed: false }
   }
 
-  if (shouldUseSourceView) {
-    return createBlockElementFromSpec(input.shellDocument, input.node.spec, null)
+  return {
+    element: createBlockElementFromSpec(input.shellDocument, input.node.spec, null),
+    reconstructed: true
   }
-
-  return createBlockElementFromSpec(input.shellDocument, input.node.spec, null)
 }
 
 const applyReviewMarker = (element: Element, node: DocxReplayNode): void => {
@@ -213,7 +223,10 @@ const applyReviewMarker = (element: Element, node: DocxReplayNode): void => {
   }
 }
 
-const ensureStableTableLayout = (table: Element, spec: Extract<DocxBlockSpec, { kind: 'table' }>): void => {
+const ensureStableTableLayout = (
+  table: Element,
+  spec: Extract<DocxBlockSpec, { kind: 'table' }>
+): void => {
   const columnCount = Math.max(1, ...spec.rows.map((row) => row.length))
   const tableWidth = 9072
   const columnWidth = Math.max(720, Math.floor(tableWidth / columnCount))
@@ -221,7 +234,8 @@ const ensureStableTableLayout = (table: Element, spec: Extract<DocxBlockSpec, { 
 
   const tblPr = getOrCreateChild(table, 'tblPr')
   const tblW = firstChildElement(tblPr, 'tblW') || doc.createElementNS(WORD_NS, 'w:tblW')
-  const tblLayout = firstChildElement(tblPr, 'tblLayout') || doc.createElementNS(WORD_NS, 'w:tblLayout')
+  const tblLayout =
+    firstChildElement(tblPr, 'tblLayout') || doc.createElementNS(WORD_NS, 'w:tblLayout')
   setWordAttribute(tblW, 'w', String(tableWidth))
   setWordAttribute(tblW, 'type', 'dxa')
   setWordAttribute(tblLayout, 'type', 'fixed')
@@ -266,17 +280,18 @@ export const materializeDocxProjectedArtifact = async (input: {
   const sectPr = firstChildElement(body, 'sectPr')
   clearBodyContent(body)
 
-  const projectedNodes = input.kind === 'review'
-    ? projectReviewView(input.session)
-    : projectCommittedView(input.session)
+  const projectedNodes =
+    input.kind === 'review' ? projectReviewView(input.session) : projectCommittedView(input.session)
   projectedNodes.forEach((node) => {
-    const element = resolveElementForNode({
+    const resolved = resolveElementForNode({
       shellDocument: workingBundle.documentDom,
       node,
+      session: input.session,
       currentIndex,
       sourceIndex
     })
-    if (node.kind === 'table' && node.spec.kind === 'table') {
+    const element = resolved.element
+    if (resolved.reconstructed && node.kind === 'table' && node.spec.kind === 'table') {
       ensureStableTableLayout(element, node.spec)
     }
     if (input.kind === 'review') {
@@ -292,7 +307,9 @@ export const materializeDocxProjectedArtifact = async (input: {
   const buffer = await writeDocumentXml(workingBundle.zip, workingBundle.documentDom)
   await assertValidDocxBuffer(
     buffer,
-    input.kind === 'review' ? 'review_artifact_invalid_generated' : 'committed_artifact_invalid_generated'
+    input.kind === 'review'
+      ? 'review_artifact_invalid_generated'
+      : 'committed_artifact_invalid_generated'
   )
   await ensureDirForFile(input.outPath)
   await fs.writeFile(input.outPath, buffer)

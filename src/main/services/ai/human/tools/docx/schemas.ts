@@ -1,11 +1,15 @@
 import { z } from 'zod/v4'
 
+export const docxHexColorSchema = z
+  .string()
+  .regex(/^[0-9a-fA-F]{6}$/, 'color must be exactly 6 hexadecimal characters, for example FF0000')
+
 export const runSpecSchema = z.object({
   text: z.string(),
   bold: z.boolean().optional(),
   italic: z.boolean().optional(),
   underline: z.boolean().optional(),
-  color: z.string().optional()
+  color: docxHexColorSchema.optional()
 })
 
 export const paragraphSpecSchema = z.object({
@@ -25,12 +29,22 @@ export const tableSpecSchema = z.object({
 
 export const blockSpecSchema = z.union([paragraphSpecSchema, tableSpecSchema])
 export const docxSearchModeSchema = z.enum(['literal', 'regex', 'semantic'])
-export const docxTextStyleSchema = z.object({
-  color: z.string().optional(),
-  bold: z.boolean().optional(),
-  italic: z.boolean().optional(),
-  underline: z.boolean().optional()
-})
+export const docxTextStyleSchema = z
+  .object({
+    color: docxHexColorSchema.optional(),
+    bold: z.boolean().optional(),
+    italic: z.boolean().optional(),
+    underline: z.boolean().optional()
+  })
+  .strict()
+  .refine(
+    (style) =>
+      style.color !== undefined ||
+      style.bold !== undefined ||
+      style.italic !== undefined ||
+      style.underline !== undefined,
+    { message: 'style must contain at least one formatting property' }
+  )
 
 export const docOpSchema = z.discriminatedUnion('type', [
   z.object({

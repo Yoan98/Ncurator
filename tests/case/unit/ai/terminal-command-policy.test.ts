@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   analyzeSafeTerminalCommandPolicy,
+  analyzeTerminalCommandEffect,
   analyzeTerminalCommand,
   checkWorkspaceBoundary
 } from '../../../../src/main/services/ai/human/tools/terminal/commandPolicy'
@@ -44,9 +45,62 @@ describe('ai unit terminal command policy', () => {
         'windows'
       ).executionPolicy
     ).toBe('safe_allowed')
+    const pptSearch = analyzeSafeTerminalCommandPolicy(
+      'Get-ChildItem -Recurse -Filter "*.ppt*" -File | Select-Object FullName, Length, LastWriteTime',
+      'windows'
+    )
+    expect(pptSearch).toMatchObject({
+      executionPolicy: 'safe_allowed',
+      effect: 'read_only',
+      matchedRuleId: 'get-childitem|select-object',
+      reasonCode: 'matched_readonly_rules'
+    })
+    expect(
+      analyzeSafeTerminalCommandPolicy(
+        'Get-ChildItem | Select-Object -Property FullName, Length',
+        'windows'
+      ).executionPolicy
+    ).toBe('safe_allowed')
     expect(analyzeSafeTerminalCommandPolicy('ls', 'windows').executionPolicy).toBe(
       'approval_required'
     )
+  })
+
+  it('rejects dynamic powershell expressions while allowing quoted wildcard data', () => {
+    expect(
+      analyzeSafeTerminalCommandPolicy('Get-ChildItem -Filter "*.ppt*"', 'windows').executionPolicy
+    ).toBe('safe_allowed')
+
+    const calculatedProperty = analyzeSafeTerminalCommandPolicy(
+      "Get-ChildItem | Select-Object @{Name='X'; Expression={ Remove-Item important.txt }}",
+      'windows'
+    )
+    expect(calculatedProperty).toMatchObject({
+      executionPolicy: 'approval_required',
+      effect: 'unknown',
+      reasonCode: 'dynamic_expression'
+    })
+
+    const substitution = analyzeSafeTerminalCommandPolicy(
+      'Get-ChildItem -Path "$(Remove-Item important.txt)"',
+      'windows'
+    )
+    expect(substitution).toMatchObject({
+      executionPolicy: 'approval_required',
+      effect: 'unknown',
+      reasonCode: 'command_substitution'
+    })
+  })
+
+  it('distinguishes known mutations from commands with unknown effects', () => {
+    expect(analyzeTerminalCommandEffect('Remove-Item notes.txt', 'windows')).toMatchObject({
+      effect: 'mutating',
+      reasonCode: 'known_mutating_command'
+    })
+    expect(analyzeTerminalCommandEffect('Invoke-CustomReader notes.txt', 'windows')).toMatchObject({
+      effect: 'unknown',
+      reasonCode: 'unknown_command'
+    })
   })
 
   it('requires approval for inline interpreter commands', () => {
@@ -72,17 +126,24 @@ describe('ai unit terminal command policy', () => {
     const findMeta = macTerminalSpec.resolveExecutionMeta({
       command: 'find . -type f'
     })
+    const windowsMeta = createTerminalRunToolSpec('windows').resolveExecutionMeta({
+      command:
+        'Get-ChildItem -Recurse -Filter "*.ppt*" -File | Select-Object FullName, Length, LastWriteTime'
+    })
 
     expect(pythonMeta.mutability).toBe('mutating')
     expect(nodeMeta.mutability).toBe('mutating')
     expect(echoMeta.mutability).toBe('read_only')
     expect(findMeta.mutability).toBe('read_only')
+    expect(windowsMeta.mutability).toBe('read_only')
   })
 
   it('requires approval for shell redirection and broad commands', () => {
-    expect(analyzeSafeTerminalCommandPolicy('echo hi > a.txt', 'macos').executionPolicy).toBe(
-      'approval_required'
-    )
+    expect(analyzeSafeTerminalCommandPolicy('echo hi > a.txt', 'macos')).toMatchObject({
+      executionPolicy: 'approval_required',
+      effect: 'mutating',
+      reasonCode: 'output_redirection'
+    })
     expect(analyzeSafeTerminalCommandPolicy('find . -delete', 'macos').executionPolicy).toBe(
       'approval_required'
     )
@@ -93,6 +154,11 @@ describe('ai unit terminal command policy', () => {
     expect(analyzeSafeTerminalCommandPolicy('ls & rm -rf tmp', 'macos').executionPolicy).toBe(
       'approval_required'
     )
+    expect(analyzeSafeTerminalCommandPolicy('echo "`rm -rf tmp`"', 'macos')).toMatchObject({
+      executionPolicy: 'approval_required',
+      effect: 'unknown',
+      reasonCode: 'command_substitution'
+    })
   })
 
   it('allows workspace and user runtime paths while rejecting other absolute paths', () => {

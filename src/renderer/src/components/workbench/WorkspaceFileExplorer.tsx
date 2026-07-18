@@ -53,6 +53,7 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
 }) => {
   const [childrenByPath, setChildrenByPath] = useState<Record<string, WorkspaceTreeEntry[]>>({})
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
+  const [expandedChangeGroups, setExpandedChangeGroups] = useState<Set<string>>(() => new Set())
   const [loading, setLoading] = useState<Set<string>>(() => new Set())
   const [query, setQuery] = useState('')
 
@@ -87,6 +88,7 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
   useEffect(() => {
     setChildrenByPath({})
     setExpanded(new Set())
+    setExpandedChangeGroups(new Set())
     if (workspace) void loadDirectory('')
   }, [loadDirectory, workspace])
 
@@ -221,46 +223,106 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
         ) : filteredChanges.length > 0 ? (
           filteredChanges.map(({ latest, records, paths }) => {
             const selected =
-              latest.id === activeChangeId ||
+              records.some((record) => record.id === activeChangeId) ||
               (Boolean(activeFilePath) && paths.has(normalizePath(activeFilePath || '')))
+            const isExpanded = expandedChangeGroups.has(latest.id)
             const displayPath = getRelativePath(
               workspace,
               latest.afterPath || latest.beforePath || latest.path
             )
             return (
-              <button
-                type="button"
-                key={latest.id}
-                className={`relative flex h-9 w-full items-center gap-2 px-2 text-left text-[13px] transition-colors ${selected ? 'bg-[#EEEEEB] font-medium text-[#2F2E2A] before:absolute before:inset-y-1 before:left-0 before:w-0.5 before:bg-[#787774]' : 'text-[#57554F] hover:bg-[#F4F4F2]'}`}
-                aria-current={selected ? 'page' : undefined}
-                data-testid={`${workbenchSelectors.workspaceFileChangePrefix}-${latest.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`}
-                onClick={() => onOpenChange(latest)}
-              >
-                <HiDocumentText className="h-4 w-4 shrink-0 text-[#91918E]" />
-                <span className="min-w-0 flex-1 truncate" title={displayPath}>
-                  {displayPath}
-                </span>
-                {latest.insertCount > 0 || latest.deleteCount > 0 ? (
-                  <ChangeCountBadges
-                    insertCount={latest.insertCount}
-                    deleteCount={latest.deleteCount}
-                    mode="compact"
-                  />
-                ) : (
-                  <span className="shrink-0 text-[11px] text-[#787774]">
-                    {latest.operation === 'deleted'
-                      ? '已删除'
-                      : latest.operation === 'renamed'
-                        ? '已重命名'
-                        : '已改'}
+              <React.Fragment key={latest.id}>
+                <button
+                  type="button"
+                  className={`relative flex h-9 w-full items-center gap-2 px-2 text-left text-[13px] transition-colors ${selected ? 'bg-[#EEEEEB] font-medium text-[#2F2E2A] before:absolute before:inset-y-1 before:left-0 before:w-0.5 before:bg-[#787774]' : 'text-[#57554F] hover:bg-[#F4F4F2]'}`}
+                  aria-current={selected ? 'page' : undefined}
+                  data-testid={`${workbenchSelectors.workspaceFileChangePrefix}-${latest.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`}
+                  onClick={() => onOpenChange(latest)}
+                >
+                  {records.length > 1 ? (
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      aria-label={isExpanded ? '收起修改记录' : '展开修改记录'}
+                      className="flex h-6 w-4 shrink-0 items-center justify-center text-[#91918E]"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        setExpandedChangeGroups((current) => {
+                          const next = new Set(current)
+                          next.has(latest.id) ? next.delete(latest.id) : next.add(latest.id)
+                          return next
+                        })
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key !== 'Enter' && event.key !== ' ') return
+                        event.preventDefault()
+                        event.stopPropagation()
+                        setExpandedChangeGroups((current) => {
+                          const next = new Set(current)
+                          next.has(latest.id) ? next.delete(latest.id) : next.add(latest.id)
+                          return next
+                        })
+                      }}
+                    >
+                      {isExpanded ? (
+                        <HiChevronDown className="h-4 w-4" />
+                      ) : (
+                        <HiChevronRight className="h-4 w-4" />
+                      )}
+                    </span>
+                  ) : null}
+                  <HiDocumentText className="h-4 w-4 shrink-0 text-[#91918E]" />
+                  <span className="min-w-0 flex-1 truncate" title={displayPath}>
+                    {displayPath}
                   </span>
-                )}
-                {records.length > 1 ? (
-                  <span className="shrink-0 text-[11px] tabular-nums text-[#9B9A97]">
-                    {records.length} 次
-                  </span>
+                  {latest.insertCount > 0 || latest.deleteCount > 0 ? (
+                    <ChangeCountBadges
+                      insertCount={latest.insertCount}
+                      deleteCount={latest.deleteCount}
+                      mode="compact"
+                    />
+                  ) : (
+                    <span className="shrink-0 text-[11px] text-[#787774]">
+                      {latest.operation === 'deleted'
+                        ? '已删除'
+                        : latest.operation === 'renamed'
+                          ? '已重命名'
+                          : '已改'}
+                    </span>
+                  )}
+                  {records.length > 1 ? (
+                    <span className="shrink-0 text-[11px] tabular-nums text-[#9B9A97]">
+                      {records.length} 次
+                    </span>
+                  ) : null}
+                </button>
+                {records.length > 1 && isExpanded ? (
+                  <div className="border-b border-[#EEEEEC] bg-[#FAFAF9] py-1">
+                    {records.map((record, index) => (
+                      <button
+                        key={record.id}
+                        type="button"
+                        className={`flex h-8 w-full items-center gap-2 pl-9 pr-2 text-left text-[12px] ${record.id === activeChangeId ? 'bg-[#EEEEEB] text-[#37352F]' : 'text-[#787774] hover:bg-[#F4F4F2]'}`}
+                        aria-current={record.id === activeChangeId ? 'page' : undefined}
+                        onClick={() => onOpenChange(record)}
+                      >
+                        <span className="shrink-0">
+                          {index === 0 ? '最新' : `第 ${records.length - index} 次`}
+                        </span>
+                        <span className="min-w-0 flex-1 truncate">
+                          {record.runSummary || '文件修改'}
+                        </span>
+                        <span className="shrink-0 tabular-nums text-[#9B9A97]">
+                          {new Date(record.updatedAt).toLocaleTimeString('zh-CN', {
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
                 ) : null}
-              </button>
+              </React.Fragment>
             )
           })
         ) : (

@@ -1,16 +1,27 @@
 import fs from 'node:fs/promises'
 import { describe, it } from 'vitest'
 import JSZip from 'jszip'
-import {
-  createDocxToolHarness,
-  writeTestDocxFile
-} from '../../../../harness/backend/aiToolHarness'
+import { createDocxToolHarness, writeTestDocxFile } from '../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
-import type { DocxMutationResult, DocxSearchResult } from './testUtils'
+import type { DocxMutationResult, DocxOutlineResult, DocxSearchResult } from './testUtils'
+import { findParagraphBlockIdByText } from './testUtils'
 
 const readDocumentXml = async (filePath: string): Promise<string> => {
   const zip = await JSZip.loadAsync(await fs.readFile(filePath))
   return await zip.file('word/document.xml')!.async('string')
+}
+
+const firstTableXml = (xml: string): string => /<w:tbl[\s\S]*?<\/w:tbl>/.exec(xml)?.[0] || ''
+
+const addDistinctTableBorders = async (filePath: string): Promise<void> => {
+  const zip = await JSZip.loadAsync(await fs.readFile(filePath))
+  const documentFile = zip.file('word/document.xml')
+  if (!documentFile) throw new Error('word/document.xml is missing')
+  const xml = await documentFile.async('string')
+  const borders =
+    '<w:tblBorders><w:top w:val="double" w:sz="12" w:color="123456"/><w:left w:val="double" w:sz="12" w:color="123456"/><w:bottom w:val="double" w:sz="12" w:color="123456"/><w:right w:val="double" w:sz="12" w:color="123456"/><w:insideH w:val="single" w:sz="6" w:color="654321"/><w:insideV w:val="single" w:sz="6" w:color="654321"/></w:tblBorders>'
+  zip.file('word/document.xml', xml.replace('<w:tblPr>', `<w:tblPr>${borders}`))
+  await fs.writeFile(filePath, await zip.generateAsync({ type: 'nodebuffer' }))
 }
 
 describe('ai tool docx backend', () => {
@@ -27,20 +38,43 @@ describe('ai tool docx backend', () => {
       execute: async (runtime) => {
         const relativePath = 'direct-apply.docx'
         const sourcePath = await writeTestDocxFile(runtime.workspaceRoot, relativePath, [
+          { type: 'heading', level: 2, text: 'Project status' },
           { type: 'paragraph', text: 'Status: draft.' },
-          { type: 'paragraph', text: 'Owner: Alice.' }
+          { type: 'paragraph', text: 'Owner: Alice.' },
+          {
+            type: 'table',
+            rows: [
+              ['Name', 'State'],
+              ['Alpha', 'Open']
+            ]
+          }
         ])
+        await addDistinctTableBorders(sourcePath)
         const beforeBytes = await fs.readFile(sourcePath)
+        const beforeXml = await readDocumentXml(sourcePath)
         const harness = createDocxToolHarness(runtime)
         try {
           harness.ctx.beginDocxApplyRun()
+          const outline = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
+            sourcePath: relativePath,
+            ranges: [{ type: 'percent', fromPercent: 0, toPercent: 100 }]
+          })
+          const headingBlockId = findParagraphBlockIdByText(outline.blocks, 'Project status')
           const edited = await harness.invoke<DocxMutationResult>('docx_edit', {
             sourcePath: relativePath,
-            actions: [{
-              type: 'replace_text',
-              query: 'Status: draft.',
-              replace: 'Status: approved.'
-            }]
+            actions: [
+              {
+                type: 'style_text',
+                blockId: headingBlockId,
+                query: 'Project status',
+                style: { color: 'FF0000' }
+              },
+              {
+                type: 'replace_text',
+                query: 'Status: draft.',
+                replace: 'Status: approved.'
+              }
+            ]
           })
           const records = await harness.ctx.applyDocxRunEdits()
           const afterBytes = await fs.readFile(sourcePath)
@@ -62,9 +96,11 @@ describe('ai tool docx backend', () => {
           return {
             edited,
             records,
+            beforeXml,
             sourceChangedAfterApply: Buffer.compare(beforeBytes, afterBytes) !== 0,
             sourceXmlAfterApply,
             diffXml,
+            tableXmlPreserved: firstTableXml(beforeXml) === firstTableXml(diffXml),
             revertedMatchesBefore: Buffer.compare(beforeBytes, revertedBytes) === 0,
             searchAfterApply,
             revert
@@ -75,7 +111,7 @@ describe('ai tool docx backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.edited.changedBlocks.length === 1 &&
+          result.edited.changedBlocks.length === 2 &&
             result.records.length === 1 &&
             result.records[0]?.status === 'applied' &&
             result.records[0]?.operation === 'updated' &&
@@ -101,8 +137,14 @@ describe('ai tool docx backend', () => {
           result.diffXml.includes('w:fill="FDECEC"') &&
             result.diffXml.includes('w:strike') &&
             result.diffXml.includes('w:fill="E9F7EF"') &&
+            !result.diffXml.includes('CFFAFE') &&
+            result.diffXml.includes('w:color="123456"') &&
+            result.diffXml.includes('w:color="654321"') &&
+            result.tableXmlPreserved &&
+            result.sourceXmlAfterApply.includes('w:val="FF0000"') &&
             !result.sourceXmlAfterApply.includes('w:fill="FDECEC"') &&
-            !result.sourceXmlAfterApply.includes('w:fill="E9F7EF"'),
+            !result.sourceXmlAfterApply.includes('w:fill="E9F7EF"') &&
+            result.beforeXml.includes('w:color="123456"'),
           {
             name: 'docx-apply-diff-preview-has-markers-but-source-is-clean',
             message: 'apply 应生成带红绿标注的系统内 diff 预览稿，但真实源文件保持净稿。',
@@ -138,7 +180,8 @@ describe('ai tool docx backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['docx'],
-      description: '验证 AI 写回后用户又改文件时，首次回退提示风险，force=true 后仍允许恢复 checkpoint。',
+      description:
+        '验证 AI 写回后用户又改文件时，首次回退提示风险，force=true 后仍允许恢复 checkpoint。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -153,11 +196,13 @@ describe('ai tool docx backend', () => {
           harness.ctx.beginDocxApplyRun()
           await harness.invoke<DocxMutationResult>('docx_edit', {
             sourcePath: relativePath,
-            actions: [{
-              type: 'replace_text',
-              query: 'Risk: pending.',
-              replace: 'Risk: mitigated.'
-            }]
+            actions: [
+              {
+                type: 'replace_text',
+                query: 'Risk: pending.',
+                replace: 'Risk: mitigated.'
+              }
+            ]
           })
           const records = await harness.ctx.applyDocxRunEdits()
           const record = records[0]

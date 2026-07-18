@@ -12,19 +12,12 @@ import {
   UnderlineType
 } from 'docx'
 import { injectPatchTag } from './anchorInjector'
-import {
-  buildBlockIndex,
-  loadDocxBundle,
-  extractBlockText
-} from './blockIndex'
+import { buildBlockIndex, loadDocxBundle, extractBlockText } from './blockIndex'
 import { blockSpecText, nodeToBlockSpec } from './blockSpec'
 import { paragraphNodeToSpec } from './blockIndex'
 import { childElements, collectText, isElementNode } from './dom'
 import { createBlockElementFromSpec } from '../../utils/specDom'
-import type {
-  ApplyOpsResult,
-  BlockIndex
-} from './types'
+import type { ApplyOpsResult, BlockIndex } from './types'
 import type {
   DocxBlockSpec,
   DocxChangedBlock,
@@ -39,16 +32,15 @@ type StructuralDocxOp =
   | Extract<DocxOp, { type: 'delete_block' }>
   | Extract<DocxOp, { type: 'update_table_cell' }>
 
-type ExecutableDocxOp =
-  | StructuralDocxOp
-  | Extract<DocxOp, { type: 'replace_text' | 'style_text' }>
+type ExecutableDocxOp = StructuralDocxOp | Extract<DocxOp, { type: 'replace_text' | 'style_text' }>
 
 const safeColor = (input: string | undefined): string | undefined => {
   const value = String(input || '').trim()
   if (!value) return undefined
-  const normalized = value.replace(/^#/, '')
-  if (!/^[0-9a-fA-F]{6}$/.test(normalized)) return undefined
-  return normalized.toUpperCase()
+  if (!/^[0-9a-fA-F]{6}$/.test(value)) {
+    throw new Error(`invalid DOCX color: ${value}; expected exactly 6 hexadecimal characters`)
+  }
+  return value
 }
 
 const paragraphFromSpec = (spec: DocxParagraphSpec): Paragraph => {
@@ -89,7 +81,9 @@ const tableFromSpec = (spec: DocxTableSpec): Table => {
 }
 
 const specToDocxChildren = (specs: DocxBlockSpec[]): Array<Paragraph | Table> => {
-  return specs.map((spec) => (spec.kind === 'paragraph' ? paragraphFromSpec(spec) : tableFromSpec(spec)))
+  return specs.map((spec) =>
+    spec.kind === 'paragraph' ? paragraphFromSpec(spec) : tableFromSpec(spec)
+  )
 }
 
 const patchWithTag = async (input: {
@@ -392,7 +386,8 @@ const applyStyleTextOp = async (
   }
 }
 
-const serializeElement = (element: Element): string => new XMLSerializer().serializeToString(element)
+const serializeElement = (element: Element): string =>
+  new XMLSerializer().serializeToString(element)
 
 const applyInsertOpWithoutMutatingAnchor = async (input: {
   buffer: Buffer
@@ -515,7 +510,9 @@ const applyStructuralOp = async (input: {
       blockId: op.blockId,
       children: op.content.map((paragraph) => paragraphFromSpec(paragraph))
     })
-    const afterText = op.content.map((paragraph) => paragraph.runs.map((run) => run.text).join('')).join('\n')
+    const afterText = op.content
+      .map((paragraph) => paragraph.runs.map((run) => run.text).join(''))
+      .join('\n')
     return {
       buffer: next,
       changed: {
@@ -556,7 +553,10 @@ const applyReplaceTextOp = async (
   const bundle = await loadDocxBundle(buffer)
   const index = buildBlockIndex(bundle.documentDom)
   const warnings: string[] = []
-  const selected = Array.isArray(op.blockIds) && op.blockIds.length > 0 ? op.blockIds : index.outline.map((item) => item.blockId)
+  const selected =
+    Array.isArray(op.blockIds) && op.blockIds.length > 0
+      ? op.blockIds
+      : index.outline.map((item) => item.blockId)
   const changedBlocks: DocxChangedBlock[] = []
 
   for (const blockId of selected) {

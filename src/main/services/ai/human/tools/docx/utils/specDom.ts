@@ -26,12 +26,29 @@ const getOrCreateChild = (node: Element, localName: string): Element => {
 const createTextRun = (
   doc: Document,
   text: string,
-  prototypeRun?: Element | null
+  prototypeRun?: Element | null,
+  formatting?: DocxParagraphSpec['runs'][number]
 ): Element => {
   const run = prototypeRun ? cloneElement(prototypeRun) : doc.createElementNS(WORD_NS, 'w:r')
   clearChildren(run)
   const rPr = prototypeRun ? firstChildElement(prototypeRun, 'rPr') : null
   if (rPr) run.appendChild(cloneElement(rPr))
+  const effectiveRPr = firstChildElement(run, 'rPr') || doc.createElementNS(WORD_NS, 'w:rPr')
+  if (formatting?.bold) effectiveRPr.appendChild(doc.createElementNS(WORD_NS, 'w:b'))
+  if (formatting?.italic) effectiveRPr.appendChild(doc.createElementNS(WORD_NS, 'w:i'))
+  if (formatting?.underline) {
+    const underline = doc.createElementNS(WORD_NS, 'w:u')
+    setWordAttribute(underline, 'val', 'single')
+    effectiveRPr.appendChild(underline)
+  }
+  if (formatting?.color) {
+    const color = doc.createElementNS(WORD_NS, 'w:color')
+    setWordAttribute(color, 'val', formatting.color)
+    effectiveRPr.appendChild(color)
+  }
+  if (effectiveRPr.childNodes.length > 0 && !effectiveRPr.parentNode) {
+    run.appendChild(effectiveRPr)
+  }
 
   const parts = String(text || '').split('\n')
   parts.forEach((part, index) => {
@@ -49,7 +66,9 @@ export const createParagraphElementFromSpec = (
   spec: DocxParagraphSpec,
   prototypeParagraph?: Element | null
 ): Element => {
-  const paragraph = prototypeParagraph ? cloneElement(prototypeParagraph) : doc.createElementNS(WORD_NS, 'w:p')
+  const paragraph = prototypeParagraph
+    ? cloneElement(prototypeParagraph)
+    : doc.createElementNS(WORD_NS, 'w:p')
   clearChildren(paragraph)
 
   const prototypePPr = prototypeParagraph ? firstChildElement(prototypeParagraph, 'pPr') : null
@@ -67,7 +86,7 @@ export const createParagraphElementFromSpec = (
   const runs = spec.runs.length > 0 ? spec.runs : [{ text: '' }]
   runs.forEach((runSpec, index) => {
     const prototypeRun = prototypeRuns[index] || prototypeRuns[0] || null
-    paragraph.appendChild(createTextRun(doc, String(runSpec.text || ''), prototypeRun))
+    paragraph.appendChild(createTextRun(doc, String(runSpec.text || ''), prototypeRun, runSpec))
   })
 
   return paragraph
@@ -91,14 +110,17 @@ export const createTableElementFromSpec = (
       clearChildren(row)
       rowSpec.forEach((cellSpec, cellIndex) => {
         const prototypeCell = prototypeRow ? childElements(prototypeRow, 'tc')[cellIndex] : null
-        const cell = prototypeCell ? cloneElement(prototypeCell) : doc.createElementNS(WORD_NS, 'w:tc')
+        const cell = prototypeCell
+          ? cloneElement(prototypeCell)
+          : doc.createElementNS(WORD_NS, 'w:tc')
         const tcPr = firstChildElement(cell, 'tcPr')
         clearChildren(cell)
         if (tcPr) cell.appendChild(tcPr)
         const prototypeParagraphs = prototypeCell ? childElements(prototypeCell, 'p') : []
-        const paragraphs = cellSpec.paragraphs.length > 0
-          ? cellSpec.paragraphs
-          : [{ kind: 'paragraph' as const, style: 'Normal', runs: [{ text: '' }] }]
+        const paragraphs =
+          cellSpec.paragraphs.length > 0
+            ? cellSpec.paragraphs
+            : [{ kind: 'paragraph' as const, style: 'Normal', runs: [{ text: '' }] }]
         paragraphs.forEach((paragraphSpec, paragraphIndex) => {
           cell.appendChild(
             createParagraphElementFromSpec(
@@ -123,11 +145,21 @@ export const createTableElementFromSpec = (
   const tblPr = doc.createElementNS(WORD_NS, 'w:tblPr')
   const tblW = doc.createElementNS(WORD_NS, 'w:tblW')
   const tblLayout = doc.createElementNS(WORD_NS, 'w:tblLayout')
+  const tblBorders = doc.createElementNS(WORD_NS, 'w:tblBorders')
   setWordAttribute(tblW, 'w', String(tableWidth))
   setWordAttribute(tblW, 'type', 'dxa')
   setWordAttribute(tblLayout, 'type', 'fixed')
   tblPr.appendChild(tblW)
   tblPr.appendChild(tblLayout)
+  ;['top', 'left', 'bottom', 'right', 'insideH', 'insideV'].forEach((side) => {
+    const border = doc.createElementNS(WORD_NS, `w:${side}`)
+    setWordAttribute(border, 'val', 'single')
+    setWordAttribute(border, 'sz', '4')
+    setWordAttribute(border, 'space', '0')
+    setWordAttribute(border, 'color', '000000')
+    tblBorders.appendChild(border)
+  })
+  tblPr.appendChild(tblBorders)
   table.appendChild(tblPr)
 
   const tblGrid = doc.createElementNS(WORD_NS, 'w:tblGrid')
@@ -147,9 +179,10 @@ export const createTableElementFromSpec = (
       setWordAttribute(tcW, 'w', String(columnWidth))
       setWordAttribute(tcW, 'type', 'dxa')
       tcPr.appendChild(tcW)
-      const paragraphs = cellSpec.paragraphs.length > 0
-        ? cellSpec.paragraphs
-        : [{ kind: 'paragraph' as const, style: 'Normal', runs: [{ text: '' }] }]
+      const paragraphs =
+        cellSpec.paragraphs.length > 0
+          ? cellSpec.paragraphs
+          : [{ kind: 'paragraph' as const, style: 'Normal', runs: [{ text: '' }] }]
       paragraphs.forEach((paragraphSpec) => {
         cell.appendChild(createParagraphElementFromSpec(doc, paragraphSpec))
       })
@@ -167,5 +200,13 @@ export const createBlockElementFromSpec = (
   prototypeElement?: Element | null
 ): Element =>
   spec.kind === 'paragraph'
-    ? createParagraphElementFromSpec(doc, spec, prototypeElement?.localName === 'p' ? prototypeElement : null)
-    : createTableElementFromSpec(doc, spec, prototypeElement?.localName === 'tbl' ? prototypeElement : null)
+    ? createParagraphElementFromSpec(
+        doc,
+        spec,
+        prototypeElement?.localName === 'p' ? prototypeElement : null
+      )
+    : createTableElementFromSpec(
+        doc,
+        spec,
+        prototypeElement?.localName === 'tbl' ? prototypeElement : null
+      )

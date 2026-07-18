@@ -112,7 +112,7 @@ export const DOCX_EDIT_TOOL_SPEC = {
   promptSpec: {
     name: 'docx_edit',
     description:
-      '创建或编辑 DOCX 文件，可在一次调用中连续完成内容新增、替换、格式调整、表格更新和删除，成功后直接保存并返回修改后的相关内容。'
+      '创建或编辑 DOCX 文件，可在一次调用中连续完成内容新增、替换、格式调整、表格更新和删除，成功后直接保存并返回修改后的相关内容。style_text.color 必须是恰好 6 位且不带 # 的十六进制颜色，例如 FF0000；red 等颜色名无效。参数无效时调用失败且不修改文件。'
   },
   resolveExecutionMeta: createDocxMutatingExecutionMeta(),
   activityActionType: 'docx_edit'

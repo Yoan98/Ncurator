@@ -81,6 +81,15 @@ describe('workbench result e2e', () => {
             const applyPanelText = (
               (await getWorkbenchLocator(page, workbenchSelectors.applyPanel).textContent()) || ''
             ).trim()
+            const previewModeToggle = getWorkbenchLocator(
+              page,
+              workbenchSelectors.docxPreviewModeToggle
+            )
+            const initialToggleLabel = await previewModeToggle.getAttribute('aria-label')
+            await previewModeToggle.click()
+            const fileModeToggleLabel = await previewModeToggle.getAttribute('aria-label')
+            await previewModeToggle.click()
+            const restoredToggleLabel = await previewModeToggle.getAttribute('aria-label')
             const modeTagCount = await getWorkbenchLocator(
               page,
               workbenchSelectors.documentPreviewModeTag
@@ -139,6 +148,9 @@ describe('workbench result e2e', () => {
               applyEntryLines,
               artifactChipCount,
               applyPanelText,
+              initialToggleLabel,
+              fileModeToggleLabel,
+              restoredToggleLabel,
               modeTagCount,
               openSystemButtonVisible,
               revealButtonVisible,
@@ -168,6 +180,12 @@ describe('workbench result e2e', () => {
               !result.applyPanelText.includes('已修改') &&
               !result.applyPanelText.includes('其他应用') &&
               !result.applyPanelText.includes('处修改') &&
+              !result.applyPanelText.includes('最新改动') &&
+              !result.applyPanelText.includes('修改前') &&
+              !result.applyPanelText.includes('修改后') &&
+              result.initialToggleLabel === '查看文件' &&
+              result.fileModeToggleLabel === '查看变更' &&
+              result.restoredToggleLabel === '查看文件' &&
               result.openSystemButtonVisible &&
               result.revealButtonVisible &&
               result.revertButtonVisible &&

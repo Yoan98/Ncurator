@@ -32,6 +32,8 @@ export type TerminalSafeExecutionPolicy = 'safe_allowed' | 'approval_required'
 
 export type TerminalSafePolicyResult = {
   executionPolicy: TerminalSafeExecutionPolicy
+  effect: 'read_only' | 'mutating' | 'unknown'
   matchedRuleId?: string
+  reasonCode: string
   reason: string
 }

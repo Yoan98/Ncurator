@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  docxEditSchema
-} from '../../../../src/main/services/ai/human/tools/docx/schemas'
+import { docxEditSchema } from '../../../../src/main/services/ai/human/tools/docx/schemas'
 
 describe('ai unit docx write schema contract', () => {
   it('accepts batch docx_edit actions', () => {
@@ -57,6 +55,64 @@ describe('ai unit docx write schema contract', () => {
             cellBlockId: 'tbl:1.r:1.c:1',
             anchorBlockId: 'b:1',
             text: 'Bob'
+          }
+        ]
+      }).success
+    ).toBe(false)
+  })
+
+  it.each(['red', '#FF0000', 'F00', 'GG0000', ''])('rejects invalid color %j', (color) => {
+    const result = docxEditSchema.safeParse({
+      sourcePath: 'a.docx',
+      actions: [
+        {
+          type: 'style_text',
+          blockId: 'b:1',
+          query: 'Heading',
+          style: { color }
+        }
+      ]
+    })
+
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            path: ['actions', 0, 'style', 'color'],
+            message: expect.stringContaining('6 hexadecimal characters')
+          })
+        ])
+      )
+    }
+  })
+
+  it.each(['FF0000', 'ff0000'])('accepts six-digit hexadecimal color %s', (color) => {
+    expect(
+      docxEditSchema.safeParse({
+        sourcePath: 'a.docx',
+        actions: [
+          {
+            type: 'style_text',
+            blockId: 'b:1',
+            query: 'Heading',
+            style: { color }
+          }
+        ]
+      }).success
+    ).toBe(true)
+  })
+
+  it('rejects an empty style object', () => {
+    expect(
+      docxEditSchema.safeParse({
+        sourcePath: 'a.docx',
+        actions: [
+          {
+            type: 'style_text',
+            blockId: 'b:1',
+            query: 'Heading',
+            style: {}
           }
         ]
       }).success
