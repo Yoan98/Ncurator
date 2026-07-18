@@ -163,7 +163,7 @@ releases/latest.json           官网最新版下载清单
 
 三个平台的 fragment 全部通过文件大小、R2 sha512 metadata 和审计校验后，才会更新三个 latest 文件。版本文件使用一年不可变缓存，latest 元数据使用 `no-store`。
 
-GitHub Release 是可选展示层，只保存版本说明和 R2 下载链接，不保存二进制。它在 R2 latest 公开验证成功后才创建；没有 `NCURATOR_RELEASE_TOKEN` 时直接跳过，不影响正式发布。
+当前发布流程不创建 GitHub Release。版本下载清单和自动更新元数据全部由 R2 提供。
 
 ## 一次性环境配置
 
@@ -306,8 +306,7 @@ Mac 命令会：
 4. 生成并上传两个带审计的 macOS fragment；
 5. 等待并验证 Windows fragment；
 6. 生成并公开验证 latest 元数据；
-7. 可选创建只含 R2 链接的 GitHub Release；
-8. 清理 R2 旧版本。
+7. 清理 R2 旧版本。
 
 ### 只发布 Mac 更新通道
 
@@ -319,7 +318,7 @@ pnpm release:mac:only -- --tag vX.Y.Z
 
 该命令仍会构建、签名、审计并上传 macOS arm64 和 x64，但只更新
 `updates/latest/latest-mac.yml`。它不会修改 Windows 更新元数据、跨平台
-`releases/latest.json`、GitHub Release，也不会清理旧版本。全平台发布使用
+`releases/latest.json`，也不会清理旧版本。全平台发布使用
 `release:mac` 或 `release:r2:finalize`。
 
 ## 单阶段重试
