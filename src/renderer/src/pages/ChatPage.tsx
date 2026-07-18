@@ -653,9 +653,7 @@ const ChatPage: React.FC = () => {
   const [contentPanelShellMounted, setContentPanelShellMounted] = useState(false)
   const [contentPanelShellVisible, setContentPanelShellVisible] = useState(false)
   const [browserPresentationEnabled, setBrowserPresentationEnabled] = useState(false)
-  const [contentPanelCollapsedByWorkspace, setContentPanelCollapsedByWorkspace] = useState<
-    Record<string, boolean>
-  >({})
+  const contentPanelCollapsedByWorkspaceRef = useRef<Record<string, boolean>>({})
 
   const [activeApplyRecord, setActiveApplyRecord] = useState<AiFileChangeRecord | null>(null)
   const [fileChangeRecords, setFileChangeRecords] = useState<AiFileChangeRecord[]>([])
@@ -1038,12 +1036,12 @@ const ChatPage: React.FC = () => {
   const collapseContentPanel = useCallback((): void => {
     setBrowserPresentationEnabled(false)
     void window.api.browserPanelHide()
-    setContentPanelCollapsedByWorkspace((current) => ({ ...current, [tabWorkspaceKey]: true }))
+    contentPanelCollapsedByWorkspaceRef.current[tabWorkspaceKey] = true
     setContentPanelCollapsed(true)
   }, [tabWorkspaceKey])
 
   const expandContentPanel = useCallback((): void => {
-    setContentPanelCollapsedByWorkspace((current) => ({ ...current, [tabWorkspaceKey]: false }))
+    contentPanelCollapsedByWorkspaceRef.current[tabWorkspaceKey] = false
     setContentPanelCollapsed(false)
   }, [tabWorkspaceKey])
 
@@ -1403,7 +1401,7 @@ const ChatPage: React.FC = () => {
       setContentPanel(createEmptyPanel())
       setBrowserPresentationEnabled(false)
       void window.api.browserPanelHide()
-      setContentPanelCollapsedByWorkspace((current) => ({ ...current, __draft__: true }))
+      contentPanelCollapsedByWorkspaceRef.current.__draft__ = true
       setContentPanelCollapsed(true)
       resetApplyWorkspaceState()
       setFileChangeRecords([])
@@ -1583,13 +1581,13 @@ const ChatPage: React.FC = () => {
       const activeTab = savedWorkspace?.tabs.find((tab) => tab.id === savedWorkspace.activeTabId)
       if (!activeTab) {
         setContentPanel(createEmptyPanel())
-        setContentPanelCollapsedByWorkspace((current) => ({ ...current, [session.id]: true }))
+        contentPanelCollapsedByWorkspaceRef.current[session.id] = true
         setContentPanelCollapsed(true)
         resetApplyWorkspaceState()
         return
       }
       setContentPanel(activeTab.state)
-      setContentPanelCollapsed(contentPanelCollapsedByWorkspace[session.id] ?? true)
+      setContentPanelCollapsed(contentPanelCollapsedByWorkspaceRef.current[session.id] ?? true)
       if (
         activeTab.state.kind === 'apply_workspace' &&
         activeTab.state.applyId &&
@@ -1717,8 +1715,7 @@ const ChatPage: React.FC = () => {
   }, [assistantTurns, currentMessages, loading, pendingApprovalBatch, pendingUserTakeover])
 
   useEffect(() => {
-    let firstFrame: number | null = null
-    let secondFrame: number | null = null
+    let startTimer: number | null = null
     let finishTimer: number | null = null
 
     if (contentPanelCollapsed) {
@@ -1729,19 +1726,16 @@ const ChatPage: React.FC = () => {
     } else {
       setBrowserPresentationEnabled(false)
       setContentPanelShellMounted(true)
-      firstFrame = window.requestAnimationFrame(() => {
-        secondFrame = window.requestAnimationFrame(() => {
-          setContentPanelShellVisible(true)
-          finishTimer = window.setTimeout(() => {
-            setBrowserPresentationEnabled(true)
-          }, 220)
-        })
+      startTimer = window.setTimeout(() => {
+        setContentPanelShellVisible(true)
+        finishTimer = window.setTimeout(() => {
+          setBrowserPresentationEnabled(true)
+        }, 220)
       })
     }
 
     return () => {
-      if (firstFrame !== null) window.cancelAnimationFrame(firstFrame)
-      if (secondFrame !== null) window.cancelAnimationFrame(secondFrame)
+      if (startTimer !== null) window.clearTimeout(startTimer)
       if (finishTimer !== null) window.clearTimeout(finishTimer)
     }
   }, [contentPanelCollapsed])

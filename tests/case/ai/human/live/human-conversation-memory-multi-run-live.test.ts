@@ -1,7 +1,8 @@
 import { describe, it } from 'vitest'
 import {
   buildConversationMemorySummary,
-  CONVERSATION_MEMORY_BATCH_MESSAGES
+  CONVERSATION_MEMORY_RECENT_TURNS,
+  CONVERSATION_MEMORY_SUMMARY_TRIGGER_TURNS
 } from '../../../../../src/main/services/ai/memory'
 import {
   loadLiveLlmConfigFromEnv,
@@ -122,7 +123,7 @@ describe('ai human live backend', () => {
 
           const firstUserTimestamp = Date.now() + 1
           const firstAssistantTimestamp = Date.now() + 2
-          const batchBridgeMessages = Array.from({ length: 10 }, (_, index) => ({
+          const batchBridgeMessages = Array.from({ length: 18 }, (_, index) => ({
             id: `live-conversation-memory-bridge-${index + 1}`,
             role: index % 2 === 0 ? ('user' as const) : ('assistant' as const),
             content:
@@ -134,31 +135,36 @@ describe('ai human live backend', () => {
           await runtime.seedChatHistory({
             sessionId: SESSION_ID,
             messages: [
-              ...batchBridgeMessages,
               {
                 id: 'live-conversation-memory-user-1',
                 role: 'user',
                 content: CONVERSATION_MEMORY_FIRST_RUN_USER_INPUT,
-                timestamp: firstUserTimestamp + batchBridgeMessages.length
+                timestamp: firstUserTimestamp
               },
               {
                 id: 'live-conversation-memory-assistant-1',
                 role: 'assistant',
                 content: firstOutput.deliveryMarkdown,
-                timestamp: firstAssistantTimestamp + batchBridgeMessages.length,
+                timestamp: firstAssistantTimestamp,
                 artifacts: firstOutput.artifacts
-              }
+              },
+              ...batchBridgeMessages.map((message, index) => ({
+                ...message,
+                timestamp: firstAssistantTimestamp + index + 1
+              }))
             ]
           })
-          const memoryBatch = await runtime.chatStore.getNextConversationMemoryBatch({
+          const memoryBatch = await runtime.chatStore.getConversationMemoryCompaction({
             sessionId: SESSION_ID,
-            batchSize: CONVERSATION_MEMORY_BATCH_MESSAGES
+            recentTurns: CONVERSATION_MEMORY_RECENT_TURNS,
+            triggerTurns: CONVERSATION_MEMORY_SUMMARY_TRIGGER_TURNS
           })
+          if (!memoryBatch) throw new Error('conversation memory compaction was not triggered')
           const summary = await buildConversationMemorySummary({
             runId: runtime.runId,
             sessionId: SESSION_ID,
             previousSummary: initialMemorySummary,
-            messages: memoryBatch.batch,
+            messages: memoryBatch.messagesToSummarize,
             runtimeSettings: await runtime.storageService.aiRuntimeSettings.get(),
             llmStore: runtime.llmStore,
             modelConfigId: liveConfig.id,
@@ -171,6 +177,7 @@ describe('ai human live backend', () => {
             coveredMessageId: memoryBatch.targetCoveredMessageId,
             coveredTimestamp: memoryBatch.targetCoveredTimestamp,
             coveredMessageCount: memoryBatch.targetCoveredMessageCount,
+            revision: (memoryBatch.memory?.revision || 0) + 1,
             updatedAt: Date.now()
           })
 
@@ -197,7 +204,7 @@ describe('ai human live backend', () => {
             secondOutput,
             savedMemory,
             memoryBatch: {
-              count: memoryBatch.batch.length,
+              count: memoryBatch.messagesToSummarize.length,
               targetCoveredMessageId: memoryBatch.targetCoveredMessageId,
               targetCoveredTimestamp: memoryBatch.targetCoveredTimestamp,
               targetCoveredMessageCount: memoryBatch.targetCoveredMessageCount
@@ -222,8 +229,8 @@ describe('ai human live backend', () => {
           const persistenceSatisfied =
             result.firstOutput?.status === 'completed' &&
             result.secondOutput?.status === 'completed' &&
-            result.memoryBatch?.count === CONVERSATION_MEMORY_BATCH_MESSAGES &&
-            result.memoryBatch?.targetCoveredMessageId === 'live-conversation-memory-assistant-1' &&
+            result.memoryBatch?.count === 10 &&
+            result.memoryBatch?.targetCoveredMessageId === 'live-conversation-memory-bridge-8' &&
             result.savedMemory?.coveredMessageId === result.memoryBatch?.targetCoveredMessageId &&
             result.savedMemory?.coveredTimestamp === result.memoryBatch?.targetCoveredTimestamp &&
             result.savedMemory?.coveredMessageCount ===

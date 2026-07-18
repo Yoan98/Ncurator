@@ -1025,6 +1025,8 @@ export class ChatRunService {
       const saved = await this.deps.chatStore.saveConversationMemoryIfCurrent({
         sessionId: input.sessionId,
         expectedRevision: startMemory?.revision || 0,
+        expectedCoveredMessageId: startMemory?.coveredMessageId || null,
+        expectedUpdatedAt: startMemory?.updatedAt || null,
         memory: {
           summary,
           coveredMessageId: compaction.targetCoveredMessageId,

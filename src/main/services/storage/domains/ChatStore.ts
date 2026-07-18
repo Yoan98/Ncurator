@@ -149,11 +149,19 @@ export class ChatStore {
   public async saveConversationMemoryIfCurrent(input: {
     sessionId: string
     expectedRevision: number
+    expectedCoveredMessageId: string | null
+    expectedUpdatedAt: number | null
     memory: ChatConversationMemory
   }): Promise<boolean> {
     return this.sqlite.transaction(() => {
       const current = this.readConversationMemory(input.sessionId)
-      if ((current?.revision || 0) !== input.expectedRevision) return false
+      if (
+        (current?.revision || 0) !== input.expectedRevision ||
+        (current?.coveredMessageId || null) !== input.expectedCoveredMessageId ||
+        (current?.updatedAt || null) !== input.expectedUpdatedAt
+      ) {
+        return false
+      }
       this.sqlite
         .prepare(
           `
@@ -437,8 +445,11 @@ export class ChatStore {
     triggerTurns: number
   }): Promise<ConversationMemoryCompaction | null> {
     const context = await this.getConversationMemoryContext(input.sessionId)
-    const recentTurns = Math.max(1, Math.floor(input.recentTurns))
-    const triggerTurns = Math.max(recentTurns + 1, Math.floor(input.triggerTurns))
+    const recentTurns = Math.floor(input.recentTurns)
+    const triggerTurns = Math.floor(input.triggerTurns)
+    if (recentTurns < 1 || triggerTurns <= recentTurns) {
+      throw new Error('conversation_memory_turn_config_invalid')
+    }
     const turnStartIndexes: number[] = []
     for (let index = 0; index < context.recentMessages.length; index += 1) {
       if (context.recentMessages[index].role !== 'user') continue

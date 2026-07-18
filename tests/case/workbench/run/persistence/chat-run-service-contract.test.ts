@@ -44,6 +44,7 @@ type ChatRunServicePrivate = ChatRunService & {
 }
 
 const tempRoots: string[] = []
+const activeStorages: StorageService[] = []
 
 const waitForCondition = async (
   check: () => Promise<boolean> | boolean,
@@ -73,6 +74,7 @@ const createTestService = async (options?: {
     dbPath: path.join(root, 'lancedb')
   })
   await storage.initialize()
+  activeStorages.push(storage)
   const aiFileChangeService = new AiFileChangeService(storage.aiFileChange)
   const docxApplyService = new DocxApplyService(storage.docxApply, aiFileChangeService)
   const embeddingService = {
@@ -190,6 +192,7 @@ const submitAiRun = async ({ workspaceRoot, storage, service }: TestService) => 
 }
 
 afterEach(async () => {
+  await Promise.all(activeStorages.splice(0).map((storage) => storage.close()))
   await Promise.all(tempRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
 
@@ -339,6 +342,32 @@ describe('workbench chat run backend', () => {
       triggerTurns: CONVERSATION_MEMORY_SUMMARY_TRIGGER_TURNS
     })
     expect(belowTrigger).toBeNull()
+
+    await saveMessages(
+      setup.storage,
+      buildConversationTurns({ prefix: 'later', count: 4, startTime: baseTime + 100 })
+    )
+    await setup.storage.chat.saveChatMessage(
+      buildMessage({ id: 'later-user-5', role: 'user', timestamp: baseTime + 108 })
+    )
+    expect(
+      await setup.storage.chat.getConversationMemoryCompaction({
+        sessionId: 'session-1',
+        recentTurns: CONVERSATION_MEMORY_RECENT_TURNS,
+        triggerTurns: CONVERSATION_MEMORY_SUMMARY_TRIGGER_TURNS
+      })
+    ).toBeNull()
+
+    await setup.storage.chat.saveChatMessage(
+      buildMessage({ id: 'later-assistant-5', role: 'assistant', timestamp: baseTime + 109 })
+    )
+    const nextCompaction = await setup.storage.chat.getConversationMemoryCompaction({
+      sessionId: 'session-1',
+      recentTurns: CONVERSATION_MEMORY_RECENT_TURNS,
+      triggerTurns: CONVERSATION_MEMORY_SUMMARY_TRIGGER_TURNS
+    })
+    expect(nextCompaction?.targetCoveredMessageId).toBe('memory-assistant-10')
+    expect(nextCompaction?.messagesToSummarize).toHaveLength(10)
   })
 
   it('conversation-memory-background-job-triggers-at-ten-turns-and-compacts-to-five', async () => {
@@ -391,6 +420,42 @@ describe('workbench chat run backend', () => {
     const recent = await setup.storage.chat.getMessagesAfterConversationMemory('session-1')
     expect(recent).toHaveLength(10)
     expect(recent[0].id).toBe('threshold-user-6')
+
+    await saveMessages(
+      setup.storage,
+      buildConversationTurns({ prefix: 'next-cycle', count: 4, startTime: baseTime + 1_000 })
+    )
+    await service.scheduleConversationMemoryUpdate({
+      runId: 'run-next-cycle-below-threshold',
+      sessionId: 'session-1',
+      runtimeSettings,
+      modelName: 'mock-model',
+      sendEvent: (event) => setup.events.push(event)
+    })
+    expect(setup.memorySummaryCalls).toHaveLength(1)
+
+    await saveMessages(setup.storage, [
+      buildMessage({ id: 'next-cycle-user-5', role: 'user', timestamp: baseTime + 1_008 }),
+      buildMessage({
+        id: 'next-cycle-assistant-5',
+        role: 'assistant',
+        timestamp: baseTime + 1_009
+      })
+    ])
+    await service.scheduleConversationMemoryUpdate({
+      runId: 'run-next-cycle-trigger',
+      sessionId: 'session-1',
+      runtimeSettings,
+      modelName: 'mock-model',
+      sendEvent: (event) => setup.events.push(event)
+    })
+    const secondCycleMemory = await setup.storage.chat.getConversationMemory('session-1')
+    expect(setup.memorySummaryCalls).toHaveLength(2)
+    expect(secondCycleMemory?.coveredMessageId).toBe('threshold-assistant-10')
+    expect(secondCycleMemory?.revision).toBe(2)
+    expect(await setup.storage.chat.getMessagesAfterConversationMemory('session-1')).toHaveLength(
+      10
+    )
 
     const failing = await createTestService({
       conversationMemorySummaryBuilder: async () => {
@@ -491,6 +556,13 @@ describe('workbench chat run backend', () => {
 
     await waitForCondition(() => calls.length === 1)
     expect(secondJob).toBeNull()
+    const pendingContext = await setup.storage.chat.getConversationMemoryContext('session-1')
+    expect(pendingContext.memory).toBeNull()
+    expect(pendingContext.recentMessages).toHaveLength(20)
+    await saveMessages(
+      setup.storage,
+      buildConversationTurns({ prefix: 'during-summary', count: 2, startTime: baseTime + 100 })
+    )
     releaseSummary?.()
     await firstJob
     await waitForCondition(async () =>
@@ -500,6 +572,9 @@ describe('workbench chat run backend', () => {
     expect((await setup.storage.chat.getConversationMemory('session-1'))?.coveredMessageCount).toBe(
       10
     )
+    const committedContext = await setup.storage.chat.getConversationMemoryContext('session-1')
+    expect(committedContext.recentMessages).toHaveLength(14)
+    expect(committedContext.recentMessages[0].id).toBe('dedupe-user-6')
   })
 
   it('autostart-run-emits-process-events-after-run-started', async () => {
