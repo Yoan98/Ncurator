@@ -8,40 +8,7 @@
   1. `tool`
   2. `human`
 
-## 2. 执行摘要
-
-### 2.1 按 Suite / 分类汇总
-
-- `tool` 完整回归：`77 / 77`
-  - 检测时间：`2026-07-16 19:07:56 +08:00`
-  - 执行命令：`pnpm test:ai:tool`
-- `tool / docx`
-  - 通过率：`40 / 40`
-  - 检测时间：`2026-07-18 13:05:00 +08:00`
-  - 工具面只保留 `docx_read_outline / docx_search / docx_read_blocks / docx_edit`；模型协议不返回 revision。blockId 使用 run 内稳定 UUID，写工具成功时真实文件已经落盘，run 收尾只生成差异预览和回退记录。
-- `tool / ppt`
-  - 通过率：`2 / 2`
-  - 检测时间：`2026-07-18 13:05:00 +08:00`
-  - `ppt_edit(actions[])` 覆盖原子失败、立即落盘、写后 checksum/readback、页面与专业元素编辑；PPT 页面级 Diff 与回退由 Workbench E2E 独立覆盖。
-- `tool / text-file`
-  - 通过率：`2 / 2`
-  - 检测时间：`2026-07-16 19:07:56 +08:00`
-  - 覆盖补充：`text_file_read` 行范围与总行数；`text_file_edit` 的 create、rewrite、唯一 edit、replaceAll、原子失败、BOM/CRLF 保持、结构化 diff 重放和修改记录。
-- `tool / pdf`
-  - 通过率：`4 / 4`
-  - 检测时间：`2026-07-16 19:07:56 +08:00`
-  - 新增 `pdf_inspect / pdf_search / pdf_read_pages / pdf_render_pages`，只负责 PDF 信息、文本层和页面渲染。
-  - 页面 PNG 写入 `.ncurator/runtime/assets/<uuid>/page-N.png`，不作为文件修改或普通 artifact；图片理解由 `image_analyze` 独立完成。
-- `tool / kb`
-  - 通过率：`2 / 2`
-  - 检测时间：`2026-07-16 19:07:56 +08:00`
-  - 覆盖补充：文件路径与网页来源 URL 返回契约已通过。
-- `tool / terminal`
-  - 通过率：`6 / 6`
-  - 检测时间：`2026-07-16 19:07:56 +08:00`
-  - 覆盖补充：terminal 回归测试按“安全指令集”语义维护；持久终端覆盖 cwd 保持、多终端、长命令让出、增量读取和停止；terminal 不根据命令文本猜测文件产物，文件变化统一由顶层 Run 扫描捕获。
-
-### 2.2 Office 写工具当前契约
+## 2. 核心回归契约
 
 - DOCX/PPT mutation 均使用 `actions[]`；action 严格按输入顺序执行，同一次调用只提交一次。
 - 任一 action、格式校验、原子替换或 post-write 校验失败，整个调用不得产生部分落盘。
@@ -50,40 +17,6 @@
 - run 收尾仍要验证 DOCX 红删绿增预览、PPT 页面级差异、before checkpoint、修改记录和 revert。
 - 外部修改 DOCX 后，旧 session 的下一次读取或编辑必须失败并要求重新读取；不做指纹模糊恢复。
 - `human-runtime-limits` 直接锁定默认工具调用上限为 60、LangGraph 递归上限为 100，并验证生产节点使用默认值与运行时 override。
-- `tool / web-browsing`
-  - 通过率：`7 / 7`
-  - 检测时间：`2026-07-16 19:07:56 +08:00`
-  - 覆盖补充：`web-crawl-contract` 覆盖 `web_crawl` 的 `topic` 必填、`markdown` 字段来源于 `fit_markdown`、`requestedUrl/finalUrl`、分组 links 评分、HTTP 失败与结果过大；同文件覆盖 `web_search` 结构化候选网页结果和 `browser_use` 缺少内置浏览器服务时的真实 diagnostic；用例使用全局 15 分钟回归超时，不再单独写死 30 秒。
-- `tool / utility`
-  - 通过率：`7 / 7`
-  - 检测时间：`2026-07-16 19:07:56 +08:00`
-  - 覆盖补充：`wait_time` 等待时长与返回 `waitedMs`；`image_analyze` 已覆盖普通文本透传、无法确认类文本透传与底层失败分支。
-- `tool / hand`
-  - 通过率：`9 / 9`
-  - 检测时间：`2026-07-16 19:07:56 +08:00`
-- `human / mock-llm`
-  - 通过率：`23 / 23`
-  - 检测时间：`2026-07-16 19:08:37 +08:00`
-- `human / live`
-  - 登记 case：`11`；当前有效结果 `11 / 11` 通过，其中 `human-terminal-preview-service-live` 已于 `2026-07-16` 使用真实模型定向通过。
-  - 最近定向检测：`human-pdf-visual-reading-live` 于 `2026-07-16 19:11:47 +08:00` 通过；其他 live case 沿用各自最近有效结果。
-  - 实际主模型：`deepseek-v4-flash`；PDF 图像识别模型：`qwen3-vl-flash`。
-  - memory、compaction、resume 均保留并通过；compaction 使用 `16K` 上下文，自然触发 1 次压缩，不限制压缩次数，压缩后继续完成周报文件交付。
-  - KB/docx case 使用 2 次 KB 检索定位源资料，并真实更新 2 份目标文档；不再依赖模型枚举目标文件。
-  - positioned DOCX case 正确命中复杂排版保护，没有危险写入，并交付了可直接手动粘贴的完整内容。
-  - AI unit：`45` files、`197 / 197` tests 通过；检测时间：`2026-07-16 19:05:58 +08:00`。
-  - 样例评分：
-    - `human-conversation-memory-multi-run-live`：`10 / 10`；风险主线、待确认项、负责人和后续追问连续性完整。
-    - `human-risk-report-draft-live`：`10 / 10`；新建周报、原文件安全、未闭环风险、负责人动作和谨慎结论均满足。
-    - `human-kb-guided-docx-comparison-draft-live`：`10 / 10`；KB 证据、两份目标文档写入、内容依据和交付均满足。
-    - `human-context-compaction-natural-trigger-live`：`10 / 10`；压缩生命周期、摘要质量、连续性和最终 artifact 均满足。
-    - `human-docx-positioned-structural-edit-fallback-live`：`9 / 10`；复杂排版保护和手动交付完整，本轮未生成独立补充文件 artifact。
-    - `human-session-resume-with-new-selection-live`：`8.5 / 10`；恢复后保留旧事实，并结合新选择文件完成对比小结。
-    - `human-web-crawl-multi-hop-cross-domain-reading-live`：`8.8 / 10`；完成多跳跨域读取并整理申请对象、材料、截止时间和线上办理方式。
-    - `human-web-crawl-url-inference-reading-live`：`9.0 / 10`；自行推断 pandas 官网地址并完成两份 CSV 文档对比。
-    - `human-text-file-read-write-live`：通过；真实调用 `replaceAll`、唯一 `edit` 和回读，最终文件与工具结果边界均满足。
-    - `human-terminal-preview-service-live`：`10 / 10`；真实进入子目录启动预览服务，完成页面访问、增量日志读取、正常停止、终端关闭和端口释放。
-    - `human-pdf-visual-reading-live`：`10 / 10`；PDF 文本读取和页面渲染成功，第 1、9 页均完成真实图像识别，识别失败为 0，未调用 terminal、KB 或 docx，未产生普通 artifact，源 PDF 保持不变。
 
 ## 3. Suite 设计
 
@@ -118,7 +51,7 @@
 
 - AI backend 回归 case 必须使用生产 `createAiRunContext` 作为唯一 runtime 入口。
 - 回归 harness 必须使用真实 `StorageService / DocumentsStore / ChatStore / DocxApplyStore / LlmConfigStore / DocxApplyService / EmbeddingService`。
-- 每个 AI run 的 DOCX、PDF 及未来其他文档 worker 资源统一通过 `AiRunResourceManager` 在 run 结束时释放；资源释放失败不能覆盖任务结果。
+- 每个 AI run 的文档 worker 资源统一通过 `AiRunResourceManager` 在 run 结束时释放；资源释放失败不能覆盖任务结果。
 - `mock-llm` 统一通过 scripted LLM driver 固定 LLM 输出；除 LLM 输出外，其余全部真实。
 - `live` 统一通过真实 `LlmConfigStore` 注入 live 配置，并走生产统一 LLM executor。
 - 凡是会进入 `human` 的回归 run，必须在进入 `human` 前完成 embedding 基础服务 preflight；不允许把 embedding 初始化推迟到某个工具调用时才暴露。
@@ -141,7 +74,7 @@
 - 目的：验证真实业务场景在真实生产调用下可以完成。
 - case 设计必须使用真实用户风格输入，不得把内部固定工具顺序写进用户输入。
 - 断言口径统一遵循 `doc/test.md` 的真实 AI / live 断言规则。
-- 每次 `human / live` 回归执行完成后，除更新通过率、检测时间、备注外，还要在执行摘要中补充本轮已执行样例的完成度评分及简短依据。
+- `human / live` 结果写入测试运行产物，不回写本计划；本计划只维护稳定 case、执行规则和 Oracle。
 
 ### 4.3 目录与命令
 
@@ -609,6 +542,20 @@ AI unit / 辅助测试目录：
 - Oracle：每种输入都返回明确失败，不读取工作区外文件。
 - Not：不做密码破解或损坏文件修复。
 
+#### ppt 类别
+
+##### `ppt-create-read-edit-commit`
+
+- 测试类型：`backend / tool`
+- What：验证逐页创建、读取、编辑、每次写后立即回读，以及 Run 收尾生成单一页面级 diff 记录。
+- Oracle：每次 `ppt_edit` 成功后正式文件立即存在、可解析且页面内容正确；Run 收尾后同一文件只生成一条修改记录和页面级 diff。
+
+##### `ppt-professional-element-edit`
+
+- 测试类型：`backend / tool`
+- What：验证元素位置、样式、图层、复制、线条、图片、表格、图表和公式更新。
+- Oracle：操作成功；`postWriteReadback` 返回可继续使用的真实 elementId；最终 pptx 可解析。
+
 #### kb 类别
 
 ##### `kb-list-documents-contract`
@@ -732,7 +679,7 @@ AI unit / 辅助测试目录：
 - Oracle：结果返回 `web_crawl result too large`，且带有统一 `decisionHint`。
 - Not：不验证压缩摘要或自动截断策略。
 
-##### `llm-recognize-contract`
+##### `image-analyze-contract`
 
 - 测试类型：`backend`
 - What：验证 `image_analyze` 成功时直接返回普通文本。
@@ -741,7 +688,7 @@ AI unit / 辅助测试目录：
 - Oracle：工具结果直接是字符串，不包额外结构。
 - Not：不验证具体视觉模型质量。
 
-##### `llm-recognize-uncertain-text-contract`
+##### `image-analyze-uncertain-text-contract`
 
 - 测试类型：`backend`
 - What：验证视觉模型返回“无法确认”类文本时，`image_analyze` 仍按正常结果透传。
@@ -750,7 +697,7 @@ AI unit / 辅助测试目录：
 - Oracle：工具结果仍是成功字符串。
 - Not：不验证 UI 渲染。
 
-##### `llm-recognize-unsupported-vision-contract`
+##### `image-analyze-unsupported-vision-contract`
 
 - 测试类型：`backend`
 - What：验证模型协议明确声明不支持图像识别时，`image_analyze` 返回稳定错误结果。
@@ -759,7 +706,7 @@ AI unit / 辅助测试目录：
 - Oracle：工具结果返回包含当前模型名的固定不支持图像识别错误，提示用户切换模型。
 - Not：不验证 UI 中的模型切换操作。
 
-##### `llm-recognize-bottom-error-contract`
+##### `image-analyze-bottom-error-contract`
 
 - 测试类型：`backend`
 - What：验证视觉模型底层失败时，`image_analyze` 返回 error。
@@ -969,7 +916,7 @@ AI unit / 辅助测试目录：
 
 - 测试类型：`backend`
 - What：验证 `AiRunService` 在同一 `session` 下会对 `timeout / network_error` 保存恢复快照，并在下一次 run 自动恢复语义上下文继续完成。
-- Why：本轮重构的核心目标不是重试，而是把中断态最小持久化后交给下一次用户继续对话恢复；这条 contract 需要回归保护。
+- Why：中断恢复依赖最小持久化快照，而不是在同一 run 内盲目重试；这条 contract 需要回归保护。
 - How：首轮通过真实 `AiRunService` 启动一次 run，让真实 `brain` 先写入可恢复状态后命中 `timeout`；第二轮在同一 session 下不再显式传引用范围与工作区，验证真实 run 会自动恢复并继续完成；同时补一条 `network_error` 分支和一条普通 `error` 分支。
 - Oracle：`timeout / network_error` 失败态会写出 `failureCode` 与 `resumeSnapshotSaved=true`，`ChatStore` 中保留最新恢复快照；下一轮同 session 会从 `context_budget -> brain` 重新开始，但带回恢复快照中的已学 skill / task run 语义，并在 brain prompt 中出现 `run_resumed_after_interruption` hint；成功完成后恢复快照被清空；普通 `error` 不保存恢复快照。
 - Not：不验证 docx 临时运行态恢复；不验证 live provider 的真实网络抖动概率。
@@ -1046,7 +993,19 @@ AI unit / 辅助测试目录：
 - Oracle：真实 KB 检索结果中包含目标文档 `doc-1` 的证据，且这条证据文本会进入真实 `mouth` prompt，任务最终完成。
 - Not：不验证答案措辞或检索召回优劣。
 
+##### `create-ppt-deck`
+
+- 测试类型：`mock-llm`
+- What：验证 AI 能学习 `ppt-read / ppt-write`，通过工具逐页创建并交付 PPT。
+- Oracle：至少两次 `ppt_edit`；最终文件可解析且内容正确；只产生一个 PPT 修改记录和文件交付。
+
 #### live 类别
+
+##### `human-create-ppt-deck-live`
+
+- 测试类型：`live`
+- What：验证真实模型能学习 `ppt-read / ppt-write`，自主逐页创建并交付 PPT。
+- Oracle：最终文件可解析且内容正确；只产生一个 PPT 修改记录和文件交付。
 
 ##### `human-conversation-memory-multi-run-live`
 
@@ -1146,30 +1105,3 @@ AI unit / 辅助测试目录：
 - How：在临时 workspace 的 `preview-site` 中创建带唯一标记的页面，为用户提供一个随机空闲端口；用户只描述“进入目录启动预览、确认页面、检查请求日志、用完关闭”的真实诉求，不指定工具或命令。仅开放三个 terminal 工具，由真实模型自主决策。
 - Oracle：服务命令在 `preview-site` 中运行并返回 `command_still_running`；模型使用 `terminal_read` 读取服务终端，页面标记出现在真实终端结果和最终答复中；模型使用 `terminal_stop(closeTerminal=true)` 停止并关闭服务终端；端口最终不可访问；工具结果不包含 `availableActions` 或内部 `commandId`。
 - Not：不绑定 Python、curl 等具体命令，不要求固定工具调用轮数，不验证 Workbench UI 或公网访问。
-
-## 6. 验收口径
-
-### PPT 回归
-
-#### `ppt-create-read-edit-commit`
-
-- 测试类型：`backend / tool`
-- What：验证逐页创建、读取、编辑、每次写后立即回读，以及 Run 收尾生成单一页面级 diff 记录。
-- Oracle：每次 `ppt_edit` 成功后正式文件立即存在、可解析且页面内容正确；Run 收尾后同一文件只生成一条修改记录和页面级 diff。
-
-#### `ppt-professional-element-edit`
-
-- 测试类型：`backend / tool`
-- What：验证元素位置、样式、图层、复制、线条、图片、表格、图表和公式更新。
-- Oracle：操作成功；`postWriteReadback` 返回可继续使用的真实 elementId；最终 pptx 可解析。
-
-#### `create-ppt-deck` 与 `human-create-ppt-deck-live`
-
-- 测试类型：`mock-llm / live`
-- What：验证 AI 能学习 `ppt-read / ppt-write`，自主逐页创建并交付 PPT。
-- Oracle：至少两次 `ppt_edit`；最终文件可解析且内容正确；只产生一个 PPT 修改记录和文件交付。
-
-- `tool` suite 必须持续守住真实工具输入输出、审批边界和 artifact 契约。
-- `human/mock-llm` 必须覆盖 `AiRunService -> human` 入口、`brain / learning / hand / mouth` 主链、memory 延续、decision hint 收敛与复杂工具协作。
-- `human/live` 必须至少保留 1 条简单任务和 1 条复杂任务回归 case。
-- `human` suite 必须继续支撑 `WB-CORE-002`、`WB-CORE-003`、`WB-CORE-004`、`WB-CORE-005`、`WB-CORE-006`。

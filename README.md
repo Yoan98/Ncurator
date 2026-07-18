@@ -14,9 +14,9 @@
 
 ### 1.3 测试相关
 
-- `doc/test-plan/ai-test.md`：涉及 AI 回归测试范围、live case 设计、执行摘要或 suite 覆盖维护时阅读。
+- `doc/test-plan/ai-test.md`：涉及 AI 回归测试范围、live case 设计或 suite 覆盖维护时阅读。
 - `doc/test-plan/settings-test.md`：涉及 Settings 测试范围或测试边界时阅读。
-- `doc/test-plan/workbench-test.md`：涉及 Workbench 回归测试范围、真实 e2e case 设计、发送前置条件验证、执行摘要或 suite 覆盖维护时阅读。
+- `doc/test-plan/workbench-test.md`：涉及 Workbench 回归测试范围、真实 e2e case 设计、发送前置条件验证或 suite 覆盖维护时阅读。
 - `doc/test.md`：涉及测试体系、UI E2E 回归规则、runner 或回归测试流程时阅读。
 
 ### 1.4 prd产品文档相关

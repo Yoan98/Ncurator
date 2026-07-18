@@ -7,14 +7,20 @@ import { describe, expect, it } from 'vitest'
 const execFileAsync = promisify(execFile)
 
 const resolveSidecarPython = (): string => {
-  const venvPython = path.join(
+  const override = String(process.env.NCURATOR_SIDECAR_BUILD_PYTHON || '').trim()
+  if (override) return override
+
+  const venvRoot = path.join(
     process.cwd(),
     '.runvenv',
-    'web_crawler_sidecar',
-    'bin',
-    'python'
+    `web_crawler_sidecar-${process.platform}-${process.arch}`
   )
-  return fs.existsSync(venvPython) ? venvPython : 'python3'
+  const candidates =
+    process.platform === 'win32'
+      ? [path.join(venvRoot, 'Scripts', 'python.exe'), 'python']
+      : [path.join(venvRoot, 'bin', 'python'), 'python3']
+
+  return candidates.find((candidate) => !path.isAbsolute(candidate) || fs.existsSync(candidate))!
 }
 
 describe('web crawler sidecar search retry', () => {

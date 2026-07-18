@@ -38,7 +38,7 @@ const startOpenAiCompatibleServer = async (input: {
       })
       response.end(
         JSON.stringify({
-          id: 'chatcmpl-llm-recognize',
+          id: 'chatcmpl-image-analyze',
           object: 'chat.completion',
           created: Math.floor(Date.now() / 1000),
           model: 'gpt-5',
@@ -120,9 +120,9 @@ const writeFixtureImage = async (workspaceRoot: string): Promise<string> => {
 }
 
 describe('ai tool image recognition backend', () => {
-  it('llm-recognize-contract', async () => {
+  it('image-analyze-contract', async () => {
     await runBackendCase({
-      caseId: 'llm-recognize-contract',
+      caseId: 'image-analyze-contract',
       harnessMode: 'tool-real',
       domain: 'ai',
       suite: 'tool',
@@ -153,7 +153,7 @@ describe('ai tool image recognition backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(result === '这是一张蓝底截图，中间有白色字母 DS。', {
-          name: 'llm-recognize-returns-protocol-result',
+          name: 'image-analyze-returns-protocol-result',
           message: 'image_analyze 成功时应返回图像识别协议里的 result。',
           data: result
         })
@@ -161,9 +161,9 @@ describe('ai tool image recognition backend', () => {
     })
   })
 
-  it('llm-recognize-uncertain-text-contract', async () => {
+  it('image-analyze-uncertain-text-contract', async () => {
     await runBackendCase({
-      caseId: 'llm-recognize-uncertain-text-contract',
+      caseId: 'image-analyze-uncertain-text-contract',
       harnessMode: 'tool-real',
       domain: 'ai',
       suite: 'tool',
@@ -196,7 +196,7 @@ describe('ai tool image recognition backend', () => {
         runtime.assertThat(
           typeof result === 'string' && result.includes('无法确认') && result.includes('界面截图'),
           {
-            name: 'llm-recognize-returns-uncertain-protocol-result',
+            name: 'image-analyze-returns-uncertain-protocol-result',
             message: 'image_analyze 对无法确认类文本也应返回协议 result。',
             data: result
           }
@@ -205,9 +205,9 @@ describe('ai tool image recognition backend', () => {
     })
   })
 
-  it('llm-recognize-unsupported-vision-contract', async () => {
+  it('image-analyze-unsupported-vision-contract', async () => {
     await runBackendCase({
-      caseId: 'llm-recognize-unsupported-vision-contract',
+      caseId: 'image-analyze-unsupported-vision-contract',
       harnessMode: 'tool-real',
       domain: 'ai',
       suite: 'tool',
@@ -243,7 +243,7 @@ describe('ai tool image recognition backend', () => {
             result.error ===
               '当前模型 gpt-5 不支持图像识别，请提示用户切换支持图片输入的模型后再试',
           {
-            name: 'llm-recognize-returns-fixed-unsupported-vision-error',
+            name: 'image-analyze-returns-fixed-unsupported-vision-error',
             message: '模型协议返回不支持图像识别时，image_analyze 应返回固定 error 文案。',
             data: result
           }
@@ -252,9 +252,9 @@ describe('ai tool image recognition backend', () => {
     })
   })
 
-  it('llm-recognize-bottom-error-contract', async () => {
+  it('image-analyze-bottom-error-contract', async () => {
     await runBackendCase({
-      caseId: 'llm-recognize-bottom-error-contract',
+      caseId: 'image-analyze-bottom-error-contract',
       harnessMode: 'tool-real',
       domain: 'ai',
       suite: 'tool',
@@ -288,7 +288,7 @@ describe('ai tool image recognition backend', () => {
             typeof result.error === 'string' &&
             result.error.trim().length > 0,
           {
-            name: 'llm-recognize-returns-error-on-bottom-failure',
+            name: 'image-analyze-returns-error-on-bottom-failure',
             message: 'image_analyze 只有底层调用失败时才应返回 error。',
             data: result
           }

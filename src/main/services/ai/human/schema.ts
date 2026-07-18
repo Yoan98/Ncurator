@@ -277,10 +277,9 @@ export const humanThoughtDecisionPromptSchema = z.object({
   nextAction: brainPromptNextActionSchema
 })
 
-export const createBrainNextActionSchema = (_toolNames: readonly string[] = []) => brainNextActionSchema
+export const createBrainNextActionSchema = () => brainNextActionSchema
 
-export const createHumanThoughtDecisionSchema = (_toolNames: readonly string[] = []) =>
-  humanThoughtDecisionSchema
+export const createHumanThoughtDecisionSchema = () => humanThoughtDecisionSchema
 
 export const humanThoughtDecisionSchema = z.object({
   thought: humanThoughtSchema,

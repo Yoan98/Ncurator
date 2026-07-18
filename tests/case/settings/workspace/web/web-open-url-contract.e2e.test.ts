@@ -4,7 +4,6 @@ import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
   SETTINGS_WEB_E2E_TIMEOUT_MS,
   createFixtureWorkspace,
-  getSettingsLocator,
   navigateToSettingsSection,
   seedWebSources,
   workspaceCardLocator

@@ -98,7 +98,7 @@ Workbench 右侧是按需渲染的独立资源工作台，由资源 Tab、紧凑
 
 文本 Diff adapter 在首次打开时读取不可变 before/after 对象，生成只包含结构化 hunks 的 version 2 artifact 并缓存。“N 行未修改”展开时直接读取不可变 after 对象，不在 artifact 中重复保存完整行。大文件仍由 Renderer 虚拟列表控制实际 DOM 行数。
 
-Docx adapter 保存 before 对象、committed Docx 和 Review Docx。只有 Docx 工具拥有语义操作时才生成 Review Docx；终端直接修改的 Docx 仅提供 before/after 文件版本切换。`PptDiffAdapter` 已实现页面级 before/after 差异、变化页筛选和缩略图预览；`ExcelDiffAdapter` 仍只预留契约，本期不实现。
+Docx adapter 保存 before 对象、committed Docx 和 Review Docx。只有 Docx 工具拥有语义操作时才生成 Review Docx；终端直接修改的 Docx 仅提供 before/after 文件版本切换。`PptDiffAdapter` 提供页面级 before/after 差异、变化页筛选和缩略图预览。Excel 文件不提供专用 Diff adapter。
 
 ## AI 架构
 

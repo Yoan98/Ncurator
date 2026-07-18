@@ -16,7 +16,6 @@ import {
 import {
   bindWorkspaceRootThroughIpc,
   createWorkspaceThroughSettingsUi,
-  getSettingsLocator,
   navigateToSettingsSection
 } from '../harness/e2e/settings'
 

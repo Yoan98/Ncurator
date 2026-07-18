@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/explicit-function-return-type */
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { readBundleGraph } from './runtime-bundle-graph.mjs'

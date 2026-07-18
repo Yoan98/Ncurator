@@ -3,42 +3,18 @@
 ## 1. 总体目标
 
 - 本计划用于定义 Workbench 用户可见交互能力的回归测试范围。
-- Workbench 回归测试统一对齐 [workbench.md](/Users/test/work-space/NCurator-Desktop/doc/prd/workbench.md)，新增、调整或验收结论都应引用对应的 `WB-*` 需求编号与验收编号。
+- Workbench 回归测试统一对齐 [workbench.md](../prd/workbench.md)，新增、调整或验收结论都应引用对应的 `WB-*` 需求编号与验收编号。
 - 新增或调整测试、runner、raw logs、UI E2E 回归规则与真实 AI / live 断言规则，统一遵循 `doc/test.md`。
 - Workbench UI E2E 回归测试必须通过真实 Electron UI 配模型、配工作区、发送消息、选择 `@` 资料、搜索、预览、回退和操作右侧面板。
 - 涉及 AI 的 Workbench UI E2E 回归测试必须使用真实模型调用；测试只从 `AI_LIVE_BASE_URL`、`AI_LIVE_API_KEY`、`AI_LIVE_PRIMARY_MODEL_NAME` 读取 live 配置，并在应用内未配置时通过 Settings UI 新增配置。
 - 真实执行 case 时，如果失败来自新的生产行为缺口或必须修改业务实现才能通过，不在测试实现中硬改生产行为；统一记录为待产品 / 生产实现决策项。
 
-## 2. 执行摘要
-
-### 2.1 当前状态
-
-- 总体登记：`22` 个 e2e case，`1` 个 backend contract case。
-- 当前有效结论：历史全量 e2e `21 / 21` 通过；本轮定向通过 `file-preview-actions`、`text-file-apply-preview-and-revert`、`multi-file-apply-tabs`、`browser-use-task-panel`，并通过 Workbench unit `23 / 23`；未重跑全部 Workbench suite。
-- 检测时间：`2026-07-15 +08:00`。
-- 本轮模型配置由根目录 `.env` 通过 `loadRootEnvOnce()` 自动读取，无需手工 export。
-
-### 2.2 按 Suite 汇总
-
-- `conversation`
-  - 登记 case：`8`
-  - 当前有效结论：`8 / 8`。
-  - 备注：缺模型提示已合并到 `send-guard-mode-switch-and-preferences`；纯文本选区行为已下沉 unit。
-- `run`
-  - 登记 case：`8` 个 e2e，`1` 个 backend contract
-  - 当前有效结论：backend contract `15 / 15` tests；e2e `8 / 8`。
-  - 备注：浏览器现已升级为多 Tab；后续 `browser-use-task-panel` 必须覆盖独立历史、共享持久登录分区和 Stagehand targetId 精确选页。
-- `result`
-  - 登记 case：`6`
-  - 当前有效结论：`text-file-apply-preview-and-revert` 与 `multi-file-apply-tabs` 本轮真实模型定向通过。
-  - 备注：`file-preview-actions` 本轮定向通过，覆盖四个真实文件 Tab、旧 Tab 切回和 pdf/docx/md/txt 真实预览。
-
-### 2.3 当前边界
+## 2. 测试边界
 
 - Workbench UI E2E 回归测试通过脚本在 case 运行时把 `tests/fixtures/workspace` 复制到临时目录，并默认通过 Settings UI 创建工作区、绑定真实目录、检查更新和更新索引。
 - Workbench 正式 e2e 不允许直接调用 `workspacePrepare`、直接写模型配置、fake model、fake search、fake docx、fake AI event、fake attachment pick 或固定 document id。
 - Workbench e2e 的 workspace 文件索引允许在测试环境通过 `NCURATOR_WORKSPACE_KNOWLEDGE_CACHE=1` 启用真实 split / vector 缓存；缓存只按文件内容 hash、扩展名、splitter 参数和 embedding model 复用计算结果，不替代 workspace 文件记录、document id、搜索结果或 UI 状态。
-- Workbench 模型选择 helper 已改为通过真实下拉搜索选择 `AI_LIVE_PRIMARY_MODEL_NAME`；`ai-process-stream-and-final-answer` 已验证 `deepseek-v4-flash` 可通过真实 UI 搜索选中。
+- Workbench 模型选择 helper 必须通过真实下拉搜索选择 `AI_LIVE_PRIMARY_MODEL_NAME`。
 - Workbench UI E2E 回归测试需要真实索引完成信号和 UI 可见状态作为等待条件；IPC observer 和 job 查询只能作为辅助证据，不能用来造业务状态。
 - `file-preview-actions` 当前按生产真实索引能力覆盖 `pdf/docx/md/txt`：连续打开的文件要分别保留为资源 Tab，并能切回旧 Tab；`.log` 与代码等其他 UTF-8 文件的纯文本 fallback 由 `file-render-utils` unit case 直接覆盖。
 - docx apply case 需要真实 docx 输入、真实 AI 编辑、真实写回记录、真实预览和真实回退。
@@ -62,11 +38,11 @@ Workbench 的回归测试顶层 suite 按用户任务闭环划分，而不是逐
 - `result` 验证搜索结果、普通文件预览、修改文件工作区、真实 docx 预览、文本 diff、回退和多文件修改入口。
 - Workbench 回归测试优先使用 `e2e`，因为核心风险集中在 Electron、renderer 状态、IPC、真实 AI 调用、右侧面板和文件系统联动。
 - `backend` 只用于稳定的纯契约测试，例如参考资料候选过滤、搜索范围 payload 或会话 / 修改记录查询契约；不得用 backend case 代替真实 UI 交互断言。
-- 涉及 AI 的 case 必须记录模型、耗时、完成度评分和失败归因；Oracle 继续引用 [workbench.md](/Users/test/work-space/NCurator-Desktop/doc/prd/workbench.md) 的需求编号与验收编号。
+- 涉及 AI 的 case 必须记录模型、耗时、完成度评分和失败归因；Oracle 继续引用 [workbench.md](../prd/workbench.md) 的需求编号与验收编号。
 - AI 内置浏览器 case 必须验证右侧浏览器面板、网页操作结果和最终 assistant 输出形成闭环，不能只验证面板出现。
 - docx apply 相关 case 必须使用真实 docx 文件验证预览与回退；仅写入 `.docx` 后缀文本文件不满足回归 case 口径。
 - 依赖工作区语义的测试统一复用 `tests/fixtures/workspace` 作为共享输入目录，但该目录只作为真实输入文件来源。
-- `How` 与 `Oracle` 必须显式映射到 [workbench.md](/Users/test/work-space/NCurator-Desktop/doc/prd/workbench.md) 的需求编号与验收编号。
+- `How` 与 `Oracle` 必须显式映射到 [workbench.md](../prd/workbench.md) 的需求编号与验收编号。
 
 ## 4. 目录与命令
 
@@ -143,7 +119,7 @@ tests/case/workbench/
 - Why：用户编辑上一条消息依赖撤回最新 turn、回填 composer 和附件 UI 协同；任一状态错误都会导致重复发送、误编辑运行中消息或附件被正文挤压遮挡。
 - How：使用真实 Workbench UI 创建工作区与会话，真实粘贴图片和 `md` 附件并发送 AI 请求；hover 用户消息并触发复制与编辑；在 running 状态检查用户消息气泡和附件布局。
 - Oracle：hover 后显示时间、复制和编辑；复制给出成功反馈；编辑会撤回最新 turn 并把原文回填输入框；running 状态不显示编辑；图片和 `md` 附件显示在用户消息气泡上方，文件副标题显示 `MD`，输入框附件关闭按钮保持可点击且不被遮挡。
-- Not：不验证模型回答质量；不再使用附件解析或图片识别 override。
+- Not：不验证模型回答质量；附件输入通过真实保存与传递链路进入产品。
 
 #### `composer-attachments-context`
 
@@ -170,7 +146,7 @@ tests/case/workbench/
 - Why：工作区名称选择和工作目录绑定已经拆开，若缺少“未绑定目录不可发送”的明确反馈，用户会误以为工作区已经可用。
 - How：通过 Settings UI 创建未绑定目录的真实工作区；在 Settings 文件 tab 验证轻提示；进入 Workbench 选择该工作区和真实模型，确认发送按钮禁用与 composer 提示；再回到 Settings 绑定真实目录，返回 Workbench 发送真实请求。
 - Oracle：未设置工作文件地址时，Settings 文件 tab 会提示设置后才能在 Workbench 发送任务，对齐 `SET-WORKSPACE-006-AC3`；Workbench 发送按钮保持禁用且 composer 提示前往设置页绑定地址，对齐 `WB-COMPOSER-005-AC1`、`WB-COMPOSER-005-AC2`；绑定目录后恢复发送并完成真实 AI 运行，对齐 `WB-CORE-006-AC1`；记录模型、耗时、完成度评分和失败归因。
-- Not：不验证运行中补工作区恢复流；该产品语义已废弃。
+- Not：不验证运行中的工作区恢复流。
 
 #### `reference-token-lifecycle`
 
@@ -325,7 +301,7 @@ tests/case/workbench/
 - Why：终端、脚本和内部文件工具必须共享同一变化真相，不能依赖命令字符串猜测产物。
 - How：Run 基线后分别执行文本修改、新增、删除和重命名；完成扫描后检查 `FileRevision`、对象哈希和来源；首次读取文本记录后检查 Diff 缓存；分别回退删除和重命名。
 - Oracle：四种操作均被捕获；相同内容对象去重；扫描前记录没有文本 preview，首次读取后生成 version 2 hunks 且无 `afterLines`；删除回退恢复文件，重命名回退恢复原路径；`.ncurator`、`.git`、`node_modules` 等内部目录不进入变化列表。
-- Not：不在本用例重复验证 DOCX、PPT 或未来 Excel 的专用 Diff 渲染；PPT 页面级 Diff 由 `ppt-create-diff-and-revert` 独立覆盖，Excel adapter 仍为预留能力。
+- Not：不在本用例重复验证 DOCX 或 PPT 的专用 Diff 渲染；PPT 页面级 Diff 由 `ppt-create-diff-and-revert` 独立覆盖，Excel 不提供专用 Diff adapter。
 
 #### `docx-apply-panel-preview-and-revert`
 

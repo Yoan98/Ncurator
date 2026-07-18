@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/explicit-function-return-type */
 import { spawn } from 'node:child_process'
 import path from 'node:path'
 import process from 'node:process'

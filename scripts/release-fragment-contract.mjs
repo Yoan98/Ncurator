@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/explicit-function-return-type */
 const PLATFORM_AUDIT = Object.freeze({
   'windows-x64': { platform: 'win32', arch: 'x64', requiresSignature: false },
   'macos-arm64': { platform: 'darwin', arch: 'arm64', requiresSignature: true },

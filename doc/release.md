@@ -261,7 +261,7 @@ pnpm release:signing:setup
 在准备发版的机器执行：
 
 ```bash
-pnpm release:start -- --version 0.1.4 --notes "Ncurator v0.1.4"
+pnpm release:start -- --version X.Y.Z --notes "Ncurator vX.Y.Z"
 ```
 
 命令会：
@@ -279,10 +279,10 @@ pnpm release:start -- --version 0.1.4 --notes "Ncurator v0.1.4"
 
 ```bash
 # 本地环境不完整时直接失败
-pnpm release:start -- --version 0.1.4 --local-only
+pnpm release:start -- --version X.Y.Z --local-only
 
 # 无条件使用 GitHub Actions
-pnpm release:start -- --version 0.1.4 --actions
+pnpm release:start -- --version X.Y.Z --actions
 ```
 
 Tag push 本身不会触发 Actions，避免本地构建时浪费 Runner。
@@ -295,7 +295,7 @@ Windows 完成后，在 Apple Silicon Mac 获取同一个 Tag：
 git fetch --tags
 git checkout main
 git pull --ff-only
-pnpm release:mac -- --tag v0.1.4
+pnpm release:mac -- --tag vX.Y.Z
 ```
 
 Mac 命令会：
@@ -311,15 +311,15 @@ Mac 命令会：
 
 ### 只发布 Mac 更新通道
 
-Windows 暂时无法构建时，可以只发布两个 Mac 架构：
+只发布两个 Mac 架构时使用：
 
 ```bash
-pnpm release:mac:only -- --tag v0.1.4
+pnpm release:mac:only -- --tag vX.Y.Z
 ```
 
 该命令仍会构建、签名、审计并上传 macOS arm64 和 x64，但只更新
 `updates/latest/latest-mac.yml`。它不会修改 Windows 更新元数据、跨平台
-`releases/latest.json`、GitHub Release，也不会清理旧版本。恢复全平台发布后，仍需执行正常的
+`releases/latest.json`、GitHub Release，也不会清理旧版本。全平台发布使用
 `release:mac` 或 `release:r2:finalize`。
 
 ## 单阶段重试
@@ -328,22 +328,22 @@ pnpm release:mac:only -- --tag v0.1.4
 
 ```bash
 # Windows 本地重试
-pnpm release:win -- --tag v0.1.4
+pnpm release:win -- --tag vX.Y.Z
 
 # Windows 本地或 Actions 自动路由
-pnpm release:win:auto -- --tag v0.1.4
+pnpm release:win:auto -- --tag vX.Y.Z
 
 # 强制 Actions
-pnpm release:win:auto -- --tag v0.1.4 --actions
+pnpm release:win:auto -- --tag vX.Y.Z --actions
 
 # Mac 双架构重试
-pnpm release:mac -- --tag v0.1.4
+pnpm release:mac -- --tag vX.Y.Z
 
 # 只重试最终汇总
-pnpm release:r2:finalize -- --tag v0.1.4
+pnpm release:r2:finalize -- --tag vX.Y.Z
 
 # 查询三个平台状态
-pnpm release:status -- --tag v0.1.4
+pnpm release:status -- --tag vX.Y.Z
 ```
 
 Windows 失败时工作目录自动保留。`--reuse-work` 会重新导出干净 Tag，只复用 Python、pip 和 sidecar 生成缓存，不复用源码、`node_modules` 或旧 `dist`。缓存必须绑定同一个 Tag commit。成功后需要保留现场时使用 `--keep-work`。
@@ -372,7 +372,7 @@ macOS 更新：https://download.ncurator.com/updates/latest/latest-mac.yml
 
 ## R2 保留和回滚
 
-新版本公开验证成功后，最终汇总会删除旧版本的 `artifacts`、`release-status` 和旧逻辑遗留目录。R2 稳态只保存最新版本。
+新版本公开验证成功后，最终汇总会删除非最新版本的 `artifacts`、`release-status` 和非当前目录。R2 稳态只保存最新版本。
 
 需要回滚时，从旧 annotated Tag 重新构建、审计并发布，不能复用未审计的本地旧产物。
 
@@ -404,7 +404,7 @@ pnpm test:update:e2e
 真实自动更新只在明确需要时执行：
 
 ```bash
-pnpm test:update:real -- --source-version 0.1.3 --expected-version 0.1.4
+pnpm test:update:real -- --source-version 0.1.3 --expected-version X.Y.Z
 ```
 
 ## 失败处理

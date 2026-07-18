@@ -1,4 +1,4 @@
-const FILE_SYSTEM_ILLEGAL_CHARS = /[\/\\:*?"<>|]+/g
+const FILE_SYSTEM_ILLEGAL_CHARS = /[/\\:*?"<>|]+/g
 const DUPLICATE_DASHES = /-{2,}/g
 const DUPLICATE_SPACES = /\s{2,}/g
 const LEADING_TRAILING_NOISE = /^[\s.-]+|[\s.-]+$/g

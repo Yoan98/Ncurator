@@ -3,38 +3,11 @@
 ## 1. 总体目标
 
 - 本计划用于定义 Settings 用户可见能力的回归测试范围。
-- Settings 回归测试统一对齐 [settings.md](/Users/test/work-space/NCurator-Desktop/doc/prd/settings.md)，新增、调整或验收结论都应引用对应的 `SET-*` 需求编号与验收编号。
+- Settings 回归测试统一对齐 [settings.md](../prd/settings.md)，新增、调整或验收结论都应引用对应的 `SET-*` 需求编号与验收编号。
 - 新增或调整测试、runner、raw logs、UI E2E 回归规则与真实 AI / live 断言规则，统一遵循 `doc/test.md`。
 - Settings UI E2E 的被测行为必须通过真实 UI 完成；目录绑定本身由 `workspace-set-root-path` 独立覆盖。其他索引/Web case 可通过真实 IPC 建立目录绑定前置状态，但不得用 IPC 替代当前 case 要验证的按钮、进度、索引结果或页面刷新。
 
-## 2. 执行摘要
-
-### 2.1 按 Suite 汇总
-
-- 当前代码登记：backend `13` 个 case 文件、`27` 个 test；e2e `22` 个 case。
-- 最近一次记录：backend `27 / 27` tests 通过；Settings 全量 e2e 需要在合并后重新执行。
-  - 检测时间：`2026-07-14 14:07:57 +08:00`
-  - `workspace-remove-from-list` 与 `workspace-prepare-refresh` 均已连续 3 次通过；非目录选择 case 使用真实 IPC 建立目录绑定前置状态，当前 case 的删除、刷新、进度和索引结果仍由 UI 验证。
-  - 独立的原生目录选择 case `workspace-set-root-path` 通过。
-- `model`
-  - 登记 case：backend `1`，e2e `5`。
-  - 本轮涉及的 `model-create-edit-form` 已通过。
-- `workspace / core`
-  - 登记 case：backend `1`，e2e `4`。
-  - 本轮涉及的 `workspace-add-selection-flow` 已通过；`workspace-remove-from-list` 本轮启动超时。
-- `workspace / files`
-  - 登记 case：backend `5`，e2e `6`。
-  - `workspace-prepare-refresh` 已合并真实 fixture 全量索引断言；本轮被 macOS 原生窗口焦点阻断。
-- `workspace / web`
-  - 登记 case：e2e `5`。
-  - 本轮涉及的 `web-add-sources-dialog`、`web-prepare-summary` 均通过。
-- `vector`
-  - 登记 case：backend `2`，e2e `1`。
-- `update`
-  - 登记 case：backend `4`，e2e `1`。
-  - 模拟页面 E2E 验证界面状态和 IPC；真实安装升级不进入日常门禁，执行方式见 [app-update-test.md](/Users/test/work-space/NCurator-Desktop/doc/app-update-test.md)。
-
-## 3. Suite 设计
+## 2. Suite 设计
 
 Settings 的回归测试顶层 suite 直接对齐 PRD 模块：
 
@@ -50,13 +23,13 @@ Settings 的回归测试顶层 suite 直接对齐 PRD 模块：
 - `vector` 属于 Settings 产品域，但页面位于独立路由 `/model-download`，测试目录与 runner 仍统一归入 `tests/case/settings/vector/**`。
 - `update` 覆盖应用更新服务、发布配置、R2 元数据和设置页面；真实下载安装单独按 `doc/app-update-test.md` 执行。
 - `workspace` 在这里是 Settings 下的 suite，不是独立测试 domain；其下统一按 `core / files / web` 组织子区域。
-- `workspace` 当前测试语义基于“具名工作空间容器 + 文件 tab + 网页 tab”，不再保留旧的“创建即绑定目录 / 全局状态 / 三种索引处理模式 / 打开路径 / 网页本地筛选”模型。
+- `workspace` 测试语义基于“具名工作空间容器 + 文件 tab + 网页 tab”。
 - `workspace` 相关回归测试默认复用 `tests/fixtures/workspace` 作为共享输入目录。
-- `How` 与 `Oracle` 必须显式映射到 [settings.md](/Users/test/work-space/NCurator-Desktop/doc/prd/settings.md) 的需求编号与验收编号。
+- `How` 与 `Oracle` 必须显式映射到 [settings.md](../prd/settings.md) 的需求编号与验收编号。
 
-## 4. 回归测试清单
+## 3. 回归测试清单
 
-### 4.1 `model`
+### 3.1 `model`
 
 #### `model-config-list-contract`
 
@@ -112,7 +85,7 @@ Settings 的回归测试顶层 suite 直接对齐 PRD 模块：
 - Oracle：Windows 原生标题栏独立位于业务内容上方；拖动区域使用 `-webkit-app-region: drag`；业务内容不侵入原生窗口按钮区；侧栏切换按钮使用 `no-drag` 并可完成折叠/展开；页面按钮仍可点击。非 Windows 平台继续验证页面顶部拖动区域。
 - Not：不验证不同操作系统窗口管理器的实际拖动效果，只验证页面命中和样式契约。
 
-### 4.2 `workspace / core`
+### 3.2 `workspace / core`
 
 #### `workspace-page-load-default-selection`
 
@@ -159,6 +132,8 @@ Settings 的回归测试顶层 suite 直接对齐 PRD 模块：
 - Oracle：移除成功后，该工作空间从列表中消失，对齐 `SET-WORKSPACE-006-AC2`；详情区不会继续显示已删除工作空间的陈旧数据。
 - Not：不验证其他消费页面中的范围清理展示；只覆盖 Settings 页内可见结果。
 
+### 3.3 `workspace / files`
+
 #### `workspace-index-job-store-contract`
 
 - 测试类型：`backend`
@@ -189,7 +164,7 @@ Settings 的回归测试顶层 suite 直接对齐 PRD 模块：
 #### `workspace-prepare-contract`
 
 - 测试类型：`backend`
-- What：验证更新索引只处理 `可索引 / 失败` 文件，不再暴露旧三种处理模式。
+- What：验证更新索引处理 `可索引 / 失败` 文件，界面只提供检查和更新两种操作。
 - Why：新模型的核心是增量索引，不再允许“模式选择”成为伪交互。
 - How：构造 `needs_index / failed / indexed` 三类记录，验证实际目标集。
 - Oracle：更新索引的目标仅包含 `needs_index` 与 `failed`，对齐 `SET-WORKSPACE-004-AC1`；同一工作区文件任务重复启动返回已有 running job，对齐 `SET-WORKSPACE-004-AC3`；契约中不再向产品模型暴露 `full / presence_only / changes_only` 等旧模式，对齐 `SET-WORKSPACE-004`。
@@ -258,7 +233,7 @@ Settings 的回归测试顶层 suite 直接对齐 PRD 模块：
 - Oracle：running job 被标记为失败，对齐 `SET-WORKSPACE-004-AC5`、`SET-WEB-004-AC6`；文件和网页执行中状态分别收敛为失败状态，对齐 `SET-WORKSPACE-004-AC5`、`SET-WEB-004-AC6`。
 - Not：不模拟真实操作系统强杀，只验证启动恢复的数据收敛规则。
 
-### 4.4 `workspace / web`
+### 3.4 `workspace / web`
 
 #### `web-add-sources-dialog`
 
@@ -305,7 +280,7 @@ Settings 的回归测试顶层 suite 直接对齐 PRD 模块：
 - Oracle：触发 `openExternal(originalUrl)`，对齐 `SET-WEB-005-AC2`。
 - Not：不验证系统浏览器窗口是否真的出现在前台，也不验证不同操作系统的外链打开体验。
 
-### 4.5 `vector`
+### 3.5 `vector`
 
 #### `vector-model-catalog-load`
 
@@ -336,7 +311,7 @@ Settings 的回归测试顶层 suite 直接对齐 PRD 模块：
 
 下载进度、下载结果、页面切换恢复和删除反馈不再登记为正式 e2e。它们需要真实大文件下载环境，短期由 `vector-download-single-task-contract` 和 `vector-download-startup-resume-contract` 覆盖服务契约，必要时另建真实下载手动回归。
 
-### 4.6 `update`
+### 3.6 `update`
 
 #### `app-update-service-contract`
 
@@ -372,4 +347,4 @@ Settings 的回归测试顶层 suite 直接对齐 PRD 模块：
 - Why：用户需要从页面明确看到是否有更新、当前进度、失败原因和下一步操作。
 - How：通过受控更新服务状态打开应用更新面板，覆盖检查、可下载、下载完成和错误展示。
 - Oracle：页面按钮、状态和错误信息与主进程更新状态一致，未完成下载时不会提供安装动作。
-- Not：不下载真实更新包；真实升级按 [app-update-test.md](/Users/test/work-space/NCurator-Desktop/doc/app-update-test.md) 单独执行。
+- Not：不下载真实更新包；真实升级按 [app-update-test.md](../app-update-test.md) 单独执行。

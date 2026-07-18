@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/explicit-function-return-type */
 import fs from 'node:fs'
 import { builtinModules } from 'node:module'
 import path from 'node:path'

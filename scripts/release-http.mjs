@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/explicit-function-return-type */
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 

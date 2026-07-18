@@ -89,14 +89,13 @@ const normalizeToolCallResult = (
       typeof payload.error === 'string' && payload.error.trim() ? payload.error.trim() : undefined
     const ok = payload.ok !== false && payload.success !== false && !explicitError
     const payloadMessage = resolvePayloadMessage(toolName, payload)
-    const {
-      ok: _ignoredOk,
-      success: _ignoredSuccess,
-      code: _ignoredCode,
-      summary: _ignoredSummary,
-      resourceContext: candidateResourceContext,
-      ...data
-    } = payload
+    const data = { ...payload }
+    const candidateResourceContext = data.resourceContext
+    delete data.ok
+    delete data.success
+    delete data.code
+    delete data.summary
+    delete data.resourceContext
 
     const resourceContext = (() => {
         const candidate = candidateResourceContext

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/explicit-function-return-type */
 import { access, readFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'

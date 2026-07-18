@@ -9,12 +9,12 @@ const markdownRenderSpy = vi.hoisted(() => vi.fn())
 
 vi.mock('../../../../src/renderer/src/components/MarkdownRenderer', () => ({
   default: React.memo(
-    ({
+    function MockMarkdownRenderer({
       content
     }: {
       content: string
       onOpenReference?: (reference: unknown) => void
-    }) => {
+    }) {
       markdownRenderSpy(content)
       return React.createElement('div', { 'data-testid': 'mock-markdown' }, content)
     }

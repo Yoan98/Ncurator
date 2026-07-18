@@ -14,6 +14,9 @@ export default defineConfig(
       '.codex-tmp',
       '.pyinstaller',
       '.runvenv',
+      'tests/logs',
+      'tests/.cache',
+      'artifacts/ai-test-results',
       'release-stage',
       'resources/web_crawler_sidecar/bin'
     ]
@@ -21,6 +24,12 @@ export default defineConfig(
   tseslint.configs.recommended,
   eslintPluginReact.configs.flat.recommended,
   eslintPluginReact.configs.flat['jsx-runtime'],
+  {
+    files: ['**/*.mjs'],
+    rules: {
+      '@typescript-eslint/explicit-function-return-type': 0
+    }
+  },
   {
     settings: {
       react: {
@@ -78,5 +87,10 @@ export default defineConfig(
       ]
     }
   },
-  eslintConfigPrettier
+  eslintConfigPrettier,
+  {
+    rules: {
+      'prettier/prettier': 0
+    }
+  }
 )

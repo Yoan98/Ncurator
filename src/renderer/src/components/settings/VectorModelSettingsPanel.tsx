@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import { Button, List, Popconfirm, Progress, Tag, message } from 'antd'
 import { HiCheckCircle, HiExclamationCircle, HiTrash } from 'react-icons/hi2'
 import type {
@@ -45,7 +45,7 @@ const VectorModelSettingsPanel: React.FC = () => {
   const [fileProgress, setFileProgress] = useState({ completed: 0, total: 0 })
   const [errorMsg, setErrorMsg] = useState('')
 
-  const fetchModels = async (): Promise<void> => {
+  const fetchModels = useCallback(async (): Promise<void> => {
     setLoading(true)
     try {
       const list = await window.api.getModels()
@@ -59,44 +59,47 @@ const VectorModelSettingsPanel: React.FC = () => {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
-  const applyDownloadState = (
-    data: DownloadProgressPayload | ActiveDownloadSnapshot,
-    status: DownloadStatus = 'downloading'
-  ): void => {
-    if (status === 'downloading') {
-      setDownloadingId(data.repoId)
-      setErrorRepoId(null)
-      setErrorMsg('')
-      setDownloadProgress(data.progress)
-      setCurrentFile('currentFile' in data ? data.currentFile : data.file || '')
-      setFileProgress({
-        completed: data.completedFiles || 0,
-        total: data.totalFiles || 0
-      })
-      return
-    }
+  const applyDownloadState = useCallback(
+    (
+      data: DownloadProgressPayload | ActiveDownloadSnapshot,
+      status: DownloadStatus = 'downloading'
+    ): void => {
+      if (status === 'downloading') {
+        setDownloadingId(data.repoId)
+        setErrorRepoId(null)
+        setErrorMsg('')
+        setDownloadProgress(data.progress)
+        setCurrentFile('currentFile' in data ? data.currentFile : data.file || '')
+        setFileProgress({
+          completed: data.completedFiles || 0,
+          total: data.totalFiles || 0
+        })
+        return
+      }
 
-    if (status === 'completed') {
+      if (status === 'completed') {
+        setDownloadingId(null)
+        setErrorRepoId(null)
+        setErrorMsg('')
+        setDownloadProgress(100)
+        void fetchModels()
+        message.success(TEXT.downloadCompleted)
+        return
+      }
+
+      const nextError = 'error' in data ? data.error || TEXT.unknownError : TEXT.unknownError
       setDownloadingId(null)
-      setErrorRepoId(null)
-      setErrorMsg('')
-      setDownloadProgress(100)
-      void fetchModels()
-      message.success(TEXT.downloadCompleted)
-      return
-    }
-
-    const nextError = 'error' in data ? data.error || TEXT.unknownError : TEXT.unknownError
-    setDownloadingId(null)
-    setErrorRepoId(data.repoId)
-    setErrorMsg(nextError)
-    if ('file' in data && data.file) {
-      setCurrentFile(data.file)
-    }
-    message.error(`${TEXT.downloadFailedPrefix}: ${nextError}`)
-  }
+      setErrorRepoId(data.repoId)
+      setErrorMsg(nextError)
+      if ('file' in data && data.file) {
+        setCurrentFile(data.file)
+      }
+      message.error(`${TEXT.downloadFailedPrefix}: ${nextError}`)
+    },
+    [fetchModels]
+  )
 
   useEffect(() => {
     let disposed = false
@@ -120,7 +123,7 @@ const VectorModelSettingsPanel: React.FC = () => {
       disposed = true
       window.api.removeDownloadProgressListeners()
     }
-  }, [])
+  }, [applyDownloadState, fetchModels])
 
   const handleDownload = async (repoId: string): Promise<void> => {
     if (downloadingId) {

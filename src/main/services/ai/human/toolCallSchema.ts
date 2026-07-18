@@ -42,13 +42,14 @@ export const createToolCallSchema = (toolNames: readonly string[]) => {
   }
 
   type ToolCallOptionSchema = ReturnType<typeof buildToolCallOptionSchema>
+  const first = buildToolCallOptionSchema(normalizedToolNames[0]!)
+  const second = buildToolCallOptionSchema(normalizedToolNames[1]!)
+  const rest: ToolCallOptionSchema[] = normalizedToolNames
+    .slice(2)
+    .map((toolName) => buildToolCallOptionSchema(toolName))
   return z.discriminatedUnion(
     'toolName',
-    normalizedToolNames.map((toolName) => buildToolCallOptionSchema(toolName)) as unknown as [
-      ToolCallOptionSchema,
-      ToolCallOptionSchema,
-      ...ToolCallOptionSchema[]
-    ]
+    [first, second, ...rest]
   )
 }
 

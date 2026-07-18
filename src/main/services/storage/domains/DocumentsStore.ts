@@ -485,6 +485,7 @@ export class DocumentsStore {
   }
 
   public async listLegacyLocalDocuments(_boundDocumentIds: string[]): Promise<DocumentRecord[]> {
+    void _boundDocumentIds
     return []
   }
 

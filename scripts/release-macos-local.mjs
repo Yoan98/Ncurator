@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/explicit-function-return-type */
 import { execFile, spawn } from 'node:child_process'
 import { access, mkdir, readdir, rm } from 'node:fs/promises'
 import os from 'node:os'
