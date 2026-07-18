@@ -17,17 +17,21 @@
   - 执行命令：`pnpm test:ai:tool`
 - `tool / docx`
   - 通过率：`40 / 40`
-  - 检测时间：`2026-07-16 19:07:56 +08:00`
+  - 检测时间：`2026-07-18 13:05:00 +08:00`
   - 工具面只保留 `docx_read_outline / docx_search / docx_read_blocks / docx_edit`；模型协议不返回 revision。blockId 使用 run 内稳定 UUID，写工具成功时真实文件已经落盘，run 收尾只生成差异预览和回退记录。
+- `tool / ppt`
+  - 通过率：`2 / 2`
+  - 检测时间：`2026-07-18 13:05:00 +08:00`
+  - `ppt_edit(actions[])` 覆盖原子失败、立即落盘、写后 checksum/readback、页面与专业元素编辑；PPT 页面级 Diff 与回退由 Workbench E2E 独立覆盖。
 - `tool / text-file`
   - 通过率：`2 / 2`
   - 检测时间：`2026-07-16 19:07:56 +08:00`
-  - 覆盖补充：`file_read` 行范围与总行数；`file_edit` 的 create、rewrite、唯一 edit、replaceAll、原子失败、BOM/CRLF 保持、结构化 diff 重放和修改记录。
+  - 覆盖补充：`text_file_read` 行范围与总行数；`text_file_edit` 的 create、rewrite、唯一 edit、replaceAll、原子失败、BOM/CRLF 保持、结构化 diff 重放和修改记录。
 - `tool / pdf`
   - 通过率：`4 / 4`
   - 检测时间：`2026-07-16 19:07:56 +08:00`
   - 新增 `pdf_inspect / pdf_search / pdf_read_pages / pdf_render_pages`，只负责 PDF 信息、文本层和页面渲染。
-  - 页面 PNG 写入 `.ncurator/runtime/assets/<uuid>/page-N.png`，不作为文件修改或普通 artifact；图片理解由 `llm_recognize` 独立完成。
+  - 页面 PNG 写入 `.ncurator/runtime/assets/<uuid>/page-N.png`，不作为文件修改或普通 artifact；图片理解由 `image_analyze` 独立完成。
 - `tool / kb`
   - 通过率：`2 / 2`
   - 检测时间：`2026-07-16 19:07:56 +08:00`
@@ -45,6 +49,7 @@
 - DOCX/PPT 工具返回成功后，测试必须直接从工作区正式路径重新读取文件验证，不再以 run 收尾提交作为成功条件。
 - run 收尾仍要验证 DOCX 红删绿增预览、PPT 页面级差异、before checkpoint、修改记录和 revert。
 - 外部修改 DOCX 后，旧 session 的下一次读取或编辑必须失败并要求重新读取；不做指纹模糊恢复。
+- `human-runtime-limits` 直接锁定默认工具调用上限为 60、LangGraph 递归上限为 100，并验证生产节点使用默认值与运行时 override。
 - `tool / web-browsing`
   - 通过率：`7 / 7`
   - 检测时间：`2026-07-16 19:07:56 +08:00`
@@ -52,7 +57,7 @@
 - `tool / utility`
   - 通过率：`7 / 7`
   - 检测时间：`2026-07-16 19:07:56 +08:00`
-  - 覆盖补充：`wait_time` 等待时长与返回 `waitedMs`；`llm_recognize` 已覆盖普通文本透传、无法确认类文本透传与底层失败分支。
+  - 覆盖补充：`wait_time` 等待时长与返回 `waitedMs`；`image_analyze` 已覆盖普通文本透传、无法确认类文本透传与底层失败分支。
 - `tool / hand`
   - 通过率：`9 / 9`
   - 检测时间：`2026-07-16 19:07:56 +08:00`
@@ -180,8 +185,8 @@ AI unit / 辅助测试目录：
 - 测试类型：`backend`
 - What：验证 `docx_edit(create_document)` 新建的 docx 能立刻进入 `outline / read / edit` 主链。
 - Why：cross-source summary 这类“先生成新 Word 文件再写内容”的真实场景，底层必须先守住 create 契约。
-- How：真实执行 `docx_edit(create_document) -> docx_outline -> docx_read_blocks -> docx_edit(insert_blocks) -> docx_search`。
-- Oracle：create-target 结果返回稳定 `sourcePath / postWriteReadback`；新文档可被继续读取；后续编辑会生成新的可读状态，且新内容可继续被搜索命中；目标路径在 apply 前不存在。
+- How：真实执行 `docx_edit(create_document) -> docx_read_outline -> docx_read_blocks -> docx_edit(insert_blocks) -> docx_search`。
+- Oracle：create-target 结果返回稳定 `sourcePath / postWriteReadback`；工具成功后目标路径立即存在且可被继续读取；后续编辑会生成新的可读状态，新内容可继续被搜索命中。
 - Not：不验证 human 是否会选择 create。
 
 ##### `docx-create-existing-path-guard`
@@ -196,7 +201,7 @@ AI unit / 辅助测试目录：
 ##### `docx-create-with-content-direct-applies`
 
 - 测试类型：`backend`
-- What：验证仅执行 `docx_edit(create_document, blocks=...)` 也能在 run 收尾直接创建目标 docx 并生成 apply record。
+- What：验证仅执行 `docx_edit(create_document, blocks=...)` 也会立即创建目标 docx，并在 run 收尾生成 apply record。
 - Why：真实模型很可能在 create 时一次写完内容，这条能力必须由回归测试保护，不能强依赖后续 edit。
 - How：真实执行 `docx_edit(create_document)` 并直接 `applyDocxRunEdits`。
 - Oracle：生成 `DocxApplyRecord(operation=created,status=applied)` 并包含 diff 预览 artifact 路径；目标文件立即存在；最终 artifacts 包含携带 `applyId` 的 docx file artifact。
@@ -205,7 +210,7 @@ AI unit / 辅助测试目录：
 ##### `docx-direct-apply-checkpoint-revert`
 
 - 测试类型：`backend`
-- What：验证 existing docx run 结束时直接写回、保存 checkpoint，并支持干净回退。
+- What：验证 existing docx 在 `docx_edit` 成功时立即写回，run 收尾保存 checkpoint 和修改记录，并支持干净回退。
 - Why：direct apply 模式下，写回与回退是替代旧确认提交流程的核心安全边界。
 - How：真实编辑一份 docx，执行 `applyDocxRunEdits`，再执行 `DocxApplyService.revertRecord(force=false)`。
 - Oracle：源文件在 apply 后立即变化；生成 `DocxApplyRecord(operation=updated,status=applied)`、checkpoint 与 diff 预览 artifact；真实源文件不包含 diff 标记；回退后源文件恢复 checkpoint，记录状态变为 `reverted`。
@@ -234,7 +239,7 @@ AI unit / 辅助测试目录：
 - 测试类型：`backend`
 - What：验证长文档下的读取、定位和局部精读能力。
 - Why：长文档最容易暴露基础定位问题。
-- How：对高 block 数 fixture 真实调用 `docx_outline(ranges=block_index) / docx_search / docx_read_blocks`。
+- How：对高 block 数 fixture 真实调用 `docx_read_outline(ranges=block_index) / docx_search / docx_read_blocks`。
 - Oracle：长文档下仍返回稳定 `blockId/blockIndex` 信息，且能定位并精读目标 block。
 - Not：不验证编辑落盘。
 
@@ -243,7 +248,7 @@ AI unit / 辅助测试目录：
 - 测试类型：`backend`
 - What：验证纯读 docx 工具首次访问只创建 read session，不会提前创建 replay session。
 - Why：这是 read/write session 分层重构的根契约，破坏后会让只读场景重新回到高内存 replay 路径。
-- How：真实执行 `docx_outline -> docx_read_blocks -> docx_search`，检查 runtime session 状态。
+- How：真实执行 `docx_read_outline -> docx_read_blocks -> docx_search`，检查 runtime session 状态。
 - Oracle：三次调用都成功；`readSessionCount=1`；`replaySessionCount=0`。
 - Not：不验证编辑链路。
 
@@ -252,7 +257,7 @@ AI unit / 辅助测试目录：
 - 测试类型：`backend`
 - What：验证纯读后首次编辑会升级到 replay session，并释放旧 read session。
 - Why：升级动作必须把只读缓存收口掉，否则同一路径会长期保留两套运行态，违背本次重构目标。
-- How：真实执行 `docx_outline -> docx_edit(insert_blocks) -> docx_search`，检查 runtime session 状态。
+- How：真实执行 `docx_read_outline -> docx_edit(insert_blocks) -> docx_search`，检查 runtime session 状态。
 - Oracle：编辑成功；后续搜索可命中新文本；`readSessionCount=0`；`replaySessionCount=1`。
 - Not：不验证 direct apply / revert。
 
@@ -261,7 +266,7 @@ AI unit / 辅助测试目录：
 - 测试类型：`backend`
 - What：验证长文档在 read 分页后升级到 replay session 时不会丢失尾部 block。
 - Why：如果 replay snapshot 仍走固定 block 上限，read world 与 write world 会在长文档上出现静默分裂。
-- How：先用 `docx_outline(ranges=block_index)` 读取 5000 之后的尾部范围，再对尾部 block 执行真实 `docx_edit(insert_blocks)` 与 `docx_search`。
+- How：先用 `docx_read_outline(ranges=block_index)` 读取 5000 之后的尾部范围，再对尾部 block 执行真实 `docx_edit(insert_blocks)` 与 `docx_search`。
 - Oracle：尾部范围返回正确 `blockIndex`；尾部 block 编辑成功；后续搜索可命中新文本；`readSessionCount=0`；`replaySessionCount=1`。
 - Not：不验证 AI 的读取策略。
 
@@ -315,16 +320,16 @@ AI unit / 辅助测试目录：
 - 测试类型：`backend`
 - What：验证 `docx_read_blocks(range=block_index)` 会返回连续区间 blocks。
 - Why：这是“搜索 -> 精读”工作流的核心读取契约，必须长期稳定。
-- How：先通过真实 `docx_outline` 定位起止 block，再执行区间 `docx_read_blocks`。
+- How：先通过真实 `docx_read_outline` 定位起止 block，再执行区间 `docx_read_blocks`。
 - Oracle：返回结果按文档顺序覆盖闭区间，且详细块都带 `blockId/blockIndex`。
 - Not：不验证 AI 何时该扩大片段范围。
 
 ##### `docx-outline-pagination-contract`
 
 - 测试类型：`backend`
-- What：验证 `docx_outline(ranges=block_index)` 可以读取长文档后半段。
+- What：验证 `docx_read_outline(ranges=block_index)` 可以读取长文档后半段。
 - Why：如果只能重复看前几百块，AI 很容易误判“文档没写”。
-- How：对长文档执行带 `block_index` range 的真实 `docx_outline`。
+- How：对长文档执行带 `block_index` range 的真实 `docx_read_outline`。
 - Oracle：返回结果从指定 `blockIndex` 开始，并按闭区间返回目标块。
 - Not：不验证 UI 层如何呈现分页。
 
@@ -340,9 +345,9 @@ AI unit / 辅助测试目录：
 ##### `docx-outline-truncation-contract`
 
 - 测试类型：`backend`
-- What：验证 `docx_outline` 结果超出 AI-facing 体积门禁时返回 `result_too_large`。
+- What：验证 `docx_read_outline` 结果超出 AI-facing 体积门禁时返回 `result_too_large`。
 - Why：长文档 outline 不能依赖 AI-controlled 数量上限截断，必须提示 brain 缩小范围。
-- How：对长文档执行过大的真实 `docx_outline(ranges=...)`，检查返回 `ok=false`、失败文本与 decision hint。
+- How：对长文档执行过大的真实 `docx_read_outline(ranges=...)`，检查返回 `ok=false`、失败文本与 decision hint。
 - Oracle：返回 `ok=false`，失败文本明确为结果过大，且 decision hint 包含 `toolName/estimatedTokens/limit`。
 - Not：不验证 human 是否一定继续读取后续内容。
 
@@ -423,7 +428,7 @@ AI unit / 辅助测试目录：
 - 测试类型：`backend`
 - What：验证命中 positioned block 时，docx 写工具会统一拒绝自动编辑。
 - Why：复杂定位排版 docx 即使只是原地改字也可能因结构重写而错位，这条 case 要长期守住 `positioned = read-only` 的能力边界。
-- How：对真实 `图形学.docx` 执行 `docx_outline` 定位一个 positioned block，再分别尝试 `docx_edit(insert_blocks)`、`docx_edit(replace_text)`、`docx_edit(style_text)` 与 `docx_edit(update_table_cell)`。
+- How：对真实 `图形学.docx` 执行 `docx_read_outline` 定位一个 positioned block，再分别尝试 `docx_edit(insert_blocks)`、`docx_edit(replace_text)`、`docx_edit(style_text)` 与 `docx_edit(update_table_cell)`。
 - Oracle：四类写入都返回 `invalid_input`；错误信息稳定包含“当前命中复杂定位排版区域，暂不支持自动编辑”；不产生新的当前修订。
 - Not：不验证 human 的回退话术，也不验证 positioned 文档中的读取质量。
 
@@ -506,14 +511,14 @@ AI unit / 辅助测试目录：
 - 测试类型：`backend`
 - What：验证同一文件在一轮中执行 `read -> write -> read` 仍允许通过。
 - Why：hand 允许串行读写混排，围绕单次写的读回确认流程不应被误伤。
-- How：真实执行 `docx_outline -> docx_edit(replace_text) -> docx_read_blocks`。
+- How：真实执行 `docx_read_outline -> docx_edit(replace_text) -> docx_read_blocks`。
 - Oracle：三步都成功，最后一次读取能看到写后内容，且不返回 `hand_docx_edit_failed`。
 - Not：不验证额外的多次写。
 
 ##### `docx-write-then-outline-percent-sees-new-block`
 
 - 测试类型：`backend`
-- What：验证 docx 写后立刻使用 `docx_outline(percent)` 读取当前 working draft 时，能看到新增块。
+- What：验证 docx 写后立刻使用 `docx_read_outline(percent)` 读取当前 working draft 时，能看到新增块。
 - Why：这直接覆盖 replay session stats 未同步导致 percent 漏块的回归问题。
 - How：真实执行一次 `docx_edit(insert_blocks heading)`，随后立刻用 `ranges=[{type:'percent',fromPercent:0,toPercent:100}]` 读取。
 - Oracle：outline 返回新增块，且 replay session 的 `stats.blockCount` 等于当前 active revision 的真实块数。
@@ -523,7 +528,7 @@ AI unit / 辅助测试目录：
 
 - 测试类型：`backend`
 - What：验证 replay session 暴露的 `stats` 会随着 revision 前进持续对齐当前 active snapshot。
-- Why：`docx_outline(percent)`、写后读回与后续只读工具都依赖这份 stats 一致性。
+- Why：`docx_read_outline(percent)`、写后读回与后续只读工具都依赖这份 stats 一致性。
 - How：真实执行“插入一段 -> 再改写该段”，分别检查 `registerRevision` 后 replay session 的 `stats.blockCount`。
 - Oracle：每次 revision 之后 `stats.blockCount` 都与当前真实 working draft 一致，不残留旧版本统计。
 - Not：不验证 imageCount 等与 replay snapshot 无关的计数来源。
@@ -562,7 +567,7 @@ AI unit / 辅助测试目录：
 - 测试类型：`backend`
 - What：验证普通文本创建、范围读取、多个唯一编辑、replaceAll、AI-facing 简短结果、修改记录和结构化 diff。
 - Why：普通文本工具是代码、Markdown 和配置文件处理的基础，必须保证 AI 不需要生成或解析 unified diff。
-- How：真实调用 `file_read/file_edit`，连续执行 create、edit、replaceAll，再从统一修改记录读取 diff artifact 并用 before 内容重放。
+- How：真实调用 `text_file_read/text_file_edit`，连续执行 create、edit、replaceAll，再从统一修改记录读取 diff artifact 并用 before 内容重放。
 - Oracle：文件内容正确；结果只包含简短文本；每次写入产生 `text_file` 修改记录与 artifact；结构化 diff 重放等于真实 after。
 - Not：不验证 Workbench 视觉样式。
 
@@ -600,7 +605,7 @@ AI unit / 辅助测试目录：
 - 测试类型：`backend`
 - What：验证 PDF 输入边界会明确失败。
 - Why：防止路径逃逸、伪 PDF、非法 regex 和越界页码进入不确定状态。
-- How：分别传入越界页码、非法 regex、错误文件头以及指向工作区外的符号链接。
+- How：分别传入越界页码、非法 regex、错误文件头以及指向工作区外的链接；Windows 使用无需提升权限的目录 junction，Unix 使用目录 symlink。
 - Oracle：每种输入都返回明确失败，不读取工作区外文件。
 - Not：不做密码破解或损坏文件修复。
 
@@ -676,8 +681,8 @@ AI unit / 辅助测试目录：
 - 测试类型：`backend`
 - What：验证真实 PTY 持久终端保留当前路径、长命令让出控制权、增量读取和停止。
 - Why：后台服务和长任务不能继续依赖单次 shell 超时或系统孤儿进程。
-- How：在同一 terminalId 中真实执行 cd、pwd 和持续输出命令，同时新开第二终端；使用 terminal_read 读取输出并用 terminal_stop 停止。
-- Oracle：同一终端保留路径，新终端从 workspace 根目录启动；长命令返回 command_still_running 且进程仍在；读取能取得真实增量输出；停止后终端回到 idle 且无子进程残留。
+- How：在同一 terminalId 中真实执行 cd、pwd 和持续输出命令，同时新开第二终端；短命令若先返回 running，则通过 terminal_read 等到 idle 后再复用；长命令使用 terminal_read 读取输出并用 terminal_stop 停止。
+- Oracle：同一终端保留路径，新终端从 workspace 根目录启动；长命令返回 command_still_running 且进程仍在；读取能取得真实增量输出；正常停止后终端回到 idle，强制停止后终端进入 closed，且均无子进程残留。
 - Not：不验证 Workbench 浏览器联动，该能力由真实 e2e 覆盖。
 
 #### web-browsing 类别
@@ -730,36 +735,36 @@ AI unit / 辅助测试目录：
 ##### `llm-recognize-contract`
 
 - 测试类型：`backend`
-- What：验证 `llm_recognize` 成功时直接返回普通文本。
+- What：验证 `image_analyze` 成功时直接返回普通文本。
 - Why：图像识别能力不要求结构化 JSON，human 需要拿到模型原始可读文本自己决策下一步。
-- How：启动本地 OpenAI-compatible HTTP server 返回普通文本，调用 `llm_recognize(path, instruction)`。
+- How：启动本地 OpenAI-compatible HTTP server 返回普通文本，调用 `image_analyze(path, instruction)`。
 - Oracle：工具结果直接是字符串，不包额外结构。
 - Not：不验证具体视觉模型质量。
 
 ##### `llm-recognize-uncertain-text-contract`
 
 - 测试类型：`backend`
-- What：验证视觉模型返回“无法确认”类文本时，`llm_recognize` 仍按正常结果透传。
+- What：验证视觉模型返回“无法确认”类文本时，`image_analyze` 仍按正常结果透传。
 - Why：无法确认不属于工具失败，而是模型识别结论的一部分。
-- How：启动本地 OpenAI-compatible HTTP server 返回“无法确认”文本，调用 `llm_recognize(path, instruction)`。
+- How：启动本地 OpenAI-compatible HTTP server 返回“无法确认”文本，调用 `image_analyze(path, instruction)`。
 - Oracle：工具结果仍是成功字符串。
 - Not：不验证 UI 渲染。
 
 ##### `llm-recognize-unsupported-vision-contract`
 
 - 测试类型：`backend`
-- What：验证模型协议明确声明不支持图像识别时，`llm_recognize` 返回稳定错误结果。
+- What：验证模型协议明确声明不支持图像识别时，`image_analyze` 返回稳定错误结果。
 - Why：不支持图片输入属于模型能力边界，必须与普通“无法确认”文本和底层调用失败区分。
-- How：启动本地 OpenAI-compatible HTTP server，返回 `supports_image_recognition=false`，再调用 `llm_recognize`。
+- How：启动本地 OpenAI-compatible HTTP server，返回 `supports_image_recognition=false`，再调用 `image_analyze`。
 - Oracle：工具结果返回包含当前模型名的固定不支持图像识别错误，提示用户切换模型。
 - Not：不验证 UI 中的模型切换操作。
 
 ##### `llm-recognize-bottom-error-contract`
 
 - 测试类型：`backend`
-- What：验证视觉模型底层失败时，`llm_recognize` 返回 error。
+- What：验证视觉模型底层失败时，`image_analyze` 返回 error。
 - Why：只有底层调用失败才应进入工具错误路径。
-- How：启动本地 OpenAI-compatible HTTP server 返回失败响应，调用 `llm_recognize(path, instruction)`。
+- How：启动本地 OpenAI-compatible HTTP server 返回失败响应，调用 `image_analyze(path, instruction)`。
 - Oracle：工具结果返回 `{ error }`。
 - Not：不验证 provider 重试策略。
 
@@ -1010,7 +1015,7 @@ AI unit / 辅助测试目录：
 - 测试类型：`backend`
 - What：验证 human 在 mock-llm 模式下能收到 docx 读取链路中的关键客观事实，包括 outline 截断说明与归一化后的搜索命中。
 - Why：这一层如果事实暴露不足，human 很容易把“当前结果被截断”或“搜索已命中”误读成别的状态。
-- How：构造包含长文档截断与兼容字形文本的真实 docx，通过 scripted brain 先执行 `docx_outline`、再执行 `docx_search` 与 `docx_read_blocks`，检查后续 prompt 是否包含相关事实。
+- How：构造包含长文档截断与兼容字形文本的真实 docx，通过 scripted brain 先执行 `docx_read_outline`、再执行 `docx_search` 与 `docx_read_blocks`，检查后续 prompt 是否包含相关事实。
 - Oracle：后续 `brain` prompt 中可读到截断文字说明、归一化搜索命中与区间精读正文，最终任务完成且不会把文档中已写内容误报为“未写”。
 - Not：不验证 live 模型在该场景下的自主策略优劣。
 
@@ -1077,7 +1082,7 @@ AI unit / 辅助测试目录：
 - Why：`human/live` 需要至少一条长期高价值复杂样例，覆盖 workspace 搜索、真实材料辨别、跨 `docx + txt` 综合、create-target 写入与最终交付链路；同时守住“共享 workspace 中全部已支持文件都已进入真实 KB，且关键事实可能来自 KB 命中的 txt 或后续读取材料”的更真实用户环境。
 - How：注入真实 live LLM 配置；workspace 直接使用 `tests/fixtures/workspace` 共享目录，并在 run 前通过真实生产文件 ingestion 链把该目录下当前所有已支持文件索引进 KB；随后由测试在运行时重建 `工作/` 目录：包含一份不可直接覆盖的周报模板、一份只能参考风格的上周已发版周报、多份提供本周事实的 `docx` 工作文档、数份必须读取的 `txt` 口径/跟进材料，以及少量看起来相关但不应直接采用的干扰文件；直接输入“帮我写下这周的周报，基于这个周报模版和我的工作文档信息，记得参考我上周写的周报风格来哦”的自然语言诉求，让真实 `human` 自主完成。
 - Oracle：任务最终完成；共享 workspace 中全部已支持文件均被索引；事件流中至少出现一次 `terminal_run`、至少一次真实资料读取/检索步骤以及一次 `docx_edit(create_document)`；模型会打开模板和上周周报；最终输出 artifacts 中包含携带 `applyId` 的 docx file artifact；模板与既有参考 `docx` 文件不被覆盖。按 10 分制评估文件交付、原文件安全、未闭环风险、负责人动作和谨慎结论，严格超过 8 分通过；否定上下文中的“风险已解除”等文字不得误判成正向收口。
-- Not：不绑定最终答案措辞，不要求固定是否使用 `docx_outline` 还是 `docx_read_blocks`，也不强制一定调用 KB；若模型仅凭工作区材料完成任务，也视为符合预期。
+- Not：不绑定最终答案措辞，不要求固定是否使用 `docx_read_outline` 还是 `docx_read_blocks`，也不强制一定调用 KB；若模型仅凭工作区材料完成任务，也视为符合预期。
 
 ##### `human-docx-positioned-structural-edit-fallback-live`
 
@@ -1085,7 +1090,7 @@ AI unit / 辅助测试目录：
 - What：验证 live 模式下 `human` 在复杂 positioned docx 中会跳过命中的复杂定位排版区域，并继续尝试处理其他可安全编辑的位置。
 - Why：这类由 `framePr` / 绝对定位 shape 组成的 docx 即使只是原地改字也可能因结构重写而错位；这条 case 要长期守住“positioned 区域只读、自动写入必须拒绝并给用户手动提示”的能力，对齐 `WB-CORE-003-AC1`、`WB-CORE-004-AC1`、`WB-CORE-006-AC1`、`WB-CORE-006-AC2`。
 - How：注入真实 live LLM 配置；只将 `图形学.docx` 作为已选资料复制进 workspace；直接输入“我准备把这份图形学讲义发给同学复习，想把‘反走样’这一节补得更容易记一些。你直接在这一节后面加一段更通俗的说明，再加一个很短的总结表，帮助大家快速区分两种常见做法。”的自然语言诉求，让真实 `human` 自主完成。
-- Oracle：事件流中至少一次 `docx_search` / `docx_read_blocks` / `docx_outline` 覆盖 `图形学.docx`；至少一次 docx 写入请求因为命中复杂定位排版区域失败，并返回稳定 `hand_docx_positioned_write_blocked` 与 `diagnostic.message`；复杂区域不得发生成功写入；允许改为生成独立补充稿，也允许在最终答复中直接交付可粘贴的完整说明和总结表。按 10 分制评估目标读取、保护触发、写入安全、手动说明、内容可用性和 artifact 一致性，严格超过 8 分通过，不把内部完成状态作为单独失败条件。
+- Oracle：事件流中至少一次 `docx_search` / `docx_read_blocks` / `docx_read_outline` 覆盖 `图形学.docx`；至少一次 docx 写入请求因为命中复杂定位排版区域失败，并返回稳定 `hand_docx_positioned_write_blocked` 与 `diagnostic.message`；复杂区域不得发生成功写入；允许改为生成独立补充稿，也允许在最终答复中直接交付可粘贴的完整说明和总结表。按 10 分制评估目标读取、保护触发、写入安全、手动说明、内容可用性和 artifact 一致性，严格超过 8 分通过，不把内部完成状态作为单独失败条件。
 - Not：不要求固定使用哪一种 docx 写工具，也不要求最终答复使用固定措辞。
 
 ##### `human-kb-guided-docx-comparison-draft-live`
@@ -1102,8 +1107,8 @@ AI unit / 辅助测试目录：
 - 测试类型：`backend / live`
 - What：验证真实模型会自主组合 PDF 文本读取、页面渲染和通用图像识别。
 - Why：PDF 工具不内置图片理解，必须验证工具解耦后 AI 仍能完成图文结合阅读。
-- How：只选择 `深度学习.pdf`，询问第 1 页训练闭环和第 9 页 Proper fit / Overfit 图形差异，仅开放 PDF 四个工具与 `llm_recognize`。
-- Oracle：任务完成；调用 `pdf_read_pages`、包含第 9 页的 `pdf_render_pages` 和 `llm_recognize`；第 9 页图像识别必须成功且全部图像识别失败数为 0；识别路径来自 render 输出并位于 `.ncurator/runtime/assets/<uuid>/page-9.png`；不调用 terminal、KB、docx；最终答复同时说明训练闭环和两组曲线差异，不能用“无法识别图片”等内容绕过；源 PDF 不变。
+- How：只选择 `深度学习.pdf`，询问第 1 页训练闭环和第 9 页 Proper fit / Overfit 图形差异，仅开放 PDF 四个工具与 `image_analyze`。
+- Oracle：任务完成；调用 `pdf_read_pages`、包含第 9 页的 `pdf_render_pages` 和 `image_analyze`；第 9 页图像识别必须成功且全部图像识别失败数为 0；识别路径来自 render 输出并位于 `.ncurator/runtime/assets/<uuid>/page-9.png`；不调用 terminal、KB、docx；最终答复同时说明训练闭环和两组曲线差异，不能用“无法识别图片”等内容绕过；源 PDF 不变。
 - Not：不固定工具调用顺序和最终措辞，不要求把 PDF 页面图片登记为 artifact。
 
 ##### `human-web-crawl-multi-hop-cross-domain-reading-live`
@@ -1129,7 +1134,7 @@ AI unit / 辅助测试目录：
 - 测试类型：`backend`
 - What：验证 live 模型读取代码文件后，使用 `replaceAll` 修改统一关键词、使用 `edit` 修改唯一块，并回读确认。
 - Why：工具契约正确不等于模型会正确选择 action；必须验证真实模型能区分唯一编辑和全部替换。
-- How：只开放 `file_read/file_edit`，准备包含两处 `OLD_API_URL` 和一处 timeout 的真实 TypeScript 文件，要求全部改名并精确修改 timeout。
+- How：只开放 `text_file_read/text_file_edit`，准备包含两处 `OLD_API_URL` 和一处 timeout 的真实 TypeScript 文件，要求全部改名并精确修改 timeout。
 - Oracle：任务完成；至少一次 `replaceAll` 参数正确、一次 `edit` 参数有效；最终文件无旧关键词；写入工具结果不包含 diff、previewPath 或 unified patch。
 - Not：不要求固定调用轮数，不验证 Workbench UI。
 
@@ -1149,8 +1154,8 @@ AI unit / 辅助测试目录：
 #### `ppt-create-read-edit-commit`
 
 - 测试类型：`backend / tool`
-- What：验证逐页创建、读取、编辑、写后回读、Run 末一次写回和页面级 diff。
-- Oracle：正式文件提交前不存在；提交后可解析且页面内容正确；同一文件只生成一条修改记录。
+- What：验证逐页创建、读取、编辑、每次写后立即回读，以及 Run 收尾生成单一页面级 diff 记录。
+- Oracle：每次 `ppt_edit` 成功后正式文件立即存在、可解析且页面内容正确；Run 收尾后同一文件只生成一条修改记录和页面级 diff。
 
 #### `ppt-professional-element-edit`
 

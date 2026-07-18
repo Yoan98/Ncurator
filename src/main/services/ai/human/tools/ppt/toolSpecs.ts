@@ -99,19 +99,8 @@ export const PPT_EDIT_TOOL_SPEC = {
   outputSchema: pptToolOutputSchema,
   promptSpec: {
     name: 'ppt_edit',
-    description: [
-      '创建或修改 PPTX。一次调用接收 actions 数组并严格顺序执行；全部 action 成功后才原子写入真实文件。',
-      'action type=create_presentation：新建 PPTX，并使用 HTML 创建第一页；目标文件不能已存在。',
-      'action type=insert_slide：使用 HTML 在指定页面前插入一页；不指定 beforeSlideId 时追加到末尾。',
-      'action type=delete_slides：删除一个或多个指定页面。',
-      'action type=move_slide：把指定页面移动到另一页面之前；不指定 beforeSlideId 时移动到末尾。',
-      'action type=duplicate_slide：复制指定页面，并插入到指定位置或末尾。',
-      'action type=replace_text：在整份演示文稿或指定页面中替换文字。',
-      'action type=edit_elements：修改指定页面内的元素。',
-      'action type=set_notes：设置指定页面的讲者备注。',
-      '页面 HTML 支持内联 CSS、文本、形状、工作区本地图片、SVG、表格、图表和 data-pptx-latex 公式。',
-      '返回变化页面的 changedSlideIds、postWriteReadback 和布局警告。'
-    ].join('\n')
+    description:
+      '创建或编辑 PPTX 文件，可在一次调用中连续完成页面新增、复制、移动、删除以及文字、元素和备注调整，成功后直接保存并返回修改后的相关页面。'
   },
   resolveExecutionMeta: createStaticExecutionMetaResolver({
     mutability: 'mutating',

@@ -1,5 +1,6 @@
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
+import { execFile } from 'node:child_process'
 import * as pty from 'node-pty'
 import type { IPty } from 'node-pty'
 import type { AiRuntimePlatform } from '../../../types'
@@ -79,6 +80,8 @@ type ManagedTerminalSession = {
   readyMarkerCount: number
   ready: Promise<void>
   markReady: () => void
+  exited: Promise<void>
+  markExited: () => void
   createdAt: number
   lastActiveAt: number
 }
@@ -171,8 +174,11 @@ const buildCommandEnvelope = (input: {
       `$__ncurator_command = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('${encoded}'))`,
       `$__ncurator_start = '__NCURATOR_' + 'START:${input.commandId}__'`,
       'Write-Output $__ncurator_start',
+      '$global:LASTEXITCODE = $null',
+      '$__ncurator_error_count = $Error.Count',
       `Invoke-Expression $__ncurator_command`,
-      `$__ncurator_exit = if ($null -ne $LASTEXITCODE) { $LASTEXITCODE } elseif ($?) { 0 } else { 1 }`,
+      '$__ncurator_succeeded = $? -and $Error.Count -eq $__ncurator_error_count',
+      `$__ncurator_exit = if ($null -ne $LASTEXITCODE) { $LASTEXITCODE } elseif ($__ncurator_succeeded) { 0 } else { 1 }`,
       `$__ncurator_cwd = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes((Get-Location).Path))`,
       `$__ncurator_marker = '__NCURATOR_' + "DONE:${input.commandId}:$($__ncurator_exit):$($__ncurator_cwd)__"`,
       'Write-Output $__ncurator_marker'
@@ -197,6 +203,8 @@ const decodeCwd = (encoded: string): string | null => {
     return null
   }
 }
+
+const isSessionClosed = (session: ManagedTerminalSession): boolean => session.status === 'closed'
 
 export class TerminalSessionManager {
   private readonly sessions = new Map<string, ManagedTerminalSession>()
@@ -358,29 +366,36 @@ export class TerminalSessionManager {
       session.status = 'stopping'
       const command = session.currentCommand
       session.process.write('\u0003')
-      session.process.write(
-        `${buildStopProbe({
-          platform: session.platform,
-          commandId: command.commandId
-        })}${session.platform === 'windows' ? '\r' : '\n'}`
-      )
+      await new Promise<void>((resolve) => setTimeout(resolve, 100))
+      if (!command.returnReason) {
+        session.process.write(
+          `${buildStopProbe({
+            platform: session.platform,
+            commandId: command.commandId
+          })}${session.platform === 'windows' ? '\r' : '\n'}`
+        )
+      }
       await Promise.race([
         command.completion,
         new Promise<void>((resolve) => setTimeout(resolve, this.stopGraceMs))
       ])
       if (!command.returnReason) {
         forced = true
-        session.process.kill()
+        await this.forceTerminateSession(session)
         await Promise.race([
           command.completion,
           new Promise<void>((resolve) => setTimeout(resolve, this.stopGraceMs))
         ])
+        if (!isSessionClosed(session)) {
+          session.status = 'closed'
+          this.sessions.delete(session.terminalId)
+        }
       }
     }
 
     if (input.closeTerminal && session.status !== 'closed') {
-      session.process.kill()
-      session.status = 'closed'
+      await this.closeSession(session)
+    } else if (input.closeTerminal) {
       this.sessions.delete(session.terminalId)
     } else if (session.status === 'stopping') {
       session.status = session.currentCommand ? 'running' : 'idle'
@@ -399,11 +414,7 @@ export class TerminalSessionManager {
     const sessions = Array.from(this.sessions.values()).filter(
       (session) => session.chatSessionId === chatSessionId
     )
-    sessions.forEach((session) => {
-      session.process.kill()
-      session.status = 'closed'
-      this.sessions.delete(session.terminalId)
-    })
+    await Promise.all(sessions.map(async (session) => await this.closeSession(session)))
   }
 
   public async stopByRun(runId: string): Promise<void> {
@@ -423,8 +434,9 @@ export class TerminalSessionManager {
 
   public async dispose(): Promise<void> {
     clearInterval(this.cleanupTimer)
-    Array.from(this.sessions.values()).forEach((session) => session.process.kill())
-    this.sessions.clear()
+    await Promise.all(
+      Array.from(this.sessions.values()).map(async (session) => await this.closeSession(session))
+    )
     this.completedCommandExitCodes.clear()
   }
 
@@ -435,9 +447,7 @@ export class TerminalSessionManager {
         ? now - session.currentCommand.startedAt >= this.runningTtlMs
         : now - session.lastActiveAt >= this.idleTtlMs
       if (!expired) continue
-      session.process.kill()
-      session.status = 'closed'
-      this.sessions.delete(session.terminalId)
+      void this.closeSession(session)
     }
   }
 
@@ -462,6 +472,7 @@ export class TerminalSessionManager {
       )
     )
     const ready = createDeferred()
+    const exited = createDeferred()
     const shell = buildShellStart(input.platform)
     const terminalProcess = pty.spawn(shell.executable, shell.args, {
       name: 'xterm-256color',
@@ -492,6 +503,8 @@ export class TerminalSessionManager {
       readyMarkerCount: 0,
       ready: ready.promise,
       markReady: ready.resolve,
+      exited: exited.promise,
+      markExited: exited.resolve,
       createdAt: Date.now(),
       lastActiveAt: Date.now()
     }
@@ -508,6 +521,7 @@ export class TerminalSessionManager {
         session.currentCommand = null
       }
       session.markReady()
+      session.markExited()
     })
     terminalProcess.write(buildReadyCommand(input.platform))
     await Promise.race([
@@ -517,6 +531,60 @@ export class TerminalSessionManager {
       )
     ])
     return session
+  }
+
+  private async closeSession(session: ManagedTerminalSession): Promise<void> {
+    if (session.status === 'closed') {
+      this.sessions.delete(session.terminalId)
+      return
+    }
+
+    if (!session.currentCommand && session.status === 'idle') {
+      try {
+        session.process.write(session.platform === 'windows' ? 'exit\r' : 'exit\n')
+        await Promise.race([
+          session.exited,
+          new Promise<void>((resolve) => setTimeout(resolve, this.stopGraceMs))
+        ])
+      } catch {
+        // Fall through to forced process termination.
+      }
+    }
+
+    if (!isSessionClosed(session)) {
+      await this.forceTerminateSession(session)
+      await Promise.race([
+        session.exited,
+        new Promise<void>((resolve) => setTimeout(resolve, this.stopGraceMs))
+      ])
+    }
+
+    session.status = 'closed'
+    this.sessions.delete(session.terminalId)
+  }
+
+  private async forceTerminateSession(session: ManagedTerminalSession): Promise<void> {
+    if (session.platform === 'windows') {
+      await new Promise<void>((resolve) => {
+        execFile(
+          'taskkill.exe',
+          ['/PID', String(session.process.pid), '/T', '/F'],
+          { windowsHide: true },
+          () => resolve()
+        )
+      })
+      await Promise.race([
+        session.exited,
+        new Promise<void>((resolve) => setTimeout(resolve, this.stopGraceMs))
+      ])
+      if (isSessionClosed(session)) return
+    }
+
+    try {
+      session.process.kill()
+    } catch {
+      // The PTY may have exited between the status check and kill.
+    }
   }
 
   private requireSession(input: {

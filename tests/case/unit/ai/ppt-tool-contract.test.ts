@@ -56,46 +56,58 @@ describe('ai unit ppt tool contract', () => {
     ).toBe(false)
   })
 
-  it('accepts one html page, professional element operations and no action arrays', () => {
+  it('accepts ordered action arrays and rejects the removed single-action contract', () => {
     expect(
       pptEditSchema.safeParse({
         sourcePath: 'deck.pptx',
-        action: { type: 'create_presentation', html: '<section data-ppt-slide></section>' }
+        actions: [{ type: 'create_presentation', html: '<section data-ppt-slide></section>' }]
       }).success
     ).toBe(true)
     expect(
       pptEditSchema.safeParse({
         sourcePath: 'deck.pptx',
-        action: {
-          type: 'edit_elements',
-          slideId: '/ppt/slides/slide1.xml',
-          operations: [
-            {
-              type: 'add_element',
-              element: {
-                type: 'line',
-                from: { x: 100, y: 100 },
-                to: { x: 500, y: 100 },
-                arrowEnd: true
+        actions: [
+          {
+            type: 'edit_elements',
+            slideId: '/ppt/slides/slide1.xml',
+            operations: [
+              {
+                type: 'add_element',
+                element: {
+                  type: 'line',
+                  from: { x: 100, y: 100 },
+                  to: { x: 500, y: 100 },
+                  arrowEnd: true
+                }
               }
-            },
-            { type: 'set_z_order', elementId: '/ppt/slides/slide1.xml#2', placement: 'front' },
-            { type: 'duplicate_element', elementId: '/ppt/slides/slide1.xml#3' }
-          ]
-        }
+            ]
+          }
+        ]
       }).success
     ).toBe(true)
     expect(
       pptEditSchema.safeParse({
         sourcePath: 'deck.pptx',
-        actions: [{ type: 'create_presentation', html: '<section></section>' }]
+        action: { type: 'create_presentation', html: '<section></section>' }
       }).success
     ).toBe(false)
   })
 
   it('keeps the edit prompt concise and does not teach runtime asset workflow', () => {
-    expect(PPT_EDIT_TOOL_SPEC.promptSpec.description).not.toContain('先保存')
-    expect(PPT_EDIT_TOOL_SPEC.promptSpec.description).not.toContain('runtime/assets')
+    const description = PPT_EDIT_TOOL_SPEC.promptSpec.description
+    expect(description).not.toContain('\n')
+    for (const internalTerm of [
+      'revision',
+      'replay',
+      'checksum',
+      'UUID',
+      'postWriteReadback',
+      '原子',
+      'runtime/assets',
+      'action type='
+    ]) {
+      expect(description).not.toContain(internalTerm)
+    }
     expect(PPT_EDIT_TOOL_SPEC.promptSpec).not.toHaveProperty('examples')
   })
 

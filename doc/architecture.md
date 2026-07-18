@@ -76,13 +76,15 @@ Docx Runtime 负责 Word 文档读取、搜索、编辑、任务内回滚、写�
 
 ### Text File Runtime
 
-Text File Runtime 通过 builtin `text-file` skill 提供 `file_read` 和 `file_edit`。它负责 UTF-8 普通文本读取、创建、完整改写、唯一文本编辑和全部精确匹配替换。写入先完成全部校验，再通过同目录临时文件原子替换。工具只提供写入语义和专用元数据，文件变化统一由 Run 前后工作区扫描确认。
+Text File Runtime 通过 builtin `text-file` skill 提供 `text_file_read` 和 `text_file_edit`。它负责 UTF-8 普通文本读取、创建、完整改写、唯一文本编辑和全部精确匹配替换。写入先完成全部校验，再通过同目录临时文件原子替换。工具只提供写入语义和专用元数据，文件变化统一由 Run 前后工作区扫描确认。
 
 ### Terminal Runtime
 
-Terminal Runtime 由 `TerminalSessionManager` 和 `terminal_run / terminal_read / terminal_stop` 组成。Manager 位于 Main Process，按 chat session 与 workspace 隔离持久 PTY，会话可跨单个 AI run 保留。每个终端维护 terminalId、当前路径、运行状态、当前命令、输出环形缓冲区和绝对输出游标。terminal_run 固定等待后让出控制权，不终止仍在运行的命令；terminal_read 增量读取；terminal_stop 通过 Ctrl+C、宽限期和强制终止收口。删除聊天、取消所属 run 和应用退出会清理托管进程。
+Terminal Runtime 由 `TerminalSessionManager` 和 `terminal_run / terminal_read / terminal_stop` 组成。Manager 位于 Main Process，按 chat session 与 workspace 隔离持久 PTY，会话可跨单个 AI run 保留。每个终端维护 terminalId、当前路径、运行状态、当前命令、输出环形缓冲区和绝对输出游标。terminal_run 固定等待后让出控制权，不终止仍在运行的命令；同一终端仍为 running 时必须先通过 terminal_read 等到 idle，不能直接提交下一条命令。terminal_stop 先通过 Ctrl+C 和宽限期尝试保留会话，正常停止后回到 idle；无法正常停止时强制终止进程树并把终端置为 closed。删除聊天、取消所属 run 和应用退出会先尝试正常退出，再清理托管进程。
 
 Brain 的 `local_environment` 整体使用格式化 JSON，其中 `current_time` 同时提供 UTC ISO 时间、本地 ISO 时间和时区，`terminal_state` 只包含新终端默认路径和各终端的 id、状态、当前路径、当前命令与开始时间，不注入完整日志或环境变量。工具说明只声明能力、结果和边界，不返回下一步建议字段。terminal_run 输入不包含 cwd；已有终端的当前路径是执行和工作空间边界判断的基准。
+
+DOCX/PPT 编辑工具的模型描述各自保持为一句能力说明，不枚举 action，也不解释 UUID、revision、replay、checksum、原子替换或回读结构；可调用参数和定位字段由输入 schema 提供，内部事务与差异实现不进入模型提示词。
 
 ### Apply Review
 
@@ -96,7 +98,7 @@ Workbench 右侧是按需渲染的独立资源工作台，由资源 Tab、紧凑
 
 文本 Diff adapter 在首次打开时读取不可变 before/after 对象，生成只包含结构化 hunks 的 version 2 artifact 并缓存。“N 行未修改”展开时直接读取不可变 after 对象，不在 artifact 中重复保存完整行。大文件仍由 Renderer 虚拟列表控制实际 DOM 行数。
 
-Docx adapter 保存 before 对象、committed Docx 和 Review Docx。只有 Docx 工具拥有语义操作时才生成 Review Docx；终端直接修改的 Docx 仅提供 before/after 文件版本切换。`PptDiffAdapter` 与 `ExcelDiffAdapter` 仅预留契约和注释，本期不实现。
+Docx adapter 保存 before 对象、committed Docx 和 Review Docx。只有 Docx 工具拥有语义操作时才生成 Review Docx；终端直接修改的 Docx 仅提供 before/after 文件版本切换。`PptDiffAdapter` 已实现页面级 before/after 差异、变化页筛选和缩略图预览；`ExcelDiffAdapter` 仍只预留契约，本期不实现。
 
 ## AI 架构
 
@@ -206,8 +208,8 @@ flowchart TD
 
 普通文本文件链路不使用 unified diff 作为 AI 输入或输出：
 
-1. `file_read` 解码 UTF-8 文本，并返回指定行范围和总行数。
-2. `file_edit` 按 action 校验完整输入；`edit` 的每个 `oldText` 必须唯一且互不重叠，`replaceAll` 对一个非空 `oldText` 执行全部非重叠精确替换。
+1. `text_file_read` 解码 UTF-8 文本，并返回指定行范围和总行数。
+2. `text_file_edit` 按 action 校验完整输入；`edit` 的每个 `oldText` 必须唯一且互不重叠，`replaceAll` 对一个非空 `oldText` 执行全部非重叠精确替换。
 3. 后端保留原始 BOM、换行风格和文件权限，写入前再次检查文件未发生变化。
 4. Run 结束扫描将真实 before/after 内容保存为不可变对象；首次打开修改预览时通过 `diff` 库生成带行号的结构化 hunks 并缓存。
 5. Workbench 的 `TextFileDiffViewer` 读取结构化 diff，使用单行号列展示新增、删除、上下文和词级变化，hunk 间用“N 行未修改”收起；展开时读取 after 对象，大 diff 使用虚拟列表。

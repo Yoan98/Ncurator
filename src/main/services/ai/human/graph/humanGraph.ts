@@ -18,6 +18,10 @@ import {
   isRecoverableRunErrorCode
 } from '../../utils/runFailure'
 
+export const HUMAN_GRAPH_INVOKE_CONFIG = {
+  recursionLimit: HUMAN_GRAPH_RECURSION_LIMIT
+} as const
+
 export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
   const { ctx } = input
   const State = createHumanRunStateSchema()
@@ -97,9 +101,10 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
         .compile()
 
       const initialState = options.initialState || createInitialHumanState(taskInput)
-      const output = (await graph.invoke(initialState as HumanState, {
-        recursionLimit: HUMAN_GRAPH_RECURSION_LIMIT
-      })) as HumanState
+      const output = (await graph.invoke(
+        initialState as HumanState,
+        HUMAN_GRAPH_INVOKE_CONFIG
+      )) as HumanState
 
       return {
         taskId: taskInput.taskId,

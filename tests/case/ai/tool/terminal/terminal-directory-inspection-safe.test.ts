@@ -65,7 +65,7 @@ describe('ai tool terminal backend', () => {
           noMatch: await harness.invoke<TerminalRunCommandResult>('terminal_run', {
             terminalId: list.terminalId,
             command: isWindows
-              ? 'Select-String -Path materials/nested/daily-note.txt -Pattern missing-value -Quiet'
+              ? 'Get-Content -LiteralPath materials/nested/missing-value.txt'
               : 'grep -q missing-value materials/nested/daily-note.txt'
           }),
           events: runtime.eventCollector.snapshot()

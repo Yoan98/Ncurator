@@ -111,18 +111,8 @@ export const DOCX_EDIT_TOOL_SPEC = {
   outputSchema: docxWriteOutputSchema,
   promptSpec: {
     name: 'docx_edit',
-    description: [
-      '创建或修改 docx 内容。一次 docx_edit 调用接收 actions 数组，并严格按数组顺序串行执行；全部 action 成功、校验并原子写入真实文件后才返回成功。',
-      'action type=create_document：新建 docx，并可一次写入 heading、paragraph、table；必须作为唯一 action。',
-      'action type=insert_blocks：在真实 anchorBlockId 前/后插入多个 block，按输入 blocks 顺序写入。',
-      'action type=replace_block：把一个完整 block 替换成新的 heading、paragraph 或 table。',
-      'action type=replace_text：在全文或指定 blockIds 中替换文本。',
-      'action type=style_text：给指定 block 内命中的文本设置加粗、斜体、下划线、颜色等样式。',
-      'action type=update_table_cell：替换指定表格单元格的文本。',
-      'action type=delete_blocks：删除一个或多个完整 block。',
-      'blockId 是当前文档会话内稳定的 blk_<uuid>；插入生成新 ID，替换保留原 ID，删除后的 ID 会失效。blockIndex 只表示当前位置。',
-      '返回写入后的编辑状态，以及所有 action 完成后的相邻区域详细回读信息（postWriteReadback字段），它代表着修改后最新的 docx 内容结构。'
-    ].join('\n')
+    description:
+      '创建或编辑 DOCX 文件，可在一次调用中连续完成内容新增、替换、格式调整、表格更新和删除，成功后直接保存并返回修改后的相关内容。'
   },
   resolveExecutionMeta: createDocxMutatingExecutionMeta(),
   activityActionType: 'docx_edit'

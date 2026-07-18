@@ -42,7 +42,7 @@
 - Workbench UI E2E 回归测试需要真实索引完成信号和 UI 可见状态作为等待条件；IPC observer 和 job 查询只能作为辅助证据，不能用来造业务状态。
 - `file-preview-actions` 当前按生产真实索引能力覆盖 `pdf/docx/md/txt`：连续打开的文件要分别保留为资源 Tab，并能切回旧 Tab；`.log` 与代码等其他 UTF-8 文件的纯文本 fallback 由 `file-render-utils` unit case 直接覆盖。
 - docx apply case 需要真实 docx 输入、真实 AI 编辑、真实写回记录、真实预览和真实回退。
-- text-file apply case 需要真实 Markdown 或代码文件、真实 `file_edit`、真实结构化 diff、独立 `TextFileDiffViewer` 和按原始 bytes 回退。
+- text-file apply case 需要真实 Markdown 或代码文件、真实 `text_file_edit`、真实结构化 diff、独立 `TextFileDiffViewer` 和按原始 bytes 回退。
 - `browser-use-task-panel` 需要真实 AI run 触发 `browser_use` 并驱动内置浏览器完成本地网页任务；同时验证多个浏览器 Tab 独立历史、共享持久站点数据、切换文件后网页状态不销毁，以及同 URL 标签不会让 Stagehand 串页，不能用 fake browser 替代。
 - `web_search` 与 `web_crawl` 需要分开覆盖：搜索 case 只验证候选网页返回；读取 case 必须验证 AI 继续读取网页正文后再回答。
 - Workbench 附件链路当前固定保存到 `<workspace>/.ncurator/runtime/assets/<assetBucketId>/`，`assetBucketId` 为输入草稿 UUID，发送给 AI 时只传附件名称与路径，不再做发送前识图或文件解析。
@@ -325,7 +325,7 @@ tests/case/workbench/
 - Why：终端、脚本和内部文件工具必须共享同一变化真相，不能依赖命令字符串猜测产物。
 - How：Run 基线后分别执行文本修改、新增、删除和重命名；完成扫描后检查 `FileRevision`、对象哈希和来源；首次读取文本记录后检查 Diff 缓存；分别回退删除和重命名。
 - Oracle：四种操作均被捕获；相同内容对象去重；扫描前记录没有文本 preview，首次读取后生成 version 2 hunks 且无 `afterLines`；删除回退恢复文件，重命名回退恢复原路径；`.ncurator`、`.git`、`node_modules` 等内部目录不进入变化列表。
-- Not：不验证 PPT / Excel Diff；本期只验证预留 adapter 不影响统一数据模型。
+- Not：不在本用例重复验证 DOCX、PPT 或未来 Excel 的专用 Diff 渲染；PPT 页面级 Diff 由 `ppt-create-diff-and-revert` 独立覆盖，Excel adapter 仍为预留能力。
 
 #### `docx-apply-panel-preview-and-revert`
 

@@ -190,11 +190,21 @@ describe('ai tool pdf backend', () => {
       execute: async (runtime) => {
         const sourcePath = runtime.getFixtureWorkspacePath(PDF_FIXTURE)
         const corruptPath = path.join(runtime.workspaceRoot, 'corrupt.pdf')
-        const outsidePath = path.join(path.dirname(runtime.workspaceRoot), 'outside-pdf.pdf')
-        const symlinkPath = path.join(runtime.workspaceRoot, 'outside-link.pdf')
+        const outsideDirectory = path.join(
+          path.dirname(runtime.workspaceRoot),
+          `${path.basename(runtime.workspaceRoot)}-outside`
+        )
+        const outsidePath = path.join(outsideDirectory, 'outside-pdf.pdf')
+        const symlinkPath = path.join(runtime.workspaceRoot, 'outside-link')
+        const escapedPdfPath = path.join(symlinkPath, 'outside-pdf.pdf')
         await fs.writeFile(corruptPath, 'not a pdf')
+        await fs.mkdir(outsideDirectory, { recursive: true })
         await fs.copyFile(sourcePath, outsidePath)
-        await fs.symlink(outsidePath, symlinkPath)
+        await fs.symlink(
+          outsideDirectory,
+          symlinkPath,
+          process.platform === 'win32' ? 'junction' : 'dir'
+        )
         const harness = createPdfToolHarness(runtime)
         try {
           const outOfRange = await harness.invoke<PdfFailure>('pdf_read_pages', {
@@ -214,12 +224,12 @@ describe('ai tool pdf backend', () => {
             sourcePath: corruptPath
           })
           const outside = await harness.invoke<PdfFailure>('pdf_inspect', {
-            sourcePath: symlinkPath
+            sourcePath: escapedPdfPath
           })
           return { outOfRange, badRegex, oversizedRange, corrupt, outside }
         } finally {
           await harness.release()
-          await fs.rm(outsidePath, { force: true })
+          await fs.rm(outsideDirectory, { recursive: true, force: true })
         }
       },
       assert: async (result, runtime) => {

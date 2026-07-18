@@ -37,6 +37,9 @@ import {
 } from '../utils/stateTransitions'
 import { getAvailableToolNames } from '../utils/runtimeCache'
 
+export const resolveHumanToolCallLimit = (override?: number): number =>
+  override ?? HUMAN_DEFAULT_TOOL_CALL_LIMIT
+
 const isTerminalRunCall = (toolName: string): boolean => toolName === 'terminal_run'
 const isBrowserUseCall = (toolName: string): boolean => toolName === 'browser_use'
 
@@ -369,8 +372,9 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
     input.ctx.checkCancelled()
     assertExternalLearnedSkillIds(state.skills.learnedSkillIds)
     input.cache.currentState = state
-    const toolCallLimit =
-      input.ctx.humanRuntimeOverrides?.hardActionLimit || HUMAN_DEFAULT_TOOL_CALL_LIMIT
+    const toolCallLimit = resolveHumanToolCallLimit(
+      input.ctx.humanRuntimeOverrides?.hardActionLimit
+    )
 
     if (
       !state.execution.currentThought ||

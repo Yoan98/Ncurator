@@ -100,7 +100,7 @@
 - `src/main/services/storage/**` 放 SQLite、LanceDB 和领域 Store。
 - AI 运行入口与基础设施放在 `src/main/services/ai/**`。
 - AI human graph、node、prompt、skill、tool 按 human 领域收口。
-- Tool 实现按实现域归位，例如 docx、textFile、kb、terminal；builtin `text-file` skill 通过 `file_read/file_edit` 提供 UTF-8 普通文本和代码文件读写。
+- Tool 实现按实现域归位，例如 docx、textFile、kb、terminal；builtin `text-file` skill 通过 `text_file_read/text_file_edit` 提供 UTF-8 普通文本和代码文件读写。
 - Docx replay、apply、checkpoint 和 revert 能力放在 AI human tools 的 docx 领域下；普通文本写入使用结构化 diff 和统一文件修改记录，不把 unified diff 返回给 AI。
 - `src/main/utils/**` 只放 Main 侧通用工具，不放强业务流程。
 - `src/main/types/**` 只放 Main 侧通用类型。

@@ -118,7 +118,7 @@ export const TERMINAL_STOP_TOOL_SPEC: TerminalStopToolSpec = {
   promptSpec: {
     name: 'terminal_stop',
     description:
-      '停止持久终端中的当前命令并可同时关闭终端，并返回 terminalId、停止结果、是否强制终止和终端状态。'
+      '停止持久终端中的当前命令并可同时关闭终端，并返回 terminalId、停止结果、是否强制终止和终端状态；正常停止后终端可继续复用，强制终止后终端会关闭。'
   },
   resolveExecutionMeta: () => ({ mutability: 'mutating' })
 }

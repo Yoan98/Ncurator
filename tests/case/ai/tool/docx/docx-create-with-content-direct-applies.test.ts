@@ -23,7 +23,7 @@ describe('ai tool docx backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['docx'],
-      description: '验证 create_document run 结束时直接写回源文件并生成可回退 apply 记录。',
+      description: '验证 create_document 立即写回源文件，run 结束时生成可回退 apply 记录。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {

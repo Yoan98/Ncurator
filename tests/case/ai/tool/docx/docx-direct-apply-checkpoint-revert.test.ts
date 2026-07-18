@@ -21,7 +21,7 @@ describe('ai tool docx backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['docx'],
-      description: '验证 existing docx run 结束时直接写回、保存 checkpoint，并支持干净回退。',
+      description: '验证 existing docx 编辑后立即写回，run 结束时保存 checkpoint，并支持干净回退。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -88,7 +88,8 @@ describe('ai tool docx backend', () => {
             result.searchAfterApply.matches.length === 1,
           {
             name: 'docx-update-directly-writes-source-and-records-checkpoint',
-            message: 'update run 收尾时应直接写回源文件，并生成包含 checkpoint 的 applied 记录。',
+            message:
+              'docx_edit 成功时应立即写回源文件，run 收尾生成包含 checkpoint 的 applied 记录。',
             data: {
               records: result.records,
               searchAfterApply: result.searchAfterApply.matches
