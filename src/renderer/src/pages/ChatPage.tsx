@@ -1596,6 +1596,23 @@ const ChatPage: React.FC = () => {
     void openExistingSession(session)
   }
 
+  const acknowledgeCurrentSessionCompletion = useCallback((): void => {
+    const sessionId = currentSessionIdRef.current
+    if (
+      !sessionId ||
+      !sessions.some((session) => session.id === sessionId && session.hasUnreadCompletion)
+    ) {
+      return
+    }
+
+    setSessions((items) =>
+      items.map((item) => (item.id === sessionId ? { ...item, hasUnreadCompletion: false } : item))
+    )
+    void window.api.chatSessionMarkViewed(sessionId).then((response) => {
+      if (!response.success) void loadSessions()
+    })
+  }, [loadSessions, sessions])
+
   useEffect(() => {
     void loadSessions().then((list) => {
       if (sessionListHydratedRef.current) return
@@ -3017,6 +3034,7 @@ const ChatPage: React.FC = () => {
       className="nc-app-shell"
       data-testid={workbenchSelectors.page}
       data-workbench-mode={composerMode}
+      onClick={acknowledgeCurrentSessionCompletion}
     >
       <div
         className="nc-left-titlebar-chrome"

@@ -516,9 +516,7 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
   onOpenWorkspaceFile,
   onOpenWorkspaceChange
 }) => {
-  const [explorerOpen, setExplorerOpen] = useState(
-    state.kind === 'file_launcher' || state.kind === 'apply_workspace'
-  )
+  const [explorerOpen, setExplorerOpen] = useState(state.kind === 'file_launcher')
   const [explorerMode, setExplorerMode] = useState<WorkspaceFileExplorerMode>(
     state.kind === 'apply_workspace' ? 'changed' : 'all'
   )
@@ -530,7 +528,7 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
       setExplorerMode('all')
     }
     if (state.kind === 'apply_workspace') {
-      setExplorerOpen(true)
+      setExplorerOpen(false)
       setExplorerMode('changed')
     }
   }, [state.kind])
