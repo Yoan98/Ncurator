@@ -1,7 +1,11 @@
 import type {
   AiRuntimeSettings,
   BrowserPanelBoundsRequest,
+  BrowserPanelHideRequest,
   BrowserPanelMutationResponse,
+  BrowserPanelOcclusionRequest,
+  BrowserPanelPresentationResponse,
+  BrowserPanelShowRequest,
   BrowserPanelState,
   BrowserPanelStateResponse,
   BrowserTabCreateRequest,
@@ -235,9 +239,11 @@ export type DesktopApi = {
   browserTabNavigate: (payload: BrowserTabNavigateRequest) => Promise<BrowserPanelStateResponse>
   browserTabBack: (payload: BrowserTabMutationRequest) => Promise<BrowserPanelStateResponse>
   browserTabForward: (payload: BrowserTabMutationRequest) => Promise<BrowserPanelStateResponse>
-  browserPanelShow: (payload: BrowserTabMutationRequest) => Promise<BrowserPanelMutationResponse>
-  browserPanelHide: () => Promise<BrowserPanelMutationResponse>
-  browserPanelSetOccluded: (occluded: boolean) => Promise<BrowserPanelMutationResponse>
+  browserPanelShow: (payload: BrowserPanelShowRequest) => Promise<BrowserPanelPresentationResponse>
+  browserPanelHide: (payload?: BrowserPanelHideRequest) => Promise<BrowserPanelMutationResponse>
+  browserPanelSetOccluded: (
+    payload: BrowserPanelOcclusionRequest
+  ) => Promise<BrowserPanelMutationResponse>
   browserPanelReload: (payload: BrowserTabMutationRequest) => Promise<BrowserPanelMutationResponse>
   browserPanelStop: (payload: BrowserTabMutationRequest) => Promise<BrowserPanelMutationResponse>
   browserPanelOpenExternal: (

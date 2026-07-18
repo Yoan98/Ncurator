@@ -7,7 +7,6 @@ export type BrowserPanelBoundsState = {
   y: number
   width: number
   height: number
-  visible: boolean
 }
 
 export type BrowserUseRunInput = {

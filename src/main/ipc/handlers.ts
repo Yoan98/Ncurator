@@ -60,7 +60,11 @@ import type {
   AiRunUserTakeoverConfirmRequest,
   AiRunUserTakeoverConfirmResponse,
   BrowserPanelBoundsRequest,
+  BrowserPanelHideRequest,
   BrowserPanelMutationResponse,
+  BrowserPanelOcclusionRequest,
+  BrowserPanelPresentationResponse,
+  BrowserPanelShowRequest,
   BrowserPanelStateResponse,
   BrowserTabCreateRequest,
   BrowserTabCreateResponse,
@@ -2286,13 +2290,16 @@ export function registerHandlers(services: {
     async (_event, payload: BrowserPanelBoundsRequest): Promise<BrowserPanelMutationResponse> => {
       try {
         if (!browserEmbedService) return { success: false, error: 'browser service unavailable' }
-        browserEmbedService.setBounds(String(payload?.tabId || ''), {
+        browserEmbedService.setBounds(
+          String(payload?.tabId || ''),
+          Number(payload?.presentationId || 0),
+          {
           x: Number(payload?.x || 0),
           y: Number(payload?.y || 0),
           width: Number(payload?.width || 0),
-          height: Number(payload?.height || 0),
-          visible: payload?.visible === true
-        })
+            height: Number(payload?.height || 0)
+          }
+        )
         return { success: true }
       } catch (e) {
         return { success: false, error: e instanceof Error ? e.message : String(e) }
@@ -2358,10 +2365,26 @@ export function registerHandlers(services: {
 
   ipcMain.handle(
     'browser-panel-show',
-    async (_event, payload?: BrowserTabMutationRequest): Promise<BrowserPanelMutationResponse> => {
+    async (
+      _event,
+      payload?: BrowserPanelShowRequest
+    ): Promise<BrowserPanelPresentationResponse> => {
       try {
         if (!browserEmbedService) return { success: false, error: 'browser service unavailable' }
-        await browserEmbedService.show(String(payload?.tabId || ''))
+        const presentationId = browserEmbedService.show(String(payload?.tabId || ''))
+        return { success: true, presentationId }
+      } catch (e) {
+        return { success: false, error: e instanceof Error ? e.message : String(e) }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'browser-panel-hide',
+    async (_event, payload?: BrowserPanelHideRequest): Promise<BrowserPanelMutationResponse> => {
+      try {
+        if (!browserEmbedService) return { success: false, error: 'browser service unavailable' }
+        browserEmbedService.hide(payload?.presentationId)
         return { success: true }
       } catch (e) {
         return { success: false, error: e instanceof Error ? e.message : String(e) }
@@ -2369,22 +2392,19 @@ export function registerHandlers(services: {
     }
   )
 
-  ipcMain.handle('browser-panel-hide', async (): Promise<BrowserPanelMutationResponse> => {
-    try {
-      if (!browserEmbedService) return { success: false, error: 'browser service unavailable' }
-      browserEmbedService.hide()
-      return { success: true }
-    } catch (e) {
-      return { success: false, error: e instanceof Error ? e.message : String(e) }
-    }
-  })
-
   ipcMain.handle(
     'browser-panel-occluded',
-    async (_event, occluded: boolean): Promise<BrowserPanelMutationResponse> => {
+    async (
+      _event,
+      payload: BrowserPanelOcclusionRequest
+    ): Promise<BrowserPanelMutationResponse> => {
       try {
         if (!browserEmbedService) return { success: false, error: 'browser service unavailable' }
-        browserEmbedService.setOccluded(occluded === true)
+        browserEmbedService.setOccluded(
+          String(payload?.tabId || ''),
+          Number(payload?.presentationId || 0),
+          payload?.occluded === true
+        )
         return { success: true }
       } catch (e) {
         return { success: false, error: e instanceof Error ? e.message : String(e) }

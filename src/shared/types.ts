@@ -1106,12 +1106,30 @@ export type BrowserPanelBounds = {
 
 export type BrowserPanelBoundsRequest = BrowserPanelBounds & {
   tabId: string
-  visible: boolean
+  presentationId: number
+}
+
+export type BrowserPanelShowRequest = {
+  tabId: string
+}
+
+export type BrowserPanelHideRequest = {
+  presentationId?: number
+}
+
+export type BrowserPanelOcclusionRequest = {
+  tabId: string
+  presentationId: number
+  occluded: boolean
 }
 
 export type BrowserPanelMutationResponse = {
   success: boolean
   error?: string
+}
+
+export type BrowserPanelPresentationResponse = BrowserPanelMutationResponse & {
+  presentationId?: number
 }
 
 export type BrowserTabState = {

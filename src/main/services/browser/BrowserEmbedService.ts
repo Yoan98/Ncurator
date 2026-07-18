@@ -48,8 +48,7 @@ const EMPTY_BOUNDS: BrowserPanelBoundsState = {
   x: 0,
   y: 0,
   width: 0,
-  height: 0,
-  visible: false
+  height: 0
 }
 
 const normalizeUrl = (rawUrl: string): string => {
@@ -125,6 +124,8 @@ const resolveInitialZoomFactor = (width: number): number =>
 export class BrowserEmbedService implements BrowserUseService {
   private readonly tabs = new Map<string, BrowserTabRuntime>()
   private activeTabId: string | null = null
+  private presentedTabId: string | null = null
+  private presentationId = 0
   private bounds: BrowserPanelBoundsState = EMPTY_BOUNDS
   private occluded = false
   private persistTimer: ReturnType<typeof setTimeout> | null = null
@@ -207,29 +208,46 @@ export class BrowserEmbedService implements BrowserUseService {
     }
     this.tabs.delete(tabId)
     if (this.activeTabId === tabId) this.activeTabId = null
+    if (this.presentedTabId === tabId) {
+      this.presentedTabId = null
+      this.occluded = false
+    }
     this.applyAllVisibility()
     await this.persistNow()
   }
 
-  public async show(tabId?: string): Promise<void> {
-    if (tabId) this.activateTab(tabId)
-    this.bounds = { ...this.bounds, visible: true }
+  public show(tabId: string): number {
+    const runtime = this.requireTab(tabId)
+    this.activeTabId = tabId
+    this.presentedTabId = tabId
+    this.presentationId += 1
+    this.occluded = false
+    runtime.persisted.updatedAt = Date.now()
+    this.applyAllVisibility()
+    this.emitState(runtime)
+    this.schedulePersist()
+    return this.presentationId
+  }
+
+  public hide(presentationId?: number): void {
+    if (presentationId !== undefined && presentationId !== this.presentationId) return
+    this.presentedTabId = null
+    this.occluded = false
     this.applyAllVisibility()
   }
 
-  public hide(): void {
-    this.bounds = { ...this.bounds, visible: false }
-    this.applyAllVisibility()
-  }
-
-  public setOccluded(occluded: boolean): void {
+  public setOccluded(tabId: string, presentationId: number, occluded: boolean): void {
+    if (!this.isCurrentPresentation(tabId, presentationId)) return
     this.occluded = occluded
     this.applyAllVisibility()
   }
 
-  public setBounds(tabId: string, bounds: BrowserPanelBoundsState): void {
-    if (!this.tabs.has(tabId)) return
-    this.activeTabId = tabId
+  public setBounds(
+    tabId: string,
+    presentationId: number,
+    bounds: BrowserPanelBoundsState
+  ): void {
+    if (!this.isCurrentPresentation(tabId, presentationId)) return
     this.bounds = bounds
     this.applyAllVisibility()
   }
@@ -293,7 +311,6 @@ export class BrowserEmbedService implements BrowserUseService {
 
   public async run(input: BrowserUseRunInput): Promise<BrowserUseRunResult> {
     const runtime = this.requireTab(input.tabId || this.activeTabId)
-    await this.show(runtime.persisted.id)
     if (input.action === 'navigate') {
       if (!input.url) throw new Error('browser_use navigate requires url')
       await this.navigate(input.url, runtime.persisted.id)
@@ -322,6 +339,10 @@ export class BrowserEmbedService implements BrowserUseService {
     const runtime = this.tabs.get(tabId)
     if (!runtime) throw new Error('browser tab not found')
     return runtime
+  }
+
+  private isCurrentPresentation(tabId: string, presentationId: number): boolean {
+    return this.presentedTabId === tabId && this.presentationId === presentationId
   }
 
   private async ensureReady(runtime: BrowserTabRuntime): Promise<WebContentsView> {
@@ -383,8 +404,7 @@ export class BrowserEmbedService implements BrowserUseService {
     for (const [tabId, runtime] of this.tabs) {
       if (!runtime.view || runtime.view.webContents.isDestroyed()) continue
       const visible =
-        tabId === this.activeTabId &&
-        this.bounds.visible &&
+        tabId === this.presentedTabId &&
         !this.occluded &&
         this.bounds.width > 0 &&
         this.bounds.height > 0 &&

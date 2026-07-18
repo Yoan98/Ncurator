@@ -7,6 +7,13 @@ const DEFAULT_WEB_TIMEOUT_MS = 2500
 
 type FetchLike = typeof fetch
 
+const resolveDefaultFetch = async (): Promise<FetchLike> => {
+  if (!process.versions.electron) return fetch
+
+  const { net } = await import('electron')
+  return net.fetch as FetchLike
+}
+
 const resolveFileReference = async (
   reference: BrainEvidenceReference,
   workspaceRootPath: string | undefined
@@ -39,8 +46,7 @@ const requestWebReference = async (
   fetchImpl(url, {
     method,
     redirect: 'follow',
-    signal,
-    headers: method === 'GET' ? { Range: 'bytes=0-0' } : undefined
+    signal
   })
 
 const resolveWebReference = async (
@@ -61,11 +67,25 @@ const resolveWebReference = async (
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), timeoutMs)
   try {
-    let response = await requestWebReference(url.toString(), fetchImpl, controller.signal, 'HEAD')
-    if (response.status === 405 || response.status === 501) {
-      await response.body?.cancel()
-      response = await requestWebReference(url.toString(), fetchImpl, controller.signal, 'GET')
+    try {
+      const headResponse = await requestWebReference(
+        url.toString(),
+        fetchImpl,
+        controller.signal,
+        'HEAD'
+      )
+      const headAccessible = headResponse.ok
+      await headResponse.body?.cancel()
+      if (headAccessible) {
+        return { ...reference, path: url.toString(), accessStatus: 'accessible' }
+      }
+    } catch (error) {
+      if (isAbortError(error)) {
+        return { ...reference, path: url.toString(), accessStatus: 'accessible' }
+      }
     }
+
+    const response = await requestWebReference(url.toString(), fetchImpl, controller.signal, 'GET')
     const accessStatus = response.ok ? 'accessible' : 'unavailable'
     await response.body?.cancel()
     return { ...reference, path: url.toString(), accessStatus }
@@ -88,7 +108,7 @@ export const resolveEvidenceReferenceAccess = async (input: {
 }): Promise<HumanReference[] | undefined> => {
   if (!input.references || input.references.length === 0) return undefined
 
-  const fetchImpl = input.fetchImpl || fetch
+  const fetchImpl = input.fetchImpl || (await resolveDefaultFetch())
   const webTimeoutMs = input.webTimeoutMs ?? DEFAULT_WEB_TIMEOUT_MS
   const resolutions = new Map<string, Promise<HumanReference>>()
 

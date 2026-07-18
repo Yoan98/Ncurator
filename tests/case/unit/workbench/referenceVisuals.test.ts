@@ -67,16 +67,20 @@ describe('reference visual spec', () => {
         createFileReference({ name: 'fallback.PDF', relativePath: 'docs/fallback.PDF' })
       )
     ).toBe('pdf')
-    expect(getReferenceVisualKind(createFileReference({ name: 'brief.markdown' }))).toBe('markdown')
-    expect(getReferenceVisualKind(createFileReference({ name: 'brief.md' }))).toBe('markdown')
   })
 
-  it('keeps unknown files on the generic file visual spec', () => {
+  it('keeps markdown and unknown files on the generic file visual spec', () => {
     const noExtension = getReferenceVisualSpec(createFileReference({ name: 'README' }))
     const textFile = getReferenceVisualSpec(createFileReference({ name: 'notes.txt' }))
+    const markdownFile = getReferenceVisualSpec(createFileReference({ name: 'brief.markdown' }))
+    const mdFile = getReferenceVisualSpec(createFileReference({ name: 'brief.md' }))
 
     expect(noExtension.kind).toBe('file')
     expect(textFile.kind).toBe('file')
     expect(textFile.documentLabel).toBeUndefined()
+    expect(markdownFile.kind).toBe('file')
+    expect(markdownFile.documentLabel).toBeUndefined()
+    expect(mdFile.kind).toBe('file')
+    expect(mdFile.documentLabel).toBeUndefined()
   })
 })

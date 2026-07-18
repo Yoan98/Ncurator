@@ -124,11 +124,58 @@ describe('ai unit evidence reference access', () => {
       ]
     })
 
-    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
     expect(references?.map((reference) => reference.accessStatus)).toEqual([
       'unavailable',
       'unavailable'
     ])
+  })
+
+  it('falls back to GET when a server rejects HEAD requests', async () => {
+    const fetchImpl = vi.fn(async (_url: string | URL | Request, init?: RequestInit) =>
+      init?.method === 'HEAD'
+        ? new Response(null, { status: 403 })
+        : new Response(null, { status: 200 })
+    )
+
+    const references = await resolveEvidenceReferenceAccess({
+      fetchImpl: fetchImpl as typeof fetch,
+      references: [
+        {
+          label: 'HEAD restricted page',
+          path: 'https://example.com/head-restricted',
+          resourceType: 'web',
+          usedFor: 'supports a web conclusion'
+        }
+      ]
+    })
+
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
+    expect(fetchImpl.mock.calls.map((call) => call[1]?.method)).toEqual(['HEAD', 'GET'])
+    expect(references?.[0].accessStatus).toBe('accessible')
+  })
+
+  it('falls back to GET when the HEAD request has a transport failure', async () => {
+    const fetchImpl = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      if (init?.method === 'HEAD') throw new TypeError('fetch failed')
+      return new Response(null, { status: 204 })
+    })
+
+    const references = await resolveEvidenceReferenceAccess({
+      fetchImpl: fetchImpl as typeof fetch,
+      references: [
+        {
+          label: 'HEAD transport failure page',
+          path: 'https://example.com/head-failure',
+          resourceType: 'web',
+          usedFor: 'supports a web conclusion'
+        }
+      ]
+    })
+
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
+    expect(fetchImpl.mock.calls.map((call) => call[1]?.method)).toEqual(['HEAD', 'GET'])
+    expect(references?.[0].accessStatus).toBe('accessible')
   })
 
   it('does not hide a web reference when the checker itself times out', async () => {

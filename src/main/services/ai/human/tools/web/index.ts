@@ -309,7 +309,6 @@ export const webToolFamily: ToolFamilyDefinition = {
                 browserTabId: browserTab.id,
                 createdAt: Date.now()
               })
-              await service.show(browserTab.id)
               const result = await service.run({
                 tabId: browserTab.id,
                 action,
