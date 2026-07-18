@@ -1,8 +1,5 @@
 import { describe, it } from 'vitest'
-import {
-  createDocxToolHarness,
-  writeTestDocxFile
-} from '../../../../harness/backend/aiToolHarness'
+import { createDocxToolHarness, writeTestDocxFile } from '../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import {
   type DocxMutationResult,
@@ -143,13 +140,17 @@ describe('ai tool docx backend', () => {
         }
       },
       assert: async (result, runtime) => {
-        const changedActions = [
-          ...result.serialEdit.changedBlocks.map((block) => block.action)
-        ]
+        const changedActions = [...result.serialEdit.changedBlocks.map((block) => block.action)]
 
         runtime.assertThat(
-          ['replace_text', 'delete_block', 'update_table_cell', 'insert_after', 'insert_before'].every(
-            (action) => changedActions.includes(
+          [
+            'replace_text',
+            'delete_block',
+            'update_table_cell',
+            'insert_after',
+            'insert_before'
+          ].every((action) =>
+            changedActions.includes(
               action as
                 | 'insert_after'
                 | 'insert_before'
@@ -160,9 +161,8 @@ describe('ai tool docx backend', () => {
           ),
           {
             name: 'complex-ops-serial-actions-covers-all-op-types',
-            message: '复杂编辑 case 应覆盖当前写工具支持的底层变更动作，并产出新的修订摘要。',
+            message: '复杂编辑 case 应覆盖当前写工具支持的底层变更动作。',
             data: {
-              currentRevisionRef: result.serialEdit.currentRevisionRef,
               changedActions
             }
           }
@@ -172,13 +172,16 @@ describe('ai tool docx backend', () => {
           result.searchAfter.matches.length === 1 &&
             result.readAfter.blocks.length === 1 &&
             result.finalOutline.blocks.some(
-              (block) => block.type === 'paragraph' && block.text.includes('Inserted before anchor.')
+              (block) =>
+                block.type === 'paragraph' && block.text.includes('Inserted before anchor.')
             ) &&
             result.finalOutline.blocks.some(
               (block) => block.type === 'table_cell' && block.text.includes('Bob')
             ) &&
             result.finalOutline.blocks.some(
-              (block) => block.type === 'paragraph' && block.text.includes('Replaced whole block in final snapshot.')
+              (block) =>
+                block.type === 'paragraph' &&
+                block.text.includes('Replaced whole block in final snapshot.')
             ) &&
             result.serialEdit.warnings.length === 0,
           {

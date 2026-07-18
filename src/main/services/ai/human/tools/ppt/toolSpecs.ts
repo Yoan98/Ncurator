@@ -100,7 +100,7 @@ export const PPT_EDIT_TOOL_SPEC = {
   promptSpec: {
     name: 'ppt_edit',
     description: [
-      '创建或修改 PPTX。每次调用执行一个 action。',
+      '创建或修改 PPTX。一次调用接收 actions 数组并严格顺序执行；全部 action 成功后才原子写入真实文件。',
       'action type=create_presentation：新建 PPTX，并使用 HTML 创建第一页；目标文件不能已存在。',
       'action type=insert_slide：使用 HTML 在指定页面前插入一页；不指定 beforeSlideId 时追加到末尾。',
       'action type=delete_slides：删除一个或多个指定页面。',

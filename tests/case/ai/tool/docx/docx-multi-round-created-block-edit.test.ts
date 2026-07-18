@@ -1,14 +1,7 @@
 import { describe, it } from 'vitest'
-import {
-  createDocxToolHarness,
-  writeTestDocxFile
-} from '../../../../harness/backend/aiToolHarness'
+import { createDocxToolHarness, writeTestDocxFile } from '../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
-import type {
-  DocxMutationResult,
-  DocxOutlineResult,
-  DocxSearchResult
-} from './testUtils'
+import type { DocxMutationResult, DocxOutlineResult, DocxSearchResult } from './testUtils'
 
 describe('ai tool docx backend', () => {
   it('docx-multi-round-created-block-edit', async () => {
@@ -39,12 +32,14 @@ describe('ai tool docx backend', () => {
 
           const insertParagraph = await harness.invoke<DocxMutationResult>('docx_edit', {
             sourcePath: 'multi-round-created.docx',
-            actions: [{
-              type: 'insert_blocks',
-              position: 'after',
-              anchorBlockId,
-              blocks: [{ type: 'paragraph', text: '新增段落初稿。' }]
-            }]
+            actions: [
+              {
+                type: 'insert_blocks',
+                position: 'after',
+                anchorBlockId,
+                blocks: [{ type: 'paragraph', text: '新增段落初稿。' }]
+              }
+            ]
           })
 
           const insertedParagraphSearch = await harness.invoke<DocxSearchResult>('docx_search', {
@@ -53,30 +48,36 @@ describe('ai tool docx backend', () => {
           })
           const insertedParagraphBlockId = insertedParagraphSearch.matches[0]?.blockId || ''
 
-          const rewriteInsertedParagraph = await harness.invoke<DocxMutationResult>(
-            'docx_edit',
-            {
-              sourcePath: insertParagraph.sourcePath,
-              actions: [{
+          const rewriteInsertedParagraph = await harness.invoke<DocxMutationResult>('docx_edit', {
+            sourcePath: insertParagraph.sourcePath,
+            actions: [
+              {
                 type: 'replace_text',
                 query: '新增段落初稿。',
                 replace: '新增段落二稿。',
                 blockIds: [insertedParagraphBlockId]
-              }]
-            }
-          )
+              }
+            ]
+          })
 
           const insertTable = await harness.invoke<DocxMutationResult>('docx_edit', {
             sourcePath: rewriteInsertedParagraph.sourcePath,
-            actions: [{
-              type: 'insert_blocks',
-              position: 'after',
-              anchorBlockId: insertedParagraphBlockId,
-              blocks: [{ type: 'table', rows: [
-              ['单元格初稿', '说明'],
-              ['保留项', '尾注']
-            ] }]
-            }]
+            actions: [
+              {
+                type: 'insert_blocks',
+                position: 'after',
+                anchorBlockId: insertedParagraphBlockId,
+                blocks: [
+                  {
+                    type: 'table',
+                    rows: [
+                      ['单元格初稿', '说明'],
+                      ['保留项', '尾注']
+                    ]
+                  }
+                ]
+              }
+            ]
           })
 
           const insertedCellSearch = await harness.invoke<DocxSearchResult>('docx_search', {
@@ -84,16 +85,17 @@ describe('ai tool docx backend', () => {
             query: '单元格初稿'
           })
           const cellBlockId =
-            insertedCellSearch.matches.find((match) => match.type === 'table_cell')?.blockId ||
-            ''
+            insertedCellSearch.matches.find((match) => match.type === 'table_cell')?.blockId || ''
 
           const updateCreatedCell = await harness.invoke<DocxMutationResult>('docx_edit', {
             sourcePath: insertTable.sourcePath,
-            actions: [{
-              type: 'update_table_cell',
-              cellBlockId,
-              text: '单元格终稿'
-            }]
+            actions: [
+              {
+                type: 'update_table_cell',
+                cellBlockId,
+                text: '单元格终稿'
+              }
+            ]
           })
 
           const rewrittenParagraphSearch = await harness.invoke<DocxSearchResult>('docx_search', {
@@ -136,32 +138,23 @@ describe('ai tool docx backend', () => {
         const canEditCreatedContent =
           result.rewriteInsertedParagraph.changedBlocks.length === 1 &&
           result.updateCreatedCell.changedBlocks.length === 1 &&
-          result.rewriteInsertedParagraph.previousRevisionRef === result.insertParagraph.currentRevisionRef &&
-          result.insertTable.previousRevisionRef === result.rewriteInsertedParagraph.currentRevisionRef &&
-          result.updateCreatedCell.previousRevisionRef === result.insertTable.currentRevisionRef &&
-          result.rewrittenParagraphSearch.matches.length === 1
-        runtime.assertThat(
-          canEditCreatedContent,
-          {
-            name: 'later-rounds-can-edit-created-paragraph-and-cell',
-            message:
-              '第 2/3 轮应能继续编辑第 1 轮新增的段落与表格单元格，并且新内容可以继续被读取工具定位。',
-            data: {
-              insertedParagraphBlockId: result.insertedParagraphBlockId,
-              cellBlockId: result.cellBlockId,
-              revisionRefs: {
-                insertParagraph: result.insertParagraph.currentRevisionRef,
-                rewriteInsertedParagraph: result.rewriteInsertedParagraph.currentRevisionRef,
-                insertTable: result.insertTable.currentRevisionRef,
-                updateCreatedCell: result.updateCreatedCell.currentRevisionRef
-              },
-              rewriteInsertedParagraph: result.rewriteInsertedParagraph.changedBlocks,
-              updateCreatedCell: result.updateCreatedCell.changedBlocks,
-              rewrittenParagraphSearch: result.rewrittenParagraphSearch.matches,
-              updatedCellSearch: result.updatedCellSearch.matches
-            }
+          result.rewrittenParagraphSearch.matches.length === 1 &&
+          result.updatedCellSearch.matches.length >= 1 &&
+          /^blk_[0-9a-f]{32}$/.test(result.insertedParagraphBlockId) &&
+          /^blk_[0-9a-f]{32}$/.test(result.cellBlockId)
+        runtime.assertThat(canEditCreatedContent, {
+          name: 'later-rounds-can-edit-created-paragraph-and-cell',
+          message:
+            '第 2/3 轮应能继续编辑第 1 轮新增的段落与表格单元格，并且新内容可以继续被读取工具定位。',
+          data: {
+            insertedParagraphBlockId: result.insertedParagraphBlockId,
+            cellBlockId: result.cellBlockId,
+            rewriteInsertedParagraph: result.rewriteInsertedParagraph.changedBlocks,
+            updateCreatedCell: result.updateCreatedCell.changedBlocks,
+            rewrittenParagraphSearch: result.rewrittenParagraphSearch.matches,
+            updatedCellSearch: result.updatedCellSearch.matches
           }
-        )
+        })
       }
     })
   })

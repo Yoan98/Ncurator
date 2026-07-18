@@ -166,39 +166,41 @@ Docx 架构负责让 AI 可以读取、连续编辑并安全写回 Word 文档�
 ```mermaid
 flowchart TD
     A["Tool API\ndocx tools"] --> B["Read / Write Tools"]
-    B --> C["Runtime / Session"]
+    B --> C["Document Session / Stable Identity"]
     C --> D["Worker"]
     D --> E["OOXML Adapter"]
-    C --> F["Apply / Checkpoint / Revert"]
+    C --> F["Run Review Tree / Checkpoint / Revert"]
 ```
 
 ### 主要分层
 
 - Tool API 层负责对 AI 暴露 docx 读取和写入能力。
 - Read / Write Tools 层负责 AI-facing 的读取、搜索、编辑和任务内回滚。
-- Runtime / Session 层负责 sourcePath、read session、replay session、revision 和 open target 管理。
+- Runtime / Session 层负责 sourcePath、活动文档状态、稳定 block UUID、磁盘指纹和 open target 管理。
 - Worker 层负责实际打开、解析、搜索、编辑执行和校验。
-- OOXML Adapter 层负责 docx 结构解析、block 建模和底层操作。
-- Apply / Checkpoint / Revert 层负责最终写回、写回前 checkpoint 和用户回退。
+- OOXML Adapter 层使用位置型内部 ID 解析 docx，但这些 ID 不暴露给 AI；worker 将稳定 UUID 映射到当前 OOXML 节点。
+- Run Review Tree / Checkpoint / Revert 层负责 run 基线、红删绿增预览、统一修改记录和用户回退。
 
 ### 主流程
 
-1. 读取阶段先基于源文件建立 read session。
-2. 只有需要创建、编辑、历史或回滚时，才升级到 replay session。
-3. AI 每轮读取当前 working view，不反复回到源文件重算。
-4. 编辑成功后，replay session 更新，并投影出新的 working view。
-5. run 结束时，从 committed view 写回源文件。
-6. 写回前保存 checkpoint，写回后记录统一文件修改记录。
-7. 用户回退时根据修改记录恢复 checkpoint 或删除新建文件。
+1. 首次读取文件时建立活动 Document Session，并给段落、表格和单元格分配 `blk_<uuid>`。
+2. 后续读取直接查询 session；`blockIndex` 可以变化，block UUID 在当前 run 内保持稳定。
+3. `docx_edit(actions[])` 创建一次事务 working copy，所有 action 按输入顺序执行。
+4. 插入块生成新 UUID；替换块继承目标 UUID；删除块使 UUID 失效。
+5. 全部 action 成功后只序列化一次，完成 DOCX 校验、原子落盘和 post-write checksum 验证后才返回成功。
+6. 第一次修改保留 run 前基线；后续修改持续更新 Run Review Tree，不保存模型可见 revision。
+7. run 结束只生成红删绿增预览和统一修改记录，不再提交源文件。
+8. 用户回退时根据修改记录恢复 checkpoint 或删除新建文件。
 
 ### 关键原则
 
-- source 只负责初始化基线和最终写回目标。
-- read session 只负责读取，不提前承担持续编辑职责。
-- replay session 是任务内持续编辑的运行时真相。
-- AI 永远基于当前 working view 继续工作。
-- 写回永远从 committed view 落盘。
-- checkpoint 是用户回退真相，revision 是 AI 任务内编辑历史，二者不能互相替代。
+- 磁盘文件是内容真相；活动 Document Session 是当前 run 内 block 身份真相。
+- AI-facing blockId 只能使用稳定 UUID，位置型 OOXML ID 只能留在 adapter 内部。
+- 写工具返回成功意味着真实文件已经落盘并通过 post-write 校验。
+- 多 action 共享一个事务，任一 action 失败都不得产生部分落盘。
+- 文件 size/mtime 变化时计算 checksum；检测到外部修改后使旧 session 失效并要求重新读取。
+- revision 和 replay 不进入模型协议；Review Tree 只服务 run 级差异预览。
+- checkpoint 是用户回退真相，真实源文件不包含红绿审阅标记。
 
 ## 普通文本文件架构
 

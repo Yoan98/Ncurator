@@ -77,18 +77,20 @@ describe('ai tool hand backend', () => {
                     toolName: 'docx_edit',
                     args: {
                       sourcePath: 'serial-docx-chain.docx',
-                      actions: [{
-                        type: 'replace_text',
-                        query: 'RISK_TODO',
-                        replace: '待跟进'
-                      }]
+                      actions: [
+                        {
+                          type: 'replace_text',
+                          query: 'RISK_TODO',
+                          replace: '待跟进'
+                        }
+                      ]
                     }
                   },
                   {
                     toolName: 'docx_read_blocks',
                     args: {
                       sourcePath: 'serial-docx-chain.docx',
-                      range: { type: 'block_ids', blockIds: ['b:1'] }
+                      range: { type: 'block_index', fromBlockIndex: 1, toBlockIndex: 1 }
                     }
                   }
                 ]
@@ -111,11 +113,16 @@ describe('ai tool hand backend', () => {
             typeof result.state.execution.lastToolResults?.[0]?.data === 'object' &&
             result.state.execution.lastToolResults?.[0]?.data !== null &&
             Array.isArray(
-              (result.state.execution.lastToolResults?.[0]?.data as { postWriteReadback?: { regions?: unknown[] } }).postWriteReadback?.regions
+              (
+                result.state.execution.lastToolResults?.[0]?.data as {
+                  postWriteReadback?: { regions?: unknown[] }
+                }
+              ).postWriteReadback?.regions
             ),
           {
             name: 'serial-docx-chain-executes-in-order',
-            message: 'hand 应按顺序执行 docx_edit、docx_read_blocks，且写工具返回 postWriteReadback。',
+            message:
+              'hand 应按顺序执行 docx_edit、docx_read_blocks，且写工具返回 postWriteReadback。',
             data: {
               toolNames,
               lastToolUseResults: result.state.execution.lastToolResults
@@ -128,7 +135,8 @@ describe('ai tool hand backend', () => {
             result.state.execution.lastToolResults?.[1]?.toolName === 'docx_read_blocks',
           {
             name: 'serial-docx-chain-stays-within-edit-and-read-tools',
-            message: 'docx 编辑的 hand 链路不直接产出交付 artifact；后续交付由 mouth 收尾 direct apply 并生成已修改文件 artifact。',
+            message:
+              'docx 编辑的 hand 链路不直接产出交付 artifact；后续交付由 mouth 收尾 direct apply 并生成已修改文件 artifact。',
             data: {
               artifacts: result.state.execution.artifacts,
               lastToolUseResults: result.state.execution.lastToolResults

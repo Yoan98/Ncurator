@@ -455,7 +455,7 @@
 
 #### WB-PPT-001 AI 创建和编辑 PPT
 
-- 系统行为：AI 通过 `ppt-read` 和 `ppt-write` 完成 pptx 读取、创建和编辑。读取工具为 `ppt_outline / ppt_read_slides / ppt_search / ppt_render`，写入工具为 `ppt_edit`。新建演示文稿和插入页面时，每次调用只接收一个 1920x1080 页面 HTML，并转换为可编辑 PPT 元素。任务结束时一次写回最终文件。
+- 系统行为：AI 通过 `ppt-read` 和 `ppt-write` 完成 pptx 读取、创建和编辑。读取工具为 `ppt_outline / ppt_read_slides / ppt_search / ppt_render`，写入工具为 `ppt_edit`。`ppt_edit` 接收顺序执行的 `actions[]`；一次调用全部成功后原子写入真实文件。任务结束时只生成 run 级差异记录，不再提交文件。
 - 验收：
   - `WB-PPT-001-AC1` AI 可自行新建 pptx，不依赖用户点击新建入口。
   - `WB-PPT-001-AC2` 新建演示文稿或插入页面时，单次调用只允许一个页面 HTML，不接受页面数组。
@@ -465,6 +465,8 @@
   - `WB-PPT-001-AC6` `ppt_outline` 支持 percent 和 slide_index；`ppt_read_slides` 与 `ppt_render` 支持 slide_index 和 slide_ids；`ppt_search` 使用可选 `scope.slideIds`。
   - `WB-PPT-001-AC7` `ppt_edit` 返回变化页面的 `postWriteReadback`；移动或删除页面时返回附近页面顺序。
   - `WB-PPT-001-AC8` 元素编辑支持文字、位置、样式、图层、复制、删除、新增、图片、表格、图表和公式更新。
+  - `WB-PPT-001-AC9` 同一次 `ppt_edit(actions[])` 任一 action 失败时，文件和活动 session 都保持调用前状态。
+  - `WB-PPT-001-AC10` `ppt_edit` 返回成功时，其他程序已经可以读取最终 pptx。
 
 #### WB-PPT-002 PPT 单页左右差异预览
 

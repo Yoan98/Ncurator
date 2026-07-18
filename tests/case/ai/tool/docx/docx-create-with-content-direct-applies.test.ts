@@ -33,14 +33,16 @@ describe('ai tool docx backend', () => {
           harness.ctx.beginDocxApplyRun()
           const created = await harness.invoke<DocxCreateResult>('docx_edit', {
             sourcePath: targetFileName,
-            actions: [{
-              type: 'create_document',
-              blocks: [
-                { type: 'heading', level: 1, text: '深度学习与图形学复习总结' },
-                { type: 'paragraph', text: '过拟合：训练时间过久时容易出现。' },
-                { type: 'paragraph', text: '反走样：采样频率不足时会出现锯齿。' }
-              ]
-            }]
+            actions: [
+              {
+                type: 'create_document',
+                blocks: [
+                  { type: 'heading', level: 1, text: '深度学习与图形学复习总结' },
+                  { type: 'paragraph', text: '过拟合：训练时间过久时容易出现。' },
+                  { type: 'paragraph', text: '反走样：采样频率不足时会出现锯齿。' }
+                ]
+              }
+            ]
           })
           const records = await harness.ctx.applyDocxRunEdits()
           const search = await harness.invoke<DocxSearchResult>('docx_search', {
@@ -68,9 +70,7 @@ describe('ai tool docx backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.created.previousRevisionRef === 'v1' &&
-            result.created.currentRevisionRef === 'v2' &&
-            result.created.createdBlocks.length >= 2 &&
+          result.created.createdBlocks.length >= 2 &&
             result.records.length === 1 &&
             result.records[0]?.status === 'applied' &&
             result.records[0]?.operation === 'created' &&
@@ -79,7 +79,7 @@ describe('ai tool docx backend', () => {
             result.targetExistsAfterApply === true,
           {
             name: 'docx-create-directly-applies-target-file',
-            message: 'create_document run 收尾时应直接创建目标 docx，并生成 created apply 记录。',
+            message: 'create_document 应立即创建目标 docx，run 收尾生成 created 差异记录。',
             data: {
               created: result.created,
               records: result.records,

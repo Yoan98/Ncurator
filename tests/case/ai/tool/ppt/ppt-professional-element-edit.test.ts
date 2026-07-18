@@ -26,7 +26,7 @@ describe('ai tool ppt professional editing', () => {
         const sourcePath = 'professional-edit.pptx'
         await harness.invoke<JsonObject>('ppt_edit', {
           sourcePath,
-          action: { type: 'create_presentation', html: baseHtml }
+          actions: [{ type: 'create_presentation', html: baseHtml }]
         })
         const outline = await harness.invoke<JsonObject>('ppt_read_outline', {
           sourcePath,
@@ -45,53 +45,55 @@ describe('ai tool ppt professional editing', () => {
 
         const inserted = await harness.invoke<JsonObject>('ppt_edit', {
           sourcePath,
-          action: {
-            type: 'edit_elements',
-            slideId,
-            operations: [
-              { type: 'duplicate_element', elementId: titleId },
-              {
-                type: 'add_element',
-                element: {
-                  type: 'line',
-                  from: { x: 140, y: 250 },
-                  to: { x: 1760, y: 250 },
-                  color: '#C18B25',
-                  width: 3,
-                  arrowEnd: true
+          actions: [
+            {
+              type: 'edit_elements',
+              slideId,
+              operations: [
+                { type: 'duplicate_element', elementId: titleId },
+                {
+                  type: 'add_element',
+                  element: {
+                    type: 'line',
+                    from: { x: 140, y: 250 },
+                    to: { x: 1760, y: 250 },
+                    color: '#C18B25',
+                    width: 3,
+                    arrowEnd: true
+                  }
+                },
+                {
+                  type: 'add_element',
+                  element: {
+                    type: 'table',
+                    bounds: { x: 140, y: 330, width: 700, height: 300 },
+                    rows: [
+                      ['指标', '结果'],
+                      ['增长', '18%']
+                    ]
+                  }
+                },
+                {
+                  type: 'add_element',
+                  element: {
+                    type: 'chart',
+                    bounds: { x: 980, y: 330, width: 700, height: 340 },
+                    chartType: 'column',
+                    categories: ['Q1', 'Q2'],
+                    series: [{ name: '收入', values: [12, 18] }]
+                  }
+                },
+                {
+                  type: 'add_element',
+                  element: {
+                    type: 'formula',
+                    bounds: { x: 140, y: 730, width: 650, height: 180 },
+                    latex: 'E=mc^2'
+                  }
                 }
-              },
-              {
-                type: 'add_element',
-                element: {
-                  type: 'table',
-                  bounds: { x: 140, y: 330, width: 700, height: 300 },
-                  rows: [
-                    ['指标', '结果'],
-                    ['增长', '18%']
-                  ]
-                }
-              },
-              {
-                type: 'add_element',
-                element: {
-                  type: 'chart',
-                  bounds: { x: 980, y: 330, width: 700, height: 340 },
-                  chartType: 'column',
-                  categories: ['Q1', 'Q2'],
-                  series: [{ name: '收入', values: [12, 18] }]
-                }
-              },
-              {
-                type: 'add_element',
-                element: {
-                  type: 'formula',
-                  bounds: { x: 140, y: 730, width: 650, height: 180 },
-                  latex: 'E=mc^2'
-                }
-              }
-            ]
-          }
+              ]
+            }
+          ]
         })
         const insertedSlides = (inserted.postWriteReadback as { slides: Array<JsonObject> }).slides
         const elements = insertedSlides[0]!.elements as Array<JsonObject>
@@ -104,36 +106,38 @@ describe('ai tool ppt professional editing', () => {
 
         const updated = await harness.invoke<JsonObject>('ppt_edit', {
           sourcePath,
-          action: {
-            type: 'edit_elements',
-            slideId,
-            operations: [
-              {
-                type: 'set_style',
-                elementId: titleId,
-                style: { underline: true, verticalAlign: 'middle', color: '#7A241E' }
-              },
-              { type: 'set_z_order', elementId: duplicateId, placement: 'back' },
-              {
-                type: 'update_table',
-                elementId: tableId,
-                cells: [{ rowIndex: 2, columnIndex: 2, text: '24%' }]
-              },
-              {
-                type: 'update_chart',
-                elementId: chartId,
-                chartType: 'line',
-                categories: ['Q1', 'Q2'],
-                series: [{ name: '收入', values: [15, 24] }],
-                title: '收入趋势'
-              },
-              { type: 'update_formula', elementId: formulaId, latex: 'a^2+b^2=c^2' }
-            ]
-          }
+          actions: [
+            {
+              type: 'edit_elements',
+              slideId,
+              operations: [
+                {
+                  type: 'set_style',
+                  elementId: titleId,
+                  style: { underline: true, verticalAlign: 'middle', color: '#7A241E' }
+                },
+                { type: 'set_z_order', elementId: duplicateId, placement: 'back' },
+                {
+                  type: 'update_table',
+                  elementId: tableId,
+                  cells: [{ rowIndex: 2, columnIndex: 2, text: '24%' }]
+                },
+                {
+                  type: 'update_chart',
+                  elementId: chartId,
+                  chartType: 'line',
+                  categories: ['Q1', 'Q2'],
+                  series: [{ name: '收入', values: [15, 24] }],
+                  title: '收入趋势'
+                },
+                { type: 'update_formula', elementId: formulaId, latex: 'a^2+b^2=c^2' }
+              ]
+            }
+          ]
         })
         const duplicated = await harness.invoke<JsonObject>('ppt_edit', {
           sourcePath,
-          action: { type: 'duplicate_slide', slideId }
+          actions: [{ type: 'duplicate_slide', slideId }]
         })
         const records = await harness.runtime.commitAll()
         const presentation = await loadPresentation(

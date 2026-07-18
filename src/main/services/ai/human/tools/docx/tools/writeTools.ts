@@ -12,8 +12,7 @@ import type {
   DocxOutlineBlock,
   DocxParagraphSpec,
   DocxTableSpec,
-  DocxPostWriteReadback,
-  DocxStableLocator
+  DocxPostWriteReadback
 } from '../types'
 import type { DocxToolRuntime } from '../runtime'
 import { DOCX_POST_WRITE_READBACK_WINDOW_POLICY } from '../writeReadbackPolicy'
@@ -344,7 +343,23 @@ const failIfPositionedBlock = async (input: {
   docId: string
   blockId: string
 }): Promise<DocxToolFailure | null> => {
-  const block = await fetchDetailedBlock(input.runtime, input.docId, input.blockId)
+  let block: DocxDetailedBlock
+  try {
+    block = await fetchDetailedBlock(input.runtime, input.docId, input.blockId)
+  } catch (error) {
+    return input.runtime.emitFailure({
+      toolName: input.toolName,
+      toolCallId: input.toolCallId,
+      reason: 'invalid_input',
+      error: error instanceof Error ? error.message : String(error),
+      draftDocId: input.docId,
+      resourceContext: input.runtime.buildResourceContext({
+        sourcePath: input.sourcePath,
+        effectKind: 'mutated',
+        currentRevisionRef: input.currentRevisionRef
+      })
+    })
+  }
   if (block.layoutMode !== 'positioned') {
     return null
   }
@@ -435,8 +450,6 @@ type BatchReadbackTarget = {
 
 type WriteToolResult = {
   sourcePath: string
-  previousRevisionRef?: string
-  currentRevisionRef: string
   changedBlocks: DocxChangedBlock[]
   createdBlocks?: DocxCreatedBlock[]
   warnings: string[]
@@ -450,16 +463,8 @@ const actionLabel = (action: DocxEditAction): string => {
   return action.type
 }
 
-type StableTargetField = 'blockId' | 'anchorBlockId' | 'cellBlockId' | 'blockIds'
-
-type SerialActionTarget = {
-  field: StableTargetField
-  stableLocators: DocxStableLocator[]
-}
-
 type CompiledSerialAction = {
   action: DocxEditAction
-  targets: SerialActionTarget[]
 }
 
 type CompiledSerialEdit = {
@@ -488,40 +493,6 @@ type ApplySerialEditResult =
       readbackTargets: BatchReadbackTarget[]
     }
 
-const isDocxToolFailure = (value: SerialActionTarget | DocxToolFailure): value is DocxToolFailure =>
-  'ok' in value && value.ok === false
-
-const bindStableTarget = (input: {
-  runtime: DocxToolRuntime
-  toolName: string
-  toolCallId: string
-  sourcePath: string
-  field: StableTargetField
-  blockIds: string[]
-}): SerialActionTarget | DocxToolFailure => {
-  const resolved = input.runtime.resolveCurrentStableLocatorsFromSnapshot({
-    sourcePath: input.sourcePath,
-    field: input.field,
-    blockIds: input.blockIds
-  })
-  if (!resolved.ok) {
-    return input.runtime.emitFailure({
-      toolName: input.toolName,
-      toolCallId: input.toolCallId,
-      reason: 'invalid_input',
-      error: resolved.error,
-      resourceContext: input.runtime.buildResourceContext({
-        sourcePath: input.sourcePath,
-        effectKind: 'mutated'
-      })
-    })
-  }
-  return {
-    field: input.field,
-    stableLocators: resolved.stableLocators
-  }
-}
-
 const compileSerialEditActions = (input: {
   runtime: DocxToolRuntime
   toolName: string
@@ -547,96 +518,15 @@ const compileSerialEditActions = (input: {
       }
     }
 
-    const targets: SerialActionTarget[] = []
-    if (action.type === 'insert_blocks') {
-      const target = bindStableTarget({
-        runtime: input.runtime,
-        toolName: input.toolName,
-        toolCallId: input.toolCallId,
-        sourcePath: input.sourcePath,
-        field: 'anchorBlockId',
-        blockIds: [action.anchorBlockId]
-      })
-      if (isDocxToolFailure(target)) return { failure: target }
-      targets.push(target)
-      actions.push({ action, targets })
-      continue
-    }
-
-    if (action.type === 'replace_block') {
-      const target = bindStableTarget({
-        runtime: input.runtime,
-        toolName: input.toolName,
-        toolCallId: input.toolCallId,
-        sourcePath: input.sourcePath,
-        field: 'blockId',
-        blockIds: [action.blockId]
-      })
-      if (isDocxToolFailure(target)) return { failure: target }
-      targets.push(target)
-      actions.push({ action, targets })
-      continue
-    }
-
-    if (action.type === 'replace_text') {
-      if (action.blockIds) {
-        const target = bindStableTarget({
-          runtime: input.runtime,
-          toolName: input.toolName,
-          toolCallId: input.toolCallId,
-          sourcePath: input.sourcePath,
-          field: 'blockIds',
-          blockIds: action.blockIds
-        })
-        if (isDocxToolFailure(target)) return { failure: target }
-        targets.push(target)
-      }
-      actions.push({ action, targets })
-      continue
-    }
-
-    if (action.type === 'style_text') {
-      const target = bindStableTarget({
-        runtime: input.runtime,
-        toolName: input.toolName,
-        toolCallId: input.toolCallId,
-        sourcePath: input.sourcePath,
-        field: 'blockId',
-        blockIds: [action.blockId]
-      })
-      if (isDocxToolFailure(target)) return { failure: target }
-      targets.push(target)
-      actions.push({ action, targets })
-      continue
-    }
-
-    if (action.type === 'update_table_cell') {
-      const target = bindStableTarget({
-        runtime: input.runtime,
-        toolName: input.toolName,
-        toolCallId: input.toolCallId,
-        sourcePath: input.sourcePath,
-        field: 'cellBlockId',
-        blockIds: [action.cellBlockId]
-      })
-      if (isDocxToolFailure(target)) return { failure: target }
-      targets.push(target)
-      actions.push({ action, targets })
-      continue
-    }
-
-    if (action.type === 'delete_blocks') {
-      const target = bindStableTarget({
-        runtime: input.runtime,
-        toolName: input.toolName,
-        toolCallId: input.toolCallId,
-        sourcePath: input.sourcePath,
-        field: 'blockIds',
-        blockIds: action.blockIds
-      })
-      if (isDocxToolFailure(target)) return { failure: target }
-      targets.push(target)
-      actions.push({ action, targets })
+    if (
+      action.type === 'insert_blocks' ||
+      action.type === 'replace_block' ||
+      action.type === 'replace_text' ||
+      action.type === 'style_text' ||
+      action.type === 'update_table_cell' ||
+      action.type === 'delete_blocks'
+    ) {
+      actions.push({ action })
       continue
     }
 
@@ -660,43 +550,6 @@ const compileSerialEditActions = (input: {
   }
 }
 
-const resolveSerialTargetBlockIds = (input: {
-  runtime: DocxToolRuntime
-  toolName: string
-  toolCallId: string
-  sourcePath: string
-  session: Parameters<
-    DocxToolRuntime['resolveLiveBlockIdsFromStableLocatorsInSession']
-  >[0]['session']
-  target: SerialActionTarget
-  allowDeleted?: boolean
-}): string[] | DocxToolFailure => {
-  const resolved = input.runtime.resolveLiveBlockIdsFromStableLocatorsInSession({
-    session: input.session,
-    field: input.target.field,
-    stableLocators: input.target.stableLocators,
-    allowDeleted: input.allowDeleted
-  })
-  if (!resolved.ok) {
-    return input.runtime.emitFailure({
-      toolName: input.toolName,
-      toolCallId: input.toolCallId,
-      reason: 'invalid_input',
-      error: resolved.error,
-      resourceContext: input.runtime.buildResourceContext({
-        sourcePath: input.sourcePath,
-        effectKind: 'mutated'
-      })
-    })
-  }
-  return resolved.blockIds
-}
-
-const findSerialTarget = (
-  action: CompiledSerialAction,
-  field: StableTargetField
-): SerialActionTarget | undefined => action.targets.find((target) => target.field === field)
-
 const buildSerialActionOps = async (input: {
   runtime: DocxToolRuntime
   toolName: string
@@ -704,9 +557,6 @@ const buildSerialActionOps = async (input: {
   sourcePath: string
   currentDocId: string
   currentRevisionRef: string
-  session: Parameters<
-    DocxToolRuntime['resolveLiveBlockIdsFromStableLocatorsInSession']
-  >[0]['session']
   action: CompiledSerialAction
 }): Promise<
   | {
@@ -719,31 +569,7 @@ const buildSerialActionOps = async (input: {
   const action = input.action.action
 
   if (action.type === 'insert_blocks') {
-    const target = findSerialTarget(input.action, 'anchorBlockId')
-    if (!target) {
-      return {
-        failure: input.runtime.emitFailure({
-          toolName: input.toolName,
-          toolCallId: input.toolCallId,
-          reason: 'invalid_input',
-          error: 'insert_blocks missing bound anchorBlockId',
-          resourceContext: input.runtime.buildResourceContext({
-            sourcePath: input.sourcePath,
-            effectKind: 'mutated'
-          })
-        })
-      }
-    }
-    const anchorBlockIds = resolveSerialTargetBlockIds({
-      runtime: input.runtime,
-      toolName: input.toolName,
-      toolCallId: input.toolCallId,
-      sourcePath: input.sourcePath,
-      session: input.session,
-      target
-    })
-    if (!Array.isArray(anchorBlockIds)) return { failure: anchorBlockIds }
-    const anchorBlockId = anchorBlockIds[0]
+    const anchorBlockId = action.anchorBlockId
     const op: DocxOp = {
       type: action.position === 'before' ? 'insert_before' : 'insert_after',
       anchorBlockId,
@@ -760,19 +586,7 @@ const buildSerialActionOps = async (input: {
   }
 
   if (action.type === 'replace_block') {
-    const target = findSerialTarget(input.action, 'blockId')
-    const blockIds = target
-      ? resolveSerialTargetBlockIds({
-          runtime: input.runtime,
-          toolName: input.toolName,
-          toolCallId: input.toolCallId,
-          sourcePath: input.sourcePath,
-          session: input.session,
-          target
-        })
-      : []
-    if (!Array.isArray(blockIds)) return { failure: blockIds }
-    const blockId = blockIds[0]
+    const blockId = action.blockId
     return {
       ops: [
         {
@@ -790,18 +604,7 @@ const buildSerialActionOps = async (input: {
   }
 
   if (action.type === 'replace_text') {
-    const target = findSerialTarget(input.action, 'blockIds')
-    const blockIds = target
-      ? resolveSerialTargetBlockIds({
-          runtime: input.runtime,
-          toolName: input.toolName,
-          toolCallId: input.toolCallId,
-          sourcePath: input.sourcePath,
-          session: input.session,
-          target
-        })
-      : undefined
-    if (blockIds && !Array.isArray(blockIds)) return { failure: blockIds }
+    const blockIds = action.blockIds
     const targetBlockIds = await resolveReplaceTextTargetBlockIds({
       runtime: input.runtime,
       docId: input.currentDocId,
@@ -827,19 +630,7 @@ const buildSerialActionOps = async (input: {
   }
 
   if (action.type === 'style_text') {
-    const target = findSerialTarget(input.action, 'blockId')
-    const blockIds = target
-      ? resolveSerialTargetBlockIds({
-          runtime: input.runtime,
-          toolName: input.toolName,
-          toolCallId: input.toolCallId,
-          sourcePath: input.sourcePath,
-          session: input.session,
-          target
-        })
-      : []
-    if (!Array.isArray(blockIds)) return { failure: blockIds }
-    const blockId = blockIds[0]
+    const blockId = action.blockId
     return {
       ops: [
         {
@@ -858,19 +649,7 @@ const buildSerialActionOps = async (input: {
   }
 
   if (action.type === 'update_table_cell') {
-    const target = findSerialTarget(input.action, 'cellBlockId')
-    const cellBlockIds = target
-      ? resolveSerialTargetBlockIds({
-          runtime: input.runtime,
-          toolName: input.toolName,
-          toolCallId: input.toolCallId,
-          sourcePath: input.sourcePath,
-          session: input.session,
-          target
-        })
-      : []
-    if (!Array.isArray(cellBlockIds)) return { failure: cellBlockIds }
-    const cellBlockId = cellBlockIds[0]
+    const cellBlockId = action.cellBlockId
     return {
       ops: [
         {
@@ -887,18 +666,21 @@ const buildSerialActionOps = async (input: {
     }
   }
 
-  const target = findSerialTarget(input.action, 'blockIds')
-  const blockIds = target
-    ? resolveSerialTargetBlockIds({
-        runtime: input.runtime,
+  if (action.type !== 'delete_blocks') {
+    return {
+      failure: input.runtime.emitFailure({
         toolName: input.toolName,
         toolCallId: input.toolCallId,
-        sourcePath: input.sourcePath,
-        session: input.session,
-        target
+        reason: 'invalid_input',
+        error: `unsupported serial docx action: ${action.type}`,
+        resourceContext: input.runtime.buildResourceContext({
+          sourcePath: input.sourcePath,
+          effectKind: 'mutated'
+        })
       })
-    : []
-  if (!Array.isArray(blockIds)) return { failure: blockIds }
+    }
+  }
+  const blockIds = action.blockIds
 
   const outlineBlocks = await fetchOutlineBlocks(input.runtime, input.currentDocId)
   const rankByBlockId = new Map(
@@ -1032,7 +814,6 @@ const applySerialEdit = async (input: {
       sourcePath: input.sourcePath,
       currentDocId,
       currentRevisionRef: input.currentRevisionRef,
-      session: tempSession,
       action
     })
     if ('failure' in actionOps) return { failure: actionOps.failure }
@@ -1116,17 +897,60 @@ const applySerialEdit = async (input: {
     records: opRecords
   })
   const createdBlocks = review.createdBlocksByOp.flat()
-  const revisionUpdate = await input.runtime.registerRevision({
-    sourcePath: input.sourcePath,
-    previousDocId: input.currentDocId,
-    nextDocId: currentDocId,
-    ops: review.ops,
-    createdBlocks,
-    createdBlocksByOp: review.createdBlocksByOp,
-    opNextDocIds: review.opNextDocIds,
-    changedBlocks,
-    summary: input.compiled.summary
-  })
+  let persistedStats: Awaited<ReturnType<DocxToolRuntime['persistDocId']>>
+  try {
+    persistedStats = await input.runtime.persistDocId({
+      sourcePath: input.sourcePath,
+      docId: currentDocId
+    })
+  } catch (error) {
+    return {
+      failure: input.runtime.emitFailure({
+        toolName: input.toolName,
+        toolCallId: input.toolCallId,
+        reason: 'failed',
+        error: `docx post-write persistence failed: ${error instanceof Error ? error.message : String(error)}`,
+        resourceContext: input.runtime.buildResourceContext({
+          sourcePath: input.sourcePath,
+          effectKind: 'mutated',
+          currentRevisionRef: input.currentRevisionRef
+        })
+      })
+    }
+  }
+
+  let revisionUpdate: { currentRevisionRef: string; previousRevisionRef: string }
+  try {
+    revisionUpdate = await input.runtime.registerRevision({
+      sourcePath: input.sourcePath,
+      previousDocId: input.currentDocId,
+      nextDocId: currentDocId,
+      ops: review.ops,
+      createdBlocks,
+      createdBlocksByOp: review.createdBlocksByOp,
+      opNextDocIds: review.opNextDocIds,
+      changedBlocks,
+      persistedStats,
+      summary: input.compiled.summary
+    })
+  } catch (error) {
+    await input.runtime
+      .persistDocId({ sourcePath: input.sourcePath, docId: input.currentDocId })
+      .catch(() => undefined)
+    return {
+      failure: input.runtime.emitFailure({
+        toolName: input.toolName,
+        toolCallId: input.toolCallId,
+        reason: 'failed',
+        error: `docx session commit failed: ${error instanceof Error ? error.message : String(error)}`,
+        resourceContext: input.runtime.buildResourceContext({
+          sourcePath: input.sourcePath,
+          effectKind: 'mutated',
+          currentRevisionRef: input.currentRevisionRef
+        })
+      })
+    }
+  }
   input.runtime.input.ctx.trackDocxBatchChanges({
     previousDocId: input.currentDocId,
     nextDocId: currentDocId,
@@ -1168,8 +992,6 @@ const buildWriteToolResult = async (input: {
 
   return {
     sourcePath: input.sourcePath,
-    previousRevisionRef: input.previousRevisionRef,
-    currentRevisionRef: input.currentRevisionRef,
     changedBlocks: input.changedBlocks,
     createdBlocks: input.createdBlocks,
     warnings: input.warnings,
@@ -1352,14 +1174,57 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
           }
           const workingDocId = workingOpen.payload.docId
 
-          const registered = await runtime.registerCreatedDocument({
-            sourcePath: requestedSourcePath,
-            baselineDocId,
-            workingDocId,
-            meta: workingOpen.payload.meta,
-            stats: workingOpen.payload.stats,
-            summary: 'create_document'
-          })
+          let persistedStats: Awaited<ReturnType<DocxToolRuntime['persistDocId']>>
+          try {
+            persistedStats = await runtime.persistDocId({
+              sourcePath: requestedSourcePath,
+              docId: workingDocId
+            })
+          } catch (error) {
+            return finalizeDocxToolFailure({
+              runtime,
+              failure: runtime.emitFailure({
+                toolName,
+                toolCallId,
+                reason: 'failed',
+                error: `docx create persistence failed: ${error instanceof Error ? error.message : String(error)}`,
+                resourceContext: runtime.buildResourceContext({
+                  sourcePath: requestedSourcePath,
+                  effectKind: 'mutated'
+                })
+              }),
+              activity: { actionType: DOCX_EDIT_TOOL_SPEC.activityActionType! }
+            })
+          }
+
+          let registered: Awaited<ReturnType<typeof runtime.registerCreatedDocument>>
+          try {
+            registered = await runtime.registerCreatedDocument({
+              sourcePath: requestedSourcePath,
+              baselineDocId,
+              workingDocId,
+              meta: workingOpen.payload.meta,
+              stats: workingOpen.payload.stats,
+              persistedStats,
+              summary: 'create_document'
+            })
+          } catch (error) {
+            await fs.rm(requestedSourcePath, { force: true }).catch(() => undefined)
+            return finalizeDocxToolFailure({
+              runtime,
+              failure: runtime.emitFailure({
+                toolName,
+                toolCallId,
+                reason: 'failed',
+                error: `docx create session commit failed: ${error instanceof Error ? error.message : String(error)}`,
+                resourceContext: runtime.buildResourceContext({
+                  sourcePath: requestedSourcePath,
+                  effectKind: 'mutated'
+                })
+              }),
+              activity: { actionType: DOCX_EDIT_TOOL_SPEC.activityActionType! }
+            })
+          }
           runtime.input.ctx.trackDocxOpen({
             docId: baselineDocId,
             sourcePath: requestedSourcePath,
@@ -1393,8 +1258,7 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
             toolCallId,
             result,
             outputPreview: {
-              sourcePath: result.sourcePath,
-              currentRevisionRef: result.currentRevisionRef
+              sourcePath: result.sourcePath
             },
             activity: {
               actionType: DOCX_EDIT_TOOL_SPEC.activityActionType!,

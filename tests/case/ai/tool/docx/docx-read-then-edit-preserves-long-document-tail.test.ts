@@ -1,14 +1,7 @@
 import { describe, it } from 'vitest'
-import {
-  createDocxToolHarness,
-  writeTestDocxFile
-} from '../../../../harness/backend/aiToolHarness'
+import { createDocxToolHarness, writeTestDocxFile } from '../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
-import type {
-  DocxMutationResult,
-  DocxOutlineResult,
-  DocxSearchResult
-} from './testUtils'
+import type { DocxMutationResult, DocxOutlineResult, DocxSearchResult } from './testUtils'
 
 describe('ai tool docx backend', () => {
   it('docx-read-then-edit-preserves-long-document-tail', async () => {
@@ -39,12 +32,14 @@ describe('ai tool docx backend', () => {
           const tailBlockId = outline.blocks[outline.blocks.length - 1]?.blockId || ''
           const mutation = await harness.invoke<DocxMutationResult>('docx_edit', {
             sourcePath: 'long-tail-upgrade.docx',
-            actions: [{
-              type: 'replace_text',
-              query: '第 5105 段。',
-              replace: '尾部段落已经改写。',
-              blockIds: [tailBlockId]
-            }]
+            actions: [
+              {
+                type: 'replace_text',
+                query: '第 5105 段。',
+                replace: '尾部段落已经改写。',
+                blockIds: [tailBlockId]
+              }
+            ]
           })
           const search = await harness.invoke<DocxSearchResult>('docx_search', {
             sourcePath: 'long-tail-upgrade.docx',
@@ -64,18 +59,16 @@ describe('ai tool docx backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.outline.currentRevisionRef === 'v1' &&
-            result.outline.blocks.length >= 7 &&
+          result.outline.blocks.length >= 7 &&
             result.outline.blocks[0]?.blockIndex === 5098 &&
             result.outline.blocks[result.outline.blocks.length - 1]?.blockIndex === 5104 &&
-            result.mutation.currentRevisionRef === 'v2' &&
-            result.search.currentRevisionRef === 'v2' &&
             result.search.returnedMatchCount >= 1 &&
             result.readSessionCount === 0 &&
             result.replaySessionCount === 1,
           {
             name: 'docx-replay-upgrade-preserves-long-document-tail',
-            message: '长文档在 read 分页后升级到 replay session 时，尾部 block 仍应可编辑并可被后续搜索命中。',
+            message:
+              '长文档在 read 分页后升级到 replay session 时，尾部 block 仍应可编辑并可被后续搜索命中。',
             data: result
           }
         )

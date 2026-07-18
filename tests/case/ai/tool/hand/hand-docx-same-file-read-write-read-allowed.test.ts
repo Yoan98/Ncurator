@@ -24,8 +24,20 @@ describe('ai tool hand backend', () => {
 
         const ctx = runtime.createAiRunContext()
         const cache = createHumanRuntimeCache()
-        ensureSkillTools({ cache, ctx, runId: runtime.runId, taskId: runtime.taskId, skillId: 'docx-read' })
-        ensureSkillTools({ cache, ctx, runId: runtime.runId, taskId: runtime.taskId, skillId: 'docx-write' })
+        ensureSkillTools({
+          cache,
+          ctx,
+          runId: runtime.runId,
+          taskId: runtime.taskId,
+          skillId: 'docx-read'
+        })
+        ensureSkillTools({
+          cache,
+          ctx,
+          runId: runtime.runId,
+          taskId: runtime.taskId,
+          skillId: 'docx-write'
+        })
 
         const handNode = createHandNode({ ctx, cache })
         const state = await handNode({
@@ -59,18 +71,20 @@ describe('ai tool hand backend', () => {
                     toolName: 'docx_edit',
                     args: {
                       sourcePath: 'same-file-read-write-read.docx',
-                      actions: [{
-                        type: 'replace_text',
-                        query: 'Alpha',
-                        replace: 'Alpha updated'
-                      }]
+                      actions: [
+                        {
+                          type: 'replace_text',
+                          query: 'Alpha',
+                          replace: 'Alpha updated'
+                        }
+                      ]
                     }
                   },
                   {
                     toolName: 'docx_read_blocks',
                     args: {
                       sourcePath: 'same-file-read-write-read.docx',
-                      range: { type: 'block_ids', blockIds: ['b:0'] }
+                      range: { type: 'block_index', fromBlockIndex: 0, toBlockIndex: 0 }
                     }
                   }
                 ]

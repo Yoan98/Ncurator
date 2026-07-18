@@ -1,9 +1,6 @@
 import { z } from 'zod/v4'
 import type { HumanToolSpec } from '../types'
-import {
-  analyzeSafeTerminalCommandPolicy,
-  analyzeTerminalCommand
-} from './commandPolicy'
+import { analyzeSafeTerminalCommandPolicy, analyzeTerminalCommand } from './commandPolicy'
 import { readStringArg } from '../utils/toolSpecUtils'
 import type { AiRuntimePlatform } from '../../../types'
 import { getAiRuntimePlatform } from '../../../utils/platform'
@@ -82,7 +79,8 @@ export const createTerminalRunToolSpec = (
   outputSchema: TERMINAL_RUN_OUTPUT_SCHEMA,
   promptSpec: {
     name: 'terminal_run',
-    description: '在持久终端中执行命令，并返回 terminalId、终端状态、执行状态、增量输出、输出游标和退出码。'
+    description:
+      '在持久终端中执行命令，并返回 terminalId、终端状态、执行状态、增量输出、输出游标和退出码。若已有状态为 idle 的终端且不需要新的独立终端环境，优先传入其 terminalId 复用；不传 terminalId 时会创建新终端。'
   },
   resolveExecutionMeta: (args) => {
     const command = readStringArg(args, 'command') || ''
@@ -104,7 +102,8 @@ export const TERMINAL_READ_TOOL_SPEC: TerminalReadToolSpec = {
   outputSchema: TERMINAL_READ_OUTPUT_SCHEMA,
   promptSpec: {
     name: 'terminal_read',
-    description: '读取持久终端从输出游标开始的增量输出和状态，并返回 terminalId、终端状态、增量输出、最新游标和退出码。'
+    description:
+      '读取持久终端从输出游标开始的增量输出和状态，并返回 terminalId、终端状态、增量输出、最新游标和退出码。'
   },
   resolveExecutionMeta: () => ({ mutability: 'read_only' })
 }
@@ -118,7 +117,8 @@ export const TERMINAL_STOP_TOOL_SPEC: TerminalStopToolSpec = {
   outputSchema: TERMINAL_STOP_OUTPUT_SCHEMA,
   promptSpec: {
     name: 'terminal_stop',
-    description: '停止持久终端中的当前命令并可同时关闭终端，并返回 terminalId、停止结果、是否强制终止和终端状态。'
+    description:
+      '停止持久终端中的当前命令并可同时关闭终端，并返回 terminalId、停止结果、是否强制终止和终端状态。'
   },
   resolveExecutionMeta: () => ({ mutability: 'mutating' })
 }

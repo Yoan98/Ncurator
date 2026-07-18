@@ -18,7 +18,7 @@
 - `tool / docx`
   - 通过率：`40 / 40`
   - 检测时间：`2026-07-16 19:07:56 +08:00`
-  - 工具面只保留 `docx_outline / docx_search / docx_read_blocks / docx_edit`；模型侧任务内 history/rollback 已移除，内部 replay/revision 与用户文件级回退继续保留。
+  - 工具面只保留 `docx_read_outline / docx_search / docx_read_blocks / docx_edit`；模型协议不返回 revision。blockId 使用 run 内稳定 UUID，写工具成功时真实文件已经落盘，run 收尾只生成差异预览和回退记录。
 - `tool / text-file`
   - 通过率：`2 / 2`
   - 检测时间：`2026-07-16 19:07:56 +08:00`
@@ -36,6 +36,15 @@
   - 通过率：`6 / 6`
   - 检测时间：`2026-07-16 19:07:56 +08:00`
   - 覆盖补充：terminal 回归测试按“安全指令集”语义维护；持久终端覆盖 cwd 保持、多终端、长命令让出、增量读取和停止；terminal 不根据命令文本猜测文件产物，文件变化统一由顶层 Run 扫描捕获。
+
+### 2.2 Office 写工具当前契约
+
+- DOCX/PPT mutation 均使用 `actions[]`；action 严格按输入顺序执行，同一次调用只提交一次。
+- 任一 action、格式校验、原子替换或 post-write 校验失败，整个调用不得产生部分落盘。
+- DOCX 对外 blockId 必须匹配 `blk_[0-9a-f]{32}`；插入生成新 ID，替换保留 ID，删除使 ID 失效。
+- DOCX/PPT 工具返回成功后，测试必须直接从工作区正式路径重新读取文件验证，不再以 run 收尾提交作为成功条件。
+- run 收尾仍要验证 DOCX 红删绿增预览、PPT 页面级差异、before checkpoint、修改记录和 revert。
+- 外部修改 DOCX 后，旧 session 的下一次读取或编辑必须失败并要求重新读取；不做指纹模糊恢复。
 - `tool / web-browsing`
   - 通过率：`7 / 7`
   - 检测时间：`2026-07-16 19:07:56 +08:00`

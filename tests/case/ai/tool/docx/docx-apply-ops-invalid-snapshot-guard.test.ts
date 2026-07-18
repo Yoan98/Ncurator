@@ -2,10 +2,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import JSZip from 'jszip'
 import { describe, it } from 'vitest'
-import {
-  createDocxToolHarness,
-  writeTestDocxFile
-} from '../../../../harness/backend/aiToolHarness'
+import { createDocxToolHarness, writeTestDocxFile } from '../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import {
   type DocxFailureResult,
@@ -68,11 +65,13 @@ describe('ai tool docx backend', () => {
             'docx_edit',
             {
               sourcePath: initialRead.sourcePath,
-              actions: [{
-                type: 'replace_text',
-                query: 'Original invalid snapshot source.',
-                replace: 'Should never become the latest draft.'
-              }]
+              actions: [
+                {
+                  type: 'replace_text',
+                  query: 'Original invalid snapshot source.',
+                  replace: 'Should never become the latest draft.'
+                }
+              ]
             }
           )
           const readOriginalSearch = await harness.invoke<DocxSearchResult>('docx_search', {
@@ -90,7 +89,8 @@ describe('ai tool docx backend', () => {
             readOriginalSearch,
             readOriginal,
             activeRevisionRef:
-              harness.state.replaySessionBySourcePath.get(initialRead.sourcePath)?.activeRevisionRef || '',
+              harness.state.replaySessionBySourcePath.get(initialRead.sourcePath)
+                ?.activeRevisionRef || '',
             trackedSourcePaths: [...harness.state.replaySessionBySourcePath.keys()]
           }
         } finally {
@@ -114,7 +114,7 @@ describe('ai tool docx backend', () => {
         )
 
         runtime.assertThat(
-          result.activeRevisionRef === result.initialRead.currentRevisionRef &&
+          result.activeRevisionRef === 'v1' &&
             result.trackedSourcePaths.length === 1 &&
             result.trackedSourcePaths[0] === result.initialRead.sourcePath,
           {

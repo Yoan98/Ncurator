@@ -5,7 +5,6 @@ import type {
 
 export type DocxOutlineResult = {
   sourcePath: string
-  currentRevisionRef: string
   blocks: Array<
     | {
         blockId: string
@@ -43,7 +42,6 @@ export type DocxOutlineResult = {
 
 export type DocxSearchResult = {
   sourcePath: string
-  currentRevisionRef: string
   mode: 'literal' | 'regex' | 'semantic'
   effectiveQuery: string
   appliedAliases: Array<{ from: string; to: string }>
@@ -65,7 +63,6 @@ export type DocxSearchResult = {
 
 export type DocxReadResult = {
   sourcePath: string
-  currentRevisionRef: string
   fromBlockIndex?: number
   toBlockIndex?: number
   blocks: Array<
@@ -149,8 +146,6 @@ export type DocxReadResult = {
 
 export type DocxCreateResult = {
   sourcePath: string
-  previousRevisionRef: string
-  currentRevisionRef: string
   changedBlocks: DocxChangedBlock[]
   createdBlocks: Array<{ blockId: string; type: 'paragraph' | 'table' | 'table_cell' }>
   warnings: string[]
@@ -167,8 +162,6 @@ export type DocxCreateResult = {
 
 export type DocxMutationResult = {
   sourcePath: string
-  previousRevisionRef: string
-  currentRevisionRef: string
   changedBlocks: DocxChangedBlock[]
   createdBlocks?: Array<{ blockId: string; type: 'paragraph' | 'table' | 'table_cell' }>
   warnings: string[]

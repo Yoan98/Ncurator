@@ -9,6 +9,7 @@ import type {
   DocxSearchMode
 } from '../types'
 import type { BlockIndex, ParsedDocxBundle } from '../adapters/ooxml/types'
+import type { DocxIdentityIndex } from './identity'
 
 export type DocxWorkerAction =
   | 'open'
@@ -115,6 +116,8 @@ export type DocxWorkerSuccessPayload =
       docId: string
       meta: DocxOpenMeta
       stats: DocxOpenStats
+      checksum: string
+      byteSize: number
     }
   | {
       action: 'outline'
@@ -174,8 +177,10 @@ export type DocSnapshot = {
   createdAt: number
   parentDocId?: string
   buffer: Buffer
+  checksum: string
   bundle: ParsedDocxBundle
   index: BlockIndex
+  identity: DocxIdentityIndex
   detailByBlockId: Map<string, DocxDetailedBlock>
 }
 

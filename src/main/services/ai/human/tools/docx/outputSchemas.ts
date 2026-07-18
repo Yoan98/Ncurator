@@ -158,20 +158,17 @@ const docxPostWriteReadbackOutputSchema = z.object({
 })
 
 const docxBaseOutputSchema = z.object({
-  sourcePath: z.string().optional(),
-  currentRevisionRef: z.string().optional()
+  sourcePath: z.string().optional()
 })
 
 export const docxOutlineOutputSchema = docxBaseOutputSchema.extend({
   sourcePath: z.string(),
-  currentRevisionRef: z.string(),
   totalBlockCount: z.number().int().min(0),
   blocks: z.array(docxOutlineBlockOutputSchema)
 })
 
 export const docxSearchOutputSchema = docxBaseOutputSchema.extend({
   sourcePath: z.string(),
-  currentRevisionRef: z.string(),
   mode: z.enum(['literal', 'regex', 'semantic']),
   effectiveQuery: z.string(),
   appliedAliases: z.array(
@@ -201,7 +198,6 @@ export const docxSearchOutputSchema = docxBaseOutputSchema.extend({
 
 export const docxReadBlocksOutputSchema = docxBaseOutputSchema.extend({
   sourcePath: z.string(),
-  currentRevisionRef: z.string(),
   fromBlockIndex: z.number().int(),
   toBlockIndex: z.number().int(),
   blocks: z.array(docxDetailedBlockOutputSchema)
@@ -209,8 +205,6 @@ export const docxReadBlocksOutputSchema = docxBaseOutputSchema.extend({
 
 export const docxWriteOutputSchema = docxBaseOutputSchema.extend({
   sourcePath: z.string(),
-  previousRevisionRef: z.string(),
-  currentRevisionRef: z.string(),
   changedBlocks: z.array(docxChangedBlockOutputSchema),
   createdBlocks: z.array(docxCreatedBlockOutputSchema),
   warnings: z.array(z.string()),

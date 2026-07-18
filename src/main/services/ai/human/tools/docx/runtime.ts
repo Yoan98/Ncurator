@@ -1,3 +1,5 @@
+import { createHash, randomUUID } from 'node:crypto'
+import fs from 'node:fs/promises'
 import path from 'node:path'
 import type { AiToolCallResult, JsonObject } from '../../../../../../shared/types'
 import type {
@@ -5,6 +7,7 @@ import type {
   DocxCapabilityToolsRuntimeState,
   DocxCreatedBlock,
   DocxDetailedBlock,
+  DocxDiskFingerprint,
   DocxPostWriteReadback,
   DocxPostWriteReadbackRegion,
   DocxOpenMeta,
@@ -129,6 +132,7 @@ export type DocxToolRuntime = {
     workingDocId: string
     meta?: DocxOpenMeta
     stats?: DocxOpenStats
+    persistedStats: DocxDiskFingerprint
     summary?: string
   }) => Promise<{
     session: DocxReplaySession
@@ -146,6 +150,7 @@ export type DocxToolRuntime = {
     createdBlocksByOp?: NonNullable<DocxRevision['createdBlocksByOp']>
     opNextDocIds?: NonNullable<DocxRevision['opNextDocIds']>
     changedBlocks?: DocxRevision['changedBlocks']
+    persistedStats: DocxDiskFingerprint
     summary?: string
   }) => Promise<{ currentRevisionRef: string; previousRevisionRef: string }>
   expandOpsForReview: (docId: string, ops: DocxOp[]) => Promise<DocxOp[]>
@@ -216,6 +221,10 @@ export type DocxToolRuntime = {
       toBlockIndex: number
     }>
   }) => Promise<DocxPostWriteReadback>
+  persistDocId: (input: {
+    sourcePath: string
+    docId: string
+  }) => Promise<{ checksum: string; byteSize: number; modifiedAt: number }>
 }
 
 export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxToolRuntime => {
@@ -335,6 +344,42 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
   const getReplaySession = (sourcePath: string): DocxReplaySession | undefined =>
     state.replaySessionBySourcePath.get(path.resolve(sourcePath))
 
+  const isSessionFresh = async (
+    sourcePath: string,
+    fingerprint: DocxDiskFingerprint
+  ): Promise<boolean> => {
+    try {
+      const stat = await fs.stat(sourcePath)
+      const modifiedAt = Math.trunc(stat.mtimeMs)
+      if (stat.size === fingerprint.byteSize && modifiedAt === fingerprint.modifiedAt) return true
+      const buffer = await fs.readFile(sourcePath)
+      const checksum = createHash('sha256').update(buffer).digest('hex')
+      if (checksum !== fingerprint.checksum) return false
+      fingerprint.byteSize = buffer.byteLength
+      fingerprint.modifiedAt = modifiedAt
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  const externalChangeFailure = (inputValue: {
+    toolName: string
+    toolCallId: string
+    sourcePath: string
+  }): DocxToolFailure => {
+    const sourcePath = path.resolve(inputValue.sourcePath)
+    state.readSessionBySourcePath.delete(sourcePath)
+    state.replaySessionBySourcePath.delete(sourcePath)
+    return emitFailure({
+      toolName: inputValue.toolName,
+      toolCallId: inputValue.toolCallId,
+      reason: 'document_changed_externally',
+      error: 'document changed outside the active docx session; read the document again',
+      resourceContext: { family: 'docx', sourcePath }
+    })
+  }
+
   const getRevisionRefByDocId = (docId: string): string | undefined =>
     state.revisionEntryByDocId.get(docId)?.revisionRef
 
@@ -357,6 +402,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
       sourceDocId: session.sourceDocId,
       meta: session.meta,
       stats: session.stats,
+      diskFingerprint: session.diskFingerprint,
       snapshot: session.sourceSnapshot
     })
     clone.docIdByRevisionRef = session.docIdByRevisionRef
@@ -1088,6 +1134,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
       throw new Error('worker protocol mismatch (open)')
     }
     const normalizedSourcePath = path.resolve(resolvedTarget.trackedSourcePath)
+    const openedStat = await fs.stat(resolvedTarget.openPath)
     registerSnapshot(workerResponse.payload.docId)
     state.sourcePathByDocId.set(workerResponse.payload.docId, normalizedSourcePath)
     const session: DocxReadSession = {
@@ -1096,6 +1143,11 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
       meta: workerResponse.payload.meta,
       stats: workerResponse.payload.stats,
       currentRevisionRef: 'v1',
+      diskFingerprint: {
+        checksum: workerResponse.payload.checksum,
+        byteSize: workerResponse.payload.byteSize,
+        modifiedAt: Math.trunc(openedStat.mtimeMs)
+      },
       cache: createReadSessionCache()
     }
     state.readSessionBySourcePath.set(normalizedSourcePath, session)
@@ -1233,6 +1285,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
       sourceDocId: readSession.docId,
       meta: readSession.meta,
       stats: readSession.stats,
+      diskFingerprint: readSession.diskFingerprint,
       snapshot
     })
     session.docIdByRevisionRef = new Map([[readSession.currentRevisionRef, readSession.docId]])
@@ -1265,11 +1318,17 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
 
     const replaySession = getReplaySession(requestedSourcePath)
     if (replaySession) {
+      if (!(await isSessionFresh(requestedSourcePath, replaySession.diskFingerprint))) {
+        return { failure: externalChangeFailure({ ...params, sourcePath: requestedSourcePath }) }
+      }
       return buildReadSessionResultFromReplay(requestedSourcePath, replaySession)
     }
 
     const existingReadSession = getReadSession(requestedSourcePath)
     if (existingReadSession) {
+      if (!(await isSessionFresh(requestedSourcePath, existingReadSession.diskFingerprint))) {
+        return { failure: externalChangeFailure({ ...params, sourcePath: requestedSourcePath }) }
+      }
       return buildReadSessionResult(requestedSourcePath, existingReadSession)
     }
 
@@ -1311,10 +1370,16 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
 
     const existingReplay = getReplaySession(requestedSourcePath)
     if (existingReplay) {
+      if (!(await isSessionFresh(requestedSourcePath, existingReplay.diskFingerprint))) {
+        return { failure: externalChangeFailure({ ...params, sourcePath: requestedSourcePath }) }
+      }
       return buildReplaySessionResult(requestedSourcePath, existingReplay)
     }
 
     let readSession = getReadSession(requestedSourcePath)
+    if (readSession && !(await isSessionFresh(requestedSourcePath, readSession.diskFingerprint))) {
+      return { failure: externalChangeFailure({ ...params, sourcePath: requestedSourcePath }) }
+    }
     if (!readSession) {
       const readResult = await ensureReadSession({
         toolName: params.toolName,
@@ -1406,6 +1471,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     workingDocId: string
     meta?: DocxOpenMeta
     stats?: DocxOpenStats
+    persistedStats: DocxDiskFingerprint
     summary?: string
   }) => {
     const normalizedSourcePath = path.resolve(params.sourcePath)
@@ -1441,6 +1507,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
         imageCount: 0,
         charCount: 0
       },
+      diskFingerprint: params.persistedStats,
       snapshot: baselineSnapshot
     })
     session.revisionByDocId = new Map([[params.baselineDocId, baselineRevisionEntry]])
@@ -1456,6 +1523,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
       ops: [{ type: 'create_document' }],
       createdBlocks,
       changedBlocks,
+      persistedStats: params.persistedStats,
       summary: params.summary
     })
 
@@ -1477,6 +1545,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     createdBlocksByOp?: NonNullable<DocxRevision['createdBlocksByOp']>
     opNextDocIds?: NonNullable<DocxRevision['opNextDocIds']>
     changedBlocks?: DocxRevision['changedBlocks']
+    persistedStats: DocxDiskFingerprint
     summary?: string
   }) => {
     const sourcePath = path.resolve(params.sourcePath)
@@ -1525,6 +1594,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     }
     session.activeDocId = params.nextDocId
     session.activeRevisionRef = currentRevisionRef
+    session.diskFingerprint = params.persistedStats
     syncReplaySessionStats(session)
     return {
       currentRevisionRef,
@@ -1719,6 +1789,77 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     }
   }
 
+  const persistDocId = async (inputValue: {
+    sourcePath: string
+    docId: string
+  }): Promise<{ checksum: string; byteSize: number; modifiedAt: number }> => {
+    const sourcePath = path.resolve(inputValue.sourcePath)
+    await fs.mkdir(path.dirname(sourcePath), { recursive: true })
+    const tempPath = path.join(
+      path.dirname(sourcePath),
+      `.${path.basename(sourcePath)}.ncurator-${randomUUID()}.tmp`
+    )
+    const backupPath = `${tempPath}.previous`
+    let hasBackup = false
+    let preserveBackup = false
+    try {
+      const materialized = await callWorker({
+        action: 'materialize_draft',
+        payload: { docId: inputValue.docId, outPath: tempPath }
+      })
+      if (!materialized.ok) throw new Error(materialized.error)
+      if (materialized.payload.action !== 'materialize_draft') {
+        throw new Error('worker protocol mismatch (materialize_draft)')
+      }
+
+      try {
+        await fs.copyFile(sourcePath, backupPath)
+        hasBackup = true
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+      }
+
+      try {
+        await fs.rename(tempPath, sourcePath)
+      } catch {
+        await fs.rm(sourcePath, { force: true })
+        await fs.rename(tempPath, sourcePath)
+      }
+
+      const [buffer, stat] = await Promise.all([fs.readFile(sourcePath), fs.stat(sourcePath)])
+      const checksum = createHash('sha256').update(buffer).digest('hex')
+      if (checksum !== materialized.payload.checksum) {
+        throw new Error('post-write checksum mismatch')
+      }
+      if (hasBackup) {
+        await fs.rm(backupPath, { force: true })
+        hasBackup = false
+      }
+      return {
+        checksum,
+        byteSize: buffer.byteLength,
+        modifiedAt: Math.trunc(stat.mtimeMs)
+      }
+    } catch (error) {
+      if (hasBackup) {
+        try {
+          await fs.rm(sourcePath, { force: true })
+          await fs.rename(backupPath, sourcePath)
+          hasBackup = false
+        } catch {
+          // Preserve the original error. The backup remains beside the target for recovery.
+          preserveBackup = true
+        }
+      }
+      throw error
+    } finally {
+      await fs.rm(tempPath, { force: true }).catch(() => undefined)
+      if (hasBackup && !preserveBackup) {
+        await fs.rm(backupPath, { force: true }).catch(() => undefined)
+      }
+    }
+  }
+
   return {
     input,
     state,
@@ -1747,6 +1888,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     buildReplaySnapshotForDoc,
     applyTempRevisionToReplaySession,
     buildResourceContext,
-    buildPostWriteReadback
+    buildPostWriteReadback,
+    persistDocId
   }
 }

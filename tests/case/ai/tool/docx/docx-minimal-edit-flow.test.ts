@@ -1,12 +1,13 @@
 import path from 'node:path'
+import fs from 'node:fs/promises'
 import { describe, it } from 'vitest'
+import {
+  buildBlockIndex,
+  loadDocxBundle
+} from '../../../../../src/main/services/ai/human/tools/docx/adapters/ooxml/blockIndex'
 import { createDocxToolHarness } from '../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
-import {
-  type DocxMutationResult,
-  type DocxReadResult,
-  type DocxSearchResult
-} from './testUtils'
+import { type DocxMutationResult, type DocxReadResult, type DocxSearchResult } from './testUtils'
 
 const SAMPLE_DOCX_FIXTURE = path.resolve('tests/fixtures/workspace/sample-edit.docx')
 
@@ -22,7 +23,7 @@ describe('ai tool docx backend', () => {
       fixtures: [SAMPLE_DOCX_FIXTURE],
       runMode: 'single',
       execute: async (runtime) => {
-          const harness = createDocxToolHarness(runtime)
+        const harness = createDocxToolHarness(runtime)
         try {
           const sourcePath = runtime.getFixtureWorkspacePath(SAMPLE_DOCX_FIXTURE)
           const searchBefore = await harness.invoke<DocxSearchResult>('docx_search', {
@@ -35,11 +36,13 @@ describe('ai tool docx backend', () => {
           })
           const applied = await harness.invoke<DocxMutationResult>('docx_edit', {
             sourcePath,
-            actions: [{
-              type: 'replace_text',
-              query: 'Hello',
-              replace: 'Hi'
-            }]
+            actions: [
+              {
+                type: 'replace_text',
+                query: 'Hello',
+                replace: 'Hi'
+              }
+            ]
           })
           const searchAfter = await harness.invoke<DocxSearchResult>('docx_search', {
             sourcePath: applied.sourcePath,
@@ -49,12 +52,17 @@ describe('ai tool docx backend', () => {
             sourcePath: applied.sourcePath,
             range: { type: 'block_ids', blockIds: [searchAfter.matches[0]!.blockId] }
           })
+          const persistedBundle = await loadDocxBundle(await fs.readFile(sourcePath))
+          const persistedText = buildBlockIndex(persistedBundle.documentDom)
+            .outline.map((block) => block.text)
+            .join('\n')
           return {
             searchBefore,
             readBefore,
             applied,
             searchAfter,
-            readAfter
+            readAfter,
+            persistedText
           }
         } finally {
           await harness.release()
@@ -64,15 +72,18 @@ describe('ai tool docx backend', () => {
         runtime.assertThat(
           result.searchBefore.matches.length === 1 &&
             result.readBefore.blocks.length === 1 &&
-            result.applied.currentRevisionRef !== result.readBefore.currentRevisionRef &&
             result.applied.changedBlocks.length === 1 &&
-            result.applied.changedBlocks[0]?.action === 'replace_text',
+            result.applied.changedBlocks[0]?.action === 'replace_text' &&
+            result.readBefore.blocks[0]?.blockId === result.readAfter.blocks[0]?.blockId &&
+            /^blk_[0-9a-f]{32}$/.test(result.readAfter.blocks[0]?.blockId || '') &&
+            !('currentRevisionRef' in result.applied) &&
+            !('currentRevisionRef' in result.readAfter) &&
+            result.persistedText.includes('Hi') &&
+            !result.persistedText.includes('Hello'),
           {
             name: 'minimal-edit-flow-produces-single-targeted-change',
-            message: '最小编辑流程应生成新的修订，且只命中目标段落对应的 changedBlocks。',
+            message: '最小编辑流程应只修改目标段落，并在修改后保持稳定 block UUID。',
             data: {
-              originalVersionRef: result.readBefore.currentRevisionRef,
-              currentRevisionRef: result.applied.currentRevisionRef,
               changedBlocks: result.applied.changedBlocks
             }
           }

@@ -298,7 +298,14 @@ export type DocxReadSession = {
   meta: DocxOpenMeta
   stats: DocxOpenStats
   currentRevisionRef: string
+  diskFingerprint: DocxDiskFingerprint
   cache: DocxReadSessionCache
+}
+
+export type DocxDiskFingerprint = {
+  checksum: string
+  byteSize: number
+  modifiedAt: number
 }
 
 export type DocxReplaySession = {
@@ -310,6 +317,7 @@ export type DocxReplaySession = {
   nextRevisionNumber: number
   meta: DocxOpenMeta
   stats: DocxOpenStats
+  diskFingerprint: DocxDiskFingerprint
   sourceSnapshot: DocxReplaySnapshot
   activeSnapshot: DocxReplaySnapshot
   docIdByRevisionRef: Map<string, string>

@@ -8,7 +8,11 @@ import type {
   DocxReadSession,
   DocxSearchMatch
 } from '../types'
-import { DOCX_READ_OUTLINE_TOOL_SPEC, DOCX_READ_TOOL_SPEC, DOCX_SEARCH_TOOL_SPEC } from '../toolSpecs'
+import {
+  DOCX_READ_OUTLINE_TOOL_SPEC,
+  DOCX_READ_TOOL_SPEC,
+  DOCX_SEARCH_TOOL_SPEC
+} from '../toolSpecs'
 import { createDocxTool, finalizeDocxToolFailure, finalizeDocxToolSuccess } from './workerTool'
 import { HUMAN_TOOL_RESULT_TOKEN_LIMIT_RATIO } from '../../../constants'
 
@@ -254,7 +258,6 @@ const buildLiteralSearchAttempts = (
 
 const buildSearchResult = (input: {
   sourcePath: string
-  currentRevisionRef: string
   mode: 'literal' | 'regex' | 'semantic'
   effectiveQuery: string
   appliedAliases: AppliedAlias[]
@@ -264,7 +267,6 @@ const buildSearchResult = (input: {
   runtime: DocxToolRuntime
 }) => ({
   sourcePath: input.sourcePath,
-  currentRevisionRef: input.currentRevisionRef,
   mode: input.mode,
   effectiveQuery: input.effectiveQuery,
   appliedAliases: input.appliedAliases,
@@ -276,7 +278,6 @@ const buildSearchResult = (input: {
 
 const buildSearchOutputPreview = (result: ReturnType<typeof buildSearchResult>) => ({
   sourcePath: result.sourcePath,
-  currentRevisionRef: result.currentRevisionRef,
   mode: result.mode,
   effectiveQuery: result.effectiveQuery,
   returnedMatchCount: result.returnedMatchCount,
@@ -433,7 +434,6 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
         }
         const result = {
           sourcePath: sessionResult.sourcePath,
-          currentRevisionRef: sessionResult.currentRevisionRef,
           totalBlockCount: sessionResult.stats.blockCount,
           blocks: resultBlocks
         }
@@ -444,7 +444,6 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
           result,
           outputPreview: {
             sourcePath: result.sourcePath,
-            currentRevisionRef: result.currentRevisionRef,
             blocks: result.blocks
           },
           draftDocId: sessionResult.docId,
@@ -566,7 +565,6 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
             : []
         const result = buildSearchResult({
           sourcePath: sessionResult.sourcePath,
-          currentRevisionRef: sessionResult.currentRevisionRef,
           mode,
           effectiveQuery: args.query,
           appliedAliases: [],
@@ -633,7 +631,6 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
       const matches = allMatches.slice(0, MAX_SEARCH_MATCHES)
       const result = buildSearchResult({
         sourcePath: sessionResult.sourcePath,
-        currentRevisionRef: sessionResult.currentRevisionRef,
         mode,
         effectiveQuery,
         appliedAliases,
@@ -703,7 +700,6 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
         }
         const result = {
           sourcePath: sessionResult.sourcePath,
-          currentRevisionRef: sessionResult.currentRevisionRef,
           fromBlockIndex,
           toBlockIndex,
           blocks: blocks.map(buildReadBlock)
@@ -715,7 +711,6 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
           result,
           outputPreview: {
             sourcePath: result.sourcePath,
-            currentRevisionRef: result.currentRevisionRef,
             fromBlockIndex: result.fromBlockIndex,
             toBlockIndex: result.toBlockIndex,
             blocks: result.blocks

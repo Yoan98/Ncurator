@@ -6,7 +6,6 @@ import type { DocxFailureResult, DocxReadResult } from './testUtils'
 
 type PositionedOutlineResult = {
   sourcePath: string
-  currentRevisionRef: string
   blocks: Array<{
     blockId: string
     type: 'paragraph' | 'table' | 'table_cell'
@@ -16,7 +15,6 @@ type PositionedOutlineResult = {
 }
 
 const POSITIONED_FIXTURE_PATH = 'tests/fixtures/workspace/学习笔记/图形学.docx'
-const POSITIONED_READ_ONLY_MESSAGE = '当前命中复杂定位排版区域，暂不支持自动编辑'
 
 describe('ai tool docx backend', () => {
   it('docx-positioned-layout-read-only-contract', async () => {
@@ -155,13 +153,12 @@ describe('ai tool docx backend', () => {
         )
 
         runtime.assertThat(
-          result.replayRevisionState?.activeRevisionRef === result.outline.currentRevisionRef &&
+          result.replayRevisionState?.activeRevisionRef === 'v1' &&
             result.replayRevisionState.revisionCount === 1,
           {
             name: 'positioned-layout-failures-do-not-create-new-revisions',
             message: 'positioned 写入失败后不应产生新的修订。',
             data: {
-              outlineRevisionRef: result.outline.currentRevisionRef,
               replayRevisionState: result.replayRevisionState
             }
           }

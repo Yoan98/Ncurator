@@ -1,8 +1,5 @@
 import { describe, it } from 'vitest'
-import {
-  createDocxToolHarness,
-  writeTestDocxFile
-} from '../../../../harness/backend/aiToolHarness'
+import { createDocxToolHarness, writeTestDocxFile } from '../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import type { DocxOutlineResult, DocxReadResult, DocxSearchResult } from './testUtils'
 
@@ -55,18 +52,11 @@ describe('ai tool docx backend', () => {
         }
       },
       assert: async (result, runtime) => {
-        runtime.assertThat(
-          result.outline.currentRevisionRef === 'v1' &&
-            result.read.currentRevisionRef === 'v1' &&
-            result.search.currentRevisionRef === 'v1' &&
-            result.readSessionCount === 1 &&
-            result.replaySessionCount === 0,
-          {
-            name: 'docx-read-only-tools-stay-in-read-session',
-            message: 'outline/read/search 应只创建 read session，不应提前进入 replay session。',
-            data: result
-          }
-        )
+        runtime.assertThat(result.readSessionCount === 1 && result.replaySessionCount === 0, {
+          name: 'docx-read-only-tools-stay-in-read-session',
+          message: 'outline/read/search 应只创建 read session，不应提前进入 replay session。',
+          data: result
+        })
       }
     })
   })

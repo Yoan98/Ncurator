@@ -1,8 +1,5 @@
 import { describe, it } from 'vitest'
-import {
-  createDocxToolHarness,
-  writeTestDocxFile
-} from '../../../../harness/backend/aiToolHarness'
+import { createDocxToolHarness, writeTestDocxFile } from '../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import type { DocxMutationResult, DocxOutlineResult } from './testUtils'
 import { findParagraphBlockIdByText } from './testUtils'
@@ -34,26 +31,32 @@ describe('ai tool docx backend', () => {
 
           const insertResult = await harness.invoke<DocxMutationResult>('docx_edit', {
             sourcePath: 'replay-stats-active-revision.docx',
-            actions: [{
-              type: 'insert_blocks',
-              anchorBlockId,
-              position: 'after',
-              blocks: [{ type: 'paragraph', text: '新增段落' }]
-            }]
+            actions: [
+              {
+                type: 'insert_blocks',
+                anchorBlockId,
+                position: 'after',
+                blocks: [{ type: 'paragraph', text: '新增段落' }]
+              }
+            ]
           })
-          const statsAfterInsert =
-            harness.state.replaySessionBySourcePath.get(insertResult.sourcePath)?.stats
+          const statsAfterInsert = harness.state.replaySessionBySourcePath.get(
+            insertResult.sourcePath
+          )?.stats
 
           const rewriteResult = await harness.invoke<DocxMutationResult>('docx_edit', {
             sourcePath: 'replay-stats-active-revision.docx',
-            actions: [{
-              type: 'replace_text',
-              query: '新增段落',
-              replace: '新增段落二稿'
-            }]
+            actions: [
+              {
+                type: 'replace_text',
+                query: '新增段落',
+                replace: '新增段落二稿'
+              }
+            ]
           })
-          const statsAfterRewrite =
-            harness.state.replaySessionBySourcePath.get(rewriteResult.sourcePath)?.stats
+          const statsAfterRewrite = harness.state.replaySessionBySourcePath.get(
+            rewriteResult.sourcePath
+          )?.stats
 
           const finalOutline = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
             sourcePath: 'replay-stats-active-revision.docx',
@@ -73,9 +76,7 @@ describe('ai tool docx backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.insertResult.currentRevisionRef === 'v2' &&
-            result.rewriteResult.currentRevisionRef === 'v3' &&
-            result.statsAfterInsert?.blockCount === 3 &&
+          result.statsAfterInsert?.blockCount === 3 &&
             result.statsAfterRewrite?.blockCount === 3 &&
             result.finalOutline.blocks.length === 3 &&
             result.finalOutline.blocks.some(

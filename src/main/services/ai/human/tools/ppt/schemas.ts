@@ -268,58 +268,58 @@ const pptElementOperationSchema = z.discriminatedUnion('type', [
     .strict()
 ])
 
+export const pptEditActionSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('create_presentation'), html: z.string().min(1) }).strict(),
+  z
+    .object({
+      type: z.literal('insert_slide'),
+      beforeSlideId: slideIdSchema.optional(),
+      html: z.string().min(1)
+    })
+    .strict(),
+  z.object({ type: z.literal('delete_slides'), slideIds: z.array(slideIdSchema).min(1) }).strict(),
+  z
+    .object({
+      type: z.literal('move_slide'),
+      slideId: slideIdSchema,
+      beforeSlideId: slideIdSchema.optional()
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal('duplicate_slide'),
+      slideId: slideIdSchema,
+      beforeSlideId: slideIdSchema.optional()
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal('replace_text'),
+      query: z.string().min(1),
+      replace: z.string(),
+      slideIds: z.array(slideIdSchema).optional()
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal('edit_elements'),
+      slideId: slideIdSchema,
+      operations: z.array(pptElementOperationSchema).min(1)
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal('set_notes'),
+      slideId: slideIdSchema,
+      text: z.string()
+    })
+    .strict()
+])
+
 export const pptEditSchema = z
   .object({
     sourcePath: sourcePathSchema,
-    action: z.discriminatedUnion('type', [
-      z.object({ type: z.literal('create_presentation'), html: z.string().min(1) }).strict(),
-      z
-        .object({
-          type: z.literal('insert_slide'),
-          beforeSlideId: slideIdSchema.optional(),
-          html: z.string().min(1)
-        })
-        .strict(),
-      z
-        .object({ type: z.literal('delete_slides'), slideIds: z.array(slideIdSchema).min(1) })
-        .strict(),
-      z
-        .object({
-          type: z.literal('move_slide'),
-          slideId: slideIdSchema,
-          beforeSlideId: slideIdSchema.optional()
-        })
-        .strict(),
-      z
-        .object({
-          type: z.literal('duplicate_slide'),
-          slideId: slideIdSchema,
-          beforeSlideId: slideIdSchema.optional()
-        })
-        .strict(),
-      z
-        .object({
-          type: z.literal('replace_text'),
-          query: z.string().min(1),
-          replace: z.string(),
-          slideIds: z.array(slideIdSchema).optional()
-        })
-        .strict(),
-      z
-        .object({
-          type: z.literal('edit_elements'),
-          slideId: slideIdSchema,
-          operations: z.array(pptElementOperationSchema).min(1)
-        })
-        .strict(),
-      z
-        .object({
-          type: z.literal('set_notes'),
-          slideId: slideIdSchema,
-          text: z.string()
-        })
-        .strict()
-    ])
+    actions: z.array(pptEditActionSchema).min(1)
   })
   .strict()
 

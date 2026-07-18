@@ -1,8 +1,5 @@
 import { describe, it } from 'vitest'
-import {
-  createDocxToolHarness,
-  writeTestDocxFile
-} from '../../../../harness/backend/aiToolHarness'
+import { createDocxToolHarness, writeTestDocxFile } from '../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import type { DocxMutationResult, DocxOutlineResult } from './testUtils'
 import { findParagraphBlockIdByText } from './testUtils'
@@ -34,12 +31,14 @@ describe('ai tool docx backend', () => {
 
           const writeResult = await harness.invoke<DocxMutationResult>('docx_edit', {
             sourcePath: 'outline-percent-after-write.docx',
-            actions: [{
-              type: 'insert_blocks',
-              anchorBlockId,
-              position: 'after',
-              blocks: [{ type: 'heading', level: 2, text: '第一部分：深度学习' }]
-            }]
+            actions: [
+              {
+                type: 'insert_blocks',
+                anchorBlockId,
+                position: 'after',
+                blocks: [{ type: 'heading', level: 2, text: '第一部分：深度学习' }]
+              }
+            ]
           })
 
           const afterOutline = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
@@ -51,21 +50,23 @@ describe('ai tool docx backend', () => {
             beforeOutline,
             writeResult,
             afterOutline,
-            replayStats:
-              harness.state.replaySessionBySourcePath.get(writeResult.sourcePath)?.stats
+            replayStats: harness.state.replaySessionBySourcePath.get(writeResult.sourcePath)?.stats
           }
         } finally {
           await harness.release()
         }
       },
       assert: async (result, runtime) => {
+        const createdParagraphId = result.writeResult.createdBlocks?.find(
+          (block) => block.type === 'paragraph'
+        )?.blockId
         runtime.assertThat(
           result.beforeOutline.blocks.length === 2 &&
-            result.writeResult.createdBlocks?.some((block) => block.blockId === 'b:2') &&
+            /^blk_[0-9a-f]{32}$/.test(createdParagraphId || '') &&
             result.afterOutline.blocks.some(
               (block) =>
                 block.type === 'paragraph' &&
-                block.blockId === 'b:2' &&
+                block.blockId === createdParagraphId &&
                 block.text === '第一部分：深度学习'
             ) &&
             result.replayStats?.blockCount === 3,

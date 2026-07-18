@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { getSlides, getSlideShapes, getSlideText, isChartShape, loadPresentation } from 'pptx-kit'
@@ -35,12 +36,12 @@ describe('ai tool ppt backend', () => {
         const sourcePath = 'product-review.pptx'
         const created = await harness.invoke<JsonObject>('ppt_edit', {
           sourcePath,
-          action: { type: 'create_presentation', html: coverHtml }
+          actions: [
+            { type: 'create_presentation', html: coverHtml },
+            { type: 'insert_slide', html: detailHtml }
+          ]
         })
-        const inserted = await harness.invoke<JsonObject>('ppt_edit', {
-          sourcePath,
-          action: { type: 'insert_slide', html: detailHtml }
-        })
+        const inserted = created
         const overview = await harness.invoke<JsonObject>('ppt_read_outline', {
           sourcePath,
           ranges: [{ type: 'percent', fromPercent: 0, toPercent: 100 }]
@@ -52,10 +53,13 @@ describe('ai tool ppt backend', () => {
         })
         const failedDelete = await harness.invoke<JsonObject>('ppt_edit', {
           sourcePath,
-          action: {
-            type: 'delete_slides',
-            slideIds: [firstSlideId, '/ppt/slides/missing.xml']
-          }
+          actions: [
+            { type: 'replace_text', query: '2026 产品复盘', replace: '不应落盘的标题' },
+            {
+              type: 'delete_slides',
+              slideIds: [firstSlideId, '/ppt/slides/missing.xml']
+            }
+          ]
         })
         const overviewAfterFailedDelete = await harness.invoke<JsonObject>('ppt_read_outline', {
           sourcePath,
@@ -63,7 +67,7 @@ describe('ai tool ppt backend', () => {
         })
         const replaced = await harness.invoke<JsonObject>('ppt_edit', {
           sourcePath,
-          action: { type: 'replace_text', query: '反馈周期', replace: '客户反馈周期' }
+          actions: [{ type: 'replace_text', query: '反馈周期', replace: '客户反馈周期' }]
         })
         const search = await harness.invoke<JsonObject>('ppt_search', {
           sourcePath,
@@ -78,6 +82,15 @@ describe('ai tool ppt backend', () => {
           .access(targetPath)
           .then(() => true)
           .catch(() => false)
+        const aiPersistedBytes = new Uint8Array(await fs.readFile(targetPath))
+        const aiPersistedChecksum = createHash('sha256').update(aiPersistedBytes).digest('hex')
+        await fs.writeFile(
+          targetPath,
+          Buffer.concat([Buffer.from(aiPersistedBytes), Buffer.from('external-user-change')])
+        )
+        const externallyChangedChecksum = createHash('sha256')
+          .update(await fs.readFile(targetPath))
+          .digest('hex')
         const records = await harness.runtime.commitAll()
         const repeatedCommitRecords = await harness.runtime.commitAll()
         const bytes = new Uint8Array(await fs.readFile(targetPath))
@@ -100,6 +113,8 @@ describe('ai tool ppt backend', () => {
           search,
           rendered,
           beforeCommitExists,
+          aiPersistedChecksum,
+          externallyChangedChecksum,
           records,
           repeatedCommitRecords,
           slideCount: getSlides(presentation).length,
@@ -109,8 +124,13 @@ describe('ai tool ppt backend', () => {
         }
       },
       assert: async (result, runtime) => {
+        runtime.assertThat(result.beforeCommitExists === true, {
+          name: 'ppt-edit-writes-real-file-immediately',
+          message: 'ppt_edit 返回成功前必须已经写入真实 PPTX 文件。',
+          data: { beforeCommitExists: result.beforeCommitExists }
+        })
         runtime.assertThat(
-          result.created.slideCount === 1 &&
+          result.created.slideCount === 2 &&
             result.inserted.slideCount === 2 &&
             Boolean((result.created.postWriteReadback as JsonObject)?.slides) &&
             Boolean((result.inserted.postWriteReadback as JsonObject)?.slides) &&
@@ -119,20 +139,20 @@ describe('ai tool ppt backend', () => {
             result.readSlides.slides.length === 1 &&
             result.failedDelete.ok === false &&
             result.overviewAfterFailedDelete.slideCount === 2 &&
+            !JSON.stringify(result.overviewAfterFailedDelete).includes('不应落盘的标题') &&
             Array.isArray(result.search.matches) &&
             result.search.matches.length === 1 &&
             Array.isArray(result.rendered.images) &&
             result.rendered.images.length === 1 &&
-            String((result.rendered.images as Array<{ path: string }>)[0]!.path).includes(
-              '/.ncurator/runtime/assets/'
-            ) &&
-            String((result.rendered.images as Array<{ path: string }>)[0]!.path).includes(
-              '/ppt-render/'
-            ) &&
-            result.beforeCommitExists === false,
+            String((result.rendered.images as Array<{ path: string }>)[0]!.path)
+              .replace(/\\/g, '/')
+              .includes('/.ncurator/runtime/assets/') &&
+            String((result.rendered.images as Array<{ path: string }>)[0]!.path)
+              .replace(/\\/g, '/')
+              .includes('/ppt-render/'),
           {
-            name: 'ppt-draft-is-readable-before-single-run-commit',
-            message: 'PPT 工作草稿应支持逐页创建、编辑和回读，且 commit 前不提前写正式文件。',
+            name: 'ppt-edit-persists-before-run-finalization',
+            message: 'PPT 编辑成功后应立即写入正式文件，同时保持后续读取和 run 级差异生成能力。',
             data: result
           }
         )
@@ -142,6 +162,8 @@ describe('ai tool ppt backend', () => {
             result.records[0]!.operation === 'created' &&
             result.records[0]!.insertCount === 2 &&
             result.records[0]!.deleteCount === 0 &&
+            result.records[0]!.afterChecksum === result.aiPersistedChecksum &&
+            result.records[0]!.afterChecksum !== result.externallyChangedChecksum &&
             result.repeatedCommitRecords.length === 0 &&
             result.slideCount === 2 &&
             result.hasChart &&

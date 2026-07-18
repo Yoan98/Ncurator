@@ -13,17 +13,23 @@ import type {
   DocxReviewState
 } from '../types'
 
-const normalizeParagraphSpec = (block: DocxDetailedParagraphBlock): Extract<DocxBlockSpec, { kind: 'paragraph' }> => ({
+const normalizeParagraphSpec = (
+  block: DocxDetailedParagraphBlock
+): Extract<DocxBlockSpec, { kind: 'paragraph' }> => ({
   kind: 'paragraph',
   style: block.style || 'Normal',
   runs: block.runs.length > 0 ? block.runs.map((run) => ({ ...run })) : [{ text: block.text || '' }]
 })
 
-const normalizeTableSpec = (block: DocxDetailedTableBlock): Extract<DocxBlockSpec, { kind: 'table' }> => ({
+const normalizeTableSpec = (
+  block: DocxDetailedTableBlock
+): Extract<DocxBlockSpec, { kind: 'table' }> => ({
   kind: 'table',
   rows: Array.from({ length: block.rows }, (_, rowIndex) =>
     Array.from({ length: block.cols }, (_, colIndex) => {
-      const cell = block.cells.find((item) => item.row === rowIndex + 1 && item.col === colIndex + 1)
+      const cell = block.cells.find(
+        (item) => item.row === rowIndex + 1 && item.col === colIndex + 1
+      )
       return {
         paragraphs:
           cell && cell.paragraphs.length > 0
@@ -66,10 +72,7 @@ export const createReplaySnapshot = (input: {
       blockIndex: block.blockIndex,
       kind: detail.type,
       spec: detailedBlockToSpec(detail),
-      tableCellBlockIds:
-        detail.type === 'table'
-          ? detail.cells.map((cell) => cell.blockId)
-          : [],
+      tableCellBlockIds: detail.type === 'table' ? detail.cells.map((cell) => cell.blockId) : [],
       tableCells:
         detail.type === 'table'
           ? detail.cells.map((cell) => ({
@@ -158,7 +161,13 @@ const buildSpecKey = (spec: DocxBlockSpec): string => {
     return buildParagraphSignature(spec)
   }
   return `t:${spec.rows
-    .map((row) => row.map((cell) => cell.paragraphs.map((paragraph) => buildParagraphSignature(paragraph)).join('\u241E')).join('\u241F'))
+    .map((row) =>
+      row
+        .map((cell) =>
+          cell.paragraphs.map((paragraph) => buildParagraphSignature(paragraph)).join('\u241E')
+        )
+        .join('\u241F')
+    )
     .join('\u2424')}`
 }
 
@@ -216,7 +225,9 @@ const rebindVisibleNodesToSnapshot = (input: {
   const { nextSnapshot, session, skipNodeIds, reservedBlockIds } = input
   const visibleNodes = session.bodyNodeIds
     .map((nodeId) => session.nodeById.get(nodeId))
-    .filter((node): node is DocxReplayNode => Boolean(node && isVisibleReviewState(node.reviewState)))
+    .filter((node): node is DocxReplayNode =>
+      Boolean(node && isVisibleReviewState(node.reviewState))
+    )
   const usedBlockIds = new Set<string>()
   let cursor = 0
 
@@ -253,7 +264,11 @@ const resolveInsertIndex = (
   let insertIndex = anchorIndex + 1
   while (insertIndex < session.bodyNodeIds.length) {
     const candidate = session.nodeById.get(session.bodyNodeIds[insertIndex])
-    if (!candidate || candidate.parentNodeId !== anchorNodeId || !isVisibleReviewState(candidate.reviewState)) {
+    if (
+      !candidate ||
+      candidate.parentNodeId !== anchorNodeId ||
+      !isVisibleReviewState(candidate.reviewState)
+    ) {
       break
     }
     insertIndex += 1
@@ -272,14 +287,19 @@ const insertNodeIds = (
   reindexBodyNodes(session)
 }
 
-const findVisibleNodeIdByBlockId = (session: DocxReplaySession, blockId: string): string | undefined =>
+const findVisibleNodeIdByBlockId = (
+  session: DocxReplaySession,
+  blockId: string
+): string | undefined =>
   session.bodyNodeIds.find((nodeId) => {
     const node = session.nodeById.get(nodeId)
     return Boolean(
       node &&
-        (node.currentBlockId === blockId || node.blockId === blockId || node.sourceBlockId === blockId) &&
-        node.reviewState !== 'deleted' &&
-        node.reviewState !== 'replaced-old'
+      (node.currentBlockId === blockId ||
+        node.blockId === blockId ||
+        node.sourceBlockId === blockId) &&
+      node.reviewState !== 'deleted' &&
+      node.reviewState !== 'replaced-old'
     )
   })
 
@@ -288,9 +308,7 @@ const resolveBodyBlocksFromCreated = (
   createdBlocks: DocxCreatedBlock[]
 ): DocxReplaySnapshotBlock[] => {
   const createdBodyIds = new Set(
-    createdBlocks
-      .filter((block) => block.type !== 'table_cell')
-      .map((block) => block.blockId)
+    createdBlocks.filter((block) => block.type !== 'table_cell').map((block) => block.blockId)
   )
   return snapshot.blocks.filter((block) => createdBodyIds.has(block.blockId))
 }
@@ -365,6 +383,7 @@ export const createReplaySessionFromSnapshot = (input: {
   sourceDocId: string
   meta: DocxReplaySession['meta']
   stats: DocxReplaySession['stats']
+  diskFingerprint: DocxReplaySession['diskFingerprint']
   snapshot: DocxReplaySnapshot
 }): DocxReplaySession => {
   const nodeById = new Map<string, DocxReplayNode>()
@@ -395,6 +414,7 @@ export const createReplaySessionFromSnapshot = (input: {
     nextRevisionNumber: 2,
     meta: input.meta,
     stats: input.stats,
+    diskFingerprint: input.diskFingerprint,
     sourceSnapshot: input.snapshot,
     activeSnapshot: input.snapshot,
     docIdByRevisionRef: new Map([['v1', input.sourceDocId]]),
@@ -416,12 +436,7 @@ export const applyRevisionToReplaySession = (input: {
   if (op.type === 'create_document') {
     const createdBodyBlocks = resolveBodyBlocksFromCreated(nextSnapshot, createdBlocks)
     const insertedNodeIds = createdBodyBlocks.map((block) => {
-      const node = buildCurrentNodeFromSnapshot(
-        block,
-        revisionRef,
-        'inserted',
-        'generated'
-      )
+      const node = buildCurrentNodeFromSnapshot(block, revisionRef, 'inserted', 'generated')
       session.nodeById.set(node.nodeId, node)
       return node.nodeId
     })
@@ -431,14 +446,17 @@ export const applyRevisionToReplaySession = (input: {
   }
 
   const targetBlockId =
-    op.type === 'update_table_cell' || (op.type === 'replace_text' && Array.isArray(op.blockIds) && op.blockIds[0])
+    op.type === 'update_table_cell' ||
+    (op.type === 'replace_text' && Array.isArray(op.blockIds) && op.blockIds[0])
       ? op.type === 'update_table_cell'
         ? op.blockId
         : String(op.blockIds?.[0] || '')
       : 'blockId' in op
         ? String(op.blockId || '')
         : ''
-  const targetNodeId = targetBlockId ? findVisibleNodeIdByBlockId(session, targetBlockId) : undefined
+  const targetNodeId = targetBlockId
+    ? findVisibleNodeIdByBlockId(session, targetBlockId)
+    : undefined
   const targetNodeIdsToSkip =
     targetNodeId &&
     (op.type === 'delete_block' ||
@@ -450,7 +468,9 @@ export const applyRevisionToReplaySession = (input: {
       : undefined
   const reservedBlockIds =
     op.type === 'insert_before' || op.type === 'insert_after'
-      ? new Set(resolveBodyBlocksFromCreated(nextSnapshot, createdBlocks).map((block) => block.blockId))
+      ? new Set(
+          resolveBodyBlocksFromCreated(nextSnapshot, createdBlocks).map((block) => block.blockId)
+        )
       : undefined
 
   rebindVisibleNodesToSnapshot({
@@ -477,7 +497,12 @@ export const applyRevisionToReplaySession = (input: {
       session.nodeById.set(node.nodeId, node)
       return node.nodeId
     })
-    insertNodeIds(session, anchorNodeId, insertedNodeIds, op.type === 'insert_before' ? 'before' : 'after')
+    insertNodeIds(
+      session,
+      anchorNodeId,
+      insertedNodeIds,
+      op.type === 'insert_before' ? 'before' : 'after'
+    )
     session.activeSnapshot = nextSnapshot
     return
   }
@@ -529,9 +554,7 @@ export const applyRevisionToReplaySession = (input: {
   }
 
   const oldState =
-    op.type === 'replace_block' ||
-    op.type === 'replace_text' ||
-    op.type === 'update_table_cell'
+    op.type === 'replace_block' || op.type === 'replace_text' || op.type === 'update_table_cell'
       ? 'replaced-old'
       : 'deleted'
 

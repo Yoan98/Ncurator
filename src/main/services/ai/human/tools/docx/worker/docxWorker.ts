@@ -2,7 +2,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
 import { parentPort } from 'node:worker_threads'
-import type { DocxDetailedBlock, DocxOutlineBlock, DocxSearchMatch } from '../types'
+import type { DocxDetailedBlock, DocxOp, DocxOutlineBlock, DocxSearchMatch } from '../types'
 import { applyDocxOps } from '../adapters/ooxml/opExecutor'
 import {
   buildBlockIndex,
@@ -16,6 +16,16 @@ import {
 import { validateDocxBuffer } from '../adapters/ooxml/validator'
 import { normalizeDocxSearchText } from '../utils/searchText'
 import type { DocSnapshot, DocxWorkerRequest, DocxWorkerResponse, RunSessions } from './types'
+import {
+  createInitialIdentityIndex,
+  createNextIdentityIndex,
+  resolveInternalBlockId,
+  toInternalOp,
+  toPublicChangedBlocks,
+  toPublicDetailedBlock,
+  toPublicOutlineBlock,
+  toPublicSearchMatch
+} from './identity'
 
 const sessions: RunSessions = new Map()
 
@@ -37,17 +47,29 @@ const createDocSnapshot = async (input: {
   createdAt?: number
   parentDocId?: string
   buffer: Buffer
+  previousSnapshot?: DocSnapshot
+  publicOps?: DocxOp[]
 }): Promise<DocSnapshot> => {
   const bundle = await loadDocxBundle(input.buffer)
   const index = buildBlockIndex(bundle.documentDom)
+  const identity = input.previousSnapshot
+    ? createNextIdentityIndex({
+        previousIndex: input.previousSnapshot.index,
+        previousIdentity: input.previousSnapshot.identity,
+        nextIndex: index,
+        publicOps: input.publicOps || []
+      })
+    : createInitialIdentityIndex(index)
   return {
     docId: input.docId,
     sourcePath: input.sourcePath,
     createdAt: input.createdAt || Date.now(),
     parentDocId: input.parentDocId,
     buffer: input.buffer,
+    checksum: createHash('sha256').update(input.buffer).digest('hex'),
     bundle,
     index,
+    identity,
     detailByBlockId: new Map<string, DocxDetailedBlock>()
   }
 }
@@ -60,13 +82,18 @@ const getSnapshot = (runId: string, docId: string): DocSnapshot => {
   return snapshot
 }
 
-const getDetailedBlockCached = (snapshot: DocSnapshot, blockId: string): DocxDetailedBlock | null => {
+const getDetailedBlockCached = (
+  snapshot: DocSnapshot,
+  blockId: string
+): DocxDetailedBlock | null => {
   const cached = snapshot.detailByBlockId.get(blockId)
   if (cached) return cached
-  const detail = getDetailedBlock(snapshot.index, blockId)
+  const internalId = resolveInternalBlockId(snapshot.identity, blockId)
+  const detail = getDetailedBlock(snapshot.index, internalId)
   if (!detail) return null
-  snapshot.detailByBlockId.set(blockId, detail)
-  return detail
+  const publicDetail = toPublicDetailedBlock(snapshot.identity, detail)
+  snapshot.detailByBlockId.set(blockId, publicDetail)
+  return publicDetail
 }
 
 const getDetailedBlocksByIds = (
@@ -92,7 +119,7 @@ const getDetailedBlocksByBlockIndexRange = (
   const end = Math.max(0, Math.max(fromBlockIndex, toBlockIndex))
   const blockIds = snapshot.index.outline
     .filter((block) => block.blockIndex >= start && block.blockIndex <= end)
-    .map((block) => block.blockId)
+    .map((block) => toPublicOutlineBlock(snapshot.identity, block).blockId)
   return getDetailedBlocksByIds(snapshot, blockIds)
 }
 
@@ -139,7 +166,8 @@ const searchBlocks = (input: {
 
   for (const block of input.blocks) {
     if (scope && !scope.has(block.blockId)) continue
-    const text = extractBlockText(input.snapshot.index, block.blockId)
+    const internalBlockId = resolveInternalBlockId(input.snapshot.identity, block.blockId)
+    const text = extractBlockText(input.snapshot.index, internalBlockId)
     const normalizedText = normalizeDocxSearchText(text)
     if (!normalizedText) continue
     const normalizedQuery =
@@ -151,19 +179,21 @@ const searchBlocks = (input: {
         ? replaceAllOffsets(normalizedText, normalizedQuery)
         : regexOffsets(normalizedText, normalizedQuery)
     if (offsets.length === 0) continue
-    const structureFacts = getBlockStructureFacts(input.snapshot.index, block.blockId)
+    const structureFacts = getBlockStructureFacts(input.snapshot.index, internalBlockId)
     if (!structureFacts) continue
-    out.push({
-      blockId: block.blockId,
-      type: structureFacts.blockType,
-      blockIndex: structureFacts.blockIndex,
-      matchedText: input.query,
-      previousBlockId: structureFacts.previousBlockId,
-      nextBlockId: structureFacts.nextBlockId,
-      tableBlockId: structureFacts.tableBlockId,
-      text,
-      offsets
-    })
+    out.push(
+      toPublicSearchMatch(input.snapshot.identity, {
+        blockId: internalBlockId,
+        type: structureFacts.blockType,
+        blockIndex: structureFacts.blockIndex,
+        matchedText: input.query,
+        previousBlockId: structureFacts.previousBlockId,
+        nextBlockId: structureFacts.nextBlockId,
+        tableBlockId: structureFacts.tableBlockId,
+        text,
+        offsets
+      })
+    )
   }
 
   return out
@@ -207,7 +237,9 @@ export const handleDocxWorkerRequest = async (
           action: 'open',
           docId,
           meta: snapshot.bundle.meta,
-          stats: toOpenStats(snapshot.index, snapshot.bundle.imageCount)
+          stats: toOpenStats(snapshot.index, snapshot.bundle.imageCount),
+          checksum: snapshot.checksum,
+          byteSize: snapshot.buffer.byteLength
         }
       }
     }
@@ -224,7 +256,7 @@ export const handleDocxWorkerRequest = async (
         ok: true,
         payload: {
           action: 'outline',
-          blocks: outline.blocks
+          blocks: outline.blocks.map((block) => toPublicOutlineBlock(snapshot.identity, block))
         }
       }
     }
@@ -303,7 +335,9 @@ export const handleDocxWorkerRequest = async (
         }
       }
       const matches = searchBlocks({
-        blocks: snapshot.index.outline,
+        blocks: snapshot.index.outline.map((block) =>
+          toPublicOutlineBlock(snapshot.identity, block)
+        ),
         snapshot,
         query: request.payload.query,
         mode,
@@ -322,9 +356,10 @@ export const handleDocxWorkerRequest = async (
 
     if (request.action === 'apply_ops') {
       const snapshot = getSnapshot(request.runId, request.payload.docId)
+      const internalOps = request.payload.ops.map((op) => toInternalOp(snapshot.identity, op))
       const applied = await applyDocxOps({
         buffer: snapshot.buffer,
-        ops: request.payload.ops
+        ops: internalOps
       })
       const validationProblems = await validateDocxBuffer(applied.buffer)
       if (validationProblems.length > 0) {
@@ -344,7 +379,9 @@ export const handleDocxWorkerRequest = async (
         sourcePath: snapshot.sourcePath,
         createdAt: Date.now(),
         parentDocId: snapshot.docId,
-        buffer: applied.buffer
+        buffer: applied.buffer,
+        previousSnapshot: snapshot,
+        publicOps: request.payload.ops
       })
       runSession.set(newDocId, nextSnapshot)
       return {
@@ -353,7 +390,11 @@ export const handleDocxWorkerRequest = async (
         payload: {
           action: 'apply_ops',
           newDocId,
-          changedBlocks: applied.changedBlocks,
+          changedBlocks: toPublicChangedBlocks({
+            changedBlocks: applied.changedBlocks,
+            previousIdentity: snapshot.identity,
+            nextIdentity: nextSnapshot.identity
+          }),
           warnings: applied.warnings
         }
       }

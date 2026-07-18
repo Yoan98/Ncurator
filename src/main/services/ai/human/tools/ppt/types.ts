@@ -55,6 +55,7 @@ export type PptRuntimeDocument = {
   sourcePath: string
   sourceName: string
   beforeBytes?: Uint8Array
+  lastPersistedBytes?: Uint8Array
   presentation: PresentationData
   dirty: boolean
   changedSlideIds: Set<string>

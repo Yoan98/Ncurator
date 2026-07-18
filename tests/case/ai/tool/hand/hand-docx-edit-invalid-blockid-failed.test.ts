@@ -24,7 +24,13 @@ describe('ai tool hand backend', () => {
 
         const ctx = runtime.createAiRunContext()
         const cache = createHumanRuntimeCache()
-        ensureSkillTools({ cache, ctx, runId: runtime.runId, taskId: runtime.taskId, skillId: 'docx-write' })
+        ensureSkillTools({
+          cache,
+          ctx,
+          runId: runtime.runId,
+          taskId: runtime.taskId,
+          skillId: 'docx-write'
+        })
 
         const handNode = createHandNode({ ctx, cache })
         const initialState = createInitialHumanState({
@@ -49,12 +55,14 @@ describe('ai tool hand backend', () => {
                     toolName: 'docx_edit',
                     args: {
                       sourcePath: 'invalid-blockid.docx',
-                      actions: [{
-                        type: 'insert_blocks',
-                        position: 'after',
-                        anchorBlockId: 'b:99',
-                        blocks: [{ type: 'paragraph', text: 'Inserted' }]
-                      }]
+                      actions: [
+                        {
+                          type: 'insert_blocks',
+                          position: 'after',
+                          anchorBlockId: 'blk_00000000000000000000000000000000',
+                          blocks: [{ type: 'paragraph', text: 'Inserted' }]
+                        }
+                      ]
                     }
                   }
                 ]
@@ -75,7 +83,7 @@ describe('ai tool hand backend', () => {
             hint.detail.toolName === 'docx_edit' &&
             hint.detail.sourcePath === 'invalid-blockid.docx' &&
             hint.detail.action === 'insert_blocks' &&
-            hint.detail.error.includes('cannot resolve anchorBlockId=b:99 in base revision'),
+            hint.detail.error.includes('stale or unknown docx blockId'),
           {
             name: 'invalid-blockid-produces-unified-docx-edit-hint',
             message: '不存在/过期 blockId 写入应失败，并统一走 hand_docx_edit_failed。',

@@ -7,7 +7,7 @@ import type { DocxChangedBlock, DocxCreatedBlock, DocxOp, DocxReplaySession } fr
 import { getDocxWorkerClient } from '../worker/docxWorkerClient'
 import { materializeDocxProjectedArtifact } from './reviewSerializer'
 import type { RunDocxEditDocument } from './types'
-import { buildDocxChangeSummary, calculateFileStats, fileExists, sanitizeFileName } from './utils'
+import { buildDocxChangeSummary, calculateFileStats, sanitizeFileName } from './utils'
 import { buildDocxApplyArtifactPaths } from './viewProjection'
 import { projectReviewView } from './viewProjector'
 
@@ -140,7 +140,10 @@ export class RunDocxEditTracker {
       applyId,
       sourceName: input.document.sourceName
     })
-    const sourceArtifactPath = path.join(paths.workDir, `source-${sanitizeFileName(input.document.sourceName)}`)
+    const sourceArtifactPath = path.join(
+      paths.workDir,
+      `source-${sanitizeFileName(input.document.sourceName)}`
+    )
     const client = getDocxWorkerClient()
 
     const sourceSaveResponse = await client.call({
@@ -195,7 +198,7 @@ export class RunDocxEditTracker {
     })
     const diffStats = await calculateFileStats(paths.diffArtifactPath)
 
-    const beforeExists = await fileExists(input.document.sourcePath)
+    const beforeExists = replaySession.targetMode === 'update'
     const operation = beforeExists ? 'updated' : 'created'
     let beforeChecksum: string | undefined
     let beforeByteSize: number | undefined
@@ -204,22 +207,19 @@ export class RunDocxEditTracker {
 
     if (beforeExists) {
       await fs.mkdir(paths.workDir, { recursive: true })
-      await fs.copyFile(input.document.sourcePath, paths.beforeSnapshotPath)
-      const beforeStats = await calculateFileStats(input.document.sourcePath)
+      await fs.copyFile(sourceArtifactPath, paths.beforeSnapshotPath)
+      const beforeStats = await calculateFileStats(sourceArtifactPath)
       beforeChecksum = beforeStats.checksum
       beforeByteSize = beforeStats.byteSize
       beforeModifiedAt = beforeStats.modifiedAt
       beforeSnapshotPath = paths.beforeSnapshotPath
     }
 
-    await fs.mkdir(path.dirname(input.document.sourcePath), { recursive: true })
-    const tempOutputPath = path.join(
-      path.dirname(input.document.sourcePath),
-      `${path.basename(input.document.sourcePath)}.apply-${applyId}.tmp`
-    )
-    await fs.copyFile(paths.committedArtifactPath, tempOutputPath)
-    await fs.rename(tempOutputPath, input.document.sourcePath)
-    const afterStats = await calculateFileStats(input.document.sourcePath)
+    const afterStats = {
+      checksum: replaySession.diskFingerprint.checksum,
+      byteSize: replaySession.diskFingerprint.byteSize,
+      modifiedAt: replaySession.diskFingerprint.modifiedAt
+    }
 
     try {
       await fs.rm(sourceArtifactPath, { force: true })
