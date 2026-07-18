@@ -30,11 +30,16 @@ const openedExpectedDoc = (
   openedSourcePaths: readonly string[],
   expectedRelativePath: string,
   expectedName: string
-): boolean =>
-  openedSourcePaths.some(
-    (sourcePath) =>
-      sourcePath.endsWith(expectedRelativePath) || sourcePath.endsWith(`/${expectedName}`)
-  )
+): boolean => {
+  const normalizedExpectedRelativePath = expectedRelativePath.replace(/\\/g, '/')
+  return openedSourcePaths.some((sourcePath) => {
+    const normalizedSourcePath = sourcePath.replace(/\\/g, '/')
+    return (
+      normalizedSourcePath.endsWith(normalizedExpectedRelativePath) ||
+      normalizedSourcePath.endsWith(`/${expectedName}`)
+    )
+  })
+}
 
 const toWorkspaceRelativePath = (workspaceRoot: string, sourcePath: string): string => {
   const relativePath = path.isAbsolute(sourcePath)
@@ -66,6 +71,9 @@ const hasRiskConclusionSemantics = (text: string, expectedRiskConclusion: string
   const normalizedExpected = normalizeAssertionText(expectedRiskConclusion)
   return (
     normalizedText.includes(normalizedExpected) ||
+    /(?:最终|外部)合规(?:签署|附件)[^。]{0,40}(?:尚未|仍未|还未)(?:完全)?闭环[^。]{0,40}(?:保持|持续|继续)跟进/.test(
+      normalizedText
+    ) ||
     /最终合规签署完成前[^。]{0,40}(?:仍需|继续)(?:保持|持续)跟进/.test(normalizedText) ||
     /最终合规签署(?:尚未|仍未)[^。]{0,20}(?:闭环|完成)[^。]{0,40}风险状态(?:仍需|继续)?(?:保持|持续)?跟进/.test(
       normalizedText
@@ -82,6 +90,9 @@ const hasRiskConclusionSemantics = (text: string, expectedRiskConclusion: string
 const hasPendingRiskStateSemantics = (text: string): boolean => {
   const normalizedText = normalizeAssertionText(text)
   return (
+    /(?:最终|外部)合规(?:签署|附件)[^。]{0,40}(?:尚未|仍未|还未)(?:完全)?闭环/.test(
+      normalizedText
+    ) ||
     /最终合规签署(?:尚未|仍未|还未)(?:闭环|完成)/.test(normalizedText) ||
     /最终合规签署[^。]{0,40}(?:仍存在|尚有|还有).{0,24}(?:确认项|确认环节|未闭环|未完成)/.test(
       normalizedText

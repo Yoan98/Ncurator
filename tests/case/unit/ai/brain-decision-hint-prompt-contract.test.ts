@@ -73,8 +73,8 @@ describe('ai unit brain decision-hint prompt contract', () => {
         terminals: []
       },
       runtime_paths: {
-        assets: path.join('/tmp/workspace', '.ncurator', 'runtime', 'assets'),
-        scripts: path.join('/tmp/workspace', '.ncurator', 'runtime', 'scripts'),
+        assets: path.resolve('/tmp/workspace/.ncurator/runtime/assets'),
+        scripts: path.resolve('/tmp/workspace/.ncurator/runtime/scripts'),
         user_runtime: path.join(os.homedir(), '.ncurator', 'runtime')
       }
     })

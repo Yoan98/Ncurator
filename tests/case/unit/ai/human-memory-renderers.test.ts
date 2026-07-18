@@ -229,6 +229,9 @@ describe('ai unit human memory renderers', () => {
     const rendered = renderBrainRoundSection(taskRun.rounds)
 
     expect(rendered).toContain('第 1 轮')
+    expect(rendered).toContain('- 第 1 轮\n判断：')
+    expect(rendered).not.toContain('- 第 1 轮\n\n判断：')
+    expect(rendered).not.toContain('\n\n执行：')
     expect(rendered).toContain(
       '参数：{"sourcePath":"draft.docx","actions":[{"type":"create_document","blocks":[{"type":"paragraph","text":"..."}]}]}'
     )

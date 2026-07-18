@@ -474,10 +474,8 @@ export const renderBrainRoundExecutionOnly = (record: HumanRoundRecord | undefin
 const renderBrainRoundRecord = (record: HumanRoundRecord): string =>
   `
 - 第 ${record.roundId} 轮
-
 判断：
 ${renderBrainRoundDecision(record)}
-
 执行：
 ${renderBrainRoundExecution(record)}
 `.trim()

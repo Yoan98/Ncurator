@@ -1,5 +1,6 @@
 import { END, START, StateGraph } from '@langchain/langgraph'
 import type { AiRunContext, HumanRunDispatchOptions } from '../../types'
+import { HUMAN_GRAPH_RECURSION_LIMIT } from '../constants'
 import type { HumanState, HumanTaskInput, HumanTaskOutput } from '../types'
 import { createBrainNode } from '../node/brainNode'
 import { createContextCompactionNode } from '../node/contextCompactionNode'
@@ -16,8 +17,6 @@ import {
   isCancelledError,
   isRecoverableRunErrorCode
 } from '../../utils/runFailure'
-
-const RECURSION_LIMIT = 60
 
 export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
   const { ctx } = input
@@ -99,7 +98,7 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
 
       const initialState = options.initialState || createInitialHumanState(taskInput)
       const output = (await graph.invoke(initialState as HumanState, {
-        recursionLimit: RECURSION_LIMIT
+        recursionLimit: HUMAN_GRAPH_RECURSION_LIMIT
       })) as HumanState
 
       return {

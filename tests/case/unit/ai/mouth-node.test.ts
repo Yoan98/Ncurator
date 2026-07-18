@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import path from 'node:path'
 import {
   appendRoundRecord,
   buildHandExecution
@@ -222,7 +223,7 @@ describe('ai unit mouth node', () => {
     expect(nextState.execution.evidenceReferences).toEqual([
       {
         label: '深度学习.docx',
-        path: '/tmp/workspace/学习笔记/深度学习.docx',
+        path: path.resolve('/tmp/workspace/学习笔记/深度学习.docx'),
         resourceType: 'file',
         usedFor: '支撑深度学习部分的总结内容',
         accessStatus: 'unavailable'

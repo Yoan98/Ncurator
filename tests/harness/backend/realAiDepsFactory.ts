@@ -2,6 +2,7 @@ import path from 'node:path'
 import { createHumanGraphRunner } from '../../../src/main/services/ai/human/graph/humanGraph'
 import { AiFileChangeService } from '../../../src/main/services/ai/fileChanges/AiFileChangeService'
 import { DocxApplyService } from '../../../src/main/services/ai/human/tools/docx/review/DocxApplyService'
+import { terminalSessionManager } from '../../../src/main/services/ai/human/tools/terminal/TerminalSessionManager'
 import { createAiRunContext } from '../../../src/main/services/ai/runtime'
 import { runAiRuntimePreflight } from '../../../src/main/services/ai/runtimePreflight'
 import type {
@@ -125,6 +126,7 @@ export const createRealAiDepsFactory = async (input: {
 
   const aiFileChangeService = new AiFileChangeService(storageService.aiFileChange)
   const docxApplyService = new DocxApplyService(storageService.docxApply, aiFileChangeService)
+  const terminalSessionIds = new Set<string>()
 
   const seedLlmConfig = async (config: LiveLlmConfig): Promise<void> => {
     const { model_name, ...persistedConfig } = config
@@ -156,10 +158,12 @@ export const createRealAiDepsFactory = async (input: {
       ...contextInput.runtimeSettingsOverride
     }
 
+    const sessionId = contextInput.sessionId || 'test-session'
+    terminalSessionIds.add(sessionId)
     const ctx = createAiRunContext(
       {
         runId: input.runId,
-        sessionId: contextInput.sessionId || 'test-session',
+        sessionId,
         userMessageId: `test-user-message-${input.runId}`,
         assistantMessageId: `test-assistant-message-${input.runId}`,
         input: contextInput.userInput || '请处理当前测试任务。',
@@ -291,6 +295,11 @@ export const createRealAiDepsFactory = async (input: {
     },
     seedLlmConfig,
     close: async () => {
+      await Promise.all(
+        Array.from(terminalSessionIds, (sessionId) =>
+          terminalSessionManager.closeByChatSession(sessionId)
+        )
+      )
       await storageService.close()
     }
   }

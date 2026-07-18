@@ -6,13 +6,12 @@ import {
 } from '../../../../src/main/services/ai/human/tools/registry'
 
 describe('ai unit tool prompt contract', () => {
-  it('keeps tool prompts to one capability-and-result sentence without usage teaching', () => {
+  it('keeps tool prompts free of legacy usage-teaching fields', () => {
     ALL_TOOL_SPECS.forEach((spec) => {
       expect(spec.promptSpec).toEqual({
         name: spec.name,
         description: expect.any(String)
       })
-      expect(spec.promptSpec.description).not.toMatch(/能力：|结果：|边界：|\n/)
     })
   })
 

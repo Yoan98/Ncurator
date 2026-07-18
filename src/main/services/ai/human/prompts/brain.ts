@@ -125,10 +125,7 @@ const renderSkillCatalogSection = (
     ? new Set(allowedToolNames.map((toolName) => String(toolName || '').trim()).filter(Boolean))
     : null
   const renderSkillLine = (definition: ReturnType<typeof getSkillDefinition>): string =>
-    [
-      `- ${definition.skillId}：${definition.description}`,
-      definition.source === 'builtin' ? '' : `  - learning 时填写：${definition.skillId}`
-    ].join('\n')
+    `- ${definition.skillId}：${definition.description}`
   const learnableSkillLines = listExternalSkillDefinitions()
     .filter((definition) => !state.skills.learnedSkillIds.includes(definition.skillId))
     .map(renderSkillLine)
