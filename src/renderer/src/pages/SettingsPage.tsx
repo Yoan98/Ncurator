@@ -8,7 +8,7 @@ import WorkspaceSettingsPanel from '../components/settings/WorkspaceSettingsPane
 import { SETTINGS_SECTION_META, SETTINGS_SECTION_ORDER } from '../components/settings/constants'
 import type { SettingsSectionValue } from '../components/settings/types'
 import { settingsSelectors } from '../testing/selectors'
-import WindowsTitleBar from '../components/WindowsTitleBar'
+import SidebarPanelIcon from '../components/SidebarPanelIcon'
 import {
   WORKBENCH_SIDEBAR_DEFAULT_WIDTH,
   WORKBENCH_SIDEBAR_MAX_WIDTH,
@@ -44,6 +44,7 @@ const SettingsPage: React.FC = () => {
   const params = useParams<{ section?: string }>()
   const currentSection = normalizeSettingsSection(params.section)
   const [platform, setPlatform] = useState<string>(() => detectRendererPlatform())
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [sidebarWidth] = useState<number>(() => {
     const stored = window.localStorage.getItem(WORKBENCH_SIDEBAR_WIDTH_STORAGE_KEY)
     return clampSettingsSidebarWidth(stored ? Number(stored) : WORKBENCH_SIDEBAR_DEFAULT_WIDTH)
@@ -66,37 +67,47 @@ const SettingsPage: React.FC = () => {
   }
 
   return (
-    <div
-      className={`nc-app-shell ${platform === 'win32' ? 'nc-app-shell-windows' : ''}`}
-      data-testid={settingsSelectors.page}
-    >
-      {platform === 'win32' ? <WindowsTitleBar /> : null}
+    <div className="nc-app-shell" data-testid={settingsSelectors.page}>
+      <div
+        className="nc-left-titlebar-chrome nc-settings-left-titlebar-chrome"
+        style={{ width: sidebarWidth }}
+      >
+        {platform === 'darwin' ? <div className="nc-left-titlebar-window-controls" /> : null}
+        {platform === 'win32' ? (
+          <button
+            type="button"
+            className="nc-sidebar-titlebar-toggle nc-sidebar-titlebar-toggle-chrome workbench-no-drag"
+            onClick={() => setSidebarCollapsed((previous) => !previous)}
+            data-testid={settingsSelectors.sidebarToggle}
+            aria-label={sidebarCollapsed ? '展开设置侧边栏' : '收起设置侧边栏'}
+          >
+            <SidebarPanelIcon
+              className="h-4 w-4"
+              variant={sidebarCollapsed ? 'expand' : 'collapse'}
+            />
+          </button>
+        ) : null}
+        <div className="nc-left-titlebar-drag" data-testid={settingsSelectors.sidebarDragRegion} />
+      </div>
 
       <aside
-        className={`nc-sidebar nc-settings-sidebar ${platform === 'darwin' ? 'nc-sidebar-mac' : ''}`}
-        style={{ width: sidebarWidth, minWidth: sidebarWidth, flexBasis: sidebarWidth }}
+        className={`nc-sidebar nc-settings-sidebar ${platform === 'darwin' ? 'nc-sidebar-mac' : ''} ${sidebarCollapsed ? 'nc-sidebar-hidden' : ''}`}
+        style={{
+          width: sidebarWidth,
+          minWidth: sidebarCollapsed ? 0 : sidebarWidth,
+          flexBasis: sidebarWidth
+        }}
+        data-testid={settingsSelectors.sidebar}
       >
-        <div
-          className="nc-settings-left-titlebar-chrome"
-          style={{ width: sidebarWidth }}
-          aria-hidden="true"
-        >
-          <div className="nc-left-titlebar-window-controls" />
-          <div
-            className="nc-left-titlebar-drag"
-            data-testid={settingsSelectors.sidebarDragRegion}
-          />
-        </div>
-
-        <div
-          className={`nc-sidebar-window-spacer ${platform === 'darwin' ? 'nc-sidebar-window-spacer-mac' : ''}`}
-          aria-hidden="true"
-        />
+        {platform === 'darwin' ? (
+          <div className="nc-sidebar-window-spacer" aria-hidden="true" />
+        ) : null}
 
         <div className="flex-1 overflow-y-auto px-2 py-3">
           <NavLink
             to="/"
             className="nc-settings-back-row workbench-no-drag mb-2 flex min-w-0 items-center gap-2"
+            data-testid={settingsSelectors.backRow}
           >
             <HiArrowLeft className="h-[18px] w-[18px] shrink-0 text-[#787774]" />
             <span className="truncate text-[13px] font-medium text-[#37352F]">返回工作台</span>

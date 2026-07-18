@@ -21,7 +21,7 @@ describe('workbench conversation e2e', () => {
         suite: 'conversation',
         groups: ['scope'],
         description:
-          '验证空会话输入区、右侧动态 Tab 拖拽区、横向滚动、窗口按钮避让和浏览器缩放菜单。',
+          '验证空会话输入区、右侧动态 Tab 拖拽区、横向滚动、原生窗口层分离和浏览器缩放菜单。',
         fixtures: [],
         launchMode: 'real',
         windowMode: 'visible',
@@ -115,31 +115,17 @@ describe('workbench conversation e2e', () => {
                         dragRect.top + dragRect.height / 2
                       )
                     : null
-                const controls = [
-                  selectors.window.minimizeButton,
-                  selectors.window.maximizeButton,
-                  selectors.window.closeButton
-                ]
-                  .map((testId) => {
-                    const element = document.querySelector(`[data-testid="${testId}"]`)
-                    if (!(element instanceof HTMLElement)) return null
-                    const rect = element.getBoundingClientRect()
-                    return {
-                      left: rect.left,
-                      right: rect.right,
-                      appRegion: getComputedStyle(element).getPropertyValue('-webkit-app-region'),
-                      hitTestId:
-                        document
-                          .elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)
-                          ?.closest<HTMLElement>('[data-testid]')?.dataset.testid || null
-                    }
-                  })
-                  .filter((control): control is NonNullable<typeof control> => control !== null)
+                const nativeChrome = document.querySelector(
+                  `[data-testid="${selectors.window.nativeChrome}"]`
+                )
+                const nativeChromeRect =
+                  nativeChrome instanceof HTMLElement ? nativeChrome.getBoundingClientRect() : null
 
                 return {
                   platform: navigator.userAgent.toLowerCase().includes('windows')
                     ? 'win32'
                     : 'other',
+                  tabbarTop: tabbar.getBoundingClientRect().top,
                   tabbarHeight: tabbar.getBoundingClientRect().height,
                   appRegion: getComputedStyle(dragRegion).getPropertyValue('-webkit-app-region'),
                   pointerEvents: getComputedStyle(dragRegion).pointerEvents,
@@ -153,7 +139,13 @@ describe('workbench conversation e2e', () => {
                   toggleRight: toggleRect.right,
                   scrollWidth: scroller.scrollWidth,
                   clientWidth: scroller.clientWidth,
-                  controls
+                  nativeChrome:
+                    nativeChromeRect === null
+                      ? null
+                      : {
+                          height: nativeChromeRect.height,
+                          bottom: nativeChromeRect.bottom
+                        }
                 }
               },
               { workbench: workbenchSelectors, window: windowSelectors }
@@ -300,13 +292,11 @@ describe('workbench conversation e2e', () => {
           }
         },
         assert: async (result, runtime) => {
-          const windowsControlsSafe =
+          const windowsChromeSeparated =
             result.sparseDragLayout?.platform !== 'win32' ||
-            (result.sparseDragLayout.controls.length === 3 &&
-              result.sparseDragLayout.controls.every(
-                (control) => control.appRegion === 'no-drag' && control.hitTestId !== null
-              ) &&
-              result.sparseDragLayout.toggleRight <= result.sparseDragLayout.controls[0].left)
+            (result.sparseDragLayout.nativeChrome !== null &&
+              Math.round(result.sparseDragLayout.nativeChrome.height) === 36 &&
+              result.sparseDragLayout.tabbarTop >= result.sparseDragLayout.nativeChrome.bottom)
 
           await runtime.assertThat(
             result.emptyLayout !== null &&
@@ -338,11 +328,11 @@ describe('workbench conversation e2e', () => {
               result.recoveredDragLayout !== null &&
               result.recoveredDragLayout.dragWidth > 40 &&
               result.recoveredDragLayout.hitTestId === workbenchSelectors.resourceTabDragRegion &&
-              windowsControlsSafe,
+              windowsChromeSeparated,
             {
               name: 'right-panel-empty-space-is-dynamically-draggable',
               message:
-                '右侧 Tab 后的空白区必须可拖拽；Tab 溢出时拖拽区应收缩，关闭 Tab 后应自动恢复，并避开 Windows 窗口按钮。',
+                '右侧 Tab 后的空白区必须可拖拽；Tab 溢出时拖拽区应收缩，关闭 Tab 后应自动恢复，并位于 Windows 原生窗口层下方。',
               data: {
                 sparse: result.sparseDragLayout,
                 dense: result.denseDragLayout,
@@ -363,7 +353,12 @@ describe('workbench conversation e2e', () => {
             {
               name: 'right-panel-tabbar-is-compact-and-scrollable',
               message: '右侧 Tab 栏应为 44px、无下边线、折叠按钮位于栏内，并支持溢出横向滚动。',
-              data: result.chromeLayout
+              data: {
+                fileMenuLabelVisible: result.fileMenuLabelVisible,
+                legacyFileMenuLabelCount: result.legacyFileMenuLabelCount,
+                tabCount: result.tabCount,
+                chromeLayout: result.chromeLayout
+              }
             }
           )
           await runtime.assertThat(

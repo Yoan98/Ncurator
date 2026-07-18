@@ -65,6 +65,9 @@ export const importSelectors = {
 
 export const settingsSelectors = {
   page: 'settings-page',
+  sidebar: 'settings-sidebar',
+  sidebarToggle: 'settings-sidebar-toggle',
+  backRow: 'settings-back-row',
   mainDragRegion: 'settings-main-drag-region',
   sidebarDragRegion: 'settings-sidebar-drag-region',
   helpButton: 'settings-help-button',
@@ -88,9 +91,9 @@ export const settingsSelectors = {
 } as const
 
 export const windowSelectors = {
-  minimizeButton: 'window-minimize-button',
-  maximizeButton: 'window-maximize-button',
-  closeButton: 'window-close-button'
+  nativeChrome: 'window-native-chrome',
+  nativeChromeDragRegion: 'window-native-chrome-drag-region',
+  content: 'window-content'
 } as const
 
 export const vectorSelectors = {
@@ -114,6 +117,7 @@ export const workbenchSelectors = {
   sidebar: 'workbench-sidebar',
   modeSwitch: 'workbench-mode-switch',
   aiPreferenceSwitch: 'workbench-ai-preference-switch',
+  sidebarBrand: 'workbench-sidebar-brand',
   sessionsList: 'workbench-sessions-list',
   sessionItemPrefix: 'workbench-session-item',
   sessionDeleteButtonPrefix: 'workbench-session-delete-button',

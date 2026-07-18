@@ -96,8 +96,8 @@ import {
   mergeApplyTargets
 } from '../components/workbench/applyTargetUtils'
 import { chatSelectors, workbenchSelectors } from '../testing/selectors'
-import WindowsTitleBar from '../components/WindowsTitleBar'
 import SidebarPanelIcon from '../components/SidebarPanelIcon'
+import brandIcon from '../../../../logo/png/ncurator-logo-24.png'
 import { collectReferenceDocumentIds, pruneReferencesByWorkspace } from '../utils/reference'
 import { useWorkbenchMode } from '../contexts/WorkbenchModeContext'
 import SidebarUpdateControl from '../components/update/SidebarUpdateControl'
@@ -3014,41 +3014,40 @@ const ChatPage: React.FC = () => {
 
   return (
     <div
-      className={`nc-app-shell ${platform === 'win32' ? 'nc-app-shell-windows' : ''}`}
+      className="nc-app-shell"
       data-testid={workbenchSelectors.page}
       data-workbench-mode={composerMode}
     >
-      {platform === 'win32' ? <WindowsTitleBar /> : null}
-      {platform !== 'win32' ? (
-        <div
-          className="nc-left-titlebar-chrome"
-          style={{
-            width: sidebarCollapsed ? WORKBENCH_LEFT_TITLEBAR_COLLAPSED_WIDTH : sidebarWidth
-          }}
-        >
+      <div
+        className="nc-left-titlebar-chrome"
+        style={{
+          width: sidebarCollapsed ? WORKBENCH_LEFT_TITLEBAR_COLLAPSED_WIDTH : sidebarWidth
+        }}
+      >
+        {platform === 'darwin' ? (
           <div className="nc-left-titlebar-window-controls" aria-hidden="true" />
-          <button
-            type="button"
-            className="nc-sidebar-titlebar-toggle nc-sidebar-titlebar-toggle-chrome workbench-no-drag"
-            style={WORKBENCH_NO_DRAG_STYLE}
-            onPointerDown={(event) => {
-              event.stopPropagation()
-            }}
-            onClick={(event) => {
-              event.stopPropagation()
-              setSidebarCollapsed((previous) => !previous)
-            }}
-            data-testid={workbenchSelectors.sessionsToggle}
-            aria-label={sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'}
-          >
-            <SidebarPanelIcon
-              className="h-4 w-4"
-              variant={sidebarCollapsed ? 'expand' : 'collapse'}
-            />
-          </button>
-          <div className="nc-left-titlebar-drag" aria-hidden="true" />
-        </div>
-      ) : null}
+        ) : null}
+        <button
+          type="button"
+          className="nc-sidebar-titlebar-toggle nc-sidebar-titlebar-toggle-chrome workbench-no-drag"
+          style={WORKBENCH_NO_DRAG_STYLE}
+          onPointerDown={(event) => {
+            event.stopPropagation()
+          }}
+          onClick={(event) => {
+            event.stopPropagation()
+            setSidebarCollapsed((previous) => !previous)
+          }}
+          data-testid={workbenchSelectors.sessionsToggle}
+          aria-label={sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'}
+        >
+          <SidebarPanelIcon
+            className="h-4 w-4"
+            variant={sidebarCollapsed ? 'expand' : 'collapse'}
+          />
+        </button>
+        <div className="nc-left-titlebar-drag" aria-hidden="true" />
+      </div>
       <aside
         className={`nc-sidebar ${platform === 'darwin' ? 'nc-sidebar-mac' : ''} ${
           sidebarCollapsed ? 'nc-sidebar-hidden' : ''
@@ -3056,10 +3055,21 @@ const ChatPage: React.FC = () => {
         style={{ width: sidebarWidth, flexBasis: sidebarWidth }}
         data-testid={workbenchSelectors.sidebar}
       >
-        <div
-          className={`nc-sidebar-window-spacer ${platform === 'darwin' ? 'nc-sidebar-window-spacer-mac' : ''}`}
-          aria-hidden="true"
-        />
+        {platform === 'win32' ? (
+          <div className="nc-sidebar-brand-row px-2" data-testid={workbenchSelectors.sidebarBrand}>
+            <div className="flex h-9 w-full items-center gap-2 px-3">
+              <img
+                src={brandIcon}
+                alt=""
+                className="h-[22px] w-[22px] shrink-0"
+                aria-hidden="true"
+              />
+              <span className="truncate text-[14px] font-semibold text-[#37352F]">馆长</span>
+            </div>
+          </div>
+        ) : (
+          <div className="nc-sidebar-window-spacer" aria-hidden="true" />
+        )}
 
         <div className="px-2 py-3">
           <button
@@ -3241,10 +3251,7 @@ const ChatPage: React.FC = () => {
         <div className="flex h-full min-h-0 overflow-hidden">
           <div className="relative flex min-w-0 flex-1 flex-col">
             {isNewSession ? (
-              <div
-                className={`nc-main-empty-titlebar ${contentPanelCollapsed ? 'nc-main-empty-titlebar-window-safe' : ''}`}
-                aria-hidden="true"
-              >
+              <div className="nc-main-empty-titlebar" aria-hidden="true">
                 <div
                   className="nc-main-empty-titlebar-safe-zone"
                   style={{
@@ -3314,10 +3321,6 @@ const ChatPage: React.FC = () => {
                   >
                     <SidebarPanelIcon className="h-4 w-4" variant="expand" />
                   </button>
-                ) : null}
-
-                {platform === 'win32' && contentPanelCollapsed ? (
-                  <div className="nc-topbar-window-controls-safe-zone" aria-hidden="true" />
                 ) : null}
               </div>
             ) : null}

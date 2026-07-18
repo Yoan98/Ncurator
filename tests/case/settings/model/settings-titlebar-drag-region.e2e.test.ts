@@ -19,14 +19,42 @@ type DragRegionSnapshot = {
     pointerEvents: string
     rect: { x: number; y: number; width: number; height: number }
   } | null
-  mainHitTestId: string | null
-  sidebarHitTestId: string | null
-  windowButtonHitTestId: string | null
-  windowButton: {
+  sidebarPanel: {
     appRegion: string
     pointerEvents: string
     rect: { x: number; y: number; width: number; height: number }
   } | null
+  sidebarToggle: {
+    appRegion: string
+    pointerEvents: string
+    rect: { x: number; y: number; width: number; height: number }
+  } | null
+  backRow: {
+    appRegion: string
+    pointerEvents: string
+    rect: { x: number; y: number; width: number; height: number }
+  } | null
+  mainHitTestId: string | null
+  sidebarHitTestId: string | null
+  nativeChrome: {
+    appRegion: string
+    pointerEvents: string
+    rect: { x: number; y: number; width: number; height: number }
+  } | null
+  nativeChromeDragRegion: {
+    appRegion: string
+    pointerEvents: string
+    rect: { x: number; y: number; width: number; height: number }
+  } | null
+  windowContent: {
+    appRegion: string
+    pointerEvents: string
+    rect: { x: number; y: number; width: number; height: number }
+  } | null
+  nativeChromeDragHitTestId: string | null
+  sidebarToggleHitTestId: string | null
+  viewportWidth: number
+  sidebarCollapseRoundTrip: boolean
   addModalVisible: boolean
 }
 
@@ -76,6 +104,9 @@ describe('settings model e2e', () => {
 
               const main = readRegion(selectors.mainDragRegion)
               const sidebar = readRegion(selectors.sidebarDragRegion)
+              const sidebarPanel = readRegion(selectors.sidebar)
+              const sidebarToggle = readRegion(selectors.sidebarToggle)
+              const backRow = readRegion(selectors.backRow)
               const mainHit = main
                 ? document.elementFromPoint(
                     main.rect.x + Math.min(120, Math.floor(main.rect.width / 2)),
@@ -88,32 +119,68 @@ describe('settings model e2e', () => {
                     sidebar.rect.y + 10
                   )
                 : null
-              const windowButton = readRegion(selectors.window.closeButton)
-              const windowButtonHit = windowButton
+              const nativeChrome = readRegion(selectors.window.nativeChrome)
+              const nativeChromeDragRegion = readRegion(selectors.window.nativeChromeDragRegion)
+              const windowContent = readRegion(selectors.window.content)
+              const nativeChromeDragHit = nativeChromeDragRegion
                 ? document.elementFromPoint(
-                    windowButton.rect.x + Math.floor(windowButton.rect.width / 2),
-                    windowButton.rect.y + Math.floor(windowButton.rect.height / 2)
+                    nativeChromeDragRegion.rect.x +
+                      Math.max(1, Math.floor(nativeChromeDragRegion.rect.width / 2)),
+                    nativeChromeDragRegion.rect.y +
+                      Math.max(1, Math.floor(nativeChromeDragRegion.rect.height / 2))
+                  )
+                : null
+              const sidebarToggleHit = sidebarToggle
+                ? document.elementFromPoint(
+                    sidebarToggle.rect.x + Math.floor(sidebarToggle.rect.width / 2),
+                    sidebarToggle.rect.y + Math.floor(sidebarToggle.rect.height / 2)
                   )
                 : null
 
               return {
                 platform: navigator.platform.toLowerCase().includes('win') ? 'win32' : 'darwin',
+                viewportWidth: window.innerWidth,
                 main,
                 sidebar,
+                sidebarPanel,
+                sidebarToggle,
+                backRow,
                 mainHitTestId:
                   mainHit instanceof HTMLElement ? mainHit.dataset.testid || null : null,
                 sidebarHitTestId:
                   sidebarHit instanceof HTMLElement ? sidebarHit.dataset.testid || null : null,
-                windowButton,
-                windowButtonHitTestId:
-                  windowButtonHit instanceof HTMLElement
-                    ? windowButtonHit.dataset.testid || null
+                nativeChrome,
+                nativeChromeDragRegion,
+                windowContent,
+                nativeChromeDragHitTestId:
+                  nativeChromeDragHit instanceof HTMLElement
+                    ? nativeChromeDragHit.dataset.testid || null
+                    : null,
+                sidebarToggleHitTestId:
+                  sidebarToggleHit instanceof Element
+                    ? sidebarToggleHit.closest<HTMLElement>('[data-testid]')?.dataset.testid || null
                     : null,
                 addModalVisible: false
               }
             },
             { ...settingsSelectors, window: windowSelectors }
           )
+
+          let sidebarCollapseRoundTrip = true
+          if (snapshot.platform === 'win32') {
+            const sidebarToggle = getSettingsLocator(page, settingsSelectors.sidebarToggle)
+            await sidebarToggle.click()
+            await page.waitForFunction((testId) => {
+              const sidebar = document.querySelector(`[data-testid="${testId}"]`)
+              return sidebar instanceof HTMLElement && sidebar.getBoundingClientRect().width <= 1
+            }, settingsSelectors.sidebar)
+            await sidebarToggle.click()
+            await page.waitForFunction((testId) => {
+              const sidebar = document.querySelector(`[data-testid="${testId}"]`)
+              return sidebar instanceof HTMLElement && sidebar.getBoundingClientRect().width > 100
+            }, settingsSelectors.sidebar)
+            sidebarCollapseRoundTrip = true
+          }
 
           await runtime.step({
             name: 'verify-actions-not-blocked',
@@ -128,6 +195,7 @@ describe('settings model e2e', () => {
 
           return {
             ...snapshot,
+            sidebarCollapseRoundTrip,
             addModalVisible: await getSettingsLocator(
               page,
               settingsSelectors.modelBaseUrlInput
@@ -138,7 +206,7 @@ describe('settings model e2e', () => {
           await runtime.assertThat(
             result.main?.appRegion === 'drag' &&
               result.main.pointerEvents === 'auto' &&
-              result.main.rect.height === 52 &&
+              result.main.rect.height === 44 &&
               result.mainHitTestId === settingsSelectors.mainDragRegion,
             {
               name: 'main-titlebar-hit-target-is-draggable',
@@ -148,10 +216,11 @@ describe('settings model e2e', () => {
           )
 
           await runtime.assertThat(
-            result.sidebar?.appRegion === 'drag' &&
-              result.sidebar.pointerEvents === 'auto' &&
-              result.sidebar.rect.height === 52 &&
-              result.sidebarHitTestId === settingsSelectors.sidebarDragRegion,
+            result.platform === 'win32' ||
+              (result.sidebar?.appRegion === 'drag' &&
+                result.sidebar.pointerEvents === 'auto' &&
+                result.sidebar.rect.height === 44 &&
+                result.sidebarHitTestId === settingsSelectors.sidebarDragRegion),
             {
               name: 'sidebar-titlebar-hit-target-is-draggable',
               message: '设置页侧栏顶部避开系统按钮后，也应保留可拖动窗口区域。',
@@ -160,16 +229,41 @@ describe('settings model e2e', () => {
           )
 
           await runtime.assertThat(
-            result.platform !== 'win32' ||
-              (result.windowButton?.appRegion === 'no-drag' &&
-                result.windowButton.pointerEvents !== 'none' &&
-                result.main !== null &&
-                result.main.rect.x + result.main.rect.width <= result.windowButton.rect.x &&
-                (result.windowButtonHitTestId === windowSelectors.closeButton ||
-                  result.windowButtonHitTestId === null)),
+            (() => {
+              const nativeControlButtonWidth = result.nativeChromeDragRegion
+                ? (result.viewportWidth -
+                    (result.nativeChromeDragRegion.rect.x +
+                      result.nativeChromeDragRegion.rect.width)) /
+                  3
+                : 0
+              return (
+                result.platform !== 'win32' ||
+                (result.nativeChrome !== null &&
+                  result.nativeChrome.rect.height === 36 &&
+                  result.nativeChromeDragRegion?.appRegion === 'drag' &&
+                  result.nativeChromeDragRegion.pointerEvents === 'auto' &&
+                  result.nativeChromeDragHitTestId === windowSelectors.nativeChromeDragRegion &&
+                  result.windowContent !== null &&
+                  result.windowContent.rect.y >=
+                    result.nativeChrome.rect.y + result.nativeChrome.rect.height &&
+                  result.main !== null &&
+                  result.main.rect.y >= result.windowContent.rect.y &&
+                  result.sidebarPanel !== null &&
+                  result.sidebarPanel.rect.y === result.windowContent.rect.y &&
+                  result.sidebarToggle?.appRegion === 'no-drag' &&
+                  result.sidebarToggleHitTestId === settingsSelectors.sidebarToggle &&
+                  result.sidebarToggle.rect.x === 0 &&
+                  result.sidebarToggle.rect.y === 0 &&
+                  result.sidebarToggle.rect.height === 36 &&
+                  Math.abs(result.sidebarToggle.rect.width - nativeControlButtonWidth) < 2 &&
+                  result.backRow !== null &&
+                  result.backRow.rect.y - result.windowContent.rect.y < 20 &&
+                  result.sidebarCollapseRoundTrip)
+              )
+            })(),
             {
-              name: 'windows-titlebar-buttons-are-not-covered-by-drag-region',
-              message: 'Windows 右上角窗口按钮所在区域不能被设置页拖拽层覆盖。',
+              name: 'windows-native-titlebar-is-separated-from-settings',
+              message: 'Windows 原生窗口按钮层必须独立位于设置页业务内容上方。',
               data: result
             }
           )

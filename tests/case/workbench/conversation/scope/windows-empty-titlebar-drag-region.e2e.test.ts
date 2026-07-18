@@ -11,14 +11,32 @@ import {
 type RegionSnapshot = {
   appRegion: string
   pointerEvents: string
-  rect: { x: number; y: number; width: number; height: number; right: number }
+  rect: {
+    x: number
+    y: number
+    width: number
+    height: number
+    right: number
+    bottom: number
+  }
   hitTestId: string | null
 }
 
 type EmptyTitlebarSnapshot = {
   platform: 'darwin' | 'win32' | 'other'
   dragRegion: RegionSnapshot | null
-  windowControls: RegionSnapshot[]
+  nativeChrome: RegionSnapshot | null
+  nativeChromeDragRegion: RegionSnapshot | null
+  windowContent: RegionSnapshot | null
+  sessionsToggle: RegionSnapshot | null
+  sidebarBrand: RegionSnapshot | null
+  brandIconLeft: number | null
+  newSessionIconLeft: number | null
+  viewportWidth: number
+  overlay: {
+    visible: boolean
+    rect: { x: number; y: number; width: number; height: number }
+  } | null
 }
 
 describe('workbench conversation e2e', () => {
@@ -30,8 +48,7 @@ describe('workbench conversation e2e', () => {
         domain: 'workbench',
         suite: 'conversation',
         groups: ['scope'],
-        description:
-          'The empty conversation drag region stays outside the custom Windows window controls.',
+        description: 'Windows uses a native controls overlay above the shared application content.',
         fixtures: [],
         runMode: 'single',
         execute: async ({ page }) => {
@@ -39,6 +56,14 @@ describe('workbench conversation e2e', () => {
           await getWorkbenchLocator(page, workbenchSelectors.emptyDragRegion).waitFor({
             state: 'visible'
           })
+          const isWindows = await page.evaluate(() =>
+            navigator.userAgent.toLowerCase().includes('windows')
+          )
+          if (isWindows) {
+            await getWorkbenchLocator(page, workbenchSelectors.sidebarBrand).waitFor({
+              state: 'visible'
+            })
+          }
 
           return await page.evaluate(
             (selectors) => {
@@ -62,11 +87,22 @@ describe('workbench conversation e2e', () => {
                     y: rect.y,
                     width: rect.width,
                     height: rect.height,
-                    right: rect.right
+                    right: rect.right,
+                    bottom: rect.bottom
                   },
                   hitTestId: hitTarget?.dataset.testid || null
                 }
               }
+
+              const overlayApi = (
+                navigator as unknown as {
+                  windowControlsOverlay?: {
+                    visible: boolean
+                    getTitlebarAreaRect: () => DOMRect
+                  }
+                }
+              ).windowControlsOverlay
+              const overlayRect = overlayApi?.getTitlebarAreaRect()
 
               const userAgent = navigator.userAgent.toLowerCase()
               const platform = userAgent.includes('windows')
@@ -74,17 +110,44 @@ describe('workbench conversation e2e', () => {
                 : userAgent.includes('macintosh')
                   ? 'darwin'
                   : 'other'
+              const sidebarBrand = document.querySelector(
+                `[data-testid="${selectors.sidebarBrand}"]`
+              )
+              const brandIcon = sidebarBrand?.querySelector('img')
+              const newSessionButton = document.querySelector(
+                `[data-testid="${selectors.newSessionButton}"]`
+              )
+              const newSessionIcon = newSessionButton?.querySelector('svg')
 
               return {
                 platform,
+                viewportWidth: window.innerWidth,
                 dragRegion: readRegion(selectors.emptyDragRegion),
-                windowControls: [
-                  selectors.window.minimizeButton,
-                  selectors.window.maximizeButton,
-                  selectors.window.closeButton
-                ]
-                  .map(readRegion)
-                  .filter((region): region is RegionSnapshot => region !== null)
+                nativeChrome: readRegion(selectors.window.nativeChrome),
+                nativeChromeDragRegion: readRegion(selectors.window.nativeChromeDragRegion),
+                windowContent: readRegion(selectors.window.content),
+                sessionsToggle: readRegion(selectors.sessionsToggle),
+                sidebarBrand: readRegion(selectors.sidebarBrand),
+                brandIconLeft:
+                  brandIcon instanceof SVGElement || brandIcon instanceof HTMLElement
+                    ? brandIcon.getBoundingClientRect().left
+                    : null,
+                newSessionIconLeft:
+                  newSessionIcon instanceof SVGElement || newSessionIcon instanceof HTMLElement
+                    ? newSessionIcon.getBoundingClientRect().left
+                    : null,
+                overlay:
+                  overlayApi && overlayRect
+                    ? {
+                        visible: overlayApi.visible,
+                        rect: {
+                          x: overlayRect.x,
+                          y: overlayRect.y,
+                          width: overlayRect.width,
+                          height: overlayRect.height
+                        }
+                      }
+                    : null
               }
             },
             { ...workbenchSelectors, window: windowSelectors }
@@ -105,20 +168,55 @@ describe('workbench conversation e2e', () => {
 
           await runtime.assertThat(
             result.platform !== 'win32' ||
-              (result.windowControls.length === 3 &&
-                result.windowControls.every(
-                  (control) =>
-                    control.appRegion === 'no-drag' &&
-                    control.pointerEvents !== 'none' &&
-                    control.hitTestId !== null
-                ) &&
+              (result.nativeChrome !== null &&
+                Math.round(result.nativeChrome.rect.height) === 36 &&
+                result.nativeChromeDragRegion?.appRegion === 'drag' &&
+                result.nativeChromeDragRegion.pointerEvents === 'auto' &&
+                result.nativeChromeDragRegion.hitTestId ===
+                  windowSelectors.nativeChromeDragRegion &&
+                result.windowContent !== null &&
+                result.windowContent.rect.y >= result.nativeChrome.rect.bottom &&
                 result.dragRegion !== null &&
-                result.dragRegion.rect.right <= result.windowControls[0].rect.x),
+                result.dragRegion.rect.y >= result.windowContent.rect.y &&
+                result.overlay?.visible === true &&
+                Math.round(result.overlay.rect.height) === 36),
             {
-              name: 'windows-controls-are-outside-empty-drag-region',
+              name: 'windows-native-chrome-is-separated-from-app-content',
               message:
-                'The empty conversation drag target must end before all three Windows controls.',
+                'Windows native controls must occupy a dedicated 36px overlay above application content.',
               data: result
+            }
+          )
+
+          const nativeControlButtonWidth = result.overlay
+            ? (result.viewportWidth - (result.overlay.rect.x + result.overlay.rect.width)) / 3
+            : 0
+          await runtime.assertThat(
+            result.platform !== 'win32' ||
+              (result.sessionsToggle?.appRegion === 'no-drag' &&
+                result.sessionsToggle.hitTestId === workbenchSelectors.sessionsToggle &&
+                Math.abs(result.sessionsToggle.rect.x) < 1 &&
+                Math.abs(result.sessionsToggle.rect.y) < 1 &&
+                Math.abs(result.sessionsToggle.rect.height - 36) < 1 &&
+                Math.abs(result.sessionsToggle.rect.width - nativeControlButtonWidth) < 2 &&
+                result.sidebarBrand !== null &&
+                result.windowContent !== null &&
+                Math.abs(result.sidebarBrand.rect.y - result.windowContent.rect.y) < 1 &&
+                Math.abs(result.sidebarBrand.rect.height - 36) < 1 &&
+                result.brandIconLeft !== null &&
+                result.newSessionIconLeft !== null &&
+                Math.abs(result.brandIconLeft - result.newSessionIconLeft) < 1),
+            {
+              name: 'windows-sidebar-toggle-and-brand-are-aligned',
+              message:
+                'The Windows sidebar toggle must mirror native control spacing, while the brand aligns with sidebar actions.',
+              data: {
+                sessionsToggle: result.sessionsToggle,
+                nativeControlButtonWidth,
+                sidebarBrand: result.sidebarBrand,
+                brandIconLeft: result.brandIconLeft,
+                newSessionIconLeft: result.newSessionIconLeft
+              }
             }
           )
         }

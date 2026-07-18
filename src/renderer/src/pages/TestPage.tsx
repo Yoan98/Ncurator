@@ -143,7 +143,7 @@ function TestPage(): React.JSX.Element {
   }, [view])
 
   return (
-    <div className="h-screen overflow-hidden bg-[#FFFFFF]">
+    <div className="h-full overflow-hidden bg-[#FFFFFF]">
       <div className="mx-auto flex h-full w-full max-w-[1360px] flex-col gap-5 px-5 py-5 font-sans lg:px-6">
         <AppPageHeader
           icon={<HiCube className="h-5 w-5" />}

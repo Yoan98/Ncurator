@@ -67,15 +67,18 @@
   --ui-tooltip-shadow: 0 10px 28px rgba(15, 15, 15, 0.1);
   --app-sidebar-width: 240px;
   --app-sidebar-collapsed-width: 0px;
-  --app-sidebar-mac-window-spacer-height: 36px;
+  --window-native-titlebar-height: 36px;
+  --window-native-control-button-width: 46px;
+  --window-native-controls-fallback-width: calc(var(--window-native-control-button-width) * 3);
   --workbench-titlebar-height: 44px;
   --workbench-left-titlebar-collapsed-width: 170px;
-  /* Windows 自绘窗口按钮区宽度，供标题栏与右侧安全区共用，保证折叠图标不被遮挡 */
-  --windows-titlebar-button-width: 48px;
-  --windows-window-controls-width: calc(var(--windows-titlebar-button-width) * 3);
 }
 
+html,
 body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
   background-color: var(--color-bg-primary);
   color: var(--color-text-primary);
   font-family:
@@ -92,7 +95,9 @@ body {
 }
 
 #root {
-  min-height: 100vh;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
 }
 
 button:not(:disabled),
@@ -243,25 +248,62 @@ textarea,
   background-color: var(--notion-surface-hover);
 }
 
-.nc-app-shell {
-  @apply flex min-h-screen bg-[#FBFBFA] text-[#37352F];
+.nc-window-frame {
+  display: flex;
+  width: 100%;
+  height: 100vh;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+  background: #fbfbfa;
 }
 
-/* 顶部 chrome 区域可拖拽，交互控件单独标记 no-drag */
-.nc-app-shell-windows .nc-sidebar-header,
-.nc-sidebar-header {
+.nc-native-window-chrome {
+  position: relative;
+  z-index: 200;
+  flex: 0 0 var(--window-native-titlebar-height);
+  height: var(--window-native-titlebar-height);
+  background: #fbfbfa;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-app-region: no-drag;
+}
+
+.nc-native-window-chrome-drag-region {
+  position: absolute;
+  top: env(titlebar-area-y, 0px);
+  left: env(titlebar-area-x, 0px);
+  width: env(titlebar-area-width, calc(100% - var(--window-native-controls-fallback-width)));
+  height: env(titlebar-area-height, var(--window-native-titlebar-height));
+  pointer-events: auto;
   -webkit-app-region: drag;
 }
 
-.nc-app-shell-windows button,
-.nc-app-shell-windows a,
-.nc-app-shell-windows input,
-.nc-app-shell-windows textarea,
-.nc-app-shell-windows select,
-.nc-app-shell-windows [contenteditable='true'],
-.nc-app-shell-windows .ant-select,
-.nc-app-shell-windows .ant-btn {
-  -webkit-app-region: no-drag;
+.nc-window-content {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+.nc-window-frame-windows .nc-window-content {
+  height: calc(100% - var(--window-native-titlebar-height));
+  flex: 0 0 calc(100% - var(--window-native-titlebar-height));
+}
+
+.nc-app-shell {
+  @apply flex bg-[#FBFBFA] text-[#37352F];
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+/* 顶部 chrome 区域可拖拽，交互控件单独标记 no-drag */
+.nc-sidebar-header {
+  -webkit-app-region: drag;
 }
 
 .nc-app-shell button,
@@ -279,26 +321,11 @@ textarea,
   -webkit-app-region: no-drag;
 }
 
-.windows-titlebar {
-  @apply fixed right-0 top-0 z-50 flex select-none items-stretch gap-0 overflow-hidden rounded-tr-[18px] bg-white/90 backdrop-blur-[10px];
-  width: var(--windows-window-controls-width);
-  height: var(--workbench-titlebar-height);
-  -webkit-app-region: no-drag;
-}
-
-.windows-titlebar-button {
-  @apply flex flex-1 items-center justify-center text-[#787774] transition-colors hover:bg-[#F4F4F2];
-  -webkit-app-region: no-drag;
-}
-
-.windows-titlebar-close:hover {
-  @apply bg-[#B3261E] text-white;
-}
-
 .nc-sidebar {
-  @apply flex h-screen flex-col bg-[#FBFBFA];
+  @apply flex flex-col bg-[#FBFBFA];
   position: relative;
   z-index: 1;
+  height: 100%;
   width: var(--app-sidebar-width);
   flex: 0 0 var(--app-sidebar-width);
   transform: translateX(0);
@@ -328,7 +355,7 @@ textarea,
 }
 
 .nc-left-titlebar-chrome {
-  position: fixed;
+  position: absolute;
   top: 0;
   left: 0;
   z-index: 100;
@@ -337,6 +364,25 @@ textarea,
   width: var(--app-sidebar-width);
   height: var(--workbench-titlebar-height);
   pointer-events: none;
+}
+
+.nc-window-frame-windows .nc-left-titlebar-chrome {
+  position: fixed;
+  top: 0;
+  width: var(--window-native-control-button-width) !important;
+  height: var(--window-native-titlebar-height);
+  z-index: 220;
+}
+
+.nc-window-frame-windows .nc-sidebar-titlebar-toggle-chrome {
+  width: var(--window-native-control-button-width);
+  height: var(--window-native-titlebar-height);
+  flex-basis: var(--window-native-control-button-width);
+  border-radius: 0;
+}
+
+.nc-window-frame-windows .nc-left-titlebar-drag {
+  display: none;
 }
 
 .nc-left-titlebar-window-controls {
@@ -416,11 +462,16 @@ textarea,
 }
 
 .nc-sidebar-window-spacer {
-  flex: 0 0 12px;
+  flex: 0 0 36px;
 }
 
-.nc-sidebar-window-spacer-mac {
-  flex-basis: var(--app-sidebar-mac-window-spacer-height);
+.nc-sidebar-brand-row {
+  display: flex;
+  flex: 0 0 36px;
+  height: 36px;
+  align-items: center;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 /* macOS: 标题栏区域额外高度 */
@@ -623,13 +674,11 @@ textarea,
   -webkit-app-region: no-drag;
 }
 
-.nc-app-shell-windows .nc-resource-tabbar {
-  padding-right: calc(var(--windows-window-controls-width) + 8px);
-}
-
 .nc-resource-tabbar {
   position: relative;
   z-index: 4;
+  height: var(--workbench-titlebar-height);
+  flex-shrink: 0;
 }
 
 .nc-resource-tabbar-drag-region {
@@ -678,14 +727,6 @@ textarea,
   pointer-events: none;
 }
 
-/* Windows 自绘窗口按钮预留区，把折叠图标顶到 min/max/close 左侧，避免被遮挡 */
-.nc-topbar-window-controls-safe-zone {
-  flex: 0 0 var(--windows-window-controls-width);
-  height: 100%;
-  pointer-events: none;
-  -webkit-app-region: no-drag;
-}
-
 .nc-topbar-title-region {
   align-self: stretch;
   display: flex;
@@ -713,11 +754,6 @@ textarea,
   pointer-events: none;
 }
 
-/* Keep the draggable hit target physically outside the custom Windows controls. */
-.nc-app-shell-windows .nc-main-empty-titlebar-window-safe {
-  right: var(--windows-window-controls-width);
-}
-
 .nc-main-empty-titlebar-safe-zone {
   flex: 0 0 auto;
   height: 100%;
@@ -737,9 +773,13 @@ textarea,
 .nc-main-pane {
   @apply flex min-h-0 flex-1 flex-col overflow-hidden rounded-l-[18px] border border-[#EEEEEC] bg-white;
   border-left-color: #e0dfdc;
-  height: 100vh;
+  height: 100%;
   margin: 0;
   box-shadow: none;
+}
+
+.nc-window-frame-windows .nc-main-pane {
+  border-top-right-radius: 18px;
 }
 
 .nc-sidebar-resizer {
@@ -799,7 +839,7 @@ textarea,
 }
 
 .nc-settings-left-titlebar-chrome {
-  position: fixed;
+  position: absolute;
   top: 0;
   left: 0;
   z-index: 100;
@@ -827,10 +867,6 @@ textarea,
   height: var(--workbench-titlebar-height);
   pointer-events: auto;
   -webkit-app-region: drag;
-}
-
-.nc-app-shell-windows .nc-settings-main-titlebar-drag {
-  right: var(--windows-window-controls-width);
 }
 
 .nc-settings-header {

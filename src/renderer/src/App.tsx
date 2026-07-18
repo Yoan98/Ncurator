@@ -8,6 +8,7 @@ import ModelDownloadPage from './pages/ModelDownloadPage'
 import NotificationCenter from './components/NotificationCenter'
 import { WorkbenchModeProvider } from './contexts/WorkbenchModeProvider'
 import { AppUpdateProvider } from './contexts/AppUpdateProvider'
+import AppWindowFrame from './components/app/AppWindowFrame'
 
 const { Content } = Layout
 
@@ -88,8 +89,10 @@ function App(): React.JSX.Element {
         <AppUpdateProvider>
           <WorkbenchModeProvider>
             <HashRouter>
-              <MainLayout />
-              <NotificationCenter />
+              <AppWindowFrame>
+                <MainLayout />
+                <NotificationCenter />
+              </AppWindowFrame>
             </HashRouter>
           </WorkbenchModeProvider>
         </AppUpdateProvider>
@@ -99,8 +102,8 @@ function App(): React.JSX.Element {
 }
 
 const MainLayout: React.FC = () => (
-  <Layout className="min-h-screen bg-[var(--notion-canvas)]">
-    <Content className="overflow-auto bg-[var(--notion-canvas)]">
+  <Layout className="h-full min-h-0 bg-[var(--notion-canvas)]">
+    <Content className="h-full min-h-0 overflow-hidden bg-[var(--notion-canvas)]">
       <Routes>
         <Route path="/" element={<ConversationWorkbenchPage />} />
         <Route path="/chat" element={<Navigate to="/" replace />} />

@@ -68,10 +68,20 @@ function createWindow(): BrowserWindow {
     minHeight: MIN_WINDOW_HEIGHT,
     show: false,
     autoHideMenuBar: true,
+    backgroundColor: '#FBFBFA',
     ...(process.platform === 'darwin'
       ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 16, y: 16 } }
       : {}),
-    ...(process.platform === 'win32' ? { frame: false } : {}),
+    ...(process.platform === 'win32'
+      ? {
+          titleBarStyle: 'hidden',
+          titleBarOverlay: {
+            color: '#FBFBFA',
+            symbolColor: '#37352F',
+            height: 36
+          }
+        }
+      : {}),
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
