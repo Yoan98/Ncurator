@@ -653,6 +653,9 @@ const ChatPage: React.FC = () => {
   const [contentPanelShellMounted, setContentPanelShellMounted] = useState(false)
   const [contentPanelShellVisible, setContentPanelShellVisible] = useState(false)
   const [browserPresentationEnabled, setBrowserPresentationEnabled] = useState(false)
+  const [contentPanelCollapsedByWorkspace, setContentPanelCollapsedByWorkspace] = useState<
+    Record<string, boolean>
+  >({})
 
   const [activeApplyRecord, setActiveApplyRecord] = useState<AiFileChangeRecord | null>(null)
   const [fileChangeRecords, setFileChangeRecords] = useState<AiFileChangeRecord[]>([])
@@ -1035,8 +1038,14 @@ const ChatPage: React.FC = () => {
   const collapseContentPanel = useCallback((): void => {
     setBrowserPresentationEnabled(false)
     void window.api.browserPanelHide()
+    setContentPanelCollapsedByWorkspace((current) => ({ ...current, [tabWorkspaceKey]: true }))
     setContentPanelCollapsed(true)
-  }, [])
+  }, [tabWorkspaceKey])
+
+  const expandContentPanel = useCallback((): void => {
+    setContentPanelCollapsedByWorkspace((current) => ({ ...current, [tabWorkspaceKey]: false }))
+    setContentPanelCollapsed(false)
+  }, [tabWorkspaceKey])
 
   const showContentPanel = useCallback(
     (nextState: WorkbenchContentPanelState): void => {
@@ -1047,9 +1056,9 @@ const ChatPage: React.FC = () => {
       if (nextState.kind === 'empty' || nextState.kind === 'search_list') {
         updateCurrentTabWorkspace((current) => ({ ...current, activeTabId: null }))
       }
-      setContentPanelCollapsed(false)
+      expandContentPanel()
     },
-    [contentPanel.kind, updateCurrentTabWorkspace]
+    [contentPanel.kind, expandContentPanel, updateCurrentTabWorkspace]
   )
 
   const openResourceTab = useCallback(
@@ -1069,9 +1078,9 @@ const ChatPage: React.FC = () => {
         return { tabs, activeTabId: tab.id }
       })
       setContentPanel(tab.state)
-      setContentPanelCollapsed(false)
+      expandContentPanel()
     },
-    [contentPanel, updateCurrentTabWorkspace]
+    [contentPanel, expandContentPanel, updateCurrentTabWorkspace]
   )
 
   const openBrowserTab = useCallback(
@@ -1392,12 +1401,15 @@ const ChatPage: React.FC = () => {
         __draft__: EMPTY_TAB_WORKSPACE
       }))
       setContentPanel(createEmptyPanel())
-      collapseContentPanel()
+      setBrowserPresentationEnabled(false)
+      void window.api.browserPanelHide()
+      setContentPanelCollapsedByWorkspace((current) => ({ ...current, __draft__: true }))
+      setContentPanelCollapsed(true)
       resetApplyWorkspaceState()
       setFileChangeRecords([])
       void refreshContextUsage(null)
     },
-    [applyComposerDraft, collapseContentPanel, refreshContextUsage, saveComposerDraftForSession]
+    [applyComposerDraft, refreshContextUsage, saveComposerDraftForSession]
   )
 
   const loadApplyRecord = async (input: {
@@ -1560,7 +1572,9 @@ const ChatPage: React.FC = () => {
     setPendingUserTakeover(null)
     setUserTakeoverConfirming(false)
     setContentPanel(createEmptyPanel())
-    collapseContentPanel()
+    setBrowserPresentationEnabled(false)
+    void window.api.browserPanelHide()
+    setContentPanelCollapsed(true)
     resetApplyWorkspaceState()
 
     void loadSessionOpen(session.id, requestId).then(() => {
@@ -1569,12 +1583,13 @@ const ChatPage: React.FC = () => {
       const activeTab = savedWorkspace?.tabs.find((tab) => tab.id === savedWorkspace.activeTabId)
       if (!activeTab) {
         setContentPanel(createEmptyPanel())
-        collapseContentPanel()
+        setContentPanelCollapsedByWorkspace((current) => ({ ...current, [session.id]: true }))
+        setContentPanelCollapsed(true)
         resetApplyWorkspaceState()
         return
       }
       setContentPanel(activeTab.state)
-      collapseContentPanel()
+      setContentPanelCollapsed(contentPanelCollapsedByWorkspace[session.id] ?? true)
       if (
         activeTab.state.kind === 'apply_workspace' &&
         activeTab.state.applyId &&
@@ -1897,7 +1912,7 @@ const ChatPage: React.FC = () => {
       }
       updateCurrentTabWorkspace((current) => ({ ...current, activeTabId: tabId }))
       setContentPanel(tab.state)
-      setContentPanelCollapsed(false)
+      expandContentPanel()
       if (tab.kind === 'browser' && tab.browserTabId) {
         void window.api.browserTabActivate({ tabId: tab.browserTabId })
       }
@@ -1909,7 +1924,7 @@ const ChatPage: React.FC = () => {
         void loadApplyRecordRef.current({ applyId: tab.state.applyId })
       }
     },
-    [contentPanel, tabWorkspace.tabs, updateCurrentTabWorkspace]
+    [contentPanel, expandContentPanel, tabWorkspace.tabs, updateCurrentTabWorkspace]
   )
 
   const closeResourceTab = useCallback(
@@ -3314,7 +3329,7 @@ const ChatPage: React.FC = () => {
                     title="展开右侧栏"
                     onClick={() => {
                       setContentPanelShellMounted(true)
-                      setContentPanelCollapsed(false)
+                      expandContentPanel()
                     }}
                     data-testid={workbenchSelectors.contentPanelToggle}
                     aria-label="展开右侧栏"
@@ -3358,7 +3373,7 @@ const ChatPage: React.FC = () => {
                     title="展开右侧栏"
                     onClick={() => {
                       setContentPanelShellMounted(true)
-                      setContentPanelCollapsed(false)
+                      expandContentPanel()
                     }}
                     data-testid={workbenchSelectors.contentPanelToggle}
                     aria-label="展开右侧栏"

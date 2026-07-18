@@ -39,6 +39,18 @@ type ChatMessageRow = {
   created_at?: unknown
 }
 
+export type ConversationMemoryContext = {
+  memory: ChatConversationMemory | null
+  recentMessages: ChatMessage[]
+}
+
+export type ConversationMemoryCompaction = ConversationMemoryContext & {
+  messagesToSummarize: ChatMessage[]
+  targetCoveredMessageId: string
+  targetCoveredTimestamp: number
+  targetCoveredMessageCount: number
+}
+
 const toChatRole = (value: unknown): ChatMessage['role'] => {
   const role = String(value || '')
   if (role === 'assistant' || role === 'system') return role
@@ -81,6 +93,37 @@ export class ChatStore {
     )
   }
 
+  private readConversationMemory(sessionId: string): ChatConversationMemory | null {
+    const row = this.sqlite
+      .prepare('SELECT memory_json FROM chat_conversation_memory WHERE session_id = ?')
+      .get(sessionId) as { memory_json?: unknown } | undefined
+    const memory = parseJsonObject(row?.memory_json)
+    return this.isValidConversationMemory(memory)
+      ? {
+          ...memory,
+          revision: typeof memory.revision === 'number' ? memory.revision : 0
+        }
+      : null
+  }
+
+  private findFirstMessageAfterMemory(
+    messages: ChatMessage[],
+    memory: ChatConversationMemory | null
+  ): number {
+    if (!memory?.coveredMessageId) return 0
+
+    const coveredIndex = messages.findIndex((message) => message.id === memory.coveredMessageId)
+    if (coveredIndex >= 0) return coveredIndex + 1
+
+    if (typeof memory.coveredTimestamp === 'number') {
+      const firstRecentIndex = messages.findIndex(
+        (message) => message.timestamp > Number(memory.coveredTimestamp)
+      )
+      return firstRecentIndex >= 0 ? firstRecentIndex : messages.length
+    }
+    return 0
+  }
+
   public async saveConversationMemory(
     sessionId: string,
     memory: ChatConversationMemory
@@ -100,11 +143,31 @@ export class ChatStore {
   }
 
   public async getConversationMemory(sessionId: string): Promise<ChatConversationMemory | null> {
-    const row = this.sqlite
-      .prepare('SELECT memory_json FROM chat_conversation_memory WHERE session_id = ?')
-      .get(sessionId) as { memory_json?: unknown } | undefined
-    const memory = parseJsonObject(row?.memory_json)
-    return this.isValidConversationMemory(memory) ? memory : null
+    return this.readConversationMemory(sessionId)
+  }
+
+  public async saveConversationMemoryIfCurrent(input: {
+    sessionId: string
+    expectedRevision: number
+    memory: ChatConversationMemory
+  }): Promise<boolean> {
+    return this.sqlite.transaction(() => {
+      const current = this.readConversationMemory(input.sessionId)
+      if ((current?.revision || 0) !== input.expectedRevision) return false
+      this.sqlite
+        .prepare(
+          `
+          INSERT OR REPLACE INTO chat_conversation_memory (session_id, memory_json, updated_at)
+          VALUES (@session_id, @memory_json, @updated_at)
+        `
+        )
+        .run({
+          session_id: input.sessionId,
+          memory_json: JSON.stringify(input.memory),
+          updated_at: input.memory.updatedAt
+        })
+      return true
+    })
   }
 
   public async clearConversationMemory(sessionId: string): Promise<void> {
@@ -348,56 +411,63 @@ export class ChatStore {
   }
 
   public async getMessagesAfterConversationMemory(sessionId: string): Promise<ChatMessage[]> {
-    const messages = await this.getChatMessages(sessionId)
-    const memory = await this.getConversationMemory(sessionId)
-    if (!memory?.coveredMessageId) return messages
-
-    const coveredIndex = messages.findIndex((message) => message.id === memory.coveredMessageId)
-    if (coveredIndex >= 0) return messages.slice(coveredIndex + 1)
-
-    if (typeof memory.coveredTimestamp === 'number') {
-      return messages.filter((message) => message.timestamp > Number(memory.coveredTimestamp))
-    }
-    return messages
+    return (await this.getConversationMemoryContext(sessionId)).recentMessages
   }
 
-  public async getNextConversationMemoryBatch(input: {
+  public async getConversationMemoryContext(
     sessionId: string
-    batchSize: number
-  }): Promise<{
-    memory: ChatConversationMemory | null
-    batch: ChatMessage[]
-    targetCoveredMessageId: string | null
-    targetCoveredTimestamp: number | null
-    targetCoveredMessageCount: number
-  }> {
-    const messages = await this.getChatMessages(input.sessionId)
-    const memory = await this.getConversationMemory(input.sessionId)
-    const batchSize = Math.max(1, Math.min(50, Number(input.batchSize || 12)))
-    let startIndex = 0
+  ): Promise<ConversationMemoryContext> {
+    return this.sqlite.transaction(() => {
+      const memory = this.readConversationMemory(sessionId)
+      const rows = this.sqlite
+        .prepare('SELECT * FROM chat_message WHERE session_id = ? ORDER BY seq ASC')
+        .all(sessionId) as ChatMessageRow[]
+      const messages = rows.map(toMessage)
+      const startIndex = this.findFirstMessageAfterMemory(messages, memory)
+      return {
+        memory,
+        recentMessages: messages.slice(startIndex)
+      }
+    })
+  }
 
-    if (memory?.coveredMessageId) {
-      const coveredIndex = messages.findIndex((message) => message.id === memory.coveredMessageId)
-      if (coveredIndex >= 0) {
-        startIndex = coveredIndex + 1
-      } else if (typeof memory.coveredTimestamp === 'number') {
-        startIndex = messages.findIndex(
-          (message) => message.timestamp > Number(memory.coveredTimestamp)
-        )
-        if (startIndex < 0) startIndex = messages.length
+  public async getConversationMemoryCompaction(input: {
+    sessionId: string
+    recentTurns: number
+    triggerTurns: number
+  }): Promise<ConversationMemoryCompaction | null> {
+    const context = await this.getConversationMemoryContext(input.sessionId)
+    const recentTurns = Math.max(1, Math.floor(input.recentTurns))
+    const triggerTurns = Math.max(recentTurns + 1, Math.floor(input.triggerTurns))
+    const turnStartIndexes: number[] = []
+    for (let index = 0; index < context.recentMessages.length; index += 1) {
+      if (context.recentMessages[index].role !== 'user') continue
+      const nextUserIndex = context.recentMessages.findIndex(
+        (message, candidateIndex) => candidateIndex > index && message.role === 'user'
+      )
+      const turnEndIndex = nextUserIndex >= 0 ? nextUserIndex : context.recentMessages.length
+      if (
+        context.recentMessages
+          .slice(index + 1, turnEndIndex)
+          .some((message) => message.role === 'assistant')
+      ) {
+        turnStartIndexes.push(index)
       }
     }
+    if (turnStartIndexes.length < triggerTurns) return null
 
-    const batch = messages.slice(startIndex, startIndex + batchSize)
-    const target = batch[batch.length - 1] || null
+    const firstRetainedTurnIndex = turnStartIndexes[turnStartIndexes.length - recentTurns]
+    const messagesToSummarize = context.recentMessages.slice(0, firstRetainedTurnIndex)
+    const target = messagesToSummarize.at(-1)
+    if (!target) return null
+
     return {
-      memory,
-      batch,
-      targetCoveredMessageId: target?.id || null,
-      targetCoveredTimestamp: target?.timestamp || null,
-      targetCoveredMessageCount: target
-        ? startIndex + batch.length
-        : memory?.coveredMessageCount || 0
+      ...context,
+      messagesToSummarize,
+      targetCoveredMessageId: target.id,
+      targetCoveredTimestamp: target.timestamp,
+      targetCoveredMessageCount:
+        (context.memory?.coveredMessageCount || 0) + messagesToSummarize.length
     }
   }
 

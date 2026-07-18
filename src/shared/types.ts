@@ -1540,6 +1540,7 @@ export type ChatConversationMemory = {
   coveredMessageId: string | null
   coveredTimestamp: number | null
   coveredMessageCount: number
+  revision: number
   updatedAt: number
 }
 

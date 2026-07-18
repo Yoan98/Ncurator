@@ -9,12 +9,10 @@ import type {
   TerminalRiskPolicyResult
 } from './types'
 import { analyzeTerminalRiskPolicy } from './policy/riskPolicy'
-import { buildDangerousCommandRules } from './policy/dangerousRules'
 import {
   parseTerminalCommandSegments as parsePolicyCommandSegments,
   parseTerminalCommandTokens as parsePolicyCommandTokens
 } from './policy/shellSyntax'
-import type { DangerousCommandRule } from './policy/types'
 
 type PathArgumentStrategy = 'all_non_option_args' | 'skip_first_non_option_arg' | 'none'
 
@@ -62,15 +60,6 @@ export const parseTerminalCommandSegments = (
     windowsStyle: options?.windowsStyle ?? isWindowsPlatform()
   })
 
-export const getSafeCommandRules = (
-  _platform: AiRuntimePlatform
-): readonly DangerousCommandRule[] => buildDangerousCommandRules()
-
-export const getSafeCommandGuidance = (platform: AiRuntimePlatform): string =>
-  getSafeCommandRules(platform)
-    .map((rule) => rule.guidance)
-    .join('、')
-
 export const analyzeTerminalCommandPolicy = (
   command: string,
   platform: AiRuntimePlatform = getAiRuntimePlatform()
@@ -85,8 +74,6 @@ export const analyzeTerminalCommandPolicy = (
     reason: analysis.reason
   }
 }
-
-export const analyzeSafeTerminalCommandPolicy = analyzeTerminalCommandPolicy
 
 const isRedirectionOperator = (token: string): boolean =>
   token === '>' || token === '>>' || token === '1>' || token === '1>>'

@@ -156,7 +156,7 @@ export const findUnsafeShellSyntax = (
 
     if (char === '$' && next === '(') return 'command_substitution'
     if (char === '`') return 'command_substitution'
-    if (char === '>' || char === '<') return 'redirection'
+    if (char === '>') return 'redirection'
     if (char === '&') return 'background_or_invocation_operator'
     if (char === '(' || char === ')' || char === '{' || char === '}') {
       return 'dynamic_expression'

@@ -101,8 +101,8 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
 
   const loadConversationContext: AiRunContext['loadConversationContext'] = async () => {
     checkCancelled()
-    const memory = await deps.chatStore.getConversationMemory(payload.sessionId)
-    const messages = await deps.chatStore.getMessagesAfterConversationMemory(payload.sessionId)
+    const { memory, recentMessages: messages } =
+      await deps.chatStore.getConversationMemoryContext(payload.sessionId)
     const recentTurnsText = formatPreviousTurns({
       messages,
       currentUserMessageId: payload.userMessageId,

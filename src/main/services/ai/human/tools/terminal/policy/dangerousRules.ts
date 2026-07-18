@@ -1,8 +1,15 @@
 import type { TerminalCommandSegment } from '../types'
 import type { DangerousCommandRule } from './types'
 
+export const normalizeCommandName = (value: string): string => {
+  const normalized = String(value || '')
+    .replace(/\\/g, '/')
+    .toLowerCase()
+  return normalized.slice(normalized.lastIndexOf('/') + 1)
+}
+
 const commandName = (segment: TerminalCommandSegment): string =>
-  String(segment.tokens[0] || '').toLowerCase()
+  normalizeCommandName(segment.tokens[0] || '')
 
 const hasToken = (segment: TerminalCommandSegment, values: readonly string[]): boolean => {
   const normalized = segment.tokens.map((token) => token.toLowerCase())
@@ -45,19 +52,48 @@ const isInlineInterpreter = (segment: TerminalCommandSegment): boolean => {
 
   const options = segment.tokens.slice(1).map((token) => token.toLowerCase())
   if (command.startsWith('powershell') || command.startsWith('pwsh')) {
-    return options.some((token) =>
-      ['-command', '-c', '-encodedcommand', '-ec', '-encodedarguments', '-ea'].includes(token)
+    return options.some(
+      (token) =>
+        token === '-c' ||
+        token.startsWith('-com') ||
+        token.startsWith('-enc') ||
+        token.startsWith('-ea')
     )
   }
   if (command === 'cmd' || command === 'cmd.exe') {
-    return options.some((token) => ['/c', '/k'].includes(token))
+    return options.some((token) => token.startsWith('/c') || token.startsWith('/k'))
   }
-  return options.some((token) => ['-c', '-e', '--eval', '--execute'].includes(token))
+  return options.some(
+    (token) =>
+      token === '-c' ||
+      token === '-e' ||
+      token.startsWith('-c=') ||
+      token.startsWith('-e=') ||
+      token.startsWith('--eval') ||
+      token.startsWith('--execute')
+  )
 }
 
 const isNestedShellLauncher = (segment: TerminalCommandSegment): boolean => {
   const command = commandName(segment)
   if (isInlineInterpreter(segment)) return true
+  if (
+    [
+      'cmd',
+      'cmd.exe',
+      'powershell',
+      'powershell.exe',
+      'pwsh',
+      'pwsh.exe',
+      'sh',
+      'bash',
+      'zsh',
+      'dash',
+      'fish'
+    ].includes(command)
+  ) {
+    return true
+  }
   if (command === 'xargs') return true
   if (command === 'start-process' || command === 'start') {
     const shellNames = [
@@ -71,7 +107,7 @@ const isNestedShellLauncher = (segment: TerminalCommandSegment): boolean => {
       'bash',
       'zsh'
     ]
-    return segment.tokens.slice(1).some((token) => shellNames.includes(token.toLowerCase()))
+    return segment.tokens.slice(1).some((token) => shellNames.includes(normalizeCommandName(token)))
   }
   return false
 }
@@ -86,6 +122,12 @@ const isProcessOrPrivilegeCommand = (segment: TerminalCommandSegment): boolean =
     'start-process',
     'start',
     'stop-process',
+    'start-service',
+    'stop-service',
+    'restart-service',
+    'set-service',
+    'register-scheduledtask',
+    'unregister-scheduledtask',
     'taskkill',
     'kill',
     'pkill',
@@ -100,40 +142,51 @@ const isProcessOrPrivilegeCommand = (segment: TerminalCommandSegment): boolean =
 const isDestructiveCommand = (segment: TerminalCommandSegment): boolean =>
   isAnyCommand(segment, [
     'remove-item',
+    'ri',
     'del',
     'delete',
     'erase',
     'rd',
     'rmdir',
     'rm',
-    'rmdir',
     'truncate',
     'clear-content',
     'set-content',
     'add-content',
     'out-file',
     'move-item',
+    'mi',
     'mv',
-    'git-clean',
-    'git-reset',
-    'git-restore',
-    'git-checkout'
+    'chmod',
+    'chown',
+    'chgrp',
+    'dd',
+    'shred',
+    'diskutil',
+    'mkfs',
+    'format'
   ]) ||
   (commandName(segment) === 'git' &&
-    hasOptionPrefix(segment, ['reset', 'clean', 'restore', 'checkout']) &&
-    hasToken(segment, ['--hard', '-d', '-f']))
+    (() => {
+      const subcommand = segment.tokens[1]?.toLowerCase()
+      if (subcommand === 'reset' || subcommand === 'clean' || subcommand === 'restore') return true
+      return subcommand === 'checkout' && segment.tokens.includes('--')
+    })())
 
 const isFileWriteCommand = (segment: TerminalCommandSegment): boolean =>
   isAnyCommand(segment, [
     'new-item',
+    'ni',
     'mkdir',
     'md',
-    'ni',
     'copy-item',
+    'cpi',
     'copy',
     'cp',
     'touch',
     'install',
+    'export-csv',
+    'rename-item',
     'tee'
   ])
 
@@ -153,6 +206,7 @@ const isDangerousArgument = (segment: TerminalCommandSegment): boolean => {
     ])
   }
   if (command === 'sed') return hasOptionPrefix(segment, ['-i', '--in-place'])
+  if (command === 'perl') return hasOptionPrefix(segment, ['-i', '-pi', '-n', '-p'])
   if (command === 'git') {
     return (
       hasOptionPrefix(segment, ['--force', '-f']) &&
@@ -206,8 +260,3 @@ export const buildDangerousCommandRules = (): readonly DangerousCommandRule[] =>
     matches: isProcessOrPrivilegeCommand
   }
 ]
-
-export const getDangerousCommandGuidance = (): string =>
-  buildDangerousCommandRules()
-    .map((rule) => `\`${rule.id}\``)
-    .join(', ')

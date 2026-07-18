@@ -16,7 +16,6 @@ export type DangerousCommandRule = {
   id: string
   reasonCode: TerminalRiskReason
   description: string
-  guidance?: string
   matches: (segment: TerminalCommandSegment) => boolean
 }
 

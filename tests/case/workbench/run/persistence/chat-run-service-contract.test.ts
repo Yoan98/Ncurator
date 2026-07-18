@@ -4,7 +4,10 @@ import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ChatRunService } from '../../../../../src/main/services/ai/ChatRunService'
 import { AiRunResourceManager } from '../../../../../src/main/services/ai/run/AiRunResourceManager'
-import { CONVERSATION_MEMORY_BATCH_MESSAGES } from '../../../../../src/main/services/ai/memory'
+import {
+  CONVERSATION_MEMORY_RECENT_TURNS,
+  CONVERSATION_MEMORY_SUMMARY_TRIGGER_TURNS
+} from '../../../../../src/main/services/ai/memory'
 import { AiFileChangeService } from '../../../../../src/main/services/ai/fileChanges/AiFileChangeService'
 import { DocxApplyService } from '../../../../../src/main/services/ai/human/tools/docx/review/DocxApplyService'
 import { StorageService } from '../../../../../src/main/services/storage/StorageService'
@@ -143,6 +146,27 @@ const saveMessages = async (
   }
 }
 
+const buildConversationTurns = (input: {
+  prefix: string
+  count: number
+  startTime: number
+}): ChatMessage[] =>
+  Array.from({ length: input.count }, (_, index) => {
+    const turn = index + 1
+    return [
+      buildMessage({
+        id: `${input.prefix}-user-${turn}`,
+        role: 'user',
+        timestamp: input.startTime + index * 2
+      }),
+      buildMessage({
+        id: `${input.prefix}-assistant-${turn}`,
+        role: 'assistant',
+        timestamp: input.startTime + index * 2 + 1
+      })
+    ]
+  }).flat()
+
 const submitAiRun = async ({ workspaceRoot, storage, service }: TestService) => {
   await seedSession(storage)
   const response = await service.submit({
@@ -279,69 +303,45 @@ describe('workbench chat run backend', () => {
     expect(events.map((event) => event.seq)).toEqual([1, 2])
   })
 
-  it('chat-store-conversation-memory-batch-boundaries', async () => {
+  it('chat-store-conversation-memory-compaction-keeps-the-latest-five-turns', async () => {
     const setup = await createTestService()
     await seedSession(setup.storage)
     const baseTime = Date.now()
-    const messages = Array.from({ length: 15 }, (_, index) =>
-      buildMessage({
-        id: `memory-message-${index + 1}`,
-        timestamp: baseTime + index
-      })
-    )
+    const messages = buildConversationTurns({ prefix: 'memory', count: 10, startTime: baseTime })
     await saveMessages(setup.storage, messages)
 
-    const firstBatch = await setup.storage.chat.getNextConversationMemoryBatch({
+    const compaction = await setup.storage.chat.getConversationMemoryCompaction({
       sessionId: 'session-1',
-      batchSize: CONVERSATION_MEMORY_BATCH_MESSAGES
+      recentTurns: CONVERSATION_MEMORY_RECENT_TURNS,
+      triggerTurns: CONVERSATION_MEMORY_SUMMARY_TRIGGER_TURNS
     })
-    expect(firstBatch.batch.map((message) => message.id)).toEqual(
-      messages.slice(0, 12).map((message) => message.id)
+    expect(compaction?.messagesToSummarize.map((message) => message.id)).toEqual(
+      messages.slice(0, 10).map((message) => message.id)
     )
-    expect(firstBatch.targetCoveredMessageId).toBe('memory-message-12')
-    expect(firstBatch.targetCoveredMessageCount).toBe(12)
+    expect(compaction?.targetCoveredMessageId).toBe('memory-assistant-5')
+    expect(compaction?.targetCoveredMessageCount).toBe(10)
 
     await setup.storage.chat.saveConversationMemory('session-1', {
-      summary: 'covered first batch',
-      coveredMessageId: firstBatch.targetCoveredMessageId,
-      coveredTimestamp: firstBatch.targetCoveredTimestamp,
-      coveredMessageCount: firstBatch.targetCoveredMessageCount,
+      summary: 'covered first five turns',
+      coveredMessageId: compaction?.targetCoveredMessageId || null,
+      coveredTimestamp: compaction?.targetCoveredTimestamp || null,
+      coveredMessageCount: compaction?.targetCoveredMessageCount || 0,
+      revision: 1,
       updatedAt: Date.now()
     })
     const recentTurns = await setup.storage.chat.getMessagesAfterConversationMemory('session-1')
-    expect(recentTurns.map((message) => message.id)).toEqual([
-      'memory-message-13',
-      'memory-message-14',
-      'memory-message-15'
-    ])
-    const partialNextBatch = await setup.storage.chat.getNextConversationMemoryBatch({
+    expect(recentTurns.map((message) => message.id)).toEqual(
+      messages.slice(10).map((message) => message.id)
+    )
+    const belowTrigger = await setup.storage.chat.getConversationMemoryCompaction({
       sessionId: 'session-1',
-      batchSize: CONVERSATION_MEMORY_BATCH_MESSAGES
+      recentTurns: CONVERSATION_MEMORY_RECENT_TURNS,
+      triggerTurns: CONVERSATION_MEMORY_SUMMARY_TRIGGER_TURNS
     })
-    expect(partialNextBatch.batch.map((message) => message.id)).toEqual([
-      'memory-message-13',
-      'memory-message-14',
-      'memory-message-15'
-    ])
-    expect(partialNextBatch.targetCoveredMessageCount).toBe(15)
-
-    await setup.storage.chat.saveConversationMemory('session-1', {
-      summary: 'missing covered id falls back to timestamp',
-      coveredMessageId: 'deleted-memory-message',
-      coveredTimestamp: messages[4].timestamp,
-      coveredMessageCount: 5,
-      updatedAt: Date.now()
-    })
-    const fallbackBatch = await setup.storage.chat.getNextConversationMemoryBatch({
-      sessionId: 'session-1',
-      batchSize: CONVERSATION_MEMORY_BATCH_MESSAGES
-    })
-    expect(fallbackBatch.batch[0].id).toBe('memory-message-6')
-    expect(fallbackBatch.targetCoveredMessageId).toBe('memory-message-15')
-    expect(fallbackBatch.targetCoveredMessageCount).toBe(15)
+    expect(belowTrigger).toBeNull()
   })
 
-  it('conversation-memory-background-job-batches-and-guards-writes', async () => {
+  it('conversation-memory-background-job-triggers-at-ten-turns-and-compacts-to-five', async () => {
     const setup = await createTestService()
     await seedSession(setup.storage)
     const service = setup.service as ChatRunServicePrivate
@@ -350,9 +350,7 @@ describe('workbench chat run backend', () => {
 
     await saveMessages(
       setup.storage,
-      Array.from({ length: 11 }, (_, index) =>
-        buildMessage({ id: `short-memory-${index + 1}`, timestamp: baseTime + index })
-      )
+      buildConversationTurns({ prefix: 'threshold', count: 9, startTime: baseTime })
     )
     const shortJob = service.scheduleConversationMemoryUpdate({
       runId: 'run-short',
@@ -365,9 +363,14 @@ describe('workbench chat run backend', () => {
     expect(await setup.storage.chat.getConversationMemory('session-1')).toBeNull()
     expect(setup.memorySummaryCalls).toEqual([])
 
-    await setup.storage.chat.saveChatMessage(
-      buildMessage({ id: 'short-memory-12', timestamp: baseTime + 12 })
-    )
+    await saveMessages(setup.storage, [
+      buildMessage({ id: 'threshold-user-10', role: 'user', timestamp: baseTime + 18 }),
+      buildMessage({
+        id: 'threshold-assistant-10',
+        role: 'assistant',
+        timestamp: baseTime + 19
+      })
+    ])
     const completeJob = service.scheduleConversationMemoryUpdate({
       runId: 'run-complete',
       sessionId: 'session-1',
@@ -380,10 +383,14 @@ describe('workbench chat run backend', () => {
       Boolean((await setup.storage.chat.getConversationMemory('session-1'))?.coveredMessageId)
     )
     const saved = await setup.storage.chat.getConversationMemory('session-1')
-    expect(saved?.summary).toContain('batch:short-memory-1')
-    expect(saved?.coveredMessageId).toBe('short-memory-12')
-    expect(saved?.coveredMessageCount).toBe(12)
+    expect(saved?.summary).toContain('batch:threshold-user-1')
+    expect(saved?.coveredMessageId).toBe('threshold-assistant-5')
+    expect(saved?.coveredMessageCount).toBe(10)
+    expect(saved?.revision).toBe(1)
     expect(setup.memorySummaryCalls).toHaveLength(1)
+    const recent = await setup.storage.chat.getMessagesAfterConversationMemory('session-1')
+    expect(recent).toHaveLength(10)
+    expect(recent[0].id).toBe('threshold-user-6')
 
     const failing = await createTestService({
       conversationMemorySummaryBuilder: async () => {
@@ -393,9 +400,7 @@ describe('workbench chat run backend', () => {
     await seedSession(failing.storage)
     await saveMessages(
       failing.storage,
-      Array.from({ length: 12 }, (_, index) =>
-        buildMessage({ id: `failing-memory-${index + 1}`, timestamp: baseTime + 100 + index })
-      )
+      buildConversationTurns({ prefix: 'failing', count: 10, startTime: baseTime + 100 })
     )
     const failingService = failing.service as ChatRunServicePrivate
     const failingJob = failingService.scheduleConversationMemoryUpdate({
@@ -407,25 +412,31 @@ describe('workbench chat run backend', () => {
     })
     await failingJob
     expect(await failing.storage.chat.getConversationMemory('session-1')).toBeNull()
+    expect(await failing.storage.chat.getMessagesAfterConversationMemory('session-1')).toHaveLength(
+      20
+    )
 
+    let externalUpdateWritten = false
     const stale = await createTestService({
       conversationMemorySummaryBuilder: async (input) => {
-        await stale.storage.chat.saveConversationMemory('session-1', {
-          summary: 'external update wins',
-          coveredMessageId: 'external-covered',
-          coveredTimestamp: Date.now() + 100_000,
-          coveredMessageCount: 99,
-          updatedAt: Date.now()
-        })
+        if (!externalUpdateWritten) {
+          externalUpdateWritten = true
+          await stale.storage.chat.saveConversationMemory('session-1', {
+            summary: 'external update wins',
+            coveredMessageId: 'stale-assistant-5',
+            coveredTimestamp: baseTime + 209,
+            coveredMessageCount: 10,
+            revision: 1,
+            updatedAt: Date.now()
+          })
+        }
         return `stale:${input.messages.length}`
       }
     })
     await seedSession(stale.storage)
     await saveMessages(
       stale.storage,
-      Array.from({ length: 12 }, (_, index) =>
-        buildMessage({ id: `stale-memory-${index + 1}`, timestamp: baseTime + 200 + index })
-      )
+      buildConversationTurns({ prefix: 'stale', count: 10, startTime: baseTime + 200 })
     )
     const staleService = stale.service as ChatRunServicePrivate
     const staleJob = staleService.scheduleConversationMemoryUpdate({
@@ -436,13 +447,10 @@ describe('workbench chat run backend', () => {
       sendEvent: (event) => stale.events.push(event)
     })
     await staleJob
-    await waitForCondition(async () => {
-      const memory = await stale.storage.chat.getConversationMemory('session-1')
-      return memory?.summary === 'external update wins'
-    })
-    expect((await stale.storage.chat.getConversationMemory('session-1'))?.coveredMessageId).toBe(
-      'external-covered'
-    )
+    const staleMemory = await stale.storage.chat.getConversationMemory('session-1')
+    expect(staleMemory?.summary).toBe('external update wins')
+    expect(staleMemory?.coveredMessageId).toBe('stale-assistant-5')
+    expect(stale.memorySummaryCalls).toHaveLength(0)
   })
 
   it('conversation-memory-background-job-dedupes-same-session-work', async () => {
@@ -463,9 +471,7 @@ describe('workbench chat run backend', () => {
     const baseTime = Date.now()
     await saveMessages(
       setup.storage,
-      Array.from({ length: 12 }, (_, index) =>
-        buildMessage({ id: `dedupe-memory-${index + 1}`, timestamp: baseTime + index })
-      )
+      buildConversationTurns({ prefix: 'dedupe', count: 10, startTime: baseTime })
     )
 
     const firstJob = service.scheduleConversationMemoryUpdate({
@@ -492,7 +498,7 @@ describe('workbench chat run backend', () => {
     )
     expect(calls).toHaveLength(1)
     expect((await setup.storage.chat.getConversationMemory('session-1'))?.coveredMessageCount).toBe(
-      12
+      10
     )
   })
 

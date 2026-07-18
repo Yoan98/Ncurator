@@ -1,7 +1,7 @@
 import type { AiRuntimePlatform } from '../../../../types'
 import type { TerminalCommandSegment } from '../types'
 import { findUnsafeShellSyntax, parseTerminalCommandSegments } from './shellSyntax'
-import { buildDangerousCommandRules } from './dangerousRules'
+import { buildDangerousCommandRules, normalizeCommandName } from './dangerousRules'
 import type { DangerousCommandRule, TerminalRiskAnalysis, TerminalRiskReason } from './types'
 
 const dynamicSyntaxReason = (syntax: string): TerminalRiskReason | undefined => {
@@ -33,6 +33,89 @@ const evaluateSegment = (
   return matches
 }
 
+const isShellName = (value: string): boolean =>
+  [
+    'cmd',
+    'cmd.exe',
+    'powershell',
+    'powershell.exe',
+    'pwsh',
+    'pwsh.exe',
+    'sh',
+    'bash',
+    'zsh',
+    'dash',
+    'fish'
+  ].includes(normalizeCommandName(value))
+
+const extractNestedPayloads = (segment: TerminalCommandSegment): string[] => {
+  const command = normalizeCommandName(segment.tokens[0] || '')
+  const tokens = segment.tokens
+  const payloads: string[] = []
+
+  if (isShellName(command)) {
+    const optionIndex = tokens.findIndex((token) => {
+      const normalized = token.toLowerCase()
+      return (
+        normalized === '/c' ||
+        normalized === '/k' ||
+        normalized === '-c' ||
+        normalized.startsWith('-command') ||
+        normalized.startsWith('-encoded') ||
+        normalized === '--eval' ||
+        normalized === '-e'
+      )
+    })
+    if (optionIndex >= 0 && !tokens[optionIndex].toLowerCase().startsWith('-encoded')) {
+      const payload = tokens
+        .slice(optionIndex + 1)
+        .join(' ')
+        .trim()
+      if (payload) payloads.push(payload)
+    }
+  }
+
+  if (command === 'start-process' || command === 'start') {
+    const target = tokens.slice(1).find((token) => isShellName(token))
+    const argumentIndex = tokens.findIndex((token) => token.toLowerCase() === '-argumentlist')
+    if (target && argumentIndex >= 0) {
+      const payload = `${target} ${tokens.slice(argumentIndex + 1).join(' ')}`.trim()
+      if (payload) payloads.push(payload)
+    }
+  }
+
+  if (command === '&' && isShellName(tokens[1] || '')) {
+    payloads.push(tokens.slice(1).join(' '))
+  }
+
+  if (['invoke-expression', 'iex', 'eval', 'exec'].includes(command)) {
+    const payload = tokens.slice(1).join(' ').trim()
+    if (payload) payloads.push(payload)
+  }
+
+  return payloads
+}
+
+const collectRiskMatches = (
+  command: string,
+  platform: AiRuntimePlatform,
+  rules: readonly DangerousCommandRule[],
+  depth = 0
+): Array<{ ruleId: string; reason: TerminalRiskReason }> => {
+  if (depth > 4) return []
+  const segments = parseTerminalCommandSegments(command, { windowsStyle: platform === 'windows' })
+  return segments.flatMap((segment) => {
+    const directMatches = evaluateSegment(segment, platform, rules)
+    const nestedMatches = extractNestedPayloads(segment).flatMap((payload) =>
+      collectRiskMatches(payload, platform, rules, depth + 1).map((match) => ({
+        ruleId: `nested:${match.ruleId}`,
+        reason: match.reason
+      }))
+    )
+    return [...directMatches, ...nestedMatches]
+  })
+}
+
 export const analyzeTerminalRiskPolicy = (
   command: string,
   platform: AiRuntimePlatform
@@ -60,7 +143,7 @@ export const analyzeTerminalRiskPolicy = (
   }
 
   const rules = buildDangerousCommandRules()
-  const matches = segments.flatMap((segment) => evaluateSegment(segment, platform, rules))
+  const matches = collectRiskMatches(text, platform, rules)
   const matchedRuleIds = Array.from(new Set(matches.map((match) => match.ruleId)))
   const reasons = Array.from(new Set(matches.map((match) => match.reason)))
 
@@ -83,6 +166,3 @@ export const analyzeTerminalRiskPolicy = (
     reason: `dangerous terminal rule matched: ${matchedRuleIds.join('|')}`
   }
 }
-
-export const getDangerousCommandRules = (): readonly DangerousCommandRule[] =>
-  buildDangerousCommandRules()

@@ -14,7 +14,7 @@ import {
 } from '../../shared/deliveryGuidance'
 import { buildToolCallDisplayText } from '../../shared/toolResultRenderers'
 import { assertExternalLearnedSkillIds } from '../../skills'
-import { analyzeSafeTerminalCommandPolicy } from '../../tools/terminal/commandPolicy'
+import { analyzeTerminalCommandPolicy } from '../../tools/terminal/commandPolicy'
 import { createToolCallSchema, formatToolCallSchemaError } from '../../toolCallSchema'
 import type {
   HandCallList,
@@ -144,7 +144,7 @@ const collectApprovalBatchItems = (input: {
     if (isTerminalRunCall(call.toolName)) {
       const command = readTerminalCommandArg(call.args)
       if (!command) return []
-      const riskPolicy = analyzeSafeTerminalCommandPolicy(command, input.platform)
+      const riskPolicy = analyzeTerminalCommandPolicy(command, input.platform)
       if (riskPolicy.executionPolicy === 'auto_allow') return []
       return [
         {

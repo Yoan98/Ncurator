@@ -3,7 +3,11 @@ import { v4 as uuidv4 } from 'uuid'
 import { Jieba } from '@node-rs/jieba'
 import { dict } from '@node-rs/jieba/dict'
 import { AiRunService } from './AiRunService'
-import { buildConversationMemorySummary, CONVERSATION_MEMORY_BATCH_MESSAGES } from './memory'
+import {
+  buildConversationMemorySummary,
+  CONVERSATION_MEMORY_RECENT_TURNS,
+  CONVERSATION_MEMORY_SUMMARY_TRIGGER_TURNS
+} from './memory'
 import { terminalSessionManager } from './human/tools/terminal/TerminalSessionManager'
 import type { AiRunResourceManager } from './run/AiRunResourceManager'
 import { normalizeSelectedReferences, normalizeWorkspaceBinding } from './utils/runContext'
@@ -985,18 +989,6 @@ export class ChatRunService {
     return job
   }
 
-  private isSameConversationMemoryPoint(
-    left: Awaited<ReturnType<ChatStore['getConversationMemory']>>,
-    right: Awaited<ReturnType<ChatStore['getConversationMemory']>>
-  ): boolean {
-    if (Boolean(left) !== Boolean(right)) return false
-    return (
-      (left?.coveredMessageId || null) === (right?.coveredMessageId || null) &&
-      (left?.coveredTimestamp || null) === (right?.coveredTimestamp || null) &&
-      (left?.coveredMessageCount || 0) === (right?.coveredMessageCount || 0)
-    )
-  }
-
   private async runConversationMemoryJob(input: {
     runId: string
     sessionId: string
@@ -1006,20 +998,21 @@ export class ChatRunService {
     sendEvent: (event: AiRunEvent) => void
   }): Promise<void> {
     for (;;) {
-      const batch = await this.deps.chatStore.getNextConversationMemoryBatch({
+      const compaction = await this.deps.chatStore.getConversationMemoryCompaction({
         sessionId: input.sessionId,
-        batchSize: CONVERSATION_MEMORY_BATCH_MESSAGES
+        recentTurns: CONVERSATION_MEMORY_RECENT_TURNS,
+        triggerTurns: CONVERSATION_MEMORY_SUMMARY_TRIGGER_TURNS
       })
-      if (batch.batch.length < CONVERSATION_MEMORY_BATCH_MESSAGES) return
+      if (!compaction) return
 
-      const startMemory = batch.memory
+      const startMemory = compaction.memory
       const summaryBuilder =
         this.deps.conversationMemorySummaryBuilder || buildConversationMemorySummary
       const summary = await summaryBuilder({
         runId: input.runId,
         sessionId: input.sessionId,
         previousSummary: startMemory?.summary || '',
-        messages: batch.batch,
+        messages: compaction.messagesToSummarize,
         runtimeSettings: input.runtimeSettings,
         llmStore: this.deps.llmStore,
         modelConfigId: input.modelConfigId,
@@ -1029,23 +1022,19 @@ export class ChatRunService {
       })
       if (!summary) return
 
-      const currentMemory = await this.deps.chatStore.getConversationMemory(input.sessionId)
-      if (!this.isSameConversationMemoryPoint(startMemory, currentMemory)) {
-        continue
-      }
-      const currentMessages = await this.deps.chatStore.getChatMessages(input.sessionId)
-      const currentMessageIds = new Set(currentMessages.map((message) => message.id))
-      if (!batch.batch.every((message) => currentMessageIds.has(message.id))) {
-        continue
-      }
-
-      await this.deps.chatStore.saveConversationMemory(input.sessionId, {
-        summary,
-        coveredMessageId: batch.targetCoveredMessageId,
-        coveredTimestamp: batch.targetCoveredTimestamp,
-        coveredMessageCount: batch.targetCoveredMessageCount,
-        updatedAt: Date.now()
+      const saved = await this.deps.chatStore.saveConversationMemoryIfCurrent({
+        sessionId: input.sessionId,
+        expectedRevision: startMemory?.revision || 0,
+        memory: {
+          summary,
+          coveredMessageId: compaction.targetCoveredMessageId,
+          coveredTimestamp: compaction.targetCoveredTimestamp,
+          coveredMessageCount: compaction.targetCoveredMessageCount,
+          revision: (startMemory?.revision || 0) + 1,
+          updatedAt: Date.now()
+        }
       })
+      if (!saved) continue
     }
   }
 

@@ -16,7 +16,8 @@ const summarySchema = z.object({
   summary: z.string()
 })
 
-export const CONVERSATION_MEMORY_BATCH_MESSAGES = 12
+export const CONVERSATION_MEMORY_RECENT_TURNS = 5
+export const CONVERSATION_MEMORY_SUMMARY_TRIGGER_TURNS = 10
 
 export const buildConversationMemorySummary = async (input: {
   runId: string

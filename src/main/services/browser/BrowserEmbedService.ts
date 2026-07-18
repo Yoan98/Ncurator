@@ -37,6 +37,7 @@ type BrowserTabRuntime = {
   persisted: PersistedBrowserTab
   view: WebContentsView | null
   ready: Promise<void> | null
+  visible: boolean
 }
 
 type PersistedBrowserWorkspace = {
@@ -142,7 +143,7 @@ export class BrowserEmbedService implements BrowserUseService {
       if (parsed.version !== 1 || !Array.isArray(parsed.tabs)) return
       for (const tab of parsed.tabs) {
         if (!tab?.id || !tab.ownerId) continue
-        this.tabs.set(tab.id, { persisted: tab, view: null, ready: null })
+        this.tabs.set(tab.id, { persisted: tab, view: null, ready: null, visible: false })
       }
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
@@ -168,7 +169,7 @@ export class BrowserEmbedService implements BrowserUseService {
       createdAt: now,
       updatedAt: now
     }
-    const runtime: BrowserTabRuntime = { persisted, view: null, ready: null }
+    const runtime: BrowserTabRuntime = { persisted, view: null, ready: null, visible: false }
     this.tabs.set(persisted.id, runtime)
     this.activeTabId = persisted.id
     this.applyAllVisibility()
@@ -194,6 +195,7 @@ export class BrowserEmbedService implements BrowserUseService {
     this.activeTabId = tabId
     runtime.persisted.updatedAt = Date.now()
     this.applyAllVisibility()
+    if (!runtime.view) void this.ensureReady(runtime)
     this.emitState(runtime)
     this.schedulePersist()
     return this.toState(runtime)
@@ -222,9 +224,14 @@ export class BrowserEmbedService implements BrowserUseService {
     this.presentedTabId = tabId
     this.presentationId += 1
     this.occluded = false
-    this.bounds = EMPTY_BOUNDS
     runtime.persisted.updatedAt = Date.now()
     this.applyAllVisibility()
+    if (!runtime.view || runtime.view.webContents.isDestroyed()) {
+      runtime.view = null
+      runtime.ready = null
+      runtime.visible = false
+      void this.ensureReady(runtime)
+    }
     this.emitState(runtime)
     this.schedulePersist()
     return this.presentationId
@@ -273,7 +280,11 @@ export class BrowserEmbedService implements BrowserUseService {
 
   public reload(tabId: string): void {
     const runtime = this.requireTab(tabId)
-    runtime.view?.webContents.reload()
+    if (runtime.view) {
+      runtime.view.webContents.reload()
+    } else {
+      void this.ensureReady(runtime)
+    }
   }
 
   public stop(tabId: string): void {
@@ -406,16 +417,18 @@ export class BrowserEmbedService implements BrowserUseService {
         this.bounds.width > 0 &&
         this.bounds.height > 0 &&
         !this.mainWindow.isDestroyed()
+      if (visible) {
+        const nextBounds: Rectangle = {
+          x: Math.max(0, Math.round(this.bounds.x)),
+          y: Math.max(0, Math.round(this.bounds.y)),
+          width: Math.max(1, Math.round(this.bounds.width)),
+          height: Math.max(1, Math.round(this.bounds.height))
+        }
+        runtime.view.setBounds(nextBounds)
+      }
       runtime.view.setVisible(visible)
-      const nextBounds: Rectangle = visible
-        ? {
-            x: Math.max(0, Math.round(this.bounds.x)),
-            y: Math.max(0, Math.round(this.bounds.y)),
-            width: Math.max(1, Math.round(this.bounds.width)),
-            height: Math.max(1, Math.round(this.bounds.height))
-          }
-        : { x: 0, y: 0, width: 0, height: 0 }
-      runtime.view.setBounds(nextBounds)
+      if (visible && !runtime.visible) runtime.view.webContents.invalidate()
+      runtime.visible = visible
       if (visible && runtime.persisted.zoomFactor === 1) {
         const initial = resolveInitialZoomFactor(this.bounds.width)
         runtime.persisted.zoomFactor = initial
