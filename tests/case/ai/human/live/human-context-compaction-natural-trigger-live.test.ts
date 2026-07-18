@@ -26,7 +26,7 @@ const toWorkspaceRelativePath = (workspaceRoot: string, sourcePath: string): str
   return path.posix.normalize(relativePath.split(path.sep).join('/')).replace(/^\.\//, '')
 }
 
-const LIVE_CONTEXT_COMPACTION_WINDOW_TOKENS = 16_000
+const LIVE_CONTEXT_COMPACTION_WINDOW_TOKENS = 12_000
 
 const REQUIRED_COMPACTION_HEADINGS = [
   '任务锚点：',

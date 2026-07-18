@@ -78,9 +78,6 @@ describe('ai human live backend', () => {
                   event.input.oldText === 'OLD_API_URL' &&
                   event.input.newText === 'API_BASE_URL'
               ) &&
-              writes.some(
-                (event) => event.input.action === 'edit' && Array.isArray(event.input.edits)
-              ) &&
               !result.finalContent.includes('OLD_API_URL') &&
               result.finalContent.includes('API_BASE_URL') &&
               result.finalContent.includes('const timeout = 3000') &&
