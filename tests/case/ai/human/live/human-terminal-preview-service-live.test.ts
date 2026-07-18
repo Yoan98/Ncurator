@@ -86,7 +86,9 @@ describe('ai human live backend', () => {
           try {
             const output = await runner.run({
               taskId: runtime.taskId,
-              userInput: `我准备检查 ${SITE_DIRECTORY} 里的静态页面。这个项目依赖相对路径，所以预览服务必须进入这个目录后再启动。请启动一个只监听 127.0.0.1:${String(port)} 的临时 HTTP 预览服务，访问首页并确认页面显示 ${PAGE_MARKER}。访问后再看一下服务终端的新日志，确认它确实收到了请求。检查完请停止服务并关闭启动服务的终端，不要留下后台进程。`
+              userInput: `我准备检查 ${SITE_DIRECTORY} 里的静态页面。这个项目依赖相对路径，所以预览服务必须进入这个目录后再启动。请启动一个只监听 127.0.0.1:${String(port)} 的临时 HTTP 预览服务，访问首页并确认页面显示 ${PAGE_MARKER}。
+
+服务必须由持久终端直接托管：请用 terminal_run 在前台直接运行服务命令，不要使用 Start-Process、Start-Job、尾部 & 或其他后台/分离进程方式。terminal_run 返回 command_still_running 后，请保存它返回的 terminalId；访问页面后，用同一个 terminalId 调用 terminal_read 查看新日志，确认服务确实收到了请求；最后用 terminal_stop 并设置 closeTerminal=true 停止服务和关闭终端。不要留下后台进程。`
             })
             const events = runtime.eventCollector.snapshot()
             const portReleased = await waitForUrlToBecomeUnavailable(url)
@@ -121,7 +123,7 @@ describe('ai human live backend', () => {
             .map((event) => event.result?.data)
             .filter(isRecord)
           const runningResult = runResults.find(
-            (data) => data.returnReason === 'command_still_running'
+            (data) => data.executionStatus === 'running' && data.terminalStatus === 'running'
           )
           const serviceTerminalId =
             typeof runningResult?.terminalId === 'string' ? runningResult.terminalId : ''
@@ -139,15 +141,16 @@ describe('ai human live backend', () => {
           const yielded = filterAiRunEventsByType(result.events, 'terminal_command_yielded')
           const stopped = filterAiRunEventsByType(result.events, 'terminal_command_stopped')
           const closed = filterAiRunEventsByType(result.events, 'terminal_session_closed')
+          const serviceYielded = yielded.find((event) => event.terminalId === serviceTerminalId)
           const finalText = String(result.output?.deliveryMarkdown || '')
 
           runtime.assertThat(
             result.output?.status === 'completed' &&
               Boolean(serviceTerminalId) &&
-              typeof runningResult?.currentTerminalPath === 'string' &&
-              runningResult.currentTerminalPath.endsWith(`${path.sep}${SITE_DIRECTORY}`) &&
+              typeof serviceYielded?.currentTerminalPath === 'string' &&
+              serviceYielded.currentTerminalPath.endsWith(`${path.sep}${SITE_DIRECTORY}`) &&
               commands.every((command) => !/(^|[^&])&\s*$/u.test(command)) &&
-              yielded.some((event) => event.terminalId === serviceTerminalId),
+              Boolean(serviceYielded),
             {
               name: 'human-live-terminal-starts-persistent-preview-service',
               message:
