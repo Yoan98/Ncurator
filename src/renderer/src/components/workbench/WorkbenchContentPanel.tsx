@@ -57,6 +57,7 @@ type WorkbenchContentPanelProps = {
   onBrowserStateChange: (state: BrowserTabState) => void
   onOpenWorkspaceFile: (filePath: string, fileName: string) => void
   onOpenWorkspaceChange: (changeId: string) => void
+  browserPresentationEnabled: boolean
 }
 
 const createSearchTurnSnapshot = (
@@ -489,13 +490,16 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
   onCollapse,
   onBrowserStateChange,
   onOpenWorkspaceFile,
-  onOpenWorkspaceChange
+  onOpenWorkspaceChange,
+  browserPresentationEnabled
 }) => {
   const [explorerOpen, setExplorerOpen] = useState(state.kind === 'file_launcher')
   const [explorerMode, setExplorerMode] = useState<WorkspaceFileExplorerMode>(
     state.kind === 'apply_workspace' ? 'changed' : 'all'
   )
   const [docxPreviewMode, setDocxPreviewMode] = useState<'file' | 'diff'>('diff')
+  const [browserChromeOccluded, setBrowserChromeOccluded] = useState(false)
+  const browserTabId = state.kind === 'browser' ? state.browserTabId : null
 
   useEffect(() => {
     if (state.kind === 'file_launcher') {
@@ -507,6 +511,9 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
       setExplorerMode('changed')
     }
   }, [state.kind])
+  useEffect(() => {
+    setBrowserChromeOccluded(false)
+  }, [browserTabId, state.kind])
   useEffect(
     () => setDocxPreviewMode(activeApplyRecord?.status === 'reverted' ? 'file' : 'diff'),
     [activeApplyRecord?.id, activeApplyRecord?.status]
@@ -579,7 +586,7 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
         onAddFileTab={onAddFileTab}
         onAddBrowserTab={onAddBrowserTab}
         onCollapse={onCollapse}
-        onMenuOpenChange={(open) => void window.api.browserPanelSetOccluded(open)}
+        onMenuOpenChange={setBrowserChromeOccluded}
       />
       <div className="min-h-0 flex-1 overflow-hidden">
         <div className="flex h-full min-h-0">
@@ -666,6 +673,8 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
             {state.kind === 'browser' ? (
               <WorkbenchBrowserPanel
                 tabId={state.browserTabId}
+                presentationEnabled={browserPresentationEnabled}
+                externallyOccluded={browserChromeOccluded}
                 onStateChange={onBrowserStateChange}
               />
             ) : null}

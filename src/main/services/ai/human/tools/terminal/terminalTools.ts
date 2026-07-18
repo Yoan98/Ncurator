@@ -9,11 +9,7 @@ import { getAiResultTokenLimit, estimateToolResultTokens } from '../utils/result
 import { withToolLifecycle } from '../utils/lifecycle'
 import { createToolEventEmitter } from '../utils/toolEvents'
 import type { CapabilityActivityInput } from '../types'
-import {
-  analyzeSafeTerminalCommandPolicy,
-  checkWorkspaceBoundary,
-  parseTerminalCommandTokens
-} from './commandPolicy'
+import { analyzeTerminalCommandPolicy, parseTerminalCommandTokens } from './commandPolicy'
 import { inspectTerminalOutputQuality } from './terminalExec'
 import type { TerminalCapabilityToolsInput, TerminalCapabilityToolsRuntimeState } from './types'
 import {
@@ -322,30 +318,9 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
           }
 
           const cwd = readSessionCwd(input, terminalId)
-          const boundary = checkWorkspaceBoundary(
-            command,
-            [input.workspaceRootPath, userRuntimeRootPath],
-            input.ctx.platform
-          )
-          if (!boundary.ok) {
-            const failure = buildFailure({
-              error: `workspace boundary check failed: ${boundary.reason}`
-            })
-            session.fail(
-              failure.error,
-              undefined,
-              buildTerminalToolResult({
-                toolName: terminalRunToolSpec.name,
-                ok: false,
-                data: failure
-              })
-            )
-            return failure
-          }
-
-          const safePolicy = analyzeSafeTerminalCommandPolicy(command, input.ctx.platform)
+          const riskPolicy = analyzeTerminalCommandPolicy(command, input.ctx.platform)
           const approvedByHand = consumeApprovedTerminalCommand({ cache: input.cache, command })
-          if (safePolicy.executionPolicy !== 'safe_allowed' && !approvedByHand) {
+          if (riskPolicy.executionPolicy === 'approval_required' && !approvedByHand) {
             const approval = await input.ctx.requestApprovalBatch({
               runId: input.runId,
               taskId: input.taskId,
@@ -359,7 +334,7 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
                   toolName: terminalRunToolSpec.name,
                   command,
                   commandExplanation: commandExplanation || '执行这条终端指令。',
-                  reason: safePolicy.reason
+                  reason: riskPolicy.reason
                 }
               ]
             })

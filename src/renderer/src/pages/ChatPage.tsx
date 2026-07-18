@@ -652,6 +652,7 @@ const ChatPage: React.FC = () => {
   const [contentPanelCollapsed, setContentPanelCollapsed] = useState(true)
   const [contentPanelShellMounted, setContentPanelShellMounted] = useState(false)
   const [contentPanelShellVisible, setContentPanelShellVisible] = useState(false)
+  const [browserPresentationEnabled, setBrowserPresentationEnabled] = useState(false)
 
   const [activeApplyRecord, setActiveApplyRecord] = useState<AiFileChangeRecord | null>(null)
   const [fileChangeRecords, setFileChangeRecords] = useState<AiFileChangeRecord[]>([])
@@ -1031,19 +1032,34 @@ const ChatPage: React.FC = () => {
     [tabWorkspaceKey]
   )
 
+  const collapseContentPanel = useCallback((): void => {
+    setBrowserPresentationEnabled(false)
+    void window.api.browserPanelHide()
+    setContentPanelCollapsed(true)
+  }, [])
+
   const showContentPanel = useCallback(
     (nextState: WorkbenchContentPanelState): void => {
+      if (contentPanel.kind === 'browser') {
+        void window.api.browserPanelHide()
+      }
       setContentPanel(nextState)
       if (nextState.kind === 'empty' || nextState.kind === 'search_list') {
         updateCurrentTabWorkspace((current) => ({ ...current, activeTabId: null }))
       }
       setContentPanelCollapsed(false)
     },
-    [updateCurrentTabWorkspace]
+    [contentPanel.kind, updateCurrentTabWorkspace]
   )
 
   const openResourceTab = useCallback(
     (tab: WorkbenchResourceTab): void => {
+      const switchingAwayFromBrowser =
+        contentPanel.kind === 'browser' &&
+        (tab.kind !== 'browser' || tab.browserTabId !== contentPanel.browserTabId)
+      if (switchingAwayFromBrowser) {
+        void window.api.browserPanelHide()
+      }
       updateCurrentTabWorkspace((current) => {
         const existingIndex = current.tabs.findIndex((item) => item.id === tab.id)
         const tabs =
@@ -1055,7 +1071,7 @@ const ChatPage: React.FC = () => {
       setContentPanel(tab.state)
       setContentPanelCollapsed(false)
     },
-    [updateCurrentTabWorkspace]
+    [contentPanel, updateCurrentTabWorkspace]
   )
 
   const openBrowserTab = useCallback(
@@ -1376,12 +1392,12 @@ const ChatPage: React.FC = () => {
         __draft__: EMPTY_TAB_WORKSPACE
       }))
       setContentPanel(createEmptyPanel())
-      setContentPanelCollapsed(true)
+      collapseContentPanel()
       resetApplyWorkspaceState()
       setFileChangeRecords([])
       void refreshContextUsage(null)
     },
-    [applyComposerDraft, refreshContextUsage, saveComposerDraftForSession]
+    [applyComposerDraft, collapseContentPanel, refreshContextUsage, saveComposerDraftForSession]
   )
 
   const loadApplyRecord = async (input: {
@@ -1474,7 +1490,7 @@ const ChatPage: React.FC = () => {
           current.kind === 'apply_workspace' ? createEmptyPanel() : current
         )
         if (contentPanel.kind === 'apply_workspace') {
-          setContentPanelCollapsed(true)
+          collapseContentPanel()
         }
         return
       }
@@ -1544,7 +1560,7 @@ const ChatPage: React.FC = () => {
     setPendingUserTakeover(null)
     setUserTakeoverConfirming(false)
     setContentPanel(createEmptyPanel())
-    setContentPanelCollapsed(true)
+    collapseContentPanel()
     resetApplyWorkspaceState()
 
     void loadSessionOpen(session.id, requestId).then(() => {
@@ -1553,12 +1569,12 @@ const ChatPage: React.FC = () => {
       const activeTab = savedWorkspace?.tabs.find((tab) => tab.id === savedWorkspace.activeTabId)
       if (!activeTab) {
         setContentPanel(createEmptyPanel())
-        setContentPanelCollapsed(true)
+        collapseContentPanel()
         resetApplyWorkspaceState()
         return
       }
       setContentPanel(activeTab.state)
-      setContentPanelCollapsed(true)
+      collapseContentPanel()
       if (
         activeTab.state.kind === 'apply_workspace' &&
         activeTab.state.applyId &&
@@ -1691,17 +1707,18 @@ const ChatPage: React.FC = () => {
     let finishTimer: number | null = null
 
     if (contentPanelCollapsed) {
+      setBrowserPresentationEnabled(false)
       setContentPanelShellVisible(false)
       void window.api.browserPanelHide()
       finishTimer = window.setTimeout(() => setContentPanelShellMounted(false), 220)
     } else {
+      setBrowserPresentationEnabled(false)
       setContentPanelShellMounted(true)
-      void window.api.browserPanelSetOccluded(true)
       firstFrame = window.requestAnimationFrame(() => {
         secondFrame = window.requestAnimationFrame(() => {
           setContentPanelShellVisible(true)
           finishTimer = window.setTimeout(() => {
-            void window.api.browserPanelSetOccluded(false)
+            setBrowserPresentationEnabled(true)
           }, 220)
         })
       })
@@ -1872,6 +1889,12 @@ const ChatPage: React.FC = () => {
     (tabId: string): void => {
       const tab = tabWorkspace.tabs.find((item) => item.id === tabId)
       if (!tab) return
+      const switchingAwayFromBrowser =
+        contentPanel.kind === 'browser' &&
+        (tab.kind !== 'browser' || tab.browserTabId !== contentPanel.browserTabId)
+      if (switchingAwayFromBrowser) {
+        void window.api.browserPanelHide()
+      }
       updateCurrentTabWorkspace((current) => ({ ...current, activeTabId: tabId }))
       setContentPanel(tab.state)
       setContentPanelCollapsed(false)
@@ -1886,7 +1909,7 @@ const ChatPage: React.FC = () => {
         void loadApplyRecordRef.current({ applyId: tab.state.applyId })
       }
     },
-    [tabWorkspace.tabs, updateCurrentTabWorkspace]
+    [contentPanel, tabWorkspace.tabs, updateCurrentTabWorkspace]
   )
 
   const closeResourceTab = useCallback(
@@ -1895,6 +1918,9 @@ const ChatPage: React.FC = () => {
       if (closedIndex < 0) return
       const closedTab = tabWorkspace.tabs[closedIndex]
       if (closedTab?.kind === 'browser' && closedTab.browserTabId) {
+        if (tabWorkspace.activeTabId === tabId) {
+          void window.api.browserPanelHide()
+        }
         void window.api.browserTabClose({ tabId: closedTab.browserTabId })
       }
       const tabs = tabWorkspace.tabs.filter((item) => item.id !== tabId)
@@ -3614,10 +3640,11 @@ const ChatPage: React.FC = () => {
                   onCloseTab={closeResourceTab}
                   onAddFileTab={addFileTab}
                   onAddBrowserTab={addBrowserTab}
-                  onCollapse={() => setContentPanelCollapsed(true)}
+                  onCollapse={collapseContentPanel}
                   onBrowserStateChange={handleBrowserStateChange}
                   onOpenWorkspaceFile={openWorkspaceFile}
                   onOpenWorkspaceChange={openWorkspaceChange}
+                  browserPresentationEnabled={browserPresentationEnabled}
                 />
               </div>
             </div>

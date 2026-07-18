@@ -6,16 +6,15 @@ import type {
   TerminalArtifactCandidate,
   TerminalCommandAnalysis,
   TerminalCommandSegment,
-  TerminalSafePolicyResult
+  TerminalRiskPolicyResult
 } from './types'
-import { analyzeTerminalCommandEffect, getReadonlyCommandRules } from './policy/readonlyPolicy'
+import { analyzeTerminalRiskPolicy } from './policy/riskPolicy'
+import { buildDangerousCommandRules } from './policy/dangerousRules'
 import {
   parseTerminalCommandSegments as parsePolicyCommandSegments,
   parseTerminalCommandTokens as parsePolicyCommandTokens
 } from './policy/shellSyntax'
-import type { ReadonlyCommandRule } from './policy/types'
-
-export { analyzeTerminalCommandEffect }
+import type { DangerousCommandRule } from './policy/types'
 
 type PathArgumentStrategy = 'all_non_option_args' | 'skip_first_non_option_arg' | 'none'
 
@@ -63,27 +62,31 @@ export const parseTerminalCommandSegments = (
     windowsStyle: options?.windowsStyle ?? isWindowsPlatform()
   })
 
-export const getSafeCommandRules = (platform: AiRuntimePlatform): readonly ReadonlyCommandRule[] =>
-  getReadonlyCommandRules(platform)
+export const getSafeCommandRules = (
+  _platform: AiRuntimePlatform
+): readonly DangerousCommandRule[] => buildDangerousCommandRules()
 
 export const getSafeCommandGuidance = (platform: AiRuntimePlatform): string =>
   getSafeCommandRules(platform)
     .map((rule) => rule.guidance)
     .join('、')
 
-export const analyzeSafeTerminalCommandPolicy = (
+export const analyzeTerminalCommandPolicy = (
   command: string,
   platform: AiRuntimePlatform = getAiRuntimePlatform()
-): TerminalSafePolicyResult => {
-  const analysis = analyzeTerminalCommandEffect(command, platform)
+): TerminalRiskPolicyResult => {
+  const analysis = analyzeTerminalRiskPolicy(command, platform)
   return {
-    executionPolicy: analysis.effect === 'read_only' ? 'safe_allowed' : 'approval_required',
-    effect: analysis.effect,
+    executionPolicy: analysis.decision,
+    decision: analysis.decision,
     matchedRuleId: analysis.matchedRuleIds.join('|') || undefined,
     reasonCode: analysis.reasonCode,
+    reasons: analysis.reasons,
     reason: analysis.reason
   }
 }
+
+export const analyzeSafeTerminalCommandPolicy = analyzeTerminalCommandPolicy
 
 const isRedirectionOperator = (token: string): boolean =>
   token === '>' || token === '>>' || token === '1>' || token === '1>>'

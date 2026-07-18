@@ -7,10 +7,7 @@ import {
 } from '../../constants'
 import type { AiRunContext } from '../../../types'
 import { extractArtifactRefsFromToolResults, mergeArtifactRefs } from '../../../utils/artifacts'
-import {
-  appendDecisionRound,
-  buildHandExecution
-} from '../../memory/rounds'
+import { appendDecisionRound, buildHandExecution } from '../../memory/rounds'
 import {
   createDeliveryGuidanceItem,
   mergeDeliveryGuidanceItems
@@ -147,8 +144,8 @@ const collectApprovalBatchItems = (input: {
     if (isTerminalRunCall(call.toolName)) {
       const command = readTerminalCommandArg(call.args)
       if (!command) return []
-      const safePolicy = analyzeSafeTerminalCommandPolicy(command, input.platform)
-      if (safePolicy.executionPolicy === 'safe_allowed') return []
+      const riskPolicy = analyzeSafeTerminalCommandPolicy(command, input.platform)
+      if (riskPolicy.executionPolicy === 'auto_allow') return []
       return [
         {
           itemId: randomUUID(),
@@ -156,7 +153,7 @@ const collectApprovalBatchItems = (input: {
           toolName: call.toolName,
           command,
           commandExplanation: readCommandExplanationArg(call.args) || '执行这条终端指令。',
-          reason: safePolicy.reason
+          reason: riskPolicy.reason
         }
       ]
     }
@@ -389,7 +386,12 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
           if (!call || typeof call !== 'object' || Array.isArray(call)) return []
           const candidate = call as Record<string, unknown>
           if (typeof candidate.toolName !== 'string' || !candidate.toolName.trim()) return []
-          if (!candidate.args || typeof candidate.args !== 'object' || Array.isArray(candidate.args)) return []
+          if (
+            !candidate.args ||
+            typeof candidate.args !== 'object' ||
+            Array.isArray(candidate.args)
+          )
+            return []
           return [{ toolName: candidate.toolName, args: candidate.args as JsonObject }]
         })
       : []
@@ -397,7 +399,9 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
       const result: ToolCallResult = {
         toolName: 'hand',
         ok: false,
-        data: { error: 'tool call schema invalid\ncalls: 必须包含至少一个具有 toolName 和 args 对象的调用' }
+        data: {
+          error: 'tool call schema invalid\ncalls: 必须包含至少一个具有 toolName 和 args 对象的调用'
+        }
       }
       const decisionHint = buildHandCallInvalidHint([
         { callIndex: 0, toolName: 'hand', message: String(result.data.error) }
@@ -447,23 +451,20 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
             ).startsWith('tool call schema invalid')
           )
           .map((result) => ({
-          callIndex: Number(
-            String(
-              result.data && typeof result.data === 'object' && !Array.isArray(result.data)
+            callIndex: Number(
+              String(
+                result.data && typeof result.data === 'object' && !Array.isArray(result.data)
+                  ? result.data.error
+                  : ''
+              ).match(/^tool call schema invalid\ncalls\[(\d+)\]\.args:/)?.[1] || 0
+            ),
+            toolName: result.toolName,
+            message: String(
+              (result.data && typeof result.data === 'object' && !Array.isArray(result.data)
                 ? result.data.error
-                : ''
-            ).match(
-              /^tool call schema invalid\ncalls\[(\d+)\]\.args:/
-            )?.[1] || 0
-          ),
-          toolName: result.toolName,
-          message: String(
-            (result.data && typeof result.data === 'object' && !Array.isArray(result.data)
-              ? result.data.error
-              : '') ||
-              ''
-          ).trim()
-        }))
+                : '') || ''
+            ).trim()
+          }))
       )
       return returnToBrainAfterTrace({
         ctx: input.ctx,
@@ -572,7 +573,7 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
               ...state.memory,
               taskRun: appendDecisionRound({
                 state,
-              execution: buildHandExecution({ calls, toolResults: results, decisionHint })
+                execution: buildHandExecution({ calls, toolResults: results, decisionHint })
               })
             }
           }

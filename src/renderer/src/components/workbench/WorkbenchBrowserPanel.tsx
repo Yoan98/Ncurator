@@ -16,6 +16,8 @@ import { workbenchSelectors } from '../../testing/selectors'
 
 type WorkbenchBrowserPanelProps = {
   tabId: string
+  presentationEnabled: boolean
+  externallyOccluded?: boolean
   onStateChange?: (state: BrowserTabState) => void
 }
 
@@ -29,22 +31,32 @@ const createEmptyState = (tabId: string): BrowserTabState => ({
   isLoading: false
 })
 
-const notifyBounds = (tabId: string, element: HTMLDivElement | null): void => {
+const notifyBounds = (
+  tabId: string,
+  presentationId: number,
+  element: HTMLDivElement | null
+): void => {
   if (!element) return
   const rect = element.getBoundingClientRect()
   void window.api.browserPanelSetBounds({
     tabId,
+    presentationId,
     x: rect.x,
     y: rect.y,
     width: rect.width,
-    height: rect.height,
-    visible: rect.width > 0 && rect.height > 0
+    height: rect.height
   })
 }
 
-const WorkbenchBrowserPanel: React.FC<WorkbenchBrowserPanelProps> = ({ tabId, onStateChange }) => {
+const WorkbenchBrowserPanel: React.FC<WorkbenchBrowserPanelProps> = ({
+  tabId,
+  presentationEnabled,
+  externallyOccluded = false,
+  onStateChange
+}) => {
   const viewportRef = useRef<HTMLDivElement | null>(null)
   const [state, setState] = useState<BrowserTabState>(() => createEmptyState(tabId))
+  const [presentationId, setPresentationId] = useState<number | null>(null)
   const [address, setAddress] = useState('')
   const [error, setError] = useState('')
   const [menuOpen, setMenuOpen] = useState(false)
@@ -60,28 +72,63 @@ const WorkbenchBrowserPanel: React.FC<WorkbenchBrowserPanelProps> = ({ tabId, on
   )
 
   useEffect(() => {
-    const element = viewportRef.current
-    notifyBounds(tabId, element)
     void window.api.browserTabActivate({ tabId })
-    void window.api.browserPanelShow({ tabId })
     void window.api.browserPanelStateGet({ tabId }).then((response) => {
       if (response.success && response.state) applyState(response.state)
     })
     const unsubscribe = window.api.onBrowserPanelStateChange(applyState)
-    const observer = new ResizeObserver(() => notifyBounds(tabId, element))
-    if (element) observer.observe(element)
-    const handleWindowChange = (): void => notifyBounds(tabId, element)
-    window.addEventListener('resize', handleWindowChange)
-    window.addEventListener('scroll', handleWindowChange, true)
     return () => {
-      observer.disconnect()
       unsubscribe()
-      window.removeEventListener('resize', handleWindowChange)
-      window.removeEventListener('scroll', handleWindowChange, true)
-      void window.api.browserPanelSetOccluded(false)
-      void window.api.browserPanelHide()
     }
   }, [applyState, tabId])
+
+  useEffect(() => {
+    if (!presentationEnabled) return
+    const element = viewportRef.current
+    let cancelled = false
+    let activePresentationId: number | null = null
+    let observer: ResizeObserver | null = null
+    const handleWindowChange = (): void => {
+      if (activePresentationId !== null) {
+        notifyBounds(tabId, activePresentationId, element)
+      }
+    }
+
+    void window.api.browserPanelShow({ tabId }).then((response) => {
+      if (!response.success || response.presentationId === undefined) return
+      activePresentationId = response.presentationId
+      if (cancelled) {
+        void window.api.browserPanelHide({ presentationId: activePresentationId })
+        return
+      }
+      setPresentationId(activePresentationId)
+      notifyBounds(tabId, activePresentationId, element)
+      observer = new ResizeObserver(handleWindowChange)
+      if (element) observer.observe(element)
+      window.addEventListener('resize', handleWindowChange)
+      window.addEventListener('scroll', handleWindowChange, true)
+    })
+
+    return () => {
+      cancelled = true
+      observer?.disconnect()
+      window.removeEventListener('resize', handleWindowChange)
+      window.removeEventListener('scroll', handleWindowChange, true)
+      if (activePresentationId !== null) {
+        void window.api.browserPanelHide({ presentationId: activePresentationId })
+      }
+      setPresentationId(null)
+    }
+  }, [presentationEnabled, tabId])
+
+  useEffect(() => {
+    if (presentationId === null) return
+    void window.api.browserPanelSetOccluded({
+      tabId,
+      presentationId,
+      occluded: externallyOccluded || menuOpen
+    })
+  }, [externallyOccluded, menuOpen, presentationId, tabId])
 
   const runStateAction = async (
     action: () => Promise<{ success: boolean; state?: BrowserTabState; error?: string }>
@@ -142,7 +189,6 @@ const WorkbenchBrowserPanel: React.FC<WorkbenchBrowserPanelProps> = ({ tabId, on
         disabled={!state.url}
         onClick={() => {
           setMenuOpen(false)
-          void window.api.browserPanelSetOccluded(false)
           void window.api.browserPanelOpenExternal({ tabId })
         }}
       >
@@ -235,7 +281,6 @@ const WorkbenchBrowserPanel: React.FC<WorkbenchBrowserPanelProps> = ({ tabId, on
           overlayInnerStyle={{ padding: 0, background: 'transparent', boxShadow: 'none' }}
           onOpenChange={(open) => {
             setMenuOpen(open)
-            void window.api.browserPanelSetOccluded(open)
           }}
         >
           <button

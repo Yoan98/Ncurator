@@ -2294,9 +2294,9 @@ export function registerHandlers(services: {
           String(payload?.tabId || ''),
           Number(payload?.presentationId || 0),
           {
-          x: Number(payload?.x || 0),
-          y: Number(payload?.y || 0),
-          width: Number(payload?.width || 0),
+            x: Number(payload?.x || 0),
+            y: Number(payload?.y || 0),
+            width: Number(payload?.width || 0),
             height: Number(payload?.height || 0)
           }
         )

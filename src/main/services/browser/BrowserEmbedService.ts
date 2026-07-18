@@ -222,6 +222,7 @@ export class BrowserEmbedService implements BrowserUseService {
     this.presentedTabId = tabId
     this.presentationId += 1
     this.occluded = false
+    this.bounds = EMPTY_BOUNDS
     runtime.persisted.updatedAt = Date.now()
     this.applyAllVisibility()
     this.emitState(runtime)
@@ -242,11 +243,7 @@ export class BrowserEmbedService implements BrowserUseService {
     this.applyAllVisibility()
   }
 
-  public setBounds(
-    tabId: string,
-    presentationId: number,
-    bounds: BrowserPanelBoundsState
-  ): void {
+  public setBounds(tabId: string, presentationId: number, bounds: BrowserPanelBoundsState): void {
     if (!this.isCurrentPresentation(tabId, presentationId)) return
     this.bounds = bounds
     this.applyAllVisibility()

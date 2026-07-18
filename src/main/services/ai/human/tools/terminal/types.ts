@@ -28,12 +28,13 @@ export type TerminalCommandAnalysis = {
   artifactCandidates: TerminalArtifactCandidate[]
 }
 
-export type TerminalSafeExecutionPolicy = 'safe_allowed' | 'approval_required'
+export type TerminalExecutionPolicy = 'auto_allow' | 'approval_required'
 
-export type TerminalSafePolicyResult = {
-  executionPolicy: TerminalSafeExecutionPolicy
-  effect: 'read_only' | 'mutating' | 'unknown'
+export type TerminalRiskPolicyResult = {
+  executionPolicy: TerminalExecutionPolicy
+  decision: TerminalExecutionPolicy
   matchedRuleId?: string
   reasonCode: string
+  reasons: string[]
   reason: string
 }

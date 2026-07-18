@@ -1,6 +1,6 @@
 import { z } from 'zod/v4'
 import type { HumanToolSpec } from '../types'
-import { analyzeSafeTerminalCommandPolicy, analyzeTerminalCommand } from './commandPolicy'
+import { analyzeTerminalCommandPolicy, analyzeTerminalCommand } from './commandPolicy'
 import { readStringArg } from '../utils/toolSpecUtils'
 import type { AiRuntimePlatform } from '../../../types'
 import { getAiRuntimePlatform } from '../../../utils/platform'
@@ -85,8 +85,8 @@ export const createTerminalRunToolSpec = (
   resolveExecutionMeta: (args) => {
     const command = readStringArg(args, 'command') || ''
     const analysis = analyzeTerminalCommand({ command, platform })
-    const safePolicy = analyzeSafeTerminalCommandPolicy(command, platform)
-    if (safePolicy.executionPolicy === 'safe_allowed' && analysis.artifactCandidates.length === 0) {
+    const riskPolicy = analyzeTerminalCommandPolicy(command, platform)
+    if (riskPolicy.executionPolicy === 'auto_allow' && analysis.artifactCandidates.length === 0) {
       return { mutability: 'read_only', resourceKey: analysis.resourceKey }
     }
     return { mutability: 'mutating', resourceKey: analysis.resourceKey }
