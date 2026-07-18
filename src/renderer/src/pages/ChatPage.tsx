@@ -654,6 +654,7 @@ const ChatPage: React.FC = () => {
   const [contentPanelShellVisible, setContentPanelShellVisible] = useState(false)
   const [browserPresentationEnabled, setBrowserPresentationEnabled] = useState(false)
   const contentPanelCollapsedByWorkspaceRef = useRef<Record<string, boolean>>({})
+  const restoreContentPanelWithoutAnimationRef = useRef(false)
 
   const [activeApplyRecord, setActiveApplyRecord] = useState<AiFileChangeRecord | null>(null)
   const [fileChangeRecords, setFileChangeRecords] = useState<AiFileChangeRecord[]>([])
@@ -1544,6 +1545,7 @@ const ChatPage: React.FC = () => {
     }
 
     const requestId = sessionSwitchRequestRef.current + 1
+    const restoreExpandedPanel = contentPanelCollapsedByWorkspaceRef.current[session.id] === false
     sessionSwitchRequestRef.current = requestId
     currentSessionIdRef.current = session.id
 
@@ -1572,7 +1574,12 @@ const ChatPage: React.FC = () => {
     setContentPanel(createEmptyPanel())
     setBrowserPresentationEnabled(false)
     void window.api.browserPanelHide()
-    setContentPanelCollapsed(true)
+    setContentPanelCollapsed(!restoreExpandedPanel)
+    if (restoreExpandedPanel) {
+      restoreContentPanelWithoutAnimationRef.current = true
+      setContentPanelShellMounted(true)
+      setContentPanelShellVisible(true)
+    }
     resetApplyWorkspaceState()
 
     void loadSessionOpen(session.id, requestId).then(() => {
@@ -1587,7 +1594,14 @@ const ChatPage: React.FC = () => {
         return
       }
       setContentPanel(activeTab.state)
-      setContentPanelCollapsed(contentPanelCollapsedByWorkspaceRef.current[session.id] ?? true)
+      if (restoreExpandedPanel) {
+        setContentPanelShellMounted(true)
+        setContentPanelShellVisible(true)
+        setContentPanelCollapsed(false)
+        setBrowserPresentationEnabled(true)
+      } else {
+        setContentPanelCollapsed(true)
+      }
       if (
         activeTab.state.kind === 'apply_workspace' &&
         activeTab.state.applyId &&
@@ -1718,12 +1732,34 @@ const ChatPage: React.FC = () => {
     let startTimer: number | null = null
     let finishTimer: number | null = null
 
+    if (contentPanel.kind === 'browser') {
+      if (contentPanelCollapsed) {
+        setBrowserPresentationEnabled(false)
+        setContentPanelShellVisible(false)
+        setContentPanelShellMounted(false)
+        void window.api.browserPanelHide()
+      } else {
+        restoreContentPanelWithoutAnimationRef.current = false
+        setContentPanelShellMounted(true)
+        setContentPanelShellVisible(true)
+        setBrowserPresentationEnabled(true)
+      }
+      return
+    }
+
     if (contentPanelCollapsed) {
       setBrowserPresentationEnabled(false)
       setContentPanelShellVisible(false)
       void window.api.browserPanelHide()
       finishTimer = window.setTimeout(() => setContentPanelShellMounted(false), 220)
     } else {
+      if (restoreContentPanelWithoutAnimationRef.current) {
+        restoreContentPanelWithoutAnimationRef.current = false
+        setContentPanelShellMounted(true)
+        setContentPanelShellVisible(true)
+        setBrowserPresentationEnabled(true)
+        return
+      }
       setBrowserPresentationEnabled(false)
       setContentPanelShellMounted(true)
       startTimer = window.setTimeout(() => {
@@ -1738,6 +1774,8 @@ const ChatPage: React.FC = () => {
       if (startTimer !== null) window.clearTimeout(startTimer)
       if (finishTimer !== null) window.clearTimeout(finishTimer)
     }
+    // The active panel kind is sampled only when the collapsed state changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contentPanelCollapsed])
 
   useEffect(

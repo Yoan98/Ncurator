@@ -61,6 +61,7 @@ import type {
   AiRunUserTakeoverConfirmResponse,
   BrowserPanelBoundsRequest,
   BrowserPanelHideRequest,
+  BrowserPanelMenuRequest,
   BrowserPanelMutationResponse,
   BrowserPanelOcclusionRequest,
   BrowserPanelPresentationResponse,
@@ -2391,6 +2392,29 @@ export function registerHandlers(services: {
       }
     }
   )
+
+  ipcMain.handle(
+    'browser-panel-open-menu',
+    async (_event, payload: BrowserPanelMenuRequest): Promise<BrowserPanelMutationResponse> => {
+      try {
+        if (!browserEmbedService) return { success: false, error: 'browser service unavailable' }
+        await browserEmbedService.popupMenu(
+          String(payload?.tabId || ''),
+          Number(payload?.x || 0),
+          Number(payload?.y || 0)
+        )
+        return { success: true }
+      } catch (e) {
+        return { success: false, error: e instanceof Error ? e.message : String(e) }
+      }
+    }
+  )
+
+  ipcMain.handle('browser-panel-close-menu', (): BrowserPanelMutationResponse => {
+    if (!browserEmbedService) return { success: false, error: 'browser service unavailable' }
+    browserEmbedService.closePopupMenu()
+    return { success: true }
+  })
 
   ipcMain.handle(
     'browser-panel-occluded',

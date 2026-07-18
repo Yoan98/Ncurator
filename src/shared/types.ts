@@ -1123,6 +1123,12 @@ export type BrowserPanelOcclusionRequest = {
   occluded: boolean
 }
 
+export type BrowserPanelMenuRequest = {
+  tabId: string
+  x: number
+  y: number
+}
+
 export type BrowserPanelMutationResponse = {
   success: boolean
   error?: string

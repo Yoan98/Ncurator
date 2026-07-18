@@ -1,14 +1,11 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { Popover, Tooltip } from 'antd'
+import { Tooltip } from 'antd'
 import {
   HiArrowLeft,
   HiArrowPath,
   HiArrowRight,
-  HiArrowTopRightOnSquare,
   HiEllipsisVertical,
   HiGlobeAlt,
-  HiMinus,
-  HiPlus,
   HiXMark
 } from 'react-icons/hi2'
 import type { BrowserTabState } from '../../../../shared/types'
@@ -126,9 +123,9 @@ const WorkbenchBrowserPanel: React.FC<WorkbenchBrowserPanelProps> = ({
     void window.api.browserPanelSetOccluded({
       tabId,
       presentationId,
-      occluded: externallyOccluded || menuOpen
+      occluded: externallyOccluded
     })
-  }, [externallyOccluded, menuOpen, presentationId, tabId])
+  }, [externallyOccluded, presentationId, tabId])
 
   const runStateAction = async (
     action: () => Promise<{ success: boolean; state?: BrowserTabState; error?: string }>
@@ -145,58 +142,17 @@ const WorkbenchBrowserPanel: React.FC<WorkbenchBrowserPanelProps> = ({
     await runStateAction(() => window.api.browserTabNavigate({ tabId, url }))
   }
 
-  const menuContent = (
-    <div
-      className="w-[260px] rounded-[10px] border border-[#E6E5E1] bg-white p-1.5 shadow-[0_10px_30px_rgba(15,15,15,0.12)]"
-      data-testid={workbenchSelectors.browserMenu}
-    >
-      <div className="flex h-10 items-center justify-between gap-3 px-2">
-        <span className="text-[13px] text-[#57554F]">页面缩放</span>
-        <div
-          className="flex h-7 items-center overflow-hidden rounded-[7px] border border-[#E0DFDC] bg-white"
-          data-testid={workbenchSelectors.browserZoomControls}
-        >
-          <button
-            type="button"
-            className="flex h-full w-7 items-center justify-center text-[#787774] hover:bg-[#F4F4F2] hover:text-[#37352F]"
-            aria-label="缩小页面"
-            onClick={() => void runStateAction(() => window.api.browserPanelZoomOut({ tabId }))}
-          >
-            <HiMinus className="h-3.5 w-3.5" />
-          </button>
-          <button
-            type="button"
-            className="h-full min-w-[52px] border-x border-[#E0DFDC] px-2 text-[12px] font-medium tabular-nums text-[#57554F] hover:bg-[#F4F4F2]"
-            aria-label="恢复页面缩放为 100%"
-            onClick={() => void runStateAction(() => window.api.browserPanelZoomReset({ tabId }))}
-          >
-            {state.zoomPercent}%
-          </button>
-          <button
-            type="button"
-            className="flex h-full w-7 items-center justify-center text-[#787774] hover:bg-[#F4F4F2] hover:text-[#37352F]"
-            aria-label="放大页面"
-            onClick={() => void runStateAction(() => window.api.browserPanelZoomIn({ tabId }))}
-          >
-            <HiPlus className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      </div>
-      <div className="my-1 h-px bg-[#EEEEEC]" />
-      <button
-        type="button"
-        className="flex h-9 w-full items-center gap-2 rounded-[7px] px-2 text-left text-[13px] text-[#57554F] hover:bg-[#F4F4F2] disabled:text-[#C9C7C2]"
-        disabled={!state.url}
-        onClick={() => {
-          setMenuOpen(false)
-          void window.api.browserPanelOpenExternal({ tabId })
-        }}
-      >
-        <HiArrowTopRightOnSquare className="h-4 w-4" />
-        在系统浏览器中打开
-      </button>
-    </div>
-  )
+  const openMenu = async (button: HTMLButtonElement): Promise<void> => {
+    const rect = button.getBoundingClientRect()
+    setMenuOpen(true)
+    const response = await window.api.browserPanelOpenMenu({
+      tabId,
+      x: Math.max(0, rect.right - 240),
+      y: rect.bottom
+    })
+    setMenuOpen(false)
+    if (!response.success) setError(response.error || '浏览器菜单打开失败')
+  }
 
   return (
     <div
@@ -272,25 +228,16 @@ const WorkbenchBrowserPanel: React.FC<WorkbenchBrowserPanelProps> = ({
             </button>
           </Tooltip>
         </form>
-        <Popover
-          content={menuContent}
-          trigger={['click']}
-          placement="bottomRight"
-          open={menuOpen}
-          arrow={false}
-          overlayInnerStyle={{ padding: 0, background: 'transparent', boxShadow: 'none' }}
-          onOpenChange={(open) => {
-            setMenuOpen(open)
-          }}
+        <button
+          type="button"
+          className="flex h-7 w-7 items-center justify-center rounded-[6px] text-[#787774] hover:bg-[#F4F4F2]"
+          aria-label="更多浏览器操作"
+          aria-expanded={menuOpen}
+          data-testid={workbenchSelectors.browserMenu}
+          onClick={(event) => void openMenu(event.currentTarget)}
         >
-          <button
-            type="button"
-            className="flex h-7 w-7 items-center justify-center rounded-[6px] text-[#787774] hover:bg-[#F4F4F2]"
-            aria-label="更多浏览器操作"
-          >
-            <HiEllipsisVertical className="h-4 w-4" />
-          </button>
-        </Popover>
+          <HiEllipsisVertical className="h-4 w-4" />
+        </button>
       </div>
       {error ? (
         <div className="shrink-0 border-b border-[#E7CAC6] px-3 py-1.5 text-xs text-[#B3261E]">

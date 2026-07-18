@@ -67,9 +67,9 @@ describe('workbench conversation e2e', () => {
 
           const addButton = getWorkbenchLocator(page, workbenchSelectors.resourceTabAddButton)
           await addButton.click()
-          const fileMenuLabelVisible = await page
-            .getByRole('menuitem', { name: '文件', exact: true })
-            .isVisible()
+          const fileMenuItem = page.getByRole('menuitem', { name: '文件', exact: true })
+          await fileMenuItem.waitFor({ state: 'visible' })
+          const fileMenuLabelVisible = await fileMenuItem.isVisible()
           const legacyFileMenuLabelCount = await page
             .getByRole('menuitem', { name: '打开文件', exact: true })
             .count()
@@ -236,20 +236,41 @@ describe('workbench conversation e2e', () => {
           const browserGoButtonVisible = await browserPanel
             .getByRole('button', { name: '前往' })
             .isVisible()
-          await browserPanel.getByRole('button', { name: '更多浏览器操作' }).click()
-          const zoomControls = getWorkbenchLocator(page, workbenchSelectors.browserZoomControls)
-          await zoomControls.waitFor({ state: 'visible' })
-          const zoomLayout = await zoomControls.evaluate((element) =>
-            [...element.querySelectorAll('button')].map((button) => {
-              const rect = button.getBoundingClientRect()
-              return {
-                top: rect.top,
-                bottom: rect.bottom,
-                label: button.getAttribute('aria-label')
-              }
-            })
+          const activeBrowserTestId = await tabs.nth(7).getAttribute('data-testid')
+          const activeBrowserTabId = activeBrowserTestId?.split('-browser-').at(-1) || ''
+          const browserViewport = getWorkbenchLocator(page, workbenchSelectors.browserViewport)
+          const viewportBeforeMenu = await browserViewport.boundingBox()
+          const zoomBeforeMenu = await page.evaluate(
+            async (tabId) => window.api.browserPanelStateGet({ tabId }),
+            activeBrowserTabId
           )
-          await page.keyboard.press('Escape')
+          const browserMenuButton = browserPanel.getByRole('button', {
+            name: '更多浏览器操作'
+          })
+          await browserMenuButton.click()
+          await page.waitForFunction(
+            (testId) =>
+              document.querySelector(`[data-testid="${testId}"]`)?.getAttribute('aria-expanded') ===
+              'true',
+            workbenchSelectors.browserMenu
+          )
+          const viewportDuringMenu = await browserViewport.boundingBox()
+          const zoomDuringMenu = await page.evaluate(
+            async (tabId) => window.api.browserPanelStateGet({ tabId }),
+            activeBrowserTabId
+          )
+          await page.evaluate(async () => await window.api.browserPanelCloseMenu())
+          await page.waitForFunction(
+            (testId) =>
+              document.querySelector(`[data-testid="${testId}"]`)?.getAttribute('aria-expanded') ===
+              'false',
+            workbenchSelectors.browserMenu
+          )
+          const viewportAfterMenu = await browserViewport.boundingBox()
+          const zoomAfterMenu = await page.evaluate(
+            async (tabId) => window.api.browserPanelStateGet({ tabId }),
+            activeBrowserTabId
+          )
 
           const collapseToggle = getWorkbenchLocator(page, workbenchSelectors.contentPanelToggle)
           await collapseToggle.hover()
@@ -284,7 +305,14 @@ describe('workbench conversation e2e', () => {
             denseDragLayout,
             recoveredDragLayout,
             chromeLayout,
-            zoomLayout,
+            browserMenuLayout: {
+              viewportBeforeMenu,
+              viewportDuringMenu,
+              viewportAfterMenu,
+              zoomBeforeMenu: zoomBeforeMenu.state?.zoomPercent,
+              zoomDuringMenu: zoomDuringMenu.state?.zoomPercent,
+              zoomAfterMenu: zoomAfterMenu.state?.zoomPercent
+            },
             browserGoButtonVisible,
             hoverOverflow,
             shellPresentDuringExit,
@@ -362,23 +390,40 @@ describe('workbench conversation e2e', () => {
             }
           )
           await runtime.assertThat(
-            result.zoomLayout.length === 3 &&
+            result.browserMenuLayout.viewportBeforeMenu !== null &&
+              result.browserMenuLayout.viewportDuringMenu !== null &&
+              result.browserMenuLayout.viewportAfterMenu !== null &&
+              result.browserMenuLayout.zoomBeforeMenu === 100 &&
+              result.browserMenuLayout.zoomDuringMenu === 100 &&
+              result.browserMenuLayout.zoomAfterMenu === 100 &&
+              Math.abs(
+                result.browserMenuLayout.viewportBeforeMenu.width -
+                  result.browserMenuLayout.viewportDuringMenu.width
+              ) < 1 &&
+              Math.abs(
+                result.browserMenuLayout.viewportBeforeMenu.height -
+                  result.browserMenuLayout.viewportDuringMenu.height
+              ) < 1 &&
+              Math.abs(
+                result.browserMenuLayout.viewportBeforeMenu.width -
+                  result.browserMenuLayout.viewportAfterMenu.width
+              ) < 1 &&
+              Math.abs(
+                result.browserMenuLayout.viewportBeforeMenu.height -
+                  result.browserMenuLayout.viewportAfterMenu.height
+              ) < 1 &&
               result.browserGoButtonVisible &&
               !result.hoverOverflow.horizontal &&
               !result.hoverOverflow.vertical &&
-              result.shellPresentDuringExit &&
-              result.zoomLayout.every(
-                (button) =>
-                  Math.abs(button.top - result.zoomLayout[0].top) < 1 &&
-                  Math.abs(button.bottom - result.zoomLayout[0].bottom) < 1
-              ) &&
+              !result.shellPresentDuringExit &&
               result.restoreButtonRightOffset >= 0 &&
               result.restoreButtonRightOffset < 200,
             {
               name: 'browser-menu-and-panel-toggle-remain-operable',
-              message: '浏览器缩放必须在同一行，浮层需避让原生视图，折叠后恢复按钮应贴近右边缘。',
+              message:
+                '浏览器原生菜单不得改变 viewport 或 zoom，浏览器侧栏折叠应立即卸载 shell，恢复按钮应贴近右边缘。',
               data: {
-                zoomLayout: result.zoomLayout,
+                browserMenuLayout: result.browserMenuLayout,
                 restoreButtonRightOffset: result.restoreButtonRightOffset
               }
             }
