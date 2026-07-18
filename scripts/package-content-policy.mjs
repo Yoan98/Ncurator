@@ -119,7 +119,8 @@ const SECRET_PATTERNS = [
   { label: 'Stripe live secret', pattern: /\bsk_live_[A-Za-z0-9]{20,}\b/u }
 ]
 
-const normalizeRelativePath = (value) => value.replaceAll('\\', '/').replace(/^\/+|\/+$/gu, '')
+export const normalizeRelativePath = (value) =>
+  value.replaceAll('\\', '/').replace(/^\/+|\/+$/gu, '')
 
 const isLegalNotice = (name) =>
   /^(?:license|licence|notice|copying)(?:[._-].*)?$/u.test(name) ||

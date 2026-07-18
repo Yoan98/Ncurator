@@ -143,7 +143,10 @@ try {
       String(process.env.CSC_IDENTITY_AUTO_DISCOVERY || '').trim() || 'false',
     NCURATOR_SIDECAR_BROWSER_CACHE:
       String(process.env.NCURATOR_SIDECAR_BROWSER_CACHE || '').trim() ||
-      path.join(os.homedir(), '.ncurator', 'release-tools', 'sidecar-browser-cache', 'win32-x64')
+      path.join(os.homedir(), '.ncurator', 'release-tools', 'sidecar-browser-cache', 'win32-x64'),
+    NCURATOR_SIDECAR_BUILD_PYTHON:
+      String(process.env.NCURATOR_SIDECAR_BUILD_PYTHON || '').trim() ||
+      inspection.python.executable
   }
   process.stdout.write(`[release] building ${releaseTag} for Windows x64\n`)
   await run(inspection.pnpmExecutable, ['install', '--frozen-lockfile'], {

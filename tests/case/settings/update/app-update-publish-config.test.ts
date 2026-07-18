@@ -42,6 +42,7 @@ describe('app update publish config', () => {
     expect(localRelease).toContain('tag-commit.txt')
     expect(localRelease).toContain('reusable-cache')
     expect(localRelease).toContain("['run', 'build:win']")
+    expect(localRelease).toContain('inspection.python.executable')
     expect(localRelease).toContain('upload-r2-release-fragment.mjs')
 
     const windowsToolCache = await readFile(

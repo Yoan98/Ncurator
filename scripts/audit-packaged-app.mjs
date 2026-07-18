@@ -6,6 +6,7 @@ import {
   assertMinimalPackageJson,
   assertSafePackagePaths,
   auditPackageDirectory,
+  normalizeRelativePath,
   scanTextForSecrets
 } from './package-content-policy.mjs'
 import { evaluatePackageSizeBudget, loadPackageSizeBudgetConfig } from './package-size-budget.mjs'
@@ -55,6 +56,8 @@ const listArchiveFiles = (archivePath) => {
 }
 
 const formatBytes = (bytes) => `${(bytes / 1024 / 1024).toFixed(1)} MiB`
+const extractArchiveFile = (archivePath, relativePath) =>
+  extractFile(archivePath, relativePath.replaceAll('/', path.sep))
 
 if (!fs.existsSync(inputDirectory)) throw new Error(`package output not found: ${inputDirectory}`)
 
@@ -63,7 +66,7 @@ if (archives.length === 0) throw new Error(`no packaged app.asar found under ${i
 
 const applications = []
 for (const archivePath of archives) {
-  const archiveEntries = listPackage(archivePath).map((entry) => entry.replace(/^\//u, ''))
+  const archiveEntries = listPackage(archivePath).map(normalizeRelativePath)
   assertSafePackagePaths(archiveEntries)
   const archiveRoots = [...new Set(archiveEntries.map((entry) => entry.split('/')[0]))].sort()
   const unexpectedRoots = archiveRoots.filter(
@@ -73,14 +76,16 @@ for (const archivePath of archives) {
     throw new Error(`unexpected app.asar root entries: ${unexpectedRoots.join(', ')}`)
   }
 
-  const packagedPackageJson = JSON.parse(extractFile(archivePath, 'package.json').toString('utf8'))
+  const packagedPackageJson = JSON.parse(
+    extractArchiveFile(archivePath, 'package.json').toString('utf8')
+  )
   assertMinimalPackageJson(packagedPackageJson, `${archivePath}:package.json`)
 
   const archiveFiles = listArchiveFiles(archivePath)
   for (const item of archiveFiles) {
     if (!item.relativePath.startsWith('out/') || item.size > 25 * 1024 * 1024) continue
     if (!/\.(?:js|cjs|mjs|json|html|css)$/u.test(item.relativePath)) continue
-    const source = extractFile(archivePath, item.relativePath).toString('utf8')
+    const source = extractArchiveFile(archivePath, item.relativePath).toString('utf8')
     scanTextForSecrets(source, `${archivePath}:${item.relativePath}`)
   }
 

@@ -6,6 +6,7 @@ import process from 'node:process'
 import { promisify } from 'node:util'
 import { loadReleaseEnvironment } from './release-environment.mjs'
 import { assertReleaseFragment } from './release-fragment-contract.mjs'
+import { fetchWithRetry } from './release-http.mjs'
 
 const execFileAsync = promisify(execFile)
 const WINDOWS_PLATFORM = 'windows-x64'
@@ -77,13 +78,19 @@ const resolvePython = async () => {
     const result = await commandResult(candidate.command, [
       ...candidate.args,
       '-c',
-      'import platform, sys; print(f"{sys.version_info.major}.{sys.version_info.minor}|{platform.machine()}")'
+      'import platform, sys; print(f"{sys.version_info.major}.{sys.version_info.minor}|{platform.machine()}|{sys.executable}")'
     ])
     if (!result.ok) continue
-    const [version, architecture] = result.stdout.split('|')
+    const [version, architecture, executable] = result.stdout.split('|')
     const [major, minor] = version.split('.').map(Number)
     if (major === 3 && minor === 12) {
-      return { command: candidate.command, args: candidate.args, version, architecture }
+      return {
+        command: candidate.command,
+        args: candidate.args,
+        version,
+        architecture,
+        executable
+      }
     }
   }
   return undefined
@@ -184,7 +191,7 @@ export const dispatchWindowsRelease = async (root, releaseTag) => {
   const token = String(process.env.NCURATOR_ACTIONS_TOKEN || '').trim()
   if (!token) throw new Error('NCURATOR_ACTIONS_TOKEN is required to dispatch GitHub Actions')
   const repository = String(process.env.RELEASE_REPOSITORY || 'Yoan98/Ncurator')
-  const response = await fetch(
+  const response = await fetchWithRetry(
     `https://api.github.com/repos/${repository}/actions/workflows/release.yml/dispatches`,
     {
       method: 'POST',
@@ -232,10 +239,13 @@ export const verifyPublicReleaseFragment = async (
   publicBaseUrl = PUBLIC_RELEASE_BASE_URL
 ) => {
   for (const file of fragment.files) {
-    const response = await fetch(`${publicBaseUrl}/artifacts/${fragment.tag}/${file.name}`, {
-      method: 'HEAD',
-      cache: 'no-store'
-    })
+    const response = await fetchWithRetry(
+      `${publicBaseUrl}/artifacts/${fragment.tag}/${file.name}`,
+      {
+        method: 'HEAD',
+        cache: 'no-store'
+      }
+    )
     if (!response.ok || Number(response.headers.get('content-length')) !== file.size) {
       throw new Error(`remote release asset verification failed: ${file.name}`)
     }
