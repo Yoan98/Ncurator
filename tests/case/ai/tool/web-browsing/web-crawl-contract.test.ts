@@ -433,24 +433,31 @@ describe('ai tool web backend', () => {
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
+        await runtime.seedLlmConfig({
+          id: 'ai-live-config',
+          name: 'Browser tab binding test model',
+          providerKind: 'openai-compatible',
+          base_url: 'https://example.com/v1',
+          model_name: 'browser-tab-binding-test',
+          api_key: 'test-key'
+        })
         const ensuredTabIds = ['automation-tab-a', 'ui-active-tab-b']
-        const shownTabIds: string[] = []
+        const runTabIds: string[] = []
         let ensureCallCount = 0
         const harness = createWebToolHarness(runtime, {
           sessionId: 'browser-tab-binding-session',
+          modelName: 'browser-tab-binding-test',
           browserUseService: {
             async ensureAutomationTab() {
               const id = ensuredTabIds[Math.min(ensureCallCount, ensuredTabIds.length - 1)]
               ensureCallCount += 1
               return { id }
             },
-            async show(tabId) {
-              if (tabId) shownTabIds.push(tabId)
-            },
             async navigate() {
               return
             },
             async run(input) {
+              runTabIds.push(input.tabId)
               return {
                 action: input.action,
                 page: { url: 'https://example.com/task' },
@@ -480,13 +487,13 @@ describe('ai tool web backend', () => {
           action: 'extract',
           instruction: '读取结果'
         })
-        return { first, second, ensureCallCount, shownTabIds }
+        return { first, second, ensureCallCount, runTabIds }
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
           result.ensureCallCount === 1 &&
-            result.shownTabIds.length === 2 &&
-            result.shownTabIds.every((tabId) => tabId === 'automation-tab-a'),
+            result.runTabIds.length === 2 &&
+            result.runTabIds.every((tabId) => tabId === 'automation-tab-a'),
           {
             name: 'browser-use-run-keeps-initial-tab-binding',
             message: '同一轮 Run 不应因 UI 活动标签变化而切换 browser_use 的目标标签。',

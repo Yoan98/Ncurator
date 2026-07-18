@@ -55,7 +55,7 @@ describe('ai human mock-llm backend', () => {
               },
               (input) => {
                 if (
-                  !input.user.includes('"blocks":[{"blockId":"b:0"') ||
+                  !input.user.includes('"blocks":[{"blockId":"blk_') ||
                   !input.user.includes('"blockIndex":0') ||
                   !input.user.includes('"blockIndex":229') ||
                   !input.user.includes('第 230 段普通说明。')
@@ -93,7 +93,7 @@ describe('ai human mock-llm backend', () => {
               },
               (input) => {
                 if (
-                  !input.user.includes('"blocks":[{"blockId":"b:5"') ||
+                  !input.user.includes('"blocks":[{"blockId":"blk_') ||
                   !input.user.includes('反⾛样会在采样不足时出现明显锯齿')
                 ) {
                   throw new Error('brain prompt is missing range read structured facts')
@@ -141,7 +141,8 @@ describe('ai human mock-llm backend', () => {
             result.output.deliveryMarkdown.includes('不应答成“未写”'),
           {
             name: 'human-brain-sees-truncation-and-normalized-search-structured-facts',
-            message: 'human prompt 应能读到 outline 截断、归一化搜索命中与区间精读的结构化事实摘要，并完成正确收口。',
+            message:
+              'human prompt 应能读到 outline 截断、归一化搜索命中与区间精读的结构化事实摘要，并完成正确收口。',
             data: {
               searchResult,
               readResult,

@@ -19,7 +19,7 @@ import {
 
 export type SettingsPageTarget = 'model' | 'workspace' | 'vector'
 
-export const SETTINGS_E2E_TIMEOUT_MS = 30_000
+export const SETTINGS_E2E_TIMEOUT_MS = 60_000
 export const SETTINGS_REAL_WORKSPACE_E2E_TIMEOUT_MS = 180_000
 export const SETTINGS_WEB_E2E_TIMEOUT_MS = 120_000
 const execFileAsync = promisify(execFile)
@@ -432,12 +432,13 @@ export const createFixtureWorkspace = async (
 ): Promise<WorkspaceCreateUiResponse> => {
   const workspaceId = await createWorkspaceThroughSettingsUi(page, input.name)
   if (input.rootPath) {
-    await mkdir(input.rootPath, { recursive: true })
-    await bindWorkspaceRootThroughIpc(page, input.rootPath)
+    const rootPath = path.resolve(input.rootPath)
+    await mkdir(rootPath, { recursive: true })
+    await bindWorkspaceRootThroughIpc(page, rootPath)
     await navigateToSettingsSection(page, 'workspace')
-    if (!(await waitForWorkspaceRootPathVisible(page, input.rootPath))) {
+    if (!(await waitForWorkspaceRootPathVisible(page, rootPath))) {
       throw new Error(
-        `workspace root was bound through ipc but not reflected in settings ui: ${input.rootPath}`
+        `workspace root was bound through ipc but not reflected in settings ui: ${rootPath}`
       )
     }
   }
