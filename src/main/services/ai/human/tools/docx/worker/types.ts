@@ -171,18 +171,30 @@ export type DocxWorkerResponse =
       warnings?: string[]
     }
 
-export type DocSnapshot = {
+type DocSnapshotBase = {
   docId: string
   sourcePath: string
   createdAt: number
   parentDocId?: string
   buffer: Buffer
   checksum: string
-  bundle: ParsedDocxBundle
+  meta: DocxOpenMeta
+  imageCount: number
   index: BlockIndex
   identity: DocxIdentityIndex
   detailByBlockId: Map<string, DocxDetailedBlock>
 }
+
+export type DocSnapshot = DocSnapshotBase &
+  (
+    | {
+        format: 'docx'
+        bundle: ParsedDocxBundle
+      }
+    | {
+        format: 'doc'
+      }
+  )
 
 export type RunSessions = Map<string, Map<string, DocSnapshot>>
 

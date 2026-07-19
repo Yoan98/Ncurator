@@ -112,6 +112,12 @@ export const humanDecisionHintSchema = z.discriminatedUnion('code', [
     })
   }),
   z.object({
+    code: z.literal('legacy_doc_edit_unsupported'),
+    detail: z.object({
+      instruction: z.string().min(1)
+    })
+  }),
+  z.object({
     code: z.literal('hand_docx_edit_failed'),
     detail: z.object({
       toolName: z.literal('docx_edit'),

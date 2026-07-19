@@ -20,6 +20,11 @@ import { DOCX_EDIT_TOOL_SPEC } from '../toolSpecs'
 import { createDocxTool, finalizeDocxToolFailure, finalizeDocxToolSuccess } from './workerTool'
 import type { DocxToolFailure } from '../runtime'
 import { createDocxFile } from '../utils/createDocxFile'
+import {
+  isLegacyDocPath,
+  LEGACY_DOC_EDIT_DECISION_HINT,
+  LEGACY_DOC_EDIT_ERROR
+} from '../legacyDocPolicy'
 
 const paragraphSpecFromText = (text: string, style?: string): DocxParagraphSpec => ({
   kind: 'paragraph',
@@ -1013,6 +1018,25 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
       })
     },
     execute: async ({ args, toolName, toolCallId }) => {
+      if (isLegacyDocPath(args.sourcePath)) {
+        return finalizeDocxToolFailure({
+          runtime,
+          failure: runtime.emitFailure({
+            toolName,
+            toolCallId,
+            reason: 'invalid_input',
+            error: LEGACY_DOC_EDIT_ERROR,
+            decisionHint: LEGACY_DOC_EDIT_DECISION_HINT,
+            resourceContext: runtime.buildResourceContext({
+              sourcePath: args.sourcePath,
+              effectKind: 'mutated'
+            })
+          }),
+          activity: {
+            actionType: DOCX_EDIT_TOOL_SPEC.activityActionType!
+          }
+        })
+      }
       const createAction = args.actions.find((action) => action.type === 'create_document')
       if (createAction) {
         if (args.actions.length !== 1) {

@@ -180,6 +180,10 @@ export type DocxFailureResult = {
   error: string
   warnings: string[]
   reason?: string
+  decisionHint?: {
+    code?: string
+    instruction?: string
+  }
 }
 
 export const findOutlineBlock = (

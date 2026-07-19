@@ -34,7 +34,7 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
     countsTowardToolBudget: true,
     title: 'docx-read',
     description:
-      '读取 docx 的结构、内容块、检索结果和任务内修订历史，并返回块级索引、正文、匹配信息或 revision 信息。',
+      '读取 .docx、.doc 文档的结构、内容块、检索结果和任务内修订历史，并返回块级索引、正文、匹配信息或 revision 信息。',
     toolNames: ['docx_read_outline', 'docx_search', 'docx_read_blocks']
   },
   'docx-write': {

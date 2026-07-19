@@ -43,6 +43,12 @@ const HINT_FIXTURES: Record<(typeof HUMAN_DECISION_HINT_CODES)[number], HumanDec
       limit: 5
     }
   },
+  legacy_doc_edit_unsupported: {
+    code: 'legacy_doc_edit_unsupported',
+    detail: {
+      instruction: '不要继续尝试编辑 .doc 文件，跳过它继续推进。'
+    }
+  },
   hand_docx_edit_failed: {
     code: 'hand_docx_edit_failed',
     detail: {
@@ -136,6 +142,12 @@ const HINT_FIXTURES: Record<(typeof HUMAN_DECISION_HINT_CODES)[number], HumanDec
     detail: {
       pendingItems: ['检查是否已经满足用户诉求并能进入最终交付']
     }
+  },
+  brain_content_safety: {
+    code: 'brain_content_safety',
+    detail: {
+      message: '当前请求无法继续执行。'
+    }
   }
 }
 
@@ -168,5 +180,16 @@ describe('ai unit human decision hint contract', () => {
 
     expect(rendered).toContain('错误：docx_edit(create_document) will not overwrite an existing file: report.docx。')
     expect(rendered.match(/docx_edit\(create_document\) will not overwrite an existing file: report\.docx/g)).toHaveLength(1)
+  })
+
+  it('renders legacy DOC guidance exactly', () => {
+    expect(
+      renderDecisionHintForBrain({
+        code: 'legacy_doc_edit_unsupported',
+        detail: {
+          instruction: '不要继续尝试编辑 .doc 文件，跳过它继续推进。'
+        }
+      })
+    ).toBe('不要继续尝试编辑 .doc 文件，跳过它继续推进。')
   })
 })

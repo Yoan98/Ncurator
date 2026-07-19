@@ -53,9 +53,7 @@ describe('settings workspace backend', () => {
         ])
         let hardLimitError = ''
         try {
-          createWorkspaceEmbeddingBatches([
-            createChunk(WORKSPACE_EMBEDDING_CHUNK_MAX_CHARS + 1, 1)
-          ])
+          createWorkspaceEmbeddingBatches([createChunk(WORKSPACE_EMBEDDING_CHUNK_MAX_CHARS + 1, 1)])
         } catch (error) {
           hardLimitError = error instanceof Error ? error.message : String(error)
         }
@@ -121,6 +119,18 @@ describe('settings workspace backend', () => {
           contentHash: textContentHash,
           fileExt: '.txt'
         })
+        const legacyDocPath = path.join(runtime.workspaceRoot, 'legacy-readable.doc')
+        await fs.copyFile(
+          path.resolve('tests/fixtures/legacy-doc/legacy-readable.doc'),
+          legacyDocPath
+        )
+        const legacyDocContentHash = await computeWorkspaceFileContentHash(legacyDocPath)
+        const legacyDocSplitSnapshot = await buildWorkspaceKnowledgeSplitSnapshot({
+          ingestionService: IngestionService.getInstance(),
+          filePath: legacyDocPath,
+          contentHash: legacyDocContentHash,
+          fileExt: '.doc'
+        })
         const markdownWorkerSuccess = await handleWorkspacePrepareWorkerRequest({
           requestId: 'worker-contract-markdown-success',
           action: 'prepare_source',
@@ -144,6 +154,14 @@ describe('settings workspace backend', () => {
           payload: {
             filePath: pdfFilePath,
             cachedSplit: pdfSplitSnapshot
+          }
+        })
+        const legacyDocWorkerSuccess = await handleWorkspacePrepareWorkerRequest({
+          requestId: 'worker-contract-legacy-doc-success',
+          action: 'prepare_source',
+          payload: {
+            filePath: legacyDocPath,
+            cachedSplit: legacyDocSplitSnapshot
           }
         })
         const workerFailure = await handleWorkspacePrepareWorkerRequest({
@@ -216,14 +234,17 @@ parentPort.on('message', (request) => {
             md: isSupportedLocalFilePath(markdownFilePath),
             markdown: isSupportedLocalFilePath(path.join(runtime.workspaceRoot, 'notes.markdown')),
             txt: isSupportedLocalFilePath(textFilePath),
+            doc: isSupportedLocalFilePath(legacyDocPath),
             js: isSupportedLocalFilePath(path.join(runtime.workspaceRoot, 'unsupported.js'))
           },
           markdownSplitSnapshot,
           textSplitSnapshot,
+          legacyDocSplitSnapshot,
           markdownWorkerSuccess,
           emptyTextWorkerSuccess,
           workerSuccess,
           pdfWorkerSuccess,
+          legacyDocWorkerSuccess,
           workerFailure,
           exitError,
           exitRecovery
@@ -262,11 +283,23 @@ parentPort.on('message', (request) => {
           result.textFileSupport.md &&
             result.textFileSupport.markdown &&
             result.textFileSupport.txt &&
+            result.textFileSupport.doc &&
             !result.textFileSupport.js,
           {
             name: 'text-file-extensions-supported-for-index',
             message: 'workspace 文件索引应支持 .md/.markdown/.txt，并继续拒绝无关脚本文件。',
             data: result
+          }
+        )
+
+        runtime.assertThat(
+          result.legacyDocSplitSnapshot.chunks.some((chunk) =>
+            chunk.text.includes('Unicode characters')
+          ),
+          {
+            name: 'legacy-doc-file-produces-searchable-split-chunks',
+            message: 'legacy .doc should be read by word-extractor and split into index chunks',
+            data: result.legacyDocSplitSnapshot
           }
         )
 
@@ -314,8 +347,7 @@ parentPort.on('message', (request) => {
             result.workerSuccess.payload?.splitSnapshot.chunks.length === 1,
           {
             name: 'worker-success-returns-main-process-split-payload',
-            message:
-              'worker 成功时只返回 split chunks，向量推理由独立 embedding runtime 负责。',
+            message: 'worker 成功时只返回 split chunks，向量推理由独立 embedding runtime 负责。',
             data: result
           }
         )
@@ -336,6 +368,19 @@ parentPort.on('message', (request) => {
         )
 
         runtime.assertThat(
+          result.legacyDocWorkerSuccess.ok &&
+            result.legacyDocWorkerSuccess.payload?.fileExt === '.doc' &&
+            result.legacyDocWorkerSuccess.payload.splitSnapshot.chunks.some((chunk) =>
+              chunk.text.includes('Unicode characters')
+            ),
+          {
+            name: 'worker-legacy-doc-success-uses-text-loader',
+            message: 'workspace worker should index legacy .doc files',
+            data: result.legacyDocWorkerSuccess
+          }
+        )
+
+        runtime.assertThat(
           !result.workerFailure.ok && result.workerFailure.error?.includes('Unsupported file type'),
           {
             name: 'worker-js-error-becomes-file-level-failure-response',
@@ -350,8 +395,7 @@ parentPort.on('message', (request) => {
             result.exitRecovery.contentHash === 'exit-recovery-hash',
           {
             name: 'worker-exit-fails-current-file-and-rebuilds-for-next-file',
-            message:
-              'worker 非 0 退出时应让当前请求失败，并在后续文件请求中重建 worker 继续处理。',
+            message: 'worker 非 0 退出时应让当前请求失败，并在后续文件请求中重建 worker 继续处理。',
             data: result
           }
         )

@@ -74,6 +74,8 @@ Retrieval 负责文档索引、向量检索、全文检索和结果融合。检�
 
 Docx Runtime 负责 Word 文档读取、搜索、编辑、任务内回滚、写回和用户回退。它通过 AI 工具暴露能力，但底层由 runtime、worker 和 OOXML adapter 分层完成。
 
+读取工具同时支持 `.docx` 和旧版 `.doc`。`.docx` 使用 OOXML block index；`.doc` 使用 `word-extractor` 解析正文并映射为只读段落 block，继续支持 percent、blockIndex、blockId 和搜索协议。编辑工具只接受 `.docx`；`.doc` 写入会在创建编辑会话前失败，并要求用户先转换为 `.docx`。
+
 ### Text File Runtime
 
 Text File Runtime 通过 builtin `text-file` skill 提供 `text_file_read` 和 `text_file_edit`。它负责 UTF-8 普通文本读取、创建、完整改写、唯一文本编辑和全部精确匹配替换。写入先完成全部校验，再通过同目录临时文件原子替换。工具只提供写入语义和专用元数据，文件变化统一由 Run 前后工作区扫描确认。

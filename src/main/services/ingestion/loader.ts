@@ -6,6 +6,7 @@ import { Document } from '@langchain/core/documents'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { TextDecoder } from 'node:util'
+import { extractLegacyDocBody } from '../word/legacyDocReader'
 import {
   SPLITTER_BIG_CHUNK_SETTING,
   SPLITTER_MINI_CHUNK_SIZE,
@@ -15,6 +16,7 @@ import {
 
 export const SUPPORTED_LOCAL_FILE_EXTENSIONS = [
   '.pdf',
+  '.doc',
   '.docx',
   '.md',
   '.markdown',
@@ -47,6 +49,8 @@ export class IngestionService {
     const fileExt = path.extname(filePath).toLowerCase()
     if (fileExt === '.pdf') {
       loader = new PDFLoader(filePath)
+    } else if (fileExt === '.doc') {
+      return await this.loadLegacyDocFile(filePath, fileExt)
     } else if (fileExt === '.docx') {
       loader = new DocxLoader(filePath)
     } else if (isSupportedTextFilePath(filePath)) {
@@ -57,6 +61,22 @@ export class IngestionService {
 
     const docs = await loader.load()
     return docs
+  }
+
+  private async loadLegacyDocFile(filePath: string, fileExt: string): Promise<Document[]> {
+    const text = await extractLegacyDocBody(filePath)
+    if (!text.trim()) return []
+
+    return [
+      new Document({
+        pageContent: text,
+        metadata: {
+          source: filePath,
+          file_path: filePath,
+          fileExt
+        }
+      })
+    ]
   }
 
   private async loadTextFile(filePath: string, fileExt: string): Promise<Document[]> {

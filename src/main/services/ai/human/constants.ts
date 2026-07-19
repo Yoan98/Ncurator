@@ -62,6 +62,7 @@ export const HUMAN_DECISION_HINT_CODES = [
   'learning_no_effect',
   'terminal_approval_blocked',
   'hand_call_limit_exceeded',
+  'legacy_doc_edit_unsupported',
   'hand_docx_positioned_write_blocked',
   'hand_docx_edit_failed',
   'hand_tool_limit_near_exhausted',
