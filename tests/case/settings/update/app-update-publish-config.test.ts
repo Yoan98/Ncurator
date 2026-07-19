@@ -12,6 +12,16 @@ describe('app update publish config', () => {
     expect(config).not.toMatch(/publish:\s*\n\s*provider:\s*github/u)
   })
 
+  it('makes updater-triggered NSIS installs silent while keeping normal installs assisted', async () => {
+    const config = await readFile(path.resolve('electron-builder.yml'), 'utf8')
+    const include = await readFile(path.resolve('build/nsis-updated-silent.nsh'), 'utf8')
+
+    expect(config).toContain('include: build/nsis-updated-silent.nsh')
+    expect(config).toContain('oneClick: false')
+    expect(include).toContain('${if} ${isUpdated}')
+    expect(include).toContain('SetSilent silent')
+  })
+
   it('uses a local-first Windows release with explicit Actions fallback', async () => {
     const workflow = await readFile(path.resolve('.github/workflows/release.yml'), 'utf8')
     const packageJson = JSON.parse(await readFile(path.resolve('package.json'), 'utf8'))

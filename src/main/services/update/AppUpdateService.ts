@@ -253,7 +253,8 @@ export class AppUpdateService {
       }
     }
 
-    this.dependencies.updater.quitAndInstall(false, true)
+    const installSilently = this.dependencies.platform === 'win32'
+    this.dependencies.updater.quitAndInstall(installSilently, true)
     return {
       success: true,
       snapshot: this.snapshot

@@ -26,6 +26,7 @@
     "test:update:backend": "node scripts/test-workflow.mjs --domain settings --suite update --type backend",
     "test:update:e2e": "node scripts/test-workflow.mjs --domain settings --suite update --type e2e",
     "test:update:real": "node scripts/test-app-update-real.mjs",
+    "test:update:real:win": "node scripts/test-app-update-real-windows.mjs",
     "release:start": "node scripts/prepare-desktop-release.mjs",
     "release:win": "node scripts/release-windows-local.mjs",
     "release:win:auto": "node scripts/route-windows-release.mjs",

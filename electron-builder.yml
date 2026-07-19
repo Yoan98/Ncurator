@@ -36,6 +36,7 @@ win:
         - x64
 nsis:
   artifactName: ${productName}-windows-${arch}.${ext}
+  include: build/nsis-updated-silent.nsh
   oneClick: false
   allowToChangeInstallationDirectory: true
   perMachine: false

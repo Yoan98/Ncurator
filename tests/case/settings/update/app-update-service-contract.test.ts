@@ -169,6 +169,20 @@ describe('AppUpdateService contract', () => {
 
     const installResponse = getIpcHandler(APP_UPDATE_INSTALL_CHANNEL)() as AppUpdateActionResponse
     expect(installResponse.success).toBe(true)
+    expect(mocks.updater.quitAndInstall).toHaveBeenCalledWith(true, true)
+  })
+
+  it('keeps the macOS updater install interactive', () => {
+    const service = new AppUpdateService({
+      platform: 'darwin',
+      macUpdateSignatureValid: () => true
+    })
+    service.initialize()
+    emitUpdaterEvent('update-downloaded', { version: '0.1.1' })
+
+    const response = getIpcHandler(APP_UPDATE_INSTALL_CHANNEL)() as AppUpdateActionResponse
+
+    expect(response.success).toBe(true)
     expect(mocks.updater.quitAndInstall).toHaveBeenCalledWith(false, true)
   })
 
