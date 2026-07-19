@@ -67,20 +67,20 @@ describe('workbench panel visual contract', () => {
 
   it('shows a created PPT as one final canvas without change markers or filters', async () => {
     const manifest = {
-      version: 2,
+      version: 3,
       operation: 'created',
       slides: [
         {
           slideId: 'slide-1',
           changed: true,
           changes: ['added'],
-          after: { index: 1, image: '/after-1.png' }
+          after: { index: 1, svg: '/after-1.svg' }
         },
         {
           slideId: 'slide-2',
           changed: true,
           changes: ['added'],
-          after: { index: 2, image: '/after-2.png' }
+          after: { index: 2, svg: '/after-2.svg' }
         }
       ]
     }
@@ -103,28 +103,28 @@ describe('workbench panel visual contract', () => {
 
   it('shows updated PPT markers and supports shared wheel zoom and drag pan', async () => {
     const manifest = {
-      version: 2,
+      version: 3,
       operation: 'updated',
       slides: [
         {
           slideId: 'slide-1',
           changed: true,
           changes: ['modified'],
-          before: { index: 1, image: '/before-1.png' },
-          after: { index: 1, image: '/after-1.png' }
+          before: { index: 1, svg: '/before-1.svg' },
+          after: { index: 1, svg: '/after-1.svg' }
         },
         {
           slideId: 'slide-2',
           changed: true,
           changes: ['deleted'],
-          before: { index: 2, image: '/before-2.png' }
+          before: { index: 2, svg: '/before-2.svg' }
         },
         {
           slideId: 'slide-3',
           changed: false,
           changes: [],
-          before: { index: 3, image: '/before-3.png' },
-          after: { index: 3, image: '/after-3.png' }
+          before: { index: 3, svg: '/before-3.svg' },
+          after: { index: 3, svg: '/after-3.svg' }
         }
       ]
     }

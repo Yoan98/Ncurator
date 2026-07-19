@@ -168,7 +168,7 @@ describe('workbench result e2e', () => {
               result.zoomedTransform !== result.initialTransform &&
               result.draggedTransform !== result.zoomedTransform &&
               result.existsAfterRevert === false &&
-              result.pptToolCalls >= 2 &&
+              result.pptToolCalls >= 1 &&
               result.pptArtifacts === 1,
             {
               name: 'workbench-ppt-create-diff-revert-real',

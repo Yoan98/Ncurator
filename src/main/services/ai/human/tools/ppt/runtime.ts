@@ -261,8 +261,12 @@ const decodeDataUrl = (value: string): Uint8Array | null => {
   )
 }
 
-const createRemoteImagePlaceholder = (): Uint8Array => {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180" viewBox="0 0 320 180"><rect width="320" height="180" fill="#E5E7EB"/><path d="M72 124l46-48 32 32 28-28 70 72H72z" fill="#9CA3AF"/><circle cx="224" cy="64" r="18" fill="#9CA3AF"/><path d="M32 32h256v116H32z" fill="none" stroke="#6B7280" stroke-width="4"/></svg>`
+const escapeXml = (value: string): string =>
+  value.replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' })[character] || character)
+
+const createRemoteImagePlaceholder = (url: string): Uint8Array => {
+  const displayUrl = url.length > 96 ? `${url.slice(0, 93)}...` : url
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360"><rect width="640" height="360" fill="#F3F4F6"/><rect x="3" y="3" width="634" height="354" fill="none" stroke="#9CA3AF" stroke-width="6"/><path d="M150 250l92-96 64 64 56-56 140 140H150z" fill="#D1D5DB"/><circle cx="448" cy="128" r="32" fill="#D1D5DB"/><text x="320" y="50" text-anchor="middle" font-family="Microsoft YaHei,Arial,sans-serif" font-size="24" fill="#4B5563">远程图片加载失败</text><text x="320" y="330" text-anchor="middle" font-family="Microsoft YaHei,Arial,sans-serif" font-size="16" fill="#6B7280">${escapeXml(displayUrl)}</text></svg>`
   return new Uint8Array(new Resvg(svg).render().asPng())
 }
 
@@ -295,7 +299,7 @@ const resolveAssetBytes = async (input: {
         throw new Error('invalid image response')
       return bytes
     } catch {
-      return createRemoteImagePlaceholder()
+      return createRemoteImagePlaceholder(input.rawPath)
     }
   }
   let rawPath = input.rawPath
@@ -548,6 +552,8 @@ const addCompiledElement = async (input: {
   }
   if (input.element.type === 'formula') {
     setShapeDescription(image, `ppt-latex:${input.element.latex || ''}`)
+  } else if (input.element.type === 'image' && /^https?:\/\//i.test(input.element.src || '')) {
+    setShapeDescription(image, `ppt-remote-image:${input.element.src || ''}`)
   }
 }
 
@@ -715,89 +721,18 @@ const renderPresentationSlides = async (input: {
   previewDir: string
   prefix: string
 }): Promise<Map<string, PptDiffFrame & { hash: string }>> => {
-  const { renderSlideToImage } = await import('pptx-kit-preview/node')
-  const renderWithSystemFonts = async (
-    presentation: PresentationData,
-    slide: SlideData,
-    width: number
-  ): Promise<Uint8Array | null> => {
-    try {
-      const { defaultMeasurer, renderSlideToSvg } = await import('pptx-kit-preview/node')
-      const svg = renderSlideToSvg(presentation, slide, {
-        measureText: defaultMeasurer,
-        textLayout: 'svg'
-      })
-      const rendered = new Resvg(svg, {
-        fitTo: { mode: 'width', value: width },
-        font: {
-          loadSystemFonts: true,
-          defaultFontFamily: 'Microsoft YaHei',
-          sansSerifFamily: 'Microsoft YaHei',
-          serifFamily: 'Microsoft YaHei',
-          monospaceFamily: 'Consolas'
-        }
-      }).render()
-      return new Uint8Array(rendered.asPng())
-    } catch {
-      return null
-    }
-  }
-  const renderWithElectron = async (
-    presentation: PresentationData,
-    slide: SlideData,
-    width: number,
-    height: number
-  ): Promise<Uint8Array | null> => {
-    if (!process.versions.electron) return null
-    try {
-      const electron = await import('electron')
-      if (!electron.BrowserWindow || !electron.app?.isReady()) return null
-      const { renderSlideToSvg } = await import('pptx-kit-preview')
-      const svg = renderSlideToSvg(presentation, slide)
-      const window = new electron.BrowserWindow({
-        show: false,
-        width,
-        height,
-        useContentSize: true,
-        webPreferences: {
-          nodeIntegration: false,
-          contextIsolation: true,
-          sandbox: true,
-          partition: `ppt-preview-${Date.now()}-${Math.random()}`
-        }
-      })
-      try {
-        const document = `<!doctype html><html><head><style>html,body{margin:0;padding:0;width:${width}px;height:${height}px;overflow:hidden;background:#fff}svg{display:block;width:${width}px;height:${height}px}text{font-family:"Microsoft YaHei","Noto Sans SC","PingFang SC",Arial,sans-serif}</style></head><body>${svg}</body></html>`
-        await window.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(document)}`)
-        await window.webContents.executeJavaScript('document.fonts.ready')
-        const image = await window.webContents.capturePage({ x: 0, y: 0, width, height })
-        return new Uint8Array(image.toPNG())
-      } finally {
-        window.destroy()
-      }
-    } catch {
-      return null
-    }
-  }
+  const { renderSlideToSvg } = await import('pptx-kit-preview/node')
   await fs.mkdir(input.previewDir, { recursive: true })
   const slides = getSlides(input.presentation)
   const output = new Map<string, PptDiffFrame & { hash: string }>()
   for (const slideId of input.slideIds) {
     const index = slides.findIndex((slide) => slideIdOf(slide) === slideId)
     if (index < 0) continue
-    const width = 1920
-    const height = Math.round(
-      (width * getSlideDimensions(input.presentation).height) /
-        getSlideDimensions(input.presentation).width
-    )
-    const png =
-      (await renderWithElectron(input.presentation, slides[index]!, width, height)) ||
-      (await renderWithSystemFonts(input.presentation, slides[index]!, width)) ||
-      renderSlideToImage(input.presentation, slides[index]!, { width })
-    const hash = hashBytes(png)
-    const image = path.join(input.previewDir, `${input.prefix}-${hash.slice(0, 20)}.png`)
-    await fs.writeFile(image, png)
-    output.set(slideId, { index: index + 1, image, hash })
+    const svg = renderSlideToSvg(input.presentation, slides[index]!, { textLayout: 'svg' })
+    const hash = hashBytes(svg)
+    const svgPath = path.join(input.previewDir, `${input.prefix}-${hash.slice(0, 20)}.svg`)
+    await fs.writeFile(svgPath, svg, 'utf8')
+    output.set(slideId, { index: index + 1, svg: svgPath, hash })
   }
   return output
 }
@@ -827,8 +762,8 @@ export const buildPptDiffManifest = (input: {
         slideId,
         changed: changes.length > 0,
         changes,
-        before: before ? { index: before.index, image: before.image } : undefined,
-        after: { index: after.index, image: after.image }
+        before: before ? { index: before.index, svg: before.svg } : undefined,
+        after: { index: after.index, svg: after.svg }
       }
     })
   const deleted = [...input.before.entries()]
@@ -839,11 +774,11 @@ export const buildPptDiffManifest = (input: {
       slideId,
       changed: true,
       changes: ['deleted'],
-      before: { index: before.index, image: before.image },
+      before: { index: before.index, svg: before.svg },
       after: undefined
     })
   }
-  return { version: 2, operation: input.operation, slides: afterEntries }
+  return { version: 3, operation: input.operation, slides: afterEntries }
 }
 
 const readImageDimensions = (bytes: Uint8Array): { width: number; height: number } | null => {
@@ -1316,19 +1251,35 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
       prefix: 'slide'
     })
     const dimensions = getSlideDimensions(document.presentation)
-    const width = 1280
+    const width = 1920
     const height = Math.round((width * dimensions.height) / dimensions.width)
+    const images = await Promise.all(
+      [...frames.entries()].map(async ([slideId, frame]) => {
+        const svg = await fs.readFile(frame.svg, 'utf8')
+        const png = new Uint8Array(
+          new Resvg(svg, {
+            fitTo: { mode: 'width', value: width },
+            font: { loadSystemFonts: true, defaultFontFamily: 'Microsoft YaHei' }
+          })
+            .render()
+            .asPng()
+        )
+        const pngPath = frame.svg.replace(/\.svg$/i, '.png')
+        await fs.writeFile(pngPath, png)
+        return {
+          slideId,
+          slideIndex: frame.index,
+          path: pngPath,
+          mimeType: 'image/png',
+          width,
+          height
+        }
+      })
+    )
     return {
       sourcePath: args.sourcePath,
       assetBucketId: document.changeId,
-      images: [...frames.entries()].map(([slideId, frame]) => ({
-        slideId,
-        slideIndex: frame.index,
-        path: frame.image,
-        mimeType: 'image/png',
-        width,
-        height
-      })),
+      images,
       warnings: [...new Set(document.warnings)]
     }
   }
