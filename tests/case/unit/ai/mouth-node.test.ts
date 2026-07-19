@@ -288,4 +288,99 @@ describe('ai unit mouth node', () => {
       display: { kind: 'finalizing' }
     })
   })
+
+  it('uses deterministic delivery text after a mouth content-safety failure', async () => {
+    const events: AiRunEvent[] = []
+    let applyCalled = false
+    const ctx = createBaseContext({
+      events,
+      onChatText: async () => {
+        throw new Error(
+          'text_output_failed; caller=human.mouth; reason=400 Input data may contain inappropriate content; code=inappropriate-content'
+        )
+      }
+    })
+    ctx.applyDocxRunEdits = async () => {
+      applyCalled = true
+      return []
+    }
+    const node = createMouthNode({
+      ctx,
+      cache: createHumanRuntimeCache(),
+      emitAnswerEvents: true
+    })
+    const state = createInitialHumanState({ taskId: 'mouth-safety', userInput: 'create file' })
+    state.execution.stage = 'mouth'
+    state.execution.currentThought = {
+      thought: { next: 'finalize' },
+      nextAction: { action: 'mouth' }
+    }
+    state.execution.finalizationReason = 'brain_content_safety'
+    state.memory.thought.todolist = [{ item: 'unfinished item', status: 'todo' }]
+    state.execution.deliveryGuidanceItems = [
+      { source: 'brain', text: '请调整输入后重试。' }
+    ]
+
+    const result = await node(state)
+
+    expect(applyCalled).toBe(true)
+    expect(result.execution.status).toBe('completed')
+    expect(result.result?.deliveryMarkdown).toContain('内容安全策略限制')
+    expect(result.result?.deliveryMarkdown).toContain('请调整输入后重试。')
+    expect(events.some((event) => event.type === 'answer_completed')).toBe(true)
+  })
+
+  it('lets mouth normally render guidance after a brain content-safety transition', async () => {
+    let capturedPrompt = ''
+    const ctx = createBaseContext({
+      events: [],
+      onChatText: async ({ user }) => {
+        capturedPrompt = user
+        return '根据收尾提示完成说明。'
+      }
+    })
+    const node = createMouthNode({
+      ctx,
+      cache: createHumanRuntimeCache(),
+      emitAnswerEvents: false
+    })
+    const state = createInitialHumanState({ taskId: 'brain-to-mouth', userInput: 'continue' })
+    state.execution.stage = 'mouth'
+    state.execution.finalizationReason = 'brain_content_safety'
+    state.execution.currentThought = {
+      thought: { next: '进入收尾' },
+      nextAction: { action: 'mouth' }
+    }
+    state.memory.thought.todolist = [{ item: '未完成事项', status: 'todo' }]
+    state.execution.deliveryGuidanceItems = [
+      { source: 'brain', text: '请调整输入后重试。' }
+    ]
+
+    const result = await node(state)
+
+    expect(capturedPrompt).toContain('请调整输入后重试。')
+    expect(result.result?.deliveryMarkdown).toBe('根据收尾提示完成说明。')
+  })
+
+  it('keeps non-content-safety mouth failures unchanged', async () => {
+    const ctx = createBaseContext({
+      events: [],
+      onChatText: async () => {
+        throw new Error('text_output_failed; reason=400 invalid request')
+      }
+    })
+    const node = createMouthNode({
+      ctx,
+      cache: createHumanRuntimeCache(),
+      emitAnswerEvents: false
+    })
+    const state = createInitialHumanState({ taskId: 'mouth-error', userInput: 'create file' })
+    state.execution.stage = 'mouth'
+    state.execution.currentThought = {
+      thought: { next: 'finalize' },
+      nextAction: { action: 'mouth' }
+    }
+
+    await expect(node(state)).rejects.toThrow('invalid request')
+  })
 })

@@ -5,6 +5,26 @@ import type { RecoverableHumanRunError, RecoverableRunErrorCode } from '../types
 const getErrorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error || 'unknown')
 
+export const isContentSafetyError = (error: unknown): boolean => {
+  const message = getErrorMessage(error).toLowerCase()
+  let raw = ''
+  if (error && typeof error === 'object') {
+    try {
+      raw = JSON.stringify(error).toLowerCase()
+    } catch {
+      raw = ''
+    }
+  }
+  const text = `${message} ${raw}`
+  return (
+    text.includes('inappropriate-content') ||
+    text.includes('content_policy_violation') ||
+    text.includes('content_filter') ||
+    text.includes('content safety') ||
+    text.includes('内容安全')
+  )
+}
+
 export const isCancelledError = (error: unknown): boolean =>
   Boolean(error && typeof error === 'object' && 'code' in error && error.code === 'CANCELLED')
 

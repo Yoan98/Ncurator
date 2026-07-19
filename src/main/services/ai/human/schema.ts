@@ -185,6 +185,10 @@ export const humanDecisionHintSchema = z.discriminatedUnion('code', [
     })
   }),
   z.object({
+    code: z.literal('brain_content_safety'),
+    detail: z.object({ message: z.string().min(1) })
+  }),
+  z.object({
     code: z.literal('hand_call_invalid'),
     detail: z.object({
       invalidCalls: z
@@ -310,7 +314,7 @@ export const fileChangesSummarySchema = z.object({
 })
 
 export const deliveryGuidanceItemSchema = z.object({
-  source: z.literal('hand'),
+  source: z.enum(['brain', 'hand']),
   text: z.string().min(1)
 })
 
@@ -328,6 +332,7 @@ export const humanTaskOutputSchema = humanDeliveryPayloadSchema.extend({
 export const humanExecutionSchema = z.object({
   stage: humanStageSchema,
   status: humanStatusSchema,
+  finalizationReason: z.enum(['brain_content_safety']).optional(),
   currentThought: humanThoughtDecisionSchema.optional(),
   pendingFault: z
     .object({

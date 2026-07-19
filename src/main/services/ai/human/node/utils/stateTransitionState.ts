@@ -119,6 +119,7 @@ export const applyBrainDecisionState = (input: {
         thought: input.thought
       }),
       status: 'running',
+      finalizationReason: undefined,
       currentThought: input.thought,
       pendingDecisionHint: undefined,
       pendingFault:

@@ -59,7 +59,7 @@ export type AiRunState = z.infer<typeof aiRunStateContractSchema>
 export type HumanResumeSnapshot = Pick<HumanState, 'memory' | 'skills'> & {
   execution: Pick<
     HumanState['execution'],
-    'pendingDecisionHint' | 'deliveryGuidanceItems' | 'artifacts'
+    'pendingDecisionHint' | 'deliveryGuidanceItems' | 'artifacts' | 'finalizationReason'
   >
 }
 

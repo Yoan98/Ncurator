@@ -11,6 +11,7 @@ import {
   HUMAN_STAGES,
   HUMAN_STEP_ACTIONS,
   HUMAN_STEP_RESULT_STATUSES,
+  HUMAN_FINALIZATION_REASONS,
   RUNTIME_SKILL_IDS
 } from './constants'
 import {
@@ -49,6 +50,7 @@ import { toolResourceContextSchema } from './toolSchemas'
 export type RuntimeSkillId = (typeof RUNTIME_SKILL_IDS)[number]
 export type HumanStage = (typeof HUMAN_STAGES)[number]
 export type HumanStatus = (typeof HUMAN_STATUSES)[number]
+export type HumanFinalizationReason = (typeof HUMAN_FINALIZATION_REASONS)[number]
 export type HumanStepAction = (typeof HUMAN_STEP_ACTIONS)[number]
 export type HumanStepResultStatus = (typeof HUMAN_STEP_RESULT_STATUSES)[number]
 export type HumanSkillSource = (typeof HUMAN_SKILL_SOURCES)[number]
