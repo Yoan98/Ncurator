@@ -133,10 +133,16 @@ describe('ai human mock-llm backend', () => {
                   }
                 },
                 ({ user }) => {
-                  const imagePath = user.match(
-                    /[^\s"<>]*\.ncurator\/runtime\/assets\/[^/\s"<>]+\/page-9\.png/u
-                  )?.[0]
-                  if (!imagePath)
+                  const renderEvent = filterAiRunEventsByType(
+                    runtime.eventCollector.snapshot(),
+                    'tool_call_result'
+                  )
+                    .filter((event) => event.toolName === 'pdf_render_pages' && event.result?.ok)
+                    .at(-1)
+                  const imagePath = renderedPathsFromData(renderEvent?.result?.data).find(
+                    (candidate) => path.basename(candidate) === 'page-9.png'
+                  )
+                  if (!imagePath || !user.includes('page-9.png'))
                     throw new Error('rendered page-9 image path missing from brain prompt')
                   return buildToolDecision({
                     toolName: 'image_analyze',

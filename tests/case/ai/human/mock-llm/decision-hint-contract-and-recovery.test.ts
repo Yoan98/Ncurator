@@ -1,13 +1,13 @@
 import path from 'node:path'
 import { describe, it } from 'vitest'
-import { createDocxToolHarness } from '../../../../harness/backend/aiToolHarness'
 import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import {
   buildCompleteTaskDecision,
   buildLearnSkillsDecision,
   buildToolDecision,
-  filterAiRunEventsByType
+  filterAiRunEventsByType,
+  readLatestToolResultDataFromEvents
 } from '../testUtils'
 
 const SHARED_WORKSPACE_FIXTURE_PATH = 'tests/fixtures/workspace'
@@ -43,21 +43,11 @@ describe('ai human mock-llm backend', () => {
       execute: async (runtime) => {
         const positionedSourcePath = runtime.getFixtureWorkspacePath(POSITIONED_DOCX_FIXTURE_PATH)
         const largeSourcePath = runtime.getFixtureWorkspacePath(LARGE_DOCX_FIXTURE_PATH)
-        const docxHarness = createDocxToolHarness(runtime)
-        const positionedOutline = await docxHarness.invoke<DocxOutlineResultPreview>('docx_read_outline', {
-          sourcePath: positionedSourcePath,
-          ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 80 }]
-        })
-        await docxHarness.release()
-
-        const positionedParagraphBlockId =
-          positionedOutline?.blocks.find(
-            (block) => block.type === 'paragraph' && block.layoutMode === 'positioned'
-          )?.blockId || 'b:0'
+        let positionedParagraphBlockId = ''
 
         const runner = createHumanTestRunner(runtime, {
           humanRuntimeOverrides: {
-            hardActionLimit: 3,
+            hardActionLimit: 4,
             modelContextWindowTokens: 60_000
           },
           structuredOutputScript: {
@@ -98,20 +88,40 @@ describe('ai human mock-llm backend', () => {
               },
               {
                 output: buildToolDecision({
+                  toolName: 'docx_read_outline',
+                  args: {
+                    sourcePath: positionedSourcePath,
+                    ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 80 }]
+                  },
+                  summary: '在当前 graph 中读取 positioned block'
+                })
+              },
+              () => {
+                const outline = readLatestToolResultDataFromEvents<DocxOutlineResultPreview>(
+                  runtime.eventCollector.snapshot(),
+                  'docx_read_outline'
+                )
+                positionedParagraphBlockId =
+                  outline.blocks.find(
+                    (block) => block.type === 'paragraph' && block.layoutMode === 'positioned'
+                  )?.blockId || ''
+                return buildToolDecision({
                   toolName: 'docx_edit',
                   args: {
                     sourcePath: positionedSourcePath,
-                    actions: [{
-                      type: 'insert_blocks',
-                      anchorBlockId: positionedParagraphBlockId,
-                      position: 'after',
-                      blocks: [
+                    actions: [
                       {
-                        type: 'paragraph',
-                        text: '这段内容不应被自动插入。'
+                        type: 'insert_blocks',
+                        anchorBlockId: positionedParagraphBlockId,
+                        position: 'after',
+                        blocks: [
+                          {
+                            type: 'paragraph',
+                            text: '这段内容不应被自动插入。'
+                          }
+                        ]
                       }
                     ]
-                    }]
                   },
                   summary: '命中 positioned block，触发 hand_docx_positioned_write_blocked'
                 })
@@ -187,11 +197,11 @@ describe('ai human mock-llm backend', () => {
             Array.isArray(event.detail?.duplicateSkillIds) &&
             event.detail.duplicateSkillIds.includes('docx-read')
         )
-        const hasBrainSchemaInvalid = decisionHints.some(
+        const hasInvalidHandPlan = decisionHints.some(
           (event) =>
-            event.source === 'brain' &&
-            event.code === 'brain_output_schema_invalid' &&
-            Array.isArray(event.detail?.issues)
+            event.source === 'hand' &&
+            event.code === 'hand_call_invalid' &&
+            Array.isArray(event.detail?.invalidCalls)
         )
         const hasPositionedWriteBlocked = decisionHints.some(
           (event) =>
@@ -206,8 +216,8 @@ describe('ai human mock-llm backend', () => {
           (event) =>
             event.source === 'hand' &&
             event.code === 'hand_tool_limit_exceeded' &&
-            event.detail?.toolCallCount === 4 &&
-            event.detail?.limit === 3
+            event.detail?.toolCallCount === 5 &&
+            event.detail?.limit === 4
         )
         const hasRecoveryAfterTooLarge = humanSteps.some(
           (event) =>
@@ -220,7 +230,7 @@ describe('ai human mock-llm backend', () => {
         runtime.assertThat(
           result.output.status === 'completed' &&
             hasLearningNoEffect &&
-            hasBrainSchemaInvalid &&
+            hasInvalidHandPlan &&
             hasPositionedWriteBlocked &&
             hasRecoveryAfterTooLarge &&
             hasToolLimitExceeded,

@@ -29,7 +29,28 @@ describe('web crawler sidecar search retry', () => {
 import asyncio
 import importlib.util
 import json
+import sys
+import types
 from pathlib import Path
+
+class DependencyStub:
+    pass
+
+crawl4ai = types.ModuleType("crawl4ai")
+crawl4ai.AsyncWebCrawler = DependencyStub
+crawl4ai.BrowserConfig = DependencyStub
+crawl4ai.CrawlerRunConfig = DependencyStub
+crawl4ai.LinkPreviewConfig = DependencyStub
+content_filter_strategy = types.ModuleType("crawl4ai.content_filter_strategy")
+content_filter_strategy.PruningContentFilter = DependencyStub
+markdown_generation_strategy = types.ModuleType("crawl4ai.markdown_generation_strategy")
+markdown_generation_strategy.DefaultMarkdownGenerator = DependencyStub
+ddgs = types.ModuleType("ddgs")
+ddgs.DDGS = DependencyStub
+sys.modules["crawl4ai"] = crawl4ai
+sys.modules["crawl4ai.content_filter_strategy"] = content_filter_strategy
+sys.modules["crawl4ai.markdown_generation_strategy"] = markdown_generation_strategy
+sys.modules["ddgs"] = ddgs
 
 sidecar_path = Path("resources/web_crawler_sidecar/web_crawler_sidecar.py").resolve()
 spec = importlib.util.spec_from_file_location("web_crawler_sidecar_under_test", sidecar_path)
@@ -96,7 +117,28 @@ asyncio.run(main())
 import asyncio
 import importlib.util
 import json
+import sys
+import types
 from pathlib import Path
+
+class DependencyStub:
+    pass
+
+crawl4ai = types.ModuleType("crawl4ai")
+crawl4ai.AsyncWebCrawler = DependencyStub
+crawl4ai.BrowserConfig = DependencyStub
+crawl4ai.CrawlerRunConfig = DependencyStub
+crawl4ai.LinkPreviewConfig = DependencyStub
+content_filter_strategy = types.ModuleType("crawl4ai.content_filter_strategy")
+content_filter_strategy.PruningContentFilter = DependencyStub
+markdown_generation_strategy = types.ModuleType("crawl4ai.markdown_generation_strategy")
+markdown_generation_strategy.DefaultMarkdownGenerator = DependencyStub
+ddgs = types.ModuleType("ddgs")
+ddgs.DDGS = DependencyStub
+sys.modules["crawl4ai"] = crawl4ai
+sys.modules["crawl4ai.content_filter_strategy"] = content_filter_strategy
+sys.modules["crawl4ai.markdown_generation_strategy"] = markdown_generation_strategy
+sys.modules["ddgs"] = ddgs
 
 sidecar_path = Path("resources/web_crawler_sidecar/web_crawler_sidecar.py").resolve()
 spec = importlib.util.spec_from_file_location("web_crawler_sidecar_under_test", sidecar_path)

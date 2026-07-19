@@ -192,7 +192,7 @@ tests/case/workbench/
 - What：验证 Main 侧 `ChatRunService` 对智能模式提交、assistant placeholder、AI run 状态、事件日志、审批 snapshot、启动中断恢复和会话删除清理的持久化契约。
 - Why：运行持久化的真相来源已经从 renderer 收敛到 Main；这些后端契约失败时，route 切换、reload、审批恢复和最终消息落库都会失真。
 - How：使用临时 LanceDB 初始化 `StorageService` 与 `ChatRunService`，关闭自动真实 AI 启动，通过 contract 方式提交 AI run 并注入 run event。
-- Oracle：`chatSubmit(ai)` 创建 user message、assistant placeholder 与 `running` run，并把当前 AI 推进偏好带入本次 run 上下文，对齐 `WB-COMPOSER-007-AC8`；`answer_completed/run_completed` 后 assistant message、run status、final answer 和 event log 正确；`approval_batch_required` 后 snapshot 返回 `waiting_approval` 与 pending approval；已完成 run 的过程事件可从 snapshot `runs` 恢复，token 级事件不会污染 replay；启动恢复会把遗留 active run 标记为 failed 并写入“运行已中断”；删除会话会同步清理 messages、run 和 event log，对齐 `WB-COMPOSER-003-AC1`、`WB-COMPOSER-003-AC2`、`WB-COMPOSER-003-AC7`、`WB-SESSION-002-AC3`、`WB-SESSION-002-AC4`。
+- Oracle：`chatSubmit(ai)` 创建 user message、assistant placeholder 与 `running` run，并把当前 AI 推进偏好带入本次 run 上下文，对齐 `WB-COMPOSER-007-AC8`；`answer_completed/run_completed` 后 assistant message、run status、final answer 和 event log 正确；`approval_batch_required` 后 snapshot 返回 `waiting_approval` 与 pending approval；已完成 run 的过程事件可从 snapshot `runs` 恢复，token 级事件不会污染 replay；conversation memory 在 9 个完整轮次时不触发，第 10 个完整轮次触发并只总结前 5 轮，提交后保留最新 5 轮，失败或陈旧 summary 不推进覆盖边界，同一 session 的 summary job 去重；启动恢复会把遗留 active run 标记为 failed 并写入“运行已中断”；删除会话会同步清理 messages、run 和 event log，对齐 `WB-COMPOSER-003-AC1`、`WB-COMPOSER-003-AC2`、`WB-COMPOSER-003-AC7`、`WB-SESSION-002-AC3`、`WB-SESSION-002-AC4`。
 - Not：不代替真实 UI 对 route 切换、审批点击或模型输出质量的验证。
 
 #### `approval-batch-flow`
@@ -221,6 +221,15 @@ tests/case/workbench/
 - How：先打开真实 Markdown 文件，再让 AI 使用 `browser_use` 操作本地测试页；AI Run 仍在进行时，用户通过 `+` 新建另一个浏览器标签，验证后续 observe / act / extract 不会跟随 UI 活动标签漂移；任务完成后切回文件再切回浏览器，检查网页状态保持。
 - Oracle：文件和多个浏览器 Tab 可共存，对齐 `WB-PANEL-001-AC1`；同一轮 AI Run 始终绑定首次取得的 browserTabId，用户新建或切换标签不会让 Stagehand 串页；切换文件后浏览器 URL 和页面状态保持，对齐 `WB-PANEL-004-AC3`；菜单打开时不被原生视图遮挡，对齐 `WB-PANEL-004-AC7`；真实 browser_use 结果包含 `BROWSER_TASK_DONE` 和口令。
 - Not：不验证公网网页稳定性；本 case 使用本地测试网页减少外部波动；不允许用 fake browser 或 fake tool result 替代；不要求 live 模型必须在固定时限内结束整轮最终回答，只要真实内置浏览器已完成输入、点击和结果读取即可判定 browser panel 能力有效。
+
+#### `browser-view-lifecycle`
+
+- 测试类型：`e2e`
+- What：验证内置浏览器原生视图在初次显示、面板折叠、Renderer 菜单避让和会话切换后仍可见、尺寸稳定且持续运行。
+- Why：`WebContentsView` 由 Main 管理并覆盖在 Renderer 上方；生命周期或 bounds 同步错误会导致白屏、原生视图遮挡菜单、恢复后尺寸跳变，或切换会话时误销毁仍在运行的网页。
+- How：启动带高对比颜色和自增计时器的本地真实网页，在可见 Electron 窗口中创建浏览器 Tab；分别采集初次显示、折叠恢复、菜单打开/关闭和切换会话恢复后的窗口像素、viewport 尺寸、zoom、WebContents id 与计时器值。
+- Oracle：各阶段浏览器 viewport 均包含稳定的非白真实网页像素且尺寸、zoom 不变；Renderer 菜单打开时原生视图隐藏，关闭后恢复；折叠或切换会话只停放视图，不销毁 WebContents，计时器持续前进；回到原会话时面板直接按最终宽度恢复且不重播展开动画，对齐 `WB-PANEL-001-AC5`、`WB-PANEL-004-AC1`、`WB-PANEL-004-AC3`、`WB-PANEL-004-AC7`。
+- Not：不验证公网网页、Stagehand 操作或最终 AI 回答；这些由 `browser-use-task-panel` 覆盖。
 
 #### `web-search-diagnostic`
 

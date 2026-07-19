@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto'
+import fs from 'node:fs/promises'
 import { describe, it } from 'vitest'
 import {
   loadLiveLlmConfigFromEnv,
@@ -24,15 +26,23 @@ import {
 
 const POSITIONED_FALLBACK_SUPPLEMENT_RELATIVE_PATH = '学习笔记/图形学-反走样补充说明.docx'
 
+const fileHash = async (filePath: string): Promise<string> =>
+  createHash('sha256')
+    .update(await fs.readFile(filePath))
+    .digest('hex')
+
 const openedExpectedDoc = (
   openedSourcePaths: readonly string[],
   expectedRelativePath: string,
   expectedName: string
 ): boolean =>
-  openedSourcePaths.some(
-    (sourcePath) =>
-      sourcePath.endsWith(expectedRelativePath) || sourcePath.endsWith(`/${expectedName}`)
-  )
+  openedSourcePaths.some((sourcePath) => {
+    const normalizedSourcePath = sourcePath.replace(/\\/g, '/')
+    return (
+      normalizedSourcePath.endsWith(expectedRelativePath) ||
+      normalizedSourcePath.endsWith(`/${expectedName}`)
+    )
+  })
 
 describe('ai human live backend', () => {
   it('human-docx-positioned-structural-edit-fallback-live', async () => {
@@ -54,12 +64,16 @@ describe('ai human live backend', () => {
               skipped: true,
               output: null,
               fixtureDocs: [],
+              sourceDocsUnchanged: [],
               events: []
             }
           }
 
           await runtime.seedLlmConfig(loadLiveLlmConfigFromEnv())
           const fixtureDocs = resolveSelectedDocxFixtures(runtime, DOCX_POSITIONED_FIXTURE_PATHS)
+          const sourceHashesBefore = await Promise.all(
+            fixtureDocs.map(async (fixtureDoc) => await fileHash(fixtureDoc.workspacePath))
+          )
           const runner = createHumanTestRunner(runtime, {
             selectedReferences: buildSelectedDocxFixtureReferences(
               runtime,
@@ -75,6 +89,12 @@ describe('ai human live backend', () => {
             skipped: false,
             output,
             fixtureDocs,
+            sourceDocsUnchanged: await Promise.all(
+              fixtureDocs.map(
+                async (fixtureDoc, index) =>
+                  (await fileHash(fixtureDoc.workspacePath)) === sourceHashesBefore[index]
+              )
+            ),
             events: runtime.eventCollector.snapshot()
           }
         },
@@ -111,8 +131,8 @@ describe('ai human live backend', () => {
           const positionedFailedWriteResults = failedWriteResults.filter((event) =>
             String(
               event.result?.data &&
-              typeof event.result.data === 'object' &&
-              !Array.isArray(event.result.data)
+                typeof event.result.data === 'object' &&
+                !Array.isArray(event.result.data)
                 ? event.result.data.error
                 : ''
             ).includes('当前命中复杂定位排版区域')
@@ -152,12 +172,13 @@ describe('ai human live backend', () => {
               structuralStarted.length >= 1 &&
               positionedFailedWriteResults.length >= 1 &&
               decisionHints.some((event) => event.code === 'hand_docx_positioned_write_blocked') &&
-              errorMessages.some((message) =>
-                message.includes('当前命中复杂定位排版区域')
-              )
+              errorMessages.some((message) => message.includes('当前命中复杂定位排版区域'))
                 ? 2
                 : 0,
-            protectedAreaNotWritten: successfulWriteResults.length === 0 ? 1.5 : 0,
+            protectedAreaNotWritten:
+              successfulWriteResults.length === 0 && result.sourceDocsUnchanged.every(Boolean)
+                ? 1.5
+                : 0,
             manualFallbackExplained: deliveryMentionsSkippedPositionedArea ? 2 : 0,
             usableFallbackContent: deliveryContainsUsableFallback ? 2 : 0,
             artifactShapeConsistent: artifactShapeValid ? 1 : 0,
@@ -165,45 +186,43 @@ describe('ai human live backend', () => {
           }
           const score = Object.values(scoreParts).reduce((total, value) => total + value, 0)
 
-          runtime.assertThat(
-            score > 8,
-            {
-              name: 'human-live-positioned-docx-skips-protected-area-and-reports-manual-fallback',
-              message:
-                'live human positioned case 完成度评分必须严格高于 8 分：应保护复杂定位区域，并给出可用的手动补充内容。',
-              data: {
-                score,
-                scoreParts,
-                openedSourcePaths,
-                createSourcePaths,
-                writeAttempts: structuralStarted.map((event) => ({
-                  toolName: event.toolName,
-                  actions: Array.isArray(event.input.actions)
-                    ? event.input.actions.map((action) =>
-                        action && typeof action === 'object' && !Array.isArray(action)
-                          ? (action as { type?: string }).type
-                          : undefined
-                      )
-                    : [],
-                  sourcePath: event.input.sourcePath
-                })),
-                successfulWriteResultCount: successfulWriteResults.length,
-                failedWriteResults: failedWriteResults.map((event) => ({
-                  toolName: event.toolName,
-                  error:
-                    event.result?.data &&
-                    typeof event.result.data === 'object' &&
-                    !Array.isArray(event.result.data)
-                      ? event.result.data.error
-                      : undefined
-                })),
-                decisionHints,
-                docxApplyArtifactCount,
-                docxFileArtifactCount,
-                deliveryMarkdown: result.output?.deliveryMarkdown
-              }
+          runtime.assertThat(score > 8, {
+            name: 'human-live-positioned-docx-skips-protected-area-and-reports-manual-fallback',
+            message:
+              'live human positioned case 完成度评分必须严格高于 8 分：应保护复杂定位区域，并给出可用的手动补充内容。',
+            data: {
+              score,
+              scoreParts,
+              openedSourcePaths,
+              createSourcePaths,
+              writeAttempts: structuralStarted.map((event) => ({
+                toolName: event.toolName,
+                actions: Array.isArray(event.input.actions)
+                  ? event.input.actions.map((action) =>
+                      action && typeof action === 'object' && !Array.isArray(action)
+                        ? (action as { type?: string }).type
+                        : undefined
+                    )
+                  : [],
+                sourcePath: event.input.sourcePath
+              })),
+              successfulWriteResultCount: successfulWriteResults.length,
+              sourceDocsUnchanged: result.sourceDocsUnchanged,
+              failedWriteResults: failedWriteResults.map((event) => ({
+                toolName: event.toolName,
+                error:
+                  event.result?.data &&
+                  typeof event.result.data === 'object' &&
+                  !Array.isArray(event.result.data)
+                    ? event.result.data.error
+                    : undefined
+              })),
+              decisionHints,
+              docxApplyArtifactCount,
+              docxFileArtifactCount,
+              deliveryMarkdown: result.output?.deliveryMarkdown
             }
-          )
+          })
         }
       })
     })

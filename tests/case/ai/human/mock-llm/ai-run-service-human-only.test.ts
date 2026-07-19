@@ -1,5 +1,6 @@
 import { describe, it } from 'vitest'
 import { AiRunService } from '../../../../../src/main/services/ai/AiRunService'
+import { terminalSessionManager } from '../../../../../src/main/services/ai/human/tools/terminal/TerminalSessionManager'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import { createScriptedStructuredOutputDriver } from '../../../../harness/backend/scriptedStructuredOutputDriver'
 import {
@@ -89,6 +90,7 @@ describe('ai human mock-llm backend', () => {
             })
           }
         )
+        await terminalSessionManager.closeByChatSession('human-only-session')
 
         return {
           result,
