@@ -1,6 +1,6 @@
 appId: com.yoan.ncurator
-productName: Ncurator
-artifactName: ${productName}-${os}-${arch}.${ext}
+productName: 馆长
+artifactName: Ncurator-${os}-${arch}.${ext}
 directories:
   app: release-stage/app
   buildResources: build
@@ -35,7 +35,7 @@ win:
       arch:
         - x64
 nsis:
-  artifactName: ${productName}-windows-${arch}.${ext}
+  artifactName: Ncurator-windows-${arch}.${ext}
   include: build/nsis-updated-silent.nsh
   oneClick: false
   allowToChangeInstallationDirectory: true
@@ -45,7 +45,7 @@ nsis:
   createDesktopShortcut: always
 mac:
   icon: build/icon.icns
-  artifactName: ${productName}-mac-${arch}.${ext}
+  artifactName: Ncurator-mac-${arch}.${ext}
   # @electron/osx-sign 会把部分二进制格式的数据文件误判成可执行文件。
   # 这些资源由外层 bundle 签名保护；Mach-O、.node、.dylib 和 .so 不在忽略范围内。
   signIgnore:
@@ -67,7 +67,7 @@ mac:
     - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
   notarize: false
 dmg:
-  artifactName: ${productName}-mac-${arch}.${ext}
+  artifactName: Ncurator-mac-${arch}.${ext}
 linux:
   icon: build/icon.png
   target:

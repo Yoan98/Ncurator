@@ -10,10 +10,13 @@ if (!inputDirectory || !outputDirectory || !/^v\d+\.\d+\.\d+$/u.test(releaseTag)
   )
 }
 
-const rewriteMetadata = (content) =>
+const familyForMetadata = (fileName) => (fileName === 'latest.yml' ? 'windows' : 'macos')
+
+const rewriteMetadata = (content, fileName) =>
   content.replace(
     /^(\s*(?:- url:|path:)\s+)([^\s/][^\s]*)$/gmu,
-    (_line, prefix, assetName) => `${prefix}../../artifacts/${releaseTag}/${assetName}`
+    (_line, prefix, assetName) =>
+      `${prefix}../../artifacts/${familyForMetadata(fileName)}/${releaseTag}/${assetName}`
   )
 
 const pathExists = (filePath) =>
@@ -28,8 +31,8 @@ for (const fileName of ['latest.yml', 'latest-mac.yml']) {
   if (!(await pathExists(inputPath))) continue
   const outputPath = path.join(outputDirectory, fileName)
   const content = await readFile(inputPath, 'utf8')
-  const rewritten = rewriteMetadata(content)
-  if (!rewritten.includes(`../../artifacts/${releaseTag}/`)) {
+  const rewritten = rewriteMetadata(content, fileName)
+  if (!rewritten.includes(`../../artifacts/${familyForMetadata(fileName)}/${releaseTag}/`)) {
     throw new Error(`${fileName} does not contain rewritten release asset URLs`)
   }
   await writeFile(outputPath, rewritten, 'utf8')

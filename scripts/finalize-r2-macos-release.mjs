@@ -4,77 +4,41 @@ import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 import { promisify } from 'node:util'
-import { loadReleaseEnvironment } from './release-environment.mjs'
 import { assertReleaseFragment } from './release-fragment-contract.mjs'
 import { fetchWithRetry } from './release-http.mjs'
-import { resolveAwsExecutable } from './windows-release-common.mjs'
+import { createR2Client } from './release-r2-client.mjs'
+import { artifactKey, fixedDownloadKey, statusKey } from './release-storage-layout.mjs'
 
 const execFileAsync = promisify(execFile)
 const ROOT = process.cwd()
-await loadReleaseEnvironment(ROOT)
 const args = process.argv.slice(2)
 const tagIndex = args.indexOf('--tag')
 const releaseTag = tagIndex >= 0 ? args[tagIndex + 1] || '' : ''
-
+const keepOld = args.includes('--keep-old')
 if (!/^v\d+\.\d+\.\d+$/u.test(releaseTag)) {
-  throw new Error('usage: node scripts/finalize-r2-macos-release.mjs --tag <v1.2.3>')
+  throw new Error('usage: node scripts/finalize-r2-macos-release.mjs --tag <v1.2.3> [--keep-old]')
 }
 
-for (const name of [
-  'AWS_ACCESS_KEY_ID',
-  'AWS_SECRET_ACCESS_KEY',
-  'R2_ACCOUNT_ID',
-  'R2_BUCKET_NAME',
-  'R2_PUBLIC_BASE_URL'
-]) {
-  if (!String(process.env[name] || '').trim()) {
-    throw new Error(`missing environment variable: ${name}`)
-  }
-}
-
-const publicBaseUrl = String(process.env.R2_PUBLIC_BASE_URL).replace(/\/$/u, '')
-if (publicBaseUrl !== 'https://download.ncurator.com') {
-  throw new Error(`unexpected R2 public URL: ${publicBaseUrl}`)
-}
-const awsExecutable = await resolveAwsExecutable()
-if (!awsExecutable) throw new Error('AWS CLI is required')
-const endpoint = `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`
-const bucket = String(process.env.R2_BUCKET_NAME).replace(/^\/+|\/+$/gu, '')
+const { aws, bucket, publicBaseUrl, listKeys, deleteKeys } = await createR2Client(ROOT)
 const workDirectory = await mkdtemp(path.join(os.tmpdir(), `ncurator-macos-${releaseTag}-`))
-
-const aws = (awsArgs) =>
-  execFileAsync(awsExecutable, [...awsArgs, '--endpoint-url', endpoint, '--region', 'auto'], {
-    maxBuffer: 20 * 1024 * 1024
-  })
 
 const downloadAndVerifyFragment = async (platform) => {
   const target = path.join(workDirectory, `${platform}.json`)
   await aws([
     's3',
     'cp',
-    `s3://${bucket}/release-status/${releaseTag}/${platform}.json`,
+    `s3://${bucket}/${statusKey(releaseTag, platform)}`,
     target,
     '--no-progress'
   ])
   const fragment = JSON.parse(await readFile(target, 'utf8'))
-  assertReleaseFragment(fragment, {
-    tag: releaseTag,
-    platform,
-    label: `${platform} release fragment`
-  })
+  assertReleaseFragment(fragment, { tag: releaseTag, platform })
   for (const file of fragment.files) {
-    const key = `artifacts/${releaseTag}/${file.name}`
-    const { stdout } = await aws([
-      's3api',
-      'head-object',
-      '--bucket',
-      bucket,
-      '--key',
-      key,
-      '--output',
-      'json'
-    ])
-    const remote = JSON.parse(stdout)
+    const key = artifactKey(fragment, file.name)
+    const remote = JSON.parse(
+      (await aws(['s3api', 'head-object', '--bucket', bucket, '--key', key, '--output', 'json']))
+        .stdout
+    )
     if (Number(remote.ContentLength) !== file.size || remote.Metadata?.sha512 !== file.sha512) {
       throw new Error(`R2 object does not match release fragment: ${key}`)
     }
@@ -107,12 +71,10 @@ try {
     metadataOutput,
     releaseTag
   ])
-
-  const metadataPath = path.join(metadataOutput, 'latest-mac.yml')
   await aws([
     's3',
     'cp',
-    metadataPath,
+    path.join(metadataOutput, 'latest-mac.yml'),
     `s3://${bucket}/updates/latest/latest-mac.yml`,
     '--content-type',
     'application/yaml',
@@ -121,21 +83,110 @@ try {
     '--no-progress'
   ])
 
-  const response = await fetchWithRetry(
-    `${publicBaseUrl}/updates/latest/latest-mac.yml?release=${Date.now()}`,
+  const installers = new Map()
+  for (const fragment of [arm64, x64]) {
+    const installer = fragment.files.find((file) => file.role === 'installer')
+    const sourceKey = artifactKey(fragment, installer.name)
+    const downloadKey = fixedDownloadKey(fragment.platform)
+    const downloadName =
+      fragment.platform === 'macos-arm64' ? '馆长-macos-arm64.dmg' : '馆长-macos-x64.dmg'
+    await aws([
+      's3api',
+      'copy-object',
+      '--bucket',
+      bucket,
+      '--copy-source',
+      `${bucket}/${sourceKey}`,
+      '--key',
+      downloadKey,
+      '--content-type',
+      'application/octet-stream',
+      '--cache-control',
+      'no-store',
+      '--content-disposition',
+      `attachment; filename*=UTF-8''${encodeURIComponent(downloadName)}`,
+      '--metadata-directive',
+      'REPLACE',
+      '--metadata',
+      `sha512=${installer.sha512}`
+    ])
+    installers.set(fragment.platform, { installer, downloadKey, downloadName })
+  }
+
+  const toDownload = (platform) => {
+    const { installer, downloadKey, downloadName } = installers.get(platform)
+    return {
+      name: downloadName,
+      url: `${publicBaseUrl}/${downloadKey}`,
+      size: installer.size,
+      sha512: installer.sha512
+    }
+  }
+  const manifest = {
+    schemaVersion: 2,
+    platform: 'macos',
+    version: arm64.version,
+    tag: arm64.tag,
+    publishedAt: new Date().toISOString(),
+    downloads: { arm64: toDownload('macos-arm64'), x64: toDownload('macos-x64') }
+  }
+  const manifestPath = path.join(workDirectory, 'latest.json')
+  await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8')
+  await aws([
+    's3',
+    'cp',
+    manifestPath,
+    `s3://${bucket}/releases/latest/macos.json`,
+    '--content-type',
+    'application/json',
+    '--cache-control',
+    'no-store',
+    '--no-progress'
+  ])
+
+  const metadataResponse = await fetchWithRetry(
+    `${publicBaseUrl}/updates/latest/latest-mac.yml?check=${Date.now()}`,
     { cache: 'no-store' }
   )
-  if (!response.ok) throw new Error(`latest-mac.yml verification failed: ${response.status}`)
-  const publicMetadata = await response.text()
+  const metadata = metadataResponse.ok ? await metadataResponse.text() : ''
   if (
-    !publicMetadata.includes(`version: ${releaseTag.slice(1)}`) ||
-    !publicMetadata.includes(`artifacts/${releaseTag}/Ncurator-mac-arm64.zip`) ||
-    !publicMetadata.includes(`artifacts/${releaseTag}/Ncurator-mac-x64.zip`)
+    !metadata.includes(`version: ${releaseTag.slice(1)}`) ||
+    !metadata.includes(`artifacts/macos/${releaseTag}/Ncurator-mac-arm64.zip`) ||
+    !metadata.includes(`artifacts/macos/${releaseTag}/Ncurator-mac-x64.zip`)
   ) {
     throw new Error('public latest-mac.yml does not match the Mac release')
   }
+  for (const { installer, downloadKey } of installers.values()) {
+    const response = await fetchWithRetry(`${publicBaseUrl}/${downloadKey}?check=${Date.now()}`, {
+      method: 'HEAD',
+      cache: 'no-store'
+    })
+    if (!response.ok || Number(response.headers.get('content-length')) !== installer.size) {
+      throw new Error(`public fixed macOS download verification failed: ${downloadKey}`)
+    }
+  }
+
+  if (!keepOld) {
+    const removable = (await listKeys('artifacts/macos/')).filter(
+      (key) => !key.startsWith(`artifacts/macos/${releaseTag}/`)
+    )
+    removable.push(
+      ...(await listKeys('release-status/macos/')).filter(
+        (key) => !key.startsWith(`release-status/macos/${releaseTag}/`)
+      )
+    )
+    removable.push(
+      ...(await listKeys('artifacts/v')).filter((key) => /\/Ncurator-mac-[^/]+$/u.test(key))
+    )
+    removable.push(
+      ...(await listKeys('release-status/v')).filter((key) =>
+        /\/macos-(?:arm64|x64)\.json$/u.test(key)
+      )
+    )
+    await deleteKeys(removable)
+  }
   process.stdout.write(
-    `[release] ${releaseTag} is live on the macOS update channel; Windows metadata was not changed\n`
+    `[release] macOS ${releaseTag} is live on independent fixed download channels\n`
   )
 } finally {
   await rm(workDirectory, { recursive: true, force: true })

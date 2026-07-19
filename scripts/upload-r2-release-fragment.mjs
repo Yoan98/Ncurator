@@ -8,6 +8,7 @@ import { promisify } from 'node:util'
 import { loadReleaseEnvironment } from './release-environment.mjs'
 import { assertReleaseFragment } from './release-fragment-contract.mjs'
 import { fetchWithRetry } from './release-http.mjs'
+import { artifactKey, statusKey } from './release-storage-layout.mjs'
 
 const execFileAsync = promisify(execFile)
 await loadReleaseEnvironment(process.cwd())
@@ -52,7 +53,7 @@ const contentType = (name) => {
 
 for (const file of fragment.files) {
   const source = path.join(inputDirectory, file.name)
-  const key = `artifacts/${fragment.tag}/${file.name}`
+  const key = artifactKey(fragment, file.name)
   const downloadName = file.name.replace('Ncurator-', `Ncurator-${fragment.version}-`)
   await aws([
     's3',
@@ -94,12 +95,12 @@ for (const file of fragment.files) {
   }
 }
 
-const statusKey = `release-status/${fragment.tag}/${fragment.platform}.json`
+const fragmentStatusKey = statusKey(fragment.tag, fragment.platform)
 await aws([
   's3',
   'cp',
   fragmentPath,
-  `s3://${bucket}/${statusKey}`,
+  `s3://${bucket}/${fragmentStatusKey}`,
   '--content-type',
   'application/json',
   '--cache-control',
@@ -108,5 +109,5 @@ await aws([
 ])
 
 process.stdout.write(
-  `[release] uploaded ${fragment.platform} to ${publicBaseUrl}/artifacts/${fragment.tag}/\n`
+  `[release] uploaded ${fragment.platform} to ${publicBaseUrl}/${artifactKey(fragment, '')}\n`
 )

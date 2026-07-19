@@ -38,9 +38,15 @@ for (const platform of platforms) {
   process.stdout.write(`${platform.padEnd(14)} ready, audited, installed ${installedMiB} MiB\n`)
 }
 
-const latestResponse = await fetchWithRetry(
-  `${publicBaseUrl}/releases/latest.json?check=${Date.now()}`,
-  { cache: 'no-store' }
-)
-const latest = latestResponse.ok ? await latestResponse.json() : undefined
-process.stdout.write(`published      ${latest?.tag === releaseTag ? 'yes' : 'no'}\n`)
+const [windowsLatestResponse, macLatestResponse] = await Promise.all([
+  fetchWithRetry(`${publicBaseUrl}/releases/latest/windows.json?check=${Date.now()}`, {
+    cache: 'no-store'
+  }),
+  fetchWithRetry(`${publicBaseUrl}/releases/latest/macos.json?check=${Date.now()}`, {
+    cache: 'no-store'
+  })
+])
+const windowsLatest = windowsLatestResponse.ok ? await windowsLatestResponse.json() : undefined
+const macLatest = macLatestResponse.ok ? await macLatestResponse.json() : undefined
+process.stdout.write(`windows live   ${windowsLatest?.tag === releaseTag ? 'yes' : 'no'}\n`)
+process.stdout.write(`macos live     ${macLatest?.tag === releaseTag ? 'yes' : 'no'}\n`)

@@ -42,8 +42,8 @@ describe('R2 update metadata', () => {
 
     const windowsMetadata = await readFile(path.join(outputDirectory, 'latest.yml'), 'utf8')
     const macMetadata = await readFile(path.join(outputDirectory, 'latest-mac.yml'), 'utf8')
-    expect(windowsMetadata).toContain('../../artifacts/v0.1.1/Ncurator-windows-x64.exe')
-    expect(macMetadata).toContain('../../artifacts/v0.1.1/Ncurator-mac-arm64.zip')
+    expect(windowsMetadata).toContain('../../artifacts/windows/v0.1.1/Ncurator-windows-x64.exe')
+    expect(macMetadata).toContain('../../artifacts/macos/v0.1.1/Ncurator-mac-arm64.zip')
   })
 
   it('can prepare only macOS metadata for a platform-only release', async () => {
@@ -65,7 +65,7 @@ describe('R2 update metadata', () => {
     ])
 
     const macMetadata = await readFile(path.join(outputDirectory, 'latest-mac.yml'), 'utf8')
-    expect(macMetadata).toContain('../../artifacts/v0.1.4/Ncurator-mac-arm64.zip')
+    expect(macMetadata).toContain('../../artifacts/macos/v0.1.4/Ncurator-mac-arm64.zip')
     await expect(readFile(path.join(outputDirectory, 'latest.yml'), 'utf8')).rejects.toThrow()
   })
 })

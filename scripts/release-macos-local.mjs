@@ -17,7 +17,6 @@ const valueAfter = (name) => {
 const releaseTag = valueAfter('--tag') || ''
 const keepWork = args.includes('--keep-work')
 const keepOld = args.includes('--keep-old')
-const macOnly = args.includes('--mac-only')
 
 if (process.platform !== 'darwin' || process.arch !== 'arm64') {
   throw new Error('local macOS release must run on an Apple Silicon Mac')
@@ -50,8 +49,8 @@ const assertExecutable = async (filePath, label) => {
 
 const findApp = async (directory) => {
   const entries = await readdir(directory, { withFileTypes: true, recursive: true })
-  const match = entries.find((entry) => entry.isDirectory() && entry.name === 'Ncurator.app')
-  if (!match) throw new Error(`Ncurator.app was not found under ${directory}`)
+  const match = entries.find((entry) => entry.isDirectory() && entry.name.endsWith('.app'))
+  if (!match) throw new Error(`macOS app was not found under ${directory}`)
   return path.join(match.parentPath, match.name)
 }
 
@@ -220,9 +219,12 @@ try {
   )
   await createAndUploadFragment(x64Source, 'macos-x64')
 
-  const finalizeScript = macOnly ? 'finalize-r2-macos-release.mjs' : 'finalize-r2-release.mjs'
-  const finalizeArgs = [path.join(armSource, 'scripts', finalizeScript), '--tag', releaseTag]
-  if (keepOld && !macOnly) finalizeArgs.push('--keep-old')
+  const finalizeArgs = [
+    path.join(armSource, 'scripts', 'finalize-r2-macos-release.mjs'),
+    '--tag',
+    releaseTag
+  ]
+  if (keepOld) finalizeArgs.push('--keep-old')
   await run(process.execPath, finalizeArgs, { cwd: armSource })
 } finally {
   if (keepWork) process.stdout.write(`[release] kept work directory ${workDirectory}\n`)

@@ -34,7 +34,7 @@
     "release:status": "node scripts/release-status.mjs",
     "release:signing:setup": "node scripts/setup-mac-update-signing.mjs",
     "release:mac": "node scripts/release-macos-local.mjs",
-    "release:mac:only": "node scripts/release-macos-local.mjs --mac-only",
+    "release:mac:only": "node scripts/release-macos-local.mjs",
     "release:r2:finalize": "node scripts/finalize-r2-release.mjs",
     "test:workbench": "node scripts/test-workflow.mjs --domain workbench",
     "test:workbench:backend": "node scripts/test-workflow.mjs --domain workbench --type backend",

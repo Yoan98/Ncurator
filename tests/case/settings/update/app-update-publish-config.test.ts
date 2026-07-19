@@ -22,6 +22,15 @@ describe('app update publish config', () => {
     expect(include).toContain('SetSilent silent')
   })
 
+  it('shows the Chinese product name while keeping stable technical artifact names', async () => {
+    const config = await readFile(path.resolve('electron-builder.yml'), 'utf8')
+
+    expect(config).toContain('productName: 馆长')
+    expect(config).toContain('executableName: Ncurator')
+    expect(config).toContain('artifactName: Ncurator-windows-${arch}.${ext}')
+    expect(config).toContain('artifactName: Ncurator-mac-${arch}.${ext}')
+  })
+
   it('uses a local-first Windows release with explicit Actions fallback', async () => {
     const workflow = await readFile(path.resolve('.github/workflows/release.yml'), 'utf8')
     const packageJson = JSON.parse(await readFile(path.resolve('package.json'), 'utf8'))
@@ -40,7 +49,7 @@ describe('app update publish config', () => {
     expect(packageJson.scripts['release:win']).toContain('release-windows-local.mjs')
     expect(packageJson.scripts['release:win:auto']).toContain('route-windows-release.mjs')
     expect(packageJson.scripts['release:doctor']).toContain('release-doctor.mjs')
-    expect(packageJson.scripts['release:mac:only']).toContain('--mac-only')
+    expect(packageJson.scripts['release:mac:only']).toContain('release-macos-local.mjs')
     expect(packageJson.scripts['build:win']).toContain('prepare-electron-builder-windows.mjs')
     expect(packageJson.scripts['build:win']).toContain('package:audit')
     expect(router).toContain("route === 'local'")
@@ -54,6 +63,8 @@ describe('app update publish config', () => {
     expect(localRelease).toContain("['run', 'build:win']")
     expect(localRelease).toContain('inspection.python.executable')
     expect(localRelease).toContain('upload-r2-release-fragment.mjs')
+    expect(localRelease).toContain('finalize-r2-windows-release.mjs')
+    expect(localRelease).toContain('delete releaseEnvironment.CSC_LINK')
 
     const windowsToolCache = await readFile(
       path.resolve('scripts/prepare-electron-builder-windows.mjs'),
@@ -74,13 +85,14 @@ describe('app update publish config', () => {
       path.resolve('scripts/finalize-r2-macos-release.mjs'),
       'utf8'
     )
+    const storageLayout = await readFile(path.resolve('scripts/release-storage-layout.mjs'), 'utf8')
 
-    expect(macRelease).toContain("args.includes('--mac-only')")
     expect(macRelease).toContain('finalize-r2-macos-release.mjs')
     expect(macFinalize).toContain('updates/latest/latest-mac.yml')
     expect(macFinalize).not.toContain('updates/latest/latest.yml')
-    expect(macFinalize).not.toContain('releases/latest.json')
-    expect(macFinalize).not.toContain('cleanupOldObjects')
+    expect(macFinalize).toContain('fixedDownloadKey')
+    expect(storageLayout).toContain("return 'downloads/latest/macos-arm64.dmg'")
+    expect(macFinalize).toContain("listKeys('artifacts/macos/')")
   })
 
   it('keeps simulated update E2E available without making it a release blocker', async () => {
@@ -162,10 +174,16 @@ describe('app update publish config', () => {
   })
 
   it('keeps only R2 as the release binary source', async () => {
-    const finalizeScript = await readFile(path.resolve('scripts/finalize-r2-release.mjs'), 'utf8')
+    const finalizeScript = await readFile(
+      path.resolve('scripts/finalize-r2-windows-release.mjs'),
+      'utf8'
+    )
+    const storageLayout = await readFile(path.resolve('scripts/release-storage-layout.mjs'), 'utf8')
 
-    expect(finalizeScript).toContain('releases/latest.json')
-    expect(finalizeScript).toContain('cleanupOldObjects')
+    expect(finalizeScript).toContain('releases/latest/windows.json')
+    expect(finalizeScript).toContain("listKeys('artifacts/windows/')")
+    expect(finalizeScript).toContain('fixedDownloadKey')
+    expect(storageLayout).toContain("return 'downloads/latest/windows-x64.exe'")
     expect(finalizeScript).not.toContain('gh release upload')
     expect(finalizeScript).not.toContain('createGithubRelease')
     expect(finalizeScript).not.toContain('NCURATOR_RELEASE_TOKEN')

@@ -145,9 +145,12 @@ try {
       String(process.env.NCURATOR_SIDECAR_BROWSER_CACHE || '').trim() ||
       path.join(os.homedir(), '.ncurator', 'release-tools', 'sidecar-browser-cache', 'win32-x64'),
     NCURATOR_SIDECAR_BUILD_PYTHON:
-      String(process.env.NCURATOR_SIDECAR_BUILD_PYTHON || '').trim() ||
-      inspection.python.executable
+      String(process.env.NCURATOR_SIDECAR_BUILD_PYTHON || '').trim() || inspection.python.executable
   }
+  delete releaseEnvironment.CSC_LINK
+  delete releaseEnvironment.CSC_KEY_PASSWORD
+  delete releaseEnvironment.WIN_CSC_LINK
+  delete releaseEnvironment.WIN_CSC_KEY_PASSWORD
   process.stdout.write(`[release] building ${releaseTag} for Windows x64\n`)
   await run(inspection.pnpmExecutable, ['install', '--frozen-lockfile'], {
     cwd: sourceDirectory,
@@ -180,12 +183,17 @@ try {
     ],
     { cwd: sourceDirectory, env: releaseEnvironment }
   )
+  await run(
+    process.execPath,
+    [path.join(sourceDirectory, 'scripts', 'finalize-r2-windows-release.mjs'), '--tag', releaseTag],
+    { cwd: sourceDirectory, env: releaseEnvironment }
+  )
 
   const fragment = JSON.parse(await readFile(fragmentPath, 'utf8'))
   await verifyPublicReleaseFragment(fragment, publicBaseUrl)
   await verifyR2ReleaseFragment(fragment, inspection.awsExecutable)
   completed = true
-  process.stdout.write(`[release] Windows ${releaseTag} uploaded and verified\n`)
+  process.stdout.write(`[release] Windows ${releaseTag} published and verified\n`)
 } finally {
   if (keepWork || !completed) {
     process.stdout.write(`[release] kept work directory ${workDirectory}\n`)

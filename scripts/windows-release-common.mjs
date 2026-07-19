@@ -7,6 +7,7 @@ import { promisify } from 'node:util'
 import { loadReleaseEnvironment } from './release-environment.mjs'
 import { assertReleaseFragment } from './release-fragment-contract.mjs'
 import { fetchWithRetry } from './release-http.mjs'
+import { artifactKey, statusKey } from './release-storage-layout.mjs'
 
 const execFileAsync = promisify(execFile)
 const WINDOWS_PLATFORM = 'windows-x64'
@@ -218,7 +219,7 @@ export const readPublicReleaseFragment = async (
   publicBaseUrl = PUBLIC_RELEASE_BASE_URL
 ) => {
   const response = await fetch(
-    `${publicBaseUrl}/release-status/${releaseTag}/${platform}.json?check=${Date.now()}`,
+    `${publicBaseUrl}/${statusKey(releaseTag, platform)}?check=${Date.now()}`,
     { cache: 'no-store' }
   )
   if (response.status === 404) return undefined
@@ -240,7 +241,7 @@ export const verifyPublicReleaseFragment = async (
 ) => {
   for (const file of fragment.files) {
     const response = await fetchWithRetry(
-      `${publicBaseUrl}/artifacts/${fragment.tag}/${file.name}`,
+      `${publicBaseUrl}/${artifactKey(fragment, file.name)}`,
       {
         method: 'HEAD',
         cache: 'no-store'
@@ -259,7 +260,7 @@ export const verifyR2ReleaseFragment = async (fragment, awsExecutable) => {
     throw new Error('R2 verification configuration is incomplete')
   }
   for (const file of fragment.files) {
-    const key = `artifacts/${fragment.tag}/${file.name}`
+    const key = artifactKey(fragment, file.name)
     const result = await commandResult(awsExecutable, [
       's3api',
       'head-object',

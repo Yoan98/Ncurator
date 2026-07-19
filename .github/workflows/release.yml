@@ -81,9 +81,10 @@ jobs:
           node scripts/upload-r2-release-fragment.mjs \
             dist \
             release-status/windows-x64.json
+          node scripts/finalize-r2-windows-release.mjs --tag "$RELEASE_TAG"
 
       - name: Release summary
         shell: bash
         run: |
-          echo "Windows $RELEASE_TAG uploaded to Cloudflare R2." >> "$GITHUB_STEP_SUMMARY"
-          echo "The local macOS release command will publish latest metadata after both Mac builds are ready." >> "$GITHUB_STEP_SUMMARY"
+          echo "Windows $RELEASE_TAG published independently to Cloudflare R2." >> "$GITHUB_STEP_SUMMARY"
+          echo "Fixed download: https://download.ncurator.com/downloads/latest/windows-x64.exe" >> "$GITHUB_STEP_SUMMARY"
