@@ -301,9 +301,9 @@ const normalizeBundledPlaywrightSymlinks = () => {
   }
 }
 
-const writeSourceStamp = () => {
+const writeSourceStamp = (sourceHash) => {
   fs.mkdirSync(BIN_DIR, { recursive: true })
-  fs.writeFileSync(SOURCE_STAMP_PATH, `${computeSourceHash()}\n`, 'utf8')
+  fs.writeFileSync(SOURCE_STAMP_PATH, `${sourceHash}\n`, 'utf8')
 }
 
 const main = () => {
@@ -317,12 +317,13 @@ const main = () => {
   }
 
   const bootstrapPython = resolveBootstrapPython()
+  const sourceHash = computeSourceHash()
   const venvPythonPath = ensureVenv(bootstrapPython)
   ensureSidecarDependencies(venvPythonPath)
   ensureBundledPlaywrightBrowser(venvPythonPath)
   buildSidecar(venvPythonPath)
   normalizeBundledPlaywrightSymlinks()
-  writeSourceStamp()
+  writeSourceStamp(sourceHash)
 }
 
 try {
