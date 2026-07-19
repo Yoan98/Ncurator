@@ -36,7 +36,7 @@ const resolveLiveVisionModelName = (primaryConfig: LiveLlmConfig): string => {
   if (explicit) return explicit
   try {
     if (new URL(primaryConfig.base_url).hostname.endsWith('dashscope.aliyuncs.com')) {
-      return 'qwen3-vl-flash'
+      return 'qwen3.6-plus'
     }
   } catch {
     // 交给主配置校验报告无效 URL。

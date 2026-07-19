@@ -20,7 +20,7 @@ const coverHtml = `<section data-ppt-slide style="position:relative;width:1920px
 </section>`
 
 const detailHtml = `<section data-ppt-slide style="position:relative;width:1920px;height:1080px;background:#FFFFFF">
-  <h2 style="position:absolute;left:140px;top:100px;width:1500px;height:100px;color:#17324D;font-size:56px">下一步行动</h2>
+  <h2 style="position:absolute;left:140px;top:100px;width:1500px;height:110px;color:#17324D;font-size:72px">下一步行动</h2>
   <p style="position:absolute;left:160px;top:300px;width:1450px;height:120px;color:#333333;font-size:38px">缩短反馈周期，集中投入增长引擎。</p>
 </section>`
 

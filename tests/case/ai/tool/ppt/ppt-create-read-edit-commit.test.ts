@@ -9,12 +9,12 @@ import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 
 const coverHtml = `<section data-ppt-slide style="position:relative;width:1920px;height:1080px;background:#F5F0E8">
   <div style="position:absolute;left:100px;top:90px;width:1720px;height:220px;background:#17324D;border-radius:28px"></div>
-  <h1 style="position:absolute;left:170px;top:145px;width:1450px;height:100px;color:#FFFFFF;font-size:64px">2026 产品复盘</h1>
+  <h1 style="position:absolute;left:170px;top:135px;width:1450px;height:120px;color:#FFFFFF;font-size:72px">2026 产品复盘</h1>
   <p style="position:absolute;left:170px;top:420px;width:1480px;height:120px;color:#25313C;font-size:38px">收入增长 18%，交付质量继续提升。</p>
 </section>`
 
 const detailHtml = `<section data-ppt-slide style="position:relative;width:1920px;height:1080px;background:#FFFFFF">
-  <h2 style="position:absolute;left:140px;top:100px;width:1500px;height:100px;color:#17324D;font-size:54px">核心结论</h2>
+  <h2 style="position:absolute;left:140px;top:100px;width:1500px;height:110px;color:#17324D;font-size:72px">核心结论</h2>
   <p style="position:absolute;left:160px;top:300px;width:1450px;height:120px;color:#333333;font-size:36px">下一季度重点：缩短反馈周期。</p>
   <span data-pptx-latex="E=mc^2" style="position:absolute;left:160px;top:520px;width:600px;height:160px"></span>
   <div data-pptx-chart="column" data-pptx-categories='["Q1","Q2"]' data-pptx-series='[{"name":"收入","values":[12,18]}]' style="position:absolute;left:900px;top:500px;width:760px;height:420px"></div>

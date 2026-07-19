@@ -79,6 +79,7 @@
     "@napi-rs/canvas": "0.1.80",
     "@node-rs/jieba": "^2.0.1",
     "@react-pdf/renderer": "^4.1.0",
+    "@resvg/resvg-js": "2.6.2",
     "@xmldom/xmldom": "^0.8.11",
     "antd": "5.22.1",
     "apache-arrow": "^17.0.0",

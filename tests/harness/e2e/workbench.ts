@@ -365,7 +365,9 @@ export const createTemporaryWorkbenchWorkspace = async (
     cleanup: async () => {
       await rm(rootPath, {
         recursive: true,
-        force: true
+        force: true,
+        maxRetries: 10,
+        retryDelay: 500
       })
     }
   }

@@ -7,7 +7,7 @@ import { createPptToolHarness } from '../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 
 const baseHtml = `<section data-ppt-slide style="position:relative;width:1920px;height:1080px;background:#FFFFFF">
-  <h1 style="position:absolute;left:140px;top:100px;width:1500px;height:100px;color:#17324D;font-size:56px">专业编辑验证</h1>
+  <h1 style="position:absolute;left:140px;top:100px;width:1500px;height:110px;color:#17324D;font-size:72px">专业编辑验证</h1>
 </section>`
 
 describe('ai tool ppt professional editing', () => {
