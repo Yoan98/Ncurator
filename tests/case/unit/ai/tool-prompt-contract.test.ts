@@ -54,4 +54,12 @@ describe('ai unit tool prompt contract', () => {
     ).toBe(false)
     expect(readSpec?.inputSchema.safeParse({ sourcePath: 'notes.md' }).success).toBe(true)
   })
+
+  it('keeps the PPT page creation rules compact and explicitly scoped', () => {
+    const spec = getToolSpec('ppt_edit')
+    const description = spec?.promptSpec.description || ''
+
+    expect(description).toContain('PPT 建立新页面时 HTML 的设计规则：')
+    expect(description).not.toContain('\n\n')
+  })
 })
