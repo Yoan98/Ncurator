@@ -33,6 +33,8 @@ export const renderDecisionHintForBrain = (hint: HumanDecisionHint): string => {
       ]
         .filter(Boolean)
         .join('\n')
+    case 'legacy_doc_edit_unsupported':
+      return hint.detail.instruction
     case 'hand_docx_edit_failed':
       return [
         '上一轮 docx_edit 写入失败，需要根据失败信息调整后续方案。',

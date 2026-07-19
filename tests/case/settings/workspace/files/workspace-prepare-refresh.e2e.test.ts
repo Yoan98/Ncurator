@@ -15,6 +15,8 @@ import {
   toSupportedFileStatuses
 } from './realWorkspaceHelpers'
 
+const LEGACY_DOC_NAME = '风险等级判断标准-图案设计【2026.2.10更新】.doc'
+
 describe('settings workspace e2e', () => {
   it(
     'workspace-prepare-refresh',
@@ -102,6 +104,18 @@ describe('settings workspace e2e', () => {
               message:
                 '真实共享 workspace fixture 中的支持文件应全部完成索引或失败收敛，文件索引摘要和节点状态应同步刷新，对齐 SET-WORKSPACE-004-AC1、SET-WORKSPACE-004-AC2。',
               data: result
+            }
+          )
+
+          const legacyDocStatus = result.supportedStatuses.find(
+            (item) => item.name === LEGACY_DOC_NAME
+          )
+          await runtime.assertThat(
+            legacyDocStatus?.status === 'indexed' && !legacyDocStatus.lastError,
+            {
+              name: 'prepare-indexes-legacy-doc-fixture',
+              message: '真实共享 workspace fixture 中的旧版 .doc 文件应完成索引且没有解析错误。',
+              data: legacyDocStatus || null
             }
           )
         }

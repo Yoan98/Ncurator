@@ -14,6 +14,7 @@
 - 任一 action、格式校验、原子替换或 post-write 校验失败，整个调用不得产生部分落盘。
 - DOCX 对外 blockId 必须匹配 `blk_[0-9a-f]{32}`；插入生成新 ID，替换保留 ID，删除使 ID 失效。
 - Word 读取工具必须同时覆盖 `.docx` 和 `.doc`；旧版 `.doc` 支持 outline、block range、blockId 和搜索，但 `docx_edit` 必须在写入前返回 `legacy_doc_edit_unsupported` decisionHint。
+- `.doc` 必须覆盖真实文件的 human live 阅读，以及 Electron 工作空间索引 e2e；live 读取不得修改源文件，e2e 索引状态必须收敛为 `indexed`。
 - DOCX/PPT 工具返回成功后，测试必须直接从工作区正式路径重新读取文件验证，不再以 run 收尾提交作为成功条件。
 - run 收尾仍要验证 DOCX 红删绿增预览、PPT 页面级差异、before checkpoint、修改记录和 revert。
 - 外部修改 DOCX 后，旧 session 的下一次读取或编辑必须失败并要求重新读取；不做指纹模糊恢复。

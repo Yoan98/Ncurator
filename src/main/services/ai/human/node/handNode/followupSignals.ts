@@ -6,6 +6,23 @@ import { deriveGroupedHandFailureHints } from './decisionHints'
 const asString = (value: unknown): string | undefined =>
   typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined
 
+const readLegacyDocEditUnsupportedHint = (
+  data: ToolCallResult['data']
+): Extract<HumanDecisionHint, { code: 'legacy_doc_edit_unsupported' }> | undefined => {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return undefined
+  const toolResultHint = (data as JsonObject).decisionHint
+  if (!toolResultHint || typeof toolResultHint !== 'object' || Array.isArray(toolResultHint)) {
+    return undefined
+  }
+  if (toolResultHint.code !== 'legacy_doc_edit_unsupported') return undefined
+  const instruction = asString(toolResultHint.instruction)
+  if (!instruction) return undefined
+  return {
+    code: 'legacy_doc_edit_unsupported',
+    detail: { instruction }
+  }
+}
+
 const readDocxEditActionTypes = (args: JsonObject | undefined): string | undefined => {
   if (!Array.isArray(args?.actions)) return undefined
   const types = args.actions
@@ -69,6 +86,12 @@ export const deriveHandFollowupSignals = (input: {
   const groupedFailureHints = deriveGroupedHandFailureHints(input)
 
   for (const [index, result] of input.results.entries()) {
+    const legacyDocEditUnsupportedHint = readLegacyDocEditUnsupportedHint(result.data)
+    if (legacyDocEditUnsupportedHint) {
+      return {
+        decisionHint: legacyDocEditUnsupportedHint
+      }
+    }
     const toolResultHint = result.data && typeof result.data === 'object' && !Array.isArray(result.data)
       ? (result.data as { decisionHint?: HumanDecisionHint }).decisionHint
       : undefined

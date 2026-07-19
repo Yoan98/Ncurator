@@ -2,6 +2,46 @@ import { describe, expect, it } from 'vitest'
 import { deriveHandFollowupSignals } from '../../../../src/main/services/ai/human/node/handNode/followupSignals'
 
 describe('ai unit hand followup signals', () => {
+  it('passes through legacy DOC edit guidance from the tool result', () => {
+    const signals = deriveHandFollowupSignals({
+      calls: [
+        {
+          toolName: 'docx_edit',
+          args: {
+            sourcePath: 'legacy.doc',
+            actions: [
+              {
+                type: 'replace_text',
+                query: 'old',
+                replace: 'new'
+              }
+            ]
+          }
+        }
+      ],
+      results: [
+        {
+          toolName: 'docx_edit',
+          ok: false,
+          data: {
+            error: 'docx_edit 不支持写入旧版 .doc 文件。',
+            decisionHint: {
+              code: 'legacy_doc_edit_unsupported',
+              instruction: '不要继续尝试编辑 .doc 文件，跳过它继续推进。'
+            }
+          }
+        }
+      ]
+    })
+
+    expect(signals.decisionHint).toEqual({
+      code: 'legacy_doc_edit_unsupported',
+      detail: {
+        instruction: '不要继续尝试编辑 .doc 文件，跳过它继续推进。'
+      }
+    })
+  })
+
   it('passes through hand_tool_result_too_large using the shared decision hint contract', () => {
     const signals = deriveHandFollowupSignals({
       calls: [
