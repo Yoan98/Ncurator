@@ -6,6 +6,8 @@ import { createHumanThoughtDecisionSchema } from '../../schema'
 import { assertExternalLearnedSkillIds } from '../../skills'
 import type { HumanRuntimeCache, HumanState } from '../../types'
 import { applyBrainDecisionTransition } from '../utils/stateTransitions'
+import { createDeliveryGuidanceItem, mergeDeliveryGuidanceItems } from '../../shared/deliveryGuidance'
+import { isContentSafetyError } from '../../../utils/runFailure'
 import {
   emitThinkingCompleted,
   emitThinkingFailed,
@@ -97,6 +99,37 @@ export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
       })
     } catch (error) {
       const errorMessage = getErrorMessage(error)
+      if (isContentSafetyError(error)) {
+        completeThinking()
+        const guidance = createDeliveryGuidanceItem(
+          'brain',
+          '本次处理受到服务端内容安全策略限制，无法继续执行。请调整输入内容或相关资料后重试。'
+        )
+        return {
+          ...state,
+          execution: {
+            ...state.execution,
+            stage: 'mouth',
+            status: 'running',
+            finalizationReason: 'brain_content_safety',
+            currentThought: {
+              thought: {
+                next: '由于服务端内容安全策略限制，本轮直接进入最终收尾。'
+              },
+              nextAction: { action: 'mouth' }
+            },
+            deliveryGuidanceItems: mergeDeliveryGuidanceItems(
+              state.execution.deliveryGuidanceItems,
+              guidance
+            ),
+            pendingFault: undefined,
+            pendingDecisionHint: {
+              code: 'brain_content_safety',
+              detail: { message: guidance?.text || '内容安全策略限制' }
+            }
+          }
+        }
+      }
       const isDecisionProtocolError =
         error instanceof ZodError ||
         error instanceof SyntaxError ||

@@ -31,7 +31,8 @@ export const buildHumanResumeSnapshot = (state: HumanState): HumanResumeSnapshot
   execution: {
     pendingDecisionHint: state.execution.pendingDecisionHint,
     deliveryGuidanceItems: state.execution.deliveryGuidanceItems,
-    artifacts: state.execution.artifacts
+    artifacts: state.execution.artifacts,
+    finalizationReason: state.execution.finalizationReason
   }
 })
 
@@ -75,7 +76,8 @@ export const restoreHumanStateFromResumeSnapshot = (input: {
         }
       },
       deliveryGuidanceItems: snapshot.execution?.deliveryGuidanceItems,
-      artifacts: snapshot.execution?.artifacts || []
+      artifacts: snapshot.execution?.artifacts || [],
+      finalizationReason: snapshot.execution?.finalizationReason
     },
     result: undefined,
     trace: createDefaultHumanTrace()

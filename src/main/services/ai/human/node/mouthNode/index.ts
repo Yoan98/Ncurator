@@ -13,6 +13,22 @@ import {
 import { emitFinalizingStarted } from '../../../events/processEvents'
 import { resolveEvidenceReferenceAccess } from '../../shared/evidenceReferenceAccess'
 import { brainEvidenceReferenceSchema } from '../../schema'
+import { isContentSafetyError } from '../../../utils/runFailure'
+import { renderHumanFileChangeLines } from '../../shared/runtimeRenderers'
+
+const buildContentSafetyFallbackMarkdown = (state: HumanState): string =>
+  [
+    '# 处理结果',
+    '',
+    '本次处理受到服务端内容安全策略限制，无法生成完整的最终说明。',
+    '已经成功保存的文件变更仍然有效，请调整输入内容或相关资料后重试。',
+    '',
+    '## 已保存的文件',
+    renderHumanFileChangeLines(state, 'fallback_markdown'),
+    '',
+    '## 重试提示',
+    ...(state.execution.deliveryGuidanceItems || []).map((item) => `- ${item.text}`)
+  ].join('\n')
 
 export const createMouthNode = (input: {
   ctx: AiRunContext
@@ -38,7 +54,7 @@ export const createMouthNode = (input: {
     const pendingItems = (state.memory.thought.todolist || [])
       .filter((item) => item.status === 'todo')
       .map((item) => item.item)
-    if (pendingItems.length > 0) {
+    if (pendingItems.length > 0 && state.execution.finalizationReason !== 'brain_content_safety') {
       const decisionHint = {
         code: 'brain_todolist_incomplete' as const,
         detail: { pendingItems }
@@ -113,26 +129,6 @@ export const createMouthNode = (input: {
       })
     }
 
-    const rawDeliveryMarkdown = await input.ctx.chatText({
-      caller: 'human.mouth',
-      taskId: promptState.task.taskId,
-      system: prompt.system,
-      user: prompt.user,
-      schemaName: 'human_mouth_markdown',
-      temperature: 0.2,
-      onTextDelta: input.emitAnswerEvents
-        ? (text) => {
-            input.ctx.sendEvent({
-              type: 'answer_token',
-              runId: input.ctx.runId,
-              taskId: promptState.task.taskId,
-              token: text,
-              stage: 'human_mouth'
-            })
-          }
-        : undefined
-    })
-
     const docxArtifacts =
       docxApplyRecords.length > 0
         ? appendDocxApplyArtifactsAndEmitEvents({
@@ -161,6 +157,32 @@ export const createMouthNode = (input: {
       }
     }
     input.cache.currentState = readyState
+
+    let rawDeliveryMarkdown: string
+    try {
+      rawDeliveryMarkdown = await input.ctx.chatText({
+        caller: 'human.mouth',
+        taskId: promptState.task.taskId,
+        system: prompt.system,
+        user: prompt.user,
+        schemaName: 'human_mouth_markdown',
+        temperature: 0.2,
+        onTextDelta: input.emitAnswerEvents
+          ? (text) => {
+              input.ctx.sendEvent({
+                type: 'answer_token',
+                runId: input.ctx.runId,
+                taskId: promptState.task.taskId,
+                token: text,
+                stage: 'human_mouth'
+              })
+            }
+          : undefined
+      })
+    } catch (error) {
+      if (!isContentSafetyError(error)) throw error
+      rawDeliveryMarkdown = buildContentSafetyFallbackMarkdown(readyState)
+    }
 
     const deliveryMarkdown =
       String(rawDeliveryMarkdown || '').trim() ||

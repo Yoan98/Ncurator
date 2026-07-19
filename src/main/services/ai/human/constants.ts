@@ -46,6 +46,7 @@ export const HUMAN_STAGES = [
   'context_compaction'
 ] as const
 export const HUMAN_STATUSES = ['running', 'completed'] as const
+export const HUMAN_FINALIZATION_REASONS = ['brain_content_safety'] as const
 
 export const HUMAN_STEP_ACTIONS = [
   'brain_decision',
@@ -69,6 +70,7 @@ export const HUMAN_DECISION_HINT_CODES = [
   'hand_tool_result_unusable',
   'brain_output_schema_invalid',
   'brain_todolist_incomplete',
+  'brain_content_safety',
   'hand_call_invalid',
   'hand_workspace_boundary_blocked'
 ] as const
