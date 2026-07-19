@@ -6,7 +6,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { promisify } from 'node:util'
 import JSZip from 'jszip'
-import type { Locator, Page } from 'playwright'
+import type { ElectronApplication, Locator, Page } from 'playwright'
 import type { AiRunEvent, JsonValue, WorkspaceIndexJobAction } from '../../../src/shared/types'
 import {
   buildBlockIndex,
@@ -641,12 +641,54 @@ export const bindWorkspaceRootThroughSettingsUi = async (
 
 export const selectWorkbenchAttachmentThroughNativeDialog = async (
   page: Page,
-  filePath: string
+  filePath: string,
+  electronApp: ElectronApplication
 ): Promise<void> => {
   const addButton = getWorkbenchLocator(page, workbenchSelectors.attachmentAddButton)
   const fileName = path.basename(filePath)
   await page.bringToFront()
   await addButton.waitFor({ state: 'visible' })
+  const waitForSelectedAttachment = async (): Promise<boolean> =>
+    await page
+      .waitForFunction(
+        (input: { cardPrefix: string; fileName: string }) => {
+          const cards = Array.from(
+            document.querySelectorAll(`[data-testid^="${input.cardPrefix}-"]`)
+          )
+          return cards.some((card) => {
+            if (!(card instanceof HTMLElement)) return false
+            return (
+              card.innerText.includes(input.fileName) ||
+              card.getAttribute('title') === input.fileName
+            )
+          })
+        },
+        {
+          cardPrefix: workbenchSelectors.attachmentCardPrefix,
+          fileName
+        },
+        { timeout: 30_000 }
+      )
+      .then(() => true)
+      .catch(() => false)
+
+  if (process.platform !== 'darwin') {
+    await electronApp.evaluate(({ dialog }, selectedPath) => {
+      const originalShowOpenDialog = dialog.showOpenDialog.bind(dialog)
+      dialog.showOpenDialog = (async () => {
+        dialog.showOpenDialog = originalShowOpenDialog
+        return {
+          canceled: false,
+          filePaths: [selectedPath],
+          bookmarks: []
+        }
+      }) as typeof dialog.showOpenDialog
+    }, filePath)
+    await addButton.click()
+    if (await waitForSelectedAttachment()) return
+    throw new Error(`failed to select attachment through injected dialog: ${filePath}`)
+  }
+
   const diagnostics: NativeDirectoryDialogDiagnostics[] = []
   const strategies: NativeDirectoryDialogStrategy[] = [
     'applescript-paste',
@@ -679,28 +721,7 @@ export const selectWorkbenchAttachmentThroughNativeDialog = async (
     try {
       const electronProcessId = await readElectronProcessId(page)
       const output = await selectDirectoryInNativeDialog(filePath, electronProcessId, strategy)
-      const selected = await page
-        .waitForFunction(
-          (input: { cardPrefix: string; fileName: string }) => {
-            const cards = Array.from(
-              document.querySelectorAll(`[data-testid^="${input.cardPrefix}-"]`)
-            )
-            return cards.some((card) => {
-              if (!(card instanceof HTMLElement)) return false
-              return (
-                card.innerText.includes(input.fileName) ||
-                card.getAttribute('title') === input.fileName
-              )
-            })
-          },
-          {
-            cardPrefix: workbenchSelectors.attachmentCardPrefix,
-            fileName
-          },
-          { timeout: 30_000 }
-        )
-        .then(() => true)
-        .catch(() => false)
+      const selected = await waitForSelectedAttachment()
       diagnostics.push({
         strategy: output.strategy,
         selected,

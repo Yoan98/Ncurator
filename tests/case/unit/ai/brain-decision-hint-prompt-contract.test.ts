@@ -193,11 +193,10 @@ describe('ai unit brain decision-hint prompt contract', () => {
       'cannot resolve anchorBlockId=b:1 in current active snapshot'
     )
     expect(taskProgressSection).not.toContain('上一轮 docx_edit 写入失败')
-    expect(correctionHintSection).toContain('刚才尝试修改的 docx 区域命中了定位排版保护')
-    expect(correctionHintSection).toContain(
-      '错误：当前命中复杂定位排版区域：包含“达到反走样。”的区域'
-    )
-    expect(correctionHintSection).toContain('不会被自动修改')
+    expect(correctionHintSection).toContain('DOCX 绝对定位或锚定定位布局')
+    expect(correctionHintSection).toContain('命中区域：“达到反走样。”')
+    expect(correctionHintSection).toContain('禁止通过其他方式修改该区域')
+    expect(correctionHintSection).not.toContain('错误：')
   })
 
   it('requires references disclosure when nextAction is mouth', () => {

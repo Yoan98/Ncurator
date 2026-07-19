@@ -143,11 +143,19 @@ describe('workbench conversation e2e', () => {
               page,
               workspaceBinding.workspaceId
             )
-            await selectWorkbenchAttachmentThroughNativeDialog(page, attachments.imagePath)
+            await selectWorkbenchAttachmentThroughNativeDialog(
+              page,
+              attachments.imagePath,
+              runtime.electronApp
+            )
             await getImageAttachmentCardByName(page, 'qa-image.png')
               .first()
               .waitFor({ state: 'visible' })
-            await selectWorkbenchAttachmentThroughNativeDialog(page, attachments.markdownPath)
+            await selectWorkbenchAttachmentThroughNativeDialog(
+              page,
+              attachments.markdownPath,
+              runtime.electronApp
+            )
             await waitForAttachmentCardByName(page, 'workbench-preview.md')
             const sessionCountAfterPaste = await countWorkspaceSessions(
               page,
@@ -161,10 +169,7 @@ describe('workbench conversation e2e', () => {
                   (item) => item.alt === attachmentName
                 )
                 return Boolean(
-                  image &&
-                  image.complete &&
-                  image.naturalWidth > 0 &&
-                  image.src.startsWith('blob:')
+                  image && image.complete && image.naturalWidth > 0 && image.src.startsWith('blob:')
                 )
               },
               'qa-image.png',
@@ -231,7 +236,11 @@ describe('workbench conversation e2e', () => {
             await fileCard.click()
             await page.waitForTimeout(500)
 
-            await selectWorkbenchAttachmentThroughNativeDialog(page, attachments.largePath)
+            await selectWorkbenchAttachmentThroughNativeDialog(
+              page,
+              attachments.largePath,
+              runtime.electronApp
+            )
             await waitForAttachmentCardByName(page, 'qa-large.json')
             const largeFileMessage = await waitForAntMessageText(
               page,

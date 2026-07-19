@@ -42,13 +42,11 @@ export const renderDecisionHintForBrain = (hint: HumanDecisionHint): string => {
       ]
         .filter(Boolean)
         .join('\n')
-    case 'hand_docx_positioned_write_blocked':
-      return [
-        '刚才尝试修改的 docx 区域命中了定位排版保护。',
-        '按系统设计，这类定位区域不会被自动修改。',
-        '这处位置本轮未改动，但仍可继续处理文档中其他可修改的位置。',
-        `错误：${hint.detail.error}。`
-      ].join('')
+    case 'hand_docx_positioned_write_blocked': {
+      const regionText = hint.detail.error.match(/包含[“"]([^”"]{1,80})[”"]的区域/u)?.[1]
+      const region = regionText ? `（命中区域：“${regionText}”）` : ''
+      return `该区域因使用 DOCX 绝对定位或锚定定位布局而无法安全完成正常排版，因此禁止编辑该区域${region}；可继续处理其他非定位区域，但禁止通过其他方式修改该区域。`
+    }
     case 'hand_tool_limit_near_exhausted':
       return `累计工具调用次数已接近当前上限。当前为 ${String(hint.detail.toolCallCount)}，上限为 ${String(hint.detail.limit)}。后续应尽快收尾，只保留完成最终交付所必需的动作。`
     case 'hand_tool_limit_exceeded':

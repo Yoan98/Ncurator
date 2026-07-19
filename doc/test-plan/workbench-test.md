@@ -126,9 +126,9 @@ tests/case/workbench/
 - 测试类型：`e2e`
 - What：验证 `+` 与粘贴添加附件时，附件会保存到工作区 `.ncurator/runtime/assets/<assetBucketId>/`，不会提前创建真实会话，并保持图片预览、文件打开、删除、普通文本粘贴和格式提示行为。
 - Why：附件链路已改为“统一落盘到工作区 + 只把路径交给 AI”，必须用回归测试守住真实保存路径和交互行为。
-- How：创建真实工作区，通过真实粘贴图片和 `md` 文件触发产品附件保存逻辑；另外通过粘贴覆盖不支持格式和大文件 warning。
+- How：创建真实工作区，通过真实点击添加附件并在 E2E harness 中注入下一次系统文件对话框的选择结果，经过真实 Renderer → IPC → Main → 附件保存链路；另外通过粘贴覆盖不支持格式和大文件 warning。macOS 保留原生对话框 smoke，Windows 使用同一业务链路的受控对话框返回。
 - Oracle：真实粘贴会触发附件保存；添加附件后没有真实会话；图片预览可打开；文件副标题显示 `MD`；不支持格式只提示不加入；大文件只提示不拦截；普通文本粘贴仍正常，对齐 `WB-COMPOSER-010-AC2`、`WB-COMPOSER-010-AC3`。
-- Not：不验证系统原生文件选择器本身；不通过 `attachmentPickResponse` 或直接 `attachmentSaveFile` 伪造附件结果。
+- Not：不在跨平台业务回归中验证系统原生文件选择器的视觉细节；不通过 `attachmentPickResponse` 或直接 `attachmentSaveFile` 伪造附件结果。
 
 #### `reference-mention-keyboard`
 

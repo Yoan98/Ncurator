@@ -3,17 +3,6 @@ import type { HumanDecisionHint } from '../types'
 const toDisplaySourcePath = (sourcePath: string | undefined): string =>
   sourcePath?.split(/[\\/]/).filter(Boolean).at(-1) || '目标 docx'
 
-const renderPositionedDocxGuidance = (
-  hint: Extract<HumanDecisionHint, { code: 'hand_docx_positioned_write_blocked' }>
-): string => {
-  const sourcePath = toDisplaySourcePath(hint.detail.sourcePath)
-  return [
-    `最终交付时必须说明：${sourcePath} 中${hint.detail.error}`,
-    'AI 未自动修改该区域，需要用户手动按建议内容处理这部分版式区域。',
-    '如果后续已经在其他可安全编辑的位置完成了修改，也要同时说明实际写入位置。'
-  ].join('')
-}
-
 const renderToolLimitExceededGuidance = (
   hint: Extract<HumanDecisionHint, { code: 'hand_tool_limit_exceeded' }>
 ): string =>
@@ -24,8 +13,12 @@ export const renderDeliveryGuidanceForMouth = (
 ): string | undefined => {
   if (!hint) return undefined
   switch (hint.code) {
-    case 'hand_docx_positioned_write_blocked':
-      return renderPositionedDocxGuidance(hint)
+    case 'hand_docx_positioned_write_blocked': {
+      const sourcePath = toDisplaySourcePath(hint.detail.sourcePath)
+      const regionText = hint.detail.error.match(/包含[“"]([^”"]{1,80})[”"]的区域/u)?.[1]
+      const region = regionText ? `（命中区域：“${regionText}”）` : ''
+      return `最终交付时必须说明：${sourcePath} 中该区域因使用 DOCX 绝对定位或锚定定位布局而无法安全完成正常排版，因此禁止编辑该区域${region}；可继续处理其他非定位区域，但禁止通过其他方式修改该区域。`
+    }
     case 'hand_tool_limit_exceeded':
       return renderToolLimitExceededGuidance(hint)
     default:

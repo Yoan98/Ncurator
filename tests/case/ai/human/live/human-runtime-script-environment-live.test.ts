@@ -20,6 +20,8 @@ const PYTHON_DOWNLOAD_MARKER = '271828'
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu
 
 const cleanupDirectories = new Set<string>()
+const IS_WINDOWS = process.platform === 'win32'
+const SUPPORTED_PLATFORMS = new Set<NodeJS.Platform>(['darwin', 'win32'])
 
 const listFiles = async (rootPath: string): Promise<string[]> => {
   const entries = await fs.readdir(rootPath, { withFileTypes: true }).catch(() => [])
@@ -33,9 +35,13 @@ const listFiles = async (rootPath: string): Promise<string[]> => {
 }
 
 const writeUnavailableCommand = async (directoryPath: string, commandName: string) => {
-  const commandPath = path.join(directoryPath, commandName)
-  await fs.writeFile(commandPath, '#!/bin/sh\nexit 127\n', 'utf8')
-  await fs.chmod(commandPath, 0o755)
+  const commandPath = path.join(directoryPath, IS_WINDOWS ? `${commandName}.cmd` : commandName)
+  await fs.writeFile(
+    commandPath,
+    IS_WINDOWS ? '@echo off\r\nexit /b 127\r\n' : '#!/bin/sh\nexit 127\n',
+    'utf8'
+  )
+  if (!IS_WINDOWS) await fs.chmod(commandPath, 0o755)
 }
 
 const createMissingRuntimePath = async (commandNames: readonly string[]): Promise<string> => {
@@ -44,7 +50,10 @@ const createMissingRuntimePath = async (commandNames: readonly string[]): Promis
   await Promise.all(
     commandNames.map((commandName) => writeUnavailableCommand(binPath, commandName))
   )
-  return `${binPath}:/usr/bin:/bin:/usr/sbin:/sbin`
+  const systemPaths = IS_WINDOWS
+    ? [process.env.SystemRoot, path.join(process.env.SystemRoot || 'C:\\Windows', 'System32')]
+    : ['/usr/bin', '/bin', '/usr/sbin', '/sbin']
+  return [binPath, ...systemPaths.filter(Boolean)].join(path.delimiter)
 }
 
 const createUserRuntimeTestDirectory = (): string => {
@@ -57,8 +66,8 @@ const isRuntimeInstallationArtifact = (filePath: string): boolean => {
   const fileName = path.basename(filePath)
   return (
     /\.(?:dmg|pkg|tar|tar\.gz|tgz|txz|xz|zip)$/iu.test(fileName) ||
-    fileName === 'node' ||
-    /^python(?:3(?:\.\d+)*)?$/iu.test(fileName)
+    /^node(?:\.exe)?$/iu.test(fileName) ||
+    /^python(?:3(?:\.\d+)*)?(?:\.exe)?$/iu.test(fileName)
   )
 }
 
@@ -75,6 +84,23 @@ const collectTerminalResultText = (events: Parameters<typeof filterAiRunEventsBy
       .map((event) => event.result?.data)
   )
 
+const buildRuntimeDownloadGuidance = (
+  runtimeName: 'node' | 'python',
+  installDirectory: string
+): string => {
+  if (!IS_WINDOWS && runtimeName === 'node') return ''
+  if (!IS_WINDOWS) {
+    return `为避免下载源不可达，请从 https://ghfast.top/https://github.com/mmomtchev/python-xpack/releases/download/v3.12.11-2/python-xpack-3.12.11-2-darwin-arm64.tar.gz 下载预编译的独立 Python 压缩包到 ${installDirectory}/downloads/python.tar.gz，然后解压到 ${installDirectory}/python，压缩包的顶层目录需要去掉一层。解压后的 Python 可执行文件位于 ${installDirectory}/python/.content/python。请始终复用同一个终端；下载返回 running 时只需继续读取并等待它自然完成，不要停止或重复执行。`
+  }
+
+  if (runtimeName === 'node') {
+    return `请下载 Windows x64 免安装包 https://nodejs.org/dist/v22.12.0/node-v22.12.0-win-x64.zip 到 ${path.join(installDirectory, 'downloads', 'node.zip')}，使用 PowerShell Expand-Archive 解压到 ${path.join(installDirectory, 'node')}，然后运行解压目录中的 node.exe。下载返回 running 时只需继续读取并等待它自然完成，不要停止或重复执行。`
+  }
+  return `请下载 Windows x64 embeddable 包 https://www.python.org/ftp/python/3.12.11/python-3.12.11-embed-amd64.zip 到 ${path.join(installDirectory, 'downloads', 'python.zip')}，使用 PowerShell Expand-Archive 解压到 ${path.join(installDirectory, 'python')}，然后运行 ${path.join(installDirectory, 'python', 'python.exe')}。下载返回 running 时只需继续读取并等待它自然完成，不要停止或重复执行。`
+}
+
+const normalizeCommandPath = (value: string): string => value.replace(/\\/g, '/').toLowerCase()
+
 afterEach(async () => {
   const directories = [...cleanupDirectories]
   cleanupDirectories.clear()
@@ -83,7 +109,7 @@ afterEach(async () => {
   )
 })
 
-describe.skipIf(process.platform !== 'darwin')('ai human live backend', () => {
+describe.skipIf(!SUPPORTED_PLATFORMS.has(process.platform))('ai human live backend', () => {
   it('human-runtime-inline-code-live', async () => {
     await runWithStructuredOutputRetry(async () => {
       await runBackendCase({
@@ -274,10 +300,7 @@ describe.skipIf(process.platform !== 'darwin')('ai human live backend', () => {
             const installDirectory = createUserRuntimeTestDirectory()
             const marker = runtimeName === 'node' ? NODE_DOWNLOAD_MARKER : PYTHON_DOWNLOAD_MARKER
             const languageLabel = runtimeName === 'node' ? 'Node.js' : 'Python'
-            const downloadGuidance =
-              runtimeName === 'python'
-                ? `为避免下载源不可达，请从 https://ghfast.top/https://github.com/mmomtchev/python-xpack/releases/download/v3.12.11-2/python-xpack-3.12.11-2-darwin-arm64.tar.gz 下载预编译的独立 Python 压缩包到 ${installDirectory}/downloads/python.tar.gz，然后解压到 ${installDirectory}/python，压缩包的顶层目录需要去掉一层。解压后的 Python 可执行文件位于 ${installDirectory}/python/.content/python。请始终复用同一个终端；下载返回 running 时只需继续读取并等待它自然完成，不要停止或重复执行。`
-                : ''
+            const downloadGuidance = buildRuntimeDownloadGuidance(runtimeName, installDirectory)
             const sessionId = `human-runtime-download-${runtimeName}-live-session`
             await runtime.seedLlmConfig(loadLiveLlmConfigFromEnv())
             const runner = createHumanTestRunner(runtime, {
@@ -320,25 +343,28 @@ describe.skipIf(process.platform !== 'darwin')('ai human live backend', () => {
             const marker = runtimeName === 'node' ? NODE_DOWNLOAD_MARKER : PYTHON_DOWNLOAD_MARKER
             const commands = collectTerminalCommands(result.events)
             const resultText = collectTerminalResultText(result.events)
+            const deliveryText = String(result.output?.deliveryMarkdown || '')
             const executableFiles = result.installedFiles.filter((filePath) =>
               runtimeName === 'node'
-                ? path.basename(filePath) === 'node'
-                : /^python(?:3(?:\.\d+)*)?$/iu.test(path.basename(filePath))
+                ? /^node(?:\.exe)?$/iu.test(path.basename(filePath))
+                : /^python(?:3(?:\.\d+)*)?(?:\.exe)?$/iu.test(path.basename(filePath))
             )
-            const usedInstalledRuntime = commands.some(
-              (command) =>
-                command.includes(result.installDirectory) &&
+            const usedInstalledRuntime = commands.some((command) => {
+              const normalizedCommand = normalizeCommandPath(command)
+              return (
+                normalizedCommand.includes(normalizeCommandPath(result.installDirectory)) &&
                 (runtimeName === 'node'
-                  ? /\/node(?:[\s"']|$)/iu.test(command)
-                  : /\/python(?:3(?:\.\d+)*)?(?:[\s"']|$)/iu.test(command))
-            )
+                  ? /\/node(?:\.exe)?(?:[\s"']|$)/iu.test(normalizedCommand)
+                  : /\/python(?:3(?:\.\d+)*)?(?:\.exe)?(?:[\s"']|$)/iu.test(normalizedCommand))
+              )
+            })
 
             runtime.assertThat(
               result.output?.status === 'completed' &&
                 result.installedFiles.length > 0 &&
                 executableFiles.length > 0 &&
                 usedInstalledRuntime &&
-                resultText.includes(marker) &&
+                (resultText.includes(marker) || deliveryText.includes(marker)) &&
                 result.workspaceInstallationArtifacts.length === 0,
               {
                 name: `human-live-downloads-and-runs-${runtimeName}-from-user-runtime`,
@@ -346,6 +372,7 @@ describe.skipIf(process.platform !== 'darwin')('ai human live backend', () => {
                 data: {
                   commands,
                   resultText,
+                  deliveryText,
                   installDirectory: result.installDirectory,
                   installedFiles: result.installedFiles,
                   executableFiles,
