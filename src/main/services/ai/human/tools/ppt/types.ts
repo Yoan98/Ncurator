@@ -25,19 +25,27 @@ export type PptElementStyle = {
   underline?: boolean
   textAlign?: 'left' | 'center' | 'right'
   verticalAlign?: 'top' | 'middle' | 'bottom'
+  borders?: {
+    top?: { color: string; width: number }
+    right?: { color: string; width: number }
+    bottom?: { color: string; width: number }
+    left?: { color: string; width: number }
+  }
 }
 
 export type PptCompiledElement = {
   sourceId: string
-  type: 'text' | 'shape' | 'image' | 'svg' | 'table' | 'chart' | 'formula'
+  type: 'text' | 'shape' | 'image' | 'svg' | 'table' | 'chart' | 'formula' | 'line'
   bounds: PptBounds
   style: PptElementStyle
   text?: string
   src?: string
+  imageFit?: 'fill' | 'contain' | 'cover'
   svg?: string
   latex?: string
   rows?: string[][]
   chartType?: 'bar' | 'column' | 'line' | 'pie' | 'doughnut' | 'area'
+  line?: { from: { x: number; y: number }; to: { x: number; y: number } }
   zIndex: number
 }
 
@@ -96,12 +104,14 @@ export type PptDiffFrame = {
 export type PptDiffSlide = {
   slideId: string
   changed: boolean
+  changes: Array<'added' | 'deleted' | 'modified' | 'moved'>
   before?: PptDiffFrame
   after?: PptDiffFrame
 }
 
 export type PptDiffManifest = {
-  version: 1
+  version: 2
+  operation: 'created' | 'updated'
   slides: PptDiffSlide[]
 }
 

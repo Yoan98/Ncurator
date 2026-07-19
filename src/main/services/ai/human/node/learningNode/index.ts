@@ -1,8 +1,14 @@
 import type { AiRunContext } from '../../../types'
 import { HUMAN_MAX_ACTIVE_TOOLS } from '../../constants'
-import type { HumanLearningOutcome, HumanRuntimeCache, HumanState, HumanDecisionHint } from '../../types'
+import type {
+  HumanLearningOutcome,
+  HumanRuntimeCache,
+  HumanState,
+  HumanDecisionHint
+} from '../../types'
 import {
   assertExternalLearnedSkillIds,
+  expandSkillIdsWithRequirements,
   getEffectiveLearnedSkillIds,
   getSkillDefinition,
   hasSkillDefinition,
@@ -11,7 +17,11 @@ import {
 import { appendDecisionRound, buildLearningExecution } from '../../memory/rounds'
 import { ensureSkillTools } from './skillLoader'
 import { countActiveToolNamesForSkillIds, fitSkillIdsToToolBudget } from './toolBudget'
-import { returnToBrain, returnToBrainAfterTrace, returnToBrainWithDecisionHint } from '../utils/stateTransitions'
+import {
+  returnToBrain,
+  returnToBrainAfterTrace,
+  returnToBrainWithDecisionHint
+} from '../utils/stateTransitions'
 import { emitLearningCompleted, emitLearningStarted } from '../../../events/processEvents'
 
 const dedupeInOrder = <TValue extends string>(values: readonly TValue[]): TValue[] => {
@@ -79,7 +89,9 @@ const renderLearningResult = (outcome: HumanLearningOutcome): string => {
       duplicates.length > 0
         ? `已存在技能 ${duplicates.map((item) => `\`${item}\``).join('、')}`
         : undefined,
-      unknown.length > 0 ? `未识别技能 ${unknown.map((item) => `\`${item}\``).join('、')}` : undefined,
+      unknown.length > 0
+        ? `未识别技能 ${unknown.map((item) => `\`${item}\``).join('、')}`
+        : undefined,
       outcome.evictedSkillIds.length > 0
         ? `为满足活动工具数量上限，已移除技能 ${outcome.evictedSkillIds.map((item) => `\`${item}\``).join('、')}`
         : undefined
@@ -104,16 +116,26 @@ export const createLearningNode = (input: { ctx: AiRunContext; cache: HumanRunti
     assertExternalLearnedSkillIds(state.skills.learnedSkillIds)
     input.cache.currentState = state
 
-    if (!state.execution.currentThought || state.execution.currentThought.nextAction.action !== 'learning') {
+    if (
+      !state.execution.currentThought ||
+      state.execution.currentThought.nextAction.action !== 'learning'
+    ) {
       return returnToBrain(state)
     }
 
     const rawRequestedSkillIds = state.execution.currentThought.nextAction.wantLearnSkillIds
-    const requestedSkillIds = dedupeInOrder(
+    const directRequestedSkillIds = dedupeInOrder(
       Array.isArray(rawRequestedSkillIds)
-        ? rawRequestedSkillIds.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+        ? rawRequestedSkillIds.filter(
+            (item): item is string => typeof item === 'string' && item.trim().length > 0
+          )
         : []
     )
+    const knownRequestedSkillIds = directRequestedSkillIds.filter(hasSkillDefinition)
+    const requestedSkillIds = dedupeInOrder([
+      ...expandSkillIdsWithRequirements(knownRequestedSkillIds),
+      ...directRequestedSkillIds.filter((skillId) => !hasSkillDefinition(skillId))
+    ])
     const effectiveLearnedSkillIds = getEffectiveLearnedSkillIds(state.skills.learnedSkillIds)
     const duplicateSkillIds = requestedSkillIds.filter(
       (skillId): skillId is HumanLearningOutcome['skippedDuplicateSkillIds'][number] =>

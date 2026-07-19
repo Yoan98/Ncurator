@@ -1,6 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto'
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { Resvg } from '@resvg/resvg-js'
 import {
   addBlankSlide,
   addSlideChart,
@@ -84,7 +86,12 @@ import {
 import type { AiFileChangeRecord, JsonObject } from '../../../../../../shared/types'
 import { fileExists } from '../docx/review/utils'
 import { resolveWorkspacePath } from '../terminal/commandPolicy'
-import { compilePptSlideHtml } from './htmlCompiler'
+import {
+  compilePptSlideHtml,
+  normalizePptColor,
+  PPT_CANVAS_HEIGHT,
+  PPT_CANVAS_WIDTH
+} from './htmlCompiler'
 import { renderLatexToSvg } from './formula'
 import {
   pptEditSchema,
@@ -109,8 +116,8 @@ import type {
   PptToolRuntime
 } from './types'
 
-const DEFAULT_WIDTH = 1920
-const DEFAULT_HEIGHT = 1080
+const DEFAULT_WIDTH = PPT_CANVAS_WIDTH
+const DEFAULT_HEIGHT = PPT_CANVAS_HEIGHT
 
 const hashBytes = (bytes: Uint8Array | string): string =>
   createHash('sha256').update(bytes).digest('hex')
@@ -158,10 +165,7 @@ const replaceFileWithBytes = async (targetPath: string, bytes: Uint8Array): Prom
 }
 
 const normalizeHex = (value: string | undefined, fallback = '#FFFFFF'): string => {
-  const raw = String(value || '').trim()
-  if (/^#[0-9a-f]{6}$/i.test(raw)) return raw.toUpperCase()
-  if (/^[0-9a-f]{6}$/i.test(raw)) return `#${raw.toUpperCase()}`
-  return fallback
+  return normalizePptColor(value, fallback) || fallback
 }
 
 const getSlideDimensions = (presentation: PresentationData): { width: number; height: number } => {
@@ -267,8 +271,16 @@ const resolveAssetBytes = async (input: {
   if (/^https?:\/\//i.test(input.rawPath)) {
     throw new Error('PPT 页面资源只支持工作区内已存在的本地文件。')
   }
+  let rawPath = input.rawPath
+  if (/^file:/i.test(rawPath)) {
+    try {
+      rawPath = fileURLToPath(rawPath)
+    } catch {
+      throw new Error(`无效的本地 file URL: ${input.rawPath}`)
+    }
+  }
   const resolved = resolveWorkspacePath({
-    rawPath: input.rawPath,
+    rawPath,
     cwd: path.dirname(input.sourcePath),
     rootPath: input.workspaceRootPath
   })
@@ -295,10 +307,10 @@ const applyShapeStyle = (
 ) => {
   if (style.fill) setShapeFill(shape, normalizeHex(style.fill))
   else if (textShape) setShapeNoFill(shape)
-  if (style.stroke) {
+  if (style.stroke && Number(style.strokeWidth || 0) > 0) {
     setShapeStroke(shape, {
       color: normalizeHex(style.stroke, '#000000'),
-      widthEmu: Math.round((style.strokeWidth || 1) * 12_700)
+      widthEmu: Math.round(Number(style.strokeWidth) * 12_700)
     })
   } else {
     setShapeNoStroke(shape)
@@ -308,10 +320,16 @@ const applyShapeStyle = (
     setShapeShadow(shape, { opacity: 0.22, blurEmu: 50_800, offsetEmu: 25_400 })
   }
   if (textShape) {
+    const usesDefaultFont =
+      !style.fontFamily ||
+      /^(arial|helvetica|sans-serif|times new roman|segoe ui|calibri|aptos|inter|roboto|system-ui)$/i.test(
+        style.fontFamily
+      )
+    const textFont = usesDefaultFont ? 'Microsoft YaHei' : style.fontFamily || 'Microsoft YaHei'
     setShapeTextFormat(shape, {
-      font: style.fontFamily || 'Arial',
-      fontEastAsian: style.fontFamily || 'Microsoft YaHei',
-      size: Math.max(8, (style.fontSize || 32) * 0.75),
+      font: textFont,
+      fontEastAsian: textFont,
+      size: Math.max(8, (style.fontSize || 32) * 0.5),
       color: normalizeHex(style.color, '#222222'),
       bold: (style.fontWeight || 400) >= 600,
       italic: style.italic,
@@ -327,6 +345,37 @@ const applyShapeStyle = (
   }
 }
 
+const addCompiledBorders = (input: {
+  presentation: PresentationData
+  slide: SlideData
+  compiled: PptCompiledSlide
+  element: PptCompiledElement
+}): void => {
+  const borders = input.element.style.borders
+  if (!borders) return
+  const slideSize = getSlideDimensions(input.presentation)
+  const point = (x: number, y: number) => ({
+    x: emu(Math.round((x / input.compiled.width) * slideSize.width)),
+    y: emu(Math.round((y / input.compiled.height) * slideSize.height))
+  })
+  const { x, y, width, height } = input.element.bounds
+  const sides = [
+    { border: borders.top, from: point(x, y), to: point(x + width, y) },
+    { border: borders.right, from: point(x + width, y), to: point(x + width, y + height) },
+    { border: borders.bottom, from: point(x + width, y + height), to: point(x, y + height) },
+    { border: borders.left, from: point(x, y + height), to: point(x, y) }
+  ]
+  for (const side of sides) {
+    if (!side.border || side.border.width <= 0) continue
+    addSlideLine(input.slide, {
+      from: side.from,
+      to: side.to,
+      color: normalizeHex(side.border.color, '#000000'),
+      widthEmu: Math.round(side.border.width * 12_700)
+    })
+  }
+}
+
 const addCompiledElement = async (input: {
   document: PptRuntimeDocument
   slide: SlideData
@@ -336,21 +385,69 @@ const addCompiledElement = async (input: {
 }) => {
   const bounds = boundsToEmu(
     input.document.presentation,
-    input.element.bounds,
+    input.element.type === 'text'
+      ? {
+          ...input.element.bounds,
+          width: Math.min(
+            input.compiled.width - input.element.bounds.x,
+            input.element.bounds.width +
+              Math.max(24, Math.min(72, (input.element.style.fontSize || 32) * 1.5))
+          ),
+          height: Math.min(
+            input.compiled.height - input.element.bounds.y,
+            input.element.bounds.height + Math.max(16, (input.element.style.fontSize || 32) * 0.8)
+          )
+        }
+      : input.element.bounds,
     input.compiled.width,
     input.compiled.height
   )
   if (input.element.type === 'shape') {
     const shape = addSlideShape(input.slide, {
       preset: input.element.style.radius ? 'roundRect' : 'rect',
+      text: '',
       ...bounds
     })
     applyShapeStyle(shape, input.element.style)
+    addCompiledBorders({
+      presentation: input.document.presentation,
+      slide: input.slide,
+      compiled: input.compiled,
+      element: input.element
+    })
     return
   }
   if (input.element.type === 'text') {
     const shape = addSlideTextBox(input.slide, { ...bounds, text: input.element.text || '' })
     applyShapeStyle(shape, input.element.style, true)
+    addCompiledBorders({
+      presentation: input.document.presentation,
+      slide: input.slide,
+      compiled: input.compiled,
+      element: input.element
+    })
+    return
+  }
+  if (input.element.type === 'line') {
+    const lineSpec = input.element.line || {
+      from: { x: 0, y: 0 },
+      to: { x: input.element.bounds.width, y: input.element.bounds.height }
+    }
+    const slideSize = getSlideDimensions(input.document.presentation)
+    const point = (offset: { x: number; y: number }) => ({
+      x: emu(
+        Math.round(((input.element.bounds.x + offset.x) / input.compiled.width) * slideSize.width)
+      ),
+      y: emu(
+        Math.round(((input.element.bounds.y + offset.y) / input.compiled.height) * slideSize.height)
+      )
+    })
+    addSlideLine(input.slide, {
+      from: point(lineSpec.from),
+      to: point(lineSpec.to),
+      color: normalizeHex(input.element.style.stroke || input.element.style.color, '#222222'),
+      widthEmu: Math.round(Math.max(1, input.element.style.strokeWidth || 2) * 12_700)
+    })
     return
   }
   if (input.element.type === 'table') {
@@ -407,7 +504,19 @@ const addCompiledElement = async (input: {
       extension
     })
   }
-  const image = addSlideImage(input.slide, bytes, { ...bounds, format, fit: 'contain' })
+  const image = addSlideImage(input.slide, bytes, {
+    ...bounds,
+    format,
+    fit:
+      input.element.type === 'image'
+        ? input.element.imageFit === 'contain'
+          ? 'contain'
+          : 'fill'
+        : 'contain'
+  })
+  if (input.element.type === 'image' && input.element.imageFit === 'cover') {
+    applyCoverCrop(image, bytes, input.element.bounds)
+  }
   if (input.element.type === 'formula') {
     setShapeDescription(image, `ppt-latex:${input.element.latex || ''}`)
   }
@@ -578,13 +687,84 @@ const renderPresentationSlides = async (input: {
   prefix: string
 }): Promise<Map<string, PptDiffFrame & { hash: string }>> => {
   const { renderSlideToImage } = await import('pptx-kit-preview/node')
+  const renderWithSystemFonts = async (
+    presentation: PresentationData,
+    slide: SlideData,
+    width: number
+  ): Promise<Uint8Array | null> => {
+    try {
+      const { defaultMeasurer, renderSlideToSvg } = await import('pptx-kit-preview/node')
+      const svg = renderSlideToSvg(presentation, slide, {
+        measureText: defaultMeasurer,
+        textLayout: 'svg'
+      })
+      const rendered = new Resvg(svg, {
+        fitTo: { mode: 'width', value: width },
+        font: {
+          loadSystemFonts: true,
+          defaultFontFamily: 'Microsoft YaHei',
+          sansSerifFamily: 'Microsoft YaHei',
+          serifFamily: 'Microsoft YaHei',
+          monospaceFamily: 'Consolas'
+        }
+      }).render()
+      return new Uint8Array(rendered.asPng())
+    } catch {
+      return null
+    }
+  }
+  const renderWithElectron = async (
+    presentation: PresentationData,
+    slide: SlideData,
+    width: number,
+    height: number
+  ): Promise<Uint8Array | null> => {
+    if (!process.versions.electron) return null
+    try {
+      const electron = await import('electron')
+      if (!electron.BrowserWindow || !electron.app?.isReady()) return null
+      const { renderSlideToSvg } = await import('pptx-kit-preview')
+      const svg = renderSlideToSvg(presentation, slide)
+      const window = new electron.BrowserWindow({
+        show: false,
+        width,
+        height,
+        useContentSize: true,
+        webPreferences: {
+          nodeIntegration: false,
+          contextIsolation: true,
+          sandbox: true,
+          partition: `ppt-preview-${Date.now()}-${Math.random()}`
+        }
+      })
+      try {
+        const document = `<!doctype html><html><head><style>html,body{margin:0;padding:0;width:${width}px;height:${height}px;overflow:hidden;background:#fff}svg{display:block;width:${width}px;height:${height}px}text{font-family:"Microsoft YaHei","Noto Sans SC","PingFang SC",Arial,sans-serif}</style></head><body>${svg}</body></html>`
+        await window.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(document)}`)
+        await window.webContents.executeJavaScript('document.fonts.ready')
+        const image = await window.webContents.capturePage({ x: 0, y: 0, width, height })
+        return new Uint8Array(image.toPNG())
+      } finally {
+        window.destroy()
+      }
+    } catch {
+      return null
+    }
+  }
   await fs.mkdir(input.previewDir, { recursive: true })
   const slides = getSlides(input.presentation)
   const output = new Map<string, PptDiffFrame & { hash: string }>()
   for (const slideId of input.slideIds) {
     const index = slides.findIndex((slide) => slideIdOf(slide) === slideId)
     if (index < 0) continue
-    const png = renderSlideToImage(input.presentation, slides[index]!, { width: 1280 })
+    const width = 1920
+    const height = Math.round(
+      (width * getSlideDimensions(input.presentation).height) /
+        getSlideDimensions(input.presentation).width
+    )
+    const png =
+      (await renderWithElectron(input.presentation, slides[index]!, width, height)) ||
+      (await renderWithSystemFonts(input.presentation, slides[index]!, width)) ||
+      renderSlideToImage(input.presentation, slides[index]!, { width })
     const hash = hashBytes(png)
     const image = path.join(input.previewDir, `${input.prefix}-${hash.slice(0, 20)}.png`)
     await fs.writeFile(image, png)
@@ -593,22 +773,31 @@ const renderPresentationSlides = async (input: {
   return output
 }
 
-const buildManifest = (input: {
+export const buildPptDiffManifest = (input: {
   before: Map<string, PptDiffFrame & { hash: string }>
   after: Map<string, PptDiffFrame & { hash: string }>
+  operation: 'created' | 'updated'
   forceChangedSlideIds?: ReadonlySet<string>
 }): PptDiffManifest => {
   const afterEntries: PptDiffSlide[] = [...input.after.entries()]
     .sort((a, b) => a[1].index - b[1].index)
     .map(([slideId, after]) => {
       const before = input.before.get(slideId)
+      const changes: PptDiffSlide['changes'] = []
+      if (!before) changes.push('added')
+      else {
+        if (
+          before.hash !== after.hash ||
+          (before.index === after.index && Boolean(input.forceChangedSlideIds?.has(slideId)))
+        ) {
+          changes.push('modified')
+        }
+        if (before.index !== after.index) changes.push('moved')
+      }
       return {
         slideId,
-        changed:
-          !before ||
-          before.hash !== after.hash ||
-          before.index !== after.index ||
-          Boolean(input.forceChangedSlideIds?.has(slideId)),
+        changed: changes.length > 0,
+        changes,
         before: before ? { index: before.index, image: before.image } : undefined,
         after: { index: after.index, image: after.image }
       }
@@ -620,11 +809,12 @@ const buildManifest = (input: {
     afterEntries.splice(Math.min(Math.max(0, before.index - 1), afterEntries.length), 0, {
       slideId,
       changed: true,
+      changes: ['deleted'],
       before: { index: before.index, image: before.image },
       after: undefined
     })
   }
-  return { version: 1, slides: afterEntries }
+  return { version: 2, operation: input.operation, slides: afterEntries }
 }
 
 const readImageDimensions = (bytes: Uint8Array): { width: number; height: number } | null => {
@@ -650,7 +840,7 @@ const readImageDimensions = (bytes: Uint8Array): { width: number; height: number
   return null
 }
 
-const applyCoverCrop = (shape: SlideShapeData, bytes: Uint8Array, bounds: PptBounds): void => {
+function applyCoverCrop(shape: SlideShapeData, bytes: Uint8Array, bounds: PptBounds): void {
   const dimensions = readImageDimensions(bytes)
   if (!dimensions) return
   const imageAspect = dimensions.width / dimensions.height
@@ -1126,7 +1316,9 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
     const create = createActions.length === 1
     const sourcePath = resolvePptPath(args.sourcePath)
     if (create && (documents.has(sourcePath) || (await fileExists(sourcePath)))) {
-      throw new Error(`目标 pptx 已存在，不能 create_presentation: ${args.sourcePath}`)
+      throw new Error(
+        `目标 pptx 已存在，不能再次使用 create_presentation；保留现有文件并使用 insert_slide 追加页面: ${args.sourcePath}`
+      )
     }
     const document = await loadDocument(args.sourcePath, create)
     const presentationSnapshot = await savePresentation(document.presentation)
@@ -1308,6 +1500,7 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
       const afterBytes = await savePresentation(document.presentation)
       const afterPresentation = await loadPresentation(afterBytes)
       const dirs = await ensureAssetDirectory(workspaceRootPath, document.changeId)
+      const beforeExists = Boolean(document.beforeBytes)
       const beforePresentation = document.beforeBytes
         ? await loadPresentation(document.beforeBytes)
         : null
@@ -1327,14 +1520,14 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
         previewDir: dirs.after,
         prefix: 'after'
       })
-      const manifest = buildManifest({
+      const manifest = buildPptDiffManifest({
         before: beforeFrames,
         after: afterFrames,
+        operation: beforeExists ? 'updated' : 'created',
         forceChangedSlideIds: document.changedSlideIds
       })
       const changedSlides = manifest.slides.filter((slide) => slide.changed)
       await fs.writeFile(dirs.manifest, JSON.stringify(manifest, null, 2), 'utf8')
-      const beforeExists = Boolean(document.beforeBytes)
       let beforeSnapshotPath: string | undefined
       let beforeChecksum: string | undefined
       if (beforeExists && document.beforeBytes) {

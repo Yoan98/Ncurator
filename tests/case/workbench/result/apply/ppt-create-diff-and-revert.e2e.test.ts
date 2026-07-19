@@ -29,8 +29,7 @@ describe('workbench result e2e', () => {
         domain: 'workbench',
         suite: 'result',
         groups: ['apply'],
-        description:
-          '真实 AI 创建 PPT 后，验证修改文件入口、分页左右 Diff、缩略图筛选和新建文件回撤。',
+        description: '真实 AI 创建 PPT 后，验证新建 PPT 单画布预览、缩略图和新建文件回撤。',
         fixtures: [],
         launchMode: 'real',
         windowMode: 'visible',
@@ -76,21 +75,50 @@ describe('workbench result e2e', () => {
               page,
               workbenchSelectors.pptDiffAfter
             ).isVisible()
-            const changedThumbCount = await getWorkbenchLocator(
+            const thumbnailCount = await getWorkbenchLocator(
               page,
               workbenchSelectors.pptDiffThumbnails
             )
               .locator('button')
               .count()
-            await getWorkbenchLocator(page, workbenchSelectors.pptDiffViewer)
-              .getByLabel('查看全部页')
-              .click()
-            const allThumbCount = await getWorkbenchLocator(
+            const filterCount = await getWorkbenchLocator(page, workbenchSelectors.pptDiffViewer)
+              .getByRole('button', { name: /只看变更页|查看全部页/ })
+              .count()
+            const addedMarkerCount = await getWorkbenchLocator(
+              page,
+              workbenchSelectors.pptDiffViewer
+            )
+              .locator('[aria-label="新增页"]')
+              .count()
+            const thumbnailButtons = getWorkbenchLocator(
               page,
               workbenchSelectors.pptDiffThumbnails
-            )
-              .locator('button')
-              .count()
+            ).locator('button')
+            const inactiveThumbnailClass =
+              (await thumbnailButtons.nth(1).getAttribute('class')) || ''
+            const afterSurface = getWorkbenchLocator(page, workbenchSelectors.pptDiffAfter)
+            const transform = afterSurface.locator(':scope > div[style*="transform"]').first()
+            const initialTransform = (await transform.getAttribute('style')) || ''
+            await afterSurface.hover()
+            await page.mouse.wheel(0, -420)
+            await page.waitForFunction(() => {
+              const button = document.querySelector('[aria-label="适应窗口"]')
+              return button?.textContent !== '100%'
+            })
+            const zoomPercent = (
+              (await getWorkbenchLocator(page, workbenchSelectors.pptDiffViewer)
+                .getByRole('button', { name: '适应窗口' })
+                .textContent()) || ''
+            ).trim()
+            const zoomedTransform = (await transform.getAttribute('style')) || ''
+            const box = await afterSurface.boundingBox()
+            if (box) {
+              await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+              await page.mouse.down()
+              await page.mouse.move(box.x + box.width / 2 + 56, box.y + box.height / 2 + 32)
+              await page.mouse.up()
+            }
+            const draggedTransform = (await transform.getAttribute('style')) || ''
             await getWorkbenchLocator(page, workbenchSelectors.applyRevertButton).click()
             await page.getByText('删除这个新建文件？').waitFor({ state: 'visible' })
             await page.getByRole('button', { name: '恢复到此前版本' }).click()
@@ -105,8 +133,14 @@ describe('workbench result e2e', () => {
               applyEntryText,
               beforeVisible,
               afterVisible,
-              changedThumbCount,
-              allThumbCount,
+              thumbnailCount,
+              filterCount,
+              addedMarkerCount,
+              inactiveThumbnailClass,
+              initialTransform,
+              zoomedTransform,
+              draggedTransform,
+              zoomPercent,
               existsAfterRevert,
               pptToolCalls: evidence.events.filter(
                 (event) => event.type === 'tool_call_started' && event.toolName === 'ppt_edit'
@@ -124,10 +158,15 @@ describe('workbench result e2e', () => {
             result.slideCount === 2 &&
               result.slideText.includes(MARKER) &&
               result.applyEntryText.includes(FILE_NAME) &&
-              result.beforeVisible &&
+              !result.beforeVisible &&
               result.afterVisible &&
-              result.changedThumbCount === 2 &&
-              result.allThumbCount === 2 &&
+              result.thumbnailCount === 2 &&
+              result.filterCount === 0 &&
+              result.addedMarkerCount === 0 &&
+              result.inactiveThumbnailClass.includes('border-transparent') &&
+              result.zoomPercent !== '100%' &&
+              result.zoomedTransform !== result.initialTransform &&
+              result.draggedTransform !== result.zoomedTransform &&
               result.existsAfterRevert === false &&
               result.pptToolCalls >= 2 &&
               result.pptArtifacts === 1,
