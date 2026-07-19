@@ -92,6 +92,9 @@ importers:
       docx:
         specifier: ^9.5.1
         version: 9.6.0
+      electron:
+        specifier: ^39.2.7
+        version: 39.2.7
       electron-updater:
         specifier: ^6.3.9
         version: 6.6.2
@@ -122,6 +125,9 @@ importers:
       pdfjs-dist:
         specifier: 5.4.296
         version: 5.4.296
+      playwright:
+        specifier: ^1.58.2
+        version: 1.58.2
       pptx-kit:
         specifier: 0.11.1
         version: 0.11.1
@@ -207,9 +213,6 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^5.1.1
         version: 5.1.2(vite@7.3.0(@types/node@22.19.3)(jiti@2.6.1)(less@4.5.1)(lightningcss@1.30.2)(yaml@2.8.2))
-      electron:
-        specifier: ^39.2.7
-        version: 39.2.7
       electron-builder:
         specifier: ^26.0.12
         version: 26.0.12(electron-builder-squirrel-windows@26.0.12)
@@ -234,9 +237,6 @@ importers:
       less:
         specifier: ^4.5.1
         version: 4.5.1
-      playwright:
-        specifier: ^1.58.2
-        version: 1.58.2
       prettier:
         specifier: ^3.7.4
         version: 3.7.4
