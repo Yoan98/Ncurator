@@ -98,7 +98,7 @@ export type PptOutlineItem = Omit<PptReadbackSlide, 'elements'> & {
 
 export type PptDiffFrame = {
   index: number
-  image: string
+  svg: string
 }
 
 export type PptDiffSlide = {
@@ -110,7 +110,7 @@ export type PptDiffSlide = {
 }
 
 export type PptDiffManifest = {
-  version: 2
+  version: 3
   operation: 'created' | 'updated'
   slides: PptDiffSlide[]
 }

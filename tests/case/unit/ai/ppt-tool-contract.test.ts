@@ -150,6 +150,7 @@ describe('ai unit ppt tool contract', () => {
     expect(svg.endsWith('</svg>')).toBe(true)
   })
 
+
   it('normalizes browser colors before writing native PPT styles', () => {
     expect(normalizePptColor('rgb(12, 34, 56)')).toBe('#0C2238')
     expect(normalizePptColor('rgba(12, 34, 56, 0)')).toBeUndefined()
@@ -206,17 +207,17 @@ describe('ai unit ppt tool contract', () => {
     ).resolves.toBeTruthy()
   })
 
-  it('emits v2 created and updated diff semantics', () => {
+  it('emits v3 SVG created and updated diff semantics', () => {
     const before = new Map([
-      ['slide-1', { index: 1, image: 'before-1.png', hash: 'same' }],
-      ['slide-2', { index: 2, image: 'before-2.png', hash: 'old' }]
+      ['slide-1', { index: 1, svg: 'before-1.svg', hash: 'same' }],
+      ['slide-2', { index: 2, svg: 'before-2.svg', hash: 'old' }]
     ])
     const after = new Map([
-      ['slide-2', { index: 1, image: 'after-2.png', hash: 'new' }],
-      ['slide-3', { index: 2, image: 'after-3.png', hash: 'new' }]
+      ['slide-2', { index: 1, svg: 'after-2.svg', hash: 'new' }],
+      ['slide-3', { index: 2, svg: 'after-3.svg', hash: 'new' }]
     ])
     const manifest = buildPptDiffManifest({ before, after, operation: 'updated' })
-    expect(manifest.version).toBe(2)
+    expect(manifest.version).toBe(3)
     expect(manifest.slides.map((slide) => slide.changes)).toEqual([
       ['deleted'],
       ['modified', 'moved'],

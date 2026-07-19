@@ -3,7 +3,7 @@ import type { AiFileChangeRecord } from '../../../../shared/types'
 import { workbenchSelectors } from '../../testing/selectors'
 import PptSlideDeckViewer, { type PptViewerSlide } from '../fileRenders/PptSlideDeckViewer'
 
-type DiffFrame = { index: number; image: string }
+type DiffFrame = { index: number; svg: string }
 type DiffSlide = {
   slideId: string
   changed: boolean
@@ -11,13 +11,13 @@ type DiffSlide = {
   before?: DiffFrame
   after?: DiffFrame
 }
-type DiffManifest = { version: 2; operation: 'created' | 'updated'; slides: DiffSlide[] }
+type DiffManifest = { version: 3; operation: 'created' | 'updated'; slides: DiffSlide[] }
 
 const loadLocalUrl = async (filePath: string): Promise<string> => {
   const bytes = await window.api.readFile(filePath)
   const buffer = new ArrayBuffer(bytes.byteLength)
   new Uint8Array(buffer).set(bytes)
-  return URL.createObjectURL(new Blob([buffer], { type: 'image/png' }))
+  return URL.createObjectURL(new Blob([buffer], { type: 'image/svg+xml' }))
 }
 
 const changeLabel = (changes: DiffSlide['changes']): string => {
@@ -51,7 +51,7 @@ const PptDiffViewer: React.FC<{ record: AiFileChangeRecord }> = ({ record }) => 
       .then((bytes) => JSON.parse(new TextDecoder().decode(bytes)) as DiffManifest)
       .then((next) => {
         if (cancelled) return
-        if (next.version !== 2 || !Array.isArray(next.slides))
+        if (next.version !== 3 || !Array.isArray(next.slides))
           throw new Error('PPT 差异预览格式已过期，请重新生成修改记录')
         setManifest(next)
         setChangedOnly(next.operation === 'updated')
@@ -73,7 +73,7 @@ const PptDiffViewer: React.FC<{ record: AiFileChangeRecord }> = ({ record }) => 
     const paths = [
       ...new Set(
         manifest.slides
-          .flatMap((slide) => [slide.before?.image, slide.after?.image])
+          .flatMap((slide) => [slide.before?.svg, slide.after?.svg])
           .filter((value): value is string => Boolean(value))
       )
     ]
@@ -100,8 +100,8 @@ const PptDiffViewer: React.FC<{ record: AiFileChangeRecord }> = ({ record }) => 
       (manifest?.slides || []).map((slide) => ({
         id: slide.slideId,
         index: slide.after?.index || slide.before?.index || 0,
-        primaryUrl: slide.before ? imageUrls[slide.before.image] : undefined,
-        secondaryUrl: slide.after ? imageUrls[slide.after.image] : undefined,
+        primaryUrl: slide.before ? imageUrls[slide.before.svg] : undefined,
+        secondaryUrl: slide.after ? imageUrls[slide.after.svg] : undefined,
         label: changeLabel(slide.changes),
         marker: manifest?.operation === 'updated' ? slide.changes[0] : undefined
       })),
