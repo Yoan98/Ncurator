@@ -190,11 +190,7 @@ if (!singleInstanceLock) {
 
     const mainWindow = createWindow()
     const appUpdateService = new AppUpdateService()
-    const browserEmbedService = new BrowserEmbedService(
-      mainWindow,
-      join(app.getPath('userData'), 'browser-tabs.json')
-    )
-    await browserEmbedService.initialize()
+    const browserEmbedService = new BrowserEmbedService(mainWindow)
     const webCrawlerBaseDirectory = join(app.getPath('userData'), 'web-crawler')
     const webCrawlerService = createWebCrawlerService({
       appRootPath: app.getAppPath(),

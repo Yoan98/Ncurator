@@ -1,6 +1,4 @@
 import { randomUUID } from 'node:crypto'
-import fs from 'node:fs/promises'
-import path from 'node:path'
 import { Menu, shell, webContents, WebContentsView } from 'electron'
 import type {
   BrowserWindow,
@@ -25,7 +23,7 @@ import { BrowserActionVisualizer } from './BrowserActionVisualizer'
 type StagehandModule = typeof import('@browserbasehq/stagehand')
 type StagehandInstance = InstanceType<StagehandModule['Stagehand']>
 
-type PersistedBrowserTab = {
+type BrowserTabRecord = {
   id: string
   ownerId: string
   title?: string
@@ -40,17 +38,12 @@ type PersistedBrowserTab = {
 }
 
 type BrowserTabRuntime = {
-  persisted: PersistedBrowserTab
+  persisted: BrowserTabRecord
   view: WebContentsView | null
   ready: Promise<void> | null
   attached: boolean
   visible: boolean
   lastVisibleBounds: Rectangle | null
-}
-
-type PersistedBrowserWorkspace = {
-  version: 2
-  tabs: PersistedBrowserTab[]
 }
 
 const EMPTY_BOUNDS: BrowserPanelBoundsState = {
@@ -136,38 +129,7 @@ export class BrowserEmbedService implements BrowserUseService {
   private bounds: BrowserPanelBoundsState = EMPTY_BOUNDS
   private occluded = false
   private popupMenuInstance: Menu | null = null
-  private persistTimer: ReturnType<typeof setTimeout> | null = null
-
-  public constructor(
-    private readonly mainWindow: BrowserWindow,
-    private readonly persistencePath: string
-  ) {}
-
-  public async initialize(): Promise<void> {
-    try {
-      const raw = await fs.readFile(this.persistencePath, 'utf8')
-      const parsed = JSON.parse(raw) as { version?: number; tabs?: PersistedBrowserTab[] }
-      if ((parsed.version !== 1 && parsed.version !== 2) || !Array.isArray(parsed.tabs)) return
-      for (const tab of parsed.tabs) {
-        if (!tab?.id || !tab.ownerId) continue
-        this.tabs.set(tab.id, {
-          persisted: {
-            ...tab,
-            zoomFactor: parsed.version === 1 ? 1 : clampZoomFactor(tab.zoomFactor || 1)
-          },
-          view: null,
-          ready: null,
-          attached: false,
-          visible: false,
-          lastVisibleBounds: null
-        })
-      }
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-        console.error('[BROWSER] Failed to restore browser tabs:', error)
-      }
-    }
-  }
+  public constructor(private readonly mainWindow: BrowserWindow) {}
 
   public listTabs(ownerId: string): BrowserTabState[] {
     return [...this.tabs.values()]
@@ -178,7 +140,7 @@ export class BrowserEmbedService implements BrowserUseService {
 
   public async createTab(ownerId: string): Promise<BrowserTabState> {
     const now = Date.now()
-    const persisted: PersistedBrowserTab = {
+    const persisted: BrowserTabRecord = {
       id: randomUUID(),
       ownerId: String(ownerId || '').trim() || '__browser__',
       url: '',
@@ -197,7 +159,6 @@ export class BrowserEmbedService implements BrowserUseService {
     this.tabs.set(persisted.id, runtime)
     this.activeTabId = persisted.id
     this.applyAllVisibility()
-    this.schedulePersist()
     return this.toState(runtime)
   }
 
@@ -221,7 +182,6 @@ export class BrowserEmbedService implements BrowserUseService {
     this.applyAllVisibility()
     if (!runtime.view) void this.ensureReady(runtime)
     this.emitState(runtime)
-    this.schedulePersist()
     return this.toState(runtime)
   }
 
@@ -239,7 +199,6 @@ export class BrowserEmbedService implements BrowserUseService {
       this.occluded = false
     }
     this.applyAllVisibility()
-    await this.persistNow()
   }
 
   public show(tabId: string): number {
@@ -259,7 +218,6 @@ export class BrowserEmbedService implements BrowserUseService {
       void this.ensureReady(runtime)
     }
     this.emitState(runtime)
-    this.schedulePersist()
     return this.presentationId
   }
 
@@ -394,7 +352,6 @@ export class BrowserEmbedService implements BrowserUseService {
     runtime.persisted.zoomFactor = 1
     runtime.view?.webContents.setZoomFactor(1)
     this.emitState(runtime)
-    this.schedulePersist()
     return this.toState(runtime)
   }
 
@@ -416,8 +373,6 @@ export class BrowserEmbedService implements BrowserUseService {
 
   public async dispose(): Promise<void> {
     this.closePopupMenu()
-    if (this.persistTimer) clearTimeout(this.persistTimer)
-    await this.persistNow()
     for (const runtime of this.tabs.values()) {
       if (runtime.view && !runtime.view.webContents.isDestroyed()) runtime.view.webContents.close()
     }
@@ -552,7 +507,6 @@ export class BrowserEmbedService implements BrowserUseService {
     runtime.persisted.zoomFactor = clampZoomFactor(current + delta)
     runtime.view?.webContents.setZoomFactor(runtime.persisted.zoomFactor)
     this.emitState(runtime)
-    this.schedulePersist()
     return this.toState(runtime)
   }
 
@@ -570,7 +524,6 @@ export class BrowserEmbedService implements BrowserUseService {
         index: contents.navigationHistory.getActiveIndex()
       }
     }
-    this.schedulePersist()
   }
 
   private toState(runtime: BrowserTabRuntime): BrowserTabState {
@@ -595,38 +548,6 @@ export class BrowserEmbedService implements BrowserUseService {
   private emitState(runtime: BrowserTabRuntime): void {
     if (!this.mainWindow.isDestroyed()) {
       this.mainWindow.webContents.send('browser-panel-state-change', this.toState(runtime))
-    }
-  }
-
-  private schedulePersist(): void {
-    if (this.persistTimer) clearTimeout(this.persistTimer)
-    this.persistTimer = setTimeout(() => void this.persistNow(), 250)
-  }
-
-  private async persistNow(): Promise<void> {
-    if (this.persistTimer) {
-      clearTimeout(this.persistTimer)
-      this.persistTimer = null
-    }
-    for (const runtime of this.tabs.values()) this.captureRuntimeStateWithoutScheduling(runtime)
-    const payload: PersistedBrowserWorkspace = {
-      version: 2,
-      tabs: [...this.tabs.values()].map((runtime) => runtime.persisted)
-    }
-    await fs.mkdir(path.dirname(this.persistencePath), { recursive: true })
-    await fs.writeFile(this.persistencePath, JSON.stringify(payload), 'utf8')
-  }
-
-  private captureRuntimeStateWithoutScheduling(runtime: BrowserTabRuntime): void {
-    const contents = runtime.view?.webContents
-    if (!contents || contents.isDestroyed()) return
-    runtime.persisted.url = contents.getURL()
-    runtime.persisted.title = contents.getTitle().trim() || undefined
-    runtime.persisted.zoomFactor = contents.getZoomFactor()
-    runtime.persisted.updatedAt = Date.now()
-    const entries = contents.navigationHistory.getAllEntries()
-    if (entries.length) {
-      runtime.persisted.history = { entries, index: contents.navigationHistory.getActiveIndex() }
     }
   }
 

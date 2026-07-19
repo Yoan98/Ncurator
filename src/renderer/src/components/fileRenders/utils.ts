@@ -7,6 +7,8 @@ const getMimeType = (filename: string): string => {
       return 'application/pdf'
     case 'docx':
       return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    case 'pptx':
+      return 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
     case 'md':
     case 'markdown':
       return 'text/markdown'
@@ -22,7 +24,13 @@ const getFileType = (filename: string): string => {
 }
 
 const resolveUtf8TextFileType = (bytes: ArrayBuffer, fileType: string): string => {
-  if (fileType === 'pdf' || fileType === 'docx' || fileType === 'md' || fileType === 'markdown') {
+  if (
+    fileType === 'pdf' ||
+    fileType === 'docx' ||
+    fileType === 'pptx' ||
+    fileType === 'md' ||
+    fileType === 'markdown'
+  ) {
     return fileType
   }
   try {

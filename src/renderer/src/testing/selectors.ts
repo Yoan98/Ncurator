@@ -128,6 +128,7 @@ export const workbenchSelectors = {
   sessionsToggle: 'workbench-sessions-toggle',
   sidebarResizer: 'workbench-sidebar-resizer',
   settingsHelpButton: 'workbench-settings-help-button',
+  appVersion: 'workbench-app-version',
   updateButton: 'workbench-update-button',
   updateButtonLabel: 'workbench-update-button-label',
   updateRestartModal: 'workbench-update-restart-modal',

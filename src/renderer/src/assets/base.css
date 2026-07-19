@@ -577,6 +577,19 @@ textarea,
   animation: nc-sidebar-update-enter 180ms ease-out both;
 }
 
+.nc-sidebar-version {
+  display: inline-flex;
+  min-width: 54px;
+  height: 27px;
+  margin-right: 8px;
+  align-items: center;
+  justify-content: center;
+  color: #9b9a97;
+  font-size: 11px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
 .nc-sidebar-update-button:not(:disabled):hover {
   border-color: #b7cff3;
   background: #e2edff;

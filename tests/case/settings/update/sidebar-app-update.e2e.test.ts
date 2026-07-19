@@ -40,6 +40,17 @@ describe('sidebar app update e2e', () => {
           const initiallyHidden = !(await updateButton.isVisible().catch(() => false))
 
           await setUpdateSnapshot(page, {
+            status: 'idle',
+            currentVersion: '0.1.0',
+            isPackaged: true,
+            updateSupported: true,
+            platform: 'darwin'
+          })
+          const versionControl = getWorkbenchLocator(page, workbenchSelectors.appVersion)
+          await versionControl.getByText('v0.1.0', { exact: true }).waitFor({ state: 'visible' })
+          const visibleVersion = (await versionControl.textContent()) || ''
+
+          await setUpdateSnapshot(page, {
             status: 'available',
             currentVersion: '0.1.0',
             availableVersion: '0.1.1',
@@ -48,6 +59,7 @@ describe('sidebar app update e2e', () => {
             platform: 'darwin'
           })
           await updateLabel.getByText('更新', { exact: true }).waitFor({ state: 'visible' })
+          const versionHiddenWhenUpdate = !(await versionControl.isVisible().catch(() => false))
 
           await updateButton.click()
           await updateLabel.getByText('更新 42%', { exact: true }).waitFor({ state: 'visible' })
@@ -79,6 +91,8 @@ describe('sidebar app update e2e', () => {
           const signals = await runtime.collectSignals()
           return {
             initiallyHidden,
+            visibleVersion,
+            versionHiddenWhenUpdate,
             progressLabel,
             retryLabel,
             redirectedHash: await page.evaluate(() => window.location.hash),
@@ -91,6 +105,17 @@ describe('sidebar app update e2e', () => {
             name: 'idle-update-control-is-hidden',
             message: '没有新版本时不应占用左下角空间。'
           })
+          await runtime.assertThat(
+            result.visibleVersion === 'v0.1.0' && result.versionHiddenWhenUpdate,
+            {
+              name: 'current-version-is-visible-in-sidebar-footer',
+              message: '左侧底部应在没有更新时显示版本，并在出现更新时让出同一位置。',
+              data: {
+                visibleVersion: result.visibleVersion,
+                versionHiddenWhenUpdate: result.versionHiddenWhenUpdate
+              }
+            }
+          )
           await runtime.assertThat(result.progressLabel === '更新 42%', {
             name: 'download-progress-is-visible',
             message: '用户点击更新后，按钮应持续显示下载进度。',

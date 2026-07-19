@@ -5,12 +5,29 @@ import { workbenchSelectors } from '../../testing/selectors'
 
 const SidebarUpdateControl: React.FC = () => {
   const { snapshot, actionPending, downloadUpdate, retryUpdate, installUpdate } = useAppUpdate()
-  if (!snapshot?.updateSupported) return null
+  if (!snapshot) {
+    return (
+      <span className="nc-sidebar-version" data-testid={workbenchSelectors.appVersion}>
+        v...
+      </span>
+    )
+  }
 
   const progressPercent = Math.max(0, Math.min(100, Math.round(snapshot.progressPercent || 0)))
   const retryable = snapshot.status === 'error' && Boolean(snapshot.availableVersion)
-  if (!['available', 'downloading', 'downloaded'].includes(snapshot.status) && !retryable) {
-    return null
+  const updateVisible =
+    snapshot.updateSupported &&
+    (['available', 'downloading', 'downloaded'].includes(snapshot.status) || retryable)
+
+  if (!updateVisible) {
+    const version = `v${snapshot.currentVersion}`
+    return (
+      <Tooltip title={`当前版本 ${version}`} placement="top">
+        <span className="nc-sidebar-version" data-testid={workbenchSelectors.appVersion}>
+          {version}
+        </span>
+      </Tooltip>
+    )
   }
 
   const label =

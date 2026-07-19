@@ -4,6 +4,7 @@ import DocViewer, { DocViewerRenderers } from 'react-doc-viewer'
 import CustomPDFRenderer from './pdf'
 import { CustomMarkdownRenderer, CustomPlainTextRenderer } from './markdown'
 import CustomDocxRenderer from './docx'
+import CustomPptxRenderer from './pptx'
 import { prepareFileRenderDocument } from './utils'
 import type { FileRenderDocument, LoadedFileRenderDocument } from './types'
 export type { FileRenderDocument, FileRenderMetadata } from './types'
@@ -37,11 +38,7 @@ const getDocumentsSignature = (documents: FileRenderDocument[]): string =>
     .join('\u0001')
 
 const getPreviewErrorMessage = (error: unknown): string =>
-  error instanceof Error
-    ? error.message
-    : typeof error === 'string'
-      ? error
-      : '未知错误'
+  error instanceof Error ? error.message : typeof error === 'string' ? error : '未知错误'
 
 const usePreparedDocuments = (
   documents: FileRenderDocument[]
@@ -129,6 +126,7 @@ const renderers = [
   CustomMarkdownRenderer,
   CustomPlainTextRenderer,
   CustomDocxRenderer,
+  CustomPptxRenderer,
   ...DocViewerRenderers
 ]
 
