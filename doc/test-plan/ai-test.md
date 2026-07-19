@@ -1013,7 +1013,7 @@ AI unit / 辅助测试目录：
 - What：验证 live 模式下基于真实 workspace 的 conversation memory 会在双 run 间延续关键业务状态，并被后续真实 `brain` 正确带回。
 - Why：真实环境里的会话连续性不能脱离 workspace 语义；如果记忆里提到的对象在工作区中不存在，模型会合理地转去做环境核验，导致样例失真。
 - How：复用风险周报 live 的真实 workspace；第一轮只做“状态梳理，不新建文件”；随后构造达到 conversation memory 触发阈值的完整轮次，通过 live `conversation.memory` 调用总结应覆盖的 10 条旧消息，并保存 covered 边界；第二轮在同一 session、同一 workspace 下追问“当前最关键的待确认项、应该先找谁、为什么”，允许模型继续读取真实资料。
-- Oracle：`summary` 非空且保留风险主线、负责人、待确认项与下一步；summary batch 为 10 条消息，保存的 `coveredMessageId / coveredTimestamp / coveredMessageCount` 与本次 compaction 边界一致，最新 5 个完整轮次保留为 recent turns；第二轮 `brain` prompt 同时出现 `<conversation_history>`、`<summary>` 与 `<recent_turns>`；即使模型重新读取文件，也不应偏离第一轮形成的连续业务主线；最终交付继续命中负责人、阻塞项和后续动作，并体现第一轮总结对第二轮真实判断的延续影响。
+- Oracle：`summary` 非空且保留风险主线、负责人、待确认项与下一步；summary batch 为 10 条消息，保存的 `coveredMessageId / coveredTimestamp / coveredMessageCount` 与本次 compaction 边界一致，最新 5 个完整轮次保留为 recent turns；第二轮 `brain` prompt 同时出现 `<conversation_history>`、`<summary>` 与 `<recent_turns>`；即使模型重新读取文件，也不应偏离第一轮形成的连续业务主线；最终交付继续命中负责人、阻塞项和后续动作，并体现第一轮总结对第二轮真实判断的延续影响。按 10 分制评估，达到 8 分即可通过。
 - Not：不要求第二轮禁止 reread workspace；不逐字约束 live 模型措辞；不验证 session 隔离。
 
 ##### `human-session-resume-with-new-selection-live`
@@ -1049,7 +1049,7 @@ AI unit / 辅助测试目录：
 - What：验证 live 模式下 `human` 在复杂 positioned docx 中会跳过命中的复杂定位排版区域，并继续尝试处理其他可安全编辑的位置。
 - Why：这类由 `framePr` / 绝对定位 shape 组成的 docx 即使只是原地改字也可能因结构重写而错位；这条 case 要长期守住“positioned 区域只读、自动写入必须拒绝并给用户手动提示”的能力，对齐 `WB-CORE-003-AC1`、`WB-CORE-004-AC1`、`WB-CORE-006-AC1`、`WB-CORE-006-AC2`。
 - How：注入真实 live LLM 配置；只将 `图形学.docx` 作为已选资料复制进 workspace；直接输入“我准备把这份图形学讲义发给同学复习，想把‘反走样’这一节补得更容易记一些。你直接在这一节后面加一段更通俗的说明，再加一个很短的总结表，帮助大家快速区分两种常见做法。”的自然语言诉求，让真实 `human` 自主完成。
-- Oracle：事件流中至少一次 `docx_search` / `docx_read_blocks` / `docx_read_outline` 覆盖 `图形学.docx`；至少一次 docx 写入请求因为命中复杂定位排版区域失败，并返回稳定 `hand_docx_positioned_write_blocked` 与 `diagnostic.message`；无论经 docx 工具还是终端/脚本旁路，复杂区域和源文件字节都必须保持不变；允许改为生成独立补充稿，也允许在最终答复中直接交付可粘贴的完整说明和总结表。按 10 分制评估目标读取、保护触发、写入安全、手动说明、内容可用性和 artifact 一致性，严格超过 8 分通过，不把内部完成状态作为单独失败条件。
+- Oracle：事件流中至少一次 `docx_search` / `docx_read_blocks` / `docx_read_outline` 覆盖 `图形学.docx`；至少一次 docx 写入请求因为命中复杂定位排版区域失败，并返回稳定 `hand_docx_positioned_write_blocked` 与 `diagnostic.message`；命中区域不得发生成功写入，但允许继续编辑其他非定位区域；允许改为生成独立补充稿，也允许在最终答复中直接交付可粘贴的完整说明和总结表。按 10 分制评估目标读取、保护触发、写入安全、手动说明、内容可用性和 artifact 一致性，严格超过 8 分通过，不把内部完成状态作为单独失败条件。
 - Not：不要求固定使用哪一种 docx 写工具，也不要求最终答复使用固定措辞。
 
 ##### `human-kb-guided-docx-comparison-draft-live`

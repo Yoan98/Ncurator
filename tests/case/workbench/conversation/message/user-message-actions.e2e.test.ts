@@ -141,7 +141,11 @@ describe('workbench conversation e2e', () => {
                 await switchWorkbenchMode(page, '大聪明')
                 await getWorkbenchLocator(page, workbenchSelectors.input).click()
                 await page.keyboard.type(RUNNING_MESSAGE)
-                await selectWorkbenchAttachmentThroughNativeDialog(page, attachments.markdownPath)
+                await selectWorkbenchAttachmentThroughNativeDialog(
+                  page,
+                  attachments.markdownPath,
+                  runtime.electronApp
+                )
               }
             })
             const fileComposerCard = getWorkbenchPrefixLocator(
@@ -270,7 +274,7 @@ describe('workbench conversation e2e', () => {
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
-              result.actionButtonsVisible &&
+            result.actionButtonsVisible &&
               result.messageCountAfterEdit === 0 &&
               result.removeButtonReachable &&
               result.runningEditButtons === 0 &&

@@ -13,8 +13,22 @@ describe('ai unit human delivery guidance prompt', () => {
     })
 
     expect(guidance).toBe(
-      '最终交付时必须说明：图形学.docx 中当前命中复杂定位排版区域：包含“达到反走样。”的区域，暂不支持自动编辑。AI 未自动修改该区域，需要用户手动按建议内容处理这部分版式区域。如果后续已经在其他可安全编辑的位置完成了修改，也要同时说明实际写入位置。'
+      '最终交付时必须说明：图形学.docx 中该区域因使用 DOCX 绝对定位或锚定定位布局而无法安全完成正常排版，因此禁止编辑该区域（命中区域：“达到反走样。”）；可继续处理其他非定位区域，但禁止通过其他方式修改该区域。'
     )
+  })
+
+  it('omits positioned region text when the tool error has no region', () => {
+    const guidance = renderDeliveryGuidanceForMouth({
+      code: 'hand_docx_positioned_write_blocked',
+      detail: {
+        toolName: 'docx_edit',
+        sourcePath: '/workspace/report.docx',
+        error: '当前命中复杂定位排版区域，暂不支持自动编辑。'
+      }
+    })
+
+    expect(guidance).toContain('report.docx 中该区域因使用 DOCX 绝对定位或锚定定位布局')
+    expect(guidance).not.toContain('命中区域：')
   })
 
   it('renders tool limit exceeded guidance for mouth', () => {

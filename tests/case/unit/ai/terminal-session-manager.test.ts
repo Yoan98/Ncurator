@@ -308,3 +308,64 @@ describe.skipIf(process.platform === 'win32')('terminal session manager', () => 
     expect(manager.list({ chatSessionId: 'chat-1' })).toEqual([])
   })
 })
+
+describe.skipIf(process.platform !== 'win32')('terminal session manager on Windows', () => {
+  it('updates cwd before yielding a long-running command', async () => {
+    const manager = createManager(undefined, 250)
+    const root = await createRoot()
+    const nested = path.join(root, 'nested')
+    await fs.mkdir(nested)
+
+    const running = await manager.run({
+      chatSessionId: 'chat-cwd',
+      workspaceId: 'workspace-cwd',
+      workspaceRootPath: root,
+      platform: 'windows',
+      runId: 'run-cwd',
+      command: `cd "${nested}"; while ($true) { Start-Sleep -Milliseconds 50 }`
+    })
+
+    expect(running.returnReason).toBe('command_still_running')
+    expect(running.currentTerminalPath).toBe(nested)
+    expect(
+      manager.read({
+        terminalId: running.terminalId,
+        chatSessionId: 'chat-cwd',
+        workspaceId: 'workspace-cwd'
+      }).currentTerminalPath
+    ).toBe(nested)
+
+    const stopped = await manager.stop({
+      terminalId: running.terminalId,
+      chatSessionId: 'chat-cwd',
+      workspaceId: 'workspace-cwd',
+      closeTerminal: true
+    })
+    expect(stopped.terminalStatus).toBe('closed')
+  })
+
+  it('repeatedly force closes long-running commands without crashing', async () => {
+    const manager = createManager(undefined, 100)
+    const root = await createRoot()
+
+    for (let index = 0; index < 3; index += 1) {
+      const running = await manager.run({
+        chatSessionId: `chat-close-${String(index)}`,
+        workspaceId: 'workspace-close',
+        workspaceRootPath: root,
+        platform: 'windows',
+        runId: `run-close-${String(index)}`,
+        command: 'while ($true) { Start-Sleep -Milliseconds 50 }'
+      })
+      expect(running.returnReason).toBe('command_still_running')
+
+      const stopped = await manager.stop({
+        terminalId: running.terminalId,
+        chatSessionId: `chat-close-${String(index)}`,
+        workspaceId: 'workspace-close',
+        closeTerminal: true
+      })
+      expect(stopped.terminalStatus).toBe('closed')
+    }
+  })
+})

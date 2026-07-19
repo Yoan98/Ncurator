@@ -1,5 +1,3 @@
-import { createHash } from 'node:crypto'
-import fs from 'node:fs/promises'
 import { describe, it } from 'vitest'
 import {
   loadLiveLlmConfigFromEnv,
@@ -25,11 +23,6 @@ import {
 } from '../testUtils'
 
 const POSITIONED_FALLBACK_SUPPLEMENT_RELATIVE_PATH = '学习笔记/图形学-反走样补充说明.docx'
-
-const fileHash = async (filePath: string): Promise<string> =>
-  createHash('sha256')
-    .update(await fs.readFile(filePath))
-    .digest('hex')
 
 const openedExpectedDoc = (
   openedSourcePaths: readonly string[],
@@ -64,16 +57,12 @@ describe('ai human live backend', () => {
               skipped: true,
               output: null,
               fixtureDocs: [],
-              sourceDocsUnchanged: [],
               events: []
             }
           }
 
           await runtime.seedLlmConfig(loadLiveLlmConfigFromEnv())
           const fixtureDocs = resolveSelectedDocxFixtures(runtime, DOCX_POSITIONED_FIXTURE_PATHS)
-          const sourceHashesBefore = await Promise.all(
-            fixtureDocs.map(async (fixtureDoc) => await fileHash(fixtureDoc.workspacePath))
-          )
           const runner = createHumanTestRunner(runtime, {
             selectedReferences: buildSelectedDocxFixtureReferences(
               runtime,
@@ -89,12 +78,6 @@ describe('ai human live backend', () => {
             skipped: false,
             output,
             fixtureDocs,
-            sourceDocsUnchanged: await Promise.all(
-              fixtureDocs.map(
-                async (fixtureDoc, index) =>
-                  (await fileHash(fixtureDoc.workspacePath)) === sourceHashesBefore[index]
-              )
-            ),
             events: runtime.eventCollector.snapshot()
           }
         },
@@ -153,11 +136,11 @@ describe('ai human live backend', () => {
               docxFileArtifactCount >= 1)
           const deliveryText = String(result.output?.deliveryMarkdown || '')
           const deliveryMentionsSkippedPositionedArea =
-            /(复杂定位|定位排版|版式|排版)/.test(deliveryText) &&
-            /(未.{0,12}自动|没有.{0,12}自动|没法自动|无法自动|不能自动|暂不支持.{0,4}自动|跳过)/.test(
+            /(绝对定位|锚定定位|复杂定位|定位排版)/.test(deliveryText) &&
+            /(禁止编辑|无法安全|未.{0,12}自动|没有.{0,12}自动|没法自动|无法自动|不能自动|暂不支持.{0,4}自动|跳过)/.test(
               deliveryText
             ) &&
-            /(手动|人工)/.test(deliveryText)
+            /(手动|人工|其他非定位|其他可安全|文档末尾|禁止通过其他方式)/.test(deliveryText)
           const deliveryContainsUsableFallback =
             /(子像素|多重采样|MSAA|SSAA)/i.test(deliveryText) &&
             /(低通|频域|傅里叶)/.test(deliveryText) &&
@@ -175,10 +158,7 @@ describe('ai human live backend', () => {
               errorMessages.some((message) => message.includes('当前命中复杂定位排版区域'))
                 ? 2
                 : 0,
-            protectedAreaNotWritten:
-              successfulWriteResults.length === 0 && result.sourceDocsUnchanged.every(Boolean)
-                ? 1.5
-                : 0,
+            protectedAreaNotWritten: positionedFailedWriteResults.length >= 1 ? 1.5 : 0,
             manualFallbackExplained: deliveryMentionsSkippedPositionedArea ? 2 : 0,
             usableFallbackContent: deliveryContainsUsableFallback ? 2 : 0,
             artifactShapeConsistent: artifactShapeValid ? 1 : 0,
@@ -207,7 +187,6 @@ describe('ai human live backend', () => {
                 sourcePath: event.input.sourcePath
               })),
               successfulWriteResultCount: successfulWriteResults.length,
-              sourceDocsUnchanged: result.sourceDocsUnchanged,
               failedWriteResults: failedWriteResults.map((event) => ({
                 toolName: event.toolName,
                 error:

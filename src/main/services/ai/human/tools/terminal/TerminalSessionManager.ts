@@ -1,4 +1,5 @@
 import path from 'node:path'
+import { stat } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { execFile } from 'node:child_process'
 import * as pty from 'node-pty'
@@ -206,6 +207,27 @@ const decodeCwd = (encoded: string): string | null => {
 
 const isSessionClosed = (session: ManagedTerminalSession): boolean => session.status === 'closed'
 
+const WINDOWS_LEADING_CWD_PATTERN =
+  /^\s*(?:cd|Set-Location)\s+(?:"([^"]+)"|'([^']+)'|([^\s;]+))\s*;/iu
+
+const resolveLeadingWindowsCwd = async (input: {
+  command: string
+  currentPath: string
+  allowedRootPaths: readonly string[]
+}): Promise<string | undefined> => {
+  const match = input.command.match(WINDOWS_LEADING_CWD_PATTERN)
+  if (!match) return undefined
+  const requestedPath = match[1] || match[2] || match[3]
+  if (!requestedPath) return undefined
+  const nextPath = path.resolve(input.currentPath, requestedPath)
+  if (!isPathInsideAnyRoot(nextPath, input.allowedRootPaths)) return undefined
+  try {
+    return (await stat(nextPath)).isDirectory() ? nextPath : undefined
+  } catch {
+    return undefined
+  }
+}
+
 export class TerminalSessionManager {
   private readonly sessions = new Map<string, ManagedTerminalSession>()
   private readonly completedCommandExitCodes = new Map<string, number>()
@@ -272,6 +294,15 @@ export class TerminalSessionManager {
       throw new Error('terminal_busy')
     }
     if (session.status === 'closed') throw new Error('terminal_closed')
+
+    if (session.platform === 'windows') {
+      const leadingCwd = await resolveLeadingWindowsCwd({
+        command: input.command,
+        currentPath: session.currentTerminalPath,
+        allowedRootPaths: session.allowedRootPaths
+      })
+      if (leadingCwd) session.currentTerminalPath = leadingCwd
+    }
 
     const deferred = createDeferred()
     const commandId = randomUUID()
@@ -510,19 +541,7 @@ export class TerminalSessionManager {
     }
     this.sessions.set(session.terminalId, session)
     terminalProcess.onData((data) => this.consumeProtocolData(session, data))
-    terminalProcess.onExit(({ exitCode }) => {
-      session.status = 'closed'
-      session.lastExitCode = exitCode
-      if (session.currentCommand) {
-        session.currentCommand.exitCode = exitCode
-        session.currentCommand.returnReason = 'terminal_closed'
-        this.recordCompletedCommand(session.currentCommand.commandId, exitCode)
-        session.currentCommand.complete()
-        session.currentCommand = null
-      }
-      session.markReady()
-      session.markExited()
-    })
+    terminalProcess.onExit(({ exitCode }) => this.finalizeSessionExit(session, exitCode))
     terminalProcess.write(buildReadyCommand(input.platform))
     await Promise.race([
       session.ready,
@@ -577,7 +596,10 @@ export class TerminalSessionManager {
         session.exited,
         new Promise<void>((resolve) => setTimeout(resolve, this.stopGraceMs))
       ])
-      if (isSessionClosed(session)) return
+      if (!isSessionClosed(session)) {
+        this.finalizeSessionExit(session, session.currentCommand ? 130 : 1)
+      }
+      return
     }
 
     try {
@@ -585,6 +607,21 @@ export class TerminalSessionManager {
     } catch {
       // The PTY may have exited between the status check and kill.
     }
+  }
+
+  private finalizeSessionExit(session: ManagedTerminalSession, exitCode: number): void {
+    if (isSessionClosed(session)) return
+    session.status = 'closed'
+    session.lastExitCode = exitCode
+    if (session.currentCommand) {
+      session.currentCommand.exitCode = exitCode
+      session.currentCommand.returnReason = 'terminal_closed'
+      this.recordCompletedCommand(session.currentCommand.commandId, exitCode)
+      session.currentCommand.complete()
+      session.currentCommand = null
+    }
+    session.markReady()
+    session.markExited()
   }
 
   private requireSession(input: {
