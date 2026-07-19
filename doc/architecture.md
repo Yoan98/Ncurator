@@ -84,7 +84,7 @@ Terminal Runtime 由 `TerminalSessionManager` 和 `terminal_run / terminal_read 
 
 Brain 的 `local_environment` 整体使用格式化 JSON，其中 `current_time` 同时提供 UTC ISO 时间、本地 ISO 时间和时区，`terminal_state` 只包含新终端默认路径和各终端的 id、状态、当前路径、当前命令与开始时间，不注入完整日志或环境变量。工具说明只声明能力、结果和边界，不返回下一步建议字段。terminal_run 输入不包含 cwd；已有终端的当前路径是执行和工作空间边界判断的基准。
 
-DOCX/PPT 编辑工具的模型描述各自保持为一句能力说明，不枚举 action，也不解释 UUID、revision、replay、checksum、原子替换或回读结构；可调用参数和定位字段由输入 schema 提供，内部事务与差异实现不进入模型提示词。
+DOCX 编辑工具的模型描述保持为一句能力说明。PPT 编辑工具的模型描述直接包含受限 HTML 的页面、元素、CSS、排版、版式和图片规则，确保模型在首次创建前获得完整约束；输入 schema 只负责参数结构，不承载生成指导。两类工具都不解释 UUID、revision、replay、checksum、原子替换或回读结构，内部事务与差异实现不进入模型提示词。
 
 ### Apply Review
 

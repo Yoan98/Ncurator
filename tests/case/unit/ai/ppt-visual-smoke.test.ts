@@ -31,14 +31,20 @@ describe('ppt visual smoke', () => {
         actions: [
           {
             type: 'create_presentation',
-            html: `<section data-ppt-slide style="position:relative;width:1920px;height:1080px;background:#F7F8FA">
+            html: [
+              `<section data-ppt-slide style="position:relative;width:1920px;height:1080px;background:#F7F8FA">
           <img data-ppt-element="image" id="sample" src="${pathToFileURL(imagePath).href}" style="position:absolute;left:1700px;top:72px;width:80px;height:80px;object-fit:contain" />
           <div data-ppt-element="shape" id="band" style="position:absolute;left:96px;top:72px;width:1728px;height:168px;background:#17324D;border-radius:18px"></div>
           <h1 data-ppt-element="text" id="title" style="position:absolute;left:144px;top:112px;width:1500px;height:96px;color:#FFFFFF;font-family:Microsoft YaHei;font-size:72px;font-weight:700">季度经营复盘</h1>
           <p data-ppt-element="text" id="summary" style="position:absolute;left:144px;top:330px;width:1500px;height:96px;color:rgb(30,41,59);font-size:34px">收入增长 18%，交付质量保持稳定</p>
           <div data-ppt-element="shape" id="card" style="position:absolute;left:144px;top:500px;width:760px;height:300px;background:#FFFFFF;border-top:3px solid #16A34A;border-bottom:1px solid #D1D5DB"></div>
           <p data-ppt-element="text" id="cardText" style="position:absolute;left:192px;top:560px;width:650px;height:100px;color:#334155;font-size:30px">绿色标记代表本次内容改动</p>
+        </section>`,
+              `<section data-ppt-slide style="position:relative;width:1920px;height:1080px;background:#FFFFFF">
+          <img data-ppt-element="image" id="remote" src="http://127.0.0.1:1/missing.png" style="position:absolute;left:120px;top:120px;width:320px;height:180px;object-fit:contain" />
+          <h1 data-ppt-element="text" id="remote-title" style="position:absolute;left:520px;top:120px;width:1200px;height:100px;color:#111827;font-size:72px">远程图片失败也继续生成</h1>
         </section>`
+            ]
           }
         ]
       })
@@ -57,7 +63,7 @@ describe('ppt visual smoke', () => {
       const pptxPath = path.join(root, 'visual-smoke.pptx')
       const rendered = await runtime.render({
         sourcePath: pptxPath,
-        ranges: [{ type: 'slide_index', fromSlideIndex: 1, toSlideIndex: 2 }]
+        ranges: [{ type: 'slide_index', fromSlideIndex: 1, toSlideIndex: 3 }]
       })
       const renderedImages = rendered.images as Array<{ path: string }>
       expect(created.warnings).not.toContain(
@@ -84,12 +90,27 @@ describe('ppt visual smoke', () => {
       expect(title?.style?.fontFamily).toBe('Microsoft YaHei')
       expect(title?.style?.fontSize).toBeCloseTo(36, 1)
       expect((await fs.stat(pptxPath)).size).toBeGreaterThan(1000)
-      expect(renderedImages).toHaveLength(2)
+      expect(createdSlides).toHaveLength(2)
+      expect(renderedImages).toHaveLength(3)
       await Promise.all(
         renderedImages.map(async (image) =>
           expect((await fs.stat(image.path)).size).toBeGreaterThan(1000)
         )
       )
+      await expect(
+        runtime.edit({
+          sourcePath: 'invalid.pptx',
+          actions: [
+            {
+              type: 'create_presentation',
+              html: [
+                '<section data-ppt-slide style="width:1920px;height:1080px"><h1 data-ppt-element="text" style="position:absolute;left:100px;top:100px;width:800px;height:100px;font-size:72px">有效页面</h1></section>',
+                '<section><h1>无效页面</h1></section>'
+              ]
+            }
+          ]
+        })
+      ).rejects.toThrow('create_presentation 失败：第 2 个 HTML 页面失败')
     } finally {
       await fs.rm(root, { recursive: true, force: true })
     }

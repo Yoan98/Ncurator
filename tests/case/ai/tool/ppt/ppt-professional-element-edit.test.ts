@@ -26,7 +26,7 @@ describe('ai tool ppt professional editing', () => {
         const sourcePath = 'professional-edit.pptx'
         await harness.invoke<JsonObject>('ppt_edit', {
           sourcePath,
-          actions: [{ type: 'create_presentation', html: baseHtml }]
+          actions: [{ type: 'create_presentation', html: [baseHtml] }]
         })
         const outline = await harness.invoke<JsonObject>('ppt_read_outline', {
           sourcePath,

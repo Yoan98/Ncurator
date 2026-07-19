@@ -32,7 +32,7 @@ describe('ai human mock-llm backend', () => {
       domain: 'ai',
       suite: 'human',
       groups: ['mock-llm'],
-      description: '验证 human 学习 PPT 读写技能、逐页创建并读回 PPT，mouth 只交付一次文件。',
+      description: '验证 human 学习 PPT 读写技能、批量创建并读回 PPT，mouth 只交付一次文件。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -50,7 +50,7 @@ describe('ai human mock-llm backend', () => {
                   toolName: 'ppt_edit',
                   args: {
                     sourcePath,
-                    actions: [{ type: 'create_presentation', html: coverHtml }]
+                    actions: [{ type: 'create_presentation', html: [coverHtml] }]
                   },
                   summary: '创建封面页'
                 })
@@ -126,7 +126,7 @@ describe('ai human mock-llm backend', () => {
           {
             name: 'human-ppt-run-uses-two-tools-and-commits-once',
             message:
-              'human 应通过 ppt_edit 逐页创建、ppt_read_outline 回读，并在 run 结束时只交付一个 PPT 文件记录。',
+              'human 应通过 ppt_edit 批量创建、ppt_read_outline 回读，并在 run 结束时只交付一个 PPT 文件记录。',
             data: {
               tools: startedTools.map((event) => event.toolName),
               pptArtifacts,

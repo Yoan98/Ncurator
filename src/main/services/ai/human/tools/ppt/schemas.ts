@@ -5,16 +5,7 @@ const sourcePathSchema = z.string().trim().min(1)
 const slideIdSchema = z.string().trim().min(1)
 const slideIndexSchema = z.number().int().min(1)
 
-export const PPT_SLIDE_HTML_GUIDANCE =
-  '每次提交一张可直接交付、内容完整的页面；禁止先创建空白或占位页再用 edit_elements 逐项拼装。页面 HTML 必须且只能包含一个 data-ppt-slide 根节点，根节点固定使用 position:relative、width:1920px、height:1080px、overflow:hidden。仅使用内联 CSS；未显式指定时所有带样式元素按 box-sizing:border-box 布局。允许 absolute/flex/grid，但所有真实 PPT 元素应使用 data-ppt-element 标注 text、shape、image、svg、table、chart、formula 或 line，纯布局容器不要标注。支持颜色、背景、字号、字体、对齐、圆角、边框、阴影、透明度和旋转；禁止伪元素、动画、filter、mask、mix-blend-mode 和滚动容器。四周保留至少 60px 安全边距，元素的 right 不得超过 1920、bottom 不得超过 1080；页面标题至少 70px、正文至少 32px、任何可见文本不得低于 24px，单行标题应预留宽度余量。避免文字过密、大片无意义留白、过小图片、单一深色满版和重复卡片堆叠。每页只表达一个主要结论，只使用任务中有依据的事实与数据。图片只能引用工作区本地文件。'
-
-const PPT_SLIDE_HTML_COMPATIBILITY_GUIDANCE =
-  ' 仅支持纯色 background/background-color；禁止 CSS 渐变和 background-image，请使用工作区本地 <img> 元素。主内容必须横向利用画布，左、中、右区域均应有有效信息或视觉元素，禁止把一半以上页面留空；页面标题必须保持单行。'
-
-const pptSlideHtmlSchema = z
-  .string()
-  .min(1)
-  .describe(`${PPT_SLIDE_HTML_GUIDANCE}${PPT_SLIDE_HTML_COMPATIBILITY_GUIDANCE}`)
+const pptSlideHtmlSchema = z.string().min(1)
 
 export const pptBoundsSchema = z
   .object({
@@ -281,21 +272,15 @@ const pptElementOperationSchema = z.discriminatedUnion('type', [
 
 export const pptEditActionSchema = z.discriminatedUnion('type', [
   z
-    .object({ type: z.literal('create_presentation'), html: pptSlideHtmlSchema })
-    .strict()
-    .describe(
-      '仅当 sourcePath 尚不存在时使用一次，用完整 HTML 创建第一页。创建成功后不要删除或重建文件，后续页面必须使用 insert_slide。'
-    ),
+    .object({ type: z.literal('create_presentation'), html: z.array(pptSlideHtmlSchema).min(1) })
+    .strict(),
   z
     .object({
       type: z.literal('insert_slide'),
       beforeSlideId: slideIdSchema.optional(),
       html: pptSlideHtmlSchema
     })
-    .strict()
-    .describe(
-      '向现有 PPTX 插入一张完整 HTML 页面；省略 beforeSlideId 时追加到末尾。第二页及之后都使用此动作。'
-    ),
+    .strict(),
   z.object({ type: z.literal('delete_slides'), slideIds: z.array(slideIdSchema).min(1) }).strict(),
   z
     .object({

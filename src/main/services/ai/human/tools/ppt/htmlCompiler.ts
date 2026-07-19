@@ -147,12 +147,6 @@ const sanitizeHtml = (html: string): string => {
   assertCanvasSize(root.attr('style'))
   assertRestrictedCss(source)
   root.attr('style', mergeRootStyle(root.attr('style')))
-  const remoteAsset = $('[src]')
-    .toArray()
-    .find((element) => /^https?:\/\//i.test($(element).attr('src') || ''))
-  if (remoteAsset || /url\(\s*["']?https?:\/\//i.test(source)) {
-    throw new Error('PPT images must use local workspace assets.')
-  }
   $('*').each((_index, element) => {
     if (!('attribs' in element)) return
     const node = $(element)
@@ -712,48 +706,6 @@ export const compilePptSlideHtml = async (html: string): Promise<PptCompiledSlid
       .join('; ')
     throw new Error(
       `${outside.length} PPT elements exceed the 1920x1080 slide bounds: ${details}. Keep right <= 1920 and bottom <= 1080.`
-    )
-  }
-  const undersizedText = compiled.elements.filter(
-    (element) =>
-      element.type === 'text' &&
-      Boolean(element.text?.trim()) &&
-      (Number(element.style.fontSize || 0) < 24 ||
-        ((element.text?.trim().length || 0) >= 18 && Number(element.style.fontSize || 0) < 32))
-  )
-  if (undersizedText.length > 0) {
-    throw new Error(
-      `PPT text must be at least 24px, and body copy with 18 or more characters must be at least 32px: ${undersizedText
-        .slice(0, 8)
-        .map((element) => `${element.sourceId} (${element.style.fontSize || 0}px)`)
-        .join('; ')}.`
-    )
-  }
-  const textElements = compiled.elements.filter(
-    (element) => element.type === 'text' && Boolean(element.text?.trim())
-  )
-  if (
-    textElements.length > 0 &&
-    !textElements.some((element) => Number(element.style.fontSize) >= 70)
-  ) {
-    throw new Error('Each PPT slide must include a title of at least 70px (35pt).')
-  }
-  const unsafeText = textElements.filter(
-    (element) =>
-      element.bounds.x < 60 ||
-      element.bounds.y < 60 ||
-      element.bounds.x + element.bounds.width > PPT_CANVAS_WIDTH - 60 ||
-      element.bounds.y + element.bounds.height > PPT_CANVAS_HEIGHT - 60
-  )
-  if (unsafeText.length > 0) {
-    throw new Error(
-      `PPT text must stay inside the 60px safe area: ${unsafeText
-        .slice(0, 8)
-        .map((element) => {
-          const { x, y, width, height } = element.bounds
-          return `${element.sourceId} (x=${Math.round(x)}, y=${Math.round(y)}, right=${Math.round(x + width)}, bottom=${Math.round(y + height)})`
-        })
-        .join('; ')}.`
     )
   }
   const blockingWarnings = compiled.warnings.filter((warning) =>

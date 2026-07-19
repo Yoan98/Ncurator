@@ -547,7 +547,7 @@ AI unit / 辅助测试目录：
 ##### `ppt-create-read-edit-commit`
 
 - 测试类型：`backend / tool`
-- What：验证逐页创建、读取、编辑、每次写后立即回读，以及 Run 收尾生成单一页面级 diff 记录。
+- What：验证 `create_presentation.html[]` 一次创建多页、读取、编辑、每次写后立即回读，以及 Run 收尾生成单一页面级 diff 记录。
 - Oracle：每次 `ppt_edit` 成功后正式文件立即存在、可解析且页面内容正确；Run 收尾后同一文件只生成一条修改记录和页面级 diff。
 
 ##### `ppt-professional-element-edit`
@@ -996,15 +996,15 @@ AI unit / 辅助测试目录：
 ##### `create-ppt-deck`
 
 - 测试类型：`mock-llm`
-- What：验证 AI 能学习 `ppt-read / ppt-write`，通过工具逐页创建并交付 PPT。
-- Oracle：至少两次 `ppt_edit`；最终文件可解析且内容正确；只产生一个 PPT 修改记录和文件交付。
+- What：验证 AI 能学习 `ppt-read / ppt-write`，通过 `create_presentation.html[]` 一次创建多页并交付 PPT。
+- Oracle：最终文件可解析且内容正确；只产生一个 PPT 修改记录和文件交付。
 
 #### live 类别
 
 ##### `human-create-ppt-deck-live`
 
 - 测试类型：`live`
-- What：验证真实模型能学习 `ppt-read / ppt-write`，自主逐页创建并交付 PPT。
+- What：验证真实模型能学习 `ppt-read / ppt-write`，读取工具描述中的 HTML 规则并自主创建多页 PPT。
 - Oracle：最终文件可解析且内容正确；只产生一个 PPT 修改记录和文件交付。
 
 ##### `human-conversation-memory-multi-run-live`

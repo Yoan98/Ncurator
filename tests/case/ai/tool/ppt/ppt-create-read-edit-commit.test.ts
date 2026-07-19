@@ -28,7 +28,7 @@ describe('ai tool ppt backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['ppt'],
-      description: '验证 ppt_edit 逐页创建、独立读取工具、写后回读、run 末一次写回和 diff。',
+      description: '验证 ppt_edit 批量创建、独立读取工具、写后回读、run 末一次写回和 diff。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -37,7 +37,7 @@ describe('ai tool ppt backend', () => {
         const created = await harness.invoke<JsonObject>('ppt_edit', {
           sourcePath,
           actions: [
-            { type: 'create_presentation', html: coverHtml },
+            { type: 'create_presentation', html: [coverHtml] },
             { type: 'insert_slide', html: detailHtml }
           ]
         })

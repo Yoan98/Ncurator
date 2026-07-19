@@ -75,7 +75,7 @@ const buildLivePptRequest = (logoName: string): string =>
     '',
     '执行与验收：',
     '- 只使用 PPT 和图像识别工具，不要使用 terminal。',
-    '- 使用 PPT 工具逐页创建；每次提交一张内容完整的页面 HTML，禁止先建占位页再逐元素拼装。',
+    '- 使用 PPT 工具一次提交三张内容完整的页面 HTML，禁止先建占位页再逐元素拼装。',
     '- 三页完成后一次性渲染全部页面，并使用图像识别逐页检查一次。',
     '- 图像检查必须确认标题没有换行，左右没有大面积无意义空白，也没有缺字、溢出、重叠或异常样式。',
     '- 如需修复，只复检修改页一次，并使用最近一次 ppt_render_slides 返回的新路径；最后确认文件已写回。'
@@ -134,7 +134,7 @@ describe('ai human live backend', () => {
         suite: 'human',
         groups: ['live'],
         description:
-          '验证真实 AI 使用 PPT 读写技能逐页创建可打开的两页 PPT，并在 run 结束后交付文件。',
+          '验证真实 AI 使用 PPT 读写技能批量创建可打开的多页 PPT，并在 run 结束后交付文件。',
         fixtures: [],
         runMode: 'single',
         runtimeModelName: hasLiveLlmConfigInEnv() ? loadLiveLlmConfigFromEnv().model_name : null,
@@ -277,7 +277,7 @@ describe('ai human live backend', () => {
             {
               name: 'human-live-creates-three-page-ppt-through-ppt-skill',
               message:
-                '真实 AI 应通过 ppt_edit 逐页创建三页 PPT，最终写回一个可打开文件并产生 PPT 修改记录。',
+                '真实 AI 应通过 ppt_edit 批量创建三页 PPT，最终写回一个可打开文件并产生 PPT 修改记录。',
               data: {
                 output: result.output,
                 file: result.file,

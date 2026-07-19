@@ -43,7 +43,7 @@ const createBaselineDeck = async (workspaceRootPath: string, runId: string, task
     actions: [
       {
         type: 'create_presentation',
-        html: slideHtml('市场信号', '核心客户需求持续增加，市场窗口已经明确。', '#2563EB')
+        html: [slideHtml('市场信号', '核心客户需求持续增加，市场窗口已经明确。', '#2563EB')]
       },
       {
         type: 'insert_slide',

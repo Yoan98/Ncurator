@@ -72,9 +72,15 @@ describe('ai unit ppt tool contract', () => {
     expect(
       pptEditSchema.safeParse({
         sourcePath: 'deck.pptx',
-        actions: [{ type: 'create_presentation', html: '<section data-ppt-slide></section>' }]
+        actions: [{ type: 'create_presentation', html: ['<section data-ppt-slide></section>'] }]
       }).success
     ).toBe(true)
+    expect(
+      pptEditSchema.safeParse({
+        sourcePath: 'deck.pptx',
+        actions: [{ type: 'create_presentation', html: '<section data-ppt-slide></section>' }]
+      }).success
+    ).toBe(false)
     expect(
       pptEditSchema.safeParse({
         sourcePath: 'deck.pptx',
@@ -100,14 +106,25 @@ describe('ai unit ppt tool contract', () => {
     expect(
       pptEditSchema.safeParse({
         sourcePath: 'deck.pptx',
-        action: { type: 'create_presentation', html: '<section></section>' }
+        action: { type: 'create_presentation', html: ['<section></section>'] }
       }).success
     ).toBe(false)
   })
 
-  it('keeps the edit prompt concise and does not teach runtime asset workflow', () => {
+  it('exposes the complete PPT HTML contract in the edit prompt', () => {
     const description = PPT_EDIT_TOOL_SPEC.promptSpec.description
-    expect(description).not.toContain('\n')
+    for (const requiredRule of [
+      'create_presentation 的 html 必须是 HTML 数组',
+      'data-ppt-slide',
+      'width:1920px',
+      'data-ppt-element',
+      '禁止使用 CSS 渐变',
+      '任何可见文字不得低于 24px',
+      '允许使用工作区本地图片和远程图片地址',
+      '使用相同尺寸的占位图替代'
+    ]) {
+      expect(description).toContain(requiredRule)
+    }
     for (const internalTerm of [
       'revision',
       'replay',
@@ -116,7 +133,9 @@ describe('ai unit ppt tool contract', () => {
       'postWriteReadback',
       '原子',
       'runtime/assets',
-      'action type='
+      'action type=',
+      '每页只表达一个主要结论',
+      '只使用任务中有依据的事实与数据'
     ]) {
       expect(description).not.toContain(internalTerm)
     }
@@ -182,14 +201,9 @@ describe('ai unit ppt tool contract', () => {
   it('requires a readable title and keeps text inside the slide safe area', async () => {
     await expect(
       compilePptSlideHtml(
-        '<section data-ppt-slide style="width:1920px;height:1080px"><h1 data-ppt-element="text" style="position:absolute;left:100px;top:100px;width:800px;height:100px;font-size:64px">标题</h1></section>'
+        '<section data-ppt-slide style="width:1920px;height:1080px"><h1 data-ppt-element="text" style="position:absolute;left:20px;top:100px;width:800px;height:100px;font-size:24px">标题</h1></section>'
       )
-    ).rejects.toThrow('at least 70px')
-    await expect(
-      compilePptSlideHtml(
-        '<section data-ppt-slide style="width:1920px;height:1080px"><h1 data-ppt-element="text" style="position:absolute;left:20px;top:100px;width:800px;height:100px;font-size:72px">标题</h1></section>'
-      )
-    ).rejects.toThrow('60px safe area')
+    ).resolves.toBeTruthy()
   })
 
   it('emits v2 created and updated diff semantics', () => {

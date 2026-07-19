@@ -45,7 +45,7 @@ describe('workbench result e2e', () => {
             const startedAtMs = Date.now()
             await sendWorkbenchMessage(
               page,
-              `请直接在工作区创建“${FILE_NAME}”。做两页简洁专业的 16:9 PPT：第一页标题包含“季度复盘”，第二页标题包含“下一步”，两页正文都要出现唯一标记“${MARKER}”。必须使用 PPT 工具逐页创建，每次只生成一个页面 HTML，完成后告诉我已写回。`
+              `请直接在工作区创建“${FILE_NAME}”。做两页简洁专业的 16:9 PPT：第一页标题包含“季度复盘”，第二页标题包含“下一步”，两页正文都要出现唯一标记“${MARKER}”。必须使用 PPT 工具一次提交两张完整页面 HTML，完成后告诉我已写回。`
             )
             const evidence = await waitForWorkbenchAiRunCompletion(
               runtime,

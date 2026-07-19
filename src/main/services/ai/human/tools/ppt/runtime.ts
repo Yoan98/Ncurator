@@ -261,6 +261,24 @@ const decodeDataUrl = (value: string): Uint8Array | null => {
   )
 }
 
+const createRemoteImagePlaceholder = (): Uint8Array => {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180" viewBox="0 0 320 180"><rect width="320" height="180" fill="#E5E7EB"/><path d="M72 124l46-48 32 32 28-28 70 72H72z" fill="#9CA3AF"/><circle cx="224" cy="64" r="18" fill="#9CA3AF"/><path d="M32 32h256v116H32z" fill="none" stroke="#6B7280" stroke-width="4"/></svg>`
+  return new Uint8Array(new Resvg(svg).render().asPng())
+}
+
+const isLikelyImageBytes = (bytes: Uint8Array): boolean => {
+  const buffer = Buffer.from(bytes)
+  return (
+    (buffer.length >= 8 &&
+      buffer
+        .subarray(0, 8)
+        .equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) ||
+    (buffer.length >= 3 && buffer.subarray(0, 3).equals(Buffer.from([0xff, 0xd8, 0xff]))) ||
+    buffer.toString('utf8', 0, 256).includes('<svg') ||
+    buffer.subarray(0, 4).toString('ascii') === 'RIFF'
+  )
+}
+
 const resolveAssetBytes = async (input: {
   rawPath: string
   sourcePath: string
@@ -269,7 +287,16 @@ const resolveAssetBytes = async (input: {
   const data = decodeDataUrl(input.rawPath)
   if (data) return data
   if (/^https?:\/\//i.test(input.rawPath)) {
-    throw new Error('PPT 页面资源只支持工作区内已存在的本地文件。')
+    try {
+      const response = await fetch(input.rawPath, { signal: AbortSignal.timeout(10_000) })
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+      const bytes = new Uint8Array(await response.arrayBuffer())
+      if (bytes.length === 0 || !isLikelyImageBytes(bytes))
+        throw new Error('invalid image response')
+      return bytes
+    } catch {
+      return createRemoteImagePlaceholder()
+    }
   }
   let rawPath = input.rawPath
   if (/^file:/i.test(rawPath)) {
@@ -496,7 +523,9 @@ const addCompiledElement = async (input: {
       sourcePath: input.document.sourcePath,
       workspaceRootPath: input.workspaceRootPath
     })
-    const extension = path.extname(input.element.src || '').replace('.', '') || 'bin'
+    const extension = /^https?:\/\//i.test(input.element.src || '')
+      ? 'png'
+      : path.extname(input.element.src || '').replace('.', '') || 'bin'
     await persistMedia({
       document: input.document,
       workspaceRootPath: input.workspaceRootPath,
@@ -1307,17 +1336,11 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
   const edit = async (rawArgs: unknown): Promise<Record<string, unknown>> => {
     const args = pptEditSchema.parse(rawArgs)
     const createActions = args.actions.filter((action) => action.type === 'create_presentation')
-    if (
-      createActions.length > 1 ||
-      (createActions.length === 1 && args.actions[0]?.type !== 'create_presentation')
-    ) {
-      throw new Error('create_presentation must be the first and only create action')
-    }
-    const create = createActions.length === 1
+    const create = createActions.length > 0
     const sourcePath = resolvePptPath(args.sourcePath)
     if (create && (documents.has(sourcePath) || (await fileExists(sourcePath)))) {
       throw new Error(
-        `目标 pptx 已存在，不能再次使用 create_presentation；保留现有文件并使用 insert_slide 追加页面: ${args.sourcePath}`
+        `create_presentation 失败：目标 pptx 已存在，不能覆盖已有文件: ${args.sourcePath}`
       )
     }
     const document = await loadDocument(args.sourcePath, create)
@@ -1329,106 +1352,117 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
       const changedSlideIds: string[] = []
       let outlineAnchorIndex: number | undefined
       for (const action of args.actions) {
-        if (action.type === 'create_presentation' || action.type === 'insert_slide') {
-          if (
-            action.type === 'create_presentation' &&
-            getSlides(document.presentation).length > 0
-          ) {
-            throw new Error('create_presentation 只能创建第一页')
-          }
-          const compiled = await compilePptSlideHtml(action.html)
-          const slide = await addCompiledSlide({
-            document,
-            compiled,
-            workspaceRootPath,
-            beforeSlideId: action.type === 'insert_slide' ? action.beforeSlideId : undefined
-          })
-          changedSlideIds.push(slideIdOf(slide))
-        } else if (action.type === 'delete_slides') {
-          const currentSlides = getSlides(document.presentation)
-          outlineAnchorIndex = Math.min(
-            ...action.slideIds.map((slideId) => {
-              const index = currentSlides.findIndex((slide) => slideIdOf(slide) === slideId)
-              if (index < 0) throw new Error(`找不到页面 slideId=${slideId}`)
-              return index
-            })
-          )
-          for (const slideId of action.slideIds) {
-            const slide = findSlide(document.presentation, slideId)
-            changedSlideIds.push(slideId)
-            removeSlide(document.presentation, slide)
-          }
-        } else if (action.type === 'move_slide') {
-          const slide = findSlide(document.presentation, action.slideId)
-          const currentSlides = getSlides(document.presentation)
-          const sourceIndex = currentSlides.findIndex((item) => item === slide)
-          const beforeIndex = action.beforeSlideId
-            ? currentSlides.findIndex((item) => slideIdOf(item) === action.beforeSlideId)
-            : currentSlides.length
-          if (action.beforeSlideId === action.slideId) {
-            continue
-          }
-          const targetIndex = sourceIndex < beforeIndex ? beforeIndex - 1 : beforeIndex
-          if (targetIndex < 0) throw new Error(`找不到 beforeSlideId=${action.beforeSlideId}`)
-          moveSlide(document.presentation, slide, targetIndex)
-          changedSlideIds.push(action.slideId)
-          outlineAnchorIndex = targetIndex
-        } else if (action.type === 'duplicate_slide') {
-          const source = findSlide(document.presentation, action.slideId)
-          const duplicate = duplicateSlide(document.presentation, source)
-          if (action.beforeSlideId) {
-            const targetIndex = getSlides(document.presentation).findIndex(
-              (item) => slideIdOf(item) === action.beforeSlideId
+        try {
+          if (action.type === 'create_presentation' || action.type === 'insert_slide') {
+            const htmlPages = action.type === 'create_presentation' ? action.html : [action.html]
+            for (const [pageIndex, html] of htmlPages.entries()) {
+              let compiled: PptCompiledSlide
+              try {
+                compiled = await compilePptSlideHtml(html)
+              } catch (error) {
+                const message = error instanceof Error ? error.message : String(error)
+                throw new Error(`第 ${pageIndex + 1} 个 HTML 页面失败：${message}`)
+              }
+              const slide = await addCompiledSlide({
+                document,
+                compiled,
+                workspaceRootPath,
+                beforeSlideId:
+                  action.type === 'insert_slide' && pageIndex === 0
+                    ? action.beforeSlideId
+                    : undefined
+              })
+              changedSlideIds.push(slideIdOf(slide))
+            }
+          } else if (action.type === 'delete_slides') {
+            const currentSlides = getSlides(document.presentation)
+            outlineAnchorIndex = Math.min(
+              ...action.slideIds.map((slideId) => {
+                const index = currentSlides.findIndex((slide) => slideIdOf(slide) === slideId)
+                if (index < 0) throw new Error(`找不到页面 slideId=${slideId}`)
+                return index
+              })
             )
+            for (const slideId of action.slideIds) {
+              const slide = findSlide(document.presentation, slideId)
+              changedSlideIds.push(slideId)
+              removeSlide(document.presentation, slide)
+            }
+          } else if (action.type === 'move_slide') {
+            const slide = findSlide(document.presentation, action.slideId)
+            const currentSlides = getSlides(document.presentation)
+            const sourceIndex = currentSlides.findIndex((item) => item === slide)
+            const beforeIndex = action.beforeSlideId
+              ? currentSlides.findIndex((item) => slideIdOf(item) === action.beforeSlideId)
+              : currentSlides.length
+            if (action.beforeSlideId === action.slideId) {
+              continue
+            }
+            const targetIndex = sourceIndex < beforeIndex ? beforeIndex - 1 : beforeIndex
             if (targetIndex < 0) throw new Error(`找不到 beforeSlideId=${action.beforeSlideId}`)
-            moveSlide(document.presentation, duplicate, targetIndex)
-          }
-          changedSlideIds.push(slideIdOf(duplicate))
-        } else if (action.type === 'replace_text') {
-          const targetSlides = action.slideIds?.map((slideId) =>
-            findSlide(document.presentation, slideId)
-          )
-          let replacements = 0
-          if (targetSlides) {
-            for (const slide of targetSlides) {
-              for (const shape of getSlideShapes(slide)) {
-                const text = getShapeText(shape)
-                if (!text.includes(action.query)) continue
-                setShapeText(shape, text.split(action.query).join(action.replace))
-                replacements += 1
-                changedSlideIds.push(slideIdOf(slide))
+            moveSlide(document.presentation, slide, targetIndex)
+            changedSlideIds.push(action.slideId)
+            outlineAnchorIndex = targetIndex
+          } else if (action.type === 'duplicate_slide') {
+            const source = findSlide(document.presentation, action.slideId)
+            const duplicate = duplicateSlide(document.presentation, source)
+            if (action.beforeSlideId) {
+              const targetIndex = getSlides(document.presentation).findIndex(
+                (item) => slideIdOf(item) === action.beforeSlideId
+              )
+              if (targetIndex < 0) throw new Error(`找不到 beforeSlideId=${action.beforeSlideId}`)
+              moveSlide(document.presentation, duplicate, targetIndex)
+            }
+            changedSlideIds.push(slideIdOf(duplicate))
+          } else if (action.type === 'replace_text') {
+            const targetSlides = action.slideIds?.map((slideId) =>
+              findSlide(document.presentation, slideId)
+            )
+            let replacements = 0
+            if (targetSlides) {
+              for (const slide of targetSlides) {
+                for (const shape of getSlideShapes(slide)) {
+                  const text = getShapeText(shape)
+                  if (!text.includes(action.query)) continue
+                  setShapeText(shape, text.split(action.query).join(action.replace))
+                  replacements += 1
+                  changedSlideIds.push(slideIdOf(slide))
+                }
+              }
+            } else {
+              const beforeText = new Map(
+                getSlides(document.presentation).map((slide) => [
+                  slideIdOf(slide),
+                  getSlideText(slide)
+                ])
+              )
+              replacements = replaceTextInPresentation(
+                document.presentation,
+                action.query,
+                action.replace
+              )
+              if (replacements > 0) {
+                getSlides(document.presentation).forEach((slide) => {
+                  if (beforeText.get(slideIdOf(slide)) !== getSlideText(slide))
+                    changedSlideIds.push(slideIdOf(slide))
+                })
               }
             }
-          } else {
-            const beforeText = new Map(
-              getSlides(document.presentation).map((slide) => [
-                slideIdOf(slide),
-                getSlideText(slide)
-              ])
-            )
-            replacements = replaceTextInPresentation(
-              document.presentation,
-              action.query,
-              action.replace
-            )
-            if (replacements > 0) {
-              getSlides(document.presentation).forEach((slide) => {
-                if (beforeText.get(slideIdOf(slide)) !== getSlideText(slide))
-                  changedSlideIds.push(slideIdOf(slide))
-              })
+            if (replacements === 0) document.warnings.push(`未找到要替换的文字：${action.query}`)
+          } else if (action.type === 'edit_elements') {
+            const slide = findSlide(document.presentation, action.slideId)
+            for (const operation of action.operations) {
+              await applyElementOperation({ operation, document, slide, workspaceRootPath })
             }
+            changedSlideIds.push(action.slideId)
+          } else if (action.type === 'set_notes') {
+            const slide = findSlide(document.presentation, action.slideId)
+            setSlideNotes(slide, action.text)
+            changedSlideIds.push(action.slideId)
           }
-          if (replacements === 0) document.warnings.push(`未找到要替换的文字：${action.query}`)
-        } else if (action.type === 'edit_elements') {
-          const slide = findSlide(document.presentation, action.slideId)
-          for (const operation of action.operations) {
-            await applyElementOperation({ operation, document, slide, workspaceRootPath })
-          }
-          changedSlideIds.push(action.slideId)
-        } else if (action.type === 'set_notes') {
-          const slide = findSlide(document.presentation, action.slideId)
-          setSlideNotes(slide, action.text)
-          changedSlideIds.push(action.slideId)
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          throw new Error(`${action.type} 失败：${message}`)
         }
       }
       const uniqueChanged = [...new Set(changedSlideIds)]
