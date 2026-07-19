@@ -35,6 +35,7 @@ import {
   createReplaySessionFromSnapshot,
   createReplaySnapshot
 } from './review/replayTree'
+import { isLegacyDocPath, isReadableWordPath } from './legacyDocPolicy'
 
 type FailedWorkerResponse = Extract<DocxWorkerResponse, { ok: false }>
 
@@ -327,14 +328,20 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     )
   }
 
-  const resolveDocxPath = (params: { cwd: string; rawPath: string }): string | null => {
+  const resolveReadableWordPath = (params: { cwd: string; rawPath: string }): string | null => {
     const resolved = resolveWorkspacePath({
       rawPath: params.rawPath,
       cwd: params.cwd,
       rootPath: workspaceRootPath
     })
     if (!resolved) return null
-    if (!resolved.toLowerCase().endsWith('.docx')) return null
+    if (!isReadableWordPath(resolved)) return null
+    return resolved
+  }
+
+  const resolveDocxPath = (params: { cwd: string; rawPath: string }): string | null => {
+    const resolved = resolveReadableWordPath(params)
+    if (!resolved || isLegacyDocPath(resolved)) return null
     return resolved
   }
 
@@ -1301,7 +1308,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     toolCallId: string
     sourcePath: string
   }): Promise<RequireReadSessionResult> => {
-    const requestedSourcePath = resolveDocxPath({
+    const requestedSourcePath = resolveReadableWordPath({
       cwd: workspaceRootPath,
       rawPath: params.sourcePath
     })
@@ -1311,7 +1318,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
           toolName: params.toolName,
           toolCallId: params.toolCallId,
           reason: 'invalid_input',
-          error: 'sourcePath must be a workspace-bound .docx path'
+          error: 'sourcePath must be a workspace-bound .doc or .docx path'
         })
       }
     }

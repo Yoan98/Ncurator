@@ -2,6 +2,8 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
 import { parentPort } from 'node:worker_threads'
+import { DOMParser } from '@xmldom/xmldom'
+import { extractLegacyDocBody, splitLegacyDocParagraphs } from '../../../../../word/legacyDocReader'
 import type { DocxDetailedBlock, DocxOp, DocxOutlineBlock, DocxSearchMatch } from '../types'
 import { applyDocxOps } from '../adapters/ooxml/opExecutor'
 import {
@@ -61,6 +63,7 @@ const createDocSnapshot = async (input: {
       })
     : createInitialIdentityIndex(index)
   return {
+    format: 'docx',
     docId: input.docId,
     sourcePath: input.sourcePath,
     createdAt: input.createdAt || Date.now(),
@@ -68,8 +71,63 @@ const createDocSnapshot = async (input: {
     buffer: input.buffer,
     checksum: createHash('sha256').update(input.buffer).digest('hex'),
     bundle,
+    meta: bundle.meta,
+    imageCount: bundle.imageCount,
     index,
     identity,
+    detailByBlockId: new Map<string, DocxDetailedBlock>()
+  }
+}
+
+const DEFAULT_LEGACY_DOC_META = {
+  title: '',
+  creator: '',
+  lastModifiedBy: '',
+  description: '',
+  defaultFont: ''
+}
+
+const escapeXmlText = (value: string): string =>
+  value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;')
+
+const buildLegacyDocumentDom = (body: string): Document => {
+  const paragraphs = splitLegacyDocParagraphs(body)
+  const paragraphXml = paragraphs
+    .map(
+      (paragraph) =>
+        `<w:p><w:r><w:t xml:space="preserve">${escapeXmlText(paragraph)}</w:t></w:r></w:p>`
+    )
+    .join('')
+  const xml =
+    `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">` +
+    `<w:body>${paragraphXml}<w:sectPr/></w:body></w:document>`
+  return new DOMParser().parseFromString(xml, 'application/xml')
+}
+
+const createLegacyDocSnapshot = async (input: {
+  docId: string
+  sourcePath: string
+  createdAt?: number
+  buffer: Buffer
+}): Promise<DocSnapshot> => {
+  const body = await extractLegacyDocBody(input.buffer)
+  const index = buildBlockIndex(buildLegacyDocumentDom(body))
+  return {
+    format: 'doc',
+    docId: input.docId,
+    sourcePath: input.sourcePath,
+    createdAt: input.createdAt || Date.now(),
+    buffer: input.buffer,
+    checksum: createHash('sha256').update(input.buffer).digest('hex'),
+    meta: DEFAULT_LEGACY_DOC_META,
+    imageCount: 0,
+    index,
+    identity: createInitialIdentityIndex(index),
     detailByBlockId: new Map<string, DocxDetailedBlock>()
   }
 }
@@ -220,11 +278,18 @@ export const handleDocxWorkerRequest = async (
     if (request.action === 'open') {
       const buffer = await fs.readFile(request.payload.sourcePath)
       const docId = randomUUID()
-      const snapshot = await createDocSnapshot({
-        docId,
-        sourcePath: request.payload.sourcePath,
-        buffer
-      })
+      const snapshot =
+        path.extname(request.payload.sourcePath).toLowerCase() === '.doc'
+          ? await createLegacyDocSnapshot({
+              docId,
+              sourcePath: request.payload.sourcePath,
+              buffer
+            })
+          : await createDocSnapshot({
+              docId,
+              sourcePath: request.payload.sourcePath,
+              buffer
+            })
       const runSession = getRunSession(request.runId, true)
       if (!runSession) {
         throw new Error(`cannot create run session: ${request.runId}`)
@@ -236,8 +301,8 @@ export const handleDocxWorkerRequest = async (
         payload: {
           action: 'open',
           docId,
-          meta: snapshot.bundle.meta,
-          stats: toOpenStats(snapshot.index, snapshot.bundle.imageCount),
+          meta: snapshot.meta,
+          stats: toOpenStats(snapshot.index, snapshot.imageCount),
           checksum: snapshot.checksum,
           byteSize: snapshot.buffer.byteLength
         }
@@ -356,6 +421,14 @@ export const handleDocxWorkerRequest = async (
 
     if (request.action === 'apply_ops') {
       const snapshot = getSnapshot(request.runId, request.payload.docId)
+      if (snapshot.format !== 'docx') {
+        return {
+          requestId: request.requestId,
+          ok: false,
+          code: 'invalid_input',
+          error: 'docx_edit does not support writing legacy .doc files'
+        }
+      }
       const internalOps = request.payload.ops.map((op) => toInternalOp(snapshot.identity, op))
       const applied = await applyDocxOps({
         buffer: snapshot.buffer,
@@ -402,6 +475,14 @@ export const handleDocxWorkerRequest = async (
 
     if (request.action === 'materialize_draft') {
       const snapshot = getSnapshot(request.runId, request.payload.docId)
+      if (snapshot.format !== 'docx') {
+        return {
+          requestId: request.requestId,
+          ok: false,
+          code: 'invalid_input',
+          error: 'docx_edit does not support writing legacy .doc files'
+        }
+      }
       await fs.mkdir(path.dirname(request.payload.outPath), { recursive: true })
       await fs.writeFile(request.payload.outPath, snapshot.buffer)
       const checksum = createHash('sha256').update(snapshot.buffer).digest('hex')
