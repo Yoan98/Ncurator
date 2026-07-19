@@ -172,7 +172,7 @@ const PptSlideDeckViewer: React.FC<PptSlideDeckViewerProps> = ({
 
   return (
     <div
-      className="flex h-full min-h-0 bg-white"
+      className="flex h-full w-full min-h-0 bg-white"
       data-testid={testId}
       tabIndex={0}
       onKeyDown={(event) => {

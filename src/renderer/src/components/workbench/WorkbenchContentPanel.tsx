@@ -497,7 +497,7 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
   const [explorerMode, setExplorerMode] = useState<WorkspaceFileExplorerMode>(
     state.kind === 'apply_workspace' ? 'changed' : 'all'
   )
-  const [docxPreviewMode, setDocxPreviewMode] = useState<'file' | 'diff'>('diff')
+  const [documentPreviewMode, setDocumentPreviewMode] = useState<'file' | 'diff'>('diff')
   const [browserChromeOccluded, setBrowserChromeOccluded] = useState(false)
   const browserTabId = state.kind === 'browser' ? state.browserTabId : null
 
@@ -515,7 +515,7 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
     setBrowserChromeOccluded(false)
   }, [browserTabId, state.kind])
   useEffect(
-    () => setDocxPreviewMode(activeApplyRecord?.status === 'reverted' ? 'file' : 'diff'),
+    () => setDocumentPreviewMode(activeApplyRecord?.status === 'reverted' ? 'file' : 'diff'),
     [activeApplyRecord?.id, activeApplyRecord?.status]
   )
   const previewDocuments = useMemo<FileRenderDocument[]>(
@@ -538,9 +538,9 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
       activeApplyRecord.status === 'reverted' && activeApplyRecord.operation === 'updated'
     const filePath =
       activeApplyRecord.capability === 'docx'
-        ? shouldShowCurrentFile && docxPreviewMode === 'file'
+        ? shouldShowCurrentFile && documentPreviewMode === 'file'
           ? activeApplyRecord.path
-          : docxPreviewMode === 'diff' && activeApplyRecord.previewPath
+          : documentPreviewMode === 'diff' && activeApplyRecord.previewPath
             ? activeApplyRecord.previewPath
             : activeApplyRecord.afterSnapshotPath || activeApplyRecord.path
         : activeApplyRecord.afterSnapshotPath || activeApplyRecord.path
@@ -550,10 +550,12 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
         fileName: activeApplyRecord.fileName
       }
     ]
-  }, [activeApplyRecord, docxPreviewMode])
+  }, [activeApplyRecord, documentPreviewMode])
   const applyContent = useMemo(
     () =>
-      activeApplyRecord?.capability === 'ppt' && activeApplyRecord.previewPath ? (
+      activeApplyRecord?.capability === 'ppt' &&
+      activeApplyRecord.previewPath &&
+      documentPreviewMode === 'diff' ? (
         <PptDiffViewer record={activeApplyRecord} />
       ) : activeApplyRecord?.capability === 'text_file' && activeApplyRecord.previewPath ? (
         <TextFileDiffViewer
@@ -561,7 +563,7 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
           afterSnapshotPath={activeApplyRecord.afterSnapshotPath}
         />
       ) : undefined,
-    [activeApplyRecord]
+    [activeApplyRecord, documentPreviewMode]
   )
   const applyEmptyText =
     activeApplyRecord?.status === 'reverted' || hasDedicatedPreview
@@ -649,13 +651,16 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
                   onOpenPath={onOpenPath}
                   onRevealPath={onRevealPath}
                   onRevert={onRevertApply}
-                  previewMode={docxPreviewMode}
+                  previewMode={documentPreviewMode}
                   onTogglePreviewMode={
-                    activeApplyRecord.capability === 'docx' &&
+                    (activeApplyRecord.capability === 'docx' ||
+                      activeApplyRecord.capability === 'ppt') &&
                     Boolean(activeApplyRecord.previewPath) &&
                     Boolean(activeApplyRecord.afterSnapshotPath || activeApplyRecord.path)
                       ? () =>
-                          setDocxPreviewMode((current) => (current === 'diff' ? 'file' : 'diff'))
+                          setDocumentPreviewMode((current) =>
+                            current === 'diff' ? 'file' : 'diff'
+                          )
                       : undefined
                   }
                   explorerOpen={explorerOpen}
