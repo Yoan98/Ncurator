@@ -11,6 +11,7 @@ import { createPortal } from 'react-dom'
 import { Tooltip } from 'antd'
 import {
   HiCheck,
+  HiChevronDown,
   HiChevronLeft,
   HiChevronRight,
   HiCpuChip,
@@ -116,6 +117,10 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
   const [open, setOpen] = useState(false)
   const [view, setView] = useState<PanelView>('root')
   const [query, setQuery] = useState('')
+  const [collapsedConfigIds, setCollapsedConfigIds] = useState<Set<string>>(() => new Set())
+  const [searchCollapsedConfigIds, setSearchCollapsedConfigIds] = useState<Set<string>>(
+    () => new Set()
+  )
   const [position, setPosition] = useState<MenuPosition>(DEFAULT_POSITION)
 
   const mainLabel = value.mainModel?.modelName || '选择模型'
@@ -198,7 +203,16 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
     window.requestAnimationFrame(() => searchInputRef.current?.focus())
   }, [open, view])
 
-  const selectModel = (model: WorkbenchSelectedModel): void => {
+  useEffect(() => {
+    if (!query.trim()) setSearchCollapsedConfigIds(new Set())
+  }, [query])
+
+  const selectModel = (input: { configId: string; model: LlmRemoteModel }): void => {
+    const model: WorkbenchSelectedModel = {
+      configId: input.configId,
+      modelName: input.model.id,
+      structuredOutput: input.model.structuredOutput
+    }
     const nextValue: WorkbenchModelSelection =
       view === 'main'
         ? {
@@ -218,20 +232,12 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
   }
 
   const groupedModels = useMemo(() => {
-    const customModelName = query.trim()
     return configs
       .map((config) => {
         const models = (modelListsByConfigId[config.id] || []).filter((model) =>
           modelMatchesQuery({ query, config, model })
         )
-        const hasCustomModel =
-          customModelName && !models.some((model) => model.id === customModelName)
-        return {
-          config,
-          models: hasCustomModel
-            ? [...models, { id: customModelName, label: customModelName }]
-            : models
-        }
+        return { config, models }
       })
       .filter((group) => group.models.length > 0)
   }, [configs, modelListsByConfigId, query])
@@ -283,42 +289,70 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
               {!value.visionModel ? <HiCheck className="h-3.5 w-3.5 text-[#37352F]" /> : null}
             </button>
           ) : null}
-          {groupedModels.map((group) => (
-            <div key={group.config.id} className="py-1">
-              <div className="px-3 py-1 text-[11px] font-medium text-[#9B9A97]">
-                {getConfigLabel(group.config)}
-              </div>
-              {group.models.map((model) => {
-                const selected = isSameSelection(currentSelection, {
-                  configId: group.config.id,
-                  modelName: model.id
-                })
-                return (
-                  <button
-                    key={`${group.config.id}:${model.id}`}
-                    type="button"
-                    role="option"
-                    aria-selected={selected}
-                    className={joinClassNames(
-                      'workbench-select-option',
-                      selected ? 'workbench-select-option-selected' : ''
+          {groupedModels.map((group) => {
+            const searching = Boolean(query.trim())
+            const activeCollapsedIds = searching ? searchCollapsedConfigIds : collapsedConfigIds
+            const collapsed = activeCollapsedIds.has(group.config.id)
+            const toggleCollapsed = (): void => {
+              const setter = searching ? setSearchCollapsedConfigIds : setCollapsedConfigIds
+              setter((current) => {
+                const next = new Set(current)
+                if (next.has(group.config.id)) next.delete(group.config.id)
+                else next.add(group.config.id)
+                return next
+              })
+            }
+            return (
+              <div key={group.config.id} className="py-1">
+                <button
+                  type="button"
+                  aria-expanded={!collapsed}
+                  className="flex w-full items-center px-3 py-1 text-left text-[11px] font-medium text-[#9B9A97] hover:text-[#37352F]"
+                  onClick={toggleCollapsed}
+                >
+                  <span className="inline-flex items-center gap-1">
+                    <span>{getConfigLabel(group.config)}</span>
+                    {collapsed ? (
+                      <HiChevronRight className="h-3 w-3 shrink-0" />
+                    ) : (
+                      <HiChevronDown className="h-3 w-3 shrink-0" />
                     )}
-                    onClick={() => selectModel({ configId: group.config.id, modelName: model.id })}
-                  >
-                    <span className="flex min-w-0 items-center gap-2">
-                      <HiCpuChip className="h-3.5 w-3.5 shrink-0 text-[#787774]" />
-                      <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[#37352F]">
-                        {model.label || model.id}
-                      </span>
-                    </span>
-                    {selected ? <HiCheck className="h-3.5 w-3.5 text-[#37352F]" /> : null}
-                  </button>
-                )
-              })}
-            </div>
-          ))}
+                  </span>
+                </button>
+                {!collapsed
+                  ? group.models.map((model) => {
+                      const selected = isSameSelection(currentSelection, {
+                        configId: group.config.id,
+                        modelName: model.id
+                      })
+                      return (
+                        <button
+                          key={`${group.config.id}:${model.id}`}
+                          type="button"
+                          role="option"
+                          aria-selected={selected}
+                          className={joinClassNames(
+                            'workbench-select-option',
+                            selected ? 'workbench-select-option-selected' : ''
+                          )}
+                          onClick={() => selectModel({ configId: group.config.id, model })}
+                        >
+                          <span className="flex min-w-0 items-center gap-2">
+                            <HiCpuChip className="h-3.5 w-3.5 shrink-0 text-[#787774]" />
+                            <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[#37352F]">
+                              {model.label || model.id}
+                            </span>
+                          </span>
+                          {selected ? <HiCheck className="h-3.5 w-3.5 text-[#37352F]" /> : null}
+                        </button>
+                      )
+                    })
+                  : null}
+              </div>
+            )
+          })}
           {groupedModels.length === 0 ? (
-            <div className="px-4 py-6 text-center text-[12px] text-[#91918E]">暂无结果</div>
+            <div className="px-4 py-6 text-center text-[12px] text-[#91918E]">暂无匹配模型</div>
           ) : null}
         </div>
       </>

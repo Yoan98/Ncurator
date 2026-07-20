@@ -3,6 +3,7 @@ import { diffWordsWithSpace } from 'diff'
 import { Empty, Spin } from 'antd'
 import type { TextFileDiffArtifact, TextFileDiffLine } from '../../../../shared/types'
 import { workbenchSelectors } from '../../testing/selectors'
+import { normalizeUserFacingError } from '../../utils/userFacingError'
 
 const ROW_HEIGHT = 28
 const OVERSCAN_ROWS = 24
@@ -256,7 +257,10 @@ export const TextFileDiffViewer = ({
         if (!cancelled) {
           setState({
             status: 'error',
-            message: error instanceof Error ? error.message : String(error)
+            message: normalizeUserFacingError(
+              error instanceof Error ? error.message : error,
+              '差异预览加载失败'
+            )
           })
         }
       })

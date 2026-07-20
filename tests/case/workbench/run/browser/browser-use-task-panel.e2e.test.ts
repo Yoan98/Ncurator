@@ -108,7 +108,7 @@ const waitForBrowserPanelOpenedWithApproval = async (
     const events = await collectWorkbenchAiRunEvents(runtime)
     const failed = events.find((event) => event.type === 'run_failed')
     if (failed?.type === 'run_failed') {
-      throw new Error(`AI run failed while waiting for browser panel: ${failed.error}`)
+      throw new Error(`AI run failed while waiting for browser panel: ${failed.message}`)
     }
     if (events.some((event) => event.type === 'browser_panel_opened')) return
 
@@ -144,7 +144,7 @@ const waitForBrowserTaskCompletion = async (
     const events = await collectWorkbenchAiRunEvents(runtime)
     const failed = events.find((event) => event.type === 'run_failed')
     if (failed?.type === 'run_failed') {
-      throw new Error(`AI run failed while waiting for browser task: ${failed.error}`)
+      throw new Error(`AI run failed while waiting for browser task: ${failed.message}`)
     }
 
     const browserUseFailures = events.filter(

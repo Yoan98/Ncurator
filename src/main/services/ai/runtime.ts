@@ -13,6 +13,18 @@ import type { AiPreference } from '../../../shared/types'
 const normalizeAiPreference = (value: unknown): AiPreference =>
   value === 'local_sources_relaxed' || value === 'local_sources_strict' ? value : 'default'
 
+const resolveSupportedStructuredOutputModes = (
+  selection: AiRunStartPayload['mainModel']
+): LlmRuntimeConfig['supportedStructuredOutputModes'] => {
+  const capabilities = selection?.structuredOutput
+  if (!capabilities) return undefined
+  const modes: NonNullable<LlmRuntimeConfig['supportedStructuredOutputModes']> = []
+  if (capabilities.jsonSchema !== false) modes.push('json_schema')
+  if (capabilities.jsonObject !== false) modes.push('json_object')
+  modes.push('prompt_json')
+  return modes
+}
+
 export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps): AiRunContext => {
   const checkCancelled = () => {
     if (deps.abortSignal?.aborted || deps.isCancelled()) {
@@ -49,7 +61,8 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
       ...cfg,
       model_name: modelName,
       preferredTransport: preference?.preferredTransport,
-      preferredStructuredOutputMode: preference?.preferredStructuredOutputMode
+      preferredStructuredOutputMode: preference?.preferredStructuredOutputMode,
+      supportedStructuredOutputModes: resolveSupportedStructuredOutputModes(selection)
     } satisfies LlmRuntimeConfig
   }
 
@@ -101,8 +114,9 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
 
   const loadConversationContext: AiRunContext['loadConversationContext'] = async () => {
     checkCancelled()
-    const { memory, recentMessages: messages } =
-      await deps.chatStore.getConversationMemoryContext(payload.sessionId)
+    const { memory, recentMessages: messages } = await deps.chatStore.getConversationMemoryContext(
+      payload.sessionId
+    )
     const recentTurnsText = formatPreviousTurns({
       messages,
       currentUserMessageId: payload.userMessageId,

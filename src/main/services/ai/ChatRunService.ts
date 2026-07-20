@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { Jieba } from '@node-rs/jieba'
 import { dict } from '@node-rs/jieba/dict'
 import { AiRunService } from './AiRunService'
+import { toRendererRunFailure } from './errors'
 import {
   buildConversationMemorySummary,
   CONVERSATION_MEMORY_RECENT_TURNS,
@@ -115,9 +116,6 @@ const ACTIVE_RUN_STATUSES: AiRunRecord['status'][] = [
 const INTERRUPTED_RUN_MESSAGE = '运行已中断，请重新发送消息。'
 const PARTIAL_SAVE_DELAY_MS = 500
 
-const getErrorMessage = (error: unknown): string =>
-  error instanceof Error ? error.message : String(error)
-
 const normalizeAiPreference = (value: unknown): AiPreference =>
   value === 'local_sources_relaxed' || value === 'local_sources_strict' ? value : 'default'
 
@@ -172,7 +170,8 @@ export class ChatRunService {
         event: {
           type: 'run_failed',
           runId: run.id,
-          error: INTERRUPTED_RUN_MESSAGE,
+          source: 'internal',
+          message: INTERRUPTED_RUN_MESSAGE,
           code: 'error'
         }
       })
@@ -807,7 +806,10 @@ export class ChatRunService {
         await this.queueRunEvent(runId, {
           type: 'run_failed',
           runId,
-          error: result.error || 'failed',
+          source: result.failureSource || 'internal',
+          message: result.error || '运行失败，请重试。',
+          httpStatus: result.failureHttpStatus,
+          providerCode: result.failureProviderCode,
           code: result.failureCode,
           resumeSnapshotSaved: result.resumeSnapshotSaved
         })
@@ -833,10 +835,15 @@ export class ChatRunService {
         await this.queueRunEvent(runId, { type: 'run_cancelled', runId })
         return
       }
+      console.error('[CHAT-RUN] unexpected failure:', error)
+      const failure = toRendererRunFailure(error)
       await this.queueRunEvent(runId, {
         type: 'run_failed',
         runId,
-        error: getErrorMessage(error),
+        source: failure.source,
+        message: failure.message,
+        httpStatus: failure.httpStatus,
+        providerCode: failure.providerCode,
         code: 'error'
       })
     } finally {
@@ -1139,12 +1146,12 @@ export class ChatRunService {
       run.status = 'failed'
       run.pendingApproval = undefined
       run.pendingUserTakeover = undefined
-      run.error = event.error
+      run.error = event.message
       run.updatedAt = now
       run.finishedAt = now
       const content = run.partialAnswer
-        ? `${run.partialAnswer}\n\n**[失败]** ${event.error}`
-        : `**[失败]** ${event.error}`
+        ? `${run.partialAnswer}\n\n**[失败]** ${event.message}`
+        : `**[失败]** ${event.message}`
       assistantMessage = this.buildAssistantMessage(run, content, true)
     } else if (event.type === 'run_cancelled') {
       run.status = 'cancelled'

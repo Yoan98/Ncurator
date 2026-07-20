@@ -59,6 +59,26 @@ const formatBytes = (bytes) => `${(bytes / 1024 / 1024).toFixed(1)} MiB`
 const extractArchiveFile = (archivePath, relativePath) =>
   extractFile(archivePath, relativePath.replaceAll('/', path.sep))
 
+const assertPackagedNodePtyHelpersExecutable = (appRoot) => {
+  if (process.platform === 'win32') return
+  const helpers = findFiles(
+    appRoot,
+    (filePath) =>
+      path.basename(filePath) === 'spawn-helper' &&
+      filePath.includes(`${path.sep}node-pty${path.sep}`)
+  )
+  if (helpers.length === 0) {
+    throw new Error(`packaged node-pty spawn-helper not found: ${appRoot}`)
+  }
+  for (const helperPath of helpers) {
+    try {
+      fs.accessSync(helperPath, fs.constants.X_OK)
+    } catch {
+      throw new Error(`packaged node-pty spawn-helper is not executable: ${helperPath}`)
+    }
+  }
+}
+
 if (!fs.existsSync(inputDirectory)) throw new Error(`package output not found: ${inputDirectory}`)
 
 const archives = findFiles(inputDirectory, (filePath) => path.basename(filePath) === 'app.asar')
@@ -90,6 +110,7 @@ for (const archivePath of archives) {
   }
 
   const appRoot = findApplicationRoot(archivePath)
+  assertPackagedNodePtyHelpersExecutable(appRoot)
   const directoryAudit = auditPackageDirectory(appRoot)
   const totalBytes = directoryAudit.files.reduce((sum, item) => sum + item.size, 0)
   const topFiles = [...directoryAudit.files]

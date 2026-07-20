@@ -7,6 +7,7 @@ import { inferLlmProviderKind } from '../../../../shared/llmProvider'
 import { PROVIDER_OPTIONS } from './constants'
 import type { LlmConfigFormValues } from './types'
 import { settingsSelectors } from '../../testing/selectors'
+import { normalizeUserFacingError } from '../../utils/userFacingError'
 
 type ModelListState = {
   loading: boolean
@@ -97,12 +98,14 @@ const ModelSettingsPanel: React.FC = () => {
       [config.id]: {
         loading: false,
         items: response.success ? response.items : [],
-        error: response.success ? undefined : response.error || '获取模型列表失败',
+        error: response.success
+          ? undefined
+          : normalizeUserFacingError(response.error, '获取模型列表失败'),
         loadedAt: Date.now()
       }
     }))
     if (!response.success) {
-      message.error(response.error || '获取模型列表失败')
+      message.error(normalizeUserFacingError(response.error, '获取模型列表失败'))
       return
     }
   }
@@ -119,7 +122,7 @@ const ModelSettingsPanel: React.FC = () => {
     try {
       const response = await window.api.llmConfigDelete(id)
       if (!response.success) {
-        const errorMessage = response.error || '删除失败'
+        const errorMessage = normalizeUserFacingError(response.error, '删除失败')
         setActionError(errorMessage)
         message.error(errorMessage)
         return
@@ -152,7 +155,10 @@ const ModelSettingsPanel: React.FC = () => {
 
       const response = await window.api.llmConfigSave(nextConfig)
       if (!response.success) {
-        const errorMessage = response.error || (editingConfig ? '更新失败' : '添加失败')
+        const errorMessage = normalizeUserFacingError(
+          response.error,
+          editingConfig ? '更新失败' : '添加失败'
+        )
         setActionError(errorMessage)
         message.error(errorMessage)
         return
@@ -312,10 +318,7 @@ const ModelSettingsPanel: React.FC = () => {
             label="配置名称"
             rules={[{ required: true, message: '请输入配置名称' }]}
           >
-            <Input
-              placeholder="例如：公司 OpenAI"
-              data-testid={settingsSelectors.modelNameInput}
-            />
+            <Input placeholder="例如：公司 OpenAI" data-testid={settingsSelectors.modelNameInput} />
           </Form.Item>
 
           <Form.Item
@@ -340,9 +343,7 @@ const ModelSettingsPanel: React.FC = () => {
                 value: provider.value,
                 label: (
                   <div className="flex items-center gap-2">
-                    <div className="flex h-5 w-5 items-center justify-center">
-                      {provider.icon}
-                    </div>
+                    <div className="flex h-5 w-5 items-center justify-center">{provider.icon}</div>
                     <span className="font-medium text-[#37352F]">{provider.label}</span>
                   </div>
                 )
@@ -367,10 +368,7 @@ const ModelSettingsPanel: React.FC = () => {
             label="API Key"
             rules={[{ required: true, message: '请输入 API Key' }]}
           >
-            <Input.Password
-              placeholder="sk-..."
-              data-testid={settingsSelectors.modelApiKeyInput}
-            />
+            <Input.Password placeholder="sk-..." data-testid={settingsSelectors.modelApiKeyInput} />
           </Form.Item>
         </Form>
       </Modal>

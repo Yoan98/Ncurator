@@ -1,12 +1,15 @@
-import { ZodError } from 'zod/v4'
 import type { AiRunContext } from '../../../types'
+import { isLlmOutputError } from '../../../errors'
 import { applyThoughtPatch } from '../../memory/thoughtMemory'
 import { buildBrainPrompt } from '../../prompts/brain'
 import { createHumanThoughtDecisionSchema } from '../../schema'
 import { assertExternalLearnedSkillIds } from '../../skills'
 import type { HumanRuntimeCache, HumanState } from '../../types'
 import { applyBrainDecisionTransition } from '../utils/stateTransitions'
-import { createDeliveryGuidanceItem, mergeDeliveryGuidanceItems } from '../../shared/deliveryGuidance'
+import {
+  createDeliveryGuidanceItem,
+  mergeDeliveryGuidanceItems
+} from '../../shared/deliveryGuidance'
 import { isContentSafetyError } from '../../../utils/runFailure'
 import {
   emitThinkingCompleted,
@@ -98,7 +101,6 @@ export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
         overrides: {}
       })
     } catch (error) {
-      const errorMessage = getErrorMessage(error)
       if (isContentSafetyError(error)) {
         completeThinking()
         const guidance = createDeliveryGuidanceItem(
@@ -130,24 +132,13 @@ export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
           }
         }
       }
-      const isDecisionProtocolError =
-        error instanceof ZodError ||
-        error instanceof SyntaxError ||
-        errorMessage.includes('structured_output_') ||
-        errorMessage.includes('prompt_json_')
-      if (!isDecisionProtocolError) {
+      if (!isLlmOutputError(error)) {
         failThinking(error)
         throw error
       }
 
       completeThinking()
-      const issues =
-        error instanceof ZodError
-          ? error.issues.slice(0, 3).map((issue) => ({
-              path: issue.path.length > 0 ? issue.path.join('.') : 'output',
-              message: issue.message
-            }))
-          : [{ path: 'output', message: errorMessage }]
+      const issues = error.issues || [{ path: 'output', message: error.message }]
       return {
         ...state,
         execution: {

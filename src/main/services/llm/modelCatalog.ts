@@ -4,6 +4,17 @@ import { normalizeOpenAIBaseUrl } from '../../../shared/llmBaseUrl'
 type RemoteModelRow = {
   id?: string
   name?: string
+  status?: string
+  features?: {
+    structured_outputs?: {
+      json_schema?: boolean
+      json_object?: boolean
+    }
+  }
+  modalities?: {
+    input_modalities?: string[]
+    output_modalities?: string[]
+  }
 }
 
 type RemoteModelListPayload = {
@@ -11,6 +22,7 @@ type RemoteModelListPayload = {
 }
 
 const MODEL_LIST_TIMEOUT_MS = 20_000
+const HIDDEN_MODEL_STATUSES = new Set(['shutdown', 'offline', 'deprecated', 'deleted'])
 
 const buildModelListUrl = (baseUrl: string): string => {
   const normalized = normalizeOpenAIBaseUrl(baseUrl)
@@ -21,7 +33,36 @@ const buildModelListUrl = (baseUrl: string): string => {
 const toRemoteModels = (payload: RemoteModelListPayload): LlmRemoteModel[] =>
   (Array.isArray(payload.data) ? payload.data : []).reduce<LlmRemoteModel[]>((models, item) => {
     const id = String(item.id || item.name || '').trim()
-    if (id) models.push({ id, label: id })
+    const status = String(item.status || '').trim()
+    if (!id || HIDDEN_MODEL_STATUSES.has(status.toLowerCase())) return models
+    const structuredOutputs = item.features?.structured_outputs
+    models.push({
+      id,
+      label: id,
+      status: status || undefined,
+      structuredOutput: structuredOutputs
+        ? {
+            jsonSchema:
+              typeof structuredOutputs.json_schema === 'boolean'
+                ? structuredOutputs.json_schema
+                : undefined,
+            jsonObject:
+              typeof structuredOutputs.json_object === 'boolean'
+                ? structuredOutputs.json_object
+                : undefined
+          }
+        : undefined,
+      inputModalities: Array.isArray(item.modalities?.input_modalities)
+        ? item.modalities.input_modalities.filter(
+            (value): value is string => typeof value === 'string'
+          )
+        : undefined,
+      outputModalities: Array.isArray(item.modalities?.output_modalities)
+        ? item.modalities.output_modalities.filter(
+            (value): value is string => typeof value === 'string'
+          )
+        : undefined
+    })
     return models
   }, [])
 

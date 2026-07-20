@@ -1,13 +1,10 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Empty, Spin } from 'antd'
-import {
-  arrayBufferFileLoader,
-  type DocRenderer,
-  type DocRendererProps
-} from 'react-doc-viewer'
+import { arrayBufferFileLoader, type DocRenderer, type DocRendererProps } from 'react-doc-viewer'
 import MarkdownRenderer from '../MarkdownRenderer'
 import type { LoadedFileRenderDocument } from './types'
 import { workbenchSelectors } from '../../testing/selectors'
+import { normalizeUserFacingError } from '../../utils/userFacingError'
 
 const TEXT_PREVIEW_MAX_CHARS = 500_000
 
@@ -58,9 +55,7 @@ const loadDocumentText = async (document: LoadedFileRenderDocument): Promise<str
   return ''
 }
 
-const useDocumentText = (
-  document: LoadedFileRenderDocument | undefined
-): TextLoadState => {
+const useDocumentText = (document: LoadedFileRenderDocument | undefined): TextLoadState => {
   const [state, setState] = useState<TextLoadState>({
     loading: false,
     text: '',
@@ -88,7 +83,10 @@ const useDocumentText = (
           setState({
             loading: false,
             text: '',
-            error: error instanceof Error ? error.message : String(error)
+            error: normalizeUserFacingError(
+              error instanceof Error ? error.message : error,
+              '文本预览加载失败'
+            )
           })
         }
       })
@@ -108,10 +106,7 @@ const TextPreviewScaffold = ({
   state: TextLoadState
   children: (text: string, truncated: boolean) => ReactNode
 }) => {
-  const displayText = useMemo(
-    () => state.text.slice(0, TEXT_PREVIEW_MAX_CHARS),
-    [state.text]
-  )
+  const displayText = useMemo(() => state.text.slice(0, TEXT_PREVIEW_MAX_CHARS), [state.text])
   const truncated = state.text.length > TEXT_PREVIEW_MAX_CHARS
 
   if (state.loading) {

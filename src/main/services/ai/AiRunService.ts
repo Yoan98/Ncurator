@@ -1,4 +1,5 @@
 import { createHumanGraphRunner } from './human/graph/humanGraph'
+import { toRendererRunFailure } from './errors'
 import { createAiRunContext } from './runtime'
 import { runAiRuntimePreflight } from './runtimePreflight'
 import {
@@ -84,6 +85,7 @@ export class AiRunService {
         })
       }
       if (isRecoverableHumanRunError(e) && e.lastHumanState) {
+        const failure = toRendererRunFailure(e)
         await deps.chatStore.saveSessionResumeSnapshot(payload.sessionId, {
           reason: e.reason,
           runId: payload.runId,
@@ -98,18 +100,25 @@ export class AiRunService {
           runId: payload.runId,
           sessionId: payload.sessionId,
           input: payload.input,
-          error: e.message,
+          error: failure.message,
+          failureSource: failure.source,
+          failureHttpStatus: failure.httpStatus,
+          failureProviderCode: failure.providerCode,
           failureCode: e.reason,
           resumeSnapshotSaved: true
         })
       }
       await deps.chatStore.clearSessionResumeSnapshot(payload.sessionId)
-      const msg = e instanceof Error ? e.message : String(e)
+      console.error('[AI-RUN] unexpected failure:', e)
+      const failure = toRendererRunFailure(e)
       return createFailedAiRunState({
         runId: payload.runId,
         sessionId: payload.sessionId,
         input: payload.input,
-        error: msg,
+        error: failure.message,
+        failureSource: failure.source,
+        failureHttpStatus: failure.httpStatus,
+        failureProviderCode: failure.providerCode,
         failureCode: 'error',
         resumeSnapshotSaved: false
       })

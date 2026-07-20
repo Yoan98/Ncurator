@@ -510,6 +510,7 @@ export interface LLMConfig {
 export type WorkbenchSelectedModel = {
   configId: string
   modelName: string
+  structuredOutput?: LlmStructuredOutputCapabilities
 }
 
 export type WorkbenchModelSelection = {
@@ -521,11 +522,21 @@ export type LlmRuntimeConfig = LLMConfig & {
   model_name: string
   preferredTransport?: AiStructuredOutputTransport
   preferredStructuredOutputMode?: StructuredOutputMode
+  supportedStructuredOutputModes?: StructuredOutputMode[]
+}
+
+export type LlmStructuredOutputCapabilities = {
+  jsonSchema?: boolean
+  jsonObject?: boolean
 }
 
 export type LlmRemoteModel = {
   id: string
   label?: string
+  status?: string
+  structuredOutput?: LlmStructuredOutputCapabilities
+  inputModalities?: string[]
+  outputModalities?: string[]
 }
 
 export type LlmModelListResponse = {
@@ -1218,6 +1229,7 @@ export interface AiActivityDetails {
 }
 
 export type AiRunFailureCode = 'timeout' | 'network_error' | 'error'
+export type AiRunFailureSource = 'provider' | 'internal'
 
 type AiRunEventPayload =
   | {
@@ -1527,7 +1539,10 @@ type AiRunEventPayload =
   | {
       type: 'run_failed'
       runId: string
-      error: string
+      source: AiRunFailureSource
+      message: string
+      httpStatus?: number
+      providerCode?: string
       code?: AiRunFailureCode
       resumeSnapshotSaved?: boolean
     }

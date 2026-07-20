@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { App as AntdApp, Modal } from 'antd'
 import type { AppUpdateSnapshot } from '../../../shared/types'
 import { workbenchSelectors } from '../testing/selectors'
+import { normalizeUserFacingError } from '../utils/userFacingError'
 import { AppUpdateContext } from './AppUpdateContext'
 
 const promptedVersionKey = (version: string): string => `ncurator.update.prompted.${version}`
@@ -43,7 +44,9 @@ export const AppUpdateProvider: React.FC<React.PropsWithChildren> = ({ children 
     try {
       const response = await window.api.appUpdateDownload()
       setSnapshot(response.snapshot)
-      if (!response.success) message.error(response.error || '下载更新失败')
+      if (!response.success) {
+        message.error(normalizeUserFacingError(response.error, '下载更新失败'))
+      }
     } catch (error) {
       console.error('Failed to download update', error)
       message.error('下载更新失败')
@@ -61,7 +64,9 @@ export const AppUpdateProvider: React.FC<React.PropsWithChildren> = ({ children 
     try {
       const response = await window.api.appUpdateCheck()
       setSnapshot(response.snapshot)
-      if (!response.success) message.error(response.error || '检查更新失败')
+      if (!response.success) {
+        message.error(normalizeUserFacingError(response.error, '检查更新失败'))
+      }
     } catch (error) {
       console.error('Failed to retry update check', error)
       message.error('检查更新失败')
@@ -76,7 +81,7 @@ export const AppUpdateProvider: React.FC<React.PropsWithChildren> = ({ children 
       const response = await window.api.appUpdateInstall()
       setSnapshot(response.snapshot)
       if (!response.success) {
-        message.error(response.error || '安装更新失败')
+        message.error(normalizeUserFacingError(response.error, '安装更新失败'))
       }
     } catch (error) {
       console.error('Failed to install update', error)

@@ -2,6 +2,10 @@ import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } fr
 import path from 'node:path'
 import { createRequire } from 'node:module'
 import { spawnSync } from 'node:child_process'
+import {
+  isNodePtyNativeReleaseReady,
+  prepareNodePtyNativeRelease
+} from './node-pty-native-release.mjs'
 
 const require = createRequire(import.meta.url)
 const root = process.cwd()
@@ -25,18 +29,6 @@ const targetKey = (target) => {
 }
 
 const cacheDir = (target) => path.join(cacheRoot, targetKey(target), 'Release')
-
-const hasNativeRelease = (directory) => {
-  if (process.platform === 'win32') {
-    return (
-      existsSync(path.join(directory, 'conpty.node')) ||
-      existsSync(path.join(directory, 'pty.node'))
-    )
-  }
-  return (
-    existsSync(path.join(directory, 'pty.node')) && existsSync(path.join(directory, 'spawn-helper'))
-  )
-}
 
 const run = (command, args) => {
   const result = spawnSync(command, args, {
@@ -69,7 +61,7 @@ const rebuildElectron = () => {
 }
 
 const cacheCurrentRelease = (target) => {
-  if (!hasNativeRelease(releaseDir)) {
+  if (!prepareNodePtyNativeRelease(releaseDir)) {
     throw new Error(`node-pty native release missing after ${target} rebuild: ${releaseDir}`)
   }
   const targetCache = cacheDir(target)
@@ -80,15 +72,15 @@ const cacheCurrentRelease = (target) => {
 
 const restoreCachedRelease = (target) => {
   const source = cacheDir(target)
-  if (!hasNativeRelease(source)) return false
+  if (!prepareNodePtyNativeRelease(source)) return false
   rmSync(releaseDir, { recursive: true, force: true })
   mkdirSync(path.dirname(releaseDir), { recursive: true })
   cpSync(source, releaseDir, { recursive: true })
-  return true
+  return prepareNodePtyNativeRelease(releaseDir)
 }
 
 const ensure = (target) => {
-  if (hasNativeRelease(prebuildDir)) {
+  if (prepareNodePtyNativeRelease(prebuildDir)) {
     console.log(`[node-pty-native] ready prebuild ${process.platform}-${process.arch}`)
     return
   }
@@ -97,7 +89,7 @@ const ensure = (target) => {
     ? readFileSync(currentTargetPath, 'utf8').trim()
     : ''
   const expectedTarget = targetKey(target)
-  if (currentTarget === expectedTarget && hasNativeRelease(releaseDir)) {
+  if (currentTarget === expectedTarget && prepareNodePtyNativeRelease(releaseDir)) {
     console.log(`[node-pty-native] ready ${expectedTarget}`)
     return
   }
@@ -119,7 +111,7 @@ if (command === 'ensure') {
   ensure('electron')
 } else if (command === 'status') {
   console.log(
-    hasNativeRelease(prebuildDir)
+    isNodePtyNativeReleaseReady(prebuildDir)
       ? `[node-pty-native] ready prebuild ${process.platform}-${process.arch}`
       : existsSync(currentTargetPath)
       ? readFileSync(currentTargetPath, 'utf8').trim()

@@ -32,7 +32,8 @@ import type {
   ChatConversationMemory,
   ChatSessionResumeSnapshot,
   DocxApplyRecord,
-  SelectedReference
+  SelectedReference,
+  WorkbenchSelectedModel
 } from '../../../shared/types'
 import type { LlmRuntimeConfig } from '../../../shared/types'
 import type { HumanState, HumanTaskInput, HumanTaskOutput } from './human/types'
@@ -81,14 +82,8 @@ export type AiRunStartPayload = {
   input: string
   selectedReferences?: SelectedReference[]
   attachments?: ChatAttachment[]
-  mainModel?: {
-    configId: string
-    modelName: string
-  }
-  visionModel?: {
-    configId: string
-    modelName: string
-  }
+  mainModel?: WorkbenchSelectedModel
+  visionModel?: WorkbenchSelectedModel
   preference?: AiPreference
   workspace?: {
     workspaceId: string

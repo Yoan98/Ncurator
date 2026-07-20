@@ -7,7 +7,10 @@ import type {
 } from '../../../shared/types'
 
 export const NATIVE_STRUCTURED_OUTPUT_METHODS = ['jsonSchema', 'jsonMode'] as const
-export const STRUCTURED_OUTPUT_METHODS = [...NATIVE_STRUCTURED_OUTPUT_METHODS, 'promptJson'] as const
+export const STRUCTURED_OUTPUT_METHODS = [
+  ...NATIVE_STRUCTURED_OUTPUT_METHODS,
+  'promptJson'
+] as const
 
 export type NativeStructuredOutputMethod = (typeof NATIVE_STRUCTURED_OUTPUT_METHODS)[number]
 export type NonScriptedStructuredOutputMethod = Exclude<AiStructuredOutputMethod, 'scripted'>
@@ -75,6 +78,9 @@ const normalizeSignal = (value: string | undefined): string | undefined => {
   return normalized ? normalized.toLowerCase() : undefined
 }
 
+const stripSdkErrorDecoration = (message: string): string =>
+  message.replace(/\n\s*Troubleshooting URL:\s*https?:\/\/\S+[\s\S]*$/iu, '').trim()
+
 export const normalizeStructuredOutputError = (error: unknown): StructuredOutputErrorInfo => {
   const root = getObject(error)
   const response = getObject(root?.response)
@@ -82,13 +88,14 @@ export const normalizeStructuredOutputError = (error: unknown): StructuredOutput
   const responseDataObject = getObject(responseData)
   const providerError = getObject(responseDataObject?.error)
 
-  const message =
+  const message = stripSdkErrorDecoration(
     readString(providerError?.message) ||
-    readString(responseDataObject?.message) ||
-    readString(root?.message) ||
-    stringifyValue(responseData) ||
-    stringifyValue(error) ||
-    'unknown structured output error'
+      readString(responseDataObject?.message) ||
+      readString(root?.message) ||
+      stringifyValue(responseData) ||
+      stringifyValue(error) ||
+      'unknown structured output error'
+  )
 
   const status =
     readNumber(response?.status) ||
@@ -130,7 +137,8 @@ export const normalizeStructuredOutputError = (error: unknown): StructuredOutput
   }
 }
 
-export const getErrorText = (error: unknown): string => normalizeStructuredOutputError(error).message
+export const getErrorText = (error: unknown): string =>
+  normalizeStructuredOutputError(error).message
 
 const matchesUnsupportedSignal = (body: string, markers: string[]): boolean => {
   const unsupportedSignals = [
@@ -319,14 +327,16 @@ export const classifyStructuredOutputError = (input: {
 export const isTransportCompatibilityError = (
   transport: AiStructuredOutputTransport,
   error: unknown
-): boolean => classifyStructuredOutputError({ error, transport, method: 'promptJson' }).transportCompatibility
+): boolean =>
+  classifyStructuredOutputError({ error, transport, method: 'promptJson' }).transportCompatibility
 
 export const isStructuredOutputTransportCompatibilityError = isTransportCompatibilityError
 
 export const isStructuredOutputMethodUnsupportedError = (
   method: NativeStructuredOutputMethod,
   error: unknown
-): boolean => classifyStructuredOutputError({ error, transport: 'completions', method }).methodUnsupported
+): boolean =>
+  classifyStructuredOutputError({ error, transport: 'completions', method }).methodUnsupported
 
 export const modeToStructuredOutputMethod = (
   mode: StructuredOutputMode
@@ -352,7 +362,9 @@ export const resolveStructuredOutputStrategy = (
 ): StructuredOutputStrategyMetadata => {
   const method = modeToStructuredOutputMethod(strategy.mode)
   if (!isStructuredOutputStrategyCompatible(strategy)) {
-    throw new Error(`structured_output_invalid_strategy:${formatStructuredOutputStrategy(strategy)}`)
+    throw new Error(
+      `structured_output_invalid_strategy:${formatStructuredOutputStrategy(strategy)}`
+    )
   }
   return {
     ...strategy,
@@ -396,9 +408,7 @@ export const buildStructuredOutputStrategyAttemptOrder = (input: {
       isStructuredOutputStrategyCompatible(strategy)
   )
 
-  const ordered = input.preferredStrategy
-    ? [input.preferredStrategy, ...strategies]
-    : strategies
+  const ordered = input.preferredStrategy ? [input.preferredStrategy, ...strategies] : strategies
   const seen = new Set<string>()
   return ordered.filter((strategy) => {
     if (
@@ -489,4 +499,3 @@ export const parsePromptJsonOutput = (raw: string): Record<string, unknown> => {
 export const parseJsonObjectText = (raw: string): Record<string, unknown> => {
   return parseRepairableJsonObjectText(raw, 'structured_output_empty_response')
 }
-

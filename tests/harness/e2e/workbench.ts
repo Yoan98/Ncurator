@@ -1639,7 +1639,7 @@ export const waitForWorkbenchAiEvent = async (
     if (matched) return matched
     const failed = events.find((event) => event.type === 'run_failed')
     if (failed?.type === 'run_failed') {
-      throw new Error(`AI run failed while waiting for ${input.name}: ${failed.error}`)
+      throw new Error(`AI run failed while waiting for ${input.name}: ${failed.message}`)
     }
     if (Date.now() >= deadline) {
       throw new Error(`AI event ${input.name} timed out`)
@@ -1729,7 +1729,7 @@ export const waitForWorkbenchAiRunOutcome = async (
     const events = await collectWorkbenchAiRunEvents(runtime)
     const runFailed = events.find((event) => event.type === 'run_failed')
     if (runFailed?.type === 'run_failed') {
-      throw new Error(`AI run failed while waiting for completion: ${runFailed.error}`)
+      throw new Error(`AI run failed while waiting for completion: ${runFailed.message}`)
     }
 
     const runCompleted = events.find((event) => event.type === 'run_completed')

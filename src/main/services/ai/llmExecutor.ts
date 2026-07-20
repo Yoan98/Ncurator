@@ -20,6 +20,7 @@ import type {
 } from '../../../shared/types'
 import type { AiEventDispatchContext } from './types'
 import { AI_LLM_CALL_MAX_RETRY_ATTEMPTS, AI_LLM_CALL_TIMEOUT_MS } from './constants'
+import { LlmOutputError, LlmProviderError, isLlmProviderError, toLlmOutputError } from './errors'
 import { classifyLlmFailureCode } from './utils/runFailure'
 import {
   buildStructuredOutputStrategyAttemptOrder,
@@ -273,7 +274,8 @@ const buildStructuredAttemptOrder = (
 ): StructuredOutputStrategy[] =>
   buildStructuredOutputStrategyAttemptOrder({
     supportedTransports: getSupportedTransportsForConfig(cfg),
-    preferredStrategy
+    preferredStrategy,
+    supportedModes: cfg.supportedStructuredOutputModes
   })
 
 const toInvocationMetadata = (input: {
@@ -496,11 +498,15 @@ const resolveResultStrategy = (input: {
 
 const isCancellationError = (error: unknown): boolean => {
   const code = error && typeof error === 'object' ? (error as { code?: unknown }).code : undefined
-  const message = error instanceof Error ? error.message.toLowerCase() : String(error || '').toLowerCase()
+  const message =
+    error instanceof Error ? error.message.toLowerCase() : String(error || '').toLowerCase()
   return code === 'CANCELLED' || message.includes('cancel')
 }
 
 const classifyLlmCallRetry = (error: unknown): { retryable: boolean; message: string } => {
+  if (isLlmProviderError(error)) {
+    return { retryable: error.retryable, message: error.message }
+  }
   const info = normalizeStructuredOutputError(error)
   const message = info.message || getErrorText(error)
   const body = `${info.rawText} ${error instanceof Error ? error.message : ''}`.toLowerCase()
@@ -535,6 +541,19 @@ const classifyLlmCallRetry = (error: unknown): { retryable: boolean; message: st
     return { retryable: true, message }
   }
   return { retryable: false, message }
+}
+
+const createLlmProviderError = (error: unknown, retryable: boolean): LlmProviderError => {
+  if (isLlmProviderError(error)) return error
+  const info = normalizeStructuredOutputError(error)
+  return new LlmProviderError({
+    message: info.message || '模型服务请求失败。',
+    httpStatus: info.status,
+    providerCode: info.code,
+    providerType: info.type,
+    retryable,
+    cause: error
+  })
 }
 
 const invokeStructuredWithStrategy = async <T extends Record<string, unknown>>(
@@ -637,86 +656,6 @@ const invokeStructuredWithStrategy = async <T extends Record<string, unknown>>(
   }
 }
 
-const buildStructuredOutputFailure = (input: {
-  caller: string
-  schemaName: string
-  modelName: string
-  strategy: StructuredOutputStrategy
-  transport: AiStructuredOutputTransport
-  method: NonScriptedStructuredOutputMethod
-  reason: string
-}) =>
-  new Error(
-    [
-      'structured_output_failed',
-      `caller=${input.caller}`,
-      `schema=${input.schemaName}`,
-      `model=${input.modelName}`,
-      `strategy=${formatStructuredOutputStrategy(input.strategy)}`,
-      `transport=${input.transport}`,
-      `method=${input.method}`,
-      `reason=${input.reason}`
-    ].join('; ')
-  )
-
-const buildStructuredOutputRetryableFailure = (input: {
-  caller: string
-  schemaName: string
-  modelName: string
-  strategy: StructuredOutputStrategy
-  transport: AiStructuredOutputTransport
-  method: NonScriptedStructuredOutputMethod
-  reason: string
-}) =>
-  new Error(
-    [
-      'structured_output_retryable',
-      `caller=${input.caller}`,
-      `schema=${input.schemaName}`,
-      `model=${input.modelName}`,
-      `strategy=${formatStructuredOutputStrategy(input.strategy)}`,
-      `transport=${input.transport}`,
-      `method=${input.method}`,
-      `reason=${input.reason}`
-    ].join('; ')
-  )
-
-const buildTextOutputFailure = (input: {
-  caller: string
-  schemaName: string
-  modelName: string
-  transport: AiStructuredOutputTransport
-  reason: string
-}) =>
-  new Error(
-    [
-      'text_output_failed',
-      `caller=${input.caller}`,
-      `schema=${input.schemaName}`,
-      `model=${input.modelName}`,
-      `transport=${input.transport}`,
-      `reason=${input.reason}`
-    ].join('; ')
-  )
-
-const buildTextOutputRetryableFailure = (input: {
-  caller: string
-  schemaName: string
-  modelName: string
-  transport: AiStructuredOutputTransport
-  reason: string
-}) =>
-  new Error(
-    [
-      'text_output_retryable',
-      `caller=${input.caller}`,
-      `schema=${input.schemaName}`,
-      `model=${input.modelName}`,
-      `transport=${input.transport}`,
-      `reason=${input.reason}`
-    ].join('; ')
-  )
-
 const invokeStructuredChatNative = async <T extends Record<string, unknown>>(
   input: AiLlmStructuredInvocationInput<T> & {
     checkCancelled: () => void
@@ -726,6 +665,7 @@ const invokeStructuredChatNative = async <T extends Record<string, unknown>>(
   const attemptedStrategies: StructuredOutputStrategy[] = []
   const strategyErrors: string[] = []
   let latestRawText: string | undefined
+  let latestOutputError: unknown
 
   for (const strategy of attemptOrder) {
     const { method, transport } = resolveStructuredOutputStrategy(strategy)
@@ -733,8 +673,18 @@ const invokeStructuredChatNative = async <T extends Record<string, unknown>>(
     attemptedStrategies.push(strategy)
     try {
       const result = await invokeStructuredWithStrategy(strategy, input)
+      let parsedOutput: T
+      try {
+        parsedOutput = input.schema.parse(result.output)
+      } catch (error) {
+        latestRawText = result.rawText || latestRawText
+        latestOutputError = error
+        strategyErrors.push(`${strategyLabel}: 模型返回内容不符合要求的结构`)
+        continue
+      }
       return {
         ...result,
+        output: parsedOutput,
         fallbackStrategies: attemptedStrategies
       }
     } catch (error) {
@@ -751,45 +701,27 @@ const invokeStructuredChatNative = async <T extends Record<string, unknown>>(
       }
       if (isStructuredParseFailure(error)) {
         strategyErrors.push(`${strategyLabel}: ${reason}`)
+        latestOutputError = error
         continue
       }
       if (errorAnalysis.kind === 'retryable') {
-        throw buildStructuredOutputRetryableFailure({
-          caller: input.caller,
-          schemaName: input.schemaName,
-          modelName: input.cfg.model_name,
-          strategy,
-          transport,
-          method,
-          reason
-        })
+        throw createLlmProviderError(error, true)
       }
-      throw buildStructuredOutputFailure({
-        caller: input.caller,
-        schemaName: input.schemaName,
-        modelName: input.cfg.model_name,
-        strategy,
-        transport,
-        method,
-        reason
-      })
+      throw createLlmProviderError(error, false)
     }
   }
 
-  const unsupportedError = new Error(
-    [
-      'structured_output_unsupported',
-      `caller=${input.caller}`,
-      `schema=${input.schemaName}`,
-      `model=${input.cfg.model_name}`,
-      `tried=${attemptedStrategies.map(formatStructuredOutputStrategy).join(' -> ')}`,
-      `errors=${strategyErrors.join(' | ') || 'unknown'}`
-    ].join('; ')
-  )
-  if (latestRawText) {
-    ;(unsupportedError as StructuredOutputRawTextError).rawText = latestRawText
-  }
-  throw unsupportedError
+  throw new LlmOutputError({
+    message: '模型返回内容无法解析为要求的结构。',
+    issues: [
+      {
+        path: 'output',
+        message: strategyErrors.join(' | ') || '模型未返回可用的结构化内容'
+      }
+    ],
+    rawText: latestRawText,
+    cause: latestOutputError
+  })
 }
 
 const invokeTextChatNative = async (
@@ -799,6 +731,7 @@ const invokeTextChatNative = async (
 ): Promise<AiLlmTextDriverResult> => {
   const attemptOrder = buildTransportAttemptOrder(input.preferredTransport, input.cfg)
   const transportErrors: string[] = []
+  let latestCompatibilityError: unknown
 
   for (const transport of attemptOrder) {
     try {
@@ -807,36 +740,20 @@ const invokeTextChatNative = async (
       const reason = getErrorText(error)
       if (isTransportCompatibilityError(transport, error)) {
         transportErrors.push(`${transport}: ${reason}`)
+        latestCompatibilityError = error
         continue
       }
       if (classifyLlmCallRetry(error).retryable) {
-        throw buildTextOutputRetryableFailure({
-          caller: input.caller,
-          schemaName: input.schemaName,
-          modelName: input.cfg.model_name,
-          transport,
-          reason
-        })
+        throw createLlmProviderError(error, true)
       }
-      throw buildTextOutputFailure({
-        caller: input.caller,
-        schemaName: input.schemaName,
-        modelName: input.cfg.model_name,
-        transport,
-        reason
-      })
+      throw createLlmProviderError(error, false)
     }
   }
 
-  throw new Error(
-    [
-      'text_output_unsupported',
-      `caller=${input.caller}`,
-      `schema=${input.schemaName}`,
-      `model=${input.cfg.model_name}`,
-      `tried=${attemptOrder.join(' -> ')}`,
-      `errors=${transportErrors.join(' | ') || 'unknown'}`
-    ].join('; ')
+  throw createLlmProviderError(
+    latestCompatibilityError ||
+      new Error(transportErrors.join(' | ') || '模型服务不支持当前请求接口。'),
+    false
   )
 }
 
@@ -993,7 +910,7 @@ export const createAiLlmExecutor = (input: {
                   output: request.schema.parse(invocation.output)
                 }
               } catch (error) {
-                throw withRawText(error, invocation.rawText || '')
+                throw toLlmOutputError(error, invocation.rawText || '')
               }
             }
           })
@@ -1120,8 +1037,15 @@ export const invokeStructuredChat = async <T extends Record<string, unknown>>(
         ? [strategy]
         : []
 
+  let output: T
+  try {
+    output = input.schema.parse(result.output)
+  } catch (error) {
+    throw toLlmOutputError(error, result.rawText)
+  }
+
   return {
-    output: input.schema.parse(result.output),
+    output,
     rawText: result.rawText,
     method,
     transport: result.transport,

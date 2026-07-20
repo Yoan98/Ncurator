@@ -25,6 +25,7 @@ import type {
   WorkspaceSource
 } from '../../../../shared/types'
 import { workbenchSelectors } from '../../testing/selectors'
+import { normalizeUserFacingError } from '../../utils/userFacingError'
 import type {
   WorkbenchAiPreference,
   WorkbenchContextUsage,
@@ -607,7 +608,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
       return
     }
     const response = await window.api.attachmentPick(target)
-    if (response.error) message.warning(response.error)
+    if (response.error) message.warning(normalizeUserFacingError(response.error, '选择附件失败'))
     if (!response.canceled) appendAttachments(response.items, target.assetBucketId)
     focusEditorAfterControlChange()
   }, [appendAttachments, focusEditorAfterControlChange, message, requestAttachmentTarget])

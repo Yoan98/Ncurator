@@ -14,6 +14,7 @@ import {
   HiOutlineTrash
 } from 'react-icons/hi2'
 import { importSelectors } from '../../testing/selectors'
+import { normalizeUserFacingError } from '../../utils/userFacingError'
 import StatusTag from './StatusTag'
 import WorkspaceIndexJobProgress from './WorkspaceIndexJobProgress'
 import { formatDateTime, getWebStatusBadge } from './utils/workspace'
@@ -125,7 +126,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
       }
       const response = await window.api.ingestWebs(urls.map((url) => ({ workspaceId, url })))
       if (!response.success) {
-        message.error(response.error || '添加网页失败')
+        message.error(normalizeUserFacingError(response.error, '添加网页失败'))
         return
       }
       message.success('网页已添加，等待索引')
@@ -145,7 +146,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
     try {
       const response = await window.api.webSourcesScan({ workspaceId })
       if (!response.success) {
-        message.error(response.error || '检查网页更新失败')
+        message.error(normalizeUserFacingError(response.error, '检查网页更新失败'))
         return
       }
       setWebIndexJob(response.job)
@@ -166,7 +167,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
     try {
       const response = await window.api.webSourcesPrepare({ workspaceId })
       if (!response.success) {
-        message.error(response.error || '更新网页索引失败')
+        message.error(normalizeUserFacingError(response.error, '更新网页索引失败'))
         return
       }
       setWebIndexJob(response.job)
@@ -185,7 +186,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
         webSourceId: deleteWebSource.id
       })
       if (!response.success) {
-        message.error(response.error || '删除网页失败')
+        message.error(normalizeUserFacingError(response.error, '删除网页失败'))
         return
       }
       message.success('网页已删除')
@@ -375,7 +376,9 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
                           onClick={async () => {
                             const response = await window.api.openExternal(source.url)
                             if (!response.success) {
-                              message.error(response.error || '打开链接失败')
+                              message.error(
+                                normalizeUserFacingError(response.error, '打开链接失败')
+                              )
                             }
                           }}
                           data-testid={`${importSelectors.webSourceUrlLinkButtonPrefix}-${source.id}`}

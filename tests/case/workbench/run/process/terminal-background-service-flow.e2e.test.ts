@@ -81,7 +81,7 @@ describe('workbench terminal e2e', () => {
                 continue
               }
               const failed = events.find((event) => event.type === 'run_failed')
-              if (failed?.type === 'run_failed') throw new Error(failed.error)
+              if (failed?.type === 'run_failed') throw new Error(failed.message)
               if (events.some((event) => event.type === 'run_completed')) break
               if (Date.now() >= deadline) throw new Error('terminal background flow timed out')
               await runtime.page.waitForTimeout(500)

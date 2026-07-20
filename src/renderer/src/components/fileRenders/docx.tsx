@@ -4,6 +4,7 @@ import type { DocRendererProps, IDocument } from 'react-doc-viewer'
 import '@js-preview/docx/lib/index.css'
 import './index.css'
 import { workbenchSelectors } from '../../testing/selectors'
+import { normalizeUserFacingError } from '../../utils/userFacingError'
 
 type DocViewerMetadata = {
   anchorName?: string
@@ -76,7 +77,12 @@ const CustomDocxRenderer = ({ mainState }: DocRendererProps) => {
         } catch (error) {
           console.error('Failed to fetch docx', error)
           if (!cancelled) {
-            setRenderError(error instanceof Error ? error.message : '读取 docx 预览数据失败')
+            setRenderError(
+              normalizeUserFacingError(
+                error instanceof Error ? error.message : error,
+                '读取 docx 预览数据失败'
+              )
+            )
           }
           return
         }
@@ -99,7 +105,12 @@ const CustomDocxRenderer = ({ mainState }: DocRendererProps) => {
       } catch (error) {
         console.error('Failed to render docx preview', error)
         if (!cancelled) {
-          setRenderError(error instanceof Error ? error.message : 'docx 渲染失败')
+          setRenderError(
+            normalizeUserFacingError(
+              error instanceof Error ? error.message : error,
+              'docx 渲染失败'
+            )
+          )
         }
       }
     }

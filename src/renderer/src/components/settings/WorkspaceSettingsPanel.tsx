@@ -19,6 +19,7 @@ import {
   HiOutlineTrash
 } from 'react-icons/hi2'
 import { importSelectors, settingsSelectors } from '../../testing/selectors'
+import { normalizeUserFacingError } from '../../utils/userFacingError'
 import WebSourcesSettingsPanel from './WebSourcesSettingsPanel'
 import WorkspaceIndexJobProgress from './WorkspaceIndexJobProgress'
 import {
@@ -240,7 +241,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
     try {
       const response = await window.api.workspaceCreate({ name })
       if (!response.success || !response.workspace) {
-        message.error(response.error || '创建工作空间失败')
+        message.error(normalizeUserFacingError(response.error, '创建工作空间失败'))
         return
       }
 
@@ -272,7 +273,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
       rootPath: selection.path.trim()
     })
     if (!response.success) {
-      message.error(response.error || '设置工作目录失败')
+      message.error(normalizeUserFacingError(response.error, '设置工作目录失败'))
       return
     }
     message.success('工作目录已设置')
@@ -284,7 +285,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
     try {
       const response = await window.api.workspaceScan({ workspaceId: workspace.id })
       if (!response.success) {
-        message.error(response.error || '检查更新失败')
+        message.error(normalizeUserFacingError(response.error, '检查更新失败'))
         return
       }
       if (response.job) {
@@ -309,7 +310,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
         workspaceId: workspace.id
       })
       if (!response.success) {
-        message.error(response.error || '更新索引失败')
+        message.error(normalizeUserFacingError(response.error, '更新索引失败'))
         return
       }
       if (response.job) {
@@ -328,7 +329,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
     try {
       const response = await window.api.workspaceDelete(deleteWorkspaceId)
       if (!response.success) {
-        message.error(response.error || '移除工作空间失败')
+        message.error(normalizeUserFacingError(response.error, '移除工作空间失败'))
         return
       }
       message.success('工作空间已移除')
@@ -523,9 +524,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
                                   className="mt-4 w-full"
                                   onClick={() => void handleSetWorkspaceRootPath(selectedWorkspace)}
                                 >
-                                  {selectedWorkspace.root_path
-                                    ? '更换工作目录'
-                                    : '设置工作目录'}
+                                  {selectedWorkspace.root_path ? '更换工作目录' : '设置工作目录'}
                                 </Button>
                               </section>
 

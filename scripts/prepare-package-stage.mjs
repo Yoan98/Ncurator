@@ -5,6 +5,7 @@ import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { parse, stringify } from 'yaml'
 import { collectRuntimePackageNames } from './runtime-bundle-graph.mjs'
+import { assertNodePtyNativeReleaseReady } from './node-pty-native-release.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const STAGE_DIR = path.join(ROOT, 'release-stage', 'app')
@@ -93,6 +94,7 @@ const installPreparedNodePtyNative = () => {
     fs.rmSync(prebuildTarget, { recursive: true, force: true })
     fs.mkdirSync(path.dirname(prebuildTarget), { recursive: true })
     fs.cpSync(prebuildSource, prebuildTarget, { recursive: true, force: true })
+    assertNodePtyNativeReleaseReady(prebuildTarget, 'staged node-pty prebuild')
     return
   }
   const source = path.join(ROOT, 'node_modules', 'node-pty', 'build', 'Release')
@@ -101,6 +103,7 @@ const installPreparedNodePtyNative = () => {
   fs.rmSync(target, { recursive: true, force: true })
   fs.mkdirSync(path.dirname(target), { recursive: true })
   fs.cpSync(source, target, { recursive: true, force: true })
+  assertNodePtyNativeReleaseReady(target, 'staged node-pty native release')
 }
 
 const collectInstalledTopLevelDependencies = () => {

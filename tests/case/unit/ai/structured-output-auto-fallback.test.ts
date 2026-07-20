@@ -257,6 +257,31 @@ describe('ai unit structured output auto fallback', () => {
     ])
   })
 
+  it('continues to the next strategy when JSON is valid but violates the schema', async () => {
+    const callOrder: string[] = []
+    configureCreateChatModel(
+      {
+        'completions/json_schema': {
+          type: 'success',
+          rawText: JSON.stringify({ answer: 123 })
+        },
+        'completions/json_object': {
+          type: 'success',
+          rawText: JSON.stringify({ answer: 'schema-valid fallback' })
+        }
+      },
+      callOrder
+    )
+
+    const result = await invokeStructuredChat({
+      ...baseInput,
+      cfg: compatibleCfg
+    })
+
+    expect(result.output).toEqual({ answer: 'schema-valid fallback' })
+    expect(callOrder).toEqual(['completions/json_schema', 'completions/json_object'])
+  })
+
   it('tries the preferred strategy first', async () => {
     const callOrder: string[] = []
     configureCreateChatModel(
@@ -311,9 +336,75 @@ describe('ai unit structured output auto fallback', () => {
         ...baseInput,
         cfg: compatibleCfg
       })
-    ).rejects.toThrow(
-      'structured_output_retryable; caller=unit.test; schema=unit_schema; model=gpt-5; strategy=completions/json_schema; transport=completions; method=jsonSchema; reason=Rate limit exceeded'
-    )
+    ).rejects.toMatchObject({
+      name: 'LlmProviderError',
+      message: 'Rate limit exceeded',
+      httpStatus: 429,
+      providerCode: 'rate_limit_exceeded',
+      retryable: true
+    })
     expect(callOrder).toEqual(['completions/json_schema'])
+  })
+
+  it('surfaces non-retryable provider failures without trying another strategy', async () => {
+    const callOrder: string[] = []
+    configureCreateChatModel(
+      {
+        'completions/json_schema': {
+          type: 'error',
+          error: Object.assign(new Error('The selected model is not activated'), {
+            response: {
+              status: 404,
+              data: {
+                error: {
+                  code: 'ModelNotOpen',
+                  type: 'Not Found',
+                  message: 'The selected model is not activated'
+                }
+              }
+            }
+          })
+        }
+      },
+      callOrder
+    )
+
+    await expect(
+      invokeStructuredChat({
+        ...baseInput,
+        cfg: compatibleCfg
+      })
+    ).rejects.toMatchObject({
+      name: 'LlmProviderError',
+      message: 'The selected model is not activated',
+      httpStatus: 404,
+      providerCode: 'ModelNotOpen',
+      retryable: false
+    })
+    expect(callOrder).toEqual(['completions/json_schema'])
+  })
+
+  it('uses prompt_json directly when model capabilities disable native structured output', async () => {
+    const callOrder: string[] = []
+    configureCreateChatModel(
+      {
+        'completions/prompt_json': {
+          type: 'success',
+          rawText: JSON.stringify({ answer: 'capability-directed prompt json' })
+        }
+      },
+      callOrder
+    )
+
+    const result = await invokeStructuredChat({
+      ...baseInput,
+      cfg: {
+        ...compatibleCfg,
+        supportedStructuredOutputModes: ['prompt_json']
+      }
+    })
+
+    expect(result.output).toEqual({ answer: 'capability-directed prompt json' })
+    expect(callOrder).toEqual(['completions/prompt_json'])
   })
 })

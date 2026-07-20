@@ -42,6 +42,7 @@ import type {
 import { USER_MANUAL_URL } from '../../../shared/constants'
 import MarkdownRenderer from '../components/MarkdownRenderer'
 import { useNavigate } from 'react-router-dom'
+import { normalizeUserFacingError } from '../utils/userFacingError'
 import { HiOutlineCog6Tooth } from 'react-icons/hi2'
 import AssistantTurnCard from '../components/workbench/AssistantTurnCard'
 import WorkbenchComposer from '../components/workbench/WorkbenchComposer'
@@ -261,6 +262,17 @@ const buildAssistantTurnFromMessage = (message: ChatMessage): AssistantTurnViewM
 const getRunMessageContent = (run: AiRunRecord): string =>
   run.finalAnswer || run.partialAnswer || ''
 
+const formatRunFailureMessage = (event: Extract<AiRunEvent, { type: 'run_failed' }>): string => {
+  if (event.source !== 'provider') return event.message || '运行失败，请重试。'
+  const metadata = [
+    event.httpStatus ? `HTTP ${event.httpStatus}` : '',
+    event.providerCode || ''
+  ].filter(Boolean)
+  return metadata.length > 0
+    ? `${metadata.join(' · ')}\n${event.message || '模型服务请求失败。'}`
+    : event.message || '模型服务请求失败。'
+}
+
 const reduceAssistantTurnByRunEvent = (
   turn: AssistantTurnViewModel,
   event: AiRunEvent
@@ -375,7 +387,12 @@ const reduceAssistantTurnByRunEvent = (
   }
 
   if (event.type === 'run_failed') {
-    next = { ...next, status: 'failed', runFinished: true, error: event.error }
+    next = {
+      ...next,
+      status: 'failed',
+      runFinished: true,
+      error: formatRunFailureMessage(event)
+    }
   }
 
   if (event.type === 'run_cancelled') {
@@ -539,16 +556,6 @@ const delay = (ms: number): Promise<void> =>
   new Promise((resolve) => {
     window.setTimeout(resolve, ms)
   })
-
-const normalizeUserFacingError = (value: string): string => {
-  const message = String(value || '').trim()
-  if (!message) return '操作失败'
-  const lower = message.toLowerCase()
-  if (lower === 'cancelled' || lower === 'canceled' || lower === 'run cancelled') return '已取消'
-  if (lower === 'run not active' || lower === 'run not found') return '当前运行已结束'
-  if (lower === 'session deleted') return '当前会话已删除'
-  return message
-}
 
 const appendMessagesDedupe = (
   current: ChatMessage[],
@@ -1304,26 +1311,34 @@ const ChatPage: React.FC = () => {
       setModelListsByConfigId(nextLists)
 
       const preference = readWorkbenchModelPreference(window.localStorage)
-      const hasModel = (model: WorkbenchModelSelection['mainModel']): boolean =>
-        Boolean(
-          model?.configId &&
-          model.modelName &&
-          nextLists[model.configId]?.some((item) => item.id === model.modelName)
-        )
-      const firstConfigWithModel = list.find((config) => (nextLists[config.id] || []).length > 0)
-      const firstModel = firstConfigWithModel
-        ? {
-            configId: firstConfigWithModel.id,
-            modelName: nextLists[firstConfigWithModel.id][0]?.id || ''
-          }
-        : null
-      const nextSelection: WorkbenchModelSelection = {
-        mainModel: hasModel(preference?.mainModel || null)
-          ? preference?.mainModel || null
-          : firstModel,
-        visionModel: hasModel(preference?.visionModel || null)
-          ? preference?.visionModel || null
+      const resolveModel = (
+        model: WorkbenchModelSelection['mainModel']
+      ): WorkbenchModelSelection['mainModel'] => {
+        if (!model?.configId || !model.modelName) return null
+        const remoteModel = nextLists[model.configId]?.find((item) => item.id === model.modelName)
+        return remoteModel
+          ? {
+              configId: model.configId,
+              modelName: model.modelName,
+              structuredOutput: remoteModel.structuredOutput
+            }
           : null
+      }
+      const firstConfigWithModel = list.find((config) => (nextLists[config.id] || []).length > 0)
+      const firstRemoteModel = firstConfigWithModel
+        ? nextLists[firstConfigWithModel.id][0]
+        : undefined
+      const firstModel =
+        firstConfigWithModel && firstRemoteModel
+          ? {
+              configId: firstConfigWithModel.id,
+              modelName: firstRemoteModel.id,
+              structuredOutput: firstRemoteModel.structuredOutput
+            }
+          : null
+      const nextSelection: WorkbenchModelSelection = {
+        mainModel: resolveModel(preference?.mainModel || null) || firstModel,
+        visionModel: resolveModel(preference?.visionModel || null)
       }
       setModelSelection(nextSelection)
       writeWorkbenchModelPreference(
@@ -2221,7 +2236,7 @@ const ChatPage: React.FC = () => {
       }
 
       if (event.type === 'run_failed') {
-        const errorText = normalizeUserFacingError(event.error || '运行失败')
+        const errorText = formatRunFailureMessage(event)
         setLoading(false)
         setAiRunId(null)
         setCancellingRun(false)
@@ -2240,7 +2255,7 @@ const ChatPage: React.FC = () => {
               : item
           )
         )
-        emitErrorMessage(errorText)
+        emitErrorMessage(event.source === 'provider' ? '模型请求失败' : '运行失败')
         return
       }
 
