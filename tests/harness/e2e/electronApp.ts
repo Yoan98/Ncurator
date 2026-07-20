@@ -71,12 +71,25 @@ export type E2ERuntimeSignals = {
 export type LaunchedElectronApp = {
   electronApp: ElectronApplication
   page: Page
+  appInfo: E2EAppInfo
   collectSignals: () => Promise<E2ERuntimeSignals>
   close: (input: { tracePath: string }) => Promise<void>
 }
 
-export type ElectronLaunchMode = 'fixture' | 'real'
+export type E2EAppTarget = 'source' | 'package'
+export type E2EServiceMode = 'fixture' | 'real'
 export type ElectronWindowMode = 'background' | 'visible'
+
+export type E2EAppInfo = {
+  target: E2EAppTarget
+  isPackaged: boolean
+  appPath: string
+  executablePath: string
+  resourcesPath: string
+  version: string
+  artifactPath: string | null
+  artifactSha256: string | null
+}
 
 export type ElectronSignalSink = {
   onAiRunEvent?: (entry: E2EAiRunEventEntry) => void
@@ -86,6 +99,42 @@ export type ElectronSignalSink = {
 
 const OUT_MAIN_ENTRY = path.resolve(process.cwd(), 'out', 'main', 'index.js')
 const APP_ROOT = process.cwd()
+
+const resolveAppTarget = (): E2EAppTarget => {
+  const target = String(process.env.NCURATOR_E2E_APP_TARGET || 'source').trim()
+  if (target === 'source' || target === 'package') return target
+  throw new Error(`Unsupported NCURATOR_E2E_APP_TARGET: ${target}`)
+}
+
+const resolveElectronLaunch = async (): Promise<{
+  target: E2EAppTarget
+  executablePath: string
+  args: string[]
+  cwd: string
+}> => {
+  const target = resolveAppTarget()
+  if (target === 'source') {
+    await access(OUT_MAIN_ENTRY)
+    return {
+      target,
+      executablePath: electronPath as unknown as string,
+      args: [APP_ROOT],
+      cwd: APP_ROOT
+    }
+  }
+
+  const executablePath = String(process.env.NCURATOR_E2E_EXECUTABLE || '').trim()
+  if (!executablePath) {
+    throw new Error('Package E2E requires NCURATOR_E2E_EXECUTABLE')
+  }
+  await access(executablePath)
+  return {
+    target,
+    executablePath,
+    args: [],
+    cwd: path.dirname(executablePath)
+  }
+}
 
 const toConsoleLevel = (message: ConsoleMessage): E2EConsoleLevel => {
   if (message.type() === 'error') return 'error'
@@ -109,10 +158,6 @@ const pushProcessLog = (
   }
   entries.push(entry)
   sink?.onConsole?.(entry)
-}
-
-const ensureBuiltAppExists = async (): Promise<void> => {
-  await access(OUT_MAIN_ENTRY)
 }
 
 const assertLaunchedWorkbenchApp = (page: Page): void => {
@@ -158,7 +203,7 @@ const allocateFreePort = async (): Promise<number> => {
 
 const buildElectronLaunchEnv = (
   userDataDir: string,
-  launchMode: ElectronLaunchMode,
+  serviceMode: E2EServiceMode,
   remoteDebuggingPort: number,
   windowMode?: ElectronWindowMode
 ): NodeJS.ProcessEnv => {
@@ -171,9 +216,9 @@ const buildElectronLaunchEnv = (
     }
   }
 
-  if (launchMode === 'fixture') {
+  if (serviceMode === 'fixture') {
     env.NCURATOR_E2E_MODE = '1'
-    delete env.NCURATOR_E2E_OBSERVER
+    env.NCURATOR_E2E_OBSERVER = '1'
   } else {
     delete env.NCURATOR_E2E_MODE
     env.NCURATOR_E2E_OBSERVER = '1'
@@ -263,14 +308,12 @@ const focusVisibleElectronWindow = async (electronApp: ElectronApplication): Pro
   })
 }
 
-export const launchElectronApp = async (
-  input: {
-    launchMode?: ElectronLaunchMode
-    windowMode?: ElectronWindowMode
-    signalSink?: ElectronSignalSink
-  } = {}
-): Promise<LaunchedElectronApp> => {
-  await ensureBuiltAppExists()
+export const launchElectronApp = async (input: {
+  serviceMode: E2EServiceMode
+  windowMode?: ElectronWindowMode
+  signalSink?: ElectronSignalSink
+}): Promise<LaunchedElectronApp> => {
+  const launch = await resolveElectronLaunch()
 
   const consoleEntries: E2EConsoleEntry[] = []
   const lifecycleEntries: E2ELifecycleEntry[] = []
@@ -287,15 +330,15 @@ export const launchElectronApp = async (
   const remoteDebuggingPort = await allocateFreePort()
   const launchEnv = buildElectronLaunchEnv(
     userDataDir,
-    input.launchMode || 'fixture',
+    input.serviceMode,
     remoteDebuggingPort,
     input.windowMode
   )
   const electronApp = await electron.launch({
-    executablePath: electronPath,
-    args: [APP_ROOT],
-    cwd: APP_ROOT,
-    env: launchEnv
+    executablePath: launch.executablePath,
+    args: launch.args,
+    cwd: launch.cwd,
+    env: launchEnv as Record<string, string>
   })
   const electronProcess = electronApp.process()
   recordLifecycle('electron-process-started', {
@@ -323,6 +366,30 @@ export const launchElectronApp = async (
 
   const page = await electronApp.firstWindow()
   assertLaunchedWorkbenchApp(page)
+  const processInfo = await electronApp.evaluate(({ app }) => ({
+    isPackaged: app.isPackaged,
+    appPath: app.getAppPath(),
+    executablePath: app.getPath('exe'),
+    resourcesPath: process.resourcesPath,
+    version: app.getVersion()
+  }))
+  if (launch.target === 'package' && !processInfo.isPackaged) {
+    throw new Error(
+      `Package E2E launched a non-packaged application: ${processInfo.executablePath}`
+    )
+  }
+  if (launch.target === 'source' && processInfo.isPackaged) {
+    throw new Error(
+      `Source E2E unexpectedly launched a packaged application: ${processInfo.appPath}`
+    )
+  }
+  const appInfo: E2EAppInfo = {
+    target: launch.target,
+    ...processInfo,
+    artifactPath: String(process.env.NCURATOR_E2E_ARTIFACT_PATH || '').trim() || null,
+    artifactSha256: String(process.env.NCURATOR_E2E_ARTIFACT_SHA256 || '').trim() || null
+  }
+  recordLifecycle('electron-app-verified', appInfo)
   if ((input.windowMode || process.env.NCURATOR_E2E_WINDOW_MODE) === 'visible') {
     await focusVisibleElectronWindow(electronApp)
   }
@@ -361,6 +428,7 @@ export const launchElectronApp = async (
   return {
     electronApp,
     page,
+    appInfo,
     collectSignals: async () => {
       let state: E2EObserverState = {
         routeEntries: [],
@@ -398,11 +466,11 @@ export const launchElectronApp = async (
         lifecycleEntries
       }
     },
-    close: async (input) => {
+    close: async (closeInput) => {
       if (!page.isClosed()) {
         try {
           await page.context().tracing.stop({
-            path: input.tracePath
+            path: closeInput.tracePath
           })
         } catch (error) {
           pushProcessLog(

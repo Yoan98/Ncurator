@@ -1,6 +1,7 @@
 import { readFile, readdir, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { spawnSync } from 'node:child_process'
+import { preparePackagedE2EApplication } from './package-app.mjs'
 
 const ROOT = process.cwd()
 const TESTS_ROOT = path.join(ROOT, 'tests')
@@ -9,6 +10,7 @@ const resolveLocalBin = (name) =>
   path.join(ROOT, 'node_modules', '.bin', process.platform === 'win32' ? `${name}.cmd` : name)
 const PNPM_BIN = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
 const VITEST_BIN = resolveLocalBin('vitest')
+const E2E_CONTRACT_SCRIPT = path.join(ROOT, 'scripts', 'test', 'validate-e2e-contract.mjs')
 const ELECTRON_VITE_BIN = resolveLocalBin('electron-vite')
 const NATIVE_PREPARE_SCRIPT = path.join(ROOT, 'scripts', 'build', 'native', 'better-sqlite3.mjs')
 const NODE_PTY_NATIVE_PREPARE_SCRIPT = path.join(ROOT, 'scripts', 'build', 'native', 'node-pty.mjs')
@@ -33,7 +35,8 @@ const parseArgs = (argv) => {
     groups: [],
     caseId: '',
     runs: 1,
-    runDelayMs: 0
+    runDelayMs: 0,
+    target: 'source'
   }
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -71,6 +74,11 @@ const parseArgs = (argv) => {
     }
     if (current === '--run-delay-ms' && next) {
       parsed.runDelayMs = Math.max(0, Number(next))
+      index += 1
+      continue
+    }
+    if (current === '--target' && next) {
+      parsed.target = next
       index += 1
     }
   }
@@ -331,6 +339,12 @@ const buildE2EApp = (env) => {
   })
 }
 
+const validateE2EContract = () => {
+  const result = runSpawn(process.execPath, [E2E_CONTRACT_SCRIPT], undefined, true)
+  if (result.error || typeof result.status !== 'number') return 1
+  return result.status
+}
+
 const formatScope = (input) =>
   [[input.domain, input.suite, ...input.groups].filter(Boolean).join('/'), input.type]
     .filter(Boolean)
@@ -339,6 +353,7 @@ const formatScope = (input) =>
 const runE2ETestFilesSerially = async (testFiles, requestedDelayMs, env, testNamePattern) => {
   const e2eFileDelayMs = requestedDelayMs > 0 ? requestedDelayMs : DEFAULT_E2E_FILE_DELAY_MS
   let exitCode = 0
+  const results = []
 
   for (let index = 0; index < testFiles.length; index += 1) {
     const testFile = testFiles[index]
@@ -352,11 +367,13 @@ const runE2ETestFilesSerially = async (testFiles, requestedDelayMs, env, testNam
       testNamePattern
     })
     if (code !== 0) {
-      process.stdout.write(
-        `[test-workflow] e2e failed; stopping remaining files to avoid repeated Electron launches\n`
-      )
-      return code
+      exitCode = code
     }
+    results.push({
+      file: path.relative(ROOT, testFile),
+      status: code === 0 ? 'passed' : 'failed',
+      exitCode: code
+    })
     if (e2eFileDelayMs > 0 && index < testFiles.length - 1) {
       process.stdout.write(
         `[test-workflow] waiting ${String(e2eFileDelayMs)}ms before next e2e file\n`
@@ -365,14 +382,14 @@ const runE2ETestFilesSerially = async (testFiles, requestedDelayMs, env, testNam
     }
   }
 
-  return exitCode
+  return { exitCode, results }
 }
 
 const runTypeWorkflow = async (input) => {
   const testFiles = await findTestFiles(input)
   if (testFiles.length === 0) {
     process.stdout.write(`[test-workflow] no tests found for ${formatScope(input)}\n`)
-    return 0
+    return { exitCode: 0, e2eResults: [] }
   }
 
   const nativeTarget = input.type === 'e2e' ? 'electron' : 'node'
@@ -387,27 +404,33 @@ const runTypeWorkflow = async (input) => {
         )
       ).some(Boolean))
   const testNamePattern = shouldFilterByTestName ? input.caseId : ''
-  const nativeCode = prepareBetterSqliteNative(nativeTarget)
-  if (nativeCode !== 0) {
-    return nativeCode
-  }
-  const nodePtyNativeCode = prepareNodePtyNative(nativeTarget)
-  if (nodePtyNativeCode !== 0) {
-    return nodePtyNativeCode
-  }
-  const nativeBinding = resolveBetterSqliteNativeBinding(nativeTarget)
-  if (!nativeBinding.ok) {
-    return 1
+  let runtimeEnv = input.e2eEnv || {}
+  if (input.type !== 'e2e' || input.target === 'source') {
+    const nativeCode = prepareBetterSqliteNative(nativeTarget)
+    if (nativeCode !== 0) {
+      return { exitCode: nativeCode, e2eResults: [] }
+    }
+    const nodePtyNativeCode = prepareNodePtyNative(nativeTarget)
+    if (nodePtyNativeCode !== 0) {
+      return { exitCode: nodePtyNativeCode, e2eResults: [] }
+    }
+    const nativeBinding = resolveBetterSqliteNativeBinding(nativeTarget)
+    if (!nativeBinding.ok) {
+      return { exitCode: 1, e2eResults: [] }
+    }
+    runtimeEnv = { ...nativeBinding.env, ...runtimeEnv }
   }
 
-  if (input.type === 'e2e') {
-    const buildCode = buildE2EApp(nativeBinding.env)
+  if (input.type === 'e2e' && input.target === 'source') {
+    const buildCode = buildE2EApp(runtimeEnv)
     if (buildCode !== 0) {
-      return buildCode
+      return { exitCode: buildCode, e2eResults: [] }
     }
+    runtimeEnv.NCURATOR_E2E_APP_TARGET = 'source'
   }
 
   let exitCode = 0
+  const e2eResults = []
   const { liveFiles } =
     input.type === 'backend' ? partitionBackendTestFiles(testFiles) : { liveFiles: [] }
   const runDelayMs =
@@ -420,13 +443,13 @@ const runTypeWorkflow = async (input) => {
         {
           configPath: 'vitest.backend.config.mts',
           testFiles: nonLiveFiles,
-          env: nativeBinding.env,
+          env: runtimeEnv,
           testNamePattern
         },
         {
           configPath: 'vitest.backend.live.config.mts',
           testFiles: liveFiles,
-          env: nativeBinding.env,
+          env: runtimeEnv,
           testNamePattern
         }
       ].filter((group) => group.testFiles.length > 0)
@@ -438,14 +461,15 @@ const runTypeWorkflow = async (input) => {
         }
       }
     } else {
-      const code = await runE2ETestFilesSerially(
+      const runResult = await runE2ETestFilesSerially(
         testFiles,
         input.runDelayMs,
-        nativeBinding.env,
+        runtimeEnv,
         testNamePattern
       )
-      if (code !== 0) {
-        exitCode = code
+      e2eResults.push(...runResult.results)
+      if (runResult.exitCode !== 0) {
+        exitCode = runResult.exitCode
       }
     }
 
@@ -457,30 +481,55 @@ const runTypeWorkflow = async (input) => {
     }
   }
 
-  return exitCode
+  return { exitCode, e2eResults }
 }
 
 const main = async () => {
   removeNpmLifecycleEnv()
   const args = parseArgs(process.argv.slice(2))
 
-  if (!args.domain) {
-    throw new Error('missing required flag: --domain')
+  if (!['source', 'package'].includes(args.target)) {
+    throw new Error(`unsupported --target: ${args.target}`)
+  }
+  if (!args.domain && args.type !== 'e2e') {
+    throw new Error('非纯 E2E 工作流必须提供 --domain')
+  }
+  if (args.target === 'package' && args.type !== 'e2e') {
+    throw new Error('--target package 只能与 --type e2e 一起使用')
   }
 
   let exitCode = 0
+  let packageSession = null
+  let e2eEnv = {}
+
+  if (!args.type || args.type === 'e2e') {
+    const validationCode = validateE2EContract()
+    if (validationCode !== 0) process.exit(validationCode)
+  }
+
+  if (args.type === 'e2e' && args.target === 'package') {
+    packageSession = await preparePackagedE2EApplication()
+    e2eEnv = packageSession.env
+  }
 
   if (!args.type || args.type === 'backend') {
-    exitCode = await runTypeWorkflow({
+    const result = await runTypeWorkflow({
       ...args,
       type: 'backend'
     })
+    exitCode = result.exitCode
   }
 
   if (exitCode === 0 && (!args.type || args.type === 'e2e')) {
-    exitCode = await runTypeWorkflow({
+    const result = await runTypeWorkflow({
       ...args,
-      type: 'e2e'
+      type: 'e2e',
+      e2eEnv
+    })
+    exitCode = result.exitCode
+    packageSession?.writeSummary({
+      status: exitCode === 0 ? 'passed' : 'failed',
+      tests: result.e2eResults
     })
   }
 

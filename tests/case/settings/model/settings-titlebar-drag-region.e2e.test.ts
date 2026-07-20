@@ -68,6 +68,7 @@ describe('settings model e2e', () => {
         suite: 'model',
         description: '设置页顶部区域提供 Electron 窗口拖动区，且不遮挡页面按钮。',
         fixtures: [],
+        serviceMode: 'real',
         runMode: 'single',
         execute: async (runtime) => {
           const { page } = runtime

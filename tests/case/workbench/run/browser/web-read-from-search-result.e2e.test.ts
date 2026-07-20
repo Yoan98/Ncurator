@@ -47,7 +47,7 @@ describe('workbench run e2e', () => {
         description:
           '真实 AI 先用 web_search 搜索 DeepSeek 融资候选网页，再用 web_crawl 读取网页正文后总结。',
         fixtures: ['tests/fixtures/workspace'],
-        launchMode: 'real',
+        serviceMode: 'real',
         windowMode: 'visible',
         runMode: 'single',
         execute: async (runtime) => {

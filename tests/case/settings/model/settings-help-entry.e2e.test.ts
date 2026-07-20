@@ -18,6 +18,7 @@ describe('settings help e2e', () => {
         suite: 'model',
         description: '设置页在向量模型下方展示同级使用帮助入口，并打开官方手册。',
         fixtures: [],
+        serviceMode: 'real',
         runMode: 'single',
         execute: async (runtime) => {
           const { page } = runtime

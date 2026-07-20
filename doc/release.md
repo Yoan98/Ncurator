@@ -11,25 +11,28 @@
 
 ## 打包安全边界
 
-electron-builder 不从项目根目录打包。`pnpm run build` 每次都会重新创建：
+electron-builder 不从项目根目录打包。`pnpm run build` 每次都会重新创建 staging，并在 `release-stage/` 保存不进入安装包的追踪与混淆报告：
 
 ```text
-release-stage/app/
-├── package.json
-├── out/
-│   ├── main/
-│   ├── preload/
-│   └── renderer/
-├── node_modules/
-└── resources/
-    ├── native/
-    └── web_crawler_sidecar/bin/
+release-stage/
+├── runtime-trace-report.json
+├── main-obfuscation-report.json
+└── app/
+    ├── package.json
+    ├── out/
+    │   ├── main/
+    │   ├── preload/
+    │   └── renderer/
+    ├── node_modules/
+    └── resources/
+        ├── native/
+        └── web_crawler_sidecar/bin/
 ```
 
 staging 只允许包含：
 
 - 压缩后的 main、preload 和 renderer；
-- 根据编译结果自动计算出的运行时依赖；
+- 由 main 和 preload 入口递归追踪得到的完整运行时依赖；
 - 当前系统、当前架构的原生二进制；
 - 只包含 Chromium headless shell 的网页抓取 sidecar；
 - 最小化生产 `package.json`；
@@ -47,7 +50,7 @@ staging 只允许包含：
 - 错误系统或错误架构的原生二进制；
 - 私钥、签名证书和高风险 Token。
 
-`app.asar` 只是归档，不是加密。Electron 运行所需的编译后 JavaScript 仍可被逆向分析，因此客户端代码和所有 `VITE_*` 变量都必须按公开信息处理。
+`app.asar` 只是归档，不是加密。Electron 运行所需的编译后 JavaScript 仍可被逆向分析，因此客户端代码和所有 `VITE_*` 变量都必须按公开信息处理。当前只混淆 `out/main`，用于提高直接阅读和批量提取提示词的成本；preload、renderer 和第三方依赖不做同等级混淆。混淆不能替代服务端密钥管理，也不能视为源码加密。
 
 ## Source Map 和密钥
 
@@ -67,28 +70,36 @@ R2 凭据、GitHub Token 和签名证书只能保存在本机安全环境或 Git
 
 `pnpm run build` 依次执行：
 
-1. TypeScript 类型检查；
+1. 准备 Node 测试和构建使用的 native 模块并执行 TypeScript 类型检查；
 2. 构建或复用当前平台的网页抓取 sidecar；
 3. 导出 Electron 使用的 better-sqlite3 原生模块；
 4. 构建并压缩 main、preload、renderer，禁止 Source Map；
-5. 验证 main、worker 和 embedding 运行时边界；
-6. 删除旧 `dist` 和旧 staging；
-7. 根据编译产物生成最小生产 `package.json`；
-8. 使用主锁文件离线安装运行时依赖；
-9. 根据实际安装结果写入完整的生产依赖闭包，防止打包器漏掉被提升的间接依赖；
-10. 删除测试、文档、源码、Source Map 和错误平台二进制；
-11. 执行 staging 安全审计。
+5. 验证 main、worker 和 embedding 的运行时边界；
+6. 准备 Electron 使用的 node-pty，并删除旧 `dist` 和旧 staging；
+7. 在混淆前使用 `@vercel/nft` 从全部 main/preload JavaScript 入口递归追踪文件依赖；
+8. 按 `build/runtime-trace-policy.json` 分类已知的跨平台 native 分支和静态资源告警，任何未知告警直接终止构建；
+9. 验证追踪到的根依赖全部声明在生产 `dependencies`，并检查递归发现的 optional peer 版本；
+10. 生成 `release-stage/runtime-trace-report.json`、最小生产 `package.json` 和暂存锁文件；
+11. 使用主锁文件离线安装运行时依赖，再根据实际安装结果写入完整生产依赖闭包；
+12. 删除测试、文档、源码、Source Map 和错误平台二进制；
+13. 只使用 staging 中的依赖，通过真实 `DocxLoader` 和 `PDFLoader` 读取仓库 fixture，并检查 `mammoth`、`pdf-parse` 与 PDF worker；
+14. 混淆 `out/main`，执行语法、哈希、体积增长和受保护提示词明文检查；
+15. 执行 staging 安全审计。
+
+`scripts/build/runtime/bundle-graph.mjs` 中的轻量扫描只负责进程边界检查，不再决定打包哪些依赖。无法被递归追踪的依赖只能通过 `build/runtime-trace-policy.json` 显式包含，并且必须写明原因和对应测试；未使用的显式包含项会使构建失败。
 
 electron-builder 完成后，`pnpm run package:audit` 检查真实 `.app` 或 `win-unpacked`。最终审计会验证：
 
 - `app.asar` 根目录只能有 `out`、`node_modules`、`package.json`；
 - `package.json` 只能包含最小生产字段；
 - `app.asar` 和外部 resources 没有禁止文件；
+- 递归追踪到的每个运行时根依赖和关键子路径都真实存在于 `app.asar`；
 - 没有绝对路径或逃出安装目录的符号链接；
 - 没有私钥和高风险 Token；
+- `out/main` 中不存在受保护提示词明文；
 - sidecar 没有完整 Chromium、Patchright 和 Python 源码；
 - ONNX Runtime 和 native prebuild 只保留当前平台与架构；
-- 生成 `dist/package-audit.json`，记录安装目录、`app.asar` 和安装包体积。
+- 生成 `dist/package-audit.json`，记录安装目录、`app.asar`、运行时追踪摘要和安装包体积。
 
 macOS 体积审计使用 `build/package-size-budgets.json` 中独立的 arm64、x64 基线。相比基线增长超过 3% 时输出警告，增长超过 8% 或超过硬上限时审计失败。审计失败或缺少体积结果的 macOS 产物不能生成发布 fragment，也不能上传。
 
@@ -106,7 +117,10 @@ pnpm run build:mac:arm64
 pnpm run build:mac:x64
 pnpm run package:audit
 pnpm run package:audit:summary
+pnpm test:e2e:package
 ```
+
+`pnpm test:e2e:package` 是完整正式包回归：它会重新构建并审计当前平台产物，安装 DMG 或 EXE，再让 E2E harness 连接安装后的真实可执行程序。该命令耗时长，不替代日常的源码 E2E。
 
 ## 平台构建方式
 
@@ -409,6 +423,8 @@ pnpm test:update:real -- --source-version 0.1.3 --expected-version X.Y.Z
 ## 失败处理
 
 - staging 审计失败：确认文件是否真的属于运行时必需内容，不能直接加白名单。
+- 运行时追踪失败：先检查新依赖是否真的可达、是否声明在生产 `dependencies`；只有确定属于跨平台可选分支或非 JavaScript 资源时，才能增加带原因和测试的策略规则。
+- PDF/DOCX staging 探针失败：检查 staging 内的 `mammoth`、`pdf-parse`、PDF worker 和 optional peer 版本，不能改回根 `node_modules` 验证或替换生产 Loader。
 - 最终审计失败：检查真实 `app.asar` 和外部 resources，不能只改 electron-builder glob。
 - Windows 工具缓存失败：检查 SHA512、写权限和 `ELECTRON_BUILDER_CACHE`。
 - Windows 本地环境失败：运行 `pnpm release:doctor`，或显式使用 `--actions`。

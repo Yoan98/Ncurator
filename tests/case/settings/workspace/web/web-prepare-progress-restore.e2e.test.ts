@@ -20,6 +20,7 @@ describe('settings workspace web e2e', () => {
         groups: ['web'],
         description: '网页索引执行中离开并返回工作空间页后，应恢复分阶段持久化进度。',
         fixtures: [],
+        serviceMode: 'real',
         runMode: 'single',
         execute: async (runtime) => {
           const { page } = runtime

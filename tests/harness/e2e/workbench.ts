@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { cp, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
+import { readFile, writeFile } from 'node:fs/promises'
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import os from 'node:os'
@@ -30,13 +30,18 @@ import {
 } from './settings'
 import type { E2ETestRuntime } from './run-e2e-case'
 import type { E2ERuntimeSignals } from './electronApp'
+import {
+  E2E_WORKSPACE_FIXTURE_ROOT,
+  copyE2EWorkspaceFixture,
+  type TemporaryE2EWorkspace
+} from './workspaceFixture'
 
 export const WORKBENCH_E2E_TIMEOUT_MS = SETTINGS_E2E_TIMEOUT_MS
 export const WORKBENCH_LONG_E2E_TIMEOUT_MS = SETTINGS_REAL_WORKSPACE_E2E_TIMEOUT_MS
 export const WORKBENCH_RESULT_E2E_TIMEOUT_MS = WORKBENCH_LONG_E2E_TIMEOUT_MS + 120_000
 export const WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS = 900_000
 export const WORKBENCH_MODEL_LIST_TIMEOUT_MS = 60_000
-export const WORKBENCH_FIXTURE_ROOT = 'tests/fixtures/workspace'
+export const WORKBENCH_FIXTURE_ROOT = E2E_WORKSPACE_FIXTURE_ROOT
 
 export type WorkbenchLiveModelEnv = {
   baseUrl: string
@@ -44,10 +49,7 @@ export type WorkbenchLiveModelEnv = {
   modelName: string
 }
 
-export type TemporaryWorkbenchWorkspace = {
-  rootPath: string
-  cleanup: () => Promise<void>
-}
+export type TemporaryWorkbenchWorkspace = TemporaryE2EWorkspace
 
 export type LocalWorkbenchHttpServer = {
   url: string
@@ -277,8 +279,6 @@ const readEnv = (name: string): string => {
   return String(process.env[name] || '').trim()
 }
 
-const sanitizeCasePathPart = (caseId: string): string => caseId.replace(/[^a-zA-Z0-9-_]/g, '-')
-
 const closeServer = async (server: Server): Promise<void> => {
   const forceCloseTimer = setTimeout(() => {
     const closeableServer = server as Server & {
@@ -350,28 +350,7 @@ export const loadWorkbenchLiveModelEnv = (): WorkbenchLiveModelEnv => {
 
 export const createTemporaryWorkbenchWorkspace = async (
   caseId: string
-): Promise<TemporaryWorkbenchWorkspace> => {
-  const createdRootPath = await mkdtemp(
-    path.join(os.tmpdir(), `ncurator-workbench-${sanitizeCasePathPart(caseId)}-`)
-  )
-  const rootPath = await realpath(createdRootPath)
-  await cp(path.resolve(WORKBENCH_FIXTURE_ROOT), rootPath, {
-    recursive: true,
-    force: true
-  })
-
-  return {
-    rootPath,
-    cleanup: async () => {
-      await rm(rootPath, {
-        recursive: true,
-        force: true,
-        maxRetries: 10,
-        retryDelay: 500
-      })
-    }
-  }
-}
+): Promise<TemporaryWorkbenchWorkspace> => await copyE2EWorkspaceFixture(caseId, 'workbench')
 
 export const startLocalWorkbenchHttpServer = async (
   html: string
@@ -955,7 +934,7 @@ export const setupWorkbenchWithTempWorkspace = async (
       workspaceName,
       rootPath: workspace.rootPath,
       webSourceUrl: input.webSourceUrl,
-      rootBindingMode: input.rootBindingMode
+      rootBindingMode: input.rootBindingMode || 'ipc'
     })
     if (input.configureModel !== false) {
       await selectWorkbenchModel(page, env.modelName)
@@ -989,7 +968,8 @@ export const setupWorkbenchWorkspaceOnly = async (
     await prepareWorkbenchWorkspaceThroughUi(page, {
       workspaceName,
       rootPath: workspace.rootPath,
-      webSourceUrl: input.webSourceUrl
+      webSourceUrl: input.webSourceUrl,
+      rootBindingMode: 'ipc'
     })
   } catch (error) {
     await workspace.cleanup()

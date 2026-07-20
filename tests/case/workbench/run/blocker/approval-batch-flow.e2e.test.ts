@@ -88,7 +88,7 @@ describe('workbench run e2e', () => {
         groups: ['blocker'],
         description: '真实 AI 触发 terminal 审批后，覆盖同意执行、拒绝无副作用和指导输入回流。',
         fixtures: ['tests/fixtures/workspace'],
-        launchMode: 'real',
+        serviceMode: 'real',
         windowMode: 'visible',
         runMode: 'single',
         execute: async (runtime) => {

@@ -93,7 +93,7 @@ describe('workbench result e2e', () => {
         description:
           '真实 AI 同一轮修改两个 docx 后，验证 assistant 多入口、右侧仅展示当前点击文件并切换对应记录。',
         fixtures: ['tests/fixtures/workspace'],
-        launchMode: 'real',
+        serviceMode: 'real',
         windowMode: 'visible',
         runMode: 'single',
         execute: async (runtime) => {

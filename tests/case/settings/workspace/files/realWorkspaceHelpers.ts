@@ -1,7 +1,8 @@
-import { mkdir, writeFile, cp, rm, mkdtemp } from 'node:fs/promises'
+import { mkdir, writeFile, rm, mkdtemp } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import type { WorkspaceTreeListResponse } from '../../../../../src/shared/types'
+import { copyE2EWorkspaceFixture } from '../../../../harness/e2e/workspaceFixture'
 
 export type SupportedFileStatus = {
   name: string
@@ -11,13 +12,8 @@ export type SupportedFileStatus = {
 }
 
 export const copySharedWorkspaceFixture = async (caseId: string): Promise<string> => {
-  const workspaceRoot = await mkWorkspaceRoot(caseId)
-  await cp(path.resolve('tests/fixtures/workspace'), workspaceRoot, {
-    recursive: true,
-    force: true,
-    filter: (source) => path.basename(source) !== '.DS_Store'
-  })
-  return workspaceRoot
+  const workspace = await copyE2EWorkspaceFixture(caseId, 'settings')
+  return workspace.rootPath
 }
 
 export const createWorkspaceWithFiles = async (

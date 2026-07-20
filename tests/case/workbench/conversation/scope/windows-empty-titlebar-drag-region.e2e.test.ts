@@ -50,6 +50,7 @@ describe('workbench conversation e2e', () => {
         groups: ['scope'],
         description: 'Windows uses a native controls overlay above the shared application content.',
         fixtures: [],
+        serviceMode: 'real',
         runMode: 'single',
         execute: async ({ page }) => {
           await navigateToWorkbench(page, { waitForSessionListText: false })

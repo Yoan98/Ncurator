@@ -24,29 +24,31 @@ pnpm test:update:e2e
 只有明确需要验证真实自动更新时才运行：
 
 ```bash
-pnpm test:update:real
+pnpm test:update:real -- \
+  --source-version 0.1.16 \
+  --expected-version 0.1.17
 ```
 
-当前脚本支持 macOS，默认执行 `0.1.0 → 0.1.1`。脚本会：
+当前脚本只支持 macOS，并且必须显式传入旧版本和更高的目标版本。脚本会：
 
-1. 使用当前代码打包一个版本号为 `0.1.0` 的测试 App。
+1. 使用当前代码打包一个版本号为 `source-version` 的测试 App，或复制 `source-app` 指定的已有 App。
 2. 写入与正式构建相同的 Generic 更新地址。
 3. 使用独立的用户数据和缓存启动测试 App。
-4. 从正式 R2 更新源检查并下载 `0.1.1`。
+4. 从正式 R2 更新源检查并下载 `expected-version`。
 5. 调用重启安装。
-6. 检查 App 版本是否变成 `0.1.1`。
+6. 检查 App 版本是否变成 `expected-version`。
 7. 检查测试用户数据是否保留。
 8. 删除临时 App，保留测试报告。
 
 不会修改正在运行的正式 App，也不会使用正式用户数据。
 
-可以指定版本。也可以传入已经打包好的旧版 App：
+也可以传入已经打包好的旧版 App；该 App 的真实版本必须与 `source-version` 一致：
 
 ```bash
 pnpm test:update:real -- \
-  --source-app dist/mac-arm64/Ncurator.app \
-  --source-version 0.1.0 \
-  --expected-version 0.1.1
+  --source-app dist/mac-arm64/馆长.app \
+  --source-version 0.1.16 \
+  --expected-version 0.1.17
 ```
 
 报告保存在：
@@ -70,4 +72,4 @@ tests/logs/settings/update/real/<运行时间>/process.log
 
 如果下载完成但 App 没有被替换，应优先检查 macOS 代码签名和 Squirrel.Mac 日志。
 
-当前 macOS 正式包没有 Developer ID 签名。应用会关闭 macOS 自动更新，并在设置页直接显示原因。配置签名后，应重新执行真实升级测试，只有安装替换成功才算完整通过。
+当前 macOS 正式包使用固定的 `Ncurator Update Signing` 签名，不是 Apple Developer ID，也不代表已经完成 Apple 公证。应用只有在签名 Authority、Bundle Identifier 和稳定 designated requirement 全部匹配时才启用 macOS 自动更新；ad-hoc、无签名或签名不匹配都会关闭更新并显示原因。更换签名或更新链路后必须重新执行真实升级测试，只有安装替换成功才算完整通过。

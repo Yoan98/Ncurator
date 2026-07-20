@@ -44,6 +44,7 @@ describe('settings workspace web e2e', () => {
         groups: ['web'],
         description: '更新网页索引后，会区分已索引与爬取失败结果，并刷新摘要统计。',
         fixtures: [],
+        serviceMode: 'real',
         runMode: 'single',
         execute: async (runtime) => {
           const { page } = runtime

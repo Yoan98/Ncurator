@@ -76,7 +76,8 @@ tests/case/workbench/
 
 补充规则：
 
-- `pnpm test:workbench:e2e` 是 Workbench UI E2E 回归测试入口。
+- `pnpm test:workbench:e2e` 是 Workbench UI 源码 E2E 回归测试入口。
+- 需要验证正式安装包时使用 `pnpm test:e2e:package`；它会构建并审计当前平台安装包，再对安装后的真实应用执行全部 E2E，不属于普通开发回归。
 - AI case 缺少 `AI_LIVE_BASE_URL`、`AI_LIVE_API_KEY`、`AI_LIVE_PRIMARY_MODEL_NAME` 时必须 preflight fail，不得静默跳过。
 - `conversation / run / result` 是稳定 suite，不因 PRD 小节增删而轻易重排。
 - suite 下的 `session / composer / message / scope / process / blocker / browser / search / preview / apply` 是 group，只在同一 suite 内用于收敛相近 case。

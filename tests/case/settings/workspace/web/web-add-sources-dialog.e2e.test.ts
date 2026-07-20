@@ -21,6 +21,7 @@ describe('settings workspace web e2e', () => {
         groups: ['web'],
         description: '网页资料添加弹窗支持空输入校验、多行 URL 提交和成功后的清空收尾。',
         fixtures: [],
+        serviceMode: 'real',
         runMode: 'single',
         execute: async (runtime) => {
           const { page } = runtime

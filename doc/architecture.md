@@ -24,7 +24,7 @@
 - LangGraph JS
 - @huggingface/transformers v3
 - SQLite + better-sqlite3
-- LanceDB v0.23
+- LanceDB v0.22.3
 - pdf-parse
 - mammoth
 - @node-rs/jieba

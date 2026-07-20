@@ -135,11 +135,12 @@ tests/
 
 统一入口默认是 `scripts/test/workflow.mjs`。
 
-runner 的职责只有三件事：
+runner 的职责：
 
 1. 找到目标测试文件并执行。
 2. 落原始日志到 `tests/logs/**`。
-3. 在不带 `--type` 时按“普通测试 -> e2e”顺序执行。
+3. 在不带 `--type` 时按“普通测试 -> 源码 E2E”顺序执行。
+4. 按 `--target` 准备源码应用，或构建、审计并安装正式包。
 
 runner 不负责：
 
@@ -158,6 +159,9 @@ runner 不负责：
 - Unit
   - `pnpm test:unit`
   - `pnpm test:unit:ai`
+- 全量 E2E
+  - `pnpm test:e2e:source`：构建当前源码并运行全部 E2E。
+  - `pnpm test:e2e:package`：构建、审计并安装当前平台正式包，再对安装后的可执行程序运行全部 E2E。
 - Settings
   - `pnpm test:settings`
   - `pnpm test:settings:backend`
@@ -178,16 +182,21 @@ runner 支持的过滤参数：
 - `--group`，可重复传入
 - `--case`
 - `--runs`
+- `--target`，取值为 `source` 或 `package`，默认 `source`。
 
 补充规则：
 
 - 不带 `--type` 时，runner 会先收集普通测试，再收集 `.e2e.test.ts`。
 - `--type` 取值为 `backend` 或 `e2e`。
-- E2E case 通过 runner 按文件串行执行，每个文件独立启动并关闭一个 Electron app；runner 会在相邻 E2E 文件之间默认等待 1 秒，也可通过 `--run-delay-ms` 覆盖，且任一 E2E 文件失败后立即停止后续文件，避免连续原生启动过快导致不稳定。
+- `--target package` 只能与 `--type e2e` 一起使用；普通测试和 backend 不允许使用正式包目标。
+- `source` 是日常默认目标：runner 准备 Electron native 模块、构建当前源码，并让每个 E2E 文件独立启动源码应用。
+- `package` 是正式产物目标：runner 先执行当前平台完整构建与安全审计；macOS 从 DMG 挂载并复制 App，Windows 静默安装 EXE；随后对安装后的真实可执行程序运行同一批 E2E。不得把 `dist` 中的未安装目录当成正式包验证。
+- E2E case 通过 runner 按文件串行执行，每个文件独立启动并关闭一个 Electron app；runner 会在相邻 E2E 文件之间默认等待 1 秒，也可通过 `--run-delay-ms` 覆盖。单个文件失败后仍继续执行剩余文件，最终统一返回失败并保存每个文件的结果。
 - E2E runner 直接调用本地 Vitest binary，不经 `pnpm exec`；启动 Vitest 子进程和 harness 启动 Electron 时都会过滤 `npm_*` 环境变量，只保留系统环境与 `NCURATOR_E2E_*` 等项目测试变量，避免 npm lifecycle 变量影响 macOS Electron 原生注册。
 - 如果需要继续收窄到某个 `suite`、`group` 或单条 `case`，统一通过 runner 参数过滤。
 - `--group` 只在目标 `suite` 确实存在额外子目录时使用；如果 case 直接位于 `suite` 根目录，则不需要 `--group`。
 - `better-sqlite3` native 模块需要区分 Node ABI 和 Electron ABI。runner 会通过 `scripts/build/native/better-sqlite3.mjs` 自动准备对应缓存，并通过 `NCURATOR_BETTER_SQLITE3_NATIVE_BINDING` 注入本次测试使用的 binding；正常回归不需要手动 rebuild 或覆盖 `node_modules` 中的 native 文件。
+- 正式包 E2E 的构建、安装日志、安装包哈希和汇总写入 `tests/logs/package/<runId>/`；业务 case 自身的 raw logs 仍按原有 `tests/logs/<domain>/<suite>/**` 规则保存。
 
 ### 4.3 读取与分析 raw logs
 

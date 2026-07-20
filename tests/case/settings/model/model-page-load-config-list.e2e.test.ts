@@ -16,6 +16,7 @@ describe('settings model e2e', () => {
         suite: 'model',
         description: '大模型页通过真实 UI 创建配置后，重新进入页面仍能展示配置列表。',
         fixtures: [],
+        serviceMode: 'real',
         runMode: 'single',
         execute: async (runtime) => {
           const { page } = runtime

@@ -17,6 +17,7 @@ describe('settings model e2e', () => {
         suite: 'model',
         description: '新增和编辑连接配置表单提供配置名称、模型服务地址、API Key 与必填校验。',
         fixtures: [],
+        serviceMode: 'real',
         runMode: 'single',
         execute: async (runtime) => {
           const { page } = runtime

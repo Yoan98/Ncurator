@@ -26,7 +26,7 @@ describe('workbench conversation e2e', () => {
         groups: ['session', 'composer'],
         description: '验证会话删除确认、取消/确认删除，以及输入框上下文圆圈 hover 信息。',
         fixtures: ['tests/fixtures/workspace'],
-        launchMode: 'real',
+        serviceMode: 'real',
         windowMode: 'visible',
         runMode: 'single',
         execute: async (runtime) => {

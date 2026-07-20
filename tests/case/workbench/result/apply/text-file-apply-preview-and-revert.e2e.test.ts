@@ -35,7 +35,7 @@ describe('workbench result e2e', () => {
         groups: ['apply'],
         description: '验证普通文件正常预览、文本修改 diff 展示和按原始 bytes 回退。',
         fixtures: ['tests/fixtures/workspace'],
-        launchMode: 'real',
+        serviceMode: 'real',
         windowMode: 'visible',
         runMode: 'single',
         execute: async (runtime) => {

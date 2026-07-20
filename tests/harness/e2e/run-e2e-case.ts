@@ -23,7 +23,7 @@ import {
 import {
   launchElectronApp,
   type E2ERuntimeSignals,
-  type ElectronLaunchMode,
+  type E2EServiceMode,
   type ElectronWindowMode,
   type LaunchedElectronApp
 } from './electronApp'
@@ -73,14 +73,23 @@ export type E2ETestRuntime = {
   collectSignals: () => Promise<E2ERuntimeSignals>
 }
 
-export type E2ETestCaseDefinition<TResult> = {
+type E2EServiceConfiguration =
+  | {
+      serviceMode: Extract<E2EServiceMode, 'real'>
+      fixtureReason?: never
+    }
+  | {
+      serviceMode: Extract<E2EServiceMode, 'fixture'>
+      fixtureReason: string
+    }
+
+export type E2ETestCaseDefinition<TResult> = E2EServiceConfiguration & {
   caseId: string
   domain: Extract<TestDomain, 'ai' | 'settings' | 'workbench' | 'kb-search'>
   suite: string
   groups?: readonly string[]
   description: string
   fixtures: readonly string[]
-  launchMode?: ElectronLaunchMode
   windowMode?: ElectronWindowMode
   runMode: E2ETestRunMode
   execute: (runtime: E2ETestRuntime) => Promise<TResult>
@@ -462,7 +471,8 @@ export const runE2ECase = async <TResult>(
     data: {
       description: definition.description,
       fixtures: definition.fixtures.map((fixturePath) => path.resolve(fixturePath)),
-      launchMode: definition.launchMode || 'fixture',
+      serviceMode: definition.serviceMode,
+      fixtureReason: definition.fixtureReason || null,
       windowMode: definition.windowMode || 'background',
       runMode: definition.runMode
     }
@@ -471,7 +481,7 @@ export const runE2ECase = async <TResult>(
 
   try {
     launchedApp = await launchElectronApp({
-      launchMode: definition.launchMode,
+      serviceMode: definition.serviceMode,
       windowMode: definition.windowMode,
       signalSink: {
         onAiRunEvent: (entry) => {
@@ -521,6 +531,13 @@ export const runE2ECase = async <TResult>(
           })
         }
       }
+    })
+    recordEvent({
+      type: 'signal',
+      name: 'electron-app-verified',
+      status: 'ok',
+      message: `已验证 ${launchedApp.appInfo.target} Electron 应用`,
+      data: launchedApp.appInfo
     })
     const runtime = createRuntime(launchedApp)
     const result = await definition.execute(runtime)

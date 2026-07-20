@@ -30,6 +30,8 @@ describe('sidebar app update e2e', () => {
         suite: 'update',
         description: '左下角更新按钮展示新版本、下载进度和重启操作，设置页不再保留更新入口。',
         fixtures: ['app-update-fixture'],
+        serviceMode: 'fixture',
+        fixtureReason: '需要稳定控制更新可用、下载进度、下载完成和失败重试状态。',
         runMode: 'single',
         execute: async (runtime) => {
           const { page } = runtime

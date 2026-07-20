@@ -33,7 +33,7 @@ describe('workbench run persistence e2e', () => {
         description:
           '真实 AI 输出过程中切到 Settings，完成后回到 Workbench，通过 session snapshot replay 恢复过程流和最终回答。',
         fixtures: ['tests/fixtures/workspace'],
-        launchMode: 'real',
+        serviceMode: 'real',
         windowMode: 'visible',
         runMode: 'single',
         execute: async (runtime) => {

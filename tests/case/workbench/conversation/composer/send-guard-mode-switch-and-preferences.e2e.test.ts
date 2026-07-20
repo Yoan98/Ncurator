@@ -38,7 +38,7 @@ describe('workbench conversation e2e', () => {
         description:
           '真实 UI 覆盖发送 guard、模式切换输入保留、模型/工作区偏好恢复，并用真实模型完成一次发送。',
         fixtures: ['tests/fixtures/workspace'],
-        launchMode: 'real',
+        serviceMode: 'real',
         windowMode: 'visible',
         runMode: 'single',
         execute: async (runtime) => {

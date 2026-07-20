@@ -18,6 +18,7 @@ describe('settings model e2e', () => {
         suite: 'model',
         description: '删除连接配置时，成功路径通过真实 UI 刷新列表。',
         fixtures: [],
+        serviceMode: 'real',
         runMode: 'single',
         execute: async (runtime) => {
           const { page } = runtime

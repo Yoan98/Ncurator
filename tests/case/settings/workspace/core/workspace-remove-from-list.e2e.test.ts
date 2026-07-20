@@ -20,6 +20,7 @@ describe('settings workspace e2e', () => {
         groups: ['core'],
         description: '移除工作空间后，列表和详情区不再继续展示已删除项。',
         fixtures: [],
+        serviceMode: 'real',
         runMode: 'single',
         execute: async (runtime) => {
           const { page } = runtime

@@ -33,7 +33,7 @@ describe('workbench terminal unicode e2e', () => {
         groups: ['process'],
         description: '真实 Electron 与真实 AI 通过终端读取中文目录和中文文件名。',
         fixtures: ['tests/fixtures/workspace'],
-        launchMode: 'real',
+        serviceMode: 'real',
         windowMode: 'visible',
         runMode: 'single',
         execute: async (runtime) => {

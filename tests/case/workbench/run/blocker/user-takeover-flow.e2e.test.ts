@@ -47,7 +47,7 @@ describe('workbench run e2e', () => {
         description:
           '真实 AI 在内置浏览器遇到人工步骤后调用 wait_for_user_takeover，验证暂停、用户操作、确认和恢复闭环。',
         fixtures: ['tests/fixtures/workspace'],
-        launchMode: 'real',
+        serviceMode: 'real',
         windowMode: 'visible',
         runMode: 'single',
         execute: async (runtime) => {

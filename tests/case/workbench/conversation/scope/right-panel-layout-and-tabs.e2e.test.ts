@@ -23,7 +23,7 @@ describe('workbench conversation e2e', () => {
         description:
           '验证空会话输入区、右侧动态 Tab 拖拽区、横向滚动、原生窗口层分离和浏览器缩放菜单。',
         fixtures: [],
-        launchMode: 'real',
+        serviceMode: 'real',
         windowMode: 'visible',
         runMode: 'single',
         execute: async (runtime) => {

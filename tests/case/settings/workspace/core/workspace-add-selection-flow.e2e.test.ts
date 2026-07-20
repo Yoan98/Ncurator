@@ -19,6 +19,7 @@ describe('settings workspace e2e', () => {
         groups: ['core'],
         description: '添加工作空间时按名称创建空容器，并在成功后自动切到新工作空间。',
         fixtures: [],
+        serviceMode: 'real',
         runMode: 'single',
         execute: async (runtime) => {
           const { page } = runtime

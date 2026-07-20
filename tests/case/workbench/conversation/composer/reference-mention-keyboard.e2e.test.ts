@@ -23,7 +23,7 @@ describe('workbench conversation e2e', () => {
         groups: ['composer'],
         description: '@ 候选列表用下键移动时，选中项应停在下一项，不应被刷新回第一项。',
         fixtures: ['tests/fixtures/workspace'],
-        launchMode: 'real',
+        serviceMode: 'real',
         windowMode: 'visible',
         runMode: 'single',
         execute: async (runtime) => {

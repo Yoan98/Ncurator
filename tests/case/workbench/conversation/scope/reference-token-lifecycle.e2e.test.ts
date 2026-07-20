@@ -60,7 +60,7 @@ describe('workbench conversation e2e', () => {
         description:
           '真实 workspace + 真实 web source 下验证 @ 候选、token 追加共存、同资料去重、删除和切工作区清理。',
         fixtures: ['tests/fixtures/workspace'],
-        launchMode: 'real',
+        serviceMode: 'real',
         windowMode: 'visible',
         runMode: 'single',
         execute: async (runtime) => {

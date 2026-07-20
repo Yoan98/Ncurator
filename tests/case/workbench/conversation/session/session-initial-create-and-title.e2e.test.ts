@@ -32,7 +32,7 @@ describe('workbench conversation e2e', () => {
         description:
           '真实 UI 首次进入 Workbench 后不自动创建会话，用户手动创建后首条消息更新标题，第二条消息不再自动改标题。',
         fixtures: ['tests/fixtures/workspace'],
-        launchMode: 'real',
+        serviceMode: 'real',
         windowMode: 'visible',
         runMode: 'single',
         execute: async (runtime) => {
