@@ -60,7 +60,7 @@ SQLite 保存主要业务数据：
 - `pnpm native:node`：只准备 Node binding。
 - `pnpm native:electron`：只准备 Electron binding。
 - `pnpm native:status`：查看缓存和资源状态。
-- `scripts/test-workflow.mjs` 会按 backend / e2e 类型自动准备并注入正确 binding，正常执行回归时不需要手动 rebuild。
+- `scripts/test/workflow.mjs` 会按 backend / e2e 类型自动准备并注入正确 binding，正常执行回归时不需要手动 rebuild。
 - 打包流程会准备 Electron binding 并导出到 `resources/native/better-sqlite3/**`。
 
 当前项目尚未发布，开发和测试环境允许删除本地数据库并重新创建，因此发布前可以直接整理 `001_initial_schema`。首次正式发布后必须冻结已经发布的 migration；届时新增表或字段必须增加更高版本 migration，不能只修改已执行的旧 migration。

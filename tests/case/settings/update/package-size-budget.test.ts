@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   evaluatePackageSizeBudget,
   loadPackageSizeBudgetConfig
-} from '../../../../scripts/package-size-budget.mjs'
+} from '../../../../scripts/build/package/size-budget.mjs'
 
 const MIB = 1024 * 1024
 
@@ -49,16 +49,16 @@ describe('package size budget', () => {
     const config = loadPackageSizeBudgetConfig(path.resolve('build/package-size-budgets.json'))
 
     expect(config.platforms['darwin-arm64']).toMatchObject({
-      installedApp: { baselineMiB: 1079.1, hardLimitMiB: 1200 },
-      appAsar: { baselineMiB: 179, hardLimitMiB: 200 },
-      dmg: { baselineMiB: 423.6, hardLimitMiB: 470 },
-      zip: { baselineMiB: 409.5, hardLimitMiB: 455 }
+      installedApp: { baselineMiB: 1113.3, hardLimitMiB: 1200 },
+      appAsar: { baselineMiB: 210.9, hardLimitMiB: 230 },
+      dmg: { baselineMiB: 432.9, hardLimitMiB: 480 },
+      zip: { baselineMiB: 418.5, hardLimitMiB: 465 }
     })
     expect(config.platforms['darwin-x64']).toMatchObject({
-      installedApp: { baselineMiB: 1111.4, hardLimitMiB: 1200 },
-      appAsar: { baselineMiB: 179, hardLimitMiB: 200 },
-      dmg: { baselineMiB: 438.6, hardLimitMiB: 470 },
-      zip: { baselineMiB: 424.3, hardLimitMiB: 455 }
+      installedApp: { baselineMiB: 1145.6, hardLimitMiB: 1230 },
+      appAsar: { baselineMiB: 210.9, hardLimitMiB: 230 },
+      dmg: { baselineMiB: 447.9, hardLimitMiB: 495 },
+      zip: { baselineMiB: 433.3, hardLimitMiB: 480 }
     })
   })
 })

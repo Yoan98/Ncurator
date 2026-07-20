@@ -22,10 +22,10 @@ if (existsSync(electronInstall)) {
 
 if (process.env.NCURATOR_REBUILD_NATIVE === '1') {
   run(process.execPath, [
-    path.join(root, 'scripts', 'prepare-better-sqlite3-native.mjs'),
+    path.join(root, 'scripts', 'build', 'native', 'better-sqlite3.mjs'),
     'prepare'
   ])
-  run(process.execPath, [path.join(root, 'scripts', 'prepare-node-pty-native.mjs'), 'prepare'])
+  run(process.execPath, [path.join(root, 'scripts', 'build', 'native', 'node-pty.mjs'), 'prepare'])
 } else {
   console.log('[postinstall] skip native prepare; set NCURATOR_REBUILD_NATIVE=1 to run it')
 }

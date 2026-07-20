@@ -9,7 +9,7 @@ import {
   obfuscateMainJavaScript,
   obfuscatePackageMain,
   verifyPackageMainObfuscation
-} from '../../../../scripts/package-main-obfuscation.mjs'
+} from '../../../../scripts/build/package/obfuscation.mjs'
 
 let temporaryDirectory = ''
 
@@ -107,16 +107,21 @@ describe('package-main-obfuscation main-process release protection', () => {
   it('runs only after dependency collection and keeps packaged-app protection auditing', async () => {
     const packageJson = JSON.parse(await readFile(path.resolve('package.json'), 'utf8'))
     const buildScript = String(packageJson.scripts.build || '')
-    const prepareIndex = buildScript.indexOf('prepare-package-stage.mjs')
-    const obfuscateIndex = buildScript.indexOf('obfuscate-package-main.mjs')
-    const verifyIndex = buildScript.indexOf('verify-package-main-obfuscation.mjs')
-    const auditIndex = buildScript.lastIndexOf('audit-package-stage.mjs')
-    const packagedAudit = await readFile(path.resolve('scripts/audit-packaged-app.mjs'), 'utf8')
+    const prepareIndex = buildScript.indexOf('build/package/prepare-stage.mjs')
+    const prepareStage = await readFile(
+      path.resolve('scripts/build/package/prepare-stage.mjs'),
+      'utf8'
+    )
+    const packagedAudit = await readFile(
+      path.resolve('scripts/build/package/audit-app.mjs'),
+      'utf8'
+    )
 
     expect(prepareIndex).toBeGreaterThanOrEqual(0)
-    expect(obfuscateIndex).toBeGreaterThan(prepareIndex)
-    expect(verifyIndex).toBeGreaterThan(obfuscateIndex)
-    expect(auditIndex).toBeGreaterThan(verifyIndex)
+    expect(prepareStage).toContain('traceRuntimeDependencies')
+    expect(prepareStage).toContain('verifyStagedRuntime')
+    expect(prepareStage).toContain('obfuscatePackageMain')
+    expect(prepareStage).toContain('verifyPackageMainObfuscation')
     expect(packagedAudit).toContain('assertProtectedMainPlaintextAbsent')
   })
 })

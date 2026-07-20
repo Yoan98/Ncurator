@@ -70,9 +70,9 @@ tests/case/workbench/
 - `pnpm test:workbench`
 - `pnpm test:workbench:e2e`
 - `pnpm test:workbench:backend`
-- `node scripts/test-workflow.mjs --domain workbench`
-- `node scripts/test-workflow.mjs --domain workbench --type e2e`
-- `node scripts/test-workflow.mjs --domain workbench --type backend`
+- `node scripts/test/workflow.mjs --domain workbench`
+- `node scripts/test/workflow.mjs --domain workbench --type e2e`
+- `node scripts/test/workflow.mjs --domain workbench --type backend`
 
 补充规则：
 

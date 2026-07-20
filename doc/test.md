@@ -127,13 +127,13 @@ tests/
 1. 先与用户确认是否新增或调整测试，以及目标分类。
 2. 如果是回归测试，先更新对应 `doc/test-plan/**`，再修改 `tests/case/<domain>/**`。
 3. 如果是 `unit / 辅助测试`，放入 `tests/case/unit/**`，不更新 `doc/test-plan/**`。
-4. 通过 `scripts/test-workflow.mjs` 执行并产生日志。
+4. 通过 `scripts/test/workflow.mjs` 执行并产生日志。
 5. 先看 `timeline.jsonl`，不足时再看 `runtime-events.jsonl`、`meta.json` 与 `artifacts.json`。
 6. 最后基于 raw logs 回流结论，决定是否需要更新 `doc/test-plan/**` 或实现代码。
 
 ### 4.2 runner 与常用命令
 
-统一入口默认是 `scripts/test-workflow.mjs`。
+统一入口默认是 `scripts/test/workflow.mjs`。
 
 runner 的职责只有三件事：
 
@@ -166,9 +166,9 @@ runner 不负责：
   - `pnpm test:workbench`
   - `pnpm test:workbench:backend`
   - `pnpm test:workbench:e2e`
-  - `node scripts/test-workflow.mjs --domain workbench`
-  - `node scripts/test-workflow.mjs --domain workbench --type backend`
-  - `node scripts/test-workflow.mjs --domain workbench --type e2e`
+  - `node scripts/test/workflow.mjs --domain workbench`
+  - `node scripts/test/workflow.mjs --domain workbench --type backend`
+  - `node scripts/test/workflow.mjs --domain workbench --type e2e`
 
 runner 支持的过滤参数：
 
@@ -187,7 +187,7 @@ runner 支持的过滤参数：
 - E2E runner 直接调用本地 Vitest binary，不经 `pnpm exec`；启动 Vitest 子进程和 harness 启动 Electron 时都会过滤 `npm_*` 环境变量，只保留系统环境与 `NCURATOR_E2E_*` 等项目测试变量，避免 npm lifecycle 变量影响 macOS Electron 原生注册。
 - 如果需要继续收窄到某个 `suite`、`group` 或单条 `case`，统一通过 runner 参数过滤。
 - `--group` 只在目标 `suite` 确实存在额外子目录时使用；如果 case 直接位于 `suite` 根目录，则不需要 `--group`。
-- `better-sqlite3` native 模块需要区分 Node ABI 和 Electron ABI。runner 会通过 `scripts/prepare-better-sqlite3-native.mjs` 自动准备对应缓存，并通过 `NCURATOR_BETTER_SQLITE3_NATIVE_BINDING` 注入本次测试使用的 binding；正常回归不需要手动 rebuild 或覆盖 `node_modules` 中的 native 文件。
+- `better-sqlite3` native 模块需要区分 Node ABI 和 Electron ABI。runner 会通过 `scripts/build/native/better-sqlite3.mjs` 自动准备对应缓存，并通过 `NCURATOR_BETTER_SQLITE3_NATIVE_BINDING` 注入本次测试使用的 binding；正常回归不需要手动 rebuild 或覆盖 `node_modules` 中的 native 文件。
 
 ### 4.3 读取与分析 raw logs
 

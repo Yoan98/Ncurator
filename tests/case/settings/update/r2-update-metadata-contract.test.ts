@@ -31,12 +31,7 @@ describe('R2 update metadata', () => {
 
     await execFileAsync(
       process.execPath,
-      [
-        path.resolve('scripts/prepare-r2-update-metadata.mjs'),
-        inputDirectory,
-        outputDirectory,
-        'v0.1.1'
-      ],
+      [path.resolve('scripts/release/r2/metadata.mjs'), inputDirectory, outputDirectory, 'v0.1.1'],
       { cwd: process.cwd() }
     )
 
@@ -58,7 +53,7 @@ describe('R2 update metadata', () => {
     )
 
     await execFileAsync(process.execPath, [
-      path.resolve('scripts/prepare-r2-update-metadata.mjs'),
+      path.resolve('scripts/release/r2/metadata.mjs'),
       inputDirectory,
       outputDirectory,
       'v0.1.4'

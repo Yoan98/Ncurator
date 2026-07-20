@@ -5,7 +5,8 @@ on:
     paths:
       - 'src/main/services/ai/human/tools/terminal/**'
       - 'tests/case/unit/ai/terminal-*.test.ts'
-      - 'scripts/prepare-node-pty-native.mjs'
+      - 'scripts/build/native/node-pty.mjs'
+      - 'scripts/build/native/node-pty-release.mjs'
       - 'package.json'
       - 'pnpm-lock.yaml'
       - '.github/workflows/terminal-compatibility.yml'
@@ -15,7 +16,8 @@ on:
     paths:
       - 'src/main/services/ai/human/tools/terminal/**'
       - 'tests/case/unit/ai/terminal-*.test.ts'
-      - 'scripts/prepare-node-pty-native.mjs'
+      - 'scripts/build/native/node-pty.mjs'
+      - 'scripts/build/native/node-pty-release.mjs'
       - 'package.json'
       - 'pnpm-lock.yaml'
       - '.github/workflows/terminal-compatibility.yml'

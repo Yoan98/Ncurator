@@ -3,7 +3,7 @@ import {
   artifactKey,
   fixedDownloadKey,
   statusKey
-} from '../../../../scripts/release-storage-layout.mjs'
+} from '../../../../scripts/release/r2/storage-layout.mjs'
 
 describe('release storage layout', () => {
   it('separates immutable assets and status by platform family', () => {

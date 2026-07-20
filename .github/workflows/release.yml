@@ -68,22 +68,22 @@ jobs:
 
       - name: Add package audit to workflow summary
         shell: bash
-        run: node scripts/print-package-audit-summary.mjs dist/package-audit.json >> "$GITHUB_STEP_SUMMARY"
+        run: node scripts/build/package/audit-summary.mjs dist/package-audit.json >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload Windows release directly to Cloudflare R2
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p release-status
-          node scripts/create-release-fragment.mjs \
+          node scripts/release/r2/create-fragment.mjs \
             dist \
             release-status/windows-x64.json \
             "$RELEASE_TAG" \
             windows-x64
-          node scripts/upload-r2-release-fragment.mjs \
+          node scripts/release/r2/upload-fragment.mjs \
             dist \
             release-status/windows-x64.json
-          node scripts/finalize-r2-windows-release.mjs --tag "$RELEASE_TAG"
+          node scripts/release/r2/finalize-windows.mjs --tag "$RELEASE_TAG"
 
       - name: Release summary
         shell: bash

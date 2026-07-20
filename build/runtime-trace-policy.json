@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 1,
+  "traceIgnore": ["node_modules/electron/**", "node_modules/.pnpm/electron@*/**"],
+  "explicitIncludes": [],
+  "warningRules": [
+    {
+      "id": "pdfjs-import-meta-parser",
+      "kind": "parse",
+      "package": "pdfjs-dist",
+      "pathPattern": "/legacy/build/pdf\\.mjs$",
+      "reason": "NFT retries this ESM file as a script and reports import.meta even though the ESM parse succeeds."
+    },
+    {
+      "id": "sharp-license-asset",
+      "kind": "parse",
+      "packagePattern": "^@img/sharp-(?:darwin|win32|linux)-",
+      "pathPattern": "/LICENSE$",
+      "reason": "The sharp loader traces its license as an asset; it is not JavaScript."
+    },
+    {
+      "id": "playwright-static-assets",
+      "kind": "parse",
+      "package": "playwright-core",
+      "pathPattern": "\\.(?:png|svg|html|ttf|css)$|/xdg-open$",
+      "reason": "Playwright statically references UI and launcher assets which are not JavaScript."
+    },
+    {
+      "id": "canvas-optional-native-targets",
+      "kind": "resolve",
+      "package": "@napi-rs/canvas",
+      "specifierPattern": "^(?:\\./skia\\.|@napi-rs/canvas-)",
+      "reason": "The generated native loader contains branches for every supported platform."
+    },
+    {
+      "id": "jieba-optional-native-targets",
+      "kind": "resolve",
+      "package": "@node-rs/jieba",
+      "specifierPattern": "^(?:\\./jieba\\.|@node-rs/jieba-)",
+      "reason": "The generated native loader contains branches for every supported platform."
+    },
+    {
+      "id": "resvg-optional-native-targets",
+      "kind": "resolve",
+      "package": "@resvg/resvg-js",
+      "specifierPattern": "^(?:\\./resvgjs\\.|@resvg/resvg-js-)",
+      "reason": "The generated native loader contains branches for every supported platform."
+    },
+    {
+      "id": "lancedb-optional-native-targets",
+      "kind": "resolve",
+      "package": "@lancedb/lancedb",
+      "specifierPattern": "^(?:\\./lancedb\\.|@lancedb/lancedb-)",
+      "reason": "The generated native loader contains branches for every supported platform."
+    },
+    {
+      "id": "sharp-optional-native-targets",
+      "kind": "resolve",
+      "package": "sharp",
+      "specifierPattern": "^@img/sharp-",
+      "reason": "Sharp probes optional binary packages for other libc and CPU targets."
+    }
+  ],
+  "requiredFiles": [
+    {
+      "id": "mammoth-runtime",
+      "package": "mammoth",
+      "path": "lib/index.js"
+    },
+    {
+      "id": "pdf-parse-runtime",
+      "package": "pdf-parse",
+      "path": "lib/pdf.js/v1.10.100/build/pdf.js"
+    },
+    {
+      "id": "pdf-parse-worker",
+      "package": "pdf-parse",
+      "path": "lib/pdf.js/v1.10.100/build/pdf.worker.js"
+    }
+  ]
+}

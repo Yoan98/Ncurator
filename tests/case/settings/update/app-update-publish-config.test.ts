@@ -36,23 +36,23 @@ describe('app update publish config', () => {
   it('uses a local-first Windows release with explicit Actions fallback', async () => {
     const workflow = await readFile(path.resolve('.github/workflows/release.yml'), 'utf8')
     const packageJson = JSON.parse(await readFile(path.resolve('package.json'), 'utf8'))
-    const router = await readFile(path.resolve('scripts/route-windows-release.mjs'), 'utf8')
-    const localRelease = await readFile(path.resolve('scripts/release-windows-local.mjs'), 'utf8')
+    const router = await readFile(path.resolve('scripts/release/route-windows.mjs'), 'utf8')
+    const localRelease = await readFile(path.resolve('scripts/release/windows.mjs'), 'utf8')
 
     expect(workflow).toContain('runs-on: windows-latest')
     expect(workflow).toContain('workflow_dispatch:')
     expect(workflow).not.toMatch(/push:\s*\n\s*tags:/u)
-    expect(workflow).toContain('print-package-audit-summary.mjs')
-    expect(workflow).toContain('create-release-fragment.mjs')
-    expect(workflow).toContain('upload-r2-release-fragment.mjs')
+    expect(workflow).toContain('build/package/audit-summary.mjs')
+    expect(workflow).toContain('release/r2/create-fragment.mjs')
+    expect(workflow).toContain('release/r2/upload-fragment.mjs')
     expect(workflow).not.toContain('actions/upload-artifact')
     expect(workflow).not.toContain('runs-on: macos-')
     expect(workflow).not.toContain('publish-release')
-    expect(packageJson.scripts['release:win']).toContain('release-windows-local.mjs')
-    expect(packageJson.scripts['release:win:auto']).toContain('route-windows-release.mjs')
-    expect(packageJson.scripts['release:doctor']).toContain('release-doctor.mjs')
-    expect(packageJson.scripts['release:mac:only']).toContain('release-macos-local.mjs')
-    expect(packageJson.scripts['build:win']).toContain('prepare-electron-builder-windows.mjs')
+    expect(packageJson.scripts['release:win']).toContain('release/windows.mjs')
+    expect(packageJson.scripts['release:win:auto']).toContain('release/route-windows.mjs')
+    expect(packageJson.scripts['release:doctor']).toContain('release/doctor.mjs')
+    expect(packageJson.scripts['release:mac:only']).toContain('release/macos.mjs')
+    expect(packageJson.scripts['build:win']).toContain('build/native/electron-builder-windows.mjs')
     expect(packageJson.scripts['build:win']).toContain('package:audit')
     expect(router).toContain("route === 'local'")
     expect(router).toContain('dispatchWindowsRelease')
@@ -64,16 +64,16 @@ describe('app update publish config', () => {
     expect(localRelease).toContain('reusable-cache')
     expect(localRelease).toContain("['run', 'build:win']")
     expect(localRelease).toContain('inspection.python.executable')
-    expect(localRelease).toContain('upload-r2-release-fragment.mjs')
-    expect(localRelease).toContain('finalize-r2-windows-release.mjs')
+    expect(localRelease).toContain("'r2', 'upload-fragment.mjs'")
+    expect(localRelease).toContain("'r2', 'finalize-windows.mjs'")
     expect(localRelease).toContain('delete releaseEnvironment.CSC_LINK')
 
     const windowsToolCache = await readFile(
-      path.resolve('scripts/prepare-electron-builder-windows.mjs'),
+      path.resolve('scripts/build/native/electron-builder-windows.mjs'),
       'utf8'
     )
     const releaseEnvironment = await readFile(
-      path.resolve('scripts/release-environment.mjs'),
+      path.resolve('scripts/release/shared/environment.mjs'),
       'utf8'
     )
     expect(windowsToolCache).toContain("'x', '-snl-'")
@@ -82,14 +82,17 @@ describe('app update publish config', () => {
   })
 
   it('can publish only the Mac update channel without changing Windows latest metadata', async () => {
-    const macRelease = await readFile(path.resolve('scripts/release-macos-local.mjs'), 'utf8')
+    const macRelease = await readFile(path.resolve('scripts/release/macos.mjs'), 'utf8')
     const macFinalize = await readFile(
-      path.resolve('scripts/finalize-r2-macos-release.mjs'),
+      path.resolve('scripts/release/r2/finalize-macos.mjs'),
       'utf8'
     )
-    const storageLayout = await readFile(path.resolve('scripts/release-storage-layout.mjs'), 'utf8')
+    const storageLayout = await readFile(
+      path.resolve('scripts/release/r2/storage-layout.mjs'),
+      'utf8'
+    )
 
-    expect(macRelease).toContain('finalize-r2-macos-release.mjs')
+    expect(macRelease).toContain("'r2', 'finalize-macos.mjs'")
     expect(macFinalize).toContain('updates/latest/latest-mac.yml')
     expect(macFinalize).not.toContain('updates/latest/latest.yml')
     expect(macFinalize).toContain('fixedDownloadKey')
@@ -99,10 +102,7 @@ describe('app update publish config', () => {
 
   it('keeps simulated update E2E available without making it a release blocker', async () => {
     const packageJson = JSON.parse(await readFile(path.resolve('package.json'), 'utf8'))
-    const prepareRelease = await readFile(
-      path.resolve('scripts/prepare-desktop-release.mjs'),
-      'utf8'
-    )
+    const prepareRelease = await readFile(path.resolve('scripts/release/prepare.mjs'), 'utf8')
 
     expect(packageJson.scripts['test:update:e2e']).toBeTruthy()
     expect(packageJson.scripts['test:update:backend']).toBeTruthy()
@@ -112,7 +112,10 @@ describe('app update publish config', () => {
 
   it('keeps the complete installed production dependency closure', async () => {
     const packageJson = JSON.parse(await readFile(path.resolve('package.json'), 'utf8'))
-    const packageStage = await readFile(path.resolve('scripts/prepare-package-stage.mjs'), 'utf8')
+    const packageStage = await readFile(
+      path.resolve('scripts/build/package/prepare-stage.mjs'),
+      'utf8'
+    )
 
     expect(packageStage).toContain('collectInstalledTopLevelDependencies')
     expect(packageStage).toContain('dependencies: packagedDependencies')
@@ -132,9 +135,9 @@ describe('app update publish config', () => {
 
   it('requires local Rosetta builds and stable macOS signatures', async () => {
     const builderConfig = await readFile(path.resolve('electron-builder.yml'), 'utf8')
-    const localRelease = await readFile(path.resolve('scripts/release-macos-local.mjs'), 'utf8')
+    const localRelease = await readFile(path.resolve('scripts/release/macos.mjs'), 'utf8')
     const signatureVerifier = await readFile(
-      path.resolve('scripts/verify-mac-update-signature.mjs'),
+      path.resolve('scripts/release/verify-macos-signature.mjs'),
       'utf8'
     )
     const runtimeSignatureVerifier = await readFile(
@@ -163,9 +166,9 @@ describe('app update publish config', () => {
     const config = JSON.parse(
       await readFile(path.resolve('build/package-size-budgets.json'), 'utf8')
     )
-    const packageAudit = await readFile(path.resolve('scripts/audit-packaged-app.mjs'), 'utf8')
+    const packageAudit = await readFile(path.resolve('scripts/build/package/audit-app.mjs'), 'utf8')
     const releaseFragment = await readFile(
-      path.resolve('scripts/create-release-fragment.mjs'),
+      path.resolve('scripts/release/r2/create-fragment.mjs'),
       'utf8'
     )
 
@@ -179,10 +182,13 @@ describe('app update publish config', () => {
 
   it('keeps only R2 as the release binary source', async () => {
     const finalizeScript = await readFile(
-      path.resolve('scripts/finalize-r2-windows-release.mjs'),
+      path.resolve('scripts/release/r2/finalize-windows.mjs'),
       'utf8'
     )
-    const storageLayout = await readFile(path.resolve('scripts/release-storage-layout.mjs'), 'utf8')
+    const storageLayout = await readFile(
+      path.resolve('scripts/release/r2/storage-layout.mjs'),
+      'utf8'
+    )
 
     expect(finalizeScript).toContain('releases/latest/windows.json')
     expect(finalizeScript).toContain("listKeys('artifacts/windows/')")

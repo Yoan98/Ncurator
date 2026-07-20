@@ -6,7 +6,7 @@ import {
   assertNodePtyNativeReleaseReady,
   isNodePtyNativeReleaseReady,
   prepareNodePtyNativeRelease
-} from '../../../../scripts/node-pty-native-release.mjs'
+} from '../../../../scripts/build/native/node-pty-release.mjs'
 
 const tempRoots: string[] = []
 

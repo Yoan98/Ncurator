@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   assertPackageAudit,
   assertReleaseFragment
-} from '../../../../scripts/release-fragment-contract.mjs'
+} from '../../../../scripts/release/r2/fragment-contract.mjs'
 
 const execFileAsync = promisify(execFile)
 let temporaryDirectory = ''
@@ -52,7 +52,7 @@ describe('release fragment', () => {
     )
 
     await execFileAsync(process.execPath, [
-      path.resolve('scripts/create-release-fragment.mjs'),
+      path.resolve('scripts/release/r2/create-fragment.mjs'),
       input,
       output,
       'v0.1.3',
@@ -98,7 +98,7 @@ describe('release fragment', () => {
 
     await expect(
       execFileAsync(process.execPath, [
-        path.resolve('scripts/create-release-fragment.mjs'),
+        path.resolve('scripts/release/r2/create-fragment.mjs'),
         input,
         output,
         'v0.1.3',
