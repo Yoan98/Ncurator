@@ -201,11 +201,9 @@ runner 支持的过滤参数：
 - `better-sqlite3` native 模块需要区分 Node ABI 和 Electron ABI。runner 会通过 `scripts/build/native/better-sqlite3.mjs` 自动准备对应缓存，并通过 `NCURATOR_BETTER_SQLITE3_NATIVE_BINDING` 注入本次测试使用的 binding；正常回归不需要手动 rebuild 或覆盖 `node_modules` 中的 native 文件。
 - 正式包 E2E 的构建、安装日志、安装包哈希和汇总写入 `tests/logs/package/<runId>/`；业务 case 自身的 raw logs 仍按原有 `tests/logs/<domain>/<suite>/**` 规则保存。
 
-### 4.3 自动更新专项测试
+### 4.3 自动更新模拟测试
 
-自动更新分为快速测试和真实升级测试。模拟页面 E2E 只验证界面状态和 IPC，不代替真实安装升级。
-
-快速测试运行后端契约测试和模拟页面 E2E：
+自动更新测试运行后端契约测试和模拟页面 E2E：
 
 ```bash
 pnpm test:update
@@ -218,54 +216,7 @@ pnpm test:update:backend
 pnpm test:update:e2e
 ```
 
-后端测试验证主进程更新状态、发布配置、R2 元数据和 release fragment。模拟 E2E 验证页面按钮、进度、错误提示和 IPC，不下载真实更新包，也不作为正式发布的阻塞门禁。
-
-只有明确需要验证真实自动更新时才运行：
-
-```bash
-pnpm test:update:real -- \
-  --source-version 0.1.16 \
-  --expected-version 0.1.17
-```
-
-真实升级脚本当前只支持 macOS，并且必须显式传入旧版本和更高的目标版本。脚本固定执行：
-
-1. 使用当前代码打包一个版本号为 `source-version` 的测试 App，或复制 `source-app` 指定的已有 App。
-2. 写入与正式构建相同的 Generic 更新地址。
-3. 使用独立用户数据和缓存启动测试 App。
-4. 从正式 R2 更新源检查并下载 `expected-version`。
-5. 调用重启安装。
-6. 检查 App 版本是否变成 `expected-version`。
-7. 检查测试用户数据是否保留。
-8. 删除临时 App，保留测试报告。
-
-也可以传入已经打包好的旧版 App；该 App 的真实版本必须与 `source-version` 一致：
-
-```bash
-pnpm test:update:real -- \
-  --source-app dist/mac-arm64/馆长.app \
-  --source-version 0.1.16 \
-  --expected-version 0.1.17
-```
-
-真实升级测试不会修改正在运行的正式 App，也不会使用正式用户数据。报告保存在：
-
-```text
-tests/logs/settings/update/real/<运行时间>/report.json
-tests/logs/settings/update/real/<运行时间>/process.log
-```
-
-真实升级只有同时满足以下条件才算通过：
-
-- 能发现指定的新版本。
-- 更新包下载完成且校验通过。
-- 调用重启安装后 App 被替换。
-- App 版本变成目标版本。
-- 测试用户数据仍然存在。
-
-如果下载完成但 App 没有被替换，应优先检查 macOS 代码签名和 Squirrel.Mac 日志。当前 macOS 正式包使用固定的 `Ncurator Update Signing` 签名，不是 Apple Developer ID，也不代表已经完成 Apple 公证。应用只有在签名 Authority、Bundle Identifier 和稳定 designated requirement 全部匹配时才启用 macOS 自动更新；ad-hoc、无签名或签名不匹配都会关闭更新并显示原因。更换签名或更新链路后必须重新执行真实升级测试，只有安装替换成功才算完整通过。
-
-真实升级会下载完整更新包，耗时和流量都较大，不进入普通 PR 或日常测试。
+后端测试验证主进程更新状态、发布配置、R2 元数据和 release fragment。模拟 E2E 验证页面按钮、进度、错误提示和 IPC。自动化测试不下载或安装真实更新包。
 
 ### 4.4 读取与分析 raw logs
 

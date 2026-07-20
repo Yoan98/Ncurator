@@ -412,13 +412,7 @@ pnpm test:update:e2e
 - 网页搜索和动态网页抓取；
 - 安装、覆盖升级、卸载；
 - 无网络启动；
-- 自动更新下载、sha512、签名替换和用户数据保留。
-
-真实自动更新只在明确需要时执行：
-
-```bash
-pnpm test:update:real -- --source-version 0.1.3 --expected-version X.Y.Z
-```
+- 自动更新的后端契约和模拟页面交互。
 
 ## 失败处理
 
