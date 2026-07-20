@@ -533,7 +533,7 @@ const hasWorkspaceRootPath = (
   typeof workspace?.root_path === 'string' && workspace.root_path.trim().length > 0
 
 const getWorkspaceRequirementHint = (workspace: WorkspaceSource | null): string =>
-  workspace ? '当前工作区未设置文件目录，请前往 设置 > 工作空间 绑定地址' : '请先选择工作区'
+  workspace ? '当前工作区未设置文件目录，请前往 设置 > 工作空间 设置工作目录后' : '请先选择工作区'
 
 const delay = (ms: number): Promise<void> =>
   new Promise((resolve) => {
