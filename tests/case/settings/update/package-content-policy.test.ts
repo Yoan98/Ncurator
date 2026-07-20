@@ -27,8 +27,20 @@ describe('package content policy paths', () => {
     const appSource = path.join(temporaryDirectory, 'app-source')
     const packagedApp = path.join(temporaryDirectory, 'package', 'win-unpacked')
     const archivePath = path.join(packagedApp, 'resources', 'app.asar')
+    const nodePtyHelperPath = path.join(
+      packagedApp,
+      'resources',
+      'app.asar.unpacked',
+      'node_modules',
+      'node-pty',
+      'build',
+      'Release',
+      'spawn-helper'
+    )
     await mkdir(path.join(appSource, 'out', 'main'), { recursive: true })
     await mkdir(path.dirname(archivePath), { recursive: true })
+    await mkdir(path.dirname(nodePtyHelperPath), { recursive: true })
+    await writeFile(nodePtyHelperPath, '', { mode: 0o755 })
     await writeFile(path.join(appSource, 'out', 'main', 'index.js'), 'export const ready = true\n')
     await writeFile(
       path.join(appSource, 'package.json'),
