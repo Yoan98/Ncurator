@@ -73,12 +73,3 @@ export const inspectTerminalOutputQuality = (
     matchedSignatures
   }
 }
-
-export const buildWindowsPowerShellEncodedCommand = (command: string): string => {
-  const wrappedCommand = [
-    '[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)',
-    '$OutputEncoding = [System.Text.UTF8Encoding]::new($false)',
-    command
-  ].join('\n')
-  return Buffer.from(wrappedCommand, 'utf16le').toString('base64')
-}

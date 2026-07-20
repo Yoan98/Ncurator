@@ -84,6 +84,8 @@ Text File Runtime 通过 builtin `text-file` skill 提供 `text_file_read` 和 `
 
 Terminal Runtime 由 `TerminalSessionManager` 和 `terminal_run / terminal_read / terminal_stop` 组成。Manager 位于 Main Process，按 chat session 与 workspace 隔离持久 PTY，会话可跨单个 AI run 保留。每个终端维护 terminalId、当前路径、运行状态、当前命令、输出环形缓冲区和绝对输出游标。terminal_run 固定等待后让出控制权，不终止仍在运行的命令；同一终端仍为 running 时必须先通过 terminal_read 等到 idle，不能直接提交下一条命令。terminal_stop 先通过 Ctrl+C 和宽限期尝试保留会话，正常停止后回到 idle；无法正常停止时强制终止进程树并把终端置为 closed。删除聊天、取消所属 run 和应用退出会先尝试正常退出，再清理托管进程。
 
+Terminal Runtime 内部以 UTF-8 为强制契约，不继承宿主进程是否正确配置 locale 的偶然结果。`TerminalPlatformAdapter` 隔离 macOS zsh 与 Windows PowerShell 的 shell、环境、初始化、命令包装、目录预判和进程终止差异；Manager 不拼接平台命令。每个会话使用带随机 token 的独立控制协议，START、DONE、CWD 与 READY 标记不会和其他会话或普通旧标记混淆。命令正文先写入权限受限的会话临时目录，再由 PTY 中的短控制命令以 UTF-8 读取执行，避免终端输入行长度、回显和分片破坏长命令或 Unicode；命令完成后立即删除正文文件，会话关闭时清理整个临时目录。
+
 Brain 的 `local_environment` 整体使用格式化 JSON，其中 `current_time` 同时提供 UTC ISO 时间、本地 ISO 时间和时区，`terminal_state` 只包含新终端默认路径和各终端的 id、状态、当前路径、当前命令与开始时间，不注入完整日志或环境变量。工具说明只声明能力、结果和边界，不返回下一步建议字段。terminal_run 输入不包含 cwd；已有终端的当前路径是执行和工作空间边界判断的基准。
 
 DOCX 编辑工具的模型描述保持为一句能力说明。PPT 编辑工具的模型描述直接包含受限 HTML 的页面、元素、CSS、排版、版式和图片规则，确保模型在首次创建前获得完整约束；输入 schema 只负责参数结构，不承载生成指导。两类工具都不解释 UUID、revision、replay、checksum、原子替换或回读结构，内部事务与差异实现不进入模型提示词。

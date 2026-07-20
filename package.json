@@ -19,6 +19,7 @@
     "test:ai:human:live": "node scripts/test-workflow.mjs --domain ai --suite human --group live --type backend",
     "test:unit": "node scripts/test-workflow.mjs --domain unit --type backend",
     "test:unit:ai": "node scripts/test-workflow.mjs --domain unit --suite ai --type backend",
+    "test:terminal": "node scripts/prepare-node-pty-native.mjs ensure node && vitest run --config vitest.backend.config.mts tests/case/unit/ai/terminal-session-manager.test.ts tests/case/unit/ai/terminal-protocol.test.ts tests/case/unit/ai/terminal-platform-adapter.test.ts tests/case/unit/ai/terminal-command-policy.test.ts",
     "test:settings": "node scripts/test-workflow.mjs --domain settings",
     "test:settings:backend": "node scripts/test-workflow.mjs --domain settings --type backend",
     "test:settings:e2e": "node scripts/test-workflow.mjs --domain settings --type e2e",

@@ -1,11 +1,14 @@
 import path from 'node:path'
-import { stat } from 'node:fs/promises'
+import os from 'node:os'
 import { randomUUID } from 'node:crypto'
-import { execFile } from 'node:child_process'
+import { chmod, mkdtemp, rm, unlink, writeFile } from 'node:fs/promises'
 import * as pty from 'node-pty'
 import type { IPty } from 'node-pty'
 import type { AiRuntimePlatform } from '../../../types'
 import { isPathInsideAnyRoot } from './commandPolicy'
+import { buildTerminalEnvironment } from './environment/TerminalEnvironment'
+import { getTerminalPlatformAdapter, type TerminalPlatformAdapter } from './platform'
+import { TerminalProtocol, type TerminalProtocolEvent } from './protocol/TerminalProtocol'
 
 export type TerminalSessionStatus = 'idle' | 'running' | 'stopping' | 'closed'
 export type TerminalCommandReturnReason =
@@ -56,6 +59,7 @@ type ActiveCommand = {
   runId: string
   startedAt: number
   outputStartCursor: number
+  commandFilePath: string
   exitCode: number | null
   returnReason?: TerminalCommandReturnReason
   completion: Promise<void>
@@ -66,9 +70,10 @@ type ManagedTerminalSession = {
   terminalId: string
   chatSessionId: string
   workspaceId: string
-  workspaceRootPath: string
+  runtimeDirectory: string
   allowedRootPaths: string[]
-  platform: AiRuntimePlatform
+  adapter: TerminalPlatformAdapter
+  protocol: TerminalProtocol
   process: IPty
   status: TerminalSessionStatus
   currentTerminalPath: string
@@ -77,8 +82,6 @@ type ManagedTerminalSession = {
   output: string
   outputBaseCursor: number
   outputCursor: number
-  protocolBuffer: string
-  readyMarkerCount: number
   ready: Promise<void>
   markReady: () => void
   exited: Promise<void>
@@ -97,11 +100,6 @@ export type TerminalSessionManagerOptions = {
   environment?: Record<string, string>
 }
 
-const READY_MARKER = '__NCURATOR_READY__'
-const CWD_PREFIX = '__NCURATOR_CWD:'
-const START_PREFIX = '__NCURATOR_START:'
-const DONE_PREFIX = '__NCURATOR_DONE:'
-const DONE_SUFFIX = '__'
 const ANSI_PATTERN =
   // eslint-disable-next-line no-control-regex
   /[\u001B\u009B][[\]()#;?]*(?:(?:(?:[a-zA-Z\d]*(?:;[-a-zA-Z\d/#&.:=?%@~_]+)*)?\u0007)|(?:(?:\d{1,4}(?:[;:]\d{0,4})*)?[\dA-PR-TZcf-nq-uy=><~]))/g
@@ -117,85 +115,6 @@ const createDeferred = () => {
   return { promise, resolve }
 }
 
-const encodePowerShellCommand = (command: string): string =>
-  Buffer.from(command, 'utf16le').toString('base64')
-
-const buildShellStart = (platform: AiRuntimePlatform) =>
-  platform === 'windows'
-    ? { executable: 'powershell.exe', args: ['-NoLogo', '-NoProfile'] }
-    : { executable: '/bin/zsh', args: ['-f'] }
-
-const buildTerminalEnv = (overrides?: Record<string, string>): Record<string, string> => ({
-  ...Object.fromEntries(
-    Object.entries(process.env).filter(
-      (entry): entry is [string, string] => typeof entry[1] === 'string'
-    )
-  ),
-  ...overrides,
-  TERM: 'xterm-256color',
-  PS1: '',
-  PROMPT: '',
-  RPROMPT: ''
-})
-
-const buildReadyCommand = (platform: AiRuntimePlatform): string =>
-  platform === 'windows'
-    ? [
-        `function global:Set-Location { param([Parameter(Position=0)][string]$Path) Microsoft.PowerShell.Management\\Set-Location -Path $Path; $__cwd = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes((Get-Location).Path)); Write-Output ('__NCURATOR_' + 'CWD:' + $__cwd + '__') }`,
-        `Write-Output ('__NCURATOR_' + 'READY__')`
-      ].join('; ') + '\r'
-    : [
-        'stty -echo',
-        `function chpwd() { local __ncurator_cwd=$(pwd | base64 | tr -d '\\n'); printf '%sCWD:%s__\\n' '__NCURATOR_' "$__ncurator_cwd"; }`,
-        `printf '%s%s\\n' '__NCURATOR_' 'READY__'`
-      ].join('; ') + '\n'
-
-const buildStopProbe = (input: { platform: AiRuntimePlatform; commandId: string }): string => {
-  if (input.platform === 'windows') {
-    return [
-      `$__ncurator_cwd = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes((Get-Location).Path))`,
-      `$__ncurator_marker = '__NCURATOR_' + "DONE:${input.commandId}:130:$($__ncurator_cwd)__"`,
-      'Write-Output $__ncurator_marker'
-    ].join('\r')
-  }
-  return [
-    "__ncurator_cwd=$(pwd | base64 | tr -d '\\n')",
-    `printf '%sDONE:${input.commandId}:130:%s__\\n' '__NCURATOR_' "$__ncurator_cwd"`
-  ].join('\n')
-}
-
-const buildCommandEnvelope = (input: {
-  platform: AiRuntimePlatform
-  commandId: string
-  command: string
-}): string => {
-  if (input.platform === 'windows') {
-    const encoded = encodePowerShellCommand(input.command)
-    return [
-      `$__ncurator_command = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('${encoded}'))`,
-      `$__ncurator_start = '__NCURATOR_' + 'START:${input.commandId}__'`,
-      'Write-Output $__ncurator_start',
-      '$global:LASTEXITCODE = $null',
-      '$__ncurator_errors = @()',
-      `Invoke-Expression $__ncurator_command -ErrorVariable +__ncurator_errors`,
-      '$__ncurator_succeeded = $? -and $__ncurator_errors.Count -eq 0',
-      `$__ncurator_exit = if ($null -ne $LASTEXITCODE) { $LASTEXITCODE } elseif ($__ncurator_succeeded) { 0 } else { 1 }`,
-      `$__ncurator_cwd = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes((Get-Location).Path))`,
-      `$__ncurator_marker = '__NCURATOR_' + "DONE:${input.commandId}:$($__ncurator_exit):$($__ncurator_cwd)__"`,
-      'Write-Output $__ncurator_marker'
-    ].join('; ')
-  }
-
-  const encoded = Buffer.from(input.command, 'utf8').toString('base64')
-  return [
-    `printf '%sSTART:${input.commandId}__\\n' '__NCURATOR_'`,
-    `eval "$(printf '%s' '${encoded}' | base64 -D)"`,
-    '__ncurator_exit=$?',
-    "__ncurator_cwd=$(pwd | base64 | tr -d '\\n')",
-    `printf '%sDONE:${input.commandId}:%s:%s__\\n' '__NCURATOR_' "$__ncurator_exit" "$__ncurator_cwd"`
-  ].join('; ')
-}
-
 const decodeCwd = (encoded: string): string | null => {
   try {
     const decoded = Buffer.from(encoded, 'base64').toString('utf8').trim()
@@ -206,27 +125,6 @@ const decodeCwd = (encoded: string): string | null => {
 }
 
 const isSessionClosed = (session: ManagedTerminalSession): boolean => session.status === 'closed'
-
-const WINDOWS_LEADING_CWD_PATTERN =
-  /^\s*(?:cd|Set-Location)\s+(?:"([^"]+)"|'([^']+)'|([^\s;]+))\s*;/iu
-
-const resolveLeadingWindowsCwd = async (input: {
-  command: string
-  currentPath: string
-  allowedRootPaths: readonly string[]
-}): Promise<string | undefined> => {
-  const match = input.command.match(WINDOWS_LEADING_CWD_PATTERN)
-  if (!match) return undefined
-  const requestedPath = match[1] || match[2] || match[3]
-  if (!requestedPath) return undefined
-  const nextPath = path.resolve(input.currentPath, requestedPath)
-  if (!isPathInsideAnyRoot(nextPath, input.allowedRootPaths)) return undefined
-  try {
-    return (await stat(nextPath)).isDirectory() ? nextPath : undefined
-  } catch {
-    return undefined
-  }
-}
 
 export class TerminalSessionManager {
   private readonly sessions = new Map<string, ManagedTerminalSession>()
@@ -295,23 +193,24 @@ export class TerminalSessionManager {
     }
     if (session.status === 'closed') throw new Error('terminal_closed')
 
-    if (session.platform === 'windows') {
-      const leadingCwd = await resolveLeadingWindowsCwd({
-        command: input.command,
-        currentPath: session.currentTerminalPath,
-        allowedRootPaths: session.allowedRootPaths
-      })
-      if (leadingCwd) session.currentTerminalPath = leadingCwd
-    }
+    const leadingCwd = await session.adapter.resolveCommandCwd({
+      command: input.command,
+      currentPath: session.currentTerminalPath,
+      allowedRootPaths: session.allowedRootPaths
+    })
+    if (leadingCwd) session.currentTerminalPath = leadingCwd
 
     const deferred = createDeferred()
     const commandId = randomUUID()
+    const commandFilePath = path.join(session.runtimeDirectory, `${commandId}.command`)
+    await writeFile(commandFilePath, input.command, { encoding: 'utf8', mode: 0o600 })
     const commandState: ActiveCommand = {
       commandId,
       command: input.command,
       runId: input.runId,
       startedAt: Date.now(),
       outputStartCursor: session.outputCursor,
+      commandFilePath,
       exitCode: null,
       completion: deferred.promise,
       complete: deferred.resolve
@@ -319,13 +218,19 @@ export class TerminalSessionManager {
     session.currentCommand = commandState
     session.status = 'running'
     session.lastActiveAt = Date.now()
-    session.process.write(
-      `${buildCommandEnvelope({
-        platform: session.platform,
-        commandId,
-        command: input.command
-      })}${session.platform === 'windows' ? '\r' : '\n'}`
-    )
+    try {
+      session.process.write(
+        `${session.adapter.buildCommandEnvelope(
+          commandId,
+          commandFilePath
+        )}${session.adapter.shell.lineEnding}`
+      )
+    } catch (error) {
+      session.currentCommand = null
+      session.status = 'idle'
+      await unlink(commandFilePath).catch(() => undefined)
+      throw error
+    }
 
     await Promise.race([
       commandState.completion,
@@ -400,10 +305,7 @@ export class TerminalSessionManager {
       await new Promise<void>((resolve) => setTimeout(resolve, 100))
       if (!command.returnReason) {
         session.process.write(
-          `${buildStopProbe({
-            platform: session.platform,
-            commandId: command.commandId
-          })}${session.platform === 'windows' ? '\r' : '\n'}`
+          `${session.adapter.buildStopProbe(command.commandId)}${session.adapter.shell.lineEnding}`
         )
       }
       await Promise.race([
@@ -428,6 +330,7 @@ export class TerminalSessionManager {
       await this.closeSession(session)
     } else if (input.closeTerminal) {
       this.sessions.delete(session.terminalId)
+      await rm(session.runtimeDirectory, { recursive: true, force: true })
     } else if (session.status === 'stopping') {
       session.status = session.currentCommand ? 'running' : 'idle'
     }
@@ -504,24 +407,36 @@ export class TerminalSessionManager {
     )
     const ready = createDeferred()
     const exited = createDeferred()
-    const shell = buildShellStart(input.platform)
-    const terminalProcess = pty.spawn(shell.executable, shell.args, {
-      name: 'xterm-256color',
-      cols: 120,
-      rows: 30,
-      cwd: rootPath,
-      env: buildTerminalEnv({
-        ...this.environment,
-        ...input.environment
+    const runtimeDirectory = await mkdtemp(path.join(os.tmpdir(), 'ncurator-terminal-runtime-'))
+    await chmod(runtimeDirectory, 0o700)
+    const adapter = getTerminalPlatformAdapter(input.platform)
+    const protocol = new TerminalProtocol(randomUUID())
+    let terminalProcess: IPty
+    try {
+      terminalProcess = pty.spawn(adapter.shell.executable, adapter.shell.args, {
+        name: 'xterm-256color',
+        cols: 120,
+        rows: 30,
+        cwd: rootPath,
+        encoding: 'utf8',
+        env: buildTerminalEnvironment({
+          platform: input.platform,
+          managerEnvironment: this.environment,
+          sessionEnvironment: input.environment
+        })
       })
-    })
+    } catch (error) {
+      await rm(runtimeDirectory, { recursive: true, force: true })
+      throw error
+    }
     const session: ManagedTerminalSession = {
       terminalId: randomUUID(),
       chatSessionId: input.chatSessionId,
       workspaceId: input.workspaceId,
-      workspaceRootPath: rootPath,
+      runtimeDirectory,
       allowedRootPaths,
-      platform: input.platform,
+      adapter,
+      protocol,
       process: terminalProcess,
       status: 'idle',
       currentTerminalPath: rootPath,
@@ -530,8 +445,6 @@ export class TerminalSessionManager {
       output: '',
       outputBaseCursor: 0,
       outputCursor: 0,
-      protocolBuffer: '',
-      readyMarkerCount: 0,
       ready: ready.promise,
       markReady: ready.resolve,
       exited: exited.promise,
@@ -542,25 +455,31 @@ export class TerminalSessionManager {
     this.sessions.set(session.terminalId, session)
     terminalProcess.onData((data) => this.consumeProtocolData(session, data))
     terminalProcess.onExit(({ exitCode }) => this.finalizeSessionExit(session, exitCode))
-    terminalProcess.write(buildReadyCommand(input.platform))
-    await Promise.race([
-      session.ready,
-      new Promise<void>((_, reject) =>
-        setTimeout(() => reject(new Error('terminal_start_timeout')), 3000)
-      )
-    ])
+    try {
+      terminalProcess.write(adapter.buildBootstrapCommand(protocol))
+      await Promise.race([
+        session.ready,
+        new Promise<void>((_, reject) =>
+          setTimeout(() => reject(new Error('terminal_start_timeout')), 3000)
+        )
+      ])
+    } catch (error) {
+      await this.closeSession(session)
+      throw error
+    }
     return session
   }
 
   private async closeSession(session: ManagedTerminalSession): Promise<void> {
     if (session.status === 'closed') {
       this.sessions.delete(session.terminalId)
+      await rm(session.runtimeDirectory, { recursive: true, force: true })
       return
     }
 
     if (!session.currentCommand && session.status === 'idle') {
       try {
-        session.process.write(session.platform === 'windows' ? 'exit\r' : 'exit\n')
+        session.process.write(session.adapter.buildExitCommand())
         await Promise.race([
           session.exited,
           new Promise<void>((resolve) => setTimeout(resolve, this.stopGraceMs))
@@ -580,32 +499,17 @@ export class TerminalSessionManager {
 
     session.status = 'closed'
     this.sessions.delete(session.terminalId)
+    await rm(session.runtimeDirectory, { recursive: true, force: true })
   }
 
   private async forceTerminateSession(session: ManagedTerminalSession): Promise<void> {
-    if (session.platform === 'windows') {
-      await new Promise<void>((resolve) => {
-        execFile(
-          'taskkill.exe',
-          ['/PID', String(session.process.pid), '/T', '/F'],
-          { windowsHide: true },
-          () => resolve()
-        )
-      })
-      await Promise.race([
-        session.exited,
-        new Promise<void>((resolve) => setTimeout(resolve, this.stopGraceMs))
-      ])
-      if (!isSessionClosed(session)) {
-        this.finalizeSessionExit(session, session.currentCommand ? 130 : 1)
-      }
-      return
-    }
-
-    try {
-      session.process.kill()
-    } catch {
-      // The PTY may have exited between the status check and kill.
+    await session.adapter.forceTerminate(session.process)
+    await Promise.race([
+      session.exited,
+      new Promise<void>((resolve) => setTimeout(resolve, this.stopGraceMs))
+    ])
+    if (!isSessionClosed(session)) {
+      this.finalizeSessionExit(session, session.currentCommand ? 130 : 1)
     }
   }
 
@@ -614,6 +518,7 @@ export class TerminalSessionManager {
     session.status = 'closed'
     session.lastExitCode = exitCode
     if (session.currentCommand) {
+      void unlink(session.currentCommand.commandFilePath).catch(() => undefined)
       session.currentCommand.exitCode = exitCode
       session.currentCommand.returnReason = 'terminal_closed'
       this.recordCompletedCommand(session.currentCommand.commandId, exitCode)
@@ -641,89 +546,53 @@ export class TerminalSessionManager {
   }
 
   private consumeProtocolData(session: ManagedTerminalSession, data: string): void {
-    session.protocolBuffer += data
-    for (;;) {
-      const readyIndex = session.protocolBuffer.indexOf(READY_MARKER)
-      const cwdIndex = session.protocolBuffer.indexOf(CWD_PREFIX)
-      const startIndex = session.protocolBuffer.indexOf(START_PREFIX)
-      const doneIndex = session.protocolBuffer.indexOf(DONE_PREFIX)
-      const markerIndexes = [readyIndex, cwdIndex, startIndex, doneIndex].filter(
-        (index) => index >= 0
-      )
-      if (markerIndexes.length === 0) {
-        const keepLength = Math.min(
-          session.protocolBuffer.length,
-          Math.max(
-            READY_MARKER.length,
-            CWD_PREFIX.length,
-            START_PREFIX.length,
-            DONE_PREFIX.length
-          ) - 1
-        )
-        const flushLength = session.protocolBuffer.length - keepLength
-        if (flushLength > 0) {
-          this.appendOutput(session, session.protocolBuffer.slice(0, flushLength))
-          session.protocolBuffer = session.protocolBuffer.slice(flushLength)
-        }
-        return
-      }
+    for (const event of session.protocol.consume(data)) this.consumeProtocolEvent(session, event)
+  }
 
-      const markerIndex = Math.min(...markerIndexes)
-      if (markerIndex > 0) {
-        this.appendOutput(session, session.protocolBuffer.slice(0, markerIndex))
-        session.protocolBuffer = session.protocolBuffer.slice(markerIndex)
+  private consumeProtocolEvent(
+    session: ManagedTerminalSession,
+    event: TerminalProtocolEvent
+  ): void {
+    if (event.type === 'output') {
+      this.appendOutput(session, event.data)
+      return
+    }
+    if (event.type === 'ready') {
+      session.output = ''
+      session.outputBaseCursor = 0
+      session.outputCursor = 0
+      session.markReady()
+      return
+    }
+    if (event.type === 'cwd') {
+      this.updateCurrentPath(session, event.encodedCwd)
+      return
+    }
+    if (event.type === 'start') {
+      if (session.currentCommand?.commandId === event.commandId) {
+        session.currentCommand.outputStartCursor = session.outputCursor
       }
+      return
+    }
 
-      if (session.protocolBuffer.startsWith(READY_MARKER)) {
-        session.protocolBuffer = session.protocolBuffer.slice(READY_MARKER.length)
-        session.readyMarkerCount += 1
-        session.markReady()
-        continue
-      }
+    const command = session.currentCommand
+    if (!command || command.commandId !== event.commandId) return
+    this.updateCurrentPath(session, event.encodedCwd)
+    const exitCode = Number(event.exitCodeText)
+    command.exitCode = Number.isFinite(exitCode) ? exitCode : 1
+    command.returnReason = session.status === 'stopping' ? 'command_stopped' : 'command_completed'
+    session.lastExitCode = command.exitCode
+    void unlink(command.commandFilePath).catch(() => undefined)
+    this.recordCompletedCommand(command.commandId, command.exitCode)
+    session.status = 'idle'
+    session.currentCommand = null
+    command.complete()
+  }
 
-      if (session.protocolBuffer.startsWith(CWD_PREFIX)) {
-        const endIndex = session.protocolBuffer.indexOf(DONE_SUFFIX, CWD_PREFIX.length)
-        if (endIndex < 0) return
-        const encodedCwd = session.protocolBuffer.slice(CWD_PREFIX.length, endIndex)
-        session.protocolBuffer = session.protocolBuffer.slice(endIndex + DONE_SUFFIX.length)
-        const nextPath = decodeCwd(encodedCwd)
-        if (nextPath && isPathInsideAnyRoot(nextPath, session.allowedRootPaths)) {
-          session.currentTerminalPath = path.resolve(nextPath)
-        }
-        continue
-      }
-
-      if (session.protocolBuffer.startsWith(START_PREFIX)) {
-        const endIndex = session.protocolBuffer.indexOf(DONE_SUFFIX, START_PREFIX.length)
-        if (endIndex < 0) return
-        const commandId = session.protocolBuffer.slice(START_PREFIX.length, endIndex)
-        session.protocolBuffer = session.protocolBuffer.slice(endIndex + DONE_SUFFIX.length)
-        if (session.currentCommand?.commandId === commandId) {
-          session.currentCommand.outputStartCursor = session.outputCursor
-        }
-        continue
-      }
-
-      const endIndex = session.protocolBuffer.indexOf(DONE_SUFFIX, DONE_PREFIX.length)
-      if (endIndex < 0) return
-      const marker = session.protocolBuffer.slice(DONE_PREFIX.length, endIndex)
-      session.protocolBuffer = session.protocolBuffer.slice(endIndex + DONE_SUFFIX.length)
-      const [commandId, exitCodeText, encodedCwd] = marker.split(':')
-      const command = session.currentCommand
-      if (!command || command.commandId !== commandId) continue
-
-      const nextPath = decodeCwd(encodedCwd || '')
-      if (nextPath && isPathInsideAnyRoot(nextPath, session.allowedRootPaths)) {
-        session.currentTerminalPath = path.resolve(nextPath)
-      }
-      const exitCode = Number(exitCodeText)
-      command.exitCode = Number.isFinite(exitCode) ? exitCode : 1
-      command.returnReason = session.status === 'stopping' ? 'command_stopped' : 'command_completed'
-      session.lastExitCode = command.exitCode
-      this.recordCompletedCommand(command.commandId, command.exitCode)
-      session.status = 'idle'
-      session.currentCommand = null
-      command.complete()
+  private updateCurrentPath(session: ManagedTerminalSession, encodedCwd: string): void {
+    const nextPath = decodeCwd(encodedCwd)
+    if (nextPath && isPathInsideAnyRoot(nextPath, session.allowedRootPaths)) {
+      session.currentTerminalPath = path.resolve(nextPath)
     }
   }
 

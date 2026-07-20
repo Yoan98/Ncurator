@@ -145,6 +145,68 @@ describe.skipIf(process.platform === 'win32')('terminal session manager', () => 
     expect(continued.output).toContain(userRuntimeRoot)
   })
 
+  it('uses deterministic UTF-8 for Chinese files even when the parent locale is invalid', async () => {
+    const manager = createManager({ LANG: 'C', LC_ALL: 'C', LC_CTYPE: 'C' }, 1000)
+    const root = await createRoot()
+    const chineseDirectory = path.join(root, '中文目录')
+    await fs.mkdir(chineseDirectory)
+    await fs.writeFile(path.join(root, 'sample-edit_中文.docx'), 'fixture', 'utf8')
+
+    const listed = await manager.run({
+      chatSessionId: 'chat-unicode',
+      workspaceId: 'workspace-unicode',
+      workspaceRootPath: root,
+      platform: 'macos',
+      runId: 'run-unicode',
+      command: 'ls -1'
+    })
+
+    expect(listed.exitCode).toBe(0)
+    expect(listed.output).toContain('中文目录')
+    expect(listed.output).toContain('sample-edit_中文.docx')
+    expect(listed.output).not.toContain('????')
+
+    const changed = await manager.run({
+      chatSessionId: 'chat-unicode',
+      workspaceId: 'workspace-unicode',
+      workspaceRootPath: root,
+      platform: 'macos',
+      runId: 'run-unicode',
+      terminalId: listed.terminalId,
+      command: 'cd "中文目录"'
+    })
+    expect(changed.currentTerminalPath).toBe(chineseDirectory)
+
+    const continued = await manager.run({
+      chatSessionId: 'chat-unicode',
+      workspaceId: 'workspace-unicode',
+      workspaceRootPath: root,
+      platform: 'macos',
+      runId: 'run-unicode',
+      terminalId: listed.terminalId,
+      command: `printf '中文输出😀\\n'; pwd`
+    })
+    expect(continued.output).toContain('中文输出😀')
+    expect(continued.output).toContain(chineseDirectory)
+  })
+
+  it('runs commands larger than the PTY input line limit', async () => {
+    const manager = createManager(undefined, 1000)
+    const root = await createRoot()
+    const longComment = `# ${'long-command-payload-'.repeat(1500)}`
+    const result = await manager.run({
+      chatSessionId: 'chat-long-command',
+      workspaceId: 'workspace-long-command',
+      workspaceRootPath: root,
+      platform: 'macos',
+      runId: 'run-long-command',
+      command: `${longComment}\nprintf '超长命令正常\\n'`
+    })
+
+    expect(result.exitCode).toBe(0)
+    expect(result.output).toContain('超长命令正常')
+  })
+
   it('can isolate Node and Python availability without changing the app process', async () => {
     const root = await createRoot()
     const binRoot = await createRoot()
@@ -310,6 +372,57 @@ describe.skipIf(process.platform === 'win32')('terminal session manager', () => 
 })
 
 describe.skipIf(process.platform !== 'win32')('terminal session manager on Windows', () => {
+  it('keeps PowerShell and native command output in UTF-8', async () => {
+    const manager = createManager({ PYTHONIOENCODING: 'cp1252', PYTHONUTF8: '0' }, 2000)
+    const root = await createRoot()
+    const chineseDirectory = path.join(root, '中文目录')
+    await fs.mkdir(chineseDirectory)
+    await fs.writeFile(path.join(root, 'sample-edit_中文.txt'), 'fixture', 'utf8')
+
+    const powershell = await manager.run({
+      chatSessionId: 'chat-windows-unicode',
+      workspaceId: 'workspace-windows-unicode',
+      workspaceRootPath: root,
+      platform: 'windows',
+      runId: 'run-windows-unicode',
+      command:
+        `Write-Output '中文输出😀'; Get-ChildItem -Name; ` +
+        `Write-Output ([Console]::InputEncoding.WebName); ` +
+        `Write-Output ([Console]::OutputEncoding.WebName); ` +
+        `Write-Output ($OutputEncoding.WebName)`
+    })
+
+    expect(powershell.exitCode).toBe(0)
+    expect(powershell.output).toContain('中文输出😀')
+    expect(powershell.output).toContain('中文目录')
+    expect(powershell.output).toContain('sample-edit_中文.txt')
+    expect(powershell.output.match(/utf-8/giu)?.length).toBeGreaterThanOrEqual(3)
+
+    const native = await manager.run({
+      chatSessionId: 'chat-windows-unicode',
+      workspaceId: 'workspace-windows-unicode',
+      workspaceRootPath: root,
+      platform: 'windows',
+      runId: 'run-windows-unicode',
+      terminalId: powershell.terminalId,
+      command: 'cmd.exe /d /c dir /b'
+    })
+    expect(native.output).toContain('中文目录')
+    expect(native.output).toContain('sample-edit_中文.txt')
+
+    const changed = await manager.run({
+      chatSessionId: 'chat-windows-unicode',
+      workspaceId: 'workspace-windows-unicode',
+      workspaceRootPath: root,
+      platform: 'windows',
+      runId: 'run-windows-unicode',
+      terminalId: powershell.terminalId,
+      command: `Set-Location "${chineseDirectory}"; Write-Output '持续中文'`
+    })
+    expect(changed.currentTerminalPath).toBe(chineseDirectory)
+    expect(changed.output).toContain('持续中文')
+  })
+
   it('updates cwd before yielding a long-running command', async () => {
     const manager = createManager(undefined, 250)
     const root = await createRoot()

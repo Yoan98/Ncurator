@@ -61,6 +61,8 @@ jobs:
           echo "RELEASE_TAG=$tag" >> "$GITHUB_ENV"
 
       - run: pnpm install --frozen-lockfile
+      - name: Verify Windows terminal compatibility
+        run: pnpm run test:terminal
       - name: Build and security-audit Windows package
         run: pnpm run build:win
 

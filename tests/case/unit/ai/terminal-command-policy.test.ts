@@ -3,7 +3,6 @@ import {
   analyzeTerminalCommand,
   analyzeTerminalCommandPolicy
 } from '../../../../src/main/services/ai/human/tools/terminal/commandPolicy'
-import { buildWindowsPowerShellEncodedCommand } from '../../../../src/main/services/ai/human/tools/terminal/terminalExec'
 import { createTerminalRunToolSpec } from '../../../../src/main/services/ai/human/tools/terminal/toolSpecs'
 
 const allow = (command: string, platform: 'windows' | 'macos') => {
@@ -163,14 +162,5 @@ describe('ai unit terminal dangerous-command policy', () => {
     expect(
       analyzeTerminalCommand({ command: 'echo hello', platform: 'macos' }).artifactCandidates
     ).toEqual([])
-  })
-
-  it('builds windows powershell encoded commands with utf8 prelude', () => {
-    const encoded = buildWindowsPowerShellEncodedCommand('Get-ChildItem')
-    const decoded = Buffer.from(encoded, 'base64').toString('utf16le')
-
-    expect(decoded).toContain('[Console]::OutputEncoding')
-    expect(decoded).toContain('$OutputEncoding')
-    expect(decoded).toContain('Get-ChildItem')
   })
 })
