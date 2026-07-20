@@ -1,4 +1,5 @@
-import { readFile, readdir, stat } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import { mkdir, readFile, readdir, rm, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { preparePackagedE2EApplication } from './package-app.mjs'
@@ -18,6 +19,13 @@ const BETTER_SQLITE_NATIVE_BINDING_ENV = 'NCURATOR_BETTER_SQLITE3_NATIVE_BINDING
 const LIVE_BACKEND_NODE_OLD_SPACE_MB = 8192
 const DEFAULT_E2E_FILE_DELAY_MS = 1000
 const USE_WINDOWS_SHELL = process.platform === 'win32'
+const KNOWLEDGE_CACHE_ROOT = path.join(TESTS_ROOT, '.cache', 'workspace-knowledge')
+const EMPTY_KNOWLEDGE_CACHE_STATS = {
+  splitCacheHits: 0,
+  splitCacheMisses: 0,
+  vectorCacheHits: 0,
+  vectorCacheMisses: 0
+}
 
 const removeNpmLifecycleEnv = () => {
   for (const key of Object.keys(process.env)) {
@@ -36,7 +44,9 @@ const parseArgs = (argv) => {
     caseId: '',
     runs: 1,
     runDelayMs: 0,
-    target: 'source'
+    target: 'source',
+    freshKnowledgeCache: false,
+    reuseKnowledgeCache: false
   }
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -80,7 +90,10 @@ const parseArgs = (argv) => {
     if (current === '--target' && next) {
       parsed.target = next
       index += 1
+      continue
     }
+    if (current === '--fresh-knowledge-cache') parsed.freshKnowledgeCache = true
+    if (current === '--reuse-knowledge-cache') parsed.reuseKnowledgeCache = true
   }
 
   return parsed
@@ -100,6 +113,55 @@ const walk = async (target) => {
     files.push(resolved)
   }
   return files
+}
+
+const hashBuildDirectories = async (directories) => {
+  const hash = createHash('sha256')
+  for (const directory of directories) {
+    const files = (await walk(directory)).sort()
+    for (const filePath of files) {
+      const relativePath = path.relative(ROOT, filePath).split(path.sep).join('/')
+      hash.update(relativePath)
+      hash.update('\0')
+      hash.update(await readFile(filePath))
+      hash.update('\0')
+    }
+  }
+  return hash.digest('hex')
+}
+
+const readKnowledgeCacheStats = async (cachePath) => {
+  try {
+    const parsed = JSON.parse(await readFile(path.join(cachePath, 'stats.json'), 'utf8'))
+    return {
+      splitCacheHits: Number(parsed.splitCacheHits || 0),
+      splitCacheMisses: Number(parsed.splitCacheMisses || 0),
+      vectorCacheHits: Number(parsed.vectorCacheHits || 0),
+      vectorCacheMisses: Number(parsed.vectorCacheMisses || 0)
+    }
+  } catch {
+    return { ...EMPTY_KNOWLEDGE_CACHE_STATS }
+  }
+}
+
+const prepareKnowledgeCache = async (input) => {
+  const cachePath = input.reuse
+    ? path.join(KNOWLEDGE_CACHE_ROOT, 'debug-reuse', input.namespace)
+    : path.join(KNOWLEDGE_CACHE_ROOT, input.namespace, input.buildFingerprint)
+  if (input.fresh) await rm(cachePath, { recursive: true, force: true })
+  await mkdir(cachePath, { recursive: true })
+  return {
+    knowledgeCacheEnabled: true,
+    knowledgeCachePath: cachePath,
+    knowledgeCacheNamespace: input.namespace,
+    buildFingerprint: input.buildFingerprint,
+    env: {
+      NCURATOR_WORKSPACE_KNOWLEDGE_CACHE: '1',
+      NCURATOR_WORKSPACE_KNOWLEDGE_CACHE_PATH: cachePath,
+      NCURATOR_E2E_KNOWLEDGE_CACHE_NAMESPACE: input.namespace,
+      NCURATOR_E2E_BUILD_FINGERPRINT: input.buildFingerprint
+    }
+  }
 }
 
 const resolveScopeDir = (input) => {
@@ -427,6 +489,17 @@ const runTypeWorkflow = async (input) => {
       return { exitCode: buildCode, e2eResults: [] }
     }
     runtimeEnv.NCURATOR_E2E_APP_TARGET = 'source'
+    const buildFingerprint = await hashBuildDirectories([
+      path.join(ROOT, 'out', 'main'),
+      path.join(ROOT, 'out', 'preload')
+    ])
+    const knowledgeCache = await prepareKnowledgeCache({
+      namespace: 'source',
+      buildFingerprint,
+      fresh: input.freshKnowledgeCache,
+      reuse: input.reuseKnowledgeCache
+    })
+    runtimeEnv = { ...runtimeEnv, ...knowledgeCache.env }
   }
 
   let exitCode = 0
@@ -497,10 +570,14 @@ const main = async () => {
   if (args.target === 'package' && args.type !== 'e2e') {
     throw new Error('--target package 只能与 --type e2e 一起使用')
   }
+  if (args.freshKnowledgeCache && args.reuseKnowledgeCache) {
+    throw new Error('--fresh-knowledge-cache 和 --reuse-knowledge-cache 不能同时使用')
+  }
 
   let exitCode = 0
   let packageSession = null
   let e2eEnv = {}
+  let packageKnowledgeCache = null
 
   if (!args.type || args.type === 'e2e') {
     const validationCode = validateE2EContract()
@@ -509,7 +586,13 @@ const main = async () => {
 
   if (args.type === 'e2e' && args.target === 'package') {
     packageSession = await preparePackagedE2EApplication()
-    e2eEnv = packageSession.env
+    packageKnowledgeCache = await prepareKnowledgeCache({
+      namespace: 'package',
+      buildFingerprint: packageSession.artifactSha256,
+      fresh: args.freshKnowledgeCache,
+      reuse: args.reuseKnowledgeCache
+    })
+    e2eEnv = { ...packageSession.env, ...packageKnowledgeCache.env }
   }
 
   if (!args.type || args.type === 'backend') {
@@ -529,7 +612,16 @@ const main = async () => {
     exitCode = result.exitCode
     packageSession?.writeSummary({
       status: exitCode === 0 ? 'passed' : 'failed',
-      tests: result.e2eResults
+      tests: result.e2eResults,
+      knowledgeCache: packageKnowledgeCache
+        ? {
+            knowledgeCacheEnabled: packageKnowledgeCache.knowledgeCacheEnabled,
+            knowledgeCachePath: packageKnowledgeCache.knowledgeCachePath,
+            knowledgeCacheNamespace: packageKnowledgeCache.knowledgeCacheNamespace,
+            buildFingerprint: packageKnowledgeCache.buildFingerprint,
+            ...(await readKnowledgeCacheStats(packageKnowledgeCache.knowledgeCachePath))
+          }
+        : null
     })
   }
 

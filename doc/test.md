@@ -186,6 +186,8 @@ runner 支持的过滤参数：
 - `--case`
 - `--runs`
 - `--target`，取值为 `source` 或 `package`，默认 `source`。
+- `--fresh-knowledge-cache`，删除本次构建对应的知识库缓存，强制从零验证完整索引。
+- `--reuse-knowledge-cache`，人工调试时跨构建复用同一类缓存；不能和 `--fresh-knowledge-cache` 同时使用。
 
 补充规则：
 
@@ -200,6 +202,9 @@ runner 支持的过滤参数：
 - `--group` 只在目标 `suite` 确实存在额外子目录时使用；如果 case 直接位于 `suite` 根目录，则不需要 `--group`。
 - `better-sqlite3` native 模块需要区分 Node ABI 和 Electron ABI。runner 会通过 `scripts/build/native/better-sqlite3.mjs` 自动准备对应缓存，并通过 `NCURATOR_BETTER_SQLITE3_NATIVE_BINDING` 注入本次测试使用的 binding；正常回归不需要手动 rebuild 或覆盖 `node_modules` 中的 native 文件。
 - 正式包 E2E 的构建、安装日志、安装包哈希和汇总写入 `tests/logs/package/<runId>/`；业务 case 自身的 raw logs 仍按原有 `tests/logs/<domain>/<suite>/**` 规则保存。
+- E2E 知识库缓存由 workflow 统一选择，一轮测试的全部 case 共用同一个目录。源码测试使用 `tests/.cache/workspace-knowledge/source/<out-main-and-preload-sha256>`；正式包测试使用 `tests/.cache/workspace-knowledge/package/<installer-sha256>`。两类缓存完全隔离，不再使用固定共享目录。
+- 缓存键仍包含文件内容哈希、扩展名、分块配置和向量模型名。未修改文件可以命中；新增或修改的文件会重新处理；删除文件不会因为缓存仍存在而重新进入新 workspace 的索引。
+- 每个 E2E case 的附件中会生成 `knowledge-cache-summary.json`，timeline 也会记录同样的命中和未命中统计。正式包总统计同时写入 `tests/logs/package/<runId>/summary.json`。
 
 ### 4.3 自动更新模拟测试
 

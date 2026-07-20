@@ -35,3 +35,6 @@
 - 正式包构建、安装和用例汇总保存在 `tests/logs/package/<run-id>`。
 - Workbench 和需要真实文件的 Settings 用例复制 `tests/fixtures/workspace` 到临时目录，结束后删除临时副本。
 - 每个 E2E 必须显式声明 `serviceMode`；fixture 还必须提供 `fixtureReason`。
+- 知识库缓存按构建隔离：source 使用 `tests/.cache/workspace-knowledge/source/<build-sha256>`，package 使用 `tests/.cache/workspace-knowledge/package/<artifact-sha256>`；同一轮所有用例共用选中的目录。
+- `--fresh-knowledge-cache` 强制清空当前构建缓存；`--reuse-knowledge-cache` 只用于人工调试时跨构建复用。
+- 每个 case 的附件都有 `knowledge-cache-summary.json`，正式包汇总也记录缓存路径、构建指纹和 hit/miss。

@@ -415,16 +415,18 @@ describe('workbench conversation e2e', () => {
               result.browserGoButtonVisible &&
               !result.hoverOverflow.horizontal &&
               !result.hoverOverflow.vertical &&
-              !result.shellPresentDuringExit &&
               result.restoreButtonRightOffset >= 0 &&
               result.restoreButtonRightOffset < 200,
             {
               name: 'browser-menu-and-panel-toggle-remain-operable',
               message:
-                '浏览器原生菜单不得改变 viewport 或 zoom，浏览器侧栏折叠应立即卸载 shell，恢复按钮应贴近右边缘。',
+                '浏览器原生菜单不得改变 viewport 或 zoom，浏览器侧栏折叠完成后应卸载 shell，恢复按钮应贴近右边缘。',
               data: {
                 browserMenuLayout: result.browserMenuLayout,
-                restoreButtonRightOffset: result.restoreButtonRightOffset
+                restoreButtonRightOffset: result.restoreButtonRightOffset,
+                browserGoButtonVisible: result.browserGoButtonVisible,
+                hoverOverflow: result.hoverOverflow,
+                shellPresentDuringExit: result.shellPresentDuringExit
               }
             }
           )

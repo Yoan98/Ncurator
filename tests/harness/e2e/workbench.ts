@@ -1024,14 +1024,29 @@ export const setWorkbenchInput = async (page: Page, value: string): Promise<void
       selection?.addRange(range)
     })
   }
-  await selectAllInput()
-  await page.keyboard.press('Backspace')
-  await page.waitForFunction((testId: string) => {
-    const element = document.querySelector(`[data-testid="${testId}"]`)
-    if (!(element instanceof HTMLElement)) return false
-    const tokenCount = element.querySelectorAll('[data-role="scope-token"]').length
-    return tokenCount === 0 && !element.textContent?.trim()
-  }, workbenchSelectors.input)
+  let cleared = false
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    await input.click()
+    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A')
+    await page.keyboard.press('Backspace')
+    cleared = await page
+      .waitForFunction(
+        (testId: string) => {
+          const element = document.querySelector(`[data-testid="${testId}"]`)
+          if (!(element instanceof HTMLElement)) return false
+          const tokenCount = element.querySelectorAll('[data-role="scope-token"]').length
+          return tokenCount === 0 && !element.textContent?.trim()
+        },
+        workbenchSelectors.input,
+        { timeout: 1500 }
+      )
+      .then(() => true)
+      .catch(() => false)
+    if (cleared) break
+    await selectAllInput()
+    await page.keyboard.press('Backspace')
+  }
+  if (!cleared) throw new Error('workbench input could not be cleared through keyboard interaction')
   if (!value) return
 
   for (let attempt = 1; attempt <= 3; attempt += 1) {

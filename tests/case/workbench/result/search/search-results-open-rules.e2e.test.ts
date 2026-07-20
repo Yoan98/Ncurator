@@ -152,7 +152,10 @@ describe('workbench result e2e', () => {
                 return {
                   webResultsText,
                   populatedLayout,
-                  legitimateSearchTextVisible: await page.getByText('已检索知识库').isVisible()
+                  legitimateSearchTextVisible: await page
+                    .getByText('已检索知识库')
+                    .first()
+                    .isVisible()
                 }
               }
             })
@@ -211,12 +214,8 @@ describe('workbench result e2e', () => {
                 const draftText = (
                   (await getWorkbenchLocator(page, workbenchSelectors.input).textContent()) || ''
                 ).trim()
-                const rightPanelText = (
-                  (await getWorkbenchLocator(
-                    page,
-                    workbenchSelectors.contentPanel
-                  ).textContent()) || ''
-                ).trim()
+                const rightPanelPresent =
+                  (await getWorkbenchLocator(page, workbenchSelectors.contentPanel).count()) > 0
                 await switchWorkbenchMode(page, '大聪明')
                 const cleanAiSessionKnowledgeTextCount = await page
                   .getByText('已检索知识库')
@@ -226,7 +225,7 @@ describe('workbench result e2e', () => {
                   messagesAfter,
                   sendButtonStateBefore,
                   draftText,
-                  rightPanelText,
+                  rightPanelPresent,
                   cleanAiSessionKnowledgeTextCount
                 }
               }
@@ -265,7 +264,7 @@ describe('workbench result e2e', () => {
               result.emptySearchResult.cleanAiSessionKnowledgeTextCount === 0 &&
               result.emptySearchResult.messagesBefore === result.emptySearchResult.messagesAfter &&
               result.emptySearchResult.draftText.includes('anything') &&
-              result.emptySearchResult.rightPanelText.includes('右侧暂无内容'),
+              !result.emptySearchResult.rightPanelPresent,
             {
               name: 'workbench-search-results-real-open-rules',
               message:

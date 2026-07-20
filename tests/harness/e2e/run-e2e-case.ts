@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import type { Page } from 'playwright'
 import type { ElectronApplication } from 'playwright'
@@ -29,6 +29,54 @@ import {
 } from './electronApp'
 
 export type E2ETestRunMode = 'single' | 'repeatable'
+
+type KnowledgeCacheStats = {
+  splitCacheHits: number
+  splitCacheMisses: number
+  vectorCacheHits: number
+  vectorCacheMisses: number
+}
+
+type KnowledgeCacheSummary = KnowledgeCacheStats & {
+  knowledgeCacheEnabled: boolean
+  knowledgeCachePath: string
+  knowledgeCacheNamespace: string
+  buildFingerprint: string
+}
+
+const EMPTY_KNOWLEDGE_CACHE_STATS: KnowledgeCacheStats = {
+  splitCacheHits: 0,
+  splitCacheMisses: 0,
+  vectorCacheHits: 0,
+  vectorCacheMisses: 0
+}
+
+const readKnowledgeCacheStats = async (cachePath: string): Promise<KnowledgeCacheStats> => {
+  if (!cachePath) return { ...EMPTY_KNOWLEDGE_CACHE_STATS }
+  try {
+    const parsed = JSON.parse(
+      await readFile(path.join(cachePath, 'stats.json'), 'utf8')
+    ) as Partial<KnowledgeCacheStats>
+    return {
+      splitCacheHits: Number(parsed.splitCacheHits || 0),
+      splitCacheMisses: Number(parsed.splitCacheMisses || 0),
+      vectorCacheHits: Number(parsed.vectorCacheHits || 0),
+      vectorCacheMisses: Number(parsed.vectorCacheMisses || 0)
+    }
+  } catch {
+    return { ...EMPTY_KNOWLEDGE_CACHE_STATS }
+  }
+}
+
+const subtractKnowledgeCacheStats = (
+  current: KnowledgeCacheStats,
+  baseline: KnowledgeCacheStats
+): KnowledgeCacheStats => ({
+  splitCacheHits: Math.max(0, current.splitCacheHits - baseline.splitCacheHits),
+  splitCacheMisses: Math.max(0, current.splitCacheMisses - baseline.splitCacheMisses),
+  vectorCacheHits: Math.max(0, current.vectorCacheHits - baseline.vectorCacheHits),
+  vectorCacheMisses: Math.max(0, current.vectorCacheMisses - baseline.vectorCacheMisses)
+})
 
 type E2EAssertionInput = {
   name: string
@@ -236,6 +284,15 @@ export const runE2ECase = async <TResult>(
     caseId: definition.caseId,
     runId
   })
+  const knowledgeCachePath = String(
+    process.env.NCURATOR_WORKSPACE_KNOWLEDGE_CACHE_PATH || ''
+  ).trim()
+  const knowledgeCacheEnabled =
+    String(process.env.NCURATOR_WORKSPACE_KNOWLEDGE_CACHE || '').trim() === '1' &&
+    Boolean(knowledgeCachePath)
+  const knowledgeCacheBaseline = knowledgeCacheEnabled
+    ? await readKnowledgeCacheStats(knowledgeCachePath)
+    : { ...EMPTY_KNOWLEDGE_CACHE_STATS }
   const emittedTimelineSignalKeys = new Set<string>()
   const emittedRuntimeEventKeys = new Set<string>()
   let launchedApp: LaunchedElectronApp | null = null
@@ -677,6 +734,38 @@ export const runE2ECase = async <TResult>(
         message: '保存 Playwright trace'
       })
     }
+
+    const knowledgeCacheCurrent = knowledgeCacheEnabled
+      ? await readKnowledgeCacheStats(knowledgeCachePath)
+      : { ...EMPTY_KNOWLEDGE_CACHE_STATS }
+    const knowledgeCacheSummary: KnowledgeCacheSummary = {
+      knowledgeCacheEnabled,
+      knowledgeCachePath,
+      knowledgeCacheNamespace: String(
+        process.env.NCURATOR_E2E_KNOWLEDGE_CACHE_NAMESPACE || ''
+      ).trim(),
+      buildFingerprint: String(process.env.NCURATOR_E2E_BUILD_FINGERPRINT || '').trim(),
+      ...subtractKnowledgeCacheStats(knowledgeCacheCurrent, knowledgeCacheBaseline)
+    }
+    const knowledgeCacheSummaryPath = path.join(logDirArtifacts, 'knowledge-cache-summary.json')
+    await mkdir(path.dirname(knowledgeCacheSummaryPath), { recursive: true })
+    await writeFile(
+      knowledgeCacheSummaryPath,
+      `${JSON.stringify(knowledgeCacheSummary, null, 2)}\n`,
+      'utf8'
+    )
+    await captureArtifact({
+      kind: 'other',
+      relativePath: 'knowledge-cache-summary.json',
+      message: '保存本用例知识库缓存命中统计'
+    })
+    recordEvent({
+      type: 'signal',
+      name: 'knowledge-cache-summary',
+      status: 'info',
+      message: knowledgeCacheEnabled ? '记录本用例知识库缓存命中统计' : '本用例未启用知识库缓存',
+      data: knowledgeCacheSummary
+    })
 
     if (status === 'failed') {
       const reportRelativePath = path.posix.join('playwright', 'report', 'index.html')

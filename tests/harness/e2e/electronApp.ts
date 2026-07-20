@@ -222,10 +222,6 @@ const buildElectronLaunchEnv = (
   } else {
     delete env.NCURATOR_E2E_MODE
     env.NCURATOR_E2E_OBSERVER = '1'
-    env.NCURATOR_WORKSPACE_KNOWLEDGE_CACHE = process.env.NCURATOR_WORKSPACE_KNOWLEDGE_CACHE || '1'
-    env.NCURATOR_WORKSPACE_KNOWLEDGE_CACHE_PATH =
-      process.env.NCURATOR_WORKSPACE_KNOWLEDGE_CACHE_PATH ||
-      path.resolve(process.cwd(), 'tests', '.cache', 'workspace-knowledge')
   }
   env.NCURATOR_E2E_WINDOW_MODE = windowMode || process.env.NCURATOR_E2E_WINDOW_MODE || 'background'
   env.NCURATOR_USER_DATA_PATH = userDataDir

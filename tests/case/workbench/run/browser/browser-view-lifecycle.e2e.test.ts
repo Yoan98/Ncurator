@@ -140,65 +140,37 @@ describe('workbench browser lifecycle e2e', () => {
             const captureViewportPixels = async () => {
               const rect = await readViewportRect()
               if (!rect) throw new Error('browser viewport bounds are missing')
-              return await runtime.electronApp.evaluate(
-                async ({ BrowserWindow, desktopCapturer }, input) => {
-                  const window = BrowserWindow.getAllWindows()[0]
-                  if (!window || window.isDestroyed()) throw new Error('main window is unavailable')
-                  const windowBounds = window.getBounds()
-                  const contentBounds = window.getContentBounds()
-                  const mediaSourceId = window.getMediaSourceId()
-                  const sources = await desktopCapturer.getSources({
-                    types: ['window'],
-                    thumbnailSize: {
-                      width: Math.max(1, windowBounds.width),
-                      height: Math.max(1, windowBounds.height)
-                    }
-                  })
-                  const source =
-                    sources.find((candidate) => candidate.id === mediaSourceId) ||
-                    sources.find((candidate) => candidate.name === window.getTitle())
-                  if (!source) throw new Error('desktop capture source is unavailable')
-
-                  const image = source.thumbnail
-                  const size = image.getSize()
-                  const bitmap = image.toBitmap()
-                  const scaleX = size.width / windowBounds.width
-                  const scaleY = size.height / windowBounds.height
-                  const contentOffsetX = contentBounds.x - windowBounds.x
-                  const contentOffsetY = contentBounds.y - windowBounds.y
-                  const left = Math.max(0, Math.floor((contentOffsetX + input.rect.x) * scaleX))
-                  const top = Math.max(0, Math.floor((contentOffsetY + input.rect.y) * scaleY))
-                  const right = Math.min(
-                    size.width,
-                    Math.ceil((contentOffsetX + input.rect.x + input.rect.width) * scaleX)
-                  )
-                  const bottom = Math.min(
-                    size.height,
-                    Math.ceil((contentOffsetY + input.rect.y + input.rect.height) * scaleY)
-                  )
-                  let sampled = 0
-                  let white = 0
-                  let dark = 0
-                  for (let y = top; y < bottom; y += 3) {
-                    for (let x = left; x < right; x += 3) {
-                      const offset = (y * size.width + x) * 4
-                      const blue = bitmap[offset]
-                      const green = bitmap[offset + 1]
-                      const red = bitmap[offset + 2]
-                      sampled += 1
-                      if (red > 245 && green > 245 && blue > 245) white += 1
-                      if (red < 80 && green < 100 && blue < 120) dark += 1
-                    }
+              return await runtime.electronApp.evaluate(async ({ webContents }, url) => {
+                const contents = webContents
+                  .getAllWebContents()
+                  .find((candidate) => candidate.getURL() === url)
+                if (!contents || contents.isDestroyed()) {
+                  throw new Error('embedded browser web contents is unavailable')
+                }
+                const image = await contents.capturePage()
+                const size = image.getSize()
+                const bitmap = image.toBitmap()
+                let sampled = 0
+                let white = 0
+                let dark = 0
+                for (let y = 0; y < size.height; y += 3) {
+                  for (let x = 0; x < size.width; x += 3) {
+                    const offset = (y * size.width + x) * 4
+                    const blue = bitmap[offset]
+                    const green = bitmap[offset + 1]
+                    const red = bitmap[offset + 2]
+                    sampled += 1
+                    if (red > 245 && green > 245 && blue > 245) white += 1
+                    if (red < 80 && green < 100 && blue < 120) dark += 1
                   }
-                  return {
-                    sampled,
-                    whiteRatio: sampled > 0 ? white / sampled : 1,
-                    darkRatio: sampled > 0 ? dark / sampled : 0,
-                    imageSize: size
-                  }
-                },
-                { rect }
-              )
+                }
+                return {
+                  sampled,
+                  whiteRatio: sampled > 0 ? white / sampled : 1,
+                  darkRatio: sampled > 0 ? dark / sampled : 0,
+                  imageSize: size
+                }
+              }, server.url)
             }
             const inspectBrowserRuntime = async () =>
               await runtime.electronApp.evaluate(async ({ webContents }, url) => {
