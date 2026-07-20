@@ -10,9 +10,7 @@ const execFileAsync = promisify(execFile)
 const [appPath = '', outputPath = ''] = process.argv.slice(2)
 
 if (!appPath || !outputPath) {
-  throw new Error(
-    'usage: node scripts/verify-mac-update-signature.mjs <Ncurator.app> <output-file>'
-  )
+  throw new Error('usage: node scripts/verify-mac-update-signature.mjs <app> <output-file>')
 }
 
 await execFileAsync('/usr/bin/codesign', ['--verify', '--deep', '--strict', '--verbose=2', appPath])
@@ -43,7 +41,12 @@ const verifyPackagedAppLaunch = async () => {
   const homeDirectory = path.join(runtimeDirectory, 'home')
   await mkdir(userDataDirectory, { recursive: true })
   await mkdir(homeDirectory, { recursive: true })
-  const executable = path.join(appPath, 'Contents', 'MacOS', 'Ncurator')
+  const { stdout: executableName } = await execFileAsync('/usr/libexec/PlistBuddy', [
+    '-c',
+    'Print :CFBundleExecutable',
+    path.join(appPath, 'Contents', 'Info.plist')
+  ])
+  const executable = path.join(appPath, 'Contents', 'MacOS', executableName.trim())
   let output = ''
   let electronApp
 

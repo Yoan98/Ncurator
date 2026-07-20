@@ -74,6 +74,16 @@ const readBundleVersion = async (appPath) => {
   return stdout.trim()
 }
 
+const readBundleExecutable = async (appPath) => {
+  const plistPath = path.join(appPath, 'Contents', 'Info.plist')
+  const { stdout } = await execFileAsync('/usr/libexec/PlistBuddy', [
+    '-c',
+    'Print :CFBundleExecutable',
+    plistPath
+  ])
+  return stdout.trim()
+}
+
 const readGenericUpdateUrl = async () => {
   const builderConfig = await readFile(path.join(ROOT, 'electron-builder.yml'), 'utf8')
   const publishBlock = builderConfig.match(
@@ -106,6 +116,8 @@ const verifyStableMacSignature = async (appPath) => {
 
 const resolveBuiltAppPath = async (outputPath) => {
   const candidates = [
+    path.join(outputPath, `mac-${process.arch}`, '馆长.app'),
+    path.join(outputPath, 'mac', '馆长.app'),
     path.join(outputPath, `mac-${process.arch}`, 'Ncurator.app'),
     path.join(outputPath, 'mac', 'Ncurator.app')
   ]
@@ -162,7 +174,8 @@ const waitForBundleVersion = async (appPath, expectedVersion, timeoutMs) => {
 }
 
 const launchApp = async ({ appPath, userDataPath, homePath, remoteDebuggingPort, logs }) => {
-  const executablePath = path.join(appPath, 'Contents', 'MacOS', 'Ncurator')
+  const executableName = await readBundleExecutable(appPath)
+  const executablePath = path.join(appPath, 'Contents', 'MacOS', executableName)
   const electronApp = await electron.launch({
     executablePath,
     cwd: path.dirname(appPath),

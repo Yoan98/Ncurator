@@ -24,9 +24,11 @@ describe('app update publish config', () => {
 
   it('shows the Chinese product name while keeping stable technical artifact names', async () => {
     const config = await readFile(path.resolve('electron-builder.yml'), 'utf8')
+    const macBlock = config.match(/^mac:\s*\n([\s\S]*?)^dmg:/mu)?.[1] || ''
 
     expect(config).toContain('productName: 馆长')
     expect(config).toContain('executableName: Ncurator')
+    expect(macBlock).not.toContain('executableName:')
     expect(config).toContain('artifactName: Ncurator-windows-${arch}.${ext}')
     expect(config).toContain('artifactName: Ncurator-mac-${arch}.${ext}')
   })
@@ -150,6 +152,7 @@ describe('app update publish config', () => {
     expect(signatureVerifier).toContain('macOS release must not use an ad-hoc signature')
     expect(signatureVerifier).toContain('macOS designated requirement must remain stable')
     expect(signatureVerifier).toContain('packaged macOS app launch verification passed')
+    expect(signatureVerifier).toContain('Print :CFBundleExecutable')
     expect(signatureVerifier).toContain("'--deep'")
     expect(runtimeSignatureVerifier).toContain("['-d', '-r-', '--verbose=4'")
     expect(runtimeSignatureVerifier).not.toContain("'--deep'")

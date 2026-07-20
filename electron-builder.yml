@@ -45,7 +45,6 @@ nsis:
   createDesktopShortcut: always
 mac:
   icon: build/icon.icns
-  executableName: Ncurator
   artifactName: Ncurator-mac-${arch}.${ext}
   # @electron/osx-sign 会把部分二进制格式的数据文件误判成可执行文件。
   # 这些资源由外层 bundle 签名保护；Mach-O、.node、.dylib 和 .so 不在忽略范围内。
