@@ -10,7 +10,7 @@ const ENV_KEYS = [
   'AI_LIVE_PRIMARY_MODEL_NAME',
   'AI_LIVE_VISION_BASE_URL',
   'AI_LIVE_VISION_API_KEY',
-  'AI_LIVE_VISION_MODEL_NAME',
+  'AI_LIVE_VISUAL_MODEL_NAME',
   'AI_LIVE_VISION_PROVIDER_KIND'
 ] as const
 
@@ -36,7 +36,7 @@ describe('live LLM configuration', () => {
     process.env.AI_LIVE_PRIMARY_MODEL_NAME = 'deepseek-v4-flash'
     delete process.env.AI_LIVE_VISION_BASE_URL
     delete process.env.AI_LIVE_VISION_API_KEY
-    delete process.env.AI_LIVE_VISION_MODEL_NAME
+    delete process.env.AI_LIVE_VISUAL_MODEL_NAME
     delete process.env.AI_LIVE_VISION_PROVIDER_KIND
 
     const config = loadLiveVisionLlmConfigFromEnv()
@@ -53,7 +53,7 @@ describe('live LLM configuration', () => {
     process.env.AI_LIVE_PRIMARY_MODEL_NAME = 'primary-model'
     process.env.AI_LIVE_VISION_BASE_URL = 'https://vision.example.test/v1'
     process.env.AI_LIVE_VISION_API_KEY = 'vision-key'
-    process.env.AI_LIVE_VISION_MODEL_NAME = 'vision-model'
+    process.env.AI_LIVE_VISUAL_MODEL_NAME = 'vision-model'
 
     const config = loadLiveVisionLlmConfigFromEnv()
 

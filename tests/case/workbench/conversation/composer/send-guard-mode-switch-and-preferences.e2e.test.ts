@@ -14,6 +14,7 @@ import {
   selectWorkbenchAiPreference,
   recordWorkbenchAiEvidence,
   selectWorkbenchModel,
+  selectWorkbenchVisualModel,
   sendWorkbenchMessage,
   setWorkbenchInput,
   switchWorkbenchMode,
@@ -91,6 +92,7 @@ describe('workbench conversation e2e', () => {
               rootPath: workspace.rootPath
             })
             await selectWorkbenchModel(page, env.modelName)
+            await selectWorkbenchVisualModel(page, env.visualModelName)
             await selectWorkbenchAiPreference(page, '严谨')
             const selectedAiPreferenceBeforeReload = await readWorkbenchAiPreferenceSelection(page)
             await switchWorkbenchMode(page, '没头脑')

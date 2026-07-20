@@ -21,7 +21,7 @@ Settings 的回归测试顶层 suite 直接对齐 PRD 模块：
 - `model` 验证大模型可用服务配置的加载、创建、编辑、删除和远端模型列表刷新。
 - `workspace` 验证工作空间容器及其下属 `files`、`web` 两类子区域的页面行为和 backend / IPC 支撑契约。
 - `vector` 属于 Settings 产品域，但页面位于独立路由 `/model-download`，测试目录与 runner 仍统一归入 `tests/case/settings/vector/**`。
-- `update` 覆盖应用更新服务、发布配置、R2 元数据和设置页面；真实下载安装单独按 `doc/app-update-test.md` 执行。
+- `update` 覆盖应用更新服务、发布配置、R2 元数据和设置页面；真实下载安装按 `doc/test.md` 的“自动更新专项测试”执行。
 - `workspace` 在这里是 Settings 下的 suite，不是独立测试 domain；其下统一按 `core / files / web` 组织子区域。
 - `workspace` 测试语义基于“具名工作空间容器 + 文件 tab + 网页 tab”。
 - `workspace` 相关回归测试默认复用 `tests/fixtures/workspace` 作为共享输入目录。
@@ -347,4 +347,4 @@ Settings 的回归测试顶层 suite 直接对齐 PRD 模块：
 - Why：用户需要从页面明确看到是否有更新、当前进度、失败原因和下一步操作。
 - How：通过受控更新服务状态打开应用更新面板，覆盖检查、可下载、下载完成和错误展示。
 - Oracle：页面按钮、状态和错误信息与主进程更新状态一致，未完成下载时不会提供安装动作。
-- Not：不下载真实更新包；真实升级按 [app-update-test.md](../app-update-test.md) 单独执行。
+- Not：不下载真实更新包；真实升级按 [测试总规范](../test.md#43-自动更新专项测试) 单独执行。

@@ -47,6 +47,7 @@ export type WorkbenchLiveModelEnv = {
   baseUrl: string
   apiKey: string
   modelName: string
+  visualModelName: string
 }
 
 export type TemporaryWorkbenchWorkspace = TemporaryE2EWorkspace
@@ -329,14 +330,16 @@ export const loadWorkbenchLiveModelEnv = (): WorkbenchLiveModelEnv => {
   const baseUrl = readEnv('AI_LIVE_BASE_URL')
   const apiKey = readEnv('AI_LIVE_API_KEY')
   const modelName = readEnv('AI_LIVE_PRIMARY_MODEL_NAME')
+  const visualModelName = readEnv('AI_LIVE_VISUAL_MODEL_NAME')
 
-  if (!baseUrl || !apiKey || !modelName) {
+  if (!baseUrl || !apiKey || !modelName || !visualModelName) {
     throw new Error(
       [
         'Workbench formal AI e2e 缺少真实模型配置，必须设置：',
         '- AI_LIVE_BASE_URL',
         '- AI_LIVE_API_KEY',
-        '- AI_LIVE_PRIMARY_MODEL_NAME'
+        '- AI_LIVE_PRIMARY_MODEL_NAME',
+        '- AI_LIVE_VISUAL_MODEL_NAME'
       ].join('\n')
     )
   }
@@ -344,7 +347,8 @@ export const loadWorkbenchLiveModelEnv = (): WorkbenchLiveModelEnv => {
   return {
     baseUrl,
     apiKey,
-    modelName
+    modelName,
+    visualModelName
   }
 }
 
@@ -439,6 +443,7 @@ export const configureLiveModelThroughSettingsUi = async (
 
   await navigateToWorkbench(page, { waitForSessionListText: false })
   await selectWorkbenchModel(page, env.modelName)
+  await selectWorkbenchVisualModel(page, env.visualModelName)
 }
 
 export const createWorkspaceThroughSettingsUi = async (
@@ -938,6 +943,7 @@ export const setupWorkbenchWithTempWorkspace = async (
     })
     if (input.configureModel !== false) {
       await selectWorkbenchModel(page, env.modelName)
+      await selectWorkbenchVisualModel(page, env.visualModelName)
     }
     if (input.createSession !== false) {
       await page.getByRole('button', { name: `在 ${workspaceName} 中新建对话` }).click()
@@ -1194,13 +1200,18 @@ export const readWorkbenchAiPreferenceSelection = async (page: Page): Promise<st
   return selectedLabel.trim()
 }
 
-export const selectWorkbenchModel = async (page: Page, modelName: string): Promise<void> => {
+const selectWorkbenchModelByRole = async (
+  page: Page,
+  modelName: string,
+  role: '主模型' | '视觉模型',
+  envName: 'AI_LIVE_PRIMARY_MODEL_NAME' | 'AI_LIVE_VISUAL_MODEL_NAME'
+): Promise<void> => {
   const modelSelect = getWorkbenchLocator(page, workbenchSelectors.modelSelect)
   await modelSelect.click()
   await page
     .locator('.workbench-select-menu.workbench-composer-menu')
     .last()
-    .getByRole('button', { name: /^主模型/u })
+    .getByRole('button', { name: new RegExp(`^${role}`, 'u') })
     .click()
   const searchInput = page
     .locator('.workbench-select-menu.workbench-composer-menu input[placeholder="搜索模型"]')
@@ -1220,7 +1231,7 @@ export const selectWorkbenchModel = async (page: Page, modelName: string): Promi
     const optionTexts = (await options.allTextContents()).map((item) => item.trim()).filter(Boolean)
     throw new Error(
       [
-        `AI_LIVE_PRIMARY_MODEL_NAME="${modelName}" was not found in the Workbench model dropdown.`,
+        `${envName}="${modelName}" was not found in the Workbench ${role} dropdown.`,
         `Available models: ${optionTexts.join(', ') || '(none)'}`,
         'Workbench formal AI e2e cannot continue without a real UI-selectable live model.'
       ].join('\n')
@@ -1228,6 +1239,12 @@ export const selectWorkbenchModel = async (page: Page, modelName: string): Promi
   }
   await modelOption.click()
 }
+
+export const selectWorkbenchModel = async (page: Page, modelName: string): Promise<void> =>
+  await selectWorkbenchModelByRole(page, modelName, '主模型', 'AI_LIVE_PRIMARY_MODEL_NAME')
+
+export const selectWorkbenchVisualModel = async (page: Page, modelName: string): Promise<void> =>
+  await selectWorkbenchModelByRole(page, modelName, '视觉模型', 'AI_LIVE_VISUAL_MODEL_NAME')
 
 export const selectWorkbenchWorkspace = async (
   page: Page,

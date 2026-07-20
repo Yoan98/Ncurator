@@ -6,7 +6,7 @@
 - Workbench 回归测试统一对齐 [workbench.md](../prd/workbench.md)，新增、调整或验收结论都应引用对应的 `WB-*` 需求编号与验收编号。
 - 新增或调整测试、runner、raw logs、UI E2E 回归规则与真实 AI / live 断言规则，统一遵循 `doc/test.md`。
 - Workbench UI E2E 回归测试必须通过真实 Electron UI 配模型、配工作区、发送消息、选择 `@` 资料、搜索、预览、回退和操作右侧面板。
-- 涉及 AI 的 Workbench UI E2E 回归测试必须使用真实模型调用；测试只从 `AI_LIVE_BASE_URL`、`AI_LIVE_API_KEY`、`AI_LIVE_PRIMARY_MODEL_NAME` 读取 live 配置，并在应用内未配置时通过 Settings UI 新增配置。
+- 涉及 AI 的 Workbench UI E2E 回归测试必须使用真实模型调用；测试只从 `AI_LIVE_BASE_URL`、`AI_LIVE_API_KEY`、`AI_LIVE_PRIMARY_MODEL_NAME`、`AI_LIVE_VISUAL_MODEL_NAME` 读取 live 配置，并在应用内未配置时通过 Settings UI 新增配置。
 - 真实执行 case 时，如果失败来自新的生产行为缺口或必须修改业务实现才能通过，不在测试实现中硬改生产行为；统一记录为待产品 / 生产实现决策项。
 
 ## 2. 测试边界
@@ -14,7 +14,7 @@
 - Workbench UI E2E 回归测试通过脚本在 case 运行时把 `tests/fixtures/workspace` 复制到临时目录，并默认通过 Settings UI 创建工作区、绑定真实目录、检查更新和更新索引。
 - Workbench 正式 e2e 不允许直接调用 `workspacePrepare`、直接写模型配置、fake model、fake search、fake docx、fake AI event、fake attachment pick 或固定 document id。
 - Workbench e2e 的 workspace 文件索引允许在测试环境通过 `NCURATOR_WORKSPACE_KNOWLEDGE_CACHE=1` 启用真实 split / vector 缓存；缓存只按文件内容 hash、扩展名、splitter 参数和 embedding model 复用计算结果，不替代 workspace 文件记录、document id、搜索结果或 UI 状态。
-- Workbench 模型选择 helper 必须通过真实下拉搜索选择 `AI_LIVE_PRIMARY_MODEL_NAME`。
+- Workbench 模型选择 helper 必须通过真实下拉搜索分别选择 `AI_LIVE_PRIMARY_MODEL_NAME` 和 `AI_LIVE_VISUAL_MODEL_NAME`。
 - Workbench UI E2E 回归测试需要真实索引完成信号和 UI 可见状态作为等待条件；IPC observer 和 job 查询只能作为辅助证据，不能用来造业务状态。
 - `file-preview-actions` 当前按生产真实索引能力覆盖 `pdf/docx/md/txt`：连续打开的文件要分别保留为资源 Tab，并能切回旧 Tab；`.log` 与代码等其他 UTF-8 文件的纯文本 fallback 由 `file-render-utils` unit case 直接覆盖。
 - docx apply case 需要真实 docx 输入、真实 AI 编辑、真实写回记录、真实预览和真实回退。
@@ -78,7 +78,7 @@ tests/case/workbench/
 
 - `pnpm test:workbench:e2e` 是 Workbench UI 源码 E2E 回归测试入口。
 - 需要验证正式安装包时使用 `pnpm test:e2e:package`；它会构建并审计当前平台安装包，再对安装后的真实应用执行全部 E2E，不属于普通开发回归。
-- AI case 缺少 `AI_LIVE_BASE_URL`、`AI_LIVE_API_KEY`、`AI_LIVE_PRIMARY_MODEL_NAME` 时必须 preflight fail，不得静默跳过。
+- AI case 缺少 `AI_LIVE_BASE_URL`、`AI_LIVE_API_KEY`、`AI_LIVE_PRIMARY_MODEL_NAME`、`AI_LIVE_VISUAL_MODEL_NAME` 时必须 preflight fail，不得静默跳过。
 - `conversation / run / result` 是稳定 suite，不因 PRD 小节增删而轻易重排。
 - suite 下的 `session / composer / message / scope / process / blocker / browser / search / preview / apply` 是 group，只在同一 suite 内用于收敛相近 case。
 

@@ -17,6 +17,7 @@ import {
   readDocxPlainText,
   recordWorkbenchAiEvidence,
   selectWorkbenchModel,
+  selectWorkbenchVisualModel,
   selectWorkbenchWorkspace,
   sendWorkbenchMessage,
   waitForWorkbenchApplyPanelReady,
@@ -73,6 +74,7 @@ const setupMultiFileApplyWorkspace = async (
   await navigateToWorkbench(page)
   await selectWorkbenchWorkspace(page, workspaceName)
   await selectWorkbenchModel(page, env.modelName)
+  await selectWorkbenchVisualModel(page, env.visualModelName)
 
   return {
     env,

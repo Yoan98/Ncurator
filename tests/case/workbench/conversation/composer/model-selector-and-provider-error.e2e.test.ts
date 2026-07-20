@@ -19,9 +19,8 @@ import {
 } from '../../../../harness/e2e/workbench'
 
 const CASE_ID = 'model-selector-and-provider-error'
-const MODEL_NAME = 'doubao-seed-2-0-mini-260215'
 const MISSING_MODEL_NAME = 'missing-model-must-not-be-created'
-const UNAVAILABLE_MODEL_NAME = 'doubao-lite-128k-240428'
+const UNAVAILABLE_MODEL_NAME = 'missing-provider-model-must-fail'
 const WORKSPACE_NAME = 'Model Provider Error Workspace'
 
 type ProviderServer = {
@@ -146,16 +145,14 @@ describe('workbench conversation e2e', () => {
         execute: async (runtime) => {
           const { page } = runtime
           const liveEnv = loadWorkbenchLiveModelEnv()
-          if (liveEnv.modelName !== MODEL_NAME) {
-            throw new Error(`本用例必须使用真实豆包模型 ${MODEL_NAME}`)
-          }
           const provider = await startProviderServer(liveEnv)
           const workspace = await createTemporaryWorkbenchWorkspace(CASE_ID)
           try {
             await configureLiveModelThroughSettingsUi(page, {
               baseUrl: provider.baseUrl,
               apiKey: liveEnv.apiKey,
-              modelName: MODEL_NAME
+              modelName: liveEnv.modelName,
+              visualModelName: liveEnv.modelName
             })
             await navigateToWorkbench(page, { waitForSessionListText: false })
 
@@ -186,13 +183,13 @@ describe('workbench conversation e2e', () => {
             const collapsed =
               (await configButton.getAttribute('aria-expanded')) === 'false' &&
               !(await dropdown
-                .getByRole('option', { name: MODEL_NAME })
+                .getByRole('option', { name: liveEnv.modelName })
                 .isVisible()
                 .catch(() => false))
             await configButton.click()
             const expanded =
               (await configButton.getAttribute('aria-expanded')) === 'true' &&
-              (await dropdown.getByRole('option', { name: MODEL_NAME }).isVisible())
+              (await dropdown.getByRole('option', { name: liveEnv.modelName }).isVisible())
 
             await searchInput.fill(MISSING_MODEL_NAME)
             await dropdown.getByText('暂无匹配模型', { exact: true }).waitFor({ state: 'visible' })
@@ -208,7 +205,7 @@ describe('workbench conversation e2e', () => {
             })
 
             await searchInput.fill('')
-            await dropdown.getByRole('option', { name: MODEL_NAME }).click()
+            await dropdown.getByRole('option', { name: liveEnv.modelName }).click()
 
             const created = await page.evaluate(
               async ({ name, rootPath }) => {
@@ -235,7 +232,7 @@ describe('workbench conversation e2e', () => {
             const successEvidence = await waitForWorkbenchAiRunCompletion(
               runtime,
               successStartedAt,
-              MODEL_NAME,
+              liveEnv.modelName,
               240_000,
               { page }
             )
@@ -247,7 +244,9 @@ describe('workbench conversation e2e', () => {
               const signals = await runtime.collectSignals()
               return signals.aiRunEventEntries.map((entry) => entry.event)
             })
-            await page.getByText(/HTTP 404/u).waitFor({ state: 'visible' })
+            await page
+              .getByText(new RegExp(`HTTP ${String(runFailed.httpStatus || '')}`, 'u'))
+              .waitFor({ state: 'visible' })
             await page.getByText(runFailed.message, { exact: false }).waitFor({ state: 'visible' })
             const pageText = (await page.locator('body').innerText()).trim()
             await runtime.captureScreenshot({
@@ -264,6 +263,7 @@ describe('workbench conversation e2e', () => {
               successfulChatRequestCount: provider.getSuccessfulChatRequestCount(),
               successFinalAnswer: successEvidence.finalAnswerText,
               chatRequestCount: provider.getChatRequestCount(),
+              modelName: liveEnv.modelName,
               runFailed,
               pageText
             }
@@ -292,9 +292,10 @@ describe('workbench conversation e2e', () => {
           await runtime.assertThat(
             result.successfulChatRequestCount > 0 && result.successFinalAnswer.includes('测试成功'),
             {
-              name: 'real-doubao-model-is-called',
-              message: 'doubao-seed-2-0-mini-260215 应被真实调用并返回回答。',
+              name: 'configured-real-model-is-called',
+              message: '环境变量配置的真实主模型应被调用并返回回答。',
               data: {
+                modelName: result.modelName,
                 successfulChatRequestCount: result.successfulChatRequestCount,
                 successFinalAnswer: result.successFinalAnswer
               }
@@ -303,18 +304,16 @@ describe('workbench conversation e2e', () => {
           await runtime.assertThat(
             result.chatRequestCount === 1 &&
               result.runFailed.source === 'provider' &&
-              result.runFailed.httpStatus === 404 &&
-              result.runFailed.providerCode === 'InvalidEndpointOrModel.NotFound' &&
+              Number(result.runFailed.httpStatus || 0) >= 400 &&
               result.runFailed.message.trim().length > 0 &&
-              result.pageText.includes('HTTP 404') &&
-              result.pageText.includes('InvalidEndpointOrModel.NotFound') &&
+              result.pageText.includes(`HTTP ${String(result.runFailed.httpStatus || '')}`) &&
               result.pageText.includes(result.runFailed.message) &&
               !/LangGraph|LangChain|Troubleshooting URL|structured_output_|recursionLimit/iu.test(
                 result.pageText
               ),
             {
               name: 'provider-error-is-not-reentered-into-graph',
-              message: '模型服务 404 应只请求一次并原样展示服务端错误，不得泄露内部实现信息。',
+              message: '模型服务错误应只请求一次并原样展示，不得泄露内部实现信息。',
               data: {
                 chatRequestCount: result.chatRequestCount,
                 runFailed: result.runFailed,

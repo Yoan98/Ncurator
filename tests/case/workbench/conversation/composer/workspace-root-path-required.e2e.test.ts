@@ -12,6 +12,7 @@ import {
   navigateToWorkbench,
   recordWorkbenchAiEvidence,
   selectWorkbenchModel,
+  selectWorkbenchVisualModel,
   selectWorkbenchWorkspace,
   sendWorkbenchMessage,
   setWorkbenchInput,
@@ -54,6 +55,7 @@ describe('workbench conversation e2e', () => {
             await navigateToWorkbench(page)
             await selectWorkbenchWorkspace(page, WORKSPACE_NAME)
             await selectWorkbenchModel(page, env.modelName)
+            await selectWorkbenchVisualModel(page, env.visualModelName)
             await switchWorkbenchMode(page, '大聪明')
             await setWorkbenchInput(page, PROMPT)
 
@@ -70,6 +72,7 @@ describe('workbench conversation e2e', () => {
             await navigateToWorkbench(page)
             await selectWorkbenchWorkspace(page, WORKSPACE_NAME)
             await selectWorkbenchModel(page, env.modelName)
+            await selectWorkbenchVisualModel(page, env.visualModelName)
             await switchWorkbenchMode(page, '大聪明')
             await setWorkbenchInput(page, PROMPT)
 

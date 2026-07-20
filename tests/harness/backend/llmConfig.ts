@@ -32,7 +32,7 @@ const resolveLiveBaseUrl = (modelName: string): string => {
 }
 
 const resolveLiveVisionModelName = (primaryConfig: LiveLlmConfig): string => {
-  const explicit = readEnv('AI_LIVE_VISION_MODEL_NAME')
+  const explicit = readEnv('AI_LIVE_VISUAL_MODEL_NAME')
   if (explicit) return explicit
   try {
     if (new URL(primaryConfig.base_url).hostname.endsWith('dashscope.aliyuncs.com')) {
