@@ -153,6 +153,7 @@ describe('app update publish config', () => {
     expect(signatureVerifier).toContain('macOS designated requirement must remain stable')
     expect(signatureVerifier).toContain('packaged macOS app launch verification passed')
     expect(signatureVerifier).toContain('Print :CFBundleExecutable')
+    expect(signatureVerifier).toContain('NCURATOR_EMBEDDED_BROWSER_REMOTE_DEBUGGING_PORT')
     expect(signatureVerifier).toContain("'--deep'")
     expect(runtimeSignatureVerifier).toContain("['-d', '-r-', '--verbose=4'")
     expect(runtimeSignatureVerifier).not.toContain("'--deep'")

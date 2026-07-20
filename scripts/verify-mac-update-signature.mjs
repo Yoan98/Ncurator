@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process'
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
+import net from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
@@ -8,6 +9,20 @@ import { _electron as electron } from 'playwright'
 
 const execFileAsync = promisify(execFile)
 const [appPath = '', outputPath = ''] = process.argv.slice(2)
+
+const allocatePort = async () => {
+  const server = net.createServer()
+  await new Promise((resolve, reject) => {
+    server.once('error', reject)
+    server.listen(0, '127.0.0.1', resolve)
+  })
+  const address = server.address()
+  if (!address || typeof address === 'string') throw new Error('failed to allocate a test port')
+  await new Promise((resolve, reject) =>
+    server.close((error) => (error ? reject(error) : resolve()))
+  )
+  return address.port
+}
 
 if (!appPath || !outputPath) {
   throw new Error('usage: node scripts/verify-mac-update-signature.mjs <app> <output-file>')
@@ -47,6 +62,7 @@ const verifyPackagedAppLaunch = async () => {
     path.join(appPath, 'Contents', 'Info.plist')
   ])
   const executable = path.join(appPath, 'Contents', 'MacOS', executableName.trim())
+  const embeddedBrowserPort = await allocatePort()
   let output = ''
   let electronApp
 
@@ -58,6 +74,7 @@ const verifyPackagedAppLaunch = async () => {
         HOME: homeDirectory,
         NCURATOR_E2E_OBSERVER: '1',
         NCURATOR_E2E_WINDOW_MODE: 'background',
+        NCURATOR_EMBEDDED_BROWSER_REMOTE_DEBUGGING_PORT: String(embeddedBrowserPort),
         NCURATOR_USER_DATA_PATH: userDataDirectory
       },
       timeout: 60_000
