@@ -9,6 +9,7 @@ import {
   normalizeRelativePath,
   scanTextForSecrets
 } from './package-content-policy.mjs'
+import { assertProtectedMainPlaintextAbsent } from './package-main-obfuscation.mjs'
 import { evaluatePackageSizeBudget, loadPackageSizeBudgetConfig } from './package-size-budget.mjs'
 
 const inputDirectory = path.resolve(process.argv[2] || 'dist')
@@ -107,6 +108,9 @@ for (const archivePath of archives) {
     if (!/\.(?:js|cjs|mjs|json|html|css)$/u.test(item.relativePath)) continue
     const source = extractArchiveFile(archivePath, item.relativePath).toString('utf8')
     scanTextForSecrets(source, `${archivePath}:${item.relativePath}`)
+    if (item.relativePath.startsWith('out/main/')) {
+      assertProtectedMainPlaintextAbsent(source, `${archivePath}:${item.relativePath}`)
+    }
   }
 
   const appRoot = findApplicationRoot(archivePath)
