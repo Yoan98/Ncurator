@@ -1,6 +1,6 @@
 {
   "name": "ncurator",
-  "version": "0.1.13",
+  "version": "0.1.14",
   "description": "An Electron application with React and TypeScript",
   "main": "./out/main/index.js",
   "author": "example.com",
