@@ -114,8 +114,8 @@ if (command === 'ensure') {
     isNodePtyNativeReleaseReady(prebuildDir)
       ? `[node-pty-native] ready prebuild ${process.platform}-${process.arch}`
       : existsSync(currentTargetPath)
-      ? readFileSync(currentTargetPath, 'utf8').trim()
-      : '[node-pty-native] no current target'
+        ? readFileSync(currentTargetPath, 'utf8').trim()
+        : '[node-pty-native] no current target'
   )
 } else if (command === 'clean') {
   rmSync(cacheRoot, { recursive: true, force: true })
