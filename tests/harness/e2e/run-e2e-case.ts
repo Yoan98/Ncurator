@@ -27,6 +27,11 @@ import {
   type ElectronWindowMode,
   type LaunchedElectronApp
 } from './electronApp'
+import {
+  E2EResourceScope,
+  runWithE2EResourceScope,
+  type E2EResourceDisposalError
+} from './resourceScope'
 
 export type E2ETestRunMode = 'single' | 'repeatable'
 
@@ -119,6 +124,11 @@ export type E2ETestRuntime = {
     refs?: TestArtifactRefs
   }) => Promise<TestArtifact>
   collectSignals: () => Promise<E2ERuntimeSignals>
+  registerResource: (resource: {
+    name: string
+    phase: 'before-app-close' | 'after-app-close'
+    dispose: () => Promise<void>
+  }) => void
 }
 
 type E2EServiceConfiguration =
@@ -305,6 +315,9 @@ export const runE2ECase = async <TResult>(
   let failedAssertionId: string | null = null
   let executionErrorName: string | null = null
   let executionErrorMessage: string | null = null
+  let primaryError: Error | null = null
+  const resourceScope = new E2EResourceScope()
+  const teardownErrors: E2EResourceDisposalError[] = []
 
   const pushEvent = (event: TestLogEvent): void => {
     events.push(event)
@@ -493,7 +506,8 @@ export const runE2ECase = async <TResult>(
     },
     captureArtifact,
     captureScreenshot,
-    collectSignals: app.collectSignals
+    collectSignals: app.collectSignals,
+    registerResource: (resource) => resourceScope.register(resource)
   })
 
   streamingLogWriter.init({
@@ -597,13 +611,15 @@ export const runE2ECase = async <TResult>(
       data: launchedApp.appInfo
     })
     const runtime = createRuntime(launchedApp)
-    const result = await definition.execute(runtime)
-    await definition.assert(result, runtime)
+    await runWithE2EResourceScope(resourceScope, async () => {
+      const result = await definition.execute(runtime)
+      await definition.assert(result, runtime)
+    })
     status = 'passed'
   } catch (error) {
-    executionErrorName = executionErrorName || (error instanceof Error ? error.name : 'Error')
-    executionErrorMessage =
-      executionErrorMessage || (error instanceof Error ? error.message : String(error))
+    primaryError = error instanceof Error ? error : new Error(String(error))
+    executionErrorName = executionErrorName || primaryError.name
+    executionErrorMessage = executionErrorMessage || primaryError.message
     recordEvent({
       type: 'error',
       name: 'execution-failed',
@@ -625,7 +641,6 @@ export const runE2ECase = async <TResult>(
         }
       })
     }
-    throw error
   } finally {
     const signals: E2ERuntimeSignals = launchedApp
       ? await launchedApp.collectSignals()
@@ -721,18 +736,69 @@ export const runE2ECase = async <TResult>(
       })
     }
 
+    teardownErrors.push(...(await resourceScope.dispose('before-app-close')))
+
     if (launchedApp) {
       const traceRelativePath = path.posix.join('trace', 'playwright-trace.zip')
       const traceAbsolutePath = path.join(logDirArtifacts, traceRelativePath)
       await mkdir(path.dirname(traceAbsolutePath), { recursive: true })
-      await launchedApp.close({
-        tracePath: traceAbsolutePath
+      try {
+        await launchedApp.close({
+          tracePath: traceAbsolutePath
+        })
+        await captureArtifact({
+          kind: 'trace',
+          relativePath: traceRelativePath,
+          message: '保存 Playwright trace'
+        })
+      } catch (error) {
+        teardownErrors.push({
+          name: 'electron-app-close',
+          phase: 'before-app-close',
+          error: error instanceof Error ? error : new Error(String(error))
+        })
+      }
+
+      const processExit = signals.lifecycleEntries
+        .filter((entry) => entry.name === 'electron-process-exit')
+        .at(-1)
+      const processExitData = processExit?.data as
+        | { code?: number | null; signal?: string | null }
+        | undefined
+      if (processExitData && (processExitData.code !== 0 || Boolean(processExitData.signal))) {
+        teardownErrors.push({
+          name: 'electron-process-exit',
+          phase: 'before-app-close',
+          error: new Error(
+            `Electron exited with code=${String(processExitData.code)} signal=${String(processExitData.signal || '')}`
+          )
+        })
+      }
+    }
+
+    teardownErrors.push(...(await resourceScope.dispose('after-app-close')))
+    for (const teardownError of teardownErrors) {
+      recordEvent({
+        type: 'error',
+        name: 'teardown-failed',
+        status: 'failed',
+        message: `Failed to dispose ${teardownError.name}: ${teardownError.error.message}`,
+        data: {
+          resourceName: teardownError.name,
+          phase: teardownError.phase,
+          errorName: teardownError.error.name,
+          errorMessage: teardownError.error.message
+        }
       })
-      await captureArtifact({
-        kind: 'trace',
-        relativePath: traceRelativePath,
-        message: '保存 Playwright trace'
-      })
+    }
+    if (!primaryError && teardownErrors.length > 0) {
+      primaryError = new AggregateError(
+        teardownErrors.map((entry) => entry.error),
+        `E2E teardown failed for ${teardownErrors.map((entry) => entry.name).join(', ')}`
+      )
+      executionErrorName = primaryError.name
+      executionErrorMessage = primaryError.message
+      status = 'failed'
     }
 
     const knowledgeCacheCurrent = knowledgeCacheEnabled
@@ -826,4 +892,6 @@ export const runE2ECase = async <TResult>(
       artifacts
     })
   }
+
+  if (primaryError) throw primaryError
 }

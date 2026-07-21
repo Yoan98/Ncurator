@@ -1,7 +1,7 @@
 import path from 'node:path'
 import os from 'node:os'
 import { createServer } from 'node:net'
-import { access, mkdtemp, rm } from 'node:fs/promises'
+import { access, mkdir, mkdtemp, rm } from 'node:fs/promises'
 import electronPath from 'electron'
 import {
   _electron as electron,
@@ -322,7 +322,11 @@ export const launchElectronApp = async (input: {
     lifecycleEntries.push(entry)
     input.signalSink?.onLifecycle?.(entry)
   }
-  const userDataDir = await mkdtemp(path.join(os.tmpdir(), 'ncurator-e2e-user-data-'))
+  const e2eTempRoot = path.resolve(
+    String(process.env.NCURATOR_E2E_TEMP_ROOT || '').trim() || os.tmpdir()
+  )
+  await mkdir(e2eTempRoot, { recursive: true })
+  const userDataDir = await mkdtemp(path.join(e2eTempRoot, 'ncurator-e2e-user-data-'))
   const remoteDebuggingPort = await allocateFreePort()
   const launchEnv = buildElectronLaunchEnv(
     userDataDir,

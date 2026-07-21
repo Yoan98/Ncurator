@@ -59,67 +59,63 @@ describe('workbench terminal e2e', () => {
           )
           const startedAtMs = Date.now()
           const handledApprovals = new Set<string>()
-          try {
-            await sendWorkbenchMessage(
-              runtime.page,
-              `请使用持久终端启动 python3 -m http.server ${port} --bind 127.0.0.1，不要在命令末尾添加 &。服务开始运行后，用内置浏览器打开 http://127.0.0.1:${port}/terminal-service.html 并确认页面包含 ${PAGE_MARKER}，最后停止并关闭启动服务的终端。`
-            )
+          await sendWorkbenchMessage(
+            runtime.page,
+            `请使用持久终端启动 python3 -m http.server ${port} --bind 127.0.0.1，不要在命令末尾添加 &。服务开始运行后，用内置浏览器打开 http://127.0.0.1:${port}/terminal-service.html 并确认页面包含 ${PAGE_MARKER}，最后停止并关闭启动服务的终端。`
+          )
 
-            const deadline = Date.now() + WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS
-            let events: AiRunEvent[] = []
-            for (;;) {
-              events = await collectWorkbenchAiRunEvents(runtime)
-              const approval = events
-                .filter(isApprovalRequired)
-                .find((event) => !handledApprovals.has(event.batchId))
-              if (approval) {
-                handledApprovals.add(approval.batchId)
-                await decideWorkbenchApprovalBatch(runtime, runtime.page, {
-                  event: approval,
-                  action: 'approve'
-                })
-                continue
-              }
-              const failed = events.find((event) => event.type === 'run_failed')
-              if (failed?.type === 'run_failed') throw new Error(failed.message)
-              if (events.some((event) => event.type === 'run_completed')) break
-              if (Date.now() >= deadline) throw new Error('terminal background flow timed out')
-              await runtime.page.waitForTimeout(500)
+          const deadline = Date.now() + WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS
+          let events: AiRunEvent[] = []
+          for (;;) {
+            events = await collectWorkbenchAiRunEvents(runtime)
+            const approval = events
+              .filter(isApprovalRequired)
+              .find((event) => !handledApprovals.has(event.batchId))
+            if (approval) {
+              handledApprovals.add(approval.batchId)
+              await decideWorkbenchApprovalBatch(runtime, runtime.page, {
+                event: approval,
+                action: 'approve'
+              })
+              continue
             }
+            const failed = events.find((event) => event.type === 'run_failed')
+            if (failed?.type === 'run_failed') throw new Error(failed.message)
+            if (events.some((event) => event.type === 'run_completed')) break
+            if (Date.now() >= deadline) throw new Error('terminal background flow timed out')
+            await runtime.page.waitForTimeout(500)
+          }
 
-            const finalAnswerText =
-              events
-                .filter(
-                  (event): event is Extract<AiRunEvent, { type: 'answer_completed' }> =>
-                    event.type === 'answer_completed'
-                )
-                .at(-1)?.text || ''
-            recordWorkbenchAiEvidence(
-              runtime,
-              {
-                modelName: setup.env.modelName,
-                durationMs: Date.now() - startedAtMs,
-                events,
-                finalAnswerText
-              },
-              0.85
-            )
-            const portReleased = await fetch(`http://127.0.0.1:${port}/terminal-service.html`)
-              .then(() => false)
-              .catch(() => true)
-            return {
-              eventTypes: events.map((event) => event.type),
-              toolNames: events
-                .filter(
-                  (event): event is Extract<AiRunEvent, { type: 'tool_call_started' }> =>
-                    event.type === 'tool_call_started'
-                )
-                .map((event) => event.toolName),
-              portReleased,
+          const finalAnswerText =
+            events
+              .filter(
+                (event): event is Extract<AiRunEvent, { type: 'answer_completed' }> =>
+                  event.type === 'answer_completed'
+              )
+              .at(-1)?.text || ''
+          recordWorkbenchAiEvidence(
+            runtime,
+            {
+              modelName: setup.env.modelName,
+              durationMs: Date.now() - startedAtMs,
+              events,
               finalAnswerText
-            }
-          } finally {
-            await setup.workspace.cleanup()
+            },
+            0.85
+          )
+          const portReleased = await fetch(`http://127.0.0.1:${port}/terminal-service.html`)
+            .then(() => false)
+            .catch(() => true)
+          return {
+            eventTypes: events.map((event) => event.type),
+            toolNames: events
+              .filter(
+                (event): event is Extract<AiRunEvent, { type: 'tool_call_started' }> =>
+                  event.type === 'tool_call_started'
+              )
+              .map((event) => event.toolName),
+            portReleased,
+            finalAnswerText
           }
         },
         assert: async (result, runtime) => {

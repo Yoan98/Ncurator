@@ -2,6 +2,7 @@ import { mkdir, writeFile, rm, mkdtemp } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import type { WorkspaceTreeListResponse } from '../../../../../src/shared/types'
+import { registerE2EResource } from '../../../../harness/e2e/resourceScope'
 import { copyE2EWorkspaceFixture } from '../../../../harness/e2e/workspaceFixture'
 
 export type SupportedFileStatus = {
@@ -29,13 +30,6 @@ export const createWorkspaceWithFiles = async (
   return workspaceRoot
 }
 
-export const cleanupRealWorkspace = async (workspaceRoot: string): Promise<void> => {
-  await rm(workspaceRoot, {
-    recursive: true,
-    force: true
-  })
-}
-
 export const toSupportedFileStatuses = (tree: WorkspaceTreeListResponse): SupportedFileStatus[] =>
   tree.items
     .filter((item) => item.kind === 'file' && item.supported_for_index)
@@ -46,7 +40,25 @@ export const toSupportedFileStatuses = (tree: WorkspaceTreeListResponse): Suppor
       lastError: item.last_error || ''
     }))
 
-const mkWorkspaceRoot = async (caseId: string): Promise<string> =>
-  await mkdtemp(
-    path.join(os.tmpdir(), `ncurator-settings-${caseId.replace(/[^a-zA-Z0-9-_]/g, '-')}-`)
+const mkWorkspaceRoot = async (caseId: string): Promise<string> => {
+  const tempRoot = path.resolve(
+    String(process.env.NCURATOR_E2E_TEMP_ROOT || '').trim() || os.tmpdir()
   )
+  await mkdir(tempRoot, { recursive: true })
+  const workspaceRoot = await mkdtemp(
+    path.join(tempRoot, `ncurator-settings-${caseId.replace(/[^a-zA-Z0-9-_]/g, '-')}-`)
+  )
+  registerE2EResource({
+    name: `settings-workspace:${workspaceRoot}`,
+    phase: 'after-app-close',
+    dispose: async () => {
+      await rm(workspaceRoot, {
+        recursive: true,
+        force: true,
+        maxRetries: 10,
+        retryDelay: 500
+      })
+    }
+  })
+  return workspaceRoot
+}

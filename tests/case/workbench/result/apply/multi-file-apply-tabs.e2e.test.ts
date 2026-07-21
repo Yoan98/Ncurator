@@ -102,97 +102,90 @@ describe('workbench result e2e', () => {
         execute: async (runtime) => {
           const { page } = runtime
           const setup = await setupMultiFileApplyWorkspace(page)
-          try {
-            const firstPath = path.join(setup.workspace.rootPath, FIRST_FILE)
-            const secondPath = path.join(setup.workspace.rootPath, SECOND_FILE)
-            const firstBeforeText = await readDocxPlainText(firstPath)
-            const secondBeforeText = await readDocxPlainText(secondPath)
-            await insertWorkbenchReferenceToken(page, FIRST_FILE)
-            await insertWorkbenchReferenceToken(page, SECOND_FILE)
-            const startedAtMs = Date.now()
-            await sendWorkbenchMessage(
-              page,
-              `请只完成这两个写回动作：1. 修改我刚选中的 ${FIRST_FILE}，只在文末新增一段“${FIRST_MARKER}”；2. 修改我刚选中的 ${SECOND_FILE}，只在文末新增一段“${SECOND_MARKER}”。请分别写回原文件，不要新建文件。两个文件都写回后，立即回复“已写回”，不要继续读取、复核、解释或追加其他操作。`
-            )
-            const evidence = await waitForWorkbenchAiRunCompletion(
-              runtime,
-              startedAtMs,
-              setup.env.modelName,
-              WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
-              { page, blockerPolicy: 'auto_approve' }
-            )
-            recordWorkbenchAiEvidence(runtime, evidence, 0.8)
-            const firstAfterText = await readDocxPlainText(firstPath)
-            const secondAfterText = await readDocxPlainText(secondPath)
-            await getWorkbenchPrefixLocator(page, workbenchSelectors.assistantTurnApplyPrefix)
-              .first()
-              .waitFor({ state: 'visible' })
-            const applyEntryCount = await getWorkbenchPrefixLocator(
-              page,
-              workbenchSelectors.assistantTurnApplyPrefix
-            ).count()
-            const firstEntry = getWorkbenchPrefixLocator(
-              page,
-              workbenchSelectors.assistantTurnApplyPrefix
-            )
-              .filter({ hasText: FIRST_FILE })
-              .first()
-            const secondEntry = getWorkbenchPrefixLocator(
-              page,
-              workbenchSelectors.assistantTurnApplyPrefix
-            )
-              .filter({ hasText: SECOND_FILE })
-              .first()
-            const firstEntryText = ((await firstEntry.textContent()) || '').trim()
-            const secondEntryText = ((await secondEntry.textContent()) || '').trim()
-            await firstEntry.click()
-            await waitForApplyPanelFile(page, FIRST_FILE)
-            const afterFirstEntryText = (
-              (await getWorkbenchLocator(page, workbenchSelectors.applyPanel).textContent()) || ''
-            ).trim()
-            const firstModeTagCount = await getWorkbenchLocator(
-              page,
-              workbenchSelectors.documentPreviewModeTag
-            ).count()
-            await secondEntry.click()
-            await waitForApplyPanelFile(page, SECOND_FILE)
-            const afterSecondEntryText = (
-              (await getWorkbenchLocator(page, workbenchSelectors.applyPanel).textContent()) || ''
-            ).trim()
-            const resourceTabs = getWorkbenchPrefixLocator(
-              page,
-              workbenchSelectors.resourceTabPrefix
-            )
-            const resourceTabCount = await resourceTabs.count()
-            await resourceTabs.filter({ hasText: FIRST_FILE }).first().click()
-            await waitForApplyPanelFile(page, FIRST_FILE)
-            const afterFirstEntryAgainText = (
-              (await getWorkbenchLocator(page, workbenchSelectors.applyPanel).textContent()) || ''
-            ).trim()
-            const applyPanelCount = await getWorkbenchLocator(
-              page,
-              workbenchSelectors.applyPanel
-            ).count()
+          const firstPath = path.join(setup.workspace.rootPath, FIRST_FILE)
+          const secondPath = path.join(setup.workspace.rootPath, SECOND_FILE)
+          const firstBeforeText = await readDocxPlainText(firstPath)
+          const secondBeforeText = await readDocxPlainText(secondPath)
+          await insertWorkbenchReferenceToken(page, FIRST_FILE)
+          await insertWorkbenchReferenceToken(page, SECOND_FILE)
+          const startedAtMs = Date.now()
+          await sendWorkbenchMessage(
+            page,
+            `请只完成这两个写回动作：1. 修改我刚选中的 ${FIRST_FILE}，只在文末新增一段“${FIRST_MARKER}”；2. 修改我刚选中的 ${SECOND_FILE}，只在文末新增一段“${SECOND_MARKER}”。请分别写回原文件，不要新建文件。两个文件都写回后，立即回复“已写回”，不要继续读取、复核、解释或追加其他操作。`
+          )
+          const evidence = await waitForWorkbenchAiRunCompletion(
+            runtime,
+            startedAtMs,
+            setup.env.modelName,
+            WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
+            { page, blockerPolicy: 'auto_approve' }
+          )
+          recordWorkbenchAiEvidence(runtime, evidence, 0.8)
+          const firstAfterText = await readDocxPlainText(firstPath)
+          const secondAfterText = await readDocxPlainText(secondPath)
+          await getWorkbenchPrefixLocator(page, workbenchSelectors.assistantTurnApplyPrefix)
+            .first()
+            .waitFor({ state: 'visible' })
+          const applyEntryCount = await getWorkbenchPrefixLocator(
+            page,
+            workbenchSelectors.assistantTurnApplyPrefix
+          ).count()
+          const firstEntry = getWorkbenchPrefixLocator(
+            page,
+            workbenchSelectors.assistantTurnApplyPrefix
+          )
+            .filter({ hasText: FIRST_FILE })
+            .first()
+          const secondEntry = getWorkbenchPrefixLocator(
+            page,
+            workbenchSelectors.assistantTurnApplyPrefix
+          )
+            .filter({ hasText: SECOND_FILE })
+            .first()
+          const firstEntryText = ((await firstEntry.textContent()) || '').trim()
+          const secondEntryText = ((await secondEntry.textContent()) || '').trim()
+          await firstEntry.click()
+          await waitForApplyPanelFile(page, FIRST_FILE)
+          const afterFirstEntryText = (
+            (await getWorkbenchLocator(page, workbenchSelectors.applyPanel).textContent()) || ''
+          ).trim()
+          const firstModeTagCount = await getWorkbenchLocator(
+            page,
+            workbenchSelectors.documentPreviewModeTag
+          ).count()
+          await secondEntry.click()
+          await waitForApplyPanelFile(page, SECOND_FILE)
+          const afterSecondEntryText = (
+            (await getWorkbenchLocator(page, workbenchSelectors.applyPanel).textContent()) || ''
+          ).trim()
+          const resourceTabs = getWorkbenchPrefixLocator(page, workbenchSelectors.resourceTabPrefix)
+          const resourceTabCount = await resourceTabs.count()
+          await resourceTabs.filter({ hasText: FIRST_FILE }).first().click()
+          await waitForApplyPanelFile(page, FIRST_FILE)
+          const afterFirstEntryAgainText = (
+            (await getWorkbenchLocator(page, workbenchSelectors.applyPanel).textContent()) || ''
+          ).trim()
+          const applyPanelCount = await getWorkbenchLocator(
+            page,
+            workbenchSelectors.applyPanel
+          ).count()
 
-            return {
-              firstBeforeText,
-              secondBeforeText,
-              firstAfterText,
-              secondAfterText,
-              applyEntryCount,
-              firstEntryText,
-              secondEntryText,
-              afterFirstEntryText,
-              afterSecondEntryText,
-              afterFirstEntryAgainText,
-              firstModeTagCount,
-              applyPanelCount,
-              resourceTabCount,
-              fileArtifactCount: evidence.events.filter((event) => event.type === 'file_artifact')
-                .length
-            }
-          } finally {
-            await setup.workspace.cleanup()
+          return {
+            firstBeforeText,
+            secondBeforeText,
+            firstAfterText,
+            secondAfterText,
+            applyEntryCount,
+            firstEntryText,
+            secondEntryText,
+            afterFirstEntryText,
+            afterSecondEntryText,
+            afterFirstEntryAgainText,
+            firstModeTagCount,
+            applyPanelCount,
+            resourceTabCount,
+            fileArtifactCount: evidence.events.filter((event) => event.type === 'file_artifact')
+              .length
           }
         },
         assert: async (result, runtime) => {

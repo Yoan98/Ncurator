@@ -32,42 +32,38 @@ describe('workbench conversation e2e', () => {
             caseId: CASE_ID,
             workspaceName: 'Workbench Mention Keyboard Workspace'
           })
-          try {
-            await appendWorkbenchInputText(page, '@')
-            const mentionPanel = getWorkbenchLocator(page, workbenchSelectors.mentionPanel)
-            await waitForWorkbenchMentionPanelText(page)
+          await appendWorkbenchInputText(page, '@')
+          const mentionPanel = getWorkbenchLocator(page, workbenchSelectors.mentionPanel)
+          await waitForWorkbenchMentionPanelText(page)
 
-            const readActiveMentionText = async (): Promise<string> => {
-              const activeMention = mentionPanel.locator('[data-mention-active="true"]').first()
-              await activeMention.waitFor({ state: 'visible' })
-              return ((await activeMention.textContent()) || '').trim()
+          const readActiveMentionText = async (): Promise<string> => {
+            const activeMention = mentionPanel.locator('[data-mention-active="true"]').first()
+            await activeMention.waitFor({ state: 'visible' })
+            return ((await activeMention.textContent()) || '').trim()
+          }
+
+          const activeBeforeArrowDown = await readActiveMentionText()
+          await page.keyboard.press('ArrowDown')
+          await page.waitForFunction(
+            (input: { testId: string; previousText: string }) => {
+              const panel = document.querySelector(`[data-testid="${input.testId}"]`)
+              const active = panel?.querySelector('[data-mention-active="true"]')
+              const activeText = active?.textContent?.trim() || ''
+              return activeText.length > 0 && activeText !== input.previousText
+            },
+            {
+              testId: workbenchSelectors.mentionPanel,
+              previousText: activeBeforeArrowDown
             }
+          )
+          const activeAfterArrowDown = await readActiveMentionText()
+          await page.waitForTimeout(200)
+          const activeAfterSettled = await readActiveMentionText()
 
-            const activeBeforeArrowDown = await readActiveMentionText()
-            await page.keyboard.press('ArrowDown')
-            await page.waitForFunction(
-              (input: { testId: string; previousText: string }) => {
-                const panel = document.querySelector(`[data-testid="${input.testId}"]`)
-                const active = panel?.querySelector('[data-mention-active="true"]')
-                const activeText = active?.textContent?.trim() || ''
-                return activeText.length > 0 && activeText !== input.previousText
-              },
-              {
-                testId: workbenchSelectors.mentionPanel,
-                previousText: activeBeforeArrowDown
-              }
-            )
-            const activeAfterArrowDown = await readActiveMentionText()
-            await page.waitForTimeout(200)
-            const activeAfterSettled = await readActiveMentionText()
-
-            return {
-              activeBeforeArrowDown,
-              activeAfterArrowDown,
-              activeAfterSettled
-            }
-          } finally {
-            await setup.workspace.cleanup()
+          return {
+            activeBeforeArrowDown,
+            activeAfterArrowDown,
+            activeAfterSettled
           }
         },
         assert: async (result, runtime) => {

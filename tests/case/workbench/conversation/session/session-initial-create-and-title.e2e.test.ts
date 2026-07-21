@@ -42,70 +42,66 @@ describe('workbench conversation e2e', () => {
             caseId: CASE_ID,
             createSession: false
           })
-          try {
-            const initialSessionsText = await readSessionListText(page)
-            const autoCreatedSessionCount = await page.evaluate(
-              async (startedAt) =>
-                (await window.api.chatSessionList()).filter(
-                  (session) => session.created_at >= startedAt
-                ).length,
-              setupStartedAt
-            )
-            const manualCreateStartedAt = Date.now()
-            await page.getByRole('button', { name: `在 ${setup.workspaceName} 中新建对话` }).click()
-            await selectWorkbenchWorkspace(page, setup.workspaceName)
-            const afterManualCreateSessionsText = await readSessionListText(page)
-            const manuallyCreatedSessionCount = await page.evaluate(
-              async (startedAt) =>
-                (await window.api.chatSessionList()).filter(
-                  (session) => session.created_at >= startedAt
-                ).length,
-              manualCreateStartedAt
-            )
-            const firstStartedAtMs = Date.now()
-            await sendWorkbenchMessage(page, FIRST_PROMPT)
-            const firstEvidence = await waitForWorkbenchAiRunCompletion(
-              runtime,
-              firstStartedAtMs,
-              setup.env.modelName,
-              { page, blockerPolicy: 'auto_approve' }
-            )
-            recordWorkbenchAiEvidence(runtime, firstEvidence, 0.8)
-            const afterFirstSessionsText = await readSessionListText(page)
-            const afterFirstCreatedSessionCount = await page.evaluate(
-              async (startedAt) =>
-                (await window.api.chatSessionList()).filter(
-                  (session) => session.created_at >= startedAt
-                ).length,
-              manualCreateStartedAt
-            )
+          const initialSessionsText = await readSessionListText(page)
+          const autoCreatedSessionCount = await page.evaluate(
+            async (startedAt) =>
+              (await window.api.chatSessionList()).filter(
+                (session) => session.created_at >= startedAt
+              ).length,
+            setupStartedAt
+          )
+          const manualCreateStartedAt = Date.now()
+          await page.getByRole('button', { name: `在 ${setup.workspaceName} 中新建对话` }).click()
+          await selectWorkbenchWorkspace(page, setup.workspaceName)
+          const afterManualCreateSessionsText = await readSessionListText(page)
+          const manuallyCreatedSessionCount = await page.evaluate(
+            async (startedAt) =>
+              (await window.api.chatSessionList()).filter(
+                (session) => session.created_at >= startedAt
+              ).length,
+            manualCreateStartedAt
+          )
+          const firstStartedAtMs = Date.now()
+          await sendWorkbenchMessage(page, FIRST_PROMPT)
+          const firstEvidence = await waitForWorkbenchAiRunCompletion(
+            runtime,
+            firstStartedAtMs,
+            setup.env.modelName,
+            { page, blockerPolicy: 'auto_approve' }
+          )
+          recordWorkbenchAiEvidence(runtime, firstEvidence, 0.8)
+          const afterFirstSessionsText = await readSessionListText(page)
+          const afterFirstCreatedSessionCount = await page.evaluate(
+            async (startedAt) =>
+              (await window.api.chatSessionList()).filter(
+                (session) => session.created_at >= startedAt
+              ).length,
+            manualCreateStartedAt
+          )
 
-            const secondStartedAtMs = Date.now()
-            await sendWorkbenchMessage(page, SECOND_PROMPT)
-            const secondEvidence = await waitForWorkbenchAiRunCompletion(
-              runtime,
-              secondStartedAtMs,
-              setup.env.modelName,
-              { page, blockerPolicy: 'auto_approve' }
-            )
-            recordWorkbenchAiEvidence(runtime, secondEvidence, 0.8)
-            const afterSecondSessionsText = await readSessionListText(page)
+          const secondStartedAtMs = Date.now()
+          await sendWorkbenchMessage(page, SECOND_PROMPT)
+          const secondEvidence = await waitForWorkbenchAiRunCompletion(
+            runtime,
+            secondStartedAtMs,
+            setup.env.modelName,
+            { page, blockerPolicy: 'auto_approve' }
+          )
+          recordWorkbenchAiEvidence(runtime, secondEvidence, 0.8)
+          const afterSecondSessionsText = await readSessionListText(page)
 
-            return {
-              initialSessionsText,
-              afterManualCreateSessionsText,
-              autoCreatedSessionCount,
-              manuallyCreatedSessionCount,
-              afterFirstCreatedSessionCount,
-              afterFirstSessionsText,
-              afterSecondSessionsText,
-              firstTitlePrefix: FIRST_PROMPT.slice(0, 20),
-              secondTitlePrefix: SECOND_PROMPT.slice(0, 20),
-              firstFinalAnswer: firstEvidence.finalAnswerText,
-              secondFinalAnswer: secondEvidence.finalAnswerText
-            }
-          } finally {
-            await setup.workspace.cleanup()
+          return {
+            initialSessionsText,
+            afterManualCreateSessionsText,
+            autoCreatedSessionCount,
+            manuallyCreatedSessionCount,
+            afterFirstCreatedSessionCount,
+            afterFirstSessionsText,
+            afterSecondSessionsText,
+            firstTitlePrefix: FIRST_PROMPT.slice(0, 20),
+            secondTitlePrefix: SECOND_PROMPT.slice(0, 20),
+            firstFinalAnswer: firstEvidence.finalAnswerText,
+            secondFinalAnswer: secondEvidence.finalAnswerText
           }
         },
         assert: async (result, runtime) => {

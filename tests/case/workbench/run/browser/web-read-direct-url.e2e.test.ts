@@ -50,44 +50,44 @@ describe('workbench run e2e', () => {
             <p>任务口令：${WEB_READ_CODE}</p>
             <p>这段内容只能通过读取网页正文获得，不需要点击、输入或提交表单。</p>
           </main>`)
+          runtime.registerResource({
+            name: 'web-read-http-server',
+            phase: 'before-app-close',
+            dispose: server.close
+          })
           const setup = await setupWorkbenchWithTempWorkspace(page, { caseId: CASE_ID })
-          try {
-            const startedAtMs = Date.now()
-            await sendWorkbenchMessage(
-              page,
-              `请读取这个网页 URL 的正文，并告诉我页面里的任务口令：${server.url}。请使用网页读取工具，不要使用浏览器点击操作。`
-            )
-            const evidence = await waitForWorkbenchAiRunCompletion(
-              runtime,
-              startedAtMs,
-              setup.env.modelName,
-              WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
-              { page, blockerPolicy: 'auto_approve' }
-            )
-            recordWorkbenchAiEvidence(runtime, evidence, 0.85)
+          const startedAtMs = Date.now()
+          await sendWorkbenchMessage(
+            page,
+            `请读取这个网页 URL 的正文，并告诉我页面里的任务口令：${server.url}。请使用网页读取工具，不要使用浏览器点击操作。`
+          )
+          const evidence = await waitForWorkbenchAiRunCompletion(
+            runtime,
+            startedAtMs,
+            setup.env.modelName,
+            WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
+            { page, blockerPolicy: 'auto_approve' }
+          )
+          recordWorkbenchAiEvidence(runtime, evidence, 0.85)
 
-            const toolStarts = evidence.events.filter(
-              (event): event is Extract<AiRunEvent, { type: 'tool_call_started' }> =>
-                event.type === 'tool_call_started'
-            )
-            const crawlStarts = toolStarts.filter((event) => event.toolName === 'web_crawl')
-            const browserUseStarts = toolStarts.filter((event) => event.toolName === 'browser_use')
-            const crawlResults = evidence.events.filter(
-              (event): event is Extract<AiRunEvent, { type: 'tool_call_result' }> =>
-                event.type === 'tool_call_result' && event.toolName === 'web_crawl'
-            )
+          const toolStarts = evidence.events.filter(
+            (event): event is Extract<AiRunEvent, { type: 'tool_call_started' }> =>
+              event.type === 'tool_call_started'
+          )
+          const crawlStarts = toolStarts.filter((event) => event.toolName === 'web_crawl')
+          const browserUseStarts = toolStarts.filter((event) => event.toolName === 'browser_use')
+          const crawlResults = evidence.events.filter(
+            (event): event is Extract<AiRunEvent, { type: 'tool_call_result' }> =>
+              event.type === 'tool_call_result' && event.toolName === 'web_crawl'
+          )
 
-            return {
-              finalAnswerText: evidence.finalAnswerText,
-              eventTypes: evidence.events.map((event) => event.type),
-              crawlUrls: crawlStarts.map((event) => readToolInputString(event, 'url')),
-              usedBrowserUse: browserUseStarts.length > 0,
-              crawlOk: crawlResults.some((event) => event.result?.ok === true),
-              crawlErrors: crawlResults.map((event) => event.error || '').filter(Boolean)
-            }
-          } finally {
-            await setup.workspace.cleanup()
-            await server.close()
+          return {
+            finalAnswerText: evidence.finalAnswerText,
+            eventTypes: evidence.events.map((event) => event.type),
+            crawlUrls: crawlStarts.map((event) => readToolInputString(event, 'url')),
+            usedBrowserUse: browserUseStarts.length > 0,
+            crawlOk: crawlResults.some((event) => event.result?.ok === true),
+            crawlErrors: crawlResults.map((event) => event.error || '').filter(Boolean)
           }
         },
         assert: async (result, runtime) => {

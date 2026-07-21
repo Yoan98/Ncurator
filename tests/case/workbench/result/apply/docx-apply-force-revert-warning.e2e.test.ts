@@ -39,52 +39,46 @@ describe('workbench result e2e', () => {
         execute: async (runtime) => {
           const { page } = runtime
           const setup = await setupWorkbenchWithTempWorkspace(page, { caseId: CASE_ID })
-          try {
-            const targetPath = path.join(setup.workspace.rootPath, 'sample-edit.docx')
-            const beforeText = await readDocxPlainText(targetPath)
-            await insertWorkbenchReferenceToken(page, 'sample-edit.docx')
-            const startedAtMs = Date.now()
-            await sendWorkbenchMessage(
-              page,
-              `请直接修改我刚选中的 sample-edit.docx，在文末新增一段：“Workbench force revert marker ${MARKER}”。完成后告诉我已写回。`
-            )
-            const evidence = await waitForWorkbenchAiRunCompletion(
-              runtime,
-              startedAtMs,
-              setup.env.modelName,
-              WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
-              { page, blockerPolicy: 'auto_approve' }
-            )
-            recordWorkbenchAiEvidence(runtime, evidence, 0.8)
-            const afterApplyText = await readDocxPlainText(targetPath)
-            const applyEntry = await waitForApplyEntry(page)
-            await applyEntry.click()
-            await waitForWorkbenchApplyPanelReady(page)
+          const targetPath = path.join(setup.workspace.rootPath, 'sample-edit.docx')
+          const beforeText = await readDocxPlainText(targetPath)
+          await insertWorkbenchReferenceToken(page, 'sample-edit.docx')
+          const startedAtMs = Date.now()
+          await sendWorkbenchMessage(
+            page,
+            `请直接修改我刚选中的 sample-edit.docx，在文末新增一段：“Workbench force revert marker ${MARKER}”。完成后告诉我已写回。`
+          )
+          const evidence = await waitForWorkbenchAiRunCompletion(
+            runtime,
+            startedAtMs,
+            setup.env.modelName,
+            WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
+            { page, blockerPolicy: 'auto_approve' }
+          )
+          recordWorkbenchAiEvidence(runtime, evidence, 0.8)
+          const afterApplyText = await readDocxPlainText(targetPath)
+          const applyEntry = await waitForApplyEntry(page)
+          await applyEntry.click()
+          await waitForWorkbenchApplyPanelReady(page)
 
-            await mutateDocxExternally(targetPath, `external-${MARKER}`)
-            await getWorkbenchLocator(page, workbenchSelectors.applyRevertButton).click()
-            await page.getByText('恢复到本次修改前？').waitFor({ state: 'visible' })
-            const warningText = (
-              (await page.locator('.ant-modal').last().textContent()) || ''
-            ).trim()
-            await page.getByRole('button', { name: '恢复到此前版本' }).click()
-            await waitForWorkbenchApplyRecordStatus(page, 'reverted')
-            const afterForceRevertText = await readDocxPlainText(targetPath)
-            const antMessageText = await getAntMessageText(page)
-            const panelText = (
-              (await getWorkbenchLocator(page, workbenchSelectors.applyPanel).textContent()) || ''
-            ).trim()
+          await mutateDocxExternally(targetPath, `external-${MARKER}`)
+          await getWorkbenchLocator(page, workbenchSelectors.applyRevertButton).click()
+          await page.getByText('恢复到本次修改前？').waitFor({ state: 'visible' })
+          const warningText = ((await page.locator('.ant-modal').last().textContent()) || '').trim()
+          await page.getByRole('button', { name: '恢复到此前版本' }).click()
+          await waitForWorkbenchApplyRecordStatus(page, 'reverted')
+          const afterForceRevertText = await readDocxPlainText(targetPath)
+          const antMessageText = await getAntMessageText(page)
+          const panelText = (
+            (await getWorkbenchLocator(page, workbenchSelectors.applyPanel).textContent()) || ''
+          ).trim()
 
-            return {
-              beforeText,
-              afterApplyText,
-              warningText,
-              afterForceRevertText,
-              antMessageText,
-              panelText
-            }
-          } finally {
-            await setup.workspace.cleanup()
+          return {
+            beforeText,
+            afterApplyText,
+            warningText,
+            afterForceRevertText,
+            antMessageText,
+            panelText
           }
         },
         assert: async (result, runtime) => {

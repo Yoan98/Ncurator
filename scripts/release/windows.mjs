@@ -1,5 +1,5 @@
 import { execFile, spawn } from 'node:child_process'
-import { access, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { mkdir, readFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
@@ -10,6 +10,7 @@ import {
   verifyPublicReleaseFragment,
   verifyR2ReleaseFragment
 } from './shared/windows.mjs'
+import { prepareReleaseWorkspace } from './workspace.mjs'
 
 const execFileAsync = promisify(execFile)
 const ROOT = process.cwd()
@@ -20,12 +21,9 @@ const valueAfter = (name) => {
 }
 const releaseTag = valueAfter('--tag') || ''
 const keepWork = args.includes('--keep-work')
-const reuseWork = args.includes('--reuse-work')
 
 if (!/^v\d+\.\d+\.\d+$/u.test(releaseTag)) {
-  throw new Error(
-    'usage: node scripts/release/windows.mjs --tag <v1.2.3> [--keep-work] [--reuse-work]'
-  )
+  throw new Error('usage: node scripts/release/windows.mjs --tag <v1.2.3> [--keep-work]')
 }
 
 const run = (command, commandArgs, options = {}) =>
@@ -43,11 +41,6 @@ const run = (command, commandArgs, options = {}) =>
       else reject(new Error(`${command} exited with ${code ?? signal}`))
     })
   })
-
-const pathExists = (filePath) =>
-  access(filePath)
-    .then(() => true)
-    .catch(() => false)
 
 const inspection = await inspectLocalWindowsRelease(ROOT)
 if (!inspection.ready) {
@@ -78,64 +71,19 @@ if (existing) {
   process.exit(0)
 }
 
-const workRoot = path.resolve(
-  String(process.env.NCURATOR_RELEASE_WORK_ROOT || '').trim() ||
-    path.join(os.tmpdir(), 'ncurator-release')
-)
-const workDirectory = path.join(workRoot, releaseTag)
+const releaseWorkspace = await prepareReleaseWorkspace({
+  releaseTag,
+  defaultRootName: 'ncurator-release',
+  keepWork
+})
+const { workDirectory } = releaseWorkspace
 const archivePath = path.join(workDirectory, 'source.zip')
 const sourceDirectory = path.join(workDirectory, 'source')
-const cacheDirectory = path.join(workDirectory, 'reusable-cache')
-const tagCommitPath = path.join(workDirectory, 'tag-commit.txt')
-const { stdout: tagCommitOutput } = await execFileAsync('git', ['rev-list', '-n', '1', releaseTag])
-const tagCommit = tagCommitOutput.trim()
-
-const reusablePaths = ['.runvenv', '.pip-cache', 'resources/web_crawler_sidecar/bin']
-const preserveReusableCache = async () => {
-  if (!(await pathExists(sourceDirectory))) return
-  for (const relativePath of reusablePaths) {
-    const source = path.join(sourceDirectory, relativePath)
-    if (!(await pathExists(source))) continue
-    const target = path.join(cacheDirectory, relativePath)
-    await mkdir(path.dirname(target), { recursive: true })
-    await rm(target, { recursive: true, force: true })
-    await rename(source, target)
-  }
-}
-
-const restoreReusableCache = async () => {
-  if (!(await pathExists(cacheDirectory))) return
-  for (const relativePath of reusablePaths) {
-    const source = path.join(cacheDirectory, relativePath)
-    if (!(await pathExists(source))) continue
-    const target = path.join(sourceDirectory, relativePath)
-    await mkdir(path.dirname(target), { recursive: true })
-    await rm(target, { recursive: true, force: true })
-    await rename(source, target)
-  }
-  await rm(cacheDirectory, { recursive: true, force: true })
-}
-
-let completed = false
 
 try {
-  if (reuseWork) {
-    const cachedCommit = await readFile(tagCommitPath, 'utf8').catch(() => '')
-    if (cachedCommit.trim() !== tagCommit) {
-      throw new Error(`reusable Windows release work does not match immutable tag ${releaseTag}`)
-    }
-    await preserveReusableCache()
-    process.stdout.write(`[release] reusing Windows work directory ${workDirectory}\n`)
-  } else {
-    await rm(workDirectory, { recursive: true, force: true })
-  }
-  await rm(sourceDirectory, { recursive: true, force: true })
-  await rm(archivePath, { force: true })
-  await mkdir(sourceDirectory, { recursive: true })
   await run('git', ['archive', '--format=zip', '--output', archivePath, releaseTag])
+  await mkdir(sourceDirectory, { recursive: true })
   await run('tar', ['-xf', archivePath, '-C', sourceDirectory])
-  if (reuseWork) await restoreReusableCache()
-  await writeFile(tagCommitPath, `${tagCommit}\n`, 'utf8')
 
   const releaseEnvironment = {
     ...process.env,
@@ -196,15 +144,7 @@ try {
   const fragment = JSON.parse(await readFile(fragmentPath, 'utf8'))
   await verifyPublicReleaseFragment(fragment, publicBaseUrl)
   await verifyR2ReleaseFragment(fragment, inspection.awsExecutable)
-  completed = true
   process.stdout.write(`[release] Windows ${releaseTag} published and verified\n`)
 } finally {
-  if (keepWork || !completed) {
-    process.stdout.write(`[release] kept work directory ${workDirectory}\n`)
-    if (!completed) {
-      process.stdout.write(
-        `[release] retry with: pnpm release:win -- --tag ${releaseTag} --reuse-work\n`
-      )
-    }
-  } else await rm(workDirectory, { recursive: true, force: true })
+  await releaseWorkspace.dispose()
 }

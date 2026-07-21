@@ -63,6 +63,11 @@ describe('workbench result e2e', () => {
           const server = await startLocalWorkbenchHttpServer(
             '<!doctype html><title>Workbench Search Web</title><main>cedar-search-888 web indexed content.</main>'
           )
+          runtime.registerResource({
+            name: 'search-results-http-server',
+            phase: 'before-app-close',
+            dispose: server.close
+          })
           const setup = await runtime.step({
             name: 'prepare-search-workspace',
             message: '通过真实 Settings UI 创建工作区、绑定临时目录并索引本地文件和网页资料。',
@@ -76,177 +81,161 @@ describe('workbench result e2e', () => {
                 webSourceUrl: server.url
               })
           })
-          try {
-            const fileSearch = await runtime.step({
-              name: 'search-local-docx',
-              message: `切换搜索模式并从真实本地索引结果打开 ${LOCAL_RESULT_FILE} 预览。`,
-              run: async () => {
-                await switchWorkbenchMode(page, '没头脑')
-                await insertWorkbenchReferenceToken(page, LOCAL_RESULT_FILE, '交付合规')
-                await appendWorkbenchInputText(page, LOCAL_RESULT_QUERY)
-                await submitWorkbenchCurrentDraft(page)
-                const fileResults = await waitForWorkbenchSearchResults(page)
-                const fileResultsText = ((await fileResults.textContent()) || '').trim()
-                await fileResults
-                  .locator('div')
-                  .filter({ hasText: LOCAL_RESULT_FILE })
-                  .first()
-                  .getByRole('button', { name: '预览文件' })
-                  .click()
-                await getWorkbenchLocator(page, workbenchSelectors.documentView).waitFor({
-                  state: 'visible'
-                })
-                const docxViewerVisible = await getWorkbenchLocator(
-                  page,
-                  workbenchSelectors.documentView
-                ).isVisible()
-                return {
-                  fileResultsText,
-                  docxViewerVisible
-                }
+          const fileSearch = await runtime.step({
+            name: 'search-local-docx',
+            message: `切换搜索模式并从真实本地索引结果打开 ${LOCAL_RESULT_FILE} 预览。`,
+            run: async () => {
+              await switchWorkbenchMode(page, '没头脑')
+              await insertWorkbenchReferenceToken(page, LOCAL_RESULT_FILE, '交付合规')
+              await appendWorkbenchInputText(page, LOCAL_RESULT_QUERY)
+              await submitWorkbenchCurrentDraft(page)
+              const fileResults = await waitForWorkbenchSearchResults(page)
+              const fileResultsText = ((await fileResults.textContent()) || '').trim()
+              await fileResults
+                .locator('div')
+                .filter({ hasText: LOCAL_RESULT_FILE })
+                .first()
+                .getByRole('button', { name: '预览文件' })
+                .click()
+              await getWorkbenchLocator(page, workbenchSelectors.documentView).waitFor({
+                state: 'visible'
+              })
+              const docxViewerVisible = await getWorkbenchLocator(
+                page,
+                workbenchSelectors.documentView
+              ).isVisible()
+              return {
+                fileResultsText,
+                docxViewerVisible
               }
-            })
-
-            const webSearch = await runtime.step({
-              name: 'search-web-source',
-              message: '切换搜索模式并从真实网页索引结果触发系统浏览器打开。',
-              run: async () => {
-                await switchWorkbenchMode(page, '没头脑')
-                await insertWorkbenchReferenceToken(page, 'Workbench Search Web', server.url)
-                await appendWorkbenchInputText(page, 'cedar-search-888')
-                await submitWorkbenchCurrentDraft(page)
-                const webResults = await waitForWorkbenchSearchResults(page)
-                const webResultsText = ((await webResults.textContent()) || '').trim()
-                await webResults
-                  .locator('div')
-                  .filter({ hasText: 'cedar-search-888' })
-                  .first()
-                  .getByRole('button', { name: '打开网页' })
-                  .click()
-                const populatedLayout = await page.evaluate((selectors) => {
-                  const messageList = document.querySelector(
-                    `[data-testid="${selectors.messageList}"]`
-                  )
-                  const composerShell = document.querySelector(
-                    `[data-testid="${selectors.composerShell}"]`
-                  )
-                  const main = document.querySelector('.nc-main-pane')
-                  const scroll = messageList?.parentElement
-                  if (
-                    !(composerShell instanceof HTMLElement) ||
-                    !(scroll instanceof HTMLElement) ||
-                    !(main instanceof HTMLElement)
-                  ) {
-                    return null
-                  }
-                  const mainRect = main.getBoundingClientRect()
-                  const composerRect = composerShell.getBoundingClientRect()
-                  const scrollRect = scroll.getBoundingClientRect()
-                  return {
-                    composerInsideViewport: composerRect.bottom <= mainRect.bottom + 1,
-                    messageAreaEndsBeforeComposer: scrollRect.bottom <= composerRect.top + 1,
-                    messageOverflowY: getComputedStyle(scroll).overflowY,
-                    composerFlexShrink: getComputedStyle(composerShell).flexShrink
-                  }
-                }, workbenchSelectors)
-                return {
-                  webResultsText,
-                  populatedLayout,
-                  legitimateSearchTextVisible: await page
-                    .getByText('已检索知识库')
-                    .first()
-                    .isVisible()
-                }
-              }
-            })
-
-            const emptySearchResult = await runtime.step({
-              name: 'search-empty-workspace',
-              message: '创建无可检索资料的真实工作区并验证搜索模式拦截提示。',
-              run: async () => {
-                await createWorkspaceThroughSettingsUi(page, 'Workbench Empty Search Workspace')
-                await navigateToWorkbench(page)
-                await createWorkbenchNewSession(page)
-                await selectWorkbenchWorkspace(page, 'Workbench Empty Search Workspace')
-                await switchWorkbenchMode(page, '没头脑')
-                const emptyScopeProbe = await waitForWorkbenchSearchScopeEmptyThroughUi(page)
-                runtime.signal({
-                  name: 'workbench-empty-search-scope-settled',
-                  message: '切换空工作区后通过真实 @ 候选空态确认搜索范围刷新完成。',
-                  data: {
-                    emptyScopeProbe
-                  }
-                })
-                const messagesBefore = await getWorkbenchLocator(
-                  page,
-                  workbenchSelectors.messageList
-                )
-                  .locator('.ant-chat-message')
-                  .count()
-                await setWorkbenchInput(page, 'anything')
-                const sendButtonStateBefore = await getWorkbenchLocator(
-                  page,
-                  workbenchSelectors.sendButton
-                ).evaluate((element) => {
-                  if (!(element instanceof HTMLButtonElement)) {
-                    throw new Error('workbench send button is not an HTMLButtonElement')
-                  }
-                  return {
-                    disabled: element.disabled,
-                    text: (element.textContent || '').trim()
-                  }
-                })
-                await getWorkbenchLocator(page, workbenchSelectors.sendButton).evaluate(
-                  (element) => {
-                    if (!(element instanceof HTMLButtonElement)) {
-                      throw new Error('workbench send button is not an HTMLButtonElement')
-                    }
-                    element.click()
-                  }
-                )
-                await page.waitForTimeout(1000)
-                const messagesAfter = await getWorkbenchLocator(
-                  page,
-                  workbenchSelectors.messageList
-                )
-                  .locator('.ant-chat-message')
-                  .count()
-                const draftText = (
-                  (await getWorkbenchLocator(page, workbenchSelectors.input).textContent()) || ''
-                ).trim()
-                const rightPanelPresent =
-                  (await getWorkbenchLocator(page, workbenchSelectors.contentPanel).count()) > 0
-                await switchWorkbenchMode(page, '大聪明')
-                const cleanAiSessionKnowledgeTextCount = await page
-                  .getByText('已检索知识库')
-                  .count()
-                return {
-                  messagesBefore,
-                  messagesAfter,
-                  sendButtonStateBefore,
-                  draftText,
-                  rightPanelPresent,
-                  cleanAiSessionKnowledgeTextCount
-                }
-              }
-            })
-            const signals = await collectSignalsWithoutBlocking(runtime.collectSignals)
-
-            return {
-              fileResultsText: fileSearch.fileResultsText,
-              docxViewerVisible: fileSearch.docxViewerVisible,
-              webResultsText: webSearch.webResultsText,
-              populatedLayout: webSearch.populatedLayout,
-              legitimateSearchTextVisible: webSearch.legitimateSearchTextVisible,
-              emptySearchResult,
-              aiEventCount: signals?.aiRunEventEntries.length ?? 0,
-              openExternalCalls:
-                signals?.ipcInvokeEntries.filter((entry) => entry.name === 'openExternal').length ??
-                1
             }
-          } finally {
-            await setup.workspace.cleanup()
-            await server.close()
+          })
+
+          const webSearch = await runtime.step({
+            name: 'search-web-source',
+            message: '切换搜索模式并从真实网页索引结果触发系统浏览器打开。',
+            run: async () => {
+              await switchWorkbenchMode(page, '没头脑')
+              await insertWorkbenchReferenceToken(page, 'Workbench Search Web', server.url)
+              await appendWorkbenchInputText(page, 'cedar-search-888')
+              await submitWorkbenchCurrentDraft(page)
+              const webResults = await waitForWorkbenchSearchResults(page)
+              const webResultsText = ((await webResults.textContent()) || '').trim()
+              await webResults
+                .locator('div')
+                .filter({ hasText: 'cedar-search-888' })
+                .first()
+                .getByRole('button', { name: '打开网页' })
+                .click()
+              const populatedLayout = await page.evaluate((selectors) => {
+                const messageList = document.querySelector(
+                  `[data-testid="${selectors.messageList}"]`
+                )
+                const composerShell = document.querySelector(
+                  `[data-testid="${selectors.composerShell}"]`
+                )
+                const main = document.querySelector('.nc-main-pane')
+                const scroll = messageList?.parentElement
+                if (
+                  !(composerShell instanceof HTMLElement) ||
+                  !(scroll instanceof HTMLElement) ||
+                  !(main instanceof HTMLElement)
+                ) {
+                  return null
+                }
+                const mainRect = main.getBoundingClientRect()
+                const composerRect = composerShell.getBoundingClientRect()
+                const scrollRect = scroll.getBoundingClientRect()
+                return {
+                  composerInsideViewport: composerRect.bottom <= mainRect.bottom + 1,
+                  messageAreaEndsBeforeComposer: scrollRect.bottom <= composerRect.top + 1,
+                  messageOverflowY: getComputedStyle(scroll).overflowY,
+                  composerFlexShrink: getComputedStyle(composerShell).flexShrink
+                }
+              }, workbenchSelectors)
+              return {
+                webResultsText,
+                populatedLayout,
+                legitimateSearchTextVisible: await page
+                  .getByText('已检索知识库')
+                  .first()
+                  .isVisible()
+              }
+            }
+          })
+
+          const emptySearchResult = await runtime.step({
+            name: 'search-empty-workspace',
+            message: '创建无可检索资料的真实工作区并验证搜索模式拦截提示。',
+            run: async () => {
+              await createWorkspaceThroughSettingsUi(page, 'Workbench Empty Search Workspace')
+              await navigateToWorkbench(page)
+              await createWorkbenchNewSession(page)
+              await selectWorkbenchWorkspace(page, 'Workbench Empty Search Workspace')
+              await switchWorkbenchMode(page, '没头脑')
+              const emptyScopeProbe = await waitForWorkbenchSearchScopeEmptyThroughUi(page)
+              runtime.signal({
+                name: 'workbench-empty-search-scope-settled',
+                message: '切换空工作区后通过真实 @ 候选空态确认搜索范围刷新完成。',
+                data: {
+                  emptyScopeProbe
+                }
+              })
+              const messagesBefore = await getWorkbenchLocator(page, workbenchSelectors.messageList)
+                .locator('.ant-chat-message')
+                .count()
+              await setWorkbenchInput(page, 'anything')
+              const sendButtonStateBefore = await getWorkbenchLocator(
+                page,
+                workbenchSelectors.sendButton
+              ).evaluate((element) => {
+                if (!(element instanceof HTMLButtonElement)) {
+                  throw new Error('workbench send button is not an HTMLButtonElement')
+                }
+                return {
+                  disabled: element.disabled,
+                  text: (element.textContent || '').trim()
+                }
+              })
+              await getWorkbenchLocator(page, workbenchSelectors.sendButton).evaluate((element) => {
+                if (!(element instanceof HTMLButtonElement)) {
+                  throw new Error('workbench send button is not an HTMLButtonElement')
+                }
+                element.click()
+              })
+              await page.waitForTimeout(1000)
+              const messagesAfter = await getWorkbenchLocator(page, workbenchSelectors.messageList)
+                .locator('.ant-chat-message')
+                .count()
+              const draftText = (
+                (await getWorkbenchLocator(page, workbenchSelectors.input).textContent()) || ''
+              ).trim()
+              const rightPanelPresent =
+                (await getWorkbenchLocator(page, workbenchSelectors.contentPanel).count()) > 0
+              await switchWorkbenchMode(page, '大聪明')
+              const cleanAiSessionKnowledgeTextCount = await page.getByText('已检索知识库').count()
+              return {
+                messagesBefore,
+                messagesAfter,
+                sendButtonStateBefore,
+                draftText,
+                rightPanelPresent,
+                cleanAiSessionKnowledgeTextCount
+              }
+            }
+          })
+          const signals = await collectSignalsWithoutBlocking(runtime.collectSignals)
+
+          return {
+            fileResultsText: fileSearch.fileResultsText,
+            docxViewerVisible: fileSearch.docxViewerVisible,
+            webResultsText: webSearch.webResultsText,
+            populatedLayout: webSearch.populatedLayout,
+            legitimateSearchTextVisible: webSearch.legitimateSearchTextVisible,
+            emptySearchResult,
+            aiEventCount: signals?.aiRunEventEntries.length ?? 0,
+            openExternalCalls:
+              signals?.ipcInvokeEntries.filter((entry) => entry.name === 'openExternal').length ?? 1
           }
         },
         assert: async (result, runtime) => {
