@@ -109,9 +109,6 @@
 - `src/main/services/**` 放业务编排、领域服务和适配层。
 - `src/main/services/storage/**` 放 SQLite、LanceDB 和领域 Store。
 - AI 运行入口与基础设施放在 `src/main/services/ai/**`。
-- AI human graph、node、prompt、skill、tool 按 human 领域收口。
-- Tool 实现按实现域归位，例如 docx、textFile、kb、terminal；builtin `text-file` skill 通过 `text_file_read/text_file_edit` 提供 UTF-8 普通文本和代码文件读写。
-- Docx replay、apply、checkpoint 和 revert 能力放在 AI human tools 的 docx 领域下；普通文本写入使用结构化 diff 和统一文件修改记录，不把 unified diff 返回给 AI。
 - `src/main/utils/**` 只放 Main 侧通用工具，不放强业务流程。
 - `src/main/types/**` 只放 Main 侧通用类型。
 
@@ -130,49 +127,21 @@
 - Main 与 Renderer 都会消费的数据结构放 `src/shared/**`。
 - 只给 Main、AI、human 或 Renderer 单侧使用的类型与常量，不要放进 `src/shared/**`。
 
-### 3.5 测试目录
-
-- `tests/harness/**` 只放可复用的测试基础设施。
-- `tests/harness/e2e/**` 只封装 UI 自动化、原生目录选择自动化、真实临时文件、本地 HTTP 服务、截图、raw log 读取和 IPC observer。
-- `tests/harness/e2e/**` 不提供 preload override、直接创建业务状态、假模型、假搜索结果、假下载进度、假 AI 事件或假附件选择结果。
-- `tests/fixtures/**` 只放长期复用的输入样本，不混入运行产物。
-- `tests/fixtures/workspace/` 是共享工作区输入目录。
-- `tests/case/ai/**` 放 AI formal tests。
-- `tests/case/unit/**` 放长期保留、但不进入 formal test-plan 的 unit / helper / schema / prompt 类测试。
-
 ## 4. 必须遵守的规则
 
-### 代码相关
 
-- 禁止使用 `Modal.confirm`、`Modal.info` 等静态方法
-- 禁止未经允许就私自创建任何文档
+### 代码实现
 
-### 代码实现准则
-
-0. 允许重构且不兼容旧逻辑
-1. 存在重复逻辑、重复类型，且适合抽象后提高阅读性、简单性、后期维护性的，要进行抽象封装，视情况看是否拆分文件
-2. 代码逻辑实现过于复杂，有更简单的实现，且有助提高阅读性、简单性、后期维护性的，要进行简单实现
-3. 文件拆得太碎，且拆后的小文件并不会继续在该文件扩展，那这些文件需要进行整合，有助提高阅读性、简单性、后期维护性
-4. 代码逻辑不能为了抽象封装而封装，导致一些逻辑太零散太少，那这些代码也需要进行整合
-
-#### 代码类型，常量，通用逻辑抽象规则
-
-- 类型禁止使用 `any` 与 `unknown`
-- 类型应抽到types文件中统一管理，常量应抽入constants统一管理，通用逻辑应按职责设计为单一的文件并放入utils中管理
-- types、constants、utils 统一按目录就近归位，比如main目录下的通用type就放到main目录下的types文件中；
-- 只有 main 与 renderer 共享的内容放 src/shared/\*\*，其余按 ai、main、human 或更细分领域各自收口。
-- 默认每个目录只有一个 types.ts、一个 constants.ts，utils/\*\* 按需创建；
+1. 允许破坏性重构
+   不需要兼容旧逻辑，优先以代码质量、可读性、简单性和长期维护性为目标。
+2. 消除重复与合理抽象
+   重复逻辑、重复类型应进行抽象封装；但避免过度抽象，不要为了封装导致代码零散、复杂。
+3. 简化复杂实现
+   对于过度复杂的代码逻辑，如果存在更简单、更清晰、更易维护的实现，应直接重构替换。
+4. 优化文件与代码组织
+   合理拆分或合并文件，避免文件过碎或职责混乱；保持代码结构清晰、直观，降低理解和维护成本。
+5.  禁止使用 `Modal.confirm`、`Modal.info` 等静态方法；类型禁止使用 `any` 与 `unknown`
 
 ### 文档相关
-
-- 文档入口或文档变更时，需同步更新本文档的“文档引用”部分；本文档承担根文档索引职责。
 - 代码变更必须要看是否要同步更新prd和test文档
 
-### 测试相关
-
-- 涉及工作区语义的测试时，统一使用 `tests/fixtures/workspace` 作为共享输入目录，不再把共享 workspace 放在 `tests/fixtures/ai/**` 下维护
-
-### 你的回复相关
-
-- 当对应测试用例文档明确要求引用 PRD 编号时，写回归测试或验收结论应按该文档要求执行
-- 最终回复涉及功能实现时，应说明已验证和未验证项；只有在对应测试用例文档明确要求或 `doc/prd/**` 发生变更时，才需要说明 PRD 对齐情况
