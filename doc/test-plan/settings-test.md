@@ -56,6 +56,15 @@ Settings 顶层 suite 对齐 PRD 模块：
 - Oracle：新增表单可填写配置名称、模型服务地址和 API Key，对齐 `SET-MODEL-002-AC1`；第一条配置保存后作为普通可用服务展示，不产生默认、当前或启用状态，对齐 `SET-MODEL-001-AC1`、`SET-MODEL-001-AC2`；编辑现有配置时表单带出当前值，对齐 `SET-MODEL-002-AC2`；必填字段不完整时保存被拦截，对齐 `SET-MODEL-002-AC3`；新增和编辑弹窗点击遮罩后保持打开且输入不丢失，对齐 `SET-MODEL-002-AC6`。
 - Not：不验证 workbench 模型选择。
 
+#### `model-free-key-entry`
+
+- 测试类型：`e2e`
+- What：大模型配置页展示免费 AI Key 官网入口，并保持与配置操作区的正确位置关系。
+- Why：用户需要在新增配置前快速获得可体验的 Key，同时外链操作不能破坏当前设置页状态。
+- How：进入大模型配置页，检查入口位于配置数量与“新增配置”之间，点击后收集真实 Renderer → Preload 外链调用信号。
+- Oracle：入口位置和可访问名称符合 `SET-MODEL-004-AC1`；外链目标为 `https://www.ncurator.com/zh/free-keys` 且当前路由不变，对齐 `SET-MODEL-004-AC2`。
+- Not：不访问外部网页内容，也不验证免费 Key 的实时可用性。
+
 #### `model-remote-list-refresh`
 
 - 测试类型：`e2e`

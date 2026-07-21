@@ -75,6 +75,8 @@ export const settingsSelectors = {
   workspacePanel: 'settings-workspace-panel',
   modelPanel: 'settings-model-panel',
   modelTable: 'settings-model-table',
+  modelConfigCount: 'settings-model-config-count',
+  modelFreeKeyButton: 'settings-model-free-key-button',
   modelAddButton: 'settings-model-add-button',
   modelModal: 'settings-model-modal',
   modelNameInput: 'settings-model-name-input',

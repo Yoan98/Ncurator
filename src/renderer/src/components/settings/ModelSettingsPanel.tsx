@@ -1,8 +1,9 @@
 ﻿import React, { useEffect, useMemo, useState } from 'react'
 import { AutoComplete, Button, Form, Input, Modal, Popconfirm, Space, Table, message } from 'antd'
 import type { TableColumnsType } from 'antd'
-import { HiArrowPath, HiPencil, HiPlus, HiTrash } from 'react-icons/hi2'
+import { HiArrowPath, HiArrowTopRightOnSquare, HiPencil, HiPlus, HiTrash } from 'react-icons/hi2'
 import type { LLMConfig, LlmRemoteModel } from '../../../../shared/types'
+import { FREE_AI_KEYS_URL } from '../../../../shared/constants'
 import { inferLlmProviderKind } from '../../../../shared/llmProvider'
 import { PROVIDER_OPTIONS } from './constants'
 import type { LlmConfigFormValues } from './types'
@@ -268,9 +269,21 @@ const ModelSettingsPanel: React.FC = () => {
     >
       <section className="shrink-0 px-1 pt-1">
         <div className="flex flex-wrap items-center justify-end gap-2">
-          <span className="rounded-full border border-[#EEEEEC] bg-white px-3 py-1 text-[12px] text-[#787774]">
+          <span
+            className="rounded-full border border-[#EEEEEC] bg-white px-3 py-1 text-[12px] text-[#787774]"
+            data-testid={settingsSelectors.modelConfigCount}
+          >
             共 {configs.length} 个配置
           </span>
+          <Button
+            icon={<HiArrowTopRightOnSquare className="h-4 w-4" />}
+            onClick={() => void window.api.openExternal(FREE_AI_KEYS_URL)}
+            aria-label="免费获取 AI Key"
+            className="!border-[#E0DFDC] !bg-white !text-[#37352F] shadow-none hover:!border-[#D3D1CC] hover:!bg-[#F7F7F5]"
+            data-testid={settingsSelectors.modelFreeKeyButton}
+          >
+            免费获取 AI Key
+          </Button>
           <Button
             type="primary"
             icon={<HiPlus className="h-4 w-4" />}
