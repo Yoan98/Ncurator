@@ -67,6 +67,15 @@ describe('reference visual spec', () => {
         createFileReference({ name: 'fallback.PDF', relativePath: 'docs/fallback.PDF' })
       )
     ).toBe('pdf')
+    expect(getReferenceVisualKind(createFileReference({ name: 'slides.ppt' }))).toBe('ppt')
+    expect(
+      getReferenceVisualKind(
+        createFileReference({ name: 'slides.PPTX', relativePath: 'docs/slides.PPTX' })
+      )
+    ).toBe('ppt')
+    expect(getReferenceVisualSpec(createFileReference({ name: 'slides.pptx' })).documentLabel).toBe(
+      'PPT'
+    )
   })
 
   it('keeps markdown and unknown files on the generic file visual spec', () => {

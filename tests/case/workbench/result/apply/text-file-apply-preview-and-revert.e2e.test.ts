@@ -139,15 +139,30 @@ describe('workbench result e2e', () => {
             const omittedCountAfterExpand = await diffViewer
               .locator('[data-diff-omitted-count]')
               .count()
-            const workspaceExplorerToggleLabel = await getWorkbenchLocator(
+            const workspaceExplorerToggle = getWorkbenchLocator(
               page,
               workbenchSelectors.workspaceExplorerToggle
-            ).getAttribute('aria-label')
-            const workspaceExplorerModeText =
-              (await getWorkbenchLocator(
-                page,
-                workbenchSelectors.workspaceExplorerModeSwitch
-              ).textContent()) || ''
+            )
+            await page.waitForFunction(
+              (testId) =>
+                document.querySelector(`[data-testid="${testId}"]`)?.getAttribute('aria-label') ===
+                '显示工作区文件',
+              workbenchSelectors.workspaceExplorerToggle
+            )
+            const workspaceExplorerToggleLabelBeforeOpen =
+              await workspaceExplorerToggle.getAttribute('aria-label')
+            const workspaceExplorerModeCountBeforeOpen = await getWorkbenchLocator(
+              page,
+              workbenchSelectors.workspaceExplorerModeSwitch
+            ).count()
+            await workspaceExplorerToggle.click()
+            const workspaceExplorerModeSwitch = getWorkbenchLocator(
+              page,
+              workbenchSelectors.workspaceExplorerModeSwitch
+            )
+            await workspaceExplorerModeSwitch.waitFor({ state: 'visible' })
+            const workspaceExplorerModeTextAfterOpen =
+              (await workspaceExplorerModeSwitch.textContent()) || ''
             const currentSessionChanges = getWorkbenchPrefixLocator(
               page,
               workbenchSelectors.workspaceFileChangePrefix
@@ -174,8 +189,9 @@ describe('workbench result e2e', () => {
               applyEntryCountDuringRun,
               omittedCountBeforeExpand,
               omittedCountAfterExpand,
-              workspaceExplorerToggleLabel,
-              workspaceExplorerModeText,
+              workspaceExplorerToggleLabelBeforeOpen,
+              workspaceExplorerModeCountBeforeOpen,
+              workspaceExplorerModeTextAfterOpen,
               currentSessionChangeMarkerCount,
               restoredBytes: afterRevertBytes.equals(beforeBytes),
               diffStillVisible
@@ -200,8 +216,9 @@ describe('workbench result e2e', () => {
               result.applyEntryCountDuringRun === 0 &&
               result.omittedLineLabels.some((label) => label.includes('行未修改')) &&
               result.omittedCountAfterExpand < result.omittedCountBeforeExpand &&
-              result.workspaceExplorerToggleLabel === '收起工作区文件' &&
-              result.workspaceExplorerModeText.includes('本会话改动') &&
+              result.workspaceExplorerToggleLabelBeforeOpen === '显示工作区文件' &&
+              result.workspaceExplorerModeCountBeforeOpen === 0 &&
+              result.workspaceExplorerModeTextAfterOpen.includes('本会话改动') &&
               result.currentSessionChangeMarkerCount >= 1 &&
               result.restoredBytes &&
               result.diffStillVisible,

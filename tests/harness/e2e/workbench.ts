@@ -732,6 +732,40 @@ export const selectWorkbenchAttachmentThroughNativeDialog = async (
   )
 }
 
+export const selectWorkbenchAttachmentThroughInjectedDialog = async (
+  page: Page,
+  filePath: string,
+  electronApp: ElectronApplication
+): Promise<void> => {
+  const addButton = getWorkbenchLocator(page, workbenchSelectors.attachmentAddButton)
+  const fileName = path.basename(filePath)
+  await electronApp.evaluate(({ dialog }, selectedPath) => {
+    const originalShowOpenDialog = dialog.showOpenDialog.bind(dialog)
+    dialog.showOpenDialog = (async () => {
+      dialog.showOpenDialog = originalShowOpenDialog
+      return {
+        canceled: false,
+        filePaths: [selectedPath],
+        bookmarks: []
+      }
+    }) as typeof dialog.showOpenDialog
+  }, filePath)
+  await addButton.click()
+  await page.waitForFunction(
+    (input: { cardPrefix: string; fileName: string }) =>
+      Array.from(document.querySelectorAll(`[data-testid^="${input.cardPrefix}-"]`)).some(
+        (card) =>
+          card instanceof HTMLElement &&
+          (card.innerText.includes(input.fileName) || card.getAttribute('title') === input.fileName)
+      ),
+    {
+      cardPrefix: workbenchSelectors.attachmentCardPrefix,
+      fileName
+    },
+    { timeout: 30_000 }
+  )
+}
+
 export const waitForSettingsCountToBecome = async (
   page: Page,
   testId: string,

@@ -155,7 +155,7 @@ tests/case/workbench/
 - What：验证 `@` 参考资料候选覆盖工作区全部本地目录 / 文件与网页资料、目录 / 文件 / 网页 token 插入、多 token 共存、键盘删除、去重、切工作区清理和空候选提示。
 - Why：显式参考资料是用户控制 AI 上下文的核心入口，错误会直接导致搜索或 AI 执行范围偏离用户意图。
 - How：创建真实 workspace，绑定 `tests/fixtures/workspace`，等待真实文件扫描并准备索引状态；添加真实 web source 并等待真实网页索引完成；输入 `@` 触发候选，选择文件、目录、网页；候选应覆盖工作区下本地项并显示索引状态，其中 md/txt 索引完成后应显示为已索引；选中即追加，同一资料才去重；通过 Backspace 删除 token；切工作区清理旧 token。
-- Oracle：候选来源符合当前工作区和模式，对齐 `WB-SCOPE-001-AC1`、`WB-SCOPE-001-AC2`；token 插入、共存和删除后发送参数符合 `WB-SCOPE-002-AC1` 至 `WB-SCOPE-002-AC3`；重复候选和跨工作区清理符合 `WB-SCOPE-003-AC1`、`WB-SCOPE-003-AC2`；空候选提示符合 `WB-SCOPE-004-AC1`、`WB-SCOPE-004-AC2`。
+- Oracle：候选来源符合当前工作区和模式，对齐 `WB-SCOPE-001-AC1`、`WB-SCOPE-001-AC2`；token 插入、共存和删除后发送参数符合 `WB-SCOPE-002-AC1` 至 `WB-SCOPE-002-AC3`；目录、网页、PDF、DOCX、PPT/PPTX 使用专属样式，Markdown、TXT 和其他文件使用普通文件样式，对齐 `WB-SCOPE-002-AC5`；重复候选和跨工作区清理符合 `WB-SCOPE-003-AC1`、`WB-SCOPE-003-AC2`；空候选提示符合 `WB-SCOPE-004-AC1`、`WB-SCOPE-004-AC2`。
 - Not：不验证底层 KB 检索排序质量，也不验证 Settings 工作区资料配置细节。
 
 #### `right-panel-layout-and-tabs`
@@ -285,7 +285,7 @@ tests/case/workbench/
 - What：验证同一个 Markdown 文件在普通预览时正常渲染，在 AI 修改记录中使用独立文本 diff，并能恢复原始 bytes。
 - Why：普通预览和修改预览是两种不同语义；如果共用文件渲染器，用户看不到本次具体增加和删除内容。
 - How：先从真实搜索结果打开 Markdown 普通预览；再通过真实 AI 调用 `replaceAll` 和 `edit` 修改该文件；点击 assistant 修改入口检查 `TextFileDiffViewer`；最后执行回退。
-- Oracle：普通预览与修改 diff 共用一个文件 Tab；file_artifact 已产生但 Run 尚未结束时不展示修改入口；Run 完成后 assistant 修改文件入口使用 `工作区/目录/文件`，右侧工具栏使用 `工作区 > 目录 > 文件`；从入口打开时文件列表切到“本会话改动”并选中对应文件；文本 Diff 只展示该 Run 修改批次，不生成会话累计 Diff；Diff 行背景覆盖整个可见及可滚动画布宽度；首次打开后缓存 version 2 hunks 且不含完整 `afterLines`；“N 行未修改”可从不可变 after 对象展开；回退后 bytes 与原始输入一致且有效改动标记消失。
+- Oracle：普通预览与修改 diff 共用一个文件 Tab；file_artifact 已产生但 Run 尚未结束时不展示修改入口；Run 完成后 assistant 修改文件入口使用 `工作区/目录/文件`，右侧工具栏使用 `工作区 > 目录 > 文件`；从入口打开时文件列表默认关闭，点击“目录列表”后才展示并默认进入“本会话改动”、选中对应文件；文本 Diff 只展示该 Run 修改批次，不生成会话累计 Diff；Diff 行背景覆盖整个可见及可滚动画布宽度；首次打开后缓存 version 2 hunks 且不含完整 `afterLines`；“N 行未修改”可从不可变 after 对象展开；回退后 bytes 与原始输入一致且有效改动标记消失。
 - Not：不验证 unified diff 字符串；UI 只消费结构化 diff artifact。
 
 #### `ppt-create-diff-and-revert`
@@ -319,7 +319,7 @@ tests/case/workbench/
 - What：验证 AI 修改真实 docx 后，assistant 修改文件入口、右侧修改文件工作区、当前记录预览和干净回退闭环。
 - Why：直接写回和回退是 Workbench 文件编辑能力的安全边界，只看 artifact 事件无法证明用户能检查和撤销修改。
 - How：通过 UI 选择真实 docx 资料并发送真实编辑请求；等待 AI 写回；点击 assistant turn 中的修改文件入口；检查右侧文件面包屑、无模式标签状态和预览；执行回退并重新读取文件内容。
-- Oracle：修改后源文件立即成为 AI 最终净稿且 assistant turn 展示本轮修改文件入口；点击入口后右侧进入“本会话改动”、选中对应文件并展示 Review Docx；Review Docx 继续保留段落、表格、图片、字体和页面结构；未发生后续修改时回退恢复 before 对象且记录状态变为 `reverted`；记录模型、耗时、完成度评分和失败归因。
+- Oracle：修改后源文件立即成为 AI 最终净稿且 assistant turn 展示本轮修改文件入口；点击入口后右侧打开对应修改文件且工作区文件列表默认关闭；用户手动打开列表后进入“本会话改动”并选中对应文件；Review Docx 继续保留段落、表格、图片、字体和页面结构；未发生后续修改时回退恢复 before 对象且记录状态变为 `reverted`；记录模型、耗时、完成度评分和失败归因。
 - Not：不验证 docx 编辑算法的所有格式保真细节，该能力归 AI tool docx 测试。
 
 #### `docx-apply-force-revert-warning`

@@ -69,7 +69,8 @@ const setupMultiFileApplyWorkspace = async (
   await configureLiveModelThroughSettingsUi(page, env)
   await prepareWorkbenchWorkspaceThroughUi(page, {
     workspaceName,
-    rootPath: workspace.rootPath
+    rootPath: workspace.rootPath,
+    rootBindingMode: 'ipc'
   })
   await navigateToWorkbench(page)
   await selectWorkbenchWorkspace(page, workspaceName)

@@ -118,12 +118,18 @@ describe('workbench conversation e2e', () => {
               (await mentionPanel.locator('[data-reference-icon-kind="docx"]').count()) > 0
             const pdfIconPresent =
               (await mentionPanel.locator('[data-reference-icon-kind="pdf"]').count()) > 0
-            const markdownIconPresent =
+            const unexpectedMarkdownIconPresent =
               (await mentionPanel.locator('[data-reference-icon-kind="markdown"]').count()) > 0
             const genericFileIconPresent =
               (await mentionPanel
                 .getByRole('button')
                 .filter({ hasText: 'human-input.txt' })
+                .locator('[data-reference-icon-kind="file"]')
+                .count()) > 0
+            const markdownUsesGenericFileIcon =
+              (await mentionPanel
+                .getByRole('button')
+                .filter({ hasText: 'workbench-preview.md' })
                 .locator('[data-reference-icon-kind="file"]')
                 .count()) > 0
             const duplicateCandidateVisible = await getWorkbenchLocator(
@@ -236,8 +242,9 @@ describe('workbench conversation e2e', () => {
               webIconVisible,
               docxIconPresent,
               pdfIconPresent,
-              markdownIconPresent,
+              unexpectedMarkdownIconPresent,
               genericFileIconPresent,
+              markdownUsesGenericFileIcon,
               duplicateCandidateVisible,
               textFileIndexedVisible,
               markdownFileIndexedVisible,
@@ -280,8 +287,9 @@ describe('workbench conversation e2e', () => {
               result.webIconVisible &&
               result.docxIconPresent &&
               result.pdfIconPresent &&
-              result.markdownIconPresent &&
+              !result.unexpectedMarkdownIconPresent &&
               result.genericFileIconPresent &&
+              result.markdownUsesGenericFileIcon &&
               !result.duplicateCandidateVisible &&
               result.textFileIndexedVisible &&
               result.markdownFileIndexedVisible &&
@@ -309,7 +317,7 @@ describe('workbench conversation e2e', () => {
             {
               name: 'workbench-reference-token-real-lifecycle',
               message:
-                '@ 参考资料应来自真实 workspace/web 资料；候选按文件/网页分组并覆盖 md/txt 已索引本地文件，目录、网页、pdf/docx/md 和普通文件使用分型图标；选择文件、目录、网页时应追加共存，发送后用户消息保留紧凑 token 和分型图标，同一资料不重复出现，删除后移除 token，切换工作区后清理旧 token，空候选给出提示，对齐 WB-SCOPE-001 至 WB-SCOPE-004。',
+                '@ 参考资料应来自真实 workspace/web 资料；候选按文件/网页分组并覆盖 md/txt 已索引本地文件，目录、网页、PDF、DOCX、PPT 使用专属样式，Markdown、TXT 和其他文件使用普通文件样式；选择文件、目录、网页时应追加共存，发送后用户消息保留紧凑 token 和分型图标，同一资料不重复出现，删除后移除 token，切换工作区后清理旧 token，空候选给出提示，对齐 WB-SCOPE-001 至 WB-SCOPE-004。',
               data: result
             }
           )

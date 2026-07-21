@@ -12,7 +12,7 @@ import {
   getWorkbenchLocator,
   getWorkbenchPrefixLocator,
   navigateToWorkbench,
-  selectWorkbenchAttachmentThroughNativeDialog,
+  selectWorkbenchAttachmentThroughInjectedDialog,
   selectWorkbenchWorkspace,
   setupWorkbenchWithTempWorkspace,
   submitWorkbenchCurrentDraft,
@@ -141,7 +141,7 @@ describe('workbench conversation e2e', () => {
                 await switchWorkbenchMode(page, '大聪明')
                 await getWorkbenchLocator(page, workbenchSelectors.input).click()
                 await page.keyboard.type(RUNNING_MESSAGE)
-                await selectWorkbenchAttachmentThroughNativeDialog(
+                await selectWorkbenchAttachmentThroughInjectedDialog(
                   page,
                   attachments.markdownPath,
                   runtime.electronApp

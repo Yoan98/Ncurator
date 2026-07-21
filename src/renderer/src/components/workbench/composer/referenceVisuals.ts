@@ -1,6 +1,6 @@
 import type { SelectedReference } from '../../../../../shared/types'
 
-export type ReferenceVisualKind = 'directory' | 'web' | 'pdf' | 'docx' | 'file'
+export type ReferenceVisualKind = 'directory' | 'web' | 'pdf' | 'docx' | 'ppt' | 'file'
 
 export type ReferenceVisualSpec = {
   kind: ReferenceVisualKind
@@ -42,6 +42,14 @@ const REFERENCE_VISUAL_SPECS: Record<ReferenceVisualKind, ReferenceVisualSpec> =
     documentAccentClassName: 'fill-[#BFDBFE]',
     documentLabel: 'DOC'
   },
+  ppt: {
+    kind: 'ppt',
+    iconClassName: 'text-[#D97706]',
+    labelClassName: 'text-[#B45309]',
+    documentFillClassName: 'fill-[#F59E0B]',
+    documentAccentClassName: 'fill-[#FDE68A]',
+    documentLabel: 'PPT'
+  },
   file: {
     kind: 'file',
     iconClassName: 'text-[#787774]',
@@ -77,6 +85,7 @@ export const getReferenceVisualKind = (reference: SelectedReference): ReferenceV
   const fileExt = getReferenceFileExtension(reference)
   if (fileExt === 'pdf') return 'pdf'
   if (fileExt === 'docx') return 'docx'
+  if (fileExt === 'ppt' || fileExt === 'pptx') return 'ppt'
   return 'file'
 }
 
