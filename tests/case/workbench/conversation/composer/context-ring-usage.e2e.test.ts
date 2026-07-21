@@ -57,11 +57,15 @@ describe('workbench conversation e2e', () => {
             )
             const label = (await contextRing.getAttribute('aria-label')) || ''
             await contextRing.hover()
+            const tooltipTitle = page.getByText('上下文用量', { exact: true })
+            const usedPercent = page.getByText(/^已用 \d+%$/).first()
+            await tooltipTitle.waitFor({ state: 'visible', timeout: 3000 })
+            await usedPercent.waitFor({ state: 'visible', timeout: 3000 })
 
             return {
               label,
-              tooltipVisible: await page.getByText('上下文用量').isVisible(),
-              percentVisible: await page.getByText(/已用 \d+%/).first().isVisible(),
+              tooltipVisible: await tooltipTitle.isVisible(),
+              percentVisible: await usedPercent.isVisible(),
               finalAnswerText: evidence.finalAnswerText
             }
           } finally {

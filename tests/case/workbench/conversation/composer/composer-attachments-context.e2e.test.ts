@@ -236,8 +236,6 @@ describe('workbench conversation e2e', () => {
               .first()
             await fileCard.waitFor({ state: 'visible' })
             const fileCardText = (await fileCard.textContent()) || ''
-            await fileCard.click()
-            await page.waitForTimeout(500)
 
             await selectWorkbenchAttachmentThroughNativeDialog(
               page,
@@ -258,6 +256,8 @@ describe('workbench conversation e2e', () => {
               name: 'attachment-final-state',
               message: '文件附件、大文件提示和普通文本粘贴后的最终输入框状态。'
             })
+            await fileCard.click()
+            await page.waitForTimeout(500)
 
             const signals = await runtime.collectSignals()
             const openPathCalls = signals.ipcInvokeEntries.filter(
