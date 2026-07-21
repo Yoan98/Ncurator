@@ -1,5 +1,6 @@
 export const APP_ID = 'com.yoan.ncurator'
 export const USER_MANUAL_URL = 'https://www.ncurator.com/zh/manual'
+export const FREE_AI_KEYS_URL = 'https://www.ncurator.com/zh/free-keys'
 
 export const APP_UPDATE_GET_SNAPSHOT_CHANNEL = 'app-update-get-snapshot'
 export const APP_UPDATE_CHECK_CHANNEL = 'app-update-check'

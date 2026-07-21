@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react'
-import jsPreviewDocx from '@js-preview/docx'
 import type { DocRendererProps, IDocument } from 'react-doc-viewer'
 import '@js-preview/docx/lib/index.css'
 import './index.css'
@@ -16,6 +15,62 @@ type DocViewerDocument = Omit<IDocument, 'fileData'> & {
   fileName?: string
   fileData?: string | ArrayBuffer | Blob | File
   metadata?: DocViewerMetadata
+}
+
+type BrowserProcessShim = {
+  env: Record<string, string | undefined>
+  browser: true
+  version: string
+  versions: Record<string, string>
+  platform: 'browser'
+  argv: string[]
+  pid: number
+  nextTick: (callback: (...args: unknown[]) => void, ...args: unknown[]) => void
+  cwd: () => string
+  emit: () => false
+  on: () => BrowserProcessShim
+  once: () => BrowserProcessShim
+  off: () => BrowserProcessShim
+  removeListener: () => BrowserProcessShim
+}
+
+let docxPreviewModulePromise: Promise<typeof import('@js-preview/docx')> | null = null
+
+const ensureBrowserProcessShim = (): void => {
+  const runtime = globalThis as unknown as { process?: unknown }
+  if (runtime.process) return
+
+  const shim = {} as BrowserProcessShim
+  Object.assign(shim, {
+    env: {},
+    browser: true,
+    version: '',
+    versions: {},
+    platform: 'browser',
+    argv: [],
+    pid: 0,
+    nextTick: (callback: (...args: unknown[]) => void, ...args: unknown[]) => {
+      queueMicrotask(() => callback(...args))
+    },
+    cwd: () => '/',
+    emit: () => false,
+    on: () => shim,
+    once: () => shim,
+    off: () => shim,
+    removeListener: () => shim
+  } satisfies BrowserProcessShim)
+
+  Object.defineProperty(runtime, 'process', {
+    configurable: true,
+    value: shim,
+    writable: true
+  })
+}
+
+const loadDocxPreview = async (): Promise<(typeof import('@js-preview/docx'))['default']> => {
+  ensureBrowserProcessShim()
+  docxPreviewModulePromise ||= import('@js-preview/docx')
+  return (await docxPreviewModulePromise).default
 }
 
 const scrollToAnchor = (container: HTMLDivElement, anchorName?: string): void => {
@@ -95,6 +150,8 @@ const CustomDocxRenderer = ({ mainState }: DocRendererProps) => {
       }
 
       container.innerHTML = ''
+      const jsPreviewDocx = await loadDocxPreview()
+      if (cancelled) return
       const previewer = jsPreviewDocx.init(container)
       try {
         await previewer.preview(file)
