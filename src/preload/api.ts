@@ -44,12 +44,10 @@ import type {
   ChatSubmitResponse,
   ChatTurnRetractLatestRequest,
   ChatTurnRetractLatestResponse,
-  ChunkListResponse,
   CreateWorkspaceSourceRequest,
   DeleteWebSourceRequest,
   DeleteWebSourceResponse,
   DeleteWorkspaceSourceResponse,
-  DocumentRecord,
   LegacyLocalImportMigrationStatus,
   ListReferenceItemsRequest,
   ListWebSourcesRequest,
@@ -60,7 +58,6 @@ import type {
   PrepareWorkspaceRequest,
   RefreshWebSourceRequest,
   SearchResponse,
-  SearchResult,
   SearchSourceFilter,
   PickApplicationResponse,
   PickDirectoryResponse,
@@ -137,26 +134,6 @@ export type DesktopApi = {
     sourceType?: SearchSourceFilter,
     documentIds?: string[]
   ) => Promise<SearchResponse>
-  ftsSearch: (
-    query: string,
-    sourceType?: SearchSourceFilter,
-    documentIds?: string[]
-  ) => Promise<SearchResult[]>
-  vectorSearch: (
-    query: string,
-    sourceType?: SearchSourceFilter,
-    documentIds?: string[]
-  ) => Promise<SearchResult[]>
-  hybridSearch: (
-    query: string,
-    sourceType?: SearchSourceFilter,
-    documentIds?: string[]
-  ) => Promise<SearchResult[]>
-  listDocuments: (payload: {
-    sourceNameQuery?: string
-    page: number
-    pageSize: number
-  }) => Promise<{ items: DocumentRecord[]; total: number }>
   workspaceList: () => Promise<WorkspaceListResponse>
   workspaceCreate: (payload: CreateWorkspaceSourceRequest) => Promise<WorkspaceMutationResponse>
   workspaceSetRootPath: (payload: SetWorkspaceRootPathRequest) => Promise<WorkspaceMutationResponse>
@@ -176,15 +153,6 @@ export type DesktopApi = {
   webSourceRefresh: (payload: RefreshWebSourceRequest) => Promise<WebSourceMutationResponse>
   webSourceDelete: (payload: DeleteWebSourceRequest) => Promise<DeleteWebSourceResponse>
   legacyLocalImportMigrationStatus: () => Promise<LegacyLocalImportMigrationStatus | null>
-  listChunks: (payload: {
-    query?: string
-    page: number
-    pageSize: number
-  }) => Promise<ChunkListResponse>
-  deleteDocuments: (
-    ids: string[]
-  ) => Promise<{ success: boolean; deletedDocs?: number; deletedChunks?: number; error?: string }>
-  dropDocumentsTable: () => Promise<{ success: boolean; existed?: boolean; error?: string }>
   sourceListRefresh: (cb: () => void) => () => void
   downloadModel: (repoId: string) => Promise<{ success: boolean; error?: string }>
   onDownloadProgress: (cb: (progressData: DownloadProgress) => void) => void

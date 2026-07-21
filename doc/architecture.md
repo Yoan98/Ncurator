@@ -163,7 +163,15 @@ skill 不按目录强行拆分，也不等同于工具数量。一个 skill 可�
 
 ### 会话连续性
 
-run 完成后，系统会基于本轮用户输入、最终答复和产物更新 conversation summary。下一次 run 会读取最近消息和 summary，形成跨轮连续性。
+跨轮上下文由 conversation summary 和未被摘要覆盖的 recent messages 共同组成。两部分必须不重复、不遗漏，并通过 `getConversationMemoryContext` 从同一数据库快照读取。
+
+- 系统只统计包含 user 和 assistant 的完整轮次；未完成轮次不参与摘要。
+- 未覆盖完整轮次达到 10 轮时，总结较早轮次并保留最近 5 轮原文。
+- 摘要在后台生成，完成前不移动覆盖边界，因此失败不会丢失消息。
+- 提交时同时校验旧摘要 revision、覆盖消息和更新时间；陈旧结果会被丢弃。
+- 同一会话同一时间只运行一个摘要任务，摘要期间新增消息继续保留在 recent messages。
+
+具体阈值由 `src/main/services/ai/memory/index.ts` 定义，存储边界由 `ChatStore` 保证。run 内的 `context_compaction` 只压缩当前 run 过程，与跨 run 的 conversation memory 是两套独立机制。
 
 ## Docx 架构
 

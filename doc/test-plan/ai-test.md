@@ -717,7 +717,7 @@ AI unit / 辅助测试目录：
 - Oracle：工具结果返回 `{ error }`。
 - Not：不验证 provider 重试策略。
 
-##### `browser-use-service-unavailable-diagnostic`
+##### `browser-use-service-unavailable-error`
 
 - 测试类型：`backend`
 - What：验证 `browser_use` 在缺少内置浏览器服务时返回真实 diagnostic。
@@ -821,7 +821,7 @@ AI unit / 辅助测试目录：
 - What：验证 embedding preflight 失败时，`AiRunService` 会在进入 `human` 前直接失败收口。
 - Why：基础服务明确失败时继续进入 human graph 会制造后续工具层噪音，应该在入口阶段明确失败；初始化卡住则由有界 preflight 超时保护。
 - How：注入会抛错的 `ensureEmbeddingReady`，启动一次真实 `AiRunService` run。
-- Oracle：run 状态为 `failed`，错误包含 preflight 失败原因，事件流中没有任何 `human_step`。
+- Oracle：run 状态为 `failed`，只返回统一的用户可见错误，不泄露底层 preflight 原文，事件流中没有任何 `human_step`。
 - Not：不验证模型下载进度展示。
 
 ##### `learning-hand-mouth-smoke`

@@ -63,7 +63,7 @@ SQLite 保存主要业务数据：
 - `scripts/test/workflow.mjs` 会按 backend / e2e 类型自动准备并注入正确 binding，正常执行回归时不需要手动 rebuild。
 - 打包流程会准备 Electron binding 并导出到 `resources/native/better-sqlite3/**`。
 
-当前项目尚未发布，开发和测试环境允许删除本地数据库并重新创建，因此发布前可以直接整理 `001_initial_schema`。首次正式发布后必须冻结已经发布的 migration；届时新增表或字段必须增加更高版本 migration，不能只修改已执行的旧 migration。
+`001_initial_schema` 已随首个用户版本发布并冻结。任何 schema 或数据变更都必须新增更高版本 migration，不能修改、重排或复用已发布 migration。开发环境需要重建数据库时也必须验证从已发布 schema 向前迁移的路径。
 
 ## LanceDB
 

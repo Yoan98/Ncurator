@@ -3,7 +3,6 @@ import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { App as AntdApp, Layout, ConfigProvider, theme } from 'antd'
 import ConversationWorkbenchPage from './pages/ConversationWorkbenchPage'
 import SettingsPage from './pages/SettingsPage'
-import TestPage from './pages/TestPage'
 import ModelDownloadPage from './pages/ModelDownloadPage'
 import NotificationCenter from './components/NotificationCenter'
 import { WorkbenchModeProvider } from './contexts/WorkbenchModeProvider'
@@ -110,7 +109,6 @@ const MainLayout: React.FC = () => (
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/settings/:section" element={<SettingsPage />} />
         <Route path="/model-download" element={<ModelDownloadPage />} />
-        <Route path="/test" element={<TestPage />} />
       </Routes>
     </Content>
   </Layout>

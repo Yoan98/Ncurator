@@ -83,4 +83,28 @@ describe('attachment service runtime directories', () => {
       path.join(workspaceRootPath, '.ncurator', 'runtime', 'assets', 'bucket-pdf', 'lecture.pdf')
     )
   })
+
+  it('rejects unsupported attachment formats without writing a file', async () => {
+    await expect(
+      service.saveAttachment({
+        workspaceRootPath,
+        assetBucketId: 'bucket-unsupported',
+        name: 'archive.zip',
+        bytes: Buffer.from('not-a-supported-attachment')
+      })
+    ).rejects.toThrow('暂不支持该文件格式')
+
+    await expect(
+      fs.stat(
+        path.join(
+          workspaceRootPath,
+          '.ncurator',
+          'runtime',
+          'assets',
+          'bucket-unsupported',
+          'archive.zip'
+        )
+      )
+    ).rejects.toThrow()
+  })
 })

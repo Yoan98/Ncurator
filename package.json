@@ -1,10 +1,10 @@
 {
   "name": "ncurator",
   "version": "0.1.17",
-  "description": "An Electron application with React and TypeScript",
+  "description": "Local-first AI workspace for documents, research, and task execution",
   "main": "./out/main/index.js",
-  "author": "example.com",
-  "homepage": "https://electron-vite.org",
+  "author": "NCurator",
+  "homepage": "https://www.ncurator.com",
   "scripts": {
     "format": "prettier --write .",
     "lint": "eslint --cache .",
@@ -55,7 +55,6 @@
     "build:mac:arm64": "pnpm run build && electron-builder --mac --arm64 --publish never && pnpm run package:audit",
     "build:mac:release:x64": "pnpm run build && electron-builder --mac --x64 --publish never --config.forceCodeSigning=true && pnpm run package:audit",
     "build:mac:release:arm64": "pnpm run build && electron-builder --mac --arm64 --publish never --config.forceCodeSigning=true && pnpm run package:audit",
-    "build:linux": "pnpm run build && electron-builder --linux && pnpm run package:audit",
     "native:node": "node scripts/build/native/better-sqlite3.mjs ensure node",
     "native:electron": "node scripts/build/native/better-sqlite3.mjs ensure electron",
     "native:pty:node": "node scripts/build/native/node-pty.mjs ensure node",

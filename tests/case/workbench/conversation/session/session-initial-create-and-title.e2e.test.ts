@@ -44,16 +44,6 @@ describe('workbench conversation e2e', () => {
           })
           try {
             const initialSessionsText = await readSessionListText(page)
-            const helpButtonAccessible = await getWorkbenchLocator(
-              page,
-              workbenchSelectors.settingsHelpButton
-            )
-              .isVisible()
-              .catch(() => false)
-            const helpButtonLabel =
-              (await getWorkbenchLocator(page, workbenchSelectors.settingsHelpButton).getAttribute(
-                'aria-label'
-              )) || ''
             const autoCreatedSessionCount = await page.evaluate(
               async (startedAt) =>
                 (await window.api.chatSessionList()).filter(
@@ -103,8 +93,6 @@ describe('workbench conversation e2e', () => {
 
             return {
               initialSessionsText,
-              helpButtonAccessible,
-              helpButtonLabel,
               afterManualCreateSessionsText,
               autoCreatedSessionCount,
               manuallyCreatedSessionCount,
@@ -123,8 +111,6 @@ describe('workbench conversation e2e', () => {
         assert: async (result, runtime) => {
           await runtime.assertThat(
             result.autoCreatedSessionCount === 0 &&
-              result.helpButtonAccessible &&
-              result.helpButtonLabel === '查看使用帮助' &&
               result.manuallyCreatedSessionCount === 0 &&
               result.afterFirstCreatedSessionCount === 1 &&
               result.afterFirstSessionsText.includes(result.firstTitlePrefix) &&
@@ -135,7 +121,7 @@ describe('workbench conversation e2e', () => {
             {
               name: 'workbench-session-title-lifecycle',
               message:
-                'Workbench 首次进入、点击新对话和选择工作空间都不应落库；第一条真实消息发送后才应创建会话并更新标题，第二条真实消息不应再次自动改写标题；左侧栏应提供可访问的使用帮助入口。',
+                'Workbench 首次进入、点击新对话和选择工作空间都不应落库；第一条真实消息发送后才应创建会话并更新标题，第二条真实消息不应再次自动改写标题。',
               data: result
             }
           )

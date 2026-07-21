@@ -561,14 +561,6 @@ export class DocumentsStore {
     return { items, total }
   }
 
-  public async dropDocumentsStorage(): Promise<{ existed: boolean }> {
-    const deletedDocs = this.sqlite.prepare('DELETE FROM document').run().changes
-    const table = await this.vector.openTable(LANCE_TABLES.CHUNK)
-    const deletedChunks = await table.countRows()
-    await table.delete('id IS NOT NULL')
-    return { existed: deletedDocs > 0 || deletedChunks > 0 }
-  }
-
   public async countChunksByDocumentIds(ids: string[]): Promise<number> {
     if (ids.length === 0) return 0
     const table = await this.vector.openTable(LANCE_TABLES.CHUNK)

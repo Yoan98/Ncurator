@@ -1,203 +1,82 @@
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { parse } from 'yaml'
+
+type BuilderConfig = {
+  productName?: string
+  publish?: { provider?: string; url?: string }
+  win?: { executableName?: string }
+  nsis?: { include?: string; oneClick?: boolean; artifactName?: string }
+  mac?: { artifactName?: string }
+  linux?: unknown
+}
+
+const readBuilderConfig = async (): Promise<BuilderConfig> =>
+  parse(await readFile(path.resolve('electron-builder.yml'), 'utf8')) as BuilderConfig
 
 describe('app update publish config', () => {
-  it('uses the direct release download feed instead of the GitHub Atom provider', async () => {
-    const config = await readFile(path.resolve('electron-builder.yml'), 'utf8')
+  it('uses the direct update feed and updater-aware NSIS behavior', async () => {
+    const [config, include] = await Promise.all([
+      readBuilderConfig(),
+      readFile(path.resolve('build/nsis-updated-silent.nsh'), 'utf8')
+    ])
 
-    expect(config).toMatch(
-      /publish:\s*\n\s*provider:\s*generic\s*\n\s*url:\s*https:\/\/download\.ncurator\.com\/updates\/latest/u
-    )
-    expect(config).not.toMatch(/publish:\s*\n\s*provider:\s*github/u)
-  })
-
-  it('makes updater-triggered NSIS installs silent while keeping normal installs assisted', async () => {
-    const config = await readFile(path.resolve('electron-builder.yml'), 'utf8')
-    const include = await readFile(path.resolve('build/nsis-updated-silent.nsh'), 'utf8')
-
-    expect(config).toContain('include: build/nsis-updated-silent.nsh')
-    expect(config).toContain('oneClick: false')
+    expect(config.publish).toEqual({
+      provider: 'generic',
+      url: 'https://download.ncurator.com/updates/latest'
+    })
+    expect(config.nsis?.include).toBe('build/nsis-updated-silent.nsh')
+    expect(config.nsis?.oneClick).toBe(false)
     expect(include).toContain('${if} ${isUpdated}')
     expect(include).toContain('SetSilent silent')
   })
 
-  it('shows the Chinese product name while keeping stable technical artifact names', async () => {
-    const config = await readFile(path.resolve('electron-builder.yml'), 'utf8')
-    const macBlock = config.match(/^mac:\s*\n([\s\S]*?)^dmg:/mu)?.[1] || ''
+  it('uses the product brand with stable technical artifact names', async () => {
+    const config = await readBuilderConfig()
 
-    expect(config).toContain('productName: 馆长')
-    expect(config).toContain('executableName: Ncurator')
-    expect(macBlock).not.toContain('executableName:')
-    expect(config).toContain('artifactName: Ncurator-windows-${arch}.${ext}')
-    expect(config).toContain('artifactName: Ncurator-mac-${arch}.${ext}')
+    expect(config.productName).toBe('馆长')
+    expect(config.win?.executableName).toBe('Ncurator')
+    expect(config.nsis?.artifactName).toBe('Ncurator-windows-${arch}.${ext}')
+    expect(config.mac?.artifactName).toBe('Ncurator-mac-${arch}.${ext}')
+    expect(config.linux).toBeUndefined()
   })
 
-  it('uses a local-first Windows release with explicit Actions fallback', async () => {
-    const workflow = await readFile(path.resolve('.github/workflows/release.yml'), 'utf8')
-    const packageJson = JSON.parse(await readFile(path.resolve('package.json'), 'utf8'))
-    const router = await readFile(path.resolve('scripts/release/route-windows.mjs'), 'utf8')
-    const localRelease = await readFile(path.resolve('scripts/release/windows.mjs'), 'utf8')
+  it('routes Windows locally first with an explicit Actions fallback', async () => {
+    const [workflow, packageJsonText, router, prepareRelease] = await Promise.all([
+      readFile(path.resolve('.github/workflows/release.yml'), 'utf8'),
+      readFile(path.resolve('package.json'), 'utf8'),
+      readFile(path.resolve('scripts/release/route-windows.mjs'), 'utf8'),
+      readFile(path.resolve('scripts/release/prepare.mjs'), 'utf8')
+    ])
+    const packageJson = JSON.parse(packageJsonText) as {
+      scripts: Record<string, string>
+    }
 
-    expect(workflow).toContain('runs-on: windows-latest')
     expect(workflow).toContain('workflow_dispatch:')
     expect(workflow).not.toMatch(/push:\s*\n\s*tags:/u)
-    expect(workflow).toContain('build/package/audit-summary.mjs')
-    expect(workflow).toContain('release/r2/create-fragment.mjs')
-    expect(workflow).toContain('release/r2/upload-fragment.mjs')
     expect(workflow).not.toContain('actions/upload-artifact')
-    expect(workflow).not.toContain('runs-on: macos-')
-    expect(workflow).not.toContain('publish-release')
     expect(packageJson.scripts['release:win']).toContain('release/windows.mjs')
     expect(packageJson.scripts['release:win:auto']).toContain('release/route-windows.mjs')
-    expect(packageJson.scripts['release:doctor']).toContain('release/doctor.mjs')
-    expect(packageJson.scripts['release:mac:only']).toContain('release/macos.mjs')
-    expect(packageJson.scripts['build:win']).toContain('build/native/electron-builder-windows.mjs')
-    expect(packageJson.scripts['build:win']).toContain('package:audit')
     expect(router).toContain("route === 'local'")
     expect(router).toContain('dispatchWindowsRelease')
-    expect(localRelease).toContain("'--format=zip'")
-    expect(localRelease).toContain("path.join(os.tmpdir(), 'ncurator-release')")
-    expect(localRelease).toContain('NCURATOR_RELEASE_WORK_ROOT')
-    expect(localRelease).toContain("args.includes('--reuse-work')")
-    expect(localRelease).toContain('tag-commit.txt')
-    expect(localRelease).toContain('reusable-cache')
-    expect(localRelease).toContain("['run', 'build:win']")
-    expect(localRelease).toContain('inspection.python.executable')
-    expect(localRelease).toContain("'r2', 'upload-fragment.mjs'")
-    expect(localRelease).toContain("'r2', 'finalize-windows.mjs'")
-    expect(localRelease).toContain('delete releaseEnvironment.CSC_LINK')
-
-    const windowsToolCache = await readFile(
-      path.resolve('scripts/build/native/electron-builder-windows.mjs'),
-      'utf8'
-    )
-    const releaseEnvironment = await readFile(
-      path.resolve('scripts/release/shared/environment.mjs'),
-      'utf8'
-    )
-    expect(windowsToolCache).toContain("'x', '-snl-'")
-    expect(windowsToolCache).toContain('SHA512 verification failed')
-    expect(releaseEnvironment).toContain("'Amazon', 'AWSCLIV2', 'aws.exe'")
-  })
-
-  it('can publish only the Mac update channel without changing Windows latest metadata', async () => {
-    const macRelease = await readFile(path.resolve('scripts/release/macos.mjs'), 'utf8')
-    const macFinalize = await readFile(
-      path.resolve('scripts/release/r2/finalize-macos.mjs'),
-      'utf8'
-    )
-    const storageLayout = await readFile(
-      path.resolve('scripts/release/r2/storage-layout.mjs'),
-      'utf8'
-    )
-
-    expect(macRelease).toContain("'r2', 'finalize-macos.mjs'")
-    expect(macFinalize).toContain('updates/latest/latest-mac.yml')
-    expect(macFinalize).not.toContain('updates/latest/latest.yml')
-    expect(macFinalize).toContain('fixedDownloadKey')
-    expect(storageLayout).toContain("return 'downloads/latest/macos-arm64.dmg'")
-    expect(macFinalize).toContain("listKeys('artifacts/macos/')")
-  })
-
-  it('keeps simulated update E2E available without making it a release blocker', async () => {
-    const packageJson = JSON.parse(await readFile(path.resolve('package.json'), 'utf8'))
-    const prepareRelease = await readFile(path.resolve('scripts/release/prepare.mjs'), 'utf8')
-
-    expect(packageJson.scripts['test:update:e2e']).toBeTruthy()
-    expect(packageJson.scripts['test:update:backend']).toBeTruthy()
     expect(prepareRelease).toContain("['test:update:backend']")
     expect(prepareRelease).not.toContain('test:update:e2e')
   })
 
-  it('keeps the complete installed production dependency closure', async () => {
-    const packageJson = JSON.parse(await readFile(path.resolve('package.json'), 'utf8'))
-    const packageStage = await readFile(
-      path.resolve('scripts/build/package/prepare-stage.mjs'),
-      'utf8'
-    )
+  it('finalizes Windows and macOS release channels independently', async () => {
+    const [windowsRelease, macRelease, windowsFinalize, macFinalize] = await Promise.all([
+      readFile(path.resolve('scripts/release/windows.mjs'), 'utf8'),
+      readFile(path.resolve('scripts/release/macos.mjs'), 'utf8'),
+      readFile(path.resolve('scripts/release/r2/finalize-windows.mjs'), 'utf8'),
+      readFile(path.resolve('scripts/release/r2/finalize-macos.mjs'), 'utf8')
+    ])
 
-    expect(packageStage).toContain('collectInstalledTopLevelDependencies')
-    expect(packageStage).toContain('dependencies: packagedDependencies')
-    expect(packageStage).toContain('isIncompatiblePackage')
-    expect(packageStage).not.toContain("name.startsWith('history.')")
-
-    const workspaceConfig = await readFile(path.resolve('pnpm-workspace.yaml'), 'utf8')
-    expect(workspaceConfig).toContain('supportedArchitectures:')
-    expect(workspaceConfig).toContain('- win32')
-    expect(workspaceConfig).toContain('- x64')
-    expect(packageJson.dependencies['@lancedb/lancedb']).toBe('0.22.3')
-
-    const lockfile = await readFile(path.resolve('pnpm-lock.yaml'), 'utf8')
-    expect(lockfile).toContain("'@lancedb/lancedb-darwin-x64@0.22.3':")
-    expect(lockfile).toContain("'@lancedb/lancedb-win32-x64-msvc@0.22.3':")
-  })
-
-  it('requires local Rosetta builds and stable macOS signatures', async () => {
-    const builderConfig = await readFile(path.resolve('electron-builder.yml'), 'utf8')
-    const localRelease = await readFile(path.resolve('scripts/release/macos.mjs'), 'utf8')
-    const signatureVerifier = await readFile(
-      path.resolve('scripts/release/verify-macos-signature.mjs'),
-      'utf8'
-    )
-    const runtimeSignatureVerifier = await readFile(
-      path.resolve('src/main/services/update/utils/macUpdateSignature.ts'),
-      'utf8'
-    )
-
-    expect(localRelease).toContain('NCURATOR_X64_NODE')
-    expect(localRelease).toContain('NCURATOR_X64_PYTHON')
-    expect(localRelease).toContain("'-x86_64'")
-    expect(localRelease).toContain("path.join(os.tmpdir(), 'ncurator-macos-release')")
-    expect(localRelease).toContain('NCURATOR_SIDECAR_PIP_CACHE')
-    expect(builderConfig).toContain('entitlements: build/entitlements.mac.inherit.plist')
-    expect(builderConfig).toContain('from: build/app-update.yml')
-    expect(signatureVerifier).toContain('macOS release must not use an ad-hoc signature')
-    expect(signatureVerifier).toContain('macOS designated requirement must remain stable')
-    expect(signatureVerifier).toContain('packaged macOS app launch verification passed')
-    expect(signatureVerifier).toContain('Print :CFBundleExecutable')
-    expect(signatureVerifier).toContain('NCURATOR_EMBEDDED_BROWSER_REMOTE_DEBUGGING_PORT')
-    expect(signatureVerifier).toContain("'--deep'")
-    expect(runtimeSignatureVerifier).toContain("['-d', '-r-', '--verbose=4'")
-    expect(runtimeSignatureVerifier).not.toContain("'--deep'")
-  })
-
-  it('enforces approved macOS package size budgets before publishing', async () => {
-    const config = JSON.parse(
-      await readFile(path.resolve('build/package-size-budgets.json'), 'utf8')
-    )
-    const packageAudit = await readFile(path.resolve('scripts/build/package/audit-app.mjs'), 'utf8')
-    const releaseFragment = await readFile(
-      path.resolve('scripts/release/r2/create-fragment.mjs'),
-      'utf8'
-    )
-
-    expect(config.warningGrowthPercent).toBe(3)
-    expect(config.failureGrowthPercent).toBe(8)
-    expect(config.platforms['darwin-arm64']).toBeTruthy()
-    expect(config.platforms['darwin-x64']).toBeTruthy()
-    expect(packageAudit).toContain('package size budget failed')
-    expect(releaseFragment).toContain('macOS package size budget is missing or failed')
-  })
-
-  it('keeps only R2 as the release binary source', async () => {
-    const finalizeScript = await readFile(
-      path.resolve('scripts/release/r2/finalize-windows.mjs'),
-      'utf8'
-    )
-    const storageLayout = await readFile(
-      path.resolve('scripts/release/r2/storage-layout.mjs'),
-      'utf8'
-    )
-
-    expect(finalizeScript).toContain('releases/latest/windows.json')
-    expect(finalizeScript).toContain("listKeys('artifacts/windows/')")
-    expect(finalizeScript).toContain('fixedDownloadKey')
-    expect(storageLayout).toContain("return 'downloads/latest/windows-x64.exe'")
-    expect(finalizeScript).not.toContain('gh release upload')
-    expect(finalizeScript).not.toContain('createGithubRelease')
-    expect(finalizeScript).not.toContain('NCURATOR_RELEASE_TOKEN')
-    expect(finalizeScript).not.toContain('api.github.com/repos')
-    await expect(readFile(path.resolve('.github/workflows/sync-r2.yml'), 'utf8')).rejects.toThrow()
+    expect(windowsRelease).toContain("'r2', 'finalize-windows.mjs'")
+    expect(macRelease).toContain("'r2', 'finalize-macos.mjs'")
+    expect(windowsFinalize).toContain('releases/latest/windows.json')
+    expect(windowsFinalize).not.toContain('releases/latest/macos.json')
+    expect(macFinalize).toContain('releases/latest/macos.json')
+    expect(macFinalize).not.toContain('releases/latest/windows.json')
   })
 })

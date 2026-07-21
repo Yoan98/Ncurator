@@ -89,20 +89,38 @@ tests/case/workbench/
 #### `session-initial-create-and-title`
 
 - 测试类型：`e2e`
-- What：验证首次进入 Workbench 时只展示可输入草稿态，第一条用户消息真实发送后才创建会话并生成标题，第二条消息不再自动改写标题；同时验证使用帮助入口可见且可访问。
-- Why：会话初始化和标题更新是 Workbench 最早的可见状态；如果草稿态提前落库会产生空会话，如果帮助入口缺失则用户无法快速进入官方手册。
-- How：通过 Settings UI 新增真实模型配置；通过 Settings UI 创建并绑定真实工作区；进入 Workbench 后检查帮助入口和会话记录数量，发送两条真实自然语言请求。
-- Oracle：没有历史会话时页面提供可操作草稿态，进入页面、点击新对话和选择工作区都不创建真实会话，对齐 `WB-SESSION-001-AC1`、`WB-SESSION-001-AC2`；第一条消息发送后才创建会话并以消息前 20 个字符为标题，对齐 `WB-SESSION-001-AC3`、`WB-SESSION-003-AC1`；第二条消息不会再次自动改写标题，对齐 `WB-SESSION-003-AC2`；帮助入口可见并具有“查看使用帮助”可访问名称，对齐 `WB-COMPOSER-011-AC1`。
+- What：验证首次进入 Workbench 时只展示可输入草稿态，第一条用户消息真实发送后才创建会话并生成标题，第二条消息不再自动改写标题。
+- Why：会话初始化和标题更新是 Workbench 最早的可见状态；草稿态提前落库会产生空会话。
+- How：通过 Settings UI 新增真实模型配置并绑定真实工作区；检查会话记录数量，发送两条真实自然语言请求。
+- Oracle：进入页面、点击新对话和选择工作区都不创建真实会话，对齐 `WB-SESSION-001`；第一条消息发送后才创建会话并生成标题，第二条消息不再改写标题，对齐 `WB-SESSION-003`。
 - Not：不验证标题手动编辑，也不验证会话列表视觉样式。
 
-#### `session-delete-confirmation-and-context-ring`
+#### `session-delete-confirmation`
 
 - 测试类型：`e2e`
-- What：验证会话删除确认、取消 / 确认删除，以及输入框上下文圆圈 hover 信息。
-- Why：会话删除是高风险操作，必须避免误删；上下文圆圈用于提示当前运行上下文，展示错误会误导用户。
-- How：通过真实 Workbench UI 创建会话并发送真实请求；打开删除确认，分别覆盖取消和确认；hover 输入框上下文圆圈读取提示。
-- Oracle：取消删除时会话保留；确认删除后会话从列表消失；上下文圆圈 hover 能展示当前工作区、模型或相关上下文提示。
+- What：验证会话删除确认，以及取消和确认删除。
+- Why：会话删除是高风险操作，必须避免误删。
+- How：通过真实 Workbench UI 创建会话；打开删除确认，分别覆盖取消和确认。
+- Oracle：取消删除时会话保留；确认删除后会话从列表消失，对齐 `WB-SESSION-004`。
 - Not：不验证历史会话批量管理和跨设备同步。
+
+#### `workbench-help-entry`
+
+- 测试类型：`e2e`
+- What：验证 Workbench 左侧使用帮助入口。
+- Why：帮助入口必须独立于会话创建和模型运行保持可用。
+- How：打开 Workbench，点击帮助入口并观察外链调用和当前路由。
+- Oracle：入口可访问，打开官方中文手册且不改变当前会话路由，对齐 `WB-COMPOSER-011`。
+- Not：不验证系统浏览器窗口样式。
+
+#### `context-ring-usage`
+
+- 测试类型：`e2e`
+- What：验证智能模式上下文用量在 run 后刷新，并可查看已用与剩余比例。
+- Why：用量提示错误会误导用户对后续可用上下文的判断。
+- How：完成一次真实 AI run，读取圆圈可访问名称和 hover 提示。
+- Oracle：圆圈展示已用与剩余信息，hover 展示百分比，对齐 `WB-COMPOSER-008`。
+- Not：不验证 token 估算器的逐 token 精度。
 
 #### `send-guard-mode-switch-and-preferences`
 
@@ -112,6 +130,15 @@ tests/case/workbench/
 - How：先在无模型配置状态下切换智能 / 搜索模式检查提示，再通过 UI 配置真实模型和工作区；覆盖无工作区、输入保留、模型 / 工作区选择、AI 推进偏好、重新进入页面后的恢复和真实发送。
 - Oracle：无模型时智能模式快速显示配置提示，搜索模式隐藏且切回后恢复；未绑定工作区不会触发发送，对齐 `WB-COMPOSER-001-AC1`、`WB-COMPOSER-005-AC1`；切换模式后输入保留且发送路径按新模式执行，对齐 `WB-MODE-001-AC1`、`WB-MODE-001-AC2`；模型和工作区恢复符合 `WB-COMPOSER-007-AC1` 至 `WB-COMPOSER-007-AC5`；可选择并恢复“本地资料·严谨”，搜索模式隐藏偏好入口且切回后保留选择，对齐 `WB-COMPOSER-007-AC2`、`WB-COMPOSER-007-AC6`、`WB-COMPOSER-007-AC7`。
 - Not：不验证真实模型回答质量，只验证用户路径和发送前置条件。
+
+#### `model-selector-and-provider-error`
+
+- 测试类型：`e2e`
+- What：验证模型选择按配置分组、视觉模型选择和 provider 错误反馈。
+- Why：模型配置和视觉模型是智能任务能否启动的直接前提。
+- How：通过真实设置页配置模型，回到 Workbench 选择主模型和视觉模型，触发受控 provider 错误。
+- Oracle：候选按配置分组可搜索，视觉模型可单独选择，provider 失败显示用户可读错误，对齐 `WB-COMPOSER-007` 与 `WB-CORE-006`。
+- Not：不评价模型回答质量。
 
 #### `user-message-actions`
 
@@ -137,7 +164,7 @@ tests/case/workbench/
 - What：验证 `@` 候选列表使用方向键移动时，当前高亮项能停在移动后的选项，不会因候选刷新跳回第一项。
 - Why：`@` 候选选择依赖键盘稳定性；高亮项被刷新会导致用户插入错误资料范围。
 - How：通过真实 Settings / Workbench UI 创建并准备真实工作区；在 composer 输入 `@` 打开候选列表，按 `ArrowDown` 后观察 active 候选项。
-- Oracle：候选项数量大于 1；按下方向键后 active 候选项发生变化，并在短暂停留后保持不变，对齐 `WB-SCOPE-002-AC1` 与 `WB-COMPOSER-002-AC2` 的键盘交互口径。
+- Oracle：候选项数量大于 1；按下方向键后 active 候选项发生变化，并在短暂停留后保持不变，对齐 `WB-SCOPE-002-AC1`。
 - Not：不验证 AI run 或底层检索质量。
 
 #### `workspace-root-path-required`
@@ -166,6 +193,15 @@ tests/case/workbench/
 - How：直接进入无历史会话的真实 Workbench，先确认右侧 shell 不存在并测量空会话输入区位置；展开后连续创建八个真实浏览器 Tab，使用鼠标滚轮触发横向滚动并检查折叠 / 展开；打开浏览器更多菜单检查三段式缩放控件和地址栏“前往”按钮。
 - Oracle：空会话输入区居中且右侧 shell 不占宽度；展开和折叠保留约 200ms 动画，折叠动画结束后 shell 才卸载；折叠态按钮位于主标题栏并在展开后隐藏；悬浮按钮不产生 document 横纵溢出；标签栏和浏览器工具栏均为 44px，标签栏无下边线；八个 Tab 溢出后滚轮可横向滚动；加号菜单显示“文件 / 浏览器”，缩放控件同排，地址栏显示“前往”按钮，浮层触发原生视图避让。
 - Not：不验证公网网页、模型回答质量或系统窗口按钮本身；Stagehand targetId、共享持久分区和历史恢复继续由 `browser-use-task-panel` 覆盖。
+
+#### `windows-empty-titlebar-drag-region`
+
+- 测试类型：`e2e`
+- What：验证 Workbench 空会话的窗口拖动区和原生标题栏不遮挡输入区或右侧入口。
+- Why：窗口层级错误会让首屏无法拖动或按钮无法点击。
+- How：在可见窗口测量原生标题栏、拖动区和空态输入区，点击关键入口。
+- Oracle：业务内容从标题栏下方开始，交互元素位于 `no-drag` 区，空态输入区可用，对齐 `WB-PANEL-001`。
+- Not：不验证系统窗口管理器的实际移动动画。
 
 ### 5.2 `run`
 
@@ -204,6 +240,15 @@ tests/case/workbench/
 - How：通过真实用户请求诱导 AI 产生需要审批的 terminal 操作；分别覆盖全同意、任一拒绝、填写指导输入和不操作期间保持等待。
 - Oracle：整批同意后按原 serial 顺序继续，对齐 `WB-BLOCKER-001-AC1`；任一拒绝或填写指导输入时本批命令 0 执行并回到后续 AI 决策，对齐 `WB-BLOCKER-001-AC2`；指导输入不作为独立第三按钮，对齐 `WB-BLOCKER-001-AC3`；审批不因固定超时自动失败，对齐 `WB-BLOCKER-001-AC4`；记录模型、耗时、完成度评分和失败归因。
 - Not：不验证 terminal 工具安全指令集本身，该能力归 AI tool 测试。
+
+#### `user-takeover-flow`
+
+- 测试类型：`e2e`
+- What：验证 AI 请求用户接手浏览器、用户完成后继续和取消任务。
+- Why：登录、验证码和人工确认无法由 AI 自动完成，等待状态必须可恢复且可释放。
+- How：通过真实浏览器任务触发接手事件，分别点击“完成并继续”和“取消本次任务”，并覆盖切换会话后返回。
+- Oracle：展示原因和对应浏览器；确认后从同一页面继续；取消后 run 结束且不再保留 blocker，对齐 `WB-BLOCKER-002`。
+- Not：不验证第三方网站业务结果。
 
 #### `stop-running-or-approval-run`
 
@@ -295,6 +340,15 @@ tests/case/workbench/
 - Oracle：只产生一个 PPT 修改记录；pptx 可解析；左右差异区和缩略图可见；全部页与变化页切换有效；回撤后新建文件被删除。
 - Not：不逐字断言最终回答，不对页面审美打分。
 
+#### `ppt-update-diff-interactions`
+
+- 测试类型：`e2e`
+- What：验证已有 PPT 更新后的左右差异、变化标记、缩略图筛选、缩放和拖动画布。
+- Why：创建态与更新态的差异语义不同，不能只用新建 PPT case 代替。
+- How：修改真实 PPT 的页面内容和顺序，打开修改记录并操作差异预览。
+- Oracle：修改前后画面、变化页标记、全部页切换、同步切页、缩放和拖动均可用，对齐 `WB-PPT-002`。
+- Not：不评价页面设计质量。
+
 #### `terminal-background-service-flow`
 
 - 测试类型：`e2e`
@@ -304,14 +358,14 @@ tests/case/workbench/
 - Oracle：事件包含 terminal_command_yielded、terminal_command_stopped、terminal_run、terminal_stop 和 browser_use；最终答复包含页面唯一标记；任务结束后真实端口不可访问；不存在 fake AI/tool/browser 信号。
 - Not：不依赖公网，不允许测试进程替 AI 启动目标 HTTP 服务。
 
-#### `workspace-change-tracker`
+#### `terminal-unicode-file-list`
 
-- 测试类型：`backend`
-- What：验证统一 Run 前后扫描、内容寻址对象库、延迟文本 Diff 和删除 / 重命名回退。
-- Why：终端、脚本和内部文件工具必须共享同一变化真相，不能依赖命令字符串猜测产物。
-- How：Run 基线后分别执行文本修改、新增、删除和重命名；完成扫描后检查 `FileRevision`、对象哈希和来源；首次读取文本记录后检查 Diff 缓存；分别回退删除和重命名。
-- Oracle：四种操作均被捕获；相同内容对象去重；扫描前记录没有文本 preview，首次读取后生成 version 2 hunks 且无 `afterLines`；删除回退恢复文件，重命名回退恢复原路径；`.ncurator`、`.git`、`node_modules` 等内部目录不进入变化列表。
-- Not：不在本用例重复验证 DOCX 或 PPT 的专用 Diff 渲染；PPT 页面级 Diff 由 `ppt-create-diff-and-revert` 独立覆盖，Excel 不提供专用 Diff adapter。
+- 测试类型：`e2e`
+- What：验证持久终端在当前平台处理 Unicode 路径和文件列表。
+- Why：中文路径是 macOS 与 Windows 用户的常见场景，编码错误会直接破坏终端任务。
+- How：在真实工作区创建 Unicode 文件名，通过真实终端读取目录并返回结果。
+- Oracle：终端结果保留 Unicode 文件名，任务完成后无乱码或跨会话泄漏，对齐 `WB-TERMINAL-001`。
+- Not：不覆盖全部 shell 命令策略。
 
 #### `docx-apply-panel-preview-and-revert`
 

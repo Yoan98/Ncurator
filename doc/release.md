@@ -1,17 +1,14 @@
 # 桌面端构建与发布
 
-本文是桌面端打包、签名、安全审计、跨机器构建、R2 上传和自动更新的唯一发布说明。
+本文是 Windows、macOS 打包、安全审计、R2 发布和自动更新的唯一说明。只发布 Windows x64、macOS arm64 和 macOS x64，不发布 Linux。
 
-整个发布由同一个 annotated Tag 驱动。Windows 与 macOS 可以在不同机器独立构建，但必须满足两个硬规则：
+发布由 annotated Tag 驱动。Windows 和 macOS 可在不同机器独立构建、发布和回滚，互不等待。任何产物必须先通过最终包审计，才能生成发布片段并上传。
 
-1. 安装包只包含运行必需内容。
-2. 没有通过最终产物安全审计的文件不能生成发布片段，也不能上传到 R2。
+向量模型在应用内单独下载，不进入安装包。
 
-向量模型由应用首次使用时单独下载，不属于安装包。本流程不修改模型名称、精度、下载文件或缓存逻辑。
+## 打包边界
 
-## 打包安全边界
-
-electron-builder 不从项目根目录打包。`pnpm run build` 每次都会重新创建 staging，并在 `release-stage/` 保存不进入安装包的追踪与混淆报告：
+`pnpm run build` 会重建 `release-stage/`。electron-builder 只从 `release-stage/app` 打包，不直接打包项目根目录。
 
 ```text
 release-stage/
@@ -19,95 +16,46 @@ release-stage/
 ├── main-obfuscation-report.json
 └── app/
     ├── package.json
-    ├── out/
-    │   ├── main/
-    │   ├── preload/
-    │   └── renderer/
+    ├── out/{main,preload,renderer}/
     ├── node_modules/
-    └── resources/
-        ├── native/
-        └── web_crawler_sidecar/bin/
+    └── resources/{native,web_crawler_sidecar}/
 ```
 
-staging 只允许包含：
+安装包只允许包含编译后的应用、运行时依赖、当前平台原生二进制、网页抓取 sidecar 和必要 License。以下内容不得进入 staging 或安装包：
 
-- 压缩后的 main、preload 和 renderer；
-- 由 main 和 preload 入口递归追踪得到的完整运行时依赖；
-- 当前系统、当前架构的原生二进制；
-- 只包含 Chromium headless shell 的网页抓取 sidecar；
-- 最小化生产 `package.json`；
-- 法律要求保留的第三方 License 和 Notice。
+- `src`、`tests`、`scripts`、`doc` 和开发配置；
+- `.env`、锁文件、测试日志、fixture 和截图；
+- TypeScript、Python、C/C++ 源码和 Source Map；
+- 完整 Chromium、Patchright 和错误平台原生文件；
+- 私钥、证书、Token 和其他敏感凭据。
 
-以下内容禁止进入 staging 和最终安装目录：
+`app.asar` 不是加密。客户端代码和所有 `VITE_*` 变量都按公开信息处理。当前只混淆 `out/main`，目的是提高直接阅读成本，不能代替密钥管理。
 
-- 项目 `src`、`tests`、`scripts`、`doc`；
-- `.git`、`.github`、`.claude`、`.codex`；
-- `.env`、锁文件、工作区配置和构建配置；
-- TypeScript、Python、C/C++ 等原始源码；
-- Source Map 和残留 `sourceMappingURL` 指令；
-- 测试日志、截图、fixture 和 Playwright trace；
-- 完整 Chromium 和 Patchright；
-- 错误系统或错误架构的原生二进制；
-- 私钥、签名证书和高风险 Token。
+## 构建与审计
 
-`app.asar` 只是归档，不是加密。Electron 运行所需的编译后 JavaScript 仍可被逆向分析，因此客户端代码和所有 `VITE_*` 变量都必须按公开信息处理。当前只混淆 `out/main`，用于提高直接阅读和批量提取提示词的成本；preload、renderer 和第三方依赖不做同等级混淆。混淆不能替代服务端密钥管理，也不能视为源码加密。
+`pnpm run build` 的固定流程：
 
-## Source Map 和密钥
+1. 准备 native 模块并执行 TypeScript 类型检查。
+2. 构建或复用当前平台的网页抓取 sidecar。
+3. 构建 main、preload、renderer，并验证进程边界。
+4. 用 `@vercel/nft` 追踪 main/preload 的运行时依赖。
+5. 离线安装生产依赖闭包，移除开发内容和错误平台文件。
+6. 用 staging 中的真实 Loader 验证 DOCX、PDF 和 PDF worker。
+7. 混淆 `out/main` 并执行语法、哈希、体积和明文检查。
+8. 执行 staging 安全审计。
 
-正式安装包内禁止 `.map`。如果以后接入错误监控，固定流程是：
+无法自动追踪的依赖只能在 `build/runtime-trace-policy.json` 中显式声明原因和对应测试。未知告警或未使用的显式规则都会使构建失败。
 
-1. 构建时生成 Source Map；
-2. 上传到受访问控制的错误监控平台；
-3. 从 staging 删除 Source Map 和引用；
-4. 执行 staging 审计；
-5. 再打包并执行最终审计。
+electron-builder 完成后，`pnpm run package:audit` 检查真实 `.app` 或 `win-unpacked`，包括：
 
-Source Map 不能上传到公开 CDN，因为 `sourcesContent` 可能包含完整源码。
+- `app.asar` 目录和生产 `package.json` 是否最小化；
+- 运行时依赖、native 文件、sidecar 和符号链接是否正确；
+- 是否包含禁止文件、Source Map、敏感信息或受保护提示词明文；
+- 平台、架构、安装体积和 `app.asar` 体积是否符合预算。
 
-R2 凭据、GitHub Token 和签名证书只能保存在本机安全环境或 GitHub Actions Secret 中，不能写入 renderer、仓库文件或打包配置。
+macOS 正式产物还必须通过稳定签名校验并真实启动到窗口和 preload API 就绪。只存在进程或只通过 `codesign` 不算可发布。
 
-## 构建和审计流程
-
-`pnpm run build` 依次执行：
-
-1. 准备 Node 测试和构建使用的 native 模块并执行 TypeScript 类型检查；
-2. 构建或复用当前平台的网页抓取 sidecar；
-3. 导出 Electron 使用的 better-sqlite3 原生模块；
-4. 构建并压缩 main、preload、renderer，禁止 Source Map；
-5. 验证 main、worker 和 embedding 的运行时边界；
-6. 准备 Electron 使用的 node-pty，并删除旧 `dist` 和旧 staging；
-7. 在混淆前使用 `@vercel/nft` 从全部 main/preload JavaScript 入口递归追踪文件依赖；
-8. 按 `build/runtime-trace-policy.json` 分类已知的跨平台 native 分支和静态资源告警，任何未知告警直接终止构建；
-9. 验证追踪到的根依赖全部声明在生产 `dependencies`，并检查递归发现的 optional peer 版本；
-10. 生成 `release-stage/runtime-trace-report.json`、最小生产 `package.json` 和暂存锁文件；
-11. 使用主锁文件离线安装运行时依赖，再根据实际安装结果写入完整生产依赖闭包；
-12. 删除测试、文档、源码、Source Map 和错误平台二进制；
-13. 只使用 staging 中的依赖，通过真实 `DocxLoader` 和 `PDFLoader` 读取仓库 fixture，并检查 `mammoth`、`pdf-parse` 与 PDF worker；
-14. 混淆 `out/main`，执行语法、哈希、体积增长和受保护提示词明文检查；
-15. 执行 staging 安全审计。
-
-`scripts/build/runtime/bundle-graph.mjs` 中的轻量扫描只负责进程边界检查，不再决定打包哪些依赖。无法被递归追踪的依赖只能通过 `build/runtime-trace-policy.json` 显式包含，并且必须写明原因和对应测试；未使用的显式包含项会使构建失败。
-
-electron-builder 完成后，`pnpm run package:audit` 检查真实 `.app` 或 `win-unpacked`。最终审计会验证：
-
-- `app.asar` 根目录只能有 `out`、`node_modules`、`package.json`；
-- `package.json` 只能包含最小生产字段；
-- `app.asar` 和外部 resources 没有禁止文件；
-- 递归追踪到的每个运行时根依赖和关键子路径都真实存在于 `app.asar`；
-- 没有绝对路径或逃出安装目录的符号链接；
-- 没有私钥和高风险 Token；
-- `out/main` 中不存在受保护提示词明文；
-- sidecar 没有完整 Chromium、Patchright 和 Python 源码；
-- ONNX Runtime 和 native prebuild 只保留当前平台与架构；
-- 生成 `dist/package-audit.json`，记录安装目录、`app.asar`、运行时追踪摘要和安装包体积。
-
-macOS 体积审计使用 `build/package-size-budgets.json` 中独立的 arm64、x64 基线。相比基线增长超过 3% 时输出警告，增长超过 8% 或超过硬上限时审计失败。审计失败或缺少体积结果的 macOS 产物不能生成发布 fragment，也不能上传。
-
-macOS 正式产物还必须真实启动到窗口和 preload API 就绪。只通过文件审计、`codesign --verify` 或存在进程都不算可发布。
-
-所有正式构建命令都包含最终审计。macOS 已启用体积硬预算；Windows 等完成稳定版本实测后再设置独立基线。
-
-常用构建命令：
+常用命令：
 
 ```bash
 pnpm run build
@@ -120,68 +68,49 @@ pnpm run package:audit:summary
 pnpm test:e2e:package
 ```
 
-`pnpm test:e2e:package` 是完整正式包回归：它会重新构建并审计当前平台产物，安装 DMG 或 EXE，再让 E2E harness 连接安装后的真实可执行程序。该命令耗时长，不替代日常的源码 E2E。
+`pnpm test:e2e:package` 会重新构建、审计并安装当前平台正式包，再连接真实安装程序执行 E2E。它耗时较长，不替代日常源码 E2E。
 
-## 平台构建方式
+## 平台构建
 
-- Windows x64：本地环境完整时优先本地构建，否则显式触发 GitHub Windows Runner。
-- macOS arm64：在 Apple Silicon Mac 本地构建。
-- macOS x64：在同一台 Mac 的 Rosetta x64 Node/Python 环境构建。
-- GitHub Actions 不响应 Tag push，不保存安装包 Artifact，也不构建 macOS 或 Linux。
+- Windows x64：默认优先本地 Windows；本地环境不可用时回退到手动 dispatch 的 GitHub Actions。
+- macOS arm64：Apple Silicon Mac 本地构建。
+- macOS x64：同一台 Mac 使用 Rosetta x64 Node 和 Python 构建。
+- GitHub Actions 不响应 Tag push，不保存安装包 Artifact，也不构建 macOS。
 
-`pnpm-workspace.yaml` 固定记录 macOS arm64、macOS x64 和 Windows x64 的可选原生依赖。打包时再按当前 OS/CPU 删除不兼容包，不能只用开发机架构生成锁文件。
+`--local-only` 强制 Windows 本地构建，本地条件不完整就失败。`--actions` 强制使用 Actions。两个参数不能同时使用。
 
-当前 Intel Mac 依赖 `@lancedb/lancedb 0.22.3`，这是项目已验证且包含 `darwin-x64` 原生包的稳定版本。升级 LanceDB 前必须先确认 npm 中同时存在 arm64、x64 和 Windows x64 对应包，并重新执行三个架构的真实启动测试。
+## 发布片段
 
-Windows GitHub Actions 只允许手动 `workflow_dispatch`，并按 Tag 设置 concurrency。工作流步骤固定为：
+发布片段使用 `schemaVersion: 2`，包含 Tag、版本、平台、安装包大小与 sha512、自动更新元数据、包审计摘要；macOS 片段还包含稳定签名摘要。旧 schema 或缺少审计信息的片段不能发布。
 
-1. 检出输入的 annotated Tag；
-2. 安装锁定依赖；
-3. 准备 Windows electron-builder 工具缓存；
-4. 构建 Windows x64；
-5. 审计 staging 和最终 `win-unpacked`；
-6. 把体积和安全结果写入 Workflow Summary；
-7. 生成强制包含审计信息的 fragment；
-8. 上传并校验 R2。
+上传、状态查询和 finalize 都会重新验证片段、公开文件大小与 R2 sha512 metadata。
 
-## 发布片段协议
+## R2 目录
 
-跨机器状态通过 `release-status/vX.Y.Z/*.json` 交接。当前 fragment 使用 `schemaVersion: 2`，必须包含：
-
-- Tag、版本、平台；
-- 每个安装包的文件名、大小、sha512 和用途；
-- 自动更新元数据；
-- `package-audit.json` 的平台、架构、安装体积和 `app.asar` 摘要；
-- macOS 稳定签名摘要。
-
-以下位置都会重新验证 fragment：
-
-- 上传脚本；
-- Windows 重复构建检查；
-- `release:status`；
-- 三个平台最终汇总。
-
-旧的 schema v1 或缺少审计的 fragment 不能被当成已完成发布。
-
-## R2 发布结构
-
-所有二进制和自动更新元数据由 Cloudflare R2 提供：
+Windows 和 macOS 使用独立目录与 latest 清单：
 
 ```text
-artifacts/vX.Y.Z/*             当前版本安装包和更新文件
-release-status/vX.Y.Z/*.json   三个平台的 v2 发布片段
-updates/latest/latest.yml      Windows 自动更新元数据
-updates/latest/latest-mac.yml  macOS 自动更新元数据
-releases/latest.json           官网最新版下载清单
+artifacts/windows/vX.Y.Z/*
+artifacts/macos/vX.Y.Z/*
+release-status/windows/vX.Y.Z.json
+release-status/macos/vX.Y.Z/macos-arm64.json
+release-status/macos/vX.Y.Z/macos-x64.json
+updates/latest/latest.yml
+updates/latest/latest-mac.yml
+releases/latest/windows.json
+releases/latest/macos.json
+downloads/latest/windows-x64.exe
+downloads/latest/macos-arm64.dmg
+downloads/latest/macos-x64.dmg
 ```
 
-三个平台的 fragment 全部通过文件大小、R2 sha512 metadata 和审计校验后，才会更新三个 latest 文件。版本文件使用一年不可变缓存，latest 元数据使用 `no-store`。
+每个平台 finalize 只更新自己的更新元数据、官网清单和固定下载地址，也只清理本平台旧对象。版本产物使用长期不可变缓存，latest 和固定下载使用 `no-store`。固定下载通过 `Content-Disposition` 给用户返回带“馆长”的文件名，R2 技术文件名保持 ASCII。
 
-当前发布流程不创建 GitHub Release。版本下载清单和自动更新元数据全部由 R2 提供。
+当前流程不创建 GitHub Release，官网和应用更新都读取 R2。
 
-## 一次性环境配置
+## 环境配置
 
-本地发布配置统一从项目根目录 `.env` 读取。通用配置：
+本地发布从根目录 `.env` 读取：
 
 ```text
 R2_ACCESS_KEY_ID
@@ -191,119 +120,47 @@ R2_BUCKET_NAME
 R2_PUBLIC_BASE_URL=https://download.ncurator.com
 ```
 
-`.env` 已被 Git 忽略，也被打包安全策略禁止，不能提交或复制到 staging。
+`.env` 已被 Git 忽略且禁止进入安装包。
 
-### Windows 本地环境
-
-Windows 本地发布需要：
-
-- Windows x64；
-- x64 Node.js 22；
-- `package.json` 指定版本的 pnpm；
-- x64 Python 3.12；
-- Git 和 tar；
-- AWS CLI；
-- 上述 R2 配置。
-
-可选配置：
-
-```text
-NCURATOR_SIDECAR_BUILD_PYTHON
-NCURATOR_AWS_CLI
-NCURATOR_RELEASE_WORK_ROOT
-NCURATOR_SIDECAR_BROWSER_CACHE
-```
-
-默认 Windows 工作目录位于用户可写的 `%TEMP%/ncurator-release`。如需更短路径，可用 `NCURATOR_RELEASE_WORK_ROOT` 指定。未开启 Windows 开发者模式时，`build:win` 会准备经过固定 SHA512 校验的 winCodeSign 工具缓存，不需要管理员终端。
-
-如果本机不能构建 Windows，Actions 兜底需要：
+Windows 本地发布需要 Windows x64、x64 Node.js 22、pnpm、x64 Python 3.12、Git、tar、AWS CLI 和 R2 配置。Actions 回退额外需要：
 
 ```text
 NCURATOR_ACTIONS_TOKEN
 RELEASE_REPOSITORY=owner/repo
 ```
 
-Token 只需要目标仓库的 Actions 写入权限。
-
-配置后可执行只读诊断：
-
-```bash
-pnpm release:doctor
-```
-
-### macOS 本地环境
-
-Mac 需要：
-
-- 登录钥匙串安装并信任固定的 `Ncurator Update Signing` P12；
-- arm64 Node.js、pnpm 和 Python；
-- Rosetta x64 Node.js 和 Python；
-- AWS CLI 和 R2 配置。
-
-可用以下变量覆盖默认工具路径：
-
-```text
-NCURATOR_X64_NODE
-NCURATOR_X64_PYTHON
-NCURATOR_AWS_CLI
-```
-
-首次导入签名证书：
+macOS 本地发布需要 Apple Silicon Mac、arm64 Node/Python、Rosetta x64 Node/Python、AWS CLI、R2 配置，以及已安装并信任的 `Ncurator Update Signing` P12。首次配置执行：
 
 ```bash
 pnpm release:signing:setup
+pnpm release:doctor
 ```
 
-当前 macOS 使用项目自建的 `Ncurator Update Signing`，并设置 `timestamp: none`，因为 Apple 时间戳服务不接受该证书。这套签名用于保证两个架构更新包来自同一发布方，不等同于 Apple Developer ID 公证。
-
-应用启动时只读取顶层 App 的签名身份和 designated requirement，用于判断自动更新是否可用，不执行耗时的 `codesign --verify --deep`。完整的 `--deep --strict` 验签只在正式发布阶段执行，随后还必须真实启动打包后的 App。
-
-自建证书没有 Apple Team ID。macOS 会把不同签名对象视为不同 Team，因此顶层 App 和子进程都必须使用 `build/entitlements.mac.inherit.plist` 关闭 library validation，否则 dyld 会拒绝加载 Electron Framework 或 sidecar 的 Python Framework。正式发布在生成 fragment 前必须真实启动打包后的 App；不能只看 `codesign --verify`。
-
-以后迁移 Apple Developer ID 时必须一起完成：
-
-1. 替换签名证书和 CI Secret；
-2. 删除 `timestamp: none`；
-3. 评估并移除子进程的 `disable-library-validation`；
-4. 启用 notarize；
-5. 重新验证 arm64、x64、Gatekeeper、sidecar 和自动更新。
+当前 macOS 使用项目自建更新签名，`timestamp: none`、`notarize: false`。它用于确认更新来源一致，不等同于 Apple Developer ID 公证。切换 Developer ID 时必须同时恢复时间戳、启用公证、复核 entitlement，并重测 arm64、x64、Gatekeeper、sidecar 和自动更新。
 
 ## 正式发布
 
-### 1. 创建版本并启动 Windows 阶段
+### 1. 创建版本并发布 Windows
 
-在准备发版的机器执行：
+在干净且与 `origin/main` 一致的 `main` 上执行：
 
 ```bash
 pnpm release:start -- --version X.Y.Z --notes "Ncurator vX.Y.Z"
 ```
 
-命令会：
-
-1. 要求位于干净的 `main`；
-2. fetch 远端并确认本地 `main` 与 `origin/main` 完全一致；
-3. 检查版本递增、远端和本地都没有同名 Tag；
-4. 确认 Windows 本地或 Actions 至少有一条路线可用；
-5. 执行 `typecheck` 和更新后端契约测试；
-6. 提交 `package.json` 版本并创建 annotated Tag；
-7. 原子推送 `main` 和 Tag；
-8. 本地构建 Windows，或显式 dispatch Actions。
-
-路由参数：
+命令会检查版本和发布路线，执行 `typecheck` 与更新后端测试，提交版本号，创建 annotated Tag，原子推送 `main` 和 Tag，然后按默认路线发布 Windows。
 
 ```bash
-# 本地环境不完整时直接失败
+# 强制本地 Windows
 pnpm release:start -- --version X.Y.Z --local-only
 
-# 无条件使用 GitHub Actions
+# 强制 GitHub Actions
 pnpm release:start -- --version X.Y.Z --actions
 ```
 
-Tag push 本身不会触发 Actions，避免本地构建时浪费 Runner。
+### 2. 在 Mac 发布 macOS
 
-### 2. 在 Mac 续跑 macOS 阶段
-
-Windows 完成后，在 Apple Silicon Mac 获取同一个 Tag：
+Windows 与 macOS 发布相互独立。Mac 只需获取同一不可变 Tag：
 
 ```bash
 git fetch --tags
@@ -312,119 +169,68 @@ git pull --ff-only
 pnpm release:mac -- --tag vX.Y.Z
 ```
 
-Mac 命令会：
+命令分别从 Tag 导出干净源码，构建、签名、审计并上传 arm64 和 x64 片段，然后只 finalize macOS 通道。
 
-1. 从 Tag 导出两份干净源码；
-2. 分别构建并审计 macOS arm64 和 x64；
-3. 真实检查两个 App 的稳定签名；
-4. 生成并上传两个带审计的 macOS fragment；
-5. 等待并验证 Windows fragment；
-6. 生成并公开验证 latest 元数据；
-7. 清理 R2 旧版本。
+`release:mac:only` 当前与 `release:mac` 指向同一脚本，都会发布 macOS 独立通道。
 
-### 只发布 Mac 更新通道
+## 重试与状态
 
-只发布两个 Mac 架构时使用：
+版本创建后只能基于原 Tag 重试，不能修改或重建 Tag：
 
 ```bash
-pnpm release:mac:only -- --tag vX.Y.Z
-```
-
-该命令仍会构建、签名、审计并上传 macOS arm64 和 x64，但只更新
-`updates/latest/latest-mac.yml`。它不会修改 Windows 更新元数据、跨平台
-`releases/latest.json`，也不会清理旧版本。全平台发布使用
-`release:mac` 或 `release:r2:finalize`。
-
-## 单阶段重试
-
-版本创建后，各阶段都按不可变 Tag 重试，不能修改或重建 Tag：
-
-```bash
-# Windows 本地重试
 pnpm release:win -- --tag vX.Y.Z
-
-# Windows 本地或 Actions 自动路由
 pnpm release:win:auto -- --tag vX.Y.Z
-
-# 强制 Actions
 pnpm release:win:auto -- --tag vX.Y.Z --actions
-
-# Mac 双架构重试
 pnpm release:mac -- --tag vX.Y.Z
-
-# 只重试最终汇总
 pnpm release:r2:finalize -- --tag vX.Y.Z
-
-# 查询三个平台状态
 pnpm release:status -- --tag vX.Y.Z
 ```
 
-Windows 失败时工作目录自动保留。`--reuse-work` 会重新导出干净 Tag，只复用 Python、pip 和 sidecar 生成缓存，不复用源码、`node_modules` 或旧 `dist`。缓存必须绑定同一个 Tag commit。成功后需要保留现场时使用 `--keep-work`。
+`release:r2:finalize` 依次重新 finalize Windows 和 macOS，适合两个平台都已上传后的恢复操作；日常平台发布不依赖它。
 
-最终汇总调试时可加 `--keep-old`，暂不删除旧 R2 对象。它不会跳过 fragment 和审计校验。
+Windows 失败会保留工作目录。`--reuse-work` 只复用同一 Tag 的 Python、pip 和 sidecar 缓存，不复用源码、`node_modules` 或旧 `dist`。`--keep-work` 保留工作目录，`--keep-old` 暂不清理旧 R2 对象，但都不会跳过验证。
 
 ## 下载地址
 
 ```text
-官网：https://download.ncurator.com/releases/latest.json
+Windows 清单：https://download.ncurator.com/releases/latest/windows.json
+macOS 清单：https://download.ncurator.com/releases/latest/macos.json
+Windows 固定下载：https://download.ncurator.com/downloads/latest/windows-x64.exe
+macOS arm64 固定下载：https://download.ncurator.com/downloads/latest/macos-arm64.dmg
+macOS x64 固定下载：https://download.ncurator.com/downloads/latest/macos-x64.dmg
 Windows 更新：https://download.ncurator.com/updates/latest/latest.yml
 macOS 更新：https://download.ncurator.com/updates/latest/latest-mac.yml
-安装包：https://download.ncurator.com/artifacts/vX.Y.Z/*
 ```
 
-## 客户端自动更新交互
+## 自动更新
 
-- 应用启动 5 秒后静默检查一次，持续运行时每 4 小时再检查一次。
-- 发现新版本后不自动下载，工作台左下角、问号左边显示“更新”。
-- 用户点击“更新”后才下载，按钮会显示实时百分比。
-- 下载完成后弹出“立即重启 / 稍后”。选择稍后时，左下角保留“重启更新”。
-- 已下载的更新在用户正常退出应用时仍会自动安装。
-- 设置页不再提供“应用更新”入口，更新操作统一放在工作台左下角。
+- 启动 5 秒后静默检查，持续运行时每 4 小时检查一次。
+- 发现新版本后不自动下载，工作台左下角显示“更新”。
+- 用户点击后开始下载并显示进度。
+- 下载完成后可立即重启或稍后处理；正常退出时仍会安装已下载更新。
+- 设置页没有应用更新入口。
 
-真实更新测试必须先等到 `available`，再主动调用下载 API。仅检查更新不会下载更新包。
+`sidebar-app-update.e2e.test.ts` 使用更新 fixture 验证按钮状态、进度、重启、重试和 API 调用。它不证明真实安装包下载或安装成功，不作为发布阻塞项。真实更新验证必须使用已发布的旧版本安装包，等待 `available` 后主动下载。
 
-## R2 保留和回滚
+## 发布前验证
 
-新版本公开验证成功后，最终汇总会删除非最新版本的 `artifacts`、`release-status` 和非当前目录。R2 稳态只保存最新版本。
-
-需要回滚时，从旧 annotated Tag 重新构建、审计并发布，不能复用未审计的本地旧产物。
-
-## 发布前回归
-
-发布准备阶段执行：
+发布准备脚本固定执行：
 
 ```bash
 pnpm typecheck
 pnpm test:update:backend
 ```
 
-模拟更新 E2E 用于验证左下角按钮、下载进度、重启弹框、重试状态和 IPC，但不作为发布阻塞项：
+发版前还应按改动风险执行 unit、Settings、Workbench、AI mock/tool 和源码 E2E，并检查应用启动、SQLite/LanceDB、embedding、PDF/DOCX、网页能力、安装、覆盖升级、卸载和无网络启动。live AI 测试只在有真实模型配置且本次改动需要时执行。
 
-```bash
-pnpm test:update:e2e
-```
+## 保留与回滚
 
-还需要按风险验证：
+每个平台公开验证成功后，只删除该平台的旧 artifacts 和 release-status。需要回滚时，从旧 annotated Tag 重新构建、审计和发布，不能复用未审计的本地产物。
 
-- 应用启动、preload 和 IPC；
-- SQLite、LanceDB 和 embedding；
-- PDF/DOCX 读取与预览；
-- 网页搜索和动态网页抓取；
-- 安装、覆盖升级、卸载；
-- 无网络启动；
-- 自动更新的后端契约和模拟页面交互。
+## 常见失败
 
-## 失败处理
-
-- staging 审计失败：确认文件是否真的属于运行时必需内容，不能直接加白名单。
-- 运行时追踪失败：先检查新依赖是否真的可达、是否声明在生产 `dependencies`；只有确定属于跨平台可选分支或非 JavaScript 资源时，才能增加带原因和测试的策略规则。
-- PDF/DOCX staging 探针失败：检查 staging 内的 `mammoth`、`pdf-parse`、PDF worker 和 optional peer 版本，不能改回根 `node_modules` 验证或替换生产 Loader。
-- 最终审计失败：检查真实 `app.asar` 和外部 resources，不能只改 electron-builder glob。
-- Windows 工具缓存失败：检查 SHA512、写权限和 `ELECTRON_BUILDER_CACHE`。
-- Windows 本地环境失败：运行 `pnpm release:doctor`，或显式使用 `--actions`。
-- sidecar 缺浏览器：重新执行 `pnpm run build:sidecar`，确认只有 headless shell。
-- 平台二进制缺失：确认 Node、Python 和目标架构一致。
-- fragment v2 校验失败：不能复用旧 schema v1 状态，必须用当前 Tag 重新构建和审计。
-- R2 汇总失败：保留现有 latest，修复后重新运行 finalize，不能发布部分平台。
-
-任何失败都不能通过复制旧 `dist`、关闭审计、修改 Tag 或手工上传来绕过。
+- staging 审计失败：确认文件是否真是运行必需内容，不能直接放宽规则。
+- 运行时追踪失败：先检查依赖可达性和生产依赖声明，再决定是否增加带原因和测试的策略。
+- DOCX/PDF 探针失败：检查 staging 内真实 Loader、worker 和 optional peer，不能改用根目录依赖绕过。
+- macOS 签名或启动失败：该架构不能上传片段。
+- fragment、R2 metadata 或公开下载校验失败：不得更新对应 latest 通道。

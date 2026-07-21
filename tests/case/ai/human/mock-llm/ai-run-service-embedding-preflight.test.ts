@@ -205,11 +205,12 @@ describe('ai human mock-llm backend', () => {
 
         runtime.assertThat(
           result.result.status === 'failed' &&
-            result.result.error?.includes('embedding preflight failed for test') === true &&
+            result.result.error === '运行失败，请重试。如果问题持续出现，请查看应用日志。' &&
             humanSteps.length === 0,
           {
             name: 'ai-run-service-aborts-before-human-on-preflight-failure',
-            message: 'embedding preflight 失败时，run 应直接失败，且不进入任何 human stage。',
+            message:
+              'embedding preflight 失败时，run 应直接失败、不进入 human stage，并隐藏底层错误。',
             data: {
               status: result.result.status,
               error: result.result.error,

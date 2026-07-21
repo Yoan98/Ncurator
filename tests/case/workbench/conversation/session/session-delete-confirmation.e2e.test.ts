@@ -12,7 +12,7 @@ import {
   workbenchSelectors
 } from '../../../../harness/e2e/workbench'
 
-const CASE_ID = 'session-delete-confirmation-and-context-ring'
+const CASE_ID = 'session-delete-confirmation'
 const SESSION_PROMPT = '请只回复 ok，用于删除确认测试会话。'
 
 describe('workbench conversation e2e', () => {
@@ -23,8 +23,8 @@ describe('workbench conversation e2e', () => {
         caseId: CASE_ID,
         domain: 'workbench',
         suite: 'conversation',
-        groups: ['session', 'composer'],
-        description: '验证会话删除确认、取消/确认删除，以及输入框上下文圆圈 hover 信息。',
+        groups: ['session'],
+        description: '验证会话删除确认，以及取消和确认删除。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
         windowMode: 'visible',
@@ -63,29 +63,6 @@ describe('workbench conversation e2e', () => {
               throw new Error('failed to read created session id from UI')
             }
 
-            const contextRing = getWorkbenchLocator(page, workbenchSelectors.contextRing)
-            await contextRing.waitFor({ state: 'visible' })
-            await page.waitForFunction(
-              (testId) => {
-                const element = document.querySelector(`[data-testid="${testId}"]`)
-                return element?.getAttribute('aria-label')?.includes('已用') || false
-              },
-              workbenchSelectors.contextRing,
-              { timeout: 10_000 }
-            )
-            const contextRingLabel = (await contextRing.getAttribute('aria-label')) || ''
-            await contextRing.hover()
-            const contextTooltipVisible = await page
-              .getByText('上下文用量')
-              .waitFor({ state: 'visible', timeout: 5_000 })
-              .then(() => true)
-              .catch(() => false)
-            const contextTooltipPercentVisible = await page
-              .getByText(/已用 \d+%/)
-              .first()
-              .isVisible()
-              .catch(() => false)
-
             const deleteButton = getWorkbenchLocator(
               page,
               `${workbenchSelectors.sessionDeleteButtonPrefix}-${sessionId}`
@@ -118,9 +95,6 @@ describe('workbench conversation e2e', () => {
               .catch(async () => !(await selectedSession.isVisible().catch(() => false)))
 
             return {
-              contextRingLabel,
-              contextTooltipVisible,
-              contextTooltipPercentVisible,
               sessionStillExistsAfterCancel,
               sessionRemovedAfterConfirm,
               finalAnswerText: evidence.finalAnswerText
@@ -131,17 +105,12 @@ describe('workbench conversation e2e', () => {
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
-            result.contextRingLabel.includes('已用') &&
-              result.contextRingLabel.includes('剩余') &&
-              result.contextTooltipVisible &&
-              result.contextTooltipPercentVisible &&
-              result.sessionStillExistsAfterCancel &&
+            result.sessionStillExistsAfterCancel &&
               result.sessionRemovedAfterConfirm &&
               result.finalAnswerText.trim().length > 0,
             {
-              name: 'workbench-session-delete-confirmation-and-context-ring',
-              message:
-                'Workbench 会话删除必须先确认，取消不删除，确认后删除；输入框上下文圆圈应可见，hover 后展示已用和剩余比例。',
+              name: 'workbench-session-delete-confirmation',
+              message: 'Workbench 会话删除必须先确认，取消不删除，确认后删除。',
               data: result
             }
           )

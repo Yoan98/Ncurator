@@ -21,7 +21,7 @@ Settings 的回归测试顶层 suite 直接对齐 PRD 模块：
 - `model` 验证大模型可用服务配置的加载、创建、编辑、删除和远端模型列表刷新。
 - `workspace` 验证工作空间容器及其下属 `files`、`web` 两类子区域的页面行为和 backend / IPC 支撑契约。
 - `vector` 属于 Settings 产品域，但页面位于独立路由 `/model-download`，测试目录与 runner 仍统一归入 `tests/case/settings/vector/**`。
-- `update` 覆盖应用更新服务、发布配置、R2 元数据和设置页面，不下载或安装真实更新包。
+- `update` 覆盖应用更新服务、发布配置、R2 元数据和 Workbench 左侧更新入口，不下载或安装真实更新包。
 - `workspace` 在这里是 Settings 下的 suite，不是独立测试 domain；其下统一按 `core / files / web` 组织子区域。
 - `workspace` 测试语义基于“具名工作空间容器 + 文件 tab + 网页 tab”。
 - `workspace` 相关回归测试默认复用 `tests/fixtures/workspace` 作为共享输入目录。
@@ -72,9 +72,9 @@ Settings 的回归测试顶层 suite 直接对齐 PRD 模块：
 - 测试类型：`e2e`
 - What：验证删除连接配置后的列表刷新，以及删除失败时的错误反馈。
 - Why：删除结果是最直接的用户确认反馈，缺失时用户会误判配置是否已经被移除。
-- How：分别覆盖删除成功和删除失败两条路径。
-- Oracle：删除成功后，被删配置不再出现在列表中，对齐 `SET-MODEL-003-AC1`；删除失败时页面出现明确错误提示，对齐 `SET-MODEL-003-AC2`。
-- Not：不定义删除后 workbench 本地模型偏好如何恢复；只验证被删项移除和失败反馈。
+- How：通过 UI 覆盖删除成功路径；删除失败反馈由独立组件测试注入失败响应验证。
+- Oracle：删除成功后，被删配置不再出现在列表中，对齐 `SET-MODEL-003-AC1`；失败响应保留原配置并显示脱敏错误，对齐 `SET-MODEL-003-AC2`。
+- Not：不定义删除后 workbench 本地模型偏好如何恢复。
 
 #### `settings-titlebar-drag-region`
 
@@ -84,6 +84,15 @@ Settings 的回归测试顶层 suite 直接对齐 PRD 模块：
 - How：打开 Settings 页面，检查 36px 原生标题栏、原生拖动区域、下方业务内容起点、侧栏切换按钮命中和关键页面按钮可用性。
 - Oracle：Windows 原生标题栏独立位于业务内容上方；拖动区域使用 `-webkit-app-region: drag`；业务内容不侵入原生窗口按钮区；侧栏切换按钮使用 `no-drag` 并可完成折叠/展开；页面按钮仍可点击。非 Windows 平台继续验证页面顶部拖动区域。
 - Not：不验证不同操作系统窗口管理器的实际拖动效果，只验证页面命中和样式契约。
+
+#### `settings-help-entry`
+
+- 测试类型：`e2e`
+- What：验证设置页向量模型下方的使用帮助入口。
+- Why：设置帮助与 Workbench 帮助是首发版唯一官方手册入口，位置和外链必须稳定。
+- How：打开设置页，检查入口位置、可访问名称，点击后观察外链调用和路由。
+- Oracle：入口紧接向量模型、使用同级样式，打开官方中文手册且不改变设置路由，对齐 `SET-HELP-001`。
+- Not：不验证系统浏览器窗口样式。
 
 ### 3.2 `workspace / core`
 
@@ -309,7 +318,7 @@ Settings 的回归测试顶层 suite 直接对齐 PRD 模块：
 - Oracle：服务初始化后自动恢复同一模型下载并持续上报进度，对齐 `SET-VECTOR-002-AC4`。
 - Not：不验证真实网络环境下的跨版本兼容；这里只覆盖本地快照恢复与同步。
 
-下载进度、下载结果、页面切换恢复和删除反馈不再登记为正式 e2e。它们需要真实大文件下载环境，短期由 `vector-download-single-task-contract` 和 `vector-download-startup-resume-contract` 覆盖服务契约，必要时另建真实下载手动回归。
+下载进度、完成、失败、页面恢复和删除反馈必须由受控服务契约或组件测试覆盖；真实大文件下载只作为发布前按需手动回归，不应成为日常自动化前提。
 
 ### 3.6 `update`
 
@@ -340,11 +349,74 @@ Settings 的回归测试顶层 suite 直接对齐 PRD 模块：
 - Oracle：latest 元数据只引用带版本的不可变文件，且各字段与发布产物一致。
 - Not：不访问真实 R2，也不验证 CDN 缓存刷新。
 
-#### `app-update-panel`
+#### `release-fragment-contract`
+
+- 测试类型：`backend`
+- What：验证发布片段包含不可变产物、sha512、包审计和 macOS 签名摘要。
+- Why：片段是跨机器和 finalize 的发布真相。
+- How：生成合法与伪造片段并执行校验。
+- Oracle：只接受 schema v2、Tag/平台一致且审计完整的片段。
+- Not：不上传真实 R2。
+
+#### `release-storage-layout`
+
+- 测试类型：`backend`
+- What：验证 Windows 与 macOS 的 artifacts、status 和固定下载 key 相互隔离。
+- Why：平台独立发布不能覆盖另一平台对象。
+- How：对三个平台调用统一 storage-layout helper。
+- Oracle：key 与 `doc/release.md` 的 R2 目录完全一致。
+- Not：不验证公开 CDN。
+
+#### `package-content-policy`
+
+- 测试类型：`backend`
+- What：验证最终包拒绝禁止文件、提示词明文和缺失运行依赖。
+- Why：staging 通过不代表真实安装目录安全完整。
+- How：构造最小 asar 清单和违规包执行审计。
+- Oracle：合法包通过，源码、敏感内容和依赖缺失导致失败。
+- Not：不实际构建安装包。
+
+#### `package-main-obfuscation`
+
+- 测试类型：`backend`
+- What：验证 Main 混淆保持运行语义并生成可复核报告。
+- Why：混淆不能破坏运行时，也不能只依赖“脚本执行成功”。
+- How：混淆代表性 Main 文件，核对执行结果、哈希和报告。
+- Oracle：运行结果不变，受保护明文消失，报告覆盖全部目标文件。
+- Not：不把混淆视为加密。
+
+#### `package-size-budget`
+
+- 测试类型：`backend`
+- What：验证 macOS arm64/x64 独立体积基线和失败阈值。
+- Why：异常体积增长通常意味着错误依赖或资源进入安装包。
+- How：对基线、警告增长和失败增长输入执行预算计算。
+- Oracle：3% 以上警告，8% 以上或超过硬上限失败。
+- Not：不更新已批准基线。
+
+#### `runtime-trace`
+
+- 测试类型：`backend`
+- What：验证运行依赖追踪能解析 pnpm 路径、显式资源和 optional peer。
+- Why：依赖漏包只会在安装后暴露，必须在构建阶段阻断。
+- How：构造代表性依赖图与策略输入。
+- Oracle：可达依赖完整，未知告警、版本错误和无用显式规则失败。
+- Not：不重复最终 asar 内容审计。
+
+#### `mac-update-signature`
+
+- 测试类型：`backend`
+- What：验证 macOS 更新使用稳定签名身份并拒绝 ad-hoc 或不一致签名。
+- Why：两个架构必须被客户端识别为同一更新发布方。
+- How：输入合法和非法 codesign 摘要执行校验。
+- Oracle：仅固定 identity 与 designated requirement 组合通过。
+- Not：不替代正式包的真实 `codesign --deep --strict` 和启动验证。
+
+#### `sidebar-app-update`
 
 - 测试类型：`e2e`
-- What：验证设置页应用更新面板的检查、下载和安装入口状态。
-- Why：用户需要从页面明确看到是否有更新、当前进度、失败原因和下一步操作。
-- How：通过受控更新服务状态打开应用更新面板，覆盖检查、可下载、下载完成和错误展示。
-- Oracle：页面按钮、状态和错误信息与主进程更新状态一致，未完成下载时不会提供安装动作。
-- Not：不下载或安装真实更新包。
+- What：验证 Workbench 左侧更新入口的隐藏、下载、进度、稍后重启、安装和失败重试状态，并确认旧设置路由已移除。
+- Why：更新入口是特殊发布交互，需要稳定验证按钮状态和 API 调用。
+- How：使用专用更新 fixture 驱动各状态，通过真实 Renderer 交互观察按钮和 IPC observer。
+- Oracle：无更新时入口隐藏；有更新时用户点击才下载；下载中显示进度；下载完成可稍后或重启；失败可重试；旧设置路由回到大模型页，对齐 `WB-COMPOSER-012`。
+- Not：fixture 不证明真实安装包下载、签名或安装成功，本 case 不作为发布阻塞项。

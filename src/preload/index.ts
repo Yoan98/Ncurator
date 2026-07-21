@@ -117,13 +117,6 @@ const api: DesktopApi = {
   pickApplication: () => ipcRenderer.invoke('pick-application'),
   search: (query: string, sourceType?: SearchSourceFilter, documentIds?: string[]) =>
     ipcRenderer.invoke('search', query, sourceType, documentIds),
-  ftsSearch: (query: string, sourceType?: SearchSourceFilter, documentIds?: string[]) =>
-    ipcRenderer.invoke('fts-search', query, sourceType, documentIds),
-  vectorSearch: (query: string, sourceType?: SearchSourceFilter, documentIds?: string[]) =>
-    ipcRenderer.invoke('vector-search', query, sourceType, documentIds),
-  hybridSearch: (query: string, sourceType?: SearchSourceFilter, documentIds?: string[]) =>
-    ipcRenderer.invoke('hybrid-search', query, sourceType, documentIds),
-  listDocuments: (payload) => ipcRenderer.invoke('list-documents', payload),
   workspaceList: () => ipcRenderer.invoke('workspace-list'),
   workspaceCreate: (payload) => ipcRenderer.invoke('workspace-create', payload),
   workspaceSetRootPath: (payload) => ipcRenderer.invoke('workspace-set-root-path', payload),
@@ -166,13 +159,6 @@ const api: DesktopApi = {
   webSourceDelete: (payload) => ipcRenderer.invoke('web-source-delete', payload),
   legacyLocalImportMigrationStatus: () =>
     ipcRenderer.invoke('legacy-local-import-migration-status'),
-  listChunks: (payload) => ipcRenderer.invoke('list-chunks', payload),
-  deleteDocuments: (
-    ids: string[]
-  ): Promise<{ success: boolean; deletedDocs?: number; deletedChunks?: number; error?: string }> =>
-    ipcRenderer.invoke('delete-documents', ids),
-  dropDocumentsTable: (): Promise<{ success: boolean; existed?: boolean; error?: string }> =>
-    ipcRenderer.invoke('drop-documents-table'),
   sourceListRefresh: (cb: () => void) => {
     const listener = (): void => cb()
     ipcRenderer.on('source-list-refresh', listener)
