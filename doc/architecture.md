@@ -1,6 +1,6 @@
 # NCurator-Desktop 架构
 
-本文是项目唯一架构入口，只描述长期稳定的系统结构、模块职责和主流程。具体字段、工具 schema、底层实现细节以代码和测试为准。只服务mac和windows端。
+本文是项目唯一架构入口，只描述长期稳定的系统结构、模块职责和主流程。具体字段、工具 schema、底层实现细节以代码和测试为准。应用只支持 macOS 和 Windows。
 
 ## 技术栈
 
@@ -54,6 +54,10 @@ NCurator-Desktop 是本地优先的 Electron 桌面应用。文档解析、嵌�
 
 ## 核心模块
 
+### Application Shell
+
+Application Shell 由 Renderer、Main、Preload 和 Shared 组成：Renderer 负责界面与交互，Main 负责本地能力和任务编排，Preload 提供安全桥接，Shared 维护 IPC 契约和共享类型。
+
 ### AI Runtime
 
 AI Runtime 负责一次用户请求的 run 生命周期、事件流、审批、工具调用和最终答复。它不直接承担所有任务逻辑，而是把具体能力交给 human graph、工具和领域服务。
@@ -70,39 +74,13 @@ Storage 负责本地持久化：
 
 Retrieval 负责文档索引、向量检索、全文检索和结果融合。检索前会先从 SQLite 读取当前有效的 `document.active_generation_id`，再到 LanceDB 搜索有效 generation。
 
-### Docx Runtime
+### Tool Runtime
 
-Docx Runtime 负责 Word 文档读取、搜索、编辑、任务内回滚、写回和用户回退。它通过 AI 工具暴露能力，但底层由 runtime、worker 和 OOXML adapter 分层完成。
+Tool Runtime 为 AI 提供文件、终端、浏览器等本地能力。工具实现位于 Main，由各领域服务负责具体操作；通用安全边界、审批和工作区变化追踪由运行时统一处理。
 
-读取工具同时支持 `.docx` 和旧版 `.doc`。`.docx` 使用 OOXML block index；`.doc` 使用 `word-extractor` 解析正文并映射为只读段落 block，继续支持 percent、blockIndex、blockId 和搜索协议。编辑工具只接受 `.docx`；`.doc` 写入会在创建编辑会话前失败，并要求用户先转换为 `.docx`。
+### Workspace Change Tracking
 
-### Text File Runtime
-
-Text File Runtime 通过 builtin `text-file` skill 提供 `text_file_read` 和 `text_file_edit`。它负责 UTF-8 普通文本读取、创建、完整改写、唯一文本编辑和全部精确匹配替换。写入先完成全部校验，再通过同目录临时文件原子替换。工具只提供写入语义和专用元数据，文件变化统一由 Run 前后工作区扫描确认。
-
-### Terminal Runtime
-
-Terminal Runtime 由 `TerminalSessionManager` 和 `terminal_run / terminal_read / terminal_stop` 组成。Manager 位于 Main Process，按 chat session 与 workspace 隔离持久 PTY，会话可跨单个 AI run 保留。每个终端维护 terminalId、当前路径、运行状态、当前命令、输出环形缓冲区和绝对输出游标。terminal_run 固定等待后让出控制权，不终止仍在运行的命令；同一终端仍为 running 时必须先通过 terminal_read 等到 idle，不能直接提交下一条命令。terminal_stop 先通过 Ctrl+C 和宽限期尝试保留会话，正常停止后回到 idle；无法正常停止时强制终止进程树并把终端置为 closed。删除聊天、取消所属 run 和应用退出会先尝试正常退出，再清理托管进程。
-
-Terminal Runtime 内部以 UTF-8 为强制契约，不继承宿主进程是否正确配置 locale 的偶然结果。`TerminalPlatformAdapter` 隔离 macOS zsh 与 Windows PowerShell 的 shell、环境、初始化、命令包装、目录预判和进程终止差异；Manager 不拼接平台命令。每个会话使用带随机 token 的独立控制协议，START、DONE、CWD 与 READY 标记不会和其他会话或普通旧标记混淆。命令正文先写入权限受限的会话临时目录，再由 PTY 中的短控制命令以 UTF-8 读取执行，避免终端输入行长度、回显和分片破坏长命令或 Unicode；命令完成后立即删除正文文件，会话关闭时清理整个临时目录。
-
-Brain 的 `local_environment` 整体使用格式化 JSON，其中 `current_time` 同时提供 UTC ISO 时间、本地 ISO 时间和时区，`terminal_state` 只包含新终端默认路径和各终端的 id、状态、当前路径、当前命令与开始时间，不注入完整日志或环境变量。工具说明只声明能力、结果和边界，不返回下一步建议字段。terminal_run 输入不包含 cwd；已有终端的当前路径是执行和工作空间边界判断的基准。
-
-DOCX 编辑工具的模型描述保持为一句能力说明。PPT 编辑工具的模型描述直接包含受限 HTML 的页面、元素、CSS、排版、版式和图片规则，确保模型在首次创建前获得完整约束；输入 schema 只负责参数结构，不承载生成指导。两类工具都不解释 UUID、revision、replay、checksum、原子替换或回读结构，内部事务与差异实现不进入模型提示词。
-
-### Apply Review
-
-Apply Review 由两层组成：`WorkspaceChangeTracker` 在每个 Run 前后扫描工作区，统一确认新增、修改、删除和重命名；格式 adapter 只决定变化如何预览。内容写入 `.ncurator/objects/sha256` 对象库并按哈希去重，SQLite 只保存对象哈希、路径、Run、会话和预览元数据。用户回退依赖完整 before 对象，不依赖 diff 反向计算。
-
-### Workbench Resource Workspace
-
-Workbench 右侧是按需渲染的独立资源工作台，由资源 Tab、紧凑上下文工具栏和内容区组成。折叠时 shell 不进入布局。文件列表分为“全部”和“本会话改动”：“全部”只打开当前工作区文件的正常预览；“本会话改动”聚合逻辑文件，但每次点击展示独立 Run 修改批次。普通预览与修改预览共用同一个文件 Tab。
-
-浏览器由 `BrowserEmbedService` 管理多个 Tab runtime，每个 Tab 持有独立 `WebContentsView` 和导航历史，全部使用 `persist:ncurator-browser` 共享登录、站点存储和缓存。非活动视图只隐藏不销毁；标签历史序列化到 userData，重启后使用 Electron `navigationHistory.restore` 懒恢复。Stagehand 连接应用 CDP 端点后，以 Electron WebContents 对应的 DevTools targetId 匹配 Stagehand Page，禁止使用 URL 作为多标签身份。Renderer 浮层打开期间通过 occluded 状态隐藏活动原生视图，避免原生层覆盖菜单。
-
-文本 Diff adapter 在首次打开时读取不可变 before/after 对象，生成只包含结构化 hunks 的 version 2 artifact 并缓存。“N 行未修改”展开时直接读取不可变 after 对象，不在 artifact 中重复保存完整行。大文件仍由 Renderer 虚拟列表控制实际 DOM 行数。
-
-Docx adapter 保存 before 对象、committed Docx 和 Review Docx。只有 Docx 工具拥有语义操作时才生成 Review Docx；终端直接修改的 Docx 仅提供 before/after 文件版本切换。`PptDiffAdapter` 提供页面级 before/after 差异、变化页筛选和缩略图预览。Excel 文件不提供专用 Diff adapter。
+每个 Run 前后扫描工作区，统一确认新增、修改、删除和重命名，并保存可回退的修改前对象。不同文件格式只负责提供对应的预览方式。
 
 ## AI 架构
 
@@ -159,76 +137,9 @@ AI 能力通过 skill 和 tool 两层表达：
 
 skill 不按目录强行拆分，也不等同于工具数量。一个 skill 可以对应多个 tool，多个 skill 也可以共享同一实现域。
 
-`text-file` 是 builtin skill，默认提供普通文本读写能力。AI-facing 的写入结果只返回简短成功文本；结构化 diff、快照路径和 checksum 只进入内部修改记录，不进入模型工具结果。
-
 ### 会话连续性
 
-跨轮上下文由 conversation summary 和未被摘要覆盖的 recent messages 共同组成。两部分必须不重复、不遗漏，并通过 `getConversationMemoryContext` 从同一数据库快照读取。
-
-- 系统只统计包含 user 和 assistant 的完整轮次；未完成轮次不参与摘要。
-- 未覆盖完整轮次达到 10 轮时，总结较早轮次并保留最近 5 轮原文。
-- 摘要在后台生成，完成前不移动覆盖边界，因此失败不会丢失消息。
-- 提交时同时校验旧摘要 revision、覆盖消息和更新时间；陈旧结果会被丢弃。
-- 同一会话同一时间只运行一个摘要任务，摘要期间新增消息继续保留在 recent messages。
-
-具体阈值由 `src/main/services/ai/memory/index.ts` 定义，存储边界由 `ChatStore` 保证。run 内的 `context_compaction` 只压缩当前 run 过程，与跨 run 的 conversation memory 是两套独立机制。
-
-## Docx 架构
-
-Docx 架构负责让 AI 可以读取、连续编辑并安全写回 Word 文档。它的目标不是维护一份独立审阅稿，而是让 AI 在任务内持续基于最新文档状态工作，最终直接写回源文件，并提供可回退记录。
-
-```mermaid
-flowchart TD
-    A["Tool API\ndocx tools"] --> B["Read / Write Tools"]
-    B --> C["Document Session / Stable Identity"]
-    C --> D["Worker"]
-    D --> E["OOXML Adapter"]
-    C --> F["Run Review Tree / Checkpoint / Revert"]
-```
-
-### 主要分层
-
-- Tool API 层负责对 AI 暴露 docx 读取和写入能力。
-- Read / Write Tools 层负责 AI-facing 的读取、搜索、编辑和任务内回滚。
-- Runtime / Session 层负责 sourcePath、活动文档状态、稳定 block UUID、磁盘指纹和 open target 管理。
-- Worker 层负责实际打开、解析、搜索、编辑执行和校验。
-- OOXML Adapter 层使用位置型内部 ID 解析 docx，但这些 ID 不暴露给 AI；worker 将稳定 UUID 映射到当前 OOXML 节点。
-- Run Review Tree / Checkpoint / Revert 层负责 run 基线、红删绿增预览、统一修改记录和用户回退。
-
-### 主流程
-
-1. 首次读取文件时建立活动 Document Session，并给段落、表格和单元格分配 `blk_<uuid>`。
-2. 后续读取直接查询 session；`blockIndex` 可以变化，block UUID 在当前 run 内保持稳定。
-3. `docx_edit(actions[])` 创建一次事务 working copy，所有 action 按输入顺序执行。
-4. 插入块生成新 UUID；替换块继承目标 UUID；删除块使 UUID 失效。
-5. 全部 action 成功后只序列化一次，完成 DOCX 校验、原子落盘和 post-write checksum 验证后才返回成功。
-6. 第一次修改保留 run 前基线；后续修改持续更新 Run Review Tree，不保存模型可见 revision。
-7. run 结束只生成红删绿增预览和统一修改记录，不再提交源文件。
-8. 用户回退时根据修改记录恢复 checkpoint 或删除新建文件。
-
-### 关键原则
-
-- 磁盘文件是内容真相；活动 Document Session 是当前 run 内 block 身份真相。
-- AI-facing blockId 只能使用稳定 UUID，位置型 OOXML ID 只能留在 adapter 内部。
-- 写工具返回成功意味着真实文件已经落盘并通过 post-write 校验。
-- 多 action 共享一个事务，任一 action 失败都不得产生部分落盘。
-- 文件 size/mtime 变化时计算 checksum；检测到外部修改后使旧 session 失效并要求重新读取。
-- revision 和 replay 不进入模型协议；Review Tree 只服务 run 级差异预览。
-- checkpoint 是用户回退真相，真实源文件不包含红绿审阅标记。
-
-## 普通文本文件架构
-
-普通文本文件链路不使用 unified diff 作为 AI 输入或输出：
-
-1. `text_file_read` 解码 UTF-8 文本，并返回指定行范围和总行数。
-2. `text_file_edit` 按 action 校验完整输入；`edit` 的每个 `oldText` 必须唯一且互不重叠，`replaceAll` 对一个非空 `oldText` 执行全部非重叠精确替换。
-3. 后端保留原始 BOM、换行风格和文件权限，写入前再次检查文件未发生变化。
-4. Run 结束扫描将真实 before/after 内容保存为不可变对象；首次打开修改预览时通过 `diff` 库生成带行号的结构化 hunks 并缓存。
-5. Workbench 的 `TextFileDiffViewer` 读取结构化 diff，使用单行号列展示新增、删除、上下文和词级变化，hunk 间用“N 行未修改”收起；展开时读取 after 对象，大 diff 使用虚拟列表。
-6. 回退更新文件时恢复原始 bytes；回退新建文件时删除目标，历史 diff 保留用于查看。
-7. terminal 不猜测文件产物；顶层 Run 扫描捕获其所有工作区变化。文本进入同一 Diff adapter，无法严格解码的产物保持 `terminal_exec` 并使用前后版本预览。
-
-普通文件预览先保留 PDF、DOCX 和 Markdown 的专用渲染；其他文件严格 UTF-8 解码成功后统一进入纯文本渲染，因此 `.log`、代码、JSON、HTML 等普通文本无需逐个维护扩展名白名单。解码失败时不进入纯文本渲染，避免误展示二进制内容。
+跨轮上下文由 conversation summary 和未被摘要覆盖的 recent messages 组成。摘要只覆盖完整轮次，并在后台生成；失败或陈旧结果不会推进覆盖边界。run 内压缩和跨 run 的会话记忆是两套独立机制。
 
 ## 存储架构
 
@@ -250,7 +161,7 @@ flowchart TD
 5. 后台删除旧 generation。
 6. 失败时不切换 active generation，旧索引继续可用。
 
-检索时只搜索当前 active generation，避免读到过期索引。
+检索时只搜索当前 active generation，避免读到过期索引。详细存储规则见 `doc/database.md`。
 
 ## 主链路
 
@@ -258,6 +169,6 @@ flowchart TD
 2. Main 创建 run，并读取会话上下文和工作区状态。
 3. AI Runtime 通过 human graph 推进 brain、learning、hand、mouth。
 4. 需要资料时进入 Retrieval，读取 SQLite 元数据并检索 LanceDB。
-5. 需要 docx 能力时进入 Docx Runtime；需要普通文本能力时进入 Text File Runtime。
+5. 需要本地能力时由 Tool Runtime 调用对应领域服务。
 6. 文件写回后记录统一修改记录和对应预览，供 UI 展示和回退。
 7. 最终答复和事件流通过 IPC 回到 Renderer 展示。

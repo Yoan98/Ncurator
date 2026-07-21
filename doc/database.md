@@ -4,12 +4,10 @@
 
 ## 总体原则
 
-- SQLite 是业务真相，文件路径为 `userData/app.sqlite`。
-- LanceDB 是可重建索引，目录为 `userData/lancedb`。
-- LanceDB 只保存 `vector_chunk`，不保存业务状态。
-- 业务状态不能在 SQLite 和 LanceDB 中形成两个真相。
-- SQLite schema 通过 migration 向前演进。
-- LanceDB 索引可按 SQLite 中的 document generation 重建。
+- SQLite 是业务真相，文件位于 `userData/app.sqlite`。
+- LanceDB 是可重建索引，目录位于 `userData/lancedb`，只保存 `vector_chunk`。
+- SQLite schema 通过 migration 向前演进；LanceDB 索引按 SQLite 中的 document generation 重建。
+- 同一业务状态不能同时以 SQLite 和 LanceDB 为真相。
 
 ## SQLite
 
@@ -21,18 +19,13 @@ SQLite 使用 `better-sqlite3`。启动时 `SqliteCore` 负责：
 - 设置 `PRAGMA busy_timeout = 5000`。
 - 执行未执行的 migration。
 
-SQLite 保存主要业务数据：
+SQLite 保存以下业务数据：
 
-- 会话和消息。
-- conversation memory 和恢复快照。
-- AI run、run event 和审批状态。
-- AI 文件修改记录。
-- Docx apply 记录。
+- 会话、消息、conversation memory 和恢复快照。
+- AI run、事件、审批和文件修改记录。
+- 工作区、文件索引任务、文档元数据和网页源。
+- LLM 配置、AI runtime 设置和模型输出策略偏好。
 - 文件内容和预览 artifact 的 SHA-256 对象引用；实际对象保存在工作区 `.ncurator/objects/sha256`，相同内容只存一份。
-- 工作区源、文件索引任务和文档元数据。
-- 网页源。
-- LLM 配置和 AI runtime 设置。
-- 按模型记录的结构化输出策略偏好。
 
 关键规则：
 
@@ -54,34 +47,22 @@ SQLite 保存主要业务数据：
 
 ## Native 依赖
 
-`better-sqlite3` 是 native 模块，Node backend 测试和 Electron e2e 使用的 ABI 不同。项目通过独立缓存保存两套 native binding，不再反复覆盖 `node_modules` 中的同一个 `.node` 文件。
+`better-sqlite3` 是 native 模块，Node backend 测试和 Electron e2e 使用不同 ABI。项目通过独立缓存保存两套 binding，不覆盖 `node_modules` 中的同一个 `.node` 文件。
 
 - `pnpm native:prepare`：准备当前平台的 Node 与 Electron binding。
 - `pnpm native:node`：只准备 Node binding。
 - `pnpm native:electron`：只准备 Electron binding。
 - `pnpm native:status`：查看缓存和资源状态。
-- `scripts/test/workflow.mjs` 会按 backend / e2e 类型自动准备并注入正确 binding，正常执行回归时不需要手动 rebuild。
+- `scripts/test/workflow.mjs` 会按测试类型自动准备并注入正确 binding，正常回归不需要手动 rebuild。
 - 打包流程会准备 Electron binding 并导出到 `resources/native/better-sqlite3/**`。
 
-`001_initial_schema` 已随首个用户版本发布并冻结。任何 schema 或数据变更都必须新增更高版本 migration，不能修改、重排或复用已发布 migration。开发环境需要重建数据库时也必须验证从已发布 schema 向前迁移的路径。
+`001_initial_schema` 已发布并冻结。任何 schema 或数据变更都必须新增更高版本 migration，不能修改、重排或复用已发布 migration。开发环境重建数据库时也必须验证从已发布 schema 向前迁移的路径。
 
 ## LanceDB
 
 LanceDB 只创建和使用 `vector_chunk` 表。
 
-`vector_chunk` 保存内容：
-
-- chunk id。
-- document id。
-- workspace id。
-- source type。
-- generation id。
-- chunk index。
-- chunk text。
-- document name。
-- metadata。
-- created time。
-- embedding vector。
+`vector_chunk` 保存 chunk、document、workspace、source type、generation、顺序、正文、文档名、metadata、创建时间和 embedding vector。
 
 允许操作：
 
@@ -120,11 +101,11 @@ SQLite 决定什么数据有效，LanceDB 只负责在有效范围内检索内�
 5. 后台删除旧 generation chunks。
 6. 如果失败，不切换 `active_generation_id`，旧索引继续可用。
 
-这个机制保证索引构建失败时不会破坏已有可用检索结果。
+因此索引构建失败时，已有检索结果仍然可用。
 
 ## Fragment 和 Optimize
 
-LanceDB 的 fragment 可以理解为一次或多次写入形成的数据片段，不等于一行数据。
+LanceDB fragment 是一次或多次写入形成的数据片段，不等于一行数据。
 
 维护规则：
 

@@ -3,8 +3,8 @@
 ## 1. 文档定位
 
 - 本文是 NCurator-Desktop 的唯一测试总规范。
-- 本文负责定义测试分类、回归测试准入、测试执行闭环、UI E2E 真实性、真实 AI / live 断言、runner 与 raw logs 契约。
-- 各业务域的 suite 列表、回归 case 定义与领域特有规则，只在对应 `doc/test-plan/**` 中维护，本文不重复登记 case 清单。
+- 本文定义测试分类、回归准入、执行闭环、UI E2E 真实性、真实 AI / live 断言，以及 runner 和 raw logs 契约。
+- 各业务域的 suite、case 和领域规则只在对应 `doc/test-plan/**` 中维护，本文不重复登记 case。
 - 只有当功能代码发生变动、对应 `doc/test-plan/**` 明确要求对齐 `doc/prd/**`，或者 `doc/prd/**` 本身发生变更时，才需要校验实现与 `doc/prd/**` 的一致性。
 - 新增任何测试文件前，必须先与用户确认目标分类：回归测试，或 `unit / 辅助测试`。
 
@@ -24,7 +24,7 @@
 - `unit / 辅助测试`
   - 放在 `tests/case/unit/**`。
   - 不进入 `doc/test-plan/**`，由 unit runner 独立发现和执行。
-- 不落测试文件的排查不作为测试文档治理对象；一旦要新增测试文件，必须先与用户确认归入回归测试还是 `unit / 辅助测试`。
+- 不落测试文件的排查不属于测试文档治理对象；新增测试文件前必须先确认归入回归测试还是 `unit / 辅助测试`。
 
 ### 2.2 目录结构
 
@@ -43,10 +43,10 @@ tests/
 
 规则：
 
-- 目录统一使用 kebab-case。
+- 目录使用 kebab-case。
 - 测试发现目录使用通用树形结构：`tests/case/<domain>/<suite>/<groups...>/<case>.test.ts`。
 - e2e 测试文件使用 `tests/case/<domain>/<suite>/<groups...>/<case>.e2e.test.ts`。
-- `suite` 是第一层稳定分类；`groups...` 是 suite 下可选的任意深度子目录。
+- `suite` 是第一层稳定分类；`groups...` 是 suite 下可选的子目录。
 - 各 domain 的 `suite` 列表与归属，只在对应 `doc/test-plan/**` 中定义。
 - 当某个 `suite` 不需要继续细分时，回归 case 可以直接放在该 `suite` 目录下。
 - `tests/case/**` 中除 `unit/**` 外，只允许放已在 `doc/test-plan/**` 登记的回归 case。
@@ -64,7 +64,7 @@ tests/
   - `suite` 下可选子目录。
   - 只有同一 `suite` 内确实需要继续分层时才创建。
 - `case`
-  - 最终测试定义，对应唯一 `caseId` 与唯一日志目录；一个文件可以包含多个紧密相关的 case。
+  - 最终测试定义，对应唯一 `caseId` 和日志目录；一个文件可以包含多个紧密相关的 case。
 - `type`
   - 测试类型只通过文件名体现。
   - 普通测试默认视为 `backend`；文件名包含 `.e2e.test.ts` 时视为 `e2e`。
@@ -95,43 +95,38 @@ tests/
 - `Not`
   - 明确不验证什么，防止实现时擅自扩张范围。
 
-- `doc/test-plan/**` 只保存稳定的 case 规格、执行规则和 Oracle，不保存通过率、检测时间、单次评分或环境故障记录。
+- `doc/test-plan/**` 只保存稳定的 case 规格、执行规则和 Oracle，不保存单次运行结果或环境故障记录。
 - 每次运行的模型、耗时、通过情况、完成度评分、失败归因和原始证据统一保存在对应 run 的 `meta.json`、`timeline.jsonl`、`runtime-events.jsonl` 与 artifacts 中。
 - 测试数量和 case 清单以测试源码及 runner 实时发现结果为准，不在文档中维护容易失真的计数副本。
 - `mock-llm` 回归 case 只允许替换 LLM 输出；不得 fake tool、store、docx apply service、runner 或节点执行结果。
 
 ### 3.3 UI E2E 回归规则
 
-- UI e2e 回归测试的目标是验证真实用户路径：通过可见 UI、Electron、IPC、文件系统、网络与后端服务完成操作。
-- 测试准备只允许创建真实输入数据，例如真实文件、真实 docx、真实 PDF、真实工作区目录、真实本地 HTTP 页面或真实网页 URL；不得用 fixture 直接替代产品运行结果。
-- `tests/fixtures/**` 只能作为真实输入数据来源，不得作为搜索结果、AI 事件、artifact、docx 修改记录、模型返回或 renderer 状态的替身。
-- UI e2e 回归测试禁止使用 fake / mock / stub 替代被测产品结果，包括 fake model、fake search、fake docx、脚本化 AI 事件、脚本化 artifact、直接写 renderer 状态、直接写业务 store 或直接调用内部 IPC 来绕过用户可见操作。
-- 正式 UI e2e 禁止使用 `setE2EApiOverrides`、preload override、直接写 store、假下载进度、假搜索结果、假 AI 事件或假附件选择结果。与当前 case 被测行为无关、且已有独立真实 UI case 覆盖的前置状态，允许通过真实 `window.api.*` 建立；不得用该方式替代当前 case 要验证的用户操作和产品结果。
-- 测试 helper 可以做用户同等可见的点击、输入、选择、等待、截图、读取 raw logs 和读取输出文件；不得在被测行为上替代 UI、Electron 或后端真实实现。
-- 测试 helper 可以创建真实输入，例如临时目录、真实文件、本地 HTTP 服务、剪贴板文件、原生目录选择自动化；这些输入必须再通过 UI 或产品真实处理链路进入系统。
-- 涉及真实 AI 调用的 UI e2e 必须使用测试计划声明的 live 环境变量或真实应用配置；缺少配置时必须 preflight fail，不得静默跳过，也不得回落到 mock LLM。
-- 如果某个 UI e2e 回归测试需要生产代码或 testability 入口才能继续，测试实现不得改用模拟路径绕过；应在目标 run 产物和最终结论中记录缺口，交给产品 / 生产实现决策。
-- 依赖上述禁止路径的 case 不符合回归准入规则，必须改为真实用户路径。
+- UI E2E 必须通过真实 UI 和产品链路完成被测行为，不得用 fake、mock、stub、直接写状态或内部 IPC 绕过。
+- fixture 和 helper 只能准备真实输入、执行用户可见操作、等待结果和收集证据，不能替代产品输出。
+- 与当前 case 无关且已有独立覆盖的前置状态，可以通过真实 `window.api.*` 建立，但不能代替当前 case 的用户操作。
+- 涉及真实 AI 时必须使用 live 配置；配置缺失应直接失败，不能跳过或回落到 mock。
+- 产品缺少必要 testability 入口时，应记录缺口，不能改用模拟路径绕过。
 
 ### 3.4 真实 AI / live 断言规则
 
 - Workbench 真实 AI E2E 固定读取 `AI_LIVE_BASE_URL`、`AI_LIVE_API_KEY`、`AI_LIVE_PRIMARY_MODEL_NAME`、`AI_LIVE_VISUAL_MODEL_NAME`；缺少任意一项都必须 preflight fail。
 - Workbench 真实 AI E2E 必须通过应用 UI 同时选择主模型和视觉模型；视觉模型不得静默跟随主模型。
 - backend 视觉模型测试统一读取 `AI_LIVE_VISUAL_MODEL_NAME`；视觉模型专用地址、密钥和 provider 仍可通过 `AI_LIVE_VISION_BASE_URL`、`AI_LIVE_VISION_API_KEY`、`AI_LIVE_VISION_PROVIDER_KIND` 覆盖。
-- 涉及真实 AI 调用的回归测试，硬断言只验证最低工程契约：完成态、关键事实、关键工具或事件、关键 artifact、用户诉求是否真实落地。
+- 涉及真实 AI 调用的回归测试，硬断言只验证最低工程契约：完成态、关键事实、关键工具或事件、关键 artifact，以及用户诉求是否落地。
 - 不对最终文案做逐字断言，不断言固定工具顺序，不断言固定 prompt 原文，不因表达差异判失败。
-- 如果用户诉求已经落地但硬断言过严导致失败，应优先调整 `Oracle` 和测试代码，再基于 raw logs 记录完成度评分。
+- 如果用户诉求已落地但断言过严，应先调整 `Oracle` 和测试代码，再根据 raw logs 记录完成度评分。
 - 完成度评分由执行者或 agent 写入运行结论；测试代码不得在执行过程中修改文档。
 
 ## 4. 测试执行闭环
 
 ### 4.1 固定顺序
 
-1. 先与用户确认是否新增或调整测试，以及目标分类。
+1. 先确认是否新增或调整测试，以及目标分类。
 2. 如果是回归测试，先更新对应 `doc/test-plan/**`，再修改 `tests/case/<domain>/**`。
 3. 如果是 `unit / 辅助测试`，放入 `tests/case/unit/**`，不更新 `doc/test-plan/**`。
-4. 通过 `scripts/test/workflow.mjs` 执行并产生日志。
-5. 先看 `timeline.jsonl`，不足时再看 `runtime-events.jsonl`、`meta.json` 与 `artifacts.json`。
+4. 通过 `scripts/test/workflow.mjs` 执行并产出日志。
+5. 先看 `timeline.jsonl`；不足时再看 `runtime-events.jsonl`、`meta.json` 和 `artifacts.json`。
 6. 最后基于 raw logs 回流结论，决定是否需要更新 `doc/test-plan/**` 或实现代码。
 
 ### 4.2 runner 与常用命令

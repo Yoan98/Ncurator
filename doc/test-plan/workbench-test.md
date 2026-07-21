@@ -2,12 +2,11 @@
 
 ## 1. 总体目标
 
-- 本计划用于定义 Workbench 用户可见交互能力的回归测试范围。
-- Workbench 回归测试统一对齐 [workbench.md](../prd/workbench.md)，新增、调整或验收结论都应引用对应的 `WB-*` 需求编号与验收编号。
-- 新增或调整测试、runner、raw logs、UI E2E 回归规则与真实 AI / live 断言规则，统一遵循 `doc/test.md`。
+- 本计划定义 Workbench 用户可见交互的回归范围，并对齐 [workbench.md](../prd/workbench.md) 的 `WB-*` 需求和验收编号。
+- 通用测试、runner、raw logs、UI E2E 和 live 断言规则遵循 `doc/test.md`。
 - Workbench UI E2E 回归测试必须通过真实 Electron UI 配模型、配工作区、发送消息、选择 `@` 资料、搜索、预览、回退和操作右侧面板。
 - 涉及 AI 的 Workbench UI E2E 回归测试必须使用真实模型调用；测试只从 `AI_LIVE_BASE_URL`、`AI_LIVE_API_KEY`、`AI_LIVE_PRIMARY_MODEL_NAME`、`AI_LIVE_VISUAL_MODEL_NAME` 读取 live 配置，并在应用内未配置时通过 Settings UI 新增配置。
-- 真实执行 case 时，如果失败来自新的生产行为缺口或必须修改业务实现才能通过，不在测试实现中硬改生产行为；统一记录为待产品 / 生产实现决策项。
+- case 因生产行为缺口失败时，不在测试中硬改业务行为，统一记录为产品或生产实现待决项。
 
 ## 2. 测试边界
 
@@ -25,7 +24,7 @@
 
 ## 3. Suite 设计
 
-Workbench 的回归测试顶层 suite 按用户任务闭环划分，而不是逐一复制 PRD 小节：
+Workbench 顶层 suite 按用户任务闭环划分，不逐一复制 PRD 小节：
 
 1. `conversation`
 2. `run`
@@ -33,16 +32,16 @@ Workbench 的回归测试顶层 suite 按用户任务闭环划分，而不是逐
 
 领域规则：
 
-- `conversation` 验证用户发起任务前后的会话壳、composer、模式、模型 / 工作区偏好、工作目录前置条件与 `@` 参考资料 token。
+- `conversation` 验证会话、composer、模式、模型 / 工作区偏好、工作目录前置条件和 `@` 参考资料 token。
 - `run` 验证智能模式运行中的过程流、持久化恢复、停止、审批、压缩提示和 AI 内置浏览器任务。
 - `result` 验证搜索结果、普通文件预览、修改文件工作区、真实 docx 预览、文本 diff、回退和多文件修改入口。
-- Workbench 回归测试优先使用 `e2e`，因为核心风险集中在 Electron、renderer 状态、IPC、真实 AI 调用、右侧面板和文件系统联动。
+- Workbench 优先使用 `e2e`，覆盖 Electron、renderer、IPC、真实 AI、右侧面板和文件系统联动。
 - `backend` 只用于稳定的纯契约测试，例如参考资料候选过滤、搜索范围 payload 或会话 / 修改记录查询契约；不得用 backend case 代替真实 UI 交互断言。
-- 涉及 AI 的 case 必须记录模型、耗时、完成度评分和失败归因；Oracle 继续引用 [workbench.md](../prd/workbench.md) 的需求编号与验收编号。
+- 涉及 AI 的 case 必须记录模型、耗时、完成度评分和失败归因；Oracle 引用 [workbench.md](../prd/workbench.md) 的需求或验收编号。
 - AI 内置浏览器 case 必须验证右侧浏览器面板、网页操作结果和最终 assistant 输出形成闭环，不能只验证面板出现。
 - docx apply 相关 case 必须使用真实 docx 文件验证预览与回退；仅写入 `.docx` 后缀文本文件不满足回归 case 口径。
 - 依赖工作区语义的测试统一复用 `tests/fixtures/workspace` 作为共享输入目录，但该目录只作为真实输入文件来源。
-- `How` 与 `Oracle` 必须显式映射到 [workbench.md](../prd/workbench.md) 的需求编号与验收编号。
+- `How` 和 `Oracle` 必须映射到 [workbench.md](../prd/workbench.md) 的需求或验收编号。
 
 ## 4. 目录与命令
 
@@ -89,7 +88,7 @@ tests/case/workbench/
 #### `session-initial-create-and-title`
 
 - 测试类型：`e2e`
-- What：验证首次进入 Workbench 时只展示可输入草稿态，第一条用户消息真实发送后才创建会话并生成标题，第二条消息不再自动改写标题。
+- What：首次进入 Workbench 时只展示可输入草稿态，第一条用户消息真实发送后才创建会话并生成标题，第二条消息不再自动改写标题。
 - Why：会话初始化和标题更新是 Workbench 最早的可见状态；草稿态提前落库会产生空会话。
 - How：通过 Settings UI 新增真实模型配置并绑定真实工作区；检查会话记录数量，发送两条真实自然语言请求。
 - Oracle：进入页面、点击新对话和选择工作区都不创建真实会话，对齐 `WB-SESSION-001`；第一条消息发送后才创建会话并生成标题，第二条消息不再改写标题，对齐 `WB-SESSION-003`。
@@ -98,7 +97,7 @@ tests/case/workbench/
 #### `session-delete-confirmation`
 
 - 测试类型：`e2e`
-- What：验证会话删除确认，以及取消和确认删除。
+- What：会话删除确认，以及取消和确认删除。
 - Why：会话删除是高风险操作，必须避免误删。
 - How：通过真实 Workbench UI 创建会话；打开删除确认，分别覆盖取消和确认。
 - Oracle：取消删除时会话保留；确认删除后会话从列表消失，对齐 `WB-SESSION-004`。
@@ -107,7 +106,7 @@ tests/case/workbench/
 #### `workbench-help-entry`
 
 - 测试类型：`e2e`
-- What：验证 Workbench 左侧使用帮助入口。
+- What：Workbench 左侧使用帮助入口。
 - Why：帮助入口必须独立于会话创建和模型运行保持可用。
 - How：打开 Workbench，点击帮助入口并观察外链调用和当前路由。
 - Oracle：入口可访问，打开官方中文手册且不改变当前会话路由，对齐 `WB-COMPOSER-011`。
@@ -116,7 +115,7 @@ tests/case/workbench/
 #### `context-ring-usage`
 
 - 测试类型：`e2e`
-- What：验证智能模式上下文用量在 run 后刷新，并可查看已用与剩余比例。
+- What：智能模式上下文用量在 run 后刷新，并可查看已用与剩余比例。
 - Why：用量提示错误会误导用户对后续可用上下文的判断。
 - How：完成一次真实 AI run，读取圆圈可访问名称和 hover 提示。
 - Oracle：圆圈展示已用与剩余信息，hover 展示百分比，对齐 `WB-COMPOSER-008`。
@@ -125,7 +124,7 @@ tests/case/workbench/
 #### `send-guard-mode-switch-and-preferences`
 
 - 测试类型：`e2e`
-- What：验证缺少模型时的模式提示、发送前置条件、模式切换保留输入，以及模型 / 工作区 / AI 推进偏好恢复。
+- What：缺少模型时的模式提示、发送前置条件、模式切换保留输入，以及模型 / 工作区 / AI 推进偏好恢复。
 - Why：Workbench 的任务入口依赖这些基础交互；任一状态失真都会导致用户无法发起任务、把任务发到错误上下文或使用错误资料边界。
 - How：先在无模型配置状态下切换智能 / 搜索模式检查提示，再通过 UI 配置真实模型和工作区；覆盖无工作区、输入保留、模型 / 工作区选择、AI 推进偏好、重新进入页面后的恢复和真实发送。
 - Oracle：无模型时智能模式快速显示配置提示，搜索模式隐藏且切回后恢复；未绑定工作区不会触发发送，对齐 `WB-COMPOSER-001-AC1`、`WB-COMPOSER-005-AC1`；切换模式后输入保留且发送路径按新模式执行，对齐 `WB-MODE-001-AC1`、`WB-MODE-001-AC2`；模型和工作区恢复符合 `WB-COMPOSER-007-AC1` 至 `WB-COMPOSER-007-AC5`；可选择并恢复“本地资料·严谨”，搜索模式隐藏偏好入口且切回后保留选择，对齐 `WB-COMPOSER-007-AC2`、`WB-COMPOSER-007-AC6`、`WB-COMPOSER-007-AC7`。
@@ -134,7 +133,7 @@ tests/case/workbench/
 #### `model-selector-and-provider-error`
 
 - 测试类型：`e2e`
-- What：验证模型选择按配置分组、视觉模型选择和 provider 错误反馈。
+- What：模型选择按配置分组、视觉模型选择和 provider 错误反馈。
 - Why：模型配置和视觉模型是智能任务能否启动的直接前提。
 - How：通过真实设置页配置模型，回到 Workbench 选择主模型和视觉模型，触发受控 provider 错误。
 - Oracle：候选按配置分组可搜索，视觉模型可单独选择，provider 失败显示用户可读错误，对齐 `WB-COMPOSER-007` 与 `WB-CORE-006`。
@@ -143,7 +142,7 @@ tests/case/workbench/
 #### `user-message-actions`
 
 - 测试类型：`e2e`
-- What：验证用户消息 hover 操作、latest turn 编辑撤回、running 态编辑入口隐藏，以及用户消息附件展示。
+- What：用户消息 hover 操作、latest turn 编辑撤回、running 态编辑入口隐藏，以及用户消息附件展示。
 - Why：用户编辑上一条消息依赖撤回最新 turn、回填 composer 和附件 UI 协同；任一状态错误都会导致重复发送、误编辑运行中消息或附件被正文挤压遮挡。
 - How：使用真实 Workbench UI 创建工作区与会话，真实粘贴图片和 `md` 附件并发送 AI 请求；hover 用户消息并触发复制与编辑；在 running 状态检查用户消息气泡和附件布局。
 - Oracle：hover 后显示时间、复制和编辑；复制给出成功反馈；编辑会撤回最新 turn 并把原文回填输入框；running 状态不显示编辑；图片和 `md` 附件显示在用户消息气泡上方，文件副标题显示 `MD`，输入框附件关闭按钮保持可点击且不被遮挡。
@@ -152,7 +151,7 @@ tests/case/workbench/
 #### `composer-attachments-context`
 
 - 测试类型：`e2e`
-- What：验证 `+` 与粘贴添加附件时，附件会保存到工作区 `.ncurator/runtime/assets/<assetBucketId>/`，不会提前创建真实会话，并保持图片预览、文件打开、删除、普通文本粘贴和格式提示行为。
+- What：`+` 与粘贴添加附件时，附件会保存到工作区 `.ncurator/runtime/assets/<assetBucketId>/`，不会提前创建真实会话，并保持图片预览、文件打开、删除、普通文本粘贴和格式提示行为。
 - Why：附件链路已改为“统一落盘到工作区 + 只把路径交给 AI”，必须用回归测试守住真实保存路径和交互行为。
 - How：创建真实工作区，通过真实点击添加附件并在 E2E harness 中注入下一次系统文件对话框的选择结果，经过真实 Renderer → IPC → Main → 附件保存链路；另外通过粘贴覆盖不支持格式和大文件 warning。macOS 保留原生对话框 smoke，Windows 使用同一业务链路的受控对话框返回。
 - Oracle：真实粘贴会触发附件保存；添加附件后没有真实会话；图片预览可打开；文件副标题显示 `MD`；不支持格式只提示不加入；大文件只提示不拦截；普通文本粘贴仍正常，对齐 `WB-COMPOSER-010-AC2`、`WB-COMPOSER-010-AC3`。
@@ -161,7 +160,7 @@ tests/case/workbench/
 #### `reference-mention-keyboard`
 
 - 测试类型：`e2e`
-- What：验证 `@` 候选列表使用方向键移动时，当前高亮项能停在移动后的选项，不会因候选刷新跳回第一项。
+- What：`@` 候选列表使用方向键移动时，当前高亮项能停在移动后的选项，不会因候选刷新跳回第一项。
 - Why：`@` 候选选择依赖键盘稳定性；高亮项被刷新会导致用户插入错误资料范围。
 - How：通过真实 Settings / Workbench UI 创建并准备真实工作区；在 composer 输入 `@` 打开候选列表，按 `ArrowDown` 后观察 active 候选项。
 - Oracle：候选项数量大于 1；按下方向键后 active 候选项发生变化，并在短暂停留后保持不变，对齐 `WB-SCOPE-002-AC1`。
@@ -170,7 +169,7 @@ tests/case/workbench/
 #### `workspace-root-path-required`
 
 - 测试类型：`e2e`
-- What：验证已选工作区但未设置工作文件地址时，Settings 和 Workbench 都会给出轻提示，且 Workbench 发送按钮保持禁用；绑定目录后恢复可发送。
+- What：已选工作区但未设置工作文件地址时，Settings 和 Workbench 都会给出轻提示，且 Workbench 发送按钮保持禁用；绑定目录后恢复可发送。
 - Why：工作区名称选择和工作目录绑定已经拆开，若缺少“未绑定目录不可发送”的明确反馈，用户会误以为工作区已经可用。
 - How：通过 Settings UI 创建未绑定目录的真实工作区；在 Settings 文件 tab 验证轻提示；进入 Workbench 选择该工作区和真实模型，确认发送按钮禁用与 composer 提示；再回到 Settings 绑定真实目录，返回 Workbench 发送真实请求。
 - Oracle：未设置工作文件地址时，Settings 文件 tab 会提示设置后才能在 Workbench 发送任务，对齐 `SET-WORKSPACE-006-AC3`；Workbench 发送按钮保持禁用且 composer 提示前往设置页绑定地址，对齐 `WB-COMPOSER-005-AC1`、`WB-COMPOSER-005-AC2`；绑定目录后恢复发送并完成真实 AI 运行，对齐 `WB-CORE-006-AC1`；记录模型、耗时、完成度评分和失败归因。
@@ -179,7 +178,7 @@ tests/case/workbench/
 #### `reference-token-lifecycle`
 
 - 测试类型：`e2e`
-- What：验证 `@` 参考资料候选覆盖工作区全部本地目录 / 文件与网页资料、目录 / 文件 / 网页 token 插入、多 token 共存、键盘删除、去重、切工作区清理和空候选提示。
+- What：`@` 参考资料候选覆盖工作区全部本地目录 / 文件与网页资料、目录 / 文件 / 网页 token 插入、多 token 共存、键盘删除、去重、切工作区清理和空候选提示。
 - Why：显式参考资料是用户控制 AI 上下文的核心入口，错误会直接导致搜索或 AI 执行范围偏离用户意图。
 - How：创建真实 workspace，绑定 `tests/fixtures/workspace`，等待真实文件扫描并准备索引状态；添加真实 web source 并等待真实网页索引完成；输入 `@` 触发候选，选择文件、目录、网页；候选应覆盖工作区下本地项并显示索引状态，其中 md/txt 索引完成后应显示为已索引；选中即追加，同一资料才去重；通过 Backspace 删除 token；切工作区清理旧 token。
 - Oracle：候选来源符合当前工作区和模式，对齐 `WB-SCOPE-001-AC1`、`WB-SCOPE-001-AC2`；token 插入、共存和删除后发送参数符合 `WB-SCOPE-002-AC1` 至 `WB-SCOPE-002-AC3`；目录、网页、PDF、DOCX、PPT/PPTX 使用专属样式，Markdown、TXT 和其他文件使用普通文件样式，对齐 `WB-SCOPE-002-AC5`；重复候选和跨工作区清理符合 `WB-SCOPE-003-AC1`、`WB-SCOPE-003-AC2`；空候选提示符合 `WB-SCOPE-004-AC1`、`WB-SCOPE-004-AC2`。
@@ -188,7 +187,7 @@ tests/case/workbench/
 #### `right-panel-layout-and-tabs`
 
 - 测试类型：`e2e`
-- What：验证空会话输入区布局、右侧默认无占位折叠、标签栏密度与折叠入口、Tab 溢出滚动、加号菜单文案、浏览器缩放菜单和地址栏“前往”按钮。
+- What：空会话输入区布局、右侧默认无占位折叠、标签栏密度与折叠入口、Tab 溢出滚动、加号菜单文案、浏览器缩放菜单和地址栏“前往”按钮。
 - Why：右侧资源工作台和聊天输入区共享窗口高度与标题栏命中区域，普通功能测试无法发现输入框被推出窗口、折叠按钮放错区域、Tab 无法滚动或原生浏览器遮挡浮层等视觉交互回归。
 - How：直接进入无历史会话的真实 Workbench，先确认右侧 shell 不存在并测量空会话输入区位置；展开后连续创建八个真实浏览器 Tab，使用鼠标滚轮触发横向滚动并检查折叠 / 展开；打开浏览器更多菜单检查三段式缩放控件和地址栏“前往”按钮。
 - Oracle：空会话输入区居中且右侧 shell 不占宽度；展开和折叠保留约 200ms 动画，折叠动画结束后 shell 才卸载；折叠态按钮位于主标题栏并在展开后隐藏；悬浮按钮不产生 document 横纵溢出；标签栏和浏览器工具栏均为 44px，标签栏无下边线；八个 Tab 溢出后滚轮可横向滚动；加号菜单显示“文件 / 浏览器”，缩放控件同排，地址栏显示“前往”按钮，浮层触发原生视图避让。
@@ -197,7 +196,7 @@ tests/case/workbench/
 #### `windows-empty-titlebar-drag-region`
 
 - 测试类型：`e2e`
-- What：验证 Workbench 空会话的窗口拖动区和原生标题栏不遮挡输入区或右侧入口。
+- What：Workbench 空会话的窗口拖动区和原生标题栏不遮挡输入区或右侧入口。
 - Why：窗口层级错误会让首屏无法拖动或按钮无法点击。
 - How：在可见窗口测量原生标题栏、拖动区和空态输入区，点击关键入口。
 - Oracle：业务内容从标题栏下方开始，交互元素位于 `no-drag` 区，空态输入区可用，对齐 `WB-PANEL-001`。
@@ -208,7 +207,7 @@ tests/case/workbench/
 #### `ai-process-stream-and-final-answer`
 
 - 测试类型：`e2e`
-- What：验证智能模式真实发送后用户消息、assistant 占位、过程流、最终 markdown 输出和中间结果收口。
+- What：智能模式真实发送后用户消息、assistant 占位、过程流、最终 markdown 输出和中间结果收口。
 - Why：Workbench 的核心体验不是只启动 AI，而是让用户看见过程并得到可消费结果。
 - How：真实工作区内准备带唯一事实的文件；用户通过 UI 发送自然语言总结请求；等待真实 AI run 完成。
 - Oracle：发送后先出现用户消息和 assistant 占位，对齐 `WB-COMPOSER-003-AC1`；过程事件逐步追加，对齐 `WB-COMPOSER-003-AC2`；本地占位、总结等待层、最终 markdown 和链接行为符合 `WB-COMPOSER-003-AC3`、`WB-COMPOSER-003-AC4`；决策层不展示原始 chain-of-thought，对齐 `WB-COMPOSER-003-AC5`；最终回答包含 workspace 唯一事实并围绕用户诉求收口，对齐 `WB-CORE-005-AC1` 至 `WB-CORE-005-AC3`、`WB-CORE-006-AC1` 至 `WB-CORE-006-AC3`；记录模型、耗时、完成度评分和失败归因。
@@ -217,7 +216,7 @@ tests/case/workbench/
 #### `run-navigation-snapshot-replay`
 
 - 测试类型：`e2e`
-- What：验证真实 AI 输出过程中切到 Settings，完成后回到 Workbench 能通过持久化 snapshot replay 恢复过程流和最终 assistant 回答。
+- What：真实 AI 输出过程中切到 Settings，完成后回到 Workbench 能通过持久化 snapshot replay 恢复过程流和最终 assistant 回答。
 - Why：Workbench route 切换会导致 renderer 重新挂载；如果运行态只存在 renderer 内存中，用户离开页面后会丢失 AI 过程和最终回答。
 - How：通过 UI 配置真实模型和真实工作区；发送真实 AI 请求，等待过程流出现后切到 Settings；停留到 AI run 完成，再回到 Workbench 读取恢复后的过程流和最终回答。
 - Oracle：切走前过程流已出现；返回 Workbench 后仍能通过 `chatSessionSnapshotGet.runs` replay 看到过程流条目和最终回答，且 run event 包含 `answer_completed` 与 `run_completed`，对齐 `WB-SESSION-002-AC3` 与 `WB-COMPOSER-003-AC7`；记录模型、耗时、完成度评分和失败归因。
@@ -226,7 +225,7 @@ tests/case/workbench/
 #### `chat-run-service-contract`
 
 - 测试类型：`backend`
-- What：验证 Main 侧 `ChatRunService` 对智能模式提交、assistant placeholder、AI run 状态、事件日志、审批 snapshot、启动中断恢复和会话删除清理的持久化契约。
+- What：Main 侧 `ChatRunService` 对智能模式提交、assistant placeholder、AI run 状态、事件日志、审批 snapshot、启动中断恢复和会话删除清理的持久化契约。
 - Why：运行持久化的真相来源已经从 renderer 收敛到 Main；这些后端契约失败时，route 切换、reload、审批恢复和最终消息落库都会失真。
 - How：使用临时 LanceDB 初始化 `StorageService` 与 `ChatRunService`，关闭自动真实 AI 启动，通过 contract 方式提交 AI run 并注入 run event。
 - Oracle：`chatSubmit(ai)` 创建 user message、assistant placeholder 与 `running` run，并把当前 AI 推进偏好带入本次 run 上下文，对齐 `WB-COMPOSER-007-AC8`；`answer_completed/run_completed` 后 assistant message、run status、final answer 和 event log 正确；`approval_batch_required` 后 snapshot 返回 `waiting_approval` 与 pending approval；已完成 run 的过程事件可从 snapshot `runs` 恢复，token 级事件不会污染 replay；conversation memory 在 9 个完整轮次时不触发，第 10 个完整轮次触发并只总结前 5 轮，提交后保留最新 5 轮，失败或陈旧 summary 不推进覆盖边界，同一 session 的 summary job 去重；启动恢复会把遗留 active run 标记为 failed 并写入“运行已中断”；删除会话会同步清理 messages、run 和 event log，对齐 `WB-COMPOSER-003-AC1`、`WB-COMPOSER-003-AC2`、`WB-COMPOSER-003-AC7`、`WB-SESSION-002-AC3`、`WB-SESSION-002-AC4`。
@@ -235,7 +234,7 @@ tests/case/workbench/
 #### `approval-batch-flow`
 
 - 测试类型：`e2e`
-- What：验证真实 AI 运行中触发需审批 terminal 操作后，composer 上方审批卡片的同意、拒绝和指导输入流程。
+- What：真实 AI 运行中触发需审批 terminal 操作后，composer 上方审批卡片的同意、拒绝和指导输入流程。
 - Why：审批是高风险 terminal 执行的用户确认边界；UI 误执行或误恢复都会破坏安全约束。
 - How：通过真实用户请求诱导 AI 产生需要审批的 terminal 操作；分别覆盖全同意、任一拒绝、填写指导输入和不操作期间保持等待。
 - Oracle：整批同意后按原 serial 顺序继续，对齐 `WB-BLOCKER-001-AC1`；任一拒绝或填写指导输入时本批命令 0 执行并回到后续 AI 决策，对齐 `WB-BLOCKER-001-AC2`；指导输入不作为独立第三按钮，对齐 `WB-BLOCKER-001-AC3`；审批不因固定超时自动失败，对齐 `WB-BLOCKER-001-AC4`；记录模型、耗时、完成度评分和失败归因。
@@ -244,7 +243,7 @@ tests/case/workbench/
 #### `user-takeover-flow`
 
 - 测试类型：`e2e`
-- What：验证 AI 请求用户接手浏览器、用户完成后继续和取消任务。
+- What：AI 请求用户接手浏览器、用户完成后继续和取消任务。
 - Why：登录、验证码和人工确认无法由 AI 自动完成，等待状态必须可恢复且可释放。
 - How：通过真实浏览器任务触发接手事件，分别点击“完成并继续”和“取消本次任务”，并覆盖切换会话后返回。
 - Oracle：展示原因和对应浏览器；确认后从同一页面继续；取消后 run 结束且不再保留 blocker，对齐 `WB-BLOCKER-002`。
@@ -253,7 +252,7 @@ tests/case/workbench/
 #### `stop-running-or-approval-run`
 
 - 测试类型：`e2e`
-- What：验证智能模式运行中底部发送按钮切换为停止图标，并能取消普通长任务和审批等待中的运行。
+- What：智能模式运行中底部发送按钮切换为停止图标，并能取消普通长任务和审批等待中的运行。
 - Why：用户需要可靠中断长任务；审批等待时停止若不能释放等待，会造成运行态卡死。
 - How：发送真实长任务请求和真实审批等待请求；运行中点击底部停止图标并观察运行态、审批态和反馈。
 - Oracle：运行中发送按钮切换为停止图标且不显示独立取消按钮，对齐 `WB-COMPOSER-006-AC1`；当前会话列表项显示“任务运行中”，取消后标记消失，对齐 `WB-SESSION-002-AC5`；点击停止后当前运行结束并给出已取消反馈，对齐 `WB-COMPOSER-006-AC2`；审批等待时点击停止也结束 run，对齐 `WB-COMPOSER-006-AC3`；记录模型、耗时、完成度评分和失败归因。
@@ -262,7 +261,7 @@ tests/case/workbench/
 #### `browser-use-task-panel`
 
 - 测试类型：`e2e`
-- What：验证 AI 通过内置浏览器完成网页任务时，文件 / 多浏览器 Tab、独立页面导航、持久站点数据和真实网页操作结果形成闭环。
+- What：AI 通过内置浏览器完成网页任务时，文件 / 多浏览器 Tab、独立页面导航、持久站点数据和真实网页操作结果形成闭环。
 - Why：内置浏览器是 Electron 与 AI run 深度联动场景，仅 backend 或静态事件无法覆盖视口嵌入、导航和最终收口问题。
 - How：先打开真实 Markdown 文件，再让 AI 使用 `browser_use` 操作本地测试页；AI Run 仍在进行时，用户通过 `+` 新建另一个浏览器标签，验证后续 observe / act / extract 不会跟随 UI 活动标签漂移；任务完成后切回文件再切回浏览器，检查网页状态保持。
 - Oracle：文件和多个浏览器 Tab 可共存，对齐 `WB-PANEL-001-AC1`；同一轮 AI Run 始终绑定首次取得的 browserTabId，用户新建或切换标签不会让 Stagehand 串页；切换文件后浏览器 URL 和页面状态保持，对齐 `WB-PANEL-004-AC3`；菜单打开时不被原生视图遮挡，对齐 `WB-PANEL-004-AC7`；真实 browser_use 结果包含 `BROWSER_TASK_DONE` 和口令。
@@ -271,7 +270,7 @@ tests/case/workbench/
 #### `browser-view-lifecycle`
 
 - 测试类型：`e2e`
-- What：验证内置浏览器原生视图在初次显示、面板折叠、Renderer 菜单避让和会话切换后仍可见、尺寸稳定且持续运行。
+- What：内置浏览器原生视图在初次显示、面板折叠、Renderer 菜单避让和会话切换后仍可见、尺寸稳定且持续运行。
 - Why：`WebContentsView` 由 Main 管理并覆盖在 Renderer 上方；生命周期或 bounds 同步错误会导致白屏、原生视图遮挡菜单、恢复后尺寸跳变，或切换会话时误销毁仍在运行的网页。
 - How：启动带高对比颜色和自增计时器的本地真实网页，在可见 Electron 窗口中创建浏览器 Tab；分别采集初次显示、折叠恢复、菜单打开/关闭和切换会话恢复后的窗口像素、viewport 尺寸、zoom、WebContents id 与计时器值。
 - Oracle：各阶段浏览器 viewport 均包含稳定的非白真实网页像素且尺寸、zoom 不变；Renderer 菜单打开时原生视图隐藏，关闭后恢复；折叠或切换会话只停放视图，不销毁 WebContents，计时器持续前进；回到原会话时面板直接按最终宽度恢复且不重播展开动画，对齐 `WB-PANEL-001-AC5`、`WB-PANEL-004-AC1`、`WB-PANEL-004-AC3`、`WB-PANEL-004-AC7`。
@@ -280,7 +279,7 @@ tests/case/workbench/
 #### `web-search-diagnostic`
 
 - 测试类型：`e2e`
-- What：验证真实 AI 针对“DeepSeek 最近融资情况”先调用 `web_search`，并拿到结构化候选网页。
+- What：真实 AI 针对“DeepSeek 最近融资情况”先调用 `web_search`，并拿到结构化候选网页。
 - Why：网页搜索是实时信息入口；如果模型没有调用搜索工具或搜索工具没有返回候选，后续网页读取和回答都会变成编造。
 - How：通过真实 Workbench UI 发送 DeepSeek 融资搜索请求；等待真实 AI run 完成；从 run event 中读取 `web_search` 调用、query 和结果数量。
 - Oracle：run 完成；至少一次 `web_search` query 包含 DeepSeek；最后一次搜索结果 `ok=true` 且候选网页数量大于 0；不出现 fake search / fake AI 信号。
@@ -289,7 +288,7 @@ tests/case/workbench/
 #### `web-read-from-search-result`
 
 - 测试类型：`e2e`
-- What：验证真实 AI 先用 `web_search` 搜索 DeepSeek 融资候选网页，再用 `web_crawl` 读取网页正文后总结。
+- What：真实 AI 先用 `web_search` 搜索 DeepSeek 融资候选网页，再用 `web_crawl` 读取网页正文后总结。
 - Why：搜索结果只是候选列表，不是正文证据；必须守住“搜索后读取正文”的真实网页信息闭环。
 - How：通过真实 Workbench UI 发送“搜索 DeepSeek 最近融资情况并读取最相关网页正文后总结”；等待真实 AI run 完成；检查 `web_search` 与 `web_crawl` 的工具调用和结果。
 - Oracle：run 完成；`web_search` query 包含 DeepSeek 且有候选结果；至少一次 `web_crawl` 成功；最终回答包含 DeepSeek 和融资 / 投资 / funding 相关信息；不出现 fake search / fake crawl / fake AI 信号。
@@ -298,7 +297,7 @@ tests/case/workbench/
 #### `web-read-direct-url`
 
 - 测试类型：`e2e`
-- What：验证用户直接给 URL 时，真实 AI 使用 `web_crawl` 读取网页正文，并回答正文中的唯一口令。
+- What：用户直接给 URL 时，真实 AI 使用 `web_crawl` 读取网页正文，并回答正文中的唯一口令。
 - Why：直接 URL 读取是网页阅读的最小闭环，不能退化成浏览器点击任务或只复述 URL。
 - How：启动本地 HTTP 页面并写入唯一口令；通过真实 Workbench UI 要求 AI 读取该 URL 正文；等待真实 AI run 完成。
 - Oracle：run 完成；至少一次 `web_crawl` 成功；不调用 `browser_use`；最终回答包含本地网页唯一口令；不出现 fake crawl / fake AI 信号。
@@ -309,7 +308,7 @@ tests/case/workbench/
 #### `search-results-open-rules`
 
 - 测试类型：`e2e`
-- What：验证搜索模式发送、completed assistant 结果摘要、右侧搜索结果、网页 / 本地结果打开规则和无可检索资料下的发送拦截。
+- What：搜索模式发送、completed assistant 结果摘要、右侧搜索结果、网页 / 本地结果打开规则和无可检索资料下的发送拦截。
 - Why：搜索模式是 Workbench 的非 AI 路径，必须确保不误启动 AI，且右侧结果操作符合用户预期。
 - How：通过 UI 创建并绑定真实工作区，等待本地文件和网页资料真实索引完成；切换搜索模式发送自然语言查询；点击网页结果和本地结果操作图标；再切换到无可检索资料范围发送搜索。
 - Oracle：搜索模式不启动 AI run，对齐 `WB-COMPOSER-004-AC1`；搜索提交期间防重复提交且成功后展示 completed assistant 结果摘要和右侧命中列表，对齐 `WB-COMPOSER-004-AC2`、`WB-COMPOSER-004-AC3`；有消息后消息区独立滚动且输入区固定底部，对齐 `WB-COMPOSER-009-AC11`；搜索会话显示合法知识库过程，新建干净智能会话不继承该文案，对齐 `WB-COMPOSER-009-AC12`；网页结果调用系统浏览器、本地结果进入文件预览且正文区域无动作，对齐 `WB-PANEL-002-AC1`、`WB-PANEL-002-AC2`；无可检索资料时不执行发送并保留当前输入，对齐 `WB-MODE-002-AC1`、`WB-MODE-002-AC2`。
@@ -318,7 +317,7 @@ tests/case/workbench/
 #### `file-preview-actions`
 
 - 测试类型：`e2e`
-- What：验证右侧普通文件预览态、“全部 / 本会话改动”文件模式、稳定选中态、多个文件 Tab、定位文件、系统打开入口、PDF 命中定位，以及 Markdown / 纯文本预览。
+- What：右侧普通文件预览态、“全部 / 本会话改动”文件模式、稳定选中态、多个文件 Tab、定位文件、系统打开入口、PDF 命中定位，以及 Markdown / 纯文本预览。
 - Why：右侧面板是用户消费搜索 / 引用结果的主要区域，预览布局错误会直接阻断阅读。
 - How：从真实搜索结果连续打开真实 pdf、docx、md、txt 文件；检查预览内容和工具条；确认产生四个文件 Tab，再切回 Markdown Tab。
 - Oracle：加号创建“文件”标签且不调用系统文件选择器；默认进入“全部”，目录展开按需读取子级，修改文件有标记但点击后仍是正常预览；当前文件有稳定浅灰选中态；普通文件预览和 44px 工具条对齐 `WB-PANEL-003-AC1`；路径使用 `>` 面包屑且无“预览 / 编辑”标签；四个文件分别保留且旧 Tab 可恢复。
@@ -327,7 +326,7 @@ tests/case/workbench/
 #### `text-file-apply-preview-and-revert`
 
 - 测试类型：`e2e`
-- What：验证同一个 Markdown 文件在普通预览时正常渲染，在 AI 修改记录中使用独立文本 diff，并能恢复原始 bytes。
+- What：同一个 Markdown 文件在普通预览时正常渲染，在 AI 修改记录中使用独立文本 diff，并能恢复原始 bytes。
 - Why：普通预览和修改预览是两种不同语义；如果共用文件渲染器，用户看不到本次具体增加和删除内容。
 - How：先从真实搜索结果打开 Markdown 普通预览；再通过真实 AI 调用 `replaceAll` 和 `edit` 修改该文件；点击 assistant 修改入口检查 `TextFileDiffViewer`；最后执行回退。
 - Oracle：普通预览与修改 diff 共用一个文件 Tab；file_artifact 已产生但 Run 尚未结束时不展示修改入口；Run 完成后 assistant 修改文件入口使用 `工作区/目录/文件`，右侧工具栏使用 `工作区 > 目录 > 文件`；从入口打开时文件列表默认关闭，点击“目录列表”后才展示并默认进入“本会话改动”、选中对应文件；文本 Diff 只展示该 Run 修改批次，不生成会话累计 Diff；Diff 行背景覆盖整个可见及可滚动画布宽度；首次打开后缓存 version 2 hunks 且不含完整 `afterLines`；“N 行未修改”可从不可变 after 对象展开；回退后 bytes 与原始输入一致且有效改动标记消失。
@@ -336,14 +335,16 @@ tests/case/workbench/
 #### `ppt-create-diff-and-revert`
 
 - 测试类型：`e2e / live`
-- What：验证真实 AI 创建两页 PPT 后，用户可打开页面级左右 diff、切换缩略图模式并回撤文件。
+- What：真实 AI 创建两页 PPT 后，用户可打开页面级左右 diff、切换缩略图模式并回撤文件。
+- Why：新建 PPT 必须同时验证文件交付、差异预览和回退闭环。
+- How：通过真实 Workbench UI 请求 AI 创建两页 PPT，打开修改记录并操作差异预览和回退。
 - Oracle：只产生一个 PPT 修改记录；pptx 可解析；左右差异区和缩略图可见；全部页与变化页切换有效；回撤后新建文件被删除。
 - Not：不逐字断言最终回答，不对页面审美打分。
 
 #### `ppt-update-diff-interactions`
 
 - 测试类型：`e2e`
-- What：验证已有 PPT 更新后的左右差异、变化标记、缩略图筛选、缩放和拖动画布。
+- What：已有 PPT 更新后的左右差异、变化标记、缩略图筛选、缩放和拖动画布。
 - Why：创建态与更新态的差异语义不同，不能只用新建 PPT case 代替。
 - How：修改真实 PPT 的页面内容和顺序，打开修改记录并操作差异预览。
 - Oracle：修改前后画面、变化页标记、全部页切换、同步切页、缩放和拖动均可用，对齐 `WB-PPT-002`。
@@ -352,8 +353,8 @@ tests/case/workbench/
 #### `terminal-background-service-flow`
 
 - 测试类型：`e2e`
-- What：验证真实 AI 使用持久终端启动本地 HTTP 服务、让出控制权、通过内置浏览器验证页面并停止服务。
-- Why：这是持久终端、多终端决策、浏览器联动和进程清理的完整用户路径，静态事件或 fake tool result 无法覆盖。
+- What：真实 AI 使用持久终端启动本地 HTTP 服务、让出控制权、通过内置浏览器验证页面并停止服务。
+- Why：持久终端、多终端决策、浏览器联动和进程清理的完整用户路径，静态事件或 fake tool result 无法覆盖。
 - How：在真实临时 workspace 创建带唯一标记的 HTML；通过可见 Electron Workbench 发送请求，真实审批 terminal 命令，使用真实 PTY 启动 Python HTTP server，真实 browser_use 打开页面，最后 terminal_stop。
 - Oracle：事件包含 terminal_command_yielded、terminal_command_stopped、terminal_run、terminal_stop 和 browser_use；最终答复包含页面唯一标记；任务结束后真实端口不可访问；不存在 fake AI/tool/browser 信号。
 - Not：不依赖公网，不允许测试进程替 AI 启动目标 HTTP 服务。
@@ -361,7 +362,7 @@ tests/case/workbench/
 #### `terminal-unicode-file-list`
 
 - 测试类型：`e2e`
-- What：验证持久终端在当前平台处理 Unicode 路径和文件列表。
+- What：持久终端在当前平台处理 Unicode 路径和文件列表。
 - Why：中文路径是 macOS 与 Windows 用户的常见场景，编码错误会直接破坏终端任务。
 - How：在真实工作区创建 Unicode 文件名，通过真实终端读取目录并返回结果。
 - Oracle：终端结果保留 Unicode 文件名，任务完成后无乱码或跨会话泄漏，对齐 `WB-TERMINAL-001`。
@@ -370,7 +371,7 @@ tests/case/workbench/
 #### `docx-apply-panel-preview-and-revert`
 
 - 测试类型：`e2e`
-- What：验证 AI 修改真实 docx 后，assistant 修改文件入口、右侧修改文件工作区、当前记录预览和干净回退闭环。
+- What：AI 修改真实 docx 后，assistant 修改文件入口、右侧修改文件工作区、当前记录预览和干净回退闭环。
 - Why：直接写回和回退是 Workbench 文件编辑能力的安全边界，只看 artifact 事件无法证明用户能检查和撤销修改。
 - How：通过 UI 选择真实 docx 资料并发送真实编辑请求；等待 AI 写回；点击 assistant turn 中的修改文件入口；检查右侧文件面包屑、无模式标签状态和预览；执行回退并重新读取文件内容。
 - Oracle：修改后源文件立即成为 AI 最终净稿且 assistant turn 展示本轮修改文件入口；点击入口后右侧打开对应修改文件且工作区文件列表默认关闭；用户手动打开列表后进入“本会话改动”并选中对应文件；Review Docx 继续保留段落、表格、图片、字体和页面结构；未发生后续修改时回退恢复 before 对象且记录状态变为 `reverted`；记录模型、耗时、完成度评分和失败归因。
@@ -379,7 +380,7 @@ tests/case/workbench/
 #### `docx-apply-force-revert-warning`
 
 - 测试类型：`e2e`
-- What：验证 AI 写回后文件又被外部真实修改时，首次回退展示风险提示，确认后允许强制回退并刷新右侧状态。
+- What：AI 写回后文件又被外部真实修改时，首次回退展示风险提示，确认后允许强制回退并刷新右侧状态。
 - Why：强制回退是避免静默覆盖用户后续修改的关键安全交互。
 - How：AI 写回真实 docx 后，由测试进程对同一个真实文件做外部修改；在右侧修改文件工作区点击回退，先观察风险提示，再确认强制回退。
 - Oracle：检测到后续修改时首次回退不静默覆盖并展示风险提示，对齐 `WB-APPLY-004-AC1`；用户确认强制回退后恢复 checkpoint 或删除新建文件，对齐 `WB-APPLY-004-AC2`；右侧记录状态和预览在强制回退后刷新，对齐 `WB-APPLY-004-AC3`；记录模型、耗时、完成度评分和失败归因。
@@ -388,7 +389,7 @@ tests/case/workbench/
 #### `multi-file-apply-tabs`
 
 - 测试类型：`e2e`
-- What：验证同一轮 AI 修改多个文件时，assistant turn 保留全部入口；右侧为每个文件保留资源 Tab，并可切回旧文件。
+- What：同一轮 AI 修改多个文件时，assistant turn 保留全部入口；右侧为每个文件保留资源 Tab，并可切回旧文件。
 - Why：多文件任务如果只保留最新或单个入口，用户无法检查和回退完整结果。
 - How：通过 UI 选择至少两个真实 docx 文件并发送真实多文件编辑请求；分别点击两个修改入口，确认生成两个文件 Tab，再点击第一个 Tab 恢复其记录。
 - Oracle：多个修改入口对齐 `WB-APPLY-005-AC1`；点击入口加载对应记录并新增或激活文件 Tab，对齐 `WB-PANEL-001-AC1`、`WB-APPLY-005-AC2`；切回旧 Tab 后仍显示对应记录；全部入口继续保留。
