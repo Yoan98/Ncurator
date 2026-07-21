@@ -84,6 +84,22 @@ describe('attachment service runtime directories', () => {
     )
   })
 
+  it.each([
+    ['legacy.doc', 'application/msword'],
+    ['slides.pptx', 'application/vnd.openxmlformats-officedocument.presentationml.presentation']
+  ])('accepts %s attachments and assigns the expected MIME type', async (name, mimeType) => {
+    const attachment = await service.saveAttachment({
+      workspaceRootPath,
+      assetBucketId: 'bucket-office',
+      name,
+      bytes: Buffer.from('office-attachment')
+    })
+
+    expect(attachment.kind).toBe('file')
+    expect(attachment.mimeType).toBe(mimeType)
+    await expect(fs.stat(attachment.path)).resolves.toBeDefined()
+  })
+
   it('rejects unsupported attachment formats without writing a file', async () => {
     await expect(
       service.saveAttachment({

@@ -17,3 +17,9 @@ resources/web_crawler_sidecar/bin
 resources/native
 release-stage
 design/
+promo/episodes/**/assets/raw/
+promo/episodes/**/assets/captured/
+promo/episodes/**/assets/audio/
+promo/episodes/**/renders/
+promo/library/audio/files/
+.venv

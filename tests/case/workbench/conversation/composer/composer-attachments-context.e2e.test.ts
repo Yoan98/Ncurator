@@ -27,6 +27,8 @@ const createAttachmentFixtures = async (): Promise<{
   rootPath: string
   imagePath: string
   markdownPath: string
+  legacyDocPath: string
+  pptxPath: string
   largePath: string
   cleanup: () => Promise<void>
 }> => {
@@ -34,16 +36,22 @@ const createAttachmentFixtures = async (): Promise<{
   const rootPath = await realpath(createdRootPath)
   const imagePath = path.join(rootPath, 'qa-image.png')
   const markdownPath = path.join(rootPath, 'workbench-preview.md')
+  const legacyDocPath = path.join(rootPath, 'legacy-reference.doc')
+  const pptxPath = path.join(rootPath, 'slides-reference.pptx')
   const largePath = path.join(rootPath, 'qa-large.json')
   await Promise.all([
     writeFile(imagePath, ONE_PIXEL_PNG),
     writeFile(markdownPath, '# Preview\n\nAttachment markdown body.'),
+    writeFile(legacyDocPath, 'legacy doc attachment fixture'),
+    writeFile(pptxPath, 'pptx attachment fixture'),
     writeFile(largePath, Buffer.alloc(11 * 1024 * 1024, 65))
   ])
   return {
     rootPath,
     imagePath,
     markdownPath,
+    legacyDocPath,
+    pptxPath,
     largePath,
     cleanup: async () => {
       await rm(rootPath, { recursive: true, force: true })
@@ -123,7 +131,7 @@ describe('workbench conversation e2e', () => {
         suite: 'conversation',
         groups: ['composer'],
         description:
-          '对齐附件上下文 PRD：验证统一附件选择、图片预览、文件默认打开、删除、普通文本粘贴和大文件提示。',
+          '对齐附件上下文 PRD：验证统一附件选择、doc/pptx 格式放行、图片预览、文件默认打开、删除、普通文本粘贴和大文件提示。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
         windowMode: 'visible',
@@ -157,6 +165,18 @@ describe('workbench conversation e2e', () => {
               runtime.electronApp
             )
             await waitForAttachmentCardByName(page, 'workbench-preview.md')
+            await selectWorkbenchAttachmentThroughNativeDialog(
+              page,
+              attachments.legacyDocPath,
+              runtime.electronApp
+            )
+            await waitForAttachmentCardByName(page, 'legacy-reference.doc')
+            await selectWorkbenchAttachmentThroughNativeDialog(
+              page,
+              attachments.pptxPath,
+              runtime.electronApp
+            )
+            await waitForAttachmentCardByName(page, 'slides-reference.pptx')
             const sessionCountAfterPaste = await countWorkspaceSessions(
               page,
               workspaceBinding.workspaceId
@@ -236,6 +256,16 @@ describe('workbench conversation e2e', () => {
               .first()
             await fileCard.waitFor({ state: 'visible' })
             const fileCardText = (await fileCard.textContent()) || ''
+            const legacyDocCardText =
+              (await getWorkbenchPrefixLocator(page, workbenchSelectors.attachmentCardPrefix)
+                .filter({ hasText: 'legacy-reference.doc' })
+                .first()
+                .textContent()) || ''
+            const pptxCardText =
+              (await getWorkbenchPrefixLocator(page, workbenchSelectors.attachmentCardPrefix)
+                .filter({ hasText: 'slides-reference.pptx' })
+                .first()
+                .textContent()) || ''
 
             await selectWorkbenchAttachmentThroughNativeDialog(
               page,
@@ -284,6 +314,8 @@ describe('workbench conversation e2e', () => {
                 closeButtonBox.y + closeButtonBox.height <= previewImageBox.y
               ),
               fileCardText,
+              legacyDocCardText,
+              pptxCardText,
               largeFileMessage,
               inputText,
               openPathCallCount: openPathCalls.length,
@@ -308,13 +340,15 @@ describe('workbench conversation e2e', () => {
               result.zoomControlBelowImage &&
               result.topActionsAboveImage &&
               result.fileCardText.includes('MD') &&
+              result.legacyDocCardText.includes('DOC') &&
+              result.pptxCardText.includes('PPTX') &&
               result.largeFileMessage.includes('文件过大，建议放到工作空间索引里使用') &&
               result.inputText.includes('plain paste ok') &&
               result.openPathCallCount >= 1,
             {
               name: 'workbench-composer-attachments-prd-flow',
               message:
-                '附件输入应满足 PRD：真实选择附件会走系统选择和附件导入，添加附件不创建新会话，图片可预览且控件不压图，文件副标题显示扩展名，文件可默认打开，超过 10MB 只提示不拦截，普通文本粘贴仍正常。',
+                '附件输入应满足 PRD：真实选择附件会走系统选择和附件导入，doc/pptx 可以添加并显示正确类型，添加附件不创建新会话，图片可预览且控件不压图，文件可默认打开，超过 10MB 只提示不拦截，普通文本粘贴仍正常。',
               data: result
             }
           )

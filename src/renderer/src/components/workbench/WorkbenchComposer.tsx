@@ -93,7 +93,7 @@ type WorkbenchComposerProps = {
 const isTextNode = (value: Node | null): value is Text => value instanceof Text
 const CARET_ANCHOR_ROLE = 'composer-caret-anchor'
 const LARGE_FILE_WARNING_BYTES = 10 * 1024 * 1024
-const SUPPORTED_ATTACHMENT_FILE_EXTENSIONS = new Set(['md', 'json', 'docx', 'pdf'])
+const SUPPORTED_ATTACHMENT_FILE_EXTENSIONS = new Set(['md', 'json', 'doc', 'docx', 'pptx', 'pdf'])
 
 const getAttachmentFileExt = (name: string): string => {
   const last =

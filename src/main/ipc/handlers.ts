@@ -1541,7 +1541,9 @@ export function registerHandlers(services: {
                 'tiff',
                 'md',
                 'json',
+                'doc',
                 'docx',
+                'pptx',
                 'pdf'
               ]
             },
@@ -1558,7 +1560,9 @@ export function registerHandlers(services: {
                 'tiff',
                 'md',
                 'json',
+                'doc',
                 'docx',
+                'pptx',
                 'pdf'
               ]
             }
