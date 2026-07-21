@@ -127,8 +127,7 @@
 - Main 与 Renderer 都会消费的数据结构放 `src/shared/**`。
 - 只给 Main、AI、human 或 Renderer 单侧使用的类型与常量，不要放进 `src/shared/**`。
 
-## 4. 必须遵守的规则
-
+## 4. 你必须遵守的规则
 
 ### 代码实现
 
