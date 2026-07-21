@@ -83,6 +83,7 @@
 ├── build/                            # 构建相关资源
 ├── logo/                             # logo 资源
 │   └── png/                          # png 格式 logo
+├── promo/                            # 馆长竖屏宣传视频、HyperFrames 模板和音频库存
 ├── .codex/                           # Codex 项目配置
 │   └── skills/                       # Codex 技能定义
 ├── .agent/                           # Agent 本地配置
@@ -143,4 +144,3 @@
 
 ### 文档相关
 - 代码变更必须要看是否要同步更新prd和test文档
-

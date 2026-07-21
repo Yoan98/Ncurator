@@ -6,6 +6,12 @@
   "author": "NCurator",
   "homepage": "https://www.ncurator.com",
   "scripts": {
+    "promo:new": "node promo/scripts/new-episode.mjs",
+    "promo:capture": "node promo/scripts/capture-frame.mjs",
+    "promo:voice": "node promo/scripts/generate-narration.mjs",
+    "promo:check": "node promo/scripts/run-episode.mjs check",
+    "promo:preview": "node promo/scripts/run-episode.mjs preview",
+    "promo:render": "node promo/scripts/run-episode.mjs render",
     "format": "prettier --write .",
     "lint": "eslint --cache .",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
