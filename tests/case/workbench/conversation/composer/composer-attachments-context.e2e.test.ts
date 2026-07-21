@@ -218,10 +218,13 @@ describe('workbench conversation e2e', () => {
             await closeButton.click()
             await previewModal.waitFor({ state: 'hidden' })
 
-            await imageCard.first().hover()
-            await getWorkbenchPrefixLocator(page, workbenchSelectors.attachmentRemoveButtonPrefix)
-              .first()
-              .click({ force: true })
+            const imageAttachmentCard = imageCard.first()
+            await imageAttachmentCard.hover()
+            const imageRemoveButton = imageAttachmentCard.locator(
+              `[data-testid^="${workbenchSelectors.attachmentRemoveButtonPrefix}-"]`
+            )
+            await imageRemoveButton.waitFor({ state: 'visible' })
+            await imageRemoveButton.click()
             const imageRemoved =
               (await getImageAttachmentCardByName(page, 'qa-image.png').count()) === 0
 

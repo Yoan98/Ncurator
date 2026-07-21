@@ -125,10 +125,6 @@ on run argv
   set keyStatus to "not-run"
   set clickedConfirmButton to false
 
-  try
-    tell application id targetBundleId to activate
-  end try
-
   tell application "System Events"
     set beforeFrontmost to name of first application process whose frontmost is true
     repeat 12 times
