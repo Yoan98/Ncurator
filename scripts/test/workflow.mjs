@@ -467,6 +467,17 @@ const runTypeWorkflow = async (input) => {
       ).some(Boolean))
   const testNamePattern = shouldFilterByTestName ? input.caseId : ''
   let runtimeEnv = input.e2eEnv || {}
+  if (input.type === 'e2e') {
+    const e2eTempRoot = path.resolve(
+      String(process.env.NCURATOR_E2E_TEMP_ROOT || '').trim() ||
+        path.join(TESTS_ROOT, '.tmp', 'e2e')
+    )
+    await mkdir(e2eTempRoot, { recursive: true })
+    runtimeEnv = {
+      ...runtimeEnv,
+      NCURATOR_E2E_TEMP_ROOT: e2eTempRoot
+    }
+  }
   if (input.type !== 'e2e' || input.target === 'source') {
     const nativeCode = prepareBetterSqliteNative(nativeTarget)
     if (nativeCode !== 0) {

@@ -19,6 +19,7 @@ import { AppUpdateService } from './services/update/AppUpdateService'
 import { APP_ID } from '../shared/constants'
 import { MODELS_PATH } from './utils/paths'
 import { terminalSessionManager } from './services/ai/human/tools/terminal/TerminalSessionManager'
+import { AppShutdownCoordinator } from './services/AppShutdownCoordinator'
 
 app.commandLine.appendSwitch(
   'remote-debugging-port',
@@ -37,6 +38,23 @@ if (e2eUserDataPath) {
 const singleInstanceLock = process.env.NCURATOR_E2E_OBSERVER
   ? true
   : app.requestSingleInstanceLock()
+const shutdownCoordinator = new AppShutdownCoordinator()
+let quitAfterShutdown = false
+let shutdownRequested = false
+
+app.on('before-quit', (event) => {
+  if (quitAfterShutdown) return
+  event.preventDefault()
+  if (shutdownRequested) return
+  shutdownRequested = true
+  void shutdownCoordinator.shutdown().then((failures) => {
+    for (const failure of failures) {
+      console.error(`[APP-SHUTDOWN] ${failure.name} failed:`, failure.error)
+    }
+    quitAfterShutdown = true
+    app.quit()
+  })
+})
 
 const INITIAL_WINDOW_WIDTH = 1400
 const INITIAL_WINDOW_HEIGHT = 800
@@ -213,12 +231,25 @@ if (!singleInstanceLock) {
     appUpdateService.initialize()
     appUpdateService.checkForUpdatesOnLaunch()
 
-    app.on('before-quit', () => {
-      void terminalSessionManager.dispose()
-      void storageService.failInterruptedWorkspaceIndexJobs()
-      void webCrawlerService.close()
-      void embeddingService.close()
-      void browserEmbedService.dispose()
+    shutdownCoordinator.register({
+      name: 'workspace-index-jobs',
+      dispose: () => storageService.failInterruptedWorkspaceIndexJobs()
+    })
+    shutdownCoordinator.register({
+      name: 'embedding-service',
+      dispose: () => embeddingService.close()
+    })
+    shutdownCoordinator.register({
+      name: 'web-crawler',
+      dispose: () => webCrawlerService.close()
+    })
+    shutdownCoordinator.register({
+      name: 'browser-embed-service',
+      dispose: () => browserEmbedService.dispose()
+    })
+    shutdownCoordinator.register({
+      name: 'terminal-session-manager',
+      dispose: () => terminalSessionManager.dispose()
     })
 
     vectorModelDownloadService

@@ -39,102 +39,103 @@ describe('settings workspace e2e', () => {
         execute: async (runtime) => {
           const { page } = runtime
           const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'ncurator-settings-scan-'))
+          runtime.registerResource({
+            name: `settings-workspace:${workspaceRoot}`,
+            phase: 'after-app-close',
+            dispose: async () => await rm(workspaceRoot, { recursive: true, force: true })
+          })
           let workspaceId = ''
 
-          try {
-            await runtime.step({
-              name: 'create-empty-workspace',
-              message: '通过 UI 创建并绑定一个真实空目录工作空间。',
-              run: async () => {
-                const workspace = await createRealWorkspaceWithRoot(page, {
-                  rootPath: workspaceRoot,
-                  name: '扫描工作区'
-                })
-                workspaceId = workspace.workspace!.id
-                await navigateToSettingsSection(page, 'workspace')
-                await getSettingsLocator(page, importSelectors.workspaceQuickScanButton).waitFor({
-                  state: 'visible'
-                })
-              }
-            })
-
-            await runtime.step({
-              name: 'create-real-file-changes',
-              message: '在已绑定目录里写入真实文件，制造目录变化。',
-              run: async () => {
-                await createManyWorkspaceFiles(workspaceRoot)
-              }
-            })
-
-            let inProgressVisible = false
-            let buttonsDisabled = false
-            let progressEventSeen = false
-
-            await runtime.step({
-              name: 'scan-workspace-through-ui',
-              message: '点击检查更新，并捕捉真实进度事件或执行中 UI。',
-              run: async () => {
-                const progressEventsPromise = page.evaluate(
-                  (workspaceId) =>
-                    new Promise<boolean>((resolve) => {
-                      let settled = false
-                      const finish = (value: boolean): void => {
-                        if (settled) return
-                        settled = true
-                        unsubscribe()
-                        resolve(value)
-                      }
-                      const unsubscribe = window.api.onWorkspaceIndexJobProgress((job) => {
-                        if (
-                          job.workspace_id === workspaceId &&
-                          job.source_kind === 'file' &&
-                          job.action === 'scan'
-                        ) {
-                          finish(true)
-                        }
-                      })
-                      window.setTimeout(() => finish(false), 3000)
-                    }),
-                  workspaceId
-                )
-
-                await getSettingsLocator(page, importSelectors.workspaceQuickScanButton).click()
-                inProgressVisible = await getSettingsLocator(
-                  page,
-                  importSelectors.workspaceIndexJobProgress
-                )
-                  .waitFor({
-                    state: 'visible',
-                    timeout: 1000
-                  })
-                  .then(() => true)
-                  .catch(() => false)
-                if (inProgressVisible) {
-                  buttonsDisabled =
-                    (await getSettingsLocator(
-                      page,
-                      importSelectors.workspaceQuickScanButton
-                    ).isDisabled()) &&
-                    (await getSettingsLocator(
-                      page,
-                      importSelectors.workspaceQuickPrepareButton
-                    ).isDisabled())
-                }
-                progressEventSeen = await progressEventsPromise
-              }
-            })
-
-            const result = await waitForFileIndexJobIdle(page, workspaceId)
-
-            return {
-              inProgressVisible,
-              buttonsDisabled,
-              progressEventSeen,
-              summary: result.tree.summary,
-              itemNames: result.tree.items.map((item) => item.name)
+          await runtime.step({
+            name: 'create-empty-workspace',
+            message: '通过 UI 创建并绑定一个真实空目录工作空间。',
+            run: async () => {
+              const workspace = await createRealWorkspaceWithRoot(page, {
+                rootPath: workspaceRoot,
+                name: '扫描工作区'
+              })
+              workspaceId = workspace.workspace!.id
+              await navigateToSettingsSection(page, 'workspace')
+              await getSettingsLocator(page, importSelectors.workspaceQuickScanButton).waitFor({
+                state: 'visible'
+              })
             }
-          } finally {
-            await rm(workspaceRoot, { recursive: true, force: true })
+          })
+
+          await runtime.step({
+            name: 'create-real-file-changes',
+            message: '在已绑定目录里写入真实文件，制造目录变化。',
+            run: async () => {
+              await createManyWorkspaceFiles(workspaceRoot)
+            }
+          })
+
+          let inProgressVisible = false
+          let buttonsDisabled = false
+          let progressEventSeen = false
+
+          await runtime.step({
+            name: 'scan-workspace-through-ui',
+            message: '点击检查更新，并捕捉真实进度事件或执行中 UI。',
+            run: async () => {
+              const progressEventsPromise = page.evaluate(
+                (workspaceId) =>
+                  new Promise<boolean>((resolve) => {
+                    let settled = false
+                    const finish = (value: boolean): void => {
+                      if (settled) return
+                      settled = true
+                      unsubscribe()
+                      resolve(value)
+                    }
+                    const unsubscribe = window.api.onWorkspaceIndexJobProgress((job) => {
+                      if (
+                        job.workspace_id === workspaceId &&
+                        job.source_kind === 'file' &&
+                        job.action === 'scan'
+                      ) {
+                        finish(true)
+                      }
+                    })
+                    window.setTimeout(() => finish(false), 3000)
+                  }),
+                workspaceId
+              )
+
+              await getSettingsLocator(page, importSelectors.workspaceQuickScanButton).click()
+              inProgressVisible = await getSettingsLocator(
+                page,
+                importSelectors.workspaceIndexJobProgress
+              )
+                .waitFor({
+                  state: 'visible',
+                  timeout: 1000
+                })
+                .then(() => true)
+                .catch(() => false)
+              if (inProgressVisible) {
+                buttonsDisabled =
+                  (await getSettingsLocator(
+                    page,
+                    importSelectors.workspaceQuickScanButton
+                  ).isDisabled()) &&
+                  (await getSettingsLocator(
+                    page,
+                    importSelectors.workspaceQuickPrepareButton
+                  ).isDisabled())
+              }
+              progressEventSeen = await progressEventsPromise
+            }
+          })
+
+          const result = await waitForFileIndexJobIdle(page, workspaceId)
+
+          return {
+            inProgressVisible,
+            buttonsDisabled,
+            progressEventSeen,
+            summary: result.tree.summary,
+            itemNames: result.tree.items.map((item) => item.name)
           }
         },
         assert: async (result, runtime) => {

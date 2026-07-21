@@ -1,10 +1,10 @@
 import { execFile, spawn } from 'node:child_process'
-import { access, mkdir, readdir, rm } from 'node:fs/promises'
-import os from 'node:os'
+import { access, mkdir, readdir } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 import { promisify } from 'node:util'
 import { loadReleaseEnvironment } from './shared/environment.mjs'
+import { prepareReleaseWorkspace } from './workspace.mjs'
 
 const execFileAsync = promisify(execFile)
 const ROOT = process.cwd()
@@ -169,17 +169,15 @@ const createAndUploadFragment = async (sourceDirectory, platform) => {
 }
 
 const preflight = await validatePreflight()
-const workRoot = path.resolve(
-  String(process.env.NCURATOR_RELEASE_WORK_ROOT || '').trim() ||
-    path.join(os.tmpdir(), 'ncurator-macos-release')
-)
-const workDirectory = path.join(workRoot, releaseTag)
+const releaseWorkspace = await prepareReleaseWorkspace({
+  releaseTag,
+  defaultRootName: 'ncurator-macos-release',
+  keepWork
+})
+const { workDirectory } = releaseWorkspace
 const archivePath = path.join(workDirectory, 'source.tar')
 const armSource = path.join(workDirectory, 'arm64')
 const x64Source = path.join(workDirectory, 'x64')
-
-await rm(workDirectory, { recursive: true, force: true })
-await mkdir(workDirectory, { recursive: true })
 
 try {
   await run('git', ['archive', '--format=tar', '--output', archivePath, releaseTag])
@@ -227,6 +225,5 @@ try {
   if (keepOld) finalizeArgs.push('--keep-old')
   await run(process.execPath, finalizeArgs, { cwd: armSource })
 } finally {
-  if (keepWork) process.stdout.write(`[release] kept work directory ${workDirectory}\n`)
-  else await rm(workDirectory, { recursive: true, force: true })
+  await releaseWorkspace.dispose()
 }

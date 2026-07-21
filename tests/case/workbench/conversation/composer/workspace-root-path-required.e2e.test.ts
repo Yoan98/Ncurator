@@ -44,71 +44,67 @@ describe('workbench conversation e2e', () => {
           const { page } = runtime
           const env = loadWorkbenchLiveModelEnv()
           const workspace = await createTemporaryWorkbenchWorkspace(CASE_ID)
-          try {
-            await configureLiveModelThroughSettingsUi(page, env)
-            await createWorkspaceThroughSettingsUi(page, WORKSPACE_NAME)
-            await navigateToSettingsSection(page, 'workspace')
-            const settingsHintText = await page
-              .getByText('设置后才能在 Workbench 中发送任务。')
-              .textContent()
+          await configureLiveModelThroughSettingsUi(page, env)
+          await createWorkspaceThroughSettingsUi(page, WORKSPACE_NAME)
+          await navigateToSettingsSection(page, 'workspace')
+          const settingsHintText = await page
+            .getByText('设置后才能在 Workbench 中发送任务。')
+            .textContent()
 
-            await navigateToWorkbench(page)
-            await selectWorkbenchWorkspace(page, WORKSPACE_NAME)
-            await selectWorkbenchModel(page, env.modelName)
-            await selectWorkbenchVisualModel(page, env.visualModelName)
-            await switchWorkbenchMode(page, '大聪明')
-            await setWorkbenchInput(page, PROMPT)
+          await navigateToWorkbench(page)
+          await selectWorkbenchWorkspace(page, WORKSPACE_NAME)
+          await selectWorkbenchModel(page, env.modelName)
+          await selectWorkbenchVisualModel(page, env.visualModelName)
+          await switchWorkbenchMode(page, '大聪明')
+          await setWorkbenchInput(page, PROMPT)
 
-            const disabledBeforeBinding = await getWorkbenchLocator(
-              page,
-              workbenchSelectors.sendButton
-            ).evaluate((element) => element instanceof HTMLButtonElement && element.disabled)
-            const composerHintBeforeBinding = (
-              (await getWorkbenchLocator(page, workbenchSelectors.composerHint).textContent()) || ''
-            ).trim()
+          const disabledBeforeBinding = await getWorkbenchLocator(
+            page,
+            workbenchSelectors.sendButton
+          ).evaluate((element) => element instanceof HTMLButtonElement && element.disabled)
+          const composerHintBeforeBinding = (
+            (await getWorkbenchLocator(page, workbenchSelectors.composerHint).textContent()) || ''
+          ).trim()
 
-            await navigateToSettingsSection(page, 'workspace')
-            await bindWorkspaceRootThroughSettingsUi(page, workspace.rootPath)
-            await navigateToWorkbench(page)
-            await selectWorkbenchWorkspace(page, WORKSPACE_NAME)
-            await selectWorkbenchModel(page, env.modelName)
-            await selectWorkbenchVisualModel(page, env.visualModelName)
-            await switchWorkbenchMode(page, '大聪明')
-            await setWorkbenchInput(page, PROMPT)
+          await navigateToSettingsSection(page, 'workspace')
+          await bindWorkspaceRootThroughSettingsUi(page, workspace.rootPath)
+          await navigateToWorkbench(page)
+          await selectWorkbenchWorkspace(page, WORKSPACE_NAME)
+          await selectWorkbenchModel(page, env.modelName)
+          await selectWorkbenchVisualModel(page, env.visualModelName)
+          await switchWorkbenchMode(page, '大聪明')
+          await setWorkbenchInput(page, PROMPT)
 
-            const disabledAfterBinding = await getWorkbenchLocator(
-              page,
-              workbenchSelectors.sendButton
-            ).evaluate((element) => element instanceof HTMLButtonElement && element.disabled)
-            const composerHintVisibleAfterBinding = await getWorkbenchLocator(
-              page,
-              workbenchSelectors.composerHint
-            )
-              .isVisible()
-              .catch(() => false)
+          const disabledAfterBinding = await getWorkbenchLocator(
+            page,
+            workbenchSelectors.sendButton
+          ).evaluate((element) => element instanceof HTMLButtonElement && element.disabled)
+          const composerHintVisibleAfterBinding = await getWorkbenchLocator(
+            page,
+            workbenchSelectors.composerHint
+          )
+            .isVisible()
+            .catch(() => false)
 
-            const startedAtMs = Date.now()
-            await sendWorkbenchMessage(page, PROMPT)
-            const evidence = await waitForWorkbenchAiRunCompletion(
-              runtime,
-              startedAtMs,
-              env.modelName,
-              WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
-              { page, blockerPolicy: 'auto_approve' }
-            )
-            recordWorkbenchAiEvidence(runtime, evidence, 0.75)
+          const startedAtMs = Date.now()
+          await sendWorkbenchMessage(page, PROMPT)
+          const evidence = await waitForWorkbenchAiRunCompletion(
+            runtime,
+            startedAtMs,
+            env.modelName,
+            WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
+            { page, blockerPolicy: 'auto_approve' }
+          )
+          recordWorkbenchAiEvidence(runtime, evidence, 0.75)
 
-            return {
-              settingsHintText: (settingsHintText || '').trim(),
-              disabledBeforeBinding,
-              composerHintBeforeBinding,
-              disabledAfterBinding,
-              composerHintVisibleAfterBinding,
-              finalAnswerText: evidence.finalAnswerText,
-              eventTypes: evidence.events.map((event) => event.type)
-            }
-          } finally {
-            await workspace.cleanup()
+          return {
+            settingsHintText: (settingsHintText || '').trim(),
+            disabledBeforeBinding,
+            composerHintBeforeBinding,
+            disabledAfterBinding,
+            composerHintVisibleAfterBinding,
+            finalAnswerText: evidence.finalAnswerText,
+            eventTypes: evidence.events.map((event) => event.type)
           }
         },
         assert: async (result, runtime) => {

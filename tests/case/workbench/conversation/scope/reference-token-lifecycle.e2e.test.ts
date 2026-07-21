@@ -69,200 +69,200 @@ describe('workbench conversation e2e', () => {
           const server = await startLocalWorkbenchHttpServer(
             '<!doctype html><title>Workbench Web Fixture</title><main>Workbench web fixture unique fact: cedar-scope-731.</main>'
           )
+          runtime.registerResource({
+            name: 'reference-token-http-server',
+            phase: 'before-app-close',
+            dispose: server.close
+          })
           const setup = await setupScopeWorkspace(page, {
             workspaceName: 'Workbench Scope Workspace',
             webSourceUrl: server.url
           })
-          try {
-            await switchWorkbenchMode(page, '大聪明')
-            await insertWorkbenchReferenceToken(page, 'sample-edit.docx')
-            const afterFile = await getWorkbenchReferenceTokenTexts(page)
-            await insertWorkbenchReferenceToken(page, '工作')
-            const afterDirectory = await getWorkbenchReferenceTokenTexts(page)
+          await switchWorkbenchMode(page, '大聪明')
+          await insertWorkbenchReferenceToken(page, 'sample-edit.docx')
+          const afterFile = await getWorkbenchReferenceTokenTexts(page)
+          await insertWorkbenchReferenceToken(page, '工作')
+          const afterDirectory = await getWorkbenchReferenceTokenTexts(page)
 
-            await appendWorkbenchInputText(page, '@')
-            const mentionPanel = getWorkbenchLocator(page, workbenchSelectors.mentionPanel)
-            await waitForWorkbenchMentionPanelText(page)
-            await page.waitForFunction(
-              (testId: string) => {
-                const panel = document.querySelector(`[data-testid="${testId}"]`)
-                return Boolean(panel?.querySelector('button'))
-              },
-              workbenchSelectors.mentionPanel,
-              { timeout: WORKBENCH_RESULT_E2E_TIMEOUT_MS }
-            )
-            const mentionPanelText = ((await mentionPanel.textContent()) || '').trim()
-            const fileGroupVisible = await mentionPanel.getByText('文件').isVisible()
-            const webGroupVisible = await mentionPanel.getByText('网页').isVisible()
-            const legacyDirectoryGroupVisible = await mentionPanel
-              .getByText('目录')
-              .isVisible()
-              .catch(() => false)
-            const legacyTypeTagVisible = await mentionPanel
-              .locator('.nc-tag')
-              .filter({ hasText: /DOCX|PDF|文件|网页|目录/u })
-              .first()
-              .isVisible()
-              .catch(() => false)
-            const directoryIconVisible = await mentionPanel
-              .locator('[data-reference-kind="directory"] [data-reference-icon-kind="directory"]')
-              .first()
-              .isVisible()
-              .catch(() => false)
-            const webIconVisible = await mentionPanel
-              .locator('[data-reference-kind="web"] [data-reference-icon-kind="web"]')
-              .first()
-              .isVisible()
-              .catch(() => false)
-            const docxIconPresent =
-              (await mentionPanel.locator('[data-reference-icon-kind="docx"]').count()) > 0
-            const pdfIconPresent =
-              (await mentionPanel.locator('[data-reference-icon-kind="pdf"]').count()) > 0
-            const unexpectedMarkdownIconPresent =
-              (await mentionPanel.locator('[data-reference-icon-kind="markdown"]').count()) > 0
-            const genericFileIconPresent =
-              (await mentionPanel
-                .getByRole('button')
-                .filter({ hasText: 'human-input.txt' })
-                .locator('[data-reference-icon-kind="file"]')
-                .count()) > 0
-            const markdownUsesGenericFileIcon =
-              (await mentionPanel
-                .getByRole('button')
-                .filter({ hasText: 'workbench-preview.md' })
-                .locator('[data-reference-icon-kind="file"]')
-                .count()) > 0
-            const duplicateCandidateVisible = await getWorkbenchLocator(
-              page,
-              workbenchSelectors.mentionPanel
-            )
-              .getByText('sample-edit.docx')
-              .isVisible()
-              .catch(() => false)
-            const textFileIndexedVisible = await mentionPanel
+          await appendWorkbenchInputText(page, '@')
+          const mentionPanel = getWorkbenchLocator(page, workbenchSelectors.mentionPanel)
+          await waitForWorkbenchMentionPanelText(page)
+          await page.waitForFunction(
+            (testId: string) => {
+              const panel = document.querySelector(`[data-testid="${testId}"]`)
+              return Boolean(panel?.querySelector('button'))
+            },
+            workbenchSelectors.mentionPanel,
+            { timeout: WORKBENCH_RESULT_E2E_TIMEOUT_MS }
+          )
+          const mentionPanelText = ((await mentionPanel.textContent()) || '').trim()
+          const fileGroupVisible = await mentionPanel.getByText('文件').isVisible()
+          const webGroupVisible = await mentionPanel.getByText('网页').isVisible()
+          const legacyDirectoryGroupVisible = await mentionPanel
+            .getByText('目录')
+            .isVisible()
+            .catch(() => false)
+          const legacyTypeTagVisible = await mentionPanel
+            .locator('.nc-tag')
+            .filter({ hasText: /DOCX|PDF|文件|网页|目录/u })
+            .first()
+            .isVisible()
+            .catch(() => false)
+          const directoryIconVisible = await mentionPanel
+            .locator('[data-reference-kind="directory"] [data-reference-icon-kind="directory"]')
+            .first()
+            .isVisible()
+            .catch(() => false)
+          const webIconVisible = await mentionPanel
+            .locator('[data-reference-kind="web"] [data-reference-icon-kind="web"]')
+            .first()
+            .isVisible()
+            .catch(() => false)
+          const docxIconPresent =
+            (await mentionPanel.locator('[data-reference-icon-kind="docx"]').count()) > 0
+          const pdfIconPresent =
+            (await mentionPanel.locator('[data-reference-icon-kind="pdf"]').count()) > 0
+          const unexpectedMarkdownIconPresent =
+            (await mentionPanel.locator('[data-reference-icon-kind="markdown"]').count()) > 0
+          const genericFileIconPresent =
+            (await mentionPanel
               .getByRole('button')
               .filter({ hasText: 'human-input.txt' })
-              .filter({ hasText: '已索引' })
-              .first()
-              .isVisible()
-              .catch(() => false)
-            const markdownFileIndexedVisible = await mentionPanel
+              .locator('[data-reference-icon-kind="file"]')
+              .count()) > 0
+          const markdownUsesGenericFileIcon =
+            (await mentionPanel
               .getByRole('button')
               .filter({ hasText: 'workbench-preview.md' })
-              .filter({ hasText: '已索引' })
-              .first()
-              .isVisible()
-              .catch(() => false)
-            const localTextFileStillUnindexed = await mentionPanel
-              .getByRole('button')
-              .filter({ hasText: 'human-input.txt' })
-              .filter({ hasText: '未索引' })
-              .first()
-              .isVisible()
-              .catch(() => false)
-            await mentionPanel
-              .getByRole('button')
-              .filter({ hasText: 'Workbench Web Fixture' })
-              .click()
-            const afterWeb = await getWorkbenchReferenceTokenTexts(page)
-            const tokensBeforeSubmit = await getWorkbenchReferenceTokenTexts(page)
-            const composerReferenceIconKinds = await getWorkbenchLocator(
-              page,
-              workbenchSelectors.input
-            ).evaluate((element) => {
+              .locator('[data-reference-icon-kind="file"]')
+              .count()) > 0
+          const duplicateCandidateVisible = await getWorkbenchLocator(
+            page,
+            workbenchSelectors.mentionPanel
+          )
+            .getByText('sample-edit.docx')
+            .isVisible()
+            .catch(() => false)
+          const textFileIndexedVisible = await mentionPanel
+            .getByRole('button')
+            .filter({ hasText: 'human-input.txt' })
+            .filter({ hasText: '已索引' })
+            .first()
+            .isVisible()
+            .catch(() => false)
+          const markdownFileIndexedVisible = await mentionPanel
+            .getByRole('button')
+            .filter({ hasText: 'workbench-preview.md' })
+            .filter({ hasText: '已索引' })
+            .first()
+            .isVisible()
+            .catch(() => false)
+          const localTextFileStillUnindexed = await mentionPanel
+            .getByRole('button')
+            .filter({ hasText: 'human-input.txt' })
+            .filter({ hasText: '未索引' })
+            .first()
+            .isVisible()
+            .catch(() => false)
+          await mentionPanel
+            .getByRole('button')
+            .filter({ hasText: 'Workbench Web Fixture' })
+            .click()
+          const afterWeb = await getWorkbenchReferenceTokenTexts(page)
+          const tokensBeforeSubmit = await getWorkbenchReferenceTokenTexts(page)
+          const composerReferenceIconKinds = await getWorkbenchLocator(
+            page,
+            workbenchSelectors.input
+          ).evaluate((element) => {
+            if (!(element instanceof HTMLElement)) {
+              throw new Error('workbench input is not an HTMLElement')
+            }
+            return Array.from(
+              element.querySelectorAll('[data-role="scope-token"] [data-reference-icon-kind]')
+            ).map((node) => node.getAttribute('data-reference-icon-kind') || '')
+          })
+          const composerTokenCloseButtonVisible = await getWorkbenchLocator(
+            page,
+            workbenchSelectors.input
+          )
+            .locator('[data-role="scope-token"] button')
+            .first()
+            .isVisible()
+            .catch(() => false)
+          await switchWorkbenchMode(page, '没头脑')
+          await appendWorkbenchInputText(page, '请用一句话说明这些资料。')
+          await submitWorkbenchCurrentDraft(page)
+          const latestUserMessageReferenceTokens =
+            await getWorkbenchLatestUserMessageReferenceTokenTexts(page)
+          const latestUserMessageText = (
+            (await getWorkbenchLocator(page, workbenchSelectors.userMessageReferences)
+              .last()
+              .textContent()) || ''
+          ).trim()
+          const latestUserMessageReferenceIconKinds = await getWorkbenchLocator(
+            page,
+            workbenchSelectors.userMessageReferences
+          )
+            .last()
+            .evaluate((element) => {
               if (!(element instanceof HTMLElement)) {
-                throw new Error('workbench input is not an HTMLElement')
+                throw new Error('workbench user message references is not an HTMLElement')
               }
               return Array.from(
-                element.querySelectorAll('[data-role="scope-token"] [data-reference-icon-kind]')
+                element.querySelectorAll(
+                  '[data-role="reference-inline-token"] [data-reference-icon-kind]'
+                )
               ).map((node) => node.getAttribute('data-reference-icon-kind') || '')
             })
-            const composerTokenCloseButtonVisible = await getWorkbenchLocator(
-              page,
-              workbenchSelectors.input
-            )
-              .locator('[data-role="scope-token"] button')
-              .first()
-              .isVisible()
-              .catch(() => false)
-            await switchWorkbenchMode(page, '没头脑')
-            await appendWorkbenchInputText(page, '请用一句话说明这些资料。')
-            await submitWorkbenchCurrentDraft(page)
-            const latestUserMessageReferenceTokens =
-              await getWorkbenchLatestUserMessageReferenceTokenTexts(page)
-            const latestUserMessageText = (
-              (await getWorkbenchLocator(page, workbenchSelectors.userMessageReferences)
-                .last()
-                .textContent()) || ''
-            ).trim()
-            const latestUserMessageReferenceIconKinds = await getWorkbenchLocator(
-              page,
-              workbenchSelectors.userMessageReferences
-            )
-              .last()
-              .evaluate((element) => {
-                if (!(element instanceof HTMLElement)) {
-                  throw new Error('workbench user message references is not an HTMLElement')
-                }
-                return Array.from(
-                  element.querySelectorAll(
-                    '[data-role="reference-inline-token"] [data-reference-icon-kind]'
-                  )
-                ).map((node) => node.getAttribute('data-reference-icon-kind') || '')
-              })
-            await getWorkbenchLocator(page, workbenchSelectors.searchResults).waitFor({
-              state: 'visible'
-            })
+          await getWorkbenchLocator(page, workbenchSelectors.searchResults).waitFor({
+            state: 'visible'
+          })
 
-            await switchWorkbenchMode(page, '大聪明')
-            await insertWorkbenchReferenceToken(page, 'sample-edit.docx')
-            await insertWorkbenchReferenceToken(page, '工作')
-            await insertWorkbenchReferenceToken(page, 'Workbench Web Fixture', server.url)
-            const tokensBeforeDelete = await getWorkbenchReferenceTokenTexts(page)
-            await removeFirstWorkbenchReferenceToken(page)
-            const afterDelete = await getWorkbenchReferenceTokenTexts(page)
+          await switchWorkbenchMode(page, '大聪明')
+          await insertWorkbenchReferenceToken(page, 'sample-edit.docx')
+          await insertWorkbenchReferenceToken(page, '工作')
+          await insertWorkbenchReferenceToken(page, 'Workbench Web Fixture', server.url)
+          const tokensBeforeDelete = await getWorkbenchReferenceTokenTexts(page)
+          await removeFirstWorkbenchReferenceToken(page)
+          const afterDelete = await getWorkbenchReferenceTokenTexts(page)
 
-            await createFixtureWorkspace(page, { name: 'Workbench Empty Scope Workspace' })
-            await navigateToWorkbench(page)
-            await createWorkbenchNewSession(page)
-            await selectWorkbenchWorkspace(page, 'Workbench Empty Scope Workspace')
-            const afterWorkspaceSwitch = await getWorkbenchReferenceTokenTexts(page)
-            const emptyPanelText = await waitForWorkbenchSearchScopeEmptyThroughUi(page)
+          await createFixtureWorkspace(page, { name: 'Workbench Empty Scope Workspace' })
+          await navigateToWorkbench(page)
+          await createWorkbenchNewSession(page)
+          await selectWorkbenchWorkspace(page, 'Workbench Empty Scope Workspace')
+          const afterWorkspaceSwitch = await getWorkbenchReferenceTokenTexts(page)
+          const emptyPanelText = await waitForWorkbenchSearchScopeEmptyThroughUi(page)
 
-            return {
-              afterFile,
-              afterDirectory,
-              afterWeb,
-              mentionPanelText,
-              fileGroupVisible,
-              webGroupVisible,
-              legacyDirectoryGroupVisible,
-              legacyTypeTagVisible,
-              directoryIconVisible,
-              webIconVisible,
-              docxIconPresent,
-              pdfIconPresent,
-              unexpectedMarkdownIconPresent,
-              genericFileIconPresent,
-              markdownUsesGenericFileIcon,
-              duplicateCandidateVisible,
-              textFileIndexedVisible,
-              markdownFileIndexedVisible,
-              localTextFileStillUnindexed,
-              tokensBeforeSubmit,
-              composerReferenceIconKinds,
-              composerTokenCloseButtonVisible,
-              tokensBeforeDelete,
-              latestUserMessageReferenceTokens,
-              latestUserMessageText,
-              latestUserMessageReferenceIconKinds,
-              afterDelete,
-              afterWorkspaceSwitch,
-              emptyPanelText
-            }
-          } finally {
-            await setup.workspace.cleanup()
-            await server.close()
+          return {
+            afterFile,
+            afterDirectory,
+            afterWeb,
+            mentionPanelText,
+            fileGroupVisible,
+            webGroupVisible,
+            legacyDirectoryGroupVisible,
+            legacyTypeTagVisible,
+            directoryIconVisible,
+            webIconVisible,
+            docxIconPresent,
+            pdfIconPresent,
+            unexpectedMarkdownIconPresent,
+            genericFileIconPresent,
+            markdownUsesGenericFileIcon,
+            duplicateCandidateVisible,
+            textFileIndexedVisible,
+            markdownFileIndexedVisible,
+            localTextFileStillUnindexed,
+            tokensBeforeSubmit,
+            composerReferenceIconKinds,
+            composerTokenCloseButtonVisible,
+            tokensBeforeDelete,
+            latestUserMessageReferenceTokens,
+            latestUserMessageText,
+            latestUserMessageReferenceIconKinds,
+            afterDelete,
+            afterWorkspaceSwitch,
+            emptyPanelText
           }
         },
         assert: async (result, runtime) => {

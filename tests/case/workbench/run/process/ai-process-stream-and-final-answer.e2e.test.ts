@@ -35,33 +35,29 @@ describe('workbench run e2e', () => {
         execute: async (runtime) => {
           const { page } = runtime
           const setup = await setupWorkbenchWithTempWorkspace(page, { caseId: CASE_ID })
-          try {
-            const startedAtMs = Date.now()
-            await sendWorkbenchMessage(page, PROMPT)
-            const processLocator = await waitForLatestAssistantProcess(page)
-            const processTextDuringRun = ((await processLocator.textContent()) || '').trim()
-            const evidence = await waitForWorkbenchAiRunCompletion(
-              runtime,
-              startedAtMs,
-              setup.env.modelName,
-              WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
-              { page, blockerPolicy: 'auto_approve' }
-            )
-            const finalAnswerText = await waitForLatestAssistantFinalAnswerText(page)
-            recordWorkbenchAiEvidence(runtime, evidence, 0.85)
-            const processItemCount = await getWorkbenchPrefixLocator(
-              page,
-              workbenchSelectors.assistantProcessItemPrefix
-            ).count()
+          const startedAtMs = Date.now()
+          await sendWorkbenchMessage(page, PROMPT)
+          const processLocator = await waitForLatestAssistantProcess(page)
+          const processTextDuringRun = ((await processLocator.textContent()) || '').trim()
+          const evidence = await waitForWorkbenchAiRunCompletion(
+            runtime,
+            startedAtMs,
+            setup.env.modelName,
+            WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
+            { page, blockerPolicy: 'auto_approve' }
+          )
+          const finalAnswerText = await waitForLatestAssistantFinalAnswerText(page)
+          recordWorkbenchAiEvidence(runtime, evidence, 0.85)
+          const processItemCount = await getWorkbenchPrefixLocator(
+            page,
+            workbenchSelectors.assistantProcessItemPrefix
+          ).count()
 
-            return {
-              processTextDuringRun,
-              processItemCount,
-              finalAnswerText,
-              eventTypes: evidence.events.map((event) => event.type)
-            }
-          } finally {
-            await setup.workspace.cleanup()
+          return {
+            processTextDuringRun,
+            processItemCount,
+            finalAnswerText,
+            eventTypes: evidence.events.map((event) => event.type)
           }
         },
         assert: async (result, runtime) => {

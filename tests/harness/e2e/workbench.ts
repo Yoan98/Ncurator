@@ -980,7 +980,6 @@ export const setupWorkbenchWithTempWorkspace = async (
       await selectWorkbenchWorkspace(page, workspaceName)
     }
   } catch (error) {
-    await workspace.cleanup()
     throw error
   }
   return {
@@ -1008,7 +1007,6 @@ export const setupWorkbenchWorkspaceOnly = async (
       rootBindingMode: 'ipc'
     })
   } catch (error) {
-    await workspace.cleanup()
     throw error
   }
   return {

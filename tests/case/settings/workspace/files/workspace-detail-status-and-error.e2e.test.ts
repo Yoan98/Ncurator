@@ -9,11 +9,7 @@ import {
   navigateToSettingsSection,
   waitForFileIndexJobIdle
 } from '../../../../harness/e2e/settings'
-import {
-  cleanupRealWorkspace,
-  createWorkspaceWithFiles,
-  toSupportedFileStatuses
-} from './realWorkspaceHelpers'
+import { createWorkspaceWithFiles, toSupportedFileStatuses } from './realWorkspaceHelpers'
 
 describe('settings workspace e2e', () => {
   it(
@@ -32,51 +28,43 @@ describe('settings workspace e2e', () => {
           const { page } = runtime
           let workspaceRoot = ''
 
-          try {
-            workspaceRoot = await createWorkspaceWithFiles('workspace-detail-status-and-error', [
-              {
-                relativePath: 'docs/broken.docx',
-                content: 'not a valid docx archive'
-              }
-            ])
-            const workspace = await createRealWorkspaceWithRoot(page, {
-              name: '失败工作区',
-              rootPath: workspaceRoot
-            })
-            const workspaceId = workspace.workspace!.id
-
-            await runtime.step({
-              name: 'trigger-real-prepare-error',
-              message: '通过 UI 点击更新索引，让真实坏 docx 文件进入文件级失败状态。',
-              run: async () => {
-                await navigateToSettingsSection(page, 'workspace')
-                await getSettingsLocator(page, importSelectors.workspaceQuickPrepareButton).waitFor(
-                  {
-                    state: 'visible'
-                  }
-                )
-                await getSettingsLocator(page, importSelectors.workspaceQuickPrepareButton).click()
-              }
-            })
-
-            const result = await waitForFileIndexJobIdle(page, workspaceId)
-            const counts = await getWorkspaceIndexCounts(page)
-            const treeText =
-              (await getSettingsLocator(page, importSelectors.workspaceTree).textContent()) || ''
-            const failedItems = toSupportedFileStatuses(result.tree).filter(
-              (item) => item.status === 'failed'
-            )
-
-            return {
-              summary: result.tree.summary,
-              counts,
-              treeText,
-              failedItems
+          workspaceRoot = await createWorkspaceWithFiles('workspace-detail-status-and-error', [
+            {
+              relativePath: 'docs/broken.docx',
+              content: 'not a valid docx archive'
             }
-          } finally {
-            if (workspaceRoot) {
-              await cleanupRealWorkspace(workspaceRoot)
+          ])
+          const workspace = await createRealWorkspaceWithRoot(page, {
+            name: '失败工作区',
+            rootPath: workspaceRoot
+          })
+          const workspaceId = workspace.workspace!.id
+
+          await runtime.step({
+            name: 'trigger-real-prepare-error',
+            message: '通过 UI 点击更新索引，让真实坏 docx 文件进入文件级失败状态。',
+            run: async () => {
+              await navigateToSettingsSection(page, 'workspace')
+              await getSettingsLocator(page, importSelectors.workspaceQuickPrepareButton).waitFor({
+                state: 'visible'
+              })
+              await getSettingsLocator(page, importSelectors.workspaceQuickPrepareButton).click()
             }
+          })
+
+          const result = await waitForFileIndexJobIdle(page, workspaceId)
+          const counts = await getWorkspaceIndexCounts(page)
+          const treeText =
+            (await getSettingsLocator(page, importSelectors.workspaceTree).textContent()) || ''
+          const failedItems = toSupportedFileStatuses(result.tree).filter(
+            (item) => item.status === 'failed'
+          )
+
+          return {
+            summary: result.tree.summary,
+            counts,
+            treeText,
+            failedItems
           }
         },
         assert: async (result, runtime) => {

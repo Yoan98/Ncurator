@@ -30,97 +30,93 @@ describe('workbench run e2e', () => {
         execute: async (runtime) => {
           const { page } = runtime
           const setup = await setupWorkbenchWithTempWorkspace(page, { caseId: CASE_ID })
-          try {
-            await sendWorkbenchMessage(
-              page,
-              '请读取当前工作区所有工作目录资料，写一份至少 2000 字的详细分析，逐项说明证据来源。'
-            )
-            await waitForWorkbenchAiEvent(runtime, {
-              name: 'run_started_for_stop',
-              matches: (event) => event.type === 'run_started'
-            })
-            await getWorkbenchLocator(page, workbenchSelectors.sendButton).waitFor({
-              state: 'visible'
-            })
-            await page.waitForFunction(
-              (testId) => {
-                const button = document.querySelector(`[data-testid="${testId}"]`)
-                return button?.getAttribute('aria-label')?.includes('停止') ?? false
-              },
-              workbenchSelectors.sendButton,
-              { timeout: 10_000 }
-            )
-            const stopLabelDuringRun =
-              (await getWorkbenchLocator(page, workbenchSelectors.sendButton).getAttribute(
+          await sendWorkbenchMessage(
+            page,
+            '请读取当前工作区所有工作目录资料，写一份至少 2000 字的详细分析，逐项说明证据来源。'
+          )
+          await waitForWorkbenchAiEvent(runtime, {
+            name: 'run_started_for_stop',
+            matches: (event) => event.type === 'run_started'
+          })
+          await getWorkbenchLocator(page, workbenchSelectors.sendButton).waitFor({
+            state: 'visible'
+          })
+          await page.waitForFunction(
+            (testId) => {
+              const button = document.querySelector(`[data-testid="${testId}"]`)
+              return button?.getAttribute('aria-label')?.includes('停止') ?? false
+            },
+            workbenchSelectors.sendButton,
+            { timeout: 10_000 }
+          )
+          const stopLabelDuringRun =
+            (await getWorkbenchLocator(page, workbenchSelectors.sendButton).getAttribute(
+              'aria-label'
+            )) || ''
+          await page.getByLabel('任务运行中').waitFor({ state: 'visible' })
+          const sessionRunningIndicatorVisible = await page.getByLabel('任务运行中').isVisible()
+          await getWorkbenchLocator(page, workbenchSelectors.sendButton).click()
+          await waitForWorkbenchAiEvent(runtime, {
+            name: 'run_cancelled',
+            matches: (event) => event.type === 'run_cancelled'
+          })
+          await page.waitForFunction(
+            (testId) => {
+              const button = document.querySelector(`[data-testid="${testId}"]`)
+              return !(button?.getAttribute('aria-label') || '').includes('停止')
+            },
+            workbenchSelectors.sendButton,
+            { timeout: 10_000 }
+          )
+          const labelAfterCancel =
+            (await getWorkbenchLocator(page, workbenchSelectors.sendButton).getAttribute(
+              'aria-label'
+            )) || ''
+          await page.getByLabel('任务运行中').waitFor({ state: 'hidden' })
+          const sessionRunningIndicatorHiddenAfterCancel = !(await page
+            .getByLabel('任务运行中')
+            .isVisible()
+            .catch(() => false))
+
+          await sendWorkbenchMessage(
+            page,
+            '请使用终端命令在当前工作区创建 stop-approval-waiting.txt，内容写 should-not-execute-before-stop。'
+          )
+          await getApprovalCard(page).waitFor({ state: 'visible' })
+          await page.waitForFunction(
+            (testId) => {
+              const button = document.querySelector(`[data-testid="${testId}"]`)
+              return button?.getAttribute('aria-label')?.includes('停止') ?? false
+            },
+            workbenchSelectors.sendButton,
+            { timeout: 10_000 }
+          )
+          const stopButtonVisibleDuringApproval = await getWorkbenchLocator(
+            page,
+            workbenchSelectors.sendButton
+          )
+            .isVisible()
+            .catch(() => false)
+          const stopLabelDuringApproval = stopButtonVisibleDuringApproval
+            ? (await getWorkbenchLocator(page, workbenchSelectors.sendButton).getAttribute(
                 'aria-label'
               )) || ''
-            await page.getByLabel('任务运行中').waitFor({ state: 'visible' })
-            const sessionRunningIndicatorVisible = await page.getByLabel('任务运行中').isVisible()
+            : ''
+          if (stopButtonVisibleDuringApproval) {
             await getWorkbenchLocator(page, workbenchSelectors.sendButton).click()
             await waitForWorkbenchAiEvent(runtime, {
-              name: 'run_cancelled',
+              name: 'approval_run_cancelled',
               matches: (event) => event.type === 'run_cancelled'
             })
-            await page.waitForFunction(
-              (testId) => {
-                const button = document.querySelector(`[data-testid="${testId}"]`)
-                return !(button?.getAttribute('aria-label') || '').includes('停止')
-              },
-              workbenchSelectors.sendButton,
-              { timeout: 10_000 }
-            )
-            const labelAfterCancel =
-              (await getWorkbenchLocator(page, workbenchSelectors.sendButton).getAttribute(
-                'aria-label'
-              )) || ''
-            await page.getByLabel('任务运行中').waitFor({ state: 'hidden' })
-            const sessionRunningIndicatorHiddenAfterCancel = !(await page
-              .getByLabel('任务运行中')
-              .isVisible()
-              .catch(() => false))
+          }
 
-            await sendWorkbenchMessage(
-              page,
-              '请使用终端命令在当前工作区创建 stop-approval-waiting.txt，内容写 should-not-execute-before-stop。'
-            )
-            await getApprovalCard(page).waitFor({ state: 'visible' })
-            await page.waitForFunction(
-              (testId) => {
-                const button = document.querySelector(`[data-testid="${testId}"]`)
-                return button?.getAttribute('aria-label')?.includes('停止') ?? false
-              },
-              workbenchSelectors.sendButton,
-              { timeout: 10_000 }
-            )
-            const stopButtonVisibleDuringApproval = await getWorkbenchLocator(
-              page,
-              workbenchSelectors.sendButton
-            )
-              .isVisible()
-              .catch(() => false)
-            const stopLabelDuringApproval = stopButtonVisibleDuringApproval
-              ? (await getWorkbenchLocator(page, workbenchSelectors.sendButton).getAttribute(
-                  'aria-label'
-                )) || ''
-              : ''
-            if (stopButtonVisibleDuringApproval) {
-              await getWorkbenchLocator(page, workbenchSelectors.sendButton).click()
-              await waitForWorkbenchAiEvent(runtime, {
-                name: 'approval_run_cancelled',
-                matches: (event) => event.type === 'run_cancelled'
-              })
-            }
-
-            return {
-              stopLabelDuringRun,
-              labelAfterCancel,
-              sessionRunningIndicatorVisible,
-              sessionRunningIndicatorHiddenAfterCancel,
-              stopButtonVisibleDuringApproval,
-              stopLabelDuringApproval
-            }
-          } finally {
-            await setup.workspace.cleanup()
+          return {
+            stopLabelDuringRun,
+            labelAfterCancel,
+            sessionRunningIndicatorVisible,
+            sessionRunningIndicatorHiddenAfterCancel,
+            stopButtonVisibleDuringApproval,
+            stopLabelDuringApproval
           }
         },
         assert: async (result, runtime) => {

@@ -43,41 +43,37 @@ describe('workbench run e2e', () => {
         execute: async (runtime) => {
           const { page } = runtime
           const setup = await setupWorkbenchWithTempWorkspace(page, { caseId: CASE_ID })
-          try {
-            const startedAtMs = Date.now()
-            await sendWorkbenchMessage(page, PROMPT)
-            const evidence = await waitForWorkbenchAiRunCompletion(
-              runtime,
-              startedAtMs,
-              setup.env.modelName,
-              WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
-              { page, blockerPolicy: 'auto_approve' }
-            )
-            recordWorkbenchAiEvidence(runtime, evidence, 0.75)
+          const startedAtMs = Date.now()
+          await sendWorkbenchMessage(page, PROMPT)
+          const evidence = await waitForWorkbenchAiRunCompletion(
+            runtime,
+            startedAtMs,
+            setup.env.modelName,
+            WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
+            { page, blockerPolicy: 'auto_approve' }
+          )
+          recordWorkbenchAiEvidence(runtime, evidence, 0.75)
 
-            const searchStarts = evidence.events.filter(
-              (event): event is Extract<AiRunEvent, { type: 'tool_call_started' }> =>
-                event.type === 'tool_call_started' && event.toolName === 'web_search'
-            )
-            const searchResults = evidence.events.filter(
-              (event): event is Extract<AiRunEvent, { type: 'tool_call_result' }> =>
-                event.type === 'tool_call_result' && event.toolName === 'web_search'
-            )
-            const latestSearchResult = searchResults.at(-1)
+          const searchStarts = evidence.events.filter(
+            (event): event is Extract<AiRunEvent, { type: 'tool_call_started' }> =>
+              event.type === 'tool_call_started' && event.toolName === 'web_search'
+          )
+          const searchResults = evidence.events.filter(
+            (event): event is Extract<AiRunEvent, { type: 'tool_call_result' }> =>
+              event.type === 'tool_call_result' && event.toolName === 'web_search'
+          )
+          const latestSearchResult = searchResults.at(-1)
 
-            return {
-              finalAnswerText: evidence.finalAnswerText,
-              eventTypes: evidence.events.map((event) => event.type),
-              searchQueries: searchStarts.map((event) => {
-                const input = event.input as JsonValue
-                return isObjectRecord(input) ? String(input.query || '') : ''
-              }),
-              searchResultCount: latestSearchResult ? readSearchResultCount(latestSearchResult) : 0,
-              searchError: latestSearchResult?.error || '',
-              searchOk: latestSearchResult?.result?.ok === true
-            }
-          } finally {
-            await setup.workspace.cleanup()
+          return {
+            finalAnswerText: evidence.finalAnswerText,
+            eventTypes: evidence.events.map((event) => event.type),
+            searchQueries: searchStarts.map((event) => {
+              const input = event.input as JsonValue
+              return isObjectRecord(input) ? String(input.query || '') : ''
+            }),
+            searchResultCount: latestSearchResult ? readSearchResultCount(latestSearchResult) : 0,
+            searchError: latestSearchResult?.error || '',
+            searchOk: latestSearchResult?.result?.ok === true
           }
         },
         assert: async (result, runtime) => {
