@@ -4,6 +4,7 @@ import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { ensureVoiceRuntime } from './ensure-voice-runtime.mjs'
 import { cliArgs, promoEnvironment, promoRoot, resolveEpisode } from './lib.mjs'
+import { syncEpisodeManifest } from './manifest.mjs'
 
 const [selector] = cliArgs()
 const { name, episodeDir } = await resolveEpisode(selector)
@@ -30,9 +31,11 @@ const pythonPath = await ensureVoiceRuntime()
 const generatorPath = path.join(promoRoot, 'scripts', 'generate-local-voice.py')
 const audioDir = path.join(episodeDir, 'assets', 'audio')
 const narrationAudioPath = path.join(audioDir, 'narration.wav')
-const rawNarrationAudioPath = path.join(audioDir, 'narration.raw.wav')
+const voiceWorkDir = path.join(episodeDir, '.work', 'voice')
+const rawNarrationAudioPath = path.join(voiceWorkDir, 'narration.raw.wav')
 const narrationMetaPath = path.join(audioDir, 'narration.meta.json')
 await mkdir(audioDir, { recursive: true })
+await mkdir(voiceWorkDir, { recursive: true })
 
 function runCommand(command, args, cwd = episodeDir) {
   return new Promise((resolve, reject) => {
@@ -163,4 +166,5 @@ await writeFile(
   )}\n`
 )
 await rm(rawNarrationAudioPath, { force: true })
+await syncEpisodeManifest(episodeDir)
 console.log(`旁白和字幕时间已经生成：${name}（${duration.toFixed(2)} 秒，${profile.voiceId}）`)

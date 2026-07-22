@@ -26,11 +26,14 @@ const templateDir = path.join(promoRoot, 'templates', 'vertical-product-demo')
 
 await cp(templateDir, episodeDir, { recursive: true, verbatimSymlinks: true })
 await rm(path.join(episodeDir, 'DESIGN.md'), { force: true })
+await rm(path.join(episodeDir, 'meta.json'), { force: true })
 await symlink('../../doc/DESIGN.md', path.join(episodeDir, 'DESIGN.md'))
-await mkdir(path.join(episodeDir, 'assets', 'raw'), { recursive: true })
-await mkdir(path.join(episodeDir, 'assets', 'captured'), { recursive: true })
+await mkdir(path.join(episodeDir, 'assets', 'captured', 'source'), { recursive: true })
+await mkdir(path.join(episodeDir, 'assets', 'captured', 'clips'), { recursive: true })
+await mkdir(path.join(episodeDir, 'assets', 'captured', 'stills'), { recursive: true })
 await mkdir(path.join(episodeDir, 'assets', 'audio'), { recursive: true })
 await mkdir(path.join(episodeDir, 'renders'), { recursive: true })
+await mkdir(path.join(episodeDir, '.work'), { recursive: true })
 
 const meta = {
   id: episodeName,
@@ -38,7 +41,10 @@ const meta = {
   title,
   createdAt: new Date().toISOString()
 }
-await writeFile(path.join(episodeDir, 'meta.json'), `${JSON.stringify(meta, null, 2)}\n`)
+await writeFile(
+  path.join(episodeDir, 'episode.json'),
+  `${JSON.stringify({ schemaVersion: 1, ...meta, video: null, assets: [] }, null, 2)}\n`
+)
 
 await writeFile(
   path.join(episodeDir, 'brief.md'),

@@ -4,17 +4,24 @@ import { createServer } from 'node:net'
 import Database from 'better-sqlite3'
 import electronPath from 'electron'
 import { _electron as electron } from 'playwright'
+import { syncEpisodeManifest } from '../../scripts/manifest.mjs'
 
 const repoRoot = path.resolve('../../..')
 const episodeDir = process.cwd()
-const outputDir = path.join(episodeDir, 'assets', 'captured')
-const rawDir = path.join(episodeDir, 'assets', 'raw')
-const workspaceDir = path.join(rawDir, 'demo-workspace')
-const userDataDir = path.join(rawDir, 'user-data')
-const videoTempDir = path.join(rawDir, 'playwright-video')
+const outputDir = path.join(episodeDir, 'assets', 'captured', 'source')
+const workDir = path.join(episodeDir, '.work', 'capture')
+const workspaceDir = path.join(workDir, 'demo-workspace')
+const userDataDir = path.join(workDir, 'user-data')
+const videoTempDir = path.join(workDir, 'playwright-video')
 const persistentDbCandidates = [
   path.join(process.env.HOME || '', 'Library', 'Application Support', 'ncurator', 'app.sqlite'),
-  path.join(process.env.HOME || '', 'Library', 'Application Support', 'ncurator-desktop', 'app.sqlite')
+  path.join(
+    process.env.HOME || '',
+    'Library',
+    'Application Support',
+    'ncurator-desktop',
+    'app.sqlite'
+  )
 ]
 const sourceName = '项目推进会-07月18日.md'
 const workspaceName = '30份会议纪要'
@@ -29,8 +36,7 @@ const nativeBinding = path.join(
   'better_sqlite3.node'
 )
 
-await rm(rawDir, { recursive: true, force: true })
-await rm(outputDir, { recursive: true, force: true })
+await rm(workDir, { recursive: true, force: true })
 await mkdir(workspaceDir, { recursive: true })
 await mkdir(outputDir, { recursive: true })
 await mkdir(videoTempDir, { recursive: true })
@@ -85,7 +91,9 @@ const allocateFreePort = async () => {
   const address = server.address()
   if (!address || typeof address === 'string') throw new Error('无法分配调试端口')
   const port = address.port
-  await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())))
+  await new Promise((resolve, reject) =>
+    server.close((error) => (error ? reject(error) : resolve()))
+  )
   return port
 }
 
@@ -178,7 +186,9 @@ const selectWorkspaceThroughUi = async (page) => {
   if (selectedText.includes(workspaceName)) return
   await workspaceSelect.click()
   const option = page
-    .locator('.workbench-select-menu [role="option"], .workspace-quick-select-popup [role="option"]')
+    .locator(
+      '.workbench-select-menu [role="option"], .workspace-quick-select-popup [role="option"]'
+    )
     .filter({ hasText: workspaceName })
     .first()
   await option.waitFor({ state: 'visible' })
@@ -295,7 +305,10 @@ try {
   await recording.page.locator('[data-testid="workbench-page"]').waitFor({ state: 'visible' })
   const notice = recording.page.locator('[data-testid="workbench-llm-config-missing-notification"]')
   if (await notice.count()) {
-    await notice.getByRole('button', { name: '稍后' }).click().catch(() => {})
+    await notice
+      .getByRole('button', { name: '稍后' })
+      .click()
+      .catch(() => {})
   }
   await selectWorkspaceThroughUi(recording.page)
   await selectModelThroughUi(recording.page, model.modelName)
@@ -364,7 +377,7 @@ const finalRecordingPath = path.join(outputDir, 'product-run.webm')
 await rename(recordedPath, finalRecordingPath)
 
 await writeFile(
-  path.join(rawDir, 'capture-manifest.json'),
+  path.join(workDir, 'capture-manifest.json'),
   `${JSON.stringify(
     {
       recording: finalRecordingPath,
@@ -384,7 +397,9 @@ await writeFile(
   'utf8'
 )
 
+await rm(userDataDir, { recursive: true, force: true })
 if (recordingError) throw recordingError
+await syncEpisodeManifest(episodeDir)
 
 console.log(`真实模型：${model.configName} / ${model.modelName}`)
 console.log(`真实回答：${answerText}`)

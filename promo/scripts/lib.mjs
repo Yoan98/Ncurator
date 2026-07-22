@@ -11,11 +11,7 @@ export function cliArgs() {
 }
 
 export async function resolveEpisode(selector) {
-  const entries = await readdir(episodesRoot, { withFileTypes: true }).catch(() => [])
-  const names = entries
-    .filter((entry) => entry.isDirectory() && /^\d{3}-/.test(entry.name))
-    .map((entry) => entry.name)
-    .sort()
+  const names = await listEpisodes()
 
   if (names.length === 0) {
     throw new Error('还没有视频工程，请先运行 pnpm promo:new -- "主题" "英文短名"')
@@ -29,6 +25,14 @@ export async function resolveEpisode(selector) {
   const episodeDir = path.join(episodesRoot, name)
   await access(path.join(episodeDir, 'index.html'))
   return { name, episodeDir }
+}
+
+export async function listEpisodes() {
+  const entries = await readdir(episodesRoot, { withFileTypes: true }).catch(() => [])
+  return entries
+    .filter((entry) => entry.isDirectory() && /^\d{3}-/.test(entry.name))
+    .map((entry) => entry.name)
+    .sort()
 }
 
 export function promoEnvironment() {

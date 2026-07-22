@@ -6,15 +6,16 @@ import Database from 'better-sqlite3'
 import electronPath from 'electron'
 import mammoth from 'mammoth'
 import { _electron as electron } from 'playwright'
+import { syncEpisodeManifest } from '../../scripts/manifest.mjs'
 
 const execFileAsync = promisify(execFile)
 const repoRoot = path.resolve('../../..')
 const episodeDir = process.cwd()
-const outputDir = path.join(episodeDir, 'assets', 'captured')
-const rawDir = path.join(episodeDir, 'assets', 'raw')
-const workspaceDir = path.join(rawDir, 'demo-workspace')
-const userDataDir = path.join(rawDir, 'user-data')
-const videoTempDir = path.join(rawDir, 'playwright-video')
+const outputDir = path.join(episodeDir, 'assets', 'captured', 'stills')
+const workDir = path.join(episodeDir, '.work', 'capture')
+const workspaceDir = path.join(workDir, 'demo-workspace')
+const userDataDir = path.join(workDir, 'user-data')
+const videoTempDir = path.join(workDir, 'playwright-video')
 const sourceName = '星桥项目实施方案.docx'
 const sourcePath = path.join(workspaceDir, sourceName)
 const workspaceName = '星桥项目方案'
@@ -27,7 +28,13 @@ const prompt = [
 ].join('\n')
 const persistentDbCandidates = [
   path.join(process.env.HOME || '', 'Library', 'Application Support', 'ncurator', 'app.sqlite'),
-  path.join(process.env.HOME || '', 'Library', 'Application Support', 'ncurator-desktop', 'app.sqlite')
+  path.join(
+    process.env.HOME || '',
+    'Library',
+    'Application Support',
+    'ncurator-desktop',
+    'app.sqlite'
+  )
 ]
 const nativeBinding = path.join(
   repoRoot,
@@ -68,7 +75,9 @@ const allocateFreePort = async () => {
   const address = server.address()
   if (!address || typeof address === 'string') throw new Error('无法分配调试端口')
   const port = address.port
-  await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())))
+  await new Promise((resolve, reject) =>
+    server.close((error) => (error ? reject(error) : resolve()))
+  )
   return port
 }
 
@@ -150,7 +159,8 @@ const chooseRealModel = async (page) =>
         usable.find((item) => /deepseek-chat|chat/iu.test(item.id)) ||
         usable.find((item) => /doubao-seed-1-6|doubao.*pro/iu.test(item.id)) ||
         usable[0]
-      if (preferred) return { configId: config.id, configName: config.name, modelName: preferred.id }
+      if (preferred)
+        return { configId: config.id, configName: config.name, modelName: preferred.id }
     }
     throw new Error('现有模型配置都无法提供可用的对话模型')
   })
@@ -160,7 +170,9 @@ const selectWorkspaceThroughUi = async (page) => {
   if (((await workspaceSelect.textContent()) || '').includes(workspaceName)) return
   await workspaceSelect.click()
   const option = page
-    .locator('.workbench-select-menu [role="option"], .workspace-quick-select-popup [role="option"]')
+    .locator(
+      '.workbench-select-menu [role="option"], .workspace-quick-select-popup [role="option"]'
+    )
     .filter({ hasText: workspaceName })
     .first()
   await option.waitFor({ state: 'visible' })
@@ -288,7 +300,11 @@ try {
   await recording.page.reload()
   await recording.page.locator('[data-testid="workbench-page"]').waitFor({ state: 'visible' })
   const notice = recording.page.locator('[data-testid="workbench-llm-config-missing-notification"]')
-  if (await notice.count()) await notice.getByRole('button', { name: '稍后' }).click().catch(() => {})
+  if (await notice.count())
+    await notice
+      .getByRole('button', { name: '稍后' })
+      .click()
+      .catch(() => {})
   await selectWorkspaceThroughUi(recording.page)
   await selectModelThroughUi(recording.page, model.modelName)
 
@@ -313,8 +329,12 @@ try {
   await recording.page.waitForTimeout(1800)
   await recording.page.screenshot({ path: path.join(outputDir, 'processing.png') })
 
-  const finalAnswer = recording.page.locator('[data-testid^="workbench-assistant-final-answer-"]').last()
-  const applyEntry = recording.page.locator('[data-testid^="workbench-assistant-turn-apply-"]').last()
+  const finalAnswer = recording.page
+    .locator('[data-testid^="workbench-assistant-final-answer-"]')
+    .last()
+  const applyEntry = recording.page
+    .locator('[data-testid^="workbench-assistant-turn-apply-"]')
+    .last()
   const deadline = Date.now() + 600_000
   while (Date.now() < deadline) {
     const approve = recording.page.locator('[data-testid="chat-approval-batch-approve-button"]')
@@ -350,7 +370,9 @@ try {
   const docxViewer = recording.page.locator('[data-testid="workbench-docx-viewer"]')
   await applyPanel.waitFor({ state: 'visible', timeout: 60_000 })
   await docxViewer.waitFor({ state: 'visible', timeout: 60_000 })
-  await applyPanel.getByText('上线前完成全量数据备份').waitFor({ state: 'visible', timeout: 60_000 })
+  await applyPanel
+    .getByText('上线前完成全量数据备份')
+    .waitFor({ state: 'visible', timeout: 60_000 })
   events.diffReady = elapsed()
   console.log('变更预览已打开')
   await recording.page.waitForTimeout(1800)
@@ -402,7 +424,7 @@ const checks = {
 }
 
 await writeFile(
-  path.join(rawDir, 'capture-manifest.json'),
+  path.join(workDir, 'capture-manifest.json'),
   `${JSON.stringify(
     {
       resolution: '1600x1000',
@@ -431,10 +453,12 @@ await writeFile(
   'utf8'
 )
 
+await rm(userDataDir, { recursive: true, force: true })
 if (recordingError) throw recordingError
 if (!Object.values(checks).every(Boolean)) {
   throw new Error(`修改结果未通过校验：${JSON.stringify(checks)}`)
 }
+await syncEpisodeManifest(episodeDir)
 
 console.log(`真实模型：${model.configName} / ${model.modelName}`)
 console.log(`真实回答：${answerText}`)

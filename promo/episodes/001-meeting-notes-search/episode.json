@@ -1,0 +1,93 @@
+{
+  "schemaVersion": 1,
+  "id": "001-meeting-notes-search",
+  "name": "001-meeting-notes-search",
+  "title": "30份会议纪要，一句话找到负责人和截止时间",
+  "createdAt": "2026-07-21T10:53:24.976Z",
+  "video": {
+    "width": 1080,
+    "height": 1920,
+    "fps": 30,
+    "duration": 22.49
+  },
+  "tools": {
+    "hyperframes": "0.7.65",
+    "node": ">=22"
+  },
+  "sources": [
+    {
+      "path": "index.html",
+      "size": 24930,
+      "sha256": "4b837c1815a9096c501e89c09739466cbc97ec7fb306ab9d86ff9f3b0221f3f1"
+    },
+    {
+      "path": "hyperframes.json",
+      "size": 318,
+      "sha256": "53dbce1e19aa713cbb12ee0bc4d206143b45ab15e6ffbfcaa8f69572d4d24d50"
+    },
+    {
+      "path": "package.json",
+      "size": 306,
+      "sha256": "d8d00e5679c287068b3df6ee1c7dcd16be98f5b2c354d59322716d7d01484f24"
+    },
+    {
+      "path": "narration.txt",
+      "size": 315,
+      "sha256": "e32828df60b678db09b08009be4be1c5c3b7c6bc96055ba8af63071a9e2addb3"
+    },
+    {
+      "path": "transcript.json",
+      "size": 810,
+      "sha256": "387d0ac5c8853834b8014f16b414041dfcb259c3ebbbfd4e028f0a2e136ab653"
+    },
+    {
+      "path": "caption-overrides.json",
+      "size": 3,
+      "sha256": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356"
+    }
+  ],
+  "assets": [
+    {
+      "role": "music",
+      "path": "assets/audio/music.wav",
+      "size": 4318158,
+      "sha256": "94dddbddf78ade4b4cfd0afbb0d326562e6d35cb26bec6116a739d29ba50e812"
+    },
+    {
+      "role": "narration",
+      "path": "assets/audio/narration.wav",
+      "size": 2111454,
+      "sha256": "28cfbb0e3f11cc8f118851baffefa87104b82ac98298db518f6a9399c2269c36"
+    },
+    {
+      "role": "capture-clip",
+      "path": "assets/captured/clips/answer.mp4",
+      "size": 165968,
+      "sha256": "283e8d1a63b3e92d18fd807e7775a9fb44a69e7acb3c010d15bdc38529d00d5b"
+    },
+    {
+      "role": "capture-clip",
+      "path": "assets/captured/clips/run-fast.mp4",
+      "size": 95156,
+      "sha256": "b29d737f7a75577d54877a49e9c2460c668123b256643611b47dcdd035fae3ee"
+    },
+    {
+      "role": "capture-clip",
+      "path": "assets/captured/clips/source.mp4",
+      "size": 138871,
+      "sha256": "165c5bfb73f73ad26b7a1065c61f6205829d4da3ae1a8f0c49c57ce9deac8af8"
+    },
+    {
+      "role": "capture-clip",
+      "path": "assets/captured/clips/typing.mp4",
+      "size": 67077,
+      "sha256": "2572d5f19b2619b468500ca1ca334e138770fed32dd64d6f3617d5fbacccad85"
+    },
+    {
+      "role": "capture-source",
+      "path": "assets/captured/source/product-run.webm",
+      "size": 1968981,
+      "sha256": "bcf578c6ca20351a022f1e93d1b146791af39ed5320acbfa2c5365f1e8e5fa5f"
+    }
+  ]
+}

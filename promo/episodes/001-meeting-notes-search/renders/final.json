@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "path": "renders/final.mp4",
+  "size": 5947598,
+  "sha256": "dc4f9c083fe6d3b47cce5105f4e34aac6d7990539017d0c5d98c3352876752fd",
+  "episodeManifestSha256": "92010baa6491fd90f22bbcc2398c6cffc4bbf6743c043ef7c581d7b564225907",
+  "video": {
+    "width": 1080,
+    "height": 1920,
+    "fps": 30,
+    "duration": 22.506667,
+    "codec": "h264"
+  }
+}

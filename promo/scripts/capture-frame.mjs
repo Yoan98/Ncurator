@@ -5,13 +5,14 @@ import path from 'node:path'
 import electronPath from 'electron'
 import { _electron as electron } from 'playwright'
 import { cliArgs, promoRoot, resolveEpisode } from './lib.mjs'
+import { syncEpisodeManifest } from './manifest.mjs'
 
 const [selector, requestedName = 'app-frame'] = cliArgs()
 const { name, episodeDir } = await resolveEpisode(selector)
 const fileName = requestedName.replace(/[^a-zA-Z0-9_-]+/g, '-')
 const repoRoot = path.resolve(promoRoot, '..')
 const mainEntry = path.join(repoRoot, 'out', 'main', 'index.js')
-const outputDir = path.join(episodeDir, 'assets', 'captured')
+const outputDir = path.join(episodeDir, 'assets', 'captured', 'stills')
 const outputPath = path.join(outputDir, `${fileName}.png`)
 
 await access(mainEntry).catch(() => {
@@ -52,6 +53,7 @@ try {
 
   await page.waitForTimeout(Number(process.env.PROMO_CAPTURE_WAIT_MS || 1200))
   await page.screenshot({ path: outputPath, animations: 'disabled' })
+  await syncEpisodeManifest(episodeDir)
   console.log(`已采集 ${name}：${outputPath}`)
 } finally {
   await app.close()
