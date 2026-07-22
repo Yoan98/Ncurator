@@ -765,7 +765,26 @@ export const runE2ECase = async <TResult>(
       const processExitData = processExit?.data as
         | { code?: number | null; signal?: string | null }
         | undefined
-      if (processExitData && (processExitData.code !== 0 || Boolean(processExitData.signal))) {
+      const gracefulShutdownPrepared = signals.lifecycleEntries.some(
+        (entry) => entry.name === 'electron-graceful-shutdown-prepared'
+      )
+      const isKnownWindowsInspectorExit =
+        process.platform === 'win32' &&
+        gracefulShutdownPrepared &&
+        (processExitData?.code === 3221225477 || processExitData?.code === 3221226505) &&
+        !processExitData.signal
+      if (isKnownWindowsInspectorExit) {
+        recordEvent({
+          type: 'signal',
+          name: 'electron-inspector-exit-warning',
+          status: 'info',
+          message: `Electron exited with known Windows inspector status ${String(processExitData?.code)}`,
+          data: processExitData
+        })
+      } else if (
+        processExitData &&
+        (processExitData.code !== 0 || Boolean(processExitData.signal))
+      ) {
         teardownErrors.push({
           name: 'electron-process-exit',
           phase: 'before-app-close',

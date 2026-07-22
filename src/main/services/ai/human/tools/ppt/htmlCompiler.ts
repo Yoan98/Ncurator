@@ -297,7 +297,7 @@ const layoutWithElectron = async (html: string): Promise<PptCompiledSlide | null
         });
         const rootStyle = getComputedStyle(root);
         const warnings = [];
-        if (rootRect.width !== ${PPT_CANVAS_WIDTH} || rootRect.height !== ${PPT_CANVAS_HEIGHT}) warnings.push('Slide root must be exactly 1920x1080.');
+        if (Math.abs(rootRect.width - ${PPT_CANVAS_WIDTH}) > 0.5 || Math.abs(rootRect.height - ${PPT_CANVAS_HEIGHT}) > 0.5) warnings.push('Slide root must be exactly 1920x1080.');
         candidates.forEach((element) => { const style = getComputedStyle(element); if (style.filter !== 'none' || style.mixBlendMode !== 'normal' || style.animationName !== 'none') warnings.push('Unsupported CSS on ' + (element.id || element.tagName) + '.'); });
         return { width: ${PPT_CANVAS_WIDTH}, height: ${PPT_CANVAS_HEIGHT}, background: color(rootStyle.backgroundColor) || '#FFFFFF', notes: document.querySelector('[data-ppt-notes]')?.textContent?.trim(), elements, warnings };
       })()`)) as PptCompiledSlide

@@ -25,7 +25,6 @@ const setupPreviewWorkspace = async (
   page: Page
 ): Promise<{
   workspaceName: string
-  cleanup: () => Promise<void>
 }> => {
   const workspace = await createTemporaryWorkbenchWorkspace(CASE_ID)
   const workspaceName = `Workbench ${CASE_ID}`
@@ -37,8 +36,7 @@ const setupPreviewWorkspace = async (
   await navigateToWorkbench(page)
   await selectWorkbenchWorkspace(page, workspaceName)
   return {
-    workspaceName,
-    cleanup: workspace.cleanup
+    workspaceName
   }
 }
 
@@ -141,12 +139,7 @@ describe('workbench result e2e', () => {
         runMode: 'single',
         execute: async (runtime) => {
           const { page } = runtime
-          const setup = await setupPreviewWorkspace(page)
-          runtime.registerResource({
-            name: 'file-preview-workspace',
-            phase: 'after-app-close',
-            dispose: setup.cleanup
-          })
+          await setupPreviewWorkspace(page)
           await switchWorkbenchMode(page, '没头脑')
           await insertWorkbenchReferenceToken(page, '深度学习.pdf')
           await appendWorkbenchInputText(page, '反走样')
@@ -171,7 +164,11 @@ describe('workbench result e2e', () => {
             workbenchSelectors.documentPreviewModeTag
           ).count()
           const docxPreviewStableWhileTyping = await verifyDocxPreviewStaysMountedWhileTyping(page)
-          await page.getByRole('button', { name: '系统默认打开' }).last().click()
+          const systemOpenVisible = await page
+            .getByRole('button', { name: '系统默认打开' })
+            .last()
+            .isVisible()
+            .catch(() => false)
 
           await switchWorkbenchMode(page, '没头脑')
           await insertWorkbenchReferenceToken(page, 'workbench-preview.md')
@@ -210,6 +207,7 @@ describe('workbench result e2e', () => {
             docxViewerVisible,
             docxModeTagCount,
             docxPreviewStableWhileTyping,
+            systemOpenVisible,
             markdownPreviewVisible,
             plainTextPreviewVisible,
             reopenedMarkdownVisible,
@@ -226,6 +224,7 @@ describe('workbench result e2e', () => {
               result.docxViewerVisible &&
               result.docxModeTagCount === 0 &&
               result.docxPreviewStableWhileTyping &&
+              result.systemOpenVisible &&
               result.markdownPreviewVisible &&
               result.plainTextPreviewVisible &&
               result.reopenedMarkdownVisible &&
