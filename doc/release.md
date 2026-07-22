@@ -104,7 +104,7 @@ downloads/latest/macos-arm64.dmg
 downloads/latest/macos-x64.dmg
 ```
 
-每个平台 finalize 只更新本平台的元数据、官网清单和固定下载地址，也只清理本平台旧对象。版本产物使用长期不可变缓存，latest 和固定下载使用 `no-store`。固定下载通过 `Content-Disposition` 返回带“馆长”的文件名，R2 技术文件名保持 ASCII。
+每个平台 finalize 只更新本平台的元数据、官网清单和固定下载地址，也只清理本平台旧对象。版本产物使用长期不可变缓存，latest 和固定下载使用 `no-store`。固定下载通过 `Content-Disposition` 返回 `Ncurator-<version>-<platform>` 格式的文件名，R2 技术文件名保持 ASCII。
 
 当前流程不创建 GitHub Release，官网和应用更新都读取 R2。
 
