@@ -10,6 +10,8 @@
 - `scripts/release/r2/`：R2 上传、元数据和发布收尾。
 - `scripts/release/shared/`：发布流程共享能力。
 - `scripts/test/`：源码/正式包 E2E 编排和真实更新测试。
+
+正式包 E2E 只消费发布候选 bundle，不再自行调用任何 `build:*` 脚本。发布脚本先生成并校验 `release-bundle-*.json`，可选执行 `pnpm test:e2e:package -- --bundle <path>`，最后复验哈希后上传同一组文件。
 - `scripts/postinstall.mjs`：安装完成后的唯一根级入口。
 
 ## 打包主流程
@@ -29,10 +31,10 @@
 ## Electron E2E
 
 - `pnpm test:e2e:source`：构建 `out` 后运行全部 E2E。
-- `pnpm test:e2e:package`：构建当前平台安装包，安装后运行同一套 E2E。
-- 正式包测试不会自动加入发布流程，只在明确执行命令时运行。
-- macOS 测试应用保留在 `~/Applications/NCurator-E2E/馆长.app`，后续运行直接覆盖。
-- 正式包构建、安装和用例汇总保存在 `tests/logs/package/<run-id>`。
+- `pnpm test:e2e:package -- --bundle <release-bundle.json>`：安装既有候选包后运行同一套 E2E，不重新构建。
+- 正式包测试只在发布命令传入 `--package-e2e` 或单独执行上述命令时运行。
+- macOS 测试应用按 `macos-arm64`、`macos-x64` 分目录保留在 `~/Applications/NCurator-E2E/`。
+- 正式包 bundle 校验、安装和用例汇总保存在 `tests/logs/package/<run-id>`。
 - Workbench 和需要真实文件的 Settings 用例复制 `tests/fixtures/workspace` 到临时目录，结束后删除临时副本。
 - 每个 E2E 必须显式声明 `serviceMode`；fixture 还必须提供 `fixtureReason`。
 - 知识库缓存按构建隔离：source 使用 `tests/.cache/workspace-knowledge/source/<build-sha256>`，package 使用 `tests/.cache/workspace-knowledge/package/<artifact-sha256>`；同一轮所有用例共用选中的目录。

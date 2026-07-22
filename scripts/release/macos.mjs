@@ -5,6 +5,7 @@ import process from 'node:process'
 import { promisify } from 'node:util'
 import { loadReleaseEnvironment } from './shared/environment.mjs'
 import { prepareReleaseWorkspace } from './workspace.mjs'
+import { createReleaseBundle, verifyReleaseBundle } from './artifact-bundle.mjs'
 
 const execFileAsync = promisify(execFile)
 const ROOT = process.cwd()
@@ -17,6 +18,7 @@ const valueAfter = (name) => {
 const releaseTag = valueAfter('--tag') || ''
 const keepWork = args.includes('--keep-work')
 const keepOld = args.includes('--keep-old')
+const packageE2E = args.includes('--package-e2e')
 
 if (process.platform !== 'darwin' || process.arch !== 'arm64') {
   throw new Error('local macOS release must run on an Apple Silicon Mac')
@@ -145,7 +147,7 @@ const extractTag = async (archivePath, directory) => {
   await run('/usr/bin/tar', ['-xf', archivePath, '-C', directory])
 }
 
-const createAndUploadFragment = async (sourceDirectory, platform) => {
+const createReleaseCandidate = async (sourceDirectory, platform, commit) => {
   const distDirectory = path.join(sourceDirectory, 'dist')
   const appPath = await findApp(distDirectory)
   await run(process.execPath, [
@@ -161,10 +163,20 @@ const createAndUploadFragment = async (sourceDirectory, platform) => {
     releaseTag,
     platform
   ])
+  const bundlePath = path.join(distDirectory, `release-bundle-${platform}.json`)
+  await createReleaseBundle({ fragmentPath, outputPath: bundlePath, commit })
+  return { sourceDirectory, distDirectory, fragmentPath, bundlePath, platform }
+}
+
+const uploadReleaseCandidate = async (candidate) => {
+  await verifyReleaseBundle(candidate.bundlePath, {
+    tag: releaseTag,
+    platform: candidate.platform
+  })
   await run(process.execPath, [
-    path.join(sourceDirectory, 'scripts', 'release', 'r2', 'upload-fragment.mjs'),
-    distDirectory,
-    fragmentPath
+    path.join(candidate.sourceDirectory, 'scripts', 'release', 'r2', 'upload-fragment.mjs'),
+    candidate.distDirectory,
+    candidate.fragmentPath
   ])
 }
 
@@ -180,6 +192,13 @@ const armSource = path.join(workDirectory, 'arm64')
 const x64Source = path.join(workDirectory, 'x64')
 
 try {
+  const { stdout: taggedCommitOutput } = await execFileAsync('git', [
+    'rev-list',
+    '-n',
+    '1',
+    releaseTag
+  ])
+  const taggedCommit = taggedCommitOutput.trim()
   await run('git', ['archive', '--format=tar', '--output', archivePath, releaseTag])
   await extractTag(archivePath, armSource)
   await extractTag(archivePath, x64Source)
@@ -194,7 +213,7 @@ try {
       NCURATOR_SIDECAR_PIP_CACHE: path.join(preflight.sidecarPipCacheRoot, 'darwin-arm64')
     }
   })
-  await createAndUploadFragment(armSource, 'macos-arm64')
+  const armCandidate = await createReleaseCandidate(armSource, 'macos-arm64', taggedCommit)
 
   process.stdout.write(`[release] building ${releaseTag} for macOS x64 under Rosetta\n`)
   const x64Environment = {
@@ -215,7 +234,35 @@ try {
     ['-x86_64', preflight.x64Node, preflight.pnpmPath, 'run', 'build:mac:release:x64'],
     { cwd: x64Source, env: x64Environment }
   )
-  await createAndUploadFragment(x64Source, 'macos-x64')
+  const x64Candidate = await createReleaseCandidate(x64Source, 'macos-x64', taggedCommit)
+
+  if (packageE2E) {
+    const testEnvironment = { ...process.env }
+    for (const name of [
+      'AWS_ACCESS_KEY_ID',
+      'AWS_SECRET_ACCESS_KEY',
+      'R2_ACCOUNT_ID',
+      'R2_BUCKET_NAME',
+      'R2_PUBLIC_BASE_URL'
+    ]) {
+      delete testEnvironment[name]
+    }
+    for (const candidate of [armCandidate, x64Candidate]) {
+      process.stdout.write(
+        `[release] running package E2E for ${releaseTag} ${candidate.platform}\n`
+      )
+      await run(
+        preflight.pnpmPath,
+        ['run', 'test:e2e:package', '--', '--bundle', candidate.bundlePath],
+        { cwd: armSource, env: testEnvironment }
+      )
+    }
+  } else {
+    process.stdout.write('[release] package E2E: skipped by release policy\n')
+  }
+
+  await uploadReleaseCandidate(armCandidate)
+  await uploadReleaseCandidate(x64Candidate)
 
   const finalizeArgs = [
     path.join(armSource, 'scripts', 'release', 'r2', 'finalize-macos.mjs'),

@@ -65,10 +65,10 @@ pnpm run build:mac:arm64
 pnpm run build:mac:x64
 pnpm run package:audit
 pnpm run package:audit:summary
-pnpm test:e2e:package
+pnpm test:e2e:package -- --bundle <release-bundle.json>
 ```
 
-`pnpm test:e2e:package` 会重新构建、审计并安装当前平台正式包，再连接真实安装程序执行 E2E。它耗时较长，不替代日常源码 E2E。
+`pnpm test:e2e:package` 校验并安装指定 release bundle 中已经构建完成的正式包，再连接真实安装程序执行 E2E。它不会重新构建，且不替代日常源码 E2E。
 
 ## 平台构建
 
@@ -156,6 +156,9 @@ pnpm release:start -- --version X.Y.Z --local-only
 
 # 强制 GitHub Actions
 pnpm release:start -- --version X.Y.Z --actions
+
+# 创建版本后对已构建 Windows 候选包执行正式包 E2E
+pnpm release:start -- --version X.Y.Z --package-e2e
 ```
 
 ### 2. 在 Mac 发布 macOS
@@ -169,9 +172,7 @@ git pull --ff-only
 pnpm release:mac -- --tag vX.Y.Z
 ```
 
-命令分别从 Tag 导出干净源码，构建、签名、审计并上传 arm64 和 x64 片段，然后只 finalize macOS 通道。
-
-`release:mac:only` 当前与 `release:mac` 指向同一脚本，都会发布 macOS 独立通道。
+命令分别从 Tag 导出干净源码，先完成 arm64 和 x64 的构建、签名、审计与 bundle 校验，再按参数执行可选正式包 E2E，最后上传两个片段并 finalize macOS 通道。
 
 ## 重试与状态
 
@@ -179,8 +180,8 @@ pnpm release:mac -- --tag vX.Y.Z
 
 ```bash
 pnpm release:win -- --tag vX.Y.Z
-pnpm release:win:auto -- --tag vX.Y.Z
-pnpm release:win:auto -- --tag vX.Y.Z --actions
+pnpm release:win -- --tag vX.Y.Z --actions
+pnpm release:win -- --tag vX.Y.Z --package-e2e
 pnpm release:mac -- --tag vX.Y.Z
 pnpm release:r2:finalize -- --tag vX.Y.Z
 pnpm release:status -- --tag vX.Y.Z
@@ -188,7 +189,7 @@ pnpm release:status -- --tag vX.Y.Z
 
 `release:r2:finalize` 依次重新 finalize Windows 和 macOS，只用于两个平台都已上传后的恢复；日常发布不依赖它。
 
-Windows 失败会保留工作目录。`--reuse-work` 只复用同一 Tag 的 Python、pip 和 sidecar 缓存，不复用源码、`node_modules` 或旧 `dist`。`--keep-work` 保留工作目录，`--keep-old` 暂不清理旧 R2 对象，但都不会跳过验证。
+`--keep-work` 保留发布工作目录用于排查；默认在流程结束后清理。Python、pip 和 sidecar 使用独立缓存，但不复用源码、`node_modules` 或旧 `dist`。`--keep-old` 暂不清理旧 R2 对象。这些参数都不会跳过 bundle、审计或签名验证。
 
 ## 下载地址
 
@@ -224,6 +225,25 @@ pnpm test:update:backend
 发版前还应按风险执行 unit、Settings、Workbench、AI mock/tool 和源码 E2E，并检查应用启动、SQLite/LanceDB、embedding、PDF/DOCX、网页能力、安装、覆盖升级、卸载和无网络启动。仅在有真实模型配置且改动相关时执行 live AI 测试。
 
 ## 保留与回滚
+
+### 正式包回归门
+
+正式包 E2E 不是每次发布的强制步骤。默认发布只执行构建、审计、签名（macOS）、bundle 完整性校验和 R2 发布；改动风险较高时显式增加 `--package-e2e`：
+
+```bash
+pnpm release:win -- --tag vX.Y.Z --package-e2e
+pnpm release:mac -- --tag vX.Y.Z --package-e2e
+```
+
+E2E 消费本次 tag 已生成的 `release-bundle-*.json`，不会再次构建。Windows 本地和 GitHub Actions 只负责选择构建位置，构建后的 bundle、可选回归和 R2 发布走同一套流程。macOS 必须先完成 arm64 和 x64 两个 bundle，再执行可选回归和上传；启用回归时两个架构都必须通过。
+
+独立测试已构建候选包使用：
+
+```bash
+pnpm test:e2e:package -- --bundle <release-bundle.json>
+```
+
+发布前重新计算 bundle 中所有文件哈希。R2 中已存在且哈希不同的同 tag 对象禁止覆盖。
 
 每个平台公开验证成功后，只删除该平台的旧 artifacts 和 release-status。需要回滚时，从旧 annotated Tag 重新构建、审计和发布，不能复用未审计的本地产物。
 

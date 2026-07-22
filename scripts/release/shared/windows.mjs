@@ -187,7 +187,7 @@ export const assertWindowsReleaseRouteAvailable = async ({
   return 'actions'
 }
 
-export const dispatchWindowsRelease = async (root, releaseTag) => {
+export const dispatchWindowsRelease = async (root, releaseTag, { packageE2E = false } = {}) => {
   await loadReleaseEnvironment(root)
   const token = String(process.env.NCURATOR_ACTIONS_TOKEN || '').trim()
   if (!token) throw new Error('NCURATOR_ACTIONS_TOKEN is required to dispatch GitHub Actions')
@@ -202,7 +202,10 @@ export const dispatchWindowsRelease = async (root, releaseTag) => {
         'X-GitHub-Api-Version': '2022-11-28',
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ ref: 'main', inputs: { tag: releaseTag } })
+      body: JSON.stringify({
+        ref: 'main',
+        inputs: { tag: releaseTag, package_e2e: packageE2E ? 'true' : 'false' }
+      })
     }
   )
   if (!response.ok) {

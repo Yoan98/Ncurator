@@ -5,12 +5,15 @@ import path from 'node:path'
 import process from 'node:process'
 import { promisify } from 'node:util'
 import {
+  assertWindowsReleaseRouteAvailable,
+  dispatchWindowsRelease,
   inspectLocalWindowsRelease,
   readPublicReleaseFragment,
   verifyPublicReleaseFragment,
   verifyR2ReleaseFragment
 } from './shared/windows.mjs'
 import { prepareReleaseWorkspace } from './workspace.mjs'
+import { createReleaseBundle, verifyReleaseBundle } from './artifact-bundle.mjs'
 
 const execFileAsync = promisify(execFile)
 const ROOT = process.cwd()
@@ -21,10 +24,16 @@ const valueAfter = (name) => {
 }
 const releaseTag = valueAfter('--tag') || ''
 const keepWork = args.includes('--keep-work')
+const forceLocal = args.includes('--local-only')
+const forceActions = args.includes('--actions')
+const packageE2E = args.includes('--package-e2e')
 
 if (!/^v\d+\.\d+\.\d+$/u.test(releaseTag)) {
-  throw new Error('usage: node scripts/release/windows.mjs --tag <v1.2.3> [--keep-work]')
+  throw new Error(
+    'usage: node scripts/release/windows.mjs --tag <v1.2.3> [--local-only|--actions] [--package-e2e] [--keep-work]'
+  )
 }
+if (forceLocal && forceActions) throw new Error('--local-only and --actions cannot be combined')
 
 const run = (command, commandArgs, options = {}) =>
   new Promise((resolve, reject) => {
@@ -42,10 +51,23 @@ const run = (command, commandArgs, options = {}) =>
     })
   })
 
-const inspection = await inspectLocalWindowsRelease(ROOT)
-if (!inspection.ready) {
-  throw new Error(`local Windows release preflight failed:\n- ${inspection.issues.join('\n- ')}`)
+const localInspection = forceActions ? undefined : await inspectLocalWindowsRelease(ROOT)
+const route = await assertWindowsReleaseRouteAvailable({
+  root: ROOT,
+  forceLocal,
+  forceActions,
+  localInspection
+})
+if (route === 'actions') {
+  if (localInspection?.issues.length) {
+    process.stdout.write(
+      `[release] local Windows release unavailable; using Actions:\n- ${localInspection.issues.join('\n- ')}\n`
+    )
+  }
+  await dispatchWindowsRelease(ROOT, releaseTag, { packageE2E })
+  process.exit(0)
 }
+const inspection = localInspection
 
 const { stdout: tagType } = await execFileAsync('git', ['cat-file', '-t', releaseTag], {
   cwd: ROOT
@@ -59,6 +81,13 @@ const taggedVersion = JSON.parse(taggedPackageJson).version
 if (releaseTag !== `v${taggedVersion}`) {
   throw new Error(`${releaseTag} does not match package version ${taggedVersion}`)
 }
+const { stdout: taggedCommitOutput } = await execFileAsync('git', [
+  'rev-list',
+  '-n',
+  '1',
+  releaseTag
+])
+const taggedCommit = taggedCommitOutput.trim()
 
 const publicBaseUrl = String(process.env.R2_PUBLIC_BASE_URL).replace(/\/$/u, '')
 const existing = await readPublicReleaseFragment(releaseTag, 'windows-x64', publicBaseUrl)
@@ -122,6 +151,31 @@ try {
     ],
     { cwd: sourceDirectory, env: releaseEnvironment }
   )
+  const bundlePath = path.join(distDirectory, 'release-bundle-windows-x64.json')
+  await createReleaseBundle({ fragmentPath, outputPath: bundlePath, commit: taggedCommit })
+
+  if (packageE2E) {
+    const testEnvironment = { ...releaseEnvironment }
+    for (const name of [
+      'AWS_ACCESS_KEY_ID',
+      'AWS_SECRET_ACCESS_KEY',
+      'R2_ACCOUNT_ID',
+      'R2_BUCKET_NAME',
+      'R2_PUBLIC_BASE_URL'
+    ]) {
+      delete testEnvironment[name]
+    }
+    process.stdout.write(`[release] running package E2E for ${releaseTag} Windows x64\n`)
+    await run(
+      inspection.pnpmExecutable,
+      ['run', 'test:e2e:package', '--', '--bundle', bundlePath],
+      { cwd: sourceDirectory, env: testEnvironment }
+    )
+  } else {
+    process.stdout.write('[release] package E2E: skipped by release policy\n')
+  }
+
+  await verifyReleaseBundle(bundlePath, { tag: releaseTag, platform: 'windows-x64' })
   await run(
     process.execPath,
     [
