@@ -9,11 +9,7 @@ import {
   navigateToSettingsSection,
   waitForFileIndexJobIdle
 } from '../../../../harness/e2e/settings'
-import {
-  cleanupRealWorkspace,
-  copySharedWorkspaceFixture,
-  toSupportedFileStatuses
-} from './realWorkspaceHelpers'
+import { copySharedWorkspaceFixture, toSupportedFileStatuses } from './realWorkspaceHelpers'
 
 const LEGACY_DOC_NAME = '风险等级判断标准-图案设计【2026.2.10更新】.doc'
 
@@ -34,53 +30,45 @@ describe('settings workspace e2e', () => {
           const { page } = runtime
           let workspaceRoot = ''
 
-          try {
-            workspaceRoot = await copySharedWorkspaceFixture('workspace-prepare-refresh')
-            const workspaceId = await createWorkspaceThroughSettingsUi(page, '索引工作区')
-            await bindWorkspaceRootThroughIpc(page, workspaceRoot)
-            let prepareProgressVisible = false
-            let buttonsDisabled = false
+          workspaceRoot = await copySharedWorkspaceFixture('workspace-prepare-refresh')
+          const workspaceId = await createWorkspaceThroughSettingsUi(page, '索引工作区')
+          await bindWorkspaceRootThroughIpc(page, workspaceRoot)
+          let prepareProgressVisible = false
+          let buttonsDisabled = false
 
-            await runtime.step({
-              name: 'prepare-workspace-through-ui',
-              message: '通过 UI 点击更新索引，并确认执行中进度块和按钮禁用状态。',
-              run: async () => {
-                await navigateToSettingsSection(page, 'workspace')
-                await getSettingsLocator(page, importSelectors.workspaceQuickPrepareButton).waitFor(
-                  {
-                    state: 'visible'
-                  }
-                )
-                await getSettingsLocator(page, importSelectors.workspaceQuickPrepareButton).click()
-                await getSettingsLocator(page, importSelectors.workspaceIndexJobProgress).waitFor({
-                  state: 'visible'
-                })
-                prepareProgressVisible = true
-                buttonsDisabled =
-                  (await getSettingsLocator(
-                    page,
-                    importSelectors.workspaceQuickScanButton
-                  ).isDisabled()) &&
-                  (await getSettingsLocator(
-                    page,
-                    importSelectors.workspaceQuickPrepareButton
-                  ).isDisabled())
-              }
-            })
-
-            const result = await waitForFileIndexJobIdle(page, workspaceId)
-            const supportedStatuses = toSupportedFileStatuses(result.tree)
-
-            return {
-              prepareProgressVisible,
-              buttonsDisabled,
-              summary: result.tree.summary,
-              supportedStatuses
+          await runtime.step({
+            name: 'prepare-workspace-through-ui',
+            message: '通过 UI 点击更新索引，并确认执行中进度块和按钮禁用状态。',
+            run: async () => {
+              await navigateToSettingsSection(page, 'workspace')
+              await getSettingsLocator(page, importSelectors.workspaceQuickPrepareButton).waitFor({
+                state: 'visible'
+              })
+              await getSettingsLocator(page, importSelectors.workspaceQuickPrepareButton).click()
+              await getSettingsLocator(page, importSelectors.workspaceIndexJobProgress).waitFor({
+                state: 'visible'
+              })
+              prepareProgressVisible = true
+              buttonsDisabled =
+                (await getSettingsLocator(
+                  page,
+                  importSelectors.workspaceQuickScanButton
+                ).isDisabled()) &&
+                (await getSettingsLocator(
+                  page,
+                  importSelectors.workspaceQuickPrepareButton
+                ).isDisabled())
             }
-          } finally {
-            if (workspaceRoot) {
-              await cleanupRealWorkspace(workspaceRoot)
-            }
+          })
+
+          const result = await waitForFileIndexJobIdle(page, workspaceId)
+          const supportedStatuses = toSupportedFileStatuses(result.tree)
+
+          return {
+            prepareProgressVisible,
+            buttonsDisabled,
+            summary: result.tree.summary,
+            supportedStatuses
           }
         },
         assert: async (result, runtime) => {

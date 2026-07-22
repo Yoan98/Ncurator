@@ -42,11 +42,11 @@ describe('app update publish config', () => {
     expect(config.linux).toBeUndefined()
   })
 
-  it('routes Windows locally first with an explicit Actions fallback', async () => {
-    const [workflow, packageJsonText, router, prepareRelease] = await Promise.all([
+  it('uses one Windows pipeline with a local or Actions build backend', async () => {
+    const [workflow, packageJsonText, windowsRelease, prepareRelease] = await Promise.all([
       readFile(path.resolve('.github/workflows/release.yml'), 'utf8'),
       readFile(path.resolve('package.json'), 'utf8'),
-      readFile(path.resolve('scripts/release/route-windows.mjs'), 'utf8'),
+      readFile(path.resolve('scripts/release/windows.mjs'), 'utf8'),
       readFile(path.resolve('scripts/release/prepare.mjs'), 'utf8')
     ])
     const packageJson = JSON.parse(packageJsonText) as {
@@ -55,11 +55,19 @@ describe('app update publish config', () => {
 
     expect(workflow).toContain('workflow_dispatch:')
     expect(workflow).not.toMatch(/push:\s*\n\s*tags:/u)
-    expect(workflow).not.toContain('actions/upload-artifact')
+    expect(workflow).toContain('package_e2e:')
+    expect(workflow).toContain('candidate_run_id:')
+    expect(workflow).toContain('actions/upload-artifact@v4')
+    expect(workflow).toContain('actions/download-artifact@v4')
     expect(packageJson.scripts['release:win']).toContain('release/windows.mjs')
-    expect(packageJson.scripts['release:win:auto']).toContain('release/route-windows.mjs')
-    expect(router).toContain("route === 'local'")
-    expect(router).toContain('dispatchWindowsRelease')
+    expect(packageJson.scripts['release:win:auto']).toBeUndefined()
+    expect(windowsRelease).toContain('dispatchWindowsRelease')
+    expect(windowsRelease).toContain("route === 'actions'")
+    expect(windowsRelease).toContain('--package-e2e')
+    expect(windowsRelease).toContain('--prepare-only')
+    expect(windowsRelease).toContain('--test-only')
+    expect(windowsRelease).toContain('--publish-only')
+    expect(prepareRelease).toContain("'--prepare-only'")
     expect(prepareRelease).toContain("['test:update:backend']")
     expect(prepareRelease).not.toContain('test:update:e2e')
   })

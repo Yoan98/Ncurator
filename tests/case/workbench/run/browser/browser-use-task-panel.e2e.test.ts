@@ -252,190 +252,184 @@ describe('workbench run e2e', () => {
               document.querySelector('#task-result').textContent = 'BROWSER_TASK_DONE:' + document.querySelector('#task-code').value
             })
           </script>`)
+          runtime.registerResource({
+            name: 'browser-task-http-server',
+            phase: 'before-app-close',
+            dispose: server.close
+          })
           const setup = await setupWorkbenchWithTempWorkspace(page, {
             caseId: CASE_ID,
             rootBindingMode: 'ipc'
           })
-          try {
-            await switchWorkbenchMode(page, '没头脑')
-            await insertWorkbenchReferenceToken(page, 'workbench-preview.md')
-            await appendWorkbenchInputText(page, 'cedar-markdown-preview-442')
-            await submitWorkbenchCurrentDraft(page)
-            const previewResults = await waitForWorkbenchSearchResults(page)
-            await previewResults
-              .locator('div')
-              .filter({ hasText: 'workbench-preview.md' })
-              .first()
-              .getByRole('button', { name: '预览文件' })
-              .click()
-            await getWorkbenchLocator(page, workbenchSelectors.markdownViewer).waitFor({
-              state: 'visible',
-              timeout: 30_000
-            })
+          await switchWorkbenchMode(page, '没头脑')
+          await insertWorkbenchReferenceToken(page, 'workbench-preview.md')
+          await appendWorkbenchInputText(page, 'cedar-markdown-preview-442')
+          await submitWorkbenchCurrentDraft(page)
+          const previewResults = await waitForWorkbenchSearchResults(page)
+          await previewResults
+            .locator('div')
+            .filter({ hasText: 'workbench-preview.md' })
+            .first()
+            .getByRole('button', { name: '预览文件' })
+            .click()
+          await getWorkbenchLocator(page, workbenchSelectors.markdownViewer).waitFor({
+            state: 'visible',
+            timeout: 30_000
+          })
 
-            await switchWorkbenchMode(page, '大聪明')
-            const startedAtMs = Date.now()
-            await sendWorkbenchMessage(
-              page,
-              `Use the right embedded browser to complete this page task. Use browser_use navigate to open ${server.url}, use observe to inspect the form controls, then do not combine form actions: use one act to fill the Task code input with ${TASK_CODE}, call wait_time exactly once for 1 second, use another act to click Submit task, then use extract to read the full displayed result. Tell me the exact result text.`
-            )
+          await switchWorkbenchMode(page, '大聪明')
+          const startedAtMs = Date.now()
+          await sendWorkbenchMessage(
+            page,
+            `Use the right embedded browser to complete this page task. Use browser_use navigate to open ${server.url}, use observe to inspect the form controls, then do not combine form actions: use one act to fill the Task code input with ${TASK_CODE}, call wait_time exactly once for 1 second, use another act to click Submit task, then use extract to read the full displayed result. Tell me the exact result text.`
+          )
 
-            await waitForBrowserPanelOpenedWithApproval(runtime)
-            await getWorkbenchLocator(page, workbenchSelectors.browserPanel).waitFor({
-              state: 'visible'
-            })
-            await getWorkbenchLocator(page, workbenchSelectors.browserViewport).waitFor({
-              state: 'visible'
-            })
-            const resourceTabs = getWorkbenchPrefixLocator(
-              page,
-              workbenchSelectors.resourceTabPrefix
+          await waitForBrowserPanelOpenedWithApproval(runtime)
+          await getWorkbenchLocator(page, workbenchSelectors.browserPanel).waitFor({
+            state: 'visible'
+          })
+          await getWorkbenchLocator(page, workbenchSelectors.browserViewport).waitFor({
+            state: 'visible'
+          })
+          const resourceTabs = getWorkbenchPrefixLocator(page, workbenchSelectors.resourceTabPrefix)
+          const initialResourceTabCount = await resourceTabs.count()
+          const openedEvent = (await collectWorkbenchAiRunEvents(runtime))
+            .filter(
+              (event): event is Extract<AiRunEvent, { type: 'browser_panel_opened' }> =>
+                event.type === 'browser_panel_opened'
             )
-            const initialResourceTabCount = await resourceTabs.count()
-            const openedEvent = (await collectWorkbenchAiRunEvents(runtime))
-              .filter(
-                (event): event is Extract<AiRunEvent, { type: 'browser_panel_opened' }> =>
-                  event.type === 'browser_panel_opened'
-              )
-              .at(-1)
-            if (!openedEvent) throw new Error('browser_panel_opened event is missing')
-            await getWorkbenchLocator(page, workbenchSelectors.resourceTabAddButton).click()
-            const openFileMenuItemVisible = await page
-              .getByRole('menuitem', { name: '文件', exact: true })
-              .isVisible()
-            await page.getByRole('menuitem', { name: '浏览器' }).click()
-            await resourceTabs.nth(2).waitFor({ state: 'visible', timeout: 10_000 })
-            const resourceTabCountAfterReopen = await resourceTabs.count()
-            const browserPanel = getWorkbenchLocator(page, workbenchSelectors.browserPanel)
-            const browserBackButtonCount = await browserPanel
-              .getByRole('button', { name: /后退|back/i })
-              .count()
-            const evidence = await waitForBrowserTaskCompletion(
-              runtime,
-              startedAtMs,
-              setup.env.modelName
+            .at(-1)
+          if (!openedEvent) throw new Error('browser_panel_opened event is missing')
+          await getWorkbenchLocator(page, workbenchSelectors.resourceTabAddButton).click()
+          const openFileMenuItemVisible = await page
+            .getByRole('menuitem', { name: '文件', exact: true })
+            .isVisible()
+          await page.getByRole('menuitem', { name: '浏览器' }).click()
+          await resourceTabs.nth(2).waitFor({ state: 'visible', timeout: 10_000 })
+          const resourceTabCountAfterReopen = await resourceTabs.count()
+          const browserPanel = getWorkbenchLocator(page, workbenchSelectors.browserPanel)
+          const browserBackButtonCount = await browserPanel
+            .getByRole('button', { name: /后退|back/i })
+            .count()
+          const evidence = await waitForBrowserTaskCompletion(
+            runtime,
+            startedAtMs,
+            setup.env.modelName
+          )
+          recordWorkbenchAiEvidence(runtime, evidence, 0.8)
+          const browserStarts = evidence.events.filter(
+            (event): event is Extract<AiRunEvent, { type: 'tool_call_started' }> =>
+              event.type === 'tool_call_started' && event.toolName === 'browser_use'
+          )
+          const browserResults = evidence.events.filter(
+            (event): event is Extract<AiRunEvent, { type: 'tool_call_result' }> =>
+              event.type === 'tool_call_result' && event.toolName === 'browser_use'
+          )
+          const browserData = browserResults.map((event) => event.result?.data)
+          const waitStarts = evidence.events.filter(
+            (event): event is Extract<AiRunEvent, { type: 'tool_call_started' }> =>
+              event.type === 'tool_call_started' && event.toolName === 'wait_time'
+          )
+          const processItemTexts = await getWorkbenchPrefixLocator(
+            page,
+            workbenchSelectors.assistantProcessItemPrefix
+          ).allTextContents()
+          const processBlocks = getWorkbenchPrefixLocator(
+            page,
+            workbenchSelectors.assistantProcessItemPrefix
+          )
+          const executionSummaryTexts = await processBlocks.locator('summary').allTextContents()
+          const executionIconKinds = await processBlocks
+            .locator('summary [data-process-icon-kind]')
+            .evaluateAll((icons) =>
+              icons.map((icon) => icon.getAttribute('data-process-icon-kind') || '')
             )
-            recordWorkbenchAiEvidence(runtime, evidence, 0.8)
-            const browserStarts = evidence.events.filter(
-              (event): event is Extract<AiRunEvent, { type: 'tool_call_started' }> =>
-                event.type === 'tool_call_started' && event.toolName === 'browser_use'
-            )
-            const browserResults = evidence.events.filter(
-              (event): event is Extract<AiRunEvent, { type: 'tool_call_result' }> =>
-                event.type === 'tool_call_result' && event.toolName === 'browser_use'
-            )
-            const browserData = browserResults.map((event) => event.result?.data)
-            const waitStarts = evidence.events.filter(
-              (event): event is Extract<AiRunEvent, { type: 'tool_call_started' }> =>
-                event.type === 'tool_call_started' && event.toolName === 'wait_time'
-            )
-            const processItemTexts = await getWorkbenchPrefixLocator(
-              page,
-              workbenchSelectors.assistantProcessItemPrefix
-            ).allTextContents()
-            const processBlocks = getWorkbenchPrefixLocator(
-              page,
-              workbenchSelectors.assistantProcessItemPrefix
-            )
-            const executionSummaryTexts = await processBlocks.locator('summary').allTextContents()
-            const executionIconKinds = await processBlocks
-              .locator('summary [data-process-icon-kind]')
-              .evaluateAll((icons) =>
-                icons.map((icon) => icon.getAttribute('data-process-icon-kind') || '')
-              )
-            await processBlocks.evaluateAll((blocks) => {
-              for (const block of blocks) {
-                if (block.querySelector('summary + div')) block.setAttribute('open', '')
-              }
-            })
-            const browserExecutionItems = processBlocks.locator('summary + div > div')
-            const browserExecutionItemTexts = await browserExecutionItems.allTextContents()
-            const browserExecutionItemFontWeights = await browserExecutionItems.evaluateAll(
-              (items) => items.map((item) => window.getComputedStyle(item).fontWeight)
-            )
-            await resourceTabs.filter({ hasText: 'workbench-preview.md' }).first().click()
-            const fileTabRestored = await getWorkbenchLocator(
-              page,
-              workbenchSelectors.markdownViewer
-            )
-              .waitFor({ state: 'visible', timeout: 30_000 })
-              .then(() => true)
-              .catch(() => false)
-            const browserStateWhileHidden = await page.evaluate(
-              async (tabId) => window.api.browserPanelStateGet({ tabId }),
-              openedEvent.browserTabId
-            )
-            await getWorkbenchLocator(
-              page,
-              `${workbenchSelectors.resourceTabPrefix}-browser-${openedEvent.browserTabId}`
-            ).click()
-            await getWorkbenchLocator(page, workbenchSelectors.browserViewport).waitFor({
-              state: 'visible'
-            })
-            const browserStateAfterRestore = await page.evaluate(
-              async (tabId) => window.api.browserPanelStateGet({ tabId }),
-              openedEvent.browserTabId
-            )
-
-            return {
-              finalAnswerText: evidence.finalAnswerText,
-              eventTypes: evidence.events.map((event) => event.type),
-              browserBackButtonCount,
-              initialResourceTabCount,
-              openFileMenuItemVisible,
-              resourceTabCountAfterReopen,
-              fileTabRestored,
-              browserUrlPreserved:
-                browserStateWhileHidden.success &&
-                browserStateAfterRestore.success &&
-                browserStateWhileHidden.state?.url === server.url &&
-                browserStateAfterRestore.state?.url === server.url,
-              browserActions: browserStarts.map((event) => readToolInputString(event, 'action')),
-              waitCallCount: waitStarts.length,
-              executionSummaryTexts,
-              executionIconKinds,
-              browserExecutionItemTexts,
-              browserExecutionItemFontWeights,
-              redundantBrowserActionPrefixesAbsent: processItemTexts.every(
-                (text) =>
-                  !text.includes('观察页面：') &&
-                  !text.includes('提取页面内容：') &&
-                  !text.includes('操作页面：')
-              ),
-              browserResultContractValid:
-                browserData.length > 0 && browserData.every(isBrowserUseDataContract),
-              deprecatedBrowserUseFieldsAbsent: browserData.every(
-                (data) => !hasDeprecatedBrowserUseField(data)
-              ),
-              observeResultVisible: browserData.some(
-                (data) =>
-                  isObjectRecord(data) &&
-                  data.action === 'observe' &&
-                  isObjectRecord(data.result) &&
-                  Array.isArray(data.result.actions)
-              ),
-              actResultVisible: browserData.some(
-                (data) =>
-                  isObjectRecord(data) &&
-                  data.action === 'act' &&
-                  isObjectRecord(data.result) &&
-                  typeof data.result.success === 'boolean' &&
-                  typeof data.result.message === 'string' &&
-                  typeof data.result.actionDescription === 'string' &&
-                  Array.isArray(data.result.actions)
-              ),
-              extractResultVisible: browserData.some(
-                (data) =>
-                  isObjectRecord(data) &&
-                  data.action === 'extract' &&
-                  isObjectRecord(data.result) &&
-                  typeof data.result.extracted === 'string' &&
-                  data.result.extracted.includes('BROWSER_TASK_DONE')
-              )
+          await processBlocks.evaluateAll((blocks) => {
+            for (const block of blocks) {
+              if (block.querySelector('summary + div')) block.setAttribute('open', '')
             }
-          } finally {
-            await setup.workspace.cleanup()
-            await server.close()
+          })
+          const browserExecutionItems = processBlocks.locator('summary + div > div')
+          const browserExecutionItemTexts = await browserExecutionItems.allTextContents()
+          const browserExecutionItemFontWeights = await browserExecutionItems.evaluateAll((items) =>
+            items.map((item) => window.getComputedStyle(item).fontWeight)
+          )
+          await resourceTabs.filter({ hasText: 'workbench-preview.md' }).first().click()
+          const fileTabRestored = await getWorkbenchLocator(page, workbenchSelectors.markdownViewer)
+            .waitFor({ state: 'visible', timeout: 30_000 })
+            .then(() => true)
+            .catch(() => false)
+          const browserStateWhileHidden = await page.evaluate(
+            async (tabId) => window.api.browserPanelStateGet({ tabId }),
+            openedEvent.browserTabId
+          )
+          await getWorkbenchLocator(
+            page,
+            `${workbenchSelectors.resourceTabPrefix}-browser-${openedEvent.browserTabId}`
+          ).click()
+          await getWorkbenchLocator(page, workbenchSelectors.browserViewport).waitFor({
+            state: 'visible'
+          })
+          const browserStateAfterRestore = await page.evaluate(
+            async (tabId) => window.api.browserPanelStateGet({ tabId }),
+            openedEvent.browserTabId
+          )
+
+          return {
+            finalAnswerText: evidence.finalAnswerText,
+            eventTypes: evidence.events.map((event) => event.type),
+            browserBackButtonCount,
+            initialResourceTabCount,
+            openFileMenuItemVisible,
+            resourceTabCountAfterReopen,
+            fileTabRestored,
+            browserUrlPreserved:
+              browserStateWhileHidden.success &&
+              browserStateAfterRestore.success &&
+              browserStateWhileHidden.state?.url === server.url &&
+              browserStateAfterRestore.state?.url === server.url,
+            browserActions: browserStarts.map((event) => readToolInputString(event, 'action')),
+            waitCallCount: waitStarts.length,
+            executionSummaryTexts,
+            executionIconKinds,
+            browserExecutionItemTexts,
+            browserExecutionItemFontWeights,
+            redundantBrowserActionPrefixesAbsent: processItemTexts.every(
+              (text) =>
+                !text.includes('观察页面：') &&
+                !text.includes('提取页面内容：') &&
+                !text.includes('操作页面：')
+            ),
+            browserResultContractValid:
+              browserData.length > 0 && browserData.every(isBrowserUseDataContract),
+            deprecatedBrowserUseFieldsAbsent: browserData.every(
+              (data) => !hasDeprecatedBrowserUseField(data)
+            ),
+            observeResultVisible: browserData.some(
+              (data) =>
+                isObjectRecord(data) &&
+                data.action === 'observe' &&
+                isObjectRecord(data.result) &&
+                Array.isArray(data.result.actions)
+            ),
+            actResultVisible: browserData.some(
+              (data) =>
+                isObjectRecord(data) &&
+                data.action === 'act' &&
+                isObjectRecord(data.result) &&
+                typeof data.result.success === 'boolean' &&
+                typeof data.result.message === 'string' &&
+                typeof data.result.actionDescription === 'string' &&
+                Array.isArray(data.result.actions)
+            ),
+            extractResultVisible: browserData.some(
+              (data) =>
+                isObjectRecord(data) &&
+                data.action === 'extract' &&
+                isObjectRecord(data.result) &&
+                typeof data.result.extracted === 'string' &&
+                data.result.extracted.includes('BROWSER_TASK_DONE')
+            )
           }
         },
         assert: async (result, runtime) => {

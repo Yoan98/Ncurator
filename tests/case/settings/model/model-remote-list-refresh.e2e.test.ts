@@ -88,65 +88,66 @@ describe('settings model e2e', () => {
         execute: async (runtime) => {
           const { page } = runtime
           const server = await startModelListServer()
+          runtime.registerResource({
+            name: 'model-list-server',
+            phase: 'before-app-close',
+            dispose: server.close
+          })
           let successText = ''
           let failureText = ''
 
-          try {
-            await runtime.step({
-              name: 'create-config-through-ui',
-              message: '通过设置页 UI 新增一个指向本地 HTTP 服务的模型配置。',
-              run: async () => {
-                await createModelConfigThroughSettingsUi(page, {
-                  baseUrl: server.baseUrl,
-                  apiKey: 'sk-local-model-list'
-                })
-                await navigateToSettingsSection(page, 'model')
-              }
-            })
-
-            const row = page.locator('tbody tr').filter({ hasText: server.baseUrl })
-            const listButton = row.locator(
-              `[data-testid^="${settingsSelectors.modelListButtonPrefix}-"]`
-            )
-
-            await runtime.step({
-              name: 'open-model-list-success',
-              message: '点击模型列表，真实请求本地 /models 并展示模型数量和条目。',
-              run: async () => {
-                server.setMode('success')
-                await listButton.click()
-                await row.filter({ hasText: '2 个模型' }).waitFor({ state: 'visible' })
-                await page.getByText('gpt-4o-mini').waitFor({ state: 'visible' })
-              }
-            })
-
-            successText =
-              (await getSettingsLocator(page, settingsSelectors.modelTable).textContent()) || ''
-            await getSettingsLocator(page, settingsSelectors.modelListModal)
-              .locator('.ant-modal-close')
-              .click()
-            await page.getByText('gpt-4o-mini').waitFor({ state: 'hidden' })
-
-            await runtime.step({
-              name: 'open-model-list-failed',
-              message: '本地 /models 返回 500 后点击重新获取，确认 UI 进入失败态。',
-              run: async () => {
-                server.setMode('failure')
-                await listButton.click()
-                await getSettingsLocator(page, settingsSelectors.modelListRetryButton).click()
-                await row.filter({ hasText: '获取失败' }).waitFor({ state: 'visible' })
-                await page.getByText(/获取模型列表失败/u).waitFor({ state: 'visible' })
-              }
-            })
-
-            failureText =
-              (await getSettingsLocator(page, settingsSelectors.modelTable).textContent()) || ''
-            return {
-              successText,
-              failureText
+          await runtime.step({
+            name: 'create-config-through-ui',
+            message: '通过设置页 UI 新增一个指向本地 HTTP 服务的模型配置。',
+            run: async () => {
+              await createModelConfigThroughSettingsUi(page, {
+                baseUrl: server.baseUrl,
+                apiKey: 'sk-local-model-list'
+              })
+              await navigateToSettingsSection(page, 'model')
             }
-          } finally {
-            await server.close()
+          })
+
+          const row = page.locator('tbody tr').filter({ hasText: server.baseUrl })
+          const listButton = row.locator(
+            `[data-testid^="${settingsSelectors.modelListButtonPrefix}-"]`
+          )
+
+          await runtime.step({
+            name: 'open-model-list-success',
+            message: '点击模型列表，真实请求本地 /models 并展示模型数量和条目。',
+            run: async () => {
+              server.setMode('success')
+              await listButton.click()
+              await row.filter({ hasText: '2 个模型' }).waitFor({ state: 'visible' })
+              await page.getByText('gpt-4o-mini').waitFor({ state: 'visible' })
+            }
+          })
+
+          successText =
+            (await getSettingsLocator(page, settingsSelectors.modelTable).textContent()) || ''
+          await getSettingsLocator(page, settingsSelectors.modelListModal)
+            .locator('.ant-modal-close')
+            .click()
+          await page.getByText('gpt-4o-mini').waitFor({ state: 'hidden' })
+
+          await runtime.step({
+            name: 'open-model-list-failed',
+            message: '本地 /models 返回 500 后点击重新获取，确认 UI 进入失败态。',
+            run: async () => {
+              server.setMode('failure')
+              await listButton.click()
+              await getSettingsLocator(page, settingsSelectors.modelListRetryButton).click()
+              await row.filter({ hasText: '获取失败' }).waitFor({ state: 'visible' })
+              await page.getByText(/获取模型列表失败/u).waitFor({ state: 'visible' })
+            }
+          })
+
+          failureText =
+            (await getSettingsLocator(page, settingsSelectors.modelTable).textContent()) || ''
+          return {
+            successText,
+            failureText
           }
         },
         assert: async (result, runtime) => {

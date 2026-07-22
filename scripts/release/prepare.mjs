@@ -20,11 +20,12 @@ const releaseTag = `v${version}`
 const notes = valueAfter('--notes') || `Ncurator ${releaseTag}`
 const forceLocal = args.includes('--local-only')
 const forceActions = args.includes('--actions')
+const packageE2E = args.includes('--package-e2e')
 const pnpmExecutable = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
 
 if (!/^\d+\.\d+\.\d+$/u.test(version)) {
   throw new Error(
-    'usage: node scripts/release/prepare.mjs --version <1.2.3> [--notes <text>] [--local-only|--actions]'
+    'usage: node scripts/release/prepare.mjs --version <1.2.3> [--notes <text>] [--local-only|--actions] [--package-e2e]'
   )
 }
 if (forceLocal && forceActions) throw new Error('--local-only and --actions cannot be combined')
@@ -105,7 +106,13 @@ await run('git', ['push', '--atomic', 'origin', 'main', releaseTag])
 
 process.stdout.write(`[release] prepared and pushed ${releaseTag}\n`)
 
-const routeArgs = [path.join(ROOT, 'scripts', 'release', 'route-windows.mjs'), '--tag', releaseTag]
+const routeArgs = [
+  path.join(ROOT, 'scripts', 'release', 'windows.mjs'),
+  '--tag',
+  releaseTag,
+  '--prepare-only'
+]
 if (forceLocal) routeArgs.push('--local-only')
 if (forceActions) routeArgs.push('--actions')
+if (packageE2E) routeArgs.push('--package-e2e')
 await run(process.execPath, routeArgs)

@@ -36,71 +36,65 @@ describe('workbench conversation e2e', () => {
             workspaceName: `Workbench ${CASE_ID}`,
             createSession: false
           })
-          try {
-            await page.getByRole('button', { name: `在 ${setup.workspaceName} 中新建对话` }).click()
-            const startedAtMs = Date.now()
-            await sendWorkbenchMessage(page, SESSION_PROMPT)
-            const evidence = await waitForWorkbenchAiRunCompletion(
-              runtime,
-              startedAtMs,
-              setup.env.modelName
-            )
-            recordWorkbenchAiEvidence(runtime, evidence, 0.6)
-            const sessionTitlePrefix = SESSION_PROMPT.slice(0, 16)
-            const selectedSession = getWorkbenchPrefixLocator(
-              page,
-              workbenchSelectors.sessionItemPrefix
-            )
-              .filter({ hasText: sessionTitlePrefix })
-              .first()
-            await selectedSession.waitFor({ state: 'visible' })
-            const selectedSessionTestId = await selectedSession.getAttribute('data-testid')
-            const sessionId = selectedSessionTestId?.replace(
-              `${workbenchSelectors.sessionItemPrefix}-`,
-              ''
-            )
-            if (!sessionId || sessionId === selectedSessionTestId) {
-              throw new Error('failed to read created session id from UI')
-            }
+          await page.getByRole('button', { name: `在 ${setup.workspaceName} 中新建对话` }).click()
+          const startedAtMs = Date.now()
+          await sendWorkbenchMessage(page, SESSION_PROMPT)
+          const evidence = await waitForWorkbenchAiRunCompletion(
+            runtime,
+            startedAtMs,
+            setup.env.modelName
+          )
+          recordWorkbenchAiEvidence(runtime, evidence, 0.6)
+          const sessionTitlePrefix = SESSION_PROMPT.slice(0, 16)
+          const selectedSession = getWorkbenchPrefixLocator(
+            page,
+            workbenchSelectors.sessionItemPrefix
+          )
+            .filter({ hasText: sessionTitlePrefix })
+            .first()
+          await selectedSession.waitFor({ state: 'visible' })
+          const selectedSessionTestId = await selectedSession.getAttribute('data-testid')
+          const sessionId = selectedSessionTestId?.replace(
+            `${workbenchSelectors.sessionItemPrefix}-`,
+            ''
+          )
+          if (!sessionId || sessionId === selectedSessionTestId) {
+            throw new Error('failed to read created session id from UI')
+          }
 
-            const deleteButton = getWorkbenchLocator(
-              page,
-              `${workbenchSelectors.sessionDeleteButtonPrefix}-${sessionId}`
-            )
-            const confirmButton = getWorkbenchLocator(
-              page,
-              workbenchSelectors.sessionDeleteConfirmButton
-            )
-            const cancelButton = getWorkbenchLocator(
-              page,
-              workbenchSelectors.sessionDeleteCancelButton
-            )
-            await selectedSession.hover()
-            await deleteButton.click()
-            await confirmButton.waitFor({ state: 'visible' })
-            await cancelButton.click()
-            await confirmButton.waitFor({ state: 'hidden' })
-            const sessionStillExistsAfterCancel = await selectedSession
-              .isVisible()
-              .catch(() => false)
+          const deleteButton = getWorkbenchLocator(
+            page,
+            `${workbenchSelectors.sessionDeleteButtonPrefix}-${sessionId}`
+          )
+          const confirmButton = getWorkbenchLocator(
+            page,
+            workbenchSelectors.sessionDeleteConfirmButton
+          )
+          const cancelButton = getWorkbenchLocator(
+            page,
+            workbenchSelectors.sessionDeleteCancelButton
+          )
+          await selectedSession.hover()
+          await deleteButton.click()
+          await confirmButton.waitFor({ state: 'visible' })
+          await cancelButton.click()
+          await confirmButton.waitFor({ state: 'hidden' })
+          const sessionStillExistsAfterCancel = await selectedSession.isVisible().catch(() => false)
 
-            await selectedSession.hover()
-            await deleteButton.click()
-            await confirmButton.waitFor({ state: 'visible' })
-            await confirmButton.click()
-            await confirmButton.waitFor({ state: 'hidden' })
-            const sessionRemovedAfterConfirm = await selectedSession
-              .waitFor({ state: 'detached', timeout: 10_000 })
-              .then(() => true)
-              .catch(async () => !(await selectedSession.isVisible().catch(() => false)))
+          await selectedSession.hover()
+          await deleteButton.click()
+          await confirmButton.waitFor({ state: 'visible' })
+          await confirmButton.click()
+          await confirmButton.waitFor({ state: 'hidden' })
+          const sessionRemovedAfterConfirm = await selectedSession
+            .waitFor({ state: 'detached', timeout: 10_000 })
+            .then(() => true)
+            .catch(async () => !(await selectedSession.isVisible().catch(() => false)))
 
-            return {
-              sessionStillExistsAfterCancel,
-              sessionRemovedAfterConfirm,
-              finalAnswerText: evidence.finalAnswerText
-            }
-          } finally {
-            await setup.workspace.cleanup()
+          return {
+            sessionStillExistsAfterCancel,
+            sessionRemovedAfterConfirm,
+            finalAnswerText: evidence.finalAnswerText
           }
         },
         assert: async (result, runtime) => {

@@ -53,46 +53,42 @@ describe('workbench run e2e', () => {
         execute: async (runtime) => {
           const { page } = runtime
           const setup = await setupWorkbenchWithTempWorkspace(page, { caseId: CASE_ID })
-          try {
-            const startedAtMs = Date.now()
-            await sendWorkbenchMessage(page, PROMPT)
-            const evidence = await waitForWorkbenchAiRunCompletion(
-              runtime,
-              startedAtMs,
-              setup.env.modelName,
-              WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
-              { page, blockerPolicy: 'auto_approve' }
-            )
-            recordWorkbenchAiEvidence(runtime, evidence, 0.8)
+          const startedAtMs = Date.now()
+          await sendWorkbenchMessage(page, PROMPT)
+          const evidence = await waitForWorkbenchAiRunCompletion(
+            runtime,
+            startedAtMs,
+            setup.env.modelName,
+            WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
+            { page, blockerPolicy: 'auto_approve' }
+          )
+          recordWorkbenchAiEvidence(runtime, evidence, 0.8)
 
-            const toolStarts = evidence.events.filter(
-              (event): event is Extract<AiRunEvent, { type: 'tool_call_started' }> =>
-                event.type === 'tool_call_started'
-            )
-            const searchStarts = toolStarts.filter((event) => event.toolName === 'web_search')
-            const crawlStarts = toolStarts.filter((event) => event.toolName === 'web_crawl')
-            const searchResults = evidence.events.filter(
-              (event): event is Extract<AiRunEvent, { type: 'tool_call_result' }> =>
-                event.type === 'tool_call_result' && event.toolName === 'web_search'
-            )
-            const crawlResults = evidence.events.filter(
-              (event): event is Extract<AiRunEvent, { type: 'tool_call_result' }> =>
-                event.type === 'tool_call_result' && event.toolName === 'web_crawl'
-            )
-            const latestSearchResult = searchResults.at(-1)
+          const toolStarts = evidence.events.filter(
+            (event): event is Extract<AiRunEvent, { type: 'tool_call_started' }> =>
+              event.type === 'tool_call_started'
+          )
+          const searchStarts = toolStarts.filter((event) => event.toolName === 'web_search')
+          const crawlStarts = toolStarts.filter((event) => event.toolName === 'web_crawl')
+          const searchResults = evidence.events.filter(
+            (event): event is Extract<AiRunEvent, { type: 'tool_call_result' }> =>
+              event.type === 'tool_call_result' && event.toolName === 'web_search'
+          )
+          const crawlResults = evidence.events.filter(
+            (event): event is Extract<AiRunEvent, { type: 'tool_call_result' }> =>
+              event.type === 'tool_call_result' && event.toolName === 'web_crawl'
+          )
+          const latestSearchResult = searchResults.at(-1)
 
-            return {
-              finalAnswerText: evidence.finalAnswerText,
-              eventTypes: evidence.events.map((event) => event.type),
-              searchQueries: searchStarts.map((event) => readToolInputString(event, 'query')),
-              crawlUrls: crawlStarts.map((event) => readToolInputString(event, 'url')),
-              searchResultCount: latestSearchResult ? readSearchResultCount(latestSearchResult) : 0,
-              searchOk: searchResults.some((event) => event.result?.ok === true),
-              crawlOk: crawlResults.some((event) => event.result?.ok === true),
-              crawlErrors: crawlResults.map((event) => event.error || '').filter(Boolean)
-            }
-          } finally {
-            await setup.workspace.cleanup()
+          return {
+            finalAnswerText: evidence.finalAnswerText,
+            eventTypes: evidence.events.map((event) => event.type),
+            searchQueries: searchStarts.map((event) => readToolInputString(event, 'query')),
+            crawlUrls: crawlStarts.map((event) => readToolInputString(event, 'url')),
+            searchResultCount: latestSearchResult ? readSearchResultCount(latestSearchResult) : 0,
+            searchOk: searchResults.some((event) => event.result?.ok === true),
+            crawlOk: crawlResults.some((event) => event.result?.ok === true),
+            crawlErrors: crawlResults.map((event) => event.error || '').filter(Boolean)
           }
         },
         assert: async (result, runtime) => {

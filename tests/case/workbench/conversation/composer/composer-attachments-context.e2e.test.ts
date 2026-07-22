@@ -139,194 +139,186 @@ describe('workbench conversation e2e', () => {
         execute: async (runtime) => {
           const { page } = runtime
           const attachments = await createAttachmentFixtures()
+          runtime.registerResource({
+            name: `composer-attachments:${attachments.rootPath}`,
+            phase: 'after-app-close',
+            dispose: attachments.cleanup
+          })
           const setup = await setupWorkbenchWorkspaceOnly(page, {
             caseId: CASE_ID,
             workspaceName: 'Workbench Composer Attachments Workspace'
           })
-          try {
-            const workspaceBinding = await resolveWorkspaceBinding(page)
-            await navigateToWorkbench(page)
-            await selectWorkbenchWorkspace(page, setup.workspaceName)
-            const sessionCountBeforePaste = await countWorkspaceSessions(
-              page,
-              workspaceBinding.workspaceId
-            )
-            await selectWorkbenchAttachmentThroughNativeDialog(
-              page,
-              attachments.imagePath,
-              runtime.electronApp
-            )
-            await getImageAttachmentCardByName(page, 'qa-image.png')
+          const workspaceBinding = await resolveWorkspaceBinding(page)
+          await navigateToWorkbench(page)
+          await selectWorkbenchWorkspace(page, setup.workspaceName)
+          const sessionCountBeforePaste = await countWorkspaceSessions(
+            page,
+            workspaceBinding.workspaceId
+          )
+          await selectWorkbenchAttachmentThroughNativeDialog(
+            page,
+            attachments.imagePath,
+            runtime.electronApp
+          )
+          await getImageAttachmentCardByName(page, 'qa-image.png')
+            .first()
+            .waitFor({ state: 'visible' })
+          await selectWorkbenchAttachmentThroughNativeDialog(
+            page,
+            attachments.markdownPath,
+            runtime.electronApp
+          )
+          await waitForAttachmentCardByName(page, 'workbench-preview.md')
+          await selectWorkbenchAttachmentThroughNativeDialog(
+            page,
+            attachments.legacyDocPath,
+            runtime.electronApp
+          )
+          await waitForAttachmentCardByName(page, 'legacy-reference.doc')
+          await selectWorkbenchAttachmentThroughNativeDialog(
+            page,
+            attachments.pptxPath,
+            runtime.electronApp
+          )
+          await waitForAttachmentCardByName(page, 'slides-reference.pptx')
+          const sessionCountAfterPaste = await countWorkspaceSessions(
+            page,
+            workspaceBinding.workspaceId
+          )
+          const imageCard = getImageAttachmentCardByName(page, 'qa-image.png')
+          await imageCard.first().waitFor({ state: 'visible' })
+          await page.waitForFunction(
+            (attachmentName) => {
+              const image = Array.from(document.images).find((item) => item.alt === attachmentName)
+              return Boolean(
+                image && image.complete && image.naturalWidth > 0 && image.src.startsWith('blob:')
+              )
+            },
+            'qa-image.png',
+            { timeout: 5000 }
+          )
+          await runtime.captureScreenshot({
+            name: 'attachment-image-card',
+            message: '图片附件应显示在输入框顶部，并展示真实缩略图。'
+          })
+
+          await imageCard.first().click()
+          const previewModal = getWorkbenchLocator(page, workbenchSelectors.attachmentPreviewModal)
+          await previewModal.waitFor({ state: 'visible' })
+          await page.waitForFunction(
+            ({ modalTestId, attachmentName }) => {
+              const image = document.querySelector<HTMLImageElement>(
+                `[data-testid="${modalTestId}"] img[alt="${attachmentName}"]`
+              )
+              if (!image || !image.complete || image.naturalWidth <= 0) return false
+              const rect = image.getBoundingClientRect()
+              return rect.width > 0 && rect.height > 0
+            },
+            {
+              modalTestId: workbenchSelectors.attachmentPreviewModal,
+              attachmentName: 'qa-image.png'
+            },
+            { timeout: 5000 }
+          )
+          const downloadButton = page.getByRole('button', { name: '下载图片', exact: true })
+          const closeButton = page.getByRole('button', { name: '关闭图片预览', exact: true })
+          const zoomButton = page.getByRole('button', { name: '放大', exact: true })
+          const previewImageBox = await previewModal
+            .locator('img[alt="qa-image.png"]')
+            .boundingBox()
+          const downloadButtonBox = await downloadButton.boundingBox()
+          const closeButtonBox = await closeButton.boundingBox()
+          const zoomButtonBox = await zoomButton.boundingBox()
+          const previewVisible = true
+          await runtime.captureScreenshot({
+            name: 'attachment-image-preview',
+            message: '点击图片附件后应打开图片预览弹窗。'
+          })
+          await closeButton.click()
+          await previewModal.waitFor({ state: 'hidden' })
+
+          const imageAttachmentCard = imageCard.first()
+          await imageAttachmentCard.hover()
+          const imageRemoveButton = imageAttachmentCard.locator(
+            `[data-testid^="${workbenchSelectors.attachmentRemoveButtonPrefix}-"]`
+          )
+          await imageRemoveButton.waitFor({ state: 'visible' })
+          await imageRemoveButton.click()
+          const imageRemoved =
+            (await getImageAttachmentCardByName(page, 'qa-image.png').count()) === 0
+
+          const fileCard = getWorkbenchPrefixLocator(page, workbenchSelectors.attachmentCardPrefix)
+            .filter({ hasText: 'workbench-preview.md' })
+            .first()
+          await fileCard.waitFor({ state: 'visible' })
+          const fileCardText = (await fileCard.textContent()) || ''
+          const legacyDocCardText =
+            (await getWorkbenchPrefixLocator(page, workbenchSelectors.attachmentCardPrefix)
+              .filter({ hasText: 'legacy-reference.doc' })
               .first()
-              .waitFor({ state: 'visible' })
-            await selectWorkbenchAttachmentThroughNativeDialog(
-              page,
-              attachments.markdownPath,
-              runtime.electronApp
-            )
-            await waitForAttachmentCardByName(page, 'workbench-preview.md')
-            await selectWorkbenchAttachmentThroughNativeDialog(
-              page,
-              attachments.legacyDocPath,
-              runtime.electronApp
-            )
-            await waitForAttachmentCardByName(page, 'legacy-reference.doc')
-            await selectWorkbenchAttachmentThroughNativeDialog(
-              page,
-              attachments.pptxPath,
-              runtime.electronApp
-            )
-            await waitForAttachmentCardByName(page, 'slides-reference.pptx')
-            const sessionCountAfterPaste = await countWorkspaceSessions(
-              page,
-              workspaceBinding.workspaceId
-            )
-            const imageCard = getImageAttachmentCardByName(page, 'qa-image.png')
-            await imageCard.first().waitFor({ state: 'visible' })
-            await page.waitForFunction(
-              (attachmentName) => {
-                const image = Array.from(document.images).find(
-                  (item) => item.alt === attachmentName
-                )
-                return Boolean(
-                  image && image.complete && image.naturalWidth > 0 && image.src.startsWith('blob:')
-                )
-              },
-              'qa-image.png',
-              { timeout: 5000 }
-            )
-            await runtime.captureScreenshot({
-              name: 'attachment-image-card',
-              message: '图片附件应显示在输入框顶部，并展示真实缩略图。'
-            })
-
-            await imageCard.first().click()
-            const previewModal = getWorkbenchLocator(
-              page,
-              workbenchSelectors.attachmentPreviewModal
-            )
-            await previewModal.waitFor({ state: 'visible' })
-            await page.waitForFunction(
-              ({ modalTestId, attachmentName }) => {
-                const image = document.querySelector<HTMLImageElement>(
-                  `[data-testid="${modalTestId}"] img[alt="${attachmentName}"]`
-                )
-                if (!image || !image.complete || image.naturalWidth <= 0) return false
-                const rect = image.getBoundingClientRect()
-                return rect.width > 0 && rect.height > 0
-              },
-              {
-                modalTestId: workbenchSelectors.attachmentPreviewModal,
-                attachmentName: 'qa-image.png'
-              },
-              { timeout: 5000 }
-            )
-            const downloadButton = page.getByRole('button', { name: '下载图片', exact: true })
-            const closeButton = page.getByRole('button', { name: '关闭图片预览', exact: true })
-            const zoomButton = page.getByRole('button', { name: '放大', exact: true })
-            const previewImageBox = await previewModal
-              .locator('img[alt="qa-image.png"]')
-              .boundingBox()
-            const downloadButtonBox = await downloadButton.boundingBox()
-            const closeButtonBox = await closeButton.boundingBox()
-            const zoomButtonBox = await zoomButton.boundingBox()
-            const previewVisible = true
-            await runtime.captureScreenshot({
-              name: 'attachment-image-preview',
-              message: '点击图片附件后应打开图片预览弹窗。'
-            })
-            await closeButton.click()
-            await previewModal.waitFor({ state: 'hidden' })
-
-            const imageAttachmentCard = imageCard.first()
-            await imageAttachmentCard.hover()
-            const imageRemoveButton = imageAttachmentCard.locator(
-              `[data-testid^="${workbenchSelectors.attachmentRemoveButtonPrefix}-"]`
-            )
-            await imageRemoveButton.waitFor({ state: 'visible' })
-            await imageRemoveButton.click()
-            const imageRemoved =
-              (await getImageAttachmentCardByName(page, 'qa-image.png').count()) === 0
-
-            const fileCard = getWorkbenchPrefixLocator(
-              page,
-              workbenchSelectors.attachmentCardPrefix
-            )
-              .filter({ hasText: 'workbench-preview.md' })
+              .textContent()) || ''
+          const pptxCardText =
+            (await getWorkbenchPrefixLocator(page, workbenchSelectors.attachmentCardPrefix)
+              .filter({ hasText: 'slides-reference.pptx' })
               .first()
-            await fileCard.waitFor({ state: 'visible' })
-            const fileCardText = (await fileCard.textContent()) || ''
-            const legacyDocCardText =
-              (await getWorkbenchPrefixLocator(page, workbenchSelectors.attachmentCardPrefix)
-                .filter({ hasText: 'legacy-reference.doc' })
-                .first()
-                .textContent()) || ''
-            const pptxCardText =
-              (await getWorkbenchPrefixLocator(page, workbenchSelectors.attachmentCardPrefix)
-                .filter({ hasText: 'slides-reference.pptx' })
-                .first()
-                .textContent()) || ''
+              .textContent()) || ''
 
-            await selectWorkbenchAttachmentThroughNativeDialog(
-              page,
-              attachments.largePath,
-              runtime.electronApp
-            )
-            await waitForAttachmentCardByName(page, 'qa-large.json')
-            const largeFileMessage = await waitForAntMessageText(
-              page,
-              '文件过大，建议放到工作空间索引里使用'
-            )
+          await selectWorkbenchAttachmentThroughNativeDialog(
+            page,
+            attachments.largePath,
+            runtime.electronApp
+          )
+          await waitForAttachmentCardByName(page, 'qa-large.json')
+          const largeFileMessage = await waitForAntMessageText(
+            page,
+            '文件过大，建议放到工作空间索引里使用'
+          )
 
-            await pastePlainText(page, 'plain paste ok')
-            const inputText = (
-              (await getWorkbenchLocator(page, workbenchSelectors.input).textContent()) || ''
-            ).trim()
-            await runtime.captureScreenshot({
-              name: 'attachment-final-state',
-              message: '文件附件、大文件提示和普通文本粘贴后的最终输入框状态。'
-            })
-            await fileCard.click()
-            await page.waitForTimeout(500)
+          await pastePlainText(page, 'plain paste ok')
+          const inputText = (
+            (await getWorkbenchLocator(page, workbenchSelectors.input).textContent()) || ''
+          ).trim()
+          await runtime.captureScreenshot({
+            name: 'attachment-final-state',
+            message: '文件附件、大文件提示和普通文本粘贴后的最终输入框状态。'
+          })
+          await fileCard.click()
+          await page.waitForTimeout(500)
 
-            const signals = await runtime.collectSignals()
-            const openPathCalls = signals.ipcInvokeEntries.filter(
-              (entry) => entry.name === 'openPath'
-            )
+          const signals = await runtime.collectSignals()
+          const openPathCalls = signals.ipcInvokeEntries.filter(
+            (entry) => entry.name === 'openPath'
+          )
 
-            return {
-              sessionCountBeforePaste,
-              sessionCountAfterPaste,
-              previewVisible,
-              imageRemoved,
-              downloadButtonVisible: Boolean(downloadButtonBox),
-              closeButtonVisible: Boolean(closeButtonBox),
-              zoomControlBelowImage: Boolean(
-                previewImageBox &&
-                zoomButtonBox &&
-                zoomButtonBox.y >= previewImageBox.y + previewImageBox.height
-              ),
-              topActionsAboveImage: Boolean(
-                previewImageBox &&
-                downloadButtonBox &&
-                closeButtonBox &&
-                downloadButtonBox.y + downloadButtonBox.height <= previewImageBox.y &&
-                closeButtonBox.y + closeButtonBox.height <= previewImageBox.y
-              ),
-              fileCardText,
-              legacyDocCardText,
-              pptxCardText,
-              largeFileMessage,
-              inputText,
-              openPathCallCount: openPathCalls.length,
-              attachmentPickCallCount: signals.ipcInvokeEntries.filter(
-                (entry) => entry.name === 'attachmentPick'
-              ).length,
-              latestAntMessage: await getAntMessageText(page)
-            }
-          } finally {
-            await attachments.cleanup()
-            await setup.workspace.cleanup()
+          return {
+            sessionCountBeforePaste,
+            sessionCountAfterPaste,
+            previewVisible,
+            imageRemoved,
+            downloadButtonVisible: Boolean(downloadButtonBox),
+            closeButtonVisible: Boolean(closeButtonBox),
+            zoomControlBelowImage: Boolean(
+              previewImageBox &&
+              zoomButtonBox &&
+              zoomButtonBox.y >= previewImageBox.y + previewImageBox.height
+            ),
+            topActionsAboveImage: Boolean(
+              previewImageBox &&
+              downloadButtonBox &&
+              closeButtonBox &&
+              downloadButtonBox.y + downloadButtonBox.height <= previewImageBox.y &&
+              closeButtonBox.y + closeButtonBox.height <= previewImageBox.y
+            ),
+            fileCardText,
+            legacyDocCardText,
+            pptxCardText,
+            largeFileMessage,
+            inputText,
+            openPathCallCount: openPathCalls.length,
+            attachmentPickCallCount: signals.ipcInvokeEntries.filter(
+              (entry) => entry.name === 'attachmentPick'
+            ).length,
+            latestAntMessage: await getAntMessageText(page)
           }
         },
         assert: async (result, runtime) => {

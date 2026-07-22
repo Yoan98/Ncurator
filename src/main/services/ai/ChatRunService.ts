@@ -816,6 +816,16 @@ export class ChatRunService {
         return
       }
 
+      const completedRun = await this.getMutableRun(runId)
+      if (completedRun && !completedRun.finalAnswer) {
+        await this.queueRunEvent(runId, {
+          type: 'answer_completed',
+          runId,
+          taskId: runId,
+          text: result.finalDeliveryMarkdown || completedRun.partialAnswer || '',
+          stage: 'human_mouth'
+        })
+      }
       await this.flushRunEvents(runId)
       await this.queueRunEvent(runId, { type: 'run_completed', runId })
       this.scheduleConversationMemoryUpdate({

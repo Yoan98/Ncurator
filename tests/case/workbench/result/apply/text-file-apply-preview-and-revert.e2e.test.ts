@@ -44,160 +44,156 @@ describe('workbench result e2e', () => {
             caseId: CASE_ID,
             rootBindingMode: 'ipc'
           })
-          try {
-            const targetPath = path.join(setup.workspace.rootPath, 'workbench-preview.md')
-            const beforeBytes = await fs.readFile(targetPath)
+          const targetPath = path.join(setup.workspace.rootPath, 'workbench-preview.md')
+          const beforeBytes = await fs.readFile(targetPath)
 
-            await switchWorkbenchMode(page, '没头脑')
-            await insertWorkbenchReferenceToken(page, 'workbench-preview.md')
-            await appendWorkbenchInputText(page, 'cedar-markdown-preview-442')
-            await submitWorkbenchCurrentDraft(page)
-            const searchResults = await waitForWorkbenchSearchResults(page)
-            await searchResults
-              .locator('div')
-              .filter({ hasText: 'workbench-preview.md' })
-              .first()
-              .getByRole('button', { name: '预览文件' })
-              .click()
-            await getWorkbenchLocator(page, workbenchSelectors.markdownViewer).waitFor({
-              state: 'visible',
-              timeout: 30_000
-            })
-            const normalPreviewModeTagCount = await getWorkbenchLocator(
-              page,
-              workbenchSelectors.documentPreviewModeTag
-            ).count()
+          await switchWorkbenchMode(page, '没头脑')
+          await insertWorkbenchReferenceToken(page, 'workbench-preview.md')
+          await appendWorkbenchInputText(page, 'cedar-markdown-preview-442')
+          await submitWorkbenchCurrentDraft(page)
+          const searchResults = await waitForWorkbenchSearchResults(page)
+          await searchResults
+            .locator('div')
+            .filter({ hasText: 'workbench-preview.md' })
+            .first()
+            .getByRole('button', { name: '预览文件' })
+            .click()
+          await getWorkbenchLocator(page, workbenchSelectors.markdownViewer).waitFor({
+            state: 'visible',
+            timeout: 30_000
+          })
+          const normalPreviewModeTagCount = await getWorkbenchLocator(
+            page,
+            workbenchSelectors.documentPreviewModeTag
+          ).count()
 
-            await switchWorkbenchMode(page, '大聪明')
-            await insertWorkbenchReferenceToken(page, 'workbench-preview.md')
-            const startedAtMs = Date.now()
-            await sendWorkbenchMessage(
-              page,
-              '请直接修改 workbench-preview.md：使用 replaceAll 把所有 Preview 改为 DiffPreview，再把唯一的 cedar-markdown-preview-442 精确改成 cedar-text-diff-884。写入完成后必须先等待 5 秒，再读取文件确认。'
-            )
-            const completionPromise = waitForWorkbenchAiRunCompletion(
-              runtime,
-              startedAtMs,
-              setup.env.modelName,
-              WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
-              { page, blockerPolicy: 'auto_approve' }
-            )
-            await waitForWorkbenchAiEvent(runtime, {
-              name: 'text_file_artifact_before_run_completion',
-              matches: (event) =>
-                event.type === 'file_artifact' && event.fileName === 'workbench-preview.md'
-            })
-            const applyEntryCountDuringRun = await getWorkbenchPrefixLocator(
-              page,
-              workbenchSelectors.assistantTurnApplyPrefix
-            ).count()
-            const evidence = await completionPromise
-            recordWorkbenchAiEvidence(runtime, evidence, 0.8)
-            const afterApply = await fs.readFile(targetPath, 'utf-8')
-            const applyEntry = await waitForApplyEntry(page)
-            await applyEntry.click()
-            const diffViewer = getWorkbenchLocator(page, workbenchSelectors.textDiffViewer)
-            await diffViewer.waitFor({ state: 'visible', timeout: 30_000 })
-            const removedLines = diffViewer.locator('[data-diff-line-type="remove"]')
-            const addedLines = diffViewer.locator('[data-diff-line-type="add"]')
-            await removedLines.first().waitFor({ state: 'visible' })
-            await addedLines.first().waitFor({ state: 'visible' })
-            const diffText = ((await diffViewer.textContent()) || '').trim()
-            const editModeTagCount = await getWorkbenchLocator(
-              page,
-              workbenchSelectors.documentPreviewModeTag
-            ).count()
-            const hasOldLineNumber = await removedLines
-              .first()
-              .getAttribute('data-old-line')
-              .then((value) => Boolean(value))
-            const hasNewLineNumber = await addedLines
-              .first()
-              .getAttribute('data-new-line')
-              .then((value) => Boolean(value))
-            const addedRowColumnCount = await addedLines.first().locator(':scope > span').count()
-            const resourceTabCount = await getWorkbenchPrefixLocator(
-              page,
-              workbenchSelectors.resourceTabPrefix
-            ).count()
-            const standaloneArtifactCount = await getWorkbenchPrefixLocator(
-              page,
-              workbenchSelectors.assistantTurnArtifactPrefix
-            ).count()
-            const omittedLineLabels = await diffViewer
-              .locator('[data-diff-omitted-count]')
-              .allTextContents()
-            const omittedCountBeforeExpand = omittedLineLabels.length
-            if (omittedCountBeforeExpand > 0) {
-              await diffViewer.locator('[data-diff-omitted-count]').first().click()
-              await page.waitForFunction(
-                (beforeCount) =>
-                  document.querySelectorAll('[data-diff-omitted-count]').length < beforeCount,
-                omittedCountBeforeExpand
-              )
-            }
-            const omittedCountAfterExpand = await diffViewer
-              .locator('[data-diff-omitted-count]')
-              .count()
-            const workspaceExplorerToggle = getWorkbenchLocator(
-              page,
-              workbenchSelectors.workspaceExplorerToggle
-            )
+          await switchWorkbenchMode(page, '大聪明')
+          await insertWorkbenchReferenceToken(page, 'workbench-preview.md')
+          const startedAtMs = Date.now()
+          await sendWorkbenchMessage(
+            page,
+            '请直接修改 workbench-preview.md：使用 replaceAll 把所有 Preview 改为 DiffPreview，再把唯一的 cedar-markdown-preview-442 精确改成 cedar-text-diff-884。写入完成后必须先等待 5 秒，再读取文件确认。'
+          )
+          const completionPromise = waitForWorkbenchAiRunCompletion(
+            runtime,
+            startedAtMs,
+            setup.env.modelName,
+            WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
+            { page, blockerPolicy: 'auto_approve' }
+          )
+          await waitForWorkbenchAiEvent(runtime, {
+            name: 'text_file_artifact_before_run_completion',
+            matches: (event) =>
+              event.type === 'file_artifact' && event.fileName === 'workbench-preview.md'
+          })
+          const applyEntryCountDuringRun = await getWorkbenchPrefixLocator(
+            page,
+            workbenchSelectors.assistantTurnApplyPrefix
+          ).count()
+          const evidence = await completionPromise
+          recordWorkbenchAiEvidence(runtime, evidence, 0.8)
+          const afterApply = await fs.readFile(targetPath, 'utf-8')
+          const applyEntry = await waitForApplyEntry(page)
+          await applyEntry.click()
+          const diffViewer = getWorkbenchLocator(page, workbenchSelectors.textDiffViewer)
+          await diffViewer.waitFor({ state: 'visible', timeout: 30_000 })
+          const removedLines = diffViewer.locator('[data-diff-line-type="remove"]')
+          const addedLines = diffViewer.locator('[data-diff-line-type="add"]')
+          await removedLines.first().waitFor({ state: 'visible' })
+          await addedLines.first().waitFor({ state: 'visible' })
+          const diffText = ((await diffViewer.textContent()) || '').trim()
+          const editModeTagCount = await getWorkbenchLocator(
+            page,
+            workbenchSelectors.documentPreviewModeTag
+          ).count()
+          const hasOldLineNumber = await removedLines
+            .first()
+            .getAttribute('data-old-line')
+            .then((value) => Boolean(value))
+          const hasNewLineNumber = await addedLines
+            .first()
+            .getAttribute('data-new-line')
+            .then((value) => Boolean(value))
+          const addedRowColumnCount = await addedLines.first().locator(':scope > span').count()
+          const resourceTabCount = await getWorkbenchPrefixLocator(
+            page,
+            workbenchSelectors.resourceTabPrefix
+          ).count()
+          const standaloneArtifactCount = await getWorkbenchPrefixLocator(
+            page,
+            workbenchSelectors.assistantTurnArtifactPrefix
+          ).count()
+          const omittedLineLabels = await diffViewer
+            .locator('[data-diff-omitted-count]')
+            .allTextContents()
+          const omittedCountBeforeExpand = omittedLineLabels.length
+          if (omittedCountBeforeExpand > 0) {
+            await diffViewer.locator('[data-diff-omitted-count]').first().click()
             await page.waitForFunction(
-              (testId) =>
-                document.querySelector(`[data-testid="${testId}"]`)?.getAttribute('aria-label') ===
-                '显示工作区文件',
-              workbenchSelectors.workspaceExplorerToggle
+              (beforeCount) =>
+                document.querySelectorAll('[data-diff-omitted-count]').length < beforeCount,
+              omittedCountBeforeExpand
             )
-            const workspaceExplorerToggleLabelBeforeOpen =
-              await workspaceExplorerToggle.getAttribute('aria-label')
-            const workspaceExplorerModeCountBeforeOpen = await getWorkbenchLocator(
-              page,
-              workbenchSelectors.workspaceExplorerModeSwitch
-            ).count()
-            await workspaceExplorerToggle.click()
-            const workspaceExplorerModeSwitch = getWorkbenchLocator(
-              page,
-              workbenchSelectors.workspaceExplorerModeSwitch
-            )
-            await workspaceExplorerModeSwitch.waitFor({ state: 'visible' })
-            const workspaceExplorerModeTextAfterOpen =
-              (await workspaceExplorerModeSwitch.textContent()) || ''
-            const currentSessionChanges = getWorkbenchPrefixLocator(
-              page,
-              workbenchSelectors.workspaceFileChangePrefix
-            )
-            await currentSessionChanges.first().waitFor({ state: 'visible', timeout: 10_000 })
-            const currentSessionChangeMarkerCount = await currentSessionChanges.count()
+          }
+          const omittedCountAfterExpand = await diffViewer
+            .locator('[data-diff-omitted-count]')
+            .count()
+          const workspaceExplorerToggle = getWorkbenchLocator(
+            page,
+            workbenchSelectors.workspaceExplorerToggle
+          )
+          await page.waitForFunction(
+            (testId) =>
+              document.querySelector(`[data-testid="${testId}"]`)?.getAttribute('aria-label') ===
+              '显示工作区文件',
+            workbenchSelectors.workspaceExplorerToggle
+          )
+          const workspaceExplorerToggleLabelBeforeOpen =
+            await workspaceExplorerToggle.getAttribute('aria-label')
+          const workspaceExplorerModeCountBeforeOpen = await getWorkbenchLocator(
+            page,
+            workbenchSelectors.workspaceExplorerModeSwitch
+          ).count()
+          await workspaceExplorerToggle.click()
+          const workspaceExplorerModeSwitch = getWorkbenchLocator(
+            page,
+            workbenchSelectors.workspaceExplorerModeSwitch
+          )
+          await workspaceExplorerModeSwitch.waitFor({ state: 'visible' })
+          const workspaceExplorerModeTextAfterOpen =
+            (await workspaceExplorerModeSwitch.textContent()) || ''
+          const currentSessionChanges = getWorkbenchPrefixLocator(
+            page,
+            workbenchSelectors.workspaceFileChangePrefix
+          )
+          await currentSessionChanges.first().waitFor({ state: 'visible', timeout: 10_000 })
+          const currentSessionChangeMarkerCount = await currentSessionChanges.count()
 
-            await getWorkbenchLocator(page, workbenchSelectors.applyRevertButton).click()
-            await waitForWorkbenchApplyRecordStatus(page, 'reverted')
-            const afterRevertBytes = await fs.readFile(targetPath)
-            const diffStillVisible = await diffViewer.isVisible().catch(() => false)
+          await getWorkbenchLocator(page, workbenchSelectors.applyRevertButton).click()
+          await waitForWorkbenchApplyRecordStatus(page, 'reverted')
+          const afterRevertBytes = await fs.readFile(targetPath)
+          const diffStillVisible = await diffViewer.isVisible().catch(() => false)
 
-            return {
-              normalPreviewModeTagCount,
-              editModeTagCount,
-              afterApply,
-              diffText,
-              hasOldLineNumber,
-              hasNewLineNumber,
-              addedRowColumnCount,
-              resourceTabCount,
-              standaloneArtifactCount,
-              omittedLineLabels,
-              applyEntryCountDuringRun,
-              omittedCountBeforeExpand,
-              omittedCountAfterExpand,
-              workspaceExplorerToggleLabelBeforeOpen,
-              workspaceExplorerModeCountBeforeOpen,
-              workspaceExplorerModeTextAfterOpen,
-              currentSessionChangeMarkerCount,
-              restoredBytes: afterRevertBytes.equals(beforeBytes),
-              diffStillVisible
-            }
-          } finally {
-            await setup.workspace.cleanup()
+          return {
+            normalPreviewModeTagCount,
+            editModeTagCount,
+            afterApply,
+            diffText,
+            hasOldLineNumber,
+            hasNewLineNumber,
+            addedRowColumnCount,
+            resourceTabCount,
+            standaloneArtifactCount,
+            omittedLineLabels,
+            applyEntryCountDuringRun,
+            omittedCountBeforeExpand,
+            omittedCountAfterExpand,
+            workspaceExplorerToggleLabelBeforeOpen,
+            workspaceExplorerModeCountBeforeOpen,
+            workspaceExplorerModeTextAfterOpen,
+            currentSessionChangeMarkerCount,
+            restoredBytes: afterRevertBytes.equals(beforeBytes),
+            diffStillVisible
           }
         },
         assert: async (result, runtime) => {

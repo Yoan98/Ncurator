@@ -1,67 +1,14 @@
-import { createHash } from 'node:crypto'
 import { spawn, spawnSync } from 'node:child_process'
-import {
-  appendFileSync,
-  createReadStream,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  rmSync,
-  writeFileSync
-} from 'node:fs'
+import { appendFileSync, existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { mkdtemp } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import { resolveBundleInstaller } from '../release/artifact-bundle.mjs'
 
 const ROOT = process.cwd()
-const DIST_DIR = path.join(ROOT, 'dist')
 const LOGS_ROOT = path.join(ROOT, 'tests', 'logs', 'package')
 
 const createRunId = () => new Date().toISOString().replaceAll(':', '-').replaceAll('.', '-')
-
-const resolvePnpmCommand = () => {
-  const npmExecPath = String(process.env.npm_execpath || '').trim()
-  if (npmExecPath && /\.(?:c?js|mjs)$/u.test(npmExecPath)) {
-    return { command: process.execPath, prefixArgs: [npmExecPath] }
-  }
-  return {
-    command: process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm',
-    prefixArgs: []
-  }
-}
-
-const sha256File = async (filePath) =>
-  await new Promise((resolve, reject) => {
-    const hash = createHash('sha256')
-    const stream = createReadStream(filePath)
-    stream.on('error', reject)
-    stream.on('data', (chunk) => hash.update(chunk))
-    stream.on('end', () => resolve(hash.digest('hex')))
-  })
-
-const readPackageAudit = () => {
-  const auditPath = path.join(DIST_DIR, 'package-audit.json')
-  if (!existsSync(auditPath)) throw new Error(`打包审计报告不存在：${auditPath}`)
-  return JSON.parse(readFileSync(auditPath, 'utf8'))
-}
-
-const resolveSingleInstaller = (extension) => {
-  const audit = readPackageAudit()
-  const matches = (audit.installers || []).filter((item) =>
-    String(item.name || '')
-      .toLowerCase()
-      .endsWith(extension)
-  )
-  if (matches.length !== 1) {
-    throw new Error(
-      `期望 package-audit.json 中只有一个 ${extension} 安装包，实际为 ${String(matches.length)}`
-    )
-  }
-  const artifactPath = path.join(DIST_DIR, matches[0].name)
-  if (!existsSync(artifactPath)) throw new Error(`安装包不存在：${artifactPath}`)
-  return artifactPath
-}
 
 const findMountedMacApp = (mountPath) => {
   const apps = readdirSync(mountPath, { withFileTypes: true })
@@ -115,9 +62,20 @@ const clearQuarantine = (targetPath) => {
   }
 }
 
-export const preparePackagedE2EApplication = async () => {
+export const preparePackagedE2EApplication = async (bundlePath, { resultPath = '' } = {}) => {
   if (process.platform !== 'darwin' && process.platform !== 'win32') {
     throw new Error(`正式包 E2E 只支持 macOS 和 Windows，当前平台：${process.platform}`)
+  }
+  if (!bundlePath) throw new Error('正式包 E2E 必须提供 --bundle <release-bundle.json>')
+
+  const expectedPlatform = process.platform === 'win32' ? 'windows-x64' : undefined
+  const resolvedBundlePath = path.resolve(ROOT, bundlePath)
+  const { bundle, installer, installerPath } = await resolveBundleInstaller(
+    resolvedBundlePath,
+    expectedPlatform ? { platform: expectedPlatform } : {}
+  )
+  if (process.platform === 'darwin' && !bundle.platform.startsWith('macos-')) {
+    throw new Error(`macOS 不能测试 ${bundle.platform} 发布包`)
   }
 
   const runId = createRunId()
@@ -155,21 +113,14 @@ export const preparePackagedE2EApplication = async () => {
     })
   }
 
-  const pnpm = resolvePnpmCommand()
-  const buildScript =
-    process.platform === 'darwin'
-      ? process.arch === 'arm64'
-        ? 'build:mac:arm64'
-        : 'build:mac:x64'
-      : 'build:win'
-  await runLogged(pnpm.command, [...pnpm.prefixArgs, 'run', buildScript])
-
-  let artifactPath = ''
+  const artifactPath = installerPath
   let installedAppPath = ''
   let executablePath = ''
 
   if (process.platform === 'darwin') {
-    artifactPath = resolveSingleInstaller('.dmg')
+    if (!artifactPath.toLowerCase().endsWith('.dmg')) {
+      throw new Error(`macOS release bundle installer must be a DMG: ${artifactPath}`)
+    }
     clearQuarantine(artifactPath)
     const mountPath = await mkdtemp(path.join(os.tmpdir(), 'ncurator-e2e-dmg-'))
     let mounted = false
@@ -184,7 +135,7 @@ export const preparePackagedE2EApplication = async () => {
       ])
       mounted = true
       const sourceAppPath = findMountedMacApp(mountPath)
-      const installRoot = path.join(os.homedir(), 'Applications', 'NCurator-E2E')
+      const installRoot = path.join(os.homedir(), 'Applications', 'NCurator-E2E', bundle.platform)
       installedAppPath = path.join(installRoot, path.basename(sourceAppPath))
       const previousExecutable = existsSync(installedAppPath)
         ? resolveMacExecutable(installedAppPath)
@@ -202,7 +153,9 @@ export const preparePackagedE2EApplication = async () => {
       rmSync(mountPath, { recursive: true, force: true })
     }
   } else {
-    artifactPath = resolveSingleInstaller('.exe')
+    if (!artifactPath.toLowerCase().endsWith('.exe')) {
+      throw new Error(`Windows release bundle installer must be an EXE: ${artifactPath}`)
+    }
     const installRoot = path.join(os.homedir(), 'AppData', 'Local', 'NCurator-E2E')
     mkdirSync(installRoot, { recursive: true })
     await runLogged(artifactPath, ['/S', `/D=${installRoot}`])
@@ -212,14 +165,17 @@ export const preparePackagedE2EApplication = async () => {
       throw new Error(`Windows 安装后的应用不存在：${executablePath}`)
   }
 
-  const artifactSha256 = await sha256File(artifactPath)
+  const artifactSha256 = installer.sha256
   const metadata = {
     schemaVersion: 1,
     runId,
     createdAt: new Date().toISOString(),
     platform: process.platform,
     arch: process.arch,
-    buildScript,
+    releaseTag: bundle.tag,
+    releaseCommit: bundle.commit,
+    releasePlatform: bundle.platform,
+    bundlePath: resolvedBundlePath,
     artifactPath,
     artifactSha256,
     installedAppPath,
@@ -244,11 +200,17 @@ export const preparePackagedE2EApplication = async () => {
       NCURATOR_BETTER_SQLITE3_NATIVE_BINDING: ''
     },
     writeSummary: (input) => {
-      writeFileSync(
-        path.join(logDir, 'summary.json'),
-        `${JSON.stringify({ ...metadata, finishedAt: new Date().toISOString(), ...input }, null, 2)}\n`,
-        'utf8'
-      )
+      const summary = `${JSON.stringify(
+        { ...metadata, finishedAt: new Date().toISOString(), ...input },
+        null,
+        2
+      )}\n`
+      writeFileSync(path.join(logDir, 'summary.json'), summary, 'utf8')
+      if (resultPath) {
+        const resolvedResultPath = path.resolve(ROOT, resultPath)
+        mkdirSync(path.dirname(resolvedResultPath), { recursive: true })
+        writeFileSync(resolvedResultPath, summary, 'utf8')
+      }
     }
   }
 }

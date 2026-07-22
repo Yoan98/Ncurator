@@ -1,15 +1,25 @@
 import { execFile, spawn } from 'node:child_process'
-import { access, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 import { promisify } from 'node:util'
+import { createReleaseBundle } from './artifact-bundle.mjs'
 import {
+  assertCandidatePublishable,
+  markCandidatePublished,
+  materializeReleaseCandidate,
+  readReleaseCandidate,
+  recordCandidateE2E
+} from './candidate.mjs'
+import {
+  assertWindowsReleaseRouteAvailable,
+  dispatchWindowsRelease,
   inspectLocalWindowsRelease,
   readPublicReleaseFragment,
   verifyPublicReleaseFragment,
   verifyR2ReleaseFragment
 } from './shared/windows.mjs'
+import { prepareReleaseWorkspace } from './workspace.mjs'
 
 const execFileAsync = promisify(execFile)
 const ROOT = process.cwd()
@@ -19,13 +29,30 @@ const valueAfter = (name) => {
   return index >= 0 ? args[index + 1] : undefined
 }
 const releaseTag = valueAfter('--tag') || ''
-const keepWork = args.includes('--keep-work')
-const reuseWork = args.includes('--reuse-work')
+const forceLocal = args.includes('--local-only')
+const forceActions = args.includes('--actions')
+const packageE2E = args.includes('--package-e2e')
+const candidateRunId = valueAfter('--candidate-run-id') || ''
+const modes = [
+  ['prepare', args.includes('--prepare-only')],
+  ['test', args.includes('--test-only')],
+  ['publish', args.includes('--publish-only')]
+].filter(([, enabled]) => enabled)
 
-if (!/^v\d+\.\d+\.\d+$/u.test(releaseTag)) {
+if (!/^v\d+\.\d+\.\d+$/u.test(releaseTag) || modes.length !== 1) {
   throw new Error(
-    'usage: node scripts/release/windows.mjs --tag <v1.2.3> [--keep-work] [--reuse-work]'
+    'usage: node scripts/release/windows.mjs --tag <v1.2.3> (--prepare-only|--test-only|--publish-only) [--package-e2e] [--local-only|--actions] [--candidate-run-id <id>]'
   )
+}
+if (forceLocal && forceActions) throw new Error('--local-only and --actions cannot be combined')
+const mode = modes[0][0]
+if (mode !== 'prepare' && packageE2E) {
+  throw new Error('--package-e2e can only be combined with --prepare-only')
+}
+if (mode === 'test' && forceActions)
+  throw new Error('--test-only currently requires the local route')
+if (candidateRunId && !(mode === 'publish' && forceActions)) {
+  throw new Error('--candidate-run-id is only valid for Actions publish-only')
 }
 
 const run = (command, commandArgs, options = {}) =>
@@ -44,15 +71,25 @@ const run = (command, commandArgs, options = {}) =>
     })
   })
 
-const pathExists = (filePath) =>
-  access(filePath)
-    .then(() => true)
-    .catch(() => false)
-
-const inspection = await inspectLocalWindowsRelease(ROOT)
-if (!inspection.ready) {
-  throw new Error(`local Windows release preflight failed:\n- ${inspection.issues.join('\n- ')}`)
+const requirePublish = mode === 'publish'
+const localInspection = forceActions
+  ? undefined
+  : await inspectLocalWindowsRelease(ROOT, { requirePublish })
+const route = await assertWindowsReleaseRouteAvailable({
+  root: ROOT,
+  forceLocal: forceLocal || mode === 'test',
+  forceActions,
+  localInspection
+})
+if (route === 'actions') {
+  await dispatchWindowsRelease(ROOT, releaseTag, {
+    mode,
+    packageE2E,
+    candidateRunId
+  })
+  process.exit(0)
 }
+const inspection = localInspection
 
 const { stdout: tagType } = await execFileAsync('git', ['cat-file', '-t', releaseTag], {
   cwd: ROOT
@@ -66,145 +103,194 @@ const taggedVersion = JSON.parse(taggedPackageJson).version
 if (releaseTag !== `v${taggedVersion}`) {
   throw new Error(`${releaseTag} does not match package version ${taggedVersion}`)
 }
+const { stdout: taggedCommitOutput } = await execFileAsync('git', [
+  'rev-list',
+  '-n',
+  '1',
+  releaseTag
+])
+const taggedCommit = taggedCommitOutput.trim()
 
-const publicBaseUrl = String(process.env.R2_PUBLIC_BASE_URL).replace(/\/$/u, '')
-const existing = await readPublicReleaseFragment(releaseTag, 'windows-x64', publicBaseUrl)
-if (existing) {
-  await verifyPublicReleaseFragment(existing, publicBaseUrl)
-  await verifyR2ReleaseFragment(existing, inspection.awsExecutable)
-  process.stdout.write(
-    `[release] Windows ${releaseTag} is already complete on R2; skipped rebuild\n`
-  )
-  process.exit(0)
-}
-
-const workRoot = path.resolve(
-  String(process.env.NCURATOR_RELEASE_WORK_ROOT || '').trim() ||
-    path.join(os.tmpdir(), 'ncurator-release')
-)
-const workDirectory = path.join(workRoot, releaseTag)
-const archivePath = path.join(workDirectory, 'source.zip')
-const sourceDirectory = path.join(workDirectory, 'source')
-const cacheDirectory = path.join(workDirectory, 'reusable-cache')
-const tagCommitPath = path.join(workDirectory, 'tag-commit.txt')
-const { stdout: tagCommitOutput } = await execFileAsync('git', ['rev-list', '-n', '1', releaseTag])
-const tagCommit = tagCommitOutput.trim()
-
-const reusablePaths = ['.runvenv', '.pip-cache', 'resources/web_crawler_sidecar/bin']
-const preserveReusableCache = async () => {
-  if (!(await pathExists(sourceDirectory))) return
-  for (const relativePath of reusablePaths) {
-    const source = path.join(sourceDirectory, relativePath)
-    if (!(await pathExists(source))) continue
-    const target = path.join(cacheDirectory, relativePath)
-    await mkdir(path.dirname(target), { recursive: true })
-    await rm(target, { recursive: true, force: true })
-    await rename(source, target)
-  }
-}
-
-const restoreReusableCache = async () => {
-  if (!(await pathExists(cacheDirectory))) return
-  for (const relativePath of reusablePaths) {
-    const source = path.join(cacheDirectory, relativePath)
-    if (!(await pathExists(source))) continue
-    const target = path.join(sourceDirectory, relativePath)
-    await mkdir(path.dirname(target), { recursive: true })
-    await rm(target, { recursive: true, force: true })
-    await rename(source, target)
-  }
-  await rm(cacheDirectory, { recursive: true, force: true })
-}
-
-let completed = false
-
-try {
-  if (reuseWork) {
-    const cachedCommit = await readFile(tagCommitPath, 'utf8').catch(() => '')
-    if (cachedCommit.trim() !== tagCommit) {
-      throw new Error(`reusable Windows release work does not match immutable tag ${releaseTag}`)
-    }
-    await preserveReusableCache()
-    process.stdout.write(`[release] reusing Windows work directory ${workDirectory}\n`)
-  } else {
-    await rm(workDirectory, { recursive: true, force: true })
-  }
-  await rm(sourceDirectory, { recursive: true, force: true })
-  await rm(archivePath, { force: true })
-  await mkdir(sourceDirectory, { recursive: true })
-  await run('git', ['archive', '--format=zip', '--output', archivePath, releaseTag])
-  await run('tar', ['-xf', archivePath, '-C', sourceDirectory])
-  if (reuseWork) await restoreReusableCache()
-  await writeFile(tagCommitPath, `${tagCommit}\n`, 'utf8')
-
-  const releaseEnvironment = {
+const releaseEnvironment = () => {
+  const environment = {
     ...process.env,
     CSC_IDENTITY_AUTO_DISCOVERY:
       String(process.env.CSC_IDENTITY_AUTO_DISCOVERY || '').trim() || 'false',
     NCURATOR_SIDECAR_BROWSER_CACHE:
       String(process.env.NCURATOR_SIDECAR_BROWSER_CACHE || '').trim() ||
       path.join(os.homedir(), '.ncurator', 'release-tools', 'sidecar-browser-cache', 'win32-x64'),
+    NCURATOR_SIDECAR_VENV_ROOT:
+      String(process.env.NCURATOR_SIDECAR_VENV_ROOT || '').trim() ||
+      path.join(os.homedir(), '.ncurator', 'release-tools', 'sidecar-venv'),
     NCURATOR_SIDECAR_BUILD_PYTHON:
       String(process.env.NCURATOR_SIDECAR_BUILD_PYTHON || '').trim() || inspection.python.executable
   }
-  delete releaseEnvironment.CSC_LINK
-  delete releaseEnvironment.CSC_KEY_PASSWORD
-  delete releaseEnvironment.WIN_CSC_LINK
-  delete releaseEnvironment.WIN_CSC_KEY_PASSWORD
-  process.stdout.write(`[release] building ${releaseTag} for Windows x64\n`)
-  await run(inspection.pnpmExecutable, ['install', '--frozen-lockfile'], {
-    cwd: sourceDirectory,
-    env: releaseEnvironment
-  })
-  await run(inspection.pnpmExecutable, ['run', 'build:win'], {
-    cwd: sourceDirectory,
-    env: releaseEnvironment
-  })
-
-  const distDirectory = path.join(sourceDirectory, 'dist')
-  const fragmentPath = path.join(distDirectory, 'windows-x64.json')
-  await run(
-    process.execPath,
-    [
-      path.join(sourceDirectory, 'scripts', 'release', 'r2', 'create-fragment.mjs'),
-      distDirectory,
-      fragmentPath,
-      releaseTag,
-      'windows-x64'
-    ],
-    { cwd: sourceDirectory, env: releaseEnvironment }
-  )
-  await run(
-    process.execPath,
-    [
-      path.join(sourceDirectory, 'scripts', 'release', 'r2', 'upload-fragment.mjs'),
-      distDirectory,
-      fragmentPath
-    ],
-    { cwd: sourceDirectory, env: releaseEnvironment }
-  )
-  await run(
-    process.execPath,
-    [
-      path.join(sourceDirectory, 'scripts', 'release', 'r2', 'finalize-windows.mjs'),
-      '--tag',
-      releaseTag
-    ],
-    { cwd: sourceDirectory, env: releaseEnvironment }
-  )
-
-  const fragment = JSON.parse(await readFile(fragmentPath, 'utf8'))
-  await verifyPublicReleaseFragment(fragment, publicBaseUrl)
-  await verifyR2ReleaseFragment(fragment, inspection.awsExecutable)
-  completed = true
-  process.stdout.write(`[release] Windows ${releaseTag} published and verified\n`)
-} finally {
-  if (keepWork || !completed) {
-    process.stdout.write(`[release] kept work directory ${workDirectory}\n`)
-    if (!completed) {
-      process.stdout.write(
-        `[release] retry with: pnpm release:win -- --tag ${releaseTag} --reuse-work\n`
-      )
-    }
-  } else await rm(workDirectory, { recursive: true, force: true })
+  for (const name of ['CSC_LINK', 'CSC_KEY_PASSWORD', 'WIN_CSC_LINK', 'WIN_CSC_KEY_PASSWORD']) {
+    delete environment[name]
+  }
+  return environment
 }
+
+const testEnvironment = (environment) => {
+  const sanitized = { ...environment }
+  for (const name of [
+    'AWS_ACCESS_KEY_ID',
+    'AWS_SECRET_ACCESS_KEY',
+    'R2_ACCOUNT_ID',
+    'R2_BUCKET_NAME',
+    'R2_PUBLIC_BASE_URL'
+  ]) {
+    delete sanitized[name]
+  }
+  return sanitized
+}
+
+const extractTagSource = async (defaultRootName) => {
+  const workspace = await prepareReleaseWorkspace({
+    releaseTag,
+    defaultRootName,
+    keepWork: false
+  })
+  const sourceDirectory = path.join(workspace.workDirectory, 'source')
+  await run('git', ['worktree', 'add', '--detach', sourceDirectory, releaseTag])
+  return {
+    sourceDirectory,
+    workspace: {
+      dispose: async () => {
+        try {
+          await run('git', ['worktree', 'remove', '--force', sourceDirectory])
+        } catch (error) {
+          await workspace.dispose()
+          await run('git', ['worktree', 'prune', '--expire', 'now'])
+          const message = error instanceof Error ? error.message : String(error)
+          process.stderr.write(`[release] worktree cleanup recovered after: ${message}\n`)
+          return
+        }
+        await workspace.dispose()
+      }
+    }
+  }
+}
+
+const runCandidateE2E = async ({ candidate, sourceDirectory, environment }) => {
+  const resultPath = path.join(candidate.directory, 'package-e2e-result.json')
+  try {
+    await run(
+      inspection.pnpmExecutable,
+      ['run', 'test:e2e:package', '--', '--bundle', candidate.bundlePath, '--result', resultPath],
+      { cwd: sourceDirectory, env: testEnvironment(environment) }
+    )
+    return await recordCandidateE2E({
+      tag: releaseTag,
+      platform: 'windows-x64',
+      status: 'passed',
+      resultPath
+    })
+  } catch (error) {
+    await recordCandidateE2E({
+      tag: releaseTag,
+      platform: 'windows-x64',
+      status: 'failed',
+      resultPath
+    })
+    throw error
+  }
+}
+
+if (mode === 'prepare') {
+  const { workspace, sourceDirectory } = await extractTagSource('p')
+  try {
+    const environment = releaseEnvironment()
+    await run(inspection.pnpmExecutable, ['install', '--frozen-lockfile'], {
+      cwd: sourceDirectory,
+      env: environment
+    })
+    await run(inspection.pnpmExecutable, ['run', 'build:win'], {
+      cwd: sourceDirectory,
+      env: environment
+    })
+    const distDirectory = path.join(sourceDirectory, 'dist')
+    const fragmentPath = path.join(distDirectory, 'windows-x64.json')
+    await run(
+      process.execPath,
+      [
+        path.join(sourceDirectory, 'scripts', 'release', 'r2', 'create-fragment.mjs'),
+        distDirectory,
+        fragmentPath,
+        releaseTag,
+        'windows-x64'
+      ],
+      { cwd: sourceDirectory, env: environment }
+    )
+    const bundlePath = path.join(distDirectory, 'release-bundle-windows-x64.json')
+    await createReleaseBundle({ fragmentPath, outputPath: bundlePath, commit: taggedCommit })
+    let candidate = await materializeReleaseCandidate({ bundlePath })
+    if (packageE2E) {
+      candidate = await runCandidateE2E({ candidate, sourceDirectory, environment })
+    } else {
+      candidate = await recordCandidateE2E({
+        tag: releaseTag,
+        platform: 'windows-x64',
+        status: 'skipped'
+      })
+    }
+    process.stdout.write(
+      `[release] candidate ready; R2 publish paused\n[release] bundle ${candidate.bundlePath}\n`
+    )
+  } finally {
+    await workspace.dispose()
+  }
+  process.exit(0)
+}
+
+if (mode === 'test') {
+  let candidate = await readReleaseCandidate({ tag: releaseTag, platform: 'windows-x64' })
+  if (candidate.state.commit !== taggedCommit) {
+    throw new Error('candidate commit does not match release tag')
+  }
+  const { workspace, sourceDirectory } = await extractTagSource('t')
+  try {
+    const environment = releaseEnvironment()
+    await run(inspection.pnpmExecutable, ['install', '--frozen-lockfile'], {
+      cwd: sourceDirectory,
+      env: environment
+    })
+    candidate = await runCandidateE2E({ candidate, sourceDirectory, environment })
+    process.stdout.write(`[release] candidate E2E passed: ${candidate.bundlePath}\n`)
+  } finally {
+    await workspace.dispose()
+  }
+  process.exit(0)
+}
+
+const publicBaseUrl = String(process.env.R2_PUBLIC_BASE_URL).replace(/\/$/u, '')
+const existing = await readPublicReleaseFragment(releaseTag, 'windows-x64', publicBaseUrl)
+if (existing) {
+  await verifyPublicReleaseFragment(existing, publicBaseUrl)
+  await verifyR2ReleaseFragment(existing, inspection.awsExecutable)
+  process.stdout.write(`[release] Windows ${releaseTag} is already complete on R2\n`)
+  process.exit(0)
+}
+const candidate = await assertCandidatePublishable({
+  tag: releaseTag,
+  platform: 'windows-x64',
+  commit: taggedCommit
+})
+await run(
+  process.execPath,
+  [
+    path.join(ROOT, 'scripts', 'release', 'r2', 'upload-fragment.mjs'),
+    candidate.verified.directory,
+    candidate.verified.fragmentPath
+  ],
+  { cwd: ROOT, env: process.env }
+)
+await run(
+  process.execPath,
+  [path.join(ROOT, 'scripts', 'release', 'r2', 'finalize-windows.mjs'), '--tag', releaseTag],
+  { cwd: ROOT, env: process.env }
+)
+await verifyPublicReleaseFragment(candidate.verified.fragment, publicBaseUrl)
+await verifyR2ReleaseFragment(candidate.verified.fragment, inspection.awsExecutable)
+await markCandidatePublished({ tag: releaseTag, platform: 'windows-x64' })
+process.stdout.write(`[release] Windows ${releaseTag} published from ${candidate.bundlePath}\n`)
