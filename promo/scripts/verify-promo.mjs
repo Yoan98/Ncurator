@@ -59,7 +59,7 @@ export const verifyEpisode = async (episodeDir, { checkFinal = true } = {}) => {
   }
 
   for (const asset of manifest.assets) {
-    if (!/^assets\/(audio|captured\/(source|clips|stills))\//u.test(asset.path)) {
+    if (!/^assets\/(audio|fonts|captured\/(source|clips|stills))\//u.test(asset.path)) {
       throw new Error(`非法正式素材路径：${asset.path}`)
     }
     const filePath = path.join(episodeDir, asset.path)

@@ -32,6 +32,7 @@ await mkdir(path.join(episodeDir, 'assets', 'captured', 'source'), { recursive: 
 await mkdir(path.join(episodeDir, 'assets', 'captured', 'clips'), { recursive: true })
 await mkdir(path.join(episodeDir, 'assets', 'captured', 'stills'), { recursive: true })
 await mkdir(path.join(episodeDir, 'assets', 'audio'), { recursive: true })
+await mkdir(path.join(episodeDir, 'assets', 'fonts'), { recursive: true })
 await mkdir(path.join(episodeDir, 'renders'), { recursive: true })
 await mkdir(path.join(episodeDir, '.work'), { recursive: true })
 

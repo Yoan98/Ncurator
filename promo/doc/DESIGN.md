@@ -16,7 +16,7 @@
 
 ## Typography
 
-- 中文：`PingFang SC`、`Microsoft YaHei`、`Noto Sans CJK SC`
+- 中文：工程内置 `Noto Sans CJK SC` 变量字体，不依赖系统字体
 - 标题不小于 `72px`，字幕不小于 `46px`，辅助文字不小于 `28px`
 - 字距固定为 `0`，让中文自然换行，不手写强制换行
 

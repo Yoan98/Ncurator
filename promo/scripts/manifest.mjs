@@ -50,6 +50,7 @@ const assetRole = (relativePath) => {
   if (relativePath.startsWith('assets/captured/source/')) return 'capture-source'
   if (relativePath.startsWith('assets/captured/clips/')) return 'capture-clip'
   if (relativePath.startsWith('assets/captured/stills/')) return 'capture-still'
+  if (relativePath.startsWith('assets/fonts/')) return 'font'
   return 'metadata'
 }
 

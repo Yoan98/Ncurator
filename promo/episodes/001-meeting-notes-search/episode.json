@@ -17,8 +17,8 @@
   "sources": [
     {
       "path": "index.html",
-      "size": 24930,
-      "sha256": "4b837c1815a9096c501e89c09739466cbc97ec7fb306ab9d86ff9f3b0221f3f1"
+      "size": 24883,
+      "sha256": "74369f33b3e3ef7f2c9176bf8e812058a327b7ad927ef62d372fc6ab23a7836d"
     },
     {
       "path": "hyperframes.json",
@@ -88,6 +88,12 @@
       "path": "assets/captured/source/product-run.webm",
       "size": 1968981,
       "sha256": "bcf578c6ca20351a022f1e93d1b146791af39ed5320acbfa2c5365f1e8e5fa5f"
+    },
+    {
+      "role": "font",
+      "path": "assets/fonts/NotoSansCJKsc-VF.otf",
+      "size": 30737452,
+      "sha256": "2745e9681cb9d8a5c8901b62c9e1bd98c9c774365fc3b84dd467621013b51cd3"
     }
   ]
 }

@@ -17,8 +17,8 @@
   "sources": [
     {
       "path": "index.html",
-      "size": 21836,
-      "sha256": "1dfe7b7cd09d65314bb2d138796f8d2aaf5d2d0f336c69a05158276bce4de41c"
+      "size": 21789,
+      "sha256": "39ab43c528689db37108c5bf41eba4263c66652c1a6bb60bfe3012994f941fef"
     },
     {
       "path": "hyperframes.json",
@@ -95,6 +95,12 @@
       "path": "assets/captured/stills/result.png",
       "size": 210851,
       "sha256": "735b36f5122280eb09af48d7c3eccb363ba5e1a39739a1796466561928199599"
+    },
+    {
+      "role": "font",
+      "path": "assets/fonts/NotoSansCJKsc-VF.otf",
+      "size": 30737452,
+      "sha256": "2745e9681cb9d8a5c8901b62c9e1bd98c9c774365fc3b84dd467621013b51cd3"
     }
   ]
 }

@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "path": "renders/final.mp4",
-  "size": 5947598,
-  "sha256": "dc4f9c083fe6d3b47cce5105f4e34aac6d7990539017d0c5d98c3352876752fd",
-  "episodeManifestSha256": "92010baa6491fd90f22bbcc2398c6cffc4bbf6743c043ef7c581d7b564225907",
+  "size": 5970773,
+  "sha256": "8f9ab4fea27857bda6d4b068bd818870b0f46ade953c2581fe9a04ed6a089bee",
+  "episodeManifestSha256": "c2a057569727b371e23ea93ceb84fe2969491bd32f102e54f9cfbb7df196b733",
   "video": {
     "width": 1080,
     "height": 1920,
