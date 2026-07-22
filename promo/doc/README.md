@@ -43,7 +43,9 @@ promo/
 ```bash
 pnpm promo:new -- "本期主题" "episode-slug"
 pnpm promo:capture -- 001-episode app-frame
+pnpm promo:voice:setup
 pnpm promo:voice -- 001-episode
+pnpm promo:voice:check -- 001-episode
 pnpm promo:check -- 001-episode
 pnpm promo:preview -- 001-episode
 pnpm promo:render -- 001-episode
@@ -66,15 +68,57 @@ pnpm promo:render -- 001-episode
 
 ## 人声
 
-馆长默认使用本地 Qwen3-TTS，不需要真人录音和在线接口。
+### 唯一正式配音方案
 
-- 模型：`Qwen3-TTS VoiceDesign 1.7B 8bit`
-- 声音：成熟、松弛、可信的中文男声
+馆长所有宣传视频只使用本地 Qwen3-TTS。第一期成片使用的就是下面这套方案，后续视频必须保持一致：
+
+- 固定人声 ID：`qwen3-guan-zhang-relaxed-male-v1`
+- 模型：`mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-8bit`
+- 声音描述：成熟、松弛、可信的中文男声，像有经验的朋友自然交流
+- 生成方式：整段文案一次生成，不能逐句拼接
+- 随机种子与采样参数：固定在 `profile.json`，保证同一文案重复生成时声音和时长稳定
 - 语速：原始语音的 `1.08` 倍
+- 后处理：`48kHz`、单声道、`PCM 16-bit`，响度 `-17 LUFS`，峰值 `-1 dBTP`
 - 产品名称：统一读作“馆长”
 - 禁用词：`NCurator`、`大聪明`、`没头脑`
 
-旁白按整段生成，保持句子之间的语气连续。字幕直接使用原始文案，不用语音识别改写文字。Edge、macOS `say` 和 Kokoro 不再作为正式中文配音方案。
+唯一配置源是 `promo/library/voice/profile.json`。模型、声音描述、语速和后处理参数都从这里读取，生成脚本中不能再维护另一套默认值。
+
+### 强制规则
+
+- 正式旁白只能通过 `pnpm promo:voice -- <视频目录>` 生成。
+- Edge、macOS `say`、Kokoro 和其他系统语音禁止作为备用方案。
+- Qwen 环境缺失或模型下载失败时，必须停止制作并修复环境，不能自动降级。
+- 不能手工覆盖 `assets/audio/narration.wav`。
+- 每次生成都会同时写入 `narration.meta.json`，记录人声 ID、模型、风格、语速、文案哈希和音频哈希。
+- `promo:check`、`promo:preview` 和 `promo:render` 会强制校验该凭证；音频被替换、文案变更后未重生成、人声配置不一致、字幕时长不一致或 HTML 音轨时长未同步时都会直接失败。
+
+### 首次安装与缓存
+
+`pnpm promo:voice` 会自动检查本地运行环境。首次使用会通过 `uv` 创建 Python 3.11 环境、安装 `promo/library/voice/requirements.txt` 中锁定的依赖，并下载约 2GB 的 8bit 模型。之后直接复用缓存。
+
+也可以提前运行：
+
+```bash
+pnpm promo:voice:setup
+```
+
+默认位置：
+
+- Python 环境：`~/.cache/ncurator-promo/tts/venv`
+- 模型缓存：`~/.cache/huggingface/hub`
+
+如需使用别的虚拟环境，可设置 `PROMO_TTS_VENV`。如需禁止自动安装，可设置 `PROMO_TTS_AUTO_SETUP=0`；此时环境不可用会直接报错，仍然不能换成系统语音。
+
+### 每期正确顺序
+
+1. 写完 `narration.txt`。
+2. 运行 `pnpm promo:voice -- <视频目录>`。
+3. 按新生成的 `transcript.json` 调整场景和字幕时间。
+4. 运行 `pnpm promo:voice:check -- <视频目录>` 确认固定人声与音频哈希一致。
+5. 再运行 `promo:check` 和 `promo:render`。
+
+字幕直接使用原始文案，不用语音识别改写文字。
 
 ## Git 规则
 

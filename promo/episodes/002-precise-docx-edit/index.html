@@ -1,0 +1,784 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <title>让 AI 只改 Word 里的 3 处，其他别动</title>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      @font-face {
+        font-family: 'PingFang SC';
+        src: local('PingFang SC');
+      }
+
+      @font-face {
+        font-family: 'Microsoft YaHei';
+        src: local('Microsoft YaHei');
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 1080px;
+        height: 1920px;
+        margin: 0;
+        overflow: hidden;
+        background: #fbfbfa;
+        color: #37352f;
+        font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      }
+
+      #root,
+      .scene {
+        width: 100%;
+        height: 100%;
+      }
+
+      #root {
+        position: relative;
+        overflow: hidden;
+        background: #fbfbfa;
+      }
+
+      .scene {
+        position: absolute;
+        inset: 0;
+        overflow: hidden;
+        background: #fbfbfa;
+      }
+
+      #scene-1 {
+        z-index: 1;
+      }
+
+      #scene-2,
+      #scene-3,
+      #scene-4,
+      #scene-5 {
+        opacity: 0;
+      }
+
+      #scene-2 {
+        z-index: 2;
+        background: #ffffff;
+      }
+
+      #scene-3 {
+        z-index: 3;
+      }
+
+      #scene-4 {
+        z-index: 4;
+        background: #ffffff;
+      }
+
+      #scene-5 {
+        z-index: 5;
+        background: #edf6ef;
+      }
+
+      .scene-content {
+        position: relative;
+        z-index: 4;
+        display: flex;
+        width: 100%;
+        height: 100%;
+        flex-direction: column;
+        justify-content: center;
+        gap: 26px;
+        padding: 160px 200px 420px 80px;
+      }
+
+      .top-rule,
+      .bottom-rule {
+        position: absolute;
+        right: 200px;
+        left: 80px;
+        z-index: 2;
+        height: 2px;
+        background: #eeeeec;
+        transform-origin: left center;
+      }
+
+      .top-rule {
+        top: 160px;
+      }
+
+      .bottom-rule {
+        bottom: 352px;
+      }
+
+      .ambient {
+        position: absolute;
+        z-index: 1;
+        width: 560px;
+        height: 560px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(11, 107, 203, 0.1), rgba(11, 107, 203, 0) 70%);
+      }
+
+      .ambient.blue {
+        top: 30px;
+        right: -210px;
+      }
+
+      .ambient.green {
+        bottom: 250px;
+        left: -250px;
+        background: radial-gradient(circle, rgba(47, 111, 78, 0.1), rgba(47, 111, 78, 0) 70%);
+      }
+
+      .eyebrow {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        margin: 0;
+        color: #0b6bcb;
+        font-size: 31px;
+        font-weight: 700;
+      }
+
+      .eyebrow::before {
+        width: 34px;
+        height: 7px;
+        border-radius: 4px;
+        background: #0b6bcb;
+        content: '';
+      }
+
+      .title {
+        max-width: 800px;
+        margin: 0;
+        font-size: 82px;
+        font-weight: 820;
+        line-height: 1.12;
+        letter-spacing: -0.035em;
+      }
+
+      .hook-title {
+        max-width: 830px;
+        margin: 0;
+        font-size: 106px;
+        font-weight: 850;
+        line-height: 1.06;
+        letter-spacing: -0.045em;
+      }
+
+      .hook-title strong,
+      .title strong {
+        color: #0b6bcb;
+        font-weight: 900;
+      }
+
+      .subcopy {
+        max-width: 780px;
+        margin: 0;
+        color: #787774;
+        font-size: 36px;
+        line-height: 1.5;
+      }
+
+      .paper-stage {
+        position: relative;
+        width: 800px;
+        height: 590px;
+        margin-top: 18px;
+      }
+
+      .paper-shadow {
+        position: absolute;
+        inset: 45px 16px 0 54px;
+        border-radius: 22px;
+        background: #e9edf1;
+        transform: rotate(4deg);
+      }
+
+      .paper {
+        position: absolute;
+        inset: 0 46px 28px 0;
+        padding: 48px 48px 42px;
+        border: 2px solid #deddd9;
+        border-radius: 22px;
+        background: #ffffff;
+        box-shadow: 0 26px 66px rgba(55, 53, 47, 0.15);
+        transform: rotate(-2deg);
+      }
+
+      .word-mark {
+        display: flex;
+        width: 58px;
+        height: 58px;
+        align-items: center;
+        justify-content: center;
+        border-radius: 11px;
+        background: #0b6bcb;
+        color: #ffffff;
+        font-size: 32px;
+        font-weight: 850;
+      }
+
+      .paper-name {
+        margin: 22px 0 40px;
+        color: #1f4d78;
+        font-size: 37px;
+        font-weight: 750;
+      }
+
+      .change-row {
+        display: flex;
+        align-items: center;
+        gap: 22px;
+        margin-top: 24px;
+        padding: 23px 26px;
+        border: 1px solid #e5e4e0;
+        border-radius: 14px;
+        background: #fbfbfa;
+      }
+
+      .change-number {
+        display: flex;
+        width: 48px;
+        height: 48px;
+        flex: none;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        background: #edf4fb;
+        color: #0b6bcb;
+        font-size: 26px;
+        font-weight: 800;
+      }
+
+      .change-label {
+        color: #37352f;
+        font-size: 31px;
+        font-weight: 700;
+      }
+
+      .lock-note {
+        position: absolute;
+        right: 0;
+        bottom: 0;
+        padding: 22px 30px;
+        border-radius: 15px;
+        background: #37352f;
+        color: #ffffff;
+        font-size: 29px;
+        font-weight: 750;
+        box-shadow: 0 18px 38px rgba(55, 53, 47, 0.2);
+      }
+
+      .product-window {
+        position: relative;
+        width: 800px;
+        overflow: hidden;
+        border: 2px solid #deddd9;
+        border-radius: 18px;
+        background: #ffffff;
+        box-shadow: 0 22px 58px rgba(55, 53, 47, 0.15);
+      }
+
+      .window-bar {
+        display: flex;
+        height: 54px;
+        align-items: center;
+        gap: 10px;
+        padding: 0 22px;
+        border-bottom: 1px solid #eeeeec;
+        background: #fbfbfa;
+      }
+
+      .window-dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: #d9d8d4;
+      }
+
+      .window-name {
+        margin-left: 10px;
+        color: #787774;
+        font-size: 24px;
+        font-weight: 650;
+      }
+
+      .screen-crop {
+        position: relative;
+        width: 100%;
+        overflow: hidden;
+        background: #ffffff;
+      }
+
+      .screen-crop img {
+        position: absolute;
+        display: block;
+        max-width: none;
+      }
+
+      .prompt-crop {
+        height: 570px;
+      }
+
+      .prompt-crop img {
+        top: -245px;
+        left: -410px;
+        width: 1280px;
+        height: 800px;
+      }
+
+      .result-crop {
+        height: 650px;
+      }
+
+      .result-crop img {
+        top: -155px;
+        left: -360px;
+        width: 1280px;
+        height: 800px;
+      }
+
+      .process-image {
+        opacity: 1;
+      }
+
+      .result-image {
+        opacity: 0;
+      }
+
+      .docx-crop {
+        height: 780px;
+      }
+
+      #scene-5 .docx-crop {
+        height: 660px;
+      }
+
+      .docx-crop img {
+        top: -52px;
+        left: -800px;
+        width: 1600px;
+        height: 1000px;
+      }
+
+      .focus-note {
+        display: flex;
+        width: 800px;
+        align-items: center;
+        gap: 16px;
+        padding: 22px 28px;
+        border: 2px solid #d9eadf;
+        border-radius: 15px;
+        background: #f7fbf8;
+        color: #2f6f4e;
+        font-size: 30px;
+        font-weight: 700;
+      }
+
+      .check {
+        display: flex;
+        width: 42px;
+        height: 42px;
+        flex: none;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        background: #2f6f4e;
+        color: #ffffff;
+        font-size: 25px;
+      }
+
+      .diff-key {
+        display: flex;
+        gap: 18px;
+      }
+
+      .key-item {
+        padding: 12px 20px;
+        border-radius: 999px;
+        font-size: 27px;
+        font-weight: 700;
+      }
+
+      .key-delete {
+        background: #fae9e7;
+        color: #b3261e;
+      }
+
+      .key-insert {
+        background: #eaf5ed;
+        color: #2f6f4e;
+      }
+
+      .caption {
+        position: absolute;
+        right: 200px;
+        bottom: 366px;
+        left: 80px;
+        z-index: 40;
+        min-height: 112px;
+        margin: 0;
+        padding: 22px 28px;
+        border: 2px solid rgba(55, 53, 47, 0.14);
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.96);
+        color: #37352f;
+        font-size: 49px;
+        font-weight: 720;
+        line-height: 1.35;
+        text-align: center;
+        box-shadow: 0 14px 34px rgba(55, 53, 47, 0.12);
+        opacity: 0;
+        visibility: hidden;
+      }
+
+      .caption .accent {
+        color: #0b6bcb;
+      }
+
+      .caption .success {
+        color: #2f6f4e;
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-duration="24.5"
+      data-width="1080"
+      data-height="1920"
+    >
+      <section id="scene-1" class="scene" data-layout-allow-occlusion>
+        <div class="ambient blue" data-layout-ignore></div>
+        <div class="ambient green" data-layout-ignore></div>
+        <div class="top-rule"></div>
+        <div class="bottom-rule"></div>
+        <div class="scene-content">
+          <p class="eyebrow">AI 精细修改 DOCX</p>
+          <h1 class="hook-title">只改 <strong>3 处</strong><br />其他别动</h1>
+          <div class="paper-stage" data-layout-ignore>
+            <div class="paper-shadow"></div>
+            <div class="paper">
+              <div class="word-mark">W</div>
+              <p class="paper-name">星桥项目实施方案.docx</p>
+              <div class="change-row">
+                <span class="change-number">1</span><span class="change-label">替换上线日期</span>
+              </div>
+              <div class="change-row">
+                <span class="change-number">2</span><span class="change-label">修改表格负责人</span>
+              </div>
+              <div class="change-row">
+                <span class="change-number">3</span><span class="change-label">补充风险条目</span>
+              </div>
+            </div>
+            <div class="lock-note">原内容与排版保持不变</div>
+          </div>
+        </div>
+      </section>
+
+      <section id="scene-2" class="scene" data-layout-allow-occlusion>
+        <div class="ambient blue" data-layout-ignore></div>
+        <div class="top-rule"></div>
+        <div class="bottom-rule"></div>
+        <div class="scene-content">
+          <p class="eyebrow">要求写清楚</p>
+          <h2 class="title">日期、负责人、备份要求</h2>
+          <p class="subcopy">指定原文、目标内容和插入位置。</p>
+          <div class="product-window" data-layout-ignore>
+            <div class="window-bar">
+              <span class="window-dot"></span><span class="window-dot"></span
+              ><span class="window-dot"></span><span class="window-name">馆长 · 精确修改要求</span>
+            </div>
+            <div class="screen-crop prompt-crop">
+              <img src="assets/captured/prompt.png" alt="真实输入三项 DOCX 修改要求" />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="scene-3" class="scene" data-layout-allow-occlusion>
+        <div class="ambient green" data-layout-ignore></div>
+        <div class="top-rule"></div>
+        <div class="bottom-rule"></div>
+        <div class="scene-content">
+          <p class="eyebrow">真实读取并写回</p>
+          <h2 class="title">正文、表格和列表，一次改完</h2>
+          <div class="product-window" data-layout-ignore>
+            <div class="window-bar">
+              <span class="window-dot"></span><span class="window-dot"></span
+              ><span class="window-dot"></span
+              ><span class="window-name">馆长 · 处理过程与修改结果</span>
+            </div>
+            <div class="screen-crop result-crop">
+              <img
+                class="process-image"
+                src="assets/captured/processing.png"
+                alt="馆长正在处理 DOCX"
+              />
+              <img
+                class="result-image"
+                src="assets/captured/result.png"
+                alt="馆长完成三处 DOCX 修改"
+              />
+            </div>
+          </div>
+          <div class="focus-note">
+            <span class="check">✓</span><span>只写回指定文件，生成修改入口</span>
+          </div>
+        </div>
+      </section>
+
+      <section id="scene-4" class="scene" data-layout-allow-occlusion>
+        <div class="ambient blue" data-layout-ignore></div>
+        <div class="top-rule"></div>
+        <div class="bottom-rule"></div>
+        <div class="scene-content">
+          <p class="eyebrow">查看变更</p>
+          <h2 class="title">删了什么，新增什么，一眼看清</h2>
+          <div class="diff-key">
+            <span class="key-item key-delete">红色：删除</span
+            ><span class="key-item key-insert">绿色：新增</span>
+          </div>
+          <div class="product-window" data-layout-ignore>
+            <div class="window-bar">
+              <span class="window-dot"></span><span class="window-dot"></span
+              ><span class="window-dot"></span
+              ><span class="window-name">星桥项目实施方案.docx · 变更预览</span>
+            </div>
+            <div class="screen-crop docx-crop">
+              <img id="diff-shot" src="assets/captured/diff.png" alt="DOCX 真实变更预览" />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="scene-5" class="scene" data-layout-allow-occlusion>
+        <div class="ambient green" data-layout-ignore></div>
+        <div class="top-rule"></div>
+        <div class="bottom-rule"></div>
+        <div class="scene-content">
+          <p class="eyebrow">切回文件</p>
+          <h2 class="title">内容改对了，<strong>原排版还在</strong></h2>
+          <div class="product-window" data-layout-ignore>
+            <div class="window-bar">
+              <span class="window-dot"></span><span class="window-dot"></span
+              ><span class="window-dot"></span
+              ><span class="window-name">星桥项目实施方案.docx · 修改后文件</span>
+            </div>
+            <div class="screen-crop docx-crop">
+              <img id="file-shot" src="assets/captured/file.png" alt="修改后的 DOCX 文件" />
+            </div>
+          </div>
+          <div class="focus-note">
+            <span class="check">✓</span><span>新增：上线前完成全量数据备份。</span>
+          </div>
+        </div>
+      </section>
+
+      <p id="caption-1" class="caption">让 AI 改 Word，最怕它顺手重写整篇。</p>
+      <p id="caption-2" class="caption">
+        我只让<span class="accent">馆长</span>改三处：上线日期、项目负责人，再补一条数据备份要求。
+      </p>
+      <p id="caption-3" class="caption">
+        <span class="accent">馆长</span>找到对应段落和表格，只修改指定位置。
+      </p>
+      <p id="caption-4" class="caption">
+        打开修改记录，<span class="success">新增和删除</span>都清清楚楚。
+      </p>
+      <p id="caption-5" class="caption">切回文件，原来的内容和排版都还在。</p>
+
+      <audio
+        id="narration"
+        data-start="0"
+        data-duration="23.9205"
+        data-track-index="20"
+        src="assets/audio/narration.wav"
+        data-volume="1"
+      ></audio>
+      <audio
+        id="music"
+        data-start="0"
+        data-duration="24.5"
+        data-track-index="21"
+        src="assets/audio/music.wav"
+        data-volume="0.14"
+      ></audio>
+    </div>
+
+    <script>
+      window.__timelines = window.__timelines || {}
+      const tl = gsap.timeline({ paused: true })
+
+      const pushScene = (oldScene, newScene, start) => {
+        tl.to(oldScene, { x: -1080, duration: 0.42, ease: 'power3.inOut' }, start)
+        tl.fromTo(
+          newScene,
+          { x: 1080, opacity: 1 },
+          { x: 0, opacity: 1, duration: 0.42, ease: 'power3.inOut' },
+          start
+        )
+        tl.set(oldScene, { opacity: 0 }, start + 0.42)
+      }
+
+      const dissolveScene = (oldScene, newScene, start) => {
+        tl.to(
+          oldScene,
+          { opacity: 0, filter: 'blur(7px)', scale: 1.02, duration: 0.38, ease: 'power2.inOut' },
+          start
+        )
+        tl.fromTo(
+          newScene,
+          { opacity: 0, filter: 'blur(7px)', scale: 0.98 },
+          { opacity: 1, filter: 'blur(0px)', scale: 1, duration: 0.42, ease: 'power2.inOut' },
+          start + 0.08
+        )
+      }
+
+      const revealScene = (scene, start) => {
+        tl.from(`${scene} .top-rule`, { scaleX: 0, duration: 0.46, ease: 'expo.out' }, start + 0.18)
+        tl.from(
+          `${scene} .bottom-rule`,
+          { scaleX: 0, duration: 0.56, ease: 'power4.out' },
+          start + 0.22
+        )
+        tl.from(
+          `${scene} .eyebrow`,
+          { x: -40, opacity: 0, duration: 0.4, ease: 'circ.out' },
+          start + 0.2
+        )
+        tl.from(
+          `${scene} .title`,
+          { y: 48, opacity: 0, duration: 0.56, ease: 'power3.out' },
+          start + 0.34
+        )
+        const subcopyTargets = gsap.utils.toArray(scene + ' .subcopy')
+        if (subcopyTargets.length) {
+          tl.from(
+            subcopyTargets,
+            { x: 36, opacity: 0, duration: 0.42, ease: 'expo.out' },
+            start + 0.5
+          )
+        }
+        tl.from(
+          `${scene} .product-window`,
+          { y: 42, opacity: 0, scale: 0.94, duration: 0.6, ease: 'back.out(1.18)' },
+          start + 0.52
+        )
+      }
+
+      tl.from('#scene-1 .top-rule', { scaleX: 0, duration: 0.58, ease: 'expo.out' }, 0.16)
+      tl.from('#scene-1 .bottom-rule', { scaleX: 0, duration: 0.64, ease: 'power4.out' }, 0.24)
+      tl.from('#scene-1 .eyebrow', { x: -46, opacity: 0, duration: 0.46, ease: 'circ.out' }, 0.22)
+      tl.from(
+        '#scene-1 .hook-title',
+        { y: 66, opacity: 0, duration: 0.68, ease: 'power3.out' },
+        0.38
+      )
+      tl.from(
+        '#scene-1 .paper-shadow',
+        { x: 70, y: 46, opacity: 0, duration: 0.56, ease: 'power3.out' },
+        0.82
+      )
+      tl.from(
+        '#scene-1 .paper',
+        { y: 70, opacity: 0, scale: 0.92, rotation: -7, duration: 0.68, ease: 'back.out(1.25)' },
+        0.88
+      )
+      tl.from(
+        '#scene-1 .change-row',
+        { x: 44, opacity: 0, duration: 0.42, stagger: 0.13, ease: 'power3.out' },
+        1.28
+      )
+      tl.from(
+        '#scene-1 .lock-note',
+        { scale: 0.6, opacity: 0, rotation: 5, duration: 0.48, ease: 'back.out(1.5)' },
+        1.86
+      )
+      tl.to(
+        '#scene-1 .paper-stage',
+        { y: -10, duration: 1.2, ease: 'sine.inOut', repeat: 1, yoyo: true },
+        2.25
+      )
+
+      pushScene('#scene-1', '#scene-2', 4.9834375)
+      revealScene('#scene-2', 4.9834375)
+      tl.to(
+        '#scene-2 .prompt-crop img',
+        { x: -72, y: -18, scale: 1.08, duration: 6.1, ease: 'sine.inOut' },
+        5.58
+      )
+
+      dissolveScene('#scene-2', '#scene-3', 11.711078125)
+      revealScene('#scene-3', 11.711078125)
+      tl.from('#scene-3 .focus-note', { y: 30, opacity: 0, duration: 0.42, ease: 'expo.out' }, 12.5)
+      tl.to('#scene-3 .process-image', { opacity: 0, duration: 0.35, ease: 'power2.inOut' }, 13.25)
+      tl.to('#scene-3 .result-image', { opacity: 1, duration: 0.4, ease: 'power2.inOut' }, 13.28)
+      tl.to(
+        '#scene-3 .result-image',
+        { x: -48, y: -16, scale: 1.06, duration: 2.7, ease: 'sine.inOut' },
+        13.42
+      )
+
+      pushScene('#scene-3', '#scene-4', 16.196171875)
+      revealScene('#scene-4', 16.196171875)
+      tl.from(
+        '#scene-4 .diff-key .key-item',
+        { y: 24, opacity: 0, duration: 0.38, stagger: 0.1, ease: 'back.out(1.18)' },
+        16.81
+      )
+      tl.to(
+        '#scene-4 #diff-shot',
+        { x: -62, y: -38, scale: 1.1, duration: 3.15, ease: 'sine.inOut' },
+        16.89
+      )
+
+      dissolveScene('#scene-4', '#scene-5', 20.182921875)
+      revealScene('#scene-5', 20.182921875)
+      tl.from(
+        '#scene-5 .focus-note',
+        { x: -42, opacity: 0, duration: 0.46, ease: 'expo.out' },
+        20.98
+      )
+      tl.to(
+        '#scene-5 #file-shot',
+        { x: -52, y: -32, scale: 1.09, duration: 3.7, ease: 'sine.inOut' },
+        20.6
+      )
+      tl.to(
+        '#scene-5 .focus-note',
+        { scale: 1.025, duration: 0.8, ease: 'sine.inOut', repeat: 1, yoyo: true },
+        22.06
+      )
+
+      const captions = [
+        { id: '#caption-1', start: 0, end: 4.9834375 },
+        { id: '#caption-2', start: 4.9834375, end: 11.711078125 },
+        { id: '#caption-3', start: 11.711078125, end: 16.196171875 },
+        { id: '#caption-4', start: 16.196171875, end: 20.182921875 },
+        { id: '#caption-5', start: 20.182921875, end: 23.9205 }
+      ]
+
+      captions.forEach((caption) => {
+        tl.set(caption.id, { visibility: 'visible' }, caption.start)
+        tl.fromTo(
+          caption.id,
+          { opacity: 0, y: 24, scale: 0.98 },
+          { opacity: 1, y: 0, scale: 1, duration: 0.22, ease: 'power3.out' },
+          caption.start
+        )
+        tl.to(
+          caption.id,
+          { opacity: 0, scale: 0.97, duration: 0.12, ease: 'power2.in' },
+          caption.end - 0.12
+        )
+        tl.set(caption.id, { visibility: 'hidden' }, caption.end)
+      })
+
+      window.__timelines.main = tl
+    </script>
+  </body>
+</html>

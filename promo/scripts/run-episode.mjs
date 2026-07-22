@@ -2,6 +2,7 @@ import { mkdir } from 'node:fs/promises'
 import { spawn } from 'node:child_process'
 import path from 'node:path'
 import { cliArgs, hyperframesVersion, promoEnvironment, resolveEpisode } from './lib.mjs'
+import { validateNarration } from './validate-narration.mjs'
 
 const [command, selector] = cliArgs()
 const supportedCommands = new Set(['check', 'preview', 'render'])
@@ -11,6 +12,7 @@ if (!supportedCommands.has(command)) {
 }
 
 const { name, episodeDir } = await resolveEpisode(selector)
+await validateNarration(episodeDir)
 const args = ['--yes', `hyperframes@${hyperframesVersion}`]
 
 if (command === 'check') {

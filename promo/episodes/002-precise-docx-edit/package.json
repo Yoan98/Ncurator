@@ -1,0 +1,11 @@
+{
+  "name": "vertical-product-demo",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "npx --yes hyperframes@0.7.65 preview",
+    "check": "npx --yes hyperframes@0.7.65 check",
+    "render": "npx --yes hyperframes@0.7.65 render",
+    "publish": "npx --yes hyperframes@0.7.65 publish"
+  }
+}

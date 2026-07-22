@@ -6,25 +6,23 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+import mlx.core as mx
 import soundfile as sf
 from mlx_audio.tts.utils import load_model
-
-
-DEFAULT_MODEL = "mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-8bit"
-DEFAULT_STYLE = (
-    "一位四十岁左右的中国男性，声音成熟、可信、松弛，像经验丰富的产品负责人"
-    "在和同事自然交流。普通话标准但没有播音腔，不要刻意压低嗓音，不要广告腔。"
-    "语速自然，句子之间有真实思考感，重点词轻微强调，整体克制、从容、有温度。"
-)
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("text_file", type=Path)
     parser.add_argument("output", type=Path)
-    parser.add_argument("--model", default=DEFAULT_MODEL)
-    parser.add_argument("--style", default=DEFAULT_STYLE)
-    parser.add_argument("--language", default="Chinese")
+    parser.add_argument("--model", required=True)
+    parser.add_argument("--style", required=True)
+    parser.add_argument("--language", required=True)
+    parser.add_argument("--seed", required=True, type=int)
+    parser.add_argument("--temperature", required=True, type=float)
+    parser.add_argument("--top-k", required=True, type=int)
+    parser.add_argument("--top-p", required=True, type=float)
+    parser.add_argument("--repetition-penalty", required=True, type=float)
     return parser.parse_args()
 
 
@@ -34,6 +32,7 @@ def main() -> None:
     if not text:
         raise SystemExit("旁白文案不能为空")
 
+    mx.random.seed(args.seed)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     model = load_model(args.model)
     results = list(
@@ -41,6 +40,10 @@ def main() -> None:
             text=text,
             language=args.language,
             instruct=args.style,
+            temperature=args.temperature,
+            top_k=args.top_k,
+            top_p=args.top_p,
+            repetition_penalty=args.repetition_penalty,
         )
     )
     if not results:
