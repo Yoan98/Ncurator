@@ -42,16 +42,29 @@ const shutdownCoordinator = new AppShutdownCoordinator()
 let quitAfterShutdown = false
 let shutdownRequested = false
 
+const prepareAppShutdown = async (): Promise<void> => {
+  if (quitAfterShutdown) return
+  shutdownRequested = true
+  const failures = await shutdownCoordinator.shutdown()
+  for (const failure of failures) {
+    console.error(`[APP-SHUTDOWN] ${failure.name} failed:`, failure.error)
+  }
+  quitAfterShutdown = true
+}
+
+if (process.env.NCURATOR_E2E_OBSERVER) {
+  ;(
+    globalThis as typeof globalThis & {
+      __NCURATOR_E2E_PREPARE_SHUTDOWN__?: () => Promise<void>
+    }
+  ).__NCURATOR_E2E_PREPARE_SHUTDOWN__ = prepareAppShutdown
+}
+
 app.on('before-quit', (event) => {
   if (quitAfterShutdown) return
   event.preventDefault()
   if (shutdownRequested) return
-  shutdownRequested = true
-  void shutdownCoordinator.shutdown().then((failures) => {
-    for (const failure of failures) {
-      console.error(`[APP-SHUTDOWN] ${failure.name} failed:`, failure.error)
-    }
-    quitAfterShutdown = true
+  void prepareAppShutdown().then(() => {
     app.quit()
   })
 })
@@ -201,6 +214,9 @@ if (!singleInstanceLock) {
     })
 
     console.log('Starting background initialization of services...')
+    await modelService
+      .reuseDownloadedModelFromAlternatePath(DEFAULT_EMBEDDING_MODEL_NAME)
+      .catch((err) => console.error('Failed to reuse downloaded embedding model:', err))
     embeddingService
       .initialize()
       .catch((err) => console.error('Failed to initialize EmbeddingService:', err))

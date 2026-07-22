@@ -482,16 +482,52 @@ export const launchElectronApp = async (input: {
           )
         }
       }
+      let gracefulExitRequested = false
       try {
-        await electronApp.close()
+        gracefulExitRequested = await electronApp.evaluate(async ({ app }) => {
+          const prepareShutdown = (
+            globalThis as typeof globalThis & {
+              __NCURATOR_E2E_PREPARE_SHUTDOWN__?: () => Promise<void>
+            }
+          ).__NCURATOR_E2E_PREPARE_SHUTDOWN__
+          if (!prepareShutdown) return false
+          await prepareShutdown()
+          setTimeout(() => app.exit(0), 0)
+          return true
+        })
+        if (gracefulExitRequested) {
+          recordLifecycle('electron-graceful-shutdown-prepared')
+        }
       } catch (error) {
         pushProcessLog(
           consoleEntries,
           'warning',
-          'electron-close',
+          'prepare-shutdown',
           error instanceof Error ? error.message : String(error),
           input.signalSink
         )
+      }
+      if (gracefulExitRequested && electronProcess && electronProcess.exitCode === null) {
+        await new Promise<void>((resolve) => {
+          const timeout = setTimeout(resolve, 10_000)
+          electronProcess.once('exit', () => {
+            clearTimeout(timeout)
+            resolve()
+          })
+        })
+      }
+      if (!gracefulExitRequested || (electronProcess && electronProcess.exitCode === null)) {
+        try {
+          await electronApp.close()
+        } catch (error) {
+          pushProcessLog(
+            consoleEntries,
+            'warning',
+            'electron-close',
+            error instanceof Error ? error.message : String(error),
+            input.signalSink
+          )
+        }
       }
       await rm(userDataDir, {
         recursive: true,

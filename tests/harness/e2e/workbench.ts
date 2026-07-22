@@ -961,26 +961,22 @@ export const setupWorkbenchWithTempWorkspace = async (
   const env = loadWorkbenchLiveModelEnv()
   const workspace = await createTemporaryWorkbenchWorkspace(input.caseId)
   const workspaceName = input.workspaceName || `Workbench ${input.caseId}`
-  try {
-    if (input.configureModel !== false) {
-      await configureLiveModelThroughSettingsUi(page, env)
-    }
-    await prepareWorkbenchWorkspaceThroughUi(page, {
-      workspaceName,
-      rootPath: workspace.rootPath,
-      webSourceUrl: input.webSourceUrl,
-      rootBindingMode: input.rootBindingMode || 'ipc'
-    })
-    if (input.configureModel !== false) {
-      await selectWorkbenchModel(page, env.modelName)
-      await selectWorkbenchVisualModel(page, env.visualModelName)
-    }
-    if (input.createSession !== false) {
-      await page.getByRole('button', { name: `在 ${workspaceName} 中新建对话` }).click()
-      await selectWorkbenchWorkspace(page, workspaceName)
-    }
-  } catch (error) {
-    throw error
+  if (input.configureModel !== false) {
+    await configureLiveModelThroughSettingsUi(page, env)
+  }
+  await prepareWorkbenchWorkspaceThroughUi(page, {
+    workspaceName,
+    rootPath: workspace.rootPath,
+    webSourceUrl: input.webSourceUrl,
+    rootBindingMode: input.rootBindingMode || 'ipc'
+  })
+  if (input.configureModel !== false) {
+    await selectWorkbenchModel(page, env.modelName)
+    await selectWorkbenchVisualModel(page, env.visualModelName)
+  }
+  if (input.createSession !== false) {
+    await page.getByRole('button', { name: `在 ${workspaceName} 中新建对话` }).click()
+    await selectWorkbenchWorkspace(page, workspaceName)
   }
   return {
     env,
@@ -999,16 +995,12 @@ export const setupWorkbenchWorkspaceOnly = async (
 ): Promise<WorkbenchWorkspaceOnlySetupResult> => {
   const workspace = await createTemporaryWorkbenchWorkspace(input.caseId)
   const workspaceName = input.workspaceName || `Workbench ${input.caseId}`
-  try {
-    await prepareWorkbenchWorkspaceThroughUi(page, {
-      workspaceName,
-      rootPath: workspace.rootPath,
-      webSourceUrl: input.webSourceUrl,
-      rootBindingMode: 'ipc'
-    })
-  } catch (error) {
-    throw error
-  }
+  await prepareWorkbenchWorkspaceThroughUi(page, {
+    workspaceName,
+    rootPath: workspace.rootPath,
+    webSourceUrl: input.webSourceUrl,
+    rootBindingMode: 'ipc'
+  })
   return {
     workspace,
     workspaceName
@@ -1534,7 +1526,7 @@ export const getApprovalCard = (page: Page): Locator =>
   page.locator(byTestId(chatSelectors.approvalBatchCard))
 
 const readLocatorText = async (locator: Locator): Promise<string> =>
-  ((await locator.textContent().catch(() => '')) || '').trim()
+  ((await locator.textContent({ timeout: 500 }).catch(() => '')) || '').trim()
 
 const readAssistantTextSoFar = async (page: Page): Promise<string> => {
   const finalAnswerText = await readLocatorText(
