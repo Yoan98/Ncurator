@@ -69,7 +69,6 @@
 ├── resources/                        # 运行期资源
 │   └── web_crawler_sidecar/          # 网页抓取 sidecar 资源
 ├── scripts/                          # 工程脚本
-│   ├── README.md                     # 脚本分层与打包主流程
 │   ├── postinstall.mjs               # 安装后的唯一根级入口
 │   ├── build/                        # 构建、运行时追踪、原生模块和打包审计
 │   │   ├── native/                   # Node/Electron 原生模块准备
@@ -77,9 +76,9 @@
 │   │   ├── runtime/                  # bundle 边界、递归依赖追踪和暂存验证
 │   │   └── sidecar/                  # 网页抓取 sidecar 构建
 │   ├── release/                      # 本地发布、R2 和发布共享能力
-│   │   ├── r2/
-│   │   └── shared/
-│   └── test/                         # 测试工作流和真实更新测试
+│   │   ├── r2/                       # R2 上传、元数据和发布收尾
+│   │   └── shared/                   # 发布流程共享能力
+│   └── test/                         # 源码/正式包 E2E 编排和真实更新测试
 ├── build/                            # 构建相关资源
 ├── logo/                             # logo 资源
 │   └── png/                          # png 格式 logo

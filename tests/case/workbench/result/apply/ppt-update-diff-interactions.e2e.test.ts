@@ -82,111 +82,105 @@ describe('workbench result e2e', () => {
             caseId: CASE_ID,
             rootBindingMode: 'ipc'
           })
-          try {
-            await createBaselineDeck(setup.workspace.rootPath, runtime.runId, runtime.taskId)
-            const filePath = path.join(setup.workspace.rootPath, FILE_NAME)
-            const baselineBytes = await fs.readFile(filePath)
-            const startedAtMs = Date.now()
-            await sendWorkbenchMessage(
-              page,
-              `请直接修改工作区已有的“${FILE_NAME}”。必须先读取页面提纲，再完成这些操作：把“交付质量”页移动到第一页；把“市场信号”页标题改成“市场信号已确认”；删除“产品进展”页；在“附录数据”页之前新增一页“风险与应对”；“附录数据”页必须保持完全不变。只使用 PPT 工具，完成后渲染全部变化页面检查并确认文件已经写回。`
+          await createBaselineDeck(setup.workspace.rootPath, runtime.runId, runtime.taskId)
+          const filePath = path.join(setup.workspace.rootPath, FILE_NAME)
+          const baselineBytes = await fs.readFile(filePath)
+          const startedAtMs = Date.now()
+          await sendWorkbenchMessage(
+            page,
+            `请直接修改工作区已有的“${FILE_NAME}”。必须先读取页面提纲，再完成这些操作：把“交付质量”页移动到第一页；把“市场信号”页标题改成“市场信号已确认”；删除“产品进展”页；在“附录数据”页之前新增一页“风险与应对”；“附录数据”页必须保持完全不变。只使用 PPT 工具，完成后渲染全部变化页面检查并确认文件已经写回。`
+          )
+          const evidence = await waitForWorkbenchAiRunCompletion(
+            runtime,
+            startedAtMs,
+            setup.env.modelName,
+            WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
+            { page, blockerPolicy: 'auto_approve' }
+          )
+          recordWorkbenchAiEvidence(runtime, evidence, 0.8)
+
+          const updatedPresentation = await loadPresentation(
+            new Uint8Array(await fs.readFile(filePath))
+          )
+          const updatedText = getSlides(updatedPresentation)
+            .map((slide) => getSlideText(slide))
+            .join('\n')
+          const applyEntry = await waitForApplyEntry(page)
+          await applyEntry.click()
+          const viewer = getWorkbenchLocator(page, workbenchSelectors.pptDiffViewer)
+          await viewer.waitFor({ state: 'visible', timeout: 30_000 })
+          const beforeSurface = getWorkbenchLocator(page, workbenchSelectors.pptDiffBefore)
+          const afterSurface = getWorkbenchLocator(page, workbenchSelectors.pptDiffAfter)
+          const beforeVisible = await beforeSurface.isVisible()
+          const afterVisible = await afterSurface.isVisible()
+          const changedThumbnails = getWorkbenchLocator(
+            page,
+            workbenchSelectors.pptDiffThumbnails
+          ).locator('button')
+          const changedThumbnailCount = await changedThumbnails.count()
+          const greenMarkerCount = await viewer
+            .locator(
+              '[aria-label="新增页"], [aria-label="内容已修改"], [aria-label="位置已移动"], [aria-label="内容已修改，位置已移动"]'
             )
-            const evidence = await waitForWorkbenchAiRunCompletion(
-              runtime,
-              startedAtMs,
-              setup.env.modelName,
-              WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
-              { page, blockerPolicy: 'auto_approve' }
-            )
-            recordWorkbenchAiEvidence(runtime, evidence, 0.8)
+            .count()
+          const redMarkerCount = await viewer.locator('[aria-label="已删除"]').count()
+          const inactiveThumbnailClass =
+            (await changedThumbnails.nth(1).getAttribute('class')) || ''
 
-            const updatedPresentation = await loadPresentation(
-              new Uint8Array(await fs.readFile(filePath))
-            )
-            const updatedText = getSlides(updatedPresentation)
-              .map((slide) => getSlideText(slide))
-              .join('\n')
-            const applyEntry = await waitForApplyEntry(page)
-            await applyEntry.click()
-            const viewer = getWorkbenchLocator(page, workbenchSelectors.pptDiffViewer)
-            await viewer.waitFor({ state: 'visible', timeout: 30_000 })
-            const beforeSurface = getWorkbenchLocator(page, workbenchSelectors.pptDiffBefore)
-            const afterSurface = getWorkbenchLocator(page, workbenchSelectors.pptDiffAfter)
-            const beforeVisible = await beforeSurface.isVisible()
-            const afterVisible = await afterSurface.isVisible()
-            const changedThumbnails = getWorkbenchLocator(
-              page,
-              workbenchSelectors.pptDiffThumbnails
-            ).locator('button')
-            const changedThumbnailCount = await changedThumbnails.count()
-            const greenMarkerCount = await viewer
-              .locator(
-                '[aria-label="新增页"], [aria-label="内容已修改"], [aria-label="位置已移动"], [aria-label="内容已修改，位置已移动"]'
-              )
-              .count()
-            const redMarkerCount = await viewer.locator('[aria-label="已删除"]').count()
-            const inactiveThumbnailClass =
-              (await changedThumbnails.nth(1).getAttribute('class')) || ''
+          const beforeTransform = beforeSurface.locator(':scope > div[style*="transform"]').first()
+          const afterTransform = afterSurface.locator(':scope > div[style*="transform"]').first()
+          await afterSurface.hover()
+          await page.mouse.wheel(0, -420)
+          await page.waitForFunction(() => {
+            const button = document.querySelector('[aria-label="适应窗口"]')
+            return button?.textContent !== '100%'
+          })
+          const beforeZoomTransform = (await beforeTransform.getAttribute('style')) || ''
+          const afterZoomTransform = (await afterTransform.getAttribute('style')) || ''
+          const box = await afterSurface.boundingBox()
+          if (box) {
+            await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+            await page.mouse.down()
+            await page.mouse.move(box.x + box.width / 2 + 48, box.y + box.height / 2 + 28)
+            await page.mouse.up()
+          }
+          const beforeDragTransform = (await beforeTransform.getAttribute('style')) || ''
+          const afterDragTransform = (await afterTransform.getAttribute('style')) || ''
 
-            const beforeTransform = beforeSurface
-              .locator(':scope > div[style*="transform"]')
-              .first()
-            const afterTransform = afterSurface.locator(':scope > div[style*="transform"]').first()
-            await afterSurface.hover()
-            await page.mouse.wheel(0, -420)
-            await page.waitForFunction(() => {
-              const button = document.querySelector('[aria-label="适应窗口"]')
-              return button?.textContent !== '100%'
-            })
-            const beforeZoomTransform = (await beforeTransform.getAttribute('style')) || ''
-            const afterZoomTransform = (await afterTransform.getAttribute('style')) || ''
-            const box = await afterSurface.boundingBox()
-            if (box) {
-              await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
-              await page.mouse.down()
-              await page.mouse.move(box.x + box.width / 2 + 48, box.y + box.height / 2 + 28)
-              await page.mouse.up()
-            }
-            const beforeDragTransform = (await beforeTransform.getAttribute('style')) || ''
-            const afterDragTransform = (await afterTransform.getAttribute('style')) || ''
+          await viewer.getByRole('button', { name: '查看全部页' }).click()
+          const allThumbnailCount = await getWorkbenchLocator(
+            page,
+            workbenchSelectors.pptDiffThumbnails
+          )
+            .locator('button')
+            .count()
 
-            await viewer.getByRole('button', { name: '查看全部页' }).click()
-            const allThumbnailCount = await getWorkbenchLocator(
-              page,
-              workbenchSelectors.pptDiffThumbnails
-            )
-              .locator('button')
-              .count()
+          await getWorkbenchLocator(page, workbenchSelectors.applyRevertButton).click()
+          await waitForWorkbenchApplyRecordStatus(page, 'reverted')
+          const revertedBytes = await fs.readFile(filePath)
+          const revertedPresentation = await loadPresentation(new Uint8Array(revertedBytes))
+          const revertedText = getSlides(revertedPresentation)
+            .map((slide) => getSlideText(slide))
+            .join('\n')
 
-            await getWorkbenchLocator(page, workbenchSelectors.applyRevertButton).click()
-            await waitForWorkbenchApplyRecordStatus(page, 'reverted')
-            const revertedBytes = await fs.readFile(filePath)
-            const revertedPresentation = await loadPresentation(new Uint8Array(revertedBytes))
-            const revertedText = getSlides(revertedPresentation)
-              .map((slide) => getSlideText(slide))
-              .join('\n')
-
-            return {
-              updatedText,
-              beforeVisible,
-              afterVisible,
-              changedThumbnailCount,
-              allThumbnailCount,
-              greenMarkerCount,
-              redMarkerCount,
-              inactiveThumbnailClass,
-              beforeZoomTransform,
-              afterZoomTransform,
-              beforeDragTransform,
-              afterDragTransform,
-              revertedToBaseline: revertedBytes.equals(baselineBytes),
-              revertedText,
-              toolNames: evidence.events
-                .filter((event) => event.type === 'tool_call_started')
-                .map((event) => event.toolName)
-            }
-          } finally {
-            await setup.workspace.cleanup()
+          return {
+            updatedText,
+            beforeVisible,
+            afterVisible,
+            changedThumbnailCount,
+            allThumbnailCount,
+            greenMarkerCount,
+            redMarkerCount,
+            inactiveThumbnailClass,
+            beforeZoomTransform,
+            afterZoomTransform,
+            beforeDragTransform,
+            afterDragTransform,
+            revertedToBaseline: revertedBytes.equals(baselineBytes),
+            revertedText,
+            toolNames: evidence.events
+              .filter((event) => event.type === 'tool_call_started')
+              .map((event) => event.toolName)
           }
         },
         assert: async (result, runtime) => {

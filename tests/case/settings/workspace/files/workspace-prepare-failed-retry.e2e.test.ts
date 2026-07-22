@@ -9,11 +9,7 @@ import {
   navigateToSettingsSection,
   waitForFileIndexJobIdle
 } from '../../../../harness/e2e/settings'
-import {
-  cleanupRealWorkspace,
-  createWorkspaceWithFiles,
-  toSupportedFileStatuses
-} from './realWorkspaceHelpers'
+import { createWorkspaceWithFiles, toSupportedFileStatuses } from './realWorkspaceHelpers'
 
 describe('settings workspace e2e', () => {
   it(
@@ -32,41 +28,35 @@ describe('settings workspace e2e', () => {
         execute: async (runtime) => {
           const { page } = runtime
           let workspaceRoot = ''
-          try {
-            workspaceRoot = await createWorkspaceWithFiles('workspace-prepare-failed-retry', [
-              {
-                relativePath: 'broken.docx',
-                content: 'not a valid docx archive'
-              }
-            ])
-            const workspace = await createRealWorkspaceWithRoot(page, {
-              name: '失败重试工作区',
-              rootPath: workspaceRoot
-            })
-            const workspaceId = workspace.workspace!.id
-
-            await navigateToSettingsSection(page, 'workspace')
-            await getSettingsLocator(page, importSelectors.workspaceQuickPrepareButton).waitFor({
-              state: 'visible'
-            })
-            await getSettingsLocator(page, importSelectors.workspaceQuickPrepareButton).click()
-            await waitForFileIndexJobIdle(page, workspaceId)
-            const firstCounts = await getWorkspaceIndexCounts(page)
-
-            await getSettingsLocator(page, importSelectors.workspaceQuickPrepareButton).click()
-            const retry = await waitForFileIndexJobIdle(page, workspaceId)
-            const retryCounts = await getWorkspaceIndexCounts(page)
-
-            return {
-              firstCounts,
-              retryCounts,
-              lastRunningJob: retry.lastRunningJob,
-              statuses: toSupportedFileStatuses(retry.tree)
+          workspaceRoot = await createWorkspaceWithFiles('workspace-prepare-failed-retry', [
+            {
+              relativePath: 'broken.docx',
+              content: 'not a valid docx archive'
             }
-          } finally {
-            if (workspaceRoot) {
-              await cleanupRealWorkspace(workspaceRoot)
-            }
+          ])
+          const workspace = await createRealWorkspaceWithRoot(page, {
+            name: '失败重试工作区',
+            rootPath: workspaceRoot
+          })
+          const workspaceId = workspace.workspace!.id
+
+          await navigateToSettingsSection(page, 'workspace')
+          await getSettingsLocator(page, importSelectors.workspaceQuickPrepareButton).waitFor({
+            state: 'visible'
+          })
+          await getSettingsLocator(page, importSelectors.workspaceQuickPrepareButton).click()
+          await waitForFileIndexJobIdle(page, workspaceId)
+          const firstCounts = await getWorkspaceIndexCounts(page)
+
+          await getSettingsLocator(page, importSelectors.workspaceQuickPrepareButton).click()
+          const retry = await waitForFileIndexJobIdle(page, workspaceId)
+          const retryCounts = await getWorkspaceIndexCounts(page)
+
+          return {
+            firstCounts,
+            retryCounts,
+            lastRunningJob: retry.lastRunningJob,
+            statuses: toSupportedFileStatuses(retry.tree)
           }
         },
         assert: async (result, runtime) => {

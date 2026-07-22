@@ -43,39 +43,35 @@ describe('workbench run persistence e2e', () => {
             workspaceName: WORKSPACE_NAME,
             createSession: false
           })
-          try {
-            await navigateToWorkbench(page)
-            await selectWorkbenchWorkspace(page, WORKSPACE_NAME)
-            const startedAtMs = Date.now()
-            await sendWorkbenchMessage(page, PROMPT)
-            const processLocator = await waitForLatestAssistantProcess(page)
-            const processTextBeforeNavigation = ((await processLocator.textContent()) || '').trim()
+          await navigateToWorkbench(page)
+          await selectWorkbenchWorkspace(page, WORKSPACE_NAME)
+          const startedAtMs = Date.now()
+          await sendWorkbenchMessage(page, PROMPT)
+          const processLocator = await waitForLatestAssistantProcess(page)
+          const processTextBeforeNavigation = ((await processLocator.textContent()) || '').trim()
 
-            await navigateToSettingsSection(page, 'workspace')
-            const evidence = await waitForWorkbenchAiRunCompletion(
-              runtime,
-              startedAtMs,
-              setup.env.modelName,
-              WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
-              { page, blockerPolicy: 'auto_approve' }
-            )
-            await navigateToWorkbench(page)
+          await navigateToSettingsSection(page, 'workspace')
+          const evidence = await waitForWorkbenchAiRunCompletion(
+            runtime,
+            startedAtMs,
+            setup.env.modelName,
+            WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
+            { page, blockerPolicy: 'auto_approve' }
+          )
+          await navigateToWorkbench(page)
 
-            const finalAnswerText = await waitForLatestAssistantFinalAnswerText(page)
-            const processItemCount = await getWorkbenchPrefixLocator(
-              page,
-              workbenchSelectors.assistantProcessItemPrefix
-            ).count()
-            recordWorkbenchAiEvidence(runtime, evidence, 0.85)
+          const finalAnswerText = await waitForLatestAssistantFinalAnswerText(page)
+          const processItemCount = await getWorkbenchPrefixLocator(
+            page,
+            workbenchSelectors.assistantProcessItemPrefix
+          ).count()
+          recordWorkbenchAiEvidence(runtime, evidence, 0.85)
 
-            return {
-              processTextBeforeNavigation,
-              processItemCount,
-              finalAnswerText,
-              eventTypes: evidence.events.map((event) => event.type)
-            }
-          } finally {
-            await setup.workspace.cleanup()
+          return {
+            processTextBeforeNavigation,
+            processItemCount,
+            finalAnswerText,
+            eventTypes: evidence.events.map((event) => event.type)
           }
         },
         assert: async (result, runtime) => {

@@ -33,43 +33,39 @@ describe('workbench conversation e2e', () => {
             caseId: CASE_ID,
             createSession: false
           })
-          try {
-            await page.getByRole('button', { name: `在 ${setup.workspaceName} 中新建对话` }).click()
-            const startedAtMs = Date.now()
-            await sendWorkbenchMessage(page, '请只回复 ok，用于上下文用量测试。')
-            const evidence = await waitForWorkbenchAiRunCompletion(
-              runtime,
-              startedAtMs,
-              setup.env.modelName
-            )
-            recordWorkbenchAiEvidence(runtime, evidence, 0.6)
+          await page.getByRole('button', { name: `在 ${setup.workspaceName} 中新建对话` }).click()
+          const startedAtMs = Date.now()
+          await sendWorkbenchMessage(page, '请只回复 ok，用于上下文用量测试。')
+          const evidence = await waitForWorkbenchAiRunCompletion(
+            runtime,
+            startedAtMs,
+            setup.env.modelName
+          )
+          recordWorkbenchAiEvidence(runtime, evidence, 0.6)
 
-            const contextRing = getWorkbenchLocator(page, workbenchSelectors.contextRing)
-            await contextRing.waitFor({ state: 'visible' })
-            await page.waitForFunction(
-              (testId) =>
-                document
-                  .querySelector(`[data-testid="${testId}"]`)
-                  ?.getAttribute('aria-label')
-                  ?.includes('已用') || false,
-              workbenchSelectors.contextRing,
-              { timeout: 10_000 }
-            )
-            const label = (await contextRing.getAttribute('aria-label')) || ''
-            await contextRing.hover()
-            const tooltipTitle = page.getByText('上下文用量', { exact: true })
-            const usedPercent = page.getByText(/^已用 \d+%$/).first()
-            await tooltipTitle.waitFor({ state: 'visible', timeout: 3000 })
-            await usedPercent.waitFor({ state: 'visible', timeout: 3000 })
+          const contextRing = getWorkbenchLocator(page, workbenchSelectors.contextRing)
+          await contextRing.waitFor({ state: 'visible' })
+          await page.waitForFunction(
+            (testId) =>
+              document
+                .querySelector(`[data-testid="${testId}"]`)
+                ?.getAttribute('aria-label')
+                ?.includes('已用') || false,
+            workbenchSelectors.contextRing,
+            { timeout: 10_000 }
+          )
+          const label = (await contextRing.getAttribute('aria-label')) || ''
+          await contextRing.hover()
+          const tooltipTitle = page.getByText('上下文用量', { exact: true })
+          const usedPercent = page.getByText(/^已用 \d+%$/).first()
+          await tooltipTitle.waitFor({ state: 'visible', timeout: 3000 })
+          await usedPercent.waitFor({ state: 'visible', timeout: 3000 })
 
-            return {
-              label,
-              tooltipVisible: await tooltipTitle.isVisible(),
-              percentVisible: await usedPercent.isVisible(),
-              finalAnswerText: evidence.finalAnswerText
-            }
-          } finally {
-            await setup.workspace.cleanup()
+          return {
+            label,
+            tooltipVisible: await tooltipTitle.isVisible(),
+            percentVisible: await usedPercent.isVisible(),
+            finalAnswerText: evidence.finalAnswerText
           }
         },
         assert: async (result, runtime) => {

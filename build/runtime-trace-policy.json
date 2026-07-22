@@ -4,6 +4,13 @@
   "explicitIncludes": [],
   "warningRules": [
     {
+      "id": "electron-dist-assets",
+      "kind": "parse",
+      "package": "electron",
+      "pathPattern": "/(?:version|LICENSE|LICENSES\\.chromium\\.html)$",
+      "reason": "Electron dist ships version and license text assets which are not JavaScript."
+    },
+    {
       "id": "pdfjs-import-meta-parser",
       "kind": "parse",
       "package": "pdfjs-dist",

@@ -45,6 +45,8 @@ const parseArgs = (argv) => {
     runs: 1,
     runDelayMs: 0,
     target: 'source',
+    bundle: '',
+    result: '',
     freshKnowledgeCache: false,
     reuseKnowledgeCache: false
   }
@@ -89,6 +91,16 @@ const parseArgs = (argv) => {
     }
     if (current === '--target' && next) {
       parsed.target = next
+      index += 1
+      continue
+    }
+    if (current === '--bundle' && next) {
+      parsed.bundle = next
+      index += 1
+      continue
+    }
+    if (current === '--result' && next) {
+      parsed.result = next
       index += 1
       continue
     }
@@ -467,6 +479,17 @@ const runTypeWorkflow = async (input) => {
       ).some(Boolean))
   const testNamePattern = shouldFilterByTestName ? input.caseId : ''
   let runtimeEnv = input.e2eEnv || {}
+  if (input.type === 'e2e') {
+    const e2eTempRoot = path.resolve(
+      String(process.env.NCURATOR_E2E_TEMP_ROOT || '').trim() ||
+        path.join(TESTS_ROOT, '.tmp', 'e2e')
+    )
+    await mkdir(e2eTempRoot, { recursive: true })
+    runtimeEnv = {
+      ...runtimeEnv,
+      NCURATOR_E2E_TEMP_ROOT: e2eTempRoot
+    }
+  }
   if (input.type !== 'e2e' || input.target === 'source') {
     const nativeCode = prepareBetterSqliteNative(nativeTarget)
     if (nativeCode !== 0) {
@@ -570,6 +593,15 @@ const main = async () => {
   if (args.target === 'package' && args.type !== 'e2e') {
     throw new Error('--target package 只能与 --type e2e 一起使用')
   }
+  if (args.target === 'package' && !args.bundle) {
+    throw new Error('--target package 必须提供 --bundle <release-bundle.json>')
+  }
+  if (args.target !== 'package' && args.bundle) {
+    throw new Error('--bundle 只能与 --target package 一起使用')
+  }
+  if (args.target !== 'package' && args.result) {
+    throw new Error('--result 只能与 --target package 一起使用')
+  }
   if (args.freshKnowledgeCache && args.reuseKnowledgeCache) {
     throw new Error('--fresh-knowledge-cache 和 --reuse-knowledge-cache 不能同时使用')
   }
@@ -585,7 +617,7 @@ const main = async () => {
   }
 
   if (args.type === 'e2e' && args.target === 'package') {
-    packageSession = await preparePackagedE2EApplication()
+    packageSession = await preparePackagedE2EApplication(args.bundle, { resultPath: args.result })
     packageKnowledgeCache = await prepareKnowledgeCache({
       namespace: 'package',
       buildFingerprint: packageSession.artifactSha256,

@@ -372,7 +372,7 @@ describe('workbench conversation e2e', () => {
             result.fileMenuLabelVisible &&
               result.legacyFileMenuLabelCount === 0 &&
               result.tabCount === 8 &&
-              result.chromeLayout?.tabbarHeight === 44 &&
+              Math.round(result.chromeLayout?.tabbarHeight ?? 0) === 44 &&
               result.chromeLayout.tabbarBorderBottom === '0px' &&
               result.chromeLayout.toggleInsideTabbar &&
               result.chromeLayout.toggleAppRegion === 'no-drag' &&

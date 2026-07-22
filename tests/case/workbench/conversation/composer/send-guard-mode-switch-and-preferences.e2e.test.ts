@@ -68,107 +68,103 @@ describe('workbench conversation e2e', () => {
 
           const env = loadWorkbenchLiveModelEnv()
           const workspace = await createTemporaryWorkbenchWorkspace(CASE_ID)
-          try {
-            await configureLiveModelThroughSettingsUi(page, env)
-            await navigateToWorkbench(page)
+          await configureLiveModelThroughSettingsUi(page, env)
+          await navigateToWorkbench(page)
 
-            await setWorkbenchInput(page, DRAFT_TEXT)
-            const disabledWithoutWorkspace = await getWorkbenchLocator(
-              page,
-              workbenchSelectors.sendButton
-            ).evaluate((element) => element instanceof HTMLButtonElement && element.disabled)
+          await setWorkbenchInput(page, DRAFT_TEXT)
+          const disabledWithoutWorkspace = await getWorkbenchLocator(
+            page,
+            workbenchSelectors.sendButton
+          ).evaluate((element) => element instanceof HTMLButtonElement && element.disabled)
 
-            await switchWorkbenchMode(page, '没头脑')
-            const searchModeInputText = (
-              (await getWorkbenchLocator(page, workbenchSelectors.input).textContent()) || ''
-            ).trim()
-            await switchWorkbenchMode(page, '大聪明')
-            const aiModeInputText = (
-              (await getWorkbenchLocator(page, workbenchSelectors.input).textContent()) || ''
-            ).trim()
+          await switchWorkbenchMode(page, '没头脑')
+          const searchModeInputText = (
+            (await getWorkbenchLocator(page, workbenchSelectors.input).textContent()) || ''
+          ).trim()
+          await switchWorkbenchMode(page, '大聪明')
+          const aiModeInputText = (
+            (await getWorkbenchLocator(page, workbenchSelectors.input).textContent()) || ''
+          ).trim()
 
-            await prepareWorkbenchWorkspaceThroughUi(page, {
-              workspaceName: 'Workbench Guard Workspace',
-              rootPath: workspace.rootPath
-            })
-            await selectWorkbenchModel(page, env.modelName)
-            await selectWorkbenchVisualModel(page, env.visualModelName)
-            await selectWorkbenchAiPreference(page, '严谨')
-            const selectedAiPreferenceBeforeReload = await readWorkbenchAiPreferenceSelection(page)
-            await switchWorkbenchMode(page, '没头脑')
-            const aiPreferenceHiddenInSearch = !(await getWorkbenchLocator(
-              page,
-              workbenchSelectors.aiPreferenceSwitch
-            )
-              .isVisible()
-              .catch(() => false))
-            await switchWorkbenchMode(page, '大聪明')
-            const selectedAiPreferenceAfterModeRoundTrip =
-              await readWorkbenchAiPreferenceSelection(page)
-            const selectedModelBeforeReload = await readWorkbenchSelectedControlText(
-              page,
-              workbenchSelectors.modelSelect
-            )
-            const selectedWorkspaceBeforeReload = await readWorkbenchSelectedControlText(
-              page,
-              workbenchSelectors.workspaceSelect
-            )
+          await prepareWorkbenchWorkspaceThroughUi(page, {
+            workspaceName: 'Workbench Guard Workspace',
+            rootPath: workspace.rootPath
+          })
+          await selectWorkbenchModel(page, env.modelName)
+          await selectWorkbenchVisualModel(page, env.visualModelName)
+          await selectWorkbenchAiPreference(page, '严谨')
+          const selectedAiPreferenceBeforeReload = await readWorkbenchAiPreferenceSelection(page)
+          await switchWorkbenchMode(page, '没头脑')
+          const aiPreferenceHiddenInSearch = !(await getWorkbenchLocator(
+            page,
+            workbenchSelectors.aiPreferenceSwitch
+          )
+            .isVisible()
+            .catch(() => false))
+          await switchWorkbenchMode(page, '大聪明')
+          const selectedAiPreferenceAfterModeRoundTrip =
+            await readWorkbenchAiPreferenceSelection(page)
+          const selectedModelBeforeReload = await readWorkbenchSelectedControlText(
+            page,
+            workbenchSelectors.modelSelect
+          )
+          const selectedWorkspaceBeforeReload = await readWorkbenchSelectedControlText(
+            page,
+            workbenchSelectors.workspaceSelect
+          )
 
-            await navigateToWorkbench(page)
-            const selectedModelAfterReload = await readWorkbenchSelectedControlText(
-              page,
-              workbenchSelectors.modelSelect
-            )
-            const selectedWorkspaceAfterReload = await readWorkbenchSelectedControlText(
-              page,
-              workbenchSelectors.workspaceSelect
-            )
-            const selectedAiPreferenceAfterReload = await readWorkbenchAiPreferenceSelection(page)
+          await navigateToWorkbench(page)
+          const selectedModelAfterReload = await readWorkbenchSelectedControlText(
+            page,
+            workbenchSelectors.modelSelect
+          )
+          const selectedWorkspaceAfterReload = await readWorkbenchSelectedControlText(
+            page,
+            workbenchSelectors.workspaceSelect
+          )
+          const selectedAiPreferenceAfterReload = await readWorkbenchAiPreferenceSelection(page)
 
-            const startedAtMs = Date.now()
-            await sendWorkbenchMessage(page, REAL_SEND_PROMPT)
-            await getWorkbenchLocator(page, workbenchSelectors.sendButton).waitFor({
-              state: 'visible'
-            })
-            await page.waitForFunction((testId: string) => {
-              const element = document.querySelector(`[data-testid="${testId}"]`)
-              return element?.getAttribute('aria-label')?.includes('停止')
-            }, workbenchSelectors.sendButton)
-            const runningButtonLabel =
-              (await getWorkbenchLocator(page, workbenchSelectors.sendButton).getAttribute(
-                'aria-label'
-              )) || ''
-            const evidence = await waitForWorkbenchAiRunCompletion(
-              runtime,
-              startedAtMs,
-              env.modelName,
-              WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
-              { page, blockerPolicy: 'auto_approve' }
-            )
-            recordWorkbenchAiEvidence(runtime, evidence, 0.75)
+          const startedAtMs = Date.now()
+          await sendWorkbenchMessage(page, REAL_SEND_PROMPT)
+          await getWorkbenchLocator(page, workbenchSelectors.sendButton).waitFor({
+            state: 'visible'
+          })
+          await page.waitForFunction((testId: string) => {
+            const element = document.querySelector(`[data-testid="${testId}"]`)
+            return element?.getAttribute('aria-label')?.includes('停止')
+          }, workbenchSelectors.sendButton)
+          const runningButtonLabel =
+            (await getWorkbenchLocator(page, workbenchSelectors.sendButton).getAttribute(
+              'aria-label'
+            )) || ''
+          const evidence = await waitForWorkbenchAiRunCompletion(
+            runtime,
+            startedAtMs,
+            env.modelName,
+            WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
+            { page, blockerPolicy: 'auto_approve' }
+          )
+          recordWorkbenchAiEvidence(runtime, evidence, 0.75)
 
-            return {
-              missingModelInitialDelayMs,
-              missingModelReturnDelayMs,
-              missingModelInitialText,
-              missingModelHiddenInSearch,
-              disabledWithoutWorkspace,
-              searchModeInputText,
-              aiModeInputText,
-              selectedModelBeforeReload,
-              selectedWorkspaceBeforeReload,
-              selectedModelAfterReload,
-              selectedWorkspaceAfterReload,
-              selectedAiPreferenceBeforeReload,
-              selectedAiPreferenceAfterModeRoundTrip,
-              selectedAiPreferenceAfterReload,
-              aiPreferenceHiddenInSearch,
-              runningButtonLabel,
-              finalAnswerText: evidence.finalAnswerText,
-              antMessageText: await getAntMessageText(page)
-            }
-          } finally {
-            await workspace.cleanup()
+          return {
+            missingModelInitialDelayMs,
+            missingModelReturnDelayMs,
+            missingModelInitialText,
+            missingModelHiddenInSearch,
+            disabledWithoutWorkspace,
+            searchModeInputText,
+            aiModeInputText,
+            selectedModelBeforeReload,
+            selectedWorkspaceBeforeReload,
+            selectedModelAfterReload,
+            selectedWorkspaceAfterReload,
+            selectedAiPreferenceBeforeReload,
+            selectedAiPreferenceAfterModeRoundTrip,
+            selectedAiPreferenceAfterReload,
+            aiPreferenceHiddenInSearch,
+            runningButtonLabel,
+            finalAnswerText: evidence.finalAnswerText,
+            antMessageText: await getAntMessageText(page)
           }
         },
         assert: async (result, runtime) => {

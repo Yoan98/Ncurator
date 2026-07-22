@@ -10,11 +10,7 @@ import {
   navigateToSettingsSection,
   waitForFileIndexJobIdle
 } from '../../../../harness/e2e/settings'
-import {
-  cleanupRealWorkspace,
-  createWorkspaceWithFiles,
-  toSupportedFileStatuses
-} from './realWorkspaceHelpers'
+import { createWorkspaceWithFiles, toSupportedFileStatuses } from './realWorkspaceHelpers'
 
 describe('settings workspace e2e', () => {
   it(
@@ -33,49 +29,43 @@ describe('settings workspace e2e', () => {
         execute: async (runtime) => {
           const { page } = runtime
           let workspaceRoot = ''
-          try {
-            workspaceRoot = await createWorkspaceWithFiles(
-              'workspace-prepare-file-failure-isolated',
-              [
-                {
-                  relativePath: 'broken.docx',
-                  content: 'not a valid docx archive'
-                }
-              ]
-            )
-            await mkdir(path.join(workspaceRoot, 'ok'), { recursive: true })
-            await cp(
-              path.resolve('tests/fixtures/workspace/sample-edit.docx'),
-              path.join(workspaceRoot, 'ok', 'sample-edit.docx')
-            )
-            const workspace = await createRealWorkspaceWithRoot(page, {
-              name: '失败隔离工作区',
-              rootPath: workspaceRoot
-            })
-            const workspaceId = workspace.workspace!.id
+          workspaceRoot = await createWorkspaceWithFiles(
+            'workspace-prepare-file-failure-isolated',
+            [
+              {
+                relativePath: 'broken.docx',
+                content: 'not a valid docx archive'
+              }
+            ]
+          )
+          await mkdir(path.join(workspaceRoot, 'ok'), { recursive: true })
+          await cp(
+            path.resolve('tests/fixtures/workspace/sample-edit.docx'),
+            path.join(workspaceRoot, 'ok', 'sample-edit.docx')
+          )
+          const workspace = await createRealWorkspaceWithRoot(page, {
+            name: '失败隔离工作区',
+            rootPath: workspaceRoot
+          })
+          const workspaceId = workspace.workspace!.id
 
-            await navigateToSettingsSection(page, 'workspace')
-            await getSettingsLocator(page, importSelectors.workspaceQuickPrepareButton).waitFor({
-              state: 'visible'
+          await navigateToSettingsSection(page, 'workspace')
+          await getSettingsLocator(page, importSelectors.workspaceQuickPrepareButton).waitFor({
+            state: 'visible'
+          })
+          await getSettingsLocator(page, importSelectors.workspaceQuickPrepareButton).click()
+          const result = await waitForFileIndexJobIdle(page, workspaceId)
+          const pingTree = await page.evaluate(async (selectedWorkspaceId) => {
+            return await window.api.workspaceTree({
+              workspaceId: selectedWorkspaceId,
+              includeUnsupported: true
             })
-            await getSettingsLocator(page, importSelectors.workspaceQuickPrepareButton).click()
-            const result = await waitForFileIndexJobIdle(page, workspaceId)
-            const pingTree = await page.evaluate(async (selectedWorkspaceId) => {
-              return await window.api.workspaceTree({
-                workspaceId: selectedWorkspaceId,
-                includeUnsupported: true
-              })
-            }, workspaceId)
+          }, workspaceId)
 
-            return {
-              finalSummary: result.tree.summary,
-              statuses: toSupportedFileStatuses(result.tree),
-              pingTotal: pingTree.total
-            }
-          } finally {
-            if (workspaceRoot) {
-              await cleanupRealWorkspace(workspaceRoot)
-            }
+          return {
+            finalSummary: result.tree.summary,
+            statuses: toSupportedFileStatuses(result.tree),
+            pingTotal: pingTree.total
           }
         },
         assert: async (result, runtime) => {

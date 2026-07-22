@@ -19,6 +19,7 @@ import { AppUpdateService } from './services/update/AppUpdateService'
 import { APP_ID } from '../shared/constants'
 import { MODELS_PATH } from './utils/paths'
 import { terminalSessionManager } from './services/ai/human/tools/terminal/TerminalSessionManager'
+import { AppShutdownCoordinator } from './services/AppShutdownCoordinator'
 
 app.commandLine.appendSwitch(
   'remote-debugging-port',
@@ -37,6 +38,36 @@ if (e2eUserDataPath) {
 const singleInstanceLock = process.env.NCURATOR_E2E_OBSERVER
   ? true
   : app.requestSingleInstanceLock()
+const shutdownCoordinator = new AppShutdownCoordinator()
+let quitAfterShutdown = false
+let shutdownRequested = false
+
+const prepareAppShutdown = async (): Promise<void> => {
+  if (quitAfterShutdown) return
+  shutdownRequested = true
+  const failures = await shutdownCoordinator.shutdown()
+  for (const failure of failures) {
+    console.error(`[APP-SHUTDOWN] ${failure.name} failed:`, failure.error)
+  }
+  quitAfterShutdown = true
+}
+
+if (process.env.NCURATOR_E2E_OBSERVER) {
+  ;(
+    globalThis as typeof globalThis & {
+      __NCURATOR_E2E_PREPARE_SHUTDOWN__?: () => Promise<void>
+    }
+  ).__NCURATOR_E2E_PREPARE_SHUTDOWN__ = prepareAppShutdown
+}
+
+app.on('before-quit', (event) => {
+  if (quitAfterShutdown) return
+  event.preventDefault()
+  if (shutdownRequested) return
+  void prepareAppShutdown().then(() => {
+    app.quit()
+  })
+})
 
 const INITIAL_WINDOW_WIDTH = 1400
 const INITIAL_WINDOW_HEIGHT = 800
@@ -183,6 +214,9 @@ if (!singleInstanceLock) {
     })
 
     console.log('Starting background initialization of services...')
+    await modelService
+      .reuseDownloadedModelFromAlternatePath(DEFAULT_EMBEDDING_MODEL_NAME)
+      .catch((err) => console.error('Failed to reuse downloaded embedding model:', err))
     embeddingService
       .initialize()
       .catch((err) => console.error('Failed to initialize EmbeddingService:', err))
@@ -213,12 +247,25 @@ if (!singleInstanceLock) {
     appUpdateService.initialize()
     appUpdateService.checkForUpdatesOnLaunch()
 
-    app.on('before-quit', () => {
-      void terminalSessionManager.dispose()
-      void storageService.failInterruptedWorkspaceIndexJobs()
-      void webCrawlerService.close()
-      void embeddingService.close()
-      void browserEmbedService.dispose()
+    shutdownCoordinator.register({
+      name: 'workspace-index-jobs',
+      dispose: () => storageService.failInterruptedWorkspaceIndexJobs()
+    })
+    shutdownCoordinator.register({
+      name: 'embedding-service',
+      dispose: () => embeddingService.close()
+    })
+    shutdownCoordinator.register({
+      name: 'web-crawler',
+      dispose: () => webCrawlerService.close()
+    })
+    shutdownCoordinator.register({
+      name: 'browser-embed-service',
+      dispose: () => browserEmbedService.dispose()
+    })
+    shutdownCoordinator.register({
+      name: 'terminal-session-manager',
+      dispose: () => terminalSessionManager.dispose()
     })
 
     vectorModelDownloadService

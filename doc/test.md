@@ -104,6 +104,8 @@ tests/
 
 - UI E2E 必须通过真实 UI 和产品链路完成被测行为，不得用 fake、mock、stub、直接写状态或内部 IPC 绕过。
 - fixture 和 helper 只能准备真实输入、执行用户可见操作、等待结果和收集证据，不能替代产品输出。
+- 每个 E2E case 必须显式声明 `serviceMode`；使用 `fixture` 模式时还必须提供 `fixtureReason`。
+- Workbench 和需要真实文件的 Settings case 将 `tests/fixtures/workspace` 复制到临时目录，case 结束并关闭应用后删除临时副本。
 - 与当前 case 无关且已有独立覆盖的前置状态，可以通过真实 `window.api.*` 建立，但不能代替当前 case 的用户操作。
 - 涉及真实 AI 时必须使用 live 配置；配置缺失应直接失败，不能跳过或回落到 mock。
 - 产品缺少必要 testability 入口时，应记录缺口，不能改用模拟路径绕过。
@@ -159,7 +161,7 @@ runner 不负责：
   - `pnpm test:unit:ai`
 - 全量 E2E
   - `pnpm test:e2e:source`：构建当前源码并运行全部 E2E。
-  - `pnpm test:e2e:package`：构建、审计并安装当前平台正式包，再对安装后的可执行程序运行全部 E2E。
+  - `pnpm test:e2e:package -- --bundle <release-bundle.json>`：校验并安装已经构建的正式包，再对安装后的可执行程序运行全部 E2E。
 - Settings
   - `pnpm test:settings`
   - `pnpm test:settings:backend`
@@ -181,6 +183,7 @@ runner 支持的过滤参数：
 - `--case`
 - `--runs`
 - `--target`，取值为 `source` 或 `package`，默认 `source`。
+- `--bundle`，正式包 E2E 必填，指向已构建候选包的 `release-bundle-*.json`。
 - `--fresh-knowledge-cache`，删除本次构建对应的知识库缓存，强制从零验证完整索引。
 - `--reuse-knowledge-cache`，人工调试时跨构建复用同一类缓存；不能和 `--fresh-knowledge-cache` 同时使用。
 
@@ -190,13 +193,18 @@ runner 支持的过滤参数：
 - `--type` 取值为 `backend` 或 `e2e`。
 - `--target package` 只能与 `--type e2e` 一起使用；普通测试和 backend 不允许使用正式包目标。
 - `source` 是日常默认目标：runner 准备 Electron native 模块、构建当前源码，并让每个 E2E 文件独立启动源码应用。
-- `package` 是正式产物目标：runner 先执行当前平台完整构建与安全审计；macOS 从 DMG 挂载并复制 App，Windows 静默安装 EXE；随后对安装后的真实可执行程序运行同一批 E2E。不得把 `dist` 中的未安装目录当成正式包验证。
+- `package` 是正式产物目标：runner 校验 release bundle 及文件哈希；macOS 从指定 DMG 挂载并复制 App，Windows 静默安装指定 EXE；随后对安装后的真实可执行程序运行同一批 E2E。runner 不执行构建，也不得把 `dist` 中的未安装目录当成正式包验证。
+- macOS 正式包 E2E 按 `macos-arm64`、`macos-x64` 分目录将测试应用保留在 `~/Applications/NCurator-E2E/`。
 - E2E case 通过 runner 按文件串行执行，每个文件独立启动并关闭一个 Electron app；runner 会在相邻 E2E 文件之间默认等待 1 秒，也可通过 `--run-delay-ms` 覆盖。单个文件失败后仍继续执行剩余文件，最终统一返回失败并保存每个文件的结果。
 - E2E runner 直接调用本地 Vitest binary，不经 `pnpm exec`；启动 Vitest 子进程和 harness 启动 Electron 时都会过滤 `npm_*` 环境变量，只保留系统环境与 `NCURATOR_E2E_*` 等项目测试变量，避免 npm lifecycle 变量影响 macOS Electron 原生注册。
 - 如果需要继续收窄到某个 `suite`、`group` 或单条 `case`，统一通过 runner 参数过滤。
 - `--group` 只在目标 `suite` 确实存在额外子目录时使用；如果 case 直接位于 `suite` 根目录，则不需要 `--group`。
 - `better-sqlite3` native 模块需要区分 Node ABI 和 Electron ABI。runner 会通过 `scripts/build/native/better-sqlite3.mjs` 自动准备对应缓存，并通过 `NCURATOR_BETTER_SQLITE3_NATIVE_BINDING` 注入本次测试使用的 binding；正常回归不需要手动 rebuild 或覆盖 `node_modules` 中的 native 文件。
-- 正式包 E2E 的构建、安装日志、安装包哈希和汇总写入 `tests/logs/package/<runId>/`；业务 case 自身的 raw logs 仍按原有 `tests/logs/<domain>/<suite>/**` 规则保存。
+- 正式包 E2E 的 bundle 校验、安装日志、安装包哈希和汇总写入 `tests/logs/package/<runId>/`；业务 case 自身的 raw logs 仍按原有 `tests/logs/<domain>/<suite>/**` 规则保存。
+
+- 正式包 E2E 不负责构建。`--target package` 必须接收 `--bundle <release-bundle.json>`，只安装并测试 bundle 指定的既有安装包；bundle 的 tag、平台、fragment 和文件哈希必须全部匹配。
+- 发布流程通过 `--package-e2e` 显式启用正式包回归门；未启用时不阻塞发布。macOS 启用时 arm64、x64 两个 bundle 均须通过。
+- 发布候选包可使用 `release:win|release:mac -- --tag <tag> --test-only` 重跑正式包 E2E；该阶段只消费持久化候选 bundle，不重新构建。失败会把候选标记为 `rejected`，通过后恢复为 `ready`。
 - E2E 知识库缓存由 workflow 统一选择，一轮测试的全部 case 共用同一个目录。源码测试使用 `tests/.cache/workspace-knowledge/source/<out-main-and-preload-sha256>`；正式包测试使用 `tests/.cache/workspace-knowledge/package/<installer-sha256>`。两类缓存完全隔离，不再使用固定共享目录。
 - 缓存键仍包含文件内容哈希、扩展名、分块配置和向量模型名。未修改文件可以命中；新增或修改的文件会重新处理；删除文件不会因为缓存仍存在而重新进入新 workspace 的索引。
 - 每个 E2E case 的附件中会生成 `knowledge-cache-summary.json`，timeline 也会记录同样的命中和未命中统计。正式包总统计同时写入 `tests/logs/package/<runId>/summary.json`。

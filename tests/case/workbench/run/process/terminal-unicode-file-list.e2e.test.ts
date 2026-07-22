@@ -46,69 +46,65 @@ describe('workbench terminal unicode e2e', () => {
           const startedAtMs = Date.now()
           const handledApprovals = new Set<string>()
 
-          try {
-            await sendWorkbenchMessage(
-              runtime.page,
-              `请只使用 terminal_run 执行 ls -1 查看工作区根目录，然后明确写出目录名“${CHINESE_DIRECTORY}”和文件名“${CHINESE_FILE}”。不要猜测文件名。`
-            )
+          await sendWorkbenchMessage(
+            runtime.page,
+            `请只使用 terminal_run 执行 ls -1 查看工作区根目录，然后明确写出目录名“${CHINESE_DIRECTORY}”和文件名“${CHINESE_FILE}”。不要猜测文件名。`
+          )
 
-            const deadline = Date.now() + WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS
-            let events: AiRunEvent[] = []
-            for (;;) {
-              events = await collectWorkbenchAiRunEvents(runtime)
-              const approval = events
-                .filter(isApprovalRequired)
-                .find((event) => !handledApprovals.has(event.batchId))
-              if (approval) {
-                handledApprovals.add(approval.batchId)
-                await decideWorkbenchApprovalBatch(runtime, runtime.page, {
-                  event: approval,
-                  action: 'approve'
-                })
-                continue
-              }
-              const failed = events.find((event) => event.type === 'run_failed')
-              if (failed?.type === 'run_failed') throw new Error(failed.message)
-              if (events.some((event) => event.type === 'run_completed')) break
-              if (Date.now() >= deadline) throw new Error('terminal unicode flow timed out')
-              await runtime.page.waitForTimeout(500)
+          const deadline = Date.now() + WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS
+          let events: AiRunEvent[] = []
+          for (;;) {
+            events = await collectWorkbenchAiRunEvents(runtime)
+            const approval = events
+              .filter(isApprovalRequired)
+              .find((event) => !handledApprovals.has(event.batchId))
+            if (approval) {
+              handledApprovals.add(approval.batchId)
+              await decideWorkbenchApprovalBatch(runtime, runtime.page, {
+                event: approval,
+                action: 'approve'
+              })
+              continue
             }
+            const failed = events.find((event) => event.type === 'run_failed')
+            if (failed?.type === 'run_failed') throw new Error(failed.message)
+            if (events.some((event) => event.type === 'run_completed')) break
+            if (Date.now() >= deadline) throw new Error('terminal unicode flow timed out')
+            await runtime.page.waitForTimeout(500)
+          }
 
-            const finalAnswerText =
-              events
-                .filter(
-                  (event): event is Extract<AiRunEvent, { type: 'answer_completed' }> =>
-                    event.type === 'answer_completed'
-                )
-                .at(-1)?.text || ''
-            const terminalResults = events
+          const finalAnswerText =
+            events
               .filter(
-                (event): event is Extract<AiRunEvent, { type: 'tool_call_result' }> =>
-                  event.type === 'tool_call_result' && event.toolName === 'terminal_run'
+                (event): event is Extract<AiRunEvent, { type: 'answer_completed' }> =>
+                  event.type === 'answer_completed'
               )
-              .map((event) => JSON.stringify(event.result || {}))
-              .join('\n')
-
-            recordWorkbenchAiEvidence(
-              runtime,
-              {
-                modelName: setup.env.modelName,
-                durationMs: Date.now() - startedAtMs,
-                events,
-                finalAnswerText
-              },
-              0.9
+              .at(-1)?.text || ''
+          const terminalResults = events
+            .filter(
+              (event): event is Extract<AiRunEvent, { type: 'tool_call_result' }> =>
+                event.type === 'tool_call_result' && event.toolName === 'terminal_run'
             )
+            .map((event) => JSON.stringify(event.result || {}))
+            .join('\n')
 
-            return {
-              finalAnswerText,
-              terminalResults,
-              terminalRunCalled: events.some(
-                (event) => event.type === 'tool_call_started' && event.toolName === 'terminal_run'
-              )
-            }
-          } finally {
-            await setup.workspace.cleanup()
+          recordWorkbenchAiEvidence(
+            runtime,
+            {
+              modelName: setup.env.modelName,
+              durationMs: Date.now() - startedAtMs,
+              events,
+              finalAnswerText
+            },
+            0.9
+          )
+
+          return {
+            finalAnswerText,
+            terminalResults,
+            terminalRunCalled: events.some(
+              (event) => event.type === 'tool_call_started' && event.toolName === 'terminal_run'
+            )
           }
         },
         assert: async (result, runtime) => {

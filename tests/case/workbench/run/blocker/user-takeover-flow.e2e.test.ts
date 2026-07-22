@@ -63,123 +63,123 @@ describe('workbench run e2e', () => {
                 document.querySelector('#manual-result').textContent = '${COMPLETION_TEXT}'
               })
             </script>`)
+          runtime.registerResource({
+            name: 'user-takeover-http-server',
+            phase: 'before-app-close',
+            dispose: server.close
+          })
           const setup = await setupWorkbenchWithTempWorkspace(page, { caseId: CASE_ID })
 
-          try {
-            const startedAtMs = Date.now()
-            await sendWorkbenchMessage(
+          const startedAtMs = Date.now()
+          await sendWorkbenchMessage(
+            page,
+            `请严格按顺序完成任务：先用 browser_use navigate 打开 ${server.url}，再用 observe 查看页面。页面要求用户本人操作时，不要替用户点击，调用 wait_for_user_takeover，message 必须是“${TAKEOVER_MESSAGE}”。用户确认完成后，先用 observe 重新查看页面，再用 extract 读取结果，最终原样告诉我结果文字。`
+          )
+
+          const approval = await waitForWorkbenchAiEvent(runtime, {
+            name: 'user_takeover_browser_approval',
+            matches: isApprovalRequired
+          })
+          if (!isApprovalRequired(approval)) throw new Error('browser approval was not required')
+          await decideWorkbenchApprovalBatch(runtime, page, {
+            event: approval,
+            action: 'approve'
+          })
+
+          const takeover = await waitForWorkbenchAiEvent(runtime, {
+            name: 'user_takeover_required',
+            matches: isUserTakeoverRequired,
+            timeoutMs: 180_000
+          })
+          if (!isUserTakeoverRequired(takeover)) {
+            throw new Error('user takeover was not requested')
+          }
+
+          const takeoverPanel = getWorkbenchLocator(page, workbenchSelectors.userTakeoverPanel)
+          await takeoverPanel.waitFor({ state: 'visible' })
+          const panelMessage =
+            (await getWorkbenchLocator(
               page,
-              `请严格按顺序完成任务：先用 browser_use navigate 打开 ${server.url}，再用 observe 查看页面。页面要求用户本人操作时，不要替用户点击，调用 wait_for_user_takeover，message 必须是“${TAKEOVER_MESSAGE}”。用户确认完成后，先用 observe 重新查看页面，再用 extract 读取结果，最终原样告诉我结果文字。`
-            )
+              workbenchSelectors.userTakeoverMessage
+            ).textContent()) || ''
+          const composerHidden = !(await getWorkbenchLocator(page, workbenchSelectors.input)
+            .isVisible()
+            .catch(() => false))
+          await getWorkbenchLocator(page, workbenchSelectors.browserPanel).waitFor({
+            state: 'visible'
+          })
+          await runtime.captureScreenshot({
+            name: 'user-takeover-panel',
+            message: 'AI 已暂停，输入框位置显示用户接手面板，右侧浏览器保持打开。'
+          })
 
-            const approval = await waitForWorkbenchAiEvent(runtime, {
-              name: 'user_takeover_browser_approval',
-              matches: isApprovalRequired
-            })
-            if (!isApprovalRequired(approval)) throw new Error('browser approval was not required')
-            await decideWorkbenchApprovalBatch(runtime, page, {
-              event: approval,
-              action: 'approve'
-            })
-
-            const takeover = await waitForWorkbenchAiEvent(runtime, {
-              name: 'user_takeover_required',
-              matches: isUserTakeoverRequired,
-              timeoutMs: 180_000
-            })
-            if (!isUserTakeoverRequired(takeover)) {
-              throw new Error('user takeover was not requested')
-            }
-
-            const takeoverPanel = getWorkbenchLocator(page, workbenchSelectors.userTakeoverPanel)
-            await takeoverPanel.waitFor({ state: 'visible' })
-            const panelMessage =
-              (await getWorkbenchLocator(
-                page,
-                workbenchSelectors.userTakeoverMessage
-              ).textContent()) || ''
-            const composerHidden = !(await getWorkbenchLocator(page, workbenchSelectors.input)
-              .isVisible()
-              .catch(() => false))
-            await getWorkbenchLocator(page, workbenchSelectors.browserPanel).waitFor({
-              state: 'visible'
-            })
-            await runtime.captureScreenshot({
-              name: 'user-takeover-panel',
-              message: 'AI 已暂停，输入框位置显示用户接手面板，右侧浏览器保持打开。'
-            })
-
-            const browserActionResult = await runtime.electronApp.evaluate(
-              async ({ webContents }, input) => {
-                const allContents = webContents.getAllWebContents()
-                const browserContents = allContents.find((item) =>
-                  item.getURL().startsWith(input.url)
-                )
-                if (!browserContents) {
-                  return {
-                    ok: false,
-                    result: '',
-                    urls: allContents.map((item) => item.getURL())
-                  }
-                }
-                const result = await browserContents.executeJavaScript(`(() => {
-                  const button = document.querySelector('#complete-manual')
-                  if (!(button instanceof HTMLElement)) return 'BUTTON_NOT_FOUND'
-                  button.click()
-                  return document.querySelector('#manual-result')?.textContent || ''
-                })()`)
-                return { ok: true, result: String(result), urls: [] }
-              },
-              { url: server.url }
-            )
-            if (!browserActionResult.ok) {
-              throw new Error(
-                `embedded browser webContents not found: ${browserActionResult.urls.join(', ')}`
+          const browserActionResult = await runtime.electronApp.evaluate(
+            async ({ webContents }, input) => {
+              const allContents = webContents.getAllWebContents()
+              const browserContents = allContents.find((item) =>
+                item.getURL().startsWith(input.url)
               )
-            }
-
-            await getWorkbenchLocator(page, workbenchSelectors.userTakeoverConfirmButton).click()
-            await waitForWorkbenchAiEvent(runtime, {
-              name: 'user_takeover_confirmed',
-              matches: (event) =>
-                event.type === 'user_takeover_confirmed' && event.requestId === takeover.requestId
-            })
-            await takeoverPanel.waitFor({ state: 'hidden' })
-
-            const evidence = await waitForWorkbenchAiRunCompletion(
-              runtime,
-              startedAtMs,
-              setup.env.modelName
+              if (!browserContents) {
+                return {
+                  ok: false,
+                  result: '',
+                  urls: allContents.map((item) => item.getURL())
+                }
+              }
+              const result = await browserContents.executeJavaScript(`(() => {
+                const button = document.querySelector('#complete-manual')
+                if (!(button instanceof HTMLElement)) return 'BUTTON_NOT_FOUND'
+                button.click()
+                return document.querySelector('#manual-result')?.textContent || ''
+              })()`)
+              return { ok: true, result: String(result), urls: [] }
+            },
+            { url: server.url }
+          )
+          if (!browserActionResult.ok) {
+            throw new Error(
+              `embedded browser webContents not found: ${browserActionResult.urls.join(', ')}`
             )
-            recordWorkbenchAiEvidence(runtime, evidence, 0.8)
-            const confirmedIndex = evidence.events.findIndex(
-              (event) => event.type === 'user_takeover_confirmed'
-            )
-            const actionsAfterConfirmation = evidence.events
-              .slice(Math.max(0, confirmedIndex + 1))
-              .map(readBrowserAction)
-              .filter(Boolean)
-            const toolNames = evidence.events
-              .filter((event) => event.type === 'tool_call_started')
-              .map((event) => event.toolName)
-            const signals = await runtime.collectSignals()
+          }
 
-            return {
-              panelMessage,
-              takeoverMessage: takeover.message,
-              composerHidden,
-              browserActionResult: browserActionResult.result,
-              actionsAfterConfirmation,
-              toolNames,
-              finalAnswerText: evidence.finalAnswerText,
-              confirmIpcCalled: signals.ipcInvokeEntries.some(
-                (entry) => entry.name === 'aiRunUserTakeoverConfirm'
-              ),
-              eventTypes: evidence.events.map((event) => event.type)
-            }
-          } finally {
-            await setup.workspace.cleanup()
-            await server.close()
+          await getWorkbenchLocator(page, workbenchSelectors.userTakeoverConfirmButton).click()
+          await waitForWorkbenchAiEvent(runtime, {
+            name: 'user_takeover_confirmed',
+            matches: (event) =>
+              event.type === 'user_takeover_confirmed' && event.requestId === takeover.requestId
+          })
+          await takeoverPanel.waitFor({ state: 'hidden' })
+
+          const evidence = await waitForWorkbenchAiRunCompletion(
+            runtime,
+            startedAtMs,
+            setup.env.modelName
+          )
+          recordWorkbenchAiEvidence(runtime, evidence, 0.8)
+          const confirmedIndex = evidence.events.findIndex(
+            (event) => event.type === 'user_takeover_confirmed'
+          )
+          const actionsAfterConfirmation = evidence.events
+            .slice(Math.max(0, confirmedIndex + 1))
+            .map(readBrowserAction)
+            .filter(Boolean)
+          const toolNames = evidence.events
+            .filter((event) => event.type === 'tool_call_started')
+            .map((event) => event.toolName)
+          const signals = await runtime.collectSignals()
+
+          return {
+            panelMessage,
+            takeoverMessage: takeover.message,
+            composerHidden,
+            browserActionResult: browserActionResult.result,
+            actionsAfterConfirmation,
+            toolNames,
+            finalAnswerText: evidence.finalAnswerText,
+            confirmIpcCalled: signals.ipcInvokeEntries.some(
+              (entry) => entry.name === 'aiRunUserTakeoverConfirm'
+            ),
+            eventTypes: evidence.events.map((event) => event.type)
           }
         },
         assert: async (result, runtime) => {

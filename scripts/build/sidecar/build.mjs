@@ -11,11 +11,10 @@ const SIDECAR_SCRIPT_PATH = path.join(SIDECAR_DIR, 'web_crawler_sidecar.py')
 const REQUIREMENTS_PATH = path.join(SIDECAR_DIR, 'requirements.txt')
 const BUILD_SCRIPT_PATH = path.join(ROOT, 'scripts', 'build', 'sidecar', 'build.py')
 const THIS_SCRIPT_PATH = fileURLToPath(import.meta.url)
-const VENV_DIR = path.join(
-  ROOT,
-  '.runvenv',
-  `web_crawler_sidecar-${process.platform}-${process.arch}`
+const VENV_ROOT = path.resolve(
+  String(process.env.NCURATOR_SIDECAR_VENV_ROOT || '').trim() || path.join(ROOT, '.runvenv')
 )
+const VENV_DIR = path.join(VENV_ROOT, `web_crawler_sidecar-${process.platform}-${process.arch}`)
 const STAMP_PATH = path.join(VENV_DIR, '.requirements.sha256')
 const PLAYWRIGHT_BROWSER_STAMP_PATH = path.join(VENV_DIR, '.playwright-browser.sha256')
 const PIP_CACHE_DIR = path.resolve(

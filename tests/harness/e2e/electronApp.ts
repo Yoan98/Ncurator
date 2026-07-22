@@ -1,7 +1,7 @@
 import path from 'node:path'
 import os from 'node:os'
 import { createServer } from 'node:net'
-import { access, mkdtemp, rm } from 'node:fs/promises'
+import { access, mkdir, mkdtemp, rm } from 'node:fs/promises'
 import electronPath from 'electron'
 import {
   _electron as electron,
@@ -44,6 +44,32 @@ export type E2ELifecycleEntry = {
   ts: string
   name: string
   data?: JsonValue
+}
+
+export const isExpectedWindowsInspectorTeardownExit = (input: {
+  platform: NodeJS.Platform
+  lifecycleEntries: readonly E2ELifecycleEntry[]
+  testPassed: boolean
+}): boolean => {
+  if (input.platform !== 'win32' || !input.testPassed) return false
+
+  const exitIndex = input.lifecycleEntries.findLastIndex(
+    (entry) => entry.name === 'electron-process-exit'
+  )
+  if (exitIndex < 0) return false
+
+  const teardownIndex = input.lifecycleEntries.findIndex(
+    (entry) => entry.name === 'electron-teardown-started'
+  )
+  if (teardownIndex < 0 || teardownIndex >= exitIndex) return false
+  if (input.lifecycleEntries.some((entry) => entry.name === 'page-crash')) return false
+
+  const exitData = input.lifecycleEntries[exitIndex]?.data as
+    | { code?: number | null; signal?: string | null }
+    | undefined
+  return (
+    (exitData?.code === 3221225477 || exitData?.code === 3221226505) && !exitData.signal
+  )
 }
 
 type E2EObserverState = {
@@ -322,7 +348,11 @@ export const launchElectronApp = async (input: {
     lifecycleEntries.push(entry)
     input.signalSink?.onLifecycle?.(entry)
   }
-  const userDataDir = await mkdtemp(path.join(os.tmpdir(), 'ncurator-e2e-user-data-'))
+  const e2eTempRoot = path.resolve(
+    String(process.env.NCURATOR_E2E_TEMP_ROOT || '').trim() || os.tmpdir()
+  )
+  await mkdir(e2eTempRoot, { recursive: true })
+  const userDataDir = await mkdtemp(path.join(e2eTempRoot, 'ncurator-e2e-user-data-'))
   const remoteDebuggingPort = await allocateFreePort()
   const launchEnv = buildElectronLaunchEnv(
     userDataDir,
@@ -463,6 +493,7 @@ export const launchElectronApp = async (input: {
       }
     },
     close: async (closeInput) => {
+      recordLifecycle('electron-teardown-started')
       if (!page.isClosed()) {
         try {
           await page.context().tracing.stop({
@@ -478,16 +509,52 @@ export const launchElectronApp = async (input: {
           )
         }
       }
+      let gracefulExitRequested = false
       try {
-        await electronApp.close()
+        gracefulExitRequested = await electronApp.evaluate(async ({ app }) => {
+          const prepareShutdown = (
+            globalThis as typeof globalThis & {
+              __NCURATOR_E2E_PREPARE_SHUTDOWN__?: () => Promise<void>
+            }
+          ).__NCURATOR_E2E_PREPARE_SHUTDOWN__
+          if (!prepareShutdown) return false
+          await prepareShutdown()
+          setTimeout(() => app.exit(0), 0)
+          return true
+        })
+        if (gracefulExitRequested) {
+          recordLifecycle('electron-graceful-shutdown-prepared')
+        }
       } catch (error) {
         pushProcessLog(
           consoleEntries,
           'warning',
-          'electron-close',
+          'prepare-shutdown',
           error instanceof Error ? error.message : String(error),
           input.signalSink
         )
+      }
+      if (gracefulExitRequested && electronProcess && electronProcess.exitCode === null) {
+        await new Promise<void>((resolve) => {
+          const timeout = setTimeout(resolve, 10_000)
+          electronProcess.once('exit', () => {
+            clearTimeout(timeout)
+            resolve()
+          })
+        })
+      }
+      if (!gracefulExitRequested || (electronProcess && electronProcess.exitCode === null)) {
+        try {
+          await electronApp.close()
+        } catch (error) {
+          pushProcessLog(
+            consoleEntries,
+            'warning',
+            'electron-close',
+            error instanceof Error ? error.message : String(error),
+            input.signalSink
+          )
+        }
       }
       await rm(userDataDir, {
         recursive: true,

@@ -146,130 +146,129 @@ describe('workbench conversation e2e', () => {
           const { page } = runtime
           const liveEnv = loadWorkbenchLiveModelEnv()
           const provider = await startProviderServer(liveEnv)
+          runtime.registerResource({
+            name: 'model-provider-server',
+            phase: 'before-app-close',
+            dispose: provider.close
+          })
           const workspace = await createTemporaryWorkbenchWorkspace(CASE_ID)
-          try {
-            await configureLiveModelThroughSettingsUi(page, {
-              baseUrl: provider.baseUrl,
-              apiKey: liveEnv.apiKey,
-              modelName: liveEnv.modelName,
-              visualModelName: liveEnv.modelName
+          await configureLiveModelThroughSettingsUi(page, {
+            baseUrl: provider.baseUrl,
+            apiKey: liveEnv.apiKey,
+            modelName: liveEnv.modelName,
+            visualModelName: liveEnv.modelName
+          })
+          await navigateToWorkbench(page, { waitForSessionListText: false })
+
+          const modelSelect = getWorkbenchLocator(page, workbenchSelectors.modelSelect)
+          await modelSelect.click()
+          await page
+            .locator('.workbench-select-menu.workbench-composer-menu')
+            .last()
+            .getByRole('button', { name: /^主模型/u })
+            .click()
+          const dropdown = page.locator('.workbench-select-menu.workbench-composer-menu').last()
+          const searchInput = dropdown.locator('input[placeholder="搜索模型"]')
+          await searchInput.waitFor({ state: 'visible' })
+
+          const configButton = dropdown
+            .getByRole('button', { name: /Live Model/u })
+            .filter({ has: page.locator('svg') })
+            .first()
+          await configButton.waitFor({ state: 'visible' })
+          const iconIsRightOfText = await configButton.evaluate((button) => {
+            const content = button.firstElementChild
+            return (
+              content?.children.item(0)?.tagName.toLowerCase() === 'span' &&
+              content?.children.item(1)?.tagName.toLowerCase() === 'svg'
+            )
+          })
+          await configButton.click()
+          const collapsed =
+            (await configButton.getAttribute('aria-expanded')) === 'false' &&
+            !(await dropdown
+              .getByRole('option', { name: liveEnv.modelName })
+              .isVisible()
+              .catch(() => false))
+          await configButton.click()
+          const expanded =
+            (await configButton.getAttribute('aria-expanded')) === 'true' &&
+            (await dropdown.getByRole('option', { name: liveEnv.modelName }).isVisible())
+
+          await searchInput.fill(MISSING_MODEL_NAME)
+          await dropdown.getByText('暂无匹配模型', { exact: true }).waitFor({ state: 'visible' })
+          const missingOptionCount = await dropdown
+            .getByRole('option')
+            .filter({
+              hasText: MISSING_MODEL_NAME
             })
-            await navigateToWorkbench(page, { waitForSessionListText: false })
+            .count()
+          await runtime.captureScreenshot({
+            name: 'model-selector-empty-search',
+            message: '模型搜索无结果时显示空状态，不把搜索词创建成模型。'
+          })
 
-            const modelSelect = getWorkbenchLocator(page, workbenchSelectors.modelSelect)
-            await modelSelect.click()
-            await page
-              .locator('.workbench-select-menu.workbench-composer-menu')
-              .last()
-              .getByRole('button', { name: /^主模型/u })
-              .click()
-            const dropdown = page.locator('.workbench-select-menu.workbench-composer-menu').last()
-            const searchInput = dropdown.locator('input[placeholder="搜索模型"]')
-            await searchInput.waitFor({ state: 'visible' })
+          await searchInput.fill('')
+          await dropdown.getByRole('option', { name: liveEnv.modelName }).click()
 
-            const configButton = dropdown
-              .getByRole('button', { name: /Live Model/u })
-              .filter({ has: page.locator('svg') })
-              .first()
-            await configButton.waitFor({ state: 'visible' })
-            const iconIsRightOfText = await configButton.evaluate((button) => {
-              const content = button.firstElementChild
-              return (
-                content?.children.item(0)?.tagName.toLowerCase() === 'span' &&
-                content?.children.item(1)?.tagName.toLowerCase() === 'svg'
-              )
-            })
-            await configButton.click()
-            const collapsed =
-              (await configButton.getAttribute('aria-expanded')) === 'false' &&
-              !(await dropdown
-                .getByRole('option', { name: liveEnv.modelName })
-                .isVisible()
-                .catch(() => false))
-            await configButton.click()
-            const expanded =
-              (await configButton.getAttribute('aria-expanded')) === 'true' &&
-              (await dropdown.getByRole('option', { name: liveEnv.modelName }).isVisible())
-
-            await searchInput.fill(MISSING_MODEL_NAME)
-            await dropdown.getByText('暂无匹配模型', { exact: true }).waitFor({ state: 'visible' })
-            const missingOptionCount = await dropdown
-              .getByRole('option')
-              .filter({
-                hasText: MISSING_MODEL_NAME
+          const created = await page.evaluate(
+            async ({ name, rootPath }) => {
+              const createResult = await window.api.workspaceCreate({ name })
+              if (!createResult.success || !createResult.workspace) {
+                throw new Error(createResult.error || 'workspace create failed')
+              }
+              const bindResult = await window.api.workspaceSetRootPath({
+                workspaceId: createResult.workspace.id,
+                rootPath
               })
-              .count()
-            await runtime.captureScreenshot({
-              name: 'model-selector-empty-search',
-              message: '模型搜索无结果时显示空状态，不把搜索词创建成模型。'
-            })
+              if (!bindResult.success) throw new Error(bindResult.error || 'workspace bind failed')
+              return createResult.workspace.id
+            },
+            { name: WORKSPACE_NAME, rootPath: workspace.rootPath }
+          )
 
-            await searchInput.fill('')
-            await dropdown.getByRole('option', { name: liveEnv.modelName }).click()
+          await navigateToWorkbench(page, { waitForSessionListText: false })
+          await selectWorkbenchWorkspace(page, WORKSPACE_NAME)
+          await switchWorkbenchMode(page, '大聪明')
+          const successStartedAt = Date.now()
+          await sendWorkbenchMessage(page, '不要调用任何工具，只回复“测试成功”。')
+          const successEvidence = await waitForWorkbenchAiRunCompletion(
+            runtime,
+            successStartedAt,
+            liveEnv.modelName,
+            240_000,
+            { page }
+          )
 
-            const created = await page.evaluate(
-              async ({ name, rootPath }) => {
-                const createResult = await window.api.workspaceCreate({ name })
-                if (!createResult.success || !createResult.workspace) {
-                  throw new Error(createResult.error || 'workspace create failed')
-                }
-                const bindResult = await window.api.workspaceSetRootPath({
-                  workspaceId: createResult.workspace.id,
-                  rootPath
-                })
-                if (!bindResult.success)
-                  throw new Error(bindResult.error || 'workspace bind failed')
-                return createResult.workspace.id
-              },
-              { name: WORKSPACE_NAME, rootPath: workspace.rootPath }
-            )
+          provider.enableUnavailableModel()
+          await sendWorkbenchMessage(page, '不要调用任何工具，只回复“测试失败”。')
 
-            await navigateToWorkbench(page, { waitForSessionListText: false })
-            await selectWorkbenchWorkspace(page, WORKSPACE_NAME)
-            await switchWorkbenchMode(page, '大聪明')
-            const successStartedAt = Date.now()
-            await sendWorkbenchMessage(page, '不要调用任何工具，只回复“测试成功”。')
-            const successEvidence = await waitForWorkbenchAiRunCompletion(
-              runtime,
-              successStartedAt,
-              liveEnv.modelName,
-              240_000,
-              { page }
-            )
+          const runFailed = await waitForRunFailed(async () => {
+            const signals = await runtime.collectSignals()
+            return signals.aiRunEventEntries.map((entry) => entry.event)
+          })
+          await page
+            .getByText(new RegExp(`HTTP ${String(runFailed.httpStatus || '')}`, 'u'))
+            .waitFor({ state: 'visible' })
+          await page.getByText(runFailed.message, { exact: false }).waitFor({ state: 'visible' })
+          const pageText = (await page.locator('body').innerText()).trim()
+          await runtime.captureScreenshot({
+            name: 'provider-error-visible',
+            message: '模型服务错误在页面中显示，内部实现信息不对用户暴露。'
+          })
 
-            provider.enableUnavailableModel()
-            await sendWorkbenchMessage(page, '不要调用任何工具，只回复“测试失败”。')
-
-            const runFailed = await waitForRunFailed(async () => {
-              const signals = await runtime.collectSignals()
-              return signals.aiRunEventEntries.map((entry) => entry.event)
-            })
-            await page
-              .getByText(new RegExp(`HTTP ${String(runFailed.httpStatus || '')}`, 'u'))
-              .waitFor({ state: 'visible' })
-            await page.getByText(runFailed.message, { exact: false }).waitFor({ state: 'visible' })
-            const pageText = (await page.locator('body').innerText()).trim()
-            await runtime.captureScreenshot({
-              name: 'provider-error-visible',
-              message: '模型服务错误在页面中显示，内部实现信息不对用户暴露。'
-            })
-
-            return {
-              created,
-              iconIsRightOfText,
-              collapsed,
-              expanded,
-              missingOptionCount,
-              successfulChatRequestCount: provider.getSuccessfulChatRequestCount(),
-              successFinalAnswer: successEvidence.finalAnswerText,
-              chatRequestCount: provider.getChatRequestCount(),
-              modelName: liveEnv.modelName,
-              runFailed,
-              pageText
-            }
-          } finally {
-            await workspace.cleanup()
-            await provider.close()
+          return {
+            created,
+            iconIsRightOfText,
+            collapsed,
+            expanded,
+            missingOptionCount,
+            successfulChatRequestCount: provider.getSuccessfulChatRequestCount(),
+            successFinalAnswer: successEvidence.finalAnswerText,
+            chatRequestCount: provider.getChatRequestCount(),
+            modelName: liveEnv.modelName,
+            runFailed,
+            pageText
           }
         },
         assert: async (result, runtime) => {

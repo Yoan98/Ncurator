@@ -172,9 +172,21 @@ const WorkspaceSettingsPanel: React.FC = () => {
         [job.workspace_id]: job.status === 'running' ? job : undefined
       }))
       void loadWorkspaces()
+      if (job.status !== 'running') {
+        void loadWorkspaceTree(job.workspace_id, true).then((response) => {
+          setWorkspaceTrees((previous) => ({
+            ...previous,
+            [job.workspace_id]: response.items
+          }))
+          setWorkspaceTreeSummaries((previous) => ({
+            ...previous,
+            [job.workspace_id]: response.summary
+          }))
+        })
+      }
     }
     return window.api.onWorkspaceIndexJobProgress(handleProgress)
-  }, [loadWorkspaces])
+  }, [loadWorkspaceTree, loadWorkspaces])
 
   useEffect(() => {
     if (workspaces.length === 0) {

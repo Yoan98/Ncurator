@@ -65,10 +65,10 @@ pnpm run build:mac:arm64
 pnpm run build:mac:x64
 pnpm run package:audit
 pnpm run package:audit:summary
-pnpm test:e2e:package
+pnpm test:e2e:package -- --bundle <release-bundle.json>
 ```
 
-`pnpm test:e2e:package` 会重新构建、审计并安装当前平台正式包，再连接真实安装程序执行 E2E。它耗时较长，不替代日常源码 E2E。
+`pnpm test:e2e:package` 校验并安装指定 release bundle 中已经构建完成的正式包，再连接真实安装程序执行 E2E。它不会重新构建，且不替代日常源码 E2E。
 
 ## 平台构建
 
@@ -140,7 +140,7 @@ pnpm release:doctor
 
 ## 正式发布
 
-### 1. 创建版本并发布 Windows
+### 1. 创建版本并准备 Windows 候选包
 
 在干净且与 `origin/main` 一致的 `main` 上执行：
 
@@ -148,7 +148,7 @@ pnpm release:doctor
 pnpm release:start -- --version X.Y.Z --notes "Ncurator vX.Y.Z"
 ```
 
-命令会检查版本和发布路线，执行 `typecheck` 与更新后端测试，提交版本号，创建 annotated Tag，原子推送 `main` 和 Tag，再按默认路线发布 Windows。
+命令会检查版本和发布路线，执行 `typecheck` 与更新后端测试，提交版本号，创建 annotated Tag，原子推送 `main` 和 Tag，再按默认路线构建 Windows 候选包。它不会上传 R2。
 
 ```bash
 # 强制本地 Windows
@@ -156,6 +156,9 @@ pnpm release:start -- --version X.Y.Z --local-only
 
 # 强制 GitHub Actions
 pnpm release:start -- --version X.Y.Z --actions
+
+# 创建版本后对已构建 Windows 候选包执行正式包 E2E
+pnpm release:start -- --version X.Y.Z --package-e2e
 ```
 
 ### 2. 在 Mac 发布 macOS
@@ -166,29 +169,33 @@ Windows 与 macOS 发布相互独立。Mac 只需获取同一不可变 Tag：
 git fetch --tags
 git checkout main
 git pull --ff-only
-pnpm release:mac -- --tag vX.Y.Z
+pnpm release:mac -- --tag vX.Y.Z --prepare-only
 ```
 
-命令分别从 Tag 导出干净源码，构建、签名、审计并上传 arm64 和 x64 片段，然后只 finalize macOS 通道。
+该命令先完成 arm64 和 x64 的构建、签名、审计与 bundle 固化，然后保留候选包并暂停；只有后续显式执行 `--publish-only` 才上传和 finalize。
 
-`release:mac:only` 当前与 `release:mac` 指向同一脚本，都会发布 macOS 独立通道。
+prepare 阶段分别从 Tag 导出干净源码，完成 arm64 和 x64 的构建、签名、审计与 bundle 校验，并停在上传前；publish 阶段才上传两个片段并 finalize macOS 通道。
 
 ## 重试与状态
 
 版本创建后只能基于原 Tag 重试，不能修改或重建 Tag：
 
 ```bash
-pnpm release:win -- --tag vX.Y.Z
-pnpm release:win:auto -- --tag vX.Y.Z
-pnpm release:win:auto -- --tag vX.Y.Z --actions
-pnpm release:mac -- --tag vX.Y.Z
+pnpm release:win -- --tag vX.Y.Z --prepare-only
+pnpm release:win -- --tag vX.Y.Z --prepare-only --package-e2e
+pnpm release:win -- --tag vX.Y.Z --test-only
+pnpm release:win -- --tag vX.Y.Z --publish-only
+pnpm release:mac -- --tag vX.Y.Z --prepare-only
+pnpm release:mac -- --tag vX.Y.Z --prepare-only --package-e2e
+pnpm release:mac -- --tag vX.Y.Z --test-only
+pnpm release:mac -- --tag vX.Y.Z --publish-only
 pnpm release:r2:finalize -- --tag vX.Y.Z
 pnpm release:status -- --tag vX.Y.Z
 ```
 
 `release:r2:finalize` 依次重新 finalize Windows 和 macOS，只用于两个平台都已上传后的恢复；日常发布不依赖它。
 
-Windows 失败会保留工作目录。`--reuse-work` 只复用同一 Tag 的 Python、pip 和 sidecar 缓存，不复用源码、`node_modules` 或旧 `dist`。`--keep-work` 保留工作目录，`--keep-old` 暂不清理旧 R2 对象，但都不会跳过验证。
+`--keep-work` 保留发布工作目录用于排查；默认在流程结束后清理。Python、pip 和 sidecar 使用独立缓存，但不复用源码、`node_modules` 或旧 `dist`。`--keep-old` 暂不清理旧 R2 对象。这些参数都不会跳过 bundle、审计或签名验证。
 
 ## 下载地址
 
@@ -224,6 +231,29 @@ pnpm test:update:backend
 发版前还应按风险执行 unit、Settings、Workbench、AI mock/tool 和源码 E2E，并检查应用启动、SQLite/LanceDB、embedding、PDF/DOCX、网页能力、安装、覆盖升级、卸载和无网络启动。仅在有真实模型配置且改动相关时执行 live AI 测试。
 
 ## 保留与回滚
+
+### 正式包回归门
+
+正式包 E2E 不是每次发布的强制步骤。prepare 默认执行构建、审计、签名（macOS）和 bundle 完整性校验并暂停；改动风险较高时显式增加 `--package-e2e`：
+
+```bash
+pnpm release:win -- --tag vX.Y.Z --prepare-only --package-e2e
+pnpm release:mac -- --tag vX.Y.Z --prepare-only --package-e2e
+```
+
+所有发布必须显式选择 `--prepare-only`、`--test-only` 或 `--publish-only`；不再存在构建后自动上传的默认模式。候选包默认保存在 `~/.ncurator/release-candidates/<tag>/<platform>/`，也可通过 `NCURATOR_RELEASE_CANDIDATE_ROOT` 覆盖。
+
+`--publish-only` 只接受状态为 `ready`、commit 与 tag 一致且全部哈希复验通过的候选包。准备阶段跳过 E2E 时仍可发布；显式请求 E2E 但失败时状态为 `rejected`，必须使用 `--test-only` 对同一候选包重测通过。
+
+E2E 消费本次 tag 已生成的 `release-bundle-*.json`，不会再次构建。Windows 本地和 GitHub Actions 只负责选择构建位置，构建后的 bundle、可选回归和 R2 发布走同一套流程。macOS 必须先完成 arm64 和 x64 两个 bundle，再执行可选回归和上传；启用回归时两个架构都必须通过。
+
+独立测试已构建候选包使用：
+
+```bash
+pnpm test:e2e:package -- --bundle <release-bundle.json>
+```
+
+发布前重新计算 bundle 中所有文件哈希。R2 中已存在且哈希不同的同 tag 对象禁止覆盖。
 
 每个平台公开验证成功后，只删除该平台的旧 artifacts 和 release-status。需要回滚时，从旧 annotated Tag 重新构建、审计和发布，不能复用未审计的本地产物。
 

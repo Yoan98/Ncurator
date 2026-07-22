@@ -168,7 +168,7 @@ export class ModelService {
       .filter((candidate) => this.isModelDownloadedAtPath(repoId, candidate))
   }
 
-  private async reuseDownloadedModelFromAlternatePath(repoId: string): Promise<boolean> {
+  public async reuseDownloadedModelFromAlternatePath(repoId: string): Promise<boolean> {
     const alternatePath = this.listAlternateDownloadedModelPaths(repoId)[0]
     if (!alternatePath) {
       return false
@@ -177,7 +177,11 @@ export class ModelService {
     const modelPath = this.resolveModelPath(repoId)
     await fs.promises.mkdir(path.dirname(modelPath), { recursive: true })
     await fs.promises.rm(modelPath, { recursive: true, force: true })
-    await fs.promises.symlink(alternatePath, modelPath, 'dir')
+    await fs.promises.symlink(
+      alternatePath,
+      modelPath,
+      process.platform === 'win32' ? 'junction' : 'dir'
+    )
     return true
   }
 

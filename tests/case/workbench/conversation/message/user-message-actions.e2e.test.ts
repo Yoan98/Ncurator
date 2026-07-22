@@ -118,158 +118,158 @@ describe('workbench conversation e2e', () => {
           const { page } = runtime
           let setup: Awaited<ReturnType<typeof setupWorkbenchWithTempWorkspace>> | null = null
           const attachments = await createUserMessageAttachmentFixtures()
-          try {
-            await runtime.step({
-              name: 'prepare-live-model-and-workspace-through-ui',
-              message: '通过 Settings UI 配置 live 模型，并创建真实工作区。',
-              run: async () => {
-                setup = await setupWorkbenchWithTempWorkspace(page, {
-                  caseId: CASE_ID,
-                  workspaceName: 'Workbench User Message Actions Workspace',
-                  createSession: false
-                })
-              }
-            })
-            await runtime.step({
-              name: 'prepare-composer',
-              message: '打开 Workbench、选择工作区并粘贴消息附件',
-              run: async () => {
-                if (!setup) throw new Error('workspace setup missing')
-                await navigateToWorkbench(page)
-                await createWorkbenchNewSession(page)
-                await selectWorkbenchWorkspace(page, setup.workspaceName)
-                await switchWorkbenchMode(page, '大聪明')
-                await getWorkbenchLocator(page, workbenchSelectors.input).click()
-                await page.keyboard.type(RUNNING_MESSAGE)
-                await selectWorkbenchAttachmentThroughInjectedDialog(
-                  page,
-                  attachments.markdownPath,
-                  runtime.electronApp
-                )
-              }
-            })
-            const fileComposerCard = getWorkbenchPrefixLocator(
-              page,
-              workbenchSelectors.attachmentCardPrefix
-            ).filter({ hasText: 'message-note.md' })
-            await fileComposerCard.waitFor({ state: 'visible' })
-            const fileRemoveButton = getWorkbenchPrefixLocator(
-              page,
-              workbenchSelectors.attachmentRemoveButtonPrefix
-            ).last()
-            await fileComposerCard.hover()
-            const removeButtonBox = await fileRemoveButton.boundingBox()
-            const fileCardBox = await fileComposerCard.boundingBox()
-            const removeButtonVisible = await fileRemoveButton.isVisible().catch(() => false)
-
-            await submitWorkbenchCurrentDraft(page)
-            await page.waitForFunction(
-              (input: { sendButtonTestId: string }) => {
-                const button = document.querySelector(`[data-testid="${input.sendButtonTestId}"]`)
-                return (button?.getAttribute('aria-label') || '').includes('停止')
-              },
-              { sendButtonTestId: workbenchSelectors.sendButton },
-              { timeout: WORKBENCH_RESULT_E2E_TIMEOUT_MS }
-            )
-            const assistantProcess = await waitForLatestAssistantProcess(page)
-            const assistantProcessTextAfterSend = (await assistantProcess.textContent()) || ''
-            await waitForAssistantProcessWithoutGap(page)
-            const assistantProcessTextAfterWait = (await assistantProcess.textContent()) || ''
-            await page.waitForFunction(
-              (input: { prefix: string }) =>
-                document.querySelectorAll(`[data-testid^="${input.prefix}-"]`).length >= 1,
-              { prefix: workbenchSelectors.userMessageAttachmentPrefix },
-              { timeout: WORKBENCH_RESULT_E2E_TIMEOUT_MS }
-            )
-            const runningUser = latestUserMessage(page)
-            await runningUser.hover()
-            const runningEditButtons = await getWorkbenchPrefixLocator(
-              page,
-              workbenchSelectors.userMessageEditButtonPrefix
-            ).count()
-            const messageAttachmentTexts = await getWorkbenchPrefixLocator(
-              page,
-              workbenchSelectors.userMessageAttachmentPrefix
-            ).evaluateAll((nodes) => nodes.map((node) => String(node.textContent || '').trim()))
-            const bubbleBox = await runningUser
-              .locator(`[data-testid="${workbenchSelectors.userMessageReferences}"]`)
-              .boundingBox()
-            const firstAttachmentBox = await getWorkbenchPrefixLocator(
-              page,
-              workbenchSelectors.userMessageAttachmentPrefix
-            )
-              .first()
-              .boundingBox()
-            const stopButtonLabel =
-              (await getWorkbenchLocator(page, workbenchSelectors.sendButton).getAttribute(
-                'aria-label'
-              )) || ''
-            if (stopButtonLabel.includes('停止')) {
-              await getWorkbenchLocator(page, workbenchSelectors.sendButton).click()
+          runtime.registerResource({
+            name: `user-message-attachments:${attachments.rootPath}`,
+            phase: 'after-app-close',
+            dispose: attachments.cleanup
+          })
+          await runtime.step({
+            name: 'prepare-live-model-and-workspace-through-ui',
+            message: '通过 Settings UI 配置 live 模型，并创建真实工作区。',
+            run: async () => {
+              setup = await setupWorkbenchWithTempWorkspace(page, {
+                caseId: CASE_ID,
+                workspaceName: 'Workbench User Message Actions Workspace',
+                createSession: false
+              })
             }
-            await page.waitForFunction(
-              (input: { sendButtonTestId: string }) => {
-                const button = document.querySelector(`[data-testid="${input.sendButtonTestId}"]`)
-                return !(button?.getAttribute('aria-label') || '').includes('停止')
-              },
-              { sendButtonTestId: workbenchSelectors.sendButton },
-              { timeout: WORKBENCH_RESULT_E2E_TIMEOUT_MS }
-            )
-            await runningUser.hover()
-            await latestUserMessageActions(page).waitFor({ state: 'visible' })
-            const copyButton = getWorkbenchPrefixLocator(
-              page,
-              workbenchSelectors.userMessageCopyButtonPrefix
-            ).last()
-            const editButton = getWorkbenchPrefixLocator(
-              page,
-              workbenchSelectors.userMessageEditButtonPrefix
-            ).last()
-            await editButton.waitFor({ state: 'visible' })
-            const actionButtonsVisible =
-              (await copyButton.isVisible()) && (await editButton.isVisible())
-            await copyButton.click()
-            await waitForAntMessageText(page, '已复制')
-            await editButton.click()
-            await page.waitForFunction(
-              (input: { testId: string; expected: string }) => {
-                const element = document.querySelector(`[data-testid="${input.testId}"]`)
-                return Boolean(element?.textContent?.includes(input.expected))
-              },
-              {
-                testId: workbenchSelectors.input,
-                expected: RUNNING_MESSAGE
-              },
-              { timeout: WORKBENCH_RESULT_E2E_TIMEOUT_MS }
-            )
-            const messageCountAfterEdit = await getWorkbenchPrefixLocator(
-              page,
-              workbenchSelectors.userMessagePrefix
-            ).count()
-
-            return {
-              actionButtonsVisible,
-              messageCountAfterEdit,
-              removeButtonReachable: Boolean(
-                removeButtonVisible &&
-                removeButtonBox &&
-                fileCardBox &&
-                removeButtonBox.x < fileCardBox.x + fileCardBox.width &&
-                removeButtonBox.x + removeButtonBox.width > fileCardBox.x &&
-                removeButtonBox.y < fileCardBox.y + fileCardBox.height &&
-                removeButtonBox.y + removeButtonBox.height > fileCardBox.y
-              ),
-              runningEditButtons,
-              messageAttachmentTexts,
-              assistantProcessTextAfterSend,
-              assistantProcessTextAfterWait,
-              attachmentsAboveBubble: Boolean(
-                firstAttachmentBox && bubbleBox && firstAttachmentBox.y < bubbleBox.y
+          })
+          await runtime.step({
+            name: 'prepare-composer',
+            message: '打开 Workbench、选择工作区并粘贴消息附件',
+            run: async () => {
+              if (!setup) throw new Error('workspace setup missing')
+              await navigateToWorkbench(page)
+              await createWorkbenchNewSession(page)
+              await selectWorkbenchWorkspace(page, setup.workspaceName)
+              await switchWorkbenchMode(page, '大聪明')
+              await getWorkbenchLocator(page, workbenchSelectors.input).click()
+              await page.keyboard.type(RUNNING_MESSAGE)
+              await selectWorkbenchAttachmentThroughInjectedDialog(
+                page,
+                attachments.markdownPath,
+                runtime.electronApp
               )
             }
-          } finally {
-            await attachments.cleanup()
-            await setup?.workspace.cleanup()
+          })
+          const fileComposerCard = getWorkbenchPrefixLocator(
+            page,
+            workbenchSelectors.attachmentCardPrefix
+          ).filter({ hasText: 'message-note.md' })
+          await fileComposerCard.waitFor({ state: 'visible' })
+          const fileRemoveButton = getWorkbenchPrefixLocator(
+            page,
+            workbenchSelectors.attachmentRemoveButtonPrefix
+          ).last()
+          await fileComposerCard.hover()
+          const removeButtonBox = await fileRemoveButton.boundingBox()
+          const fileCardBox = await fileComposerCard.boundingBox()
+          const removeButtonVisible = await fileRemoveButton.isVisible().catch(() => false)
+
+          await submitWorkbenchCurrentDraft(page)
+          await page.waitForFunction(
+            (input: { sendButtonTestId: string }) => {
+              const button = document.querySelector(`[data-testid="${input.sendButtonTestId}"]`)
+              return (button?.getAttribute('aria-label') || '').includes('停止')
+            },
+            { sendButtonTestId: workbenchSelectors.sendButton },
+            { timeout: WORKBENCH_RESULT_E2E_TIMEOUT_MS }
+          )
+          const assistantProcess = await waitForLatestAssistantProcess(page)
+          const assistantProcessTextAfterSend = (await assistantProcess.textContent()) || ''
+          await waitForAssistantProcessWithoutGap(page)
+          const assistantProcessTextAfterWait = (await assistantProcess.textContent()) || ''
+          await page.waitForFunction(
+            (input: { prefix: string }) =>
+              document.querySelectorAll(`[data-testid^="${input.prefix}-"]`).length >= 1,
+            { prefix: workbenchSelectors.userMessageAttachmentPrefix },
+            { timeout: WORKBENCH_RESULT_E2E_TIMEOUT_MS }
+          )
+          const runningUser = latestUserMessage(page)
+          await runningUser.hover()
+          const runningEditButtons = await getWorkbenchPrefixLocator(
+            page,
+            workbenchSelectors.userMessageEditButtonPrefix
+          ).count()
+          const messageAttachmentTexts = await getWorkbenchPrefixLocator(
+            page,
+            workbenchSelectors.userMessageAttachmentPrefix
+          ).evaluateAll((nodes) => nodes.map((node) => String(node.textContent || '').trim()))
+          const bubbleBox = await runningUser
+            .locator(`[data-testid="${workbenchSelectors.userMessageReferences}"]`)
+            .boundingBox()
+          const firstAttachmentBox = await getWorkbenchPrefixLocator(
+            page,
+            workbenchSelectors.userMessageAttachmentPrefix
+          )
+            .first()
+            .boundingBox()
+          const stopButtonLabel =
+            (await getWorkbenchLocator(page, workbenchSelectors.sendButton).getAttribute(
+              'aria-label'
+            )) || ''
+          if (stopButtonLabel.includes('停止')) {
+            await getWorkbenchLocator(page, workbenchSelectors.sendButton).click()
+          }
+          await page.waitForFunction(
+            (input: { sendButtonTestId: string }) => {
+              const button = document.querySelector(`[data-testid="${input.sendButtonTestId}"]`)
+              return !(button?.getAttribute('aria-label') || '').includes('停止')
+            },
+            { sendButtonTestId: workbenchSelectors.sendButton },
+            { timeout: WORKBENCH_RESULT_E2E_TIMEOUT_MS }
+          )
+          await runningUser.hover()
+          await latestUserMessageActions(page).waitFor({ state: 'visible' })
+          const copyButton = getWorkbenchPrefixLocator(
+            page,
+            workbenchSelectors.userMessageCopyButtonPrefix
+          ).last()
+          const editButton = getWorkbenchPrefixLocator(
+            page,
+            workbenchSelectors.userMessageEditButtonPrefix
+          ).last()
+          await editButton.waitFor({ state: 'visible' })
+          const actionButtonsVisible =
+            (await copyButton.isVisible()) && (await editButton.isVisible())
+          await copyButton.click()
+          await waitForAntMessageText(page, '已复制')
+          await editButton.click()
+          await page.waitForFunction(
+            (input: { testId: string; expected: string }) => {
+              const element = document.querySelector(`[data-testid="${input.testId}"]`)
+              return Boolean(element?.textContent?.includes(input.expected))
+            },
+            {
+              testId: workbenchSelectors.input,
+              expected: RUNNING_MESSAGE
+            },
+            { timeout: WORKBENCH_RESULT_E2E_TIMEOUT_MS }
+          )
+          const messageCountAfterEdit = await getWorkbenchPrefixLocator(
+            page,
+            workbenchSelectors.userMessagePrefix
+          ).count()
+
+          return {
+            actionButtonsVisible,
+            messageCountAfterEdit,
+            removeButtonReachable: Boolean(
+              removeButtonVisible &&
+              removeButtonBox &&
+              fileCardBox &&
+              removeButtonBox.x < fileCardBox.x + fileCardBox.width &&
+              removeButtonBox.x + removeButtonBox.width > fileCardBox.x &&
+              removeButtonBox.y < fileCardBox.y + fileCardBox.height &&
+              removeButtonBox.y + removeButtonBox.height > fileCardBox.y
+            ),
+            runningEditButtons,
+            messageAttachmentTexts,
+            assistantProcessTextAfterSend,
+            assistantProcessTextAfterWait,
+            attachmentsAboveBubble: Boolean(
+              firstAttachmentBox && bubbleBox && firstAttachmentBox.y < bubbleBox.y
+            )
           }
         },
         assert: async (result, runtime) => {
