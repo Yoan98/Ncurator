@@ -104,6 +104,8 @@ tests/
 
 - UI E2E 必须通过真实 UI 和产品链路完成被测行为，不得用 fake、mock、stub、直接写状态或内部 IPC 绕过。
 - fixture 和 helper 只能准备真实输入、执行用户可见操作、等待结果和收集证据，不能替代产品输出。
+- 每个 E2E case 必须显式声明 `serviceMode`；使用 `fixture` 模式时还必须提供 `fixtureReason`。
+- Workbench 和需要真实文件的 Settings case 将 `tests/fixtures/workspace` 复制到临时目录，case 结束并关闭应用后删除临时副本。
 - 与当前 case 无关且已有独立覆盖的前置状态，可以通过真实 `window.api.*` 建立，但不能代替当前 case 的用户操作。
 - 涉及真实 AI 时必须使用 live 配置；配置缺失应直接失败，不能跳过或回落到 mock。
 - 产品缺少必要 testability 入口时，应记录缺口，不能改用模拟路径绕过。
@@ -192,6 +194,7 @@ runner 支持的过滤参数：
 - `--target package` 只能与 `--type e2e` 一起使用；普通测试和 backend 不允许使用正式包目标。
 - `source` 是日常默认目标：runner 准备 Electron native 模块、构建当前源码，并让每个 E2E 文件独立启动源码应用。
 - `package` 是正式产物目标：runner 校验 release bundle 及文件哈希；macOS 从指定 DMG 挂载并复制 App，Windows 静默安装指定 EXE；随后对安装后的真实可执行程序运行同一批 E2E。runner 不执行构建，也不得把 `dist` 中的未安装目录当成正式包验证。
+- macOS 正式包 E2E 按 `macos-arm64`、`macos-x64` 分目录将测试应用保留在 `~/Applications/NCurator-E2E/`。
 - E2E case 通过 runner 按文件串行执行，每个文件独立启动并关闭一个 Electron app；runner 会在相邻 E2E 文件之间默认等待 1 秒，也可通过 `--run-delay-ms` 覆盖。单个文件失败后仍继续执行剩余文件，最终统一返回失败并保存每个文件的结果。
 - E2E runner 直接调用本地 Vitest binary，不经 `pnpm exec`；启动 Vitest 子进程和 harness 启动 Electron 时都会过滤 `npm_*` 环境变量，只保留系统环境与 `NCURATOR_E2E_*` 等项目测试变量，避免 npm lifecycle 变量影响 macOS Electron 原生注册。
 - 如果需要继续收窄到某个 `suite`、`group` 或单条 `case`，统一通过 runner 参数过滤。
