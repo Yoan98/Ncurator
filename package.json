@@ -9,6 +9,7 @@
     "promo:new": "node promo/scripts/new-episode.mjs",
     "promo:capture": "node promo/scripts/capture-frame.mjs",
     "promo:voice": "node promo/scripts/generate-narration.mjs",
+    "promo:music": "node promo/scripts/generate-music.mjs",
     "promo:check": "node promo/scripts/run-episode.mjs check",
     "promo:preview": "node promo/scripts/run-episode.mjs preview",
     "promo:render": "node promo/scripts/run-episode.mjs render",

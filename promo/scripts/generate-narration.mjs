@@ -28,6 +28,7 @@ if (segments.length === 0) {
 const audioDir = path.join(episodeDir, 'assets', 'audio')
 const segmentDir = path.join(audioDir, 'segments')
 const narrationAudioPath = path.join(audioDir, 'narration.wav')
+const rawNarrationAudioPath = path.join(audioDir, 'narration.raw.wav')
 const concatListPath = path.join(audioDir, 'concat.txt')
 await rm(segmentDir, { recursive: true, force: true })
 await mkdir(segmentDir, { recursive: true })
@@ -140,6 +141,26 @@ await runCommand(
     path.basename(concatListPath),
     '-c:a',
     'pcm_s16le',
+    path.basename(rawNarrationAudioPath)
+  ],
+  audioDir
+)
+await runCommand(
+  'ffmpeg',
+  [
+    '-loglevel',
+    'error',
+    '-y',
+    '-i',
+    path.basename(rawNarrationAudioPath),
+    '-af',
+    'loudnorm=I=-17:TP=-1:LRA=7',
+    '-ar',
+    '48000',
+    '-ac',
+    '1',
+    '-c:a',
+    'pcm_s16le',
     path.basename(narrationAudioPath)
   ],
   audioDir
@@ -150,4 +171,5 @@ await writeFile(
 )
 await rm(segmentDir, { recursive: true, force: true })
 await rm(concatListPath, { force: true })
+await rm(rawNarrationAudioPath, { force: true })
 console.log(`旁白和精确字幕时间已经生成：${name}`)
