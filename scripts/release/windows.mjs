@@ -153,7 +153,7 @@ const extractTagSource = async (defaultRootName) => {
   const sourceDirectory = path.join(workspace.workDirectory, 'source')
   await run('git', ['archive', '--format=zip', '--output', archivePath, releaseTag])
   await mkdir(sourceDirectory, { recursive: true })
-  await run('tar', ['-xf', archivePath, '-C', sourceDirectory])
+  await run('tar', ['-xf', archivePath], { cwd: sourceDirectory })
   return { workspace, sourceDirectory }
 }
 
