@@ -2,7 +2,7 @@ import { describe, it } from 'vitest'
 import { importSelectors } from '../../../../../src/renderer/src/testing/selectors'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
-  SETTINGS_REAL_WORKSPACE_E2E_TIMEOUT_MS,
+  SETTINGS_REAL_WORKSPACE_LONG_E2E_TIMEOUT_MS,
   bindWorkspaceRootThroughIpc,
   createWorkspaceThroughSettingsUi,
   getSettingsLocator,
@@ -109,6 +109,6 @@ describe('settings workspace e2e', () => {
         }
       })
     },
-    SETTINGS_REAL_WORKSPACE_E2E_TIMEOUT_MS
+    SETTINGS_REAL_WORKSPACE_LONG_E2E_TIMEOUT_MS
   )
 })

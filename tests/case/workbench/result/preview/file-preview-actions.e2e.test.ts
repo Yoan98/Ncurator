@@ -2,7 +2,7 @@ import type { Locator, Page } from 'playwright'
 import { describe, it } from 'vitest'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
-  WORKBENCH_LONG_E2E_TIMEOUT_MS,
+  WORKBENCH_RESULT_E2E_TIMEOUT_MS,
   appendWorkbenchInputText,
   assertNoWorkbenchFakeSignals,
   createTemporaryWorkbenchWorkspace,
@@ -243,6 +243,6 @@ describe('workbench result e2e', () => {
         }
       })
     },
-    WORKBENCH_LONG_E2E_TIMEOUT_MS
+    WORKBENCH_RESULT_E2E_TIMEOUT_MS
   )
 })

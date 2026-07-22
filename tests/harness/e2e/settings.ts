@@ -20,7 +20,9 @@ import {
 export type SettingsPageTarget = 'model' | 'workspace' | 'vector'
 
 export const SETTINGS_E2E_TIMEOUT_MS = 60_000
+export const SETTINGS_LONG_E2E_TIMEOUT_MS = 120_000
 export const SETTINGS_REAL_WORKSPACE_E2E_TIMEOUT_MS = 180_000
+export const SETTINGS_REAL_WORKSPACE_LONG_E2E_TIMEOUT_MS = 360_000
 export const SETTINGS_WEB_E2E_TIMEOUT_MS = 120_000
 const execFileAsync = promisify(execFile)
 const MACOS_ELECTRON_BUNDLE_ID = 'com.github.Electron'

@@ -136,7 +136,7 @@ tests/case/workbench/
 - What：模型选择按配置分组、视觉模型选择和 provider 错误反馈。
 - Why：模型配置和视觉模型是智能任务能否启动的直接前提。
 - How：通过真实设置页配置模型，回到 Workbench 选择主模型和视觉模型，触发受控 provider 错误。
-- Oracle：候选按配置分组可搜索，视觉模型可单独选择，provider 失败显示用户可读错误，对齐 `WB-COMPOSER-007` 与 `WB-CORE-006`。
+- Oracle：候选按配置分组可搜索，视觉模型可单独选择；模型菜单打开后触发器 Tooltip 必须关闭，不能遮挡真实点击；provider 失败显示用户可读错误，对齐 `WB-COMPOSER-007` 与 `WB-CORE-006`。
 - Not：不评价模型回答质量。
 
 #### `user-message-actions`

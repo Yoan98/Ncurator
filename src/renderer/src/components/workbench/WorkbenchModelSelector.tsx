@@ -366,7 +366,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
       data-workbench-select-root="true"
       data-testid={dataTestId}
     >
-      <Tooltip title={tooltip}>
+      <Tooltip title={tooltip} open={open ? false : undefined}>
         <button
           ref={triggerRef}
           type="button"
