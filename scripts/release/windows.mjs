@@ -198,7 +198,7 @@ const runCandidateE2E = async ({ candidate, sourceDirectory, environment }) => {
 }
 
 if (mode === 'prepare') {
-  const { workspace, sourceDirectory } = await extractTagSource('ncurator-release-prepare')
+  const { workspace, sourceDirectory } = await extractTagSource('p')
   try {
     const environment = releaseEnvironment()
     await run(inspection.pnpmExecutable, ['install', '--frozen-lockfile'], {
@@ -248,7 +248,7 @@ if (mode === 'test') {
   if (candidate.state.commit !== taggedCommit) {
     throw new Error('candidate commit does not match release tag')
   }
-  const { workspace, sourceDirectory } = await extractTagSource('ncurator-release-test')
+  const { workspace, sourceDirectory } = await extractTagSource('t')
   try {
     const environment = releaseEnvironment()
     await run(inspection.pnpmExecutable, ['install', '--frozen-lockfile'], {

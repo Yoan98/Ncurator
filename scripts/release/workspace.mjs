@@ -4,9 +4,13 @@ import path from 'node:path'
 import process from 'node:process'
 
 export const prepareReleaseWorkspace = async ({ releaseTag, defaultRootName, keepWork }) => {
+  const defaultBaseDirectory =
+    process.platform === 'win32'
+      ? path.join(os.homedir(), '.ncurator', 'release-work')
+      : os.tmpdir()
   const workRoot = path.resolve(
     String(process.env.NCURATOR_RELEASE_WORK_ROOT || '').trim() ||
-      path.join(os.tmpdir(), defaultRootName)
+      path.join(defaultBaseDirectory, defaultRootName)
   )
   const workDirectory = path.join(workRoot, releaseTag)
   await rm(workDirectory, {
