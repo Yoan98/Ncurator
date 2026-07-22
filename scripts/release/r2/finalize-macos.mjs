@@ -89,7 +89,9 @@ try {
     const sourceKey = artifactKey(fragment, installer.name)
     const downloadKey = fixedDownloadKey(fragment.platform)
     const downloadName =
-      fragment.platform === 'macos-arm64' ? '馆长-macos-arm64.dmg' : '馆长-macos-x64.dmg'
+      fragment.platform === 'macos-arm64'
+        ? `Ncurator-${fragment.version}-macos-arm64.dmg`
+        : `Ncurator-${fragment.version}-macos-x64.dmg`
     await aws([
       's3api',
       'copy-object',
@@ -104,7 +106,7 @@ try {
       '--cache-control',
       'no-store',
       '--content-disposition',
-      `attachment; filename*=UTF-8''${encodeURIComponent(downloadName)}`,
+      `attachment; filename="${downloadName}"`,
       '--metadata-directive',
       'REPLACE',
       '--metadata',
@@ -156,12 +158,18 @@ try {
   ) {
     throw new Error('public latest-mac.yml does not match the Mac release')
   }
-  for (const { installer, downloadKey } of installers.values()) {
+  for (const { installer, downloadKey, downloadName } of installers.values()) {
     const response = await fetchWithRetry(`${publicBaseUrl}/${downloadKey}?check=${Date.now()}`, {
       method: 'HEAD',
       cache: 'no-store'
     })
-    if (!response.ok || Number(response.headers.get('content-length')) !== installer.size) {
+    if (
+      !response.ok ||
+      Number(response.headers.get('content-length')) !== installer.size ||
+      !String(response.headers.get('content-disposition') || '').includes(
+        `filename="${downloadName}"`
+      )
+    ) {
       throw new Error(`public fixed macOS download verification failed: ${downloadKey}`)
     }
   }

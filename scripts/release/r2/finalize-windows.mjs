@@ -73,6 +73,7 @@ try {
   const installer = fragment.files.find((file) => file.role === 'installer')
   const sourceKey = artifactKey(fragment, installer.name)
   const downloadKey = fixedDownloadKey(fragment.platform)
+  const downloadName = `Ncurator-${fragment.version}-windows-x64.exe`
   await aws([
     's3api',
     'copy-object',
@@ -87,7 +88,7 @@ try {
     '--cache-control',
     'no-store',
     '--content-disposition',
-    "attachment; filename*=UTF-8''%E9%A6%86%E9%95%BF-windows-x64.exe",
+    `attachment; filename="${downloadName}"`,
     '--metadata-directive',
     'REPLACE',
     '--metadata',
@@ -102,7 +103,7 @@ try {
     publishedAt: new Date().toISOString(),
     downloads: {
       x64: {
-        name: '馆长-windows-x64.exe',
+        name: downloadName,
         url: `${publicBaseUrl}/${downloadKey}`,
         size: installer.size,
         sha512: installer.sha512
@@ -123,12 +124,15 @@ try {
     '--no-progress'
   ])
 
-  const [metadataResponse, downloadResponse] = await Promise.all([
+  const [metadataResponse, downloadResponse, manifestResponse] = await Promise.all([
     fetchWithRetry(`${publicBaseUrl}/updates/latest/latest.yml?check=${Date.now()}`, {
       cache: 'no-store'
     }),
     fetchWithRetry(`${publicBaseUrl}/${downloadKey}?check=${Date.now()}`, {
       method: 'HEAD',
+      cache: 'no-store'
+    }),
+    fetchWithRetry(`${publicBaseUrl}/releases/latest/windows.json?check=${Date.now()}`, {
       cache: 'no-store'
     })
   ])
@@ -140,9 +144,20 @@ try {
   }
   if (
     !downloadResponse.ok ||
-    Number(downloadResponse.headers.get('content-length')) !== installer.size
+    Number(downloadResponse.headers.get('content-length')) !== installer.size ||
+    !String(downloadResponse.headers.get('content-disposition') || '').includes(
+      `filename="${downloadName}"`
+    )
   ) {
     throw new Error('public fixed Windows download verification failed')
+  }
+  const publicManifest = manifestResponse.ok ? await manifestResponse.json() : undefined
+  if (
+    publicManifest?.version !== fragment.version ||
+    publicManifest?.downloads?.x64?.name !== downloadName ||
+    publicManifest?.downloads?.x64?.url !== `${publicBaseUrl}/${downloadKey}`
+  ) {
+    throw new Error('public Windows release manifest verification failed')
   }
 
   if (!keepOld) {
