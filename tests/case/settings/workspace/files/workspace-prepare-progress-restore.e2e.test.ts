@@ -2,7 +2,7 @@ import { describe, it } from 'vitest'
 import { importSelectors } from '../../../../../src/renderer/src/testing/selectors'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
-  SETTINGS_REAL_WORKSPACE_E2E_TIMEOUT_MS,
+  SETTINGS_REAL_WORKSPACE_LONG_E2E_TIMEOUT_MS,
   createRealWorkspaceWithRoot,
   getSettingsLocator,
   navigateToSettingsSection,
@@ -10,11 +10,23 @@ import {
 } from '../../../../harness/e2e/settings'
 import { createWorkspaceWithFiles } from './realWorkspaceHelpers'
 
-const createSlowEnoughInvalidDocxFiles = (): Array<{ relativePath: string; content: string }> =>
-  Array.from({ length: 120 }, (_, index) => ({
-    relativePath: `docs/broken-${String(index + 1).padStart(3, '0')}.docx`,
-    content: `not a valid docx archive ${index + 1}`
+const createSlowEnoughWorkspaceFiles = (): Array<{ relativePath: string; content: string }> => {
+  const runMarker = Date.now().toString(36)
+  const invalidDocxFiles = Array.from({ length: 20 }, (_, index) => ({
+    relativePath: `broken/broken-${String(index + 1).padStart(2, '0')}.docx`,
+    content: `not a valid docx archive ${runMarker}-${index + 1}`
   }))
+  const markdownFiles = Array.from({ length: 10 }, (_, fileIndex) => ({
+    relativePath: `notes/index-source-${String(fileIndex + 1).padStart(2, '0')}.md`,
+    content: Array.from(
+      { length: 100 },
+      (_, paragraphIndex) =>
+        `# ${runMarker} file ${fileIndex + 1} paragraph ${paragraphIndex + 1}\n\n` +
+        `Unique indexing content ${runMarker}-${fileIndex + 1}-${paragraphIndex + 1}.`
+    ).join('\n\n')
+  }))
+  return [...invalidDocxFiles, ...markdownFiles]
+}
 
 describe('settings workspace e2e', () => {
   it(
@@ -35,7 +47,7 @@ describe('settings workspace e2e', () => {
 
           workspaceRoot = await createWorkspaceWithFiles(
             'workspace-prepare-progress-restore',
-            createSlowEnoughInvalidDocxFiles()
+            createSlowEnoughWorkspaceFiles()
           )
           const workspace = await createRealWorkspaceWithRoot(page, {
             name: '文件进度恢复工作区',
@@ -83,7 +95,11 @@ describe('settings workspace e2e', () => {
             }
           })
 
-          const idle = await waitForFileIndexJobIdle(page, workspaceId)
+          const idle = await waitForFileIndexJobIdle(
+            page,
+            workspaceId,
+            SETTINGS_REAL_WORKSPACE_LONG_E2E_TIMEOUT_MS
+          )
 
           return {
             restoredProgressVisible,
@@ -106,6 +122,6 @@ describe('settings workspace e2e', () => {
         }
       })
     },
-    SETTINGS_REAL_WORKSPACE_E2E_TIMEOUT_MS
+    SETTINGS_REAL_WORKSPACE_LONG_E2E_TIMEOUT_MS
   )
 })

@@ -33,7 +33,7 @@ let appUpdateFixtureSnapshot: AppUpdateSnapshot = {
 }
 
 const waitForAppUpdateFixtureStep = async (): Promise<void> => {
-  await new Promise<void>((resolve) => setTimeout(resolve, 250))
+  await new Promise<void>((resolve) => setTimeout(resolve, 1_000))
 }
 
 const setAppUpdateFixtureSnapshot = (snapshot: AppUpdateSnapshot): void => {

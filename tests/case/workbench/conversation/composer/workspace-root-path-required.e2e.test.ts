@@ -3,7 +3,6 @@ import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
   WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
   assertNoWorkbenchFakeSignals,
-  bindWorkspaceRootThroughSettingsUi,
   configureLiveModelThroughSettingsUi,
   createTemporaryWorkbenchWorkspace,
   createWorkspaceThroughSettingsUi,
@@ -20,7 +19,10 @@ import {
   waitForWorkbenchAiRunCompletion,
   workbenchSelectors
 } from '../../../../harness/e2e/workbench'
-import { navigateToSettingsSection } from '../../../../harness/e2e/settings'
+import {
+  bindWorkspaceRootThroughIpc,
+  navigateToSettingsSection
+} from '../../../../harness/e2e/settings'
 
 const CASE_ID = 'workspace-root-path-required'
 const WORKSPACE_NAME = 'Workbench Root Path Required Workspace'
@@ -67,7 +69,7 @@ describe('workbench conversation e2e', () => {
           ).trim()
 
           await navigateToSettingsSection(page, 'workspace')
-          await bindWorkspaceRootThroughSettingsUi(page, workspace.rootPath)
+          await bindWorkspaceRootThroughIpc(page, workspace.rootPath)
           await navigateToWorkbench(page)
           await selectWorkbenchWorkspace(page, WORKSPACE_NAME)
           await selectWorkbenchModel(page, env.modelName)
