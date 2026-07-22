@@ -1,6 +1,6 @@
 {
   "name": "ncurator",
-  "version": "0.1.26",
+  "version": "0.1.27",
   "description": "Local-first AI workspace for documents, research, and task execution",
   "main": "./out/main/index.js",
   "author": "NCurator",
