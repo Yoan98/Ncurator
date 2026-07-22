@@ -6,6 +6,7 @@ import {
   createFixtureWorkspace,
   navigateToSettingsSection,
   seedWebSources,
+  startLocalSettingsHttpServer,
   workspaceCardLocator
 } from '../../../../harness/e2e/settings'
 
@@ -29,6 +30,18 @@ describe('settings workspace web e2e', () => {
           let restoredButtonsDisabled = false
           let restoredActiveJob = false
           let restoredStepText = ''
+          const httpServer = await startLocalSettingsHttpServer({
+            '/web-restore': {
+              body: '<html><head><title>Web Restore</title></head><body>Delayed local web fixture.</body></html>',
+              delayMs: 5_000
+            }
+          })
+
+          runtime.registerResource({
+            name: 'settings-http-server',
+            phase: 'before-app-close',
+            dispose: httpServer.close
+          })
 
           await runtime.step({
             name: 'seed-delayed-web-sources',
@@ -39,7 +52,7 @@ describe('settings workspace web e2e', () => {
                 name: '网页进度恢复工作区'
               })
               workspaceId = workspace.workspace!.id
-              await seedWebSources(page, workspaceId, ['https://example.com/web-restore'])
+              await seedWebSources(page, workspaceId, [httpServer.url('/web-restore')])
               await navigateToSettingsSection(page, 'workspace')
               await workspaceCardLocator(page, workspaceId).click()
               await page.getByRole('tab', { name: '网页 1' }).click()

@@ -60,19 +60,19 @@ describe('settings workspace web e2e', () => {
           const httpServer = await startLocalSettingsHttpServer({
             '/prepare-success': {
               body: '<html><head><title>Prepare Success</title></head><body>Local web fixture for indexing.</body></html>',
-              delayMs: 1500
+              delayMs: 5_000
             },
             '/refresh-fail': {
               body: '<html><head><title>Refresh First Pass</title></head><body>Available during scan.</body></html>',
               responses: [
                 {
                   body: '<html><head><title>Refresh First Pass</title></head><body>Available during scan.</body></html>',
-                  delayMs: 1500
+                  delayMs: 5_000
                 },
                 {
                   status: 500,
                   body: 'refresh failed during prepare',
-                  delayMs: 1500
+                  delayMs: 5_000
                 }
               ]
             }
