@@ -40,8 +40,7 @@ export class EmbeddingService {
       })
       .catch((error: unknown) => {
         this.status = 'error'
-        const message = error instanceof Error ? error.message : String(error)
-        console.warn('EmbeddingService initialization failed:', message)
+        throw error
       })
       .finally(() => {
         this.initializationPromise = null
@@ -52,9 +51,10 @@ export class EmbeddingService {
 
   public async embed(texts: string | string[]): Promise<EmbeddingResult> {
     if (this.status !== 'ready') {
-      throw new Error(
-        `EmbeddingService is not ready. Current status: ${this.status}. Please wait for initialization.`
-      )
+      await this.initialize()
+    }
+    if (this.status !== 'ready') {
+      throw new Error(`EmbeddingService initialization ended in unexpected status: ${this.status}`)
     }
     const inputTexts = Array.isArray(texts) ? texts : [texts]
     return await this.executor.embed(inputTexts)

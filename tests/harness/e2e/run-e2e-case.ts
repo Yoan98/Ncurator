@@ -22,6 +22,7 @@ import {
 } from '../core/write-run-log'
 import {
   launchElectronApp,
+  isExpectedWindowsInspectorTeardownExit,
   type E2ERuntimeSignals,
   type E2EServiceMode,
   type ElectronWindowMode,
@@ -765,14 +766,11 @@ export const runE2ECase = async <TResult>(
       const processExitData = processExit?.data as
         | { code?: number | null; signal?: string | null }
         | undefined
-      const gracefulShutdownPrepared = signals.lifecycleEntries.some(
-        (entry) => entry.name === 'electron-graceful-shutdown-prepared'
-      )
-      const isKnownWindowsInspectorExit =
-        process.platform === 'win32' &&
-        gracefulShutdownPrepared &&
-        (processExitData?.code === 3221225477 || processExitData?.code === 3221226505) &&
-        !processExitData.signal
+      const isKnownWindowsInspectorExit = isExpectedWindowsInspectorTeardownExit({
+        platform: process.platform,
+        lifecycleEntries: signals.lifecycleEntries,
+        testPassed: status === 'passed' && !primaryError
+      })
       if (isKnownWindowsInspectorExit) {
         recordEvent({
           type: 'signal',
