@@ -106,7 +106,12 @@ await run('git', ['push', '--atomic', 'origin', 'main', releaseTag])
 
 process.stdout.write(`[release] prepared and pushed ${releaseTag}\n`)
 
-const routeArgs = [path.join(ROOT, 'scripts', 'release', 'windows.mjs'), '--tag', releaseTag]
+const routeArgs = [
+  path.join(ROOT, 'scripts', 'release', 'windows.mjs'),
+  '--tag',
+  releaseTag,
+  '--prepare-only'
+]
 if (forceLocal) routeArgs.push('--local-only')
 if (forceActions) routeArgs.push('--actions')
 if (packageE2E) routeArgs.push('--package-e2e')

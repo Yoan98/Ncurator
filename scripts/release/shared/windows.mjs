@@ -102,7 +102,7 @@ const expectedPnpmVersion = async (root) => {
   return String(packageJson.packageManager || '').match(/^pnpm@([^+]+)/u)?.[1] || ''
 }
 
-export const inspectLocalWindowsRelease = async (root) => {
+export const inspectLocalWindowsRelease = async (root, { requirePublish = true } = {}) => {
   await loadReleaseEnvironment(root)
   const issues = []
   if (process.platform !== 'win32')
@@ -128,8 +128,8 @@ export const inspectLocalWindowsRelease = async (root) => {
     issues.push(`Python architecture is ${python.architecture}, not x64`)
   }
 
-  const awsExecutable = await resolveAwsExecutable()
-  if (!awsExecutable) issues.push('AWS CLI is not available')
+  const awsExecutable = requirePublish ? await resolveAwsExecutable() : ''
+  if (requirePublish && !awsExecutable) issues.push('AWS CLI is not available')
 
   for (const [command, label] of [
     ['git', 'Git'],
@@ -138,19 +138,22 @@ export const inspectLocalWindowsRelease = async (root) => {
     if (!(await commandResult(command, ['--version'])).ok) issues.push(`${label} is not available`)
   }
 
-  for (const name of [
-    'AWS_ACCESS_KEY_ID',
-    'AWS_SECRET_ACCESS_KEY',
-    'R2_ACCOUNT_ID',
-    'R2_BUCKET_NAME',
-    'R2_PUBLIC_BASE_URL'
-  ]) {
-    if (!String(process.env[name] || '').trim())
-      issues.push(`missing environment variable: ${name}`)
-  }
-  const publicBaseUrl = String(process.env.R2_PUBLIC_BASE_URL || '').replace(/\/$/u, '')
-  if (publicBaseUrl && publicBaseUrl !== PUBLIC_RELEASE_BASE_URL) {
-    issues.push(`R2_PUBLIC_BASE_URL must be ${PUBLIC_RELEASE_BASE_URL}`)
+  if (requirePublish) {
+    for (const name of [
+      'AWS_ACCESS_KEY_ID',
+      'AWS_SECRET_ACCESS_KEY',
+      'R2_ACCOUNT_ID',
+      'R2_BUCKET_NAME',
+      'R2_PUBLIC_BASE_URL'
+    ]) {
+      if (!String(process.env[name] || '').trim()) {
+        issues.push(`missing environment variable: ${name}`)
+      }
+    }
+    const publicBaseUrl = String(process.env.R2_PUBLIC_BASE_URL || '').replace(/\/$/u, '')
+    if (publicBaseUrl && publicBaseUrl !== PUBLIC_RELEASE_BASE_URL) {
+      issues.push(`R2_PUBLIC_BASE_URL must be ${PUBLIC_RELEASE_BASE_URL}`)
+    }
   }
 
   return {
@@ -187,7 +190,11 @@ export const assertWindowsReleaseRouteAvailable = async ({
   return 'actions'
 }
 
-export const dispatchWindowsRelease = async (root, releaseTag, { packageE2E = false } = {}) => {
+export const dispatchWindowsRelease = async (
+  root,
+  releaseTag,
+  { mode, packageE2E = false, candidateRunId = '' }
+) => {
   await loadReleaseEnvironment(root)
   const token = String(process.env.NCURATOR_ACTIONS_TOKEN || '').trim()
   if (!token) throw new Error('NCURATOR_ACTIONS_TOKEN is required to dispatch GitHub Actions')
@@ -204,7 +211,12 @@ export const dispatchWindowsRelease = async (root, releaseTag, { packageE2E = fa
       },
       body: JSON.stringify({
         ref: 'main',
-        inputs: { tag: releaseTag, package_e2e: packageE2E ? 'true' : 'false' }
+        inputs: {
+          tag: releaseTag,
+          mode,
+          package_e2e: packageE2E ? 'true' : 'false',
+          candidate_run_id: candidateRunId
+        }
       })
     }
   )

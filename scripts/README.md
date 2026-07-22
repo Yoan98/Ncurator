@@ -11,7 +11,7 @@
 - `scripts/release/shared/`：发布流程共享能力。
 - `scripts/test/`：源码/正式包 E2E 编排和真实更新测试。
 
-正式包 E2E 只消费发布候选 bundle，不再自行调用任何 `build:*` 脚本。发布脚本先生成并校验 `release-bundle-*.json`，可选执行 `pnpm test:e2e:package -- --bundle <path>`，最后复验哈希后上传同一组文件。
+正式包 E2E 只消费发布候选 bundle，不再自行调用任何 `build:*` 脚本。发布入口必须显式选择 `--prepare-only`、`--test-only` 或 `--publish-only`：prepare 固化候选，test 只重测候选，publish 只上传同一候选。
 - `scripts/postinstall.mjs`：安装完成后的唯一根级入口。
 
 ## 打包主流程
