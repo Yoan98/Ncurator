@@ -119,6 +119,9 @@ const releaseEnvironment = () => {
     NCURATOR_SIDECAR_BROWSER_CACHE:
       String(process.env.NCURATOR_SIDECAR_BROWSER_CACHE || '').trim() ||
       path.join(os.homedir(), '.ncurator', 'release-tools', 'sidecar-browser-cache', 'win32-x64'),
+    NCURATOR_SIDECAR_VENV_ROOT:
+      String(process.env.NCURATOR_SIDECAR_VENV_ROOT || '').trim() ||
+      path.join(os.homedir(), '.ncurator', 'release-tools', 'sidecar-venv'),
     NCURATOR_SIDECAR_BUILD_PYTHON:
       String(process.env.NCURATOR_SIDECAR_BUILD_PYTHON || '').trim() || inspection.python.executable
   }
@@ -154,7 +157,15 @@ const extractTagSource = async (defaultRootName) => {
     sourceDirectory,
     workspace: {
       dispose: async () => {
-        await run('git', ['worktree', 'remove', '--force', sourceDirectory])
+        try {
+          await run('git', ['worktree', 'remove', '--force', sourceDirectory])
+        } catch (error) {
+          await workspace.dispose()
+          await run('git', ['worktree', 'prune', '--expire', 'now'])
+          const message = error instanceof Error ? error.message : String(error)
+          process.stderr.write(`[release] worktree cleanup recovered after: ${message}\n`)
+          return
+        }
         await workspace.dispose()
       }
     }
