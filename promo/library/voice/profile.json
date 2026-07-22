@@ -1,8 +1,8 @@
 {
   "displayName": "馆长默认中文男声",
-  "provider": "macos-say",
-  "voiceId": "Reed (中文（中国大陆）)",
-  "language": "zh",
-  "rate": 190,
-  "style": "温和、可靠、自然，不使用播音腔"
+  "provider": "qwen3-tts-local",
+  "model": "mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-8bit",
+  "language": "Chinese",
+  "speed": 1.08,
+  "style": "一位三十五到四十五岁的中国男性，像经验丰富的朋友坐在旁边自然说话。声音真实、松弛、有一点生活感，不是配音演员，不是主持人，不是广告，不使用播音腔。语气有轻微起伏和自然停顿，偶尔像边想边说，但表达依然清楚可信。"
 }
