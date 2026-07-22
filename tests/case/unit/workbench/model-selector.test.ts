@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from 'react'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import WorkbenchModelSelector from '../../../../src/renderer/src/components/workbench/WorkbenchModelSelector'
 
@@ -34,6 +34,19 @@ describe('workbench model selector', () => {
 
     expect(groupButton.getAttribute('aria-expanded')).toBe('false')
     expect(screen.queryByRole('option', { name: 'model-a' })).toBeNull()
+  })
+
+  it('closes the trigger tooltip while the model menu is open', async () => {
+    renderSelector()
+    const trigger = screen.getByRole('button', { name: '选择模型' })
+
+    fireEvent.mouseEnter(trigger)
+    await waitFor(() => expect(screen.getByRole('tooltip')).toBeTruthy())
+
+    fireEvent.click(trigger)
+
+    expect(trigger.getAttribute('aria-expanded')).toBe('true')
+    await waitFor(() => expect(screen.queryByRole('tooltip')).toBeNull())
   })
 })
 
