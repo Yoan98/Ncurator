@@ -1,5 +1,4 @@
 import { execFile, spawn } from 'node:child_process'
-import { mkdir } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
@@ -149,12 +148,17 @@ const extractTagSource = async (defaultRootName) => {
     defaultRootName,
     keepWork: false
   })
-  const archivePath = path.join(workspace.workDirectory, 'source.zip')
   const sourceDirectory = path.join(workspace.workDirectory, 'source')
-  await run('git', ['archive', '--format=zip', '--output', archivePath, releaseTag])
-  await mkdir(sourceDirectory, { recursive: true })
-  await run('tar', ['-xf', archivePath], { cwd: sourceDirectory })
-  return { workspace, sourceDirectory }
+  await run('git', ['worktree', 'add', '--detach', sourceDirectory, releaseTag])
+  return {
+    sourceDirectory,
+    workspace: {
+      dispose: async () => {
+        await run('git', ['worktree', 'remove', '--force', sourceDirectory])
+        await workspace.dispose()
+      }
+    }
+  }
 }
 
 const runCandidateE2E = async ({ candidate, sourceDirectory, environment }) => {
