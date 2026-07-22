@@ -51,37 +51,53 @@ const contentType = (name) => {
   return 'application/octet-stream'
 }
 
+const readRemoteObject = async (key) => {
+  try {
+    const { stdout } = await aws([
+      's3api',
+      'head-object',
+      '--bucket',
+      bucket,
+      '--key',
+      key,
+      '--output',
+      'json'
+    ])
+    return JSON.parse(stdout)
+  } catch {
+    return undefined
+  }
+}
+
 for (const file of fragment.files) {
   const source = path.join(inputDirectory, file.name)
   const key = artifactKey(fragment, file.name)
   const downloadName = file.name.replace('Ncurator-', `Ncurator-${fragment.version}-`)
-  await aws([
-    's3',
-    'cp',
-    source,
-    `s3://${bucket}/${key}`,
-    '--cache-control',
-    'public, max-age=31536000, immutable',
-    '--content-type',
-    contentType(file.name),
-    '--content-disposition',
-    `attachment; filename=${downloadName}`,
-    '--metadata',
-    `sha512=${file.sha512}`,
-    '--no-progress'
-  ])
+  const existing = await readRemoteObject(key)
+  if (existing) {
+    if (Number(existing.ContentLength) !== file.size || existing.Metadata?.sha512 !== file.sha512) {
+      throw new Error(`refusing to overwrite a different release asset: ${key}`)
+    }
+  } else {
+    await aws([
+      's3',
+      'cp',
+      source,
+      `s3://${bucket}/${key}`,
+      '--cache-control',
+      'public, max-age=31536000, immutable',
+      '--content-type',
+      contentType(file.name),
+      '--content-disposition',
+      `attachment; filename=${downloadName}`,
+      '--metadata',
+      `sha512=${file.sha512}`,
+      '--no-progress'
+    ])
+  }
 
-  const { stdout } = await aws([
-    's3api',
-    'head-object',
-    '--bucket',
-    bucket,
-    '--key',
-    key,
-    '--output',
-    'json'
-  ])
-  const remote = JSON.parse(stdout)
+  const remote = await readRemoteObject(key)
+  if (!remote) throw new Error(`R2 object disappeared after upload: ${key}`)
   if (Number(remote.ContentLength) !== file.size || remote.Metadata?.sha512 !== file.sha512) {
     throw new Error(`R2 verification failed: ${key}`)
   }

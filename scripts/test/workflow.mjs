@@ -45,6 +45,7 @@ const parseArgs = (argv) => {
     runs: 1,
     runDelayMs: 0,
     target: 'source',
+    bundle: '',
     freshKnowledgeCache: false,
     reuseKnowledgeCache: false
   }
@@ -89,6 +90,11 @@ const parseArgs = (argv) => {
     }
     if (current === '--target' && next) {
       parsed.target = next
+      index += 1
+      continue
+    }
+    if (current === '--bundle' && next) {
+      parsed.bundle = next
       index += 1
       continue
     }
@@ -581,6 +587,12 @@ const main = async () => {
   if (args.target === 'package' && args.type !== 'e2e') {
     throw new Error('--target package 只能与 --type e2e 一起使用')
   }
+  if (args.target === 'package' && !args.bundle) {
+    throw new Error('--target package 必须提供 --bundle <release-bundle.json>')
+  }
+  if (args.target !== 'package' && args.bundle) {
+    throw new Error('--bundle 只能与 --target package 一起使用')
+  }
   if (args.freshKnowledgeCache && args.reuseKnowledgeCache) {
     throw new Error('--fresh-knowledge-cache 和 --reuse-knowledge-cache 不能同时使用')
   }
@@ -596,7 +608,7 @@ const main = async () => {
   }
 
   if (args.type === 'e2e' && args.target === 'package') {
-    packageSession = await preparePackagedE2EApplication()
+    packageSession = await preparePackagedE2EApplication(args.bundle)
     packageKnowledgeCache = await prepareKnowledgeCache({
       namespace: 'package',
       buildFingerprint: packageSession.artifactSha256,
