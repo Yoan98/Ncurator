@@ -201,6 +201,7 @@ runner 支持的过滤参数：
 
 - 正式包 E2E 不负责构建。`--target package` 必须接收 `--bundle <release-bundle.json>`，只安装并测试 bundle 指定的既有安装包；bundle 的 tag、平台、fragment 和文件哈希必须全部匹配。
 - 发布流程通过 `--package-e2e` 显式启用正式包回归门；未启用时不阻塞发布。macOS 启用时 arm64、x64 两个 bundle 均须通过。
+- 发布候选包可使用 `release:win|release:mac -- --tag <tag> --test-only` 重跑正式包 E2E；该阶段只消费持久化候选 bundle，不重新构建。失败会把候选标记为 `rejected`，通过后恢复为 `ready`。
 - E2E 知识库缓存由 workflow 统一选择，一轮测试的全部 case 共用同一个目录。源码测试使用 `tests/.cache/workspace-knowledge/source/<out-main-and-preload-sha256>`；正式包测试使用 `tests/.cache/workspace-knowledge/package/<installer-sha256>`。两类缓存完全隔离，不再使用固定共享目录。
 - 缓存键仍包含文件内容哈希、扩展名、分块配置和向量模型名。未修改文件可以命中；新增或修改的文件会重新处理；删除文件不会因为缓存仍存在而重新进入新 workspace 的索引。
 - 每个 E2E case 的附件中会生成 `knowledge-cache-summary.json`，timeline 也会记录同样的命中和未命中统计。正式包总统计同时写入 `tests/logs/package/<runId>/summary.json`。

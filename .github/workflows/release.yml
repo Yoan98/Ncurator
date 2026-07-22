@@ -1,27 +1,89 @@
-name: Build Windows Release
+name: Windows Release Candidate
 
 on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag, for example v0.1.3'
+        description: 'Release tag, for example v0.1.21'
         required: true
+      mode:
+        description: 'Prepare a retained candidate or publish one from an earlier run'
+        required: true
+        type: choice
+        options:
+          - prepare
+          - publish
       package_e2e:
-        description: 'Run package E2E against the built release candidate before publishing'
+        description: 'Run package E2E while preparing the candidate'
         required: false
         default: false
         type: boolean
+      candidate_run_id:
+        description: 'Prepare workflow run id containing the candidate artifact (publish only)'
+        required: false
+        default: ''
 
 concurrency:
-  group: windows-release-${{ inputs.tag }}
+  group: windows-release-${{ inputs.tag }}-${{ inputs.mode }}
   cancel-in-progress: false
 
 jobs:
-  build-windows:
+  prepare-windows:
+    if: inputs.mode == 'prepare'
+    runs-on: windows-latest
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      NCURATOR_RELEASE_CANDIDATE_ROOT: ${{ github.workspace }}/release-candidates
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+          fetch-depth: 0
+
+      - name: Use HTTPS for GitHub dependencies
+        shell: bash
+        run: 'git config --global url."https://github.com/".insteadOf git@github.com:'
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Build and optionally test retained candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          args=(--tag "${{ inputs.tag }}" --prepare-only --local-only)
+          if [ "${{ inputs.package_e2e }}" = "true" ]; then
+            args+=(--package-e2e)
+          fi
+          node scripts/release/windows.mjs "${args[@]}"
+
+      - name: Retain exact release candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: ncurator-windows-${{ inputs.tag }}
+          path: release-candidates/${{ inputs.tag }}/windows-x64
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Candidate summary
+        shell: bash
+        run: |
+          echo "Windows ${{ inputs.tag }} candidate prepared; R2 publish paused." >> "$GITHUB_STEP_SUMMARY"
+          echo "Package E2E requested: ${{ inputs.package_e2e }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Publish with candidate run id: $GITHUB_RUN_ID" >> "$GITHUB_STEP_SUMMARY"
+
+  publish-windows:
+    if: inputs.mode == 'publish'
     runs-on: windows-latest
     environment: ncuratore
     env:
-      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      NCURATOR_RELEASE_CANDIDATE_ROOT: ${{ github.workspace }}/release-candidates
       AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
       R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
@@ -33,35 +95,33 @@ jobs:
           ref: ${{ inputs.tag }}
           fetch-depth: 0
 
-      - name: Use HTTPS for GitHub dependencies
-        shell: bash
-        run: |
-          git config --global url."https://github.com/".insteadOf git@github.com:
-
       - uses: pnpm/action-setup@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
-
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      - name: Build, optionally test, and publish the Windows release candidate
+      - name: Require candidate run id
         shell: bash
-        run: |
-          set -euo pipefail
-          args=(--tag "${{ inputs.tag }}" --local-only)
-          if [ "${{ inputs.package_e2e }}" = "true" ]; then
-            args+=(--package-e2e)
-          fi
-          node scripts/release/windows.mjs "${args[@]}"
+        run: test -n "${{ inputs.candidate_run_id }}"
+
+      - name: Download retained candidate from prepare run
+        uses: actions/download-artifact@v4
+        with:
+          name: ncurator-windows-${{ inputs.tag }}
+          path: release-candidates/${{ inputs.tag }}/windows-x64
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.candidate_run_id }}
+
+      - name: Publish retained candidate without rebuilding
+        shell: bash
+        run: node scripts/release/windows.mjs --tag "${{ inputs.tag }}" --publish-only --local-only
 
       - name: Release summary
         shell: bash
         run: |
-          echo "Windows ${{ inputs.tag }} published independently to Cloudflare R2." >> "$GITHUB_STEP_SUMMARY"
-          echo "Package E2E requested: ${{ inputs.package_e2e }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Windows ${{ inputs.tag }} published from prepare run ${{ inputs.candidate_run_id }}." >> "$GITHUB_STEP_SUMMARY"
           echo "Fixed download: https://download.ncurator.com/downloads/latest/windows-x64.exe" >> "$GITHUB_STEP_SUMMARY"

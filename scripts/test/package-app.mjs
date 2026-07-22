@@ -62,7 +62,7 @@ const clearQuarantine = (targetPath) => {
   }
 }
 
-export const preparePackagedE2EApplication = async (bundlePath) => {
+export const preparePackagedE2EApplication = async (bundlePath, { resultPath = '' } = {}) => {
   if (process.platform !== 'darwin' && process.platform !== 'win32') {
     throw new Error(`正式包 E2E 只支持 macOS 和 Windows，当前平台：${process.platform}`)
   }
@@ -200,11 +200,17 @@ export const preparePackagedE2EApplication = async (bundlePath) => {
       NCURATOR_BETTER_SQLITE3_NATIVE_BINDING: ''
     },
     writeSummary: (input) => {
-      writeFileSync(
-        path.join(logDir, 'summary.json'),
-        `${JSON.stringify({ ...metadata, finishedAt: new Date().toISOString(), ...input }, null, 2)}\n`,
-        'utf8'
-      )
+      const summary = `${JSON.stringify(
+        { ...metadata, finishedAt: new Date().toISOString(), ...input },
+        null,
+        2
+      )}\n`
+      writeFileSync(path.join(logDir, 'summary.json'), summary, 'utf8')
+      if (resultPath) {
+        const resolvedResultPath = path.resolve(ROOT, resultPath)
+        mkdirSync(path.dirname(resolvedResultPath), { recursive: true })
+        writeFileSync(resolvedResultPath, summary, 'utf8')
+      }
     }
   }
 }
