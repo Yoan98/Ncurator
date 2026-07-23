@@ -26,3 +26,7 @@ macOS 和 Windows。
 ## 了解更多
 
 访问官方网站：[https://www.ncurator.com/zh](https://www.ncurator.com/zh)
+
+## 友链
+
+- [LinuxDo 社区](https://linux.do/)
