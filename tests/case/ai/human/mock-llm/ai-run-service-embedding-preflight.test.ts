@@ -25,6 +25,7 @@ describe('ai human mock-llm backend', () => {
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
+        const sessionId = 'embedding-preflight-session'
         await writeTestDocxFile(runtime.workspaceRoot, 'semantic-docx.docx', [
           {
             type: 'paragraph',
@@ -35,10 +36,16 @@ describe('ai human mock-llm backend', () => {
         let ensureReadyCalls = 0
         const initialEmbeddingStatus = runtime.embeddingService.getStatus()
         const runtimeSettings = await runtime.storageService.aiRuntimeSettings.get()
+        await runtime.chatStore.saveChatSession({
+          id: sessionId,
+          title: 'embedding preflight session',
+          created_at: Date.now(),
+          workspace_id: 'test-workspace'
+        })
         const result = await AiRunService.getInstance().run(
           {
             runId: runtime.runId,
-            sessionId: 'embedding-preflight-session',
+            sessionId,
             input: '请读取 docx，找到反走样相关内容。',
             mainModel: {
               configId: 'mock-llm-scripted',

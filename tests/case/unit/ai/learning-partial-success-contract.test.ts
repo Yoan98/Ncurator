@@ -5,50 +5,74 @@ import { createHumanRuntimeCache } from '../../../../src/main/services/ai/human/
 import { createInitialHumanState } from '../../../../src/main/services/ai/human/state/schema'
 import type { HumanThoughtDecision } from '../../../../src/main/services/ai/human/types'
 
-const createStubAiRunContext = (): AiRunContext => ({
-  runId: 'run-learning-unit',
-  referenceScope: {
+const createStubAiRunContext = (): AiRunContext => {
+  let sessionSkillState: Awaited<ReturnType<AiRunContext['loadSessionSkillState']>> = {
+    schemaVersion: 1,
+    learnedSkillIds: [],
+    revision: 0,
+    updatedAt: 0,
+    lastUpdatedRunId: ''
+  }
+
+  return {
+    runId: 'run-learning-unit',
+    referenceScope: {
+      workspace: {
+        workspaceId: 'workspace-1',
+        workspaceName: 'workspace',
+        rootPath: '/tmp/workspace-root'
+      },
+      selectedReferences: [],
+      hasExplicitSelectedReferences: false,
+      hasDirectDocumentNarrowing: false,
+      defaultKnowledgeScope: 'current_workspace'
+    },
     workspace: {
       workspaceId: 'workspace-1',
       workspaceName: 'workspace',
       rootPath: '/tmp/workspace-root'
     },
-    selectedReferences: [],
-    hasExplicitSelectedReferences: false,
-    hasDirectDocumentNarrowing: false,
-    defaultKnowledgeScope: 'current_workspace'
-  },
-  workspace: {
-    workspaceId: 'workspace-1',
-    workspaceName: 'workspace',
-    rootPath: '/tmp/workspace-root'
-  },
-  checkCancelled: () => {},
-  chatStructured: async () => {
-    throw new Error('chatStructured should not be called in learning unit tests')
-  },
-  chatText: async () => {
-    throw new Error('chatText should not be called in learning unit tests')
-  },
-  sendEvent: () => {},
-  requestApprovalBatch: async () => ({ accepted: true, decisions: [] }),
-  loadConversationContext: async () => ({
-    recentTurnsText: '',
-    conversationSummaryText: ''
-  }),
-  loadConversationMemory: async () => null,
-  trackDocxOpen: () => {},
-  trackDocxChanges: () => {},
-  trackDocxBatchChanges: () => {},
-  resolveDocxOpenTarget: async () => {
-    throw new Error('resolveDocxOpenTarget should not be called in learning unit tests')
-  },
-  beginDocxApplyRun: () => {},
-  applyDocxRunEdits: async () => [],
-  discardDocxApplyRun: () => {},
-  documentsStore: undefined as never,
-  embeddingService: undefined as never
-})
+    checkCancelled: () => {},
+    chatStructured: async () => {
+      throw new Error('chatStructured should not be called in learning unit tests')
+    },
+    chatText: async () => {
+      throw new Error('chatText should not be called in learning unit tests')
+    },
+    sendEvent: () => {},
+    requestApprovalBatch: async () => ({ accepted: true, decisions: [] }),
+    loadConversationContext: async () => ({
+      recentTurnsText: '',
+      conversationSummaryText: ''
+    }),
+    loadConversationMemory: async () => null,
+    loadSessionSkillState: async () => sessionSkillState,
+    saveSessionSkillState: async ({ expectedRevision, learnedSkillIds }) => {
+      if (expectedRevision !== sessionSkillState.revision) {
+        throw new Error('session skill revision mismatch')
+      }
+      sessionSkillState = {
+        schemaVersion: 1,
+        learnedSkillIds: [...learnedSkillIds],
+        revision: sessionSkillState.revision + 1,
+        updatedAt: Date.now(),
+        lastUpdatedRunId: 'run-learning-unit'
+      }
+      return sessionSkillState
+    },
+    trackDocxOpen: () => {},
+    trackDocxChanges: () => {},
+    trackDocxBatchChanges: () => {},
+    resolveDocxOpenTarget: async () => {
+      throw new Error('resolveDocxOpenTarget should not be called in learning unit tests')
+    },
+    beginDocxApplyRun: () => {},
+    applyDocxRunEdits: async () => [],
+    discardDocxApplyRun: () => {},
+    documentsStore: undefined as never,
+    embeddingService: undefined as never
+  }
+}
 
 const buildLearningDecision = (skillIds: string[]): HumanThoughtDecision => ({
   thought: {

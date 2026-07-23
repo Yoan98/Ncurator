@@ -71,6 +71,17 @@ namespace NCurator.OpenWith {
       return result == 0 ? output.ToString() : null;
     }
 
+    static string NormalizeExecutable(string value) {
+      if (String.IsNullOrWhiteSpace(value)) return null;
+      var expanded = Environment.ExpandEnvironmentVariables(value).Trim().Trim('"');
+      if (expanded.IndexOf('%') >= 0 || !Path.IsPathRooted(expanded)) return null;
+      try {
+        return Path.GetFullPath(expanded);
+      } catch {
+        return null;
+      }
+    }
+
     static List<IAssocHandler> Enumerate(string filePath) {
       var extension = Path.GetExtension(filePath);
       if (String.IsNullOrWhiteSpace(extension)) return new List<IAssocHandler>();
@@ -93,7 +104,7 @@ namespace NCurator.OpenWith {
 
     public static ApplicationInfo[] List(string filePath) {
       var applications = new List<ApplicationInfo>();
-      var defaultExecutable = QueryExecutable(Path.GetExtension(filePath));
+      var defaultExecutable = NormalizeExecutable(QueryExecutable(Path.GetExtension(filePath)));
       foreach (var handler in Enumerate(filePath)) {
         try {
           string id;
@@ -103,8 +114,8 @@ namespace NCurator.OpenWith {
           handler.GetName(out id);
           handler.GetUIName(out name);
           handler.GetIconLocation(out iconPath, out iconIndex);
-          var executable = QueryExecutable(id);
-          var isDefault = !String.IsNullOrWhiteSpace(defaultExecutable) && !String.IsNullOrWhiteSpace(executable) && String.Equals(Path.GetFullPath(defaultExecutable), Path.GetFullPath(executable), StringComparison.OrdinalIgnoreCase);
+          var executable = NormalizeExecutable(QueryExecutable(id)) ?? NormalizeExecutable(id) ?? NormalizeExecutable(iconPath);
+          var isDefault = !String.IsNullOrWhiteSpace(defaultExecutable) && !String.IsNullOrWhiteSpace(executable) && String.Equals(defaultExecutable, executable, StringComparison.OrdinalIgnoreCase);
           applications.Add(new ApplicationInfo {
             id = id,
             name = String.IsNullOrWhiteSpace(name) ? Path.GetFileNameWithoutExtension(executable) : name,

@@ -29,7 +29,7 @@ describe('workbench run e2e', () => {
         runMode: 'single',
         execute: async (runtime) => {
           const { page } = runtime
-          const setup = await setupWorkbenchWithTempWorkspace(page, { caseId: CASE_ID })
+          await setupWorkbenchWithTempWorkspace(page, { caseId: CASE_ID })
           await sendWorkbenchMessage(
             page,
             '请读取当前工作区所有工作目录资料，写一份至少 2000 字的详细分析，逐项说明证据来源。'
