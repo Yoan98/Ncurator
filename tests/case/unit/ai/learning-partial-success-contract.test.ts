@@ -1,78 +1,69 @@
 import { describe, expect, it } from 'vitest'
 import type { AiRunContext } from '../../../../src/main/services/ai/types'
+import type { ChatSessionSkillState } from '../../../../src/shared/types'
 import { createLearningNode } from '../../../../src/main/services/ai/human/node/learningNode'
 import { createHumanRuntimeCache } from '../../../../src/main/services/ai/human/node/utils/runtimeCache'
 import { createInitialHumanState } from '../../../../src/main/services/ai/human/state/schema'
 import type { HumanThoughtDecision } from '../../../../src/main/services/ai/human/types'
 
-const createStubAiRunContext = (): AiRunContext => {
-  let sessionSkillState: Awaited<ReturnType<AiRunContext['loadSessionSkillState']>> = {
-    schemaVersion: 1,
-    learnedSkillIds: [],
-    revision: 0,
-    updatedAt: 0,
-    lastUpdatedRunId: ''
-  }
-
-  return {
-    runId: 'run-learning-unit',
-    referenceScope: {
-      workspace: {
-        workspaceId: 'workspace-1',
-        workspaceName: 'workspace',
-        rootPath: '/tmp/workspace-root'
-      },
-      selectedReferences: [],
-      hasExplicitSelectedReferences: false,
-      hasDirectDocumentNarrowing: false,
-      defaultKnowledgeScope: 'current_workspace'
-    },
+const createStubAiRunContext = (): AiRunContext => ({
+  runId: 'run-learning-unit',
+  referenceScope: {
     workspace: {
       workspaceId: 'workspace-1',
       workspaceName: 'workspace',
       rootPath: '/tmp/workspace-root'
     },
-    checkCancelled: () => {},
-    chatStructured: async () => {
-      throw new Error('chatStructured should not be called in learning unit tests')
-    },
-    chatText: async () => {
-      throw new Error('chatText should not be called in learning unit tests')
-    },
-    sendEvent: () => {},
-    requestApprovalBatch: async () => ({ accepted: true, decisions: [] }),
-    loadConversationContext: async () => ({
-      recentTurnsText: '',
-      conversationSummaryText: ''
-    }),
-    loadConversationMemory: async () => null,
-    loadSessionSkillState: async () => sessionSkillState,
-    saveSessionSkillState: async ({ expectedRevision, learnedSkillIds }) => {
-      if (expectedRevision !== sessionSkillState.revision) {
-        throw new Error('session skill revision mismatch')
-      }
-      sessionSkillState = {
-        schemaVersion: 1,
-        learnedSkillIds: [...learnedSkillIds],
-        revision: sessionSkillState.revision + 1,
-        updatedAt: Date.now(),
-        lastUpdatedRunId: 'run-learning-unit'
-      }
-      return sessionSkillState
-    },
-    trackDocxOpen: () => {},
-    trackDocxChanges: () => {},
-    trackDocxBatchChanges: () => {},
-    resolveDocxOpenTarget: async () => {
-      throw new Error('resolveDocxOpenTarget should not be called in learning unit tests')
-    },
-    beginDocxApplyRun: () => {},
-    applyDocxRunEdits: async () => [],
-    discardDocxApplyRun: () => {},
-    documentsStore: undefined as never,
-    embeddingService: undefined as never
-  }
-}
+    selectedReferences: [],
+    hasExplicitSelectedReferences: false,
+    hasDirectDocumentNarrowing: false,
+    defaultKnowledgeScope: 'current_workspace'
+  },
+  workspace: {
+    workspaceId: 'workspace-1',
+    workspaceName: 'workspace',
+    rootPath: '/tmp/workspace-root'
+  },
+  checkCancelled: () => {},
+  chatStructured: async () => {
+    throw new Error('chatStructured should not be called in learning unit tests')
+  },
+  chatText: async () => {
+    throw new Error('chatText should not be called in learning unit tests')
+  },
+  sendEvent: () => {},
+  requestApprovalBatch: async () => ({ accepted: true, decisions: [] }),
+  loadConversationContext: async () => ({
+    recentTurnsText: '',
+    conversationSummaryText: ''
+  }),
+  loadConversationMemory: async () => null,
+  loadSessionSkillState: async (): Promise<ChatSessionSkillState> => ({
+    schemaVersion: 1,
+    learnedSkillIds: [],
+    revision: 0,
+    updatedAt: 0,
+    lastUpdatedRunId: ''
+  }),
+  saveSessionSkillState: async (input): Promise<ChatSessionSkillState> => ({
+    schemaVersion: 1,
+    learnedSkillIds: input.learnedSkillIds,
+    revision: input.expectedRevision + 1,
+    updatedAt: 1,
+    lastUpdatedRunId: 'run-learning-unit'
+  }),
+  trackDocxOpen: () => {},
+  trackDocxChanges: () => {},
+  trackDocxBatchChanges: () => {},
+  resolveDocxOpenTarget: async () => {
+    throw new Error('resolveDocxOpenTarget should not be called in learning unit tests')
+  },
+  beginDocxApplyRun: () => {},
+  applyDocxRunEdits: async () => [],
+  discardDocxApplyRun: () => {},
+  documentsStore: undefined as never,
+  embeddingService: undefined as never
+})
 
 const buildLearningDecision = (skillIds: string[]): HumanThoughtDecision => ({
   thought: {
