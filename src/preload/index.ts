@@ -22,6 +22,8 @@ const isE2EObserverEnabled = isE2EFixtureMode || process.env.NCURATOR_E2E_OBSERV
 const downloadProgressListeners = new Set<(progressData: DownloadProgress) => void>()
 const workspaceIndexJobProgressListeners = new Set<(job: WorkspaceIndexJobRecord) => void>()
 const appUpdateFixtureListeners = new Set<(snapshot: AppUpdateSnapshot) => void>()
+const systemNotificationSessionListeners = new Set<(sessionId: string) => void>()
+let pendingSystemNotificationSessionId: string | null = null
 const APP_UPDATE_E2E_SET_SNAPSHOT_EVENT = 'ncurator-e2e-app-update-set-snapshot'
 
 let appUpdateFixtureSnapshot: AppUpdateSnapshot = {
@@ -33,7 +35,7 @@ let appUpdateFixtureSnapshot: AppUpdateSnapshot = {
 }
 
 const waitForAppUpdateFixtureStep = async (): Promise<void> => {
-  await new Promise<void>((resolve) => setTimeout(resolve, 250))
+  await new Promise<void>((resolve) => setTimeout(resolve, 1_000))
 }
 
 const setAppUpdateFixtureSnapshot = (snapshot: AppUpdateSnapshot): void => {
@@ -70,6 +72,12 @@ const emitDownloadProgress = (payload: DownloadProgress): void => {
   }
 }
 
+ipcRenderer.on('system-notification-open-session', (_event, sessionId: string) => {
+  pendingSystemNotificationSessionId = sessionId
+  for (const listener of systemNotificationSessionListeners) listener(sessionId)
+  if (systemNotificationSessionListeners.size > 0) pendingSystemNotificationSessionId = null
+})
+
 if (isE2EObserverEnabled) {
   ipcRenderer.on('ai-run-event', (_event: Electron.IpcRendererEvent, data: AiRunEvent) => {
     emitE2EAiRunEvent(data)
@@ -103,7 +111,6 @@ const api: DesktopApi = {
     emitE2EIpcCall('openPath', safePath)
     return ipcRenderer.invoke('open-path', filePath)
   },
-  openPathWithApplication: (payload) => ipcRenderer.invoke('open-path-with-application', payload),
   revealPath: (filePath: string): Promise<{ success: boolean; error?: string }> => {
     const safePath = String(filePath || '').trim()
     emitE2EIpcCall('revealPath', safePath)
@@ -114,7 +121,19 @@ const api: DesktopApi = {
     return ipcRenderer.invoke('pick-directory')
   },
   pickFile: (defaultPath?: string) => ipcRenderer.invoke('pick-file', defaultPath),
-  pickApplication: () => ipcRenderer.invoke('pick-application'),
+  listOpenWithApplications: (payload) => {
+    emitE2EIpcCall('listOpenWithApplications', {
+      filePath: String(payload.filePath || '').trim()
+    })
+    return ipcRenderer.invoke('list-open-with-applications', payload)
+  },
+  openFileWithApplication: (payload) => {
+    emitE2EIpcCall('openFileWithApplication', {
+      filePath: String(payload.filePath || '').trim(),
+      applicationId: String(payload.applicationId || '').trim()
+    })
+    return ipcRenderer.invoke('open-file-with-application', payload)
+  },
   search: (query: string, sourceType?: SearchSourceFilter, documentIds?: string[]) =>
     ipcRenderer.invoke('search', query, sourceType, documentIds),
   workspaceList: () => ipcRenderer.invoke('workspace-list'),
@@ -373,6 +392,17 @@ const api: DesktopApi = {
     ipcRenderer.on('ai-run-event', listener)
     return () => {
       ipcRenderer.removeListener('ai-run-event', listener)
+    }
+  },
+  onSystemNotificationOpenSession: (cb: (sessionId: string) => void) => {
+    systemNotificationSessionListeners.add(cb)
+    if (pendingSystemNotificationSessionId) {
+      const sessionId = pendingSystemNotificationSessionId
+      pendingSystemNotificationSessionId = null
+      queueMicrotask(() => cb(sessionId))
+    }
+    return () => {
+      systemNotificationSessionListeners.delete(cb)
     }
   },
   onBrowserPanelStateChange: (cb: (state: BrowserPanelState) => void) => {

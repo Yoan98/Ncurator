@@ -12,9 +12,9 @@ import type { BrowserActionCandidate, BrowserUsePage, BrowserUseService } from '
 import {
   EMBEDDED_BROWSER_NAVIGATION_TIMEOUT_MS,
   EMBEDDED_BROWSER_PARTITION,
-  EMBEDDED_BROWSER_REMOTE_DEBUGGING_PORT,
   EMBEDDED_BROWSER_STAGEHAND_TIMEOUT_MS
 } from './constants'
+import type { CdpEndpointService } from './CdpEndpointService'
 import type { BrowserPanelBoundsState, BrowserUseRunInput, BrowserUseRunResult } from './types'
 import type { BrowserTabState } from '../../../shared/types'
 import { resolveStagehandRuntimeModel } from '../llm/stagehandModel'
@@ -129,7 +129,10 @@ export class BrowserEmbedService implements BrowserUseService {
   private bounds: BrowserPanelBoundsState = EMPTY_BOUNDS
   private occluded = false
   private popupMenuInstance: Menu | null = null
-  public constructor(private readonly mainWindow: BrowserWindow) {}
+  public constructor(
+    private readonly mainWindow: BrowserWindow,
+    private readonly cdpEndpointService: CdpEndpointService
+  ) {}
 
   public listTabs(ownerId: string): BrowserTabState[] {
     return [...this.tabs.values()]
@@ -552,9 +555,8 @@ export class BrowserEmbedService implements BrowserUseService {
   }
 
   private async resolveDevToolsTargetId(contents: WebContents): Promise<string> {
-    const response = await fetch(
-      `http://127.0.0.1:${String(EMBEDDED_BROWSER_REMOTE_DEBUGGING_PORT)}/json/list`
-    )
+    const endpoint = await this.cdpEndpointService.getEndpoint()
+    const response = await fetch(`${endpoint.httpOrigin}/json/list`)
     if (!response.ok) throw new Error(`CDP target list unavailable: ${String(response.status)}`)
     const targets = z
       .array(z.object({ id: z.string().min(1) }).passthrough())
@@ -647,13 +649,6 @@ export class BrowserEmbedService implements BrowserUseService {
   }
 
   private async getCdpWebSocketUrl(): Promise<string> {
-    const response = await fetch(
-      `http://127.0.0.1:${String(EMBEDDED_BROWSER_REMOTE_DEBUGGING_PORT)}/json/version`
-    )
-    if (!response.ok) throw new Error(`CDP endpoint unavailable: ${String(response.status)}`)
-    const payload = z
-      .object({ webSocketDebuggerUrl: z.string().min(1) })
-      .parse(await response.json())
-    return payload.webSocketDebuggerUrl
+    return (await this.cdpEndpointService.getEndpoint()).browserWebSocketUrl
   }
 }

@@ -100,7 +100,6 @@ export const TEXT_FILE_EDIT_TOOL_SPEC: HumanToolSpec<
     description: [
       '创建或修改普通文本文件,如 txt、md、csv、json，代码等 UTF-8 普通文本文件。',
       '无法创建或修改结构化文件如 docx、pptx、pdf、xlsx 等。',
-      '每次调用执行一个 action。',
       'action=create：创建新文件并写入完整内容，不覆盖已有文件。',
       'action=rewrite：使用新内容完整改写已有文件。',
       'action=edit：对已有文件执行一个或多个精确文本修改；每个 oldText 必须恰好匹配一次。',

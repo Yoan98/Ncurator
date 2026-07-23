@@ -875,7 +875,9 @@ const upsertGroupFromDisplayEvent = (
   }
 ): AssistantProcessGroup[] => {
   const currentWithoutLocalThinking = current.filter(
-    (group) => !(group.kind === 'thinking' && group.sourceEventType === 'thinking')
+    (group) =>
+      group.kind !== 'thinking' ||
+      (input.kind !== 'retry' && group.sourceEventType !== 'thinking')
   )
   const existing = currentWithoutLocalThinking.find((group) => group.id === input.groupId)
   const next = createDisplayProcessGroup({
@@ -929,7 +931,9 @@ const upsertProcessItem = (
   }
 ): AssistantProcessGroup[] => {
   const currentWithoutLocalThinking = current.filter(
-    (group) => !(group.kind === 'thinking' && group.sourceEventType === 'thinking')
+    (group) =>
+      group.kind !== 'thinking' ||
+      (input.display.kind !== 'retry' && group.sourceEventType !== 'thinking')
   )
   const existingGroup = currentWithoutLocalThinking.find((group) => group.id === input.groupId)
   const groupsWithParent = existingGroup

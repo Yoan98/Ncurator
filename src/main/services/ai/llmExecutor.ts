@@ -274,7 +274,7 @@ const buildStructuredAttemptOrder = (
 ): StructuredOutputStrategy[] =>
   buildStructuredOutputStrategyAttemptOrder({
     supportedTransports: getSupportedTransportsForConfig(cfg),
-    preferredStrategy,
+    preferredStrategy: preferredStrategy || buildPreferredStrategy(cfg),
     supportedModes: cfg.supportedStructuredOutputModes
   })
 
@@ -503,9 +503,18 @@ const isCancellationError = (error: unknown): boolean => {
   return code === 'CANCELLED' || message.includes('cancel')
 }
 
-const classifyLlmCallRetry = (error: unknown): { retryable: boolean; message: string } => {
+export const classifyLlmCallRetry = (
+  error: unknown,
+  attempt = 1
+): { retryable: boolean; message: string; delayMs?: number } => {
   if (isLlmProviderError(error)) {
-    return { retryable: error.retryable, message: error.message }
+    return {
+      retryable: error.retryable,
+      message: error.message,
+      ...(isResourceExhaustedError(error)
+        ? { delayMs: resolveResourceExhaustedDelay(attempt) }
+        : {})
+    }
   }
   const info = normalizeStructuredOutputError(error)
   const message = info.message || getErrorText(error)
@@ -516,7 +525,13 @@ const classifyLlmCallRetry = (error: unknown): { retryable: boolean; message: st
   }
   const retryableStatus = new Set([408, 409, 425, 429, 500, 502, 503, 504])
   if (info.status !== undefined && retryableStatus.has(info.status)) {
-    return { retryable: true, message }
+    return {
+      retryable: true,
+      message,
+      ...(isResourceExhaustedError(error, `${info.rawText} ${info.code} ${info.message}`)
+        ? { delayMs: resolveResourceExhaustedDelay(attempt) }
+        : {})
+    }
   }
   const code = String(info.code || '').toLowerCase()
   if (
@@ -542,6 +557,14 @@ const classifyLlmCallRetry = (error: unknown): { retryable: boolean; message: st
   }
   return { retryable: false, message }
 }
+
+const isResourceExhaustedError = (error: unknown, extraText = ''): boolean => {
+  const message = `${error instanceof Error ? error.message : String(error || '')} ${extraText}`
+  return /resourceexhausted|worker local total request limit/i.test(message)
+}
+
+const resolveResourceExhaustedDelay = (attempt: number): number =>
+  Math.min(15_000, 2_000 * 2 ** Math.max(0, attempt - 1))
 
 const createLlmProviderError = (error: unknown, retryable: boolean): LlmProviderError => {
   if (isLlmProviderError(error)) return error
@@ -666,6 +689,7 @@ const invokeStructuredChatNative = async <T extends Record<string, unknown>>(
   const strategyErrors: string[] = []
   let latestRawText: string | undefined
   let latestOutputError: unknown
+  let latestCapacityError: unknown
 
   for (const strategy of attemptOrder) {
     const { method, transport } = resolveStructuredOutputStrategy(strategy)
@@ -705,10 +729,24 @@ const invokeStructuredChatNative = async <T extends Record<string, unknown>>(
         continue
       }
       if (errorAnalysis.kind === 'retryable') {
+        if (
+          isResourceExhaustedError(
+            error,
+            `${errorAnalysis.info.rawText} ${errorAnalysis.info.code} ${errorAnalysis.info.message}`
+          )
+        ) {
+          strategyErrors.push(`${strategyLabel}: ${reason}`)
+          latestCapacityError = error
+          continue
+        }
         throw createLlmProviderError(error, true)
       }
       throw createLlmProviderError(error, false)
     }
+  }
+
+  if (latestCapacityError) {
+    throw createLlmProviderError(latestCapacityError, true)
   }
 
   throw new LlmOutputError({

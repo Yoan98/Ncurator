@@ -276,6 +276,15 @@ tests/case/workbench/
 - Oracle：各阶段浏览器 viewport 均包含稳定的非白真实网页像素且尺寸、zoom 不变；Renderer 菜单打开时原生视图隐藏，关闭后恢复；折叠或切换会话只停放视图，不销毁 WebContents，计时器持续前进；回到原会话时面板直接按最终宽度恢复且不重播展开动画，对齐 `WB-PANEL-001-AC5`、`WB-PANEL-004-AC1`、`WB-PANEL-004-AC3`、`WB-PANEL-004-AC7`。
 - Not：不验证公网网页、Stagehand 操作或最终 AI 回答；这些由 `browser-use-task-panel` 覆盖。
 
+#### `cdp-random-port-isolation`
+
+- 测试类型：`e2e`
+- What：在启动 Electron 前占用旧的 `9333` 端口，验证应用仍能启动并使用 Chromium 自动分配的回环 CDP 端口。
+- Why：生产环境不应依赖固定端口；安装版、开发版或用户其他软件占用 `9333` 时，不能影响应用启动。
+- How：启动本地 `127.0.0.1:9333` 占用者，启动真实 Electron，读取隔离 user-data 中的 `DevToolsActivePort`，再访问 `/json/version` 验证 endpoint 可用。
+- Oracle：应用进入可用状态；实际端口为有效端口且不等于 `9333`；CDP endpoint 返回成功。
+- Not：不验证 Stagehand 的模型操作；完整 `observe / act / extract` 仍由 `browser-use-task-panel` 覆盖。
+
 #### `web-search-diagnostic`
 
 - 测试类型：`e2e`
@@ -317,11 +326,11 @@ tests/case/workbench/
 #### `file-preview-actions`
 
 - 测试类型：`e2e`
-- What：右侧普通文件预览态、“全部 / 本会话改动”文件模式、稳定选中态、多个文件 Tab、定位文件、系统打开入口、PDF 命中定位，以及 Markdown / 纯文本预览。
+- What：右侧普通文件预览态、“全部 / 本会话改动”文件模式、稳定选中态、多个文件 Tab、定位文件、系统打开方式下拉、PDF 命中定位，以及 Markdown / 纯文本预览。
 - Why：右侧面板是用户消费搜索 / 引用结果的主要区域，预览布局错误会直接阻断阅读。
-- How：从真实搜索结果连续打开真实 pdf、docx、md、txt 文件；检查预览内容和工具条；确认产生四个文件 Tab，再切回 Markdown Tab。
-- Oracle：加号创建“文件”标签且不调用系统文件选择器；默认进入“全部”，目录展开按需读取子级，修改文件有标记但点击后仍是正常预览；当前文件有稳定浅灰选中态；普通文件预览和 44px 工具条对齐 `WB-PANEL-003-AC1`；路径使用 `>` 面包屑且无“预览 / 编辑”标签；四个文件分别保留且旧 Tab 可恢复。
-- Not：不验证系统文件管理器或系统默认应用本身是否成功打开；不伪造 md/txt 搜索结果或右侧预览状态。
+- How：从真实搜索结果连续打开真实 pdf、docx、md、txt 文件；检查预览内容和工具条；展开打开方式菜单，确认触发系统关联应用查询、存在默认应用标记和至少一个系统返回的 Handler；确认产生四个文件 Tab，再切回 Markdown Tab。
+- Oracle：加号创建“文件”标签且不调用系统文件选择器；默认进入“全部”，目录展开按需读取子级，修改文件有标记但点击后仍是正常预览；当前文件有稳定浅灰选中态；普通文件预览和 44px 工具条对齐 `WB-PANEL-003-AC1`；系统默认应用显示在组合按钮和下拉首项，候选列表通过 `listOpenWithApplications` 获取，对齐 `WB-PANEL-003-AC15`；路径使用 `>` 面包屑且无“预览 / 编辑”标签；四个文件分别保留且旧 Tab 可恢复。
+- Not：不在自动测试中真正启动外部应用或修改操作系统默认关联；不伪造 md/txt 搜索结果或右侧预览状态。
 
 #### `text-file-apply-preview-and-revert`
 

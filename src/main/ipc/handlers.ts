@@ -1,7 +1,6 @@
 import { BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import type { SystemNotificationService } from '../services/SystemNotificationService'
 import type { OpenDialogOptions } from 'electron'
-import { execFile } from 'node:child_process'
-import { promisify } from 'node:util'
 import { IngestionService } from '../services/ingestion/loader'
 import { EmbeddingService } from '../services/vector/EmbeddingService'
 import { ensureEmbeddingReady } from '../services/vector/ensureEmbeddingReady'
@@ -27,6 +26,7 @@ import { WorkspaceSourceService } from '../services/workspace/WorkspaceSourceSer
 import { WorkspaceKnowledgePrepareService } from '../services/workspace/WorkspaceKnowledgePrepareService'
 import { createWorkspaceKnowledgeCache } from '../services/workspace/WorkspaceKnowledgeCache'
 import { WebSourceService } from '../services/web/WebSourceService'
+import { OpenWithService } from '../services/openWith/OpenWithService'
 import type { BrowserEmbedService } from '../services/browser/BrowserEmbedService'
 import type { WebCrawlerService } from '../services/webCrawler/types'
 import { v4 as uuidv4 } from 'uuid'
@@ -84,12 +84,13 @@ import type {
   ListWorkspaceTreeRequest,
   ListWorkspaceDirectoryRequest,
   WorkspaceDirectoryListResponse,
-  OpenPathWithApplicationRequest,
-  OpenPathWithApplicationResponse,
+  ListOpenWithApplicationsRequest,
+  ListOpenWithApplicationsResponse,
+  OpenFileWithApplicationRequest,
+  OpenFileWithApplicationResponse,
   PrepareWebSourcesRequest,
   PickDirectoryResponse,
   PickFileResponse,
-  PickApplicationResponse,
   ReferenceItemListResponse,
   ScanWebSourcesRequest,
   SetWorkspaceRootPathRequest,
@@ -121,7 +122,6 @@ import { dict } from '@node-rs/jieba/dict'
 import { normalizeForIpc } from '../utils/serialization'
 
 const jieba = Jieba.withDict(dict)
-const execFileAsync = promisify(execFile)
 const getErrorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error)
 
@@ -147,7 +147,9 @@ export function registerHandlers(services: {
   browserEmbedService?: BrowserEmbedService
   webCrawlerService?: WebCrawlerService
   recordLlmIo?: (record: AiLlmIoRecord) => void
+  systemNotificationService?: SystemNotificationService
 }) {
+  const openWithService = new OpenWithService()
   const {
     embeddingService,
     storageService,
@@ -194,7 +196,10 @@ export function registerHandlers(services: {
     runResourceManager,
     browserUseService: browserEmbedService,
     webCrawlerService,
-    recordLlmIo: services.recordLlmIo
+    recordLlmIo: services.recordLlmIo,
+    onRunTerminal: async (run, status) => {
+      await services.systemNotificationService?.notifyRunTerminal(run, status)
+    }
   })
   void chatRunService.failInterruptedRuns().catch((error) => {
     console.error('[CHAT-RUN] Failed to mark interrupted runs:', error)
@@ -1399,29 +1404,20 @@ export function registerHandlers(services: {
   })
 
   ipcMain.handle(
-    'open-path-with-application',
+    'list-open-with-applications',
     async (
       _event,
-      payload: OpenPathWithApplicationRequest
-    ): Promise<OpenPathWithApplicationResponse> => {
-      try {
-        const filePath = path.resolve(String(payload?.filePath || '').trim())
-        const appPath = path.resolve(String(payload?.appPath || '').trim())
-        if (!filePath || !appPath) {
-          return { success: false, error: 'filePath and appPath are required' }
-        }
-        if (!fs.existsSync(filePath)) return { success: false, error: 'file path not found' }
-        if (!fs.existsSync(appPath)) return { success: false, error: 'application not found' }
-        if (process.platform !== 'darwin') {
-          return { success: false, error: 'open with application currently supports macOS only' }
-        }
+      payload: ListOpenWithApplicationsRequest
+    ): Promise<ListOpenWithApplicationsResponse> => openWithService.list(payload?.filePath || '')
+  )
 
-        await execFileAsync('/usr/bin/open', ['-a', appPath, filePath])
-        return { success: true }
-      } catch (error) {
-        return { success: false, error: getErrorMessage(error) }
-      }
-    }
+  ipcMain.handle(
+    'open-file-with-application',
+    async (
+      _event,
+      payload: OpenFileWithApplicationRequest
+    ): Promise<OpenFileWithApplicationResponse> =>
+      openWithService.open(payload?.filePath || '', payload?.applicationId || '')
   )
 
   ipcMain.handle('reveal-path', async (_event, rawPath: string) => {
@@ -1476,36 +1472,6 @@ export function registerHandlers(services: {
         : await dialog.showOpenDialog(dialogOptions)
       if (result.canceled || result.filePaths.length === 0) return { canceled: true }
       return { canceled: false, path: result.filePaths[0] }
-    } catch (error) {
-      return { canceled: true, error: getErrorMessage(error) }
-    }
-  })
-
-  ipcMain.handle('pick-application', async (event): Promise<PickApplicationResponse> => {
-    try {
-      if (process.platform !== 'darwin') {
-        return { canceled: true, error: 'pick application currently supports macOS only' }
-      }
-      const dialogOptions: OpenDialogOptions = {
-        title: '选择要打开文件的应用',
-        buttonLabel: '选择此应用',
-        defaultPath: '/Applications',
-        properties: ['openFile', 'dontAddToRecent'],
-        filters: [{ name: 'Applications', extensions: ['app'] }]
-      }
-      let result
-      try {
-        const ownerWindow = BrowserWindow.fromWebContents(event.sender)
-        result = ownerWindow
-          ? await dialog.showOpenDialog(ownerWindow, dialogOptions)
-          : await dialog.showOpenDialog(dialogOptions)
-      } catch {
-        result = await dialog.showOpenDialog(dialogOptions)
-      }
-      if (result.canceled || result.filePaths.length === 0) {
-        return { canceled: true }
-      }
-      return { canceled: false, appPath: result.filePaths[0] }
     } catch (error) {
       return { canceled: true, error: getErrorMessage(error) }
     }

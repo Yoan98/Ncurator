@@ -4,7 +4,8 @@ import type {
   ChatMessage,
   ChatSession,
   ChatSessionResumeSnapshot,
-  ChatSessionResumeSnapshotRow
+  ChatSessionResumeSnapshotRow,
+  ChatSessionSkillState
 } from '../../../types/store'
 import type { SqliteCore } from '../sqlite/SqliteCore'
 import {
@@ -243,6 +244,80 @@ export class ChatStore {
       .run(sessionId)
   }
 
+  public async getSessionSkillState(sessionId: string): Promise<ChatSessionSkillState> {
+    const row = this.sqlite
+      .prepare(
+        'SELECT state_json, revision, updated_at FROM chat_session_skill_state WHERE session_id = ?'
+      )
+      .get(sessionId) as
+      | { state_json?: unknown; revision?: unknown; updated_at?: unknown }
+      | undefined
+    if (!row?.state_json) {
+      return {
+        schemaVersion: 1,
+        learnedSkillIds: [],
+        revision: 0,
+        updatedAt: 0,
+        lastUpdatedRunId: ''
+      }
+    }
+    try {
+      const parsed = JSON.parse(String(row.state_json)) as Partial<ChatSessionSkillState>
+      return {
+        schemaVersion: 1,
+        learnedSkillIds: Array.isArray(parsed.learnedSkillIds)
+          ? parsed.learnedSkillIds.map((id) => String(id).trim()).filter(Boolean)
+          : [],
+        revision: Number(row.revision || parsed.revision || 0),
+        updatedAt: Number(row.updated_at || parsed.updatedAt || 0),
+        lastUpdatedRunId: String(parsed.lastUpdatedRunId || '')
+      }
+    } catch {
+      return {
+        schemaVersion: 1,
+        learnedSkillIds: [],
+        revision: Number(row.revision || 0),
+        updatedAt: Number(row.updated_at || 0),
+        lastUpdatedRunId: ''
+      }
+    }
+  }
+
+  public async saveSessionSkillStateIfCurrent(input: {
+    sessionId: string
+    expectedRevision: number
+    learnedSkillIds: string[]
+    runId: string
+  }): Promise<ChatSessionSkillState | null> {
+    return this.sqlite.transaction(() => {
+      const current = this.sqlite
+        .prepare('SELECT revision FROM chat_session_skill_state WHERE session_id = ?')
+        .get(input.sessionId) as { revision?: unknown } | undefined
+      const currentRevision = Number(current?.revision || 0)
+      if (currentRevision !== input.expectedRevision) return null
+      const next: ChatSessionSkillState = {
+        schemaVersion: 1,
+        learnedSkillIds: [...input.learnedSkillIds],
+        revision: currentRevision + 1,
+        updatedAt: Date.now(),
+        lastUpdatedRunId: input.runId
+      }
+      this.sqlite
+        .prepare(
+          `INSERT OR REPLACE INTO chat_session_skill_state
+             (session_id, state_json, revision, updated_at)
+           VALUES (@session_id, @state_json, @revision, @updated_at)`
+        )
+        .run({
+          session_id: input.sessionId,
+          state_json: JSON.stringify(next),
+          revision: next.revision,
+          updated_at: next.updatedAt
+        })
+      return next
+    })
+  }
+
   public async saveChatSession(session: ChatSession): Promise<void> {
     const now = Date.now()
     this.sqlite
@@ -422,9 +497,7 @@ export class ChatStore {
     return (await this.getConversationMemoryContext(sessionId)).recentMessages
   }
 
-  public async getConversationMemoryContext(
-    sessionId: string
-  ): Promise<ConversationMemoryContext> {
+  public async getConversationMemoryContext(sessionId: string): Promise<ConversationMemoryContext> {
     return this.sqlite.transaction(() => {
       const memory = this.readConversationMemory(sessionId)
       const rows = this.sqlite

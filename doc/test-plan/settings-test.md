@@ -11,13 +11,15 @@
 Settings 顶层 suite 对齐 PRD 模块：
 
 1. `model`
-2. `workspace`
-3. `vector`
-4. `update`
+2. `general`
+3. `workspace`
+4. `vector`
+5. `update`
 
 领域规则：
 
 - `model` 验证大模型可用服务配置的加载、创建、编辑、删除和远端模型列表刷新。
+- `general` 验证 AI 运行系统通知开关的加载、保存和关闭后的静默行为；系统通知中心的真实视觉展示按 macOS 与 Windows 发布前手动验证。
 - `workspace` 验证工作空间容器及其下属 `files`、`web` 两类子区域的页面行为和 backend / IPC 支撑契约。
 - `vector` 属于 Settings 产品域，但页面位于独立路由 `/model-download`，测试目录与 runner 仍统一归入 `tests/case/settings/vector/**`。
 - `update` 覆盖应用更新服务、发布配置、R2 元数据和 Workbench 左侧更新入口，不下载或安装真实更新包。
@@ -327,7 +329,27 @@ Settings 顶层 suite 对齐 PRD 模块：
 
 下载进度、完成、失败、页面恢复和删除反馈必须由受控服务契约或组件测试覆盖；真实大文件下载只作为发布前按需手动回归，不应成为日常自动化前提。
 
-### 3.6 `update`
+### 3.6 `general`
+
+#### `system-notification-settings`
+
+- 测试类型：`e2e`
+- What：通用设置中的 AI 运行完成通知开关可以关闭，并通过真实 IPC 持久化。
+- Why：通知是跨进程能力，开关状态必须由主进程保存，不能只停留在 Renderer 内存。
+- How：通过 Settings UI 打开通用页，关闭开关，重新读取 `ai-runtime-settings-get`，再恢复开关。
+- Oracle：开关默认开启，关闭后 UI 与主进程设置均为关闭，对齐 `SET-GENERAL-001-AC1`、`SET-GENERAL-001-AC3`。
+- Not：开发机自动化不把系统通知中心的视觉弹窗作为稳定断言；终态通知发送由 `SystemNotificationService` 单元测试和 AI run backend contract 覆盖。
+
+#### `system-notification-session-navigation`
+
+- 测试类型：`e2e`
+- What：系统通知点击事件可以从 Settings 返回 Workbench，并打开通知对应的会话。
+- Why：通知跨越 Main、Preload、Router 和会话加载，单测只能证明 IPC 被发送，不能证明用户最终进入正确会话。
+- How：通过真实 IPC 创建目标会话并进入通用设置，再由 Electron Main 向 Renderer 发送与通知点击相同的 `system-notification-open-session` 事件。
+- Oracle：路由回到 Workbench；目标会话可见且处于选中状态，对齐 `SET-GENERAL-001-AC4`。
+- Not：不点击操作系统通知中心的真实弹窗；macOS 与 Windows 的通知视觉和系统权限仍在发布前手动检查。
+
+### 3.7 `update`
 
 #### `app-update-service-contract`
 

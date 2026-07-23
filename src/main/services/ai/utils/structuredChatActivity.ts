@@ -59,6 +59,7 @@ export type LlmCallExecutionResult<T> = {
 type LlmCallRetryDecision = {
   retryable: boolean
   message: string
+  delayMs?: number
 }
 
 const sleep = async (ms: number): Promise<void> =>
@@ -115,7 +116,7 @@ export const runLlmCallWithActivity = async <T>(input: {
   onTextDelta?: (text: string) => void
   execute: (observer: LlmCallStreamObserver, callId: string) => Promise<LlmCallExecutionResult<T>>
   maxAttempts?: number
-  classifyRetry?: (error: unknown) => LlmCallRetryDecision
+  classifyRetry?: (error: unknown, attempt: number) => LlmCallRetryDecision
 }): Promise<LlmCallExecutionResult<T>> => {
   const startedAt = Date.now()
   const baseUrlHost = resolveBaseUrlHost(input.telemetry.baseUrl)
@@ -212,7 +213,9 @@ export const runLlmCallWithActivity = async <T>(input: {
         }
         break
       } catch (error) {
-        const retry = input.classifyRetry?.(error) || { retryable: false, message: reasonFromError(error) }
+        const retry =
+          input.classifyRetry?.(error, attempt) ||
+          ({ retryable: false, message: reasonFromError(error) } satisfies LlmCallRetryDecision)
         if (!retry.retryable || attempt >= maxAttempts) {
           if (retryGroupStarted) {
             emitLlmRetryProcessFailed({
@@ -234,7 +237,8 @@ export const runLlmCallWithActivity = async <T>(input: {
           maxAttempts,
           message: retry.message
         })
-        await sleep(Math.min(1_500, 250 * attempt))
+        const delayMs = retry.delayMs ?? Math.min(1_500, 250 * attempt)
+        await sleep(Math.max(0, delayMs))
       }
     }
     if (!result) throw new Error('llm_call_missing_result')

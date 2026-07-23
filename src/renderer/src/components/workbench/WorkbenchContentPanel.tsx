@@ -1,5 +1,5 @@
 ﻿import React, { useEffect, useMemo, useState } from 'react'
-import { Button, Empty, Spin, Tooltip } from 'antd'
+import { Button, Dropdown, Empty, Spin, Tooltip, message } from 'antd'
 import {
   HiArrowLeft,
   HiArrowTopRightOnSquare,
@@ -12,11 +12,13 @@ import {
   HiMapPin,
   HiOutlineMagnifyingGlass,
   HiSparkles,
-  HiOutlineQueueList
+  HiOutlineQueueList,
+  HiChevronDown
 } from 'react-icons/hi2'
 import type {
   AiFileChangeRecord,
   BrowserTabState,
+  OpenWithApplication,
   SearchResult,
   WorkspaceSource
 } from '../../../../shared/types'
@@ -59,6 +61,16 @@ type WorkbenchContentPanelProps = {
   onOpenWorkspaceChange: (changeId: string) => void
   browserPresentationEnabled: boolean
 }
+
+const canTogglePreviewMode = (record: AiFileChangeRecord | null): boolean =>
+  Boolean(
+    record &&
+    (record.capability === 'docx' ||
+      record.capability === 'ppt' ||
+      record.capability === 'text_file') &&
+    record.previewPath &&
+    (record.afterSnapshotPath || record.path)
+  )
 
 const createSearchTurnSnapshot = (
   state: Extract<WorkbenchContentPanelState, { kind: 'search_list' }>,
@@ -252,7 +264,7 @@ type WorkbenchDocumentPreviewPanelProps = {
   onTogglePreviewMode?: () => void
 }
 
-const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPreviewPanelProps> = ({
+export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPreviewPanelProps> = ({
   filePath,
   documents,
   content,
@@ -280,6 +292,9 @@ const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPreviewPanelP
   previewMode = 'file',
   onTogglePreviewMode
 }) => {
+  const [openWithApplications, setOpenWithApplications] = useState<OpenWithApplication[]>([])
+  const [openWithLoading, setOpenWithLoading] = useState(false)
+  const [openWithError, setOpenWithError] = useState<string | null>(null)
   const isDeletedCreatedFile = mode === 'edit' && status === 'reverted' && operation === 'created'
   const revealPath = isDeletedCreatedFile ? getParentPath(filePath) : filePath
   const revealTitle = isDeletedCreatedFile ? '定位到所在文件夹' : '定位到系统位置'
@@ -294,6 +309,88 @@ const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPreviewPanelP
         : '回退本次修改'
   const statusBadgeLabel =
     status === 'reverted' ? (operation === 'created' ? '已删除' : '已回退') : null
+  const defaultApplication = openWithApplications.find((application) => application.isDefault)
+  const openWithLabel = defaultApplication?.name || '系统默认打开'
+
+  const loadOpenWithApplications = async (): Promise<void> => {
+    if (
+      !canOpen ||
+      isDeletedCreatedFile ||
+      typeof window.api.listOpenWithApplications !== 'function'
+    ) {
+      return
+    }
+    setOpenWithLoading(true)
+    setOpenWithError(null)
+    try {
+      const response = await window.api.listOpenWithApplications({ filePath })
+      if (!response.success) {
+        setOpenWithApplications([])
+        setOpenWithError(response.error || '无法获取可用应用')
+        return
+      }
+      setOpenWithApplications(response.applications)
+    } catch (error) {
+      setOpenWithApplications([])
+      setOpenWithError(error instanceof Error ? error.message : '无法获取可用应用')
+    } finally {
+      setOpenWithLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    setOpenWithApplications([])
+    setOpenWithError(null)
+    if (canOpen && !isDeletedCreatedFile) void loadOpenWithApplications()
+    // The file path is the native association query key.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filePath, canOpen, isDeletedCreatedFile])
+
+  const openWithApplication = async (application: OpenWithApplication): Promise<void> => {
+    try {
+      const response = await window.api.openFileWithApplication({
+        filePath,
+        applicationId: application.id
+      })
+      if (!response.success) {
+        setOpenWithError(response.error || '打开应用失败')
+        message.error(response.error || '打开应用失败')
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : '打开应用失败'
+      setOpenWithError(errorMessage)
+      message.error(errorMessage)
+    }
+  }
+
+  const openWithItems =
+    openWithApplications.length > 0
+      ? openWithApplications.map((application) => ({
+          key: application.id,
+          icon: application.iconDataUrl ? (
+            <img src={application.iconDataUrl} alt="" className="h-5 w-5 shrink-0 object-contain" />
+          ) : (
+            <HiArrowTopRightOnSquare className="h-4 w-4 text-[#91918E]" />
+          ),
+          label: (
+            <span
+              className="flex min-w-0 flex-1 items-center gap-3"
+              data-testid={`${workbenchSelectors.openWithApplicationPrefix}-${application.id}`}
+            >
+              <span className="min-w-0 flex-1 truncate">{application.name}</span>
+              {application.isDefault ? (
+                <span className="shrink-0 text-[11px] text-[#9B9A97]">默认</span>
+              ) : null}
+            </span>
+          )
+        }))
+      : [
+          {
+            key: 'empty',
+            disabled: true,
+            label: openWithLoading ? '正在获取可用应用…' : openWithError || '没有可用的应用'
+          }
+        ]
 
   return (
     <div className="flex h-full min-h-0 flex-col" data-testid={testId}>
@@ -350,7 +447,7 @@ const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPreviewPanelP
                   )
                 }
                 className="!text-[#787774] hover:!bg-[#F4F4F2] hover:!text-[#37352F]"
-                data-testid={workbenchSelectors.docxPreviewModeToggle}
+                data-testid={workbenchSelectors.previewModeToggle}
                 onClick={onTogglePreviewMode}
               />
             </Tooltip>
@@ -379,21 +476,65 @@ const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPreviewPanelP
               onClick={() => void onRevealPath(revealPath)}
             />
           </Tooltip>
-          <Tooltip title={openTitle}>
-            <Button
-              type="text"
-              size="small"
-              aria-label={openTitle}
-              icon={<HiArrowTopRightOnSquare className="h-4 w-4" />}
-              className="!text-[#787774] hover:!bg-[#F4F4F2] hover:!text-[#37352F] disabled:!text-[#C9C7C2]"
-              data-testid={workbenchSelectors.applyOpenSystemButton}
-              disabled={!canOpen || isDeletedCreatedFile}
-              onClick={() => {
-                if (!canOpen || isDeletedCreatedFile) return
-                void onOpenPath(filePath)
-              }}
-            />
-          </Tooltip>
+          <Dropdown
+            trigger={['click']}
+            placement="bottomRight"
+            overlayClassName="workbench-open-with-menu"
+            menu={{
+              items: openWithItems,
+              onClick: ({ key }) => {
+                const application = openWithApplications.find((item) => item.id === key)
+                if (application) void openWithApplication(application)
+              }
+            }}
+            onOpenChange={(open) => {
+              if (open && openWithApplications.length === 0 && !openWithLoading) {
+                void loadOpenWithApplications()
+              }
+            }}
+          >
+            <div
+              className="flex h-8 shrink-0 items-stretch overflow-hidden rounded-[6px] border border-[#E7E5E0] bg-[#FBFBFA] shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
+              data-testid={workbenchSelectors.openWithMenu}
+            >
+              <Button
+                type="text"
+                size="small"
+                aria-label={openTitle}
+                icon={
+                  defaultApplication?.iconDataUrl ? (
+                    <img
+                      src={defaultApplication.iconDataUrl}
+                      alt=""
+                      className="h-4 w-4 object-contain"
+                    />
+                  ) : (
+                    <HiArrowTopRightOnSquare className="h-4 w-4" />
+                  )
+                }
+                className="!h-full !rounded-none !px-2.5 !text-[#37352F] hover:!bg-[#F1F1EF] disabled:!text-[#C9C7C2]"
+                data-testid={workbenchSelectors.openWithButton}
+                disabled={!canOpen || isDeletedCreatedFile}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  if (!canOpen || isDeletedCreatedFile) return
+                  if (defaultApplication) void openWithApplication(defaultApplication)
+                  else void onOpenPath(filePath)
+                }}
+              >
+                <span className="max-w-[104px] truncate text-[12px]">{openWithLabel}</span>
+              </Button>
+              <Button
+                type="text"
+                size="small"
+                aria-label="选择打开应用"
+                icon={<HiChevronDown className="h-3.5 w-3.5" />}
+                className="!h-full !rounded-none !border-l !border-l-[#E7E5E0] !px-1.5 !text-[#787774] hover:!bg-[#F1F1EF] disabled:!text-[#C9C7C2]"
+                data-testid={workbenchSelectors.applyOpenSystemButton}
+                disabled={!canOpen || isDeletedCreatedFile}
+              />
+            </div>
+          </Dropdown>
           {mode === 'edit' ? (
             <Tooltip title={revertTitle}>
               <Button
@@ -533,17 +674,17 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
   )
   const hasDedicatedPreview = Boolean(activeApplyRecord?.previewPath)
   const applyDocuments = useMemo<FileRenderDocument[]>(() => {
-    if (!activeApplyRecord || activeApplyRecord.capability === 'text_file') return []
+    if (!activeApplyRecord || !canTogglePreviewMode(activeApplyRecord)) return []
     const shouldShowCurrentFile =
       activeApplyRecord.status === 'reverted' && activeApplyRecord.operation === 'updated'
     const filePath =
-      activeApplyRecord.capability === 'docx'
-        ? shouldShowCurrentFile && documentPreviewMode === 'file'
-          ? activeApplyRecord.path
-          : documentPreviewMode === 'diff' && activeApplyRecord.previewPath
-            ? activeApplyRecord.previewPath
-            : activeApplyRecord.afterSnapshotPath || activeApplyRecord.path
-        : activeApplyRecord.afterSnapshotPath || activeApplyRecord.path
+      documentPreviewMode === 'file' && shouldShowCurrentFile
+        ? activeApplyRecord.path
+        : documentPreviewMode === 'diff' && activeApplyRecord.capability !== 'text_file'
+          ? activeApplyRecord.previewPath ||
+            activeApplyRecord.afterSnapshotPath ||
+            activeApplyRecord.path
+          : activeApplyRecord.afterSnapshotPath || activeApplyRecord.path
     return [
       {
         filePath,
@@ -557,7 +698,9 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
       activeApplyRecord.previewPath &&
       documentPreviewMode === 'diff' ? (
         <PptDiffViewer record={activeApplyRecord} />
-      ) : activeApplyRecord?.capability === 'text_file' && activeApplyRecord.previewPath ? (
+      ) : activeApplyRecord?.capability === 'text_file' &&
+        activeApplyRecord.previewPath &&
+        documentPreviewMode === 'diff' ? (
         <TextFileDiffViewer
           previewPath={activeApplyRecord.previewPath}
           afterSnapshotPath={activeApplyRecord.afterSnapshotPath}
@@ -653,10 +796,7 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
                   onRevert={onRevertApply}
                   previewMode={documentPreviewMode}
                   onTogglePreviewMode={
-                    (activeApplyRecord.capability === 'docx' ||
-                      activeApplyRecord.capability === 'ppt') &&
-                    Boolean(activeApplyRecord.previewPath) &&
-                    Boolean(activeApplyRecord.afterSnapshotPath || activeApplyRecord.path)
+                    canTogglePreviewMode(activeApplyRecord)
                       ? () =>
                           setDocumentPreviewMode((current) =>
                             current === 'diff' ? 'file' : 'diff'

@@ -11,6 +11,7 @@ import { createMouthNode } from '../node/mouthNode'
 import { createFaultNode } from '../node/faultNode'
 import { createHumanRuntimeCache } from '../node/utils/runtimeCache'
 import { createHumanRunStateSchema, createInitialHumanState } from '../state/schema'
+import { isLearnableSkillId } from '../skills'
 import {
   classifyLlmFailureCode,
   createRecoverableHumanRunError,
@@ -100,7 +101,18 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
         })
         .compile()
 
-      const initialState = options.initialState || createInitialHumanState(taskInput)
+      const sessionSkillState = await ctx.loadSessionSkillState()
+      const baseInitialState = options.initialState || createInitialHumanState(taskInput)
+      const learnedSkillIds = Array.from(new Set(sessionSkillState.learnedSkillIds)).filter(
+        isLearnableSkillId
+      )
+      const initialState: HumanState = {
+        ...baseInitialState,
+        task: taskInput,
+        skills: {
+          learnedSkillIds
+        }
+      }
       const output = (await graph.invoke(
         initialState as HumanState,
         HUMAN_GRAPH_INVOKE_CONFIG

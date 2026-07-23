@@ -2,7 +2,12 @@
 import type { LlmProviderId, LlmProviderKind } from '../../../../shared/types'
 import type { ReactNode } from 'react'
 import type { SettingsSectionMeta, SettingsSectionValue } from './types'
-import { HiCloudArrowDown, HiOutlineRectangleStack, HiSparkles } from 'react-icons/hi2'
+import {
+  HiCloudArrowDown,
+  HiOutlineAdjustmentsHorizontal,
+  HiOutlineRectangleStack,
+  HiSparkles
+} from 'react-icons/hi2'
 import { LLM_PROVIDER_REGISTRY } from '../../../../shared/llmProvider'
 
 import openaiLogo from '../../assets/img/openai.png'
@@ -19,11 +24,24 @@ import minimaxLogo from '../../assets/img/minimax.png'
 import yiLogo from '../../assets/img/yi.png'
 import nvidiaLogo from '../../assets/img/nvidia.png'
 
-export const SETTINGS_SECTION_ORDER: SettingsSectionValue[] = ['model', 'workspace', 'vector']
+export const SETTINGS_SECTION_ORDER: SettingsSectionValue[] = [
+  'general',
+  'model',
+  'workspace',
+  'vector'
+]
 
 export const WORKSPACE_TREE_FILE_NAME_MAX_WIDTH = 'min(34rem, calc(100vw - 20rem))'
 
 export const SETTINGS_SECTION_META: Record<SettingsSectionValue, SettingsSectionMeta> = {
+  general: {
+    value: 'general',
+    label: '通用',
+    title: '通用',
+    description: '管理桌面通知等应用偏好。',
+    path: '/settings/general',
+    icon: <HiOutlineAdjustmentsHorizontal className="h-5 w-5" />
+  },
   model: {
     value: 'model',
     label: '大模型',
@@ -51,6 +69,13 @@ export const SETTINGS_SECTION_META: Record<SettingsSectionValue, SettingsSection
 }
 
 export const APP_MENU_ITEMS = [
+  {
+    key: 'general',
+    label: '通用',
+    description: '桌面通知与应用偏好',
+    path: '/settings/general',
+    icon: <HiOutlineAdjustmentsHorizontal className="h-4 w-4" />
+  },
   {
     key: 'model',
     label: '大模型',

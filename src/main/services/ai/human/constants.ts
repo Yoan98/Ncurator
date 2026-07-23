@@ -76,7 +76,7 @@ export const HUMAN_DECISION_HINT_CODES = [
   'hand_workspace_boundary_blocked'
 ] as const
 
-export const HUMAN_MAX_ACTIVE_TOOLS = 20
+export const HUMAN_MAX_ACTIVE_TOOLS = 25
 export const HUMAN_DEFAULT_TOOL_CALL_LIMIT = 60
 export const HUMAN_HAND_CALL_LIMIT = 5
 export const HUMAN_GRAPH_RECURSION_LIMIT = 100

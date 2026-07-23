@@ -157,6 +157,9 @@ pnpm release:start -- --version X.Y.Z --local-only
 # 强制 GitHub Actions
 pnpm release:start -- --version X.Y.Z --actions
 
+# 只创建版本和 Tag，后续仅发布 macOS
+pnpm release:start -- --version X.Y.Z --mac-only
+
 # 创建版本后对已构建 Windows 候选包执行正式包 E2E
 pnpm release:start -- --version X.Y.Z --package-e2e
 ```

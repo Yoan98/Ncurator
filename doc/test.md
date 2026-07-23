@@ -99,6 +99,7 @@ tests/
 - 每次运行的模型、耗时、通过情况、完成度评分、失败归因和原始证据统一保存在对应 run 的 `meta.json`、`timeline.jsonl`、`runtime-events.jsonl` 与 artifacts 中。
 - 测试数量和 case 清单以测试源码及 runner 实时发现结果为准，不在文档中维护容易失真的计数副本。
 - `mock-llm` 回归 case 只允许替换 LLM 输出；不得 fake tool、store、docx apply service、runner 或节点执行结果。
+- `scripts/test/workflow.mjs` 会自动读取仓库根目录的 `.env.local`、`.env`（已存在的 shell 环境变量优先）；可用 `AI_TEST_DISABLE_DOTENV=1` 禁用自动加载。
 
 ### 3.3 UI E2E 回归规则
 

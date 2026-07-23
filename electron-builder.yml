@@ -11,6 +11,10 @@ files:
   - '!**/*.{ts,tsx,mts,cts,py,pyc,pyo,c,cc,cpp,h,hpp,pdb}'
   - '!**/{test,tests,__tests__,doc,docs,example,examples,benchmark,benchmarks,scripts}/**/*'
 extraResources:
+  - from: release-stage/app/resources/open-with
+    to: open-with
+    filter:
+      - '**/*'
   - from: release-stage/app/resources/web_crawler_sidecar/bin
     to: web_crawler_sidecar/bin
     filter:

@@ -24,6 +24,12 @@ describe('ai human mock-llm backend', () => {
       runMode: 'single',
       execute: async (runtime) => {
         const runtimeSettings = await runtime.storageService.aiRuntimeSettings.get()
+        await runtime.chatStore.saveChatSession({
+          id: 'human-only-session',
+          title: 'human only session',
+          created_at: Date.now(),
+          workspace_id: 'test-workspace'
+        })
         const result = await AiRunService.getInstance().run(
           {
             runId: runtime.runId,

@@ -1,0 +1,136 @@
+import fs from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+
+vi.mock('electron', () => ({
+  app: {
+    isPackaged: false,
+    getFileIcon: vi.fn()
+  }
+}))
+
+import {
+  MACOS_LIST_SCRIPT,
+  OpenWithService
+} from '../../../../src/main/services/openWith/OpenWithService'
+
+const temporaryDirectories: string[] = []
+
+const createFile = async (): Promise<string> => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'ncurator-open-with-'))
+  temporaryDirectories.push(directory)
+  const filePath = path.join(directory, 'report.md')
+  await fs.writeFile(filePath, '# report')
+  return filePath
+}
+
+afterEach(async () => {
+  await Promise.all(
+    temporaryDirectories
+      .splice(0)
+      .map((directory) => fs.rm(directory, { recursive: true, force: true }))
+  )
+})
+
+describe('OpenWithService', () => {
+  it('returns the system default first and removes duplicate system handlers', async () => {
+    const filePath = await createFile()
+    const service = new OpenWithService({
+      runNativeList: vi.fn().mockResolvedValue({
+        defaultApplicationId: 'com.example.editor',
+        applications: [
+          {
+            id: 'com.example.viewer',
+            name: 'Viewer',
+            path: '/Applications/Viewer.app',
+            isDefault: false
+          },
+          {
+            id: 'com.example.editor',
+            name: 'Editor',
+            path: '/Applications/Editor.app',
+            isDefault: true
+          },
+          {
+            id: 'com.example.viewer',
+            name: 'Viewer duplicate',
+            path: '/Applications/Viewer-copy.app',
+            isDefault: false
+          }
+        ]
+      }),
+      getIconDataUrl: async (applicationPath) => `icon:${applicationPath}`
+    })
+
+    const result = await service.list(filePath)
+
+    expect(result).toMatchObject({
+      success: true,
+      defaultApplicationId: 'com.example.editor',
+      applications: [
+        { id: 'com.example.editor', name: 'Editor', isDefault: true },
+        { id: 'com.example.viewer', name: 'Viewer', isDefault: false }
+      ]
+    })
+    expect(result.applications[0]?.iconDataUrl).toBe('icon:/Applications/Editor.app')
+  })
+
+  it('only opens a handler returned by the system query and reuses its cache', async () => {
+    const filePath = await createFile()
+    const runNativeList = vi.fn().mockResolvedValue({
+      applications: [
+        {
+          id: 'system-handler',
+          name: 'System Editor',
+          path: '/Applications/System Editor.app',
+          isDefault: true
+        }
+      ]
+    })
+    const runNativeOpen = vi.fn().mockResolvedValue({ success: true })
+    const service = new OpenWithService({ runNativeList, runNativeOpen })
+
+    await service.list(filePath)
+    expect(await service.open(filePath, 'untrusted-path')).toEqual({
+      success: false,
+      error: 'application is not available for this file'
+    })
+    expect(await service.open(filePath, 'system-handler')).toEqual({ success: true })
+    expect(runNativeList).toHaveBeenCalledTimes(1)
+    expect(runNativeOpen).toHaveBeenCalledWith(
+      filePath,
+      expect.objectContaining({ id: 'system-handler' })
+    )
+  })
+
+  it('uses public macOS workspace association APIs', () => {
+    expect(MACOS_LIST_SCRIPT).toContain('URLForApplicationToOpenURL')
+    expect(MACOS_LIST_SCRIPT).toContain('URLsForApplicationsToOpenURL')
+  })
+
+  it('uses Windows shell association handlers instead of an application list', async () => {
+    const helper = await fs.readFile(
+      path.join(process.cwd(), 'resources', 'open-with', 'windows-open-with.txt'),
+      'utf8'
+    )
+    expect(helper).toContain('SHAssocEnumHandlers')
+    expect(helper).toContain('IAssocHandler')
+    expect(helper).toContain('handler.Invoke(itemArray)')
+    expect(helper).not.toContain('Visual Studio Code')
+    expect(helper).not.toContain('Microsoft Word')
+  })
+
+  it.runIf(process.platform === 'darwin' || process.platform === 'win32')(
+    'queries the current operating system for real handlers',
+    async () => {
+      const filePath = await createFile()
+      const result = await new OpenWithService().list(filePath)
+
+      expect(result.success).toBe(true)
+      expect(result.applications.length).toBeGreaterThan(0)
+      expect(result.applications.some((application) => application.isDefault)).toBe(true)
+      expect(result.defaultApplicationId).toBeTruthy()
+    }
+  )
+})

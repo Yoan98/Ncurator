@@ -65,6 +65,7 @@ type TestConversationMemorySummaryBuilder = NonNullable<
 const createTestService = async (options?: {
   autoStartRuns?: boolean
   conversationMemorySummaryBuilder?: TestConversationMemorySummaryBuilder
+  onRunTerminal?: (run: AiRunRecord, status: 'completed' | 'failed' | 'cancelled') => void
 }): Promise<TestService> => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'ncurator-chat-run-'))
   const workspaceRoot = path.join(root, 'workspace')
@@ -109,7 +110,8 @@ const createTestService = async (options?: {
         ]
           .filter(Boolean)
           .join('\n')
-      })
+      }),
+    onRunTerminal: options?.onRunTerminal
   })
   return { workspaceRoot, storage, service, events, memorySummaryCalls }
 }
@@ -242,6 +244,21 @@ describe('workbench chat run backend', () => {
     expect(events.map((event) => event.type)).toContain('run_completed')
     expect(events.map((event) => event.type)).not.toContain('answer_token')
     expect(storedRun?.processEvents).toBeUndefined()
+  })
+
+  it('notifies the terminal callback after the run is persisted', async () => {
+    const terminalRuns: Array<{ run: AiRunRecord; status: string }> = []
+    const setup = await createTestService({
+      onRunTerminal: (run, status) => terminalRuns.push({ run, status })
+    })
+    const run = await submitAiRun(setup)
+    const service = setup.service as ChatRunServicePrivate
+
+    await service.queueRunEvent(run.id, { type: 'run_failed', runId: run.id, source: 'internal', message: '失败' })
+
+    expect(terminalRuns).toHaveLength(1)
+    expect(terminalRuns[0].status).toBe('failed')
+    expect((await setup.storage.aiRun.getRun(run.id))?.status).toBe('failed')
   })
 
   it('user-takeover-pauses-persists-and-resumes-the-run', async () => {

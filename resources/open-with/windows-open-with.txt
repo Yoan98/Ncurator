@@ -1,0 +1,180 @@
+param(
+  [Parameter(Mandatory = $true)]
+  [ValidateSet('list', 'open')]
+  [string]$Mode,
+  [Parameter(Mandatory = $true)]
+  [string]$FilePath,
+  [string]$ApplicationId = ''
+)
+
+$ErrorActionPreference = 'Stop'
+
+Add-Type -TypeDefinition @'
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Runtime.InteropServices;
+
+namespace NCurator.OpenWith {
+  [ComImport]
+  [Guid("973810AE-9599-4B88-9E4D-6EE98C9552DA")]
+  [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+  interface IEnumAssocHandlers {
+    [PreserveSig]
+    int Next(uint count, out IAssocHandler handler, out uint fetched);
+  }
+
+  [ComImport]
+  [Guid("F04061AC-1659-4A3F-A954-775AA57FC083")]
+  [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+  interface IAssocHandler {
+    void GetName([MarshalAs(UnmanagedType.LPWStr)] out string name);
+    void GetUIName([MarshalAs(UnmanagedType.LPWStr)] out string uiName);
+    void GetIconLocation([MarshalAs(UnmanagedType.LPWStr)] out string path, out int index);
+    [PreserveSig]
+    int IsRecommended();
+    void MakeDefault(IntPtr selection);
+    void Invoke([MarshalAs(UnmanagedType.Interface)] object itemArray);
+  }
+
+  public sealed class ApplicationInfo {
+    public string id { get; set; }
+    public string name { get; set; }
+    public string path { get; set; }
+    public bool isDefault { get; set; }
+  }
+
+  public static class AssociationBridge {
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+    static extern int SHAssocEnumHandlers(string extension, AssocFilter filter, out IEnumAssocHandlers handlers);
+
+    [DllImport("shlwapi.dll", CharSet = CharSet.Unicode)]
+    static extern int AssocQueryString(AssocFlags flags, AssocString value, string association, string extra, System.Text.StringBuilder output, ref uint outputLength);
+
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode, PreserveSig = false)]
+    static extern void SHCreateItemFromParsingName(string path, IntPtr bindingContext, ref Guid interfaceId, [MarshalAs(UnmanagedType.Interface)] out object shellItem);
+
+    [DllImport("shell32.dll", PreserveSig = false)]
+    static extern void SHCreateShellItemArrayFromShellItem([MarshalAs(UnmanagedType.Interface)] object shellItem, ref Guid interfaceId, [MarshalAs(UnmanagedType.Interface)] out object itemArray);
+
+    enum AssocFilter : uint { Recommended = 0 }
+    [Flags]
+    enum AssocFlags : uint { None = 0 }
+    enum AssocString : uint { Executable = 2 }
+
+    static string QueryExecutable(string association) {
+      uint length = 0;
+      AssocQueryString(AssocFlags.None, AssocString.Executable, association, null, null, ref length);
+      if (length == 0) return null;
+      var output = new System.Text.StringBuilder((int)length);
+      var result = AssocQueryString(AssocFlags.None, AssocString.Executable, association, null, output, ref length);
+      return result == 0 ? output.ToString() : null;
+    }
+
+    static List<IAssocHandler> Enumerate(string filePath) {
+      var extension = Path.GetExtension(filePath);
+      if (String.IsNullOrWhiteSpace(extension)) return new List<IAssocHandler>();
+      IEnumAssocHandlers enumerator;
+      var result = SHAssocEnumHandlers(extension, AssocFilter.Recommended, out enumerator);
+      if (result != 0 || enumerator == null) Marshal.ThrowExceptionForHR(result);
+      var items = new List<IAssocHandler>();
+      try {
+        while (true) {
+          IAssocHandler handler;
+          uint fetched;
+          if (enumerator.Next(1, out handler, out fetched) != 0 || fetched == 0 || handler == null) break;
+          items.Add(handler);
+        }
+      } finally {
+        Marshal.ReleaseComObject(enumerator);
+      }
+      return items;
+    }
+
+    public static ApplicationInfo[] List(string filePath) {
+      var applications = new List<ApplicationInfo>();
+      var defaultExecutable = QueryExecutable(Path.GetExtension(filePath));
+      foreach (var handler in Enumerate(filePath)) {
+        try {
+          string id;
+          string name;
+          string iconPath;
+          int iconIndex;
+          handler.GetName(out id);
+          handler.GetUIName(out name);
+          handler.GetIconLocation(out iconPath, out iconIndex);
+          var executable = QueryExecutable(id);
+          var isDefault = !String.IsNullOrWhiteSpace(defaultExecutable) && !String.IsNullOrWhiteSpace(executable) && String.Equals(Path.GetFullPath(defaultExecutable), Path.GetFullPath(executable), StringComparison.OrdinalIgnoreCase);
+          applications.Add(new ApplicationInfo {
+            id = id,
+            name = String.IsNullOrWhiteSpace(name) ? Path.GetFileNameWithoutExtension(executable) : name,
+            path = !String.IsNullOrWhiteSpace(executable) ? executable : Environment.ExpandEnvironmentVariables(iconPath ?? String.Empty),
+            isDefault = isDefault
+          });
+        } finally {
+          Marshal.ReleaseComObject(handler);
+        }
+      }
+      applications.Sort((left, right) => left.isDefault == right.isDefault ? 0 : left.isDefault ? -1 : 1);
+      return applications.ToArray();
+    }
+
+    public static void Open(string filePath, string applicationId) {
+      foreach (var handler in Enumerate(filePath)) {
+        try {
+          string id;
+          handler.GetName(out id);
+          if (!String.Equals(id, applicationId, StringComparison.OrdinalIgnoreCase)) continue;
+          object shellItem;
+          var shellItemId = new Guid("43826D1E-E718-42EE-BC55-A1E261C37BFE");
+          SHCreateItemFromParsingName(filePath, IntPtr.Zero, ref shellItemId, out shellItem);
+          try {
+            object itemArray;
+            var itemArrayId = new Guid("B63EA76D-1F85-456F-A19C-48159EFA858B");
+            SHCreateShellItemArrayFromShellItem(shellItem, ref itemArrayId, out itemArray);
+            try {
+              handler.Invoke(itemArray);
+              return;
+            } finally {
+              Marshal.ReleaseComObject(itemArray);
+            }
+          } finally {
+            Marshal.ReleaseComObject(shellItem);
+          }
+        } finally {
+          Marshal.ReleaseComObject(handler);
+        }
+      }
+      throw new InvalidOperationException("Application is not registered for this file type.");
+    }
+  }
+}
+'@
+
+try {
+  $resolvedPath = [System.IO.Path]::GetFullPath($FilePath)
+  if (-not [System.IO.File]::Exists($resolvedPath)) {
+    throw 'File does not exist.'
+  }
+
+  if ($Mode -eq 'list') {
+    $applications = [NCurator.OpenWith.AssociationBridge]::List($resolvedPath)
+    $default = $applications | Where-Object { $_.isDefault } | Select-Object -First 1
+    @{
+      applications = @($applications)
+      defaultApplicationId = if ($null -ne $default) { $default.id } else { $null }
+    } | ConvertTo-Json -Depth 4 -Compress
+  } else {
+    if ([string]::IsNullOrWhiteSpace($ApplicationId)) {
+      throw 'ApplicationId is required.'
+    }
+    [NCurator.OpenWith.AssociationBridge]::Open($resolvedPath, $ApplicationId)
+    @{ success = $true } | ConvertTo-Json -Compress
+  }
+} catch {
+  if ($Mode -eq 'list') {
+    @{ applications = @(); error = $_.Exception.Message } | ConvertTo-Json -Compress
+  } else {
+    @{ success = $false; error = $_.Exception.Message } | ConvertTo-Json -Compress
+  }
+}

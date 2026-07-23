@@ -21,6 +21,7 @@ const ROOT_PACKAGE_PATH = path.join(ROOT, 'package.json')
 const ROOT_LOCKFILE_PATH = path.join(ROOT, 'pnpm-lock.yaml')
 const SIDECAR_BIN_DIR = path.join(ROOT, 'resources', 'web_crawler_sidecar', 'bin')
 const NATIVE_RESOURCE_DIR = path.join(ROOT, 'resources', 'native')
+const OPEN_WITH_RESOURCE_DIR = path.join(ROOT, 'resources', 'open-with')
 const RUNTIME_TRACE_POLICY_PATH = path.join(ROOT, 'build', 'runtime-trace-policy.json')
 const RUNTIME_TRACE_REPORT_PATH = path.join(ROOT, 'release-stage', 'runtime-trace-report.json')
 const MAIN_OBFUSCATION_REPORT_PATH = path.join(
@@ -404,6 +405,7 @@ const pruneStagedResources = () => {
       const lowerName = entry.name.toLowerCase()
       if (entry.isSymbolicLink()) continue
       if (entry.isDirectory()) {
+        if (lowerName === 'open-with') continue
         if (
           REMOVE_DIRECTORY_NAMES.has(lowerName) ||
           lowerName === 'patchright' ||
@@ -441,6 +443,7 @@ const main = async () => {
   assertDirectory(OUT_DIR, 'compiled application output')
   assertDirectory(SIDECAR_BIN_DIR, 'web crawler sidecar binary')
   assertDirectory(NATIVE_RESOURCE_DIR, 'native resource directory')
+  assertDirectory(OPEN_WITH_RESOURCE_DIR, 'open with resource directory')
 
   const rootPackage = JSON.parse(fs.readFileSync(ROOT_PACKAGE_PATH, 'utf8'))
   const runtimeEntries = [
@@ -483,6 +486,11 @@ const main = async () => {
     verbatimSymlinks: true
   })
   fs.cpSync(NATIVE_RESOURCE_DIR, path.join(STAGE_DIR, 'resources', 'native'), {
+    recursive: true,
+    force: true,
+    verbatimSymlinks: true
+  })
+  fs.cpSync(OPEN_WITH_RESOURCE_DIR, path.join(STAGE_DIR, 'resources', 'open-with'), {
     recursive: true,
     force: true,
     verbatimSymlinks: true

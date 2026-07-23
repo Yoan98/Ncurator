@@ -86,6 +86,26 @@ AI unit / 辅助测试目录：
 
 ## 4. 回归测试清单
 
+### 4.0 结构化输出策略与服务重试
+
+#### `structured-output-strategy-memory`
+
+- 测试类型：`unit + backend contract`
+- What：无历史策略时按通用顺序尝试结构化输出；降级成功后保存 `configId + modelName` 对应策略，下一次调用直接复用。
+- Why：不同供应商的结构化能力不同，不能靠供应商名称写死；策略记忆是减少失败请求和避免重复探测的核心机制。
+- How：unit 测试覆盖 `json_schema -> json_object -> prompt_json` 和解析失败后的继续降级；执行器 contract 测试验证成功策略写入配置保存入口；策略 Store 使用真实 SQLite 读写验证下一次读取。
+- Oracle：首次最终成功策略为 `completions/prompt_json` 时保存该策略；后续加载同一配置和模型得到相同策略；失败调用不写入新策略。
+- Not：不把真实 NVIDIA 或其他供应商网络容量当作稳定测试前置条件。
+
+#### `structured-output-resource-exhausted-backoff`
+
+- 测试类型：`unit`
+- What：结构化策略返回 `503 ResourceExhausted` 时先尝试下一个候选策略；全部候选都容量失败时再按 2、4、8、15 秒退避。
+- Why：容量错误不等于永久不支持，但不同结构化请求形态可能落到不同服务路径；只原样重试会让每个新对话重复同样的三次等待，也无法形成有价值的策略记忆。
+- How：native 结构化输出测试让 `json_schema`、`json_object` 返回容量错误，`prompt_json` 成功，并验证第二次调用直接命中已保存偏好；执行器集成测试覆盖所有候选均失败后的外层退避和最终成功；Workbench 真实 UI E2E 在运行中出现重试时检查过程流不同时显示“让俺想想”。
+- Oracle：首轮后续策略成功时保存最终策略，第二轮只调用保存的策略；所有策略都容量失败时才产生外层重试事件；重试状态可见且不与思考占位并存。
+- Not：不要求真实 provider 在每次 E2E 都主动返回 503。
+
 ### 4.1 `tool`
 
 #### docx 类别

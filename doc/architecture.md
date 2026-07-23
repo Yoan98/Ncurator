@@ -37,6 +37,7 @@ NCurator-Desktop 是本地优先的 Electron 桌面应用。文档解析、嵌�
 
 - Renderer 负责 UI 展示、用户交互和状态呈现。
 - Main 负责 AI 编排、数据库访问、文档处理、资料索引和写回流程。
+- Main 负责 AI 运行终态的系统通知；通知由 `SystemNotificationService` 统一适配 macOS 和 Windows，Renderer 只负责接收通知点击后的会话打开事件。
 - Preload 负责 Renderer 与 Main 之间的安全桥接。
 - Shared 负责 IPC 契约、事件类型和跨进程共享类型。
 
@@ -77,6 +78,15 @@ Retrieval 负责文档索引、向量检索、全文检索和结果融合。检�
 ### Tool Runtime
 
 Tool Runtime 为 AI 提供文件、终端、浏览器等本地能力。工具实现位于 Main，由各领域服务负责具体操作；通用安全边界、审批和工作区变化追踪由运行时统一处理。
+
+内置浏览器的 Stagehand 自动化通过 Electron Chromium 的 CDP 连接。Main 启动时只设置
+`remote-debugging-address=127.0.0.1` 和 `remote-debugging-port=0`，由 Chromium 自动选择空闲端口并写入
+user-data 目录下的 `DevToolsActivePort`。`CdpEndpointService` 负责等待、解析和校验该文件及 `/json/version`，
+`BrowserEmbedService` 只依赖解析后的 endpoint，不持有固定端口。CDP 仅绑定本机回环地址；随机端口用于避免
+安装版、开发版或其他本地程序之间的固定端口冲突，但不把随机端口当作安全认证机制。
+
+开发版默认使用独立的 `*-dev` user-data 目录，避免和安装版共享数据库、实例锁或 `DevToolsActivePort`；E2E
+可以通过 `NCURATOR_USER_DATA_PATH` 显式提供隔离目录。
 
 ### Workspace Change Tracking
 
@@ -137,6 +147,12 @@ AI 能力通过 skill 和 tool 两层表达：
 
 skill 不按目录强行拆分，也不等同于工具数量。一个 skill 可以对应多个 tool，多个 skill 也可以共享同一实现域。
 
+### 结构化输出策略与重试
+
+AI 结构化调用按配置和模型维度记忆成功策略。首次没有历史策略时，统一按 `json_schema -> json_object -> prompt_json` 尝试；某个策略成功后，`LlmStrategyPreferenceStore` 以 `configId + modelName` 为键保存 `transport` 和结构化输出模式，后续调用直接优先使用已保存策略。供应商不会在执行器里写死专用策略。
+
+结构化能力不支持、返回内容无法解析或不符合 Schema 时属于“策略降级”。结构化策略遇到 `ResourceExhausted` 时，会先在同一次调用内尝试下一个策略；后续策略成功后保存该策略，避免下一轮再次命中已拥塞的请求形态。只有所有候选策略都返回容量错误，才进入服务重试并使用指数退避。其他 HTTP 503、429 和超时仍直接进入服务重试。策略只有在完整调用成功后才会保存，失败调用不会污染历史偏好。
+
 ### 会话连续性
 
 跨轮上下文由 conversation summary 和未被摘要覆盖的 recent messages 组成。摘要只覆盖完整轮次，并在后台生成；失败或陈旧结果不会推进覆盖边界。run 内压缩和跨 run 的会话记忆是两套独立机制。
@@ -172,3 +188,4 @@ skill 不按目录强行拆分，也不等同于工具数量。一个 skill 可�
 5. 需要本地能力时由 Tool Runtime 调用对应领域服务。
 6. 文件写回后记录统一修改记录和对应预览，供 UI 展示和回退。
 7. 最终答复和事件流通过 IPC 回到 Renderer 展示。
+8. Run 持久化为 `completed`、`failed` 或 `cancelled` 后，Main 触发一次系统通知；通知点击通过 Preload IPC 打开对应会话。

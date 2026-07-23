@@ -106,6 +106,7 @@ import SidebarUpdateControl from '../components/update/SidebarUpdateControl'
 type ApprovalBatchRequiredEvent = Extract<AiRunEvent, { type: 'approval_batch_required' }>
 type UserTakeoverRequiredEvent = Extract<AiRunEvent, { type: 'user_takeover_required' }>
 type ApprovalBatchDecisionAction = 'approve' | 'reject' | 'guide'
+const COLLAPSED_WORKSPACE_SESSION_LIMIT = 5
 type WorkbenchE2EWindow = Window &
   typeof globalThis & {
     __NCURATOR_E2E_SET_WORKBENCH_DRAFT__?: (draft: ComposerDraftValue) => void
@@ -656,6 +657,9 @@ const ChatPage: React.FC = () => {
     return clampWorkbenchSidebarWidth(stored ? Number(stored) : WORKBENCH_SIDEBAR_DEFAULT_WIDTH)
   })
   const [collapsedWorkspaceIds, setCollapsedWorkspaceIds] = useState<Set<string>>(() => new Set())
+  const [expandedWorkspaceSessionIds, setExpandedWorkspaceSessionIds] = useState<Set<string>>(
+    () => new Set()
+  )
   const [contentPanelCollapsed, setContentPanelCollapsed] = useState(true)
   const [contentPanelShellMounted, setContentPanelShellMounted] = useState(false)
   const [contentPanelShellVisible, setContentPanelShellVisible] = useState(false)
@@ -1386,6 +1390,18 @@ const ChatPage: React.FC = () => {
     })
   }, [])
 
+  const toggleWorkspaceSessionsExpanded = useCallback((workspaceId: string): void => {
+    setExpandedWorkspaceSessionIds((current) => {
+      const next = new Set(current)
+      if (next.has(workspaceId)) {
+        next.delete(workspaceId)
+      } else {
+        next.add(workspaceId)
+      }
+      return next
+    })
+  }, [])
+
   const createNewSession = useCallback(
     (workspaceId?: string): void => {
       saveComposerDraftForSession(currentSessionIdRef.current, composerDraftValueRef.current)
@@ -1653,6 +1669,27 @@ const ChatPage: React.FC = () => {
     })
     void openExistingSession(session)
   }
+
+  useEffect(() => {
+    const openNotificationSession = async (sessionId: string): Promise<void> => {
+      const session = sessions.find((item) => item.id === sessionId)
+      if (session) {
+        selectSession(session)
+        return
+      }
+      const loadedSessions = await loadSessions()
+      const loadedSession = loadedSessions.find((item) => item.id === sessionId)
+      if (loadedSession) selectSession(loadedSession)
+    }
+    const pendingSessionId = window.sessionStorage.getItem('ncurator.pending-notification-session')
+    if (pendingSessionId) {
+      window.sessionStorage.removeItem('ncurator.pending-notification-session')
+      void openNotificationSession(pendingSessionId)
+    }
+    return window.api.onSystemNotificationOpenSession(openNotificationSession)
+    // Session selection intentionally uses the current list captured by this effect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessions])
 
   const acknowledgeCurrentSessionCompletion = useCallback((): void => {
     const sessionId = currentSessionIdRef.current
@@ -3212,6 +3249,64 @@ const ChatPage: React.FC = () => {
           {workspaces.map((workspace) => {
             const workspaceSessions = sessionsByWorkspace.get(workspace.id) || []
             const workspaceCollapsed = collapsedWorkspaceIds.has(workspace.id)
+            const workspaceSessionsExpanded = expandedWorkspaceSessionIds.has(workspace.id)
+            const visibleWorkspaceSessions = workspaceSessions.slice(
+              0,
+              COLLAPSED_WORKSPACE_SESSION_LIMIT
+            )
+            const overflowWorkspaceSessions = workspaceSessions.slice(
+              COLLAPSED_WORKSPACE_SESSION_LIMIT
+            )
+            const hasOverflowSessions = overflowWorkspaceSessions.length > 0
+            const renderSession = (session: ChatSessionListItem): React.JSX.Element => (
+              <div
+                key={session.id}
+                role="button"
+                tabIndex={0}
+                data-testid={`${workbenchSelectors.sessionItemPrefix}-${session.id}`}
+                className={`nc-sidebar-item group relative ${
+                  currentSessionId === session.id ? 'nc-sidebar-item-active' : 'bg-transparent'
+                } ${
+                  deletingSessionIds.has(session.id) ? 'pointer-events-none opacity-60' : ''
+                } px-3 py-2`}
+                onClick={() => selectSession(session)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault()
+                    selectSession(session)
+                  }
+                }}
+              >
+                <div className="flex min-w-0 items-center gap-2 pl-4">
+                  <div className="min-w-0 flex-1 truncate text-[13px] font-medium text-[#37352F]">
+                    {session.title}
+                  </div>
+                  <div className="flex h-4 shrink-0 items-center gap-1 text-[11px] text-[#91918E] group-hover:hidden">
+                    {session.isRunning ? (
+                      <span className="nc-session-running-spinner" aria-label="任务运行中" />
+                    ) : session.hasUnreadCompletion ? (
+                      <span className="nc-session-unread-dot" aria-label="任务已完成，未查看" />
+                    ) : (
+                      <>
+                        <HiClock className="h-3 w-3" />
+                        <span>{formatRelativeTime(session.created_at)}</span>
+                      </>
+                    )}
+                  </div>
+                  <Button
+                    type="text"
+                    size="small"
+                    icon={<HiTrash className="h-3.5 w-3.5" />}
+                    className="!absolute !right-1 !top-1/2 !z-10 !h-6 !w-6 !-translate-y-1/2 !rounded-[6px] !p-0 opacity-0 transition-opacity group-hover:opacity-100"
+                    loading={deletingSessionIds.has(session.id)}
+                    disabled={deletingSessionIds.has(session.id)}
+                    data-testid={`${workbenchSelectors.sessionDeleteButtonPrefix}-${session.id}`}
+                    onMouseDown={(event) => event.stopPropagation()}
+                    onClick={(event) => requestDeleteSession(event, session)}
+                  />
+                </div>
+              </div>
+            )
             return (
               <div key={workspace.id} className="nc-sidebar-workspace-group">
                 <div className="nc-sidebar-workspace-header group">
@@ -3248,62 +3343,48 @@ const ChatPage: React.FC = () => {
                   </div>
                 </div>
                 {workspaceCollapsed ? null : (
-                  <div className="mt-1 space-y-1">
-                    {workspaceSessions.map((session) => (
+                  <div className="mt-1 flex flex-col gap-1">
+                    {visibleWorkspaceSessions.map(renderSession)}
+                    {hasOverflowSessions ? (
                       <div
-                        key={session.id}
-                        role="button"
-                        tabIndex={0}
-                        data-testid={`${workbenchSelectors.sessionItemPrefix}-${session.id}`}
-                        className={`nc-sidebar-item group relative ${
-                          currentSessionId === session.id
-                            ? 'nc-sidebar-item-active'
-                            : 'bg-transparent'
-                        } ${deletingSessionIds.has(session.id) ? 'pointer-events-none opacity-60' : ''} px-3 py-2`}
-                        onClick={() => selectSession(session)}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter' || event.key === ' ') {
-                            event.preventDefault()
-                            selectSession(session)
-                          }
-                        }}
+                        className={`nc-sidebar-session-overflow ${
+                          workspaceSessionsExpanded ? 'nc-sidebar-session-overflow-expanded' : ''
+                        }`}
+                        aria-hidden={!workspaceSessionsExpanded}
+                        inert={!workspaceSessionsExpanded}
                       >
-                        <div className="flex min-w-0 items-center gap-2 pl-4">
-                          <div className="min-w-0 flex-1 truncate text-[13px] font-medium text-[#37352F]">
-                            {session.title}
+                        <div className="min-h-0 overflow-hidden">
+                          <div className="flex flex-col gap-1">
+                            {overflowWorkspaceSessions.map(renderSession)}
                           </div>
-                          <div className="flex h-4 shrink-0 items-center gap-1 text-[11px] text-[#91918E] group-hover:hidden">
-                            {session.isRunning ? (
-                              <span
-                                className="nc-session-running-spinner"
-                                aria-label="任务运行中"
-                              />
-                            ) : session.hasUnreadCompletion ? (
-                              <span
-                                className="nc-session-unread-dot"
-                                aria-label="任务已完成，未查看"
-                              />
-                            ) : (
-                              <>
-                                <HiClock className="h-3 w-3" />
-                                <span>{formatRelativeTime(session.created_at)}</span>
-                              </>
-                            )}
-                          </div>
-                          <Button
-                            type="text"
-                            size="small"
-                            icon={<HiTrash className="h-3.5 w-3.5" />}
-                            className="!absolute !right-1 !top-1/2 !z-10 !h-6 !w-6 !-translate-y-1/2 !rounded-[6px] !p-0 opacity-0 transition-opacity group-hover:opacity-100"
-                            loading={deletingSessionIds.has(session.id)}
-                            disabled={deletingSessionIds.has(session.id)}
-                            data-testid={`${workbenchSelectors.sessionDeleteButtonPrefix}-${session.id}`}
-                            onMouseDown={(event) => event.stopPropagation()}
-                            onClick={(event) => requestDeleteSession(event, session)}
-                          />
                         </div>
                       </div>
-                    ))}
+                    ) : null}
+                    {hasOverflowSessions ? (
+                      <button
+                        type="button"
+                        className="nc-sidebar-session-toggle workbench-no-drag"
+                        onClick={() => toggleWorkspaceSessionsExpanded(workspace.id)}
+                        data-testid={`${workbenchSelectors.workspaceSessionTogglePrefix}-${workspace.id}`}
+                        aria-expanded={workspaceSessionsExpanded}
+                        aria-label={
+                          workspaceSessionsExpanded
+                            ? `收起 ${workspace.name} 的对话`
+                            : `展开 ${workspace.name} 的其余 ${overflowWorkspaceSessions.length} 个对话`
+                        }
+                      >
+                        <span>
+                          {workspaceSessionsExpanded
+                            ? '收起'
+                            : `展开其余 ${overflowWorkspaceSessions.length} 个`}
+                        </span>
+                        <HiChevronDown
+                          className={`h-3.5 w-3.5 transition-transform duration-150 ${
+                            workspaceSessionsExpanded ? 'rotate-180' : ''
+                          }`}
+                        />
+                      </button>
+                    ) : null}
                   </div>
                 )}
               </div>

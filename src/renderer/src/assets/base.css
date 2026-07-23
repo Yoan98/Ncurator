@@ -201,6 +201,22 @@ textarea,
   color: var(--ink-3) !important;
 }
 
+.workbench-open-with-menu .ant-dropdown-menu {
+  min-width: 220px;
+  max-width: 300px;
+  max-height: 360px;
+  overflow-y: auto;
+  padding: 6px;
+}
+
+.workbench-open-with-menu .ant-dropdown-menu-item {
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+}
+
 .ui-panel {
   @apply border border-[#EEEEEC] bg-white shadow-none;
   border-radius: var(--ui-radius-panel);
@@ -544,6 +560,24 @@ textarea,
 
 .nc-sidebar-item-active {
   @apply bg-[#EFEFEE] text-[#37352F];
+}
+
+.nc-sidebar-session-overflow {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition:
+    grid-template-rows 160ms ease,
+    opacity 120ms ease;
+}
+
+.nc-sidebar-session-overflow-expanded {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+.nc-sidebar-session-toggle {
+  @apply flex h-7 w-full items-center justify-start gap-1 rounded-[6px] pl-7 text-[12px] font-medium text-[#91918E] transition-colors hover:bg-[#EFEFEE] hover:text-[#37352F] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0B6BCB]/30;
 }
 
 .nc-sidebar-update-button {

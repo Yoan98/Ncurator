@@ -34,8 +34,7 @@ export const skillDefinitionBaseSchema = z.object({
   countsTowardToolBudget: z.boolean(),
   title: z.string().min(1),
   description: z.string().min(1),
-  toolNames: z.array(z.string().min(1)),
-  requiredSkillIds: z.array(runtimeSkillIdSchema).optional()
+  toolNames: z.array(z.string().min(1))
 })
 
 export const toolCallParamSchema = z.object({

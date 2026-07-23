@@ -97,6 +97,17 @@ describe('workbench result e2e', () => {
           await applyEntry.click()
           const diffViewer = getWorkbenchLocator(page, workbenchSelectors.textDiffViewer)
           await diffViewer.waitFor({ state: 'visible', timeout: 30_000 })
+          const previewModeToggle = getWorkbenchLocator(page, workbenchSelectors.previewModeToggle)
+          const initialToggleLabel = await previewModeToggle.getAttribute('aria-label')
+          await previewModeToggle.click()
+          await getWorkbenchLocator(page, workbenchSelectors.markdownViewer).waitFor({
+            state: 'visible',
+            timeout: 30_000
+          })
+          const fileModeToggleLabel = await previewModeToggle.getAttribute('aria-label')
+          await previewModeToggle.click()
+          await diffViewer.waitFor({ state: 'visible', timeout: 30_000 })
+          const restoredToggleLabel = await previewModeToggle.getAttribute('aria-label')
           const removedLines = diffViewer.locator('[data-diff-line-type="remove"]')
           const addedLines = diffViewer.locator('[data-diff-line-type="add"]')
           await removedLines.first().waitFor({ state: 'visible' })
@@ -172,11 +183,19 @@ describe('workbench result e2e', () => {
           await getWorkbenchLocator(page, workbenchSelectors.applyRevertButton).click()
           await waitForWorkbenchApplyRecordStatus(page, 'reverted')
           const afterRevertBytes = await fs.readFile(targetPath)
-          const diffStillVisible = await diffViewer.isVisible().catch(() => false)
+          const fileStillVisible = await getWorkbenchLocator(
+            page,
+            workbenchSelectors.markdownViewer
+          )
+            .isVisible()
+            .catch(() => false)
 
           return {
             normalPreviewModeTagCount,
             editModeTagCount,
+            initialToggleLabel,
+            fileModeToggleLabel,
+            restoredToggleLabel,
             afterApply,
             diffText,
             hasOldLineNumber,
@@ -193,13 +212,16 @@ describe('workbench result e2e', () => {
             workspaceExplorerModeTextAfterOpen,
             currentSessionChangeMarkerCount,
             restoredBytes: afterRevertBytes.equals(beforeBytes),
-            diffStillVisible
+            fileStillVisible
           }
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
             result.normalPreviewModeTagCount === 0 &&
               result.editModeTagCount === 0 &&
+              result.initialToggleLabel === '查看文件' &&
+              result.fileModeToggleLabel === '查看变更' &&
+              result.restoredToggleLabel === '查看文件' &&
               result.afterApply.includes('DiffPreview') &&
               result.afterApply.includes('cedar-text-diff-884') &&
               result.diffText.includes('Preview') &&
@@ -217,7 +239,7 @@ describe('workbench result e2e', () => {
               result.workspaceExplorerModeTextAfterOpen.includes('本会话改动') &&
               result.currentSessionChangeMarkerCount >= 1 &&
               result.restoredBytes &&
-              result.diffStillVisible,
+              result.fileStillVisible,
             {
               name: 'workbench-text-file-preview-diff-revert-real',
               message: '普通预览应继续渲染 Markdown，修改入口应展示文本 diff，并能恢复原始 bytes。',

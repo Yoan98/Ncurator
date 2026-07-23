@@ -1,11 +1,30 @@
 import asyncio
 import json
 import os
+import platform
 import random
 import sys
 from typing import Any
 
+
+def playwright_macos_x64_host_platform() -> str:
+    darwin_major = int(platform.release().split(".", 1)[0])
+    if darwin_major < 18:
+        return "mac10.13"
+    if darwin_major <= 19:
+        return f"mac10.{darwin_major - 4}"
+    if darwin_major < 25:
+        return f"mac{darwin_major - 9}"
+    return f"mac{min(darwin_major + 1, 26)}"
+
+
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "0")
+if sys.platform == "darwin" and platform.machine().lower() in {"x86_64", "amd64"}:
+    # Playwright otherwise detects the Apple Silicon host CPU through Rosetta
+    # and looks for an arm64 browser beside this x64 sidecar.
+    os.environ.setdefault(
+        "PLAYWRIGHT_HOST_PLATFORM_OVERRIDE", playwright_macos_x64_host_platform()
+    )
 
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, LinkPreviewConfig
 from crawl4ai.content_filter_strategy import PruningContentFilter

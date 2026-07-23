@@ -1,6 +1,0 @@
-promo/**/*.wav filter=lfs diff=lfs merge=lfs -text
-promo/**/*.mp4 filter=lfs diff=lfs merge=lfs -text
-promo/**/*.webm filter=lfs diff=lfs merge=lfs -text
-promo/**/*.mov filter=lfs diff=lfs merge=lfs -text
-promo/**/*.otf filter=lfs diff=lfs merge=lfs -text
-promo/**/*.ttf filter=lfs diff=lfs merge=lfs -text

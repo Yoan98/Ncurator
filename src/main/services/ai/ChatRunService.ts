@@ -105,6 +105,10 @@ type ChatRunServiceDeps = {
   broadcastEvent?: (event: AiRunEvent) => void
   autoStartRuns?: boolean
   conversationMemorySummaryBuilder?: ConversationMemorySummaryBuilder
+  onRunTerminal?: (
+    run: AiRunRecord,
+    status: Extract<AiRunRecord['status'], 'completed' | 'failed' | 'cancelled'>
+  ) => void | Promise<void>
 }
 
 const jieba = Jieba.withDict(dict)
@@ -136,6 +140,7 @@ export class ChatRunService {
   private readonly activeApprovals = new Map<string, ActiveApproval>()
   private readonly activeUserTakeovers = new Map<string, ActiveUserTakeover>()
   private readonly conversationMemoryJobs = new Map<string, Promise<void>>()
+  private readonly pendingSessionSubmissions = new Set<string>()
 
   public constructor(private readonly deps: ChatRunServiceDeps) {}
 
@@ -175,6 +180,11 @@ export class ChatRunService {
           code: 'error'
         }
       })
+      try {
+        await this.deps.onRunTerminal?.(nextRun, 'failed')
+      } catch (error) {
+        console.error('[CHAT-RUN] terminal notification failed:', error)
+      }
     }
   }
 
@@ -360,7 +370,18 @@ export class ChatRunService {
     if (!sessionId) return { success: false, error: 'sessionId is required' }
     if (!input) return { success: false, error: 'input is required' }
     if (mode === 'search') return await this.submitSearch({ ...payload, mode, sessionId, input })
-    return await this.submitAi({ ...payload, mode, sessionId, input })
+    if (
+      this.pendingSessionSubmissions.has(sessionId) ||
+      Array.from(this.activeRuns.values()).some((entry) => entry.run.sessionId === sessionId)
+    ) {
+      return { success: false, error: '当前会话已有运行中的任务，请等待完成后再发送。' }
+    }
+    this.pendingSessionSubmissions.add(sessionId)
+    try {
+      return await this.submitAi({ ...payload, mode, sessionId, input })
+    } finally {
+      this.pendingSessionSubmissions.delete(sessionId)
+    }
   }
 
   public async cancelRun(runId: string): Promise<AiRunCancelResponse> {
@@ -582,6 +603,12 @@ export class ChatRunService {
   private async submitAi(
     payload: ChatSubmitRequest & { mode: 'ai'; sessionId: string; input: string }
   ): Promise<ChatSubmitResponse> {
+    const sessionHasActiveRun = Array.from(this.activeRuns.values()).some(
+      (entry) => entry.run.sessionId === payload.sessionId
+    )
+    if (sessionHasActiveRun) {
+      return { success: false, error: '当前会话已有运行中的任务，请等待完成后再发送。' }
+    }
     const normalizedReferences = normalizeSelectedReferences(payload.selectedReferences)
     const attachments = Array.isArray(payload.attachments) ? payload.attachments : []
     const normalizedWorkspace = normalizeWorkspaceBinding(payload.workspace)
@@ -1090,6 +1117,17 @@ export class ChatRunService {
       event
     })
     await this.projectEvent(runId, run, event)
+    if (
+      event.type === 'run_completed' ||
+      event.type === 'run_failed' ||
+      event.type === 'run_cancelled'
+    ) {
+      try {
+        await this.deps.onRunTerminal?.(run, run.status as 'completed' | 'failed' | 'cancelled')
+      } catch (error) {
+        console.error('[CHAT-RUN] terminal notification failed:', error)
+      }
+    }
     this.broadcastEvent(event)
   }
 

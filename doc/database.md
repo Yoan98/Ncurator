@@ -25,6 +25,7 @@ SQLite 保存以下业务数据：
 - AI run、事件、审批和文件修改记录。
 - 工作区、文件索引任务、文档元数据和网页源。
 - LLM 配置、AI runtime 设置和模型输出策略偏好。
+- AI runtime 设置中的 `systemNotificationsEnabled`，默认值为 `1`，控制 AI 运行终态系统通知。
 - 文件内容和预览 artifact 的 SHA-256 对象引用；实际对象保存在工作区 `.ncurator/objects/sha256`，相同内容只存一份。
 
 关键规则：
@@ -57,6 +58,8 @@ SQLite 保存以下业务数据：
 - 打包流程会准备 Electron binding 并导出到 `resources/native/better-sqlite3/**`。
 
 `001_initial_schema` 已发布并冻结。任何 schema 或数据变更都必须新增更高版本 migration，不能修改、重排或复用已发布 migration。开发环境重建数据库时也必须验证从已发布 schema 向前迁移的路径。
+
+`002_ai_runtime_system_notifications` 为 `ai_runtime_settings` 增加 `systemNotificationsEnabled INTEGER NOT NULL DEFAULT 1`。旧设置记录升级后默认开启系统通知。
 
 ## LanceDB
 

@@ -109,6 +109,7 @@ export type E2ETestRuntime = {
   taskId: string
   page: Page
   electronApp: ElectronApplication
+  userDataDir: string
   recordEvent: (input: Omit<TestLogEvent, 'ts'>) => void
   signal: (input: {
     name: string
@@ -443,6 +444,7 @@ export const runE2ECase = async <TResult>(
     taskId,
     page: app.page,
     electronApp: app.electronApp,
+    userDataDir: app.userDataDir,
     recordEvent,
     signal,
     step: async (input) => {

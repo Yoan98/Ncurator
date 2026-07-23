@@ -169,7 +169,6 @@ describe('workbench result e2e', () => {
             .last()
             .isVisible()
             .catch(() => false)
-
           await switchWorkbenchMode(page, '没头脑')
           await insertWorkbenchReferenceToken(page, 'workbench-preview.md')
           await appendWorkbenchInputText(page, 'cedar-markdown-preview-442')
@@ -185,6 +184,20 @@ describe('workbench result e2e', () => {
           const textResults = await waitForWorkbenchSearchResults(page)
           await openSearchPreview(page, textResults, 'human-input.txt')
           const plainTextPreviewVisible = await waitForPlainTextPreview(page)
+          const openWithMenuButton = page.getByRole('button', { name: '选择打开应用' }).last()
+          await openWithMenuButton.click()
+          const openWithApplicationItems = getWorkbenchPrefixLocator(
+            page,
+            workbenchSelectors.openWithApplicationPrefix
+          )
+          await openWithApplicationItems.first().waitFor({ state: 'visible', timeout: 15_000 })
+          const openWithApplicationCount = await openWithApplicationItems.count()
+          const defaultApplicationMarkerVisible = await page
+            .getByText('默认', { exact: true })
+            .last()
+            .isVisible()
+            .catch(() => false)
+          await page.keyboard.press('Escape')
           const resourceTabs = getWorkbenchPrefixLocator(page, workbenchSelectors.resourceTabPrefix)
           const resourceTabCount = await resourceTabs.count()
           await resourceTabs.filter({ hasText: 'workbench-preview.md' }).first().click()
@@ -208,12 +221,17 @@ describe('workbench result e2e', () => {
             docxModeTagCount,
             docxPreviewStableWhileTyping,
             systemOpenVisible,
+            openWithApplicationCount,
+            defaultApplicationMarkerVisible,
             markdownPreviewVisible,
             plainTextPreviewVisible,
             reopenedMarkdownVisible,
             fileLauncherVisible,
             workspaceFileFilterVisible,
             resourceTabCount,
+            openWithQueryCalls: signals.ipcInvokeEntries.filter(
+              (entry) => entry.name === 'listOpenWithApplications'
+            ).length,
             revealPathCalls: signals.ipcInvokeEntries.filter((entry) => entry.name === 'revealPath')
               .length
           }
@@ -225,6 +243,9 @@ describe('workbench result e2e', () => {
               result.docxModeTagCount === 0 &&
               result.docxPreviewStableWhileTyping &&
               result.systemOpenVisible &&
+              result.openWithApplicationCount >= 1 &&
+              result.defaultApplicationMarkerVisible &&
+              result.openWithQueryCalls >= 1 &&
               result.markdownPreviewVisible &&
               result.plainTextPreviewVisible &&
               result.reopenedMarkdownVisible &&
@@ -235,7 +256,7 @@ describe('workbench result e2e', () => {
             {
               name: 'workbench-file-preview-actions-real',
               message:
-                '右侧普通文件预览应能打开真实 pdf/docx/md/txt，并提供定位文件和系统打开入口；PDF 预览应显示页面，md/txt 应来自真实索引搜索命中，对齐 WB-PANEL-003-AC1、WB-PANEL-003-AC3。',
+                '右侧普通文件预览应能打开真实 pdf/docx/md/txt，并通过系统关联应用查询提供打开方式下拉和默认标记；PDF 预览应显示页面，md/txt 应来自真实索引搜索命中，对齐 WB-PANEL-003-AC1、WB-PANEL-003-AC3、WB-PANEL-003-AC15。',
               data: result
             }
           )

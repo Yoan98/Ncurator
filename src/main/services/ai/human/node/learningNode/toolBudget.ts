@@ -30,13 +30,19 @@ const collectToolNames = <TSkillId extends string>(input: {
 export const countActiveToolNamesForSkillIds = <TSkillId extends string>(input: {
   skillIds: readonly TSkillId[]
   getToolNames: (skillId: TSkillId) => readonly string[]
-}): number => collectToolNames(input).length
+  baseToolNames?: readonly string[]
+}): number =>
+  new Set([
+    ...(input.baseToolNames || []).map((name) => String(name || '').trim()).filter(Boolean),
+    ...collectToolNames(input)
+  ]).size
 
 export const fitSkillIdsToToolBudget = <TSkillId extends string>(input: {
   existingSkillIds: readonly TSkillId[]
   requestedSkillIds: readonly TSkillId[]
   maxActiveTools: number
   getToolNames: (skillId: TSkillId) => readonly string[]
+  baseToolNames?: readonly string[]
 }):
   | {
       ok: true
@@ -57,7 +63,8 @@ export const fitSkillIdsToToolBudget = <TSkillId extends string>(input: {
 
   let activeToolCount = countActiveToolNamesForSkillIds({
     skillIds: learnedSkillIds,
-    getToolNames: input.getToolNames
+    getToolNames: input.getToolNames,
+    baseToolNames: input.baseToolNames
   })
 
   while (activeToolCount > input.maxActiveTools) {
@@ -77,7 +84,8 @@ export const fitSkillIdsToToolBudget = <TSkillId extends string>(input: {
 
     activeToolCount = countActiveToolNamesForSkillIds({
       skillIds: learnedSkillIds,
-      getToolNames: input.getToolNames
+      getToolNames: input.getToolNames,
+      baseToolNames: input.baseToolNames
     })
   }
 

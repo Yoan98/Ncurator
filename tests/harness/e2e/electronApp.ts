@@ -1,6 +1,5 @@
 import path from 'node:path'
 import os from 'node:os'
-import { createServer } from 'node:net'
 import { access, mkdir, mkdtemp, rm } from 'node:fs/promises'
 import electronPath from 'electron'
 import {
@@ -67,9 +66,7 @@ export const isExpectedWindowsInspectorTeardownExit = (input: {
   const exitData = input.lifecycleEntries[exitIndex]?.data as
     | { code?: number | null; signal?: string | null }
     | undefined
-  return (
-    (exitData?.code === 3221225477 || exitData?.code === 3221226505) && !exitData.signal
-  )
+  return (exitData?.code === 3221225477 || exitData?.code === 3221226505) && !exitData.signal
 }
 
 type E2EObserverState = {
@@ -97,6 +94,7 @@ export type E2ERuntimeSignals = {
 export type LaunchedElectronApp = {
   electronApp: ElectronApplication
   page: Page
+  userDataDir: string
   appInfo: E2EAppInfo
   collectSignals: () => Promise<E2ERuntimeSignals>
   close: (input: { tracePath: string }) => Promise<void>
@@ -200,37 +198,9 @@ const assertLaunchedWorkbenchApp = (page: Page): void => {
   }
 }
 
-const allocateFreePort = async (): Promise<number> => {
-  const server = createServer()
-  await new Promise<void>((resolve, reject) => {
-    server.once('error', reject)
-    server.listen(0, '127.0.0.1', () => {
-      server.off('error', reject)
-      resolve()
-    })
-  })
-  const address = server.address()
-  if (!address || typeof address === 'string') {
-    server.close()
-    throw new Error('failed to allocate free port for electron e2e')
-  }
-  const port = address.port
-  await new Promise<void>((resolve, reject) => {
-    server.close((error) => {
-      if (error) {
-        reject(error)
-        return
-      }
-      resolve()
-    })
-  })
-  return port
-}
-
 const buildElectronLaunchEnv = (
   userDataDir: string,
   serviceMode: E2EServiceMode,
-  remoteDebuggingPort: number,
   windowMode?: ElectronWindowMode
 ): NodeJS.ProcessEnv => {
   const env: NodeJS.ProcessEnv = {}
@@ -251,7 +221,6 @@ const buildElectronLaunchEnv = (
   }
   env.NCURATOR_E2E_WINDOW_MODE = windowMode || process.env.NCURATOR_E2E_WINDOW_MODE || 'background'
   env.NCURATOR_USER_DATA_PATH = userDataDir
-  env.NCURATOR_EMBEDDED_BROWSER_REMOTE_DEBUGGING_PORT = String(remoteDebuggingPort)
 
   return env
 }
@@ -353,13 +322,7 @@ export const launchElectronApp = async (input: {
   )
   await mkdir(e2eTempRoot, { recursive: true })
   const userDataDir = await mkdtemp(path.join(e2eTempRoot, 'ncurator-e2e-user-data-'))
-  const remoteDebuggingPort = await allocateFreePort()
-  const launchEnv = buildElectronLaunchEnv(
-    userDataDir,
-    input.serviceMode,
-    remoteDebuggingPort,
-    input.windowMode
-  )
+  const launchEnv = buildElectronLaunchEnv(userDataDir, input.serviceMode, input.windowMode)
   const electronApp = await electron.launch({
     executablePath: launch.executablePath,
     args: launch.args,
@@ -454,6 +417,7 @@ export const launchElectronApp = async (input: {
   return {
     electronApp,
     page,
+    userDataDir,
     appInfo,
     collectSignals: async () => {
       let state: E2EObserverState = {

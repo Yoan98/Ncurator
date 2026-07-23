@@ -80,10 +80,7 @@ describe('workbench result e2e', () => {
           const applyPanelText = (
             (await getWorkbenchLocator(page, workbenchSelectors.applyPanel).textContent()) || ''
           ).trim()
-          const previewModeToggle = getWorkbenchLocator(
-            page,
-            workbenchSelectors.docxPreviewModeToggle
-          )
+          const previewModeToggle = getWorkbenchLocator(page, workbenchSelectors.previewModeToggle)
           const initialToggleLabel = await previewModeToggle.getAttribute('aria-label')
           await previewModeToggle.click()
           const fileModeToggleLabel = await previewModeToggle.getAttribute('aria-label')

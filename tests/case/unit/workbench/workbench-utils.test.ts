@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { WorkspaceSource } from '../../../../src/shared/types'
+import type { AiRunEvent, WorkspaceSource } from '../../../../src/shared/types'
 import {
   buildAssistantExecutionSummaryText,
   createAssistantThinkingGroup,
@@ -83,6 +83,22 @@ describe('workbench utils', () => {
     })
 
     expect(groups.some((group) => group.kind === 'thinking')).toBe(false)
+  })
+
+  it('hides thinking while a retry process is running', () => {
+    const groups = reduceAssistantProcessGroups([createAssistantThinkingGroup('message-1')], {
+      type: 'assistant_process_group_started',
+      runId: 'run-1',
+      groupId: 'run-1:llm-retry:call-1',
+      kind: 'retry',
+      display: { kind: 'retry', attempt: 2, maxAttempts: 5, message: '服务暂时不可用' },
+      createdAt: 2
+    } satisfies AiRunEvent)
+
+    expect(groups.some((group) => group.kind === 'thinking')).toBe(false)
+    expect(groups.some((group) => group.kind === 'retry' && group.status === 'running')).toBe(
+      true
+    )
   })
 
   it('formats attachment type labels from file extensions', () => {

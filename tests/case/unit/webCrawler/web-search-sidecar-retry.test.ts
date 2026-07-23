@@ -24,6 +24,62 @@ const resolveSidecarPython = (): string => {
 }
 
 describe('web crawler sidecar search retry', () => {
+  it.each([
+    { systemPlatform: 'darwin', machine: 'x86_64', release: '24.1.0', expected: 'mac15' },
+    { systemPlatform: 'darwin', machine: 'arm64', release: '24.1.0', expected: null },
+    { systemPlatform: 'win32', machine: 'AMD64', release: '10', expected: null }
+  ])(
+    'sets the Playwright platform override only for macOS x64 ($systemPlatform/$machine)',
+    async ({ systemPlatform, machine, release, expected }) => {
+      const script = String.raw`
+import asyncio
+import importlib.util
+import json
+import os
+import platform
+import sys
+import types
+from pathlib import Path
+
+class DependencyStub:
+    pass
+
+crawl4ai = types.ModuleType("crawl4ai")
+crawl4ai.AsyncWebCrawler = DependencyStub
+crawl4ai.BrowserConfig = DependencyStub
+crawl4ai.CrawlerRunConfig = DependencyStub
+crawl4ai.LinkPreviewConfig = DependencyStub
+content_filter_strategy = types.ModuleType("crawl4ai.content_filter_strategy")
+content_filter_strategy.PruningContentFilter = DependencyStub
+markdown_generation_strategy = types.ModuleType("crawl4ai.markdown_generation_strategy")
+markdown_generation_strategy.DefaultMarkdownGenerator = DependencyStub
+ddgs = types.ModuleType("ddgs")
+ddgs.DDGS = DependencyStub
+sys.modules["crawl4ai"] = crawl4ai
+sys.modules["crawl4ai.content_filter_strategy"] = content_filter_strategy
+sys.modules["crawl4ai.markdown_generation_strategy"] = markdown_generation_strategy
+sys.modules["ddgs"] = ddgs
+
+os.environ.pop("PLAYWRIGHT_HOST_PLATFORM_OVERRIDE", None)
+sys.platform = ${JSON.stringify(systemPlatform)}
+platform.machine = lambda: ${JSON.stringify(machine)}
+platform.release = lambda: ${JSON.stringify(release)}
+
+sidecar_path = Path("resources/web_crawler_sidecar/web_crawler_sidecar.py").resolve()
+spec = importlib.util.spec_from_file_location("web_crawler_sidecar_platform_test", sidecar_path)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+print(json.dumps(os.environ.get("PLAYWRIGHT_HOST_PLATFORM_OVERRIDE")))
+`
+      const { stdout } = await execFileAsync(resolveSidecarPython(), ['-c', script], {
+        cwd: process.cwd(),
+        timeout: 30_000
+      })
+
+      expect(JSON.parse(stdout.trim())).toBe(expected)
+    }
+  )
+
   it('retries transient ddgs failures without exposing attempts in the result', async () => {
     const script = String.raw`
 import asyncio

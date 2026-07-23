@@ -68,6 +68,8 @@ describe('app update publish config', () => {
     expect(windowsRelease).toContain('--test-only')
     expect(windowsRelease).toContain('--publish-only')
     expect(prepareRelease).toContain("'--prepare-only'")
+    expect(prepareRelease).toContain("args.includes('--mac-only')")
+    expect(prepareRelease).toContain('prepared for independent macOS release')
     expect(prepareRelease).toContain("['test:update:backend']")
     expect(prepareRelease).not.toContain('test:update:e2e')
   })

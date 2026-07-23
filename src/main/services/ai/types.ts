@@ -31,6 +31,7 @@ import type {
   BrainContextBudgetSnapshot,
   ChatConversationMemory,
   ChatSessionResumeSnapshot,
+  ChatSessionSkillState,
   DocxApplyRecord,
   SelectedReference,
   WorkbenchSelectedModel
@@ -284,6 +285,11 @@ export type AiRunContext = {
     conversationSummaryText: string
   }>
   loadConversationMemory: () => Promise<ChatConversationMemory | null>
+  loadSessionSkillState: () => Promise<ChatSessionSkillState>
+  saveSessionSkillState: (input: {
+    expectedRevision: number
+    learnedSkillIds: string[]
+  }) => Promise<ChatSessionSkillState>
   trackDocxOpen: (input: {
     docId: string
     sourcePath: string

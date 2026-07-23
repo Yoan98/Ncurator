@@ -59,11 +59,12 @@ import type {
   RefreshWebSourceRequest,
   SearchResponse,
   SearchSourceFilter,
-  PickApplicationResponse,
   PickDirectoryResponse,
   PickFileResponse,
-  OpenPathWithApplicationRequest,
-  OpenPathWithApplicationResponse,
+  ListOpenWithApplicationsRequest,
+  ListOpenWithApplicationsResponse,
+  OpenFileWithApplicationRequest,
+  OpenFileWithApplicationResponse,
   PrepareWebSourcesRequest,
   ReferenceItemListResponse,
   ScanWebSourcesRequest,
@@ -236,9 +237,12 @@ export type DesktopApi = {
   appUpdateDownload: () => Promise<AppUpdateActionResponse>
   appUpdateInstall: () => Promise<AppUpdateActionResponse>
   onAppUpdateStatus: (cb: (snapshot: AppUpdateSnapshot) => void) => () => void
-  pickApplication: () => Promise<PickApplicationResponse>
-  openPathWithApplication: (
-    payload: OpenPathWithApplicationRequest
-  ) => Promise<OpenPathWithApplicationResponse>
+  listOpenWithApplications: (
+    payload: ListOpenWithApplicationsRequest
+  ) => Promise<ListOpenWithApplicationsResponse>
+  openFileWithApplication: (
+    payload: OpenFileWithApplicationRequest
+  ) => Promise<OpenFileWithApplicationResponse>
   onAiRunEvent: (cb: (event: AiRunEvent) => void) => () => void
+  onSystemNotificationOpenSession: (cb: (sessionId: string) => void) => () => void
 }
