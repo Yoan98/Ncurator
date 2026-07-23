@@ -192,9 +192,9 @@ describe('workbench result e2e', () => {
           )
           await openWithApplicationItems.first().waitFor({ state: 'visible', timeout: 15_000 })
           const openWithApplicationCount = await openWithApplicationItems.count()
-          const defaultApplicationMarkerVisible = await page
+          const visibleOpenWithMenu = page.locator('[role="menu"]:visible').last()
+          const defaultApplicationMarkerVisible = await visibleOpenWithMenu
             .getByText('默认', { exact: true })
-            .last()
             .isVisible()
             .catch(() => false)
           await page.keyboard.press('Escape')

@@ -25,6 +25,12 @@ describe('ai human mock-llm backend', () => {
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
+        await runtime.chatStore.saveChatSession({
+          id: 'embedding-preflight-session',
+          title: 'embedding preflight',
+          created_at: Date.now(),
+          workspace_id: 'test-workspace'
+        })
         await writeTestDocxFile(runtime.workspaceRoot, 'semantic-docx.docx', [
           {
             type: 'paragraph',
