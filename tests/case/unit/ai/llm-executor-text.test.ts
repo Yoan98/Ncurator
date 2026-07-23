@@ -12,6 +12,7 @@ vi.mock('../../../../src/main/services/llm/chatModel', () => ({
 
 import { createAiLlmExecutor } from '../../../../src/main/services/ai/llmExecutor'
 import type { AiLlmDriver } from '../../../../src/main/services/ai/llmExecutor'
+import { LlmProviderError } from '../../../../src/main/services/ai/errors'
 import type { AiLlmIoRecord, AiRunEvent, LlmRuntimeConfig } from '../../../../src/shared/types'
 
 const baseConfig: LlmRuntimeConfig = {
@@ -114,16 +115,23 @@ describe('ai unit llm executor text path', () => {
   })
 
   it('persists the winning structured fallback strategy for the next run', async () => {
-    const saveConfig = vi.fn(async () => undefined)
+    let currentConfig = baseConfig
+    const preferredStrategies: Array<unknown> = []
+    const saveConfig = vi.fn(async (nextConfig: LlmRuntimeConfig) => {
+      currentConfig = nextConfig
+    })
     const driver: AiLlmDriver = {
-      chatStructured: async () => ({
-        output: { answer: 'from prompt json' },
-        rawText: '{"answer":"from prompt json"}',
-        method: 'promptJson',
-        transport: 'completions',
-        structuredOutputMode: 'prompt_json',
-        strategy: { transport: 'completions', mode: 'prompt_json' }
-      })
+      chatStructured: async (input) => {
+        preferredStrategies.push(input.preferredStrategy)
+        return {
+          output: { answer: 'from prompt json' },
+          rawText: '{"answer":"from prompt json"}',
+          method: 'promptJson',
+          transport: 'completions',
+          structuredOutputMode: 'prompt_json',
+          strategy: { transport: 'completions', mode: 'prompt_json' }
+        }
+      }
     }
 
     const executor = createAiLlmExecutor({
@@ -132,27 +140,115 @@ describe('ai unit llm executor text path', () => {
         sendEvent: () => undefined
       },
       runtimeSettings: { llmStreamingMode: 'force_non_stream' },
-      getConfig: async () => baseConfig,
+      getConfig: async () => currentConfig,
       saveConfig,
       checkCancelled: () => undefined,
       driver
     })
 
-    const result = await executor.chatStructured({
+    const request = {
       caller: 'human.brain',
       schemaName: 'unit_schema',
       schema: z.object({ answer: z.string() }),
       system: 'Return JSON only.',
       user: 'Say hello.'
-    })
+    } as const
+    const firstResult = await executor.chatStructured(request)
+    const secondResult = await executor.chatStructured(request)
 
-    expect(result.output).toEqual({ answer: 'from prompt json' })
+    expect(firstResult.output).toEqual({ answer: 'from prompt json' })
+    expect(secondResult.output).toEqual({ answer: 'from prompt json' })
+    expect(preferredStrategies).toEqual([
+      undefined,
+      { transport: 'completions', mode: 'prompt_json' }
+    ])
+    expect(saveConfig).toHaveBeenCalledTimes(1)
     expect(saveConfig).toHaveBeenCalledWith(
       expect.objectContaining({
         preferredTransport: 'completions',
         preferredStructuredOutputMode: 'prompt_json'
       })
     )
+  })
+
+  it('recovers when ResourceExhausted fails twice and the third attempt succeeds', async () => {
+    vi.useFakeTimers()
+    try {
+      const events: AiRunEvent[] = []
+      const saveConfig = vi.fn(async () => undefined)
+      let callCount = 0
+      const driver: AiLlmDriver = {
+        chatStructured: async () => {
+          callCount += 1
+          if (callCount < 3) {
+            throw new LlmProviderError({
+              message: '503 ResourceExhausted: Worker local total request limit reached (48/48)',
+              httpStatus: 503,
+              providerCode: 'service_unavailable',
+              retryable: true
+            })
+          }
+          return {
+            output: { answer: 'recovered on attempt 3' },
+            rawText: '{"answer":"recovered on attempt 3"}',
+            method: 'promptJson',
+            transport: 'completions',
+            structuredOutputMode: 'prompt_json',
+            strategy: { transport: 'completions', mode: 'prompt_json' }
+          }
+        }
+      }
+
+      const executor = createAiLlmExecutor({
+        eventCtx: {
+          runId: 'run-resource-exhausted-recovery',
+          sendEvent: (event) => events.push(event)
+        },
+        runtimeSettings: { llmStreamingMode: 'force_non_stream' },
+        getConfig: async () => baseConfig,
+        saveConfig,
+        checkCancelled: () => undefined,
+        driver
+      })
+
+      const resultPromise = executor.chatStructured({
+        caller: 'human.brain',
+        schemaName: 'unit_schema',
+        schema: z.object({ answer: z.string() }),
+        system: 'Return JSON only.',
+        user: 'List files.'
+      })
+
+      await vi.advanceTimersByTimeAsync(2_000)
+      await vi.advanceTimersByTimeAsync(4_000)
+      const result = await resultPromise
+
+      const retryStarted = events.filter(
+        (event) =>
+          event.type === 'assistant_process_group_started' && event.display.kind === 'retry'
+      )
+      expect(result.output).toEqual({ answer: 'recovered on attempt 3' })
+      expect(callCount).toBe(3)
+      expect(retryStarted.map((event) => event.display)).toEqual([
+        expect.objectContaining({ kind: 'retry', attempt: 2, maxAttempts: 5 }),
+        expect.objectContaining({ kind: 'retry', attempt: 3, maxAttempts: 5 })
+      ])
+      expect(
+        events.some((event) => event.type === 'assistant_process_group_completed')
+      ).toBe(true)
+      expect(
+        events.some((event) => event.type === 'assistant_process_group_failed')
+      ).toBe(false)
+      expect(saveConfig).toHaveBeenCalledTimes(1)
+      expect(saveConfig).toHaveBeenCalledWith(
+        expect.objectContaining({
+          preferredTransport: 'completions',
+          preferredStructuredOutputMode: 'prompt_json'
+        })
+      )
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('forwards streamed text deltas through the observer and records stream metadata', async () => {

@@ -385,6 +385,51 @@ describe('ai unit structured output auto fallback', () => {
     expect(callOrder).toEqual(['completions/json_schema'])
   })
 
+  it('tries another structured strategy after provider capacity exhaustion', async () => {
+    const callOrder: string[] = []
+    const capacityError = Object.assign(
+      new Error('ResourceExhausted: Worker local total request limit reached (48/48)'),
+      { status: 503 }
+    )
+    configureCreateChatModel(
+      {
+        'completions/json_schema': { type: 'error', error: capacityError },
+        'completions/json_object': { type: 'error', error: capacityError },
+        'completions/prompt_json': {
+          type: 'success',
+          rawText: JSON.stringify({ answer: 'capacity fallback worked' })
+        }
+      },
+      callOrder
+    )
+
+    const firstResult = await invokeStructuredChat({
+      ...baseInput,
+      cfg: nvidiaCfg
+    })
+
+    expect(firstResult.output).toEqual({ answer: 'capacity fallback worked' })
+    expect(firstResult.strategy).toEqual({ transport: 'completions', mode: 'prompt_json' })
+    expect(callOrder).toEqual([
+      'completions/json_schema',
+      'completions/json_object',
+      'completions/prompt_json'
+    ])
+
+    callOrder.length = 0
+    const secondResult = await invokeStructuredChat({
+      ...baseInput,
+      cfg: {
+        ...nvidiaCfg,
+        preferredTransport: 'completions',
+        preferredStructuredOutputMode: 'prompt_json'
+      }
+    })
+
+    expect(secondResult.output).toEqual({ answer: 'capacity fallback worked' })
+    expect(callOrder).toEqual(['completions/prompt_json'])
+  })
+
   it('surfaces non-retryable provider failures without trying another strategy', async () => {
     const callOrder: string[] = []
     configureCreateChatModel(

@@ -1759,15 +1759,29 @@ export const waitForWorkbenchAiRunOutcome = async (
 
   for (;;) {
     const events = await collectWorkbenchAiRunEvents(runtime)
-    const runFailed = events.find((event) => event.type === 'run_failed')
+    const runStarted = events
+      .filter(
+        (event): event is Extract<AiRunEvent, { type: 'run_started' }> =>
+          event.type === 'run_started' && event.createdAt >= startedAtMs
+      )
+      .at(-1)
+    if (!runStarted) {
+      if (Date.now() >= deadline) {
+        throw new Error(`AI run did not start within ${timeoutMs}ms`)
+      }
+      await page.waitForTimeout(250)
+      continue
+    }
+    const runEvents = events.filter((event) => event.runId === runStarted.runId)
+    const runFailed = runEvents.find((event) => event.type === 'run_failed')
     if (runFailed?.type === 'run_failed') {
       throw new Error(`AI run failed while waiting for completion: ${runFailed.message}`)
     }
 
-    const runCompleted = events.find((event) => event.type === 'run_completed')
+    const runCompleted = runEvents.find((event) => event.type === 'run_completed')
     if (runCompleted?.type === 'run_completed') {
       const finalAnswerText =
-        events
+        runEvents
           .filter(
             (event): event is Extract<AiRunEvent, { type: 'answer_completed' }> =>
               event.type === 'answer_completed'
@@ -1779,20 +1793,20 @@ export const waitForWorkbenchAiRunOutcome = async (
         evidence: {
           modelName,
           durationMs: Date.now() - startedAtMs,
-          events,
+          events: runEvents,
           finalAnswerText
         }
       }
     }
 
-    const approvalRequired = events
+    const approvalRequired = runEvents
       .filter(
         (event): event is Extract<AiRunEvent, { type: 'approval_batch_required' }> =>
           event.type === 'approval_batch_required'
       )
       .at(-1)
     const approvalAlreadyDecided = approvalRequired
-      ? events.some(
+      ? runEvents.some(
           (event) =>
             event.type === 'approval_batch_decision' && event.batchId === approvalRequired.batchId
         )

@@ -689,6 +689,7 @@ const invokeStructuredChatNative = async <T extends Record<string, unknown>>(
   const strategyErrors: string[] = []
   let latestRawText: string | undefined
   let latestOutputError: unknown
+  let latestCapacityError: unknown
 
   for (const strategy of attemptOrder) {
     const { method, transport } = resolveStructuredOutputStrategy(strategy)
@@ -728,10 +729,24 @@ const invokeStructuredChatNative = async <T extends Record<string, unknown>>(
         continue
       }
       if (errorAnalysis.kind === 'retryable') {
+        if (
+          isResourceExhaustedError(
+            error,
+            `${errorAnalysis.info.rawText} ${errorAnalysis.info.code} ${errorAnalysis.info.message}`
+          )
+        ) {
+          strategyErrors.push(`${strategyLabel}: ${reason}`)
+          latestCapacityError = error
+          continue
+        }
         throw createLlmProviderError(error, true)
       }
       throw createLlmProviderError(error, false)
     }
+  }
+
+  if (latestCapacityError) {
+    throw createLlmProviderError(latestCapacityError, true)
   }
 
   throw new LlmOutputError({

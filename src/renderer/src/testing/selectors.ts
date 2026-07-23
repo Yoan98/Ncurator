@@ -122,6 +122,7 @@ export const workbenchSelectors = {
   sidebarBrand: 'workbench-sidebar-brand',
   sessionsList: 'workbench-sessions-list',
   sessionItemPrefix: 'workbench-session-item',
+  workspaceSessionTogglePrefix: 'workbench-workspace-session-toggle',
   sessionDeleteButtonPrefix: 'workbench-session-delete-button',
   sessionDeleteConfirmModal: 'workbench-session-delete-confirm-modal',
   sessionDeleteConfirmButton: 'workbench-session-delete-confirm-button',
