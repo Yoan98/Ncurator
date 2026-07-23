@@ -205,7 +205,8 @@ describe('sqlite storage core and stores', () => {
 
     expect(rows).toEqual([
       { version: 1, name: 'initial_schema' },
-      { version: 2, name: 'ai_runtime_system_notifications' }
+      { version: 2, name: 'ai_runtime_system_notifications' },
+      { version: 3, name: 'chat_session_skill_state' }
     ])
   })
 
@@ -225,6 +226,34 @@ describe('sqlite storage core and stores', () => {
     expect(page.messages.map((message) => message.id)).toEqual(
       Array.from({ length: 50 }, (_, index) => `message-${index + 11}`)
     )
+  })
+
+  it('persists session skills with revision checks and deletes them with the session', async () => {
+    const initial = await chatStore.getSessionSkillState('session-1')
+    const saved = await chatStore.saveSessionSkillStateIfCurrent({
+      sessionId: 'session-1',
+      expectedRevision: initial.revision,
+      learnedSkillIds: ['docx-read'],
+      runId: 'run-skill-1'
+    })
+    const staleWrite = await chatStore.saveSessionSkillStateIfCurrent({
+      sessionId: 'session-1',
+      expectedRevision: initial.revision,
+      learnedSkillIds: ['pdf-read'],
+      runId: 'run-skill-stale'
+    })
+    const reloaded = await new ChatStore(sqlite).getSessionSkillState('session-1')
+
+    expect(initial).toMatchObject({ learnedSkillIds: [], revision: 0 })
+    expect(saved).toMatchObject({ learnedSkillIds: ['docx-read'], revision: 1 })
+    expect(staleWrite).toBeNull()
+    expect(reloaded).toMatchObject({ learnedSkillIds: ['docx-read'], revision: 1 })
+
+    await chatStore.deleteChatSession('session-1')
+    expect(await chatStore.getSessionSkillState('session-1')).toMatchObject({
+      learnedSkillIds: [],
+      revision: 0
+    })
   })
 
   it('restores active and pending approval runs from sqlite', async () => {

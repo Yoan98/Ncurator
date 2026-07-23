@@ -12,8 +12,34 @@ const FAKE_SKILL_TOOLS: Record<FakeSkillId, readonly string[]> = {
   beta: ['tool-9', 'tool-10', 'tool-11', 'tool-12', 'tool-13', 'tool-14', 'tool-15', 'tool-16'],
   gamma: ['tool-17', 'tool-18', 'tool-19', 'tool-20', 'tool-21'],
   delta: ['tool-22', 'tool-23', 'tool-24', 'tool-25'],
-  epsilon: ['tool-26', 'tool-27', 'tool-28', 'tool-29', 'tool-30', 'tool-31', 'tool-32', 'tool-33', 'tool-34', 'tool-35', 'tool-36', 'tool-37'],
-  zeta: ['tool-38', 'tool-39', 'tool-40', 'tool-41', 'tool-42', 'tool-43', 'tool-44', 'tool-45', 'tool-46', 'tool-47', 'tool-48', 'tool-49']
+  epsilon: [
+    'tool-26',
+    'tool-27',
+    'tool-28',
+    'tool-29',
+    'tool-30',
+    'tool-31',
+    'tool-32',
+    'tool-33',
+    'tool-34',
+    'tool-35',
+    'tool-36',
+    'tool-37'
+  ],
+  zeta: [
+    'tool-38',
+    'tool-39',
+    'tool-40',
+    'tool-41',
+    'tool-42',
+    'tool-43',
+    'tool-44',
+    'tool-45',
+    'tool-46',
+    'tool-47',
+    'tool-48',
+    'tool-49'
+  ]
 }
 
 const getFakeToolNames = (skillId: FakeSkillId): readonly string[] => FAKE_SKILL_TOOLS[skillId]
@@ -26,6 +52,24 @@ describe('ai unit learning tool budget', () => {
     })
 
     expect(count).toBe(16)
+  })
+
+  it('includes builtin tools and evicts whole skills in FIFO order', () => {
+    const builtinToolNames = Array.from({ length: 12 }, (_, index) => `builtin-${index + 1}`)
+    const result = fitSkillIdsToToolBudget({
+      existingSkillIds: ['alpha', 'beta'],
+      requestedSkillIds: ['delta'],
+      maxActiveTools: 25,
+      baseToolNames: builtinToolNames,
+      getToolNames: getFakeToolNames
+    })
+
+    expect(result).toEqual({
+      ok: true,
+      learnedSkillIds: ['beta', 'delta'],
+      evictedSkillIds: ['alpha'],
+      activeToolCount: 24
+    })
   })
 
   it('evicts oldest previously learned skills to preserve newly requested skills under tool budget', () => {

@@ -132,6 +132,30 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     return await deps.chatStore.getConversationMemory(payload.sessionId)
   }
 
+  let sessionSkillStatePromise: ReturnType<typeof deps.chatStore.getSessionSkillState> | undefined
+  const loadSessionSkillState: AiRunContext['loadSessionSkillState'] = async () => {
+    checkCancelled()
+    sessionSkillStatePromise ||= deps.chatStore.getSessionSkillState(payload.sessionId)
+    return await sessionSkillStatePromise
+  }
+
+  const saveSessionSkillState: AiRunContext['saveSessionSkillState'] = async (input) => {
+    checkCancelled()
+    const current = await loadSessionSkillState()
+    if (current.revision !== input.expectedRevision) {
+      throw new Error('会话技能状态已被其他运行更新，请重试当前操作。')
+    }
+    const next = await deps.chatStore.saveSessionSkillStateIfCurrent({
+      sessionId: payload.sessionId,
+      expectedRevision: input.expectedRevision,
+      learnedSkillIds: input.learnedSkillIds,
+      runId: payload.runId
+    })
+    if (!next) throw new Error('会话技能状态更新冲突，请重试当前操作。')
+    sessionSkillStatePromise = Promise.resolve(next)
+    return next
+  }
+
   return {
     runId: payload.runId,
     sessionId: payload.sessionId,
@@ -156,6 +180,8 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     webCrawlerService: deps.webCrawlerService,
     loadConversationContext,
     loadConversationMemory,
+    loadSessionSkillState,
+    saveSessionSkillState,
     trackDocxOpen: ({ docId, sourcePath, replaySession }) => {
       deps.docxApplyService.registerDocxOpen({
         runId: payload.runId,

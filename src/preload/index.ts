@@ -111,7 +111,6 @@ const api: DesktopApi = {
     emitE2EIpcCall('openPath', safePath)
     return ipcRenderer.invoke('open-path', filePath)
   },
-  openPathWithApplication: (payload) => ipcRenderer.invoke('open-path-with-application', payload),
   revealPath: (filePath: string): Promise<{ success: boolean; error?: string }> => {
     const safePath = String(filePath || '').trim()
     emitE2EIpcCall('revealPath', safePath)
@@ -122,7 +121,19 @@ const api: DesktopApi = {
     return ipcRenderer.invoke('pick-directory')
   },
   pickFile: (defaultPath?: string) => ipcRenderer.invoke('pick-file', defaultPath),
-  pickApplication: () => ipcRenderer.invoke('pick-application'),
+  listOpenWithApplications: (payload) => {
+    emitE2EIpcCall('listOpenWithApplications', {
+      filePath: String(payload.filePath || '').trim()
+    })
+    return ipcRenderer.invoke('list-open-with-applications', payload)
+  },
+  openFileWithApplication: (payload) => {
+    emitE2EIpcCall('openFileWithApplication', {
+      filePath: String(payload.filePath || '').trim(),
+      applicationId: String(payload.applicationId || '').trim()
+    })
+    return ipcRenderer.invoke('open-file-with-application', payload)
+  },
   search: (query: string, sourceType?: SearchSourceFilter, documentIds?: string[]) =>
     ipcRenderer.invoke('search', query, sourceType, documentIds),
   workspaceList: () => ipcRenderer.invoke('workspace-list'),

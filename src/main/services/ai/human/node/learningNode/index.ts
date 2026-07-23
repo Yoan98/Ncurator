@@ -4,15 +4,16 @@ import type {
   HumanLearningOutcome,
   HumanRuntimeCache,
   HumanState,
-  HumanDecisionHint
+  HumanDecisionHint,
+  RuntimeSkillId
 } from '../../types'
 import {
   assertExternalLearnedSkillIds,
-  expandSkillIdsWithRequirements,
   getEffectiveLearnedSkillIds,
   getSkillDefinition,
   hasSkillDefinition,
-  isLearnableSkillId
+  isLearnableSkillId,
+  listBuiltinSkillDefinitions
 } from '../../skills'
 import { appendDecisionRound, buildLearningExecution } from '../../memory/rounds'
 import { ensureSkillTools } from './skillLoader'
@@ -35,6 +36,16 @@ const dedupeInOrder = <TValue extends string>(values: readonly TValue[]): TValue
   })
 
   return out
+}
+
+const BUILTIN_TOOL_NAMES = Array.from(
+  new Set(listBuiltinSkillDefinitions().flatMap((definition) => definition.toolNames))
+)
+
+const filterAllowedToolNames = (names: readonly string[], allowedToolNames?: readonly string[]) => {
+  if (!allowedToolNames) return [...names]
+  const allowed = new Set(allowedToolNames.map((name) => String(name || '').trim()).filter(Boolean))
+  return names.filter((name) => allowed.has(name))
 }
 
 const buildNoEffectDecisionHint = (input: {
@@ -115,6 +126,9 @@ export const createLearningNode = (input: { ctx: AiRunContext; cache: HumanRunti
     input.ctx.checkCancelled()
     assertExternalLearnedSkillIds(state.skills.learnedSkillIds)
     input.cache.currentState = state
+    const budgetToolNames = filterAllowedToolNames(BUILTIN_TOOL_NAMES, input.ctx.allowedToolNames)
+    const getBudgetToolNames = (skillId: RuntimeSkillId): string[] =>
+      filterAllowedToolNames(getSkillDefinition(skillId).toolNames, input.ctx.allowedToolNames)
 
     if (
       !state.execution.currentThought ||
@@ -131,11 +145,7 @@ export const createLearningNode = (input: { ctx: AiRunContext; cache: HumanRunti
           )
         : []
     )
-    const knownRequestedSkillIds = directRequestedSkillIds.filter(hasSkillDefinition)
-    const requestedSkillIds = dedupeInOrder([
-      ...expandSkillIdsWithRequirements(knownRequestedSkillIds),
-      ...directRequestedSkillIds.filter((skillId) => !hasSkillDefinition(skillId))
-    ])
+    const requestedSkillIds = directRequestedSkillIds
     const effectiveLearnedSkillIds = getEffectiveLearnedSkillIds(state.skills.learnedSkillIds)
     const duplicateSkillIds = requestedSkillIds.filter(
       (skillId): skillId is HumanLearningOutcome['skippedDuplicateSkillIds'][number] =>
@@ -152,7 +162,8 @@ export const createLearningNode = (input: { ctx: AiRunContext; cache: HumanRunti
     if (newSkillIds.length === 0) {
       const activeToolCount = countActiveToolNamesForSkillIds({
         skillIds: state.skills.learnedSkillIds,
-        getToolNames: (skillId) => getSkillDefinition(skillId).toolNames
+        getToolNames: getBudgetToolNames,
+        baseToolNames: budgetToolNames
       })
       const lastLearningOutcome = buildLearningOutcome({
         requestedSkillIds,
@@ -197,7 +208,8 @@ export const createLearningNode = (input: { ctx: AiRunContext; cache: HumanRunti
       existingSkillIds: state.skills.learnedSkillIds,
       requestedSkillIds: [...duplicateSkillIds, ...newSkillIds],
       maxActiveTools: HUMAN_MAX_ACTIVE_TOOLS,
-      getToolNames: (skillId) => getSkillDefinition(skillId).toolNames
+      getToolNames: getBudgetToolNames,
+      baseToolNames: budgetToolNames
     })
     if (!fittedLearnedSkills.ok) {
       const lastLearningOutcome = buildLearningOutcome({
@@ -256,6 +268,11 @@ export const createLearningNode = (input: { ctx: AiRunContext; cache: HumanRunti
       })
     })
     const learnedSkillIds = fittedLearnedSkills.learnedSkillIds
+    const sessionSkillState = await input.ctx.loadSessionSkillState()
+    await input.ctx.saveSessionSkillState({
+      expectedRevision: sessionSkillState.revision,
+      learnedSkillIds
+    })
     const lastLearningOutcome = buildLearningOutcome({
       requestedSkillIds,
       loadedSkillIds: newSkillIds,

@@ -160,6 +160,12 @@ export const createRealAiDepsFactory = async (input: {
 
     const sessionId = contextInput.sessionId || 'test-session'
     terminalSessionIds.add(sessionId)
+    void storageService.chat.saveChatSession({
+      id: sessionId,
+      title: 'backend test session',
+      created_at: Date.now(),
+      workspace_id: 'test-workspace'
+    })
     const ctx = createAiRunContext(
       {
         runId: input.runId,

@@ -20,15 +20,19 @@ const releaseTag = `v${version}`
 const notes = valueAfter('--notes') || `Ncurator ${releaseTag}`
 const forceLocal = args.includes('--local-only')
 const forceActions = args.includes('--actions')
+const macOnly = args.includes('--mac-only')
 const packageE2E = args.includes('--package-e2e')
 const pnpmExecutable = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
 
 if (!/^\d+\.\d+\.\d+$/u.test(version)) {
   throw new Error(
-    'usage: node scripts/release/prepare.mjs --version <1.2.3> [--notes <text>] [--local-only|--actions] [--package-e2e]'
+    'usage: node scripts/release/prepare.mjs --version <1.2.3> [--notes <text>] [--local-only|--actions|--mac-only] [--package-e2e]'
   )
 }
 if (forceLocal && forceActions) throw new Error('--local-only and --actions cannot be combined')
+if (macOnly && (forceLocal || forceActions || packageE2E)) {
+  throw new Error('--mac-only cannot be combined with Windows route or package E2E options')
+}
 
 const run = (command, commandArgs) =>
   new Promise((resolve, reject) => {
@@ -86,13 +90,15 @@ const tagExists = await execFileAsync('git', ['rev-parse', '--verify', '--quiet'
   .catch(() => false)
 if (tagExists) throw new Error(`tag already exists: ${releaseTag}`)
 
-const localInspection = forceActions ? undefined : await inspectLocalWindowsRelease(ROOT)
-await assertWindowsReleaseRouteAvailable({
-  root: ROOT,
-  forceLocal,
-  forceActions,
-  localInspection
-})
+if (!macOnly) {
+  const localInspection = forceActions ? undefined : await inspectLocalWindowsRelease(ROOT)
+  await assertWindowsReleaseRouteAvailable({
+    root: ROOT,
+    forceLocal,
+    forceActions,
+    localInspection
+  })
+}
 
 await run(pnpmExecutable, ['typecheck'])
 await run(pnpmExecutable, ['test:update:backend'])
@@ -105,6 +111,11 @@ await run('git', ['tag', '-a', releaseTag, '-m', notes])
 await run('git', ['push', '--atomic', 'origin', 'main', releaseTag])
 
 process.stdout.write(`[release] prepared and pushed ${releaseTag}\n`)
+
+if (macOnly) {
+  process.stdout.write(`[release] ${releaseTag} prepared for independent macOS release\n`)
+  process.exit(0)
+}
 
 const routeArgs = [
   path.join(ROOT, 'scripts', 'release', 'windows.mjs'),

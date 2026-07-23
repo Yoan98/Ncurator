@@ -116,6 +116,13 @@ describe('ai human mock-llm backend', () => {
           timeoutDeps
         )
         const timeoutSnapshot = await runtime.chatStore.getSessionResumeSnapshot(SESSION_ID)
+        const skillsAfterTimeout = await runtime.chatStore.getSessionSkillState(SESSION_ID)
+        await runtime.chatStore.saveSessionSkillStateIfCurrent({
+          sessionId: SESSION_ID,
+          expectedRevision: skillsAfterTimeout.revision,
+          learnedSkillIds: ['pdf-read'],
+          runId: `${runtime.runId}-newer-session-skills`
+        })
 
         let restoredSkillSeen = false
         let restoredRoundSeen = false
@@ -123,7 +130,8 @@ describe('ai human mock-llm backend', () => {
         const secondDriver = createScriptedStructuredOutputDriver({
           'human.brain': [
             ({ user }) => {
-              restoredSkillSeen = user.includes('docx-read')
+              restoredSkillSeen =
+                user.includes('工具 pdf_inspect') && !user.includes('工具 docx_read_outline')
               restoredRoundSeen = user.includes('先学习一个 skill 再继续。')
               resumeHintSeen =
                 user.includes('上一次运行因 timeout 中断') &&
@@ -157,6 +165,7 @@ describe('ai human mock-llm backend', () => {
           },
           secondDeps
         )
+        const skillsAfterResume = await runtime.chatStore.getSessionSkillState(SESSION_ID)
         const clearedSnapshot = await runtime.chatStore.getSessionResumeSnapshot(SESSION_ID)
 
         const networkDriver = createScriptedStructuredOutputDriver({
@@ -233,7 +242,9 @@ describe('ai human mock-llm backend', () => {
         return {
           timeoutResult,
           timeoutSnapshot,
+          skillsAfterTimeout,
           resumedResult,
+          skillsAfterResume,
           restoredSkillSeen,
           restoredRoundSeen,
           resumeHintSeen,
@@ -254,8 +265,10 @@ describe('ai human mock-llm backend', () => {
             result.timeoutSnapshot.workspace?.rootPath === runtime.workspaceRoot &&
             result.timeoutSnapshot.humanState.skills?.learnedSkillIds?.includes('docx-read') ===
               true &&
+            result.skillsAfterTimeout.learnedSkillIds.includes('docx-read') &&
             result.resumedResult.status === 'completed' &&
             result.resumedResult.finalDeliveryMarkdown?.includes('恢复快照') === true &&
+            result.skillsAfterResume.learnedSkillIds.join(',') === 'pdf-read' &&
             result.clearedSnapshot === null &&
             result.resumeHintSeen &&
             result.networkResult.status === 'failed' &&

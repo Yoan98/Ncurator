@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  expandSkillIdsWithRequirements,
-  SKILL_DEFINITIONS
-} from '../../../../src/main/services/ai/human/skills'
+import { SKILL_DEFINITIONS } from '../../../../src/main/services/ai/human/skills'
 import {
   PPT_EDIT_TOOL_SPEC,
   PPT_TOOL_SPECS
@@ -31,8 +28,6 @@ describe('ai unit ppt tool contract', () => {
       'ppt_render_slides'
     ])
     expect(SKILL_DEFINITIONS['ppt-write'].toolNames).toEqual(['ppt_edit'])
-    expect(SKILL_DEFINITIONS['ppt-write'].requiredSkillIds).toEqual(['ppt-read'])
-    expect(expandSkillIdsWithRequirements(['ppt-write'])).toEqual(['ppt-read', 'ppt-write'])
     expect(PPT_TOOL_SPECS.map((spec) => spec.name)).toEqual([
       'ppt_read_outline',
       'ppt_read_slides',

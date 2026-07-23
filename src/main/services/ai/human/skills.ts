@@ -75,8 +75,7 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
     title: 'ppt-write',
     description:
       '使用受限 HTML 创建或编辑 PPTX 页面和元素，并返回变化页面回读和布局警告。碰到有ppt编辑的需要时，必须要使用该技能',
-    toolNames: ['ppt_edit'],
-    requiredSkillIds: ['ppt-read']
+    toolNames: ['ppt_edit']
   },
   'image-recognition': {
     skillId: 'image-recognition',
@@ -143,25 +142,8 @@ export const getSkillDefinition = (skillId: RuntimeSkillId): SkillDefinition => 
   }
   return {
     ...definition,
-    toolNames: [...definition.toolNames],
-    requiredSkillIds: definition.requiredSkillIds ? [...definition.requiredSkillIds] : undefined
+    toolNames: [...definition.toolNames]
   }
-}
-
-export const expandSkillIdsWithRequirements = (
-  skillIds: readonly RuntimeSkillId[]
-): RuntimeSkillId[] => {
-  const expanded: RuntimeSkillId[] = []
-  const visited = new Set<RuntimeSkillId>()
-  const visit = (skillId: RuntimeSkillId): void => {
-    if (visited.has(skillId)) return
-    visited.add(skillId)
-    const definition = getSkillDefinition(skillId)
-    for (const requiredSkillId of definition.requiredSkillIds || []) visit(requiredSkillId)
-    expanded.push(skillId)
-  }
-  for (const skillId of skillIds) visit(skillId)
-  return expanded
 }
 
 export const listSkillDefinitions = (): SkillDefinition[] =>

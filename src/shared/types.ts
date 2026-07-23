@@ -797,18 +797,30 @@ export interface FileChangesSummary {
   changed_files: FileChangeSummaryItem[]
 }
 
-export interface PickApplicationResponse {
-  canceled: boolean
-  appPath?: string
+export interface OpenWithApplication {
+  id: string
+  name: string
+  iconDataUrl?: string
+  isDefault: boolean
+}
+
+export interface ListOpenWithApplicationsRequest {
+  filePath: string
+}
+
+export interface ListOpenWithApplicationsResponse {
+  success: boolean
+  applications: OpenWithApplication[]
+  defaultApplicationId?: string
   error?: string
 }
 
-export interface OpenPathWithApplicationRequest {
+export interface OpenFileWithApplicationRequest {
   filePath: string
-  appPath: string
+  applicationId: string
 }
 
-export interface OpenPathWithApplicationResponse {
+export interface OpenFileWithApplicationResponse {
   success: boolean
   error?: string
 }
@@ -1593,4 +1605,12 @@ export type ChatSessionResumeSnapshotRow = {
   human_state_json: string
   error_message: string
   updated_at: number
+}
+
+export type ChatSessionSkillState = {
+  schemaVersion: 1
+  learnedSkillIds: string[]
+  revision: number
+  updatedAt: number
+  lastUpdatedRunId: string
 }
