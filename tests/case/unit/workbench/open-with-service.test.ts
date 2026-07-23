@@ -76,6 +76,24 @@ describe('OpenWithService', () => {
     expect(result.applications[0]?.iconDataUrl).toBe('icon:/Applications/Editor.app')
   })
 
+  it('returns at most five system-recommended handlers', async () => {
+    const filePath = await createFile()
+    const service = new OpenWithService({
+      runNativeList: vi.fn().mockResolvedValue({
+        applications: Array.from({ length: 7 }, (_, index) => ({
+          id: `application-${index}`,
+          name: `Application ${index}`,
+          isDefault: index === 6
+        }))
+      })
+    })
+
+    const result = await service.list(filePath)
+
+    expect(result.applications).toHaveLength(5)
+    expect(result.applications[0]).toMatchObject({ id: 'application-6', isDefault: true })
+  })
+
   it('only opens a handler returned by the system query and reuses its cache', async () => {
     const filePath = await createFile()
     const runNativeList = vi.fn().mockResolvedValue({
@@ -116,7 +134,12 @@ describe('OpenWithService', () => {
     )
     expect(helper).toContain('SHAssocEnumHandlers')
     expect(helper).toContain('IAssocHandler')
-    expect(helper).toContain('handler.Invoke(itemArray)')
+    expect(helper).toContain('enum AssocFilter : uint { Recommended = 1 }')
+    expect(helper).toContain('[Console]::OutputEncoding = $utf8')
+    expect(helper).toContain('interface IShellItem')
+    expect(helper).toContain('shellItem.BindToHandler')
+    expect(helper).toContain('B8C0BD9F-ED24-455C-83E6-D5390C4FE8C4')
+    expect(helper).toContain('handler.Invoke(dataObject)')
     expect(helper).not.toContain('Visual Studio Code')
     expect(helper).not.toContain('Microsoft Word')
   })

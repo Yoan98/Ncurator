@@ -12,7 +12,27 @@ import { workbenchSelectors } from '../../../../src/renderer/src/testing/selecto
 
 afterEach(cleanup)
 
-const renderPanel = (openFileWithApplication = vi.fn()) => {
+const renderPanel = (
+  openFileWithApplication = vi.fn(),
+  applications: Array<{
+    id: string
+    name: string
+    iconDataUrl?: string
+    isDefault: boolean
+  }> = [
+    {
+      id: 'com.example.editor',
+      name: 'System Editor',
+      iconDataUrl: 'data:image/png;base64,AA==',
+      isDefault: true
+    },
+    {
+      id: 'com.example.viewer',
+      name: 'Viewer',
+      isDefault: false
+    }
+  ]
+) => {
   const onOpenPath = vi.fn()
   Object.defineProperty(window, 'matchMedia', {
     configurable: true,
@@ -23,19 +43,7 @@ const renderPanel = (openFileWithApplication = vi.fn()) => {
     value: {
       listOpenWithApplications: vi.fn().mockResolvedValue({
         success: true,
-        applications: [
-          {
-            id: 'com.example.editor',
-            name: 'System Editor',
-            iconDataUrl: 'data:image/png;base64,AA==',
-            isDefault: true
-          },
-          {
-            id: 'com.example.viewer',
-            name: 'Viewer',
-            isDefault: false
-          }
-        ],
+        applications,
         defaultApplicationId: 'com.example.editor'
       }),
       openFileWithApplication
@@ -105,5 +113,27 @@ describe('workbench open-with panel', () => {
       })
     )
     expect(onOpenPath).not.toHaveBeenCalled()
+  })
+
+  it('renders no more than five application choices', async () => {
+    renderPanel(
+      vi.fn(),
+      Array.from({ length: 7 }, (_, index) => ({
+        id: `application-${index}`,
+        name: `Application ${index}`,
+        isDefault: index === 0
+      }))
+    )
+
+    await waitFor(() =>
+      expect(screen.getByTestId(workbenchSelectors.openWithButton).textContent).toContain(
+        'Application 0'
+      )
+    )
+    fireEvent.click(screen.getByRole('button', { name: '选择打开应用' }))
+
+    expect(await screen.findByText('Application 4')).toBeTruthy()
+    expect(screen.queryByText('Application 5')).toBeNull()
+    expect(screen.queryByText('Application 6')).toBeNull()
   })
 })

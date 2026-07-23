@@ -202,10 +202,10 @@ textarea,
 }
 
 .workbench-open-with-menu .ant-dropdown-menu {
-  min-width: 220px;
-  max-width: 300px;
-  max-height: 360px;
-  overflow-y: auto;
+  width: 260px;
+  min-width: 0;
+  max-width: calc(100vw - 16px);
+  overflow: hidden;
   padding: 6px;
 }
 
@@ -215,6 +215,12 @@ textarea,
   align-items: center;
   gap: 10px;
   padding: 7px 10px;
+  min-width: 0;
+}
+
+.workbench-open-with-menu .ant-dropdown-menu-title-content {
+  min-width: 0;
+  overflow: hidden;
 }
 
 .ui-panel {

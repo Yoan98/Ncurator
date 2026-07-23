@@ -12,6 +12,7 @@ import type {
 
 const execFileAsync = promisify(execFile)
 const OPEN_WITH_CACHE_TTL_MS = 5 * 60 * 1_000
+const MAX_OPEN_WITH_APPLICATIONS = 5
 const NATIVE_QUERY_MAX_BUFFER = 10 * 1024 * 1024
 
 export type NativeOpenWithApplication = {
@@ -100,8 +101,14 @@ export class OpenWithService {
       const native = await (this.options.runNativeList?.(resolvedPath) ??
         this.runNativeList(resolvedPath))
       if (native.error) return { success: false, applications: [], error: native.error }
+      const nativeApplications = (native.applications || [])
+        .filter(
+          (item, index, items) => items.findIndex((candidate) => candidate.id === item.id) === index
+        )
+        .sort((left, right) => Number(right.isDefault) - Number(left.isDefault))
+        .slice(0, MAX_OPEN_WITH_APPLICATIONS)
       const applications = await Promise.all(
-        (native.applications || []).map(
+        nativeApplications.map(
           async (item): Promise<OpenWithApplication> => ({
             id: item.id,
             name: item.name,
@@ -112,19 +119,16 @@ export class OpenWithService {
           })
         )
       )
-      const normalized = applications
-        .filter(
-          (item, index, items) => items.findIndex((candidate) => candidate.id === item.id) === index
-        )
-        .sort((left, right) => Number(right.isDefault) - Number(left.isDefault))
       this.handlerCache.set(resolvedPath, {
-        applications: native.applications || [],
+        applications: nativeApplications,
         expiresAt: (this.options.now?.() ?? Date.now()) + OPEN_WITH_CACHE_TTL_MS
       })
       return {
         success: true,
-        applications: normalized,
-        defaultApplicationId: native.defaultApplicationId
+        applications,
+        defaultApplicationId:
+          nativeApplications.find((application) => application.isDefault)?.id ||
+          native.defaultApplicationId
       }
     } catch (error) {
       return {
@@ -219,7 +223,7 @@ export class OpenWithService {
       '& ([scriptblock]::Create([IO.File]::ReadAllText($env:NCURATOR_OPEN_WITH_SCRIPT))) -Mode $env:NCURATOR_OPEN_WITH_MODE -FilePath $env:NCURATOR_OPEN_WITH_FILE -ApplicationId $env:NCURATOR_OPEN_WITH_APPLICATION'
     return execFileAsync(
       'powershell.exe',
-      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', command],
+      ['-NoProfile', '-NonInteractive', '-Sta', '-ExecutionPolicy', 'Bypass', '-Command', command],
       { env, maxBuffer: NATIVE_QUERY_MAX_BUFFER }
     )
   }
