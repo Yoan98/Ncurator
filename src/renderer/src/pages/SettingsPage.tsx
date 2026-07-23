@@ -5,6 +5,7 @@ import { USER_MANUAL_URL } from '../../../shared/constants'
 import ModelSettingsPanel from '../components/settings/ModelSettingsPanel'
 import VectorModelSettingsPanel from '../components/settings/VectorModelSettingsPanel'
 import WorkspaceSettingsPanel from '../components/settings/WorkspaceSettingsPanel'
+import GeneralSettingsPanel from '../components/settings/GeneralSettingsPanel'
 import { SETTINGS_SECTION_META, SETTINGS_SECTION_ORDER } from '../components/settings/constants'
 import type { SettingsSectionValue } from '../components/settings/types'
 import { settingsSelectors } from '../testing/selectors'
@@ -20,7 +21,7 @@ const normalizeSettingsSection = (value: string | undefined): SettingsSectionVal
   if (!value) return null
   if (value === 'web-sources') return 'workspace'
   if (value === 'model-download') return 'vector'
-  if (value === 'model' || value === 'workspace' || value === 'vector') {
+  if (value === 'general' || value === 'model' || value === 'workspace' || value === 'vector') {
     return value
   }
   return null
@@ -173,6 +174,7 @@ const SettingsPage: React.FC = () => {
           </header>
 
           <div className="min-h-0 flex-1 overflow-hidden">
+            {currentSection === 'general' ? <GeneralSettingsPanel /> : null}
             {currentSection === 'workspace' ? <WorkspaceSettingsPanel /> : null}
             {currentSection === 'model' ? <ModelSettingsPanel /> : null}
             {currentSection === 'vector' ? <VectorModelSettingsPanel /> : null}

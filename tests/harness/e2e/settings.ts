@@ -17,7 +17,7 @@ import {
   vectorSelectors
 } from '../../../src/renderer/src/testing/selectors'
 
-export type SettingsPageTarget = 'model' | 'workspace' | 'vector'
+export type SettingsPageTarget = 'general' | 'model' | 'workspace' | 'vector'
 
 export const SETTINGS_E2E_TIMEOUT_MS = 60_000
 export const SETTINGS_LONG_E2E_TIMEOUT_MS = 120_000
@@ -149,18 +149,21 @@ const byTestId = (testId: string): string => `[data-testid="${testId}"]`
 const byTestIdPrefix = (testIdPrefix: string): string => `[data-testid^="${testIdPrefix}-"]`
 
 const SETTINGS_TARGET_HEADINGS: Record<SettingsPageTarget, string> = {
+  general: '通用',
   model: '大模型',
   workspace: '工作空间',
   vector: '向量模型'
 }
 
 const SETTINGS_TARGET_HASHES: Record<SettingsPageTarget, string> = {
+  general: '#/settings/general',
   model: '#/settings/model',
   workspace: '#/settings/workspace',
   vector: '#/model-download'
 }
 
 const SETTINGS_TARGET_SELECTORS: Record<SettingsPageTarget, string> = {
+  general: settingsSelectors.generalPanel,
   model: settingsSelectors.page,
   workspace: settingsSelectors.page,
   vector: vectorSelectors.page

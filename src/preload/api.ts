@@ -241,4 +241,5 @@ export type DesktopApi = {
     payload: OpenPathWithApplicationRequest
   ) => Promise<OpenPathWithApplicationResponse>
   onAiRunEvent: (cb: (event: AiRunEvent) => void) => () => void
+  onSystemNotificationOpenSession: (cb: (sessionId: string) => void) => () => void
 }

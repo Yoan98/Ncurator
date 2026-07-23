@@ -1,0 +1,106 @@
+import { describe, expect, it, vi } from 'vitest'
+import { SystemNotificationService } from '../../../src/main/services/SystemNotificationService'
+import type { AiRunRecord, AiRuntimeSettings } from '../../../src/shared/types'
+
+const run = (status: AiRunRecord['status'] = 'completed'): AiRunRecord => ({
+  id: 'run-1',
+  sessionId: 'session-1',
+  userMessageId: 'user-1',
+  assistantMessageId: 'assistant-1',
+  status,
+  input: '测试输入',
+  partialAnswer: '',
+  artifacts: [],
+  processEvents: [],
+  eventCount: 0,
+  visibleEventCount: 0,
+  createdAt: 1,
+  updatedAt: 1
+})
+
+const settingsStore = (settings: AiRuntimeSettings) => ({
+  get: vi.fn(async () => settings)
+})
+
+describe('SystemNotificationService', () => {
+  it.each([
+    ['completed', 'AI 运行已完成'],
+    ['failed', 'AI 运行失败'],
+    ['cancelled', 'AI 运行已取消']
+  ] as const)('notifies %s terminal runs', async (status, title) => {
+    const show = vi.fn()
+    const on = vi.fn()
+    const createNotification = vi.fn(() => ({ show, on }))
+    const service = new SystemNotificationService({
+      settingsStore: settingsStore({
+        llmStreamingMode: 'force_stream',
+        systemNotificationsEnabled: true
+      }) as never,
+      getMainWindow: () => null,
+      isSupported: () => true,
+      createNotification
+    })
+
+    await service.notifyRunTerminal(run(status), status)
+
+    expect(on).toHaveBeenCalledWith('click', expect.any(Function))
+    expect(show).toHaveBeenCalledOnce()
+    expect(createNotification).toHaveBeenCalledWith(expect.objectContaining({ title }))
+  })
+
+  it('does not notify when disabled', async () => {
+    const createNotification = vi.fn()
+    const service = new SystemNotificationService({
+      settingsStore: settingsStore({
+        llmStreamingMode: 'force_stream',
+        systemNotificationsEnabled: false
+      }) as never,
+      getMainWindow: () => null,
+      isSupported: () => true,
+      createNotification
+    })
+
+    await service.notifyRunTerminal(run(), 'completed')
+    expect(createNotification).not.toHaveBeenCalled()
+  })
+
+  it('opens the matching session when the notification is clicked', async () => {
+    let clickHandler: (() => void) | undefined
+    const window = {
+      isDestroyed: () => false,
+      isMinimized: () => true,
+      restore: vi.fn(),
+      show: vi.fn(),
+      focus: vi.fn(),
+      webContents: {
+        isDestroyed: () => false,
+        send: vi.fn()
+      }
+    }
+    const service = new SystemNotificationService({
+      settingsStore: settingsStore({
+        llmStreamingMode: 'force_stream',
+        systemNotificationsEnabled: true
+      }) as never,
+      getMainWindow: () => window as never,
+      isSupported: () => true,
+      createNotification: () => ({
+        show: vi.fn(),
+        on: (_event, listener) => {
+          clickHandler = listener
+        }
+      })
+    })
+
+    await service.notifyRunTerminal(run(), 'completed')
+    clickHandler?.()
+
+    expect(window.restore).toHaveBeenCalledOnce()
+    expect(window.show).toHaveBeenCalledOnce()
+    expect(window.focus).toHaveBeenCalledOnce()
+    expect(window.webContents.send).toHaveBeenCalledWith(
+      'system-notification-open-session',
+      'session-1'
+    )
+  })
+})

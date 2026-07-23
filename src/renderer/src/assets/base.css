@@ -561,7 +561,7 @@ textarea,
 }
 
 .nc-sidebar-session-toggle {
-  @apply flex h-7 w-full items-center justify-center gap-1 rounded-[6px] text-[12px] font-medium text-[#91918E] transition-colors hover:bg-[#EFEFEE] hover:text-[#37352F] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0B6BCB]/30;
+  @apply flex h-7 w-full items-center justify-start gap-1 rounded-[6px] pl-7 text-[12px] font-medium text-[#91918E] transition-colors hover:bg-[#EFEFEE] hover:text-[#37352F] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0B6BCB]/30;
 }
 
 .nc-sidebar-update-button {

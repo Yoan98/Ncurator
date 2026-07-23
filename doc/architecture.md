@@ -37,6 +37,7 @@ NCurator-Desktop 是本地优先的 Electron 桌面应用。文档解析、嵌�
 
 - Renderer 负责 UI 展示、用户交互和状态呈现。
 - Main 负责 AI 编排、数据库访问、文档处理、资料索引和写回流程。
+- Main 负责 AI 运行终态的系统通知；通知由 `SystemNotificationService` 统一适配 macOS 和 Windows，Renderer 只负责接收通知点击后的会话打开事件。
 - Preload 负责 Renderer 与 Main 之间的安全桥接。
 - Shared 负责 IPC 契约、事件类型和跨进程共享类型。
 
@@ -77,6 +78,15 @@ Retrieval 负责文档索引、向量检索、全文检索和结果融合。检�
 ### Tool Runtime
 
 Tool Runtime 为 AI 提供文件、终端、浏览器等本地能力。工具实现位于 Main，由各领域服务负责具体操作；通用安全边界、审批和工作区变化追踪由运行时统一处理。
+
+内置浏览器的 Stagehand 自动化通过 Electron Chromium 的 CDP 连接。Main 启动时只设置
+`remote-debugging-address=127.0.0.1` 和 `remote-debugging-port=0`，由 Chromium 自动选择空闲端口并写入
+user-data 目录下的 `DevToolsActivePort`。`CdpEndpointService` 负责等待、解析和校验该文件及 `/json/version`，
+`BrowserEmbedService` 只依赖解析后的 endpoint，不持有固定端口。CDP 仅绑定本机回环地址；随机端口用于避免
+安装版、开发版或其他本地程序之间的固定端口冲突，但不把随机端口当作安全认证机制。
+
+开发版默认使用独立的 `*-dev` user-data 目录，避免和安装版共享数据库、实例锁或 `DevToolsActivePort`；E2E
+可以通过 `NCURATOR_USER_DATA_PATH` 显式提供隔离目录。
 
 ### Workspace Change Tracking
 
@@ -178,3 +188,4 @@ AI 结构化调用按配置和模型维度记忆成功策略。首次没有历�
 5. 需要本地能力时由 Tool Runtime 调用对应领域服务。
 6. 文件写回后记录统一修改记录和对应预览，供 UI 展示和回退。
 7. 最终答复和事件流通过 IPC 回到 Renderer 展示。
+8. Run 持久化为 `completed`、`failed` 或 `cancelled` 后，Main 触发一次系统通知；通知点击通过 Preload IPC 打开对应会话。

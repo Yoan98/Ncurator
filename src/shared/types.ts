@@ -918,6 +918,7 @@ export type DecisionHintSource = 'brain' | 'learning' | 'hand' | 'memory_reducer
 
 export type AiRuntimeSettings = {
   llmStreamingMode: AiLlmStreamingMode
+  systemNotificationsEnabled: boolean
 }
 
 export type AiFileArtifactCapability = 'terminal_exec' | 'docx' | 'ppt' | 'excel' | 'text_file'

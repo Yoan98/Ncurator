@@ -203,7 +203,10 @@ describe('sqlite storage core and stores', () => {
       .prepare('SELECT version, name FROM schema_migrations ORDER BY version ASC')
       .all() as Array<{ version: number; name: string }>
 
-    expect(rows).toEqual([{ version: 1, name: 'initial_schema' }])
+    expect(rows).toEqual([
+      { version: 1, name: 'initial_schema' },
+      { version: 2, name: 'ai_runtime_system_notifications' }
+    ])
   })
 
   it('keeps chat message seq stable and returns the latest 50 in ascending order', async () => {

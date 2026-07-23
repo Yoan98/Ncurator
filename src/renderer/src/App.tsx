@@ -1,5 +1,6 @@
 ﻿import React from 'react'
-import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { HashRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { useEffect } from 'react'
 import { App as AntdApp, Layout, ConfigProvider, theme } from 'antd'
 import ConversationWorkbenchPage from './pages/ConversationWorkbenchPage'
 import SettingsPage from './pages/SettingsPage'
@@ -10,6 +11,22 @@ import { AppUpdateProvider } from './contexts/AppUpdateProvider'
 import AppWindowFrame from './components/app/AppWindowFrame'
 
 const { Content } = Layout
+const PENDING_NOTIFICATION_SESSION_KEY = 'ncurator.pending-notification-session'
+
+const SystemNotificationNavigationBridge: React.FC = () => {
+  const navigate = useNavigate()
+  const location = useLocation()
+
+  useEffect(() => {
+    return window.api.onSystemNotificationOpenSession((sessionId) => {
+      if (location.pathname === '/') return
+      window.sessionStorage.setItem(PENDING_NOTIFICATION_SESSION_KEY, sessionId)
+      navigate('/')
+    })
+  }, [location.pathname, navigate])
+
+  return null
+}
 
 function App(): React.JSX.Element {
   return (
@@ -88,6 +105,7 @@ function App(): React.JSX.Element {
         <AppUpdateProvider>
           <WorkbenchModeProvider>
             <HashRouter>
+              <SystemNotificationNavigationBridge />
               <AppWindowFrame>
                 <MainLayout />
                 <NotificationCenter />

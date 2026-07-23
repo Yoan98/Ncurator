@@ -4,6 +4,10 @@ import path from 'path'
 import { SQLITE_DB_PATH } from '../../../utils/paths'
 import { initialSchemaSql } from './migrations/001_initial_schema'
 
+const notificationSettingsMigration = `
+ALTER TABLE ai_runtime_settings ADD COLUMN systemNotificationsEnabled INTEGER NOT NULL DEFAULT 1;
+`
+
 export type SqliteDatabase = Database.Database
 export type SqliteStatement = Database.Statement
 
@@ -18,6 +22,11 @@ const MIGRATIONS: Migration[] = [
     version: 1,
     name: 'initial_schema',
     sql: initialSchemaSql
+  },
+  {
+    version: 2,
+    name: 'ai_runtime_system_notifications',
+    sql: notificationSettingsMigration
   }
 ]
 

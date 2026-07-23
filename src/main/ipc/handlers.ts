@@ -1,4 +1,5 @@
 import { BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import type { SystemNotificationService } from '../services/SystemNotificationService'
 import type { OpenDialogOptions } from 'electron'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
@@ -147,6 +148,7 @@ export function registerHandlers(services: {
   browserEmbedService?: BrowserEmbedService
   webCrawlerService?: WebCrawlerService
   recordLlmIo?: (record: AiLlmIoRecord) => void
+  systemNotificationService?: SystemNotificationService
 }) {
   const {
     embeddingService,
@@ -194,7 +196,10 @@ export function registerHandlers(services: {
     runResourceManager,
     browserUseService: browserEmbedService,
     webCrawlerService,
-    recordLlmIo: services.recordLlmIo
+    recordLlmIo: services.recordLlmIo,
+    onRunTerminal: async (run, status) => {
+      await services.systemNotificationService?.notifyRunTerminal(run, status)
+    }
   })
   void chatRunService.failInterruptedRuns().catch((error) => {
     console.error('[CHAT-RUN] Failed to mark interrupted runs:', error)

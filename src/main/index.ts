@@ -13,18 +13,14 @@ import { VectorModelDownloadService } from './services/model/VectorModelDownload
 import { globalShortcut } from 'electron'
 import { loadRootEnvOnce } from './utils/rootEnv'
 import { BrowserEmbedService } from './services/browser/BrowserEmbedService'
-import { EMBEDDED_BROWSER_REMOTE_DEBUGGING_PORT } from './services/browser/constants'
+import { CdpEndpointService } from './services/browser/CdpEndpointService'
 import { createWebCrawlerService } from './services/webCrawler/createWebCrawlerService'
 import { AppUpdateService } from './services/update/AppUpdateService'
 import { APP_ID } from '../shared/constants'
 import { MODELS_PATH } from './utils/paths'
 import { terminalSessionManager } from './services/ai/human/tools/terminal/TerminalSessionManager'
 import { AppShutdownCoordinator } from './services/AppShutdownCoordinator'
-
-app.commandLine.appendSwitch(
-  'remote-debugging-port',
-  String(EMBEDDED_BROWSER_REMOTE_DEBUGGING_PORT)
-)
+import { SystemNotificationService } from './services/SystemNotificationService'
 
 if (!app.isPackaged) {
   loadRootEnvOnce()
@@ -33,7 +29,12 @@ if (!app.isPackaged) {
 const e2eUserDataPath = String(process.env.NCURATOR_USER_DATA_PATH || '').trim()
 if (e2eUserDataPath) {
   app.setPath('userData', e2eUserDataPath)
+} else if (!app.isPackaged) {
+  app.setPath('userData', `${app.getPath('userData')}-dev`)
 }
+
+app.commandLine.appendSwitch('remote-debugging-address', '127.0.0.1')
+app.commandLine.appendSwitch('remote-debugging-port', '0')
 
 const singleInstanceLock = process.env.NCURATOR_E2E_OBSERVER
   ? true
@@ -223,8 +224,15 @@ if (!singleInstanceLock) {
     await storageService.initialize()
 
     const mainWindow = createWindow()
+    const systemNotificationService = new SystemNotificationService({
+      settingsStore: storageService.aiRuntimeSettings,
+      getMainWindow: () => BrowserWindow.getAllWindows()[0] || null
+    })
     const appUpdateService = new AppUpdateService()
-    const browserEmbedService = new BrowserEmbedService(mainWindow)
+    const cdpEndpointService = new CdpEndpointService({
+      userDataPath: app.getPath('userData')
+    })
+    const browserEmbedService = new BrowserEmbedService(mainWindow, cdpEndpointService)
     const webCrawlerBaseDirectory = join(app.getPath('userData'), 'web-crawler')
     const webCrawlerService = createWebCrawlerService({
       appRootPath: app.getAppPath(),
@@ -242,7 +250,8 @@ if (!singleInstanceLock) {
       modelService,
       vectorModelDownloadService,
       browserEmbedService,
-      webCrawlerService
+      webCrawlerService,
+      systemNotificationService
     })
     appUpdateService.initialize()
     appUpdateService.checkForUpdatesOnLaunch()

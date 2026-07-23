@@ -1670,6 +1670,27 @@ const ChatPage: React.FC = () => {
     void openExistingSession(session)
   }
 
+  useEffect(() => {
+    const openNotificationSession = async (sessionId: string): Promise<void> => {
+      const session = sessions.find((item) => item.id === sessionId)
+      if (session) {
+        selectSession(session)
+        return
+      }
+      const loadedSessions = await loadSessions()
+      const loadedSession = loadedSessions.find((item) => item.id === sessionId)
+      if (loadedSession) selectSession(loadedSession)
+    }
+    const pendingSessionId = window.sessionStorage.getItem('ncurator.pending-notification-session')
+    if (pendingSessionId) {
+      window.sessionStorage.removeItem('ncurator.pending-notification-session')
+      void openNotificationSession(pendingSessionId)
+    }
+    return window.api.onSystemNotificationOpenSession(openNotificationSession)
+    // Session selection intentionally uses the current list captured by this effect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessions])
+
   const acknowledgeCurrentSessionCompletion = useCallback((): void => {
     const sessionId = currentSessionIdRef.current
     if (

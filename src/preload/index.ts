@@ -22,6 +22,8 @@ const isE2EObserverEnabled = isE2EFixtureMode || process.env.NCURATOR_E2E_OBSERV
 const downloadProgressListeners = new Set<(progressData: DownloadProgress) => void>()
 const workspaceIndexJobProgressListeners = new Set<(job: WorkspaceIndexJobRecord) => void>()
 const appUpdateFixtureListeners = new Set<(snapshot: AppUpdateSnapshot) => void>()
+const systemNotificationSessionListeners = new Set<(sessionId: string) => void>()
+let pendingSystemNotificationSessionId: string | null = null
 const APP_UPDATE_E2E_SET_SNAPSHOT_EVENT = 'ncurator-e2e-app-update-set-snapshot'
 
 let appUpdateFixtureSnapshot: AppUpdateSnapshot = {
@@ -69,6 +71,12 @@ const emitDownloadProgress = (payload: DownloadProgress): void => {
     listener(payload)
   }
 }
+
+ipcRenderer.on('system-notification-open-session', (_event, sessionId: string) => {
+  pendingSystemNotificationSessionId = sessionId
+  for (const listener of systemNotificationSessionListeners) listener(sessionId)
+  if (systemNotificationSessionListeners.size > 0) pendingSystemNotificationSessionId = null
+})
 
 if (isE2EObserverEnabled) {
   ipcRenderer.on('ai-run-event', (_event: Electron.IpcRendererEvent, data: AiRunEvent) => {
@@ -373,6 +381,17 @@ const api: DesktopApi = {
     ipcRenderer.on('ai-run-event', listener)
     return () => {
       ipcRenderer.removeListener('ai-run-event', listener)
+    }
+  },
+  onSystemNotificationOpenSession: (cb: (sessionId: string) => void) => {
+    systemNotificationSessionListeners.add(cb)
+    if (pendingSystemNotificationSessionId) {
+      const sessionId = pendingSystemNotificationSessionId
+      pendingSystemNotificationSessionId = null
+      queueMicrotask(() => cb(sessionId))
+    }
+    return () => {
+      systemNotificationSessionListeners.delete(cb)
     }
   },
   onBrowserPanelStateChange: (cb: (state: BrowserPanelState) => void) => {

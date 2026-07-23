@@ -72,6 +72,8 @@ export const settingsSelectors = {
   sidebarDragRegion: 'settings-sidebar-drag-region',
   helpButton: 'settings-help-button',
   tabSwitch: 'settings-tab-switch',
+  generalPanel: 'settings-general-panel',
+  systemNotificationsSwitch: 'settings-system-notifications-switch',
   workspacePanel: 'settings-workspace-panel',
   modelPanel: 'settings-model-panel',
   modelTable: 'settings-model-table',

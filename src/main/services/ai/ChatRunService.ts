@@ -105,6 +105,10 @@ type ChatRunServiceDeps = {
   broadcastEvent?: (event: AiRunEvent) => void
   autoStartRuns?: boolean
   conversationMemorySummaryBuilder?: ConversationMemorySummaryBuilder
+  onRunTerminal?: (
+    run: AiRunRecord,
+    status: Extract<AiRunRecord['status'], 'completed' | 'failed' | 'cancelled'>
+  ) => void | Promise<void>
 }
 
 const jieba = Jieba.withDict(dict)
@@ -175,6 +179,11 @@ export class ChatRunService {
           code: 'error'
         }
       })
+      try {
+        await this.deps.onRunTerminal?.(nextRun, 'failed')
+      } catch (error) {
+        console.error('[CHAT-RUN] terminal notification failed:', error)
+      }
     }
   }
 
@@ -1090,6 +1099,20 @@ export class ChatRunService {
       event
     })
     await this.projectEvent(runId, run, event)
+    if (
+      event.type === 'run_completed' ||
+      event.type === 'run_failed' ||
+      event.type === 'run_cancelled'
+    ) {
+      try {
+        await this.deps.onRunTerminal?.(
+          run,
+          run.status as 'completed' | 'failed' | 'cancelled'
+        )
+      } catch (error) {
+        console.error('[CHAT-RUN] terminal notification failed:', error)
+      }
+    }
     this.broadcastEvent(event)
   }
 

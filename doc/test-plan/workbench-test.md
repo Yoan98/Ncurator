@@ -276,6 +276,15 @@ tests/case/workbench/
 - Oracle：各阶段浏览器 viewport 均包含稳定的非白真实网页像素且尺寸、zoom 不变；Renderer 菜单打开时原生视图隐藏，关闭后恢复；折叠或切换会话只停放视图，不销毁 WebContents，计时器持续前进；回到原会话时面板直接按最终宽度恢复且不重播展开动画，对齐 `WB-PANEL-001-AC5`、`WB-PANEL-004-AC1`、`WB-PANEL-004-AC3`、`WB-PANEL-004-AC7`。
 - Not：不验证公网网页、Stagehand 操作或最终 AI 回答；这些由 `browser-use-task-panel` 覆盖。
 
+#### `cdp-random-port-isolation`
+
+- 测试类型：`e2e`
+- What：在启动 Electron 前占用旧的 `9333` 端口，验证应用仍能启动并使用 Chromium 自动分配的回环 CDP 端口。
+- Why：生产环境不应依赖固定端口；安装版、开发版或用户其他软件占用 `9333` 时，不能影响应用启动。
+- How：启动本地 `127.0.0.1:9333` 占用者，启动真实 Electron，读取隔离 user-data 中的 `DevToolsActivePort`，再访问 `/json/version` 验证 endpoint 可用。
+- Oracle：应用进入可用状态；实际端口为有效端口且不等于 `9333`；CDP endpoint 返回成功。
+- Not：不验证 Stagehand 的模型操作；完整 `observe / act / extract` 仍由 `browser-use-task-panel` 覆盖。
+
 #### `web-search-diagnostic`
 
 - 测试类型：`e2e`

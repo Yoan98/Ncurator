@@ -4,12 +4,14 @@ import type { SqliteCore } from '../sqlite/SqliteCore'
 const SETTINGS_ROW_ID = 'singleton'
 
 const DEFAULT_SETTINGS: AiRuntimeSettings = {
-  llmStreamingMode: 'force_stream'
+  llmStreamingMode: 'force_stream',
+  systemNotificationsEnabled: true
 }
 
 type AiRuntimeSettingsRow = {
   id?: unknown
   llmStreamingMode?: unknown
+  systemNotificationsEnabled?: unknown
   updated_at?: unknown
 }
 
@@ -23,7 +25,8 @@ export class AiRuntimeSettingsStore {
     if (!row) return DEFAULT_SETTINGS
     return {
       llmStreamingMode:
-        row.llmStreamingMode === 'force_non_stream' ? 'force_non_stream' : 'force_stream'
+        row.llmStreamingMode === 'force_non_stream' ? 'force_non_stream' : 'force_stream',
+      systemNotificationsEnabled: row.systemNotificationsEnabled !== 0
     }
   }
 
@@ -31,14 +34,15 @@ export class AiRuntimeSettingsStore {
     this.sqlite
       .prepare(
         `
-        INSERT OR REPLACE INTO ai_runtime_settings (id, llmStreamingMode, updated_at)
-        VALUES (@id, @llmStreamingMode, @updated_at)
+        INSERT OR REPLACE INTO ai_runtime_settings (id, llmStreamingMode, systemNotificationsEnabled, updated_at)
+        VALUES (@id, @llmStreamingMode, @systemNotificationsEnabled, @updated_at)
       `
       )
       .run({
         id: SETTINGS_ROW_ID,
         llmStreamingMode:
           settings.llmStreamingMode === 'force_non_stream' ? 'force_non_stream' : 'force_stream',
+        systemNotificationsEnabled: settings.systemNotificationsEnabled === false ? 0 : 1,
         updated_at: Date.now()
       })
   }
