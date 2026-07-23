@@ -12,6 +12,7 @@ import type {
 
 const execFileAsync = promisify(execFile)
 const OPEN_WITH_CACHE_TTL_MS = 5 * 60 * 1_000
+const NATIVE_QUERY_MAX_BUFFER = 10 * 1024 * 1024
 
 export type NativeOpenWithApplication = {
   id: string
@@ -170,14 +171,11 @@ export class OpenWithService {
 
   private async runNativeList(filePath: string): Promise<NativeOpenWithListResponse> {
     if (process.platform === 'darwin') {
-      const result = await execFileAsync('/usr/bin/osascript', [
-        '-l',
-        'JavaScript',
-        '-e',
-        MACOS_LIST_SCRIPT,
-        '--',
-        filePath
-      ])
+      const result = await execFileAsync(
+        '/usr/bin/osascript',
+        ['-l', 'JavaScript', '-e', MACOS_LIST_SCRIPT, '--', filePath],
+        { maxBuffer: NATIVE_QUERY_MAX_BUFFER }
+      )
       return parseJson<NativeOpenWithListResponse>(result.stdout)
     }
     if (process.platform === 'win32') {
@@ -192,17 +190,11 @@ export class OpenWithService {
     application: NativeOpenWithApplication
   ): Promise<NativeOpenWithResponse> {
     if (process.platform === 'darwin') {
-      const result = await execFileAsync('/usr/bin/osascript', [
-        '-l',
-        'JavaScript',
-        '-e',
-        `ObjC['im' + 'port']('AppKit'); function run(argv) { const fileURL = $.NSURL.fileURLWithPath(argv[0]); const urls = $.NSArray.arrayWithObject(fileURL); const ok = $.NSWorkspace.sharedWorkspace.openURLsWithAppBundleIdentifierOptionsAdditionalEventParamDescriptorLaunchIdentifiers(urls, argv[2], $.NSWorkspaceLaunchDefault, null, null); return JSON.stringify({ success: Boolean(ok) }); }`,
-        '--',
-        filePath,
-        application.path || '',
-        application.id
-      ])
-      return parseJson<NativeOpenWithResponse>(result.stdout)
+      const target = application.id.startsWith('/')
+        ? ['-a', application.id, filePath]
+        : ['-b', application.id, filePath]
+      await execFileAsync('/usr/bin/open', target)
+      return { success: true }
     }
     if (process.platform === 'win32') {
       const result = await this.runWindowsHelper('open', filePath, application.id)
@@ -228,7 +220,7 @@ export class OpenWithService {
     return execFileAsync(
       'powershell.exe',
       ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', command],
-      { env }
+      { env, maxBuffer: NATIVE_QUERY_MAX_BUFFER }
     )
   }
 }

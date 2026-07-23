@@ -494,44 +494,42 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
             }}
           >
             <div
-              className="flex shrink-0 items-center"
+              className="flex h-8 shrink-0 items-stretch overflow-hidden rounded-[6px] border border-[#E7E5E0] bg-[#FBFBFA] shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
               data-testid={workbenchSelectors.openWithMenu}
             >
-              <Tooltip title={openTitle}>
-                <Button
-                  type="text"
-                  size="small"
-                  aria-label={openTitle}
-                  icon={
-                    defaultApplication?.iconDataUrl ? (
-                      <img
-                        src={defaultApplication.iconDataUrl}
-                        alt=""
-                        className="h-4 w-4 object-contain"
-                      />
-                    ) : (
-                      <HiArrowTopRightOnSquare className="h-4 w-4" />
-                    )
-                  }
-                  className="!rounded-l-[6px] !rounded-r-none !text-[#37352F] hover:!bg-[#F4F4F2] disabled:!text-[#C9C7C2]"
-                  data-testid={workbenchSelectors.openWithButton}
-                  disabled={!canOpen || isDeletedCreatedFile}
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    if (!canOpen || isDeletedCreatedFile) return
-                    if (defaultApplication) void openWithApplication(defaultApplication)
-                    else void onOpenPath(filePath)
-                  }}
-                >
-                  <span className="max-w-[104px] truncate text-[12px]">{openWithLabel}</span>
-                </Button>
-              </Tooltip>
+              <Button
+                type="text"
+                size="small"
+                aria-label={openTitle}
+                icon={
+                  defaultApplication?.iconDataUrl ? (
+                    <img
+                      src={defaultApplication.iconDataUrl}
+                      alt=""
+                      className="h-4 w-4 object-contain"
+                    />
+                  ) : (
+                    <HiArrowTopRightOnSquare className="h-4 w-4" />
+                  )
+                }
+                className="!h-full !rounded-none !px-2.5 !text-[#37352F] hover:!bg-[#F1F1EF] disabled:!text-[#C9C7C2]"
+                data-testid={workbenchSelectors.openWithButton}
+                disabled={!canOpen || isDeletedCreatedFile}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  if (!canOpen || isDeletedCreatedFile) return
+                  if (defaultApplication) void openWithApplication(defaultApplication)
+                  else void onOpenPath(filePath)
+                }}
+              >
+                <span className="max-w-[104px] truncate text-[12px]">{openWithLabel}</span>
+              </Button>
               <Button
                 type="text"
                 size="small"
                 aria-label="选择打开应用"
                 icon={<HiChevronDown className="h-3.5 w-3.5" />}
-                className="!rounded-l-none !rounded-r-[6px] !px-1 !text-[#787774] hover:!bg-[#F4F4F2] disabled:!text-[#C9C7C2]"
+                className="!h-full !rounded-none !border-l !border-l-[#E7E5E0] !px-1.5 !text-[#787774] hover:!bg-[#F1F1EF] disabled:!text-[#C9C7C2]"
                 data-testid={workbenchSelectors.applyOpenSystemButton}
                 disabled={!canOpen || isDeletedCreatedFile}
               />
