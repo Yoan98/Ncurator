@@ -19,13 +19,4 @@ resources/native
 release-stage
 design/
 
-# 宣传视频：正式素材和成片进 Git/LFS，只忽略临时工作数据
-promo/episodes/**/.work/
-promo/episodes/**/assets/raw/
-promo/episodes/**/assets/audio/*.raw.wav
-promo/episodes/**/renders/*
-!promo/episodes/**/renders/final.mp4
-!promo/episodes/**/renders/final.json
-promo/library/voice/samples/
-
 .venv
