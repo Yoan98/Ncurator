@@ -199,7 +199,7 @@
 - 验收：
   - `WB-COMPOSER-003-AC1` 智能模式发送后，主区先可见用户消息与 assistant 占位消息。
   - `WB-COMPOSER-003-AC2` AI 运行成功启动后，assistant 过程流通过事件逐步追加更新，而不是一次性静态替换。
-  - `WB-COMPOSER-003-AC3` assistant 占位回复在最终输出前展示“让俺想想”并带有流动视觉反馈；当后端 thinking 过程事件到达时，本地占位被替换为该 run 的 thinking 过程组，不重复展示。
+  - `WB-COMPOSER-003-AC3` assistant 占位回复在最终输出前展示“让俺想想”并带有流动视觉反馈；当后端 thinking 过程事件到达时，本地占位被替换为该 run 的 thinking 过程组，不重复展示；当出现“正在重试”过程组时，必须隐藏“让俺想想”占位，避免两个等待状态同时出现。
   - `WB-COMPOSER-003-AC4` assistant turn 中 mouth 最终输出始终位于过程流下方，并按 markdown 渲染；mouth 等待 AI 返回时先展示总结层“基本完成了，让俺收尾下吧”，首个 markdown token 或完成事件到达后隐藏该等待层；证据引用链接与普通链接视觉区分，内部文件链接打开右侧文件预览，内部网页链接使用系统浏览器打开。
   - `WB-COMPOSER-003-AC5` 决策层文本来自 `assistant_process_thought` 中经过 schema 约束的 `thought.next`，不得展示模型原始 chain-of-thought；决策层出现时，当前思考层必须立即隐藏，即使下一步执行正等待审批。
   - `WB-COMPOSER-003-AC6` 过程流使用用户可理解的分层文案，不直接暴露内部 tool 名或底层事件名；同一轮执行中的多个工具调用合并为一个执行层 header，展开后每个工具按其入参生成一句自然语言说明。

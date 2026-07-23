@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { readFileSync } from 'node:fs'
 import { mkdir, readFile, readdir, rm, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -26,6 +27,34 @@ const EMPTY_KNOWLEDGE_CACHE_STATS = {
   vectorCacheHits: 0,
   vectorCacheMisses: 0
 }
+
+const loadRootEnv = () => {
+  if (String(process.env.AI_TEST_DISABLE_DOTENV || '').trim() === '1') return
+  for (const fileName of ['.env.local', '.env']) {
+    let raw = ''
+    try {
+      raw = readFileSync(path.resolve(ROOT, fileName), 'utf8')
+    } catch {
+      continue
+    }
+    for (const line of raw.split(/\r?\n/u)) {
+      const trimmed = line.trim()
+      if (!trimmed || trimmed.startsWith('#')) continue
+      const separator = trimmed.indexOf('=')
+      if (separator <= 0) continue
+      const key = trimmed.slice(0, separator).trim()
+      const value = trimmed.slice(separator + 1).trim()
+      if (!key || String(process.env[key] || '').trim()) continue
+      process.env[key] =
+        (value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'"))
+          ? value.slice(1, -1)
+          : value
+    }
+  }
+}
+
+loadRootEnv()
 
 const removeNpmLifecycleEnv = () => {
   for (const key of Object.keys(process.env)) {

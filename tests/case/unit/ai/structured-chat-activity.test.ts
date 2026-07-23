@@ -3,9 +3,25 @@ import {
   runLlmCallWithActivity,
   runStructuredChatWithActivity
 } from '../../../../src/main/services/ai/utils/structuredChatActivity'
+import { classifyLlmCallRetry } from '../../../../src/main/services/ai/llmExecutor'
 import type { AiLlmIoRecord, AiRunEvent } from '../../../../src/shared/types'
 
 describe('ai unit structured chat activity', () => {
+  it('uses exponential backoff for provider capacity exhaustion', () => {
+    const error = Object.assign(
+      new Error('ResourceExhausted: Worker local total request limit reached (69/48)'),
+      { status: 503 }
+    )
+
+    expect([1, 2, 3, 4, 5].map((attempt) => classifyLlmCallRetry(error, attempt))).toEqual(
+      [2_000, 4_000, 8_000, 15_000, 15_000].map((delayMs) => ({
+        retryable: true,
+        message: error.message,
+        delayMs
+      }))
+    )
+  })
+
   it('records scripted structured output activity and llm io', async () => {
     const events: AiRunEvent[] = []
     const llmIoRecords: AiLlmIoRecord[] = []
@@ -319,5 +335,44 @@ describe('ai unit structured chat activity', () => {
         }
       })
     )
+  })
+
+  it('passes the current attempt to retry classification and uses its delay', async () => {
+    const events: AiRunEvent[] = []
+    const classifyAttempts: number[] = []
+    let callCount = 0
+    const startedAt = Date.now()
+
+    await runLlmCallWithActivity({
+      ctx: {
+        runId: 'run-retry-delay',
+        sendEvent: (event) => events.push(event)
+      },
+      runId: 'run-retry-delay',
+      system: 'system prompt',
+      user: 'user prompt',
+      telemetry: {
+        actionType: 'llm_text_output',
+        caller: 'human.mouth',
+        schemaName: 'human_mouth_markdown',
+        modelName: 'scripted-llm',
+        baseUrl: 'https://scripted.local/v1',
+        streamingMode: 'force_non_stream'
+      },
+      maxAttempts: 2,
+      classifyRetry: (_error, attempt) => {
+        classifyAttempts.push(attempt)
+        return { retryable: true, message: 'capacity exhausted', delayMs: 20 }
+      },
+      execute: async () => {
+        callCount += 1
+        if (callCount === 1) throw new Error('ResourceExhausted')
+        return { output: 'ok', rawText: 'ok' }
+      }
+    })
+
+    expect(classifyAttempts).toEqual([1])
+    expect(callCount).toBe(2)
+    expect(Date.now() - startedAt).toBeGreaterThanOrEqual(15)
   })
 })

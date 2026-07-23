@@ -137,6 +137,12 @@ AI 能力通过 skill 和 tool 两层表达：
 
 skill 不按目录强行拆分，也不等同于工具数量。一个 skill 可以对应多个 tool，多个 skill 也可以共享同一实现域。
 
+### 结构化输出策略与重试
+
+AI 结构化调用按配置和模型维度记忆成功策略。首次没有历史策略时，统一按 `json_schema -> json_object -> prompt_json` 尝试；某个策略成功后，`LlmStrategyPreferenceStore` 以 `configId + modelName` 为键保存 `transport` 和结构化输出模式，后续调用直接优先使用已保存策略。供应商不会在执行器里写死专用策略。
+
+结构化能力不支持、返回内容无法解析或不符合 Schema 时属于“策略降级”；HTTP 503、429、超时和 `ResourceExhausted` 属于“服务重试”，不会被误判成能力降级。`ResourceExhausted` 使用指数退避，避免短时间内重复请求进一步加重服务端容量压力。策略只有在完整调用成功后才会保存，失败调用不会污染历史偏好。
+
 ### 会话连续性
 
 跨轮上下文由 conversation summary 和未被摘要覆盖的 recent messages 组成。摘要只覆盖完整轮次，并在后台生成；失败或陈旧结果不会推进覆盖边界。run 内压缩和跨 run 的会话记忆是两套独立机制。

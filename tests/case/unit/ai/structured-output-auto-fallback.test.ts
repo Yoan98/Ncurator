@@ -56,6 +56,11 @@ const compatibleCfg = {
   base_url: 'https://example.test/v1'
 } as const
 
+const nvidiaCfg = {
+  ...compatibleCfg,
+  base_url: 'https://integrate.api.nvidia.com/v1'
+} as const
+
 const baseInput = {
   caller: 'unit.test',
   schema,
@@ -166,6 +171,40 @@ describe('ai unit structured output auto fallback', () => {
     expect(result.strategy).toEqual({ transport: 'responses', mode: 'json_schema' })
     expect(result.fallbackStrategies).toEqual([{ transport: 'responses', mode: 'json_schema' }])
     expect(callOrder).toEqual(['responses/json_schema'])
+  })
+
+  it('uses the generic fallback order for NVIDIA NIM instead of a provider override', async () => {
+    const callOrder: string[] = []
+    configureCreateChatModel(
+      {
+        'completions/json_schema': {
+          type: 'error',
+          error: new SyntaxError('Unexpected token W in JSON')
+        },
+        'completions/json_object': {
+          type: 'error',
+          error: new SyntaxError('Unexpected token R in JSON')
+        },
+        'completions/prompt_json': {
+          type: 'success',
+          rawText: JSON.stringify({ answer: 'from prompt json' })
+        }
+      },
+      callOrder
+    )
+
+    const result = await invokeStructuredChat({
+      ...baseInput,
+      cfg: nvidiaCfg
+    })
+
+    expect(result.output).toEqual({ answer: 'from prompt json' })
+    expect(result.strategy).toEqual({ transport: 'completions', mode: 'prompt_json' })
+    expect(callOrder).toEqual([
+      'completions/json_schema',
+      'completions/json_object',
+      'completions/prompt_json'
+    ])
   })
 
   it('falls back from unsupported json_schema to json_object for compatible providers', async () => {

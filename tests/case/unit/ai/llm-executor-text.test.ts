@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { z } from 'zod/v4'
 
 const { createChatModelMock } = vi.hoisted(() => ({
   createChatModelMock: vi.fn()
@@ -110,6 +111,48 @@ describe('ai unit llm executor text path', () => {
       streamed: false,
       rawText: 'Hello from responses'
     })
+  })
+
+  it('persists the winning structured fallback strategy for the next run', async () => {
+    const saveConfig = vi.fn(async () => undefined)
+    const driver: AiLlmDriver = {
+      chatStructured: async () => ({
+        output: { answer: 'from prompt json' },
+        rawText: '{"answer":"from prompt json"}',
+        method: 'promptJson',
+        transport: 'completions',
+        structuredOutputMode: 'prompt_json',
+        strategy: { transport: 'completions', mode: 'prompt_json' }
+      })
+    }
+
+    const executor = createAiLlmExecutor({
+      eventCtx: {
+        runId: 'run-structured-persist',
+        sendEvent: () => undefined
+      },
+      runtimeSettings: { llmStreamingMode: 'force_non_stream' },
+      getConfig: async () => baseConfig,
+      saveConfig,
+      checkCancelled: () => undefined,
+      driver
+    })
+
+    const result = await executor.chatStructured({
+      caller: 'human.brain',
+      schemaName: 'unit_schema',
+      schema: z.object({ answer: z.string() }),
+      system: 'Return JSON only.',
+      user: 'Say hello.'
+    })
+
+    expect(result.output).toEqual({ answer: 'from prompt json' })
+    expect(saveConfig).toHaveBeenCalledWith(
+      expect.objectContaining({
+        preferredTransport: 'completions',
+        preferredStructuredOutputMode: 'prompt_json'
+      })
+    )
   })
 
   it('forwards streamed text deltas through the observer and records stream metadata', async () => {

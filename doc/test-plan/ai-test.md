@@ -86,6 +86,26 @@ AI unit / 辅助测试目录：
 
 ## 4. 回归测试清单
 
+### 4.0 结构化输出策略与服务重试
+
+#### `structured-output-strategy-memory`
+
+- 测试类型：`unit + backend contract`
+- What：无历史策略时按通用顺序尝试结构化输出；降级成功后保存 `configId + modelName` 对应策略，下一次调用直接复用。
+- Why：不同供应商的结构化能力不同，不能靠供应商名称写死；策略记忆是减少失败请求和避免重复探测的核心机制。
+- How：unit 测试覆盖 `json_schema -> json_object -> prompt_json` 和解析失败后的继续降级；执行器 contract 测试验证成功策略写入配置保存入口；策略 Store 使用真实 SQLite 读写验证下一次读取。
+- Oracle：首次最终成功策略为 `completions/prompt_json` 时保存该策略；后续加载同一配置和模型得到相同策略；失败调用不写入新策略。
+- Not：不把真实 NVIDIA 或其他供应商网络容量当作稳定测试前置条件。
+
+#### `structured-output-resource-exhausted-backoff`
+
+- 测试类型：`unit`
+- What：供应商返回 `503 ResourceExhausted` 时保持服务重试语义，并按 2、4、8、15 秒退避。
+- Why：服务容量错误不是结构化能力不支持；过短的固定重试会放大服务端限流并阻止策略探测完成。
+- How：直接验证重试分类结果和当前 attempt 对应的 delay；Workbench 真实 UI E2E 在运行中出现重试时检查过程流不同时显示“让俺想想”。
+- Oracle：ResourceExhausted 不触发策略持久化；重试状态可见且不与思考占位并存。
+- Not：不要求真实 provider 在每次 E2E 都主动返回 503。
+
 ### 4.1 `tool`
 
 #### docx 类别

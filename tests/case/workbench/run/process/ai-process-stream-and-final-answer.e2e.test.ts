@@ -39,6 +39,8 @@ describe('workbench run e2e', () => {
           await sendWorkbenchMessage(page, PROMPT)
           const processLocator = await waitForLatestAssistantProcess(page)
           const processTextDuringRun = ((await processLocator.textContent()) || '').trim()
+          const retryAndThinkingCoexist =
+            /正在重试/u.test(processTextDuringRun) && /让俺想想/u.test(processTextDuringRun)
           const evidence = await waitForWorkbenchAiRunCompletion(
             runtime,
             startedAtMs,
@@ -55,6 +57,7 @@ describe('workbench run e2e', () => {
 
           return {
             processTextDuringRun,
+            retryAndThinkingCoexist,
             processItemCount,
             finalAnswerText,
             eventTypes: evidence.events.map((event) => event.type)
@@ -63,6 +66,7 @@ describe('workbench run e2e', () => {
         assert: async (result, runtime) => {
           await runtime.assertThat(
             result.processTextDuringRun.length > 0 &&
+              !result.retryAndThinkingCoexist &&
               result.processItemCount > 0 &&
               result.eventTypes.includes('answer_completed') &&
               result.eventTypes.includes('run_completed') &&
