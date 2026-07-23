@@ -1,5 +1,5 @@
 import { execFile, spawn } from 'node:child_process'
-import { access, mkdir, readdir } from 'node:fs/promises'
+import { access, cp, mkdir, readdir } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 import { promisify } from 'node:util'
@@ -170,6 +170,16 @@ const extractTag = async (archivePath, directory) => {
   await run('/usr/bin/tar', ['-xf', archivePath, '-C', directory])
 }
 
+const seedNativeCache = async (sourceDirectory) => {
+  const cacheSource = path.join(ROOT, 'node_modules', '.native-cache')
+  const cacheTarget = path.join(sourceDirectory, 'node_modules', '.native-cache')
+  const available = await access(cacheSource)
+    .then(() => true)
+    .catch(() => false)
+  if (!available) return
+  await cp(cacheSource, cacheTarget, { recursive: true, force: false })
+}
+
 const createCandidate = async (sourceDirectory, platform, commit) => {
   const distDirectory = path.join(sourceDirectory, 'dist')
   const appPath = await findApp(distDirectory)
@@ -247,6 +257,7 @@ if (mode === 'prepare') {
     await extractTag(archivePath, armSource)
     await extractTag(archivePath, x64Source)
     await run(tools.pnpmPath, ['install', '--frozen-lockfile'], { cwd: armSource })
+    await seedNativeCache(armSource)
     await run(tools.pnpmPath, ['run', 'build:mac:release:arm64'], {
       cwd: armSource,
       env: {
@@ -270,6 +281,7 @@ if (mode === 'prepare') {
       ['-x86_64', tools.x64Node, tools.pnpmPath, 'install', '--frozen-lockfile'],
       { cwd: x64Source, env: x64Environment }
     )
+    await seedNativeCache(x64Source)
     await run(
       '/usr/bin/arch',
       ['-x86_64', tools.x64Node, tools.pnpmPath, 'run', 'build:mac:release:x64'],
