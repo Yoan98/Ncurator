@@ -226,7 +226,8 @@ if (!singleInstanceLock) {
     const mainWindow = createWindow()
     const systemNotificationService = new SystemNotificationService({
       settingsStore: storageService.aiRuntimeSettings,
-      getMainWindow: () => BrowserWindow.getAllWindows()[0] || null
+      getMainWindow: () => BrowserWindow.getAllWindows()[0] || null,
+      createMainWindow: () => createWindow()
     })
     const appUpdateService = new AppUpdateService()
     const cdpEndpointService = new CdpEndpointService({

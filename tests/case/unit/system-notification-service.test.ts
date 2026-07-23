@@ -64,6 +64,22 @@ describe('SystemNotificationService', () => {
     expect(createNotification).not.toHaveBeenCalled()
   })
 
+  it('does not notify when the operating system does not support notifications', async () => {
+    const createNotification = vi.fn()
+    const service = new SystemNotificationService({
+      settingsStore: settingsStore({
+        llmStreamingMode: 'force_stream',
+        systemNotificationsEnabled: true
+      }) as never,
+      getMainWindow: () => null,
+      isSupported: () => false,
+      createNotification
+    })
+
+    await service.notifyRunTerminal(run(), 'completed')
+    expect(createNotification).not.toHaveBeenCalled()
+  })
+
   it('opens the matching session when the notification is clicked', async () => {
     let clickHandler: (() => void) | undefined
     const window = {
@@ -74,6 +90,7 @@ describe('SystemNotificationService', () => {
       focus: vi.fn(),
       webContents: {
         isDestroyed: () => false,
+        isLoading: () => false,
         send: vi.fn()
       }
     }
@@ -96,6 +113,48 @@ describe('SystemNotificationService', () => {
     clickHandler?.()
 
     expect(window.restore).toHaveBeenCalledOnce()
+    expect(window.show).toHaveBeenCalledOnce()
+    expect(window.focus).toHaveBeenCalledOnce()
+    expect(window.webContents.send).toHaveBeenCalledWith(
+      'system-notification-open-session',
+      'session-1'
+    )
+  })
+
+  it('creates a window before opening the session when all windows are closed', async () => {
+    let clickHandler: (() => void) | undefined
+    const window = {
+      isDestroyed: () => false,
+      isMinimized: () => false,
+      restore: vi.fn(),
+      show: vi.fn(),
+      focus: vi.fn(),
+      webContents: {
+        isDestroyed: () => false,
+        isLoading: () => false,
+        send: vi.fn()
+      }
+    }
+    const service = new SystemNotificationService({
+      settingsStore: settingsStore({
+        llmStreamingMode: 'force_stream',
+        systemNotificationsEnabled: true
+      }) as never,
+      getMainWindow: () => null,
+      createMainWindow: () => window as never,
+      isSupported: () => true,
+      createNotification: () => ({
+        show: vi.fn(),
+        on: (_event, listener) => {
+          clickHandler = listener
+        }
+      })
+    })
+
+    await service.notifyRunTerminal(run(), 'completed')
+    clickHandler?.()
+    await Promise.resolve()
+
     expect(window.show).toHaveBeenCalledOnce()
     expect(window.focus).toHaveBeenCalledOnce()
     expect(window.webContents.send).toHaveBeenCalledWith(

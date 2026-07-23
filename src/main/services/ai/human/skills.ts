@@ -24,7 +24,7 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
     countsTowardToolBudget: false,
     title: 'text-file',
     description:
-      '读取和写入 Markdown、TXT、代码等 UTF-8 普通文本文件，并返回文本、行范围、执行结果和文件修改记录。',
+      '读取和写入 Markdown、TXT、代码等 UTF-8 普通文本文件，并返回文本、行范围、执行结果和文件修改记录。 碰到有文本文件操作的需要时，必须要使用该技能',
     toolNames: ['text_file_read', 'text_file_edit']
   },
   'docx-read': {
@@ -34,7 +34,7 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
     countsTowardToolBudget: true,
     title: 'docx-read',
     description:
-      '读取 .docx、.doc 文档的结构、内容块、检索结果和任务内修订历史，并返回块级索引、正文、匹配信息或 revision 信息。',
+      '读取 .docx、.doc 文档的结构、内容块、检索结果和任务内修订历史，并返回块级索引、正文、匹配信息或 revision 信息。 碰到有word阅读的需要时，必须要使用该技能',
     toolNames: ['docx_read_outline', 'docx_search', 'docx_read_blocks']
   },
   'docx-write': {
@@ -44,7 +44,7 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
     countsTowardToolBudget: true,
     title: 'docx-write',
     description:
-      '创建或修改 Word 文档中的段落、标题、表格、文本和样式，并返回写入状态和相邻区域的详细回读信息。',
+      '创建或修改 Word 文档中的段落、标题、表格、文本和样式，并返回写入状态和相邻区域的详细回读信息。 碰到有word编辑的需要时，必须要使用该技能',
     toolNames: ['docx_edit']
   },
   'pdf-read': {
@@ -54,7 +54,7 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
     countsTowardToolBudget: true,
     title: 'pdf-read',
     description:
-      '读取 PDF 文档信息、页级文本和检索结果或将页面渲染为图片，并返回元数据、正文、匹配位置或图片路径。',
+      '读取 PDF 文档信息、页级文本和检索结果或将页面渲染为图片，并返回元数据、正文、匹配位置或图片路径。 碰到有pdf阅读的需要时，必须要使用该技能',
     toolNames: ['pdf_inspect', 'pdf_search', 'pdf_read_pages', 'pdf_render_pages']
   },
   'ppt-read': {
@@ -64,7 +64,7 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
     countsTowardToolBudget: true,
     title: 'ppt-read',
     description:
-      '读取 PPTX 的页面结构、内容和搜索结果或将页面渲染为图片，并返回页面提纲、元素、匹配位置或图片路径。',
+      '读取 PPTX 的页面结构、内容和搜索结果或将页面渲染为图片，并返回页面提纲、元素、匹配位置或图片路径。碰到有ppt阅读的需要时，必须要使用该技能',
     toolNames: ['ppt_read_outline', 'ppt_read_slides', 'ppt_search', 'ppt_render_slides']
   },
   'ppt-write': {
@@ -73,7 +73,8 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
     source: 'external',
     countsTowardToolBudget: true,
     title: 'ppt-write',
-    description: '使用受限 HTML 创建或编辑 PPTX 页面和元素，并返回变化页面回读和布局警告。',
+    description:
+      '使用受限 HTML 创建或编辑 PPTX 页面和元素，并返回变化页面回读和布局警告。碰到有ppt编辑的需要时，必须要使用该技能',
     toolNames: ['ppt_edit'],
     requiredSkillIds: ['ppt-read']
   },

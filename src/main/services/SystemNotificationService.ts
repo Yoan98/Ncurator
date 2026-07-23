@@ -12,6 +12,7 @@ type NotificationLike = {
 type SystemNotificationServiceDeps = {
   settingsStore: AiRuntimeSettingsStore
   getMainWindow: () => BrowserWindow | null
+  createMainWindow?: () => BrowserWindow
   createNotification?: (options: Electron.NotificationConstructorOptions) => NotificationLike
   isSupported?: () => boolean
 }
@@ -39,7 +40,9 @@ export class SystemNotificationService {
       }
     )
 
-    notification.on('click', () => this.openSession(run.sessionId))
+    notification.on('click', () => {
+      void this.openSession(run.sessionId)
+    })
     notification.show()
 
     const observer = (
@@ -56,9 +59,22 @@ export class SystemNotificationService {
     observer?.({ runId: run.id, sessionId: run.sessionId, status, ...copy })
   }
 
-  private openSession(sessionId: string): void {
-    const window = this.deps.getMainWindow()
+  private async openSession(sessionId: string): Promise<void> {
+    const window = this.deps.getMainWindow() || this.deps.createMainWindow?.()
     if (!window || window.isDestroyed()) return
+    if (window.webContents.isLoading()) {
+      await new Promise<void>((resolve) => {
+        const finish = (): void => {
+          window.webContents.removeListener('did-finish-load', finish)
+          window.webContents.removeListener('did-fail-load', finish)
+          resolve()
+        }
+        window.webContents.once('did-finish-load', finish)
+        window.webContents.once('did-fail-load', finish)
+        if (!window.webContents.isLoading()) finish()
+      })
+    }
+    if (window.isDestroyed() || window.webContents.isDestroyed()) return
     if (window.isMinimized()) window.restore()
     window.show()
     window.focus()

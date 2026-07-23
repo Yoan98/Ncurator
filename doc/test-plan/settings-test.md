@@ -340,6 +340,15 @@ Settings 顶层 suite 对齐 PRD 模块：
 - Oracle：开关默认开启，关闭后 UI 与主进程设置均为关闭，对齐 `SET-GENERAL-001-AC1`、`SET-GENERAL-001-AC3`。
 - Not：开发机自动化不把系统通知中心的视觉弹窗作为稳定断言；终态通知发送由 `SystemNotificationService` 单元测试和 AI run backend contract 覆盖。
 
+#### `system-notification-session-navigation`
+
+- 测试类型：`e2e`
+- What：系统通知点击事件可以从 Settings 返回 Workbench，并打开通知对应的会话。
+- Why：通知跨越 Main、Preload、Router 和会话加载，单测只能证明 IPC 被发送，不能证明用户最终进入正确会话。
+- How：通过真实 IPC 创建目标会话并进入通用设置，再由 Electron Main 向 Renderer 发送与通知点击相同的 `system-notification-open-session` 事件。
+- Oracle：路由回到 Workbench；目标会话可见且处于选中状态，对齐 `SET-GENERAL-001-AC4`。
+- Not：不点击操作系统通知中心的真实弹窗；macOS 与 Windows 的通知视觉和系统权限仍在发布前手动检查。
+
 ### 3.7 `update`
 
 #### `app-update-service-contract`
