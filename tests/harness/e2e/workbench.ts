@@ -1473,7 +1473,9 @@ export const waitForWorkbenchApplyPanelReady = async (page: Page): Promise<Locat
       const text = root.innerText.trim()
       if (text.includes('当前没有 AI 修改记录。')) return true
       if (text.includes('当前文件暂时不可预览。')) return true
-      if (text.includes('当前修改记录没有专用预览稿。')) return true
+      if (text.includes('本次修改了文件名')) return true
+      if (text.includes('文件已发生修改')) return true
+      if (text.includes('本次删除了该文件')) return true
       if (text.includes('本次 AI 修改已回退。') || text.includes('已回退')) return true
       if (root.querySelector(`[data-testid="${revertButtonTestId}"]`)) return true
       return Boolean(

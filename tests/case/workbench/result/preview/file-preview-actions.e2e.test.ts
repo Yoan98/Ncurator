@@ -147,7 +147,7 @@ describe('workbench result e2e', () => {
           const pdfResults = await waitForWorkbenchSearchResults(page)
           await openSearchPreview(page, pdfResults, '深度学习.pdf')
           const pdfPageVisible = await waitForPdfPreviewPage(page)
-          await page.getByRole('button', { name: '定位到系统位置' }).last().click()
+          await page.getByRole('button', { name: '打开对应文件夹' }).last().click()
 
           await switchWorkbenchMode(page, '没头脑')
           await insertWorkbenchReferenceToken(page, '深度学习.docx')

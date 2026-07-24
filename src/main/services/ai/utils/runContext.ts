@@ -91,16 +91,16 @@ export const normalizeSelectedReferences = (
   return normalized.length > 0 ? normalized : undefined
 }
 
+export type PromptArtifactRef = Pick<AiArtifactRef, 'kind' | 'path' | 'operation'>
+
+export const toPromptArtifactRef = (artifact: AiArtifactRef): PromptArtifactRef => ({
+  kind: artifact.kind,
+  path: artifact.path,
+  operation: artifact.operation
+})
+
 const formatArtifactRef = (artifact: AiArtifactRef): string =>
-  [
-    'file',
-    artifact.fileName ? `fileName=${artifact.fileName}` : '',
-    artifact.path ? `path=${artifact.path}` : '',
-    artifact.applyId ? `applyId=${artifact.applyId}` : '',
-    artifact.summary ? `summary=${artifact.summary}` : ''
-  ]
-    .filter(Boolean)
-    .join('；')
+  JSON.stringify(toPromptArtifactRef(artifact))
 
 export const formatTurns = (messages: ChatMessage[]): string =>
   messages
@@ -129,7 +129,7 @@ export const formatPreviousTurns = (input: {
     turn_index: number
     user_message: string | null
     assistant_message: string | null
-    artifacts: AiArtifactRef[]
+    artifacts: PromptArtifactRef[]
   }> = []
 
   for (const message of messages) {
@@ -150,11 +150,11 @@ export const formatPreviousTurns = (input: {
           turn_index: turns.length + 1,
           user_message: null,
           assistant_message: message.content,
-          artifacts: message.artifacts || []
+          artifacts: (message.artifacts || []).map(toPromptArtifactRef)
         })
       } else {
         latestTurn.assistant_message = message.content
-        latestTurn.artifacts = message.artifacts || []
+        latestTurn.artifacts = (message.artifacts || []).map(toPromptArtifactRef)
       }
     }
   }

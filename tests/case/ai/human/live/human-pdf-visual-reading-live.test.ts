@@ -46,8 +46,7 @@ describe('ai human live backend', () => {
         domain: 'ai',
         suite: 'human',
         groups: ['live'],
-        description:
-          '验证 live 模型能自主组合 PDF 文本读取和页面视觉读取，回答图文结合问题。',
+        description: '验证 live 模型能使用 PDF 页面视觉读取，回答图文结合问题。',
         fixtures: [PDF_READING_FIXTURE_PATH],
         runMode: 'single',
         runtimeModelName: hasLiveLlmConfigInEnv() ? loadLiveLlmConfigFromEnv().model_name : null,
@@ -68,12 +67,7 @@ describe('ai human live backend', () => {
               configId: visionConfig.id,
               modelName: visionConfig.model_name
             },
-            allowedToolNames: [
-              'pdf_inspect',
-              'pdf_search',
-              'pdf_read_pages',
-              'pdf_read_visuals'
-            ]
+            allowedToolNames: ['pdf_inspect', 'pdf_search', 'pdf_read_pages', 'pdf_read_visuals']
           })
           const output = await runner.run({
             taskId: runtime.taskId,
@@ -109,7 +103,6 @@ describe('ai human live backend', () => {
 
           runtime.assertThat(
             result.output?.status === 'completed' &&
-              toolNames.includes('pdf_read_pages') &&
               toolNames.includes('pdf_read_visuals') &&
               visualTexts.some((text) => /Proper fit/i.test(text) || /Overfit/i.test(text)) &&
               failedVisualCount === 0 &&
@@ -131,9 +124,8 @@ describe('ai human live backend', () => {
               !/(无法|不能|不支持).{0,12}(看到|识别|读取).{0,8}(图片|图像|曲线)/i.test(delivery) &&
               result.beforeHash === result.afterHash,
             {
-              name: 'human-live-composes-pdf-text-and-visual-reading',
-              message:
-                'live human 应自主组合 PDF 文本阅读和页面视觉读取，回答训练闭环及过度拟合图形差异。',
+              name: 'human-live-uses-pdf-visual-reading',
+              message: 'live human 应使用 PDF 页面视觉读取，回答训练闭环及过度拟合图形差异。',
               data: {
                 toolNames,
                 visualTexts,

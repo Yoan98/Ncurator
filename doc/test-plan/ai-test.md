@@ -54,6 +54,8 @@
 - 允许：脚本化 LLM 输入输出。
 - 不允许：脚本化 runtime 节点执行结果。
 - 断言重点：节点流转、工具调用、审批事件、artifact、memory、错误收敛、状态收口。
+- artifact 进入 conversation history 和 conversation memory 时只允许包含 `kind / path / operation`；内部 `capability / fileName / applyId` 不得进入提示词。
+- 已经落地的文件修改不得因 `run_failed` 或 `run_cancelled` 丢失，终态消息与 Workbench 都必须继续显示对应修改记录。
 
 #### live 类别
 

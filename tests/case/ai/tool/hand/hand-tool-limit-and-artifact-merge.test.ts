@@ -115,8 +115,7 @@ describe('ai tool hand backend', () => {
           path: path.join(runtime.workspaceRoot, 'artifact-merge.docx'),
           fileName: 'artifact-merge.docx',
           operation: 'updated',
-          applyId: 'existing-docx-change',
-          summary: '已有的文档修改记录'
+          applyId: 'existing-docx-change'
         }
 
         const secondState = await handNode({

@@ -750,7 +750,6 @@ export class ChatRunService {
           fileName: record.fileName,
           operation: record.operation,
           applyId: record.id,
-          summary: `workspace ${record.operation}: ${record.fileName}`,
           createdAt: record.updatedAt
         })
       }
@@ -1176,8 +1175,7 @@ export class ChatRunService {
         path: event.path,
         fileName: event.fileName,
         operation: event.operation,
-        applyId: event.applyId,
-        summary: event.summary
+        applyId: event.applyId
       })
       run.updatedAt = now
       assistantMessage = this.buildAssistantMessage(run, run.finalAnswer || run.partialAnswer)
@@ -1212,8 +1210,8 @@ export class ChatRunService {
       run.updatedAt = now
       run.finishedAt = now
       const content = run.partialAnswer
-        ? `${run.partialAnswer}\n\n**[失败]** ${event.message}`
-        : `**[失败]** ${event.message}`
+        ? `${run.partialAnswer}\n\n失败：${event.message}`
+        : `失败：${event.message}`
       assistantMessage = this.buildAssistantMessage(run, content, true)
     } else if (event.type === 'run_cancelled') {
       run.status = 'cancelled'
@@ -1222,7 +1220,7 @@ export class ChatRunService {
       run.error = '已取消'
       run.updatedAt = now
       run.finishedAt = now
-      const content = run.partialAnswer ? `${run.partialAnswer}\n\n**[已取消]**` : '**[已取消]**'
+      const content = run.partialAnswer ? `${run.partialAnswer}\n\n已取消` : '已取消'
       assistantMessage = this.buildAssistantMessage(run, content, true)
     } else if (
       !event.internal &&

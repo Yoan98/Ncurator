@@ -117,12 +117,31 @@ describe('ai human live backend', () => {
           const toolNames = filterAiRunEventsByType(events, 'tool_call_result').map(
             (event) => event.toolName
           )
+          const successfulToolCallIds = new Set(
+            filterAiRunEventsByType(events, 'tool_call_result')
+              .filter((event) => event.result?.ok === true)
+              .map((event) => event.toolCallId)
+          )
           const createSourcePaths = filterAiRunEventsByType(events, 'tool_call_started')
-            .filter((event) => event.toolName === 'docx_edit' && isDocxEditCreateInput(event.input))
+            .filter(
+              (event) =>
+                event.toolName === 'docx_edit' &&
+                successfulToolCallIds.has(event.toolCallId) &&
+                isDocxEditCreateInput(event.input)
+            )
             .map((event) => event.input.sourcePath)
             .filter((value): value is string => typeof value === 'string')
-          const createdRelativePaths = createSourcePaths.map((sourcePath) =>
-            toWorkspaceRelativePath(runtime.workspaceRoot, sourcePath)
+          const textCreateSourcePaths = filterAiRunEventsByType(events, 'tool_call_started')
+            .filter(
+              (event) =>
+                event.toolName === 'text_file_edit' &&
+                successfulToolCallIds.has(event.toolCallId) &&
+                event.input.action === 'create'
+            )
+            .map((event) => event.input.sourcePath)
+            .filter((value): value is string => typeof value === 'string')
+          const createdRelativePaths = [...createSourcePaths, ...textCreateSourcePaths].map(
+            (sourcePath) => toWorkspaceRelativePath(runtime.workspaceRoot, sourcePath)
           )
           const llmIoRecords = result.llmIoRecords
           const compactionRecords = llmIoRecords.filter(
@@ -185,11 +204,12 @@ describe('ai human live backend', () => {
             result.output?.status === 'completed' &&
             deliveryText.length > 0 &&
             !hasInventedEntityText(deliveryText, inventedLastWeekDocName) &&
-            toolNames.includes('docx_edit')
+            (toolNames.includes('docx_edit') || toolNames.includes('text_file_edit'))
           const artifactSatisfied =
-            hasDocxFileArtifact(result.output?.artifacts) &&
-            hasDocxApplyArtifact(result.output?.artifacts) &&
-            createSourcePaths.length >= 1 &&
+            ((hasDocxFileArtifact(result.output?.artifacts) &&
+              hasDocxApplyArtifact(result.output?.artifacts) &&
+              createSourcePaths.length >= 1) ||
+              textCreateSourcePaths.length >= 1) &&
             createdRelativePaths.every(
               (sourcePath) =>
                 sourcePath.startsWith('工作/') || sourcePath === path.basename(sourcePath)
@@ -219,6 +239,8 @@ describe('ai human live backend', () => {
               latestBrainPrompt: latestBrainRecord?.user,
               ratios,
               toolNames,
+              createSourcePaths,
+              textCreateSourcePaths,
               artifacts: result.output?.artifacts,
               deliveryText
             }

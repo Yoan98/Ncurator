@@ -112,9 +112,9 @@ type WorkbenchE2EWindow = Window &
     __NCURATOR_E2E_SET_WORKBENCH_DRAFT__?: (draft: ComposerDraftValue) => void
   }
 
-type ApplyForceConfirmState = {
+type ApplyRevertConfirmState = {
   changeId: string
-  title: string
+  stage: 'confirm' | 'force'
   content: string
 }
 
@@ -245,7 +245,6 @@ const buildAssistantTurnFromMessage = (message: ChatMessage): AssistantTurnViewM
       path: artifact.path,
       fileName: artifact.fileName,
       origin: 'artifact',
-      summary: artifact.summary,
       applyId: artifact.applyId,
       operation: artifact.operation,
       format:
@@ -307,7 +306,6 @@ const reduceAssistantTurnByRunEvent = (
           path: event.path,
           fileName: event.fileName,
           origin: 'artifact',
-          summary: event.summary,
           applyId: event.applyId,
           operation: event.operation,
           format:
@@ -439,7 +437,6 @@ const applyRunRecordToTurn = (
         path: artifact.path,
         fileName: artifact.fileName,
         origin: 'artifact' as const,
-        summary: artifact.summary,
         applyId: artifact.applyId,
         operation: artifact.operation,
         format:
@@ -496,10 +493,7 @@ const appendArtifactForMessage = (
 ): void => {
   const currentArtifacts = store[messageId] || []
   const exists = currentArtifacts.some(
-    (item) =>
-      item.path === artifact.path &&
-      item.applyId === artifact.applyId &&
-      item.summary === artifact.summary
+    (item) => item.path === artifact.path && item.applyId === artifact.applyId
   )
   if (!exists) {
     store[messageId] = [...currentArtifacts, artifact]
@@ -671,7 +665,7 @@ const ChatPage: React.FC = () => {
   const [fileChangeRecords, setFileChangeRecords] = useState<AiFileChangeRecord[]>([])
   const [applyLoading, setApplyLoading] = useState(false)
   const [applyReverting, setApplyReverting] = useState(false)
-  const [applyForceConfirm, setApplyForceConfirm] = useState<ApplyForceConfirmState | null>(null)
+  const [applyRevertConfirm, setApplyRevertConfirm] = useState<ApplyRevertConfirmState | null>(null)
 
   const [pendingApprovalBatch, setPendingApprovalBatch] =
     useState<ApprovalBatchRequiredEvent | null>(null)
@@ -1139,7 +1133,7 @@ const ChatPage: React.FC = () => {
     setActiveApplyRecord(null)
     setApplyLoading(false)
     setApplyReverting(false)
-    setApplyForceConfirm(null)
+    setApplyRevertConfirm(null)
   }
 
   const updateTurnForRun = (
@@ -2171,8 +2165,7 @@ const ChatPage: React.FC = () => {
           path: event.path,
           fileName: event.fileName,
           operation: event.operation,
-          applyId: event.applyId,
-          summary: event.summary
+          applyId: event.applyId
         })
         setCurrentMessages((previous) =>
           previous.map((item) =>
@@ -2287,11 +2280,17 @@ const ChatPage: React.FC = () => {
               ? {
                   ...item,
                   error: true,
-                  content: `${item.content || ''}\n\n**[失败]** ${errorText}`
+                  content: item.content
+                    ? `${item.content}\n\n失败：${errorText}`
+                    : `失败：${errorText}`
                 }
               : item
           )
         )
+        const activeSessionId = currentSessionIdRef.current
+        if (activeSessionId) {
+          void loadFileChangesForSession(activeSessionId)
+        }
         emitErrorMessage(event.source === 'provider' ? '模型请求失败' : '运行失败')
         return
       }
@@ -2310,11 +2309,15 @@ const ChatPage: React.FC = () => {
               ? {
                   ...item,
                   error: true,
-                  content: item.content ? `${item.content}\n\n**[已取消]**` : '**[已取消]**'
+                  content: item.content ? `${item.content}\n\n已取消` : '已取消'
                 }
               : item
           )
         )
+        const activeSessionId = currentSessionIdRef.current
+        if (activeSessionId) {
+          void loadFileChangesForSession(activeSessionId)
+        }
         message.info('已取消')
         return
       }
@@ -2462,7 +2465,7 @@ const ChatPage: React.FC = () => {
       setCurrentMessages((previous) =>
         previous.map((item) =>
           item.id === optimisticAssistantMessage.id
-            ? { ...item, error: true, content: `**[失败]** ${normalized}` }
+            ? { ...item, error: true, content: `失败：${normalized}` }
             : item.id === optimisticUserMessage.id
               ? { ...item, error: true }
               : item
@@ -2796,27 +2799,26 @@ const ChatPage: React.FC = () => {
 
   const handleApplyRevert = async (): Promise<void> => {
     if (!activeApplyRecord || !currentSessionId || applyReverting) return
-    if (activeApplyRecord.operation === 'created') {
-      setApplyForceConfirm({
-        changeId: activeApplyRecord.id,
-        title: '删除这个新建文件？',
-        content: '这是本次 AI 新建的文件。回退会删除该文件。'
-      })
-      return
-    }
+    setApplyRevertConfirm({
+      changeId: activeApplyRecord.id,
+      stage: 'confirm',
+      content: '文件将恢复到这次修改发生前的状态。'
+    })
+  }
+
+  const handleApplyRevertConfirm = async (): Promise<void> => {
+    if (!applyRevertConfirm || !currentSessionId || applyReverting) return
     setApplyReverting(true)
     try {
       const response = await window.api.aiFileChangeRevert({
-        changeId: activeApplyRecord.id,
-        force: false
+        changeId: applyRevertConfirm.changeId,
+        force: applyRevertConfirm.stage === 'force'
       })
       if (response.requiresForce) {
-        setApplyForceConfirm({
-          changeId: activeApplyRecord.id,
-          title: '恢复到本次修改前？',
-          content:
-            response.warning ||
-            '当前文件在这次 AI 修改后又发生了变化。继续操作会恢复到这次修改前的版本，并丢失之后的修改。'
+        setApplyRevertConfirm({
+          changeId: applyRevertConfirm.changeId,
+          stage: 'force',
+          content: response.warning || '文件在这次修改后又发生了变化。继续回退会覆盖之后的内容。'
         })
         return
       }
@@ -2828,41 +2830,10 @@ const ChatPage: React.FC = () => {
         setActiveApplyRecord(response.record)
         showApplyWorkspace(response.record)
       }
+      setApplyRevertConfirm(null)
       emitSuccessMessage('已回退本次修改')
       await loadFileChangesForSession(currentSessionId, {
-        preferredApplyId: response.record?.id || activeApplyRecord.id,
-        autoOpen: true,
-        forceOpenWorkspace: true,
-        skipApplyRecordReload: true
-      })
-    } catch (error) {
-      console.error(error)
-      emitErrorMessage('回退失败')
-    } finally {
-      setApplyReverting(false)
-    }
-  }
-
-  const handleForceApplyRevertConfirm = async (): Promise<void> => {
-    if (!applyForceConfirm || !currentSessionId) return
-    setApplyReverting(true)
-    try {
-      const forced = await window.api.aiFileChangeRevert({
-        changeId: applyForceConfirm.changeId,
-        force: true
-      })
-      if (!forced.success) {
-        emitErrorMessage(forced.error || '回退失败')
-        return
-      }
-      if (forced.record) {
-        setActiveApplyRecord(forced.record)
-        showApplyWorkspace(forced.record)
-      }
-      setApplyForceConfirm(null)
-      emitSuccessMessage('已回退本次修改')
-      await loadFileChangesForSession(currentSessionId, {
-        preferredApplyId: forced.record?.id || applyForceConfirm.changeId,
+        preferredApplyId: response.record?.id || applyRevertConfirm.changeId,
         autoOpen: true,
         forceOpenWorkspace: true,
         skipApplyRecordReload: true
@@ -3794,15 +3765,23 @@ const ChatPage: React.FC = () => {
           ) : null}
         </div>
         <Modal
-          open={Boolean(applyForceConfirm)}
-          title={applyForceConfirm?.title || '恢复到本次修改前？'}
-          okText="恢复到此前版本"
+          open={Boolean(applyRevertConfirm)}
+          title={applyRevertConfirm?.stage === 'force' ? '仍然回退这次修改？' : '回退这次修改？'}
+          okText={applyRevertConfirm?.stage === 'force' ? '仍然回退' : '回退'}
           cancelText="取消"
+          okButtonProps={{
+            danger: applyRevertConfirm?.stage === 'force',
+            'data-testid': workbenchSelectors.applyRevertConfirmButton
+          }}
+          cancelButtonProps={{
+            'data-testid': workbenchSelectors.applyRevertCancelButton
+          }}
           confirmLoading={applyReverting}
-          onOk={() => void handleForceApplyRevertConfirm()}
-          onCancel={() => setApplyForceConfirm(null)}
+          onOk={() => void handleApplyRevertConfirm()}
+          onCancel={() => setApplyRevertConfirm(null)}
+          data-testid={workbenchSelectors.applyRevertConfirmModal}
         >
-          <p>{applyForceConfirm?.content}</p>
+          <p>{applyRevertConfirm?.content}</p>
         </Modal>
         <ImageLightbox image={previewImage} onClose={() => setPreviewImage(null)} />
         <Modal

@@ -942,7 +942,6 @@ export type AiFileArtifactRef = {
   fileName: string
   operation: AiFileArtifactOperation
   applyId?: string
-  summary: string
 }
 export type AiDraftSnapshotRef = {
   draftSnapshotId: string
@@ -1446,7 +1445,6 @@ type AiRunEventPayload =
       fileName: string
       operation: AiFileArtifactOperation
       applyId?: string
-      summary: string
       stepId?: string
       createdAt: number
     }

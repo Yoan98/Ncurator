@@ -156,11 +156,33 @@ describe('workbench result e2e', () => {
           await page.waitForFunction(
             (testId) =>
               document.querySelector(`[data-testid="${testId}"]`)?.getAttribute('aria-label') ===
-              '显示工作区文件',
+              '展开文件列表',
             workbenchSelectors.workspaceExplorerToggle
           )
           const workspaceExplorerToggleLabelBeforeOpen =
             await workspaceExplorerToggle.getAttribute('aria-label')
+          const toolbarActionOrder = await getWorkbenchLocator(
+            page,
+            workbenchSelectors.documentToolbar
+          ).evaluate(
+            (toolbar, selectors) =>
+              selectors
+                .map((testId) => toolbar.querySelector(`[data-testid="${testId}"]`))
+                .filter((element): element is Element => Boolean(element))
+                .map((element) => ({
+                  testId: element.getAttribute('data-testid'),
+                  left: element.getBoundingClientRect().left
+                }))
+                .sort((left, right) => left.left - right.left)
+                .map((item) => item.testId),
+            [
+              workbenchSelectors.openWithMenu,
+              workbenchSelectors.applyRevealButton,
+              workbenchSelectors.previewModeToggle,
+              workbenchSelectors.applyRevertButton,
+              workbenchSelectors.workspaceExplorerToggle
+            ]
+          )
           const workspaceExplorerModeCountBeforeOpen = await getWorkbenchLocator(
             page,
             workbenchSelectors.workspaceExplorerModeSwitch
@@ -171,6 +193,12 @@ describe('workbench result e2e', () => {
             workbenchSelectors.workspaceExplorerModeSwitch
           )
           await workspaceExplorerModeSwitch.waitFor({ state: 'visible' })
+          const workspaceExplorerToggleLabelAfterOpen =
+            await workspaceExplorerToggle.getAttribute('aria-label')
+          const workspaceExplorerTogglePressedAfterOpen =
+            await workspaceExplorerToggle.getAttribute('aria-pressed')
+          const workspaceExplorerToggleClassAfterOpen =
+            (await workspaceExplorerToggle.getAttribute('class')) || ''
           const workspaceExplorerModeTextAfterOpen =
             (await workspaceExplorerModeSwitch.textContent()) || ''
           const currentSessionChanges = getWorkbenchPrefixLocator(
@@ -181,6 +209,8 @@ describe('workbench result e2e', () => {
           const currentSessionChangeMarkerCount = await currentSessionChanges.count()
 
           await getWorkbenchLocator(page, workbenchSelectors.applyRevertButton).click()
+          await page.getByText('回退这次修改？').waitFor({ state: 'visible' })
+          await getWorkbenchLocator(page, workbenchSelectors.applyRevertConfirmButton).click()
           await waitForWorkbenchApplyRecordStatus(page, 'reverted')
           const afterRevertBytes = await fs.readFile(targetPath)
           const fileStillVisible = await getWorkbenchLocator(
@@ -208,6 +238,10 @@ describe('workbench result e2e', () => {
             omittedCountBeforeExpand,
             omittedCountAfterExpand,
             workspaceExplorerToggleLabelBeforeOpen,
+            workspaceExplorerToggleLabelAfterOpen,
+            workspaceExplorerTogglePressedAfterOpen,
+            workspaceExplorerToggleClassAfterOpen,
+            toolbarActionOrder,
             workspaceExplorerModeCountBeforeOpen,
             workspaceExplorerModeTextAfterOpen,
             currentSessionChangeMarkerCount,
@@ -234,7 +268,18 @@ describe('workbench result e2e', () => {
               result.applyEntryCountDuringRun === 0 &&
               result.omittedLineLabels.some((label) => label.includes('行未修改')) &&
               result.omittedCountAfterExpand < result.omittedCountBeforeExpand &&
-              result.workspaceExplorerToggleLabelBeforeOpen === '显示工作区文件' &&
+              result.workspaceExplorerToggleLabelBeforeOpen === '展开文件列表' &&
+              result.workspaceExplorerToggleLabelAfterOpen === '收起文件列表' &&
+              result.workspaceExplorerTogglePressedAfterOpen === 'true' &&
+              result.workspaceExplorerToggleClassAfterOpen.includes('!bg-[#F1F1EF]') &&
+              JSON.stringify(result.toolbarActionOrder) ===
+                JSON.stringify([
+                  workbenchSelectors.openWithMenu,
+                  workbenchSelectors.applyRevealButton,
+                  workbenchSelectors.previewModeToggle,
+                  workbenchSelectors.applyRevertButton,
+                  workbenchSelectors.workspaceExplorerToggle
+                ]) &&
               result.workspaceExplorerModeCountBeforeOpen === 0 &&
               result.workspaceExplorerModeTextAfterOpen.includes('本会话改动') &&
               result.currentSessionChangeMarkerCount >= 1 &&

@@ -40,7 +40,6 @@ const createFileArtifactRef = (input: {
   capability: AiFileArtifactRef['capability']
   artifactPath: string
   operation: AiFileArtifactOperation
-  summary: string
   applyId?: string
 }): AiFileArtifactRef => ({
   kind: 'file',
@@ -48,8 +47,7 @@ const createFileArtifactRef = (input: {
   path: input.artifactPath,
   fileName: path.basename(input.artifactPath),
   operation: input.operation,
-  applyId: input.applyId,
-  summary: input.summary
+  applyId: input.applyId
 })
 
 const extractTerminalArtifacts = (result: ToolCallResult): AiArtifactRef[] => {
@@ -64,10 +62,7 @@ const extractTerminalArtifacts = (result: ToolCallResult): AiArtifactRef[] => {
       createFileArtifactRef({
         capability: 'terminal_exec',
         artifactPath,
-        operation: readArtifactOperation(item, 'operation', 'created'),
-        summary:
-          readNonEmptyString(item, 'summary') ||
-          `terminal command produced/updated file: ${path.basename(artifactPath)}`
+        operation: readArtifactOperation(item, 'operation', 'created')
       })
     ]
   })
@@ -103,8 +98,7 @@ export const buildRunArtifactsFromDocxApplyRecord = (record: DocxApplyRecord): A
     capability: 'docx',
     artifactPath: record.source_path,
     operation: record.operation,
-    applyId: record.id,
-    summary: `docx applied: ${record.source_name}`
+    applyId: record.id
   })
 ]
 
@@ -131,7 +125,6 @@ export const appendDocxApplyArtifactsAndEmitEvents = (input: {
       fileName: record.source_name,
       operation: record.operation,
       applyId: record.id,
-      summary: `docx applied: ${record.source_name}`,
       createdAt: Date.now()
     })
   })
@@ -153,8 +146,7 @@ export const appendFileChangeArtifactsAndEmitEvents = (input: {
         capability: record.capability,
         artifactPath: record.path,
         operation: record.operation,
-        applyId: record.id,
-        summary: `${record.capability} applied: ${record.fileName}`
+        applyId: record.id
       })
     ])
   )
@@ -170,7 +162,6 @@ export const appendFileChangeArtifactsAndEmitEvents = (input: {
       fileName: record.fileName,
       operation: record.operation,
       applyId: record.id,
-      summary: `${record.capability} applied: ${record.fileName}`,
       createdAt: Date.now()
     })
   })

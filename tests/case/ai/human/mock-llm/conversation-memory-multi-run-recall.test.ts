@@ -66,8 +66,7 @@ describe('ai human mock-llm backend', () => {
                   applyId: 'apply-risk-tracking',
                   path: '/workspace/risk-tracking.docx',
                   fileName: 'risk-tracking.docx',
-                  operation: 'created',
-                  summary: '风险跟踪草稿'
+                  operation: 'created'
                 }
               ]
             }

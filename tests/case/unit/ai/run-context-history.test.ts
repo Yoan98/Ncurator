@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ChatMessage } from '../../../../src/shared/types'
-import { formatPreviousTurns } from '../../../../src/main/services/ai/utils/runContext'
+import { formatPreviousTurns, formatTurns } from '../../../../src/main/services/ai/utils/runContext'
 
 const message = (input: {
   id: string
@@ -28,9 +28,11 @@ describe('ai run context conversation history', () => {
           artifacts: [
             {
               kind: 'file',
+              capability: 'text_file',
               path: '/workspace/snake.html',
               fileName: 'snake.html',
-              summary: 'text file created: snake.html'
+              operation: 'created',
+              applyId: 'change-current'
             }
           ]
         })
@@ -53,9 +55,11 @@ describe('ai run context conversation history', () => {
           artifacts: [
             {
               kind: 'file',
+              capability: 'text_file',
               path: '/workspace/snake.html',
               fileName: 'snake.html',
-              summary: 'text file created: snake.html'
+              operation: 'created',
+              applyId: 'change-previous'
             }
           ]
         }),
@@ -75,8 +79,7 @@ describe('ai run context conversation history', () => {
           {
             kind: 'file',
             path: '/workspace/snake.html',
-            fileName: 'snake.html',
-            summary: 'text file created: snake.html'
+            operation: 'created'
           }
         ]
       }
@@ -90,7 +93,7 @@ describe('ai run context conversation history', () => {
         message({
           id: 'interrupted-assistant',
           role: 'assistant',
-          content: '**[失败]** 无法连接模型服务，请检查网络后重试。'
+          content: '失败：无法连接模型服务，请检查网络后重试。'
         }),
         message({ id: 'current-user', role: 'user', content: '补充材料 B 后继续整理' }),
         message({ id: 'current-assistant', role: 'assistant', content: '' })
@@ -103,7 +106,7 @@ describe('ai run context conversation history', () => {
       {
         turn_index: 1,
         user_message: '整理材料 A',
-        assistant_message: '**[失败]** 无法连接模型服务，请检查网络后重试。',
+        assistant_message: '失败：无法连接模型服务，请检查网络后重试。',
         artifacts: []
       }
     ])
@@ -137,5 +140,34 @@ describe('ai run context conversation history', () => {
         artifacts: []
       }
     ])
+  })
+
+  it('uses the same minimal artifact projection for conversation memory input', () => {
+    const turnsText = formatTurns([
+      message({ id: 'user-1', role: 'user', content: '创建文件' }),
+      message({
+        id: 'assistant-1',
+        role: 'assistant',
+        content: '已经创建。',
+        artifacts: [
+          {
+            kind: 'file',
+            capability: 'ppt',
+            path: '/workspace/report.pptx',
+            fileName: 'report.pptx',
+            operation: 'created',
+            applyId: 'internal-change-id'
+          }
+        ]
+      })
+    ])
+
+    expect(turnsText).toContain(
+      'artifacts:\n- {"kind":"file","path":"/workspace/report.pptx","operation":"created"}'
+    )
+    expect(turnsText).not.toContain('capability')
+    expect(turnsText).not.toContain('fileName')
+    expect(turnsText).not.toContain('applyId')
+    expect(turnsText).not.toContain('summary')
   })
 })

@@ -62,9 +62,11 @@ describe('workbench result e2e', () => {
 
           await mutateDocxExternally(targetPath, `external-${MARKER}`)
           await getWorkbenchLocator(page, workbenchSelectors.applyRevertButton).click()
-          await page.getByText('恢复到本次修改前？').waitFor({ state: 'visible' })
+          await page.getByText('回退这次修改？').waitFor({ state: 'visible' })
+          await getWorkbenchLocator(page, workbenchSelectors.applyRevertConfirmButton).click()
+          await page.getByText('仍然回退这次修改？').waitFor({ state: 'visible' })
           const warningText = ((await page.locator('.ant-modal').last().textContent()) || '').trim()
-          await page.getByRole('button', { name: '恢复到此前版本' }).click()
+          await getWorkbenchLocator(page, workbenchSelectors.applyRevertConfirmButton).click()
           await waitForWorkbenchApplyRecordStatus(page, 'reverted')
           const afterForceRevertText = await readDocxPlainText(targetPath)
           const antMessageText = await getAntMessageText(page)

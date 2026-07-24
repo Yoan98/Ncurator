@@ -11,7 +11,6 @@ export type EmitFileArtifactEventInput = {
   artifactPath: string
   operation: AiFileArtifactOperation
   applyId?: string
-  summary: string
   stepId?: string
   onNonFatalError?: (reason: string) => void
 }
@@ -28,7 +27,6 @@ export const emitFileArtifactEvent = (input: EmitFileArtifactEventInput): boolea
       fileName: path.basename(input.artifactPath),
       operation: input.operation,
       applyId: input.applyId,
-      summary: input.summary,
       stepId: input.stepId,
       createdAt: Date.now()
     })

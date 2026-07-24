@@ -390,8 +390,7 @@ const editTextFile = async (
         capability: 'text_file',
         artifactPath: sourcePath,
         operation,
-        applyId: operationId,
-        summary: `text file ${operation}: ${path.basename(sourcePath)}`
+        applyId: operationId
       })
 
       return {

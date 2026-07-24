@@ -69,7 +69,13 @@ export class AiFileChangeService {
     request: GetAiFileChangeRecordRequest
   ): Promise<GetAiFileChangeRecordResponse> {
     const response = await this.store.getRecord(request)
-    if (!response.record || response.record.capability !== 'text_file') return response
+    if (
+      !response.record ||
+      response.record.capability !== 'text_file' ||
+      (response.record.operation !== 'created' && response.record.operation !== 'updated')
+    ) {
+      return response
+    }
     if (response.record.previewPath) return response
     try {
       return { record: await this.materializeTextPreview(response.record) }

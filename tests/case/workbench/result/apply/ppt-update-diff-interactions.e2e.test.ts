@@ -156,6 +156,8 @@ describe('workbench result e2e', () => {
             .count()
 
           await getWorkbenchLocator(page, workbenchSelectors.applyRevertButton).click()
+          await page.getByText('回退这次修改？').waitFor({ state: 'visible' })
+          await getWorkbenchLocator(page, workbenchSelectors.applyRevertConfirmButton).click()
           await waitForWorkbenchApplyRecordStatus(page, 'reverted')
           const revertedBytes = await fs.readFile(filePath)
           const revertedPresentation = await loadPresentation(new Uint8Array(revertedBytes))

@@ -27,7 +27,11 @@ describe('backend artifact collector', () => {
     try {
       const workspaceRoot = path.join(tempRoot, 'workspace')
       const runtimeEventsPath = path.join(tempRoot, 'runtime-events.jsonl')
-      const artifactSourcePath = path.join(workspaceRoot, '输出', 'draft-深度学习与图形学复习总结.docx')
+      const artifactSourcePath = path.join(
+        workspaceRoot,
+        '输出',
+        'draft-深度学习与图形学复习总结.docx'
+      )
       await fs.mkdir(path.dirname(artifactSourcePath), { recursive: true })
       await fs.writeFile(artifactSourcePath, 'draft-bytes', 'utf8')
 
@@ -41,7 +45,6 @@ describe('backend artifact collector', () => {
         fileName: 'draft-深度学习与图形学复习总结.docx',
         operation: 'created',
         applyId: 'apply-123',
-        summary: 'docx applied',
         createdAt: Date.now()
       } satisfies Extract<AiRunEvent, { type: 'file_artifact' }>
       await fs.writeFile(runtimeEventsPath, `${JSON.stringify(event)}\n`, 'utf8')

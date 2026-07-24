@@ -266,6 +266,68 @@ describe('workbench chat run backend', () => {
     expect((await setup.storage.aiRun.getRun(run.id))?.status).toBe('failed')
   })
 
+  it.each([
+    {
+      name: 'failed',
+      terminalEvent: (runId: string): AiRunEvent => ({
+        type: 'run_failed',
+        runId,
+        source: 'internal',
+        message: '模型连接中断'
+      }),
+      expectedContent: '草稿内容\n\n失败：模型连接中断'
+    },
+    {
+      name: 'cancelled',
+      terminalEvent: (runId: string): AiRunEvent => ({
+        type: 'run_cancelled',
+        runId
+      }),
+      expectedContent: '草稿内容\n\n已取消'
+    }
+  ])('keeps applied artifacts when a run is $name', async ({ terminalEvent, expectedContent }) => {
+    const setup = await createTestService()
+    const run = await submitAiRun(setup)
+    const service = setup.service as ChatRunServicePrivate
+    const filePath = path.join(setup.workspaceRoot, 'result.md')
+
+    await service.queueRunEvent(run.id, {
+      type: 'answer_token',
+      runId: run.id,
+      token: '草稿内容'
+    })
+    await service.queueRunEvent(run.id, {
+      type: 'file_artifact',
+      runId: run.id,
+      taskId: run.id,
+      artifactId: 'artifact-1',
+      capability: 'text_file',
+      path: filePath,
+      fileName: 'result.md',
+      operation: 'updated',
+      applyId: 'change-1',
+      createdAt: Date.now()
+    })
+    await service.queueRunEvent(run.id, terminalEvent(run.id))
+
+    const messages = await setup.storage.chat.getChatMessages('session-1')
+    const assistantMessage = messages.find((message) => message.role === 'assistant')
+    const storedRun = await setup.storage.aiRun.getRun(run.id)
+
+    expect(assistantMessage?.content).toBe(expectedContent)
+    expect(assistantMessage?.artifacts).toEqual([
+      {
+        kind: 'file',
+        capability: 'text_file',
+        path: filePath,
+        fileName: 'result.md',
+        operation: 'updated',
+        applyId: 'change-1'
+      }
+    ])
+    expect(storedRun?.artifacts).toEqual(assistantMessage?.artifacts)
+  })
+
   it('user-takeover-pauses-persists-and-resumes-the-run', async () => {
     const setup = await createTestService()
     const run = await submitAiRun(setup)

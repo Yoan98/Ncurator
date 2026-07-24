@@ -31,7 +31,8 @@ const renderPanel = (
       name: 'Viewer',
       isDefault: false
     }
-  ]
+  ],
+  overrides: Record<string, unknown> = {}
 ) => {
   const onOpenPath = vi.fn()
   Object.defineProperty(window, 'matchMedia', {
@@ -58,7 +59,8 @@ const renderPanel = (
       workspaces: [],
       onBackToPanelState: vi.fn(),
       onOpenPath,
-      onRevealPath: vi.fn()
+      onRevealPath: vi.fn(),
+      ...overrides
     })
   )
   return { onOpenPath }
@@ -135,5 +137,54 @@ describe('workbench open-with panel', () => {
     expect(await screen.findByText('Application 4')).toBeTruthy()
     expect(screen.queryByText('Application 5')).toBeNull()
     expect(screen.queryByText('Application 6')).toBeNull()
+  })
+
+  it('orders edit actions and gives the expanded file list a persistent selected state', async () => {
+    renderPanel(vi.fn(), undefined, {
+      mode: 'edit',
+      status: 'applied',
+      operation: 'updated',
+      canRevert: true,
+      previewMode: 'diff',
+      onTogglePreviewMode: vi.fn(),
+      explorerOpen: false,
+      onToggleExplorer: vi.fn()
+    })
+
+    await screen.findByTestId(workbenchSelectors.openWithButton)
+    const toolbar = screen.getByTestId(workbenchSelectors.documentToolbar)
+    const orderedTestIds = Array.from(toolbar.querySelectorAll('[data-testid]'))
+      .map((element) => element.getAttribute('data-testid'))
+      .filter((value) =>
+        [
+          workbenchSelectors.openWithMenu,
+          workbenchSelectors.applyRevealButton,
+          workbenchSelectors.previewModeToggle,
+          workbenchSelectors.applyRevertButton,
+          workbenchSelectors.workspaceExplorerToggle
+        ].includes(value as never)
+      )
+
+    expect(orderedTestIds).toEqual([
+      workbenchSelectors.openWithMenu,
+      workbenchSelectors.applyRevealButton,
+      workbenchSelectors.previewModeToggle,
+      workbenchSelectors.applyRevertButton,
+      workbenchSelectors.workspaceExplorerToggle
+    ])
+    expect(screen.getByRole('button', { name: '打开对应文件夹' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '展开文件列表' }).getAttribute('aria-pressed')).toBe(
+      'false'
+    )
+
+    cleanup()
+    renderPanel(vi.fn(), undefined, {
+      explorerOpen: true,
+      onToggleExplorer: vi.fn()
+    })
+    const expandedButton = await screen.findByRole('button', { name: '收起文件列表' })
+    expect(expandedButton.getAttribute('aria-pressed')).toBe('true')
+    expect(expandedButton.className).toContain('!border-[#D9D8D4]')
+    expect(expandedButton.className).toContain('!bg-[#F1F1EF]')
   })
 })

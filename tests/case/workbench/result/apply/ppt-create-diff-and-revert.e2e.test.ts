@@ -115,8 +115,9 @@ describe('workbench result e2e', () => {
           }
           const draggedTransform = (await transform.getAttribute('style')) || ''
           await getWorkbenchLocator(page, workbenchSelectors.applyRevertButton).click()
-          await page.getByText('删除这个新建文件？').waitFor({ state: 'visible' })
-          await page.getByRole('button', { name: '恢复到此前版本' }).click()
+          await page.getByText('回退这次修改？').waitFor({ state: 'visible' })
+          await page.getByText('文件将恢复到这次修改发生前的状态。').waitFor({ state: 'visible' })
+          await getWorkbenchLocator(page, workbenchSelectors.applyRevertConfirmButton).click()
           await waitForWorkbenchApplyRecordStatus(page, 'reverted')
           const existsAfterRevert = await fs
             .access(filePath)

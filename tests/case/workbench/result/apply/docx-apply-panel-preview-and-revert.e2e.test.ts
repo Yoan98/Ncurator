@@ -130,6 +130,8 @@ describe('workbench result e2e', () => {
             })
             .catch(() => false)
           await getWorkbenchLocator(page, workbenchSelectors.applyRevertButton).click()
+          await page.getByText('回退这次修改？').waitFor({ state: 'visible' })
+          await getWorkbenchLocator(page, workbenchSelectors.applyRevertConfirmButton).click()
           await waitForWorkbenchApplyRecordStatus(page, 'reverted')
           const afterRevertText = await readDocxPlainText(targetPath)
           const revertedPanelText = (

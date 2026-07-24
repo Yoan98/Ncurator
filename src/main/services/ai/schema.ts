@@ -9,12 +9,11 @@ import { AI_RUN_STATUSES } from './constants'
 
 export const aiFileArtifactRefSchema: z.ZodType<AiFileArtifactRef> = z.object({
   kind: z.literal('file'),
-  capability: z.enum(['terminal_exec', 'docx', 'text_file']),
+  capability: z.enum(['terminal_exec', 'docx', 'ppt', 'excel', 'text_file']),
   path: z.string().min(1),
   fileName: z.string().min(1),
-  operation: z.enum(['created', 'updated']),
-  applyId: z.string().min(1).optional(),
-  summary: z.string().min(1)
+  operation: z.enum(['created', 'updated', 'deleted', 'renamed']),
+  applyId: z.string().min(1).optional()
 })
 
 export const aiArtifactRefSchema: z.ZodType<AiArtifactRef> = aiFileArtifactRefSchema

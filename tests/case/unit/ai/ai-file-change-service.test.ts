@@ -222,6 +222,8 @@ describe('ai file change service', () => {
     const renamed = completed.find((item) => item.record.operation === 'renamed')?.record
     expect(renamed?.beforePath).toBe(renamedBeforePath)
     expect(renamed?.afterPath).toBe(renamedAfterPath)
+    const openedRename = await service.getRecord({ changeId: renamed!.id })
+    expect(openedRename.record?.previewPath).toBeUndefined()
   })
 
   it('restores deleted and renamed files during revert', async () => {
