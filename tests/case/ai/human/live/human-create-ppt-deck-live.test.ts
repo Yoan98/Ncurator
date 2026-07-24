@@ -75,10 +75,11 @@ const buildLivePptRequest = (logoName: string): string =>
     '',
     '执行与验收：',
     '- 只使用 PPT 工具，不要使用 terminal。',
-    '- 使用 PPT 工具一次提交三张内容完整的页面 HTML，禁止先建占位页再逐元素拼装。',
-    '- 三页完成后一次性读取全部页面视觉内容并逐页检查一次。',
+    '- 使用 ppt_edit 一次提交三张内容完整的页面 HTML，禁止先建占位页再逐元素拼装。',
+    '- 创建完成后只调用一次 ppt_read_visuals，一次性读取全部 3 页视觉内容并逐页检查。',
     '- 视觉检查必须确认标题没有换行，左右没有大面积无意义空白，也没有缺字、溢出、重叠或异常样式。',
-    '- 如需修复，只复检修改页一次；最后确认文件已写回。'
+    '- 如需修复，最多再调用一次 ppt_edit，并只对修改页再做一次 ppt_read_visuals；然后立即完成，不要继续反复改。',
+    '- 最后确认文件已写回。'
   ].join('\n')
 
 const imageContentMetrics = async (
@@ -251,7 +252,7 @@ describe('ai human live backend', () => {
           )
           runtime.assertThat(
             result.output?.status === 'completed' &&
-              startedTools.filter((name) => name === 'ppt_edit').length >= 3 &&
+              startedTools.filter((name) => name === 'ppt_edit').length >= 1 &&
               startedTools.includes('ppt_read_visuals') &&
               !startedTools.includes('image_analyze') &&
               !startedTools.includes('ppt_render_slides') &&

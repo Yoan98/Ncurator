@@ -88,7 +88,7 @@ describe('workbench result e2e', () => {
           const startedAtMs = Date.now()
           await sendWorkbenchMessage(
             page,
-            `请直接修改工作区已有的“${FILE_NAME}”。必须先读取页面提纲，再完成这些操作：把“交付质量”页移动到第一页；把“市场信号”页标题改成“市场信号已确认”；删除“产品进展”页；在“附录数据”页之前新增一页“风险与应对”；“附录数据”页必须保持完全不变。只使用 PPT 工具，完成后渲染全部变化页面检查并确认文件已经写回。`
+            `请直接修改工作区已有的“${FILE_NAME}”。必须先读取页面提纲，再完成这些操作：把“交付质量”页移动到第一页；把“市场信号”页标题改成“市场信号已确认”；删除“产品进展”页；在“附录数据”页之前新增一页“风险与应对”；“附录数据”页必须保持完全不变。只使用 PPT 工具，完成后用 ppt_read_visuals 读取全部变化页面视觉内容并检查，确认文件已经写回。`
           )
           const evidence = await waitForWorkbenchAiRunCompletion(
             runtime,
