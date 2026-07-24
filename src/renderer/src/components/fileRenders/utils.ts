@@ -1,4 +1,10 @@
-import type { FileRenderDocument, LoadedFileRenderDocument } from './types'
+import {
+  getFileExtension,
+  isKnownUnsupportedBinaryType,
+  isUtf8Text,
+  resolveRegisteredPreviewType
+} from './capabilities'
+import type { FileRenderDocument, PreparedFileRenderDocument } from './types'
 
 const getMimeType = (filename: string): string => {
   const extension = filename.split('.').pop()?.toLowerCase()
@@ -9,6 +15,19 @@ const getMimeType = (filename: string): string => {
       return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
     case 'pptx':
       return 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+    case 'png':
+      return 'image/png'
+    case 'jpg':
+    case 'jpeg':
+      return 'image/jpeg'
+    case 'gif':
+      return 'image/gif'
+    case 'webp':
+      return 'image/webp'
+    case 'bmp':
+      return 'image/bmp'
+    case 'svg':
+      return 'image/svg+xml'
     case 'md':
     case 'markdown':
       return 'text/markdown'
@@ -16,28 +35,6 @@ const getMimeType = (filename: string): string => {
       return 'text/plain'
     default:
       return 'application/octet-stream'
-  }
-}
-
-const getFileType = (filename: string): string => {
-  return filename.split('.').pop()?.toLowerCase() || ''
-}
-
-const resolveUtf8TextFileType = (bytes: ArrayBuffer, fileType: string): string => {
-  if (
-    fileType === 'pdf' ||
-    fileType === 'docx' ||
-    fileType === 'pptx' ||
-    fileType === 'md' ||
-    fileType === 'markdown'
-  ) {
-    return fileType
-  }
-  try {
-    new TextDecoder('utf-8', { fatal: true }).decode(bytes)
-    return 'txt'
-  } catch {
-    return fileType
   }
 }
 
@@ -87,9 +84,16 @@ const getSerializableFileData = (
 export const prepareFileRenderDocument = async (
   document: FileRenderDocument,
   createdUrls: string[]
-): Promise<LoadedFileRenderDocument | null> => {
+): Promise<PreparedFileRenderDocument> => {
   const fileName = getFileName(document)
-  const fileType = document.fileType || getFileType(fileName)
+  const sourceMimeType =
+    document.file instanceof Blob
+      ? document.file.type
+      : document.fileData instanceof Blob
+        ? document.fileData.type
+        : undefined
+  const registeredType = resolveRegisteredPreviewType(fileName, document.fileType, sourceMimeType)
+  const originalFileType = document.fileType || getFileExtension(fileName)
   const fileData = getSerializableFileData(document.fileData)
   const sourceBlob =
     document.file instanceof Blob
@@ -98,58 +102,79 @@ export const prepareFileRenderDocument = async (
         ? document.fileData
         : null
 
+  if (
+    !registeredType &&
+    isKnownUnsupportedBinaryType(fileName, document.fileType, sourceMimeType)
+  ) {
+    return { status: 'unsupported', fileName, fileType: originalFileType }
+  }
+
+  const resolveFileType = (bytes: ArrayBuffer): string | null =>
+    registeredType || (isUtf8Text(bytes) ? 'txt' : null)
+
+  const unsupported = (): PreparedFileRenderDocument => ({
+    status: 'unsupported',
+    fileName,
+    fileType: originalFileType
+  })
+
   if (sourceBlob) {
     const file = createFileFromBlob(sourceBlob, fileName)
     const blobBytes = await sourceBlob.arrayBuffer()
-    const resolvedFileType = resolveUtf8TextFileType(blobBytes, fileType)
+    const resolvedFileType = resolveFileType(blobBytes)
+    if (!resolvedFileType) return unsupported()
     const previewFileData = resolvedFileType === 'pdf' ? blobBytes : fileData
     return {
-      ...document,
-      uri: document.uri || createObjectUrl(file, createdUrls),
-      fileData: previewFileData,
-      fileName,
-      fileType: resolvedFileType,
-      file,
-      metadata: document.metadata
+      status: 'ready',
+      document: {
+        ...document,
+        uri: document.uri || createObjectUrl(file, createdUrls),
+        fileData: previewFileData,
+        fileName,
+        fileType: resolvedFileType,
+        file,
+        metadata: document.metadata
+      }
     }
   }
 
   if (document.filePath) {
     const buffer = await window.api.readFile(document.filePath)
     const bufferArray = copyBytesToArrayBuffer(buffer)
-    const resolvedFileType = resolveUtf8TextFileType(bufferArray, fileType)
+    const resolvedFileType = resolveFileType(bufferArray)
+    if (!resolvedFileType) return unsupported()
     const previewFileData = resolvedFileType === 'pdf' ? bufferArray : fileData
     const file = new File([previewFileData || bufferArray], fileName, {
       type: resolvedFileType === 'txt' ? 'text/plain' : getMimeType(fileName)
     })
     return {
-      ...document,
-      uri: createObjectUrl(file, createdUrls),
-      fileData: previewFileData,
-      fileName,
-      fileType: resolvedFileType,
-      file,
-      metadata: document.metadata
+      status: 'ready',
+      document: {
+        ...document,
+        uri: createObjectUrl(file, createdUrls),
+        fileData: previewFileData,
+        fileName,
+        fileType: resolvedFileType,
+        file,
+        metadata: document.metadata
+      }
     }
   }
 
   if (document.uri) {
+    if (!registeredType) return unsupported()
     return {
-      uri: document.uri,
-      fileType,
-      fileData,
-      fileName,
-      filePath: document.filePath,
-      metadata: document.metadata
+      status: 'ready',
+      document: {
+        uri: document.uri,
+        fileType: registeredType,
+        fileData,
+        fileName,
+        filePath: document.filePath,
+        metadata: document.metadata
+      }
     }
   }
 
-  return {
-    uri: '',
-    fileType,
-    fileData,
-    fileName,
-    filePath: document.filePath,
-    metadata: document.metadata
-  }
+  return unsupported()
 }

@@ -7,6 +7,9 @@ vi.mock('electron', () => ({
   app: {
     isPackaged: false,
     getFileIcon: vi.fn()
+  },
+  nativeImage: {
+    createFromPath: vi.fn()
   }
 }))
 
@@ -107,6 +110,33 @@ describe('OpenWithService', () => {
   it('uses public macOS workspace association APIs', () => {
     expect(MACOS_LIST_SCRIPT).toContain('URLForApplicationToOpenURL')
     expect(MACOS_LIST_SCRIPT).toContain('URLsForApplicationsToOpenURL')
+    expect(MACOS_LIST_SCRIPT).toContain('CFBundleIconFile')
+  })
+
+  it('uses the application bundle icon path when the system provides it', async () => {
+    const filePath = await createFile()
+    const getIconDataUrl = vi.fn().mockResolvedValue('icon:data')
+    const service = new OpenWithService({
+      runNativeList: vi.fn().mockResolvedValue({
+        applications: [
+          {
+            id: 'com.example.editor',
+            name: 'Editor',
+            path: '/Applications/Editor.app',
+            iconPath: '/Applications/Editor.app/Contents/Resources/Editor.icns',
+            isDefault: true
+          }
+        ]
+      }),
+      getIconDataUrl
+    })
+
+    await service.list(filePath)
+
+    expect(getIconDataUrl).toHaveBeenCalledWith(
+      '/Applications/Editor.app',
+      '/Applications/Editor.app/Contents/Resources/Editor.icns'
+    )
   })
 
   it('uses Windows shell association handlers instead of an application list', async () => {

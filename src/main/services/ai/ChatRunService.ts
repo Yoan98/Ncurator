@@ -328,6 +328,7 @@ export class ChatRunService {
     if (memoryCleared) {
       await this.deps.chatStore.clearConversationMemory(sessionId)
     }
+    await this.deps.chatStore.clearSessionResumeSnapshot(sessionId)
     const nextMessages = await this.deps.chatStore.getChatMessages(sessionId)
 
     return {

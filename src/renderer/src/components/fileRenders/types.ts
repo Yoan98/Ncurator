@@ -21,3 +21,16 @@ export type LoadedFileRenderDocument = IDocument & {
   metadata?: FileRenderMetadata
   file?: File | Blob
 }
+
+export type UnsupportedFileRenderDocument = {
+  status: 'unsupported'
+  fileName: string
+  fileType: string
+}
+
+export type PreparedFileRenderDocument =
+  | {
+      status: 'ready'
+      document: LoadedFileRenderDocument
+    }
+  | UnsupportedFileRenderDocument

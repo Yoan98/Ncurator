@@ -825,6 +825,15 @@ describe('workbench chat run backend', () => {
   it('retract-latest-turn-guards-running-and-non-latest-user-message', async () => {
     const runningSetup = await createTestService()
     const runningRun = await submitAiRun(runningSetup)
+    await runningSetup.storage.chat.saveSessionResumeSnapshot('session-1', {
+      reason: 'user_cancelled',
+      runId: runningRun.id,
+      userInput: runningRun.input,
+      selectedReferences: [],
+      humanState: {},
+      errorMessage: 'keep snapshot when retract is rejected',
+      updatedAt: Date.now()
+    })
     const runningMessages = await runningSetup.storage.chat.getChatMessages('session-1')
     const runningResponse = await runningSetup.service.retractLatestTurn({
       sessionId: 'session-1',
@@ -835,6 +844,7 @@ describe('workbench chat run backend', () => {
     expect(await runningSetup.storage.chat.getChatMessages('session-1')).toHaveLength(
       runningMessages.length
     )
+    expect(await runningSetup.storage.chat.getSessionResumeSnapshot('session-1')).not.toBeNull()
 
     const setup = await createTestService()
     await seedSession(setup.storage)
@@ -886,6 +896,21 @@ describe('workbench chat run backend', () => {
       coveredMessageCount: 4,
       updatedAt: Date.now()
     })
+    await setup.storage.chat.saveSessionResumeSnapshot('session-1', {
+      reason: 'user_cancelled',
+      runId: 'retract-run',
+      userInput: 'retract me',
+      selectedReferences: [],
+      humanState: {
+        memory: {
+          taskRun: {
+            rounds: [{ summary: 'stale interrupted task state' }]
+          }
+        }
+      },
+      errorMessage: 'cancelled',
+      updatedAt: Date.now()
+    })
 
     const response = await setup.service.retractLatestTurn({
       sessionId: 'session-1',
@@ -900,6 +925,7 @@ describe('workbench chat run backend', () => {
     expect(response.messages.map((message) => message.id)).toEqual(['kept-user', 'kept-assistant'])
     expect(await setup.storage.aiRun.getRun('retract-run')).toBeNull()
     expect(await setup.storage.chat.getConversationMemory('session-1')).toBeNull()
+    expect(await setup.storage.chat.getSessionResumeSnapshot('session-1')).toBeNull()
   })
 
   it('delete-session-cleans-run-and-event-records', async () => {

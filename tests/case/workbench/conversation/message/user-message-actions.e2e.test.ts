@@ -8,22 +8,27 @@ import {
   WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
   WORKBENCH_RESULT_E2E_TIMEOUT_MS,
   assertNoWorkbenchFakeSignals,
+  collectWorkbenchAiRunEvents,
   createWorkbenchNewSession,
   getWorkbenchLocator,
   getWorkbenchPrefixLocator,
   navigateToWorkbench,
   selectWorkbenchAttachmentThroughInjectedDialog,
   selectWorkbenchWorkspace,
+  setWorkbenchInput,
   setupWorkbenchWithTempWorkspace,
   submitWorkbenchCurrentDraft,
   switchWorkbenchMode,
   waitForLatestAssistantProcess,
   waitForAntMessageText,
+  waitForWorkbenchAiEvent,
+  waitForWorkbenchAiRunCompletion,
   workbenchSelectors
 } from '../../../../harness/e2e/workbench'
 
 const CASE_ID = 'user-message-actions'
 const RUNNING_MESSAGE = '请根据我刚附上的文件做一个简短说明。'
+const EDITED_MESSAGE = '这是编辑后的全新任务，请只回复：编辑后新任务。'
 const ONE_PIXEL_PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII=',
   'base64'
@@ -167,6 +172,10 @@ describe('workbench conversation e2e', () => {
           const removeButtonVisible = await fileRemoveButton.isVisible().catch(() => false)
 
           await submitWorkbenchCurrentDraft(page)
+          const interruptedRunStarted = await waitForWorkbenchAiEvent(runtime, {
+            name: 'user_message_edit_interrupted_run_started',
+            matches: (event) => event.type === 'run_started' && event.input === RUNNING_MESSAGE
+          })
           await page.waitForFunction(
             (input: { sendButtonTestId: string }) => {
               const button = document.querySelector(`[data-testid="${input.sendButtonTestId}"]`)
@@ -211,6 +220,17 @@ describe('workbench conversation e2e', () => {
           if (stopButtonLabel.includes('停止')) {
             await getWorkbenchLocator(page, workbenchSelectors.sendButton).click()
           }
+          const interruptedRunCancelled = await waitForWorkbenchAiEvent(runtime, {
+            name: 'user_message_edit_interrupted_run_cancelled',
+            matches: (event) =>
+              event.type === 'run_cancelled' && event.runId === interruptedRunStarted.runId
+          })
+          if (
+            interruptedRunCancelled.type !== 'run_cancelled' ||
+            !interruptedRunCancelled.resumeSnapshotSaved
+          ) {
+            throw new Error('stopped run did not persist a resume snapshot before message edit')
+          }
           await page.waitForFunction(
             (input: { sendButtonTestId: string }) => {
               const button = document.querySelector(`[data-testid="${input.sendButtonTestId}"]`)
@@ -250,6 +270,27 @@ describe('workbench conversation e2e', () => {
             page,
             workbenchSelectors.userMessagePrefix
           ).count()
+          await setWorkbenchInput(page, EDITED_MESSAGE)
+          const editedRunStartedAt = Date.now()
+          await submitWorkbenchCurrentDraft(page)
+          const editedRunStarted = await waitForWorkbenchAiEvent(runtime, {
+            name: 'edited_message_fresh_run_started',
+            matches: (event) => event.type === 'run_started' && event.input === EDITED_MESSAGE
+          })
+          if (!setup) throw new Error('workspace setup missing before edited run completion')
+          await waitForWorkbenchAiRunCompletion(
+            runtime,
+            editedRunStartedAt,
+            setup.env.modelName,
+            WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
+            { page }
+          )
+          const editedRunResumed = (await collectWorkbenchAiRunEvents(runtime)).some(
+            (event) =>
+              event.type === 'decision_hint' &&
+              event.runId === editedRunStarted.runId &&
+              event.code === 'run_resumed_after_interruption'
+          )
 
           return {
             actionButtonsVisible,
@@ -267,6 +308,10 @@ describe('workbench conversation e2e', () => {
             messageAttachmentTexts,
             assistantProcessTextAfterSend,
             assistantProcessTextAfterWait,
+            interruptedSnapshotSaved:
+              interruptedRunCancelled.type === 'run_cancelled' &&
+              interruptedRunCancelled.resumeSnapshotSaved === true,
+            editedRunResumed,
             attachmentsAboveBubble: Boolean(
               firstAttachmentBox && bubbleBox && firstAttachmentBox.y < bubbleBox.y
             )
@@ -283,11 +328,13 @@ describe('workbench conversation e2e', () => {
               result.assistantProcessTextAfterSend.includes('让俺想想') &&
               (result.assistantProcessTextAfterWait.includes('让俺想想') ||
                 result.assistantProcessTextAfterWait.includes('处理中')) &&
+              result.interruptedSnapshotSaved &&
+              !result.editedRunResumed &&
               result.attachmentsAboveBubble,
             {
               name: 'workbench-user-message-actions-and-attachments',
               message:
-                '用户消息 hover 后应显示时间/复制/编辑；编辑会撤回 latest turn 并回填输入框；running 中不显示编辑；发送后 assistant thinking 过程不能闪断；文件附件应在用户消息气泡上方独立展示，文件副标题显示扩展名，输入框附件关闭按钮无遮挡。',
+                '用户消息 hover 后应显示时间/复制/编辑；编辑会撤回 latest turn、清理中断恢复快照并以新 run 重发；running 中不显示编辑；发送后 assistant thinking 过程不能闪断；文件附件应在用户消息气泡上方独立展示，文件副标题显示扩展名，输入框附件关闭按钮无遮挡。',
               data: result
             }
           )

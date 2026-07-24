@@ -1,12 +1,18 @@
 ﻿import React, { useEffect, useRef, useState } from 'react'
 import { Empty, Modal, Spin } from 'antd'
-import DocViewer, { DocViewerRenderers } from 'react-doc-viewer'
+import DocViewer from 'react-doc-viewer'
 import CustomPDFRenderer from './pdf'
 import { CustomMarkdownRenderer, CustomPlainTextRenderer } from './markdown'
 import CustomDocxRenderer from './docx'
 import CustomPptxRenderer from './pptx'
+import CustomImageRenderer from './image'
 import { prepareFileRenderDocument } from './utils'
-import type { FileRenderDocument, LoadedFileRenderDocument } from './types'
+import { FILE_PREVIEW_SUPPORT_SUMMARY, getPreviewTypeLabel } from './capabilities'
+import type {
+  FileRenderDocument,
+  LoadedFileRenderDocument,
+  UnsupportedFileRenderDocument
+} from './types'
 export type { FileRenderDocument, FileRenderMetadata } from './types'
 
 type FileRenderViewerProps = {
@@ -42,10 +48,17 @@ const getPreviewErrorMessage = (error: unknown): string =>
 
 const usePreparedDocuments = (
   documents: FileRenderDocument[]
-): { documents: LoadedFileRenderDocument[]; loading: boolean; errorMessage: string | null } => {
+): {
+  documents: LoadedFileRenderDocument[]
+  loading: boolean
+  errorMessage: string | null
+  unsupportedDocument: UnsupportedFileRenderDocument | null
+} => {
   const [loadedDocuments, setLoadedDocuments] = useState<LoadedFileRenderDocument[]>([])
   const [loading, setLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [unsupportedDocument, setUnsupportedDocument] =
+    useState<UnsupportedFileRenderDocument | null>(null)
   const latestDocumentsRef = useRef(documents)
   const lastSignatureRef = useRef('')
   const documentsSignature = getDocumentsSignature(documents)
@@ -69,6 +82,7 @@ const usePreparedDocuments = (
       setLoadedDocuments([])
       setLoading(false)
       setErrorMessage(null)
+      setUnsupportedDocument(null)
       return cleanupUrls
     }
 
@@ -77,18 +91,22 @@ const usePreparedDocuments = (
     const loadDocuments = async (): Promise<void> => {
       setLoading(true)
       setErrorMessage(null)
+      setUnsupportedDocument(null)
       cleanupUrls()
 
       try {
         const preparedDocuments = await Promise.all(
           documentsToLoad.map((document) => prepareFileRenderDocument(document, createdUrls))
         )
-        const validDocuments = preparedDocuments.filter(
-          (document): document is LoadedFileRenderDocument =>
-            document !== null && Boolean(document.uri)
-        )
+        const validDocuments = preparedDocuments
+          .filter((result) => result.status === 'ready')
+          .map((result) => result.document)
+          .filter((document) => Boolean(document.uri))
+        const firstUnsupported =
+          preparedDocuments.find((result) => result.status === 'unsupported') || null
         if (!cancelled) {
           setLoadedDocuments(validDocuments)
+          setUnsupportedDocument(firstUnsupported)
           setErrorMessage(null)
         } else {
           cleanupUrls()
@@ -97,6 +115,7 @@ const usePreparedDocuments = (
         console.error('Failed to load file preview', error)
         if (!cancelled) {
           setLoadedDocuments([])
+          setUnsupportedDocument(null)
           setErrorMessage(getPreviewErrorMessage(error))
         }
       } finally {
@@ -117,7 +136,8 @@ const usePreparedDocuments = (
   return {
     documents: loadedDocuments,
     loading,
-    errorMessage
+    errorMessage,
+    unsupportedDocument
   }
 }
 
@@ -127,7 +147,7 @@ const renderers = [
   CustomPlainTextRenderer,
   CustomDocxRenderer,
   CustomPptxRenderer,
-  ...DocViewerRenderers
+  CustomImageRenderer
 ]
 
 const FileRenderViewerBase: React.FC<FileRenderViewerProps> = ({
@@ -136,7 +156,12 @@ const FileRenderViewerBase: React.FC<FileRenderViewerProps> = ({
   className,
   framed = true
 }) => {
-  const { documents: loadedDocuments, loading, errorMessage } = usePreparedDocuments(documents)
+  const {
+    documents: loadedDocuments,
+    loading,
+    errorMessage,
+    unsupportedDocument
+  } = usePreparedDocuments(documents)
   const surfaceClassName = framed
     ? `rounded-[8px] border border-[#EEEEEC] bg-white ${className || ''}`
     : `bg-white ${className || ''}`
@@ -169,6 +194,9 @@ const FileRenderViewerBase: React.FC<FileRenderViewerProps> = ({
   }
 
   if (loadedDocuments.length === 0) {
+    const unsupportedType = unsupportedDocument
+      ? getPreviewTypeLabel(unsupportedDocument.fileName, unsupportedDocument.fileType)
+      : null
     return (
       <div
         className={`flex h-full items-center justify-center ${
@@ -179,7 +207,11 @@ const FileRenderViewerBase: React.FC<FileRenderViewerProps> = ({
           image={Empty.PRESENTED_IMAGE_SIMPLE}
           description={
             <span className="max-w-[420px] whitespace-pre-wrap break-words text-[#787774]">
-              {errorMessage ? `文件暂时无法预览：${errorMessage}` : '文件暂时无法预览'}
+              {errorMessage
+                ? `文件暂时无法预览：${errorMessage}`
+                : unsupportedType
+                  ? `${unsupportedType} 文件暂不支持预览。\n${FILE_PREVIEW_SUPPORT_SUMMARY}`
+                  : '文件暂时无法预览'}
             </span>
           }
         />

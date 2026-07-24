@@ -1,4 +1,4 @@
-import { app } from 'electron'
+import { app, nativeImage } from 'electron'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
@@ -18,6 +18,7 @@ export type NativeOpenWithApplication = {
   id: string
   name: string
   path?: string
+  iconPath?: string
   isDefault: boolean
 }
 
@@ -35,7 +36,7 @@ export type OpenWithServiceOptions = {
     filePath: string,
     application: NativeOpenWithApplication
   ) => Promise<NativeOpenWithResponse>
-  getIconDataUrl?: (applicationPath: string) => Promise<string | undefined>
+  getIconDataUrl?: (applicationPath: string, iconPath?: string) => Promise<string | undefined>
   now?: () => number
 }
 
@@ -59,10 +60,18 @@ function run(argv) {
     if (seen[bundleId]) continue
     seen[bundleId] = true
     const name = ObjC.unwrap($.NSFileManager.defaultManager.displayNameAtPath(url.path))
+    const iconValue = bundle ? bundle.objectForInfoDictionaryKey('CFBundleIconFile') : null
+    let iconPath = ''
+    if (iconValue && bundle.resourcePath) {
+      let iconName = ObjC.unwrap(iconValue)
+      if (iconName && !iconName.toLowerCase().endsWith('.icns')) iconName += '.icns'
+      if (iconName) iconPath = ObjC.unwrap(bundle.resourcePath) + '/' + iconName
+    }
     applications.push({
       id: bundleId,
       name,
       path: appPath,
+      iconPath,
       isDefault: appPath === defaultPath
     })
   }
@@ -106,7 +115,8 @@ export class OpenWithService {
             id: item.id,
             name: item.name,
             iconDataUrl: item.path
-              ? await (this.options.getIconDataUrl?.(item.path) ?? this.getIconDataUrl(item.path))
+              ? await (this.options.getIconDataUrl?.(item.path, item.iconPath) ??
+                  this.getIconDataUrl(item.path, item.iconPath))
               : undefined,
             isDefault: Boolean(item.isDefault)
           })
@@ -159,9 +169,45 @@ export class OpenWithService {
     }
   }
 
-  private async getIconDataUrl(applicationPath: string): Promise<string | undefined> {
+  private async getIconDataUrl(
+    applicationPath: string,
+    iconPath?: string
+  ): Promise<string | undefined> {
+    if (iconPath) {
+      try {
+        const bundleIcon = nativeImage.createFromPath(iconPath)
+        if (!bundleIcon.isEmpty()) {
+          const png = bundleIcon.resize({ width: 32, height: 32, quality: 'best' }).toPNG()
+          if (png.length > 0) return `data:image/png;base64,${png.toString('base64')}`
+        }
+      } catch {
+        // macOS application icons are commonly stored as ICNS, which Electron may not decode.
+      }
+
+      if (process.platform === 'darwin' && path.extname(iconPath).toLowerCase() === '.icns') {
+        let temporaryDirectory: string | undefined
+        try {
+          temporaryDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'ncurator-app-icon-'))
+          const pngPath = path.join(temporaryDirectory, 'icon.png')
+          await execFileAsync(
+            '/usr/bin/sips',
+            ['-z', '32', '32', '-s', 'format', 'png', iconPath, '--out', pngPath],
+            { maxBuffer: NATIVE_QUERY_MAX_BUFFER }
+          )
+          const png = await fs.readFile(pngPath)
+          if (png.length > 0) return `data:image/png;base64,${png.toString('base64')}`
+        } catch {
+          // Fall through to the operating system file icon.
+        } finally {
+          if (temporaryDirectory) {
+            await fs.rm(temporaryDirectory, { recursive: true, force: true }).catch(() => undefined)
+          }
+        }
+      }
+    }
+
     try {
-      const icon = await app.getFileIcon(applicationPath, { size: 'small' })
+      const icon = await app.getFileIcon(applicationPath, { size: 'normal' })
       const png = icon.toPNG()
       return png.length > 0 ? `data:image/png;base64,${png.toString('base64')}` : undefined
     } catch {
