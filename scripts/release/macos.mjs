@@ -13,6 +13,7 @@ import {
 } from './candidate.mjs'
 import { loadReleaseEnvironment } from './shared/environment.mjs'
 import { prepareReleaseWorkspace } from './workspace.mjs'
+import { parseReleaseTag } from './tag.mjs'
 
 const execFileAsync = promisify(execFile)
 const ROOT = process.cwd()
@@ -34,9 +35,15 @@ const modes = [
 if (process.platform !== 'darwin' || process.arch !== 'arm64') {
   throw new Error('local macOS release must run on an Apple Silicon Mac')
 }
-if (!/^v\d+\.\d+\.\d+$/u.test(releaseTag) || modes.length !== 1) {
+let releaseVersion = ''
+try {
+  releaseVersion = parseReleaseTag(releaseTag, 'mac').version
+} catch {
+  // Report the complete command contract below.
+}
+if (!releaseVersion || modes.length !== 1) {
   throw new Error(
-    'usage: node scripts/release/macos.mjs --tag <v1.2.3> (--prepare-only|--test-only|--publish-only) [--package-e2e] [--keep-old]'
+    'usage: node scripts/release/macos.mjs --tag <mac-v1.2.3> (--prepare-only|--test-only|--publish-only) [--package-e2e] [--keep-old]'
   )
 }
 const mode = modes[0][0]
@@ -76,7 +83,7 @@ const validateTag = async () => {
   if (tagType.trim() !== 'tag') throw new Error(`${releaseTag} must be an annotated tag`)
   const { stdout: packageJson } = await execFileAsync('git', ['show', `${releaseTag}:package.json`])
   const version = JSON.parse(packageJson).version
-  if (releaseTag !== `v${version}`) {
+  if (releaseVersion !== version) {
     throw new Error(`${releaseTag} does not match package version ${version}`)
   }
   return (

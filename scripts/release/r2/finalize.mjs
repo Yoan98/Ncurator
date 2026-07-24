@@ -1,12 +1,18 @@
 import { spawn } from 'node:child_process'
 import path from 'node:path'
 import process from 'node:process'
+import { parseReleaseTag } from '../tag.mjs'
 
 const args = process.argv.slice(2)
 const tagIndex = args.indexOf('--tag')
 const releaseTag = tagIndex >= 0 ? args[tagIndex + 1] || '' : ''
-if (!/^v\d+\.\d+\.\d+$/u.test(releaseTag)) {
-  throw new Error('usage: node scripts/release/r2/finalize.mjs --tag <v1.2.3> [--keep-old]')
+let releaseFamily = ''
+try {
+  releaseFamily = parseReleaseTag(releaseTag).family
+} catch {
+  throw new Error(
+    'usage: node scripts/release/r2/finalize.mjs --tag <mac-v1.2.3|windows-v1.2.3> [--keep-old]'
+  )
 }
 
 const run = (script) =>
@@ -28,5 +34,4 @@ const run = (script) =>
     )
   })
 
-await run('finalize-windows.mjs')
-await run('finalize-macos.mjs')
+await run(releaseFamily === 'mac' ? 'finalize-macos.mjs' : 'finalize-windows.mjs')

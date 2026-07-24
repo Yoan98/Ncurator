@@ -375,7 +375,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - What：R2 最新版本元数据指向不可变的版本化产物。
 - Why：可变文件名容易被缓存污染，导致客户端拿到元数据与安装包不一致。
 - How：生成并读取 latest 元数据，核对版本、文件名和下载路径。
-- Oracle：latest 元数据只引用带版本的不可变文件，且各字段与发布产物一致。
+- Oracle：latest 元数据只引用带平台 Tag 的不可变文件；Windows 只接受 `windows-vX.Y.Z`，macOS 只接受 `mac-vX.Y.Z`，且各字段与发布产物一致。
 - Not：不访问真实 R2，也不验证 CDN 缓存刷新。
 
 #### `release-fragment-contract`
@@ -383,8 +383,8 @@ Settings 顶层 suite 对齐 PRD 模块：
 - 测试类型：`backend`
 - What：发布片段包含不可变产物、sha512、包审计和 macOS 签名摘要。
 - Why：片段是跨机器和 finalize 的发布真相。
-- How：生成合法与伪造片段并执行校验。
-- Oracle：只接受 schema v2、Tag/平台一致且审计完整的片段。
+- How：生成合法与伪造片段并执行校验，同时比较两个平台各自的版本序列。
+- Oracle：只接受 schema v2、平台前缀 Tag、Tag/平台一致且审计完整的片段；Mac 与 Windows 版本只在各自 Tag 序列内递增。
 - Not：不上传真实 R2。
 
 #### `release-storage-layout`
@@ -393,7 +393,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - What：Windows 与 macOS 的 artifacts、status 和固定下载 key 相互隔离。
 - Why：平台独立发布不能覆盖另一平台对象。
 - How：对三个平台调用统一 storage-layout helper。
-- Oracle：key 与 `doc/release.md` 的 R2 目录完全一致。
+- Oracle：key 包含对应平台 Tag，且与 `doc/release.md` 的 R2 目录完全一致。
 - Not：不验证公开 CDN。
 
 #### `package-content-policy`

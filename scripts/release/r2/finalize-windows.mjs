@@ -6,14 +6,19 @@ import { assertReleaseFragment } from './fragment-contract.mjs'
 import { artifactKey, fixedDownloadKey, statusKey } from './storage-layout.mjs'
 import { createR2Client } from './client.mjs'
 import { fetchWithRetry } from '../shared/http.mjs'
+import { parseReleaseTag } from '../tag.mjs'
 
 const ROOT = process.cwd()
 const args = process.argv.slice(2)
 const tagIndex = args.indexOf('--tag')
 const releaseTag = tagIndex >= 0 ? args[tagIndex + 1] || '' : ''
 const keepOld = args.includes('--keep-old')
-if (!/^v\d+\.\d+\.\d+$/u.test(releaseTag)) {
-  throw new Error('usage: node scripts/release/r2/finalize-windows.mjs --tag <v1.2.3> [--keep-old]')
+try {
+  parseReleaseTag(releaseTag, 'windows')
+} catch {
+  throw new Error(
+    'usage: node scripts/release/r2/finalize-windows.mjs --tag <windows-v1.2.3> [--keep-old]'
+  )
 }
 
 const { aws, bucket, publicBaseUrl, listKeys, deleteKeys } = await createR2Client(ROOT)

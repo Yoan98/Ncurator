@@ -9,6 +9,11 @@ import {
   assertPackageAudit,
   assertReleaseFragment
 } from '../../../../scripts/release/r2/fragment-contract.mjs'
+import {
+  compareReleaseVersions,
+  createReleaseTag,
+  parseReleaseTag
+} from '../../../../scripts/release/tag.mjs'
 
 const execFileAsync = promisify(execFile)
 let temporaryDirectory = ''
@@ -18,6 +23,15 @@ afterEach(async () => {
 })
 
 describe('release fragment', () => {
+  it('manages macOS and Windows tag versions independently', () => {
+    expect(createReleaseTag('mac', '0.1.30')).toBe('mac-v0.1.30')
+    expect(createReleaseTag('windows', '0.1.32')).toBe('windows-v0.1.32')
+    expect(parseReleaseTag('mac-v0.1.30', 'macos-arm64').version).toBe('0.1.30')
+    expect(() => parseReleaseTag('windows-v0.1.32', 'macos-arm64')).toThrow(/does not match/u)
+    expect(compareReleaseVersions('0.1.30', '0.1.29')).toBeGreaterThan(0)
+    expect(compareReleaseVersions('0.1.30', '0.1.31')).toBeLessThan(0)
+  })
+
   it('records immutable Windows assets and update metadata', async () => {
     temporaryDirectory = await mkdtemp(path.join(os.tmpdir(), 'ncurator-release-fragment-'))
     const input = path.join(temporaryDirectory, 'input')
@@ -55,13 +69,13 @@ describe('release fragment', () => {
       path.resolve('scripts/release/r2/create-fragment.mjs'),
       input,
       output,
-      'v0.1.3',
+      'windows-v0.1.3',
       'windows-x64'
     ])
 
     const fragment = JSON.parse(await readFile(output, 'utf8'))
     expect(fragment.schemaVersion).toBe(2)
-    expect(fragment.tag).toBe('v0.1.3')
+    expect(fragment.tag).toBe('windows-v0.1.3')
     expect(fragment.platform).toBe('windows-x64')
     expect(fragment.metadata).toContain('version: 0.1.3')
     expect(fragment.audit).toEqual({
@@ -101,7 +115,7 @@ describe('release fragment', () => {
         path.resolve('scripts/release/r2/create-fragment.mjs'),
         input,
         output,
-        'v0.1.3',
+        'windows-v0.1.3',
         'windows-x64'
       ])
     ).rejects.toThrow(/package-audit\.json/u)
@@ -110,7 +124,7 @@ describe('release fragment', () => {
   it('rejects old, mismatched, unsafe, or forged release fragments', () => {
     const validFragment = {
       schemaVersion: 2,
-      tag: 'v0.1.3',
+      tag: 'windows-v0.1.3',
       version: '0.1.3',
       platform: 'windows-x64',
       createdAt: '2026-07-15T00:00:00.000Z',
@@ -140,6 +154,9 @@ describe('release fragment', () => {
     }
 
     expect(() => assertReleaseFragment(validFragment)).not.toThrow()
+    expect(() => assertReleaseFragment({ ...validFragment, tag: 'mac-v0.1.3' })).toThrow(
+      /tag must match its platform/u
+    )
     expect(() => assertReleaseFragment({ ...validFragment, schemaVersion: 1 })).toThrow(
       /schemaVersion must be 2/u
     )

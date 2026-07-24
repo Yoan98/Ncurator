@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { readFile, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { assertReleaseFragment } from './r2/fragment-contract.mjs'
+import { parseReleaseTag } from './tag.mjs'
 
 const SHA256_HEX = /^[a-f0-9]{64}$/u
 const SHA512_BASE64 = /^[A-Za-z0-9+/]{86}==$/u
@@ -29,7 +30,11 @@ export const assertReleaseBundle = (
 ) => {
   if (!bundle || typeof bundle !== 'object') throw new Error('release bundle is missing')
   if (bundle.schemaVersion !== 1) throw new Error('release bundle schemaVersion must be 1')
-  if (!/^v\d+\.\d+\.\d+$/u.test(bundle.tag)) throw new Error('release bundle tag is invalid')
+  try {
+    parseReleaseTag(bundle.tag, bundle.platform)
+  } catch {
+    throw new Error('release bundle tag is invalid')
+  }
   if (expectedTag && bundle.tag !== expectedTag) {
     throw new Error(`release bundle tag must be ${expectedTag}`)
   }

@@ -40,7 +40,7 @@ const createBundle = async () => {
   }))
   const fragment = {
     schemaVersion: 2,
-    tag: 'v0.1.21',
+    tag: 'windows-v0.1.21',
     version: '0.1.21',
     platform: 'windows-x64',
     createdAt: new Date().toISOString(),
@@ -71,16 +71,20 @@ describe('retained release candidate', () => {
     await materializeReleaseCandidate({ bundlePath })
     await expect(
       assertCandidatePublishable({
-        tag: 'v0.1.21',
+        tag: 'windows-v0.1.21',
         platform: 'windows-x64',
         commit: '0123456789012345678901234567890123456789'
       })
     ).rejects.toThrow('is prepared')
 
-    await recordCandidateE2E({ tag: 'v0.1.21', platform: 'windows-x64', status: 'skipped' })
+    await recordCandidateE2E({
+      tag: 'windows-v0.1.21',
+      platform: 'windows-x64',
+      status: 'skipped'
+    })
     await expect(
       assertCandidatePublishable({
-        tag: 'v0.1.21',
+        tag: 'windows-v0.1.21',
         platform: 'windows-x64',
         commit: '0123456789012345678901234567890123456789'
       })
@@ -90,8 +94,15 @@ describe('retained release candidate', () => {
   it('marks a failed regression as rejected and preserves the same bundle', async () => {
     const bundlePath = await createBundle()
     const prepared = await materializeReleaseCandidate({ bundlePath })
-    await recordCandidateE2E({ tag: 'v0.1.21', platform: 'windows-x64', status: 'failed' })
-    const rejected = await readReleaseCandidate({ tag: 'v0.1.21', platform: 'windows-x64' })
+    await recordCandidateE2E({
+      tag: 'windows-v0.1.21',
+      platform: 'windows-x64',
+      status: 'failed'
+    })
+    const rejected = await readReleaseCandidate({
+      tag: 'windows-v0.1.21',
+      platform: 'windows-x64'
+    })
     expect(rejected.state.status).toBe('rejected')
     expect(rejected.bundlePath).toBe(prepared.bundlePath)
   })

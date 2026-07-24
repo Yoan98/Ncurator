@@ -3,6 +3,7 @@ import { readFile, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 import { assertPackageAudit, assertReleaseFragment } from './fragment-contract.mjs'
+import { parseReleaseTag } from '../tag.mjs'
 
 const [inputDirectory = '', outputPath = '', releaseTag = '', platform = ''] = process.argv.slice(2)
 
@@ -37,14 +38,15 @@ const definitions = {
   }
 }
 
-if (!inputDirectory || !outputPath || !/^v\d+\.\d+\.\d+$/u.test(releaseTag)) {
+if (!inputDirectory || !outputPath || !releaseTag) {
   throw new Error(
-    'usage: node scripts/release/r2/create-fragment.mjs <input-dir> <output-json> <v1.2.3> <platform>'
+    'usage: node scripts/release/r2/create-fragment.mjs <input-dir> <output-json> <platform-v1.2.3> <platform>'
   )
 }
 
 const definition = definitions[platform]
 if (!definition) throw new Error(`unsupported release platform: ${platform}`)
+const { version } = parseReleaseTag(releaseTag, platform)
 
 const auditPath = path.join(inputDirectory, 'package-audit.json')
 const audit = JSON.parse(await readFile(auditPath, 'utf8'))
@@ -53,7 +55,6 @@ if (platform.startsWith('macos-') && !['passed', 'warning'].includes(audit.sizeB
   throw new Error(`macOS package size budget is missing or failed: ${auditPath}`)
 }
 
-const version = releaseTag.slice(1)
 const sha512 = async (filePath) =>
   createHash('sha512')
     .update(await readFile(filePath))

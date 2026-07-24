@@ -68,19 +68,23 @@ describe('app update publish config', () => {
     expect(windowsRelease).toContain('--test-only')
     expect(windowsRelease).toContain('--publish-only')
     expect(prepareRelease).toContain("'--prepare-only'")
-    expect(prepareRelease).toContain("args.includes('--mac-only')")
+    expect(prepareRelease).toContain("valueAfter('--platform')")
+    expect(prepareRelease).toContain("['mac', 'windows']")
+    expect(prepareRelease).toContain('latestPlatformVersion')
     expect(prepareRelease).toContain('prepared for independent macOS release')
     expect(prepareRelease).toContain("['test:update:backend']")
     expect(prepareRelease).not.toContain('test:update:e2e')
   })
 
   it('finalizes Windows and macOS release channels independently', async () => {
-    const [windowsRelease, macRelease, windowsFinalize, macFinalize] = await Promise.all([
-      readFile(path.resolve('scripts/release/windows.mjs'), 'utf8'),
-      readFile(path.resolve('scripts/release/macos.mjs'), 'utf8'),
-      readFile(path.resolve('scripts/release/r2/finalize-windows.mjs'), 'utf8'),
-      readFile(path.resolve('scripts/release/r2/finalize-macos.mjs'), 'utf8')
-    ])
+    const [windowsRelease, macRelease, windowsFinalize, macFinalize, tagContract] =
+      await Promise.all([
+        readFile(path.resolve('scripts/release/windows.mjs'), 'utf8'),
+        readFile(path.resolve('scripts/release/macos.mjs'), 'utf8'),
+        readFile(path.resolve('scripts/release/r2/finalize-windows.mjs'), 'utf8'),
+        readFile(path.resolve('scripts/release/r2/finalize-macos.mjs'), 'utf8'),
+        readFile(path.resolve('scripts/release/tag.mjs'), 'utf8')
+      ])
 
     expect(windowsRelease).toContain("'r2', 'finalize-windows.mjs'")
     expect(macRelease).toContain("'r2', 'finalize-macos.mjs'")
@@ -88,5 +92,6 @@ describe('app update publish config', () => {
     expect(windowsFinalize).not.toContain('releases/latest/macos.json')
     expect(macFinalize).toContain('releases/latest/macos.json')
     expect(macFinalize).not.toContain('releases/latest/windows.json')
+    expect(tagContract).toContain('/^(mac|windows)-v')
   })
 })

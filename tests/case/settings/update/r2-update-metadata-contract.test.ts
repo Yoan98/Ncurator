@@ -23,22 +23,21 @@ describe('R2 update metadata', () => {
       'version: 0.1.1\nfiles:\n  - url: Ncurator-windows-x64.exe\npath: Ncurator-windows-x64.exe\n',
       'utf8'
     )
-    await writeFile(
-      path.join(inputDirectory, 'latest-mac.yml'),
-      'version: 0.1.1\nfiles:\n  - url: Ncurator-mac-arm64.zip\npath: Ncurator-mac-arm64.zip\n',
-      'utf8'
-    )
-
     await execFileAsync(
       process.execPath,
-      [path.resolve('scripts/release/r2/metadata.mjs'), inputDirectory, outputDirectory, 'v0.1.1'],
+      [
+        path.resolve('scripts/release/r2/metadata.mjs'),
+        inputDirectory,
+        outputDirectory,
+        'windows-v0.1.1'
+      ],
       { cwd: process.cwd() }
     )
 
     const windowsMetadata = await readFile(path.join(outputDirectory, 'latest.yml'), 'utf8')
-    const macMetadata = await readFile(path.join(outputDirectory, 'latest-mac.yml'), 'utf8')
-    expect(windowsMetadata).toContain('../../artifacts/windows/v0.1.1/Ncurator-windows-x64.exe')
-    expect(macMetadata).toContain('../../artifacts/macos/v0.1.1/Ncurator-mac-arm64.zip')
+    expect(windowsMetadata).toContain(
+      '../../artifacts/windows/windows-v0.1.1/Ncurator-windows-x64.exe'
+    )
   })
 
   it('can prepare only macOS metadata for a platform-only release', async () => {
@@ -56,11 +55,11 @@ describe('R2 update metadata', () => {
       path.resolve('scripts/release/r2/metadata.mjs'),
       inputDirectory,
       outputDirectory,
-      'v0.1.4'
+      'mac-v0.1.4'
     ])
 
     const macMetadata = await readFile(path.join(outputDirectory, 'latest-mac.yml'), 'utf8')
-    expect(macMetadata).toContain('../../artifacts/macos/v0.1.4/Ncurator-mac-arm64.zip')
+    expect(macMetadata).toContain('../../artifacts/macos/mac-v0.1.4/Ncurator-mac-arm64.zip')
     await expect(readFile(path.join(outputDirectory, 'latest.yml'), 'utf8')).rejects.toThrow()
   })
 })

@@ -8,6 +8,7 @@ import { assertReleaseFragment } from './fragment-contract.mjs'
 import { fetchWithRetry } from '../shared/http.mjs'
 import { createR2Client } from './client.mjs'
 import { artifactKey, fixedDownloadKey, statusKey } from './storage-layout.mjs'
+import { parseReleaseTag } from '../tag.mjs'
 
 const execFileAsync = promisify(execFile)
 const ROOT = process.cwd()
@@ -15,8 +16,13 @@ const args = process.argv.slice(2)
 const tagIndex = args.indexOf('--tag')
 const releaseTag = tagIndex >= 0 ? args[tagIndex + 1] || '' : ''
 const keepOld = args.includes('--keep-old')
-if (!/^v\d+\.\d+\.\d+$/u.test(releaseTag)) {
-  throw new Error('usage: node scripts/release/r2/finalize-macos.mjs --tag <v1.2.3> [--keep-old]')
+let releaseVersion = ''
+try {
+  releaseVersion = parseReleaseTag(releaseTag, 'mac').version
+} catch {
+  throw new Error(
+    'usage: node scripts/release/r2/finalize-macos.mjs --tag <mac-v1.2.3> [--keep-old]'
+  )
 }
 
 const { aws, bucket, publicBaseUrl, listKeys, deleteKeys } = await createR2Client(ROOT)
@@ -152,7 +158,7 @@ try {
   )
   const metadata = metadataResponse.ok ? await metadataResponse.text() : ''
   if (
-    !metadata.includes(`version: ${releaseTag.slice(1)}`) ||
+    !metadata.includes(`version: ${releaseVersion}`) ||
     !metadata.includes(`artifacts/macos/${releaseTag}/Ncurator-mac-arm64.zip`) ||
     !metadata.includes(`artifacts/macos/${releaseTag}/Ncurator-mac-x64.zip`)
   ) {

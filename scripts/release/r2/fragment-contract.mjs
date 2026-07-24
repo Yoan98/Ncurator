@@ -1,3 +1,5 @@
+import { parseReleaseTag } from '../tag.mjs'
+
 const PLATFORM_AUDIT = Object.freeze({
   'windows-x64': { platform: 'win32', arch: 'x64', requiresSignature: false },
   'macos-arm64': { platform: 'darwin', arch: 'arm64', requiresSignature: true },
@@ -5,7 +7,6 @@ const PLATFORM_AUDIT = Object.freeze({
 })
 
 const SHA512_BASE64 = /^[A-Za-z0-9+/]{86}==$/u
-const RELEASE_TAG = /^v\d+\.\d+\.\d+$/u
 const ASSET_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*$/u
 
 const isNonEmptyString = (value) => typeof value === 'string' && value.trim().length > 0
@@ -71,9 +72,14 @@ export const assertReleaseFragment = (
 ) => {
   if (!fragment || typeof fragment !== 'object') fail(label, 'document is missing')
   if (fragment.schemaVersion !== 2) fail(label, 'schemaVersion must be 2')
-  if (!RELEASE_TAG.test(fragment.tag)) fail(label, 'tag must use vX.Y.Z')
+  let parsedTag
+  try {
+    parsedTag = parseReleaseTag(fragment.tag, fragment.platform)
+  } catch {
+    fail(label, 'tag must match its platform and use mac-vX.Y.Z or windows-vX.Y.Z')
+  }
   if (expectedTag && fragment.tag !== expectedTag) fail(label, `expected tag ${expectedTag}`)
-  if (fragment.version !== fragment.tag.slice(1)) fail(label, 'version does not match tag')
+  if (fragment.version !== parsedTag.version) fail(label, 'version does not match tag')
   if (!PLATFORM_AUDIT[fragment.platform]) fail(label, 'unsupported platform')
   if (expectedPlatform && fragment.platform !== expectedPlatform) {
     fail(label, `expected platform ${expectedPlatform}`)

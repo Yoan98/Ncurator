@@ -7,6 +7,12 @@ import {
   assertWindowsReleaseRouteAvailable,
   inspectLocalWindowsRelease
 } from './shared/windows.mjs'
+import {
+  compareReleaseVersions,
+  createReleaseTag,
+  parseReleaseTag,
+  RELEASE_VERSION_PATTERN
+} from './tag.mjs'
 
 const execFileAsync = promisify(execFile)
 const ROOT = process.cwd()
@@ -16,22 +22,23 @@ const valueAfter = (name) => {
   return index >= 0 ? args[index + 1] : undefined
 }
 const version = valueAfter('--version') || ''
-const releaseTag = `v${version}`
+const platform = valueAfter('--platform') || ''
+const releaseTag =
+  RELEASE_VERSION_PATTERN.test(version) && platform ? createReleaseTag(platform, version) : ''
 const notes = valueAfter('--notes') || `Ncurator ${releaseTag}`
 const forceLocal = args.includes('--local-only')
 const forceActions = args.includes('--actions')
-const macOnly = args.includes('--mac-only')
 const packageE2E = args.includes('--package-e2e')
 const pnpmExecutable = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
 
-if (!/^\d+\.\d+\.\d+$/u.test(version)) {
+if (!RELEASE_VERSION_PATTERN.test(version) || !['mac', 'windows'].includes(platform)) {
   throw new Error(
-    'usage: node scripts/release/prepare.mjs --version <1.2.3> [--notes <text>] [--local-only|--actions|--mac-only] [--package-e2e]'
+    'usage: node scripts/release/prepare.mjs --platform <mac|windows> --version <1.2.3> [--notes <text>] [--local-only|--actions] [--package-e2e]'
   )
 }
 if (forceLocal && forceActions) throw new Error('--local-only and --actions cannot be combined')
-if (macOnly && (forceLocal || forceActions || packageE2E)) {
-  throw new Error('--mac-only cannot be combined with Windows route or package E2E options')
+if (platform === 'mac' && (forceLocal || forceActions || packageE2E)) {
+  throw new Error('mac release preparation cannot use Windows route or package E2E options')
 }
 
 const run = (command, commandArgs) =>
@@ -48,15 +55,6 @@ const run = (command, commandArgs) =>
       else reject(new Error(`${command} exited with ${code ?? signal}`))
     })
   })
-
-const compareVersions = (left, right) => {
-  const a = left.split('.').map(Number)
-  const b = right.split('.').map(Number)
-  for (let index = 0; index < 3; index += 1) {
-    if (a[index] !== b[index]) return a[index] - b[index]
-  }
-  return 0
-}
 
 const branch = (
   await execFileAsync('git', ['branch', '--show-current'], { cwd: ROOT })
@@ -79,8 +77,19 @@ if (localHead.trim() !== remoteHead.trim()) {
 
 const packagePath = path.join(ROOT, 'package.json')
 const packageJson = JSON.parse(await readFile(packagePath, 'utf8'))
-if (compareVersions(version, packageJson.version) <= 0) {
-  throw new Error(`new version ${version} must be higher than ${packageJson.version}`)
+const { stdout: platformTagsOutput } = await execFileAsync(
+  'git',
+  ['tag', '--list', `${platform}-v*`],
+  { cwd: ROOT }
+)
+const platformVersions = platformTagsOutput
+  .split(/\r?\n/u)
+  .filter(Boolean)
+  .map((tag) => parseReleaseTag(tag, platform).version)
+  .sort(compareReleaseVersions)
+const latestPlatformVersion = platformVersions.at(-1)
+if (latestPlatformVersion && compareReleaseVersions(version, latestPlatformVersion) <= 0) {
+  throw new Error(`new ${platform} version ${version} must be higher than ${latestPlatformVersion}`)
 }
 
 const tagExists = await execFileAsync('git', ['rev-parse', '--verify', '--quiet', releaseTag], {
@@ -90,7 +99,7 @@ const tagExists = await execFileAsync('git', ['rev-parse', '--verify', '--quiet'
   .catch(() => false)
 if (tagExists) throw new Error(`tag already exists: ${releaseTag}`)
 
-if (!macOnly) {
+if (platform === 'windows') {
   const localInspection = forceActions ? undefined : await inspectLocalWindowsRelease(ROOT)
   await assertWindowsReleaseRouteAvailable({
     root: ROOT,
@@ -112,7 +121,7 @@ await run('git', ['push', '--atomic', 'origin', 'main', releaseTag])
 
 process.stdout.write(`[release] prepared and pushed ${releaseTag}\n`)
 
-if (macOnly) {
+if (platform === 'mac') {
   process.stdout.write(`[release] ${releaseTag} prepared for independent macOS release\n`)
   process.exit(0)
 }

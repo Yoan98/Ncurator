@@ -20,6 +20,7 @@ import {
   verifyR2ReleaseFragment
 } from './shared/windows.mjs'
 import { prepareReleaseWorkspace } from './workspace.mjs'
+import { parseReleaseTag } from './tag.mjs'
 
 const execFileAsync = promisify(execFile)
 const ROOT = process.cwd()
@@ -39,9 +40,15 @@ const modes = [
   ['publish', args.includes('--publish-only')]
 ].filter(([, enabled]) => enabled)
 
-if (!/^v\d+\.\d+\.\d+$/u.test(releaseTag) || modes.length !== 1) {
+let releaseVersion = ''
+try {
+  releaseVersion = parseReleaseTag(releaseTag, 'windows').version
+} catch {
+  // Report the complete command contract below.
+}
+if (!releaseVersion || modes.length !== 1) {
   throw new Error(
-    'usage: node scripts/release/windows.mjs --tag <v1.2.3> (--prepare-only|--test-only|--publish-only) [--package-e2e] [--local-only|--actions] [--candidate-run-id <id>]'
+    'usage: node scripts/release/windows.mjs --tag <windows-v1.2.3> (--prepare-only|--test-only|--publish-only) [--package-e2e] [--local-only|--actions] [--candidate-run-id <id>]'
   )
 }
 if (forceLocal && forceActions) throw new Error('--local-only and --actions cannot be combined')
@@ -100,7 +107,7 @@ const { stdout: taggedPackageJson } = await execFileAsync('git', [
   `${releaseTag}:package.json`
 ])
 const taggedVersion = JSON.parse(taggedPackageJson).version
-if (releaseTag !== `v${taggedVersion}`) {
+if (releaseVersion !== taggedVersion) {
   throw new Error(`${releaseTag} does not match package version ${taggedVersion}`)
 }
 const { stdout: taggedCommitOutput } = await execFileAsync('git', [

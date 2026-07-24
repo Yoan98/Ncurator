@@ -8,21 +8,25 @@ import {
   verifyPublicReleaseFragment,
   verifyR2ReleaseFragment
 } from './shared/windows.mjs'
+import { parseReleaseTag } from './tag.mjs'
 
 const ROOT = process.cwd()
 await loadReleaseEnvironment(ROOT)
 const args = process.argv.slice(2)
 const tagIndex = args.indexOf('--tag')
 const releaseTag = tagIndex >= 0 ? args[tagIndex + 1] || '' : ''
-if (!/^v\d+\.\d+\.\d+$/u.test(releaseTag)) {
-  throw new Error('usage: node scripts/release/status.mjs --tag <v1.2.3>')
+let releaseFamily = ''
+try {
+  releaseFamily = parseReleaseTag(releaseTag).family
+} catch {
+  throw new Error('usage: node scripts/release/status.mjs --tag <mac-v1.2.3|windows-v1.2.3>')
 }
 
 const publicBaseUrl = String(process.env.R2_PUBLIC_BASE_URL || PUBLIC_RELEASE_BASE_URL).replace(
   /\/$/u,
   ''
 )
-const platforms = ['windows-x64', 'macos-arm64', 'macos-x64']
+const platforms = releaseFamily === 'mac' ? ['macos-arm64', 'macos-x64'] : ['windows-x64']
 const awsExecutable = await resolveAwsExecutable()
 if (!awsExecutable) throw new Error('AWS CLI is required to verify release sha512 metadata')
 for (const platform of platforms) {
@@ -48,5 +52,8 @@ const [windowsLatestResponse, macLatestResponse] = await Promise.all([
 ])
 const windowsLatest = windowsLatestResponse.ok ? await windowsLatestResponse.json() : undefined
 const macLatest = macLatestResponse.ok ? await macLatestResponse.json() : undefined
-process.stdout.write(`windows live   ${windowsLatest?.tag === releaseTag ? 'yes' : 'no'}\n`)
-process.stdout.write(`macos live     ${macLatest?.tag === releaseTag ? 'yes' : 'no'}\n`)
+if (releaseFamily === 'windows') {
+  process.stdout.write(`windows live   ${windowsLatest?.tag === releaseTag ? 'yes' : 'no'}\n`)
+} else {
+  process.stdout.write(`macos live     ${macLatest?.tag === releaseTag ? 'yes' : 'no'}\n`)
+}

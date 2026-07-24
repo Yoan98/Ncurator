@@ -33,7 +33,7 @@ const createFixture = async () => {
   )
   const fragment = {
     schemaVersion: 2,
-    tag: 'v0.1.21',
+    tag: 'windows-v0.1.21',
     version: '0.1.21',
     platform: 'windows-x64',
     createdAt: new Date().toISOString(),
@@ -70,7 +70,7 @@ describe('release artifact bundle', () => {
       commit: '0123456789012345678901234567890123456789'
     })
     await expect(
-      verifyReleaseBundle(bundlePath, { tag: 'v0.1.21', platform: 'windows-x64' })
+      verifyReleaseBundle(bundlePath, { tag: 'windows-v0.1.21', platform: 'windows-x64' })
     ).resolves.toBeDefined()
   })
 

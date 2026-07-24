@@ -3,6 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 import { verifyReleaseBundle } from './artifact-bundle.mjs'
+import { parseReleaseTag } from './tag.mjs'
 
 const CANDIDATE_STATES = new Set(['prepared', 'ready', 'rejected', 'published'])
 const E2E_STATES = new Set(['pending', 'skipped', 'passed', 'failed'])
@@ -21,7 +22,11 @@ const statePathFor = (directory) => path.join(directory, 'candidate-state.json')
 const assertCandidateState = (state, expected = {}) => {
   if (!state || typeof state !== 'object') throw new Error('candidate state is missing')
   if (state.schemaVersion !== 1) throw new Error('candidate state schemaVersion must be 1')
-  if (!/^v\d+\.\d+\.\d+$/u.test(state.tag)) throw new Error('candidate state tag is invalid')
+  try {
+    parseReleaseTag(state.tag, state.platform)
+  } catch {
+    throw new Error('candidate state tag is invalid')
+  }
   if (!/^[a-f0-9]{40}$/u.test(state.commit)) throw new Error('candidate state commit is invalid')
   if (expected.tag && state.tag !== expected.tag) {
     throw new Error(`candidate state tag must be ${expected.tag}`)
