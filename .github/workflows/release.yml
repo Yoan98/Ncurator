@@ -4,24 +4,46 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Windows release tag, for example windows-v0.1.21'
+        description: 'Windows release tag, for example windows-v0.1.33'
         required: true
       mode:
-        description: 'Prepare a retained candidate or publish one from an earlier run'
+        description: 'Prepare, test, or publish the retained candidate'
         required: true
         type: choice
         options:
           - prepare
+          - test
           - publish
-      package_e2e:
-        description: 'Run package E2E while preparing the candidate'
+      candidate_run_id:
+        description: 'Previous prepare or test run id (test and publish only)'
+        required: false
+        default: ''
+      test_domain:
+        description: 'Optional package E2E domain'
+        required: false
+        default: ''
+      test_suite:
+        description: 'Optional package E2E suite'
+        required: false
+        default: ''
+      test_groups:
+        description: 'Optional comma-separated package E2E groups'
+        required: false
+        default: ''
+      test_case:
+        description: 'Optional package E2E case id'
+        required: false
+        default: ''
+      fresh_knowledge_cache:
+        description: 'Run package E2E with a fresh knowledge cache'
         required: false
         default: false
         type: boolean
-      candidate_run_id:
-        description: 'Prepare workflow run id containing the candidate artifact (publish only)'
+      keep_old:
+        description: 'Keep superseded R2 version objects while publishing'
         required: false
-        default: ''
+        default: false
+        type: boolean
 
 concurrency:
   group: windows-release-${{ inputs.tag }}-${{ inputs.mode }}
@@ -32,8 +54,9 @@ jobs:
     if: inputs.mode == 'prepare'
     runs-on: windows-latest
     env:
-      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      RELEASE_TAG: ${{ inputs.tag }}
       NCURATOR_RELEASE_CANDIDATE_ROOT: ${{ github.workspace }}/release-candidates
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
     steps:
       - uses: actions/checkout@v4
         with:
@@ -53,15 +76,9 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Build and optionally test retained candidate
+      - name: Build retained candidate
         shell: bash
-        run: |
-          set -euo pipefail
-          args=(--tag "${{ inputs.tag }}" --prepare-only --local-only)
-          if [ "${{ inputs.package_e2e }}" = "true" ]; then
-            args+=(--package-e2e)
-          fi
-          node scripts/release/windows.mjs "${args[@]}"
+        run: node scripts/release/windows.mjs --tag "$RELEASE_TAG" --prepare-only --local-only
 
       - name: Retain exact release candidate
         uses: actions/upload-artifact@v4
@@ -74,15 +91,90 @@ jobs:
       - name: Candidate summary
         shell: bash
         run: |
-          echo "Windows ${{ inputs.tag }} candidate prepared; R2 publish paused." >> "$GITHUB_STEP_SUMMARY"
-          echo "Package E2E requested: ${{ inputs.package_e2e }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "Publish with candidate run id: $GITHUB_RUN_ID" >> "$GITHUB_STEP_SUMMARY"
+          echo "Windows $RELEASE_TAG candidate prepared; package E2E and R2 publish are pending." >> "$GITHUB_STEP_SUMMARY"
+          echo "Use candidate run id $GITHUB_RUN_ID for the test stage." >> "$GITHUB_STEP_SUMMARY"
+
+  test-windows:
+    if: inputs.mode == 'test'
+    runs-on: windows-latest
+    env:
+      RELEASE_TAG: ${{ inputs.tag }}
+      CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+      TEST_DOMAIN: ${{ inputs.test_domain }}
+      TEST_SUITE: ${{ inputs.test_suite }}
+      TEST_GROUPS: ${{ inputs.test_groups }}
+      TEST_CASE: ${{ inputs.test_case }}
+      FRESH_KNOWLEDGE_CACHE: ${{ inputs.fresh_knowledge_cache }}
+      NCURATOR_RELEASE_CANDIDATE_ROOT: ${{ github.workspace }}/release-candidates
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Require candidate run id
+        shell: bash
+        run: test -n "$CANDIDATE_RUN_ID"
+
+      - name: Download retained candidate
+        uses: actions/download-artifact@v4
+        with:
+          name: ncurator-windows-${{ inputs.tag }}
+          path: release-candidates/${{ inputs.tag }}/windows-x64
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.candidate_run_id }}
+
+      - name: Run package E2E
+        shell: bash
+        run: |
+          set -euo pipefail
+          args=(--tag "$RELEASE_TAG" --test-only --local-only)
+          if [ -n "$TEST_DOMAIN" ]; then args+=(--domain "$TEST_DOMAIN"); fi
+          if [ -n "$TEST_SUITE" ]; then args+=(--suite "$TEST_SUITE"); fi
+          if [ -n "$TEST_GROUPS" ]; then
+            IFS=',' read -ra groups <<< "$TEST_GROUPS"
+            for group in "${groups[@]}"; do
+              if [ -n "$group" ]; then args+=(--group "$group"); fi
+            done
+          fi
+          if [ -n "$TEST_CASE" ]; then args+=(--case "$TEST_CASE"); fi
+          if [ "$FRESH_KNOWLEDGE_CACHE" = "true" ]; then args+=(--fresh-knowledge-cache); fi
+          node scripts/release/windows.mjs "${args[@]}"
+
+      - name: Retain tested candidate
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ncurator-windows-${{ inputs.tag }}
+          path: release-candidates/${{ inputs.tag }}/windows-x64
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Test summary
+        if: always()
+        shell: bash
+        run: |
+          echo "Windows $RELEASE_TAG package E2E completed." >> "$GITHUB_STEP_SUMMARY"
+          echo "Use candidate run id $GITHUB_RUN_ID for another test or the publish stage." >> "$GITHUB_STEP_SUMMARY"
 
   publish-windows:
     if: inputs.mode == 'publish'
     runs-on: windows-latest
     environment: ncuratore
     env:
+      RELEASE_TAG: ${{ inputs.tag }}
+      CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+      KEEP_OLD: ${{ inputs.keep_old }}
       NCURATOR_RELEASE_CANDIDATE_ROOT: ${{ github.workspace }}/release-candidates
       AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
@@ -106,9 +198,9 @@ jobs:
 
       - name: Require candidate run id
         shell: bash
-        run: test -n "${{ inputs.candidate_run_id }}"
+        run: test -n "$CANDIDATE_RUN_ID"
 
-      - name: Download retained candidate from prepare run
+      - name: Download tested candidate
         uses: actions/download-artifact@v4
         with:
           name: ncurator-windows-${{ inputs.tag }}
@@ -118,10 +210,13 @@ jobs:
 
       - name: Publish retained candidate without rebuilding
         shell: bash
-        run: node scripts/release/windows.mjs --tag "${{ inputs.tag }}" --publish-only --local-only
+        run: |
+          args=(--tag "$RELEASE_TAG" --publish-only --local-only)
+          if [ "$KEEP_OLD" = "true" ]; then args+=(--keep-old); fi
+          node scripts/release/windows.mjs "${args[@]}"
 
       - name: Release summary
         shell: bash
         run: |
-          echo "Windows ${{ inputs.tag }} published from prepare run ${{ inputs.candidate_run_id }}." >> "$GITHUB_STEP_SUMMARY"
+          echo "Windows $RELEASE_TAG published from tested candidate run $CANDIDATE_RUN_ID." >> "$GITHUB_STEP_SUMMARY"
           echo "Fixed download: https://download.ncurator.com/downloads/latest/windows-x64.exe" >> "$GITHUB_STEP_SUMMARY"

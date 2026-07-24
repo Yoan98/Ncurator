@@ -28,17 +28,16 @@ const releaseTag =
 const notes = valueAfter('--notes') || `Ncurator ${releaseTag}`
 const forceLocal = args.includes('--local-only')
 const forceActions = args.includes('--actions')
-const packageE2E = args.includes('--package-e2e')
 const pnpmExecutable = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
 
 if (!RELEASE_VERSION_PATTERN.test(version) || !['mac', 'windows'].includes(platform)) {
   throw new Error(
-    'usage: node scripts/release/prepare.mjs --platform <mac|windows> --version <1.2.3> [--notes <text>] [--local-only|--actions] [--package-e2e]'
+    'usage: node scripts/release/prepare.mjs --platform <mac|windows> --version <1.2.3> [--notes <text>] [--local-only|--actions]'
   )
 }
 if (forceLocal && forceActions) throw new Error('--local-only and --actions cannot be combined')
-if (platform === 'mac' && (forceLocal || forceActions || packageE2E)) {
-  throw new Error('mac release preparation cannot use Windows route or package E2E options')
+if (platform === 'mac' && (forceLocal || forceActions)) {
+  throw new Error('mac release preparation cannot use Windows route options')
 }
 
 const run = (command, commandArgs) =>
@@ -134,5 +133,4 @@ const routeArgs = [
 ]
 if (forceLocal) routeArgs.push('--local-only')
 if (forceActions) routeArgs.push('--actions')
-if (packageE2E) routeArgs.push('--package-e2e')
 await run(process.execPath, routeArgs)

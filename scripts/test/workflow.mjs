@@ -1,17 +1,19 @@
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { mkdir, readFile, readdir, rm, stat } from 'node:fs/promises'
+import { createRequire } from 'node:module'
 import path from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { preparePackagedE2EApplication } from './package-app.mjs'
 
 const ROOT = process.cwd()
+const require = createRequire(import.meta.url)
 const TESTS_ROOT = path.join(ROOT, 'tests')
 const TEST_CASES_ROOT = path.join(TESTS_ROOT, 'case')
 const resolveLocalBin = (name) =>
   path.join(ROOT, 'node_modules', '.bin', process.platform === 'win32' ? `${name}.cmd` : name)
 const PNPM_BIN = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
-const VITEST_BIN = resolveLocalBin('vitest')
+const VITEST_CLI = path.join(path.dirname(require.resolve('vitest/package.json')), 'vitest.mjs')
 const E2E_CONTRACT_SCRIPT = path.join(ROOT, 'scripts', 'test', 'validate-e2e-contract.mjs')
 const ELECTRON_VITE_BIN = resolveLocalBin('electron-vite')
 const NATIVE_PREPARE_SCRIPT = path.join(ROOT, 'scripts', 'build', 'native', 'better-sqlite3.mjs')
@@ -282,7 +284,7 @@ const runSpawn = (bin, args, env, omitNpmEnv) =>
   spawnSync(bin, args, {
     cwd: ROOT,
     stdio: 'inherit',
-    shell: USE_WINDOWS_SHELL,
+    shell: USE_WINDOWS_SHELL && /\.(cmd|bat)$/iu.test(bin),
     env: buildCommandEnv(env, { omitNpmEnv })
   })
 
@@ -416,8 +418,8 @@ const runVitest = (input) => {
       args: ['exec', 'vitest', ...commandArgs]
     },
     fallback: {
-      bin: VITEST_BIN,
-      args: commandArgs
+      bin: process.execPath,
+      args: [VITEST_CLI, ...commandArgs]
     }
   })
 }

@@ -1,12 +1,22 @@
-import { copyFile, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import {
+  access,
+  copyFile,
+  mkdir,
+  readFile,
+  readdir,
+  rename,
+  rm,
+  rmdir,
+  writeFile
+} from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 import { verifyReleaseBundle } from './artifact-bundle.mjs'
-import { parseReleaseTag } from './tag.mjs'
+import { compareReleaseVersions, parseReleaseTag } from './tag.mjs'
 
 const CANDIDATE_STATES = new Set(['prepared', 'ready', 'rejected', 'published'])
-const E2E_STATES = new Set(['pending', 'skipped', 'passed', 'failed'])
+const E2E_STATES = new Set(['pending', 'passed', 'failed'])
 
 const candidateRoot = () =>
   path.resolve(
@@ -21,7 +31,7 @@ const statePathFor = (directory) => path.join(directory, 'candidate-state.json')
 
 const assertCandidateState = (state, expected = {}) => {
   if (!state || typeof state !== 'object') throw new Error('candidate state is missing')
-  if (state.schemaVersion !== 1) throw new Error('candidate state schemaVersion must be 1')
+  if (state.schemaVersion !== 2) throw new Error('candidate state schemaVersion must be 2')
   try {
     parseReleaseTag(state.tag, state.platform)
   } catch {
@@ -36,6 +46,15 @@ const assertCandidateState = (state, expected = {}) => {
   }
   if (!CANDIDATE_STATES.has(state.status)) throw new Error('candidate status is invalid')
   if (!E2E_STATES.has(state.e2e?.status)) throw new Error('candidate E2E status is invalid')
+  const expectedE2EStatus = {
+    prepared: 'pending',
+    ready: 'passed',
+    rejected: 'failed',
+    published: 'passed'
+  }[state.status]
+  if (state.e2e.status !== expectedE2EStatus) {
+    throw new Error(`candidate ${state.status} state must use E2E status ${expectedE2EStatus}`)
+  }
   if (typeof state.bundle !== 'string' || state.bundle !== path.basename(state.bundle)) {
     throw new Error('candidate bundle path is invalid')
   }
@@ -70,7 +89,7 @@ export const materializeReleaseCandidate = async ({ bundlePath }) => {
     platform: verified.bundle.platform
   })
   const state = await writeState(directory, {
-    schemaVersion: 1,
+    schemaVersion: 2,
     tag: verified.bundle.tag,
     commit: verified.bundle.commit,
     platform: verified.bundle.platform,
@@ -96,18 +115,22 @@ export const readReleaseCandidate = async ({ tag, platform }) => {
   return { directory, state, bundlePath, verified }
 }
 
-export const recordCandidateE2E = async ({ tag, platform, status, resultPath = '' }) => {
-  if (!['skipped', 'passed', 'failed'].includes(status)) {
+export const recordCandidateE2E = async ({ tag, platform, status, resultPath = '', selection }) => {
+  if (!['passed', 'failed'].includes(status)) {
     throw new Error(`unsupported candidate E2E status: ${status}`)
   }
   const candidate = await readReleaseCandidate({ tag, platform })
+  if (candidate.state.status === 'published') {
+    throw new Error(`published candidate ${tag} ${platform} cannot be retested`)
+  }
   const state = {
     ...candidate.state,
     status: status === 'failed' ? 'rejected' : 'ready',
     e2e: {
       status,
       recordedAt: new Date().toISOString(),
-      ...(resultPath ? { result: path.relative(candidate.directory, resultPath) } : {})
+      ...(resultPath ? { result: path.relative(candidate.directory, resultPath) } : {}),
+      ...(selection ? { selection } : {})
     }
   }
   await writeState(candidate.directory, state)
@@ -138,4 +161,56 @@ export const markCandidatePublished = async ({ tag, platform }) => {
   }
   await writeState(candidate.directory, state)
   return { ...candidate, state }
+}
+
+const removeDirectoryIfEmpty = async (directory) => {
+  try {
+    await rmdir(directory)
+  } catch (error) {
+    if (!['ENOENT', 'ENOTEMPTY', 'EEXIST'].includes(error?.code)) throw error
+  }
+}
+
+export const cleanupSupersededReleaseCandidates = async ({ tag, platforms }) => {
+  const current = parseReleaseTag(tag)
+  const selectedPlatforms = [...new Set(platforms || [])]
+  if (selectedPlatforms.length === 0) throw new Error('candidate cleanup requires a platform')
+  for (const platform of selectedPlatforms) parseReleaseTag(tag, platform)
+
+  const root = candidateRoot()
+  const entries = await readdir(root, { withFileTypes: true }).catch((error) => {
+    if (error?.code === 'ENOENT') return []
+    throw error
+  })
+  const removed = []
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue
+    let previous
+    try {
+      previous = parseReleaseTag(entry.name)
+    } catch {
+      continue
+    }
+    if (
+      previous.family !== current.family ||
+      compareReleaseVersions(previous.version, current.version) >= 0
+    ) {
+      continue
+    }
+    for (const platform of selectedPlatforms) {
+      const directory = resolveCandidateDirectory(entry.name, platform)
+      const exists = await access(directory)
+        .then(() => true)
+        .catch((error) => {
+          if (error?.code === 'ENOENT') return false
+          throw error
+        })
+      if (!exists) continue
+      await rm(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 500 })
+      removed.push(directory)
+    }
+    await removeDirectoryIfEmpty(path.join(root, entry.name))
+  }
+  await removeDirectoryIfEmpty(root)
+  return removed
 }

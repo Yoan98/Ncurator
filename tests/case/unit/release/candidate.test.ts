@@ -6,9 +6,11 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { createReleaseBundle } from '../../../../scripts/release/artifact-bundle.mjs'
 import {
   assertCandidatePublishable,
+  cleanupSupersededReleaseCandidates,
   materializeReleaseCandidate,
   readReleaseCandidate,
-  recordCandidateE2E
+  recordCandidateE2E,
+  resolveCandidateDirectory
 } from '../../../../scripts/release/candidate.mjs'
 
 const tempRoots: string[] = []
@@ -22,10 +24,15 @@ afterEach(async () => {
   )
 })
 
-const createBundle = async () => {
+const createBundle = async ({
+  version = '0.1.21',
+  candidateRoot
+}: { version?: string; candidateRoot?: string } = {}) => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ncurator-candidate-test-'))
-  const candidates = await fs.mkdtemp(path.join(os.tmpdir(), 'ncurator-candidates-'))
-  tempRoots.push(root, candidates)
+  const candidates =
+    candidateRoot || (await fs.mkdtemp(path.join(os.tmpdir(), 'ncurator-candidates-')))
+  tempRoots.push(root)
+  if (!candidateRoot) tempRoots.push(candidates)
   process.env.NCURATOR_RELEASE_CANDIDATE_ROOT = candidates
   const assets = [
     { name: 'Ncurator-windows-x64.exe', role: 'installer', content: 'installer' },
@@ -40,12 +47,12 @@ const createBundle = async () => {
   }))
   const fragment = {
     schemaVersion: 2,
-    tag: 'windows-v0.1.21',
-    version: '0.1.21',
+    tag: `windows-v${version}`,
+    version,
     platform: 'windows-x64',
     createdAt: new Date().toISOString(),
     files,
-    metadata: 'version: 0.1.21\n',
+    metadata: `version: ${version}\n`,
     audit: {
       schemaVersion: 1,
       generatedAt: new Date().toISOString(),
@@ -80,7 +87,8 @@ describe('retained release candidate', () => {
     await recordCandidateE2E({
       tag: 'windows-v0.1.21',
       platform: 'windows-x64',
-      status: 'skipped'
+      status: 'passed',
+      selection: { mode: 'selected', domain: 'workbench' }
     })
     await expect(
       assertCandidatePublishable({
@@ -89,6 +97,15 @@ describe('retained release candidate', () => {
         commit: '0123456789012345678901234567890123456789'
       })
     ).resolves.toBeDefined()
+
+    const ready = await readReleaseCandidate({
+      tag: 'windows-v0.1.21',
+      platform: 'windows-x64'
+    })
+    expect(ready.state.e2e).toMatchObject({
+      status: 'passed',
+      selection: { mode: 'selected', domain: 'workbench' }
+    })
   })
 
   it('marks a failed regression as rejected and preserves the same bundle', async () => {
@@ -105,5 +122,31 @@ describe('retained release candidate', () => {
     })
     expect(rejected.state.status).toBe('rejected')
     expect(rejected.bundlePath).toBe(prepared.bundlePath)
+  })
+
+  it('keeps the current and newer candidates while removing superseded versions', async () => {
+    const candidateRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'ncurator-candidates-'))
+    tempRoots.push(candidateRoot)
+    for (const version of ['0.1.20', '0.1.21', '0.1.22']) {
+      await materializeReleaseCandidate({
+        bundlePath: await createBundle({ version, candidateRoot })
+      })
+    }
+
+    await expect(
+      cleanupSupersededReleaseCandidates({
+        tag: 'windows-v0.1.21',
+        platforms: ['windows-x64']
+      })
+    ).resolves.toEqual([resolveCandidateDirectory('windows-v0.1.20', 'windows-x64')])
+    await expect(
+      fs.access(resolveCandidateDirectory('windows-v0.1.20', 'windows-x64'))
+    ).rejects.toThrow()
+    await expect(
+      readReleaseCandidate({ tag: 'windows-v0.1.21', platform: 'windows-x64' })
+    ).resolves.toBeDefined()
+    await expect(
+      readReleaseCandidate({ tag: 'windows-v0.1.22', platform: 'windows-x64' })
+    ).resolves.toBeDefined()
   })
 })

@@ -6,6 +6,7 @@ import { promisify } from 'node:util'
 import { createReleaseBundle } from './artifact-bundle.mjs'
 import {
   assertCandidatePublishable,
+  cleanupSupersededReleaseCandidates,
   markCandidatePublished,
   materializeReleaseCandidate,
   readReleaseCandidate,
@@ -14,6 +15,7 @@ import {
 import { loadReleaseEnvironment } from './shared/environment.mjs'
 import { prepareReleaseWorkspace } from './workspace.mjs'
 import { parseReleaseTag } from './tag.mjs'
+import { hasRegressionSelectionArgs, readRegressionSelection } from './regression.mjs'
 
 const execFileAsync = promisify(execFile)
 const ROOT = process.cwd()
@@ -25,7 +27,7 @@ const valueAfter = (name) => {
 }
 const releaseTag = valueAfter('--tag') || ''
 const keepOld = args.includes('--keep-old')
-const packageE2E = args.includes('--package-e2e')
+const regression = readRegressionSelection(args)
 const modes = [
   ['prepare', args.includes('--prepare-only')],
   ['test', args.includes('--test-only')],
@@ -43,12 +45,12 @@ try {
 }
 if (!releaseVersion || modes.length !== 1) {
   throw new Error(
-    'usage: node scripts/release/macos.mjs --tag <mac-v1.2.3> (--prepare-only|--test-only|--publish-only) [--package-e2e] [--keep-old]'
+    'usage: node scripts/release/macos.mjs --tag <mac-v1.2.3> (--prepare-only|--test-only|--publish-only) [--keep-old] [--domain <name>] [--suite <name>] [--group <name>] [--case <caseId>] [--fresh-knowledge-cache]'
   )
 }
 const mode = modes[0][0]
-if (mode !== 'prepare' && packageE2E) {
-  throw new Error('--package-e2e can only be combined with --prepare-only')
+if (mode !== 'test' && hasRegressionSelectionArgs(args)) {
+  throw new Error('regression selection options are only valid with --test-only')
 }
 if (mode !== 'publish' && keepOld) {
   throw new Error('--keep-old can only be combined with --publish-only')
@@ -227,21 +229,32 @@ const runCandidateE2E = async ({ candidate, sourceDirectory, pnpmPath }) => {
   try {
     await run(
       pnpmPath,
-      ['run', 'test:e2e:package', '--', '--bundle', candidate.bundlePath, '--result', resultPath],
+      [
+        'run',
+        'test:e2e:package',
+        '--',
+        '--bundle',
+        candidate.bundlePath,
+        '--result',
+        resultPath,
+        ...regression.workflowArgs
+      ],
       { cwd: sourceDirectory, env: sanitizedTestEnvironment() }
     )
     return await recordCandidateE2E({
       tag: releaseTag,
       platform: candidate.state.platform,
       status: 'passed',
-      resultPath
+      resultPath,
+      selection: regression.state
     })
   } catch (error) {
     await recordCandidateE2E({
       tag: releaseTag,
       platform: candidate.state.platform,
       status: 'failed',
-      resultPath
+      resultPath,
+      selection: regression.state
     })
     throw error
   }
@@ -273,7 +286,7 @@ if (mode === 'prepare') {
         NCURATOR_SIDECAR_PIP_CACHE: path.join(tools.sidecarPipCacheRoot, 'darwin-arm64')
       }
     })
-    let armCandidate = await createCandidate(armSource, 'macos-arm64', taggedCommit)
+    const armCandidate = await createCandidate(armSource, 'macos-arm64', taggedCommit)
 
     const x64Environment = {
       ...process.env,
@@ -294,33 +307,9 @@ if (mode === 'prepare') {
       ['-x86_64', tools.x64Node, tools.pnpmPath, 'run', 'build:mac:release:x64'],
       { cwd: x64Source, env: x64Environment }
     )
-    let x64Candidate = await createCandidate(x64Source, 'macos-x64', taggedCommit)
-
-    if (packageE2E) {
-      armCandidate = await runCandidateE2E({
-        candidate: armCandidate,
-        sourceDirectory: armSource,
-        pnpmPath: tools.pnpmPath
-      })
-      x64Candidate = await runCandidateE2E({
-        candidate: x64Candidate,
-        sourceDirectory: armSource,
-        pnpmPath: tools.pnpmPath
-      })
-    } else {
-      armCandidate = await recordCandidateE2E({
-        tag: releaseTag,
-        platform: 'macos-arm64',
-        status: 'skipped'
-      })
-      x64Candidate = await recordCandidateE2E({
-        tag: releaseTag,
-        platform: 'macos-x64',
-        status: 'skipped'
-      })
-    }
+    const x64Candidate = await createCandidate(x64Source, 'macos-x64', taggedCommit)
     process.stdout.write(
-      `[release] macOS candidates ready; R2 publish paused\n${armCandidate.bundlePath}\n${x64Candidate.bundlePath}\n`
+      `[release] macOS candidates prepared; impact assessment and package E2E are required before publish\n${armCandidate.bundlePath}\n${x64Candidate.bundlePath}\n`
     )
   } finally {
     await workspace.dispose()
@@ -381,5 +370,17 @@ if (keepOld) finalizeArgs.push('--keep-old')
 await run(process.execPath, finalizeArgs)
 for (const platform of ['macos-arm64', 'macos-x64']) {
   await markCandidatePublished({ tag: releaseTag, platform })
+}
+try {
+  const removed = await cleanupSupersededReleaseCandidates({
+    tag: releaseTag,
+    platforms: ['macos-arm64', 'macos-x64']
+  })
+  if (removed.length > 0) {
+    process.stdout.write(`[release] removed ${removed.length} superseded local candidate(s)\n`)
+  }
+} catch (error) {
+  const message = error instanceof Error ? error.message : String(error)
+  process.stderr.write(`[release] local candidate cleanup warning: ${message}\n`)
 }
 process.stdout.write(`[release] macOS ${releaseTag} published from retained candidates\n`)

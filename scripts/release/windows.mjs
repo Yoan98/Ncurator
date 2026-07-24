@@ -6,6 +6,7 @@ import { promisify } from 'node:util'
 import { createReleaseBundle } from './artifact-bundle.mjs'
 import {
   assertCandidatePublishable,
+  cleanupSupersededReleaseCandidates,
   markCandidatePublished,
   materializeReleaseCandidate,
   readReleaseCandidate,
@@ -21,6 +22,7 @@ import {
 } from './shared/windows.mjs'
 import { prepareReleaseWorkspace } from './workspace.mjs'
 import { parseReleaseTag } from './tag.mjs'
+import { hasRegressionSelectionArgs, readRegressionSelection } from './regression.mjs'
 
 const execFileAsync = promisify(execFile)
 const ROOT = process.cwd()
@@ -32,8 +34,9 @@ const valueAfter = (name) => {
 const releaseTag = valueAfter('--tag') || ''
 const forceLocal = args.includes('--local-only')
 const forceActions = args.includes('--actions')
-const packageE2E = args.includes('--package-e2e')
 const candidateRunId = valueAfter('--candidate-run-id') || ''
+const keepOld = args.includes('--keep-old')
+const regression = readRegressionSelection(args)
 const modes = [
   ['prepare', args.includes('--prepare-only')],
   ['test', args.includes('--test-only')],
@@ -48,18 +51,19 @@ try {
 }
 if (!releaseVersion || modes.length !== 1) {
   throw new Error(
-    'usage: node scripts/release/windows.mjs --tag <windows-v1.2.3> (--prepare-only|--test-only|--publish-only) [--package-e2e] [--local-only|--actions] [--candidate-run-id <id>]'
+    'usage: node scripts/release/windows.mjs --tag <windows-v1.2.3> (--prepare-only|--test-only|--publish-only) [--local-only|--actions] [--candidate-run-id <id>] [--keep-old] [--domain <name>] [--suite <name>] [--group <name>] [--case <caseId>] [--fresh-knowledge-cache]'
   )
 }
 if (forceLocal && forceActions) throw new Error('--local-only and --actions cannot be combined')
 const mode = modes[0][0]
-if (mode !== 'prepare' && packageE2E) {
-  throw new Error('--package-e2e can only be combined with --prepare-only')
+if (mode !== 'test' && hasRegressionSelectionArgs(args)) {
+  throw new Error('regression selection options are only valid with --test-only')
 }
-if (mode === 'test' && forceActions)
-  throw new Error('--test-only currently requires the local route')
-if (candidateRunId && !(mode === 'publish' && forceActions)) {
-  throw new Error('--candidate-run-id is only valid for Actions publish-only')
+if (mode !== 'publish' && keepOld) {
+  throw new Error('--keep-old can only be combined with --publish-only')
+}
+if (candidateRunId && !['test', 'publish'].includes(mode)) {
+  throw new Error('--candidate-run-id is only valid for Actions test-only or publish-only')
 }
 
 const run = (command, commandArgs, options = {}) =>
@@ -84,18 +88,23 @@ const localInspection = forceActions
   : await inspectLocalWindowsRelease(ROOT, { requirePublish })
 const route = await assertWindowsReleaseRouteAvailable({
   root: ROOT,
-  forceLocal: forceLocal || mode === 'test',
+  forceLocal,
   forceActions,
   localInspection
 })
 if (route === 'actions') {
+  if (['test', 'publish'].includes(mode) && !candidateRunId) {
+    throw new Error(`--candidate-run-id is required for Actions ${mode}-only`)
+  }
   await dispatchWindowsRelease(ROOT, releaseTag, {
     mode,
-    packageE2E,
-    candidateRunId
+    candidateRunId,
+    regression: regression.state,
+    keepOld
   })
   process.exit(0)
 }
+if (candidateRunId) throw new Error('--candidate-run-id is only valid for the Actions route')
 const inspection = localInspection
 
 const { stdout: tagType } = await execFileAsync('git', ['cat-file', '-t', releaseTag], {
@@ -117,6 +126,21 @@ const { stdout: taggedCommitOutput } = await execFileAsync('git', [
   releaseTag
 ])
 const taggedCommit = taggedCommitOutput.trim()
+
+const cleanupLocalCandidates = async () => {
+  try {
+    const removed = await cleanupSupersededReleaseCandidates({
+      tag: releaseTag,
+      platforms: ['windows-x64']
+    })
+    if (removed.length > 0) {
+      process.stdout.write(`[release] removed ${removed.length} superseded local candidate(s)\n`)
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    process.stderr.write(`[release] local candidate cleanup warning: ${message}\n`)
+  }
+}
 
 const releaseEnvironment = () => {
   const environment = {
@@ -184,21 +208,32 @@ const runCandidateE2E = async ({ candidate, sourceDirectory, environment }) => {
   try {
     await run(
       inspection.pnpmExecutable,
-      ['run', 'test:e2e:package', '--', '--bundle', candidate.bundlePath, '--result', resultPath],
+      [
+        'run',
+        'test:e2e:package',
+        '--',
+        '--bundle',
+        candidate.bundlePath,
+        '--result',
+        resultPath,
+        ...regression.workflowArgs
+      ],
       { cwd: sourceDirectory, env: testEnvironment(environment) }
     )
     return await recordCandidateE2E({
       tag: releaseTag,
       platform: 'windows-x64',
       status: 'passed',
-      resultPath
+      resultPath,
+      selection: regression.state
     })
   } catch (error) {
     await recordCandidateE2E({
       tag: releaseTag,
       platform: 'windows-x64',
       status: 'failed',
-      resultPath
+      resultPath,
+      selection: regression.state
     })
     throw error
   }
@@ -231,18 +266,9 @@ if (mode === 'prepare') {
     )
     const bundlePath = path.join(distDirectory, 'release-bundle-windows-x64.json')
     await createReleaseBundle({ fragmentPath, outputPath: bundlePath, commit: taggedCommit })
-    let candidate = await materializeReleaseCandidate({ bundlePath })
-    if (packageE2E) {
-      candidate = await runCandidateE2E({ candidate, sourceDirectory, environment })
-    } else {
-      candidate = await recordCandidateE2E({
-        tag: releaseTag,
-        platform: 'windows-x64',
-        status: 'skipped'
-      })
-    }
+    const candidate = await materializeReleaseCandidate({ bundlePath })
     process.stdout.write(
-      `[release] candidate ready; R2 publish paused\n[release] bundle ${candidate.bundlePath}\n`
+      `[release] candidate prepared; impact assessment and package E2E are required before publish\n[release] bundle ${candidate.bundlePath}\n`
     )
   } finally {
     await workspace.dispose()
@@ -275,6 +301,7 @@ const existing = await readPublicReleaseFragment(releaseTag, 'windows-x64', publ
 if (existing) {
   await verifyPublicReleaseFragment(existing, publicBaseUrl)
   await verifyR2ReleaseFragment(existing, inspection.awsExecutable)
+  await cleanupLocalCandidates()
   process.stdout.write(`[release] Windows ${releaseTag} is already complete on R2\n`)
   process.exit(0)
 }
@@ -292,12 +319,15 @@ await run(
   ],
   { cwd: ROOT, env: process.env }
 )
-await run(
-  process.execPath,
-  [path.join(ROOT, 'scripts', 'release', 'r2', 'finalize-windows.mjs'), '--tag', releaseTag],
-  { cwd: ROOT, env: process.env }
-)
+const finalizeArgs = [
+  path.join(ROOT, 'scripts', 'release', 'r2', 'finalize-windows.mjs'),
+  '--tag',
+  releaseTag
+]
+if (keepOld) finalizeArgs.push('--keep-old')
+await run(process.execPath, finalizeArgs, { cwd: ROOT, env: process.env })
 await verifyPublicReleaseFragment(candidate.verified.fragment, publicBaseUrl)
 await verifyR2ReleaseFragment(candidate.verified.fragment, inspection.awsExecutable)
 await markCandidatePublished({ tag: releaseTag, platform: 'windows-x64' })
+await cleanupLocalCandidates()
 process.stdout.write(`[release] Windows ${releaseTag} published from ${candidate.bundlePath}\n`)
