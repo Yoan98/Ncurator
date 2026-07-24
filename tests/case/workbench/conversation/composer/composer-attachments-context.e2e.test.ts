@@ -10,6 +10,7 @@ import {
   getWorkbenchLocator,
   getWorkbenchPrefixLocator,
   navigateToWorkbench,
+  pasteWorkbenchText,
   selectWorkbenchAttachmentThroughInjectedDialog,
   selectWorkbenchWorkspace,
   setupWorkbenchWorkspaceOnly,
@@ -61,21 +62,7 @@ const createAttachmentFixtures = async (): Promise<{
 
 const pastePlainText = async (page: import('playwright').Page, text: string): Promise<void> => {
   await getWorkbenchLocator(page, workbenchSelectors.input).click()
-  const wroteClipboard = await page
-    .evaluate(async (value) => {
-      try {
-        await navigator.clipboard.writeText(value)
-        return true
-      } catch {
-        return false
-      }
-    }, text)
-    .catch(() => false)
-  if (wroteClipboard) {
-    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+V' : 'Control+V')
-    return
-  }
-  await page.keyboard.insertText(text)
+  await pasteWorkbenchText(page, text)
 }
 
 const waitForAttachmentCardByName = async (
