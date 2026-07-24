@@ -10,9 +10,7 @@ let releaseFamily = ''
 try {
   releaseFamily = parseReleaseTag(releaseTag).family
 } catch {
-  throw new Error(
-    'usage: node scripts/release/r2/finalize.mjs --tag <mac-v1.2.3|windows-v1.2.3> [--keep-old]'
-  )
+  throw new Error('usage: node scripts/release/r2/finalize.mjs --tag <mac-v1.2.3|windows-v1.2.3>')
 }
 
 const run = (script) =>
@@ -22,7 +20,6 @@ const run = (script) =>
       '--tag',
       releaseTag
     ]
-    if (args.includes('--keep-old')) childArgs.push('--keep-old')
     const child = spawn(process.execPath, childArgs, {
       cwd: process.cwd(),
       env: process.env,

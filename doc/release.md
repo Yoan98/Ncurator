@@ -224,7 +224,7 @@ RELEASE_REPOSITORY=owner/repo
 
 publish 会上传候选产物和 fragment，更新对应平台的自动更新 metadata、官网 manifest 与固定下载地址，然后验证公开文件大小、sha512、文件名和 manifest。公开验证成功后才把候选状态标记为 `published`。
 
-默认会清理该平台的旧 artifacts 与 release-status；发布时使用 `--keep-old` 可以暂时保留旧对象。
+公开验证成功后会清理该平台更早版本的 artifacts 与 release-status，R2 只保留当前最新版本。
 
 ### 本地保留与清理
 

@@ -12,13 +12,10 @@ const ROOT = process.cwd()
 const args = process.argv.slice(2)
 const tagIndex = args.indexOf('--tag')
 const releaseTag = tagIndex >= 0 ? args[tagIndex + 1] || '' : ''
-const keepOld = args.includes('--keep-old')
 try {
   parseReleaseTag(releaseTag, 'windows')
 } catch {
-  throw new Error(
-    'usage: node scripts/release/r2/finalize-windows.mjs --tag <windows-v1.2.3> [--keep-old]'
-  )
+  throw new Error('usage: node scripts/release/r2/finalize-windows.mjs --tag <windows-v1.2.3>')
 }
 
 const { aws, bucket, publicBaseUrl, listKeys, deleteKeys } = await createR2Client(ROOT)
@@ -165,23 +162,21 @@ try {
     throw new Error('public Windows release manifest verification failed')
   }
 
-  if (!keepOld) {
-    const removable = (await listKeys('artifacts/windows/')).filter(
-      (key) => !key.startsWith(`artifacts/windows/${releaseTag}/`)
+  const removable = (await listKeys('artifacts/windows/')).filter(
+    (key) => !key.startsWith(`artifacts/windows/${releaseTag}/`)
+  )
+  removable.push(
+    ...(await listKeys('release-status/windows/')).filter(
+      (key) => key !== statusKey(releaseTag, 'windows-x64')
     )
-    removable.push(
-      ...(await listKeys('release-status/windows/')).filter(
-        (key) => key !== statusKey(releaseTag, 'windows-x64')
-      )
-    )
-    removable.push(
-      ...(await listKeys('artifacts/v')).filter((key) => /\/Ncurator-windows-[^/]+$/u.test(key))
-    )
-    removable.push(
-      ...(await listKeys('release-status/v')).filter((key) => key.endsWith('/windows-x64.json'))
-    )
-    await deleteKeys(removable)
-  }
+  )
+  removable.push(
+    ...(await listKeys('artifacts/v')).filter((key) => /\/Ncurator-windows-[^/]+$/u.test(key))
+  )
+  removable.push(
+    ...(await listKeys('release-status/v')).filter((key) => key.endsWith('/windows-x64.json'))
+  )
+  await deleteKeys(removable)
   process.stdout.write(
     `[release] Windows ${releaseTag} is live at ${publicBaseUrl}/${downloadKey}\n`
   )

@@ -39,12 +39,6 @@ on:
         required: false
         default: false
         type: boolean
-      keep_old:
-        description: 'Keep superseded R2 version objects while publishing'
-        required: false
-        default: false
-        type: boolean
-
 concurrency:
   group: windows-release-${{ inputs.tag }}-${{ inputs.mode }}
   cancel-in-progress: false
@@ -174,7 +168,6 @@ jobs:
     env:
       RELEASE_TAG: ${{ inputs.tag }}
       CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
-      KEEP_OLD: ${{ inputs.keep_old }}
       NCURATOR_RELEASE_CANDIDATE_ROOT: ${{ github.workspace }}/release-candidates
       AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
@@ -210,10 +203,7 @@ jobs:
 
       - name: Publish retained candidate without rebuilding
         shell: bash
-        run: |
-          args=(--tag "$RELEASE_TAG" --publish-only --local-only)
-          if [ "$KEEP_OLD" = "true" ]; then args+=(--keep-old); fi
-          node scripts/release/windows.mjs "${args[@]}"
+        run: node scripts/release/windows.mjs --tag "$RELEASE_TAG" --publish-only --local-only
 
       - name: Release summary
         shell: bash

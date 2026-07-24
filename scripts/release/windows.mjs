@@ -35,7 +35,6 @@ const releaseTag = valueAfter('--tag') || ''
 const forceLocal = args.includes('--local-only')
 const forceActions = args.includes('--actions')
 const candidateRunId = valueAfter('--candidate-run-id') || ''
-const keepOld = args.includes('--keep-old')
 const regression = readRegressionSelection(args)
 const modes = [
   ['prepare', args.includes('--prepare-only')],
@@ -51,16 +50,13 @@ try {
 }
 if (!releaseVersion || modes.length !== 1) {
   throw new Error(
-    'usage: node scripts/release/windows.mjs --tag <windows-v1.2.3> (--prepare-only|--test-only|--publish-only) [--local-only|--actions] [--candidate-run-id <id>] [--keep-old] [--domain <name>] [--suite <name>] [--group <name>] [--case <caseId>] [--fresh-knowledge-cache]'
+    'usage: node scripts/release/windows.mjs --tag <windows-v1.2.3> (--prepare-only|--test-only|--publish-only) [--local-only|--actions] [--candidate-run-id <id>] [--domain <name>] [--suite <name>] [--group <name>] [--case <caseId>] [--fresh-knowledge-cache]'
   )
 }
 if (forceLocal && forceActions) throw new Error('--local-only and --actions cannot be combined')
 const mode = modes[0][0]
 if (mode !== 'test' && hasRegressionSelectionArgs(args)) {
   throw new Error('regression selection options are only valid with --test-only')
-}
-if (mode !== 'publish' && keepOld) {
-  throw new Error('--keep-old can only be combined with --publish-only')
 }
 if (candidateRunId && !['test', 'publish'].includes(mode)) {
   throw new Error('--candidate-run-id is only valid for Actions test-only or publish-only')
@@ -99,8 +95,7 @@ if (route === 'actions') {
   await dispatchWindowsRelease(ROOT, releaseTag, {
     mode,
     candidateRunId,
-    regression: regression.state,
-    keepOld
+    regression: regression.state
   })
   process.exit(0)
 }
@@ -319,13 +314,11 @@ await run(
   ],
   { cwd: ROOT, env: process.env }
 )
-const finalizeArgs = [
-  path.join(ROOT, 'scripts', 'release', 'r2', 'finalize-windows.mjs'),
-  '--tag',
-  releaseTag
-]
-if (keepOld) finalizeArgs.push('--keep-old')
-await run(process.execPath, finalizeArgs, { cwd: ROOT, env: process.env })
+await run(
+  process.execPath,
+  [path.join(ROOT, 'scripts', 'release', 'r2', 'finalize-windows.mjs'), '--tag', releaseTag],
+  { cwd: ROOT, env: process.env }
+)
 await verifyPublicReleaseFragment(candidate.verified.fragment, publicBaseUrl)
 await verifyR2ReleaseFragment(candidate.verified.fragment, inspection.awsExecutable)
 await markCandidatePublished({ tag: releaseTag, platform: 'windows-x64' })

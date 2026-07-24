@@ -26,7 +26,6 @@ const valueAfter = (name) => {
   return index >= 0 ? args[index + 1] : undefined
 }
 const releaseTag = valueAfter('--tag') || ''
-const keepOld = args.includes('--keep-old')
 const regression = readRegressionSelection(args)
 const modes = [
   ['prepare', args.includes('--prepare-only')],
@@ -45,15 +44,12 @@ try {
 }
 if (!releaseVersion || modes.length !== 1) {
   throw new Error(
-    'usage: node scripts/release/macos.mjs --tag <mac-v1.2.3> (--prepare-only|--test-only|--publish-only) [--keep-old] [--domain <name>] [--suite <name>] [--group <name>] [--case <caseId>] [--fresh-knowledge-cache]'
+    'usage: node scripts/release/macos.mjs --tag <mac-v1.2.3> (--prepare-only|--test-only|--publish-only) [--domain <name>] [--suite <name>] [--group <name>] [--case <caseId>] [--fresh-knowledge-cache]'
   )
 }
 const mode = modes[0][0]
 if (mode !== 'test' && hasRegressionSelectionArgs(args)) {
   throw new Error('regression selection options are only valid with --test-only')
-}
-if (mode !== 'publish' && keepOld) {
-  throw new Error('--keep-old can only be combined with --publish-only')
 }
 
 const run = (command, commandArgs, options = {}) =>
@@ -361,13 +357,11 @@ for (const candidate of candidates) {
     candidate.verified.fragmentPath
   ])
 }
-const finalizeArgs = [
+await run(process.execPath, [
   path.join(ROOT, 'scripts', 'release', 'r2', 'finalize-macos.mjs'),
   '--tag',
   releaseTag
-]
-if (keepOld) finalizeArgs.push('--keep-old')
-await run(process.execPath, finalizeArgs)
+])
 for (const platform of ['macos-arm64', 'macos-x64']) {
   await markCandidatePublished({ tag: releaseTag, platform })
 }

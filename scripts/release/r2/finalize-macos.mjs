@@ -15,14 +15,11 @@ const ROOT = process.cwd()
 const args = process.argv.slice(2)
 const tagIndex = args.indexOf('--tag')
 const releaseTag = tagIndex >= 0 ? args[tagIndex + 1] || '' : ''
-const keepOld = args.includes('--keep-old')
 let releaseVersion = ''
 try {
   releaseVersion = parseReleaseTag(releaseTag, 'mac').version
 } catch {
-  throw new Error(
-    'usage: node scripts/release/r2/finalize-macos.mjs --tag <mac-v1.2.3> [--keep-old]'
-  )
+  throw new Error('usage: node scripts/release/r2/finalize-macos.mjs --tag <mac-v1.2.3>')
 }
 
 const { aws, bucket, publicBaseUrl, listKeys, deleteKeys } = await createR2Client(ROOT)
@@ -180,25 +177,23 @@ try {
     }
   }
 
-  if (!keepOld) {
-    const removable = (await listKeys('artifacts/macos/')).filter(
-      (key) => !key.startsWith(`artifacts/macos/${releaseTag}/`)
+  const removable = (await listKeys('artifacts/macos/')).filter(
+    (key) => !key.startsWith(`artifacts/macos/${releaseTag}/`)
+  )
+  removable.push(
+    ...(await listKeys('release-status/macos/')).filter(
+      (key) => !key.startsWith(`release-status/macos/${releaseTag}/`)
     )
-    removable.push(
-      ...(await listKeys('release-status/macos/')).filter(
-        (key) => !key.startsWith(`release-status/macos/${releaseTag}/`)
-      )
+  )
+  removable.push(
+    ...(await listKeys('artifacts/v')).filter((key) => /\/Ncurator-mac-[^/]+$/u.test(key))
+  )
+  removable.push(
+    ...(await listKeys('release-status/v')).filter((key) =>
+      /\/macos-(?:arm64|x64)\.json$/u.test(key)
     )
-    removable.push(
-      ...(await listKeys('artifacts/v')).filter((key) => /\/Ncurator-mac-[^/]+$/u.test(key))
-    )
-    removable.push(
-      ...(await listKeys('release-status/v')).filter((key) =>
-        /\/macos-(?:arm64|x64)\.json$/u.test(key)
-      )
-    )
-    await deleteKeys(removable)
-  }
+  )
+  await deleteKeys(removable)
   process.stdout.write(
     `[release] macOS ${releaseTag} is live on independent fixed download channels\n`
   )

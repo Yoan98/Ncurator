@@ -193,7 +193,7 @@ export const assertWindowsReleaseRouteAvailable = async ({
 export const dispatchWindowsRelease = async (
   root,
   releaseTag,
-  { mode, candidateRunId = '', regression = {}, keepOld = false }
+  { mode, candidateRunId = '', regression = {} }
 ) => {
   await loadReleaseEnvironment(root)
   const token = String(process.env.NCURATOR_ACTIONS_TOKEN || '').trim()
@@ -219,8 +219,7 @@ export const dispatchWindowsRelease = async (
           test_suite: String(regression.suite || ''),
           test_groups: Array.isArray(regression.groups) ? regression.groups.join(',') : '',
           test_case: String(regression.caseId || ''),
-          fresh_knowledge_cache: regression.freshKnowledgeCache ? 'true' : 'false',
-          keep_old: keepOld ? 'true' : 'false'
+          fresh_knowledge_cache: regression.freshKnowledgeCache ? 'true' : 'false'
         }
       })
     }
