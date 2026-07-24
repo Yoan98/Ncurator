@@ -10,7 +10,7 @@ import {
   getWorkbenchLocator,
   getWorkbenchPrefixLocator,
   navigateToWorkbench,
-  selectWorkbenchAttachmentThroughNativeDialog,
+  selectWorkbenchAttachmentThroughInjectedDialog,
   selectWorkbenchWorkspace,
   setupWorkbenchWorkspaceOnly,
   waitForAntMessageText,
@@ -155,7 +155,7 @@ describe('workbench conversation e2e', () => {
             page,
             workspaceBinding.workspaceId
           )
-          await selectWorkbenchAttachmentThroughNativeDialog(
+          await selectWorkbenchAttachmentThroughInjectedDialog(
             page,
             attachments.imagePath,
             runtime.electronApp
@@ -163,19 +163,19 @@ describe('workbench conversation e2e', () => {
           await getImageAttachmentCardByName(page, 'qa-image.png')
             .first()
             .waitFor({ state: 'visible' })
-          await selectWorkbenchAttachmentThroughNativeDialog(
+          await selectWorkbenchAttachmentThroughInjectedDialog(
             page,
             attachments.markdownPath,
             runtime.electronApp
           )
           await waitForAttachmentCardByName(page, 'workbench-preview.md')
-          await selectWorkbenchAttachmentThroughNativeDialog(
+          await selectWorkbenchAttachmentThroughInjectedDialog(
             page,
             attachments.legacyDocPath,
             runtime.electronApp
           )
           await waitForAttachmentCardByName(page, 'legacy-reference.doc')
-          await selectWorkbenchAttachmentThroughNativeDialog(
+          await selectWorkbenchAttachmentThroughInjectedDialog(
             page,
             attachments.pptxPath,
             runtime.electronApp
@@ -263,7 +263,7 @@ describe('workbench conversation e2e', () => {
               .first()
               .textContent()) || ''
 
-          await selectWorkbenchAttachmentThroughNativeDialog(
+          await selectWorkbenchAttachmentThroughInjectedDialog(
             page,
             attachments.largePath,
             runtime.electronApp

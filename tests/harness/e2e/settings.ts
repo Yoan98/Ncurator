@@ -5,7 +5,7 @@ import type { AddressInfo } from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
 import { promisify } from 'node:util'
-import type { Locator, Page } from 'playwright'
+import type { ElectronApplication, Locator, Page } from 'playwright'
 import type {
   WorkspaceIndexJobRecord,
   WorkspaceListItem,
@@ -116,7 +116,6 @@ on run argv
   return "frontmost-before=" & beforeFrontmost & "; frontmost-after=" & afterFrontmost & "; target-process-name=" & targetProcessName & "; target-process-count=" & targetProcessCount & "; key-status=" & keyStatus
 end run
 `
-
 type SettingsE2EWindow = Window & {
   __NCURATOR_E2E_ELECTRON_PROCESS_ID__?: number
 }
@@ -390,7 +389,8 @@ export const bindWorkspaceRootThroughIpc = async (page: Page, rootPath: string):
 
 export const bindWorkspaceRootThroughSettingsUi = async (
   page: Page,
-  rootPath: string
+  rootPath: string,
+  electronApp?: ElectronApplication
 ): Promise<void> => {
   await navigateToSettingsSection(page, 'workspace')
   if (process.platform !== 'darwin') {
@@ -407,6 +407,23 @@ export const bindWorkspaceRootThroughSettingsUi = async (
   await page.bringToFront()
   await rootPathButton.waitFor({ state: 'visible' })
   const diagnostics: string[] = []
+  if (electronApp) {
+    await electronApp.evaluate(({ dialog }, selectedPath) => {
+      const originalShowOpenDialog = dialog.showOpenDialog.bind(dialog)
+      dialog.showOpenDialog = (async () => {
+        dialog.showOpenDialog = originalShowOpenDialog
+        return {
+          canceled: false,
+          filePaths: [selectedPath],
+          bookmarks: []
+        }
+      }) as typeof dialog.showOpenDialog
+    }, rootPath)
+    await rootPathButton.click()
+    if (await waitForWorkspaceRootPathVisible(page, rootPath)) return
+    throw new Error(`injected workspace root was not reflected in settings ui: ${rootPath}`)
+  }
+
   for (let attempt = 1; attempt <= 4; attempt += 1) {
     if (attempt > 1 && (await waitForWorkspaceRootPathVisible(page, rootPath, 1000))) return
     const electronProcessId = await readElectronProcessId(page)
