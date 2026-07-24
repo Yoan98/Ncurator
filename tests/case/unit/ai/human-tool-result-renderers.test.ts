@@ -159,14 +159,11 @@ describe('ai unit human tool result renderers', () => {
         matches: [{ pageNumber: 9, matchedText: '过度拟合', snippet: '右图属于过度拟合' }]
       }
     })
-    const imagePath = '/workspace/.ncurator/runtime/assets/uuid/page-9.png'
-    const renderRendered = renderToolResultDataText({
-      toolName: 'pdf_render_pages',
+    const visualRendered = renderToolResultDataText({
+      toolName: 'pdf_read_visuals',
       data: {
         sourcePath: '/workspace/深度学习.pdf',
-        pageCount: 11,
-        assetBucketId: 'uuid',
-        images: [{ pageNumber: 9, path: imagePath, mimeType: 'image/png', width: 100, height: 200 }]
+        results: [{ index: 9, text: '第9页右侧 Overfit 曲线显示验证表现变差。' }]
       }
     })
 
@@ -174,6 +171,7 @@ describe('ai unit human tool result renderers', () => {
     expect(readRendered).toContain('architecture')
     expect(searchRendered).toContain('pageNumber=9')
     expect(searchRendered).toContain('右图属于过度拟合')
-    expect(renderRendered).toContain(imagePath)
+    expect(visualRendered).toContain('index=9')
+    expect(visualRendered).toContain('Overfit 曲线')
   })
 })

@@ -9,6 +9,7 @@ import {
   normalizeWorkspaceBinding
 } from './utils/runContext'
 import type { AiPreference } from '../../../shared/types'
+import { saveHumanResumeSnapshot } from './utils/resumeSnapshot'
 
 const normalizeAiPreference = (value: unknown): AiPreference =>
   value === 'local_sources_relaxed' || value === 'local_sources_strict' ? value : 'default'
@@ -41,6 +42,20 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
   const normalizedReferences = normalizeSelectedReferences(payload.selectedReferences)
   const platform = getAiRuntimePlatform()
   const preference = normalizeAiPreference(payload.preference)
+
+  const saveResumeSnapshot: AiRunContext['saveResumeSnapshot'] = async (input) => {
+    await saveHumanResumeSnapshot({
+      chatStore: deps.chatStore,
+      sessionId: payload.sessionId,
+      runId: payload.runId,
+      userInput: payload.input,
+      reason: input.reason,
+      selectedReferences: normalizedReferences,
+      workspace: normalizedWorkspace,
+      humanState: input.humanState,
+      errorMessage: input.errorMessage
+    })
+  }
 
   const getModelConfig = async (
     selection: typeof payload.mainModel,
@@ -168,6 +183,7 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     }),
     workspace: normalizedWorkspace,
     checkCancelled,
+    saveResumeSnapshot,
     chatStructured: llmExecutor.chatStructured,
     chatText: llmExecutor.chatText,
     sendEvent: deps.sendEvent,

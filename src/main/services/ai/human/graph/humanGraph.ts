@@ -10,6 +10,7 @@ import { createHandNode } from '../node/handNode'
 import { createMouthNode } from '../node/mouthNode'
 import { createFaultNode } from '../node/faultNode'
 import { createHumanRuntimeCache } from '../node/utils/runtimeCache'
+import { emitDecisionHint } from '../node/utils/stateTransitionEvents'
 import { createHumanRunStateSchema, createInitialHumanState } from '../state/schema'
 import { isLearnableSkillId } from '../skills'
 import {
@@ -32,6 +33,27 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
     options: HumanRunDispatchOptions = {}
   ): Promise<HumanTaskOutput> => {
     const cache = createHumanRuntimeCache()
+    const saveProcessSnapshot = async (state: HumanState): Promise<void> => {
+      try {
+        await ctx.saveResumeSnapshot({
+          reason: 'process_interrupted',
+          humanState: state,
+          errorMessage: '运行中断恢复快照'
+        })
+      } catch (error) {
+        console.error('[AI-RUN] save process resume snapshot failed:', error)
+      }
+    }
+    const runNodeWithSnapshot = async (
+      state: HumanState,
+      node: (state: HumanState) => Promise<HumanState>
+    ): Promise<HumanState> => {
+      cache.currentState = state
+      const nextState = await node(state)
+      cache.currentState = nextState
+      await saveProcessSnapshot(nextState)
+      return nextState
+    }
     ctx.beginDocxApplyRun()
     try {
       const contextBudgetNode = createContextBudgetNode({ ctx, cache })
@@ -47,34 +69,19 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
       const faultNode = createFaultNode({ ctx, cache })
 
       const graph = new StateGraph(State)
-        .addNode('human_context_budget_node', (state) => {
-          cache.currentState = state as HumanState
-          return contextBudgetNode(state as HumanState)
-        })
-        .addNode('human_context_compaction_node', (state) => {
-          cache.currentState = state as HumanState
-          return contextCompactionNode(state as HumanState)
-        })
-        .addNode('human_brain_node', (state) => {
-          cache.currentState = state as HumanState
-          return brainNode(state as HumanState)
-        })
-        .addNode('human_learning_node', (state) => {
-          cache.currentState = state as HumanState
-          return learningNode(state as HumanState)
-        })
-        .addNode('human_hand_node', (state) => {
-          cache.currentState = state as HumanState
-          return handNode(state as HumanState)
-        })
-        .addNode('human_mouth_node', (state) => {
-          cache.currentState = state as HumanState
-          return mouthNode(state as HumanState)
-        })
-        .addNode('human_fault_node', (state) => {
-          cache.currentState = state as HumanState
-          return faultNode(state as HumanState)
-        })
+        .addNode('human_context_budget_node', (state) =>
+          runNodeWithSnapshot(state as HumanState, contextBudgetNode)
+        )
+        .addNode('human_context_compaction_node', (state) =>
+          runNodeWithSnapshot(state as HumanState, contextCompactionNode)
+        )
+        .addNode('human_brain_node', (state) => runNodeWithSnapshot(state as HumanState, brainNode))
+        .addNode('human_learning_node', (state) =>
+          runNodeWithSnapshot(state as HumanState, learningNode)
+        )
+        .addNode('human_hand_node', (state) => runNodeWithSnapshot(state as HumanState, handNode))
+        .addNode('human_mouth_node', (state) => runNodeWithSnapshot(state as HumanState, mouthNode))
+        .addNode('human_fault_node', (state) => runNodeWithSnapshot(state as HumanState, faultNode))
         .addEdge(START, 'human_context_budget_node')
         .addConditionalEdges('human_context_budget_node', (state) => {
           const humanState = state as HumanState
@@ -101,8 +108,9 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
         })
         .compile()
 
-      const sessionSkillState = await ctx.loadSessionSkillState()
       const baseInitialState = options.initialState || createInitialHumanState(taskInput)
+      cache.currentState = baseInitialState
+      const sessionSkillState = await ctx.loadSessionSkillState()
       const learnedSkillIds = Array.from(new Set(sessionSkillState.learnedSkillIds)).filter(
         isLearnableSkillId
       )
@@ -112,6 +120,16 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
         skills: {
           learnedSkillIds
         }
+      }
+      cache.currentState = initialState
+      await saveProcessSnapshot(initialState)
+      if (initialState.execution.pendingDecisionHint?.code === 'run_resumed_after_interruption') {
+        emitDecisionHint({
+          ctx,
+          taskId: initialState.task.taskId,
+          source: 'brain',
+          decisionHint: initialState.execution.pendingDecisionHint
+        })
       }
       const output = (await graph.invoke(
         initialState as HumanState,
@@ -126,7 +144,14 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
       }
     } catch (error) {
       ctx.discardDocxApplyRun()
-      if (!isCancelledError(error)) {
+      if (isCancelledError(error)) {
+        throw createRecoverableHumanRunError({
+          reason: 'user_cancelled',
+          error,
+          lastHumanState: cache.currentState
+        })
+      }
+      {
         const code = classifyLlmFailureCode(error)
         if (isRecoverableRunErrorCode(code)) {
           throw createRecoverableHumanRunError({

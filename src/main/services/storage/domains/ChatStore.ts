@@ -223,8 +223,15 @@ export class ChatStore {
       const selectedReferences = JSON.parse(String(row.selected_references_json || '[]'))
       const workspace = row.workspace_json ? JSON.parse(String(row.workspace_json)) : undefined
       const humanState = JSON.parse(String(row.human_state_json))
+      const reasonText = String(row.reason || '')
+      const reason =
+        reasonText === 'network_error' ||
+        reasonText === 'user_cancelled' ||
+        reasonText === 'process_interrupted'
+          ? reasonText
+          : 'timeout'
       return {
-        reason: String(row.reason) === 'network_error' ? 'network_error' : 'timeout',
+        reason,
         runId: String(row.run_id || ''),
         userInput: String(row.user_input || ''),
         selectedReferences: Array.isArray(selectedReferences) ? selectedReferences : [],

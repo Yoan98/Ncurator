@@ -343,6 +343,7 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
               approval.decisions.length === 1 &&
               approval.decisions[0]?.action === 'approve'
             if (!approved) {
+              input.ctx.checkCancelled()
               const notExecuted = {
                 executionStatus: 'not_executed' as const,
                 reason: 'approval_denied',

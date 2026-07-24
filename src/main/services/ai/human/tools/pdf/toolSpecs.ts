@@ -6,13 +6,13 @@ import { createStaticExecutionMetaResolver, readStringArg } from '../utils/toolS
 import {
   pdfInspectOutputSchema,
   pdfReadPagesOutputSchema,
-  pdfRenderPagesOutputSchema,
+  pdfReadVisualsOutputSchema,
   pdfSearchOutputSchema
 } from './outputSchemas'
 import {
   pdfInspectSchema,
   pdfReadPagesSchema,
-  pdfRenderPagesSchema,
+  pdfReadVisualsSchema,
   pdfSearchSchema
 } from './schemas'
 
@@ -60,7 +60,8 @@ export const PDF_SEARCH_TOOL_SPEC: PdfToolSpec<
   requiresWorkspace: true,
   promptSpec: {
     name: 'pdf_search',
-    description: '在 PDF 文本层中按 literal 或 regex 搜索并支持限制页码和数量，并返回页码、匹配文本、上下文、位置和文本层统计。'
+    description:
+      '在 PDF 文本层中按 literal 或 regex 搜索并支持限制页码和数量，并返回页码、匹配文本、上下文、位置和文本层统计。'
   },
   inputSchema: pdfSearchSchema,
   outputSchema: pdfSearchOutputSchema,
@@ -79,29 +80,31 @@ export const PDF_READ_PAGES_TOOL_SPEC: PdfToolSpec<
   requiresWorkspace: true,
   promptSpec: {
     name: 'pdf_read_pages',
-    description: '按连续页码范围或指定页码集合读取 PDF 文本层，并逐页返回正文、页码、文本状态、图片数量、尺寸和警告。'
+    description:
+      '按连续页码范围或指定页码集合读取 PDF 文本层，并逐页返回正文、页码、文本状态、图片数量、尺寸和警告。'
   },
   inputSchema: pdfReadPagesSchema,
   outputSchema: pdfReadPagesOutputSchema,
   resolveExecutionMeta: PDF_READ_EXECUTION_META
 }
 
-export const PDF_RENDER_PAGES_TOOL_SPEC: PdfToolSpec<
-  z.infer<typeof pdfRenderPagesSchema>,
-  z.infer<typeof pdfRenderPagesOutputSchema>,
-  'pdf_render_pages',
+export const PDF_READ_VISUALS_TOOL_SPEC: PdfToolSpec<
+  z.infer<typeof pdfReadVisualsSchema>,
+  z.infer<typeof pdfReadVisualsOutputSchema>,
+  'pdf_read_visuals',
   'pdf-read'
 > = {
-  name: 'pdf_render_pages',
+  name: 'pdf_read_visuals',
   familyId: 'pdf',
   skillIds: ['pdf-read'],
   requiresWorkspace: true,
   promptSpec: {
-    name: 'pdf_render_pages',
-    description: '将 PDF 页面渲染为 PNG 图片，并返回每页的页码、图片路径、格式和尺寸。'
+    name: 'pdf_read_visuals',
+    description:
+      '读取 PDF 指定页的视觉内容，按 requests 一次性返回每个页面的识别结果；每条 request 包含 index 和 instruction，最多 10 条。'
   },
-  inputSchema: pdfRenderPagesSchema,
-  outputSchema: pdfRenderPagesOutputSchema,
+  inputSchema: pdfReadVisualsSchema,
+  outputSchema: pdfReadVisualsOutputSchema,
   resolveExecutionMeta: PDF_READ_EXECUTION_META
 }
 
@@ -109,5 +112,5 @@ export const PDF_TOOL_SPECS = [
   PDF_INSPECT_TOOL_SPEC,
   PDF_SEARCH_TOOL_SPEC,
   PDF_READ_PAGES_TOOL_SPEC,
-  PDF_RENDER_PAGES_TOOL_SPEC
+  PDF_READ_VISUALS_TOOL_SPEC
 ] as const

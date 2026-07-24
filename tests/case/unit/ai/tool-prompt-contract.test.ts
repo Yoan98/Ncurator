@@ -24,7 +24,8 @@ describe('ai unit tool prompt contract', () => {
         'text_file_edit',
         'docx_read_outline',
         'ppt_read_outline',
-        'ppt_render_slides',
+        'ppt_read_visuals',
+        'pdf_read_visuals',
         'image_analyze'
       ])
     )
@@ -35,6 +36,8 @@ describe('ai unit tool prompt contract', () => {
         'docx_outline',
         'ppt_outline',
         'ppt_render',
+        'ppt_render_slides',
+        'pdf_render_pages',
         'llm_recognize'
       ])
     )

@@ -254,7 +254,12 @@ describe('workbench chat run backend', () => {
     const run = await submitAiRun(setup)
     const service = setup.service as ChatRunServicePrivate
 
-    await service.queueRunEvent(run.id, { type: 'run_failed', runId: run.id, source: 'internal', message: '失败' })
+    await service.queueRunEvent(run.id, {
+      type: 'run_failed',
+      runId: run.id,
+      source: 'internal',
+      message: '失败'
+    })
 
     expect(terminalRuns).toHaveLength(1)
     expect(terminalRuns[0].status).toBe('failed')
@@ -782,16 +787,39 @@ describe('workbench chat run backend', () => {
       createdAt: now,
       updatedAt: now
     })
+    await setup.storage.chat.saveSessionResumeSnapshot('session-1', {
+      reason: 'process_interrupted',
+      runId: 'run-1',
+      userInput: '测试中断',
+      selectedReferences: [],
+      humanState: {
+        memory: {
+          taskRun: {
+            rounds: []
+          }
+        }
+      },
+      errorMessage: '运行中断恢复快照',
+      updatedAt: now
+    })
 
     await setup.service.failInterruptedRuns()
 
     const storedRun = await setup.storage.aiRun.getRun('run-1')
     const messages = await setup.storage.chat.getChatMessages('session-1')
+    const events = await setup.storage.aiRun.listEvents('run-1')
+    const snapshot = await setup.storage.chat.getSessionResumeSnapshot('session-1')
 
     expect(storedRun?.status).toBe('failed')
     expect(storedRun?.error).toContain('运行已中断')
     expect(messages[0].content).toContain('运行已中断')
     expect(messages[0].error).toBe(true)
+    expect(events.at(-1)?.event).toMatchObject({
+      type: 'run_failed',
+      code: 'process_interrupted',
+      resumeSnapshotSaved: true
+    })
+    expect(snapshot?.reason).toBe('process_interrupted')
   })
 
   it('retract-latest-turn-guards-running-and-non-latest-user-message', async () => {

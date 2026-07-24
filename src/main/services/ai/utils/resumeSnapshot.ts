@@ -4,6 +4,8 @@ import type {
   SelectedReference,
   WorkspaceRuntimeBinding
 } from '../../../../shared/types'
+import type { ChatStore } from '../../storage/domains/ChatStore'
+import type { AiRunStartPayload } from '../types'
 import type { HumanResumeSnapshot } from '../types'
 import type { HumanState } from '../human/types'
 import { createDefaultHumanTrace, createInitialHumanState } from '../human/state/schema'
@@ -11,8 +13,9 @@ import { createDefaultHumanTrace, createInitialHumanState } from '../human/state
 const toJsonObject = (value: HumanResumeSnapshot): JsonObject =>
   JSON.parse(JSON.stringify(value)) as JsonObject
 
-const cloneSelectedReferences = (references: SelectedReference[] | undefined): SelectedReference[] =>
-  JSON.parse(JSON.stringify(references || [])) as SelectedReference[]
+const cloneSelectedReferences = (
+  references: SelectedReference[] | undefined
+): SelectedReference[] => JSON.parse(JSON.stringify(references || [])) as SelectedReference[]
 
 const cloneWorkspace = (
   workspace: WorkspaceRuntimeBinding | undefined
@@ -38,6 +41,30 @@ export const buildHumanResumeSnapshot = (state: HumanState): HumanResumeSnapshot
 
 export const serializeHumanResumeSnapshot = (state: HumanState): JsonObject =>
   toJsonObject(buildHumanResumeSnapshot(state))
+
+export const saveHumanResumeSnapshot = async (input: {
+  chatStore: ChatStore
+  sessionId: string
+  runId: string
+  userInput: string
+  reason: ChatSessionResumeSnapshot['reason']
+  selectedReferences?: SelectedReference[]
+  workspace?: AiRunStartPayload['workspace']
+  humanState: HumanState
+  errorMessage?: string
+  updatedAt?: number
+}): Promise<void> => {
+  await input.chatStore.saveSessionResumeSnapshot(input.sessionId, {
+    reason: input.reason,
+    runId: input.runId,
+    userInput: String(input.userInput || ''),
+    selectedReferences: cloneSelectedReferences(input.selectedReferences),
+    workspace: cloneWorkspace(input.workspace),
+    humanState: serializeHumanResumeSnapshot(input.humanState),
+    errorMessage: String(input.errorMessage || ''),
+    updatedAt: input.updatedAt || Date.now()
+  })
+}
 
 export const restoreHumanStateFromResumeSnapshot = (input: {
   runId: string
@@ -91,7 +118,10 @@ export const resolveResumeSelectedReferences = (input: {
   if (Array.isArray(input.payloadSelectedReferences)) {
     return cloneSelectedReferences(input.payloadSelectedReferences)
   }
-  if (Array.isArray(input.snapshotSelectedReferences) && input.snapshotSelectedReferences.length > 0) {
+  if (
+    Array.isArray(input.snapshotSelectedReferences) &&
+    input.snapshotSelectedReferences.length > 0
+  ) {
     return cloneSelectedReferences(input.snapshotSelectedReferences)
   }
   return undefined

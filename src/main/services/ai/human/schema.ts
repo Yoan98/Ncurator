@@ -78,7 +78,7 @@ export const humanDecisionHintSchema = z.discriminatedUnion('code', [
   z.object({
     code: z.literal('run_resumed_after_interruption'),
     detail: z.object({
-      reason: z.enum(['timeout', 'network_error'])
+      reason: z.enum(['timeout', 'network_error', 'user_cancelled', 'process_interrupted'])
     })
   }),
   z.object({

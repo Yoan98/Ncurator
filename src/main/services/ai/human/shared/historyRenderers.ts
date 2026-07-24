@@ -94,6 +94,15 @@ const FALLBACK_TOOL_HISTORY_WHITELIST: NestedWhitelistConfig = {
   error: true
 }
 
+const VISUAL_READ_RESULT_WHITELIST: NestedWhitelistConfig = {
+  sourcePath: true,
+  results: {
+    index: true,
+    text: true,
+    error: true
+  }
+}
+
 const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
   text_file_read: {
     sourcePath: true,
@@ -185,7 +194,7 @@ const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
   ppt_read_outline: PPT_RESULT_WHITELIST,
   ppt_read_slides: PPT_RESULT_WHITELIST,
   ppt_search: PPT_RESULT_WHITELIST,
-  ppt_render_slides: PPT_RESULT_WHITELIST,
+  ppt_read_visuals: VISUAL_READ_RESULT_WHITELIST,
   ppt_edit: PPT_RESULT_WHITELIST,
   pdf_inspect: {
     sourcePath: true,
@@ -250,21 +259,7 @@ const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
     error: true,
     decisionHint: true
   },
-  pdf_render_pages: {
-    sourcePath: true,
-    pageCount: true,
-    assetBucketId: true,
-    images: {
-      pageNumber: true,
-      path: true,
-      mimeType: true,
-      width: true,
-      height: true
-    },
-    warnings: true,
-    error: true,
-    decisionHint: true
-  },
+  pdf_read_visuals: VISUAL_READ_RESULT_WHITELIST,
   web_search: {
     query: true,
     results: {

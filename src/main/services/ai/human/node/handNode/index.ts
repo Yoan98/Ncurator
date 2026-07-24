@@ -547,6 +547,7 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
         stage: 'human_hand'
       })
       if (!approvalBatchResult.accepted) {
+        input.ctx.checkCancelled()
         throw new Error(approvalBatchResult.error)
       }
 

@@ -3,7 +3,7 @@ import type { WorkspaceCapabilityBuildInput } from '../types'
 import type {
   pdfInspectSchema,
   pdfReadPagesSchema,
-  pdfRenderPagesSchema,
+  pdfReadVisualsSchema,
   pdfSearchSchema
 } from './schemas'
 
@@ -15,4 +15,4 @@ export type PdfCapabilityToolsInput = WorkspaceCapabilityBuildInput & {
 export type PdfInspectRequest = z.infer<typeof pdfInspectSchema>
 export type PdfSearchRequest = z.infer<typeof pdfSearchSchema>
 export type PdfReadPagesRequest = z.infer<typeof pdfReadPagesSchema>
-export type PdfRenderPagesRequest = z.infer<typeof pdfRenderPagesSchema>
+export type PdfReadVisualsRequest = z.infer<typeof pdfReadVisualsSchema>

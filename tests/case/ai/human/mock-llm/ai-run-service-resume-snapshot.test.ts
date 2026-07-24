@@ -54,6 +54,17 @@ describe('ai human mock-llm backend', () => {
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
+        const waitForCondition = async (
+          check: () => Promise<boolean> | boolean,
+          timeoutMs = 5000
+        ): Promise<void> => {
+          const deadline = Date.now() + timeoutMs
+          for (;;) {
+            if (await check()) return
+            if (Date.now() >= deadline) throw new Error('condition timed out')
+            await new Promise<void>((resolve) => setTimeout(resolve, 20))
+          }
+        }
         const timeoutDriver = createScriptedStructuredOutputDriver({
           'human.brain': [
             {
@@ -152,7 +163,7 @@ describe('ai human mock-llm backend', () => {
           {
             runId: `${runtime.runId}-resume`,
             sessionId: SESSION_ID,
-            input: '继续',
+            input: '另外补充一个要求：把上次任务继续收尾。',
             mainModel: {
               configId: 'mock-llm-scripted',
               modelName: 'scripted-llm'
@@ -167,6 +178,15 @@ describe('ai human mock-llm backend', () => {
         )
         const skillsAfterResume = await runtime.chatStore.getSessionSkillState(SESSION_ID)
         const clearedSnapshot = await runtime.chatStore.getSessionResumeSnapshot(SESSION_ID)
+        const resumeDecisionHintEventSeen = runtime.eventCollector
+          .snapshot()
+          .some(
+            (event) =>
+              event.type === 'decision_hint' &&
+              event.runId === `${runtime.runId}-resume` &&
+              event.code === 'run_resumed_after_interruption' &&
+              event.detail?.reason === 'timeout'
+          )
 
         const networkDriver = createScriptedStructuredOutputDriver({
           'human.brain': [
@@ -202,6 +222,137 @@ describe('ai human mock-llm backend', () => {
         )
         const networkSnapshot = await runtime.chatStore.getSessionResumeSnapshot(
           `${SESSION_ID}-network`
+        )
+
+        const cancelDriver = createScriptedStructuredOutputDriver({
+          'human.brain': [
+            {
+              output: buildLearnSkillsDecision({
+                skillIds: ['docx-read'],
+                summary: '取消前已经建立了部分任务进度。'
+              })
+            },
+            async () => await new Promise<never>(() => {})
+          ]
+        })
+        await runtime.chatStore.saveChatSession({
+          id: `${SESSION_ID}-cancel`,
+          title: 'cancel resume snapshot test',
+          created_at: Date.now(),
+          workspace_id: 'test-workspace'
+        })
+        const { controller: cancelController, deps: cancelDeps } = await buildDeps(
+          runtime,
+          cancelDriver
+        )
+        const cancelPromise = AiRunService.getInstance().run(
+          {
+            runId: `${runtime.runId}-cancel`,
+            sessionId: `${SESSION_ID}-cancel`,
+            input: '触发用户取消恢复',
+            mainModel: {
+              configId: 'mock-llm-scripted',
+              modelName: 'scripted-llm'
+            },
+            workspace: {
+              workspaceId: 'test-workspace',
+              workspaceName: 'test-workspace',
+              rootPath: runtime.workspaceRoot
+            }
+          },
+          cancelDeps
+        )
+        await waitForCondition(async () => {
+          const snapshot = await runtime.chatStore.getSessionResumeSnapshot(`${SESSION_ID}-cancel`)
+          return snapshot?.reason === 'process_interrupted'
+        })
+        cancelController.abort()
+        const cancelResult = await cancelPromise
+        const cancelSnapshot = await runtime.chatStore.getSessionResumeSnapshot(
+          `${SESSION_ID}-cancel`
+        )
+
+        const earlyCancelDriver = createScriptedStructuredOutputDriver({})
+        await runtime.chatStore.saveChatSession({
+          id: `${SESSION_ID}-early-cancel`,
+          title: 'early cancel resume snapshot test',
+          created_at: Date.now(),
+          workspace_id: 'test-workspace'
+        })
+        const { controller: earlyCancelController, deps: earlyCancelDeps } = await buildDeps(
+          runtime,
+          earlyCancelDriver
+        )
+        earlyCancelController.abort()
+        const earlyCancelResult = await AiRunService.getInstance().run(
+          {
+            runId: `${runtime.runId}-early-cancel`,
+            sessionId: `${SESSION_ID}-early-cancel`,
+            input: '刚开始就取消也要保存恢复',
+            mainModel: {
+              configId: 'mock-llm-scripted',
+              modelName: 'scripted-llm'
+            },
+            workspace: {
+              workspaceId: 'test-workspace',
+              workspaceName: 'test-workspace',
+              rootPath: runtime.workspaceRoot
+            }
+          },
+          earlyCancelDeps
+        )
+        const earlyCancelSnapshot = await runtime.chatStore.getSessionResumeSnapshot(
+          `${SESSION_ID}-early-cancel`
+        )
+
+        const contentSafetyDriver = createScriptedStructuredOutputDriver({
+          'human.brain': [
+            {
+              error:
+                'reason=400 Input data may contain inappropriate content; code=inappropriate-content'
+            }
+          ],
+          'human.mouth': [
+            {
+              text: '本次处理受到内容安全限制，已完成说明。'
+            }
+          ]
+        })
+        await runtime.chatStore.saveChatSession({
+          id: `${SESSION_ID}-content-safety`,
+          title: 'content safety clears snapshot test',
+          created_at: Date.now(),
+          workspace_id: 'test-workspace'
+        })
+        await runtime.chatStore.saveSessionResumeSnapshot(`${SESSION_ID}-content-safety`, {
+          reason: 'process_interrupted',
+          runId: `${runtime.runId}-content-safety-old`,
+          userInput: '旧快照',
+          selectedReferences: [],
+          humanState: {},
+          errorMessage: '旧快照',
+          updatedAt: Date.now()
+        })
+        const { deps: contentSafetyDeps } = await buildDeps(runtime, contentSafetyDriver)
+        const contentSafetyResult = await AiRunService.getInstance().run(
+          {
+            runId: `${runtime.runId}-content-safety`,
+            sessionId: `${SESSION_ID}-content-safety`,
+            input: '触发内容安全收口',
+            mainModel: {
+              configId: 'mock-llm-scripted',
+              modelName: 'scripted-llm'
+            },
+            workspace: {
+              workspaceId: 'test-workspace',
+              workspaceName: 'test-workspace',
+              rootPath: runtime.workspaceRoot
+            }
+          },
+          contentSafetyDeps
+        )
+        const contentSafetySnapshot = await runtime.chatStore.getSessionResumeSnapshot(
+          `${SESSION_ID}-content-safety`
         )
 
         const ordinaryDriver = createScriptedStructuredOutputDriver({
@@ -248,9 +399,16 @@ describe('ai human mock-llm backend', () => {
           restoredSkillSeen,
           restoredRoundSeen,
           resumeHintSeen,
+          resumeDecisionHintEventSeen,
           clearedSnapshot,
           networkResult,
           networkSnapshot,
+          cancelResult,
+          cancelSnapshot,
+          earlyCancelResult,
+          earlyCancelSnapshot,
+          contentSafetyResult,
+          contentSafetySnapshot,
           ordinaryResult,
           ordinarySnapshot
         }
@@ -271,10 +429,22 @@ describe('ai human mock-llm backend', () => {
             result.skillsAfterResume.learnedSkillIds.join(',') === 'pdf-read' &&
             result.clearedSnapshot === null &&
             result.resumeHintSeen &&
+            result.resumeDecisionHintEventSeen &&
             result.networkResult.status === 'failed' &&
             result.networkResult.failureCode === 'network_error' &&
             result.networkResult.resumeSnapshotSaved === true &&
             result.networkSnapshot?.reason === 'network_error' &&
+            result.cancelResult.status === 'cancelled' &&
+            result.cancelResult.failureCode === 'user_cancelled' &&
+            result.cancelResult.resumeSnapshotSaved === true &&
+            result.cancelSnapshot?.reason === 'user_cancelled' &&
+            JSON.stringify(result.cancelSnapshot).includes('取消前已经建立了部分任务进度') &&
+            result.earlyCancelResult.status === 'cancelled' &&
+            result.earlyCancelResult.resumeSnapshotSaved === true &&
+            result.earlyCancelSnapshot?.reason === 'user_cancelled' &&
+            JSON.stringify(result.earlyCancelSnapshot?.humanState).includes('"rounds":[]') &&
+            result.contentSafetyResult.status === 'completed' &&
+            result.contentSafetySnapshot === null &&
             result.restoredSkillSeen &&
             result.restoredRoundSeen &&
             result.ordinaryResult.status === 'failed' &&

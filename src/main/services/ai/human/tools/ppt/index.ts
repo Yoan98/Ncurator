@@ -8,25 +8,31 @@ import { createPptToolRuntime, toPptToolFailure } from './runtime'
 import {
   pptEditSchema,
   pptOutlineSchema,
+  pptReadVisualsSchema,
   pptReadSlidesSchema,
-  pptRenderSchema,
   pptSearchSchema
 } from './schemas'
 import {
   PPT_EDIT_TOOL_SPEC,
   PPT_READ_OUTLINE_TOOL_SPEC,
   PPT_READ_SLIDES_TOOL_SPEC,
-  PPT_RENDER_SLIDES_TOOL_SPEC,
+  PPT_READ_VISUALS_TOOL_SPEC,
   PPT_SEARCH_TOOL_SPEC
 } from './toolSpecs'
+import { createVisualRecognitionService } from '../visualRecognition/service'
 
-type PptToolName = 'ppt_read_outline' | 'ppt_read_slides' | 'ppt_search' | 'ppt_render_slides' | 'ppt_edit'
+type PptToolName =
+  | 'ppt_read_outline'
+  | 'ppt_read_slides'
+  | 'ppt_search'
+  | 'ppt_read_visuals'
+  | 'ppt_edit'
 
 const ACTIVITY_SUMMARY: Record<PptToolName, string> = {
   ppt_read_outline: '读取 PPT 提纲',
   ppt_read_slides: '读取 PPT 页面',
   ppt_search: '搜索 PPT',
-  ppt_render_slides: '渲染 PPT 页面',
+  ppt_read_visuals: '读取 PPT 页面视觉内容',
   ppt_edit: '编辑 PPT'
 }
 
@@ -38,6 +44,7 @@ export const buildPptCapabilityTools = (input: Parameters<typeof createPptToolRu
     runId: input.runId,
     taskId: input.taskId
   })
+  const visualRecognitionService = createVisualRecognitionService(input.ctx)
 
   const createTool = <TSchema extends z.ZodType>(params: {
     name: PptToolName
@@ -112,10 +119,45 @@ export const buildPptCapabilityTools = (input: Parameters<typeof createPptToolRu
         execute: runtime.search
       }),
       createTool({
-        name: 'ppt_render_slides',
-        description: PPT_RENDER_SLIDES_TOOL_SPEC.promptSpec.description,
-        schema: pptRenderSchema,
-        execute: runtime.render
+        name: 'ppt_read_visuals',
+        description: PPT_READ_VISUALS_TOOL_SPEC.promptSpec.description,
+        schema: pptReadVisualsSchema,
+        execute: async (rawArgs) => {
+          const args = pptReadVisualsSchema.parse(rawArgs)
+          const uniqueIndices = [...new Set(args.requests.map((request) => request.index))]
+          const rendered = await runtime.render({
+            sourcePath: args.sourcePath,
+            ranges: uniqueIndices.map((index) => ({
+              type: 'slide_index' as const,
+              fromSlideIndex: index,
+              toSlideIndex: index
+            }))
+          })
+          const images = Array.isArray(rendered.images)
+            ? rendered.images.flatMap((image) => {
+                if (!image || typeof image !== 'object' || Array.isArray(image)) return []
+                const record = image as JsonObject
+                return typeof record.slideIndex === 'number' && typeof record.path === 'string'
+                  ? [
+                      {
+                        index: record.slideIndex,
+                        path: record.path,
+                        mimeType:
+                          typeof record.mimeType === 'string' ? record.mimeType : 'image/png'
+                      }
+                    ]
+                  : []
+              })
+            : []
+          const results = await visualRecognitionService.recognizeImages({
+            images,
+            requests: args.requests
+          })
+          return {
+            sourcePath: args.sourcePath,
+            results
+          }
+        }
       }),
       createTool({
         name: 'ppt_edit',

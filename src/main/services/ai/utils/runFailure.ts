@@ -31,9 +31,13 @@ export const isCancelledError = (error: unknown): boolean =>
 export const classifyLlmFailureCode = (error: unknown): AiRunFailureCode => {
   const message = getErrorMessage(error).toLowerCase()
   const code =
-    error && typeof error === 'object' && 'code' in error ? String(error.code || '').toLowerCase() : ''
+    error && typeof error === 'object' && 'code' in error
+      ? String(error.code || '').toLowerCase()
+      : ''
   const name =
-    error && typeof error === 'object' && 'name' in error ? String(error.name || '').toLowerCase() : ''
+    error && typeof error === 'object' && 'name' in error
+      ? String(error.name || '').toLowerCase()
+      : ''
 
   if (
     code === 'timeout' ||
@@ -67,7 +71,11 @@ export const classifyLlmFailureCode = (error: unknown): AiRunFailureCode => {
 
 export const isRecoverableRunErrorCode = (
   code: AiRunFailureCode
-): code is RecoverableRunErrorCode => code === 'timeout' || code === 'network_error'
+): code is RecoverableRunErrorCode =>
+  code === 'timeout' ||
+  code === 'network_error' ||
+  code === 'user_cancelled' ||
+  code === 'process_interrupted'
 
 export const createRecoverableHumanRunError = (input: {
   reason: RecoverableRunErrorCode
@@ -88,9 +96,12 @@ export const createRecoverableHumanRunError = (input: {
 export const isRecoverableHumanRunError = (error: unknown): error is RecoverableHumanRunError =>
   Boolean(
     error &&
-      typeof error === 'object' &&
-      'code' in error &&
-      error.code === 'RECOVERABLE_HUMAN_RUN' &&
-      'reason' in error &&
-      (error.reason === 'timeout' || error.reason === 'network_error')
+    typeof error === 'object' &&
+    'code' in error &&
+    error.code === 'RECOVERABLE_HUMAN_RUN' &&
+    'reason' in error &&
+    (error.reason === 'timeout' ||
+      error.reason === 'network_error' ||
+      error.reason === 'user_cancelled' ||
+      error.reason === 'process_interrupted')
   )

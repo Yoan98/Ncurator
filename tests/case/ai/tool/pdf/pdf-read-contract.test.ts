@@ -1,5 +1,7 @@
 import { createHash } from 'node:crypto'
 import fs from 'node:fs/promises'
+import { createServer } from 'node:http'
+import type { AddressInfo, Socket } from 'node:net'
 import path from 'node:path'
 import { describe, it } from 'vitest'
 import { createPdfToolHarness } from '../../../../harness/backend/aiToolHarness'
@@ -29,23 +31,62 @@ type PdfSearchResult = {
   returnedMatchCount: number
   matches: Array<{ pageNumber: number; matchedText: string; snippet: string }>
 }
-type PdfRenderResult = {
+type PdfReadVisualsResult = {
   sourcePath: string
-  pageCount: number
-  assetBucketId: string
-  images: Array<{
-    pageNumber: number
-    path: string
-    mimeType: 'image/png'
-    width: number
-    height: number
-  }>
+  results: Array<{ index: number; text?: string; error?: string }>
 }
 
 const sha256 = async (filePath: string): Promise<string> =>
   createHash('sha256')
     .update(await fs.readFile(filePath))
     .digest('hex')
+
+const startVisionServer = async (): Promise<{ baseUrl: string; close: () => Promise<void> }> => {
+  const sockets = new Set<Socket>()
+  const server = createServer((request, response) => {
+    request.resume()
+    response.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
+    response.end(
+      JSON.stringify({
+        id: 'chatcmpl-pdf-visuals',
+        object: 'chat.completion',
+        created: Math.floor(Date.now() / 1000),
+        model: 'gpt-5',
+        choices: [
+          {
+            index: 0,
+            message: {
+              role: 'assistant',
+              content: JSON.stringify({
+                supports_image_recognition: true,
+                result: '第9页 Overfit 图显示训练曲线继续改善，但验证曲线变差。'
+              })
+            },
+            finish_reason: 'stop'
+          }
+        ]
+      })
+    )
+  })
+  server.on('connection', (socket) => {
+    sockets.add(socket)
+    socket.on('close', () => sockets.delete(socket))
+  })
+  await new Promise<void>((resolve, reject) => {
+    server.once('error', reject)
+    server.listen(0, '127.0.0.1', () => resolve())
+  })
+  const address = server.address() as AddressInfo
+  return {
+    baseUrl: `http://127.0.0.1:${String(address.port)}/v1`,
+    close: async () => {
+      sockets.forEach((socket) => socket.destroy())
+      await new Promise<void>((resolve, reject) =>
+        server.close((error) => (error ? reject(error) : resolve()))
+      )
+    }
+  }
+}
 
 describe('ai tool pdf backend', () => {
   it('pdf-inspect-read-search-contract', async () => {
@@ -111,66 +152,70 @@ describe('ai tool pdf backend', () => {
     })
   })
 
-  it('pdf-render-pages-runtime-assets-contract', async () => {
+  it('pdf-read-visuals-contract', async () => {
     await runBackendCase({
-      caseId: 'pdf-render-pages-runtime-assets-contract',
+      caseId: 'pdf-read-visuals-contract',
       harnessMode: 'tool-real',
       domain: 'ai',
       suite: 'tool',
       groups: ['pdf'],
-      description: '验证 PDF 页面图片写入 runtime assets，且不修改源 PDF、不产生普通 artifact。',
+      description: '验证 PDF 页面视觉读取会返回结构化识别结果，且不修改源 PDF、不产生普通 artifact。',
       fixtures: [PDF_FIXTURE],
       runMode: 'single',
       execute: async (runtime) => {
+        const visionServer = await startVisionServer()
         const sourcePath = runtime.getFixtureWorkspacePath(PDF_FIXTURE)
-        const beforeHash = await sha256(sourcePath)
-        const harness = createPdfToolHarness(runtime)
         try {
-          const render = await harness.invoke<PdfRenderResult>('pdf_render_pages', {
-            sourcePath,
-            pageNumbers: [1, 9]
+          await runtime.seedLlmConfig({
+            id: 'ai-live-config',
+            name: 'PDF 视觉读取测试配置',
+            providerKind: 'openai-compatible',
+            base_url: visionServer.baseUrl,
+            model_name: 'gpt-5',
+            api_key: 'test-key'
           })
-          const headers = await Promise.all(
-            render.images.map(async (image) =>
-              (await fs.readFile(image.path)).subarray(0, 8).toString('hex')
-            )
-          )
-          return {
-            render,
-            headers,
-            beforeHash,
-            afterHash: await sha256(sourcePath),
-            artifactCount: runtime.eventCollector
-              .snapshot()
-              .filter((event) => event.type === 'file_artifact').length
+          const beforeHash = await sha256(sourcePath)
+          const harness = createPdfToolHarness(runtime, { modelName: 'gpt-5' })
+          try {
+            const visual = await harness.invoke<PdfReadVisualsResult>('pdf_read_visuals', {
+              sourcePath,
+              requests: [
+                { index: 9, instruction: '说明页面中的 Overfit 图形差异。' },
+                { index: 99, instruction: '说明页面视觉内容。' }
+              ]
+            })
+            return {
+              visual,
+              beforeHash,
+              afterHash: await sha256(sourcePath),
+              artifactCount: runtime.eventCollector
+                .snapshot()
+                .filter((event) => event.type === 'file_artifact').length
+            }
+          } finally {
+            await harness.release()
           }
         } finally {
-          await harness.release()
+          await visionServer.close()
         }
       },
       assert: async (result, runtime) => {
-        const expectedParent = path.join(
-          runtime.workspaceRoot,
-          '.ncurator',
-          'runtime',
-          'assets',
-          result.render.assetBucketId
-        )
         runtime.assertThat(
-          result.render.images.length === 2 &&
-            result.render.images.every((image) => path.dirname(image.path) === expectedParent) &&
-            result.render.images.map((image) => path.basename(image.path)).join(',') ===
-              'page-1.png,page-9.png' &&
-            result.headers.every((header) => header === '89504e470d0a1a0a'),
+          result.visual.results.length === 2 &&
+            result.visual.results[0]?.index === 9 &&
+            result.visual.results[0]?.text?.includes('验证曲线') === true &&
+            result.visual.results[1]?.index === 99 &&
+            typeof result.visual.results[1]?.error === 'string' &&
+            result.visual.results[1]?.error?.includes('页码超出范围') === true,
           {
-            name: 'pdf-render-writes-valid-runtime-assets',
-            message: '页面图片应写入 .ncurator/runtime/assets/<uuid>，并且是有效 PNG。',
-            data: result.render
+            name: 'pdf-read-visuals-returns-per-request-results',
+            message: 'pdf_read_visuals 应按请求顺序返回成功 text 或失败 error。',
+            data: result.visual
           }
         )
         runtime.assertThat(result.beforeHash === result.afterHash && result.artifactCount === 0, {
-          name: 'pdf-render-does-not-mutate-source-or-emit-artifact',
-          message: '渲染页面不能修改源 PDF，也不能产生普通 file artifact。',
+          name: 'pdf-read-visuals-does-not-mutate-source-or-emit-artifact',
+          message: '读取页面视觉内容不能修改源 PDF，也不能产生普通 file artifact。',
           data: { artifactCount: result.artifactCount }
         })
       }

@@ -12,7 +12,7 @@ import {
   resolveResumeSelectedReferences,
   resolveResumeWorkspace,
   restoreHumanStateFromResumeSnapshot,
-  serializeHumanResumeSnapshot
+  saveHumanResumeSnapshot
 } from './utils/resumeSnapshot'
 import { isCancelledError, isRecoverableHumanRunError } from './utils/runFailure'
 
@@ -76,26 +76,28 @@ export class AiRunService {
         finalArtifacts: output.artifacts || []
       })
     } catch (e) {
-      if (isCancelledError(e)) {
-        await deps.chatStore.clearSessionResumeSnapshot(payload.sessionId)
-        return createCancelledAiRunState({
-          runId: payload.runId,
-          sessionId: payload.sessionId,
-          input: payload.input
-        })
-      }
       if (isRecoverableHumanRunError(e) && e.lastHumanState) {
         const failure = toRendererRunFailure(e)
-        await deps.chatStore.saveSessionResumeSnapshot(payload.sessionId, {
+        await saveHumanResumeSnapshot({
+          chatStore: deps.chatStore,
+          sessionId: payload.sessionId,
           reason: e.reason,
           runId: payload.runId,
           userInput: String(payload.input || ''),
           selectedReferences: mergedSelectedReferences || [],
           workspace: mergedWorkspace,
-          humanState: serializeHumanResumeSnapshot(e.lastHumanState),
+          humanState: e.lastHumanState,
           errorMessage: e.message,
           updatedAt: Date.now()
         })
+        if (e.reason === 'user_cancelled') {
+          return createCancelledAiRunState({
+            runId: payload.runId,
+            sessionId: payload.sessionId,
+            input: payload.input,
+            resumeSnapshotSaved: true
+          })
+        }
         return createFailedAiRunState({
           runId: payload.runId,
           sessionId: payload.sessionId,
@@ -106,6 +108,16 @@ export class AiRunService {
           failureProviderCode: failure.providerCode,
           failureCode: e.reason,
           resumeSnapshotSaved: true
+        })
+      }
+      if (isCancelledError(e)) {
+        return createCancelledAiRunState({
+          runId: payload.runId,
+          sessionId: payload.sessionId,
+          input: payload.input,
+          resumeSnapshotSaved: Boolean(
+            await deps.chatStore.getSessionResumeSnapshot(payload.sessionId)
+          )
         })
       }
       await deps.chatStore.clearSessionResumeSnapshot(payload.sessionId)

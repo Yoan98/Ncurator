@@ -54,8 +54,8 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
     countsTowardToolBudget: true,
     title: 'pdf-read',
     description:
-      '读取 PDF 文档信息、页级文本和检索结果或将页面渲染为图片，并返回元数据、正文、匹配位置或图片路径。 碰到有pdf阅读的需要时，必须要使用该技能',
-    toolNames: ['pdf_inspect', 'pdf_search', 'pdf_read_pages', 'pdf_render_pages']
+      '读取 PDF 文档信息、页级文本、检索结果和页面视觉内容，并返回元数据、正文、匹配位置或视觉识别结果。 碰到有pdf阅读的需要时，必须要使用该技能',
+    toolNames: ['pdf_inspect', 'pdf_search', 'pdf_read_pages', 'pdf_read_visuals']
   },
   'ppt-read': {
     skillId: 'ppt-read',
@@ -64,8 +64,8 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
     countsTowardToolBudget: true,
     title: 'ppt-read',
     description:
-      '读取 PPTX 的页面结构、内容和搜索结果或将页面渲染为图片，并返回页面提纲、元素、匹配位置或图片路径。碰到有ppt阅读的需要时，必须要使用该技能',
-    toolNames: ['ppt_read_outline', 'ppt_read_slides', 'ppt_search', 'ppt_render_slides']
+      '读取 PPTX 的页面结构、内容、搜索结果和页面视觉内容，并返回页面提纲、元素、匹配位置或视觉识别结果。碰到有ppt阅读的需要时，必须要使用该技能',
+    toolNames: ['ppt_read_outline', 'ppt_read_slides', 'ppt_search', 'ppt_read_visuals']
   },
   'ppt-write': {
     skillId: 'ppt-write',

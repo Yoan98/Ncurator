@@ -33,10 +33,13 @@ export const createCancelledAiRunState = (input: {
   runId: string
   sessionId: string
   input: string
+  resumeSnapshotSaved?: boolean
 }): AiRunState => ({
   ...createInitialAiRunState(input),
   status: 'cancelled',
-  error: '已取消'
+  error: '已取消',
+  failureCode: 'user_cancelled',
+  resumeSnapshotSaved: input.resumeSnapshotSaved
 })
 
 export const createFailedAiRunState = (input: {

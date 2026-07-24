@@ -1,5 +1,7 @@
 import { createHash } from 'node:crypto'
 import fs from 'node:fs/promises'
+import { createServer } from 'node:http'
+import type { AddressInfo, Socket } from 'node:net'
 import path from 'node:path'
 import { getSlides, getSlideShapes, getSlideText, isChartShape, loadPresentation } from 'pptx-kit'
 import { describe, it } from 'vitest'
@@ -20,6 +22,53 @@ const detailHtml = `<section data-ppt-slide style="position:relative;width:1920p
   <div data-pptx-chart="column" data-pptx-categories='["Q1","Q2"]' data-pptx-series='[{"name":"收入","values":[12,18]}]' style="position:absolute;left:900px;top:500px;width:760px;height:420px"></div>
 </section>`
 
+const startVisionServer = async (): Promise<{ baseUrl: string; close: () => Promise<void> }> => {
+  const sockets = new Set<Socket>()
+  const server = createServer((request, response) => {
+    request.resume()
+    response.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
+    response.end(
+      JSON.stringify({
+        id: 'chatcmpl-ppt-visuals',
+        object: 'chat.completion',
+        created: Math.floor(Date.now() / 1000),
+        model: 'gpt-5',
+        choices: [
+          {
+            index: 0,
+            message: {
+              role: 'assistant',
+              content: JSON.stringify({
+                supports_image_recognition: true,
+                result: '第2页展示核心结论，并包含公式和收入柱状图。'
+              })
+            },
+            finish_reason: 'stop'
+          }
+        ]
+      })
+    )
+  })
+  server.on('connection', (socket) => {
+    sockets.add(socket)
+    socket.on('close', () => sockets.delete(socket))
+  })
+  await new Promise<void>((resolve, reject) => {
+    server.once('error', reject)
+    server.listen(0, '127.0.0.1', () => resolve())
+  })
+  const address = server.address() as AddressInfo
+  return {
+    baseUrl: `http://127.0.0.1:${String(address.port)}/v1`,
+    close: async () => {
+      sockets.forEach((socket) => socket.destroy())
+      await new Promise<void>((resolve, reject) =>
+        server.close((error) => (error ? reject(error) : resolve()))
+      )
+    }
+  }
+}
+
 describe('ai tool ppt backend', () => {
   it('ppt-create-read-edit-commit', async () => {
     await runBackendCase({
@@ -32,95 +81,108 @@ describe('ai tool ppt backend', () => {
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
-        const harness = createPptToolHarness(runtime)
+        const visionServer = await startVisionServer()
         const sourcePath = 'product-review.pptx'
-        const created = await harness.invoke<JsonObject>('ppt_edit', {
-          sourcePath,
-          actions: [
-            { type: 'create_presentation', html: [coverHtml] },
-            { type: 'insert_slide', html: detailHtml }
-          ]
-        })
-        const inserted = created
-        const overview = await harness.invoke<JsonObject>('ppt_read_outline', {
-          sourcePath,
-          ranges: [{ type: 'percent', fromPercent: 0, toPercent: 100 }]
-        })
-        const firstSlideId = (overview.slides as Array<{ slideId: string }>)[0]!.slideId
-        const readSlides = await harness.invoke<JsonObject>('ppt_read_slides', {
-          sourcePath,
-          ranges: [{ type: 'slide_ids', slideIds: [firstSlideId] }]
-        })
-        const failedDelete = await harness.invoke<JsonObject>('ppt_edit', {
-          sourcePath,
-          actions: [
-            { type: 'replace_text', query: '2026 产品复盘', replace: '不应落盘的标题' },
-            {
-              type: 'delete_slides',
-              slideIds: [firstSlideId, '/ppt/slides/missing.xml']
-            }
-          ]
-        })
-        const overviewAfterFailedDelete = await harness.invoke<JsonObject>('ppt_read_outline', {
-          sourcePath,
-          ranges: [{ type: 'slide_index', fromSlideIndex: 1, toSlideIndex: 2 }]
-        })
-        const replaced = await harness.invoke<JsonObject>('ppt_edit', {
-          sourcePath,
-          actions: [{ type: 'replace_text', query: '反馈周期', replace: '客户反馈周期' }]
-        })
-        const search = await harness.invoke<JsonObject>('ppt_search', {
-          sourcePath,
-          query: '客户反馈周期'
-        })
-        const rendered = await harness.invoke<JsonObject>('ppt_render_slides', {
-          sourcePath,
-          ranges: [{ type: 'slide_index', fromSlideIndex: 2, toSlideIndex: 2 }]
-        })
-        const targetPath = path.join(runtime.workspaceRoot, sourcePath)
-        const beforeCommitExists = await fs
-          .access(targetPath)
-          .then(() => true)
-          .catch(() => false)
-        const aiPersistedBytes = new Uint8Array(await fs.readFile(targetPath))
-        const aiPersistedChecksum = createHash('sha256').update(aiPersistedBytes).digest('hex')
-        await fs.writeFile(
-          targetPath,
-          Buffer.concat([Buffer.from(aiPersistedBytes), Buffer.from('external-user-change')])
-        )
-        const externallyChangedChecksum = createHash('sha256')
-          .update(await fs.readFile(targetPath))
-          .digest('hex')
-        const records = await harness.runtime.commitAll()
-        const repeatedCommitRecords = await harness.runtime.commitAll()
-        const bytes = new Uint8Array(await fs.readFile(targetPath))
-        const presentation = await loadPresentation(bytes)
-        const texts = getSlides(presentation).map((slide) => getSlideText(slide))
-        const hasChart = getSlides(presentation).some((slide) =>
-          getSlideShapes(slide).some((shape) => isChartShape(shape))
-        )
-        const manifest = JSON.parse(await fs.readFile(records[0]!.previewPath!, 'utf8')) as {
-          slides: Array<{ changed: boolean; after?: unknown; before?: unknown }>
-        }
-        return {
-          created,
-          inserted,
-          overview,
-          readSlides,
-          failedDelete,
-          overviewAfterFailedDelete,
-          replaced,
-          search,
-          rendered,
-          beforeCommitExists,
-          aiPersistedChecksum,
-          externallyChangedChecksum,
-          records,
-          repeatedCommitRecords,
-          slideCount: getSlides(presentation).length,
-          texts,
-          hasChart,
-          manifest
+        try {
+          await runtime.seedLlmConfig({
+            id: 'ai-live-config',
+            name: 'PPT 视觉读取测试配置',
+            providerKind: 'openai-compatible',
+            base_url: visionServer.baseUrl,
+            model_name: 'gpt-5',
+            api_key: 'test-key'
+          })
+          const harness = createPptToolHarness(runtime, { modelName: 'gpt-5' })
+          const created = await harness.invoke<JsonObject>('ppt_edit', {
+            sourcePath,
+            actions: [
+              { type: 'create_presentation', html: [coverHtml] },
+              { type: 'insert_slide', html: detailHtml }
+            ]
+          })
+          const inserted = created
+          const overview = await harness.invoke<JsonObject>('ppt_read_outline', {
+            sourcePath,
+            ranges: [{ type: 'percent', fromPercent: 0, toPercent: 100 }]
+          })
+          const firstSlideId = (overview.slides as Array<{ slideId: string }>)[0]!.slideId
+          const readSlides = await harness.invoke<JsonObject>('ppt_read_slides', {
+            sourcePath,
+            ranges: [{ type: 'slide_ids', slideIds: [firstSlideId] }]
+          })
+          const failedDelete = await harness.invoke<JsonObject>('ppt_edit', {
+            sourcePath,
+            actions: [
+              { type: 'replace_text', query: '2026 产品复盘', replace: '不应落盘的标题' },
+              {
+                type: 'delete_slides',
+                slideIds: [firstSlideId, '/ppt/slides/missing.xml']
+              }
+            ]
+          })
+          const overviewAfterFailedDelete = await harness.invoke<JsonObject>('ppt_read_outline', {
+            sourcePath,
+            ranges: [{ type: 'slide_index', fromSlideIndex: 1, toSlideIndex: 2 }]
+          })
+          const replaced = await harness.invoke<JsonObject>('ppt_edit', {
+            sourcePath,
+            actions: [{ type: 'replace_text', query: '反馈周期', replace: '客户反馈周期' }]
+          })
+          const search = await harness.invoke<JsonObject>('ppt_search', {
+            sourcePath,
+            query: '客户反馈周期'
+          })
+          const visual = await harness.invoke<JsonObject>('ppt_read_visuals', {
+            sourcePath,
+            requests: [{ index: 2, instruction: '说明第 2 页视觉内容。' }]
+          })
+          const targetPath = path.join(runtime.workspaceRoot, sourcePath)
+          const beforeCommitExists = await fs
+            .access(targetPath)
+            .then(() => true)
+            .catch(() => false)
+          const aiPersistedBytes = new Uint8Array(await fs.readFile(targetPath))
+          const aiPersistedChecksum = createHash('sha256').update(aiPersistedBytes).digest('hex')
+          await fs.writeFile(
+            targetPath,
+            Buffer.concat([Buffer.from(aiPersistedBytes), Buffer.from('external-user-change')])
+          )
+          const externallyChangedChecksum = createHash('sha256')
+            .update(await fs.readFile(targetPath))
+            .digest('hex')
+          const records = await harness.runtime.commitAll()
+          const repeatedCommitRecords = await harness.runtime.commitAll()
+          const bytes = new Uint8Array(await fs.readFile(targetPath))
+          const presentation = await loadPresentation(bytes)
+          const texts = getSlides(presentation).map((slide) => getSlideText(slide))
+          const hasChart = getSlides(presentation).some((slide) =>
+            getSlideShapes(slide).some((shape) => isChartShape(shape))
+          )
+          const manifest = JSON.parse(await fs.readFile(records[0]!.previewPath!, 'utf8')) as {
+            slides: Array<{ changed: boolean; after?: unknown; before?: unknown }>
+          }
+          return {
+            created,
+            inserted,
+            overview,
+            readSlides,
+            failedDelete,
+            overviewAfterFailedDelete,
+            replaced,
+            search,
+            visual,
+            beforeCommitExists,
+            aiPersistedChecksum,
+            externallyChangedChecksum,
+            records,
+            repeatedCommitRecords,
+            slideCount: getSlides(presentation).length,
+            texts,
+            hasChart,
+            manifest
+          }
+        } finally {
+          await visionServer.close()
         }
       },
       assert: async (result, runtime) => {
@@ -142,14 +204,11 @@ describe('ai tool ppt backend', () => {
             !JSON.stringify(result.overviewAfterFailedDelete).includes('不应落盘的标题') &&
             Array.isArray(result.search.matches) &&
             result.search.matches.length === 1 &&
-            Array.isArray(result.rendered.images) &&
-            result.rendered.images.length === 1 &&
-            String((result.rendered.images as Array<{ path: string }>)[0]!.path)
-              .replace(/\\/g, '/')
-              .includes('/.ncurator/runtime/assets/') &&
-            String((result.rendered.images as Array<{ path: string }>)[0]!.path)
-              .replace(/\\/g, '/')
-              .includes('/ppt-render/'),
+            Array.isArray(result.visual.results) &&
+            result.visual.results.length === 1 &&
+            String(
+              (result.visual.results as Array<{ index: number; text?: string }>)[0]?.text || ''
+            ).includes('公式和收入柱状图'),
           {
             name: 'ppt-edit-persists-before-run-finalization',
             message: 'PPT 编辑成功后应立即写入正式文件，同时保持后续读取和 run 级差异生成能力。',
@@ -178,5 +237,5 @@ describe('ai tool ppt backend', () => {
         )
       }
     })
-  })
+  }, 30_000)
 })

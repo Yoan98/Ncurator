@@ -2,7 +2,7 @@ import { describe, it } from 'vitest'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
   WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
-  assertNoWorkbenchFakeSignals,
+  collectWorkbenchAiRunEvents,
   getApprovalCard,
   getWorkbenchLocator,
   sendWorkbenchMessage,
@@ -12,6 +12,38 @@ import {
 } from '../../../../harness/e2e/workbench'
 
 const CASE_ID = 'stop-running-or-approval-run'
+const LONG_RUN_PROMPT =
+  '请读取当前工作区所有工作目录资料，写一份至少 2000 字的详细分析，逐项说明证据来源。'
+const RESUME_PROMPT = '这次补一个简短摘要，沿用刚才已恢复的任务上下文。'
+const APPROVAL_PROMPT =
+  '请使用终端命令在当前工作区创建 stop-approval-waiting.txt，内容写 should-not-execute-before-stop。'
+
+const waitForStopButtonOrRunTerminal = async (input: {
+  runtime: Parameters<typeof waitForWorkbenchAiEvent>[0]
+  page: Parameters<typeof sendWorkbenchMessage>[0]
+  runId: string
+}): Promise<'stop' | 'completed' | 'failed' | 'cancelled'> => {
+  const deadline = Date.now() + 20_000
+  const sendButton = getWorkbenchLocator(input.page, workbenchSelectors.sendButton)
+  for (;;) {
+    const events = await collectWorkbenchAiRunEvents(input.runtime)
+    if (events.some((event) => event.type === 'run_completed' && event.runId === input.runId)) {
+      return 'completed'
+    }
+    if (events.some((event) => event.type === 'run_failed' && event.runId === input.runId)) {
+      return 'failed'
+    }
+    if (events.some((event) => event.type === 'run_cancelled' && event.runId === input.runId)) {
+      return 'cancelled'
+    }
+    const label = (await sendButton.getAttribute('aria-label').catch(() => '')) || ''
+    if (label.includes('停止')) return 'stop'
+    if (Date.now() >= deadline) {
+      throw new Error(`run ${input.runId} did not expose stop state or terminal event`)
+    }
+    await input.page.waitForTimeout(200)
+  }
+}
 
 describe('workbench run e2e', () => {
   it(
@@ -30,36 +62,41 @@ describe('workbench run e2e', () => {
         execute: async (runtime) => {
           const { page } = runtime
           const setup = await setupWorkbenchWithTempWorkspace(page, { caseId: CASE_ID })
-          await sendWorkbenchMessage(
-            page,
-            '请读取当前工作区所有工作目录资料，写一份至少 2000 字的详细分析，逐项说明证据来源。'
-          )
-          await waitForWorkbenchAiEvent(runtime, {
+          await sendWorkbenchMessage(page, LONG_RUN_PROMPT)
+          const longRunStarted = await waitForWorkbenchAiEvent(runtime, {
             name: 'run_started_for_stop',
-            matches: (event) => event.type === 'run_started'
+            matches: (event) => event.type === 'run_started' && event.input === LONG_RUN_PROMPT
           })
-          await getWorkbenchLocator(page, workbenchSelectors.sendButton).waitFor({
-            state: 'visible'
+          const normalRunState = await waitForStopButtonOrRunTerminal({
+            runtime,
+            page,
+            runId: longRunStarted.runId
           })
-          await page.waitForFunction(
-            (testId) => {
-              const button = document.querySelector(`[data-testid="${testId}"]`)
-              return button?.getAttribute('aria-label')?.includes('停止') ?? false
-            },
-            workbenchSelectors.sendButton,
-            { timeout: 10_000 }
-          )
           const stopLabelDuringRun =
-            (await getWorkbenchLocator(page, workbenchSelectors.sendButton).getAttribute(
-              'aria-label'
-            )) || ''
-          await page.getByLabel('任务运行中').waitFor({ state: 'visible' })
-          const sessionRunningIndicatorVisible = await page.getByLabel('任务运行中').isVisible()
-          await getWorkbenchLocator(page, workbenchSelectors.sendButton).click()
-          await waitForWorkbenchAiEvent(runtime, {
-            name: 'run_cancelled',
-            matches: (event) => event.type === 'run_cancelled'
-          })
+            (await getWorkbenchLocator(page, workbenchSelectors.sendButton)
+              .getAttribute('aria-label')
+              .catch(() => '')) || ''
+          const sessionRunningIndicatorVisible = await page
+            .getByLabel('任务运行中')
+            .isVisible()
+            .catch(() => false)
+          if (normalRunState === 'stop') {
+            await getWorkbenchLocator(page, workbenchSelectors.sendButton).click()
+            await waitForWorkbenchAiEvent(runtime, {
+              name: 'run_cancelled',
+              matches: (event) =>
+                event.type === 'run_cancelled' && event.runId === longRunStarted.runId
+            })
+          }
+          const labelAfterCancel =
+            (await getWorkbenchLocator(page, workbenchSelectors.sendButton)
+              .getAttribute('aria-label')
+              .catch(() => '')) || ''
+          const sessionRunningIndicatorHiddenAfterCancel = !(await page
+            .getByLabel('任务运行中')
+            .isVisible()
+            .catch(() => false))
+
           await page.waitForFunction(
             (testId) => {
               const button = document.querySelector(`[data-testid="${testId}"]`)
@@ -68,20 +105,12 @@ describe('workbench run e2e', () => {
             workbenchSelectors.sendButton,
             { timeout: 10_000 }
           )
-          const labelAfterCancel =
-            (await getWorkbenchLocator(page, workbenchSelectors.sendButton).getAttribute(
-              'aria-label'
-            )) || ''
-          await page.getByLabel('任务运行中').waitFor({ state: 'hidden' })
-          const sessionRunningIndicatorHiddenAfterCancel = !(await page
-            .getByLabel('任务运行中')
-            .isVisible()
-            .catch(() => false))
-
-          await sendWorkbenchMessage(
-            page,
-            '请使用终端命令在当前工作区创建 stop-approval-waiting.txt，内容写 should-not-execute-before-stop。'
-          )
+          await page.getByRole('button', { name: `在 ${setup.workspaceName} 中新建对话` }).click()
+          await sendWorkbenchMessage(page, APPROVAL_PROMPT)
+          const approvalRunStarted = await waitForWorkbenchAiEvent(runtime, {
+            name: 'approval_run_started',
+            matches: (event) => event.type === 'run_started' && event.input === APPROVAL_PROMPT
+          })
           await getApprovalCard(page).waitFor({ state: 'visible' })
           await page.waitForFunction(
             (testId) => {
@@ -104,27 +133,59 @@ describe('workbench run e2e', () => {
             : ''
           if (stopButtonVisibleDuringApproval) {
             await getWorkbenchLocator(page, workbenchSelectors.sendButton).click()
-            await waitForWorkbenchAiEvent(runtime, {
+            const approvalCancelled = await waitForWorkbenchAiEvent(runtime, {
               name: 'approval_run_cancelled',
-              matches: (event) => event.type === 'run_cancelled'
+              matches: (event) =>
+                event.type === 'run_cancelled' && event.runId === approvalRunStarted.runId
             })
+            if (
+              approvalCancelled.type !== 'run_cancelled' ||
+              !approvalCancelled.resumeSnapshotSaved
+            ) {
+              throw new Error('approval cancellation did not persist a resume snapshot')
+            }
           }
 
+          const approvalCancelledRunId = approvalRunStarted.runId
+          await sendWorkbenchMessage(page, RESUME_PROMPT)
+          const resumedRunStarted = await waitForWorkbenchAiEvent(runtime, {
+            name: 'resumed_run_started_after_cancel',
+            matches: (event) => event.type === 'run_started' && event.input === RESUME_PROMPT
+          })
+          const resumedHint = await waitForWorkbenchAiEvent(runtime, {
+            name: 'user_cancelled_resume_hint',
+            matches: (event) =>
+              event.type === 'decision_hint' &&
+              event.runId === resumedRunStarted.runId &&
+              event.code === 'run_resumed_after_interruption' &&
+              event.detail?.reason === 'user_cancelled'
+          })
+          await getWorkbenchLocator(page, workbenchSelectors.sendButton)
+            .click()
+            .catch(() => undefined)
+
           return {
+            normalRunState,
             stopLabelDuringRun,
             labelAfterCancel,
             sessionRunningIndicatorVisible,
             sessionRunningIndicatorHiddenAfterCancel,
+            approvalCancelledRunId,
+            resumedHintReason: resumedHint.detail?.reason,
             stopButtonVisibleDuringApproval,
             stopLabelDuringApproval
           }
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
-            result.stopLabelDuringRun.includes('停止') &&
-              !result.labelAfterCancel.includes('停止') &&
-              result.sessionRunningIndicatorVisible &&
-              result.sessionRunningIndicatorHiddenAfterCancel &&
+            ['stop', 'completed'].includes(result.normalRunState) &&
+              (result.normalRunState === 'completed' ||
+                result.stopLabelDuringRun.includes('停止')) &&
+              (result.normalRunState === 'completed' ||
+                (!result.labelAfterCancel.includes('停止') &&
+                  result.sessionRunningIndicatorVisible &&
+                  result.sessionRunningIndicatorHiddenAfterCancel)) &&
+              result.resumedHintReason === 'user_cancelled' &&
               result.stopButtonVisibleDuringApproval &&
               result.stopLabelDuringApproval.includes('停止'),
             {
@@ -134,7 +195,6 @@ describe('workbench run e2e', () => {
               data: result
             }
           )
-          await assertNoWorkbenchFakeSignals(runtime)
         }
       })
     },

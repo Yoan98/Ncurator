@@ -26,7 +26,7 @@ export class PdfToolRuntimeError extends Error {
 export type PdfToolResourceContext = {
   family: 'pdf'
   sourcePath: string
-  effectKind: 'inspected' | 'searched' | 'read' | 'rendered'
+  effectKind: 'inspected' | 'searched' | 'read'
 }
 
 export type PdfToolFailure = {

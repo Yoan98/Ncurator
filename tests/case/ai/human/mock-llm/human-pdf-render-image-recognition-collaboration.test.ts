@@ -1,6 +1,5 @@
 import { createServer } from 'node:http'
 import type { AddressInfo, Socket } from 'node:net'
-import path from 'node:path'
 import { describe, it } from 'vitest'
 import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
@@ -11,10 +10,8 @@ import {
 import {
   buildCompleteTaskDecision,
   buildLearnSkillsDecision,
-  buildToolDecision,
   filterAiRunEventsByType
 } from '../testUtils'
-import type { JsonObject } from '../../../../../src/shared/types'
 
 const startVisionServer = async (): Promise<{ baseUrl: string; close: () => Promise<void> }> => {
   const sockets = new Set<Socket>()
@@ -63,25 +60,15 @@ const startVisionServer = async (): Promise<{ baseUrl: string; close: () => Prom
   }
 }
 
-const renderedPathsFromData = (data: unknown): string[] => {
-  if (!data || typeof data !== 'object' || Array.isArray(data)) return []
-  const images = (data as JsonObject).images
-  if (!Array.isArray(images)) return []
-  return images.flatMap((image) => {
-    if (!image || typeof image !== 'object' || Array.isArray(image)) return []
-    return typeof image.path === 'string' ? [image.path] : []
-  })
-}
-
 describe('ai human mock-llm backend', () => {
-  it('human-pdf-render-image-recognition-collaboration', async () => {
+  it('human-pdf-read-visuals-collaboration', async () => {
     await runBackendCase({
-      caseId: 'human-pdf-render-image-recognition-collaboration',
+      caseId: 'human-pdf-read-visuals-collaboration',
       harnessMode: 'mock-llm',
       domain: 'ai',
       suite: 'human',
       groups: ['mock-llm'],
-      description: '验证 PDF 页面图片路径会回流给 brain，并可继续交给通用图像识别工具。',
+      description: '验证 PDF 页面视觉读取可在一次工具调用中返回识图结果。',
       fixtures: [PDF_READING_FIXTURE_PATH],
       runMode: 'single',
       execute: async (runtime) => {
@@ -99,18 +86,18 @@ describe('ai human mock-llm backend', () => {
           const runner = createHumanTestRunner(runtime, {
             modelName: 'gpt-5',
             selectedReferences: [reference],
-            allowedToolNames: ['pdf_read_pages', 'pdf_render_pages', 'image_analyze'],
+            allowedToolNames: ['pdf_read_pages', 'pdf_read_visuals'],
             structuredOutputScript: {
               'human.brain': [
                 {
                   output: buildLearnSkillsDecision({
-                    skillIds: ['pdf-read', 'image-recognition'],
-                    summary: '补齐 PDF 阅读和图像识别能力。'
+                    skillIds: ['pdf-read'],
+                    summary: '补齐 PDF 阅读能力。'
                   })
                 },
                 {
                   output: {
-                    thought: { next: '读取文本并渲染需要观察的页面。' },
+                    thought: { next: '读取文本并识别需要观察的页面视觉内容。' },
                     nextAction: {
                       action: 'hand',
                       calls: [
@@ -122,36 +109,20 @@ describe('ai human mock-llm backend', () => {
                           }
                         },
                         {
-                          toolName: 'pdf_render_pages',
+                          toolName: 'pdf_read_visuals',
                           args: {
                             sourcePath: reference.absolutePath,
-                            pageNumbers: [9]
+                            requests: [
+                              {
+                                index: 9,
+                                instruction: '说明 Proper fit 和 Overfit 两组曲线的直观差异。'
+                              }
+                            ]
                           }
                         }
                       ]
                     }
                   }
-                },
-                ({ user }) => {
-                  const renderEvent = filterAiRunEventsByType(
-                    runtime.eventCollector.snapshot(),
-                    'tool_call_result'
-                  )
-                    .filter((event) => event.toolName === 'pdf_render_pages' && event.result?.ok)
-                    .at(-1)
-                  const imagePath = renderedPathsFromData(renderEvent?.result?.data).find(
-                    (candidate) => path.basename(candidate) === 'page-9.png'
-                  )
-                  if (!imagePath || !user.includes('page-9.png'))
-                    throw new Error('rendered page-9 image path missing from brain prompt')
-                  return buildToolDecision({
-                    toolName: 'image_analyze',
-                    args: {
-                      path: imagePath,
-                      instruction: '说明 Proper fit 和 Overfit 两组曲线的直观差异。'
-                    },
-                    summary: '识别第9页对比图。'
-                  })
                 },
                 {
                   output: buildCompleteTaskDecision({
@@ -182,32 +153,27 @@ describe('ai human mock-llm backend', () => {
       assert: async (result, runtime) => {
         const starts = filterAiRunEventsByType(result.events, 'tool_call_started')
         const toolResults = filterAiRunEventsByType(result.events, 'tool_call_result')
-        const renderPaths = toolResults
-          .filter((event) => event.toolName === 'pdf_render_pages' && event.result?.ok === true)
-          .flatMap((event) => renderedPathsFromData(event.result?.data))
-        const recognizePaths = starts
-          .filter((event) => event.toolName === 'image_analyze')
-          .map((event) => event.input.path)
-          .filter((value): value is string => typeof value === 'string')
 
         runtime.assertThat(
           result.output.status === 'completed' &&
             starts.some((event) => event.toolName === 'pdf_read_pages') &&
-            renderPaths.some((imagePath) => path.basename(imagePath) === 'page-9.png') &&
-            recognizePaths.some((imagePath) => renderPaths.includes(imagePath)) &&
+            starts.some((event) => event.toolName === 'pdf_read_visuals') &&
             toolResults.some(
               (event) =>
-                event.toolName === 'image_analyze' &&
+                event.toolName === 'pdf_read_visuals' &&
                 event.result?.ok === true &&
                 JSON.stringify(event.result.data).includes('验证曲线')
+            ) &&
+            !starts.some(
+              (event) => event.toolName === 'pdf_render_pages' || event.toolName === 'image_analyze'
             ),
           {
-            name: 'pdf-render-path-feeds-generic-image-recognition',
-            message: 'PDF 渲染结果中的真实图片路径应进入下一轮 brain，并交给 image_analyze。',
-            data: { renderPaths, recognizePaths }
+            name: 'pdf-read-visuals-returns-recognition-result-directly',
+            message: 'PDF 页面视觉读取应直接返回识图文本，不再暴露 render 路径或依赖 image_analyze。',
+            data: { toolNames: starts.map((event) => event.toolName) }
           }
         )
       }
     })
-  })
+  }, 30_000)
 })

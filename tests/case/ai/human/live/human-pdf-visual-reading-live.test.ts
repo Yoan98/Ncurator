@@ -1,6 +1,5 @@
 import { createHash } from 'node:crypto'
 import fs from 'node:fs/promises'
-import path from 'node:path'
 import { describe, it } from 'vitest'
 import {
   hasLiveLlmConfigInEnv,
@@ -22,14 +21,17 @@ const fileHash = async (filePath: string): Promise<string> =>
     .update(await fs.readFile(filePath))
     .digest('hex')
 
-const readRenderedImagePaths = (data: unknown): string[] => {
+const readVisualTexts = (data: unknown): string[] => {
   if (!data || typeof data !== 'object' || Array.isArray(data)) return []
-  const images = (data as JsonObject).images
-  if (!Array.isArray(images)) return []
-  return images
-    .map((image) =>
-      image && typeof image === 'object' && !Array.isArray(image) && typeof image.path === 'string'
-        ? image.path
+  const results = (data as JsonObject).results
+  if (!Array.isArray(results)) return []
+  return results
+    .map((result) =>
+      result &&
+      typeof result === 'object' &&
+      !Array.isArray(result) &&
+      typeof result.text === 'string'
+        ? result.text
         : ''
     )
     .filter(Boolean)
@@ -45,7 +47,7 @@ describe('ai human live backend', () => {
         suite: 'human',
         groups: ['live'],
         description:
-          '验证 live 模型能自主组合 PDF 文本读取、页面渲染和通用图像识别，回答图文结合问题。',
+          '验证 live 模型能自主组合 PDF 文本读取和页面视觉读取，回答图文结合问题。',
         fixtures: [PDF_READING_FIXTURE_PATH],
         runMode: 'single',
         runtimeModelName: hasLiveLlmConfigInEnv() ? loadLiveLlmConfigFromEnv().model_name : null,
@@ -70,8 +72,7 @@ describe('ai human live backend', () => {
               'pdf_inspect',
               'pdf_search',
               'pdf_read_pages',
-              'pdf_render_pages',
-              'image_analyze'
+              'pdf_read_visuals'
             ]
           })
           const output = await runner.run({
@@ -98,57 +99,27 @@ describe('ai human live backend', () => {
           const starts = filterAiRunEventsByType(result.events, 'tool_call_started')
           const results = filterAiRunEventsByType(result.events, 'tool_call_result')
           const toolNames = starts.map((event) => event.toolName)
-          const renderPaths = results
-            .filter((event) => event.toolName === 'pdf_render_pages' && event.result?.ok === true)
-            .flatMap((event) => readRenderedImagePaths(event.result?.data))
-          const recognizePaths = starts
-            .filter((event) => event.toolName === 'image_analyze')
-            .map((event) => event.input.path)
-            .filter((value): value is string => typeof value === 'string')
-          const successfulRecognizeCallIds = new Set(
-            results
-              .filter((event) => event.toolName === 'image_analyze' && event.result?.ok === true)
-              .map((event) => event.toolCallId)
-          )
-          const successfulRecognizePaths = starts
-            .filter(
-              (event) =>
-                event.toolName === 'image_analyze' &&
-                successfulRecognizeCallIds.has(event.toolCallId)
-            )
-            .map((event) => event.input.path)
-            .filter((value): value is string => typeof value === 'string')
-          const failedRecognizeCount = results.filter(
-            (event) => event.toolName === 'image_analyze' && event.result?.ok === false
+          const visualTexts = results
+            .filter((event) => event.toolName === 'pdf_read_visuals' && event.result?.ok === true)
+            .flatMap((event) => readVisualTexts(event.result?.data))
+          const failedVisualCount = results.filter(
+            (event) => event.toolName === 'pdf_read_visuals' && event.result?.ok === false
           ).length
           const delivery = String(result.output?.deliveryMarkdown || '')
-          const page9Path = renderPaths.find(
-            (imagePath) => path.basename(imagePath) === 'page-9.png'
-          )
-          const expectedAssetRoot = path.join(
-            runtime.workspaceRoot,
-            '.ncurator',
-            'runtime',
-            'assets'
-          )
 
           runtime.assertThat(
             result.output?.status === 'completed' &&
               toolNames.includes('pdf_read_pages') &&
-              toolNames.includes('pdf_render_pages') &&
-              toolNames.includes('image_analyze') &&
-              Boolean(page9Path) &&
-              recognizePaths.some((imagePath) => renderPaths.includes(imagePath)) &&
-              successfulRecognizePaths.some(
-                (imagePath) => path.basename(imagePath) === 'page-9.png'
-              ) &&
-              failedRecognizeCount === 0 &&
-              Boolean(
-                page9Path && path.relative(expectedAssetRoot, page9Path).split(path.sep).length >= 2
-              ) &&
+              toolNames.includes('pdf_read_visuals') &&
+              visualTexts.some((text) => /Proper fit/i.test(text) || /Overfit/i.test(text)) &&
+              failedVisualCount === 0 &&
               !toolNames.some(
                 (name) =>
-                  name === 'terminal_run' || name.startsWith('kb_') || name.startsWith('docx_')
+                  name === 'terminal_run' ||
+                  name.startsWith('kb_') ||
+                  name.startsWith('docx_') ||
+                  name === 'pdf_render_pages' ||
+                  name === 'image_analyze'
               ) &&
               /(inputs|输入)/i.test(delivery) &&
               /(parameters|参数)/i.test(delivery) &&
@@ -160,15 +131,13 @@ describe('ai human live backend', () => {
               !/(无法|不能|不支持).{0,12}(看到|识别|读取).{0,8}(图片|图像|曲线)/i.test(delivery) &&
               result.beforeHash === result.afterHash,
             {
-              name: 'human-live-composes-pdf-render-and-image-recognition',
+              name: 'human-live-composes-pdf-text-and-visual-reading',
               message:
-                'live human 应自主组合 PDF 阅读、页面渲染和图像识别，回答训练闭环及过度拟合图形差异。',
+                'live human 应自主组合 PDF 文本阅读和页面视觉读取，回答训练闭环及过度拟合图形差异。',
               data: {
                 toolNames,
-                renderPaths,
-                recognizePaths,
-                successfulRecognizePaths,
-                failedRecognizeCount,
+                visualTexts,
+                failedVisualCount,
                 deliveryMarkdown: result.output?.deliveryMarkdown
               }
             }

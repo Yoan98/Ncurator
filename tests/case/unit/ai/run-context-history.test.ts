@@ -83,6 +83,32 @@ describe('ai run context conversation history', () => {
     ])
   })
 
+  it('keeps previous interrupted turns while excluding only the current run placeholders', () => {
+    const recentTurnsText = formatPreviousTurns({
+      messages: [
+        message({ id: 'interrupted-user', role: 'user', content: '整理材料 A' }),
+        message({
+          id: 'interrupted-assistant',
+          role: 'assistant',
+          content: '**[失败]** 无法连接模型服务，请检查网络后重试。'
+        }),
+        message({ id: 'current-user', role: 'user', content: '补充材料 B 后继续整理' }),
+        message({ id: 'current-assistant', role: 'assistant', content: '' })
+      ],
+      currentUserMessageId: 'current-user',
+      currentAssistantMessageId: 'current-assistant'
+    })
+
+    expect(JSON.parse(recentTurnsText)).toEqual([
+      {
+        turn_index: 1,
+        user_message: '整理材料 A',
+        assistant_message: '**[失败]** 无法连接模型服务，请检查网络后重试。',
+        artifacts: []
+      }
+    ])
+  })
+
   it('separates multiple completed user and assistant turns', () => {
     const recentTurnsText = formatPreviousTurns({
       messages: [

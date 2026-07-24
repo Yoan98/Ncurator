@@ -286,12 +286,11 @@ describe('ai unit human memory renderers', () => {
     expect(rendered).toContain('"totalLines":1')
   })
 
-  it('keeps PDF page text and rendered image paths in brain history', () => {
+  it('keeps PDF page text and visual reading results in brain history', () => {
     const initialState = createInitialHumanState({
       taskId: 'task-history-pdf',
       userInput: '阅读 PDF 图文'
     })
-    const imagePath = '/workspace/.ncurator/runtime/assets/uuid/page-9.png'
     const calls = [
       {
         toolName: 'pdf_read_pages',
@@ -301,8 +300,11 @@ describe('ai unit human memory renderers', () => {
         }
       },
       {
-        toolName: 'pdf_render_pages',
-        args: { sourcePath: '/workspace/深度学习.pdf', pageNumbers: [9] }
+        toolName: 'pdf_read_visuals',
+        args: {
+          sourcePath: '/workspace/深度学习.pdf',
+          requests: [{ index: 9, instruction: '说明第 9 页图形结论。' }]
+        }
       }
     ]
     const taskRun = appendRoundRecord({
@@ -332,21 +334,11 @@ describe('ai unit human memory renderers', () => {
             }
           },
           {
-            toolName: 'pdf_render_pages',
+            toolName: 'pdf_read_visuals',
             ok: true,
             data: {
               sourcePath: '/workspace/深度学习.pdf',
-              pageCount: 11,
-              assetBucketId: 'uuid',
-              images: [
-                {
-                  pageNumber: 9,
-                  path: imagePath,
-                  mimeType: 'image/png',
-                  width: 1224,
-                  height: 1584
-                }
-              ]
+              results: [{ index: 9, text: 'Overfit 图里训练和验证曲线差距明显。' }]
             }
           }
         ]
@@ -355,8 +347,8 @@ describe('ai unit human memory renderers', () => {
 
     const rendered = renderBrainRoundSection(taskRun.rounds)
     expect(rendered).toContain('过度拟合会让训练与验证表现差距变大')
-    expect(rendered).toContain(imagePath)
-    expect(rendered).toContain('"pageNumber":9')
+    expect(rendered).toContain('Overfit 图里训练和验证曲线差距明显')
+    expect(rendered).toContain('"index":9')
   })
 
   it('renders kb_list_documents result ids in round history', () => {

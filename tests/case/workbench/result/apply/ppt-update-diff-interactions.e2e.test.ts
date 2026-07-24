@@ -202,7 +202,7 @@ describe('workbench result e2e', () => {
               result.revertedText.includes('产品进展') &&
               !result.revertedText.includes('风险与应对') &&
               result.toolNames.includes('ppt_edit') &&
-              result.toolNames.includes('ppt_render_slides'),
+              result.toolNames.includes('ppt_read_visuals'),
             {
               name: 'workbench-ppt-update-diff-interactions-real',
               message: '真实 AI 更新 PPT 后应正确展示页面增删改移动、同步缩放拖拽、筛选和回撤。',

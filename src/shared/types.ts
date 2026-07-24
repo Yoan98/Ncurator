@@ -1241,7 +1241,13 @@ export interface AiActivityDetails {
   reason?: string
 }
 
-export type AiRunFailureCode = 'timeout' | 'network_error' | 'error'
+export type AiRunFailureCode =
+  | 'timeout'
+  | 'network_error'
+  | 'user_cancelled'
+  | 'process_interrupted'
+  | 'error'
+export type AiRunResumeSnapshotReason = Exclude<AiRunFailureCode, 'error'>
 export type AiRunFailureSource = 'provider' | 'internal'
 
 type AiRunEventPayload =
@@ -1562,6 +1568,7 @@ type AiRunEventPayload =
   | {
       type: 'run_cancelled'
       runId: string
+      resumeSnapshotSaved?: boolean
     }
 
 export type AiRunEvent = AiRunEventPayload & {
@@ -1585,7 +1592,7 @@ export type ChatConversationMemoryRow = {
 }
 
 export type ChatSessionResumeSnapshot = {
-  reason: Extract<AiRunFailureCode, 'timeout' | 'network_error'>
+  reason: AiRunResumeSnapshotReason
   runId: string
   userInput: string
   selectedReferences: SelectedReference[]

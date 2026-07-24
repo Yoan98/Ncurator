@@ -25,7 +25,7 @@ const SESSION_ID = 'live-session-resume-with-new-selection'
 const INTERRUPTED_RUN_INPUT =
   '我想做一个复习对比小结。请先只看我刚选的深度学习课件，整理“过拟合/过度拟合”的概念定义、出现原因、处理方式；如果资料没写某一项就标成未写。为了节省时间，请先用 docx_search 搜索“过拟合/过度拟合”来定位，再只读取命中位置附近内容，不要先做全文 outline。后面我会再选另一份课件补第二个概念。'
 const RESUMED_RUN_INPUT =
-  '继续刚才的复习对比小结，但这次我新选了图形学课件。请保留刚才已经整理到的过拟合信息，再补充这份资料里的反走样信息，最后输出一个对比小结。资料没写的地方要直接说明未写。'
+  '这次我新选了图形学课件。请保留刚才已经整理到的过拟合信息，再补充这份资料里的反走样信息，最后输出一个对比小结。资料没写的地方要直接说明未写。'
 
 type LiveFaultInjectionState = {
   shouldFailNextBrain: boolean

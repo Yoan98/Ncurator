@@ -22,6 +22,7 @@ import type {
   AiLlmUsage,
   AiPreference,
   AiRunFailureCode,
+  AiRunResumeSnapshotReason,
   AiRuntimeSettings,
   AiRunEvent,
   AiRunEventStage,
@@ -65,7 +66,7 @@ export type HumanResumeSnapshot = Pick<HumanState, 'memory' | 'skills'> & {
   >
 }
 
-export type RecoverableRunErrorCode = Extract<AiRunFailureCode, 'timeout' | 'network_error'>
+export type RecoverableRunErrorCode = AiRunResumeSnapshotReason
 
 export type RecoverableHumanRunError = Error & {
   code: 'RECOVERABLE_HUMAN_RUN'
@@ -248,6 +249,11 @@ export type AiRunContext = {
     policyProfile?: string
   }
   checkCancelled: () => void
+  saveResumeSnapshot: (input: {
+    reason: AiRunResumeSnapshotReason
+    humanState: HumanState
+    errorMessage?: string
+  }) => Promise<void>
   chatStructured: <T extends Record<string, unknown>>(input: {
     caller: string
     taskId?: string

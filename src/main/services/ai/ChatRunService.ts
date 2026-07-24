@@ -177,7 +177,10 @@ export class ChatRunService {
           runId: run.id,
           source: 'internal',
           message: INTERRUPTED_RUN_MESSAGE,
-          code: 'error'
+          code: 'process_interrupted',
+          resumeSnapshotSaved: Boolean(
+            await this.deps.chatStore.getSessionResumeSnapshot(run.sessionId)
+          )
         }
       })
       try {
@@ -824,7 +827,11 @@ export class ChatRunService {
       await this.flushRunEvents(runId)
       if (result.status === 'cancelled') {
         this.deps.docxApplyService.discardRun(runId)
-        await this.queueRunEvent(runId, { type: 'run_cancelled', runId })
+        await this.queueRunEvent(runId, {
+          type: 'run_cancelled',
+          runId,
+          resumeSnapshotSaved: result.resumeSnapshotSaved
+        })
         return
       }
 
@@ -869,7 +876,13 @@ export class ChatRunService {
         console.error('[CHAT-RUN] workspace change scan failed:', scanError)
       })
       if (this.activeRuns.get(runId)?.cancelled) {
-        await this.queueRunEvent(runId, { type: 'run_cancelled', runId })
+        await this.queueRunEvent(runId, {
+          type: 'run_cancelled',
+          runId,
+          resumeSnapshotSaved: Boolean(
+            await this.deps.chatStore.getSessionResumeSnapshot(run.sessionId)
+          )
+        })
         return
       }
       console.error('[CHAT-RUN] unexpected failure:', error)

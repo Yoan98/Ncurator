@@ -83,11 +83,11 @@ const isAssistantToolName = (toolName: string): toolName is AssistantToolName =>
   toolName === 'pdf_inspect' ||
   toolName === 'pdf_search' ||
   toolName === 'pdf_read_pages' ||
-  toolName === 'pdf_render_pages' ||
+  toolName === 'pdf_read_visuals' ||
   toolName === 'ppt_read_outline' ||
   toolName === 'ppt_read_slides' ||
   toolName === 'ppt_search' ||
-  toolName === 'ppt_render_slides' ||
+  toolName === 'ppt_read_visuals' ||
   toolName === 'ppt_edit' ||
   toolName === 'web_search' ||
   toolName === 'web_crawl' ||
@@ -239,7 +239,7 @@ const getToolUiKind = (toolName?: AssistantToolName): AssistantProcessSkillKey =
     toolName === 'pdf_inspect' ||
     toolName === 'pdf_search' ||
     toolName === 'pdf_read_pages' ||
-    toolName === 'pdf_render_pages'
+    toolName === 'pdf_read_visuals'
   ) {
     return 'pdf-read'
   }
@@ -247,7 +247,7 @@ const getToolUiKind = (toolName?: AssistantToolName): AssistantProcessSkillKey =
     toolName === 'ppt_read_outline' ||
     toolName === 'ppt_read_slides' ||
     toolName === 'ppt_search' ||
-    toolName === 'ppt_render_slides' ||
+    toolName === 'ppt_read_visuals' ||
     toolName === 'ppt_edit'
   ) {
     return 'ppt'
@@ -443,13 +443,14 @@ const getToolItemText = (
   if (toolName === 'pdf_read_pages') {
     return sentence(text('读取 PDF 页面 '), text(fileLabel))
   }
-  if (toolName === 'pdf_render_pages') {
-    return sentence(text('渲染 PDF 页面 '), text(fileLabel))
+  if (toolName === 'pdf_read_visuals') {
+    return sentence(text('读取 PDF 页面视觉内容 '), text(fileLabel))
   }
   if (toolName === 'ppt_read_outline') return sentence(text('阅读 PPT 结构 '), text(fileLabel))
   if (toolName === 'ppt_read_slides') return sentence(text('读取 PPT 页面 '), text(fileLabel))
   if (toolName === 'ppt_search') return sentence(text('搜索 PPT '), text(queryLabel))
-  if (toolName === 'ppt_render_slides') return sentence(text('渲染 PPT 页面 '), text(fileLabel))
+  if (toolName === 'ppt_read_visuals')
+    return sentence(text('读取 PPT 页面视觉内容 '), text(fileLabel))
   if (toolName === 'ppt_edit') return sentence(text('编辑 PPT '), text(fileLabel))
   if (toolName === 'terminal_run') {
     return sentence(text('执行命令 '), text(commandLabel))

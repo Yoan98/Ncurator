@@ -1,4 +1,5 @@
 import { z } from 'zod/v4'
+import { visualRecognitionOutputSchema } from '../visualRecognition/schemas'
 
 const warningsSchema = z.array(z.string())
 
@@ -69,18 +70,4 @@ export const pdfReadPagesOutputSchema = z.object({
   warnings: warningsSchema
 })
 
-export const pdfRenderPagesOutputSchema = z.object({
-  sourcePath: z.string(),
-  pageCount: z.number().int(),
-  assetBucketId: z.string(),
-  images: z.array(
-    z.object({
-      pageNumber: z.number().int(),
-      path: z.string(),
-      mimeType: z.literal('image/png'),
-      width: z.number().int(),
-      height: z.number().int()
-    })
-  ),
-  warnings: warningsSchema
-})
+export const pdfReadVisualsOutputSchema = visualRecognitionOutputSchema

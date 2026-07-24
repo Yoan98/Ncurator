@@ -74,11 +74,11 @@ const buildLivePptRequest = (logoName: string): string =>
     '- 中文清晰可读，可直接用于正式汇报。',
     '',
     '执行与验收：',
-    '- 只使用 PPT 和图像识别工具，不要使用 terminal。',
+    '- 只使用 PPT 工具，不要使用 terminal。',
     '- 使用 PPT 工具一次提交三张内容完整的页面 HTML，禁止先建占位页再逐元素拼装。',
-    '- 三页完成后一次性渲染全部页面，并使用图像识别逐页检查一次。',
-    '- 图像检查必须确认标题没有换行，左右没有大面积无意义空白，也没有缺字、溢出、重叠或异常样式。',
-    '- 如需修复，只复检修改页一次，并使用最近一次 ppt_render_slides 返回的新路径；最后确认文件已写回。'
+    '- 三页完成后一次性读取全部页面视觉内容并逐页检查一次。',
+    '- 视觉检查必须确认标题没有换行，左右没有大面积无意义空白，也没有缺字、溢出、重叠或异常样式。',
+    '- 如需修复，只复检修改页一次；最后确认文件已写回。'
   ].join('\n')
 
 const imageContentMetrics = async (
@@ -147,10 +147,9 @@ describe('ai human live backend', () => {
           await runtime.seedLlmConfig(visionConfig)
           const runner = createHumanTestRunner(runtime, {
             allowedToolNames: [
-              'image_analyze',
               'ppt_read_outline',
               'ppt_read_slides',
-              'ppt_render_slides',
+              'ppt_read_visuals',
               'ppt_edit'
             ],
             visionModel: {
@@ -253,8 +252,9 @@ describe('ai human live backend', () => {
           runtime.assertThat(
             result.output?.status === 'completed' &&
               startedTools.filter((name) => name === 'ppt_edit').length >= 3 &&
-              startedTools.includes('ppt_render_slides') &&
-              startedTools.filter((name) => name === 'image_analyze').length >= 3 &&
+              startedTools.includes('ppt_read_visuals') &&
+              !startedTools.includes('image_analyze') &&
+              !startedTools.includes('ppt_render_slides') &&
               result.visionModelName === loadLiveVisionLlmConfigFromEnv().model_name &&
               result.file.slideCount === 3 &&
               REQUIRED_CONTENT.every((marker) => result.file!.text.includes(marker)) &&

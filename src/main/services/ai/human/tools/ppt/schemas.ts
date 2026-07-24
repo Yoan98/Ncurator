@@ -1,5 +1,6 @@
 import { z } from 'zod/v4'
 import type { JsonObject } from '../../../../../../shared/types'
+import { visualRecognitionRequestSchema } from '../visualRecognition/schemas'
 
 const sourcePathSchema = z.string().trim().min(1)
 const slideIdSchema = z.string().trim().min(1)
@@ -105,6 +106,13 @@ export const pptRenderSchema = z
   .object({
     sourcePath: sourcePathSchema,
     ranges: z.array(pptSlideRangeSchema).min(1)
+  })
+  .strict()
+
+export const pptReadVisualsSchema = z
+  .object({
+    sourcePath: sourcePathSchema,
+    requests: z.array(visualRecognitionRequestSchema).min(1).max(10)
   })
   .strict()
 

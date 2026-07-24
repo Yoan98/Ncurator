@@ -281,17 +281,15 @@ const renderPdfSearchMatches = (value: JsonValue | undefined): string => {
     .join('\n')
 }
 
-const renderPdfImages = (value: JsonValue | undefined): string => {
+const renderVisualResults = (value: JsonValue | undefined): string => {
   if (!Array.isArray(value) || value.length === 0) return 'none'
   return value
     .map((item, index) => {
       if (!isJsonObject(item)) return renderGenericArrayItem(item, index)
       return `${index + 1}. ${renderKeyValuePairs([
-        ['pageNumber', readNumberTextField(item, 'pageNumber')],
-        ['path', readStringField(item, 'path')],
-        ['mimeType', readStringField(item, 'mimeType')],
-        ['width', readNumberTextField(item, 'width')],
-        ['height', readNumberTextField(item, 'height')]
+        ['index', readNumberTextField(item, 'index')],
+        ['text', readStringField(item, 'text')],
+        ['error', readStringField(item, 'error')]
       ])}`
     })
     .join('\n')
@@ -334,15 +332,11 @@ const renderPdfReadPagesResult = (obj: JsonObject): string =>
     renderPdfPageList(obj.pages)
   ].join('\n')
 
-const renderPdfRenderPagesResult = (obj: JsonObject): string =>
+const renderVisualReadResult = (obj: JsonObject): string =>
   [
-    renderKeyValuePairs([
-      ['sourcePath', readStringField(obj, 'sourcePath')],
-      ['pageCount', readNumberTextField(obj, 'pageCount')],
-      ['assetBucketId', readStringField(obj, 'assetBucketId')]
-    ]),
-    'images:',
-    renderPdfImages(obj.images)
+    renderKeyValuePairs([['sourcePath', readStringField(obj, 'sourcePath')]]),
+    'results:',
+    renderVisualResults(obj.results)
   ].join('\n')
 
 const renderWebCrawlLinkList = (value: JsonValue | undefined): string => {
@@ -489,8 +483,9 @@ export const renderToolResultDataText = (
       return renderPdfSearchResult(value)
     case 'pdf_read_pages':
       return renderPdfReadPagesResult(value)
-    case 'pdf_render_pages':
-      return renderPdfRenderPagesResult(value)
+    case 'pdf_read_visuals':
+    case 'ppt_read_visuals':
+      return renderVisualReadResult(value)
     case 'web_search':
       return renderWebSearchResult(value)
     case 'web_crawl':

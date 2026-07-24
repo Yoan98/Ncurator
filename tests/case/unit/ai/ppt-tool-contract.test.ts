@@ -7,6 +7,7 @@ import {
 import {
   pptEditSchema,
   pptOutlineSchema,
+  pptReadVisualsSchema,
   pptReadSlidesSchema,
   pptSearchSchema
 } from '../../../../src/main/services/ai/human/tools/ppt/schemas'
@@ -25,14 +26,14 @@ describe('ai unit ppt tool contract', () => {
       'ppt_read_outline',
       'ppt_read_slides',
       'ppt_search',
-      'ppt_render_slides'
+      'ppt_read_visuals'
     ])
     expect(SKILL_DEFINITIONS['ppt-write'].toolNames).toEqual(['ppt_edit'])
     expect(PPT_TOOL_SPECS.map((spec) => spec.name)).toEqual([
       'ppt_read_outline',
       'ppt_read_slides',
       'ppt_search',
-      'ppt_render_slides',
+      'ppt_read_visuals',
       'ppt_edit'
     ])
   })
@@ -59,6 +60,21 @@ describe('ai unit ppt tool contract', () => {
         query: '结论',
         scope: { slideIds: ['/ppt/slides/slide1.xml'] },
         maxMatches: 10
+      }).success
+    ).toBe(false)
+    expect(
+      pptReadVisualsSchema.safeParse({
+        sourcePath: 'deck.pptx',
+        requests: [{ index: 1, instruction: '检查标题是否换行。' }]
+      }).success
+    ).toBe(true)
+    expect(
+      pptReadVisualsSchema.safeParse({
+        sourcePath: 'deck.pptx',
+        requests: Array.from({ length: 11 }, (_, index) => ({
+          index: index + 1,
+          instruction: '检查页面视觉内容。'
+        }))
       }).success
     ).toBe(false)
   })
