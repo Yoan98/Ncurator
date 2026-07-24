@@ -74,7 +74,7 @@ describe('workbench conversation e2e', () => {
             phase: 'before-app-close',
             dispose: server.close
           })
-          const setup = await setupScopeWorkspace(page, {
+          await setupScopeWorkspace(page, {
             workspaceName: 'Workbench Scope Workspace',
             webSourceUrl: server.url
           })

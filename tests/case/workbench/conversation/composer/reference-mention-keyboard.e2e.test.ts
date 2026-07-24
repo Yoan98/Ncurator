@@ -28,7 +28,7 @@ describe('workbench conversation e2e', () => {
         runMode: 'single',
         execute: async (runtime) => {
           const { page } = runtime
-          const setup = await setupWorkbenchWorkspaceOnly(page, {
+          await setupWorkbenchWorkspaceOnly(page, {
             caseId: CASE_ID,
             workspaceName: 'Workbench Mention Keyboard Workspace'
           })

@@ -8,6 +8,9 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$utf8 = New-Object System.Text.UTF8Encoding($false)
+[Console]::OutputEncoding = $utf8
+$OutputEncoding = $utf8
 
 Add-Type -TypeDefinition @'
 using System;
@@ -37,6 +40,17 @@ namespace NCurator.OpenWith {
     void Invoke([MarshalAs(UnmanagedType.Interface)] object itemArray);
   }
 
+  [ComImport]
+  [Guid("43826D1E-E718-42EE-BC55-A1E261C37BFE")]
+  [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+  interface IShellItem {
+    void BindToHandler(IntPtr bindingContext, ref Guid handlerId, ref Guid interfaceId, [MarshalAs(UnmanagedType.Interface)] out object result);
+    void GetParent([MarshalAs(UnmanagedType.Interface)] out object parent);
+    void GetDisplayName(uint displayNameType, out IntPtr displayName);
+    void GetAttributes(uint attributeMask, out uint attributes);
+    void Compare([MarshalAs(UnmanagedType.Interface)] object shellItem, uint hint, out int order);
+  }
+
   public sealed class ApplicationInfo {
     public string id { get; set; }
     public string name { get; set; }
@@ -52,12 +66,9 @@ namespace NCurator.OpenWith {
     static extern int AssocQueryString(AssocFlags flags, AssocString value, string association, string extra, System.Text.StringBuilder output, ref uint outputLength);
 
     [DllImport("shell32.dll", CharSet = CharSet.Unicode, PreserveSig = false)]
-    static extern void SHCreateItemFromParsingName(string path, IntPtr bindingContext, ref Guid interfaceId, [MarshalAs(UnmanagedType.Interface)] out object shellItem);
+    static extern void SHCreateItemFromParsingName(string path, IntPtr bindingContext, ref Guid interfaceId, out IShellItem shellItem);
 
-    [DllImport("shell32.dll", PreserveSig = false)]
-    static extern void SHCreateShellItemArrayFromShellItem([MarshalAs(UnmanagedType.Interface)] object shellItem, ref Guid interfaceId, [MarshalAs(UnmanagedType.Interface)] out object itemArray);
-
-    enum AssocFilter : uint { Recommended = 0 }
+    enum AssocFilter : uint { Recommended = 1 }
     [Flags]
     enum AssocFlags : uint { None = 0 }
     enum AssocString : uint { Executable = 2 }
@@ -69,6 +80,17 @@ namespace NCurator.OpenWith {
       var output = new System.Text.StringBuilder((int)length);
       var result = AssocQueryString(AssocFlags.None, AssocString.Executable, association, null, output, ref length);
       return result == 0 ? output.ToString() : null;
+    }
+
+    static string NormalizeExecutable(string value) {
+      if (String.IsNullOrWhiteSpace(value)) return null;
+      var expanded = Environment.ExpandEnvironmentVariables(value).Trim().Trim('"');
+      if (expanded.IndexOf('%') >= 0 || !Path.IsPathRooted(expanded)) return null;
+      try {
+        return Path.GetFullPath(expanded);
+      } catch {
+        return null;
+      }
     }
 
     static List<IAssocHandler> Enumerate(string filePath) {
@@ -93,7 +115,7 @@ namespace NCurator.OpenWith {
 
     public static ApplicationInfo[] List(string filePath) {
       var applications = new List<ApplicationInfo>();
-      var defaultExecutable = QueryExecutable(Path.GetExtension(filePath));
+      var defaultExecutable = NormalizeExecutable(QueryExecutable(Path.GetExtension(filePath)));
       foreach (var handler in Enumerate(filePath)) {
         try {
           string id;
@@ -103,8 +125,8 @@ namespace NCurator.OpenWith {
           handler.GetName(out id);
           handler.GetUIName(out name);
           handler.GetIconLocation(out iconPath, out iconIndex);
-          var executable = QueryExecutable(id);
-          var isDefault = !String.IsNullOrWhiteSpace(defaultExecutable) && !String.IsNullOrWhiteSpace(executable) && String.Equals(Path.GetFullPath(defaultExecutable), Path.GetFullPath(executable), StringComparison.OrdinalIgnoreCase);
+          var executable = NormalizeExecutable(QueryExecutable(id)) ?? NormalizeExecutable(id) ?? NormalizeExecutable(iconPath);
+          var isDefault = !String.IsNullOrWhiteSpace(defaultExecutable) && !String.IsNullOrWhiteSpace(executable) && String.Equals(defaultExecutable, executable, StringComparison.OrdinalIgnoreCase);
           applications.Add(new ApplicationInfo {
             id = id,
             name = String.IsNullOrWhiteSpace(name) ? Path.GetFileNameWithoutExtension(executable) : name,
@@ -125,18 +147,19 @@ namespace NCurator.OpenWith {
           string id;
           handler.GetName(out id);
           if (!String.Equals(id, applicationId, StringComparison.OrdinalIgnoreCase)) continue;
-          object shellItem;
+          IShellItem shellItem;
           var shellItemId = new Guid("43826D1E-E718-42EE-BC55-A1E261C37BFE");
           SHCreateItemFromParsingName(filePath, IntPtr.Zero, ref shellItemId, out shellItem);
           try {
-            object itemArray;
-            var itemArrayId = new Guid("B63EA76D-1F85-456F-A19C-48159EFA858B");
-            SHCreateShellItemArrayFromShellItem(shellItem, ref itemArrayId, out itemArray);
+            object dataObject;
+            var dataObjectHandlerId = new Guid("B8C0BD9F-ED24-455C-83E6-D5390C4FE8C4");
+            var dataObjectId = new Guid("0000010E-0000-0000-C000-000000000046");
+            shellItem.BindToHandler(IntPtr.Zero, ref dataObjectHandlerId, ref dataObjectId, out dataObject);
             try {
-              handler.Invoke(itemArray);
+              handler.Invoke(dataObject);
               return;
             } finally {
-              Marshal.ReleaseComObject(itemArray);
+              Marshal.ReleaseComObject(dataObject);
             }
           } finally {
             Marshal.ReleaseComObject(shellItem);

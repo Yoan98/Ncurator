@@ -68,7 +68,7 @@ describe('workbench result e2e', () => {
             phase: 'before-app-close',
             dispose: server.close
           })
-          const setup = await runtime.step({
+          await runtime.step({
             name: 'prepare-search-workspace',
             message: '通过真实 Settings UI 创建工作区、绑定临时目录并索引本地文件和网页资料。',
             data: {

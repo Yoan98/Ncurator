@@ -329,7 +329,7 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
         setOpenWithError(response.error || '无法获取可用应用')
         return
       }
-      setOpenWithApplications(response.applications)
+      setOpenWithApplications(response.applications.slice(0, 5))
     } catch (error) {
       setOpenWithApplications([])
       setOpenWithError(error instanceof Error ? error.message : '无法获取可用应用')

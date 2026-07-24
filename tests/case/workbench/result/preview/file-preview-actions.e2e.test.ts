@@ -193,6 +193,9 @@ describe('workbench result e2e', () => {
           await openWithApplicationItems.first().waitFor({ state: 'visible', timeout: 15_000 })
           const openWithApplicationCount = await openWithApplicationItems.count()
           const visibleOpenWithMenu = page.locator('[role="menu"]:visible').last()
+          const openWithMenuHasHorizontalOverflow = await visibleOpenWithMenu.evaluate(
+            (element) => element.scrollWidth > element.clientWidth
+          )
           const defaultApplicationMarkerVisible = await visibleOpenWithMenu
             .getByText('默认', { exact: true })
             .isVisible()
@@ -222,6 +225,7 @@ describe('workbench result e2e', () => {
             docxPreviewStableWhileTyping,
             systemOpenVisible,
             openWithApplicationCount,
+            openWithMenuHasHorizontalOverflow,
             defaultApplicationMarkerVisible,
             markdownPreviewVisible,
             plainTextPreviewVisible,
@@ -244,6 +248,8 @@ describe('workbench result e2e', () => {
               result.docxPreviewStableWhileTyping &&
               result.systemOpenVisible &&
               result.openWithApplicationCount >= 1 &&
+              result.openWithApplicationCount <= 5 &&
+              !result.openWithMenuHasHorizontalOverflow &&
               result.defaultApplicationMarkerVisible &&
               result.openWithQueryCalls >= 1 &&
               result.markdownPreviewVisible &&
