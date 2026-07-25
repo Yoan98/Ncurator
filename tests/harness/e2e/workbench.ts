@@ -29,7 +29,7 @@ import {
   navigateToSettingsSection
 } from './settings'
 import type { E2ETestRuntime } from './run-e2e-case'
-import type { E2ERuntimeSignals } from './electronApp'
+import { pasteTextThroughElectronClipboard, type E2ERuntimeSignals } from './electronApp'
 import {
   E2E_WORKSPACE_FIXTURE_ROOT,
   copyE2EWorkspaceFixture,
@@ -898,26 +898,61 @@ export const setupWorkbenchWorkspaceOnly = async (
   }
 }
 
-const pasteWorkbenchTextThroughSystemClipboard = async (
-  page: Page,
-  value: string
-): Promise<void> => {
-  const wroteClipboard = await page
-    .evaluate(async (text) => {
-      try {
-        await navigator.clipboard.writeText(text)
-        return true
-      } catch {
-        return false
-      }
-    }, value)
-    .catch(() => false)
-  if (wroteClipboard) {
-    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+V' : 'Control+V')
+export const pasteWorkbenchText = async (page: Page, value: string): Promise<void> => {
+  let electronClipboardError: string | null = null
+  let pastedThroughElectron = false
+  try {
+    pastedThroughElectron = await pasteTextThroughElectronClipboard(page, value)
+  } catch (error) {
+    electronClipboardError = error instanceof Error ? error.message : String(error)
+  }
+  if (pastedThroughElectron) {
+    await page.waitForTimeout(100)
+    lastWorkbenchPasteDiagnostics = { transport: 'electron-clipboard' }
     return
   }
-  await page.keyboard.insertText(value)
+
+  // Packaged E2E can run in a Windows session without OS clipboard access. Keep the
+  // installed renderer's paste handler under test by dispatching a populated ClipboardEvent.
+  const syntheticPaste = await page.evaluate(
+    (input: { testId: string; text: string }) => {
+      const editor = document.querySelector(`[data-testid="${input.testId}"]`)
+      if (!(editor instanceof HTMLElement)) {
+        return { dispatched: false, defaultPrevented: false, clipboardTextLength: 0 }
+      }
+
+      editor.focus()
+      const clipboardData = new DataTransfer()
+      clipboardData.setData('text/plain', input.text)
+      const pasteEvent = new ClipboardEvent('paste', {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        clipboardData
+      })
+      editor.dispatchEvent(pasteEvent)
+      return {
+        dispatched: true,
+        defaultPrevented: pasteEvent.defaultPrevented,
+        clipboardTextLength: pasteEvent.clipboardData?.getData('text/plain').length || 0
+      }
+    },
+    { testId: workbenchSelectors.input, text: value }
+  )
+  lastWorkbenchPasteDiagnostics = {
+    transport: 'synthetic-paste-event',
+    electronClipboardError,
+    ...syntheticPaste
+  }
+  if (!syntheticPaste.dispatched || !syntheticPaste.defaultPrevented) {
+    throw new Error(
+      `failed to dispatch workbench paste event: ${JSON.stringify(lastWorkbenchPasteDiagnostics)}`
+    )
+  }
+  await page.waitForTimeout(100)
 }
+
+let lastWorkbenchPasteDiagnostics: unknown = null
 
 export const setWorkbenchInput = async (page: Page, value: string): Promise<void> => {
   const input = getWorkbenchLocator(page, workbenchSelectors.input)
@@ -962,7 +997,7 @@ export const setWorkbenchInput = async (page: Page, value: string): Promise<void
 
   for (let attempt = 1; attempt <= 3; attempt += 1) {
     await input.click()
-    await pasteWorkbenchTextThroughSystemClipboard(page, value)
+    await pasteWorkbenchText(page, value)
     const typed = await page
       .waitForFunction(
         (inputValue: { testId: string; expected: string }) => {
@@ -986,7 +1021,9 @@ export const setWorkbenchInput = async (page: Page, value: string): Promise<void
   }
 
   const actual = ((await input.textContent()) || '').trim()
-  throw new Error(`failed to type workbench input: expected "${value}", got "${actual}"`)
+  throw new Error(
+    `failed to type workbench input: expected "${value}", got "${actual}"; pasteDiagnostics=${JSON.stringify(lastWorkbenchPasteDiagnostics)}`
+  )
 }
 
 export const appendWorkbenchInputText = async (page: Page, value: string): Promise<void> => {
@@ -1003,7 +1040,7 @@ export const appendWorkbenchInputText = async (page: Page, value: string): Promi
     selection?.removeAllRanges()
     selection?.addRange(range)
   })
-  await pasteWorkbenchTextThroughSystemClipboard(page, value)
+  await pasteWorkbenchText(page, value)
 }
 
 export const submitWorkbenchCurrentDraft = async (page: Page): Promise<void> => {

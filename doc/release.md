@@ -89,7 +89,7 @@ pnpm release:mac -- --tag mac-vX.Y.Z --test-only --case <caseId>
 
 macOS arm64 和 x64 两个候选包都必须通过选定的回归范围。
 
-源码 E2E、backend、unit 和 live AI 可用于开发验证或问题排查，但不替代正式包 E2E，也不属于标准发布门。
+选中的正式包 E2E 全部执行，其中使用真实 AI 或真实服务的 E2E 也不排除。源码 E2E、backend、unit 和独立的 `test:ai*` 测试集只用于开发验证或问题排查，不替代正式包 E2E，也不属于标准发布门。
 
 ### 问题处理与发布
 
@@ -230,7 +230,7 @@ publish 会上传候选产物和 fragment，更新对应平台的自动更新 me
 
 ### 本地保留与清理
 
-prepare 和 test 的临时代码、依赖与构建目录位于 `.ncurator/release-work`，阶段结束后自动删除。候选包位于 `.ncurator/release-candidates`：发布并完成公开验证后，保留本平台当前已发布候选及其 E2E 结果，删除更早版本；较新但尚未发布的候选不会被误删。
+prepare 和 test 的临时代码、依赖与构建目录位于 `.ncurator/release-work`，阶段结束后自动删除。候选包位于 `.ncurator/release-candidates`；发布并完成公开验证后，本地只保留本平台最新候选及其 E2E 结果。
 
 `.ncurator/release-tools` 保存 Python 环境、浏览器和构建缓存，`.ncurator/runtime` 保存运行资源；它们可复用且不属于历史安装包，不随发布自动删除。Actions 候选 Artifact 保留 14 天后由 GitHub 自动清理。
 

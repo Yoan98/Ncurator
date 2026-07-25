@@ -123,6 +123,29 @@ export type ElectronSignalSink = {
 
 const OUT_MAIN_ENTRY = path.resolve(process.cwd(), 'out', 'main', 'index.js')
 const APP_ROOT = process.cwd()
+const electronApplicationByPage = new WeakMap<Page, ElectronApplication>()
+
+export const pasteTextThroughElectronClipboard = async (
+  page: Page,
+  value: string
+): Promise<boolean> => {
+  const electronApp = electronApplicationByPage.get(page)
+  if (!electronApp) return false
+
+  return electronApp.evaluate(({ BrowserWindow, clipboard }, text) => {
+    const targetWindow =
+      BrowserWindow.getFocusedWindow() ||
+      BrowserWindow.getAllWindows().find((window) => !window.isDestroyed())
+    if (!targetWindow || targetWindow.isDestroyed() || targetWindow.webContents.isDestroyed()) {
+      return false
+    }
+
+    clipboard.writeText(text)
+    if (clipboard.readText() !== text) return false
+    targetWindow.webContents.paste()
+    return true
+  }, value)
+}
 
 const resolveAppTarget = (): E2EAppTarget => {
   const target = String(process.env.NCURATOR_E2E_APP_TARGET || 'source').trim()
@@ -354,6 +377,7 @@ export const launchElectronApp = async (input: {
   })
 
   const page = await electronApp.firstWindow()
+  electronApplicationByPage.set(page, electronApp)
   assertLaunchedWorkbenchApp(page)
   const processInfo = await electronApp.evaluate(({ app }) => ({
     isPackaged: app.isPackaged,
@@ -457,6 +481,7 @@ export const launchElectronApp = async (input: {
       }
     },
     close: async (closeInput) => {
+      electronApplicationByPage.delete(page)
       recordLifecycle('electron-teardown-started')
       if (!page.isClosed()) {
         try {
