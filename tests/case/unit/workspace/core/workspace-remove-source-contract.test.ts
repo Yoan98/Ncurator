@@ -55,7 +55,7 @@ describe('settings workspace backend', () => {
     await runBackendCase({
       caseId: 'workspace-remove-source-contract',
       harnessMode: 'tool-real',
-      domain: 'settings',
+      domain: 'unit',
       suite: 'workspace',
       groups: ['core'],
       description: '移除工作空间后，文件索引记录与网页资料记录都应一并清理。',

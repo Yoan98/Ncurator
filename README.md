@@ -18,6 +18,7 @@
 - `doc/test-plan/settings-test.md`：涉及 Settings 测试范围或测试边界时阅读。
 - `doc/test-plan/workbench-test.md`：涉及 Workbench 回归测试范围、真实 e2e case 设计、发送前置条件验证或 suite 覆盖维护时阅读。
 - `doc/test.md`：涉及测试体系、UI E2E 回归规则、runner 或回归测试流程时阅读。
+- `doc/tidy.md`：需要按周期整理文档、PRD、测试计划和测试用例时，先按其中流程审计并等待决策。
 
 ### 1.4 prd产品文档相关
 
@@ -38,10 +39,11 @@
 │   ├── prd/                          # 产品需求
 │   │   ├── settings.md               # Settings 产品需求
 │   │   └── workbench.md              # Workbench 产品需求
-│   └── test-plan/                    # 专项测试计划
+│   ├── test-plan/                    # 专项测试计划
 │       ├── ai-test.md                # AI 回归测试计划
 │       ├── settings-test.md          # Settings 测试计划
 │       └── workbench-test.md         # Workbench 测试计划
+│   └── tidy.md                       # 周期性文档与测试整理流程
 ├── src/                              # 应用源码
 │   ├── main/                         # Electron Main 进程
 │   │   ├── ipc/                      # IPC handler 和通道入口
@@ -57,7 +59,7 @@
 │   ├── case/                         # 测试用例
 │   │   ├── ai/                       # AI 测试用例
 │   │   ├── settings/                 # Settings 测试用例
-│   │   ├── unit/                     # unit / helper / schema 类测试
+│   │   ├── unit/                     # backend 单元测试
 │   │   └── workbench/                # Workbench 测试用例
 │   ├── fixtures/                     # 长期复用测试输入
 │   │   └── workspace/                # 工作区语义测试共享输入目录
@@ -141,4 +143,5 @@
 5. 类型禁止使用 `any` 与 `unknown`
 
 ### 文档相关
+
 - 代码变更必须要看是否要同步更新prd和test文档

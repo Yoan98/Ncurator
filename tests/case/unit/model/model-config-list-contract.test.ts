@@ -24,7 +24,7 @@ describe('settings model backend', () => {
     await runBackendCase({
       caseId: 'model-config-list-contract',
       harnessMode: 'tool-real',
-      domain: 'settings',
+      domain: 'unit',
       suite: 'model',
       description: '模型连接配置列表查询可返回全部可用服务配置。',
       fixtures: [],

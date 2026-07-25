@@ -15,7 +15,7 @@
 - Workbench e2e 的 workspace 文件索引允许在测试环境通过 `NCURATOR_WORKSPACE_KNOWLEDGE_CACHE=1` 启用真实 split / vector 缓存；缓存只按文件内容 hash、扩展名、splitter 参数和 embedding model 复用计算结果，不替代 workspace 文件记录、document id、搜索结果或 UI 状态。
 - Workbench 模型选择 helper 必须通过真实下拉搜索分别选择 `AI_LIVE_PRIMARY_MODEL_NAME` 和 `AI_LIVE_VISUAL_MODEL_NAME`。
 - Workbench UI E2E 回归测试需要真实索引完成信号和 UI 可见状态作为等待条件；IPC observer 和 job 查询只能作为辅助证据，不能用来造业务状态。
-- `file-preview-actions` 当前按生产真实索引能力覆盖 `pdf/docx/md/txt`：连续打开的文件要分别保留为资源 Tab，并能切回旧 Tab；`.log` 与代码等其他 UTF-8 文件的纯文本 fallback 由 `file-render-utils` unit case 直接覆盖。
+- `file-preview-actions` 当前按生产真实索引能力覆盖 `pdf/docx/md/txt`：连续打开的文件要分别保留为资源 Tab，并能切回旧 Tab。
 - docx apply case 需要真实 docx 输入、真实 AI 编辑、真实写回记录、真实预览和真实回退。
 - text-file apply case 需要真实 Markdown 或代码文件、真实 `text_file_edit`、真实结构化 diff、独立 `TextFileDiffViewer` 和按原始 bytes 回退。
 - `browser-use-task-panel` 需要真实 AI run 触发 `browser_use` 并驱动内置浏览器完成本地网页任务；同时验证多个浏览器 Tab 独立历史、共享持久站点数据、切换文件后网页状态不销毁，以及同 URL 标签不会让 Stagehand 串页，不能用 fake browser 替代。
@@ -35,8 +35,7 @@ Workbench 顶层 suite 按用户任务闭环划分，不逐一复制 PRD 小节�
 - `conversation` 验证会话、composer、模式、模型 / 工作区偏好、工作目录前置条件和 `@` 参考资料 token。
 - `run` 验证智能模式运行中的过程流、持久化恢复、停止、审批、压缩提示和 AI 内置浏览器任务。
 - `result` 验证搜索结果、普通文件预览、修改文件工作区、真实 docx 预览、文本 diff、回退和多文件修改入口。
-- Workbench 优先使用 `e2e`，覆盖 Electron、renderer、IPC、真实 AI、右侧面板和文件系统联动。
-- `backend` 只用于稳定的纯契约测试，例如参考资料候选过滤、搜索范围 payload 或会话 / 修改记录查询契约；不得用 backend case 代替真实 UI 交互断言。
+- Workbench 测试全部是 `e2e`，覆盖 Electron、renderer、IPC、真实 AI、右侧面板和文件系统联动。
 - 涉及 AI 的 case 必须记录模型、耗时、完成度评分和失败归因；Oracle 引用 [workbench.md](../prd/workbench.md) 的需求或验收编号。
 - AI 内置浏览器 case 必须验证右侧浏览器面板、网页操作结果和最终 assistant 输出形成闭环，不能只验证面板出现。
 - docx apply 相关 case 必须使用真实 docx 文件验证预览与回退；仅写入 `.docx` 后缀文本文件不满足回归 case 口径。
@@ -68,10 +67,8 @@ tests/case/workbench/
 
 - `pnpm test:workbench`
 - `pnpm test:workbench:e2e`
-- `pnpm test:workbench:backend`
 - `node scripts/test/workflow.mjs --domain workbench`
 - `node scripts/test/workflow.mjs --domain workbench --type e2e`
-- `node scripts/test/workflow.mjs --domain workbench --type backend`
 
 补充规则：
 
@@ -111,6 +108,15 @@ tests/case/workbench/
 - How：打开 Workbench，点击帮助入口并观察外链调用和当前路由。
 - Oracle：入口可访问，打开官方中文手册且不改变当前会话路由，对齐 `WB-COMPOSER-011`。
 - Not：不验证系统浏览器窗口样式。
+
+#### `sidebar-app-update`
+
+- 测试类型：`e2e`
+- What：Workbench 左侧更新入口的隐藏、下载、进度、稍后重启、安装和失败重试状态。
+- Why：更新入口属于 Workbench 用户交互，设置页不再重复提供该入口。
+- How：使用更新 fixture 驱动各状态，通过真实 Renderer 交互观察按钮和 IPC observer。
+- Oracle：无更新时入口隐藏；用户点击后才下载；下载中显示进度；下载完成可稍后或重启；失败可重试；旧设置路由回到大模型页，对齐 `WB-COMPOSER-012-AC1`、`WB-COMPOSER-012-AC2`、`WB-COMPOSER-012-AC3`。
+- Not：fixture 不证明真实安装包下载、签名或安装成功。
 
 #### `context-ring-usage`
 
@@ -220,16 +226,16 @@ tests/case/workbench/
 - Why：Workbench route 切换会导致 renderer 重新挂载；如果运行态只存在 renderer 内存中，用户离开页面后会丢失 AI 过程和最终回答。
 - How：通过 UI 配置真实模型和真实工作区；发送真实 AI 请求，等待过程流出现后切到 Settings；停留到 AI run 完成，再回到 Workbench 读取恢复后的过程流和最终回答。
 - Oracle：切走前过程流已出现；返回 Workbench 后仍能通过 `chatSessionSnapshotGet.runs` replay 看到过程流条目和最终回答，且 run event 包含 `answer_completed` 与 `run_completed`，对齐 `WB-SESSION-002-AC3` 与 `WB-COMPOSER-003-AC7`；记录模型、耗时、完成度评分和失败归因。
-- Not：不覆盖审批等待恢复；审批恢复由 `approval-batch-flow` 和 `chat-run-service-contract` 覆盖。
+- Not：不覆盖审批等待恢复；审批恢复由 `approval-batch-flow` 覆盖。
 
-#### `chat-run-service-contract`
+#### `session-skill-memory-persistence`
 
-- 测试类型：`backend`
-- What：Main 侧 `ChatRunService` 对智能模式提交、assistant placeholder、AI run 状态、事件日志、审批 snapshot、启动中断恢复和会话删除清理的持久化契约。
-- Why：运行持久化的真相来源已经从 renderer 收敛到 Main；这些后端契约失败时，route 切换、reload、审批恢复和最终消息落库都会失真。
-- How：使用临时 LanceDB 初始化 `StorageService` 与 `ChatRunService`，关闭自动真实 AI 启动，通过 contract 方式提交 AI run 并注入 run event。
-- Oracle：`chatSubmit(ai)` 创建 user message、assistant placeholder 与 `running` run，并把当前 AI 推进偏好带入本次 run 上下文，对齐 `WB-COMPOSER-007-AC8`；`answer_completed/run_completed` 后 assistant message、run status、final answer 和 event log 正确；`approval_batch_required` 后 snapshot 返回 `waiting_approval` 与 pending approval；已完成 run 的过程事件可从 snapshot `runs` 恢复，token 级事件不会污染 replay；conversation memory 在 9 个完整轮次时不触发，第 10 个完整轮次触发并只总结前 5 轮，提交后保留最新 5 轮，失败或陈旧 summary 不推进覆盖边界，同一 session 的 summary job 去重；启动恢复会把遗留 active run 标记为 failed 并写入“运行已中断”；删除会话会同步清理 messages、run 和 event log，对齐 `WB-COMPOSER-003-AC1`、`WB-COMPOSER-003-AC2`、`WB-COMPOSER-003-AC7`、`WB-SESSION-002-AC3`、`WB-SESSION-002-AC4`。
-- Not：不代替真实 UI 对 route 切换、审批点击或模型输出质量的验证。
+- 测试类型：`e2e`
+- What：同一 Workbench 会话的多轮 AI run 能复用已学习的技能并继续上一轮任务主线。
+- Why：续做不能丢失已有上下文，也不能每轮重复学习同一技能。
+- How：通过真实 Workbench UI 完成两轮请求，检查两轮 human steps、工具选择和最终结果。
+- Oracle：第一轮学习 `docx-read` 技能；第二轮不重复 learning 且能使用该技能继续读取文档；两轮结果均完成，对齐 `WB-SESSION-005-AC1`、`WB-SESSION-005-AC2`。
+- Not：不替代 AI backend 对技能图和 memory store 的契约测试。
 
 #### `approval-batch-flow`
 

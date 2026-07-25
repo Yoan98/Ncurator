@@ -15,6 +15,12 @@ const resolveLocalBin = (name) =>
 const PNPM_BIN = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
 const VITEST_CLI = path.join(path.dirname(require.resolve('vitest/package.json')), 'vitest.mjs')
 const E2E_CONTRACT_SCRIPT = path.join(ROOT, 'scripts', 'test', 'validate-e2e-contract.mjs')
+const TEST_ARCHITECTURE_SCRIPT = path.join(
+  ROOT,
+  'scripts',
+  'test',
+  'validate-test-architecture.mjs'
+)
 const ELECTRON_VITE_BIN = resolveLocalBin('electron-vite')
 const NATIVE_PREPARE_SCRIPT = path.join(ROOT, 'scripts', 'build', 'native', 'better-sqlite3.mjs')
 const NODE_PTY_NATIVE_PREPARE_SCRIPT = path.join(ROOT, 'scripts', 'build', 'native', 'node-pty.mjs')
@@ -72,6 +78,7 @@ const parseArgs = (argv) => {
     type: '',
     suite: '',
     groups: [],
+    excludeGroups: [],
     caseId: '',
     runs: 1,
     runDelayMs: 0,
@@ -102,6 +109,11 @@ const parseArgs = (argv) => {
     }
     if (current === '--group' && next) {
       parsed.groups.push(next)
+      index += 1
+      continue
+    }
+    if (current === '--exclude-group' && next) {
+      parsed.excludeGroups.push(next)
       index += 1
       continue
     }
@@ -243,6 +255,11 @@ const findTestFiles = async (input) => {
   const allFiles = await walk(scopeDir)
   const candidates = allFiles
     .filter((filePath) => filePath.endsWith('.test.ts'))
+    .filter((filePath) => {
+      if (input.excludeGroups.length === 0) return true
+      const segments = path.relative(TEST_CASES_ROOT, filePath).split(path.sep)
+      return !input.excludeGroups.some((group) => segments.includes(group))
+    })
     .filter((filePath) => {
       if (!input.type) return true
       return input.type === 'e2e' ? isE2EFile(filePath) : !isE2EFile(filePath)
@@ -450,6 +467,12 @@ const validateE2EContract = () => {
   return result.status
 }
 
+const validateTestArchitecture = () => {
+  const result = runSpawn(process.execPath, [TEST_ARCHITECTURE_SCRIPT], undefined, true)
+  if (result.error || typeof result.status !== 'number') return 1
+  return result.status
+}
+
 const formatScope = (input) =>
   [[input.domain, input.suite, ...input.groups].filter(Boolean).join('/'), input.type]
     .filter(Boolean)
@@ -615,6 +638,21 @@ const main = async () => {
   removeNpmLifecycleEnv()
   const args = parseArgs(process.argv.slice(2))
 
+  const expectedTypeByDomain = {
+    ai: 'backend',
+    unit: 'backend',
+    settings: 'e2e',
+    workbench: 'e2e'
+  }
+  if (args.domain) {
+    const expectedType = expectedTypeByDomain[args.domain]
+    if (!expectedType) throw new Error(`unsupported --domain: ${args.domain}`)
+    if (!args.type) args.type = expectedType
+    if (args.type !== expectedType) {
+      throw new Error(`${args.domain} 测试只允许 --type ${expectedType}`)
+    }
+  }
+
   if (!['source', 'package'].includes(args.target)) {
     throw new Error(`unsupported --target: ${args.target}`)
   }
@@ -636,6 +674,9 @@ const main = async () => {
   if (args.freshKnowledgeCache && args.reuseKnowledgeCache) {
     throw new Error('--fresh-knowledge-cache 和 --reuse-knowledge-cache 不能同时使用')
   }
+
+  const architectureValidationCode = validateTestArchitecture()
+  if (architectureValidationCode !== 0) process.exit(architectureValidationCode)
 
   let exitCode = 0
   let packageSession = null

@@ -6,7 +6,7 @@
 - 本文定义测试分类、回归准入、执行闭环、UI E2E 真实性、真实 AI / live 断言，以及 runner 和 raw logs 契约。
 - 各业务域的 suite、case 和领域规则只在对应 `doc/test-plan/**` 中维护，本文不重复登记 case。
 - 只有当功能代码发生变动、对应 `doc/test-plan/**` 明确要求对齐 `doc/prd/**`，或者 `doc/prd/**` 本身发生变更时，才需要校验实现与 `doc/prd/**` 的一致性。
-- 新增任何测试文件前，必须先与用户确认目标分类：回归测试，或 `unit / 辅助测试`。
+- 新增任何测试文件前，必须先与用户确认目标分类：AI、Settings、Workbench 或 Unit。
 
 测试体系只沉淀一层长期执行产物：
 
@@ -21,10 +21,11 @@
 - 回归测试
   - 列入 `doc/test-plan/**`，放在 `tests/case/<domain>/<suite>/**`。
   - 用于长期维护、批量执行和生成可追溯运行产物。
-- `unit / 辅助测试`
+- `unit`
   - 放在 `tests/case/unit/**`。
+  - 全部是 backend 单元测试，不允许导入 Renderer、React、jsdom 或 Electron UI。
   - 不进入 `doc/test-plan/**`，由 unit runner 独立发现和执行。
-- 不落测试文件的排查不属于测试文档治理对象；新增测试文件前必须先确认归入回归测试还是 `unit / 辅助测试`。
+- 不落测试文件的排查不属于测试文档治理对象；新增测试文件前必须先确认归入 AI、Settings、Workbench 或 Unit。
 
 ### 2.2 目录结构
 
@@ -68,6 +69,7 @@ tests/
 - `type`
   - 测试类型只通过文件名体现。
   - 普通测试默认视为 `backend`；文件名包含 `.e2e.test.ts` 时视为 `e2e`。
+- `domain` 与 `type` 必须满足固定边界：`ai` 只能是 backend，`unit` 只能是 backend，`settings` 和 `workbench` 只能是 e2e。
 
 ## 3. 回归 case 规则
 
@@ -75,7 +77,7 @@ tests/
 
 - 新增任何测试文件前，必须先与用户确认目标分类。
 - `doc/test-plan/**` 是回归 case 的唯一规格来源；新增、修改或补齐回归 case 时，必须先更新对应测试计划，再修改测试代码。
-- `tests/case/<domain>/**` 只能放已登记的回归 case；`tests/case/unit/**` 不进入领域回归计划。
+- `tests/case/<domain>/**` 只能放已登记的回归 case；`tests/case/unit/**` 不进入领域回归计划，但仍必须满足 Unit backend 边界。
 - 每个回归 `caseId` 都必须稳定映射到唯一测试定义与唯一日志目录。一个测试文件可以承载多个紧密相关的 case，但 `--case <caseId>` 必须能只执行目标 case。
 
 ### 3.2 回归 case 共享字段
@@ -99,6 +101,8 @@ tests/
 - 每次运行的模型、耗时、通过情况、完成度评分、失败归因和原始证据统一保存在对应 run 的 `meta.json`、`timeline.jsonl`、`runtime-events.jsonl` 与 artifacts 中。
 - 测试数量和 case 清单以测试源码及 runner 实时发现结果为准，不在文档中维护容易失真的计数副本。
 - `mock-llm` 回归 case 只允许替换 LLM 输出；不得 fake tool、store、docx apply service、runner 或节点执行结果。
+- `ai-test` 专门覆盖 AI 架构及其工具，全部是 backend；`settings-test` 和 `workbench-test` 专门覆盖对应 PRD 功能点，全部是 E2E；Unit 只补足前述范围未覆盖的 backend 函数、类和底层逻辑。
+- `scripts/test/validate-test-architecture.mjs` 在 runner 执行前校验上述域边界、Unit 的 Renderer/jsdom 禁止项，以及 AI/Settings/Workbench 计划与实际 case ID 的一一对应。
 - `scripts/test/workflow.mjs` 会自动读取仓库根目录的 `.env.local`、`.env`（已存在的 shell 环境变量优先）；可用 `AI_TEST_DISABLE_DOTENV=1` 禁用自动加载。
 
 ### 3.3 UI E2E 回归规则
@@ -127,7 +131,7 @@ tests/
 
 1. 先确认是否新增或调整测试，以及目标分类。
 2. 如果是回归测试，先更新对应 `doc/test-plan/**`，再修改 `tests/case/<domain>/**`。
-3. 如果是 `unit / 辅助测试`，放入 `tests/case/unit/**`，不更新 `doc/test-plan/**`。
+3. 如果是 Unit，放入 `tests/case/unit/**`，保持 backend-only，不更新 `doc/test-plan/**`。
 4. 通过 `scripts/test/workflow.mjs` 执行并产出日志。
 5. 先看 `timeline.jsonl`；不足时再看 `runtime-events.jsonl`、`meta.json` 和 `artifacts.json`。
 6. 最后基于 raw logs 回流结论，决定是否需要更新 `doc/test-plan/**` 或实现代码。
@@ -154,6 +158,7 @@ runner 不负责：
 - AI
   - `pnpm test:ai`
   - `pnpm test:ai:backend`
+  - `pnpm test:ai:non-live`
   - `pnpm test:ai:tool`
   - `pnpm test:ai:human:mock-llm`
   - `pnpm test:ai:human:live`
@@ -165,14 +170,11 @@ runner 不负责：
   - `pnpm test:e2e:package -- --bundle <release-bundle.json>`：校验并安装已经构建的正式包，再对安装后的可执行程序运行全部 E2E。
 - Settings
   - `pnpm test:settings`
-  - `pnpm test:settings:backend`
   - `pnpm test:settings:e2e`
 - Workbench
   - `pnpm test:workbench`
-  - `pnpm test:workbench:backend`
   - `pnpm test:workbench:e2e`
   - `node scripts/test/workflow.mjs --domain workbench`
-  - `node scripts/test/workflow.mjs --domain workbench --type backend`
   - `node scripts/test/workflow.mjs --domain workbench --type e2e`
 
 runner 支持的过滤参数：
@@ -181,6 +183,7 @@ runner 支持的过滤参数：
 - `--type`
 - `--suite`
 - `--group`，可重复传入
+- `--exclude-group`，可重复传入
 - `--case`
 - `--runs`
 - `--target`，取值为 `source` 或 `package`，默认 `source`。
@@ -192,6 +195,7 @@ runner 支持的过滤参数：
 
 - 不带 `--type` 时，runner 会先收集普通测试，再收集 `.e2e.test.ts`。
 - `--type` 取值为 `backend` 或 `e2e`。
+- 指定 `--domain` 时 runner 会强制检查类型：`ai/unit=backend`，`settings/workbench=e2e`；不允许用旧的跨域类型命令绕过边界。
 - `--target package` 只能与 `--type e2e` 一起使用；普通测试和 backend 不允许使用正式包目标。
 - `source` 是日常默认目标：runner 准备 Electron native 模块、构建当前源码，并让每个 E2E 文件独立启动源码应用。
 - `package` 是正式产物目标：runner 校验 release bundle 及文件哈希；macOS 从指定 DMG 挂载并复制 App，Windows 静默安装指定 EXE；随后对安装后的真实可执行程序运行同一批 E2E。runner 不执行构建，也不得把 `dist` 中的未安装目录当成正式包验证。
@@ -205,6 +209,7 @@ runner 支持的过滤参数：
 
 - 正式包 E2E 不负责构建。`--target package` 必须接收 `--bundle <release-bundle.json>`，只安装并测试 bundle 指定的既有安装包；bundle 的 tag、平台、fragment 和文件哈希必须全部匹配。
 - 正式发布的回归范围、门禁和问题处理流程统一遵循 `doc/release.md`。
+- 发布公开验证成功后，Windows/macOS 发布脚本会清理本地 `tests/logs/**`；失败、prepare-only 和 test-only 不清理。
 - 发布候选包使用 `release:win|release:mac -- --tag <tag> --test-only` 执行或重跑正式包 E2E，并可继续使用 `--domain`、`--suite`、`--group`、`--case` 收窄范围。该阶段只消费持久化候选 bundle，不重新构建；失败会把候选标记为 `rejected`，通过后恢复为 `ready`。
 - E2E 知识库缓存由 workflow 统一选择，一轮测试的全部 case 共用同一个目录。源码测试使用 `tests/.cache/workspace-knowledge/source/<out-main-and-preload-sha256>`；正式包测试使用 `tests/.cache/workspace-knowledge/package/<installer-sha256>`。两类缓存完全隔离，不再使用固定共享目录。
 - 缓存键仍包含文件内容哈希、扩展名、分块配置和向量模型名。未修改文件可以命中；新增或修改的文件会重新处理；删除文件不会因为缓存仍存在而重新进入新 workspace 的索引。

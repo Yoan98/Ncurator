@@ -1,11 +1,11 @@
 import { describe, it } from 'vitest'
-import { runE2ECase } from '../../../harness/e2e/run-e2e-case'
-import { SETTINGS_LONG_E2E_TIMEOUT_MS } from '../../../harness/e2e/settings'
+import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
+import { SETTINGS_LONG_E2E_TIMEOUT_MS } from '../../../../harness/e2e/settings'
 import {
   getWorkbenchLocator,
   navigateToWorkbench,
   workbenchSelectors
-} from '../../../harness/e2e/workbench'
+} from '../../../../harness/e2e/workbench'
 
 const setUpdateSnapshot = async (
   page: import('playwright').Page,
@@ -26,8 +26,9 @@ describe('sidebar app update e2e', () => {
     async () => {
       await runE2ECase({
         caseId: 'sidebar-app-update',
-        domain: 'settings',
-        suite: 'update',
+        domain: 'workbench',
+        suite: 'conversation',
+        groups: ['composer'],
         description: '左下角更新按钮展示新版本、下载进度和重启操作，设置页不再保留更新入口。',
         fixtures: ['app-update-fixture'],
         serviceMode: 'fixture',

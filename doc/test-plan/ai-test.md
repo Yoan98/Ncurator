@@ -44,7 +44,7 @@
 - KB fixture 必须走真实导入、真实索引、真实检索。
 - embedding 模型缺失时，harness 应优先通过真实生产下载链自动检查并下载，不得引入测试专用 embedding 替身。
 - 回归 harness 不得使用旧式 fake API。
-- backend/live/e2e 回归测试统一使用默认 `testTimeout=900_000`、`hookTimeout=900_000`；不再为单个回归 case 单独配置超时。
+- AI backend 回归统一使用默认 `testTimeout=900_000`、`hookTimeout=900_000`；不再为单个回归 case 单独配置超时。
 
 ### 3.2 `mock-llm` 与 `live` 设计口径
 
@@ -83,34 +83,23 @@ AI unit / 辅助测试目录：
 - `pnpm test:ai:tool`
 - `pnpm test:ai:human:mock-llm`
 - `pnpm test:ai:human:live`
-- `pnpm test:unit`
-- `pnpm test:unit:ai`
 
 ## 4. 回归测试清单
 
 ### 4.0 结构化输出策略与服务重试
 
-#### `structured-output-strategy-memory`
-
-- 测试类型：`unit + backend contract`
-- What：无历史策略时按通用顺序尝试结构化输出；降级成功后保存 `configId + modelName` 对应策略，下一次调用直接复用。
-- Why：不同供应商的结构化能力不同，不能靠供应商名称写死；策略记忆是减少失败请求和避免重复探测的核心机制。
-- How：unit 测试覆盖 `json_schema -> json_object -> prompt_json` 和解析失败后的继续降级；执行器 contract 测试验证成功策略写入配置保存入口；策略 Store 使用真实 SQLite 读写验证下一次读取。
-- Oracle：首次最终成功策略为 `completions/prompt_json` 时保存该策略；后续加载同一配置和模型得到相同策略；失败调用不写入新策略。
-- Not：不把真实 NVIDIA 或其他供应商网络容量当作稳定测试前置条件。
-
-#### `structured-output-resource-exhausted-backoff`
-
-- 测试类型：`unit`
-- What：结构化策略返回 `503 ResourceExhausted` 时先尝试下一个候选策略；全部候选都容量失败时再按 2、4、8、15 秒退避。
-- Why：容量错误不等于永久不支持，但不同结构化请求形态可能落到不同服务路径；只原样重试会让每个新对话重复同样的三次等待，也无法形成有价值的策略记忆。
-- How：native 结构化输出测试让 `json_schema`、`json_object` 返回容量错误，`prompt_json` 成功，并验证第二次调用直接命中已保存偏好；执行器集成测试覆盖所有候选均失败后的外层退避和最终成功；Workbench 真实 UI E2E 在运行中出现重试时检查过程流不同时显示“让俺想想”。
-- Oracle：首轮后续策略成功时保存最终策略，第二轮只调用保存的策略；所有策略都容量失败时才产生外层重试事件；重试状态可见且不与思考占位并存。
-- Not：不要求真实 provider 在每次 E2E 都主动返回 503。
-
 ### 4.1 `tool`
 
 #### docx 类别
+
+##### `docx-legacy-doc-read-contract`
+
+- 测试类型：`backend`
+- What：旧版 .doc 文件可以通过现有 docx-read 工具读取，并明确拒绝写入。
+- Why：旧格式读取是 AI 文档能力的兼容边界，写入拒绝必须可解释且不产生副作用。
+- How：读取 outline、block、literal/regex 搜索，再尝试编辑并检查 decision hint。
+- Oracle：读取结果有效；编辑返回“不支持写入旧版 .doc”及对应提示；源文件 bytes 不变。
+- Not：不把旧版 .doc 写入转换为隐式成功。
 
 ##### `docx-minimal-edit-flow`
 
@@ -166,7 +155,7 @@ AI unit / 辅助测试目录：
 - Oracle：首次回退返回 `requiresForce=true` 和“恢复到本次修改前”风险 warning；强制回退后恢复 checkpoint 并覆盖后续修改。
 - Not：不验证 UI 二次确认文案。
 
-##### `docx-create-target-appears-before-apply-becomes-update`
+##### `docx-immediate-create-and-external-change-invalidates-session`
 
 - 测试类型：`backend`
 - What：create-target replay 后目标被外部创建时，apply 按 updated 备份并覆盖，回退恢复外部文件。
@@ -532,7 +521,7 @@ AI unit / 辅助测试目录：
 - Oracle：页数为 11，标题为“深度学习”，正文没有 NUL，且“过度拟合”能命中第 8 或第 9 页。
 - Not：不识别页面图片。
 
-##### `pdf-render-pages-runtime-assets-contract`
+##### `pdf-read-visuals-contract`
 
 - 测试类型：`backend`
 - What：指定页面会被渲染为可供其他工具使用的 PNG。
@@ -540,6 +529,15 @@ AI unit / 辅助测试目录：
 - How：渲染第 1、9 页并检查文件路径、PNG 文件头、源文件哈希和事件。
 - Oracle：路径为 `.ncurator/runtime/assets/<uuid>/page-N.png`；图片真实存在；源 PDF 不变；不产生普通 artifact。
 - Not：不在 PDF 工具内部做图像识别。
+
+##### `pdf-result-size-contract`
+
+- 测试类型：`backend`
+- What：PDF 工具结果在页数、文本和视觉输出过大时遵守统一大小边界。
+- Why：结果失控会污染上下文并掩盖后续工具调用。
+- How：构造不同大小的 PDF 读取与视觉结果，检查截断、错误和原始文件不变。
+- Oracle：结果不超过约定上限；超限返回可识别错误或受控截断，不生成伪造内容。
+- Not：不评价模型最终回答措辞。
 
 ##### `pdf-failure-boundary-contract`
 
@@ -637,6 +635,15 @@ AI unit / 辅助测试目录：
 - Oracle：命令真实生效并经过审批；terminal 工具结果不包含 `artifacts`；工具执行阶段没有修改记录或 `file_artifact`，后续由顶层 Run 扫描统一捕获。
 - Not：不在工具级 case 重复验证 WorkspaceChangeTracker；统一扫描由对应 tracker 和 Workbench 测试覆盖。
 
+##### `terminal-inline-interpreter-execution`
+
+- 测试类型：`backend`
+- What：终端 inline interpreter 能在受控工作区执行内联 Node/Python 代码并返回真实结果。
+- Why：AI 需要可靠的短脚本执行入口，不能把解释器调用误当成普通 shell 文本。
+- How：通过 terminal 工具执行内联代码，检查命令、输出、工作目录和边界错误。
+- Oracle：返回真实标记和正确退出状态；越界或不可用解释器被明确拒绝。
+- Not：不替代持久终端会话的生命周期测试。
+
 ##### `terminal-persistent-session-contract`
 
 - 测试类型：`backend`
@@ -729,6 +736,15 @@ AI unit / 辅助测试目录：
 - Oracle：工具结果返回 `{ error }`。
 - Not：不验证 provider 重试策略。
 
+##### `browser-use-keeps-one-tab-for-the-whole-run`
+
+- 测试类型：`backend`
+- What：同一 browser-use run 复用一个浏览器 tab，并在多次操作后保持上下文连续。
+- Why：重复建 tab 会丢失页面状态、泄漏资源并改变 AI 工具语义。
+- How：执行连续浏览器操作，记录 tab 标识和生命周期事件。
+- Oracle：整个 run 只有一个 tab；后续操作使用同一上下文，run 结束后资源被清理。
+- Not：不评价浏览器页面视觉质量。
+
 ##### `browser-use-service-unavailable-error`
 
 - 测试类型：`backend`
@@ -739,6 +755,15 @@ AI unit / 辅助测试目录：
 - Not：不验证 Stagehand 实际网页操作。
 
 #### utility 类别
+
+##### `wait-for-user-takeover-contract`
+
+- 测试类型：`backend`
+- What：AI 在需要用户接管时通过 wait 工具暂停并正确恢复或结束。
+- Why：接管是 AI 架构的阻塞态，状态、提示和恢复边界必须稳定。
+- How：构造 takeover 请求，观察事件、等待结果和用户响应后的终态。
+- Oracle：只产生一个可识别的等待状态；响应后继续执行或安全结束，不重复调用和伪造完成。
+- Not：不覆盖 Workbench 接管面板的视觉交互。
 
 ##### `wait-time-contract`
 
@@ -944,6 +969,15 @@ AI unit / 辅助测试目录：
 - Oracle：事件流出现 `context_compaction_started / context_compaction_completed`；只保留一个 `rounds` compaction block；`latest_round` 保留原文；压缩摘要保留审批未完成、未审批不可发布、Bob 和上线窗口冲突；后续 `brain` prompt 使用 `<compactions>` 且旧 history 不再以未压缩 rounds 渲染；`tokenEstimateAfter / sourceHistoryTokenEstimate <= 0.35`。
 - Not：不验证 live 模型自由生成下的压缩质量；不验证多次滚动压缩合并。
 
+##### `session-skill-memory-multi-run`
+
+- 测试类型：`backend / mock-llm`
+- What：同一 AI session 的多轮 human run 能复用已学习技能记忆。
+- Why：技能记忆是 AI 架构跨轮次协作的核心，不应每轮重复 learning。
+- How：第一轮学习并使用技能，第二轮继续同一任务，检查 brain 输入和 human steps。
+- Oracle：第一轮写入技能；第二轮能看到技能且不重复 learning；两轮均正常完成。
+- Not：不覆盖 Workbench UI 会话持久化，该路径由 Workbench E2E 覆盖。
+
 ##### `todolist-memory-maintenance`
 
 - 测试类型：`backend`
@@ -998,6 +1032,15 @@ AI unit / 辅助测试目录：
 - Oracle：同一条任务中真实出现 terminal 与 KB 两类工具结果，任务最终完成。
 - Not：不验证更复杂的多轮依赖型工具调度。
 
+##### `human-pdf-read-visuals-collaboration`
+
+- 测试类型：`backend / mock-llm`
+- What：mock human 能组合 PDF 文本读取与 PDF 视觉读取，直接得到识图结果。
+- Why：PDF 视觉能力属于 AI 架构工具协作，不应依赖 Workbench 或伪造事件。
+- How：用本地视觉服务和脚本化 human 决策调用 `pdf_read_pages` 与 `pdf_read_visuals`。
+- Oracle：两类工具均成功；视觉结果包含服务返回的信息；不调用旧的 render/image-analyze 路径。
+- Not：不验证真实模型的自主决策。
+
 ##### `kb-answer-with-real-kb`
 
 - 测试类型：`backend`
@@ -1017,6 +1060,22 @@ AI unit / 辅助测试目录：
 - Not：不验证真实模型的自主规划质量。
 
 #### live 类别
+
+##### `human-legacy-doc-reading-live`
+
+- 测试类型：`backend / live`
+- What：真实模型通过 docx-read 工具读取选中的旧版 .doc 文档。
+- Why：真实 human 必须遵守旧格式只读边界并保持源文件不变。
+- How：仅提供旧版文档和读取工具，检查工具事件、答案关键事实与文件 hash。
+- Oracle：读取成功、答案包含预期事实、不调用编辑工具且源文件未改变。
+
+##### `human-legacy-doc-edit-skip-live`
+
+- 测试类型：`backend / live`
+- What：真实模型尝试编辑旧版 .doc 后遵循 decision hint，停止重试并跳过。
+- Why：不可写格式必须快速收敛，避免反复工具调用和误改原文件。
+- How：要求直接编辑旧版文档，检查一次失败、提示事件、最终答复和文件 hash。
+- Oracle：只尝试一次编辑；出现 legacy_doc_edit_unsupported；源文件不变且任务完成。
 
 ##### `human-create-ppt-deck-live`
 
@@ -1044,6 +1103,38 @@ AI unit / 辅助测试目录：
 - How：使用已有共享 workspace fixture，即 `tests/fixtures/workspace`。Run 1 选中文件 A `深度学习.docx`，让真实模型读取并沉淀“过拟合/过度拟合”的定义、原因和处理信息；测试 driver 在确认工具结果中已经出现过拟合事实后，于后续 `human.brain` 调用注入 `network_error`，保存恢复快照。Run 2 恢复真实 LLM 配置，同 session 继续提问并显式改选文件 B `图形学.docx`，要求保留过拟合信息并补充反走样信息形成对比小结。
 - Oracle：Run 1 注入失败为 `network_error` 且 `resumeSnapshotSaved=true`；恢复快照中能看到中断前沉淀的过拟合事实；Run 2 成功完成；Run 2 的 brain prompt / llm-io 中出现中断恢复 hint 文案，且包含本轮新选择文件 B 与恢复出的过拟合上下文；最终交付同时包含过拟合与反走样关键事实；Run 2 成功后恢复快照被清空。
 - Not：不验证真实 provider 的随机网络抖动；不要求 live 模型逐字复述 hint 文案；不恢复 docx 临时运行态。
+
+##### `human-runtime-inline-code-live`
+
+- 测试类型：`backend / live`
+- What：真实模型使用 runtime inline code 执行代码并返回确定性结果。
+- Why：runtime 是 AI 架构的执行能力，必须验证真实解释器调用而非文本猜测。
+- How：只开放 terminal/runtime 相关工具，检查执行命令、结果标记和资源边界。
+- Oracle：实际执行 inline code 并返回预期标记；无伪造工具事件。
+
+##### `human-runtime-script-assets-live`
+
+- 测试类型：`backend / live`
+- What：真实模型执行脚本并将临时产物写入受控 UUID runtime assets 目录。
+- Why：脚本和产物是 AI 工具协作的真实交付边界，不能污染工作区。
+- How：检查脚本执行、assets 路径、文件内容和清理结果。
+- Oracle：脚本真实运行；产物位于 UUID assets 子目录；工作区没有安装/临时污染文件。
+
+##### `human-runtime-download-node-live`
+
+- 测试类型：`backend / live`
+- What：本地 Node.js 不可用时，真实模型下载无需系统安装的 Node.js runtime 并完成代码执行。
+- Why：AI runtime 必须能在缺少系统 Node.js 的环境中自主补齐真实执行能力。
+- How：隐藏系统 Node.js，只开放 terminal 工具，要求模型把 runtime 安装到受控 `user_runtime` 目录后执行确定性代码。
+- Oracle：下载后的 Node.js 真实执行并返回预期标记；安装文件只存在于指定 runtime 目录；工作区无安装产物。
+
+##### `human-runtime-download-python-live`
+
+- 测试类型：`backend / live`
+- What：本地 Python 不可用时，真实模型下载无需系统安装的 Python runtime 并完成代码执行。
+- Why：AI runtime 必须能在缺少系统 Python 的环境中自主补齐真实执行能力。
+- How：隐藏系统 Python，只开放 terminal 工具，要求模型把 runtime 安装到受控 `user_runtime` 目录后执行确定性代码。
+- Oracle：下载后的 Python 真实执行并返回预期标记；安装文件只存在于指定 runtime 目录；工作区无安装产物。
 
 ##### `human-context-compaction-natural-trigger-live`
 

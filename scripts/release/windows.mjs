@@ -23,6 +23,7 @@ import {
 import { prepareReleaseWorkspace } from './workspace.mjs'
 import { parseReleaseTag } from './tag.mjs'
 import { hasRegressionSelectionArgs, readRegressionSelection } from './regression.mjs'
+import { cleanupLocalTestLogs } from './shared/test-logs.mjs'
 
 const execFileAsync = promisify(execFile)
 const ROOT = process.cwd()
@@ -134,6 +135,15 @@ const cleanupLocalCandidates = async () => {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     process.stderr.write(`[release] local candidate cleanup warning: ${message}\n`)
+  }
+}
+
+const cleanupLocalTestLogsSafely = async () => {
+  try {
+    await cleanupLocalTestLogs(ROOT)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    process.stderr.write(`[release] local test log cleanup warning: ${message}\n`)
   }
 }
 
@@ -296,6 +306,7 @@ const existing = await readPublicReleaseFragment(releaseTag, 'windows-x64', publ
 if (existing) {
   await verifyPublicReleaseFragment(existing, publicBaseUrl)
   await verifyR2ReleaseFragment(existing, inspection.awsExecutable)
+  await cleanupLocalTestLogsSafely()
   await cleanupLocalCandidates()
   process.stdout.write(`[release] Windows ${releaseTag} is already complete on R2\n`)
   process.exit(0)
@@ -322,5 +333,6 @@ await run(
 await verifyPublicReleaseFragment(candidate.verified.fragment, publicBaseUrl)
 await verifyR2ReleaseFragment(candidate.verified.fragment, inspection.awsExecutable)
 await markCandidatePublished({ tag: releaseTag, platform: 'windows-x64' })
+await cleanupLocalTestLogsSafely()
 await cleanupLocalCandidates()
 process.stdout.write(`[release] Windows ${releaseTag} published from ${candidate.bundlePath}\n`)

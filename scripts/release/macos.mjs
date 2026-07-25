@@ -13,6 +13,7 @@ import {
   recordCandidateE2E
 } from './candidate.mjs'
 import { loadReleaseEnvironment } from './shared/environment.mjs'
+import { cleanupLocalTestLogs } from './shared/test-logs.mjs'
 import { prepareReleaseWorkspace } from './workspace.mjs'
 import { parseReleaseTag } from './tag.mjs'
 import { hasRegressionSelectionArgs, readRegressionSelection } from './regression.mjs'
@@ -364,6 +365,12 @@ await run(process.execPath, [
 ])
 for (const platform of ['macos-arm64', 'macos-x64']) {
   await markCandidatePublished({ tag: releaseTag, platform })
+}
+try {
+  await cleanupLocalTestLogs(ROOT)
+} catch (error) {
+  const message = error instanceof Error ? error.message : String(error)
+  process.stderr.write(`[release] local test log cleanup warning: ${message}\n`)
 }
 try {
   const removed = await cleanupSupersededReleaseCandidates({

@@ -9,10 +9,10 @@ import {
 
 describe('settings system notification e2e', () => {
   it(
-    'system-notification-setting-persists',
+    'system-notification-settings',
     async () => {
       await runE2ECase({
-        caseId: 'system-notification-setting-persists',
+        caseId: 'system-notification-settings',
         domain: 'settings',
         suite: 'general',
         description: '通用设置可以关闭和恢复 AI 运行完成时的系统通知。',

@@ -32,10 +32,7 @@ const FILE_RECORD: WorkspaceFileIndexRecord = {
   updated_at: NOW
 }
 
-const createWebSource = (
-  id: string,
-  status: WebSourceRecord['index_status']
-): WebSourceRecord => ({
+const createWebSource = (id: string, status: WebSourceRecord['index_status']): WebSourceRecord => ({
   id,
   workspace_id: WORKSPACE.id,
   identity_kind: 'normalized_url',
@@ -72,7 +69,7 @@ describe('settings workspace backend', () => {
     await runBackendCase({
       caseId: 'workspace-interrupted-job-recovery-contract',
       harnessMode: 'tool-real',
-      domain: 'settings',
+      domain: 'unit',
       suite: 'workspace',
       groups: ['files'],
       description: '启动恢复会把遗留 running job 和条目级执行中状态收敛为失败。',
@@ -83,9 +80,15 @@ describe('settings workspace backend', () => {
         await runtime.storageService.workspace.replaceWorkspaceFileIndexRecords(WORKSPACE.id, [
           FILE_RECORD
         ])
-        await runtime.storageService.webSource.saveWebSource(createWebSource('crawling-web', 'crawling'))
-        await runtime.storageService.webSource.saveWebSource(createWebSource('indexing-web', 'indexing'))
-        await runtime.storageService.workspaceIndexJob.saveJob(createJob('file-running-job', 'file'))
+        await runtime.storageService.webSource.saveWebSource(
+          createWebSource('crawling-web', 'crawling')
+        )
+        await runtime.storageService.webSource.saveWebSource(
+          createWebSource('indexing-web', 'indexing')
+        )
+        await runtime.storageService.workspaceIndexJob.saveJob(
+          createJob('file-running-job', 'file')
+        )
         await runtime.storageService.workspaceIndexJob.saveJob(createJob('web-running-job', 'web'))
 
         await runtime.storageService.failInterruptedWorkspaceIndexJobs('程序关闭导致索引中断')
@@ -95,7 +98,8 @@ describe('settings workspace backend', () => {
         )
         const webSources = await runtime.storageService.webSource.listWebSources(WORKSPACE.id)
         const runningJobs = await runtime.storageService.workspaceIndexJob.listRunningJobs()
-        const fileJob = await runtime.storageService.workspaceIndexJob.getJobById('file-running-job')
+        const fileJob =
+          await runtime.storageService.workspaceIndexJob.getJobById('file-running-job')
         const webJob = await runtime.storageService.workspaceIndexJob.getJobById('web-running-job')
 
         return {
@@ -126,8 +130,7 @@ describe('settings workspace backend', () => {
             result.fileError === '程序关闭导致索引中断',
           {
             name: 'indexing-files-fail-on-recovery',
-            message:
-              '启动恢复应把索引中的文件收敛为失败状态，对齐 SET-WORKSPACE-004-AC5。',
+            message: '启动恢复应把索引中的文件收敛为失败状态，对齐 SET-WORKSPACE-004-AC5。',
             data: result
           }
         )

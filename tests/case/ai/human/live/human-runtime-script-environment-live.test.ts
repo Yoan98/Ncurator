@@ -18,6 +18,10 @@ const SCRIPT_MARKER = 'NCURATOR_RUNTIME_SCRIPT_OK'
 const NODE_DOWNLOAD_MARKER = 'NCURATOR_DOWNLOADED_NODE_OK'
 const PYTHON_DOWNLOAD_MARKER = '271828'
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu
+const RUNTIME_DOWNLOAD_CASES = [
+  { runtimeName: 'node', caseId: 'human-runtime-download-node-live' },
+  { runtimeName: 'python', caseId: 'human-runtime-download-python-live' }
+] as const
 
 const cleanupDirectories = new Set<string>()
 const IS_WINDOWS = process.platform === 'win32'
@@ -269,120 +273,126 @@ describe.skipIf(!SUPPORTED_PLATFORMS.has(process.platform))('ai human live backe
     })
   }, 240_000)
 
-  for (const runtimeName of ['node', 'python'] as const) {
-    it(`human-runtime-download-${runtimeName}-live`, async () => {
-      await runWithStructuredOutputRetry(async () => {
-        await runBackendCase({
-          caseId: `human-runtime-download-${runtimeName}-live`,
-          harnessMode: 'live',
-          domain: 'ai',
-          suite: 'human',
-          groups: ['live'],
-          description: `验证真实模型在本地缺少 ${runtimeName} 时，下载真实可执行环境到 user_runtime 并完成任务。`,
-          fixtures: [],
-          runMode: 'single',
-          runtimeModelName: hasLiveLlmConfigInEnv() ? loadLiveLlmConfigFromEnv().model_name : null,
-          execute: async (runtime) => {
-            if (!hasLiveLlmConfigInEnv()) {
-              return {
-                skipped: true,
-                output: null,
-                events: [],
-                installedFiles: [],
-                workspaceInstallationArtifacts: [],
-                installDirectory: ''
-              }
-            }
-
-            const missingCommands =
-              runtimeName === 'node' ? ['node', 'nodejs'] : ['python', 'python3']
-            const runtimePath = await createMissingRuntimePath(missingCommands)
-            const installDirectory = createUserRuntimeTestDirectory()
-            const marker = runtimeName === 'node' ? NODE_DOWNLOAD_MARKER : PYTHON_DOWNLOAD_MARKER
-            const languageLabel = runtimeName === 'node' ? 'Node.js' : 'Python'
-            const downloadGuidance = buildRuntimeDownloadGuidance(runtimeName, installDirectory)
-            const sessionId = `human-runtime-download-${runtimeName}-live-session`
-            await runtime.seedLlmConfig(loadLiveLlmConfigFromEnv())
-            const runner = createHumanTestRunner(runtime, {
-              sessionId,
-              allowedToolNames: ['terminal_run', 'terminal_read', 'terminal_stop'],
-              humanRuntimeOverrides: {
-                hardActionLimit: 24,
-                terminalEnvironment: { PATH: runtimePath }
-              }
-            })
-
-            try {
-              const output = await runner.run({
-                taskId: runtime.taskId,
-                userInput: `请使用 ${languageLabel} 真实运行程序并输出标记 ${marker}。当前终端中 ${languageLabel} 不可用，请下载无需系统安装的真实可执行环境，将本次测试的全部运行环境文件放在 ${installDirectory} 下，然后使用下载后的环境执行代码。${downloadGuidance}`
-              })
-              return {
-                skipped: false,
-                output,
-                events: runtime.eventCollector.snapshot(),
-                installedFiles: await listFiles(installDirectory),
-                workspaceInstallationArtifacts: (await listFiles(runtime.workspaceRoot)).filter(
-                  isRuntimeInstallationArtifact
-                ),
-                installDirectory
-              }
-            } finally {
-              await terminalSessionManager.closeByChatSession(sessionId)
-            }
-          },
-          assert: async (result, runtime) => {
-            if (result.skipped) {
-              runtime.assertThat(true, {
-                name: 'live-config-not-provided',
-                message: `未提供 live 模型配置，已跳过 ${runtimeName} download live case。`
-              })
-              return
-            }
-
-            const marker = runtimeName === 'node' ? NODE_DOWNLOAD_MARKER : PYTHON_DOWNLOAD_MARKER
-            const commands = collectTerminalCommands(result.events)
-            const resultText = collectTerminalResultText(result.events)
-            const deliveryText = String(result.output?.deliveryMarkdown || '')
-            const executableFiles = result.installedFiles.filter((filePath) =>
-              runtimeName === 'node'
-                ? /^node(?:\.exe)?$/iu.test(path.basename(filePath))
-                : /^python(?:3(?:\.\d+)*)?(?:\.exe)?$/iu.test(path.basename(filePath))
-            )
-            const usedInstalledRuntime = commands.some((command) => {
-              const normalizedCommand = normalizeCommandPath(command)
-              return (
-                normalizedCommand.includes(normalizeCommandPath(result.installDirectory)) &&
-                (runtimeName === 'node'
-                  ? /\/node(?:\.exe)?(?:[\s"']|$)/iu.test(normalizedCommand)
-                  : /\/python(?:3(?:\.\d+)*)?(?:\.exe)?(?:[\s"']|$)/iu.test(normalizedCommand))
-              )
-            })
-
-            runtime.assertThat(
-              result.output?.status === 'completed' &&
-                result.installedFiles.length > 0 &&
-                executableFiles.length > 0 &&
-                usedInstalledRuntime &&
-                (resultText.includes(marker) || deliveryText.includes(marker)) &&
-                result.workspaceInstallationArtifacts.length === 0,
-              {
-                name: `human-live-downloads-and-runs-${runtimeName}-from-user-runtime`,
-                message: `live human 应在缺少 ${runtimeName} 时将真实运行环境下载到 user_runtime 独立目录，并用它执行代码。`,
-                data: {
-                  commands,
-                  resultText,
-                  deliveryText,
-                  installDirectory: result.installDirectory,
-                  installedFiles: result.installedFiles,
-                  executableFiles,
-                  workspaceInstallationArtifacts: result.workspaceInstallationArtifacts
+  for (const { runtimeName, caseId } of RUNTIME_DOWNLOAD_CASES) {
+    it(
+      caseId,
+      async () => {
+        await runWithStructuredOutputRetry(async () => {
+          await runBackendCase({
+            caseId,
+            harnessMode: 'live',
+            domain: 'ai',
+            suite: 'human',
+            groups: ['live'],
+            description: `验证真实模型在本地缺少 ${runtimeName} 时，下载真实可执行环境到 user_runtime 并完成任务。`,
+            fixtures: [],
+            runMode: 'single',
+            runtimeModelName: hasLiveLlmConfigInEnv()
+              ? loadLiveLlmConfigFromEnv().model_name
+              : null,
+            execute: async (runtime) => {
+              if (!hasLiveLlmConfigInEnv()) {
+                return {
+                  skipped: true,
+                  output: null,
+                  events: [],
+                  installedFiles: [],
+                  workspaceInstallationArtifacts: [],
+                  installDirectory: ''
                 }
               }
-            )
-          }
+
+              const missingCommands =
+                runtimeName === 'node' ? ['node', 'nodejs'] : ['python', 'python3']
+              const runtimePath = await createMissingRuntimePath(missingCommands)
+              const installDirectory = createUserRuntimeTestDirectory()
+              const marker = runtimeName === 'node' ? NODE_DOWNLOAD_MARKER : PYTHON_DOWNLOAD_MARKER
+              const languageLabel = runtimeName === 'node' ? 'Node.js' : 'Python'
+              const downloadGuidance = buildRuntimeDownloadGuidance(runtimeName, installDirectory)
+              const sessionId = `${caseId}-session`
+              await runtime.seedLlmConfig(loadLiveLlmConfigFromEnv())
+              const runner = createHumanTestRunner(runtime, {
+                sessionId,
+                allowedToolNames: ['terminal_run', 'terminal_read', 'terminal_stop'],
+                humanRuntimeOverrides: {
+                  hardActionLimit: 24,
+                  terminalEnvironment: { PATH: runtimePath }
+                }
+              })
+
+              try {
+                const output = await runner.run({
+                  taskId: runtime.taskId,
+                  userInput: `请使用 ${languageLabel} 真实运行程序并输出标记 ${marker}。当前终端中 ${languageLabel} 不可用，请下载无需系统安装的真实可执行环境，将本次测试的全部运行环境文件放在 ${installDirectory} 下，然后使用下载后的环境执行代码。${downloadGuidance}`
+                })
+                return {
+                  skipped: false,
+                  output,
+                  events: runtime.eventCollector.snapshot(),
+                  installedFiles: await listFiles(installDirectory),
+                  workspaceInstallationArtifacts: (await listFiles(runtime.workspaceRoot)).filter(
+                    isRuntimeInstallationArtifact
+                  ),
+                  installDirectory
+                }
+              } finally {
+                await terminalSessionManager.closeByChatSession(sessionId)
+              }
+            },
+            assert: async (result, runtime) => {
+              if (result.skipped) {
+                runtime.assertThat(true, {
+                  name: 'live-config-not-provided',
+                  message: `未提供 live 模型配置，已跳过 ${runtimeName} download live case。`
+                })
+                return
+              }
+
+              const marker = runtimeName === 'node' ? NODE_DOWNLOAD_MARKER : PYTHON_DOWNLOAD_MARKER
+              const commands = collectTerminalCommands(result.events)
+              const resultText = collectTerminalResultText(result.events)
+              const deliveryText = String(result.output?.deliveryMarkdown || '')
+              const executableFiles = result.installedFiles.filter((filePath) =>
+                runtimeName === 'node'
+                  ? /^node(?:\.exe)?$/iu.test(path.basename(filePath))
+                  : /^python(?:3(?:\.\d+)*)?(?:\.exe)?$/iu.test(path.basename(filePath))
+              )
+              const usedInstalledRuntime = commands.some((command) => {
+                const normalizedCommand = normalizeCommandPath(command)
+                return (
+                  normalizedCommand.includes(normalizeCommandPath(result.installDirectory)) &&
+                  (runtimeName === 'node'
+                    ? /\/node(?:\.exe)?(?:[\s"']|$)/iu.test(normalizedCommand)
+                    : /\/python(?:3(?:\.\d+)*)?(?:\.exe)?(?:[\s"']|$)/iu.test(normalizedCommand))
+                )
+              })
+
+              runtime.assertThat(
+                result.output?.status === 'completed' &&
+                  result.installedFiles.length > 0 &&
+                  executableFiles.length > 0 &&
+                  usedInstalledRuntime &&
+                  (resultText.includes(marker) || deliveryText.includes(marker)) &&
+                  result.workspaceInstallationArtifacts.length === 0,
+                {
+                  name: `human-live-downloads-and-runs-${runtimeName}-from-user-runtime`,
+                  message: `live human 应在缺少 ${runtimeName} 时将真实运行环境下载到 user_runtime 独立目录，并用它执行代码。`,
+                  data: {
+                    commands,
+                    resultText,
+                    deliveryText,
+                    installDirectory: result.installDirectory,
+                    installedFiles: result.installedFiles,
+                    executableFiles,
+                    workspaceInstallationArtifacts: result.workspaceInstallationArtifacts
+                  }
+                }
+              )
+            }
+          })
         })
-      })
-    }, 480_000)
+      },
+      480_000
+    )
   }
 })

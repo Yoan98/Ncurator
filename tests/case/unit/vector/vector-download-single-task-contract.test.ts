@@ -27,7 +27,7 @@ describe('settings vector backend', () => {
     await runBackendCase({
       caseId: 'vector-download-single-task-contract',
       harnessMode: 'tool-real',
-      domain: 'settings',
+      domain: 'unit',
       suite: 'vector',
       description: '向量模型下载在服务层只允许单任务进行，并对活跃任务持续上报进度字段。',
       fixtures: [],

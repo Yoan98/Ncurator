@@ -8,7 +8,7 @@ describe('settings workspace backend', () => {
     await runBackendCase({
       caseId: 'workspace-scan-contract',
       harnessMode: 'tool-real',
-      domain: 'settings',
+      domain: 'unit',
       suite: 'workspace',
       groups: ['files'],
       description: '工作空间扫描服务生成文件索引记录，并由派生摘要支撑页面刷新。',

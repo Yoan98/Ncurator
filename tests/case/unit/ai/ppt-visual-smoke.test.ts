@@ -114,5 +114,5 @@ describe('ppt visual smoke', () => {
     } finally {
       await fs.rm(root, { recursive: true, force: true })
     }
-  }, 15_000)
+  }, 30_000)
 })

@@ -110,6 +110,8 @@ if (platform === 'windows') {
 
 await run(pnpmExecutable, ['typecheck'])
 await run(pnpmExecutable, ['test:update:backend'])
+await run(pnpmExecutable, ['test:unit'])
+await run(pnpmExecutable, ['test:ai:non-live'])
 
 packageJson.version = version
 await writeFile(packagePath, `${JSON.stringify(packageJson, null, 2)}\n`, 'utf8')

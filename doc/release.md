@@ -36,9 +36,11 @@ flowchart TD
 ```bash
 pnpm typecheck
 pnpm test:update:backend
+pnpm test:unit
+pnpm test:ai:non-live
 ```
 
-这两项是创建 Tag 前的基础检查，不是正式包回归。检查通过后，脚本更新 `package.json`、提交版本号、创建 annotated Tag，并原子推送 `main` 与 Tag。
+这些是创建 Tag 前的基础检查，不是正式包回归：既有的 typecheck/update 检查、全部 Unit，以及除 `live` 外的全部 AI 测试都必须通过。检查通过后，脚本更新 `package.json`、提交版本号、创建 annotated Tag，并原子推送 `main` 与 Tag。
 
 Windows 随后按本地优先的路线构建候选包；macOS 只创建 Tag，候选包需要在 Apple Silicon Mac 上单独构建。
 
@@ -222,7 +224,7 @@ NCURATOR_ACTIONS_TOKEN
 RELEASE_REPOSITORY=owner/repo
 ```
 
-publish 会上传候选产物和 fragment，更新对应平台的自动更新 metadata、官网 manifest 与固定下载地址，然后验证公开文件大小、sha512、文件名和 manifest。公开验证成功后才把候选状态标记为 `published`。
+publish 会上传候选产物和 fragment，更新对应平台的自动更新 metadata、官网 manifest 与固定下载地址，然后验证公开文件大小、sha512、文件名和 manifest。公开验证成功后才把候选状态标记为 `published`；随后清理本地 `tests/logs/**`，不在失败、prepare-only 或 test-only 阶段清理。
 
 公开验证成功后会清理该平台更早版本的 artifacts 与 release-status，R2 只保留当前最新版本。
 

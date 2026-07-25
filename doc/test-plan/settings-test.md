@@ -4,7 +4,7 @@
 
 - 本计划定义 Settings 用户可见能力的回归范围，并对齐 [settings.md](../prd/settings.md) 的 `SET-*` 需求和验收编号。
 - 通用测试、runner、raw logs、UI E2E 和 live 断言规则遵循 `doc/test.md`。
-- Settings UI E2E 必须通过真实 UI 完成被测行为。目录绑定由 `workspace-set-root-path` 独立覆盖；其他 case 可以通过真实 IPC 建立目录绑定前置状态，但不能替代当前 case 的按钮、进度、索引结果或页面刷新。
+- Settings 测试全部是 E2E，必须通过真实 UI 完成被测行为；前置状态可以通过真实 IPC 建立，但不能替代当前 case 的按钮、进度、索引结果或页面刷新。
 
 ## 2. Suite 设计
 
@@ -14,15 +14,13 @@ Settings 顶层 suite 对齐 PRD 模块：
 2. `general`
 3. `workspace`
 4. `vector`
-5. `update`
 
 领域规则：
 
 - `model` 验证大模型可用服务配置的加载、创建、编辑、删除和远端模型列表刷新。
 - `general` 验证 AI 运行系统通知开关的加载、保存和关闭后的静默行为；系统通知中心的真实视觉展示按 macOS 与 Windows 发布前手动验证。
-- `workspace` 验证工作空间容器及其下属 `files`、`web` 两类子区域的页面行为和 backend / IPC 支撑契约。
+- `workspace` 验证工作空间容器及其下属 `files`、`web` 两类子区域的页面行为和真实 IPC 链路。
 - `vector` 属于 Settings 产品域，但页面位于独立路由 `/model-download`，测试目录与 runner 仍统一归入 `tests/case/settings/vector/**`。
-- `update` 覆盖应用更新服务、发布配置、R2 元数据和 Workbench 左侧更新入口，不下载或安装真实更新包。
 - `workspace` 是 Settings 下的 suite，按 `core / files / web` 组织，语义为“具名工作空间 + 文件 tab + 网页 tab”。
 - `workspace` 相关回归测试默认复用 `tests/fixtures/workspace` 作为共享输入目录。
 - `How` 和 `Oracle` 必须映射到 [settings.md](../prd/settings.md) 的需求或验收编号。
@@ -30,15 +28,6 @@ Settings 顶层 suite 对齐 PRD 模块：
 ## 3. 回归测试清单
 
 ### 3.1 `model`
-
-#### `model-config-list-contract`
-
-- 测试类型：`backend`
-- What：大模型页初始化依赖的连接配置查询契约，能够返回完整配置列表和配置名称。
-- Why：如果列表查询或配置名称丢失，Settings 列表和 workbench 按配置分组的模型选择都会失真。
-- How：构造至少两条连接配置；调用 Settings 大模型页使用的配置查询服务或 IPC。
-- Oracle：返回结果包含全部连接配置，对齐 `SET-MODEL-001-AC1`；返回结果保留用户配置名称和服务地址，对齐 `SET-MODEL-001-AC2`。
-- Not：不验证列表视觉样式、排序规则和新增/编辑表单交互。
 
 #### `model-page-load-config-list`
 
@@ -132,15 +121,6 @@ Settings 顶层 suite 对齐 PRD 模块：
 - Oracle：成功设置后，当前工作空间会写入文件目录并刷新目录树，对齐 `SET-WORKSPACE-006-AC1`、`SET-WORKSPACE-008-AC3`。
 - Not：不验证不同操作系统的原生目录选择器样式，也不验证真实文件系统权限错误分支。
 
-#### `workspace-remove-source-contract`
-
-- 测试类型：`backend`
-- What：移除工作空间后，工作空间本体、文件索引记录和网页资料记录都被清理。
-- Why：`SET-WORKSPACE-006-AC2` 的风险不只在当前列表消失，还在于派生资料范围是否残留脏数据。
-- How：预置一条工作空间、一条文件索引记录和一条网页资料记录，然后执行删除。
-- Oracle：工作空间列表不再返回被删项，对齐 `SET-WORKSPACE-006-AC2`；文件索引记录与网页资料记录同步消失，对齐 `SET-WORKSPACE-006-AC2`。
-- Not：不直接验证后续消费入口的 UI 展示；这里只验证 Settings 列表与后续可选数据源同时清理。
-
 #### `workspace-remove-from-list`
 
 - 测试类型：`e2e`
@@ -152,24 +132,6 @@ Settings 顶层 suite 对齐 PRD 模块：
 
 ### 3.3 `workspace / files`
 
-#### `workspace-index-job-store-contract`
-
-- 测试类型：`backend`
-- What：`workspace_index_job` 支持创建、读取 active、更新阶段进度和批量失败收敛。
-- Why：文件和网页索引进度恢复都依赖同一张持久化 job 表，必须先稳定底层 store contract。
-- How：预置同一工作区下多个 running job，更新其中一个任务进度后读取 active job，再调用失败收敛逻辑。
-- Oracle：active 查询返回同资料类型最新 running job，对齐 `SET-WORKSPACE-004-AC3`；进度更新可持久化读取，对齐 `SET-WORKSPACE-004-AC4`；running job 可批量收敛为失败，对齐 `SET-WORKSPACE-004-AC5`、`SET-WEB-004-AC6`。
-- Not：不验证前端订阅事件和按钮禁用，这些由 E2E case 覆盖。
-
-#### `workspace-scan-contract`
-
-- 测试类型：`backend`
-- What：目录检查会生成文件索引记录，并由持久化 job 与派生摘要驱动页面刷新。
-- Why：文件数、需索引数等摘要已不再缓存到 `workspace_source`，这里的契约必须稳定。
-- How：扫描真实工作目录，写入 `workspace_source` 与 `workspace_file_index` 后读取派生摘要。
-- Oracle：检查任务包含可供页面恢复的持久化 job 信息，对齐 `SET-WORKSPACE-003-AC1`、`SET-WORKSPACE-003-AC3`；工作空间本体只保留容器字段，文件摘要从文件索引记录派生，对齐 `SET-WORKSPACE-003-AC2`、`SET-WORKSPACE-005-AC2`。
-- Not：不验证前端按钮状态和目录树视觉展示。
-
 #### `workspace-scan-progress-refresh`
 
 - 测试类型：`e2e`
@@ -178,15 +140,6 @@ Settings 顶层 suite 对齐 PRD 模块：
 - How：创建一条带扫描延迟的 fixture 工作空间，触发检查更新并读取刷新后的文件树响应。
 - Oracle：检查过程中出现持久化进度反馈，且检查更新/更新索引按钮同时禁用，对齐 `SET-WORKSPACE-003-AC1`；检查成功后，文件树和需索引摘要同步刷新，对齐 `SET-WORKSPACE-003-AC2`。
 - Not：不验证真实大目录性能和文件系统权限失败分支。
-
-#### `workspace-prepare-contract`
-
-- 测试类型：`backend`
-- What：更新索引处理 `可索引 / 失败` 文件，界面只提供检查和更新两种操作。
-- Why：新模型的核心是增量索引，不再允许“模式选择”成为伪交互。
-- How：构造 `needs_index / failed / indexed` 三类记录，验证实际目标集。
-- Oracle：更新索引的目标仅包含 `needs_index` 与 `failed`，对齐 `SET-WORKSPACE-004-AC1`；同一工作区文件任务重复启动返回已有 running job，对齐 `SET-WORKSPACE-004-AC3`；契约中不再向产品模型暴露 `full / presence_only / changes_only` 等旧模式，对齐 `SET-WORKSPACE-004`。
-- Not：不验证真实 embedding、chunk 写入和单文件索引失败细节。
 
 #### `workspace-prepare-refresh`
 
@@ -232,24 +185,6 @@ Settings 顶层 suite 对齐 PRD 模块：
 - How：创建一条 prepare 会失败的 fixture 工作空间，触发更新索引并读取刷新后的文件树响应。
 - Oracle：文件 tab 的可索引数字包含失败数量并展示 `含失败 N 个` 辅助文案，对齐 `SET-WORKSPACE-005-AC2`；文件索引失败后，失败状态和错误信息保留在文件级记录中，目录树文件项只保留文件名与状态标记，对齐 `SET-WORKSPACE-008-AC2`。
 - Not：不验证错误文案的逐字 UI 展示，也不验证恢复失败文件后的二次成功链路。
-
-#### `workspace-index-worker-contract`
-
-- 测试类型：`backend`
-- What：workspace 文件索引 worker 协议与 embedding batch 限制。
-- Why：更新索引的稳定性依赖文件级 worker 响应和受控 batch，若 batch 过大或 worker 错误不能文件级收敛，真实工作区更新索引可能重新出现卡顿或闪退。
-- How：用纯函数覆盖 batch 组装规则；用 cached split/vector 请求覆盖 worker 成功响应；用不支持文件请求覆盖 worker JS error 返回；用临时 worker 脚本模拟非 0 exit 后重建 worker。
-- Oracle：batch 同时满足最多 `4` 个 chunk 和最多 `12000` 字符，单 chunk 超过 `12000` 时单独 embed，单 chunk 超过 `40000` 时失败；worker 成功返回 main 可写库的 split/chunks/vectors，worker JS error 返回文件级失败响应，worker exit 会让当前请求失败并在下一次文件请求中重建 worker，对齐 `SET-WORKSPACE-004-AC1`、`SET-WORKSPACE-004-AC2`。
-- Not：不验证真实 embedding 语义质量；不验证 native crash 进程隔离，若 worker_threads 仍遇到原生崩溃，应升级到进程级隔离方案。
-
-#### `workspace-interrupted-job-recovery-contract`
-
-- 测试类型：`backend`
-- What：启动恢复会把遗留的工作空间索引任务和条目级执行中状态收敛为失败。
-- Why：程序被直接关闭时退出钩子不可靠，必须靠下次启动恢复避免长期停留在索引中。
-- How：预置 running job、文件 `indexing`、网页 `crawling / indexing`，调用存储恢复逻辑。
-- Oracle：running job 被标记为失败，对齐 `SET-WORKSPACE-004-AC5`、`SET-WEB-004-AC6`；文件和网页执行中状态分别收敛为失败状态，对齐 `SET-WORKSPACE-004-AC5`、`SET-WEB-004-AC6`。
-- Not：不模拟真实操作系统强杀，只验证启动恢复的数据收敛规则。
 
 ### 3.4 `workspace / web`
 
@@ -309,26 +244,6 @@ Settings 顶层 suite 对齐 PRD 模块：
 - Oracle：页面至少展示一个模型卡片，且每个模型有下载按钮或已安装标识，对齐 `SET-VECTOR-001-AC1`。
 - Not：不验证下载进度、下载成功、下载失败和删除反馈；这些不能再通过假进度 e2e 验证。
 
-#### `vector-download-single-task-contract`
-
-- 测试类型：`backend`
-- What：向量模型下载在服务层只允许同一时间一个任务进行。
-- Why：并发下载会争用本地模型目录、进度通道和最终安装状态，必须在服务层建立单任务边界。
-- How：在 backend contract 中控制下载执行耗时，先启动一个下载任务，再尝试启动第二个任务。
-- Oracle：已有下载任务时，新的下载入口不可继续触发新任务，对齐 `SET-VECTOR-002-AC1`。
-- Not：不验证真实下载速度、网络失败和磁盘写入完整性。
-
-#### `vector-download-startup-resume-contract`
-
-- 测试类型：`backend`
-- What：应用启动时遇到进行中的向量模型下载快照，会恢复后台下载并继续上报进度。
-- Why：如果启动恢复失效，用户会误以为长时间下载已经丢失，重新进入页面时也无法看到一致的进度状态。
-- How：预置一条进行中的下载快照，初始化向量模型下载服务，观察是否恢复同一模型下载、继续上报进度，并在完成后清理快照。
-- Oracle：服务初始化后自动恢复同一模型下载并持续上报进度，对齐 `SET-VECTOR-002-AC4`。
-- Not：不验证真实网络环境下的跨版本兼容；这里只覆盖本地快照恢复与同步。
-
-下载进度、完成、失败、页面恢复和删除反馈必须由受控服务契约或组件测试覆盖；真实大文件下载只作为发布前按需手动回归，不应成为日常自动化前提。
-
 ### 3.6 `general`
 
 #### `system-notification-settings`
@@ -348,104 +263,3 @@ Settings 顶层 suite 对齐 PRD 模块：
 - How：通过真实 IPC 创建目标会话并进入通用设置，再由 Electron Main 向 Renderer 发送与通知点击相同的 `system-notification-open-session` 事件。
 - Oracle：路由回到 Workbench；目标会话可见且处于选中状态，对齐 `SET-GENERAL-001-AC4`。
 - Not：不点击操作系统通知中心的真实弹窗；macOS 与 Windows 的通知视觉和系统权限仍在发布前手动检查。
-
-### 3.7 `update`
-
-#### `app-update-service-contract`
-
-- 测试类型：`backend`
-- What：更新检查、下载、安装、错误、重复检查保护、启动检查和平台/签名开关。
-- Why：自动更新涉及应用替换，必须先用稳定契约守住状态机和安全边界。
-- How：使用受控 updater 事件覆盖有更新、已是最新版、下载完成、校验失败、未下载先安装、开发环境和未签名 macOS 等分支。
-- Oracle：状态、错误和安装调用与 updater 事件一致；开发环境、不支持平台和未签名 macOS 不会误启用自动更新。
-- Not：不下载真实安装包，不验证应用替换。
-
-#### `app-update-publish-config`
-
-- 测试类型：`backend`
-- What：发布配置使用直接下载源，并要求稳定的 macOS 签名身份。
-- Why：更新源或签名配置错误会导致客户端能发现版本但无法安全安装。
-- How：读取打包与发布配置，检查 provider、下载地址和签名约束。
-- Oracle：发布产物指向预期直连 feed；macOS 发布前必须具备唯一稳定签名身份。
-- Not：不执行打包、上传和真实签名。
-
-#### `r2-update-metadata-contract`
-
-- 测试类型：`backend`
-- What：R2 最新版本元数据指向不可变的版本化产物。
-- Why：可变文件名容易被缓存污染，导致客户端拿到元数据与安装包不一致。
-- How：生成并读取 latest 元数据，核对版本、文件名和下载路径。
-- Oracle：latest 元数据只引用带平台 Tag 的不可变文件；Windows 只接受 `windows-vX.Y.Z`，macOS 只接受 `mac-vX.Y.Z`，且各字段与发布产物一致。
-- Not：不访问真实 R2，也不验证 CDN 缓存刷新。
-
-#### `release-fragment-contract`
-
-- 测试类型：`backend`
-- What：发布片段包含不可变产物、sha512、包审计和 macOS 签名摘要。
-- Why：片段是跨机器和 finalize 的发布真相。
-- How：生成合法与伪造片段并执行校验，同时比较两个平台各自的版本序列。
-- Oracle：只接受 schema v2、平台前缀 Tag、Tag/平台一致且审计完整的片段；Mac 与 Windows 版本只在各自 Tag 序列内递增。
-- Not：不上传真实 R2。
-
-#### `release-storage-layout`
-
-- 测试类型：`backend`
-- What：Windows 与 macOS 的 artifacts、status 和固定下载 key 相互隔离。
-- Why：平台独立发布不能覆盖另一平台对象。
-- How：对三个平台调用统一 storage-layout helper。
-- Oracle：key 包含对应平台 Tag，且与 `doc/release.md` 的 R2 目录完全一致。
-- Not：不验证公开 CDN。
-
-#### `package-content-policy`
-
-- 测试类型：`backend`
-- What：最终包拒绝禁止文件、提示词明文和缺失运行依赖。
-- Why：staging 通过不代表真实安装目录安全完整。
-- How：构造最小 asar 清单和违规包执行审计。
-- Oracle：合法包通过，源码、敏感内容和依赖缺失导致失败。
-- Not：不实际构建安装包。
-
-#### `package-main-obfuscation`
-
-- 测试类型：`backend`
-- What：Main 混淆保持运行语义并生成可复核报告。
-- Why：混淆不能破坏运行时，也不能只依赖“脚本执行成功”。
-- How：混淆代表性 Main 文件，核对执行结果、哈希和报告。
-- Oracle：运行结果不变，受保护明文消失，报告覆盖全部目标文件。
-- Not：不把混淆视为加密。
-
-#### `package-size-budget`
-
-- 测试类型：`backend`
-- What：macOS arm64/x64 独立体积基线和失败阈值。
-- Why：异常体积增长通常意味着错误依赖或资源进入安装包。
-- How：对基线、警告增长和失败增长输入执行预算计算。
-- Oracle：3% 以上警告，8% 以上或超过硬上限失败。
-- Not：不更新已批准基线。
-
-#### `runtime-trace`
-
-- 测试类型：`backend`
-- What：运行依赖追踪能解析 pnpm 路径、显式资源和 optional peer。
-- Why：依赖漏包只会在安装后暴露，必须在构建阶段阻断。
-- How：构造代表性依赖图与策略输入。
-- Oracle：可达依赖完整，未知告警、版本错误和无用显式规则失败。
-- Not：不重复最终 asar 内容审计。
-
-#### `mac-update-signature`
-
-- 测试类型：`backend`
-- What：macOS 更新使用稳定签名身份并拒绝 ad-hoc 或不一致签名。
-- Why：两个架构必须被客户端识别为同一更新发布方。
-- How：输入合法和非法 codesign 摘要执行校验。
-- Oracle：仅固定 identity 与 designated requirement 组合通过。
-- Not：不替代正式包的真实 `codesign --deep --strict` 和启动验证。
-
-#### `sidebar-app-update`
-
-- 测试类型：`e2e`
-- What：Workbench 左侧更新入口的隐藏、下载、进度、稍后重启、安装和失败重试状态，并确认旧设置路由已移除。
-- Why：更新入口是特殊发布交互，需要稳定验证按钮状态和 API 调用。
-- How：使用专用更新 fixture 驱动各状态，通过真实 Renderer 交互观察按钮和 IPC observer。
-- Oracle：无更新时入口隐藏；有更新时用户点击才下载；下载中显示进度；下载完成可稍后或重启；失败可重试；旧设置路由回到大模型页，对齐 `WB-COMPOSER-012`。
-- Not：fixture 不证明真实安装包下载、签名或安装成功，本 case 不作为发布阻塞项。

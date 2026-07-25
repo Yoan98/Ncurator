@@ -31,7 +31,7 @@ describe('settings workspace backend', () => {
     await runBackendCase({
       caseId: 'workspace-index-worker-contract',
       harnessMode: 'tool-real',
-      domain: 'settings',
+      domain: 'unit',
       suite: 'workspace',
       groups: ['files'],
       description: 'workspace 文件索引 worker 协议与 embedding batch 限制保持稳定。',

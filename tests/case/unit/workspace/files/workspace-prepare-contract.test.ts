@@ -34,7 +34,7 @@ describe('settings workspace backend', () => {
     await runBackendCase({
       caseId: 'workspace-prepare-contract',
       harnessMode: 'tool-real',
-      domain: 'settings',
+      domain: 'unit',
       suite: 'workspace',
       groups: ['files'],
       description: '更新索引只处理可索引和失败文件，不再暴露旧三种处理模式。',

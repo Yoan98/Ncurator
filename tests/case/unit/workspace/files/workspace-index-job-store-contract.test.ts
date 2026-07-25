@@ -32,7 +32,7 @@ describe('settings workspace backend', () => {
     await runBackendCase({
       caseId: 'workspace-index-job-store-contract',
       harnessMode: 'tool-real',
-      domain: 'settings',
+      domain: 'unit',
       suite: 'workspace',
       groups: ['files'],
       description: 'workspace_index_job store 支持创建、active 查询、阶段进度更新和失败收敛。',

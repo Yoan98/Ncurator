@@ -44,7 +44,7 @@ describe('settings vector backend', () => {
     await runBackendCase({
       caseId: 'vector-download-startup-resume-contract',
       harnessMode: 'tool-real',
-      domain: 'settings',
+      domain: 'unit',
       suite: 'vector',
       description:
         'When a persisted active download snapshot exists, vector model startup initialization resumes the download in the background and clears the snapshot after completion.',
@@ -88,8 +88,9 @@ describe('settings vector backend', () => {
           'utf8'
         )
 
-        const downloadSpy = vi.spyOn(modelService, 'downloadModel').mockImplementation(
-          async (repoId: string, reporter?: ModelDownloadProgressReporter) => {
+        const downloadSpy = vi
+          .spyOn(modelService, 'downloadModel')
+          .mockImplementation(async (repoId: string, reporter?: ModelDownloadProgressReporter) => {
             reporter?.({
               repoId,
               file: 'onnx/model.onnx',
@@ -100,8 +101,7 @@ describe('settings vector backend', () => {
             })
             await blockedDownload
             return { success: true }
-          }
-        )
+          })
         vi.spyOn(modelService, 'isModelDownloaded').mockReturnValue(false)
         vi.spyOn(embeddingService, 'initialize').mockResolvedValue()
 
