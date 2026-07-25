@@ -88,8 +88,7 @@ describe('workbench conversation e2e', () => {
 
           await prepareWorkbenchWorkspaceThroughUi(page, {
             workspaceName: 'Workbench Guard Workspace',
-            rootPath: workspace.rootPath,
-            rootBindingMode: 'ipc'
+            rootPath: workspace.rootPath
           })
           await selectWorkbenchModel(page, env.modelName)
           await selectWorkbenchVisualModel(page, env.visualModelName)

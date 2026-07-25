@@ -47,8 +47,7 @@ const setupScopeWorkspace = async (
   await prepareWorkbenchWorkspaceThroughUi(page, {
     workspaceName: input.workspaceName,
     rootPath: workspace.rootPath,
-    webSourceUrl: input.webSourceUrl,
-    rootBindingMode: 'ipc'
+    webSourceUrl: input.webSourceUrl
   })
 
   return {

@@ -11,7 +11,7 @@ import {
   getWorkbenchLocator,
   loadWorkbenchLiveModelEnv,
   navigateToWorkbench,
-  selectWorkbenchWorkspace,
+  prepareWorkbenchWorkspaceThroughUi,
   sendWorkbenchMessage,
   switchWorkbenchMode,
   waitForWorkbenchAiRunCompletion,
@@ -211,24 +211,10 @@ describe('workbench conversation e2e', () => {
           await searchInput.fill('')
           await dropdown.getByRole('option', { name: liveEnv.modelName }).click()
 
-          const created = await page.evaluate(
-            async ({ name, rootPath }) => {
-              const createResult = await window.api.workspaceCreate({ name })
-              if (!createResult.success || !createResult.workspace) {
-                throw new Error(createResult.error || 'workspace create failed')
-              }
-              const bindResult = await window.api.workspaceSetRootPath({
-                workspaceId: createResult.workspace.id,
-                rootPath
-              })
-              if (!bindResult.success) throw new Error(bindResult.error || 'workspace bind failed')
-              return createResult.workspace.id
-            },
-            { name: WORKSPACE_NAME, rootPath: workspace.rootPath }
-          )
-
-          await navigateToWorkbench(page, { waitForSessionListText: false })
-          await selectWorkbenchWorkspace(page, WORKSPACE_NAME)
+          await prepareWorkbenchWorkspaceThroughUi(page, {
+            workspaceName: WORKSPACE_NAME,
+            rootPath: workspace.rootPath
+          })
           await switchWorkbenchMode(page, '大聪明')
           const successStartedAt = Date.now()
           await sendWorkbenchMessage(page, '不要调用任何工具，只回复“测试成功”。')
@@ -258,7 +244,6 @@ describe('workbench conversation e2e', () => {
           })
 
           return {
-            created,
             iconIsRightOfText,
             collapsed,
             expanded,

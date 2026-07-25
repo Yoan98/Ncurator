@@ -1,6 +1,7 @@
 import { describe, it } from 'vitest'
 import type { AiRunEvent } from '../../../../../src/shared/types'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
+import { clickScreenPoint } from '../../../../harness/e2e/nativeMouse'
 import {
   WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
   assertNoWorkbenchFakeSignals,
@@ -113,7 +114,7 @@ describe('workbench run e2e', () => {
             message: 'AI 已暂停，输入框位置显示用户接手面板，右侧浏览器保持打开。'
           })
 
-          const browserActionResult = await runtime.electronApp.evaluate(
+          const browserTarget = await runtime.electronApp.evaluate(
             async ({ webContents }, input) => {
               const allContents = webContents.getAllWebContents()
               const browserContents = allContents.find((item) =>
@@ -122,25 +123,54 @@ describe('workbench run e2e', () => {
               if (!browserContents) {
                 return {
                   ok: false,
-                  result: '',
+                  rect: null,
                   urls: allContents.map((item) => item.getURL())
                 }
               }
-              const result = await browserContents.executeJavaScript(`(() => {
+              const rect = await browserContents.executeJavaScript(`(() => {
                 const button = document.querySelector('#complete-manual')
-                if (!(button instanceof HTMLElement)) return 'BUTTON_NOT_FOUND'
-                button.click()
-                return document.querySelector('#manual-result')?.textContent || ''
+                if (!(button instanceof HTMLElement)) return null
+                const bounds = button.getBoundingClientRect()
+                return { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height }
               })()`)
-              return { ok: true, result: String(result), urls: [] }
+              return { ok: Boolean(rect), rect, urls: [] }
             },
             { url: server.url }
           )
-          if (!browserActionResult.ok) {
-            throw new Error(
-              `embedded browser webContents not found: ${browserActionResult.urls.join(', ')}`
-            )
+          if (!browserTarget.ok || !browserTarget.rect) {
+            throw new Error(`embedded browser target not found: ${browserTarget.urls.join(', ')}`)
           }
+          const viewportBox = await getWorkbenchLocator(
+            page,
+            workbenchSelectors.browserViewport
+          ).boundingBox()
+          if (!viewportBox) throw new Error('embedded browser viewport bounds are unavailable')
+          const contentBounds = await runtime.electronApp.evaluate(({ BrowserWindow }) => {
+            const window = BrowserWindow.getAllWindows().find(
+              (candidate) => !candidate.isDestroyed()
+            )
+            if (!window) throw new Error('application window is unavailable')
+            return window.getContentBounds()
+          })
+          await page.bringToFront()
+          await clickScreenPoint(
+            contentBounds.x + viewportBox.x + browserTarget.rect.x + browserTarget.rect.width / 2,
+            contentBounds.y + viewportBox.y + browserTarget.rect.y + browserTarget.rect.height / 2
+          )
+          const browserActionResult = await runtime.electronApp.evaluate(
+            async ({ webContents }, input) => {
+              const browserContents = webContents
+                .getAllWebContents()
+                .find((item) => item.getURL().startsWith(input.url))
+              if (!browserContents) return ''
+              return String(
+                await browserContents.executeJavaScript(
+                  "document.querySelector('#manual-result')?.textContent || ''"
+                )
+              )
+            },
+            { url: server.url }
+          )
 
           await getWorkbenchLocator(page, workbenchSelectors.userTakeoverConfirmButton).click()
           await waitForWorkbenchAiEvent(runtime, {
@@ -172,7 +202,7 @@ describe('workbench run e2e', () => {
             panelMessage,
             takeoverMessage: takeover.message,
             composerHidden,
-            browserActionResult: browserActionResult.result,
+            browserActionResult,
             actionsAfterConfirmation,
             toolNames,
             finalAnswerText: evidence.finalAnswerText,

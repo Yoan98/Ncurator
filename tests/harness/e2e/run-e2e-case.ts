@@ -126,6 +126,7 @@ export type E2ETestRuntime = {
     refs?: TestArtifactRefs
   }) => Promise<TestArtifact>
   collectSignals: () => Promise<E2ERuntimeSignals>
+  restartApp: () => Promise<{ page: Page; electronApp: ElectronApplication }>
   registerResource: (resource: {
     name: string
     phase: 'before-app-close' | 'after-app-close'
@@ -440,79 +441,123 @@ export const runE2ECase = async <TResult>(
     })
   }
 
-  const createRuntime = (app: LaunchedElectronApp): E2ETestRuntime => ({
-    runId,
-    taskId,
-    page: app.page,
-    electronApp: app.electronApp,
-    userDataDir: app.userDataDir,
-    recordEvent,
-    signal,
-    step: async (input) => {
-      stepCounter += 1
-      const stepId = `step-${stepCounter}`
-      lastStepId = stepId
-      try {
-        const result = await input.run()
+  const createRuntime = (app: LaunchedElectronApp): E2ETestRuntime => {
+    let currentApp = app
+    let restartCounter = 0
+    const archivedSignals: E2ERuntimeSignals[] = []
+    const runtime: E2ETestRuntime = {
+      runId,
+      taskId,
+      page: app.page,
+      electronApp: app.electronApp,
+      userDataDir: app.userDataDir,
+      recordEvent,
+      signal,
+      step: async (input) => {
+        stepCounter += 1
+        const stepId = `step-${stepCounter}`
+        lastStepId = stepId
+        try {
+          const result = await input.run()
+          recordEvent({
+            type: 'step',
+            name: input.name,
+            id: stepId,
+            status: 'ok',
+            message: input.message,
+            data: input.data
+          })
+          return result
+        } catch (error) {
+          failedStepId = stepId
+          executionErrorName = error instanceof Error ? error.name : 'Error'
+          executionErrorMessage = error instanceof Error ? error.message : String(error)
+          recordEvent({
+            type: 'step',
+            name: input.name,
+            id: stepId,
+            status: 'failed',
+            message: input.message,
+            data: {
+              input: input.data || null,
+              errorName: executionErrorName,
+              errorMessage: executionErrorMessage
+            }
+          })
+          throw error
+        }
+      },
+      assertThat: async (condition, input) => {
+        assertionCounter += 1
+        const assertionId = `assertion-${assertionCounter}`
+        if (!condition) {
+          failedAssertionId = assertionId
+        }
         recordEvent({
-          type: 'step',
+          type: 'assertion',
           name: input.name,
-          id: stepId,
-          status: 'ok',
+          id: assertionId,
+          status: condition ? 'ok' : 'failed',
           message: input.message,
           data: input.data
         })
-        return result
-      } catch (error) {
-        failedStepId = stepId
-        executionErrorName = error instanceof Error ? error.name : 'Error'
-        executionErrorMessage = error instanceof Error ? error.message : String(error)
-        recordEvent({
-          type: 'step',
-          name: input.name,
-          id: stepId,
-          status: 'failed',
-          message: input.message,
-          data: {
-            input: input.data || null,
-            errorName: executionErrorName,
-            errorMessage: executionErrorMessage
-          }
+        if (!condition) {
+          await captureScreenshot({
+            name: `${input.name}-${assertionId}-failed`,
+            message: '保存失败截图',
+            refs: {
+              assertionId,
+              stepId: lastStepId || undefined
+            }
+          })
+          throw new Error(input.message)
+        }
+      },
+      captureArtifact,
+      captureScreenshot,
+      collectSignals: async () => {
+        const currentSignals = await currentApp.collectSignals()
+        const allSignals = [...archivedSignals, currentSignals]
+        return {
+          routeEntries: allSignals.flatMap((signals) => signals.routeEntries),
+          ipcInvokeEntries: allSignals.flatMap((signals) => signals.ipcInvokeEntries),
+          aiRunEventEntries: allSignals.flatMap((signals) => signals.aiRunEventEntries),
+          domEventEntries: allSignals.flatMap((signals) => signals.domEventEntries),
+          consoleEntries: allSignals.flatMap((signals) => signals.consoleEntries),
+          lifecycleEntries: allSignals.flatMap((signals) => signals.lifecycleEntries)
+        }
+      },
+      restartApp: async () => {
+        restartCounter += 1
+        archivedSignals.push(await currentApp.collectSignals())
+        const traceRelativePath = path.posix.join(
+          'trace',
+          `playwright-trace-before-restart-${String(restartCounter)}.zip`
+        )
+        const traceAbsolutePath = path.join(logDirArtifacts, traceRelativePath)
+        await mkdir(path.dirname(traceAbsolutePath), { recursive: true })
+        await currentApp.close({ tracePath: traceAbsolutePath, preserveUserData: true })
+        await captureArtifact({
+          kind: 'trace',
+          relativePath: traceRelativePath,
+          message: `保存第 ${String(restartCounter)} 次重启前的 Playwright trace`
         })
-        throw error
-      }
-    },
-    assertThat: async (condition, input) => {
-      assertionCounter += 1
-      const assertionId = `assertion-${assertionCounter}`
-      if (!condition) {
-        failedAssertionId = assertionId
-      }
-      recordEvent({
-        type: 'assertion',
-        name: input.name,
-        id: assertionId,
-        status: condition ? 'ok' : 'failed',
-        message: input.message,
-        data: input.data
-      })
-      if (!condition) {
-        await captureScreenshot({
-          name: `${input.name}-${assertionId}-failed`,
-          message: '保存失败截图',
-          refs: {
-            assertionId,
-            stepId: lastStepId || undefined
-          }
+        currentApp = await launchElectronApp({
+          serviceMode: definition.serviceMode,
+          windowMode: definition.windowMode,
+          extraEnv: definition.extraEnv,
+          signalSink,
+          userDataDir: app.userDataDir
         })
-        throw new Error(input.message)
-      }
-    },
-    captureArtifact,
-    captureScreenshot,
-    collectSignals: app.collectSignals,
-    registerResource: (resource) => resourceScope.register(resource)
-  })
+        launchedApp = currentApp
+        runtime.page = currentApp.page
+        runtime.electronApp = currentApp.electronApp
+        return { page: currentApp.page, electronApp: currentApp.electronApp }
+      },
+      registerResource: (resource) => resourceScope.register(resource)
+    }
+    return runtime
+  }
 
   streamingLogWriter.init({
     meta: {
@@ -554,59 +599,56 @@ export const runE2ECase = async <TResult>(
   })
   await streamingLogWriter.flush()
 
+  const signalSink = {
+    onAiRunEvent: (entry: E2ERuntimeSignals['aiRunEventEntries'][number]) => {
+      appendRuntimeEventOnce(entry)
+      pushSignalEventOnce({
+        source: 'ai-run-event',
+        event: {
+          ts: entry.ts,
+          type: 'signal' as const,
+          name: 'ai-run-event',
+          status: 'info' as const,
+          message: `收到 AI 事件 ${entry.event.type}`,
+          data: { eventType: entry.event.type }
+        }
+      })
+    },
+    onConsole: (entry: E2ERuntimeSignals['consoleEntries'][number]) => {
+      if (entry.level === 'log') return
+      pushSignalEventOnce({
+        source: 'console',
+        event: {
+          ts: entry.ts,
+          type: 'signal' as const,
+          name: entry.level === 'warning' ? 'console-warning' : 'console-error',
+          status: 'info' as const,
+          message: `捕获到 console ${entry.level}：${entry.text}`,
+          data: { level: entry.level, text: entry.text }
+        }
+      })
+    },
+    onLifecycle: (entry: E2ERuntimeSignals['lifecycleEntries'][number]) => {
+      pushSignalEventOnce({
+        source: 'electron-lifecycle',
+        event: {
+          ts: entry.ts,
+          type: 'signal' as const,
+          name: 'electron-lifecycle',
+          status: 'info' as const,
+          message: `Electron lifecycle: ${entry.name}`,
+          data: entry.data
+        }
+      })
+    }
+  }
+
   try {
     launchedApp = await launchElectronApp({
       serviceMode: definition.serviceMode,
       windowMode: definition.windowMode,
       extraEnv: definition.extraEnv,
-      signalSink: {
-        onAiRunEvent: (entry) => {
-          appendRuntimeEventOnce(entry)
-          pushSignalEventOnce({
-            source: 'ai-run-event',
-            event: {
-              ts: entry.ts,
-              type: 'signal',
-              name: 'ai-run-event',
-              status: 'info',
-              message: `收到 AI 事件 ${entry.event.type}`,
-              data: {
-                eventType: entry.event.type
-              }
-            }
-          })
-        },
-        onConsole: (entry) => {
-          if (entry.level === 'log') return
-          pushSignalEventOnce({
-            source: 'console',
-            event: {
-              ts: entry.ts,
-              type: 'signal',
-              name: entry.level === 'warning' ? 'console-warning' : 'console-error',
-              status: 'info',
-              message: `捕获到 console ${entry.level}：${entry.text}`,
-              data: {
-                level: entry.level,
-                text: entry.text
-              }
-            }
-          })
-        },
-        onLifecycle: (entry) => {
-          pushSignalEventOnce({
-            source: 'electron-lifecycle',
-            event: {
-              ts: entry.ts,
-              type: 'signal',
-              name: 'electron-lifecycle',
-              status: 'info',
-              message: `Electron lifecycle: ${entry.name}`,
-              data: entry.data
-            }
-          })
-        }
-      }
+      signalSink
     })
     recordEvent({
       type: 'signal',

@@ -49,8 +49,7 @@ describe('workbench terminal e2e', () => {
         runMode: 'single',
         execute: async (runtime) => {
           const setup = await setupWorkbenchWithTempWorkspace(runtime.page, {
-            caseId: CASE_ID,
-            rootBindingMode: 'ipc'
+            caseId: CASE_ID
           })
           const port = await reservePort()
           await fs.writeFile(

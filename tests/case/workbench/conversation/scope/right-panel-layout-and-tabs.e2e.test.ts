@@ -259,7 +259,7 @@ describe('workbench conversation e2e', () => {
             async (tabId) => window.api.browserPanelStateGet({ tabId }),
             activeBrowserTabId
           )
-          await page.evaluate(async () => await window.api.browserPanelCloseMenu())
+          await page.keyboard.press('Escape')
           await page.waitForFunction(
             (testId) =>
               document.querySelector(`[data-testid="${testId}"]`)?.getAttribute('aria-expanded') ===

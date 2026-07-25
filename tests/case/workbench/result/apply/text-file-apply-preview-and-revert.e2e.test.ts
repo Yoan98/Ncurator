@@ -41,8 +41,7 @@ describe('workbench result e2e', () => {
         execute: async (runtime) => {
           const { page } = runtime
           const setup = await setupWorkbenchWithTempWorkspace(page, {
-            caseId: CASE_ID,
-            rootBindingMode: 'ipc'
+            caseId: CASE_ID
           })
           const targetPath = path.join(setup.workspace.rootPath, 'workbench-preview.md')
           const beforeBytes = await fs.readFile(targetPath)

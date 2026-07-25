@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { lstat, mkdir, mkdtemp, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { describe, it } from 'vitest'
@@ -18,6 +18,8 @@ describe('settings vector real download e2e', () => {
     async () => {
       const modelsPath = await mkdtemp(path.join(os.tmpdir(), 'ncurator-vector-download-'))
       try {
+        const isolatedProfilePath = path.join(modelsPath, 'profile')
+        await mkdir(isolatedProfilePath, { recursive: true })
         await runE2ECase({
           caseId: CASE_ID,
           domain: 'settings',
@@ -27,12 +29,26 @@ describe('settings vector real download e2e', () => {
           fixtures: [],
           serviceMode: 'real',
           extraEnv: {
-            NCURATOR_MODELS_PATH: modelsPath
+            NCURATOR_MODELS_PATH: modelsPath,
+            ...(process.platform === 'win32' ? { USERPROFILE: isolatedProfilePath } : {})
           },
           windowMode: 'visible',
           runMode: 'single',
           execute: async (runtime) => {
             const { page } = runtime
+            const reusedModelPath = path.join(modelsPath, MODEL_ID)
+            const reusedModelStats = await lstat(reusedModelPath).catch(
+              (error: NodeJS.ErrnoException) => {
+                if (error.code === 'ENOENT') return null
+                throw error
+              }
+            )
+            if (reusedModelStats && !reusedModelStats.isSymbolicLink()) {
+              throw new Error(`refusing to remove non-link model path: ${reusedModelPath}`)
+            }
+            if (reusedModelStats) {
+              await rm(reusedModelPath, { recursive: true, force: true })
+            }
             await navigateToSettingsSection(page, 'vector')
 
             const downloadButton = getSettingsLocator(

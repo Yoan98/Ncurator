@@ -5,7 +5,7 @@ import type { AddressInfo } from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
 import { promisify } from 'node:util'
-import type { ElectronApplication, Locator, Page } from 'playwright'
+import type { Locator, Page } from 'playwright'
 import type {
   WorkspaceIndexJobRecord,
   WorkspaceListItem,
@@ -16,6 +16,7 @@ import {
   settingsSelectors,
   vectorSelectors
 } from '../../../src/renderer/src/testing/selectors'
+import { selectDirectoryInWindowsDialog } from './windowsNativeDialog'
 
 export type SettingsPageTarget = 'general' | 'model' | 'workspace' | 'vector'
 
@@ -250,9 +251,10 @@ const selectDirectoryInNativeDialog = async (
   directoryPath: string,
   electronProcessId: number | null
 ): Promise<string> => {
-  if (process.platform !== 'darwin') {
-    throw new Error('native directory dialog automation currently supports macOS only')
+  if (process.platform === 'win32') {
+    return await selectDirectoryInWindowsDialog(directoryPath, electronProcessId)
   }
+  if (process.platform !== 'darwin') throw new Error(`unsupported platform: ${process.platform}`)
   if (!electronProcessId) {
     throw new Error('native directory dialog automation requires Electron process id')
   }
@@ -365,70 +367,21 @@ export const createWorkspaceThroughSettingsUi = async (
   return await readWorkspaceIdFromSettingsCard(page, workspaceName)
 }
 
-export const bindWorkspaceRootThroughIpc = async (page: Page, rootPath: string): Promise<void> => {
-  const response = await page.evaluate(async (targetRootPath) => {
-    const list = await window.api.workspaceList()
-    const pending = list.items.filter((item) => !String(item.root_path || '').trim())
-    if (pending.length !== 1) {
-      return {
-        success: false,
-        error: `expected exactly one workspace without a root path, found ${String(pending.length)}`
-      }
-    }
-    return await window.api.workspaceSetRootPath({
-      workspaceId: pending[0].id,
-      rootPath: targetRootPath
-    })
-  }, rootPath)
-  if (!response.success) {
-    throw new Error(
-      `failed to bind workspace root through ipc: ${response.error || 'unknown error'}`
-    )
-  }
-}
-
 export const bindWorkspaceRootThroughSettingsUi = async (
   page: Page,
-  rootPath: string,
-  electronApp?: ElectronApplication
+  rootPath: string
 ): Promise<void> => {
   await navigateToSettingsSection(page, 'workspace')
-  if (process.platform !== 'darwin') {
-    // Native directory dialog automation is implemented for macOS only; other
-    // platforms bind through the same IPC the dialog flow ends up calling.
-    await bindWorkspaceRootThroughIpc(page, rootPath)
-    await navigateToSettingsSection(page, 'workspace')
-    if (await waitForWorkspaceRootPathVisible(page, rootPath)) return
-    throw new Error(
-      `workspace root was bound through ipc but not reflected in settings ui: ${rootPath}`
-    )
-  }
   const rootPathButton = page.getByRole('button', { name: /设置工作目录|更换工作目录/u }).first()
   await page.bringToFront()
   await rootPathButton.waitFor({ state: 'visible' })
   const diagnostics: string[] = []
-  if (electronApp) {
-    await electronApp.evaluate(({ dialog }, selectedPath) => {
-      const originalShowOpenDialog = dialog.showOpenDialog.bind(dialog)
-      dialog.showOpenDialog = (async () => {
-        dialog.showOpenDialog = originalShowOpenDialog
-        return {
-          canceled: false,
-          filePaths: [selectedPath],
-          bookmarks: []
-        }
-      }) as typeof dialog.showOpenDialog
-    }, rootPath)
-    await rootPathButton.click()
-    if (await waitForWorkspaceRootPathVisible(page, rootPath)) return
-    throw new Error(`injected workspace root was not reflected in settings ui: ${rootPath}`)
-  }
-
-  for (let attempt = 1; attempt <= 4; attempt += 1) {
+  const attempts = process.platform === 'win32' ? 3 : 4
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
     if (attempt > 1 && (await waitForWorkspaceRootPathVisible(page, rootPath, 1000))) return
     const electronProcessId = await readElectronProcessId(page)
     await rootPathButton.click()
-    await page.waitForTimeout(250)
+    await page.waitForTimeout(1_000)
     try {
       diagnostics.push(await selectDirectoryInNativeDialog(rootPath, electronProcessId))
       if (await waitForWorkspaceRootPathVisible(page, rootPath)) return
@@ -452,7 +405,7 @@ export const createFixtureWorkspace = async (
   if (input.rootPath) {
     const rootPath = path.resolve(input.rootPath)
     await mkdir(rootPath, { recursive: true })
-    await bindWorkspaceRootThroughIpc(page, rootPath)
+    await bindWorkspaceRootThroughSettingsUi(page, rootPath)
     await navigateToSettingsSection(page, 'workspace')
     if (!(await waitForWorkspaceRootPathVisible(page, rootPath))) {
       throw new Error(

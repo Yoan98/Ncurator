@@ -13,7 +13,7 @@ import {
   getWorkbenchLocator,
   getWorkbenchPrefixLocator,
   navigateToWorkbench,
-  selectWorkbenchAttachmentThroughInjectedDialog,
+  selectWorkbenchAttachmentThroughNativeDialog,
   selectWorkbenchWorkspace,
   setWorkbenchInput,
   setupWorkbenchWithTempWorkspace,
@@ -150,11 +150,7 @@ describe('workbench conversation e2e', () => {
               await switchWorkbenchMode(page, '大聪明')
               await getWorkbenchLocator(page, workbenchSelectors.input).click()
               await page.keyboard.type(RUNNING_MESSAGE)
-              await selectWorkbenchAttachmentThroughInjectedDialog(
-                page,
-                attachments.markdownPath,
-                runtime.electronApp
-              )
+              await selectWorkbenchAttachmentThroughNativeDialog(page, attachments.markdownPath)
             }
           })
           const fileComposerCard = getWorkbenchPrefixLocator(

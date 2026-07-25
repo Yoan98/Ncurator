@@ -47,7 +47,7 @@ describe('settings workspace web e2e', () => {
 
           await runtime.step({
             name: 'seed-delayed-web-sources',
-            message: '创建带 prepare 延迟的网页 fixture 工作区并进入网页 tab。',
+            message: '创建延迟响应的本地真实网页并进入工作区网页 tab。',
             run: async () => {
               const workspace = await createFixtureWorkspace(page, {
                 rootPath: '/tmp/ncurator-e2e-settings-web-prepare-delay-restore',

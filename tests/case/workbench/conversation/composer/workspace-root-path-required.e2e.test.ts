@@ -20,7 +20,7 @@ import {
   workbenchSelectors
 } from '../../../../harness/e2e/workbench'
 import {
-  bindWorkspaceRootThroughIpc,
+  bindWorkspaceRootThroughSettingsUi,
   navigateToSettingsSection
 } from '../../../../harness/e2e/settings'
 
@@ -69,7 +69,7 @@ describe('workbench conversation e2e', () => {
           ).trim()
 
           await navigateToSettingsSection(page, 'workspace')
-          await bindWorkspaceRootThroughIpc(page, workspace.rootPath)
+          await bindWorkspaceRootThroughSettingsUi(page, workspace.rootPath)
           await navigateToWorkbench(page)
           await selectWorkbenchWorkspace(page, WORKSPACE_NAME)
           await selectWorkbenchModel(page, env.modelName)

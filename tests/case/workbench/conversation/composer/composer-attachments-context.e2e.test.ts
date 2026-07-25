@@ -11,7 +11,7 @@ import {
   getWorkbenchPrefixLocator,
   navigateToWorkbench,
   pasteWorkbenchText,
-  selectWorkbenchAttachmentThroughInjectedDialog,
+  selectWorkbenchAttachmentThroughNativeDialog,
   selectWorkbenchWorkspace,
   setupWorkbenchWorkspaceOnly,
   waitForAntMessageText,
@@ -152,31 +152,15 @@ describe('workbench conversation e2e', () => {
             page,
             workspaceBinding.workspaceId
           )
-          await selectWorkbenchAttachmentThroughInjectedDialog(
-            page,
-            attachments.imagePath,
-            runtime.electronApp
-          )
+          await selectWorkbenchAttachmentThroughNativeDialog(page, attachments.imagePath)
           await getImageAttachmentCardByName(page, 'qa-image.png')
             .first()
             .waitFor({ state: 'visible' })
-          await selectWorkbenchAttachmentThroughInjectedDialog(
-            page,
-            attachments.markdownPath,
-            runtime.electronApp
-          )
+          await selectWorkbenchAttachmentThroughNativeDialog(page, attachments.markdownPath)
           await waitForAttachmentCardByName(page, 'workbench-preview.md')
-          await selectWorkbenchAttachmentThroughInjectedDialog(
-            page,
-            attachments.legacyDocPath,
-            runtime.electronApp
-          )
+          await selectWorkbenchAttachmentThroughNativeDialog(page, attachments.legacyDocPath)
           await waitForAttachmentCardByName(page, 'legacy-reference.doc')
-          await selectWorkbenchAttachmentThroughInjectedDialog(
-            page,
-            attachments.pptxPath,
-            runtime.electronApp
-          )
+          await selectWorkbenchAttachmentThroughNativeDialog(page, attachments.pptxPath)
           await waitForAttachmentCardByName(page, 'slides-reference.pptx')
           const sessionCountAfterPaste = await countWorkspaceSessions(
             page,
@@ -260,11 +244,7 @@ describe('workbench conversation e2e', () => {
               .first()
               .textContent()) || ''
 
-          await selectWorkbenchAttachmentThroughInjectedDialog(
-            page,
-            attachments.largePath,
-            runtime.electronApp
-          )
+          await selectWorkbenchAttachmentThroughNativeDialog(page, attachments.largePath)
           await waitForAttachmentCardByName(page, 'qa-large.json')
           const largeFileMessage = await waitForAntMessageText(
             page,

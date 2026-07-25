@@ -38,8 +38,7 @@ describe('workbench terminal unicode e2e', () => {
         runMode: 'single',
         execute: async (runtime) => {
           const setup = await setupWorkbenchWithTempWorkspace(runtime.page, {
-            caseId: CASE_ID,
-            rootBindingMode: 'ipc'
+            caseId: CASE_ID
           })
           await fs.mkdir(path.join(setup.workspace.rootPath, CHINESE_DIRECTORY))
           await fs.writeFile(path.join(setup.workspace.rootPath, CHINESE_FILE), 'unicode fixture')

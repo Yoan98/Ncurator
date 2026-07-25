@@ -36,8 +36,7 @@ describe('workbench result e2e', () => {
         execute: async (runtime) => {
           const { page } = runtime
           const setup = await setupWorkbenchWithTempWorkspace(page, {
-            caseId: CASE_ID,
-            rootBindingMode: 'ipc'
+            caseId: CASE_ID
           })
           const beforePath = path.join(setup.workspace.rootPath, BEFORE_NAME)
           const afterPath = path.join(setup.workspace.rootPath, AFTER_NAME)

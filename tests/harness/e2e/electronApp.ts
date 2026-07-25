@@ -97,7 +97,7 @@ export type LaunchedElectronApp = {
   userDataDir: string
   appInfo: E2EAppInfo
   collectSignals: () => Promise<E2ERuntimeSignals>
-  close: (input: { tracePath: string }) => Promise<void>
+  close: (input: { tracePath: string; preserveUserData?: boolean }) => Promise<void>
 }
 
 export type E2EAppTarget = 'source' | 'package'
@@ -332,6 +332,7 @@ export const launchElectronApp = async (input: {
   windowMode?: ElectronWindowMode
   extraEnv?: Readonly<Record<string, string>>
   signalSink?: ElectronSignalSink
+  userDataDir?: string
 }): Promise<LaunchedElectronApp> => {
   const launch = await resolveElectronLaunch()
 
@@ -350,7 +351,10 @@ export const launchElectronApp = async (input: {
     String(process.env.NCURATOR_E2E_TEMP_ROOT || '').trim() || os.tmpdir()
   )
   await mkdir(e2eTempRoot, { recursive: true })
-  const userDataDir = await mkdtemp(path.join(e2eTempRoot, 'ncurator-e2e-user-data-'))
+  const userDataDir = input.userDataDir
+    ? path.resolve(input.userDataDir)
+    : await mkdtemp(path.join(e2eTempRoot, 'ncurator-e2e-user-data-'))
+  await mkdir(userDataDir, { recursive: true })
   const launchEnv = buildElectronLaunchEnv(
     userDataDir,
     input.serviceMode,
@@ -556,12 +560,14 @@ export const launchElectronApp = async (input: {
           )
         }
       }
-      await rm(userDataDir, {
-        recursive: true,
-        force: true,
-        maxRetries: 5,
-        retryDelay: 200
-      })
+      if (!closeInput.preserveUserData) {
+        await rm(userDataDir, {
+          recursive: true,
+          force: true,
+          maxRetries: 5,
+          retryDelay: 200
+        })
+      }
     }
   }
 }

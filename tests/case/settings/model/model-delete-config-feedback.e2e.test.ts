@@ -1,3 +1,5 @@
+import path from 'node:path'
+import Database from 'better-sqlite3'
 import { describe, it } from 'vitest'
 import { settingsSelectors } from '../../../../src/renderer/src/testing/selectors'
 import { runE2ECase } from '../../../harness/e2e/run-e2e-case'
@@ -22,6 +24,8 @@ describe('settings model e2e', () => {
         runMode: 'single',
         execute: async (runtime) => {
           const { page } = runtime
+          let deleteFailureVisible = false
+          let failedDeleteRowVisible = false
 
           await runtime.step({
             name: 'create-configs-through-ui',
@@ -58,6 +62,51 @@ describe('settings model e2e', () => {
             }
           })
 
+          await runtime.step({
+            name: 'delete-config-while-database-is-locked',
+            message: '制造真实数据库写锁后通过 UI 删除配置，确认失败反馈和原配置保留。',
+            run: async () => {
+              const nativeBinding = path.resolve(
+                process.cwd(),
+                'node_modules',
+                '.native-cache',
+                'better-sqlite3',
+                `node-v${process.versions.modules}-${process.platform}-${process.arch}`,
+                'better_sqlite3.node'
+              )
+              const lockDatabase = new Database(path.join(runtime.userDataDir, 'app.sqlite'), {
+                nativeBinding
+              })
+              lockDatabase.exec('BEGIN IMMEDIATE')
+              runtime.registerResource({
+                name: 'settings-model-delete-database-lock',
+                phase: 'before-app-close',
+                dispose: async () => {
+                  if (lockDatabase.inTransaction) lockDatabase.exec('ROLLBACK')
+                  lockDatabase.close()
+                }
+              })
+
+              await page
+                .locator('tbody tr')
+                .filter({ hasText: 'https://api.openai.com/v1' })
+                .locator('button')
+                .last()
+                .click()
+              await page.getByText('确定要删除此配置吗？').waitFor({ state: 'visible' })
+              await page.locator('.ant-popover .ant-btn-primary').click()
+
+              const errorNotice = page.locator('.nc-notice-danger')
+              await errorNotice.waitFor({ state: 'visible', timeout: 10_000 })
+              deleteFailureVisible = Boolean((await errorNotice.textContent())?.trim())
+              failedDeleteRowVisible =
+                (await page
+                  .locator('tbody tr')
+                  .filter({ hasText: 'https://api.openai.com/v1' })
+                  .count()) === 1
+            }
+          })
+
           return {
             deletedRowVisible: await page
               .locator('tbody tr')
@@ -67,6 +116,8 @@ describe('settings model e2e', () => {
               .locator('tbody tr')
               .filter({ hasText: 'https://api.openai.com/v1' })
               .count(),
+            deleteFailureVisible,
+            failedDeleteRowVisible,
             tableText:
               (await getSettingsLocator(page, settingsSelectors.modelTable).textContent()) || ''
           }
@@ -86,6 +137,12 @@ describe('settings model e2e', () => {
               data: result
             }
           )
+
+          await runtime.assertThat(result.deleteFailureVisible && result.failedDeleteRowVisible, {
+            name: 'delete-failure-keeps-config-and-shows-error',
+            message: '真实数据库写入失败时应显示错误且保留原配置，对齐 SET-MODEL-003-AC2。',
+            data: result
+          })
         }
       })
     },

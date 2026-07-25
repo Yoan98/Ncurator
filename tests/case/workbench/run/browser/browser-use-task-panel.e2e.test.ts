@@ -258,8 +258,7 @@ describe('workbench run e2e', () => {
             dispose: server.close
           })
           const setup = await setupWorkbenchWithTempWorkspace(page, {
-            caseId: CASE_ID,
-            rootBindingMode: 'ipc'
+            caseId: CASE_ID
           })
           await switchWorkbenchMode(page, '没头脑')
           await insertWorkbenchReferenceToken(page, 'workbench-preview.md')

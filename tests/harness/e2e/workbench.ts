@@ -6,7 +6,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { promisify } from 'node:util'
 import JSZip from 'jszip'
-import type { ElectronApplication, Locator, Page } from 'playwright'
+import type { Locator, Page } from 'playwright'
 import type { AiRunEvent, JsonValue, WorkspaceIndexJobAction } from '../../../src/shared/types'
 import {
   buildBlockIndex,
@@ -22,12 +22,13 @@ import { loadRootEnvOnce } from '../core/rootEnv'
 import {
   SETTINGS_E2E_TIMEOUT_MS,
   SETTINGS_REAL_WORKSPACE_LONG_E2E_TIMEOUT_MS,
-  bindWorkspaceRootThroughIpc,
   getWorkspaceIndexCounts,
   getSettingsLocator,
   getSettingsPrefixLocator,
   navigateToSettingsSection
 } from './settings'
+import { selectDirectoryInWindowsDialog } from './windowsNativeDialog'
+import { selectFileInNativeDialog } from './nativeFileDialog'
 import type { E2ETestRuntime } from './run-e2e-case'
 import { pasteTextThroughElectronClipboard, type E2ERuntimeSignals } from './electronApp'
 import {
@@ -252,7 +253,11 @@ let afterFrontmost = NSWorkspace.shared.frontmostApplication?.localizedName ?? "
 print("frontmost-before=\\(beforeFrontmost); frontmost-after=\\(afterFrontmost); target-app=\\(targetApp?.localizedName ?? "none")")
 `
 
-type NativeDirectoryDialogStrategy = 'applescript-paste' | 'applescript-type' | 'swift'
+type NativeDirectoryDialogStrategy =
+  | 'windows-keyboard'
+  | 'applescript-paste'
+  | 'applescript-type'
+  | 'swift'
 
 type NativeDirectoryDialogResult = {
   strategy: NativeDirectoryDialogStrategy
@@ -476,9 +481,14 @@ export const selectDirectoryInNativeDialog = async (
   electronProcessId: number | null,
   strategy: NativeDirectoryDialogStrategy
 ): Promise<NativeDirectoryDialogResult> => {
-  if (process.platform !== 'darwin') {
-    throw new Error('native directory dialog automation currently supports macOS only')
+  if (strategy === 'windows-keyboard') {
+    return {
+      strategy,
+      stdout: await selectDirectoryInWindowsDialog(directoryPath, electronProcessId),
+      stderr: ''
+    }
   }
+  if (process.platform !== 'darwin') throw new Error(`unsupported platform: ${process.platform}`)
   if (!electronProcessId) {
     throw new Error('native directory dialog automation requires Electron process id')
   }
@@ -569,27 +579,22 @@ export const bindWorkspaceRootThroughSettingsUi = async (
           .catch(() => false)
       })
 
-  if (process.platform !== 'darwin') {
-    // Native directory dialog automation is implemented for macOS only; other
-    // platforms bind through the same IPC the dialog flow ends up calling.
-    await bindWorkspaceRootThroughIpc(page, rootPath)
-    if (await waitForSelectedRootPath(8_000)) return
-    throw new Error(
-      `workspace root was bound through ipc but not reflected in settings ui: ${rootPath}`
-    )
+  if (process.platform !== 'win32' && process.platform !== 'darwin') {
+    throw new Error(`unsupported platform: ${process.platform}`)
   }
 
-  const strategies: NativeDirectoryDialogStrategy[] = [
-    'applescript-paste',
-    'applescript-type',
-    'swift'
-  ]
+  const strategies: NativeDirectoryDialogStrategy[] =
+    process.platform === 'win32'
+      ? ['windows-keyboard']
+      : ['applescript-paste', 'applescript-type', 'swift']
 
-  for (const [strategyIndex, strategy] of strategies.entries()) {
-    if (strategyIndex > 0 && (await waitForSelectedRootPath(1_000))) return
+  const attempts = process.platform === 'win32' ? 3 : strategies.length
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const strategy = strategies[Math.min(attempt, strategies.length - 1)]
+    if (attempt > 0 && (await waitForSelectedRootPath(1_000))) return
     const electronProcessId = await readElectronProcessId(page)
     await rootPathButton.click()
-    await page.waitForTimeout(250)
+    await page.waitForTimeout(1_000)
     try {
       const output = await selectDirectoryInNativeDialog(rootPath, electronProcessId, strategy)
       const selected = await waitForSelectedRootPath(12_000)
@@ -619,37 +624,50 @@ export const bindWorkspaceRootThroughSettingsUi = async (
   )
 }
 
-export const selectWorkbenchAttachmentThroughInjectedDialog = async (
+export const selectWorkbenchAttachmentThroughNativeDialog = async (
   page: Page,
-  filePath: string,
-  electronApp: ElectronApplication
+  filePath: string
 ): Promise<void> => {
   const addButton = getWorkbenchLocator(page, workbenchSelectors.attachmentAddButton)
   const fileName = path.basename(filePath)
-  await electronApp.evaluate(({ dialog }, selectedPath) => {
-    const originalShowOpenDialog = dialog.showOpenDialog.bind(dialog)
-    dialog.showOpenDialog = (async () => {
-      dialog.showOpenDialog = originalShowOpenDialog
-      return {
-        canceled: false,
-        filePaths: [selectedPath],
-        bookmarks: []
-      }
-    }) as typeof dialog.showOpenDialog
-  }, filePath)
-  await addButton.click()
-  await page.waitForFunction(
-    (input: { cardPrefix: string; fileName: string }) =>
-      Array.from(document.querySelectorAll(`[data-testid^="${input.cardPrefix}-"]`)).some(
-        (card) =>
-          card instanceof HTMLElement &&
-          (card.innerText.includes(input.fileName) || card.getAttribute('title') === input.fileName)
-      ),
-    {
-      cardPrefix: workbenchSelectors.attachmentCardPrefix,
-      fileName
-    },
-    { timeout: 30_000 }
+  const diagnostics: string[] = []
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    const alreadyVisible = await getWorkbenchPrefixLocator(
+      page,
+      workbenchSelectors.attachmentCardPrefix
+    )
+      .filter({ hasText: fileName })
+      .first()
+      .isVisible()
+      .catch(() => false)
+    if (alreadyVisible) return
+    const electronProcessId = await readElectronProcessId(page)
+    await page.bringToFront()
+    await addButton.click()
+    await page.waitForTimeout(1_000)
+    try {
+      diagnostics.push(await selectFileInNativeDialog(filePath, electronProcessId))
+      await page.waitForFunction(
+        (input: { cardPrefix: string; fileName: string }) =>
+          Array.from(document.querySelectorAll(`[data-testid^="${input.cardPrefix}-"]`)).some(
+            (card) =>
+              card instanceof HTMLElement &&
+              (card.innerText.includes(input.fileName) ||
+                card.getAttribute('title') === input.fileName)
+          ),
+        {
+          cardPrefix: workbenchSelectors.attachmentCardPrefix,
+          fileName
+        },
+        { timeout: 12_000 }
+      )
+      return
+    } catch (error) {
+      diagnostics.push(error instanceof Error ? error.message : String(error))
+    }
+  }
+  throw new Error(
+    `native file selection did not create attachment ${fileName}; diagnostics=${JSON.stringify(diagnostics)}`
   )
 }
 
@@ -819,16 +837,11 @@ export const prepareWorkbenchWorkspaceThroughUi = async (
     workspaceName: string
     rootPath: string
     webSourceUrl?: string
-    rootBindingMode?: 'ui' | 'ipc'
   }
 ): Promise<void> => {
   await createWorkspaceThroughSettingsUi(page, input.workspaceName)
   const workspaceId = await readWorkspaceIdFromSettingsCard(page, input.workspaceName)
-  if (input.rootBindingMode === 'ipc') {
-    await bindWorkspaceRootThroughIpc(page, input.rootPath)
-  } else {
-    await bindWorkspaceRootThroughSettingsUi(page, input.rootPath)
-  }
+  await bindWorkspaceRootThroughSettingsUi(page, input.rootPath)
   await prepareSelectedWorkspaceFilesThroughSettingsUi(page, workspaceId)
   if (input.webSourceUrl) {
     await addWebSourceThroughSettingsUi(page, input.webSourceUrl)
@@ -846,7 +859,6 @@ export const setupWorkbenchWithTempWorkspace = async (
     webSourceUrl?: string
     configureModel?: boolean
     createSession?: boolean
-    rootBindingMode?: 'ui' | 'ipc'
   }
 ): Promise<WorkbenchSetupResult> => {
   const env = loadWorkbenchLiveModelEnv()
@@ -858,8 +870,7 @@ export const setupWorkbenchWithTempWorkspace = async (
   await prepareWorkbenchWorkspaceThroughUi(page, {
     workspaceName,
     rootPath: workspace.rootPath,
-    webSourceUrl: input.webSourceUrl,
-    rootBindingMode: input.rootBindingMode || 'ipc'
+    webSourceUrl: input.webSourceUrl
   })
   if (input.configureModel !== false) {
     await selectWorkbenchModel(page, env.modelName)
@@ -889,8 +900,7 @@ export const setupWorkbenchWorkspaceOnly = async (
   await prepareWorkbenchWorkspaceThroughUi(page, {
     workspaceName,
     rootPath: workspace.rootPath,
-    webSourceUrl: input.webSourceUrl,
-    rootBindingMode: 'ipc'
+    webSourceUrl: input.webSourceUrl
   })
   return {
     workspace,

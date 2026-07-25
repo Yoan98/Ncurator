@@ -28,7 +28,7 @@ describe('settings workspace e2e', () => {
         serviceMode: 'real',
         runMode: 'single',
         execute: async (runtime) => {
-          const { electronApp, page } = runtime
+          const { page } = runtime
           const targetRootPath = await mkdtemp(
             path.join(os.tmpdir(), 'settings-workspace-set-root-')
           )
@@ -56,7 +56,7 @@ describe('settings workspace e2e', () => {
             name: 'set-root-path',
             message: '通过原生目录选择器绑定真实目录，确认右侧目录与目录树都同步刷新。',
             run: async () => {
-              await bindWorkspaceRootThroughSettingsUi(page, targetRootPath, electronApp)
+              await bindWorkspaceRootThroughSettingsUi(page, targetRootPath)
               await page.waitForFunction(
                 (input: {
                   detailTestId: string

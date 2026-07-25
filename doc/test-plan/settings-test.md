@@ -4,7 +4,7 @@
 
 - 本计划定义 Settings 用户可见能力的回归范围，并对齐 [settings.md](../prd/settings.md) 的 `SET-*` 需求和验收编号。
 - 通用测试、runner、raw logs、UI E2E 和 live 断言规则遵循 `doc/test.md`。
-- Settings 测试全部是 E2E，必须通过真实 UI 完成被测行为；前置状态可以通过真实 IPC 建立，但不能替代当前 case 的按钮、进度、索引结果或页面刷新。
+- Settings 测试全部是 E2E，工作空间、目录、网页和模型状态必须通过真实 UI、原生系统交互与真实输入建立；只读 IPC / 数据库查询只能补充诊断证据，不能创建或修改业务状态。
 
 ## 2. Suite 设计
 
@@ -19,7 +19,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 
 - `model` 验证大模型可用服务配置的加载、创建、编辑、删除和远端模型列表刷新。
 - `general` 验证 AI 运行系统通知开关的加载、保存和关闭后的静默行为；系统通知中心的真实视觉展示按 macOS 与 Windows 发布前手动验证。
-- `workspace` 验证工作空间容器及其下属 `files`、`web` 两类子区域的页面行为和真实 IPC 链路。
+- `workspace` 验证工作空间容器及其下属 `files`、`web` 两类子区域的真实用户操作链路。
 - `vector` 属于 Settings 产品域，但页面位于独立路由 `/model-download`，测试目录与 runner 仍统一归入 `tests/case/settings/vector/**`。
 - `workspace` 是 Settings 下的 suite，按 `core / files / web` 组织，语义为“具名工作空间 + 文件 tab + 网页 tab”。
 - `workspace` 相关回归测试默认复用 `tests/fixtures/workspace` 作为共享输入目录。
@@ -70,7 +70,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - 测试类型：`e2e`
 - What：删除连接配置后的列表刷新，以及删除失败时的错误反馈。
 - Why：删除结果是最直接的用户确认反馈，缺失时用户会误判配置是否已经被移除。
-- How：通过 UI 覆盖删除成功路径；删除失败反馈由独立组件测试注入失败响应验证。
+- How：通过 UI 覆盖删除成功路径；再以真实 SQLite 写锁制造持久化环境故障，仍由用户从 UI 发起删除，不注入接口响应。
 - Oracle：删除成功后，被删配置不再出现在列表中，对齐 `SET-MODEL-003-AC1`；失败响应保留原配置并显示脱敏错误，对齐 `SET-MODEL-003-AC2`。
 - Not：不定义删除后 workbench 本地模型偏好如何恢复。
 
@@ -112,6 +112,15 @@ Settings 顶层 suite 对齐 PRD 模块：
 - Oracle：移除成功后，该工作空间从列表中消失，对齐 `SET-WORKSPACE-006-AC2`；详情区不会继续显示已删除工作空间的陈旧数据。
 - Not：不验证其他消费页面中的范围清理展示；只覆盖 Settings 页内可见结果。
 
+#### `workspace-interrupted-jobs-recovery`
+
+- 测试类型：`e2e`
+- What：真实文件检查、网页检查和网页更新索引在程序关闭时被中断，重启后任务退出执行中状态并收敛为失败。
+- Why：后台任务若在进程退出后永久保持 running，会持续禁用操作并给用户错误进度。
+- How：通过 Settings UI 对 25,000 个真实文件启动检查；再对延迟响应的本地真实网页分别启动检查和更新索引；每次在进度可见时关闭并复用同一用户目录重启应用。
+- Oracle：文件检查退出执行中状态、按钮恢复且 job 为失败，对齐 `SET-WORKSPACE-003-AC4`；网页检查 job 为失败，对齐 `SET-WEB-003-AC4`；网页索引 job 与执行中的网页均收敛为失败，对齐 `SET-WEB-004-AC6`。
+- Not：只读 SQLite 查询用于确认已触发任务的最终状态，不写数据库、不伪造 running job；文件更新索引的底层记录收敛继续由 unit 覆盖。
+
 ### 3.3 `workspace / files`
 
 #### `workspace-scan-progress-refresh`
@@ -119,7 +128,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - 测试类型：`e2e`
 - What：点击“检查更新”后，页面会刷新文件树和需索引摘要。
 - Why：这是用户识别待更新文件的第一步。
-- How：创建一条带扫描延迟的 fixture 工作空间，触发检查更新并读取刷新后的文件树响应。
+- How：通过原生目录选择绑定真实临时目录，写入 600 个真实文件，通过 Settings UI 触发检查更新并读取刷新后的文件树。
 - Oracle：检查过程中出现持久化进度反馈，对齐 `SET-WORKSPACE-003-AC1`；成功后文件树和摘要刷新，对齐 `SET-WORKSPACE-003-AC2`；离开再返回时恢复当前进度和按钮状态，对齐 `SET-WORKSPACE-003-AC3`。
 - Not：不验证真实大目录性能和文件系统权限失败分支。
 
@@ -128,7 +137,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - 测试类型：`e2e`
 - What：点击“更新索引”后，文件状态会刷新为已索引并同步更新摘要。
 - Why：“索引已经可用”的核心用户反馈链路。
-- How：复制共享 workspace fixture 的隔离副本，在 setup 阶段通过真实 IPC 绑定目录；随后通过 Settings UI 触发更新索引，读取刷新后的文件树和全部支持文件状态。原生目录选择由 `workspace-set-root-path` 单独覆盖。
+- How：复制共享 workspace 输入的隔离副本，通过 Settings UI 和原生目录选择完成创建与绑定；随后点击更新索引，读取刷新后的文件树和全部支持文件状态。
 - Oracle：更新索引过程中出现持久化总进度，且检查更新/更新索引按钮同时禁用，对齐 `SET-WORKSPACE-004-AC3`；共享 fixture 中全部支持文件真实进入处理范围，对齐 `SET-WORKSPACE-004-AC1`；更新后所有支持文件收敛为 `indexed / failed`，摘要和节点状态同步刷新，对齐 `SET-WORKSPACE-004-AC2`。
 - Not：不验证向量内容质量和搜索召回结果。
 
@@ -137,7 +146,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - 测试类型：`e2e`
 - What：已有失败文件再次点击“更新索引”时会被纳入本次处理范围，并且文件 tab 的可索引数量包含失败数量。
 - Why：失败文件是用户最常见的重试对象，如果失败记录不再进入目标集，或者 UI 不把失败数算进可操作数量，用户会误判“没有东西可更新”。
-- How：创建真实工作空间并绑定共享 workspace fixture 的隔离副本，先通过测试注入或服务契约制造一个 `failed` 文件索引记录，再从 Settings 文件 tab 点击“更新索引”，读取 active job 的目标数量、文件摘要和页面可索引数字。
+- How：通过原生目录选择绑定包含真实损坏 docx 的临时目录，首次点击“更新索引”形成真实 failed 文件；再次点击更新索引，读取 active job、文件摘要和页面可索引数字。
 - Oracle：本次 job 的目标数量包含失败文件，对齐 `SET-WORKSPACE-004-AC1`；页面“可索引”数字等于 `needs_index_count + failed_file_count`，并在存在失败文件时展示 `含失败 N 个` 辅助文案，且失败文件重试后状态发生收敛，对齐 `SET-WORKSPACE-004-AC2`、`SET-WORKSPACE-005-AC2`。
 - Not：不要求失败文件最终一定成功；允许因真实文件内容或环境依赖再次失败，但必须确认发生了重试。
 
@@ -155,16 +164,16 @@ Settings 顶层 suite 对齐 PRD 模块：
 - 测试类型：`e2e`
 - What：文件索引执行中离开并返回工作空间页后，进度块和按钮状态会恢复。
 - Why：索引任务已切换为持久化后台 job，页面生命周期不能影响用户对任务状态的判断。
-- How：创建带 prepare 延迟的 fixture 工作空间，触发更新索引后切到其他设置页，再返回工作空间页读取 active job 与 UI 状态。
+- How：绑定真实工作空间输入并通过 UI 触发更新索引，执行中切到其他设置页，再返回工作空间页读取 active job 与 UI 状态。
 - Oracle：返回后仍能看到 running job 对应的进度块，且检查更新/更新索引按钮继续禁用，对齐 `SET-WORKSPACE-004-AC4`。
-- Not：不模拟真实 Electron 进程退出；中断收敛由 `workspace-interrupted-job-recovery-contract` 覆盖。
+- Not：本 case 不关闭应用；真实进程退出由 `workspace-interrupted-jobs-recovery` 覆盖。
 
 #### `workspace-detail-status-and-error`
 
 - 测试类型：`e2e`
 - What：文件 tab 用可索引数承载失败提示，并在索引失败后保留文件级错误状态；目录树文件项不再展示文件名下方辅助字项。
 - Why：文件问题通常发生在索引阶段，如果失败只留在控制台，用户无法判断资料是否可用。
-- How：创建一条 prepare 会失败的 fixture 工作空间，触发更新索引并读取刷新后的文件树响应。
+- How：通过原生目录选择绑定包含真实损坏 docx 的临时目录，点击更新索引并读取刷新后的文件树响应。
 - Oracle：文件 tab 的可索引数字包含失败数量并展示 `含失败 N 个` 辅助文案，对齐 `SET-WORKSPACE-005-AC2`；文件索引失败后，失败状态和错误信息保留在文件级记录中，目录树文件项只保留文件名与状态标记，对齐 `SET-WORKSPACE-008-AC2`。
 - Not：不验证错误文案的逐字 UI 展示，也不验证恢复失败文件后的二次成功链路。
 
@@ -193,7 +202,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - 测试类型：`e2e`
 - What：网页索引执行中离开并返回网页 tab 后，分阶段进度块和按钮状态会恢复。
 - Why：网页索引包含抓取与索引两阶段，恢复时不能只恢复“执行中”标签而丢失当前阶段。
-- How：创建带 prepare 延迟的 fixture 工作区，触发网页更新索引后切到其他设置页，再返回网页 tab 读取 active job 与进度文案。
+- How：通过 UI 添加延迟响应的本地真实网页，触发网页检查和更新索引后分别切到其他设置页，再返回网页 tab 读取 active job 与进度文案。
 - Oracle：检查更新离开再返回时恢复当前进度，对齐 `SET-WEB-003-AC3`；更新索引离开再返回时恢复当前阶段且两个按钮继续禁用，对齐 `SET-WEB-004-AC5`。
 - Not：不验证无抓取动作时直接展示第二步的真实内容缓存分支；该分支由后端 job 状态能力保留。
 
@@ -231,7 +240,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - 测试类型：`e2e`
 - What：用户下载产品列表中的真实向量模型，观察真实进度和页面恢复，再完成删除确认、取消与成功删除。
 - Why：模型下载是索引前置能力，必须验证应用现有下载逻辑、真实网络传输、真实落盘和用户操作形成完整闭环。
-- How：关闭代理软件 TUN 模式，在临时模型目录中启动真实应用以保护本机已有模型；从 Settings 点击产品列表中的模型下载，离开并返回页面，等待下载完成，再分别取消和确认删除。
+- How：关闭代理软件 TUN 模式，在临时模型目录和隔离的 Electron 子进程用户目录中启动真实应用，避免复用本机已有模型；从 Settings 点击产品列表中的模型下载，离开并返回页面，等待下载完成，再分别取消和确认删除。
 - Oracle：下载中展示当前文件、文件完成数和总进度，离开页面后任务继续且返回时恢复进度，对齐 `SET-VECTOR-002`；完成后显示已安装，网络失败则 case 失败并保留 raw logs，对齐 `SET-VECTOR-003`；删除先确认、取消后仍安装、确认后恢复下载入口，对齐 `SET-VECTOR-004`。
 - Not：不修改产品模型清单、下载地址、文件内容、下载服务或生产代码；临时模型目录只隔离测试落盘数据，不改变下载逻辑。测试不主动制造网络和文件系统故障。
 
@@ -263,3 +272,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - How：通过 Settings UI 打开通用页，关闭开关，重新读取 `ai-runtime-settings-get`，再恢复开关。
 - Oracle：开关默认开启，关闭后 UI 与主进程设置均为关闭，对齐 `SET-GENERAL-001-AC1`、`SET-GENERAL-001-AC3`。
 - Not：自动化不伪造通知对象、终态或点击事件；系统通知展示和点击导航保留为发布前真实人工检查。
+
+### 4. 发布前真实检查
+
+- `SET-GENERAL-001`：自动化 case 覆盖开关默认值和关闭后静默；四类真实终态通知、点击系统通知返回对应会话、系统通知不可用时应用保持稳定，必须在 Windows 与 macOS 候选包上使用真实系统通知检查，不伪造通知对象或点击事件。

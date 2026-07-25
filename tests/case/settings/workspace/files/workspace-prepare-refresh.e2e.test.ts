@@ -3,7 +3,7 @@ import { importSelectors } from '../../../../../src/renderer/src/testing/selecto
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
   SETTINGS_REAL_WORKSPACE_LONG_E2E_TIMEOUT_MS,
-  bindWorkspaceRootThroughIpc,
+  bindWorkspaceRootThroughSettingsUi,
   createWorkspaceThroughSettingsUi,
   getSettingsLocator,
   navigateToSettingsSection,
@@ -32,7 +32,7 @@ describe('settings workspace e2e', () => {
 
           workspaceRoot = await copySharedWorkspaceFixture('workspace-prepare-refresh')
           const workspaceId = await createWorkspaceThroughSettingsUi(page, '索引工作区')
-          await bindWorkspaceRootThroughIpc(page, workspaceRoot)
+          await bindWorkspaceRootThroughSettingsUi(page, workspaceRoot)
           let prepareProgressVisible = false
           let buttonsDisabled = false
 

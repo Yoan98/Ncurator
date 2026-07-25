@@ -2,13 +2,18 @@ import { describe, it } from 'vitest'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
   WORKBENCH_E2E_TIMEOUT_MS,
+  createWorkbenchNewSession,
   getWorkbenchLocator,
-  navigateToWorkbench,
+  sendWorkbenchMessage,
+  setupWorkbenchWithTempWorkspace,
   startLocalWorkbenchHttpServer,
+  waitForWorkbenchAiRunCompletion,
   workbenchSelectors
 } from '../../../../harness/e2e/workbench'
 
 const CASE_ID = 'browser-view-lifecycle'
+const WORKSPACE_NAME = 'Browser Lifecycle Workspace'
+const SESSION_PROMPT = 'Reply with BROWSER_SESSION_READY only. Do not use tools.'
 
 type ViewportRect = {
   x: number
@@ -34,7 +39,7 @@ describe('workbench browser lifecycle e2e', () => {
         groups: ['browser'],
         description:
           '使用真实窗口像素验证浏览器初次显示、折叠恢复、原生菜单覆盖和会话切换期间持续运行。',
-        fixtures: [],
+        fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
         windowMode: 'visible',
         runMode: 'single',
@@ -64,43 +69,30 @@ describe('workbench browser lifecycle e2e', () => {
             dispose: server.close
           })
 
-          await navigateToWorkbench(page, { waitForSessionListText: false })
-          const sessionIds = await page.evaluate(async () => {
-            const original = crypto.randomUUID()
-            const secondary = crypto.randomUUID()
-            const workspaceResponse = await window.api.workspaceCreate({
-              name: `Browser lifecycle ${crypto.randomUUID().slice(0, 8)}`
-            })
-            const workspaceId = workspaceResponse.workspace?.id
-            if (!workspaceResponse.success || !workspaceId) {
-              throw new Error(workspaceResponse.error || 'failed to seed workspace')
-            }
-            const originalResponse = await window.api.chatSessionSave({
-              id: original,
-              title: 'Browser lifecycle A',
-              created_at: Date.now() - 1_000,
-              workspace_id: workspaceId
-            })
-            const secondaryResponse = await window.api.chatSessionSave({
-              id: secondary,
-              title: 'Browser lifecycle B',
-              created_at: Date.now(),
-              workspace_id: workspaceId
-            })
-            if (!originalResponse.success || !secondaryResponse.success) {
-              throw new Error(
-                originalResponse.error || secondaryResponse.error || 'failed to seed sessions'
-              )
-            }
-            return { original, secondary }
+          const setup = await setupWorkbenchWithTempWorkspace(page, {
+            caseId: CASE_ID,
+            workspaceName: WORKSPACE_NAME,
+            createSession: false
           })
-          await page.reload()
-          await navigateToWorkbench(page, { waitForSessionListText: false })
-          const originalSessionTestId = `${workbenchSelectors.sessionItemPrefix}-${sessionIds.original}`
-          const secondarySessionTestId = `${workbenchSelectors.sessionItemPrefix}-${sessionIds.secondary}`
-          const originalSessionItem = page.locator(`[data-testid="${originalSessionTestId}"]`)
+          const liveEnv = setup.env
+          await page.getByRole('button', { name: `在 ${WORKSPACE_NAME} 中新建对话` }).click()
+          const originalSessionTestId = await page
+            .locator(
+              `[data-testid^="${workbenchSelectors.sessionItemPrefix}-"].nc-sidebar-item-active`
+            )
+            .getAttribute('data-testid')
+          if (!originalSessionTestId) throw new Error('active session id is missing')
+          const sessionStartedAt = Date.now()
+          await sendWorkbenchMessage(page, SESSION_PROMPT)
+          await waitForWorkbenchAiRunCompletion(
+            runtime,
+            sessionStartedAt,
+            liveEnv.modelName,
+            240_000,
+            { page }
+          )
+          const originalSessionItem = page.getByTestId(originalSessionTestId)
           await originalSessionItem.waitFor({ state: 'visible' })
-          await originalSessionItem.click()
 
           const panelToggle = getWorkbenchLocator(page, workbenchSelectors.contentPanelToggle)
           if ((await panelToggle.getAttribute('aria-label')) === '展开右侧栏') {
@@ -121,13 +113,9 @@ describe('workbench browser lifecycle e2e', () => {
           const browserTabId = browserTabTestId?.split('-browser-').at(-1) || ''
           if (!browserTabId) throw new Error('browser tab id is missing')
 
-          const navigateResponse = await page.evaluate(
-            async ({ tabId, url }) => window.api.browserTabNavigate({ tabId, url }),
-            { tabId: browserTabId, url: server.url }
-          )
-          if (!navigateResponse.success) {
-            throw new Error(navigateResponse.error || 'browser fixture navigation failed')
-          }
+          const browserPanel = getWorkbenchLocator(page, workbenchSelectors.browserPanel)
+          await browserPanel.getByRole('textbox', { name: /浏览器地址/u }).fill(server.url)
+          await browserPanel.getByRole('button', { name: /前往/u }).click()
           await page.waitForFunction(
             async ({ tabId, url }) => {
               const response = await window.api.browserPanelStateGet({ tabId })
@@ -234,7 +222,7 @@ describe('workbench browser lifecycle e2e', () => {
             async (tabId) => window.api.browserPanelStateGet({ tabId }),
             browserTabId
           )
-          await page.evaluate(async () => await window.api.browserPanelCloseMenu())
+          await page.keyboard.press('Escape')
           await page.waitForFunction(
             (testId) =>
               document.querySelector(`[data-testid="${testId}"]`)?.getAttribute('aria-expanded') ===
@@ -244,7 +232,7 @@ describe('workbench browser lifecycle e2e', () => {
           const afterMenuRect = await readViewportRect()
           const afterMenuPixels = await captureViewportPixels()
 
-          await page.locator(`[data-testid="${secondarySessionTestId}"]`).click()
+          await createWorkbenchNewSession(page)
           await page.waitForFunction(
             (testId) => document.querySelector(`[data-testid="${testId}"]`) === null,
             workbenchSelectors.contentPanelShell
@@ -252,35 +240,27 @@ describe('workbench browser lifecycle e2e', () => {
           const switchedAwayRuntimeBefore = await inspectBrowserRuntime()
           await page.waitForTimeout(300)
           const switchedAwayRuntimeAfter = await inspectBrowserRuntime()
-          const restoreSamples = await page.evaluate(
-            async ({ sessionTestId, shellTestId }) => {
-              const session = document.querySelector(`[data-testid="${sessionTestId}"]`)
-              if (!(session instanceof HTMLElement)) return []
-              session.click()
-              const startedAt = performance.now()
-              const samples: Array<{
-                elapsed: number
-                mounted: boolean
-                visible: string | null
-                width: number
-              }> = []
-              while (performance.now() - startedAt < 400) {
-                const shell = document.querySelector(`[data-testid="${shellTestId}"]`)
-                samples.push({
-                  elapsed: performance.now() - startedAt,
-                  mounted: shell instanceof HTMLElement,
-                  visible: shell?.getAttribute('data-panel-visible') || null,
-                  width: shell instanceof HTMLElement ? shell.getBoundingClientRect().width : 0
-                })
-                await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
-              }
-              return samples
-            },
-            {
-              sessionTestId: originalSessionTestId,
-              shellTestId: workbenchSelectors.contentPanelShell
+          await originalSessionItem.click()
+          const restoreSamples = await page.evaluate(async (shellTestId) => {
+            const startedAt = performance.now()
+            const samples: Array<{
+              elapsed: number
+              mounted: boolean
+              visible: string | null
+              width: number
+            }> = []
+            while (performance.now() - startedAt < 400) {
+              const shell = document.querySelector(`[data-testid="${shellTestId}"]`)
+              samples.push({
+                elapsed: performance.now() - startedAt,
+                mounted: shell instanceof HTMLElement,
+                visible: shell?.getAttribute('data-panel-visible') || null,
+                width: shell instanceof HTMLElement ? shell.getBoundingClientRect().width : 0
+              })
+              await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
             }
-          )
+            return samples
+          }, workbenchSelectors.contentPanelShell)
           await viewport.waitFor({ state: 'visible' })
           const sessionRestoredPixels = await captureViewportPixels()
           const finalRuntime = await inspectBrowserRuntime()

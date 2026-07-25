@@ -159,7 +159,7 @@ tests/case/workbench/
 - 测试类型：`e2e`
 - What：`+` 与粘贴添加附件时，附件会保存到工作区 `.ncurator/runtime/assets/<assetBucketId>/`，不会提前创建真实会话；图片、`doc`、`docx`、`pptx`、`pdf`、`md`、`json` 可以添加，并保持图片预览、文件打开、删除、普通文本粘贴和格式提示行为。
 - Why：附件链路已改为“统一落盘到工作区 + 只把路径交给 AI”，必须用回归测试守住真实保存路径和交互行为。
-- How：创建真实工作区，通过真实点击添加附件并在 E2E harness 中注入下一次系统文件对话框的选择结果，经过真实 Renderer → IPC → Main → 附件保存链路；另外通过粘贴覆盖不支持格式和大文件 warning。macOS 保留原生对话框 smoke，Windows 使用同一业务链路的受控对话框返回。
+- How：创建并通过原生目录选择绑定真实工作区；点击添加附件后，在 Windows 系统文件窗口或 macOS Open 面板中用系统级键鼠选择真实文件，经过 Renderer → IPC → Main → 附件保存链路；另外通过粘贴覆盖不支持格式和大文件 warning。
 - Oracle：未绑定工作区时提示先选择工作区且不添加附件；真实添加会落盘且不提前创建会话；图片预览、格式范围、不支持提示及只传名称与路径的发送上下文整体对齐 `WB-COMPOSER-010`。
 - Not：不在跨平台业务回归中验证系统原生文件选择器的视觉细节；不通过 `attachmentPickResponse` 或直接 `attachmentSaveFile` 伪造附件结果。
 
@@ -219,6 +219,10 @@ tests/case/workbench/
 - Oracle：用户消息、assistant 占位、各过程层、总结等待层、最终 markdown 和链接行为对齐 `WB-COMPOSER-003`、`WB-COMPOSER-009`；最终回答使用 workspace 中间结果并围绕用户诉求收口，对齐 `WB-CORE-005`、`WB-CORE-006`。
 - Not：不对最终文案逐字断言，也不把真实模型质量问题误归因为 UI bug。
 
+### 3.5 发布前真实检查
+
+- `WB-BLOCKER-004`：上下文压缩必须由真实模型使用量和正式压缩阈值触发，检查运行中与完成态过程组；不得为 E2E 降低生产阈值或伪造 compaction 事件。该检查运行成本取决于模型上下文，不作为每次源码回归的固定 case。
+
 #### `run-navigation-snapshot-replay`
 
 - 测试类型：`e2e`
@@ -251,7 +255,7 @@ tests/case/workbench/
 - 测试类型：`e2e`
 - What：AI 请求用户接手浏览器、用户完成后继续和取消任务。
 - Why：登录、验证码和人工确认无法由 AI 自动完成，等待状态必须可恢复且可释放。
-- How：通过真实浏览器任务触发接手事件，分别点击“完成并继续”和“取消本次任务”，并覆盖切换会话后返回。
+- How：通过真实浏览器任务触发接手事件；测试以 Windows `user32` 或 macOS `CGEvent` 发送系统鼠标输入，点击嵌入网页中的确认按钮，再从 Workbench UI 完成继续或取消并覆盖切换会话后返回。
 - Oracle：展示原因和对应浏览器；确认后从同一页面继续；取消后 run 结束且不再保留 blocker，对齐 `WB-BLOCKER-002`。
 - Not：不验证第三方网站业务结果。
 
@@ -287,18 +291,9 @@ tests/case/workbench/
 - 测试类型：`e2e`
 - What：内置浏览器原生视图在初次显示、面板折叠、Renderer 菜单避让和会话切换后仍可见、尺寸稳定且持续运行。
 - Why：`WebContentsView` 由 Main 管理并覆盖在 Renderer 上方；生命周期或 bounds 同步错误会导致白屏、原生视图遮挡菜单、恢复后尺寸跳变，或切换会话时误销毁仍在运行的网页。
-- How：启动带高对比颜色和自增计时器的本地真实网页，在可见 Electron 窗口中创建浏览器 Tab；分别采集初次显示、折叠恢复、菜单打开/关闭和切换会话恢复后的窗口像素、viewport 尺寸、zoom、WebContents id 与计时器值。
+- How：通过 Settings UI 创建工作空间并用真实模型发送消息形成会话；在 Workbench UI 新建浏览器 Tab，从“浏览器地址”输入框点击“前往”打开带高对比颜色和自增计时器的本地真实网页；通过 UI 新建/切回会话、Escape 关闭菜单，并采集各阶段窗口像素、viewport 尺寸、zoom、WebContents id 与计时器值。
 - Oracle：各阶段浏览器 viewport 均包含稳定的非白真实网页像素且尺寸、zoom 不变；Renderer 菜单打开时原生视图隐藏，关闭后恢复；折叠或切换会话只停放视图，不销毁 WebContents，计时器持续前进；回到原会话时面板直接按最终宽度恢复且不重播展开动画，对齐 `WB-PANEL-001-AC5`、`WB-PANEL-004-AC1`、`WB-PANEL-004-AC3`、`WB-PANEL-004-AC7`。
 - Not：不验证公网网页、Stagehand 操作或最终 AI 回答；这些由 `browser-use-task-panel` 覆盖。
-
-#### `cdp-random-port-isolation`
-
-- 测试类型：`e2e`
-- What：在启动 Electron 前占用旧的 `9333` 端口，验证应用仍能启动并使用 Chromium 自动分配的回环 CDP 端口。
-- Why：生产环境不应依赖固定端口；安装版、开发版或用户其他软件占用 `9333` 时，不能影响应用启动。
-- How：启动本地 `127.0.0.1:9333` 占用者，启动真实 Electron，读取隔离 user-data 中的 `DevToolsActivePort`，再访问 `/json/version` 验证 endpoint 可用。
-- Oracle：应用进入可用状态；实际端口为有效端口且不等于 `9333`；CDP endpoint 返回成功。
-- Not：不验证 Stagehand 的模型操作；完整 `observe / act / extract` 仍由 `browser-use-task-panel` 覆盖。
 
 #### `web-search-diagnostic`
 
