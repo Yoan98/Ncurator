@@ -6,6 +6,7 @@ import { parseReleaseTag } from './tag.mjs'
 
 const SHA256_HEX = /^[a-f0-9]{64}$/u
 const SHA512_BASE64 = /^[A-Za-z0-9+/]{86}==$/u
+const STORAGE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*$/u
 
 const hashFile = async (filePath, algorithm, encoding) =>
   createHash(algorithm)
@@ -29,7 +30,7 @@ export const assertReleaseBundle = (
   { tag: expectedTag, platform: expectedPlatform } = {}
 ) => {
   if (!bundle || typeof bundle !== 'object') throw new Error('release bundle is missing')
-  if (bundle.schemaVersion !== 1) throw new Error('release bundle schemaVersion must be 1')
+  if (bundle.schemaVersion !== 2) throw new Error('release bundle schemaVersion must be 2')
   try {
     parseReleaseTag(bundle.tag, bundle.platform)
   } catch {
@@ -50,10 +51,19 @@ export const assertReleaseBundle = (
     throw new Error('release bundle files are missing')
   }
   const names = new Set()
+  const storageNames = new Set()
   for (const file of bundle.files) {
     assertPlainFileName(file?.name, 'release bundle asset')
     if (names.has(file.name)) throw new Error(`duplicate release bundle asset: ${file.name}`)
     names.add(file.name)
+    assertPlainFileName(file?.storageName, 'release bundle storage asset')
+    if (!STORAGE_NAME.test(file.storageName)) {
+      throw new Error(`release bundle storage asset must be ASCII: ${file.name}`)
+    }
+    if (storageNames.has(file.storageName)) {
+      throw new Error(`duplicate release bundle storage asset: ${file.storageName}`)
+    }
+    storageNames.add(file.storageName)
     if (!['installer', 'update'].includes(file.role)) {
       throw new Error(`invalid release bundle role: ${file.name}`)
     }
@@ -85,6 +95,7 @@ export const createReleaseBundle = async ({ fragmentPath, outputPath, commit }) 
     }
     files.push({
       name: file.name,
+      storageName: file.storageName,
       role: file.role,
       size: file.size,
       sha256: await hashFile(filePath, 'sha256', 'hex'),
@@ -93,7 +104,7 @@ export const createReleaseBundle = async ({ fragmentPath, outputPath, commit }) 
   }
 
   const bundle = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     tag: fragment.tag,
     commit,
     platform: fragment.platform,
@@ -123,6 +134,7 @@ export const verifyReleaseBundle = async (bundlePath, expected = {}) => {
     if (
       !fragmentFile ||
       fragmentFile.role !== file.role ||
+      fragmentFile.storageName !== file.storageName ||
       fragmentFile.size !== file.size ||
       fragmentFile.sha512 !== file.sha512
     ) {

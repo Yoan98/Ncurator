@@ -19,7 +19,7 @@ const MODEL_FIXTURES: readonly LLMConfig[] = [
   }
 ]
 
-describe('settings model backend', () => {
+describe('unit model backend', () => {
   it('model-config-list-contract', async () => {
     await runBackendCase({
       caseId: 'model-config-list-contract',

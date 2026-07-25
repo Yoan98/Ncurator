@@ -15,7 +15,7 @@ describe('settings help e2e', () => {
       await runE2ECase({
         caseId: 'settings-help-entry',
         domain: 'settings',
-        suite: 'model',
+        suite: 'general',
         description: '设置页在向量模型下方展示同级使用帮助入口，并打开官方手册。',
         fixtures: [],
         serviceMode: 'real',

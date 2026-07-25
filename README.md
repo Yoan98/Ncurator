@@ -40,15 +40,14 @@
 │   │   ├── settings.md               # Settings 产品需求
 │   │   └── workbench.md              # Workbench 产品需求
 │   ├── test-plan/                    # 专项测试计划
-│       ├── ai-test.md                # AI 回归测试计划
-│       ├── settings-test.md          # Settings 测试计划
-│       └── workbench-test.md         # Workbench 测试计划
+│   │   ├── ai-test.md                # AI 回归测试计划
+│   │   ├── settings-test.md          # Settings 测试计划
+│   │   └── workbench-test.md         # Workbench 测试计划
 │   └── tidy.md                       # 周期性文档与测试整理流程
 ├── src/                              # 应用源码
 │   ├── main/                         # Electron Main 进程
 │   │   ├── ipc/                      # IPC handler 和通道入口
 │   │   ├── services/                 # 主进程业务服务
-│   │   ├── testing/                  # 主进程测试辅助能力
 │   │   ├── types/                    # Main 侧通用类型
 │   │   └── utils/                    # Main 侧通用工具
 │   ├── preload/                      # Electron preload 桥接层
@@ -84,14 +83,10 @@
 ├── build/                            # 构建相关资源
 ├── logo/                             # logo 资源
 │   └── png/                          # png 格式 logo
-├── .codex/                           # Codex 项目配置
-│   └── skills/                       # Codex 技能定义
-├── .agent/                           # Agent 本地配置
-├── .claude/                          # Claude 本地配置
+├── .agents/                          # Agent 协作配置
 ├── .vscode/                          # VS Code 配置
 ├── .codex-tmp/                       # Codex 临时产物，不承载长期代码和文档
 ├── .pip-cache/                       # Python 依赖缓存，不承载长期代码和文档
-├── .pyinstaller/                     # PyInstaller 构建缓存，不承载长期代码和文档
 └── .runvenv/                         # 本地运行虚拟环境，不承载长期代码和文档
 ```
 

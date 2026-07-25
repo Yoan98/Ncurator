@@ -50,16 +50,7 @@ SQLite 保存以下业务数据：
 
 `better-sqlite3` 是 native 模块，Node backend 测试和 Electron e2e 使用不同 ABI。项目通过独立缓存保存两套 binding，不覆盖 `node_modules` 中的同一个 `.node` 文件。
 
-- `pnpm native:prepare`：准备当前平台的 Node 与 Electron binding。
-- `pnpm native:node`：只准备 Node binding。
-- `pnpm native:electron`：只准备 Electron binding。
-- `pnpm native:status`：查看缓存和资源状态。
-- `scripts/test/workflow.mjs` 会按测试类型自动准备并注入正确 binding，正常回归不需要手动 rebuild。
-- 打包流程会准备 Electron binding 并导出到 `resources/native/better-sqlite3/**`。
-
-`001_initial_schema` 已发布并冻结。任何 schema 或数据变更都必须新增更高版本 migration，不能修改、重排或复用已发布 migration。开发环境重建数据库时也必须验证从已发布 schema 向前迁移的路径。
-
-`002_ai_runtime_system_notifications` 为 `ai_runtime_settings` 增加 `systemNotificationsEnabled INTEGER NOT NULL DEFAULT 1`。旧设置记录升级后默认开启系统通知。
+测试 runner 和打包流程会自动准备并注入正确 binding，正常开发与回归不手工 rebuild。已发布 migration 不修改、重排或复用；任何 schema 或数据变更都新增更高版本 migration，具体历史以 migration 源码为准。
 
 ## LanceDB
 
@@ -95,16 +86,7 @@ SQLite 决定什么数据有效，LanceDB 只负责在有效范围内检索内�
 
 ## Generation 机制
 
-文件和网页索引都用 `generation_id` 保证一致性。
-
-1. SQLite 标记 `document.import_status = indexing`。
-2. 生成新的 `generation_id`。
-3. LanceDB 批量写入新 generation 的 chunks。
-4. 写入成功后，SQLite transaction 切换 `document.active_generation_id`，并标记 indexed。
-5. 后台删除旧 generation chunks。
-6. 如果失败，不切换 `active_generation_id`，旧索引继续可用。
-
-因此索引构建失败时，已有检索结果仍然可用。
+文件和网页索引先写入新 `generation_id`，成功后由 SQLite transaction 切换 `active_generation_id`，再清理旧 chunks；失败时不切换，因此已有检索结果仍可用。
 
 ## Fragment 和 Optimize
 

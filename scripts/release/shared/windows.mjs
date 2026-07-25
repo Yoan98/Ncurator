@@ -259,7 +259,7 @@ export const verifyPublicReleaseFragment = async (
   publicBaseUrl = PUBLIC_RELEASE_BASE_URL
 ) => {
   for (const file of fragment.files) {
-    const response = await fetchWithRetry(`${publicBaseUrl}/${artifactKey(fragment, file.name)}`, {
+    const response = await fetchWithRetry(`${publicBaseUrl}/${artifactKey(fragment, file.storageName)}`, {
       method: 'HEAD',
       cache: 'no-store'
     })
@@ -276,7 +276,7 @@ export const verifyR2ReleaseFragment = async (fragment, awsExecutable) => {
     throw new Error('R2 verification configuration is incomplete')
   }
   for (const file of fragment.files) {
-    const key = artifactKey(fragment, file.name)
+    const key = artifactKey(fragment, file.storageName)
     const result = await commandResult(awsExecutable, [
       's3api',
       'head-object',

@@ -64,7 +64,7 @@ const createJob = (
   updated_at: NOW
 })
 
-describe('settings workspace backend', () => {
+describe('unit workspace backend', () => {
   it('workspace-interrupted-job-recovery-contract', async () => {
     await runBackendCase({
       caseId: 'workspace-interrupted-job-recovery-contract',

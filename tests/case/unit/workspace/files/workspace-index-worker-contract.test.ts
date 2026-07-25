@@ -26,7 +26,7 @@ const createChunk = (length: number, page: number): { text: string; page: number
   page
 })
 
-describe('settings workspace backend', () => {
+describe('unit workspace backend', () => {
   it('workspace-index-worker-contract', async () => {
     await runBackendCase({
       caseId: 'workspace-index-worker-contract',

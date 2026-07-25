@@ -18,8 +18,8 @@ afterEach(async () => {
 const createFixture = async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ncurator-release-bundle-'))
   tempRoots.push(root)
-  await fs.writeFile(path.join(root, 'Ncurator-windows-x64.exe'), 'installer')
-  await fs.writeFile(path.join(root, 'Ncurator-windows-x64.exe.blockmap'), 'blockmap')
+  await fs.writeFile(path.join(root, '馆长-0.1.21-Windows-x64.exe'), 'installer')
+  await fs.writeFile(path.join(root, '馆长-0.1.21-Windows-x64.exe.blockmap'), 'blockmap')
   await fs.writeFile(path.join(root, 'latest.yml'), 'version: 0.1.21\n')
   await fs.writeFile(
     path.join(root, 'package-audit.json'),
@@ -32,14 +32,26 @@ const createFixture = async () => {
     })
   )
   const fragment = {
-    schemaVersion: 2,
+    schemaVersion: 3,
     tag: 'windows-v0.1.21',
     version: '0.1.21',
     platform: 'windows-x64',
     createdAt: new Date().toISOString(),
     files: [
-      { name: 'Ncurator-windows-x64.exe', role: 'installer', size: 9, sha512: '' },
-      { name: 'Ncurator-windows-x64.exe.blockmap', role: 'update', size: 8, sha512: '' }
+      {
+        name: '馆长-0.1.21-Windows-x64.exe',
+        storageName: 'Ncurator-windows-x64.exe',
+        role: 'installer',
+        size: 9,
+        sha512: ''
+      },
+      {
+        name: '馆长-0.1.21-Windows-x64.exe.blockmap',
+        storageName: 'Ncurator-windows-x64.exe.blockmap',
+        role: 'update',
+        size: 8,
+        sha512: ''
+      }
     ],
     metadata: 'version: 0.1.21\n',
     audit: {
@@ -82,7 +94,7 @@ describe('release artifact bundle', () => {
       outputPath: bundlePath,
       commit: '0123456789012345678901234567890123456789'
     })
-    await fs.appendFile(path.join(root, 'Ncurator-windows-x64.exe'), 'changed')
+    await fs.appendFile(path.join(root, '馆长-0.1.21-Windows-x64.exe'), 'changed')
     await expect(verifyReleaseBundle(bundlePath)).rejects.toThrow('release asset size changed')
   })
 })

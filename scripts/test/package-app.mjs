@@ -160,7 +160,7 @@ export const preparePackagedE2EApplication = async (bundlePath, { resultPath = '
     mkdirSync(installRoot, { recursive: true })
     await runLogged(artifactPath, ['/S', `/D=${installRoot}`])
     installedAppPath = installRoot
-    executablePath = path.join(installRoot, 'Ncurator.exe')
+    executablePath = path.join(installRoot, '馆长.exe')
     if (!existsSync(executablePath))
       throw new Error(`Windows 安装后的应用不存在：${executablePath}`)
   }

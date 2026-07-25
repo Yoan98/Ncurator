@@ -39,7 +39,7 @@ afterEach(async () => {
   await fs.promises.rm(resolveSnapshotPath(), { force: true })
 })
 
-describe('settings vector backend', () => {
+describe('unit vector backend', () => {
   it('vector-download-startup-resume-contract', async () => {
     await runBackendCase({
       caseId: 'vector-download-startup-resume-contract',

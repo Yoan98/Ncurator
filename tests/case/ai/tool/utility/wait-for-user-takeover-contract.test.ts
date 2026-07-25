@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, it } from 'vitest'
 import { createUtilityToolHarness } from '../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import { filterAiRunEventsByType } from '../../human/testUtils'
@@ -24,8 +24,13 @@ describe('ai tool utility backend', () => {
         const result = await harness.invoke<WaitForUserTakeoverResult>('wait_for_user_takeover', {
           message: '请在右侧浏览器完成登录'
         })
+        const { WAIT_FOR_USER_TAKEOVER_SCHEMA } =
+          await import('../../../../../src/main/services/ai/human/tools/utility/toolSpecs')
         return {
           result,
+          rejectsOverlongMessage: !WAIT_FOR_USER_TAKEOVER_SCHEMA.safeParse({
+            message: '用'.repeat(31)
+          }).success,
           events: runtime.eventCollector.snapshot()
         }
       },
@@ -36,6 +41,10 @@ describe('ai tool utility backend', () => {
           name: 'takeover-tool-resumes-after-confirmation',
           message: '用户确认后工具应返回 confirmed=true。',
           data: output.result
+        })
+        runtime.assertThat(output.rejectsOverlongMessage, {
+          name: 'takeover-message-schema-limit',
+          message: '接手提示超过 30 个字符时应被工具 schema 拒绝。'
         })
         runtime.assertThat(
           required.length === 1 &&
@@ -50,12 +59,5 @@ describe('ai tool utility backend', () => {
         )
       }
     })
-  })
-
-  it('rejects takeover messages longer than 30 characters', async () => {
-    const { WAIT_FOR_USER_TAKEOVER_SCHEMA } =
-      await import('../../../../../src/main/services/ai/human/tools/utility/toolSpecs')
-    const parsed = WAIT_FOR_USER_TAKEOVER_SCHEMA.safeParse({ message: '用'.repeat(31) })
-    expect(parsed.success).toBe(false)
   })
 })

@@ -221,7 +221,7 @@ export type TestCaseDefinition<TResult> = {
   caseId: string
   harnessMode: BackendHarnessMode
   testType?: Extract<TestType, 'backend'>
-  domain: Extract<TestDomain, 'ai' | 'settings' | 'kb-search'>
+  domain: Extract<TestDomain, 'ai' | 'unit'>
   suite: string
   groups?: readonly string[]
   description: string

@@ -29,7 +29,7 @@ const createRecord = (
   updated_at: NOW
 })
 
-describe('settings workspace backend', () => {
+describe('unit workspace backend', () => {
   it('workspace-prepare-contract', async () => {
     await runBackendCase({
       caseId: 'workspace-prepare-contract',

@@ -32,12 +32,12 @@ describe('app update publish config', () => {
     expect(include).toContain('SetSilent silent')
   })
 
-  it('uses the product brand with stable technical artifact names', async () => {
+  it('uses the product brand for Windows user-visible files and stable macOS artifact names', async () => {
     const config = await readBuilderConfig()
 
     expect(config.productName).toBe('馆长')
-    expect(config.win?.executableName).toBe('Ncurator')
-    expect(config.nsis?.artifactName).toBe('Ncurator-windows-${arch}.${ext}')
+    expect(config.win?.executableName).toBe('馆长')
+    expect(config.nsis?.artifactName).toBe('馆长-${version}-Windows-${arch}.${ext}')
     expect(config.mac?.artifactName).toBe('Ncurator-mac-${arch}.${ext}')
     expect(config.linux).toBeUndefined()
   })

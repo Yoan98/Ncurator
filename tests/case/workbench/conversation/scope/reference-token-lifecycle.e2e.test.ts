@@ -1,4 +1,7 @@
+import { writeFile } from 'node:fs/promises'
+import path from 'node:path'
 import { describe, it } from 'vitest'
+import { importSelectors } from '../../../../../src/renderer/src/testing/selectors'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
   WORKBENCH_RESULT_E2E_TIMEOUT_MS,
@@ -21,7 +24,12 @@ import {
   waitForWorkbenchSearchScopeEmptyThroughUi,
   workbenchSelectors
 } from '../../../../harness/e2e/workbench'
-import { createFixtureWorkspace } from '../../../../harness/e2e/settings'
+import {
+  createFixtureWorkspace,
+  getSettingsLocator,
+  navigateToSettingsSection,
+  waitForFileIndexJobIdle
+} from '../../../../harness/e2e/settings'
 
 const CASE_ID = 'reference-token-lifecycle'
 
@@ -74,10 +82,27 @@ describe('workbench conversation e2e', () => {
             phase: 'before-app-close',
             dispose: server.close
           })
-          await setupScopeWorkspace(page, {
+          const setup = await setupScopeWorkspace(page, {
             workspaceName: 'Workbench Scope Workspace',
             webSourceUrl: server.url
           })
+          await writeFile(
+            path.join(setup.workspace.rootPath, '工作', 'added-after-index.md'),
+            '# Added after indexing',
+            'utf8'
+          )
+          const workspaceId = await page.evaluate(async (workspaceName) => {
+            const workspace = (await window.api.workspaceList()).items.find(
+              (item) => item.name === workspaceName
+            )
+            if (!workspace) throw new Error('scope workspace missing after setup')
+            return workspace.id
+          }, setup.workspaceName)
+          await navigateToSettingsSection(page, 'workspace')
+          await getSettingsLocator(page, importSelectors.workspaceQuickScanButton).click()
+          await waitForFileIndexJobIdle(page, workspaceId)
+          await navigateToWorkbench(page)
+          await selectWorkbenchWorkspace(page, setup.workspaceName)
           await switchWorkbenchMode(page, '大聪明')
           await insertWorkbenchReferenceToken(page, 'sample-edit.docx')
           const afterFile = await getWorkbenchReferenceTokenTexts(page)
@@ -189,7 +214,16 @@ describe('workbench conversation e2e', () => {
             .first()
             .isVisible()
             .catch(() => false)
+          const smartModeSearchWarningVisible = await getWorkbenchLocator(
+            page,
+            workbenchSelectors.referenceSearchWarning
+          )
+            .isVisible()
+            .catch(() => false)
           await switchWorkbenchMode(page, '没头脑')
+          const searchWarning = getWorkbenchLocator(page, workbenchSelectors.referenceSearchWarning)
+          await searchWarning.waitFor({ state: 'visible' })
+          const searchWarningText = ((await searchWarning.textContent()) || '').trim()
           await appendWorkbenchInputText(page, '请用一句话说明这些资料。')
           await submitWorkbenchCurrentDraft(page)
           const latestUserMessageReferenceTokens =
@@ -256,6 +290,8 @@ describe('workbench conversation e2e', () => {
             tokensBeforeSubmit,
             composerReferenceIconKinds,
             composerTokenCloseButtonVisible,
+            smartModeSearchWarningVisible,
+            searchWarningText,
             tokensBeforeDelete,
             latestUserMessageReferenceTokens,
             latestUserMessageText,
@@ -299,6 +335,8 @@ describe('workbench conversation e2e', () => {
               result.composerReferenceIconKinds.includes('directory') &&
               result.composerReferenceIconKinds.includes('web') &&
               !result.composerTokenCloseButtonVisible &&
+              !result.smartModeSearchWarningVisible &&
+              result.searchWarningText.includes('搜索只会覆盖其已索引子文件') &&
               result.tokensBeforeDelete.length === 3 &&
               result.latestUserMessageReferenceTokens.length === 3 &&
               result.latestUserMessageReferenceIconKinds.includes('docx') &&

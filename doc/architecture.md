@@ -79,11 +79,7 @@ Retrieval 负责文档索引、向量检索、全文检索和结果融合。检�
 
 Tool Runtime 为 AI 提供文件、终端、浏览器等本地能力。工具实现位于 Main，由各领域服务负责具体操作；通用安全边界、审批和工作区变化追踪由运行时统一处理。
 
-内置浏览器的 Stagehand 自动化通过 Electron Chromium 的 CDP 连接。Main 启动时只设置
-`remote-debugging-address=127.0.0.1` 和 `remote-debugging-port=0`，由 Chromium 自动选择空闲端口并写入
-user-data 目录下的 `DevToolsActivePort`。`CdpEndpointService` 负责等待、解析和校验该文件及 `/json/version`，
-`BrowserEmbedService` 只依赖解析后的 endpoint，不持有固定端口。CDP 仅绑定本机回环地址；随机端口用于避免
-安装版、开发版或其他本地程序之间的固定端口冲突，但不把随机端口当作安全认证机制。
+内置浏览器由 Electron `WebContentsView` 承载，Stagehand 通过仅绑定本机回环地址的随机 CDP endpoint 精确连接对应 Tab，不依赖固定端口或 URL 猜测页面。
 
 开发版默认使用独立的 `*-dev` user-data 目录，避免和安装版共享数据库、实例锁或 `DevToolsActivePort`；E2E
 可以通过 `NCURATOR_USER_DATA_PATH` 显式提供隔离目录。
@@ -149,17 +145,13 @@ skill 不按目录强行拆分，也不等同于工具数量。一个 skill 可�
 
 ### 结构化输出策略与重试
 
-AI 结构化调用按配置和模型维度记忆成功策略。首次没有历史策略时，统一按 `json_schema -> json_object -> prompt_json` 尝试；某个策略成功后，`LlmStrategyPreferenceStore` 以 `configId + modelName` 为键保存 `transport` 和结构化输出模式，后续调用直接优先使用已保存策略。供应商不会在执行器里写死专用策略。
-
-结构化能力不支持、返回内容无法解析或不符合 Schema 时属于“策略降级”。结构化策略遇到 `ResourceExhausted` 时，会先在同一次调用内尝试下一个策略；后续策略成功后保存该策略，避免下一轮再次命中已拥塞的请求形态。只有所有候选策略都返回容量错误，才进入服务重试并使用指数退避。其他 HTTP 503、429 和超时仍直接进入服务重试。策略只有在完整调用成功后才会保存，失败调用不会污染历史偏好。
+AI 结构化调用按配置和模型记忆成功策略；能力不支持、解析失败或 Schema 不匹配时降级，服务容量、限流和超时按统一重试策略处理。只有完整成功的策略会被保存，供应商差异不写死在执行器中。
 
 ### 会话连续性
 
 跨轮上下文由 conversation summary 和未被摘要覆盖的 recent messages 组成。摘要只覆盖完整轮次，并在后台生成；失败或陈旧结果不会推进覆盖边界。run 内压缩和跨 run 的会话记忆是两套独立机制。
 
-消息中保存的文件 artifact 是内部业务数据，包含文件能力、文件名和修改记录 ID，用于预览、差异查看与回退。传入模型的会话历史不会直接序列化内部 artifact，而是统一投影为 `kind / path / operation`，避免把 `applyId` 等内部标识写入提示词。artifact 不保存重复的展示摘要。
-
-运行失败或用户取消不会撤销已经落地的文件修改。终态消息继续保存此前产生的 artifact，Renderer 在 completed、failed、cancelled 三种终态都会重新读取文件修改记录，保证中断后的文件仍可查看和回退。
+文件 artifact 是预览、差异与回退所需的内部业务数据；传入模型时只投影必要语义，不暴露内部记录标识。运行失败或取消不会撤销已落地修改，所有终态都保留可查看、可回退的修改记录。
 
 ## 存储架构
 
@@ -172,16 +164,7 @@ AI 结构化调用按配置和模型维度记忆成功策略。首次没有历�
 
 ## 索引一致性
 
-文件和网页索引使用 `generation_id` 保证一致性：
-
-1. SQLite 将 document 标记为 indexing。
-2. 生成新的 generation。
-3. 写入新 generation 的 LanceDB chunks。
-4. 写入成功后切换 SQLite `active_generation_id`。
-5. 后台删除旧 generation。
-6. 失败时不切换 active generation，旧索引继续可用。
-
-检索时只搜索当前 active generation，避免读到过期索引。详细存储规则见 `doc/database.md`。
+文件和网页索引通过 `generation_id` 原子切换当前有效版本；新索引失败时继续使用旧版本，检索只读取 active generation。详细规则见 `doc/database.md`。
 
 ## 主链路
 

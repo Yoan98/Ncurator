@@ -74,24 +74,6 @@ Settings 顶层 suite 对齐 PRD 模块：
 - Oracle：删除成功后，被删配置不再出现在列表中，对齐 `SET-MODEL-003-AC1`；失败响应保留原配置并显示脱敏错误，对齐 `SET-MODEL-003-AC2`。
 - Not：不定义删除后 workbench 本地模型偏好如何恢复。
 
-#### `settings-titlebar-drag-region`
-
-- 测试类型：`e2e`
-- What：Settings 在 Windows 使用独立的 Electron 原生标题栏覆盖层，同时业务内容拖动区和页面按钮保持可用。
-- Why：原生窗口按钮、窗口拖动区和 Settings 内容必须分层；任一层位置错误都会导致窗口无法拖动、侧栏无法切换或配置按钮被遮挡。
-- How：打开 Settings 页面，检查 36px 原生标题栏、原生拖动区域、下方业务内容起点、侧栏切换按钮命中和关键页面按钮可用性。
-- Oracle：Windows 原生标题栏独立位于业务内容上方；拖动区域使用 `-webkit-app-region: drag`；业务内容不侵入原生窗口按钮区；侧栏切换按钮使用 `no-drag` 并可完成折叠/展开；页面按钮仍可点击。非 Windows 平台继续验证页面顶部拖动区域。
-- Not：不验证不同操作系统窗口管理器的实际拖动效果，只验证页面命中和样式契约。
-
-#### `settings-help-entry`
-
-- 测试类型：`e2e`
-- What：设置页向量模型下方的使用帮助入口。
-- Why：设置帮助与 Workbench 帮助是首发版唯一官方手册入口，位置和外链必须稳定。
-- How：打开设置页，检查入口位置、可访问名称，点击后观察外链调用和路由。
-- Oracle：入口紧接向量模型、使用同级样式，打开官方中文手册且不改变设置路由，对齐 `SET-HELP-001`。
-- Not：不验证系统浏览器窗口样式。
-
 ### 3.2 `workspace / core`
 
 #### `workspace-page-load-default-selection`
@@ -100,7 +82,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - What：工作空间页打开后会自动初始化列表和详情，并默认选中第一条工作空间。
 - Why：后续文件 / 网页管理都依赖首屏默认选中，如果这里失效，详情区会表现成“无从下手”。
 - How：通过 UI 创建两个工作空间，进入工作空间页并等待第一条详情渲染完成。
-- Oracle：页面打开后列表和详情区会自动完成初始化，对齐 `SET-WORKSPACE-001-AC1`；第一条工作空间自动成为当前选中项，且左侧同时表达文件数与网页数，对齐 `SET-WORKSPACE-001-AC2`、`SET-WORKSPACE-005-AC4`。
+- Oracle：页面打开后列表和详情区自动初始化；头部只展示名称和工作空间操作；第一条工作空间自动选中且左侧同时表达文件数与网页数，对齐 `SET-WORKSPACE-001`、`SET-WORKSPACE-005-AC1`、`SET-WORKSPACE-005-AC4`。
 - Not：不验证添加或移除工作空间的后续选中回退策略。
 
 #### `workspace-add-selection-flow`
@@ -109,7 +91,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - What：无工作空间和未绑定目录时的空状态，以及按名称创建空容器后自动切换到新工作空间。
 - Why：工作空间已从“目录快照”改为“具名容器”，首个创建动作必须反映这一语义。
 - How：进入无工作空间页面检查列表和详情空状态，覆盖空名称提交和有效名称提交，再检查新建未绑定工作空间的文件区空状态。
-- Oracle：没有工作空间时显示明确选择提示，对齐 `SET-WORKSPACE-007-AC1`；名称为空时不允许提交，对齐 `SET-WORKSPACE-002-AC1`；点击遮罩后弹窗保持打开且输入不丢失，对齐 `SET-WORKSPACE-002-AC3`；创建成功后，新工作空间立即进入列表并成为当前选中项，对齐 `SET-WORKSPACE-002-AC2`；未绑定目录时文件区显示明确空态，对齐 `SET-WORKSPACE-007-AC2`。
+- Oracle：没有工作空间时显示选择提示；名称校验和创建流程对齐 `SET-WORKSPACE-002`；未绑定目录时明确提示设置后才能在 Workbench 发送，对齐 `SET-WORKSPACE-006-AC3`、`SET-WORKSPACE-007`。
 - Not：不验证创建后自动扫描或自动索引；该需求未在 PRD 中定义。
 
 #### `workspace-set-root-path`
@@ -118,7 +100,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - What：文件 tab 内可以为当前工作空间绑定工作文件地址，并立即刷新目录树。
 - Why：目录绑定已从“创建工作空间”移动到“文件 tab 内设置”，这是新的主操作链路。
 - How：先创建未绑定目录的工作空间，再通过目录选择器为其设置工作文件地址。
-- Oracle：成功设置后，当前工作空间会写入文件目录并刷新目录树，对齐 `SET-WORKSPACE-006-AC1`、`SET-WORKSPACE-008-AC3`。
+- Oracle：成功设置后写入文件目录并刷新当前真实目录树，对齐 `SET-WORKSPACE-006-AC1`、`SET-WORKSPACE-008-AC1`、`SET-WORKSPACE-008-AC3`。
 - Not：不验证不同操作系统的原生目录选择器样式，也不验证真实文件系统权限错误分支。
 
 #### `workspace-remove-from-list`
@@ -138,7 +120,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - What：点击“检查更新”后，页面会刷新文件树和需索引摘要。
 - Why：这是用户识别待更新文件的第一步。
 - How：创建一条带扫描延迟的 fixture 工作空间，触发检查更新并读取刷新后的文件树响应。
-- Oracle：检查过程中出现持久化进度反馈，且检查更新/更新索引按钮同时禁用，对齐 `SET-WORKSPACE-003-AC1`；检查成功后，文件树和需索引摘要同步刷新，对齐 `SET-WORKSPACE-003-AC2`。
+- Oracle：检查过程中出现持久化进度反馈，对齐 `SET-WORKSPACE-003-AC1`；成功后文件树和摘要刷新，对齐 `SET-WORKSPACE-003-AC2`；离开再返回时恢复当前进度和按钮状态，对齐 `SET-WORKSPACE-003-AC3`。
 - Not：不验证真实大目录性能和文件系统权限失败分支。
 
 #### `workspace-prepare-refresh`
@@ -203,7 +185,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - What：网页“检查更新 → 更新索引”完整链路会先刷新可索引状态，再区分成功索引与爬取失败并刷新摘要。
 - Why：网页索引是“爬取 + 建索引”两阶段链路，失败类型必须可区分。
 - How：预置一条成功网页和一条带失败标记的网页，先执行“检查更新”，再执行“更新索引”。
-- Oracle：检查更新执行中出现进度且两个按钮禁用，完成后网页进入 `needs_index`，对齐 `SET-WEB-003-AC1`、`SET-WEB-003-AC2`；更新索引执行中出现抓取/索引分阶段进度，且两个按钮继续禁用，对齐 `SET-WEB-004-AC4`；成功网页转为已索引，对齐 `SET-WEB-004-AC2`；失败网页被标记为爬取失败，失败数量同步更新，对齐 `SET-WEB-004-AC3`。
+- Oracle：网页列表、摘要、失败数量和操作区初始化对齐 `SET-WEB-001-AC1`、`SET-WEB-001-AC2`；检查进度和完成状态对齐 `SET-WEB-003-AC1`、`SET-WEB-003-AC2`；更新时网页进入抓取/索引状态，对齐 `SET-WEB-004-AC1`；成功与失败分别收敛，对齐 `SET-WEB-004-AC2`、`SET-WEB-004-AC3`；分阶段进度对齐 `SET-WEB-004-AC4`。
 - Not：不验证真实网页正文切块、embedding 写入质量和索引失败以外的网络细节。
 
 #### `web-prepare-progress-restore`
@@ -212,7 +194,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - What：网页索引执行中离开并返回网页 tab 后，分阶段进度块和按钮状态会恢复。
 - Why：网页索引包含抓取与索引两阶段，恢复时不能只恢复“执行中”标签而丢失当前阶段。
 - How：创建带 prepare 延迟的 fixture 工作区，触发网页更新索引后切到其他设置页，再返回网页 tab 读取 active job 与进度文案。
-- Oracle：返回后仍能看到 running job 对应的分阶段进度，且检查更新/更新索引按钮继续禁用，对齐 `SET-WEB-004-AC5`。
+- Oracle：检查更新离开再返回时恢复当前进度，对齐 `SET-WEB-003-AC3`；更新索引离开再返回时恢复当前阶段且两个按钮继续禁用，对齐 `SET-WEB-004-AC5`。
 - Not：不验证无抓取动作时直接展示第二步的真实内容缓存分支；该分支由后端 job 状态能力保留。
 
 #### `web-detail-and-delete`
@@ -242,9 +224,27 @@ Settings 顶层 suite 对齐 PRD 模块：
 - Why：向量模型是检索能力的基础依赖，如果列表加载状态不清晰，用户无法判断是否还需要下载模型。
 - How：打开 Settings 向量模型页，等待真实模型目录渲染。
 - Oracle：页面至少展示一个模型卡片，且每个模型有下载按钮或已安装标识，对齐 `SET-VECTOR-001-AC1`。
-- Not：不验证下载进度、下载成功、下载失败和删除反馈；这些不能再通过假进度 e2e 验证。
+- Not：不下载或删除正式模型；自动化不得用伪模型目录、伪下载源或生产故障开关替代真实用户链路。
 
 ### 3.6 `general`
+
+#### `settings-titlebar-drag-region`
+
+- 测试类型：`e2e`
+- What：Settings 的原生窗口层、业务内容拖动区和页面操作保持分层。
+- Why：任一层位置错误都会导致窗口无法拖动、侧栏无法切换或页面按钮被遮挡。
+- How：打开 Settings，检查 36px 原生标题栏、业务内容起点、拖动区域、侧栏切换按钮命中和页面按钮可用性。
+- Oracle：Windows 原生标题栏独立位于业务内容上方，对齐 `SET-GENERAL-002-AC1`；主内容和侧栏拖动区可命中，侧栏按钮为 `no-drag` 且可折叠/展开，对齐 `SET-GENERAL-002-AC2`。
+- Not：不验证不同窗口管理器的实际拖动手感。
+
+#### `settings-help-entry`
+
+- 测试类型：`e2e`
+- What：设置页向量模型下方的使用帮助入口。
+- Why：设置帮助与 Workbench 帮助是官方手册入口，位置和外链必须稳定。
+- How：打开设置页，检查入口位置和可访问名称，点击后观察外链调用与路由。
+- Oracle：入口样式和位置对齐 `SET-HELP-001-AC1`；打开官方中文手册且不改变设置路由，对齐 `SET-HELP-001-AC2`。
+- Not：不验证系统浏览器窗口样式。
 
 #### `system-notification-settings`
 
@@ -253,13 +253,4 @@ Settings 顶层 suite 对齐 PRD 模块：
 - Why：通知是跨进程能力，开关状态必须由主进程保存，不能只停留在 Renderer 内存。
 - How：通过 Settings UI 打开通用页，关闭开关，重新读取 `ai-runtime-settings-get`，再恢复开关。
 - Oracle：开关默认开启，关闭后 UI 与主进程设置均为关闭，对齐 `SET-GENERAL-001-AC1`、`SET-GENERAL-001-AC3`。
-- Not：开发机自动化不把系统通知中心的视觉弹窗作为稳定断言；终态通知发送由 `SystemNotificationService` 单元测试和 AI run backend contract 覆盖。
-
-#### `system-notification-session-navigation`
-
-- 测试类型：`e2e`
-- What：系统通知点击事件可以从 Settings 返回 Workbench，并打开通知对应的会话。
-- Why：通知跨越 Main、Preload、Router 和会话加载，单测只能证明 IPC 被发送，不能证明用户最终进入正确会话。
-- How：通过真实 IPC 创建目标会话并进入通用设置，再由 Electron Main 向 Renderer 发送与通知点击相同的 `system-notification-open-session` 事件。
-- Oracle：路由回到 Workbench；目标会话可见且处于选中状态，对齐 `SET-GENERAL-001-AC4`。
-- Not：不点击操作系统通知中心的真实弹窗；macOS 与 Windows 的通知视觉和系统权限仍在发布前手动检查。
+- Not：自动化不伪造通知对象、终态或点击事件；系统通知展示和点击导航保留为发布前真实人工检查。

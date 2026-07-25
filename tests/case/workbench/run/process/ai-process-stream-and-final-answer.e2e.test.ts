@@ -54,7 +54,6 @@ describe('workbench run e2e', () => {
             page,
             workbenchSelectors.assistantProcessItemPrefix
           ).count()
-
           return {
             processTextDuringRun,
             retryAndThinkingCoexist,

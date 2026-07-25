@@ -224,7 +224,8 @@ const assertLaunchedWorkbenchApp = (page: Page): void => {
 const buildElectronLaunchEnv = (
   userDataDir: string,
   serviceMode: E2EServiceMode,
-  windowMode?: ElectronWindowMode
+  windowMode?: ElectronWindowMode,
+  extraEnv?: Readonly<Record<string, string>>
 ): NodeJS.ProcessEnv => {
   const env: NodeJS.ProcessEnv = {}
 
@@ -244,6 +245,10 @@ const buildElectronLaunchEnv = (
   }
   env.NCURATOR_E2E_WINDOW_MODE = windowMode || process.env.NCURATOR_E2E_WINDOW_MODE || 'background'
   env.NCURATOR_USER_DATA_PATH = userDataDir
+
+  for (const [key, value] of Object.entries(extraEnv || {})) {
+    env[key] = value
+  }
 
   return env
 }
@@ -325,6 +330,7 @@ const focusVisibleElectronWindow = async (electronApp: ElectronApplication): Pro
 export const launchElectronApp = async (input: {
   serviceMode: E2EServiceMode
   windowMode?: ElectronWindowMode
+  extraEnv?: Readonly<Record<string, string>>
   signalSink?: ElectronSignalSink
 }): Promise<LaunchedElectronApp> => {
   const launch = await resolveElectronLaunch()
@@ -345,7 +351,12 @@ export const launchElectronApp = async (input: {
   )
   await mkdir(e2eTempRoot, { recursive: true })
   const userDataDir = await mkdtemp(path.join(e2eTempRoot, 'ncurator-e2e-user-data-'))
-  const launchEnv = buildElectronLaunchEnv(userDataDir, input.serviceMode, input.windowMode)
+  const launchEnv = buildElectronLaunchEnv(
+    userDataDir,
+    input.serviceMode,
+    input.windowMode,
+    input.extraEnv
+  )
   const electronApp = await electron.launch({
     executablePath: launch.executablePath,
     args: launch.args,

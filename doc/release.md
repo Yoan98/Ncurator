@@ -55,6 +55,8 @@ pnpm release:start -- --platform mac --version X.Y.Z
 
 prepare 阶段从 Tag 创建独立工作区，执行 `pnpm install --frozen-lockfile`、正式构建、安装包审计和 bundle 固化。它不复用当前源码、旧 `node_modules` 或旧 `dist`，也不上传 R2。
 
+Windows 的用户可见名称统一为“馆长”：安装包为 `馆长-X.Y.Z-Windows-x64.exe`，安装后的主程序为 `馆长.exe`，快捷方式与卸载项也使用“馆长”。npm 包名、`appId`、`.ncurator` 目录和 R2 对象键等内部技术标识保持不变。
+
 候选包保存在：
 
 ```text
@@ -205,7 +207,7 @@ downloads/latest/macos-arm64.dmg
 downloads/latest/macos-x64.dmg
 ```
 
-版本化产物使用不可变缓存；latest、manifest 和固定下载使用 `no-store`。固定下载返回带版本和平台的用户文件名，R2 技术文件名保持 ASCII。
+版本化产物使用不可变缓存；latest、manifest 和固定下载使用 `no-store`。fragment 中的 `name` 记录用户可见文件名，`storageName` 记录 R2 ASCII 对象名；二者共同进入候选 bundle 校验。Windows 固定下载与 manifest 返回 `馆长-X.Y.Z-Windows-x64.exe`，自动更新 metadata 则指向对应的 ASCII 对象键。
 
 本地 `.env` 使用：
 

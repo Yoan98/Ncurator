@@ -20,7 +20,20 @@ describe('R2 update metadata', () => {
     await import('node:fs/promises').then(({ mkdir }) => mkdir(inputDirectory, { recursive: true }))
     await writeFile(
       path.join(inputDirectory, 'latest.yml'),
-      'version: 0.1.1\nfiles:\n  - url: Ncurator-windows-x64.exe\npath: Ncurator-windows-x64.exe\n',
+      'version: 0.1.1\nfiles:\n  - url: 馆长-0.1.1-Windows-x64.exe\npath: 馆长-0.1.1-Windows-x64.exe\n',
+      'utf8'
+    )
+    const fragmentPath = path.join(temporaryDirectory, 'windows-x64.json')
+    await writeFile(
+      fragmentPath,
+      JSON.stringify({
+        files: [
+          {
+            name: '馆长-0.1.1-Windows-x64.exe',
+            storageName: 'Ncurator-windows-x64.exe'
+          }
+        ]
+      }),
       'utf8'
     )
     await execFileAsync(
@@ -29,7 +42,8 @@ describe('R2 update metadata', () => {
         path.resolve('scripts/release/r2/metadata.mjs'),
         inputDirectory,
         outputDirectory,
-        'windows-v0.1.1'
+        'windows-v0.1.1',
+        fragmentPath
       ],
       { cwd: process.cwd() }
     )

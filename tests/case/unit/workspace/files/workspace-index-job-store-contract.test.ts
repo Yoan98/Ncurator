@@ -27,7 +27,7 @@ const createJob = (input: {
   updated_at: input.startedAt || NOW
 })
 
-describe('settings workspace backend', () => {
+describe('unit workspace backend', () => {
   it('workspace-index-job-store-contract', async () => {
     await runBackendCase({
       caseId: 'workspace-index-job-store-contract',

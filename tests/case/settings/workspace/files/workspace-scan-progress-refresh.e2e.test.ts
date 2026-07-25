@@ -73,6 +73,8 @@ describe('settings workspace e2e', () => {
           let inProgressVisible = false
           let buttonsDisabled = false
           let progressEventSeen = false
+          let restoredProgressVisible = false
+          let restoredButtonsDisabled = false
 
           await runtime.step({
             name: 'scan-workspace-through-ui',
@@ -125,6 +127,24 @@ describe('settings workspace e2e', () => {
                   ).isDisabled())
               }
               progressEventSeen = await progressEventsPromise
+              await navigateToSettingsSection(page, 'model')
+              await navigateToSettingsSection(page, 'workspace')
+              await getSettingsLocator(page, importSelectors.workspaceIndexJobProgress).waitFor({
+                state: 'visible'
+              })
+              restoredProgressVisible = await getSettingsLocator(
+                page,
+                importSelectors.workspaceIndexJobProgress
+              ).isVisible()
+              restoredButtonsDisabled =
+                (await getSettingsLocator(
+                  page,
+                  importSelectors.workspaceQuickScanButton
+                ).isDisabled()) &&
+                (await getSettingsLocator(
+                  page,
+                  importSelectors.workspaceQuickPrepareButton
+                ).isDisabled())
             }
           })
 
@@ -134,6 +154,8 @@ describe('settings workspace e2e', () => {
             inProgressVisible,
             buttonsDisabled,
             progressEventSeen,
+            restoredProgressVisible,
+            restoredButtonsDisabled,
             summary: result.tree.summary,
             itemNames: result.tree.items.map((item) => item.name)
           }
@@ -145,6 +167,15 @@ describe('settings workspace e2e', () => {
               '检查更新应通过真实 UI 触发扫描，并能观察到执行中的 UI 或真实进度事件；扫描很快完成时进度块可能已恢复。',
             data: result
           })
+          await runtime.assertThat(
+            result.restoredProgressVisible && result.restoredButtonsDisabled,
+            {
+              name: 'scan-progress-restores-after-return',
+              message:
+                '检查更新执行中离开并返回工作空间页后，应恢复进度块并继续禁用两个操作按钮，对齐 SET-WORKSPACE-003-AC3。',
+              data: result
+            }
+          )
 
           await runtime.assertThat(
             result.summary.file_count === 600 &&

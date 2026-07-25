@@ -198,7 +198,7 @@ afterEach(async () => {
   await Promise.all(tempRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
 
-describe('workbench chat run backend', () => {
+describe('unit ai persistence backend', () => {
   it('chat-submit-ai-creates-placeholder-and-run', async () => {
     const setup = await createTestService()
     const run = await submitAiRun(setup)

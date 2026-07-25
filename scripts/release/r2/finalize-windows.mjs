@@ -33,7 +33,7 @@ try {
   const fragment = JSON.parse(await readFile(fragmentPath, 'utf8'))
   assertReleaseFragment(fragment, { tag: releaseTag, platform: 'windows-x64' })
   for (const file of fragment.files) {
-    const key = artifactKey(fragment, file.name)
+    const key = artifactKey(fragment, file.storageName)
     const remote = JSON.parse(
       (await aws(['s3api', 'head-object', '--bucket', bucket, '--key', key, '--output', 'json']))
         .stdout
@@ -53,7 +53,8 @@ try {
       path.join(ROOT, 'scripts', 'release', 'r2', 'metadata.mjs'),
       metadataInput,
       metadataOutput,
-      releaseTag
+      releaseTag,
+      fragmentPath
     ])
     child.once('error', reject)
     child.once('exit', (code) =>
@@ -73,9 +74,11 @@ try {
   ])
 
   const installer = fragment.files.find((file) => file.role === 'installer')
-  const sourceKey = artifactKey(fragment, installer.name)
+  const sourceKey = artifactKey(fragment, installer.storageName)
   const downloadKey = fixedDownloadKey(fragment.platform)
-  const downloadName = `Ncurator-${fragment.version}-windows-x64.exe`
+  const downloadName = installer.name
+  const fallbackDownloadName = `Ncurator-${fragment.version}-Windows-x64.exe`
+  const downloadDisposition = `attachment; filename="${fallbackDownloadName}"; filename*=UTF-8''${encodeURIComponent(downloadName)}`
   await aws([
     's3api',
     'copy-object',
@@ -90,7 +93,7 @@ try {
     '--cache-control',
     'no-store',
     '--content-disposition',
-    `attachment; filename="${downloadName}"`,
+    downloadDisposition,
     '--metadata-directive',
     'REPLACE',
     '--metadata',
@@ -147,9 +150,7 @@ try {
   if (
     !downloadResponse.ok ||
     Number(downloadResponse.headers.get('content-length')) !== installer.size ||
-    !String(downloadResponse.headers.get('content-disposition') || '').includes(
-      `filename="${downloadName}"`
-    )
+    String(downloadResponse.headers.get('content-disposition') || '') !== downloadDisposition
   ) {
     throw new Error('public fixed Windows download verification failed')
   }

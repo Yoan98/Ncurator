@@ -1052,7 +1052,7 @@ AI unit / 辅助测试目录：
 
 ##### `create-ppt-deck`
 
-- 测试类型：`mock-llm`
+- 测试类型：`backend / mock-llm`
 - What：AI 能学习 `ppt-read / ppt-write`，通过 `create_presentation.html[]` 一次创建多页并交付 PPT。
 - Why：需要验证 human 主链能正确学习并调用 PPT 能力。
 - How：使用 scripted LLM 输出驱动真实 human graph 创建并交付 PPT。
@@ -1068,6 +1068,7 @@ AI unit / 辅助测试目录：
 - Why：真实 human 必须遵守旧格式只读边界并保持源文件不变。
 - How：仅提供旧版文档和读取工具，检查工具事件、答案关键事实与文件 hash。
 - Oracle：读取成功、答案包含预期事实、不调用编辑工具且源文件未改变。
+- Not：不验证旧版 `.doc` 的编辑能力；该格式只允许读取。
 
 ##### `human-legacy-doc-edit-skip-live`
 
@@ -1076,10 +1077,11 @@ AI unit / 辅助测试目录：
 - Why：不可写格式必须快速收敛，避免反复工具调用和误改原文件。
 - How：要求直接编辑旧版文档，检查一次失败、提示事件、最终答复和文件 hash。
 - Oracle：只尝试一次编辑；出现 legacy_doc_edit_unsupported；源文件不变且任务完成。
+- Not：不要求模型绕过格式限制，也不把失败后的多次重试视为可接受结果。
 
 ##### `human-create-ppt-deck-live`
 
-- 测试类型：`live`
+- 测试类型：`backend / live`
 - What：真实模型能学习 `ppt-read / ppt-write`，读取工具描述中的 HTML 规则并自主创建多页 PPT。
 - Why：真实模型必须能理解 PPT 规则并完成可交付文件。
 - How：使用自然语言请求真实模型创建多页 PPT，并读取最终文件和修改记录。
@@ -1111,6 +1113,7 @@ AI unit / 辅助测试目录：
 - Why：runtime 是 AI 架构的执行能力，必须验证真实解释器调用而非文本猜测。
 - How：只开放 terminal/runtime 相关工具，检查执行命令、结果标记和资源边界。
 - Oracle：实际执行 inline code 并返回预期标记；无伪造工具事件。
+- Not：不覆盖下载安装 runtime；该路径由独立下载 case 验证。
 
 ##### `human-runtime-script-assets-live`
 
@@ -1119,6 +1122,7 @@ AI unit / 辅助测试目录：
 - Why：脚本和产物是 AI 工具协作的真实交付边界，不能污染工作区。
 - How：检查脚本执行、assets 路径、文件内容和清理结果。
 - Oracle：脚本真实运行；产物位于 UUID assets 子目录；工作区没有安装/临时污染文件。
+- Not：不验证业务文档交付质量，只验证 runtime 脚本与临时资产边界。
 
 ##### `human-runtime-download-node-live`
 
@@ -1127,6 +1131,7 @@ AI unit / 辅助测试目录：
 - Why：AI runtime 必须能在缺少系统 Node.js 的环境中自主补齐真实执行能力。
 - How：隐藏系统 Node.js，只开放 terminal 工具，要求模型把 runtime 安装到受控 `user_runtime` 目录后执行确定性代码。
 - Oracle：下载后的 Node.js 真实执行并返回预期标记；安装文件只存在于指定 runtime 目录；工作区无安装产物。
+- Not：不修改或依赖系统级 Node.js 安装。
 
 ##### `human-runtime-download-python-live`
 
@@ -1135,6 +1140,7 @@ AI unit / 辅助测试目录：
 - Why：AI runtime 必须能在缺少系统 Python 的环境中自主补齐真实执行能力。
 - How：隐藏系统 Python，只开放 terminal 工具，要求模型把 runtime 安装到受控 `user_runtime` 目录后执行确定性代码。
 - Oracle：下载后的 Python 真实执行并返回预期标记；安装文件只存在于指定 runtime 目录；工作区无安装产物。
+- Not：不修改或依赖系统级 Python 安装。
 
 ##### `human-context-compaction-natural-trigger-live`
 

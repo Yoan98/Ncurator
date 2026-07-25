@@ -7,7 +7,7 @@ const PLATFORM_AUDIT = Object.freeze({
 })
 
 const SHA512_BASE64 = /^[A-Za-z0-9+/]{86}==$/u
-const ASSET_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*$/u
+const STORAGE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*$/u
 
 const isNonEmptyString = (value) => typeof value === 'string' && value.trim().length > 0
 const isPositiveInteger = (value) => Number.isSafeInteger(value) && value > 0
@@ -71,7 +71,7 @@ export const assertReleaseFragment = (
   { tag: expectedTag, platform: expectedPlatform, label = 'release fragment' } = {}
 ) => {
   if (!fragment || typeof fragment !== 'object') fail(label, 'document is missing')
-  if (fragment.schemaVersion !== 2) fail(label, 'schemaVersion must be 2')
+  if (fragment.schemaVersion !== 3) fail(label, 'schemaVersion must be 3')
   let parsedTag
   try {
     parsedTag = parseReleaseTag(fragment.tag, fragment.platform)
@@ -90,18 +90,41 @@ export const assertReleaseFragment = (
     fail(label, 'files must not be empty')
   }
   const names = new Set()
+  const storageNames = new Set()
   for (const file of fragment.files) {
-    if (!isNonEmptyString(file?.name) || !ASSET_NAME.test(file.name)) {
+    if (
+      !isNonEmptyString(file?.name) ||
+      file.name === '.' ||
+      file.name === '..' ||
+      /[\\/]/u.test(file.name)
+    ) {
       fail(label, 'asset name must be a plain filename')
     }
     if (names.has(file.name)) fail(label, `duplicate asset ${file.name}`)
     names.add(file.name)
+    if (!isNonEmptyString(file.storageName) || !STORAGE_NAME.test(file.storageName)) {
+      fail(label, `storageName must be an ASCII filename for ${file.name}`)
+    }
+    if (storageNames.has(file.storageName)) fail(label, `duplicate storage asset ${file.storageName}`)
+    storageNames.add(file.storageName)
     if (!['installer', 'update'].includes(file.role)) fail(label, `invalid role for ${file.name}`)
     if (!isPositiveInteger(file.size)) fail(label, `invalid size for ${file.name}`)
     if (!SHA512_BASE64.test(file.sha512)) fail(label, `invalid sha512 for ${file.name}`)
   }
   if (fragment.files.filter((file) => file.role === 'installer').length !== 1) {
     fail(label, 'exactly one installer is required')
+  }
+  if (fragment.platform === 'windows-x64') {
+    const expectedAssets = new Map([
+      [`馆长-${fragment.version}-Windows-x64.exe`, 'Ncurator-windows-x64.exe'],
+      [`馆长-${fragment.version}-Windows-x64.exe.blockmap`, 'Ncurator-windows-x64.exe.blockmap']
+    ])
+    if (
+      fragment.files.length !== expectedAssets.size ||
+      fragment.files.some((file) => expectedAssets.get(file.name) !== file.storageName)
+    ) {
+      fail(label, 'Windows asset names do not match the user-visible and storage naming contract')
+    }
   }
 
   if (!isNonEmptyString(fragment.metadata)) fail(label, 'update metadata is missing')

@@ -3,7 +3,7 @@ import path from 'node:path'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 
-describe('settings workspace backend', () => {
+describe('unit workspace backend', () => {
   it('workspace-scan-contract', async () => {
     await runBackendCase({
       caseId: 'workspace-scan-contract',

@@ -37,7 +37,7 @@ const downloadAndVerifyFragment = async (platform) => {
   const fragment = JSON.parse(await readFile(target, 'utf8'))
   assertReleaseFragment(fragment, { tag: releaseTag, platform })
   for (const file of fragment.files) {
-    const key = artifactKey(fragment, file.name)
+    const key = artifactKey(fragment, file.storageName)
     const remote = JSON.parse(
       (await aws(['s3api', 'head-object', '--bucket', bucket, '--key', key, '--output', 'json']))
         .stdout
@@ -89,7 +89,7 @@ try {
   const installers = new Map()
   for (const fragment of [arm64, x64]) {
     const installer = fragment.files.find((file) => file.role === 'installer')
-    const sourceKey = artifactKey(fragment, installer.name)
+    const sourceKey = artifactKey(fragment, installer.storageName)
     const downloadKey = fixedDownloadKey(fragment.platform)
     const downloadName =
       fragment.platform === 'macos-arm64'

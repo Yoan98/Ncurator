@@ -145,12 +145,13 @@ type E2EServiceConfiguration =
 
 export type E2ETestCaseDefinition<TResult> = E2EServiceConfiguration & {
   caseId: string
-  domain: Extract<TestDomain, 'ai' | 'settings' | 'workbench' | 'kb-search'>
+  domain: Extract<TestDomain, 'settings' | 'workbench'>
   suite: string
   groups?: readonly string[]
   description: string
   fixtures: readonly string[]
   windowMode?: ElectronWindowMode
+  extraEnv?: Readonly<Record<string, string>>
   runMode: E2ETestRunMode
   execute: (runtime: E2ETestRuntime) => Promise<TResult>
   assert: (result: TResult, runtime: E2ETestRuntime) => Promise<void>
@@ -557,6 +558,7 @@ export const runE2ECase = async <TResult>(
     launchedApp = await launchElectronApp({
       serviceMode: definition.serviceMode,
       windowMode: definition.windowMode,
+      extraEnv: definition.extraEnv,
       signalSink: {
         onAiRunEvent: (entry) => {
           appendRuntimeEventOnce(entry)

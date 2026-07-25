@@ -11,29 +11,29 @@ const definitions = {
   'windows-x64': {
     metadata: 'latest.yml',
     signature: undefined,
-    assets: [
-      ['Ncurator-windows-x64.exe', 'installer'],
-      ['Ncurator-windows-x64.exe.blockmap', 'update']
+    assets: (version) => [
+      [`馆长-${version}-Windows-x64.exe`, 'Ncurator-windows-x64.exe', 'installer'],
+      [`馆长-${version}-Windows-x64.exe.blockmap`, 'Ncurator-windows-x64.exe.blockmap', 'update']
     ]
   },
   'macos-arm64': {
     metadata: 'latest-mac.yml',
     signature: 'mac-update-signature.txt',
-    assets: [
-      ['Ncurator-mac-arm64.dmg', 'installer'],
-      ['Ncurator-mac-arm64.dmg.blockmap', 'update'],
-      ['Ncurator-mac-arm64.zip', 'update'],
-      ['Ncurator-mac-arm64.zip.blockmap', 'update']
+    assets: () => [
+      ['Ncurator-mac-arm64.dmg', 'Ncurator-mac-arm64.dmg', 'installer'],
+      ['Ncurator-mac-arm64.dmg.blockmap', 'Ncurator-mac-arm64.dmg.blockmap', 'update'],
+      ['Ncurator-mac-arm64.zip', 'Ncurator-mac-arm64.zip', 'update'],
+      ['Ncurator-mac-arm64.zip.blockmap', 'Ncurator-mac-arm64.zip.blockmap', 'update']
     ]
   },
   'macos-x64': {
     metadata: 'latest-mac.yml',
     signature: 'mac-update-signature.txt',
-    assets: [
-      ['Ncurator-mac-x64.dmg', 'installer'],
-      ['Ncurator-mac-x64.dmg.blockmap', 'update'],
-      ['Ncurator-mac-x64.zip', 'update'],
-      ['Ncurator-mac-x64.zip.blockmap', 'update']
+    assets: () => [
+      ['Ncurator-mac-x64.dmg', 'Ncurator-mac-x64.dmg', 'installer'],
+      ['Ncurator-mac-x64.dmg.blockmap', 'Ncurator-mac-x64.dmg.blockmap', 'update'],
+      ['Ncurator-mac-x64.zip', 'Ncurator-mac-x64.zip', 'update'],
+      ['Ncurator-mac-x64.zip.blockmap', 'Ncurator-mac-x64.zip.blockmap', 'update']
     ]
   }
 }
@@ -61,10 +61,10 @@ const sha512 = async (filePath) =>
     .digest('base64')
 
 const files = []
-for (const [name, role] of definition.assets) {
+for (const [name, storageName, role] of definition.assets(version)) {
   const filePath = path.join(inputDirectory, name)
   const fileStat = await stat(filePath)
-  files.push({ name, role, size: fileStat.size, sha512: await sha512(filePath) })
+  files.push({ name, storageName, role, size: fileStat.size, sha512: await sha512(filePath) })
 }
 
 const metadata = await readFile(path.join(inputDirectory, definition.metadata), 'utf8')
@@ -77,7 +77,7 @@ const signature = definition.signature
   : undefined
 
 const fragment = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   tag: releaseTag,
   version,
   platform,

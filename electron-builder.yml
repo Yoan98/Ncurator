@@ -33,13 +33,13 @@ asarUnpack:
   - '**/node_modules/@napi-rs/canvas-*/**/*'
 win:
   icon: build/icon.ico
-  executableName: Ncurator
+  executableName: 馆长
   target:
     - target: nsis
       arch:
         - x64
 nsis:
-  artifactName: Ncurator-windows-${arch}.${ext}
+  artifactName: 馆长-${version}-Windows-${arch}.${ext}
   include: build/nsis-updated-silent.nsh
   oneClick: false
   allowToChangeInstallationDirectory: true

@@ -86,9 +86,34 @@ describe('workbench result e2e', () => {
             message: `切换搜索模式并从真实本地索引结果打开 ${LOCAL_RESULT_FILE} 预览。`,
             run: async () => {
               await switchWorkbenchMode(page, '没头脑')
+              const composer = getWorkbenchLocator(page, workbenchSelectors.input)
+              await setWorkbenchInput(page, '第一行')
+              const messagesBeforeShiftEnter = await getWorkbenchLocator(
+                page,
+                workbenchSelectors.messageList
+              )
+                .locator('.ant-chat-message')
+                .count()
+              await composer.press('Shift+Enter')
+              await page.keyboard.insertText('第二行')
+              const shiftEnterText = (await composer.innerText()).trim()
+              const messagesAfterShiftEnter = await getWorkbenchLocator(
+                page,
+                workbenchSelectors.messageList
+              )
+                .locator('.ant-chat-message')
+                .count()
+
+              await setWorkbenchInput(page, '')
+              await composer.dispatchEvent('compositionstart', { data: '' })
+              await page.keyboard.insertText('中文输入')
+              await composer.dispatchEvent('compositionupdate', { data: '中文输入' })
+              await composer.dispatchEvent('compositionend', { data: '中文输入' })
+              const compositionText = (await composer.innerText()).trim()
+              await setWorkbenchInput(page, '')
               await insertWorkbenchReferenceToken(page, LOCAL_RESULT_FILE, '交付合规')
               await appendWorkbenchInputText(page, LOCAL_RESULT_QUERY)
-              await submitWorkbenchCurrentDraft(page)
+              await composer.press('Enter')
               const fileResults = await waitForWorkbenchSearchResults(page)
               const fileResultsText = ((await fileResults.textContent()) || '').trim()
               await fileResults
@@ -106,7 +131,11 @@ describe('workbench result e2e', () => {
               ).isVisible()
               return {
                 fileResultsText,
-                docxViewerVisible
+                docxViewerVisible,
+                shiftEnterText,
+                compositionText,
+                messagesBeforeShiftEnter,
+                messagesAfterShiftEnter
               }
             }
           })
@@ -229,6 +258,10 @@ describe('workbench result e2e', () => {
           return {
             fileResultsText: fileSearch.fileResultsText,
             docxViewerVisible: fileSearch.docxViewerVisible,
+            shiftEnterText: fileSearch.shiftEnterText,
+            compositionText: fileSearch.compositionText,
+            messagesBeforeShiftEnter: fileSearch.messagesBeforeShiftEnter,
+            messagesAfterShiftEnter: fileSearch.messagesAfterShiftEnter,
             webResultsText: webSearch.webResultsText,
             populatedLayout: webSearch.populatedLayout,
             legitimateSearchTextVisible: webSearch.legitimateSearchTextVisible,
@@ -243,6 +276,10 @@ describe('workbench result e2e', () => {
             result.aiEventCount === 0 &&
               result.fileResultsText.includes(LOCAL_RESULT_FILE) &&
               result.docxViewerVisible &&
+              result.shiftEnterText.includes('第一行') &&
+              result.shiftEnterText.includes('第二行') &&
+              result.messagesBeforeShiftEnter === result.messagesAfterShiftEnter &&
+              result.compositionText === '中文输入' &&
               /cedar-search-888/u.test(result.webResultsText) &&
               result.openExternalCalls >= 1 &&
               result.populatedLayout?.composerInsideViewport &&

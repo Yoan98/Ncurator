@@ -169,7 +169,7 @@ describe('ai tool kb backend', () => {
                 !row.source_url
             ),
           {
-            name: 'kb-search-preserves-file-source-path',
+            name: 'knowledge-search-preserves-file-source-path',
             message:
               'kb_search should expose source_type and file_path so AI can cite file knowledge as a local path.',
             data: result.fileHit
@@ -185,7 +185,7 @@ describe('ai tool kb backend', () => {
                 row.source_url === 'https://docs.langchain.com/oss/javascript/langchain/overview'
             ),
           {
-            name: 'kb-search-preserves-web-source-url',
+            name: 'knowledge-search-preserves-web-source-url',
             message:
               'kb_search should expose source_type and source_url so AI can cite web knowledge as a URL.',
             data: result.webHit

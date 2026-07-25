@@ -22,7 +22,7 @@ afterEach(() => {
   ;(VectorModelDownloadService as VectorModelDownloadServiceStatics).instance = null
 })
 
-describe('settings vector backend', () => {
+describe('unit vector backend', () => {
   it('vector-download-single-task-contract', async () => {
     await runBackendCase({
       caseId: 'vector-download-single-task-contract',

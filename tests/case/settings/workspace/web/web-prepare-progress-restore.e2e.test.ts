@@ -30,6 +30,8 @@ describe('settings workspace web e2e', () => {
           let restoredButtonsDisabled = false
           let restoredActiveJob = false
           let restoredStepText = ''
+          let restoredScanProgressVisible = false
+          let restoredScanButtonsDisabled = false
           const httpServer = await startLocalSettingsHttpServer({
             '/web-restore': {
               body: '<html><head><title>Web Restore</title></head><body>Delayed local web fixture.</body></html>',
@@ -56,6 +58,27 @@ describe('settings workspace web e2e', () => {
               await navigateToSettingsSection(page, 'workspace')
               await workspaceCardLocator(page, workspaceId).click()
               await page.getByRole('tab', { name: '网页 1' }).click()
+              await page.getByRole('button', { name: '检查更新' }).click()
+              await page.getByTestId(importSelectors.webSourceIndexJobProgress).waitFor({
+                state: 'visible'
+              })
+              await navigateToSettingsSection(page, 'model')
+              await navigateToSettingsSection(page, 'workspace')
+              await workspaceCardLocator(page, workspaceId).click()
+              await page.getByRole('tab', { name: '网页 1' }).click()
+              await page.getByTestId(importSelectors.webSourceIndexJobProgress).waitFor({
+                state: 'visible'
+              })
+              restoredScanProgressVisible = await page
+                .getByTestId(importSelectors.webSourceIndexJobProgress)
+                .isVisible()
+              restoredScanButtonsDisabled =
+                (await page.getByRole('button', { name: '检查更新' }).isDisabled()) &&
+                (await page.getByRole('button', { name: '更新索引' }).isDisabled())
+              await page.getByTestId(importSelectors.webSourceIndexJobProgress).waitFor({
+                state: 'hidden',
+                timeout: SETTINGS_WEB_E2E_TIMEOUT_MS
+              })
               await page.getByRole('button', { name: '更新索引' }).click()
               await page.getByTestId(importSelectors.webSourceIndexJobProgress).waitFor({
                 state: 'visible'
@@ -109,10 +132,21 @@ describe('settings workspace web e2e', () => {
             restoredProgressVisible,
             restoredButtonsDisabled,
             restoredActiveJob,
-            restoredStepText
+            restoredStepText,
+            restoredScanProgressVisible,
+            restoredScanButtonsDisabled
           }
         },
         assert: async (result, runtime) => {
+          await runtime.assertThat(
+            result.restoredScanProgressVisible && result.restoredScanButtonsDisabled,
+            {
+              name: 'web-scan-progress-restores-after-return',
+              message:
+                '网页检查更新执行中离开并返回网页 tab 后，应恢复进度并继续禁用两个按钮，对齐 SET-WEB-003-AC3。',
+              data: result
+            }
+          )
           await runtime.assertThat(
             result.restoredProgressVisible &&
               result.restoredButtonsDisabled &&

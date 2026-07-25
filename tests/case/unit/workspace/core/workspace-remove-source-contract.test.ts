@@ -50,7 +50,7 @@ const WEB_SOURCE: WebSourceRecord = {
   updated_at: NOW
 }
 
-describe('settings workspace backend', () => {
+describe('unit workspace backend', () => {
   it('workspace-remove-source-contract', async () => {
     await runBackendCase({
       caseId: 'workspace-remove-source-contract',

@@ -13,7 +13,7 @@ type TerminalRunCommandResult = {
 const isWindows = process.platform === 'win32'
 
 describe('ai tool terminal backend', () => {
-  it('terminal-dangerous-command-approval', async () => {
+  it('terminal-risk-and-boundary-guard', async () => {
     await runBackendCase({
       caseId: 'terminal-risk-and-boundary-guard',
       harnessMode: 'tool-real',

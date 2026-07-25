@@ -131,6 +131,16 @@ describe('workbench conversation e2e', () => {
             phase: 'after-app-close',
             dispose: attachments.cleanup
           })
+          await navigateToWorkbench(page)
+          await getWorkbenchLocator(page, workbenchSelectors.attachmentAddButton).click()
+          const missingWorkspaceMessage = await waitForAntMessageText(
+            page,
+            '请先选择工作区后再添加附件'
+          )
+          const attachmentCountWithoutWorkspace = await getWorkbenchPrefixLocator(
+            page,
+            workbenchSelectors.attachmentCardPrefix
+          ).count()
           const setup = await setupWorkbenchWorkspaceOnly(page, {
             caseId: CASE_ID,
             workspaceName: 'Workbench Composer Attachments Workspace'
@@ -278,6 +288,8 @@ describe('workbench conversation e2e', () => {
           )
 
           return {
+            missingWorkspaceMessage,
+            attachmentCountWithoutWorkspace,
             sessionCountBeforePaste,
             sessionCountAfterPaste,
             previewVisible,
@@ -310,7 +322,9 @@ describe('workbench conversation e2e', () => {
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
-            result.previewVisible &&
+            result.missingWorkspaceMessage.includes('请先选择工作区后再添加附件') &&
+              result.attachmentCountWithoutWorkspace === 0 &&
+              result.previewVisible &&
               result.imageRemoved &&
               result.downloadButtonVisible &&
               result.closeButtonVisible &&

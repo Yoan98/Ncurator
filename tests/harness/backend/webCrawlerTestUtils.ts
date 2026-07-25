@@ -19,7 +19,12 @@ export const createWebCrawlerService = (): ManagedWebCrawlerService => {
     try {
       await closeService()
     } finally {
-      await rm(baseDirectory, { recursive: true, force: true })
+      await rm(baseDirectory, {
+        recursive: true,
+        force: true,
+        maxRetries: 20,
+        retryDelay: 100
+      })
     }
   }
   return service

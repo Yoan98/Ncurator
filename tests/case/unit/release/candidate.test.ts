@@ -35,18 +35,29 @@ const createBundle = async ({
   if (!candidateRoot) tempRoots.push(candidates)
   process.env.NCURATOR_RELEASE_CANDIDATE_ROOT = candidates
   const assets = [
-    { name: 'Ncurator-windows-x64.exe', role: 'installer', content: 'installer' },
-    { name: 'Ncurator-windows-x64.exe.blockmap', role: 'update', content: 'blockmap' }
+    {
+      name: `馆长-${version}-Windows-x64.exe`,
+      storageName: 'Ncurator-windows-x64.exe',
+      role: 'installer',
+      content: 'installer'
+    },
+    {
+      name: `馆长-${version}-Windows-x64.exe.blockmap`,
+      storageName: 'Ncurator-windows-x64.exe.blockmap',
+      role: 'update',
+      content: 'blockmap'
+    }
   ]
   for (const asset of assets) await fs.writeFile(path.join(root, asset.name), asset.content)
   const files = assets.map((asset) => ({
     name: asset.name,
+    storageName: asset.storageName,
     role: asset.role,
     size: Buffer.byteLength(asset.content),
     sha512: createHash('sha512').update(asset.content).digest('base64')
   }))
   const fragment = {
-    schemaVersion: 2,
+    schemaVersion: 3,
     tag: `windows-v${version}`,
     version,
     platform: 'windows-x64',

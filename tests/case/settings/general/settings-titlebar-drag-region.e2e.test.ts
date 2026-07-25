@@ -58,15 +58,15 @@ type DragRegionSnapshot = {
   addModalVisible: boolean
 }
 
-describe('settings model e2e', () => {
+describe('settings general e2e', () => {
   it(
     'settings-titlebar-drag-region',
     async () => {
       await runE2ECase<DragRegionSnapshot>({
         caseId: 'settings-titlebar-drag-region',
         domain: 'settings',
-        suite: 'model',
-        description: '设置页顶部区域提供 Electron 窗口拖动区，且不遮挡页面按钮。',
+        suite: 'general',
+        description: '设置页窗口层与业务内容分层，拖动区不遮挡页面操作。',
         fixtures: [],
         serviceMode: 'real',
         runMode: 'single',
@@ -211,7 +211,8 @@ describe('settings model e2e', () => {
               result.mainHitTestId === settingsSelectors.mainDragRegion,
             {
               name: 'main-titlebar-hit-target-is-draggable',
-              message: '设置页主内容顶部应命中 drag 区域，鼠标放在顶部条才能拖动窗口。',
+              message:
+                '设置页主内容顶部应命中 drag 区域，鼠标放在顶部条才能拖动窗口，对齐 SET-GENERAL-002-AC2。',
               data: result
             }
           )
@@ -224,7 +225,8 @@ describe('settings model e2e', () => {
                 result.sidebarHitTestId === settingsSelectors.sidebarDragRegion),
             {
               name: 'sidebar-titlebar-hit-target-is-draggable',
-              message: '设置页侧栏顶部避开系统按钮后，也应保留可拖动窗口区域。',
+              message:
+                '设置页侧栏顶部避开系统按钮后，也应保留可拖动窗口区域，对齐 SET-GENERAL-002-AC2。',
               data: result
             }
           )
@@ -264,7 +266,8 @@ describe('settings model e2e', () => {
             })(),
             {
               name: 'windows-native-titlebar-is-separated-from-settings',
-              message: 'Windows 原生窗口按钮层必须独立位于设置页业务内容上方。',
+              message:
+                'Windows 原生窗口按钮层必须独立位于设置页业务内容上方，对齐 SET-GENERAL-002-AC1。',
               data: result
             }
           )

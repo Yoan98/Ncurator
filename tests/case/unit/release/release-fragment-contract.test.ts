@@ -39,11 +39,11 @@ describe('release fragment', () => {
     await mkdir(input, { recursive: true })
     const installer = Buffer.from('windows-installer')
     const blockmap = Buffer.from('windows-blockmap')
-    await writeFile(path.join(input, 'Ncurator-windows-x64.exe'), installer)
-    await writeFile(path.join(input, 'Ncurator-windows-x64.exe.blockmap'), blockmap)
+    await writeFile(path.join(input, '馆长-0.1.3-Windows-x64.exe'), installer)
+    await writeFile(path.join(input, '馆长-0.1.3-Windows-x64.exe.blockmap'), blockmap)
     await writeFile(
       path.join(input, 'latest.yml'),
-      'version: 0.1.3\npath: Ncurator-windows-x64.exe\n',
+      'version: 0.1.3\npath: 馆长-0.1.3-Windows-x64.exe\n',
       'utf8'
     )
     await writeFile(
@@ -74,7 +74,7 @@ describe('release fragment', () => {
     ])
 
     const fragment = JSON.parse(await readFile(output, 'utf8'))
-    expect(fragment.schemaVersion).toBe(2)
+    expect(fragment.schemaVersion).toBe(3)
     expect(fragment.tag).toBe('windows-v0.1.3')
     expect(fragment.platform).toBe('windows-x64')
     expect(fragment.metadata).toContain('version: 0.1.3')
@@ -95,7 +95,8 @@ describe('release fragment', () => {
     expect(fragment.files).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          name: 'Ncurator-windows-x64.exe',
+          name: '馆长-0.1.3-Windows-x64.exe',
+          storageName: 'Ncurator-windows-x64.exe',
           role: 'installer',
           size: installer.length,
           sha512: createHash('sha512').update(installer).digest('base64')
@@ -123,20 +124,28 @@ describe('release fragment', () => {
 
   it('rejects old, mismatched, unsafe, or forged release fragments', () => {
     const validFragment = {
-      schemaVersion: 2,
+      schemaVersion: 3,
       tag: 'windows-v0.1.3',
       version: '0.1.3',
       platform: 'windows-x64',
       createdAt: '2026-07-15T00:00:00.000Z',
       files: [
         {
-          name: 'Ncurator-windows-x64.exe',
+          name: '馆长-0.1.3-Windows-x64.exe',
+          storageName: 'Ncurator-windows-x64.exe',
           role: 'installer',
           size: 100,
           sha512: createHash('sha512').update('installer').digest('base64')
+        },
+        {
+          name: '馆长-0.1.3-Windows-x64.exe.blockmap',
+          storageName: 'Ncurator-windows-x64.exe.blockmap',
+          role: 'update',
+          size: 50,
+          sha512: createHash('sha512').update('blockmap').digest('base64')
         }
       ],
-      metadata: 'version: 0.1.3\npath: Ncurator-windows-x64.exe\n',
+      metadata: 'version: 0.1.3\npath: 馆长-0.1.3-Windows-x64.exe\n',
       audit: {
         schemaVersion: 1,
         generatedAt: '2026-07-15T00:00:00.000Z',
@@ -157,8 +166,8 @@ describe('release fragment', () => {
     expect(() => assertReleaseFragment({ ...validFragment, tag: 'mac-v0.1.3' })).toThrow(
       /tag must match its platform/u
     )
-    expect(() => assertReleaseFragment({ ...validFragment, schemaVersion: 1 })).toThrow(
-      /schemaVersion must be 2/u
+    expect(() => assertReleaseFragment({ ...validFragment, schemaVersion: 2 })).toThrow(
+      /schemaVersion must be 3/u
     )
     expect(() =>
       assertReleaseFragment({
@@ -169,19 +178,25 @@ describe('release fragment', () => {
     expect(() =>
       assertReleaseFragment({
         ...validFragment,
-        files: [{ ...validFragment.files[0], name: '../Ncurator.exe' }]
+        files: [{ ...validFragment.files[0], name: '../Ncurator.exe' }, validFragment.files[1]]
       })
     ).toThrow(/plain filename/u)
     expect(() =>
       assertReleaseFragment({
         ...validFragment,
-        files: [{ ...validFragment.files[0], name: '..\\Ncurator.exe' }]
+        files: [{ ...validFragment.files[0], name: '..\\Ncurator.exe' }, validFragment.files[1]]
       })
     ).toThrow(/plain filename/u)
     expect(() =>
       assertReleaseFragment({
         ...validFragment,
-        files: [{ ...validFragment.files[0], sha512: 'not-a-sha512' }]
+        files: [{ ...validFragment.files[0], storageName: '馆长.exe' }, validFragment.files[1]]
+      })
+    ).toThrow(/storageName must be an ASCII filename/u)
+    expect(() =>
+      assertReleaseFragment({
+        ...validFragment,
+        files: [{ ...validFragment.files[0], sha512: 'not-a-sha512' }, validFragment.files[1]]
       })
     ).toThrow(/invalid sha512/u)
     expect(() =>
