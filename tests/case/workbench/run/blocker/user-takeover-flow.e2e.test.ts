@@ -109,13 +109,20 @@ describe('workbench run e2e', () => {
           await getWorkbenchLocator(page, workbenchSelectors.browserPanel).waitFor({
             state: 'visible'
           })
+          const taskBrowserTab = page
+            .locator(`[data-testid^="${workbenchSelectors.resourceTabPrefix}-browser-"]`)
+            .filter({ hasText: 'User Takeover Task' })
+            .first()
+          await taskBrowserTab.waitFor({ state: 'visible' })
+          await taskBrowserTab.click()
+          await page.waitForTimeout(300)
           await runtime.captureScreenshot({
             name: 'user-takeover-panel',
             message: 'AI 已暂停，输入框位置显示用户接手面板，右侧浏览器保持打开。'
           })
 
           const browserTarget = await runtime.electronApp.evaluate(
-            async ({ webContents }, input) => {
+            async ({ BrowserWindow, WebContentsView, screen, webContents }, input) => {
               const allContents = webContents.getAllWebContents()
               const browserContents = allContents.find((item) =>
                 item.getURL().startsWith(input.url)
@@ -124,53 +131,95 @@ describe('workbench run e2e', () => {
                 return {
                   ok: false,
                   rect: null,
+                  viewBounds: null,
+                  screenPoint: null,
+                  paintedPixelSamples: 0,
                   urls: allContents.map((item) => item.getURL())
                 }
               }
+              const ownerWindow = BrowserWindow.getAllWindows().find((candidate) =>
+                candidate.contentView.children.some(
+                  (child) =>
+                    child instanceof WebContentsView && child.webContents.id === browserContents.id
+                )
+              )
+              const browserView = ownerWindow?.contentView.children.find(
+                (child) =>
+                  child instanceof WebContentsView && child.webContents.id === browserContents.id
+              )
               const rect = await browserContents.executeJavaScript(`(() => {
                 const button = document.querySelector('#complete-manual')
                 if (!(button instanceof HTMLElement)) return null
                 const bounds = button.getBoundingClientRect()
                 return { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height }
               })()`)
-              return { ok: Boolean(rect), rect, urls: [] }
+              if (!ownerWindow || !(browserView instanceof WebContentsView) || !rect) {
+                return {
+                  ok: false,
+                  rect,
+                  viewBounds: null,
+                  screenPoint: null,
+                  paintedPixelSamples: 0,
+                  urls: allContents.map((item) => item.getURL())
+                }
+              }
+              const image = await browserContents.capturePage()
+              const bitmap = image.toBitmap()
+              let paintedPixelSamples = 0
+              for (let offset = 0; offset < bitmap.length; offset += 4 * 64) {
+                if (bitmap[offset] < 245 || bitmap[offset + 1] < 245 || bitmap[offset + 2] < 245) {
+                  paintedPixelSamples += 1
+                }
+              }
+              const contentBounds = ownerWindow.getContentBounds()
+              const viewBounds = browserView.getBounds()
+              const dipPoint = {
+                x: contentBounds.x + viewBounds.x + rect.x + rect.width / 2,
+                y: contentBounds.y + viewBounds.y + rect.y + rect.height / 2
+              }
+              return {
+                ok:
+                  browserView.getVisible() &&
+                  viewBounds.width > 0 &&
+                  viewBounds.height > 0 &&
+                  paintedPixelSamples > 0,
+                rect,
+                viewBounds,
+                screenPoint:
+                  process.platform === 'win32' ? screen.dipToScreenPoint(dipPoint) : dipPoint,
+                paintedPixelSamples,
+                urls: []
+              }
             },
             { url: server.url }
           )
-          if (!browserTarget.ok || !browserTarget.rect) {
-            throw new Error(`embedded browser target not found: ${browserTarget.urls.join(', ')}`)
-          }
-          const viewportBox = await getWorkbenchLocator(
-            page,
-            workbenchSelectors.browserViewport
-          ).boundingBox()
-          if (!viewportBox) throw new Error('embedded browser viewport bounds are unavailable')
-          const contentBounds = await runtime.electronApp.evaluate(({ BrowserWindow }) => {
-            const window = BrowserWindow.getAllWindows().find(
-              (candidate) => !candidate.isDestroyed()
+          if (!browserTarget.ok || !browserTarget.rect || !browserTarget.screenPoint) {
+            throw new Error(
+              `embedded browser target is not ready: ${JSON.stringify(browserTarget)}`
             )
-            if (!window) throw new Error('application window is unavailable')
-            return window.getContentBounds()
-          })
+          }
           await page.bringToFront()
-          await clickScreenPoint(
-            contentBounds.x + viewportBox.x + browserTarget.rect.x + browserTarget.rect.width / 2,
-            contentBounds.y + viewportBox.y + browserTarget.rect.y + browserTarget.rect.height / 2
-          )
-          const browserActionResult = await runtime.electronApp.evaluate(
-            async ({ webContents }, input) => {
-              const browserContents = webContents
-                .getAllWebContents()
-                .find((item) => item.getURL().startsWith(input.url))
-              if (!browserContents) return ''
-              return String(
-                await browserContents.executeJavaScript(
-                  "document.querySelector('#manual-result')?.textContent || ''"
+          await clickScreenPoint(browserTarget.screenPoint.x, browserTarget.screenPoint.y)
+          let browserActionResult = ''
+          const browserActionDeadline = Date.now() + 5_000
+          while (Date.now() < browserActionDeadline) {
+            browserActionResult = await runtime.electronApp.evaluate(
+              async ({ webContents }, input) => {
+                const browserContents = webContents
+                  .getAllWebContents()
+                  .find((item) => item.getURL().startsWith(input.url))
+                if (!browserContents) return ''
+                return String(
+                  await browserContents.executeJavaScript(
+                    "document.querySelector('#manual-result')?.textContent || ''"
+                  )
                 )
-              )
-            },
-            { url: server.url }
-          )
+              },
+              { url: server.url }
+            )
+            if (browserActionResult === COMPLETION_TEXT) break
+            await page.waitForTimeout(100)
+          }
 
           await getWorkbenchLocator(page, workbenchSelectors.userTakeoverConfirmButton).click()
           await waitForWorkbenchAiEvent(runtime, {
@@ -203,6 +252,7 @@ describe('workbench run e2e', () => {
             takeoverMessage: takeover.message,
             composerHidden,
             browserActionResult,
+            browserTarget,
             actionsAfterConfirmation,
             toolNames,
             finalAnswerText: evidence.finalAnswerText,

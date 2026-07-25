@@ -1,5 +1,6 @@
 import { describe, it } from 'vitest'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
+import { pressEscapeKey } from '../../../../harness/e2e/nativeMouse'
 import {
   WORKBENCH_E2E_TIMEOUT_MS,
   createWorkbenchNewSession,
@@ -76,12 +77,6 @@ describe('workbench browser lifecycle e2e', () => {
           })
           const liveEnv = setup.env
           await page.getByRole('button', { name: `在 ${WORKSPACE_NAME} 中新建对话` }).click()
-          const originalSessionTestId = await page
-            .locator(
-              `[data-testid^="${workbenchSelectors.sessionItemPrefix}-"].nc-sidebar-item-active`
-            )
-            .getAttribute('data-testid')
-          if (!originalSessionTestId) throw new Error('active session id is missing')
           const sessionStartedAt = Date.now()
           await sendWorkbenchMessage(page, SESSION_PROMPT)
           await waitForWorkbenchAiRunCompletion(
@@ -91,6 +86,12 @@ describe('workbench browser lifecycle e2e', () => {
             240_000,
             { page }
           )
+          const originalSessionTestId = await page
+            .locator(
+              `[data-testid^="${workbenchSelectors.sessionItemPrefix}-"].nc-sidebar-item-active`
+            )
+            .getAttribute('data-testid')
+          if (!originalSessionTestId) throw new Error('active session id is missing')
           const originalSessionItem = page.getByTestId(originalSessionTestId)
           await originalSessionItem.waitFor({ state: 'visible' })
 
@@ -222,7 +223,7 @@ describe('workbench browser lifecycle e2e', () => {
             async (tabId) => window.api.browserPanelStateGet({ tabId }),
             browserTabId
           )
-          await page.keyboard.press('Escape')
+          await pressEscapeKey()
           await page.waitForFunction(
             (testId) =>
               document.querySelector(`[data-testid="${testId}"]`)?.getAttribute('aria-expanded') ===

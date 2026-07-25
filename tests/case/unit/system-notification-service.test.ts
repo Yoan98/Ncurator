@@ -38,6 +38,7 @@ describe('SystemNotificationService', () => {
       }) as never,
       getMainWindow: () => null,
       isSupported: () => true,
+      notificationIcon: 'ncurator-icon.png',
       createNotification
     })
 
@@ -45,7 +46,9 @@ describe('SystemNotificationService', () => {
 
     expect(on).toHaveBeenCalledWith('click', expect.any(Function))
     expect(show).toHaveBeenCalledOnce()
-    expect(createNotification).toHaveBeenCalledWith(expect.objectContaining({ title }))
+    expect(createNotification).toHaveBeenCalledWith(
+      expect.objectContaining({ title, icon: 'ncurator-icon.png' })
+    )
   })
 
   it('does not notify when disabled', async () => {

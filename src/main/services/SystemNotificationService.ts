@@ -15,6 +15,7 @@ type SystemNotificationServiceDeps = {
   createMainWindow?: () => BrowserWindow
   createNotification?: (options: Electron.NotificationConstructorOptions) => NotificationLike
   isSupported?: () => boolean
+  notificationIcon?: string
 }
 
 const STATUS_COPY: Record<RunTerminalStatus, { title: string; body: string }> = {
@@ -36,6 +37,7 @@ export class SystemNotificationService {
       {
         title: copy.title,
         body: copy.body,
+        ...(this.deps.notificationIcon ? { icon: this.deps.notificationIcon } : {}),
         silent: false
       }
     )

@@ -22,6 +22,14 @@ usleep(50_000)
 CGEvent(mouseEventSource: nil, mouseType: .leftMouseDown, mouseCursorPosition: point, mouseButton: .left)?.post(tap: .cghidEventTap)
 CGEvent(mouseEventSource: nil, mouseType: .leftMouseUp, mouseCursorPosition: point, mouseButton: .left)?.post(tap: .cghidEventTap)
 `
+const MACOS_ESCAPE_SCRIPT_PATH = path.join(os.tmpdir(), 'ncurator-e2e-native-escape.swift')
+const MACOS_ESCAPE_SCRIPT = `
+import ApplicationServices
+
+let escapeKeyCode: CGKeyCode = 53
+CGEvent(keyboardEventSource: nil, virtualKey: escapeKeyCode, keyDown: true)?.post(tap: .cghidEventTap)
+CGEvent(keyboardEventSource: nil, virtualKey: escapeKeyCode, keyDown: false)?.post(tap: .cghidEventTap)
+`
 
 export const clickScreenPoint = async (x: number, y: number): Promise<void> => {
   const roundedX = Math.round(x)
@@ -47,4 +55,24 @@ export const clickScreenPoint = async (x: number, y: number): Promise<void> => {
     return
   }
   throw new Error(`native mouse automation is unsupported on ${process.platform}`)
+}
+
+export const pressEscapeKey = async (): Promise<void> => {
+  if (process.platform === 'win32') {
+    const script = [
+      'Add-Type -TypeDefinition \'using System; using System.Runtime.InteropServices; public static class NativeKeyboard { [DllImport("user32.dll")] public static extern void keybd_event(byte virtualKey, byte scanCode, uint flags, UIntPtr extraInfo); }\'',
+      '[NativeKeyboard]::keybd_event(0x1B, 0, 0, [UIntPtr]::Zero)',
+      '[NativeKeyboard]::keybd_event(0x1B, 0, 0x0002, [UIntPtr]::Zero)'
+    ].join('; ')
+    await execFileAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], {
+      timeout: 30_000
+    })
+    return
+  }
+  if (process.platform === 'darwin') {
+    await writeFile(MACOS_ESCAPE_SCRIPT_PATH, MACOS_ESCAPE_SCRIPT, 'utf8')
+    await execFileAsync('/usr/bin/swift', [MACOS_ESCAPE_SCRIPT_PATH], { timeout: 30_000 })
+    return
+  }
+  throw new Error(`native keyboard automation is unsupported on ${process.platform}`)
 }
