@@ -3,8 +3,7 @@ import { importSelectors } from '../../../../../src/renderer/src/testing/selecto
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
   SETTINGS_REAL_WORKSPACE_LONG_E2E_TIMEOUT_MS,
-  bindWorkspaceRootThroughSettingsUi,
-  createWorkspaceThroughSettingsUi,
+  createRealWorkspaceWithRoot,
   getSettingsLocator,
   navigateToSettingsSection,
   waitForFileIndexJobIdle
@@ -25,15 +24,18 @@ describe('settings workspace e2e', () => {
         description: '点击更新索引后，页面按增量策略执行，并在完成后刷新文件索引状态。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
-        execution: 'exclusive',
+        execution: 'warmup',
         runMode: 'single',
         execute: async (runtime) => {
           const { page } = runtime
           let workspaceRoot = ''
 
           workspaceRoot = await copySharedWorkspaceFixture('workspace-prepare-refresh')
-          const workspaceId = await createWorkspaceThroughSettingsUi(page, '索引工作区')
-          await bindWorkspaceRootThroughSettingsUi(page, workspaceRoot)
+          const workspace = await createRealWorkspaceWithRoot(page, {
+            name: '索引工作区',
+            rootPath: workspaceRoot
+          })
+          const workspaceId = workspace.workspace!.id
           let prepareProgressVisible = false
           let buttonsDisabled = false
 

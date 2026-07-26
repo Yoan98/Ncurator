@@ -73,6 +73,7 @@ describe('settings workspace e2e', () => {
           let inProgressVisible = false
           let buttonsDisabled = false
           let progressEventSeen = false
+          let scanRunningAfterReturn = false
           let restoredProgressVisible = false
           let restoredButtonsDisabled = false
 
@@ -129,22 +130,46 @@ describe('settings workspace e2e', () => {
               progressEventSeen = await progressEventsPromise
               await navigateToSettingsSection(page, 'model')
               await navigateToSettingsSection(page, 'workspace')
-              await getSettingsLocator(page, importSelectors.workspaceIndexJobProgress).waitFor({
-                state: 'visible'
-              })
-              restoredProgressVisible = await getSettingsLocator(
-                page,
-                importSelectors.workspaceIndexJobProgress
-              ).isVisible()
-              restoredButtonsDisabled =
-                (await getSettingsLocator(
-                  page,
-                  importSelectors.workspaceQuickScanButton
-                ).isDisabled()) &&
-                (await getSettingsLocator(
-                  page,
-                  importSelectors.workspaceQuickPrepareButton
-                ).isDisabled())
+              const restoredState = await page
+                .waitForFunction(
+                  async (input) => {
+                    const response = await window.api.workspaceIndexJobGet({
+                      workspaceId: input.workspaceId,
+                      sourceKind: 'file'
+                    })
+                    const running = response.job?.status === 'running'
+                    const progress = document.querySelector(
+                      `[data-testid="${input.progressTestId}"]`
+                    )
+                    const progressVisible =
+                      progress instanceof HTMLElement && progress.offsetParent !== null
+                    const scanButton = document.querySelector(
+                      `[data-testid="${input.scanButtonTestId}"]`
+                    )
+                    const prepareButton = document.querySelector(
+                      `[data-testid="${input.prepareButtonTestId}"]`
+                    )
+                    const buttonsDisabled =
+                      scanButton instanceof HTMLButtonElement &&
+                      scanButton.disabled &&
+                      prepareButton instanceof HTMLButtonElement &&
+                      prepareButton.disabled
+                    if (running === progressVisible && running === buttonsDisabled) {
+                      return { running, progressVisible, buttonsDisabled }
+                    }
+                    return null
+                  },
+                  {
+                    workspaceId,
+                    progressTestId: importSelectors.workspaceIndexJobProgress,
+                    scanButtonTestId: importSelectors.workspaceQuickScanButton,
+                    prepareButtonTestId: importSelectors.workspaceQuickPrepareButton
+                  }
+                )
+                .then((handle) => handle.jsonValue())
+              scanRunningAfterReturn = restoredState.running
+              restoredProgressVisible = restoredState.progressVisible
+              restoredButtonsDisabled = restoredState.buttonsDisabled
             }
           })
 
@@ -154,6 +179,7 @@ describe('settings workspace e2e', () => {
             inProgressVisible,
             buttonsDisabled,
             progressEventSeen,
+            scanRunningAfterReturn,
             restoredProgressVisible,
             restoredButtonsDisabled,
             summary: result.tree.summary,
@@ -168,11 +194,12 @@ describe('settings workspace e2e', () => {
             data: result
           })
           await runtime.assertThat(
-            result.restoredProgressVisible && result.restoredButtonsDisabled,
+            result.restoredProgressVisible === result.scanRunningAfterReturn &&
+              result.restoredButtonsDisabled === result.scanRunningAfterReturn,
             {
               name: 'scan-progress-restores-after-return',
               message:
-                '检查更新执行中离开并返回工作空间页后，应恢复进度块并继续禁用两个操作按钮，对齐 SET-WORKSPACE-003-AC3。',
+                '检查更新执行中离开并返回工作空间页后，仍运行时应恢复进度块并禁用操作，已完成时应隐藏进度并恢复按钮，对齐 SET-WORKSPACE-003-AC3。',
               data: result
             }
           )

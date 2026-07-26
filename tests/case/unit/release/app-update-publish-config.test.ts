@@ -106,4 +106,23 @@ describe('app update publish config', () => {
     expect(macFinalize).not.toContain('--keep-old')
     expect(tagContract).toContain('/^(mac|windows)-v')
   })
+
+  it('warms the vector runtime before opening parallel E2E workers', async () => {
+    const [testWorkflow, architectureValidator, warmupCase] = await Promise.all([
+      readFile(path.resolve('scripts/test/workflow.mjs'), 'utf8'),
+      readFile(path.resolve('scripts/test/validate-test-architecture.mjs'), 'utf8'),
+      readFile(
+        path.resolve('tests/case/settings/workspace/files/workspace-prepare-refresh.e2e.test.ts'),
+        'utf8'
+      )
+    ])
+
+    expect(testWorkflow).toContain("task.execution === 'warmup'")
+    expect(testWorkflow).toContain('vector warm-up failed; parallel E2E will not start')
+    expect(testWorkflow).toContain('seedCaseKnowledgeCache')
+    expect(testWorkflow).toContain("path.basename(source) !== 'stats.json'")
+    expect(testWorkflow).toContain("spawnSync('taskkill.exe'")
+    expect(architectureValidator).toContain('warmupFiles.length !== 1')
+    expect(warmupCase).toContain("execution: 'warmup'")
+  })
 })

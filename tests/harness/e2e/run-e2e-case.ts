@@ -35,7 +35,7 @@ import {
 } from './resourceScope'
 
 export type E2ETestRunMode = 'single' | 'repeatable'
-export type E2EExecutionClass = 'normal' | 'live' | 'exclusive'
+export type E2EExecutionClass = 'normal' | 'live' | 'exclusive' | 'warmup'
 
 type KnowledgeCacheStats = {
   splitCacheHits: number

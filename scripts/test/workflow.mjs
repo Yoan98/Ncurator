@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
-import { mkdir, readFile, readdir, rm, stat } from 'node:fs/promises'
+import { cp, mkdir, readFile, readdir, rm, stat } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { spawn, spawnSync } from 'node:child_process'
@@ -31,8 +31,10 @@ const E2E_WORKERS = 3
 const LIVE_WORKERS = 2
 const RUNNER_DEADLINE_MS = 55 * 60 * 1000
 const DEADLINE_EXIT_CODE = 124
-const E2E_EXECUTION_CLASSES = new Set(['normal', 'live', 'exclusive'])
+const E2E_EXECUTION_CLASSES = new Set(['normal', 'live', 'exclusive', 'warmup'])
 const USE_WINDOWS_SHELL = process.platform === 'win32'
+const activeAsyncChildren = new Set()
+let stoppingActiveChildren = false
 const KNOWLEDGE_CACHE_ROOT = path.join(TESTS_ROOT, '.cache', 'workspace-knowledge')
 const EMPTY_KNOWLEDGE_CACHE_STATS = {
   splitCacheHits: 0,
@@ -236,9 +238,9 @@ const toCaseId = (filePath) => path.basename(filePath).replace(/\.e2e\.test\.ts$
 
 const readE2EExecutionClass = async (filePath) => {
   const source = await readFile(filePath, 'utf8')
-  const matches = [...source.matchAll(/\bexecution\s*:\s*['"](normal|live|exclusive)['"]/gu)].map(
-    (match) => match[1]
-  )
+  const matches = [
+    ...source.matchAll(/\bexecution\s*:\s*['"](normal|live|exclusive|warmup)['"]/gu)
+  ].map((match) => match[1])
   const declared = [...new Set(matches)]
   if (declared.length > 1) {
     throw new Error(`${path.relative(ROOT, filePath)} declares multiple E2E execution classes`)
@@ -264,6 +266,17 @@ const buildCaseKnowledgeCacheEnv = async (env, testFile) => {
       env.NCURATOR_E2E_KNOWLEDGE_CACHE_NAMESPACE || 'e2e'
     )}/${caseKey}`
   }
+}
+
+const seedCaseKnowledgeCache = async (caseEnv, seedPath) => {
+  const casePath = String(caseEnv.NCURATOR_WORKSPACE_KNOWLEDGE_CACHE_PATH || '').trim()
+  if (!seedPath || !casePath || path.resolve(seedPath) === path.resolve(casePath)) return
+  await cp(seedPath, casePath, {
+    recursive: true,
+    force: false,
+    errorOnExist: false,
+    filter: (source) => path.basename(source) !== 'stats.json'
+  })
 }
 
 const fileContainsCaseId = async (filePath, caseId) => {
@@ -331,6 +344,31 @@ const buildCommandEnv = (overrides = {}, options = {}) => {
 
 const formatCommand = (bin, args) => [bin, ...args].join(' ')
 
+const terminateProcessTree = (child) => {
+  if (!child?.pid) return
+  if (process.platform === 'win32') {
+    spawnSync('taskkill.exe', ['/pid', String(child.pid), '/T', '/F'], {
+      stdio: 'ignore',
+      windowsHide: true
+    })
+    return
+  }
+  child.kill('SIGTERM')
+}
+
+const stopActiveChildren = (signal) => {
+  if (stoppingActiveChildren) return
+  stoppingActiveChildren = true
+  process.stderr.write(
+    `[test-workflow] received ${signal}; stopping ${String(activeAsyncChildren.size)} active test process tree(s)\n`
+  )
+  for (const child of activeAsyncChildren) terminateProcessTree(child)
+  process.exit(signal === 'SIGINT' ? 130 : 143)
+}
+
+process.once('SIGINT', () => stopActiveChildren('SIGINT'))
+process.once('SIGTERM', () => stopActiveChildren('SIGTERM'))
+
 const runSpawn = (bin, args, env, omitNpmEnv) =>
   spawnSync(bin, args, {
     cwd: ROOT,
@@ -353,6 +391,7 @@ const runSpawnAsync = (bin, args, env, omitNpmEnv, deadlineAt) =>
       if (settled) return
       settled = true
       clearTimeout(timer)
+      activeAsyncChildren.delete(child)
       resolve(code)
     }
     const timer = setTimeout(() => {
@@ -361,6 +400,7 @@ const runSpawnAsync = (bin, args, env, omitNpmEnv, deadlineAt) =>
         `[test-workflow] deadline reached; stopping ${formatCommand(bin, args)}\n`
       )
       controller.abort()
+      terminateProcessTree(child)
     }, remainingMs)
     const child = spawn(bin, args, {
       cwd: ROOT,
@@ -369,6 +409,7 @@ const runSpawnAsync = (bin, args, env, omitNpmEnv, deadlineAt) =>
       env: buildCommandEnv(env, { omitNpmEnv }),
       signal: controller.signal
     })
+    activeAsyncChildren.add(child)
     child.once('error', (error) => {
       if (!timedOut) {
         process.stderr.write(
@@ -560,12 +601,16 @@ const runE2ETestFilesConcurrently = async (testFiles, targets, testNamePattern, 
       }))
     )
     .map((task, index) => ({ ...task, index }))
-  const concurrentTasks = tasks.filter((task) => task.execution !== 'exclusive')
+  const warmupTasks = tasks.filter((task) => task.execution === 'warmup')
+  const concurrentTasks = tasks.filter(
+    (task) => task.execution !== 'exclusive' && task.execution !== 'warmup'
+  )
   const exclusiveTasks = tasks.filter((task) => task.execution === 'exclusive')
   const results = []
   let exitCode = 0
   let liveActive = 0
   let completed = 0
+  const warmupCacheByTarget = new Map()
 
   const recordDeadline = (task) => {
     exitCode = DEADLINE_EXIT_CODE
@@ -579,7 +624,7 @@ const runE2ETestFilesConcurrently = async (testFiles, targets, testNamePattern, 
     })
   }
 
-  const runTask = async (task) => {
+  const runTask = async (task, seedPath = '') => {
     completed += 1
     const relativeFile = path.relative(ROOT, task.testFile)
     process.stdout.write(
@@ -587,6 +632,7 @@ const runE2ETestFilesConcurrently = async (testFiles, targets, testNamePattern, 
     )
     const startedAt = Date.now()
     const caseEnv = await buildCaseKnowledgeCacheEnv(task.env, task.testFile)
+    await seedCaseKnowledgeCache(caseEnv, seedPath)
     const code = await runVitest({
       configPath: 'vitest.e2e.config.mts',
       testFiles: [task.testFile],
@@ -605,6 +651,41 @@ const runE2ETestFilesConcurrently = async (testFiles, targets, testNamePattern, 
       exitCode: code,
       durationMs: Date.now() - startedAt
     })
+    return {
+      code,
+      cachePath: String(caseEnv.NCURATOR_WORKSPACE_KNOWLEDGE_CACHE_PATH || '').trim()
+    }
+  }
+
+  for (let index = 0; index < warmupTasks.length; index += 1) {
+    const task = warmupTasks[index]
+    if (Date.now() >= deadlineAt) {
+      for (const remaining of warmupTasks.slice(index)) recordDeadline(remaining)
+      return {
+        exitCode,
+        results: results.sort((left, right) => left.index - right.index)
+      }
+    }
+    process.stdout.write(
+      `[test-workflow] vector warm-up ${String(index + 1)}/${String(warmupTasks.length)} must pass before parallel E2E starts\n`
+    )
+    const outcome = await runTask(task)
+    if (outcome.code !== 0) {
+      process.stderr.write(
+        '[test-workflow] vector warm-up failed; parallel E2E will not start on a cold cache\n'
+      )
+      return {
+        exitCode,
+        results: results.sort((left, right) => left.index - right.index)
+      }
+    }
+    warmupCacheByTarget.set(task.targetId, outcome.cachePath)
+  }
+
+  if (warmupCacheByTarget.size > 0) {
+    process.stdout.write(
+      `[test-workflow] vector warm-up passed; isolated E2E caches will be seeded for ${String(warmupCacheByTarget.size)} target(s)\n`
+    )
   }
 
   const pending = [...concurrentTasks]
@@ -618,7 +699,7 @@ const runE2ETestFilesConcurrently = async (testFiles, targets, testNamePattern, 
       const [task] = pending.splice(nextIndex, 1)
       if (task.execution === 'live') liveActive += 1
       let running
-      running = runTask(task).finally(() => {
+      running = runTask(task, warmupCacheByTarget.get(task.targetId)).finally(() => {
         if (task.execution === 'live') liveActive -= 1
         active.delete(running)
       })
@@ -636,7 +717,7 @@ const runE2ETestFilesConcurrently = async (testFiles, targets, testNamePattern, 
       for (const remaining of exclusiveTasks.slice(index)) recordDeadline(remaining)
       break
     }
-    await runTask(task)
+    await runTask(task, warmupCacheByTarget.get(task.targetId))
   }
 
   return {

@@ -183,8 +183,8 @@ runner 支持的过滤参数：
 
 补充规则：
 
-- runner 强制执行固定 domain/type 边界。backend 普通测试并发为 6；E2E 总并发为 3、live 并发为 2、`exclusive` 用例串行独占；失败后继续收集剩余 case，最后统一返回结果。
-- E2E 默认执行类型为 `normal`；真实 AI/服务调用声明 `execution: 'live'`，原生对话框、鼠标和桌面焦点用例声明 `execution: 'exclusive'`。
+- runner 强制执行固定 domain/type 边界。backend 普通测试并发为 6；E2E 先串行执行全仓唯一的 `warmup` 用例，并把它产生的 split/vector 缓存种子复制到后续 case 的隔离缓存目录，成功后开放总并发 3、live 并发 2，`exclusive` 用例串行独占；普通失败继续收集剩余 case，warm-up 失败则不启动后续并发。
+- E2E 默认执行类型为 `normal`；真实 AI/服务调用声明 `execution: 'live'`，原生对话框、鼠标和桌面焦点用例声明 `execution: 'exclusive'`，唯一的向量冷启动用例声明 `execution: 'warmup'`。
 - `source` 是日常目标；`package` 只接受既有 release bundle，安装后运行同一批 E2E，不负责构建。
 - native binding、知识库缓存和临时 Electron app 由 runner 自动准备；普通回归不手工修改 `node_modules` 或复用正式包缓存。
 - 正式包测试、发布门禁、Tag 前 Unit/非 live AI 以及发布后日志清理只在 `doc/release.md` 定义，本文不重复发布流程。
