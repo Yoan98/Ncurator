@@ -451,7 +451,7 @@ export const configureLiveModelThroughSettingsUi = async (
 export const createWorkspaceThroughSettingsUi = async (
   page: Page,
   workspaceName: string
-): Promise<void> => {
+): Promise<string> => {
   await navigateToSettingsSection(page, 'workspace')
   await getSettingsLocator(page, importSelectors.createWorkspaceButton).click()
   await getSettingsLocator(page, importSelectors.createWorkspaceNameInput).fill(workspaceName)
@@ -463,6 +463,7 @@ export const createWorkspaceThroughSettingsUi = async (
   await getSettingsLocator(page, importSelectors.workspaceDetail)
     .getByRole('tab', { name: /文件/u })
     .waitFor({ state: 'visible' })
+  return await readWorkspaceIdFromSettingsCard(page, workspaceName)
 }
 
 type WorkbenchE2EWindow = Window & {
@@ -840,8 +841,7 @@ export const prepareWorkbenchWorkspaceThroughUi = async (
     webSourceUrl?: string
   }
 ): Promise<void> => {
-  await createWorkspaceThroughSettingsUi(page, input.workspaceName)
-  const workspaceId = await readWorkspaceIdFromSettingsCard(page, input.workspaceName)
+  const workspaceId = await createWorkspaceThroughSettingsUi(page, input.workspaceName)
   await bindWorkspaceRootDirectly(page, workspaceId, input.rootPath)
   await prepareSelectedWorkspaceFilesThroughSettingsUi(page, workspaceId)
   if (input.webSourceUrl) {

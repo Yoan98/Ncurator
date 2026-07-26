@@ -20,7 +20,7 @@ import {
   workbenchSelectors
 } from '../../../../harness/e2e/workbench'
 import {
-  bindWorkspaceRootThroughSettingsUi,
+  bindWorkspaceRootDirectly,
   navigateToSettingsSection
 } from '../../../../harness/e2e/settings'
 
@@ -40,7 +40,7 @@ describe('workbench conversation e2e', () => {
         description: '未设置工作目录的工作区应禁用发送；绑定目录后恢复可发送并走真实 AI 运行。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
-        execution: 'exclusive',
+        execution: 'live',
         windowMode: 'visible',
         runMode: 'single',
         execute: async (runtime) => {
@@ -48,7 +48,7 @@ describe('workbench conversation e2e', () => {
           const env = loadWorkbenchLiveModelEnv()
           const workspace = await createTemporaryWorkbenchWorkspace(CASE_ID)
           await configureLiveModelThroughSettingsUi(page, env)
-          await createWorkspaceThroughSettingsUi(page, WORKSPACE_NAME)
+          const workspaceId = await createWorkspaceThroughSettingsUi(page, WORKSPACE_NAME)
           await navigateToSettingsSection(page, 'workspace')
           const settingsHintText = await page
             .getByText('设置后才能在 Workbench 中发送任务。')
@@ -70,7 +70,7 @@ describe('workbench conversation e2e', () => {
           ).trim()
 
           await navigateToSettingsSection(page, 'workspace')
-          await bindWorkspaceRootThroughSettingsUi(page, workspace.rootPath)
+          await bindWorkspaceRootDirectly(page, workspaceId, workspace.rootPath)
           await navigateToWorkbench(page)
           await selectWorkbenchWorkspace(page, WORKSPACE_NAME)
           await selectWorkbenchModel(page, env.modelName)
