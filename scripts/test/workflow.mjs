@@ -762,6 +762,12 @@ const runTypeWorkflow = async (input) => {
       env: { ...target.env, NCURATOR_E2E_TEMP_ROOT: e2eTempRoot }
     }))
   }
+  if (input.type === 'e2e' && input.target === 'package') {
+    const nativeCode = prepareBetterSqliteNative('node')
+    if (nativeCode !== 0) {
+      return { exitCode: nativeCode, e2eResults: [] }
+    }
+  }
   if (input.type !== 'e2e' || input.target === 'source') {
     const nativeCode = prepareBetterSqliteNative(nativeTarget)
     if (nativeCode !== 0) {

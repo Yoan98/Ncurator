@@ -122,6 +122,8 @@ describe('app update publish config', () => {
     expect(testWorkflow).toContain('seedCaseKnowledgeCache')
     expect(testWorkflow).toContain("path.basename(source) !== 'stats.json'")
     expect(testWorkflow).toContain("spawnSync('taskkill.exe'")
+    expect(testWorkflow).toContain("input.type === 'e2e' && input.target === 'package'")
+    expect(testWorkflow).toContain("prepareBetterSqliteNative('node')")
     expect(architectureValidator).toContain('warmupFiles.length !== 1')
     expect(warmupCase).toContain("execution: 'warmup'")
   })
