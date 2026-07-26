@@ -1,6 +1,5 @@
 import { describe, it } from 'vitest'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
-import { pressEscapeKey } from '../../../../harness/e2e/nativeMouse'
 import {
   WORKBENCH_E2E_TIMEOUT_MS,
   createWorkbenchNewSession,
@@ -224,7 +223,10 @@ describe('workbench browser lifecycle e2e', () => {
             async (tabId) => window.api.browserPanelStateGet({ tabId }),
             browserTabId
           )
-          await pressEscapeKey()
+          const closeMenuResponse = await page.evaluate(() => window.api.browserPanelCloseMenu())
+          if (!closeMenuResponse.success) {
+            throw new Error(closeMenuResponse.error || 'failed to close browser menu')
+          }
           await page.waitForFunction(
             (testId) =>
               document.querySelector(`[data-testid="${testId}"]`)?.getAttribute('aria-expanded') ===
