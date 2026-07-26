@@ -39,6 +39,7 @@ describe('workbench run e2e', () => {
         description: '真实 AI 读取用户直接给出的 URL 正文，并从网页正文中回答唯一口令。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
+        execution: 'live',
         windowMode: 'visible',
         runMode: 'single',
         execute: async (runtime) => {

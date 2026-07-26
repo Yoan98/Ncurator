@@ -38,6 +38,7 @@ describe('workbench run e2e', () => {
           '真实 AI 用 deepseek 最近的融资情况触发 web_search，验证搜索工具链能把关键词交给 ddgs 并返回候选网页。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
+        execution: 'live',
         windowMode: 'visible',
         runMode: 'single',
         execute: async (runtime) => {

@@ -32,6 +32,7 @@ describe('workbench result e2e', () => {
         description: '真实 AI 创建 PPT 后，验证新建 PPT 单画布预览、缩略图和新建文件回撤。',
         fixtures: [],
         serviceMode: 'real',
+        execution: 'live',
         windowMode: 'visible',
         runMode: 'single',
         execute: async (runtime) => {

@@ -31,6 +31,7 @@ describe('workbench result e2e', () => {
         description: '真实 AI 修改真实 docx 后，验证 assistant 修改入口、右侧预览和干净回退。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
+        execution: 'live',
         windowMode: 'visible',
         runMode: 'single',
         execute: async (runtime) => {

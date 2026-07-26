@@ -397,6 +397,22 @@ export const bindWorkspaceRootThroughSettingsUi = async (
   )
 }
 
+export const bindWorkspaceRootDirectly = async (
+  page: Page,
+  workspaceId: string,
+  rootPath: string
+): Promise<void> => {
+  const response = await page.evaluate(
+    async (input) => await window.api.workspaceSetRootPath(input),
+    { workspaceId, rootPath: path.resolve(rootPath) }
+  )
+  if (!response.success) {
+    throw new Error(
+      `failed to bind workspace root through IPC: ${response.error || 'unknown error'}`
+    )
+  }
+}
+
 export const createFixtureWorkspace = async (
   page: Page,
   input: { name: string; rootPath?: string }
@@ -405,7 +421,7 @@ export const createFixtureWorkspace = async (
   if (input.rootPath) {
     const rootPath = path.resolve(input.rootPath)
     await mkdir(rootPath, { recursive: true })
-    await bindWorkspaceRootThroughSettingsUi(page, rootPath)
+    await bindWorkspaceRootDirectly(page, workspaceId, rootPath)
     await navigateToSettingsSection(page, 'workspace')
     if (!(await waitForWorkspaceRootPathVisible(page, rootPath))) {
       throw new Error(

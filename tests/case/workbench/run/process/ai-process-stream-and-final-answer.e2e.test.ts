@@ -30,6 +30,7 @@ describe('workbench run e2e', () => {
           '真实 AI 总结 workspace 唯一事实，验证过程流、最终回答和不暴露原始 chain-of-thought。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
+        execution: 'live',
         windowMode: 'visible',
         runMode: 'single',
         execute: async (runtime) => {

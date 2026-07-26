@@ -34,6 +34,7 @@ describe('workbench result e2e', () => {
         description: 'AI 写回后测试进程真实外部改 docx，验证首次回退风险提示和确认后强制回退。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
+        execution: 'live',
         windowMode: 'visible',
         runMode: 'single',
         execute: async (runtime) => {

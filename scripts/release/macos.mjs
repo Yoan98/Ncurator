@@ -14,12 +14,14 @@ import {
 } from './candidate.mjs'
 import { loadReleaseEnvironment } from './shared/environment.mjs'
 import { cleanupLocalTestLogs } from './shared/test-logs.mjs'
+import { createReleaseStageDeadline } from './shared/stage-deadline.mjs'
 import { prepareReleaseWorkspace } from './workspace.mjs'
 import { parseReleaseTag } from './tag.mjs'
 import { hasRegressionSelectionArgs, readRegressionSelection } from './regression.mjs'
 
 const execFileAsync = promisify(execFile)
 const ROOT = process.cwd()
+const stageDeadline = createReleaseStageDeadline('macOS release stage')
 await loadReleaseEnvironment(ROOT)
 const args = process.argv.slice(2)
 const valueAfter = (name) => {
@@ -55,12 +57,14 @@ if (mode !== 'test' && hasRegressionSelectionArgs(args)) {
 
 const run = (command, commandArgs, options = {}) =>
   new Promise((resolve, reject) => {
-    const child = spawn(command, commandArgs, {
-      cwd: ROOT,
-      env: process.env,
-      stdio: 'inherit',
-      ...options
-    })
+    const child = stageDeadline.track(
+      spawn(command, commandArgs, {
+        cwd: ROOT,
+        env: process.env,
+        stdio: 'inherit',
+        ...options
+      })
+    )
     child.once('error', reject)
     child.once('exit', (code, signal) => {
       if (code === 0) resolve()
@@ -221,8 +225,10 @@ const sanitizedTestEnvironment = () => {
   return environment
 }
 
-const runCandidateE2E = async ({ candidate, sourceDirectory, pnpmPath }) => {
-  const resultPath = path.join(candidate.directory, 'package-e2e-result.json')
+const runCandidateE2E = async ({ candidates, sourceDirectory, pnpmPath }) => {
+  const resultPaths = candidates.map((candidate) =>
+    path.join(candidate.directory, 'package-e2e-result.json')
+  )
   try {
     await run(
       pnpmPath,
@@ -230,29 +236,39 @@ const runCandidateE2E = async ({ candidate, sourceDirectory, pnpmPath }) => {
         'run',
         'test:e2e:package',
         '--',
-        '--bundle',
-        candidate.bundlePath,
-        '--result',
-        resultPath,
+        ...candidates.flatMap((candidate, index) => [
+          '--bundle',
+          candidate.bundlePath,
+          '--result',
+          resultPaths[index]
+        ]),
         ...regression.workflowArgs
       ],
       { cwd: sourceDirectory, env: sanitizedTestEnvironment() }
     )
-    return await recordCandidateE2E({
-      tag: releaseTag,
-      platform: candidate.state.platform,
-      status: 'passed',
-      resultPath,
-      selection: regression.state
-    })
+    return await Promise.all(
+      candidates.map((candidate, index) =>
+        recordCandidateE2E({
+          tag: releaseTag,
+          platform: candidate.state.platform,
+          status: 'passed',
+          resultPath: resultPaths[index],
+          selection: regression.state
+        })
+      )
+    )
   } catch (error) {
-    await recordCandidateE2E({
-      tag: releaseTag,
-      platform: candidate.state.platform,
-      status: 'failed',
-      resultPath,
-      selection: regression.state
-    })
+    await Promise.all(
+      candidates.map((candidate, index) =>
+        recordCandidateE2E({
+          tag: releaseTag,
+          platform: candidate.state.platform,
+          status: 'failed',
+          resultPath: resultPaths[index],
+          selection: regression.state
+        })
+      )
+    )
     throw error
   }
 }
@@ -273,18 +289,11 @@ if (mode === 'prepare') {
     await run('git', ['archive', '--format=tar', '--output', archivePath, releaseTag])
     await extractTag(archivePath, armSource)
     await extractTag(archivePath, x64Source)
-    await run(tools.pnpmPath, ['install', '--frozen-lockfile'], { cwd: armSource })
-    await seedNativeCache(armSource)
-    await run(tools.pnpmPath, ['run', 'build:mac:release:arm64'], {
-      cwd: armSource,
-      env: {
-        ...process.env,
-        NCURATOR_SIDECAR_BROWSER_CACHE: path.join(tools.sidecarBrowserCacheRoot, 'darwin-arm64'),
-        NCURATOR_SIDECAR_PIP_CACHE: path.join(tools.sidecarPipCacheRoot, 'darwin-arm64')
-      }
-    })
-    const armCandidate = await createCandidate(armSource, 'macos-arm64', taggedCommit)
-
+    const armEnvironment = {
+      ...process.env,
+      NCURATOR_SIDECAR_BROWSER_CACHE: path.join(tools.sidecarBrowserCacheRoot, 'darwin-arm64'),
+      NCURATOR_SIDECAR_PIP_CACHE: path.join(tools.sidecarPipCacheRoot, 'darwin-arm64')
+    }
     const x64Environment = {
       ...process.env,
       PATH: `${path.dirname(tools.x64Node)}:${process.env.PATH || ''}`,
@@ -293,18 +302,40 @@ if (mode === 'prepare') {
       NCURATOR_SIDECAR_BROWSER_CACHE: path.join(tools.sidecarBrowserCacheRoot, 'darwin-x64'),
       NCURATOR_SIDECAR_PIP_CACHE: path.join(tools.sidecarPipCacheRoot, 'darwin-x64')
     }
-    await run(
-      '/usr/bin/arch',
-      ['-x86_64', tools.x64Node, tools.pnpmPath, 'install', '--frozen-lockfile'],
-      { cwd: x64Source, env: x64Environment }
-    )
-    await seedNativeCache(x64Source)
-    await run(
-      '/usr/bin/arch',
-      ['-x86_64', tools.x64Node, tools.pnpmPath, 'run', 'build:mac:release:x64'],
-      { cwd: x64Source, env: x64Environment }
-    )
-    const x64Candidate = await createCandidate(x64Source, 'macos-x64', taggedCommit)
+    await Promise.all([
+      (async () => {
+        await run(tools.pnpmPath, ['install', '--frozen-lockfile'], {
+          cwd: armSource,
+          env: armEnvironment
+        })
+        await seedNativeCache(armSource)
+      })(),
+      (async () => {
+        await run(
+          '/usr/bin/arch',
+          ['-x86_64', tools.x64Node, tools.pnpmPath, 'install', '--frozen-lockfile'],
+          { cwd: x64Source, env: x64Environment }
+        )
+        await seedNativeCache(x64Source)
+      })()
+    ])
+    const [armCandidate, x64Candidate] = await Promise.all([
+      (async () => {
+        await run(tools.pnpmPath, ['run', 'build:mac:release:arm64'], {
+          cwd: armSource,
+          env: armEnvironment
+        })
+        return await createCandidate(armSource, 'macos-arm64', taggedCommit)
+      })(),
+      (async () => {
+        await run(
+          '/usr/bin/arch',
+          ['-x86_64', tools.x64Node, tools.pnpmPath, 'run', 'build:mac:release:x64'],
+          { cwd: x64Source, env: x64Environment }
+        )
+        return await createCandidate(x64Source, 'macos-x64', taggedCommit)
+      })()
+    ])
     process.stdout.write(
       `[release] macOS candidates prepared; impact assessment and package E2E are required before publish\n${armCandidate.bundlePath}\n${x64Candidate.bundlePath}\n`
     )
@@ -326,13 +357,16 @@ if (mode === 'test') {
     await run('git', ['archive', '--format=tar', '--output', archivePath, releaseTag])
     await extractTag(archivePath, sourceDirectory)
     await run(tools.pnpmPath, ['install', '--frozen-lockfile'], { cwd: sourceDirectory })
-    for (const platform of ['macos-arm64', 'macos-x64']) {
-      const candidate = await readReleaseCandidate({ tag: releaseTag, platform })
-      if (candidate.state.commit !== taggedCommit) {
-        throw new Error(`${platform} candidate commit does not match release tag`)
-      }
-      await runCandidateE2E({ candidate, sourceDirectory, pnpmPath: tools.pnpmPath })
-    }
+    const candidates = await Promise.all(
+      ['macos-arm64', 'macos-x64'].map(async (platform) => {
+        const candidate = await readReleaseCandidate({ tag: releaseTag, platform })
+        if (candidate.state.commit !== taggedCommit) {
+          throw new Error(`${platform} candidate commit does not match release tag`)
+        }
+        return candidate
+      })
+    )
+    await runCandidateE2E({ candidates, sourceDirectory, pnpmPath: tools.pnpmPath })
   } finally {
     await workspace.dispose()
   }

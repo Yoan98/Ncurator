@@ -13,6 +13,7 @@ import {
   parseReleaseTag,
   RELEASE_VERSION_PATTERN
 } from './tag.mjs'
+import { createReleaseStageDeadline } from './shared/stage-deadline.mjs'
 
 const execFileAsync = promisify(execFile)
 const ROOT = process.cwd()
@@ -29,6 +30,7 @@ const notes = valueAfter('--notes') || `Ncurator ${releaseTag}`
 const forceLocal = args.includes('--local-only')
 const forceActions = args.includes('--actions')
 const pnpmExecutable = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
+const stageDeadline = createReleaseStageDeadline('release preparation')
 
 if (!RELEASE_VERSION_PATTERN.test(version) || !['mac', 'windows'].includes(platform)) {
   throw new Error(
@@ -42,12 +44,14 @@ if (platform === 'mac' && (forceLocal || forceActions)) {
 
 const run = (command, commandArgs) =>
   new Promise((resolve, reject) => {
-    const child = spawn(command, commandArgs, {
-      cwd: ROOT,
-      env: process.env,
-      stdio: 'inherit',
-      shell: process.platform === 'win32' && /\.(cmd|bat)$/iu.test(command)
-    })
+    const child = stageDeadline.track(
+      spawn(command, commandArgs, {
+        cwd: ROOT,
+        env: process.env,
+        stdio: 'inherit',
+        shell: process.platform === 'win32' && /\.(cmd|bat)$/iu.test(command)
+      })
+    )
     child.once('error', reject)
     child.once('exit', (code, signal) => {
       if (code === 0) resolve()
@@ -108,10 +112,18 @@ if (platform === 'windows') {
   })
 }
 
-await run(pnpmExecutable, ['typecheck'])
-await run(pnpmExecutable, ['test:update:backend'])
-await run(pnpmExecutable, ['test:unit'])
-await run(pnpmExecutable, ['test:ai:non-live'])
+await Promise.all([
+  run(pnpmExecutable, ['typecheck:node']),
+  run(pnpmExecutable, ['typecheck:web']),
+  run(process.execPath, [path.join(ROOT, 'scripts', 'build', 'sidecar', 'ensure.mjs')])
+])
+await run(process.execPath, [
+  path.join(ROOT, 'scripts', 'test', 'workflow.mjs'),
+  '--type',
+  'backend',
+  '--exclude-group',
+  'live'
+])
 
 packageJson.version = version
 await writeFile(packagePath, `${JSON.stringify(packageJson, null, 2)}\n`, 'utf8')

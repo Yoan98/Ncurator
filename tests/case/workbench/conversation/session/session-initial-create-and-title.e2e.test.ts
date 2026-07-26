@@ -48,6 +48,7 @@ describe('workbench conversation e2e', () => {
           '真实 UI 首次进入 Workbench 后不自动创建会话，用户手动创建后首条消息更新标题，第二条消息不再自动改标题。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
+        execution: 'live',
         windowMode: 'visible',
         runMode: 'single',
         execute: async (runtime) => {
@@ -141,14 +142,13 @@ describe('workbench conversation e2e', () => {
             }
           )
           const savedStrategy = result.firstStructuredStrategies.at(-1)?.strategy
-          const secondRunFirstStrategy =
-            result.secondStructuredStrategies[0]?.fallbackStrategies[0]
+          const secondRunFirstStrategy = result.secondStructuredStrategies[0]?.fallbackStrategies[0]
           await runtime.assertThat(
             Boolean(
               savedStrategy &&
-                secondRunFirstStrategy &&
-                secondRunFirstStrategy.transport === savedStrategy.transport &&
-                secondRunFirstStrategy.mode === savedStrategy.mode
+              secondRunFirstStrategy &&
+              secondRunFirstStrategy.transport === savedStrategy.transport &&
+              secondRunFirstStrategy.mode === savedStrategy.mode
             ),
             {
               name: 'workbench-structured-output-strategy-profile-reuse',

@@ -26,6 +26,7 @@ describe('settings workspace e2e', () => {
         description: '文件 tab 内可以为当前工作空间设置工作目录并立即刷新目录树。',
         fixtures: [],
         serviceMode: 'real',
+        execution: 'exclusive',
         runMode: 'single',
         execute: async (runtime) => {
           const { page } = runtime

@@ -25,6 +25,7 @@ describe('workbench conversation e2e', () => {
         description: '验证智能模式上下文圆圈会刷新并展示已用与剩余比例。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
+        execution: 'live',
         windowMode: 'visible',
         runMode: 'single',
         execute: async (runtime) => {

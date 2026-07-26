@@ -6,7 +6,7 @@ export default defineConfig({
     exclude: ['tests/harness/**', 'tests/fixtures/**', 'tests/logs/**'],
     environment: 'node',
     globals: true,
-    fileParallelism: false,
+    fileParallelism: true,
     testTimeout: 900_000,
     hookTimeout: 900_000,
     passWithNoTests: false

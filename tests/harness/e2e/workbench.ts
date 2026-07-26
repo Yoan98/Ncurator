@@ -22,6 +22,7 @@ import { loadRootEnvOnce } from '../core/rootEnv'
 import {
   SETTINGS_E2E_TIMEOUT_MS,
   SETTINGS_REAL_WORKSPACE_LONG_E2E_TIMEOUT_MS,
+  bindWorkspaceRootDirectly,
   getWorkspaceIndexCounts,
   getSettingsLocator,
   getSettingsPrefixLocator,
@@ -841,7 +842,7 @@ export const prepareWorkbenchWorkspaceThroughUi = async (
 ): Promise<void> => {
   await createWorkspaceThroughSettingsUi(page, input.workspaceName)
   const workspaceId = await readWorkspaceIdFromSettingsCard(page, input.workspaceName)
-  await bindWorkspaceRootThroughSettingsUi(page, input.rootPath)
+  await bindWorkspaceRootDirectly(page, workspaceId, input.rootPath)
   await prepareSelectedWorkspaceFilesThroughSettingsUi(page, workspaceId)
   if (input.webSourceUrl) {
     await addWebSourceThroughSettingsUi(page, input.webSourceUrl)
