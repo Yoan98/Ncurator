@@ -1,7 +1,6 @@
 import { describe, it } from 'vitest'
 import type { AiRunEvent } from '../../../../../src/shared/types'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
-import { clickScreenPoint } from '../../../../harness/e2e/nativeMouse'
 import {
   WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
   assertNoWorkbenchFakeSignals,
@@ -123,43 +122,51 @@ describe('workbench run e2e', () => {
           })
 
           const browserTarget = await runtime.electronApp.evaluate(
-            async ({ BrowserWindow, WebContentsView, screen, webContents }, input) => {
+            async ({ BrowserWindow, WebContentsView, webContents }, input) => {
               const allContents = webContents.getAllWebContents()
-              const browserContents = allContents.find((item) =>
-                item.getURL().startsWith(input.url)
-              )
-              if (!browserContents) {
+              const windows = BrowserWindow.getAllWindows()
+              const target = allContents
+                .filter((item) => item.getURL().startsWith(input.url))
+                .map((contents) => {
+                  const ownerWindow = windows.find((candidate) =>
+                    candidate.contentView.children.some(
+                      (child) =>
+                        child instanceof WebContentsView && child.webContents.id === contents.id
+                    )
+                  )
+                  const browserView = ownerWindow?.contentView.children.find(
+                    (child) =>
+                      child instanceof WebContentsView && child.webContents.id === contents.id
+                  )
+                  return { contents, ownerWindow, browserView }
+                })
+                .find(
+                  (candidate) =>
+                    candidate.ownerWindow && candidate.browserView instanceof WebContentsView
+                )
+              if (!target) {
                 return {
                   ok: false,
                   rect: null,
                   viewBounds: null,
-                  screenPoint: null,
+                  inputPoint: null,
                   paintedPixelSamples: 0,
                   urls: allContents.map((item) => item.getURL())
                 }
               }
-              const ownerWindow = BrowserWindow.getAllWindows().find((candidate) =>
-                candidate.contentView.children.some(
-                  (child) =>
-                    child instanceof WebContentsView && child.webContents.id === browserContents.id
-                )
-              )
-              const browserView = ownerWindow?.contentView.children.find(
-                (child) =>
-                  child instanceof WebContentsView && child.webContents.id === browserContents.id
-              )
+              const { contents: browserContents, browserView } = target
               const rect = await browserContents.executeJavaScript(`(() => {
                 const button = document.querySelector('#complete-manual')
                 if (!(button instanceof HTMLElement)) return null
                 const bounds = button.getBoundingClientRect()
                 return { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height }
               })()`)
-              if (!ownerWindow || !(browserView instanceof WebContentsView) || !rect) {
+              if (!(browserView instanceof WebContentsView) || !rect) {
                 return {
                   ok: false,
                   rect,
                   viewBounds: null,
-                  screenPoint: null,
+                  inputPoint: null,
                   paintedPixelSamples: 0,
                   urls: allContents.map((item) => item.getURL())
                 }
@@ -172,35 +179,48 @@ describe('workbench run e2e', () => {
                   paintedPixelSamples += 1
                 }
               }
-              const contentBounds = ownerWindow.getContentBounds()
               const viewBounds = browserView.getBounds()
-              const dipPoint = {
-                x: contentBounds.x + viewBounds.x + rect.x + rect.width / 2,
-                y: contentBounds.y + viewBounds.y + rect.y + rect.height / 2
+              const inputPoint = {
+                x: Math.round(rect.x + rect.width / 2),
+                y: Math.round(rect.y + rect.height / 2)
+              }
+              const ready =
+                browserView.getVisible() &&
+                viewBounds.width > 0 &&
+                viewBounds.height > 0 &&
+                paintedPixelSamples > 0
+              if (ready) {
+                browserContents.focus()
+                browserContents.sendInputEvent({ type: 'mouseMove', ...inputPoint })
+                browserContents.sendInputEvent({
+                  type: 'mouseDown',
+                  button: 'left',
+                  clickCount: 1,
+                  ...inputPoint
+                })
+                browserContents.sendInputEvent({
+                  type: 'mouseUp',
+                  button: 'left',
+                  clickCount: 1,
+                  ...inputPoint
+                })
               }
               return {
-                ok:
-                  browserView.getVisible() &&
-                  viewBounds.width > 0 &&
-                  viewBounds.height > 0 &&
-                  paintedPixelSamples > 0,
+                ok: ready,
                 rect,
                 viewBounds,
-                screenPoint:
-                  process.platform === 'win32' ? screen.dipToScreenPoint(dipPoint) : dipPoint,
+                inputPoint,
                 paintedPixelSamples,
                 urls: []
               }
             },
             { url: server.url }
           )
-          if (!browserTarget.ok || !browserTarget.rect || !browserTarget.screenPoint) {
+          if (!browserTarget.ok || !browserTarget.rect || !browserTarget.inputPoint) {
             throw new Error(
               `embedded browser target is not ready: ${JSON.stringify(browserTarget)}`
             )
           }
-          await page.bringToFront()
-          await clickScreenPoint(browserTarget.screenPoint.x, browserTarget.screenPoint.y)
           let browserActionResult = ''
           const browserActionDeadline = Date.now() + 5_000
           while (Date.now() < browserActionDeadline) {
