@@ -190,20 +190,30 @@ describe('workbench run e2e', () => {
                 viewBounds.height > 0 &&
                 paintedPixelSamples > 0
               if (ready) {
-                browserContents.focus()
-                browserContents.sendInputEvent({ type: 'mouseMove', ...inputPoint })
-                browserContents.sendInputEvent({
-                  type: 'mouseDown',
-                  button: 'left',
-                  clickCount: 1,
-                  ...inputPoint
-                })
-                browserContents.sendInputEvent({
-                  type: 'mouseUp',
-                  button: 'left',
-                  clickCount: 1,
-                  ...inputPoint
-                })
+                const debuggerWasAttached = browserContents.debugger.isAttached()
+                try {
+                  if (!debuggerWasAttached) browserContents.debugger.attach('1.3')
+                  await browserContents.debugger.sendCommand('Input.dispatchMouseEvent', {
+                    type: 'mouseMoved',
+                    ...inputPoint
+                  })
+                  await browserContents.debugger.sendCommand('Input.dispatchMouseEvent', {
+                    type: 'mousePressed',
+                    button: 'left',
+                    clickCount: 1,
+                    ...inputPoint
+                  })
+                  await browserContents.debugger.sendCommand('Input.dispatchMouseEvent', {
+                    type: 'mouseReleased',
+                    button: 'left',
+                    clickCount: 1,
+                    ...inputPoint
+                  })
+                } finally {
+                  if (!debuggerWasAttached && browserContents.debugger.isAttached()) {
+                    browserContents.debugger.detach()
+                  }
+                }
               }
               return {
                 ok: ready,
@@ -240,6 +250,11 @@ describe('workbench run e2e', () => {
             )
             if (browserActionResult === COMPLETION_TEXT) break
             await page.waitForTimeout(100)
+          }
+          if (browserActionResult !== COMPLETION_TEXT) {
+            throw new Error(
+              `embedded browser input did not complete the user action: ${browserActionResult}`
+            )
           }
 
           await getWorkbenchLocator(page, workbenchSelectors.userTakeoverConfirmButton).click()

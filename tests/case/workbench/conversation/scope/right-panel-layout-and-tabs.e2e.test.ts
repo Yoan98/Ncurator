@@ -259,7 +259,10 @@ describe('workbench conversation e2e', () => {
             async (tabId) => window.api.browserPanelStateGet({ tabId }),
             activeBrowserTabId
           )
-          await page.keyboard.press('Escape')
+          const closeMenuResponse = await page.evaluate(() => window.api.browserPanelCloseMenu())
+          if (!closeMenuResponse.success) {
+            throw new Error(closeMenuResponse.error || 'failed to close browser menu')
+          }
           await page.waitForFunction(
             (testId) =>
               document.querySelector(`[data-testid="${testId}"]`)?.getAttribute('aria-expanded') ===
