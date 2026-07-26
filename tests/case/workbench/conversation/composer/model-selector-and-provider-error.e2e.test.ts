@@ -140,6 +140,7 @@ describe('workbench conversation e2e', () => {
         description: '验证模型搜索空状态、配置分组折叠，以及模型服务 404 的统一错误处理。',
         fixtures: [],
         serviceMode: 'real',
+        execution: 'live',
         windowMode: 'background',
         runMode: 'single',
         execute: async (runtime) => {

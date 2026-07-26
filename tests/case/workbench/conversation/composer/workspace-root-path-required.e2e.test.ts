@@ -40,6 +40,7 @@ describe('workbench conversation e2e', () => {
         description: '未设置工作目录的工作区应禁用发送；绑定目录后恢复可发送并走真实 AI 运行。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
+        execution: 'exclusive',
         windowMode: 'visible',
         runMode: 'single',
         execute: async (runtime) => {

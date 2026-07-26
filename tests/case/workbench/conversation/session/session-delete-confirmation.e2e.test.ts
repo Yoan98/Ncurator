@@ -27,6 +27,7 @@ describe('workbench conversation e2e', () => {
         description: '验证会话删除确认，以及取消和确认删除。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
+        execution: 'live',
         windowMode: 'visible',
         runMode: 'single',
         execute: async (runtime) => {

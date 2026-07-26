@@ -78,6 +78,19 @@ for (const [domain, rule] of Object.entries(DOMAIN_RULES)) {
     if (rule.type === 'e2e' && !isE2E) failures.push(`${relativePath}: ${domain} 只允许 E2E 测试`)
     if (rule.type === 'backend' && isE2E)
       failures.push(`${relativePath}: ${domain} 只允许 backend 测试`)
+    if (isE2E) {
+      const executionValues = [...source.matchAll(/\bexecution\s*:\s*['"]([^'"]+)['"]/gu)].map(
+        (match) => match[1]
+      )
+      for (const execution of executionValues) {
+        if (!['normal', 'live', 'exclusive'].includes(execution)) {
+          failures.push(`${relativePath}: unsupported E2E execution class ${execution}`)
+        }
+      }
+      if (new Set(executionValues).size > 1) {
+        failures.push(`${relativePath}: one E2E file cannot mix execution classes`)
+      }
+    }
     if (
       domain === 'unit' &&
       (source.includes('src/renderer') || /@vitest-environment\s+jsdom/u.test(source))

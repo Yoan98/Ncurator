@@ -31,6 +31,7 @@ describe('workbench result e2e', () => {
         description: '真实 AI 使用终端重命名文件后，验证扫描记录、重命名说明和确认回退。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
+        execution: 'live',
         windowMode: 'visible',
         runMode: 'single',
         execute: async (runtime) => {

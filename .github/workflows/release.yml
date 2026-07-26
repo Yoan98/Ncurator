@@ -47,6 +47,7 @@ jobs:
   prepare-windows:
     if: inputs.mode == 'prepare'
     runs-on: windows-latest
+    timeout-minutes: 60
     env:
       RELEASE_TAG: ${{ inputs.tag }}
       NCURATOR_RELEASE_CANDIDATE_ROOT: ${{ github.workspace }}/release-candidates
@@ -91,6 +92,7 @@ jobs:
   test-windows:
     if: inputs.mode == 'test'
     runs-on: windows-latest
+    timeout-minutes: 60
     env:
       RELEASE_TAG: ${{ inputs.tag }}
       CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
@@ -164,6 +166,7 @@ jobs:
   publish-windows:
     if: inputs.mode == 'publish'
     runs-on: windows-latest
+    timeout-minutes: 60
     environment: ncuratore
     env:
       RELEASE_TAG: ${{ inputs.tag }}

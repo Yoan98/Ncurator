@@ -57,6 +57,7 @@ describe('workbench run e2e', () => {
         description: '真实长任务和真实审批等待中点击停止，验证运行结束和 UI 恢复。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
+        execution: 'live',
         windowMode: 'visible',
         runMode: 'single',
         execute: async (runtime) => {

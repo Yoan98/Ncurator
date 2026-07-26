@@ -79,7 +79,7 @@ export const preparePackagedE2EApplication = async (bundlePath, { resultPath = '
   }
 
   const runId = createRunId()
-  const logDir = path.join(LOGS_ROOT, runId)
+  const logDir = path.join(LOGS_ROOT, `${runId}-${bundle.platform}`)
   const processLogPath = path.join(logDir, 'build-install.log')
   mkdirSync(logDir, { recursive: true })
   writeFileSync(processLogPath, '', 'utf8')

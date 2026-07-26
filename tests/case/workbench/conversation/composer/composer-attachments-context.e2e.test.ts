@@ -121,6 +121,7 @@ describe('workbench conversation e2e', () => {
           '对齐附件上下文 PRD：验证统一附件选择、doc/pptx 格式放行、图片预览、文件默认打开、删除、普通文本粘贴和大文件提示。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
+        execution: 'exclusive',
         windowMode: 'visible',
         runMode: 'single',
         execute: async (runtime) => {

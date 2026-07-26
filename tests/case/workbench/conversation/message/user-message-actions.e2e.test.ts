@@ -117,6 +117,7 @@ describe('workbench conversation e2e', () => {
           '验证用户消息 hover 操作、latest turn 编辑撤回、running 态隐藏编辑，以及用户消息附件独立展示和输入框附件关闭按钮无遮挡。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
+        execution: 'exclusive',
         windowMode: 'visible',
         runMode: 'single',
         execute: async (runtime) => {

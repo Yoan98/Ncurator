@@ -31,6 +31,7 @@ describe('workbench run e2e', () => {
         description: '文件修改落地后取消运行，仍保留取消文案、文件卡片和差异预览。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
+        execution: 'live',
         windowMode: 'visible',
         runMode: 'single',
         execute: async (runtime) => {

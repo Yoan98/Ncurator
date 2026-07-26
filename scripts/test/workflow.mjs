@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { mkdir, readFile, readdir, rm, stat } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import path from 'node:path'
-import { spawnSync } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { preparePackagedE2EApplication } from './package-app.mjs'
 
 const ROOT = process.cwd()
@@ -26,7 +26,12 @@ const NATIVE_PREPARE_SCRIPT = path.join(ROOT, 'scripts', 'build', 'native', 'bet
 const NODE_PTY_NATIVE_PREPARE_SCRIPT = path.join(ROOT, 'scripts', 'build', 'native', 'node-pty.mjs')
 const BETTER_SQLITE_NATIVE_BINDING_ENV = 'NCURATOR_BETTER_SQLITE3_NATIVE_BINDING'
 const LIVE_BACKEND_NODE_OLD_SPACE_MB = 8192
-const DEFAULT_E2E_FILE_DELAY_MS = 1000
+const BACKEND_WORKERS = 6
+const E2E_WORKERS = 3
+const LIVE_WORKERS = 2
+const RUNNER_DEADLINE_MS = 55 * 60 * 1000
+const DEADLINE_EXIT_CODE = 124
+const E2E_EXECUTION_CLASSES = new Set(['normal', 'live', 'exclusive'])
 const USE_WINDOWS_SHELL = process.platform === 'win32'
 const KNOWLEDGE_CACHE_ROOT = path.join(TESTS_ROOT, '.cache', 'workspace-knowledge')
 const EMPTY_KNOWLEDGE_CACHE_STATS = {
@@ -81,10 +86,9 @@ const parseArgs = (argv) => {
     excludeGroups: [],
     caseId: '',
     runs: 1,
-    runDelayMs: 0,
     target: 'source',
-    bundle: '',
-    result: '',
+    bundles: [],
+    results: [],
     freshKnowledgeCache: false,
     reuseKnowledgeCache: false
   }
@@ -127,23 +131,18 @@ const parseArgs = (argv) => {
       index += 1
       continue
     }
-    if (current === '--run-delay-ms' && next) {
-      parsed.runDelayMs = Math.max(0, Number(next))
-      index += 1
-      continue
-    }
     if (current === '--target' && next) {
       parsed.target = next
       index += 1
       continue
     }
     if (current === '--bundle' && next) {
-      parsed.bundle = next
+      parsed.bundles.push(next)
       index += 1
       continue
     }
     if (current === '--result' && next) {
-      parsed.result = next
+      parsed.results.push(next)
       index += 1
       continue
     }
@@ -153,8 +152,6 @@ const parseArgs = (argv) => {
 
   return parsed
 }
-
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 const walk = async (target) => {
   const entries = await readdir(target, { withFileTypes: true })
@@ -186,17 +183,22 @@ const hashBuildDirectories = async (directories) => {
 }
 
 const readKnowledgeCacheStats = async (cachePath) => {
+  const totals = { ...EMPTY_KNOWLEDGE_CACHE_STATS }
+  let files = []
   try {
-    const parsed = JSON.parse(await readFile(path.join(cachePath, 'stats.json'), 'utf8'))
-    return {
-      splitCacheHits: Number(parsed.splitCacheHits || 0),
-      splitCacheMisses: Number(parsed.splitCacheMisses || 0),
-      vectorCacheHits: Number(parsed.vectorCacheHits || 0),
-      vectorCacheMisses: Number(parsed.vectorCacheMisses || 0)
-    }
+    files = await walk(cachePath)
   } catch {
-    return { ...EMPTY_KNOWLEDGE_CACHE_STATS }
+    return totals
   }
+  for (const filePath of files.filter((item) => path.basename(item) === 'stats.json')) {
+    try {
+      const parsed = JSON.parse(await readFile(filePath, 'utf8'))
+      for (const key of Object.keys(totals)) totals[key] += Number(parsed[key] || 0)
+    } catch {
+      // A failed case may leave no usable cache statistics.
+    }
+  }
+  return totals
 }
 
 const prepareKnowledgeCache = async (input) => {
@@ -231,6 +233,38 @@ const isE2EFile = (filePath) => path.basename(filePath).endsWith('.e2e.test.ts')
 const isLiveBackendFile = (filePath) =>
   filePath.includes(`${path.sep}live${path.sep}`) && !isE2EFile(filePath)
 const toCaseId = (filePath) => path.basename(filePath).replace(/\.e2e\.test\.ts$|\.test\.ts$/u, '')
+
+const readE2EExecutionClass = async (filePath) => {
+  const source = await readFile(filePath, 'utf8')
+  const matches = [...source.matchAll(/\bexecution\s*:\s*['"](normal|live|exclusive)['"]/gu)].map(
+    (match) => match[1]
+  )
+  const declared = [...new Set(matches)]
+  if (declared.length > 1) {
+    throw new Error(`${path.relative(ROOT, filePath)} declares multiple E2E execution classes`)
+  }
+  const execution = declared[0] || 'normal'
+  if (!E2E_EXECUTION_CLASSES.has(execution)) {
+    throw new Error(`${path.relative(ROOT, filePath)} has unsupported execution class ${execution}`)
+  }
+  return execution
+}
+
+const buildCaseKnowledgeCacheEnv = async (env, testFile) => {
+  const basePath = String(env.NCURATOR_WORKSPACE_KNOWLEDGE_CACHE_PATH || '').trim()
+  if (!basePath) return env
+  const relativePath = path.relative(TEST_CASES_ROOT, testFile).split(path.sep).join('/')
+  const caseKey = `${toCaseId(testFile)}-${createHash('sha256').update(relativePath).digest('hex').slice(0, 12)}`
+  const casePath = path.join(basePath, 'cases', caseKey)
+  await mkdir(casePath, { recursive: true })
+  return {
+    ...env,
+    NCURATOR_WORKSPACE_KNOWLEDGE_CACHE_PATH: casePath,
+    NCURATOR_E2E_KNOWLEDGE_CACHE_NAMESPACE: `${String(
+      env.NCURATOR_E2E_KNOWLEDGE_CACHE_NAMESPACE || 'e2e'
+    )}/${caseKey}`
+  }
+}
 
 const fileContainsCaseId = async (filePath, caseId) => {
   if (toCaseId(filePath) === caseId) return true
@@ -303,6 +337,47 @@ const runSpawn = (bin, args, env, omitNpmEnv) =>
     stdio: 'inherit',
     shell: USE_WINDOWS_SHELL && /\.(cmd|bat)$/iu.test(bin),
     env: buildCommandEnv(env, { omitNpmEnv })
+  })
+
+const runSpawnAsync = (bin, args, env, omitNpmEnv, deadlineAt) =>
+  new Promise((resolve) => {
+    const remainingMs = deadlineAt - Date.now()
+    if (remainingMs <= 0) {
+      resolve(DEADLINE_EXIT_CODE)
+      return
+    }
+    const controller = new AbortController()
+    let settled = false
+    let timedOut = false
+    const finish = (code) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      resolve(code)
+    }
+    const timer = setTimeout(() => {
+      timedOut = true
+      process.stderr.write(
+        `[test-workflow] deadline reached; stopping ${formatCommand(bin, args)}\n`
+      )
+      controller.abort()
+    }, remainingMs)
+    const child = spawn(bin, args, {
+      cwd: ROOT,
+      stdio: 'inherit',
+      shell: USE_WINDOWS_SHELL && /\.(cmd|bat)$/iu.test(bin),
+      env: buildCommandEnv(env, { omitNpmEnv }),
+      signal: controller.signal
+    })
+    child.once('error', (error) => {
+      if (!timedOut) {
+        process.stderr.write(
+          `[test-workflow] command failed to start: ${formatCommand(bin, args)}\n${String(error)}\n`
+        )
+      }
+      finish(timedOut ? DEADLINE_EXIT_CODE : 1)
+    })
+    child.once('exit', (code) => finish(timedOut ? DEADLINE_EXIT_CODE : (code ?? 1)))
   })
 
 const reportSpawnFailure = (label, bin, args, result) => {
@@ -403,11 +478,8 @@ const resolveBetterSqliteNativeBinding = (target) => {
   }
 }
 
-const runVitest = (input) => {
-  const requiresSingleWorker =
-    input.configPath.includes('e2e') ||
-    input.testFiles.some((filePath) => isLiveBackendFile(filePath))
-  const extraArgs = requiresSingleWorker ? ['--maxWorkers', '1'] : []
+const runVitest = async (input) => {
+  const extraArgs = ['--maxWorkers', String(input.workers)]
   const env = input.testFiles.some((filePath) => isLiveBackendFile(filePath))
     ? {
         NODE_OPTIONS: appendNodeOption(
@@ -426,19 +498,13 @@ const runVitest = (input) => {
     ...caseArgs,
     ...input.testFiles
   ]
-  return runCommandWithFallback({
+  return await runSpawnAsync(
+    process.execPath,
+    [VITEST_CLI, ...commandArgs],
     env,
-    omitNpmEnv: input.configPath.includes('e2e'),
-    preferFallback: true,
-    primary: {
-      bin: PNPM_BIN,
-      args: ['exec', 'vitest', ...commandArgs]
-    },
-    fallback: {
-      bin: process.execPath,
-      args: [VITEST_CLI, ...commandArgs]
-    }
-  })
+    input.configPath.includes('e2e'),
+    input.deadlineAt
+  )
 }
 
 const partitionBackendTestFiles = (testFiles) => ({
@@ -478,39 +544,105 @@ const formatScope = (input) =>
     .filter(Boolean)
     .join(' ')
 
-const runE2ETestFilesSerially = async (testFiles, requestedDelayMs, env, testNamePattern) => {
-  const e2eFileDelayMs = requestedDelayMs > 0 ? requestedDelayMs : DEFAULT_E2E_FILE_DELAY_MS
-  let exitCode = 0
-  const results = []
-
-  for (let index = 0; index < testFiles.length; index += 1) {
-    const testFile = testFiles[index]
-    process.stdout.write(
-      `[test-workflow] e2e ${String(index + 1)}/${String(testFiles.length)} ${path.relative(ROOT, testFile)}\n`
+const runE2ETestFilesConcurrently = async (testFiles, targets, testNamePattern, deadlineAt) => {
+  const fileTasks = await Promise.all(
+    testFiles.map(async (testFile) => ({
+      testFile,
+      execution: await readE2EExecutionClass(testFile)
+    }))
+  )
+  const tasks = targets
+    .flatMap((target) =>
+      fileTasks.map((task) => ({
+        ...task,
+        targetId: target.id,
+        env: target.env
+      }))
     )
-    const code = runVitest({
-      configPath: 'vitest.e2e.config.mts',
-      testFiles: [testFile],
-      env,
-      testNamePattern
-    })
-    if (code !== 0) {
-      exitCode = code
-    }
+    .map((task, index) => ({ ...task, index }))
+  const concurrentTasks = tasks.filter((task) => task.execution !== 'exclusive')
+  const exclusiveTasks = tasks.filter((task) => task.execution === 'exclusive')
+  const results = []
+  let exitCode = 0
+  let liveActive = 0
+  let completed = 0
+
+  const recordDeadline = (task) => {
+    exitCode = DEADLINE_EXIT_CODE
     results.push({
-      file: path.relative(ROOT, testFile),
-      status: code === 0 ? 'passed' : 'failed',
-      exitCode: code
+      index: task.index,
+      file: path.relative(ROOT, task.testFile),
+      targetId: task.targetId,
+      execution: task.execution,
+      status: 'timed_out',
+      exitCode: DEADLINE_EXIT_CODE
     })
-    if (e2eFileDelayMs > 0 && index < testFiles.length - 1) {
-      process.stdout.write(
-        `[test-workflow] waiting ${String(e2eFileDelayMs)}ms before next e2e file\n`
-      )
-      await sleep(e2eFileDelayMs)
-    }
   }
 
-  return { exitCode, results }
+  const runTask = async (task) => {
+    completed += 1
+    const relativeFile = path.relative(ROOT, task.testFile)
+    process.stdout.write(
+      `[test-workflow] e2e ${String(completed)}/${String(tasks.length)} [${task.targetId}/${task.execution}] ${relativeFile}\n`
+    )
+    const startedAt = Date.now()
+    const caseEnv = await buildCaseKnowledgeCacheEnv(task.env, task.testFile)
+    const code = await runVitest({
+      configPath: 'vitest.e2e.config.mts',
+      testFiles: [task.testFile],
+      env: caseEnv,
+      testNamePattern,
+      workers: 1,
+      deadlineAt
+    })
+    if (code !== 0) exitCode = code === DEADLINE_EXIT_CODE ? DEADLINE_EXIT_CODE : exitCode || code
+    results.push({
+      index: task.index,
+      file: relativeFile,
+      targetId: task.targetId,
+      execution: task.execution,
+      status: code === 0 ? 'passed' : code === DEADLINE_EXIT_CODE ? 'timed_out' : 'failed',
+      exitCode: code,
+      durationMs: Date.now() - startedAt
+    })
+  }
+
+  const pending = [...concurrentTasks]
+  const active = new Set()
+  while (pending.length > 0 || active.size > 0) {
+    while (pending.length > 0 && active.size < E2E_WORKERS && Date.now() < deadlineAt) {
+      const nextIndex = pending.findIndex(
+        (task) => task.execution !== 'live' || liveActive < LIVE_WORKERS
+      )
+      if (nextIndex < 0) break
+      const [task] = pending.splice(nextIndex, 1)
+      if (task.execution === 'live') liveActive += 1
+      let running
+      running = runTask(task).finally(() => {
+        if (task.execution === 'live') liveActive -= 1
+        active.delete(running)
+      })
+      active.add(running)
+    }
+    if (Date.now() >= deadlineAt && pending.length > 0) {
+      for (const task of pending.splice(0)) recordDeadline(task)
+    }
+    if (active.size > 0) await Promise.race(active)
+  }
+
+  for (let index = 0; index < exclusiveTasks.length; index += 1) {
+    const task = exclusiveTasks[index]
+    if (Date.now() >= deadlineAt) {
+      for (const remaining of exclusiveTasks.slice(index)) recordDeadline(remaining)
+      break
+    }
+    await runTask(task)
+  }
+
+  return {
+    exitCode,
+    results: results.sort((left, right) => left.index - right.index)
+  }
 }
 
 const runTypeWorkflow = async (input) => {
@@ -533,6 +665,7 @@ const runTypeWorkflow = async (input) => {
       ).some(Boolean))
   const testNamePattern = shouldFilterByTestName ? input.caseId : ''
   let runtimeEnv = input.e2eEnv || {}
+  let e2eTargets = input.e2eTargets || []
   if (input.type === 'e2e') {
     const e2eTempRoot = path.resolve(
       String(process.env.NCURATOR_E2E_TEMP_ROOT || '').trim() ||
@@ -543,6 +676,10 @@ const runTypeWorkflow = async (input) => {
       ...runtimeEnv,
       NCURATOR_E2E_TEMP_ROOT: e2eTempRoot
     }
+    e2eTargets = e2eTargets.map((target) => ({
+      ...target,
+      env: { ...target.env, NCURATOR_E2E_TEMP_ROOT: e2eTempRoot }
+    }))
   }
   if (input.type !== 'e2e' || input.target === 'source') {
     const nativeCode = prepareBetterSqliteNative(nativeTarget)
@@ -577,15 +714,11 @@ const runTypeWorkflow = async (input) => {
       reuse: input.reuseKnowledgeCache
     })
     runtimeEnv = { ...runtimeEnv, ...knowledgeCache.env }
+    e2eTargets = [{ id: 'source', env: runtimeEnv }]
   }
 
   let exitCode = 0
   const e2eResults = []
-  const { liveFiles } =
-    input.type === 'backend' ? partitionBackendTestFiles(testFiles) : { liveFiles: [] }
-  const runDelayMs =
-    input.runs > 1 && liveFiles.length > 0 ? (input.runDelayMs > 0 ? input.runDelayMs : 3000) : 0
-
   for (let iteration = 0; iteration < input.runs; iteration += 1) {
     if (input.type === 'backend') {
       const { nonLiveFiles, liveFiles } = partitionBackendTestFiles(testFiles)
@@ -594,40 +727,37 @@ const runTypeWorkflow = async (input) => {
           configPath: 'vitest.backend.config.mts',
           testFiles: nonLiveFiles,
           env: runtimeEnv,
-          testNamePattern
+          testNamePattern,
+          workers: BACKEND_WORKERS,
+          deadlineAt: input.deadlineAt
         },
         {
           configPath: 'vitest.backend.live.config.mts',
           testFiles: liveFiles,
           env: runtimeEnv,
-          testNamePattern
+          testNamePattern,
+          workers: LIVE_WORKERS,
+          deadlineAt: input.deadlineAt
         }
       ].filter((group) => group.testFiles.length > 0)
 
       for (const group of groups) {
-        const code = runVitest(group)
+        const code = await runVitest(group)
         if (code !== 0) {
           exitCode = code
         }
       }
     } else {
-      const runResult = await runE2ETestFilesSerially(
+      const runResult = await runE2ETestFilesConcurrently(
         testFiles,
-        input.runDelayMs,
-        runtimeEnv,
-        testNamePattern
+        e2eTargets,
+        testNamePattern,
+        input.deadlineAt
       )
       e2eResults.push(...runResult.results)
       if (runResult.exitCode !== 0) {
         exitCode = runResult.exitCode
       }
-    }
-
-    if (runDelayMs > 0 && iteration < input.runs - 1) {
-      process.stdout.write(
-        `[test-workflow] waiting ${String(runDelayMs)}ms before next live run (${String(iteration + 2)}/${String(input.runs)})\n`
-      )
-      await sleep(runDelayMs)
     }
   }
 
@@ -637,6 +767,7 @@ const runTypeWorkflow = async (input) => {
 const main = async () => {
   removeNpmLifecycleEnv()
   const args = parseArgs(process.argv.slice(2))
+  const deadlineAt = Date.now() + RUNNER_DEADLINE_MS
 
   const expectedTypeByDomain = {
     ai: 'backend',
@@ -656,19 +787,16 @@ const main = async () => {
   if (!['source', 'package'].includes(args.target)) {
     throw new Error(`unsupported --target: ${args.target}`)
   }
-  if (!args.domain && args.type !== 'e2e') {
-    throw new Error('非纯 E2E 工作流必须提供 --domain')
-  }
   if (args.target === 'package' && args.type !== 'e2e') {
     throw new Error('--target package 只能与 --type e2e 一起使用')
   }
-  if (args.target === 'package' && !args.bundle) {
+  if (args.target === 'package' && args.bundles.length === 0) {
     throw new Error('--target package 必须提供 --bundle <release-bundle.json>')
   }
-  if (args.target !== 'package' && args.bundle) {
+  if (args.target !== 'package' && args.bundles.length > 0) {
     throw new Error('--bundle 只能与 --target package 一起使用')
   }
-  if (args.target !== 'package' && args.result) {
+  if (args.target !== 'package' && args.results.length > 0) {
     throw new Error('--result 只能与 --target package 一起使用')
   }
   if (args.freshKnowledgeCache && args.reuseKnowledgeCache) {
@@ -679,9 +807,7 @@ const main = async () => {
   if (architectureValidationCode !== 0) process.exit(architectureValidationCode)
 
   let exitCode = 0
-  let packageSession = null
-  let e2eEnv = {}
-  let packageKnowledgeCache = null
+  let packageTargets = []
 
   if (!args.type || args.type === 'e2e') {
     const validationCode = validateE2EContract()
@@ -689,20 +815,35 @@ const main = async () => {
   }
 
   if (args.type === 'e2e' && args.target === 'package') {
-    packageSession = await preparePackagedE2EApplication(args.bundle, { resultPath: args.result })
-    packageKnowledgeCache = await prepareKnowledgeCache({
-      namespace: 'package',
-      buildFingerprint: packageSession.artifactSha256,
-      fresh: args.freshKnowledgeCache,
-      reuse: args.reuseKnowledgeCache
-    })
-    e2eEnv = { ...packageSession.env, ...packageKnowledgeCache.env }
+    if (args.results.length > 0 && args.results.length !== args.bundles.length) {
+      throw new Error('each --bundle must have a matching --result when result paths are provided')
+    }
+    packageTargets = await Promise.all(
+      args.bundles.map(async (bundle, index) => {
+        const session = await preparePackagedE2EApplication(bundle, {
+          resultPath: args.results[index] || ''
+        })
+        const knowledgeCache = await prepareKnowledgeCache({
+          namespace: `package/${session.releasePlatform}`,
+          buildFingerprint: session.artifactSha256,
+          fresh: args.freshKnowledgeCache,
+          reuse: args.reuseKnowledgeCache
+        })
+        return {
+          id: session.releasePlatform,
+          env: { ...session.env, ...knowledgeCache.env },
+          session,
+          knowledgeCache
+        }
+      })
+    )
   }
 
   if (!args.type || args.type === 'backend') {
     const result = await runTypeWorkflow({
       ...args,
-      type: 'backend'
+      type: 'backend',
+      deadlineAt
     })
     exitCode = result.exitCode
   }
@@ -711,22 +852,23 @@ const main = async () => {
     const result = await runTypeWorkflow({
       ...args,
       type: 'e2e',
-      e2eEnv
+      e2eTargets: packageTargets.map(({ id, env }) => ({ id, env })),
+      deadlineAt
     })
     exitCode = result.exitCode
-    packageSession?.writeSummary({
-      status: exitCode === 0 ? 'passed' : 'failed',
-      tests: result.e2eResults,
-      knowledgeCache: packageKnowledgeCache
-        ? {
-            knowledgeCacheEnabled: packageKnowledgeCache.knowledgeCacheEnabled,
-            knowledgeCachePath: packageKnowledgeCache.knowledgeCachePath,
-            knowledgeCacheNamespace: packageKnowledgeCache.knowledgeCacheNamespace,
-            buildFingerprint: packageKnowledgeCache.buildFingerprint,
-            ...(await readKnowledgeCacheStats(packageKnowledgeCache.knowledgeCachePath))
-          }
-        : null
-    })
+    for (const target of packageTargets) {
+      target.session.writeSummary({
+        status: exitCode === 0 ? 'passed' : 'failed',
+        tests: result.e2eResults.filter((test) => test.targetId === target.id),
+        knowledgeCache: {
+          knowledgeCacheEnabled: target.knowledgeCache.knowledgeCacheEnabled,
+          knowledgeCachePath: target.knowledgeCache.knowledgeCachePath,
+          knowledgeCacheNamespace: target.knowledgeCache.knowledgeCacheNamespace,
+          buildFingerprint: target.knowledgeCache.buildFingerprint,
+          ...(await readKnowledgeCacheStats(target.knowledgeCache.knowledgeCachePath))
+        }
+      })
+    }
   }
 
   process.exit(exitCode)

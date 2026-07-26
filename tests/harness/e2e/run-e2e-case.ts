@@ -35,6 +35,7 @@ import {
 } from './resourceScope'
 
 export type E2ETestRunMode = 'single' | 'repeatable'
+export type E2EExecutionClass = 'normal' | 'live' | 'exclusive'
 
 type KnowledgeCacheStats = {
   splitCacheHits: number
@@ -151,6 +152,7 @@ export type E2ETestCaseDefinition<TResult> = E2EServiceConfiguration & {
   groups?: readonly string[]
   description: string
   fixtures: readonly string[]
+  execution?: E2EExecutionClass
   windowMode?: ElectronWindowMode
   extraEnv?: Readonly<Record<string, string>>
   runMode: E2ETestRunMode
@@ -592,6 +594,7 @@ export const runE2ECase = async <TResult>(
       description: definition.description,
       fixtures: definition.fixtures.map((fixturePath) => path.resolve(fixturePath)),
       serviceMode: definition.serviceMode,
+      execution: definition.execution || 'normal',
       fixtureReason: definition.fixtureReason || null,
       windowMode: definition.windowMode || 'background',
       runMode: definition.runMode

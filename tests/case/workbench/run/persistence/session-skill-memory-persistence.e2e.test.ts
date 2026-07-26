@@ -34,6 +34,7 @@ describe('workbench run e2e', () => {
           '真实 Workbench 同一会话的多轮 AI run 应共享已学习的 Word 技能，后续 run 不需要重新 learning。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
+        execution: 'live',
         windowMode: 'visible',
         runMode: 'single',
         execute: async (runtime) => {

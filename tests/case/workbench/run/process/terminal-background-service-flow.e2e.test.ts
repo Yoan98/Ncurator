@@ -45,6 +45,7 @@ describe('workbench terminal e2e', () => {
         description: '真实 AI 启动持久终端 HTTP 服务、浏览器验证页面并停止服务。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
+        execution: 'live',
         windowMode: 'visible',
         runMode: 'single',
         execute: async (runtime) => {

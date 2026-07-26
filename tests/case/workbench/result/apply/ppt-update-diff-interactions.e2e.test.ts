@@ -74,6 +74,7 @@ describe('workbench result e2e', () => {
           '真实 AI 更新已有 PPT 后，验证页面增删改移动标记、左右同步缩放拖拽、筛选和文件回撤。',
         fixtures: [],
         serviceMode: 'real',
+        execution: 'live',
         windowMode: 'visible',
         runMode: 'single',
         execute: async (runtime) => {

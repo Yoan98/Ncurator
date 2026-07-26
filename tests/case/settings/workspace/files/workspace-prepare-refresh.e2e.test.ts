@@ -25,6 +25,7 @@ describe('settings workspace e2e', () => {
         description: '点击更新索引后，页面按增量策略执行，并在完成后刷新文件索引状态。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
+        execution: 'exclusive',
         runMode: 'single',
         execute: async (runtime) => {
           const { page } = runtime

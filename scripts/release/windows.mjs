@@ -24,9 +24,11 @@ import { prepareReleaseWorkspace } from './workspace.mjs'
 import { parseReleaseTag } from './tag.mjs'
 import { hasRegressionSelectionArgs, readRegressionSelection } from './regression.mjs'
 import { cleanupLocalTestLogs } from './shared/test-logs.mjs'
+import { createReleaseStageDeadline } from './shared/stage-deadline.mjs'
 
 const execFileAsync = promisify(execFile)
 const ROOT = process.cwd()
+const stageDeadline = createReleaseStageDeadline('Windows release stage')
 const args = process.argv.slice(2)
 const valueAfter = (name) => {
   const index = args.indexOf(name)
@@ -65,13 +67,15 @@ if (candidateRunId && !['test', 'publish'].includes(mode)) {
 
 const run = (command, commandArgs, options = {}) =>
   new Promise((resolve, reject) => {
-    const child = spawn(command, commandArgs, {
-      cwd: ROOT,
-      env: process.env,
-      stdio: 'inherit',
-      shell: process.platform === 'win32' && /\.(cmd|bat)$/iu.test(command),
-      ...options
-    })
+    const child = stageDeadline.track(
+      spawn(command, commandArgs, {
+        cwd: ROOT,
+        env: process.env,
+        stdio: 'inherit',
+        shell: process.platform === 'win32' && /\.(cmd|bat)$/iu.test(command),
+        ...options
+      })
+    )
     child.once('error', reject)
     child.once('exit', (code, signal) => {
       if (code === 0) resolve()

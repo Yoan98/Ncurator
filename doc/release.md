@@ -34,13 +34,12 @@ flowchart TD
 `release:start` 会先执行：
 
 ```bash
-pnpm typecheck
-pnpm test:update:backend
-pnpm test:unit
-pnpm test:ai:non-live
+pnpm typecheck:node  # 与 typecheck:web 并行
+pnpm typecheck:web
+node scripts/test/workflow.mjs --type backend --exclude-group live
 ```
 
-这些是创建 Tag 前的基础检查，不是正式包回归：既有的 typecheck/update 检查、全部 Unit，以及除 `live` 外的全部 AI 测试都必须通过。检查通过后，脚本更新 `package.json`、提交版本号、创建 annotated Tag，并原子推送 `main` 与 Tag。
+这些是创建 Tag 前的基础检查，不是正式包回归：两套 typecheck 并行执行；全部 Unit、update backend 和除 `live` 外的 AI 测试进入统一的 6 worker backend 队列，避免重复执行 update 子集。检查通过后，脚本更新 `package.json`、提交版本号、创建 annotated Tag，并原子推送 `main` 与 Tag。
 
 Windows 随后按本地优先的路线构建候选包；macOS 只创建 Tag，候选包需要在 Apple Silicon Mac 上单独构建。
 
@@ -90,6 +89,8 @@ pnpm release:mac -- --tag mac-vX.Y.Z --test-only --case <caseId>
 ```
 
 macOS arm64 和 x64 两个候选包都必须通过选定的回归范围。
+
+所有发布阶段最多运行 60 分钟；测试 runner 在 55 分钟停止领取新用例并保存部分结果。E2E 总并发为 3，其中 live 并发最多为 2，原生对话框、鼠标和桌面焦点用例独占执行。macOS 两个候选包由同一个 runner 统一调度，共享上述并发上限。
 
 选中的正式包 E2E 全部执行，其中使用真实 AI 或真实服务的 E2E 也不排除。源码 E2E、backend、unit 和独立的 `test:ai*` 测试集只用于开发验证或问题排查，不替代正式包 E2E，也不属于标准发布门。
 
