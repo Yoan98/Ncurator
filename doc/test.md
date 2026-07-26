@@ -90,6 +90,7 @@ tests/
 - `ai-test` 专门覆盖 AI 架构及其工具，全部是 backend；`settings-test` 和 `workbench-test` 专门覆盖对应 PRD 功能点，全部是 E2E；Unit 只补足前述范围未覆盖的 backend 函数、类和底层逻辑。
 - `scripts/test/validate-test-architecture.mjs` 在 runner 执行前校验域边界、Unit 禁止项、计划必填字段、PRD 引用、case/runner 包装和目录映射。
 - `scripts/test/workflow.mjs` 会自动读取仓库根目录的 `.env.local`、`.env`（已存在的 shell 环境变量优先）；可用 `AI_TEST_DISABLE_DOTENV=1` 禁用自动加载。
+- LangSmith tracing 默认关闭；仅在排查时将 `LANGSMITH_TRACING=true`，结束后恢复为 `false`。
 
 ### 3.3 UI E2E 回归规则
 

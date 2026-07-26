@@ -125,4 +125,11 @@ describe('app update publish config', () => {
     expect(architectureValidator).toContain('warmupFiles.length !== 1')
     expect(warmupCase).toContain("execution: 'warmup'")
   })
+
+  it('keeps LangSmith tracing opt-in by default', async () => {
+    const exampleEnv = await readFile(path.resolve('.env-example'), 'utf8')
+
+    expect(exampleEnv).toMatch(/^LANGSMITH_TRACING=false$/mu)
+    expect(exampleEnv).toMatch(/^LANGSMITH_API_KEY=$/mu)
+  })
 })
