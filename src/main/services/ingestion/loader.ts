@@ -23,6 +23,9 @@ export const SUPPORTED_LOCAL_FILE_EXTENSIONS = [
   '.txt'
 ] as const
 
+export const isSpreadsheetFilePath = (filePath: string): boolean =>
+  new Set(['.xlsx', '.xlsm', '.xltx', '.xltm']).has(path.extname(filePath).toLowerCase())
+
 const SUPPORTED_LOCAL_FILE_EXTENSION_SET = new Set<string>(SUPPORTED_LOCAL_FILE_EXTENSIONS)
 const SUPPORTED_TEXT_FILE_EXTENSION_SET = new Set<string>(['.md', '.markdown', '.txt'])
 

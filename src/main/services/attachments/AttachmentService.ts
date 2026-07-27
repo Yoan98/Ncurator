@@ -14,7 +14,18 @@ const SUPPORTED_IMAGE_EXTENSIONS = new Set([
   'tif',
   'tiff'
 ])
-const SUPPORTED_FILE_EXTENSIONS = new Set(['doc', 'docx', 'pptx', 'pdf', 'md', 'json'])
+const SUPPORTED_FILE_EXTENSIONS = new Set([
+  'doc',
+  'docx',
+  'pptx',
+  'pdf',
+  'md',
+  'json',
+  'xlsx',
+  'xlsm',
+  'xltx',
+  'xltm'
+])
 
 const MIME_BY_EXTENSION: Record<string, string> = {
   png: 'image/png',
@@ -30,7 +41,11 @@ const MIME_BY_EXTENSION: Record<string, string> = {
   pdf: 'application/pdf',
   doc: 'application/msword',
   docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  xlsm: 'application/vnd.ms-excel.sheet.macroEnabled.12',
+  xltx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.template',
+  xltm: 'application/vnd.ms-excel.template.macroEnabled.12'
 }
 
 const normalizeExt = (value: string): string =>

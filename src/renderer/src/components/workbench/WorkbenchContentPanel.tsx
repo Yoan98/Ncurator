@@ -69,6 +69,7 @@ const canTogglePreviewMode = (record: AiFileChangeRecord | null): boolean =>
     record.operation !== 'deleted' &&
     (record.capability === 'docx' ||
       record.capability === 'ppt' ||
+      record.capability === 'excel' ||
       record.capability === 'text_file') &&
     record.previewPath &&
     (record.afterSnapshotPath || record.path)

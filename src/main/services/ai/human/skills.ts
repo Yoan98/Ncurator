@@ -77,6 +77,26 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
       '使用受限 HTML 创建或编辑 PPTX 页面和元素，并返回变化页面回读和布局警告。碰到有ppt编辑的需要时，必须要使用该技能',
     toolNames: ['ppt_edit']
   },
+  'excel-read': {
+    skillId: 'excel-read',
+    familyId: 'excel',
+    source: 'external',
+    countsTowardToolBudget: true,
+    title: 'excel-read',
+    description:
+      '读取 Excel 工作簿、工作表、单元格范围、公式和值，并返回结构概览、搜索结果和单元格明细。碰到有 Excel 阅读的需要时，必须要使用该技能',
+    toolNames: ['excel_read_outline', 'excel_search', 'excel_read_cells']
+  },
+  'excel-write': {
+    skillId: 'excel-write',
+    familyId: 'excel',
+    source: 'external',
+    countsTowardToolBudget: true,
+    title: 'excel-write',
+    description:
+      '创建或编辑 Excel 工作簿中的工作表、单元格、公式、格式和结构，并返回写入后的范围、回读值和文件修改记录。碰到有 Excel 编辑的需要时，必须要使用该技能',
+    toolNames: ['excel_edit']
+  },
   'image-recognition': {
     skillId: 'image-recognition',
     familyId: 'image-recognition',
