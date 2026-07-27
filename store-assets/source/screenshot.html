@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>馆长: AI助手 - 商店截图</title>
+    <style>
+      * { box-sizing: border-box; }
+      html, body { width: 1280px; height: 800px; margin: 0; overflow: hidden; }
+      body {
+        color: #1f1f1f;
+        background: #e9e7e2;
+        font-family: "SF Pro Text", "PingFang SC", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      .browser { position: relative; width: 100%; height: 100%; background: #fbfaf7; }
+      .browser-bar {
+        display: flex; height: 68px; align-items: center; gap: 16px; padding: 0 22px;
+        border-bottom: 1px solid #d8d6d1; background: #f1efeb;
+      }
+      .dots { display: flex; gap: 8px; }
+      .dot { width: 12px; height: 12px; border-radius: 50%; }
+      .address {
+        display: flex; height: 38px; flex: 1; align-items: center; border: 1px solid #d8d6d1;
+        border-radius: 8px; background: white; padding: 0 16px; color: #8d8880; font-size: 13px;
+      }
+      .page {
+        position: absolute; inset: 68px 0 0; overflow: hidden;
+        background-image:
+          linear-gradient(to right, rgba(216,214,209,.46) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(216,214,209,.46) 1px, transparent 1px);
+        background-size: 72px 72px;
+      }
+      .copy { position: absolute; left: 78px; top: 118px; width: 550px; }
+      .brand { display: flex; align-items: center; gap: 15px; color: #6f6a62; font-size: 17px; font-weight: 650; }
+      .brand img { width: 54px; height: 54px; }
+      h1 { margin: 44px 0 0; max-width: 520px; font-size: 55px; line-height: 1.08; letter-spacing: 0; }
+      p { margin: 22px 0 0; max-width: 470px; color: #5f5b55; font-size: 19px; line-height: 1.7; }
+      .privacy { display: flex; align-items: center; gap: 10px; margin-top: 34px; color: #727865; font-size: 14px; font-weight: 600; }
+      .privacy i { width: 9px; height: 9px; border-radius: 50%; background: #727865; }
+      .popup-wrap {
+        position: absolute; right: 76px; top: 36px; width: 420px; height: 600px; overflow: hidden;
+        border: 1px solid #cfcbc3; border-radius: 8px;
+        box-shadow: 0 30px 80px rgba(32,28,23,.22), 0 3px 10px rgba(32,28,23,.10);
+      }
+      iframe { display: block; width: 420px; height: 600px; border: 0; }
+    </style>
+  </head>
+  <body>
+    <div class="browser">
+      <div class="browser-bar">
+        <div class="dots">
+          <span class="dot" style="background:#ef6a5b"></span>
+          <span class="dot" style="background:#f0c75e"></span>
+          <span class="dot" style="background:#62b86d"></span>
+        </div>
+        <div class="address">chrome://newtab</div>
+      </div>
+      <div class="page">
+        <div class="copy">
+          <div class="brand">
+            <img src="./logo/ncurator-logo.svg" alt="" />
+            <span>馆长 Ncurator</span>
+          </div>
+          <h1>收藏夹网址<br />一键复制</h1>
+          <p>查看标题、文件夹和网址。复制结果每行一个，方便保存、整理和继续使用。</p>
+          <div class="privacy"><i></i>仅在本地读取，不修改、不上传</div>
+        </div>
+        <div class="popup-wrap">
+          <iframe src="./preview.html" title="馆长插件真实界面"></iframe>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
+

@@ -1,0 +1,20 @@
+{
+  "extensionName": { "message": "Ncurator: AI Assistant" },
+  "extensionDescription": { "message": "The browser companion for Ncurator Desktop. View bookmarks and copy every URL in one click, processed locally." },
+  "browserCompanion": { "message": "Browser companion" },
+  "bookmarkTitle": { "message": "Your bookmarks" },
+  "urlUnit": { "message": "URLs" },
+  "copyAll": { "message": "Copy all URLs" },
+  "copiedCount": { "message": "$1 URLs copied" },
+  "copyFailed": { "message": "Copy failed" },
+  "loading": { "message": "Reading bookmarks" },
+  "loadFailed": { "message": "Unable to read bookmarks" },
+  "retry": { "message": "Try again" },
+  "emptyTitle": { "message": "No bookmark URLs yet" },
+  "emptyDescription": { "message": "Bookmarks you add will appear here." },
+  "privacyNote": { "message": "Read locally. Never modified, saved, or uploaded." },
+  "desktopTitle": { "message": "Ncurator is now a desktop app" },
+  "desktopDescription": { "message": "Faster and more capable on macOS and Windows" },
+  "learnDesktop": { "message": "Explore desktop" }
+}
+

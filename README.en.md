@@ -1,28 +1,31 @@
-# Ncurator
+# Ncurator: AI Assistant
 
 [中文](./README.md) · [Official Website](https://www.ncurator.com/en)
 
-## Your AI Work Partner
+A lightweight browser companion for Ncurator Desktop. It displays browser bookmarks and copies every URL in one click, one URL per line.
 
-Ncurator is a desktop AI work partner.
+## Privacy
 
-Tell it what you need, and it can use your local files, web resources, and personal knowledge base to find information, organize supporting materials, and help complete your work.
+Bookmark data is processed locally in the browser. The extension never modifies, stores, or uploads bookmarks and contains no analytics or tracking code.
 
-Ncurator is useful for preparing weekly reports, drafting proposals, researching information, working with documents, and handling everyday research tasks.
+## Development
 
-## Key Features
+```bash
+npm install
+npm run dev
+```
 
-- **Complete tasks independently**: Read materials, organize information, and deliver results based on your instructions.
-- **Local knowledge base**: Use your own files and materials to provide more accurate and relevant answers.
-- **Document handling**: Read, organize, and edit DOCX documents.
-- **Browser use**: Visit websites and collect the information you need.
-- **Web search**: Search, filter, and organize online information.
-- **Lower cost**: The software is free. You only pay for the AI services you choose to use.
+Load `.output/chrome-mv3` as an unpacked extension in Chrome. For Edge, run `npm run dev:edge` and load `.output/edge-mv3`.
 
-## Supported Platforms
+## Verify and build
 
-Ncurator supports macOS and Windows.
+```bash
+npm run typecheck
+npm test
+npm run build
+npm run build:edge
+npm run zip
+npm run zip:edge
+```
 
-## Learn More
-
-Visit the official website: [https://www.ncurator.com/en](https://www.ncurator.com/en)
+Store copy and the release checklist are in [`docs`](./docs). Store artwork is in [`store-assets`](./store-assets).

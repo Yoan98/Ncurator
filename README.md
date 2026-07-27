@@ -1,32 +1,31 @@
-# 馆长 Ncurator
+# 馆长: AI助手
 
 [English](./README.en.md) · [官方网站](https://www.ncurator.com/zh)
 
-## 你的 AI 工作伙伴
+Ncurator 桌面端的轻量浏览器配套工具。它读取并展示浏览器收藏夹，支持一键复制全部网址，每行一个。
 
-馆长（Ncurator）是一款桌面 AI 应用。
+## 隐私
 
-你只需要告诉它要做什么，它会结合本地文件、网页资料和个人知识库，帮你查找信息、整理依据并完成工作。
+收藏夹数据只在浏览器本地处理。插件不会修改、保存或上传收藏夹，也不包含分析和跟踪代码。
 
-馆长适合用来整理周报、编写方案、查找资料、处理文档，以及完成日常研究工作。
+## 开发
 
-## 主要功能
+```bash
+npm install
+npm run dev
+```
 
-- **自主完成任务**：根据你的要求读取资料、整理内容并输出结果。
-- **本地知识库**：利用你的文件和资料，让回答更准确、更贴近实际工作。
-- **文档处理**：阅读、整理和修改 DOCX 文档。
-- **浏览器使用**：访问网页并获取所需信息。
-- **网页搜索**：搜索、筛选和整理网络资料。
-- **更低的使用成本**：软件免费，只需承担自己使用的 AI 服务费用。
+Chrome 开发模式加载 `.output/chrome-mv3`。Edge 开发模式使用 `npm run dev:edge`，加载 `.output/edge-mv3`。
 
-## 支持平台
+## 验证与构建
 
-macOS 和 Windows。
+```bash
+npm run typecheck
+npm test
+npm run build
+npm run build:edge
+npm run zip
+npm run zip:edge
+```
 
-## 了解更多
-
-访问官方网站：[https://www.ncurator.com/zh](https://www.ncurator.com/zh)
-
-## 友链
-
-- [LinuxDo 社区](https://linux.do/)
+商店文案和发布检查表位于 [`docs`](./docs)，宣传资源位于 [`store-assets`](./store-assets)。

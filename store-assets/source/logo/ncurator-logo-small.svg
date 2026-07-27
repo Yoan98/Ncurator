@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="badge" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#23261f"/>
+      <stop offset="1" stop-color="#0c0e0b"/>
+    </linearGradient>
+  </defs>
+  <circle cx="512" cy="548" r="368" fill="url(#badge)"/>
+  <path d="M308 420 C376 310 648 310 716 420 L688 544 C604 590 420 590 336 544 Z" fill="#f2e7d0"/>
+  <ellipse cx="500" cy="580" rx="338" ry="86" fill="#f2e7d0" transform="rotate(-4 500 580)"/>
+  <path d="M360 692 C400 848 624 848 664 692" fill="none" stroke="#f2e7d0" stroke-width="76" stroke-linecap="round"/>
+  <path d="M290 906 C404 776 620 776 734 906" fill="none" stroke="#f2e7d0" stroke-width="78" stroke-linecap="round"/>
+  <path d="M420 852 L512 792 L604 852 L512 926 Z" fill="#a77b4b"/>
+  <circle cx="720" cy="284" r="30" fill="#a77b4b"/>
+</svg>
