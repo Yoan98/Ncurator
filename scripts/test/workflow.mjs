@@ -235,6 +235,11 @@ const resolveScopeDir = (input) => {
 const isE2EFile = (filePath) => path.basename(filePath).endsWith('.e2e.test.ts')
 const isLiveBackendFile = (filePath) =>
   filePath.includes(`${path.sep}live${path.sep}`) && !isE2EFile(filePath)
+const requiresBackendPptBrowser = async (filePath) => {
+  if (isE2EFile(filePath) || isLiveBackendFile(filePath)) return false
+  const source = await readFile(filePath, 'utf8')
+  return /\bppt_edit\b/u.test(source) && /\bcreate_presentation\b/u.test(source)
+}
 const toCaseId = (filePath) => path.basename(filePath).replace(/\.e2e\.test\.ts$|\.test\.ts$/u, '')
 
 const readE2EExecutionClass = async (filePath) => {
@@ -550,10 +555,16 @@ const runVitest = async (input) => {
   )
 }
 
-const partitionBackendTestFiles = (testFiles) => ({
-  nonLiveFiles: testFiles.filter((filePath) => !isLiveBackendFile(filePath)),
-  liveFiles: testFiles.filter((filePath) => isLiveBackendFile(filePath))
-})
+const partitionBackendTestFiles = async (testFiles) => {
+  const pptBrowserFlags = await Promise.all(testFiles.map(requiresBackendPptBrowser))
+  return {
+    nonLiveFiles: testFiles.filter(
+      (filePath, index) => !isLiveBackendFile(filePath) && !pptBrowserFlags[index]
+    ),
+    pptBrowserFiles: testFiles.filter((_filePath, index) => pptBrowserFlags[index]),
+    liveFiles: testFiles.filter((filePath) => isLiveBackendFile(filePath))
+  }
+}
 
 const buildE2EApp = (env) => {
   return runCommandWithFallback({
@@ -846,7 +857,8 @@ const runTypeWorkflow = async (input) => {
   const e2eResults = []
   for (let iteration = 0; iteration < input.runs; iteration += 1) {
     if (input.type === 'backend') {
-      const { nonLiveFiles, liveFiles } = partitionBackendTestFiles(testFiles)
+      const { nonLiveFiles, pptBrowserFiles, liveFiles } =
+        await partitionBackendTestFiles(testFiles)
       const groups = [
         {
           configPath: 'vitest.backend.config.mts',
@@ -854,6 +866,15 @@ const runTypeWorkflow = async (input) => {
           env: runtimeEnv,
           testNamePattern,
           workers: BACKEND_WORKERS,
+          retries: 0,
+          deadlineAt: input.deadlineAt
+        },
+        {
+          configPath: 'vitest.backend.config.mts',
+          testFiles: pptBrowserFiles,
+          env: runtimeEnv,
+          testNamePattern,
+          workers: 1,
           retries: 0,
           deadlineAt: input.deadlineAt
         },
