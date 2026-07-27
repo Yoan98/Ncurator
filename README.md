@@ -1,31 +1,37 @@
 # 馆长: AI助手
 
-[English](./README.en.md) · [官方网站](https://www.ncurator.com/zh)
+[English](./README.en.md) · [官方网站](https://www.ncurator.com/zh) · [隐私政策](https://www.ncurator.com/zh/privacy/browser-extension)
 
-Ncurator 桌面端的轻量浏览器配套工具。它读取并展示浏览器收藏夹，支持一键复制全部网址，每行一个。
+馆长是你的 AI 工作伙伴。你安排任务，让馆长帮你查资料、使用本地知识库、整理信息和编写文档。
 
-## 隐私
+完整能力已升级至 macOS 和 Windows 桌面端。
 
-收藏夹数据只在浏览器本地处理。插件不会修改、保存或上传收藏夹，也不包含分析和跟踪代码。
+## 浏览器插件
 
-## 开发
+浏览器插件提供一个简单、专注的收藏夹工具：
+
+- 查看收藏夹标题、目录和网址
+- 一键复制全部收藏网址，每行一个
+- 支持多层收藏夹目录
+- 保持浏览器中的原始排列顺序
+- 所有收藏夹数据只在浏览器本地处理
+
+插件只申请 `bookmarks` 权限，不会创建、修改或删除收藏夹，也不包含广告、分析或跟踪代码。
+
+## 本地开发
 
 ```bash
 npm install
 npm run dev
 ```
 
-Chrome 开发模式加载 `.output/chrome-mv3`。Edge 开发模式使用 `npm run dev:edge`，加载 `.output/edge-mv3`。
+在 Chrome 扩展程序页面加载 `.output/chrome-mv3`。Edge 使用 `npm run dev:edge`，加载 `.output/edge-mv3`。
 
 ## 验证与构建
 
 ```bash
-npm run typecheck
-npm test
-npm run build
-npm run build:edge
-npm run zip
-npm run zip:edge
+npm run check
+npm run zip:stores
 ```
 
-商店文案和发布检查表位于 [`docs`](./docs)，宣传资源位于 [`store-assets`](./store-assets)。
+商店文案和宣传资源位于 [`store-assets`](./store-assets)。商店发布凭据保存在本地 `.env`，不会提交到 Git。

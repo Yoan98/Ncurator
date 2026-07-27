@@ -1,14 +1,24 @@
 # Ncurator: AI Assistant
 
-[中文](./README.md) · [Official Website](https://www.ncurator.com/en)
+[中文](./README.md) · [Official Website](https://www.ncurator.com/en) · [Privacy Policy](https://www.ncurator.com/en/privacy/browser-extension)
 
-A lightweight browser companion for Ncurator Desktop. It displays browser bookmarks and copies every URL in one click, one URL per line.
+Ncurator is your AI work partner. Give it a task and let it research, use your local knowledge base, organize information, and create documents.
 
-## Privacy
+The complete experience is available on macOS and Windows.
 
-Bookmark data is processed locally in the browser. The extension never modifies, stores, or uploads bookmarks and contains no analytics or tracking code.
+## Browser extension
 
-## Development
+The browser extension provides a focused bookmark tool:
+
+- View bookmark titles, folders, and URLs
+- Copy every bookmarked URL in one click, one URL per line
+- Support nested bookmark folders
+- Preserve the browser's original bookmark order
+- Process all bookmark data locally in the browser
+
+The extension only requests the `bookmarks` permission. It never creates, modifies, or deletes bookmarks and contains no advertising, analytics, or tracking code.
+
+## Local development
 
 ```bash
 npm install
@@ -20,12 +30,8 @@ Load `.output/chrome-mv3` as an unpacked extension in Chrome. For Edge, run `npm
 ## Verify and build
 
 ```bash
-npm run typecheck
-npm test
-npm run build
-npm run build:edge
-npm run zip
-npm run zip:edge
+npm run check
+npm run zip:stores
 ```
 
-Store copy and the release checklist are in [`docs`](./docs). Store artwork is in [`store-assets`](./store-assets).
+Store copy and artwork are in [`store-assets`](./store-assets). Store credentials are kept in the local `.env` file and are never committed to Git.

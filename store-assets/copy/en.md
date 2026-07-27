@@ -6,19 +6,19 @@ Ncurator: AI Assistant
 
 ## Short description
 
-The browser companion for Ncurator Desktop. View bookmarks and copy every URL in one click, processed locally.
+Ncurator is your AI work partner for research, knowledge, and documents. The extension lets you view bookmarks and copy every URL in one click.
 
 ## Detailed description
 
-Ncurator: AI Assistant is the lightweight browser companion for Ncurator Desktop.
+Ncurator is your AI work partner. Give it a task and let it research, use your local knowledge base, organize information, and create documents.
 
-This version lets you view browser bookmarks and copy every bookmarked URL to the clipboard in one click. Each URL is placed on its own line, ready to save, organize, or use in another workflow.
+The complete Ncurator experience is available on macOS and Windows. In your browser, Ncurator provides a simple, focused bookmark tool: view your browser bookmarks and copy every URL to the clipboard in one click. Each URL is placed on its own line, ready to save, organize, or continue working with in Ncurator.
 
-Key features:
+Browser extension features:
 
 - View bookmark titles, folder paths, and URLs
 - Copy every bookmarked URL in one click
-- Preserve the original browser bookmark order
+- Preserve the browser's original bookmark order
 - Support nested bookmark folders
 - Process all bookmark data locally in the browser
 
@@ -26,7 +26,7 @@ Privacy:
 
 The extension only reads bookmarks. It never creates, changes, or deletes bookmark content. Bookmark titles, folders, and URLs are never sent to Ncurator or any third-party server. The extension contains no advertising, analytics, or tracking code.
 
-The complete Ncurator AI work partner is now available as a desktop app for macOS and Windows. Use the website link inside the extension to learn more.
+Visit the official website to download Ncurator for desktop and access the complete AI work partner experience.
 
 ## Single purpose
 
@@ -46,7 +46,7 @@ The extension accesses bookmark data locally but does not collect, store, upload
 
 ## Certification notes
 
-This release is a new lightweight version of the existing Ncurator browser extension. The previous browser-based AI features have moved to the desktop app. The current extension displays bookmark URLs and copies them to the clipboard. This release removes all unnecessary website access, script injection, and side-panel permissions, retaining only the bookmarks permission required for its core function. No login or test account is required.
+This release is a new lightweight version of the existing browser extension. The previous browser-based AI features have moved to the desktop app. The current extension only displays bookmark URLs and copies them to the clipboard. This release removes unnecessary website access, script injection, and side-panel permissions, retaining only the bookmarks permission required for its core function. No login or test account is required.
 
 Test steps:
 
@@ -54,4 +54,3 @@ Test steps:
 2. The popup displays the number and list of bookmarked URLs.
 3. Click "Copy all URLs."
 4. Paste the clipboard into a text editor. Each URL should appear on its own line.
-

@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>馆长 - 浏览器收藏夹</title>
+    <style>
+      * { box-sizing: border-box; }
+      html, body { width: 1280px; height: 800px; margin: 0; overflow: hidden; }
+      body {
+        position: relative; color: #1d201c; background: #eef0eb;
+        font-family: "SF Pro Text", "PingFang SC", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      .backdrop {
+        position: absolute; left: 500px; top: 80px; width: 760px; height: 640px; overflow: hidden;
+        border: 1px solid #d7dad4; border-radius: 8px; background: white;
+      }
+      .backdrop img { width: 1024px; height: 640px; object-fit: cover; object-position: left center; opacity: .72; }
+      .veil { position: absolute; inset: 0; background: rgba(241,243,238,.68); }
+      .copy { position: absolute; z-index: 2; left: 62px; top: 66px; width: 445px; }
+      .brand { display: flex; align-items: center; gap: 14px; color: #5d635b; font-size: 18px; font-weight: 650; }
+      .brand img { width: 58px; height: 58px; }
+      h1 { margin: 72px 0 0; font-size: 55px; line-height: 1.12; letter-spacing: 0; }
+      p { margin: 24px 0 0; color: #565c54; font-size: 19px; line-height: 1.7; }
+      .privacy { margin-top: 35px; color: #39705d; font-size: 14px; font-weight: 700; }
+      .popup {
+        position: absolute; z-index: 3; right: 94px; top: 58px; width: 420px; height: 684px; overflow: hidden;
+        border: 1px solid #c9cec6; border-radius: 8px; background: #fbfaf7;
+        box-shadow: 0 30px 80px rgba(34,42,35,.19);
+      }
+      iframe { display: block; width: 420px; height: 684px; border: 0; }
+    </style>
+  </head>
+  <body>
+    <div class="backdrop"><img src="./media/desktop-task.png" alt="" /><div class="veil"></div></div>
+    <div class="copy">
+      <div class="brand"><img src="./logo/ncurator-logo.svg" alt="" />馆长</div>
+      <h1>收藏夹网址<br />一键复制</h1>
+      <p>查看收藏夹标题、目录和网址。复制结果每行一个，方便交给馆长继续整理和处理。</p>
+      <div class="privacy">仅在本地读取 · 不修改 · 不上传</div>
+    </div>
+    <div class="popup"><iframe src="./preview.html" title="馆长浏览器插件真实界面"></iframe></div>
+  </body>
+</html>

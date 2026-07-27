@@ -3,37 +3,45 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>馆长: AI助手 - 大宣传图</title>
+    <title>馆长 - 大宣传图</title>
     <style>
       * { box-sizing: border-box; }
       html, body { width: 1400px; height: 560px; margin: 0; overflow: hidden; }
       body {
-        position: relative; color: #f2e7d0; background: #191c17;
+        position: relative;
+        color: #f8f7f3;
+        background: #171a16;
         font-family: "SF Pro Text", "PingFang SC", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       }
-      .grid { position: absolute; inset: 0; opacity: .16; background-image: linear-gradient(to right, #727865 1px, transparent 1px), linear-gradient(to bottom, #727865 1px, transparent 1px); background-size: 70px 70px; }
-      .copy { position: absolute; left: 92px; top: 72px; width: 650px; }
-      .brand { display: flex; align-items: center; gap: 18px; color: rgba(242,231,208,.72); font-size: 20px; font-weight: 650; }
-      .brand img { width: 76px; height: 76px; }
-      h1 { margin: 38px 0 0; font-size: 60px; line-height: 1.08; letter-spacing: 0; }
-      p { margin: 22px 0 0; max-width: 530px; color: rgba(255,255,255,.62); font-size: 18px; line-height: 1.7; }
-      .privacy { margin-top: 30px; color: #b9bea9; font-size: 14px; font-weight: 650; }
-      .interface {
-        position: absolute; right: 80px; top: 63px; width: 454px; height: 434px; overflow: hidden;
-        border: 1px solid rgba(242,231,208,.24); border-radius: 8px; background: #fbfaf7;
-        box-shadow: 0 30px 80px rgba(0,0,0,.34);
+      .copy { position: absolute; z-index: 2; left: 76px; top: 58px; width: 520px; }
+      .brand { display: flex; align-items: center; gap: 15px; color: #c6c9c1; font-size: 18px; font-weight: 650; }
+      .brand img { width: 62px; height: 62px; }
+      h1 { margin: 34px 0 0; font-size: 55px; line-height: 1.1; letter-spacing: 0; }
+      p { margin: 20px 0 0; color: #bdc1b8; font-size: 20px; line-height: 1.6; }
+      .abilities { margin-top: 29px; color: #9bbbab; font-size: 15px; font-weight: 650; }
+      .visual {
+        position: absolute; right: 0; top: 0; width: 770px; height: 560px; overflow: hidden;
+        border-left: 1px solid #353a33; background: #fbfaf7;
       }
-      iframe { display: block; width: 420px; height: 600px; border: 0; transform: scale(1.08); transform-origin: top left; }
+      .visual img { width: 896px; height: 560px; object-fit: cover; object-position: 25% center; }
+      .browser-note {
+        position: absolute; right: 40px; bottom: 34px; display: flex; align-items: center; gap: 10px;
+        padding: 13px 17px; border: 1px solid #d6d8d2; border-radius: 7px; color: #30332e;
+        background: rgba(251,250,247,.96); font-size: 14px; font-weight: 650;
+      }
+      .browser-note i { width: 8px; height: 8px; border-radius: 50%; background: #4f806d; }
     </style>
   </head>
   <body>
-    <div class="grid"></div>
     <div class="copy">
-      <div class="brand"><img src="./logo/ncurator-logo.svg" alt="" />馆长: AI助手</div>
-      <h1>收藏夹网址，一键复制</h1>
-      <p>Ncurator 桌面端的轻量浏览器配套工具。查看收藏夹，把全部网址按每行一个复制到剪贴板。</p>
-      <div class="privacy">仅在本地读取，不修改、不保存、不上传</div>
+      <div class="brand"><img src="./logo/ncurator-logo.svg" alt="" />馆长</div>
+      <h1>你的 AI<br />工作伙伴</h1>
+      <p>你安排任务，让馆长帮你完成。</p>
+      <div class="abilities">查资料 · 用知识库 · 写文档</div>
     </div>
-    <div class="interface"><iframe src="./preview.html" title="馆长插件真实界面"></iframe></div>
+    <div class="visual">
+      <img src="./media/desktop-task.png" alt="馆长桌面端执行任务" />
+      <div class="browser-note"><i></i>浏览器收藏夹，一键复制网址</div>
+    </div>
   </body>
 </html>

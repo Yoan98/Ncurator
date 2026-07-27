@@ -1,7 +1,7 @@
 {
   "extensionName": { "message": "馆长: AI助手" },
-  "extensionDescription": { "message": "Ncurator 桌面端的浏览器配套工具，查看收藏夹并一键复制全部网址，数据仅在本地处理。" },
-  "browserCompanion": { "message": "浏览器配套工具" },
+  "extensionDescription": { "message": "馆长是你的 AI 工作伙伴。浏览器插件支持查看收藏夹并一键复制全部网址。" },
+  "browserCompanion": { "message": "浏览器工具" },
   "bookmarkTitle": { "message": "你的收藏夹" },
   "urlUnit": { "message": "个网址" },
   "copyAll": { "message": "复制全部网址" },
@@ -13,8 +13,7 @@
   "emptyTitle": { "message": "还没有收藏网址" },
   "emptyDescription": { "message": "添加收藏夹后，它们会显示在这里。" },
   "privacyNote": { "message": "仅在本地读取，不修改、不保存、不上传。" },
-  "desktopTitle": { "message": "馆长已全面升级为桌面端" },
-  "desktopDescription": { "message": "更快、更完整，支持 macOS 和 Windows" },
+  "desktopTitle": { "message": "更多能力，尽在馆长桌面端" },
+  "desktopDescription": { "message": "查资料、用知识库、写文档" },
   "learnDesktop": { "message": "了解桌面版" }
 }
-
