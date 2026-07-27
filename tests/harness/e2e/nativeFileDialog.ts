@@ -10,20 +10,72 @@ const MACOS_FILE_SCRIPT = `
 on run argv
   set targetPath to item 1 of argv
   set targetPid to (item 2 of argv) as integer
+  set beforeFrontmost to ""
+  set afterFrontmost to ""
+  set targetProcessName to ""
+  set targetProcessCount to 0
+  set keyStatus to "not-run"
+  set clickedConfirmButton to false
+
   tell application "System Events"
-    set targetProcesses to application processes whose unix id is targetPid
-    if (count of targetProcesses) is 0 then error "Electron process not found"
-    set targetProcess to item 1 of targetProcesses
-    set frontmost of targetProcess to true
-    delay 0.2
-    key code 5 using {command down, shift down}
-    delay 0.2
-    set the clipboard to targetPath
-    key code 9 using {command down}
-    key code 36
-    delay 0.8
-    key code 36
+    set beforeFrontmost to name of first application process whose frontmost is true
+    repeat 12 times
+      set targetProcesses to application processes whose unix id is targetPid
+      set targetProcessCount to count of targetProcesses
+      if targetProcessCount is greater than 0 then
+        set targetProcess to item 1 of targetProcesses
+        set targetProcessName to name of targetProcess
+        set frontmost of targetProcess to true
+        try
+          perform action "AXRaise" of window 1 of targetProcess
+        end try
+        delay 0.05
+        if (name of first application process whose frontmost is true) is targetProcessName then
+          exit repeat
+        end if
+      end if
+      delay 0.05
+    end repeat
+    delay 0.1
+    set afterFrontmost to name of first application process whose frontmost is true
   end tell
+
+  if targetProcessName is not "" and afterFrontmost is targetProcessName then
+    tell application "System Events"
+      key code 5 using {command down, shift down}
+      delay 0.3
+      set the clipboard to targetPath
+      key code 9 using {command down}
+      delay 0.15
+      key code 36
+      set keyStatus to "path-sent"
+      delay 0.8
+
+      set candidateButtons to {"选择附件", "打开", "选择", "Select Attachments", "Open", "Choose"}
+      repeat with candidateButton in candidateButtons
+        try
+          click button (candidateButton as text) of sheet 1 of window 1 of targetProcess
+          set keyStatus to "clicked-" & (candidateButton as text)
+          set clickedConfirmButton to true
+          exit repeat
+        end try
+        try
+          click button (candidateButton as text) of window 1 of targetProcess
+          set keyStatus to "clicked-" & (candidateButton as text)
+          set clickedConfirmButton to true
+          exit repeat
+        end try
+      end repeat
+      if clickedConfirmButton is false then
+        key code 36
+        set keyStatus to "return-fallback"
+      end if
+    end tell
+  else
+    set keyStatus to "skipped-not-frontmost"
+  end if
+
+  return "frontmost-before=" & beforeFrontmost & "; frontmost-after=" & afterFrontmost & "; target-process-name=" & targetProcessName & "; target-process-count=" & targetProcessCount & "; key-status=" & keyStatus
 end run
 `
 

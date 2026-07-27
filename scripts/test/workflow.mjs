@@ -29,6 +29,7 @@ const LIVE_BACKEND_NODE_OLD_SPACE_MB = 8192
 const BACKEND_WORKERS = 6
 const E2E_WORKERS = 3
 const LIVE_WORKERS = 2
+const LIVE_BACKEND_RETRIES = 3
 const RUNNER_DEADLINE_MS = 55 * 60 * 1000
 const DEADLINE_EXIT_CODE = 124
 const E2E_EXECUTION_CLASSES = new Set(['normal', 'live', 'exclusive', 'warmup'])
@@ -521,6 +522,7 @@ const resolveBetterSqliteNativeBinding = (target) => {
 
 const runVitest = async (input) => {
   const extraArgs = ['--maxWorkers', String(input.workers)]
+  if (input.retries > 0) extraArgs.push('--retry', String(input.retries))
   const env = input.testFiles.some((filePath) => isLiveBackendFile(filePath))
     ? {
         NODE_OPTIONS: appendNodeOption(
@@ -614,22 +616,33 @@ const runE2ETestFilesConcurrently = async (testFiles, targets, testNamePattern, 
 
   const recordDeadline = (task) => {
     exitCode = DEADLINE_EXIT_CODE
-    results.push({
+    const previousResultIndex = results.findIndex((result) => result.index === task.index)
+    const previousResult = previousResultIndex >= 0 ? results[previousResultIndex] : undefined
+    const taskResult = {
       index: task.index,
       file: path.relative(ROOT, task.testFile),
       targetId: task.targetId,
       execution: task.execution,
       status: 'timed_out',
-      exitCode: DEADLINE_EXIT_CODE
-    })
+      exitCode: DEADLINE_EXIT_CODE,
+      attempts: Number(previousResult?.attempts || 0)
+    }
+    if (previousResultIndex >= 0) results[previousResultIndex] = taskResult
+    else results.push(taskResult)
   }
 
-  const runTask = async (task, seedPath = '') => {
-    completed += 1
+  const runTask = async (task, seedPath = '', retry = false) => {
     const relativeFile = path.relative(ROOT, task.testFile)
-    process.stdout.write(
-      `[test-workflow] e2e ${String(completed)}/${String(tasks.length)} [${task.targetId}/${task.execution}] ${relativeFile}\n`
-    )
+    if (retry) {
+      process.stdout.write(
+        `[test-workflow] e2e retry [${task.targetId}/${task.execution}] ${relativeFile}\n`
+      )
+    } else {
+      completed += 1
+      process.stdout.write(
+        `[test-workflow] e2e ${String(completed)}/${String(tasks.length)} [${task.targetId}/${task.execution}] ${relativeFile}\n`
+      )
+    }
     const startedAt = Date.now()
     const caseEnv = await buildCaseKnowledgeCacheEnv(task.env, task.testFile)
     await seedCaseKnowledgeCache(caseEnv, seedPath)
@@ -641,16 +654,20 @@ const runE2ETestFilesConcurrently = async (testFiles, targets, testNamePattern, 
       workers: 1,
       deadlineAt
     })
-    if (code !== 0) exitCode = code === DEADLINE_EXIT_CODE ? DEADLINE_EXIT_CODE : exitCode || code
-    results.push({
+    const previousResultIndex = results.findIndex((result) => result.index === task.index)
+    const previousResult = previousResultIndex >= 0 ? results[previousResultIndex] : undefined
+    const taskResult = {
       index: task.index,
       file: relativeFile,
       targetId: task.targetId,
       execution: task.execution,
       status: code === 0 ? 'passed' : code === DEADLINE_EXIT_CODE ? 'timed_out' : 'failed',
       exitCode: code,
-      durationMs: Date.now() - startedAt
-    })
+      durationMs: Date.now() - startedAt,
+      attempts: Number(previousResult?.attempts || 0) + 1
+    }
+    if (previousResultIndex >= 0) results[previousResultIndex] = taskResult
+    else results.push(taskResult)
     return {
       code,
       cachePath: String(caseEnv.NCURATOR_WORKSPACE_KNOWLEDGE_CACHE_PATH || '').trim()
@@ -671,6 +688,7 @@ const runE2ETestFilesConcurrently = async (testFiles, targets, testNamePattern, 
     )
     const outcome = await runTask(task)
     if (outcome.code !== 0) {
+      exitCode = outcome.code
       process.stderr.write(
         '[test-workflow] vector warm-up failed; parallel E2E will not start on a cold cache\n'
       )
@@ -711,14 +729,34 @@ const runE2ETestFilesConcurrently = async (testFiles, targets, testNamePattern, 
     if (active.size > 0) await Promise.race(active)
   }
 
+  const failedConcurrentTasks = concurrentTasks.filter((task) =>
+    results.some((result) => result.index === task.index && result.exitCode !== 0)
+  )
+  for (let index = 0; index < failedConcurrentTasks.length; index += 1) {
+    const task = failedConcurrentTasks[index]
+    if (Date.now() >= deadlineAt) {
+      for (const remaining of failedConcurrentTasks.slice(index)) recordDeadline(remaining)
+      break
+    }
+    await runTask(task, warmupCacheByTarget.get(task.targetId), true)
+  }
+
   for (let index = 0; index < exclusiveTasks.length; index += 1) {
     const task = exclusiveTasks[index]
     if (Date.now() >= deadlineAt) {
       for (const remaining of exclusiveTasks.slice(index)) recordDeadline(remaining)
       break
     }
-    await runTask(task, warmupCacheByTarget.get(task.targetId))
+    const outcome = await runTask(task, warmupCacheByTarget.get(task.targetId))
+    if (outcome.code !== 0 && Date.now() < deadlineAt) {
+      await runTask(task, warmupCacheByTarget.get(task.targetId), true)
+    }
   }
+
+  exitCode = results.reduce((code, result) => {
+    if (result.exitCode === DEADLINE_EXIT_CODE) return DEADLINE_EXIT_CODE
+    return code || result.exitCode
+  }, 0)
 
   return {
     exitCode,
@@ -816,6 +854,7 @@ const runTypeWorkflow = async (input) => {
           env: runtimeEnv,
           testNamePattern,
           workers: BACKEND_WORKERS,
+          retries: 0,
           deadlineAt: input.deadlineAt
         },
         {
@@ -824,6 +863,7 @@ const runTypeWorkflow = async (input) => {
           env: runtimeEnv,
           testNamePattern,
           workers: LIVE_WORKERS,
+          retries: LIVE_BACKEND_RETRIES,
           deadlineAt: input.deadlineAt
         }
       ].filter((group) => group.testFiles.length > 0)

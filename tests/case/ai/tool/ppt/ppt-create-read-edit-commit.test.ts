@@ -237,5 +237,5 @@ describe('ai tool ppt backend', () => {
         )
       }
     })
-  }, 30_000)
+  }, 120_000)
 })

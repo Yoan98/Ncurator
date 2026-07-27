@@ -60,8 +60,14 @@ describe('workbench run e2e', () => {
             <button id="complete-manual" type="button">用户确认</button>
             <output id="manual-result">WAITING_FOR_USER</output>
             <script>
+              const completionText = '${COMPLETION_TEXT}'
+              const result = document.querySelector('#manual-result')
+              if (localStorage.getItem('ncurator-user-takeover-result') === completionText) {
+                result.textContent = completionText
+              }
               document.querySelector('#complete-manual').addEventListener('click', () => {
-                document.querySelector('#manual-result').textContent = '${COMPLETION_TEXT}'
+                localStorage.setItem('ncurator-user-takeover-result', completionText)
+                result.textContent = completionText
               })
             </script>`)
           runtime.registerResource({

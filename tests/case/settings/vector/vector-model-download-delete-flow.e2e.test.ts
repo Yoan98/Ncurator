@@ -30,7 +30,9 @@ describe('settings vector real download e2e', () => {
           serviceMode: 'real',
           extraEnv: {
             NCURATOR_MODELS_PATH: modelsPath,
-            ...(process.platform === 'win32' ? { USERPROFILE: isolatedProfilePath } : {})
+            ...(process.platform === 'win32'
+              ? { USERPROFILE: isolatedProfilePath }
+              : { HOME: isolatedProfilePath })
           },
           windowMode: 'visible',
           runMode: 'single',
