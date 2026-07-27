@@ -135,6 +135,38 @@ describe('retained release candidate', () => {
     expect(rejected.bundlePath).toBe(prepared.bundlePath)
   })
 
+  it('allows an explicitly justified E2E skip to become publishable', async () => {
+    const bundlePath = await createBundle()
+    await materializeReleaseCandidate({ bundlePath })
+
+    await expect(
+      recordCandidateE2E({
+        tag: 'windows-v0.1.21',
+        platform: 'windows-x64',
+        status: 'skipped'
+      })
+    ).rejects.toThrow('requires a reason')
+
+    await recordCandidateE2E({
+      tag: 'windows-v0.1.21',
+      platform: 'windows-x64',
+      status: 'skipped',
+      reason: 'compatibility artifact is published without package E2E',
+      selection: { mode: 'disabled-by-default' }
+    })
+
+    const candidate = await assertCandidatePublishable({
+      tag: 'windows-v0.1.21',
+      platform: 'windows-x64',
+      commit: '0123456789012345678901234567890123456789'
+    })
+    expect(candidate.state.e2e).toMatchObject({
+      status: 'skipped',
+      reason: 'compatibility artifact is published without package E2E',
+      selection: { mode: 'disabled-by-default' }
+    })
+  })
+
   it('keeps the current and newer candidates while removing superseded versions', async () => {
     const candidateRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'ncurator-candidates-'))
     tempRoots.push(candidateRoot)

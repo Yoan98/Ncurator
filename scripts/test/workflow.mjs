@@ -28,6 +28,7 @@ const BETTER_SQLITE_NATIVE_BINDING_ENV = 'NCURATOR_BETTER_SQLITE3_NATIVE_BINDING
 const LIVE_BACKEND_NODE_OLD_SPACE_MB = 8192
 const BACKEND_WORKERS = 6
 const E2E_WORKERS = 3
+const E2E_WORKERS_BY_TARGET = new Map([['macos-x64', 1]])
 const LIVE_WORKERS = 2
 const LIVE_BACKEND_RETRIES = 3
 const RUNNER_DEADLINE_MS = 55 * 60 * 1000
@@ -88,11 +89,12 @@ const parseArgs = (argv) => {
     suite: '',
     groups: [],
     excludeGroups: [],
-    caseId: '',
+    caseIds: [],
     runs: 1,
     target: 'source',
     bundles: [],
     results: [],
+    resumePassed: false,
     freshKnowledgeCache: false,
     reuseKnowledgeCache: false
   }
@@ -126,7 +128,7 @@ const parseArgs = (argv) => {
       continue
     }
     if (current === '--case' && next) {
-      parsed.caseId = next
+      parsed.caseIds.push(next)
       index += 1
       continue
     }
@@ -150,6 +152,7 @@ const parseArgs = (argv) => {
       index += 1
       continue
     }
+    if (current === '--resume-passed') parsed.resumePassed = true
     if (current === '--fresh-knowledge-cache') parsed.freshKnowledgeCache = true
     if (current === '--reuse-knowledge-cache') parsed.reuseKnowledgeCache = true
   }
@@ -288,7 +291,9 @@ const seedCaseKnowledgeCache = async (caseEnv, seedPath) => {
 
 const resolveWarmupSeedPath = (task, warmupCacheByTarget) => {
   const explicitSeedPath = String(
-    task.env.NCURATOR_E2E_CROSS_ARCH_WARMUP_SEED_PATH || ''
+    task.env.NCURATOR_E2E_CROSS_ARCH_WARMUP_SEED_PATH ||
+      process.env.NCURATOR_E2E_CROSS_ARCH_WARMUP_SEED_PATH ||
+      ''
   ).trim()
   if (explicitSeedPath) return explicitSeedPath
   const sourceTargetId = CROSS_ARCH_WARMUP_SOURCE_TARGET.get(task.targetId)
@@ -327,11 +332,15 @@ const findTestFiles = async (input) => {
       if (!input.type) return true
       return input.type === 'e2e' ? isE2EFile(filePath) : !isE2EFile(filePath)
     })
-  if (!input.caseId) return candidates.sort()
+  if (input.caseIds.length === 0) return candidates.sort()
   const matches = await Promise.all(
     candidates.map(async (filePath) => ({
       filePath,
-      matches: await fileContainsCaseId(filePath, input.caseId)
+      matches: (
+        await Promise.all(
+          input.caseIds.map(async (caseId) => await fileContainsCaseId(filePath, caseId))
+        )
+      ).some(Boolean)
     }))
   )
   return matches
@@ -624,15 +633,30 @@ const runE2ETestFilesConcurrently = async (testFiles, targets, testNamePattern, 
       }))
     )
     .map((task, index) => ({ ...task, index }))
-  const warmupTasks = tasks.filter((task) => task.execution === 'warmup')
-  const concurrentTasks = tasks.filter(
+  const taskByKey = new Map(tasks.map((task) => [`${task.targetId}:${task.testFile}`, task]))
+  const resumedResults = targets.flatMap((target) =>
+    (target.resumedTests || []).flatMap((result) => {
+      if (result.status !== 'passed' || result.execution === 'warmup') return []
+      const task = taskByKey.get(`${target.id}:${path.resolve(ROOT, result.file)}`)
+      return task ? [{ ...result, index: task.index, targetId: target.id }] : []
+    })
+  )
+  const resumedKeys = new Set(
+    resumedResults.map((result) => `${result.targetId}:${path.resolve(ROOT, result.file)}`)
+  )
+  const runnableTasks = tasks.filter(
+    (task) => !resumedKeys.has(`${task.targetId}:${task.testFile}`)
+  )
+  const warmupTasks = runnableTasks.filter((task) => task.execution === 'warmup')
+  const concurrentTasks = runnableTasks.filter(
     (task) => task.execution !== 'exclusive' && task.execution !== 'warmup'
   )
-  const exclusiveTasks = tasks.filter((task) => task.execution === 'exclusive')
-  const results = []
+  const exclusiveTasks = runnableTasks.filter((task) => task.execution === 'exclusive')
+  const results = [...resumedResults]
   let exitCode = 0
   let liveActive = 0
-  let completed = 0
+  let completed = resumedResults.length
+  const activeByTarget = new Map()
   const warmupCacheByTarget = new Map()
 
   const recordDeadline = (task) => {
@@ -745,15 +769,22 @@ const runE2ETestFilesConcurrently = async (testFiles, targets, testNamePattern, 
   const active = new Set()
   while (pending.length > 0 || active.size > 0) {
     while (pending.length > 0 && active.size < E2E_WORKERS && Date.now() < deadlineAt) {
-      const nextIndex = pending.findIndex(
-        (task) => task.execution !== 'live' || liveActive < LIVE_WORKERS
-      )
+      const nextIndex = pending.findIndex((task) => {
+        if (task.execution === 'live' && liveActive >= LIVE_WORKERS) return false
+        const targetLimit = E2E_WORKERS_BY_TARGET.get(task.targetId) || E2E_WORKERS
+        return Number(activeByTarget.get(task.targetId) || 0) < targetLimit
+      })
       if (nextIndex < 0) break
       const [task] = pending.splice(nextIndex, 1)
       if (task.execution === 'live') liveActive += 1
+      activeByTarget.set(task.targetId, Number(activeByTarget.get(task.targetId) || 0) + 1)
       let running
       running = runTask(task, warmupCacheByTarget.get(task.targetId)).finally(() => {
         if (task.execution === 'live') liveActive -= 1
+        activeByTarget.set(
+          task.targetId,
+          Math.max(0, Number(activeByTarget.get(task.targetId) || 0) - 1)
+        )
         active.delete(running)
       })
       active.add(running)
@@ -808,16 +839,19 @@ const runTypeWorkflow = async (input) => {
 
   const nativeTarget = input.type === 'e2e' ? 'electron' : 'node'
   const shouldFilterByTestName =
-    Boolean(input.caseId) &&
+    input.caseIds.length > 0 &&
     input.domain !== 'unit' &&
-    (input.type === 'e2e' ||
-      testFiles.some((filePath) => toCaseId(filePath) !== input.caseId) ||
+    (input.caseIds.length > 1 ||
+      input.type === 'e2e' ||
+      testFiles.some((filePath) => toCaseId(filePath) !== input.caseIds[0]) ||
       (
         await Promise.all(
-          testFiles.map(async (filePath) => await fileDeclaresCaseId(filePath, input.caseId))
+          testFiles.map(async (filePath) => await fileDeclaresCaseId(filePath, input.caseIds[0]))
         )
       ).some(Boolean))
-  const testNamePattern = shouldFilterByTestName ? input.caseId : ''
+  const testNamePattern = shouldFilterByTestName
+    ? input.caseIds.map((caseId) => caseId.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')).join('|')
+    : ''
   let runtimeEnv = input.e2eEnv || {}
   let e2eTargets = input.e2eTargets || []
   if (input.type === 'e2e') {
@@ -939,7 +973,12 @@ const runTypeWorkflow = async (input) => {
 const main = async () => {
   removeNpmLifecycleEnv()
   const args = parseArgs(process.argv.slice(2))
-  const deadlineAt = Date.now() + RUNNER_DEADLINE_MS
+  const configuredDeadlineMs = Number(process.env.NCURATOR_TEST_RUNNER_DEADLINE_MS || 0)
+  const deadlineAt =
+    Date.now() +
+    (Number.isFinite(configuredDeadlineMs) && configuredDeadlineMs > 0
+      ? configuredDeadlineMs
+      : RUNNER_DEADLINE_MS)
 
   const expectedTypeByDomain = {
     ai: 'backend',
@@ -971,6 +1010,9 @@ const main = async () => {
   if (args.target !== 'package' && args.results.length > 0) {
     throw new Error('--result 只能与 --target package 一起使用')
   }
+  if (args.resumePassed && (args.target !== 'package' || args.results.length === 0)) {
+    throw new Error('--resume-passed requires package --result paths')
+  }
   if (args.freshKnowledgeCache && args.reuseKnowledgeCache) {
     throw new Error('--fresh-knowledge-cache 和 --reuse-knowledge-cache 不能同时使用')
   }
@@ -995,6 +1037,17 @@ const main = async () => {
         const session = await preparePackagedE2EApplication(bundle, {
           resultPath: args.results[index] || ''
         })
+        let resumedTests = []
+        if (args.resumePassed) {
+          const previousResult = JSON.parse(await readFile(args.results[index], 'utf8'))
+          if (
+            previousResult.releasePlatform !== session.releasePlatform ||
+            previousResult.artifactSha256 !== session.artifactSha256
+          ) {
+            throw new Error('resume result does not match the packaged E2E artifact')
+          }
+          resumedTests = Array.isArray(previousResult.tests) ? previousResult.tests : []
+        }
         const knowledgeCache = await prepareKnowledgeCache({
           namespace: `package/${session.releasePlatform}`,
           buildFingerprint: session.artifactSha256,
@@ -1005,7 +1058,8 @@ const main = async () => {
           id: session.releasePlatform,
           env: { ...session.env, ...knowledgeCache.env },
           session,
-          knowledgeCache
+          knowledgeCache,
+          resumedTests
         }
       })
     )
@@ -1024,14 +1078,23 @@ const main = async () => {
     const result = await runTypeWorkflow({
       ...args,
       type: 'e2e',
-      e2eTargets: packageTargets.map(({ id, env }) => ({ id, env })),
+      e2eTargets: packageTargets.map(({ id, env, resumedTests }) => ({
+        id,
+        env,
+        resumedTests
+      })),
       deadlineAt
     })
     exitCode = result.exitCode
     for (const target of packageTargets) {
+      const targetTests = result.e2eResults.filter((test) => test.targetId === target.id)
+      const targetStatus =
+        targetTests.length > 0 && targetTests.every((test) => Number(test.exitCode) === 0)
+          ? 'passed'
+          : 'failed'
       target.session.writeSummary({
-        status: exitCode === 0 ? 'passed' : 'failed',
-        tests: result.e2eResults.filter((test) => test.targetId === target.id),
+        status: targetStatus,
+        tests: targetTests,
         knowledgeCache: {
           knowledgeCacheEnabled: target.knowledgeCache.knowledgeCacheEnabled,
           knowledgeCachePath: target.knowledgeCache.knowledgeCachePath,

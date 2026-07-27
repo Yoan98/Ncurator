@@ -108,13 +108,14 @@ describe('app update publish config', () => {
   })
 
   it('warms the vector runtime before opening parallel E2E workers', async () => {
-    const [testWorkflow, architectureValidator, warmupCase] = await Promise.all([
+    const [testWorkflow, architectureValidator, warmupCase, macRelease] = await Promise.all([
       readFile(path.resolve('scripts/test/workflow.mjs'), 'utf8'),
       readFile(path.resolve('scripts/test/validate-test-architecture.mjs'), 'utf8'),
       readFile(
         path.resolve('tests/case/settings/workspace/files/workspace-prepare-refresh.e2e.test.ts'),
         'utf8'
-      )
+      ),
+      readFile(path.resolve('scripts/release/macos.mjs'), 'utf8')
     ])
 
     expect(testWorkflow).toContain("task.execution === 'warmup'")
@@ -122,8 +123,19 @@ describe('app update publish config', () => {
     expect(testWorkflow).toContain('seedCaseKnowledgeCache')
     expect(testWorkflow).toContain("path.basename(source) !== 'stats.json'")
     expect(testWorkflow).toContain("new Map([['macos-x64', 'macos-arm64']])")
+    expect(testWorkflow).toContain("E2E_WORKERS_BY_TARGET = new Map([['macos-x64', 1]])")
+    expect(testWorkflow).toContain('const LIVE_WORKERS = 2')
+    expect(testWorkflow).toContain('parsed.caseIds.push(next)')
+    expect(testWorkflow).toContain("if (current === '--resume-passed')")
+    expect(testWorkflow).toContain('resume result does not match the packaged E2E artifact')
+    expect(testWorkflow).toContain('NCURATOR_TEST_RUNNER_DEADLINE_MS')
     expect(testWorkflow).toContain('NCURATOR_E2E_CROSS_ARCH_WARMUP_SEED_PATH')
     expect(testWorkflow).toContain('uses verified cross-architecture cache seed')
+    expect(testWorkflow).toContain('targetTests.every')
+    expect(macRelease).toContain("if (result.status === 'passed') status = 'passed'")
+    expect(macRelease).toContain("const DEFAULT_E2E_PLATFORMS = ['macos-arm64']")
+    expect(macRelease).toContain("args.includes('--include-x64-e2e')")
+    expect(macRelease).toContain("status: 'skipped'")
     expect(testWorkflow).toContain("spawnSync('taskkill.exe'")
     expect(testWorkflow).toContain("input.type === 'e2e' && input.target === 'package'")
     expect(testWorkflow).toContain("prepareBetterSqliteNative('node')")

@@ -16,7 +16,7 @@ import { verifyReleaseBundle } from './artifact-bundle.mjs'
 import { compareReleaseVersions, parseReleaseTag } from './tag.mjs'
 
 const CANDIDATE_STATES = new Set(['prepared', 'ready', 'rejected', 'published'])
-const E2E_STATES = new Set(['pending', 'passed', 'failed'])
+const E2E_STATES = new Set(['pending', 'passed', 'failed', 'skipped'])
 
 const candidateRoot = () =>
   path.resolve(
@@ -46,14 +46,16 @@ const assertCandidateState = (state, expected = {}) => {
   }
   if (!CANDIDATE_STATES.has(state.status)) throw new Error('candidate status is invalid')
   if (!E2E_STATES.has(state.e2e?.status)) throw new Error('candidate E2E status is invalid')
-  const expectedE2EStatus = {
-    prepared: 'pending',
-    ready: 'passed',
-    rejected: 'failed',
-    published: 'passed'
+  const allowedE2EStatuses = {
+    prepared: ['pending'],
+    ready: ['passed', 'skipped'],
+    rejected: ['failed'],
+    published: ['passed', 'skipped']
   }[state.status]
-  if (state.e2e.status !== expectedE2EStatus) {
-    throw new Error(`candidate ${state.status} state must use E2E status ${expectedE2EStatus}`)
+  if (!allowedE2EStatuses.includes(state.e2e.status)) {
+    throw new Error(
+      `candidate ${state.status} state must use E2E status ${allowedE2EStatuses.join(' or ')}`
+    )
   }
   if (typeof state.bundle !== 'string' || state.bundle !== path.basename(state.bundle)) {
     throw new Error('candidate bundle path is invalid')
@@ -115,9 +117,19 @@ export const readReleaseCandidate = async ({ tag, platform }) => {
   return { directory, state, bundlePath, verified }
 }
 
-export const recordCandidateE2E = async ({ tag, platform, status, resultPath = '', selection }) => {
-  if (!['passed', 'failed'].includes(status)) {
+export const recordCandidateE2E = async ({
+  tag,
+  platform,
+  status,
+  resultPath = '',
+  selection,
+  reason = ''
+}) => {
+  if (!['passed', 'failed', 'skipped'].includes(status)) {
     throw new Error(`unsupported candidate E2E status: ${status}`)
+  }
+  if (status === 'skipped' && !String(reason).trim()) {
+    throw new Error('skipped candidate E2E requires a reason')
   }
   const candidate = await readReleaseCandidate({ tag, platform })
   if (candidate.state.status === 'published') {
@@ -130,7 +142,8 @@ export const recordCandidateE2E = async ({ tag, platform, status, resultPath = '
       status,
       recordedAt: new Date().toISOString(),
       ...(resultPath ? { result: path.relative(candidate.directory, resultPath) } : {}),
-      ...(selection ? { selection } : {})
+      ...(selection ? { selection } : {}),
+      ...(reason ? { reason: String(reason).trim() } : {})
     }
   }
   await writeState(candidate.directory, state)

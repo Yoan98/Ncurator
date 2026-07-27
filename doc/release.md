@@ -62,7 +62,7 @@ Windows 的用户可见名称统一为“馆长”：安装包为 `馆长-X.Y.Z-
 ~/.ncurator/release-candidates/<tag>/<platform>/
 ```
 
-候选包生成后处于 `prepared`，必须完成正式包 E2E 才能进入 `ready`。测试失败时为 `rejected`；公开发布并验证完成后为 `published`。
+候选包生成后处于 `prepared`。需要正式包 E2E 的平台通过后进入 `ready`；暂时不要求正式包 E2E 的平台会明确记录为 `skipped` 后进入 `ready`，不会伪装成测试通过。测试失败时为 `rejected`；公开发布并验证完成后为 `published`。
 
 ### 影响评估与正式包回归
 
@@ -88,9 +88,13 @@ pnpm release:mac -- --tag mac-vX.Y.Z --test-only
 pnpm release:mac -- --tag mac-vX.Y.Z --test-only --case <caseId>
 ```
 
-macOS arm64 和 x64 两个候选包都必须通过选定的回归范围。
+macOS arm64 候选包必须通过选定的回归范围。macOS x64 仍正常构建、签名、审计、启动验证和发布，但由于 Rosetta 下正式包 E2E 速度过慢，默认不执行 x64 正式包 E2E，也不把它作为发布门禁。需要人工诊断时可显式执行 `--include-x64-e2e`，x64 E2E 固定单并发：
 
-所有发布阶段最多运行 60 分钟；测试 runner 在 55 分钟停止领取新用例并保存部分结果。正式并发开始前，每个候选包先串行通过唯一的 `warmup` 向量索引用例，让模型和磁盘缓存完成冷启动；warm-up 产生的 split/vector 缓存会作为种子复制到后续 case 的隔离缓存目录，warm-up 失败时不会启动后续并发。随后 E2E 总并发为 3，其中 live 并发最多为 2，原生对话框、鼠标和桌面焦点用例独占执行。macOS 两个候选包由同一个 runner 统一调度，逐个完成 warm-up，并共享上述并发上限。
+```bash
+pnpm release:mac -- --tag mac-vX.Y.Z --test-only --include-x64-e2e
+```
+
+所有发布阶段最多运行 60 分钟；测试 runner 在 55 分钟停止领取新用例并保存部分结果。正式并发开始前，每个实际参加 E2E 的候选包先串行通过唯一的 `warmup` 向量索引用例，让模型和磁盘缓存完成冷启动；warm-up 产生的 split/vector 缓存会作为种子复制到后续 case 的隔离缓存目录，warm-up 失败时不会启动后续并发。随后 E2E 总并发为 3，其中 live 并发最多为 2，原生对话框、鼠标和桌面焦点用例独占执行。显式启用 macOS x64 E2E 时，x64 仍固定为单并发。
 
 选中的正式包 E2E 全部执行，其中使用真实 AI 或真实服务的 E2E 也不排除。源码 E2E、backend、unit 和独立的 `test:ai*` 测试集只用于开发验证或问题排查，不替代正式包 E2E，也不属于标准发布门。
 
@@ -148,7 +152,7 @@ macOS 没有 Actions 构建路线。prepare 必须在 Apple Silicon Mac 执行�
 - arm64 使用本机 arm64 Node/Python。
 - x64 使用 Rosetta、x64 Node 和 x64 Python。
 - 两个架构分别安装依赖、构建、签名、审计和生成候选包。
-- 两个候选包必须完成正式包 E2E，发布时还会检查更新签名一致。
+- arm64 候选包必须完成正式包 E2E；x64 默认跳过正式包 E2E，但发布时仍会检查两个架构的更新签名一致。
 
 ```bash
 git fetch --tags

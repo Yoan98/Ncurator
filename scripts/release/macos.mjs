@@ -1,5 +1,5 @@
 import { execFile, spawn } from 'node:child_process'
-import { access, cp, mkdir, readdir } from 'node:fs/promises'
+import { access, cp, mkdir, readFile, readdir } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 import { promisify } from 'node:util'
@@ -21,6 +21,10 @@ import { hasRegressionSelectionArgs, readRegressionSelection } from './regressio
 
 const execFileAsync = promisify(execFile)
 const ROOT = process.cwd()
+const MACOS_PLATFORMS = ['macos-arm64', 'macos-x64']
+const DEFAULT_E2E_PLATFORMS = ['macos-arm64']
+const X64_E2E_DISABLED_REASON =
+  'macOS x64 package E2E is disabled by default because Rosetta execution is too slow; artifacts are still built, verified, signed, and published.'
 const stageDeadline = createReleaseStageDeadline('macOS release stage')
 await loadReleaseEnvironment(ROOT)
 const args = process.argv.slice(2)
@@ -29,6 +33,7 @@ const valueAfter = (name) => {
   return index >= 0 ? args[index + 1] : undefined
 }
 const releaseTag = valueAfter('--tag') || ''
+const includeX64E2E = args.includes('--include-x64-e2e')
 const regression = readRegressionSelection(args)
 const modes = [
   ['prepare', args.includes('--prepare-only')],
@@ -47,10 +52,13 @@ try {
 }
 if (!releaseVersion || modes.length !== 1) {
   throw new Error(
-    'usage: node scripts/release/macos.mjs --tag <mac-v1.2.3> (--prepare-only|--test-only|--publish-only) [--domain <name>] [--suite <name>] [--group <name>] [--case <caseId>] [--fresh-knowledge-cache]'
+    'usage: node scripts/release/macos.mjs --tag <mac-v1.2.3> (--prepare-only|--test-only|--publish-only) [--include-x64-e2e] [--domain <name>] [--suite <name>] [--group <name>] [--case <caseId>] [--fresh-knowledge-cache]'
   )
 }
 const mode = modes[0][0]
+if (includeX64E2E && mode !== 'test') {
+  throw new Error('--include-x64-e2e is only valid with --test-only')
+}
 if (mode !== 'test' && hasRegressionSelectionArgs(args)) {
   throw new Error('regression selection options are only valid with --test-only')
 }
@@ -259,15 +267,22 @@ const runCandidateE2E = async ({ candidates, sourceDirectory, pnpmPath }) => {
     )
   } catch (error) {
     await Promise.all(
-      candidates.map((candidate, index) =>
-        recordCandidateE2E({
+      candidates.map(async (candidate, index) => {
+        let status = 'failed'
+        try {
+          const result = JSON.parse(await readFile(resultPaths[index], 'utf8'))
+          if (result.status === 'passed') status = 'passed'
+        } catch {
+          // Missing or invalid evidence is a failed candidate result.
+        }
+        return await recordCandidateE2E({
           tag: releaseTag,
           platform: candidate.state.platform,
-          status: 'failed',
+          status,
           resultPath: resultPaths[index],
           selection: regression.state
         })
-      )
+      })
     )
     throw error
   }
@@ -336,8 +351,15 @@ if (mode === 'prepare') {
         return await createCandidate(x64Source, 'macos-x64', taggedCommit)
       })()
     ])
+    await recordCandidateE2E({
+      tag: releaseTag,
+      platform: 'macos-x64',
+      status: 'skipped',
+      reason: X64_E2E_DISABLED_REASON,
+      selection: { mode: 'disabled-by-default' }
+    })
     process.stdout.write(
-      `[release] macOS candidates prepared; impact assessment and package E2E are required before publish\n${armCandidate.bundlePath}\n${x64Candidate.bundlePath}\n`
+      `[release] macOS candidates prepared; arm64 package E2E is required before publish and x64 package E2E is disabled by default\n${armCandidate.bundlePath}\n${x64Candidate.bundlePath}\n`
     )
   } finally {
     await workspace.dispose()
@@ -357,8 +379,18 @@ if (mode === 'test') {
     await run('git', ['archive', '--format=tar', '--output', archivePath, releaseTag])
     await extractTag(archivePath, sourceDirectory)
     await run(tools.pnpmPath, ['install', '--frozen-lockfile'], { cwd: sourceDirectory })
+    const e2ePlatforms = includeX64E2E ? MACOS_PLATFORMS : DEFAULT_E2E_PLATFORMS
+    if (!includeX64E2E) {
+      await recordCandidateE2E({
+        tag: releaseTag,
+        platform: 'macos-x64',
+        status: 'skipped',
+        reason: X64_E2E_DISABLED_REASON,
+        selection: { mode: 'disabled-by-default' }
+      })
+    }
     const candidates = await Promise.all(
-      ['macos-arm64', 'macos-x64'].map(async (platform) => {
+      e2ePlatforms.map(async (platform) => {
         const candidate = await readReleaseCandidate({ tag: releaseTag, platform })
         if (candidate.state.commit !== taggedCommit) {
           throw new Error(`${platform} candidate commit does not match release tag`)
@@ -370,12 +402,23 @@ if (mode === 'test') {
   } finally {
     await workspace.dispose()
   }
-  process.stdout.write(`[release] macOS candidate E2E passed for both architectures\n`)
+  process.stdout.write(
+    includeX64E2E
+      ? `[release] macOS candidate E2E passed for both architectures\n`
+      : `[release] macOS arm64 candidate E2E passed; x64 package E2E is disabled by default\n`
+  )
   process.exit(0)
 }
 
+await recordCandidateE2E({
+  tag: releaseTag,
+  platform: 'macos-x64',
+  status: 'skipped',
+  reason: X64_E2E_DISABLED_REASON,
+  selection: { mode: 'disabled-by-default' }
+})
 const candidates = await Promise.all(
-  ['macos-arm64', 'macos-x64'].map(async (platform) =>
+  MACOS_PLATFORMS.map(async (platform) =>
     assertCandidatePublishable({ tag: releaseTag, platform, commit: taggedCommit })
   )
 )
@@ -397,7 +440,7 @@ await run(process.execPath, [
   '--tag',
   releaseTag
 ])
-for (const platform of ['macos-arm64', 'macos-x64']) {
+for (const platform of MACOS_PLATFORMS) {
   await markCandidatePublished({ tag: releaseTag, platform })
 }
 try {
