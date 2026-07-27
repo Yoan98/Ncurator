@@ -34,4 +34,9 @@ npm run check
 npm run zip:stores
 ```
 
-Store copy and artwork are in [`store-assets`](./store-assets). Store credentials are kept in the local `.env` file and are never committed to Git.
+More documentation:
+
+- [Extension architecture](./docs/architecture.md)
+- [Store release](./docs/release.md)
+
+Store artwork and its editable source files are in [`store-assets`](./store-assets). Store credentials are kept in the local `.env` file and are never committed to Git.

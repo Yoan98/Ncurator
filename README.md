@@ -34,4 +34,9 @@ npm run check
 npm run zip:stores
 ```
 
-商店文案和宣传资源位于 [`store-assets`](./store-assets)。商店发布凭据保存在本地 `.env`，不会提交到 Git。
+更多资料：
+
+- [插件架构](./docs/architecture.md)
+- [商店发布](./docs/release.md)
+
+宣传图片及其可编辑源文件位于 [`store-assets`](./store-assets)。商店发布凭据保存在本地 `.env`，不会提交到 Git。

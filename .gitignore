@@ -6,4 +6,8 @@ artifacts/
 .env
 .env.*
 !.env.example
+*.pem
+*.p12
+service-account*.json
+credentials*.json
 .DS_Store
