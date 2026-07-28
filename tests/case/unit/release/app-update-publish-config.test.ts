@@ -107,7 +107,7 @@ describe('app update publish config', () => {
     expect(tagContract).toContain('/^(mac|windows)-v')
   })
 
-  it('warms the vector runtime before opening parallel E2E workers', async () => {
+  it('shares source caches directly and warms packaged E2E before parallel workers', async () => {
     const [testWorkflow, architectureValidator, warmupCase, macRelease] = await Promise.all([
       readFile(path.resolve('scripts/test/workflow.mjs'), 'utf8'),
       readFile(path.resolve('scripts/test/validate-test-architecture.mjs'), 'utf8'),
@@ -119,6 +119,11 @@ describe('app update publish config', () => {
     ])
 
     expect(testWorkflow).toContain("task.execution === 'warmup'")
+    expect(testWorkflow).toContain("cacheMode: 'direct'")
+    expect(testWorkflow).toContain("cacheMode: 'warmup'")
+    expect(testWorkflow).toContain("task.cacheMode === 'warmup' && task.execution === 'warmup'")
+    expect(testWorkflow).toContain('buildDirectKnowledgeCacheEnv')
+    expect(testWorkflow).toContain('NCURATOR_WORKSPACE_KNOWLEDGE_CACHE_STATS_PATH')
     expect(testWorkflow).toContain('vector warm-up failed; parallel E2E will not start')
     expect(testWorkflow).toContain('seedCaseKnowledgeCache')
     expect(testWorkflow).toContain("path.basename(source) !== 'stats.json'")

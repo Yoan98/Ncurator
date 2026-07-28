@@ -37,6 +37,9 @@ import { getAvailableToolNames } from '../utils/runtimeCache'
 export const resolveHumanToolCallLimit = (override?: number): number =>
   override ?? HUMAN_DEFAULT_TOOL_CALL_LIMIT
 
+export const resolveHumanToolLimitWarningRatio = (override?: number): number =>
+  override ?? HUMAN_TOOL_LIMIT_NEAR_EXHAUSTED_RATIO
+
 const isTerminalRunCall = (toolName: string): boolean => toolName === 'terminal_run'
 const isBrowserUseCall = (toolName: string): boolean => toolName === 'browser_use'
 
@@ -372,6 +375,9 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
     const toolCallLimit = resolveHumanToolCallLimit(
       input.ctx.humanRuntimeOverrides?.hardActionLimit
     )
+    const toolLimitWarningRatio = resolveHumanToolLimitWarningRatio(
+      input.ctx.humanRuntimeOverrides?.toolLimitWarningRatio
+    )
 
     if (
       !state.execution.currentThought ||
@@ -610,8 +616,7 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
     const toolLimitDecisionHint =
       input.cache.toolCallCount > toolCallLimit
         ? buildToolLimitDecisionHint(input.cache.toolCallCount, toolCallLimit)
-        : input.cache.toolCallCount >=
-            Math.ceil(toolCallLimit * HUMAN_TOOL_LIMIT_NEAR_EXHAUSTED_RATIO)
+        : input.cache.toolCallCount >= Math.ceil(toolCallLimit * toolLimitWarningRatio)
           ? buildToolLimitNearExhaustedDecisionHint(input.cache.toolCallCount, toolCallLimit)
           : undefined
     const decisionHint = toolLimitDecisionHint || followupSignals.decisionHint

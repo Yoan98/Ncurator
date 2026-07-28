@@ -57,7 +57,6 @@ const renderMenuHtml = (state: BrowserTabState): string => `<!doctype html>
         border: 1px solid #e1e0dc;
         border-radius: 8px;
         background: #fff;
-        box-shadow: 0 10px 28px rgba(15, 15, 15, 0.16);
       }
       .zoom-row { height: 51px; display: flex; align-items: center; justify-content: space-between; padding: 0 12px; }
       .label { color: #57554f; }
@@ -185,7 +184,8 @@ export class BrowserMenuWindowService {
   public async open(options: BrowserMenuOpenOptions): Promise<void> {
     const menuWindow = this.createWindow(options.x, options.y, {
       width: MENU_WIDTH,
-      height: MENU_HEIGHT
+      height: MENU_HEIGHT,
+      hasShadow: false
     })
     if (!menuWindow) return
 

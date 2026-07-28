@@ -206,7 +206,8 @@ describe('sqlite storage core and stores', () => {
     expect(rows).toEqual([
       { version: 1, name: 'initial_schema' },
       { version: 2, name: 'ai_runtime_system_notifications' },
-      { version: 3, name: 'chat_session_skill_state' }
+      { version: 3, name: 'chat_session_skill_state' },
+      { version: 4, name: 'reset_resume_snapshots_v2' }
     ])
   })
 

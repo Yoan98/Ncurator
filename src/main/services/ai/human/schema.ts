@@ -22,9 +22,34 @@ export const humanDecisionHintCodeSchema = z.enum(HUMAN_DECISION_HINT_CODES)
 export const humanSkillSourceSchema = z.enum(HUMAN_SKILL_SOURCES)
 export const humanRoundExecutionKindSchema = z.enum(HUMAN_ROUND_EXECUTION_KINDS)
 
+export const humanTaskInterruptionReasonSchema = z.enum([
+  'timeout',
+  'network_error',
+  'user_cancelled',
+  'process_interrupted',
+  'runtime_limit',
+  'unexpected_error'
+])
+
+export const humanTaskContextSchema = z.object({
+  originalGoal: z.string(),
+  recoveryHistory: z.array(
+    z.object({
+      interruptionReason: humanTaskInterruptionReasonSchema,
+      userInput: z.string()
+    })
+  ),
+  currentInterruption: z
+    .object({
+      reason: humanTaskInterruptionReasonSchema
+    })
+    .optional()
+})
+
 export const humanTaskInputSchema = z.object({
   taskId: z.string(),
-  userInput: z.string()
+  userInput: z.string(),
+  taskContext: humanTaskContextSchema.optional()
 })
 
 export const skillDefinitionBaseSchema = z.object({
@@ -78,7 +103,7 @@ export const humanDecisionHintSchema = z.discriminatedUnion('code', [
   z.object({
     code: z.literal('run_resumed_after_interruption'),
     detail: z.object({
-      reason: z.enum(['timeout', 'network_error', 'user_cancelled', 'process_interrupted'])
+      reason: humanTaskInterruptionReasonSchema
     })
   }),
   z.object({

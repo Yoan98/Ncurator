@@ -174,6 +174,8 @@ export type CreateAiRunContextInput = {
   checkCancelledOverride?: () => void
   humanRuntimeOverrides?: {
     hardActionLimit?: number
+    graphRecursionLimit?: number
+    toolLimitWarningRatio?: number
     modelContextWindowTokens?: number
     terminalEnvironment?: Record<string, string>
   }

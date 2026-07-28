@@ -7,7 +7,7 @@ import type {
 import type { ChatStore } from '../../storage/domains/ChatStore'
 import type { AiRunStartPayload } from '../types'
 import type { HumanResumeSnapshot } from '../types'
-import type { HumanState } from '../human/types'
+import type { HumanState, HumanTaskContext } from '../human/types'
 import { createDefaultHumanTrace, createInitialHumanState } from '../human/state/schema'
 
 const toJsonObject = (value: HumanResumeSnapshot): JsonObject =>
@@ -22,7 +22,51 @@ const cloneWorkspace = (
 ): WorkspaceRuntimeBinding | undefined =>
   workspace ? (JSON.parse(JSON.stringify(workspace)) as WorkspaceRuntimeBinding) : undefined
 
-export const buildHumanResumeSnapshot = (state: HumanState): HumanResumeSnapshot => ({
+const interruptionReasonLabels: Record<ChatSessionResumeSnapshot['reason'], string> = {
+  timeout: '请求超时',
+  network_error: '网络错误',
+  user_cancelled: '用户主动停止',
+  process_interrupted: '运行进程中断',
+  runtime_limit: '达到运行上限',
+  unexpected_error: '未知运行异常'
+}
+
+export const createHumanTaskContext = (originalGoal: string): HumanTaskContext => ({
+  originalGoal: String(originalGoal || '').trim(),
+  recoveryHistory: []
+})
+
+export const renderHumanTaskGoal = (taskContext: HumanTaskContext): string => {
+  const originalGoal = String(taskContext.originalGoal || '').trim()
+  if (taskContext.recoveryHistory.length === 0) return originalGoal
+  return [
+    `原始任务：${originalGoal}`,
+    '',
+    '历次中断与恢复：',
+    ...taskContext.recoveryHistory.map(
+      (item, index) =>
+        `${String(index + 1)}. 任务因${interruptionReasonLabels[item.interruptionReason]}而中断；用户随后要求：“${item.userInput}”`
+    )
+  ].join('\n')
+}
+
+const resolveTaskContext = (state: HumanState): HumanTaskContext =>
+  state.task.taskContext || createHumanTaskContext(state.task.userInput)
+
+const buildInterruptedTaskContext = (
+  state: HumanState,
+  reason: ChatSessionResumeSnapshot['reason']
+): HumanTaskContext => ({
+  ...resolveTaskContext(state),
+  currentInterruption: { reason }
+})
+
+export const buildHumanResumeSnapshot = (
+  state: HumanState,
+  reason: ChatSessionResumeSnapshot['reason']
+): HumanResumeSnapshot => ({
+  schemaVersion: 2,
+  taskContext: buildInterruptedTaskContext(state, reason),
   memory: {
     thought: state.memory.thought,
     conversation: state.memory.conversation,
@@ -39,8 +83,10 @@ export const buildHumanResumeSnapshot = (state: HumanState): HumanResumeSnapshot
   }
 })
 
-export const serializeHumanResumeSnapshot = (state: HumanState): JsonObject =>
-  toJsonObject(buildHumanResumeSnapshot(state))
+export const serializeHumanResumeSnapshot = (
+  state: HumanState,
+  reason: ChatSessionResumeSnapshot['reason']
+): JsonObject => toJsonObject(buildHumanResumeSnapshot(state, reason))
 
 export const saveHumanResumeSnapshot = async (input: {
   chatStore: ChatStore
@@ -60,7 +106,7 @@ export const saveHumanResumeSnapshot = async (input: {
     userInput: String(input.userInput || ''),
     selectedReferences: cloneSelectedReferences(input.selectedReferences),
     workspace: cloneWorkspace(input.workspace),
-    humanState: serializeHumanResumeSnapshot(input.humanState),
+    humanState: serializeHumanResumeSnapshot(input.humanState, input.reason),
     errorMessage: String(input.errorMessage || ''),
     updatedAt: input.updatedAt || Date.now()
   })
@@ -77,12 +123,26 @@ export const restoreHumanStateFromResumeSnapshot = (input: {
     userInput: input.userInput
   })
   const snapshot = input.snapshot as Partial<HumanResumeSnapshot>
+  const previousTaskContext = snapshot.taskContext || createHumanTaskContext(input.userInput)
+  const interruptionReason = previousTaskContext.currentInterruption?.reason || input.reason
+  const taskContext: HumanTaskContext = {
+    originalGoal: previousTaskContext.originalGoal,
+    recoveryHistory: [
+      ...previousTaskContext.recoveryHistory,
+      {
+        interruptionReason,
+        userInput: input.userInput
+      }
+    ]
+  }
+  const taskGoal = renderHumanTaskGoal(taskContext)
 
   return {
     ...baseState,
     task: {
       taskId: input.runId,
-      userInput: input.userInput
+      userInput: taskGoal,
+      taskContext
     },
     memory: {
       thought: snapshot.memory?.thought || baseState.memory.thought,

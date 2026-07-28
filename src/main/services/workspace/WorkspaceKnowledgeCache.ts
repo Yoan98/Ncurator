@@ -1,5 +1,5 @@
-import { createHash } from 'node:crypto'
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
+import { createHash, randomUUID } from 'node:crypto'
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { SPLITTER_BIG_CHUNK_SETTING, SPLITTER_MINI_CHUNK_SIZE } from '../../utils/constant'
 import { USER_DATA_PATH } from '../../utils/paths'
@@ -49,6 +49,13 @@ const resolveWorkspaceKnowledgeCacheRoot = (): string => {
   return path.join(USER_DATA_PATH, 'workspace-knowledge-cache')
 }
 
+const resolveWorkspaceKnowledgeCacheStatsPath = (cacheRoot: string): string => {
+  const explicitPath = String(
+    process.env.NCURATOR_WORKSPACE_KNOWLEDGE_CACHE_STATS_PATH || ''
+  ).trim()
+  return explicitPath ? path.resolve(explicitPath) : path.join(cacheRoot, 'stats.json')
+}
+
 const buildSplitCacheKey = (input: { contentHash: string; fileExt: string }): string =>
   createHash('sha256')
     .update(
@@ -75,6 +82,22 @@ const buildVectorCacheKey = (input: { splitCacheKey: string; modelName: string }
     )
     .digest('hex')
 
+const writeCacheSnapshot = async (filePath: string, payload: string): Promise<void> => {
+  await mkdir(path.dirname(filePath), { recursive: true })
+  const tempPath = `${filePath}.${String(process.pid)}.${randomUUID()}.tmp`
+  await writeFile(tempPath, payload, 'utf8')
+  try {
+    await rename(tempPath, filePath)
+  } catch (error) {
+    await rm(tempPath, { force: true })
+    try {
+      await readFile(filePath, 'utf8')
+    } catch {
+      throw error
+    }
+  }
+}
+
 class PersistentWorkspaceKnowledgeCache implements WorkspaceKnowledgeCache {
   private readonly statsPath: string
   private stats: WorkspaceKnowledgeCacheStats = { ...EMPTY_CACHE_STATS }
@@ -83,7 +106,7 @@ class PersistentWorkspaceKnowledgeCache implements WorkspaceKnowledgeCache {
   private statsWriteSequence = 0
 
   public constructor(private readonly cacheRoot: string) {
-    this.statsPath = path.join(cacheRoot, 'stats.json')
+    this.statsPath = resolveWorkspaceKnowledgeCacheStatsPath(cacheRoot)
   }
 
   private async initializeStats(): Promise<void> {
@@ -113,7 +136,7 @@ class PersistentWorkspaceKnowledgeCache implements WorkspaceKnowledgeCache {
     this.statsWriteSequence += 1
     const tempPath = `${this.statsPath}.${String(process.pid)}.${String(this.statsWriteSequence)}.tmp`
     this.statsWriteQueue = this.statsWriteQueue.then(async () => {
-      await mkdir(this.cacheRoot, { recursive: true })
+      await mkdir(path.dirname(this.statsPath), { recursive: true })
       await writeFile(tempPath, `${JSON.stringify(this.stats, null, 2)}\n`, 'utf8')
       await rename(tempPath, this.statsPath)
     })
@@ -156,8 +179,7 @@ class PersistentWorkspaceKnowledgeCache implements WorkspaceKnowledgeCache {
       },
       snapshot
     }
-    await mkdir(path.dirname(cacheFilePath), { recursive: true })
-    await writeFile(cacheFilePath, JSON.stringify(payload), 'utf8')
+    await writeCacheSnapshot(cacheFilePath, JSON.stringify(payload))
   }
 
   public async loadVectorSnapshot(input: {
@@ -214,8 +236,7 @@ class PersistentWorkspaceKnowledgeCache implements WorkspaceKnowledgeCache {
       splitCacheKey,
       snapshot
     }
-    await mkdir(path.dirname(cacheFilePath), { recursive: true })
-    await writeFile(cacheFilePath, JSON.stringify(payload), 'utf8')
+    await writeCacheSnapshot(cacheFilePath, JSON.stringify(payload))
   }
 }
 

@@ -763,6 +763,22 @@ describe('unit ai persistence backend', () => {
       runId: run.id,
       token: 'partial'
     })
+    await setup.storage.chat.saveSessionResumeSnapshot('session-1', {
+      reason: 'process_interrupted',
+      runId: run.id,
+      userInput: run.input,
+      selectedReferences: [],
+      humanState: {
+        schemaVersion: 2,
+        taskContext: {
+          originalGoal: run.input,
+          recoveryHistory: [],
+          currentInterruption: { reason: 'process_interrupted' }
+        }
+      },
+      errorMessage: 'interrupted',
+      updatedAt: Date.now()
+    })
     await service.queueRunEvent(run.id, {
       type: 'answer_completed',
       runId: run.id,
@@ -855,6 +871,12 @@ describe('unit ai persistence backend', () => {
       userInput: '测试中断',
       selectedReferences: [],
       humanState: {
+        schemaVersion: 2,
+        taskContext: {
+          originalGoal: '测试中断',
+          recoveryHistory: [],
+          currentInterruption: { reason: 'process_interrupted' }
+        },
         memory: {
           taskRun: {
             rounds: []
@@ -892,7 +914,14 @@ describe('unit ai persistence backend', () => {
       runId: runningRun.id,
       userInput: runningRun.input,
       selectedReferences: [],
-      humanState: {},
+      humanState: {
+        schemaVersion: 2,
+        taskContext: {
+          originalGoal: runningRun.input,
+          recoveryHistory: [],
+          currentInterruption: { reason: 'user_cancelled' }
+        }
+      },
       errorMessage: 'keep snapshot when retract is rejected',
       updatedAt: Date.now()
     })
@@ -928,7 +957,7 @@ describe('unit ai persistence backend', () => {
     expect(await setup.storage.chat.getChatMessages('session-1')).toHaveLength(4)
   })
 
-  it('retract-latest-turn-removes-user-assistant-run-and-clears-covered-memory', async () => {
+  it('retract-latest-turn-removes-user-assistant-run-and-clears-covered-memory-but-keeps-resume', async () => {
     const setup = await createTestService()
     await seedSession(setup.storage)
     const baseTime = Date.now()
@@ -964,6 +993,12 @@ describe('unit ai persistence backend', () => {
       userInput: 'retract me',
       selectedReferences: [],
       humanState: {
+        schemaVersion: 2,
+        taskContext: {
+          originalGoal: 'retract me',
+          recoveryHistory: [],
+          currentInterruption: { reason: 'user_cancelled' }
+        },
         memory: {
           taskRun: {
             rounds: [{ summary: 'stale interrupted task state' }]
@@ -987,7 +1022,7 @@ describe('unit ai persistence backend', () => {
     expect(response.messages.map((message) => message.id)).toEqual(['kept-user', 'kept-assistant'])
     expect(await setup.storage.aiRun.getRun('retract-run')).toBeNull()
     expect(await setup.storage.chat.getConversationMemory('session-1')).toBeNull()
-    expect(await setup.storage.chat.getSessionResumeSnapshot('session-1')).toBeNull()
+    expect(await setup.storage.chat.getSessionResumeSnapshot('session-1')).not.toBeNull()
   })
 
   it('delete-session-cleans-run-and-event-records', async () => {
@@ -1006,10 +1041,12 @@ describe('unit ai persistence backend', () => {
     const messages = await setup.storage.chat.getChatMessages('session-1')
     const storedRun = await setup.storage.aiRun.getRun(run.id)
     const events = await setup.storage.aiRun.listEvents(run.id)
+    const resumeSnapshot = await setup.storage.chat.getSessionResumeSnapshot('session-1')
 
     expect(sessions).toEqual([])
     expect(messages).toEqual([])
     expect(storedRun).toBeNull()
     expect(events).toEqual([])
+    expect(resumeSnapshot).toBeNull()
   })
 })

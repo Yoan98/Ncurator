@@ -18,6 +18,10 @@ CREATE TABLE IF NOT EXISTS chat_session_skill_state (
 );
 `
 
+const resetResumeSnapshotsV2Migration = `
+DELETE FROM chat_session_resume_snapshot;
+`
+
 export type SqliteDatabase = Database.Database
 export type SqliteStatement = Database.Statement
 
@@ -42,6 +46,11 @@ const MIGRATIONS: Migration[] = [
     version: 3,
     name: 'chat_session_skill_state',
     sql: sessionSkillStateMigration
+  },
+  {
+    version: 4,
+    name: 'reset_resume_snapshots_v2',
+    sql: resetResumeSnapshotsV2Migration
   }
 ]
 

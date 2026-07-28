@@ -1257,6 +1257,8 @@ export type AiRunFailureCode =
   | 'network_error'
   | 'user_cancelled'
   | 'process_interrupted'
+  | 'runtime_limit'
+  | 'unexpected_error'
   | 'error'
 export type AiRunResumeSnapshotReason = Exclude<AiRunFailureCode, 'error'>
 export type AiRunFailureSource = 'provider' | 'internal'

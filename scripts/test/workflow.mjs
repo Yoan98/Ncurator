@@ -262,16 +262,35 @@ const readE2EExecutionClass = async (filePath) => {
   return execution
 }
 
+const buildKnowledgeCacheCaseKey = (testFile) => {
+  const relativePath = path.relative(TEST_CASES_ROOT, testFile).split(path.sep).join('/')
+  return `${toCaseId(testFile)}-${createHash('sha256').update(relativePath).digest('hex').slice(0, 12)}`
+}
+
 const buildCaseKnowledgeCacheEnv = async (env, testFile) => {
   const basePath = String(env.NCURATOR_WORKSPACE_KNOWLEDGE_CACHE_PATH || '').trim()
   if (!basePath) return env
-  const relativePath = path.relative(TEST_CASES_ROOT, testFile).split(path.sep).join('/')
-  const caseKey = `${toCaseId(testFile)}-${createHash('sha256').update(relativePath).digest('hex').slice(0, 12)}`
+  const caseKey = buildKnowledgeCacheCaseKey(testFile)
   const casePath = path.join(basePath, 'cases', caseKey)
   await mkdir(casePath, { recursive: true })
   return {
     ...env,
     NCURATOR_WORKSPACE_KNOWLEDGE_CACHE_PATH: casePath,
+    NCURATOR_E2E_KNOWLEDGE_CACHE_NAMESPACE: `${String(
+      env.NCURATOR_E2E_KNOWLEDGE_CACHE_NAMESPACE || 'e2e'
+    )}/${caseKey}`
+  }
+}
+
+const buildDirectKnowledgeCacheEnv = async (env, testFile) => {
+  const cachePath = String(env.NCURATOR_WORKSPACE_KNOWLEDGE_CACHE_PATH || '').trim()
+  if (!cachePath) return env
+  const caseKey = buildKnowledgeCacheCaseKey(testFile)
+  const statsPath = path.join(cachePath, 'case-stats', caseKey, 'stats.json')
+  await mkdir(path.dirname(statsPath), { recursive: true })
+  return {
+    ...env,
+    NCURATOR_WORKSPACE_KNOWLEDGE_CACHE_STATS_PATH: statsPath,
     NCURATOR_E2E_KNOWLEDGE_CACHE_NAMESPACE: `${String(
       env.NCURATOR_E2E_KNOWLEDGE_CACHE_NAMESPACE || 'e2e'
     )}/${caseKey}`
@@ -629,7 +648,8 @@ const runE2ETestFilesConcurrently = async (testFiles, targets, testNamePattern, 
       fileTasks.map((task) => ({
         ...task,
         targetId: target.id,
-        env: target.env
+        env: target.env,
+        cacheMode: target.cacheMode
       }))
     )
     .map((task, index) => ({ ...task, index }))
@@ -647,9 +667,13 @@ const runE2ETestFilesConcurrently = async (testFiles, targets, testNamePattern, 
   const runnableTasks = tasks.filter(
     (task) => !resumedKeys.has(`${task.targetId}:${task.testFile}`)
   )
-  const warmupTasks = runnableTasks.filter((task) => task.execution === 'warmup')
+  const warmupTasks = runnableTasks.filter(
+    (task) => task.cacheMode === 'warmup' && task.execution === 'warmup'
+  )
   const concurrentTasks = runnableTasks.filter(
-    (task) => task.execution !== 'exclusive' && task.execution !== 'warmup'
+    (task) =>
+      task.execution !== 'exclusive' &&
+      !(task.cacheMode === 'warmup' && task.execution === 'warmup')
   )
   const exclusiveTasks = runnableTasks.filter((task) => task.execution === 'exclusive')
   const results = [...resumedResults]
@@ -689,8 +713,11 @@ const runE2ETestFilesConcurrently = async (testFiles, targets, testNamePattern, 
       )
     }
     const startedAt = Date.now()
-    const caseEnv = await buildCaseKnowledgeCacheEnv(task.env, task.testFile)
-    await seedCaseKnowledgeCache(caseEnv, seedPath)
+    const caseEnv =
+      task.cacheMode === 'direct'
+        ? await buildDirectKnowledgeCacheEnv(task.env, task.testFile)
+        : await buildCaseKnowledgeCacheEnv(task.env, task.testFile)
+    if (task.cacheMode === 'warmup') await seedCaseKnowledgeCache(caseEnv, seedPath)
     const code = await runVitest({
       configPath: 'vitest.e2e.config.mts',
       testFiles: [task.testFile],
@@ -908,7 +935,7 @@ const runTypeWorkflow = async (input) => {
       reuse: input.reuseKnowledgeCache
     })
     runtimeEnv = { ...runtimeEnv, ...knowledgeCache.env }
-    e2eTargets = [{ id: 'source', env: runtimeEnv }]
+    e2eTargets = [{ id: 'source', env: runtimeEnv, cacheMode: 'direct' }]
   }
 
   let exitCode = 0
@@ -1057,6 +1084,7 @@ const main = async () => {
         return {
           id: session.releasePlatform,
           env: { ...session.env, ...knowledgeCache.env },
+          cacheMode: 'warmup',
           session,
           knowledgeCache,
           resumedTests
@@ -1078,9 +1106,10 @@ const main = async () => {
     const result = await runTypeWorkflow({
       ...args,
       type: 'e2e',
-      e2eTargets: packageTargets.map(({ id, env, resumedTests }) => ({
+      e2eTargets: packageTargets.map(({ id, env, cacheMode, resumedTests }) => ({
         id,
         env,
+        cacheMode,
         resumedTests
       })),
       deadlineAt

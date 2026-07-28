@@ -9,7 +9,10 @@ const SESSION_ID = 'resume-snapshot-session'
 
 const buildDeps = async (
   runtime: BackendTestRuntime,
-  driver: ReturnType<typeof createScriptedStructuredOutputDriver>
+  driver: ReturnType<typeof createScriptedStructuredOutputDriver>,
+  humanRuntimeOverrides?: {
+    graphRecursionLimit?: number
+  }
 ) => {
   const runtimeSettings = await runtime.storageService.aiRuntimeSettings.get()
   const controller = new AbortController()
@@ -36,7 +39,8 @@ const buildDeps = async (
       sendEvent: (event) => runtime.eventCollector.add(event),
       recordLlmIo: (record) => runtime.eventCollector.addLlmIo(record),
       requestApprovalBatch: async () => ({ accepted: true, decisions: [] as never[] }),
-      llmDriver: driver
+      llmDriver: driver,
+      humanRuntimeOverrides
     }
   }
 }
@@ -145,7 +149,7 @@ describe('ai human mock-llm backend', () => {
                 user.includes('工具 pdf_inspect') && !user.includes('工具 docx_read_outline')
               restoredRoundSeen = user.includes('先学习一个 skill 再继续。')
               resumeHintSeen =
-                user.includes('上一次运行因 timeout 中断') &&
+                user.includes('上一次运行因请求超时而中断') &&
                 user.includes('已恢复最近一次上下文信息')
               return buildCompleteTaskDecision({
                 summary: '已从恢复快照继续完成任务。'
@@ -390,6 +394,77 @@ describe('ai human mock-llm backend', () => {
           `${SESSION_ID}-error`
         )
 
+        const runtimeLimitSessionId = `${SESSION_ID}-runtime-limit`
+        await runtime.chatStore.saveChatSession({
+          id: runtimeLimitSessionId,
+          title: 'runtime limit resume snapshot test',
+          created_at: Date.now(),
+          workspace_id: 'test-workspace'
+        })
+        const runtimeLimitDriver = createScriptedStructuredOutputDriver({
+          'human.brain': [
+            {
+              output: buildLearnSkillsDecision({
+                skillIds: ['docx-read'],
+                summary: '在低 Graph 上限测试中建立任务进度。'
+              })
+            }
+          ]
+        })
+        const { deps: runtimeLimitDeps } = await buildDeps(runtime, runtimeLimitDriver, {
+          graphRecursionLimit: 4
+        })
+        const runtimeLimitResult = await AiRunService.getInstance().run(
+          {
+            runId: `${runtime.runId}-runtime-limit`,
+            sessionId: runtimeLimitSessionId,
+            input: '验证达到运行上限后恢复原始任务',
+            mainModel: {
+              configId: 'mock-llm-scripted',
+              modelName: 'scripted-llm'
+            },
+            workspace: {
+              workspaceId: 'test-workspace',
+              workspaceName: 'test-workspace',
+              rootPath: runtime.workspaceRoot
+            }
+          },
+          runtimeLimitDeps
+        )
+        const runtimeLimitSnapshot =
+          await runtime.chatStore.getSessionResumeSnapshot(runtimeLimitSessionId)
+        let runtimeLimitTaskGoalSeen = false
+        const runtimeLimitResumeDriver = createScriptedStructuredOutputDriver({
+          'human.brain': [
+            ({ user }) => {
+              runtimeLimitTaskGoalSeen =
+                user.includes('原始任务：验证达到运行上限后恢复原始任务') &&
+                user.includes('任务因达到运行上限而中断') &&
+                user.includes('用户随后要求：“继续完成运行上限测试”')
+              return buildCompleteTaskDecision({ summary: '运行上限恢复完成。' })
+            }
+          ],
+          'human.mouth': [{ text: '运行上限恢复完成。' }]
+        })
+        const { deps: runtimeLimitResumeDeps } = await buildDeps(runtime, runtimeLimitResumeDriver)
+        const runtimeLimitResumeResult = await AiRunService.getInstance().run(
+          {
+            runId: `${runtime.runId}-runtime-limit-resume`,
+            sessionId: runtimeLimitSessionId,
+            input: '继续完成运行上限测试',
+            mainModel: {
+              configId: 'mock-llm-scripted',
+              modelName: 'scripted-llm'
+            },
+            workspace: {
+              workspaceId: 'test-workspace',
+              workspaceName: 'test-workspace',
+              rootPath: runtime.workspaceRoot
+            }
+          },
+          runtimeLimitResumeDeps
+        )
+
         return {
           timeoutResult,
           timeoutSnapshot,
@@ -410,7 +485,11 @@ describe('ai human mock-llm backend', () => {
           contentSafetyResult,
           contentSafetySnapshot,
           ordinaryResult,
-          ordinarySnapshot
+          ordinarySnapshot,
+          runtimeLimitResult,
+          runtimeLimitSnapshot,
+          runtimeLimitResumeResult,
+          runtimeLimitTaskGoalSeen
         }
       },
       assert: async (result, runtime) => {
@@ -448,13 +527,19 @@ describe('ai human mock-llm backend', () => {
             result.restoredSkillSeen &&
             result.restoredRoundSeen &&
             result.ordinaryResult.status === 'failed' &&
-            result.ordinaryResult.failureCode === 'error' &&
-            result.ordinaryResult.resumeSnapshotSaved === false &&
-            result.ordinarySnapshot === null,
+            result.ordinaryResult.failureCode === 'unexpected_error' &&
+            result.ordinaryResult.resumeSnapshotSaved === true &&
+            result.ordinarySnapshot?.reason === 'unexpected_error' &&
+            result.runtimeLimitResult.status === 'failed' &&
+            result.runtimeLimitResult.failureCode === 'runtime_limit' &&
+            result.runtimeLimitResult.error === '已达到运行上限，可继续对话推进' &&
+            result.runtimeLimitSnapshot?.reason === 'runtime_limit' &&
+            result.runtimeLimitResumeResult.status === 'completed' &&
+            result.runtimeLimitTaskGoalSeen,
           {
             name: 'ai-run-service-saves-and-restores-session-resume-snapshot',
             message:
-              'timeout/network_error 应保存恢复快照并在下一轮同 session 自动恢复；普通 error 不应保留恢复快照。',
+              'timeout/network_error 和未知异常都应保存恢复快照，并在下一轮同 session 自动恢复。',
             data: result
           }
         )

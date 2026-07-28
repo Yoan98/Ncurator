@@ -146,6 +146,18 @@ describe('ai tool hand backend', () => {
         })
 
         runtime.assertThat(
+          result.firstState.execution.pendingDecisionHint?.code ===
+            'hand_tool_limit_near_exhausted' &&
+            result.firstState.execution.pendingDecisionHint.detail.toolCallCount === 1 &&
+            result.firstState.execution.pendingDecisionHint.detail.limit === 1,
+          {
+            name: 'tool-limit-warning-uses-configured-ratio',
+            message: '达到工具预算提醒比例后应产生接近上限提示，且不阻止本轮工具执行。',
+            data: result.firstState.execution.pendingDecisionHint
+          }
+        )
+
+        runtime.assertThat(
           result.secondState.execution.artifacts.length === 1 &&
             result.secondState.execution.artifacts.some(
               (artifact) => artifact.kind === 'file' && artifact.applyId === 'existing-docx-change'

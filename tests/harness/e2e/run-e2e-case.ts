@@ -58,12 +58,16 @@ const EMPTY_KNOWLEDGE_CACHE_STATS: KnowledgeCacheStats = {
   vectorCacheMisses: 0
 }
 
-const readKnowledgeCacheStats = async (cachePath: string): Promise<KnowledgeCacheStats> => {
-  if (!cachePath) return { ...EMPTY_KNOWLEDGE_CACHE_STATS }
+const readKnowledgeCacheStats = async (
+  cachePathOrStatsPath: string
+): Promise<KnowledgeCacheStats> => {
+  if (!cachePathOrStatsPath) return { ...EMPTY_KNOWLEDGE_CACHE_STATS }
   try {
-    const parsed = JSON.parse(
-      await readFile(path.join(cachePath, 'stats.json'), 'utf8')
-    ) as Partial<KnowledgeCacheStats>
+    const statsPath =
+      path.basename(cachePathOrStatsPath) === 'stats.json'
+        ? cachePathOrStatsPath
+        : path.join(cachePathOrStatsPath, 'stats.json')
+    const parsed = JSON.parse(await readFile(statsPath, 'utf8')) as Partial<KnowledgeCacheStats>
     return {
       splitCacheHits: Number(parsed.splitCacheHits || 0),
       splitCacheMisses: Number(parsed.splitCacheMisses || 0),
@@ -303,11 +307,14 @@ export const runE2ECase = async <TResult>(
   const knowledgeCachePath = String(
     process.env.NCURATOR_WORKSPACE_KNOWLEDGE_CACHE_PATH || ''
   ).trim()
+  const knowledgeCacheStatsPath = String(
+    process.env.NCURATOR_WORKSPACE_KNOWLEDGE_CACHE_STATS_PATH || ''
+  ).trim()
   const knowledgeCacheEnabled =
     String(process.env.NCURATOR_WORKSPACE_KNOWLEDGE_CACHE || '').trim() === '1' &&
     Boolean(knowledgeCachePath)
   const knowledgeCacheBaseline = knowledgeCacheEnabled
-    ? await readKnowledgeCacheStats(knowledgeCachePath)
+    ? await readKnowledgeCacheStats(knowledgeCacheStatsPath || knowledgeCachePath)
     : { ...EMPTY_KNOWLEDGE_CACHE_STATS }
   const emittedTimelineSignalKeys = new Set<string>()
   const emittedRuntimeEventKeys = new Set<string>()
@@ -868,7 +875,7 @@ export const runE2ECase = async <TResult>(
     }
 
     const knowledgeCacheCurrent = knowledgeCacheEnabled
-      ? await readKnowledgeCacheStats(knowledgeCachePath)
+      ? await readKnowledgeCacheStats(knowledgeCacheStatsPath || knowledgeCachePath)
       : { ...EMPTY_KNOWLEDGE_CACHE_STATS }
     const knowledgeCacheSummary: KnowledgeCacheSummary = {
       knowledgeCacheEnabled,

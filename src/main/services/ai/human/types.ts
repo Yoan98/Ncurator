@@ -17,6 +17,7 @@ import {
 } from './constants'
 import {
   humanThoughtSchema,
+  humanTaskContextSchema,
   brainNextActionSchema,
   deliveryGuidanceItemSchema,
   humanThoughtDecisionSchema,
@@ -66,6 +67,7 @@ export type SkillDefinitionBase = z.infer<typeof skillDefinitionBaseSchema>
 export type SkillDefinition = SkillDefinitionBase
 
 export type HumanThought = z.infer<typeof humanThoughtSchema>
+export type HumanTaskContext = z.infer<typeof humanTaskContextSchema>
 export type BrainNextAction = z.infer<typeof brainNextActionSchema>
 export type HumanTodoItemStatus = z.infer<typeof humanTodoItemStatusSchema>
 export type HumanTodoItem = z.infer<typeof humanTodoItemSchema>

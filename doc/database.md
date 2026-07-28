@@ -21,7 +21,7 @@ SQLite 使用 `better-sqlite3`。启动时 `SqliteCore` 负责：
 
 SQLite 保存以下业务数据：
 
-- 会话、消息、conversation memory 和恢复快照。
+- 会话、消息、conversation memory 和按会话隔离的中断恢复快照；恢复快照只在任务正常完成或会话删除时清理。
 - AI run、事件、审批和文件修改记录。
 - 工作区、文件索引任务、文档元数据和网页源。
 - LLM 配置、AI runtime 设置和模型输出策略偏好。

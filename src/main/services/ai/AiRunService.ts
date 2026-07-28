@@ -15,6 +15,10 @@ import {
   saveHumanResumeSnapshot
 } from './utils/resumeSnapshot'
 import { isCancelledError, isRecoverableHumanRunError } from './utils/runFailure'
+import { classifyInterruptionReason } from './utils/runFailure'
+import { createInitialHumanState } from './human/state/schema'
+import type { HumanState } from './human/types'
+import { createHumanTaskContext } from './utils/resumeSnapshot'
 
 export class AiRunService {
   private static instance: AiRunService
@@ -29,10 +33,15 @@ export class AiRunService {
   }
 
   public async run(payload: AiRunStartPayload, deps: AiRunDeps): Promise<AiRunState> {
+    const userInput = String(payload.input || '')
     let mergedSelectedReferences = payload.selectedReferences
     let mergedWorkspace = payload.workspace
+    let initialState: HumanState = createInitialHumanState({
+      taskId: payload.runId,
+      userInput,
+      taskContext: createHumanTaskContext(userInput)
+    })
     try {
-      await runAiRuntimePreflight(deps)
       const resumeSnapshot = await deps.chatStore.getSessionResumeSnapshot(payload.sessionId)
       mergedSelectedReferences = resolveResumeSelectedReferences({
         payloadSelectedReferences: payload.selectedReferences,
@@ -47,14 +56,15 @@ export class AiRunService {
         selectedReferences: mergedSelectedReferences,
         workspace: mergedWorkspace
       }
-      const initialState = resumeSnapshot
+      initialState = resumeSnapshot
         ? restoreHumanStateFromResumeSnapshot({
             runId: payload.runId,
-            userInput: String(payload.input || ''),
+            userInput,
             reason: resumeSnapshot.reason,
             snapshot: resumeSnapshot.humanState
           })
-        : undefined
+        : initialState
+      await runAiRuntimePreflight(deps)
       const ctx = createAiRunContext(effectivePayload, deps)
       const runHumanTask = createHumanGraphRunner({ ctx })
       const output = await runHumanTask(
@@ -76,63 +86,42 @@ export class AiRunService {
         finalArtifacts: output.artifacts || []
       })
     } catch (e) {
-      if (isRecoverableHumanRunError(e) && e.lastHumanState) {
-        const failure = toRendererRunFailure(e)
-        await saveHumanResumeSnapshot({
-          chatStore: deps.chatStore,
-          sessionId: payload.sessionId,
-          reason: e.reason,
-          runId: payload.runId,
-          userInput: String(payload.input || ''),
-          selectedReferences: mergedSelectedReferences || [],
-          workspace: mergedWorkspace,
-          humanState: e.lastHumanState,
-          errorMessage: e.message,
-          updatedAt: Date.now()
-        })
-        if (e.reason === 'user_cancelled') {
-          return createCancelledAiRunState({
-            runId: payload.runId,
-            sessionId: payload.sessionId,
-            input: payload.input,
-            resumeSnapshotSaved: true
-          })
-        }
-        return createFailedAiRunState({
-          runId: payload.runId,
-          sessionId: payload.sessionId,
-          input: payload.input,
-          error: failure.message,
-          failureSource: failure.source,
-          failureHttpStatus: failure.httpStatus,
-          failureProviderCode: failure.providerCode,
-          failureCode: e.reason,
-          resumeSnapshotSaved: true
-        })
-      }
-      if (isCancelledError(e)) {
+      const reason = isRecoverableHumanRunError(e) ? e.reason : classifyInterruptionReason(e)
+      const humanState =
+        isRecoverableHumanRunError(e) && e.lastHumanState ? e.lastHumanState : initialState
+      await saveHumanResumeSnapshot({
+        chatStore: deps.chatStore,
+        sessionId: payload.sessionId,
+        reason,
+        runId: payload.runId,
+        userInput,
+        selectedReferences: mergedSelectedReferences || [],
+        workspace: mergedWorkspace,
+        humanState,
+        errorMessage: e instanceof Error ? e.message : String(e || ''),
+        updatedAt: Date.now()
+      })
+      if (reason === 'user_cancelled' || isCancelledError(e)) {
         return createCancelledAiRunState({
           runId: payload.runId,
           sessionId: payload.sessionId,
           input: payload.input,
-          resumeSnapshotSaved: Boolean(
-            await deps.chatStore.getSessionResumeSnapshot(payload.sessionId)
-          )
+          resumeSnapshotSaved: true
         })
       }
-      await deps.chatStore.clearSessionResumeSnapshot(payload.sessionId)
-      console.error('[AI-RUN] unexpected failure:', e)
       const failure = toRendererRunFailure(e)
+      const message =
+        reason === 'runtime_limit' ? '已达到运行上限，可继续对话推进' : failure.message
       return createFailedAiRunState({
         runId: payload.runId,
         sessionId: payload.sessionId,
         input: payload.input,
-        error: failure.message,
-        failureSource: failure.source,
+        error: message,
+        failureSource: reason === 'runtime_limit' ? 'internal' : failure.source,
         failureHttpStatus: failure.httpStatus,
         failureProviderCode: failure.providerCode,
-        failureCode: 'error',
-        resumeSnapshotSaved: false
+        failureCode: reason,
+        resumeSnapshotSaved: true
       })
     }
   }

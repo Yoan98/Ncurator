@@ -67,11 +67,9 @@ describe('workbench result e2e', () => {
             { timeout: 30_000 }
           )
           const diffCanvasVisible = (await viewer.locator('canvas').count()) > 0
-          await viewer.getByRole('button', { name: 'Notes' }).click()
-          const notesSheetVisible = await viewer
-            .getByRole('button', { name: 'Notes' })
-            .isVisible()
-            .catch(() => false)
+          const notesSheetTab = viewer.getByText('Notes', { exact: true }).last()
+          await notesSheetTab.click()
+          const notesSheetVisible = await notesSheetTab.isVisible().catch(() => false)
 
           await getWorkbenchLocator(page, workbenchSelectors.applyRevertButton).click()
           await page.getByText('回退这次修改？').waitFor({ state: 'visible' })

@@ -38,7 +38,7 @@ import type {
   WorkbenchSelectedModel
 } from '../../../shared/types'
 import type { LlmRuntimeConfig } from '../../../shared/types'
-import type { HumanState, HumanTaskInput, HumanTaskOutput } from './human/types'
+import type { HumanState, HumanTaskContext, HumanTaskInput, HumanTaskOutput } from './human/types'
 import { aiRunStateContractSchema, aiRunStatusSchema } from './schema'
 
 export type { AiRunStatus, HumanTaskInput, HumanTaskOutput }
@@ -60,6 +60,8 @@ export type HumanTaskRunner = (
 export type AiRunState = z.infer<typeof aiRunStateContractSchema>
 
 export type HumanResumeSnapshot = Pick<HumanState, 'memory' | 'skills'> & {
+  schemaVersion: 2
+  taskContext: HumanTaskContext
   execution: Pick<
     HumanState['execution'],
     'pendingDecisionHint' | 'deliveryGuidanceItems' | 'artifacts' | 'finalizationReason'
@@ -228,6 +230,13 @@ export type AiRunDeps = {
   llmDriver?: AiLlmDriver
   browserUseService?: BrowserUseService
   webCrawlerService?: WebCrawlerService
+  humanRuntimeOverrides?: {
+    hardActionLimit?: number
+    graphRecursionLimit?: number
+    toolLimitWarningRatio?: number
+    modelContextWindowTokens?: number
+    terminalEnvironment?: Record<string, string>
+  }
 }
 
 export type AiRunContext = {
@@ -239,6 +248,8 @@ export type AiRunContext = {
   allowedToolNames?: string[]
   humanRuntimeOverrides?: {
     hardActionLimit?: number
+    graphRecursionLimit?: number
+    toolLimitWarningRatio?: number
     modelContextWindowTokens?: number
     terminalEnvironment?: Record<string, string>
   }

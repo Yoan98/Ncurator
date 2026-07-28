@@ -12,7 +12,7 @@
 
 - Workbench UI E2E 回归测试通过脚本在 case 运行时把 `tests/fixtures/workspace` 复制到临时目录，并默认通过 Settings UI 创建工作区、绑定真实目录、检查更新和更新索引。
 - Workbench 正式 e2e 不允许直接调用 `workspacePrepare`、直接写模型配置、fake model、fake search、fake docx、fake AI event、fake attachment pick 或固定 document id。
-- Workbench e2e 的 workspace 文件索引允许在测试环境通过 `NCURATOR_WORKSPACE_KNOWLEDGE_CACHE=1` 启用真实 split / vector 缓存；缓存只按文件内容 hash、扩展名、splitter 参数和 embedding model 复用计算结果，不替代 workspace 文件记录、document id、搜索结果或 UI 状态。
+- Workbench e2e 的 workspace 文件索引允许在测试环境通过 `NCURATOR_WORKSPACE_KNOWLEDGE_CACHE=1` 启用真实 split / vector 缓存；缓存只按文件内容 hash、扩展名、splitter 参数和 embedding model 复用计算结果，不替代 workspace 文件记录、document id、搜索结果或 UI 状态。Source E2E 直接共享内容缓存并按 case 隔离统计；只有正式包 E2E 先执行 warm-up，再把缓存种子复制给隔离 case。
 - Workbench 模型选择 helper 必须通过真实下拉搜索分别选择 `AI_LIVE_PRIMARY_MODEL_NAME` 和 `AI_LIVE_VISUAL_MODEL_NAME`。
 - Workbench UI E2E 回归测试需要真实索引完成信号和 UI 可见状态作为等待条件；IPC observer 和 job 查询只能作为辅助证据，不能用来造业务状态。
 - `file-preview-actions` 当前按生产真实索引能力覆盖 `pdf/docx/md/txt/xlsx/xlsm/xltx/xltm`：连续打开的文件要分别保留为资源 Tab，并能切回旧 Tab。
@@ -272,12 +272,12 @@ tests/case/workbench/
 
 #### `stop-running-or-approval-run`
 
-- 测试类型：`e2e`
-- What：智能模式运行中底部发送按钮切换为停止图标，并能取消普通长任务和审批等待中的运行。
-- Why：用户需要可靠中断长任务；审批等待时停止若不能释放等待，会造成运行态卡死。
-- How：发送真实长任务请求和真实审批等待请求；运行中点击底部停止图标并观察运行态、审批态和反馈。
-- Oracle：运行中发送按钮切换为停止图标且不显示独立取消按钮，对齐 `WB-COMPOSER-006-AC1`；当前会话列表项显示“任务运行中”，取消后标记消失，对齐 `WB-SESSION-002-AC5`；点击停止后当前运行结束并给出已取消反馈，对齐 `WB-COMPOSER-006-AC2`；审批等待时点击停止也结束 run，对齐 `WB-COMPOSER-006-AC3`；记录模型、耗时、完成度评分和失败归因。
-- Not：不验证后端 abort signal 在每个 AI 节点内部的细节。
+- 测试类型：`backend contract + e2e`
+- What：智能模式运行中底部发送按钮切换为停止图标并能取消普通长任务和审批等待；同一会话中的任务在用户停止、网络错误、请求超时、进程中断、达到运行上限或未知异常后保存恢复快照，并在后续消息中恢复原始目标、历次中断记录和已有进度。
+- Why：用户需要可靠中断长任务；审批等待时停止若不能释放等待会造成运行态卡死，任何失败分支误删快照、跨会话读取或覆盖原始目标也会让用户无法可靠续做。
+- How：E2E 发送真实长任务和审批等待请求，运行中点击停止后再发送恢复语句；backend 使用 Mock LLM、真实测试数据库和测试专用 `humanRuntimeOverrides`，将 Graph 上限和工具预算降到很小的值，依次制造多种中断并检查 `taskContext`、清理规则和最终 `task_goal`。生产默认值 200、120 和 80% 由常量契约测试锁定，不真实跑满。
+- Oracle：运行中发送按钮和取消反馈对齐 `WB-COMPOSER-006`，会话运行标记对齐 `WB-SESSION-002-AC5`；全部中断原因都保存并可在同一会话恢复，对齐 `WB-SESSION-007-AC1`；`task_goal` 保留原始任务并按顺序渲染所有中断原因和恢复语句，对齐 `WB-SESSION-007-AC2`、`WB-SESSION-007-AC3`；切换会话、重启和跨会话隔离对齐 `WB-SESSION-007-AC4`；编辑最新用户消息后快照仍存在，对齐 `WB-SESSION-007-AC5`；只有正常完成或删除会话才清理，对齐 `WB-SESSION-007-AC6`；运行上限显示“已达到运行上限，可继续对话推进”并可恢复，对齐 `WB-SESSION-007-AC7`。
+- Not：不使用真实模型执行 200 个 Graph 步骤或调用 120 次真实工具；测试覆盖参数不能通过产品正常请求传入，也不改变工具软上限语义。
 
 #### `cancelled-run-keeps-artifact`
 

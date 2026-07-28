@@ -17,7 +17,8 @@ import {
   classifyLlmFailureCode,
   createRecoverableHumanRunError,
   isCancelledError,
-  isRecoverableRunErrorCode
+  isRecoverableRunErrorCode,
+  isGraphRuntimeLimitError
 } from '../../utils/runFailure'
 
 export const HUMAN_GRAPH_INVOKE_CONFIG = {
@@ -116,7 +117,7 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
       )
       const initialState: HumanState = {
         ...baseInitialState,
-        task: taskInput,
+        task: options.initialState?.task || taskInput,
         skills: {
           learnedSkillIds
         }
@@ -131,10 +132,10 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
           decisionHint: initialState.execution.pendingDecisionHint
         })
       }
-      const output = (await graph.invoke(
-        initialState as HumanState,
-        HUMAN_GRAPH_INVOKE_CONFIG
-      )) as HumanState
+      const output = (await graph.invoke(initialState as HumanState, {
+        recursionLimit:
+          ctx.humanRuntimeOverrides?.graphRecursionLimit || HUMAN_GRAPH_RECURSION_LIMIT
+      })) as HumanState
 
       return {
         taskId: taskInput.taskId,
@@ -151,6 +152,13 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
           lastHumanState: cache.currentState
         })
       }
+      if (isGraphRuntimeLimitError(error)) {
+        throw createRecoverableHumanRunError({
+          reason: 'runtime_limit',
+          error,
+          lastHumanState: cache.currentState
+        })
+      }
       {
         const code = classifyLlmFailureCode(error)
         if (isRecoverableRunErrorCode(code)) {
@@ -161,7 +169,11 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
           })
         }
       }
-      throw error
+      throw createRecoverableHumanRunError({
+        reason: 'unexpected_error',
+        error,
+        lastHumanState: cache.currentState
+      })
     }
   }
 }

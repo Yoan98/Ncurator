@@ -176,6 +176,7 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     sessionId: payload.sessionId,
     platform,
     preference,
+    humanRuntimeOverrides: deps.humanRuntimeOverrides,
     referenceScope: buildReferenceScope({
       workspace: normalizedWorkspace,
       selectedReferences: normalizedReferences,

@@ -10,7 +10,16 @@ export const renderDecisionHintForBrain = (hint: HumanDecisionHint): string => {
   switch (hint.code) {
     case 'run_resumed_after_interruption':
       return [
-        `上一次运行因 ${hint.detail.reason} 中断，已恢复最近一次上下文信息，请根据用户诉求继续推进`
+        `上一次运行因${
+          {
+            timeout: '请求超时',
+            network_error: '网络错误',
+            user_cancelled: '用户主动停止',
+            process_interrupted: '运行进程中断',
+            runtime_limit: '达到运行上限',
+            unexpected_error: '未知运行异常'
+          }[hint.detail.reason]
+        }而中断，已恢复最近一次上下文信息，请根据完整 task_goal 继续推进`
       ].join('\n')
     case 'learning_no_effect':
       return `上一轮学习没有带来新能力。请求的技能有：${renderStringList(hint.detail.requestedSkillIds)}；重复的技能有：${renderStringList(hint.detail.duplicateSkillIds)}；不存在的技能有：${renderStringList(hint.detail.unknownSkillIds)}。`

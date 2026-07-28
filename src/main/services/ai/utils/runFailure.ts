@@ -28,6 +28,14 @@ export const isContentSafetyError = (error: unknown): boolean => {
 export const isCancelledError = (error: unknown): boolean =>
   Boolean(error && typeof error === 'object' && 'code' in error && error.code === 'CANCELLED')
 
+export const isGraphRuntimeLimitError = (error: unknown): boolean =>
+  Boolean(
+    error &&
+    typeof error === 'object' &&
+    (('lc_error_code' in error && error.lc_error_code === 'GRAPH_RECURSION_LIMIT') ||
+      ('name' in error && error.name === 'GraphRecursionError'))
+  )
+
 export const classifyLlmFailureCode = (error: unknown): AiRunFailureCode => {
   const message = getErrorMessage(error).toLowerCase()
   const code =
@@ -75,7 +83,16 @@ export const isRecoverableRunErrorCode = (
   code === 'timeout' ||
   code === 'network_error' ||
   code === 'user_cancelled' ||
-  code === 'process_interrupted'
+  code === 'process_interrupted' ||
+  code === 'runtime_limit' ||
+  code === 'unexpected_error'
+
+export const classifyInterruptionReason = (error: unknown): RecoverableRunErrorCode => {
+  if (isCancelledError(error)) return 'user_cancelled'
+  if (isGraphRuntimeLimitError(error)) return 'runtime_limit'
+  const code = classifyLlmFailureCode(error)
+  return code === 'timeout' || code === 'network_error' ? code : 'unexpected_error'
+}
 
 export const createRecoverableHumanRunError = (input: {
   reason: RecoverableRunErrorCode
@@ -103,5 +120,7 @@ export const isRecoverableHumanRunError = (error: unknown): error is Recoverable
     (error.reason === 'timeout' ||
       error.reason === 'network_error' ||
       error.reason === 'user_cancelled' ||
-      error.reason === 'process_interrupted')
+      error.reason === 'process_interrupted' ||
+      error.reason === 'runtime_limit' ||
+      error.reason === 'unexpected_error')
   )

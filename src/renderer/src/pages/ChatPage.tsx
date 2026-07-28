@@ -2326,7 +2326,13 @@ const ChatPage: React.FC = () => {
         if (activeSessionId) {
           void loadFileChangesForSession(activeSessionId)
         }
-        emitErrorMessage(event.source === 'provider' ? '模型请求失败' : '运行失败')
+        emitErrorMessage(
+          event.code === 'runtime_limit'
+            ? '已达到运行上限，可继续对话推进'
+            : event.source === 'provider'
+              ? '模型请求失败'
+              : '运行失败'
+        )
         return
       }
 
