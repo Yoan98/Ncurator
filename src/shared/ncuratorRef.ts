@@ -289,3 +289,8 @@ export const normalizeNcuratorRefMarkdownLinks = (markdown: string): string => {
 
   return output
 }
+
+export const repairInlineCodeWrappedNcuratorLinks = (markdown: string): string =>
+  markdown.replace(/`(\[[^\n`]+\]\((ncurator:\/\/ref\?[^\n`]+)\))`/g, (match, link, href) =>
+    parseNcuratorRefHref(href).type === 'reference' ? link : match
+  )

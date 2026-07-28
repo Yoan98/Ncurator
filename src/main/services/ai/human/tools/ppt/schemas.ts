@@ -280,12 +280,10 @@ const pptElementOperationSchema = z.discriminatedUnion('type', [
 
 export const pptEditActionSchema = z.discriminatedUnion('type', [
   z
-    .object({ type: z.literal('create_presentation'), html: z.array(pptSlideHtmlSchema).min(1) })
-    .strict(),
-  z
     .object({
       type: z.literal('insert_slide'),
-      beforeSlideId: slideIdSchema.optional(),
+      position: z.enum(['before', 'after']),
+      anchorSlideId: slideIdSchema.optional(),
       html: pptSlideHtmlSchema
     })
     .strict(),
@@ -294,14 +292,16 @@ export const pptEditActionSchema = z.discriminatedUnion('type', [
     .object({
       type: z.literal('move_slide'),
       slideId: slideIdSchema,
-      beforeSlideId: slideIdSchema.optional()
+      position: z.enum(['before', 'after']),
+      anchorSlideId: slideIdSchema
     })
     .strict(),
   z
     .object({
       type: z.literal('duplicate_slide'),
       slideId: slideIdSchema,
-      beforeSlideId: slideIdSchema.optional()
+      position: z.enum(['before', 'after']),
+      anchorSlideId: slideIdSchema
     })
     .strict(),
   z

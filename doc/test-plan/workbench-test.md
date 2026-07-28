@@ -22,7 +22,7 @@
 - `browser-use-task-panel` 需要真实 AI run 触发 `browser_use` 并驱动内置浏览器完成本地网页任务；同时验证多个浏览器 Tab 独立历史、共享持久站点数据、切换文件后网页状态不销毁，以及同 URL 标签不会让 Stagehand 串页，不能用 fake browser 替代。
 - `web_search` 与 `web_crawl` 需要分开覆盖：搜索 case 只验证候选网页返回；读取 case 必须验证 AI 继续读取网页正文后再回答。
 - Workbench 附件链路当前支持图片、`doc`、`docx`、`pptx`、`pdf`、`md`、`json`、`xlsx`、`xlsm`、`xltx`、`xltm`，统一保存到 `<workspace>/.ncurator/runtime/assets/<assetBucketId>/`；`assetBucketId` 为输入草稿 UUID，发送给 AI 时只传附件名称与路径，不再做发送前识图或文件解析。
-- `WB-EXCEL-001-AC1`、`WB-EXCEL-001-AC2`、`WB-EXCEL-001-AC3`、`WB-EXCEL-001-AC4` 的工具输入输出、完整编辑操作、原子失败、冲突和只读格式边界由 AI tool 回归承担；Workbench 的 Excel apply case 负责真实模型选用工具、正式文件、修改入口、单网格 Diff 和回退闭环，不重复枚举底层操作。
+- `WB-EXCEL-001-AC1`、`WB-EXCEL-001-AC2`、`WB-EXCEL-001-AC3`、`WB-EXCEL-001-AC4`、`WB-EXCEL-001-AC6`、`WB-EXCEL-001-AC7` 的工具输入输出、完整编辑操作、原子失败、冲突、只读格式、默认 Sheet 和 Sheet 严格校验由 AI tool 回归承担；Workbench 的 Excel apply case 负责真实模型选用工具、正式文件、修改入口、单网格 Diff 和回退闭环，不重复枚举底层操作。
 
 ## 3. Suite 设计
 
@@ -404,7 +404,7 @@ tests/case/workbench/
 - What：真实 AI 修改已有 Excel 后，用户在同一个网格中查看红绿单元格边框，并能回退到原始文件。
 - Why：Excel 修改预览不能依赖模型描述，也不适合 PPT 式左右画面对比，必须直接验证工作簿数据、公式和单元格级 diff。
 - How：通过真实 Workbench UI 用自然语言请求 AI 对已有 xlsx 分两轮修改；打开修改记录，显式切换“查看文件/查看变更”，在两种模式下切换工作表，检查累计红绿边框，再执行回退。
-- Oracle：正式 xlsx 的值和公式准确且没有 diff 边框；同一 run 两轮修改只形成相对首个 baseline 的累计记录；新增和修改单元格为绿色、删除单元格为红色；两种模式都可切换工作表且不出现 PPT 前后预览；回退后 bytes 与修改前一致；真实调用包含 Excel 读工具和至少两次 `excel_edit`；对齐 `WB-EXCEL-001-AC5`、`WB-EXCEL-002-AC1`、`WB-EXCEL-002-AC2`、`WB-EXCEL-002-AC3`、`WB-EXCEL-002-AC4`。
+- Oracle：正式 xlsx 的值和公式准确且没有 diff 边框；同一 run 两轮修改只形成相对首个 baseline 的累计记录；新增和修改单元格为绿色、删除单元格为红色，Sheet 增删在 Diff 中使用红绿标签；两种模式都通过 Univer 可切换工作表且不出现 PPT 前后预览；回退后 bytes 与修改前一致；真实调用包含 Excel 读工具和至少两次 `excel_edit`；对齐 `WB-EXCEL-001-AC5`、`WB-EXCEL-002-AC1`、`WB-EXCEL-002-AC2`、`WB-EXCEL-002-AC3`、`WB-EXCEL-002-AC4`、`WB-EXCEL-002-AC5`。
 - Not：不逐字断言最终回答，不把模型直接计算的文本结果当作数据正确性证据。
 
 #### `excel-create-diff-and-revert`

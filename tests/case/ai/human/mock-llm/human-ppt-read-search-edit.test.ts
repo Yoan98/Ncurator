@@ -33,7 +33,7 @@ describe('ai human mock-llm ppt backend', () => {
       execute: async (runtime) => {
         await createPptToolHarness(runtime).invoke<JsonObject>('ppt_edit', {
           sourcePath,
-          actions: [{ type: 'create_presentation', html: [html] }]
+          actions: [{ type: 'insert_slide', position: 'after', html }]
         })
         const runner = createHumanTestRunner(runtime, {
           allowedToolNames: ['ppt_read_outline', 'ppt_read_slides', 'ppt_search', 'ppt_edit'],

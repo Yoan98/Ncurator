@@ -23,7 +23,7 @@ describe('ai tool docx backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['docx'],
-      description: '验证 create_document 立即写回源文件，run 结束时生成可回退 apply 记录。',
+      description: '验证新文件的 insert_blocks 立即写回源文件，run 结束时生成可回退 apply 记录。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -35,7 +35,8 @@ describe('ai tool docx backend', () => {
             sourcePath: targetFileName,
             actions: [
               {
-                type: 'create_document',
+                type: 'insert_blocks',
+                position: 'after',
                 blocks: [
                   { type: 'heading', level: 1, text: '深度学习与图形学复习总结' },
                   { type: 'paragraph', text: '过拟合：训练时间过久时容易出现。' },
@@ -79,7 +80,7 @@ describe('ai tool docx backend', () => {
             result.targetExistsAfterApply === true,
           {
             name: 'docx-create-directly-applies-target-file',
-            message: 'create_document 应立即创建目标 docx，run 收尾生成 created 差异记录。',
+            message: 'insert_blocks 应立即创建目标 docx，run 收尾生成 created 差异记录。',
             data: {
               created: result.created,
               records: result.records,

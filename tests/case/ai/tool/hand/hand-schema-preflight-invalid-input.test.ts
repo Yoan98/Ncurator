@@ -48,7 +48,7 @@ describe('ai tool hand backend', () => {
 	                      args: {
 	                        sourcePath: 'broken.docx',
 	                        actions: [{
-	                          type: 'create_document',
+	                          type: 'insert_blocks', position: 'after',
 	                          blocks: [
 	                            {
 	                              type: 'paragraph',

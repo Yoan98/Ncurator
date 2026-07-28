@@ -65,8 +65,7 @@ describe('ai tool hand excel backend', () => {
                     toolName: 'excel_edit',
                     args: {
                       sourcePath: 'hand-report.xlsx',
-                      action: 'update',
-                      operations: [
+                      actions: [
                         { type: 'set_cell', sheetName: 'Data', address: 'B2', value: 20 }
                       ]
                     }

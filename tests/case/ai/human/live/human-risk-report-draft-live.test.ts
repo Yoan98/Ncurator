@@ -212,7 +212,11 @@ describe('ai human live backend', () => {
             return Buffer.compare(currentBytes, Buffer.from(fixture.bytes)) === 0
           })
         )
-        const openedSourcePaths = collectStartedToolStringArgs(events, 'docx_read_outline', 'sourcePath')
+        const openedSourcePaths = collectStartedToolStringArgs(
+          events,
+          'docx_read_outline',
+          'sourcePath'
+        )
           .concat(collectStartedToolStringArgs(events, 'docx_read_blocks', 'sourcePath'))
           .concat(collectStartedToolStringArgs(events, 'docx_search', 'sourcePath'))
         const createSourcePaths = collectStartedDocxEditSourcePaths(events, isDocxEditCreateInput)
@@ -351,7 +355,7 @@ describe('ai human live backend', () => {
           {
             name: 'human-live-risk-report-runs-required-tool-chain',
             message:
-              'live human complex case 应通过真实 workspace/检索读取/docx_edit(create_document) 工具链完成本周周报文件创建任务。',
+              'live human complex case 应通过真实 workspace/检索读取/docx_edit(insert_blocks) 工具链完成本周周报文件创建任务。',
             data: {
               toolNames,
               hasResearchReadStep,

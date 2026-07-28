@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { createToolCallSchema, formatToolCallSchemaError } from '../../../../src/main/services/ai/human/toolCallSchema'
+import {
+  createToolCallSchema,
+  formatToolCallSchemaError
+} from '../../../../src/main/services/ai/human/toolCallSchema'
 
 describe('ai unit tool call schema', () => {
-  it('accepts a valid docx_edit create_document call and rejects nested args wrappers', () => {
+  it('accepts a valid docx_edit insert_blocks call and rejects nested args wrappers', () => {
     const schema = createToolCallSchema(['docx_edit', 'terminal_run'])
 
     expect(
@@ -10,15 +13,18 @@ describe('ai unit tool call schema', () => {
         toolName: 'docx_edit',
         args: {
           sourcePath: 'report.docx',
-          actions: [{
-            type: 'create_document',
-            blocks: [
-              {
-                type: 'paragraph',
-                text: 'hello'
-              }
-            ]
-          }]
+          actions: [
+            {
+              type: 'insert_blocks',
+              position: 'after',
+              blocks: [
+                {
+                  type: 'paragraph',
+                  text: 'hello'
+                }
+              ]
+            }
+          ]
         }
       })
     ).toMatchObject({
@@ -26,22 +32,25 @@ describe('ai unit tool call schema', () => {
     })
 
     const nested = schema.safeParse({
+      toolName: 'docx_edit',
+      args: {
         toolName: 'docx_edit',
         args: {
-          toolName: 'docx_edit',
-          args: {
-            sourcePath: 'report.docx',
-            actions: [{
-              type: 'create_document',
+          sourcePath: 'report.docx',
+          actions: [
+            {
+              type: 'insert_blocks',
+              position: 'after',
               blocks: [
                 {
                   type: 'paragraph',
                   text: 'hello'
                 }
               ]
-            }]
-          }
+            }
+          ]
         }
+      }
     })
 
     expect(nested.success).toBe(false)

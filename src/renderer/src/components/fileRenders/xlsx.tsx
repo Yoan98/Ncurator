@@ -1,6 +1,20 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { DocRendererProps, IDocument } from 'react-doc-viewer'
-import JSZip from 'jszip'
+import ExcelJS from 'exceljs'
+import {
+  BooleanNumber,
+  BorderStyleTypes,
+  CellValueType,
+  HorizontalAlign,
+  LocaleType,
+  VerticalAlign,
+  WrapStrategy,
+  type ICellData,
+  type IStyleData,
+  type IWorkbookData,
+  type IWorksheetData
+} from '@univerjs/core'
+import '@univerjs/preset-sheets-core/lib/index.css'
 import { workbenchSelectors } from '../../testing/selectors'
 
 type XlsxDocument = Omit<IDocument, 'fileData'> & {
@@ -9,239 +23,264 @@ type XlsxDocument = Omit<IDocument, 'fileData'> & {
   fileName?: string
 }
 
-type XlsxCell = { address: string; value: string; formula?: string; border?: 'green' | 'red' }
-type XlsxSheet = { name: string; cells: XlsxCell[]; maxRow: number; maxColumn: number }
-
-const localElements = (root: Document | Element, name: string): Element[] =>
-  Array.from(root.getElementsByTagNameNS('*', name))
-
-const textContent = (element: Element | null): string =>
-  element
-    ? Array.from(element.getElementsByTagNameNS('*', 't'))
-        .map((item) => item.textContent || '')
-        .join('')
-    : ''
-
-const columnNumber = (address: string): number => {
-  const letters = address.match(/^[A-Za-z]+/)?.[0] || 'A'
-  return letters
-    .toUpperCase()
-    .split('')
-    .reduce((total, letter) => total * 26 + letter.charCodeAt(0) - 64, 0)
-}
-
-const rowNumber = (address: string): number => Number(address.match(/\d+/)?.[0] || 1)
-
-const columnLetters = (column: number): string => {
-  let value = column
-  let result = ''
-  while (value > 0) {
-    const remainder = (value - 1) % 26
-    result = String.fromCharCode(65 + remainder) + result
-    value = Math.floor((value - 1) / 26)
-  }
-  return result
-}
-
 const readBytes = async (document: XlsxDocument): Promise<ArrayBuffer> => {
-  if (document.file instanceof Blob) return await document.file.arrayBuffer()
-  if (document.fileData instanceof Blob) return await document.fileData.arrayBuffer()
+  if (document.file instanceof Blob) return document.file.arrayBuffer()
+  if (document.fileData instanceof Blob) return document.fileData.arrayBuffer()
   if (document.fileData instanceof ArrayBuffer) return document.fileData
-  if (document.fileData instanceof Uint8Array) {
-    const copy = new Uint8Array(document.fileData.byteLength)
-    copy.set(document.fileData)
-    return copy.buffer
-  }
+  if (document.fileData instanceof Uint8Array) return document.fileData.slice().buffer
   if (document.uri) {
     const response = await fetch(document.uri)
     if (!response.ok) throw new Error(`读取 Excel 失败（${response.status}）`)
-    return await response.arrayBuffer()
+    return response.arrayBuffer()
   }
   throw new Error('缺少 Excel 预览数据')
 }
 
-const parseWorkbook = async (bytes: ArrayBuffer): Promise<XlsxSheet[]> => {
-  const zip = await JSZip.loadAsync(bytes)
-  const xml = async (fileName: string): Promise<Document> =>
-    new DOMParser().parseFromString(await zip.file(fileName)!.async('text'), 'application/xml')
-  const workbook = await xml('xl/workbook.xml')
-  const rels = await xml('xl/_rels/workbook.xml.rels')
-  const relMap = new Map(
-    localElements(rels, 'Relationship').map((item) => [
-      item.getAttribute('Id') || '',
-      item.getAttribute('Target') || ''
-    ])
-  )
-  const sharedStrings = zip.file('xl/sharedStrings.xml')
-    ? localElements(await xml('xl/sharedStrings.xml'), 'si').map((item) => textContent(item))
-    : []
-  const styleBorders = new Map<number, 'green' | 'red'>()
-  if (zip.file('xl/styles.xml')) {
-    const styles = await xml('xl/styles.xml')
-    const borders = localElements(styles, 'border').map((border) => {
-      const colors = localElements(border, 'color').map((color) =>
-        (color.getAttribute('rgb') || '').toUpperCase()
-      )
-      return colors.some((color) => color.endsWith('22A06B'))
-        ? 'green'
-        : colors.some((color) => color.endsWith('D14343'))
-          ? 'red'
-          : undefined
-    })
-    const cellXfsRoot = localElements(styles, 'cellXfs')[0]
-    const cellXfs = cellXfsRoot ? localElements(cellXfsRoot, 'xf') : []
-    cellXfs.forEach((xf, index) => {
-      const borderId = Number(xf.getAttribute('borderId') || 0)
-      const border = borders[borderId]
-      if (border) styleBorders.set(index, border)
-    })
-  }
-  const sheets: XlsxSheet[] = []
-  for (const sheetNode of localElements(workbook, 'sheet')) {
-    const name = sheetNode.getAttribute('name') || 'Sheet'
-    const relation =
-      relMap.get(sheetNode.getAttribute('id') || sheetNode.getAttribute('r:id') || '') || ''
-    const target = relation.replace(/^\//, '').startsWith('xl/')
-      ? relation.replace(/^\//, '')
-      : `xl/${relation.replace(/^\.\//, '')}`
-    if (!zip.file(target)) continue
-    const sheetXml = await xml(target)
-    const cells: XlsxCell[] = []
-    for (const cellNode of localElements(sheetXml, 'c')) {
-      const address = cellNode.getAttribute('r') || ''
-      if (!address) continue
-      const type = cellNode.getAttribute('t') || ''
-      const formula = localElements(cellNode, 'f')[0]?.textContent || undefined
-      const raw = localElements(cellNode, 'v')[0]?.textContent || ''
-      const inline = textContent(localElements(cellNode, 'is')[0] || null)
-      let value =
-        type === 's' ? sharedStrings[Number(raw)] || '' : type === 'inlineStr' ? inline : raw
-      if (type === 'b') value = raw === '1' ? 'TRUE' : 'FALSE'
-      const styleId = Number(cellNode.getAttribute('s') || 0)
-      cells.push({ address, value, formula, border: styleBorders.get(styleId) })
-    }
-    sheets.push({
-      name,
-      cells,
-      maxRow: Math.max(1, ...cells.map((cell) => rowNumber(cell.address))),
-      maxColumn: Math.max(1, ...cells.map((cell) => columnNumber(cell.address)))
-    })
-  }
-  return sheets
+const color = (input?: Partial<ExcelJS.Color>): { rgb: string } | undefined => {
+  const argb = input?.argb
+  if (!argb) return undefined
+  return { rgb: `#${argb.slice(-6)}` }
 }
 
-const XlsxTable = ({ sheet }: { sheet: XlsxSheet }) => {
-  const cells = useMemo(
-    () => new Map(sheet.cells.map((cell) => [cell.address.toUpperCase(), cell])),
-    [sheet.cells]
-  )
-  const columns = Math.min(sheet.maxColumn, 40)
-  const rows = Math.min(sheet.maxRow, 500)
-  return (
-    <div className="min-w-full overflow-auto p-3" data-testid={workbenchSelectors.excelGrid}>
-      <table className="border-collapse text-xs">
-        <thead>
-          <tr>
-            <th className="sticky left-0 top-0 z-10 min-w-10 border border-[#D9D9D6] bg-[#F7F7F5] px-2 py-1" />
-            {Array.from({ length: columns }, (_, index) => (
-              <th
-                key={index}
-                className="border border-[#D9D9D6] bg-[#F7F7F5] px-3 py-1 font-medium text-[#787774]"
-              >
-                {index + 1}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {Array.from({ length: rows }, (_, rowIndex) => (
-            <tr key={rowIndex}>
-              <th className="sticky left-0 z-10 border border-[#D9D9D6] bg-[#F7F7F5] px-2 py-1 font-medium text-[#787774]">
-                {rowIndex + 1}
-              </th>
-              {Array.from({ length: columns }, (_, columnIndex) => {
-                const address = `${columnLetters(columnIndex + 1)}${rowIndex + 1}`
-                const cell = cells.get(address)
-                const border =
-                  cell?.border === 'green'
-                    ? 'border-2 border-[#22A06B]'
-                    : cell?.border === 'red'
-                      ? 'border-2 border-[#D14343]'
-                      : 'border border-[#E5E5E2]'
-                return (
-                  <td
-                    key={columnIndex}
-                    className={`${border} min-w-24 max-w-64 whitespace-pre-wrap break-words px-2 py-1 align-top text-[#37352F]`}
-                    data-cell-address={address}
-                    title={cell?.formula ? `=${cell.formula}` : undefined}
-                  >
-                    {cell ? cell.value : ''}
-                  </td>
-                )
-              })}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  )
+const borderStyle = (
+  side?: Partial<ExcelJS.Border>
+): { s: BorderStyleTypes; cl: { rgb: string } } | undefined => {
+  if (!side?.style) return undefined
+  const styles: Partial<Record<ExcelJS.BorderStyle, BorderStyleTypes>> = {
+    thin: BorderStyleTypes.THIN,
+    medium: BorderStyleTypes.MEDIUM,
+    thick: BorderStyleTypes.THICK,
+    double: BorderStyleTypes.DOUBLE,
+    dotted: BorderStyleTypes.DOTTED,
+    dashed: BorderStyleTypes.DASHED,
+    dashDot: BorderStyleTypes.DASH_DOT,
+    dashDotDot: BorderStyleTypes.DASH_DOT_DOT,
+    hair: BorderStyleTypes.HAIR
+  }
+  return {
+    s: styles[side.style] || BorderStyleTypes.THIN,
+    cl: color(side.color) || { rgb: '#D9D9D9' }
+  }
+}
+
+const cellStyle = (cell: ExcelJS.Cell): IStyleData => ({
+  ff: cell.font?.name || undefined,
+  fs: cell.font?.size,
+  bl: cell.font?.bold ? BooleanNumber.TRUE : BooleanNumber.FALSE,
+  it: cell.font?.italic ? BooleanNumber.TRUE : BooleanNumber.FALSE,
+  cl: color(cell.font?.color),
+  bg: cell.fill?.type === 'pattern' && cell.fill.fgColor ? color(cell.fill.fgColor) : undefined,
+  n: cell.numFmt && cell.numFmt !== 'General' ? { pattern: cell.numFmt } : undefined,
+  ht:
+    cell.alignment?.horizontal === 'center'
+      ? HorizontalAlign.CENTER
+      : cell.alignment?.horizontal === 'right'
+        ? HorizontalAlign.RIGHT
+        : cell.alignment?.horizontal === 'left'
+          ? HorizontalAlign.LEFT
+          : undefined,
+  vt:
+    cell.alignment?.vertical === 'middle'
+      ? VerticalAlign.MIDDLE
+      : cell.alignment?.vertical === 'bottom'
+        ? VerticalAlign.BOTTOM
+        : cell.alignment?.vertical === 'top'
+          ? VerticalAlign.TOP
+          : undefined,
+  tb: cell.alignment?.wrapText ? WrapStrategy.WRAP : undefined,
+  bd: {
+    t: borderStyle(cell.border?.top),
+    r: borderStyle(cell.border?.right),
+    b: borderStyle(cell.border?.bottom),
+    l: borderStyle(cell.border?.left)
+  }
+})
+
+const cellData = (cell: ExcelJS.Cell): ICellData => {
+  const formula =
+    cell.value && typeof cell.value === 'object' && 'formula' in cell.value
+      ? String(cell.value.formula)
+      : undefined
+  const rawValue = formula
+    ? cell.result
+    : cell.value instanceof Date
+      ? cell.value.toISOString()
+      : cell.value
+  const value =
+    typeof rawValue === 'string' || typeof rawValue === 'number' || typeof rawValue === 'boolean'
+      ? rawValue
+      : rawValue == null
+        ? undefined
+        : cell.text
+  return {
+    v: value,
+    f: formula ? `=${formula}` : undefined,
+    t:
+      typeof value === 'number'
+        ? CellValueType.NUMBER
+        : typeof value === 'boolean'
+          ? CellValueType.BOOLEAN
+          : CellValueType.STRING,
+    s: cellStyle(cell)
+  }
+}
+
+const toWorkbookData = async (bytes: ArrayBuffer, name: string): Promise<IWorkbookData> => {
+  const workbook = new ExcelJS.Workbook()
+  await workbook.xlsx.load(bytes as never)
+  const sheets: Record<string, Partial<IWorksheetData>> = {}
+  const sheetOrder: string[] = []
+  workbook.eachSheet((sheet) => {
+    const id = `sheet-${String(sheet.id)}`
+    sheetOrder.push(id)
+    const cells: Record<number, Record<number, ICellData>> = {}
+    sheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+      row.eachCell({ includeEmpty: false }, (cell, columnNumber) => {
+        ;(cells[rowNumber - 1] ||= {})[columnNumber - 1] = cellData(cell)
+      })
+    })
+    const rowData: Record<number, { h: number }> = {}
+    sheet.eachRow({ includeEmpty: true }, (row, rowNumber) => {
+      if (row.height) rowData[rowNumber - 1] = { h: Math.round(row.height * 1.333) }
+    })
+    const columnData: Record<number, { w: number }> = {}
+    for (let index = 1; index <= Math.max(1, sheet.columnCount); index += 1) {
+      const width = sheet.getColumn(index).width
+      if (width) columnData[index - 1] = { w: Math.round(width * 7) }
+    }
+    const mergeData = (sheet.model.merges || []).map((range) => {
+      const parsed = sheet.getCell(range.split(':')[0])
+      const end = sheet.getCell(range.split(':')[1] || range.split(':')[0])
+      return {
+        startRow: Number(parsed.row) - 1,
+        startColumn: Number(parsed.col) - 1,
+        endRow: Number(end.row) - 1,
+        endColumn: Number(end.col) - 1
+      }
+    })
+    sheets[id] = {
+      id,
+      name: sheet.name,
+      tabColor: color(sheet.properties.tabColor)?.rgb || '',
+      hidden: sheet.state === 'visible' ? BooleanNumber.FALSE : BooleanNumber.TRUE,
+      rowCount: Math.max(100, sheet.rowCount + 20),
+      columnCount: Math.max(26, sheet.columnCount + 10),
+      cellData: cells,
+      rowData,
+      columnData,
+      mergeData,
+      showGridlines: BooleanNumber.TRUE,
+      rightToLeft: BooleanNumber.FALSE
+    }
+  })
+  if (sheetOrder.length === 0) throw new Error('工作簿没有可预览的工作表')
+  return {
+    id: `xlsx-${Date.now().toString(36)}`,
+    name,
+    appVersion: '1.0.0',
+    locale: LocaleType.ZH_CN,
+    styles: {},
+    sheetOrder,
+    sheets
+  }
 }
 
 const CustomXlsxRenderer = ({ mainState }: DocRendererProps) => {
   const document = mainState.currentDocument as XlsxDocument | undefined
-  const [sheets, setSheets] = useState<XlsxSheet[]>([])
-  const [active, setActive] = useState(0)
+  const containerRef = useRef<HTMLDivElement>(null)
   const [error, setError] = useState<string | null>(null)
+  const [ready, setReady] = useState(false)
+
   useEffect(() => {
+    if (!document || !containerRef.current) return
+    const container = containerRef.current
     let cancelled = false
-    if (!document) return
-    void readBytes(document)
-      .then(parseWorkbook)
-      .then((parsed) => {
-        if (!cancelled) {
-          setSheets(parsed)
-          setActive(0)
-          setError(null)
+    let dispose: (() => void) | undefined
+    setReady(false)
+    setError(null)
+    void Promise.all([
+      readBytes(document).then((bytes) => toWorkbookData(bytes, document.fileName || 'Excel')),
+      import('@univerjs/core'),
+      import('@univerjs/core/facade'),
+      import('@univerjs/preset-sheets-core'),
+      import('@univerjs/preset-sheets-core/locales/zh-CN')
+    ])
+      .then(
+        async ([
+          data,
+          { Univer, LogLevel },
+          { FUniver },
+          { UniverSheetsCorePreset },
+          localeModule
+        ]) => {
+          if (cancelled) return
+          const univer = new Univer({
+            logLevel: LogLevel.WARN,
+            locale: LocaleType.ZH_CN,
+            locales: { [LocaleType.ZH_CN]: localeModule.default }
+          })
+          const preset = UniverSheetsCorePreset({
+            container,
+            header: false,
+            toolbar: false,
+            formulaBar: true,
+            footer: { sheetBar: true, zoomSlider: true },
+            disableAutoFocus: true
+          })
+          for (const entry of preset.plugins) {
+            const [plugin, options] = Array.isArray(entry) ? entry : [entry, undefined]
+            univer.registerPlugin(plugin, options)
+          }
+          const univerAPI = FUniver.newAPI(univer)
+          const fWorkbook = univerAPI.createWorkbook(data)
+          dispose = () => univer.dispose()
+          await Promise.all(
+            fWorkbook.getSheets().map(async (sheet) => {
+              const permission = sheet.getWorksheetPermission()
+              await permission.protect({ name: '预览只读' })
+              await permission.setMode('readOnly')
+            })
+          )
+          if (cancelled) {
+            dispose()
+            return
+          }
+          await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+          if (!cancelled) setReady(true)
         }
-      })
+      )
       .catch((reason) => {
-        if (!cancelled) setError(reason instanceof Error ? reason.message : String(reason))
+        if (!cancelled) {
+          setReady(false)
+          setError(reason instanceof Error ? reason.message : String(reason))
+        }
       })
     return () => {
       cancelled = true
+      dispose?.()
+      container.innerHTML = ''
     }
   }, [document])
+
   if (!document) return null
   return (
     <div
-      className="flex h-full w-full flex-col bg-white"
+      className="relative h-full w-full bg-white"
       data-testid={workbenchSelectors.excelViewer}
+      data-excel-ready={ready ? 'true' : 'false'}
+      data-excel-file-name={document.fileName || ''}
+      data-excel-uri={document.uri || ''}
     >
       {error ? (
-        <div className="m-auto text-sm text-[#787774]">Excel 预览失败：{error}</div>
-      ) : (
-        <>
-          <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-[#E5E5E2] bg-[#F7F7F5] px-2 py-1">
-            {sheets.map((sheet, index) => (
-              <button
-                key={sheet.name}
-                type="button"
-                className={`border-b-2 px-3 py-1 text-xs ${index === active ? 'border-[#22A06B] font-medium text-[#37352F]' : 'border-transparent text-[#787774]'}`}
-                onClick={() => setActive(index)}
-              >
-                {sheet.name}
-              </button>
-            ))}
-          </div>
-          <div className="min-h-0 flex-1 overflow-auto">
-            {sheets[active] ? (
-              <XlsxTable sheet={sheets[active]} />
-            ) : (
-              <div className="p-4 text-sm text-[#787774]">工作簿为空</div>
-            )}
-          </div>
-        </>
-      )}
+        <div className="flex h-full items-center justify-center text-sm text-[#787774]">
+          Excel 预览失败：{error}
+        </div>
+      ) : null}
+      <div
+        ref={containerRef}
+        className="h-full w-full"
+        data-testid={workbenchSelectors.excelGrid}
+      />
     </div>
   )
 }

@@ -83,13 +83,39 @@ describe('ai unit ppt tool contract', () => {
     expect(
       pptEditSchema.safeParse({
         sourcePath: 'deck.pptx',
-        actions: [{ type: 'create_presentation', html: ['<section data-ppt-slide></section>'] }]
+        actions: [
+          { type: 'insert_slide', position: 'after', html: '<section data-ppt-slide></section>' }
+        ]
       }).success
     ).toBe(true)
     expect(
       pptEditSchema.safeParse({
         sourcePath: 'deck.pptx',
-        actions: [{ type: 'create_presentation', html: '<section data-ppt-slide></section>' }]
+        actions: [{ type: 'insert_slide', html: '<section data-ppt-slide></section>' }]
+      }).success
+    ).toBe(false)
+    expect(
+      pptEditSchema.safeParse({
+        sourcePath: 'deck.pptx',
+        actions: [
+          {
+            type: 'move_slide',
+            slideId: '/ppt/slides/slide1.xml',
+            position: 'after'
+          }
+        ]
+      }).success
+    ).toBe(false)
+    expect(
+      pptEditSchema.safeParse({
+        sourcePath: 'deck.pptx',
+        actions: [
+          {
+            type: 'duplicate_slide',
+            slideId: '/ppt/slides/slide1.xml',
+            position: 'after'
+          }
+        ]
       }).success
     ).toBe(false)
     expect(
@@ -117,7 +143,7 @@ describe('ai unit ppt tool contract', () => {
     expect(
       pptEditSchema.safeParse({
         sourcePath: 'deck.pptx',
-        action: { type: 'create_presentation', html: ['<section></section>'] }
+        action: { type: 'insert_slide', position: 'after', html: '<section></section>' }
       }).success
     ).toBe(false)
   })
@@ -125,7 +151,7 @@ describe('ai unit ppt tool contract', () => {
   it('exposes the complete PPT HTML contract in the edit prompt', () => {
     const description = PPT_EDIT_TOOL_SPEC.promptSpec.description
     for (const requiredRule of [
-      'create_presentation 的 html 必须是 HTML 数组',
+      'insert_slide 的 html 对应一张完整页面',
       'data-ppt-slide',
       'width:1920px',
       'data-ppt-element',
@@ -160,7 +186,6 @@ describe('ai unit ppt tool contract', () => {
     expect(svg.startsWith('<svg')).toBe(true)
     expect(svg.endsWith('</svg>')).toBe(true)
   })
-
 
   it('normalizes browser colors before writing native PPT styles', () => {
     expect(normalizePptColor('rgb(12, 34, 56)')).toBe('#0C2238')

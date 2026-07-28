@@ -65,8 +65,7 @@ describe('ai human mock-llm excel backend', () => {
                   toolName: 'excel_edit',
                   args: {
                     sourcePath,
-                    action: 'update',
-                    operations: [{ type: 'set_cell', sheetName: 'Data', address: 'B2', value: 20 }]
+                    actions: [{ type: 'set_cell', sheetName: 'Data', address: 'B2', value: 20 }]
                   },
                   summary: '更新金额'
                 })

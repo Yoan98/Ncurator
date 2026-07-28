@@ -111,18 +111,6 @@ export const docxCreateBlockSchema = z.discriminatedUnion('type', [
   docxCreateTableBlockSchema
 ])
 
-export const docxCreateSchema = z.object({
-  sourcePath: z.string().min(1),
-  blocks: z.array(docxCreateBlockSchema).optional()
-})
-
-export const docxEditCreateDocumentActionSchema = z
-  .object({
-    type: z.literal('create_document'),
-    blocks: z.array(docxCreateBlockSchema).optional()
-  })
-  .strict()
-
 export const docxOutlineRangeSchema = z.discriminatedUnion('type', [
   z
     .object({
@@ -204,7 +192,7 @@ const docxEditInsertBlocksActionSchema = z
   .object({
     type: z.literal('insert_blocks'),
     position: z.enum(['before', 'after']),
-    anchorBlockId: z.string().min(1),
+    anchorBlockId: z.string().min(1).optional(),
     blocks: z.array(docxCreateBlockSchema).min(1)
   })
   .strict()
@@ -330,7 +318,6 @@ const docxEditStyleTextActionSchema = z
   .strict()
 
 export const docxEditActionSchema = z.discriminatedUnion('type', [
-  docxEditCreateDocumentActionSchema,
   docxEditInsertBlocksActionSchema,
   docxEditReplaceBlockActionSchema,
   docxEditReplaceTextActionSchema,

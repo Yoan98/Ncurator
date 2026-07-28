@@ -142,7 +142,7 @@ describe('ai unit mouth node', () => {
                 sourcePath: '深度学习与图形学复习总结.docx',
                 actions: [
                   {
-                    type: 'create_document',
+                    type: 'insert_blocks', position: 'after',
                     blocks: [{ type: 'paragraph', text: '总结正文' }]
                   }
                 ]
@@ -159,7 +159,7 @@ describe('ai unit mouth node', () => {
               sourcePath: '深度学习与图形学复习总结.docx',
               actions: [
                 {
-                  type: 'create_document',
+                  type: 'insert_blocks', position: 'after',
                   blocks: [{ type: 'paragraph', text: '总结正文' }]
                 }
               ]

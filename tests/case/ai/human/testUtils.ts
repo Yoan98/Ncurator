@@ -112,12 +112,14 @@ export const collectStartedToolStringArgs = (
 
 export const isDocxEditCreateInput = (input: JsonObject): boolean =>
   Array.isArray(input.actions) &&
-  input.actions.some(
+  input.actions.length > 0 &&
+  input.actions.every(
     (action) =>
       action &&
       typeof action === 'object' &&
       !Array.isArray(action) &&
-      (action as JsonObject).type === 'create_document'
+      (action as JsonObject).type === 'insert_blocks' &&
+      typeof (action as JsonObject).anchorBlockId !== 'string'
   )
 
 export const isDocxEditWriteInput = (input: JsonObject): boolean =>
@@ -127,8 +129,8 @@ export const isDocxEditWriteInput = (input: JsonObject): boolean =>
       action &&
       typeof action === 'object' &&
       !Array.isArray(action) &&
-      typeof (action as JsonObject).type === 'string' &&
-      (action as JsonObject).type !== 'create_document'
+      (action as JsonObject).type !== 'insert_blocks' ||
+      typeof (action as JsonObject).anchorBlockId === 'string'
   )
 
 export const collectStartedDocxEditSourcePaths = (
@@ -218,7 +220,7 @@ export const collectDocxApplyOpsContentKinds = (
       input.actions.forEach((action) => {
         if (!action || typeof action !== 'object' || Array.isArray(action)) return
         const actionInput = action as JsonObject
-        if (actionInput.type === 'insert_blocks' || actionInput.type === 'create_document') {
+        if (actionInput.type === 'insert_blocks') {
           collectDocxBlockKindsFromValue(actionInput.blocks, kinds)
         }
         if (actionInput.type === 'replace_block') {

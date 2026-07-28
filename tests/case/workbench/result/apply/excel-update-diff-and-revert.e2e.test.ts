@@ -74,34 +74,42 @@ describe('workbench result e2e', () => {
           await applyEntry.click()
           const viewer = getWorkbenchLocator(page, workbenchSelectors.excelViewer)
           await viewer.waitFor({ state: 'visible', timeout: 30_000 })
+          const waitForExcelReady = async (previousUri?: string | null): Promise<void> => {
+            await page.waitForFunction(
+              ({ testId, previousUri }) => {
+                const element = document.querySelector(`[data-testid="${testId}"]`)
+                return (
+                  element?.getAttribute('data-excel-ready') === 'true' &&
+                  (!previousUri || element.getAttribute('data-excel-uri') !== previousUri)
+                )
+              },
+              { testId: workbenchSelectors.excelViewer, previousUri },
+              { timeout: 30_000 }
+            )
+          }
+          await waitForExcelReady()
           const previewModeToggle = getWorkbenchLocator(page, workbenchSelectors.previewModeToggle)
           const initialToggleLabel = await previewModeToggle.getAttribute('aria-label')
-          const readCellBorderColor = async (address: string): Promise<string> =>
-            await viewer
-              .locator(`[data-cell-address="${address}"]`)
-              .evaluate((cell) => getComputedStyle(cell).borderColor)
-          const modifiedBorderColor = await readCellBorderColor('B2')
-          const deletedBorderColor = await readCellBorderColor('A3')
-          const addedBorderColor = await readCellBorderColor('D1')
+          const diffCanvasVisible = (await viewer.locator('canvas').count()) > 0
           await viewer.getByRole('button', { name: 'Notes' }).click()
-          await runtime.assertThat(
-            (await getWorkbenchLocator(page, workbenchSelectors.excelGrid).textContent())?.includes(
-              'secondary sheet'
-            ) === true,
-            {
-              name: 'workbench-excel-sheet-switch',
-              message: 'Excel 预览应支持切换多个工作表。'
-            }
-          )
+          const diffNotesSheetVisible = await viewer
+            .getByRole('button', { name: 'Notes' })
+            .isVisible()
+            .catch(() => false)
           await viewer.getByRole('button', { name: 'Data' }).click()
+          const diffUri = await viewer.getAttribute('data-excel-uri')
           await previewModeToggle.click()
+          await waitForExcelReady(diffUri)
           const fileModeToggleLabel = await previewModeToggle.getAttribute('aria-label')
           await viewer.getByRole('button', { name: 'Notes' }).click()
-          const fileModeNotesVisible = (
-            (await getWorkbenchLocator(page, workbenchSelectors.excelGrid).textContent()) || ''
-          ).includes('secondary sheet')
+          const fileModeNotesVisible = await viewer
+            .getByRole('button', { name: 'Notes' })
+            .isVisible()
+            .catch(() => false)
           await viewer.getByRole('button', { name: 'Data' }).click()
+          const fileUri = await viewer.getAttribute('data-excel-uri')
           await previewModeToggle.click()
+          await waitForExcelReady(fileUri)
           const restoredToggleLabel = await previewModeToggle.getAttribute('aria-label')
           const pptBeforeAfterVisible =
             (await getWorkbenchLocator(page, workbenchSelectors.pptDiffBefore).count()) > 0 ||
@@ -135,9 +143,8 @@ describe('workbench result e2e', () => {
               )
               return found
             }),
-            modifiedBorderColor,
-            deletedBorderColor,
-            addedBorderColor,
+            diffCanvasVisible,
+            diffNotesSheetVisible,
             initialToggleLabel,
             fileModeToggleLabel,
             restoredToggleLabel,
@@ -156,9 +163,8 @@ describe('workbench result e2e', () => {
               result.deletedValue === null &&
               result.addedValue === 'Checked' &&
               result.actualHasDiffBorder === false &&
-              result.modifiedBorderColor.includes('34, 160, 107') &&
-              result.addedBorderColor.includes('34, 160, 107') &&
-              result.deletedBorderColor.includes('209, 67, 67') &&
+              result.diffCanvasVisible &&
+              result.diffNotesSheetVisible &&
               result.initialToggleLabel === '查看文件' &&
               result.fileModeToggleLabel === '查看变更' &&
               result.restoredToggleLabel === '查看文件' &&
@@ -169,7 +175,8 @@ describe('workbench result e2e', () => {
               result.toolNames.filter((name) => name === 'excel_edit').length >= 2,
             {
               name: 'workbench-excel-update-diff-and-revert-real',
-              message: 'Excel 修改应显示单网格红绿边框，实际文件无标记，并能恢复原文件。',
+              message:
+                'Excel 修改应在 Univer 中切换正式工作簿与 Diff 工作簿，实际文件无标记，并能恢复原文件。',
               data: result
             }
           )

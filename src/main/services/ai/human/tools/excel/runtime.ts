@@ -224,6 +224,11 @@ const buildDiffWorkbook = async (input: {
   for (const change of input.changes) {
     const sheet =
       diffWorkbook.getWorksheet(change.sheetName) || diffWorkbook.addWorksheet(change.sheetName)
+    if (change.address === 'A1' && change.kind === 'deleted') {
+      sheet.properties.tabColor = { argb: RED }
+    } else if (change.address === 'A1' && change.kind === 'added') {
+      sheet.properties.tabColor = { argb: GREEN }
+    }
     const cell = sheet.getCell(change.address)
     if (change.kind === 'deleted') {
       const beforeCell = beforeCells.get(cellKey(change.sheetName, change.address))
@@ -393,10 +398,6 @@ export const createExcelToolRuntime = (input: ExcelCapabilityToolsInput): ExcelT
       .stat(sourcePath)
       .then(() => true)
       .catch(() => false)
-    if (args.action === 'update' && !exists && !state.currentBytesByPath.has(sourcePath))
-      throw new Error(`Excel 文件不存在: ${args.sourcePath}`)
-    if (args.action === 'create' && exists && !state.currentBytesByPath.has(sourcePath))
-      throw new Error(`Excel 文件已存在: ${args.sourcePath}`)
     const cachedBytes = state.currentBytesByPath.get(sourcePath)
     if (cachedBytes && exists) {
       const diskBytes = await readBytes(sourcePath)
@@ -409,30 +410,27 @@ export const createExcelToolRuntime = (input: ExcelCapabilityToolsInput): ExcelT
       state.baselineBytesByPath.set(sourcePath, beforeBytes)
     const workbook = beforeBytes ? await loadWorkbook(beforeBytes) : new ExcelJS.Workbook()
     const forcedChanges: CellChange[] = []
-    if (!beforeBytes && args.action === 'create' && (args.sheets || []).length === 0) {
-      workbook.addWorksheet('Sheet1')
-    }
-    for (const sheetName of args.sheets || [])
-      if (!workbook.getWorksheet(sheetName)) workbook.addWorksheet(sheetName)
-    for (const operation of args.operations) {
+    for (const operation of args.actions) {
       if (operation.type === 'add_sheet') {
-        if (!workbook.getWorksheet(String(operation.sheetName))) {
-          workbook.addWorksheet(String(operation.sheetName))
-          forcedChanges.push({
-            sheetName: String(operation.sheetName),
-            address: 'A1',
-            kind: 'added'
-          })
-        }
+        if (workbook.getWorksheet(String(operation.sheetName)))
+          throw new Error(`工作表已存在: ${String(operation.sheetName)}`)
+        workbook.addWorksheet(String(operation.sheetName))
+        forcedChanges.push({
+          sheetName: String(operation.sheetName),
+          address: 'A1',
+          kind: 'added'
+        })
       } else if (operation.type === 'delete_sheet') {
         const sheet = workbook.getWorksheet(String(operation.sheetName))
-        if (sheet) {
-          workbook.removeWorksheet(sheet.id)
-          forcedChanges.push({ sheetName: sheet.name, address: 'A1', kind: 'deleted' })
-        }
+        if (!sheet) throw new Error(`工作表不存在: ${String(operation.sheetName)}`)
+        if (workbook.worksheets.length === 1) throw new Error('Excel 最终必须至少保留一个工作表')
+        workbook.removeWorksheet(sheet.id)
+        forcedChanges.push({ sheetName: sheet.name, address: 'A1', kind: 'deleted' })
       } else if (operation.type === 'rename_sheet') {
         const sheet = workbook.getWorksheet(String(operation.sheetName))
         if (!sheet) throw new Error(`工作表不存在: ${String(operation.sheetName)}`)
+        if (workbook.getWorksheet(String(operation.newName)))
+          throw new Error(`工作表已存在: ${String(operation.newName)}`)
         const previousName = sheet.name
         sheet.name = String(operation.newName)
         forcedChanges.push(
@@ -502,6 +500,7 @@ export const createExcelToolRuntime = (input: ExcelCapabilityToolsInput): ExcelT
         }
       }
     }
+    if (workbook.worksheets.length === 0) throw new Error('Excel 最终必须至少保留一个工作表')
     workbook.calcProperties.fullCalcOnLoad = true
     const afterBytes = Buffer.from(await workbook.xlsx.writeBuffer())
     const beforeWorkbook = beforeBytes ? await loadWorkbook(beforeBytes) : null

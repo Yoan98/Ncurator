@@ -79,6 +79,8 @@
     "@playwright/test": "1.58.2",
     "@react-pdf/renderer": "^4.1.0",
     "@resvg/resvg-js": "2.6.2",
+    "@univerjs/core": "0.25.1",
+    "@univerjs/preset-sheets-core": "0.25.1",
     "@xmldom/xmldom": "^0.8.11",
     "ajv": "8.20.0",
     "ajv-formats": "3.0.1",

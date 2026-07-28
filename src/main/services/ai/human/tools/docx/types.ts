@@ -4,7 +4,6 @@ import type { WorkspaceCapabilityBuildInput } from '../types'
 import {
   blockSpecSchema,
   docxCreateBlockSchema,
-  docxCreateSchema,
   docxDeleteSchema,
   docxEditActionSchema,
   docxEditSchema,
@@ -158,7 +157,6 @@ export type DocxWriteReadbackAction =
 
 export type DocxSearchMode = z.infer<typeof docxSearchModeSchema>
 export type DocxCreateBlock = z.infer<typeof docxCreateBlockSchema>
-export type DocxCreateRequest = z.infer<typeof docxCreateSchema>
 export type DocxEditAction = z.infer<typeof docxEditActionSchema>
 export type DocxEditRequest = z.infer<typeof docxEditSchema>
 export type DocxDeleteRequest = z.infer<typeof docxDeleteSchema>

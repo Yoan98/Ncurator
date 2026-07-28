@@ -98,10 +98,21 @@ const waitForPlainTextPreview = async (page: Page): Promise<boolean> => {
   return text.includes('Hello from human fixture.') && text.includes('workspace read validation')
 }
 
-const waitForExcelPreview = async (page: Page): Promise<boolean> => {
+const waitForExcelPreview = async (page: Page, fileName: string): Promise<boolean> => {
   const viewer = getWorkbenchLocator(page, workbenchSelectors.excelViewer)
   await viewer.waitFor({ state: 'visible', timeout: 30_000 })
-  return ((await viewer.textContent()) || '').includes('excel normal preview fixture')
+  await page.waitForFunction(
+    ({ testId, fileName }) => {
+      const element = document.querySelector(`[data-testid="${testId}"]`)
+      return (
+        element?.getAttribute('data-excel-ready') === 'true' &&
+        element.getAttribute('data-excel-file-name') === fileName
+      )
+    },
+    { testId: workbenchSelectors.excelViewer, fileName },
+    { timeout: 30_000 }
+  )
+  return (await viewer.locator('canvas').count()) > 0
 }
 
 const verifyDocxPreviewStaysMountedWhileTyping = async (page: Page): Promise<boolean> => {
@@ -241,7 +252,7 @@ describe('workbench result e2e', () => {
             const fileName = `normal-preview.${extension}`
             await workspaceFileFilter.fill(fileName)
             await page.getByTitle(fileName, { exact: true }).click()
-            excelPreviewResults.push(await waitForExcelPreview(page))
+            excelPreviewResults.push(await waitForExcelPreview(page, fileName))
           }
           const resourceTabCount = await resourceTabs.count()
           const signals = await runtime.collectSignals()

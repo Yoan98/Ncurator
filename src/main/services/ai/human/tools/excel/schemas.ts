@@ -141,9 +141,7 @@ export const excelEditOperationSchema = z.discriminatedUnion('type', [
 export const excelEditSchema = z
   .object({
     sourcePath: sourcePathSchema,
-    action: z.enum(['create', 'update']),
-    sheets: z.array(sheetNameSchema).optional(),
-    operations: z.array(excelEditOperationSchema).min(1)
+    actions: z.array(excelEditOperationSchema).min(1)
   })
   .strict()
 

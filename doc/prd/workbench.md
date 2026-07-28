@@ -464,6 +464,8 @@
   - `WB-APPLY-002-AC4` 普通文本 `edit` 的每个 `oldText` 必须唯一且互不重叠；`replaceAll` 替换一个 `oldText` 的全部非重叠精确匹配；失败时文件保持原样。
   - `WB-APPLY-002-AC5` 同一次 AI Run 对同一个 pptx 的多次逐页编辑只生成一条修改记录，加减数量按变化页计算。
   - `WB-APPLY-002-AC6` 创建或修改 `xlsx` 后，正式路径立即包含最终净工作簿并生成一条修改记录；同一次 AI Run 对同一路径连续编辑时保持首次写入前基线，不重复生成记录。
+  - `WB-APPLY-002-AC7` `docx_edit`、`ppt_edit` 和 `excel_edit` 统一使用 `sourcePath + actions[]`；目标不存在时由编辑 Action 直接创建，不再提供独立的文档或演示文稿创建 Action。
+  - `WB-APPLY-002-AC8` `docx_edit.insert_blocks` 的 `position` 必填，`anchorBlockId` 可选；无锚点时 `before` 表示文档开头，`after` 表示文档末尾。
   - `WB-APPLY-002-AC7` 生成 PNG、JPEG 或 WebP 图片后，正式路径立即包含可读取图片并生成一条修改记录；同一次 AI Run 对同一路径再次生成时自动更新并保持首次写入前基线。
 
 #### WB-TERMINAL-001 持久终端会话
@@ -508,7 +510,7 @@
 
 #### WB-PPT-001 AI 创建和编辑 PPT
 
-- 系统行为：AI 通过 `ppt-read` 和 `ppt-write` 读取、创建和编辑 pptx。`ppt_edit` 按顺序执行 `actions[]`，全部成功后原子写入真实文件；任务结束时只生成 run 级差异记录，不再次提交文件。
+- 系统行为：AI 通过 `ppt-read` 和 `ppt-write` 读取、创建和编辑 pptx。`ppt_edit` 的入参统一为 `sourcePath + actions[]`；路径不存在时创建，存在时编辑。Actions 按顺序执行，全部成功后原子写入真实文件；任务结束时只生成 run 级差异记录，不再次提交文件。
 - 验收：
   - `WB-PPT-001-AC1` AI 可自行新建 pptx，不依赖用户点击新建入口。
   - `WB-PPT-001-AC2` 新建演示文稿或插入页面时，单次调用只允许一个页面 HTML，不接受页面数组。
@@ -520,6 +522,8 @@
   - `WB-PPT-001-AC8` 元素编辑支持文字、位置、样式、图层、复制、删除、新增、图片、表格、图表和公式更新。
   - `WB-PPT-001-AC9` 同一次 `ppt_edit(actions[])` 任一 action 失败时，文件和活动 session 都保持调用前状态。
   - `WB-PPT-001-AC10` `ppt_edit` 返回成功时，其他程序已经可以读取最终 pptx。
+  - `WB-PPT-001-AC11` 不提供 `create_presentation` Action；`insert_slide` 必须提供 `position`，`anchorSlideId` 可选，无锚点时 `before` 插到最前、`after` 追加到最后。
+  - `WB-PPT-001-AC12` `move_slide` 和 `duplicate_slide` 必须同时提供 `slideId`、`position` 和 `anchorSlideId`；移动不能锚定自身，复制可以锚定源页自身；最终至少保留一页。
 
 #### WB-PPT-002 PPT 单页左右差异预览
 
@@ -535,22 +539,25 @@
 
 #### WB-EXCEL-001 AI 读取和编辑 Excel
 
-- 系统行为：AI 通过 `excel-read` 读取工作簿概览、搜索值或公式并按 A1 范围读取单元格；通过 `excel-write` 创建或编辑工作表、单元格、公式、格式和结构。读取支持 `xlsx`、`xlsm`、`xltx`、`xltm`，写入只支持 `xlsx`。Excel 文件不进入本地知识库文本索引，由 Excel 专用工具按工作区路径处理。
+- 系统行为：AI 通过 `excel-read` 读取工作簿概览、搜索值或公式并按 A1 范围读取单元格；通过 `excel-write` 创建或编辑工作表、单元格、公式、格式和结构。`excel_edit` 的入参统一为 `sourcePath + actions[]`，不再提供顶层 `action`、`sheets` 或 `operations`。路径不存在时创建，存在时编辑。读取支持 `xlsx`、`xlsm`、`xltx`、`xltm`，写入只支持 `xlsx`。Excel 文件不进入本地知识库文本索引，由 Excel 专用工具按工作区路径处理。
 - 验收：
   - `WB-EXCEL-001-AC1` `excel_read_outline` 返回工作表、使用范围、表格和公式数量概览；`excel_search` 可搜索单元格值、显示值、公式、工作表名和表格列名；`excel_read_cells` 可按多个工作表和 A1 范围返回地址、值、显示值、公式、类型与数字格式。
   - `WB-EXCEL-001-AC2` `excel_edit` 支持创建或更新 `xlsx`，可设置或删除单元格、批量写范围、清空范围、插入或删除行、设置列宽、增加或删除或重命名工作表、合并单元格，并保留未修改的工作簿结构与样式。
   - `WB-EXCEL-001-AC3` 同一次 `excel_edit` 的任一操作失败时不产生部分写入；文件在连续编辑之间被外部修改时拒绝覆盖并提示冲突；无实际变化时不生成修改记录。
   - `WB-EXCEL-001-AC4` `xlsm`、`xltx`、`xltm` 可以读取但不能写回；拒绝写入时源文件保持不变，并明确说明是为了避免丢失宏或模板信息。
   - `WB-EXCEL-001-AC5` Excel 创建或编辑成功后，正式文件中的值与公式可被其他程序立即读取，正式文件不包含用于差异预览的红绿边框。
+  - `WB-EXCEL-001-AC6` 新建工作簿只包含 `add_sheet` 显式创建的 Sheet，不自动生成 `Sheet1`；最终至少保留一个 Sheet，删除最后一个 Sheet 必须失败。
+  - `WB-EXCEL-001-AC7` 新增已存在的 Sheet、删除不存在的 Sheet、重命名到已存在名称都必须失败，且不写入部分结果。
 
 #### WB-EXCEL-002 Excel 单网格差异预览
 
-- 系统行为：用户打开 `xlsx` 修改记录后，在一个工作簿网格中查看修改后的内容；新增和修改单元格使用绿色边框，删除单元格使用红色边框。用户可切换工作表，不使用 PPT 的修改前/修改后左右画面对比。
+- 系统行为：用户打开 `xlsx` 修改记录后，前端使用成熟的 Univer 工作簿组件分别预览正式 XLSX 和 Diff XLSX，不自行解析 OOXML 生成 HTML 表格。新增和修改单元格使用绿色边框，删除单元格使用红色边框。用户可切换工作表，不使用 PPT 的修改前/修改后左右画面对比。
 - 验收：
   - `WB-EXCEL-002-AC1` “查看文件”展示正式净工作簿，“查看变更”展示基于首次写入前基线生成的差异工作簿，两者均可切换工作表。
   - `WB-EXCEL-002-AC2` 新增和修改单元格显示绿色边框，删除单元格显示红色边框；未变化单元格不增加差异边框，正式工作簿也不带差异边框。
   - `WB-EXCEL-002-AC3` 同一 AI Run 对同一路径连续编辑后只保留一条有效修改记录，差异始终相对该 Run 首次写入前基线计算。
   - `WB-EXCEL-002-AC4` 回退已有 `xlsx` 时恢复写入前原始 bytes；回退新建 `xlsx` 时删除目标文件，修改记录状态同步更新。
+  - `WB-EXCEL-002-AC5` Diff XLSX 中新增 Sheet 的标签为绿色，删除 Sheet 以修改前内容恢复到 Diff XLSX 并将标签标为红色；正式 XLSX 不带这些差异标记。
 
 ### 8.11 图片生成
 

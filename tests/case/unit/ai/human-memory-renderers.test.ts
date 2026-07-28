@@ -166,7 +166,8 @@ describe('ai unit human memory renderers', () => {
                 sourcePath: 'draft.docx',
                 actions: [
                   {
-                    type: 'create_document',
+                    type: 'insert_blocks',
+                    position: 'after',
                     blocks: [{ type: 'paragraph', text: '...' }]
                   }
                 ]
@@ -183,7 +184,8 @@ describe('ai unit human memory renderers', () => {
               sourcePath: 'draft.docx',
               actions: [
                 {
-                  type: 'create_document',
+                  type: 'insert_blocks',
+                  position: 'after',
                   blocks: [{ type: 'paragraph', text: '...' }]
                 }
               ]
@@ -233,7 +235,7 @@ describe('ai unit human memory renderers', () => {
     expect(rendered).not.toContain('- 第 1 轮\n\n判断：')
     expect(rendered).not.toContain('\n\n执行：')
     expect(rendered).toContain(
-      '参数：{"sourcePath":"draft.docx","actions":[{"type":"create_document","blocks":[{"type":"paragraph","text":"..."}]}]}'
+      '参数：{"sourcePath":"draft.docx","actions":[{"type":"insert_blocks","position":"after","blocks":[{"type":"paragraph","text":"..."}]}]}'
     )
     expect(rendered).toContain(
       '"postWriteReadback":{"regions":[{"fromBlockIndex":1,"toBlockIndex":2,"blocks":[{"blockId":"b1","type":"paragraph","blockIndex":1,"text":"hello"}]}]}'
@@ -363,7 +365,7 @@ describe('ai unit human memory renderers', () => {
       },
       {
         toolName: 'excel_edit',
-        args: { sourcePath: '/workspace/data.xlsx', action: 'update', operations: [] }
+        args: { sourcePath: '/workspace/data.xlsx', actions: [] }
       }
     ]
     const taskRun = appendRoundRecord({

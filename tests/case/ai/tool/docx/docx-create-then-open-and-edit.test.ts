@@ -29,7 +29,8 @@ describe('ai tool docx backend', () => {
             sourcePath,
             actions: [
               {
-                type: 'create_document',
+                type: 'insert_blocks',
+                position: 'after',
                 blocks: [
                   {
                     type: 'heading',
@@ -98,7 +99,7 @@ describe('ai tool docx backend', () => {
             result.read.blocks.length === 1,
           {
             name: 'docx-create-produces-readable-initial-document',
-            message: 'docx_edit(create_document) 后应立刻生成可 outline / read 的合法 docx 文档。',
+            message: 'docx_edit(insert_blocks) 后应立刻生成可 outline / read 的合法 docx 文档。',
             data: {
               created: result.created,
               outline: result.outline.blocks,

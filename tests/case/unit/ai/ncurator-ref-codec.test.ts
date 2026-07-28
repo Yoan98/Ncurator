@@ -4,6 +4,7 @@ import {
   encodeNcuratorRefValue,
   normalizeNcuratorRefMarkdownLinks,
   parseNcuratorRefHref,
+  repairInlineCodeWrappedNcuratorLinks,
   type NcuratorRefResourceType
 } from '../../../../src/shared/ncuratorRef'
 
@@ -212,6 +213,26 @@ describe('ai unit ncurator ref codec', () => {
       label: '交互式探究学习案例：产业转移.docx',
       path: rawPath
     })
+  })
+
+  it('unwraps a valid ncurator markdown link from inline code', () => {
+    const link = buildNcuratorRefMarkdown({
+      kind: 'reference',
+      resourceType: 'file',
+      accessStatus: 'accessible',
+      label: '报告.xlsx',
+      path: '/tmp/报告.xlsx'
+    })
+
+    expect(repairInlineCodeWrappedNcuratorLinks(`文件：\`${link}\``)).toBe(`文件：${link}`)
+  })
+
+  it('keeps normal inline code and invalid ncurator links unchanged', () => {
+    const normalCode = '`sourcePath`'
+    const invalidLink = '`[报告](ncurator://ref?kind=reference&resourceType=file)`'
+
+    expect(repairInlineCodeWrappedNcuratorLinks(normalCode)).toBe(normalCode)
+    expect(repairInlineCodeWrappedNcuratorLinks(invalidLink)).toBe(invalidLink)
   })
 
   it('parses browser-normalized windows paths without a leading slash', () => {

@@ -42,19 +42,23 @@ const createBaselineDeck = async (workspaceRootPath: string, runId: string, task
     sourcePath: FILE_NAME,
     actions: [
       {
-        type: 'create_presentation',
-        html: [slideHtml('市场信号', '核心客户需求持续增加，市场窗口已经明确。', '#2563EB')]
+        type: 'insert_slide',
+        position: 'after',
+        html: slideHtml('市场信号', '核心客户需求持续增加，市场窗口已经明确。', '#2563EB')
       },
       {
         type: 'insert_slide',
+        position: 'after',
         html: slideHtml('产品进展', '关键能力已经进入稳定交付阶段。', '#7C3AED')
       },
       {
         type: 'insert_slide',
+        position: 'after',
         html: slideHtml('交付质量', '本季度交付准时率保持在目标区间。', '#16A34A')
       },
       {
         type: 'insert_slide',
+        position: 'after',
         html: slideHtml('附录数据', '本页必须保持完全不变，用于验证未修改页面。', '#64748B')
       }
     ]

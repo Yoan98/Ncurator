@@ -508,21 +508,6 @@ const compileSerialEditActions = (input: {
   const actions: CompiledSerialAction[] = []
 
   for (const [actionIndex, action] of input.actions.entries()) {
-    if (action.type === 'create_document') {
-      return {
-        failure: input.runtime.emitFailure({
-          toolName: input.toolName,
-          toolCallId: input.toolCallId,
-          reason: 'invalid_input',
-          error: 'docx_edit(create_document) must be the only action in a call',
-          resourceContext: input.runtime.buildResourceContext({
-            sourcePath: input.sourcePath,
-            effectKind: 'mutated'
-          })
-        })
-      }
-    }
-
     if (
       action.type === 'insert_blocks' ||
       action.type === 'replace_block' ||
@@ -574,7 +559,15 @@ const buildSerialActionOps = async (input: {
   const action = input.action.action
 
   if (action.type === 'insert_blocks') {
-    const anchorBlockId = action.anchorBlockId
+    const bodyBlocks = action.anchorBlockId
+      ? []
+      : bodyBlocksOnly(await fetchOutlineBlocks(input.runtime, input.currentDocId))
+    const boundaryBlock =
+      action.position === 'before' ? bodyBlocks[0] : bodyBlocks[bodyBlocks.length - 1]
+    const anchorBlockId = action.anchorBlockId || boundaryBlock?.blockId
+    if (!anchorBlockId) {
+      throw new Error('DOCX 中没有可用于插入内容的正文位置')
+    }
     const op: DocxOp = {
       type: action.position === 'before' ? 'insert_before' : 'insert_after',
       anchorBlockId,
@@ -671,20 +664,6 @@ const buildSerialActionOps = async (input: {
     }
   }
 
-  if (action.type !== 'delete_blocks') {
-    return {
-      failure: input.runtime.emitFailure({
-        toolName: input.toolName,
-        toolCallId: input.toolCallId,
-        reason: 'invalid_input',
-        error: `unsupported serial docx action: ${action.type}`,
-        resourceContext: input.runtime.buildResourceContext({
-          sourcePath: input.sourcePath,
-          effectKind: 'mutated'
-        })
-      })
-    }
-  }
   const blockIds = action.blockIds
 
   const outlineBlocks = await fetchOutlineBlocks(input.runtime, input.currentDocId)
@@ -1037,58 +1016,43 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
           }
         })
       }
-      const createAction = args.actions.find((action) => action.type === 'create_document')
-      if (createAction) {
-        if (args.actions.length !== 1) {
-          return finalizeDocxToolFailure({
-            runtime,
-            failure: runtime.emitFailure({
-              toolName,
-              toolCallId,
-              reason: 'invalid_input',
-              error: 'docx_edit create_document must be the only action in a call',
-              resourceContext: runtime.buildResourceContext({
-                sourcePath: args.sourcePath,
-                effectKind: 'mutated'
-              })
-            }),
-            activity: {
-              actionType: DOCX_EDIT_TOOL_SPEC.activityActionType!
-            }
-          })
-        }
-
-        const requestedSourcePath = runtime.resolveDocxPath({
-          cwd: runtime.workspaceRootPath,
-          rawPath: args.sourcePath
+      const requestedSourcePath = runtime.resolveDocxPath({
+        cwd: runtime.workspaceRootPath,
+        rawPath: args.sourcePath
+      })
+      if (!requestedSourcePath) {
+        return finalizeDocxToolFailure({
+          runtime,
+          failure: runtime.emitFailure({
+            toolName,
+            toolCallId,
+            reason: 'invalid_input',
+            error: 'sourcePath must be a workspace-bound .docx path'
+          }),
+          activity: {
+            actionType: DOCX_EDIT_TOOL_SPEC.activityActionType!
+          }
         })
-        if (!requestedSourcePath) {
-          return finalizeDocxToolFailure({
-            runtime,
-            failure: runtime.emitFailure({
-              toolName,
-              toolCallId,
-              reason: 'invalid_input',
-              error: 'sourcePath must be a workspace-bound .docx path'
-            }),
-            activity: {
-              actionType: DOCX_EDIT_TOOL_SPEC.activityActionType!
-            }
-          })
-        }
+      }
 
-        if (
-          runtime.getReadSession(requestedSourcePath) ||
-          runtime.getReplaySession(requestedSourcePath) ||
-          (await documentExists(requestedSourcePath))
-        ) {
+      const sourceExists = Boolean(
+        runtime.getReadSession(requestedSourcePath) ||
+        runtime.getReplaySession(requestedSourcePath) ||
+        (await documentExists(requestedSourcePath))
+      )
+      if (!sourceExists) {
+        const invalidCreateAction = args.actions.find(
+          (action) => action.type !== 'insert_blocks' || Boolean(action.anchorBlockId)
+        )
+        if (invalidCreateAction) {
           return finalizeDocxToolFailure({
             runtime,
             failure: runtime.emitFailure({
               toolName,
               toolCallId,
               reason: 'invalid_input',
-              error: `docx_edit(create_document) will not overwrite an existing file: ${requestedSourcePath}`,
+              error:
+                '新建 DOCX 时只能使用不带 anchorBlockId 的 insert_blocks；其他操作需要已有文档内容',
               resourceContext: runtime.buildResourceContext({
                 sourcePath: requestedSourcePath,
                 effectKind: 'mutated'
@@ -1100,6 +1064,13 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
           })
         }
 
+        const createBlocks = args.actions.reduce<DocxCreateBlock[]>((blocks, action) => {
+          if (action.type !== 'insert_blocks') return blocks
+          return action.position === 'before'
+            ? [...action.blocks, ...blocks]
+            : [...blocks, ...action.blocks]
+        }, [])
+
         const tempPaths = await buildCreateTargetTempPaths(requestedSourcePath)
 
         try {
@@ -1109,7 +1080,7 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
           })
           await createDocxFile({
             filePath: tempPaths.workingPath,
-            blocks: createAction.blocks || []
+            blocks: createBlocks
           })
 
           const baselineOpen = await runtime.callWorker({
@@ -1230,7 +1201,7 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
               meta: workingOpen.payload.meta,
               stats: workingOpen.payload.stats,
               persistedStats,
-              summary: 'create_document'
+              summary: 'insert_blocks'
             })
           } catch (error) {
             await fs.rm(requestedSourcePath, { force: true }).catch(() => undefined)
@@ -1273,7 +1244,7 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
             changedBlocks: registered.changedBlocks || [],
             createdBlocks: registered.createdBlocks || [],
             warnings: [],
-            readbackTargets: [{ action: 'create_document', targetBlockIds: [] }]
+            readbackTargets: [{ action: 'insert_after', targetBlockIds: [] }]
           })
 
           return finalizeDocxToolSuccess({
@@ -1286,8 +1257,8 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
             },
             activity: {
               actionType: DOCX_EDIT_TOOL_SPEC.activityActionType!,
-              startedSummary: '执行 docx_edit: create_document',
-              buildCompletedSummary: () => 'docx_edit 完成: create_document'
+              startedSummary: '执行 docx_edit: insert_blocks',
+              buildCompletedSummary: () => 'docx_edit 完成: insert_blocks'
             }
           })
         } finally {

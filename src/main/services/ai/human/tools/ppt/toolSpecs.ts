@@ -124,11 +124,9 @@ export const PPT_EDIT_TOOL_SPEC = {
     name: 'ppt_edit',
     description: `创建或编辑 PPTX 文件，可在一次调用中完成页面创建、新增、复制、移动、删除以及文字、元素和备注调整，成功后直接保存并返回修改后的相关页面。
 调用约束：
-- 禁止使用 create_presentation 覆盖已有文件。
 - 禁止先创建空白页或占位页，再使用 edit_elements 逐项拼装页面。
 PPT 建立新页面时 HTML 的设计规则：
 页面与画布：
-- create_presentation 的 html 必须是 HTML 数组，数组中的每个 HTML 对应一张完整页面。
 - insert_slide 的 html 对应一张完整页面。
 - 每个页面 HTML 必须且只能包含一个 data-ppt-slide 根节点。
 - 根节点必须使用 position:relative、width:1920px、height:1080px、overflow:hidden。

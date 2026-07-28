@@ -3,6 +3,7 @@ import { FileTextOutlined, GlobalOutlined } from '@ant-design/icons'
 import {
   parseNcuratorRefHref,
   normalizeNcuratorRefMarkdownLinks,
+  repairInlineCodeWrappedNcuratorLinks,
   type NcuratorRefKind,
   type NcuratorRefResourceType,
   type ParsedNcuratorRef
@@ -14,6 +15,7 @@ export type ParsedRefLink = ParsedNcuratorRef
 
 export const parseRefHref = parseNcuratorRefHref
 export const normalizeRefMarkdownLinks = normalizeNcuratorRefMarkdownLinks
+export { repairInlineCodeWrappedNcuratorLinks }
 
 export const renderReferenceIcon = (input: {
   kind: ParsedNcuratorRefKind

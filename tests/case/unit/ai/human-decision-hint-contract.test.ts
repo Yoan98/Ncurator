@@ -38,7 +38,14 @@ const HINT_FIXTURES: Record<(typeof HUMAN_DECISION_HINT_CODES)[number], HumanDec
   hand_call_limit_exceeded: {
     code: 'hand_call_limit_exceeded',
     detail: {
-      offendingToolNames: ['terminal_run', 'docx_read_outline', 'docx_read_blocks', 'kb_search', 'docx_edit', 'docx_read_outline'],
+      offendingToolNames: [
+        'terminal_run',
+        'docx_read_outline',
+        'docx_read_blocks',
+        'kb_search',
+        'docx_edit',
+        'docx_read_outline'
+      ],
       callCount: 6,
       limit: 5
     }
@@ -132,7 +139,8 @@ const HINT_FIXTURES: Record<(typeof HUMAN_DECISION_HINT_CODES)[number], HumanDec
         {
           callIndex: 1,
           toolName: 'terminal_run',
-          message: 'workspace boundary check failed: relative path escapes workspace boundary: ../secret.txt'
+          message:
+            'workspace boundary check failed: relative path escapes workspace boundary: ../secret.txt'
         }
       ]
     }
@@ -152,20 +160,17 @@ const HINT_FIXTURES: Record<(typeof HUMAN_DECISION_HINT_CODES)[number], HumanDec
 }
 
 describe('ai unit human decision hint contract', () => {
-  it.each(HUMAN_DECISION_HINT_CODES)(
-    'accepts and renders %s without throwing',
-    (code) => {
-      const fixture = HINT_FIXTURES[code]
-      const parsed = humanDecisionHintSchema.parse(fixture)
-      const summary = renderDecisionHintForBrain(parsed)
-      const detail = renderDecisionHintDetail(parsed)
+  it.each(HUMAN_DECISION_HINT_CODES)('accepts and renders %s without throwing', (code) => {
+    const fixture = HINT_FIXTURES[code]
+    const parsed = humanDecisionHintSchema.parse(fixture)
+    const summary = renderDecisionHintForBrain(parsed)
+    const detail = renderDecisionHintDetail(parsed)
 
-      expect(parsed).toEqual(fixture)
-      expect(typeof summary).toBe('string')
-      expect(summary.length).toBeGreaterThan(0)
-      expect(detail).toEqual(fixture.detail)
-    }
-  )
+    expect(parsed).toEqual(fixture)
+    expect(typeof summary).toBe('string')
+    expect(summary.length).toBeGreaterThan(0)
+    expect(detail).toEqual(fixture.detail)
+  })
 
   it('renders a docx edit error once', () => {
     const rendered = renderDecisionHintForBrain({
@@ -173,13 +178,15 @@ describe('ai unit human decision hint contract', () => {
       detail: {
         toolName: 'docx_edit',
         sourcePath: 'report.docx',
-        action: 'create_document',
-        error: 'docx_edit(create_document) will not overwrite an existing file: report.docx'
+        action: 'insert_blocks',
+        error: 'docx_edit(insert_blocks) cannot find anchor block: b:99'
       }
     })
 
-    expect(rendered).toContain('错误：docx_edit(create_document) will not overwrite an existing file: report.docx。')
-    expect(rendered.match(/docx_edit\(create_document\) will not overwrite an existing file: report\.docx/g)).toHaveLength(1)
+    expect(rendered).toContain('错误：docx_edit(insert_blocks) cannot find anchor block: b:99。')
+    expect(
+      rendered.match(/docx_edit\(insert_blocks\) cannot find anchor block: b:99/g)
+    ).toHaveLength(1)
   })
 
   it('renders legacy DOC guidance exactly', () => {

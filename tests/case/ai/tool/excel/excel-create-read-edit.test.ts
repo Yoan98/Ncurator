@@ -21,9 +21,8 @@ describe('ai tool excel backend', () => {
         const sourcePath = 'generated-report.xlsx'
         const created = await harness.invoke<Record<string, unknown>>('excel_edit', {
           sourcePath,
-          action: 'create',
-          sheets: ['Data'],
-          operations: [
+          actions: [
+            { type: 'add_sheet', sheetName: 'Data' },
             {
               type: 'set_range',
               sheetName: 'Data',
@@ -49,9 +48,12 @@ describe('ai tool excel backend', () => {
         })
         const createdUpdated = await harness.invoke<Record<string, unknown>>('excel_edit', {
           sourcePath,
-          action: 'update',
-          operations: [{ type: 'set_cell', sheetName: 'Data', address: 'B2', value: 20 }]
+          actions: [{ type: 'set_cell', sheetName: 'Data', address: 'B2', value: 20 }]
         })
+        const createdWorkbook = new ExcelJS.Workbook()
+        await createdWorkbook.xlsx.load(
+          (await fs.readFile(path.join(runtime.workspaceRoot, sourcePath))) as never
+        )
         const existingSourcePath = 'existing-report.xlsx'
         const existingWorkbook = new ExcelJS.Workbook()
         existingWorkbook.addWorksheet('Data').addRows([
@@ -65,8 +67,7 @@ describe('ai tool excel backend', () => {
         )
         const updated = await harness.invoke<Record<string, unknown>>('excel_edit', {
           sourcePath: existingSourcePath,
-          action: 'update',
-          operations: [
+          actions: [
             { type: 'set_cell', sheetName: 'Data', address: 'B2', value: 20 },
             { type: 'delete_cell', sheetName: 'Data', address: 'A3' }
           ]
@@ -92,6 +93,7 @@ describe('ai tool excel backend', () => {
           actualHasDiffBorder: Boolean(actual.getWorksheet('Data')?.getCell('B2').border?.left),
           modifiedBorder: diff.getWorksheet('Data')?.getCell('B2').border.left?.color?.argb,
           deletedBorder: diff.getWorksheet('Data')?.getCell('A3').border.left?.color?.argb,
+          createdSheetNames: createdWorkbook.worksheets.map((sheet) => sheet.name),
           createdRecordId: (created.record as { id?: string } | undefined)?.id,
           createdUpdatedRecordId: (createdUpdated.record as { id?: string } | undefined)?.id
         }
@@ -103,6 +105,7 @@ describe('ai tool excel backend', () => {
             result.actualHasDiffBorder === false &&
             result.modifiedBorder === 'FF22A06B' &&
             result.deletedBorder === 'FFD14343' &&
+            JSON.stringify(result.createdSheetNames) === JSON.stringify(['Data']) &&
             result.createdRecordId !== undefined &&
             result.createdRecordId === result.createdUpdatedRecordId &&
             JSON.stringify(result.search).includes('C2') &&

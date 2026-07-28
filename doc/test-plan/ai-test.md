@@ -123,29 +123,29 @@ AI unit / 辅助测试目录：
 ##### `docx-create-then-open-and-edit`
 
 - 测试类型：`backend`
-- What：`docx_edit(create_document)` 新建的 docx 能立刻进入 `outline / read / edit` 主链。
-- Why：cross-source summary 这类“先生成新 Word 文件再写内容”的真实场景，底层必须先守住 create 契约。
-- How：真实执行 `docx_edit(create_document) -> docx_read_outline -> docx_read_blocks -> docx_edit(insert_blocks) -> docx_search`。
-- Oracle：create-target 结果返回稳定 `sourcePath / postWriteReadback`；工具成功后目标路径立即存在且可被继续读取；后续编辑会生成新的可读状态，新内容可继续被搜索命中。
-- Not：不验证 human 是否会选择 create。
+- What：对不存在的路径执行 `docx_edit(insert_blocks)` 后，docx 能立刻进入 `outline / read / edit` 主链。
+- Why：cross-source summary 这类新建 Word 文件的场景，底层必须守住“路径不存在即创建”契约。
+- How：真实执行 `docx_edit(insert_blocks, position=after, 无锚点) -> docx_read_outline -> docx_read_blocks -> docx_edit(insert_blocks) -> docx_search`。
+- Oracle：结果返回稳定 `sourcePath / postWriteReadback`；工具成功后目标路径立即存在且可被继续读取；后续编辑会生成新的可读状态，新内容可继续被搜索命中。
+- Not：不验证 human 是否会自主选择这条创建链路。
 
-##### `docx-create-existing-path-guard`
+##### `docx-existing-path-is-edited-without-a-create-action`
 
 - 测试类型：`backend`
-- What：`docx_edit(create_document)` 不会覆盖已存在的目标路径。
-- Why：create 能力一旦在工具调用阶段覆盖原文件，就会破坏 docx replay 与 direct apply 的基本安全边界。
-- How：先写入一份真实 docx，再对同一路径执行 `docx_edit(create_document)`。
-- Oracle：返回 `invalid_input`；原文件 bytes 不变；当前 run 不产生新的 docx session。
+- What：`docx_edit` 根据 `sourcePath` 是否存在自动选择创建或编辑。
+- Why：删除独立创建 Action 后，已有文件必须直接进入安全的增量编辑流程。
+- How：先写入一份真实 docx，再在同一次调用中执行不带锚点的 `insert_blocks(after)` 和 `insert_blocks(before)`。
+- Oracle：原内容保留，`before` 内容位于文档开头、`after` 内容位于文档末尾；当前 run 建立 docx session。
 - Not：不验证 UI 层如何展示报错。
 
 ##### `docx-create-with-content-direct-applies`
 
 - 测试类型：`backend`
-- What：仅执行 `docx_edit(create_document, blocks=...)` 也会立即创建目标 docx，并在 run 收尾生成 apply record。
-- Why：真实模型很可能在 create 时一次写完内容，这条能力必须由回归测试保护，不能强依赖后续 edit。
-- How：真实执行 `docx_edit(create_document)` 并直接 `applyDocxRunEdits`。
+- What：仅对新路径执行一次无锚点 `docx_edit(insert_blocks)` 也会立即创建目标 docx，并在 run 收尾生成 apply record。
+- Why：真实模型很可能一次写完新文档内容，这条能力必须由回归测试保护。
+- How：真实执行 `docx_edit(insert_blocks, position=after, 无锚点)` 并直接 `applyDocxRunEdits`。
 - Oracle：生成 `DocxApplyRecord(operation=created,status=applied)` 并包含 diff 预览 artifact 路径；目标文件立即存在；最终 artifacts 包含携带 `applyId` 的 docx file artifact。
-- Not：不验证 `human` 是否会自然选择在 create 时创建完整文档。
+- Not：不验证 `human` 是否会自然选择一次创建完整文档。
 
 ##### `docx-direct-apply-checkpoint-revert`
 
@@ -170,7 +170,7 @@ AI unit / 辅助测试目录：
 - 测试类型：`backend`
 - What：create-target replay 后目标被外部创建时，apply 按 updated 备份并覆盖，回退恢复外部文件。
 - Why：新建文件写回前若目标已被外部创建，应按 update 语义备份当前文件并覆盖，回退可恢复外部创建版本。
-- How：真实执行 `docx_edit(create_document)` 建立 replay session，随后外部创建同名目标文件，再执行 `applyDocxRunEdits` 和回退。
+- How：对新路径真实执行无锚点 `docx_edit(insert_blocks)` 建立 replay session，随后外部创建同名目标文件，再执行 `applyDocxRunEdits` 和回退。
 - Oracle：生成 `DocxApplyRecord(operation=updated,before_exists=true)`；回退后恢复外部创建的文件。
 - Not：不验证目标文件由真实用户还是测试进程创建。
 
@@ -563,7 +563,7 @@ AI unit / 辅助测试目录：
 ##### `ppt-create-read-edit-commit`
 
 - 测试类型：`backend / tool`
-- What：`create_presentation.html[]` 一次创建多页、读取、编辑、每次写后立即回读，以及 Run 收尾生成单一页面级 diff 记录。
+- What：`ppt_edit(actions=[insert_slide...])` 一次创建多页、读取、编辑、每次写后立即回读，以及 Run 收尾生成单一页面级 diff 记录。
 - Why：PPT 工具必须同时守住直接写回和 run 级差异聚合。
 - How：创建真实多页 PPT，连续读取和编辑，再执行 Run 收尾。
 - Oracle：每次 `ppt_edit` 成功后正式文件立即存在、可解析且页面内容正确；Run 收尾后同一文件只生成一条修改记录和页面级 diff。
@@ -595,7 +595,7 @@ AI unit / 辅助测试目录：
 - What：Excel 专用工具创建工作簿、批量写入数据和公式，并继续执行概览、搜索、范围读取和修改。
 - Why：Excel 的值与公式必须由程序真实读写，不能用模型推算或用伪造工具结果代替。
 - How：真实调用 `excel_edit` 创建 xlsx，再调用三个只读工具并继续修改同一路径；另对已有 xlsx 执行修改和删除单元格，最后直接解析正式文件与 diff 文件。
-- Oracle：正式文件包含准确值和公式且不带 diff 边框；diff 文件对新增、修改显示绿色边框，对删除显示红色边框；同一路径只保留一条修改记录，对齐 `WB-EXCEL-001`、`WB-EXCEL-002-AC2`、`WB-EXCEL-002-AC3`。
+- Oracle：新文件只包含显式新增的 Sheet，没有默认 `Sheet1`；正式文件包含准确值和公式且不带 diff 边框；diff 文件对新增、修改显示绿色边框，对删除显示红色边框；同一路径只保留一条修改记录，对齐 `WB-EXCEL-001`、`WB-EXCEL-002-AC2`、`WB-EXCEL-002-AC3`。
 - Not：不验证 human 是否会选择 Excel 技能，也不评价表格视觉设计。
 
 ##### `excel-read-search-and-format-boundaries`
@@ -613,7 +613,7 @@ AI unit / 辅助测试目录：
 - What：Excel 全部编辑 action、样式、工作簿结构、原子写入和累计修改记录。
 - Why：写入失败、外部并发修改或 record 持久化失败都不能留下半提交状态；同一次 run 的多轮编辑必须相对首个 baseline 生成累计 Diff。
 - How：真实覆盖单元格写入/清空、公式、样式、行列与 Sheet 操作、no-op、外部修改冲突、record 持久化失败回滚和同 run 两轮编辑。
-- Oracle：每个 action 落盘后可读；no-op 不产生记录；冲突与持久化失败恢复到安全状态；最终仅一条累计 record，Diff 相对首个 baseline。
+- Oracle：每个 action 落盘后可读；删除最后一个 Sheet 失败；新增 Sheet 在 Diff 中为绿色标签，删除 Sheet 恢复旧内容并显示红色标签；no-op 不产生记录；冲突与持久化失败恢复到安全状态；最终仅一条累计 record，Diff 相对首个 baseline。
 - Not：不验证 Workbench 的 Diff 交互。
 
 ##### `hand-excel-read-write-read`
@@ -1186,7 +1186,7 @@ AI unit / 辅助测试目录：
 ##### `create-ppt-deck`
 
 - 测试类型：`backend / mock-llm`
-- What：AI 能学习 `ppt-read / ppt-write`，通过 `create_presentation.html[]` 一次创建多页并交付 PPT。
+- What：AI 能学习 `ppt-read / ppt-write`，通过 `ppt_edit.actions[]` 一次创建多页并交付 PPT。
 - Why：需要验证 human 主链能正确学习并调用 PPT 能力。
 - How：使用 scripted LLM 输出驱动真实 human graph 创建并交付 PPT。
 - Oracle：最终文件可解析且内容正确；只产生一个 PPT 修改记录和文件交付。
@@ -1308,7 +1308,7 @@ AI unit / 辅助测试目录：
 - What：live 模式下 `human` 会在一个真实长任务里串起模板定位、上周周报风格参考、多源工作资料取证、新建本周周报 docx 并直接写回交付。
 - Why：`human/live` 需要至少一条长期高价值复杂样例，覆盖 workspace 搜索、真实材料辨别、跨 `docx + txt` 综合、create-target 写入与最终交付链路；同时守住“共享 workspace 中全部已支持文件都已进入真实 KB，且关键事实可能来自 KB 命中的 txt 或后续读取材料”的更真实用户环境。
 - How：注入真实 live LLM 配置；workspace 直接使用 `tests/fixtures/workspace` 共享目录，并在 run 前通过真实生产文件 ingestion 链把该目录下当前所有已支持文件索引进 KB；随后由测试在运行时重建 `工作/` 目录：包含一份不可直接覆盖的周报模板、一份只能参考风格的上周已发版周报、多份提供本周事实的 `docx` 工作文档、数份必须读取的 `txt` 口径/跟进材料，以及少量看起来相关但不应直接采用的干扰文件；直接输入“帮我写下这周的周报，基于这个周报模版和我的工作文档信息，记得参考我上周写的周报风格来哦”的自然语言诉求，让真实 `human` 自主完成。
-- Oracle：任务最终完成；共享 workspace 中全部已支持文件均被索引；事件流中至少出现一次 `terminal_run`、至少一次真实资料读取/检索步骤以及一次 `docx_edit(create_document)`；模型会打开模板和上周周报；最终输出 artifacts 中包含携带 `applyId` 的 docx file artifact；模板与既有参考 `docx` 文件不被覆盖。按 10 分制评估文件交付、原文件安全、未闭环风险、负责人动作和谨慎结论，严格超过 8 分通过；否定上下文中的“风险已解除”等文字不得误判成正向收口。
+- Oracle：任务最终完成；共享 workspace 中全部已支持文件均被索引；事件流中至少出现一次 `terminal_run`、至少一次真实资料读取/检索步骤以及一次对新路径的 `docx_edit(insert_blocks)`；模型会打开模板和上周周报；最终输出 artifacts 中包含携带 `applyId` 的 docx file artifact；模板与既有参考 `docx` 文件不被覆盖。按 10 分制评估文件交付、原文件安全、未闭环风险、负责人动作和谨慎结论，严格超过 8 分通过；否定上下文中的“风险已解除”等文字不得误判成正向收口。
 - Not：不绑定最终答案措辞，不要求固定是否使用 `docx_read_outline` 还是 `docx_read_blocks`，也不强制一定调用 KB；若模型仅凭工作区材料完成任务，也视为符合预期。
 
 ##### `human-docx-positioned-structural-edit-fallback-live`

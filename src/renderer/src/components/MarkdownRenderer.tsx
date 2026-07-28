@@ -10,6 +10,7 @@ import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import {
   parseRefHref,
   normalizeRefMarkdownLinks,
+  repairInlineCodeWrappedNcuratorLinks,
   renderReferenceIcon,
   type ParsedNcuratorRefKind,
   type ParsedNcuratorRefResourceType
@@ -38,7 +39,10 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   className,
   onOpenReference
 }) => {
-  const normalizedContent = React.useMemo(() => normalizeRefMarkdownLinks(content), [content])
+  const normalizedContent = React.useMemo(
+    () => normalizeRefMarkdownLinks(repairInlineCodeWrappedNcuratorLinks(content)),
+    [content]
+  )
 
   return (
     <div className={`markdown-body ${className || ''}`}>

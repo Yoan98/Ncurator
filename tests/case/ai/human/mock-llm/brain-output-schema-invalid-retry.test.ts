@@ -35,7 +35,7 @@ describe('ai human mock-llm backend', () => {
                         args: {
                           sourcePath: 'report.docx',
                           actions: [{
-                            type: 'create_document',
+                            type: 'insert_blocks', position: 'after',
                             blocks: [
                             {
                               type: 'paragraph',

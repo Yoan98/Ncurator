@@ -69,7 +69,13 @@ describe('ai tool docx backend', () => {
           })
           const uppercaseFailure = await harness.invoke<DocxFailureResult>('docx_edit', {
             sourcePath: 'legacy-doc/legacy-readable.DOC',
-            actions: [{ type: 'create_document', blocks: [] }]
+            actions: [
+              {
+                type: 'insert_blocks',
+                position: 'after',
+                blocks: [{ type: 'paragraph', text: 'changed' }]
+              }
+            ]
           })
           const afterBytes = await fs.readFile(legacyDocPath)
           return {

@@ -262,7 +262,12 @@ const decodeDataUrl = (value: string): Uint8Array | null => {
 }
 
 const escapeXml = (value: string): string =>
-  value.replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' })[character] || character)
+  value.replace(
+    /[&<>"']/g,
+    (character) =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' })[character] ||
+      character
+  )
 
 const createRemoteImagePlaceholder = (url: string): Uint8Array => {
   const displayUrl = url.length > 96 ? `${url.slice(0, 93)}...` : url
@@ -561,7 +566,8 @@ const addCompiledSlide = async (input: {
   document: PptRuntimeDocument
   compiled: PptCompiledSlide
   workspaceRootPath: string
-  beforeSlideId?: string
+  position: 'before' | 'after'
+  anchorSlideId?: string
 }): Promise<SlideData> => {
   const slide = addBlankSlide(input.document.presentation)
   setSlideBackground(slide, normalizeHex(input.compiled.background))
@@ -575,15 +581,31 @@ const addCompiledSlide = async (input: {
       workspaceRootPath: input.workspaceRootPath
     })
   }
-  if (input.beforeSlideId) {
-    const beforeIndex = getSlides(input.document.presentation).findIndex(
-      (item) => slideIdOf(item) === input.beforeSlideId
-    )
-    if (beforeIndex < 0) throw new Error(`找不到 beforeSlideId=${input.beforeSlideId}`)
-    moveSlide(input.document.presentation, slide, beforeIndex)
-  }
+  placeSlide(input.document.presentation, slide, input.position, input.anchorSlideId)
   input.document.warnings.push(...input.compiled.warnings)
   return slide
+}
+
+const placeSlide = (
+  presentation: PresentationData,
+  slide: SlideData,
+  position: 'before' | 'after',
+  anchorSlideId?: string
+): number => {
+  const slides = getSlides(presentation)
+  const sourceIndex = slides.findIndex((item) => item === slide)
+  if (sourceIndex < 0) throw new Error('找不到需要定位的页面')
+  if (!anchorSlideId) {
+    const targetIndex = position === 'before' ? 0 : slides.length - 1
+    moveSlide(presentation, slide, targetIndex)
+    return targetIndex
+  }
+  const anchorIndex = slides.findIndex((item) => slideIdOf(item) === anchorSlideId)
+  if (anchorIndex < 0) throw new Error(`找不到 anchorSlideId=${anchorSlideId}`)
+  const insertionIndex = position === 'before' ? anchorIndex : anchorIndex + 1
+  const targetIndex = sourceIndex < insertionIndex ? insertionIndex - 1 : insertionIndex
+  moveSlide(presentation, slide, targetIndex)
+  return targetIndex
 }
 
 const definedObject = (input: Record<string, unknown>): JsonObject =>
@@ -1286,14 +1308,8 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
 
   const edit = async (rawArgs: unknown): Promise<Record<string, unknown>> => {
     const args = pptEditSchema.parse(rawArgs)
-    const createActions = args.actions.filter((action) => action.type === 'create_presentation')
-    const create = createActions.length > 0
     const sourcePath = resolvePptPath(args.sourcePath)
-    if (create && (documents.has(sourcePath) || (await fileExists(sourcePath)))) {
-      throw new Error(
-        `create_presentation 失败：目标 pptx 已存在，不能覆盖已有文件: ${args.sourcePath}`
-      )
-    }
+    const create = !documents.has(sourcePath) && !(await fileExists(sourcePath))
     const document = await loadDocument(args.sourcePath, create)
     const presentationSnapshot = await savePresentation(document.presentation)
     const dirtyBeforeAction = document.dirty
@@ -1304,9 +1320,8 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
       let outlineAnchorIndex: number | undefined
       for (const action of args.actions) {
         try {
-          if (action.type === 'create_presentation' || action.type === 'insert_slide') {
-            const htmlPages = action.type === 'create_presentation' ? action.html : [action.html]
-            for (const [pageIndex, html] of htmlPages.entries()) {
+          if (action.type === 'insert_slide') {
+            for (const [pageIndex, html] of [action.html].entries()) {
               let compiled: PptCompiledSlide
               try {
                 compiled = await compilePptSlideHtml(html)
@@ -1318,10 +1333,8 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
                 document,
                 compiled,
                 workspaceRootPath,
-                beforeSlideId:
-                  action.type === 'insert_slide' && pageIndex === 0
-                    ? action.beforeSlideId
-                    : undefined
+                position: action.position,
+                anchorSlideId: action.anchorSlideId
               })
               changedSlideIds.push(slideIdOf(slide))
             }
@@ -1341,29 +1354,20 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
             }
           } else if (action.type === 'move_slide') {
             const slide = findSlide(document.presentation, action.slideId)
-            const currentSlides = getSlides(document.presentation)
-            const sourceIndex = currentSlides.findIndex((item) => item === slide)
-            const beforeIndex = action.beforeSlideId
-              ? currentSlides.findIndex((item) => slideIdOf(item) === action.beforeSlideId)
-              : currentSlides.length
-            if (action.beforeSlideId === action.slideId) {
-              continue
-            }
-            const targetIndex = sourceIndex < beforeIndex ? beforeIndex - 1 : beforeIndex
-            if (targetIndex < 0) throw new Error(`找不到 beforeSlideId=${action.beforeSlideId}`)
-            moveSlide(document.presentation, slide, targetIndex)
+            if (action.anchorSlideId === action.slideId)
+              throw new Error('move_slide 的 anchorSlideId 不能等于 slideId')
+            const targetIndex = placeSlide(
+              document.presentation,
+              slide,
+              action.position,
+              action.anchorSlideId
+            )
             changedSlideIds.push(action.slideId)
             outlineAnchorIndex = targetIndex
           } else if (action.type === 'duplicate_slide') {
             const source = findSlide(document.presentation, action.slideId)
             const duplicate = duplicateSlide(document.presentation, source)
-            if (action.beforeSlideId) {
-              const targetIndex = getSlides(document.presentation).findIndex(
-                (item) => slideIdOf(item) === action.beforeSlideId
-              )
-              if (targetIndex < 0) throw new Error(`找不到 beforeSlideId=${action.beforeSlideId}`)
-              moveSlide(document.presentation, duplicate, targetIndex)
-            }
+            placeSlide(document.presentation, duplicate, action.position, action.anchorSlideId)
             changedSlideIds.push(slideIdOf(duplicate))
           } else if (action.type === 'replace_text') {
             const targetSlides = action.slideIds?.map((slideId) =>
@@ -1415,6 +1419,9 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
           const message = error instanceof Error ? error.message : String(error)
           throw new Error(`${action.type} 失败：${message}`)
         }
+      }
+      if (getSlides(document.presentation).length === 0) {
+        throw new Error('PPT 最终必须至少保留一页')
       }
       const uniqueChanged = [...new Set(changedSlideIds)]
       if (uniqueChanged.length > 0) document.dirty = true

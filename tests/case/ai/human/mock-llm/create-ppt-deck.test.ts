@@ -50,7 +50,7 @@ describe('ai human mock-llm backend', () => {
                   toolName: 'ppt_edit',
                   args: {
                     sourcePath,
-                    actions: [{ type: 'create_presentation', html: [coverHtml] }]
+                    actions: [{ type: 'insert_slide', position: 'after', html: coverHtml }]
                   },
                   summary: '创建封面页'
                 })
@@ -60,7 +60,7 @@ describe('ai human mock-llm backend', () => {
                   toolName: 'ppt_edit',
                   args: {
                     sourcePath,
-                    actions: [{ type: 'insert_slide', html: detailHtml }]
+                    actions: [{ type: 'insert_slide', position: 'after', html: detailHtml }]
                   },
                   summary: '新增行动页'
                 })

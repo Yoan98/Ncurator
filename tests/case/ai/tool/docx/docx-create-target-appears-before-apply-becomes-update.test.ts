@@ -13,7 +13,8 @@ describe('ai tool docx backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['docx'],
-      description: '验证 create_document 立即落盘，外部覆盖后旧文档 session 会失效并要求重新读取。',
+      description:
+        '验证新文件的 insert_blocks 立即落盘，外部覆盖后旧文档 session 会失效并要求重新读取。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -25,7 +26,8 @@ describe('ai tool docx backend', () => {
             sourcePath: targetFileName,
             actions: [
               {
-                type: 'create_document',
+                type: 'insert_blocks',
+                position: 'after',
                 blocks: [
                   { type: 'heading', level: 1, text: 'AI Final Report' },
                   { type: 'paragraph', text: 'AI final paragraph.' }
@@ -57,7 +59,7 @@ describe('ai tool docx backend', () => {
             result.staleRead.error.includes('changed outside the active docx session'),
           {
             name: 'docx-create-is-immediate-and-external-change-is-rejected',
-            message: 'create_document 应立即落盘；文件被外部覆盖后，旧 session 必须失效。',
+            message: 'insert_blocks 应立即落盘；文件被外部覆盖后，旧 session 必须失效。',
             data: result
           }
         )

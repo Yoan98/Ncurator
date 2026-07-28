@@ -57,8 +57,7 @@ describe('ai tool excel edit backend', () => {
         const harness = createExcelToolHarness(runtime)
         const firstEdit = await harness.invoke<Record<string, unknown>>('excel_edit', {
           sourcePath: 'operations.xlsx',
-          action: 'update',
-          operations: [
+          actions: [
             {
               type: 'set_range',
               sheetName: 'Data',
@@ -85,8 +84,7 @@ describe('ai tool excel edit backend', () => {
         })
         const secondEdit = await harness.invoke<Record<string, unknown>>('excel_edit', {
           sourcePath: 'operations.xlsx',
-          action: 'update',
-          operations: [
+          actions: [
             { type: 'rename_sheet', sheetName: 'Summary', newName: 'Overview' },
             { type: 'merge_cells', sheetName: 'Overview', range: 'A1:B1' },
             { type: 'set_column_width', sheetName: 'Data', column: 'B', width: 24 },
@@ -98,31 +96,30 @@ describe('ai tool excel edit backend', () => {
         })
         const noOp = await harness.invoke<Record<string, unknown>>('excel_edit', {
           sourcePath: 'noop.xlsx',
-          action: 'update',
-          operations: [{ type: 'set_cell', sheetName: 'Data', address: 'A1', value: 'same' }]
+          actions: [{ type: 'set_cell', sheetName: 'Data', address: 'A1', value: 'same' }]
+        })
+        const deleteLastSheet = await harness.invoke<Record<string, unknown>>('excel_edit', {
+          sourcePath: 'noop.xlsx',
+          actions: [{ type: 'delete_sheet', sheetName: 'Data' }]
         })
         const baselineFirst = await harness.invoke<Record<string, unknown>>('excel_edit', {
           sourcePath: 'baseline.xlsx',
-          action: 'update',
-          operations: [{ type: 'set_cell', sheetName: 'Data', address: 'A1', value: 2 }]
+          actions: [{ type: 'set_cell', sheetName: 'Data', address: 'A1', value: 2 }]
         })
         const baselineSecond = await harness.invoke<Record<string, unknown>>('excel_edit', {
           sourcePath: 'baseline.xlsx',
-          action: 'update',
-          operations: [{ type: 'set_cell', sheetName: 'Data', address: 'B1', value: 20 }]
+          actions: [{ type: 'set_cell', sheetName: 'Data', address: 'B1', value: 20 }]
         })
         await harness.invoke<Record<string, unknown>>('excel_edit', {
           sourcePath: 'conflict.xlsx',
-          action: 'update',
-          operations: [{ type: 'set_cell', sheetName: 'Data', address: 'A1', value: 2 }]
+          actions: [{ type: 'set_cell', sheetName: 'Data', address: 'A1', value: 2 }]
         })
         const external = new ExcelJS.Workbook()
         external.addWorksheet('Data').getCell('A1').value = 99
         await fs.writeFile(conflictFile.filePath, Buffer.from(await external.xlsx.writeBuffer()))
         const conflict = await harness.invoke<Record<string, unknown>>('excel_edit', {
           sourcePath: 'conflict.xlsx',
-          action: 'update',
-          operations: [{ type: 'set_cell', sheetName: 'Data', address: 'A1', value: 3 }]
+          actions: [{ type: 'set_cell', sheetName: 'Data', address: 'A1', value: 3 }]
         })
 
         const rollbackRoot = path.join(runtime.workspaceRoot, 'rollback-scope')
@@ -151,8 +148,7 @@ describe('ai tool excel edit backend', () => {
         try {
           await rollbackRuntime.edit({
             sourcePath: 'rollback.xlsx',
-            action: 'update',
-            operations: [{ type: 'set_cell', sheetName: 'Data', address: 'A1', value: 'after' }]
+            actions: [{ type: 'set_cell', sheetName: 'Data', address: 'A1', value: 'after' }]
           })
         } catch (error) {
           rollbackError = error instanceof Error ? error.message : String(error)
@@ -174,6 +170,9 @@ describe('ai tool excel edit backend', () => {
         }
 
         const operations = await loadWorkbook(operationsFile.filePath)
+        const operationsDiff = await loadWorkbook(
+          String((secondEdit.record as { previewPath?: string } | undefined)?.previewPath)
+        )
         const operationsXml = await JSZip.loadAsync(
           await fs.readFile(operationsFile.filePath)
         ).then((zip) => zip.file('xl/workbook.xml')!.async('text'))
@@ -187,6 +186,7 @@ describe('ai tool excel edit backend', () => {
           firstEdit,
           secondEdit,
           noOp,
+          deleteLastSheet,
           conflict,
           rollback,
           operations: {
@@ -199,6 +199,10 @@ describe('ai tool excel edit backend', () => {
             columnWidth: operations.getWorksheet('Data')?.getColumn('B').width,
             merged: operations.getWorksheet('Overview')?.getCell('B1').isMerged,
             deletedSheetMissing: !operations.getWorksheet('DeleteMe'),
+            addedSheetTabColor: operationsDiff.getWorksheet('Overview')?.properties.tabColor?.argb,
+            deletedSheetTabColor:
+              operationsDiff.getWorksheet('DeleteMe')?.properties.tabColor?.argb,
+            deletedSheetValue: operationsDiff.getWorksheet('DeleteMe')?.getCell('A1').value,
             fullCalcOnLoad: operationsXml.includes('fullCalcOnLoad="1"')
           },
           baseline: {
@@ -228,6 +232,9 @@ describe('ai tool excel edit backend', () => {
             result.operations.columnWidth === 24 &&
             result.operations.merged === true &&
             result.operations.deletedSheetMissing === true &&
+            result.operations.addedSheetTabColor === 'FF22A06B' &&
+            result.operations.deletedSheetTabColor === 'FFD14343' &&
+            result.operations.deletedSheetValue === 'remove' &&
             result.operations.fullCalcOnLoad === true,
           {
             name: 'excel-all-edit-operations',
@@ -244,6 +251,15 @@ describe('ai tool excel edit backend', () => {
             name: 'excel-no-op-has-no-record',
             message: '无变化的 Excel 编辑不能生成修改记录。',
             data: result.noOp
+          }
+        )
+        runtime.assertThat(
+          result.deleteLastSheet.ok === false &&
+            String(result.deleteLastSheet.error).includes('至少保留一个工作表'),
+          {
+            name: 'excel-cannot-delete-last-sheet',
+            message: 'Excel 不能删除最后一个工作表。',
+            data: result.deleteLastSheet
           }
         )
         runtime.assertThat(typeof result.conflict.error === 'string', {
