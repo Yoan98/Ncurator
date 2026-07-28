@@ -2,30 +2,14 @@ import fs from 'fs'
 import path from 'path'
 import { v4 as uuidv4 } from 'uuid'
 import type { ChatAttachment } from '../../../shared/types'
+import {
+  SUPPORTED_ATTACHMENT_FILE_EXTENSIONS,
+  SUPPORTED_ATTACHMENT_IMAGE_EXTENSIONS
+} from '../../../shared/attachmentFormats'
 import { ensureWorkspaceAssetBucket } from '../assets/WorkspaceAssetService'
 
-const SUPPORTED_IMAGE_EXTENSIONS = new Set([
-  'png',
-  'jpg',
-  'jpeg',
-  'webp',
-  'gif',
-  'bmp',
-  'tif',
-  'tiff'
-])
-const SUPPORTED_FILE_EXTENSIONS = new Set([
-  'doc',
-  'docx',
-  'pptx',
-  'pdf',
-  'md',
-  'json',
-  'xlsx',
-  'xlsm',
-  'xltx',
-  'xltm'
-])
+const SUPPORTED_IMAGE_EXTENSIONS = new Set<string>(SUPPORTED_ATTACHMENT_IMAGE_EXTENSIONS)
+const SUPPORTED_FILE_EXTENSIONS = new Set<string>(SUPPORTED_ATTACHMENT_FILE_EXTENSIONS)
 
 const MIME_BY_EXTENSION: Record<string, string> = {
   png: 'image/png',

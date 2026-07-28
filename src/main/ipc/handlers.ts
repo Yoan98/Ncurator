@@ -9,6 +9,7 @@ import { ModelService } from '../services/model/ModelService'
 import { VectorModelDownloadService } from '../services/model/VectorModelDownloadService'
 import { fetchLlmRemoteModels } from '../services/llm/modelCatalog'
 import { AttachmentService } from '../services/attachments/AttachmentService'
+import { SUPPORTED_ATTACHMENT_EXTENSIONS } from '../../shared/attachmentFormats'
 import { ChatRunService } from '../services/ai/ChatRunService'
 import { AiRunResourceManager } from '../services/ai/run/AiRunResourceManager'
 import { AiFileChangeService } from '../services/ai/fileChanges/AiFileChangeService'
@@ -1497,41 +1498,11 @@ export function registerHandlers(services: {
           filters: [
             {
               name: 'Attachments',
-              extensions: [
-                'png',
-                'jpg',
-                'jpeg',
-                'webp',
-                'gif',
-                'bmp',
-                'tif',
-                'tiff',
-                'md',
-                'json',
-                'doc',
-                'docx',
-                'pptx',
-                'pdf'
-              ]
+              extensions: [...SUPPORTED_ATTACHMENT_EXTENSIONS]
             },
             {
               name: 'Supported Files',
-              extensions: [
-                'png',
-                'jpg',
-                'jpeg',
-                'webp',
-                'gif',
-                'bmp',
-                'tif',
-                'tiff',
-                'md',
-                'json',
-                'doc',
-                'docx',
-                'pptx',
-                'pdf'
-              ]
+              extensions: [...SUPPORTED_ATTACHMENT_EXTENSIONS]
             }
           ]
         }

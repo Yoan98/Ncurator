@@ -68,21 +68,20 @@ describe('ai human excel live backend', () => {
             return
           }
           const starts = filterAiRunEventsByType(result.events, 'tool_call_started')
+          const fileArtifacts = filterAiRunEventsByType(result.events, 'file_artifact')
           runtime.assertThat(
             result.output?.status === 'completed' &&
               starts.some((event) => event.toolName === 'excel_edit') &&
               starts.some((event) => event.toolName.startsWith('excel_read')) &&
               result.value === 20 &&
-              result.output.artifacts.some(
-                (artifact) => artifact.kind === 'file' && artifact.capability === 'excel'
-              ),
+              fileArtifacts.some((event) => event.capability === 'excel'),
             {
               name: 'human-live-excel-read-edit',
               message: 'live human 应自主完成已有 Excel 的定位、修改、核对和交付。',
               data: {
                 tools: starts.map((event) => event.toolName),
                 value: result.value,
-                artifacts: result.output?.artifacts
+                fileArtifacts
               }
             }
           )

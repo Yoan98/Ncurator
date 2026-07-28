@@ -3,6 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { AttachmentService } from '../../../../src/main/services/attachments/AttachmentService'
+import { SUPPORTED_ATTACHMENT_EXTENSIONS } from '../../../../src/shared/attachmentFormats'
 
 describe('attachment service runtime directories', () => {
   let workspaceRootPath = ''
@@ -21,6 +22,29 @@ describe('attachment service runtime directories', () => {
         .filter(Boolean)
         .map((directoryPath) => fs.rm(directoryPath, { recursive: true, force: true }))
     )
+  })
+
+  it('exposes one extension list for validation and the native file picker', () => {
+    expect(SUPPORTED_ATTACHMENT_EXTENSIONS).toEqual([
+      'png',
+      'jpg',
+      'jpeg',
+      'webp',
+      'gif',
+      'bmp',
+      'tif',
+      'tiff',
+      'doc',
+      'docx',
+      'pptx',
+      'pdf',
+      'md',
+      'json',
+      'xlsx',
+      'xlsm',
+      'xltx',
+      'xltm'
+    ])
   })
 
   it('saves attachments under .ncurator/runtime and creates the scripts directory', async () => {

@@ -205,17 +205,6 @@ describe('workbench result e2e', () => {
           const textResults = await waitForWorkbenchSearchResults(page)
           await openSearchPreview(page, textResults, 'human-input.txt')
           const plainTextPreviewVisible = await waitForPlainTextPreview(page)
-          const excelPreviewResults: boolean[] = []
-          for (const extension of ['xlsx', 'xlsm', 'xltx', 'xltm']) {
-            const fileName = `normal-preview.${extension}`
-            await switchWorkbenchMode(page, '没头脑')
-            await insertWorkbenchReferenceToken(page, fileName)
-            await appendWorkbenchInputText(page, 'excel normal preview fixture')
-            await submitWorkbenchCurrentDraft(page)
-            const results = await waitForWorkbenchSearchResults(page)
-            await openSearchPreview(page, results, fileName)
-            excelPreviewResults.push(await waitForExcelPreview(page))
-          }
           const openWithMenuButton = page.getByRole('button', { name: '选择打开应用' }).last()
           await openWithMenuButton.click()
           const openWithApplicationItems = getWorkbenchPrefixLocator(
@@ -234,7 +223,6 @@ describe('workbench result e2e', () => {
             .catch(() => false)
           await page.keyboard.press('Escape')
           const resourceTabs = getWorkbenchPrefixLocator(page, workbenchSelectors.resourceTabPrefix)
-          const resourceTabCount = await resourceTabs.count()
           await resourceTabs.filter({ hasText: 'workbench-preview.md' }).first().click()
           const reopenedMarkdownVisible = await waitForMarkdownPreview(page)
           await selectWorkbenchResourceMenuItem(runtime, 'file')
@@ -247,6 +235,15 @@ describe('workbench result e2e', () => {
             .getByPlaceholder('筛选文件…')
             .isVisible()
             .catch(() => false)
+          const excelPreviewResults: boolean[] = []
+          const workspaceFileFilter = page.getByPlaceholder('筛选文件…')
+          for (const extension of ['xlsx', 'xlsm', 'xltx', 'xltm']) {
+            const fileName = `normal-preview.${extension}`
+            await workspaceFileFilter.fill(fileName)
+            await page.getByTitle(fileName, { exact: true }).click()
+            excelPreviewResults.push(await waitForExcelPreview(page))
+          }
+          const resourceTabCount = await resourceTabs.count()
           const signals = await runtime.collectSignals()
 
           return {
@@ -291,12 +288,12 @@ describe('workbench result e2e', () => {
               result.reopenedMarkdownVisible &&
               result.fileLauncherVisible &&
               result.workspaceFileFilterVisible &&
-              result.resourceTabCount === 4 &&
+              result.resourceTabCount === 9 &&
               result.revealPathCalls >= 1,
             {
               name: 'workbench-file-preview-actions-real',
               message:
-                '右侧普通文件预览应能打开真实 pdf/docx/md/txt/xlsx/xlsm/xltx/xltm，并通过系统关联应用查询提供打开方式下拉和默认标记；PDF 预览应显示页面，文本与 Excel 应来自真实索引搜索命中。',
+                '右侧普通文件预览应能打开真实 pdf/docx/md/txt/xlsx/xlsm/xltx/xltm，并通过系统关联应用查询提供打开方式下拉和默认标记；PDF 和文本来自真实搜索结果，Excel 从工作区文件列表直接打开。',
               data: result
             }
           )

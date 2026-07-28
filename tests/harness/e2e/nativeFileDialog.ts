@@ -6,6 +6,7 @@ import { promisify } from 'node:util'
 
 const execFileAsync = promisify(execFile)
 const MACOS_FILE_SCRIPT_PATH = path.join(os.tmpdir(), 'ncurator-e2e-select-file.applescript')
+const MACOS_FILE_SWIFT_SCRIPT_PATH = path.join(os.tmpdir(), 'ncurator-e2e-select-file.swift')
 const MACOS_FILE_SCRIPT = `
 on run argv
   set targetPath to item 1 of argv
@@ -77,6 +78,45 @@ on run argv
 
   return "frontmost-before=" & beforeFrontmost & "; frontmost-after=" & afterFrontmost & "; target-process-name=" & targetProcessName & "; target-process-count=" & targetProcessCount & "; key-status=" & keyStatus
 end run
+`
+const MACOS_FILE_SWIFT_SCRIPT = `
+import AppKit
+import ApplicationServices
+import Foundation
+
+func postKey(_ keyCode: CGKeyCode, _ flags: CGEventFlags = []) {
+  let source = CGEventSource(stateID: .hidSystemState)
+  guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: true),
+        let keyUp = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: false) else {
+    return
+  }
+  keyDown.flags = flags
+  keyUp.flags = flags
+  keyDown.post(tap: .cghidEventTap)
+  keyUp.post(tap: .cghidEventTap)
+}
+
+let targetPath = CommandLine.arguments[1]
+let processId = pid_t(Int32(CommandLine.arguments[2]) ?? 0)
+let beforeFrontmost = NSWorkspace.shared.frontmostApplication?.localizedName ?? ""
+let targetApp = NSRunningApplication(processIdentifier: processId)
+targetApp?.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
+Thread.sleep(forTimeInterval: 0.4)
+
+NSPasteboard.general.clearContents()
+NSPasteboard.general.setString(targetPath, forType: .string)
+postKey(5, [.maskCommand, .maskShift])
+Thread.sleep(forTimeInterval: 0.4)
+postKey(9, [.maskCommand])
+Thread.sleep(forTimeInterval: 0.15)
+postKey(36)
+Thread.sleep(forTimeInterval: 0.8)
+postKey(36)
+Thread.sleep(forTimeInterval: 0.2)
+
+let afterFrontmost = NSWorkspace.shared.frontmostApplication?.localizedName ?? ""
+let targetName = targetApp?.localizedName ?? "none"
+print("frontmost-before=" + beforeFrontmost + "; frontmost-after=" + afterFrontmost + "; target-app=" + targetName)
 `
 
 export const selectFileInNativeDialog = async (
@@ -151,7 +191,16 @@ export const selectFileInNativeDialog = async (
       [MACOS_FILE_SCRIPT_PATH, filePath, String(electronProcessId)],
       { timeout: 30_000 }
     )
-    return `${output.stdout}\n${output.stderr}`.trim()
+    const appleScriptOutput = `${output.stdout}\n${output.stderr}`.trim()
+    if (!appleScriptOutput.includes('skipped-not-frontmost')) return appleScriptOutput
+
+    await writeFile(MACOS_FILE_SWIFT_SCRIPT_PATH, MACOS_FILE_SWIFT_SCRIPT, 'utf8')
+    const swiftOutput = await execFileAsync(
+      '/usr/bin/swift',
+      [MACOS_FILE_SWIFT_SCRIPT_PATH, filePath, String(electronProcessId)],
+      { timeout: 30_000 }
+    )
+    return `${appleScriptOutput}\n${swiftOutput.stdout}\n${swiftOutput.stderr}`.trim()
   }
   throw new Error(`native file dialog automation is unsupported on ${process.platform}`)
 }

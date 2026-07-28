@@ -24,6 +24,7 @@ import type {
   WorkbenchModelSelection,
   WorkspaceSource
 } from '../../../../shared/types'
+import { SUPPORTED_ATTACHMENT_FILE_EXTENSIONS } from '../../../../shared/attachmentFormats'
 import { workbenchSelectors } from '../../testing/selectors'
 import { normalizeUserFacingError } from '../../utils/userFacingError'
 import type {
@@ -93,7 +94,9 @@ type WorkbenchComposerProps = {
 const isTextNode = (value: Node | null): value is Text => value instanceof Text
 const CARET_ANCHOR_ROLE = 'composer-caret-anchor'
 const LARGE_FILE_WARNING_BYTES = 10 * 1024 * 1024
-const SUPPORTED_ATTACHMENT_FILE_EXTENSIONS = new Set(['md', 'json', 'doc', 'docx', 'pptx', 'pdf'])
+const SUPPORTED_ATTACHMENT_FILE_EXTENSION_SET = new Set<string>(
+  SUPPORTED_ATTACHMENT_FILE_EXTENSIONS
+)
 
 const getAttachmentFileExt = (name: string): string => {
   const last =
@@ -110,7 +113,7 @@ const getAttachmentFileExt = (name: string): string => {
 }
 
 const isSupportedAttachmentFile = (name: string): boolean =>
-  SUPPORTED_ATTACHMENT_FILE_EXTENSIONS.has(getAttachmentFileExt(name))
+  SUPPORTED_ATTACHMENT_FILE_EXTENSION_SET.has(getAttachmentFileExt(name))
 
 const PreferenceDots: React.FC<{ count: 1 | 2 }> = ({ count }) => (
   <span className="inline-flex items-center gap-0.5 text-[#787774]">
