@@ -51,7 +51,6 @@ const TEXT_EXTENSIONS = new Set([
 ])
 
 const EXCEL_EXTENSIONS = new Set(['.xlsx', '.xlsm', '.xltx', '.xltm'])
-const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp'])
 
 type WorkspaceObject = {
   relativePath: string
@@ -187,7 +186,6 @@ const inferCapability = (
   const extension = path.extname(after?.absolutePath || before?.absolutePath || '').toLowerCase()
   if (TEXT_EXTENSIONS.has(extension)) return 'text_file'
   if (EXCEL_EXTENSIONS.has(extension)) return 'excel'
-  if (IMAGE_EXTENSIONS.has(extension)) return 'image'
   return 'terminal_exec'
 }
 

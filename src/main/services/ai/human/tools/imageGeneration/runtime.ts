@@ -87,6 +87,13 @@ const validateSvg = (svg: string): void => {
       if (FORBIDDEN_ELEMENTS.has(element.localName.toLowerCase())) {
         throw new Error(`SVG contains a forbidden element: ${element.localName}.`)
       }
+      if (element.localName.toLowerCase() === 'style') {
+        const css = element.textContent || ''
+        if (/@import\b/iu.test(css)) throw new Error('SVG contains a forbidden CSS import.')
+        for (const match of css.matchAll(/url\(([^)]+)\)/giu)) {
+          assertSafeReference(match[1].replace(/^['"]|['"]$/gu, ''))
+        }
+      }
       for (let index = 0; index < element.attributes.length; index += 1) {
         const attribute = element.attributes.item(index)
         if (!attribute) continue
@@ -157,12 +164,12 @@ export const generateImage = async (
   buildInput: WorkspaceCapabilityBuildInput,
   args: ImageGenerateInput
 ): Promise<ImageGenerateOutput> => {
-  const outputBuffer = await renderImage(args)
   const outputPath = await resolveSafeTextFilePath({
     sourcePath: args.outputPath,
     workspaceRootPath: buildInput.workspaceRootPath,
     allowMissing: true
   })
+  const outputBuffer = await renderImage(args)
 
   return await withTextFileMutationQueue(outputPath, async () => {
     await fs.mkdir(path.dirname(outputPath), { recursive: true })

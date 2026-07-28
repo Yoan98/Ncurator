@@ -773,7 +773,7 @@ AI unit / 辅助测试目录：
 - 测试类型：`backend`
 - What：危险 SVG、不支持格式和工作区越界请求失败且不产生文件副作用。
 - Why：SVG 是可包含脚本和外部资源的输入格式，图片工具必须在写文件前完成安全和路径校验。
-- How：分别提交包含脚本、外部图片引用、malformed SVG、`.gif` 输出路径和工作区外路径的真实工具调用；malformed SVG 使用一份已存在目标文件。
+- How：分别提交包含脚本、外部图片引用、CSS 外链、CSS import、超大尺寸、malformed SVG、`.gif` 输出路径和工作区外路径的真实工具调用；越界路径同时携带非法 SVG 以确认先检查路径，malformed SVG 使用一份已存在目标文件。
 - Oracle：所有调用均返回明确错误；新目标文件不存在；已有目标文件保持调用前 bytes；不生成图片修改记录或 `file_artifact`。
 - Not：不把内部安全规则写入 Tool 提示词，也不穷举全部 SVG 标签。
 
@@ -912,6 +912,15 @@ AI unit / 辅助测试目录：
 ### 4.2 `human`
 
 #### mock-llm 类别
+
+##### `human-image-generation`
+
+- 测试类型：`backend / mock-llm`
+- What：human 学习 `image-generation` 后，通过真实 `image_generate` 生成并交付 PNG。
+- Why：Tool 测试不覆盖 Brain、Learning、Hand、Mouth 的技能装载和交付主链。
+- How：只脚本化 LLM 决策，真实执行 human graph、图片渲染、修改记录和 Artifact。
+- Oracle：主链经过 Learning、Hand、Mouth；只调用一次 `image_generate`；PNG 可解码且尺寸正确；Artifact 和最终交付文件名一致。
+- Not：不验证真实模型自主选择技能，该行为由 Workbench 图片生成 Live E2E 覆盖。
 
 ##### `human-excel-read-edit`
 

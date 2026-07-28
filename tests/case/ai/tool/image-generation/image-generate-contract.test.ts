@@ -155,10 +155,22 @@ describe('ai tool image-generation backend', () => {
           outputPath: 'images/external.png',
           svg: '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><image href="https://example.com/a.png" /></svg>'
         })
+        const cssExternalError = await captureError({
+          outputPath: 'images/css-external.png',
+          svg: '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><style>rect { fill: url(https://example.com/fill.svg); }</style><rect width="10" height="10" /></svg>'
+        })
+        const cssImportError = await captureError({
+          outputPath: 'images/css-import.png',
+          svg: '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><style>@import "https://example.com/style.css";</style></svg>'
+        })
+        const oversizedError = await captureError({
+          outputPath: 'images/oversized.png',
+          svg: '<svg xmlns="http://www.w3.org/2000/svg" width="9000" height="10" />'
+        })
         const outsidePath = path.join(path.dirname(runtime.workspaceRoot), 'outside.png')
         const outsideError = await captureError({
           outputPath: outsidePath,
-          svg: createSvg('#000000')
+          svg: '<svg malformed'
         })
         const formatError = await captureError({
           outputPath: 'images/generated.gif',
@@ -177,12 +189,20 @@ describe('ai tool image-generation backend', () => {
         return {
           scriptError,
           externalError,
+          cssExternalError,
+          cssImportError,
+          oversizedError,
           outsideError,
           formatError,
           malformedError,
           preservedUnchanged: (await fs.readFile(preservedPath)).equals(preservedBytes),
           scriptExists: await exists(path.join(runtime.workspaceRoot, 'images', 'script.png')),
           externalExists: await exists(path.join(runtime.workspaceRoot, 'images', 'external.png')),
+          cssExternalExists: await exists(
+            path.join(runtime.workspaceRoot, 'images', 'css-external.png')
+          ),
+          cssImportExists: await exists(path.join(runtime.workspaceRoot, 'images', 'css-import.png')),
+          oversizedExists: await exists(path.join(runtime.workspaceRoot, 'images', 'oversized.png')),
           outsideExists: await exists(outsidePath),
           recordCount: (await harness.ctx.listFileChangeRecords({ runId: runtime.runId })).length,
           artifactCount: runtime.eventCollector
@@ -193,14 +213,20 @@ describe('ai tool image-generation backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.scriptError.includes('forbidden element') &&
+            result.scriptError.includes('forbidden element') &&
             result.externalError.includes('external resource') &&
+            result.cssExternalError.includes('external resource') &&
+            result.cssImportError.includes('forbidden CSS import') &&
+            result.oversizedError.includes('dimensions are too large') &&
             result.outsideError.includes('Invalid file path') &&
             result.formatError.length > 0 &&
             result.malformedError.includes('parsing failed') &&
             result.preservedUnchanged &&
             !result.scriptExists &&
             !result.externalExists &&
+            !result.cssExternalExists &&
+            !result.cssImportExists &&
+            !result.oversizedExists &&
             !result.outsideExists &&
             result.recordCount === 0 &&
             result.artifactCount === 0,
