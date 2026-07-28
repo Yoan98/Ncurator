@@ -1,4 +1,5 @@
 import type { JsonObject } from '../../../../../../shared/types'
+import type { RuntimeToolName } from '../../../../../../shared/runtimeCapabilities'
 import type { z } from 'zod/v4'
 import type { RuntimeSkillId } from '../../types'
 import type { HumanToolSpec } from '../types'
@@ -33,7 +34,7 @@ const createDocxMutatingExecutionMeta = () =>
 type DocxToolSpec<
   TArgs extends JsonObject = JsonObject,
   TOutput extends JsonObject = JsonObject,
-  TName extends string = string,
+  TName extends RuntimeToolName = RuntimeToolName,
   TSkillId extends RuntimeSkillId = RuntimeSkillId
 > = HumanToolSpec<TArgs, TOutput, TName, TSkillId> & {
   activityActionType?: string

@@ -1,5 +1,6 @@
 import type { StructuredToolInterface } from '@langchain/core/tools'
 import type { JsonObject, JsonValue } from '../../../../../shared/types'
+import type { RuntimeToolName } from '../../../../../shared/runtimeCapabilities'
 import type { AiRunContext } from '../../types'
 import type { z } from 'zod/v4'
 import { AI_TOOL_FAMILY_IDS } from '../constants'
@@ -50,7 +51,7 @@ export type WorkspaceCapabilityBuildInput<TContext = AiRunContext> = {
 export type HumanToolSpec<
   TInput extends JsonObject = JsonObject,
   TOutput extends JsonValue = JsonValue,
-  TName extends string = string,
+  TName extends RuntimeToolName = RuntimeToolName,
   TSkillId extends RuntimeSkillId = RuntimeSkillId
 > = {
   name: TName

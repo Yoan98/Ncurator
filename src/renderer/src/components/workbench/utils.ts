@@ -10,6 +10,11 @@ import type {
   WorkspaceSource
 } from '../../../../shared/types'
 import {
+  RUNTIME_TOOL_CATALOG,
+  getRuntimeSkillDisplayName,
+  type RuntimeToolName
+} from '../../../../shared/runtimeCapabilities'
+import {
   WORKBENCH_PREFERENCE_AI_PREFERENCE_STORAGE_KEY,
   WORKBENCH_PREFERENCE_MODE_STORAGE_KEY,
   WORKBENCH_PREFERENCE_MODEL_STORAGE_KEY,
@@ -68,37 +73,11 @@ const readNestedObject = (value: IpcJsonObject, key: string): IpcJsonObject | un
     : undefined
 }
 
-const isAssistantToolName = (toolName: string): toolName is AssistantToolName =>
-  toolName === 'terminal_run' ||
-  toolName === 'terminal_read' ||
-  toolName === 'terminal_stop' ||
-  toolName === 'text_file_read' ||
-  toolName === 'text_file_edit' ||
-  toolName === 'kb_search' ||
-  toolName === 'kb_list_documents' ||
-  toolName === 'docx_read_outline' ||
-  toolName === 'docx_search' ||
-  toolName === 'docx_read_blocks' ||
-  toolName === 'docx_edit' ||
-  toolName === 'pdf_inspect' ||
-  toolName === 'pdf_search' ||
-  toolName === 'pdf_read_pages' ||
-  toolName === 'pdf_read_visuals' ||
-  toolName === 'ppt_read_outline' ||
-  toolName === 'ppt_read_slides' ||
-  toolName === 'ppt_search' ||
-  toolName === 'ppt_read_visuals' ||
-  toolName === 'ppt_edit' ||
-  toolName === 'web_search' ||
-  toolName === 'web_crawl' ||
-  toolName === 'browser_use' ||
-  toolName === 'image_analyze' ||
-  toolName === 'image_generate' ||
-  toolName === 'wait_time' ||
-  toolName === 'unnamed'
+const isRuntimeToolName = (toolName: string): toolName is RuntimeToolName =>
+  Object.prototype.hasOwnProperty.call(RUNTIME_TOOL_CATALOG, toolName)
 
 const normalizeToolName = (toolName: string): AssistantToolName =>
-  isAssistantToolName(toolName) ? toolName : 'unnamed'
+  isRuntimeToolName(toolName) ? toolName : 'unnamed'
 
 const text = (
   value: string,
@@ -214,59 +193,45 @@ const readDocxRangeLabel = (input?: IpcJsonObject): string => {
 }
 
 const getSkillDisplayName = (skillId?: RuntimeSkillId): string => {
-  if (skillId === 'terminal') return '命令执行器'
-  if (skillId === 'text-file') return '文件编辑器'
-  if (skillId === 'kb-retrieval') return '资料查阅器'
-  if (skillId === 'docx-read') return 'docx 阅读器'
-  if (skillId === 'docx-write') return 'docx 写作器'
-  if (skillId === 'pdf-read') return 'PDF 阅读器'
-  if (skillId === 'ppt-read') return 'PPT 阅读器'
-  if (skillId === 'ppt-write') return 'PPT 编辑器'
-  if (skillId === 'image-recognition') return '图像识别'
-  if (skillId === 'image-generation') return '图片生成'
-  return '新能力'
+  return skillId ? getRuntimeSkillDisplayName(skillId) || '新能力' : '新能力'
 }
 
-const getToolUiKind = (toolName?: AssistantToolName): AssistantProcessSkillKey => {
-  if (
-    toolName === 'docx_read_outline' ||
-    toolName === 'docx_read_blocks' ||
-    toolName === 'docx_search'
-  ) {
-    return 'docx-read'
-  }
-  if (toolName === 'docx_edit') return 'docx-edit'
-  if (toolName === 'text_file_read') return 'file-read'
-  if (toolName === 'text_file_edit') return 'file-edit'
-  if (
-    toolName === 'pdf_inspect' ||
-    toolName === 'pdf_search' ||
-    toolName === 'pdf_read_pages' ||
-    toolName === 'pdf_read_visuals'
-  ) {
-    return 'pdf-read'
-  }
-  if (
-    toolName === 'ppt_read_outline' ||
-    toolName === 'ppt_read_slides' ||
-    toolName === 'ppt_search' ||
-    toolName === 'ppt_read_visuals' ||
-    toolName === 'ppt_edit'
-  ) {
-    return 'ppt'
-  }
-  if (toolName === 'kb_search' || toolName === 'kb_list_documents') return 'kb'
-  if (toolName === 'terminal_run' || toolName === 'terminal_read' || toolName === 'terminal_stop') {
-    return 'terminal'
-  }
-  if (toolName === 'web_search') return 'web-search'
-  if (toolName === 'web_crawl') return 'web-crawl'
-  if (toolName === 'browser_use') return 'browser'
-  if (toolName === 'image_analyze') return 'image-recognition'
-  if (toolName === 'image_generate') return 'image-generation'
-  if (toolName === 'wait_time') return 'wait'
-  return 'generic'
-}
+const TOOL_UI_KINDS = {
+  terminal_run: 'terminal',
+  terminal_read: 'terminal',
+  terminal_stop: 'terminal',
+  text_file_read: 'file-read',
+  text_file_edit: 'file-edit',
+  kb_search: 'kb',
+  kb_list_documents: 'kb',
+  docx_read_outline: 'docx-read',
+  docx_search: 'docx-read',
+  docx_read_blocks: 'docx-read',
+  docx_edit: 'docx-edit',
+  pdf_inspect: 'pdf-read',
+  pdf_search: 'pdf-read',
+  pdf_read_pages: 'pdf-read',
+  pdf_read_visuals: 'pdf-read',
+  ppt_read_outline: 'ppt',
+  ppt_read_slides: 'ppt',
+  ppt_search: 'ppt',
+  ppt_read_visuals: 'ppt',
+  ppt_edit: 'ppt',
+  excel_read_outline: 'excel-read',
+  excel_search: 'excel-read',
+  excel_read_cells: 'excel-read',
+  excel_edit: 'excel-edit',
+  web_search: 'web-search',
+  web_crawl: 'web-crawl',
+  browser_use: 'browser',
+  wait_time: 'wait',
+  wait_for_user_takeover: 'user-takeover',
+  image_analyze: 'image-recognition',
+  image_generate: 'image-generation'
+} as const satisfies Record<RuntimeToolName, AssistantProcessSkillKey>
+
+const getToolUiKind = (toolName?: AssistantToolName): AssistantProcessSkillKey =>
+  toolName && toolName !== 'unnamed' ? TOOL_UI_KINDS[toolName] : 'generic'
 
 const getDisplaySkillKey = (display: AssistantProcessDisplay): AssistantProcessSkillKey => {
   if (display.kind === 'tool') return getToolUiKind(normalizeToolName(display.toolName))
@@ -278,12 +243,14 @@ const getToolIconKind = (skillKey: AssistantProcessSkillKey): AssistantProcessIc
   if (skillKey === 'docx-read' || skillKey === 'pdf-read' || skillKey === 'ppt') return 'document'
   if (skillKey === 'file-read') return 'document'
   if (skillKey === 'file-edit') return 'edit'
+  if (skillKey === 'excel-read' || skillKey === 'excel-edit') return 'spreadsheet'
   if (skillKey === 'kb') return 'knowledge'
   if (skillKey === 'web-search') return 'search'
   if (skillKey === 'web-crawl') return 'web'
   if (skillKey === 'browser') return 'browser'
   if (skillKey === 'image-recognition' || skillKey === 'image-generation') return 'image'
   if (skillKey === 'wait') return 'wait'
+  if (skillKey === 'user-takeover') return 'browser'
   if (skillKey === 'terminal') return 'terminal'
   return 'default'
 }
@@ -364,6 +331,22 @@ const getToolSummaryText = (
       return sentence(text(`部分处理 ${normalizedCount} 个 PPT 文件失败`))
     return sentence(text(`处理 ${normalizedCount} 个 PPT 文件失败`))
   }
+  if (skillKey === 'excel-read') {
+    if (status === 'running') return sentence(text(`正在读取 ${normalizedCount} 个 Excel 文件`))
+    if (status === 'completed') return sentence(text(`已读取 ${normalizedCount} 个 Excel 文件`))
+    if (status === 'partial_failed') {
+      return sentence(text(`部分读取 ${normalizedCount} 个 Excel 文件失败`))
+    }
+    return sentence(text(`读取 ${normalizedCount} 个 Excel 文件失败`))
+  }
+  if (skillKey === 'excel-edit') {
+    if (status === 'running') return sentence(text(`正在编辑 ${normalizedCount} 个 Excel 文件`))
+    if (status === 'completed') return sentence(text(`已编辑 ${normalizedCount} 个 Excel 文件`))
+    if (status === 'partial_failed') {
+      return sentence(text(`部分编辑 ${normalizedCount} 个 Excel 文件失败`))
+    }
+    return sentence(text(`编辑 ${normalizedCount} 个 Excel 文件失败`))
+  }
   if (skillKey === 'kb') {
     if (status === 'running') return sentence(text('正在检索知识库'))
     if (status === 'completed') return sentence(text('已检索知识库'))
@@ -412,101 +395,83 @@ const getToolSummaryText = (
     if (status === 'partial_failed') return sentence(text('部分等待失败'))
     return sentence(text('等待失败'))
   }
+  if (skillKey === 'user-takeover') {
+    if (status === 'running') return sentence(text('正在等待用户接管浏览器'))
+    if (status === 'completed') return sentence(text('用户已完成浏览器操作'))
+    if (status === 'partial_failed') return sentence(text('等待用户接管浏览器时部分失败'))
+    return sentence(text('等待用户接管浏览器失败'))
+  }
   if (status === 'running') return sentence(text('正在处理任务'))
   if (status === 'completed') return sentence(text('已处理任务'))
   if (status === 'partial_failed') return sentence(text('部分任务处理失败'))
   return sentence(text('处理任务失败'))
 }
 
+type ToolItemRenderer = (input?: IpcJsonObject) => AssistantRichTextSegment[]
+
+const TOOL_ITEM_RENDERERS = {
+  terminal_run: (input) => sentence(text('执行命令 '), text(readCommandLabel(input))),
+  terminal_read: (input) =>
+    sentence(text('读取终端 '), text(readStringValue(input || {}, 'terminalId') || '运行结果')),
+  terminal_stop: (input) =>
+    sentence(text('停止终端 '), text(readStringValue(input || {}, 'terminalId') || '任务')),
+  text_file_read: (input) => sentence(text('读取文件 '), text(readToolFileLabel(input))),
+  text_file_edit: (input) => sentence(text('编辑文件 '), text(readToolFileLabel(input))),
+  kb_search: (input) => sentence(text('在知识库中搜索 '), text(readToolQueryLabel(input))),
+  kb_list_documents: () => sentence(text('查看工作空间文档列表')),
+  docx_read_outline: (input) =>
+    sentence(text('查看文档 '), text(readToolFileLabel(input)), text(' 的结构')),
+  docx_search: (input) => sentence(text('在文档中搜索 '), text(readToolQueryLabel(input))),
+  docx_read_blocks: (input) =>
+    sentence(
+      text('读取文档 '),
+      text(readToolFileLabel(input)),
+      text(` ${readDocxRangeLabel(input)}`)
+    ),
+  docx_edit: (input) => sentence(text('编辑文档 '), text(readToolFileLabel(input))),
+  pdf_inspect: (input) => sentence(text('查看 PDF 信息 '), text(readToolFileLabel(input))),
+  pdf_search: (input) => sentence(text('在文档中搜索 '), text(readToolQueryLabel(input))),
+  pdf_read_pages: (input) => sentence(text('读取 PDF 页面 '), text(readToolFileLabel(input))),
+  pdf_read_visuals: (input) =>
+    sentence(text('读取 PDF 页面视觉内容 '), text(readToolFileLabel(input))),
+  ppt_read_outline: (input) => sentence(text('阅读 PPT 结构 '), text(readToolFileLabel(input))),
+  ppt_read_slides: (input) => sentence(text('读取 PPT 页面 '), text(readToolFileLabel(input))),
+  ppt_search: (input) => sentence(text('搜索 PPT '), text(readToolQueryLabel(input))),
+  ppt_read_visuals: (input) =>
+    sentence(text('读取 PPT 页面视觉内容 '), text(readToolFileLabel(input))),
+  ppt_edit: (input) => sentence(text('编辑 PPT '), text(readToolFileLabel(input))),
+  excel_read_outline: (input) => sentence(text('查看 Excel 结构 '), text(readToolFileLabel(input))),
+  excel_search: (input) => sentence(text('搜索 Excel '), text(readToolQueryLabel(input))),
+  excel_read_cells: (input) => sentence(text('读取 Excel 单元格 '), text(readToolFileLabel(input))),
+  excel_edit: (input) => sentence(text('编辑 Excel '), text(readToolFileLabel(input))),
+  web_search: (input) => sentence(text('搜索网页 '), text(readToolQueryLabel(input))),
+  web_crawl: (input) => sentence(text('读取网页 '), text(readWebUrlLabel(input))),
+  browser_use: (input) => {
+    const action = input ? readStringValue(input, 'action') || '' : ''
+    const urlLabel = readWebUrlLabel(input)
+    const instructionLabel = readInstructionLabel(input)
+    if (action === 'navigate') return sentence(text('打开网页 '), text(urlLabel))
+    if (action === 'observe') return sentence(text('查看页面并'), text(instructionLabel))
+    if (action === 'extract') return sentence(text('从页面中'), text(instructionLabel))
+    if (action === 'act') return sentence(text('在页面上'), text(instructionLabel))
+    return sentence(text('操作浏览器 '), text(instructionLabel))
+  },
+  wait_time: (input) => sentence(text('等待 '), text(readWaitDurationLabel(input))),
+  wait_for_user_takeover: (input) =>
+    sentence(
+      text('等待用户接管浏览器 '),
+      text(readStringValue(input || {}, 'message') || '完成操作')
+    ),
+  image_analyze: (input) => sentence(text('识别图片 '), text(readToolFileLabel(input))),
+  image_generate: (input) => sentence(text('生成图片 '), text(readToolFileLabel(input)))
+} satisfies Record<RuntimeToolName, ToolItemRenderer>
+
 const getToolItemText = (
   toolName: AssistantToolName,
   _status: AssistantProcessStatus,
   input?: IpcJsonObject
-): AssistantRichTextSegment[] => {
-  const fileLabel = readToolFileLabel(input)
-  const queryLabel = readToolQueryLabel(input)
-  const commandLabel = readCommandLabel(input)
-  const urlLabel = readWebUrlLabel(input)
-  const instructionLabel = readInstructionLabel(input)
-  const browserAction = input ? readStringValue(input, 'action') || '' : ''
-  const waitLabel = readWaitDurationLabel(input)
-
-  if (toolName === 'docx_read_outline') {
-    return sentence(text('查看文档 '), text(fileLabel), text(' 的结构'))
-  }
-  if (toolName === 'docx_read_blocks') {
-    const rangeText = readDocxRangeLabel(input)
-    return sentence(text('读取文档 '), text(fileLabel), text(` ${rangeText}`))
-  }
-  if (toolName === 'docx_edit') {
-    return sentence(text('编辑文档 '), text(fileLabel))
-  }
-  if (toolName === 'text_file_read') {
-    return sentence(text('读取文件 '), text(fileLabel))
-  }
-  if (toolName === 'text_file_edit') {
-    return sentence(text('编辑文件 '), text(fileLabel))
-  }
-  if (toolName === 'pdf_inspect') {
-    return sentence(text('查看 PDF 信息 '), text(fileLabel))
-  }
-  if (toolName === 'pdf_read_pages') {
-    return sentence(text('读取 PDF 页面 '), text(fileLabel))
-  }
-  if (toolName === 'pdf_read_visuals') {
-    return sentence(text('读取 PDF 页面视觉内容 '), text(fileLabel))
-  }
-  if (toolName === 'ppt_read_outline') return sentence(text('阅读 PPT 结构 '), text(fileLabel))
-  if (toolName === 'ppt_read_slides') return sentence(text('读取 PPT 页面 '), text(fileLabel))
-  if (toolName === 'ppt_search') return sentence(text('搜索 PPT '), text(queryLabel))
-  if (toolName === 'ppt_read_visuals')
-    return sentence(text('读取 PPT 页面视觉内容 '), text(fileLabel))
-  if (toolName === 'ppt_edit') return sentence(text('编辑 PPT '), text(fileLabel))
-  if (toolName === 'terminal_run') {
-    return sentence(text('执行命令 '), text(commandLabel))
-  }
-  if (toolName === 'terminal_read') {
-    return sentence(
-      text('读取终端 '),
-      text(readStringValue(input || {}, 'terminalId') || '运行结果')
-    )
-  }
-  if (toolName === 'terminal_stop') {
-    return sentence(text('停止终端 '), text(readStringValue(input || {}, 'terminalId') || '任务'))
-  }
-  if (toolName === 'kb_search' || toolName === 'docx_search' || toolName === 'pdf_search') {
-    return sentence(
-      text(toolName === 'kb_search' ? '在知识库中搜索 ' : '在文档中搜索 '),
-      text(queryLabel)
-    )
-  }
-  if (toolName === 'kb_list_documents') {
-    return sentence(text('查看工作空间文档列表'))
-  }
-  if (toolName === 'web_search') {
-    return sentence(text('搜索网页 '), text(queryLabel))
-  }
-  if (toolName === 'web_crawl') {
-    return sentence(text('读取网页 '), text(urlLabel))
-  }
-  if (toolName === 'browser_use') {
-    if (browserAction === 'navigate') return sentence(text('打开网页 '), text(urlLabel))
-    if (browserAction === 'observe') return sentence(text('查看页面并'), text(instructionLabel))
-    if (browserAction === 'extract') return sentence(text('从页面中'), text(instructionLabel))
-    if (browserAction === 'act') return sentence(text('在页面上'), text(instructionLabel))
-    return sentence(text('操作浏览器 '), text(instructionLabel))
-  }
-  if (toolName === 'image_analyze') {
-    return sentence(text('识别图片 '), text(fileLabel))
-  }
-  if (toolName === 'image_generate') {
-    return sentence(text('生成图片 '), text(fileLabel))
-  }
-  if (toolName === 'wait_time') {
-    return sentence(text('等待 '), text(waitLabel))
-  }
-  return sentence(text('处理任务中的一步'))
-}
+): AssistantRichTextSegment[] =>
+  toolName === 'unnamed' ? sentence(text('处理任务中的一步')) : TOOL_ITEM_RENDERERS[toolName](input)
 
 const getDisplayGroupText = (
   display: AssistantProcessDisplay,
@@ -599,7 +564,13 @@ export const buildAssistantExecutionSummaryText = (
         } satisfies ExecutionActionSummary)
       current.count += 1
       current.statuses.push(group.status)
-      if (kind === 'docx-read' || kind === 'docx-edit' || kind === 'ppt') {
+      if (
+        kind === 'docx-read' ||
+        kind === 'docx-edit' ||
+        kind === 'ppt' ||
+        kind === 'excel-read' ||
+        kind === 'excel-edit'
+      ) {
         current.fileLabels.add(entry.targetLabel || group.id)
       }
       if (kind === 'wait') current.waitLabels.add(readWaitDurationLabel(entry.input))

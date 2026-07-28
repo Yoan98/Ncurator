@@ -1,5 +1,6 @@
 import { z } from 'zod/v4'
 import type { JsonObject } from '../../../../../../shared/types'
+import type { RuntimeToolName } from '../../../../../../shared/runtimeCapabilities'
 import type { RuntimeSkillId } from '../../types'
 import type { HumanToolSpec } from '../types'
 import { createStaticExecutionMetaResolver, readStringArg } from '../utils/toolSpecUtils'
@@ -19,7 +20,7 @@ import {
 type ExcelSpec<
   TArgs extends JsonObject,
   TOutput extends JsonObject,
-  TName extends string,
+  TName extends RuntimeToolName,
   TSkill extends RuntimeSkillId
 > = HumanToolSpec<TArgs, TOutput, TName, TSkill>
 

@@ -5,6 +5,7 @@ import type { DocxToolRuntime } from './tools/docx/runtime'
 import type { PdfToolRuntime } from './tools/pdf/runtime'
 import type { PptToolRuntime } from './tools/ppt/types'
 import type { ExcelToolRuntime } from './tools/excel/types'
+import type { RuntimeSkillId as RegisteredRuntimeSkillId } from '../../../../shared/runtimeCapabilities'
 import {
   HUMAN_ROUND_EXECUTION_KINDS,
   HUMAN_SKILL_SOURCES,
@@ -12,8 +13,7 @@ import {
   HUMAN_STAGES,
   HUMAN_STEP_ACTIONS,
   HUMAN_STEP_RESULT_STATUSES,
-  HUMAN_FINALIZATION_REASONS,
-  RUNTIME_SKILL_IDS
+  HUMAN_FINALIZATION_REASONS
 } from './constants'
 import {
   humanThoughtSchema,
@@ -48,7 +48,7 @@ import {
 } from './schema'
 import { toolResourceContextSchema } from './toolSchemas'
 
-export type RuntimeSkillId = (typeof RUNTIME_SKILL_IDS)[number]
+export type RuntimeSkillId = RegisteredRuntimeSkillId
 export type HumanStage = (typeof HUMAN_STAGES)[number]
 export type HumanStatus = (typeof HUMAN_STATUSES)[number]
 export type HumanFinalizationReason = (typeof HUMAN_FINALIZATION_REASONS)[number]

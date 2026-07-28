@@ -1,43 +1,10 @@
-export const AI_TOOL_FAMILY_IDS = [
-  'terminal',
-  'text-file',
-  'kb',
-  'docx',
-  'pdf',
-  'ppt',
-  'excel',
-  'web',
-  'utility',
-  'image-recognition',
-  'image-generation'
-] as const
-
-export const BUILTIN_RUNTIME_SKILL_IDS = [
-  'terminal',
-  'text-file',
-  'kb-retrieval',
-  'web-browsing',
-  'utility'
-] as const
-
-export const EXTERNAL_RUNTIME_SKILL_IDS = [
-  'docx-read',
-  'docx-write',
-  'pdf-read',
-  'ppt-read',
-  'ppt-write',
-  'excel-read',
-  'excel-write',
-  'image-recognition',
-  'image-generation'
-] as const
-
-export const LEARNABLE_RUNTIME_SKILL_IDS = EXTERNAL_RUNTIME_SKILL_IDS
-
-export const RUNTIME_SKILL_IDS = [
-  ...BUILTIN_RUNTIME_SKILL_IDS,
-  ...EXTERNAL_RUNTIME_SKILL_IDS
-] as const
+export {
+  AI_TOOL_FAMILY_IDS,
+  BUILTIN_RUNTIME_SKILL_IDS,
+  EXTERNAL_RUNTIME_SKILL_IDS,
+  LEARNABLE_RUNTIME_SKILL_IDS,
+  RUNTIME_SKILL_IDS
+} from '../../../../shared/runtimeCapabilities'
 
 export const HUMAN_SKILL_SOURCES = ['builtin', 'external'] as const
 

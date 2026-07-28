@@ -1,5 +1,6 @@
 import type { z } from 'zod/v4'
 import type { JsonObject } from '../../../../../../shared/types'
+import type { RuntimeToolName } from '../../../../../../shared/runtimeCapabilities'
 import type { RuntimeSkillId } from '../../types'
 import type { HumanToolSpec } from '../types'
 import { createStaticExecutionMetaResolver, readStringArg } from '../utils/toolSpecUtils'
@@ -25,7 +26,7 @@ const PDF_READ_EXECUTION_META = createStaticExecutionMetaResolver({
 type PdfToolSpec<
   TArgs extends JsonObject = JsonObject,
   TOutput extends JsonObject = JsonObject,
-  TName extends string = string,
+  TName extends RuntimeToolName = RuntimeToolName,
   TSkillId extends RuntimeSkillId = 'pdf-read'
 > = HumanToolSpec<TArgs, TOutput, TName, TSkillId>
 

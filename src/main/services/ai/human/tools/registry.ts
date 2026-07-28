@@ -15,6 +15,7 @@ import {
 import { TEXT_FILE_TOOL_SPECS } from './textFile/toolSpecs'
 import type { AiToolFamilyId, HumanToolSpec } from './types'
 import type { AiRuntimePlatform } from '../../types'
+import type { RuntimeToolName } from '../../../../../shared/runtimeCapabilities'
 
 export const ALL_TOOL_SPECS = [
   ...TERMINAL_TOOL_SPECS,
@@ -31,6 +32,10 @@ export const ALL_TOOL_SPECS = [
 ] as const
 
 type AnyToolSpec = (typeof ALL_TOOL_SPECS)[number]
+
+type MissingToolSpecName = Exclude<RuntimeToolName, AnyToolSpec['name']>
+const TOOL_SPEC_CATALOG_IS_COMPLETE: MissingToolSpecName extends never ? true : never = true
+void TOOL_SPEC_CATALOG_IS_COMPLETE
 
 const TOOL_SPEC_BY_NAME = new Map<string, AnyToolSpec>(
   ALL_TOOL_SPECS.map((spec) => [spec.name, spec])

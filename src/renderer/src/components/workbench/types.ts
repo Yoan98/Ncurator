@@ -9,6 +9,7 @@ import type {
   WorkbenchModelSelection,
   WorkspaceSource
 } from '../../../../shared/types'
+import type { RuntimeToolName } from '../../../../shared/runtimeCapabilities'
 
 export type WorkbenchMode = 'ai' | 'search'
 export type WorkbenchAiPreference = AiPreference
@@ -88,34 +89,7 @@ export type AssistantRichTextSegment = {
   iconKind?: AssistantProcessIconKind
 }
 
-export type AssistantToolName =
-  | 'terminal_run'
-  | 'terminal_read'
-  | 'terminal_stop'
-  | 'text_file_read'
-  | 'text_file_edit'
-  | 'kb_search'
-  | 'kb_list_documents'
-  | 'docx_read_outline'
-  | 'docx_search'
-  | 'docx_read_blocks'
-  | 'docx_edit'
-  | 'pdf_inspect'
-  | 'pdf_search'
-  | 'pdf_read_pages'
-  | 'pdf_read_visuals'
-  | 'ppt_read_outline'
-  | 'ppt_read_slides'
-  | 'ppt_search'
-  | 'ppt_read_visuals'
-  | 'ppt_edit'
-  | 'web_search'
-  | 'web_crawl'
-  | 'browser_use'
-  | 'image_analyze'
-  | 'image_generate'
-  | 'wait_time'
-  | 'unnamed'
+export type AssistantToolName = RuntimeToolName | 'unnamed'
 
 export type AssistantProcessIconKind =
   | 'search'
@@ -126,6 +100,7 @@ export type AssistantProcessIconKind =
   | 'knowledge'
   | 'workflow'
   | 'terminal'
+  | 'spreadsheet'
   | 'document'
   | 'edit'
   | 'retry'
@@ -149,6 +124,8 @@ export type AssistantProcessSkillKey =
   | 'file-edit'
   | 'pdf-read'
   | 'ppt'
+  | 'excel-read'
+  | 'excel-edit'
   | 'kb'
   | 'terminal'
   | 'web-search'
@@ -157,6 +134,7 @@ export type AssistantProcessSkillKey =
   | 'image-recognition'
   | 'image-generation'
   | 'wait'
+  | 'user-takeover'
   | 'generic'
 
 export type AssistantProcessGroupItem = {

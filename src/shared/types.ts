@@ -851,21 +851,7 @@ export type RuntimeIssueCode =
   | 'scope_unavailable'
   | 'approval_denied'
   | 'llm_usage_unavailable'
-export type RuntimeSkillId =
-  | 'terminal'
-  | 'text-file'
-  | 'docx-read'
-  | 'docx-write'
-  | 'pdf-read'
-  | 'ppt-read'
-  | 'ppt-write'
-  | 'excel-read'
-  | 'excel-write'
-  | 'image-recognition'
-  | 'image-generation'
-  | 'kb-retrieval'
-  | 'web-browsing'
-  | 'utility'
+export type RuntimeSkillId = RegisteredRuntimeSkillId
 export type AiRunEventStage = 'human_brain' | 'human_learning' | 'human_hand' | 'human_mouth'
 export type AssistantProcessDisplay =
   | { kind: 'thinking' }
@@ -1645,3 +1631,4 @@ export type ChatSessionSkillState = {
   updatedAt: number
   lastUpdatedRunId: string
 }
+import type { RuntimeSkillId as RegisteredRuntimeSkillId } from './runtimeCapabilities'
