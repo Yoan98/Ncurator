@@ -8,15 +8,15 @@ type ReferenceIconProps = {
 }
 
 const iconSizeClassName = {
-  sm: 'h-4 w-4',
-  md: 'h-[18px] w-[18px]',
-  inline: 'h-[1.12em] w-[1.12em]'
+  sm: 'h-[18px] w-[18px]',
+  md: 'h-[21px] w-[21px]',
+  inline: 'h-[1.22em] w-[1.22em]'
 } as const
 
 const containerSizeClassName = {
-  sm: 'h-5 w-5',
-  md: 'h-7 w-7',
-  inline: 'h-[1.24em] w-[1.24em]'
+  sm: 'h-[22px] w-[22px]',
+  md: 'h-8 w-8',
+  inline: 'h-[1.34em] w-[1.34em]'
 } as const
 
 const DocumentGlyph: React.FC<{
