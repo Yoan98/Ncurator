@@ -56,7 +56,7 @@ describe('workbench result e2e', () => {
           const startedAtMs = Date.now()
           await sendWorkbenchMessage(
             page,
-            `请读取并直接修改工作区的“${FILE_NAME}”：把 Data!B2 改为 20，删除 Data!A3，并在 Data!D1 写入“Checked”。只使用 Excel 专用工具完成读写。`
+            `请读取并直接修改工作区的“${FILE_NAME}”：先把 Data!B2 改为 20；确认第一次修改后，再删除 Data!A3，并在 Data!D1 写入“Checked”；最后核对 Data 和 Notes 两个工作表。`
           )
           const evidence = await waitForWorkbenchAiRunCompletion(
             runtime,
@@ -74,6 +74,8 @@ describe('workbench result e2e', () => {
           await applyEntry.click()
           const viewer = getWorkbenchLocator(page, workbenchSelectors.excelViewer)
           await viewer.waitFor({ state: 'visible', timeout: 30_000 })
+          const previewModeToggle = getWorkbenchLocator(page, workbenchSelectors.previewModeToggle)
+          const initialToggleLabel = await previewModeToggle.getAttribute('aria-label')
           const readCellBorderColor = async (address: string): Promise<string> =>
             await viewer
               .locator(`[data-cell-address="${address}"]`)
@@ -92,6 +94,15 @@ describe('workbench result e2e', () => {
             }
           )
           await viewer.getByRole('button', { name: 'Data' }).click()
+          await previewModeToggle.click()
+          const fileModeToggleLabel = await previewModeToggle.getAttribute('aria-label')
+          await viewer.getByRole('button', { name: 'Notes' }).click()
+          const fileModeNotesVisible = (
+            (await getWorkbenchLocator(page, workbenchSelectors.excelGrid).textContent()) || ''
+          ).includes('secondary sheet')
+          await viewer.getByRole('button', { name: 'Data' }).click()
+          await previewModeToggle.click()
+          const restoredToggleLabel = await previewModeToggle.getAttribute('aria-label')
           const pptBeforeAfterVisible =
             (await getWorkbenchLocator(page, workbenchSelectors.pptDiffBefore).count()) > 0 ||
             (await getWorkbenchLocator(page, workbenchSelectors.pptDiffAfter).count()) > 0
@@ -127,6 +138,10 @@ describe('workbench result e2e', () => {
             modifiedBorderColor,
             deletedBorderColor,
             addedBorderColor,
+            initialToggleLabel,
+            fileModeToggleLabel,
+            restoredToggleLabel,
+            fileModeNotesVisible,
             pptBeforeAfterVisible,
             revertedToBaseline: revertedBytes.equals(baselineBytes),
             toolNames: evidence.events
@@ -144,10 +159,14 @@ describe('workbench result e2e', () => {
               result.modifiedBorderColor.includes('34, 160, 107') &&
               result.addedBorderColor.includes('34, 160, 107') &&
               result.deletedBorderColor.includes('209, 67, 67') &&
+              result.initialToggleLabel === '查看文件' &&
+              result.fileModeToggleLabel === '查看变更' &&
+              result.restoredToggleLabel === '查看文件' &&
+              result.fileModeNotesVisible &&
               result.pptBeforeAfterVisible === false &&
               result.revertedToBaseline &&
               result.toolNames.includes('excel_read_outline') &&
-              result.toolNames.includes('excel_edit'),
+              result.toolNames.filter((name) => name === 'excel_edit').length >= 2,
             {
               name: 'workbench-excel-update-diff-and-revert-real',
               message: 'Excel 修改应显示单网格红绿边框，实际文件无标记，并能恢复原文件。',

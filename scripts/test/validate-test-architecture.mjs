@@ -99,6 +99,11 @@ for (const [domain, rule] of Object.entries(DOMAIN_RULES)) {
     ) {
       failures.push(`${relativePath}: Unit 不允许 Renderer 或 jsdom`)
     }
+    if (domain === 'unit' && /\bcreate[A-Za-z0-9]+ToolRuntime\b/u.test(source)) {
+      failures.push(
+        `${relativePath}: 完整生产工具 runtime 流程必须放到 ai/tool，不允许由 Unit 直接拥有`
+      )
+    }
 
     if (domain !== 'unit') {
       const declaredDomains = [...source.matchAll(/\bdomain\s*:\s*['"]([^'"]+)['"]/gu)].map(

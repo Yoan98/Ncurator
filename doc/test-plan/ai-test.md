@@ -84,6 +84,15 @@ AI unit / 辅助测试目录：
 - `pnpm test:ai:human:mock-llm`
 - `pnpm test:ai:human:live`
 
+### 3.4 覆盖归属与去重规则
+
+- `ai/tool` 负责生产工具 runtime 的完整输入输出、读写链、错误边界、原子性、修改记录与回退契约。
+- `ai/human/mock-llm` 负责真实 human graph 下的工具学习、工具选择、串联执行、暂停恢复和结果交付；只允许固定 LLM 输出，不允许替换工具执行结果。
+- `ai/human/live` 负责真实模型在自然语言输入下能否自主选择并正确使用能力；用户输入不得包含内部工具名或固定调用顺序。
+- Workbench E2E 负责用户可见的附件、预览、Diff、跨 Sheet 交互与回退闭环，不重复验证工具内部算法。
+- Unit 只保留 schema、prompt、registry、纯编译/解析/渲染、协议、平台适配和服务算法等底层契约。完整生产工具 runtime 流程一律归 `ai-test`；新增等价 AI 用例并通过后，删除重复 Unit。
+- 间接经过某个函数不算重复。只有测试输入、主要行为和 Oracle 均等价时才迁移或删除 Unit。
+
 ## 4. 回归测试清单
 
 ### 4.0 结构化输出策略与服务重试
@@ -568,6 +577,15 @@ AI unit / 辅助测试目录：
 - Oracle：操作成功；`postWriteReadback` 返回可继续使用的真实 elementId；最终 pptx 可解析。
 - Not：不评价页面设计质量。
 
+##### `ppt-visual-runtime-contract`
+
+- 测试类型：`backend`
+- What：PPT HTML 视觉 runtime 的页面尺寸、字体、布局和非法输入保护保持稳定。
+- Why：这是生产 PPT 工具的运行时契约，不应由 Unit 重复拥有完整 runtime 流程。
+- How：从原 Unit visual smoke 迁移真实 runtime 输入，执行编译、渲染和产物解析。
+- Oracle：合法页面生成可解析 PPTX 且关键元素位置稳定；非法页面返回可解释错误且不留下半成品。
+- Not：不验证模型是否会生成高质量设计。
+
 #### excel 类别
 
 ##### `excel-create-read-edit`
@@ -578,6 +596,33 @@ AI unit / 辅助测试目录：
 - How：真实调用 `excel_edit` 创建 xlsx，再调用三个只读工具并继续修改同一路径；另对已有 xlsx 执行修改和删除单元格，最后直接解析正式文件与 diff 文件。
 - Oracle：正式文件包含准确值和公式且不带 diff 边框；diff 文件对新增、修改显示绿色边框，对删除显示红色边框；同一路径只保留一条修改记录，对齐 `WB-EXCEL-001`、`WB-EXCEL-002-AC2`、`WB-EXCEL-002-AC3`。
 - Not：不验证 human 是否会选择 Excel 技能，也不评价表格视觉设计。
+
+##### `excel-read-search-and-format-boundaries`
+
+- 测试类型：`backend`
+- What：Excel outline、search、read-cells 的范围、格式与错误边界。
+- Why：当前单一 happy path 无法保护多 Sheet、regex、大结果截断和 Office Excel 格式兼容。
+- How：真实读取 `xlsx/xlsm/xltx/xltm`，覆盖 Sheet scope、多 ranges、literal/regex、500 条截断，以及非法路径、range、regex 和格式。
+- Oracle：结果 Sheet/range/值稳定；搜索最多返回 500 条并显式标记截断；合法格式可读，非法输入稳定失败且不产生修改记录。
+- Not：不验证模型如何选择读取范围。
+
+##### `excel-edit-operations-and-atomicity`
+
+- 测试类型：`backend`
+- What：Excel 全部编辑 action、样式、工作簿结构、原子写入和累计修改记录。
+- Why：写入失败、外部并发修改或 record 持久化失败都不能留下半提交状态；同一次 run 的多轮编辑必须相对首个 baseline 生成累计 Diff。
+- How：真实覆盖单元格写入/清空、公式、样式、行列与 Sheet 操作、no-op、外部修改冲突、record 持久化失败回滚和同 run 两轮编辑。
+- Oracle：每个 action 落盘后可读；no-op 不产生记录；冲突与持久化失败恢复到安全状态；最终仅一条累计 record，Diff 相对首个 baseline。
+- Not：不验证 Workbench 的 Diff 交互。
+
+##### `hand-excel-read-write-read`
+
+- 测试类型：`backend`
+- What：hand 在同一次调用中允许 Excel 读取、写入、再读取的真实串联。
+- Why：Excel 工具单测通过不代表 hand 的 schema 预检、调用预算和 artifact 合并可以承载完整链路。
+- How：真实执行 `excel_read_outline -> excel_edit -> excel_read_cells`。
+- Oracle：三步均成功；后读可见前写结果；最终 artifact 和修改记录只指向目标工作簿。
+- Not：不验证 human 是否自主选择这条顺序。
 
 #### kb 类别
 
@@ -845,6 +890,51 @@ AI unit / 辅助测试目录：
 
 #### mock-llm 类别
 
+##### `human-excel-read-edit`
+
+- 测试类型：`backend`
+- What：human 学习 Excel 能力后读取已有工作簿、修改并复读验证。
+- Why：补齐 Excel 在真实 human graph 中完全缺失的 non-live 回归。
+- How：只脚本化 LLM 决策，真实走 learning、hand、Excel runtime、apply/artifact 和 mouth。
+- Oracle：任务完成；调用包含读、写、复读；正式文件、累计 record、artifact 与最终答复一致。
+- Not：不验证真实模型的工具选择能力。
+
+##### `human-text-file-read-write`
+
+- 测试类型：`backend`
+- What：human 能读取普通文本、修改并交付结果。
+- Why：Text File 目前只有 tool 与 live，缺少可快速定位 graph/runtime 问题的 mock 层。
+- How：脚本化 LLM 决策，真实执行 text read/write 和修改记录链路。
+- Oracle：修改落盘且可复读；artifact 和最终答复包含正确文件。
+- Not：不重复穷举四种底层 write action。
+
+##### `human-ppt-read-search-edit`
+
+- 测试类型：`backend`
+- What：human 对已有 PPT 执行读取、搜索、局部编辑和复读。
+- Why：现有 Human PPT 只覆盖创建，缺少已有文件修改主链。
+- How：脚本化 LLM 决策，真实调用 PPT read/search/edit runtime。
+- Oracle：目标页和元素被修改，其他页面保持不变；正式文件、record 与 artifact 一致。
+- Not：不验证视觉美学。
+
+##### `human-web-search-crawl`
+
+- 测试类型：`backend`
+- What：human 从搜索候选进入网页正文读取并整合事实。
+- Why：现有 tool 分别验证 search/crawl，live 偏 crawl，缺少稳定的 search-to-crawl graph 回归。
+- How：仅固定 LLM 决策和可控搜索/网页响应，真实走 human graph 与 web tools。
+- Oracle：先获得候选再读取选中页面；最终答复只使用成功读取的事实和来源。
+- Not：不验证公网搜索排序质量。
+
+##### `human-utility-wait-and-takeover-resume`
+
+- 测试类型：`backend`
+- What：human 可等待、请求用户接管并在 resume 后继续完成任务。
+- Why：Utility 只有 tool 层和 Workbench 间接覆盖，缺少暂停/恢复状态机的业务回归。
+- How：脚本化 LLM 决策依次触发短等待、takeover、snapshot resume 和最终交付。
+- Oracle：暂停状态、resume 输入、后续节点和终态正确；不会重复执行暂停前动作。
+- Not：不验证真实等待时长精度。
+
 ##### `ai-run-service-human-only`
 
 - 测试类型：`backend`
@@ -1071,6 +1161,24 @@ AI unit / 辅助测试目录：
 - Not：不验证真实模型的自主规划质量。
 
 #### live 类别
+
+##### `human-excel-read-edit-live`
+
+- 测试类型：`live`
+- What：真实模型根据自然语言修改已有 Excel 并读取结果确认。
+- Why：验证模型能自主选择 Excel 能力，而不是被用户输入中的工具名提示。
+- How：只描述业务目标、目标 Sheet 和期望数据变化，不出现内部工具名或固定调用顺序。
+- Oracle：任务完成；事件流包含 Excel 读写；目标值/公式和 record 正确；最终答复引用实际文件。
+- Not：不要求固定工具调用次数和顺序。
+
+##### `human-create-excel-report-live`
+
+- 测试类型：`live`
+- What：真实模型从自然语言需求创建多 Sheet Excel 报表。
+- Why：创建、公式、基础格式和读回验证是 Excel 交付能力的核心场景。
+- How：要求创建包含明细、汇总、公式和基础表头样式的工作簿，不提供工具名。
+- Oracle：生成可解析工作簿；Sheet、公式、关键值和基础格式满足要求；事件流包含创建后的读取验证；最终答复引用实际文件。
+- Not：不比较复杂视觉设计或固定布局像素。
 
 ##### `human-legacy-doc-reading-live`
 

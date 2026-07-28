@@ -85,50 +85,6 @@ describe('ai file change service', () => {
     }
   })
 
-  it('deletes created files during revert', async () => {
-    const targetPath = path.join(tempDir, 'created.txt')
-    await fs.writeFile(targetPath, 'created')
-    await store.saveRecord(
-      createRecord({
-        id: 'created-change',
-        path: targetPath,
-        operation: 'created'
-      })
-    )
-
-    const response = await service.revertRecord({ changeId: 'created-change' })
-
-    await expect(fs.access(targetPath)).rejects.toThrow()
-    expect(response.success).toBe(true)
-    expect(response.record?.status).toBe('reverted')
-  })
-
-  it('requires force when an updated file changed after AI write', async () => {
-    const targetPath = path.join(tempDir, 'updated.txt')
-    const snapshotPath = path.join(tempDir, 'updated.snapshot.txt')
-    await fs.writeFile(snapshotPath, 'before')
-    await fs.writeFile(targetPath, 'after')
-    await store.saveRecord(
-      createRecord({
-        id: 'updated-change',
-        path: targetPath,
-        operation: 'updated',
-        beforeSnapshotPath: snapshotPath,
-        afterChecksum: 'not-current-checksum'
-      })
-    )
-
-    const blocked = await service.revertRecord({ changeId: 'updated-change' })
-    expect(blocked.success).toBe(false)
-    expect(blocked.requiresForce).toBe(true)
-
-    const forced = await service.revertRecord({ changeId: 'updated-change', force: true })
-    const content = await fs.readFile(targetPath, 'utf8')
-    expect(forced.success).toBe(true)
-    expect(forced.record?.status).toBe('reverted')
-    expect(content).toBe('before')
-  })
-
   it('captures run changes and materializes text diff only when opened', async () => {
     const targetPath = path.join(tempDir, 'notes.txt')
     await fs.writeFile(targetPath, 'line 1\nline 2\nline 3\n')

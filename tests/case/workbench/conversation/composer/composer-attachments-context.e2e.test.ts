@@ -1,11 +1,11 @@
-import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readdir, realpath, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import ExcelJS from 'exceljs'
 import { describe, it } from 'vitest'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
-  WORKBENCH_RESULT_E2E_TIMEOUT_MS,
+  WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
   assertNoWorkbenchFakeSignals,
   getAntMessageText,
   getWorkbenchLocator,
@@ -14,7 +14,9 @@ import {
   pasteWorkbenchText,
   selectWorkbenchAttachmentThroughNativeDialog,
   selectWorkbenchWorkspace,
-  setupWorkbenchWorkspaceOnly,
+  sendWorkbenchMessage,
+  setupWorkbenchWithTempWorkspace,
+  waitForWorkbenchAiRunCompletion,
   waitForAntMessageText,
   workbenchSelectors
 } from '../../../../harness/e2e/workbench'
@@ -141,7 +143,7 @@ describe('workbench conversation e2e', () => {
           '对齐附件上下文 PRD：验证统一附件选择、doc/pptx/Excel 格式放行、图片预览、文件默认打开、删除、普通文本粘贴和大文件提示。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
-        execution: 'exclusive',
+        execution: 'live',
         windowMode: 'visible',
         runMode: 'single',
         execute: async (runtime) => {
@@ -162,7 +164,7 @@ describe('workbench conversation e2e', () => {
             page,
             workbenchSelectors.attachmentCardPrefix
           ).count()
-          const setup = await setupWorkbenchWorkspaceOnly(page, {
+          const setup = await setupWorkbenchWithTempWorkspace(page, {
             caseId: CASE_ID,
             workspaceName: 'Workbench Composer Attachments Workspace'
           })
@@ -287,6 +289,14 @@ describe('workbench conversation e2e', () => {
                   .textContent()) || ''
             )
           )
+          const assetsRoot = path.join(
+            workspaceBinding.workspaceRootPath,
+            '.ncurator',
+            'runtime',
+            'assets'
+          )
+          const assetEntries = await readdir(assetsRoot, { recursive: true })
+          const importedAttachmentNames = assetEntries.map((entry) => path.basename(String(entry)))
 
           await selectWorkbenchAttachmentThroughNativeDialog(page, attachments.largePath)
           await waitForAttachmentCardByName(page, 'qa-large.json')
@@ -305,6 +315,26 @@ describe('workbench conversation e2e', () => {
           })
           await fileCard.click()
           await page.waitForTimeout(500)
+
+          const submitStartedAtMs = Date.now()
+          await sendWorkbenchMessage(page, '请只确认已经收到这些附件，不要修改任何文件。')
+          await waitForWorkbenchAiRunCompletion(
+            runtime,
+            submitStartedAtMs,
+            setup.env.modelName,
+            WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
+            { page }
+          )
+          const submittedMessages = await page.evaluate(async (workspaceId) => {
+            const sessions = (await window.api.chatSessionList())
+              .filter((item) => item.workspace_id === workspaceId)
+              .sort((left, right) => right.created_at - left.created_at)
+            return sessions[0] ? await window.api.chatMessageList(sessions[0].id) : []
+          }, workspaceBinding.workspaceId)
+          const submittedUserMessage = [...submittedMessages]
+            .reverse()
+            .find((message) => message.role === 'user')
+          const submittedAttachments = submittedUserMessage?.attachments || []
 
           const signals = await runtime.collectSignals()
           const openPathCalls = signals.ipcInvokeEntries.filter(
@@ -336,6 +366,10 @@ describe('workbench conversation e2e', () => {
             legacyDocCardText,
             pptxCardText,
             spreadsheetCardTexts,
+            importedAttachmentNames,
+            assetsRoot,
+            submittedAttachmentNames: submittedAttachments.map((attachment) => attachment.name),
+            submittedAttachmentPaths: submittedAttachments.map((attachment) => attachment.path),
             largeFileMessage,
             inputText,
             openPathCallCount: openPathCalls.length,
@@ -363,6 +397,31 @@ describe('workbench conversation e2e', () => {
               ['XLSX', 'XLSM', 'XLTX', 'XLTM'].every((label, index) =>
                 result.spreadsheetCardTexts[index]?.includes(label)
               ) &&
+              [
+                'qa-image.png',
+                'workbench-preview.md',
+                'legacy-reference.doc',
+                'slides-reference.pptx',
+                'sheet-reference.xlsx',
+                'macro-reference.xlsm',
+                'template-reference.xltx',
+                'macro-template-reference.xltm'
+              ].every((name) => result.importedAttachmentNames.includes(name)) &&
+              result.assetsRoot.includes(path.join('.ncurator', 'runtime', 'assets')) &&
+              [
+                'workbench-preview.md',
+                'legacy-reference.doc',
+                'slides-reference.pptx',
+                'sheet-reference.xlsx',
+                'macro-reference.xlsm',
+                'template-reference.xltx',
+                'macro-template-reference.xltm',
+                'qa-large.json'
+              ].every((name) => result.submittedAttachmentNames.includes(name)) &&
+              result.submittedAttachmentPaths.length === 8 &&
+              result.submittedAttachmentPaths.every((attachmentPath) =>
+                attachmentPath.startsWith(`${result.assetsRoot}${path.sep}`)
+              ) &&
               result.largeFileMessage.includes('文件过大，建议放到工作空间索引里使用') &&
               result.inputText.includes('plain paste ok') &&
               result.openPathCallCount >= 1,
@@ -377,6 +436,6 @@ describe('workbench conversation e2e', () => {
         }
       })
     },
-    WORKBENCH_RESULT_E2E_TIMEOUT_MS
+    WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS
   )
 })

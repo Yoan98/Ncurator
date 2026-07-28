@@ -1,3 +1,6 @@
+import fs from 'node:fs/promises'
+import path from 'node:path'
+import ExcelJS from 'exceljs'
 import type { Locator, Page } from 'playwright'
 import { describe, it } from 'vitest'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
@@ -28,6 +31,17 @@ const setupPreviewWorkspace = async (
   workspaceName: string
 }> => {
   const workspace = await createTemporaryWorkbenchWorkspace(CASE_ID)
+  const workbook = new ExcelJS.Workbook()
+  workbook.addWorksheet('Data').getCell('A1').value = 'excel normal preview fixture'
+  const workbookBytes = Buffer.from(await workbook.xlsx.writeBuffer())
+  await Promise.all(
+    ['xlsx', 'xlsm', 'xltx', 'xltm'].map(async (extension) => {
+      await fs.writeFile(
+        path.join(workspace.rootPath, `normal-preview.${extension}`),
+        workbookBytes
+      )
+    })
+  )
   const workspaceName = `Workbench ${CASE_ID}`
   await prepareWorkbenchWorkspaceThroughUi(page, {
     workspaceName,
@@ -82,6 +96,12 @@ const waitForPlainTextPreview = async (page: Page): Promise<boolean> => {
   await viewer.waitFor({ state: 'visible', timeout: 30_000 })
   const text = (await viewer.textContent()) || ''
   return text.includes('Hello from human fixture.') && text.includes('workspace read validation')
+}
+
+const waitForExcelPreview = async (page: Page): Promise<boolean> => {
+  const viewer = getWorkbenchLocator(page, workbenchSelectors.excelViewer)
+  await viewer.waitFor({ state: 'visible', timeout: 30_000 })
+  return ((await viewer.textContent()) || '').includes('excel normal preview fixture')
 }
 
 const verifyDocxPreviewStaysMountedWhileTyping = async (page: Page): Promise<boolean> => {
@@ -185,6 +205,17 @@ describe('workbench result e2e', () => {
           const textResults = await waitForWorkbenchSearchResults(page)
           await openSearchPreview(page, textResults, 'human-input.txt')
           const plainTextPreviewVisible = await waitForPlainTextPreview(page)
+          const excelPreviewResults: boolean[] = []
+          for (const extension of ['xlsx', 'xlsm', 'xltx', 'xltm']) {
+            const fileName = `normal-preview.${extension}`
+            await switchWorkbenchMode(page, '没头脑')
+            await insertWorkbenchReferenceToken(page, fileName)
+            await appendWorkbenchInputText(page, 'excel normal preview fixture')
+            await submitWorkbenchCurrentDraft(page)
+            const results = await waitForWorkbenchSearchResults(page)
+            await openSearchPreview(page, results, fileName)
+            excelPreviewResults.push(await waitForExcelPreview(page))
+          }
           const openWithMenuButton = page.getByRole('button', { name: '选择打开应用' }).last()
           await openWithMenuButton.click()
           const openWithApplicationItems = getWorkbenchPrefixLocator(
@@ -229,6 +260,7 @@ describe('workbench result e2e', () => {
             defaultApplicationMarkerVisible,
             markdownPreviewVisible,
             plainTextPreviewVisible,
+            excelPreviewResults,
             reopenedMarkdownVisible,
             fileLauncherVisible,
             workspaceFileFilterVisible,
@@ -254,6 +286,8 @@ describe('workbench result e2e', () => {
               result.openWithQueryCalls >= 1 &&
               result.markdownPreviewVisible &&
               result.plainTextPreviewVisible &&
+              result.excelPreviewResults.length === 4 &&
+              result.excelPreviewResults.every(Boolean) &&
               result.reopenedMarkdownVisible &&
               result.fileLauncherVisible &&
               result.workspaceFileFilterVisible &&
@@ -262,7 +296,7 @@ describe('workbench result e2e', () => {
             {
               name: 'workbench-file-preview-actions-real',
               message:
-                '右侧普通文件预览应能打开真实 pdf/docx/md/txt，并通过系统关联应用查询提供打开方式下拉和默认标记；PDF 预览应显示页面，md/txt 应来自真实索引搜索命中，对齐 WB-PANEL-003-AC1、WB-PANEL-003-AC3、WB-PANEL-003-AC15。',
+                '右侧普通文件预览应能打开真实 pdf/docx/md/txt/xlsx/xlsm/xltx/xltm，并通过系统关联应用查询提供打开方式下拉和默认标记；PDF 预览应显示页面，文本与 Excel 应来自真实索引搜索命中。',
               data: result
             }
           )

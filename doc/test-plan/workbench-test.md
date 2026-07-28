@@ -15,13 +15,13 @@
 - Workbench e2e 的 workspace 文件索引允许在测试环境通过 `NCURATOR_WORKSPACE_KNOWLEDGE_CACHE=1` 启用真实 split / vector 缓存；缓存只按文件内容 hash、扩展名、splitter 参数和 embedding model 复用计算结果，不替代 workspace 文件记录、document id、搜索结果或 UI 状态。
 - Workbench 模型选择 helper 必须通过真实下拉搜索分别选择 `AI_LIVE_PRIMARY_MODEL_NAME` 和 `AI_LIVE_VISUAL_MODEL_NAME`。
 - Workbench UI E2E 回归测试需要真实索引完成信号和 UI 可见状态作为等待条件；IPC observer 和 job 查询只能作为辅助证据，不能用来造业务状态。
-- `file-preview-actions` 当前按生产真实索引能力覆盖 `pdf/docx/md/txt`：连续打开的文件要分别保留为资源 Tab，并能切回旧 Tab。
+- `file-preview-actions` 当前按生产真实索引能力覆盖 `pdf/docx/md/txt/xlsx/xlsm/xltx/xltm`：连续打开的文件要分别保留为资源 Tab，并能切回旧 Tab。
 - docx apply case 需要真实 docx 输入、真实 AI 编辑、真实写回记录、真实预览和真实回退。
 - text-file apply case 需要真实 Markdown 或代码文件、真实 `text_file_edit`、真实结构化 diff、独立 `TextFileDiffViewer` 和按原始 bytes 回退。
 - `browser-use-task-panel` 需要真实 AI run 触发 `browser_use` 并驱动内置浏览器完成本地网页任务；同时验证多个浏览器 Tab 独立历史、共享持久站点数据、切换文件后网页状态不销毁，以及同 URL 标签不会让 Stagehand 串页，不能用 fake browser 替代。
 - `web_search` 与 `web_crawl` 需要分开覆盖：搜索 case 只验证候选网页返回；读取 case 必须验证 AI 继续读取网页正文后再回答。
 - Workbench 附件链路当前支持图片、`doc`、`docx`、`pptx`、`pdf`、`md`、`json`、`xlsx`、`xlsm`、`xltx`、`xltm`，统一保存到 `<workspace>/.ncurator/runtime/assets/<assetBucketId>/`；`assetBucketId` 为输入草稿 UUID，发送给 AI 时只传附件名称与路径，不再做发送前识图或文件解析。
-- `WB-EXCEL-001-AC1`、`WB-EXCEL-001-AC2`、`WB-EXCEL-001-AC3`、`WB-EXCEL-001-AC4` 的工具输入输出、完整编辑操作、原子失败、冲突和只读格式边界由 AI tool 与 Unit 回归承担；Workbench 的 `excel-update-diff-and-revert` 负责真实模型选用工具、正式文件、修改入口、单网格 Diff 和回退闭环，不重复枚举底层操作。
+- `WB-EXCEL-001-AC1`、`WB-EXCEL-001-AC2`、`WB-EXCEL-001-AC3`、`WB-EXCEL-001-AC4` 的工具输入输出、完整编辑操作、原子失败、冲突和只读格式边界由 AI tool 回归承担；Workbench 的 Excel apply case 负责真实模型选用工具、正式文件、修改入口、单网格 Diff 和回退闭环，不重复枚举底层操作。
 
 ## 3. Suite 设计
 
@@ -85,7 +85,7 @@ tests/case/workbench/
 
 #### `session-initial-create-and-title`
 
-- 测试类型：`e2e`
+- 测试类型：`e2e / live`
 - What：首次进入 Workbench 时只展示可输入草稿态，第一条用户消息真实发送后才创建会话并生成标题，第二条消息不再自动改写标题。
 - Why：会话初始化和标题更新是 Workbench 最早的可见状态；草稿态提前落库会产生空会话。
 - How：通过 Settings UI 新增真实模型配置并绑定真实工作区；检查会话记录数量，发送两条真实自然语言请求。
@@ -157,11 +157,11 @@ tests/case/workbench/
 
 #### `composer-attachments-context`
 
-- 测试类型：`e2e`
+- 测试类型：`e2e / live`
 - What：`+` 与粘贴添加附件时，附件会保存到工作区 `.ncurator/runtime/assets/<assetBucketId>/`，不会提前创建真实会话；图片、`doc`、`docx`、`pptx`、`pdf`、`md`、`json`、`xlsx`、`xlsm`、`xltx`、`xltm` 可以添加，并保持图片预览、文件打开、删除、普通文本粘贴和格式提示行为。
 - Why：附件链路已改为“统一落盘到工作区 + 只把路径交给 AI”，必须用回归测试守住真实保存路径和交互行为。
-- How：创建并通过原生目录选择绑定真实工作区；点击添加附件后，在 Windows 系统文件窗口或 macOS Open 面板中用系统级键鼠选择真实文件，经过 Renderer → IPC → Main → 附件保存链路；另外通过粘贴覆盖不支持格式和大文件 warning。
-- Oracle：未绑定工作区时提示先选择工作区且不添加附件；真实添加会落盘且不提前创建会话；图片预览、Excel 格式范围、不支持提示及只传名称与路径的发送上下文整体对齐 `WB-COMPOSER-010`。
+- How：创建并通过原生目录选择绑定真实工作区；点击添加附件后，在 Windows 系统文件窗口或 macOS Open 面板中用系统级键鼠选择真实文件，经过 Renderer → IPC → Main → 附件保存链路；另外覆盖大文件 warning，并通过真实模型发送一次带附件消息。
+- Oracle：未绑定工作区时提示先选择工作区且不添加附件；真实添加会落盘且不提前创建会话；图片预览、Excel 格式范围和大文件提示正确；发送后的用户消息保留附件名称，路径全部位于同一 runtime assets 目录；提示词只渲染名称与路径的纯契约由 AI Unit 负责；整体对齐 `WB-COMPOSER-010`。
 - Not：不在跨平台业务回归中验证系统原生文件选择器的视觉细节；不通过 `attachmentPickResponse` 或直接 `attachmentSaveFile` 伪造附件结果。
 
 #### `reference-mention-keyboard`
@@ -375,9 +375,18 @@ tests/case/workbench/
 - 测试类型：`e2e / live`
 - What：真实 AI 修改已有 Excel 后，用户在同一个网格中查看红绿单元格边框，并能回退到原始文件。
 - Why：Excel 修改预览不能依赖模型描述，也不适合 PPT 式左右画面对比，必须直接验证工作簿数据、公式和单元格级 diff。
-- How：通过真实 Workbench UI 请求 AI 读取并修改 xlsx；打开修改记录，切换工作表，检查红绿边框，再执行回退。
-- Oracle：正式 xlsx 的值和公式准确且没有 diff 边框；修改预览中指定的新增和修改单元格为绿色、指定的删除单元格为红色；可以切换工作表且不出现 PPT 前后预览；回退后文件 bytes 与修改前一致；真实调用包含 Excel 读工具和 `excel_edit`，对齐 `WB-EXCEL-001-AC5`、`WB-EXCEL-002`、`WB-APPLY-002-AC6`。
+- How：通过真实 Workbench UI 用自然语言请求 AI 对已有 xlsx 分两轮修改；打开修改记录，显式切换“查看文件/查看变更”，在两种模式下切换工作表，检查累计红绿边框，再执行回退。
+- Oracle：正式 xlsx 的值和公式准确且没有 diff 边框；同一 run 两轮修改只形成相对首个 baseline 的累计记录；新增和修改单元格为绿色、删除单元格为红色；两种模式都可切换工作表且不出现 PPT 前后预览；回退后 bytes 与修改前一致；真实调用包含 Excel 读工具和至少两次 `excel_edit`；对齐 `WB-EXCEL-001-AC5`、`WB-EXCEL-002-AC1`、`WB-EXCEL-002-AC2`、`WB-EXCEL-002-AC3`、`WB-EXCEL-002-AC4`。
 - Not：不逐字断言最终回答，不把模型直接计算的文本结果当作数据正确性证据。
+
+#### `excel-create-diff-and-revert`
+
+- 测试类型：`e2e / live`
+- What：真实 AI 新建多 Sheet Excel 后，用户可查看全部新增单元格的绿色 Diff，并通过回退删除新文件。
+- Why：新建文件的 baseline 为空，Diff 与回退语义不同于已有文件更新，不能由更新 case 间接代替。
+- How：通过真实 Workbench UI 用自然语言请求创建包含 Data/Notes 的 xlsx；打开修改入口，在两个 Sheet 检查新增边框，再执行回退。
+- Oracle：正式文件可解析且两个 Sheet 数据正确；所有抽查新增单元格为绿色；真实调用包含 Excel 写入和创建后的读取核对；回退后新建文件不存在。
+- Not：不评价表格视觉设计，不要求固定工具调用顺序。
 
 #### `terminal-background-service-flow`
 
