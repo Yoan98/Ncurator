@@ -124,7 +124,7 @@ describe('app update publish config', () => {
     expect(testWorkflow).toContain("path.basename(source) !== 'stats.json'")
     expect(testWorkflow).toContain("new Map([['macos-x64', 'macos-arm64']])")
     expect(testWorkflow).toContain("E2E_WORKERS_BY_TARGET = new Map([['macos-x64', 1]])")
-    expect(testWorkflow).toContain('const LIVE_WORKERS = 2')
+    expect(testWorkflow).toContain('const LIVE_WORKERS = 3')
     expect(testWorkflow).toContain('parsed.caseIds.push(next)')
     expect(testWorkflow).toContain("if (current === '--resume-passed')")
     expect(testWorkflow).toContain('resume result does not match the packaged E2E artifact')
