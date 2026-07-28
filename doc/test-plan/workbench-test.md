@@ -272,11 +272,20 @@ tests/case/workbench/
 
 #### `stop-running-or-approval-run`
 
-- 测试类型：`backend contract + e2e`
-- What：智能模式运行中底部发送按钮切换为停止图标并能取消普通长任务和审批等待；同一会话中的任务在用户停止、网络错误、请求超时、进程中断、达到运行上限或未知异常后保存恢复快照，并在后续消息中恢复原始目标、历次中断记录和已有进度。
-- Why：用户需要可靠中断长任务；审批等待时停止若不能释放等待会造成运行态卡死，任何失败分支误删快照、跨会话读取或覆盖原始目标也会让用户无法可靠续做。
-- How：E2E 发送真实长任务和审批等待请求，运行中点击停止后再发送恢复语句；backend 使用 Mock LLM、真实测试数据库和测试专用 `humanRuntimeOverrides`，将 Graph 上限和工具预算降到很小的值，依次制造多种中断并检查 `taskContext`、清理规则和最终 `task_goal`。生产默认值 200、120 和 80% 由常量契约测试锁定，不真实跑满。
-- Oracle：运行中发送按钮和取消反馈对齐 `WB-COMPOSER-006`，会话运行标记对齐 `WB-SESSION-002-AC5`；全部中断原因都保存并可在同一会话恢复，对齐 `WB-SESSION-007-AC1`；`task_goal` 保留原始任务并按顺序渲染所有中断原因和恢复语句，对齐 `WB-SESSION-007-AC2`、`WB-SESSION-007-AC3`；切换会话、重启和跨会话隔离对齐 `WB-SESSION-007-AC4`；编辑最新用户消息后快照仍存在，对齐 `WB-SESSION-007-AC5`；只有正常完成或删除会话才清理，对齐 `WB-SESSION-007-AC6`；运行上限显示“已达到运行上限，可继续对话推进”并可恢复，对齐 `WB-SESSION-007-AC7`。
+- 测试类型：`e2e`
+- What：智能模式运行中底部发送按钮切换为停止图标，并能取消普通长任务和审批等待。
+- Why：用户需要可靠中断长任务；审批等待时停止若不能释放等待会造成运行态卡死。
+- How：E2E 发送真实长任务和审批等待请求，运行中点击停止后再发送恢复语句。
+- Oracle：运行中发送按钮和取消反馈对齐 `WB-COMPOSER-006`，会话运行标记对齐 `WB-SESSION-002-AC5`；用户停止后保存并恢复任务，对齐 `WB-SESSION-007-AC1`。
+- Not：不覆盖 Graph 运行上限；该链路由 `interrupted-task-resume-flow` 覆盖。
+
+#### `interrupted-task-resume-flow`
+
+- 测试类型：`backend contract + real-model e2e`
+- What：同一会话中的任务因达到 Graph 运行上限等原因中断后，保存完整恢复上下文，并在用户后续消息中继续原任务。
+- Why：恢复能力必须经过真实 Workbench、真实模型、Main 进程、持久化和 Renderer 的完整链路验证，不能只依赖 Mock LLM。
+- How：真实模型 E2E 通过仅测试进程可用的一次性覆盖把首轮 Graph 上限降为 2，验证上限错误和快照，再发送继续语句；第二轮自动恢复正式上限 200 并完成。Backend 使用 Mock LLM 和真实测试数据库覆盖全部中断原因、连续中断、重启、跨会话隔离、编辑、删除和 `task_goal` 结构。生产默认值 200、工具软上限 120 和 80% 提醒由常量契约测试锁定，不真实跑满。
+- Oracle：全部中断原因均保存并可恢复，对齐 `WB-SESSION-007-AC1`；原始目标、历次中断和恢复语句按顺序进入 `task_goal`，对齐 `WB-SESSION-007-AC2`、`WB-SESSION-007-AC3`；重启、跨会话、编辑和清理规则对齐 `WB-SESSION-007-AC4`、`WB-SESSION-007-AC5`、`WB-SESSION-007-AC6`；真实模型首轮显示“已达到运行上限，可继续对话推进”且第二轮恢复完成，对齐 `WB-SESSION-007-AC7`。
 - Not：不使用真实模型执行 200 个 Graph 步骤或调用 120 次真实工具；测试覆盖参数不能通过产品正常请求传入，也不改变工具软上限语义。
 
 #### `cancelled-run-keeps-artifact`

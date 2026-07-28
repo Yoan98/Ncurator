@@ -27,6 +27,7 @@ import type { WebSourceStore } from '../storage/domains/WebSourceStore'
 import type { EmbeddingService } from '../vector/EmbeddingService'
 import type { BrowserEmbedService } from '../browser/BrowserEmbedService'
 import type { WebCrawlerService } from '../webCrawler/types'
+import type { AiRunDeps } from './types'
 import type {
   AiApprovalBatchDecision,
   AiApprovalBatchItem,
@@ -105,6 +106,9 @@ type ChatRunServiceDeps = {
   broadcastEvent?: (event: AiRunEvent) => void
   autoStartRuns?: boolean
   conversationMemorySummaryBuilder?: ConversationMemorySummaryBuilder
+  resolveHumanRuntimeOverrides?: (
+    run: AiRunRecord
+  ) => AiRunDeps['humanRuntimeOverrides'] | undefined
   onRunTerminal?: (
     run: AiRunRecord,
     status: Extract<AiRunRecord['status'], 'completed' | 'failed' | 'cancelled'>
@@ -816,7 +820,8 @@ export class ChatRunService {
           requestApprovalBatch: async (request) => await this.requestApprovalBatch(runId, request),
           requestUserTakeover: async (request) => await this.requestUserTakeover(runId, request),
           browserUseService: this.deps.browserUseService,
-          webCrawlerService: this.deps.webCrawlerService
+          webCrawlerService: this.deps.webCrawlerService,
+          humanRuntimeOverrides: this.deps.resolveHumanRuntimeOverrides?.(run)
         }
       )
 

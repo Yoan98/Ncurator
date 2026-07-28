@@ -177,6 +177,12 @@ export function registerHandlers(services: {
     { id: 'docx', releaseRun: releaseDocxRunSession },
     { id: 'pdf', releaseRun: releasePdfRunSession }
   ])
+  const e2eGraphRecursionLimitOnce = (() => {
+    if (process.env.NCURATOR_E2E_OBSERVER !== '1') return undefined
+    const value = Number(process.env.NCURATOR_E2E_HUMAN_GRAPH_RECURSION_LIMIT_ONCE)
+    return Number.isInteger(value) && value > 0 ? value : undefined
+  })()
+  let e2eGraphRecursionLimitUsesRemaining = e2eGraphRecursionLimitOnce ? 1 : 0
   const chatRunService = new ChatRunService({
     chatStore,
     aiRunStore,
@@ -199,6 +205,13 @@ export function registerHandlers(services: {
     browserUseService: browserEmbedService,
     webCrawlerService,
     recordLlmIo: services.recordLlmIo,
+    resolveHumanRuntimeOverrides: () => {
+      if (!e2eGraphRecursionLimitOnce || e2eGraphRecursionLimitUsesRemaining <= 0) {
+        return undefined
+      }
+      e2eGraphRecursionLimitUsesRemaining -= 1
+      return { graphRecursionLimit: e2eGraphRecursionLimitOnce }
+    },
     onRunTerminal: async (run, status) => {
       await services.systemNotificationService?.notifyRunTerminal(run, status)
     }
