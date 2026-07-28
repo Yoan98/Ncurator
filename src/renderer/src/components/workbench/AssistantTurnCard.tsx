@@ -14,8 +14,7 @@ import {
   HiOutlineGlobeAlt,
   HiOutlineMagnifyingGlass,
   HiOutlinePhoto,
-  HiOutlinePencilSquare,
-  HiOutlineTableCells
+  HiOutlinePencilSquare
 } from 'react-icons/hi2'
 import MarkdownRenderer from '../MarkdownRenderer'
 import type {
@@ -71,7 +70,6 @@ const getLayerIconClassName = (iconKind: AssistantProcessIconKind): string => {
   if (iconKind === 'knowledge') return 'text-[#787774]'
   if (iconKind === 'workflow') return 'text-[#787774]'
   if (iconKind === 'terminal') return 'text-[#787774]'
-  if (iconKind === 'spreadsheet') return 'text-[#787774]'
   if (iconKind === 'retry') return 'text-[#787774]'
   return 'text-[#9B9A97]'
 }
@@ -94,7 +92,6 @@ const LayerIcon: React.FC<{ iconKind: AssistantProcessIconKind; className?: stri
   if (iconKind === 'knowledge') return <HiOutlineBookOpen {...iconProps} />
   if (iconKind === 'workflow') return <HiOutlineBolt {...iconProps} />
   if (iconKind === 'terminal') return <HiOutlineCommandLine {...iconProps} />
-  if (iconKind === 'spreadsheet') return <HiOutlineTableCells {...iconProps} />
   if (iconKind === 'retry') return <HiArrowPath {...iconProps} />
   return <HiOutlineDocumentText {...iconProps} />
 }

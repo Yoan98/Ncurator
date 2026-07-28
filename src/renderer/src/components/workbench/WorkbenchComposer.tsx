@@ -3,7 +3,6 @@ import { App as AntdApp, Spin, Tooltip } from 'antd'
 import {
   HiArrowUp,
   HiCircleStack,
-  HiDocumentText,
   HiFolder,
   HiMagnifyingGlass,
   HiOutlineFolderPlus,
@@ -34,6 +33,7 @@ import type {
   WorkbenchSelectOption
 } from './types'
 import { COMPOSER_PLACEHOLDER, COMPOSER_REFERENCE_KINDS } from './composer/constants'
+import AttachmentFileIcon from './composer/AttachmentFileIcon'
 import ReferenceMentionPanel from './composer/ReferenceMentionPanel'
 import type { ComposerDraftValue, ComposerNode } from './composer/types'
 import {
@@ -990,9 +990,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                     )}
                   </span>
                 ) : (
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[7px] bg-[#F4F4F2] text-[#787774]">
-                    <HiDocumentText className="h-4 w-4" />
-                  </span>
+                  <AttachmentFileIcon fileName={attachment.name} />
                 )}
                 {attachment.kind === 'file' ? (
                   <span className="min-w-0 flex-1">

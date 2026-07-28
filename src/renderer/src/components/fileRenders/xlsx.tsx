@@ -219,28 +219,32 @@ const CustomXlsxRenderer = ({ mainState }: DocRendererProps) => {
             locale: LocaleType.ZH_CN,
             locales: { [LocaleType.ZH_CN]: localeModule.default }
           })
+          const sheetPreviewOptions: Record<string, unknown> = {
+            disableEdit: true,
+            protectedRangeShadow: 'none',
+            disableForceStringAlert: true
+          }
           const preset = UniverSheetsCorePreset({
             container,
             header: false,
             toolbar: false,
             formulaBar: true,
-            footer: { sheetBar: true, zoomSlider: true },
-            disableAutoFocus: true
+            footer: {
+              sheetBar: true,
+              zoomSlider: true,
+              addSheetButtonConfig: { show: false }
+            },
+            contextMenu: false,
+            disableAutoFocus: true,
+            sheets: sheetPreviewOptions
           })
           for (const entry of preset.plugins) {
             const [plugin, options] = Array.isArray(entry) ? entry : [entry, undefined]
             univer.registerPlugin(plugin, options)
           }
           const univerAPI = FUniver.newAPI(univer)
-          const fWorkbook = univerAPI.createWorkbook(data)
+          univerAPI.createWorkbook(data)
           dispose = () => univer.dispose()
-          await Promise.all(
-            fWorkbook.getSheets().map(async (sheet) => {
-              const permission = sheet.getWorksheetPermission()
-              await permission.protect({ name: '预览只读' })
-              await permission.setMode('readOnly')
-            })
-          )
           if (cancelled) {
             dispose()
             return

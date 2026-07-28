@@ -7,7 +7,6 @@ import {
   HiChevronLeft,
   HiChevronRight,
   HiClock,
-  HiDocumentText,
   HiFolder,
   HiOutlineClipboardDocument,
   HiOutlineExclamationCircle,
@@ -49,6 +48,7 @@ import WorkbenchComposer from '../components/workbench/WorkbenchComposer'
 import WorkbenchContentPanel from '../components/workbench/WorkbenchContentPanel'
 import UserTakeoverPanel from '../components/workbench/UserTakeoverPanel'
 import ImageLightbox from '../components/workbench/ImageLightbox'
+import AttachmentFileIcon from '../components/workbench/composer/AttachmentFileIcon'
 import ReferenceInlineToken from '../components/workbench/composer/ReferenceInlineToken'
 import type { ImageLightboxImage } from '../components/workbench/ImageLightbox'
 import type { ComposerDraftValue } from '../components/workbench/composer/types'
@@ -3025,9 +3025,7 @@ const ChatPage: React.FC = () => {
                     )
                   ) : (
                     <>
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[8px] bg-[#F4F4F2] text-[#787774]">
-                        <HiDocumentText className="h-4 w-4" />
-                      </span>
+                      <AttachmentFileIcon fileName={attachment.name} className="h-9 w-9" />
                       <span className="min-w-0">
                         <span className="block truncate text-[13px] font-medium leading-5 text-[#37352F]">
                           {attachment.name}
