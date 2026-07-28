@@ -161,6 +161,20 @@ describe('workbench result e2e', () => {
           )
           const workspaceExplorerToggleLabelBeforeOpen =
             await workspaceExplorerToggle.getAttribute('aria-label')
+          const documentToolbar = getWorkbenchLocator(page, workbenchSelectors.documentToolbar)
+          const standaloneRevealButtonCount = await documentToolbar
+            .getByRole('button', { name: '定位文件' })
+            .count()
+          await getWorkbenchLocator(page, workbenchSelectors.openWithMenu)
+            .getByRole('button', { name: '选择打开应用' })
+            .click()
+          const revealMenuItemVisible = await page
+            .getByRole('menuitem', { name: '打开所在文件夹' })
+            .last()
+            .waitFor({ state: 'visible', timeout: 10_000 })
+            .then(() => true)
+            .catch(() => false)
+          await page.keyboard.press('Escape')
           const toolbarActionOrder = await getWorkbenchLocator(
             page,
             workbenchSelectors.documentToolbar
@@ -177,7 +191,6 @@ describe('workbench result e2e', () => {
                 .map((item) => item.testId),
             [
               workbenchSelectors.openWithMenu,
-              workbenchSelectors.applyRevealButton,
               workbenchSelectors.previewModeToggle,
               workbenchSelectors.applyRevertButton,
               workbenchSelectors.workspaceExplorerToggle
@@ -241,6 +254,8 @@ describe('workbench result e2e', () => {
             workspaceExplorerToggleLabelAfterOpen,
             workspaceExplorerTogglePressedAfterOpen,
             workspaceExplorerToggleClassAfterOpen,
+            standaloneRevealButtonCount,
+            revealMenuItemVisible,
             toolbarActionOrder,
             workspaceExplorerModeCountBeforeOpen,
             workspaceExplorerModeTextAfterOpen,
@@ -272,10 +287,11 @@ describe('workbench result e2e', () => {
               result.workspaceExplorerToggleLabelAfterOpen === '收起文件列表' &&
               result.workspaceExplorerTogglePressedAfterOpen === 'true' &&
               result.workspaceExplorerToggleClassAfterOpen.includes('!bg-[#F1F1EF]') &&
+              result.standaloneRevealButtonCount === 0 &&
+              result.revealMenuItemVisible &&
               JSON.stringify(result.toolbarActionOrder) ===
                 JSON.stringify([
                   workbenchSelectors.openWithMenu,
-                  workbenchSelectors.applyRevealButton,
                   workbenchSelectors.previewModeToggle,
                   workbenchSelectors.applyRevertButton,
                   workbenchSelectors.workspaceExplorerToggle

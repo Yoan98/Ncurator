@@ -376,7 +376,7 @@ tests/case/workbench/
 - 测试类型：`e2e`
 - What：同一个 Markdown 文件在普通预览时正常渲染，在 AI 修改记录中使用独立文本 diff，并能恢复原始 bytes。
 - Why：普通预览和修改预览是两种不同语义；如果共用文件渲染器，用户看不到本次具体增加和删除内容。
-- How：先从真实搜索结果打开 Markdown 普通预览；再通过真实 AI 调用 `replaceAll` 和 `edit` 修改该文件；点击 assistant 修改入口检查 `TextFileDiffViewer`；最后执行回退。
+- How：先从真实搜索结果打开 Markdown 普通预览；再通过真实 AI 调用 `replaceAll` 和 `edit` 修改该文件；点击 assistant 修改入口检查 `TextFileDiffViewer`、工具栏没有独立定位按钮且系统应用下拉包含“打开所在文件夹”；最后执行回退。
 - Oracle：普通预览与修改 diff 共用一个文件 Tab；Run 终态后才展示修改入口；面包屑、工具栏、文件列表、历史批次、结构化 Diff、不可变展开和回退刷新整体对齐 `WB-PANEL-003`、`WB-APPLY-001`、`WB-APPLY-002`、`WB-APPLY-003`；确认回退后 bytes 与原始输入一致且有效改动标记消失。
 - Not：不验证 unified diff 字符串；UI 只消费结构化 diff artifact。
 
@@ -439,7 +439,7 @@ tests/case/workbench/
 - 测试类型：`e2e`
 - What：AI 修改真实 docx 后，assistant 修改文件入口、右侧修改文件工作区、当前记录预览和干净回退闭环。
 - Why：直接写回和回退是 Workbench 文件编辑能力的安全边界，只看 artifact 事件无法证明用户能检查和撤销修改。
-- How：通过 UI 选择真实 docx 资料并发送真实编辑请求；等待 AI 写回；点击 assistant turn 中的修改文件入口；检查右侧文件面包屑、无模式标签状态和预览；执行回退并重新读取文件内容。
+- How：通过 UI 选择真实 docx 资料并发送真实编辑请求；等待 AI 写回；点击 assistant turn 中的修改文件入口；检查右侧文件面包屑、无模式标签状态、预览，以及系统应用下拉内的“打开所在文件夹”；执行回退并重新读取文件内容。
 - Oracle：受支持写回类型边界对齐 `WB-CORE-003`；修改后源文件成为最终净稿并展示入口；右侧默认选中、Review Docx、写回和回退闭环对齐 `WB-APPLY-001`、`WB-APPLY-002`、`WB-APPLY-003`。
 - Not：不验证 docx 编辑算法的所有格式保真细节，该能力归 AI tool docx 测试。
 

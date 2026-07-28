@@ -196,7 +196,6 @@ export const workbenchSelectors = {
   openWithButton: 'workbench-open-with-button',
   openWithMenu: 'workbench-open-with-menu',
   openWithApplicationPrefix: 'workbench-open-with-application',
-  applyRevealButton: 'workbench-apply-reveal-button',
   previewModeToggle: 'workbench-preview-mode-toggle',
   browserPanel: 'workbench-browser-panel',
   browserViewport: 'workbench-browser-viewport',
