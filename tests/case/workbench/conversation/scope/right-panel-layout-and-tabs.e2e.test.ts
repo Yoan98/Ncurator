@@ -6,6 +6,7 @@ import {
   getWorkbenchLocator,
   getWorkbenchPrefixLocator,
   navigateToWorkbench,
+  selectWorkbenchResourceMenuItem,
   workbenchSelectors
 } from '../../../../harness/e2e/workbench'
 
@@ -65,15 +66,11 @@ describe('workbench conversation e2e', () => {
             }, workbenchSelectors.contentPanelShell)
           }
 
-          const addButton = getWorkbenchLocator(page, workbenchSelectors.resourceTabAddButton)
-          await addButton.click()
-          const fileMenuItem = page.getByRole('menuitem', { name: '文件', exact: true })
-          await fileMenuItem.waitFor({ state: 'visible' })
-          const fileMenuLabelVisible = await fileMenuItem.isVisible()
+          const resourceMenu = await selectWorkbenchResourceMenuItem(runtime, 'browser')
+          const fileMenuLabelVisible = resourceMenu.fileVisible
           const legacyFileMenuLabelCount = await page
             .getByRole('menuitem', { name: '打开文件', exact: true })
             .count()
-          await page.getByRole('menuitem', { name: '浏览器', exact: true }).click()
 
           const tabs = getWorkbenchPrefixLocator(page, workbenchSelectors.resourceTabPrefix)
           await tabs.first().waitFor({ state: 'visible' })
@@ -158,8 +155,7 @@ describe('workbench conversation e2e', () => {
           const sparseDragLayout = await readTabDragLayout()
 
           for (let index = 0; index < 7; index += 1) {
-            await addButton.click()
-            await page.getByRole('menuitem', { name: '浏览器', exact: true }).click()
+            await selectWorkbenchResourceMenuItem(runtime, 'browser')
           }
 
           await tabs.nth(7).waitFor({ state: 'visible' })
@@ -185,8 +181,7 @@ describe('workbench conversation e2e', () => {
           const recoveredDragLayout = await readTabDragLayout()
 
           for (let index = 0; index < 7; index += 1) {
-            await addButton.click()
-            await page.getByRole('menuitem', { name: '浏览器', exact: true }).click()
+            await selectWorkbenchResourceMenuItem(runtime, 'browser')
           }
           await tabs.nth(7).waitFor({ state: 'visible' })
           await tabs.first().click()
@@ -247,7 +242,18 @@ describe('workbench conversation e2e', () => {
           const browserMenuButton = browserPanel.getByRole('button', {
             name: '更多浏览器操作'
           })
+          const readNativeChildCount = async () =>
+            await runtime.electronApp.evaluate(({ BrowserWindow }) => {
+              const mainWindow = BrowserWindow.getAllWindows().find(
+                (candidate) => candidate.getParentWindow() === null
+              )
+              return mainWindow?.contentView.children.length || 0
+            })
+          const nativeChildCountBeforeMenu = await readNativeChildCount()
+          const browserMenuWindowPromise = runtime.electronApp.waitForEvent('window')
           await browserMenuButton.click()
+          const browserMenuPage = await browserMenuWindowPromise
+          await browserMenuPage.waitForLoadState('domcontentloaded')
           await page.waitForFunction(
             (testId) =>
               document.querySelector(`[data-testid="${testId}"]`)?.getAttribute('aria-expanded') ===
@@ -255,6 +261,30 @@ describe('workbench conversation e2e', () => {
             workbenchSelectors.browserMenu
           )
           const viewportDuringMenu = await browserViewport.boundingBox()
+          const nativeChildCountDuringMenu = await readNativeChildCount()
+          const zoomOutControl = browserMenuPage.getByRole('link', { name: '缩小页面' })
+          const zoomResetControl = browserMenuPage.getByRole('link', {
+            name: '恢复页面缩放为 100%'
+          })
+          const zoomInControl = browserMenuPage.getByRole('link', { name: '放大页面' })
+          const zoomControlBoxes = await Promise.all([
+            zoomOutControl.boundingBox(),
+            zoomResetControl.boundingBox(),
+            zoomInControl.boundingBox()
+          ])
+          await zoomOutControl.click()
+          await page.waitForFunction(
+            async (tabId) =>
+              (await window.api.browserPanelStateGet({ tabId })).state?.zoomPercent === 90,
+            activeBrowserTabId
+          )
+          const menuStayedOpenAfterZoom = !browserMenuPage.isClosed()
+          await zoomResetControl.click()
+          await page.waitForFunction(
+            async (tabId) =>
+              (await window.api.browserPanelStateGet({ tabId })).state?.zoomPercent === 100,
+            activeBrowserTabId
+          )
           const zoomDuringMenu = await page.evaluate(
             async (tabId) => window.api.browserPanelStateGet({ tabId }),
             activeBrowserTabId
@@ -312,6 +342,10 @@ describe('workbench conversation e2e', () => {
               viewportBeforeMenu,
               viewportDuringMenu,
               viewportAfterMenu,
+              nativeChildCountBeforeMenu,
+              nativeChildCountDuringMenu,
+              zoomControlBoxes,
+              menuStayedOpenAfterZoom,
               zoomBeforeMenu: zoomBeforeMenu.state?.zoomPercent,
               zoomDuringMenu: zoomDuringMenu.state?.zoomPercent,
               zoomAfterMenu: zoomAfterMenu.state?.zoomPercent
@@ -399,6 +433,14 @@ describe('workbench conversation e2e', () => {
               result.browserMenuLayout.zoomBeforeMenu === 100 &&
               result.browserMenuLayout.zoomDuringMenu === 100 &&
               result.browserMenuLayout.zoomAfterMenu === 100 &&
+              result.browserMenuLayout.nativeChildCountBeforeMenu > 0 &&
+              result.browserMenuLayout.nativeChildCountDuringMenu ===
+                result.browserMenuLayout.nativeChildCountBeforeMenu &&
+              result.browserMenuLayout.menuStayedOpenAfterZoom &&
+              result.browserMenuLayout.zoomControlBoxes.every((box) => box !== null) &&
+              new Set(
+                result.browserMenuLayout.zoomControlBoxes.map((box) => Math.round(box?.y || 0))
+              ).size === 1 &&
               Math.abs(
                 result.browserMenuLayout.viewportBeforeMenu.width -
                   result.browserMenuLayout.viewportDuringMenu.width

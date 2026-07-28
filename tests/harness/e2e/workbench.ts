@@ -105,6 +105,27 @@ type WorkbenchDraftSubmitState = {
 
 export { chatSelectors, importSelectors, settingsSelectors, workbenchSelectors }
 
+export const selectWorkbenchResourceMenuItem = async (
+  runtime: E2ETestRuntime,
+  kind: 'file' | 'browser'
+): Promise<{ fileVisible: boolean; browserVisible: boolean }> => {
+  const menuWindowPromise = runtime.electronApp.waitForEvent('window')
+  await getWorkbenchLocator(runtime.page, workbenchSelectors.resourceTabAddButton).click()
+  const menuPage = await menuWindowPromise
+  await menuPage.waitForLoadState('domcontentloaded')
+  const fileItem = menuPage.getByRole('menuitem', { name: '文件', exact: true })
+  const browserItem = menuPage.getByRole('menuitem', { name: '浏览器', exact: true })
+  await fileItem.waitFor({ state: 'visible', timeout: 10_000 })
+  const result = {
+    fileVisible: await fileItem.isVisible(),
+    browserVisible: await browserItem.isVisible()
+  }
+  const closePromise = menuPage.waitForEvent('close').catch(() => undefined)
+  await (kind === 'file' ? fileItem : browserItem).click()
+  await closePromise
+  return result
+}
+
 const byTestId = (testId: string): string => `[data-testid="${testId}"]`
 
 const byTestIdPrefix = (testIdPrefix: string): string => `[data-testid^="${testIdPrefix}-"]`

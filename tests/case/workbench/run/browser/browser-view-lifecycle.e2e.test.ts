@@ -5,6 +5,7 @@ import {
   createWorkbenchNewSession,
   getWorkbenchLocator,
   sendWorkbenchMessage,
+  selectWorkbenchResourceMenuItem,
   setupWorkbenchWithTempWorkspace,
   startLocalWorkbenchHttpServer,
   waitForWorkbenchAiRunCompletion,
@@ -51,13 +52,13 @@ describe('workbench browser lifecycle e2e', () => {
               <head>
                 <title>Browser lifecycle fixture</title>
                 <style>
-                  html, body { width: 100%; height: 100%; margin: 0; background: #101820; color: #ffffff; }
+                  html, body { width: 100%; min-height: 1800px; margin: 0; background: #101820; color: #ffffff; }
                   body { display: grid; place-items: center; font: 700 36px system-ui; }
                   main { width: 72%; padding: 48px; background: #d7263d; border: 20px solid #20bf55; }
                 </style>
               </head>
               <body>
-                <main>BROWSER VIEW IS LIVE</main>
+                <main>BROWSER VIEW IS LIVE <input aria-label="lifecycle field" /></main>
                 <script>
                   window.lifecycleTick = 0
                   setInterval(() => { window.lifecycleTick += 1 }, 50)
@@ -104,8 +105,7 @@ describe('workbench browser lifecycle e2e', () => {
             return shell instanceof HTMLElement && shell.getBoundingClientRect().width > 100
           }, workbenchSelectors.contentPanelShell)
 
-          await getWorkbenchLocator(page, workbenchSelectors.resourceTabAddButton).click()
-          await page.getByRole('menuitem', { name: '浏览器', exact: true }).click()
+          await selectWorkbenchResourceMenuItem(runtime, 'browser')
           const browserTab = page
             .locator(`[data-testid^="${workbenchSelectors.resourceTabPrefix}-browser-"]`)
             .last()
@@ -136,7 +136,7 @@ describe('workbench browser lifecycle e2e', () => {
             return await runtime.electronApp.evaluate(async ({ webContents }, url) => {
               const contents = webContents
                 .getAllWebContents()
-                .find((candidate) => candidate.getURL() === url)
+                .find((candidate) => candidate.getURL().startsWith(url))
               if (!contents || contents.isDestroyed()) {
                 throw new Error('embedded browser web contents is unavailable')
               }
@@ -169,15 +169,36 @@ describe('workbench browser lifecycle e2e', () => {
             await runtime.electronApp.evaluate(async ({ webContents }, url) => {
               const contents = webContents
                 .getAllWebContents()
-                .find((candidate) => candidate.getURL() === url)
+                .find((candidate) => candidate.getURL().startsWith(url))
               if (!contents || contents.isDestroyed()) {
-                return { alive: false, id: null, zoomFactor: null, tick: null }
+                return {
+                  alive: false,
+                  id: null,
+                  zoomFactor: null,
+                  tick: null,
+                  url: null,
+                  marker: null,
+                  fieldValue: null,
+                  scrollY: null
+                }
+              }
+              const pageState = (await contents.executeJavaScript(`({
+                tick: window.lifecycleTick,
+                marker: document.body.dataset.backgroundMarker || null,
+                fieldValue: document.querySelector('input')?.value || null,
+                scrollY: window.scrollY
+              })`)) as {
+                tick: number
+                marker: string | null
+                fieldValue: string | null
+                scrollY: number
               }
               return {
                 alive: true,
                 id: contents.id,
                 zoomFactor: contents.getZoomFactor(),
-                tick: await contents.executeJavaScript('window.lifecycleTick')
+                url: contents.getURL(),
+                ...pageState
               }
             }, server.url)
 
@@ -194,6 +215,26 @@ describe('workbench browser lifecycle e2e', () => {
           const hiddenRuntimeBefore = await inspectBrowserRuntime()
           await page.waitForTimeout(300)
           const hiddenRuntimeAfter = await inspectBrowserRuntime()
+          const backgroundUrl = `${server.url}?background=1`
+          const backgroundNavigation = await page.evaluate(
+            async ({ tabId, url }) => window.api.browserTabNavigate({ tabId, url }),
+            { tabId: browserTabId, url: backgroundUrl }
+          )
+          if (!backgroundNavigation.success) {
+            throw new Error(backgroundNavigation.error || 'background navigation failed')
+          }
+          await runtime.electronApp.evaluate(async ({ webContents }, url) => {
+            const contents = webContents
+              .getAllWebContents()
+              .find((candidate) => candidate.getURL() === url)
+            if (!contents) throw new Error('background browser target is missing')
+            await contents.executeJavaScript(`(() => {
+              document.body.dataset.backgroundMarker = 'BACKGROUND_UPDATED'
+              document.querySelector('input').value = 'AI_BACKGROUND_VALUE'
+              window.scrollTo(0, 720)
+            })()`)
+          }, backgroundUrl)
+          const hiddenUpdatedRuntime = await inspectBrowserRuntime()
 
           await panelToggle.click()
           await page.waitForFunction((testId) => {
@@ -282,10 +323,13 @@ describe('workbench browser lifecycle e2e', () => {
             initialRuntime,
             hiddenRuntimeBefore,
             hiddenRuntimeAfter,
+            hiddenUpdatedRuntime,
             switchedAwayRuntimeBefore,
             switchedAwayRuntimeAfter,
             finalRuntime,
             restoredZoom: restoredState.state?.zoomPercent,
+            restoredUrl: restoredState.state?.url,
+            backgroundUrl,
             menuZoom: menuState.state?.zoomPercent,
             restoreSamples
           }
@@ -303,6 +347,7 @@ describe('workbench browser lifecycle e2e', () => {
             result.initialRuntime,
             result.hiddenRuntimeBefore,
             result.hiddenRuntimeAfter,
+            result.hiddenUpdatedRuntime,
             result.switchedAwayRuntimeBefore,
             result.switchedAwayRuntimeAfter,
             result.finalRuntime
@@ -343,6 +388,15 @@ describe('workbench browser lifecycle e2e', () => {
                 typeof sample.tick === 'number'
             ) &&
               Number(result.hiddenRuntimeAfter.tick) > Number(result.hiddenRuntimeBefore.tick) &&
+              result.hiddenUpdatedRuntime.url === result.backgroundUrl &&
+              result.hiddenUpdatedRuntime.marker === 'BACKGROUND_UPDATED' &&
+              result.hiddenUpdatedRuntime.fieldValue === 'AI_BACKGROUND_VALUE' &&
+              Number(result.hiddenUpdatedRuntime.scrollY) >= 700 &&
+              result.restoredUrl === result.backgroundUrl &&
+              result.finalRuntime.url === result.backgroundUrl &&
+              result.finalRuntime.marker === 'BACKGROUND_UPDATED' &&
+              result.finalRuntime.fieldValue === 'AI_BACKGROUND_VALUE' &&
+              Number(result.finalRuntime.scrollY) >= 700 &&
               Number(result.switchedAwayRuntimeAfter.tick) >
                 Number(result.switchedAwayRuntimeBefore.tick) &&
               mountedRestoreSamples.length > 0 &&
@@ -352,7 +406,7 @@ describe('workbench browser lifecycle e2e', () => {
             {
               name: 'embedded-browser-survives-hidden-running-session',
               message:
-                '折叠侧栏或切走会话只能停放浏览器视图；同一 WebContents 必须继续运行，回到原会话时侧栏直接以最终宽度恢复且不重播动画。',
+                '折叠或切走会话后必须移除显示层但保留同一 WebContents；后台导航、表单和滚动状态应在恢复后直接显示。',
               data: {
                 runtimeSamples,
                 restoreSamples: result.restoreSamples

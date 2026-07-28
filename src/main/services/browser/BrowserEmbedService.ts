@@ -1,12 +1,6 @@
 import { randomUUID } from 'node:crypto'
-import { Menu, shell, webContents, WebContentsView } from 'electron'
-import type {
-  BrowserWindow,
-  MenuItemConstructorOptions,
-  NavigationEntry,
-  Rectangle,
-  WebContents
-} from 'electron'
+import { shell, webContents, WebContentsView } from 'electron'
+import type { BrowserWindow, NavigationEntry, Rectangle, WebContents } from 'electron'
 import { z } from 'zod/v4'
 import type { BrowserActionCandidate, BrowserUsePage, BrowserUseService } from '../ai/types'
 import {
@@ -19,6 +13,7 @@ import type { BrowserPanelBoundsState, BrowserUseRunInput, BrowserUseRunResult }
 import type { BrowserTabState } from '../../../shared/types'
 import { resolveStagehandRuntimeModel } from '../llm/stagehandModel'
 import { BrowserActionVisualizer } from './BrowserActionVisualizer'
+import { BrowserMenuWindowService } from './BrowserMenuWindowService'
 
 type StagehandModule = typeof import('@browserbasehq/stagehand')
 type StagehandInstance = InstanceType<StagehandModule['Stagehand']>
@@ -43,7 +38,6 @@ type BrowserTabRuntime = {
   ready: Promise<void> | null
   attached: boolean
   visible: boolean
-  lastVisibleBounds: Rectangle | null
 }
 
 const EMPTY_BOUNDS: BrowserPanelBoundsState = {
@@ -127,12 +121,13 @@ export class BrowserEmbedService implements BrowserUseService {
   private presentedTabId: string | null = null
   private presentationId = 0
   private bounds: BrowserPanelBoundsState = EMPTY_BOUNDS
-  private occluded = false
-  private popupMenuInstance: Menu | null = null
+  private readonly menuWindowService: BrowserMenuWindowService
   public constructor(
     private readonly mainWindow: BrowserWindow,
     private readonly cdpEndpointService: CdpEndpointService
-  ) {}
+  ) {
+    this.menuWindowService = new BrowserMenuWindowService(mainWindow)
+  }
 
   public listTabs(ownerId: string): BrowserTabState[] {
     return [...this.tabs.values()]
@@ -156,8 +151,7 @@ export class BrowserEmbedService implements BrowserUseService {
       view: null,
       ready: null,
       attached: false,
-      visible: false,
-      lastVisibleBounds: null
+      visible: false
     }
     this.tabs.set(persisted.id, runtime)
     this.activeTabId = persisted.id
@@ -199,9 +193,15 @@ export class BrowserEmbedService implements BrowserUseService {
     if (this.activeTabId === tabId) this.activeTabId = null
     if (this.presentedTabId === tabId) {
       this.presentedTabId = null
-      this.occluded = false
     }
     this.applyAllVisibility()
+  }
+
+  public async closeOwnerTabs(ownerId: string): Promise<void> {
+    const tabIds = [...this.tabs.values()]
+      .filter((runtime) => runtime.persisted.ownerId === ownerId)
+      .map((runtime) => runtime.persisted.id)
+    for (const tabId of tabIds) await this.closeTab(tabId)
   }
 
   public show(tabId: string): number {
@@ -209,7 +209,6 @@ export class BrowserEmbedService implements BrowserUseService {
     this.activeTabId = tabId
     this.presentedTabId = tabId
     this.presentationId += 1
-    this.occluded = false
     runtime.persisted.updatedAt = Date.now()
     this.applyAllVisibility()
     if (!runtime.view || runtime.view.webContents.isDestroyed()) {
@@ -217,7 +216,6 @@ export class BrowserEmbedService implements BrowserUseService {
       runtime.ready = null
       runtime.attached = false
       runtime.visible = false
-      runtime.lastVisibleBounds = null
       void this.ensureReady(runtime)
     }
     this.emitState(runtime)
@@ -228,13 +226,6 @@ export class BrowserEmbedService implements BrowserUseService {
     if (presentationId !== undefined && presentationId !== this.presentationId) return
     this.closePopupMenu()
     this.presentedTabId = null
-    this.occluded = false
-    this.applyAllVisibility()
-  }
-
-  public setOccluded(tabId: string, presentationId: number, occluded: boolean): void {
-    if (!this.isCurrentPresentation(tabId, presentationId)) return
-    this.occluded = occluded
     this.applyAllVisibility()
   }
 
@@ -285,57 +276,42 @@ export class BrowserEmbedService implements BrowserUseService {
   }
 
   public async popupMenu(tabId: string, x: number, y: number): Promise<void> {
-    this.closePopupMenu()
     const runtime = this.requireTab(tabId)
-    const zoomPercent = this.toState(runtime).zoomPercent
-    const template: MenuItemConstructorOptions[] = [
-      { label: `页面缩放 (${zoomPercent}%)`, enabled: false },
-      {
-        label: '缩小',
-        enabled: zoomPercent > Math.round(MIN_ZOOM_FACTOR * 100),
-        click: () => this.zoomOut(tabId)
-      },
-      {
-        label: '恢复为 100%',
-        enabled: zoomPercent !== 100,
-        click: () => this.zoomReset(tabId)
-      },
-      {
-        label: '放大',
-        enabled: zoomPercent < Math.round(MAX_ZOOM_FACTOR * 100),
-        click: () => this.zoomIn(tabId)
-      },
-      { type: 'separator' },
-      {
-        label: '在系统浏览器中打开',
-        enabled: Boolean(runtime.view?.webContents.getURL() || runtime.persisted.url),
-        click: () => this.openExternal(tabId)
+    await this.menuWindowService.open({
+      x,
+      y,
+      state: this.toState(runtime),
+      actions: {
+        zoomIn: () => this.zoomIn(tabId),
+        zoomOut: () => this.zoomOut(tabId),
+        zoomReset: () => this.zoomReset(tabId),
+        openExternal: () => this.openExternal(tabId)
       }
-    ]
-    const menu = Menu.buildFromTemplate(template)
-    this.popupMenuInstance = menu
-    await new Promise<void>((resolve) => {
-      if (this.mainWindow.isDestroyed()) {
-        if (this.popupMenuInstance === menu) this.popupMenuInstance = null
-        resolve()
-        return
-      }
-      menu.popup({
-        window: this.mainWindow,
-        x: Math.max(0, Math.round(x)),
-        y: Math.max(0, Math.round(y)),
-        callback: () => {
-          if (this.popupMenuInstance === menu) this.popupMenuInstance = null
-          resolve()
-        }
-      })
     })
   }
 
   public closePopupMenu(): void {
-    const menu = this.popupMenuInstance
-    this.popupMenuInstance = null
-    menu?.closePopup(this.mainWindow.isDestroyed() ? undefined : this.mainWindow)
+    this.menuWindowService.close()
+  }
+
+  public async popupResourceMenu(x: number, y: number): Promise<void> {
+    await this.menuWindowService.openResourceMenu({
+      x,
+      y,
+      onSelect: (kind) => {
+        if (!this.mainWindow.isDestroyed()) {
+          this.mainWindow.webContents.send('browser-resource-menu-action', kind)
+        }
+      }
+    })
+  }
+
+  public async capture(tabId: string): Promise<string | null> {
+    const runtime = this.requireTab(tabId)
+    const view = await this.ensureReady(runtime)
+    if (view.webContents.isDestroyed()) return null
+    const image = await view.webContents.capturePage()
+    return image.isEmpty() ? null : image.toDataURL()
   }
 
   public getState(tabId: string): BrowserTabState {
@@ -375,7 +351,7 @@ export class BrowserEmbedService implements BrowserUseService {
   }
 
   public async dispose(): Promise<void> {
-    this.closePopupMenu()
+    this.menuWindowService.dispose()
     for (const runtime of this.tabs.values()) {
       if (runtime.view && !runtime.view.webContents.isDestroyed()) runtime.view.webContents.close()
     }
@@ -455,7 +431,6 @@ export class BrowserEmbedService implements BrowserUseService {
       if (!runtime.view || runtime.view.webContents.isDestroyed()) continue
       const visible =
         tabId === this.presentedTabId &&
-        !this.occluded &&
         this.bounds.width > 0 &&
         this.bounds.height > 0 &&
         !this.mainWindow.isDestroyed()
@@ -470,37 +445,18 @@ export class BrowserEmbedService implements BrowserUseService {
           this.mainWindow.contentView.addChildView(runtime.view)
           runtime.attached = true
         }
-        runtime.lastVisibleBounds = nextBounds
         runtime.view.setBounds(nextBounds)
         runtime.view.setVisible(true)
         if (!runtime.visible) {
           runtime.view.webContents.invalidate()
         }
       } else {
-        if (!runtime.attached) {
-          this.mainWindow.contentView.addChildView(runtime.view)
-          runtime.attached = true
+        if (runtime.attached) {
+          this.mainWindow.contentView.removeChildView(runtime.view)
+          runtime.attached = false
         }
-        runtime.view.setBounds(this.getParkedBounds(runtime))
-        runtime.view.setVisible(true)
       }
       runtime.visible = visible
-    }
-  }
-
-  private getParkedBounds(runtime: BrowserTabRuntime): Rectangle {
-    const parkedSize = runtime.lastVisibleBounds || {
-      x: 0,
-      y: 0,
-      width: Math.max(1, Math.round(this.bounds.width)),
-      height: Math.max(1, Math.round(this.bounds.height))
-    }
-    const [contentWidth] = this.mainWindow.getContentSize()
-    return {
-      x: contentWidth + 64,
-      y: 0,
-      width: parkedSize.width,
-      height: parkedSize.height
     }
   }
 

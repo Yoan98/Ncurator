@@ -11,6 +11,7 @@ import {
   insertWorkbenchReferenceToken,
   navigateToWorkbench,
   prepareWorkbenchWorkspaceThroughUi,
+  selectWorkbenchResourceMenuItem,
   selectWorkbenchWorkspace,
   setWorkbenchInput,
   submitWorkbenchCurrentDraft,
@@ -146,7 +147,8 @@ describe('workbench result e2e', () => {
           const pdfResults = await waitForWorkbenchSearchResults(page)
           await openSearchPreview(page, pdfResults, '深度学习.pdf')
           const pdfPageVisible = await waitForPdfPreviewPage(page)
-          await page.getByRole('button', { name: '打开对应文件夹' }).last().click()
+          await page.getByRole('button', { name: '选择打开应用' }).last().click()
+          await page.getByRole('menuitem', { name: '打开所在文件夹' }).last().click()
 
           await switchWorkbenchMode(page, '没头脑')
           await insertWorkbenchReferenceToken(page, '深度学习.docx')
@@ -204,8 +206,7 @@ describe('workbench result e2e', () => {
           const resourceTabCount = await resourceTabs.count()
           await resourceTabs.filter({ hasText: 'workbench-preview.md' }).first().click()
           const reopenedMarkdownVisible = await waitForMarkdownPreview(page)
-          await getWorkbenchLocator(page, workbenchSelectors.resourceTabAddButton).click()
-          await page.getByRole('menuitem', { name: '文件', exact: true }).click()
+          await selectWorkbenchResourceMenuItem(runtime, 'file')
           const fileLauncherVisible = await page
             .getByText('从右侧工作区文件列表中选择')
             .waitFor({ state: 'visible', timeout: 10_000 })

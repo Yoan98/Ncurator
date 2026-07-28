@@ -4,7 +4,9 @@ import type {
   BrowserPanelHideRequest,
   BrowserPanelMenuRequest,
   BrowserPanelMutationResponse,
-  BrowserPanelOcclusionRequest,
+  BrowserPanelCaptureResponse,
+  BrowserResourceMenuAction,
+  BrowserResourceMenuRequest,
   BrowserPanelPresentationResponse,
   BrowserPanelShowRequest,
   BrowserPanelState,
@@ -213,8 +215,9 @@ export type DesktopApi = {
   browserPanelHide: (payload?: BrowserPanelHideRequest) => Promise<BrowserPanelMutationResponse>
   browserPanelOpenMenu: (payload: BrowserPanelMenuRequest) => Promise<BrowserPanelMutationResponse>
   browserPanelCloseMenu: () => Promise<BrowserPanelMutationResponse>
-  browserPanelSetOccluded: (
-    payload: BrowserPanelOcclusionRequest
+  browserPanelCapture: (payload: BrowserTabMutationRequest) => Promise<BrowserPanelCaptureResponse>
+  browserResourceMenuOpen: (
+    payload: BrowserResourceMenuRequest
   ) => Promise<BrowserPanelMutationResponse>
   browserPanelReload: (payload: BrowserTabMutationRequest) => Promise<BrowserPanelMutationResponse>
   browserPanelStop: (payload: BrowserTabMutationRequest) => Promise<BrowserPanelMutationResponse>
@@ -226,6 +229,7 @@ export type DesktopApi = {
   browserPanelZoomOut: (payload: BrowserTabMutationRequest) => Promise<BrowserPanelStateResponse>
   browserPanelZoomReset: (payload: BrowserTabMutationRequest) => Promise<BrowserPanelStateResponse>
   onBrowserPanelStateChange: (cb: (state: BrowserPanelState) => void) => () => void
+  onBrowserResourceMenuAction: (cb: (action: BrowserResourceMenuAction) => void) => () => void
   docxApplyGet: (payload: GetDocxApplyRecordRequest) => Promise<GetDocxApplyRecordResponse>
   aiFileChangeList: (
     payload?: ListAiFileChangeRecordsRequest

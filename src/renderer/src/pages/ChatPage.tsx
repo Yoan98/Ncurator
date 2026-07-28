@@ -658,6 +658,10 @@ const ChatPage: React.FC = () => {
   const [contentPanelShellMounted, setContentPanelShellMounted] = useState(false)
   const [contentPanelShellVisible, setContentPanelShellVisible] = useState(false)
   const [browserPresentationEnabled, setBrowserPresentationEnabled] = useState(false)
+  const [browserTransitionImage, setBrowserTransitionImage] = useState<{
+    tabId: string
+    dataUrl: string
+  } | null>(null)
   const contentPanelCollapsedByWorkspaceRef = useRef<Record<string, boolean>>({})
   const restoreContentPanelWithoutAnimationRef = useRef(false)
 
@@ -1039,17 +1043,50 @@ const ChatPage: React.FC = () => {
     [tabWorkspaceKey]
   )
 
+  const captureBrowserTransition = useCallback(async (tabId: string): Promise<void> => {
+    const response = await Promise.race([
+      window.api.browserPanelCapture({ tabId }),
+      new Promise<{ success: false }>((resolve) =>
+        window.setTimeout(() => resolve({ success: false }), 180)
+      )
+    ])
+    setBrowserTransitionImage(
+      response.success && 'dataUrl' in response && response.dataUrl
+        ? { tabId, dataUrl: response.dataUrl }
+        : null
+    )
+  }, [])
+
   const collapseContentPanel = useCallback((): void => {
-    setBrowserPresentationEnabled(false)
-    void window.api.browserPanelHide()
-    contentPanelCollapsedByWorkspaceRef.current[tabWorkspaceKey] = true
-    setContentPanelCollapsed(true)
-  }, [tabWorkspaceKey])
+    void (async () => {
+      if (contentPanel.kind === 'browser') {
+        await captureBrowserTransition(contentPanel.browserTabId)
+      } else {
+        setBrowserTransitionImage(null)
+      }
+      setBrowserPresentationEnabled(false)
+      void window.api.browserPanelHide()
+      contentPanelCollapsedByWorkspaceRef.current[tabWorkspaceKey] = true
+      setContentPanelCollapsed(true)
+    })()
+  }, [captureBrowserTransition, contentPanel, tabWorkspaceKey])
 
   const expandContentPanel = useCallback((): void => {
     contentPanelCollapsedByWorkspaceRef.current[tabWorkspaceKey] = false
     setContentPanelCollapsed(false)
   }, [tabWorkspaceKey])
+
+  const restoreCollapsedContentPanel = useCallback((): void => {
+    void (async () => {
+      if (contentPanel.kind === 'browser') {
+        await captureBrowserTransition(contentPanel.browserTabId)
+      } else {
+        setBrowserTransitionImage(null)
+      }
+      setContentPanelShellMounted(true)
+      expandContentPanel()
+    })()
+  }, [captureBrowserTransition, contentPanel, expandContentPanel])
 
   const showContentPanel = useCallback(
     (nextState: WorkbenchContentPanelState): void => {
@@ -1778,26 +1815,14 @@ const ChatPage: React.FC = () => {
     let startTimer: number | null = null
     let finishTimer: number | null = null
 
-    if (contentPanel.kind === 'browser') {
-      if (contentPanelCollapsed) {
-        setBrowserPresentationEnabled(false)
-        setContentPanelShellVisible(false)
-        setContentPanelShellMounted(false)
-        void window.api.browserPanelHide()
-      } else {
-        restoreContentPanelWithoutAnimationRef.current = false
-        setContentPanelShellMounted(true)
-        setContentPanelShellVisible(true)
-        setBrowserPresentationEnabled(true)
-      }
-      return
-    }
-
     if (contentPanelCollapsed) {
       setBrowserPresentationEnabled(false)
       setContentPanelShellVisible(false)
       void window.api.browserPanelHide()
-      finishTimer = window.setTimeout(() => setContentPanelShellMounted(false), 220)
+      finishTimer = window.setTimeout(() => {
+        setContentPanelShellMounted(false)
+        setBrowserTransitionImage(null)
+      }, 220)
     } else {
       if (restoreContentPanelWithoutAnimationRef.current) {
         restoreContentPanelWithoutAnimationRef.current = false
@@ -1812,6 +1837,7 @@ const ChatPage: React.FC = () => {
         setContentPanelShellVisible(true)
         finishTimer = window.setTimeout(() => {
           setBrowserPresentationEnabled(true)
+          window.setTimeout(() => setBrowserTransitionImage(null), 50)
         }, 220)
       })
     }
@@ -1820,8 +1846,6 @@ const ChatPage: React.FC = () => {
       if (startTimer !== null) window.clearTimeout(startTimer)
       if (finishTimer !== null) window.clearTimeout(finishTimer)
     }
-    // The active panel kind is sampled only when the collapsed state changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contentPanelCollapsed])
 
   useEffect(
@@ -1851,6 +1875,11 @@ const ChatPage: React.FC = () => {
       }
       const remainingSessions = sessions.filter((item) => item.id !== id)
       delete composerDraftBySessionIdRef.current[id]
+      setTabWorkspaces((current) => {
+        const next = { ...current }
+        delete next[id]
+        return next
+      })
       setSessions(remainingSessions)
       if (currentSessionIdRef.current === id) {
         const nextSession = remainingSessions[0] || null
@@ -2054,11 +2083,12 @@ const ChatPage: React.FC = () => {
       const resourceId = `browser:${browser.id}`
       const title = browser.title || (browser.url ? browser.url : '新标签页')
       setTabWorkspaces((current) => {
-        const workspace = current[tabWorkspaceKey]
+        const ownerKey = browser.ownerId || tabWorkspaceKey
+        const workspace = current[ownerKey]
         if (!workspace) return current
         return {
           ...current,
-          [tabWorkspaceKey]: {
+          [ownerKey]: {
             ...workspace,
             tabs: workspace.tabs.map((tab) =>
               tab.id === resourceId
@@ -2079,6 +2109,11 @@ const ChatPage: React.FC = () => {
       )
     },
     [tabWorkspaceKey]
+  )
+
+  useEffect(
+    () => window.api.onBrowserPanelStateChange(handleBrowserStateChange),
+    [handleBrowserStateChange]
   )
 
   const addFileTab = useCallback((): void => {
@@ -3427,8 +3462,7 @@ const ChatPage: React.FC = () => {
                     style={WORKBENCH_NO_DRAG_REGION_STYLE}
                     title="展开右侧栏"
                     onClick={() => {
-                      setContentPanelShellMounted(true)
-                      expandContentPanel()
+                      restoreCollapsedContentPanel()
                     }}
                     data-testid={workbenchSelectors.contentPanelToggle}
                     aria-label="展开右侧栏"
@@ -3471,8 +3505,7 @@ const ChatPage: React.FC = () => {
                     style={WORKBENCH_NO_DRAG_REGION_STYLE}
                     title="展开右侧栏"
                     onClick={() => {
-                      setContentPanelShellMounted(true)
-                      expandContentPanel()
+                      restoreCollapsedContentPanel()
                     }}
                     data-testid={workbenchSelectors.contentPanelToggle}
                     aria-label="展开右侧栏"
@@ -3759,6 +3792,7 @@ const ChatPage: React.FC = () => {
                   onOpenWorkspaceFile={openWorkspaceFile}
                   onOpenWorkspaceChange={openWorkspaceChange}
                   browserPresentationEnabled={browserPresentationEnabled}
+                  browserTransitionImage={browserTransitionImage}
                 />
               </div>
             </div>

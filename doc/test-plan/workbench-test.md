@@ -196,7 +196,7 @@ tests/case/workbench/
 - What：空会话输入区布局、右侧默认无占位折叠、标签栏密度与折叠入口、Tab 溢出滚动、加号菜单文案、浏览器缩放菜单和地址栏“前往”按钮。
 - Why：右侧资源工作台和聊天输入区共享窗口高度与标题栏命中区域，普通功能测试无法发现输入框被推出窗口、折叠按钮放错区域、Tab 无法滚动或原生浏览器遮挡浮层等视觉交互回归。
 - How：直接进入无历史会话的真实 Workbench，先确认右侧 shell 不存在并测量空会话输入区位置；展开后连续创建八个真实浏览器 Tab，使用鼠标滚轮触发横向滚动并检查折叠 / 展开；打开浏览器更多菜单检查三段式缩放控件和地址栏“前往”按钮。
-- Oracle：空会话输入区居中且右侧 shell 不占宽度；展开和折叠保留约 200ms 动画，折叠动画结束后 shell 才卸载；折叠态按钮位于主标题栏并在展开后隐藏；悬浮按钮不产生 document 横纵溢出；标签栏和浏览器工具栏均为 44px，标签栏无下边线；八个 Tab 溢出后滚轮可横向滚动；加号菜单显示“文件 / 浏览器”，缩放控件同排，地址栏显示“前往”按钮，浮层触发原生视图避让。
+- Oracle：空会话输入区居中且右侧 shell 不占宽度；展开和折叠保留约 200ms 动画，折叠动画结束后 shell 才卸载；折叠态按钮位于主标题栏并在展开后隐藏；悬浮按钮不产生 document 横纵溢出；标签栏和浏览器工具栏均为 44px，标签栏无下边线；八个 Tab 溢出后滚轮可横向滚动；加号菜单显示“文件 / 浏览器”，缩放控件同排且操作后菜单不关闭，地址栏显示“前往”按钮；两个菜单均由原生自绘子窗口覆盖在浏览器上方，浏览器保持挂载和可见。
 - Not：不验证公网网页、模型回答质量或系统窗口按钮本身；Stagehand targetId、共享持久分区和历史恢复继续由 `browser-use-task-panel` 覆盖。
 
 #### `windows-empty-titlebar-drag-region`
@@ -282,17 +282,17 @@ tests/case/workbench/
 - 测试类型：`e2e`
 - What：AI 通过内置浏览器完成网页任务时，文件 / 多浏览器 Tab、独立页面导航、持久站点数据和真实网页操作结果形成闭环。
 - Why：内置浏览器是 Electron 与 AI run 深度联动场景，仅 backend 或静态事件无法覆盖视口嵌入、导航和最终收口问题。
-- How：先打开真实 Markdown 文件，再让 AI 使用 `browser_use` 操作本地测试页；AI Run 仍在进行时，用户通过 `+` 新建另一个浏览器标签，验证后续 observe / act / extract 不会跟随 UI 活动标签漂移；任务完成后切回文件再切回浏览器，检查网页状态保持。
-- Oracle：文件和多个浏览器 Tab 可共存；真实 URL 导航、结果收口、targetId 隔离、共享持久分区、缩放/前往和随机 CDP 端口由浏览器组 case 合并对齐 `WB-PANEL-004`；真实 browser_use 结果包含 `BROWSER_TASK_DONE` 和口令。
+- How：先打开真实 Markdown 文件，再让 AI 使用 `browser_use` 操作本地测试页；AI Run 仍在进行时，用户通过 `+` 新建另一个浏览器标签并折叠右栏，验证后续 observe / act / extract 在后台继续操作原目标；任务完成后展开右栏并切回 AI 浏览器标签，再切换文件和浏览器检查状态保持。
+- Oracle：文件和多个浏览器 Tab 可共存；折叠期间原浏览器 `webContents` 不销毁且 AI 能完成输入和点击，展开后同一个 `webContents.id` 直接显示最新 `BROWSER_TASK_DONE` 结果；真实 URL 导航、结果收口、targetId 隔离、共享持久分区、缩放/前往和随机 CDP 端口由浏览器组 case 合并对齐 `WB-PANEL-004`。
 - Not：不验证公网网页稳定性；本 case 使用本地测试网页减少外部波动；不允许用 fake browser 或 fake tool result 替代；不要求 live 模型必须在固定时限内结束整轮最终回答，只要真实内置浏览器已完成输入、点击和结果读取即可判定 browser panel 能力有效。
 
 #### `browser-view-lifecycle`
 
 - 测试类型：`e2e`
-- What：内置浏览器原生视图在初次显示、面板折叠、Renderer 菜单避让和会话切换后仍可见、尺寸稳定且持续运行。
+- What：内置浏览器原生视图在初次显示、面板折叠、原生自绘菜单和会话切换后仍可见、尺寸稳定且持续运行。
 - Why：`WebContentsView` 由 Main 管理并覆盖在 Renderer 上方；生命周期或 bounds 同步错误会导致白屏、原生视图遮挡菜单、恢复后尺寸跳变，或切换会话时误销毁仍在运行的网页。
-- How：通过 Settings UI 创建工作空间并用真实模型发送消息形成会话；在 Workbench UI 新建浏览器 Tab，从“浏览器地址”输入框点击“前往”打开带高对比颜色和自增计时器的本地真实网页；通过 UI 新建/切回会话、Escape 关闭菜单，并采集各阶段窗口像素、viewport 尺寸、zoom、WebContents id 与计时器值。
-- Oracle：各阶段浏览器 viewport 均包含稳定的非白真实网页像素且尺寸、zoom 不变；Renderer 菜单打开时原生视图隐藏，关闭后恢复；折叠或切换会话只停放视图，不销毁 WebContents，计时器持续前进；回到原会话时面板直接按最终宽度恢复且不重播展开动画，对齐 `WB-PANEL-001-AC5`、`WB-PANEL-004-AC1`、`WB-PANEL-004-AC3`、`WB-PANEL-004-AC7`。
+- How：通过 Settings UI 创建工作空间并用真实模型发送消息形成会话；在 Workbench UI 新建浏览器 Tab，从“浏览器地址”输入框点击“前往”打开带高对比颜色和自增计时器的本地真实网页；折叠后在后台跳转新 URL、填写表单并滚动，再展开和切换会话；同时操作自绘菜单缩放控件，并采集各阶段窗口像素、viewport 尺寸、zoom、WebContents id、URL、表单、滚动位置与计时器值。
+- Oracle：各阶段浏览器 viewport 均包含稳定的非白真实网页像素且尺寸、zoom 不变；菜单打开时浏览器仍挂载且保持可见；折叠或切换会话只从显示树移除 View，不销毁 WebContents，计时器和后台导航持续进行；恢复后直接显示最新 URL、表单和滚动状态，且 WebContents id 不变，对齐 `WB-PANEL-001-AC5`、`WB-PANEL-004-AC1`、`WB-PANEL-004-AC3`、`WB-PANEL-004-AC7`、`WB-PANEL-004-AC11`。
 - Not：不验证公网网页、Stagehand 操作或最终 AI 回答；这些由 `browser-use-task-panel` 覆盖。
 
 #### `web-search-diagnostic`
