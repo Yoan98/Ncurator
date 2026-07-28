@@ -14,7 +14,7 @@ import { workbenchSelectors } from '../../testing/selectors'
 type WorkbenchBrowserPanelProps = {
   tabId: string
   presentationEnabled: boolean
-  externallyOccluded?: boolean
+  transitionImage?: string | null
   onStateChange?: (state: BrowserTabState) => void
 }
 
@@ -48,12 +48,11 @@ const notifyBounds = (
 const WorkbenchBrowserPanel: React.FC<WorkbenchBrowserPanelProps> = ({
   tabId,
   presentationEnabled,
-  externallyOccluded = false,
+  transitionImage,
   onStateChange
 }) => {
   const viewportRef = useRef<HTMLDivElement | null>(null)
   const [state, setState] = useState<BrowserTabState>(() => createEmptyState(tabId))
-  const [presentationId, setPresentationId] = useState<number | null>(null)
   const [address, setAddress] = useState('')
   const [error, setError] = useState('')
   const [menuOpen, setMenuOpen] = useState(false)
@@ -98,7 +97,6 @@ const WorkbenchBrowserPanel: React.FC<WorkbenchBrowserPanelProps> = ({
         void window.api.browserPanelHide({ presentationId: activePresentationId })
         return
       }
-      setPresentationId(activePresentationId)
       notifyBounds(tabId, activePresentationId, element)
       observer = new ResizeObserver(handleWindowChange)
       if (element) observer.observe(element)
@@ -114,18 +112,8 @@ const WorkbenchBrowserPanel: React.FC<WorkbenchBrowserPanelProps> = ({
       if (activePresentationId !== null) {
         void window.api.browserPanelHide({ presentationId: activePresentationId })
       }
-      setPresentationId(null)
     }
   }, [presentationEnabled, tabId])
-
-  useEffect(() => {
-    if (presentationId === null) return
-    void window.api.browserPanelSetOccluded({
-      tabId,
-      presentationId,
-      occluded: externallyOccluded
-    })
-  }, [externallyOccluded, presentationId, tabId])
 
   const runStateAction = async (
     action: () => Promise<{ success: boolean; state?: BrowserTabState; error?: string }>
@@ -147,8 +135,8 @@ const WorkbenchBrowserPanel: React.FC<WorkbenchBrowserPanelProps> = ({
     setMenuOpen(true)
     const response = await window.api.browserPanelOpenMenu({
       tabId,
-      x: Math.max(0, rect.right - 240),
-      y: rect.bottom
+      x: Math.max(0, rect.right - 278),
+      y: rect.bottom + 4
     })
     setMenuOpen(false)
     if (!response.success) setError(response.error || '浏览器菜单打开失败')
@@ -249,7 +237,14 @@ const WorkbenchBrowserPanel: React.FC<WorkbenchBrowserPanelProps> = ({
         className="relative min-h-0 flex-1 bg-white"
         data-testid={workbenchSelectors.browserViewport}
       >
-        {!state.url ? (
+        {!presentationEnabled && transitionImage ? (
+          <img
+            src={transitionImage}
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover"
+            draggable={false}
+          />
+        ) : !state.url ? (
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="text-center">
               <HiGlobeAlt className="mx-auto h-10 w-10 text-[#91918E]" />

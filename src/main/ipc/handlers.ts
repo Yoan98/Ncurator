@@ -57,13 +57,14 @@ import type {
   AiRunUserTakeoverConfirmRequest,
   AiRunUserTakeoverConfirmResponse,
   BrowserPanelBoundsRequest,
+  BrowserPanelCaptureResponse,
   BrowserPanelHideRequest,
   BrowserPanelMenuRequest,
   BrowserPanelMutationResponse,
-  BrowserPanelOcclusionRequest,
   BrowserPanelPresentationResponse,
   BrowserPanelShowRequest,
   BrowserPanelStateResponse,
+  BrowserResourceMenuRequest,
   BrowserTabCreateRequest,
   BrowserTabCreateResponse,
   BrowserTabListRequest,
@@ -2247,19 +2248,28 @@ export function registerHandlers(services: {
   })
 
   ipcMain.handle(
-    'browser-panel-occluded',
-    async (
-      _event,
-      payload: BrowserPanelOcclusionRequest
-    ): Promise<BrowserPanelMutationResponse> => {
+    'browser-resource-menu-open',
+    async (_event, payload: BrowserResourceMenuRequest): Promise<BrowserPanelMutationResponse> => {
       try {
         if (!browserEmbedService) return { success: false, error: 'browser service unavailable' }
-        browserEmbedService.setOccluded(
-          String(payload?.tabId || ''),
-          Number(payload?.presentationId || 0),
-          payload?.occluded === true
+        await browserEmbedService.popupResourceMenu(
+          Number(payload?.x || 0),
+          Number(payload?.y || 0)
         )
         return { success: true }
+      } catch (e) {
+        return { success: false, error: e instanceof Error ? e.message : String(e) }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'browser-panel-capture',
+    async (_event, payload: BrowserTabMutationRequest): Promise<BrowserPanelCaptureResponse> => {
+      try {
+        if (!browserEmbedService) return { success: false, error: 'browser service unavailable' }
+        const dataUrl = await browserEmbedService.capture(String(payload?.tabId || ''))
+        return { success: true, ...(dataUrl ? { dataUrl } : {}) }
       } catch (e) {
         return { success: false, error: e instanceof Error ? e.message : String(e) }
       }
@@ -2552,6 +2562,7 @@ export function registerHandlers(services: {
   ipcMain.handle('chat-session-delete', async (_event, id: string) => {
     try {
       await chatRunService.deleteSession(id)
+      await browserEmbedService?.closeOwnerTabs(id)
       return { success: true }
     } catch (e: unknown) {
       console.error('[CHAT-SESSION-DELETE] Error:', e)

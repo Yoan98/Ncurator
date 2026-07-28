@@ -1140,14 +1140,15 @@ export type BrowserPanelHideRequest = {
   presentationId?: number
 }
 
-export type BrowserPanelOcclusionRequest = {
-  tabId: string
-  presentationId: number
-  occluded: boolean
-}
-
 export type BrowserPanelMenuRequest = {
   tabId: string
+  x: number
+  y: number
+}
+
+export type BrowserResourceMenuAction = 'file' | 'browser'
+
+export type BrowserResourceMenuRequest = {
   x: number
   y: number
 }
@@ -1159,6 +1160,10 @@ export type BrowserPanelMutationResponse = {
 
 export type BrowserPanelPresentationResponse = BrowserPanelMutationResponse & {
   presentationId?: number
+}
+
+export type BrowserPanelCaptureResponse = BrowserPanelMutationResponse & {
+  dataUrl?: string
 }
 
 export type BrowserTabState = {

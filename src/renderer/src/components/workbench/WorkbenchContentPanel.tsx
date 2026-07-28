@@ -1,5 +1,5 @@
 ﻿import React, { useEffect, useMemo, useState } from 'react'
-import { Button, Dropdown, Empty, Spin, Tooltip, message } from 'antd'
+import { Button, Dropdown, Empty, Spin, Tooltip, message, type MenuProps } from 'antd'
 import {
   HiArrowLeft,
   HiArrowTopRightOnSquare,
@@ -60,6 +60,7 @@ type WorkbenchContentPanelProps = {
   onOpenWorkspaceFile: (filePath: string, fileName: string) => void
   onOpenWorkspaceChange: (changeId: string) => void
   browserPresentationEnabled: boolean
+  browserTransitionImage?: { tabId: string; dataUrl: string } | null
 }
 
 const canTogglePreviewMode = (record: AiFileChangeRecord | null): boolean =>
@@ -350,7 +351,6 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
   const [openWithError, setOpenWithError] = useState<string | null>(null)
   const isDeletedCreatedFile = mode === 'edit' && status === 'reverted' && operation === 'created'
   const revealPath = isDeletedCreatedFile ? getParentPath(filePath) : filePath
-  const revealTitle = '打开对应文件夹'
   const openTitle = isDeletedCreatedFile ? '文件已删除，不能打开' : '系统默认打开'
   const revertTitle =
     status === 'reverted'
@@ -414,7 +414,7 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
     }
   }
 
-  const openWithItems =
+  const openWithApplicationItems: MenuProps['items'] =
     openWithApplications.length > 0
       ? openWithApplications.map((application) => ({
           key: application.id,
@@ -442,6 +442,14 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
             label: openWithLoading ? '正在获取可用应用…' : openWithError || '没有可用的应用'
           }
         ]
+  const openWithItems: MenuProps['items'] = [
+    ...(openWithApplicationItems || []),
+    { type: 'divider' },
+    {
+      key: 'reveal-containing-folder',
+      label: '打开所在文件夹'
+    }
+  ]
 
   return (
     <div className="flex h-full min-h-0 flex-col" data-testid={testId}>
@@ -491,6 +499,10 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
             menu={{
               items: openWithItems,
               onClick: ({ key }) => {
+                if (key === 'reveal-containing-folder') {
+                  void onRevealPath(revealPath)
+                  return
+                }
                 const application = openWithApplications.find((item) => item.id === key)
                 if (application) void openWithApplication(application)
               }
@@ -539,21 +551,9 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
                 icon={<HiChevronDown className="h-3.5 w-3.5" />}
                 className="!h-full !rounded-none !border-l !border-l-[#E7E5E0] !px-1.5 !text-[#787774] hover:!bg-[#F1F1EF] disabled:!text-[#C9C7C2]"
                 data-testid={workbenchSelectors.applyOpenSystemButton}
-                disabled={!canOpen || isDeletedCreatedFile}
               />
             </div>
           </Dropdown>
-          <Tooltip title={revealTitle}>
-            <Button
-              type="text"
-              size="small"
-              aria-label={revealTitle}
-              icon={<HiFolderOpen className="h-4 w-4" />}
-              className="!text-[#787774] hover:!bg-[#F4F4F2] hover:!text-[#37352F]"
-              data-testid={workbenchSelectors.applyRevealButton}
-              onClick={() => void onRevealPath(revealPath)}
-            />
-          </Tooltip>
           {mode === 'edit' && onTogglePreviewMode ? (
             <Tooltip title={previewMode === 'diff' ? '查看文件' : '查看变更'}>
               <Button
@@ -689,16 +689,14 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
   onBrowserStateChange,
   onOpenWorkspaceFile,
   onOpenWorkspaceChange,
-  browserPresentationEnabled
+  browserPresentationEnabled,
+  browserTransitionImage
 }) => {
   const [explorerOpen, setExplorerOpen] = useState(state.kind === 'file_launcher')
   const [explorerMode, setExplorerMode] = useState<WorkspaceFileExplorerMode>(
     state.kind === 'apply_workspace' ? 'changed' : 'all'
   )
   const [documentPreviewMode, setDocumentPreviewMode] = useState<'file' | 'diff'>('diff')
-  const [browserChromeOccluded, setBrowserChromeOccluded] = useState(false)
-  const browserTabId = state.kind === 'browser' ? state.browserTabId : null
-
   useEffect(() => {
     if (state.kind === 'file_launcher') {
       setExplorerOpen(true)
@@ -709,9 +707,6 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
       setExplorerMode('changed')
     }
   }, [state.kind])
-  useEffect(() => {
-    setBrowserChromeOccluded(false)
-  }, [browserTabId, state.kind])
   useEffect(
     () => setDocumentPreviewMode(activeApplyRecord?.status === 'reverted' ? 'file' : 'diff'),
     [activeApplyRecord?.id, activeApplyRecord?.status]
@@ -810,7 +805,6 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
         onAddFileTab={onAddFileTab}
         onAddBrowserTab={onAddBrowserTab}
         onCollapse={onCollapse}
-        onMenuOpenChange={setBrowserChromeOccluded}
       />
       <div className="min-h-0 flex-1 overflow-hidden">
         <div className="flex h-full min-h-0">
@@ -898,7 +892,11 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
               <WorkbenchBrowserPanel
                 tabId={state.browserTabId}
                 presentationEnabled={browserPresentationEnabled}
-                externallyOccluded={browserChromeOccluded}
+                transitionImage={
+                  browserTransitionImage?.tabId === state.browserTabId
+                    ? browserTransitionImage.dataUrl
+                    : null
+                }
                 onStateChange={onBrowserStateChange}
               />
             ) : null}
@@ -939,7 +937,8 @@ const areContentPanelPropsEqual = (
   previous.workspaces === next.workspaces &&
   previous.fallbackWorkspaceName === next.fallbackWorkspaceName &&
   previous.selectedWorkspace === next.selectedWorkspace &&
-  previous.fileChangeRecords === next.fileChangeRecords
+  previous.fileChangeRecords === next.fileChangeRecords &&
+  previous.browserTransitionImage === next.browserTransitionImage
 
 const WorkbenchContentPanel = React.memo(WorkbenchContentPanelBase, areContentPanelPropsEqual)
 

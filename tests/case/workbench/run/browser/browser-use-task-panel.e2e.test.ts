@@ -13,6 +13,7 @@ import {
   insertWorkbenchReferenceToken,
   recordWorkbenchAiEvidence,
   sendWorkbenchMessage,
+  selectWorkbenchResourceMenuItem,
   setupWorkbenchWithTempWorkspace,
   startLocalWorkbenchHttpServer,
   submitWorkbenchCurrentDraft,
@@ -225,6 +226,28 @@ const waitForBrowserTaskCompletion = async (
   }
 }
 
+const waitForBrowserTaskPause = async (
+  runtime: Parameters<typeof collectWorkbenchAiRunEvents>[0]
+): Promise<void> => {
+  const deadline = Date.now() + BROWSER_PANEL_WAIT_TIMEOUT_MS
+  for (;;) {
+    const events = await collectWorkbenchAiRunEvents(runtime)
+    const failed = events.find((event) => event.type === 'run_failed')
+    if (failed?.type === 'run_failed') {
+      throw new Error(`AI run failed while waiting for browser task pause: ${failed.message}`)
+    }
+    if (
+      events.some((event) => event.type === 'tool_call_started' && event.toolName === 'wait_time')
+    ) {
+      return
+    }
+    if (Date.now() >= deadline) {
+      throw new Error('browser task did not enter the requested pause before timeout')
+    }
+    await runtime.page.waitForTimeout(100)
+  }
+}
+
 describe('workbench run e2e', () => {
   it(
     CASE_ID,
@@ -281,7 +304,7 @@ describe('workbench run e2e', () => {
           const startedAtMs = Date.now()
           await sendWorkbenchMessage(
             page,
-            `Use the right embedded browser to complete this page task. Use browser_use navigate to open ${server.url}, use observe to inspect the form controls, then do not combine form actions: use one act to fill the Task code input with ${TASK_CODE}, call wait_time exactly once for 1 second, use another act to click Submit task, then use extract to read the full displayed result. Tell me the exact result text.`
+            `Use the right embedded browser to complete this page task. Use browser_use navigate to open ${server.url}, use observe to inspect the form controls, then do not combine form actions: use one act to fill the Task code input with ${TASK_CODE}, call wait_time exactly once for 5 seconds, use another act to click Submit task, then use extract to read the full displayed result. Tell me the exact result text.`
           )
 
           await waitForBrowserPanelOpenedWithApproval(runtime)
@@ -300,22 +323,55 @@ describe('workbench run e2e', () => {
             )
             .at(-1)
           if (!openedEvent) throw new Error('browser_panel_opened event is missing')
-          await getWorkbenchLocator(page, workbenchSelectors.resourceTabAddButton).click()
-          const openFileMenuItem = page.getByRole('menuitem', { name: '文件', exact: true })
-          await openFileMenuItem.waitFor({ state: 'visible', timeout: 10_000 })
-          const openFileMenuItemVisible = await openFileMenuItem.isVisible()
-          await page.getByRole('menuitem', { name: '浏览器' }).click()
+          const inspectTaskBrowserRuntime = async () =>
+            await runtime.electronApp.evaluate(async ({ webContents }, url) => {
+              const contents = webContents
+                .getAllWebContents()
+                .find((candidate) => candidate.getURL() === url)
+              if (!contents || contents.isDestroyed()) {
+                return { alive: false, id: null, resultText: null }
+              }
+              const resultText = (await contents.executeJavaScript(
+                `document.querySelector('#task-result')?.textContent || null`
+              )) as string | null
+              return { alive: true, id: contents.id, resultText }
+            }, server.url)
+          const taskBrowserBeforeBackground = await inspectTaskBrowserRuntime()
+          await waitForBrowserTaskPause(runtime)
+          const resourceMenu = await selectWorkbenchResourceMenuItem(runtime, 'browser')
+          const openFileMenuItemVisible = resourceMenu.fileVisible
           await resourceTabs.nth(2).waitFor({ state: 'visible', timeout: 10_000 })
           const resourceTabCountAfterReopen = await resourceTabs.count()
           const browserPanel = getWorkbenchLocator(page, workbenchSelectors.browserPanel)
           const browserBackButtonCount = await browserPanel
             .getByRole('button', { name: /后退|back/i })
             .count()
+          const panelToggle = getWorkbenchLocator(page, workbenchSelectors.contentPanelToggle)
+          await panelToggle.click()
+          await page.waitForFunction(
+            (testId) => document.querySelector(`[data-testid="${testId}"]`) === null,
+            workbenchSelectors.contentPanelShell
+          )
+          const taskBrowserWhileCollapsed = await inspectTaskBrowserRuntime()
           const evidence = await waitForBrowserTaskCompletion(
             runtime,
             startedAtMs,
             setup.env.modelName
           )
+          const taskBrowserAfterBackgroundRun = await inspectTaskBrowserRuntime()
+          await getWorkbenchLocator(page, workbenchSelectors.contentPanelToggle).click()
+          await page.waitForFunction((testId) => {
+            const shell = document.querySelector(`[data-testid="${testId}"]`)
+            return shell instanceof HTMLElement && shell.getBoundingClientRect().width > 100
+          }, workbenchSelectors.contentPanelShell)
+          await getWorkbenchLocator(
+            page,
+            `${workbenchSelectors.resourceTabPrefix}-browser-${openedEvent.browserTabId}`
+          ).click()
+          await getWorkbenchLocator(page, workbenchSelectors.browserViewport).waitFor({
+            state: 'visible'
+          })
+          const taskBrowserAfterRestore = await inspectTaskBrowserRuntime()
           recordWorkbenchAiEvidence(runtime, evidence, 0.8)
           const browserStarts = evidence.events.filter(
             (event): event is Extract<AiRunEvent, { type: 'tool_call_started' }> =>
@@ -382,6 +438,17 @@ describe('workbench run e2e', () => {
             initialResourceTabCount,
             openFileMenuItemVisible,
             resourceTabCountAfterReopen,
+            backgroundBrowserStayedAlive:
+              taskBrowserBeforeBackground.alive && taskBrowserWhileCollapsed.alive,
+            backgroundBrowserFinishedTask:
+              taskBrowserAfterBackgroundRun.resultText === `BROWSER_TASK_DONE:${TASK_CODE}`,
+            restoredLatestBrowserState:
+              taskBrowserAfterRestore.resultText === `BROWSER_TASK_DONE:${TASK_CODE}`,
+            browserWebContentsPreserved:
+              taskBrowserBeforeBackground.id !== null &&
+              taskBrowserBeforeBackground.id === taskBrowserWhileCollapsed.id &&
+              taskBrowserBeforeBackground.id === taskBrowserAfterBackgroundRun.id &&
+              taskBrowserBeforeBackground.id === taskBrowserAfterRestore.id,
             fileTabRestored,
             browserUrlPreserved:
               browserStateWhileHidden.success &&
@@ -441,7 +508,7 @@ describe('workbench run e2e', () => {
               result.browserActions.includes('extract') &&
               result.waitCallCount === 1 &&
               result.executionSummaryTexts.some((text) => text.includes('已操作浏览器')) &&
-              result.executionSummaryTexts.some((text) => text.includes('等待 1 秒')) &&
+              result.executionSummaryTexts.some((text) => text.includes('等待 5 秒')) &&
               result.executionSummaryTexts.every((text) => !text.includes('，')) &&
               (result.executionIconKinds.includes('workflow') ||
                 (result.executionIconKinds.includes('browser') &&
@@ -460,6 +527,10 @@ describe('workbench run e2e', () => {
               result.initialResourceTabCount === 2 &&
               result.openFileMenuItemVisible &&
               result.resourceTabCountAfterReopen === 3 &&
+              result.backgroundBrowserStayedAlive &&
+              result.backgroundBrowserFinishedTask &&
+              result.restoredLatestBrowserState &&
+              result.browserWebContentsPreserved &&
               result.fileTabRestored &&
               result.browserUrlPreserved &&
               result.browserBackButtonCount === 1 &&
@@ -468,7 +539,7 @@ describe('workbench run e2e', () => {
             {
               name: 'workbench-browser-use-panel-real',
               message:
-                '真实 browser_use 任务应允许新增独立浏览器 Tab，保留已打开文件和原网页状态，并完成网页操作与最终回答闭环。',
+                '真实 browser_use 任务应在右栏折叠后继续操作同一浏览器实例，恢复时显示最新网页结果，并保留文件与多浏览器 Tab。',
               data: result
             }
           )

@@ -268,7 +268,8 @@ const api: DesktopApi = {
   browserPanelHide: (payload) => ipcRenderer.invoke('browser-panel-hide', payload),
   browserPanelOpenMenu: (payload) => ipcRenderer.invoke('browser-panel-open-menu', payload),
   browserPanelCloseMenu: () => ipcRenderer.invoke('browser-panel-close-menu'),
-  browserPanelSetOccluded: (payload) => ipcRenderer.invoke('browser-panel-occluded', payload),
+  browserPanelCapture: (payload) => ipcRenderer.invoke('browser-panel-capture', payload),
+  browserResourceMenuOpen: (payload) => ipcRenderer.invoke('browser-resource-menu-open', payload),
   browserPanelReload: (payload) => ipcRenderer.invoke('browser-panel-reload', payload),
   browserPanelStop: (payload) => ipcRenderer.invoke('browser-panel-stop', payload),
   browserPanelOpenExternal: (payload) => ipcRenderer.invoke('browser-panel-open-external', payload),
@@ -412,6 +413,15 @@ const api: DesktopApi = {
     ipcRenderer.on('browser-panel-state-change', listener)
     return () => {
       ipcRenderer.removeListener('browser-panel-state-change', listener)
+    }
+  },
+  onBrowserResourceMenuAction: (cb) => {
+    const listener = (_event: Electron.IpcRendererEvent, action: 'file' | 'browser'): void => {
+      cb(action)
+    }
+    ipcRenderer.on('browser-resource-menu-action', listener)
+    return () => {
+      ipcRenderer.removeListener('browser-resource-menu-action', listener)
     }
   }
 }

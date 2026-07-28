@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type WheelEvent } from 'react'
-import { Dropdown, Tooltip, type MenuProps } from 'antd'
+import { Tooltip } from 'antd'
 import { HiOutlineDocument, HiOutlineGlobeAlt, HiPlus, HiXMark } from 'react-icons/hi2'
 import type { WorkbenchResourceTab } from './types'
 import { workbenchSelectors } from '../../testing/selectors'
@@ -13,7 +13,6 @@ type WorkbenchTabBarProps = {
   onAddFileTab: () => void
   onAddBrowserTab: () => void
   onCollapse: () => void
-  onMenuOpenChange?: (open: boolean) => void
 }
 
 const getTabIcon = (tab: WorkbenchResourceTab) =>
@@ -30,12 +29,12 @@ const WorkbenchTabBar = ({
   onCloseTab,
   onAddFileTab,
   onAddBrowserTab,
-  onCollapse,
-  onMenuOpenChange
+  onCollapse
 }: WorkbenchTabBarProps) => {
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const tabRefs = useRef(new Map<string, HTMLDivElement>())
   const [scrollEdges, setScrollEdges] = useState({ left: false, right: false })
+  const [addMenuOpen, setAddMenuOpen] = useState(false)
 
   const updateScrollEdges = useCallback(() => {
     const element = scrollRef.current
@@ -75,20 +74,24 @@ const WorkbenchTabBar = ({
     updateScrollEdges()
   }
 
-  const menuItems: MenuProps['items'] = [
-    {
-      key: 'file',
-      icon: <HiOutlineDocument className="h-4 w-4 text-[#787774]" />,
-      label: '文件',
-      onClick: onAddFileTab
-    },
-    {
-      key: 'browser',
-      icon: <HiOutlineGlobeAlt className="h-4 w-4 text-[#787774]" />,
-      label: '浏览器',
-      onClick: onAddBrowserTab
-    }
-  ]
+  useEffect(
+    () =>
+      window.api.onBrowserResourceMenuAction((action) => {
+        if (action === 'file') onAddFileTab()
+        if (action === 'browser') onAddBrowserTab()
+      }),
+    [onAddBrowserTab, onAddFileTab]
+  )
+
+  const openAddMenu = async (button: HTMLButtonElement): Promise<void> => {
+    const rect = button.getBoundingClientRect()
+    setAddMenuOpen(true)
+    await window.api.browserResourceMenuOpen({
+      x: Math.max(0, rect.right - 158),
+      y: rect.bottom + 4
+    })
+    setAddMenuOpen(false)
+  }
 
   return (
     <div
@@ -160,21 +163,16 @@ const WorkbenchTabBar = ({
           <div className="pointer-events-none absolute inset-y-0 right-0 w-5 bg-gradient-to-l from-white to-transparent" />
         ) : null}
       </div>
-      <Dropdown
-        menu={{ items: menuItems }}
-        trigger={['click']}
-        placement="bottomRight"
-        onOpenChange={onMenuOpenChange}
+      <button
+        type="button"
+        className="ml-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-[7px] text-[#787774] hover:bg-[#F4F4F2] hover:text-[#37352F]"
+        aria-label="新增标签页"
+        aria-expanded={addMenuOpen}
+        data-testid={workbenchSelectors.resourceTabAddButton}
+        onClick={(event) => void openAddMenu(event.currentTarget)}
       >
-        <button
-          type="button"
-          className="ml-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-[7px] text-[#787774] hover:bg-[#F4F4F2] hover:text-[#37352F]"
-          aria-label="新增标签页"
-          data-testid={workbenchSelectors.resourceTabAddButton}
-        >
-          <HiPlus className="h-5 w-5" />
-        </button>
-      </Dropdown>
+        <HiPlus className="h-5 w-5" />
+      </button>
       <button
         type="button"
         className="ml-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-[7px] text-[#787774] hover:bg-[#F4F4F2] hover:text-[#37352F]"
