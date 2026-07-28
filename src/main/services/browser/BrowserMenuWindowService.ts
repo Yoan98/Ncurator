@@ -28,6 +28,12 @@ const MAX_ZOOM_PERCENT = 200
 const RESOURCE_MENU_WIDTH = 166
 const RESOURCE_MENU_HEIGHT = 104
 
+type MenuWindowOptions = {
+  width: number
+  height: number
+  hasShadow?: boolean
+}
+
 const renderMenuHtml = (state: BrowserTabState): string => `<!doctype html>
 <html lang="zh-CN">
   <head>
@@ -140,15 +146,28 @@ const renderResourceMenuHtml = (): string => `<!doctype html>
       * { box-sizing: border-box; }
       html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: transparent; }
       body { padding: 8px; color: #37352f; font: 13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-      .menu { width: 100%; height: 100%; padding: 5px; border: 1px solid #e1e0dc; border-radius: 8px; background: #fff; box-shadow: 0 10px 28px rgba(15, 15, 15, 0.16); }
-      a { display: flex; height: 37px; align-items: center; padding: 0 10px; border-radius: 6px; color: #37352f; text-decoration: none; user-select: none; }
+      .menu { width: 100%; height: 100%; padding: 5px; border: 1px solid #e1e0dc; border-radius: 8px; background: #fff; }
+      a { display: flex; height: 37px; align-items: center; gap: 10px; padding: 0 10px; border-radius: 6px; color: #37352f; text-decoration: none; user-select: none; }
       a:hover { background: #f4f4f2; }
+      svg { width: 17px; height: 17px; flex: 0 0 auto; color: #787774; }
     </style>
   </head>
   <body>
     <div class="menu" role="menu" aria-label="新增标签页">
-      <a href="ncurator-resource-menu://file" target="_blank" role="menuitem">文件</a>
-      <a href="ncurator-resource-menu://browser" target="_blank" role="menuitem">浏览器</a>
+      <a href="ncurator-resource-menu://file" target="_blank" role="menuitem">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+          <path d="M14 2v6h6" />
+        </svg>
+        <span>文件</span>
+      </a>
+      <a href="ncurator-resource-menu://browser" target="_blank" role="menuitem">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="9" />
+          <path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" />
+        </svg>
+        <span>浏览器</span>
+      </a>
     </div>
   </body>
 </html>`
@@ -164,7 +183,10 @@ export class BrowserMenuWindowService {
   }
 
   public async open(options: BrowserMenuOpenOptions): Promise<void> {
-    const menuWindow = this.createWindow(options.x, options.y, MENU_WIDTH, MENU_HEIGHT)
+    const menuWindow = this.createWindow(options.x, options.y, {
+      width: MENU_WIDTH,
+      height: MENU_HEIGHT
+    })
     if (!menuWindow) return
 
     const updateZoom = (state: BrowserTabState): void => {
@@ -193,12 +215,11 @@ export class BrowserMenuWindowService {
   }
 
   public async openResourceMenu(options: ResourceMenuOpenOptions): Promise<void> {
-    const menuWindow = this.createWindow(
-      options.x,
-      options.y,
-      RESOURCE_MENU_WIDTH,
-      RESOURCE_MENU_HEIGHT
-    )
+    const menuWindow = this.createWindow(options.x, options.y, {
+      width: RESOURCE_MENU_WIDTH,
+      height: RESOURCE_MENU_HEIGHT,
+      hasShadow: false
+    })
     if (!menuWindow) return
     menuWindow.webContents.setWindowOpenHandler(({ url }) => {
       const action = new URL(url).hostname
@@ -212,13 +233,13 @@ export class BrowserMenuWindowService {
   private createWindow(
     offsetX: number,
     offsetY: number,
-    width: number,
-    height: number
+    options: MenuWindowOptions
   ): BrowserWindow | null {
     this.close()
     if (this.mainWindow.isDestroyed()) return null
     const contentBounds = this.mainWindow.getContentBounds()
     const display = screen.getDisplayMatching(contentBounds)
+    const { width, height, hasShadow = true } = options
     const desiredX = contentBounds.x + Math.round(offsetX)
     const desiredY = contentBounds.y + Math.round(offsetY)
     const x = Math.min(
@@ -239,7 +260,7 @@ export class BrowserMenuWindowService {
       frame: false,
       transparent: true,
       backgroundColor: '#00000000',
-      hasShadow: true,
+      hasShadow,
       resizable: false,
       movable: false,
       minimizable: false,
