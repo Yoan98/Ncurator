@@ -568,6 +568,17 @@ AI unit / 辅助测试目录：
 - Oracle：操作成功；`postWriteReadback` 返回可继续使用的真实 elementId；最终 pptx 可解析。
 - Not：不评价页面设计质量。
 
+#### excel 类别
+
+##### `excel-create-read-edit`
+
+- 测试类型：`backend / tool`
+- What：Excel 专用工具创建工作簿、批量写入数据和公式，并继续执行概览、搜索、范围读取和修改。
+- Why：Excel 的值与公式必须由程序真实读写，不能用模型推算或用伪造工具结果代替。
+- How：真实调用 `excel_edit` 创建 xlsx，再调用三个只读工具，并继续修改和删除单元格；最后直接解析正式文件与 diff 文件。
+- Oracle：正式文件包含准确值和公式且不带 diff 边框；diff 文件对新增、修改显示绿色边框，对删除显示红色边框；同一路径只保留一条修改记录。
+- Not：不验证 human 是否会选择 Excel 技能，也不评价表格视觉设计。
+
 #### kb 类别
 
 ##### `kb-list-documents-contract`

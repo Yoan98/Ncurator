@@ -351,6 +351,80 @@ describe('ai unit human memory renderers', () => {
     expect(rendered).toContain('"index":9')
   })
 
+  it('keeps Excel read and edit results in brain history', () => {
+    const initialState = createInitialHumanState({
+      taskId: 'task-history-excel',
+      userInput: '修改 Excel 数据'
+    })
+    const calls = [
+      {
+        toolName: 'excel_read_outline',
+        args: { sourcePath: '/workspace/data.xlsx' }
+      },
+      {
+        toolName: 'excel_edit',
+        args: { sourcePath: '/workspace/data.xlsx', action: 'update', operations: [] }
+      }
+    ]
+    const taskRun = appendRoundRecord({
+      state: initialState,
+      thought: {
+        thought: { next: '读取并修改 Excel' },
+        nextAction: { action: 'hand', calls }
+      },
+      execution: buildHandExecution({
+        calls,
+        toolResults: [
+          {
+            toolName: 'excel_read_outline',
+            ok: true,
+            data: {
+              sourcePath: '/workspace/data.xlsx',
+              sheetCount: 1,
+              sheets: [
+                {
+                  name: 'Data',
+                  index: 0,
+                  range: 'A1:D3',
+                  rowCount: 3,
+                  columnCount: 4,
+                  formulaCount: 2,
+                  tables: []
+                }
+              ]
+            }
+          },
+          {
+            toolName: 'excel_edit',
+            ok: true,
+            data: {
+              sourcePath: '/workspace/data.xlsx',
+              changed: true,
+              changes: [{ sheetName: 'Data', address: 'B2', kind: 'modified' }],
+              postWriteReadback: [
+                {
+                  sheetName: 'Data',
+                  address: 'B2',
+                  value: 20,
+                  displayValue: '20',
+                  type: 'number'
+                }
+              ],
+              diffPath: '/workspace/.ncurator/data.diff.xlsx'
+            }
+          }
+        ]
+      })
+    })
+
+    const rendered = renderBrainRoundSection(taskRun.rounds)
+    expect(rendered).toContain('"sheetCount":1')
+    expect(rendered).toContain('"name":"Data"')
+    expect(rendered).toContain('"kind":"modified"')
+    expect(rendered).toContain('"value":20')
+    expect(rendered).not.toContain('返回：{}')
+  })
+
   it('renders kb_list_documents result ids in round history', () => {
     const initialState = createInitialHumanState({
       taskId: 'task-history-kb-list-documents',

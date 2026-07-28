@@ -4,6 +4,7 @@ import type { AiToolFamilyId } from './tools/types'
 import type { DocxToolRuntime } from './tools/docx/runtime'
 import type { PdfToolRuntime } from './tools/pdf/runtime'
 import type { PptToolRuntime } from './tools/ppt/types'
+import type { ExcelToolRuntime } from './tools/excel/types'
 import {
   HUMAN_ROUND_EXECUTION_KINDS,
   HUMAN_SKILL_SOURCES,
@@ -101,6 +102,7 @@ export type HumanRuntimeCache = {
   docxRuntime?: DocxToolRuntime
   pdfRuntime?: PdfToolRuntime
   pptRuntime?: PptToolRuntime
+  excelRuntime?: ExcelToolRuntime
   approvedTerminalCommandCounts?: Map<string, number>
   approvedBrowserUseTaskIds?: Set<string>
   toolCallCount: number

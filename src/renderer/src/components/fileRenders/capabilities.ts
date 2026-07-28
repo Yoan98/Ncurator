@@ -1,5 +1,5 @@
 export const FILE_PREVIEW_SUPPORT_SUMMARY =
-  '当前支持 PDF、DOCX、PPTX、Markdown、UTF-8 文本，以及 PNG、JPG、GIF、WebP、BMP、SVG 图片。'
+  '当前支持 PDF、DOCX、PPTX、Excel、Markdown、UTF-8 文本，以及 PNG、JPG、GIF、WebP、BMP、SVG 图片。'
 
 const TYPE_ALIASES: Record<string, string> = {
   pdf: 'pdf',
@@ -8,6 +8,14 @@ const TYPE_ALIASES: Record<string, string> = {
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
   pptx: 'pptx',
   'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
+  xlsx: 'xlsx',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+  xlsm: 'xlsm',
+  'application/vnd.ms-excel.sheet.macroenabled.12': 'xlsm',
+  xltx: 'xltx',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.template': 'xltx',
+  xltm: 'xltm',
+  'application/vnd.ms-excel.template.macroenabled.12': 'xltm',
   md: 'md',
   markdown: 'md',
   'text/markdown': 'md',
@@ -35,11 +43,8 @@ const KNOWN_UNSUPPORTED_BINARY_TYPES = new Set([
   'ppt',
   'application/vnd.ms-powerpoint',
   'xls',
-  'xlsx',
-  'xlsm',
   'xlsb',
   'application/vnd.ms-excel',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   'rtf',
   'application/rtf',
   'pages',

@@ -100,6 +100,24 @@ describe('attachment service runtime directories', () => {
     await expect(fs.stat(attachment.path)).resolves.toBeDefined()
   })
 
+  it.each([
+    ['report.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
+    ['macros.xlsm', 'application/vnd.ms-excel.sheet.macroEnabled.12'],
+    ['template.xltx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.template'],
+    ['macro-template.xltm', 'application/vnd.ms-excel.template.macroEnabled.12']
+  ])('accepts spreadsheet attachment %s with the expected MIME type', async (name, mimeType) => {
+    const attachment = await service.saveAttachment({
+      workspaceRootPath,
+      assetBucketId: 'bucket-spreadsheet',
+      name,
+      bytes: Buffer.from('spreadsheet-bytes')
+    })
+
+    expect(attachment.kind).toBe('file')
+    expect(attachment.mimeType).toBe(mimeType)
+    expect(attachment.name).toBe(name)
+  })
+
   it('rejects unsupported attachment formats without writing a file', async () => {
     await expect(
       service.saveAttachment({

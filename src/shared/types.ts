@@ -635,7 +635,12 @@ export interface ChatSessionListItem extends ChatSession {
 export type AiFileChangeStatus = 'applied' | 'reverted' | 'failed'
 export type AiFileChangeCapability = 'docx' | 'text_file' | 'terminal_exec' | 'ppt' | 'excel'
 export type AiFileChangeOperation = 'created' | 'updated' | 'deleted' | 'renamed'
-export type AiFileChangeSource = 'workspace_scan' | 'text_tool' | 'docx_tool'
+export type AiFileChangeSource =
+  | 'workspace_scan'
+  | 'text_tool'
+  | 'docx_tool'
+  | 'ppt_tool'
+  | 'excel_tool'
 
 export type TextFileDiffLine =
   | { type: 'context'; oldLine: number; newLine: number; text: string }
@@ -847,6 +852,8 @@ export type RuntimeSkillId =
   | 'pdf-read'
   | 'ppt-read'
   | 'ppt-write'
+  | 'excel-read'
+  | 'excel-write'
   | 'image-recognition'
   | 'kb-retrieval'
   | 'web-browsing'

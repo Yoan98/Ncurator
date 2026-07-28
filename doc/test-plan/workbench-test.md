@@ -20,7 +20,7 @@
 - text-file apply case 需要真实 Markdown 或代码文件、真实 `text_file_edit`、真实结构化 diff、独立 `TextFileDiffViewer` 和按原始 bytes 回退。
 - `browser-use-task-panel` 需要真实 AI run 触发 `browser_use` 并驱动内置浏览器完成本地网页任务；同时验证多个浏览器 Tab 独立历史、共享持久站点数据、切换文件后网页状态不销毁，以及同 URL 标签不会让 Stagehand 串页，不能用 fake browser 替代。
 - `web_search` 与 `web_crawl` 需要分开覆盖：搜索 case 只验证候选网页返回；读取 case 必须验证 AI 继续读取网页正文后再回答。
-- Workbench 附件链路当前支持图片、`doc`、`docx`、`pptx`、`pdf`、`md`、`json`，统一保存到 `<workspace>/.ncurator/runtime/assets/<assetBucketId>/`；`assetBucketId` 为输入草稿 UUID，发送给 AI 时只传附件名称与路径，不再做发送前识图或文件解析。
+- Workbench 附件链路当前支持图片、`doc`、`docx`、`pptx`、`pdf`、`md`、`json`、`xlsx`、`xlsm`、`xltx`、`xltm`，统一保存到 `<workspace>/.ncurator/runtime/assets/<assetBucketId>/`；`assetBucketId` 为输入草稿 UUID，发送给 AI 时只传附件名称与路径，不再做发送前识图或文件解析。
 
 ## 3. Suite 设计
 
@@ -368,6 +368,15 @@ tests/case/workbench/
 - How：修改真实 PPT 的页面内容和顺序，打开修改记录并操作差异预览。
 - Oracle：修改前后画面、变化页标记、全部页切换、同步切页、缩放和拖动均可用，对齐 `WB-PPT-002`。
 - Not：不评价页面设计质量。
+
+#### `excel-update-diff-and-revert`
+
+- 测试类型：`e2e / live`
+- What：真实 AI 修改已有 Excel 后，用户在同一个网格中查看红绿单元格边框，并能回退到原始文件。
+- Why：Excel 修改预览不能依赖模型描述，也不适合 PPT 式左右画面对比，必须直接验证工作簿数据、公式和单元格级 diff。
+- How：通过真实 Workbench UI 请求 AI 读取并修改 xlsx；打开修改记录，切换工作表，检查红绿边框，再执行回退。
+- Oracle：正式 xlsx 的值准确且没有 diff 边框；修改预览中新增和修改为绿色、删除为红色；不出现 PPT 前后预览；回退后文件 bytes 与修改前一致；真实调用包含 Excel 读工具和 `excel_edit`。
+- Not：不逐字断言最终回答，不把模型直接计算的文本结果当作数据正确性证据。
 
 #### `terminal-background-service-flow`
 

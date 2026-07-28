@@ -6,6 +6,7 @@ import { CustomMarkdownRenderer, CustomPlainTextRenderer } from './markdown'
 import CustomDocxRenderer from './docx'
 import CustomPptxRenderer from './pptx'
 import CustomImageRenderer from './image'
+import CustomXlsxRenderer from './xlsx'
 import { prepareFileRenderDocument } from './utils'
 import { FILE_PREVIEW_SUPPORT_SUMMARY, getPreviewTypeLabel } from './capabilities'
 import type {
@@ -147,7 +148,8 @@ const renderers = [
   CustomPlainTextRenderer,
   CustomDocxRenderer,
   CustomPptxRenderer,
-  CustomImageRenderer
+  CustomImageRenderer,
+  CustomXlsxRenderer,
 ]
 
 const FileRenderViewerBase: React.FC<FileRenderViewerProps> = ({

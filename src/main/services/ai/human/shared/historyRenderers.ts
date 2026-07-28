@@ -89,6 +89,16 @@ const PPT_RESULT_WHITELIST: NestedWhitelistConfig = {
   error: true
 }
 
+const EXCEL_CELL_WHITELIST: NestedWhitelistConfig = {
+  sheetName: true,
+  address: true,
+  value: true,
+  displayValue: true,
+  formula: true,
+  type: true,
+  numberFormat: true
+}
+
 const FALLBACK_TOOL_HISTORY_WHITELIST: NestedWhitelistConfig = {
   message: true,
   error: true
@@ -104,6 +114,59 @@ const VISUAL_READ_RESULT_WHITELIST: NestedWhitelistConfig = {
 }
 
 const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
+  excel_read_outline: {
+    sourcePath: true,
+    sheetCount: true,
+    sheets: {
+      name: true,
+      index: true,
+      range: true,
+      rowCount: true,
+      columnCount: true,
+      formulaCount: true,
+      tables: true
+    },
+    error: true
+  },
+  excel_search: {
+    sourcePath: true,
+    query: true,
+    matches: {
+      ...EXCEL_CELL_WHITELIST,
+      matchType: true,
+      tableName: true,
+      columnName: true
+    },
+    truncated: true,
+    error: true
+  },
+  excel_read_cells: {
+    sourcePath: true,
+    cells: EXCEL_CELL_WHITELIST,
+    error: true
+  },
+  excel_edit: {
+    sourcePath: true,
+    changed: true,
+    changes: {
+      sheetName: true,
+      address: true,
+      kind: true
+    },
+    postWriteReadback: EXCEL_CELL_WHITELIST,
+    diffPath: true,
+    record: {
+      id: true,
+      status: true,
+      path: true,
+      operation: true,
+      changeCount: true,
+      insertCount: true,
+      deleteCount: true,
+      previewPath: true
+    },
+    error: true
+  },
   text_file_read: {
     sourcePath: true,
     content: true,

@@ -41,6 +41,18 @@ const COMMAND_PATH_ARGUMENT_STRATEGIES: Partial<Record<string, PathArgumentStrat
   'out-file': 'all_non_option_args'
 }
 
+const EXCEL_FILE_PATTERN = /\.(?:xlsx|xlsm|xltx|xltm)(?:['"\s;|&]|$)/i
+
+export const isTerminalExcelMutationCommand = (command: string): boolean => {
+  const normalized = String(command || '').trim()
+  if (!EXCEL_FILE_PATTERN.test(normalized)) return false
+  return (
+    /(?:^|\s)(?:cp|mv|rm|touch|tee|sed|perl|python|python3|node|powershell|pwsh|rsync|set-content|add-content|out-file|copy-item|move-item|remove-item|set-cell|write|save|export|convert)(?:\s|$)/i.test(
+      normalized
+    ) || /(?:>|>>|\bopenpyxl\b|\bexceljs\b|\bwriteFile\b|\bwrite\b|\bsave\b)/i.test(normalized)
+  )
+}
+
 const isWindowsPlatform = (platform?: AiRuntimePlatform): boolean =>
   (platform || getAiRuntimePlatform()) === 'windows'
 

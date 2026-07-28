@@ -15,6 +15,14 @@ const getMimeType = (filename: string): string => {
       return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
     case 'pptx':
       return 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+    case 'xlsx':
+      return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    case 'xlsm':
+      return 'application/vnd.ms-excel.sheet.macroEnabled.12'
+    case 'xltx':
+      return 'application/vnd.openxmlformats-officedocument.spreadsheetml.template'
+    case 'xltm':
+      return 'application/vnd.ms-excel.template.macroEnabled.12'
     case 'png':
       return 'image/png'
     case 'jpg':
