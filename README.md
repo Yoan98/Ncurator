@@ -40,3 +40,8 @@ npm run zip:stores
 - [商店发布](./docs/release.md)
 
 宣传图片及其可编辑源文件位于 [`store-assets`](./store-assets)。商店发布凭据保存在本地 `.env`，不会提交到 Git。
+
+
+## 友链
+
+- [LinuxDo 社区](https://linux.do/)
