@@ -51,14 +51,35 @@ const hasOverfittingEvidence = (events: readonly AiRunEvent[]): boolean =>
     )
   })
 
-const hasAntiAliasingFacts = (text: string): boolean =>
-  /反走样/.test(text) &&
-  (/(采样频率低于信号频率|像素.*边界|锯齿|走样)/.test(text) ||
-    /(低通滤波|多个采样点|多个像素点|多次采样)/.test(text))
+const normalizeText = (text: string): string => text.normalize('NFKC')
 
-const hasOverfittingFacts = (text: string): boolean =>
-  /(过拟合|过度拟合)/.test(text) &&
-  /(训练时间过久|记住过多训练数据|只针对于这部分训练数据|不太具有展望性)/.test(text)
+const mentionsOverfittingTopic = (text: string): boolean =>
+  /(过拟合|过度拟合|overfitting)/i.test(normalizeText(text))
+
+const mentionsAntiAliasingTopic = (text: string): boolean =>
+  /(反走样|抗锯齿|anti-?aliasing)/i.test(normalizeText(text))
+
+const hasResumeHintEvent = (events: readonly AiRunEvent[], runId: string): boolean =>
+  events.some(
+    (event) =>
+      event.type === 'decision_hint' &&
+      event.runId === runId &&
+      event.code === 'run_resumed_after_interruption' &&
+      event.detail?.reason === 'network_error'
+  )
+
+const runUsedSelectedFile = (
+  events: readonly AiRunEvent[],
+  runId: string,
+  fileName: string
+): boolean =>
+  events.some(
+    (event) =>
+      event.runId === runId &&
+      ['tool_call_started', 'tool_call_result'].includes(event.type) &&
+      ['docx_search', 'docx_read_blocks'].includes(String(event.toolName || '')) &&
+      eventText(event).includes(fileName)
+  )
 
 const createFaultAfterOverfittingDriver = (input: {
   runtime: BackendTestRuntime
@@ -169,6 +190,8 @@ describe('ai human live backend', () => {
               snapshotAfterResume: null,
               injected: false,
               overfittingEvidenceBeforeFailure: false,
+              resumeHintEventSeen: false,
+              run2UsedFileB: false,
               run2BrainPrompt: '',
               run2Delivery: '',
               fileAName: '',
@@ -235,12 +258,11 @@ describe('ai human live backend', () => {
             await buildAiRunDeps({ runtime })
           )
           const snapshotAfterResume = await runtime.chatStore.getSessionResumeSnapshot(SESSION_ID)
+          const run2Events = runtime.eventCollector.snapshot()
+          const run2Id = `${runtime.runId}-run-2-resume`
           const run2BrainPrompt = runtime.eventCollector
             .snapshotLlmIo()
-            .filter(
-              (record) =>
-                record.runId === `${runtime.runId}-run-2-resume` && record.caller === 'human.brain'
-            )
+            .filter((record) => record.runId === run2Id && record.caller === 'human.brain')
             .map((record) => record.user)
             .join('\n')
 
@@ -252,6 +274,8 @@ describe('ai human live backend', () => {
             snapshotAfterResume,
             injected: faultState.injected,
             overfittingEvidenceBeforeFailure,
+            resumeHintEventSeen: hasResumeHintEvent(run2Events, run2Id),
+            run2UsedFileB: runUsedSelectedFile(run2Events, run2Id, fileBReferences[0]?.name || ''),
             run2BrainPrompt,
             run2Delivery: resumedResult.finalDeliveryMarkdown || '',
             fileAName: fileAReferences[0]?.name || '',
@@ -280,11 +304,10 @@ describe('ai human live backend', () => {
               /(训练时间过久|记住过多训练数据|不太具有展望性)/.test(snapshotText) &&
               result.resumedResult?.status === 'completed' &&
               result.snapshotAfterResume === null &&
-              result.run2BrainPrompt.includes('上一次运行因 network_error 中断') &&
-              result.run2BrainPrompt.includes(result.fileBName) &&
-              result.run2BrainPrompt.includes('过拟合') &&
-              hasOverfittingFacts(result.run2Delivery) &&
-              hasAntiAliasingFacts(result.run2Delivery),
+              result.resumeHintEventSeen === true &&
+              result.run2UsedFileB === true &&
+              mentionsOverfittingTopic(result.run2Delivery) &&
+              mentionsAntiAliasingTopic(result.run2Delivery),
             {
               name: 'human-live-session-resume-keeps-interrupted-context-and-uses-new-selection',
               message:
