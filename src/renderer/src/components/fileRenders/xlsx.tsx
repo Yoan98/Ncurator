@@ -172,6 +172,7 @@ const XlsxTable = ({ sheet }: { sheet: XlsxSheet }) => {
                   <td
                     key={columnIndex}
                     className={`${border} min-w-24 max-w-64 whitespace-pre-wrap break-words px-2 py-1 align-top text-[#37352F]`}
+                    data-cell-address={address}
                     title={cell?.formula ? `=${cell.formula}` : undefined}
                   >
                     {cell ? cell.value : ''}

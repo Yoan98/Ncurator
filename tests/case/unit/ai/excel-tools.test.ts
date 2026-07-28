@@ -67,7 +67,6 @@ describe('Excel tools', () => {
 
   it('creates, reads and updates values and formulas with a clean source and bordered diff', async () => {
     const runtime = createRuntime()
-    const sourcePath = path.join(workspaceRootPath, 'report.xlsx')
     await runtime.edit({
       sourcePath: 'report.xlsx',
       action: 'create',
@@ -89,8 +88,16 @@ describe('Excel tools', () => {
     expect(JSON.stringify(read)).toContain('A2*2')
     expect(JSON.stringify(search)).toContain('B2')
 
+    const existingPath = path.join(workspaceRootPath, 'existing.xlsx')
+    const existing = new ExcelJS.Workbook()
+    const existingSheet = existing.addWorksheet('Data')
+    existingSheet.getCell('A1').value = 'Amount'
+    existingSheet.getCell('A2').value = 12
+    existingSheet.getCell('B2').value = { formula: 'A2*2' }
+    await fs.writeFile(existingPath, Buffer.from(await existing.xlsx.writeBuffer()))
+
     await runtime.edit({
-      sourcePath: 'report.xlsx',
+      sourcePath: 'existing.xlsx',
       action: 'update',
       operations: [
         { type: 'set_cell', sheetName: 'Data', address: 'A2', value: 20 },
@@ -98,18 +105,19 @@ describe('Excel tools', () => {
       ]
     })
 
-    expect(records).toHaveLength(1)
-    expect(records[0]?.capability).toBe('excel')
-    expect(records[0]?.source).toBe('excel_tool')
-    expect(records[0]?.deleteCount).toBeGreaterThanOrEqual(1)
+    expect(records).toHaveLength(2)
+    const existingRecord = records.find((record) => record.path === existingPath)
+    expect(existingRecord?.capability).toBe('excel')
+    expect(existingRecord?.source).toBe('excel_tool')
+    expect(existingRecord?.deleteCount).toBeGreaterThanOrEqual(1)
 
     const actual = new ExcelJS.Workbook()
-    await actual.xlsx.load((await fs.readFile(sourcePath)) as never)
+    await actual.xlsx.load((await fs.readFile(existingPath)) as never)
     expect(actual.getWorksheet('Data')?.getCell('A2').value).toBe(20)
     expect(actual.getWorksheet('Data')?.getCell('A1').border?.left).toBeUndefined()
 
     const diff = new ExcelJS.Workbook()
-    await diff.xlsx.load((await fs.readFile(records[0]!.previewPath!)) as never)
+    await diff.xlsx.load((await fs.readFile(existingRecord!.previewPath!)) as never)
     expect(diff.getWorksheet('Data')?.getCell('A2').border.left?.color?.argb).toBe('FF22A06B')
     expect(diff.getWorksheet('Data')?.getCell('A1').border.left?.color?.argb).toBe('FFD14343')
     expect(diff.getWorksheet('Data')?.getCell('A1').value).toBe('Amount')

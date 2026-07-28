@@ -74,9 +74,13 @@ describe('workbench result e2e', () => {
           await applyEntry.click()
           const viewer = getWorkbenchLocator(page, workbenchSelectors.excelViewer)
           await viewer.waitFor({ state: 'visible', timeout: 30_000 })
-          const borderColors = await viewer
-            .locator('td.border-2')
-            .evaluateAll((cells) => cells.map((cell) => getComputedStyle(cell).borderColor))
+          const readCellBorderColor = async (address: string): Promise<string> =>
+            await viewer
+              .locator(`[data-cell-address="${address}"]`)
+              .evaluate((cell) => getComputedStyle(cell).borderColor)
+          const modifiedBorderColor = await readCellBorderColor('B2')
+          const deletedBorderColor = await readCellBorderColor('A3')
+          const addedBorderColor = await readCellBorderColor('D1')
           await viewer.getByRole('button', { name: 'Notes' }).click()
           await runtime.assertThat(
             (await getWorkbenchLocator(page, workbenchSelectors.excelGrid).textContent())?.includes(
@@ -100,10 +104,29 @@ describe('workbench result e2e', () => {
 
           return {
             actualValue: actual.getWorksheet('Data')?.getCell('B2').value,
+            actualFormula: (
+              actual.getWorksheet('Data')?.getCell('C2').value as { formula?: string } | undefined
+            )?.formula,
             deletedValue: actual.getWorksheet('Data')?.getCell('A3').value,
             addedValue: actual.getWorksheet('Data')?.getCell('D1').value,
-            actualHasDiffBorder: Boolean(actual.getWorksheet('Data')?.getCell('B2').border?.left),
-            borderColors,
+            actualHasDiffBorder: actual.worksheets.some((sheet) => {
+              let found = false
+              sheet.eachRow((row) =>
+                row.eachCell((cell) => {
+                  if (
+                    cell.border?.left ||
+                    cell.border?.right ||
+                    cell.border?.top ||
+                    cell.border?.bottom
+                  )
+                    found = true
+                })
+              )
+              return found
+            }),
+            modifiedBorderColor,
+            deletedBorderColor,
+            addedBorderColor,
             pptBeforeAfterVisible,
             revertedToBaseline: revertedBytes.equals(baselineBytes),
             toolNames: evidence.events
@@ -114,11 +137,13 @@ describe('workbench result e2e', () => {
         assert: async (result, runtime) => {
           await runtime.assertThat(
             result.actualValue === 20 &&
+              result.actualFormula === 'B2*2' &&
               result.deletedValue === null &&
               result.addedValue === 'Checked' &&
               result.actualHasDiffBorder === false &&
-              result.borderColors.some((color) => color.includes('34, 160, 107')) &&
-              result.borderColors.some((color) => color.includes('209, 67, 67')) &&
+              result.modifiedBorderColor.includes('34, 160, 107') &&
+              result.addedBorderColor.includes('34, 160, 107') &&
+              result.deletedBorderColor.includes('209, 67, 67') &&
               result.pptBeforeAfterVisible === false &&
               result.revertedToBaseline &&
               result.toolNames.includes('excel_read_outline') &&

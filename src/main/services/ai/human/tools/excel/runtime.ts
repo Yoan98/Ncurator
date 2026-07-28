@@ -506,13 +506,22 @@ export const createExcelToolRuntime = (input: ExcelCapabilityToolsInput): ExcelT
     const afterBytes = Buffer.from(await workbook.xlsx.writeBuffer())
     const beforeWorkbook = beforeBytes ? await loadWorkbook(beforeBytes) : null
     const afterWorkbook = await loadWorkbook(afterBytes)
-    const changes = mergeChanges(compareWorkbooks(beforeWorkbook, afterWorkbook), forcedChanges)
-    if (changes.length === 0)
+    const operationChanges = mergeChanges(
+      compareWorkbooks(beforeWorkbook, afterWorkbook),
+      forcedChanges
+    )
+    if (operationChanges.length === 0)
       return toJsonObject({ sourcePath, changed: false, changes: [], postWriteReadback: [] })
+    const baseline = state.baselineBytesByPath.get(sourcePath)
+    const baselineWorkbook = baseline ? await loadWorkbook(baseline) : null
+    const cumulativeChanges = mergeChanges(
+      compareWorkbooks(baselineWorkbook, afterWorkbook),
+      forcedChanges
+    )
     const diffBytes = await buildDiffWorkbook({
-      before: beforeWorkbook,
+      before: baselineWorkbook,
       after: afterWorkbook,
-      changes
+      changes: cumulativeChanges
     })
     const changeId = state.recordsByPath.get(sourcePath)?.id || randomUUID()
     const artifactRoot = path.join(
@@ -529,7 +538,6 @@ export const createExcelToolRuntime = (input: ExcelCapabilityToolsInput): ExcelT
     )
     await fs.mkdir(artifactRoot, { recursive: true })
     await fs.mkdir(snapshotRoot, { recursive: true })
-    const baseline = state.baselineBytesByPath.get(sourcePath)
     const beforeSnapshotPath = baseline
       ? path.join(snapshotRoot, `${changeId}-${path.basename(sourcePath)}`)
       : undefined
@@ -550,9 +558,9 @@ export const createExcelToolRuntime = (input: ExcelCapabilityToolsInput): ExcelT
       source: 'excel_tool' as const,
       beforePath: baseline ? sourcePath : undefined,
       afterPath: sourcePath,
-      changeCount: changes.length,
-      insertCount: changes.filter((item) => item.kind !== 'deleted').length,
-      deleteCount: changes.filter((item) => item.kind === 'deleted').length,
+      changeCount: cumulativeChanges.length,
+      insertCount: cumulativeChanges.filter((item) => item.kind !== 'deleted').length,
+      deleteCount: cumulativeChanges.filter((item) => item.kind === 'deleted').length,
       beforeSnapshotPath,
       afterSnapshotPath: undefined,
       beforeChecksum: baseline ? hashBytes(baseline) : undefined,
@@ -583,7 +591,7 @@ export const createExcelToolRuntime = (input: ExcelCapabilityToolsInput): ExcelT
       operation: record.operation,
       applyId: record.id
     })
-    const postWriteReadback = changes.map((change) => {
+    const postWriteReadback = operationChanges.map((change) => {
       const cell = afterWorkbook.getWorksheet(change.sheetName)?.getCell(change.address)
       return cell
         ? { sheetName: change.sheetName, ...getCellSnapshot(cell) }
@@ -598,7 +606,7 @@ export const createExcelToolRuntime = (input: ExcelCapabilityToolsInput): ExcelT
     return toJsonObject({
       sourcePath,
       changed: true,
-      changes,
+      changes: operationChanges,
       postWriteReadback,
       diffPath: previewPath,
       record

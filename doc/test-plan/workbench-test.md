@@ -21,6 +21,7 @@
 - `browser-use-task-panel` 需要真实 AI run 触发 `browser_use` 并驱动内置浏览器完成本地网页任务；同时验证多个浏览器 Tab 独立历史、共享持久站点数据、切换文件后网页状态不销毁，以及同 URL 标签不会让 Stagehand 串页，不能用 fake browser 替代。
 - `web_search` 与 `web_crawl` 需要分开覆盖：搜索 case 只验证候选网页返回；读取 case 必须验证 AI 继续读取网页正文后再回答。
 - Workbench 附件链路当前支持图片、`doc`、`docx`、`pptx`、`pdf`、`md`、`json`、`xlsx`、`xlsm`、`xltx`、`xltm`，统一保存到 `<workspace>/.ncurator/runtime/assets/<assetBucketId>/`；`assetBucketId` 为输入草稿 UUID，发送给 AI 时只传附件名称与路径，不再做发送前识图或文件解析。
+- `WB-EXCEL-001-AC1`、`WB-EXCEL-001-AC2`、`WB-EXCEL-001-AC3`、`WB-EXCEL-001-AC4` 的工具输入输出、完整编辑操作、原子失败、冲突和只读格式边界由 AI tool 与 Unit 回归承担；Workbench 的 `excel-update-diff-and-revert` 负责真实模型选用工具、正式文件、修改入口、单网格 Diff 和回退闭环，不重复枚举底层操作。
 
 ## 3. Suite 设计
 
@@ -157,10 +158,10 @@ tests/case/workbench/
 #### `composer-attachments-context`
 
 - 测试类型：`e2e`
-- What：`+` 与粘贴添加附件时，附件会保存到工作区 `.ncurator/runtime/assets/<assetBucketId>/`，不会提前创建真实会话；图片、`doc`、`docx`、`pptx`、`pdf`、`md`、`json` 可以添加，并保持图片预览、文件打开、删除、普通文本粘贴和格式提示行为。
+- What：`+` 与粘贴添加附件时，附件会保存到工作区 `.ncurator/runtime/assets/<assetBucketId>/`，不会提前创建真实会话；图片、`doc`、`docx`、`pptx`、`pdf`、`md`、`json`、`xlsx`、`xlsm`、`xltx`、`xltm` 可以添加，并保持图片预览、文件打开、删除、普通文本粘贴和格式提示行为。
 - Why：附件链路已改为“统一落盘到工作区 + 只把路径交给 AI”，必须用回归测试守住真实保存路径和交互行为。
 - How：创建并通过原生目录选择绑定真实工作区；点击添加附件后，在 Windows 系统文件窗口或 macOS Open 面板中用系统级键鼠选择真实文件，经过 Renderer → IPC → Main → 附件保存链路；另外通过粘贴覆盖不支持格式和大文件 warning。
-- Oracle：未绑定工作区时提示先选择工作区且不添加附件；真实添加会落盘且不提前创建会话；图片预览、格式范围、不支持提示及只传名称与路径的发送上下文整体对齐 `WB-COMPOSER-010`。
+- Oracle：未绑定工作区时提示先选择工作区且不添加附件；真实添加会落盘且不提前创建会话；图片预览、Excel 格式范围、不支持提示及只传名称与路径的发送上下文整体对齐 `WB-COMPOSER-010`。
 - Not：不在跨平台业务回归中验证系统原生文件选择器的视觉细节；不通过 `attachmentPickResponse` 或直接 `attachmentSaveFile` 伪造附件结果。
 
 #### `reference-mention-keyboard`
@@ -291,8 +292,8 @@ tests/case/workbench/
 - 测试类型：`e2e`
 - What：内置浏览器原生视图在初次显示、面板折叠、原生自绘菜单和会话切换后仍可见、尺寸稳定且持续运行。
 - Why：`WebContentsView` 由 Main 管理并覆盖在 Renderer 上方；生命周期或 bounds 同步错误会导致白屏、原生视图遮挡菜单、恢复后尺寸跳变，或切换会话时误销毁仍在运行的网页。
-- How：通过 Settings UI 创建工作空间并用真实模型发送消息形成会话；在 Workbench UI 新建浏览器 Tab，从“浏览器地址”输入框点击“前往”打开带高对比颜色和自增计时器的本地真实网页；折叠后在后台跳转新 URL、填写表单并滚动，再展开和切换会话；同时操作自绘菜单缩放控件，并采集各阶段窗口像素、viewport 尺寸、zoom、WebContents id、URL、表单、滚动位置与计时器值。
-- Oracle：各阶段浏览器 viewport 均包含稳定的非白真实网页像素且尺寸、zoom 不变；菜单打开时浏览器仍挂载且保持可见；折叠或切换会话只从显示树移除 View，不销毁 WebContents，计时器和后台导航持续进行；恢复后直接显示最新 URL、表单和滚动状态，且 WebContents id 不变，对齐 `WB-PANEL-001-AC5`、`WB-PANEL-004-AC1`、`WB-PANEL-004-AC3`、`WB-PANEL-004-AC7`、`WB-PANEL-004-AC11`。
+- How：通过 Settings UI 创建工作空间并用真实模型发送消息形成会话；在 Workbench UI 新建浏览器 Tab，验证空地址禁用“前往”、按 Enter 与点击按钮都可导航本地真实网页；折叠后在后台跳转新 URL、填写表单并滚动，再展开和切换会话；验证自绘菜单由 Escape、点击外部、切换资源 Tab 和主窗口移动关闭，最后分别通过关闭 Tab 和删除所属会话销毁浏览器。
+- Oracle：各阶段浏览器 viewport 均包含稳定的非白真实网页像素且尺寸、zoom 不变；菜单打开时浏览器仍挂载且保持可见，并响应 Escape、点击外部、切换 Tab 和窗口移动关闭；折叠或切换会话只从显示树移除 View，不销毁 WebContents，计时器和后台导航持续进行；恢复后直接显示最新 URL、表单和滚动状态，且 WebContents id 不变；用户关闭 Tab 或删除所属会话后，对应 WebContents 被销毁，对齐 `WB-PANEL-001-AC5`、`WB-PANEL-004-AC1`、`WB-PANEL-004-AC3`、`WB-PANEL-004-AC7`、`WB-PANEL-004-AC8`、`WB-PANEL-004-AC9`、`WB-PANEL-004-AC11`、`WB-PANEL-004-AC12`。
 - Not：不验证公网网页、Stagehand 操作或最终 AI 回答；这些由 `browser-use-task-panel` 覆盖。
 
 #### `web-search-diagnostic`
@@ -375,7 +376,7 @@ tests/case/workbench/
 - What：真实 AI 修改已有 Excel 后，用户在同一个网格中查看红绿单元格边框，并能回退到原始文件。
 - Why：Excel 修改预览不能依赖模型描述，也不适合 PPT 式左右画面对比，必须直接验证工作簿数据、公式和单元格级 diff。
 - How：通过真实 Workbench UI 请求 AI 读取并修改 xlsx；打开修改记录，切换工作表，检查红绿边框，再执行回退。
-- Oracle：正式 xlsx 的值准确且没有 diff 边框；修改预览中新增和修改为绿色、删除为红色；不出现 PPT 前后预览；回退后文件 bytes 与修改前一致；真实调用包含 Excel 读工具和 `excel_edit`。
+- Oracle：正式 xlsx 的值和公式准确且没有 diff 边框；修改预览中指定的新增和修改单元格为绿色、指定的删除单元格为红色；可以切换工作表且不出现 PPT 前后预览；回退后文件 bytes 与修改前一致；真实调用包含 Excel 读工具和 `excel_edit`，对齐 `WB-EXCEL-001-AC5`、`WB-EXCEL-002`、`WB-APPLY-002-AC6`。
 - Not：不逐字断言最终回答，不把模型直接计算的文本结果当作数据正确性证据。
 
 #### `terminal-background-service-flow`

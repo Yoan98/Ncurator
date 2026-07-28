@@ -1,6 +1,7 @@
 import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import ExcelJS from 'exceljs'
 import { describe, it } from 'vitest'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
@@ -30,6 +31,10 @@ const createAttachmentFixtures = async (): Promise<{
   markdownPath: string
   legacyDocPath: string
   pptxPath: string
+  xlsxPath: string
+  xlsmPath: string
+  xltxPath: string
+  xltmPath: string
   largePath: string
   cleanup: () => Promise<void>
 }> => {
@@ -39,12 +44,23 @@ const createAttachmentFixtures = async (): Promise<{
   const markdownPath = path.join(rootPath, 'workbench-preview.md')
   const legacyDocPath = path.join(rootPath, 'legacy-reference.doc')
   const pptxPath = path.join(rootPath, 'slides-reference.pptx')
+  const xlsxPath = path.join(rootPath, 'sheet-reference.xlsx')
+  const xlsmPath = path.join(rootPath, 'macro-reference.xlsm')
+  const xltxPath = path.join(rootPath, 'template-reference.xltx')
+  const xltmPath = path.join(rootPath, 'macro-template-reference.xltm')
   const largePath = path.join(rootPath, 'qa-large.json')
+  const workbook = new ExcelJS.Workbook()
+  workbook.addWorksheet('Data').getCell('A1').value = 'attachment fixture'
+  const workbookBytes = Buffer.from(await workbook.xlsx.writeBuffer())
   await Promise.all([
     writeFile(imagePath, ONE_PIXEL_PNG),
     writeFile(markdownPath, '# Preview\n\nAttachment markdown body.'),
     writeFile(legacyDocPath, 'legacy doc attachment fixture'),
     writeFile(pptxPath, 'pptx attachment fixture'),
+    writeFile(xlsxPath, workbookBytes),
+    writeFile(xlsmPath, workbookBytes),
+    writeFile(xltxPath, workbookBytes),
+    writeFile(xltmPath, workbookBytes),
     writeFile(largePath, Buffer.alloc(11 * 1024 * 1024, 65))
   ])
   return {
@@ -53,6 +69,10 @@ const createAttachmentFixtures = async (): Promise<{
     markdownPath,
     legacyDocPath,
     pptxPath,
+    xlsxPath,
+    xlsmPath,
+    xltxPath,
+    xltmPath,
     largePath,
     cleanup: async () => {
       await rm(rootPath, { recursive: true, force: true })
@@ -118,7 +138,7 @@ describe('workbench conversation e2e', () => {
         suite: 'conversation',
         groups: ['composer'],
         description:
-          '对齐附件上下文 PRD：验证统一附件选择、doc/pptx 格式放行、图片预览、文件默认打开、删除、普通文本粘贴和大文件提示。',
+          '对齐附件上下文 PRD：验证统一附件选择、doc/pptx/Excel 格式放行、图片预览、文件默认打开、删除、普通文本粘贴和大文件提示。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
         execution: 'exclusive',
@@ -163,6 +183,15 @@ describe('workbench conversation e2e', () => {
           await waitForAttachmentCardByName(page, 'legacy-reference.doc')
           await selectWorkbenchAttachmentThroughNativeDialog(page, attachments.pptxPath)
           await waitForAttachmentCardByName(page, 'slides-reference.pptx')
+          for (const spreadsheetPath of [
+            attachments.xlsxPath,
+            attachments.xlsmPath,
+            attachments.xltxPath,
+            attachments.xltmPath
+          ]) {
+            await selectWorkbenchAttachmentThroughNativeDialog(page, spreadsheetPath)
+            await waitForAttachmentCardByName(page, path.basename(spreadsheetPath))
+          }
           const sessionCountAfterPaste = await countWorkspaceSessions(
             page,
             workspaceBinding.workspaceId
@@ -244,6 +273,20 @@ describe('workbench conversation e2e', () => {
               .filter({ hasText: 'slides-reference.pptx' })
               .first()
               .textContent()) || ''
+          const spreadsheetCardTexts = await Promise.all(
+            [
+              'sheet-reference.xlsx',
+              'macro-reference.xlsm',
+              'template-reference.xltx',
+              'macro-template-reference.xltm'
+            ].map(
+              async (fileName) =>
+                (await getWorkbenchPrefixLocator(page, workbenchSelectors.attachmentCardPrefix)
+                  .filter({ hasText: fileName })
+                  .first()
+                  .textContent()) || ''
+            )
+          )
 
           await selectWorkbenchAttachmentThroughNativeDialog(page, attachments.largePath)
           await waitForAttachmentCardByName(page, 'qa-large.json')
@@ -292,6 +335,7 @@ describe('workbench conversation e2e', () => {
             fileCardText,
             legacyDocCardText,
             pptxCardText,
+            spreadsheetCardTexts,
             largeFileMessage,
             inputText,
             openPathCallCount: openPathCalls.length,
@@ -316,13 +360,16 @@ describe('workbench conversation e2e', () => {
               result.fileCardText.includes('MD') &&
               result.legacyDocCardText.includes('DOC') &&
               result.pptxCardText.includes('PPTX') &&
+              ['XLSX', 'XLSM', 'XLTX', 'XLTM'].every((label, index) =>
+                result.spreadsheetCardTexts[index]?.includes(label)
+              ) &&
               result.largeFileMessage.includes('文件过大，建议放到工作空间索引里使用') &&
               result.inputText.includes('plain paste ok') &&
               result.openPathCallCount >= 1,
             {
               name: 'workbench-composer-attachments-prd-flow',
               message:
-                '附件输入应满足 PRD：真实选择附件会走系统选择和附件导入，doc/pptx 可以添加并显示正确类型，添加附件不创建新会话，图片可预览且控件不压图，文件可默认打开，超过 10MB 只提示不拦截，普通文本粘贴仍正常。',
+                '附件输入应满足 PRD：真实选择附件会走系统选择和附件导入，doc/pptx/Excel 可以添加并显示正确类型，添加附件不创建新会话，图片可预览且控件不压图，文件可默认打开，超过 10MB 只提示不拦截，普通文本粘贴仍正常。',
               data: result
             }
           )

@@ -318,7 +318,9 @@ describe('Excel tools edge cases', () => {
 
   it('keeps the original baseline across multiple edits to the same file', async () => {
     const { bytes } = await writeWorkbook('baseline.xlsx', (workbook) => {
-      workbook.addWorksheet('Data').getCell('A1').value = 1
+      const sheet = workbook.addWorksheet('Data')
+      sheet.getCell('A1').value = 1
+      sheet.getCell('B1').value = 10
     })
     const runtime = createRuntime()
     await runtime.edit({
@@ -329,17 +331,22 @@ describe('Excel tools edge cases', () => {
     await runtime.edit({
       sourcePath: 'baseline.xlsx',
       action: 'update',
-      operations: [{ type: 'set_cell', sheetName: 'Data', address: 'A1', value: 3 }]
+      operations: [{ type: 'set_cell', sheetName: 'Data', address: 'B1', value: 20 }]
     })
 
     expect(records).toHaveLength(1)
-    expect(records[0]?.changeCount).toBeGreaterThanOrEqual(1)
+    expect(records[0]?.changeCount).toBe(2)
     expect((await fs.readFile(records[0]!.beforeSnapshotPath!)).equals(bytes)).toBe(true)
+    const diff = await loadWorkbook(records[0]!.previewPath)
+    expect(diff.getWorksheet('Data')?.getCell('A1').value).toBe(2)
+    expect(diff.getWorksheet('Data')?.getCell('A1').border.left?.color?.argb).toBe('FF22A06B')
+    expect(diff.getWorksheet('Data')?.getCell('B1').value).toBe(20)
+    expect(diff.getWorksheet('Data')?.getCell('B1').border.left?.color?.argb).toBe('FF22A06B')
     expect(
       (await loadWorkbook(path.join(workspaceRootPath, 'baseline.xlsx')))
         .getWorksheet('Data')
         ?.getCell('A1').value
-    ).toBe(3)
+    ).toBe(2)
   })
 
   it('blocks common terminal mutation forms while allowing inspection commands', () => {

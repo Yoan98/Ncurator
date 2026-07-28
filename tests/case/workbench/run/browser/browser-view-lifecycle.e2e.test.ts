@@ -1,5 +1,6 @@
 import { describe, it } from 'vitest'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
+import { clickScreenPoint } from '../../../../harness/e2e/nativeMouse'
 import {
   WORKBENCH_E2E_TIMEOUT_MS,
   createWorkbenchNewSession,
@@ -115,8 +116,21 @@ describe('workbench browser lifecycle e2e', () => {
           if (!browserTabId) throw new Error('browser tab id is missing')
 
           const browserPanel = getWorkbenchLocator(page, workbenchSelectors.browserPanel)
-          await browserPanel.getByRole('textbox', { name: /浏览器地址/u }).fill(server.url)
-          await browserPanel.getByRole('button', { name: /前往/u }).click()
+          const addressInput = browserPanel.getByRole('textbox', { name: /浏览器地址/u })
+          const goButton = browserPanel.getByRole('button', { name: /前往/u })
+          const emptyGoDisabled = await goButton.isDisabled()
+          const enterUrl = `${server.url}?enter=1`
+          await addressInput.fill(enterUrl)
+          await addressInput.press('Enter')
+          await page.waitForFunction(
+            async ({ tabId, url }) => {
+              const response = await window.api.browserPanelStateGet({ tabId })
+              return response.success && response.state?.url === url && !response.state.isLoading
+            },
+            { tabId: browserTabId, url: enterUrl }
+          )
+          await addressInput.fill(server.url)
+          await goButton.click()
           await page.waitForFunction(
             async ({ tabId, url }) => {
               const response = await window.api.browserPanelStateGet({ tabId })
@@ -251,7 +265,10 @@ describe('workbench browser lifecycle e2e', () => {
           )
 
           const menuButton = getWorkbenchLocator(page, workbenchSelectors.browserMenu)
+          const escapeMenuWindowPromise = runtime.electronApp.waitForEvent('window')
           await menuButton.click()
+          const escapeMenuPage = await escapeMenuWindowPromise
+          await escapeMenuPage.waitForLoadState('domcontentloaded')
           await page.waitForFunction(
             (testId) =>
               document.querySelector(`[data-testid="${testId}"]`)?.getAttribute('aria-expanded') ===
@@ -264,18 +281,81 @@ describe('workbench browser lifecycle e2e', () => {
             async (tabId) => window.api.browserPanelStateGet({ tabId }),
             browserTabId
           )
-          const closeMenuResponse = await page.evaluate(() => window.api.browserPanelCloseMenu())
-          if (!closeMenuResponse.success) {
-            throw new Error(closeMenuResponse.error || 'failed to close browser menu')
-          }
+          const zoomControlsBox = await escapeMenuPage
+            .locator('[data-testid="workbench-browser-zoom-controls"]')
+            .boundingBox()
+          const externalMenuItemBox = await escapeMenuPage
+            .getByRole('menuitem', { name: '在系统浏览器中打开' })
+            .boundingBox()
+          const escapeMenuClosePromise = escapeMenuPage.waitForEvent('close')
+          await escapeMenuPage.keyboard.press('Escape')
+          await escapeMenuClosePromise
           await page.waitForFunction(
             (testId) =>
               document.querySelector(`[data-testid="${testId}"]`)?.getAttribute('aria-expanded') ===
               'false',
             workbenchSelectors.browserMenu
           )
+          const outsideMenuWindowPromise = runtime.electronApp.waitForEvent('window')
+          await menuButton.click()
+          const outsideMenuPage = await outsideMenuWindowPromise
+          await outsideMenuPage.waitForLoadState('domcontentloaded')
+          const outsideMenuClosePromise = outsideMenuPage.waitForEvent('close')
+          const outsidePoint = await runtime.electronApp.evaluate(({ BrowserWindow }) => {
+            const mainWindow = BrowserWindow.getAllWindows().find(
+              (candidate) => candidate.getParentWindow() === null
+            )
+            if (!mainWindow) throw new Error('main window is unavailable')
+            const bounds = mainWindow.getContentBounds()
+            return { x: bounds.x + 20, y: bounds.y + 100 }
+          })
+          await outsideMenuPage.waitForTimeout(150)
+          await clickScreenPoint(outsidePoint.x, outsidePoint.y)
+          await outsideMenuClosePromise
+
+          await selectWorkbenchResourceMenuItem(runtime, 'file')
+          const fileTab = page
+            .locator(`[data-testid^="${workbenchSelectors.resourceTabPrefix}-"]`)
+            .last()
+          await browserTab.click()
+          const switchMenuWindowPromise = runtime.electronApp.waitForEvent('window')
+          await menuButton.click()
+          const switchMenuPage = await switchMenuWindowPromise
+          await switchMenuPage.waitForLoadState('domcontentloaded')
+          const switchMenuClosePromise = switchMenuPage.waitForEvent('close')
+          await fileTab.click()
+          await switchMenuClosePromise
+          await browserTab.click()
+          await viewport.waitFor({ state: 'visible' })
           const afterMenuRect = await readViewportRect()
           const afterMenuPixels = await captureViewportPixels()
+          const moveMenuWindowPromise = runtime.electronApp.waitForEvent('window')
+          await menuButton.click()
+          const moveMenuPage = await moveMenuWindowPromise
+          await moveMenuPage.waitForLoadState('domcontentloaded')
+          const moveMenuClosePromise = moveMenuPage.waitForEvent('close')
+          const originalWindowPosition = await runtime.electronApp.evaluate(({ BrowserWindow }) => {
+            const mainWindow = BrowserWindow.getAllWindows().find(
+              (candidate) => candidate.getParentWindow() === null
+            )
+            if (!mainWindow) throw new Error('main window is unavailable')
+            const [x, y] = mainWindow.getPosition()
+            mainWindow.setPosition(x + 1, y)
+            return { x, y }
+          })
+          await moveMenuClosePromise
+          await runtime.electronApp.evaluate(({ BrowserWindow }, position) => {
+            const mainWindow = BrowserWindow.getAllWindows().find(
+              (candidate) => candidate.getParentWindow() === null
+            )
+            mainWindow?.setPosition(position.x, position.y)
+          }, originalWindowPosition)
+          await page.waitForFunction(
+            (testId) =>
+              document.querySelector(`[data-testid="${testId}"]`)?.getAttribute('aria-expanded') ===
+              'false',
+            workbenchSelectors.browserMenu
+          )
 
           await createWorkbenchNewSession(page)
           await page.waitForFunction(
@@ -310,6 +390,56 @@ describe('workbench browser lifecycle e2e', () => {
           const sessionRestoredPixels = await captureViewportPixels()
           const finalRuntime = await inspectBrowserRuntime()
 
+          await browserTab.locator('button[aria-label^="关闭 "]').click()
+          await browserTab.waitFor({ state: 'detached' })
+          const closedTabDestroyed = await runtime.electronApp.evaluate(
+            ({ webContents }, webContentsId) =>
+              !webContents.getAllWebContents().some((contents) => contents.id === webContentsId),
+            Number(finalRuntime.id)
+          )
+
+          await selectWorkbenchResourceMenuItem(runtime, 'browser')
+          const ownerBrowserTab = page
+            .locator(`[data-testid^="${workbenchSelectors.resourceTabPrefix}-browser-"]`)
+            .last()
+          const ownerBrowserTabTestId = await ownerBrowserTab.getAttribute('data-testid')
+          const ownerBrowserTabId = ownerBrowserTabTestId?.split('-browser-').at(-1) || ''
+          if (!ownerBrowserTabId) throw new Error('owner browser tab id is missing')
+          const ownerUrl = `${server.url}?owner-delete=1`
+          const ownerBrowserPanel = getWorkbenchLocator(page, workbenchSelectors.browserPanel)
+          await ownerBrowserPanel.getByRole('textbox', { name: /浏览器地址/u }).fill(ownerUrl)
+          await ownerBrowserPanel.getByRole('button', { name: /前往/u }).click()
+          await page.waitForFunction(
+            async ({ tabId, url }) => {
+              const response = await window.api.browserPanelStateGet({ tabId })
+              return response.success && response.state?.url === url && !response.state.isLoading
+            },
+            { tabId: ownerBrowserTabId, url: ownerUrl }
+          )
+          const ownerRuntimeId = await runtime.electronApp.evaluate(({ webContents }, url) => {
+            const contents = webContents
+              .getAllWebContents()
+              .find((candidate) => candidate.getURL() === url)
+            if (!contents) throw new Error('owner browser web contents is unavailable')
+            return contents.id
+          }, ownerUrl)
+          const sessionId = originalSessionTestId.replace(
+            `${workbenchSelectors.sessionItemPrefix}-`,
+            ''
+          )
+          await originalSessionItem.hover()
+          await getWorkbenchLocator(
+            page,
+            `${workbenchSelectors.sessionDeleteButtonPrefix}-${sessionId}`
+          ).click()
+          await getWorkbenchLocator(page, workbenchSelectors.sessionDeleteConfirmButton).click()
+          await originalSessionItem.waitFor({ state: 'detached' })
+          const deletedOwnerDestroyed = await runtime.electronApp.evaluate(
+            ({ webContents }, webContentsId) =>
+              !webContents.getAllWebContents().some((contents) => contents.id === webContentsId),
+            ownerRuntimeId
+          )
+
           return {
             initialRect,
             restoredRect,
@@ -331,7 +461,14 @@ describe('workbench browser lifecycle e2e', () => {
             restoredUrl: restoredState.state?.url,
             backgroundUrl,
             menuZoom: menuState.state?.zoomPercent,
-            restoreSamples
+            restoreSamples,
+            emptyGoDisabled,
+            externalMenuItemBelowZoom:
+              zoomControlsBox !== null &&
+              externalMenuItemBox !== null &&
+              externalMenuItemBox.y > zoomControlsBox.y + zoomControlsBox.height,
+            closedTabDestroyed,
+            deletedOwnerDestroyed
           }
         },
         assert: async (result, runtime) => {
@@ -361,7 +498,9 @@ describe('workbench browser lifecycle e2e', () => {
               sameSize(result.restoredRect, result.menuRect) &&
               sameSize(result.menuRect, result.afterMenuRect) &&
               result.restoredZoom === 100 &&
-              result.menuZoom === 100,
+              result.menuZoom === 100 &&
+              result.emptyGoDisabled &&
+              result.externalMenuItemBelowZoom,
             {
               name: 'embedded-browser-native-pixels-remain-visible',
               message:
@@ -402,14 +541,18 @@ describe('workbench browser lifecycle e2e', () => {
               mountedRestoreSamples.length > 0 &&
               mountedRestoreSamples.every(
                 (sample) => sample.visible === 'true' && sample.width > 100
-              ),
+              ) &&
+              result.closedTabDestroyed &&
+              result.deletedOwnerDestroyed,
             {
               name: 'embedded-browser-survives-hidden-running-session',
               message:
                 '折叠或切走会话后必须移除显示层但保留同一 WebContents；后台导航、表单和滚动状态应在恢复后直接显示。',
               data: {
                 runtimeSamples,
-                restoreSamples: result.restoreSamples
+                restoreSamples: result.restoreSamples,
+                closedTabDestroyed: result.closedTabDestroyed,
+                deletedOwnerDestroyed: result.deletedOwnerDestroyed
               }
             }
           )
