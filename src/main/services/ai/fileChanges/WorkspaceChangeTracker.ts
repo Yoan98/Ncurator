@@ -51,6 +51,7 @@ const TEXT_EXTENSIONS = new Set([
 ])
 
 const EXCEL_EXTENSIONS = new Set(['.xlsx', '.xlsm', '.xltx', '.xltm'])
+const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp'])
 
 type WorkspaceObject = {
   relativePath: string
@@ -186,6 +187,7 @@ const inferCapability = (
   const extension = path.extname(after?.absolutePath || before?.absolutePath || '').toLowerCase()
   if (TEXT_EXTENSIONS.has(extension)) return 'text_file'
   if (EXCEL_EXTENSIONS.has(extension)) return 'excel'
+  if (IMAGE_EXTENSIONS.has(extension)) return 'image'
   return 'terminal_exec'
 }
 
@@ -319,9 +321,11 @@ export class WorkspaceChangeTracker {
             ? 'docx_tool'
             : specialist?.capability === 'excel'
               ? 'excel_tool'
-              : specialist?.capability === 'text_file'
-                ? 'text_tool'
-                : 'workspace_scan',
+              : specialist?.capability === 'image'
+                ? 'image_tool'
+                : specialist?.capability === 'text_file'
+                  ? 'text_tool'
+                  : 'workspace_scan',
         beforePath: change.before?.absolutePath,
         afterPath: change.after?.absolutePath,
         changeCount: specialist?.changeCount || 1,

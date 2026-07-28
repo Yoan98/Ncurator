@@ -106,6 +106,15 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
     description: '读取图片并按 instruction 分析图片内容，并返回模型生成的文本结果。',
     toolNames: ['image_analyze']
   },
+  'image-generation': {
+    skillId: 'image-generation',
+    familyId: 'image-generation',
+    source: 'external',
+    countsTowardToolBudget: true,
+    title: '图片生成',
+    description: '通过 SVG 绘制生成 PNG、JPEG 或 WebP 图片，并保存为工作区文件。',
+    toolNames: ['image_generate']
+  },
   'kb-retrieval': {
     skillId: 'kb-retrieval',
     familyId: 'kb',

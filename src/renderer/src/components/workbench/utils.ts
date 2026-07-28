@@ -93,6 +93,7 @@ const isAssistantToolName = (toolName: string): toolName is AssistantToolName =>
   toolName === 'web_crawl' ||
   toolName === 'browser_use' ||
   toolName === 'image_analyze' ||
+  toolName === 'image_generate' ||
   toolName === 'wait_time' ||
   toolName === 'unnamed'
 
@@ -155,6 +156,7 @@ const readToolFileLabel = (input?: IpcJsonObject): string => {
       'source_name',
       'sourcePath',
       'source_path',
+      'outputPath',
       'path',
       'filePath',
       'file_path'
@@ -221,6 +223,7 @@ const getSkillDisplayName = (skillId?: RuntimeSkillId): string => {
   if (skillId === 'ppt-read') return 'PPT 阅读器'
   if (skillId === 'ppt-write') return 'PPT 编辑器'
   if (skillId === 'image-recognition') return '图像识别'
+  if (skillId === 'image-generation') return '图片生成'
   return '新能力'
 }
 
@@ -260,6 +263,7 @@ const getToolUiKind = (toolName?: AssistantToolName): AssistantProcessSkillKey =
   if (toolName === 'web_crawl') return 'web-crawl'
   if (toolName === 'browser_use') return 'browser'
   if (toolName === 'image_analyze') return 'image-recognition'
+  if (toolName === 'image_generate') return 'image-generation'
   if (toolName === 'wait_time') return 'wait'
   return 'generic'
 }
@@ -278,7 +282,7 @@ const getToolIconKind = (skillKey: AssistantProcessSkillKey): AssistantProcessIc
   if (skillKey === 'web-search') return 'search'
   if (skillKey === 'web-crawl') return 'web'
   if (skillKey === 'browser') return 'browser'
-  if (skillKey === 'image-recognition') return 'image'
+  if (skillKey === 'image-recognition' || skillKey === 'image-generation') return 'image'
   if (skillKey === 'wait') return 'wait'
   if (skillKey === 'terminal') return 'terminal'
   return 'default'
@@ -396,6 +400,12 @@ const getToolSummaryText = (
     if (status === 'partial_failed') return sentence(text('部分图片识别失败'))
     return sentence(text('图片识别失败'))
   }
+  if (skillKey === 'image-generation') {
+    if (status === 'running') return sentence(text('正在生成图片'))
+    if (status === 'completed') return sentence(text('已生成图片'))
+    if (status === 'partial_failed') return sentence(text('部分图片生成失败'))
+    return sentence(text('图片生成失败'))
+  }
   if (skillKey === 'wait') {
     if (status === 'running') return sentence(text('正在等待'))
     if (status === 'completed') return sentence(text('已等待'))
@@ -488,6 +498,9 @@ const getToolItemText = (
   }
   if (toolName === 'image_analyze') {
     return sentence(text('识别图片 '), text(fileLabel))
+  }
+  if (toolName === 'image_generate') {
+    return sentence(text('生成图片 '), text(fileLabel))
   }
   if (toolName === 'wait_time') {
     return sentence(text('等待 '), text(waitLabel))
@@ -877,8 +890,7 @@ const upsertGroupFromDisplayEvent = (
 ): AssistantProcessGroup[] => {
   const currentWithoutLocalThinking = current.filter(
     (group) =>
-      group.kind !== 'thinking' ||
-      (input.kind !== 'retry' && group.sourceEventType !== 'thinking')
+      group.kind !== 'thinking' || (input.kind !== 'retry' && group.sourceEventType !== 'thinking')
   )
   const existing = currentWithoutLocalThinking.find((group) => group.id === input.groupId)
   const next = createDisplayProcessGroup({

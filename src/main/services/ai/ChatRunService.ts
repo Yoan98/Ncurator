@@ -742,10 +742,7 @@ export class ChatRunService {
           runId,
           taskId: `workspace-scan:${runId}`,
           artifactId: record.id,
-          capability:
-            record.capability === 'docx' || record.capability === 'text_file'
-              ? record.capability
-              : 'terminal_exec',
+          capability: record.capability,
           path: record.path,
           fileName: record.fileName,
           operation: record.operation,

@@ -21,6 +21,7 @@ import { buildTerminalCapabilityTools } from '../../../src/main/services/ai/huma
 import { TerminalSessionManager } from '../../../src/main/services/ai/human/tools/terminal/TerminalSessionManager'
 import { buildTextFileCapabilityTools } from '../../../src/main/services/ai/human/tools/textFile'
 import { imageRecognitionToolFamily } from '../../../src/main/services/ai/human/tools/imageRecognition'
+import { buildImageGenerationCapabilityTools } from '../../../src/main/services/ai/human/tools/imageGeneration'
 import { buildPdfCapabilityTools } from '../../../src/main/services/ai/human/tools/pdf'
 import { buildPptCapabilityTools } from '../../../src/main/services/ai/human/tools/ppt'
 import { buildExcelCapabilityTools } from '../../../src/main/services/ai/human/tools/excel'
@@ -336,6 +337,30 @@ export const createImageRecognitionToolHarness = (
       }) as readonly ToolLike[]
     ),
     ctx
+  }
+}
+
+export const createImageGenerationToolHarness = (
+  runtime: BackendTestRuntime,
+  contextInput: CreateAiRunContextInput = {}
+) => {
+  const ctx = runtime.createAiRunContext(contextInput)
+  const cache = createHumanRuntimeCache()
+  const activities: CapturedToolActivity[] = []
+  const built = buildImageGenerationCapabilityTools({
+    ctx,
+    cache,
+    runId: runtime.runId,
+    sessionId: contextInput.sessionId || 'test-session',
+    taskId: runtime.taskId,
+    workspaceRootPath: runtime.workspaceRoot,
+    emitActivity: (activity) => activities.push(activity)
+  })
+
+  return {
+    ...createToolInvoker(built.tools as readonly ToolLike[]),
+    ctx,
+    activities
   }
 }
 

@@ -8,7 +8,8 @@ export const AI_TOOL_FAMILY_IDS = [
   'excel',
   'web',
   'utility',
-  'image-recognition'
+  'image-recognition',
+  'image-generation'
 ] as const
 
 export const BUILTIN_RUNTIME_SKILL_IDS = [
@@ -27,7 +28,8 @@ export const EXTERNAL_RUNTIME_SKILL_IDS = [
   'ppt-write',
   'excel-read',
   'excel-write',
-  'image-recognition'
+  'image-recognition',
+  'image-generation'
 ] as const
 
 export const LEARNABLE_RUNTIME_SKILL_IDS = EXTERNAL_RUNTIME_SKILL_IDS
@@ -90,11 +92,6 @@ export const DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS = 200_000
 export const CONTEXT_COMPACTION_TRIGGER_RATIO = 0.8
 export const CONTEXT_COMPACTION_TARGET_RATIO = 0.25
 export const CONTEXT_COMPACTION_MIN_SOURCE_RATIO = 0.1
-export const HUMAN_ROUND_EXECUTION_KINDS = [
-  'learning',
-  'hand',
-  'mouth',
-  'fault'
-] as const
+export const HUMAN_ROUND_EXECUTION_KINDS = ['learning', 'hand', 'mouth', 'fault'] as const
 export const HUMAN_MAX_ROUND_HISTORY = 100
 export const HUMAN_MAX_RECENT_HISTORY_ROUNDS = 20

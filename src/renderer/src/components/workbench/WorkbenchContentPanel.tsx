@@ -153,10 +153,18 @@ const getRelevancePercent = (
 const WorkbenchEmptyPanel: React.FC = () => (
   <div className="flex h-full items-center justify-center px-5 py-4">
     <div className="flex h-full w-full items-center justify-center rounded-[8px] border border-dashed border-[#EEEEEC] bg-white">
-      <Empty
-        image={Empty.PRESENTED_IMAGE_SIMPLE}
-        description={<span className="text-[12px] text-[#9B9A97]">右侧暂无内容</span>}
-      />
+      <div className="text-center">
+        <Empty
+          image={Empty.PRESENTED_IMAGE_SIMPLE}
+          description={<span className="text-[12px] text-[#9B9A97]">右侧暂无内容</span>}
+        />
+        <div
+          className="mt-3 text-[11px] text-[#B0AEA8]"
+          data-testid={workbenchSelectors.supportedWritebackSummary}
+        >
+          支持直接写回：DOCX、PPTX、XLSX、PNG、JPEG、WebP 和 UTF-8 文本
+        </div>
+      </div>
     </div>
   </div>
 )
@@ -730,7 +738,10 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
   const applyDocuments = useMemo<FileRenderDocument[]>(() => {
     if (!activeApplyRecord) return []
     if (!canTogglePreviewMode(activeApplyRecord)) {
-      if (activeApplyRecord.status !== 'applied' || activeApplyRecord.operation !== 'created') {
+      if (
+        activeApplyRecord.status !== 'applied' ||
+        (activeApplyRecord.operation !== 'created' && activeApplyRecord.capability !== 'image')
+      ) {
         return []
       }
       return [
@@ -784,6 +795,7 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
     (activeApplyRecord.operation === 'renamed' ||
       activeApplyRecord.operation === 'deleted' ||
       (!hasPreviewModeToggle &&
+        activeApplyRecord.capability !== 'image' &&
         (activeApplyRecord.status === 'reverted' || activeApplyRecord.operation !== 'created'))) ? (
       <FileChangeNotice record={activeApplyRecord} />
     ) : undefined

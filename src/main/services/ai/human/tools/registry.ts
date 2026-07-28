@@ -1,5 +1,6 @@
 import { DOCX_TOOL_SPECS } from './docx/toolSpecs'
 import { IMAGE_RECOGNITION_TOOL_SPECS } from './imageRecognition/toolSpecs'
+import { IMAGE_GENERATION_TOOL_SPECS } from './imageGeneration/toolSpecs'
 import { KB_TOOL_SPECS } from './kb/toolSpecs'
 import { PDF_TOOL_SPECS } from './pdf/toolSpecs'
 import { PPT_TOOL_SPECS } from './ppt/toolSpecs'
@@ -25,7 +26,8 @@ export const ALL_TOOL_SPECS = [
   ...EXCEL_TOOL_SPECS,
   ...WEB_TOOL_SPECS,
   ...UTILITY_TOOL_SPECS,
-  ...IMAGE_RECOGNITION_TOOL_SPECS
+  ...IMAGE_RECOGNITION_TOOL_SPECS,
+  ...IMAGE_GENERATION_TOOL_SPECS
 ] as const
 
 type AnyToolSpec = (typeof ALL_TOOL_SPECS)[number]

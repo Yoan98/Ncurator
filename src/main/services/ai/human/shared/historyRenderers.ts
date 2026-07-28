@@ -114,6 +114,10 @@ const VISUAL_READ_RESULT_WHITELIST: NestedWhitelistConfig = {
 }
 
 const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
+  image_generate: {
+    outputPath: true,
+    error: true
+  },
   excel_read_outline: {
     sourcePath: true,
     sheetCount: true,

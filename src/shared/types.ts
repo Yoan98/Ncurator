@@ -633,7 +633,13 @@ export interface ChatSessionListItem extends ChatSession {
 }
 
 export type AiFileChangeStatus = 'applied' | 'reverted' | 'failed'
-export type AiFileChangeCapability = 'docx' | 'text_file' | 'terminal_exec' | 'ppt' | 'excel'
+export type AiFileChangeCapability =
+  | 'docx'
+  | 'text_file'
+  | 'terminal_exec'
+  | 'ppt'
+  | 'excel'
+  | 'image'
 export type AiFileChangeOperation = 'created' | 'updated' | 'deleted' | 'renamed'
 export type AiFileChangeSource =
   | 'workspace_scan'
@@ -641,6 +647,7 @@ export type AiFileChangeSource =
   | 'docx_tool'
   | 'ppt_tool'
   | 'excel_tool'
+  | 'image_tool'
 
 export type TextFileDiffLine =
   | { type: 'context'; oldLine: number; newLine: number; text: string }
@@ -855,6 +862,7 @@ export type RuntimeSkillId =
   | 'excel-read'
   | 'excel-write'
   | 'image-recognition'
+  | 'image-generation'
   | 'kb-retrieval'
   | 'web-browsing'
   | 'utility'
@@ -940,7 +948,13 @@ export type AiRuntimeSettings = {
   systemNotificationsEnabled: boolean
 }
 
-export type AiFileArtifactCapability = 'terminal_exec' | 'docx' | 'ppt' | 'excel' | 'text_file'
+export type AiFileArtifactCapability =
+  | 'terminal_exec'
+  | 'docx'
+  | 'ppt'
+  | 'excel'
+  | 'text_file'
+  | 'image'
 export type AiFileArtifactOperation = AiFileChangeOperation
 export type AiFileArtifactRef = {
   kind: 'file'

@@ -18,7 +18,8 @@ const TOOL_FAMILY_BUILDERS: Record<
   excel: TOOL_FAMILY_DEFINITIONS.excel.buildTools,
   web: TOOL_FAMILY_DEFINITIONS.web.buildTools,
   utility: TOOL_FAMILY_DEFINITIONS.utility.buildTools,
-  'image-recognition': TOOL_FAMILY_DEFINITIONS['image-recognition'].buildTools
+  'image-recognition': TOOL_FAMILY_DEFINITIONS['image-recognition'].buildTools,
+  'image-generation': TOOL_FAMILY_DEFINITIONS['image-generation'].buildTools
 }
 
 const ensureFamilyTools = (input: {

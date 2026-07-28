@@ -166,6 +166,7 @@ export const workbenchSelectors = {
   contentPanel: 'workbench-content-panel',
   contentPanelShell: 'workbench-content-panel-shell',
   contentPanelToggle: 'workbench-content-panel-toggle',
+  supportedWritebackSummary: 'workbench-supported-writeback-summary',
   resourceTabBar: 'workbench-resource-tab-bar',
   resourceTabScroller: 'workbench-resource-tab-scroller',
   resourceTabDragRegion: 'workbench-resource-tab-drag-region',

@@ -26,7 +26,8 @@ describe('ai unit tool prompt contract', () => {
         'ppt_read_outline',
         'ppt_read_visuals',
         'pdf_read_visuals',
-        'image_analyze'
+        'image_analyze',
+        'image_generate'
       ])
     )
     expect(names).not.toEqual(
@@ -40,6 +41,26 @@ describe('ai unit tool prompt contract', () => {
         'pdf_render_pages',
         'llm_recognize'
       ])
+    )
+  })
+
+  it('keeps image_generate minimal and informational', () => {
+    const spec = getToolSpec('image_generate')
+    const parsed = spec?.inputSchema.safeParse({
+      outputPath: 'images/result.png',
+      svg: '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1" />'
+    })
+
+    expect(parsed?.success).toBe(true)
+    expect(
+      spec?.inputSchema.safeParse({
+        outputPath: 'images/result.png',
+        svg: '<svg />',
+        format: 'png'
+      }).success
+    ).toBe(false)
+    expect(spec?.promptSpec.description).toBe(
+      '将 SVG 内容渲染为图片并保存到工作区。输出格式由 outputPath 的文件扩展名决定，支持 .png、.jpg、.jpeg 和 .webp；返回生成文件路径或错误。'
     )
   })
 

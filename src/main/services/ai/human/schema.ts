@@ -306,7 +306,7 @@ export const fileChangeSummaryItemSchema = z.object({
   id: z.string().min(1),
   fileName: z.string().min(1),
   path: z.string().min(1),
-  capability: z.enum(['docx', 'text_file', 'terminal_exec', 'ppt', 'excel']),
+  capability: z.enum(['docx', 'text_file', 'terminal_exec', 'ppt', 'excel', 'image']),
   operation: z.enum(['created', 'updated', 'deleted', 'renamed']),
   changeCount: z.number().int().min(0),
   insertCount: z.number().int().min(0),

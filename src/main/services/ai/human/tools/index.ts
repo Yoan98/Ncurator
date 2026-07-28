@@ -2,6 +2,7 @@ import type { AiToolFamilyId, ToolFamilyDefinition } from './types'
 import { docxToolFamily } from './docx'
 import { excelToolFamily } from './excel'
 import { imageRecognitionToolFamily } from './imageRecognition'
+import { imageGenerationToolFamily } from './imageGeneration'
 import { pdfToolFamily } from './pdf'
 import { pptToolFamily } from './ppt'
 import { buildKbCapabilityTools } from './kb/retrievalTools'
@@ -25,7 +26,8 @@ export const TOOL_FAMILY_DEFINITIONS: Record<AiToolFamilyId, ToolFamilyDefinitio
   excel: excelToolFamily,
   web: webToolFamily,
   utility: utilityToolFamily,
-  'image-recognition': imageRecognitionToolFamily
+  'image-recognition': imageRecognitionToolFamily,
+  'image-generation': imageGenerationToolFamily
 }
 
 export const getToolFamilyDefinition = (familyId: AiToolFamilyId): ToolFamilyDefinition =>

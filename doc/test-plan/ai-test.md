@@ -14,6 +14,7 @@
 - `tool` 只验证真实生产工具调用，不允许 fake。
 - `tool / docx` 包含 `docx-edit-serial-actions-stability`，用于守住同一次 `docx_edit(actions)` 内插入、替换、删除后的 block 定位稳定性。
 - `tool / text-file` 覆盖普通文本读取、四种写入 action、修改记录、结构化 diff 与回退前置数据。
+- `tool / image-generation` 覆盖 SVG 内部绘制输入、PNG/JPEG/WebP 转码、自动创建或更新、修改记录、Artifact、安全校验和工作区边界。
 - `tool / pdf` 使用真实 `深度学习.pdf`，覆盖元数据、页级正文、literal/regex 搜索、页面 PNG、工作区边界、损坏文件和结果大小限制。
 - `tool / web-browsing` 包含 `web-crawl-contract`，用于守住 `web_crawl`、`web_search` 和 `browser_use` 工具契约。
 - 目标：验证 tool 与 `hand` 执行守卫的生产输入输出。
@@ -755,6 +756,28 @@ AI unit / 辅助测试目录：
 - How：启动本地 HTTP server，返回超长正文页，通过真实冻结 sidecar bin 抓取，并把 tool harness 的 `modelContextWindowTokens` 压低到触发阈值。
 - Oracle：结果返回 `web_crawl result too large`，且带有统一 `decisionHint`。
 - Not：不验证压缩摘要或自动截断策略。
+
+#### image-generation 类别
+
+##### `image-generate-format-create-update-contract`
+
+- 测试类型：`backend`
+- What：`image_generate` 使用 SVG 内容生成真实 PNG、JPEG、WebP，并自动创建或更新目标图片。
+- Why：图片生成的核心交付是可读取的正式图片文件，不能只验证 SVG 或伪造扩展名。
+- How：在临时工作区调用真实 `image_generate`，分别输出 PNG、JPEG、WebP；同一路径再次生成，并覆盖一份预先存在的 JPEG。
+- Oracle：三种文件签名正确且均可实际解码为预期尺寸；新建和已有路径连续更新都复用修改记录和 applyId；已有文件始终保存首次写入前快照；Artifact capability 为 `image`；工具结果只返回 `outputPath`。
+- Not：不评价图片审美，也不要求 AI 使用固定 SVG 结构。
+
+##### `image-generate-safety-and-boundary-contract`
+
+- 测试类型：`backend`
+- What：危险 SVG、不支持格式和工作区越界请求失败且不产生文件副作用。
+- Why：SVG 是可包含脚本和外部资源的输入格式，图片工具必须在写文件前完成安全和路径校验。
+- How：分别提交包含脚本、外部图片引用、malformed SVG、`.gif` 输出路径和工作区外路径的真实工具调用；malformed SVG 使用一份已存在目标文件。
+- Oracle：所有调用均返回明确错误；新目标文件不存在；已有目标文件保持调用前 bytes；不生成图片修改记录或 `file_artifact`。
+- Not：不把内部安全规则写入 Tool 提示词，也不穷举全部 SVG 标签。
+
+#### image-recognition 类别
 
 ##### `image-analyze-contract`
 

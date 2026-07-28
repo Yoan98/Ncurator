@@ -113,6 +113,7 @@ export type AssistantToolName =
   | 'web_crawl'
   | 'browser_use'
   | 'image_analyze'
+  | 'image_generate'
   | 'wait_time'
   | 'unnamed'
 
@@ -154,6 +155,7 @@ export type AssistantProcessSkillKey =
   | 'web-crawl'
   | 'browser'
   | 'image-recognition'
+  | 'image-generation'
   | 'wait'
   | 'generic'
 

@@ -18,6 +18,7 @@
 - `file-preview-actions` 当前按生产真实索引能力覆盖 `pdf/docx/md/txt/xlsx/xlsm/xltx/xltm`：连续打开的文件要分别保留为资源 Tab，并能切回旧 Tab。
 - docx apply case 需要真实 docx 输入、真实 AI 编辑、真实写回记录、真实预览和真实回退。
 - text-file apply case 需要真实 Markdown 或代码文件、真实 `text_file_edit`、真实结构化 diff、独立 `TextFileDiffViewer` 和按原始 bytes 回退。
+- image generation apply case 需要真实模型学习 `image-generation`、真实调用 `image_generate`、生成可解码图片、展示修改入口和图片预览，并完成新建图片回退。
 - `browser-use-task-panel` 需要真实 AI run 触发 `browser_use` 并驱动内置浏览器完成本地网页任务；同时验证多个浏览器 Tab 独立历史、共享持久站点数据、切换文件后网页状态不销毁，以及同 URL 标签不会让 Stagehand 串页，不能用 fake browser 替代。
 - `web_search` 与 `web_crawl` 需要分开覆盖：搜索 case 只验证候选网页返回；读取 case 必须验证 AI 继续读取网页正文后再回答。
 - Workbench 附件链路当前支持图片、`doc`、`docx`、`pptx`、`pdf`、`md`、`json`、`xlsx`、`xlsm`、`xltx`、`xltm`，统一保存到 `<workspace>/.ncurator/runtime/assets/<assetBucketId>/`；`assetBucketId` 为输入草稿 UUID，发送给 AI 时只传附件名称与路径，不再做发送前识图或文件解析。
@@ -82,6 +83,15 @@ tests/case/workbench/
 ## 5. 回归测试清单
 
 ### 5.1 `conversation`
+
+#### `supported-writeback-format-summary`
+
+- 测试类型：`e2e`
+- What：Workbench 右侧空面板明确展示当前支持直接写回的文件格式。
+- Why：用户需要区分可直接写回并回退的正式能力与仅可预览或自行尝试处理的格式。
+- How：打开 Workbench 并展开右侧空面板，读取可见的支持格式说明。
+- Oracle：说明包含 DOCX、PPTX、XLSX、PNG、JPEG、WebP 和 UTF-8 文本，不包含 GIF、SVG，对齐 `WB-CORE-003-AC1`、`WB-CORE-003-AC2`。
+- Not：不重复验证各格式的工具实现和回退算法，这些由对应 AI tool 与 Workbench apply case 覆盖。
 
 #### `session-initial-create-and-title`
 
@@ -324,6 +334,24 @@ tests/case/workbench/
 - Not：不验证网页索引入库，也不验证交互式浏览器操作；这些分别由 Settings 网页索引 case 与 `browser-use-task-panel` 覆盖。
 
 ### 5.3 `result`
+
+#### `image-generation-preview-and-revert`
+
+- 测试类型：`e2e / live`
+- What：真实 AI 根据用户请求生成 PNG 图片，用户可以从修改入口预览并回退删除该图片。
+- Why：工具级转码成功不能证明真实模型会学习图片生成技能，也不能证明最终图片能进入 Workbench 的预览和回退闭环。
+- How：通过真实 Workbench UI 请求 AI 在工作区生成指定文件名的简单 PNG；等待 run 完成后打开修改入口，检查图片预览，再执行统一回退确认。
+- Oracle：真实调用 `image_generate` 且输入只有 `outputPath/svg`，正式文件具有 PNG 签名，对齐 `WB-IMAGE-001-AC1`、`WB-IMAGE-001-AC2`；assistant 修改入口、右侧预览和新建文件回退删除对齐 `WB-APPLY-002-AC7`、`WB-APPLY-003-AC7`。
+- Not：不对图片审美打分，不固定 SVG 元素结构或模型调用轮数；自动创建/更新由 AI 测试计划的 `image-generate-format-create-update-contract` 覆盖 `WB-IMAGE-001-AC3`，失败无副作用由 `image-generate-safety-and-boundary-contract` 覆盖 `WB-IMAGE-001-AC4`。
+
+#### `image-generation-update-preview-and-revert`
+
+- 测试类型：`e2e / live`
+- What：真实 AI 更新已有 PNG 后，Workbench 直接预览最终图片并可回退恢复原始 bytes。
+- Why：新建图片回退删除不能证明已有图片的首次写入前快照和恢复链路正确。
+- How：先在临时工作区放置有效 PNG，再通过真实 Workbench UI 请求 AI 更新同一路径；检查更新结果和图片预览，执行统一回退后重新读取文件。
+- Oracle：真实调用 `image_generate`，目标图片产生修改 Artifact，最终工作区只交付目标图片；更新后正式文件变化且仍为 PNG；右侧直接预览且没有 Diff 切换；回退后 bytes 与原图完全一致，对齐 `WB-IMAGE-001-AC2`、`WB-APPLY-002-AC7`、`WB-APPLY-003-AC7`。
+- Not：不评价图片审美，不要求模型生成固定 SVG 结构。
 
 #### `search-results-open-rules`
 

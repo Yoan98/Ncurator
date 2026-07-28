@@ -31,7 +31,8 @@ const normalizeCapability = (value: unknown): AiFileChangeCapability => {
     normalized === 'text_file' ||
     normalized === 'terminal_exec' ||
     normalized === 'ppt' ||
-    normalized === 'excel'
+    normalized === 'excel' ||
+    normalized === 'image'
   ) {
     return normalized
   }
@@ -49,7 +50,8 @@ const normalizeSource = (value: unknown): AiFileChangeSource | undefined => {
     value === 'text_tool' ||
     value === 'docx_tool' ||
     value === 'ppt_tool' ||
-    value === 'excel_tool'
+    value === 'excel_tool' ||
+    value === 'image_tool'
   )
     return value
   return undefined
