@@ -259,7 +259,7 @@ export const TextFileDiffViewer = ({
             status: 'error',
             message: normalizeUserFacingError(
               error instanceof Error ? error.message : error,
-              '差异预览加载失败'
+              '审核内容加载失败'
             )
           })
         }

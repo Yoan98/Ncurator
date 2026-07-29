@@ -47,4 +47,5 @@ export type ExcelRuntimeState = {
   recordsByPath: Map<string, AiFileChangeRecord>
   baselineBytesByPath: Map<string, Buffer | undefined>
   currentBytesByPath: Map<string, Buffer>
+  sheetLineageByPath: Map<string, Map<string, string | null>>
 }

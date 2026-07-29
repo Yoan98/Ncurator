@@ -98,7 +98,10 @@ export class RunDocxEditTracker {
     if (!state) return []
 
     const changedDocuments = [...state.documentBySourcePath.values()].filter(
-      (document) => document.dirtyChangeCount > 0 && document.replaySession
+      (document) =>
+        document.dirtyChangeCount > 0 &&
+        document.replaySession &&
+        projectReviewView(document.replaySession).some((node) => node.reviewState !== 'normal')
     )
     if (changedDocuments.length === 0) {
       this.runEdits.delete(input.runId)
@@ -256,9 +259,18 @@ export class RunDocxEditTracker {
   }
 
   private countCommittedChanges(session: DocxReplaySession): number {
-    return [...session.revisionByDocId.values()]
-      .filter((revision) => revision.revisionRef !== 'v1' && (revision.ops?.length || 0) > 0)
-      .reduce((total, revision) => total + Math.max(1, revision.changedBlocks?.length || 0), 0)
+    const nodes = projectReviewView(session)
+    const sourceChanges = new Set<string>()
+    let generatedChanges = 0
+    nodes.forEach((node) => {
+      if (node.reviewState === 'normal') return
+      if (node.sourceOrigin === 'source') {
+        sourceChanges.add(node.sourceBlockId || node.blockId)
+      } else if (node.reviewState === 'inserted' || node.reviewState === 'replaced-new') {
+        generatedChanges += 1
+      }
+    })
+    return sourceChanges.size + generatedChanges
   }
 
   private countReviewChanges(session: DocxReplaySession): DocxChangeStats {

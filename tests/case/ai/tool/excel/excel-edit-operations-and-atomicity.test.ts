@@ -39,8 +39,19 @@ describe('ai tool excel edit backend', () => {
         }
 
         const operationsFile = await writeWorkbook('operations.xlsx', (workbook) => {
-          workbook.addWorksheet('Data')
-          workbook.addWorksheet('DeleteMe').getCell('A1').value = 'remove'
+          const deleteMe = workbook.addWorksheet('DeleteMe')
+          deleteMe.getCell('A1').value = 'remove'
+          deleteMe.getCell('B2').value = 'preserve deleted sheet body'
+          deleteMe.getRow(2).height = 32
+          deleteMe.getColumn('B').width = 26
+          deleteMe.mergeCells('B2:C2')
+          deleteMe.getCell('B2').fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FFFFCC00' }
+          }
+          const data = workbook.addWorksheet('Data')
+          data.getCell('D2').value = 'clear me'
         })
         await writeWorkbook('noop.xlsx', (workbook) => {
           workbook.addWorksheet('Data').getCell('A1').value = 'same'
@@ -77,7 +88,7 @@ describe('ai tool excel edit backend', () => {
                 verticalAlignment: 'middle'
               }
             },
-            { type: 'clear_range', sheetName: 'Data', range: 'C3' },
+            { type: 'clear_range', sheetName: 'Data', range: 'D2' },
             { type: 'add_sheet', sheetName: 'Summary' },
             { type: 'set_cell', sheetName: 'Summary', address: 'A1', value: 'Overview' }
           ]
@@ -96,7 +107,11 @@ describe('ai tool excel edit backend', () => {
         })
         const noOp = await harness.invoke<Record<string, unknown>>('excel_edit', {
           sourcePath: 'noop.xlsx',
-          actions: [{ type: 'set_cell', sheetName: 'Data', address: 'A1', value: 'same' }]
+          actions: [
+            { type: 'set_cell', sheetName: 'Data', address: 'A1', value: 'same' },
+            { type: 'delete_cell', sheetName: 'Data', address: 'C3' },
+            { type: 'clear_range', sheetName: 'Data', range: 'D4:E5' }
+          ]
         })
         const deleteLastSheet = await harness.invoke<Record<string, unknown>>('excel_edit', {
           sourcePath: 'noop.xlsx',
@@ -199,10 +214,46 @@ describe('ai tool excel edit backend', () => {
             columnWidth: operations.getWorksheet('Data')?.getColumn('B').width,
             merged: operations.getWorksheet('Overview')?.getCell('B1').isMerged,
             deletedSheetMissing: !operations.getWorksheet('DeleteMe'),
+            sourceHasDiffBorder: operations.worksheets.some((sheet) => {
+              let found = false
+              sheet.eachRow((row) =>
+                row.eachCell((cell) => {
+                  if (
+                    cell.border?.left?.color?.argb === 'FF22A06B' ||
+                    cell.border?.left?.color?.argb === 'FFD14343'
+                  )
+                    found = true
+                })
+              )
+              return found
+            }),
+            diffSheetNames: operationsDiff.worksheets.map((sheet) => sheet.name),
             addedSheetTabColor: operationsDiff.getWorksheet('Overview')?.properties.tabColor?.argb,
             deletedSheetTabColor:
               operationsDiff.getWorksheet('DeleteMe')?.properties.tabColor?.argb,
             deletedSheetValue: operationsDiff.getWorksheet('DeleteMe')?.getCell('A1').value,
+            deletedSheetBodyValue: operationsDiff.getWorksheet('DeleteMe')?.getCell('B2').value,
+            deletedSheetRowHeight: operationsDiff.getWorksheet('DeleteMe')?.getRow(2).height,
+            deletedSheetColumnWidth: operationsDiff.getWorksheet('DeleteMe')?.getColumn('B').width,
+            deletedSheetMerged: operationsDiff.getWorksheet('DeleteMe')?.getCell('C2').isMerged,
+            deletedSheetFill: operationsDiff.getWorksheet('DeleteMe')?.getCell('B2').fill?.fgColor
+              ?.argb,
+            deletedSheetBorderStyle: operationsDiff.getWorksheet('DeleteMe')?.getCell('B2').border
+              .left?.style,
+            dataRedAddresses: (() => {
+              const addresses: string[] = []
+              operationsDiff.getWorksheet('Data')?.eachRow((row) =>
+                row.eachCell({ includeEmpty: true }, (cell) => {
+                  if (cell.border?.left?.color?.argb === 'FFD14343') addresses.push(cell.address)
+                })
+              )
+              return addresses
+            })(),
+            clearRangeValue: operationsDiff.getWorksheet('Data')?.getCell('D3').value,
+            clearRangeBorderColor: operationsDiff.getWorksheet('Data')?.getCell('D3').border?.left
+              ?.color?.argb,
+            clearRangeBorderStyle: operationsDiff.getWorksheet('Data')?.getCell('D3').border?.left
+              ?.style,
             fullCalcOnLoad: operationsXml.includes('fullCalcOnLoad="1"')
           },
           baseline: {
@@ -216,7 +267,9 @@ describe('ai tool excel edit backend', () => {
               ),
             sourceA1: baselineSource.getWorksheet('Data')?.getCell('A1').value,
             diffA1: baselineDiff.getWorksheet('Data')?.getCell('A1').border.left?.color?.argb,
-            diffB1: baselineDiff.getWorksheet('Data')?.getCell('B1').border.left?.color?.argb
+            diffB1: baselineDiff.getWorksheet('Data')?.getCell('B1').border.left?.color?.argb,
+            diffA1Style: baselineDiff.getWorksheet('Data')?.getCell('A1').border.left?.style,
+            diffB1Style: baselineDiff.getWorksheet('Data')?.getCell('B1').border.left?.style
           }
         }
       },
@@ -232,13 +285,26 @@ describe('ai tool excel edit backend', () => {
             result.operations.columnWidth === 24 &&
             result.operations.merged === true &&
             result.operations.deletedSheetMissing === true &&
+            result.operations.sourceHasDiffBorder === false &&
+            JSON.stringify(result.operations.diffSheetNames) ===
+              JSON.stringify(['DeleteMe', 'Data', 'Overview']) &&
             result.operations.addedSheetTabColor === 'FF22A06B' &&
             result.operations.deletedSheetTabColor === 'FFD14343' &&
             result.operations.deletedSheetValue === 'remove' &&
+            result.operations.deletedSheetBodyValue === 'preserve deleted sheet body' &&
+            result.operations.deletedSheetRowHeight === 32 &&
+            result.operations.deletedSheetColumnWidth === 26 &&
+            result.operations.deletedSheetMerged === true &&
+            result.operations.deletedSheetFill === 'FFFFCC00' &&
+            result.operations.deletedSheetBorderStyle === 'medium' &&
+            result.operations.clearRangeValue === 'clear me' &&
+            result.operations.clearRangeBorderColor === 'FFD14343' &&
+            result.operations.clearRangeBorderStyle === 'medium' &&
             result.operations.fullCalcOnLoad === true,
           {
             name: 'excel-all-edit-operations',
-            message: 'Excel 编辑应保留样式并正确执行 Sheet、行、列、合并和公式操作。',
+            message:
+              'Excel 编辑应保留样式并正确执行 Sheet、行、列、合并和公式操作，Diff 应覆盖删除 Sheet 原位置、完整内容和清空范围红色标记。',
             data: result.operations
           }
         )
@@ -284,7 +350,9 @@ describe('ai tool excel edit backend', () => {
             result.baseline.originalSnapshot === true &&
             result.baseline.sourceA1 === 2 &&
             result.baseline.diffA1 === 'FF22A06B' &&
-            result.baseline.diffB1 === 'FF22A06B',
+            result.baseline.diffB1 === 'FF22A06B' &&
+            result.baseline.diffA1Style === 'medium' &&
+            result.baseline.diffB1Style === 'medium',
           {
             name: 'excel-cumulative-first-baseline',
             message: '同一 run 的多轮 Excel 编辑应共用一条记录并相对首个 baseline 生成累计 Diff。',

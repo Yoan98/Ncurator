@@ -28,7 +28,7 @@ describe('workbench run e2e', () => {
         domain: 'workbench',
         suite: 'run',
         groups: ['blocker'],
-        description: '文件修改落地后取消运行，仍保留取消文案、文件卡片和差异预览。',
+        description: '文件修改落地后取消运行，仍保留取消文案、文件卡片和审核模式。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
         execution: 'live',
@@ -113,7 +113,7 @@ describe('workbench run e2e', () => {
               result.diffVisible,
             {
               name: 'cancelled-run-keeps-applied-file-artifact',
-              message: '文件修改成功后取消运行，取消文案、修改文件入口和差异预览都应保留。',
+              message: '文件修改成功后取消运行，取消文案、修改文件入口和审核模式都应保留。',
               data: result
             }
           )

@@ -151,7 +151,7 @@ describe('workbench result e2e', () => {
           ).trim()
           const firstModeTagCount = await getWorkbenchLocator(
             page,
-            workbenchSelectors.documentPreviewModeTag
+            workbenchSelectors.documentModeTag
           ).count()
           await secondEntry.click()
           await waitForApplyPanelFile(page, SECOND_FILE)
@@ -206,7 +206,7 @@ describe('workbench result e2e', () => {
               !result.afterSecondEntryText.includes(FIRST_FILE) &&
               result.afterFirstEntryAgainText.includes(FIRST_FILE) &&
               !result.afterFirstEntryAgainText.includes(SECOND_FILE) &&
-              result.firstModeTagCount === 0 &&
+              result.firstModeTagCount === 1 &&
               result.applyPanelCount === 1 &&
               result.resourceTabCount === 2,
             {

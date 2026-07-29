@@ -43,7 +43,7 @@ const PptDiffViewer: React.FC<{ record: AiFileChangeRecord }> = ({ record }) => 
     setManifest(null)
     if (!record.previewPath) {
       setLoading(false)
-      setError('缺少 PPT 差异预览')
+      setError('缺少 PPT 审核内容')
       return () => undefined
     }
     void window.api
@@ -52,7 +52,7 @@ const PptDiffViewer: React.FC<{ record: AiFileChangeRecord }> = ({ record }) => 
       .then((next) => {
         if (cancelled) return
         if (next.version !== 3 || !Array.isArray(next.slides))
-          throw new Error('PPT 差异预览格式已过期，请重新生成修改记录')
+          throw new Error('PPT 审核内容格式已过期，请重新生成修改记录')
         setManifest(next)
         setChangedOnly(next.operation === 'updated')
       })

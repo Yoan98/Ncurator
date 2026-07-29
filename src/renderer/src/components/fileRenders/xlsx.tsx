@@ -185,6 +185,22 @@ const toWorkbookData = async (bytes: ArrayBuffer, name: string): Promise<IWorkbo
   }
 }
 
+const withReadOnlySheetUi = (options: unknown): unknown => ({
+  ...((options && typeof options === 'object' ? options : {}) as Record<string, unknown>),
+  disableEdit: true
+})
+
+const waitForRenderedCanvas = async (
+  container: HTMLDivElement,
+  isCancelled: () => boolean
+): Promise<boolean> => {
+  for (let attempt = 0; attempt < 300 && !isCancelled(); attempt += 1) {
+    if (container.querySelector('canvas')) return true
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+  }
+  return false
+}
+
 const CustomXlsxRenderer = ({ mainState }: DocRendererProps) => {
   const document = mainState.currentDocument as XlsxDocument | undefined
   const containerRef = useRef<HTMLDivElement>(null)
@@ -220,7 +236,6 @@ const CustomXlsxRenderer = ({ mainState }: DocRendererProps) => {
             locales: { [LocaleType.ZH_CN]: localeModule.default }
           })
           const sheetPreviewOptions: Record<string, unknown> = {
-            disableEdit: true,
             protectedRangeShadow: 'none',
             disableForceStringAlert: true
           }
@@ -240,7 +255,14 @@ const CustomXlsxRenderer = ({ mainState }: DocRendererProps) => {
           })
           for (const entry of preset.plugins) {
             const [plugin, options] = Array.isArray(entry) ? entry : [entry, undefined]
-            univer.registerPlugin(plugin, options)
+            const pluginName =
+              plugin && typeof plugin === 'function' && 'pluginName' in plugin
+                ? String((plugin as { pluginName?: unknown }).pluginName)
+                : ''
+            univer.registerPlugin(
+              plugin,
+              pluginName === 'SHEET_UI_PLUGIN' ? withReadOnlySheetUi(options) : options
+            )
           }
           const univerAPI = FUniver.newAPI(univer)
           univerAPI.createWorkbook(data)
@@ -249,7 +271,8 @@ const CustomXlsxRenderer = ({ mainState }: DocRendererProps) => {
             dispose()
             return
           }
-          await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+          const canvasReady = await waitForRenderedCanvas(container, () => cancelled)
+          if (!cancelled && !canvasReady) throw new Error('Excel 预览画布加载超时')
           if (!cancelled) setReady(true)
         }
       )

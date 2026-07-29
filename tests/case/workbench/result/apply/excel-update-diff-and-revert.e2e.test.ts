@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import ExcelJS from 'exceljs'
+import type { Page } from 'playwright'
 import { describe, it } from 'vitest'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
@@ -31,6 +32,34 @@ const createBaselineWorkbook = async (filePath: string): Promise<Buffer> => {
   const bytes = Buffer.from(await workbook.xlsx.writeBuffer())
   await fs.writeFile(filePath, bytes)
   return bytes
+}
+
+const verifyExcelViewerReadOnly = async (page: Page): Promise<boolean> => {
+  const viewer = getWorkbenchLocator(page, workbenchSelectors.excelViewer)
+  const marker = `EXCEL_DIFF_EDIT_BLOCKED_${Date.now()}`
+  const box = await viewer.boundingBox()
+  if (!box) return false
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2, { clickCount: 2 })
+  await page.keyboard.type(marker)
+  await page.keyboard.press('Enter')
+  const noEditableFocus = await page.evaluate((testId) => {
+    const root = document.querySelector(`[data-testid="${testId}"]`)
+    const active = document.activeElement
+    if (!root || !active || !root.contains(active)) return true
+    return !active.matches('input, textarea, [contenteditable="true"]')
+  }, workbenchSelectors.excelViewer)
+  const markerAbsent = await viewer
+    .evaluate((element, text) => !element.textContent?.includes(text), marker)
+    .catch(() => false)
+  await page.mouse.move(box.x + 95, box.y + 24)
+  await page.mouse.down()
+  await page.mouse.move(box.x + 135, box.y + 24, { steps: 5 })
+  await page.mouse.up()
+  const previewStillReady = await viewer.evaluate(
+    (element) => element.getAttribute('data-excel-ready') === 'true'
+  )
+  const canvasStillVisible = (await viewer.locator('canvas').count()) > 0
+  return noEditableFocus && markerAbsent && previewStillReady && canvasStillVisible
 }
 
 describe('workbench result e2e', () => {
@@ -88,25 +117,34 @@ describe('workbench result e2e', () => {
             )
           }
           await waitForExcelReady()
-          const previewModeToggle = getWorkbenchLocator(page, workbenchSelectors.previewModeToggle)
-          const initialToggleLabel = await previewModeToggle.getAttribute('aria-label')
+          const documentModeToggle = getWorkbenchLocator(
+            page,
+            workbenchSelectors.documentModeToggle
+          )
+          const documentModeTag = getWorkbenchLocator(page, workbenchSelectors.documentModeTag)
+          const initialToggleLabel = await documentModeToggle.getAttribute('aria-label')
+          const initialModeTag = (await documentModeTag.textContent())?.trim()
           const diffCanvasVisible = (await viewer.locator('canvas').count()) > 0
+          const diffReadOnly = await verifyExcelViewerReadOnly(page)
           const diffNotesSheetTab = viewer.getByText('Notes', { exact: true }).last()
           await diffNotesSheetTab.click()
           const diffNotesSheetVisible = await diffNotesSheetTab.isVisible().catch(() => false)
           await viewer.getByText('Data', { exact: true }).last().click()
           const diffUri = await viewer.getAttribute('data-excel-uri')
-          await previewModeToggle.click()
+          await documentModeToggle.click()
           await waitForExcelReady(diffUri)
-          const fileModeToggleLabel = await previewModeToggle.getAttribute('aria-label')
+          const fileModeToggleLabel = await documentModeToggle.getAttribute('aria-label')
+          const previewModeTag = (await documentModeTag.textContent())?.trim()
+          const fileReadOnly = await verifyExcelViewerReadOnly(page)
           const fileNotesSheetTab = viewer.getByText('Notes', { exact: true }).last()
           await fileNotesSheetTab.click()
           const fileModeNotesVisible = await fileNotesSheetTab.isVisible().catch(() => false)
           await viewer.getByText('Data', { exact: true }).last().click()
           const fileUri = await viewer.getAttribute('data-excel-uri')
-          await previewModeToggle.click()
+          await documentModeToggle.click()
           await waitForExcelReady(fileUri)
-          const restoredToggleLabel = await previewModeToggle.getAttribute('aria-label')
+          const restoredToggleLabel = await documentModeToggle.getAttribute('aria-label')
+          const restoredModeTag = (await documentModeTag.textContent())?.trim()
           const pptBeforeAfterVisible =
             (await getWorkbenchLocator(page, workbenchSelectors.pptDiffBefore).count()) > 0 ||
             (await getWorkbenchLocator(page, workbenchSelectors.pptDiffAfter).count()) > 0
@@ -140,9 +178,14 @@ describe('workbench result e2e', () => {
               return found
             }),
             diffCanvasVisible,
+            diffReadOnly,
             diffNotesSheetVisible,
             initialToggleLabel,
             fileModeToggleLabel,
+            initialModeTag,
+            previewModeTag,
+            restoredModeTag,
+            fileReadOnly,
             restoredToggleLabel,
             fileModeNotesVisible,
             pptBeforeAfterVisible,
@@ -160,10 +203,15 @@ describe('workbench result e2e', () => {
               result.addedValue === 'Checked' &&
               result.actualHasDiffBorder === false &&
               result.diffCanvasVisible &&
+              result.diffReadOnly &&
               result.diffNotesSheetVisible &&
-              result.initialToggleLabel === '查看文件' &&
-              result.fileModeToggleLabel === '查看变更' &&
-              result.restoredToggleLabel === '查看文件' &&
+              result.initialModeTag === '审核' &&
+              result.previewModeTag === '预览' &&
+              result.restoredModeTag === '审核' &&
+              result.initialToggleLabel === '切换到预览模式' &&
+              result.fileModeToggleLabel === '切换到审核模式' &&
+              result.fileReadOnly &&
+              result.restoredToggleLabel === '切换到预览模式' &&
               result.fileModeNotesVisible &&
               result.pptBeforeAfterVisible === false &&
               result.revertedToBaseline &&

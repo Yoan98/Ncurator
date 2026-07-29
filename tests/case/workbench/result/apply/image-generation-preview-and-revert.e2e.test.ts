@@ -73,9 +73,9 @@ describe('workbench result e2e', () => {
           const imagePreview = applyPanel.locator(`img[alt="${FILE_NAME}"]`)
           await imagePreview.waitFor({ state: 'visible', timeout: 30_000 })
           const imagePreviewVisible = await imagePreview.isVisible()
-          const previewModeToggleCount = await getWorkbenchLocator(
+          const documentModeToggleCount = await getWorkbenchLocator(
             page,
-            workbenchSelectors.previewModeToggle
+            workbenchSelectors.documentModeToggle
           ).count()
 
           await getWorkbenchLocator(page, workbenchSelectors.applyRevertButton).click()
@@ -94,7 +94,7 @@ describe('workbench result e2e', () => {
             imageArtifactCount: imageArtifacts.length,
             applyEntryText,
             imagePreviewVisible,
-            previewModeToggleCount,
+            documentModeToggleCount,
             existsAfterRevert
           }
         },
@@ -109,7 +109,7 @@ describe('workbench result e2e', () => {
               result.imageArtifactCount === 1 &&
               result.applyEntryText.includes(FILE_NAME) &&
               result.imagePreviewVisible &&
-              result.previewModeToggleCount === 0 &&
+              result.documentModeToggleCount === 0 &&
               result.existsAfterRevert === false,
             {
               name: 'workbench-image-generation-preview-revert-real',

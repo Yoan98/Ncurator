@@ -84,9 +84,9 @@ describe('workbench result e2e', () => {
           const applyPanel = getWorkbenchLocator(page, workbenchSelectors.applyPanel)
           const imagePreview = applyPanel.locator(`img[alt="${FILE_NAME}"]`)
           await imagePreview.waitFor({ state: 'visible', timeout: 30_000 })
-          const previewModeToggleCount = await getWorkbenchLocator(
+          const documentModeToggleCount = await getWorkbenchLocator(
             page,
-            workbenchSelectors.previewModeToggle
+            workbenchSelectors.documentModeToggle
           ).count()
 
           await getWorkbenchLocator(page, workbenchSelectors.applyRevertButton).click()
@@ -104,7 +104,7 @@ describe('workbench result e2e', () => {
             imageArtifactFileNames: imageArtifacts.map((event) => event.fileName),
             deliveredImagePaths,
             applyEntryText,
-            previewModeToggleCount
+            documentModeToggleCount
           }
         },
         assert: async (result, runtime) => {
@@ -118,7 +118,7 @@ describe('workbench result e2e', () => {
               result.deliveredImagePaths.length === 1 &&
               path.basename(result.deliveredImagePaths[0]) === FILE_NAME &&
               result.applyEntryText.includes(FILE_NAME) &&
-              result.previewModeToggleCount === 0,
+              result.documentModeToggleCount === 0,
             {
               name: 'workbench-image-generation-update-revert-real',
               message:

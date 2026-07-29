@@ -1471,6 +1471,7 @@ export const waitForWorkbenchApplyRecordStatus = async (
         const button = root.querySelector(`[data-testid="${revertButtonTestId}"]`)
         return button instanceof HTMLButtonElement && !button.disabled
       }
+      if (root.getAttribute('data-file-change-status') === status) return true
       return texts.some((text) => root.innerText.includes(text))
     },
     {

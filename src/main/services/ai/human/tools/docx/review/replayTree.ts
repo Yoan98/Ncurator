@@ -348,6 +348,20 @@ const buildCurrentNodeFromSnapshot = (
     createdRevisionRef: revisionRef
   })
 
+const resolveUniqueNodeId = (
+  session: DocxReplaySession,
+  candidate: string,
+  reservedNodeIds: ReadonlySet<string> = new Set()
+): string => {
+  let nodeId = candidate
+  let suffix = 2
+  while (session.nodeById.has(nodeId) || reservedNodeIds.has(nodeId)) {
+    nodeId = `${candidate}:${String(suffix)}`
+    suffix += 1
+  }
+  return nodeId
+}
+
 const replaceNodeWithReviewPair = (input: {
   session: DocxReplaySession
   targetNodeId: string
@@ -358,7 +372,6 @@ const replaceNodeWithReviewPair = (input: {
   if (index < 0) return
   input.session.nodeById.set(input.oldNode.nodeId, input.oldNode)
   input.session.nodeById.set(input.newNode.nodeId, input.newNode)
-  input.session.nodeById.set(input.targetNodeId, input.oldNode)
   input.session.bodyNodeIds.splice(index, 1, input.oldNode.nodeId, input.newNode.nodeId)
   reindexBodyNodes(input.session)
 }
@@ -368,13 +381,18 @@ const resolveSnapshotBlockForMutation = (input: {
   nextSnapshot: DocxReplaySnapshot
   createdBlocks: DocxCreatedBlock[]
   targetBlockId: string
+  targetNode?: DocxReplayNode
 }): DocxReplaySnapshotBlock | undefined => {
   const createdBodyBlocks = resolveBodyBlocksFromCreated(input.nextSnapshot, input.createdBlocks)
   if (createdBodyBlocks.length > 0) return createdBodyBlocks[0]
   const direct = input.nextSnapshot.blockById.get(input.targetBlockId)
   if (direct) return direct
   const tableBlockId = input.nextSnapshot.tableBlockIdByCellBlockId.get(input.targetBlockId)
-  return tableBlockId ? input.nextSnapshot.blockById.get(tableBlockId) : undefined
+  if (tableBlockId) return input.nextSnapshot.blockById.get(tableBlockId)
+  const positional = input.targetNode
+    ? input.nextSnapshot.blocks[input.targetNode.blockIndex]
+    : undefined
+  return positional?.kind === input.targetNode?.kind ? positional : undefined
 }
 
 export const createReplaySessionFromSnapshot = (input: {
@@ -533,7 +551,8 @@ export const applyRevisionToReplaySession = (input: {
       session,
       nextSnapshot,
       createdBlocks,
-      targetBlockId
+      targetBlockId,
+      targetNode
     })
     if (!snapshotBlock) {
       targetNode.reviewState = 'formatted'
@@ -563,7 +582,8 @@ export const applyRevisionToReplaySession = (input: {
     session,
     nextSnapshot,
     createdBlocks,
-    targetBlockId
+    targetBlockId,
+    targetNode
   })
 
   if (!snapshotBlock) {
@@ -581,6 +601,8 @@ export const applyRevisionToReplaySession = (input: {
     targetNode.sourceOrigin,
     targetNode.sourceBlockId
   )
+  oldNode.nodeId = resolveUniqueNodeId(session, oldNode.nodeId)
+  newNode.nodeId = resolveUniqueNodeId(session, newNode.nodeId, new Set([oldNode.nodeId]))
   oldNode.successorNodeId = newNode.nodeId
   newNode.predecessorNodeId = oldNode.nodeId
   newNode.replacedFromNodeId = targetNode.nodeId

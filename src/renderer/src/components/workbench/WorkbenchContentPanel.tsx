@@ -7,12 +7,12 @@ import {
   HiArrowsRightLeft,
   HiDocumentText,
   HiEye,
+  HiFolder,
   HiFolderOpen,
   HiGlobeAlt,
   HiMapPin,
   HiOutlineMagnifyingGlass,
   HiSparkles,
-  HiOutlineQueueList,
   HiChevronDown
 } from 'react-icons/hi2'
 import type {
@@ -63,7 +63,13 @@ type WorkbenchContentPanelProps = {
   browserTransitionImage?: { tabId: string; dataUrl: string } | null
 }
 
-const canTogglePreviewMode = (record: AiFileChangeRecord | null): boolean =>
+type DocumentDisplayMode = 'preview' | 'review'
+
+const getDefaultDocumentDisplayMode = (
+  status: AiFileChangeRecord['status'] | null | undefined
+): DocumentDisplayMode => (status === 'reverted' ? 'preview' : 'review')
+
+const canSwitchDocumentDisplayMode = (record: AiFileChangeRecord | null): boolean =>
   Boolean(
     record &&
     record.operation !== 'renamed' &&
@@ -83,7 +89,7 @@ const getPathFileName = (value?: string): string => {
 
 export const FileChangeNotice: React.FC<{ record: AiFileChangeRecord }> = ({ record }) => {
   let title = '文件已发生修改'
-  let description = '暂不支持在应用内查看差异，你可以使用系统应用打开文件查看。'
+  let description = '暂不支持在应用内审核该文件的修改，你可以使用系统应用打开文件查看。'
 
   if (record.status === 'reverted') {
     title = '本次修改已回退'
@@ -323,8 +329,8 @@ type WorkbenchDocumentPreviewPanelProps = {
   onRevert?: () => void
   explorerOpen?: boolean
   onToggleExplorer?: () => void
-  previewMode?: 'file' | 'diff'
-  onTogglePreviewMode?: () => void
+  displayMode?: DocumentDisplayMode
+  onSwitchDisplayMode?: () => void
 }
 
 export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPreviewPanelProps> = ({
@@ -352,8 +358,8 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
   onRevert,
   explorerOpen = false,
   onToggleExplorer,
-  previewMode = 'file',
-  onTogglePreviewMode
+  displayMode = 'preview',
+  onSwitchDisplayMode
 }) => {
   const [openWithApplications, setOpenWithApplications] = useState<OpenWithApplication[]>([])
   const [openWithLoading, setOpenWithLoading] = useState(false)
@@ -369,6 +375,7 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
       : '回退本次修改'
   const statusBadgeLabel =
     status === 'reverted' ? (operation === 'created' ? '已删除' : '已回退') : null
+  const showReviewActions = mode === 'edit' && (!onSwitchDisplayMode || displayMode === 'review')
   const defaultApplication = openWithApplications.find((application) => application.isDefault)
   const openWithLabel = defaultApplication?.name || '系统默认打开'
 
@@ -461,7 +468,11 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
   ]
 
   return (
-    <div className="flex h-full min-h-0 flex-col" data-testid={testId}>
+    <div
+      className="flex h-full min-h-0 flex-col"
+      data-testid={testId}
+      data-file-change-status={mode === 'edit' ? status : undefined}
+    >
       <div
         className="flex h-11 shrink-0 items-center gap-2 border-b border-[#EEEEEC] bg-white px-3"
         data-testid={workbenchSelectors.documentToolbar}
@@ -490,11 +501,36 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
             />
             {mode === 'edit' ? (
               <>
-                <ChangeCountBadges insertCount={insertCount} deleteCount={deleteCount} />
-                {statusBadgeLabel ? (
-                  <span className="inline-flex h-5 shrink-0 items-center rounded-[4px] bg-[#F4F4F2] px-1.5 text-[11px] font-medium text-[#787774]">
-                    {statusBadgeLabel}
+                {onSwitchDisplayMode ? (
+                  <span className="inline-flex shrink-0 items-center gap-0.5">
+                    <span
+                      className="inline-flex h-5 items-center rounded-[4px] bg-[#F1F1EF] px-1.5 text-[11px] font-medium text-[#57554F]"
+                      data-testid={workbenchSelectors.documentModeTag}
+                    >
+                      {displayMode === 'review' ? '审核' : '预览'}
+                    </span>
+                    <Tooltip title={displayMode === 'review' ? '切换到预览模式' : '切换到审核模式'}>
+                      <Button
+                        type="text"
+                        size="small"
+                        aria-label={displayMode === 'review' ? '切换到预览模式' : '切换到审核模式'}
+                        icon={<HiArrowsRightLeft className="h-3.5 w-3.5" />}
+                        className="!h-6 !w-6 !min-w-6 !rounded-[4px] !p-0 !text-[#91918E] hover:!bg-[#F4F4F2] hover:!text-[#37352F]"
+                        data-testid={workbenchSelectors.documentModeToggle}
+                        onClick={onSwitchDisplayMode}
+                      />
+                    </Tooltip>
                   </span>
+                ) : null}
+                {showReviewActions ? (
+                  <>
+                    <ChangeCountBadges insertCount={insertCount} deleteCount={deleteCount} />
+                    {statusBadgeLabel ? (
+                      <span className="inline-flex h-5 shrink-0 items-center rounded-[4px] bg-[#F4F4F2] px-1.5 text-[11px] font-medium text-[#787774]">
+                        {statusBadgeLabel}
+                      </span>
+                    ) : null}
+                  </>
                 ) : null}
               </>
             ) : null}
@@ -563,26 +599,7 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
               />
             </div>
           </Dropdown>
-          {mode === 'edit' && onTogglePreviewMode ? (
-            <Tooltip title={previewMode === 'diff' ? '查看文件' : '查看变更'}>
-              <Button
-                type="text"
-                size="small"
-                aria-label={previewMode === 'diff' ? '查看文件' : '查看变更'}
-                icon={
-                  previewMode === 'diff' ? (
-                    <HiDocumentText className="h-4 w-4" />
-                  ) : (
-                    <HiArrowsRightLeft className="h-4 w-4" />
-                  )
-                }
-                className="!text-[#787774] hover:!bg-[#F4F4F2] hover:!text-[#37352F]"
-                data-testid={workbenchSelectors.previewModeToggle}
-                onClick={onTogglePreviewMode}
-              />
-            </Tooltip>
-          ) : null}
-          {mode === 'edit' ? (
+          {showReviewActions ? (
             <Tooltip title={revertTitle}>
               <Button
                 type="text"
@@ -604,13 +621,20 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
                 size="small"
                 aria-label={explorerOpen ? '收起文件列表' : '展开文件列表'}
                 aria-pressed={explorerOpen}
-                icon={<HiOutlineQueueList className="h-4 w-4" />}
+                icon={
+                  explorerOpen ? (
+                    <HiFolderOpen className="h-4 w-4" />
+                  ) : (
+                    <HiFolder className="h-4 w-4" />
+                  )
+                }
                 className={`!h-8 !w-8 !rounded-[6px] !border !p-0 !text-[#787774] hover:!bg-[#F4F4F2] hover:!text-[#37352F] ${
                   explorerOpen
                     ? '!border-[#D9D8D4] !bg-[#F1F1EF] !text-[#37352F]'
                     : '!border-transparent !bg-transparent'
                 }`}
                 data-testid={workbenchSelectors.workspaceExplorerToggle}
+                data-icon="folder"
                 onClick={onToggleExplorer}
               />
             </Tooltip>
@@ -666,7 +690,7 @@ const arePreviewPanelPropsEqual = (
   previous.workspaces === next.workspaces &&
   previous.fallbackWorkspaceName === next.fallbackWorkspaceName &&
   previous.backTarget === next.backTarget &&
-  previous.previewMode === next.previewMode &&
+  previous.displayMode === next.displayMode &&
   previous.explorerOpen === next.explorerOpen
 
 const WorkbenchDocumentPreviewPanel = React.memo(
@@ -705,7 +729,8 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
   const [explorerMode, setExplorerMode] = useState<WorkspaceFileExplorerMode>(
     state.kind === 'apply_workspace' ? 'changed' : 'all'
   )
-  const [documentPreviewMode, setDocumentPreviewMode] = useState<'file' | 'diff'>('diff')
+  const [documentDisplayMode, setDocumentDisplayMode] = useState<DocumentDisplayMode>('review')
+  const floatingExplorer = state.kind === 'file_preview' || state.kind === 'apply_workspace'
   useEffect(() => {
     if (state.kind === 'file_launcher') {
       setExplorerOpen(true)
@@ -717,9 +742,17 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
     }
   }, [state.kind])
   useEffect(
-    () => setDocumentPreviewMode(activeApplyRecord?.status === 'reverted' ? 'file' : 'diff'),
+    () => setDocumentDisplayMode(getDefaultDocumentDisplayMode(activeApplyRecord?.status)),
     [activeApplyRecord?.id, activeApplyRecord?.status]
   )
+  useEffect(() => {
+    if (!explorerOpen || !floatingExplorer) return () => undefined
+    const closeOnEscape = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') setExplorerOpen(false)
+    }
+    window.addEventListener('keydown', closeOnEscape)
+    return () => window.removeEventListener('keydown', closeOnEscape)
+  }, [explorerOpen, floatingExplorer])
   const previewDocuments = useMemo<FileRenderDocument[]>(
     () =>
       state.kind === 'file_preview'
@@ -734,10 +767,10 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
     [state]
   )
   const hasDedicatedPreview = Boolean(activeApplyRecord?.previewPath)
-  const hasPreviewModeToggle = canTogglePreviewMode(activeApplyRecord)
+  const canSwitchDisplayMode = canSwitchDocumentDisplayMode(activeApplyRecord)
   const applyDocuments = useMemo<FileRenderDocument[]>(() => {
     if (!activeApplyRecord) return []
-    if (!canTogglePreviewMode(activeApplyRecord)) {
+    if (!canSwitchDocumentDisplayMode(activeApplyRecord)) {
       if (
         activeApplyRecord.status !== 'applied' ||
         (activeApplyRecord.operation !== 'created' && activeApplyRecord.capability !== 'image')
@@ -754,9 +787,9 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
     const shouldShowCurrentFile =
       activeApplyRecord.status === 'reverted' && activeApplyRecord.operation === 'updated'
     const filePath =
-      documentPreviewMode === 'file' && shouldShowCurrentFile
+      documentDisplayMode === 'preview' && shouldShowCurrentFile
         ? activeApplyRecord.path
-        : documentPreviewMode === 'diff' && activeApplyRecord.capability !== 'text_file'
+        : documentDisplayMode === 'review' && activeApplyRecord.capability !== 'text_file'
           ? activeApplyRecord.previewPath ||
             activeApplyRecord.afterSnapshotPath ||
             activeApplyRecord.path
@@ -767,34 +800,34 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
         fileName: activeApplyRecord.fileName
       }
     ]
-  }, [activeApplyRecord, documentPreviewMode])
+  }, [activeApplyRecord, documentDisplayMode])
   const applyContent = useMemo(
     () =>
       activeApplyRecord?.capability === 'ppt' &&
       activeApplyRecord.previewPath &&
-      documentPreviewMode === 'diff' ? (
+      documentDisplayMode === 'review' ? (
         <PptDiffViewer record={activeApplyRecord} />
       ) : activeApplyRecord?.capability === 'text_file' &&
         activeApplyRecord.previewPath &&
-        documentPreviewMode === 'diff' ? (
+        documentDisplayMode === 'review' ? (
         <TextFileDiffViewer
           previewPath={activeApplyRecord.previewPath}
           afterSnapshotPath={activeApplyRecord.afterSnapshotPath}
         />
       ) : undefined,
-    [activeApplyRecord, documentPreviewMode]
+    [activeApplyRecord, documentDisplayMode]
   )
   const applyEmptyText =
     activeApplyRecord?.operation === 'created'
       ? '本次新建了该文件，暂时无法在应用内预览。'
       : hasDedicatedPreview
-        ? '变更预览加载失败，可以使用系统应用打开文件查看。'
+        ? '审核内容加载失败，可以使用系统应用打开文件查看。'
         : '文件暂时无法在应用内预览。'
   const fallbackChangeContent =
     activeApplyRecord &&
     (activeApplyRecord.operation === 'renamed' ||
       activeApplyRecord.operation === 'deleted' ||
-      (!hasPreviewModeToggle &&
+      (!canSwitchDisplayMode &&
         activeApplyRecord.capability !== 'image' &&
         (activeApplyRecord.status === 'reverted' || activeApplyRecord.operation !== 'created'))) ? (
       <FileChangeNotice record={activeApplyRecord} />
@@ -805,6 +838,11 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
       : state.kind === 'apply_workspace'
         ? activeApplyRecord?.path
         : null
+  const openWorkspaceChangeFromExplorer = (change: AiFileChangeRecord): void => {
+    setDocumentDisplayMode(getDefaultDocumentDisplayMode(change.status))
+    onOpenWorkspaceChange(change.id)
+    setExplorerOpen(false)
+  }
   return (
     <aside
       className="flex h-full min-h-0 flex-col border-l border-[#EEEEEC] bg-white"
@@ -820,7 +858,7 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
         onCollapse={onCollapse}
       />
       <div className="min-h-0 flex-1 overflow-hidden">
-        <div className="flex h-full min-h-0">
+        <div className="relative flex h-full min-h-0">
           <div className="min-w-0 flex-1 overflow-hidden">
             {state.kind === 'empty' ? <WorkbenchEmptyPanel /> : null}
             {state.kind === 'file_launcher' ? (
@@ -880,12 +918,12 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
                   onOpenPath={onOpenPath}
                   onRevealPath={onRevealPath}
                   onRevert={onRevertApply}
-                  previewMode={documentPreviewMode}
-                  onTogglePreviewMode={
-                    canTogglePreviewMode(activeApplyRecord)
+                  displayMode={documentDisplayMode}
+                  onSwitchDisplayMode={
+                    canSwitchDocumentDisplayMode(activeApplyRecord)
                       ? () =>
-                          setDocumentPreviewMode((current) =>
-                            current === 'diff' ? 'file' : 'diff'
+                          setDocumentDisplayMode((current) =>
+                            current === 'review' ? 'preview' : 'review'
                           )
                       : undefined
                   }
@@ -914,10 +952,7 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
               />
             ) : null}
           </div>
-          {(state.kind === 'file_launcher' ||
-            state.kind === 'file_preview' ||
-            state.kind === 'apply_workspace') &&
-          explorerOpen ? (
+          {state.kind === 'file_launcher' && explorerOpen ? (
             <div className="w-[min(38%,300px)] min-w-[240px] shrink-0">
               <WorkspaceFileExplorer
                 workspace={selectedWorkspace}
@@ -926,10 +961,42 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
                 activeFilePath={activePath}
                 activeChangeId={activeApplyRecord?.id}
                 onModeChange={setExplorerMode}
-                onOpenFile={(entry) => onOpenWorkspaceFile(entry.absolute_path, entry.name)}
-                onOpenChange={(change) => onOpenWorkspaceChange(change.id)}
+                onOpenFile={(entry) => {
+                  onOpenWorkspaceFile(entry.absolute_path, entry.name)
+                  setExplorerOpen(false)
+                }}
+                onOpenChange={openWorkspaceChangeFromExplorer}
               />
             </div>
+          ) : null}
+          {floatingExplorer && explorerOpen ? (
+            <>
+              <button
+                type="button"
+                aria-label="关闭文件列表"
+                className="absolute inset-x-0 bottom-0 top-11 z-10 cursor-default bg-transparent"
+                data-testid={workbenchSelectors.workspaceExplorerBackdrop}
+                onClick={() => setExplorerOpen(false)}
+              />
+              <div
+                className="absolute bottom-0 right-0 top-11 z-20 w-[300px] max-w-[85%] overflow-hidden bg-white shadow-[-8px_8px_24px_rgba(0,0,0,0.12)]"
+                data-testid={workbenchSelectors.workspaceExplorerOverlay}
+              >
+                <WorkspaceFileExplorer
+                  workspace={selectedWorkspace}
+                  changeRecords={fileChangeRecords}
+                  mode={explorerMode}
+                  activeFilePath={activePath}
+                  activeChangeId={activeApplyRecord?.id}
+                  onModeChange={setExplorerMode}
+                  onOpenFile={(entry) => {
+                    onOpenWorkspaceFile(entry.absolute_path, entry.name)
+                    setExplorerOpen(false)
+                  }}
+                  onOpenChange={openWorkspaceChangeFromExplorer}
+                />
+              </div>
+            </>
           ) : null}
         </div>
       </div>

@@ -33,6 +33,7 @@ const setupPreviewWorkspace = async (
   const workspace = await createTemporaryWorkbenchWorkspace(CASE_ID)
   const workbook = new ExcelJS.Workbook()
   workbook.addWorksheet('Data').getCell('A1').value = 'excel normal preview fixture'
+  workbook.addWorksheet('Notes').getCell('A1').value = 'excel secondary sheet'
   const workbookBytes = Buffer.from(await workbook.xlsx.writeBuffer())
   await Promise.all(
     ['xlsx', 'xlsm', 'xltx', 'xltm'].map(async (extension) => {
@@ -115,6 +116,40 @@ const waitForExcelPreview = async (page: Page, fileName: string): Promise<boolea
   return (await viewer.locator('canvas').count()) > 0
 }
 
+const verifyExcelPreviewReadOnly = async (page: Page): Promise<boolean> => {
+  const viewer = getWorkbenchLocator(page, workbenchSelectors.excelViewer)
+  const marker = `EXCEL_EDIT_BLOCKED_${Date.now()}`
+  const box = await viewer.boundingBox()
+  if (!box) return false
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2, { clickCount: 2 })
+  await page.keyboard.type(marker)
+  await page.keyboard.press('Enter')
+  const noEditableFocus = await page.evaluate((testId) => {
+    const root = document.querySelector(`[data-testid="${testId}"]`)
+    const active = document.activeElement
+    if (!root || !active || !root.contains(active)) return true
+    return !active.matches('input, textarea, [contenteditable="true"]')
+  }, workbenchSelectors.excelViewer)
+  const markerAbsent = await viewer
+    .evaluate((element, text) => !element.textContent?.includes(text), marker)
+    .catch(() => false)
+  const notesTab = viewer.getByText('Notes', { exact: true }).last()
+  await notesTab.click()
+  const sheetSwitchWorks = await notesTab.isVisible().catch(() => false)
+  await viewer.getByText('Data', { exact: true }).last().click()
+  await page.mouse.move(box.x + 95, box.y + 24)
+  await page.mouse.down()
+  await page.mouse.move(box.x + 135, box.y + 24, { steps: 5 })
+  await page.mouse.up()
+  const previewStillReady = await viewer.evaluate(
+    (element) => element.getAttribute('data-excel-ready') === 'true'
+  )
+  const canvasStillVisible = (await viewer.locator('canvas').count()) > 0
+  return (
+    noEditableFocus && markerAbsent && sheetSwitchWorks && previewStillReady && canvasStillVisible
+  )
+}
+
 const verifyDocxPreviewStaysMountedWhileTyping = async (page: Page): Promise<boolean> => {
   await page.evaluate((testId) => {
     const target = window as unknown as {
@@ -193,7 +228,7 @@ describe('workbench result e2e', () => {
             .catch(() => false)
           const docxModeTagCount = await getWorkbenchLocator(
             page,
-            workbenchSelectors.documentPreviewModeTag
+            workbenchSelectors.documentModeTag
           ).count()
           const docxPreviewStableWhileTyping = await verifyDocxPreviewStaysMountedWhileTyping(page)
           const systemOpenVisible = await page
@@ -247,12 +282,18 @@ describe('workbench result e2e', () => {
             .isVisible()
             .catch(() => false)
           const excelPreviewResults: boolean[] = []
+          let excelPreviewReadOnly = false
           const workspaceFileFilter = page.getByPlaceholder('筛选文件…')
           for (const extension of ['xlsx', 'xlsm', 'xltx', 'xltm']) {
             const fileName = `normal-preview.${extension}`
+            if (!(await workspaceFileFilter.isVisible().catch(() => false))) {
+              await getWorkbenchLocator(page, workbenchSelectors.workspaceExplorerToggle).click()
+              await workspaceFileFilter.waitFor({ state: 'visible', timeout: 10_000 })
+            }
             await workspaceFileFilter.fill(fileName)
             await page.getByTitle(fileName, { exact: true }).click()
             excelPreviewResults.push(await waitForExcelPreview(page, fileName))
+            if (extension === 'xlsx') excelPreviewReadOnly = await verifyExcelPreviewReadOnly(page)
           }
           const resourceTabCount = await resourceTabs.count()
           const signals = await runtime.collectSignals()
@@ -269,6 +310,7 @@ describe('workbench result e2e', () => {
             markdownPreviewVisible,
             plainTextPreviewVisible,
             excelPreviewResults,
+            excelPreviewReadOnly,
             reopenedMarkdownVisible,
             fileLauncherVisible,
             workspaceFileFilterVisible,
@@ -296,6 +338,7 @@ describe('workbench result e2e', () => {
               result.plainTextPreviewVisible &&
               result.excelPreviewResults.length === 4 &&
               result.excelPreviewResults.every(Boolean) &&
+              result.excelPreviewReadOnly &&
               result.reopenedMarkdownVisible &&
               result.fileLauncherVisible &&
               result.workspaceFileFilterVisible &&

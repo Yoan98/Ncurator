@@ -74,6 +74,14 @@ describe('workbench result e2e', () => {
           const panelText = (
             (await getWorkbenchLocator(page, workbenchSelectors.applyPanel).textContent()) || ''
           ).trim()
+          const modeTagText = (
+            (await getWorkbenchLocator(page, workbenchSelectors.documentModeTag).textContent()) ||
+            ''
+          ).trim()
+          const revertButtonCount = await getWorkbenchLocator(
+            page,
+            workbenchSelectors.applyRevertButton
+          ).count()
 
           return {
             beforeText,
@@ -81,7 +89,9 @@ describe('workbench result e2e', () => {
             warningText,
             afterForceRevertText,
             antMessageText,
-            panelText
+            panelText,
+            modeTagText,
+            revertButtonCount
           }
         },
         assert: async (result, runtime) => {
@@ -90,7 +100,10 @@ describe('workbench result e2e', () => {
               result.afterApplyText.includes(MARKER) &&
               /又发生了变化|丢失之后的修改|恢复到这次修改前/u.test(result.warningText) &&
               result.afterForceRevertText === result.beforeText &&
-              result.panelText.includes('已回退'),
+              result.modeTagText === '预览' &&
+              result.revertButtonCount === 0 &&
+              !result.panelText.includes('已回退') &&
+              !result.panelText.includes('已删除'),
             {
               name: 'workbench-docx-force-revert-warning-real',
               message:

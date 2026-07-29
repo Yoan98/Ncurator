@@ -15,14 +15,15 @@
 - Workbench e2e 的 workspace 文件索引允许在测试环境通过 `NCURATOR_WORKSPACE_KNOWLEDGE_CACHE=1` 启用真实 split / vector 缓存；缓存只按文件内容 hash、扩展名、splitter 参数和 embedding model 复用计算结果，不替代 workspace 文件记录、document id、搜索结果或 UI 状态。Source E2E 直接共享内容缓存并按 case 隔离统计；只有正式包 E2E 先执行 warm-up，再把缓存种子复制给隔离 case。
 - Workbench 模型选择 helper 必须通过真实下拉搜索分别选择 `AI_LIVE_PRIMARY_MODEL_NAME` 和 `AI_LIVE_VISUAL_MODEL_NAME`。
 - Workbench UI E2E 回归测试需要真实索引完成信号和 UI 可见状态作为等待条件；IPC observer 和 job 查询只能作为辅助证据，不能用来造业务状态。
-- `file-preview-actions` 当前按生产真实索引能力覆盖 `pdf/docx/md/txt/xlsx/xlsm/xltx/xltm`：连续打开的文件要分别保留为资源 Tab，并能切回旧 Tab。
+- `file-preview-actions` 当前按生产真实索引能力覆盖 `pdf/docx/md/txt/xlsx/xlsm/xltx/xltm`：连续打开的文件要分别保留为资源 Tab，并能切回旧 Tab；Excel 普通预览还要覆盖只读、切 Sheet 和拖列宽后预览仍可用。
 - docx apply case 需要真实 docx 输入、真实 AI 编辑、真实写回记录、真实预览和真实回退。
 - text-file apply case 需要真实 Markdown 或代码文件、真实 `text_file_edit`、真实结构化 diff、独立 `TextFileDiffViewer` 和按原始 bytes 回退。
 - image generation apply case 需要真实模型学习 `image-generation`、真实调用 `image_generate`、生成可解码图片、展示修改入口和图片预览，并完成新建图片回退。
 - `browser-use-task-panel` 需要真实 AI run 触发 `browser_use` 并驱动内置浏览器完成本地网页任务；同时验证多个浏览器 Tab 独立历史、共享持久站点数据、切换文件后网页状态不销毁，以及同 URL 标签不会让 Stagehand 串页，不能用 fake browser 替代。
 - `web_search` 与 `web_crawl` 需要分开覆盖：搜索 case 只验证候选网页返回；读取 case 必须验证 AI 继续读取网页正文后再回答。
 - Workbench 附件链路当前支持图片、`doc`、`docx`、`pptx`、`pdf`、`md`、`json`、`xlsx`、`xlsm`、`xltx`、`xltm`，统一保存到 `<workspace>/.ncurator/runtime/assets/<assetBucketId>/`；`assetBucketId` 为输入草稿 UUID，发送给 AI 时只传附件名称与路径，不再做发送前识图或文件解析。
-- `WB-EXCEL-001-AC1`、`WB-EXCEL-001-AC2`、`WB-EXCEL-001-AC3`、`WB-EXCEL-001-AC4`、`WB-EXCEL-001-AC6`、`WB-EXCEL-001-AC7` 的工具输入输出、完整编辑操作、原子失败、冲突、只读格式、默认 Sheet 和 Sheet 严格校验由 AI tool 回归承担；Workbench 的 Excel apply case 负责真实模型选用工具、正式文件、修改入口、单网格 Diff 和回退闭环，不重复枚举底层操作。
+- `WB-EXCEL-001-AC1`、`WB-EXCEL-001-AC2`、`WB-EXCEL-001-AC3`、`WB-EXCEL-001-AC4`、`WB-EXCEL-001-AC6`、`WB-EXCEL-001-AC7` 的工具输入输出、完整编辑操作、原子失败、冲突、只读格式、默认 Sheet 和 Sheet 严格校验由 AI tool 回归承担；`WB-EXCEL-002` 的完整 XLSX diff 语义也由 AI tool 解析 diff 文件校验。Workbench 的 Excel apply case 负责真实模型选用工具、正式文件、修改入口、只读单网格预览和回退闭环，不重复枚举底层操作。
+- docx、ppt、pdf 也按同一分层：格式专用工具的读写、边界、格式保真和 diff artifact 语义放在 AI tool；Workbench e2e 只验证真实用户流程、预览入口、差异面板交互和回退。PDF 当前是只读工具，没有 Workbench apply diff 语义。
 
 ## 3. Suite 设计
 
@@ -291,10 +292,10 @@ tests/case/workbench/
 #### `cancelled-run-keeps-artifact`
 
 - 测试类型：`e2e`
-- What：文件修改已经落地后取消运行，终态仍保留普通取消文案、修改文件入口和差异预览。
+- What：文件修改已经落地后取消运行，终态仍保留普通取消文案、修改文件入口和审核模式。
 - Why：取消只应停止后续 AI 执行，不能隐藏已经发生的文件修改，否则用户无法检查和回退副作用。
 - How：真实 AI 使用 `text_file_edit` 修改 Markdown，等待 `file_artifact` 后点击停止，再打开本轮修改记录。
-- Oracle：assistant turn 显示不含 Markdown 标记的“已取消”；修改文件入口仍存在；文件内容已经更新；文本差异预览可打开。
+- Oracle：assistant turn 显示不含 Markdown 标记的“已取消”；修改文件入口仍存在；文件内容已经更新；文本审核模式可打开。
 - Not：不验证进程被强杀后的恢复，也不要求取消立即打断正在执行的 `wait_time`。
 
 #### `browser-use-task-panel`
@@ -374,10 +375,10 @@ tests/case/workbench/
 #### `file-preview-actions`
 
 - 测试类型：`e2e`
-- What：右侧普通文件预览态、“全部 / 本会话改动”文件模式、稳定选中态、多个文件 Tab、定位文件、系统打开方式下拉、PDF 命中定位，以及 Markdown / 纯文本预览。
+- What：右侧普通文件预览态、“全部 / 本会话改动”文件模式、稳定选中态、多个文件 Tab、定位文件、系统打开方式下拉、PDF 命中定位、Markdown / 纯文本预览，以及 Excel 只读预览。
 - Why：右侧面板是用户消费搜索 / 引用结果的主要区域，预览布局错误会直接阻断阅读。
-- How：从真实搜索结果连续打开真实 pdf、docx、md、txt 文件；检查预览内容和工具条；展开打开方式菜单，确认触发系统关联应用查询、存在默认应用标记和至少一个系统返回的 Handler；确认产生四个文件 Tab，再切回 Markdown Tab。
-- Oracle：加号文件标签、目录懒加载、PDF 命中定位、Markdown / UTF-8 文本预览、选中态、面包屑、系统打开方式与工具栏行为整体对齐 `WB-PANEL-003`；四个文件分别保留且旧 Tab 可恢复。
+- How：从真实搜索结果连续打开真实 pdf、docx、md、txt 文件；检查预览内容和工具条；展开打开方式菜单，确认触发系统关联应用查询、存在默认应用标记和至少一个系统返回的 Handler；确认产生四个文件 Tab，再切回 Markdown Tab；从工作区文件列表打开 `xlsx/xlsm/xltx/xltm`，对 `xlsx` 尝试双击输入、切 Sheet 和拖列宽。
+- Oracle：加号文件标签、目录懒加载、PDF 命中定位、Markdown / UTF-8 文本预览、Excel 只读且可浏览、选中态、面包屑、系统打开方式与工具栏行为整体对齐 `WB-PANEL-003`、`WB-EXCEL-002-AC1`；各文件分别保留且旧 Tab 可恢复。
 - Not：不在自动测试中真正启动外部应用或修改操作系统默认关联；不伪造 md/txt 搜索结果或右侧预览状态。
 
 #### `text-file-apply-preview-and-revert`
@@ -386,15 +387,15 @@ tests/case/workbench/
 - What：同一个 Markdown 文件在普通预览时正常渲染，在 AI 修改记录中使用独立文本 diff，并能恢复原始 bytes。
 - Why：普通预览和修改预览是两种不同语义；如果共用文件渲染器，用户看不到本次具体增加和删除内容。
 - How：先从真实搜索结果打开 Markdown 普通预览；再通过真实 AI 调用 `replaceAll` 和 `edit` 修改该文件；点击 assistant 修改入口检查 `TextFileDiffViewer`、工具栏没有独立定位按钮且系统应用下拉包含“打开所在文件夹”；最后执行回退。
-- Oracle：普通预览与修改 diff 共用一个文件 Tab；Run 终态后才展示修改入口；面包屑、工具栏、文件列表、历史批次、结构化 Diff、不可变展开和回退刷新整体对齐 `WB-PANEL-003`、`WB-APPLY-001`、`WB-APPLY-002`、`WB-APPLY-003`；确认回退后 bytes 与原始输入一致且有效改动标记消失。
+- Oracle：普通预览与审核模式共用一个文件 Tab；Run 终态后才展示修改入口；审核模式展示差异数量、修改状态和回退，预览模式全部隐藏；文件夹入口打开的文件列表从工具栏底部贴右悬浮，不改变预览宽度，可通过外部点击、Escape 或选择文件关闭；当前已经是最新记录且处于预览模式时，再次点击文件总分类仍会重置到最新审核模式；历史批次、结构化 Diff、不可变展开和回退刷新整体对齐 `WB-PANEL-003`、`WB-APPLY-001`、`WB-APPLY-002`、`WB-APPLY-003`；确认回退后 bytes 与原始输入一致且有效改动标记消失。
 - Not：不验证 unified diff 字符串；UI 只消费结构化 diff artifact。
 
 #### `ppt-create-diff-and-revert`
 
 - 测试类型：`e2e / live`
 - What：真实 AI 创建两页 PPT 后，用户可打开页面级左右 diff、切换缩略图模式并回撤文件。
-- Why：新建 PPT 必须同时验证文件交付、差异预览和回退闭环。
-- How：通过真实 Workbench UI 请求 AI 创建两页 PPT，打开修改记录并操作差异预览和回退。
+- Why：新建 PPT 必须同时验证文件交付、审核模式和回退闭环。
+- How：通过真实 Workbench UI 请求 AI 创建两页 PPT，打开修改记录并操作审核模式和回退。
 - Oracle：真实 PPT 创建、原子写入和 run 级修改记录对齐 `WB-PPT-001`、`WB-APPLY-002`；pptx 可解析，左右差异区和缩略图可见，全部页与变化页切换有效；回撤后新建文件被删除，对齐 `WB-APPLY-003`。
 - Not：不逐字断言最终回答，不对页面审美打分。
 
@@ -403,18 +404,18 @@ tests/case/workbench/
 - 测试类型：`e2e`
 - What：已有 PPT 更新后的左右差异、变化标记、缩略图筛选、缩放和拖动画布。
 - Why：创建态与更新态的差异语义不同，不能只用新建 PPT case 代替。
-- How：修改真实 PPT 的页面内容和顺序，打开修改记录并操作差异预览。
+- How：修改真实 PPT 的页面内容和顺序，打开修改记录并操作审核模式。
 - Oracle：修改前后画面、变化页标记、全部页切换、同步切页、缩放和拖动均可用，对齐 `WB-PPT-002`。
 - Not：不评价页面设计质量。
 
 #### `excel-update-diff-and-revert`
 
 - 测试类型：`e2e / live`
-- What：真实 AI 修改已有 Excel 后，用户在同一个网格中查看红绿单元格边框，并能回退到原始文件。
+- What：真实 AI 修改已有 Excel 后，用户在同一个只读网格中查看红绿单元格边框，并能回退到原始文件。
 - Why：Excel 修改预览不能依赖模型描述，也不适合 PPT 式左右画面对比，必须直接验证工作簿数据、公式和单元格级 diff。
-- How：通过真实 Workbench UI 用自然语言请求 AI 对已有 xlsx 分两轮修改；打开修改记录，显式切换“查看文件/查看变更”，在两种模式下切换工作表，检查累计红绿边框，再执行回退。
-- Oracle：正式 xlsx 的值和公式准确且没有 diff 边框；同一 run 两轮修改只形成相对首个 baseline 的累计记录；新增和修改单元格为绿色、删除单元格为红色，Sheet 增删在 Diff 中使用红绿标签；两种模式都通过 Univer 可切换工作表且不出现 PPT 前后预览；回退后 bytes 与修改前一致；真实调用包含 Excel 读工具和至少两次 `excel_edit`；对齐 `WB-EXCEL-001-AC5`、`WB-EXCEL-002-AC1`、`WB-EXCEL-002-AC2`、`WB-EXCEL-002-AC3`、`WB-EXCEL-002-AC4`、`WB-EXCEL-002-AC5`。
-- Not：不逐字断言最终回答，不把模型直接计算的文本结果当作数据正确性证据。
+- How：通过真实 Workbench UI 用自然语言请求 AI 对已有 xlsx 分两轮修改；打开修改记录，显式切换“预览/审核”，在两种模式下尝试编辑、切换工作表和拖列宽，再执行回退。
+- Oracle：正式 xlsx 的值和公式准确且没有 diff 边框；同一 run 两轮修改只形成相对首个 baseline 的累计记录；两种模式都通过 Univer 只读预览、可切换工作表且不出现 PPT 前后预览；回退后 bytes 与修改前一致；真实调用包含 Excel 读工具和至少两次 `excel_edit`；对齐 `WB-EXCEL-001-AC5`、`WB-EXCEL-002-AC1`、`WB-EXCEL-002-AC3`、`WB-EXCEL-002-AC4`。
+- Not：不逐字断言最终回答，不把模型直接计算的文本结果当作数据正确性证据；不在 Workbench e2e 枚举新增、修改、删除、清空、删除 Sheet 的全部 diff 细节，这些由 AI tool Excel case 直接解析 diff xlsx 覆盖。
 
 #### `excel-create-diff-and-revert`
 

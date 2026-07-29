@@ -64,7 +64,7 @@ describe('workbench result e2e', () => {
           })
           const normalPreviewModeTagCount = await getWorkbenchLocator(
             page,
-            workbenchSelectors.documentPreviewModeTag
+            workbenchSelectors.documentModeTag
           ).count()
 
           await switchWorkbenchMode(page, '大聪明')
@@ -97,17 +97,24 @@ describe('workbench result e2e', () => {
           await applyEntry.click()
           const diffViewer = getWorkbenchLocator(page, workbenchSelectors.textDiffViewer)
           await diffViewer.waitFor({ state: 'visible', timeout: 30_000 })
-          const previewModeToggle = getWorkbenchLocator(page, workbenchSelectors.previewModeToggle)
-          const initialToggleLabel = await previewModeToggle.getAttribute('aria-label')
-          await previewModeToggle.click()
+          const documentModeToggle = getWorkbenchLocator(
+            page,
+            workbenchSelectors.documentModeToggle
+          )
+          const documentModeTag = getWorkbenchLocator(page, workbenchSelectors.documentModeTag)
+          const initialToggleLabel = await documentModeToggle.getAttribute('aria-label')
+          const initialModeTag = (await documentModeTag.textContent())?.trim()
+          await documentModeToggle.click()
           await getWorkbenchLocator(page, workbenchSelectors.markdownViewer).waitFor({
             state: 'visible',
             timeout: 30_000
           })
-          const fileModeToggleLabel = await previewModeToggle.getAttribute('aria-label')
-          await previewModeToggle.click()
+          const fileModeToggleLabel = await documentModeToggle.getAttribute('aria-label')
+          const previewModeTag = (await documentModeTag.textContent())?.trim()
+          await documentModeToggle.click()
           await diffViewer.waitFor({ state: 'visible', timeout: 30_000 })
-          const restoredToggleLabel = await previewModeToggle.getAttribute('aria-label')
+          const restoredToggleLabel = await documentModeToggle.getAttribute('aria-label')
+          const restoredModeTag = (await documentModeTag.textContent())?.trim()
           const removedLines = diffViewer.locator('[data-diff-line-type="remove"]')
           const addedLines = diffViewer.locator('[data-diff-line-type="add"]')
           await removedLines.first().waitFor({ state: 'visible' })
@@ -115,7 +122,7 @@ describe('workbench result e2e', () => {
           const diffText = ((await diffViewer.textContent()) || '').trim()
           const editModeTagCount = await getWorkbenchLocator(
             page,
-            workbenchSelectors.documentPreviewModeTag
+            workbenchSelectors.documentModeTag
           ).count()
           const hasOldLineNumber = await removedLines
             .first()
@@ -161,7 +168,13 @@ describe('workbench result e2e', () => {
           )
           const workspaceExplorerToggleLabelBeforeOpen =
             await workspaceExplorerToggle.getAttribute('aria-label')
+          const workspaceExplorerToggleIcon =
+            await workspaceExplorerToggle.getAttribute('data-icon')
           const documentToolbar = getWorkbenchLocator(page, workbenchSelectors.documentToolbar)
+          const documentView = getWorkbenchLocator(page, workbenchSelectors.documentView)
+          const documentViewWidthBeforeExplorer = await documentView.evaluate(
+            (element) => element.getBoundingClientRect().width
+          )
           const standaloneRevealButtonCount = await documentToolbar
             .getByRole('button', { name: '定位文件' })
             .count()
@@ -191,7 +204,7 @@ describe('workbench result e2e', () => {
                 .map((item) => item.testId),
             [
               workbenchSelectors.openWithMenu,
-              workbenchSelectors.previewModeToggle,
+              workbenchSelectors.documentModeToggle,
               workbenchSelectors.applyRevertButton,
               workbenchSelectors.workspaceExplorerToggle
             ]
@@ -200,6 +213,47 @@ describe('workbench result e2e', () => {
             page,
             workbenchSelectors.workspaceExplorerModeSwitch
           ).count()
+          await workspaceExplorerToggle.click()
+          const workspaceExplorerOverlay = getWorkbenchLocator(
+            page,
+            workbenchSelectors.workspaceExplorerOverlay
+          )
+          await workspaceExplorerOverlay.waitFor({ state: 'visible' })
+          const [toolbarBox, explorerBox] = await Promise.all([
+            documentToolbar.boundingBox(),
+            workspaceExplorerOverlay.boundingBox()
+          ])
+          const documentViewWidthAfterExplorer = await documentView.evaluate(
+            (element) => element.getBoundingClientRect().width
+          )
+          const explorerFloatsBelowToolbar = Boolean(
+            toolbarBox &&
+            explorerBox &&
+            Math.abs(explorerBox.y - (toolbarBox.y + toolbarBox.height)) <= 1
+          )
+          const explorerDoesNotResizePreview =
+            Math.abs(documentViewWidthAfterExplorer - documentViewWidthBeforeExplorer) <= 1
+          const workspaceExplorerBackdrop = getWorkbenchLocator(
+            page,
+            workbenchSelectors.workspaceExplorerBackdrop
+          )
+          const explorerBackdropVisible = await workspaceExplorerBackdrop.isVisible()
+          await workspaceExplorerBackdrop.click({ position: { x: 5, y: 5 } })
+          await workspaceExplorerOverlay.waitFor({ state: 'hidden' })
+          const explorerClosedByOutsideClick =
+            (await getWorkbenchLocator(
+              page,
+              workbenchSelectors.workspaceExplorerOverlay
+            ).count()) === 0
+          await workspaceExplorerToggle.click()
+          await workspaceExplorerOverlay.waitFor({ state: 'visible' })
+          await page.keyboard.press('Escape')
+          await workspaceExplorerOverlay.waitFor({ state: 'hidden' })
+          const explorerClosedByEscape =
+            (await getWorkbenchLocator(
+              page,
+              workbenchSelectors.workspaceExplorerOverlay
+            ).count()) === 0
           await workspaceExplorerToggle.click()
           const workspaceExplorerModeSwitch = getWorkbenchLocator(
             page,
@@ -220,6 +274,20 @@ describe('workbench result e2e', () => {
           )
           await currentSessionChanges.first().waitFor({ state: 'visible', timeout: 10_000 })
           const currentSessionChangeMarkerCount = await currentSessionChanges.count()
+          await documentModeToggle.click()
+          await getWorkbenchLocator(page, workbenchSelectors.markdownViewer).waitFor({
+            state: 'visible',
+            timeout: 30_000
+          })
+          const modeBeforeLatestGroupClick = (await documentModeTag.textContent())?.trim()
+          await currentSessionChanges.first().click()
+          await diffViewer.waitFor({ state: 'visible', timeout: 30_000 })
+          const modeAfterLatestGroupClick = (await documentModeTag.textContent())?.trim()
+          const latestGroupClickClosedExplorer =
+            (await getWorkbenchLocator(
+              page,
+              workbenchSelectors.workspaceExplorerOverlay
+            ).count()) === 0
 
           await getWorkbenchLocator(page, workbenchSelectors.applyRevertButton).click()
           await page.getByText('回退这次修改？').waitFor({ state: 'visible' })
@@ -239,6 +307,9 @@ describe('workbench result e2e', () => {
             initialToggleLabel,
             fileModeToggleLabel,
             restoredToggleLabel,
+            initialModeTag,
+            previewModeTag,
+            restoredModeTag,
             afterApply,
             diffText,
             hasOldLineNumber,
@@ -251,15 +322,24 @@ describe('workbench result e2e', () => {
             omittedCountBeforeExpand,
             omittedCountAfterExpand,
             workspaceExplorerToggleLabelBeforeOpen,
+            workspaceExplorerToggleIcon,
             workspaceExplorerToggleLabelAfterOpen,
             workspaceExplorerTogglePressedAfterOpen,
             workspaceExplorerToggleClassAfterOpen,
+            explorerFloatsBelowToolbar,
+            explorerDoesNotResizePreview,
+            explorerBackdropVisible,
+            explorerClosedByOutsideClick,
+            explorerClosedByEscape,
             standaloneRevealButtonCount,
             revealMenuItemVisible,
             toolbarActionOrder,
             workspaceExplorerModeCountBeforeOpen,
             workspaceExplorerModeTextAfterOpen,
             currentSessionChangeMarkerCount,
+            modeBeforeLatestGroupClick,
+            modeAfterLatestGroupClick,
+            latestGroupClickClosedExplorer,
             restoredBytes: afterRevertBytes.equals(beforeBytes),
             fileStillVisible
           }
@@ -267,10 +347,13 @@ describe('workbench result e2e', () => {
         assert: async (result, runtime) => {
           await runtime.assertThat(
             result.normalPreviewModeTagCount === 0 &&
-              result.editModeTagCount === 0 &&
-              result.initialToggleLabel === '查看文件' &&
-              result.fileModeToggleLabel === '查看变更' &&
-              result.restoredToggleLabel === '查看文件' &&
+              result.editModeTagCount === 1 &&
+              result.initialModeTag === '审核' &&
+              result.previewModeTag === '预览' &&
+              result.restoredModeTag === '审核' &&
+              result.initialToggleLabel === '切换到预览模式' &&
+              result.fileModeToggleLabel === '切换到审核模式' &&
+              result.restoredToggleLabel === '切换到预览模式' &&
               result.afterApply.includes('DiffPreview') &&
               result.afterApply.includes('cedar-text-diff-884') &&
               result.diffText.includes('Preview') &&
@@ -284,21 +367,30 @@ describe('workbench result e2e', () => {
               result.omittedLineLabels.some((label) => label.includes('行未修改')) &&
               result.omittedCountAfterExpand < result.omittedCountBeforeExpand &&
               result.workspaceExplorerToggleLabelBeforeOpen === '展开文件列表' &&
+              result.workspaceExplorerToggleIcon === 'folder' &&
               result.workspaceExplorerToggleLabelAfterOpen === '收起文件列表' &&
               result.workspaceExplorerTogglePressedAfterOpen === 'true' &&
               result.workspaceExplorerToggleClassAfterOpen.includes('!bg-[#F1F1EF]') &&
+              result.explorerFloatsBelowToolbar &&
+              result.explorerDoesNotResizePreview &&
+              result.explorerBackdropVisible &&
+              result.explorerClosedByOutsideClick &&
+              result.explorerClosedByEscape &&
               result.standaloneRevealButtonCount === 0 &&
               result.revealMenuItemVisible &&
               JSON.stringify(result.toolbarActionOrder) ===
                 JSON.stringify([
+                  workbenchSelectors.documentModeToggle,
                   workbenchSelectors.openWithMenu,
-                  workbenchSelectors.previewModeToggle,
                   workbenchSelectors.applyRevertButton,
                   workbenchSelectors.workspaceExplorerToggle
                 ]) &&
               result.workspaceExplorerModeCountBeforeOpen === 0 &&
               result.workspaceExplorerModeTextAfterOpen.includes('本会话改动') &&
               result.currentSessionChangeMarkerCount >= 1 &&
+              result.modeBeforeLatestGroupClick === '预览' &&
+              result.modeAfterLatestGroupClick === '审核' &&
+              result.latestGroupClickClosedExplorer &&
               result.restoredBytes &&
               result.fileStillVisible,
             {

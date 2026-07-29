@@ -482,6 +482,24 @@ AI unit / 辅助测试目录：
 - Oracle：新增段落与新增 cell 都可继续被定位和修改，最新 working draft 只暴露最新有效内容。
 - Not：不验证 live 模型如何规划多轮编辑。
 
+##### `docx-diff-original-block-net-semantics`
+
+- 测试类型：`backend / tool`
+- What：同一个原始 block 在同一次 actions 和同一 run 多轮编辑后，Diff 只展示相对 run 初始版本的净变化。
+- Why：原始 block 的每次 replacement 都直接进入 review projection 会重复显示旧内容，并放大红绿数量。
+- How：真实覆盖 `A -> B -> C`、`A -> B -> A`、替换后删除，以及同一原始 block 在单次和多次 `docx_edit` 中连续变化；Run 收尾后解析真实 preview docx。
+- Oracle：`A -> B -> C` 只出现一次红色 A 和一次绿色 C且不出现 B；`A -> B -> A` 不包含红绿标记；替换后删除只出现一次红色 A；正式 docx 始终是最终净稿，record 数量与净变化一致。
+- Not：不验证 live 模型如何规划编辑步骤。
+
+##### `docx-diff-generated-block-net-semantics`
+
+- 测试类型：`backend / tool`
+- What：本轮新增 block 后继续修改或删除时，Diff 只保留最终仍存在的 generated block。
+- Why：新增内容的中间稿和已在本轮删除的临时结构不属于用户需要审核的最终差异。
+- How：真实覆盖新增后多次替换、新增后删除、新增表格后修改单元格，并解析真实 preview docx。
+- Oracle：新增后多次修改只显示最终绿色版本；新增后删除不显示任何净变化；表格不重复；正式文件和 record 统计与最终状态一致。
+- Not：不验证原始 block 的替换链；由 `docx-diff-original-block-net-semantics` 覆盖。
+
 ##### `docx-precondition-guard`
 
 - 测试类型：`backend`
@@ -594,8 +612,8 @@ AI unit / 辅助测试目录：
 - 测试类型：`backend / tool`
 - What：Excel 专用工具创建工作簿、批量写入数据和公式，并继续执行概览、搜索、范围读取和修改。
 - Why：Excel 的值与公式必须由程序真实读写，不能用模型推算或用伪造工具结果代替。
-- How：真实调用 `excel_edit` 创建 xlsx，再调用三个只读工具并继续修改同一路径；另对已有 xlsx 执行修改和删除单元格，最后直接解析正式文件与 diff 文件。
-- Oracle：新文件只包含显式新增的 Sheet，没有默认 `Sheet1`；正式文件包含准确值和公式且不带 diff 边框；diff 文件对新增、修改显示绿色边框，对删除显示红色边框；同一路径只保留一条修改记录，对齐 `WB-EXCEL-001`、`WB-EXCEL-002-AC2`、`WB-EXCEL-002-AC3`。
+- How：真实调用 `excel_edit` 创建 xlsx，再调用三个只读工具并继续修改同一路径；另对已有 xlsx 执行修改和删除单元格，最后直接解析正式文件与 diff xlsx 文件。
+- Oracle：新文件只包含显式新增的 Sheet，没有默认 `Sheet1`；正式文件包含准确值和公式且不带 diff 边框；diff 文件对新增、修改显示绿色中等粗细边框，对删除显示红色中等粗细边框并保留修改前值；同一路径只保留一条修改记录，对齐 `WB-EXCEL-001`、`WB-EXCEL-002-AC2`、`WB-EXCEL-002-AC3`。
 - Not：不验证 human 是否会选择 Excel 技能，也不评价表格视觉设计。
 
 ##### `excel-read-search-and-format-boundaries`
@@ -610,11 +628,29 @@ AI unit / 辅助测试目录：
 ##### `excel-edit-operations-and-atomicity`
 
 - 测试类型：`backend`
-- What：Excel 全部编辑 action、样式、工作簿结构、原子写入和累计修改记录。
-- Why：写入失败、外部并发修改或 record 持久化失败都不能留下半提交状态；同一次 run 的多轮编辑必须相对首个 baseline 生成累计 Diff。
-- How：真实覆盖单元格写入/清空、公式、样式、行列与 Sheet 操作、no-op、外部修改冲突、record 持久化失败回滚和同 run 两轮编辑。
-- Oracle：每个 action 落盘后可读；删除最后一个 Sheet 失败；新增 Sheet 在 Diff 中为绿色标签，删除 Sheet 恢复旧内容并显示红色标签；no-op 不产生记录；冲突与持久化失败恢复到安全状态；最终仅一条累计 record，Diff 相对首个 baseline。
+- What：Excel 全部编辑 action、样式、工作簿结构、原子写入和累计修改记录，并校验非行位移类 diff xlsx 语义。
+- Why：写入失败、外部并发修改或 record 持久化失败都不能留下半提交状态；同一次 run 的多轮编辑必须相对首个 baseline 生成累计 Diff；删除 Sheet、清空范围和边框粗细不能只靠 UI e2e 间接发现。
+- How：真实覆盖单元格写入/清空、公式、样式、行列与 Sheet 操作、no-op、外部修改冲突、record 持久化失败回滚和同 run 两轮编辑；直接解析 diff xlsx 检查 sheet 顺序、tab 色、单元格值、边框、行高、列宽和合并单元格。
+- Oracle：每个 action 落盘后可读；删除最后一个 Sheet 失败；新增 Sheet 在 Diff 中为绿色标签；删除 Sheet 按 baseline 原位置恢复完整旧内容并显示红色标签；清空范围保留修改前值并显示红色中等粗细边框；源 xlsx 不包含 diff 标记；no-op 不产生记录；冲突与持久化失败恢复到安全状态；最终仅一条累计 record，Diff 相对首个 baseline。
 - Not：不验证 Workbench 的 Diff 交互。
+
+##### `excel-diff-row-structure-semantics`
+
+- 测试类型：`backend / tool`
+- What：插入或删除首行、中间行、末行及连续多行时，Diff 按逻辑行对齐，只标记真实新增或删除的行。
+- Why：按单元格地址直接比较会把删除行后的整体上移误判为大量绿色修改，并在末尾生成错误红色重复行。
+- How：构造包含唯一行标签、公式、样式和行高的真实 xlsx，分别执行行插入、行删除、删除后继续修改，以及同一 run 多轮结构编辑；直接解析 preview xlsx 的行顺序、值和每个边框。
+- Oracle：删除中间行只保留该旧行并标红一次；所有仅因上移或下移而换地址的行无边框；末尾没有重复行；插入行只标绿最终新增行；红绿地址集合和 record 统计精确等于净变化；正式 xlsx 无 diff 标记。
+- Not：不验证 Workbench Canvas 如何绘制边框。
+
+##### `excel-diff-cumulative-net-semantics`
+
+- 测试类型：`backend / tool`
+- What：同一 run 的多轮单元格、行和 Sheet 编辑只展示相对首个 baseline 的最终净变化。
+- Why：中间操作、改回原值、先增后删和先删后恢复不应进入最终审核结果或放大变更计数。
+- How：真实覆盖 `A -> B -> C`、`A -> B -> A`、清空后恢复、插入后删除、新增 Sheet 后删除，并解析最终正式文件与 preview xlsx。
+- Oracle：中间版本不出现；恢复原值和先增后删不产生净标记；最终只保留一条 record；红绿数量、Sheet 顺序和实际最终状态完全一致。
+- Not：不验证 live 模型是否会产生这些操作序列。
 
 ##### `hand-excel-read-write-read`
 

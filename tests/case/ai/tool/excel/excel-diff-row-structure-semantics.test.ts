@@ -1,0 +1,329 @@
+import fs from 'node:fs/promises'
+import path from 'node:path'
+import ExcelJS from 'exceljs'
+import { describe, it } from 'vitest'
+import { createExcelToolHarness } from '../../../../harness/backend/aiToolHarness'
+import { runBackendCase } from '../../../../harness/backend/run-backend-case'
+
+const RED = 'FFD14343'
+const GREEN = 'FF22A06B'
+
+const collectBorderAddresses = (sheet: ExcelJS.Worksheet, color: string): string[] => {
+  const addresses: string[] = []
+  sheet.eachRow((row) =>
+    row.eachCell({ includeEmpty: true }, (cell) => {
+      if (cell.border?.left?.color?.argb === color) addresses.push(cell.address)
+    })
+  )
+  return addresses.sort()
+}
+
+describe('ai tool excel row diff backend', () => {
+  it('excel-diff-row-structure-semantics', async () => {
+    await runBackendCase({
+      caseId: 'excel-diff-row-structure-semantics',
+      harnessMode: 'tool-real',
+      domain: 'ai',
+      suite: 'tool',
+      groups: ['excel'],
+      description: '验证删除中间行后只标红被删除行，不把后续上移数据误判为绿色修改。',
+      fixtures: [],
+      runMode: 'single',
+      execute: async (runtime) => {
+        const sourcePath = path.join(runtime.workspaceRoot, 'row-delete.xlsx')
+        const workbook = new ExcelJS.Workbook()
+        const sheet = workbook.addWorksheet('阶段涨幅')
+        sheet.addRows([
+          ['时段', '基金涨幅', '同类平均', '沪深300', '跟踪标的'],
+          ['近1周', '7.31%', '2.80%', '2.26%', '6.96%'],
+          ['近1月', '10.20%', '1.20%', '0.50%', '9.80%'],
+          ['近3月', '26.89%', '-3.46%', '-1.44%', '26.98%'],
+          ['近6月', '27.50%', '-4.15%', '-0.07%', '26.96%'],
+          ['今年来', '49.53%', '2.41%', '1.57%', '50.11%'],
+          ['近1年', '99.31%', '17.53%', '13.94%', '102.17%'],
+          ['近2年', '187.37%', '57.75%', '37.93%', '196.70%'],
+          ['近3年', '145.29%', '31.98%', '20.50%', '147.70%']
+        ])
+        sheet.getRow(3).height = 28
+        const baselineBytes = Buffer.from(await workbook.xlsx.writeBuffer())
+        await Promise.all(
+          [
+            sourcePath,
+            path.join(runtime.workspaceRoot, 'row-insert.xlsx'),
+            path.join(runtime.workspaceRoot, 'row-delete-first.xlsx'),
+            path.join(runtime.workspaceRoot, 'row-delete-last.xlsx'),
+            path.join(runtime.workspaceRoot, 'row-delete-contiguous.xlsx')
+          ].map((filePath) => fs.writeFile(filePath, baselineBytes))
+        )
+
+        const harness = createExcelToolHarness(runtime)
+        const edited = await harness.invoke<{
+          record: { previewPath: string; insertCount: number; deleteCount: number }
+        }>('excel_edit', {
+          sourcePath: 'row-delete.xlsx',
+          actions: [{ type: 'delete_rows', sheetName: '阶段涨幅', startRow: 3, count: 1 }]
+        })
+        const inserted = await harness.invoke<{
+          record: { previewPath: string; insertCount: number; deleteCount: number }
+        }>('excel_edit', {
+          sourcePath: 'row-insert.xlsx',
+          actions: [
+            { type: 'insert_rows', sheetName: '阶段涨幅', startRow: 3, count: 1 },
+            {
+              type: 'set_range',
+              sheetName: '阶段涨幅',
+              startCell: 'A3',
+              values: [['新增行', '1%', '2%', '3%', '4%']]
+            }
+          ]
+        })
+        const deletedFirst = await harness.invoke<{
+          record: { previewPath: string; insertCount: number; deleteCount: number }
+        }>('excel_edit', {
+          sourcePath: 'row-delete-first.xlsx',
+          actions: [{ type: 'delete_rows', sheetName: '阶段涨幅', startRow: 2, count: 1 }]
+        })
+        const deletedLast = await harness.invoke<{
+          record: { previewPath: string; insertCount: number; deleteCount: number }
+        }>('excel_edit', {
+          sourcePath: 'row-delete-last.xlsx',
+          actions: [{ type: 'delete_rows', sheetName: '阶段涨幅', startRow: 9, count: 1 }]
+        })
+        const deletedContiguous = await harness.invoke<{
+          record: { previewPath: string; insertCount: number; deleteCount: number }
+        }>('excel_edit', {
+          sourcePath: 'row-delete-contiguous.xlsx',
+          actions: [{ type: 'delete_rows', sheetName: '阶段涨幅', startRow: 3, count: 2 }]
+        })
+
+        const actual = new ExcelJS.Workbook()
+        await actual.xlsx.load((await fs.readFile(sourcePath)) as never)
+        const diff = new ExcelJS.Workbook()
+        await diff.xlsx.load((await fs.readFile(edited.record.previewPath)) as never)
+        const actualSheet = actual.getWorksheet('阶段涨幅')!
+        const diffSheet = diff.getWorksheet('阶段涨幅')!
+        const inspectDiff = async (previewPath: string) => {
+          const inspected = new ExcelJS.Workbook()
+          await inspected.xlsx.load((await fs.readFile(previewPath)) as never)
+          const inspectedSheet = inspected.getWorksheet('阶段涨幅')!
+          return {
+            labels: inspectedSheet.getColumn(1).values.slice(2),
+            red: collectBorderAddresses(inspectedSheet, RED),
+            green: collectBorderAddresses(inspectedSheet, GREEN)
+          }
+        }
+        return {
+          actualLabels: actualSheet.getColumn(1).values.slice(2),
+          diffLabels: diffSheet.getColumn(1).values.slice(2),
+          redAddresses: collectBorderAddresses(diffSheet, RED),
+          greenAddresses: collectBorderAddresses(diffSheet, GREEN),
+          deletedRowHeight: diffSheet.getRow(3).height,
+          insertCount: edited.record.insertCount,
+          deleteCount: edited.record.deleteCount,
+          inserted: await inspectDiff(inserted.record.previewPath),
+          deletedFirst: await inspectDiff(deletedFirst.record.previewPath),
+          deletedLast: await inspectDiff(deletedLast.record.previewPath),
+          deletedContiguous: await inspectDiff(deletedContiguous.record.previewPath)
+        }
+      },
+      assert: async (result, runtime) => {
+        runtime.assertThat(
+          JSON.stringify(result.actualLabels) ===
+            JSON.stringify(['近1周', '近3月', '近6月', '今年来', '近1年', '近2年', '近3年']) &&
+            JSON.stringify(result.diffLabels) ===
+              JSON.stringify([
+                '近1周',
+                '近1月',
+                '近3月',
+                '近6月',
+                '今年来',
+                '近1年',
+                '近2年',
+                '近3年'
+              ]) &&
+            JSON.stringify(result.redAddresses) ===
+              JSON.stringify(['A3', 'B3', 'C3', 'D3', 'E3']) &&
+            result.greenAddresses.length === 0 &&
+            result.deletedRowHeight === 28 &&
+            result.insertCount === 0 &&
+            result.deleteCount === 5 &&
+            JSON.stringify(result.inserted.green) ===
+              JSON.stringify(['A3', 'B3', 'C3', 'D3', 'E3']) &&
+            result.inserted.red.length === 0 &&
+            result.inserted.labels[1] === '新增行' &&
+            JSON.stringify(result.deletedFirst.red) ===
+              JSON.stringify(['A2', 'B2', 'C2', 'D2', 'E2']) &&
+            result.deletedFirst.green.length === 0 &&
+            JSON.stringify(result.deletedLast.red) ===
+              JSON.stringify(['A9', 'B9', 'C9', 'D9', 'E9']) &&
+            result.deletedLast.green.length === 0 &&
+            JSON.stringify(result.deletedContiguous.red) ===
+              JSON.stringify(['A3', 'A4', 'B3', 'B4', 'C3', 'C4', 'D3', 'D4', 'E3', 'E4']) &&
+            result.deletedContiguous.green.length === 0,
+          {
+            name: 'excel-row-delete-produces-one-red-tombstone-without-shift-noise',
+            message: '删除中间行时只应标红被删除行，后续上移行不得产生绿色标记或底部重复。',
+            data: result
+          }
+        )
+      }
+    })
+  })
+
+  it('excel-diff-cumulative-net-semantics', async () => {
+    await runBackendCase({
+      caseId: 'excel-diff-cumulative-net-semantics',
+      harnessMode: 'tool-real',
+      domain: 'ai',
+      suite: 'tool',
+      groups: ['excel'],
+      description: '验证同一 run 中改回原值、插入后删除和新增 Sheet 后删除不会留下净 Diff。',
+      fixtures: [],
+      runMode: 'single',
+      execute: async (runtime) => {
+        const writeBaseline = async (fileName: string): Promise<void> => {
+          const workbook = new ExcelJS.Workbook()
+          const sheet = workbook.addWorksheet('Data')
+          sheet.addRows([
+            ['Label', 'Value'],
+            ['Keep', 'A']
+          ])
+          await fs.writeFile(
+            path.join(runtime.workspaceRoot, fileName),
+            Buffer.from(await workbook.xlsx.writeBuffer())
+          )
+        }
+        await Promise.all(
+          [
+            'cell-restored.xlsx',
+            'row-restored.xlsx',
+            'sheet-restored.xlsx',
+            'sheet-renamed.xlsx'
+          ].map(writeBaseline)
+        )
+
+        const harness = createExcelToolHarness(runtime)
+        await harness.invoke('excel_edit', {
+          sourcePath: 'cell-restored.xlsx',
+          actions: [{ type: 'set_cell', sheetName: 'Data', address: 'B2', value: 'B' }]
+        })
+        const cellRestored = await harness.invoke<{
+          record: {
+            previewPath: string
+            changeCount: number
+            insertCount: number
+            deleteCount: number
+          }
+        }>('excel_edit', {
+          sourcePath: 'cell-restored.xlsx',
+          actions: [{ type: 'set_cell', sheetName: 'Data', address: 'B2', value: 'A' }]
+        })
+
+        await harness.invoke('excel_edit', {
+          sourcePath: 'row-restored.xlsx',
+          actions: [
+            { type: 'insert_rows', sheetName: 'Data', startRow: 2, count: 1 },
+            { type: 'set_cell', sheetName: 'Data', address: 'A2', value: 'Temporary' }
+          ]
+        })
+        const rowRestored = await harness.invoke<{
+          record: {
+            previewPath: string
+            changeCount: number
+            insertCount: number
+            deleteCount: number
+          }
+        }>('excel_edit', {
+          sourcePath: 'row-restored.xlsx',
+          actions: [{ type: 'delete_rows', sheetName: 'Data', startRow: 2, count: 1 }]
+        })
+
+        await harness.invoke('excel_edit', {
+          sourcePath: 'sheet-restored.xlsx',
+          actions: [
+            { type: 'add_sheet', sheetName: 'Temporary' },
+            { type: 'set_cell', sheetName: 'Temporary', address: 'A1', value: 'Temporary' }
+          ]
+        })
+        const sheetRestored = await harness.invoke<{
+          record: {
+            previewPath: string
+            changeCount: number
+            insertCount: number
+            deleteCount: number
+          }
+        }>('excel_edit', {
+          sourcePath: 'sheet-restored.xlsx',
+          actions: [{ type: 'delete_sheet', sheetName: 'Temporary' }]
+        })
+
+        await harness.invoke('excel_edit', {
+          sourcePath: 'sheet-renamed.xlsx',
+          actions: [{ type: 'rename_sheet', sheetName: 'Data', newName: 'Intermediate' }]
+        })
+        const sheetRenamed = await harness.invoke<{
+          record: {
+            previewPath: string
+            changeCount: number
+            insertCount: number
+            deleteCount: number
+          }
+        }>('excel_edit', {
+          sourcePath: 'sheet-renamed.xlsx',
+          actions: [{ type: 'rename_sheet', sheetName: 'Intermediate', newName: 'Final' }]
+        })
+
+        const inspect = async (record: {
+          previewPath: string
+          changeCount: number
+          insertCount: number
+          deleteCount: number
+        }) => {
+          const workbook = new ExcelJS.Workbook()
+          await workbook.xlsx.load((await fs.readFile(record.previewPath)) as never)
+          return {
+            sheetNames: workbook.worksheets.map((sheet) => sheet.name),
+            tabColors: workbook.worksheets.map((sheet) => sheet.properties.tabColor?.argb || null),
+            red: workbook.worksheets.flatMap((sheet) => collectBorderAddresses(sheet, RED)),
+            green: workbook.worksheets.flatMap((sheet) => collectBorderAddresses(sheet, GREEN)),
+            changeCount: record.changeCount,
+            insertCount: record.insertCount,
+            deleteCount: record.deleteCount
+          }
+        }
+
+        return {
+          cell: await inspect(cellRestored.record),
+          row: await inspect(rowRestored.record),
+          sheet: await inspect(sheetRestored.record),
+          renamed: await inspect(sheetRenamed.record)
+        }
+      },
+      assert: async (result, runtime) => {
+        runtime.assertThat(
+          [result.cell, result.row, result.sheet].every(
+            (item) =>
+              JSON.stringify(item.sheetNames) === JSON.stringify(['Data']) &&
+              item.red.length === 0 &&
+              item.green.length === 0 &&
+              item.changeCount === 0 &&
+              item.insertCount === 0 &&
+              item.deleteCount === 0
+          ) &&
+            JSON.stringify(result.renamed.sheetNames) === JSON.stringify(['Final']) &&
+            result.renamed.red.length === 0 &&
+            result.renamed.green.length === 0 &&
+            JSON.stringify(result.renamed.tabColors) === JSON.stringify([GREEN]) &&
+            result.renamed.changeCount === 1 &&
+            result.renamed.insertCount === 1 &&
+            result.renamed.deleteCount === 0,
+          {
+            name: 'excel-cumulative-diff-removes-zero-net-change-noise',
+            message: '改回 baseline、插入后删除和新增 Sheet 后删除都不得留下红绿标记或变更计数。',
+            data: result
+          }
+        )
+      }
+    })
+  })
+})

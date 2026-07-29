@@ -81,16 +81,26 @@ describe('workbench result e2e', () => {
           const applyPanelText = (
             (await getWorkbenchLocator(page, workbenchSelectors.applyPanel).textContent()) || ''
           ).trim()
-          const previewModeToggle = getWorkbenchLocator(page, workbenchSelectors.previewModeToggle)
-          const initialToggleLabel = await previewModeToggle.getAttribute('aria-label')
-          await previewModeToggle.click()
-          const fileModeToggleLabel = await previewModeToggle.getAttribute('aria-label')
-          await previewModeToggle.click()
-          const restoredToggleLabel = await previewModeToggle.getAttribute('aria-label')
-          const modeTagCount = await getWorkbenchLocator(
+          const documentModeToggle = getWorkbenchLocator(
             page,
-            workbenchSelectors.documentPreviewModeTag
+            workbenchSelectors.documentModeToggle
+          )
+          const documentModeTag = getWorkbenchLocator(page, workbenchSelectors.documentModeTag)
+          const initialToggleLabel = await documentModeToggle.getAttribute('aria-label')
+          const initialModeTag = (await documentModeTag.textContent())?.trim()
+          await documentModeToggle.click()
+          const fileModeToggleLabel = await documentModeToggle.getAttribute('aria-label')
+          const previewModeTag = (await documentModeTag.textContent())?.trim()
+          const previewToolbarText = (
+            await getWorkbenchLocator(page, workbenchSelectors.documentToolbar).textContent()
+          )?.trim()
+          const previewRevertButtonCount = await getWorkbenchLocator(
+            page,
+            workbenchSelectors.applyRevertButton
           ).count()
+          await documentModeToggle.click()
+          const restoredToggleLabel = await documentModeToggle.getAttribute('aria-label')
+          const restoredModeTag = (await documentModeTag.textContent())?.trim()
           const openSystemButtonVisible = await getWorkbenchLocator(
             page,
             workbenchSelectors.applyOpenSystemButton
@@ -142,6 +152,13 @@ describe('workbench result e2e', () => {
           await page.getByText('回退这次修改？').waitFor({ state: 'visible' })
           await getWorkbenchLocator(page, workbenchSelectors.applyRevertConfirmButton).click()
           await waitForWorkbenchApplyRecordStatus(page, 'reverted')
+          await documentModeTag.getByText('预览', { exact: true }).waitFor({ state: 'visible' })
+          const revertedModeTag = (await documentModeTag.textContent())?.trim()
+          const revertedToggleLabel = await documentModeToggle.getAttribute('aria-label')
+          const revertedRevertButtonCount = await getWorkbenchLocator(
+            page,
+            workbenchSelectors.applyRevertButton
+          ).count()
           const afterRevertText = await readDocxPlainText(targetPath)
           const revertedPanelText = (
             (await getWorkbenchLocator(page, workbenchSelectors.applyPanel).textContent()) || ''
@@ -158,7 +175,14 @@ describe('workbench result e2e', () => {
             initialToggleLabel,
             fileModeToggleLabel,
             restoredToggleLabel,
-            modeTagCount,
+            initialModeTag,
+            previewModeTag,
+            previewToolbarText,
+            previewRevertButtonCount,
+            restoredModeTag,
+            revertedModeTag,
+            revertedToggleLabel,
+            revertedRevertButtonCount,
             openSystemButtonVisible,
             standaloneRevealButtonCount,
             revealMenuItemVisible,
@@ -181,21 +205,31 @@ describe('workbench result e2e', () => {
                 1 &&
               !result.applyEntryText.includes('已修改') &&
               result.artifactChipCount === 0 &&
-              result.modeTagCount === 0 &&
+              result.initialModeTag === '审核' &&
+              result.previewModeTag === '预览' &&
+              !result.previewToolbarText?.includes('+') &&
+              !result.previewToolbarText?.includes('已回退') &&
+              !result.previewToolbarText?.includes('已删除') &&
+              result.previewRevertButtonCount === 0 &&
+              result.restoredModeTag === '审核' &&
+              result.revertedModeTag === '预览' &&
+              result.revertedToggleLabel === '切换到审核模式' &&
+              result.revertedRevertButtonCount === 0 &&
               !result.applyPanelText.includes('已修改') &&
               !result.applyPanelText.includes('其他应用') &&
               !result.applyPanelText.includes('处修改') &&
               !result.applyPanelText.includes('最新改动') &&
               !result.applyPanelText.includes('修改前') &&
               !result.applyPanelText.includes('修改后') &&
-              result.initialToggleLabel === '查看文件' &&
-              result.fileModeToggleLabel === '查看变更' &&
-              result.restoredToggleLabel === '查看文件' &&
+              result.initialToggleLabel === '切换到预览模式' &&
+              result.fileModeToggleLabel === '切换到审核模式' &&
+              result.restoredToggleLabel === '切换到预览模式' &&
               result.openSystemButtonVisible &&
               result.standaloneRevealButtonCount === 0 &&
               result.revealMenuItemVisible &&
               result.revertButtonVisible &&
-              result.revertedPanelText.includes('已回退') &&
+              !result.revertedPanelText.includes('已回退') &&
+              !result.revertedPanelText.includes('已删除') &&
               result.applyPanelText.includes(MARKER) &&
               result.documentViewVisible &&
               result.documentViewNoHorizontalOverflow &&

@@ -92,7 +92,10 @@ describe('ai tool excel backend', () => {
           )?.formula,
           actualHasDiffBorder: Boolean(actual.getWorksheet('Data')?.getCell('B2').border?.left),
           modifiedBorder: diff.getWorksheet('Data')?.getCell('B2').border.left?.color?.argb,
+          modifiedBorderStyle: diff.getWorksheet('Data')?.getCell('B2').border.left?.style,
+          deletedValueInDiff: diff.getWorksheet('Data')?.getCell('A3').value,
           deletedBorder: diff.getWorksheet('Data')?.getCell('A3').border.left?.color?.argb,
+          deletedBorderStyle: diff.getWorksheet('Data')?.getCell('A3').border.left?.style,
           createdSheetNames: createdWorkbook.worksheets.map((sheet) => sheet.name),
           createdRecordId: (created.record as { id?: string } | undefined)?.id,
           createdUpdatedRecordId: (createdUpdated.record as { id?: string } | undefined)?.id
@@ -104,7 +107,10 @@ describe('ai tool excel backend', () => {
             result.actualFormula === 'B2*2' &&
             result.actualHasDiffBorder === false &&
             result.modifiedBorder === 'FF22A06B' &&
+            result.modifiedBorderStyle === 'medium' &&
+            result.deletedValueInDiff === 'B' &&
             result.deletedBorder === 'FFD14343' &&
+            result.deletedBorderStyle === 'medium' &&
             JSON.stringify(result.createdSheetNames) === JSON.stringify(['Data']) &&
             result.createdRecordId !== undefined &&
             result.createdRecordId === result.createdUpdatedRecordId &&
