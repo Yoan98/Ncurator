@@ -36,6 +36,9 @@ describe('workbench result e2e', () => {
         description: '验证普通文件正常预览、文本修改 diff 展示和按原始 bytes 回退。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
+        extraEnv: {
+          NCURATOR_E2E_OPEN_WITH_NOOP: '1'
+        },
         execution: 'live',
         windowMode: 'visible',
         runMode: 'single',
@@ -66,6 +69,30 @@ describe('workbench result e2e', () => {
             page,
             workbenchSelectors.documentModeTag
           ).count()
+          await page.evaluate((noticeText) => {
+            const target = window as unknown as {
+              __NCURATOR_TEST_EXTERNAL_NOTICE_COUNT__?: number
+              __NCURATOR_TEST_EXTERNAL_NOTICE_OBSERVER__?: MutationObserver
+            }
+            target.__NCURATOR_TEST_EXTERNAL_NOTICE_COUNT__ = 0
+            target.__NCURATOR_TEST_EXTERNAL_NOTICE_OBSERVER__?.disconnect()
+            target.__NCURATOR_TEST_EXTERNAL_NOTICE_OBSERVER__ = new MutationObserver(
+              (mutations) => {
+                if (
+                  mutations.some((mutation) =>
+                    [...mutation.addedNodes].some((node) => node.textContent?.includes(noticeText))
+                  )
+                ) {
+                  target.__NCURATOR_TEST_EXTERNAL_NOTICE_COUNT__ =
+                    (target.__NCURATOR_TEST_EXTERNAL_NOTICE_COUNT__ || 0) + 1
+                }
+              }
+            )
+            target.__NCURATOR_TEST_EXTERNAL_NOTICE_OBSERVER__.observe(document.body, {
+              childList: true,
+              subtree: true
+            })
+          }, '检测到当前文件被外部修改，已自动刷新')
 
           await switchWorkbenchMode(page, '大聪明')
           await insertWorkbenchReferenceToken(page, 'workbench-preview.md')
@@ -93,6 +120,19 @@ describe('workbench result e2e', () => {
           const evidence = await completionPromise
           recordWorkbenchAiEvidence(runtime, evidence, 0.8)
           const afterApply = await fs.readFile(targetPath, 'utf-8')
+          const normalPreviewAfterAiWrite = getWorkbenchLocator(
+            page,
+            workbenchSelectors.markdownViewer
+          )
+          await normalPreviewAfterAiWrite
+            .getByText('cedar-text-diff-884')
+            .waitFor({ state: 'visible', timeout: 30_000 })
+          const aiWritePreviewRefreshedSilently =
+            (await page.evaluate(
+              () =>
+                (window as unknown as { __NCURATOR_TEST_EXTERNAL_NOTICE_COUNT__?: number })
+                  .__NCURATOR_TEST_EXTERNAL_NOTICE_COUNT__ || 0
+            )) === 0
           const applyEntry = await waitForApplyEntry(page)
           await applyEntry.click()
           const diffViewer = getWorkbenchLocator(page, workbenchSelectors.textDiffViewer)
@@ -188,6 +228,14 @@ describe('workbench result e2e', () => {
             .then(() => true)
             .catch(() => false)
           await page.keyboard.press('Escape')
+          await getWorkbenchLocator(page, workbenchSelectors.openWithButton).click()
+          const externalApplicationHintVisible = await page
+            .getByText('如果外部应用仍显示旧内容，请关闭该文档后重新打开。', {
+              exact: true
+            })
+            .waitFor({ state: 'visible', timeout: 10_000 })
+            .then(() => true)
+            .catch(() => false)
           const toolbarActionOrder = await getWorkbenchLocator(
             page,
             workbenchSelectors.documentToolbar
@@ -319,6 +367,8 @@ describe('workbench result e2e', () => {
             standaloneArtifactCount,
             omittedLineLabels,
             applyEntryCountDuringRun,
+            aiWritePreviewRefreshedSilently,
+            externalApplicationHintVisible,
             omittedCountBeforeExpand,
             omittedCountAfterExpand,
             workspaceExplorerToggleLabelBeforeOpen,
@@ -364,6 +414,8 @@ describe('workbench result e2e', () => {
               result.resourceTabCount === 1 &&
               result.standaloneArtifactCount === 0 &&
               result.applyEntryCountDuringRun === 0 &&
+              result.aiWritePreviewRefreshedSilently &&
+              result.externalApplicationHintVisible &&
               result.omittedLineLabels.some((label) => label.includes('行未修改')) &&
               result.omittedCountAfterExpand < result.omittedCountBeforeExpand &&
               result.workspaceExplorerToggleLabelBeforeOpen === '展开文件列表' &&

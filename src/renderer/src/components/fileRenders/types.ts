@@ -12,6 +12,7 @@ export type FileRenderDocument = {
   fileName?: string
   filePath?: string
   metadata?: FileRenderMetadata
+  contentRevision?: number
   file?: File | Blob
 }
 

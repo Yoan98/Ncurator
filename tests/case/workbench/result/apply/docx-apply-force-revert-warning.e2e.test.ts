@@ -62,6 +62,14 @@ describe('workbench result e2e', () => {
           await waitForWorkbenchApplyPanelReady(page)
 
           await mutateDocxExternally(targetPath, `external-${MARKER}`)
+          await page.waitForTimeout(800)
+          const reviewExternalRefreshNoticeCount = await page
+            .getByText('检测到当前文件被外部修改，已自动刷新', { exact: true })
+            .count()
+          const signalsAfterExternalMutation = await runtime.collectSignals()
+          const reviewWatchStartCalls = signalsAfterExternalMutation.ipcInvokeEntries.filter(
+            (entry) => entry.name === 'fileWatchStart'
+          ).length
           await getWorkbenchLocator(page, workbenchSelectors.applyRevertButton).click()
           await page.getByText('回退这次修改？').waitFor({ state: 'visible' })
           await getWorkbenchLocator(page, workbenchSelectors.applyRevertConfirmButton).click()
@@ -91,7 +99,9 @@ describe('workbench result e2e', () => {
             antMessageText,
             panelText,
             modeTagText,
-            revertButtonCount
+            revertButtonCount,
+            reviewExternalRefreshNoticeCount,
+            reviewWatchStartCalls
           }
         },
         assert: async (result, runtime) => {
@@ -102,6 +112,8 @@ describe('workbench result e2e', () => {
               result.afterForceRevertText === result.beforeText &&
               result.modeTagText === '预览' &&
               result.revertButtonCount === 0 &&
+              result.reviewExternalRefreshNoticeCount === 0 &&
+              result.reviewWatchStartCalls === 0 &&
               !result.panelText.includes('已回退') &&
               !result.panelText.includes('已删除'),
             {

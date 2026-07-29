@@ -39,6 +39,7 @@ const getDocumentsSignature = (documents: FileRenderDocument[]): string =>
         document.fileName,
         document.uri,
         document.fileType,
+        document.contentRevision,
         document.metadata ? JSON.stringify(document.metadata) : ''
       ].join('\u0000')
     )
@@ -149,7 +150,7 @@ const renderers = [
   CustomDocxRenderer,
   CustomPptxRenderer,
   CustomImageRenderer,
-  CustomXlsxRenderer,
+  CustomXlsxRenderer
 ]
 
 const FileRenderViewerBase: React.FC<FileRenderViewerProps> = ({

@@ -1033,6 +1033,19 @@ const ChatPage: React.FC = () => {
     [message]
   )
 
+  const emitInfoMessage = useCallback(
+    (content: string): void => {
+      if (typeof message.info === 'function') {
+        message.info(content)
+        return
+      }
+      if (typeof message.open === 'function') {
+        message.open({ type: 'info', content })
+      }
+    },
+    [message]
+  )
+
   const updateCurrentTabWorkspace = useCallback(
     (updater: (current: WorkbenchTabWorkspaceState) => WorkbenchTabWorkspaceState): void => {
       setTabWorkspaces((current) => ({
@@ -1189,9 +1202,15 @@ const ChatPage: React.FC = () => {
   }
 
   const openPathOrNotify = useCallback(
-    async (filePath: string): Promise<void> => {
-      const result = await window.api.openPath(filePath)
-      if (!result.success) emitErrorMessage(result.error || '打开失败')
+    async (filePath: string): Promise<boolean> => {
+      try {
+        const result = await window.api.openPath(filePath)
+        if (!result.success) emitErrorMessage(result.error || '打开失败')
+        return result.success
+      } catch (error) {
+        emitErrorMessage(error instanceof Error ? error.message : '打开失败')
+        return false
+      }
     },
     [emitErrorMessage]
   )
@@ -3795,6 +3814,9 @@ const ChatPage: React.FC = () => {
                   onBrowserStateChange={handleBrowserStateChange}
                   onOpenWorkspaceFile={openWorkspaceFile}
                   onOpenWorkspaceChange={openWorkspaceChange}
+                  isAiRunActive={Boolean(aiRunId)}
+                  onSuccessMessage={emitSuccessMessage}
+                  onInfoMessage={emitInfoMessage}
                   browserPresentationEnabled={browserPresentationEnabled}
                   browserTransitionImage={browserTransitionImage}
                 />

@@ -49,7 +49,10 @@ type WorkbenchContentPanelProps = {
   onOpenSearchResult: (turn: SearchWorkbenchTurn, resultIndex: number) => void
   onRevertApply: () => void
   onBackToPanelState: (state: WorkbenchContentPanelState) => void
-  onOpenPath: (filePath: string) => Promise<void>
+  isAiRunActive: boolean
+  onSuccessMessage: (content: string) => void
+  onInfoMessage: (content: string) => void
+  onOpenPath: (filePath: string) => Promise<boolean>
   onRevealPath: (filePath: string) => Promise<void>
   onActivateTab: (tabId: string) => void
   onCloseTab: (tabId: string) => void
@@ -324,13 +327,15 @@ type WorkbenchDocumentPreviewPanelProps = {
   fallbackWorkspaceName?: string | null
   backTarget?: WorkbenchContentPanelState
   onBackToPanelState: (state: WorkbenchContentPanelState) => void
-  onOpenPath: (filePath: string) => Promise<void>
+  onOpenPath: (filePath: string) => Promise<boolean>
   onRevealPath: (filePath: string) => Promise<void>
   onRevert?: () => void
   explorerOpen?: boolean
   onToggleExplorer?: () => void
   displayMode?: DocumentDisplayMode
   onSwitchDisplayMode?: () => void
+  showStaleExternalApplicationHint?: boolean
+  onInfoMessage: (content: string) => void
 }
 
 export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPreviewPanelProps> = ({
@@ -359,7 +364,9 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
   explorerOpen = false,
   onToggleExplorer,
   displayMode = 'preview',
-  onSwitchDisplayMode
+  onSwitchDisplayMode,
+  showStaleExternalApplicationHint = false,
+  onInfoMessage
 }) => {
   const [openWithApplications, setOpenWithApplications] = useState<OpenWithApplication[]>([])
   const [openWithLoading, setOpenWithLoading] = useState(false)
@@ -378,6 +385,11 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
   const showReviewActions = mode === 'edit' && (!onSwitchDisplayMode || displayMode === 'review')
   const defaultApplication = openWithApplications.find((application) => application.isDefault)
   const openWithLabel = defaultApplication?.name || '系统默认打开'
+  const showExternalApplicationHint = (): void => {
+    if (showStaleExternalApplicationHint) {
+      onInfoMessage('如果外部应用仍显示旧内容，请关闭该文档后重新打开。')
+    }
+  }
 
   const loadOpenWithApplications = async (): Promise<void> => {
     if (
@@ -422,7 +434,9 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
       if (!response.success) {
         setOpenWithError(response.error || '打开应用失败')
         message.error(response.error || '打开应用失败')
+        return
       }
+      showExternalApplicationHint()
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : '打开应用失败'
       setOpenWithError(errorMessage)
@@ -583,8 +597,13 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
                 onClick={(event) => {
                   event.stopPropagation()
                   if (!canOpen || isDeletedCreatedFile) return
-                  if (defaultApplication) void openWithApplication(defaultApplication)
-                  else void onOpenPath(filePath)
+                  if (defaultApplication) {
+                    void openWithApplication(defaultApplication)
+                  } else {
+                    void onOpenPath(filePath).then((opened) => {
+                      if (opened) showExternalApplicationHint()
+                    })
+                  }
                 }}
               >
                 <span className="max-w-[104px] truncate text-[12px]">{openWithLabel}</span>
@@ -722,6 +741,9 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
   onBrowserStateChange,
   onOpenWorkspaceFile,
   onOpenWorkspaceChange,
+  isAiRunActive,
+  onSuccessMessage,
+  onInfoMessage,
   browserPresentationEnabled,
   browserTransitionImage
 }) => {
@@ -730,7 +752,13 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
     state.kind === 'apply_workspace' ? 'changed' : 'all'
   )
   const [documentDisplayMode, setDocumentDisplayMode] = useState<DocumentDisplayMode>('review')
+  const [previewRevision, setPreviewRevision] = useState(0)
+  const aiRunActiveRef = React.useRef(isAiRunActive)
+  const previousAiRunActiveRef = React.useRef(isAiRunActive)
+  const suppressExternalNoticeUntilRef = React.useRef(isAiRunActive ? Number.POSITIVE_INFINITY : 0)
   const floatingExplorer = state.kind === 'file_preview' || state.kind === 'apply_workspace'
+  const previewWatchPath =
+    state.kind === 'file_preview' && !state.file.isDirectory ? state.file.path : null
   useEffect(() => {
     if (state.kind === 'file_launcher') {
       setExplorerOpen(true)
@@ -746,6 +774,56 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
     [activeApplyRecord?.id, activeApplyRecord?.status]
   )
   useEffect(() => {
+    aiRunActiveRef.current = isAiRunActive
+    if (isAiRunActive) {
+      suppressExternalNoticeUntilRef.current = Number.POSITIVE_INFINITY
+    } else if (previousAiRunActiveRef.current) {
+      suppressExternalNoticeUntilRef.current = Date.now() + 1_500
+    }
+    previousAiRunActiveRef.current = isAiRunActive
+  }, [isAiRunActive])
+  useEffect(() => {
+    if (!previewWatchPath) return () => undefined
+    let disposed = false
+    let watchId: string | null = null
+
+    const refreshPreview = (): void => {
+      if (disposed) return
+      setPreviewRevision((current) => current + 1)
+      const noticeSuppressed =
+        aiRunActiveRef.current || Date.now() <= suppressExternalNoticeUntilRef.current
+      if (!noticeSuppressed) onSuccessMessage('检测到当前文件被外部修改，已自动刷新')
+    }
+
+    const unsubscribe = window.api.onFileWatchChange((event) => {
+      if (event.watchId === watchId) refreshPreview()
+    })
+    const startWatch = async (): Promise<void> => {
+      const response = await window.api.fileWatchStart({ filePath: previewWatchPath })
+      if (!response.success || !response.watchId) return
+      if (disposed) {
+        await window.api.fileWatchStop({ watchId: response.watchId }).catch(() => undefined)
+        return
+      }
+      watchId = response.watchId
+    }
+    const checkOnFocus = (): void => {
+      if (!watchId) return
+      void window.api.fileWatchCheck({ watchId }).then((response) => {
+        if (response.success && response.changed) refreshPreview()
+      })
+    }
+
+    void startWatch()
+    window.addEventListener('focus', checkOnFocus)
+    return () => {
+      disposed = true
+      unsubscribe()
+      window.removeEventListener('focus', checkOnFocus)
+      if (watchId) void window.api.fileWatchStop({ watchId }).catch(() => undefined)
+    }
+  }, [onSuccessMessage, previewWatchPath])
+  useEffect(() => {
     if (!explorerOpen || !floatingExplorer) return () => undefined
     const closeOnEscape = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') setExplorerOpen(false)
@@ -760,11 +838,12 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
             {
               filePath: state.file.path,
               fileName: state.file.fileName,
+              contentRevision: previewRevision,
               metadata: state.file.pageNumber ? { pageNumber: state.file.pageNumber } : undefined
             }
           ]
         : [],
-    [state]
+    [previewRevision, state]
   )
   const hasDedicatedPreview = Boolean(activeApplyRecord?.previewPath)
   const canSwitchDisplayMode = canSwitchDocumentDisplayMode(activeApplyRecord)
@@ -889,6 +968,7 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
                 onBackToPanelState={onBackToPanelState}
                 onOpenPath={onOpenPath}
                 onRevealPath={onRevealPath}
+                onInfoMessage={onInfoMessage}
                 explorerOpen={explorerOpen}
                 onToggleExplorer={() => setExplorerOpen((current) => !current)}
               />
@@ -917,6 +997,7 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
                   onBackToPanelState={onBackToPanelState}
                   onOpenPath={onOpenPath}
                   onRevealPath={onRevealPath}
+                  onInfoMessage={onInfoMessage}
                   onRevert={onRevertApply}
                   displayMode={documentDisplayMode}
                   onSwitchDisplayMode={
@@ -929,6 +1010,7 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
                   }
                   explorerOpen={explorerOpen}
                   onToggleExplorer={() => setExplorerOpen((current) => !current)}
+                  showStaleExternalApplicationHint={activeApplyRecord.status === 'applied'}
                 />
               ) : (
                 <div
@@ -1018,6 +1100,9 @@ const areContentPanelPropsEqual = (
   previous.fallbackWorkspaceName === next.fallbackWorkspaceName &&
   previous.selectedWorkspace === next.selectedWorkspace &&
   previous.fileChangeRecords === next.fileChangeRecords &&
+  previous.isAiRunActive === next.isAiRunActive &&
+  previous.onSuccessMessage === next.onSuccessMessage &&
+  previous.onInfoMessage === next.onInfoMessage &&
   previous.browserTransitionImage === next.browserTransitionImage
 
 const WorkbenchContentPanel = React.memo(WorkbenchContentPanelBase, areContentPanelPropsEqual)

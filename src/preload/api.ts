@@ -50,6 +50,12 @@ import type {
   DeleteWebSourceRequest,
   DeleteWebSourceResponse,
   DeleteWorkspaceSourceResponse,
+  FileWatchChangeEvent,
+  FileWatchCheckResponse,
+  FileWatchMutationRequest,
+  FileWatchStartRequest,
+  FileWatchStartResponse,
+  FileWatchStopResponse,
   LegacyLocalImportMigrationStatus,
   ListReferenceItemsRequest,
   ListWebSourcesRequest,
@@ -129,6 +135,10 @@ export type DesktopApi = {
   ) => Promise<{ success: boolean; created?: number; error?: string }>
   openExternal: (url: string) => Promise<{ success: boolean; error?: string }>
   openPath: (filePath: string) => Promise<{ success: boolean; error?: string }>
+  fileWatchStart: (payload: FileWatchStartRequest) => Promise<FileWatchStartResponse>
+  fileWatchCheck: (payload: FileWatchMutationRequest) => Promise<FileWatchCheckResponse>
+  fileWatchStop: (payload: FileWatchMutationRequest) => Promise<FileWatchStopResponse>
+  onFileWatchChange: (cb: (event: FileWatchChangeEvent) => void) => () => void
   revealPath: (filePath: string) => Promise<{ success: boolean; error?: string }>
   pickDirectory: () => Promise<PickDirectoryResponse>
   pickFile: (defaultPath?: string) => Promise<PickFileResponse>

@@ -17,7 +17,14 @@ import { getAiContextUsage } from '../services/ai/contextUsage'
 import { DocxApplyService } from '../services/ai/human/tools/docx/review/DocxApplyService'
 import { releaseDocxRunSession } from '../services/ai/human/tools/docx/worker/docxWorkerClient'
 import { releasePdfRunSession } from '../services/pdf/worker/pdfWorkerClient'
-import type { AiLlmIoRecord } from '../../shared/types'
+import type {
+  AiLlmIoRecord,
+  FileWatchCheckResponse,
+  FileWatchMutationRequest,
+  FileWatchStartRequest,
+  FileWatchStartResponse,
+  FileWatchStopResponse
+} from '../../shared/types'
 import {
   buildWebReferenceItem,
   buildWorkspaceReferenceItems,
@@ -28,6 +35,7 @@ import { WorkspaceKnowledgePrepareService } from '../services/workspace/Workspac
 import { createWorkspaceKnowledgeCache } from '../services/workspace/WorkspaceKnowledgeCache'
 import { WebSourceService } from '../services/web/WebSourceService'
 import { OpenWithService } from '../services/openWith/OpenWithService'
+import { FileWatchService } from '../services/files/FileWatchService'
 import type { BrowserEmbedService } from '../services/browser/BrowserEmbedService'
 import type { WebCrawlerService } from '../services/webCrawler/types'
 import { v4 as uuidv4 } from 'uuid'
@@ -151,7 +159,17 @@ export function registerHandlers(services: {
   recordLlmIo?: (record: AiLlmIoRecord) => void
   systemNotificationService?: SystemNotificationService
 }) {
-  const openWithService = new OpenWithService()
+  const useE2ENoopOpenWith =
+    process.env.NCURATOR_E2E_OBSERVER === '1' && process.env.NCURATOR_E2E_OPEN_WITH_NOOP === '1'
+  const openWithService = new OpenWithService(
+    useE2ENoopOpenWith
+      ? {
+          runNativeOpen: async () => ({ success: true })
+        }
+      : undefined
+  )
+  const fileWatchService = new FileWatchService()
+  const fileWatchOwners = new Set<number>()
   const {
     embeddingService,
     storageService,
@@ -1403,6 +1421,60 @@ export function registerHandlers(services: {
       return { success: false, error: getErrorMessage(error) }
     }
   })
+
+  ipcMain.handle(
+    'file-watch-start',
+    async (event, payload: FileWatchStartRequest): Promise<FileWatchStartResponse> => {
+      try {
+        const sender = event.sender
+        fileWatchService.stopOwner(sender.id)
+        if (!fileWatchOwners.has(sender.id)) {
+          fileWatchOwners.add(sender.id)
+          sender.once('destroyed', () => {
+            fileWatchService.stopOwner(sender.id)
+            fileWatchOwners.delete(sender.id)
+          })
+        }
+        const result = await fileWatchService.start({
+          ownerId: sender.id,
+          filePath: payload?.filePath || '',
+          onChange: (change) => {
+            if (!sender.isDestroyed()) sender.send('file-watch-changed', change)
+          }
+        })
+        return { success: true, ...result }
+      } catch (error) {
+        return { success: false, error: getErrorMessage(error) }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'file-watch-check',
+    async (event, payload: FileWatchMutationRequest): Promise<FileWatchCheckResponse> => {
+      try {
+        const watchId = String(payload?.watchId || '').trim()
+        if (!fileWatchService.isOwnedBy(watchId, event.sender.id)) {
+          return { success: false, changed: false, error: 'file watch not found' }
+        }
+        return { success: true, changed: await fileWatchService.check(watchId) }
+      } catch (error) {
+        return { success: false, changed: false, error: getErrorMessage(error) }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'file-watch-stop',
+    async (event, payload: FileWatchMutationRequest): Promise<FileWatchStopResponse> => {
+      const watchId = String(payload?.watchId || '').trim()
+      if (!fileWatchService.isOwnedBy(watchId, event.sender.id)) {
+        return { success: false, error: 'file watch not found' }
+      }
+      fileWatchService.stop(watchId)
+      return { success: true }
+    }
+  )
 
   ipcMain.handle('open-path', async (_event, rawPath: string) => {
     try {

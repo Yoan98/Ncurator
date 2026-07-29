@@ -111,6 +111,26 @@ const api: DesktopApi = {
     emitE2EIpcCall('openPath', safePath)
     return ipcRenderer.invoke('open-path', filePath)
   },
+  fileWatchStart: (payload) => {
+    emitE2EIpcCall('fileWatchStart', { filePath: String(payload.filePath || '').trim() })
+    return ipcRenderer.invoke('file-watch-start', payload)
+  },
+  fileWatchCheck: (payload) => {
+    emitE2EIpcCall('fileWatchCheck', { watchId: String(payload.watchId || '').trim() })
+    return ipcRenderer.invoke('file-watch-check', payload)
+  },
+  fileWatchStop: (payload) => {
+    emitE2EIpcCall('fileWatchStop', { watchId: String(payload.watchId || '').trim() })
+    return ipcRenderer.invoke('file-watch-stop', payload)
+  },
+  onFileWatchChange: (cb) => {
+    const listener = (_event: Electron.IpcRendererEvent, change: Parameters<typeof cb>[0]): void =>
+      cb(change)
+    ipcRenderer.on('file-watch-changed', listener)
+    return () => {
+      ipcRenderer.removeListener('file-watch-changed', listener)
+    }
+  },
   revealPath: (filePath: string): Promise<{ success: boolean; error?: string }> => {
     const safePath = String(filePath || '').trim()
     emitE2EIpcCall('revealPath', safePath)

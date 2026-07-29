@@ -632,6 +632,37 @@ export interface ChatSessionListItem extends ChatSession {
   hasUnreadCompletion: boolean
 }
 
+export interface FileWatchStartRequest {
+  filePath: string
+}
+
+export interface FileWatchStartResponse {
+  success: boolean
+  watchId?: string
+  filePath?: string
+  error?: string
+}
+
+export interface FileWatchMutationRequest {
+  watchId: string
+}
+
+export interface FileWatchCheckResponse {
+  success: boolean
+  changed: boolean
+  error?: string
+}
+
+export interface FileWatchStopResponse {
+  success: boolean
+  error?: string
+}
+
+export interface FileWatchChangeEvent {
+  watchId: string
+  filePath: string
+}
+
 export type AiFileChangeStatus = 'applied' | 'reverted' | 'failed'
 export type AiFileChangeCapability =
   | 'docx'
