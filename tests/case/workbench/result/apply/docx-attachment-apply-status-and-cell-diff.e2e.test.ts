@@ -77,7 +77,7 @@ describe('workbench result e2e', () => {
             recordWorkbenchAiEvidence(runtime, evidence, 0.8)
 
             const record = await page.evaluate(async (workspaceRootPath) => {
-              const workspace = (await window.api.workspaceList()).find(
+              const workspace = (await window.api.workspaceList()).items.find(
                 (item) => item.root_path === workspaceRootPath
               )
               if (!workspace) return null
