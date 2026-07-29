@@ -14,10 +14,15 @@ const getFileExtension = (fileName: string): string => {
     .pop()
   if (!lastSegment) return ''
   const dotIndex = lastSegment.lastIndexOf('.')
-  return dotIndex > -1 ? lastSegment.slice(dotIndex + 1).trim().toLowerCase() : ''
+  return dotIndex > -1
+    ? lastSegment
+        .slice(dotIndex + 1)
+        .trim()
+        .toLowerCase()
+    : ''
 }
 
-export const createAttachmentFileReference = (fileName: string): FileReference => ({
+const createAttachmentFileReference = (fileName: string): FileReference => ({
   kind: 'file',
   workspaceId: '',
   nodeId: `attachment:${fileName}`,

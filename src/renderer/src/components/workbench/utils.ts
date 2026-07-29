@@ -15,6 +15,12 @@ import {
   type RuntimeToolName
 } from '../../../../shared/runtimeCapabilities'
 import {
+  getAssistantMixedStatus as getMixedStatus,
+  getAssistantToolIconKind as getToolIconKind,
+  getAssistantToolSummaryText as getToolSummaryText,
+  getAssistantToolUiKind as getToolUiKind
+} from '../../../../shared/assistantExecutionSummary'
+import {
   WORKBENCH_PREFERENCE_AI_PREFERENCE_STORAGE_KEY,
   WORKBENCH_PREFERENCE_MODE_STORAGE_KEY,
   WORKBENCH_PREFERENCE_MODEL_STORAGE_KEY,
@@ -196,83 +202,9 @@ const getSkillDisplayName = (skillId?: RuntimeSkillId): string => {
   return skillId ? getRuntimeSkillDisplayName(skillId) || '新能力' : '新能力'
 }
 
-const TOOL_UI_KINDS = {
-  terminal_run: 'terminal',
-  terminal_read: 'terminal',
-  terminal_stop: 'terminal',
-  text_file_read: 'file-read',
-  text_file_edit: 'file-edit',
-  kb_search: 'kb',
-  kb_list_documents: 'kb',
-  docx_read_outline: 'docx-read',
-  docx_search: 'docx-read',
-  docx_read_blocks: 'docx-read',
-  docx_edit: 'docx-edit',
-  pdf_inspect: 'pdf-read',
-  pdf_search: 'pdf-read',
-  pdf_read_pages: 'pdf-read',
-  pdf_read_visuals: 'pdf-read',
-  ppt_read_outline: 'ppt-read',
-  ppt_read_slides: 'ppt-read',
-  ppt_search: 'ppt-search',
-  ppt_read_visuals: 'ppt-read',
-  ppt_edit: 'ppt-edit',
-  excel_read_outline: 'excel-read',
-  excel_search: 'excel-read',
-  excel_read_cells: 'excel-read',
-  excel_edit: 'excel-edit',
-  web_search: 'web-search',
-  web_crawl: 'web-crawl',
-  browser_use: 'browser',
-  wait_time: 'wait',
-  wait_for_user_takeover: 'user-takeover',
-  image_analyze: 'image-recognition',
-  image_generate: 'image-generation'
-} as const satisfies Record<RuntimeToolName, AssistantProcessSkillKey>
-
-const getToolUiKind = (toolName?: AssistantToolName): AssistantProcessSkillKey =>
-  toolName && toolName !== 'unnamed' ? TOOL_UI_KINDS[toolName] : 'generic'
-
 const getDisplaySkillKey = (display: AssistantProcessDisplay): AssistantProcessSkillKey => {
   if (display.kind === 'tool') return getToolUiKind(normalizeToolName(display.toolName))
   return 'generic'
-}
-
-const getToolIconKind = (skillKey: AssistantProcessSkillKey): AssistantProcessIconKind => {
-  if (skillKey === 'docx-edit') return 'edit'
-  if (skillKey === 'docx-read' || skillKey === 'pdf-read' || skillKey === 'ppt-read') {
-    return 'document'
-  }
-  if (skillKey === 'file-read') return 'document'
-  if (skillKey === 'file-edit') return 'edit'
-  if (skillKey === 'ppt-search') return 'search'
-  if (skillKey === 'ppt-edit') return 'edit'
-  if (skillKey === 'excel-read') return 'document'
-  if (skillKey === 'excel-edit') return 'edit'
-  if (skillKey === 'kb') return 'knowledge'
-  if (skillKey === 'web-search') return 'search'
-  if (skillKey === 'web-crawl') return 'web'
-  if (skillKey === 'browser') return 'browser'
-  if (skillKey === 'image-recognition' || skillKey === 'image-generation') return 'image'
-  if (skillKey === 'wait') return 'wait'
-  if (skillKey === 'user-takeover') return 'browser'
-  if (skillKey === 'terminal') return 'terminal'
-  return 'default'
-}
-
-const getMixedStatus = (
-  statuses: AssistantProcessStatus[],
-  fallback: AssistantProcessStatus = 'completed'
-): AssistantProcessStatus => {
-  if (statuses.length === 0) return fallback
-  if (statuses.some((status) => status === 'running')) return 'running'
-  const hasCompleted = statuses.some((status) => status === 'completed')
-  const hasFailed = statuses.some((status) => status === 'failed')
-  const hasPartialFailed = statuses.some((status) => status === 'partial_failed')
-  if (hasPartialFailed) return 'partial_failed'
-  if (hasCompleted && hasFailed) return 'partial_failed'
-  if (hasFailed) return 'failed'
-  return 'completed'
 }
 
 const getDisplayIconKind = (display: AssistantProcessDisplay): AssistantProcessIconKind => {
@@ -282,148 +214,6 @@ const getDisplayIconKind = (display: AssistantProcessDisplay): AssistantProcessI
   if (display.kind === 'compaction') return 'compaction'
   if (display.kind === 'finalizing') return 'finalizing'
   return getToolIconKind(getDisplaySkillKey(display))
-}
-
-const getToolSummaryText = (
-  skillKey: AssistantProcessSkillKey,
-  status: AssistantProcessStatus,
-  count = 1
-): AssistantRichTextSegment[] => {
-  const normalizedCount = String(Math.max(1, count))
-  if (skillKey === 'docx-read') {
-    if (status === 'running') return sentence(text(`正在读取 ${normalizedCount} 个 docx 文件`))
-    if (status === 'completed') return sentence(text(`已读取 ${normalizedCount} 个 docx 文件`))
-    if (status === 'partial_failed') {
-      return sentence(text(`部分读取 ${normalizedCount} 个 docx 文件失败`))
-    }
-    return sentence(text(`读取 ${normalizedCount} 个 docx 文件失败`))
-  }
-  if (skillKey === 'docx-edit') {
-    if (status === 'running') return sentence(text(`正在编辑 ${normalizedCount} 个 docx 文件`))
-    if (status === 'completed') return sentence(text(`已编辑 ${normalizedCount} 个 docx 文件`))
-    if (status === 'partial_failed') {
-      return sentence(text(`部分编辑 ${normalizedCount} 个 docx 文件失败`))
-    }
-    return sentence(text(`编辑 ${normalizedCount} 个 docx 文件失败`))
-  }
-  if (skillKey === 'file-read') {
-    if (status === 'running') return sentence(text(`正在读取 ${normalizedCount} 个文件`))
-    if (status === 'completed') return sentence(text(`已读取 ${normalizedCount} 个文件`))
-    if (status === 'partial_failed') {
-      return sentence(text(`部分读取 ${normalizedCount} 个文件失败`))
-    }
-    return sentence(text(`读取 ${normalizedCount} 个文件失败`))
-  }
-  if (skillKey === 'file-edit') {
-    if (status === 'running') return sentence(text(`正在编辑 ${normalizedCount} 个文件`))
-    if (status === 'completed') return sentence(text(`已编辑 ${normalizedCount} 个文件`))
-    if (status === 'partial_failed') {
-      return sentence(text(`部分编辑 ${normalizedCount} 个文件失败`))
-    }
-    return sentence(text(`编辑 ${normalizedCount} 个文件失败`))
-  }
-  if (skillKey === 'pdf-read') {
-    if (status === 'running') return sentence(text(`正在读取 ${normalizedCount} 个 PDF 文件`))
-    if (status === 'completed') return sentence(text(`已读取 ${normalizedCount} 个 PDF 文件`))
-    if (status === 'partial_failed')
-      return sentence(text(`部分读取 ${normalizedCount} 个 PDF 文件失败`))
-    return sentence(text(`读取 ${normalizedCount} 个 PDF 文件失败`))
-  }
-  if (skillKey === 'ppt-read') {
-    if (status === 'running') return sentence(text(`正在读取 ${normalizedCount} 个 PPT 文件`))
-    if (status === 'completed') return sentence(text(`已读取 ${normalizedCount} 个 PPT 文件`))
-    if (status === 'partial_failed')
-      return sentence(text(`部分读取 ${normalizedCount} 个 PPT 文件失败`))
-    return sentence(text(`读取 ${normalizedCount} 个 PPT 文件失败`))
-  }
-  if (skillKey === 'ppt-search') {
-    if (status === 'running') return sentence(text('正在搜索 PPT'))
-    if (status === 'completed') return sentence(text('已搜索 PPT'))
-    if (status === 'partial_failed') return sentence(text('部分 PPT 搜索失败'))
-    return sentence(text('搜索 PPT 失败'))
-  }
-  if (skillKey === 'ppt-edit') {
-    if (status === 'running') return sentence(text(`正在编辑 ${normalizedCount} 个 PPT 文件`))
-    if (status === 'completed') return sentence(text(`已编辑 ${normalizedCount} 个 PPT 文件`))
-    if (status === 'partial_failed') {
-      return sentence(text(`部分编辑 ${normalizedCount} 个 PPT 文件失败`))
-    }
-    return sentence(text(`编辑 ${normalizedCount} 个 PPT 文件失败`))
-  }
-  if (skillKey === 'excel-read') {
-    if (status === 'running') return sentence(text(`正在读取 ${normalizedCount} 个 Excel 文件`))
-    if (status === 'completed') return sentence(text(`已读取 ${normalizedCount} 个 Excel 文件`))
-    if (status === 'partial_failed') {
-      return sentence(text(`部分读取 ${normalizedCount} 个 Excel 文件失败`))
-    }
-    return sentence(text(`读取 ${normalizedCount} 个 Excel 文件失败`))
-  }
-  if (skillKey === 'excel-edit') {
-    if (status === 'running') return sentence(text(`正在编辑 ${normalizedCount} 个 Excel 文件`))
-    if (status === 'completed') return sentence(text(`已编辑 ${normalizedCount} 个 Excel 文件`))
-    if (status === 'partial_failed') {
-      return sentence(text(`部分编辑 ${normalizedCount} 个 Excel 文件失败`))
-    }
-    return sentence(text(`编辑 ${normalizedCount} 个 Excel 文件失败`))
-  }
-  if (skillKey === 'kb') {
-    if (status === 'running') return sentence(text('正在检索知识库'))
-    if (status === 'completed') return sentence(text('已检索知识库'))
-    if (status === 'partial_failed') return sentence(text('部分知识库检索失败'))
-    return sentence(text('检索知识库失败'))
-  }
-  if (skillKey === 'terminal') {
-    if (status === 'running') return sentence(text('正在执行终端指令'))
-    if (status === 'completed') return sentence(text('已执行终端指令'))
-    if (status === 'partial_failed') return sentence(text('部分终端指令执行失败'))
-    return sentence(text('执行终端指令失败'))
-  }
-  if (skillKey === 'web-search') {
-    if (status === 'running') return sentence(text('正在搜索网页'))
-    if (status === 'completed') return sentence(text('已搜索网页'))
-    if (status === 'partial_failed') return sentence(text('部分网页搜索失败'))
-    return sentence(text('搜索网页失败'))
-  }
-  if (skillKey === 'web-crawl') {
-    if (status === 'running') return sentence(text('正在读取网页'))
-    if (status === 'completed') return sentence(text('已读取网页'))
-    if (status === 'partial_failed') return sentence(text('部分网页读取失败'))
-    return sentence(text('读取网页失败'))
-  }
-  if (skillKey === 'browser') {
-    if (status === 'running') return sentence(text('正在操作浏览器'))
-    if (status === 'completed') return sentence(text(`已操作浏览器 ${normalizedCount} 次`))
-    if (status === 'partial_failed') return sentence(text('部分浏览器操作失败'))
-    return sentence(text('浏览器操作失败'))
-  }
-  if (skillKey === 'image-recognition') {
-    if (status === 'running') return sentence(text('正在识别图片'))
-    if (status === 'completed') return sentence(text('已识别图片'))
-    if (status === 'partial_failed') return sentence(text('部分图片识别失败'))
-    return sentence(text('图片识别失败'))
-  }
-  if (skillKey === 'image-generation') {
-    if (status === 'running') return sentence(text('正在生成图片'))
-    if (status === 'completed') return sentence(text('已生成图片'))
-    if (status === 'partial_failed') return sentence(text('部分图片生成失败'))
-    return sentence(text('图片生成失败'))
-  }
-  if (skillKey === 'wait') {
-    if (status === 'running') return sentence(text('正在等待'))
-    if (status === 'completed') return sentence(text('已等待'))
-    if (status === 'partial_failed') return sentence(text('部分等待失败'))
-    return sentence(text('等待失败'))
-  }
-  if (skillKey === 'user-takeover') {
-    if (status === 'running') return sentence(text('正在等待用户接管浏览器'))
-    if (status === 'completed') return sentence(text('用户已完成浏览器操作'))
-    if (status === 'partial_failed') return sentence(text('等待用户接管浏览器时部分失败'))
-    return sentence(text('等待用户接管浏览器失败'))
-  }
-  if (status === 'running') return sentence(text('正在处理任务'))
-  if (status === 'completed') return sentence(text('已处理任务'))
-  if (status === 'partial_failed') return sentence(text('部分任务处理失败'))
-  return sentence(text('处理任务失败'))
 }
 
 type ToolItemRenderer = (input?: IpcJsonObject) => AssistantRichTextSegment[]
@@ -545,143 +335,11 @@ const getDisplayItemText = (
   return getDisplayGroupText(display, status)
 }
 
-type ExecutionActionSummary = {
-  kind: AssistantProcessSkillKey
-  fileLabels: Set<string>
-  count: number
-  statuses: AssistantProcessStatus[]
-  waitLabels: Set<string>
-}
-
-const getExecutionStatus = (groups: AssistantProcessGroup[]): AssistantProcessStatus => {
-  return getMixedStatus(groups.map((group) => group.status))
-}
-
-const getSummaryActionLabel = (kind: AssistantProcessSkillKey): string => {
-  if (
-    kind === 'docx-read' ||
-    kind === 'file-read' ||
-    kind === 'pdf-read' ||
-    kind === 'ppt-read' ||
-    kind === 'excel-read' ||
-    kind === 'web-crawl'
-  ) {
-    return '读取'
-  }
-  if (
-    kind === 'docx-edit' ||
-    kind === 'file-edit' ||
-    kind === 'ppt-edit' ||
-    kind === 'excel-edit'
-  ) {
-    return '编辑'
-  }
-  if (kind === 'ppt-search' || kind === 'web-search') return '搜索'
-  if (kind === 'kb') return '检索'
-  if (kind === 'terminal') return '终端'
-  if (kind === 'browser' || kind === 'user-takeover') return '浏览器'
-  if (kind === 'image-recognition' || kind === 'image-generation') return '图片'
-  if (kind === 'wait') return '等待'
-  return '处理'
-}
-
-const getSummaryActionLabelText = (summaries: readonly ExecutionActionSummary[]): string => {
-  const labels = Array.from(
-    new Set(summaries.map((summary) => getSummaryActionLabel(summary.kind)))
-  )
-  if (labels.length === 0) return ''
-  return `${labels.slice(0, 3).join('、')}${summaries.length > 3 ? '等' : ''}`
-}
-
-export const buildAssistantExecutionSummaryText = (
-  groups: AssistantProcessGroup[]
-): AssistantRichTextSegment[] => {
-  const summaries = new Map<AssistantProcessSkillKey, ExecutionActionSummary>()
-  for (const group of groups) {
-    const entries =
-      group.items.length > 0
-        ? group.items.map((item) => ({
-            toolName: item.toolName,
-            targetLabel: item.targetLabel,
-            input: item.input
-          }))
-        : [{ toolName: undefined, targetLabel: undefined, input: undefined }]
-    for (const entry of entries) {
-      const kind = entry.toolName ? getToolUiKind(entry.toolName) : group.skillKey
-      const current =
-        summaries.get(kind) ||
-        ({
-          kind,
-          fileLabels: new Set<string>(),
-          count: 0,
-          statuses: [],
-          waitLabels: new Set<string>()
-        } satisfies ExecutionActionSummary)
-      current.count += 1
-      current.statuses.push(group.status)
-      if (
-        kind === 'docx-read' ||
-        kind === 'docx-edit' ||
-        kind === 'ppt-read' ||
-        kind === 'ppt-edit' ||
-        kind === 'excel-read' ||
-        kind === 'excel-edit'
-      ) {
-        current.fileLabels.add(entry.targetLabel || group.id)
-      }
-      if (kind === 'wait') current.waitLabels.add(readWaitDurationLabel(entry.input))
-      summaries.set(kind, current)
-    }
-  }
-
-  const status = getExecutionStatus(groups)
-  const ordered = [...summaries.values()]
-  if (ordered.length === 0) return sentence(text('正在处理任务'))
-
-  const totalCount = ordered.reduce((sum, summary) => sum + summary.count, 0)
-  if (ordered.length > 3) {
-    const actionText = getSummaryActionLabelText(ordered)
-    const suffix = actionText ? `：${actionText}` : ''
-    if (status === 'running') return sentence(text(`正在执行 ${totalCount} 项操作${suffix}`))
-    if (status === 'completed') return sentence(text(`已完成 ${totalCount} 项操作${suffix}`))
-    if (status === 'partial_failed')
-      return sentence(text(`${totalCount} 项操作中有部分失败${suffix}`))
-    return sentence(text(`${totalCount} 项操作执行失败${suffix}`))
-  }
-
-  return ordered.flatMap((summary, index) => {
-    const count = summary.fileLabels.size || summary.count || 1
-    const summaryStatus = getMixedStatus(summary.statuses, status)
-    const prefix =
-      index === 0
-        ? ''
-        : summaryStatus === 'failed' || summaryStatus === 'partial_failed'
-          ? '但'
-          : '并'
-    if (summary.kind === 'wait' && summary.waitLabels.size === 1) {
-      const waitLabel = [...summary.waitLabels][0]
-      if (summaryStatus === 'running') return sentence(text(prefix), text(`正在等待 ${waitLabel}`))
-      if (summaryStatus === 'completed') return sentence(text(prefix), text(`等待 ${waitLabel}`))
-    }
-    return sentence(text(prefix), ...getToolSummaryText(summary.kind, summaryStatus, count))
-  })
-}
-
-export const resolveAssistantExecutionIcon = (
-  groups: AssistantProcessGroup[]
-): AssistantProcessIconKind => {
-  const kinds = new Set(
-    groups.flatMap((group) =>
-      group.items.length > 0
-        ? group.items.map((item) => (item.toolName ? getToolUiKind(item.toolName) : group.skillKey))
-        : [group.skillKey]
-    )
-  )
-  if (kinds.size !== 1) return 'workflow'
-  return getToolIconKind([...kinds][0] || 'generic')
-}
-
-export const resolveAssistantExecutionStatus = getExecutionStatus
+export {
+  buildAssistantExecutionSummaryText,
+  resolveAssistantExecutionIcon,
+  resolveAssistantExecutionStatus
+} from '../../../../shared/assistantExecutionSummary'
 
 const createProcessGroup = (input: {
   id: string
