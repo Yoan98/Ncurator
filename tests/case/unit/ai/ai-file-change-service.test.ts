@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import { createHash } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type {
   AiFileChangeRecord,
@@ -10,6 +11,9 @@ import type {
   ListAiFileChangeRecordsResponse
 } from '../../../../src/shared/types'
 import { AiFileChangeService } from '../../../../src/main/services/ai/fileChanges/AiFileChangeService'
+import { NO_EFFECTIVE_FILE_CHANGE_MESSAGE } from '../../../../src/shared/constants'
+
+const checksum = (value: string): string => createHash('sha256').update(value).digest('hex')
 
 class MemoryAiFileChangeStore {
   private records = new Map<string, AiFileChangeRecord>()
@@ -151,6 +155,70 @@ describe('ai file change service', () => {
       await fs.readFile(completed[0]!.record.previewPath!, 'utf8')
     ) as Record<string, unknown>
     expect(manifest.version).toBe(1)
+  })
+
+  it('preserves a verified specialist change under ignored runtime assets', async () => {
+    const targetPath = path.join(tempDir, '.ncurator', 'runtime', 'assets', 'bucket', 'input.docx')
+    await fs.mkdir(path.dirname(targetPath), { recursive: true })
+    await fs.writeFile(targetPath, 'before')
+    await service.beginRunTracking({
+      runId: 'attachment-run',
+      sessionId: 'session-1',
+      workspaceRootPath: tempDir,
+      runSummary: '修改附件'
+    })
+    await fs.writeFile(targetPath, 'after')
+    await service.saveRecord(
+      createRecord({
+        id: 'attachment-change',
+        runId: 'attachment-run',
+        capability: 'docx',
+        source: 'docx_tool',
+        path: targetPath,
+        fileName: 'input.docx',
+        beforeChecksum: checksum('before'),
+        afterChecksum: checksum('after')
+      })
+    )
+
+    const completed = await service.finishRunTracking('attachment-run')
+
+    expect(completed).toHaveLength(1)
+    expect(completed[0]?.record.status).toBe('applied')
+    expect(completed[0]?.record.error).toBeUndefined()
+    expect((await service.getRecord({ changeId: 'attachment-change' })).record?.status).toBe(
+      'applied'
+    )
+  })
+
+  it('marks a specialist no-op with the user-facing no-change reason', async () => {
+    const targetPath = path.join(tempDir, '.ncurator', 'runtime', 'assets', 'bucket', 'input.docx')
+    await fs.mkdir(path.dirname(targetPath), { recursive: true })
+    await fs.writeFile(targetPath, 'same')
+    await service.beginRunTracking({
+      runId: 'no-op-run',
+      sessionId: 'session-1',
+      workspaceRootPath: tempDir,
+      runSummary: '重复写入相同内容'
+    })
+    await service.saveRecord(
+      createRecord({
+        id: 'no-op-change',
+        runId: 'no-op-run',
+        capability: 'docx',
+        source: 'docx_tool',
+        path: targetPath,
+        fileName: 'input.docx',
+        beforeChecksum: checksum('same'),
+        afterChecksum: checksum('same')
+      })
+    )
+
+    const completed = await service.finishRunTracking('no-op-run')
+
+    expect(completed).toHaveLength(1)
+    expect(completed[0]?.record.status).toBe('failed')
+    expect(completed[0]?.record.error).toBe(NO_EFFECTIVE_FILE_CHANGE_MESSAGE)
   })
 
   it('captures create delete and rename in one run', async () => {

@@ -1,4 +1,10 @@
-import type { DocxBlockSpec, DocxReplayNode, DocxReplaySession } from '../types'
+import type {
+  DocxBlockSpec,
+  DocxReplayNode,
+  DocxReplaySession,
+  DocxTableCellReviewChange,
+  DocxTableSpec
+} from '../types'
 
 const isOldNode = (node: DocxReplayNode): boolean =>
   node.reviewState === 'deleted' || node.reviewState === 'replaced-old'
@@ -20,13 +26,46 @@ const textKey = (spec: DocxBlockSpec): string => {
     .join('\n')
 }
 
+const tableShapeKey = (spec: DocxTableSpec): string => spec.rows.map((row) => row.length).join(',')
+
+const buildTableCellChanges = (
+  before: DocxTableSpec,
+  after: DocxTableSpec
+): DocxTableCellReviewChange[] | null => {
+  if (tableShapeKey(before) !== tableShapeKey(after)) return null
+  const changes: DocxTableCellReviewChange[] = []
+  before.rows.forEach((row, rowIndex) => {
+    row.forEach((beforeCell, colIndex) => {
+      const afterCell = after.rows[rowIndex]?.[colIndex]
+      if (
+        !afterCell ||
+        specKey({ kind: 'table', rows: [[beforeCell]] }) ===
+          specKey({ kind: 'table', rows: [[afterCell]] })
+      ) {
+        return
+      }
+      const beforeText = textKey({ kind: 'table', rows: [[beforeCell]] })
+      const afterText = textKey({ kind: 'table', rows: [[afterCell]] })
+      changes.push({
+        rowIndex,
+        colIndex,
+        kind: beforeText === afterText ? 'formatted' : 'replaced',
+        before: beforeCell,
+        after: afterCell
+      })
+    })
+  })
+  return changes
+}
+
 const normalizeGeneratedNode = (node: DocxReplayNode): DocxReplayNode | null => {
   if (isOldNode(node)) return null
   return {
     ...node,
     nodeId: `net-inserted:${node.nodeId}`,
     reviewState: 'inserted',
-    reviewQuery: undefined
+    reviewQuery: undefined,
+    tableCellChanges: undefined
   }
 }
 
@@ -50,7 +89,8 @@ const normalizeSourceLineage = (input: {
         sourceBlockId: input.sourceBlockId,
         spec: baseline.spec,
         reviewState: 'deleted',
-        reviewQuery: undefined
+        reviewQuery: undefined,
+        tableCellChanges: undefined
       }
     ]
   }
@@ -62,9 +102,26 @@ const normalizeSourceLineage = (input: {
         nodeId: `net-normal:${input.sourceBlockId}`,
         sourceBlockId: input.sourceBlockId,
         reviewState: 'normal',
-        reviewQuery: undefined
+        reviewQuery: undefined,
+        tableCellChanges: undefined
       }
     ]
+  }
+
+  if (baseline.spec.kind === 'table' && visible.spec.kind === 'table') {
+    const tableCellChanges = buildTableCellChanges(baseline.spec, visible.spec)
+    if (tableCellChanges && tableCellChanges.length > 0) {
+      return [
+        {
+          ...visible,
+          nodeId: `net-table-cells:${input.sourceBlockId}`,
+          sourceBlockId: input.sourceBlockId,
+          reviewState: 'formatted',
+          reviewQuery: undefined,
+          tableCellChanges
+        }
+      ]
+    }
   }
 
   if (textKey(baseline.spec) === textKey(visible.spec)) {
@@ -74,7 +131,8 @@ const normalizeSourceLineage = (input: {
         nodeId: `net-formatted:${input.sourceBlockId}`,
         sourceBlockId: input.sourceBlockId,
         reviewState: 'formatted',
-        reviewQuery: undefined
+        reviewQuery: undefined,
+        tableCellChanges: undefined
       }
     ]
   }
@@ -88,7 +146,8 @@ const normalizeSourceLineage = (input: {
     sourceBlockId: input.sourceBlockId,
     spec: baseline.spec,
     reviewState: 'replaced-old',
-    reviewQuery: undefined
+    reviewQuery: undefined,
+    tableCellChanges: undefined
   }
   const newNode: DocxReplayNode = {
     ...visible,
@@ -96,6 +155,7 @@ const normalizeSourceLineage = (input: {
     sourceBlockId: input.sourceBlockId,
     reviewState: 'replaced-new',
     reviewQuery: undefined,
+    tableCellChanges: undefined,
     replacedFromNodeId: oldNode.nodeId,
     predecessorNodeId: oldNode.nodeId
   }

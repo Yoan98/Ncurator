@@ -23,7 +23,7 @@
 - `web_search` 与 `web_crawl` 需要分开覆盖：搜索 case 只验证候选网页返回；读取 case 必须验证 AI 继续读取网页正文后再回答。
 - Workbench 附件链路当前支持图片、`doc`、`docx`、`pptx`、`pdf`、`md`、`json`、`xlsx`、`xlsm`、`xltx`、`xltm`，统一保存到 `<workspace>/.ncurator/runtime/assets/<assetBucketId>/`；`assetBucketId` 为输入草稿 UUID，发送给 AI 时只传附件名称与路径，不再做发送前识图或文件解析。
 - `WB-EXCEL-001-AC1`、`WB-EXCEL-001-AC2`、`WB-EXCEL-001-AC3`、`WB-EXCEL-001-AC4`、`WB-EXCEL-001-AC6`、`WB-EXCEL-001-AC7` 的工具输入输出、完整编辑操作、原子失败、冲突、只读格式、默认 Sheet 和 Sheet 严格校验由 AI tool 回归承担；`WB-EXCEL-002` 的完整 XLSX diff 语义也由 AI tool 解析 diff 文件校验。Workbench 的 Excel apply case 负责真实模型选用工具、正式文件、修改入口、只读单网格预览和回退闭环，不重复枚举底层操作。
-- docx、ppt、pdf 也按同一分层：格式专用工具的读写、边界、格式保真和 diff artifact 语义放在 AI tool；其中 PPT tool 必须完整覆盖 baseline 到最终状态的页面/元素净变化、自然位移、零净变化、lineage、v4 schema 和准确计数。Workbench e2e 只验证真实用户流程、现有预览入口、红绿页面标记、`+N/-N`、差异面板交互和回退，不重复枚举底层元素组合。PDF 当前是只读工具，没有 Workbench apply diff 语义。
+- docx、ppt、pdf 也按同一分层：格式专用工具的读写、边界、格式保真和 diff artifact 语义放在 AI tool；DOCX tool 必须覆盖已有表格的单元格内容与格式净变化、精确红绿标记、计数和非空回读；其中 PPT tool 必须完整覆盖 baseline 到最终状态的页面/元素净变化、自然位移、零净变化、lineage、v4 schema 和准确计数。Workbench e2e 只验证真实用户流程、现有预览入口、红绿页面标记、`+N/-N`、差异面板交互和回退，不重复枚举底层元素组合。PDF 当前是只读工具，没有 Workbench apply diff 语义。
 
 ## 3. Suite 设计
 
@@ -77,7 +77,6 @@ tests/case/workbench/
 
 - `pnpm test:workbench:e2e` 是 Workbench UI 源码 E2E 回归测试入口。
 - 需要验证正式安装包时使用 `pnpm test:e2e:package -- --bundle <release-bundle.json>`；它会校验并安装已构建候选包，再对安装后的真实应用执行 E2E，不重新构建，也不属于普通开发回归。发布时按 `doc/release.md` 的影响评估选择范围，不带过滤参数时执行全部 E2E。
-- AI case 缺少 `AI_LIVE_BASE_URL`、`AI_LIVE_API_KEY`、`AI_LIVE_PRIMARY_MODEL_NAME`、`AI_LIVE_VISUAL_MODEL_NAME` 时必须 preflight fail，不得静默跳过。
 - `conversation / run / result` 是稳定 suite，不因 PRD 小节增删而轻易重排。
 - suite 下的 `session / composer / message / scope / process / blocker / browser / search / preview / apply` 是 group，只在同一 suite 内用于收敛相近 case。
 
@@ -461,6 +460,15 @@ tests/case/workbench/
 - How：通过 UI 选择真实 docx 资料并发送真实编辑请求；等待 AI 写回；点击 assistant turn 中的修改文件入口；检查右侧文件面包屑、无模式标签状态、预览，以及系统应用下拉内的“打开所在文件夹”；执行回退并重新读取文件内容。
 - Oracle：受支持写回类型边界对齐 `WB-CORE-003`；修改后源文件成为最终净稿并展示入口；右侧默认选中、Review Docx、写回和回退闭环对齐 `WB-APPLY-001`、`WB-APPLY-002`、`WB-APPLY-003`。
 - Not：不验证 docx 编辑算法的所有格式保真细节，该能力归 AI tool docx 测试。
+
+#### `docx-attachment-apply-status-and-cell-diff`
+
+- 测试类型：`e2e`
+- What：通过 Composer 添加真实 DOCX 附件，让 AI 修改已有表格单元格的文字和格式，验证附件位于 `.ncurator/runtime/assets` 时仍保持成功状态和单元格 Diff。
+- Why：通用工作区扫描忽略 `.ncurator`，且 DOCX 审核树以正文块为主，必须在真实附件链路验证专用写入记录不被误判失败。
+- How：从 UI 添加包含已有表格的 DOCX，发送明确的单元格替换和样式修改请求；等待 Run 完成后打开 assistant 修改入口，检查状态、Review Docx、临时提示和真实磁盘文件。
+- Oracle：正式 DOCX 包含最终单元格内容；修改记录为 `applied` 且不出现失败红条或“本次未检测到文件内容变化”；审核预览在对应单元格展示红绿净变化，未变单元格不整表高亮，对齐 `WB-PANEL-003-AC20`、`WB-PANEL-003-AC21`、`WB-APPLY-003-AC9`。
+- Not：不使用 fake DOCX、fake AI event 或伪造修改记录。
 
 #### `terminal-rename-change-notice-and-revert`
 

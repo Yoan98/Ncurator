@@ -22,6 +22,20 @@ const resetResumeSnapshotsV2Migration = `
 DELETE FROM chat_session_resume_snapshot;
 `
 
+const repairFalseDocxChangeFailuresMigration = `
+UPDATE ai_file_change
+SET status = 'applied', last_error = NULL
+WHERE status = 'failed'
+  AND last_error = 'Run completed without an effective workspace change.'
+  AND EXISTS (
+    SELECT 1
+    FROM docx_apply
+    WHERE docx_apply.id = ai_file_change.id
+      AND docx_apply.status = 'applied'
+      AND COALESCE(docx_apply.before_checksum, '') <> COALESCE(docx_apply.after_checksum, '')
+  );
+`
+
 export type SqliteDatabase = Database.Database
 export type SqliteStatement = Database.Statement
 
@@ -51,6 +65,11 @@ const MIGRATIONS: Migration[] = [
     version: 4,
     name: 'reset_resume_snapshots_v2',
     sql: resetResumeSnapshotsV2Migration
+  },
+  {
+    version: 5,
+    name: 'repair_false_docx_change_failures',
+    sql: repairFalseDocxChangeFailuresMigration
   }
 ]
 

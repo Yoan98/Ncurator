@@ -8,6 +8,7 @@ import type {
   AiFileChangeOperation,
   AiFileChangeRecord
 } from '../../../../shared/types'
+import { NO_EFFECTIVE_FILE_CHANGE_MESSAGE } from '../../../../shared/constants'
 
 const IGNORED_DIRECTORY_NAMES = new Set(['.git', '.ncurator', 'node_modules'])
 
@@ -76,6 +77,22 @@ export type CompletedWorkspaceChange = {
 
 const normalizePathKey = (value: string): string =>
   path.resolve(value).replace(/\\/g, '/').toLowerCase()
+
+const hasEffectiveSpecialistChange = (record: AiFileChangeRecord): boolean => {
+  if (record.source === 'workspace_scan' || record.capability === 'terminal_exec') return false
+  if (record.operation === 'created') return Boolean(record.afterChecksum)
+  if (record.operation === 'deleted') return Boolean(record.beforeChecksum)
+  if (record.operation === 'renamed') {
+    return Boolean(
+      record.beforePath &&
+      record.afterPath &&
+      normalizePathKey(record.beforePath) !== normalizePathKey(record.afterPath)
+    )
+  }
+  return Boolean(
+    record.beforeChecksum && record.afterChecksum && record.beforeChecksum !== record.afterChecksum
+  )
+}
 
 const hashFile = async (filePath: string): Promise<string> => {
   const hash = createHash('sha256')
@@ -315,15 +332,18 @@ export class WorkspaceChangeTracker {
         fileName: path.basename(targetPath),
         operation: change.operation,
         source:
-          capability === 'docx'
+          specialist?.source ||
+          (capability === 'docx'
             ? 'docx_tool'
-            : specialist?.capability === 'excel'
-              ? 'excel_tool'
-              : specialist?.capability === 'image'
-                ? 'image_tool'
-                : specialist?.capability === 'text_file'
-                  ? 'text_tool'
-                  : 'workspace_scan',
+            : capability === 'ppt'
+              ? 'ppt_tool'
+              : capability === 'excel'
+                ? 'excel_tool'
+                : capability === 'image'
+                  ? 'image_tool'
+                  : capability === 'text_file'
+                    ? 'text_tool'
+                    : 'workspace_scan'),
         beforePath: change.before?.absolutePath,
         afterPath: change.after?.absolutePath,
         changeCount: specialist?.changeCount || 1,
@@ -346,11 +366,22 @@ export class WorkspaceChangeTracker {
 
     for (const record of input.existingRecords) {
       if (matchedExistingIds.has(record.id) || record.status !== 'applied') continue
+      if (hasEffectiveSpecialistChange(record)) {
+        completed.push({
+          record: {
+            ...record,
+            error: undefined,
+            updatedAt: Date.now()
+          },
+          discoveredByScan: false
+        })
+        continue
+      }
       completed.push({
         record: {
           ...record,
           status: 'failed',
-          error: 'Run completed without an effective workspace change.',
+          error: NO_EFFECTIVE_FILE_CHANGE_MESSAGE,
           updatedAt: Date.now()
         },
         discoveredByScan: false

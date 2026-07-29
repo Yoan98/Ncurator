@@ -108,7 +108,6 @@ tests/
 
 ### 3.4 真实 AI / live 断言规则
 
-- Workbench 真实 AI E2E 固定读取 `AI_LIVE_BASE_URL`、`AI_LIVE_API_KEY`、`AI_LIVE_PRIMARY_MODEL_NAME`、`AI_LIVE_VISUAL_MODEL_NAME`；缺少任意一项都必须 preflight fail。
 - Workbench 真实 AI E2E 必须通过应用 UI 同时选择主模型和视觉模型；视觉模型不得静默跟随主模型。
 - backend 视觉模型测试统一读取 `AI_LIVE_VISUAL_MODEL_NAME`；视觉模型专用地址、密钥和 provider 仍可通过 `AI_LIVE_VISION_BASE_URL`、`AI_LIVE_VISION_API_KEY`、`AI_LIVE_VISION_PROVIDER_KIND` 覆盖。
 - 涉及真实 AI 调用的回归测试，硬断言只验证最低工程契约：完成态、关键事实、关键工具或事件、关键 artifact，以及用户诉求是否落地。

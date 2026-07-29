@@ -38,7 +38,7 @@ import type {
   WorkspaceSource,
   WorkspaceRuntimeBinding
 } from '../../../shared/types'
-import { USER_MANUAL_URL } from '../../../shared/constants'
+import { NO_EFFECTIVE_FILE_CHANGE_MESSAGE, USER_MANUAL_URL } from '../../../shared/constants'
 import MarkdownRenderer from '../components/MarkdownRenderer'
 import { useNavigate } from 'react-router-dom'
 import { normalizeUserFacingError } from '../utils/userFacingError'
@@ -708,6 +708,7 @@ const ChatPage: React.FC = () => {
         autoOpen?: boolean
         forceOpenWorkspace?: boolean
         skipApplyRecordReload?: boolean
+        notifyNoEffectiveChange?: boolean
       }
     ) => Promise<void>
   >(async () => {})
@@ -721,6 +722,7 @@ const ChatPage: React.FC = () => {
   const shouldAutoScrollRef = useRef(true)
   const scrollFrameRef = useRef<number | null>(null)
   const messageAttachmentPreviewUrlsRef = useRef<Record<string, string>>({})
+  const notifiedNoEffectiveChangeIdsRef = useRef<Set<string>>(new Set())
 
   const tabWorkspaceKey = currentSessionId || '__draft__'
   const tabWorkspace = tabWorkspaces[tabWorkspaceKey] || EMPTY_TAB_WORKSPACE
@@ -1533,6 +1535,7 @@ const ChatPage: React.FC = () => {
       autoOpen?: boolean
       forceOpenWorkspace?: boolean
       skipApplyRecordReload?: boolean
+      notifyNoEffectiveChange?: boolean
     }
   ): Promise<void> => {
     try {
@@ -1544,14 +1547,27 @@ const ChatPage: React.FC = () => {
 
       for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
         const response = await window.api.aiFileChangeList({ sessionId })
-        const nextItems = sortFileChangeRecords(response.items)
+        const listedItems = sortFileChangeRecords(response.items)
+        const noEffectiveChangeRecords = listedItems.filter(
+          (item) => item.status === 'failed' && item.error === NO_EFFECTIVE_FILE_CHANGE_MESSAGE
+        )
+        if (options?.notifyNoEffectiveChange) {
+          noEffectiveChangeRecords.forEach((record) => {
+            if (notifiedNoEffectiveChangeIdsRef.current.has(record.id)) return
+            notifiedNoEffectiveChangeIdsRef.current.add(record.id)
+            emitInfoMessage(NO_EFFECTIVE_FILE_CHANGE_MESSAGE)
+          })
+        }
+        const nextItems = listedItems.filter(
+          (item) => item.status !== 'failed' || item.error !== NO_EFFECTIVE_FILE_CHANGE_MESSAGE
+        )
         allRecords = nextItems
         activeRecords = nextItems.filter((item) => ACTIVE_FILE_CHANGE_STATUSES.has(item.status))
 
         const missingPreferred =
           options?.preferredApplyId !== undefined &&
           options.preferredApplyId !== null &&
-          !allRecords.some((record) => record.id === options.preferredApplyId)
+          !listedItems.some((record) => record.id === options.preferredApplyId)
         if (!missingPreferred) break
         if (attempt < maxAttempts - 1) await delay(150)
       }
@@ -2392,7 +2408,7 @@ const ChatPage: React.FC = () => {
         setUserTakeoverConfirming(false)
         const activeSessionId = currentSessionIdRef.current
         if (activeSessionId) {
-          void loadFileChangesForSession(activeSessionId)
+          void loadFileChangesForSession(activeSessionId, { notifyNoEffectiveChange: true })
         }
         void refreshContextUsage(activeSessionId)
       }

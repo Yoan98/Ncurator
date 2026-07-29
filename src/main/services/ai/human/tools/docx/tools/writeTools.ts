@@ -294,7 +294,7 @@ const buildPostWriteReadback = async (input: {
   regions = mergeReadbackRegions(currentOutlineBlocks, regions)
 
   const indexByBlockId = new Map(
-    currentOutlineBlocks.map((block, index) => [block.blockId, index] as const)
+    currentOutlineBlocks.map((block) => [block.blockId, block.blockIndex] as const)
   )
   const indexRegions = regions
     .map((region) => {

@@ -135,7 +135,8 @@ const buildNode = (input: {
   spec: input.spec,
   createdRevisionRef: input.createdRevisionRef,
   changedRevisionRef: input.changedRevisionRef,
-  reviewQuery: input.reviewQuery
+  reviewQuery: input.reviewQuery,
+  tableCellChanges: undefined
 })
 
 const reindexBodyNodes = (session: DocxReplaySession): void => {
@@ -463,7 +464,7 @@ export const applyRevisionToReplaySession = (input: {
     return
   }
 
-  const targetBlockId =
+  const requestedTargetBlockId =
     op.type === 'update_table_cell' ||
     (op.type === 'replace_text' && Array.isArray(op.blockIds) && op.blockIds[0])
       ? op.type === 'update_table_cell'
@@ -472,6 +473,9 @@ export const applyRevisionToReplaySession = (input: {
       : 'blockId' in op
         ? String(op.blockId || '')
         : ''
+  const targetBlockId =
+    session.activeSnapshot.tableBlockIdByCellBlockId.get(requestedTargetBlockId) ||
+    requestedTargetBlockId
   const targetNodeId = targetBlockId
     ? findVisibleNodeIdByBlockId(session, targetBlockId)
     : undefined

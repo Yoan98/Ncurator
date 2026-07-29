@@ -333,6 +333,14 @@ export type DocxReviewState =
   | 'replaced-old'
   | 'replaced-new'
 
+export type DocxTableCellReviewChange = {
+  rowIndex: number
+  colIndex: number
+  kind: 'formatted' | 'replaced'
+  before: DocxTableCellSpec
+  after: DocxTableCellSpec
+}
+
 export type DocxReplayNode = {
   nodeId: string
   blockId: string
@@ -352,6 +360,7 @@ export type DocxReplayNode = {
   createdRevisionRef: string
   changedRevisionRef?: string
   reviewQuery?: string
+  tableCellChanges?: DocxTableCellReviewChange[]
 }
 
 export type DocxCapabilityToolsRuntimeState = {

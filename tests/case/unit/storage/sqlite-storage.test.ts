@@ -207,8 +207,72 @@ describe('sqlite storage core and stores', () => {
       { version: 1, name: 'initial_schema' },
       { version: 2, name: 'ai_runtime_system_notifications' },
       { version: 3, name: 'chat_session_skill_state' },
-      { version: 4, name: 'reset_resume_snapshots_v2' }
+      { version: 4, name: 'reset_resume_snapshots_v2' },
+      { version: 5, name: 'repair_false_docx_change_failures' }
     ])
+  })
+
+  it('repairs historical DOCX changes that were falsely marked as failed', () => {
+    sqlite.prepare('DELETE FROM schema_migrations WHERE version = 5').run()
+    sqlite
+      .prepare(
+        `INSERT INTO ai_file_change (
+          id, session_id, run_id, status, capability, path, file_name, operation,
+          change_count, insert_count, delete_count, before_checksum, after_checksum,
+          created_at, updated_at, last_error
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        'false-failure',
+        'session-1',
+        'run-1',
+        'failed',
+        'docx',
+        '/workspace/input.docx',
+        'input.docx',
+        'updated',
+        1,
+        1,
+        1,
+        'before',
+        'after',
+        1,
+        2,
+        'Run completed without an effective workspace change.'
+      )
+    sqlite
+      .prepare(
+        `INSERT INTO docx_apply (
+          id, session_id, run_id, status, source_path, source_name, operation,
+          change_count, insert_count, delete_count, before_exists,
+          before_checksum, after_checksum, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        'false-failure',
+        'session-1',
+        'run-1',
+        'applied',
+        '/workspace/input.docx',
+        'input.docx',
+        'updated',
+        1,
+        1,
+        1,
+        1,
+        'before',
+        'after',
+        1,
+        2
+      )
+
+    sqlite.close()
+    sqlite.initialize()
+
+    const repaired = sqlite
+      .prepare('SELECT status, last_error FROM ai_file_change WHERE id = ?')
+      .get('false-failure') as { status: string; last_error: string | null }
+    expect(repaired).toEqual({ status: 'applied', last_error: null })
   })
 
   it('keeps chat message seq stable and returns the latest 50 in ascending order', async () => {

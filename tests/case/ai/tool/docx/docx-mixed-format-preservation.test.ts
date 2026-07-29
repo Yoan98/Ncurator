@@ -1,4 +1,7 @@
+import fs from 'node:fs/promises'
 import { describe, it } from 'vitest'
+import JSZip from 'jszip'
+import type { DocxApplyRecord } from '../../../../../src/shared/types'
 import {
   createDocxToolHarness,
   writeRichTestDocxFile
@@ -72,10 +75,7 @@ describe('ai tool docx backend', () => {
                 {
                   paragraphs: [
                     {
-                      runs: [
-                        { text: 'Owner: ' },
-                        { text: 'Alice', bold: true, color: 'FF0000' }
-                      ]
+                      runs: [{ text: 'Owner: ' }, { text: 'Alice', bold: true, color: 'FF0000' }]
                     }
                   ]
                 }
@@ -86,6 +86,7 @@ describe('ai tool docx backend', () => {
 
         const harness = createDocxToolHarness(runtime)
         try {
+          harness.ctx.beginDocxApplyRun()
           const outline = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
             sourcePath: 'mixed-format.docx',
             ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 49 }]
@@ -96,27 +97,38 @@ describe('ai tool docx backend', () => {
             'Bold Italic Underline Green'
           )
           const ownerCellBlockId = findTableCellBlockIdByText(outline.blocks, 'Owner: Alice')
+          const fieldCellBlockId = findTableCellBlockIdByText(outline.blocks, 'Field')
 
           const styledCell = await harness.invoke<DocxMutationResult>('docx_edit', {
             sourcePath: outline.sourcePath,
-            actions: [{
-              type: 'style_text',
-              blockId: ownerCellBlockId,
-              query: 'Alice',
-              style: {
-              italic: true,
-              color: '008000'
-            }
-            }]
+            actions: [
+              {
+                type: 'style_text',
+                blockId: ownerCellBlockId,
+                query: 'Alice',
+                style: {
+                  italic: true,
+                  color: '008000'
+                }
+              },
+              {
+                type: 'style_text',
+                blockId: fieldCellBlockId,
+                query: 'Field',
+                style: { bold: true }
+              }
+            ]
           })
           const renamedCell = await harness.invoke<DocxMutationResult>('docx_edit', {
             sourcePath: styledCell.sourcePath,
-            actions: [{
-              type: 'replace_text',
-              query: 'Alice',
-              replace: 'Bob',
-              blockIds: [ownerCellBlockId]
-            }]
+            actions: [
+              {
+                type: 'replace_text',
+                query: 'Alice',
+                replace: 'Bob',
+                blockIds: [ownerCellBlockId]
+              }
+            ]
           })
           const preservedParagraph = await harness.invoke<DocxReadResult>('docx_read_blocks', {
             sourcePath: renamedCell.sourcePath,
@@ -126,12 +138,18 @@ describe('ai tool docx backend', () => {
             sourcePath: renamedCell.sourcePath,
             range: { type: 'block_ids', blockIds: [ownerCellBlockId] }
           })
+          const records = await harness.ctx.applyDocxRunEdits()
+          const record = records[0] as DocxApplyRecord
+          const zip = await JSZip.loadAsync(await fs.readFile(record.preview_diff_artifact_path))
+          const diffXml = await zip.file('word/document.xml')!.async('string')
 
           return {
             styledCell,
             renamedCell,
             preservedParagraph,
-            updatedCell
+            updatedCell,
+            record,
+            diffXml
           }
         } finally {
           await harness.release()
@@ -162,6 +180,28 @@ describe('ai tool docx backend', () => {
             data: {
               updatedCell: result.updatedCell.blocks[0],
               renamedCell: result.renamedCell.changedBlocks
+            }
+          }
+        )
+
+        runtime.assertThat(
+          result.styledCell.postWriteReadback?.regions.some((region) =>
+            region.blocks.some((block) => block.type === 'table')
+          ) === true &&
+            result.record.change_count === 2 &&
+            result.record.insert_count === 1 &&
+            result.record.delete_count === 1 &&
+            result.diffXml.includes('Field') &&
+            result.diffXml.includes('Alice') &&
+            result.diffXml.includes('Bob') &&
+            result.diffXml.includes('w:fill="FDECEC"') &&
+            result.diffXml.includes('w:fill="E9F7EF"'),
+          {
+            name: 'existing-table-cell-diff-is-granular-and-readable',
+            message: '已有表格的单元格格式与文字修改都应进入 Diff，修改后回读不得为空。',
+            data: {
+              postWriteReadback: result.styledCell.postWriteReadback,
+              record: result.record
             }
           }
         )

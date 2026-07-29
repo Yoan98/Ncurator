@@ -264,6 +264,10 @@ export class RunDocxEditTracker {
     let generatedChanges = 0
     nodes.forEach((node) => {
       if (node.reviewState === 'normal') return
+      if (node.tableCellChanges?.length) {
+        generatedChanges += node.tableCellChanges.length
+        return
+      }
       if (node.sourceOrigin === 'source') {
         sourceChanges.add(node.sourceBlockId || node.blockId)
       } else if (node.reviewState === 'inserted' || node.reviewState === 'replaced-new') {
@@ -276,6 +280,14 @@ export class RunDocxEditTracker {
   private countReviewChanges(session: DocxReplaySession): DocxChangeStats {
     return projectReviewView(session).reduce<DocxChangeStats>(
       (stats, node) => {
+        if (node.tableCellChanges?.length) {
+          node.tableCellChanges.forEach((change) => {
+            if (change.kind !== 'replaced') return
+            stats.insertCount += 1
+            stats.deleteCount += 1
+          })
+          return stats
+        }
         if (node.reviewState === 'inserted' || node.reviewState === 'replaced-new') {
           stats.insertCount += 1
         }

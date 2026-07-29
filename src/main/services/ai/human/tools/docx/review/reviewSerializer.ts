@@ -6,7 +6,7 @@ import { childElements, firstChildElement, isElementNode } from '../adapters/oox
 import { buildBlockIndex, loadDocxBundle } from '../adapters/ooxml/blockIndex'
 import type { IndexedNode } from '../adapters/ooxml/types'
 import { validateDocxBuffer } from '../adapters/ooxml/validator'
-import { createBlockElementFromSpec } from '../utils/specDom'
+import { createBlockElementFromSpec, createParagraphElementFromSpec } from '../utils/specDom'
 import type { DocxBlockSpec, DocxReplayNode, DocxReplaySession } from '../types'
 import { projectCommittedView, projectReviewView } from './viewProjector'
 
@@ -123,6 +123,45 @@ const applyFormattedMarker = (element: Element, query?: string): void => {
   targetRuns.forEach((run) => styleRunForRevision(run, 'inserted'))
 }
 
+const getTableCell = (table: Element, rowIndex: number, colIndex: number): Element | undefined => {
+  const row = childElements(table, 'tr')[rowIndex]
+  return row ? childElements(row, 'tc')[colIndex] : undefined
+}
+
+const replaceCellWithReviewContent = (
+  cell: Element,
+  change: NonNullable<DocxReplayNode['tableCellChanges']>[number]
+): void => {
+  const currentParagraphs = childElements(cell, 'p').map(cloneElement)
+  childElements(cell)
+    .filter((child) => child.localName !== 'tcPr')
+    .forEach((child) => cell.removeChild(child))
+
+  change.before.paragraphs.forEach((paragraphSpec) => {
+    const paragraph = createParagraphElementFromSpec(cell.ownerDocument, paragraphSpec)
+    applyRevisionToRuns(paragraph, 'deleted')
+    cell.appendChild(paragraph)
+  })
+  currentParagraphs.forEach((paragraph) => {
+    applyRevisionToRuns(paragraph, 'inserted')
+    cell.appendChild(paragraph)
+  })
+}
+
+const applyTableCellReviewMarkers = (element: Element, node: DocxReplayNode): boolean => {
+  if (element.localName !== 'tbl' || !node.tableCellChanges?.length) return false
+  node.tableCellChanges.forEach((change) => {
+    const cell = getTableCell(element, change.rowIndex, change.colIndex)
+    if (!cell) return
+    if (change.kind === 'formatted') {
+      applyRevisionToRuns(cell, 'inserted')
+      return
+    }
+    replaceCellWithReviewContent(cell, change)
+  })
+  return true
+}
+
 const getBody = (doc: Document): Element => {
   const bodies = doc.getElementsByTagNameNS(WORD_NS, 'body')
   const body = bodies.item(0)
@@ -210,6 +249,7 @@ const resolveElementForNode = (input: {
 }
 
 const applyReviewMarker = (element: Element, node: DocxReplayNode): void => {
+  if (applyTableCellReviewMarkers(element, node)) return
   if (node.reviewState === 'formatted') {
     applyFormattedMarker(element, node.reviewQuery)
     return
