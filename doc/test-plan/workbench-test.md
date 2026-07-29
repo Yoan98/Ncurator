@@ -23,7 +23,7 @@
 - `web_search` 与 `web_crawl` 需要分开覆盖：搜索 case 只验证候选网页返回；读取 case 必须验证 AI 继续读取网页正文后再回答。
 - Workbench 附件链路当前支持图片、`doc`、`docx`、`pptx`、`pdf`、`md`、`json`、`xlsx`、`xlsm`、`xltx`、`xltm`，统一保存到 `<workspace>/.ncurator/runtime/assets/<assetBucketId>/`；`assetBucketId` 为输入草稿 UUID，发送给 AI 时只传附件名称与路径，不再做发送前识图或文件解析。
 - `WB-EXCEL-001-AC1`、`WB-EXCEL-001-AC2`、`WB-EXCEL-001-AC3`、`WB-EXCEL-001-AC4`、`WB-EXCEL-001-AC6`、`WB-EXCEL-001-AC7` 的工具输入输出、完整编辑操作、原子失败、冲突、只读格式、默认 Sheet 和 Sheet 严格校验由 AI tool 回归承担；`WB-EXCEL-002` 的完整 XLSX diff 语义也由 AI tool 解析 diff 文件校验。Workbench 的 Excel apply case 负责真实模型选用工具、正式文件、修改入口、只读单网格预览和回退闭环，不重复枚举底层操作。
-- docx、ppt、pdf 也按同一分层：格式专用工具的读写、边界、格式保真和 diff artifact 语义放在 AI tool；Workbench e2e 只验证真实用户流程、预览入口、差异面板交互和回退。PDF 当前是只读工具，没有 Workbench apply diff 语义。
+- docx、ppt、pdf 也按同一分层：格式专用工具的读写、边界、格式保真和 diff artifact 语义放在 AI tool；其中 PPT tool 必须完整覆盖 baseline 到最终状态的页面/元素净变化、自然位移、零净变化、lineage、v4 schema 和准确计数。Workbench e2e 只验证真实用户流程、现有预览入口、红绿页面标记、`+N/-N`、差异面板交互和回退，不重复枚举底层元素组合。PDF 当前是只读工具，没有 Workbench apply diff 语义。
 
 ## 3. Suite 设计
 
@@ -402,19 +402,19 @@ tests/case/workbench/
 #### `ppt-create-diff-and-revert`
 
 - 测试类型：`e2e / live`
-- What：真实 AI 创建两页 PPT 后，用户可打开页面级左右 diff、切换缩略图模式并回撤文件。
+- What：真实 AI 创建两页 PPT 后，用户可打开页面级左右 diff、看到准确 `+2/-0`、切换审核/预览并回撤文件。
 - Why：新建 PPT 必须同时验证文件交付、审核模式和回退闭环。
-- How：通过真实 Workbench UI 请求 AI 创建两页 PPT，打开修改记录并操作审核模式和回退。
-- Oracle：真实 PPT 创建、原子写入和 run 级修改记录对齐 `WB-PPT-001`、`WB-APPLY-002`；pptx 可解析，左右差异区和缩略图可见，全部页与变化页切换有效；回撤后新建文件被删除，对齐 `WB-APPLY-003`。
+- How：通过真实 Workbench UI 请求 AI 创建两页 PPT，打开修改记录，操作审核/预览、缩放、拖拽和回退。
+- Oracle：真实 PPT 创建、原子写入和 run 级修改记录对齐 `WB-PPT-001`、`WB-APPLY-002`；pptx 可解析，审核模式显示两页和 `+2/-0`，预览模式显示正式 PPT，现有缩放拖拽可用；回撤后新建文件被删除，对齐 `WB-APPLY-003`。
 - Not：不逐字断言最终回答，不对页面审美打分。
 
 #### `ppt-update-diff-interactions`
 
 - 测试类型：`e2e`
-- What：已有 PPT 更新后的左右差异、变化标记、缩略图筛选、缩放和拖动画布。
+- What：已有 PPT 更新后的左右差异、绿色新增/修改/移动、红色删除、准确 `+N/-N`、缩略图筛选、审核/预览、缩放和拖动画布。
 - Why：创建态与更新态的差异语义不同，不能只用新建 PPT case 代替。
-- How：修改真实 PPT 的页面内容和顺序，打开修改记录并操作审核模式。
-- Oracle：修改前后画面、变化页标记、全部页切换、同步切页、缩放和拖动均可用，对齐 `WB-PPT-002`。
+- How：让真实 AI 对已有四页 PPT 主动移动一页、修改一页、删除中间页、新增一页，并要求末页完全不变；打开修改记录并操作审核/预览、筛选、同步切页、缩放、拖动和回退。
+- Oracle：正式 PPT 内容和顺序正确；审核显示准确 `+3/-1`、三个绿色页面标记和一个红色删除标记；删除中间页不会把未改末页标绿，变化筛选为四页、全部模式为五个 before/after 对齐项；审核/预览切换、同步缩放拖动不变，回退后 bytes 与 baseline 完全一致，对齐 `WB-PPT-002`、`WB-APPLY-003`。
 - Not：不评价页面设计质量。
 
 #### `excel-update-diff-and-revert`

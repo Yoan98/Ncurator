@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import type { AiFileChangeRecord } from '../../../../shared/types'
+import { assertSupportedPptDiffManifest } from '../../../../shared/pptDiffManifest'
 import { workbenchSelectors } from '../../testing/selectors'
 import PptSlideDeckViewer, { type PptViewerSlide } from '../fileRenders/PptSlideDeckViewer'
 
@@ -8,10 +9,23 @@ type DiffSlide = {
   slideId: string
   changed: boolean
   changes: Array<'added' | 'deleted' | 'modified' | 'moved'>
+  elementChanges: Array<{
+    kind: 'added' | 'deleted' | 'modified'
+    beforeElementId?: string
+    afterElementId?: string
+  }>
+  positiveCount: number
+  negativeCount: number
   before?: DiffFrame
   after?: DiffFrame
 }
-type DiffManifest = { version: 3; operation: 'created' | 'updated'; slides: DiffSlide[] }
+type DiffManifest = {
+  version: 4
+  operation: 'created' | 'updated'
+  positiveCount: number
+  negativeCount: number
+  slides: DiffSlide[]
+}
 
 const loadLocalUrl = async (filePath: string): Promise<string> => {
   const bytes = await window.api.readFile(filePath)
@@ -51,8 +65,7 @@ const PptDiffViewer: React.FC<{ record: AiFileChangeRecord }> = ({ record }) => 
       .then((bytes) => JSON.parse(new TextDecoder().decode(bytes)) as DiffManifest)
       .then((next) => {
         if (cancelled) return
-        if (next.version !== 3 || !Array.isArray(next.slides))
-          throw new Error('PPT 审核内容格式已过期，请重新生成修改记录')
+        assertSupportedPptDiffManifest(next)
         setManifest(next)
         setChangedOnly(next.operation === 'updated')
       })

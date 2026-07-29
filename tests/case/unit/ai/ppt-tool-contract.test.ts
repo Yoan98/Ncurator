@@ -243,26 +243,48 @@ describe('ai unit ppt tool contract', () => {
     ).resolves.toBeTruthy()
   })
 
-  it('emits v3 SVG created and updated diff semantics', () => {
-    const before = new Map([
-      ['slide-1', { index: 1, svg: 'before-1.svg', hash: 'same' }],
-      ['slide-2', { index: 2, svg: 'before-2.svg', hash: 'old' }]
+  it('emits v4 net diff semantics without treating structural shifts as moves', () => {
+    const beforeSlides = [
+      { slideId: 'slide-1', index: 1, pageFingerprint: 'same', elements: [] },
+      { slideId: 'slide-2', index: 2, pageFingerprint: 'old', elements: [] }
+    ]
+    const afterSlides = [
+      { slideId: 'slide-2', index: 1, pageFingerprint: 'new', elements: [] },
+      { slideId: 'slide-3', index: 2, pageFingerprint: 'new', elements: [] }
+    ]
+    const beforeFrames = new Map([
+      ['slide-1', { index: 1, svg: 'before-1.svg' }],
+      ['slide-2', { index: 2, svg: 'before-2.svg' }]
     ])
-    const after = new Map([
-      ['slide-2', { index: 1, svg: 'after-2.svg', hash: 'new' }],
-      ['slide-3', { index: 2, svg: 'after-3.svg', hash: 'new' }]
+    const afterFrames = new Map([
+      ['slide-2', { index: 1, svg: 'after-2.svg' }],
+      ['slide-3', { index: 2, svg: 'after-3.svg' }]
     ])
-    const manifest = buildPptDiffManifest({ before, after, operation: 'updated' })
-    expect(manifest.version).toBe(3)
+    const manifest = buildPptDiffManifest({
+      beforeSlides,
+      afterSlides,
+      beforeFrames,
+      afterFrames,
+      operation: 'updated'
+    })
+    expect(manifest.version).toBe(4)
     expect(manifest.slides.map((slide) => slide.changes)).toEqual([
       ['deleted'],
-      ['modified', 'moved'],
+      ['modified'],
       ['added']
     ])
+    expect({ positive: manifest.positiveCount, negative: manifest.negativeCount }).toEqual({
+      positive: 2,
+      negative: 1
+    })
     expect(
-      buildPptDiffManifest({ before: new Map(), after, operation: 'created' }).slides.every(
-        (slide) => slide.changes.includes('added')
-      )
+      buildPptDiffManifest({
+        beforeSlides: [],
+        afterSlides,
+        beforeFrames: new Map(),
+        afterFrames,
+        operation: 'created'
+      }).slides.every((slide) => slide.changes.includes('added'))
     ).toBe(true)
   })
 })

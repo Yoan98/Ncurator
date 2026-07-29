@@ -66,6 +66,16 @@ describe('workbench result e2e', () => {
             state: 'visible',
             timeout: 30_000
           })
+          const reviewToolbarText = (
+            (await getWorkbenchLocator(page, workbenchSelectors.documentToolbar).textContent()) ||
+            ''
+          ).trim()
+          const documentModeToggle = getWorkbenchLocator(
+            page,
+            workbenchSelectors.documentModeToggle
+          )
+          const documentModeTag = getWorkbenchLocator(page, workbenchSelectors.documentModeTag)
+          const initialModeTag = ((await documentModeTag.textContent()) || '').trim()
           const beforeVisible = await getWorkbenchLocator(
             page,
             workbenchSelectors.pptDiffBefore
@@ -114,6 +124,17 @@ describe('workbench result e2e', () => {
             await page.mouse.up()
           }
           const draggedTransform = (await transform.getAttribute('style')) || ''
+          await documentModeToggle.click()
+          await page
+            .getByTestId('ppt-preview-viewer')
+            .waitFor({ state: 'visible', timeout: 30_000 })
+          const previewModeTag = ((await documentModeTag.textContent()) || '').trim()
+          await documentModeToggle.click()
+          await getWorkbenchLocator(page, workbenchSelectors.pptDiffViewer).waitFor({
+            state: 'visible',
+            timeout: 30_000
+          })
+          const restoredModeTag = ((await documentModeTag.textContent()) || '').trim()
           await getWorkbenchLocator(page, workbenchSelectors.applyRevertButton).click()
           await page.getByText('回退这次修改？').waitFor({ state: 'visible' })
           await page.getByText('文件将恢复到这次修改发生前的状态。').waitFor({ state: 'visible' })
@@ -127,6 +148,10 @@ describe('workbench result e2e', () => {
             slideCount: getSlides(presentation).length,
             slideText,
             applyEntryText,
+            reviewToolbarText,
+            initialModeTag,
+            previewModeTag,
+            restoredModeTag,
             beforeVisible,
             afterVisible,
             thumbnailCount,
@@ -151,6 +176,11 @@ describe('workbench result e2e', () => {
             result.slideCount === 2 &&
               result.slideText.includes(MARKER) &&
               result.applyEntryText.includes(FILE_NAME) &&
+              result.reviewToolbarText.includes('+2') &&
+              result.reviewToolbarText.includes('-0') &&
+              result.initialModeTag === '审核' &&
+              result.previewModeTag === '预览' &&
+              result.restoredModeTag === '审核' &&
               !result.beforeVisible &&
               result.afterVisible &&
               result.thumbnailCount === 2 &&

@@ -66,7 +66,9 @@ export type PptRuntimeDocument = {
   lastPersistedBytes?: Uint8Array
   presentation: PresentationData
   dirty: boolean
-  changedSlideIds: Set<string>
+  movedSlideIds: Set<string>
+  movedElementIds: Set<string>
+  elementLineage: Map<string, string>
   warnings: string[]
 }
 
@@ -101,17 +103,41 @@ export type PptDiffFrame = {
   svg: string
 }
 
+export type PptDiffElementSnapshot = {
+  elementId: string
+  fingerprint: string
+  zIndex: number
+}
+
+export type PptDiffSlideSnapshot = {
+  slideId: string
+  index: number
+  pageFingerprint: string
+  elements: PptDiffElementSnapshot[]
+}
+
+export type PptDiffElementChange = {
+  kind: 'added' | 'deleted' | 'modified'
+  beforeElementId?: string
+  afterElementId?: string
+}
+
 export type PptDiffSlide = {
   slideId: string
   changed: boolean
   changes: Array<'added' | 'deleted' | 'modified' | 'moved'>
+  elementChanges: PptDiffElementChange[]
+  positiveCount: number
+  negativeCount: number
   before?: PptDiffFrame
   after?: PptDiffFrame
 }
 
 export type PptDiffManifest = {
-  version: 3
+  version: 4
   operation: 'created' | 'updated'
+  positiveCount: number
+  negativeCount: number
   slides: PptDiffSlide[]
 }
 

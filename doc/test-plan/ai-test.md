@@ -587,6 +587,15 @@ AI unit / 辅助测试目录：
 - Oracle：每次 `ppt_edit` 成功后正式文件立即存在、可解析且页面内容正确；Run 收尾后同一文件只生成一条修改记录和页面级 diff。
 - Not：不验证 human 的工具选择或页面审美。
 
+##### `ppt-diff-slide-and-element-net-semantics`
+
+- 测试类型：`backend / tool`
+- What：真实 PPT runtime 按本 Run 首个 baseline 和最终文件生成 Diff Manifest v4，覆盖页面和元素的新增、删除、修改、移动、恢复与组合计数。
+- Why：工具调用次数、插入删除造成的页码偏移和置顶造成的层级编号顺移都可能制造假 Diff，必须直接解析真实 artifact 验证净变化。
+- How：对三个真实 PPT 连续执行页面 A→B→C、A→B→A、修改后删除、新增后继续修改、新增后删除、中间页删除、主动移动及移动后恢复；再分别改变元素内容、样式、位置、大小、层级，覆盖同元素多种修改、公式 replacement lineage、元素新增后修改、修改后删除、新增后删除、修改后恢复、备注修改后恢复，最后提交 Run 并读取 Manifest 和正式 PPT。
+- Oracle：页面组合得到准确 `+3/-2`，元素组合得到准确 `+6/-1`，零净变化文件不生成记录；中间页增删不把后续页标记为移动，置顶只计算真实移动元素；中间稿和临时对象不进入 before/after；正式 PPT 可解析且无 Diff 污染，修改记录的 `insertCount/deleteCount/changeCount` 分别等于 v4 的 positive、negative 和两者之和。
+- Not：不验证 Workbench 布局、按钮、颜色 CSS 或模型是否会自主选择操作；这些由 Workbench E2E 和 human/live case 承担。
+
 ##### `ppt-professional-element-edit`
 
 - 测试类型：`backend / tool`

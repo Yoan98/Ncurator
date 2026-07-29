@@ -21,8 +21,14 @@ import {
   findShapeById,
   getShapeBoundsResolved,
   getShapeDescription,
+  getShapeEffects,
   getShapeFillColor,
   getShapeChartSpec,
+  getShapeImageBrightness,
+  getShapeImageBytes,
+  getShapeImageContrast,
+  getShapeImageCrop,
+  getShapeImageOpacity,
   getShapeId,
   getShapeKind,
   getShapePreset,
@@ -32,7 +38,12 @@ import {
   getShapeStrokeWidth,
   getShapeText,
   getShapeTextAnchor,
+  getShapeTextAutoFit,
+  getShapeTextMargins,
+  getShapeTextWrap,
   getShapeZIndex,
+  getSlideBackground,
+  getSlideBackgroundImageBytes,
   getSlideNotes,
   getSlideCharts,
   getSlidePartName,
@@ -93,6 +104,7 @@ import {
   PPT_CANVAS_WIDTH
 } from './htmlCompiler'
 import { renderLatexToSvg } from './formula'
+import { buildPptDiffManifest } from './diff'
 import {
   pptEditSchema,
   pptOutlineSchema,
@@ -107,14 +119,15 @@ import type {
   PptCompiledElement,
   PptCompiledSlide,
   PptDiffFrame,
-  PptDiffManifest,
-  PptDiffSlide,
+  PptDiffSlideSnapshot,
   PptOutlineItem,
   PptReadbackElement,
   PptReadbackSlide,
   PptRuntimeDocument,
   PptToolRuntime
 } from './types'
+
+export { buildPptDiffManifest } from './diff'
 
 const DEFAULT_WIDTH = PPT_CANVAS_WIDTH
 const DEFAULT_HEIGHT = PPT_CANVAS_HEIGHT
@@ -661,6 +674,63 @@ const readShapeDetails = (shape: SlideShapeData): JsonObject | undefined => {
   return preset ? { shape: preset } : undefined
 }
 
+const readShapeType = (shape: SlideShapeData): string => {
+  const description = getShapeDescription(shape) || ''
+  if (description.startsWith('ppt-latex:')) return 'formula'
+  if (isTableShape(shape)) return 'table'
+  if (isChartShape(shape)) return 'chart'
+  return getShapeKind(shape)
+}
+
+const canonicalize = (value: unknown): unknown => {
+  if (value === undefined) return null
+  if (value instanceof Uint8Array) return hashBytes(value)
+  if (Array.isArray(value)) return value.map(canonicalize)
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, entry]) => [key, canonicalize(entry)])
+    )
+  }
+  if (typeof value === 'number' && !Number.isFinite(value)) return String(value)
+  return value
+}
+
+const fingerprint = (value: unknown): string => hashBytes(JSON.stringify(canonicalize(value)))
+
+const createPptDiffSlideSnapshots = (presentation: PresentationData): PptDiffSlideSnapshot[] =>
+  getSlides(presentation).map((slide, index) => ({
+    slideId: slideIdOf(slide),
+    index: index + 1,
+    pageFingerprint: fingerprint({
+      background: getSlideBackground(slide),
+      backgroundImage: getSlideBackgroundImageBytes(slide),
+      notes: getSlideNotes(slide) || ''
+    }),
+    elements: getSlideShapes(slide).map((shape) => ({
+      elementId: elementIdOf(slide, shape),
+      fingerprint: fingerprint({
+        type: readShapeType(shape),
+        text: getShapeText(shape),
+        description: getShapeDescription(shape),
+        bounds: boundsFromEmu(presentation, getShapeBoundsResolved(presentation, shape)),
+        style: readShapeStyle(shape),
+        details: readShapeDetails(shape),
+        effects: getShapeEffects(presentation, shape),
+        textMargins: getShapeTextMargins(shape),
+        textWrap: getShapeTextWrap(shape),
+        textAutoFit: getShapeTextAutoFit(shape),
+        image: getShapeImageBytes(shape),
+        imageCrop: getShapeImageCrop(shape),
+        imageOpacity: getShapeImageOpacity(shape),
+        imageBrightness: getShapeImageBrightness(shape),
+        imageContrast: getShapeImageContrast(shape)
+      }),
+      zIndex: getShapeZIndex(shape)
+    }))
+  }))
+
 const slideReadback = (
   presentation: PresentationData,
   slide: SlideData,
@@ -673,16 +743,9 @@ const slideReadback = (
         const latex = description.startsWith('ppt-latex:')
           ? description.slice('ppt-latex:'.length)
           : undefined
-        const type = latex
-          ? 'formula'
-          : isTableShape(shape)
-            ? 'table'
-            : isChartShape(shape)
-              ? 'chart'
-              : getShapeKind(shape)
         return {
           elementId: elementIdOf(slide, shape),
-          type,
+          type: readShapeType(shape),
           zIndex: getShapeZIndex(shape),
           bounds: boundsFromEmu(presentation, getShapeBoundsResolved(presentation, shape)),
           text: getShapeText(shape) || undefined,
@@ -757,50 +820,6 @@ const renderPresentationSlides = async (input: {
     output.set(slideId, { index: index + 1, svg: svgPath, hash })
   }
   return output
-}
-
-export const buildPptDiffManifest = (input: {
-  before: Map<string, PptDiffFrame & { hash: string }>
-  after: Map<string, PptDiffFrame & { hash: string }>
-  operation: 'created' | 'updated'
-  forceChangedSlideIds?: ReadonlySet<string>
-}): PptDiffManifest => {
-  const afterEntries: PptDiffSlide[] = [...input.after.entries()]
-    .sort((a, b) => a[1].index - b[1].index)
-    .map(([slideId, after]) => {
-      const before = input.before.get(slideId)
-      const changes: PptDiffSlide['changes'] = []
-      if (!before) changes.push('added')
-      else {
-        if (
-          before.hash !== after.hash ||
-          (before.index === after.index && Boolean(input.forceChangedSlideIds?.has(slideId)))
-        ) {
-          changes.push('modified')
-        }
-        if (before.index !== after.index) changes.push('moved')
-      }
-      return {
-        slideId,
-        changed: changes.length > 0,
-        changes,
-        before: before ? { index: before.index, svg: before.svg } : undefined,
-        after: { index: after.index, svg: after.svg }
-      }
-    })
-  const deleted = [...input.before.entries()]
-    .filter(([slideId]) => !input.after.has(slideId))
-    .sort((a, b) => a[1].index - b[1].index)
-  for (const [slideId, before] of deleted) {
-    afterEntries.splice(Math.min(Math.max(0, before.index - 1), afterEntries.length), 0, {
-      slideId,
-      changed: true,
-      changes: ['deleted'],
-      before: { index: before.index, svg: before.svg },
-      after: undefined
-    })
-  }
-  return { version: 3, operation: input.operation, slides: afterEntries }
 }
 
 const readImageDimensions = (bytes: Uint8Array): { width: number; height: number } | null => {
@@ -888,6 +907,7 @@ const applyElementOperation = async (input: {
   document: PptRuntimeDocument
   slide: SlideData
   workspaceRootPath: string
+  onReplaceElement: (beforeElementId: string, afterElementId: string) => void
 }) => {
   const op = input.operation
   if (op.type === 'set_text') {
@@ -1019,6 +1039,7 @@ const applyElementOperation = async (input: {
       bounds
     })
     setShapeZIndex(shape, zIndex)
+    input.onReplaceElement(op.elementId, elementIdOf(input.slide, shape))
     return
   }
 
@@ -1158,7 +1179,9 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
       lastPersistedBytes: beforeBytes ? new Uint8Array(beforeBytes) : undefined,
       presentation,
       dirty: false,
-      changedSlideIds: new Set(),
+      movedSlideIds: new Set(),
+      movedElementIds: new Set(),
+      elementLineage: new Map(),
       warnings: []
     }
     documents.set(sourcePath, document)
@@ -1313,10 +1336,13 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
     const document = await loadDocument(args.sourcePath, create)
     const presentationSnapshot = await savePresentation(document.presentation)
     const dirtyBeforeAction = document.dirty
-    const changedSlideIdsBeforeAction = new Set(document.changedSlideIds)
+    const movedSlideIdsBeforeAction = new Set(document.movedSlideIds)
+    const movedElementIdsBeforeAction = new Set(document.movedElementIds)
+    const elementLineageBeforeAction = new Map(document.elementLineage)
     const warningsBeforeAction = [...document.warnings]
     try {
       const changedSlideIds: string[] = []
+      const movedSlideIds = new Set<string>()
       let outlineAnchorIndex: number | undefined
       for (const action of args.actions) {
         try {
@@ -1363,6 +1389,7 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
               action.anchorSlideId
             )
             changedSlideIds.push(action.slideId)
+            movedSlideIds.add(action.slideId)
             outlineAnchorIndex = targetIndex
           } else if (action.type === 'duplicate_slide') {
             const source = findSlide(document.presentation, action.slideId)
@@ -1407,7 +1434,18 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
           } else if (action.type === 'edit_elements') {
             const slide = findSlide(document.presentation, action.slideId)
             for (const operation of action.operations) {
-              await applyElementOperation({ operation, document, slide, workspaceRootPath })
+              if (operation.type === 'set_z_order') {
+                document.movedElementIds.add(operation.elementId)
+              }
+              await applyElementOperation({
+                operation,
+                document,
+                slide,
+                workspaceRootPath,
+                onReplaceElement: (beforeElementId, afterElementId) => {
+                  document.elementLineage.set(beforeElementId, afterElementId)
+                }
+              })
             }
             changedSlideIds.push(action.slideId)
           } else if (action.type === 'set_notes') {
@@ -1425,7 +1463,7 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
       }
       const uniqueChanged = [...new Set(changedSlideIds)]
       if (uniqueChanged.length > 0) document.dirty = true
-      uniqueChanged.forEach((slideId) => document.changedSlideIds.add(slideId))
+      movedSlideIds.forEach((slideId) => document.movedSlideIds.add(slideId))
       const slides = getSlides(document.presentation)
       const readbackSlides = uniqueChanged.flatMap((slideId) => {
         const index = slides.findIndex((slide) => slideIdOf(slide) === slideId)
@@ -1473,7 +1511,9 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
     } catch (error) {
       document.presentation = await loadPresentation(presentationSnapshot)
       document.dirty = dirtyBeforeAction
-      document.changedSlideIds = changedSlideIdsBeforeAction
+      document.movedSlideIds = movedSlideIdsBeforeAction
+      document.movedElementIds = movedElementIdsBeforeAction
+      document.elementLineage = elementLineageBeforeAction
       document.warnings = warningsBeforeAction
       if (create) documents.delete(sourcePath)
       throw error
@@ -1498,6 +1538,30 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
         : null
       const beforeSlides = beforePresentation ? getSlides(beforePresentation) : []
       const afterSlides = getSlides(afterPresentation)
+      const beforeSnapshots = beforePresentation
+        ? createPptDiffSlideSnapshots(beforePresentation)
+        : []
+      const afterSnapshots = createPptDiffSlideSnapshots(afterPresentation)
+      const operation = beforeExists ? ('updated' as const) : ('created' as const)
+      const netManifest = buildPptDiffManifest({
+        beforeSlides: beforeSnapshots,
+        afterSlides: afterSnapshots,
+        beforeFrames: new Map(),
+        afterFrames: new Map(),
+        operation,
+        movedCandidates: document.movedSlideIds,
+        elementLineage: document.elementLineage,
+        movedElementCandidates: document.movedElementIds
+      })
+      if (netManifest.positiveCount === 0 && netManifest.negativeCount === 0) {
+        document.beforeBytes = new Uint8Array(afterBytes)
+        document.lastPersistedBytes = new Uint8Array(afterBytes)
+        document.dirty = false
+        document.movedSlideIds.clear()
+        document.movedElementIds.clear()
+        document.elementLineage.clear()
+        continue
+      }
       const beforeFrames = beforePresentation
         ? await renderPresentationSlides({
             presentation: beforePresentation,
@@ -1513,12 +1577,15 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
         prefix: 'after'
       })
       const manifest = buildPptDiffManifest({
-        before: beforeFrames,
-        after: afterFrames,
-        operation: beforeExists ? 'updated' : 'created',
-        forceChangedSlideIds: document.changedSlideIds
+        beforeSlides: beforeSnapshots,
+        afterSlides: afterSnapshots,
+        beforeFrames,
+        afterFrames,
+        operation,
+        movedCandidates: document.movedSlideIds,
+        elementLineage: document.elementLineage,
+        movedElementCandidates: document.movedElementIds
       })
-      const changedSlides = manifest.slides.filter((slide) => slide.changed)
       await fs.writeFile(dirs.manifest, JSON.stringify(manifest, null, 2), 'utf8')
       let beforeSnapshotPath: string | undefined
       let beforeChecksum: string | undefined
@@ -1544,10 +1611,10 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
         capability: 'ppt',
         path: document.sourcePath,
         fileName: document.sourceName,
-        operation: beforeExists ? 'updated' : 'created',
-        changeCount: changedSlides.length,
-        insertCount: changedSlides.filter((slide) => Boolean(slide.after)).length,
-        deleteCount: changedSlides.filter((slide) => Boolean(slide.before)).length,
+        operation,
+        changeCount: manifest.positiveCount + manifest.negativeCount,
+        insertCount: manifest.positiveCount,
+        deleteCount: manifest.negativeCount,
         beforeSnapshotPath,
         beforeChecksum,
         afterChecksum: hashBytes(persistedBytes),
@@ -1559,7 +1626,9 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
       document.beforeBytes = new Uint8Array(afterBytes)
       document.lastPersistedBytes = new Uint8Array(afterBytes)
       document.dirty = false
-      document.changedSlideIds.clear()
+      document.movedSlideIds.clear()
+      document.movedElementIds.clear()
+      document.elementLineage.clear()
       records.push(record)
     }
     return records

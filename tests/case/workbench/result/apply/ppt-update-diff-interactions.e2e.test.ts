@@ -106,13 +106,22 @@ describe('workbench result e2e', () => {
           const updatedPresentation = await loadPresentation(
             new Uint8Array(await fs.readFile(filePath))
           )
-          const updatedText = getSlides(updatedPresentation)
-            .map((slide) => getSlideText(slide))
-            .join('\n')
+          const updatedSlideTexts = getSlides(updatedPresentation).map((slide) =>
+            getSlideText(slide).trim()
+          )
+          const updatedText = updatedSlideTexts.join('\n')
           const applyEntry = await waitForApplyEntry(page)
           await applyEntry.click()
           const viewer = getWorkbenchLocator(page, workbenchSelectors.pptDiffViewer)
           await viewer.waitFor({ state: 'visible', timeout: 30_000 })
+          const documentToolbar = getWorkbenchLocator(page, workbenchSelectors.documentToolbar)
+          const reviewToolbarText = ((await documentToolbar.textContent()) || '').trim()
+          const documentModeToggle = getWorkbenchLocator(
+            page,
+            workbenchSelectors.documentModeToggle
+          )
+          const documentModeTag = getWorkbenchLocator(page, workbenchSelectors.documentModeTag)
+          const initialModeTag = ((await documentModeTag.textContent()) || '').trim()
           const beforeSurface = getWorkbenchLocator(page, workbenchSelectors.pptDiffBefore)
           const afterSurface = getWorkbenchLocator(page, workbenchSelectors.pptDiffAfter)
           const beforeVisible = await beforeSurface.isVisible()
@@ -158,6 +167,21 @@ describe('workbench result e2e', () => {
           )
             .locator('button')
             .count()
+          const allGreenMarkerCount = await viewer
+            .locator(
+              '[aria-label="新增页"], [aria-label="内容已修改"], [aria-label="位置已移动"], [aria-label="内容已修改，位置已移动"]'
+            )
+            .count()
+
+          await documentModeToggle.click()
+          await page
+            .getByTestId('ppt-preview-viewer')
+            .waitFor({ state: 'visible', timeout: 30_000 })
+          const previewModeTag = ((await documentModeTag.textContent()) || '').trim()
+          const reviewViewerHiddenInPreview = !(await viewer.isVisible().catch(() => false))
+          await documentModeToggle.click()
+          await viewer.waitFor({ state: 'visible', timeout: 30_000 })
+          const restoredModeTag = ((await documentModeTag.textContent()) || '').trim()
 
           await getWorkbenchLocator(page, workbenchSelectors.applyRevertButton).click()
           await page.getByText('回退这次修改？').waitFor({ state: 'visible' })
@@ -171,11 +195,18 @@ describe('workbench result e2e', () => {
 
           return {
             updatedText,
+            updatedSlideTexts,
+            reviewToolbarText,
+            initialModeTag,
+            previewModeTag,
+            restoredModeTag,
+            reviewViewerHiddenInPreview,
             beforeVisible,
             afterVisible,
             changedThumbnailCount,
             allThumbnailCount,
             greenMarkerCount,
+            allGreenMarkerCount,
             redMarkerCount,
             inactiveThumbnailClass,
             beforeZoomTransform,
@@ -194,11 +225,23 @@ describe('workbench result e2e', () => {
             result.updatedText.includes('市场信号已确认') &&
               result.updatedText.includes('风险与应对') &&
               !result.updatedText.includes('产品进展') &&
+              result.updatedSlideTexts.length === 4 &&
+              result.updatedSlideTexts[0]?.includes('交付质量') &&
+              result.updatedSlideTexts[1]?.includes('市场信号已确认') &&
+              result.updatedSlideTexts[2]?.includes('风险与应对') &&
+              result.updatedSlideTexts[3]?.includes('附录数据') &&
+              result.reviewToolbarText.includes('+3') &&
+              result.reviewToolbarText.includes('-1') &&
+              result.initialModeTag === '审核' &&
+              result.previewModeTag === '预览' &&
+              result.restoredModeTag === '审核' &&
+              result.reviewViewerHiddenInPreview &&
               result.beforeVisible &&
               result.afterVisible &&
               result.changedThumbnailCount === 4 &&
               result.allThumbnailCount === 5 &&
-              result.greenMarkerCount >= 3 &&
+              result.greenMarkerCount === 3 &&
+              result.allGreenMarkerCount === 3 &&
               result.redMarkerCount === 1 &&
               result.inactiveThumbnailClass.includes('border-transparent') &&
               result.beforeZoomTransform === result.afterZoomTransform &&
