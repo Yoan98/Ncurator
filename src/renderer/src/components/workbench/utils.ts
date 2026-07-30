@@ -237,6 +237,7 @@ const TOOL_ITEM_RENDERERS = {
       text(readToolFileLabel(input)),
       text(` ${readDocxRangeLabel(input)}`)
     ),
+  docx_read_visuals: (input) => sentence(text('读取文档视觉内容 '), text(readToolFileLabel(input))),
   docx_edit: (input) => sentence(text('编辑文档 '), text(readToolFileLabel(input))),
   pdf_inspect: (input) => sentence(text('查看 PDF 信息 '), text(readToolFileLabel(input))),
   pdf_search: (input) => sentence(text('在文档中搜索 '), text(readToolQueryLabel(input))),

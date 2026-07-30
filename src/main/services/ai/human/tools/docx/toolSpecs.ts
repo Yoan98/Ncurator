@@ -7,12 +7,14 @@ import {
   docxEditSchema,
   docxOutlineRequestSchema,
   docxReadRequestSchema,
+  docxReadVisualsSchema,
   docxSearchRequestSchema
 } from './schemas'
 import { createStaticExecutionMetaResolver, readStringArg } from '../utils/toolSpecUtils'
 import {
   docxOutlineOutputSchema,
   docxReadBlocksOutputSchema,
+  docxReadVisualsOutputSchema,
   docxSearchOutputSchema,
   docxWriteOutputSchema
 } from './outputSchemas'
@@ -92,7 +94,7 @@ export const DOCX_READ_TOOL_SPEC = {
   promptSpec: {
     name: 'docx_read_blocks',
     description:
-      '按 blockId 集合或 blockIndex 闭区间读取 .docx、.doc 文档的详细块内容，并返回段落 runs、表格单元格和单元格段落信息。'
+      '按 blockId 集合或 blockIndex 闭区间读取 .docx、.doc 文档的递归语义树，保留段落、行内节点、表格层级和视觉节点的原始归属顺序。'
   },
   resolveExecutionMeta: createDocxReadExecutionMeta(),
   activityActionType: 'docx_read_blocks'
@@ -100,6 +102,27 @@ export const DOCX_READ_TOOL_SPEC = {
   z.infer<typeof docxReadRequestSchema>,
   z.infer<typeof docxReadBlocksOutputSchema>,
   'docx_read_blocks',
+  'docx-read'
+>
+
+export const DOCX_READ_VISUALS_TOOL_SPEC = {
+  name: 'docx_read_visuals',
+  familyId: 'docx',
+  requiresWorkspace: true,
+  skillIds: ['docx-read'],
+  inputSchema: docxReadVisualsSchema,
+  outputSchema: docxReadVisualsOutputSchema,
+  promptSpec: {
+    name: 'docx_read_visuals',
+    description:
+      '按 visualId 读取 DOCX 中的视觉内容并返回识别文本。一次支持 1 至 10 项；每项独立返回结果或错误；不支持 .doc。'
+  },
+  resolveExecutionMeta: createDocxReadExecutionMeta(),
+  activityActionType: 'docx_read_visuals'
+} satisfies DocxToolSpec<
+  z.infer<typeof docxReadVisualsSchema>,
+  z.infer<typeof docxReadVisualsOutputSchema>,
+  'docx_read_visuals',
   'docx-read'
 >
 
@@ -113,7 +136,7 @@ export const DOCX_EDIT_TOOL_SPEC = {
   promptSpec: {
     name: 'docx_edit',
     description:
-      '创建或编辑 DOCX 文件，可在一次调用中连续完成内容新增、替换、格式调整、表格更新和删除，成功后直接保存并返回修改后的相关内容。style_text.color 必须是恰好 6 位且不带 # 的十六进制颜色，例如 FF0000；red 等颜色名无效。参数无效时调用失败且不修改文件。不支持 .doc 格式。'
+      '创建或编辑 DOCX 文件，支持递归内容树、文本替换、节点样式、表格更新和删除。可能删除视觉内容的操作必须明确允许 visual loss；参数无效时不修改文件。不支持 .doc 写入。'
   },
   resolveExecutionMeta: createDocxMutatingExecutionMeta(),
   activityActionType: 'docx_edit'
@@ -127,7 +150,8 @@ export const DOCX_EDIT_TOOL_SPEC = {
 export const DOCX_READ_TOOL_SPECS = [
   DOCX_READ_OUTLINE_TOOL_SPEC,
   DOCX_SEARCH_TOOL_SPEC,
-  DOCX_READ_TOOL_SPEC
+  DOCX_READ_TOOL_SPEC,
+  DOCX_READ_VISUALS_TOOL_SPEC
 ] as const
 
 export const DOCX_WRITE_TOOL_SPECS = [DOCX_EDIT_TOOL_SPEC] as const

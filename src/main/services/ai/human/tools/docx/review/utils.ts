@@ -27,14 +27,14 @@ export const describeDocxOp = (op: DocxOp): string => {
       return '更新表格单元格'
     case 'replace_text':
       return '替换文本'
-    case 'style_text':
+    case 'style':
       return '更新文本样式'
   }
 }
 
 export const buildDocxChangeTitle = (op: DocxOp, change: DocxChangedBlock): string => {
-  if (op.type === 'style_text') {
-    const query = String(op.query || '').trim()
+  if (op.type === 'style') {
+    const query = op.target.type === 'text_match' ? op.target.query.trim() : ''
     return query ? `更新文本样式: ${query}` : '更新文本样式'
   }
   const baseText = String(change.afterText || change.beforeText).trim()
@@ -44,8 +44,8 @@ export const buildDocxChangeTitle = (op: DocxOp, change: DocxChangedBlock): stri
 }
 
 export const buildDocxChangeSummary = (op: DocxOp, change: DocxChangedBlock): string =>
-  op.type === 'style_text'
-    ? `${describeDocxOp(op)} ${change.blockId}${String(op.query || '').trim() ? `: ${String(op.query).trim()}` : ''}`
+  op.type === 'style'
+    ? `${describeDocxOp(op)} ${change.blockId}${op.target.type === 'text_match' ? `: ${op.target.query.trim()}` : ''}`
     : `${describeDocxOp(op)} ${change.blockId}`
 
 export const calculateFileStats = async (

@@ -1,5 +1,9 @@
 import { describe, it } from 'vitest'
-import { createDocxToolHarness, writeTestDocxFile } from '../../../../harness/backend/aiToolHarness'
+import {
+  createDocxToolHarness,
+  docxParagraphNode,
+  writeTestDocxFile
+} from '../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import {
   type DocxMutationResult,
@@ -94,19 +98,19 @@ describe('ai tool docx backend', () => {
               {
                 type: 'update_table_cell',
                 cellBlockId: ownerCellBlockId,
-                text: 'Bob'
+                children: [docxParagraphNode('Bob')]
               },
               {
                 type: 'insert_blocks',
                 position: 'after',
                 anchorBlockId: insertAfterAnchor,
-                blocks: [{ type: 'paragraph', text: 'Inserted after anchor.' }]
+                blocks: [docxParagraphNode('Inserted after anchor.')]
               },
               {
                 type: 'insert_blocks',
                 position: 'before',
                 anchorBlockId: insertBeforeAnchor,
-                blocks: [{ type: 'paragraph', text: 'Inserted before anchor.' }]
+                blocks: [docxParagraphNode('Inserted before anchor.')]
               },
               {
                 type: 'replace_text',

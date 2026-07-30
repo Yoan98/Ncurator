@@ -9,9 +9,8 @@ import type {
   DocxDetailedBlock,
   DocxEditAction,
   DocxOp,
+  DocxOpenStats,
   DocxOutlineBlock,
-  DocxParagraphSpec,
-  DocxTableSpec,
   DocxPostWriteReadback
 } from '../types'
 import type { DocxToolRuntime } from '../runtime'
@@ -25,30 +24,6 @@ import {
   LEGACY_DOC_EDIT_DECISION_HINT,
   LEGACY_DOC_EDIT_ERROR
 } from '../legacyDocPolicy'
-
-const paragraphSpecFromText = (text: string, style?: string): DocxParagraphSpec => ({
-  kind: 'paragraph',
-  style,
-  runs: [{ text }]
-})
-
-const tableSpecFromRows = (rows: string[][]): DocxTableSpec => ({
-  kind: 'table',
-  rows: rows.map((row) =>
-    row.map((cellText) => ({
-      paragraphs: [paragraphSpecFromText(cellText)]
-    }))
-  )
-})
-
-const headingStyle = (level: number): string => `Heading${String(level)}`
-
-const blockSpecFromCreateBlock = (block: DocxCreateBlock): DocxParagraphSpec | DocxTableSpec => {
-  if (block.type === 'table') return tableSpecFromRows(block.rows)
-  if (block.type === 'heading')
-    return paragraphSpecFromText(block.text, headingStyle(block.level || 1))
-  return paragraphSpecFromText(block.text)
-}
 
 const buildEditSummary = (input: {
   toolName: string
@@ -494,6 +469,7 @@ type ApplySerialEditResult =
       changedBlocks: DocxChangedBlock[]
       warnings: string[]
       nextDocId: string
+      nextStats: DocxOpenStats
       createdBlocks: DocxCreatedBlock[]
       readbackTargets: BatchReadbackTarget[]
     }
@@ -512,7 +488,7 @@ const compileSerialEditActions = (input: {
       action.type === 'insert_blocks' ||
       action.type === 'replace_block' ||
       action.type === 'replace_text' ||
-      action.type === 'style_text' ||
+      action.type === 'style' ||
       action.type === 'update_table_cell' ||
       action.type === 'delete_blocks'
     ) {
@@ -571,7 +547,7 @@ const buildSerialActionOps = async (input: {
     const op: DocxOp = {
       type: action.position === 'before' ? 'insert_before' : 'insert_after',
       anchorBlockId,
-      content: action.blocks.map((block) => blockSpecFromCreateBlock(block))
+      content: action.blocks
     }
     return {
       ops: [op],
@@ -590,7 +566,8 @@ const buildSerialActionOps = async (input: {
         {
           type: 'replace_block',
           blockId,
-          content: blockSpecFromCreateBlock(action.block)
+          content: action.block,
+          allowVisualLoss: action.allowVisualLoss
         }
       ],
       readbackTarget: {
@@ -615,7 +592,6 @@ const buildSerialActionOps = async (input: {
           type: 'replace_text',
           query: action.query,
           replace: action.replace,
-          replaceAll: true,
           blockIds
         }
       ],
@@ -627,22 +603,31 @@ const buildSerialActionOps = async (input: {
     }
   }
 
-  if (action.type === 'style_text') {
-    const blockId = action.blockId
+  if (action.type === 'style') {
+    const targetBlockIds =
+      action.target.type === 'text_match'
+        ? await resolveReplaceTextTargetBlockIds({
+            runtime: input.runtime,
+            docId: input.currentDocId,
+            query: action.target.query,
+            blockIds: action.target.blockIds
+          })
+        : action.target.type === 'block'
+          ? [action.target.blockId]
+          : []
     return {
       ops: [
         {
-          type: 'style_text',
-          blockId,
-          query: action.query,
-          style: action.style
+          type: 'style',
+          target: action.target,
+          patch: action.patch
         }
       ],
       readbackTarget: {
-        action: 'style_text',
-        targetBlockIds: [blockId]
+        action: 'style',
+        targetBlockIds
       },
-      positionedCheckBlockIds: [blockId]
+      positionedCheckBlockIds: targetBlockIds
     }
   }
 
@@ -653,7 +638,8 @@ const buildSerialActionOps = async (input: {
         {
           type: 'update_table_cell',
           blockId: cellBlockId,
-          content: [paragraphSpecFromText(action.text)]
+          content: action.children,
+          allowVisualLoss: action.allowVisualLoss
         }
       ],
       readbackTarget: {
@@ -676,7 +662,8 @@ const buildSerialActionOps = async (input: {
   return {
     ops: orderedBlockIds.map((blockId) => ({
       type: 'delete_block' as const,
-      blockId
+      blockId,
+      allowVisualLoss: action.allowVisualLoss
     })),
     readbackTarget: {
       action: 'delete_block',
@@ -789,6 +776,7 @@ const applySerialEdit = async (input: {
   const changedBlocks: DocxChangedBlock[] = []
   const warnings: string[] = []
   const readbackTargets: BatchReadbackTarget[] = []
+  let nextStats: DocxOpenStats | undefined
 
   for (const [actionIndex, action] of input.compiled.actions.entries()) {
     const actionOps = await buildSerialActionOps({
@@ -842,6 +830,7 @@ const applySerialEdit = async (input: {
       }
     }
     const appliedPayload = workerResponse.payload
+    nextStats = appliedPayload.stats
 
     const createdBlocksByOp = await resolveCreatedBlocksForSingleAction({
       runtime: input.runtime,
@@ -915,6 +904,7 @@ const applySerialEdit = async (input: {
       opNextDocIds: review.opNextDocIds,
       changedBlocks,
       persistedStats,
+      stats: nextStats,
       summary: input.compiled.summary
     })
   } catch (error) {
@@ -949,6 +939,7 @@ const applySerialEdit = async (input: {
     changedBlocks,
     warnings,
     nextDocId: currentDocId,
+    nextStats: nextStats!,
     createdBlocks,
     readbackTargets
   }

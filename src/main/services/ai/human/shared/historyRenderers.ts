@@ -23,12 +23,25 @@ type NestedWhitelistConfig = {
   [key: string]: true | NestedWhitelistConfig
 }
 
-const DOCX_BLOCK_WHITELIST: NestedWhitelistConfig = {
+const DOCX_NODE_WHITELIST: NestedWhitelistConfig = {
+  nodeId: true,
+  visualId: true,
   blockId: true,
   type: true,
   blockIndex: true,
-  text: true
+  text: true,
+  kind: true,
+  style: true,
+  target: true,
+  anchor: true,
+  altText: true,
+  row: true,
+  col: true,
+  rows: true,
+  cols: true
 }
+DOCX_NODE_WHITELIST.children = DOCX_NODE_WHITELIST
+const DOCX_BLOCK_WHITELIST = DOCX_NODE_WHITELIST
 
 const DOCX_WRITE_RESULT_WHITELIST: NestedWhitelistConfig = {
   sourcePath: true,
@@ -257,6 +270,7 @@ const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
     toBlockIndex: true,
     blocks: DOCX_BLOCK_WHITELIST
   },
+  docx_read_visuals: VISUAL_READ_RESULT_WHITELIST,
   docx_edit: DOCX_WRITE_RESULT_WHITELIST,
   ppt_read_outline: PPT_RESULT_WHITELIST,
   ppt_read_slides: PPT_RESULT_WHITELIST,

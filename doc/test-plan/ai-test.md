@@ -102,6 +102,27 @@ AI unit / 辅助测试目录：
 
 #### docx 类别
 
+**DOCX 递归语义树与视觉测试补充**
+
+- What：DOCX 读取返回递归语义树，并能按 visualId 读取视觉内容。
+- How：使用 `灵感测试.docx` 验证 18 个 image visual 与 22 个真实空段落；覆盖 wrapper/run/visual 顺序、表格层级、Shape 文本框和五种 visual kind；使用 599/1034 张 VML 图片 fixture 检查性能和结果体积。
+- Oracle：详细 block 只使用 children 递归树；outline 只返回 visual 统计；visualId 在未改视觉时稳定，失效视觉不能继续读取；批量视觉读取保持顺序且单项失败不影响其他项。
+
+##### `docx-read-visuals-contract`
+
+- 测试类型：`backend`，`tool-real`
+- What：`docx_read_visuals` 可以从递归 block 的 public visualId 读取真实图片。
+- Why：视觉节点只有能按需进入视觉模型，才不是仅供展示的无效元数据。
+- How：从 `灵感测试.docx` 的 outline 定位含 visual 的 block，读取 visualId 后提交一个有效请求和一个 stale ID，并使用 mock 视觉模型返回固定识别文字。
+- Oracle：结果顺序与请求一致；有效图片返回识别文字，stale ID 只产生单项错误；源文件 checksum 不变。
+- Not：不验证 chart、diagram、shape 的页面裁剪精度；该能力由专门渲染 fixture 覆盖。
+
+**DOCX 递归编辑、样式与视觉防误删测试补充**
+
+- What：递归创建、全文替换、统一 style 和 visual 防误删共同构成新的写入协议。
+- How：覆盖嵌套表格、hyperlink、多层样式、五种 patch、跨 run 匹配、不可跨 visual、`allowVisualLoss`、串行 action 原子失败和 postWriteReadback。
+- Oracle：旧简化创建 payload 与 `style_text` 被 schema 拒绝；目标类型不匹配不落盘；text-image-text 编辑后媒体、relationship 和非目标 XML 保持不变。
+
 ##### `docx-legacy-doc-read-contract`
 
 - 测试类型：`backend`
@@ -368,7 +389,7 @@ AI unit / 辅助测试目录：
 - 测试类型：`backend`
 - What：命中 positioned block 时，docx 写工具会统一拒绝自动编辑。
 - Why：复杂定位排版 docx 即使只是原地改字也可能因结构重写而错位，这条 case 要长期守住 `positioned = read-only` 的能力边界。
-- How：对真实 `图形学.docx` 执行 `docx_read_outline` 定位一个 positioned block，再分别尝试 `docx_edit(insert_blocks)`、`docx_edit(replace_text)`、`docx_edit(style_text)` 与 `docx_edit(update_table_cell)`。
+- How：对真实 `图形学.docx` 执行 `docx_read_outline` 定位一个 positioned block，再分别尝试 `docx_edit(insert_blocks)`、`docx_edit(replace_text)`、`docx_edit(style)` 与 `docx_edit(update_table_cell)`。
 - Oracle：四类写入都返回 `invalid_input`；错误信息稳定包含“当前命中复杂定位排版区域，暂不支持自动编辑”；不产生新的当前修订。
 - Not：不验证 human 的回退话术，也不验证 positioned 文档中的读取质量。
 
@@ -1200,6 +1221,15 @@ AI unit / 辅助测试目录：
 - How：构造只写“过度拟合”的真实 docx，scripted brain 先执行 `docx_search(query=过拟合)`，再以返回 blockId 执行区间 `docx_read_blocks`。
 - Oracle：`docx_search` 返回 alias fallback 事实，`docx_read_blocks` 返回定义/成因/处理线索，任务最终完成。
 - Not：不验证 live 模型是否一定会采用相同工具顺序。
+
+##### `human-docx-read-visuals-collaboration`
+
+- 测试类型：`backend / mock-llm`
+- What：mock human 看到 DOCX 递归树里的 visual 节点后，可以选择 `docx_read_visuals` 并直接得到识图结果。
+- Why：visualId 只有能进入模型决策上下文并驱动真实视觉读取，才构成完整能力。
+- How：使用 `灵感测试.docx` 和本地视觉服务；脚本化模型先读 outline，再读取含 visual 的 block，并在后续 prompt 确认递归 visual 节点和 visualId 后调用视觉读取工具。
+- Oracle：工具顺序为 outline、block、visual；识图结果进入后续 brain prompt；不调用 `image_analyze`；任务完成。
+- Not：不验证真实模型的自由规划质量，不验证 chart、diagram 和 shape 的裁剪精度。
 
 ##### `multi-tool-collaboration`
 

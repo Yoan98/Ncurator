@@ -364,14 +364,4 @@ export type KnowledgeRetrievalContext = Pick<
   'runId' | 'checkCancelled' | 'sendEvent' | 'workspace' | 'documentsStore' | 'embeddingService'
 >
 
-export type DocxToolContext = Pick<
-  AiRunContext,
-  | 'runId'
-  | 'checkCancelled'
-  | 'sendEvent'
-  | 'trackDocxOpen'
-  | 'trackDocxChanges'
-  | 'trackDocxBatchChanges'
-  | 'resolveDocxOpenTarget'
-  | 'embeddingService'
->
+export type DocxToolContext = AiRunContext

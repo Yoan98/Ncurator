@@ -1,8 +1,16 @@
 import { describe, it } from 'vitest'
-import { writeTestDocxFile } from '../../../../harness/backend/aiToolHarness'
+import {
+  docxParagraphNode,
+  docxTableNode,
+  writeTestDocxFile
+} from '../../../../harness/backend/aiToolHarness'
 import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
-import type { DocxMutationResult, DocxReadResult, DocxSearchResult } from '../../tool/docx/testUtils'
+import type {
+  DocxMutationResult,
+  DocxReadResult,
+  DocxSearchResult
+} from '../../tool/docx/testUtils'
 import {
   buildCompleteTaskDecision,
   buildLearnSkillsDecision,
@@ -53,11 +61,13 @@ describe('ai human mock-llm backend', () => {
                   toolName: 'docx_edit',
                   args: {
                     sourcePath: 'complex-edit.docx',
-                    actions: [{
-                      type: 'replace_text',
-                      query: 'Cycle 1 draft content.',
-                      replace: 'Cycle 3 cumulative draft content.'
-                    }]
+                    actions: [
+                      {
+                        type: 'replace_text',
+                        query: 'Cycle 1 draft content.',
+                        replace: 'Cycle 3 cumulative draft content.'
+                      }
+                    ]
                   },
                   summary: '在真实 docx 上执行编辑'
                 })
@@ -213,17 +223,16 @@ describe('ai human mock-llm backend', () => {
                   toolName: 'docx_edit',
                   args: {
                     sourcePath: 'complex-structured-edit.docx',
-                    actions: [{
-                      type: 'insert_blocks',
-                      anchorBlockId,
-                      position: 'after',
-                      blocks: [
+                    actions: [
                       {
-                        type: 'paragraph',
-                        text: '补充说明：反走样通过平滑边缘像素来减轻锯齿感。'
+                        type: 'insert_blocks',
+                        anchorBlockId,
+                        position: 'after',
+                        blocks: [
+                          docxParagraphNode('补充说明：反走样通过平滑边缘像素来减轻锯齿感。')
+                        ]
                       }
                     ]
-                    }]
                   },
                   summary: '插入补充说明'
                 })
@@ -259,20 +268,19 @@ describe('ai human mock-llm backend', () => {
                   toolName: 'docx_edit',
                   args: {
                     sourcePath: 'complex-structured-edit.docx',
-                    actions: [{
-                      type: 'insert_blocks',
-                      anchorBlockId,
-                      position: 'after',
-                      blocks: [
+                    actions: [
                       {
-                        type: 'table',
-                        rows: [
-                          ['反走样', '过拟合'],
-                          ['平滑边缘，降低锯齿', '记住训练噪声，泛化变差']
+                        type: 'insert_blocks',
+                        anchorBlockId,
+                        position: 'after',
+                        blocks: [
+                          docxTableNode([
+                            ['反走样', '过拟合'],
+                            ['平滑边缘，降低锯齿', '记住训练噪声，泛化变差']
+                          ])
                         ]
                       }
                     ]
-                    }]
                   },
                   summary: '插入对照表'
                 })

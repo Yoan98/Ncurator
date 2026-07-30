@@ -76,7 +76,7 @@ export const RUNTIME_SKILL_CATALOG = {
     title: 'docx-read',
     displayName: 'docx 阅读器',
     description:
-      '读取 .docx、.doc 文档的结构、内容块、检索结果和任务内修订历史，并返回块级索引、正文、匹配信息或 revision 信息。 碰到有word文件阅读的需要时，必须要使用该技能'
+      '读取 .docx、.doc 文档的结构、递归内容树、检索结果和视觉内容，并返回块级索引、正文、节点、匹配信息或视觉识别结果。 碰到有word文件阅读的需要时，必须要使用该技能'
   },
   'docx-write': {
     familyId: 'docx',
@@ -85,7 +85,7 @@ export const RUNTIME_SKILL_CATALOG = {
     title: 'docx-write',
     displayName: 'docx 写作器',
     description:
-      '创建或修改 Word 文档中的段落、标题、表格、文本和样式，并返回写入状态和相邻区域的详细回读信息。 碰到有操作word文件的需要时，必须要使用该技能'
+      '使用递归节点创建或修改 Word 文档中的段落、表格、文本和节点样式，并返回写入状态和相邻区域的详细回读信息。 碰到有操作word文件的需要时，必须要使用该技能'
   },
   'pdf-read': {
     familyId: 'pdf',
@@ -168,6 +168,7 @@ export const RUNTIME_TOOL_CATALOG = {
   docx_read_outline: { familyId: 'docx', skillId: 'docx-read' },
   docx_search: { familyId: 'docx', skillId: 'docx-read' },
   docx_read_blocks: { familyId: 'docx', skillId: 'docx-read' },
+  docx_read_visuals: { familyId: 'docx', skillId: 'docx-read' },
   docx_edit: { familyId: 'docx', skillId: 'docx-write' },
   pdf_inspect: { familyId: 'pdf', skillId: 'pdf-read' },
   pdf_search: { familyId: 'pdf', skillId: 'pdf-read' },

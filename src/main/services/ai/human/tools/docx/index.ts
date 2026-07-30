@@ -21,18 +21,17 @@ export const docxToolFamily = createWorkspaceBoundToolFamily({
   descriptionForTool: (name) => `docx tool: ${name}`,
   reason: 'docx capability requires workspace binding before execution',
   error: 'workspace is required for docx capability',
-  buildWorkspaceTools: ({ ctx, cache, runId, sessionId, taskId, workspaceRootPath, emitActivity }) =>
+  buildWorkspaceTools: ({
+    ctx,
+    cache,
+    runId,
+    sessionId,
+    taskId,
+    workspaceRootPath,
+    emitActivity
+  }) =>
     buildDocxCapabilityTools({
-      ctx: {
-        runId: ctx.runId,
-        checkCancelled: ctx.checkCancelled,
-        sendEvent: ctx.sendEvent,
-        trackDocxOpen: ctx.trackDocxOpen,
-        trackDocxChanges: ctx.trackDocxChanges,
-        trackDocxBatchChanges: ctx.trackDocxBatchChanges,
-        resolveDocxOpenTarget: ctx.resolveDocxOpenTarget,
-        embeddingService: ctx.embeddingService
-      },
+      ctx,
       cache,
       runId,
       sessionId,
@@ -41,7 +40,6 @@ export const docxToolFamily = createWorkspaceBoundToolFamily({
       emitActivity,
       safePreviewChars: 1400,
       modelContextWindowTokens:
-        ctx.humanRuntimeOverrides?.modelContextWindowTokens ||
-        DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS
+        ctx.humanRuntimeOverrides?.modelContextWindowTokens || DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS
     }).tools
 })

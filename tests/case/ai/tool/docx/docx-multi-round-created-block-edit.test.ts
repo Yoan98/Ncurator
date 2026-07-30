@@ -1,5 +1,10 @@
 import { describe, it } from 'vitest'
-import { createDocxToolHarness, writeTestDocxFile } from '../../../../harness/backend/aiToolHarness'
+import {
+  createDocxToolHarness,
+  docxParagraphNode,
+  docxTableNode,
+  writeTestDocxFile
+} from '../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import type { DocxMutationResult, DocxOutlineResult, DocxSearchResult } from './testUtils'
 
@@ -37,7 +42,7 @@ describe('ai tool docx backend', () => {
                 type: 'insert_blocks',
                 position: 'after',
                 anchorBlockId,
-                blocks: [{ type: 'paragraph', text: '新增段落初稿。' }]
+                blocks: [docxParagraphNode('新增段落初稿。')]
               }
             ]
           })
@@ -68,13 +73,10 @@ describe('ai tool docx backend', () => {
                 position: 'after',
                 anchorBlockId: insertedParagraphBlockId,
                 blocks: [
-                  {
-                    type: 'table',
-                    rows: [
-                      ['单元格初稿', '说明'],
-                      ['保留项', '尾注']
-                    ]
-                  }
+                  docxTableNode([
+                    ['单元格初稿', '说明'],
+                    ['保留项', '尾注']
+                  ])
                 ]
               }
             ]
@@ -93,7 +95,7 @@ describe('ai tool docx backend', () => {
               {
                 type: 'update_table_cell',
                 cellBlockId,
-                text: '单元格终稿'
+                children: [docxParagraphNode('单元格终稿')]
               }
             ]
           })

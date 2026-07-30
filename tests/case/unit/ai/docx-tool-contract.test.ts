@@ -22,13 +22,15 @@ describe('ai unit docx tool contract', () => {
     expect(DOCX_READ_TOOL_SPECS.map((spec) => spec.name)).toEqual([
       'docx_read_outline',
       'docx_search',
-      'docx_read_blocks'
+      'docx_read_blocks',
+      'docx_read_visuals'
     ])
     expect(DOCX_WRITE_TOOL_SPECS.map((spec) => spec.name)).toEqual(['docx_edit'])
     expect(SKILL_DEFINITIONS['docx-read'].toolNames).toEqual([
       'docx_read_outline',
       'docx_search',
-      'docx_read_blocks'
+      'docx_read_blocks',
+      'docx_read_visuals'
     ])
     expect(SKILL_DEFINITIONS['docx-write'].toolNames).toEqual(['docx_edit'])
     expect(DOCX_TOOL_SPECS.map((spec) => spec.name)).not.toEqual(
@@ -41,8 +43,8 @@ describe('ai unit docx tool contract', () => {
 
   it('keeps the edit prompt as one capability sentence without implementation details', () => {
     const description = DOCX_EDIT_TOOL_SPEC.promptSpec.description
-    expect(description).toContain('FF0000')
-    expect(description).toContain('不带 #')
+    expect(description).toContain('递归内容树')
+    expect(description).toContain('visual loss')
     expect(description).not.toContain('\n')
     for (const internalTerm of [
       'revision',

@@ -20,7 +20,7 @@ describe('ai unit docx write schema contract', () => {
             blocks: [
               {
                 type: 'paragraph',
-                text: '补充段落'
+                children: [{ type: 'run', children: [{ type: 'text', text: '补充段落' }] }]
               }
             ]
           }
@@ -66,10 +66,9 @@ describe('ai unit docx write schema contract', () => {
       sourcePath: 'a.docx',
       actions: [
         {
-          type: 'style_text',
-          blockId: 'b:1',
-          query: 'Heading',
-          style: { color }
+          type: 'style',
+          target: { type: 'text_match', query: 'Heading', blockIds: ['b:1'] },
+          patch: { kind: 'run', color }
         }
       ]
     })
@@ -79,7 +78,7 @@ describe('ai unit docx write schema contract', () => {
       expect(result.error.issues).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
-            path: ['actions', 0, 'style', 'color'],
+            path: ['actions', 0, 'patch', 'color'],
             message: expect.stringContaining('6 hexadecimal characters')
           })
         ])
@@ -93,10 +92,9 @@ describe('ai unit docx write schema contract', () => {
         sourcePath: 'a.docx',
         actions: [
           {
-            type: 'style_text',
-            blockId: 'b:1',
-            query: 'Heading',
-            style: { color }
+            type: 'style',
+            target: { type: 'text_match', query: 'Heading', blockIds: ['b:1'] },
+            patch: { kind: 'run', color }
           }
         ]
       }).success
@@ -109,12 +107,33 @@ describe('ai unit docx write schema contract', () => {
         sourcePath: 'a.docx',
         actions: [
           {
-            type: 'style_text',
-            blockId: 'b:1',
-            query: 'Heading',
-            style: {}
+            type: 'style',
+            target: { type: 'text_match', query: 'Heading', blockIds: ['b:1'] },
+            patch: { kind: 'run' }
           }
         ]
+      }).success
+    ).toBe(false)
+  })
+
+  it('rejects legacy simplified blocks and style_text', () => {
+    expect(
+      docxEditSchema.safeParse({
+        sourcePath: 'a.docx',
+        actions: [
+          {
+            type: 'insert_blocks',
+            position: 'after',
+            anchorBlockId: 'b:1',
+            blocks: [{ type: 'paragraph', text: 'legacy' }]
+          }
+        ]
+      }).success
+    ).toBe(false)
+    expect(
+      docxEditSchema.safeParse({
+        sourcePath: 'a.docx',
+        actions: [{ type: 'style_text', blockId: 'b:1', query: 'x', style: { bold: true } }]
       }).success
     ).toBe(false)
   })

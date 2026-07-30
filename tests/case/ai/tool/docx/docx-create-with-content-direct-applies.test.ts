@@ -1,7 +1,11 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { describe, it } from 'vitest'
-import { createDocxToolHarness } from '../../../../harness/backend/aiToolHarness'
+import {
+  createDocxToolHarness,
+  docxHeadingNode,
+  docxParagraphNode
+} from '../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import type { DocxCreateResult, DocxSearchResult } from './testUtils'
 
@@ -38,9 +42,9 @@ describe('ai tool docx backend', () => {
                 type: 'insert_blocks',
                 position: 'after',
                 blocks: [
-                  { type: 'heading', level: 1, text: '深度学习与图形学复习总结' },
-                  { type: 'paragraph', text: '过拟合：训练时间过久时容易出现。' },
-                  { type: 'paragraph', text: '反走样：采样频率不足时会出现锯齿。' }
+                  docxHeadingNode(1, '深度学习与图形学复习总结'),
+                  docxParagraphNode('过拟合：训练时间过久时容易出现。'),
+                  docxParagraphNode('反走样：采样频率不足时会出现锯齿。')
                 ]
               }
             ]

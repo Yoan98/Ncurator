@@ -2,7 +2,12 @@ import fs from 'node:fs/promises'
 import JSZip from 'jszip'
 import { describe, it } from 'vitest'
 import type { DocxApplyRecord } from '../../../../../src/shared/types'
-import { createDocxToolHarness, writeTestDocxFile } from '../../../../harness/backend/aiToolHarness'
+import {
+  createDocxToolHarness,
+  docxParagraphNode,
+  docxTableNode,
+  writeTestDocxFile
+} from '../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import type { DocxMutationResult, DocxOutlineResult, DocxSearchResult } from './testUtils'
 import { findParagraphBlockIdByText } from './testUtils'
@@ -88,7 +93,7 @@ describe('ai tool docx net diff backend', () => {
               {
                 type: 'replace_block',
                 blockId: serialBlockId,
-                block: { type: 'paragraph', text: '串行 B keyword' }
+                block: docxParagraphNode('串行 B keyword')
               },
               {
                 type: 'replace_text',
@@ -200,10 +205,7 @@ describe('ai tool docx net diff backend', () => {
                   position: 'after',
                   anchorBlockId: findParagraphBlockIdByText(outline.blocks, '锚点'),
                   blocks: [
-                    {
-                      type: 'paragraph',
-                      text: sourcePath.includes('final') ? '新增初稿' : '临时新增'
-                    }
+                    docxParagraphNode(sourcePath.includes('final') ? '新增初稿' : '临时新增')
                   ]
                 }
               ]
@@ -250,7 +252,7 @@ describe('ai tool docx net diff backend', () => {
                 type: 'insert_blocks',
                 position: 'after',
                 anchorBlockId: findParagraphBlockIdByText(tableOutline.blocks, '锚点'),
-                blocks: [{ type: 'table', rows: [['单元格初稿', '保留值']] }]
+                blocks: [docxTableNode([['单元格初稿', '保留值']])]
               }
             ]
           })
@@ -265,7 +267,7 @@ describe('ai tool docx net diff backend', () => {
                 type: 'update_table_cell',
                 cellBlockId: tableCellSearch.matches.find((match) => match.type === 'table_cell')!
                   .blockId,
-                text: '单元格终稿'
+                children: [docxParagraphNode('单元格终稿')]
               }
             ]
           })

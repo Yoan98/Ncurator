@@ -1,4 +1,12 @@
 import { z } from 'zod/v4'
+import type { JsonValue } from '../../../../../../shared/types'
+import {
+  docxParagraphStyleSchema,
+  docxRunStyleSchema,
+  docxTableCellStyleSchema,
+  docxTableRowStyleSchema,
+  docxTableStyleSchema
+} from './schemas'
 
 export const docxResultCodeSchema = z.enum([
   'ok',
@@ -11,13 +19,12 @@ export const docxResultCodeSchema = z.enum([
 
 const docxLayoutModeSchema = z.enum(['normal', 'positioned'])
 
-const docxTextRunOutputSchema = z.object({
-  text: z.string(),
-  bold: z.boolean().optional(),
-  italic: z.boolean().optional(),
-  underline: z.boolean().optional(),
-  color: z.string().optional()
-})
+const docxVisualSummaryOutputSchema = z
+  .object({
+    count: z.number().int().positive(),
+    kinds: z.array(z.enum(['image', 'chart', 'diagram', 'shape', 'embedded_object'])).min(1)
+  })
+  .strict()
 
 const docxOutlineParagraphBlockOutputSchema = z.object({
   blockId: z.string(),
@@ -26,9 +33,10 @@ const docxOutlineParagraphBlockOutputSchema = z.object({
   layoutMode: docxLayoutModeSchema,
   previousBlockId: z.string().optional(),
   nextBlockId: z.string().optional(),
-  style: z.string(),
+  style: docxParagraphStyleSchema.optional(),
   headingLevel: z.number().optional(),
-  text: z.string()
+  text: z.string(),
+  visuals: docxVisualSummaryOutputSchema.optional()
 })
 
 const docxOutlineTableBlockOutputSchema = z.object({
@@ -40,7 +48,8 @@ const docxOutlineTableBlockOutputSchema = z.object({
   nextBlockId: z.string().optional(),
   rows: z.number().int(),
   cols: z.number().int(),
-  text: z.string()
+  text: z.string(),
+  visuals: docxVisualSummaryOutputSchema.optional()
 })
 
 const docxOutlineCellBlockOutputSchema = z.object({
@@ -53,7 +62,8 @@ const docxOutlineCellBlockOutputSchema = z.object({
   tableBlockId: z.string(),
   row: z.number().int(),
   col: z.number().int(),
-  text: z.string()
+  text: z.string(),
+  visuals: docxVisualSummaryOutputSchema.optional()
 })
 
 const docxOutlineBlockOutputSchema = z.discriminatedUnion('type', [
@@ -62,61 +72,151 @@ const docxOutlineBlockOutputSchema = z.discriminatedUnion('type', [
   docxOutlineCellBlockOutputSchema
 ])
 
-const docxDetailedParagraphBlockOutputSchema = z.object({
-  blockId: z.string(),
-  type: z.literal('paragraph'),
-  blockIndex: z.number().int(),
-  layoutMode: docxLayoutModeSchema,
-  previousBlockId: z.string().optional(),
-  nextBlockId: z.string().optional(),
-  style: z.string(),
-  headingLevel: z.number().optional(),
-  text: z.string(),
-  runs: z.array(docxTextRunOutputSchema)
-})
+const docxReadNodeOutputSchema: z.ZodType<JsonValue> = z.lazy(() =>
+  z.discriminatedUnion('type', [
+    z.object({ type: z.literal('text'), text: z.string() }).strict(),
+    z.object({ type: z.literal('tab') }).strict(),
+    z.object({ type: z.literal('break'), kind: z.enum(['line', 'page', 'column']) }).strict(),
+    z
+      .object({
+        type: z.literal('run'),
+        nodeId: z.string(),
+        style: docxRunStyleSchema.optional(),
+        children: z.array(docxReadNodeOutputSchema)
+      })
+      .strict(),
+    z
+      .object({
+        type: z.literal('hyperlink'),
+        target: z.string().optional(),
+        anchor: z.string().optional(),
+        children: z.array(docxReadNodeOutputSchema)
+      })
+      .strict(),
+    z
+      .object({
+        type: z.literal('content_control'),
+        tag: z.string().optional(),
+        children: z.array(docxReadNodeOutputSchema)
+      })
+      .strict(),
+    z
+      .object({
+        type: z.literal('revision'),
+        kind: z.enum(['insert', 'delete', 'move_from', 'move_to']),
+        children: z.array(docxReadNodeOutputSchema)
+      })
+      .strict(),
+    z
+      .object({
+        type: z.literal('field'),
+        instruction: z.string(),
+        children: z.array(docxReadNodeOutputSchema)
+      })
+      .strict(),
+    z
+      .object({
+        type: z.literal('visual'),
+        visualId: z.string(),
+        kind: z.enum(['image', 'chart', 'diagram', 'shape', 'embedded_object']),
+        altText: z.string().optional(),
+        children: z.array(docxReadNodeOutputSchema).optional()
+      })
+      .strict(),
+    z
+      .object({
+        type: z.literal('paragraph'),
+        nodeId: z.string(),
+        style: docxParagraphStyleSchema.optional(),
+        text: z.string(),
+        children: z.array(docxReadNodeOutputSchema)
+      })
+      .strict(),
+    z
+      .object({
+        type: z.literal('table'),
+        nodeId: z.string(),
+        style: docxTableStyleSchema.optional(),
+        rows: z.number().int(),
+        cols: z.number().int(),
+        text: z.string(),
+        children: z.array(docxReadNodeOutputSchema)
+      })
+      .strict(),
+    z
+      .object({
+        type: z.literal('table_row'),
+        nodeId: z.string(),
+        row: z.number().int(),
+        style: docxTableRowStyleSchema.optional(),
+        children: z.array(docxReadNodeOutputSchema)
+      })
+      .strict(),
+    z
+      .object({
+        type: z.literal('table_cell'),
+        blockId: z.string().optional(),
+        nodeId: z.string().optional(),
+        row: z.number().int(),
+        col: z.number().int(),
+        style: docxTableCellStyleSchema.optional(),
+        text: z.string(),
+        children: z.array(docxReadNodeOutputSchema)
+      })
+      .strict()
+      .refine((node) => Boolean(node.blockId) !== Boolean(node.nodeId), {
+        message: 'table_cell requires exactly one of blockId or nodeId'
+      })
+  ])
+)
 
-type DocxDetailedParagraphBlockOutput = z.infer<typeof docxDetailedParagraphBlockOutputSchema>
+const docxDetailedParagraphBlockOutputSchema = z
+  .object({
+    blockId: z.string(),
+    type: z.literal('paragraph'),
+    blockIndex: z.number().int(),
+    layoutMode: docxLayoutModeSchema,
+    previousBlockId: z.string().optional(),
+    nextBlockId: z.string().optional(),
+    style: docxParagraphStyleSchema.optional(),
+    headingLevel: z.number().optional(),
+    text: z.string(),
+    children: z.array(docxReadNodeOutputSchema)
+  })
+  .strict()
 
-const docxDetailedCellOutputSchema: z.ZodType<{
-  blockId: string
-  layoutMode: z.infer<typeof docxLayoutModeSchema>
-  row: number
-  col: number
-  paragraphs: DocxDetailedParagraphBlockOutput[]
-}> = z.object({
-  blockId: z.string(),
-  layoutMode: docxLayoutModeSchema,
-  row: z.number().int(),
-  col: z.number().int(),
-  paragraphs: z.array(docxDetailedParagraphBlockOutputSchema)
-})
+const docxDetailedTableBlockOutputSchema = z
+  .object({
+    blockId: z.string(),
+    type: z.literal('table'),
+    blockIndex: z.number().int(),
+    layoutMode: docxLayoutModeSchema,
+    previousBlockId: z.string().optional(),
+    nextBlockId: z.string().optional(),
+    style: docxTableStyleSchema.optional(),
+    rows: z.number().int(),
+    cols: z.number().int(),
+    text: z.string(),
+    children: z.array(docxReadNodeOutputSchema)
+  })
+  .strict()
 
-const docxDetailedTableBlockOutputSchema = z.object({
-  blockId: z.string(),
-  type: z.literal('table'),
-  blockIndex: z.number().int(),
-  layoutMode: docxLayoutModeSchema,
-  previousBlockId: z.string().optional(),
-  nextBlockId: z.string().optional(),
-  rows: z.number().int(),
-  cols: z.number().int(),
-  text: z.string(),
-  cells: z.array(docxDetailedCellOutputSchema)
-})
-
-const docxDetailedCellBlockOutputSchema = z.object({
-  blockId: z.string(),
-  type: z.literal('table_cell'),
-  blockIndex: z.number().int(),
-  layoutMode: docxLayoutModeSchema,
-  previousBlockId: z.string().optional(),
-  nextBlockId: z.string().optional(),
-  tableBlockId: z.string(),
-  row: z.number().int(),
-  col: z.number().int(),
-  text: z.string(),
-  paragraphs: z.array(docxDetailedParagraphBlockOutputSchema)
-})
+const docxDetailedCellBlockOutputSchema = z
+  .object({
+    blockId: z.string(),
+    type: z.literal('table_cell'),
+    blockIndex: z.number().int(),
+    layoutMode: docxLayoutModeSchema,
+    previousBlockId: z.string().optional(),
+    nextBlockId: z.string().optional(),
+    tableBlockId: z.string(),
+    row: z.number().int(),
+    col: z.number().int(),
+    style: docxTableCellStyleSchema.optional(),
+    text: z.string(),
+    children: z.array(docxReadNodeOutputSchema)
+  })
+  .strict()
 
 const docxDetailedBlockOutputSchema = z.discriminatedUnion('type', [
   docxDetailedParagraphBlockOutputSchema,
@@ -133,7 +233,7 @@ const docxChangedBlockOutputSchema = z.object({
     'delete_block',
     'update_table_cell',
     'replace_text',
-    'style_text'
+    'style'
   ]),
   blockId: z.string(),
   beforeText: z.string(),
@@ -210,3 +310,15 @@ export const docxWriteOutputSchema = docxBaseOutputSchema.extend({
   warnings: z.array(z.string()),
   postWriteReadback: docxPostWriteReadbackOutputSchema
 })
+
+export const docxReadVisualsOutputSchema = z
+  .object({
+    sourcePath: z.string(),
+    results: z.array(
+      z.union([
+        z.object({ visualId: z.string(), text: z.string().min(1) }).strict(),
+        z.object({ visualId: z.string(), error: z.string().min(1) }).strict()
+      ])
+    )
+  })
+  .strict()

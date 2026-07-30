@@ -1,9 +1,11 @@
 import type JSZip from 'jszip'
 import type {
   DocxChangedBlock,
+  DocxDetailedBlock,
   DocxLayoutMode,
   DocxOpenMeta,
-  DocxOutlineBlock
+  DocxOutlineBlock,
+  DocxVisualKind
 } from '../../types'
 
 export type IndexedNode =
@@ -44,6 +46,25 @@ export type BlockIndex = {
   charCount: number
   bodyBlockCount: number
   cellBlockCount: number
+  detailByBlockId: Map<string, DocxDetailedBlock>
+  editableNodesById: Map<string, DocxEditableNode>
+  visualsById: Map<string, DocxVisualDescriptor>
+}
+
+export type DocxEditableNode = {
+  nodeId: string
+  blockId: string
+  kind: 'paragraph' | 'run' | 'table' | 'table_row' | 'table_cell'
+  node: Element
+}
+
+export type DocxVisualDescriptor = {
+  visualId: string
+  blockId: string
+  kind: DocxVisualKind
+  relationshipId?: string
+  target?: string
+  contentType?: string
 }
 
 export type ParsedDocxBundle = {
@@ -51,7 +72,8 @@ export type ParsedDocxBundle = {
   documentXml: string
   documentDom: Document
   meta: DocxOpenMeta
-  imageCount: number
+  relationshipTargets: Map<string, string>
+  relationshipTypes: Map<string, string>
 }
 
 export type ApplyOpsResult = {

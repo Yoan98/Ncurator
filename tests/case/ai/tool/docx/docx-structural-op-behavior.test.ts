@@ -1,6 +1,8 @@
 import { describe, it } from 'vitest'
 import {
   createDocxToolHarness,
+  docxParagraphNode,
+  docxTableNode,
   writeTestDocxFile
 } from '../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
@@ -42,48 +44,51 @@ describe('ai tool docx backend', () => {
         try {
           const outlineBefore = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
             sourcePath: 'structural-op-behavior.docx',
-            ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 49 }],
-
+            ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 49 }]
           })
           const anchorBlockId = findParagraphBlockIdByText(outlineBefore.blocks, 'Anchor text.')
 
           const replaceResult = await harness.invoke<DocxMutationResult>('docx_edit', {
             sourcePath: outlineBefore.sourcePath,
-            actions: [{
-              type: 'replace_text',
-              query: 'Anchor text.',
-              replace: 'Anchor text updated.'
-            }]
+            actions: [
+              {
+                type: 'replace_text',
+                query: 'Anchor text.',
+                replace: 'Anchor text updated.'
+              }
+            ]
           })
           const outlineAfterReplace = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
             sourcePath: replaceResult.sourcePath,
-            ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 49 }],
-
+            ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 49 }]
           })
 
           const insertParagraph = await harness.invoke<DocxMutationResult>('docx_edit', {
             sourcePath: replaceResult.sourcePath,
-            actions: [{
-              type: 'insert_blocks',
-              position: 'after',
-              anchorBlockId,
-              blocks: [{ type: 'paragraph', text: 'Extra explanation paragraph.' }]
-            }]
+            actions: [
+              {
+                type: 'insert_blocks',
+                position: 'after',
+                anchorBlockId,
+                blocks: [docxParagraphNode('Extra explanation paragraph.')]
+              }
+            ]
           })
           const paragraphBlockId = insertParagraph.createdBlocks?.[0]?.blockId || anchorBlockId
           const insertTable = await harness.invoke<DocxMutationResult>('docx_edit', {
             sourcePath: insertParagraph.sourcePath,
-            actions: [{
-              type: 'insert_blocks',
-              position: 'after',
-              anchorBlockId: paragraphBlockId,
-              blocks: [{ type: 'table', rows: [['反走样', '过拟合']] }]
-            }]
+            actions: [
+              {
+                type: 'insert_blocks',
+                position: 'after',
+                anchorBlockId: paragraphBlockId,
+                blocks: [docxTableNode([['反走样', '过拟合']])]
+              }
+            ]
           })
           const outlineAfterInsert = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
             sourcePath: insertTable.sourcePath,
-            ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 79 }],
-
+            ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 79 }]
           })
 
           return {
@@ -101,12 +106,14 @@ describe('ai tool docx backend', () => {
       assert: async (result, runtime) => {
         runtime.assertThat(
           result.replaceResult.changedBlocks.every((block) => block.action === 'replace_text') &&
-            result.outlineAfterReplace.blocks.filter((block) => block.type !== 'table_cell').length ===
+            result.outlineAfterReplace.blocks.filter((block) => block.type !== 'table_cell')
+              .length ===
               result.outlineBefore.blocks.filter((block) => block.type !== 'table_cell').length &&
             !result.outlineAfterReplace.blocks.some((block) => block.type === 'table'),
           {
             name: 'replace-text-does-not-create-new-block-structure',
-            message: 'docx_edit(replace_text) 只应修改现有文本，不应凭空创建新的 paragraph/table 结构。',
+            message:
+              'docx_edit(replace_text) 只应修改现有文本，不应凭空创建新的 paragraph/table 结构。',
             data: {
               outlineBefore: result.outlineBefore.blocks,
               outlineAfterReplace: result.outlineAfterReplace.blocks,

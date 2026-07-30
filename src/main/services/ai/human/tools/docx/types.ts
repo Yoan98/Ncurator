@@ -4,28 +4,29 @@ import type { WorkspaceCapabilityBuildInput } from '../types'
 import {
   blockSpecSchema,
   docxCreateBlockSchema,
-  docxDeleteSchema,
   docxEditActionSchema,
   docxEditSchema,
-  docxHeadingEditActionSchema,
-  docxHeadingEditSchema,
   docxOutlineRequestSchema,
-  docxParagraphEditActionSchema,
-  docxParagraphEditSchema,
   docxReadRequestSchema,
+  docxReadVisualsSchema,
   docxSearchRequestSchema,
   docOpSchema,
   docxSearchModeSchema,
-  docxTableEditActionSchema,
-  docxTableEditSchema,
-  docxTextEditSchema,
-  docxTextStyleEditSchema,
-  docxTextStyleSchema,
   paragraphSpecSchema,
   runSpecSchema,
   tableCellSpecSchema,
   tableSpecSchema
 } from './schemas'
+import type {
+  DocxParagraphStyle,
+  DocxReadBlockNode,
+  DocxReadParagraphNode,
+  DocxReadTableCellNode,
+  DocxReadTableNode,
+  DocxVisualKind
+} from './nodeTypes'
+
+export type * from './nodeTypes'
 
 export type DocxTextRunSpec = z.infer<typeof runSpecSchema>
 export type DocxParagraphSpec = z.infer<typeof paragraphSpecSchema>
@@ -42,8 +43,9 @@ export type DocxOutlineParagraphBlock = {
   layoutMode: DocxLayoutMode
   previousBlockId?: string
   nextBlockId?: string
-  style: string
+  style?: DocxParagraphStyle
   text: string
+  visuals?: DocxVisualSummary
 }
 
 export type DocxOutlineTableBlock = {
@@ -56,6 +58,7 @@ export type DocxOutlineTableBlock = {
   rows: number
   cols: number
   text: string
+  visuals?: DocxVisualSummary
 }
 
 export type DocxOutlineCellBlock = {
@@ -69,6 +72,12 @@ export type DocxOutlineCellBlock = {
   row: number
   col: number
   text: string
+  visuals?: DocxVisualSummary
+}
+
+export type DocxVisualSummary = {
+  count: number
+  kinds: DocxVisualKind[]
 }
 
 export type DocxOutlineBlock =
@@ -76,51 +85,27 @@ export type DocxOutlineBlock =
   | DocxOutlineTableBlock
   | DocxOutlineCellBlock
 
-export type DocxDetailedParagraphBlock = {
+type DocxDetailedBlockMeta = {
   blockId: string
-  type: 'paragraph'
   blockIndex: number
   layoutMode: DocxLayoutMode
   previousBlockId?: string
   nextBlockId?: string
-  style: string
-  text: string
-  runs: DocxTextRunSpec[]
 }
 
-export type DocxDetailedTableCell = {
-  blockId: string
-  layoutMode: DocxLayoutMode
-  row: number
-  col: number
-  paragraphs: DocxDetailedParagraphBlock[]
-}
+export type DocxDetailedParagraphBlock = DocxDetailedBlockMeta &
+  Omit<DocxReadParagraphNode, 'nodeId'>
 
-export type DocxDetailedTableBlock = {
-  blockId: string
-  type: 'table'
-  blockIndex: number
-  layoutMode: DocxLayoutMode
-  previousBlockId?: string
-  nextBlockId?: string
-  rows: number
-  cols: number
-  text: string
-  cells: DocxDetailedTableCell[]
-}
+export type DocxDetailedTableBlock = DocxDetailedBlockMeta & Omit<DocxReadTableNode, 'nodeId'>
 
-export type DocxDetailedCellBlock = {
-  blockId: string
+export type DocxDetailedCellBlock = DocxDetailedBlockMeta & {
   type: 'table_cell'
-  blockIndex: number
-  layoutMode: DocxLayoutMode
-  previousBlockId?: string
-  nextBlockId?: string
   tableBlockId: string
   row: number
   col: number
+  style?: DocxReadTableCellNode['style']
   text: string
-  paragraphs: DocxDetailedParagraphBlock[]
+  children: DocxReadBlockNode[]
 }
 
 export type DocxDetailedBlock =
@@ -153,25 +138,16 @@ export type DocxWriteReadbackAction =
   | 'delete_block'
   | 'update_table_cell'
   | 'replace_text'
-  | 'style_text'
+  | 'style'
 
 export type DocxSearchMode = z.infer<typeof docxSearchModeSchema>
 export type DocxCreateBlock = z.infer<typeof docxCreateBlockSchema>
 export type DocxEditAction = z.infer<typeof docxEditActionSchema>
 export type DocxEditRequest = z.infer<typeof docxEditSchema>
-export type DocxDeleteRequest = z.infer<typeof docxDeleteSchema>
 export type DocxOutlineRequest = z.infer<typeof docxOutlineRequestSchema>
 export type DocxSearchRequest = z.infer<typeof docxSearchRequestSchema>
 export type DocxReadRequest = z.infer<typeof docxReadRequestSchema>
-export type DocxParagraphEditAction = z.infer<typeof docxParagraphEditActionSchema>
-export type DocxParagraphEditRequest = z.infer<typeof docxParagraphEditSchema>
-export type DocxHeadingEditAction = z.infer<typeof docxHeadingEditActionSchema>
-export type DocxHeadingEditRequest = z.infer<typeof docxHeadingEditSchema>
-export type DocxTableEditAction = z.infer<typeof docxTableEditActionSchema>
-export type DocxTableEditRequest = z.infer<typeof docxTableEditSchema>
-export type DocxTextEditRequest = z.infer<typeof docxTextEditSchema>
-export type DocxTextStyle = z.infer<typeof docxTextStyleSchema>
-export type DocxTextStyleEditRequest = z.infer<typeof docxTextStyleEditSchema>
+export type DocxReadVisualsRequest = z.infer<typeof docxReadVisualsSchema>
 export type DocxSearchMatch = {
   blockId: string
   blockIndex: number
@@ -194,7 +170,7 @@ export type DocxChangedBlock = {
     | 'delete_block'
     | 'update_table_cell'
     | 'replace_text'
-    | 'style_text'
+    | 'style'
   blockId: string
   beforeText: string
   afterText: string
@@ -223,6 +199,8 @@ export type DocxOpenStats = {
   paragraphCount: number
   tableCount: number
   imageCount: number
+  visualCount: number
+  visualKinds: DocxVisualKind[]
   charCount: number
 }
 
@@ -269,13 +247,19 @@ export type DocxReplaySnapshotBlock = {
   blockId: string
   blockIndex: number
   kind: 'paragraph' | 'table'
+  rawXml: string
   spec: DocxBlockSpec
+  structureFingerprint: string
+  visuals: Array<{ visualId: string; kind: DocxVisualKind }>
   tableCellBlockIds: string[]
   tableCells?: Array<{
     blockId: string
     row: number
     col: number
     text: string
+    rawXml: string
+    structureFingerprint: string
+    visuals: Array<{ visualId: string; kind: DocxVisualKind }>
   }>
 }
 
@@ -357,6 +341,8 @@ export type DocxReplayNode = {
   anchorFromNodeId?: string
   anchorSide?: 'before' | 'after'
   spec: DocxBlockSpec
+  structureFingerprint: string
+  visualIds: string[]
   createdRevisionRef: string
   changedRevisionRef?: string
   reviewQuery?: string

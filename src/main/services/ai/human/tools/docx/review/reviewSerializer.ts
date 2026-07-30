@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { XMLSerializer } from '@xmldom/xmldom'
+import { DOMParser, XMLSerializer } from '@xmldom/xmldom'
 import type JSZip from 'jszip'
 import { childElements, firstChildElement, isElementNode } from '../adapters/ooxml/dom'
 import { buildBlockIndex, loadDocxBundle } from '../adapters/ooxml/blockIndex'
@@ -200,6 +200,12 @@ const isRenderableIndexedNode = (
 ): node is Extract<IndexedNode, { kind: 'paragraph' | 'table' }> =>
   Boolean(node && (node.kind === 'paragraph' || node.kind === 'table'))
 
+const parseSnapshotElement = (rawXml: string): Element | null => {
+  if (!rawXml) return null
+  const element = new DOMParser().parseFromString(rawXml, 'application/xml').documentElement
+  return element?.localName === 'p' || element?.localName === 'tbl' ? element : null
+}
+
 const resolveElementForNode = (input: {
   shellDocument: Document
   node: DocxReplayNode
@@ -225,6 +231,10 @@ const resolveElementForNode = (input: {
     if (renderableCurrentNode) {
       return { element: cloneElement(renderableCurrentNode.node), reconstructed: false }
     }
+    const currentSnapshotElement = parseSnapshotElement(currentSnapshotBlock?.rawXml || '')
+    if (currentSnapshotElement) {
+      return { element: cloneElement(currentSnapshotElement), reconstructed: false }
+    }
   }
 
   const sourceBlockId = input.node.sourceBlockId || input.node.blockId
@@ -240,6 +250,10 @@ const resolveElementForNode = (input: {
   const renderableSourceNode = isRenderableIndexedNode(sourceNode) ? sourceNode : null
   if (renderableSourceNode) {
     return { element: cloneElement(renderableSourceNode.node), reconstructed: false }
+  }
+  const sourceSnapshotElement = parseSnapshotElement(sourceSnapshotBlock?.rawXml || '')
+  if (sourceSnapshotElement) {
+    return { element: cloneElement(sourceSnapshotElement), reconstructed: false }
   }
 
   return {

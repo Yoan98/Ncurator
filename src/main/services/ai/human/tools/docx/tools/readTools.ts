@@ -11,10 +11,13 @@ import type {
 import {
   DOCX_READ_OUTLINE_TOOL_SPEC,
   DOCX_READ_TOOL_SPEC,
+  DOCX_READ_VISUALS_TOOL_SPEC,
   DOCX_SEARCH_TOOL_SPEC
 } from '../toolSpecs'
 import { createDocxTool, finalizeDocxToolFailure, finalizeDocxToolSuccess } from './workerTool'
 import { HUMAN_TOOL_RESULT_TOKEN_LIMIT_RATIO } from '../../../constants'
+import { createVisualRecognitionService } from '../../visualRecognition/service'
+import { renderDocxVisualToPng } from '../utils/renderVisual'
 
 const MAX_SEARCH_MATCHES = 20
 const SEMANTIC_TOP_K = 8
@@ -29,8 +32,8 @@ type AppliedAlias = {
   to: string
 }
 
-const headingLevelFromStyle = (style: string | undefined): number | undefined => {
-  const normalized = String(style || '').trim()
+const headingLevelFromStyle = (styleName: string | undefined): number | undefined => {
+  const normalized = String(styleName || '').trim()
   if (!normalized) return undefined
   const match = normalized.match(/^heading\s*([1-6])$/i) || normalized.match(/^Heading([1-6])$/)
   return match ? Number(match[1]) : undefined
@@ -46,50 +49,9 @@ const buildOutlineBlock = (block: DocxOutlineBlock) => {
       previousBlockId: block.previousBlockId,
       nextBlockId: block.nextBlockId,
       style: block.style,
-      headingLevel: headingLevelFromStyle(block.style),
-      text: block.text
-    }
-  }
-  if (block.type === 'table') {
-    return {
-      blockId: block.blockId,
-      type: block.type,
-      blockIndex: block.blockIndex,
-      layoutMode: block.layoutMode,
-      previousBlockId: block.previousBlockId,
-      nextBlockId: block.nextBlockId,
-      rows: block.rows,
-      cols: block.cols,
-      text: block.text
-    }
-  }
-  return {
-    blockId: block.blockId,
-    type: block.type,
-    blockIndex: block.blockIndex,
-    layoutMode: block.layoutMode,
-    previousBlockId: block.previousBlockId,
-    nextBlockId: block.nextBlockId,
-    tableBlockId: block.tableBlockId,
-    row: block.row,
-    col: block.col,
-    text: block.text
-  }
-}
-
-const buildReadBlock = (block: DocxDetailedBlock) => {
-  if (block.type === 'paragraph') {
-    return {
-      blockId: block.blockId,
-      type: block.type,
-      blockIndex: block.blockIndex,
-      layoutMode: block.layoutMode,
-      previousBlockId: block.previousBlockId,
-      nextBlockId: block.nextBlockId,
-      style: block.style,
-      headingLevel: headingLevelFromStyle(block.style),
+      headingLevel: headingLevelFromStyle(block.style?.styleName),
       text: block.text,
-      runs: block.runs
+      visuals: block.visuals
     }
   }
   if (block.type === 'table') {
@@ -103,7 +65,7 @@ const buildReadBlock = (block: DocxDetailedBlock) => {
       rows: block.rows,
       cols: block.cols,
       text: block.text,
-      cells: block.cells
+      visuals: block.visuals
     }
   }
   return {
@@ -117,9 +79,14 @@ const buildReadBlock = (block: DocxDetailedBlock) => {
     row: block.row,
     col: block.col,
     text: block.text,
-    paragraphs: block.paragraphs
+    visuals: block.visuals
   }
 }
+
+const buildReadBlock = (block: DocxDetailedBlock) =>
+  block.type === 'paragraph'
+    ? { ...block, headingLevel: headingLevelFromStyle(block.style?.styleName) }
+    : block
 
 const fetchBlocksByBlockIds = async (input: {
   runtime: DocxToolRuntime
@@ -373,6 +340,7 @@ const mergeOutlineRanges = (
 }
 
 export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInterface[] => {
+  const visualRecognitionService = createVisualRecognitionService(runtime.input.ctx)
   const docxOutlineTool = createDocxTool({
     runtime,
     name: DOCX_READ_OUTLINE_TOOL_SPEC.name,
@@ -745,5 +713,127 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
     }
   })
 
-  return [docxOutlineTool, docxSearchTool, docxReadTool]
+  const docxReadVisualsTool = createDocxTool({
+    runtime,
+    name: DOCX_READ_VISUALS_TOOL_SPEC.name,
+    description: DOCX_READ_VISUALS_TOOL_SPEC.promptSpec.description,
+    schema: DOCX_READ_VISUALS_TOOL_SPEC.inputSchema,
+    execute: async ({ args, toolName, toolCallId }) => {
+      runtime.input.ctx.checkCancelled()
+      const sessionResult = await runtime.ensureReadSession({
+        toolName,
+        toolCallId,
+        sourcePath: args.sourcePath
+      })
+      if ('failure' in sessionResult) return sessionResult.failure
+      const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ncurator-docx-visual-'))
+      try {
+        const results = [] as Array<
+          { visualId: string; text: string } | { visualId: string; error: string }
+        >
+        for (const [index, request] of args.requests.entries()) {
+          const tempPath = path.join(tempDir, `${String(index)}.visual`)
+          try {
+            const response = await runtime.callWorker({
+              action: 'get_visual',
+              payload: { docId: sessionResult.docId, visualId: request.visualId }
+            })
+            if (!response.ok) {
+              results.push({ visualId: request.visualId, error: response.error })
+              continue
+            }
+            if (response.payload.action !== 'get_visual') {
+              results.push({
+                visualId: request.visualId,
+                error: 'worker protocol mismatch (get_visual)'
+              })
+              continue
+            }
+            if (response.payload.error) {
+              results.push({
+                visualId: request.visualId,
+                error: response.payload.error || 'visual media is missing'
+              })
+              continue
+            }
+            let visualData = response.payload.data
+            let mimeType = response.payload.mimeType
+            if ((!visualData || !mimeType) && response.payload.render) {
+              const rendered = await renderDocxVisualToPng({
+                sourcePath: sessionResult.sourcePath,
+                kind: response.payload.kind,
+                blockIndex: response.payload.render.blockIndex,
+                visualIndexInBlock: response.payload.render.visualIndexInBlock,
+                visualCountInBlock: response.payload.render.visualCountInBlock
+              })
+              if (!rendered.data) {
+                results.push({
+                  visualId: request.visualId,
+                  error: rendered.error || 'visual rendering failed'
+                })
+                continue
+              }
+              visualData = rendered.data
+              mimeType = 'image/png'
+            }
+            if (!visualData || !mimeType) {
+              results.push({ visualId: request.visualId, error: 'visual media is missing' })
+              continue
+            }
+            await fs.writeFile(tempPath, visualData)
+            const recognized = await visualRecognitionService.recognizeImage({
+              path: tempPath,
+              mimeType,
+              instruction: request.instruction
+            })
+            results.push(
+              'text' in recognized
+                ? { visualId: request.visualId, text: recognized.text }
+                : { visualId: request.visualId, error: recognized.error }
+            )
+          } catch (error) {
+            results.push({
+              visualId: request.visualId,
+              error: error instanceof Error ? error.message : String(error)
+            })
+          } finally {
+            await fs.rm(tempPath, { force: true })
+          }
+        }
+        const result = { sourcePath: sessionResult.sourcePath, results }
+        return finalizeDocxToolSuccess({
+          runtime,
+          toolName,
+          toolCallId,
+          result,
+          draftDocId: sessionResult.docId,
+          activity: {
+            actionType: DOCX_READ_VISUALS_TOOL_SPEC.activityActionType!,
+            startedSummary: `读取文档视觉内容: ${sessionResult.sourcePath}`,
+            buildCompletedSummary: (output) =>
+              `文档视觉读取完成：${String(output.results.length)} 项`
+          }
+        })
+      } catch (error) {
+        return finalizeDocxToolFailure({
+          runtime,
+          failure: runtime.emitFailure({
+            toolName,
+            toolCallId,
+            reason: 'failed',
+            error: error instanceof Error ? error.message : String(error),
+            draftDocId: sessionResult.docId
+          }),
+          activity: { actionType: DOCX_READ_VISUALS_TOOL_SPEC.activityActionType! }
+        })
+      } finally {
+        await fs.rm(tempDir, { recursive: true, force: true })
+      }
+    }
+  })
+
+  return [docxOutlineTool, docxSearchTool, docxReadTool, docxReadVisualsTool]
 }
+import fs from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'

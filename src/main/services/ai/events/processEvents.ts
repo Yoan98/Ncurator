@@ -20,6 +20,7 @@ export const getSkillKeyFromToolName = (toolName: string): string => {
   if (
     toolName === 'docx_read_outline' ||
     toolName === 'docx_read_blocks' ||
+    toolName === 'docx_read_visuals' ||
     toolName === 'docx_search'
   ) {
     return 'docx-reader'

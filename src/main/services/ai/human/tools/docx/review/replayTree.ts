@@ -13,12 +13,47 @@ import type {
   DocxReviewState
 } from '../types'
 
+const readParagraphRuns = (block: DocxDetailedParagraphBlock) => {
+  const runs: Extract<DocxBlockSpec, { kind: 'paragraph' }>['runs'] = []
+  const visit = (node: unknown): void => {
+    if (!node || typeof node !== 'object') return
+    const value = node as { type?: string; style?: Record<string, unknown>; children?: unknown[] }
+    if (value.type === 'run') {
+      const text = (value.children || [])
+        .map((child) => {
+          const item = child as { type?: string; text?: string }
+          return item.type === 'text'
+            ? item.text || ''
+            : item.type === 'tab'
+              ? '\t'
+              : item.type === 'break'
+                ? '\n'
+                : ''
+        })
+        .join('')
+      if (text)
+        runs.push({
+          text,
+          bold: value.style?.bold as boolean | undefined,
+          italic: value.style?.italic as boolean | undefined,
+          underline: value.style?.underline as boolean | undefined,
+          color: value.style?.color as string | undefined
+        })
+      return
+    }
+    ;(value.children || []).forEach(visit)
+  }
+  block.children.forEach(visit)
+  return runs
+}
+
 const normalizeParagraphSpec = (
   block: DocxDetailedParagraphBlock
 ): Extract<DocxBlockSpec, { kind: 'paragraph' }> => ({
   kind: 'paragraph',
-  style: block.style || 'Normal',
-  runs: block.runs.length > 0 ? block.runs.map((run) => ({ ...run })) : [{ text: block.text || '' }]
+  style: block.style?.styleName || 'Normal',
+  runs:
+    readParagraphRuns(block).length > 0 ? readParagraphRuns(block) : [{ text: block.text || '' }]
 })
 
 const normalizeTableSpec = (
@@ -27,13 +62,23 @@ const normalizeTableSpec = (
   kind: 'table',
   rows: Array.from({ length: block.rows }, (_, rowIndex) =>
     Array.from({ length: block.cols }, (_, colIndex) => {
-      const cell = block.cells.find(
-        (item) => item.row === rowIndex + 1 && item.col === colIndex + 1
-      )
+      const cell = block.children[rowIndex]?.children[colIndex]
       return {
         paragraphs:
-          cell && cell.paragraphs.length > 0
-            ? cell.paragraphs.map((paragraph) => normalizeParagraphSpec(paragraph))
+          cell && cell.children.length > 0
+            ? cell.children
+                .filter(
+                  (child): child is Extract<typeof child, { type: 'paragraph' }> =>
+                    child.type === 'paragraph'
+                )
+                .map((paragraph) =>
+                  normalizeParagraphSpec({
+                    ...paragraph,
+                    blockId: '',
+                    blockIndex: block.blockIndex,
+                    layoutMode: block.layoutMode
+                  })
+                )
             : [{ kind: 'paragraph' as const, style: 'Normal', runs: [{ text: '' }] }]
       }
     })
@@ -45,14 +90,57 @@ export const detailedBlockToSpec = (block: DocxDetailedBlock): DocxBlockSpec => 
   if (block.type === 'table') return normalizeTableSpec(block)
   return {
     kind: 'paragraph',
-    style: block.paragraphs[0]?.style || 'Normal',
+    style: 'Normal',
     runs: [{ text: block.text || '' }]
   }
+}
+
+const snapshotStructure = (value: unknown): unknown => {
+  if (Array.isArray(value)) return value.map(snapshotStructure)
+  if (!value || typeof value !== 'object') return value
+  const node = value as Record<string, unknown>
+  return Object.fromEntries(
+    Object.entries(node)
+      .filter(
+        ([key]) =>
+          ![
+            'blockId',
+            'nodeId',
+            'visualId',
+            'blockIndex',
+            'previousBlockId',
+            'nextBlockId'
+          ].includes(key)
+      )
+      .map(([key, child]) => [key, snapshotStructure(child)])
+  )
+}
+
+const collectSnapshotVisuals = (
+  value: unknown
+): Array<{ visualId: string; kind: import('../types').DocxVisualKind }> => {
+  const out: Array<{ visualId: string; kind: import('../types').DocxVisualKind }> = []
+  const visit = (node: unknown): void => {
+    if (!node || typeof node !== 'object') return
+    if (Array.isArray(node)) return node.forEach(visit)
+    const value = node as {
+      type?: string
+      visualId?: string
+      kind?: import('../types').DocxVisualKind
+      children?: unknown[]
+    }
+    if (value.type === 'visual' && value.visualId && value.kind)
+      out.push({ visualId: value.visualId, kind: value.kind })
+    ;(value.children || []).forEach(visit)
+  }
+  visit(value)
+  return out
 }
 
 export const createReplaySnapshot = (input: {
   outlineBlocks: DocxOutlineBlock[]
   detailedBlocksById: Map<string, DocxDetailedBlock>
+  rawXmlByBlockId: Map<string, string>
 }): DocxReplaySnapshot => {
   const blocks: DocxReplaySnapshotBlock[] = []
   const blockById = new Map<string, DocxReplaySnapshotBlock>()
@@ -71,16 +159,37 @@ export const createReplaySnapshot = (input: {
       blockId: block.blockId,
       blockIndex: block.blockIndex,
       kind: detail.type,
+      rawXml: input.rawXmlByBlockId.get(block.blockId) || '',
       spec: detailedBlockToSpec(detail),
-      tableCellBlockIds: detail.type === 'table' ? detail.cells.map((cell) => cell.blockId) : [],
+      structureFingerprint: JSON.stringify(snapshotStructure(detail)),
+      visuals: collectSnapshotVisuals(detail),
+      tableCellBlockIds:
+        detail.type === 'table'
+          ? input.outlineBlocks
+              .filter(
+                (candidate) =>
+                  candidate.type === 'table_cell' && candidate.tableBlockId === detail.blockId
+              )
+              .map((cell) => cell.blockId)
+          : [],
       tableCells:
         detail.type === 'table'
-          ? detail.cells.map((cell) => ({
-              blockId: cell.blockId,
-              row: cell.row,
-              col: cell.col,
-              text: cell.paragraphs.map((paragraph) => paragraph.text).join('\n')
-            }))
+          ? input.outlineBlocks
+              .filter(
+                (candidate): candidate is Extract<DocxOutlineBlock, { type: 'table_cell' }> =>
+                  candidate.type === 'table_cell' && candidate.tableBlockId === detail.blockId
+              )
+              .map((cell) => ({
+                blockId: cell.blockId,
+                row: cell.row,
+                col: cell.col,
+                text: cell.text,
+                rawXml: input.rawXmlByBlockId.get(cell.blockId) || '',
+                structureFingerprint: JSON.stringify(
+                  snapshotStructure(input.detailedBlocksById.get(cell.blockId))
+                ),
+                visuals: collectSnapshotVisuals(input.detailedBlocksById.get(cell.blockId))
+              }))
           : undefined
     }
 
@@ -114,6 +223,8 @@ const buildNode = (input: {
   sourceBlockId?: string
   currentBlockId?: string
   spec: DocxBlockSpec
+  structureFingerprint: string
+  visualIds: string[]
   createdRevisionRef: string
   changedRevisionRef?: string
   reviewQuery?: string
@@ -133,6 +244,8 @@ const buildNode = (input: {
   anchorFromNodeId: undefined,
   anchorSide: undefined,
   spec: input.spec,
+  structureFingerprint: input.structureFingerprint,
+  visualIds: input.visualIds,
   createdRevisionRef: input.createdRevisionRef,
   changedRevisionRef: input.changedRevisionRef,
   reviewQuery: input.reviewQuery,
@@ -149,29 +262,6 @@ const reindexBodyNodes = (session: DocxReplaySession): void => {
 const isVisibleReviewState = (reviewState: DocxReviewState): boolean =>
   reviewState !== 'deleted' && reviewState !== 'replaced-old'
 
-const buildParagraphSignature = (spec: Extract<DocxBlockSpec, { kind: 'paragraph' }>): string =>
-  `p:${spec.style || 'Normal'}:${spec.runs
-    .map(
-      (run) =>
-        `${run.text}|b:${run.bold ? '1' : '0'}|i:${run.italic ? '1' : '0'}|u:${run.underline ? '1' : '0'}|c:${run.color || ''}`
-    )
-    .join('\u241D')}`
-
-const buildSpecKey = (spec: DocxBlockSpec): string => {
-  if (spec.kind === 'paragraph') {
-    return buildParagraphSignature(spec)
-  }
-  return `t:${spec.rows
-    .map((row) =>
-      row
-        .map((cell) =>
-          cell.paragraphs.map((paragraph) => buildParagraphSignature(paragraph)).join('\u241E')
-        )
-        .join('\u241F')
-    )
-    .join('\u2424')}`
-}
-
 const findSnapshotMatchIndex = (input: {
   cursor: number
   nextSnapshot: DocxReplaySnapshot
@@ -179,27 +269,6 @@ const findSnapshotMatchIndex = (input: {
   usedBlockIds: Set<string>
   reservedBlockIds?: ReadonlySet<string>
 }): number => {
-  if (input.node.sourceOrigin === 'generated') {
-    for (let index = input.cursor; index < input.nextSnapshot.blocks.length; index += 1) {
-      const block = input.nextSnapshot.blocks[index]
-      if (
-        input.usedBlockIds.has(block.blockId) ||
-        input.reservedBlockIds?.has(block.blockId) ||
-        block.kind !== input.node.kind
-      ) {
-        continue
-      }
-      if (
-        block.blockId === input.node.currentBlockId ||
-        block.blockId === input.node.blockId ||
-        (input.node.sourceBlockId && block.blockId === input.node.sourceBlockId)
-      ) {
-        return index
-      }
-    }
-  }
-
-  const nodeKey = buildSpecKey(input.node.spec)
   for (let index = input.cursor; index < input.nextSnapshot.blocks.length; index += 1) {
     const block = input.nextSnapshot.blocks[index]
     if (
@@ -209,7 +278,30 @@ const findSnapshotMatchIndex = (input: {
     ) {
       continue
     }
-    if (buildSpecKey(block.spec) === nodeKey) {
+    if (
+      block.blockId === input.node.currentBlockId ||
+      block.blockId === input.node.blockId ||
+      (input.node.sourceBlockId && block.blockId === input.node.sourceBlockId)
+    ) {
+      return index
+    }
+  }
+
+  for (let index = input.cursor; index < input.nextSnapshot.blocks.length; index += 1) {
+    const block = input.nextSnapshot.blocks[index]
+    if (
+      input.usedBlockIds.has(block.blockId) ||
+      input.reservedBlockIds?.has(block.blockId) ||
+      block.kind !== input.node.kind
+    ) {
+      continue
+    }
+    const visualIdsMatch =
+      input.node.visualIds.length === block.visuals.length &&
+      input.node.visualIds.every(
+        (visualId, visualIndex) => visualId === block.visuals[visualIndex]?.visualId
+      )
+    if (block.structureFingerprint === input.node.structureFingerprint && visualIdsMatch) {
       return index
     }
   }
@@ -249,6 +341,8 @@ const rebindVisibleNodesToSnapshot = (input: {
     node.currentBlockId = matchedBlock.blockId
     node.blockIndex = matchedBlock.blockIndex
     node.spec = matchedBlock.spec
+    node.structureFingerprint = matchedBlock.structureFingerprint
+    node.visualIds = matchedBlock.visuals.map((visual) => visual.visualId)
   })
 }
 
@@ -346,6 +440,8 @@ const buildCurrentNodeFromSnapshot = (
     sourceBlockId,
     currentBlockId: snapshotBlock.blockId,
     spec: snapshotBlock.spec,
+    structureFingerprint: snapshotBlock.structureFingerprint,
+    visualIds: snapshotBlock.visuals.map((visual) => visual.visualId),
     createdRevisionRef: revisionRef
   })
 
@@ -418,6 +514,8 @@ export const createReplaySessionFromSnapshot = (input: {
       sourceBlockId: block.blockId,
       currentBlockId: block.blockId,
       spec: block.spec,
+      structureFingerprint: block.structureFingerprint,
+      visualIds: block.visuals.map((visual) => visual.visualId),
       createdRevisionRef: 'v1'
     })
     nodeById.set(node.nodeId, node)
@@ -484,7 +582,7 @@ export const applyRevisionToReplaySession = (input: {
     (op.type === 'delete_block' ||
       op.type === 'replace_block' ||
       op.type === 'replace_text' ||
-      op.type === 'style_text' ||
+      op.type === 'style' ||
       op.type === 'update_table_cell')
       ? new Set([targetNodeId])
       : undefined
@@ -550,7 +648,7 @@ export const applyRevisionToReplaySession = (input: {
     return
   }
 
-  if (op.type === 'style_text') {
+  if (op.type === 'style') {
     const snapshotBlock = resolveSnapshotBlockForMutation({
       session,
       nextSnapshot,
@@ -561,7 +659,7 @@ export const applyRevisionToReplaySession = (input: {
     if (!snapshotBlock) {
       targetNode.reviewState = 'formatted'
       targetNode.changedRevisionRef = revisionRef
-      targetNode.reviewQuery = op.query
+      targetNode.reviewQuery = op.target.type === 'text_match' ? op.target.query : undefined
       session.activeSnapshot = nextSnapshot
       return
     }
@@ -570,8 +668,10 @@ export const applyRevisionToReplaySession = (input: {
     targetNode.currentBlockId = snapshotBlock.blockId
     targetNode.blockIndex = snapshotBlock.blockIndex
     targetNode.spec = snapshotBlock.spec
+    targetNode.structureFingerprint = snapshotBlock.structureFingerprint
+    targetNode.visualIds = snapshotBlock.visuals.map((visual) => visual.visualId)
     targetNode.changedRevisionRef = revisionRef
-    targetNode.reviewQuery = op.query
+    targetNode.reviewQuery = op.target.type === 'text_match' ? op.target.query : undefined
     session.activeSnapshot = nextSnapshot
     return
   }

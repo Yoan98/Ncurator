@@ -60,7 +60,14 @@ describe('ai tool hand backend', () => {
                           type: 'insert_blocks',
                           position: 'after',
                           anchorBlockId: 'blk_00000000000000000000000000000000',
-                          blocks: [{ type: 'paragraph', text: 'Inserted' }]
+                          blocks: [
+                            {
+                              type: 'paragraph',
+                              children: [
+                                { type: 'run', children: [{ type: 'text', text: 'Inserted' }] }
+                              ]
+                            }
+                          ]
                         }
                       ]
                     }

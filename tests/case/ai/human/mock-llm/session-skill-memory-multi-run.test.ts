@@ -80,7 +80,7 @@ describe('ai human mock-llm backend', () => {
               {
                 output: buildLearnSkillsDecision({
                   skillIds: ['docx-write'],
-                  summary: '学习 Word 编辑技能并触发 FIFO 遗忘。'
+                  summary: '学习 Word 编辑技能并检查 FIFO 遗忘结果。'
                 })
               },
               ({ user }) => {
@@ -102,7 +102,7 @@ describe('ai human mock-llm backend', () => {
             result.run2Prompt.includes('工具 docx_read_outline') &&
             result.run2Prompt.includes('工具 pdf_inspect') &&
             result.stateAtLimit.learnedSkillIds.join(',') ===
-              'docx-read,pdf-read,image-recognition,ppt-read,ppt-write' &&
+              'pdf-read,image-recognition,ppt-read,ppt-write' &&
             result.stateAfterEviction.learnedSkillIds.join(',') ===
               'pdf-read,image-recognition,ppt-read,ppt-write,docx-write' &&
             result.run4Prompt.includes('工具 ppt_read_outline') &&

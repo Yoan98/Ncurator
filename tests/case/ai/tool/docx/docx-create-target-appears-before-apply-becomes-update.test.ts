@@ -1,7 +1,12 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { describe, it } from 'vitest'
-import { createDocxToolHarness, writeTestDocxFile } from '../../../../harness/backend/aiToolHarness'
+import {
+  createDocxToolHarness,
+  docxHeadingNode,
+  docxParagraphNode,
+  writeTestDocxFile
+} from '../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import type { DocxCreateResult, DocxFailureResult } from './testUtils'
 
@@ -29,8 +34,8 @@ describe('ai tool docx backend', () => {
                 type: 'insert_blocks',
                 position: 'after',
                 blocks: [
-                  { type: 'heading', level: 1, text: 'AI Final Report' },
-                  { type: 'paragraph', text: 'AI final paragraph.' }
+                  docxHeadingNode(1, 'AI Final Report'),
+                  docxParagraphNode('AI final paragraph.')
                 ]
               }
             ]

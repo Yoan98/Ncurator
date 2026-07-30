@@ -1,102 +1,47 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import {
-  Document,
-  HeadingLevel,
-  Packer,
-  Paragraph,
-  Table,
-  TableCell,
-  TableRow,
-  TextRun,
-  WidthType
-} from 'docx'
+import { Document, Packer, Paragraph, TextRun } from 'docx'
 import type { DocxCreateBlock } from '../types'
+import { loadDocxBundle } from '../adapters/ooxml/blockIndex'
+import { createBlockFromNode, createRelationshipWriter } from '../adapters/ooxml/createNodeDom'
+import { childElements } from '../adapters/ooxml/dom'
+import { XMLSerializer } from '@xmldom/xmldom'
 
-type DocxHeadingLevel = (typeof HeadingLevel)[keyof typeof HeadingLevel]
-
-const toHeadingLevel = (level: number | undefined): DocxHeadingLevel => {
-  switch (level) {
-    case 2:
-      return HeadingLevel.HEADING_2
-    case 3:
-      return HeadingLevel.HEADING_3
-    case 4:
-      return HeadingLevel.HEADING_4
-    case 5:
-      return HeadingLevel.HEADING_5
-    case 6:
-      return HeadingLevel.HEADING_6
-    default:
-      return HeadingLevel.HEADING_1
-  }
-}
-
-const createTextRuns = (text: string): TextRun[] => {
-  const normalized = String(text || '')
-  const parts = normalized.split('\n')
-  return parts.flatMap((part, index) => {
-    const run = new TextRun(part)
-    return index === 0 ? [run] : [new TextRun({ break: 1 }), run]
-  })
-}
-
-const createParagraph = (text: string, headingLevel?: number): Paragraph =>
-  new Paragraph({
-    heading: typeof headingLevel === 'number' ? toHeadingLevel(headingLevel) : undefined,
-    children: createTextRuns(text)
-  })
-
-const createTable = (rows: string[][]): Table =>
-  new Table({
-    width: {
-      size: 100,
-      type: WidthType.PERCENTAGE
-    },
-    rows: rows.map(
-      (row) =>
-        new TableRow({
-          children: row.map(
-            (cellText) =>
-              new TableCell({
-                children: [createParagraph(cellText)]
-              })
-          )
-        })
-    )
-  })
-
-const createDocumentChildren = (blocks: readonly DocxCreateBlock[]) => {
-  if (blocks.length === 0) {
-    return [createParagraph('')]
-  }
-
-  return blocks.map((block) => {
-    switch (block.type) {
-      case 'heading':
-        return createParagraph(block.text, block.level)
-      case 'table':
-        return createTable(block.rows)
-      case 'paragraph':
-      default:
-        return createParagraph(block.text)
-    }
-  })
-}
+const WORD_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
 
 export const createDocxFile = async (input: {
   filePath: string
   blocks: readonly DocxCreateBlock[]
 }): Promise<void> => {
-  const document = new Document({
-    sections: [
-      {
-        children: createDocumentChildren(input.blocks)
-      }
-    ]
+  const skeleton = new Document({
+    sections: [{ children: [new Paragraph({ children: [new TextRun('')] })] }]
   })
-
+  const bundle = await loadDocxBundle(await Packer.toBuffer(skeleton))
+  const body = bundle.documentDom.getElementsByTagNameNS(WORD_NS, 'body').item(0)
+  if (!body) throw new Error('generated DOCX has no document body')
+  childElements(body)
+    .filter((node) => node.localName !== 'sectPr')
+    .forEach((node) => body.removeChild(node))
+  const relationships = await createRelationshipWriter(bundle.zip)
+  const blocks =
+    input.blocks.length > 0
+      ? input.blocks
+      : [
+          {
+            type: 'paragraph',
+            children: [{ type: 'run', children: [{ type: 'text', text: '' }] }]
+          } as const
+        ]
+  const sectionProperties = childElements(body, 'sectPr')[0] || null
+  blocks.forEach((block) =>
+    body.insertBefore(
+      createBlockFromNode(bundle.documentDom, block, relationships),
+      sectionProperties
+    )
+  )
+  await relationships.persist()
+  bundle.zip.file('word/document.xml', new XMLSerializer().serializeToString(bundle.documentDom))
+  const buffer = await bundle.zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' })
   await fs.mkdir(path.dirname(input.filePath), { recursive: true })
-  const buffer = await Packer.toBuffer(document)
   await fs.writeFile(input.filePath, buffer)
 }

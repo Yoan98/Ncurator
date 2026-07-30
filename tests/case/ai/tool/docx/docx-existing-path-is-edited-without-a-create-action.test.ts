@@ -1,6 +1,10 @@
 import fs from 'node:fs/promises'
 import { describe, it } from 'vitest'
-import { createDocxToolHarness, writeTestDocxFile } from '../../../../harness/backend/aiToolHarness'
+import {
+  createDocxToolHarness,
+  docxParagraphNode,
+  writeTestDocxFile
+} from '../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 
 describe('ai tool docx backend', () => {
@@ -27,22 +31,12 @@ describe('ai tool docx backend', () => {
               {
                 type: 'insert_blocks',
                 position: 'after',
-                blocks: [
-                  {
-                    type: 'paragraph',
-                    text: '追加内容。'
-                  }
-                ]
+                blocks: [docxParagraphNode('追加内容。')]
               },
               {
                 type: 'insert_blocks',
                 position: 'before',
-                blocks: [
-                  {
-                    type: 'paragraph',
-                    text: '前置内容。'
-                  }
-                ]
+                blocks: [docxParagraphNode('前置内容。')]
               }
             ]
           })

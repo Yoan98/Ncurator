@@ -1,0 +1,180 @@
+import fs from 'node:fs/promises'
+import path from 'node:path'
+import { DOMParser, XMLSerializer } from '@xmldom/xmldom'
+import { describe, expect, it } from 'vitest'
+import {
+  buildBlockIndex,
+  loadDocxBundle
+} from '../../../../src/main/services/ai/human/tools/docx/adapters/ooxml/blockIndex'
+import { handleDocxWorkerRequest } from '../../../../src/main/services/ai/human/tools/docx/worker/docxWorker'
+import { createReplaySnapshot } from '../../../../src/main/services/ai/human/tools/docx/review/replayTree'
+
+describe('docx recursive semantic tree visuals', () => {
+  it('classifies all visual kinds, selects AlternateContent, and nests shape text', () => {
+    const xml = `
+      <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+        xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+        xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"
+        xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"
+        xmlns:dgm="http://schemas.openxmlformats.org/drawingml/2006/diagram"
+        xmlns:v="urn:schemas-microsoft-com:vml"
+        xmlns:o="urn:schemas-microsoft-com:office:office">
+        <w:body>
+          <w:p><w:r><w:drawing><pic:pic><a:blip r:embed="rImage"/></pic:pic></w:drawing></w:r></w:p>
+          <w:p><w:r><w:drawing><c:chart r:id="rChart"/></w:drawing></w:r></w:p>
+          <w:p><w:r><w:drawing><dgm:relIds r:dm="rDiagram"/></w:drawing></w:r></w:p>
+          <w:p><w:r><w:pict><v:shape><w:txbxContent><w:p><w:r><w:t>Shape text</w:t></w:r></w:p></w:txbxContent></v:shape></w:pict></w:r></w:p>
+          <w:p><w:r><w:object><v:shape><v:imagedata r:id="rPreview"/></v:shape><o:OLEObject r:id="rOle"/></w:object></w:r></w:p>
+          <w:p><w:r><mc:AlternateContent><mc:Choice Requires="unsupported"><w:drawing><c:chart r:id="bad"/></w:drawing></mc:Choice><mc:Fallback><w:drawing><pic:pic><a:blip r:embed="fallback"/></pic:pic></w:drawing></mc:Fallback></mc:AlternateContent></w:r></w:p>
+        </w:body>
+      </w:document>`
+    const dom = new DOMParser().parseFromString(xml, 'application/xml')
+    const index = buildBlockIndex(
+      dom,
+      new Map([
+        ['rImage', 'media/image.png'],
+        ['rChart', 'charts/chart1.xml'],
+        ['rDiagram', 'diagrams/data1.xml'],
+        ['rPreview', 'media/preview.png'],
+        ['fallback', 'media/fallback.png']
+      ])
+    )
+
+    expect([...index.visualsById.values()].map((visual) => visual.kind)).toEqual([
+      'image',
+      'chart',
+      'diagram',
+      'shape',
+      'embedded_object',
+      'image'
+    ])
+    expect(index.visualsById.size).toBe(6)
+    expect(index.outline[3]?.text).toBe('Shape text')
+    const shapeDetail = index.detailByBlockId.get(index.bodyBlockIds[3]!)
+    const shapeVisual =
+      shapeDetail?.type === 'paragraph' && shapeDetail.children[0]?.type === 'run'
+        ? shapeDetail.children[0].children[0]
+        : undefined
+    expect(shapeVisual?.type).toBe('visual')
+    expect(shapeVisual?.type === 'visual' ? shapeVisual.children?.[0]?.type : undefined).toBe(
+      'paragraph'
+    )
+  })
+
+  it('keeps image visuals distinct from real empty paragraphs', async () => {
+    const fixture = path.resolve('tests/fixtures/workspace/灵感测试.docx')
+    const bundle = await loadDocxBundle(await fs.readFile(fixture))
+    const index = buildBlockIndex(
+      bundle.documentDom,
+      bundle.relationshipTargets,
+      bundle.relationshipTypes
+    )
+    const images = [...index.visualsById.values()].filter((visual) => visual.kind === 'image')
+    const realEmptyParagraphs = index.outline.filter(
+      (block) => block.type === 'paragraph' && block.text === '' && !block.visuals
+    )
+    expect(images).toHaveLength(18)
+    expect(realEmptyParagraphs).toHaveLength(22)
+    expect(new Set(images.map((visual) => visual.visualId)).size).toBe(18)
+    const snapshot = createReplaySnapshot({
+      outlineBlocks: index.outline,
+      detailedBlocksById: index.detailByBlockId,
+      rawXmlByBlockId: new Map(
+        [...index.nodesById.entries()].map(([blockId, node]) => [
+          blockId,
+          new XMLSerializer().serializeToString(node.node)
+        ])
+      )
+    })
+    const bindings = snapshot.blocks.flatMap((block) =>
+      block.visuals.map((visual) => visual.visualId)
+    )
+    expect(bindings).toHaveLength(18)
+    expect(new Set(bindings).size).toBe(18)
+    expect(snapshot.blocks.filter((block) => block.visuals.length).every((block) => block.rawXml))
+      .toBe(true)
+  })
+
+  it.each([
+    ['图形学.docx', 599],
+    ['深度学习.docx', 1034]
+  ])(
+    'indexes all VML visuals in %s without flattening output',
+    async (name, expected) => {
+      const fixture = path.resolve('tests/fixtures/workspace/学习笔记', name)
+      const bundle = await loadDocxBundle(await fs.readFile(fixture))
+      const index = buildBlockIndex(
+        bundle.documentDom,
+        bundle.relationshipTargets,
+        bundle.relationshipTypes
+      )
+      expect(index.visualsById.size).toBe(expected)
+      expect(index.outline.every((block) => !('children' in block))).toBe(true)
+    },
+    15_000
+  )
+
+  it('resolves a public visualId to its package image bytes', async () => {
+    const runId = `visual-unit-${String(Date.now())}`
+    const sourcePath = path.resolve('tests/fixtures/workspace/灵感测试.docx')
+    const open = await handleDocxWorkerRequest({
+      requestId: 'open',
+      runId,
+      action: 'open',
+      payload: { sourcePath }
+    })
+    expect(open.ok).toBe(true)
+    if (!open.ok || open.payload.action !== 'open') return
+    const outline = await handleDocxWorkerRequest({
+      requestId: 'outline',
+      runId,
+      action: 'outline',
+      payload: {
+        docId: open.payload.docId,
+        ranges: [{ fromBlockIndex: 0, toBlockIndex: 100 }],
+        includeTables: true,
+        includeCells: true
+      }
+    })
+    expect(outline.ok).toBe(true)
+    if (!outline.ok || outline.payload.action !== 'outline') return
+    const owner = outline.payload.blocks.find((block) => block.visuals?.count)
+    expect(owner).toBeDefined()
+    if (!owner) return
+    const detail = await handleDocxWorkerRequest({
+      requestId: 'detail',
+      runId,
+      action: 'get_block',
+      payload: { docId: open.payload.docId, blockId: owner.blockId }
+    })
+    expect(detail.ok).toBe(true)
+    if (!detail.ok || detail.payload.action !== 'get_block') return
+    const stack: unknown[] = [detail.payload.block]
+    let visualId = ''
+    while (stack.length && !visualId) {
+      const node = stack.pop() as { type?: string; visualId?: string; children?: unknown[] }
+      if (node.type === 'visual') visualId = node.visualId || ''
+      else stack.push(...(node.children || []))
+    }
+    expect(visualId).not.toBe('')
+    const visual = await handleDocxWorkerRequest({
+      requestId: 'visual',
+      runId,
+      action: 'get_visual',
+      payload: { docId: open.payload.docId, visualId }
+    })
+    expect(visual.ok).toBe(true)
+    if (visual.ok && visual.payload.action === 'get_visual') {
+      expect(visual.payload.mimeType).toMatch(/^image\//)
+      expect(visual.payload.data?.byteLength).toBeGreaterThan(100)
+    }
+    await handleDocxWorkerRequest({
+      requestId: 'release',
+      runId,
+      action: 'release_run',
+      payload: {}
+    })
+  })
+})

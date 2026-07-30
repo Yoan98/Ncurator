@@ -18,12 +18,26 @@ export type DocxWorkerAction =
   | 'get_blocks_by_ids'
   | 'get_blocks_by_range'
   | 'get_blocks_by_block_index_range'
+  | 'get_replay_snapshot_xml'
   | 'search'
+  | 'get_visual'
   | 'apply_ops'
   | 'materialize_draft'
   | 'release_run'
 
 export type DocxWorkerRequest =
+  | {
+      requestId: string
+      runId: string
+      action: 'get_replay_snapshot_xml'
+      payload: { docId: string }
+    }
+  | {
+      requestId: string
+      runId: string
+      action: 'get_visual'
+      payload: { docId: string; visualId: string }
+    }
   | {
       requestId: string
       runId: string
@@ -112,6 +126,23 @@ export type DocxWorkerRequest =
 
 export type DocxWorkerSuccessPayload =
   | {
+      action: 'get_replay_snapshot_xml'
+      blocks: Array<{ blockId: string; rawXml: string }>
+    }
+  | {
+      action: 'get_visual'
+      visualId: string
+      kind: 'image' | 'chart' | 'diagram' | 'shape' | 'embedded_object'
+      data?: Buffer
+      mimeType?: string
+      error?: string
+      render?: {
+        blockIndex: number
+        visualIndexInBlock: number
+        visualCountInBlock: number
+      }
+    }
+  | {
       action: 'open'
       docId: string
       meta: DocxOpenMeta
@@ -143,6 +174,7 @@ export type DocxWorkerSuccessPayload =
   | {
       action: 'apply_ops'
       newDocId: string
+      stats: DocxOpenStats
       changedBlocks: DocxChangedBlock[]
       warnings: string[]
     }
@@ -179,7 +211,6 @@ type DocSnapshotBase = {
   buffer: Buffer
   checksum: string
   meta: DocxOpenMeta
-  imageCount: number
   index: BlockIndex
   identity: DocxIdentityIndex
   detailByBlockId: Map<string, DocxDetailedBlock>

@@ -20,7 +20,7 @@ describe('ai unit tool call schema', () => {
               blocks: [
                 {
                   type: 'paragraph',
-                  text: 'hello'
+                  children: [{ type: 'run', children: [{ type: 'text', text: 'hello' }] }]
                 }
               ]
             }

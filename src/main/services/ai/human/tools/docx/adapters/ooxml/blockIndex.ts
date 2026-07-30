@@ -2,8 +2,6 @@ import JSZip from 'jszip'
 import { DOMParser } from '@xmldom/xmldom'
 import type {
   DocxDetailedBlock,
-  DocxDetailedParagraphBlock,
-  DocxDetailedTableBlock,
   DocxLayoutMode,
   DocxOutlineCellBlock,
   DocxOutlineParagraphBlock,
@@ -14,11 +12,13 @@ import type {
   DocxParagraphSpec,
   DocxTextRunSpec
 } from '../../types'
-import type {
-  BlockIndex,
-  NodeMapById,
-  ParsedDocxBundle
-} from './types'
+import type { BlockIndex, NodeMapById, ParsedDocxBundle } from './types'
+import {
+  buildParagraphDetail,
+  buildTableDetail,
+  readParagraphStyle,
+  visualSummaryForBlock
+} from './semanticTree'
 import {
   childElements,
   collectText,
@@ -65,20 +65,6 @@ const paragraphTextRuns = (paragraph: Element): DocxTextRunSpec[] => {
     })
   }
   return runs
-}
-
-const paragraphDetail = (blockId: string, paragraph: Element): DocxDetailedParagraphBlock => {
-  const runs = paragraphTextRuns(paragraph)
-  const text = runs.length > 0 ? runs.map((run) => run.text).join('') : collectText(paragraph)
-  return {
-    blockId,
-    type: 'paragraph',
-    blockIndex: -1,
-    layoutMode: 'normal',
-    style: paragraphStyle(paragraph),
-    text,
-    runs
-  }
 }
 
 const summarizeTable = (table: Element): { rows: number; cols: number; text: string } => {
@@ -143,21 +129,6 @@ const parseMeta = async (zip: JSZip): Promise<DocxOpenMeta> => {
   }
 
   return meta
-}
-
-const countImages = async (zip: JSZip): Promise<number> => {
-  const relsXml = await readZipText(zip, 'word/_rels/document.xml.rels')
-  if (!relsXml) return 0
-  const relsDoc = parseXml(relsXml)
-  const relationships = relsDoc.getElementsByTagName('Relationship')
-  let count = 0
-  for (let i = 0; i < relationships.length; i += 1) {
-    const node = relationships.item(i)
-    if (!node) continue
-    const type = node.getAttribute('Type') || ''
-    if (type.includes('/image')) count += 1
-  }
-  return count
 }
 
 const getBody = (doc: Document): Element => {
@@ -263,7 +234,11 @@ const withCellStructure = (
   ...resolveBodyNeighbors(bodyBlockIds, block.blockIndex)
 })
 
-export const buildBlockIndex = (documentDom: Document): BlockIndex => {
+export const buildBlockIndex = (
+  documentDom: Document,
+  relationshipTargets: ReadonlyMap<string, string> = new Map(),
+  relationshipTypes: ReadonlyMap<string, string> = new Map()
+): BlockIndex => {
   const body = getBody(documentDom)
   const outlineDraft: DocxOutlineBlock[] = []
   const nodesById: NodeMapById = new Map()
@@ -273,6 +248,9 @@ export const buildBlockIndex = (documentDom: Document): BlockIndex => {
   let tableCount = 0
   let charCount = 0
   let cellBlockCount = 0
+  const detailByBlockId: BlockIndex['detailByBlockId'] = new Map()
+  const editableNodesById: BlockIndex['editableNodesById'] = new Map()
+  const visualsById: BlockIndex['visualsById'] = new Map()
 
   const bodyChildren = body.childNodes
   for (let i = 0; i < bodyChildren.length; i += 1) {
@@ -283,7 +261,7 @@ export const buildBlockIndex = (documentDom: Document): BlockIndex => {
     if (child.localName === 'p') {
       const blockId = `b:${blockIndex}`
       const text = paragraphText(child)
-      const style = paragraphStyle(child)
+      const style = readParagraphStyle(child)
       const layoutMode = paragraphLayoutMode(child)
       bodyBlockIds.push(blockId)
       outlineDraft.push({
@@ -373,6 +351,60 @@ export const buildBlockIndex = (documentDom: Document): BlockIndex => {
     return withCellStructure(bodyBlockIds, block)
   })
 
+  for (const blockId of bodyBlockIds) {
+    const node = nodesById.get(blockId)
+    if (!node || node.kind === 'table_cell') continue
+    const neighbors = resolveBodyNeighbors(bodyBlockIds, node.blockIndex)
+    const shared = {
+      blockId,
+      blockIndex: node.blockIndex,
+      layoutMode: node.layoutMode,
+      ...neighbors,
+      relationshipTargets,
+      relationshipTypes,
+      editableNodesById,
+      visualsById
+    }
+    const detail =
+      node.kind === 'paragraph'
+        ? buildParagraphDetail({ ...shared, paragraph: node.node })
+        : buildTableDetail({ ...shared, table: node.node })
+    detailByBlockId.set(blockId, detail)
+  }
+
+  for (const [blockId, node] of nodesById) {
+    if (node.kind !== 'table_cell') continue
+    const table = detailByBlockId.get(node.tableBlockId)
+    if (!table || table.type !== 'table') continue
+    const parsed = table.children[node.row - 1]?.children[node.col - 1]
+    if (!parsed) continue
+    const neighbors = resolveBodyNeighbors(bodyBlockIds, node.blockIndex)
+    detailByBlockId.set(blockId, {
+      blockId,
+      tableBlockId: node.tableBlockId,
+      blockIndex: node.blockIndex,
+      layoutMode: node.layoutMode,
+      ...neighbors,
+      type: 'table_cell',
+      row: node.row,
+      col: node.col,
+      style: parsed.style,
+      text: parsed.text,
+      children: parsed.children
+    })
+  }
+
+  outline.forEach((block) => {
+    const detail = detailByBlockId.get(block.blockId)
+    if (detail) block.text = detail.text
+    const visuals = detail ? visualSummaryForBlock(detail) : undefined
+    if (visuals) block.visuals = visuals
+  })
+  charCount = outline.reduce(
+    (total, block) => total + (block.type === 'table' ? 0 : block.text.length),
+    0
+  )
+
   return {
     outline,
     nodesById,
@@ -381,16 +413,25 @@ export const buildBlockIndex = (documentDom: Document): BlockIndex => {
     tableCount,
     charCount,
     bodyBlockCount: blockIndex,
-    cellBlockCount
+    cellBlockCount,
+    detailByBlockId,
+    editableNodesById,
+    visualsById
   }
 }
 
-export const toOpenStats = (index: BlockIndex, imageCount: number): DocxOpenStats => {
+export const toOpenStats = (index: BlockIndex): DocxOpenStats => {
+  const visualKinds = [...new Set([...index.visualsById.values()].map((visual) => visual.kind))]
+  const imageCount = [...index.visualsById.values()].filter(
+    (visual) => visual.kind === 'image'
+  ).length
   return {
     blockCount: index.bodyBlockCount + index.cellBlockCount,
     paragraphCount: index.paragraphCount,
     tableCount: index.tableCount,
     imageCount,
+    visualCount: index.visualsById.size,
+    visualKinds,
     charCount: index.charCount
   }
 }
@@ -416,7 +457,8 @@ export const buildOutlineOutput = (
     .filter((range) => range.toBlockIndex >= range.fromBlockIndex)
 
   const visibleBlocks = index.outline.filter((block) => {
-    if (!input.includeTables && (block.type === 'table' || block.type === 'table_cell')) return false
+    if (!input.includeTables && (block.type === 'table' || block.type === 'table_cell'))
+      return false
     if (!input.includeCells && block.type === 'table_cell') return false
     return normalizedRanges.some(
       (range) => block.blockIndex >= range.fromBlockIndex && block.blockIndex <= range.toBlockIndex
@@ -427,99 +469,20 @@ export const buildOutlineOutput = (
   }
 }
 
-const buildTableDetail = (
-  index: BlockIndex,
-  blockId: string,
-  tableNode: Element,
-  blockIndex: number
-): DocxDetailedTableBlock => {
-  const tableIndexedNode = index.nodesById.get(blockId)
-  const tableLayoutMode = tableIndexedNode?.kind === 'table' ? tableIndexedNode.layoutMode : 'normal'
-  const summary = summarizeTable(tableNode)
-  const cells = tableCells(tableNode).map((entry) => {
-    const paragraphs = cellParagraphs(entry.cell).map((paragraph, idx) =>
-      {
-        const detail = paragraphDetail(
-          `${blockId}.r:${entry.row}.c:${entry.col}.p:${idx + 1}`,
-          paragraph
-        )
-        return {
-          ...detail,
-          blockIndex,
-          layoutMode: tableLayoutMode
-        }
-      }
-    )
-    return {
-      blockId: `${blockId}.r:${entry.row}.c:${entry.col}`,
-      layoutMode: tableLayoutMode,
-      row: entry.row,
-      col: entry.col,
-      paragraphs
-    }
-  })
-  return {
-    blockId,
-    type: 'table',
-    blockIndex,
-    layoutMode: tableLayoutMode,
-    ...resolveBodyNeighbors(index.bodyBlockIds, blockIndex),
-    rows: summary.rows,
-    cols: summary.cols,
-    text: summary.text,
-    cells
-  }
-}
-
 export const getDetailedBlock = (index: BlockIndex, blockId: string): DocxDetailedBlock | null => {
-  const node = index.nodesById.get(blockId)
-  if (!node) return null
-  if (node.kind === 'paragraph') {
-    return {
-      ...paragraphDetail(blockId, node.node),
-      blockIndex: node.blockIndex,
-      layoutMode: node.layoutMode,
-      ...resolveBodyNeighbors(index.bodyBlockIds, node.blockIndex)
-    }
-  }
-  if (node.kind === 'table') return buildTableDetail(index, blockId, node.node, node.blockIndex)
-
-  const paragraphs = cellParagraphs(node.node).map((paragraph, idx) =>
-    {
-      const detail = paragraphDetail(`${blockId}.p:${idx + 1}`, paragraph)
-      return {
-        ...detail,
-        blockIndex: node.blockIndex,
-        layoutMode: node.layoutMode
-      }
-    }
-  )
-  return {
-    blockId,
-    type: 'table_cell',
-    blockIndex: node.blockIndex,
-    layoutMode: node.layoutMode,
-    ...resolveBodyNeighbors(index.bodyBlockIds, node.blockIndex),
-    tableBlockId: node.tableBlockId,
-    row: node.row,
-    col: node.col,
-    text: paragraphs.map((paragraph) => paragraph.text).join('\n'),
-    paragraphs
-  }
+  return index.detailByBlockId.get(blockId) || null
 }
 
 export const getBlockStructureFacts = (
   index: BlockIndex,
   blockId: string
-):
-  | {
-      blockType: 'paragraph' | 'table' | 'table_cell'
-      blockIndex: number
-      previousBlockId?: string
-      nextBlockId?: string
-      tableBlockId?: string
-    }
-  | null => {
+): {
+  blockType: 'paragraph' | 'table' | 'table_cell'
+  blockIndex: number
+  previousBlockId?: string
+  nextBlockId?: string
+  tableBlockId?: string
+} | null => {
   const node = index.nodesById.get(blockId)
   if (!node) return null
   return {
@@ -533,8 +496,6 @@ export const getBlockStructureFacts = (
 export const extractBlockText = (index: BlockIndex, blockId: string): string => {
   const detail = getDetailedBlock(index, blockId)
   if (!detail) return ''
-  if (detail.type === 'paragraph') return detail.text
-  if (detail.type === 'table') return detail.cells.map((cell) => cell.paragraphs.map((p) => p.text).join('\n')).join('\n')
   return detail.text
 }
 
@@ -567,12 +528,27 @@ export const loadDocxBundle = async (buffer: Buffer): Promise<ParsedDocxBundle> 
   }
   const documentDom = parseXml(documentXml)
   const meta = await parseMeta(zip)
-  const imageCount = await countImages(zip)
+  const relationshipsXml = await readZipText(zip, 'word/_rels/document.xml.rels')
+  const relationshipTargets = new Map<string, string>()
+  const relationshipTypes = new Map<string, string>()
+  if (relationshipsXml) {
+    const relationshipsDoc = parseXml(relationshipsXml)
+    const relationships = relationshipsDoc.getElementsByTagName('Relationship')
+    for (let index = 0; index < relationships.length; index += 1) {
+      const relationship = relationships.item(index)
+      if (!relationship) continue
+      const id = relationship.getAttribute('Id') || ''
+      if (!id) continue
+      relationshipTargets.set(id, relationship.getAttribute('Target') || '')
+      relationshipTypes.set(id, relationship.getAttribute('Type') || '')
+    }
+  }
   return {
     zip,
     documentXml,
     documentDom,
     meta,
-    imageCount
+    relationshipTargets,
+    relationshipTypes
   }
 }

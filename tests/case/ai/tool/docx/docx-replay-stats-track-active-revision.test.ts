@@ -1,5 +1,9 @@
 import { describe, it } from 'vitest'
-import { createDocxToolHarness, writeTestDocxFile } from '../../../../harness/backend/aiToolHarness'
+import {
+  createDocxToolHarness,
+  docxParagraphNode,
+  writeTestDocxFile
+} from '../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import type { DocxMutationResult, DocxOutlineResult } from './testUtils'
 import { findParagraphBlockIdByText } from './testUtils'
@@ -36,7 +40,7 @@ describe('ai tool docx backend', () => {
                 type: 'insert_blocks',
                 anchorBlockId,
                 position: 'after',
-                blocks: [{ type: 'paragraph', text: '新增段落' }]
+                blocks: [docxParagraphNode('新增段落')]
               }
             ]
           })

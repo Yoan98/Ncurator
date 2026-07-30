@@ -482,6 +482,13 @@
   - `WB-APPLY-002-AC6` 创建或修改 `xlsx` 后，正式路径立即包含最终净工作簿并生成一条修改记录；同一次 AI Run 对同一路径连续编辑时保持首次写入前基线，不重复生成记录。
   - `WB-APPLY-002-AC7` `docx_edit`、`ppt_edit` 和 `excel_edit` 统一使用 `sourcePath + actions[]`；目标不存在时由编辑 Action 直接创建，不再提供独立的文档或演示文稿创建 Action。
   - `WB-APPLY-002-AC8` `docx_edit.insert_blocks` 的 `position` 必填，`anchorBlockId` 可选；无锚点时 `before` 表示文档开头，`after` 表示文档末尾。
+  - `WB-APPLY-002-AC9` DOCX 详细读取使用递归语义树，按真实顺序保留 `paragraph / run / text / tab / break / hyperlink / table / table_row / table_cell / visual` 的归属关系；`paragraph / table / table_cell.text` 只是后代可见文字的派生值，不替代 children。
+  - `WB-APPLY-002-AC10` DOCX visual 类型固定为 `image / chart / diagram / shape / embedded_object`。详细读取返回 visualId；outline 只在存在视觉内容时返回 count 和 kinds，不展开视觉节点。
+  - `WB-APPLY-002-AC11` `docx_read_visuals` 接受 1 至 10 个 visualId 和识别要求，按输入顺序逐项返回识别文字或错误；结果不写入正文搜索索引，`.doc` 不支持视觉读取。
+  - `WB-APPLY-002-AC12` `insert_blocks / replace_block / update_table_cell` 使用递归创建树。标题由 paragraph 的 `styleName=Heading1...Heading6` 表达；旧 `{text}`、`heading`、`string[][]` 表格和 `style_text` 参数无效。
+  - `WB-APPLY-002-AC13` DOCX 只提供统一 `style` action。它可以按文字匹配、blockId 或 nodeId 修改 run、paragraph、table、row、cell 的直接样式；patch 类型与实际节点不一致时整次编辑失败。
+  - `WB-APPLY-002-AC14` `replace_text` 未传 blockIds 时递归处理全部正文和表格单元格，传入时只处理指定 subtree；始终替换范围内全部匹配，可跨相邻 run，但不能跨 paragraph、tab、break 或 visual。
+  - `WB-APPLY-002-AC15` 替换或删除 block、更新表格单元格时，如目标后代存在 visual，必须明确传 `allowVisualLoss:true`，否则整次编辑在保存前失败。文本替换和样式修改必须原位保留 visual。
   - `WB-APPLY-002-AC7` 生成 PNG、JPEG 或 WebP 图片后，正式路径立即包含可读取图片并生成一条修改记录；同一次 AI Run 对同一路径再次生成时自动更新并保持首次写入前基线。
 
 #### WB-TERMINAL-001 持久终端会话

@@ -23,6 +23,7 @@ describe('ai unit tool prompt contract', () => {
         'text_file_read',
         'text_file_edit',
         'docx_read_outline',
+        'docx_read_visuals',
         'ppt_read_outline',
         'ppt_read_visuals',
         'pdf_read_visuals',
@@ -42,6 +43,16 @@ describe('ai unit tool prompt contract', () => {
         'llm_recognize'
       ])
     )
+  })
+
+  it('describes docx visual reading without teaching a tool sequence', () => {
+    const description = getToolSpec('docx_read_visuals')?.promptSpec.description || ''
+
+    expect(description).toContain('visualId')
+    expect(description).toContain('1 至 10')
+    expect(description).not.toMatch(/先|然后|再调用|步骤|流程/)
+    expect(description).not.toContain('docx_read_blocks')
+    expect(description).not.toContain('image_analyze')
   })
 
   it('keeps image_generate minimal and informational', () => {

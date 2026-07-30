@@ -1,6 +1,7 @@
 import { describe, it } from 'vitest'
 import {
   createDocxToolHarness,
+  docxTableNode,
   writeTestDocxFile
 } from '../../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../../harness/backend/run-backend-case'
@@ -27,8 +28,7 @@ describe('ai tool docx backend', () => {
         try {
           const outline = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
             sourcePath: 'inserted-table-created-blocks.docx',
-            ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 19 }],
-
+            ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 19 }]
           })
           const anchorBlockId =
             outline.blocks.find(
@@ -37,15 +37,19 @@ describe('ai tool docx backend', () => {
 
           const insertedTable = await harness.invoke<DocxMutationResult>('docx_edit', {
             sourcePath: 'inserted-table-created-blocks.docx',
-            actions: [{
-              type: 'insert_blocks',
-              position: 'after',
-              anchorBlockId,
-              blocks: [{ type: 'table', rows: [
-              ['A', 'B'],
-              ['C', 'D']
-            ] }]
-            }]
+            actions: [
+              {
+                type: 'insert_blocks',
+                position: 'after',
+                anchorBlockId,
+                blocks: [
+                  docxTableNode([
+                    ['A', 'B'],
+                    ['C', 'D']
+                  ])
+                ]
+              }
+            ]
           })
 
           return {
@@ -59,17 +63,15 @@ describe('ai tool docx backend', () => {
         const tableCount =
           result.insertedTable.createdBlocks?.filter((block) => block.type === 'table').length || 0
         const cellCount =
-          result.insertedTable.createdBlocks?.filter((block) => block.type === 'table_cell').length || 0
-        runtime.assertThat(
-          tableCount === 1 && cellCount === 4,
-          {
-            name: 'inserted-table-created-blocks-include-table-and-cells',
-            message: '表格插入后，createdBlocks 应包含 1 个 table 和全部 4 个 table_cell。',
-            data: {
-              createdBlocks: result.insertedTable.createdBlocks
-            }
+          result.insertedTable.createdBlocks?.filter((block) => block.type === 'table_cell')
+            .length || 0
+        runtime.assertThat(tableCount === 1 && cellCount === 4, {
+          name: 'inserted-table-created-blocks-include-table-and-cells',
+          message: '表格插入后，createdBlocks 应包含 1 个 table 和全部 4 个 table_cell。',
+          data: {
+            createdBlocks: result.insertedTable.createdBlocks
           }
-        )
+        })
       }
     })
   })

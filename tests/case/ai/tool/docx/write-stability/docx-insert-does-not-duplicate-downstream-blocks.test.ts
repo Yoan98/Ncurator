@@ -6,6 +6,8 @@ import {
 } from '../../../../../../src/main/services/ai/human/tools/docx/adapters/ooxml/blockIndex'
 import {
   createDocxToolHarness,
+  docxParagraphNode,
+  docxTableNode,
   writeRichTestDocxFile
 } from '../../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../../harness/backend/run-backend-case'
@@ -77,12 +79,7 @@ describe('ai tool docx backend', () => {
                 type: 'insert_blocks',
                 anchorBlockId,
                 position: 'after',
-                blocks: [
-                  {
-                    type: 'paragraph',
-                    text: '学生可以根据按钮提示逐步完成脚手架操作。'
-                  }
-                ]
+                blocks: [docxParagraphNode('学生可以根据按钮提示逐步完成脚手架操作。')]
               }
             ]
           })
@@ -97,13 +94,10 @@ describe('ai tool docx backend', () => {
                 anchorBlockId: insertedParagraphBlockId,
                 position: 'after',
                 blocks: [
-                  {
-                    type: 'table',
-                    rows: [
-                      ['入口按钮', '对应动作'],
-                      ['开始引导', '进入脚手架']
-                    ]
-                  }
+                  docxTableNode([
+                    ['入口按钮', '对应动作'],
+                    ['开始引导', '进入脚手架']
+                  ])
                 ]
               }
             ]

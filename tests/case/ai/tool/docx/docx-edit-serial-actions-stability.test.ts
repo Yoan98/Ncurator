@@ -1,6 +1,7 @@
 import { describe, it } from 'vitest'
 import {
   createDocxToolHarness,
+  docxParagraphNode,
   writeTestDocxFile
 } from '../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
@@ -19,7 +20,8 @@ describe('ai tool docx backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['docx'],
-      description: '验证 docx_edit(actions) 按顺序执行时，前序插入导致 blockIndex 漂移后仍能命中后续原始 blockId。',
+      description:
+        '验证 docx_edit(actions) 按顺序执行时，前序插入导致 blockIndex 漂移后仍能命中后续原始 blockId。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -44,12 +46,12 @@ describe('ai tool docx backend', () => {
                 type: 'insert_blocks',
                 position: 'after',
                 anchorBlockId: anchorA,
-                blocks: [{ type: 'paragraph', text: 'A1' }]
+                blocks: [docxParagraphNode('A1')]
               },
               {
                 type: 'replace_block',
                 blockId: targetC,
-                block: { type: 'paragraph', text: 'C updated' }
+                block: docxParagraphNode('C updated')
               }
             ]
           })
@@ -74,7 +76,8 @@ describe('ai tool docx backend', () => {
             Array.isArray(result.edited.postWriteReadback?.regions),
           {
             name: 'serial-actions-resolve-original-target-after-insert-drift',
-            message: '前序插入后，后序 replace_block 仍应命中最初 read 到的 C，而不是漂移到其他 block。',
+            message:
+              '前序插入后，后序 replace_block 仍应命中最初 read 到的 C，而不是漂移到其他 block。',
             data: {
               bodyTexts,
               changedBlocks: result.edited.changedBlocks,
@@ -93,7 +96,8 @@ describe('ai tool docx backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['docx'],
-      description: '验证同一次 docx_edit 内 replace_block 后继续引用同一原始 blockId，会解析到 replacement successor。',
+      description:
+        '验证同一次 docx_edit 内 replace_block 后继续引用同一原始 blockId，会解析到 replacement successor。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -115,7 +119,7 @@ describe('ai tool docx backend', () => {
               {
                 type: 'replace_block',
                 blockId: target,
-                block: { type: 'paragraph', text: 'Target new keyword.' }
+                block: docxParagraphNode('Target new keyword.')
               },
               {
                 type: 'replace_text',
@@ -163,7 +167,8 @@ describe('ai tool docx backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['docx'],
-      description: '验证同一次 docx_edit 内删除后再修改同一原始 block 会失败，且不注册部分写入结果。',
+      description:
+        '验证同一次 docx_edit 内删除后再修改同一原始 block 会失败，且不注册部分写入结果。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -189,7 +194,7 @@ describe('ai tool docx backend', () => {
               {
                 type: 'replace_block',
                 blockId: target,
-                block: { type: 'paragraph', text: 'Should not appear' }
+                block: docxParagraphNode('Should not appear')
               }
             ]
           })
@@ -214,7 +219,8 @@ describe('ai tool docx backend', () => {
             !bodyTexts.includes('Should not appear'),
           {
             name: 'serial-actions-fail-after-delete-without-committing',
-            message: '同一次 actions 内删除后再改同一目标应失败，且 active 文档不应进入部分写入状态。',
+            message:
+              '同一次 actions 内删除后再改同一目标应失败，且 active 文档不应进入部分写入状态。',
             data: {
               failure,
               bodyTexts

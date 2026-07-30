@@ -35,13 +35,12 @@ describe('ai unit human tool result renderers', () => {
             type: 'paragraph',
             blockIndex: 10,
             text: '反走样定义',
-            runs: [
+            children: [
               {
-                text: '反走样',
-                bold: true
-              },
-              {
-                text: '用于减轻锯齿。'
+                type: 'run',
+                nodeId: 'n:1',
+                style: { bold: true },
+                children: [{ type: 'text', text: '反走样定义' }]
               }
             ]
           },
@@ -50,32 +49,50 @@ describe('ai unit human tool result renderers', () => {
             type: 'table',
             blockIndex: 11,
             preview: '处理方法表',
-            cells: [
+            children: [
               {
-                blockId: 'b:11:c1',
-                row: 0,
-                col: 0,
-                paragraphs: [
+                type: 'table_row',
+                nodeId: 'row:1',
+                children: [
                   {
-                    blockId: 'b:11:c1:p1',
-                    type: 'paragraph',
-                    blockIndex: 11,
-                    text: '多个像素点',
-                    runs: [{ text: '多个像素点' }]
-                  }
-                ]
-              },
-              {
-                blockId: 'b:11:c2',
-                row: 0,
-                col: 1,
-                paragraphs: [
+                    nodeId: 'b:11:c1',
+                    type: 'table_cell',
+                    row: 0,
+                    col: 0,
+                    children: [
+                      {
+                        nodeId: 'b:11:c1:p1',
+                        type: 'paragraph',
+                        text: '多个像素点',
+                        children: [
+                          {
+                            type: 'run',
+                            nodeId: 'n:2',
+                            children: [{ type: 'text', text: '多个像素点' }]
+                          }
+                        ]
+                      }
+                    ]
+                  },
                   {
-                    blockId: 'b:11:c2:p1',
-                    type: 'paragraph',
-                    blockIndex: 11,
-                    text: '低通滤波',
-                    runs: [{ text: '低通滤波' }]
+                    nodeId: 'b:11:c2',
+                    type: 'table_cell',
+                    row: 0,
+                    col: 1,
+                    children: [
+                      {
+                        nodeId: 'b:11:c2:p1',
+                        type: 'paragraph',
+                        text: '低通滤波',
+                        children: [
+                          {
+                            type: 'run',
+                            nodeId: 'n:3',
+                            children: [{ type: 'text', text: '低通滤波' }]
+                          }
+                        ]
+                      }
+                    ]
                   }
                 ]
               }
@@ -85,11 +102,10 @@ describe('ai unit human tool result renderers', () => {
       }
     })
 
-    expect(rendered).toContain('runs:')
-    expect(rendered).toContain('text=反走样')
-    expect(rendered).toContain('bold=true')
-    expect(rendered).toContain('cells:')
-    expect(rendered).toContain('blockId=b:11:c1')
+    expect(rendered).toContain('n:1')
+    expect(rendered).toContain('反走样定义')
+    expect(rendered).toContain('table_row')
+    expect(rendered).toContain('b:11:c1')
     expect(rendered).toContain('多个像素点')
     expect(rendered).toContain('低通滤波')
   })

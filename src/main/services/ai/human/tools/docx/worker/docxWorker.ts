@@ -2,7 +2,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
 import { parentPort } from 'node:worker_threads'
-import { DOMParser } from '@xmldom/xmldom'
+import { DOMParser, XMLSerializer } from '@xmldom/xmldom'
 import { extractLegacyDocBody, splitLegacyDocParagraphs } from '../../../../../word/legacyDocReader'
 import type { DocxDetailedBlock, DocxOp, DocxOutlineBlock, DocxSearchMatch } from '../types'
 import { applyDocxOps } from '../adapters/ooxml/opExecutor'
@@ -22,6 +22,7 @@ import {
   createInitialIdentityIndex,
   createNextIdentityIndex,
   resolveInternalBlockId,
+  resolveInternalVisualId,
   toInternalOp,
   toPublicChangedBlocks,
   toPublicDetailedBlock,
@@ -53,7 +54,11 @@ const createDocSnapshot = async (input: {
   publicOps?: DocxOp[]
 }): Promise<DocSnapshot> => {
   const bundle = await loadDocxBundle(input.buffer)
-  const index = buildBlockIndex(bundle.documentDom)
+  const index = buildBlockIndex(
+    bundle.documentDom,
+    bundle.relationshipTargets,
+    bundle.relationshipTypes
+  )
   const identity = input.previousSnapshot
     ? createNextIdentityIndex({
         previousIndex: input.previousSnapshot.index,
@@ -72,7 +77,6 @@ const createDocSnapshot = async (input: {
     checksum: createHash('sha256').update(input.buffer).digest('hex'),
     bundle,
     meta: bundle.meta,
-    imageCount: bundle.imageCount,
     index,
     identity,
     detailByBlockId: new Map<string, DocxDetailedBlock>()
@@ -125,7 +129,6 @@ const createLegacyDocSnapshot = async (input: {
     buffer: input.buffer,
     checksum: createHash('sha256').update(input.buffer).digest('hex'),
     meta: DEFAULT_LEGACY_DOC_META,
-    imageCount: 0,
     index,
     identity: createInitialIdentityIndex(index),
     detailByBlockId: new Map<string, DocxDetailedBlock>()
@@ -302,7 +305,7 @@ export const handleDocxWorkerRequest = async (
           action: 'open',
           docId,
           meta: snapshot.meta,
-          stats: toOpenStats(snapshot.index, snapshot.imageCount),
+          stats: toOpenStats(snapshot.index),
           checksum: snapshot.checksum,
           byteSize: snapshot.buffer.byteLength
         }
@@ -375,6 +378,24 @@ export const handleDocxWorkerRequest = async (
       }
     }
 
+    if (request.action === 'get_replay_snapshot_xml') {
+      const snapshot = getSnapshot(request.runId, request.payload.docId)
+      const serializer = new XMLSerializer()
+      return {
+        requestId: request.requestId,
+        ok: true,
+        payload: {
+          action: 'get_replay_snapshot_xml',
+          blocks: [...snapshot.index.nodesById.entries()].map(([internalBlockId, node]) => {
+            const blockId = snapshot.identity.publicIdByInternalId.get(internalBlockId)
+            if (!blockId)
+              throw new Error(`docx identity missing for internal block: ${internalBlockId}`)
+            return { blockId, rawXml: serializer.serializeToString(node.node) }
+          })
+        }
+      }
+    }
+
     if (request.action === 'search') {
       if (request.payload.mode === 'semantic') {
         return {
@@ -415,6 +436,92 @@ export const handleDocxWorkerRequest = async (
           action: 'search',
           matches,
           warnings: []
+        }
+      }
+    }
+
+    if (request.action === 'get_visual') {
+      const snapshot = getSnapshot(request.runId, request.payload.docId)
+      if (snapshot.format !== 'docx') {
+        return {
+          requestId: request.requestId,
+          ok: false,
+          code: 'invalid_input',
+          error: 'docx_read_visuals does not support legacy .doc files'
+        }
+      }
+      const internalVisualId = resolveInternalVisualId(snapshot.identity, request.payload.visualId)
+      const visual = snapshot.index.visualsById.get(internalVisualId)
+      if (!visual) throw new Error(`visual not found: ${request.payload.visualId}`)
+      if ((visual.kind !== 'image' && visual.kind !== 'embedded_object') || !visual.target) {
+        const owner = snapshot.index.nodesById.get(visual.blockId)
+        if (!owner) throw new Error(`visual owner block not found: ${request.payload.visualId}`)
+        const visualsInBlock = [...snapshot.index.visualsById.entries()].filter(([, candidate]) => {
+          const candidateOwner = snapshot.index.nodesById.get(candidate.blockId)
+          return candidateOwner?.blockIndex === owner.blockIndex
+        })
+        return {
+          requestId: request.requestId,
+          ok: true,
+          payload: {
+            action: 'get_visual',
+            visualId: request.payload.visualId,
+            kind: visual.kind,
+            render: {
+              blockIndex: owner.blockIndex,
+              visualIndexInBlock: visualsInBlock.findIndex(([id]) => id === internalVisualId),
+              visualCountInBlock: visualsInBlock.length
+            }
+          }
+        }
+      }
+      const target = path.posix.normalize(path.posix.join('word', visual.target))
+      const file = snapshot.bundle.zip.file(target)
+      if (!file) {
+        return {
+          requestId: request.requestId,
+          ok: true,
+          payload: {
+            action: 'get_visual',
+            visualId: request.payload.visualId,
+            kind: visual.kind,
+            error: `visual media is missing: ${target}`
+          }
+        }
+      }
+      const extension = path.posix.extname(target).toLowerCase()
+      const mimeTypes: Record<string, string> = {
+        '.png': 'image/png',
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg',
+        '.gif': 'image/gif',
+        '.webp': 'image/webp',
+        '.bmp': 'image/bmp',
+        '.tif': 'image/tiff',
+        '.tiff': 'image/tiff'
+      }
+      const mimeType = mimeTypes[extension]
+      if (!mimeType) {
+        return {
+          requestId: request.requestId,
+          ok: true,
+          payload: {
+            action: 'get_visual',
+            visualId: request.payload.visualId,
+            kind: visual.kind,
+            error: `unsupported visual media type: ${extension || 'unknown'}`
+          }
+        }
+      }
+      return {
+        requestId: request.requestId,
+        ok: true,
+        payload: {
+          action: 'get_visual',
+          visualId: request.payload.visualId,
+          kind: visual.kind,
+          data: await file.async('nodebuffer'),
+          mimeType
         }
       }
     }
@@ -463,6 +570,7 @@ export const handleDocxWorkerRequest = async (
         payload: {
           action: 'apply_ops',
           newDocId,
+          stats: toOpenStats(nextSnapshot.index),
           changedBlocks: toPublicChangedBlocks({
             changedBlocks: applied.changedBlocks,
             previousIdentity: snapshot.identity,

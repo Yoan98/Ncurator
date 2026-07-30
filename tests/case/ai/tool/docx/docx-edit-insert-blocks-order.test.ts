@@ -1,6 +1,8 @@
 import { describe, it } from 'vitest'
 import {
   createDocxToolHarness,
+  docxParagraphNode,
+  docxTableNode,
   writeTestDocxFile
 } from '../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
@@ -36,17 +38,19 @@ describe('ai tool docx backend', () => {
           const anchorBlockId = findParagraphBlockIdByText(before.blocks, 'A')
           const inserted = await harness.invoke<DocxMutationResult>('docx_edit', {
             sourcePath: 'insert-blocks-order.docx',
-            actions: [{
-              type: 'insert_blocks',
-              position: 'after',
-              anchorBlockId,
-              blocks: [
-              { type: 'paragraph', text: 'P1' },
-              { type: 'paragraph', text: 'P2' },
-              { type: 'table', rows: [['T1', 'T2']] },
-              { type: 'paragraph', text: 'P3' }
+            actions: [
+              {
+                type: 'insert_blocks',
+                position: 'after',
+                anchorBlockId,
+                blocks: [
+                  docxParagraphNode('P1'),
+                  docxParagraphNode('P2'),
+                  docxTableNode([['T1', 'T2']]),
+                  docxParagraphNode('P3')
+                ]
+              }
             ]
-            }]
           })
           const after = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
             sourcePath: 'insert-blocks-order.docx',
@@ -87,7 +91,8 @@ describe('ai tool docx backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['docx'],
-      description: '验证一次 docx_edit(actions) 内多个 insert_blocks 会按 action 顺序稳定写入并返回各自 createdBlocks。',
+      description:
+        '验证一次 docx_edit(actions) 内多个 insert_blocks 会按 action 顺序稳定写入并返回各自 createdBlocks。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -112,19 +117,13 @@ describe('ai tool docx backend', () => {
                 type: 'insert_blocks',
                 position: 'after',
                 anchorBlockId: anchorA,
-                blocks: [
-                  { type: 'paragraph', text: 'A1' },
-                  { type: 'paragraph', text: 'A2' }
-                ]
+                blocks: [docxParagraphNode('A1'), docxParagraphNode('A2')]
               },
               {
                 type: 'insert_blocks',
                 position: 'before',
                 anchorBlockId: anchorC,
-                blocks: [
-                  { type: 'paragraph', text: 'C-1' },
-                  { type: 'table', rows: [['T1', 'T2']] }
-                ]
+                blocks: [docxParagraphNode('C-1'), docxTableNode([['T1', 'T2']])]
               }
             ]
           })
@@ -143,12 +142,16 @@ describe('ai tool docx backend', () => {
           .map((block) => block.text)
         const createdTexts = new Set(
           (result.inserted.createdBlocks || [])
-            .map((created) => result.after.blocks.find((block) => block.blockId === created.blockId)?.text)
+            .map(
+              (created) =>
+                result.after.blocks.find((block) => block.blockId === created.blockId)?.text
+            )
             .filter((text): text is string => Boolean(text))
         )
 
         runtime.assertThat(
-          JSON.stringify(bodyTexts) === JSON.stringify(['A', 'A1', 'A2', 'B', 'C-1', 'T1 | T2', 'C']) &&
+          JSON.stringify(bodyTexts) ===
+            JSON.stringify(['A', 'A1', 'A2', 'B', 'C-1', 'T1 | T2', 'C']) &&
             ['A1', 'A2', 'C-1', 'T1 | T2'].every((text) => createdTexts.has(text)),
           {
             name: 'serial-multiple-inserts-preserve-created-blocks',

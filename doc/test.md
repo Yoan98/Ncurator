@@ -87,6 +87,8 @@ tests/
 - 每次运行的模型、耗时、通过情况、完成度评分、失败归因和原始证据统一保存在对应 run 的 `meta.json`、`timeline.jsonl`、`runtime-events.jsonl` 与 artifacts 中。
 - 测试数量和 case 清单以测试源码及 runner 实时发现结果为准，不在文档中维护容易失真的计数副本。
 - `mock-llm` 回归 case 只允许替换 LLM 输出；不得 fake tool、store、docx apply service、runner 或节点执行结果。
+- DOCX 回归必须覆盖递归语义树、递归创建树、统一 `style`、全文/限定范围 `replace_text`、visual 防误删和 `docx_read_visuals`。旧简化 block payload、旧 history shape 与 `style_text` 应直接判定为无效，不保留兼容层。
+- `灵感测试.docx` 的固定基线为 18 个 image visual 和 22 个真实空段落；视觉节点不得再被当成空段落。大型 VML fixture 继续验证 599/1034 张图片时的性能与输出体积。
 - `ai-test` 专门覆盖 AI 架构及其工具，全部是 backend；`settings-test` 和 `workbench-test` 专门覆盖对应 PRD 功能点，全部是 E2E；Unit 只补足前述范围未覆盖的 backend 函数、类和底层逻辑。
 - `scripts/test/validate-test-architecture.mjs` 在 runner 执行前校验域边界、Unit 禁止项、计划必填字段、PRD 引用、case/runner 包装和目录映射。
 - `scripts/test/workflow.mjs` 会自动读取仓库根目录的 `.env.local`、`.env`（已存在的 shell 环境变量优先）；可用 `AI_TEST_DISABLE_DOTENV=1` 禁用自动加载。

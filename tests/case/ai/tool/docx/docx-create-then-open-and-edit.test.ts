@@ -1,6 +1,10 @@
 import fs from 'node:fs/promises'
 import { describe, it } from 'vitest'
-import { createDocxToolHarness } from '../../../../harness/backend/aiToolHarness'
+import {
+  createDocxToolHarness,
+  docxHeadingNode,
+  docxParagraphNode
+} from '../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import type {
   DocxCreateResult,
@@ -32,15 +36,8 @@ describe('ai tool docx backend', () => {
                 type: 'insert_blocks',
                 position: 'after',
                 blocks: [
-                  {
-                    type: 'heading',
-                    level: 1,
-                    text: '深度学习与图形学复习总结'
-                  },
-                  {
-                    type: 'paragraph',
-                    text: '过拟合：待补充。'
-                  }
+                  docxHeadingNode(1, '深度学习与图形学复习总结'),
+                  docxParagraphNode('过拟合：待补充。')
                 ]
               }
             ]

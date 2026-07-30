@@ -1,6 +1,7 @@
 import { describe, it } from 'vitest'
 import {
   createDocxToolHarness,
+  docxParagraphNode,
   writeTestDocxFile
 } from '../../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../../harness/backend/run-backend-case'
@@ -28,8 +29,7 @@ describe('ai tool docx backend', () => {
         try {
           const outlineBefore = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
             sourcePath: 'created-blocks-insert-range.docx',
-            ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 19 }],
-
+            ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 19 }]
           })
           const anchorBlockId =
             outlineBefore.blocks.find(
@@ -38,22 +38,22 @@ describe('ai tool docx backend', () => {
 
           const inserted = await harness.invoke<DocxMutationResult>('docx_edit', {
             sourcePath: 'created-blocks-insert-range.docx',
-            actions: [{
-              type: 'insert_blocks',
-              position: 'after',
-              anchorBlockId,
-              blocks: [{ type: 'paragraph', text: 'Inserted paragraph.' }]
-            }]
+            actions: [
+              {
+                type: 'insert_blocks',
+                position: 'after',
+                anchorBlockId,
+                blocks: [docxParagraphNode('Inserted paragraph.')]
+              }
+            ]
           })
           const outlineAfter = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
             sourcePath: inserted.sourcePath,
-            ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 19 }],
-
+            ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 19 }]
           })
           const createdPreviews = (inserted.createdBlocks || []).map((created) => ({
             ...created,
-            text:
-              outlineAfter.blocks.find((block) => block.blockId === created.blockId)?.text || ''
+            text: outlineAfter.blocks.find((block) => block.blockId === created.blockId)?.text || ''
           }))
 
           return {

@@ -74,6 +74,7 @@ const TOOL_UI_KINDS = {
   docx_read_outline: 'docx-read',
   docx_search: 'docx-read',
   docx_read_blocks: 'docx-read',
+  docx_read_visuals: 'docx-read',
   docx_edit: 'docx-edit',
   pdf_inspect: 'pdf-read',
   pdf_search: 'pdf-read',

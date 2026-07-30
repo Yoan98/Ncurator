@@ -1,9 +1,9 @@
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import type {
-  DocxBlockSpec,
+  DocxCreateBlockNode,
   DocxChangedBlock,
   DocxDetailedBlock,
-  DocxDetailedParagraphBlock,
+  DocxReadNode,
   DocxOp,
   DocxOutlineBlock,
   DocxSearchMatch
@@ -13,7 +13,10 @@ import type { BlockIndex, IndexedNode } from '../adapters/ooxml/types'
 export type DocxIdentityIndex = {
   publicIdByInternalId: Map<string, string>
   internalIdByPublicId: Map<string, string>
-  nestedParagraphIdByKey: Map<string, string>
+  publicNodeIdByInternalId: Map<string, string>
+  internalNodeIdByPublicId: Map<string, string>
+  publicVisualIdByInternalId: Map<string, string>
+  internalVisualIdByPublicId: Map<string, string>
 }
 
 type LogicalBodyBlock = {
@@ -26,6 +29,8 @@ const isTableCellNode = (node: IndexedNode): node is Extract<IndexedNode, { kind
   node.kind === 'table_cell'
 
 const createBlockId = (): string => `blk_${randomUUID().replace(/-/g, '')}`
+const stableNestedId = (prefix: 'node' | 'visual', blockId: string, relativeKey: string): string =>
+  `${prefix}_${createHash('sha256').update(`${blockId}\u0000${relativeKey}`).digest('hex').slice(0, 24)}`
 
 const bindIdentity = (
   identity: DocxIdentityIndex,
@@ -41,16 +46,51 @@ export const createInitialIdentityIndex = (index: BlockIndex): DocxIdentityIndex
   const identity: DocxIdentityIndex = {
     publicIdByInternalId: new Map(),
     internalIdByPublicId: new Map(),
-    nestedParagraphIdByKey: new Map()
+    publicNodeIdByInternalId: new Map(),
+    internalNodeIdByPublicId: new Map(),
+    publicVisualIdByInternalId: new Map(),
+    internalVisualIdByPublicId: new Map()
   }
   for (const internalId of index.nodesById.keys()) bindIdentity(identity, internalId)
+  bindNestedIdentities(index, identity)
   return identity
+}
+
+const bindNestedIdentities = (index: BlockIndex, identity: DocxIdentityIndex): void => {
+  index.editableNodesById.forEach((editable, internalNodeId) => {
+    const publicBlockId = requirePublicBlockId(identity, editable.blockId)
+    const relativeKey = internalNodeId.replace(`node:${editable.blockId}:`, '')
+    const publicNodeId = stableNestedId('node', publicBlockId, relativeKey)
+    identity.publicNodeIdByInternalId.set(internalNodeId, publicNodeId)
+    identity.internalNodeIdByPublicId.set(publicNodeId, internalNodeId)
+  })
+  index.visualsById.forEach((visual, internalVisualId) => {
+    const publicBlockId = requirePublicBlockId(identity, visual.blockId)
+    const relativeKey = internalVisualId.replace(`visual:${visual.blockId}:`, '')
+    const publicVisualId = stableNestedId('visual', publicBlockId, relativeKey)
+    identity.publicVisualIdByInternalId.set(internalVisualId, publicVisualId)
+    identity.internalVisualIdByPublicId.set(publicVisualId, internalVisualId)
+  })
 }
 
 export const resolveInternalBlockId = (identity: DocxIdentityIndex, publicId: string): string => {
   const internalId = identity.internalIdByPublicId.get(publicId)
   if (!internalId)
     throw new Error(`stale or unknown docx blockId: ${publicId}; read the document again`)
+  return internalId
+}
+
+export const resolveInternalNodeId = (identity: DocxIdentityIndex, publicId: string): string => {
+  const internalId = identity.internalNodeIdByPublicId.get(publicId)
+  if (!internalId)
+    throw new Error(`stale or unknown docx nodeId: ${publicId}; read the block again`)
+  return internalId
+}
+
+export const resolveInternalVisualId = (identity: DocxIdentityIndex, publicId: string): string => {
+  const internalId = identity.internalVisualIdByPublicId.get(publicId)
+  if (!internalId)
+    throw new Error(`stale or unknown docx visualId: ${publicId}; read the block again`)
   return internalId
 }
 
@@ -95,28 +135,31 @@ export const toPublicOutlineBlock = (
   }
 }
 
-const nestedParagraphId = (
-  identity: DocxIdentityIndex,
-  cellBlockId: string,
-  paragraphIndex: number
-): string => {
-  const key = `${cellBlockId}:paragraph:${String(paragraphIndex)}`
-  const existing = identity.nestedParagraphIdByKey.get(key)
-  if (existing) return existing
-  const created = createBlockId()
-  identity.nestedParagraphIdByKey.set(key, created)
-  return created
+const toPublicReadNode = (identity: DocxIdentityIndex, node: DocxReadNode): DocxReadNode => {
+  const mappedChildren =
+    'children' in node && node.children
+      ? node.children.map((child) => toPublicReadNode(identity, child))
+      : undefined
+  if (node.type === 'visual') {
+    const publicVisualId = identity.publicVisualIdByInternalId.get(node.visualId)
+    if (!publicVisualId) throw new Error(`docx identity missing for visual: ${node.visualId}`)
+    return { ...node, visualId: publicVisualId, children: mappedChildren as typeof node.children }
+  }
+  if (node.type === 'table_cell' && node.blockId) {
+    return {
+      ...node,
+      blockId: requirePublicBlockId(identity, node.blockId),
+      children: mappedChildren as typeof node.children
+    }
+  }
+  if ('nodeId' in node && node.nodeId) {
+    const publicNodeId = identity.publicNodeIdByInternalId.get(node.nodeId)
+    if (!publicNodeId) throw new Error(`docx identity missing for node: ${node.nodeId}`)
+    return { ...node, nodeId: publicNodeId, children: mappedChildren } as DocxReadNode
+  }
+  if (mappedChildren) return { ...node, children: mappedChildren } as DocxReadNode
+  return node
 }
-
-const toPublicNestedParagraph = (
-  identity: DocxIdentityIndex,
-  cellBlockId: string,
-  paragraph: DocxDetailedParagraphBlock,
-  paragraphIndex: number
-): DocxDetailedParagraphBlock => ({
-  ...mapNeighborFields(identity, paragraph),
-  blockId: nestedParagraphId(identity, cellBlockId, paragraphIndex)
-})
 
 export const toPublicDetailedBlock = (
   identity: DocxIdentityIndex,
@@ -124,32 +167,30 @@ export const toPublicDetailedBlock = (
 ): DocxDetailedBlock => {
   const mapped = mapNeighborFields(identity, block)
   if (mapped.type === 'paragraph') {
-    return { ...mapped, blockId: requirePublicBlockId(identity, mapped.blockId) }
-  }
-  if (mapped.type === 'table_cell') {
-    const publicCellId = requirePublicBlockId(identity, mapped.blockId)
     return {
       ...mapped,
-      blockId: publicCellId,
+      blockId: requirePublicBlockId(identity, mapped.blockId),
+      children: mapped.children.map((child) =>
+        toPublicReadNode(identity, child)
+      ) as typeof mapped.children
+    }
+  }
+  if (mapped.type === 'table_cell') {
+    return {
+      ...mapped,
+      blockId: requirePublicBlockId(identity, mapped.blockId),
       tableBlockId: requirePublicBlockId(identity, mapped.tableBlockId),
-      paragraphs: mapped.paragraphs.map((paragraph, index) =>
-        toPublicNestedParagraph(identity, publicCellId, paragraph, index)
-      )
+      children: mapped.children.map((child) =>
+        toPublicReadNode(identity, child)
+      ) as typeof mapped.children
     }
   }
   return {
     ...mapped,
     blockId: requirePublicBlockId(identity, mapped.blockId),
-    cells: mapped.cells.map((cell) => {
-      const publicCellId = requirePublicBlockId(identity, cell.blockId)
-      return {
-        ...cell,
-        blockId: publicCellId,
-        paragraphs: cell.paragraphs.map((paragraph, index) =>
-          toPublicNestedParagraph(identity, publicCellId, paragraph, index)
-        )
-      }
-    })
+    children: mapped.children.map((child) =>
+      toPublicReadNode(identity, child)
+    ) as typeof mapped.children
   }
 }
 
@@ -174,21 +215,39 @@ export const toInternalOp = (identity: DocxIdentityIndex, op: DocxOp): DocxOp =>
   if (op.type === 'replace_text') {
     return { ...op, blockIds: translateIds(identity, op.blockIds) }
   }
+  if (op.type === 'style') {
+    if (op.target.type === 'text_match') {
+      return {
+        ...op,
+        target: { ...op.target, blockIds: translateIds(identity, op.target.blockIds) }
+      }
+    }
+    if (op.target.type === 'node') {
+      return {
+        ...op,
+        target: { ...op.target, nodeId: resolveInternalNodeId(identity, op.target.nodeId) }
+      }
+    }
+    return {
+      ...op,
+      target: { ...op.target, blockId: resolveInternalBlockId(identity, op.target.blockId) }
+    }
+  }
   if (op.type === 'create_document') return op
   return { ...op, blockId: resolveInternalBlockId(identity, op.blockId) }
 }
 
-const tableCellCount = (spec: Extract<DocxBlockSpec, { kind: 'table' }>): number =>
-  spec.rows.reduce((total, row) => total + row.length, 0)
+const tableCellCount = (spec: Extract<DocxCreateBlockNode, { type: 'table' }>): number =>
+  spec.children.reduce((total, row) => total + row.children.length, 0)
 
 const logicalBlockFromSpec = (
-  spec: DocxBlockSpec,
+  spec: DocxCreateBlockNode,
   blockId = createBlockId()
 ): LogicalBodyBlock => ({
   blockId,
-  kind: spec.kind,
+  kind: spec.type,
   cellBlockIds:
-    spec.kind === 'table' ? Array.from({ length: tableCellCount(spec) }, () => createBlockId()) : []
+    spec.type === 'table' ? Array.from({ length: tableCellCount(spec) }, () => createBlockId()) : []
 })
 
 const currentLogicalBody = (index: BlockIndex, identity: DocxIdentityIndex): LogicalBodyBlock[] =>
@@ -213,8 +272,7 @@ const currentLogicalBody = (index: BlockIndex, identity: DocxIdentityIndex): Log
   })
 
 const applyLogicalOp = (body: LogicalBodyBlock[], op: DocxOp): void => {
-  if (op.type === 'create_document' || op.type === 'replace_text' || op.type === 'style_text')
-    return
+  if (op.type === 'create_document' || op.type === 'replace_text' || op.type === 'style') return
   if (op.type === 'update_table_cell') return
 
   if (op.type === 'insert_before' || op.type === 'insert_after') {
@@ -254,7 +312,10 @@ export const createNextIdentityIndex = (input: {
   const identity: DocxIdentityIndex = {
     publicIdByInternalId: new Map(),
     internalIdByPublicId: new Map(),
-    nestedParagraphIdByKey: new Map(input.previousIdentity.nestedParagraphIdByKey)
+    publicNodeIdByInternalId: new Map(),
+    internalNodeIdByPublicId: new Map(),
+    publicVisualIdByInternalId: new Map(),
+    internalVisualIdByPublicId: new Map()
   }
 
   input.nextIndex.bodyBlockIds.forEach((internalId, index) => {
@@ -276,6 +337,8 @@ export const createNextIdentityIndex = (input: {
       bindIdentity(identity, cell.blockId, logical.cellBlockIds[cellIndex])
     )
   })
+
+  bindNestedIdentities(input.nextIndex, identity)
 
   return identity
 }

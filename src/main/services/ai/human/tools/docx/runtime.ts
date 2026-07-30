@@ -152,6 +152,7 @@ export type DocxToolRuntime = {
     opNextDocIds?: NonNullable<DocxRevision['opNextDocIds']>
     changedBlocks?: DocxRevision['changedBlocks']
     persistedStats: DocxDiskFingerprint
+    stats?: DocxOpenStats
     summary?: string
   }) => Promise<{ currentRevisionRef: string; previousRevisionRef: string }>
   expandOpsForReview: (docId: string, ops: DocxOp[]) => Promise<DocxOp[]>
@@ -1070,14 +1071,20 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
       paragraphCount,
       tableCount,
       imageCount: 0,
+      visualCount: 0,
+      visualKinds: [],
       charCount
     }
   }
 
   const syncReplaySessionStats = (session: DocxReplaySession): void => {
+    const visualCount = session.stats.visualCount
+    const visualKinds = session.stats.visualKinds
     session.stats = {
       ...buildOpenStatsFromReplaySnapshot(session.activeSnapshot),
-      imageCount: session.stats.imageCount
+      imageCount: session.stats.imageCount,
+      visualCount,
+      visualKinds
     }
   }
 
@@ -1262,9 +1269,20 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
       outlineBlocks.map((block) => block.blockId),
       session
     )
+    const rawXmlResponse = await callWorker({
+      action: 'get_replay_snapshot_xml',
+      payload: { docId }
+    })
+    if (!rawXmlResponse.ok) throw new Error(rawXmlResponse.error)
+    if (rawXmlResponse.payload.action !== 'get_replay_snapshot_xml') {
+      throw new Error('worker protocol mismatch (get_replay_snapshot_xml)')
+    }
     return createReplaySnapshot({
       outlineBlocks,
-      detailedBlocksById: new Map(detailedBlocks.map((block) => [block.blockId, block] as const))
+      detailedBlocksById: new Map(detailedBlocks.map((block) => [block.blockId, block] as const)),
+      rawXmlByBlockId: new Map(
+        rawXmlResponse.payload.blocks.map((block) => [block.blockId, block.rawXml] as const)
+      )
     })
   }
 
@@ -1512,6 +1530,8 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
         paragraphCount: 0,
         tableCount: 0,
         imageCount: 0,
+        visualCount: 0,
+        visualKinds: [],
         charCount: 0
       },
       diskFingerprint: params.persistedStats,
@@ -1553,6 +1573,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     opNextDocIds?: NonNullable<DocxRevision['opNextDocIds']>
     changedBlocks?: DocxRevision['changedBlocks']
     persistedStats: DocxDiskFingerprint
+    stats?: DocxOpenStats
     summary?: string
   }) => {
     const sourcePath = path.resolve(params.sourcePath)
@@ -1602,7 +1623,8 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     session.activeDocId = params.nextDocId
     session.activeRevisionRef = currentRevisionRef
     session.diskFingerprint = params.persistedStats
-    syncReplaySessionStats(session)
+    if (params.stats) session.stats = params.stats
+    else syncReplaySessionStats(session)
     return {
       currentRevisionRef,
       previousRevisionRef

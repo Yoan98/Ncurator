@@ -1,14 +1,11 @@
 import { describe, it } from 'vitest'
 import {
   createDocxToolHarness,
+  docxParagraphNode,
   writeRichTestDocxFile
 } from '../../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../../harness/backend/run-backend-case'
-import type {
-  DocxMutationResult,
-  DocxOutlineResult,
-  DocxReadResult
-} from '../testUtils'
+import type { DocxMutationResult, DocxOutlineResult, DocxReadResult } from '../testUtils'
 
 describe('ai tool docx backend', () => {
   it('docx-insert-after-preserves-anchor-xml', async () => {
@@ -45,13 +42,11 @@ describe('ai tool docx backend', () => {
         try {
           const outline = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
             sourcePath: 'insert-after-preserves-anchor.docx',
-            ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 19 }],
-
+            ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 19 }]
           })
           const anchorBlockId =
             outline.blocks.find(
-              (block) =>
-                block.type === 'paragraph' && block.text.includes('Anchor styled sentence')
+              (block) => block.type === 'paragraph' && block.text.includes('Anchor styled sentence')
             )?.blockId || ''
 
           const anchorBefore = await harness.invoke<DocxReadResult>('docx_read_blocks', {
@@ -60,12 +55,14 @@ describe('ai tool docx backend', () => {
           })
           const inserted = await harness.invoke<DocxMutationResult>('docx_edit', {
             sourcePath: 'insert-after-preserves-anchor.docx',
-            actions: [{
-              type: 'insert_blocks',
-              position: 'after',
-              anchorBlockId,
-              blocks: [{ type: 'paragraph', text: 'Inserted explanation.' }]
-            }]
+            actions: [
+              {
+                type: 'insert_blocks',
+                position: 'after',
+                anchorBlockId,
+                blocks: [docxParagraphNode('Inserted explanation.')]
+              }
+            ]
           })
           const anchorAfter = await harness.invoke<DocxReadResult>('docx_read_blocks', {
             sourcePath: inserted.sourcePath,

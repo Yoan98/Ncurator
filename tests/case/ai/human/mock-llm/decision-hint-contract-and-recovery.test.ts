@@ -1,5 +1,6 @@
 import path from 'node:path'
 import { describe, it } from 'vitest'
+import { docxParagraphNode } from '../../../../harness/backend/aiToolHarness'
 import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import {
@@ -114,12 +115,7 @@ describe('ai human mock-llm backend', () => {
                         type: 'insert_blocks',
                         anchorBlockId: positionedParagraphBlockId,
                         position: 'after',
-                        blocks: [
-                          {
-                            type: 'paragraph',
-                            text: '这段内容不应被自动插入。'
-                          }
-                        ]
+                        blocks: [docxParagraphNode('这段内容不应被自动插入。')]
                       }
                     ]
                   },

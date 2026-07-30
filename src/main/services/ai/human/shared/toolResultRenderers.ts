@@ -96,63 +96,14 @@ const renderGenericObject = (obj: JsonObject): string => {
     .join('\n')
 }
 
-const renderDocxParagraphRuns = (value: JsonValue | undefined): string => {
-  if (!Array.isArray(value) || value.length === 0) return 'none'
-
-  return value
-    .map((item, index) => {
-      if (!isJsonObject(item)) return renderGenericArrayItem(item, index)
-      return `  - run ${index + 1}：${renderKeyValuePairs([
-        ['text', readStringField(item, 'text')],
-        ['bold', renderPrimitive(item.bold)],
-        ['italic', renderPrimitive(item.italic)],
-        ['underline', renderPrimitive(item.underline)]
-      ])}`
-    })
-    .join('\n')
-}
-
-const renderDocxParagraphs = (value: JsonValue | undefined): string => {
-  if (!Array.isArray(value) || value.length === 0) return 'none'
-
-  return value
-    .map((item, index) => {
-      if (!isJsonObject(item)) return renderGenericArrayItem(item, index)
-      const blockLine = renderDocxBlockLine(item, index)
-      const runs = Array.isArray(item.runs)
-        ? `\n  runs:\n${renderDocxParagraphRuns(item.runs)}`
-        : ''
-      return `${blockLine}${runs}`
-    })
-    .join('\n')
-}
-
-const renderDocxTableCells = (value: JsonValue | undefined): string => {
-  if (!Array.isArray(value) || value.length === 0) return 'none'
-
-  return value
-    .map((item, index) => {
-      if (!isJsonObject(item)) return renderGenericArrayItem(item, index)
-      const cellHeader = `  - cell ${index + 1}：${renderKeyValuePairs([
-        ['blockId', readStringField(item, 'blockId')],
-        ['row', readNumberTextField(item, 'row')],
-        ['col', readNumberTextField(item, 'col')]
-      ])}`
-      const paragraphs = Array.isArray(item.paragraphs)
-        ? `\n    paragraphs:\n${renderDocxParagraphs(item.paragraphs)
-            .split('\n')
-            .map((line) => `    ${line}`)
-            .join('\n')}`
-        : ''
-      return `${cellHeader}${paragraphs}`
-    })
-    .join('\n')
-}
-
-const renderDocxBlockLine = (value: JsonValue, index: number): string => {
+const renderDocxBlockLine = (value: JsonValue, index: number, depth = 0): string => {
   if (!isJsonObject(value)) return renderGenericArrayItem(value, index)
 
-  const blockId = readStringField(value, 'blockId') || `item-${index + 1}`
+  const nodeId =
+    readStringField(value, 'blockId') ||
+    readStringField(value, 'nodeId') ||
+    readStringField(value, 'visualId') ||
+    `item-${index + 1}`
   const type = readStringField(value, 'type')
   const blockIndex = readNumberField(value, 'blockIndex')
   const text =
@@ -166,25 +117,16 @@ const renderDocxBlockLine = (value: JsonValue, index: number): string => {
       ['blockIndex', typeof blockIndex === 'number' ? String(blockIndex) : undefined]
     ]) || undefined
 
-  const baseLine = `- ${blockId}${extra ? `（${extra}）` : ''}：${text || JSON.stringify(value)}`
-  if (type === 'paragraph' && Array.isArray(value.runs)) {
-    return `${baseLine}\n  runs:\n${renderDocxParagraphRuns(value.runs)}`
-  }
-  if (type === 'table' && Array.isArray(value.cells)) {
-    return `${baseLine}\n  cells:\n${renderDocxTableCells(value.cells)}`
-  }
-  if (type === 'table_cell' && Array.isArray(value.paragraphs)) {
-    return `${baseLine}\n  paragraphs:\n${renderDocxParagraphs(value.paragraphs)
-      .split('\n')
-      .map((line) => `  ${line}`)
-      .join('\n')}`
-  }
-
-  return baseLine
+  const indent = '  '.repeat(depth)
+  const baseLine = `${indent}- ${nodeId}${extra ? `（${extra}）` : ''}：${text || readStringField(value, 'kind') || ''}`
+  if (!Array.isArray(value.children) || value.children.length === 0) return baseLine
+  return `${baseLine}\n${value.children.map((child, childIndex) => renderDocxBlockLine(child, childIndex, depth + 1)).join('\n')}`
 }
 
 const renderDocxBlocks = (value: JsonValue | undefined): string =>
-  Array.isArray(value) && value.length > 0 ? value.map(renderDocxBlockLine).join('\n') : 'none'
+  Array.isArray(value) && value.length > 0
+    ? value.map((block, index) => renderDocxBlockLine(block, index)).join('\n')
+    : 'none'
 
 const renderDocxSearchMatches = (value: JsonValue | undefined): string => {
   if (!Array.isArray(value) || value.length === 0) return 'none'
@@ -485,6 +427,7 @@ export const renderToolResultDataText = (
       return renderPdfReadPagesResult(value)
     case 'pdf_read_visuals':
     case 'ppt_read_visuals':
+    case 'docx_read_visuals':
       return renderVisualReadResult(value)
     case 'web_search':
       return renderWebSearchResult(value)
@@ -498,9 +441,7 @@ export const renderToolResultDataText = (
 export const buildToolCallDisplayText = (result: Pick<ToolCallResult, 'toolName' | 'ok'>): string =>
   `调用工具 ${result.toolName}（${result.ok ? '成功' : '失败'}）`
 
-export const resolveToolResultErrorText = (
-  result: Pick<ToolCallResult, 'data'>
-): string => {
+export const resolveToolResultErrorText = (result: Pick<ToolCallResult, 'data'>): string => {
   if (isJsonObject(result.data)) {
     const explicit =
       readStringField(result.data, 'error') ||

@@ -1,6 +1,7 @@
 import { describe, it } from 'vitest'
 import {
   createDocxToolHarness,
+  docxParagraphNode,
   writeTestDocxFile
 } from '../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
@@ -51,7 +52,10 @@ describe('ai tool docx backend', () => {
             ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 39 }]
           })
 
-          const headingBlockId = findParagraphBlockIdByText(outline.blocks, 'Weekly Format Variants')
+          const headingBlockId = findParagraphBlockIdByText(
+            outline.blocks,
+            'Weekly Format Variants'
+          )
           const narrativeBlockId = findParagraphBlockIdByText(
             outline.blocks,
             'Narrative paragraph content.'
@@ -68,20 +72,24 @@ describe('ai tool docx backend', () => {
           })
           const updatedParagraph = await harness.invoke<DocxMutationResult>('docx_edit', {
             sourcePath: outline.sourcePath,
-            actions: [{
-              type: 'replace_text',
-              query: 'Narrative paragraph content.',
-              replace: 'Narrative paragraph updated.',
-              blockIds: [narrativeBlockId]
-            }]
+            actions: [
+              {
+                type: 'replace_text',
+                query: 'Narrative paragraph content.',
+                replace: 'Narrative paragraph updated.',
+                blockIds: [narrativeBlockId]
+              }
+            ]
           })
           const updatedCell = await harness.invoke<DocxMutationResult>('docx_edit', {
             sourcePath: updatedParagraph.sourcePath,
-            actions: [{
-              type: 'update_table_cell',
-              cellBlockId: ownerCellBlockId,
-              text: 'Bob'
-            }]
+            actions: [
+              {
+                type: 'update_table_cell',
+                cellBlockId: ownerCellBlockId,
+                children: [docxParagraphNode('Bob')]
+              }
+            ]
           })
           const searchUpdatedParagraph = await harness.invoke<DocxSearchResult>('docx_search', {
             sourcePath: updatedCell.sourcePath,
@@ -128,7 +136,9 @@ describe('ai tool docx backend', () => {
             result.updatedCell.changedBlocks.length === 1 &&
             result.searchUpdatedParagraph.matches.length === 1 &&
             result.readUpdatedParagraph.blocks.length === 1 &&
-            result.updatedCell.changedBlocks.some((block) => block.action === 'update_table_cell') &&
+            result.updatedCell.changedBlocks.some(
+              (block) => block.action === 'update_table_cell'
+            ) &&
             result.updatedCell.warnings.length === 0,
           {
             name: 'format-variants-support-updating-paragraph-and-cell',

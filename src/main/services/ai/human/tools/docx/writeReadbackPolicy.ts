@@ -32,7 +32,7 @@ export const DOCX_POST_WRITE_READBACK_WINDOW_POLICY: Record<
     beforeBlockCount: 2,
     afterBlockCount: 2
   },
-  style_text: {
+  style: {
     beforeBlockCount: 1,
     afterBlockCount: 1
   }

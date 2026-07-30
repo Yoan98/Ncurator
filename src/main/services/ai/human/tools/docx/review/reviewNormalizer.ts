@@ -11,6 +11,13 @@ const isOldNode = (node: DocxReplayNode): boolean =>
 
 const specKey = (spec: DocxBlockSpec): string => JSON.stringify(spec)
 
+const visualIdsEqual = (
+  expected: Array<{ visualId: string }>,
+  actual: readonly string[]
+): boolean =>
+  expected.length === actual.length &&
+  expected.every((visual, index) => visual.visualId === actual[index])
+
 const textKey = (spec: DocxBlockSpec): string => {
   if (spec.kind === 'paragraph') return spec.runs.map((run) => run.text).join('')
   return spec.rows
@@ -88,6 +95,8 @@ const normalizeSourceLineage = (input: {
         currentBlockId: undefined,
         sourceBlockId: input.sourceBlockId,
         spec: baseline.spec,
+        structureFingerprint: baseline.structureFingerprint,
+        visualIds: baseline.visuals.map((visual) => visual.visualId),
         reviewState: 'deleted',
         reviewQuery: undefined,
         tableCellChanges: undefined
@@ -95,7 +104,12 @@ const normalizeSourceLineage = (input: {
     ]
   }
 
-  if (specKey(baseline.spec) === specKey(visible.spec)) {
+  const visualsUnchanged = visualIdsEqual(baseline.visuals, visible.visualIds)
+  if (
+    visualsUnchanged &&
+    baseline.structureFingerprint === visible.structureFingerprint &&
+    specKey(baseline.spec) === specKey(visible.spec)
+  ) {
     return [
       {
         ...visible,
@@ -108,7 +122,7 @@ const normalizeSourceLineage = (input: {
     ]
   }
 
-  if (baseline.spec.kind === 'table' && visible.spec.kind === 'table') {
+  if (visualsUnchanged && baseline.spec.kind === 'table' && visible.spec.kind === 'table') {
     const tableCellChanges = buildTableCellChanges(baseline.spec, visible.spec)
     if (tableCellChanges && tableCellChanges.length > 0) {
       return [
@@ -124,7 +138,7 @@ const normalizeSourceLineage = (input: {
     }
   }
 
-  if (textKey(baseline.spec) === textKey(visible.spec)) {
+  if (visualsUnchanged && textKey(baseline.spec) === textKey(visible.spec)) {
     return [
       {
         ...visible,
@@ -145,6 +159,8 @@ const normalizeSourceLineage = (input: {
     currentBlockId: undefined,
     sourceBlockId: input.sourceBlockId,
     spec: baseline.spec,
+    structureFingerprint: baseline.structureFingerprint,
+    visualIds: baseline.visuals.map((visual) => visual.visualId),
     reviewState: 'replaced-old',
     reviewQuery: undefined,
     tableCellChanges: undefined

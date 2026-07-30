@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { describe, it } from 'vitest'
-import { createDocxToolHarness } from '../../../../harness/backend/aiToolHarness'
+import { createDocxToolHarness, docxParagraphNode } from '../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import type {
   DocxFailureResult,
@@ -73,7 +73,7 @@ describe('ai tool docx backend', () => {
               {
                 type: 'insert_blocks',
                 position: 'after',
-                blocks: [{ type: 'paragraph', text: 'changed' }]
+                blocks: [docxParagraphNode('changed')]
               }
             ]
           })

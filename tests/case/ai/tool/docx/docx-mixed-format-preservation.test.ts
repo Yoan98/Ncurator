@@ -103,19 +103,26 @@ describe('ai tool docx backend', () => {
             sourcePath: outline.sourcePath,
             actions: [
               {
-                type: 'style_text',
-                blockId: ownerCellBlockId,
-                query: 'Alice',
-                style: {
+                type: 'style',
+                target: {
+                  type: 'text_match',
+                  query: 'Alice',
+                  blockIds: [ownerCellBlockId]
+                },
+                patch: {
+                  kind: 'run',
                   italic: true,
                   color: '008000'
                 }
               },
               {
-                type: 'style_text',
-                blockId: fieldCellBlockId,
-                query: 'Field',
-                style: { bold: true }
+                type: 'style',
+                target: {
+                  type: 'text_match',
+                  query: 'Field',
+                  blockIds: [fieldCellBlockId]
+                },
+                patch: { kind: 'run', bold: true }
               }
             ]
           })
@@ -159,10 +166,10 @@ describe('ai tool docx backend', () => {
         runtime.assertThat(
           result.preservedParagraph.blocks[0]?.type === 'paragraph' &&
             result.preservedParagraph.blocks[0]?.text.includes('Bold Italic Underline Green') &&
-            result.styledCell.changedBlocks.some((block) => block.action === 'style_text'),
+            result.styledCell.changedBlocks.some((block) => block.action === 'style'),
           {
             name: 'unmodified-mixed-format-content-remains-readable',
-            message: '未修改段落在后续样式编辑后应继续可读，且样式工具应记录 style_text 变更。',
+            message: '未修改段落在后续样式编辑后应继续可读，且样式工具应记录 style 变更。',
             data: {
               preservedParagraph: result.preservedParagraph.blocks[0],
               styledCell: result.styledCell.changedBlocks

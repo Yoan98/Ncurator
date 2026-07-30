@@ -1,6 +1,10 @@
 import { describe, it } from 'vitest'
 import path from 'node:path'
-import { createDocxToolHarness } from '../../../../harness/backend/aiToolHarness'
+import {
+  createDocxToolHarness,
+  docxParagraphNode,
+  docxTableNode
+} from '../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import type { DocxFailureResult, DocxReadResult } from './testUtils'
 
@@ -62,7 +66,7 @@ describe('ai tool docx backend', () => {
                 type: 'insert_blocks',
                 position: 'after',
                 anchorBlockId: positionedParagraph.blockId,
-                blocks: [{ type: 'paragraph', text: '补充说明：这里不应自动插入。' }]
+                blocks: [docxParagraphNode('补充说明：这里不应自动插入。')]
               }
             ]
           })
@@ -81,12 +85,13 @@ describe('ai tool docx backend', () => {
             sourcePath: outline.sourcePath,
             actions: [
               {
-                type: 'style_text',
-                blockId: positionedParagraph.blockId,
-                query,
-                style: {
-                  bold: true
-                }
+                type: 'style',
+                target: {
+                  type: 'text_match',
+                  query,
+                  blockIds: [positionedParagraph.blockId]
+                },
+                patch: { kind: 'run', bold: true }
               }
             ]
           })
@@ -97,7 +102,7 @@ describe('ai tool docx backend', () => {
                 type: 'insert_blocks',
                 position: 'after',
                 anchorBlockId: positionedParagraph.blockId,
-                blocks: [{ type: 'table', rows: [['问题类型', '核心原因']] }]
+                blocks: [docxTableNode([['问题类型', '核心原因']])]
               }
             ]
           })
