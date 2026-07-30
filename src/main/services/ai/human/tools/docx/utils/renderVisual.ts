@@ -48,8 +48,7 @@ window.renderDocxForCapture=async function(base64,binding){
   }
   const block=blocks[binding.blockIndex];
   if(!block) return {error:'DOCX preview owner block was not found'};
-  const selector=binding.kind==='shape'?'svg,canvas':'img,svg,canvas';
-  const candidates=Array.from(block.querySelectorAll(selector)).map((element)=>{
+  const candidates=Array.from(block.querySelectorAll('img,svg,canvas')).map((element)=>{
     const rect=element.getBoundingClientRect();
     return {x:rect.left+window.scrollX,y:rect.top+window.scrollY,width:rect.width,height:rect.height};
   }).filter(rect=>rect.width>=8&&rect.height>=8);

@@ -105,7 +105,7 @@ AI unit / 辅助测试目录：
 **DOCX 递归语义树与视觉测试补充**
 
 - What：DOCX 读取返回递归语义树，并能按 visualId 读取视觉内容。
-- How：使用 `灵感测试.docx` 验证 18 个 image visual 与 22 个真实空段落；覆盖 wrapper/run/visual 顺序、表格层级、Shape 文本框和五种 visual kind；使用 599/1034 张 VML 图片 fixture 检查性能和结果体积。
+- How：使用 `灵感测试.docx` 验证 18 个 image visual 与 22 个真实空段落；覆盖 wrapper/run/visual 顺序、表格层级、Shape 文本框和五种 visual kind；使用含五种 visual kind 的真实 OOXML fixture，在隐藏 Electron 窗口中验证 chart、diagram、shape 的裁剪结果包含足量非白像素；使用 599/1034 张 VML 图片 fixture 检查性能和结果体积。
 - Oracle：详细 block 只使用 children 递归树；outline 只返回 visual 统计；visualId 在未改视觉时稳定，失效视觉不能继续读取；批量视觉读取保持顺序且单项失败不影响其他项。
 
 ##### `docx-read-visuals-contract`
@@ -1412,6 +1412,15 @@ AI unit / 辅助测试目录：
 - How：只选择 `深度学习.pdf`，询问第 1 页训练闭环和第 9 页 Proper fit / Overfit 图形差异，仅开放 PDF 四个工具与 `image_analyze`。
 - Oracle：任务完成；调用 `pdf_read_pages`、包含第 9 页的 `pdf_render_pages` 和 `image_analyze`；第 9 页图像识别必须成功且全部图像识别失败数为 0；识别路径来自 render 输出并位于 `.ncurator/runtime/assets/<uuid>/page-9.png`；不调用 terminal、KB、docx；最终答复同时说明训练闭环和两组曲线差异，不能用“无法识别图片”等内容绕过；源 PDF 不变。
 - Not：不固定工具调用顺序和最终措辞，不要求把 PDF 页面图片登记为 artifact。
+
+##### `human-docx-visual-reading-live`
+
+- 测试类型：`backend / live`
+- What：真实模型能从 DOCX 递归 visual 节点取得 visualId，并按需读取普通图片。
+- Why：mock 只能证明协议可串联，live 还要验证模型在自然语言任务下会自主选择视觉读取，并能使用真实识图结果回答。
+- How：只选择含五种 visual kind 的真实 OOXML fixture，要求模型找到标有 IMAGE 的普通图片，说明标题、主要颜色和基本图形；只开放 DOCX 读取工具，不在用户输入中提供工具名或调用顺序。
+- Oracle：任务完成；模型读取详细 block 并成功调用 `docx_read_visuals`；识图结果和最终答复都包含 IMAGE，最终答复识别出蓝色、矩形和圆形；不调用 `image_analyze` 或 `docx_edit`；源 DOCX 不变。
+- Not：不通过 backend live 重复验证 chart、diagram、shape 的 BrowserWindow 渲染；该链路由真实 Electron 渲染测试覆盖。
 
 ##### `human-web-crawl-multi-hop-cross-domain-reading-live`
 

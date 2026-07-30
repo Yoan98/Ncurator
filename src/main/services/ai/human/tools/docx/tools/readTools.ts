@@ -728,6 +728,7 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
       if ('failure' in sessionResult) return sessionResult.failure
       const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ncurator-docx-visual-'))
       try {
+        let renderSourcePath: string | undefined
         const results = [] as Array<
           { visualId: string; text: string } | { visualId: string; error: string }
         >
@@ -759,8 +760,27 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
             let visualData = response.payload.data
             let mimeType = response.payload.mimeType
             if ((!visualData || !mimeType) && response.payload.render) {
+              if (!renderSourcePath) {
+                const draftPath = path.join(tempDir, 'active-revision.docx')
+                const materialized = await runtime.callWorker({
+                  action: 'materialize_draft',
+                  payload: { docId: sessionResult.docId, outPath: draftPath }
+                })
+                if (!materialized.ok) {
+                  results.push({ visualId: request.visualId, error: materialized.error })
+                  continue
+                }
+                if (materialized.payload.action !== 'materialize_draft') {
+                  results.push({
+                    visualId: request.visualId,
+                    error: 'worker protocol mismatch (materialize_draft)'
+                  })
+                  continue
+                }
+                renderSourcePath = materialized.payload.outPath
+              }
               const rendered = await renderDocxVisualToPng({
-                sourcePath: sessionResult.sourcePath,
+                sourcePath: renderSourcePath,
                 kind: response.payload.kind,
                 blockIndex: response.payload.render.blockIndex,
                 visualIndexInBlock: response.payload.render.visualIndexInBlock,

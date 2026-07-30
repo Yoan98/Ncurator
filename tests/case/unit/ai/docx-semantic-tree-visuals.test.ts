@@ -10,6 +10,35 @@ import { handleDocxWorkerRequest } from '../../../../src/main/services/ai/human/
 import { createReplaySnapshot } from '../../../../src/main/services/ai/human/tools/docx/review/replayTree'
 
 describe('docx recursive semantic tree visuals', () => {
+  it('parses every visual kind from the real OOXML fixture', async () => {
+    const fixture = path.resolve('tests/fixtures/workspace/docx-visual-kinds.docx')
+    const bundle = await loadDocxBundle(await fs.readFile(fixture))
+    const index = buildBlockIndex(
+      bundle.documentDom,
+      bundle.relationshipTargets,
+      bundle.relationshipTypes
+    )
+
+    expect([...index.visualsById.values()].map((visual) => visual.kind)).toEqual([
+      'image',
+      'chart',
+      'diagram',
+      'shape',
+      'embedded_object'
+    ])
+    const shape = [...index.visualsById.values()].find((visual) => visual.kind === 'shape')
+    expect(shape).toBeDefined()
+    const owner = shape ? index.detailByBlockId.get(shape.blockId) : undefined
+    const descendants = owner ? [owner] : []
+    const text: string[] = []
+    while (descendants.length) {
+      const node = descendants.pop()!
+      if (node.type === 'text') text.push(node.text)
+      if ('children' in node && node.children) descendants.push(...node.children)
+    }
+    expect(text).toContain('Shape textbox')
+  })
+
   it('classifies all visual kinds, selects AlternateContent, and nests shape text', () => {
     const xml = `
       <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
@@ -93,8 +122,9 @@ describe('docx recursive semantic tree visuals', () => {
     )
     expect(bindings).toHaveLength(18)
     expect(new Set(bindings).size).toBe(18)
-    expect(snapshot.blocks.filter((block) => block.visuals.length).every((block) => block.rawXml))
-      .toBe(true)
+    expect(
+      snapshot.blocks.filter((block) => block.visuals.length).every((block) => block.rawXml)
+    ).toBe(true)
   })
 
   it.each([

@@ -89,24 +89,33 @@ export class AiRunService {
       const reason = isRecoverableHumanRunError(e) ? e.reason : classifyInterruptionReason(e)
       const humanState =
         isRecoverableHumanRunError(e) && e.lastHumanState ? e.lastHumanState : initialState
-      await saveHumanResumeSnapshot({
-        chatStore: deps.chatStore,
-        sessionId: payload.sessionId,
-        reason,
-        runId: payload.runId,
-        userInput,
-        selectedReferences: mergedSelectedReferences || [],
-        workspace: mergedWorkspace,
-        humanState,
-        errorMessage: e instanceof Error ? e.message : String(e || ''),
-        updatedAt: Date.now()
-      })
+      let resumeSnapshotSaved = false
+      try {
+        const session = await deps.chatStore.getChatSession(payload.sessionId)
+        if (session) {
+          await saveHumanResumeSnapshot({
+            chatStore: deps.chatStore,
+            sessionId: payload.sessionId,
+            reason,
+            runId: payload.runId,
+            userInput,
+            selectedReferences: mergedSelectedReferences || [],
+            workspace: mergedWorkspace,
+            humanState,
+            errorMessage: e instanceof Error ? e.message : String(e || ''),
+            updatedAt: Date.now()
+          })
+          resumeSnapshotSaved = true
+        }
+      } catch (snapshotError) {
+        console.error('[AI-RUN] failed to save resume snapshot:', snapshotError)
+      }
       if (reason === 'user_cancelled' || isCancelledError(e)) {
         return createCancelledAiRunState({
           runId: payload.runId,
           sessionId: payload.sessionId,
           input: payload.input,
-          resumeSnapshotSaved: true
+          resumeSnapshotSaved
         })
       }
       const failure = toRendererRunFailure(e)
@@ -121,7 +130,7 @@ export class AiRunService {
         failureHttpStatus: failure.httpStatus,
         failureProviderCode: failure.providerCode,
         failureCode: reason,
-        resumeSnapshotSaved: true
+        resumeSnapshotSaved
       })
     }
   }
