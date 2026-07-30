@@ -61,7 +61,9 @@ const boolProperty = (parent: Element | null, name: string): boolean | undefined
 
 const numberAttr = (node: Element | null, name: string): number | undefined => {
   if (!node) return undefined
-  const parsed = Number(getAttr(node, name))
+  const raw = getAttr(node, name).trim()
+  if (!raw) return undefined
+  const parsed = Number(raw)
   return Number.isFinite(parsed) ? parsed : undefined
 }
 
@@ -287,9 +289,7 @@ const selectAlternateContent = (node: Element): Element[] => {
   ])
   const choice = childElements(node).find((child) => {
     if (child.localName !== 'Choice') return false
-    const requirements = attrByLocalName(child, ['Requires'])
-      .split(/\s+/)
-      .filter(Boolean)
+    const requirements = attrByLocalName(child, ['Requires']).split(/\s+/).filter(Boolean)
     return requirements.length > 0 && requirements.every((item) => supportedNamespaces.has(item))
   })
   const fallback = childElements(node).find((child) => child.localName === 'Fallback')

@@ -6,10 +6,29 @@ import {
   buildBlockIndex,
   loadDocxBundle
 } from '../../../../src/main/services/ai/human/tools/docx/adapters/ooxml/blockIndex'
+import { readParagraphStyle } from '../../../../src/main/services/ai/human/tools/docx/adapters/ooxml/semanticTree'
 import { handleDocxWorkerRequest } from '../../../../src/main/services/ai/human/tools/docx/worker/docxWorker'
 import { createReplaySnapshot } from '../../../../src/main/services/ai/human/tools/docx/review/replayTree'
 
 describe('docx recursive semantic tree visuals', () => {
+  it('omits absent direct paragraph style attributes instead of returning zeroes', () => {
+    const xml = `
+      <w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:pPr>
+          <w:pStyle w:val="Normal" />
+          <w:ind w:left="720" />
+          <w:spacing w:after="120" />
+        </w:pPr>
+      </w:p>`
+    const paragraph = new DOMParser().parseFromString(xml, 'application/xml').documentElement
+
+    expect(readParagraphStyle(paragraph)).toEqual({
+      styleName: 'Normal',
+      indent: { left: 36 },
+      spacing: { after: 6 }
+    })
+  })
+
   it('parses every visual kind from the real OOXML fixture', async () => {
     const fixture = path.resolve('tests/fixtures/workspace/docx-visual-kinds.docx')
     const bundle = await loadDocxBundle(await fs.readFile(fixture))

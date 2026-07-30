@@ -195,7 +195,7 @@ describe('ai unit brain decision-hint prompt contract', () => {
     expect(taskProgressSection).not.toContain('上一轮 docx_edit 写入失败')
     expect(correctionHintSection).toContain('DOCX 绝对定位或锚定定位布局')
     expect(correctionHintSection).toContain('命中区域：“达到反走样。”')
-    expect(correctionHintSection).toContain('禁止通过其他方式修改该区域')
+    expect(correctionHintSection).toContain('该区域需要用户手动处理')
     expect(correctionHintSection).not.toContain('错误：')
   })
 

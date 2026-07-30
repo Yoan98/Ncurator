@@ -56,7 +56,7 @@ export const renderDecisionHintForBrain = (hint: HumanDecisionHint): string => {
     case 'hand_docx_positioned_write_blocked': {
       const regionText = hint.detail.error.match(/包含[“"]([^”"]{1,80})[”"]的区域/u)?.[1]
       const region = regionText ? `（命中区域：“${regionText}”）` : ''
-      return `该区域因使用 DOCX 绝对定位或锚定定位布局而无法安全完成正常排版，因此禁止编辑该区域${region}；可继续处理其他非定位区域，但禁止通过其他方式修改该区域。`
+      return `该区域因使用 DOCX 绝对定位或锚定定位布局而无法安全自动编辑${region}；可继续处理其他非定位区域，该区域需要用户手动处理。`
     }
     case 'hand_tool_limit_near_exhausted':
       return `累计工具调用次数已接近当前上限。当前为 ${String(hint.detail.toolCallCount)}，上限为 ${String(hint.detail.limit)}。后续应尽快收尾，只保留完成最终交付所必需的动作。`
