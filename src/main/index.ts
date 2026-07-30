@@ -21,6 +21,7 @@ import { MODELS_PATH } from './utils/paths'
 import { terminalSessionManager } from './services/ai/human/tools/terminal/TerminalSessionManager'
 import { AppShutdownCoordinator } from './services/AppShutdownCoordinator'
 import { SystemNotificationService } from './services/SystemNotificationService'
+import { TelemetryService } from './services/telemetry/TelemetryService'
 
 if (!app.isPackaged) {
   loadRootEnvOnce()
@@ -235,6 +236,11 @@ if (!singleInstanceLock) {
       userDataPath: app.getPath('userData')
     })
     const browserEmbedService = new BrowserEmbedService(mainWindow, cdpEndpointService)
+    const telemetryService = new TelemetryService({
+      userDataPath: app.getPath('userData'),
+      appVersion: app.getVersion(),
+      isPackaged: app.isPackaged
+    })
     const webCrawlerBaseDirectory = join(app.getPath('userData'), 'web-crawler')
     const webCrawlerService = createWebCrawlerService({
       appRootPath: app.getAppPath(),
@@ -253,8 +259,10 @@ if (!singleInstanceLock) {
       vectorModelDownloadService,
       browserEmbedService,
       webCrawlerService,
-      systemNotificationService
+      systemNotificationService,
+      telemetryService
     })
+    telemetryService.track('app_started')
     appUpdateService.initialize()
     appUpdateService.checkForUpdatesOnLaunch()
 

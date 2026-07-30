@@ -1,5 +1,6 @@
 import { BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import type { SystemNotificationService } from '../services/SystemNotificationService'
+import type { TelemetryService } from '../services/telemetry/TelemetryService'
 import type { OpenDialogOptions } from 'electron'
 import { IngestionService } from '../services/ingestion/loader'
 import { EmbeddingService } from '../services/vector/EmbeddingService'
@@ -158,6 +159,7 @@ export function registerHandlers(services: {
   webCrawlerService?: WebCrawlerService
   recordLlmIo?: (record: AiLlmIoRecord) => void
   systemNotificationService?: SystemNotificationService
+  telemetryService?: TelemetryService
 }) {
   const useE2ENoopOpenWith =
     process.env.NCURATOR_E2E_OBSERVER === '1' && process.env.NCURATOR_E2E_OPEN_WITH_NOOP === '1'
@@ -176,7 +178,8 @@ export function registerHandlers(services: {
     modelService,
     vectorModelDownloadService,
     browserEmbedService,
-    webCrawlerService
+    webCrawlerService,
+    telemetryService
   } = services
   const activeWorkspaceIndexJobs = new Set<string>()
   const documentsStore = storageService.documents
@@ -222,6 +225,7 @@ export function registerHandlers(services: {
     runResourceManager,
     browserUseService: browserEmbedService,
     webCrawlerService,
+    telemetryService,
     recordLlmIo: services.recordLlmIo,
     resolveHumanRuntimeOverrides: () => {
       if (!e2eGraphRecursionLimitOnce || e2eGraphRecursionLimitUsesRemaining <= 0) {

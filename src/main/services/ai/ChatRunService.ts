@@ -27,6 +27,7 @@ import type { WebSourceStore } from '../storage/domains/WebSourceStore'
 import type { EmbeddingService } from '../vector/EmbeddingService'
 import type { BrowserEmbedService } from '../browser/BrowserEmbedService'
 import type { WebCrawlerService } from '../webCrawler/types'
+import type { TelemetryService } from '../telemetry/TelemetryService'
 import type { AiRunDeps } from './types'
 import type {
   AiApprovalBatchDecision,
@@ -102,6 +103,7 @@ type ChatRunServiceDeps = {
   runResourceManager: AiRunResourceManager
   browserUseService?: BrowserEmbedService
   webCrawlerService?: WebCrawlerService
+  telemetryService?: TelemetryService
   recordLlmIo?: (record: AiLlmIoRecord) => void
   broadcastEvent?: (event: AiRunEvent) => void
   autoStartRuns?: boolean
@@ -376,19 +378,49 @@ export class ChatRunService {
     const input = String(payload?.input || '').trim()
     if (!sessionId) return { success: false, error: 'sessionId is required' }
     if (!input) return { success: false, error: 'input is required' }
-    if (mode === 'search') return await this.submitSearch({ ...payload, mode, sessionId, input })
+    this.deps.telemetryService?.track('message_submit_requested', { mode })
+    if (mode === 'search') {
+      try {
+        const response = await this.submitSearch({ ...payload, mode, sessionId, input })
+        this.trackSubmitResult(mode, response)
+        return response
+      } catch (error) {
+        this.deps.telemetryService?.track('message_submit_failed', { mode, failureCode: 'UNKNOWN' })
+        throw error
+      }
+    }
     if (
       this.pendingSessionSubmissions.has(sessionId) ||
       Array.from(this.activeRuns.values()).some((entry) => entry.run.sessionId === sessionId)
     ) {
+      this.deps.telemetryService?.track('message_submit_failed', {
+        mode,
+        failureCode: 'REQUEST_FAILED'
+      })
       return { success: false, error: '当前会话已有运行中的任务，请等待完成后再发送。' }
     }
     this.pendingSessionSubmissions.add(sessionId)
     try {
-      return await this.submitAi({ ...payload, mode, sessionId, input })
+      const response = await this.submitAi({ ...payload, mode, sessionId, input })
+      this.trackSubmitResult(mode, response)
+      return response
+    } catch (error) {
+      this.deps.telemetryService?.track('message_submit_failed', { mode, failureCode: 'UNKNOWN' })
+      throw error
     } finally {
       this.pendingSessionSubmissions.delete(sessionId)
     }
+  }
+
+  private trackSubmitResult(mode: 'ai' | 'search', response: ChatSubmitResponse): void {
+    if (response.success) {
+      this.deps.telemetryService?.track('message_submit_succeeded', { mode })
+      return
+    }
+    this.deps.telemetryService?.track('message_submit_failed', {
+      mode,
+      failureCode: 'REQUEST_FAILED'
+    })
   }
 
   public async cancelRun(runId: string): Promise<AiRunCancelResponse> {
