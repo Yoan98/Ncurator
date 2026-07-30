@@ -2,6 +2,7 @@ import JSZip from 'jszip'
 import { DOMParser } from '@xmldom/xmldom'
 import type {
   DocxDetailedBlock,
+  DocxBlockWrapper,
   DocxLayoutMode,
   DocxOutlineCellBlock,
   DocxOutlineParagraphBlock,
@@ -202,6 +203,97 @@ const tableCells = (table: Element): Array<{ row: number; col: number; cell: Ele
   return out
 }
 
+const attrByLocalName = (node: Element, names: readonly string[]): string => {
+  for (let index = 0; index < node.attributes.length; index += 1) {
+    const attribute = node.attributes.item(index)
+    if (attribute && names.includes(attribute.localName || attribute.name)) return attribute.value
+  }
+  return ''
+}
+
+const selectAlternateContent = (node: Element): Element[] => {
+  const supported = new Set([
+    'w',
+    'w14',
+    'w15',
+    'wp',
+    'wp14',
+    'a',
+    'pic',
+    'c',
+    'dgm',
+    'wps',
+    'wpg',
+    'v',
+    'o'
+  ])
+  const choice = childElements(node).find((child) => {
+    if (child.localName !== 'Choice') return false
+    const requirements = attrByLocalName(child, ['Requires']).split(/\s+/).filter(Boolean)
+    return requirements.length > 0 && requirements.every((item) => supported.has(item))
+  })
+  const fallback = childElements(node).find((child) => child.localName === 'Fallback')
+  return choice ? childElements(choice) : fallback ? childElements(fallback) : []
+}
+
+type LogicalBodyElement = {
+  node: Element
+  wrapperPath: DocxBlockWrapper[]
+}
+
+const collectLogicalBodyElements = (
+  nodes: readonly Element[],
+  wrapperPath: DocxBlockWrapper[] = [],
+  path = 'body'
+): LogicalBodyElement[] => {
+  const output: LogicalBodyElement[] = []
+  nodes.forEach((node, index) => {
+    const nodePath = `${path}.${String(index)}`
+    if (node.localName === 'p' || node.localName === 'tbl') {
+      output.push({ node, wrapperPath })
+      return
+    }
+    if (node.localName === 'sectPr' || node.localName === 'del' || node.localName === 'moveFrom')
+      return
+    if (node.localName === 'AlternateContent') {
+      output.push(
+        ...collectLogicalBodyElements(selectAlternateContent(node), wrapperPath, nodePath)
+      )
+      return
+    }
+    if (node.localName === 'sdt') {
+      const properties = firstChildElement(node, 'sdtPr')
+      const tagNode = properties ? firstChildElement(properties, 'tag') : null
+      const content = firstChildElement(node, 'sdtContent')
+      if (!content) return
+      const wrapper: DocxBlockWrapper = {
+        key: nodePath,
+        type: 'content_control',
+        tag: tagNode ? getAttr(tagNode, 'val') || undefined : undefined
+      }
+      output.push(
+        ...collectLogicalBodyElements(childElements(content), [...wrapperPath, wrapper], nodePath)
+      )
+      return
+    }
+    if (node.localName === 'ins' || node.localName === 'moveTo') {
+      const wrapper: DocxBlockWrapper = {
+        key: nodePath,
+        type: 'revision',
+        kind: node.localName === 'moveTo' ? 'move_to' : 'insert'
+      }
+      output.push(
+        ...collectLogicalBodyElements(childElements(node), [...wrapperPath, wrapper], nodePath)
+      )
+      return
+    }
+    if (!['drawing', 'pict', 'object', 'txbxContent'].includes(node.localName)) {
+      output.push(...collectLogicalBodyElements(childElements(node), wrapperPath, nodePath))
+    }
+  })
+  return output
+}
+
 const resolveBodyNeighbors = (
   bodyBlockIds: readonly string[],
   blockIndex: number
@@ -252,11 +344,10 @@ export const buildBlockIndex = (
   const editableNodesById: BlockIndex['editableNodesById'] = new Map()
   const visualsById: BlockIndex['visualsById'] = new Map()
 
-  const bodyChildren = body.childNodes
-  for (let i = 0; i < bodyChildren.length; i += 1) {
-    const child = bodyChildren.item(i)
-    if (!isElementNode(child)) continue
-    if (child.localName === 'sectPr') continue
+  const bodyChildren = collectLogicalBodyElements(childElements(body))
+  for (const logical of bodyChildren) {
+    const child = logical.node
+    const wrapperPath = logical.wrapperPath
 
     if (child.localName === 'p') {
       const blockId = `b:${blockIndex}`
@@ -277,6 +368,7 @@ export const buildBlockIndex = (
         blockId,
         blockIndex,
         layoutMode,
+        wrapperPath,
         node: child
       })
       paragraphCount += 1
@@ -304,6 +396,7 @@ export const buildBlockIndex = (
         blockId,
         blockIndex,
         layoutMode,
+        wrapperPath,
         node: child
       })
       tableCount += 1
@@ -328,6 +421,7 @@ export const buildBlockIndex = (
           tableBlockId: blockId,
           blockIndex,
           layoutMode,
+          wrapperPath,
           row: entry.row,
           col: entry.col,
           node: entry.cell,
@@ -359,6 +453,7 @@ export const buildBlockIndex = (
       blockId,
       blockIndex: node.blockIndex,
       layoutMode: node.layoutMode,
+      wrapperPath: node.wrapperPath,
       ...neighbors,
       relationshipTargets,
       relationshipTypes,
@@ -384,6 +479,7 @@ export const buildBlockIndex = (
       tableBlockId: node.tableBlockId,
       blockIndex: node.blockIndex,
       layoutMode: node.layoutMode,
+      wrapperPath: node.wrapperPath,
       ...neighbors,
       type: 'table_cell',
       row: node.row,
@@ -427,6 +523,7 @@ export const toOpenStats = (index: BlockIndex): DocxOpenStats => {
   ).length
   return {
     blockCount: index.bodyBlockCount + index.cellBlockCount,
+    bodyBlockCount: index.bodyBlockCount,
     paragraphCount: index.paragraphCount,
     tableCount: index.tableCount,
     imageCount,

@@ -142,7 +142,7 @@ describe('ai unit mouth node', () => {
                 sourcePath: '深度学习与图形学复习总结.docx',
                 actions: [
                   {
-                    type: 'insert_blocks', position: 'after',
+                    type: 'insert_blocks',
                     blocks: [{ type: 'paragraph', text: '总结正文' }]
                   }
                 ]
@@ -159,7 +159,7 @@ describe('ai unit mouth node', () => {
               sourcePath: '深度学习与图形学复习总结.docx',
               actions: [
                 {
-                  type: 'insert_blocks', position: 'after',
+                  type: 'insert_blocks',
                   blocks: [{ type: 'paragraph', text: '总结正文' }]
                 }
               ]
@@ -317,9 +317,7 @@ describe('ai unit mouth node', () => {
     }
     state.execution.finalizationReason = 'brain_content_safety'
     state.memory.thought.todolist = [{ item: 'unfinished item', status: 'todo' }]
-    state.execution.deliveryGuidanceItems = [
-      { source: 'brain', text: '请调整输入后重试。' }
-    ]
+    state.execution.deliveryGuidanceItems = [{ source: 'brain', text: '请调整输入后重试。' }]
 
     const result = await node(state)
 
@@ -352,9 +350,7 @@ describe('ai unit mouth node', () => {
       nextAction: { action: 'mouth' }
     }
     state.memory.thought.todolist = [{ item: '未完成事项', status: 'todo' }]
-    state.execution.deliveryGuidanceItems = [
-      { source: 'brain', text: '请调整输入后重试。' }
-    ]
+    state.execution.deliveryGuidanceItems = [{ source: 'brain', text: '请调整输入后重试。' }]
 
     const result = await node(state)
 

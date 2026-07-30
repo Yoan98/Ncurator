@@ -58,8 +58,11 @@ describe('ai tool hand backend', () => {
                       actions: [
                         {
                           type: 'insert_blocks',
-                          position: 'after',
-                          anchorBlockId: 'blk_00000000000000000000000000000000',
+
+                          location: {
+                            blockId: 'blk_00000000000000000000000000000000',
+                            position: 'after'
+                          },
                           blocks: [
                             {
                               type: 'paragraph',

@@ -53,6 +53,7 @@ const setCellSchema = z
   .refine((value) => value.value !== undefined || value.formula !== undefined, {
     message: 'set_cell requires value or formula'
   })
+  .meta({ 'x-constraint': 'set_cell requires value or formula' })
 
 const deleteCellSchema = z
   .object({

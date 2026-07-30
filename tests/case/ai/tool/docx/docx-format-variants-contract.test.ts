@@ -136,10 +136,7 @@ describe('ai tool docx backend', () => {
             result.updatedCell.changedBlocks.length === 1 &&
             result.searchUpdatedParagraph.matches.length === 1 &&
             result.readUpdatedParagraph.blocks.length === 1 &&
-            result.updatedCell.changedBlocks.some(
-              (block) => block.action === 'update_table_cell'
-            ) &&
-            result.updatedCell.warnings.length === 0,
+            result.updatedCell.changedBlocks.some((block) => block.action === 'update_table_cell'),
           {
             name: 'format-variants-support-updating-paragraph-and-cell',
             message: 'paragraph 与 table_cell 修改后，结构仍应有效且可继续消费。',
@@ -147,8 +144,7 @@ describe('ai tool docx backend', () => {
               updatedParagraph: result.updatedParagraph.changedBlocks,
               updatedCell: result.updatedCell.changedBlocks,
               searchUpdatedParagraph: result.searchUpdatedParagraph.matches,
-              readUpdatedParagraph: result.readUpdatedParagraph.blocks,
-              warnings: result.updatedCell.warnings
+              readUpdatedParagraph: result.readUpdatedParagraph.blocks
             }
           }
         )

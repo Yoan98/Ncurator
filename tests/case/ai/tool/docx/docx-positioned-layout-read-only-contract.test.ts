@@ -7,13 +7,13 @@ import {
 } from '../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import type { DocxFailureResult, DocxReadResult } from './testUtils'
+import { readDocxNodeText } from './testUtils'
 
 type PositionedOutlineResult = {
   sourcePath: string
   blocks: Array<{
     blockId: string
     type: 'paragraph' | 'table' | 'table_cell'
-    layoutMode?: 'normal' | 'positioned'
     text: string
   }>
 }
@@ -40,7 +40,7 @@ describe('ai tool docx backend', () => {
             ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 80 }]
           })
           const positionedParagraph = outline.blocks.find(
-            (block) => block.type === 'paragraph' && block.layoutMode === 'positioned'
+            (block) => block.type === 'paragraph' && block.text === '图形学'
           )
           if (!positionedParagraph) {
             throw new Error('expected positioned paragraph block was not found')
@@ -50,10 +50,7 @@ describe('ai tool docx backend', () => {
             sourcePath: outline.sourcePath,
             range: { type: 'block_ids', blockIds: [positionedParagraph.blockId] }
           })
-          const paragraphText =
-            readPositionedParagraph.blocks[0]?.type === 'paragraph'
-              ? readPositionedParagraph.blocks[0].text
-              : ''
+          const paragraphText = readDocxNodeText(readPositionedParagraph.blocks[0])
           const query = paragraphText.trim().slice(0, 6)
           if (query.length === 0) {
             throw new Error('expected non-empty text from positioned paragraph block')
@@ -64,8 +61,8 @@ describe('ai tool docx backend', () => {
             actions: [
               {
                 type: 'insert_blocks',
-                position: 'after',
-                anchorBlockId: positionedParagraph.blockId,
+
+                location: { blockId: positionedParagraph.blockId, position: 'after' },
                 blocks: [docxParagraphNode('补充说明：这里不应自动插入。')]
               }
             ]
@@ -100,8 +97,8 @@ describe('ai tool docx backend', () => {
             actions: [
               {
                 type: 'insert_blocks',
-                position: 'after',
-                anchorBlockId: positionedParagraph.blockId,
+
+                location: { blockId: positionedParagraph.blockId, position: 'after' },
                 blocks: [docxTableNode([['问题类型', '核心原因']])]
               }
             ]

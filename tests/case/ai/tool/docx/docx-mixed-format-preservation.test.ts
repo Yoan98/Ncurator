@@ -12,7 +12,8 @@ import {
   type DocxOutlineResult,
   type DocxReadResult,
   findParagraphBlockIdByText,
-  findTableCellBlockIdByText
+  findTableCellBlockIdByText,
+  readDocxNodeText
 } from './testUtils'
 
 describe('ai tool docx backend', () => {
@@ -165,7 +166,9 @@ describe('ai tool docx backend', () => {
       assert: async (result, runtime) => {
         runtime.assertThat(
           result.preservedParagraph.blocks[0]?.type === 'paragraph' &&
-            result.preservedParagraph.blocks[0]?.text.includes('Bold Italic Underline Green') &&
+            readDocxNodeText(result.preservedParagraph.blocks[0]).includes(
+              'Bold Italic Underline Green'
+            ) &&
             result.styledCell.changedBlocks.some((block) => block.action === 'style'),
           {
             name: 'unmodified-mixed-format-content-remains-readable',
@@ -179,7 +182,7 @@ describe('ai tool docx backend', () => {
 
         runtime.assertThat(
           result.updatedCell.blocks[0]?.type === 'table_cell' &&
-            result.updatedCell.blocks[0]?.text.includes('Bob') &&
+            readDocxNodeText(result.updatedCell.blocks[0]).includes('Bob') &&
             result.renamedCell.changedBlocks.length === 1,
           {
             name: 'updated-target-remains-readable-after-style-and-text-edit',

@@ -18,6 +18,7 @@ import { createDocxTool, finalizeDocxToolFailure, finalizeDocxToolSuccess } from
 import { HUMAN_TOOL_RESULT_TOKEN_LIMIT_RATIO } from '../../../constants'
 import { createVisualRecognitionService } from '../../visualRecognition/service'
 import { renderDocxVisualToPng } from '../utils/renderVisual'
+import { projectDocxReadBlocks } from '../publicReadTree'
 
 const MAX_SEARCH_MATCHES = 20
 const SEMANTIC_TOP_K = 8
@@ -32,24 +33,12 @@ type AppliedAlias = {
   to: string
 }
 
-const headingLevelFromStyle = (styleName: string | undefined): number | undefined => {
-  const normalized = String(styleName || '').trim()
-  if (!normalized) return undefined
-  const match = normalized.match(/^heading\s*([1-6])$/i) || normalized.match(/^Heading([1-6])$/)
-  return match ? Number(match[1]) : undefined
-}
-
 const buildOutlineBlock = (block: DocxOutlineBlock) => {
   if (block.type === 'paragraph') {
     return {
       blockId: block.blockId,
       type: block.type,
       blockIndex: block.blockIndex,
-      layoutMode: block.layoutMode,
-      previousBlockId: block.previousBlockId,
-      nextBlockId: block.nextBlockId,
-      style: block.style,
-      headingLevel: headingLevelFromStyle(block.style?.styleName),
       text: block.text,
       visuals: block.visuals
     }
@@ -59,9 +48,6 @@ const buildOutlineBlock = (block: DocxOutlineBlock) => {
       blockId: block.blockId,
       type: block.type,
       blockIndex: block.blockIndex,
-      layoutMode: block.layoutMode,
-      previousBlockId: block.previousBlockId,
-      nextBlockId: block.nextBlockId,
       rows: block.rows,
       cols: block.cols,
       text: block.text,
@@ -72,9 +58,6 @@ const buildOutlineBlock = (block: DocxOutlineBlock) => {
     blockId: block.blockId,
     type: block.type,
     blockIndex: block.blockIndex,
-    layoutMode: block.layoutMode,
-    previousBlockId: block.previousBlockId,
-    nextBlockId: block.nextBlockId,
     tableBlockId: block.tableBlockId,
     row: block.row,
     col: block.col,
@@ -82,11 +65,6 @@ const buildOutlineBlock = (block: DocxOutlineBlock) => {
     visuals: block.visuals
   }
 }
-
-const buildReadBlock = (block: DocxDetailedBlock) =>
-  block.type === 'paragraph'
-    ? { ...block, headingLevel: headingLevelFromStyle(block.style?.styleName) }
-    : block
 
 const fetchBlocksByBlockIds = async (input: {
   runtime: DocxToolRuntime
@@ -364,7 +342,7 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
 
       try {
         const ranges = args.ranges.map((range) =>
-          toOutlineRange(range, sessionResult.stats.blockCount)
+          toOutlineRange(range, sessionResult.stats.bodyBlockCount)
         )
         const mergedRanges = mergeOutlineRanges(ranges)
         const outlineBlocks = await runtime.callWorker({
@@ -402,7 +380,7 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
         }
         const result = {
           sourcePath: sessionResult.sourcePath,
-          totalBlockCount: sessionResult.stats.blockCount,
+          totalBlockCount: sessionResult.stats.bodyBlockCount,
           blocks: resultBlocks
         }
         return finalizeDocxToolSuccess({
@@ -647,8 +625,6 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
 
       try {
         let blocks: DocxDetailedBlock[]
-        let fromBlockIndex = 0
-        let toBlockIndex = 0
         if (args.range.type === 'block_ids') {
           blocks = await fetchBlocksByBlockIds({
             runtime,
@@ -657,20 +633,16 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
             blockIds: args.range.blockIds
           })
         } else {
-          fromBlockIndex = args.range.fromBlockIndex
-          toBlockIndex = args.range.toBlockIndex
           blocks = await fetchBlocksByBlockIndexRange({
             runtime,
             docId: sessionResult.docId,
-            fromBlockIndex,
-            toBlockIndex
+            fromBlockIndex: args.range.fromBlockIndex,
+            toBlockIndex: args.range.toBlockIndex
           })
         }
         const result = {
           sourcePath: sessionResult.sourcePath,
-          fromBlockIndex,
-          toBlockIndex,
-          blocks: blocks.map(buildReadBlock)
+          blocks: projectDocxReadBlocks(blocks)
         }
         return finalizeDocxToolSuccess({
           runtime,
@@ -679,8 +651,6 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
           result,
           outputPreview: {
             sourcePath: result.sourcePath,
-            fromBlockIndex: result.fromBlockIndex,
-            toBlockIndex: result.toBlockIndex,
             blocks: result.blocks
           },
           draftDocId: sessionResult.docId,

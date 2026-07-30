@@ -102,14 +102,14 @@ describe('ai tool docx backend', () => {
               },
               {
                 type: 'insert_blocks',
-                position: 'after',
-                anchorBlockId: insertAfterAnchor,
+
+                location: { blockId: insertAfterAnchor, position: 'after' },
                 blocks: [docxParagraphNode('Inserted after anchor.')]
               },
               {
                 type: 'insert_blocks',
-                position: 'before',
-                anchorBlockId: insertBeforeAnchor,
+
+                location: { blockId: insertBeforeAnchor, position: 'before' },
                 blocks: [docxParagraphNode('Inserted before anchor.')]
               },
               {
@@ -186,16 +186,14 @@ describe('ai tool docx backend', () => {
               (block) =>
                 block.type === 'paragraph' &&
                 block.text.includes('Replaced whole block in final snapshot.')
-            ) &&
-            result.serialEdit.warnings.length === 0,
+            ),
           {
             name: 'complex-ops-serial-actions-remains-consumable-after-edits',
             message: '多次对象编辑后，结果结构仍应能继续被 read/outline 消费。',
             data: {
               searchMatches: result.searchAfter.matches,
               readBlocks: result.readAfter.blocks,
-              finalOutline: result.finalOutline.blocks,
-              warnings: result.serialEdit.warnings
+              finalOutline: result.finalOutline.blocks
             }
           }
         )

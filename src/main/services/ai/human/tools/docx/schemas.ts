@@ -80,6 +80,7 @@ export const docxRunStyleSchema = z
     fontSize: z.number().positive().optional()
   })
   .strict()
+  .meta({ id: 'DocxRunStyle' })
 
 export const docxParagraphStyleSchema = z
   .object({
@@ -106,6 +107,7 @@ export const docxParagraphStyleSchema = z
     pageBreakBefore: z.boolean().optional()
   })
   .strict()
+  .meta({ id: 'DocxParagraphStyle' })
 
 export const docxTableStyleSchema = z
   .object({
@@ -115,6 +117,7 @@ export const docxTableStyleSchema = z
     borders: docxBordersSchema.optional()
   })
   .strict()
+  .meta({ id: 'DocxTableStyle' })
 
 export const docxTableRowStyleSchema = z
   .object({
@@ -123,6 +126,7 @@ export const docxTableRowStyleSchema = z
     cantSplit: z.boolean().optional()
   })
   .strict()
+  .meta({ id: 'DocxTableRowStyle' })
 
 export const docxTableCellStyleSchema = z
   .object({
@@ -141,16 +145,20 @@ export const docxTableCellStyleSchema = z
     borders: docxBordersSchema.optional()
   })
   .strict()
+  .meta({ id: 'DocxTableCellStyle' })
 
 const docxCreateTextNodeSchema: z.ZodType<DocxCreateTextNode> = z
   .object({ type: z.literal('text'), text: z.string() })
   .strict()
+  .meta({ id: 'DocxCreateText' })
 const docxCreateTabNodeSchema: z.ZodType<DocxCreateTabNode> = z
   .object({ type: z.literal('tab') })
   .strict()
+  .meta({ id: 'DocxCreateTab' })
 const docxCreateBreakNodeSchema: z.ZodType<DocxCreateBreakNode> = z
   .object({ type: z.literal('break'), kind: z.enum(['line', 'page', 'column']).optional() })
   .strict()
+  .meta({ id: 'DocxCreateBreak' })
 const docxCreateRunNodeSchema: z.ZodType<DocxCreateRunNode> = z.lazy(() =>
   z
     .object({
@@ -163,6 +171,7 @@ const docxCreateRunNodeSchema: z.ZodType<DocxCreateRunNode> = z.lazy(() =>
         .min(1)
     })
     .strict()
+    .meta({ id: 'DocxCreateRun' })
 )
 const docxCreateHyperlinkNodeSchema: z.ZodType<DocxCreateHyperlinkNode> = z.lazy(() =>
   z
@@ -176,6 +185,10 @@ const docxCreateHyperlinkNodeSchema: z.ZodType<DocxCreateHyperlinkNode> = z.lazy
     .refine((value) => Boolean(value.target || value.anchor), {
       message: 'hyperlink requires target or anchor'
     })
+    .meta({
+      id: 'DocxCreateHyperlink',
+      'x-constraint': 'hyperlink requires target or anchor'
+    })
 )
 const docxCreateParagraphNodeSchema: z.ZodType<DocxCreateParagraphNode> = z.lazy(() =>
   z
@@ -185,6 +198,7 @@ const docxCreateParagraphNodeSchema: z.ZodType<DocxCreateParagraphNode> = z.lazy
       children: z.array(z.union([docxCreateRunNodeSchema, docxCreateHyperlinkNodeSchema])).min(1)
     })
     .strict()
+    .meta({ id: 'DocxCreateParagraph' })
 )
 const docxCreateTableCellNodeSchema: z.ZodType<DocxCreateTableCellNode> = z.lazy(() =>
   z
@@ -194,6 +208,7 @@ const docxCreateTableCellNodeSchema: z.ZodType<DocxCreateTableCellNode> = z.lazy
       children: z.array(docxCreateBlockSchema).min(1)
     })
     .strict()
+    .meta({ id: 'DocxCreateTableCell' })
 )
 const docxCreateTableRowNodeSchema: z.ZodType<DocxCreateTableRowNode> = z.lazy(() =>
   z
@@ -203,6 +218,7 @@ const docxCreateTableRowNodeSchema: z.ZodType<DocxCreateTableRowNode> = z.lazy((
       children: z.array(docxCreateTableCellNodeSchema).min(1)
     })
     .strict()
+    .meta({ id: 'DocxCreateTableRow' })
 )
 const docxCreateTableNodeSchema: z.ZodType<DocxCreateTableNode> = z.lazy(() =>
   z
@@ -212,11 +228,12 @@ const docxCreateTableNodeSchema: z.ZodType<DocxCreateTableNode> = z.lazy(() =>
       children: z.array(docxCreateTableRowNodeSchema).min(1)
     })
     .strict()
+    .meta({ id: 'DocxCreateTable' })
 )
 
-export const docxCreateBlockSchema: z.ZodType<DocxCreateBlockNode> = z.lazy(() =>
-  z.union([docxCreateParagraphNodeSchema, docxCreateTableNodeSchema])
-)
+export const docxCreateBlockSchema: z.ZodType<DocxCreateBlockNode> = z
+  .lazy(() => z.union([docxCreateParagraphNodeSchema, docxCreateTableNodeSchema]))
+  .meta({ id: 'DocxCreateBlock' })
 
 const runStylePatchSchema = z
   .object({
@@ -282,6 +299,7 @@ export const docxStylePatchSchema = z
   .refine((patch) => Object.keys(patch).some((key) => key !== 'kind'), {
     message: 'style patch must contain at least one property'
   })
+  .meta({ 'x-constraint': 'style patch must contain at least one property' })
 
 export const docxStyleTargetSchema = z.discriminatedUnion('type', [
   z
@@ -400,8 +418,13 @@ export const docxReadRequestSchema = z
 const docxEditInsertBlocksActionSchema = z
   .object({
     type: z.literal('insert_blocks'),
-    position: z.enum(['before', 'after']),
-    anchorBlockId: z.string().min(1).optional(),
+    location: z
+      .object({
+        blockId: z.string().min(1),
+        position: z.enum(['before', 'after'])
+      })
+      .strict()
+      .optional(),
     blocks: z.array(docxCreateBlockSchema).min(1)
   })
   .strict()

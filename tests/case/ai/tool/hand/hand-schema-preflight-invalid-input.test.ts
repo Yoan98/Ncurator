@@ -20,7 +20,13 @@ describe('ai tool hand backend', () => {
         const ctx = runtime.createAiRunContext()
         const cache = createHumanRuntimeCache()
 
-        ensureSkillTools({ cache, ctx, runId: runtime.runId, taskId: runtime.taskId, skillId: 'docx-write' })
+        ensureSkillTools({
+          cache,
+          ctx,
+          runId: runtime.runId,
+          taskId: runtime.taskId,
+          skillId: 'docx-write'
+        })
 
         const baseState = createInitialHumanState({
           taskId: runtime.taskId,
@@ -45,18 +51,20 @@ describe('ai tool hand backend', () => {
                     toolName: 'docx_edit',
                     args: {
                       toolName: 'docx_edit',
-	                      args: {
-	                        sourcePath: 'broken.docx',
-	                        actions: [{
-	                          type: 'insert_blocks', position: 'after',
-	                          blocks: [
-	                            {
-	                              type: 'paragraph',
-	                              text: 'hello'
-	                            }
-	                          ]
-	                        }]
-	                      }
+                      args: {
+                        sourcePath: 'broken.docx',
+                        actions: [
+                          {
+                            type: 'insert_blocks',
+                            blocks: [
+                              {
+                                type: 'paragraph',
+                                text: 'hello'
+                              }
+                            ]
+                          }
+                        ]
+                      }
                     }
                   }
                 ]
@@ -79,7 +87,8 @@ describe('ai tool hand backend', () => {
             result.state.execution.pendingDecisionHint.detail.invalidCalls[0]?.callIndex === 0,
           {
             name: 'hand-schema-preflight-invalid-input',
-            message: 'hand preflight schema 失败时应保留具体 schema error，并提升为 hand_call_invalid。',
+            message:
+              'hand preflight schema 失败时应保留具体 schema error，并提升为 hand_call_invalid。',
             data: {
               toolResult,
               pendingDecisionHint: result.state.execution.pendingDecisionHint

@@ -77,8 +77,8 @@ describe('ai tool docx backend', () => {
             actions: [
               {
                 type: 'insert_blocks',
-                anchorBlockId,
-                position: 'after',
+                location: { blockId: anchorBlockId, position: 'after' },
+
                 blocks: [docxParagraphNode('学生可以根据按钮提示逐步完成脚手架操作。')]
               }
             ]
@@ -91,8 +91,8 @@ describe('ai tool docx backend', () => {
             actions: [
               {
                 type: 'insert_blocks',
-                anchorBlockId: insertedParagraphBlockId,
-                position: 'after',
+                location: { blockId: insertedParagraphBlockId, position: 'after' },
+
                 blocks: [
                   docxTableNode([
                     ['入口按钮', '对应动作'],

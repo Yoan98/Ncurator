@@ -202,8 +202,11 @@ describe('ai tool docx net diff backend', () => {
               actions: [
                 {
                   type: 'insert_blocks',
-                  position: 'after',
-                  anchorBlockId: findParagraphBlockIdByText(outline.blocks, '锚点'),
+
+                  location: {
+                    blockId: findParagraphBlockIdByText(outline.blocks, '锚点'),
+                    position: 'after'
+                  },
                   blocks: [
                     docxParagraphNode(sourcePath.includes('final') ? '新增初稿' : '临时新增')
                   ]
@@ -250,8 +253,11 @@ describe('ai tool docx net diff backend', () => {
             actions: [
               {
                 type: 'insert_blocks',
-                position: 'after',
-                anchorBlockId: findParagraphBlockIdByText(tableOutline.blocks, '锚点'),
+
+                location: {
+                  blockId: findParagraphBlockIdByText(tableOutline.blocks, '锚点'),
+                  position: 'after'
+                },
                 blocks: [docxTableNode([['单元格初稿', '保留值']])]
               }
             ]

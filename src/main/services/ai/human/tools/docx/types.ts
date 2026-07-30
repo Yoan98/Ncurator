@@ -19,6 +19,7 @@ import {
 } from './schemas'
 import type {
   DocxParagraphStyle,
+  DocxPublicReadRootNode,
   DocxReadBlockNode,
   DocxReadParagraphNode,
   DocxReadTableCellNode,
@@ -35,6 +36,10 @@ export type DocxTableSpec = z.infer<typeof tableSpecSchema>
 export type DocxBlockSpec = z.infer<typeof blockSpecSchema>
 export type DocxOp = z.infer<typeof docOpSchema>
 export type DocxLayoutMode = 'normal' | 'positioned'
+
+export type DocxBlockWrapper =
+  | { key: string; type: 'content_control'; tag?: string }
+  | { key: string; type: 'revision'; kind: 'insert' | 'move_to' }
 
 export type DocxOutlineParagraphBlock = {
   blockId: string
@@ -91,6 +96,7 @@ type DocxDetailedBlockMeta = {
   layoutMode: DocxLayoutMode
   previousBlockId?: string
   nextBlockId?: string
+  wrapperPath?: DocxBlockWrapper[]
 }
 
 export type DocxDetailedParagraphBlock = DocxDetailedBlockMeta &
@@ -118,7 +124,7 @@ export type DocxPostWriteReadbackRegion = {
   fromBlockIndex: number
   toBlockId: string
   toBlockIndex: number
-  blocks: DocxDetailedBlock[]
+  blocks: DocxPublicReadRootNode[]
 }
 
 export type DocxPostWriteReadback = {
@@ -196,6 +202,7 @@ export type DocxOpenMeta = {
 
 export type DocxOpenStats = {
   blockCount: number
+  bodyBlockCount: number
   paragraphCount: number
   tableCount: number
   imageCount: number

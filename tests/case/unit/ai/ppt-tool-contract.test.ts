@@ -83,15 +83,19 @@ describe('ai unit ppt tool contract', () => {
     expect(
       pptEditSchema.safeParse({
         sourcePath: 'deck.pptx',
-        actions: [
-          { type: 'insert_slide', position: 'after', html: '<section data-ppt-slide></section>' }
-        ]
+        actions: [{ type: 'insert_slide', html: '<section data-ppt-slide></section>' }]
       }).success
     ).toBe(true)
     expect(
       pptEditSchema.safeParse({
         sourcePath: 'deck.pptx',
-        actions: [{ type: 'insert_slide', html: '<section data-ppt-slide></section>' }]
+        actions: [
+          {
+            type: 'insert_slide',
+            position: 'after',
+            html: '<section data-ppt-slide></section>'
+          }
+        ]
       }).success
     ).toBe(false)
     expect(
@@ -100,8 +104,7 @@ describe('ai unit ppt tool contract', () => {
         actions: [
           {
             type: 'move_slide',
-            slideId: '/ppt/slides/slide1.xml',
-            position: 'after'
+            slideId: '/ppt/slides/slide1.xml'
           }
         ]
       }).success
@@ -112,12 +115,11 @@ describe('ai unit ppt tool contract', () => {
         actions: [
           {
             type: 'duplicate_slide',
-            slideId: '/ppt/slides/slide1.xml',
-            position: 'after'
+            slideId: '/ppt/slides/slide1.xml'
           }
         ]
       }).success
-    ).toBe(false)
+    ).toBe(true)
     expect(
       pptEditSchema.safeParse({
         sourcePath: 'deck.pptx',
@@ -143,7 +145,7 @@ describe('ai unit ppt tool contract', () => {
     expect(
       pptEditSchema.safeParse({
         sourcePath: 'deck.pptx',
-        action: { type: 'insert_slide', position: 'after', html: '<section></section>' }
+        action: { type: 'insert_slide', html: '<section></section>' }
       }).success
     ).toBe(false)
   })

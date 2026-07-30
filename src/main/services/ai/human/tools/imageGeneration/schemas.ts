@@ -10,7 +10,8 @@ export const imageGenerateSchema = z
       .min(1)
       .refine((value) => IMAGE_OUTPUT_EXTENSION_PATTERN.test(value), {
         message: 'outputPath must end with .png, .jpg, .jpeg, or .webp'
-      }),
+      })
+      .meta({ 'x-constraint': 'outputPath must end with .png, .jpg, .jpeg, or .webp' }),
     svg: z.string().min(1)
   })
   .strict()

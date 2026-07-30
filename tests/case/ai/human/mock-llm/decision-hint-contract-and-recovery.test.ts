@@ -19,7 +19,6 @@ const isWindows = process.platform === 'win32'
 type DocxOutlineBlockPreview = {
   blockId: string
   type: 'paragraph' | 'table' | 'table_cell'
-  layoutMode?: 'normal' | 'positioned'
   text: string
 }
 
@@ -104,7 +103,7 @@ describe('ai human mock-llm backend', () => {
                 )
                 positionedParagraphBlockId =
                   outline.blocks.find(
-                    (block) => block.type === 'paragraph' && block.layoutMode === 'positioned'
+                    (block) => block.type === 'paragraph' && block.text === '图形学'
                   )?.blockId || ''
                 return buildToolDecision({
                   toolName: 'docx_edit',
@@ -113,8 +112,7 @@ describe('ai human mock-llm backend', () => {
                     actions: [
                       {
                         type: 'insert_blocks',
-                        anchorBlockId: positionedParagraphBlockId,
-                        position: 'after',
+                        location: { blockId: positionedParagraphBlockId, position: 'after' },
                         blocks: [docxParagraphNode('这段内容不应被自动插入。')]
                       }
                     ]

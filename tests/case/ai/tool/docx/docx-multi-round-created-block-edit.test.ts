@@ -40,8 +40,8 @@ describe('ai tool docx backend', () => {
             actions: [
               {
                 type: 'insert_blocks',
-                position: 'after',
-                anchorBlockId,
+
+                location: { blockId: anchorBlockId, position: 'after' },
                 blocks: [docxParagraphNode('新增段落初稿。')]
               }
             ]
@@ -70,8 +70,8 @@ describe('ai tool docx backend', () => {
             actions: [
               {
                 type: 'insert_blocks',
-                position: 'after',
-                anchorBlockId: insertedParagraphBlockId,
+
+                location: { blockId: insertedParagraphBlockId, position: 'after' },
                 blocks: [
                   docxTableNode([
                     ['单元格初稿', '说明'],

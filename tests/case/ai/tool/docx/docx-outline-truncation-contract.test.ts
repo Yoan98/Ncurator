@@ -1,8 +1,5 @@
 import { describe, it } from 'vitest'
-import {
-  createDocxToolHarness,
-  writeTestDocxFile
-} from '../../../../harness/backend/aiToolHarness'
+import { createDocxToolHarness, writeTestDocxFile } from '../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import type { DocxOutlineResult } from './testUtils'
 import { filterAiRunEventsByType } from '../../human/testUtils'
@@ -34,7 +31,10 @@ describe('ai tool docx backend', () => {
             sourcePath: 'outline-truncation.docx',
             ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 9 }]
           })
-          const outlineEvent = filterAiRunEventsByType(runtime.eventCollector.snapshot(), 'tool_call_result')
+          const outlineEvent = filterAiRunEventsByType(
+            runtime.eventCollector.snapshot(),
+            'tool_call_result'
+          )
             .filter((event) => event.toolName === 'docx_read_outline')
             .at(-1)
 

@@ -25,17 +25,24 @@ describe('ai tool docx backend', () => {
         const beforeBytes = await fs.readFile(existingPath)
         const harness = createDocxToolHarness(runtime)
         try {
+          const beforeOutline = await harness.invoke<{
+            blocks: Array<{ blockId: string; type: string; text: string }>
+          }>('docx_read_outline', {
+            sourcePath: 'already-exists.docx',
+            ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 20 }]
+          })
+          const firstBlockId = beforeOutline.blocks[0]!.blockId
           const edited = await harness.invoke<Record<string, unknown>>('docx_edit', {
             sourcePath: 'already-exists.docx',
             actions: [
               {
                 type: 'insert_blocks',
-                position: 'after',
+
                 blocks: [docxParagraphNode('追加内容。')]
               },
               {
                 type: 'insert_blocks',
-                position: 'before',
+                location: { blockId: firstBlockId, position: 'before' },
                 blocks: [docxParagraphNode('前置内容。')]
               }
             ]
@@ -67,7 +74,7 @@ describe('ai tool docx backend', () => {
             result.paragraphTexts.at(-1) === '追加内容。',
           {
             name: 'docx-existing-path-edits-in-place',
-            message: '目标已存在时应直接编辑，无锚点 before/after 应分别定位到文档首尾。',
+            message: '目标已存在时应直接编辑，显式 location 可插入首部，无 location 追加到末尾。',
             data: result
           }
         )

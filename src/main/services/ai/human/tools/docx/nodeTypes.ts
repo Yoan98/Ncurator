@@ -229,6 +229,143 @@ export type DocxReadNode =
   | DocxReadInlineNode
   | DocxReadRunChildNode
 
+// Public read nodes deliberately exclude internal summaries and layout facts. The
+// unions are split by parent so an output schema cannot admit impossible trees.
+export type DocxPublicReadTextNode = { type: 'text'; text: string }
+export type DocxPublicReadTabNode = { type: 'tab' }
+export type DocxPublicReadBreakNode = {
+  type: 'break'
+  kind: 'line' | 'page' | 'column'
+}
+export type DocxPublicReadVisualNode = {
+  type: 'visual'
+  visualId: string
+  kind: DocxVisualKind
+  altText?: string
+  children?: DocxPublicReadVisualBlockNode[]
+}
+export type DocxPublicReadRunChildNode =
+  | DocxPublicReadTextNode
+  | DocxPublicReadTabNode
+  | DocxPublicReadBreakNode
+  | DocxPublicReadVisualNode
+export type DocxPublicReadRunNode = {
+  type: 'run'
+  nodeId: string
+  style?: DocxRunStyle
+  children: DocxPublicReadRunChildNode[]
+}
+export type DocxPublicReadHyperlinkNode = {
+  type: 'hyperlink'
+  target?: string
+  anchor?: string
+  children: DocxPublicReadRunNode[]
+}
+export type DocxPublicReadInlineContentControlNode = {
+  type: 'content_control'
+  tag?: string
+  children: DocxPublicReadInlineNode[]
+}
+export type DocxPublicReadInlineRevisionNode = {
+  type: 'revision'
+  kind: 'insert' | 'delete' | 'move_from' | 'move_to'
+  children: DocxPublicReadInlineNode[]
+}
+export type DocxPublicReadFieldNode = {
+  type: 'field'
+  instruction: string
+  children: DocxPublicReadInlineNode[]
+}
+export type DocxPublicReadInlineNode =
+  | DocxPublicReadRunNode
+  | DocxPublicReadHyperlinkNode
+  | DocxPublicReadInlineContentControlNode
+  | DocxPublicReadInlineRevisionNode
+  | DocxPublicReadFieldNode
+export type DocxPublicReadNestedParagraphNode = {
+  type: 'paragraph'
+  nodeId: string
+  style?: DocxParagraphStyle
+  children: DocxPublicReadInlineNode[]
+}
+export type DocxPublicReadNestedTableCellNode = {
+  type: 'table_cell'
+  nodeId: string
+  row: number
+  col: number
+  style?: DocxTableCellStyle
+  children: DocxPublicReadNestedBlockNode[]
+}
+export type DocxPublicReadTableCellBlockNode = {
+  type: 'table_cell'
+  blockId: string
+  row: number
+  col: number
+  style?: DocxTableCellStyle
+  children: DocxPublicReadNestedBlockNode[]
+}
+export type DocxPublicReadTableRowNode = {
+  type: 'table_row'
+  nodeId: string
+  row: number
+  style?: DocxTableRowStyle
+  children: Array<DocxPublicReadNestedTableCellNode | DocxPublicReadTableCellBlockNode>
+}
+export type DocxPublicReadNestedTableNode = {
+  type: 'table'
+  nodeId: string
+  style?: DocxTableStyle
+  children: DocxPublicReadTableRowNode[]
+}
+export type DocxPublicReadBlockContentControlNode = {
+  type: 'content_control'
+  tag?: string
+  children: DocxPublicReadNestedBlockNode[]
+}
+export type DocxPublicReadBlockRevisionNode = {
+  type: 'revision'
+  kind: 'insert' | 'delete' | 'move_from' | 'move_to'
+  children: DocxPublicReadNestedBlockNode[]
+}
+export type DocxPublicReadNestedBlockNode =
+  | DocxPublicReadNestedParagraphNode
+  | DocxPublicReadNestedTableNode
+  | DocxPublicReadBlockContentControlNode
+  | DocxPublicReadBlockRevisionNode
+export type DocxPublicReadVisualBlockNode =
+  | DocxPublicReadNestedParagraphNode
+  | DocxPublicReadNestedTableNode
+export type DocxPublicReadRootParagraphNode = Omit<DocxPublicReadNestedParagraphNode, 'nodeId'> & {
+  blockId: string
+  blockIndex: number
+}
+export type DocxPublicReadRootTableNode = Omit<DocxPublicReadNestedTableNode, 'nodeId'> & {
+  blockId: string
+  blockIndex: number
+}
+export type DocxPublicReadRootCellNode = Omit<DocxPublicReadTableCellBlockNode, 'row' | 'col'> & {
+  blockIndex: number
+  tableBlockId: string
+  row: number
+  col: number
+}
+export type DocxPublicReadRootWrapperNode =
+  | {
+      type: 'content_control'
+      tag?: string
+      children: DocxPublicReadRootNode[]
+    }
+  | {
+      type: 'revision'
+      kind: 'insert' | 'move_to'
+      children: DocxPublicReadRootNode[]
+    }
+export type DocxPublicReadRootNode =
+  | DocxPublicReadRootParagraphNode
+  | DocxPublicReadRootTableNode
+  | DocxPublicReadRootCellNode
+  | DocxPublicReadRootWrapperNode
+
 export type DocxStylePatch =
   | ({ kind: 'run' } & { [K in keyof DocxRunStyle]?: DocxRunStyle[K] | null })
   | ({ kind: 'paragraph' } & {

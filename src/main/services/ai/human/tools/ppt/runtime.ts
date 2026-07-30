@@ -579,8 +579,7 @@ const addCompiledSlide = async (input: {
   document: PptRuntimeDocument
   compiled: PptCompiledSlide
   workspaceRootPath: string
-  position: 'before' | 'after'
-  anchorSlideId?: string
+  location?: { slideId: string; position: 'before' | 'after' }
 }): Promise<SlideData> => {
   const slide = addBlankSlide(input.document.presentation)
   setSlideBackground(slide, normalizeHex(input.compiled.background))
@@ -594,7 +593,7 @@ const addCompiledSlide = async (input: {
       workspaceRootPath: input.workspaceRootPath
     })
   }
-  placeSlide(input.document.presentation, slide, input.position, input.anchorSlideId)
+  placeSlide(input.document.presentation, slide, input.location)
   input.document.warnings.push(...input.compiled.warnings)
   return slide
 }
@@ -602,20 +601,19 @@ const addCompiledSlide = async (input: {
 const placeSlide = (
   presentation: PresentationData,
   slide: SlideData,
-  position: 'before' | 'after',
-  anchorSlideId?: string
+  location?: { slideId: string; position: 'before' | 'after' }
 ): number => {
   const slides = getSlides(presentation)
   const sourceIndex = slides.findIndex((item) => item === slide)
   if (sourceIndex < 0) throw new Error('找不到需要定位的页面')
-  if (!anchorSlideId) {
-    const targetIndex = position === 'before' ? 0 : slides.length - 1
+  if (!location) {
+    const targetIndex = slides.length - 1
     moveSlide(presentation, slide, targetIndex)
     return targetIndex
   }
-  const anchorIndex = slides.findIndex((item) => slideIdOf(item) === anchorSlideId)
-  if (anchorIndex < 0) throw new Error(`找不到 anchorSlideId=${anchorSlideId}`)
-  const insertionIndex = position === 'before' ? anchorIndex : anchorIndex + 1
+  const anchorIndex = slides.findIndex((item) => slideIdOf(item) === location.slideId)
+  if (anchorIndex < 0) throw new Error(`找不到 location.slideId=${location.slideId}`)
+  const insertionIndex = location.position === 'before' ? anchorIndex : anchorIndex + 1
   const targetIndex = sourceIndex < insertionIndex ? insertionIndex - 1 : insertionIndex
   moveSlide(presentation, slide, targetIndex)
   return targetIndex
@@ -1359,8 +1357,7 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
                 document,
                 compiled,
                 workspaceRootPath,
-                position: action.position,
-                anchorSlideId: action.anchorSlideId
+                location: action.location
               })
               changedSlideIds.push(slideIdOf(slide))
             }
@@ -1380,21 +1377,16 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
             }
           } else if (action.type === 'move_slide') {
             const slide = findSlide(document.presentation, action.slideId)
-            if (action.anchorSlideId === action.slideId)
-              throw new Error('move_slide 的 anchorSlideId 不能等于 slideId')
-            const targetIndex = placeSlide(
-              document.presentation,
-              slide,
-              action.position,
-              action.anchorSlideId
-            )
+            if (action.location.slideId === action.slideId)
+              throw new Error('move_slide 的 location.slideId 不能等于 slideId')
+            const targetIndex = placeSlide(document.presentation, slide, action.location)
             changedSlideIds.push(action.slideId)
             movedSlideIds.add(action.slideId)
             outlineAnchorIndex = targetIndex
           } else if (action.type === 'duplicate_slide') {
             const source = findSlide(document.presentation, action.slideId)
             const duplicate = duplicateSlide(document.presentation, source)
-            placeSlide(document.presentation, duplicate, action.position, action.anchorSlideId)
+            placeSlide(document.presentation, duplicate, action.location)
             changedSlideIds.push(slideIdOf(duplicate))
           } else if (action.type === 'replace_text') {
             const targetSlides = action.slideIds?.map((slideId) =>

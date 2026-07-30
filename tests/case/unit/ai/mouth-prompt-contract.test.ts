@@ -81,7 +81,7 @@ describe('ai unit mouth prompt contract', () => {
                   sourcePath: '深度学习与图形学复习总结.docx',
                   actions: [
                     {
-                      type: 'insert_blocks', position: 'after',
+                      type: 'insert_blocks',
                       blocks: [{ type: 'paragraph', text: '总结正文' }]
                     }
                   ]
@@ -99,7 +99,7 @@ describe('ai unit mouth prompt contract', () => {
                 sourcePath: '深度学习与图形学复习总结.docx',
                 actions: [
                   {
-                    type: 'insert_blocks', position: 'after',
+                    type: 'insert_blocks',
                     blocks: [{ type: 'paragraph', text: '总结正文' }]
                   }
                 ]

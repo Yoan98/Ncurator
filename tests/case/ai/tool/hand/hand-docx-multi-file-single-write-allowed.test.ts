@@ -29,8 +29,20 @@ describe('ai tool hand backend', () => {
 
         const ctx = runtime.createAiRunContext()
         const cache = createHumanRuntimeCache()
-        ensureSkillTools({ cache, ctx, runId: runtime.runId, taskId: runtime.taskId, skillId: 'docx-read' })
-        ensureSkillTools({ cache, ctx, runId: runtime.runId, taskId: runtime.taskId, skillId: 'docx-write' })
+        ensureSkillTools({
+          cache,
+          ctx,
+          runId: runtime.runId,
+          taskId: runtime.taskId,
+          skillId: 'docx-read'
+        })
+        ensureSkillTools({
+          cache,
+          ctx,
+          runId: runtime.runId,
+          taskId: runtime.taskId,
+          skillId: 'docx-write'
+        })
 
         const handNode = createHandNode({ ctx, cache })
         const state = await handNode({
@@ -57,22 +69,26 @@ describe('ai tool hand backend', () => {
                     toolName: 'docx_edit',
                     args: {
                       sourcePath: 'multi-file-a.docx',
-                      actions: [{
-                        type: 'replace_text',
-                        query: 'Alpha',
-                        replace: 'Alpha updated'
-                      }]
+                      actions: [
+                        {
+                          type: 'replace_text',
+                          query: 'Alpha',
+                          replace: 'Alpha updated'
+                        }
+                      ]
                     }
                   },
                   {
                     toolName: 'docx_edit',
                     args: {
                       sourcePath: 'multi-file-b.docx',
-                      actions: [{
-                        type: 'replace_text',
-                        query: 'Beta',
-                        replace: 'Beta updated'
-                      }]
+                      actions: [
+                        {
+                          type: 'replace_text',
+                          query: 'Beta',
+                          replace: 'Beta updated'
+                        }
+                      ]
                     }
                   }
                 ]
@@ -117,12 +133,15 @@ describe('ai tool hand backend', () => {
           result.state.execution.pendingDecisionHint === undefined &&
             result.state.execution.lastToolResults?.length === 2 &&
             result.state.execution.lastToolResults.every((item) => item.ok) &&
-            outlineA.blocks.some((block) => block.type === 'paragraph' && block.text === 'Alpha updated') &&
-            outlineB.blocks.some((block) => block.type === 'paragraph' && block.text === 'Beta updated'),
+            outlineA.blocks.some(
+              (block) => block.type === 'paragraph' && block.text === 'Alpha updated'
+            ) &&
+            outlineB.blocks.some(
+              (block) => block.type === 'paragraph' && block.text === 'Beta updated'
+            ),
           {
             name: 'multi-file-single-write-plan-is-allowed',
-            message:
-              '不同 sourcePath 各出现一次 docx 写应允许通过，且各自推进独立 revision。',
+            message: '不同 sourcePath 各出现一次 docx 写应允许通过，且各自推进独立 revision。',
             data: {
               lastToolResults: result.state.execution.lastToolResults,
               outlineA: outlineA.blocks,

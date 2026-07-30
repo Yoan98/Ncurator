@@ -169,7 +169,8 @@ describe('ai human mock-llm backend', () => {
             ),
           {
             name: 'pdf-read-visuals-returns-recognition-result-directly',
-            message: 'PDF 页面视觉读取应直接返回识图文本，不再暴露 render 路径或依赖 image_analyze。',
+            message:
+              'PDF 页面视觉读取应直接返回识图文本，不再暴露 render 路径或依赖 image_analyze。',
             data: { toolNames: starts.map((event) => event.toolName) }
           }
         )

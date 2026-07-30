@@ -431,14 +431,13 @@ type BatchReadbackTarget = {
 type WriteToolResult = {
   sourcePath: string
   changedBlocks: DocxChangedBlock[]
-  createdBlocks?: DocxCreatedBlock[]
-  warnings: string[]
+  createdBlocks: DocxCreatedBlock[]
   postWriteReadback: DocxPostWriteReadback
 }
 
 const actionLabel = (action: DocxEditAction): string => {
   if (action.type === 'insert_blocks')
-    return `${action.type}.${action.position}.${String(action.blocks.length)}`
+    return `${action.type}.${action.location?.position || 'append'}.${String(action.blocks.length)}`
   if (action.type === 'delete_blocks') return `${action.type}.${String(action.blockIds.length)}`
   return action.type
 }
@@ -535,17 +534,16 @@ const buildSerialActionOps = async (input: {
   const action = input.action.action
 
   if (action.type === 'insert_blocks') {
-    const bodyBlocks = action.anchorBlockId
+    const bodyBlocks = action.location
       ? []
       : bodyBlocksOnly(await fetchOutlineBlocks(input.runtime, input.currentDocId))
-    const boundaryBlock =
-      action.position === 'before' ? bodyBlocks[0] : bodyBlocks[bodyBlocks.length - 1]
-    const anchorBlockId = action.anchorBlockId || boundaryBlock?.blockId
+    const anchorBlockId = action.location?.blockId || bodyBlocks.at(-1)?.blockId
     if (!anchorBlockId) {
       throw new Error('DOCX 中没有可用于插入内容的正文位置')
     }
+    const position = action.location?.position || 'after'
     const op: DocxOp = {
-      type: action.position === 'before' ? 'insert_before' : 'insert_after',
+      type: position === 'before' ? 'insert_before' : 'insert_after',
       anchorBlockId,
       content: action.blocks
     }
@@ -969,7 +967,6 @@ const buildWriteToolResult = async (input: {
     sourcePath: input.sourcePath,
     changedBlocks: input.changedBlocks,
     createdBlocks: input.createdBlocks,
-    warnings: input.warnings,
     postWriteReadback
   }
 }
@@ -1033,7 +1030,7 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
       )
       if (!sourceExists) {
         const invalidCreateAction = args.actions.find(
-          (action) => action.type !== 'insert_blocks' || Boolean(action.anchorBlockId)
+          (action) => action.type !== 'insert_blocks' || Boolean(action.location)
         )
         if (invalidCreateAction) {
           return finalizeDocxToolFailure({
@@ -1042,8 +1039,7 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
               toolName,
               toolCallId,
               reason: 'invalid_input',
-              error:
-                '新建 DOCX 时只能使用不带 anchorBlockId 的 insert_blocks；其他操作需要已有文档内容',
+              error: '新建 DOCX 时只能使用不带 location 的 insert_blocks；其他操作需要已有文档内容',
               resourceContext: runtime.buildResourceContext({
                 sourcePath: requestedSourcePath,
                 effectKind: 'mutated'
@@ -1057,9 +1053,7 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
 
         const createBlocks = args.actions.reduce<DocxCreateBlock[]>((blocks, action) => {
           if (action.type !== 'insert_blocks') return blocks
-          return action.position === 'before'
-            ? [...action.blocks, ...blocks]
-            : [...blocks, ...action.blocks]
+          return [...blocks, ...action.blocks]
         }, [])
 
         const tempPaths = await buildCreateTargetTempPaths(requestedSourcePath)

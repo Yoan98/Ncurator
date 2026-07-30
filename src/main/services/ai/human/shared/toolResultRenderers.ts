@@ -106,6 +106,11 @@ const renderDocxBlockLine = (value: JsonValue, index: number, depth = 0): string
     `item-${index + 1}`
   const type = readStringField(value, 'type')
   const blockIndex = readNumberField(value, 'blockIndex')
+  const visuals = isJsonObject(value.visuals) ? value.visuals : undefined
+  const visualKinds =
+    visuals && Array.isArray(visuals.kinds)
+      ? visuals.kinds.filter((kind): kind is string => typeof kind === 'string').join(',')
+      : undefined
   const text =
     readStringField(value, 'text') ||
     readStringField(value, 'summary') ||
@@ -114,7 +119,14 @@ const renderDocxBlockLine = (value: JsonValue, index: number, depth = 0): string
   const extra =
     renderKeyValuePairs([
       ['type', type],
-      ['blockIndex', typeof blockIndex === 'number' ? String(blockIndex) : undefined]
+      ['blockIndex', typeof blockIndex === 'number' ? String(blockIndex) : undefined],
+      ['tableBlockId', readStringField(value, 'tableBlockId')],
+      ['row', readNumberTextField(value, 'row')],
+      ['col', readNumberTextField(value, 'col')],
+      ['rows', readNumberTextField(value, 'rows')],
+      ['cols', readNumberTextField(value, 'cols')],
+      ['visualCount', visuals ? readNumberTextField(visuals, 'count') : undefined],
+      ['visualKinds', visualKinds]
     ]) || undefined
 
   const indent = '  '.repeat(depth)
@@ -150,12 +162,7 @@ const renderDocxSearchMatches = (value: JsonValue | undefined): string => {
 
 const renderDocxReadResult = (obj: JsonObject): string =>
   [
-    renderKeyValuePairs([
-      ['sourcePath', readStringField(obj, 'sourcePath')],
-      ['currentRevisionRef', readStringField(obj, 'currentRevisionRef')],
-      ['fromBlockIndex', readNumberTextField(obj, 'fromBlockIndex')],
-      ['toBlockIndex', readNumberTextField(obj, 'toBlockIndex')]
-    ]),
+    renderKeyValuePairs([['sourcePath', readStringField(obj, 'sourcePath')]]),
     'blocks:',
     renderDocxBlocks(obj.blocks)
   ]
@@ -182,7 +189,7 @@ const renderDocxOutlineResult = (obj: JsonObject): string =>
   [
     renderKeyValuePairs([
       ['sourcePath', readStringField(obj, 'sourcePath')],
-      ['currentRevisionRef', readStringField(obj, 'currentRevisionRef')]
+      ['totalBlockCount', readNumberTextField(obj, 'totalBlockCount')]
     ]),
     'blocks:',
     renderDocxBlocks(obj.blocks)
@@ -229,6 +236,7 @@ const renderVisualResults = (value: JsonValue | undefined): string => {
     .map((item, index) => {
       if (!isJsonObject(item)) return renderGenericArrayItem(item, index)
       return `${index + 1}. ${renderKeyValuePairs([
+        ['visualId', readStringField(item, 'visualId')],
         ['index', readNumberTextField(item, 'index')],
         ['text', readStringField(item, 'text')],
         ['error', readStringField(item, 'error')]
@@ -354,15 +362,7 @@ const renderWebSearchResult = (obj: JsonObject): string =>
 
 const renderDocxCreateResult = (obj: JsonObject): string =>
   [
-    renderKeyValuePairs([
-      ['sourcePath', readStringField(obj, 'sourcePath')],
-      [
-        'warnings',
-        Array.isArray(obj.warnings) && obj.warnings.length > 0
-          ? String(obj.warnings.length)
-          : undefined
-      ]
-    ]),
+    renderKeyValuePairs([['sourcePath', readStringField(obj, 'sourcePath')]]),
     'postWriteReadback:',
     renderDocxPostWriteReadback(obj.postWriteReadback)
   ]
@@ -378,7 +378,9 @@ const renderDocxPostWriteReadback = (value: JsonValue | undefined): string => {
     .map((region, index) => {
       if (!isJsonObject(region)) return renderGenericArrayItem(region, index)
       const header = `region ${index + 1}：${renderKeyValuePairs([
+        ['fromBlockId', readStringField(region, 'fromBlockId')],
         ['fromBlockIndex', readNumberTextField(region, 'fromBlockIndex')],
+        ['toBlockId', readStringField(region, 'toBlockId')],
         ['toBlockIndex', readNumberTextField(region, 'toBlockIndex')]
       ])}`
       return `${header}\nblocks:\n${renderDocxBlocks(region.blocks)}`

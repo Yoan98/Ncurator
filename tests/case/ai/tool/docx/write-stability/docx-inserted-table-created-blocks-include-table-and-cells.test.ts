@@ -40,8 +40,8 @@ describe('ai tool docx backend', () => {
             actions: [
               {
                 type: 'insert_blocks',
-                position: 'after',
-                anchorBlockId,
+
+                location: { blockId: anchorBlockId, position: 'after' },
                 blocks: [
                   docxTableNode([
                     ['A', 'B'],

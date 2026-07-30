@@ -1,10 +1,7 @@
 import { describe, it } from 'vitest'
 import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
-import {
-  buildCompleteTaskDecision,
-  filterAiRunEventsByType
-} from '../testUtils'
+import { buildCompleteTaskDecision, filterAiRunEventsByType } from '../testUtils'
 
 describe('ai human mock-llm backend', () => {
   it('brain-output-schema-invalid-retry', async () => {
@@ -14,7 +11,8 @@ describe('ai human mock-llm backend', () => {
       domain: 'ai',
       suite: 'human',
       groups: ['mock-llm'],
-      description: '验证 brain hand plan schema 不合法时会产出 decision_hint 并在纠偏后继续完成任务。',
+      description:
+        '验证 brain hand plan schema 不合法时会产出 decision_hint 并在纠偏后继续完成任务。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -34,16 +32,18 @@ describe('ai human mock-llm backend', () => {
                         toolName: 'docx_edit',
                         args: {
                           sourcePath: 'report.docx',
-                          actions: [{
-                            type: 'insert_blocks', position: 'after',
-                            blocks: [
+                          actions: [
                             {
-                              type: 'paragraph',
-                              text: 'hello'
+                              type: 'insert_blocks',
+                              blocks: [
+                                {
+                                  type: 'paragraph',
+                                  text: 'hello'
+                                }
+                              ],
+                              unexpected: true
                             }
-                          ],
-                            unexpected: true
-                          }]
+                          ]
                         }
                       }
                     ]
@@ -87,8 +87,7 @@ describe('ai human mock-llm backend', () => {
         )
         const thinkingCompleted = result.events.filter(
           (event) =>
-            event.type === 'assistant_process_group_completed' &&
-            event.display.kind === 'thinking'
+            event.type === 'assistant_process_group_completed' && event.display.kind === 'thinking'
         )
         const schemaHintIndex = result.events.findIndex(
           (event) =>
@@ -121,7 +120,8 @@ describe('ai human mock-llm backend', () => {
             ),
           {
             name: 'hand-schema-invalid-produces-record-then-decision-hint',
-            message: 'brain 的 hand plan 不合法时，应先进入 hand 产生失败调用记录，再产出 hand_call_invalid 并继续完成任务。',
+            message:
+              'brain 的 hand plan 不合法时，应先进入 hand 产生失败调用记录，再产出 hand_call_invalid 并继续完成任务。',
             data: {
               output: result.output,
               decisionHints,

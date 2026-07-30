@@ -1,8 +1,5 @@
 import { describe, it } from 'vitest'
-import {
-  createDocxToolHarness,
-  writeTestDocxFile
-} from '../../../../harness/backend/aiToolHarness'
+import { createDocxToolHarness, writeTestDocxFile } from '../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import type { DocxOutlineResult, DocxReadResult } from './testUtils'
 import { findParagraphBlockIndexByText } from './testUtils'
@@ -53,7 +50,7 @@ describe('ai tool docx backend', () => {
       assert: async (result, runtime) => {
         runtime.assertThat(
           result.read.blocks.map((block) => block.blockIndex).join(',') === '1,2,3' &&
-          result.read.blocks.every((block) => block.type === 'paragraph'),
+            result.read.blocks.every((block) => block.type === 'paragraph'),
           {
             name: 'range-read-returns-contiguous-blocks-in-order',
             message: '区间精读应按文档顺序返回连续 blocks。',

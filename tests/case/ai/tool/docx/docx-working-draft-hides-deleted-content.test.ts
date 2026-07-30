@@ -1,14 +1,7 @@
 import { describe, it } from 'vitest'
-import {
-  createDocxToolHarness,
-  writeTestDocxFile
-} from '../../../../harness/backend/aiToolHarness'
+import { createDocxToolHarness, writeTestDocxFile } from '../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
-import type {
-  DocxMutationResult,
-  DocxOutlineResult,
-  DocxSearchResult
-} from './testUtils'
+import type { DocxMutationResult, DocxOutlineResult, DocxSearchResult } from './testUtils'
 
 describe('ai tool docx backend', () => {
   it('docx-working-draft-hides-deleted-content', async () => {
@@ -18,7 +11,8 @@ describe('ai tool docx backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['docx'],
-      description: '验证删除后的内容不会再出现在 AI 继续读取的 working draft 中，未修改内容保持可读。',
+      description:
+        '验证删除后的内容不会再出现在 AI 继续读取的 working draft 中，未修改内容保持可读。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -41,10 +35,12 @@ describe('ai tool docx backend', () => {
 
           const deleted = await harness.invoke<DocxMutationResult>('docx_edit', {
             sourcePath: 'working-draft-delete.docx',
-            actions: [{
-              type: 'delete_blocks',
-              blockIds: [deleteBlockId]
-            }]
+            actions: [
+              {
+                type: 'delete_blocks',
+                blockIds: [deleteBlockId]
+              }
+            ]
           })
           const deletedSearch = await harness.invoke<DocxSearchResult>('docx_search', {
             sourcePath: deleted.sourcePath,
@@ -70,14 +66,11 @@ describe('ai tool docx backend', () => {
         }
       },
       assert: async (result, runtime) => {
-        runtime.assertThat(
-          result.deleted.changedBlocks.length === 1 && result.deleted.warnings.length === 0,
-          {
-            name: 'delete-op-applies-cleanly',
-            message: '删除段落后应产生一次稳定变更，且不应附带额外警告。',
-            data: result.deleted
-          }
-        )
+        runtime.assertThat(result.deleted.changedBlocks.length === 1, {
+          name: 'delete-op-applies-cleanly',
+          message: '删除段落后应产生一次稳定变更，且不应附带额外警告。',
+          data: result.deleted
+        })
 
         runtime.assertThat(
           result.deletedSearch.matches.length === 0 &&

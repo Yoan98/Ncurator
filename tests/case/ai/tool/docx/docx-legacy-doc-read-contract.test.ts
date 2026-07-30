@@ -9,6 +9,7 @@ import type {
   DocxReadResult,
   DocxSearchResult
 } from './testUtils'
+import { readDocxNodeText } from './testUtils'
 
 describe('ai tool docx backend', () => {
   it('docx-legacy-doc-read-contract', async () => {
@@ -72,7 +73,7 @@ describe('ai tool docx backend', () => {
             actions: [
               {
                 type: 'insert_blocks',
-                position: 'after',
+
                 blocks: [docxParagraphNode('changed')]
               }
             ]
@@ -118,7 +119,7 @@ describe('ai tool docx backend', () => {
         runtime.assertThat(
           result.read.blocks.length > 0 &&
             result.read.blocks.every((block) => block.type === 'paragraph') &&
-            result.read.blocks.some((block) => block.text.includes('reviewing')),
+            result.read.blocks.some((block) => readDocxNodeText(block).includes('reviewing')),
           {
             name: 'legacy-doc-block-range-returns-detailed-paragraphs',
             message: 'legacy .doc should support block range reads',

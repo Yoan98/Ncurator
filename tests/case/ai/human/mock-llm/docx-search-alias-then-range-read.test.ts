@@ -3,6 +3,7 @@ import { writeTestDocxFile } from '../../../../harness/backend/aiToolHarness'
 import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import type { DocxReadResult, DocxSearchResult } from '../../tool/docx/testUtils'
+import { readDocxNodeText } from '../../tool/docx/testUtils'
 import {
   buildCompleteTaskDecision,
   buildLearnSkillsDecision,
@@ -116,10 +117,12 @@ describe('ai human mock-llm backend', () => {
             searchResult.appliedAliases.length === 1 &&
             readResult.blocks.length === 2 &&
             readResult.blocks.some(
-              (block) => block.type === 'paragraph' && block.text.includes('记住过多训练数据中的特征值')
+              (block) =>
+                block.type === 'paragraph' &&
+                readDocxNodeText(block).includes('记住过多训练数据中的特征值')
             ) &&
             readResult.blocks.some(
-              (block) => block.type === 'paragraph' && block.text.includes('数据增强')
+              (block) => block.type === 'paragraph' && readDocxNodeText(block).includes('数据增强')
             ),
           {
             name: 'human-can-use-alias-search-then-range-read',

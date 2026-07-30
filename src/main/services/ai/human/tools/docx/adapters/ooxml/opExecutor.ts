@@ -458,7 +458,7 @@ const applyStructural = async (
   const id =
     op.type === 'insert_after' || op.type === 'insert_before' ? op.anchorBlockId : op.blockId
   const target = index.nodesById.get(id)
-  if (!target) return { buffer, warning: `${op.type} skipped: block not found (${id})` }
+  if (!target) throw new Error(`${op.type} target not found: ${id}`)
   const beforeText = extractBlockText(index, id)
   if (op.type === 'replace_block') {
     const parent = target.node.parentNode
@@ -555,10 +555,11 @@ const applyReplaceText = async (buffer: Buffer, op: Extract<DocxOp, { type: 'rep
         afterText: node.node.textContent || ''
       })
   })
+  if (changedBlocks.length === 0) throw new Error(`replace_text not found: ${op.query}`)
   return {
     buffer: await writeDocumentXml(bundle.zip, bundle.documentDom),
     changedBlocks,
-    warnings: changedBlocks.length ? [] : [`replace_text not found: ${op.query}`]
+    warnings: []
   }
 }
 
@@ -623,10 +624,11 @@ const applyStyle = async (buffer: Buffer, op: Extract<DocxOp, { type: 'style' }>
     const beforeText = extractBlockText(index, blockId)
     changedBlocks.push({ action: 'style', blockId, beforeText, afterText: beforeText })
   }
+  if (changedBlocks.length === 0) throw new Error('style target text not found')
   return {
     buffer: await writeDocumentXml(bundle.zip, bundle.documentDom),
     changedBlocks,
-    warnings: changedBlocks.length ? [] : ['style target text not found']
+    warnings: []
   }
 }
 

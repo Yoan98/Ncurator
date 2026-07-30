@@ -226,8 +226,8 @@ describe('ai human mock-llm backend', () => {
                     actions: [
                       {
                         type: 'insert_blocks',
-                        anchorBlockId,
-                        position: 'after',
+                        location: { blockId: anchorBlockId, position: 'after' },
+
                         blocks: [
                           docxParagraphNode('补充说明：反走样通过平滑边缘像素来减轻锯齿感。')
                         ]
@@ -271,8 +271,8 @@ describe('ai human mock-llm backend', () => {
                     actions: [
                       {
                         type: 'insert_blocks',
-                        anchorBlockId,
-                        position: 'after',
+                        location: { blockId: anchorBlockId, position: 'after' },
+
                         blocks: [
                           docxTableNode([
                             ['反走样', '过拟合'],

@@ -1,6 +1,7 @@
 import type JSZip from 'jszip'
 import type {
   DocxChangedBlock,
+  DocxBlockWrapper,
   DocxDetailedBlock,
   DocxLayoutMode,
   DocxOpenMeta,
@@ -14,6 +15,7 @@ export type IndexedNode =
       blockId: string
       blockIndex: number
       layoutMode: DocxLayoutMode
+      wrapperPath: DocxBlockWrapper[]
       node: Element
     }
   | {
@@ -21,6 +23,7 @@ export type IndexedNode =
       blockId: string
       blockIndex: number
       layoutMode: DocxLayoutMode
+      wrapperPath: DocxBlockWrapper[]
       node: Element
     }
   | {
@@ -29,6 +32,7 @@ export type IndexedNode =
       tableBlockId: string
       blockIndex: number
       layoutMode: DocxLayoutMode
+      wrapperPath: DocxBlockWrapper[]
       row: number
       col: number
       node: Element

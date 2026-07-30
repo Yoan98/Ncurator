@@ -32,7 +32,7 @@ describe('ai tool ppt visual backend', () => {
           actions: [
             {
               type: 'insert_slide',
-              position: 'after',
+
               html: `<section data-ppt-slide style="position:relative;width:1920px;height:1080px;background:#F7F8FA">
                   <img data-ppt-element="image" id="sample" src="${pathToFileURL(imagePath).href}" style="position:absolute;left:1700px;top:72px;width:80px;height:80px;object-fit:contain" />
                   <div data-ppt-element="shape" id="band" style="position:absolute;left:96px;top:72px;width:1728px;height:168px;background:#17324D;border-radius:18px"></div>
@@ -42,7 +42,7 @@ describe('ai tool ppt visual backend', () => {
             },
             {
               type: 'insert_slide',
-              position: 'after',
+
               html: `<section data-ppt-slide style="position:relative;width:1920px;height:1080px;background:#FFFFFF">
                   <img data-ppt-element="image" id="remote" src="http://127.0.0.1:1/missing.png" style="position:absolute;left:120px;top:120px;width:320px;height:180px;object-fit:contain" />
                   <h1 data-ppt-element="text" id="remote-title" style="position:absolute;left:520px;top:120px;width:1200px;height:100px;color:#111827;font-size:72px">远程图片失败也继续生成</h1>
@@ -57,8 +57,8 @@ describe('ai tool ppt visual backend', () => {
           actions: [
             {
               type: 'insert_slide',
-              position: 'before',
-              anchorSlideId: createdSlides[0]!.slideId,
+
+              location: { slideId: createdSlides[0]!.slideId, position: 'before' },
               html: `<section data-ppt-slide style="position:relative;width:1920px;height:1080px;background:#FFFFFF">
                 <div data-ppt-element="shape" id="second-band" style="position:absolute;left:120px;top:120px;width:1680px;height:180px;background:#17324D"></div>
                 <h2 data-ppt-element="text" id="second-title" style="position:absolute;left:160px;top:155px;width:1400px;height:100px;color:#FFFFFF;font-size:72px">第二页可以在独立调用中追加</h2>
@@ -75,8 +75,8 @@ describe('ai tool ppt visual backend', () => {
             {
               type: 'move_slide',
               slideId: createdSlides[1]!.slideId,
-              position: 'before',
-              anchorSlideId: createdSlides[0]!.slideId
+
+              location: { slideId: createdSlides[0]!.slideId, position: 'before' }
             }
           ]
         })
@@ -86,8 +86,8 @@ describe('ai tool ppt visual backend', () => {
             {
               type: 'duplicate_slide',
               slideId: createdSlides[0]!.slideId,
-              position: 'after',
-              anchorSlideId: createdSlides[0]!.slideId
+
+              location: { slideId: createdSlides[0]!.slideId, position: 'after' }
             }
           ]
         })
@@ -104,12 +104,12 @@ describe('ai tool ppt visual backend', () => {
           actions: [
             {
               type: 'insert_slide',
-              position: 'after',
+
               html: '<section data-ppt-slide style="width:1920px;height:1080px"><h1 data-ppt-element="text" style="position:absolute;left:100px;top:100px;width:800px;height:100px;font-size:72px">有效页面</h1></section>'
             },
             {
               type: 'insert_slide',
-              position: 'after',
+
               html: '<section><h1>无效页面</h1></section>'
             }
           ]

@@ -40,7 +40,7 @@ describe('ai tool docx backend', () => {
             actions: [
               {
                 type: 'insert_blocks',
-                position: 'after',
+
                 blocks: [
                   docxHeadingNode(1, '深度学习与图形学复习总结'),
                   docxParagraphNode('过拟合：训练时间过久时容易出现。'),

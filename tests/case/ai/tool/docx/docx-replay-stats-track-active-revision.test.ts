@@ -38,8 +38,8 @@ describe('ai tool docx backend', () => {
             actions: [
               {
                 type: 'insert_blocks',
-                anchorBlockId,
-                position: 'after',
+                location: { blockId: anchorBlockId, position: 'after' },
+
                 blocks: [docxParagraphNode('新增段落')]
               }
             ]

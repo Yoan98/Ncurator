@@ -16,7 +16,7 @@ describe('ai unit tool call schema', () => {
           actions: [
             {
               type: 'insert_blocks',
-              position: 'after',
+              location: { blockId: 'b:1', position: 'after' },
               blocks: [
                 {
                   type: 'paragraph',
@@ -40,7 +40,7 @@ describe('ai unit tool call schema', () => {
           actions: [
             {
               type: 'insert_blocks',
-              position: 'after',
+
               blocks: [
                 {
                   type: 'paragraph',

@@ -35,20 +35,26 @@ const DOCX_NODE_WHITELIST: NestedWhitelistConfig = {
   target: true,
   anchor: true,
   altText: true,
+  tag: true,
+  instruction: true,
+  tableBlockId: true,
+  visuals: {
+    count: true,
+    kinds: true
+  },
   row: true,
-  col: true,
-  rows: true,
-  cols: true
+  col: true
 }
 DOCX_NODE_WHITELIST.children = DOCX_NODE_WHITELIST
 const DOCX_BLOCK_WHITELIST = DOCX_NODE_WHITELIST
 
 const DOCX_WRITE_RESULT_WHITELIST: NestedWhitelistConfig = {
   sourcePath: true,
-  warnings: true,
   postWriteReadback: {
     regions: {
+      fromBlockId: true,
       fromBlockIndex: true,
+      toBlockId: true,
       toBlockIndex: true,
       blocks: DOCX_BLOCK_WHITELIST
     }
@@ -120,6 +126,7 @@ const FALLBACK_TOOL_HISTORY_WHITELIST: NestedWhitelistConfig = {
 const VISUAL_READ_RESULT_WHITELIST: NestedWhitelistConfig = {
   sourcePath: true,
   results: {
+    visualId: true,
     index: true,
     text: true,
     error: true
@@ -266,8 +273,6 @@ const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
   docx_read_blocks: {
     sourcePath: true,
     currentRevisionRef: true,
-    fromBlockIndex: true,
-    toBlockIndex: true,
     blocks: DOCX_BLOCK_WHITELIST
   },
   docx_read_visuals: VISUAL_READ_RESULT_WHITELIST,

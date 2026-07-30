@@ -92,15 +92,13 @@ describe('ai tool docx backend', () => {
         runtime.assertThat(
           result.searchAfter.matches.length === 1 &&
             result.readAfter.blocks.length === 1 &&
-            result.readAfter.blocks[0]?.blockIndex === result.readBefore.blocks[0]?.blockIndex &&
-            result.applied.warnings.length === 0,
+            result.readAfter.blocks[0]?.blockIndex === result.readBefore.blocks[0]?.blockIndex,
           {
             name: 'minimal-edit-flow-remains-readable-after-edit',
             message: '修改后应能继续被 search 消费，并暴露稳定的结构位置事实。',
             data: {
               searchAfter: result.searchAfter.matches,
-              readAfter: result.readAfter.blocks,
-              warnings: result.applied.warnings
+              readAfter: result.readAfter.blocks
             }
           }
         )

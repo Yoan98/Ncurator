@@ -25,6 +25,7 @@
 - `WB-EXCEL-001-AC1`、`WB-EXCEL-001-AC2`、`WB-EXCEL-001-AC3`、`WB-EXCEL-001-AC4`、`WB-EXCEL-001-AC6`、`WB-EXCEL-001-AC7` 的工具输入输出、完整编辑操作、原子失败、冲突、只读格式、默认 Sheet 和 Sheet 严格校验由 AI tool 回归承担；`WB-EXCEL-002` 的完整 XLSX diff 语义也由 AI tool 解析 diff 文件校验。Workbench 的 Excel apply case 负责真实模型选用工具、正式文件、修改入口、只读单网格预览和回退闭环，不重复枚举底层操作。
 - docx、ppt、pdf 也按同一分层：格式专用工具的读写、边界、格式保真和 diff artifact 语义放在 AI tool；DOCX tool 必须覆盖已有表格的单元格内容与格式净变化、精确红绿标记、计数和非空回读；其中 PPT tool 必须完整覆盖 baseline 到最终状态的页面/元素净变化、自然位移、零净变化、lineage、v4 schema 和准确计数。Workbench e2e 只验证真实用户流程、现有预览入口、红绿页面标记、`+N/-N`、差异面板交互和回退，不重复枚举底层元素组合。PDF 当前是只读工具，没有 Workbench apply diff 语义。
 - DOCX 工具结果和历史结果按递归 children 树展示，Workbench 必须能显示 visualId、visual kind、nodeId 和统一 style action，不再读取旧 runs/cells/paragraphs history shape。`docx_read_visuals` 使用与 PDF/PPT 视觉读取一致的结果展示。
+- Workbench 历史只展示白名单内的必要 DOCX 字段；AI 成功结果不展示内部 `changedBlocks/createdBlocks/warnings`。DOCX/PPT 编辑事件使用新的可选 `location` 结构，旧定位字段不再兼容。
 
 ## 3. Suite 设计
 

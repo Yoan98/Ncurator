@@ -1,0 +1,38 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`ai unit tool input schema renderer > renders every registered Human tool without anonymous definitions 1`] = `
+{
+  "browser_use": 321,
+  "docx_edit": 8321,
+  "docx_read_blocks": 263,
+  "docx_read_outline": 319,
+  "docx_read_visuals": 146,
+  "docx_search": 155,
+  "excel_edit": 1837,
+  "excel_read_cells": 126,
+  "excel_read_outline": 35,
+  "excel_search": 156,
+  "image_analyze": 63,
+  "image_generate": 129,
+  "kb_list_documents": 153,
+  "kb_search": 184,
+  "pdf_inspect": 35,
+  "pdf_read_pages": 298,
+  "pdf_read_visuals": 168,
+  "pdf_search": 262,
+  "ppt_edit": 4611,
+  "ppt_read_outline": 319,
+  "ppt_read_slides": 283,
+  "ppt_read_visuals": 168,
+  "ppt_search": 125,
+  "terminal_read": 96,
+  "terminal_run": 107,
+  "terminal_stop": 60,
+  "text_file_edit": 946,
+  "text_file_read": 292,
+  "wait_for_user_takeover": 46,
+  "wait_time": 42,
+  "web_crawl": 56,
+  "web_search": 30,
+}
+`;

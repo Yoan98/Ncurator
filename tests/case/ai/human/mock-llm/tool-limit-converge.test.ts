@@ -1,11 +1,7 @@
 import { describe, it } from 'vitest'
 import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
-import {
-  buildCompleteTaskDecision,
-  buildToolDecision,
-  filterAiRunEventsByType
-} from '../testUtils'
+import { buildCompleteTaskDecision, buildToolDecision, filterAiRunEventsByType } from '../testUtils'
 
 const isWindows = process.platform === 'win32'
 

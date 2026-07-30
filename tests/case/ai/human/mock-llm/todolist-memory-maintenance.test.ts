@@ -49,8 +49,7 @@ describe('ai human mock-llm backend', () => {
               },
               ({ user }) => {
                 secondBrainSeesTodolist =
-                  user.includes('[todo] 确认 A 事项') &&
-                  user.includes('[todo] 确认 B 事项')
+                  user.includes('[todo] 确认 A 事项') && user.includes('[todo] 确认 B 事项')
                 return {
                   thought: {
                     next: '故意提前收口，验证仍有 todo 时会被打回。',

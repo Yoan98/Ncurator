@@ -68,8 +68,8 @@ describe('ai tool docx backend', () => {
             actions: [
               {
                 type: 'insert_blocks',
-                position: 'after',
-                anchorBlockId,
+
+                location: { blockId: anchorBlockId, position: 'after' },
                 blocks: [docxParagraphNode('Extra explanation paragraph.')]
               }
             ]
@@ -80,8 +80,8 @@ describe('ai tool docx backend', () => {
             actions: [
               {
                 type: 'insert_blocks',
-                position: 'after',
-                anchorBlockId: paragraphBlockId,
+
+                location: { blockId: paragraphBlockId, position: 'after' },
                 blocks: [docxTableNode([['反走样', '过拟合']])]
               }
             ]

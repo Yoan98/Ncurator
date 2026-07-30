@@ -9,8 +9,40 @@ import {
 import { readParagraphStyle } from '../../../../src/main/services/ai/human/tools/docx/adapters/ooxml/semanticTree'
 import { handleDocxWorkerRequest } from '../../../../src/main/services/ai/human/tools/docx/worker/docxWorker'
 import { createReplaySnapshot } from '../../../../src/main/services/ai/human/tools/docx/review/replayTree'
+import { projectDocxReadBlocks } from '../../../../src/main/services/ai/human/tools/docx/publicReadTree'
 
 describe('docx recursive semantic tree visuals', () => {
+  it('flattens block wrappers for outline and restores only matched wrapper paths for read', () => {
+    const xml = `
+      <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006">
+        <w:body>
+          <w:sdt><w:sdtPr><w:tag w:val="scope"/></w:sdtPr><w:sdtContent>
+            <w:p><w:r><w:t>A</w:t></w:r></w:p>
+            <w:ins><w:p><w:r><w:t>B</w:t></w:r></w:p></w:ins>
+          </w:sdtContent></w:sdt>
+          <w:del><w:p><w:r><w:delText>deleted</w:delText></w:r></w:p></w:del>
+          <mc:AlternateContent>
+            <mc:Choice Requires="unsupported"><w:p><w:r><w:t>wrong</w:t></w:r></w:p></mc:Choice>
+            <mc:Fallback><w:p><w:r><w:t>C</w:t></w:r></w:p></mc:Fallback>
+          </mc:AlternateContent>
+        </w:body>
+      </w:document>`
+    const index = buildBlockIndex(new DOMParser().parseFromString(xml, 'application/xml'))
+
+    expect(
+      index.outline.filter((block) => block.type !== 'table_cell').map((block) => block.text)
+    ).toEqual(['A', 'B', 'C'])
+    expect(index.bodyBlockCount).toBe(3)
+    expect(projectDocxReadBlocks([index.detailByBlockId.get('b:1')!])).toMatchObject([
+      {
+        type: 'content_control',
+        tag: 'scope',
+        children: [{ type: 'revision', kind: 'insert', children: [{ blockId: 'b:1' }] }]
+      }
+    ])
+  })
+
   it('omits absent direct paragraph style attributes instead of returning zeroes', () => {
     const xml = `
       <w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">

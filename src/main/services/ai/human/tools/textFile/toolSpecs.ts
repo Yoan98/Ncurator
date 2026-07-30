@@ -12,6 +12,10 @@ const textFilePathSchema = z
     message:
       'text_file tools only support UTF-8 plain text; DOCX, PPT/PPTX, PDF, XLS/XLSX and other structured documents are not supported'
   })
+  .meta({
+    'x-constraint':
+      'text_file tools only support UTF-8 plain text; DOCX, PPT/PPTX, PDF, XLS/XLSX and other structured documents are not supported'
+  })
 
 export const TEXT_FILE_READ_SCHEMA = z.object({
   sourcePath: textFilePathSchema,

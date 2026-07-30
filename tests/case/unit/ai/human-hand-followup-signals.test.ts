@@ -90,12 +90,14 @@ describe('ai unit hand followup signals', () => {
           toolName: 'docx_edit',
           args: {
             sourcePath: 'graphics.docx',
-            actions: [{
-              type: 'insert_blocks',
-              position: 'after',
-              anchorBlockId: 'b:26',
-              blocks: [{ type: 'table', rows: [['方法', '说明']] }]
-            }]
+            actions: [
+              {
+                type: 'insert_blocks',
+
+                location: { blockId: 'b:26', position: 'after' },
+                blocks: [{ type: 'table', rows: [['方法', '说明']] }]
+              }
+            ]
           }
         }
       ],
@@ -129,12 +131,14 @@ describe('ai unit hand followup signals', () => {
           toolName: 'docx_edit',
           args: {
             sourcePath: 'graphics.docx',
-            actions: [{
-              type: 'insert_blocks',
-              position: 'after',
-              anchorBlockId: 'b:26',
-              blocks: [{ type: 'paragraph', text: '补充说明' }]
-            }]
+            actions: [
+              {
+                type: 'insert_blocks',
+
+                location: { blockId: 'b:26', position: 'after' },
+                blocks: [{ type: 'paragraph', text: '补充说明' }]
+              }
+            ]
           }
         }
       ],
@@ -143,7 +147,8 @@ describe('ai unit hand followup signals', () => {
           toolName: 'docx_edit',
           ok: false,
           data: {
-            error: '当前命中复杂定位排版区域，暂不支持自动编辑，以避免预览修订和版式叠加导致错位；你可以手动按建议内容调整该处。'
+            error:
+              '当前命中复杂定位排版区域，暂不支持自动编辑，以避免预览修订和版式叠加导致错位；你可以手动按建议内容调整该处。'
           }
         }
       ]
@@ -155,7 +160,8 @@ describe('ai unit hand followup signals', () => {
         toolName: 'docx_edit',
         sourcePath: 'graphics.docx',
         action: 'insert_blocks',
-        error: '当前命中复杂定位排版区域，暂不支持自动编辑，以避免预览修订和版式叠加导致错位；你可以手动按建议内容调整该处。'
+        error:
+          '当前命中复杂定位排版区域，暂不支持自动编辑，以避免预览修订和版式叠加导致错位；你可以手动按建议内容调整该处。'
       }
     })
     expect(signals.deliveryGuidance).toBeUndefined()
@@ -168,12 +174,14 @@ describe('ai unit hand followup signals', () => {
           toolName: 'docx_edit',
           args: {
             sourcePath: 'graphics.docx',
-            actions: [{
-              type: 'insert_blocks',
-              position: 'after',
-              anchorBlockId: 'b:26',
-              blocks: [{ type: 'paragraph', text: '补充说明' }]
-            }]
+            actions: [
+              {
+                type: 'insert_blocks',
+
+                location: { blockId: 'b:26', position: 'after' },
+                blocks: [{ type: 'paragraph', text: '补充说明' }]
+              }
+            ]
           }
         }
       ],
@@ -182,13 +190,15 @@ describe('ai unit hand followup signals', () => {
           toolName: 'docx_edit',
           ok: false,
           data: {
-            error: '当前命中复杂定位排版区域，暂不支持自动编辑，以避免预览修订和版式叠加导致错位；你可以手动按建议内容调整该处。',
+            error:
+              '当前命中复杂定位排版区域，暂不支持自动编辑，以避免预览修订和版式叠加导致错位；你可以手动按建议内容调整该处。',
             decisionHint: {
               code: 'hand_docx_positioned_write_blocked',
               detail: {
                 toolName: 'docx_edit',
                 sourcePath: 'graphics.docx',
-                error: '当前命中复杂定位排版区域：包含“达到反走样。”的区域，暂不支持自动编辑，以避免预览修订和版式叠加导致错位；你可以手动按建议内容调整该处。'
+                error:
+                  '当前命中复杂定位排版区域：包含“达到反走样。”的区域，暂不支持自动编辑，以避免预览修订和版式叠加导致错位；你可以手动按建议内容调整该处。'
               }
             }
           }
@@ -201,7 +211,8 @@ describe('ai unit hand followup signals', () => {
       detail: {
         toolName: 'docx_edit',
         sourcePath: 'graphics.docx',
-        error: '当前命中复杂定位排版区域：包含“达到反走样。”的区域，暂不支持自动编辑，以避免预览修订和版式叠加导致错位；你可以手动按建议内容调整该处。'
+        error:
+          '当前命中复杂定位排版区域：包含“达到反走样。”的区域，暂不支持自动编辑，以避免预览修订和版式叠加导致错位；你可以手动按建议内容调整该处。'
       }
     })
     expect(signals.deliveryGuidance).toBeUndefined()

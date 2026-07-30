@@ -159,7 +159,8 @@ describe('ai tool pdf backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['pdf'],
-      description: '验证 PDF 页面视觉读取会返回结构化识别结果，且不修改源 PDF、不产生普通 artifact。',
+      description:
+        '验证 PDF 页面视觉读取会返回结构化识别结果，且不修改源 PDF、不产生普通 artifact。',
       fixtures: [PDF_FIXTURE],
       runMode: 'single',
       execute: async (runtime) => {

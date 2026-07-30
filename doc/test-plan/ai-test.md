@@ -146,7 +146,7 @@ AI unit / 辅助测试目录：
 - 测试类型：`backend`
 - What：对不存在的路径执行 `docx_edit(insert_blocks)` 后，docx 能立刻进入 `outline / read / edit` 主链。
 - Why：cross-source summary 这类新建 Word 文件的场景，底层必须守住“路径不存在即创建”契约。
-- How：真实执行 `docx_edit(insert_blocks, position=after, 无锚点) -> docx_read_outline -> docx_read_blocks -> docx_edit(insert_blocks) -> docx_search`。
+- How：真实执行 `docx_edit(insert_blocks, 无 location) -> docx_read_outline -> docx_read_blocks -> docx_edit(insert_blocks) -> docx_search`。
 - Oracle：结果返回稳定 `sourcePath / postWriteReadback`；工具成功后目标路径立即存在且可被继续读取；后续编辑会生成新的可读状态，新内容可继续被搜索命中。
 - Not：不验证 human 是否会自主选择这条创建链路。
 
@@ -155,8 +155,8 @@ AI unit / 辅助测试目录：
 - 测试类型：`backend`
 - What：`docx_edit` 根据 `sourcePath` 是否存在自动选择创建或编辑。
 - Why：删除独立创建 Action 后，已有文件必须直接进入安全的增量编辑流程。
-- How：先写入一份真实 docx，再在同一次调用中执行不带锚点的 `insert_blocks(after)` 和 `insert_blocks(before)`。
-- Oracle：原内容保留，`before` 内容位于文档开头、`after` 内容位于文档末尾；当前 run 建立 docx session。
+- How：先写入一份真实 docx，再在同一次调用中执行带首块 `location(before)` 的插入和不带 `location` 的末尾追加。
+- Oracle：原内容保留，显式 `before` 内容位于文档开头，无 `location` 内容位于文档末尾；当前 run 建立 docx session。
 - Not：不验证 UI 层如何展示报错。
 
 ##### `docx-create-with-content-direct-applies`
@@ -164,7 +164,7 @@ AI unit / 辅助测试目录：
 - 测试类型：`backend`
 - What：仅对新路径执行一次无锚点 `docx_edit(insert_blocks)` 也会立即创建目标 docx，并在 run 收尾生成 apply record。
 - Why：真实模型很可能一次写完新文档内容，这条能力必须由回归测试保护。
-- How：真实执行 `docx_edit(insert_blocks, position=after, 无锚点)` 并直接 `applyDocxRunEdits`。
+- How：真实执行 `docx_edit(insert_blocks, 无 location)` 并直接 `applyDocxRunEdits`。
 - Oracle：生成 `DocxApplyRecord(operation=created,status=applied)` 并包含 diff 预览 artifact 路径；目标文件立即存在；最终 artifacts 包含携带 `applyId` 的 docx file artifact。
 - Not：不验证 `human` 是否会自然选择一次创建完整文档。
 
@@ -327,7 +327,7 @@ AI unit / 辅助测试目录：
 - What：`docx_edit(insert_blocks)` 在同一 anchor 后插入多条段落与表格时保持输入顺序。
 - Why：结构插入顺序一旦漂移，后续 AI 读回确认和用户可见文档都会出现错位。
 - How：在段落 A 后一次插入 `P1 / P2 / Table / P3`，再读取完整 outline。
-- Oracle：最终顺序稳定为 `A / P1 / P2 / Table / P3 / B`，且返回 `createdBlocks` 与 `postWriteReadback`。
+- Oracle：最终顺序稳定为 `A / P1 / P2 / Table / P3 / B`；内部 raw result 的 `createdBlocks` 与面向 AI 的 `postWriteReadback` 均正确。
 - Not：不验证多 action 串行插入；该场景由 `docx-edit-serial-multiple-inserts-preserve-created-blocks` 覆盖。
 
 ##### `docx-edit-serial-multiple-inserts-preserve-created-blocks`
@@ -336,14 +336,14 @@ AI unit / 辅助测试目录：
 - What：一次 `docx_edit(actions[])` 内多个 `insert_blocks` 会按 action 顺序稳定写入，并分别返回新增 block。
 - Why：批量结构插入需要让后续读回和继续编辑能准确识别每个新增结构。
 - How：在同一文档里先在 A 后插入两个段落，再在 C 前插入段落和表格。
-- Oracle：最终顺序稳定，`createdBlocks` 能对应到本次新增的段落与表格，不误收尾部旧块。
+- Oracle：最终顺序稳定，内部 `createdBlocks` 能对应到本次新增的段落与表格，不误收尾部旧块；该字段不进入 AI 成功输出。
 - Not：不验证 replace/delete 与 insert 的混合漂移；该场景由串行动作稳定性 case 覆盖。
 
 ##### `docx-structural-op-behavior`
 
 - 测试类型：`backend`
 - What：文本替换不会创建新结构，段落/表格对象编辑可以创建独立结构块。
-- Why：docx 工具必须清晰区分文本级修改与结构级修改，否则会污染后续 outline、read 和 createdBlocks 语义。
+- Why：docx 工具必须清晰区分文本级修改与结构级修改，否则会污染后续 outline、read 和内部 createdBlocks 语义。
 - How：先执行 `replace_text`，再执行段落与表格 `insert_blocks`，分别读取 outline。
 - Oracle：`replace_text` 后 body 结构数量不变；对象插入后出现新增 paragraph/table 结构，且 changedBlocks 标记为结构插入。
 - Not：不验证 run 级样式保留。
@@ -944,7 +944,7 @@ AI unit / 辅助测试目录：
 - 测试类型：`backend`
 - What：`docx_edit` 使用不存在或过期 blockId 时失败，并返回统一 `hand_docx_edit_failed`。
 - Why：无效 blockId 是 docx 多轮编辑的高频失败入口，必须稳定进入可恢复 hint，而不是静默写错位置。
-- How：创建真实 docx 后，通过 `hand` 调用 `docx_edit(insert_blocks)`，anchorBlockId 使用不存在的 `b:99`。
+- How：创建真实 docx 后，通过 `hand` 调用 `docx_edit(insert_blocks)`，`location.blockId` 使用不存在的 `b:99`。
 - Oracle：`docx_edit` 返回失败；pending decision hint 为 `hand_docx_edit_failed`，detail 包含 toolName、sourcePath、action 与具体错误。
 - Not：不验证 human 最终交付话术。
 

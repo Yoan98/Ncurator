@@ -38,8 +38,8 @@ describe('ai tool docx backend', () => {
             actions: [
               {
                 type: 'insert_blocks',
-                anchorBlockId,
-                position: 'after',
+                location: { blockId: anchorBlockId, position: 'after' },
+
                 blocks: [docxHeadingNode(2, '第一部分：深度学习')]
               }
             ]

@@ -1,8 +1,5 @@
 import { describe, it } from 'vitest'
-import {
-  createDocxToolHarness,
-  writeTestDocxFile
-} from '../../../../harness/backend/aiToolHarness'
+import { createDocxToolHarness, writeTestDocxFile } from '../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import type { AiRunEvent } from '../../../../../src/shared/types'
 import type { DocxSearchResult } from './testUtils'
@@ -21,7 +18,8 @@ describe('ai tool docx backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['docx'],
-      description: '验证首次自动 open 后的 AI-facing 读取工具不会再先发 must be opened before 的假失败。',
+      description:
+        '验证首次自动 open 后的 AI-facing 读取工具不会再先发 must be opened before 的假失败。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {

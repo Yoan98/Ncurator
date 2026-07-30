@@ -1,13 +1,11 @@
 import { describe, it } from 'vitest'
-import {
-  createDocxToolHarness,
-  writeTestDocxFile
-} from '../../../../harness/backend/aiToolHarness'
+import { createDocxToolHarness, writeTestDocxFile } from '../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import {
   type DocxOutlineResult,
   type DocxReadResult,
-  type DocxSearchResult
+  type DocxSearchResult,
+  readDocxNodeText
 } from './testUtils'
 import { findParagraphBlockIndexByText } from './testUtils'
 
@@ -64,7 +62,8 @@ describe('ai tool docx backend', () => {
           result.outline.blocks.length === 10 &&
             (result.outline.blocks[0]?.blockIndex || 0) >= 70 &&
             result.outline.blocks[9]?.blockIndex === 79 &&
-            findParagraphBlockIndexByText(result.outline.blocks, 'target keyword appears here.') === 72,
+            findParagraphBlockIndexByText(result.outline.blocks, 'target keyword appears here.') ===
+              72,
           {
             name: 'large-document-outline-stays-stable-under-truncation',
             message: '长文档 outline 应返回稳定 block 信息，并正确标记范围结果。',
@@ -76,7 +75,7 @@ describe('ai tool docx backend', () => {
           result.search.matches.length === 1 &&
             result.read.blocks.length === 1 &&
             result.read.blocks[0]?.type === 'paragraph' &&
-            result.read.blocks[0]?.text.includes('target keyword appears here'),
+            readDocxNodeText(result.read.blocks[0]).includes('target keyword appears here'),
           {
             name: 'large-document-search-can-locate-and-read-target-block',
             message: 'docx_search + docx_read_blocks 应能在长文档中稳定定位并精读目标 block。',

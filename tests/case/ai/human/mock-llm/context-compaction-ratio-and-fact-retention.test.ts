@@ -10,10 +10,7 @@ import { createHumanRuntimeCache } from '../../../../../src/main/services/ai/hum
 import { createInitialHumanState } from '../../../../../src/main/services/ai/human/state/schema'
 import type { BackendTestRuntime } from '../../../../harness/backend/test-types'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
-import {
-  buildCompleteTaskDecision,
-  filterAiRunEventsByType
-} from '../testUtils'
+import { buildCompleteTaskDecision, filterAiRunEventsByType } from '../testUtils'
 
 const buildStateWithCompactionHistory = (runtime: BackendTestRuntime) => {
   const baseState = createInitialHumanState({
@@ -393,7 +390,9 @@ describe('ai human mock-llm backend', () => {
         const compactedState = await compactionNode(stateWithHistory)
         const nextState = await brainNode(compactedState)
         const events = runtime.eventCollector.snapshot()
-        const roundsBlock = compactedState.memory.taskRun.compactions.find((block) => block.kind === 'rounds')
+        const roundsBlock = compactedState.memory.taskRun.compactions.find(
+          (block) => block.kind === 'rounds'
+        )
 
         return {
           nextState,
@@ -406,7 +405,10 @@ describe('ai human mock-llm backend', () => {
       },
       assert: async (result, runtime) => {
         const startedEvents = filterAiRunEventsByType(result.events, 'context_compaction_started')
-        const completedEvents = filterAiRunEventsByType(result.events, 'context_compaction_completed')
+        const completedEvents = filterAiRunEventsByType(
+          result.events,
+          'context_compaction_completed'
+        )
         const completedEvent = completedEvents[0]
         const ratio =
           result.roundsBlock?.sourceHistoryTokenEstimate &&
@@ -439,7 +441,8 @@ describe('ai human mock-llm backend', () => {
             result.remainingRounds.length === 1 &&
             result.remainingRounds[0]?.roundId === 6 &&
             result.compactedPromptSeen &&
-            completedEvent?.sourceHistoryTokenEstimate === result.roundsBlock?.sourceHistoryTokenEstimate &&
+            completedEvent?.sourceHistoryTokenEstimate ===
+              result.roundsBlock?.sourceHistoryTokenEstimate &&
             ratio <= 0.45,
           {
             name: 'context-compaction-ratio-and-fact-retention-holds',

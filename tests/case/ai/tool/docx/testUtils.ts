@@ -2,6 +2,7 @@ import type {
   DocxChangedBlock,
   DocxOutlineBlock
 } from '../../../../../src/main/services/ai/human/tools/docx/types'
+import type { DocxPublicReadRootNode } from '../../../../../src/main/services/ai/human/tools/docx/nodeTypes'
 
 export type DocxOutlineResult = {
   sourcePath: string
@@ -63,85 +64,7 @@ export type DocxSearchResult = {
 
 export type DocxReadResult = {
   sourcePath: string
-  fromBlockIndex?: number
-  toBlockIndex?: number
-  blocks: Array<
-    | {
-        blockId: string
-        type: 'paragraph'
-        blockIndex: number
-        previousBlockId?: string
-        nextBlockId?: string
-        text: string
-        style?: string
-        headingLevel?: number
-        runs: Array<{
-          text: string
-          bold?: boolean
-          italic?: boolean
-          underline?: boolean
-          color?: string
-        }>
-      }
-    | {
-        blockId: string
-        type: 'table'
-        blockIndex: number
-        previousBlockId?: string
-        nextBlockId?: string
-        rows: number
-        cols: number
-        text: string
-        cells: Array<{
-          blockId: string
-          row: number
-          col: number
-          paragraphs: Array<{
-            blockId: string
-            type: 'paragraph'
-            blockIndex: number
-            previousBlockId?: string
-            nextBlockId?: string
-            style: string
-            text: string
-            runs: Array<{
-              text: string
-              bold?: boolean
-              italic?: boolean
-              underline?: boolean
-              color?: string
-            }>
-          }>
-        }>
-      }
-    | {
-        blockId: string
-        type: 'table_cell'
-        blockIndex: number
-        previousBlockId?: string
-        nextBlockId?: string
-        tableBlockId: string
-        row: number
-        col: number
-        text: string
-        paragraphs: Array<{
-          blockId: string
-          type: 'paragraph'
-          blockIndex: number
-          previousBlockId?: string
-          nextBlockId?: string
-          style: string
-          text: string
-          runs: Array<{
-            text: string
-            bold?: boolean
-            italic?: boolean
-            underline?: boolean
-            color?: string
-          }>
-        }>
-      }
-  >
+  blocks: DocxPublicReadRootNode[]
 }
 
 export type DocxCreateResult = {
@@ -184,6 +107,13 @@ export type DocxFailureResult = {
     code?: string
     instruction?: string
   }
+}
+
+export const readDocxNodeText = (node: unknown): string => {
+  if (!node || typeof node !== 'object') return ''
+  const value = node as { type?: string; text?: string; children?: unknown[] }
+  if (value.type === 'text') return value.text || ''
+  return (value.children || []).map(readDocxNodeText).join('')
 }
 
 export const findOutlineBlock = (

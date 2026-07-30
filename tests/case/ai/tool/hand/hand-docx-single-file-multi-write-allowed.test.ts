@@ -26,7 +26,13 @@ describe('ai tool hand backend', () => {
         const ctx = runtime.createAiRunContext()
         const cache = createHumanRuntimeCache()
 
-        ensureSkillTools({ cache, ctx, runId: runtime.runId, taskId: runtime.taskId, skillId: 'docx-write' })
+        ensureSkillTools({
+          cache,
+          ctx,
+          runId: runtime.runId,
+          taskId: runtime.taskId,
+          skillId: 'docx-write'
+        })
 
         const handNode = createHandNode({ ctx, cache })
         const state = await handNode({
@@ -53,22 +59,26 @@ describe('ai tool hand backend', () => {
                     toolName: 'docx_edit',
                     args: {
                       sourcePath: 'same-file-multi-write.docx',
-                      actions: [{
-                        type: 'replace_text',
-                        query: 'Alpha TODO',
-                        replace: 'Alpha done'
-                      }]
+                      actions: [
+                        {
+                          type: 'replace_text',
+                          query: 'Alpha TODO',
+                          replace: 'Alpha done'
+                        }
+                      ]
                     }
                   },
                   {
                     toolName: 'docx_edit',
                     args: {
                       sourcePath: 'same-file-multi-write.docx',
-                      actions: [{
-                        type: 'replace_text',
-                        query: 'Beta TODO',
-                        replace: 'Beta done'
-                      }]
+                      actions: [
+                        {
+                          type: 'replace_text',
+                          query: 'Beta TODO',
+                          replace: 'Beta done'
+                        }
+                      ]
                     }
                   }
                 ]

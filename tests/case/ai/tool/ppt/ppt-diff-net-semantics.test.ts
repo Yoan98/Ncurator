@@ -42,7 +42,7 @@ const seedDeck = async (
   })
   await runtime.edit({
     sourcePath,
-    actions: htmlSlides.map((html) => ({ type: 'insert_slide', position: 'after', html }))
+    actions: htmlSlides.map((html) => ({ type: 'insert_slide', html }))
   })
 }
 
@@ -119,8 +119,8 @@ describe('ai tool ppt net diff backend', () => {
           actions: [
             {
               type: 'insert_slide',
-              position: 'after',
-              anchorSlideId: chainId,
+
+              location: { slideId: chainId, position: 'after' },
               html: slideHtml('New Draft')
             }
           ]
@@ -143,8 +143,8 @@ describe('ai tool ppt net diff backend', () => {
           actions: [
             {
               type: 'insert_slide',
-              position: 'after',
-              anchorSlideId: insertedId,
+
+              location: { slideId: insertedId, position: 'after' },
               html: slideHtml('Temporary Slide')
             }
           ]
@@ -155,7 +155,11 @@ describe('ai tool ppt net diff backend', () => {
           sourcePath: 'slide-net.pptx',
           actions: [
             { type: 'delete_slides', slideIds: [temporaryId, deleteMiddleId] },
-            { type: 'move_slide', slideId: moveId, position: 'before', anchorSlideId: keepId }
+            {
+              type: 'move_slide',
+              slideId: moveId,
+              location: { slideId: keepId, position: 'before' }
+            }
           ]
         })
 
@@ -293,14 +297,14 @@ describe('ai tool ppt net diff backend', () => {
             {
               type: 'move_slide',
               slideId: zeroTailId,
-              position: 'before',
-              anchorSlideId: zeroMiddleId
+
+              location: { slideId: zeroMiddleId, position: 'before' }
             },
             {
               type: 'move_slide',
               slideId: zeroTailId,
-              position: 'after',
-              anchorSlideId: zeroMiddleId
+
+              location: { slideId: zeroMiddleId, position: 'after' }
             }
           ]
         })
@@ -309,8 +313,8 @@ describe('ai tool ppt net diff backend', () => {
           actions: [
             {
               type: 'insert_slide',
-              position: 'after',
-              anchorSlideId: zeroId,
+
+              location: { slideId: zeroId, position: 'after' },
               html: slideHtml('Zero Temporary')
             }
           ]

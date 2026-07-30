@@ -36,6 +36,7 @@ import {
   createReplaySnapshot
 } from './review/replayTree'
 import { isLegacyDocPath, isReadableWordPath } from './legacyDocPolicy'
+import { projectDocxReadBlocks } from './publicReadTree'
 
 type FailedWorkerResponse = Extract<DocxWorkerResponse, { ok: false }>
 
@@ -1068,6 +1069,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
 
     return {
       blockCount: snapshot.blocks.length,
+      bodyBlockCount: snapshot.blocks.length,
       paragraphCount,
       tableCount,
       imageCount: 0,
@@ -1527,6 +1529,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
       },
       stats: params.stats || {
         blockCount: 0,
+        bodyBlockCount: 0,
         paragraphCount: 0,
         tableCount: 0,
         imageCount: 0,
@@ -1810,7 +1813,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
         fromBlockIndex: region.fromBlockIndex,
         toBlockId: endBlockId || '',
         toBlockIndex: region.toBlockIndex,
-        blocks: response.payload.blocks
+        blocks: projectDocxReadBlocks(response.payload.blocks)
       })
     }
     return {

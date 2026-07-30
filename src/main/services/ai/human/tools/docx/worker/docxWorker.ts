@@ -179,7 +179,10 @@ const getDetailedBlocksByBlockIndexRange = (
   const start = Math.max(0, Math.min(fromBlockIndex, toBlockIndex))
   const end = Math.max(0, Math.max(fromBlockIndex, toBlockIndex))
   const blockIds = snapshot.index.outline
-    .filter((block) => block.blockIndex >= start && block.blockIndex <= end)
+    .filter(
+      (block) =>
+        block.type !== 'table_cell' && block.blockIndex >= start && block.blockIndex <= end
+    )
     .map((block) => toPublicOutlineBlock(snapshot.identity, block).blockId)
   return getDetailedBlocksByIds(snapshot, blockIds)
 }

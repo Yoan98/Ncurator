@@ -17,7 +17,8 @@ describe('ai human mock-llm backend', () => {
       domain: 'ai',
       suite: 'human',
       groups: ['mock-llm'],
-      description: '验证真实 human graph 在 mock-llm 模式下能稳定走通 brain -> learning -> hand -> mouth 主链路。',
+      description:
+        '验证真实 human graph 在 mock-llm 模式下能稳定走通 brain -> learning -> hand -> mouth 主链路。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -104,11 +105,11 @@ describe('ai human mock-llm backend', () => {
         )
 
         runtime.assertThat(
-          result.mouthPrompt.includes('<delivery_guidance>') &&
-            result.mouthPrompt.includes('none'),
+          result.mouthPrompt.includes('<delivery_guidance>') && result.mouthPrompt.includes('none'),
           {
             name: 'human-mainline-keeps-empty-delivery-guidance-when-no-hand-guidance',
-            message: '当 hand 未产出 guidance 时，mouth prompt 的 delivery_guidance 区块应保持 none。',
+            message:
+              '当 hand 未产出 guidance 时，mouth prompt 的 delivery_guidance 区块应保持 none。',
             data: {
               mouthPrompt: result.mouthPrompt
             }

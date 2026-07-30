@@ -201,8 +201,12 @@ describe('ai tool image-generation backend', () => {
           cssExternalExists: await exists(
             path.join(runtime.workspaceRoot, 'images', 'css-external.png')
           ),
-          cssImportExists: await exists(path.join(runtime.workspaceRoot, 'images', 'css-import.png')),
-          oversizedExists: await exists(path.join(runtime.workspaceRoot, 'images', 'oversized.png')),
+          cssImportExists: await exists(
+            path.join(runtime.workspaceRoot, 'images', 'css-import.png')
+          ),
+          oversizedExists: await exists(
+            path.join(runtime.workspaceRoot, 'images', 'oversized.png')
+          ),
           outsideExists: await exists(outsidePath),
           recordCount: (await harness.ctx.listFileChangeRecords({ runId: runtime.runId })).length,
           artifactCount: runtime.eventCollector
@@ -213,7 +217,7 @@ describe('ai tool image-generation backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-            result.scriptError.includes('forbidden element') &&
+          result.scriptError.includes('forbidden element') &&
             result.externalError.includes('external resource') &&
             result.cssExternalError.includes('external resource') &&
             result.cssImportError.includes('forbidden CSS import') &&

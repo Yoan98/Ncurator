@@ -26,7 +26,7 @@ describe('ai tool ppt professional editing', () => {
         const sourcePath = 'professional-edit.pptx'
         await harness.invoke<JsonObject>('ppt_edit', {
           sourcePath,
-          actions: [{ type: 'insert_slide', position: 'after', html: baseHtml }]
+          actions: [{ type: 'insert_slide', html: baseHtml }]
         })
         const outline = await harness.invoke<JsonObject>('ppt_read_outline', {
           sourcePath,
@@ -141,8 +141,8 @@ describe('ai tool ppt professional editing', () => {
             {
               type: 'duplicate_slide',
               slideId,
-              position: 'after',
-              anchorSlideId: slideId
+
+              location: { slideId: slideId, position: 'after' }
             }
           ]
         })

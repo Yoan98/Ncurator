@@ -16,7 +16,8 @@ describe('ai human mock-llm backend', () => {
       domain: 'ai',
       suite: 'human',
       groups: ['mock-llm'],
-      description: '验证 duplicate learning 触发真实 decision_hint 后，graph 仍能回到 brain 并继续完成任务。',
+      description:
+        '验证 duplicate learning 触发真实 decision_hint 后，graph 仍能回到 brain 并继续完成任务。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -87,7 +88,8 @@ describe('ai human mock-llm backend', () => {
             toolResults.some((event) => event.toolName === 'terminal_run'),
           {
             name: 'duplicate-learning-decision-hint-recovers',
-            message: 'duplicate learning 应由真实 learning node 产出 decision_hint，并在之后继续完成工具调用。',
+            message:
+              'duplicate learning 应由真实 learning node 产出 decision_hint，并在之后继续完成工具调用。',
             data: {
               decisionHints,
               toolResults: toolResults.map((event) => ({

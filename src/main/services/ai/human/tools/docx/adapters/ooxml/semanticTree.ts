@@ -679,6 +679,7 @@ export const buildParagraphDetail = (input: {
   paragraph: Element
   previousBlockId?: string
   nextBlockId?: string
+  wrapperPath?: DocxDetailedParagraphBlock['wrapperPath']
   relationshipTargets: ReadonlyMap<string, string>
   relationshipTypes: ReadonlyMap<string, string>
   editableNodesById: Map<string, DocxEditableNode>
@@ -692,7 +693,8 @@ export const buildParagraphDetail = (input: {
     blockIndex: input.blockIndex,
     layoutMode: input.layoutMode,
     previousBlockId: input.previousBlockId,
-    nextBlockId: input.nextBlockId
+    nextBlockId: input.nextBlockId,
+    wrapperPath: input.wrapperPath
   }
 }
 
@@ -703,6 +705,7 @@ export const buildTableDetail = (input: {
   table: Element
   previousBlockId?: string
   nextBlockId?: string
+  wrapperPath?: DocxDetailedTableBlock['wrapperPath']
   relationshipTargets: ReadonlyMap<string, string>
   relationshipTypes: ReadonlyMap<string, string>
   editableNodesById: Map<string, DocxEditableNode>
@@ -716,7 +719,8 @@ export const buildTableDetail = (input: {
     blockIndex: input.blockIndex,
     layoutMode: input.layoutMode,
     previousBlockId: input.previousBlockId,
-    nextBlockId: input.nextBlockId
+    nextBlockId: input.nextBlockId,
+    wrapperPath: input.wrapperPath
   }
 }
 

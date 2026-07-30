@@ -32,7 +32,7 @@ describe('ai tool docx backend', () => {
             actions: [
               {
                 type: 'insert_blocks',
-                position: 'after',
+
                 blocks: [
                   docxHeadingNode(1, 'AI Final Report'),
                   docxParagraphNode('AI final paragraph.')

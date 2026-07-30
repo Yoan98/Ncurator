@@ -481,14 +481,17 @@
   - `WB-APPLY-002-AC5` 同一次 AI Run 对同一个 pptx 的多次编辑只生成一条修改记录；PPT Diff 固定比较本 Run 第一次接触文件时的状态和 Run 完成后的最终状态，工具调用只用于识别页面、元素和真实移动，不直接累加操作次数。
   - `WB-APPLY-002-AC6` 创建或修改 `xlsx` 后，正式路径立即包含最终净工作簿并生成一条修改记录；同一次 AI Run 对同一路径连续编辑时保持首次写入前基线，不重复生成记录。
   - `WB-APPLY-002-AC7` `docx_edit`、`ppt_edit` 和 `excel_edit` 统一使用 `sourcePath + actions[]`；目标不存在时由编辑 Action 直接创建，不再提供独立的文档或演示文稿创建 Action。
-  - `WB-APPLY-002-AC8` `docx_edit.insert_blocks` 的 `position` 必填，`anchorBlockId` 可选；无锚点时 `before` 表示文档开头，`after` 表示文档末尾。
-  - `WB-APPLY-002-AC9` DOCX 详细读取使用递归语义树，按真实顺序保留 `paragraph / run / text / tab / break / hyperlink / table / table_row / table_cell / visual` 的归属关系；`paragraph / table / table_cell.text` 只是后代可见文字的派生值，不替代 children。
+  - `WB-APPLY-002-AC8` `docx_edit.insert_blocks` 使用可选 `location:{blockId,position}`；传入时在目标 block 前后插入，不传时统一追加到正文末尾。旧 `position + anchorBlockId` 参数无效。
+  - `WB-APPLY-002-AC9` DOCX 详细读取使用严格递归语义树，按真实顺序保留 `paragraph / run / text / tab / break / hyperlink / content_control / revision / field / table / table_row / table_cell / visual` 的归属关系；详细树中的正文只存在于叶子 `text` 节点，不重复返回 paragraph、table 或 cell 的派生文本和行列统计。
   - `WB-APPLY-002-AC10` DOCX visual 类型固定为 `image / chart / diagram / shape / embedded_object`。详细读取返回 visualId；outline 只在存在视觉内容时返回 count 和 kinds，不展开视觉节点。
   - `WB-APPLY-002-AC11` `docx_read_visuals` 接受 1 至 10 个 visualId 和识别要求，按输入顺序逐项返回识别文字或错误；结果不写入正文搜索索引，`.doc` 不支持视觉读取。
   - `WB-APPLY-002-AC12` `insert_blocks / replace_block / update_table_cell` 使用递归创建树。标题由 paragraph 的 `styleName=Heading1...Heading6` 表达；旧 `{text}`、`heading`、`string[][]` 表格和 `style_text` 参数无效。
   - `WB-APPLY-002-AC13` DOCX 只提供统一 `style` action。它可以按文字匹配、blockId 或 nodeId 修改 run、paragraph、table、row、cell 的直接样式；patch 类型与实际节点不一致时整次编辑失败。
   - `WB-APPLY-002-AC14` `replace_text` 未传 blockIds 时递归处理全部正文和表格单元格，传入时只处理指定 subtree；始终替换范围内全部匹配，可跨相邻 run，但不能跨 paragraph、tab、break 或 visual。
   - `WB-APPLY-002-AC15` 替换或删除 block、更新表格单元格时，如目标后代存在 visual，必须明确传 `allowVisualLoss:true`，否则整次编辑在保存前失败。文本替换和样式修改必须原位保留 visual。
+  - `WB-APPLY-002-AC16` `docx_read_outline` 只返回轻量扁平摘要和必要视觉统计，不返回 wrapper、相邻 block、样式、heading、layout 或写保护字段；解析时必须递归穿过 block-level content control、可见 revision 和 `AlternateContent`，并按真实顺序列出其中 paragraph/table。
+  - `WB-APPLY-002-AC17` `docx_edit` 成功结果只向 AI 返回保存路径和按请求生成的 `postWriteReadback`；`changedBlocks/createdBlocks` 仅供内部 review、replay、事件和测试使用，失败统一返回 error，不返回成功 warning。
+  - `WB-APPLY-002-AC18` 所有 Human 工具的输入结构由 Zod schema 统一渲染；公共类型使用稳定命名定义并只展开一次，同时保留长度、数量、正则、数值和跨字段语义约束，不生成匿名 schema 名称。
   - `WB-APPLY-002-AC7` 生成 PNG、JPEG 或 WebP 图片后，正式路径立即包含可读取图片并生成一条修改记录；同一次 AI Run 对同一路径再次生成时自动更新并保持首次写入前基线。
 
 #### WB-TERMINAL-001 持久终端会话
@@ -547,8 +550,8 @@
   - `WB-PPT-001-AC8` 元素编辑支持文字、位置、样式、图层、复制、删除、新增、图片、表格、图表和公式更新。
   - `WB-PPT-001-AC9` 同一次 `ppt_edit(actions[])` 任一 action 失败时，文件和活动 session 都保持调用前状态。
   - `WB-PPT-001-AC10` `ppt_edit` 返回成功时，其他程序已经可以读取最终 pptx。
-  - `WB-PPT-001-AC11` 不提供 `create_presentation` Action；`insert_slide` 必须提供 `position`，`anchorSlideId` 可选，无锚点时 `before` 插到最前、`after` 追加到最后。
-  - `WB-PPT-001-AC12` `move_slide` 和 `duplicate_slide` 必须同时提供 `slideId`、`position` 和 `anchorSlideId`；移动不能锚定自身，复制可以锚定源页自身；最终至少保留一页。
+  - `WB-PPT-001-AC11` 不提供 `create_presentation` Action；`insert_slide` 使用可选 `location:{slideId,position}`，不传时追加到末尾。
+  - `WB-PPT-001-AC12` `move_slide` 必须提供 `slideId` 和 `location`；`duplicate_slide` 必须提供 `slideId`，可选 `location`，不传时追加到末尾。移动不能锚定自身，复制可以锚定源页自身；旧 `position + anchorSlideId` 参数无效，最终至少保留一页。
 
 #### WB-PPT-002 PPT 单页左右审核模式
 

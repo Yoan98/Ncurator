@@ -34,7 +34,6 @@ describe('ai unit human tool result renderers', () => {
             blockId: 'b:10',
             type: 'paragraph',
             blockIndex: 10,
-            text: '反走样定义',
             children: [
               {
                 type: 'run',
@@ -63,7 +62,6 @@ describe('ai unit human tool result renderers', () => {
                       {
                         nodeId: 'b:11:c1:p1',
                         type: 'paragraph',
-                        text: '多个像素点',
                         children: [
                           {
                             type: 'run',
@@ -83,7 +81,6 @@ describe('ai unit human tool result renderers', () => {
                       {
                         nodeId: 'b:11:c2:p1',
                         type: 'paragraph',
-                        text: '低通滤波',
                         children: [
                           {
                             type: 'run',
@@ -110,6 +107,45 @@ describe('ai unit human tool result renderers', () => {
     expect(rendered).toContain('低通滤波')
   })
 
+  it('renders lightweight DOCX outline positioning and visual summaries', () => {
+    const rendered = renderToolResultDataText({
+      toolName: 'docx_read_outline',
+      data: {
+        sourcePath: 'graphics.docx',
+        totalBlockCount: 12,
+        blocks: [
+          {
+            blockId: 'b:4',
+            type: 'table',
+            blockIndex: 4,
+            rows: 2,
+            cols: 3,
+            text: '视觉方法表',
+            visuals: { count: 2, kinds: ['image', 'chart'] }
+          },
+          {
+            blockId: 'c:4:1:2',
+            type: 'table_cell',
+            blockIndex: 4,
+            tableBlockId: 'b:4',
+            row: 1,
+            col: 2,
+            text: '图表单元格'
+          }
+        ]
+      }
+    })
+
+    expect(rendered).toContain('totalBlockCount=12')
+    expect(rendered).toContain('rows=2')
+    expect(rendered).toContain('cols=3')
+    expect(rendered).toContain('visualCount=2')
+    expect(rendered).toContain('visualKinds=image,chart')
+    expect(rendered).toContain('tableBlockId=b:4')
+    expect(rendered).toContain('row=1')
+    expect(rendered).toContain('col=2')
+  })
+
   it('renders docx_edit post-write readback instead of internal revision fields', () => {
     const rendered = renderToolResultDataText({
       toolName: 'docx_edit',
@@ -129,7 +165,13 @@ describe('ai unit human tool result renderers', () => {
                   blockId: 'b:2',
                   type: 'paragraph',
                   blockIndex: 2,
-                  text: '补充说明'
+                  children: [
+                    {
+                      type: 'run',
+                      nodeId: 'n:readback',
+                      children: [{ type: 'text', text: '补充说明' }]
+                    }
+                  ]
                 }
               ]
             }
@@ -189,5 +231,23 @@ describe('ai unit human tool result renderers', () => {
     expect(searchRendered).toContain('右图属于过度拟合')
     expect(visualRendered).toContain('index=9')
     expect(visualRendered).toContain('Overfit 曲线')
+  })
+
+  it('renders DOCX visual results with visualId', () => {
+    const rendered = renderToolResultDataText({
+      toolName: 'docx_read_visuals',
+      data: {
+        sourcePath: '/workspace/灵感测试.docx',
+        results: [
+          { visualId: 'visual-18', text: '截图展示了文档中的参考界面。' },
+          { visualId: 'visual-19', error: '无法唯一定位渲染元素' }
+        ]
+      }
+    })
+
+    expect(rendered).toContain('visualId=visual-18')
+    expect(rendered).toContain('截图展示了文档中的参考界面')
+    expect(rendered).toContain('visualId=visual-19')
+    expect(rendered).toContain('无法唯一定位渲染元素')
   })
 })

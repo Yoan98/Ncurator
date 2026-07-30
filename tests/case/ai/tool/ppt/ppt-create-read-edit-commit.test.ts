@@ -96,8 +96,8 @@ describe('ai tool ppt backend', () => {
           const created = await harness.invoke<JsonObject>('ppt_edit', {
             sourcePath,
             actions: [
-              { type: 'insert_slide', position: 'after', html: coverHtml },
-              { type: 'insert_slide', position: 'after', html: detailHtml }
+              { type: 'insert_slide', html: coverHtml },
+              { type: 'insert_slide', html: detailHtml }
             ]
           })
           const inserted = created

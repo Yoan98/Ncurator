@@ -15,8 +15,7 @@ describe('ai unit docx write schema contract', () => {
           },
           {
             type: 'insert_blocks',
-            position: 'after',
-            anchorBlockId: 'b:2',
+            location: { blockId: 'b:2', position: 'after' },
             blocks: [
               {
                 type: 'paragraph',
@@ -123,9 +122,26 @@ describe('ai unit docx write schema contract', () => {
         actions: [
           {
             type: 'insert_blocks',
+            location: { blockId: 'b:1', position: 'after' },
+            blocks: [{ type: 'paragraph', text: 'legacy' }]
+          }
+        ]
+      }).success
+    ).toBe(false)
+    expect(
+      docxEditSchema.safeParse({
+        sourcePath: 'a.docx',
+        actions: [
+          {
+            type: 'insert_blocks',
             position: 'after',
             anchorBlockId: 'b:1',
-            blocks: [{ type: 'paragraph', text: 'legacy' }]
+            blocks: [
+              {
+                type: 'paragraph',
+                children: [{ type: 'run', children: [{ type: 'text', text: 'legacy' }] }]
+              }
+            ]
           }
         ]
       }).success

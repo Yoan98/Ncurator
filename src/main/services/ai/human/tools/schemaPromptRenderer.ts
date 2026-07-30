@@ -23,6 +23,33 @@ const indentBlock = (value: string, level: number): string =>
 
 const formatLiteral = (value: unknown): string => JSON.stringify(value)
 
+const renderConstraints = (node: JsonSchemaNode): string => {
+  const entries: Array<[string, unknown]> = [
+    ['minLength', node.minLength],
+    ['maxLength', node.maxLength],
+    ['pattern', node.pattern],
+    ['minimum', node.minimum],
+    ['maximum', node.maximum],
+    ['exclusiveMinimum', node.exclusiveMinimum],
+    ['exclusiveMaximum', node.exclusiveMaximum],
+    ['multipleOf', node.multipleOf],
+    ['minItems', node.minItems],
+    ['maxItems', node.maxItems],
+    ['minProperties', node.minProperties],
+    ['maxProperties', node.maxProperties]
+  ]
+  const rendered = entries
+    .filter(([, value]) => value !== undefined)
+    .map(([key, value]) => `${key}=${formatLiteral(value)}`)
+  return rendered.length > 0 ? `(${rendered.join(', ')})` : ''
+}
+
+const appendSemanticConstraint = (rendered: string, node: JsonSchemaNode): string => {
+  const constraint =
+    typeof node['x-constraint'] === 'string' ? String(node['x-constraint']).trim() : ''
+  return constraint ? `${rendered} (constraint=${formatLiteral(constraint)})` : rendered
+}
+
 const renderUnion = (parts: string[], level: number): string => {
   if (parts.length === 0) return 'unknown'
   if (parts.length === 1) return parts[0]
@@ -79,15 +106,16 @@ const renderArray = (node: JsonSchemaNode, context: RenderContext, level: number
     const tupleItems = node.items
       .filter(isJsonSchemaNode)
       .map((item) => renderSchemaType(item, context, level + 1))
-    return `[${tupleItems.join(', ')}]`
+    return `[${tupleItems.join(', ')}]${renderConstraints(node)}`
   }
 
   const itemSchema = isJsonSchemaNode(node.items) ? node.items : undefined
-  return `Array<${itemSchema ? renderSchemaType(itemSchema, context, level + 1) : 'unknown'}>`
+  return `Array<${itemSchema ? renderSchemaType(itemSchema, context, level + 1) : 'unknown'}>${renderConstraints(node)}`
 }
 
 const renderSchemaType = (node: JsonSchemaNode, context: RenderContext, level: number): string => {
-  const displayType = typeof node['x-display-type'] === 'string' ? String(node['x-display-type']) : ''
+  const displayType =
+    typeof node['x-display-type'] === 'string' ? String(node['x-display-type']) : ''
   if (displayType) return displayType
 
   if (typeof node.$ref === 'string' && node.$ref.startsWith('#/$defs/')) {
@@ -104,12 +132,24 @@ const renderSchemaType = (node: JsonSchemaNode, context: RenderContext, level: n
 
   const anyOf = asJsonSchemaNodeArray(node.anyOf)
   if (anyOf.length > 0) {
-    return renderUnion(anyOf.map((item) => renderSchemaType(item, context, level + 1)), level)
+    return appendSemanticConstraint(
+      renderUnion(
+        anyOf.map((item) => renderSchemaType(item, context, level + 1)),
+        level
+      ),
+      node
+    )
   }
 
   const oneOf = asJsonSchemaNodeArray(node.oneOf)
   if (oneOf.length > 0) {
-    return renderUnion(oneOf.map((item) => renderSchemaType(item, context, level + 1)), level)
+    return appendSemanticConstraint(
+      renderUnion(
+        oneOf.map((item) => renderSchemaType(item, context, level + 1)),
+        level
+      ),
+      node
+    )
   }
 
   const typeValue = node.type
@@ -121,23 +161,29 @@ const renderSchemaType = (node: JsonSchemaNode, context: RenderContext, level: n
   }
 
   if (typeValue === 'object' || isJsonSchemaNode(node.properties)) {
-    return renderObject(node, context, level)
+    return appendSemanticConstraint(renderObject(node, context, level), node)
   }
 
   if (typeValue === 'array') {
-    return renderArray(node, context, level)
+    return appendSemanticConstraint(renderArray(node, context, level), node)
   }
 
   if (typeValue === 'string' || typeValue === 'number' || typeValue === 'integer') {
-    return String(typeValue)
+    return appendSemanticConstraint(`${String(typeValue)}${renderConstraints(node)}`, node)
   }
 
-  if (typeValue === 'boolean') return 'boolean'
-  if (typeValue === 'null') return 'null'
+  if (typeValue === 'boolean') return appendSemanticConstraint('boolean', node)
+  if (typeValue === 'null') return appendSemanticConstraint('null', node)
 
   const allOf = asJsonSchemaNodeArray(node.allOf)
   if (allOf.length > 0) {
-    return renderUnion(allOf.map((item) => renderSchemaType(item, context, level + 1)), level)
+    return appendSemanticConstraint(
+      renderUnion(
+        allOf.map((item) => renderSchemaType(item, context, level + 1)),
+        level
+      ),
+      node
+    )
   }
 
   const description = typeof node.description === 'string' ? node.description.trim() : ''
@@ -177,15 +223,16 @@ const renderArrayCompact = (node: JsonSchemaNode, context: RenderContext): strin
     const tupleItems = node.items
       .filter(isJsonSchemaNode)
       .map((item) => renderSchemaTypeCompact(item, context))
-    return `[${tupleItems.join(', ')}]`
+    return `[${tupleItems.join(', ')}]${renderConstraints(node)}`
   }
 
   const itemSchema = isJsonSchemaNode(node.items) ? node.items : undefined
-  return `Array<${itemSchema ? renderSchemaTypeCompact(itemSchema, context) : 'unknown'}>`
+  return `Array<${itemSchema ? renderSchemaTypeCompact(itemSchema, context) : 'unknown'}>${renderConstraints(node)}`
 }
 
 const renderSchemaTypeCompact = (node: JsonSchemaNode, context: RenderContext): string => {
-  const displayType = typeof node['x-display-type'] === 'string' ? String(node['x-display-type']) : ''
+  const displayType =
+    typeof node['x-display-type'] === 'string' ? String(node['x-display-type']) : ''
   if (displayType) return displayType
 
   if (typeof node.$ref === 'string' && node.$ref.startsWith('#/$defs/')) {
@@ -202,12 +249,18 @@ const renderSchemaTypeCompact = (node: JsonSchemaNode, context: RenderContext): 
 
   const anyOf = asJsonSchemaNodeArray(node.anyOf)
   if (anyOf.length > 0) {
-    return anyOf.map((item) => renderSchemaTypeCompact(item, context)).join(' | ')
+    return appendSemanticConstraint(
+      anyOf.map((item) => renderSchemaTypeCompact(item, context)).join(' | '),
+      node
+    )
   }
 
   const oneOf = asJsonSchemaNodeArray(node.oneOf)
   if (oneOf.length > 0) {
-    return oneOf.map((item) => renderSchemaTypeCompact(item, context)).join(' | ')
+    return appendSemanticConstraint(
+      oneOf.map((item) => renderSchemaTypeCompact(item, context)).join(' | '),
+      node
+    )
   }
 
   const typeValue = node.type
@@ -216,23 +269,26 @@ const renderSchemaTypeCompact = (node: JsonSchemaNode, context: RenderContext): 
   }
 
   if (typeValue === 'object' || isJsonSchemaNode(node.properties)) {
-    return renderObjectCompact(node, context)
+    return appendSemanticConstraint(renderObjectCompact(node, context), node)
   }
 
   if (typeValue === 'array') {
-    return renderArrayCompact(node, context)
+    return appendSemanticConstraint(renderArrayCompact(node, context), node)
   }
 
   if (typeValue === 'string' || typeValue === 'number' || typeValue === 'integer') {
-    return String(typeValue)
+    return appendSemanticConstraint(`${String(typeValue)}${renderConstraints(node)}`, node)
   }
 
-  if (typeValue === 'boolean') return 'boolean'
-  if (typeValue === 'null') return 'null'
+  if (typeValue === 'boolean') return appendSemanticConstraint('boolean', node)
+  if (typeValue === 'null') return appendSemanticConstraint('null', node)
 
   const allOf = asJsonSchemaNodeArray(node.allOf)
   if (allOf.length > 0) {
-    return allOf.map((item) => renderSchemaTypeCompact(item, context)).join(' | ')
+    return appendSemanticConstraint(
+      allOf.map((item) => renderSchemaTypeCompact(item, context)).join(' | '),
+      node
+    )
   }
 
   const description = typeof node.description === 'string' ? node.description.trim() : ''
@@ -312,8 +368,10 @@ const compressBrainHandCallDisplay = (node: JsonSchemaNode): JsonSchemaNode => {
   }
 
   const properties = isJsonSchemaNode(cloned.properties) ? cloned.properties : undefined
-  const actionProperty = properties && isJsonSchemaNode(properties.action) ? properties.action : undefined
-  const callsProperty = properties && isJsonSchemaNode(properties.calls) ? properties.calls : undefined
+  const actionProperty =
+    properties && isJsonSchemaNode(properties.action) ? properties.action : undefined
+  const callsProperty =
+    properties && isJsonSchemaNode(properties.calls) ? properties.calls : undefined
   if (actionProperty?.const === 'hand' && callsProperty) {
     ;(cloned.properties as JsonSchemaNode).calls = {
       type: 'array',
@@ -376,7 +434,10 @@ export const renderToolInputSchemaForPrompt = (
   if (!options?.compact) return renderSchemaShape(schema)
 
   const { rootSchema, definitionBlocks } = buildCompactSchemaRenderOutput(schema)
-  return [rootSchema, ...(definitionBlocks.length > 0 ? [`补充定义：${definitionBlocks.join('；')}`] : [])].join('\n')
+  return [
+    rootSchema,
+    ...(definitionBlocks.length > 0 ? [`补充定义：${definitionBlocks.join('；')}`] : [])
+  ].join('\n')
 }
 
 export const renderToolOutputSchemaForPrompt = (schema: z.ZodType): string =>
@@ -393,5 +454,8 @@ export const renderBrainOutputSchemaForPrompt = (
   const { rootSchema, definitionBlocks } = buildCompactSchemaRenderOutput(schema, {
     brainPromptFriendly: true
   })
-  return [rootSchema, ...(definitionBlocks.length > 0 ? [`补充定义：${definitionBlocks.join('；')}`] : [])].join('\n')
+  return [
+    rootSchema,
+    ...(definitionBlocks.length > 0 ? [`补充定义：${definitionBlocks.join('；')}`] : [])
+  ].join('\n')
 }

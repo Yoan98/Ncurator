@@ -16,7 +16,8 @@ describe('ai human mock-llm backend', () => {
       domain: 'ai',
       suite: 'human',
       groups: ['mock-llm'],
-      description: '验证 mock-llm 模式下 human 的 KB 回答仍通过真实 KB 存储、embedding 与检索代码执行。',
+      description:
+        '验证 mock-llm 模式下 human 的 KB 回答仍通过真实 KB 存储、embedding 与检索代码执行。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -92,10 +93,7 @@ describe('ai human mock-llm backend', () => {
         const kbResult = readLatestToolResultDataFromEvents<{
           items: Array<{ document_id?: string; text: string }>
           total: number
-        }>(
-          toolResults,
-          'kb_search'
-        )
+        }>(toolResults, 'kb_search')
 
         runtime.assertThat(
           result.output.status === 'completed' &&
