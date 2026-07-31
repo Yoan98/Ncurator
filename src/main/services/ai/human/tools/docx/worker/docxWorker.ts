@@ -15,7 +15,7 @@ import {
   loadDocxBundle,
   toOpenStats
 } from '../adapters/ooxml/blockIndex'
-import { validateDocxBuffer } from '../adapters/ooxml/validator'
+import { findNewDocxValidationProblems, validateDocxBuffer } from '../adapters/ooxml/validator'
 import { normalizeDocxSearchText } from '../utils/searchText'
 import type { DocSnapshot, DocxWorkerRequest, DocxWorkerResponse, RunSessions } from './types'
 import {
@@ -57,8 +57,14 @@ const createDocSnapshot = async (input: {
   const index = buildBlockIndex(
     bundle.documentDom,
     bundle.relationshipTargets,
-    bundle.relationshipTypes
+    bundle.relationshipTypes,
+    bundle.relationshipTargetModes,
+    bundle.availableRelationshipTargetIds
   )
+  const baselineValidationProblems =
+    input.previousSnapshot?.format === 'docx'
+      ? input.previousSnapshot.baselineValidationProblems
+      : await validateDocxBuffer(input.buffer)
   const identity = input.previousSnapshot
     ? createNextIdentityIndex({
         previousIndex: input.previousSnapshot.index,
@@ -76,6 +82,7 @@ const createDocSnapshot = async (input: {
     buffer: input.buffer,
     checksum: createHash('sha256').update(input.buffer).digest('hex'),
     bundle,
+    baselineValidationProblems,
     meta: bundle.meta,
     index,
     identity,
@@ -544,13 +551,16 @@ export const handleDocxWorkerRequest = async (
         buffer: snapshot.buffer,
         ops: internalOps
       })
-      const validationProblems = await validateDocxBuffer(applied.buffer)
+      const validationProblems = findNewDocxValidationProblems(
+        snapshot.baselineValidationProblems,
+        await validateDocxBuffer(applied.buffer)
+      )
       if (validationProblems.length > 0) {
         return {
           requestId: request.requestId,
           ok: false,
           code: 'failed',
-          error: `apply_ops produced invalid docx: ${validationProblems.map((problem) => problem.message).join('; ')}`,
+          error: `apply_ops introduced invalid docx structure: ${validationProblems.map((problem) => problem.message).join('; ')}`,
           warnings: validationProblems.map((problem) => `${problem.code}: ${problem.message}`)
         }
       }

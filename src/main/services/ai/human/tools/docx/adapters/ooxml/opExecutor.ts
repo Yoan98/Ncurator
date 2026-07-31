@@ -451,7 +451,9 @@ const applyStructural = async (
   const index = buildBlockIndex(
     bundle.documentDom,
     bundle.relationshipTargets,
-    bundle.relationshipTypes
+    bundle.relationshipTypes,
+    bundle.relationshipTargetModes,
+    bundle.availableRelationshipTargetIds
   )
   validateVisualLoss(index, op)
   const relationships = await createRelationshipWriter(bundle.zip)
@@ -533,7 +535,9 @@ const applyReplaceText = async (buffer: Buffer, op: Extract<DocxOp, { type: 'rep
   const index = buildBlockIndex(
     bundle.documentDom,
     bundle.relationshipTargets,
-    bundle.relationshipTypes
+    bundle.relationshipTypes,
+    bundle.relationshipTargetModes,
+    bundle.availableRelationshipTargetIds
   )
   const changedBlocks: DocxChangedBlock[] = []
   const seenParagraphs = new Set<Element>()
@@ -579,7 +583,9 @@ const applyStyle = async (buffer: Buffer, op: Extract<DocxOp, { type: 'style' }>
   const index = buildBlockIndex(
     bundle.documentDom,
     bundle.relationshipTargets,
-    bundle.relationshipTypes
+    bundle.relationshipTypes,
+    bundle.relationshipTargetModes,
+    bundle.availableRelationshipTargetIds
   )
   const changedBlocks: DocxChangedBlock[] = []
   if (op.target.type === 'text_match') {

@@ -33,6 +33,8 @@ type SemanticTreeContext = {
   blockId: string
   relationshipTargets: ReadonlyMap<string, string>
   relationshipTypes: ReadonlyMap<string, string>
+  relationshipTargetModes: ReadonlyMap<string, string>
+  availableRelationshipTargetIds: ReadonlySet<string>
   editableNodesById: Map<string, DocxEditableNode>
   visualsById: Map<string, DocxVisualDescriptor>
 }
@@ -300,9 +302,18 @@ const parseVisual = (
   node: Element,
   context: SemanticTreeContext,
   currentPath: string
-): DocxReadVisualNode => {
+): DocxReadVisualNode | null => {
   const kind = classifyVisual(node)
   const relationshipId = visualRelationshipId(node, kind) || undefined
+  const targetMode = relationshipId ? context.relationshipTargetModes.get(relationshipId) || '' : ''
+  if (
+    kind === 'image' &&
+    relationshipId &&
+    targetMode.toLowerCase() !== 'external' &&
+    !context.availableRelationshipTargetIds.has(relationshipId)
+  ) {
+    return null
+  }
   const id = visualId(context, currentPath)
   const target = relationshipId ? context.relationshipTargets.get(relationshipId) : undefined
   const descriptor: DocxVisualDescriptor = {
@@ -366,7 +377,8 @@ const parseRun = (
       child.localName === 'pict' ||
       child.localName === 'object'
     ) {
-      children.push(parseVisual(child, context, childPath))
+      const visual = parseVisual(child, context, childPath)
+      if (visual) children.push(visual)
       return
     }
     if (child.localName === 'AlternateContent') {
@@ -376,7 +388,8 @@ const parseRun = (
           selected.localName === 'pict' ||
           selected.localName === 'object'
         ) {
-          children.push(parseVisual(selected, context, `${childPath}.${selectedIndex}`))
+          const visual = parseVisual(selected, context, `${childPath}.${selectedIndex}`)
+          if (visual) children.push(visual)
         }
       })
     }
@@ -668,6 +681,8 @@ const createContext = (input: {
   blockId: string
   relationshipTargets: ReadonlyMap<string, string>
   relationshipTypes: ReadonlyMap<string, string>
+  relationshipTargetModes: ReadonlyMap<string, string>
+  availableRelationshipTargetIds: ReadonlySet<string>
   editableNodesById: Map<string, DocxEditableNode>
   visualsById: Map<string, DocxVisualDescriptor>
 }): SemanticTreeContext => ({ ...input })
@@ -682,6 +697,8 @@ export const buildParagraphDetail = (input: {
   wrapperPath?: DocxDetailedParagraphBlock['wrapperPath']
   relationshipTargets: ReadonlyMap<string, string>
   relationshipTypes: ReadonlyMap<string, string>
+  relationshipTargetModes: ReadonlyMap<string, string>
+  availableRelationshipTargetIds: ReadonlySet<string>
   editableNodesById: Map<string, DocxEditableNode>
   visualsById: Map<string, DocxVisualDescriptor>
 }): DocxDetailedParagraphBlock => {
@@ -708,6 +725,8 @@ export const buildTableDetail = (input: {
   wrapperPath?: DocxDetailedTableBlock['wrapperPath']
   relationshipTargets: ReadonlyMap<string, string>
   relationshipTypes: ReadonlyMap<string, string>
+  relationshipTargetModes: ReadonlyMap<string, string>
+  availableRelationshipTargetIds: ReadonlySet<string>
   editableNodesById: Map<string, DocxEditableNode>
   visualsById: Map<string, DocxVisualDescriptor>
 }): DocxDetailedTableBlock => {
@@ -736,6 +755,8 @@ export const buildCellDetail = (input: {
   nextBlockId?: string
   relationshipTargets: ReadonlyMap<string, string>
   relationshipTypes: ReadonlyMap<string, string>
+  relationshipTargetModes: ReadonlyMap<string, string>
+  availableRelationshipTargetIds: ReadonlySet<string>
   editableNodesById: Map<string, DocxEditableNode>
   visualsById: Map<string, DocxVisualDescriptor>
 }): DocxDetailedCellBlock => {

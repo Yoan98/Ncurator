@@ -6,7 +6,8 @@ import type {
   DocxOp,
   DocxOutlineBlock,
   DocxSearchMatch,
-  DocxSearchMode
+  DocxSearchMode,
+  DocxValidationProblem
 } from '../types'
 import type { BlockIndex, ParsedDocxBundle } from '../adapters/ooxml/types'
 import type { DocxIdentityIndex } from './identity'
@@ -221,6 +222,7 @@ export type DocSnapshot = DocSnapshotBase &
     | {
         format: 'docx'
         bundle: ParsedDocxBundle
+        baselineValidationProblems: DocxValidationProblem[]
       }
     | {
         format: 'doc'

@@ -78,6 +78,8 @@ export type ParsedDocxBundle = {
   meta: DocxOpenMeta
   relationshipTargets: Map<string, string>
   relationshipTypes: Map<string, string>
+  relationshipTargetModes: Map<string, string>
+  availableRelationshipTargetIds: Set<string>
 }
 
 export type ApplyOpsResult = {

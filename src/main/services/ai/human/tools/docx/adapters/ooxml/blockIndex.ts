@@ -29,6 +29,7 @@ import {
   getAttr,
   isElementNode
 } from './dom'
+import { resolveDocxRelationshipTarget } from './relationshipPath'
 
 const WORD_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
 const DEFAULT_META: DocxOpenMeta = {
@@ -329,7 +330,9 @@ const withCellStructure = (
 export const buildBlockIndex = (
   documentDom: Document,
   relationshipTargets: ReadonlyMap<string, string> = new Map(),
-  relationshipTypes: ReadonlyMap<string, string> = new Map()
+  relationshipTypes: ReadonlyMap<string, string> = new Map(),
+  relationshipTargetModes: ReadonlyMap<string, string> = new Map(),
+  availableRelationshipTargetIds: ReadonlySet<string> = new Set()
 ): BlockIndex => {
   const body = getBody(documentDom)
   const outlineDraft: DocxOutlineBlock[] = []
@@ -457,6 +460,8 @@ export const buildBlockIndex = (
       ...neighbors,
       relationshipTargets,
       relationshipTypes,
+      relationshipTargetModes,
+      availableRelationshipTargetIds,
       editableNodesById,
       visualsById
     }
@@ -628,6 +633,8 @@ export const loadDocxBundle = async (buffer: Buffer): Promise<ParsedDocxBundle> 
   const relationshipsXml = await readZipText(zip, 'word/_rels/document.xml.rels')
   const relationshipTargets = new Map<string, string>()
   const relationshipTypes = new Map<string, string>()
+  const relationshipTargetModes = new Map<string, string>()
+  const availableRelationshipTargetIds = new Set<string>()
   if (relationshipsXml) {
     const relationshipsDoc = parseXml(relationshipsXml)
     const relationships = relationshipsDoc.getElementsByTagName('Relationship')
@@ -638,6 +645,12 @@ export const loadDocxBundle = async (buffer: Buffer): Promise<ParsedDocxBundle> 
       if (!id) continue
       relationshipTargets.set(id, relationship.getAttribute('Target') || '')
       relationshipTypes.set(id, relationship.getAttribute('Type') || '')
+      const targetMode = relationship.getAttribute('TargetMode') || ''
+      relationshipTargetModes.set(id, targetMode)
+      if (targetMode.toLowerCase() !== 'external') {
+        const target = resolveDocxRelationshipTarget(relationship.getAttribute('Target') || '')
+        if (target && zip.file(target)) availableRelationshipTargetIds.add(id)
+      }
     }
   }
   return {
@@ -646,6 +659,8 @@ export const loadDocxBundle = async (buffer: Buffer): Promise<ParsedDocxBundle> 
     documentDom,
     meta,
     relationshipTargets,
-    relationshipTypes
+    relationshipTypes,
+    relationshipTargetModes,
+    availableRelationshipTargetIds
   }
 }

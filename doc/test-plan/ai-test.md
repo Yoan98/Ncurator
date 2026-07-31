@@ -533,11 +533,29 @@ AI unit / 辅助测试目录：
 ##### `docx-apply-ops-invalid-snapshot-guard`
 
 - 测试类型：`backend`
-- What：`apply_ops` 产出无效 docx 时会被工程内部校验拦截。
-- Why：validate 已下沉为工程门禁，必须有回归 case 守住“坏修订不能进入当前草稿”。
-- How：对带损坏关系引用的真实 docx 执行 `docx_edit(replace_text)` 或结构编辑 action。
-- Oracle：`apply_ops` 直接失败，且当前文档会话的修订引用不会推进到无效修订。
-- Not：不验证上层如何决定重试或放弃。
+- What：源 DOCX 已有无效图片关系时，`apply_ops` 仍可正常写入。
+- Why：WPS 可打开的旧文档可能带有不可见的 `NULL` 图片残留，不能因此拒绝用户的正常编辑。
+- How：构造同时含合法 `../customXml/item1.xml` 和缺失 `../NULL` 关系的 DOCX，执行真实 `docx_edit(replace_text)` 后重新读取。
+- Oracle：`customXml` 不误报；`NULL` 被记录为源问题但不阻断编辑；修订正常推进且新文本可搜索。
+- Not：不验证编辑器新增坏关系；由 `docx-validation-detects-new-relationship-problems` 覆盖。
+
+##### `docx-validation-detects-new-relationship-problems`
+
+- 测试类型：`backend`
+- What：编辑结果新增缺失关系时，`docx_edit` 会拒绝该结果且不推进草稿。
+- Why：兼容源文档历史脏数据不能放开编辑器自己生成的结构损坏。
+- How：以无问题 DOCX 为基线，模拟编辑器产出带 `../NULL` 图片关系的结果后调用真实 `docx_edit(replace_text)`。
+- Oracle：返回“本次编辑新增结构问题”；原文本仍可搜索；活动修订保持在 `v1`。
+- Not：不验证完整 human 工具选择。
+
+##### `docx-dangling-image-relationship-contract`
+
+- 测试类型：`backend / tool-real`
+- What：真实需求 DOCX 中的 `NULL` 图片残留不计入图片数量，且不阻止编辑。
+- Why：用户在 WPS 中看不到该残留，模型和用户也不应看到虚假的“图片9”。
+- How：读取真实附件的 outline，统计 visual 数量后替换文档标题并重新搜索写入文本。
+- Oracle：源诊断仅含 `NULL` 缺失关系；读取结果只包含 8 张真实图片；编辑成功，写后残留关系仍保持原样。
+- Not：不调用真实模型；完整自然语言回归由 `human-docx-dangling-image-edit-live` 覆盖。
 
 #### text-file 类别
 
@@ -1421,6 +1439,15 @@ AI unit / 辅助测试目录：
 - How：只选择含五种 visual kind 的真实 OOXML fixture，要求模型找到标有 IMAGE 的普通图片，说明标题、主要颜色和基本图形；只开放 DOCX 读取工具，不在用户输入中提供工具名或调用顺序。
 - Oracle：任务完成；模型读取详细 block 并成功调用 `docx_read_visuals`；识图结果和最终答复都包含 IMAGE，最终答复识别出蓝色、矩形和圆形；不调用 `image_analyze` 或 `docx_edit`；源 DOCX 不变。
 - Not：不通过 backend live 重复验证 chart、diagram、shape 的 BrowserWindow 渲染；该链路由真实 Electron 渲染测试覆盖。
+
+##### `human-docx-dangling-image-edit-live`
+
+- 测试类型：`backend / live`
+- What：真实模型能读取带 `NULL` 图片残留的需求 DOCX，识别真实图片、评估需求并写回开发时间。
+- Why：这条回归覆盖用户真实的“读图 + 分析 + 同文件编辑”闭环，防止底层脏关系再次被算成虚假图片或阻止写入。
+- How：使用真实附件和用户原句，只开放 DOCX 读取、图片读取和编辑工具，并注入主模型与视觉模型配置。
+- Oracle：任务完成；调用 DOCX 读取、视觉读取和成功的 `docx_edit`；视觉结果没有缺失图片错误，最终答复不出现“图片9”，产出的 DOCX 比原文新增至少 12 条有效工时表达。
+- Not：不要求固定的估时数值、工具调用次数或最终答复措辞；未配置 live 模型时按规范跳过。
 
 ##### `human-web-crawl-multi-hop-cross-domain-reading-live`
 

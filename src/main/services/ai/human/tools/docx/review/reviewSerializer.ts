@@ -5,7 +5,7 @@ import type JSZip from 'jszip'
 import { childElements, firstChildElement, isElementNode } from '../adapters/ooxml/dom'
 import { buildBlockIndex, loadDocxBundle } from '../adapters/ooxml/blockIndex'
 import type { IndexedNode } from '../adapters/ooxml/types'
-import { validateDocxBuffer } from '../adapters/ooxml/validator'
+import { findNewDocxValidationProblems, validateDocxBuffer } from '../adapters/ooxml/validator'
 import { createBlockElementFromSpec, createParagraphElementFromSpec } from '../utils/specDom'
 import type { DocxBlockSpec, DocxReplayNode, DocxReplaySession } from '../types'
 import { projectCommittedView, projectReviewView } from './viewProjector'
@@ -187,8 +187,15 @@ const writeDocumentXml = async (zip: JSZip, doc: Document): Promise<Buffer> => {
   })
 }
 
-const assertValidDocxBuffer = async (buffer: Buffer, context: string): Promise<void> => {
-  const problems = await validateDocxBuffer(buffer)
+const assertNoNewDocxValidationProblems = async (
+  sourceBuffer: Buffer,
+  buffer: Buffer,
+  context: string
+): Promise<void> => {
+  const problems = findNewDocxValidationProblems(
+    await validateDocxBuffer(sourceBuffer),
+    await validateDocxBuffer(buffer)
+  )
   if (problems.length === 0) return
   throw new Error(
     `${context}: ${problems.map((problem) => `${problem.code}:${problem.message}`).join('; ')}`
@@ -328,8 +335,20 @@ export const materializeDocxProjectedArtifact = async (input: {
 }): Promise<void> => {
   const workingBundle = await loadDocxBundle(input.workingBuffer)
   const sourceBundle = await loadDocxBundle(input.sourceBuffer)
-  const currentIndex = buildBlockIndex(workingBundle.documentDom)
-  const sourceIndex = buildBlockIndex(sourceBundle.documentDom)
+  const currentIndex = buildBlockIndex(
+    workingBundle.documentDom,
+    workingBundle.relationshipTargets,
+    workingBundle.relationshipTypes,
+    workingBundle.relationshipTargetModes,
+    workingBundle.availableRelationshipTargetIds
+  )
+  const sourceIndex = buildBlockIndex(
+    sourceBundle.documentDom,
+    sourceBundle.relationshipTargets,
+    sourceBundle.relationshipTypes,
+    sourceBundle.relationshipTargetModes,
+    sourceBundle.availableRelationshipTargetIds
+  )
   const body = getBody(workingBundle.documentDom)
   const sectPr = firstChildElement(body, 'sectPr')
   clearBodyContent(body)
@@ -359,7 +378,8 @@ export const materializeDocxProjectedArtifact = async (input: {
   })
 
   const buffer = await writeDocumentXml(workingBundle.zip, workingBundle.documentDom)
-  await assertValidDocxBuffer(
+  await assertNoNewDocxValidationProblems(
+    input.sourceBuffer,
     buffer,
     input.kind === 'review'
       ? 'review_artifact_invalid_generated'
