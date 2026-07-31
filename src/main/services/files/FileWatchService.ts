@@ -7,7 +7,6 @@ type FileWatchRecord = {
   id: string
   ownerId: number
   filePath: string
-  fileName: string
   fingerprint: string
   watcher: FSWatcher
   debounceTimer: NodeJS.Timeout | null
@@ -34,9 +33,6 @@ const getFileFingerprint = async (filePath: string): Promise<string> => {
   }
 }
 
-const normalizeFileName = (fileName: string): string =>
-  process.platform === 'win32' ? fileName.toLocaleLowerCase() : fileName
-
 export class FileWatchService {
   private readonly records = new Map<string, FileWatchRecord>()
   private readonly debounceMs: number
@@ -59,13 +55,10 @@ export class FileWatchService {
     if (!directoryStat.isDirectory()) throw new Error('parent directory not found')
 
     const watchId = randomUUID()
-    const fileName = path.basename(filePath)
     const fingerprint = await getFileFingerprint(filePath)
-    const watcher = watch(directoryPath, { persistent: false }, (_eventType, changedFileName) => {
-      if (changedFileName) {
-        const changedBaseName = path.basename(String(changedFileName))
-        if (normalizeFileName(changedBaseName) !== normalizeFileName(fileName)) return
-      }
+    const watcher = watch(directoryPath, { persistent: false }, () => {
+      // Office applications can save through temporary sibling files before replacing the target.
+      // Rechecking the one active target is more reliable than trusting the event filename.
       this.scheduleCheck(watchId)
     })
 
@@ -73,7 +66,6 @@ export class FileWatchService {
       id: watchId,
       ownerId: input.ownerId,
       filePath,
-      fileName,
       fingerprint,
       watcher,
       debounceTimer: null,

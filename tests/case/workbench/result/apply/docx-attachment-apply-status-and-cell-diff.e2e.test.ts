@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import fs, { mkdtemp, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { describe, it } from 'vitest'
@@ -21,6 +21,21 @@ import {
 } from '../../../../harness/e2e/workbench'
 
 const CASE_ID = 'docx-attachment-apply-status-and-cell-diff'
+const EXTERNAL_CHANGE_NOTICE = '检测到当前文件被外部修改，已自动刷新'
+
+const replaceDocxFromExternalApplication = async (
+  targetPath: string,
+  replacementName: string,
+  marker: string
+): Promise<void> => {
+  const directoryPath = path.dirname(targetPath)
+  const replacementPath = await writeRichTestDocxFile(directoryPath, replacementName, [
+    { type: 'paragraph', paragraph: { runs: [{ text: marker }] } }
+  ])
+  const previousPath = path.join(directoryPath, `${replacementName}.previous`)
+  await fs.rename(targetPath, previousPath)
+  await fs.rename(replacementPath, targetPath)
+}
 
 describe('workbench result e2e', () => {
   it(
@@ -31,7 +46,8 @@ describe('workbench result e2e', () => {
         domain: 'workbench',
         suite: 'result',
         groups: ['apply'],
-        description: '真实 AI 修改 DOCX 附件中的已有表格单元格后，验证成功状态和单元格 Diff。',
+        description:
+          '真实 AI 修改 DOCX 附件中的已有表格单元格后，验证审核 Diff 固定快照和预览模式监听真实资产文件。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
         execution: 'live',
@@ -109,6 +125,92 @@ describe('workbench result e2e', () => {
               timeout: 30_000
             })
             const panelText = ((await panel.textContent()) || '').trim()
+            await page.waitForTimeout(1_600)
+            await page.evaluate((noticeText) => {
+              const target = window as unknown as {
+                __NCURATOR_TEST_EXTERNAL_NOTICE_COUNT__?: number
+                __NCURATOR_TEST_EXTERNAL_NOTICE_OBSERVER__?: MutationObserver
+              }
+              target.__NCURATOR_TEST_EXTERNAL_NOTICE_COUNT__ = 0
+              target.__NCURATOR_TEST_EXTERNAL_NOTICE_OBSERVER__?.disconnect()
+              target.__NCURATOR_TEST_EXTERNAL_NOTICE_OBSERVER__ = new MutationObserver(
+                (mutations) => {
+                  if (
+                    mutations.some((mutation) =>
+                      [...mutation.addedNodes].some((node) => node.textContent?.includes(noticeText))
+                    )
+                  ) {
+                    target.__NCURATOR_TEST_EXTERNAL_NOTICE_COUNT__ =
+                      (target.__NCURATOR_TEST_EXTERNAL_NOTICE_COUNT__ || 0) + 1
+                  }
+                }
+              )
+              target.__NCURATOR_TEST_EXTERNAL_NOTICE_OBSERVER__.observe(document.body, {
+                childList: true,
+                subtree: true
+              })
+            }, EXTERNAL_CHANGE_NOTICE)
+            const documentModeToggle = getWorkbenchLocator(
+              page,
+              workbenchSelectors.documentModeToggle
+            )
+            await documentModeToggle.click()
+            await page.waitForFunction(() =>
+              Boolean(
+                (
+                  window as unknown as {
+                    __NCURATOR_E2E_OBSERVER__?: { ipcInvokeEntries?: Array<{ name: string }> }
+                  }
+                ).__NCURATOR_E2E_OBSERVER__?.ipcInvokeEntries?.some(
+                  (entry) => entry.name === 'fileWatchStart'
+                )
+              )
+            )
+            await replaceDocxFromExternalApplication(
+              record.path,
+              'cell-diff-external-preview.docx',
+              'external asset preview content'
+            )
+            const assetPreviewRefreshed = await getWorkbenchLocator(page, workbenchSelectors.docxViewer)
+              .getByText('external asset preview content', { exact: true })
+              .waitFor({ state: 'visible', timeout: 30_000 })
+              .then(() => true)
+              .catch(() => false)
+            const externalRefreshNoticeCount = await page.evaluate(
+              () =>
+                (window as unknown as { __NCURATOR_TEST_EXTERNAL_NOTICE_COUNT__?: number })
+                  .__NCURATOR_TEST_EXTERNAL_NOTICE_COUNT__ || 0
+            )
+            await documentModeToggle.click()
+            await panel.getByText('Alice', { exact: true }).waitFor({
+              state: 'visible',
+              timeout: 30_000
+            })
+            await panel.getByText('Bob', { exact: true }).waitFor({
+              state: 'visible',
+              timeout: 30_000
+            })
+            await page.waitForFunction(() =>
+              Boolean(
+                (
+                  window as unknown as {
+                    __NCURATOR_E2E_OBSERVER__?: { ipcInvokeEntries?: Array<{ name: string }> }
+                  }
+                ).__NCURATOR_E2E_OBSERVER__?.ipcInvokeEntries?.some(
+                  (entry) => entry.name === 'fileWatchStop'
+                )
+              )
+            )
+            await replaceDocxFromExternalApplication(
+              record.path,
+              'cell-diff-external-review.docx',
+              'external review write must not replace diff'
+            )
+            await page.waitForTimeout(1_000)
+            const reviewRemainedSnapshot =
+              (await panel.getByText('Alice', { exact: true }).count()) > 0 &&
+              (await panel.getByText('Bob', { exact: true }).count()) > 0
+            const signals = await runtime.collectSignals()
 
             return {
               status: record.status,
@@ -119,6 +221,15 @@ describe('workbench result e2e', () => {
               deleteCount: record.deleteCount,
               diskText,
               panelText,
+              assetPreviewRefreshed,
+              externalRefreshNoticeCount,
+              reviewRemainedSnapshot,
+              watchStartCalls: signals.ipcInvokeEntries.filter(
+                (entry) => entry.name === 'fileWatchStart'
+              ).length,
+              watchStopCalls: signals.ipcInvokeEntries.filter(
+                (entry) => entry.name === 'fileWatchStop'
+              ).length,
               fileArtifactCount: evidence.events.filter((event) => event.type === 'file_artifact')
                 .length
             }
@@ -138,13 +249,18 @@ describe('workbench result e2e', () => {
               !result.diskText.includes('Alice') &&
               result.panelText.includes('Alice') &&
               result.panelText.includes('Bob') &&
+              result.assetPreviewRefreshed &&
+              result.externalRefreshNoticeCount === 1 &&
+              result.reviewRemainedSnapshot &&
+              result.watchStartCalls >= 1 &&
+              result.watchStopCalls >= 1 &&
               !result.panelText.includes('Run completed without an effective workspace change.') &&
               !result.panelText.includes('本次未检测到文件内容变化') &&
               result.fileArtifactCount >= 1,
             {
               name: 'docx-attachment-change-remains-applied-with-cell-diff',
               message:
-                'DOCX 附件位于 .ncurator/runtime/assets 时，真实单元格修改仍应保持 applied，并在审核模式展示单元格净变化。',
+                'DOCX 附件位于 .ncurator/runtime/assets 时，真实单元格修改仍应保持 applied；预览模式监听真实资产文件，审核模式保持单元格 Diff 快照。',
               data: result
             }
           )

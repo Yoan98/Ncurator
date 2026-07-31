@@ -85,6 +85,14 @@ const canSwitchDocumentDisplayMode = (record: AiFileChangeRecord | null): boolea
     (record.afterSnapshotPath || record.path)
   )
 
+const getApplyDocumentPath = (
+  record: AiFileChangeRecord,
+  displayMode: DocumentDisplayMode
+): string => {
+  if (displayMode === 'preview') return record.path
+  return record.previewPath || record.afterSnapshotPath || record.path
+}
+
 const getPathFileName = (value?: string): string => {
   const normalized = (value || '').replace(/\\/g, '/').replace(/\/+$/g, '')
   return normalized.split('/').filter(Boolean).pop() || normalized
@@ -758,7 +766,14 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
   const suppressExternalNoticeUntilRef = React.useRef(isAiRunActive ? Number.POSITIVE_INFINITY : 0)
   const floatingExplorer = state.kind === 'file_preview' || state.kind === 'apply_workspace'
   const previewWatchPath =
-    state.kind === 'file_preview' && !state.file.isDirectory ? state.file.path : null
+    state.kind === 'file_preview' && !state.file.isDirectory
+      ? state.file.path
+      : state.kind === 'apply_workspace' &&
+          documentDisplayMode === 'preview' &&
+          activeApplyRecord &&
+          canSwitchDocumentDisplayMode(activeApplyRecord)
+        ? activeApplyRecord.path
+        : null
   useEffect(() => {
     if (state.kind === 'file_launcher') {
       setExplorerOpen(true)
@@ -816,10 +831,15 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
 
     void startWatch()
     window.addEventListener('focus', checkOnFocus)
+    const checkOnVisibility = (): void => {
+      if (!document.hidden) checkOnFocus()
+    }
+    document.addEventListener('visibilitychange', checkOnVisibility)
     return () => {
       disposed = true
       unsubscribe()
       window.removeEventListener('focus', checkOnFocus)
+      document.removeEventListener('visibilitychange', checkOnVisibility)
       if (watchId) void window.api.fileWatchStop({ watchId }).catch(() => undefined)
     }
   }, [onSuccessMessage, previewWatchPath])
@@ -863,23 +883,15 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
         }
       ]
     }
-    const shouldShowCurrentFile =
-      activeApplyRecord.status === 'reverted' && activeApplyRecord.operation === 'updated'
-    const filePath =
-      documentDisplayMode === 'preview' && shouldShowCurrentFile
-        ? activeApplyRecord.path
-        : documentDisplayMode === 'review' && activeApplyRecord.capability !== 'text_file'
-          ? activeApplyRecord.previewPath ||
-            activeApplyRecord.afterSnapshotPath ||
-            activeApplyRecord.path
-          : activeApplyRecord.afterSnapshotPath || activeApplyRecord.path
+    const filePath = getApplyDocumentPath(activeApplyRecord, documentDisplayMode)
     return [
       {
         filePath,
-        fileName: activeApplyRecord.fileName
+        fileName: activeApplyRecord.fileName,
+        contentRevision: documentDisplayMode === 'preview' ? previewRevision : undefined
       }
     ]
-  }, [activeApplyRecord, documentDisplayMode])
+  }, [activeApplyRecord, documentDisplayMode, previewRevision])
   const applyContent = useMemo(
     () =>
       activeApplyRecord?.capability === 'ppt' &&

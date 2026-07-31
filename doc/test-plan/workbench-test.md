@@ -15,7 +15,7 @@
 - Workbench e2e 的 workspace 文件索引允许在测试环境通过 `NCURATOR_WORKSPACE_KNOWLEDGE_CACHE=1` 启用真实 split / vector 缓存；缓存只按文件内容 hash、扩展名、splitter 参数和 embedding model 复用计算结果，不替代 workspace 文件记录、document id、搜索结果或 UI 状态。Source E2E 直接共享内容缓存并按 case 隔离统计；只有正式包 E2E 先执行 warm-up，再把缓存种子复制给隔离 case。
 - Workbench 模型选择 helper 必须通过真实下拉搜索分别选择 `AI_LIVE_PRIMARY_MODEL_NAME` 和 `AI_LIVE_VISUAL_MODEL_NAME`。
 - Workbench UI E2E 回归测试需要真实索引完成信号和 UI 可见状态作为等待条件；IPC observer 和 job 查询只能作为辅助证据，不能用来造业务状态。
-- `file-preview-actions` 当前按生产真实索引能力覆盖 `pdf/docx/md/txt/xlsx/xlsm/xltx/xltm`：连续打开的文件要分别保留为资源 Tab，并能切回旧 Tab；Excel 普通预览还要覆盖只读、切 Sheet 和拖列宽后预览仍可用。`file-preview-external-change-auto-refresh` 另行覆盖所有支持预览类型的统一磁盘监听：以普通文本、DOCX、PPTX、XLSX 为代表验证，其他已支持格式复用同一预览刷新链路。
+- `file-preview-actions` 当前按生产真实索引能力覆盖 `pdf/docx/md/txt/xlsx/xlsm/xltx/xltm`：连续打开的文件要分别保留为资源 Tab，并能切回旧 Tab；Excel 普通预览还要覆盖只读、切 Sheet 和拖列宽后预览仍可用。`file-preview-external-change-auto-refresh` 另行覆盖所有实时预览的统一磁盘监听：以普通文本、DOCX、PPTX、XLSX 为代表验证，工作区文件和 `.ncurator/runtime/assets` 中的真实附件复用同一预览刷新链路；审核 Diff 快照不监听。
 - docx apply case 需要真实 docx 输入、真实 AI 编辑、真实写回记录、真实预览和真实回退。
 - text-file apply case 需要真实 Markdown 或代码文件、真实 `text_file_edit`、真实结构化 diff、独立 `TextFileDiffViewer` 和按原始 bytes 回退。
 - image generation apply case 需要真实模型学习 `image-generation`、真实调用 `image_generate`、生成可解码图片、展示修改入口和图片预览，并完成新建图片回退。
@@ -385,10 +385,10 @@ tests/case/workbench/
 #### `file-preview-external-change-auto-refresh`
 
 - 测试类型：`e2e`
-- What：当前普通文件被外部程序保存后自动刷新；该行为覆盖所有支持预览的文件类型，不只限文本；切换或关闭文件后停止旧监听；普通文件通过外部应用打开时不显示 AI 修改提醒。
+- What：右侧实时预览的当前文件被外部程序保存后自动刷新；该行为覆盖所有支持预览的文件类型，不只限文本或工作区根目录文件；切换、关闭或进入审核 Diff 后停止旧监听；普通文件通过外部应用打开时不显示 AI 修改提醒。
 - Why：用户可能同时使用 WPS、Word 或文本编辑器修改文件，Workbench 必须及时展示磁盘最新内容，同时不能让旧 Tab 的监听干扰当前预览。
-- How：从真实临时工作区打开 Markdown、TXT、DOCX、PPTX 和 XLSX；测试进程对每个当前文件执行真实写入，并等待对应预览重新加载，其中 DOCX 验证新正文内容、PPTX 验证新渲染图、XLSX 验证新工作簿加载完成。随后切换和关闭 Tab，再修改旧文件；外部应用打开使用仅在 E2E observer 环境生效的 no-op 启动开关，仍走正式关联应用查询和 IPC 成功分支。
-- Oracle：连续保存只显示一次“检测到当前文件被外部修改，已自动刷新”，Markdown/TXT、DOCX、PPTX、XLSX 均展示或加载最终磁盘版本；这些类型代表 `WB-PANEL-003-AC18` 所列的全部支持预览格式共用的监听和重载链路。切换或关闭后旧文件不再触发提示；普通文件打开外部应用不显示重新打开提醒，对齐 `WB-PANEL-003-AC18`、`WB-PANEL-003-AC19`。
+- How：从真实临时工作区打开 Markdown、TXT、DOCX、PPTX 和 XLSX；测试进程对每个当前文件执行真实写入，并等待对应预览重新加载，其中 DOCX 验证新正文内容、PPTX 验证新渲染图、XLSX 验证新工作簿加载完成。另通过真实附件链路把 DOCX 保存到 `.ncurator/runtime/assets`，在修改记录切至预览模式后执行外部保存并等待真实文件重载；切回审核 Diff 后再保存，确认快照不被刷新。随后切换和关闭 Tab，再修改旧文件；外部应用打开使用仅在 E2E observer 环境生效的 no-op 启动开关，仍走正式关联应用查询和 IPC 成功分支。
+- Oracle：连续保存只显示一次“检测到当前文件被外部修改，已自动刷新”，Markdown/TXT、DOCX、PPTX、XLSX 均展示或加载最终磁盘版本；工作区和 `.ncurator/runtime/assets` 路径中的预览模式均监听真实当前文件，审核 Diff 固定为历史快照；这些类型代表 `WB-PANEL-003-AC18` 所列的全部支持预览格式共用的监听和重载链路。切换、关闭或进入审核模式后旧监听不再触发提示；普通文件打开外部应用不显示重新打开提醒，对齐 `WB-PANEL-003-AC18`、`WB-PANEL-003-AC19`。
 - Not：不伪造文件变化、预览内容或 AI 修改记录；不真正启动外部应用，不验证 WPS/Word 自身是否支持热更新。
 
 #### `text-file-apply-preview-and-revert`
