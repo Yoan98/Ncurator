@@ -15,6 +15,9 @@ export const DOCX_POSITIONED_FIXTURE_PATHS = [
   `${WORKSPACE_LEARNING_FIXTURE_DIR}/图形学.docx`
 ] as const
 
+export const DOCX_POSITIONED_SAFE_EDIT_FIXTURE_PATH =
+  `${SHARED_WORKSPACE_FIXTURE_PATH}/sample-edit.docx` as const
+
 export const PDF_READING_FIXTURE_PATH = `${WORKSPACE_LEARNING_FIXTURE_DIR}/深度学习.pdf` as const
 
 export const HUMAN_PDF_VISUAL_READING_USER_INPUT =
@@ -32,7 +35,7 @@ export const DOCX_ALL_FIXTURE_PATHS = [
 ] as const
 
 export const HUMAN_DOCX_POSITIONED_STRUCTURAL_EDIT_FALLBACK_USER_INPUT =
-  '我准备把这份图形学讲义发给同学复习，想把“反走样”这一节补得更容易记一些。你直接在这一节后面加一段更通俗的说明，再加一个很短的总结表，帮助大家快速区分两种常见做法。'
+  '请处理我选中的两份 Word 文档：先尝试把《图形学.docx》里“反走样”这一节补得更容易记一些，在该节后添加一段通俗说明；如果该区域因复杂定位排版而无法安全自动编辑，必须保留原文并在最终答复中说明需要手动处理。然后继续修改 `sample-edit.docx`，把其中的“Hello from fixture”替换为“Hello from safe edit”。'
 
 export const HUMAN_KB_GUIDED_DOCX_COMPARISON_DRAFT_USER_INPUT =
   '我工作区里课件和教学材料有点多，我忘了哪两份课件专门讲过反走样和过拟合。你先在工作区知识库里搜索并缩小资料范围，只能依据工作区里实际写到的内容，再把适合老师讲“概念区分”的内容分别补到工作区根目录的“人工智能探究课堂PRD.docx”和“交互式探究学习案例：产业转移.docx”里。两个目标文件不需要从知识库查找，写法尽量像备课备注和课堂引导语，不要像教材摘抄。'

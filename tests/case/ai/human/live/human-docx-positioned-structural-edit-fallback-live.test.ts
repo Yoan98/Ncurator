@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto'
+import fs from 'node:fs/promises'
 import { describe, it } from 'vitest'
 import {
   loadLiveLlmConfigFromEnv,
@@ -8,6 +10,7 @@ import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import {
   buildSelectedDocxFixtureReferences,
   DOCX_POSITIONED_FIXTURE_PATHS,
+  DOCX_POSITIONED_SAFE_EDIT_FIXTURE_PATH,
   HUMAN_DOCX_POSITIONED_STRUCTURAL_EDIT_FALLBACK_USER_INPUT,
   SHARED_WORKSPACE_FIXTURE_PATH,
   resolveSelectedDocxFixtures
@@ -17,12 +20,16 @@ import {
   countDocxFileArtifacts,
   collectToolErrorMessages,
   filterAiRunEventsByType,
-  isDocxEditCreateInput,
   isDocxEditWriteInput,
   runWithStructuredOutputRetry
 } from '../testUtils'
 
-const POSITIONED_FALLBACK_SUPPLEMENT_RELATIVE_PATH = '学习笔记/图形学-反走样补充说明.docx'
+const fixturePaths = [...DOCX_POSITIONED_FIXTURE_PATHS, DOCX_POSITIONED_SAFE_EDIT_FIXTURE_PATH]
+
+const fileHash = async (filePath: string): Promise<string> =>
+  createHash('sha256')
+    .update(await fs.readFile(filePath))
+    .digest('hex')
 
 const openedExpectedDoc = (
   openedSourcePaths: readonly string[],
@@ -57,17 +64,25 @@ describe('ai human live backend', () => {
               skipped: true,
               output: null,
               fixtureDocs: [],
+              positionedSourceUnchanged: false,
               events: []
             }
           }
 
           await runtime.seedLlmConfig(loadLiveLlmConfigFromEnv())
-          const fixtureDocs = resolveSelectedDocxFixtures(runtime, DOCX_POSITIONED_FIXTURE_PATHS)
-          const runner = createHumanTestRunner(runtime, {
-            selectedReferences: buildSelectedDocxFixtureReferences(
-              runtime,
-              DOCX_POSITIONED_FIXTURE_PATHS
+          const fixtureDocs = resolveSelectedDocxFixtures(runtime, fixturePaths)
+          const positionedFixtureDocs = fixtureDocs.filter((fixtureDoc) =>
+            DOCX_POSITIONED_FIXTURE_PATHS.some(
+              (fixturePath) => fixtureDoc.sourcePath === fixturePath
             )
+          )
+          const positionedHashesBefore = await Promise.all(
+            positionedFixtureDocs.map(
+              async (fixtureDoc) => await fileHash(fixtureDoc.workspacePath)
+            )
+          )
+          const runner = createHumanTestRunner(runtime, {
+            selectedReferences: buildSelectedDocxFixtureReferences(runtime, fixturePaths)
           })
           const output = await runner.run({
             taskId: runtime.taskId,
@@ -78,6 +93,14 @@ describe('ai human live backend', () => {
             skipped: false,
             output,
             fixtureDocs,
+            positionedSourceUnchanged: (
+              await Promise.all(
+                positionedFixtureDocs.map(
+                  async (fixtureDoc, index) =>
+                    (await fileHash(fixtureDoc.workspacePath)) === positionedHashesBefore[index]
+                )
+              )
+            ).every(Boolean),
             events: runtime.eventCollector.snapshot()
           }
         },
@@ -102,38 +125,58 @@ describe('ai human live backend', () => {
               isDocxEditWriteInput(event.input) &&
               typeof event.input.sourcePath === 'string'
           )
+          const positionedWriteToolCallIds = new Set(
+            structuralStarted
+              .filter((event) =>
+                DOCX_POSITIONED_FIXTURE_PATHS.some((fixturePath) =>
+                  openedExpectedDoc(
+                    [String(event.input.sourcePath || '')],
+                    fixturePath.replace(`${SHARED_WORKSPACE_FIXTURE_PATH}/`, ''),
+                    '图形学.docx'
+                  )
+                )
+              )
+              .map((event) => event.toolCallId)
+          )
+          const safeWriteToolCallIds = new Set(
+            structuralStarted
+              .filter((event) =>
+                openedExpectedDoc(
+                  [String(event.input.sourcePath || '')],
+                  'sample-edit.docx',
+                  'sample-edit.docx'
+                )
+              )
+              .map((event) => event.toolCallId)
+          )
           const writeResults = filterAiRunEventsByType(events, 'tool_call_result').filter((event) =>
             structuralStarted.some((started) => started.toolCallId === event.toolCallId)
           )
-          const createSourcePaths = filterAiRunEventsByType(events, 'tool_call_started')
-            .filter((event) => event.toolName === 'docx_edit' && isDocxEditCreateInput(event.input))
-            .map((event) => event.input.sourcePath)
-            .filter((value): value is string => typeof value === 'string')
           const successfulWriteResults = writeResults.filter((event) => event.result?.ok === true)
           const failedWriteResults = writeResults.filter((event) => event.result?.ok === false)
-          const positionedFailedWriteResults = failedWriteResults.filter((event) =>
-            String(
-              event.result?.data &&
-                typeof event.result.data === 'object' &&
-                !Array.isArray(event.result.data)
-                ? event.result.data.error
-                : ''
-            ).includes('当前命中复杂定位排版区域')
+          const positionedWriteResults = writeResults.filter((event) =>
+            positionedWriteToolCallIds.has(event.toolCallId)
+          )
+          const safeWriteResults = writeResults.filter((event) =>
+            safeWriteToolCallIds.has(event.toolCallId)
+          )
+          const positionedFailedWriteResults = positionedWriteResults.filter(
+            (event) =>
+              event.result?.ok === false &&
+              String(
+                event.result?.data &&
+                  typeof event.result.data === 'object' &&
+                  !Array.isArray(event.result.data)
+                  ? event.result.data.error
+                  : ''
+              ).includes('当前命中复杂定位排版区域')
           )
           const decisionHints = filterAiRunEventsByType(events, 'decision_hint')
           const errorMessages = collectToolErrorMessages(events)
-          const docxApplyArtifactCount = countDocxApplyArtifacts(result.output?.artifacts)
-          const docxFileArtifactCount = countDocxFileArtifacts(result.output?.artifacts)
-          const createdIndependentSupplement =
-            createSourcePaths.length >= 1 &&
-            createSourcePaths.every((sourcePath) =>
-              sourcePath.endsWith(POSITIONED_FALLBACK_SUPPLEMENT_RELATIVE_PATH)
-            )
-          const artifactShapeValid =
-            createSourcePaths.length === 0 ||
-            (createdIndependentSupplement &&
-              docxApplyArtifactCount >= 1 &&
-              docxFileArtifactCount >= 1)
+          const safeEditCompleted =
+            safeWriteResults.some((event) => event.result?.ok === true) &&
+            countDocxApplyArtifacts(result.output?.artifacts) >= 1 &&
+            countDocxFileArtifacts(result.output?.artifacts) >= 1
           const deliveryText = String(result.output?.deliveryMarkdown || '')
           const deliveryMentionsSkippedPositionedArea =
             /(绝对定位|锚定定位|复杂定位|定位排版)/.test(deliveryText) &&
@@ -141,67 +184,53 @@ describe('ai human live backend', () => {
               deliveryText
             ) &&
             /(手动|人工|其他非定位|其他可安全|文档末尾|禁止通过其他方式)/.test(deliveryText)
-          const deliveryContainsUsableFallback =
-            /(子像素|多重采样|MSAA|SSAA)/i.test(deliveryText) &&
-            /(低通|频域|傅里叶)/.test(deliveryText) &&
-            /(总结表|\|.{0,20}方法.{0,20}\|)/.test(deliveryText)
-          const scoreParts = {
-            targetDocumentOpened: result.fixtureDocs.every((fixtureDoc) =>
-              openedExpectedDoc(openedSourcePaths, fixtureDoc.relativePath, fixtureDoc.name)
-            )
-              ? 1
-              : 0,
-            positionedProtectionTriggered:
-              structuralStarted.length >= 1 &&
+          runtime.assertThat(
+            result.output?.status === 'completed' &&
+              result.fixtureDocs.every((fixtureDoc) =>
+                openedExpectedDoc(openedSourcePaths, fixtureDoc.relativePath, fixtureDoc.name)
+              ) &&
+              positionedWriteResults.some((event) => event.result?.ok === false) &&
               positionedFailedWriteResults.length >= 1 &&
+              positionedWriteResults.every((event) => event.result?.ok !== true) &&
+              result.positionedSourceUnchanged &&
               decisionHints.some((event) => event.code === 'hand_docx_positioned_write_blocked') &&
-              errorMessages.some((message) => message.includes('当前命中复杂定位排版区域'))
-                ? 2
-                : 0,
-            protectedAreaNotWritten: positionedFailedWriteResults.length >= 1 ? 1.5 : 0,
-            manualFallbackExplained: deliveryMentionsSkippedPositionedArea ? 2 : 0,
-            usableFallbackContent: deliveryContainsUsableFallback ? 2 : 0,
-            artifactShapeConsistent: artifactShapeValid ? 1 : 0,
-            nonEmptyDelivery: deliveryText.trim().length > 0 ? 0.5 : 0
-          }
-          const score = Object.values(scoreParts).reduce((total, value) => total + value, 0)
-
-          runtime.assertThat(score > 8, {
-            name: 'human-live-positioned-docx-skips-protected-area-and-reports-manual-fallback',
-            message:
-              'live human positioned case 完成度评分必须严格高于 8 分：应保护复杂定位区域，并给出可用的手动补充内容。',
-            data: {
-              score,
-              scoreParts,
-              openedSourcePaths,
-              createSourcePaths,
-              writeAttempts: structuralStarted.map((event) => ({
-                toolName: event.toolName,
-                actions: Array.isArray(event.input.actions)
-                  ? event.input.actions.map((action) =>
-                      action && typeof action === 'object' && !Array.isArray(action)
-                        ? (action as { type?: string }).type
-                        : undefined
-                    )
-                  : [],
-                sourcePath: event.input.sourcePath
-              })),
-              successfulWriteResultCount: successfulWriteResults.length,
-              failedWriteResults: failedWriteResults.map((event) => ({
-                toolName: event.toolName,
-                error:
-                  event.result?.data &&
-                  typeof event.result.data === 'object' &&
-                  !Array.isArray(event.result.data)
-                    ? event.result.data.error
-                    : undefined
-              })),
-              decisionHints,
-              docxApplyArtifactCount,
-              docxFileArtifactCount,
-              deliveryMarkdown: result.output?.deliveryMarkdown
+              errorMessages.some((message) => message.includes('当前命中复杂定位排版区域')) &&
+              safeEditCompleted &&
+              deliveryMentionsSkippedPositionedArea &&
+              deliveryText.trim().length > 0,
+            {
+              name: 'human-live-positioned-docx-skips-protected-area-and-reports-manual-fallback',
+              message:
+                'live human positioned case 应保护复杂定位区域、继续完成其他安全编辑，并在最终答复中说明该区域需手动处理。',
+              data: {
+                openedSourcePaths,
+                writeAttempts: structuralStarted.map((event) => ({
+                  toolName: event.toolName,
+                  actions: Array.isArray(event.input.actions)
+                    ? event.input.actions.map((action) =>
+                        action && typeof action === 'object' && !Array.isArray(action)
+                          ? (action as { type?: string }).type
+                          : undefined
+                      )
+                    : [],
+                  sourcePath: event.input.sourcePath
+                })),
+                successfulWriteResultCount: successfulWriteResults.length,
+                positionedSourceUnchanged: result.positionedSourceUnchanged,
+                failedWriteResults: failedWriteResults.map((event) => ({
+                  toolName: event.toolName,
+                  error:
+                    event.result?.data &&
+                    typeof event.result.data === 'object' &&
+                    !Array.isArray(event.result.data)
+                      ? event.result.data.error
+                      : undefined
+                })),
+                decisionHints,
+                deliveryMarkdown: result.output?.deliveryMarkdown
+              }
             }
-          })
+          )
         }
       })
     })
