@@ -19,6 +19,7 @@ import {
 
 const CASE_ID = 'excel-update-diff-and-revert'
 const FILE_NAME = 'quarterly-data.xlsx'
+const EXTERNAL_APPLICATION_NOTICE = '如果外部应用仍显示旧内容，请关闭该文档后重新打开。'
 
 const createBaselineWorkbook = async (filePath: string): Promise<Buffer> => {
   const workbook = new ExcelJS.Workbook()
@@ -74,6 +75,9 @@ describe('workbench result e2e', () => {
         description: '真实 AI 更新 Excel 后，验证单网格红绿 diff、干净实际文件和回撤。',
         fixtures: [],
         serviceMode: 'real',
+        extraEnv: {
+          NCURATOR_E2E_OPEN_WITH_NOOP: '1'
+        },
         execution: 'live',
         windowMode: 'visible',
         runMode: 'single',
@@ -117,6 +121,17 @@ describe('workbench result e2e', () => {
             )
           }
           await waitForExcelReady()
+          await getWorkbenchLocator(page, workbenchSelectors.applyOpenSystemButton).click()
+          const xlsxOpenWithApplication = page
+            .locator(`[data-testid^="${workbenchSelectors.openWithApplicationPrefix}-"]`)
+            .first()
+          await xlsxOpenWithApplication.waitFor({ state: 'visible', timeout: 10_000 })
+          await xlsxOpenWithApplication.click()
+          const externalApplicationHintVisible = await page
+            .getByText(EXTERNAL_APPLICATION_NOTICE, { exact: true })
+            .waitFor({ state: 'visible', timeout: 10_000 })
+            .then(() => true)
+            .catch(() => false)
           const documentModeToggle = getWorkbenchLocator(
             page,
             workbenchSelectors.documentModeToggle
@@ -177,6 +192,7 @@ describe('workbench result e2e', () => {
               )
               return found
             }),
+            externalApplicationHintVisible,
             diffCanvasVisible,
             diffReadOnly,
             diffNotesSheetVisible,
@@ -202,6 +218,7 @@ describe('workbench result e2e', () => {
               result.deletedValue === null &&
               result.addedValue === 'Checked' &&
               result.actualHasDiffBorder === false &&
+              result.externalApplicationHintVisible &&
               result.diffCanvasVisible &&
               result.diffReadOnly &&
               result.diffNotesSheetVisible &&

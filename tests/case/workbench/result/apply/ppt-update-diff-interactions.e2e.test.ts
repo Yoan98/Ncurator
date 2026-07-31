@@ -19,6 +19,7 @@ import {
 
 const CASE_ID = 'ppt-update-diff-interactions'
 const FILE_NAME = 'existing-quarterly-review.pptx'
+const EXTERNAL_APPLICATION_NOTICE = '如果外部应用仍显示旧内容，请关闭该文档后重新打开。'
 
 const slideHtml = (title: string, body: string, accent: string): string => `
   <section data-ppt-slide style="position:relative;width:1920px;height:1080px;overflow:hidden;background:#F7F8FA">
@@ -74,6 +75,9 @@ describe('workbench result e2e', () => {
           '真实 AI 更新已有 PPT 后，验证页面增删改移动标记、左右同步缩放拖拽、筛选和文件回撤。',
         fixtures: [],
         serviceMode: 'real',
+        extraEnv: {
+          NCURATOR_E2E_OPEN_WITH_NOOP: '1'
+        },
         execution: 'live',
         windowMode: 'visible',
         runMode: 'single',
@@ -110,6 +114,17 @@ describe('workbench result e2e', () => {
           await applyEntry.click()
           const viewer = getWorkbenchLocator(page, workbenchSelectors.pptDiffViewer)
           await viewer.waitFor({ state: 'visible', timeout: 30_000 })
+          await getWorkbenchLocator(page, workbenchSelectors.applyOpenSystemButton).click()
+          const pptxOpenWithApplication = page
+            .locator(`[data-testid^="${workbenchSelectors.openWithApplicationPrefix}-"]`)
+            .first()
+          await pptxOpenWithApplication.waitFor({ state: 'visible', timeout: 10_000 })
+          await pptxOpenWithApplication.click()
+          const externalApplicationHintVisible = await page
+            .getByText(EXTERNAL_APPLICATION_NOTICE, { exact: true })
+            .waitFor({ state: 'visible', timeout: 10_000 })
+            .then(() => true)
+            .catch(() => false)
           const documentToolbar = getWorkbenchLocator(page, workbenchSelectors.documentToolbar)
           const reviewToolbarText = ((await documentToolbar.textContent()) || '').trim()
           const documentModeToggle = getWorkbenchLocator(
@@ -192,6 +207,7 @@ describe('workbench result e2e', () => {
           return {
             updatedText,
             updatedSlideTexts,
+            externalApplicationHintVisible,
             reviewToolbarText,
             initialModeTag,
             previewModeTag,
@@ -226,6 +242,7 @@ describe('workbench result e2e', () => {
               result.updatedSlideTexts[1]?.includes('市场信号已确认') &&
               result.updatedSlideTexts[2]?.includes('风险与应对') &&
               result.updatedSlideTexts[3]?.includes('附录数据') &&
+              result.externalApplicationHintVisible &&
               result.reviewToolbarText.includes('+3') &&
               result.reviewToolbarText.includes('-1') &&
               result.initialModeTag === '审核' &&

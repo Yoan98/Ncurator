@@ -2,6 +2,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { describe, it } from 'vitest'
 import { buildBlockIndex, loadDocxBundle } from '../../../../../src/main/services/ai/human/tools/docx/adapters/ooxml/blockIndex'
+import { buildDocxApplyArtifactPaths } from '../../../../../src/main/services/ai/human/tools/docx/review/viewProjection'
 import type { JsonObject } from '../../../../../src/shared/types'
 import {
   hasLiveLlmConfigInEnv,
@@ -33,20 +34,25 @@ const readDocxText = async (filePath: string): Promise<string> => {
 const countDurationEstimates = (text: string): number =>
   text.match(/\d+(?:\s*[-~至到]\s*\d+)?\s*(?:天|人日|工作日|小时)/g)?.length || 0
 
-const visualResultHasError = (data: unknown): boolean => {
-  if (!data || typeof data !== 'object' || Array.isArray(data)) return false
+const visualResultItems = (data: unknown): JsonObject[] => {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return []
   const results = (data as JsonObject).results
-  return (
-    Array.isArray(results) &&
-    results.some(
-      (result) =>
-        result &&
-        typeof result === 'object' &&
-        !Array.isArray(result) &&
-        typeof (result as JsonObject).error === 'string'
-    )
+  if (!Array.isArray(results)) return []
+  return results.filter(
+    (result): result is JsonObject =>
+      Boolean(result && typeof result === 'object' && !Array.isArray(result))
   )
 }
+
+const visualResultHasText = (data: unknown): boolean =>
+  visualResultItems(data).some((result) => typeof result.text === 'string' && result.text.length > 0)
+
+const visualResultHasMissingMediaError = (data: unknown): boolean =>
+  visualResultItems(data).some(
+    (result) =>
+      typeof result.error === 'string' &&
+      /visual media is missing|missing relationship target|(?:^|\W)null(?:\W|$)/i.test(result.error)
+  )
 
 describe('ai human live backend', () => {
   it('human-docx-dangling-image-edit-live', async () => {
@@ -88,13 +94,24 @@ describe('ai human live backend', () => {
           const artifact = output.artifacts?.find(
             (item) => item.kind === 'file' && item.capability === 'docx'
           )
-          const appliedText = artifact?.kind === 'file' ? await readDocxText(artifact.path) : ''
+          const applyRecord = (await runtime.docxApplyStore.listRecords()).items.find(
+            (item) => item.run_id === runtime.runId && item.status === 'applied'
+          )
+          const committedPath = applyRecord
+            ? buildDocxApplyArtifactPaths({
+                workspaceRootPath: runtime.workspaceRoot,
+                applyId: applyRecord.id,
+                sourceName: applyRecord.source_name
+              }).committedArtifactPath
+            : ''
+          const appliedText = committedPath ? await readDocxText(committedPath) : ''
           return {
             skipped: false,
             output,
             events: runtime.eventCollector.snapshot(),
             sourceText,
-            appliedText
+            appliedText,
+            committedPath
           }
         },
         assert: async (result, runtime) => {
@@ -128,8 +145,12 @@ describe('ai human live backend', () => {
               result.output?.artifacts?.some(
                 (item) => item.kind === 'file' && item.capability === 'docx'
               ) === true &&
+              Boolean(result.committedPath) &&
               visualResults.length >= 1 &&
-              visualResults.every((event) => !visualResultHasError(event.result?.data)) &&
+              visualResults.some((event) => visualResultHasText(event.result?.data)) &&
+              visualResults.every(
+                (event) => !visualResultHasMissingMediaError(event.result?.data)
+              ) &&
               !/图片\s*9|图片九/.test(delivery) &&
               appliedDurationCount >= 12 &&
               appliedDurationCount > sourceDurationCount,

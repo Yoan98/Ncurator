@@ -18,6 +18,7 @@ import {
 
 const CASE_ID = 'docx-apply-panel-preview-and-revert'
 const MARKER = 'cedar-apply-731'
+const EXTERNAL_APPLICATION_NOTICE = '如果外部应用仍显示旧内容，请关闭该文档后重新打开。'
 
 describe('workbench result e2e', () => {
   it(
@@ -31,6 +32,9 @@ describe('workbench result e2e', () => {
         description: '真实 AI 修改真实 docx 后，验证 assistant 修改入口、右侧预览和干净回退。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
+        extraEnv: {
+          NCURATOR_E2E_OPEN_WITH_NOOP: '1'
+        },
         execution: 'live',
         windowMode: 'visible',
         runMode: 'single',
@@ -78,6 +82,17 @@ describe('workbench result e2e', () => {
           await getWorkbenchLocator(page, workbenchSelectors.applyPanel)
             .getByText(MARKER)
             .waitFor({ state: 'visible', timeout: 30_000 })
+          await getWorkbenchLocator(page, workbenchSelectors.applyOpenSystemButton).click()
+          const docxOpenWithApplication = page
+            .locator(`[data-testid^="${workbenchSelectors.openWithApplicationPrefix}-"]`)
+            .first()
+          await docxOpenWithApplication.waitFor({ state: 'visible', timeout: 10_000 })
+          await docxOpenWithApplication.click()
+          const externalApplicationHintVisible = await page
+            .getByText(EXTERNAL_APPLICATION_NOTICE, { exact: true })
+            .waitFor({ state: 'visible', timeout: 10_000 })
+            .then(() => true)
+            .catch(() => false)
           const applyPanelText = (
             (await getWorkbenchLocator(page, workbenchSelectors.applyPanel).textContent()) || ''
           ).trim()
@@ -172,6 +187,7 @@ describe('workbench result e2e', () => {
             applyEntryLines,
             artifactChipCount,
             applyPanelText,
+            externalApplicationHintVisible,
             initialToggleLabel,
             fileModeToggleLabel,
             restoredToggleLabel,
@@ -231,6 +247,7 @@ describe('workbench result e2e', () => {
               !result.revertedPanelText.includes('已回退') &&
               !result.revertedPanelText.includes('已删除') &&
               result.applyPanelText.includes(MARKER) &&
+              result.externalApplicationHintVisible &&
               result.documentViewVisible &&
               result.documentViewNoHorizontalOverflow &&
               result.fileArtifactCount >= 1,
