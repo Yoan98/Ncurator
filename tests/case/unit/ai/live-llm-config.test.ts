@@ -1,8 +1,5 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
-import {
-  hasLiveLlmConfigInEnv,
-  loadLiveVisionLlmConfigFromEnv
-} from '../../../harness/backend/llmConfig'
+import { loadLiveVisionLlmConfigFromEnv } from '../../../harness/backend/llmConfig'
 
 const ENV_KEYS = [
   'AI_LIVE_BASE_URL',
@@ -17,7 +14,6 @@ const ENV_KEYS = [
 const originalEnv = new Map<string, string | undefined>()
 
 beforeAll(() => {
-  hasLiveLlmConfigInEnv()
   for (const key of ENV_KEYS) originalEnv.set(key, process.env[key])
 })
 

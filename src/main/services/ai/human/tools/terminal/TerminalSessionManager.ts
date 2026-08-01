@@ -460,7 +460,7 @@ export class TerminalSessionManager {
       await Promise.race([
         session.ready,
         new Promise<void>((_, reject) =>
-          setTimeout(() => reject(new Error('terminal_start_timeout')), 3000)
+          setTimeout(() => reject(new Error('terminal_start_timeout')), 10_000)
         )
       ])
     } catch (error) {
