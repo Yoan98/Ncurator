@@ -100,8 +100,17 @@ Settings 顶层 suite 对齐 PRD 模块：
 - What：文件 tab 内可以为当前工作空间绑定工作文件地址，并立即刷新目录树。
 - Why：目录绑定已从“创建工作空间”移动到“文件 tab 内设置”，这是新的主操作链路。
 - How：先创建未绑定目录的工作空间，再通过目录选择器为其设置工作文件地址。
-- Oracle：成功设置后写入文件目录并刷新当前真实目录树，对齐 `SET-WORKSPACE-006-AC1`、`SET-WORKSPACE-008-AC1`、`SET-WORKSPACE-008-AC3`。
+- Oracle：成功设置后写入文件目录并刷新当前真实目录树，后台扫描进度不会阻塞根目录首层展示，对齐 `SET-WORKSPACE-006-AC1`、`SET-WORKSPACE-006-AC4`、`SET-WORKSPACE-008-AC1`、`SET-WORKSPACE-008-AC3`。
 - Not：不验证不同操作系统的原生目录选择器样式，也不验证真实文件系统权限错误分支。
+
+#### `workspace-directory-lazy-load`
+
+- 测试类型：`unit + e2e`
+- What：目录树只读取根目录或被展开目录的直属子项，并以加载反馈承载读取过程。
+- Why：工作空间可能包含 `node_modules` 等超大目录；进入设置页不能递归枚举整个工作区。
+- How：创建包含根目录文件、普通子目录、`node_modules` 和点开头文件/目录的真实临时目录；进入文件 tab 后验证根目录首层，展开普通子目录后验证其直属文件，再确认点开头项始终不可见。
+- Oracle：`node_modules` 在根目录可见但其内容不会在首次加载时出现；子目录展开前不读取其子项，展开时显示局部 loading；点开头文件或目录在任意层级均不显示；页面没有全部展开/折叠入口，对齐 `SET-WORKSPACE-008-AC1`、`SET-WORKSPACE-008-AC4`、`SET-WORKSPACE-008-AC5`。
+- Not：不以该 case 衡量文件系统吞吐或索引模型性能；全量扫描进度由索引 job 用例覆盖。
 
 #### `workspace-remove-from-list`
 

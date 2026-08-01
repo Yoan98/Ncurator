@@ -53,7 +53,7 @@ describe('settings workspace e2e', () => {
             }
           })
 
-          await runtime.step({
+          const lazyLoadResult = await runtime.step({
             name: 'set-root-path',
             message: '通过原生目录选择器绑定真实目录，确认右侧目录与目录树都同步刷新。',
             run: async () => {
@@ -86,8 +86,12 @@ describe('settings workspace e2e', () => {
                 .filter({ hasText: 'docs' })
                 .first()
               await docsNode.waitFor({ state: 'visible' })
+              const briefBeforeExpand = await tree.getByText('brief.txt').count()
               await docsNode.locator('.ant-tree-switcher').click()
               await tree.getByText('brief.txt').waitFor({ state: 'visible' })
+              const hasGlobalTreeControl =
+                (await tree.getByLabel(/全部折叠|恢复默认展开/u).count()) > 0
+              return { briefBeforeExpand, hasGlobalTreeControl }
             }
           })
 
@@ -110,11 +114,18 @@ describe('settings workspace e2e', () => {
             rootPathVisible: rootPathAliases.some((alias) =>
               normalizedWorkspaceText.includes(alias)
             ),
-            treeHasFixtureFile: treeText.includes('brief.txt')
+            treeHasFixtureFile: treeText.includes('brief.txt'),
+            briefBeforeExpand: lazyLoadResult.briefBeforeExpand,
+            hasGlobalTreeControl: lazyLoadResult.hasGlobalTreeControl
           }
         },
         assert: async (result, runtime) => {
-          await runtime.assertThat(result.rootPathVisible && result.treeHasFixtureFile, {
+          await runtime.assertThat(
+            result.rootPathVisible &&
+              result.treeHasFixtureFile &&
+              result.briefBeforeExpand === 0 &&
+              !result.hasGlobalTreeControl,
+            {
             name: 'set-root-path-refreshes-detail',
             message:
               '点击“设置工作目录”后，应为当前工作空间绑定目录，并立即刷新当前目录树内容，对齐 SET-WORKSPACE-006-AC1、SET-WORKSPACE-008-AC3。',

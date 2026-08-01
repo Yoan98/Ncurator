@@ -1,19 +1,21 @@
 ﻿import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { Alert, Button, Empty, Input, Modal, Popover, Tabs, Tooltip, Tree, message } from 'antd'
+import { Alert, Button, Empty, Input, Modal, Popover, Tabs, Tooltip, message } from 'antd'
 import { useNavigate } from 'react-router-dom'
 import type {
   WorkspaceIndexJobRecord,
   LegacyLocalImportMigrationStatus,
   WorkspaceListItem,
-  WorkspaceTreeListResponse
+  WorkspaceTreeEntry,
+  WorkspaceDirectoryListResponse
 } from '../../../../shared/types'
 import {
   HiArrowPath,
+  HiChevronDown,
+  HiChevronRight,
   HiCircleStack,
   HiDocumentText,
+  HiFolder,
   HiGlobeAlt,
-  HiOutlineArrowsPointingIn,
-  HiOutlineArrowsPointingOut,
   HiOutlineFolderPlus,
   HiOutlineQuestionMarkCircle,
   HiOutlineTrash
@@ -23,23 +25,29 @@ import { normalizeUserFacingError } from '../../utils/userFacingError'
 import WebSourcesSettingsPanel from './WebSourcesSettingsPanel'
 import WorkspaceIndexJobProgress from './WorkspaceIndexJobProgress'
 import {
-  createWorkspaceTree,
-  getDefaultExpandedKeys,
-  getVisibleWorkspaceTreeEntries,
-  getWorkspaceTreeDisplayStrategy
+  getTreeEntryStatusMeta
 } from './utils/workspace'
-import type { WorkspaceJobMap, WorkspaceTreeMap } from './types'
+import type { WorkspaceJobMap } from './types'
+
+type WorkspaceDirectoryMap = Record<string, Record<string, WorkspaceTreeEntry[]>>
+type WorkspaceDirectoryLoadingMap = Record<string, Record<string, boolean>>
+type WorkspaceDirectoryErrorMap = Record<string, Record<string, string | undefined>>
 
 const WorkspaceSettingsPanel: React.FC = () => {
   const navigate = useNavigate()
   const [workspaces, setWorkspaces] = useState<WorkspaceListItem[]>([])
-  const [workspaceTrees, setWorkspaceTrees] = useState<WorkspaceTreeMap>({})
+  const [workspaceDirectories, setWorkspaceDirectories] = useState<WorkspaceDirectoryMap>({})
+  const [workspaceDirectoryLoading, setWorkspaceDirectoryLoading] =
+    useState<WorkspaceDirectoryLoadingMap>({})
+  const [workspaceDirectoryErrors, setWorkspaceDirectoryErrors] =
+    useState<WorkspaceDirectoryErrorMap>({})
   const [workspaceTreeSummaries, setWorkspaceTreeSummaries] = useState<
-    Record<string, WorkspaceTreeListResponse['summary']>
+    Record<string, NonNullable<WorkspaceDirectoryListResponse['summary']>>
   >({})
   const [workspaceExpandedKeys, setWorkspaceExpandedKeys] = useState<Record<string, string[]>>({})
   const [workspaceIndexJobs, setWorkspaceIndexJobs] = useState<WorkspaceJobMap>({})
   const [workspaceLoading, setWorkspaceLoading] = useState(false)
+  const [workspaceDirectoryReloadVersion, setWorkspaceDirectoryReloadVersion] = useState(0)
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null)
   const [selectedTabKey, setSelectedTabKey] = useState<'files' | 'web'>('files')
   const [legacyMigrationStatus, setLegacyMigrationStatus] =
@@ -60,33 +68,47 @@ const WorkspaceSettingsPanel: React.FC = () => {
     [selectedWorkspaceId, workspaceIndexJobs]
   )
 
-  const selectedWorkspaceEntries = useMemo(
-    () =>
-      selectedWorkspaceId
-        ? getVisibleWorkspaceTreeEntries(workspaceTrees[selectedWorkspaceId] || [])
-        : [],
-    [selectedWorkspaceId, workspaceTrees]
-  )
+  const selectedWorkspaceEntries = selectedWorkspaceId
+    ? workspaceDirectories[selectedWorkspaceId]?.[''] || []
+    : []
 
-  const selectedWorkspaceTreeStrategy = useMemo(
-    () => getWorkspaceTreeDisplayStrategy(selectedWorkspaceEntries),
-    [selectedWorkspaceEntries]
-  )
-
-  const selectedWorkspaceTree = useMemo(
-    () => createWorkspaceTree(selectedWorkspaceEntries),
-    [selectedWorkspaceEntries]
-  )
-
-  const loadWorkspaceTree = useCallback(
-    async (
-      workspaceId: string,
-      includeUnsupported?: boolean
-    ): Promise<WorkspaceTreeListResponse> => {
-      return await window.api.workspaceTree({
-        workspaceId,
-        includeUnsupported: Boolean(includeUnsupported)
-      })
+  const loadWorkspaceDirectory = useCallback(
+    async (workspaceId: string, relativePath: string): Promise<void> => {
+      setWorkspaceDirectoryLoading((previous) => ({
+        ...previous,
+        [workspaceId]: { ...previous[workspaceId], [relativePath]: true }
+      }))
+      setWorkspaceDirectoryErrors((previous) => ({
+        ...previous,
+        [workspaceId]: { ...previous[workspaceId], [relativePath]: undefined }
+      }))
+      try {
+        const response = await window.api.workspaceDirectoryList({ workspaceId, relativePath })
+        if (response.error) throw new Error(response.error)
+        setWorkspaceDirectories((previous) => ({
+          ...previous,
+          [workspaceId]: { ...previous[workspaceId], [relativePath]: response.items }
+        }))
+        if (response.summary) {
+          setWorkspaceTreeSummaries((previous) => ({
+            ...previous,
+            [workspaceId]: response.summary as NonNullable<WorkspaceDirectoryListResponse['summary']>
+          }))
+        }
+      } catch (error) {
+        setWorkspaceDirectoryErrors((previous) => ({
+          ...previous,
+          [workspaceId]: {
+            ...previous[workspaceId],
+            [relativePath]: error instanceof Error ? error.message : String(error)
+          }
+        }))
+      } finally {
+        setWorkspaceDirectoryLoading((previous) => ({
+          ...previous,
+          [workspaceId]: { ...previous[workspaceId], [relativePath]: false }
+        }))
+      }
     },
     []
   )
@@ -96,39 +118,19 @@ const WorkspaceSettingsPanel: React.FC = () => {
     try {
       const workspaceResponse = await window.api.workspaceList()
       setWorkspaces(workspaceResponse.items)
-
-      const nextTrees: WorkspaceTreeMap = {}
-      const nextSummaries: Record<string, WorkspaceTreeListResponse['summary']> = {}
-      await Promise.all(
-        workspaceResponse.items.map(async (workspace) => {
-          const response = await loadWorkspaceTree(workspace.id, true)
-          nextTrees[workspace.id] = response.items
-          nextSummaries[workspace.id] = response.summary
-        })
-      )
-
-      setWorkspaceTrees(nextTrees)
-      setWorkspaceTreeSummaries(nextSummaries)
-      setWorkspaceExpandedKeys((previous) => {
-        const next = { ...previous }
-        workspaceResponse.items.forEach((workspace) => {
-          if (!next[workspace.id]) {
-            const entries = getVisibleWorkspaceTreeEntries(nextTrees[workspace.id] || [])
-            next[workspace.id] = getDefaultExpandedKeys(
-              entries,
-              getWorkspaceTreeDisplayStrategy(entries).defaultExpandDepth
-            )
-          }
-        })
-        return next
-      })
+      setWorkspaceDirectories({})
+      setWorkspaceDirectoryLoading({})
+      setWorkspaceDirectoryErrors({})
+      setWorkspaceTreeSummaries({})
+      setWorkspaceExpandedKeys({})
+      setWorkspaceDirectoryReloadVersion((value) => value + 1)
     } catch (error) {
       console.error(error)
       message.error('加载工作空间失败')
     } finally {
       setWorkspaceLoading(false)
     }
-  }, [loadWorkspaceTree])
+  }, [])
 
   const loadVectorModelAvailability = useCallback(async (): Promise<void> => {
     try {
@@ -171,22 +173,14 @@ const WorkspaceSettingsPanel: React.FC = () => {
         ...previous,
         [job.workspace_id]: job.status === 'running' ? job : undefined
       }))
-      void loadWorkspaces()
       if (job.status !== 'running') {
-        void loadWorkspaceTree(job.workspace_id, true).then((response) => {
-          setWorkspaceTrees((previous) => ({
-            ...previous,
-            [job.workspace_id]: response.items
-          }))
-          setWorkspaceTreeSummaries((previous) => ({
-            ...previous,
-            [job.workspace_id]: response.summary
-          }))
-        })
+        setWorkspaceDirectories((previous) => ({ ...previous, [job.workspace_id]: {} }))
+        setWorkspaceExpandedKeys((previous) => ({ ...previous, [job.workspace_id]: [] }))
+        void loadWorkspaceDirectory(job.workspace_id, '')
       }
     }
     return window.api.onWorkspaceIndexJobProgress(handleProgress)
-  }, [loadWorkspaceTree, loadWorkspaces])
+  }, [loadWorkspaceDirectory])
 
   useEffect(() => {
     if (workspaces.length === 0) {
@@ -216,18 +210,17 @@ const WorkspaceSettingsPanel: React.FC = () => {
       .catch(console.error)
   }, [selectedWorkspaceId])
 
-  const reloadSelectedWorkspaceTree = useCallback(async (): Promise<void> => {
+  const reloadSelectedWorkspaceDirectory = useCallback(async (): Promise<void> => {
     if (!selectedWorkspaceId) return
-    const response = await loadWorkspaceTree(selectedWorkspaceId, true)
-    setWorkspaceTrees((previous) => ({
-      ...previous,
-      [selectedWorkspaceId]: response.items
-    }))
-    setWorkspaceTreeSummaries((previous) => ({
-      ...previous,
-      [selectedWorkspaceId]: response.summary
-    }))
-  }, [loadWorkspaceTree, selectedWorkspaceId])
+    setWorkspaceDirectories((previous) => ({ ...previous, [selectedWorkspaceId]: {} }))
+    setWorkspaceExpandedKeys((previous) => ({ ...previous, [selectedWorkspaceId]: [] }))
+    await loadWorkspaceDirectory(selectedWorkspaceId, '')
+  }, [loadWorkspaceDirectory, selectedWorkspaceId])
+
+  useEffect(() => {
+    if (!selectedWorkspace?.root_path || !selectedWorkspaceId) return
+    void loadWorkspaceDirectory(selectedWorkspaceId, '')
+  }, [loadWorkspaceDirectory, selectedWorkspace?.root_path, selectedWorkspaceId, workspaceDirectoryReloadVersion])
 
   const selectedWorkspaceSummary = useMemo(
     () =>
@@ -242,6 +235,92 @@ const WorkspaceSettingsPanel: React.FC = () => {
 
   const selectedWorkspaceActionableIndexCount =
     selectedWorkspaceSummary.needs_index_count + selectedWorkspaceSummary.failed_file_count
+
+  const toggleWorkspaceDirectory = (entry: WorkspaceTreeEntry): void => {
+    if (!selectedWorkspaceId || entry.kind !== 'directory') return
+    const workspaceId = selectedWorkspaceId
+    const path = entry.relative_path
+    const expanded = new Set(workspaceExpandedKeys[workspaceId] || [])
+    if (expanded.has(path)) {
+      expanded.delete(path)
+    } else {
+      expanded.add(path)
+      if (
+        !workspaceDirectories[workspaceId]?.[path] &&
+        !workspaceDirectoryLoading[workspaceId]?.[path]
+      ) {
+        void loadWorkspaceDirectory(workspaceId, path)
+      }
+    }
+    setWorkspaceExpandedKeys((previous) => ({
+      ...previous,
+      [workspaceId]: Array.from(expanded)
+    }))
+  }
+
+  const renderWorkspaceEntries = (workspaceId: string, parentPath: string, depth: number): React.ReactNode => {
+    const entries = workspaceDirectories[workspaceId]?.[parentPath] || []
+    const expanded = new Set(workspaceExpandedKeys[workspaceId] || [])
+    const loading = workspaceDirectoryLoading[workspaceId]?.[parentPath] === true
+    const error = workspaceDirectoryErrors[workspaceId]?.[parentPath]
+    return (
+      <div>
+        {entries.map((entry) => {
+          const isDirectory = entry.kind === 'directory'
+          const isExpanded = expanded.has(entry.relative_path)
+          const entryStatus = getTreeEntryStatusMeta(entry)
+          const childLoading = workspaceDirectoryLoading[workspaceId]?.[entry.relative_path] === true
+          return (
+            <React.Fragment key={entry.id}>
+              <button
+                type="button"
+                className="ant-tree-treenode flex min-h-8 w-full items-center gap-2 rounded-[4px] px-2 text-left text-[13px] text-[#37352F] hover:bg-[#F4F4F2]"
+                style={{ paddingLeft: 8 + depth * 18 }}
+                onClick={() => (isDirectory ? toggleWorkspaceDirectory(entry) : undefined)}
+              >
+                <span className="ant-tree-switcher flex h-4 w-4 shrink-0 items-center justify-center text-[#91918E]">
+                  {isDirectory ? (isExpanded ? <HiChevronDown /> : <HiChevronRight />) : null}
+                </span>
+                {isDirectory ? (
+                  <HiFolder className="h-4 w-4 shrink-0 text-[#787774]" />
+                ) : (
+                  <HiDocumentText className="h-4 w-4 shrink-0 text-[#91918E]" />
+                )}
+                <span className="min-w-0 flex-1 truncate" title={entry.relative_path}>
+                  {entry.name}
+                </span>
+                {childLoading ? <HiArrowPath className="h-3.5 w-3.5 animate-spin text-[#91918E]" /> : null}
+                {!isDirectory && entryStatus ? (
+                  <span className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[11px] ${entryStatus.className}`}>
+                    {entryStatus.label}
+                  </span>
+                ) : null}
+              </button>
+              {isDirectory && isExpanded
+                ? renderWorkspaceEntries(workspaceId, entry.relative_path, depth + 1)
+                : null}
+            </React.Fragment>
+          )
+        })}
+        {loading && entries.length === 0 ? (
+          <div className="flex items-center gap-2 px-3 py-3 text-xs text-[#91918E]" style={{ paddingLeft: 8 + depth * 18 }}>
+            <HiArrowPath className="h-3.5 w-3.5 animate-spin" />
+            正在读取目录
+          </div>
+        ) : null}
+        {error ? (
+          <button
+            type="button"
+            className="px-3 py-2 text-xs text-[#B3261E] hover:underline"
+            style={{ marginLeft: 8 + depth * 18 }}
+            onClick={() => void loadWorkspaceDirectory(workspaceId, parentPath)}
+          >
+            读取失败，点击重试
+          </button>
+        ) : null}
+      </div>
+    )
+  }
 
   const handleCreateWorkspace = async (): Promise<void> => {
     const name = createWorkspaceName.trim()
@@ -290,7 +369,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
     }
     message.success('工作目录已设置')
     await loadWorkspaces()
-    await reloadSelectedWorkspaceTree()
+    await reloadSelectedWorkspaceDirectory()
   }
 
   const handleWorkspaceScan = async (workspace: WorkspaceListItem): Promise<void> => {
@@ -304,7 +383,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
         setWorkspaceIndexJobs((previous) => ({ ...previous, [workspace.id]: response.job }))
       }
       await loadWorkspaces()
-      await reloadSelectedWorkspaceTree()
+      await reloadSelectedWorkspaceDirectory()
     } catch (error) {
       console.error(error)
       message.error('检查更新失败')
@@ -329,7 +408,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
         setWorkspaceIndexJobs((previous) => ({ ...previous, [workspace.id]: response.job }))
       }
       await loadWorkspaces()
-      await reloadSelectedWorkspaceTree()
+      await reloadSelectedWorkspaceDirectory()
     } catch (error) {
       console.error(error)
       message.error('更新索引失败')
@@ -633,40 +712,6 @@ const WorkspaceSettingsPanel: React.FC = () => {
                                     目录树
                                   </div>
                                 </div>
-                                <div className="flex flex-wrap gap-2">
-                                  <Tooltip
-                                    title={
-                                      (workspaceExpandedKeys[selectedWorkspace.id] || []).length > 0
-                                        ? '全部折叠'
-                                        : '恢复默认展开'
-                                    }
-                                  >
-                                    <Button
-                                      size="small"
-                                      className="border-[#EEEEEC] bg-white text-[#37352F]"
-                                      icon={
-                                        (workspaceExpandedKeys[selectedWorkspace.id] || []).length >
-                                        0 ? (
-                                          <HiOutlineArrowsPointingIn className="h-4 w-4" />
-                                        ) : (
-                                          <HiOutlineArrowsPointingOut className="h-4 w-4" />
-                                        )
-                                      }
-                                      onClick={() =>
-                                        setWorkspaceExpandedKeys((previous) => ({
-                                          ...previous,
-                                          [selectedWorkspace.id]:
-                                            (previous[selectedWorkspace.id] || []).length > 0
-                                              ? []
-                                              : getDefaultExpandedKeys(
-                                                  selectedWorkspaceEntries,
-                                                  selectedWorkspaceTreeStrategy.defaultExpandDepth
-                                                )
-                                        }))
-                                      }
-                                    />
-                                  </Tooltip>
-                                </div>
                               </div>
 
                               <div
@@ -674,20 +719,21 @@ const WorkspaceSettingsPanel: React.FC = () => {
                                 data-testid={importSelectors.workspaceTree}
                               >
                                 {selectedWorkspaceEntries.length > 0 ? (
-                                  <Tree
-                                    blockNode
-                                    className="workspace-file-tree w-full"
-                                    treeData={selectedWorkspaceTree}
-                                    expandedKeys={workspaceExpandedKeys[selectedWorkspace.id] || []}
-                                    onExpand={(expandedKeys) =>
-                                      setWorkspaceExpandedKeys((previous) => ({
-                                        ...previous,
-                                        [selectedWorkspace.id]: expandedKeys.map((item) =>
-                                          String(item)
-                                        )
-                                      }))
-                                    }
-                                  />
+                                  <div className="workspace-file-tree w-full">
+                                    {renderWorkspaceEntries(selectedWorkspace.id, '', 0)}
+                                  </div>
+                                ) : workspaceDirectoryLoading[selectedWorkspace.id]?.[''] ? (
+                                  <div className="flex min-h-0 flex-1 items-center justify-center gap-2 text-sm text-[#91918E]">
+                                    <HiArrowPath className="h-4 w-4 animate-spin" />
+                                    正在读取根目录
+                                  </div>
+                                ) : workspaceDirectoryErrors[selectedWorkspace.id]?.[''] ? (
+                                  <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 text-sm text-[#B3261E]">
+                                    <span>根目录读取失败</span>
+                                    <Button size="small" onClick={() => void loadWorkspaceDirectory(selectedWorkspace.id, '')}>
+                                      重试
+                                    </Button>
+                                  </div>
                                 ) : (
                                   <div className="flex min-h-0 flex-1 items-center justify-center">
                                     <Empty

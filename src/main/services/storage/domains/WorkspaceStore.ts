@@ -183,6 +183,21 @@ export class WorkspaceStore {
     return row ? toWorkspaceFileIndexRecord(row) : null
   }
 
+  public async listWorkspaceFileIndexRecordsByPaths(
+    workspaceId: string,
+    relativePaths: string[]
+  ): Promise<WorkspaceFileIndexRecord[]> {
+    const paths = Array.from(new Set(relativePaths.map((value) => String(value).trim()).filter(Boolean)))
+    if (paths.length === 0) return []
+    const placeholders = paths.map(() => '?').join(', ')
+    const rows = this.sqlite
+      .prepare(
+        `SELECT * FROM workspace_file_index WHERE workspace_id = ? AND relative_path IN (${placeholders})`
+      )
+      .all(workspaceId, ...paths) as WorkspaceFileIndexRow[]
+    return rows.map(toWorkspaceFileIndexRecord)
+  }
+
   public async updateWorkspaceFileIndexRecord(
     id: string,
     values: Partial<
