@@ -1524,14 +1524,22 @@ export function registerHandlers(services: {
     }
   })
 
-  ipcMain.handle('pick-directory', async (_event): Promise<PickDirectoryResponse> => {
+  ipcMain.handle('pick-directory', async (event): Promise<PickDirectoryResponse> => {
     try {
       const dialogOptions: OpenDialogOptions = {
         title: '选择工作空间目录',
         buttonLabel: '选择此目录',
         properties: ['openDirectory', 'createDirectory', 'dontAddToRecent']
       }
-      const result = await dialog.showOpenDialog(dialogOptions)
+      let result
+      try {
+        const ownerWindow = BrowserWindow.fromWebContents(event.sender)
+        result = ownerWindow
+          ? await dialog.showOpenDialog(ownerWindow, dialogOptions)
+          : await dialog.showOpenDialog(dialogOptions)
+      } catch {
+        result = await dialog.showOpenDialog(dialogOptions)
+      }
       if (result.canceled || result.filePaths.length === 0) {
         return { canceled: true }
       }
