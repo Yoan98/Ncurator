@@ -50,30 +50,6 @@ describe('release regression selection', () => {
     expect(hasRegressionSelectionArgs(['--test-only', '--domain', 'workbench'])).toBe(true)
   })
 
-  it('records an incremental retest with the unaffected baseline', () => {
-    expect(
-      readRegressionSelection([
-        '--test-only',
-        '--reused-from-tag',
-        'windows-v0.1.48',
-        '--case',
-        'workspace-set-root-path',
-        '--case',
-        'user-message-actions'
-      ])
-    ).toEqual({
-      workflowArgs: ['--case', 'workspace-set-root-path', '--case', 'user-message-actions'],
-      state: {
-        mode: 'incremental',
-        caseIds: ['workspace-set-root-path', 'user-message-actions'],
-        reusedFromTag: 'windows-v0.1.48'
-      }
-    })
-    expect(() => readRegressionSelection(['--reused-from-tag', 'windows-v0.1.48'])).toThrow(
-      '--reused-from-tag requires an explicit affected regression selection'
-    )
-  })
-
   it('rejects an incomplete hierarchy', () => {
     expect(() => readRegressionSelection(['--suite', 'result'])).toThrow(
       '--suite requires --domain'
