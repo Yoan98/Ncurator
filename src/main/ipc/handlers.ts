@@ -28,7 +28,7 @@ import type {
 } from '../../shared/types'
 import {
   buildWebReferenceItem,
-  buildWorkspaceReferenceItems,
+  buildWorkspaceReferenceItemsFromRecords,
   referenceMatchesQuery
 } from '../services/sourceScope/selection'
 import { WorkspaceSourceService } from '../services/workspace/WorkspaceSourceService'
@@ -121,6 +121,7 @@ import type {
   WorkspaceJobResponse,
   WorkspaceMutationResponse,
   WorkspaceListItem,
+  WorkspaceTreeEntry,
   WorkspaceTreeListResponse,
   WorkspaceSource,
   WorkspaceListResponse
@@ -362,47 +363,6 @@ export function registerHandlers(services: {
       ...workspace,
       file_count: fileSummary.file_count,
       web_count: webSummary.web_count
-    }
-  }
-
-  const readWorkspaceTree = async (
-    workspaceId: string,
-    includeUnsupported = false
-  ): Promise<WorkspaceTreeListResponse> => {
-    const workspace = await workspaceStore.getWorkspaceById(workspaceId)
-    if (!workspace) {
-      return {
-        items: [],
-        total: 0,
-        summary: workspaceStore.getEmptySummary()
-      }
-    }
-    if (!workspace.root_path) {
-      return {
-        items: [],
-        total: 0,
-        summary: workspaceStore.getEmptySummary()
-      }
-    }
-
-    const scanResult = await workspaceService.scanWorkspaceTree({
-      workspaceId,
-      rootPath: workspace.root_path,
-      workspaceName: workspace.name
-    })
-    const records = await workspaceStore.listWorkspaceFileIndexRecords(workspaceId)
-    const merged = workspaceService.mergeTreeWithIndex({
-      entries: scanResult.entries,
-      records
-    })
-    const visibleItems = includeUnsupported
-      ? merged
-      : merged.filter((item) => item.kind === 'directory' || item.supported_for_index)
-    const summary = await workspaceStore.getWorkspaceFileSummary(workspaceId)
-    return {
-      items: visibleItems,
-      total: visibleItems.length,
-      summary
     }
   }
 
@@ -1716,30 +1676,36 @@ export function registerHandlers(services: {
             .map((workspace) => workspace.root_path || '')
         )
 
+        const activeJob = await workspaceIndexJobStore.getActiveJob(workspaceId, 'file')
+        if (activeJob) return { success: false, error: '当前工作空间正在处理文件索引' }
+        const { normalizedRootPath } = await workspaceService.normalizeWorkspaceRoot(rootPath)
         const now = Date.now()
-        const scanResult = await workspaceService.scanWorkspaceTree({
-          workspaceId,
-          rootPath,
-          workspaceName: currentWorkspace.name,
-          now
-        })
-        const supportedEntries = scanResult.entries.filter(
-          (entry) => entry.kind === 'file' && entry.supported_for_index
-        )
-        const records = supportedEntries.map((entry) =>
-          workspaceService.buildWorkspaceFileIndexRecord({
-            workspaceId,
-            entry,
-            now
-          })
-        )
-        await workspaceStore.replaceWorkspaceFileIndexRecords(workspaceId, records)
+        const oldRecords = await workspaceStore.listWorkspaceFileIndexRecords(workspaceId)
+        const oldDocumentIds = oldRecords
+          .map((record) => record.document_id)
+          .filter((documentId): documentId is string => Boolean(documentId))
+        await workspaceStore.deleteWorkspaceFileIndexRecords(workspaceId)
+        if (oldDocumentIds.length > 0) await documentsStore.deleteDocumentsByIds(oldDocumentIds)
         const workspace: WorkspaceSource = {
           ...currentWorkspace,
-          root_path: scanResult.workspace.root_path,
+          root_path: normalizedRootPath,
           updated_at: now
         }
         await workspaceStore.saveWorkspace(workspace)
+        const jobKey = getWorkspaceIndexJobKey(workspaceId, 'file')
+        const job = await saveAndEmitWorkspaceIndexJob(
+          createWorkspaceIndexJob({
+            workspaceId,
+            sourceKind: 'file',
+            action: 'scan',
+            phase: 'scan',
+            stepIndex: 1,
+            stepTotal: 1,
+            message: '正在扫描工作目录'
+          })
+        )
+        activeWorkspaceIndexJobs.add(jobKey)
+        void runFileScanJob({ sender: event.sender, job })
         emitSourceListRefresh(event.sender)
         return { success: true, workspace }
       } catch (error) {
@@ -1753,10 +1719,29 @@ export function registerHandlers(services: {
     'workspace-tree',
     async (_event, payload: ListWorkspaceTreeRequest): Promise<WorkspaceTreeListResponse> => {
       try {
-        return await readWorkspaceTree(
-          String(payload.workspaceId || '').trim(),
-          Boolean(payload.includeUnsupported)
-        )
+        const workspaceId = String(payload?.workspaceId || '').trim()
+        const records = await workspaceStore.listWorkspaceFileIndexRecords(workspaceId)
+        const items: WorkspaceTreeEntry[] = records.map((record) => ({
+          id: `${workspaceId}:file:${record.relative_path}`,
+          workspace_id: workspaceId,
+          kind: 'file',
+          name: record.name,
+          relative_path: record.relative_path,
+          absolute_path: record.absolute_path,
+          file_ext: record.file_ext || undefined,
+          supported_for_index: true,
+          size: record.size,
+          mtime_ms: record.mtime_ms,
+          index_status: record.index_status,
+          document_id: record.document_id,
+          indexed_at: record.indexed_at,
+          last_error: record.last_error
+        }))
+        return {
+          items,
+          total: items.length,
+          summary: await workspaceStore.getWorkspaceFileSummary(workspaceId)
+        }
       } catch (error) {
         console.error('❌ [WORKSPACE-TREE] ERROR:', error)
         return { items: [], total: 0, summary: workspaceStore.getEmptySummary() }
@@ -1779,7 +1764,13 @@ export function registerHandlers(services: {
           rootPath: workspace.root_path,
           relativePath: payload?.relativePath
         })
-        return { items, total: items.length }
+        const records = await workspaceStore.listWorkspaceFileIndexRecordsByPaths(
+          workspaceId,
+          items.filter((item) => item.kind === 'file').map((item) => item.relative_path)
+        )
+        const mergedItems = workspaceService.mergeTreeWithIndex({ entries: items, records })
+        const summary = await workspaceStore.getWorkspaceFileSummary(workspaceId)
+        return { items: mergedItems, total: mergedItems.length, summary }
       } catch (error) {
         return {
           items: [],
@@ -2054,12 +2045,10 @@ export function registerHandlers(services: {
         if (workspaceIdFilter) {
           const workspace = await workspaceStore.getWorkspaceById(workspaceIdFilter)
           if (workspace) {
-            const tree = await readWorkspaceTree(workspace.id, true)
             const records = await workspaceStore.listWorkspaceFileIndexRecords(workspace.id)
             localReferences.push(
-              ...buildWorkspaceReferenceItems({
+              ...buildWorkspaceReferenceItemsFromRecords({
                 workspace,
-                entries: tree.items,
                 records
               })
             )

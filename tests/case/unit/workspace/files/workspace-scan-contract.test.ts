@@ -18,10 +18,12 @@ describe('unit workspace backend', () => {
         const now = Date.now()
         await mkdir(path.join(runtime.workspaceRoot, '.git'), { recursive: true })
         await mkdir(path.join(runtime.workspaceRoot, 'node_modules'), { recursive: true })
+        await mkdir(path.join(runtime.workspaceRoot, 'visible', 'deep'), { recursive: true })
         await mkdir(path.join(runtime.workspaceRoot, '工作', '.drafts'), { recursive: true })
         await writeFile(path.join(runtime.workspaceRoot, '.env'), 'SECRET=hidden\n')
         await writeFile(path.join(runtime.workspaceRoot, '.git', 'config'), '[core]\n')
         await writeFile(path.join(runtime.workspaceRoot, 'node_modules', 'noise.js'), 'noise\n')
+        await writeFile(path.join(runtime.workspaceRoot, 'visible', 'deep', 'leaf.txt'), 'leaf\n')
         await writeFile(
           path.join(runtime.workspaceRoot, '工作', '.drafts', 'hidden.md'),
           'hidden\n'
@@ -119,7 +121,28 @@ describe('unit workspace backend', () => {
           indexedPaths: savedRecords.map((record) => record.relative_path),
           removedHiddenPaths: hiddenDiff.removed.map((record) => record.relative_path),
           rootDirectoryPaths: rootDirectory.map((entry) => entry.relative_path),
-          nestedDirectoryPaths: nestedDirectory.map((entry) => entry.relative_path)
+          nestedDirectoryPaths: nestedDirectory.map((entry) => entry.relative_path),
+          visibleDirectoryPaths: (
+            await runtime.workspaceSourceService.listDirectory({
+              workspaceId: scanResult.workspace.id,
+              rootPath: runtime.workspaceRoot,
+              relativePath: 'visible'
+            })
+          ).map((entry) => entry.relative_path),
+          deepDirectoryPaths: (
+            await runtime.workspaceSourceService.listDirectory({
+              workspaceId: scanResult.workspace.id,
+              rootPath: runtime.workspaceRoot,
+              relativePath: 'visible/deep'
+            })
+          ).map((entry) => entry.relative_path),
+          modulesDirectoryPaths: (
+            await runtime.workspaceSourceService.listDirectory({
+              workspaceId: scanResult.workspace.id,
+              rootPath: runtime.workspaceRoot,
+              relativePath: 'node_modules'
+            })
+          ).map((entry) => entry.relative_path)
         }
       },
       assert: async (result, runtime) => {
@@ -137,12 +160,17 @@ describe('unit workspace backend', () => {
 
         runtime.assertThat(
           !result.rootDirectoryPaths.some((item) => item.startsWith('.')) &&
-            !result.rootDirectoryPaths.some((item) => item.startsWith('node_modules')) &&
+            result.rootDirectoryPaths.includes('node_modules') &&
             result.rootDirectoryPaths.includes('工作') &&
-            !result.nestedDirectoryPaths.some((item) => item.includes('.drafts')),
+            !result.nestedDirectoryPaths.some((item) => item.includes('.drafts')) &&
+            !result.rootDirectoryPaths.includes('visible/deep') &&
+            result.visibleDirectoryPaths.includes('visible/deep') &&
+            !result.visibleDirectoryPaths.includes('visible/deep/leaf.txt') &&
+            result.deepDirectoryPaths.includes('visible/deep/leaf.txt') &&
+            result.modulesDirectoryPaths.includes('node_modules/noise.js'),
           {
             name: 'workspace-directory-list-is-lazy-and-filters-noise',
-            message: 'Workbench 文件列表应按目录读取直接子级，并默认隐藏内部目录和依赖噪音。',
+            message: '目录读取应只返回直属子项，隐藏点开头项，并保留非隐藏目录的可见性。',
             data: result
           }
         )

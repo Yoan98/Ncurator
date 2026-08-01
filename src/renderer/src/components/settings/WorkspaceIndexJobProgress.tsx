@@ -36,6 +36,7 @@ const WorkspaceIndexJobProgress: React.FC<WorkspaceIndexJobProgressProps> = ({ j
       </div>
       <Progress
         percent={percent}
+        status="active"
         showInfo={false}
         size="small"
         strokeColor="#37352F"

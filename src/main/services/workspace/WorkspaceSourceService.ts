@@ -51,6 +51,8 @@ const isVisiblePath = (relativePath: string): boolean =>
     .filter(Boolean)
     .some((segment) => segment.startsWith('.'))
 
+const isVisibleName = (name: string): boolean => !name.startsWith('.')
+
 export class WorkspaceSourceService {
   public async listDirectory(input: {
     workspaceId: string
@@ -66,9 +68,8 @@ export class WorkspaceSourceService {
       throw new Error('目录不在当前工作区内')
     }
     const dirEntries = await fs.readdir(currentPath, { withFileTypes: true })
-    const ignoredNames = new Set(['node_modules', '.git', '.cache', '.next'])
     const visible = dirEntries
-      .filter((entry) => !entry.name.startsWith('.') && !ignoredNames.has(entry.name))
+      .filter((entry) => isVisibleName(entry.name))
       .sort((left, right) => {
         if (left.isDirectory() !== right.isDirectory()) return left.isDirectory() ? -1 : 1
         return left.name.localeCompare(right.name)
@@ -78,6 +79,7 @@ export class WorkspaceSourceService {
       if (!entry.isDirectory() && !entry.isFile()) continue
       const childRelativePath = [relativePath, entry.name].filter(Boolean).join('/')
       const absolutePath = path.join(currentPath, entry.name)
+      const supportedForIndex = entry.isFile() && isSupportedLocalFilePath(absolutePath)
       const base = {
         id: toEntryId(
           input.workspaceId,
@@ -90,10 +92,17 @@ export class WorkspaceSourceService {
         name: entry.name,
         relative_path: childRelativePath,
         absolute_path: absolutePath,
-        supported_for_index: entry.isFile() && isSupportedLocalFilePath(absolutePath)
+        supported_for_index: supportedForIndex
       }
       if (entry.isDirectory()) {
         entries.push(base)
+        continue
+      }
+      if (!supportedForIndex) {
+        entries.push({
+          ...base,
+          file_ext: path.extname(entry.name).toLowerCase().slice(1) || undefined
+        })
         continue
       }
       const stat = await fs.stat(absolutePath)

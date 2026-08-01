@@ -354,6 +354,7 @@ export interface ListWorkspaceDirectoryRequest {
 export interface WorkspaceDirectoryListResponse {
   items: WorkspaceTreeEntry[]
   total: number
+  summary?: WorkspaceFileSummary
   error?: string
 }
 
