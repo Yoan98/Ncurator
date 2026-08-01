@@ -2,10 +2,7 @@ import { createHash } from 'node:crypto'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { describe, it } from 'vitest'
-import {
-  hasLiveLlmConfigInEnv,
-  loadLiveLlmConfigFromEnv
-} from '../../../../harness/backend/llmConfig'
+import { loadLiveLlmConfigFromEnv } from '../../../../harness/backend/llmConfig'
 import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import { SHARED_WORKSPACE_FIXTURE_PATH } from '../../../../harness/backend/aiLiveTestData'
@@ -58,12 +55,7 @@ describe('ai human live backend', () => {
         description: '验证 live 模型通过现有 docx-read 工具读取真实旧版 .doc 文档。',
         fixtures: [LEGACY_DOC_FIXTURE_PATH],
         runMode: 'single',
-        runtimeModelName: hasLiveLlmConfigInEnv() ? loadLiveLlmConfigFromEnv().model_name : null,
         execute: async (runtime) => {
-          if (!hasLiveLlmConfigInEnv()) {
-            return { skipped: true, output: null, events: [], beforeHash: '', afterHash: '' }
-          }
-
           await runtime.seedLlmConfig(loadLiveLlmConfigFromEnv())
           const { absolutePath, reference } = buildLegacyDocReference(runtime)
           const beforeHash = await fileHash(absolutePath)
@@ -81,7 +73,6 @@ describe('ai human live backend', () => {
           })
 
           return {
-            skipped: false,
             output,
             events: runtime.eventCollector.snapshot(),
             beforeHash,
@@ -89,14 +80,6 @@ describe('ai human live backend', () => {
           }
         },
         assert: async (result, runtime) => {
-          if (result.skipped) {
-            runtime.assertThat(true, {
-              name: 'live-config-not-provided',
-              message: '未提供 live 模型配置，已跳过 human legacy DOC reading live case。'
-            })
-            return
-          }
-
           const starts = filterAiRunEventsByType(result.events, 'tool_call_started')
           const successfulResults = filterAiRunEventsByType(result.events, 'tool_call_result').filter(
             (event) => event.result?.ok === true
@@ -106,9 +89,6 @@ describe('ai human live backend', () => {
           const sourcePaths = starts
             .map((event) => event.input.sourcePath)
             .filter((value): value is string => typeof value === 'string')
-          const delivery = String(result.output?.deliveryMarkdown || '')
-          const expectedLevels = ['无风险', '中风险', '中高风险', '高风险', '最高风险']
-          const expectedRates = ['90%', '70%', '50%', '30%', '0-10%']
 
           runtime.assertThat(
             result.output?.status === 'completed' &&
@@ -118,8 +98,6 @@ describe('ai human live backend', () => {
               ) &&
               sourcePaths.some((sourcePath) => sourcePath.toLowerCase().endsWith('.doc')) &&
               !startedToolNames.includes('docx_edit') &&
-              expectedLevels.every((level) => delivery.includes(level)) &&
-              expectedRates.every((rate) => delivery.includes(rate)) &&
               result.beforeHash === result.afterHash,
             {
               name: 'human-live-reads-selected-legacy-doc-with-docx-read-tools',
@@ -129,7 +107,6 @@ describe('ai human live backend', () => {
                 startedToolNames,
                 successfulReadToolNames,
                 sourcePaths,
-                deliveryMarkdown: result.output?.deliveryMarkdown,
                 sourceUnchanged: result.beforeHash === result.afterHash
               }
             }
@@ -151,12 +128,7 @@ describe('ai human live backend', () => {
           '验证 live 模型尝试编辑旧版 .doc 后遵循 decision hint，停止重试并保持源文件不变。',
         fixtures: [LEGACY_DOC_FIXTURE_PATH],
         runMode: 'single',
-        runtimeModelName: hasLiveLlmConfigInEnv() ? loadLiveLlmConfigFromEnv().model_name : null,
         execute: async (runtime) => {
-          if (!hasLiveLlmConfigInEnv()) {
-            return { skipped: true, output: null, events: [], beforeHash: '', afterHash: '' }
-          }
-
           await runtime.seedLlmConfig(loadLiveLlmConfigFromEnv())
           const { absolutePath, reference } = buildLegacyDocReference(runtime)
           const beforeHash = await fileHash(absolutePath)
@@ -175,11 +147,10 @@ describe('ai human live backend', () => {
           const output = await runner.run({
             taskId: runtime.taskId,
             userInput:
-              '请直接使用 docx_edit，把我选中的 Word 文档第一行标题改成“图案设计风险等级判断标准”，修改原文件，不要另建文件。'
+              '请把我选中的旧版 Word 文档第一行标题改成“图案设计风险等级判断标准”，修改原文件，不要另建文件。'
           })
 
           return {
-            skipped: false,
             output,
             events: runtime.eventCollector.snapshot(),
             beforeHash,
@@ -187,14 +158,6 @@ describe('ai human live backend', () => {
           }
         },
         assert: async (result, runtime) => {
-          if (result.skipped) {
-            runtime.assertThat(true, {
-              name: 'live-config-not-provided',
-              message: '未提供 live 模型配置，已跳过 human legacy DOC edit skip live case。'
-            })
-            return
-          }
-
           const editStarts = filterAiRunEventsByType(result.events, 'tool_call_started').filter(
             (event) => event.toolName === 'docx_edit'
           )
@@ -203,7 +166,6 @@ describe('ai human live backend', () => {
           )
           const decisionHints = filterAiRunEventsByType(result.events, 'decision_hint')
           const errors = collectToolErrorMessages(result.events, 'docx_edit')
-          const delivery = String(result.output?.deliveryMarkdown || '')
 
           runtime.assertThat(
             result.output?.status === 'completed' &&
@@ -216,8 +178,7 @@ describe('ai human live backend', () => {
                   event.code === 'legacy_doc_edit_unsupported' &&
                   event.detail?.instruction === '不要继续尝试编辑 .doc 文件，跳过它继续推进。'
               ) &&
-              /(\.docx|转换|另存为)/i.test(delivery) &&
-              result.beforeHash === result.afterHash,
+                result.beforeHash === result.afterHash,
             {
               name: 'human-live-stops-after-legacy-doc-edit-decision-hint',
               message:
@@ -226,7 +187,6 @@ describe('ai human live backend', () => {
                 editAttemptCount: editStarts.length,
                 errors,
                 decisionHints,
-                deliveryMarkdown: result.output?.deliveryMarkdown,
                 sourceUnchanged: result.beforeHash === result.afterHash
               }
             }

@@ -27,6 +27,9 @@ const parseLine = (line: string): { key: string; value: string } | null => {
   return { key, value }
 }
 
+const expandEnvironmentReferences = (value: string): string =>
+  value.replace(/\$\{([A-Z][A-Z0-9_]*)\}/g, (_match, name: string) => String(process.env[name] || ''))
+
 export const loadRootEnvOnce = (): void => {
   if (loaded) return
   if (String(process.env.AI_TEST_DISABLE_DOTENV || '').trim() === '1') return
@@ -47,7 +50,7 @@ export const loadRootEnvOnce = (): void => {
       if (!parsed) continue
       const current = String(process.env[parsed.key] || '').trim()
       if (current) continue
-      process.env[parsed.key] = parsed.value
+      process.env[parsed.key] = expandEnvironmentReferences(parsed.value)
     }
   }
 }

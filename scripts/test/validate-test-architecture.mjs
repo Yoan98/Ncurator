@@ -104,6 +104,27 @@ for (const [domain, rule] of Object.entries(DOMAIN_RULES)) {
         `${relativePath}: 完整生产工具 runtime 流程必须放到 ai/tool，不允许由 Unit 直接拥有`
       )
     }
+    const isAiLive = relativePath.split(path.sep).join('/').includes('tests/case/ai/human/live/')
+    if (isAiLive) {
+      const prohibited = [
+        ['skipped live result', /\bskipped\s*:/u],
+        ['live config probe', /\bhasLiveLlmConfigInEnv\b/u],
+        ['LLM scripted override', /\bstructuredOutputScript\b|\bllmScript\b|\bchatStructuredOverride\b/u],
+        ['case score gate', /\bscoreParts\b|\bruntime\.assertThat\(\s*score\b/u]
+      ]
+      for (const [label, pattern] of prohibited) {
+        if (pattern.test(source)) failures.push(`${relativePath}: live 不允许 ${label}`)
+      }
+      if (!/\bloadLiveLlmConfigFromEnv\b|\brunBackendCase\b/u.test(source)) {
+        failures.push(`${relativePath}: live 必须走严格 env runner`)
+      }
+      if (
+        /\b(?:ppt_read_visuals|docx_read_visuals|pdf_read_visuals)\b/u.test(source) &&
+        !/\brequiresVisionModel\s*:\s*true\b/u.test(source)
+      ) {
+        failures.push(`${relativePath}: 使用视觉工具的 live case 必须声明 requiresVisionModel: true`)
+      }
+    }
 
     if (domain !== 'unit') {
       const declaredDomains = [...source.matchAll(/\bdomain\s*:\s*['"]([^'"]+)['"]/gu)].map(

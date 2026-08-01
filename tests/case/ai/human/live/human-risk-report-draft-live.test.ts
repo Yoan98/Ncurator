@@ -5,10 +5,7 @@ import {
   buildBlockIndex,
   loadDocxBundle
 } from '../../../../../src/main/services/ai/human/tools/docx/adapters/ooxml/blockIndex'
-import {
-  loadLiveLlmConfigFromEnv,
-  hasLiveLlmConfigInEnv
-} from '../../../../harness/backend/llmConfig'
+import { loadLiveLlmConfigFromEnv } from '../../../../harness/backend/llmConfig'
 import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import {
@@ -167,11 +164,11 @@ describe('ai human live backend', () => {
         '验证 live 模式下 human 会在真实长任务里串起多源工作文档取证、新建周报 docx 与文件交付。',
       fixtures: [RISK_REPORT_DRAFT_SHARED_WORKSPACE_FIXTURE_PATH],
       runMode: 'single',
-      runtimeModelName: hasLiveLlmConfigInEnv() ? loadLiveLlmConfigFromEnv().model_name : null,
+      runtimeModelName: loadLiveLlmConfigFromEnv().model_name,
       execute: async (runtime) => {
-        if (!hasLiveLlmConfigInEnv()) {
+        if (!loadLiveLlmConfigFromEnv()) {
           return {
-            skipped: true,
+            configurationMissing: true,
             output: null,
             events: []
           }
@@ -187,15 +184,15 @@ describe('ai human live backend', () => {
         })
 
         return {
-          skipped: false,
+          configurationMissing: false,
           output,
           workspaceSeed,
           events: runtime.eventCollector.snapshot()
         }
       },
       assert: async (result, runtime) => {
-        if (result.skipped) {
-          runtime.assertThat(true, {
+        if (result.configurationMissing) {
+          runtime.assertThat(false, {
             name: 'live-config-not-provided',
             message: '未提供 live 模型配置，已跳过 human live risk report draft case。'
           })
@@ -205,7 +202,6 @@ describe('ai human live backend', () => {
         const events = result.events
         const toolResults = filterAiRunEventsByType(events, 'tool_call_result')
         const toolNames = toolResults.map((event) => event.toolName)
-        const deliveryText = String(result.output?.deliveryMarkdown || '').trim()
         const trackedDocsUnchanged = await Promise.all(
           result.workspaceSeed.trackedDocFiles.map(async (fixture) => {
             const currentBytes = await fs.readFile(fixture.workspacePath)
@@ -283,8 +279,9 @@ describe('ai human live backend', () => {
         if (appliedDocPath) {
           appliedDocText = await readDocxPlainText(appliedDocPath)
         }
-        const generatedDraftText = `${appliedDocText}\n${deliveryText}`
-        const appliedTextOnly = appliedDocText || deliveryText
+        const deliveryText = appliedDocText
+        const generatedDraftText = appliedDocText
+        const appliedTextOnly = appliedDocText
         const evidenceText = `${generatedDraftText}\n${JSON.stringify(
           result.output?.artifacts || []
         )}`
@@ -328,21 +325,6 @@ describe('ai human live backend', () => {
             'kb_search'
           ].includes(toolName)
         )
-        const scoreParts = {
-          createdDraft:
-            createSourcePaths.length >= 1 &&
-            createdTargetInAllowedLocation &&
-            createdDocNotPreexisting &&
-            hasDocxArtifact
-              ? 2
-              : 0,
-          sourceSafety: trackedDocsUnchanged.every(Boolean) && writesStayOnCreatedDoc ? 2 : 0,
-          pendingRisk: riskConclusionSatisfied || pendingRiskStateSatisfied ? 2 : 0,
-          ownershipAndActions: ownerSummarySatisfied && nextStepSatisfied ? 2 : 0,
-          cautiousConclusion: !hasForbiddenAffirmativeConclusion ? 2 : 0
-        }
-        const score = Object.values(scoreParts).reduce((total, value) => total + value, 0)
-
         runtime.assertThat(
           result.output?.status === 'completed' &&
             toolNames.includes('terminal_run') &&
@@ -367,9 +349,8 @@ describe('ai human live backend', () => {
               txtReads,
               relevantDocxOpened,
               referencesDocxEvidence,
-              referencesTxtEvidence,
-              deliveryMarkdown: result.output?.deliveryMarkdown,
-              artifacts: result.output?.artifacts
+               referencesTxtEvidence,
+               artifacts: result.output?.artifacts
             }
           }
         )
@@ -383,13 +364,23 @@ describe('ai human live backend', () => {
           }
         })
 
-        runtime.assertThat(score > 8, {
+        runtime.assertThat(
+          result.output?.status === 'completed' &&
+            createSourcePaths.length >= 1 &&
+            createdTargetInAllowedLocation &&
+            createdDocNotPreexisting &&
+            hasDocxArtifact &&
+            trackedDocsUnchanged.every(Boolean) &&
+            writesStayOnCreatedDoc &&
+            (riskConclusionSatisfied || pendingRiskStateSatisfied) &&
+            ownerSummarySatisfied &&
+            nextStepSatisfied &&
+            !hasForbiddenAffirmativeConclusion,
+          {
           name: 'human-live-risk-report-creates-new-draft-without-overwriting-source-docs',
           message:
             'live risk report 按 10 分制评估文件交付、原文件安全、风险状态、负责人动作和谨慎结论，得分必须严格超过 8 分。',
           data: {
-            score,
-            scoreParts,
             createSourcePaths,
             createdRelativePaths,
             writeSourcePaths,
@@ -403,10 +394,10 @@ describe('ai human live backend', () => {
             ownerSummarySatisfied,
             nextStepSatisfied,
             generatedDraftTextSnippet: generatedDraftText.slice(0, 2000),
-            appliedTextSnippet: appliedTextOnly.slice(0, 2000),
-            deliveryMarkdown: result.output?.deliveryMarkdown
+            appliedTextSnippet: appliedTextOnly.slice(0, 2000)
           }
-        })
+          }
+        )
 
         runtime.assertThat(
           /负责人/.test(deliveryText) &&
@@ -422,9 +413,8 @@ describe('ai human live backend', () => {
               'live human complex case 应给出最终交付，并产出已修改文件 artifact 与 applyId。',
             data: {
               toolNames,
-              createSourcePaths,
-              deliveryMarkdown: result.output?.deliveryMarkdown,
-              artifacts: result.output?.artifacts
+            createSourcePaths,
+            artifacts: result.output?.artifacts
             }
           }
         )

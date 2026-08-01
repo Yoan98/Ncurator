@@ -1,97 +1,124 @@
+import { createHash } from 'node:crypto'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { describe, it } from 'vitest'
-import {
-  loadLiveLlmConfigFromEnv,
-  hasLiveLlmConfigInEnv
-} from '../../../../harness/backend/llmConfig'
 import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import { filterAiRunEventsByType, runWithStructuredOutputRetry } from '../testUtils'
 
-describe('ai human live backend', () => {
-  it('human-text-file-read-write-live', async () => {
+const hashFile = async (filePath: string): Promise<string> =>
+  createHash('sha256').update(await fs.readFile(filePath)).digest('hex')
+
+const seedCheckoutConfig = async (filePath: string): Promise<void> => {
+  await fs.writeFile(
+    filePath,
+    [
+      "export const primaryEndpoint = 'OLD_API_URL'",
+      "export const fallbackEndpoint = 'OLD_API_URL'",
+      'export const timeoutMs = 1000',
+      'export const retryCount = 2',
+      "export const telemetryChannel = 'checkout-prod'",
+      ''
+    ].join('\n'),
+    'utf8'
+  )
+}
+
+describe('ai human live text-file backend', () => {
+  it('human-text-file-read-checkout-readiness-live', async () => {
     await runWithStructuredOutputRetry(async () => {
       await runBackendCase({
-        caseId: 'human-text-file-read-write-live',
+        caseId: 'human-text-file-read-checkout-readiness-live',
         harnessMode: 'live',
         domain: 'ai',
         suite: 'human',
         groups: ['live'],
-        description: '验证 live 模型会读取代码文件，使用 replaceAll 和唯一 edit，并回读确认结果。',
+        description: 'Reads a checkout configuration and reports deployment readiness without modifying it.',
         fixtures: [],
         runMode: 'single',
-        runtimeModelName: hasLiveLlmConfigInEnv() ? loadLiveLlmConfigFromEnv().model_name : null,
         execute: async (runtime) => {
-          if (!hasLiveLlmConfigInEnv()) {
-            return { skipped: true, output: null, events: [], finalContent: '' }
-          }
-
-          const sourcePath = path.join(runtime.workspaceRoot, 'config.ts')
-          await fs.writeFile(
-            sourcePath,
-            [
-              'const OLD_API_URL = "https://api.example.com"',
-              'const timeout = 1000',
-              'export const endpoint = OLD_API_URL'
-            ].join('\n'),
-            'utf-8'
-          )
-          await runtime.seedLlmConfig(loadLiveLlmConfigFromEnv())
-          const runner = createHumanTestRunner(runtime, {
-            allowedToolNames: ['text_file_read', 'text_file_edit']
-          })
-          const output = await runner.run({
+          const sourcePath = path.join(runtime.workspaceRoot, 'checkout-config.ts')
+          await seedCheckoutConfig(sourcePath)
+          const beforeHash = await hashFile(sourcePath)
+          const output = await createHumanTestRunner(runtime, {
+            allowedToolNames: ['text_file_read']
+          }).run({
             taskId: runtime.taskId,
             userInput:
-              '请直接修改 config.ts：用 replaceAll 把所有 OLD_API_URL 改成 API_BASE_URL，再把唯一的 const timeout = 1000 精确改成 const timeout = 3000。完成后读取文件确认。'
+              'Before the checkout cutover, review checkout-config.ts and tell me whether the primary and fallback endpoints, timeout, retry count, and telemetry setting are ready. Do not modify the file.'
           })
           return {
-            skipped: false,
             output,
-            events: runtime.eventCollector.snapshot(),
-            finalContent: await fs.readFile(sourcePath, 'utf-8')
+            beforeHash,
+            afterHash: await hashFile(sourcePath),
+            events: runtime.eventCollector.snapshot()
           }
         },
         assert: async (result, runtime) => {
-          if (result.skipped) {
-            runtime.assertThat(true, {
-              name: 'live-config-not-provided',
-              message: '未提供 live 模型配置，已跳过 human text-file live case。'
-            })
-            return
-          }
-
-          const starts = filterAiRunEventsByType(result.events, 'tool_call_started')
-          const writes = starts.filter((event) => event.toolName === 'text_file_edit')
-          const resultText = JSON.stringify(
-            filterAiRunEventsByType(result.events, 'tool_call_result')
-              .filter((event) => event.toolName === 'text_file_edit')
-              .map((event) => event.result?.data)
+          const toolNames = filterAiRunEventsByType(result.events, 'tool_call_started').map(
+            (event) => event.toolName
           )
           runtime.assertThat(
-            result.output?.status === 'completed' &&
-              starts.some((event) => event.toolName === 'text_file_read') &&
-              writes.some(
-                (event) =>
-                  event.input.action === 'replaceAll' &&
-                  event.input.oldText === 'OLD_API_URL' &&
-                  event.input.newText === 'API_BASE_URL'
-              ) &&
-              !result.finalContent.includes('OLD_API_URL') &&
-              result.finalContent.includes('API_BASE_URL') &&
-              result.finalContent.includes('const timeout = 3000') &&
-              !resultText.includes('previewPath') &&
-              !resultText.includes('hunks') &&
-              !resultText.includes('@@'),
+            result.output.status === 'completed' &&
+              toolNames.includes('text_file_read') &&
+              !toolNames.includes('text_file_edit') &&
+              result.beforeHash === result.afterHash,
             {
-              name: 'human-live-text-file-read-write',
-              message: 'live human 应使用文本工具完成全量替换和唯一编辑，写入结果中不得暴露 diff。',
-              data: {
-                writes: writes.map((event) => event.input),
-                finalContent: result.finalContent,
-                toolResults: resultText
-              }
+              name: 'human-live-text-file-read-is-read-only',
+              message: 'The live model must inspect the configuration without changing it.',
+              data: { toolNames }
+            }
+          )
+        }
+      })
+    })
+  })
+
+  it('human-text-file-write-checkout-cutover-live', async () => {
+    await runWithStructuredOutputRetry(async () => {
+      await runBackendCase({
+        caseId: 'human-text-file-write-checkout-cutover-live',
+        harnessMode: 'live',
+        domain: 'ai',
+        suite: 'human',
+        groups: ['live'],
+        description: 'Makes a clearly specified checkout endpoint cutover while preserving unrelated configuration.',
+        fixtures: [],
+        runMode: 'single',
+        execute: async (runtime) => {
+          const sourcePath = path.join(runtime.workspaceRoot, 'checkout-config.ts')
+          await seedCheckoutConfig(sourcePath)
+          const output = await createHumanTestRunner(runtime, {
+            allowedToolNames: ['text_file_read', 'text_file_edit']
+          }).run({
+            taskId: runtime.taskId,
+            userInput:
+              'Perform the checkout endpoint cutover in checkout-config.ts: replace both OLD_API_URL values with API_BASE_URL, change timeoutMs to 3000, and leave retryCount and telemetryChannel unchanged. Verify the file after editing.'
+          })
+          return {
+            output,
+            finalContent: await fs.readFile(sourcePath, 'utf8'),
+            events: runtime.eventCollector.snapshot()
+          }
+        },
+        assert: async (result, runtime) => {
+          const toolNames = filterAiRunEventsByType(result.events, 'tool_call_started').map(
+            (event) => event.toolName
+          )
+          runtime.assertThat(
+            result.output.status === 'completed' &&
+              toolNames.includes('text_file_read') &&
+              toolNames.includes('text_file_edit') &&
+              !result.finalContent.includes('OLD_API_URL') &&
+              result.finalContent.includes("primaryEndpoint = 'API_BASE_URL'") &&
+              result.finalContent.includes("fallbackEndpoint = 'API_BASE_URL'") &&
+              result.finalContent.includes('timeoutMs = 3000') &&
+              result.finalContent.includes('retryCount = 2') &&
+              result.finalContent.includes("telemetryChannel = 'checkout-prod'"),
+            {
+              name: 'human-live-text-file-write-is-scoped-and-complete',
+              message: 'The live model must complete the explicit cutover without changing unrelated configuration.',
+              data: { toolNames, finalContent: result.finalContent }
             }
           )
         }

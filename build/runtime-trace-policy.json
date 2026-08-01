@@ -82,6 +82,11 @@
       "id": "pdf-parse-worker",
       "package": "pdf-parse",
       "path": "lib/pdf.js/v1.10.100/build/pdf.worker.js"
+    },
+    {
+      "id": "exceljs-workbook-runtime",
+      "package": "exceljs",
+      "path": "lib/doc/workbook.js"
     }
   ]
 }

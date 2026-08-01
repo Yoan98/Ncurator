@@ -1,11 +1,9 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { describe, it } from 'vitest'
+import { buildBlockIndex, loadDocxBundle } from '../../../../../src/main/services/ai/human/tools/docx/adapters/ooxml/blockIndex'
 import type { AiRunEvent, JsonObject, JsonValue } from '../../../../../src/shared/types'
-import {
-  loadLiveLlmConfigFromEnv,
-  hasLiveLlmConfigInEnv
-} from '../../../../harness/backend/llmConfig'
+import { loadLiveLlmConfigFromEnv } from '../../../../harness/backend/llmConfig'
 import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import {
@@ -37,6 +35,14 @@ const hasSuccessfulKbSearchHit = (events: readonly AiRunEvent[]): boolean =>
     return (typeof total === 'number' && total > 0) || (Array.isArray(items) && items.length > 0)
   })
 
+const readDocxPlainText = async (filePath: string): Promise<string> => {
+  const bundle = await loadDocxBundle(await fs.readFile(filePath))
+  return buildBlockIndex(bundle.documentDom)
+    .outline.filter((block) => block.type !== 'table_cell')
+    .map((block) => block.text)
+    .join('\n')
+}
+
 describe('ai human live backend', () => {
   it('human-kb-guided-docx-comparison-draft-live', async () => {
     await runWithStructuredOutputRetry(async () => {
@@ -50,11 +56,11 @@ describe('ai human live backend', () => {
           '验证 live 模式下 human 会先用 KB 缩圈定位相关课件，再把内容回写到另外两份目标 docx。',
         fixtures: [SHARED_WORKSPACE_FIXTURE_PATH],
         runMode: 'single',
-        runtimeModelName: hasLiveLlmConfigInEnv() ? loadLiveLlmConfigFromEnv().model_name : null,
+        runtimeModelName: loadLiveLlmConfigFromEnv().model_name,
         execute: async (runtime) => {
-          if (!hasLiveLlmConfigInEnv()) {
+          if (!loadLiveLlmConfigFromEnv()) {
             return {
-              skipped: true,
+              configurationMissing: true,
               output: null,
               indexedFiles: [],
               workspaceSeed: null,
@@ -101,7 +107,7 @@ describe('ai human live backend', () => {
           })
 
           return {
-            skipped: false,
+            configurationMissing: false,
             output,
             indexedFiles,
             workspaceSeed,
@@ -109,8 +115,8 @@ describe('ai human live backend', () => {
           }
         },
         assert: async (result, runtime) => {
-          if (result.skipped || !result.workspaceSeed) {
-            runtime.assertThat(true, {
+          if (result.configurationMissing || !result.workspaceSeed) {
+            runtime.assertThat(false, {
               name: 'live-config-not-provided',
               message:
                 '未提供 live 模型配置，已跳过 human live KB-guided docx comparison draft case。'
@@ -147,7 +153,13 @@ describe('ai human live backend', () => {
                 return Buffer.compare(currentBytes, Buffer.from(fixture.bytes)) === 0
               })
           )
-          const deliveryText = String(result.output?.deliveryMarkdown || '')
+          const deliveryText = (
+            await Promise.all(
+              result.workspaceSeed.targetDocs.map(
+                async (fixture) => await readDocxPlainText(fixture.workspacePath)
+              )
+            )
+          ).join('\n')
           const kbEvidenceSatisfied =
             hasKbToolCall(events) && hasSuccessfulKbSearchHit(events) && requiredFilesIndexed
           const writtenTargetCount = result.workspaceSeed.targetDocs.filter((fixtureDoc) =>
@@ -168,25 +180,18 @@ describe('ai human live backend', () => {
               (event) => event.capability === 'docx' && Boolean(event.applyId)
             ).length >= 2 &&
             countDocxApplyArtifacts(result.output?.artifacts) >= 2 &&
-            countDocxFileArtifacts(result.output?.artifacts) >= 2 &&
-            typeof result.output?.deliveryMarkdown === 'string' &&
-            result.output.deliveryMarkdown.trim().length > 0
-          const scoreParts = {
-            kbEvidence: kbEvidenceSatisfied ? 2 : 0,
-            targetDocuments: writtenTargetCount * 2,
-            groundedContent: groundedContentSatisfied ? 2 : 0,
-            sourceSafety: sourceDocsUnchanged.every(Boolean) ? 1 : 0,
-            finalDelivery: deliverySatisfied ? 1 : 0
-          }
-          const score = Object.values(scoreParts).reduce((total, value) => total + value, 0)
-
-          runtime.assertThat(score > 8, {
+            countDocxFileArtifacts(result.output?.artifacts) >= 2
+          runtime.assertThat(
+            kbEvidenceSatisfied &&
+              writtenTargetCount === result.workspaceSeed.targetDocs.length &&
+              groundedContentSatisfied &&
+              sourceDocsUnchanged.every(Boolean) &&
+              deliverySatisfied,
+            {
             name: 'human-live-kb-guided-docx-updates-two-target-docs-from-kb-grounded-evidence',
             message:
               'live KB-guided DOCX case 按 10 分制评估 KB 证据、两份目标文件、内容质量、来源安全和最终交付，得分必须严格超过 8 分。',
             data: {
-              score,
-              scoreParts,
               openedSourcePaths,
               writeSourcePaths,
               toolNames,
@@ -195,10 +200,10 @@ describe('ai human live backend', () => {
               requiredIndexedRelativePaths,
               indexedSupportedFiles,
               changedContentKinds,
-              deliveryMarkdown: result.output?.deliveryMarkdown,
               artifacts: result.output?.artifacts
             }
-          })
+            }
+          )
         }
       })
     })

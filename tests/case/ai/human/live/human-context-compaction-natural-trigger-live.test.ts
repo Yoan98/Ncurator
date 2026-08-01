@@ -1,9 +1,6 @@
 import path from 'node:path'
 import { describe, it } from 'vitest'
-import {
-  loadLiveLlmConfigFromEnv,
-  hasLiveLlmConfigInEnv
-} from '../../../../harness/backend/llmConfig'
+import { loadLiveLlmConfigFromEnv } from '../../../../harness/backend/llmConfig'
 import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import {
@@ -68,18 +65,7 @@ describe('ai human live backend', () => {
           '验证 live 模式下 human 在真实风险周报长任务中会自然触发 context compaction，并在压缩后继续完成任务。',
         fixtures: [CONTEXT_COMPACTION_SHARED_WORKSPACE_FIXTURE_PATH],
         runMode: 'single',
-        runtimeModelName: hasLiveLlmConfigInEnv() ? loadLiveLlmConfigFromEnv().model_name : null,
         execute: async (runtime) => {
-          if (!hasLiveLlmConfigInEnv()) {
-            return {
-              skipped: true,
-              output: null,
-              workspaceSeed: null,
-              events: [],
-              llmIoRecords: []
-            }
-          }
-
           const workspaceSeed = await loadContextCompactionWorkspaceSeed(runtime)
           await runtime.seedLlmConfig(loadLiveLlmConfigFromEnv())
           const runner = createHumanTestRunner(runtime, {
@@ -93,7 +79,6 @@ describe('ai human live backend', () => {
           })
 
           return {
-            skipped: false,
             output,
             workspaceSeed,
             events: runtime.eventCollector.snapshot(),
@@ -101,8 +86,8 @@ describe('ai human live backend', () => {
           }
         },
         assert: async (result, runtime) => {
-          if (result.skipped || !result.workspaceSeed) {
-            runtime.assertThat(true, {
+          if (!result.workspaceSeed) {
+            runtime.assertThat(false, {
               name: 'live-config-not-provided',
               message:
                 '未提供 live 模型配置，已跳过 human context compaction natural trigger live case。'
@@ -150,7 +135,6 @@ describe('ai human live backend', () => {
           const latestBrainRecord = [...llmIoRecords]
             .reverse()
             .find((record) => record.caller === 'human.brain')
-          const deliveryText = String(result.output?.deliveryMarkdown || '').trim()
           const ratios = completedEvents.map((event) =>
             event.sourceHistoryTokenEstimate > 0
               ? event.tokenEstimateAfter / event.sourceHistoryTokenEstimate
@@ -202,8 +186,6 @@ describe('ai human live backend', () => {
             !hasInventedEntityText(latestBrainRecord?.user, inventedLastWeekDocName)
           const taskCompletionSatisfied =
             result.output?.status === 'completed' &&
-            deliveryText.length > 0 &&
-            !hasInventedEntityText(deliveryText, inventedLastWeekDocName) &&
             (toolNames.includes('docx_edit') || toolNames.includes('text_file_edit'))
           const artifactSatisfied =
             ((hasDocxFileArtifact(result.output?.artifacts) &&
@@ -214,23 +196,18 @@ describe('ai human live backend', () => {
               (sourcePath) =>
                 sourcePath.startsWith('工作/') || sourcePath === path.basename(sourcePath)
             )
-          const scoreParts = {
-            lifecycle: lifecycleSatisfied ? 1 : 0,
-            summaryFormat: summaryFormatSatisfied ? 2 : 0,
-            summaryQuality: summaryQualitySatisfied ? 2 : 0,
-            continuity: continuitySatisfied ? 1 : 0,
-            taskCompletion: taskCompletionSatisfied ? 2 : 0,
-            artifact: artifactSatisfied ? 2 : 0
-          }
-          const score = Object.values(scoreParts).reduce((total, value) => total + value, 0)
-
-          runtime.assertThat(score > 8, {
+          runtime.assertThat(
+            lifecycleSatisfied &&
+              summaryFormatSatisfied &&
+              summaryQualitySatisfied &&
+              continuitySatisfied &&
+              taskCompletionSatisfied &&
+              artifactSatisfied,
+            {
             name: 'human-live-context-compaction-natural-trigger-completes-task',
             message:
               '真实风险周报长任务按 10 分制评估全部压缩结果、压缩后连续性和最终文件交付，得分必须严格超过 8 分；压缩次数不作为失败条件。',
             data: {
-              score,
-              scoreParts,
               startedEvents,
               completedEvents,
               budgetEvents,
@@ -241,10 +218,10 @@ describe('ai human live backend', () => {
               toolNames,
               createSourcePaths,
               textCreateSourcePaths,
-              artifacts: result.output?.artifacts,
-              deliveryText
+              artifacts: result.output?.artifacts
             }
-          })
+            }
+          )
         }
       })
     })

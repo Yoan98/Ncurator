@@ -22,6 +22,7 @@ export const createRealAiHarness = async (input: {
   definition: {
     harnessMode: BackendHarnessMode
     runtimeModelName?: string | null
+    visionModel?: { configId: string; modelName: string }
   }
   runId: string
   taskId: string
@@ -87,8 +88,16 @@ export const createRealAiHarness = async (input: {
       appendSeedWorkspaceFile(seedManifest, record)
     },
     getSeedManifest: () => cloneBackendSeedManifest(seedManifest),
-    createAiRunContext: (contextInput = {}) => depsFactory.createAiRunContext(contextInput),
-    createHumanTaskRunner: (contextInput = {}) => depsFactory.createHumanTaskRunner(contextInput),
+    createAiRunContext: (contextInput = {}) =>
+      depsFactory.createAiRunContext({
+        ...contextInput,
+        visionModel: contextInput.visionModel || input.definition.visionModel
+      }),
+    createHumanTaskRunner: (contextInput = {}) =>
+      depsFactory.createHumanTaskRunner({
+        ...contextInput,
+        visionModel: contextInput.visionModel || input.definition.visionModel
+      }),
     ensureEmbeddingReady: async () => {
       await depsFactory.ensureEmbeddingReady()
     },

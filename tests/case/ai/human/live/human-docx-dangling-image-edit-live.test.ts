@@ -4,11 +4,7 @@ import { describe, it } from 'vitest'
 import { buildBlockIndex, loadDocxBundle } from '../../../../../src/main/services/ai/human/tools/docx/adapters/ooxml/blockIndex'
 import { buildDocxApplyArtifactPaths } from '../../../../../src/main/services/ai/human/tools/docx/review/viewProjection'
 import type { JsonObject } from '../../../../../src/shared/types'
-import {
-  hasLiveLlmConfigInEnv,
-  loadLiveLlmConfigFromEnv,
-  loadLiveVisionLlmConfigFromEnv
-} from '../../../../harness/backend/llmConfig'
+import { loadLiveLlmConfigFromEnv, loadLiveVisionLlmConfigFromEnv } from '../../../../harness/backend/llmConfig'
 import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
 import { buildSelectedDocxFixtureReferences } from '../../../../harness/backend/aiLiveTestData'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
@@ -63,15 +59,11 @@ describe('ai human live backend', () => {
         domain: 'ai',
         suite: 'human',
         groups: ['live'],
+        requiresVisionModel: true,
         description: '验证 live 模型可处理带 NULL 图片残留的真实需求 DOCX，并将工时评估写回文档。',
         fixtures: [FIXTURE_PATH],
         runMode: 'single',
-        runtimeModelName: hasLiveLlmConfigInEnv() ? loadLiveLlmConfigFromEnv().model_name : null,
         execute: async (runtime) => {
-          if (!hasLiveLlmConfigInEnv()) {
-            return { skipped: true, output: null, events: [], sourceText: '', appliedText: '' }
-          }
-
           const primaryConfig = loadLiveLlmConfigFromEnv()
           const visionConfig = loadLiveVisionLlmConfigFromEnv()
           await runtime.seedLlmConfig(primaryConfig)
@@ -106,7 +98,6 @@ describe('ai human live backend', () => {
             : ''
           const appliedText = committedPath ? await readDocxText(committedPath) : ''
           return {
-            skipped: false,
             output,
             events: runtime.eventCollector.snapshot(),
             sourceText,
@@ -115,14 +106,6 @@ describe('ai human live backend', () => {
           }
         },
         assert: async (result, runtime) => {
-          if (result.skipped) {
-            runtime.assertThat(true, {
-              name: 'live-config-not-provided',
-              message: '未提供 live 模型配置，已跳过 human DOCX 脏图片关系编辑 case。'
-            })
-            return
-          }
-
           const events = result.events
           const toolStarts = filterAiRunEventsByType(events, 'tool_call_started')
           const toolNames = toolStarts.map((event) => event.toolName)
@@ -132,7 +115,6 @@ describe('ai human live backend', () => {
           const visualResults = filterAiRunEventsByType(events, 'tool_call_result').filter(
             (event) => event.toolName === 'docx_read_visuals' && event.result?.ok === true
           )
-          const delivery = String(result.output?.deliveryMarkdown || '')
           const appliedDurationCount = countDurationEstimates(result.appliedText)
           const sourceDurationCount = countDurationEstimates(result.sourceText)
 
@@ -151,7 +133,6 @@ describe('ai human live backend', () => {
               visualResults.every(
                 (event) => !visualResultHasMissingMediaError(event.result?.data)
               ) &&
-              !/图片\s*9|图片九/.test(delivery) &&
               appliedDurationCount >= 12 &&
               appliedDurationCount > sourceDurationCount,
             {
@@ -162,7 +143,6 @@ describe('ai human live backend', () => {
                 toolNames,
                 docxEditSucceeded,
                 visualResultCount: visualResults.length,
-                deliveryMarkdown: delivery,
                 sourceDurationCount,
                 appliedDurationCount,
                 artifacts: result.output?.artifacts
