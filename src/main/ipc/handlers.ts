@@ -133,6 +133,43 @@ import { Jieba } from '@node-rs/jieba'
 import { dict } from '@node-rs/jieba/dict'
 import { normalizeForIpc } from '../utils/serialization'
 
+type E2ENativeDialogSelection = {
+  kind: 'directory' | 'file'
+  path: string
+}
+
+type E2ENativeDialogGlobal = typeof globalThis & {
+  __NCURATOR_E2E_NATIVE_DIALOG_SELECTIONS__?: Map<number, E2ENativeDialogSelection>
+}
+
+const e2eNativeDialogSelections =
+  process.env.NCURATOR_E2E_OBSERVER === '1'
+    ? new Map<number, E2ENativeDialogSelection>()
+    : null
+
+if (e2eNativeDialogSelections) {
+  ;(globalThis as E2ENativeDialogGlobal).__NCURATOR_E2E_NATIVE_DIALOG_SELECTIONS__ =
+    e2eNativeDialogSelections
+}
+
+const takeE2ENativeDialogSelection = (
+  webContentsId: number,
+  kind: E2ENativeDialogSelection['kind']
+): string | null => {
+  const selection = e2eNativeDialogSelections?.get(webContentsId)
+  if (!selection || selection.kind !== kind) return null
+  e2eNativeDialogSelections?.delete(webContentsId)
+  const selectedPath = path.resolve(selection.path)
+  if (!fs.existsSync(selectedPath)) {
+    throw new Error(`E2E native dialog path does not exist: ${selectedPath}`)
+  }
+  const stats = fs.statSync(selectedPath)
+  if ((kind === 'directory' && !stats.isDirectory()) || (kind === 'file' && !stats.isFile())) {
+    throw new Error(`E2E native dialog path has the wrong type: ${selectedPath}`)
+  }
+  return selectedPath
+}
+
 const jieba = Jieba.withDict(dict)
 const getErrorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error)
@@ -1486,6 +1523,8 @@ export function registerHandlers(services: {
 
   ipcMain.handle('pick-directory', async (event): Promise<PickDirectoryResponse> => {
     try {
+      const e2eSelectedPath = takeE2ENativeDialogSelection(event.sender.id, 'directory')
+      if (e2eSelectedPath) return { canceled: false, path: e2eSelectedPath }
       const dialogOptions: OpenDialogOptions = {
         title: '选择工作空间目录',
         buttonLabel: '选择此目录',
@@ -1511,6 +1550,8 @@ export function registerHandlers(services: {
 
   ipcMain.handle('pick-file', async (event, defaultPath?: string): Promise<PickFileResponse> => {
     try {
+      const e2eSelectedPath = takeE2ENativeDialogSelection(event.sender.id, 'file')
+      if (e2eSelectedPath) return { canceled: false, path: e2eSelectedPath }
       const dialogOptions: OpenDialogOptions = {
         title: '打开文件',
         buttonLabel: '打开',
@@ -1530,7 +1571,7 @@ export function registerHandlers(services: {
 
   ipcMain.handle(
     'attachment-pick',
-    async (_event, payload: AttachmentPickRequest): Promise<AttachmentPickResponse> => {
+    async (event, payload: AttachmentPickRequest): Promise<AttachmentPickResponse> => {
       try {
         const workspaceRootPath = String(payload?.workspaceRootPath || '').trim()
         const assetBucketId = String(payload?.assetBucketId || '').trim()
@@ -1555,12 +1596,20 @@ export function registerHandlers(services: {
             }
           ]
         }
-        const result = await dialog.showOpenDialog(dialogOptions)
-        if (result.canceled || result.filePaths.length === 0) return { canceled: true, items: [] }
+        const ownerWindow = BrowserWindow.fromWebContents(event.sender)
+        const e2eSelectedPath = takeE2ENativeDialogSelection(event.sender.id, 'file')
+        const filePaths = e2eSelectedPath
+          ? [e2eSelectedPath]
+          : (
+              await (ownerWindow
+                ? dialog.showOpenDialog(ownerWindow, dialogOptions)
+                : dialog.showOpenDialog(dialogOptions))
+            ).filePaths
+        if (filePaths.length === 0) return { canceled: true, items: [] }
         return {
           canceled: false,
           items: await Promise.all(
-            result.filePaths.map((filePath) =>
+            filePaths.map((filePath) =>
               attachmentService.importAttachmentFromPath({
                 workspaceRootPath,
                 assetBucketId,

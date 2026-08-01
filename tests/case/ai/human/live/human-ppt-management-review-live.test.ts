@@ -62,6 +62,7 @@ describe('ai human live ppt backend', () => {
         domain: 'ai',
         suite: 'human',
         groups: ['live'],
+        requiresVisionModel: true,
         description: 'Reviews a management deck and gives the user a conversational risk briefing without changing the deck.',
         fixtures: [],
         runMode: 'single',

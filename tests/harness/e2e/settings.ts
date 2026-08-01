@@ -16,6 +16,7 @@ import {
   settingsSelectors,
   vectorSelectors
 } from '../../../src/renderer/src/testing/selectors'
+import { queueE2ENativeDialogSelection } from './electronApp'
 import { selectDirectoryInWindowsDialog } from './windowsNativeDialog'
 
 export type SettingsPageTarget = 'general' | 'model' | 'workspace' | 'vector'
@@ -376,18 +377,19 @@ export const bindWorkspaceRootThroughSettingsUi = async (
   await page.bringToFront()
   await rootPathButton.waitFor({ state: 'visible' })
   const diagnostics: string[] = []
-  const attempts = process.platform === 'win32' ? 3 : 4
-  for (let attempt = 1; attempt <= attempts; attempt += 1) {
-    if (attempt > 1 && (await waitForWorkspaceRootPathVisible(page, rootPath, 1000))) return
-    const electronProcessId = await readElectronProcessId(page)
-    await rootPathButton.click()
-    await page.waitForTimeout(1_000)
-    try {
+  const electronProcessId = await readElectronProcessId(page)
+  if (process.platform === 'win32') {
+    await queueE2ENativeDialogSelection(page, { kind: 'directory', path: rootPath })
+  }
+  await rootPathButton.click()
+  try {
+    if (process.platform !== 'win32') {
+      await page.waitForTimeout(1_000)
       diagnostics.push(await selectDirectoryInNativeDialog(rootPath, electronProcessId))
-      if (await waitForWorkspaceRootPathVisible(page, rootPath)) return
-    } catch (error) {
-      diagnostics.push(error instanceof Error ? error.message : String(error))
     }
+    if (await waitForWorkspaceRootPathVisible(page, rootPath)) return
+  } catch (error) {
+    diagnostics.push(error instanceof Error ? error.message : String(error))
   }
   throw new Error(
     [

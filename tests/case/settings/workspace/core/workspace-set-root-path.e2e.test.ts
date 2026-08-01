@@ -27,6 +27,7 @@ describe('settings workspace e2e', () => {
         fixtures: [],
         serviceMode: 'real',
         execution: 'exclusive',
+        windowMode: 'visible',
         runMode: 'single',
         execute: async (runtime) => {
           const { page } = runtime

@@ -31,7 +31,11 @@ import {
 import { selectDirectoryInWindowsDialog } from './windowsNativeDialog'
 import { selectFileInNativeDialog } from './nativeFileDialog'
 import type { E2ETestRuntime } from './run-e2e-case'
-import { pasteTextThroughElectronClipboard, type E2ERuntimeSignals } from './electronApp'
+import {
+  pasteTextThroughElectronClipboard,
+  queueE2ENativeDialogSelection,
+  type E2ERuntimeSignals
+} from './electronApp'
 import {
   E2E_WORKSPACE_FIXTURE_ROOT,
   copyE2EWorkspaceFixture,
@@ -57,6 +61,10 @@ export type TemporaryWorkbenchWorkspace = TemporaryE2EWorkspace
 export type LocalWorkbenchHttpServer = {
   url: string
   close: () => Promise<void>
+}
+
+type LocalWorkbenchHttpServerOptions = {
+  onRequest?: (requestUrl: string) => boolean
 }
 
 export type WorkbenchSetupResult = {
@@ -395,10 +403,16 @@ export const createTemporaryWorkbenchWorkspace = async (
 ): Promise<TemporaryWorkbenchWorkspace> => await copyE2EWorkspaceFixture(caseId, 'workbench')
 
 export const startLocalWorkbenchHttpServer = async (
-  html: string
+  html: string,
+  options: LocalWorkbenchHttpServerOptions = {}
 ): Promise<LocalWorkbenchHttpServer> => {
   const server = createServer((request, response) => {
     const requestUrl = request.url || '/'
+    if (options.onRequest?.(requestUrl)) {
+      response.writeHead(204)
+      response.end()
+      return
+    }
     if (requestUrl === '/' || requestUrl.startsWith('/task')) {
       response.writeHead(200, {
         'content-type': 'text/html; charset=utf-8',
@@ -626,15 +640,23 @@ export const bindWorkspaceRootThroughSettingsUi = async (
       ? ['windows-keyboard']
       : ['applescript-paste', 'applescript-type', 'swift']
 
-  const attempts = process.platform === 'win32' ? 3 : strategies.length
+  const attempts = process.platform === 'win32' ? 1 : strategies.length
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     const strategy = strategies[Math.min(attempt, strategies.length - 1)]
     if (attempt > 0 && (await waitForSelectedRootPath(1_000))) return
     const electronProcessId = await readElectronProcessId(page)
+    if (process.platform === 'win32') {
+      await queueE2ENativeDialogSelection(page, { kind: 'directory', path: rootPath })
+    }
     await rootPathButton.click()
-    await page.waitForTimeout(1_000)
     try {
-      const output = await selectDirectoryInNativeDialog(rootPath, electronProcessId, strategy)
+      const output =
+        process.platform === 'win32'
+          ? { strategy, stdout: 'e2e-native-dialog-selection', stderr: '' }
+          : await (async () => {
+              await page.waitForTimeout(1_000)
+              return await selectDirectoryInNativeDialog(rootPath, electronProcessId, strategy)
+            })()
       const selected = await waitForSelectedRootPath(12_000)
       diagnostics.push({
         strategy: output.strategy,
@@ -669,40 +691,45 @@ export const selectWorkbenchAttachmentThroughNativeDialog = async (
   const addButton = getWorkbenchLocator(page, workbenchSelectors.attachmentAddButton)
   const fileName = path.basename(filePath)
   const diagnostics: string[] = []
-  for (let attempt = 1; attempt <= 3; attempt += 1) {
-    const alreadyVisible = await getWorkbenchPrefixLocator(
-      page,
-      workbenchSelectors.attachmentCardPrefix
-    )
-      .filter({ hasText: fileName })
-      .first()
-      .isVisible()
-      .catch(() => false)
-    if (alreadyVisible) return
-    const electronProcessId = await readElectronProcessId(page)
-    await page.bringToFront()
-    await addButton.click()
-    await page.waitForTimeout(1_000)
-    try {
+  const alreadyVisible = await getWorkbenchPrefixLocator(
+    page,
+    workbenchSelectors.attachmentCardPrefix
+  )
+    .filter({ hasText: fileName })
+    .first()
+    .isVisible()
+    .catch(() => false)
+  if (alreadyVisible) return
+  const electronProcessId = await readElectronProcessId(page)
+  await page.bringToFront()
+  if (process.platform === 'win32') {
+    await queueE2ENativeDialogSelection(page, { kind: 'file', path: filePath })
+  }
+  await addButton.click()
+  try {
+    if (process.platform === 'win32') {
+      diagnostics.push('e2e-native-dialog-selection')
+    } else {
+      await page.waitForTimeout(1_000)
       diagnostics.push(await selectFileInNativeDialog(filePath, electronProcessId))
-      await page.waitForFunction(
-        (input: { cardPrefix: string; fileName: string }) =>
-          Array.from(document.querySelectorAll(`[data-testid^="${input.cardPrefix}-"]`)).some(
-            (card) =>
-              card instanceof HTMLElement &&
-              (card.innerText.includes(input.fileName) ||
-                card.getAttribute('title') === input.fileName)
-          ),
-        {
-          cardPrefix: workbenchSelectors.attachmentCardPrefix,
-          fileName
-        },
-        { timeout: 12_000 }
-      )
-      return
-    } catch (error) {
-      diagnostics.push(error instanceof Error ? error.message : String(error))
     }
+    await page.waitForFunction(
+      (input: { cardPrefix: string; fileName: string }) =>
+        Array.from(document.querySelectorAll(`[data-testid^="${input.cardPrefix}-"]`)).some(
+          (card) =>
+            card instanceof HTMLElement &&
+            (card.innerText.includes(input.fileName) ||
+              card.getAttribute('title') === input.fileName)
+        ),
+      {
+        cardPrefix: workbenchSelectors.attachmentCardPrefix,
+        fileName
+      },
+      { timeout: 12_000 }
+    )
+    return
+  } catch (error) {
+    diagnostics.push(error instanceof Error ? error.message : String(error))
   }
   throw new Error(
     `native file selection did not create attachment ${fileName}; diagnostics=${JSON.stringify(diagnostics)}`

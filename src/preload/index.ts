@@ -136,9 +136,11 @@ const api: DesktopApi = {
     emitE2EIpcCall('revealPath', safePath)
     return ipcRenderer.invoke('reveal-path', filePath)
   },
-  pickDirectory: () => {
+  pickDirectory: async () => {
     emitE2EIpcCall('pickDirectory')
-    return ipcRenderer.invoke('pick-directory')
+    const response = await ipcRenderer.invoke('pick-directory')
+    emitE2EIpcCall('pickDirectoryResult', response)
+    return response
   },
   pickFile: (defaultPath?: string) => ipcRenderer.invoke('pick-file', defaultPath),
   listOpenWithApplications: (payload) => {

@@ -1092,16 +1092,12 @@ const ChatPage: React.FC = () => {
   }, [tabWorkspaceKey])
 
   const restoreCollapsedContentPanel = useCallback((): void => {
-    void (async () => {
-      if (contentPanel.kind === 'browser') {
-        await captureBrowserTransition(contentPanel.browserTabId)
-      } else {
-        setBrowserTransitionImage(null)
-      }
-      setContentPanelShellMounted(true)
-      expandContentPanel()
-    })()
-  }, [captureBrowserTransition, contentPanel, expandContentPanel])
+    // A collapsed BrowserView is detached from the native window, where capturePage can hang.
+    // The transition image is captured before collapsing, so restoring needs no second capture.
+    setBrowserTransitionImage(null)
+    setContentPanelShellMounted(true)
+    expandContentPanel()
+  }, [expandContentPanel])
 
   const showContentPanel = useCallback(
     (nextState: WorkbenchContentPanelState): void => {

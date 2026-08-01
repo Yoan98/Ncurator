@@ -147,6 +147,34 @@ export const pasteTextThroughElectronClipboard = async (
   }, value)
 }
 
+export const queueE2ENativeDialogSelection = async (
+  page: Page,
+  selection: { kind: 'directory' | 'file'; path: string }
+): Promise<void> => {
+  const electronApp = electronApplicationByPage.get(page)
+  if (!electronApp) throw new Error('E2E native dialog selection requires a launched Electron app')
+
+  await electronApp.evaluate(({ BrowserWindow }, input) => {
+    const mainWindow = BrowserWindow.getAllWindows().find(
+      (window) => !window.isDestroyed() && window.getParentWindow() === null
+    )
+    if (!mainWindow || mainWindow.webContents.isDestroyed()) {
+      throw new Error('E2E native dialog selection could not find the main window')
+    }
+    const state = globalThis as typeof globalThis & {
+      __NCURATOR_E2E_NATIVE_DIALOG_SELECTIONS__?: Map<
+        number,
+        { kind: 'directory' | 'file'; path: string }
+      >
+    }
+    const selections = state.__NCURATOR_E2E_NATIVE_DIALOG_SELECTIONS__
+    if (!(selections instanceof Map)) {
+      throw new Error('E2E native dialog selection is unavailable outside the E2E observer')
+    }
+    selections.set(mainWindow.webContents.id, input)
+  }, selection)
+}
+
 const resolveAppTarget = (): E2EAppTarget => {
   const target = String(process.env.NCURATOR_E2E_APP_TARGET || 'source').trim()
   if (target === 'source' || target === 'package') return target

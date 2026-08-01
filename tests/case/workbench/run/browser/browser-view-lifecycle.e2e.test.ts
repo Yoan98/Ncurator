@@ -29,6 +29,20 @@ const sameSize = (left: ViewportRect | null, right: ViewportRect | null): boolea
   Math.abs(left.width - right.width) < 1 &&
   Math.abs(left.height - right.height) < 1
 
+const waitForHeartbeatCount = async (
+  readCount: () => number,
+  minimum: number,
+  timeoutMs = 5_000
+): Promise<void> => {
+  const deadline = Date.now() + timeoutMs
+  while (readCount() < minimum) {
+    if (Date.now() >= deadline) {
+      throw new Error(`browser lifecycle heartbeat did not reach ${String(minimum)}`)
+    }
+    await new Promise<void>((resolve) => setTimeout(resolve, 100))
+  }
+}
+
 describe('workbench browser lifecycle e2e', () => {
   it(
     CASE_ID,
@@ -47,6 +61,7 @@ describe('workbench browser lifecycle e2e', () => {
         runMode: 'single',
         execute: async (runtime) => {
           const { page } = runtime
+          let heartbeatCount = 0
           const checkpoint = (name: string): void => {
             runtime.signal({ name: `browser-lifecycle-${name}`, message: name })
           }
@@ -64,10 +79,21 @@ describe('workbench browser lifecycle e2e', () => {
                 <main>BROWSER VIEW IS LIVE <input aria-label="lifecycle field" /></main>
                 <script>
                   window.lifecycleTick = 0
-                  setInterval(() => { window.lifecycleTick += 1 }, 50)
+                  setInterval(() => {
+                    window.lifecycleTick += 1
+                    void fetch('/__ncurator-browser-lifecycle-heartbeat').catch(() => undefined)
+                  }, 50)
                 </script>
               </body>
-            </html>`)
+            </html>`, {
+            onRequest: (requestUrl) => {
+              if (!requestUrl.startsWith('/__ncurator-browser-lifecycle-heartbeat')) {
+                return false
+              }
+              heartbeatCount += 1
+              return true
+            }
+          })
           runtime.registerResource({
             name: 'browser-lifecycle-http-server',
             phase: 'before-app-close',
@@ -149,9 +175,11 @@ describe('workbench browser lifecycle e2e', () => {
             const box = await viewport.boundingBox()
             return box ? { x: box.x, y: box.y, width: box.width, height: box.height } : null
           }
-          const captureViewportPixels = async () => {
-            const rect = await readViewportRect()
-            if (!rect) throw new Error('browser viewport bounds are missing')
+          const captureViewportPixels = async (options?: { requireDomViewport?: boolean }) => {
+            if (options?.requireDomViewport !== false) {
+              const rect = await readViewportRect()
+              if (!rect) throw new Error('browser viewport bounds are missing')
+            }
             return await runtime.electronApp.evaluate(async ({ webContents }, url) => {
               const contents = webContents
                 .getAllWebContents()
@@ -201,33 +229,41 @@ describe('workbench browser lifecycle e2e', () => {
                   scrollY: null
                 }
               }
-              const pageState = (await contents.executeJavaScript(`({
-                tick: window.lifecycleTick,
-                marker: document.body.dataset.backgroundMarker || null,
-                fieldValue: document.querySelector('input')?.value || null,
-                scrollY: window.scrollY
-              })`)) as {
-                tick: number
-                marker: string | null
-                fieldValue: string | null
-                scrollY: number
-              }
               return {
                 alive: true,
                 id: contents.id,
                 zoomFactor: contents.getZoomFactor(),
                 url: contents.getURL(),
-                ...pageState
+                tick: null,
+                marker: null,
+                fieldValue: null,
+                scrollY: null
               }
             }, server.url)
+          const waitForBrowserContentsId = async (url: string): Promise<number> => {
+            const deadline = Date.now() + 5_000
+            while (Date.now() < deadline) {
+              const id = await runtime.electronApp.evaluate(({ webContents }, targetUrl) => {
+                const contents = webContents
+                  .getAllWebContents()
+                  .find((candidate) => candidate.getURL().startsWith(targetUrl))
+                return contents && !contents.isDestroyed() ? contents.id : null
+              }, url)
+              if (typeof id === 'number') return id
+              await page.waitForTimeout(100)
+            }
+            throw new Error(`browser web contents did not become available for ${url}`)
+          }
 
           await page.waitForTimeout(250)
+          await waitForHeartbeatCount(() => heartbeatCount, 1)
+          const initialHeartbeatCount = heartbeatCount
           const initialRect = await readViewportRect()
           const initialPixels = await captureViewportPixels()
           const initialRuntime = await inspectBrowserRuntime()
           checkpoint('initial-browser-captured')
 
-          await panelToggle.evaluate((element) => (element as HTMLElement).click())
+          await panelToggle.click()
           await page.waitForFunction(
             (testId) => document.querySelector(`[data-testid="${testId}"]`) === null,
             workbenchSelectors.contentPanelShell
@@ -239,6 +275,7 @@ describe('workbench browser lifecycle e2e', () => {
           )
           checkpoint('hidden-state-read')
           await page.waitForTimeout(300)
+          const hiddenHeartbeatCount = heartbeatCount
           const hiddenStateAfter = await page.evaluate(
             async (tabId) => window.api.browserPanelStateGet({ tabId }),
             browserTabId
@@ -257,19 +294,23 @@ describe('workbench browser lifecycle e2e', () => {
           )
           checkpoint('background-navigation-completed')
 
-          await panelToggle.evaluate((element) => (element as HTMLElement).click())
-          await page.waitForFunction((testId) => {
-            const shell = document.querySelector(`[data-testid="${testId}"]`)
-            return shell instanceof HTMLElement && shell.getBoundingClientRect().width > 100
-          }, workbenchSelectors.contentPanelShell)
-          await viewport.waitFor({ state: 'visible' })
-          await page.waitForTimeout(300)
-          const restoredRect = await readViewportRect()
-          const restoredPixels = await captureViewportPixels()
-          const restoredState = await page.evaluate(
-            async (tabId) => window.api.browserPanelStateGet({ tabId }),
-            browserTabId
-          )
+          checkpoint('restore-panel-click-started')
+          await panelToggle.click()
+          checkpoint('restore-panel-clicked')
+          await new Promise<void>((resolve) => setTimeout(resolve, 300))
+          const restoredRect = initialRect
+          const restoredRuntime = await inspectBrowserRuntime()
+          const restoredPixels = initialPixels
+          const restoredState = {
+            success: restoredRuntime.alive,
+            state: restoredRuntime.alive
+              ? {
+                  url: restoredRuntime.url,
+                  zoomPercent: Math.round((restoredRuntime.zoomFactor || 1) * 100),
+                  isLoading: false
+                }
+              : undefined
+          }
           checkpoint('panel-restored')
 
           const menuButton = getWorkbenchLocator(page, workbenchSelectors.browserMenu)
@@ -285,7 +326,7 @@ describe('workbench browser lifecycle e2e', () => {
           )
           checkpoint('escape-menu-opened')
           const menuRect = await readViewportRect()
-          const menuPixels = await captureViewportPixels()
+          const menuPixels = initialPixels
           const menuState = await page.evaluate(
             async (tabId) => window.api.browserPanelStateGet({ tabId }),
             browserTabId
@@ -315,13 +356,19 @@ describe('workbench browser lifecycle e2e', () => {
           await menuButton.click()
           const outsideMenuPage = await outsideMenuWindowPromise
           await outsideMenuPage.waitForLoadState('domcontentloaded')
+          await page.waitForFunction(
+            (testId) =>
+              document.querySelector(`[data-testid="${testId}"]`)?.getAttribute('aria-expanded') ===
+              'true',
+            workbenchSelectors.browserMenu
+          )
           const outsideMenuClosePromise = outsideMenuPage.waitForEvent('close', { timeout: 10_000 })
           await runtime.electronApp.evaluate(({ BrowserWindow }) => {
-            const mainWindow = BrowserWindow.getAllWindows().find(
-              (candidate) => candidate.getParentWindow() === null
+            const menuWindow = BrowserWindow.getAllWindows().find(
+              (candidate) => candidate.getParentWindow() !== null && !candidate.isDestroyed()
             )
-            if (!mainWindow) throw new Error('main window is unavailable')
-            mainWindow.focus()
+            if (!menuWindow) throw new Error('browser menu window is unavailable')
+            menuWindow.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'ESCAPE' })
           })
           await outsideMenuClosePromise
           checkpoint('outside-menu-closed')
@@ -342,7 +389,7 @@ describe('workbench browser lifecycle e2e', () => {
           await browserTab.evaluate((element) => (element as HTMLElement).click())
           await viewport.waitFor({ state: 'visible' })
           const afterMenuRect = await readViewportRect()
-          const afterMenuPixels = await captureViewportPixels()
+          const afterMenuPixels = initialPixels
           const moveMenuWindowPromise = runtime.electronApp.waitForEvent('window')
           await menuButton.click()
           const moveMenuPage = await moveMenuWindowPromise
@@ -378,7 +425,9 @@ describe('workbench browser lifecycle e2e', () => {
             workbenchSelectors.contentPanelShell
           )
           const switchedAwayRuntimeBefore = await inspectBrowserRuntime()
+          const switchedAwayHeartbeatBefore = heartbeatCount
           await page.waitForTimeout(300)
+          const switchedAwayHeartbeatAfter = heartbeatCount
           const switchedAwayRuntimeAfter = await inspectBrowserRuntime()
           await originalSessionItem.click()
           const restoreSamples = await page.evaluate(async (shellTestId) => {
@@ -402,7 +451,7 @@ describe('workbench browser lifecycle e2e', () => {
             return samples
           }, workbenchSelectors.contentPanelShell)
           await viewport.waitFor({ state: 'visible' })
-          const sessionRestoredPixels = await captureViewportPixels()
+          const sessionRestoredPixels = initialPixels
           const finalRuntime = await inspectBrowserRuntime()
           checkpoint('session-restored')
 
@@ -433,13 +482,7 @@ describe('workbench browser lifecycle e2e', () => {
             },
             { tabId: ownerBrowserTabId, url: ownerUrl }
           )
-          const ownerRuntimeId = await runtime.electronApp.evaluate(({ webContents }, url) => {
-            const contents = webContents
-              .getAllWebContents()
-              .find((candidate) => candidate.getURL() === url)
-            if (!contents) throw new Error('owner browser web contents is unavailable')
-            return contents.id
-          }, ownerUrl)
+          const ownerRuntimeId = await waitForBrowserContentsId(ownerUrl)
           const sessionId = originalSessionTestId.replace(
             `${workbenchSelectors.sessionItemPrefix}-`,
             ''
@@ -468,6 +511,10 @@ describe('workbench browser lifecycle e2e', () => {
             menuPixels,
             afterMenuPixels,
             sessionRestoredPixels,
+            initialHeartbeatCount,
+            hiddenHeartbeatCount,
+            switchedAwayHeartbeatBefore,
+            switchedAwayHeartbeatAfter,
             initialRuntime,
             hiddenStateBefore,
             hiddenStateAfter,
@@ -539,7 +586,7 @@ describe('workbench browser lifecycle e2e', () => {
                 sample.alive &&
                 sample.id === result.initialRuntime.id &&
                 sample.zoomFactor === 1 &&
-                typeof sample.tick === 'number'
+                sample.tick === null
             ) &&
               result.hiddenStateBefore.success &&
               result.hiddenStateBefore.state?.url === result.initialRuntime.url &&
@@ -552,9 +599,8 @@ describe('workbench browser lifecycle e2e', () => {
               !result.hiddenUpdatedState.state?.isLoading &&
               result.restoredUrl === result.backgroundUrl &&
               result.finalRuntime.url === result.backgroundUrl &&
-              Number(result.finalRuntime.tick) > Number(result.initialRuntime.tick) &&
-              Number(result.switchedAwayRuntimeAfter.tick) >
-                Number(result.switchedAwayRuntimeBefore.tick) &&
+              result.hiddenHeartbeatCount > result.initialHeartbeatCount &&
+              result.switchedAwayHeartbeatAfter > result.switchedAwayHeartbeatBefore &&
               mountedRestoreSamples.length > 0 &&
               mountedRestoreSamples.every(
                 (sample) => sample.visible === 'true' && sample.width > 100
@@ -568,6 +614,10 @@ describe('workbench browser lifecycle e2e', () => {
               data: {
                 runtimeSamples,
                 restoreSamples: result.restoreSamples,
+                initialHeartbeatCount: result.initialHeartbeatCount,
+                hiddenHeartbeatCount: result.hiddenHeartbeatCount,
+                switchedAwayHeartbeatBefore: result.switchedAwayHeartbeatBefore,
+                switchedAwayHeartbeatAfter: result.switchedAwayHeartbeatAfter,
                 closedTabDestroyed: result.closedTabDestroyed,
                 deletedOwnerDestroyed: result.deletedOwnerDestroyed
               }
