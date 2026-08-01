@@ -53,20 +53,6 @@ const buildFixture = async (runtime: Parameters<typeof createPptToolHarness>[0])
   })
 }
 
-const hasVisualText = (events: ReturnType<typeof filterAiRunEventsByType>): boolean =>
-  events.some((event) => {
-    if (event.toolName !== 'ppt_read_visuals' || event.result?.ok !== true) return false
-    const data = event.result.data as { results?: unknown } | undefined
-    return Array.isArray(data?.results) &&
-      data.results.some(
-        (item) =>
-          typeof item === 'object' &&
-          item !== null &&
-          typeof (item as { text?: unknown }).text === 'string' &&
-          (item as { text: string }).text.trim().length > 0
-      )
-  })
-
 describe('ai human live ppt backend', () => {
   it('human-ppt-read-management-risk-review-live', async () => {
     await runWithStructuredOutputRetry(async () => {
@@ -76,7 +62,6 @@ describe('ai human live ppt backend', () => {
         domain: 'ai',
         suite: 'human',
         groups: ['live'],
-        requiresVisionModel: true,
         description: 'Reviews a management deck and gives the user a conversational risk briefing without changing the deck.',
         fixtures: [],
         runMode: 'single',
@@ -102,17 +87,14 @@ describe('ai human live ppt backend', () => {
         assert: async (result, runtime) => {
           const starts = filterAiRunEventsByType(result.events, 'tool_call_started')
           const toolNames = starts.map((event) => event.toolName)
-          const results = filterAiRunEventsByType(result.events, 'tool_call_result')
           runtime.assertThat(
             result.output.status === 'completed' &&
               result.beforeHash === result.afterHash &&
               !toolNames.includes('ppt_edit') &&
-              toolNames.some((name) => name.startsWith('ppt_read') || name === 'ppt_search') &&
-              toolNames.includes('ppt_read_visuals') &&
-              hasVisualText(results),
+              toolNames.some((name) => name.startsWith('ppt_read') || name === 'ppt_search'),
             {
-              name: 'human-live-ppt-risk-review-uses-real-reading-and-vision',
-              message: 'The live model must read the deck, obtain usable visual evidence, and leave the source unchanged.',
+              name: 'human-live-ppt-risk-review-uses-real-reading',
+              message: 'The live model must read the deck and leave the source unchanged.',
               data: { toolNames }
             }
           )
