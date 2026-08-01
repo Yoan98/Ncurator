@@ -10,6 +10,7 @@ files:
   - '!**/*.map'
   - '!**/*.{ts,tsx,mts,cts,py,pyc,pyo,c,cc,cpp,h,hpp,pdb}'
   - '!**/{test,tests,__tests__,doc,docs,example,examples,benchmark,benchmarks,scripts}/**/*'
+  - 'node_modules/exceljs/lib/doc/**/*'
 extraResources:
   - from: release-stage/app/resources/open-with
     to: open-with

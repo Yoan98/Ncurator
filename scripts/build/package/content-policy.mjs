@@ -126,6 +126,9 @@ const isLegalNotice = (name) =>
   /^(?:license|licence|notice|copying)(?:[._-].*)?$/u.test(name) ||
   /^(?:apache2?|bsd|mit)$/u.test(name)
 
+const isExcelJsRuntimeDocPath = (segments) =>
+  segments.slice(0, 4).join('/') === 'node_modules/exceljs/lib/doc'
+
 export const assertSafePackagePaths = (paths) => {
   const violations = []
   const targetPrebuildDirectory = `${process.platform}-${process.arch}`
@@ -167,7 +170,11 @@ export const assertSafePackagePaths = (paths) => {
       violations.push(`${relativePath}: environment file`)
       continue
     }
-    const forbiddenSegment = lowerSegments.find((segment) => FORBIDDEN_SEGMENTS.has(segment))
+    const forbiddenSegment = lowerSegments.find(
+      (segment) =>
+        FORBIDDEN_SEGMENTS.has(segment) &&
+        !(segment === 'doc' && isExcelJsRuntimeDocPath(lowerSegments))
+    )
     if (forbiddenSegment) {
       violations.push(`${relativePath}: forbidden directory ${forbiddenSegment}`)
       continue

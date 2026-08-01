@@ -5,7 +5,10 @@ import path from 'node:path'
 import { promisify } from 'node:util'
 import { createPackage } from '@electron/asar'
 import { afterEach, describe, expect, it } from 'vitest'
-import { normalizeRelativePath } from '../../../../scripts/build/package/content-policy.mjs'
+import {
+  assertSafePackagePaths,
+  normalizeRelativePath
+} from '../../../../scripts/build/package/content-policy.mjs'
 import { PROTECTED_MAIN_PLAINTEXT_MARKERS } from '../../../../scripts/build/package/obfuscation.mjs'
 
 const execFileAsync = promisify(execFile)
@@ -21,6 +24,15 @@ describe('package content policy paths', () => {
       'node_modules/electron/index.js'
     )
     expect(normalizeRelativePath('\\out\\main\\index.js')).toBe('out/main/index.js')
+  })
+
+  it('permits ExcelJS runtime modules while rejecting other doc directories', () => {
+    expect(() =>
+      assertSafePackagePaths(['node_modules/exceljs/lib/doc/workbook.js'])
+    ).not.toThrow()
+    expect(() => assertSafePackagePaths(['node_modules/runtime-package/lib/doc/readme.js'])).toThrow(
+      'forbidden directory doc'
+    )
   })
 
   it('audits nested files in an asar archive on the current platform', async () => {
