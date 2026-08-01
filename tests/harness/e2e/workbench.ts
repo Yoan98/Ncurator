@@ -109,6 +109,10 @@ export const selectWorkbenchResourceMenuItem = async (
   runtime: E2ETestRuntime,
   kind: 'file' | 'browser'
 ): Promise<{ fileVisible: boolean; browserVisible: boolean }> => {
+  const initialTabCount = await getWorkbenchPrefixLocator(
+    runtime.page,
+    workbenchSelectors.resourceTabPrefix
+  ).count()
   const menuWindowPromise = runtime.electronApp.waitForEvent('window')
   await getWorkbenchLocator(runtime.page, workbenchSelectors.resourceTabAddButton).click()
   const menuPage = await menuWindowPromise
@@ -121,8 +125,19 @@ export const selectWorkbenchResourceMenuItem = async (
     browserVisible: await browserItem.isVisible()
   }
   const closePromise = menuPage.waitForEvent('close').catch(() => undefined)
-  await (kind === 'file' ? fileItem : browserItem).click()
+  try {
+    await (kind === 'file' ? fileItem : browserItem).click()
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    if (!/Target page, context or browser has been closed/u.test(message)) throw error
+  }
   await closePromise
+  await runtime.page.waitForFunction(
+    ({ prefix, initialCount }) =>
+      document.querySelectorAll(`[data-testid^="${prefix}-"]`).length > initialCount,
+    { prefix: workbenchSelectors.resourceTabPrefix, initialCount: initialTabCount },
+    { timeout: 10_000 }
+  )
   return result
 }
 

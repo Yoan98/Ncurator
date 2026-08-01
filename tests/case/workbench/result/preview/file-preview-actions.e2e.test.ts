@@ -201,6 +201,7 @@ describe('workbench result e2e', () => {
           '从真实搜索结果打开 pdf/docx/md/txt，验证右侧预览、定位文件、系统打开和 PDF 命中页预览。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
+        execution: 'exclusive',
         windowMode: 'visible',
         runMode: 'single',
         execute: async (runtime) => {

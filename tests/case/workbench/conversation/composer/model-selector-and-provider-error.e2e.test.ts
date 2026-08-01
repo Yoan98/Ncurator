@@ -188,13 +188,15 @@ describe('workbench conversation e2e', () => {
           const collapsed =
             (await configButton.getAttribute('aria-expanded')) === 'false' &&
             !(await dropdown
-              .getByRole('option', { name: liveEnv.modelName })
+              .getByRole('option', { name: liveEnv.modelName, exact: true })
               .isVisible()
               .catch(() => false))
           await configButton.click()
           const expanded =
             (await configButton.getAttribute('aria-expanded')) === 'true' &&
-            (await dropdown.getByRole('option', { name: liveEnv.modelName }).isVisible())
+            (await dropdown
+              .getByRole('option', { name: liveEnv.modelName, exact: true })
+              .isVisible())
 
           await searchInput.fill(MISSING_MODEL_NAME)
           await dropdown.getByText('暂无匹配模型', { exact: true }).waitFor({ state: 'visible' })
@@ -210,7 +212,7 @@ describe('workbench conversation e2e', () => {
           })
 
           await searchInput.fill('')
-          await dropdown.getByRole('option', { name: liveEnv.modelName }).click()
+          await dropdown.getByRole('option', { name: liveEnv.modelName, exact: true }).click()
 
           await prepareWorkbenchWorkspaceThroughUi(page, {
             workspaceName: WORKSPACE_NAME,

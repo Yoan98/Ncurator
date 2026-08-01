@@ -327,9 +327,16 @@ export class ChatRunService {
       Boolean(memory?.coveredTimestamp && target.timestamp <= Number(memory.coveredTimestamp)) ||
       Boolean(memory?.coveredMessageId && messageIdsToDelete.includes(memory.coveredMessageId))
 
+    // A snapshot for this run would make the edited message resume the withdrawn task.
+    const resumeSnapshot = await this.deps.chatStore.getSessionResumeSnapshot(sessionId)
+    const shouldClearResumeSnapshot = Boolean(run && resumeSnapshot?.runId === run.id)
+
     await this.deps.chatStore.deleteChatMessagesByIds(messageIdsToDelete)
     if (run) {
       await this.deps.aiRunStore.deleteRunsByIds([run.id])
+    }
+    if (shouldClearResumeSnapshot) {
+      await this.deps.chatStore.clearSessionResumeSnapshot(sessionId)
     }
     if (memoryCleared) {
       await this.deps.chatStore.clearConversationMemory(sessionId)

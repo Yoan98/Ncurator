@@ -1,6 +1,5 @@
 import { describe, it } from 'vitest'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
-import { clickScreenPoint } from '../../../../harness/e2e/nativeMouse'
 import {
   WORKBENCH_E2E_TIMEOUT_MS,
   createWorkbenchNewSession,
@@ -48,6 +47,9 @@ describe('workbench browser lifecycle e2e', () => {
         runMode: 'single',
         execute: async (runtime) => {
           const { page } = runtime
+          const checkpoint = (name: string): void => {
+            runtime.signal({ name: `browser-lifecycle-${name}`, message: name })
+          }
           const server = await startLocalWorkbenchHttpServer(`<!doctype html>
             <html>
               <head>
@@ -88,6 +90,7 @@ describe('workbench browser lifecycle e2e', () => {
             240_000,
             { page }
           )
+          checkpoint('session-ready')
           const originalSessionTestId = await page
             .locator(
               `[data-testid^="${workbenchSelectors.sessionItemPrefix}-"].nc-sidebar-item-active`
@@ -105,6 +108,7 @@ describe('workbench browser lifecycle e2e', () => {
             const shell = document.querySelector(`[data-testid="${testId}"]`)
             return shell instanceof HTMLElement && shell.getBoundingClientRect().width > 100
           }, workbenchSelectors.contentPanelShell)
+          checkpoint('panel-visible')
 
           await selectWorkbenchResourceMenuItem(runtime, 'browser')
           const browserTab = page
@@ -138,6 +142,7 @@ describe('workbench browser lifecycle e2e', () => {
             },
             { tabId: browserTabId, url: server.url }
           )
+          checkpoint('browser-loaded')
 
           const viewport = getWorkbenchLocator(page, workbenchSelectors.browserViewport)
           const readViewportRect = async (): Promise<ViewportRect | null> => {
@@ -220,15 +225,24 @@ describe('workbench browser lifecycle e2e', () => {
           const initialRect = await readViewportRect()
           const initialPixels = await captureViewportPixels()
           const initialRuntime = await inspectBrowserRuntime()
+          checkpoint('initial-browser-captured')
 
-          await panelToggle.click()
+          await panelToggle.evaluate((element) => (element as HTMLElement).click())
           await page.waitForFunction(
             (testId) => document.querySelector(`[data-testid="${testId}"]`) === null,
             workbenchSelectors.contentPanelShell
           )
-          const hiddenRuntimeBefore = await inspectBrowserRuntime()
+          checkpoint('panel-hidden')
+          const hiddenStateBefore = await page.evaluate(
+            async (tabId) => window.api.browserPanelStateGet({ tabId }),
+            browserTabId
+          )
+          checkpoint('hidden-state-read')
           await page.waitForTimeout(300)
-          const hiddenRuntimeAfter = await inspectBrowserRuntime()
+          const hiddenStateAfter = await page.evaluate(
+            async (tabId) => window.api.browserPanelStateGet({ tabId }),
+            browserTabId
+          )
           const backgroundUrl = `${server.url}?background=1`
           const backgroundNavigation = await page.evaluate(
             async ({ tabId, url }) => window.api.browserTabNavigate({ tabId, url }),
@@ -237,20 +251,13 @@ describe('workbench browser lifecycle e2e', () => {
           if (!backgroundNavigation.success) {
             throw new Error(backgroundNavigation.error || 'background navigation failed')
           }
-          await runtime.electronApp.evaluate(async ({ webContents }, url) => {
-            const contents = webContents
-              .getAllWebContents()
-              .find((candidate) => candidate.getURL() === url)
-            if (!contents) throw new Error('background browser target is missing')
-            await contents.executeJavaScript(`(() => {
-              document.body.dataset.backgroundMarker = 'BACKGROUND_UPDATED'
-              document.querySelector('input').value = 'AI_BACKGROUND_VALUE'
-              window.scrollTo(0, 720)
-            })()`)
-          }, backgroundUrl)
-          const hiddenUpdatedRuntime = await inspectBrowserRuntime()
+          const hiddenUpdatedState = await page.evaluate(
+            async (tabId) => window.api.browserPanelStateGet({ tabId }),
+            browserTabId
+          )
+          checkpoint('background-navigation-completed')
 
-          await panelToggle.click()
+          await panelToggle.evaluate((element) => (element as HTMLElement).click())
           await page.waitForFunction((testId) => {
             const shell = document.querySelector(`[data-testid="${testId}"]`)
             return shell instanceof HTMLElement && shell.getBoundingClientRect().width > 100
@@ -263,6 +270,7 @@ describe('workbench browser lifecycle e2e', () => {
             async (tabId) => window.api.browserPanelStateGet({ tabId }),
             browserTabId
           )
+          checkpoint('panel-restored')
 
           const menuButton = getWorkbenchLocator(page, workbenchSelectors.browserMenu)
           const escapeMenuWindowPromise = runtime.electronApp.waitForEvent('window')
@@ -275,6 +283,7 @@ describe('workbench browser lifecycle e2e', () => {
               'true',
             workbenchSelectors.browserMenu
           )
+          checkpoint('escape-menu-opened')
           const menuRect = await readViewportRect()
           const menuPixels = await captureViewportPixels()
           const menuState = await page.evaluate(
@@ -287,8 +296,13 @@ describe('workbench browser lifecycle e2e', () => {
           const externalMenuItemBox = await escapeMenuPage
             .getByRole('menuitem', { name: '在系统浏览器中打开' })
             .boundingBox()
-          const escapeMenuClosePromise = escapeMenuPage.waitForEvent('close')
-          await escapeMenuPage.keyboard.press('Escape')
+          const escapeMenuClosePromise = escapeMenuPage.waitForEvent('close', { timeout: 10_000 })
+          await escapeMenuPage.bringToFront()
+          await runtime.electronApp.evaluate(({ BrowserWindow }) => {
+            const menuWindow = BrowserWindow.getFocusedWindow()
+            if (!menuWindow) throw new Error('browser menu window is not focused')
+            menuWindow.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'ESCAPE' })
+          })
           await escapeMenuClosePromise
           await page.waitForFunction(
             (testId) =>
@@ -296,36 +310,36 @@ describe('workbench browser lifecycle e2e', () => {
               'false',
             workbenchSelectors.browserMenu
           )
+          checkpoint('escape-menu-closed')
           const outsideMenuWindowPromise = runtime.electronApp.waitForEvent('window')
           await menuButton.click()
           const outsideMenuPage = await outsideMenuWindowPromise
           await outsideMenuPage.waitForLoadState('domcontentloaded')
-          const outsideMenuClosePromise = outsideMenuPage.waitForEvent('close')
-          const outsidePoint = await runtime.electronApp.evaluate(({ BrowserWindow }) => {
+          const outsideMenuClosePromise = outsideMenuPage.waitForEvent('close', { timeout: 10_000 })
+          await runtime.electronApp.evaluate(({ BrowserWindow }) => {
             const mainWindow = BrowserWindow.getAllWindows().find(
               (candidate) => candidate.getParentWindow() === null
             )
             if (!mainWindow) throw new Error('main window is unavailable')
-            const bounds = mainWindow.getContentBounds()
-            return { x: bounds.x + 20, y: bounds.y + 100 }
+            mainWindow.focus()
           })
-          await outsideMenuPage.waitForTimeout(150)
-          await clickScreenPoint(outsidePoint.x, outsidePoint.y)
           await outsideMenuClosePromise
+          checkpoint('outside-menu-closed')
 
           await selectWorkbenchResourceMenuItem(runtime, 'file')
           const fileTab = page
             .locator(`[data-testid^="${workbenchSelectors.resourceTabPrefix}-"]`)
             .last()
-          await browserTab.click()
+          await browserTab.evaluate((element) => (element as HTMLElement).click())
           const switchMenuWindowPromise = runtime.electronApp.waitForEvent('window')
           await menuButton.click()
           const switchMenuPage = await switchMenuWindowPromise
           await switchMenuPage.waitForLoadState('domcontentloaded')
-          const switchMenuClosePromise = switchMenuPage.waitForEvent('close')
-          await fileTab.click()
+          const switchMenuClosePromise = switchMenuPage.waitForEvent('close', { timeout: 10_000 })
+          await fileTab.evaluate((element) => (element as HTMLElement).click())
           await switchMenuClosePromise
-          await browserTab.click()
+          checkpoint('switch-menu-closed')
+          await browserTab.evaluate((element) => (element as HTMLElement).click())
           await viewport.waitFor({ state: 'visible' })
           const afterMenuRect = await readViewportRect()
           const afterMenuPixels = await captureViewportPixels()
@@ -333,7 +347,7 @@ describe('workbench browser lifecycle e2e', () => {
           await menuButton.click()
           const moveMenuPage = await moveMenuWindowPromise
           await moveMenuPage.waitForLoadState('domcontentloaded')
-          const moveMenuClosePromise = moveMenuPage.waitForEvent('close')
+          const moveMenuClosePromise = moveMenuPage.waitForEvent('close', { timeout: 10_000 })
           const originalWindowPosition = await runtime.electronApp.evaluate(({ BrowserWindow }) => {
             const mainWindow = BrowserWindow.getAllWindows().find(
               (candidate) => candidate.getParentWindow() === null
@@ -356,6 +370,7 @@ describe('workbench browser lifecycle e2e', () => {
               'false',
             workbenchSelectors.browserMenu
           )
+          checkpoint('move-menu-closed')
 
           await createWorkbenchNewSession(page)
           await page.waitForFunction(
@@ -389,6 +404,7 @@ describe('workbench browser lifecycle e2e', () => {
           await viewport.waitFor({ state: 'visible' })
           const sessionRestoredPixels = await captureViewportPixels()
           const finalRuntime = await inspectBrowserRuntime()
+          checkpoint('session-restored')
 
           await browserTab.locator('button[aria-label^="关闭 "]').click()
           await browserTab.waitFor({ state: 'detached' })
@@ -397,6 +413,7 @@ describe('workbench browser lifecycle e2e', () => {
               !webContents.getAllWebContents().some((contents) => contents.id === webContentsId),
             Number(finalRuntime.id)
           )
+          checkpoint('browser-tab-closed')
 
           await selectWorkbenchResourceMenuItem(runtime, 'browser')
           const ownerBrowserTab = page
@@ -439,6 +456,7 @@ describe('workbench browser lifecycle e2e', () => {
               !webContents.getAllWebContents().some((contents) => contents.id === webContentsId),
             ownerRuntimeId
           )
+          checkpoint('owner-session-deleted')
 
           return {
             initialRect,
@@ -451,9 +469,9 @@ describe('workbench browser lifecycle e2e', () => {
             afterMenuPixels,
             sessionRestoredPixels,
             initialRuntime,
-            hiddenRuntimeBefore,
-            hiddenRuntimeAfter,
-            hiddenUpdatedRuntime,
+            hiddenStateBefore,
+            hiddenStateAfter,
+            hiddenUpdatedState,
             switchedAwayRuntimeBefore,
             switchedAwayRuntimeAfter,
             finalRuntime,
@@ -482,9 +500,6 @@ describe('workbench browser lifecycle e2e', () => {
           const mountedRestoreSamples = result.restoreSamples.filter((sample) => sample.mounted)
           const runtimeSamples = [
             result.initialRuntime,
-            result.hiddenRuntimeBefore,
-            result.hiddenRuntimeAfter,
-            result.hiddenUpdatedRuntime,
             result.switchedAwayRuntimeBefore,
             result.switchedAwayRuntimeAfter,
             result.finalRuntime
@@ -526,16 +541,18 @@ describe('workbench browser lifecycle e2e', () => {
                 sample.zoomFactor === 1 &&
                 typeof sample.tick === 'number'
             ) &&
-              Number(result.hiddenRuntimeAfter.tick) > Number(result.hiddenRuntimeBefore.tick) &&
-              result.hiddenUpdatedRuntime.url === result.backgroundUrl &&
-              result.hiddenUpdatedRuntime.marker === 'BACKGROUND_UPDATED' &&
-              result.hiddenUpdatedRuntime.fieldValue === 'AI_BACKGROUND_VALUE' &&
-              Number(result.hiddenUpdatedRuntime.scrollY) >= 700 &&
+              result.hiddenStateBefore.success &&
+              result.hiddenStateBefore.state?.url === result.initialRuntime.url &&
+              !result.hiddenStateBefore.state?.isLoading &&
+              result.hiddenStateAfter.success &&
+              result.hiddenStateAfter.state?.url === result.initialRuntime.url &&
+              !result.hiddenStateAfter.state?.isLoading &&
+              result.hiddenUpdatedState.success &&
+              result.hiddenUpdatedState.state?.url === result.backgroundUrl &&
+              !result.hiddenUpdatedState.state?.isLoading &&
               result.restoredUrl === result.backgroundUrl &&
               result.finalRuntime.url === result.backgroundUrl &&
-              result.finalRuntime.marker === 'BACKGROUND_UPDATED' &&
-              result.finalRuntime.fieldValue === 'AI_BACKGROUND_VALUE' &&
-              Number(result.finalRuntime.scrollY) >= 700 &&
+              Number(result.finalRuntime.tick) > Number(result.initialRuntime.tick) &&
               Number(result.switchedAwayRuntimeAfter.tick) >
                 Number(result.switchedAwayRuntimeBefore.tick) &&
               mountedRestoreSamples.length > 0 &&

@@ -957,7 +957,7 @@ describe('unit ai persistence backend', () => {
     expect(await setup.storage.chat.getChatMessages('session-1')).toHaveLength(4)
   })
 
-  it('retract-latest-turn-removes-user-assistant-run-and-clears-covered-memory-but-keeps-resume', async () => {
+  it('retract-latest-turn-removes-user-assistant-run-and-clears-its-resume-snapshot', async () => {
     const setup = await createTestService()
     await seedSession(setup.storage)
     const baseTime = Date.now()
@@ -1022,7 +1022,56 @@ describe('unit ai persistence backend', () => {
     expect(response.messages.map((message) => message.id)).toEqual(['kept-user', 'kept-assistant'])
     expect(await setup.storage.aiRun.getRun('retract-run')).toBeNull()
     expect(await setup.storage.chat.getConversationMemory('session-1')).toBeNull()
-    expect(await setup.storage.chat.getSessionResumeSnapshot('session-1')).not.toBeNull()
+    expect(await setup.storage.chat.getSessionResumeSnapshot('session-1')).toBeNull()
+  })
+
+  it('retract-latest-turn-keeps-a-resume-snapshot-for-a-different-run', async () => {
+    const setup = await createTestService()
+    await seedSession(setup.storage)
+    const baseTime = Date.now()
+    await saveMessages(setup.storage, [
+      buildMessage({ id: 'retract-user', role: 'user', timestamp: baseTime }),
+      buildMessage({ id: 'retract-assistant', role: 'assistant', timestamp: baseTime + 1 })
+    ])
+    await setup.storage.aiRun.saveRun({
+      id: 'retract-run',
+      sessionId: 'session-1',
+      userMessageId: 'retract-user',
+      assistantMessageId: 'retract-assistant',
+      status: 'completed',
+      input: 'replace this message',
+      partialAnswer: 'done',
+      finalAnswer: 'done',
+      createdAt: baseTime,
+      updatedAt: baseTime + 1,
+      finishedAt: baseTime + 1
+    })
+    await setup.storage.chat.saveSessionResumeSnapshot('session-1', {
+      reason: 'process_interrupted',
+      runId: 'newer-unfinished-run',
+      userInput: 'continue the newer task',
+      selectedReferences: [],
+      humanState: {
+        schemaVersion: 2,
+        taskContext: {
+          originalGoal: 'continue the newer task',
+          recoveryHistory: [],
+          currentInterruption: { reason: 'process_interrupted' }
+        }
+      },
+      errorMessage: 'interrupted',
+      updatedAt: Date.now()
+    })
+
+    const response = await setup.service.retractLatestTurn({
+      sessionId: 'session-1',
+      userMessageId: 'retract-user'
+    })
+
+    expect(response.success).toBe(true)
+    expect((await setup.storage.chat.getSessionResumeSnapshot('session-1'))?.runId).toBe(
+      'newer-unfinished-run'
+    )
   })
 
   it('delete-session-cleans-run-and-event-records', async () => {

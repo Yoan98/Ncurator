@@ -367,7 +367,7 @@ describe('workbench run e2e', () => {
           await getWorkbenchLocator(
             page,
             `${workbenchSelectors.resourceTabPrefix}-browser-${openedEvent.browserTabId}`
-          ).click()
+          ).evaluate((element) => (element as HTMLElement).click())
           await getWorkbenchLocator(page, workbenchSelectors.browserViewport).waitFor({
             state: 'visible'
           })
@@ -422,7 +422,7 @@ describe('workbench run e2e', () => {
           await getWorkbenchLocator(
             page,
             `${workbenchSelectors.resourceTabPrefix}-browser-${openedEvent.browserTabId}`
-          ).click()
+          ).evaluate((element) => (element as HTMLElement).click())
           await getWorkbenchLocator(page, workbenchSelectors.browserViewport).waitFor({
             state: 'visible'
           })

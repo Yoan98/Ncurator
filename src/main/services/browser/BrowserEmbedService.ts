@@ -346,7 +346,13 @@ export class BrowserEmbedService implements BrowserUseService {
         result: null
       }
     }
-    if (input.url) await this.navigate(input.url, runtime.persisted.id)
+    if (input.url) {
+      const requestedUrl = normalizeUrl(input.url)
+      const currentUrl = runtime.view?.webContents.getURL() || runtime.persisted.url
+      if (currentUrl !== requestedUrl) {
+        await this.navigate(requestedUrl, runtime.persisted.id)
+      }
+    }
     return await this.runDom(input, runtime)
   }
 
