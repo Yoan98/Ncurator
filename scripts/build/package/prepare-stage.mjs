@@ -300,6 +300,8 @@ const stripSourceMapReferences = () => {
 const pruneNodeModules = () => {
   const nodeModules = path.join(STAGE_DIR, 'node_modules')
   const targetPrebuildDirectory = `${process.platform}-${process.arch}`
+  const isRequiredRuntimeDirectory = (directory) =>
+    path.relative(nodeModules, directory) === path.join('exceljs', 'lib', 'doc')
   const supportsCurrentTarget = (values, current) => {
     if (!Array.isArray(values) || values.length === 0) return true
     const normalized = values.map((value) => String(value).trim()).filter(Boolean)
@@ -349,7 +351,7 @@ const pruneNodeModules = () => {
           continue
         }
         if (
-          REMOVE_DIRECTORY_NAMES.has(lowerName) ||
+          (REMOVE_DIRECTORY_NAMES.has(lowerName) && !isRequiredRuntimeDirectory(entryPath)) ||
           (directory === nodeModules && lowerName === '.bin')
         ) {
           fs.rmSync(entryPath, { recursive: true, force: true })

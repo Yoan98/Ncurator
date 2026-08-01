@@ -391,7 +391,22 @@ export const launchElectronApp = async (input: {
     )
   })
 
-  const page = await electronApp.firstWindow()
+  let page: Page
+  try {
+    page = await electronApp.firstWindow()
+  } catch (error) {
+    const diagnostics = consoleEntries
+      .slice(-20)
+      .map((entry) => entry.text)
+      .join('\n')
+    await electronApp.close().catch(() => undefined)
+    await rm(userDataDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
+    throw new Error(
+      `${error instanceof Error ? error.message : String(error)}${
+        diagnostics ? `\nMain process diagnostics:\n${diagnostics}` : ''
+      }`
+    )
+  }
   electronApplicationByPage.set(page, electronApp)
   assertLaunchedWorkbenchApp(page)
   const processInfo = await electronApp.evaluate(({ app }) => ({
