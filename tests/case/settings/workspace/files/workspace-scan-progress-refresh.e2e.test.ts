@@ -72,7 +72,14 @@ describe('settings workspace e2e', () => {
 
           let inProgressVisible = false
           let buttonsDisabled = false
-          let progressEventSeen = false
+          let scanProgressEvents: Array<{
+            phase: string
+            totalCount: number
+            processedCount: number
+            message?: string
+            status: string
+            directoryCallCount: number
+          }> = []
           let scanRunningAfterReturn = false
           let restoredProgressVisible = false
           let restoredButtonsDisabled = false
@@ -83,24 +90,45 @@ describe('settings workspace e2e', () => {
             name: 'scan-workspace-through-ui',
             message: '点击检查更新，并捕捉真实进度事件或执行中 UI。',
             run: async () => {
-              await getSettingsLocator(page, importSelectors.workspaceTree).waitFor({ state: 'visible' })
+              await getSettingsLocator(page, importSelectors.workspaceTree).waitFor({
+                state: 'visible'
+              })
               directoryCallBaseline = await page.evaluate(
                 () =>
-                  (window as typeof window & {
-                    __NCURATOR_E2E_OBSERVER__?: { ipcInvokeEntries: Array<{ name: string }> }
-                  }).__NCURATOR_E2E_OBSERVER__?.ipcInvokeEntries.filter(
+                  (
+                    window as typeof window & {
+                      __NCURATOR_E2E_OBSERVER__?: { ipcInvokeEntries: Array<{ name: string }> }
+                    }
+                  ).__NCURATOR_E2E_OBSERVER__?.ipcInvokeEntries.filter(
                     (entry) => entry.name === 'workspaceDirectoryList'
                   ).length || 0
               )
               const progressEventsPromise = page.evaluate(
                 (workspaceId) =>
-                  new Promise<boolean>((resolve) => {
+                  new Promise<
+                    Array<{
+                      phase: string
+                      totalCount: number
+                      processedCount: number
+                      message?: string
+                      status: string
+                      directoryCallCount: number
+                    }>
+                  >((resolve) => {
                     let settled = false
-                    const finish = (value: boolean): void => {
+                    const events: Array<{
+                      phase: string
+                      totalCount: number
+                      processedCount: number
+                      message?: string
+                      status: string
+                      directoryCallCount: number
+                    }> = []
+                    const finish = (): void => {
                       if (settled) return
                       settled = true
                       unsubscribe()
-                      resolve(value)
+                      resolve(events)
                     }
                     const unsubscribe = window.api.onWorkspaceIndexJobProgress((job) => {
                       if (
@@ -108,10 +136,27 @@ describe('settings workspace e2e', () => {
                         job.source_kind === 'file' &&
                         job.action === 'scan'
                       ) {
-                        finish(true)
+                        events.push({
+                          phase: job.phase,
+                          totalCount: job.total_count,
+                          processedCount: job.processed_count,
+                          message: job.message,
+                          status: job.status,
+                          directoryCallCount:
+                            (
+                              window as typeof window & {
+                                __NCURATOR_E2E_OBSERVER__?: {
+                                  ipcInvokeEntries: Array<{ name: string }>
+                                }
+                              }
+                            ).__NCURATOR_E2E_OBSERVER__?.ipcInvokeEntries.filter(
+                              (entry) => entry.name === 'workspaceDirectoryList'
+                            ).length || 0
+                        })
+                        if (job.status !== 'running') finish()
                       }
                     })
-                    window.setTimeout(() => finish(false), 3000)
+                    window.setTimeout(finish, 3000)
                   }),
                 workspaceId
               )
@@ -138,16 +183,13 @@ describe('settings workspace e2e', () => {
                     importSelectors.workspaceQuickPrepareButton
                   ).isDisabled())
               }
-              progressEventSeen = await progressEventsPromise
-              directoryCallsWhileRunning = await page.evaluate(
-                () =>
-                  (window as typeof window & {
-                    __NCURATOR_E2E_OBSERVER__?: { ipcInvokeEntries: Array<{ name: string }> }
-                  }).__NCURATOR_E2E_OBSERVER__?.ipcInvokeEntries.filter(
-                    (entry) => entry.name === 'workspaceDirectoryList'
-                  ).length || 0
+              scanProgressEvents = await progressEventsPromise
+              directoryCallsWhileRunning = Math.max(
+                0,
+                ...scanProgressEvents
+                  .filter((event) => event.status === 'running')
+                  .map((event) => event.directoryCallCount - directoryCallBaseline)
               )
-              directoryCallsWhileRunning -= directoryCallBaseline
               await navigateToSettingsSection(page, 'model')
               await navigateToSettingsSection(page, 'workspace')
               const restoredState = await page
@@ -198,7 +240,7 @@ describe('settings workspace e2e', () => {
           return {
             inProgressVisible,
             buttonsDisabled,
-            progressEventSeen,
+            scanProgressEvents,
             scanRunningAfterReturn,
             restoredProgressVisible,
             restoredButtonsDisabled,
@@ -208,12 +250,38 @@ describe('settings workspace e2e', () => {
           }
         },
         assert: async (result, runtime) => {
-          await runtime.assertThat(result.inProgressVisible || result.progressEventSeen, {
-            name: 'scan-progress-is-observable',
-            message:
-              '检查更新应通过真实 UI 触发扫描，并能观察到执行中的 UI 或真实进度事件；扫描很快完成时进度块可能已恢复。',
-            data: result
-          })
+          await runtime.assertThat(
+            result.inProgressVisible || result.scanProgressEvents.length > 0,
+            {
+              name: 'scan-progress-is-observable',
+              message:
+                '检查更新应通过真实 UI 触发扫描，并能观察到执行中的 UI 或真实进度事件；扫描很快完成时进度块可能已恢复。',
+              data: result
+            }
+          )
+
+          await runtime.assertThat(
+            result.scanProgressEvents.some(
+              (event) =>
+                event.phase === 'scan' &&
+                event.totalCount === 0 &&
+                event.processedCount > 0 &&
+                event.message?.includes('已扫描')
+            ) &&
+              result.scanProgressEvents.some(
+                (event) =>
+                  event.phase === 'diff' &&
+                  event.totalCount === 600 &&
+                  event.processedCount > 0 &&
+                  event.message?.includes('正在比对索引')
+              ),
+            {
+              name: 'scan-uses-discovery-and-determinate-progress-phases',
+              message:
+                '检查更新应先报告目录扫描发现数量，再以可索引文件总数显示比对索引的真实进度，对齐 SET-WORKSPACE-003-AC5。',
+              data: result.scanProgressEvents
+            }
+          )
           await runtime.assertThat(
             result.restoredProgressVisible === result.scanRunningAfterReturn &&
               result.restoredButtonsDisabled === result.scanRunningAfterReturn,
@@ -225,15 +293,12 @@ describe('settings workspace e2e', () => {
             }
           )
 
-          await runtime.assertThat(
-            result.directoryCallsWhileRunning === 0,
-            {
-              name: 'scan-does-not-refresh-directory-while-running',
-              message:
-                '检查更新执行期间不应读取目录，避免 loading 与空态闪烁；终态目录刷新由页面保留时的任务回调或重新进入时的选中加载承接。',
-              data: result
-            }
-          )
+          await runtime.assertThat(result.directoryCallsWhileRunning === 0, {
+            name: 'scan-does-not-refresh-directory-while-running',
+            message:
+              '检查更新执行期间不应读取目录，避免 loading 与空态闪烁；终态目录刷新由页面保留时的任务回调或重新进入时的选中加载承接。',
+            data: result
+          })
 
           await runtime.assertThat(
             result.summary.file_count === 600 &&

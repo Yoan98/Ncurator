@@ -8,6 +8,10 @@ type WorkspaceIndexJobProgressProps = {
 }
 
 const getJobTitle = (job: WorkspaceIndexJobRecord): string => {
+  if (job.source_kind === 'file' && job.action === 'scan') {
+    if (job.phase === 'scan') return '步骤 1/2 扫描工作目录'
+    if (job.phase === 'diff') return '步骤 2/2 比对文件索引'
+  }
   if (job.source_kind === 'web' && job.action === 'prepare') {
     if (job.phase === 'crawl') return '步骤 1/2 抓取网页'
     if (job.phase === 'index') return '步骤 2/2 建立索引'

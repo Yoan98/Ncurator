@@ -16,6 +16,8 @@ describe('unit workspace backend', () => {
       runMode: 'single',
       execute: async (runtime) => {
         const now = Date.now()
+        const scanProgress: Array<{ scannedEntryCount: number; supportedFileCount: number }> = []
+        const diffProgress: Array<{ processedCount: number; totalCount: number }> = []
         await mkdir(path.join(runtime.workspaceRoot, '.git'), { recursive: true })
         await mkdir(path.join(runtime.workspaceRoot, 'node_modules'), { recursive: true })
         await mkdir(path.join(runtime.workspaceRoot, 'visible', 'deep'), { recursive: true })
@@ -32,7 +34,10 @@ describe('unit workspace backend', () => {
           workspaceId: 'workspace-scan-contract',
           rootPath: runtime.workspaceRoot,
           workspaceName: '扫描契约工作区',
-          now
+          now,
+          onProgress: (progress) => {
+            scanProgress.push({ ...progress })
+          }
         })
         const records = scanResult.entries
           .filter((entry) => entry.kind === 'file' && entry.supported_for_index)
@@ -62,7 +67,10 @@ describe('unit workspace backend', () => {
               created_at: now,
               updated_at: now
             }
-          ]
+          ],
+          onProgress: (progress) => {
+            diffProgress.push(progress)
+          }
         })
 
         await runtime.storageService.workspace.saveWorkspace(scanResult.workspace)
@@ -89,8 +97,8 @@ describe('unit workspace backend', () => {
           status: 'running' as const,
           phase: 'scan' as const,
           step_index: 1,
-          step_total: 1,
-          total_count: records.length,
+          step_total: 2,
+          total_count: 0,
           processed_count: 0,
           failed_count: 0,
           target_ids: records.map((record) => record.id),
@@ -115,6 +123,8 @@ describe('unit workspace backend', () => {
 
         return {
           activeJob,
+          scanProgress,
+          diffProgress,
           savedWorkspace,
           fileSummary,
           scannedPaths: scanResult.entries.map((entry) => entry.relative_path),
@@ -149,12 +159,37 @@ describe('unit workspace backend', () => {
         runtime.assertThat(
           result.activeJob?.status === 'running' &&
             result.activeJob.phase === 'scan' &&
-            result.activeJob.total_count === result.fileSummary.file_count,
+            result.activeJob.step_total === 2 &&
+            result.activeJob.total_count === 0,
           {
             name: 'workspace-scan-creates-persistent-job',
             message:
               '检查目录变化应具备可用于页面恢复的持久化 job 信息，对齐 SET-WORKSPACE-003-AC1、SET-WORKSPACE-003-AC3。',
             data: result
+          }
+        )
+
+        runtime.assertThat(
+          result.scanProgress.length > 0 &&
+            result.scanProgress.at(-1)?.scannedEntryCount === result.scannedPaths.length &&
+            result.scanProgress.at(-1)?.supportedFileCount === result.indexedPaths.length,
+          {
+            name: 'workspace-scan-reports-discovery-progress',
+            message:
+              '目录扫描应持续上报已扫描条目与已发现可索引文件数量，供未知总量阶段展示真实活动进度，对齐 SET-WORKSPACE-003-AC5。',
+            data: result.scanProgress
+          }
+        )
+
+        runtime.assertThat(
+          result.diffProgress.length > 0 &&
+            result.diffProgress.at(-1)?.processedCount === result.indexedPaths.length &&
+            result.diffProgress.at(-1)?.totalCount === result.indexedPaths.length,
+          {
+            name: 'workspace-scan-reports-determinate-diff-progress',
+            message:
+              '目录扫描结束后，比对索引阶段必须以已发现的可索引文件总数上报确定进度，对齐 SET-WORKSPACE-003-AC5。',
+            data: result.diffProgress
           }
         )
 
@@ -178,7 +213,7 @@ describe('unit workspace backend', () => {
         runtime.assertThat(
           Boolean(result.savedWorkspace?.root_path) &&
             !('status' in (result.savedWorkspace || {})) &&
-            result.fileSummary.file_count === result.activeJob?.total_count,
+            result.fileSummary.file_count === result.indexedPaths.length,
           {
             name: 'workspace-scan-derives-summary-from-file-index',
             message:

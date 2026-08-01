@@ -239,7 +239,7 @@ export interface WorkspaceSyncProgress {
 export type WorkspaceIndexJobSourceKind = 'file' | 'web'
 export type WorkspaceIndexJobAction = 'scan' | 'prepare'
 export type WorkspaceIndexJobStatus = 'running' | 'succeeded' | 'failed'
-export type WorkspaceIndexJobPhase = 'scan' | 'crawl' | 'index' | 'complete'
+export type WorkspaceIndexJobPhase = 'scan' | 'diff' | 'crawl' | 'index' | 'complete'
 
 export interface WorkspaceIndexJobRecord {
   id: string

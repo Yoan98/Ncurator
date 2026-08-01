@@ -379,15 +379,58 @@ export function registerHandlers(services: {
 
       const existingRecords = await workspaceStore.listWorkspaceFileIndexRecords(workspaceId)
       const now = Date.now()
+      let lastReportedScanEntryCount = 0
       const scanResult = await workspaceService.scanWorkspaceTree({
         workspaceId,
         rootPath: currentWorkspace.root_path,
         workspaceName: currentWorkspace.name,
-        now
+        now,
+        onProgress: async ({ scannedEntryCount, supportedFileCount }) => {
+          if (scannedEntryCount - lastReportedScanEntryCount < 20) return
+          lastReportedScanEntryCount = scannedEntryCount
+          job = await updateAndEmitWorkspaceIndexJob(job, {
+            phase: 'scan',
+            step_index: 1,
+            step_total: 2,
+            total_count: 0,
+            processed_count: scannedEntryCount,
+            failed_count: 0,
+            message: `正在扫描目录：已扫描 ${scannedEntryCount} 项，发现 ${supportedFileCount} 个可索引文件`,
+            updated_at: Date.now()
+          })
+        }
       })
+      const supportedFileCount = scanResult.entries.filter(
+        (entry) => entry.kind === 'file' && entry.supported_for_index
+      ).length
+      job = await updateAndEmitWorkspaceIndexJob(job, {
+        phase: 'diff',
+        step_index: 2,
+        step_total: 2,
+        total_count: supportedFileCount,
+        processed_count: 0,
+        failed_count: 0,
+        message: `正在比对索引：0/${supportedFileCount}`,
+        updated_at: Date.now()
+      })
+      let lastReportedDiffCount = 0
       const diff = await workspaceService.diffWorkspaceTreeAgainstIndex({
         entries: scanResult.entries,
-        records: existingRecords
+        records: existingRecords,
+        onProgress: async ({ processedCount, totalCount }) => {
+          if (processedCount - lastReportedDiffCount < 10 && processedCount !== totalCount) return
+          lastReportedDiffCount = processedCount
+          job = await updateAndEmitWorkspaceIndexJob(job, {
+            phase: 'diff',
+            step_index: 2,
+            step_total: 2,
+            total_count: totalCount,
+            processed_count: processedCount,
+            failed_count: 0,
+            message: `正在比对索引：${processedCount}/${totalCount}`,
+            updated_at: Date.now()
+          })
+        }
       })
 
       const nextRecords: WorkspaceFileIndexRecord[] = []
@@ -1806,8 +1849,8 @@ export function registerHandlers(services: {
             action: 'scan',
             phase: 'scan',
             stepIndex: 1,
-            stepTotal: 1,
-            message: '正在检查目录变化'
+            stepTotal: 2,
+            message: '正在扫描目录：已扫描 0 项，发现 0 个可索引文件'
           })
         )
         activeWorkspaceIndexJobs.add(jobKey)

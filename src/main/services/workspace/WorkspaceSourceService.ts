@@ -154,6 +154,10 @@ export class WorkspaceSourceService {
     rootPath: string
     workspaceName?: string
     now?: number
+    onProgress?: (progress: {
+      scannedEntryCount: number
+      supportedFileCount: number
+    }) => void | Promise<void>
   }): Promise<WorkspaceTreeScanResult> {
     const { normalizedRootPath, displayName } = await this.normalizeWorkspaceRoot(input.rootPath)
     const now = Number.isFinite(input.now) ? Number(input.now) : Date.now()
@@ -163,7 +167,12 @@ export class WorkspaceSourceService {
       workspaceId: input.workspaceId,
       rootPath: normalizedRootPath,
       currentPath: normalizedRootPath,
-      entries
+      entries,
+      progress: {
+        scannedEntryCount: 0,
+        supportedFileCount: 0
+      },
+      onProgress: input.onProgress
     })
 
     return {
@@ -186,6 +195,7 @@ export class WorkspaceSourceService {
   public async diffWorkspaceTreeAgainstIndex(input: {
     entries: WorkspaceTreeEntry[]
     records: WorkspaceFileIndexRecord[]
+    onProgress?: (progress: { processedCount: number; totalCount: number }) => void | Promise<void>
   }): Promise<WorkspaceTreeEntryDiff> {
     const supportedEntries = input.entries.filter(
       (entry) => entry.kind === 'file' && entry.supported_for_index
@@ -203,11 +213,14 @@ export class WorkspaceSourceService {
       untracked: []
     }
 
+    let processedCount = 0
     for (const entry of supportedEntries) {
       const record = recordMap.get(entry.relative_path)
       if (!record) {
         diff.added.push(entry)
         diff.untracked.push(entry)
+        processedCount += 1
+        await input.onProgress?.({ processedCount, totalCount: supportedEntries.length })
         continue
       }
 
@@ -215,6 +228,8 @@ export class WorkspaceSourceService {
       const sameMtime = record.mtime_ms === entry.mtime_ms
       if (sameSize && sameMtime) {
         diff.unchanged.push({ entry, record })
+        processedCount += 1
+        await input.onProgress?.({ processedCount, totalCount: supportedEntries.length })
         continue
       }
 
@@ -239,6 +254,8 @@ export class WorkspaceSourceService {
           content_hash: currentHash
         }
       })
+      processedCount += 1
+      await input.onProgress?.({ processedCount, totalCount: supportedEntries.length })
     }
 
     for (const record of input.records) {
@@ -306,6 +323,14 @@ export class WorkspaceSourceService {
     rootPath: string
     currentPath: string
     entries: WorkspaceTreeEntry[]
+    progress: {
+      scannedEntryCount: number
+      supportedFileCount: number
+    }
+    onProgress?: (progress: {
+      scannedEntryCount: number
+      supportedFileCount: number
+    }) => void | Promise<void>
   }): Promise<void> {
     const dirEntries = await fs.readdir(input.currentPath, { withFileTypes: true })
     const sortedEntries = [...dirEntries].sort((a, b) => a.name.localeCompare(b.name))
@@ -328,6 +353,8 @@ export class WorkspaceSourceService {
           absolute_path: absolutePath,
           supported_for_index: false
         })
+        input.progress.scannedEntryCount += 1
+        await input.onProgress?.(input.progress)
         await this.walkDirectory({
           ...input,
           currentPath: absolutePath
@@ -338,6 +365,7 @@ export class WorkspaceSourceService {
       if (!entry.isFile()) continue
       const stat = await fs.stat(absolutePath)
       const fileExt = path.extname(entry.name).toLowerCase()
+      const supportedForIndex = isSupportedLocalFilePath(absolutePath)
       input.entries.push({
         id: toEntryId(input.workspaceId, 'file', normalizedRelativePath),
         workspace_id: input.workspaceId,
@@ -347,10 +375,13 @@ export class WorkspaceSourceService {
         relative_path: normalizedRelativePath,
         absolute_path: absolutePath,
         file_ext: fileExt.slice(1) || undefined,
-        supported_for_index: isSupportedLocalFilePath(absolutePath),
+        supported_for_index: supportedForIndex,
         size: stat.size,
         mtime_ms: Math.trunc(stat.mtimeMs)
       })
+      input.progress.scannedEntryCount += 1
+      if (supportedForIndex) input.progress.supportedFileCount += 1
+      await input.onProgress?.(input.progress)
     }
   }
 }
