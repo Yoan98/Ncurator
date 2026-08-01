@@ -34,7 +34,7 @@ type SemanticTreeContext = {
   relationshipTargets: ReadonlyMap<string, string>
   relationshipTypes: ReadonlyMap<string, string>
   relationshipTargetModes: ReadonlyMap<string, string>
-  availableRelationshipTargetIds: ReadonlySet<string>
+  availableRelationshipTargetIds?: ReadonlySet<string>
   editableNodesById: Map<string, DocxEditableNode>
   visualsById: Map<string, DocxVisualDescriptor>
 }
@@ -310,6 +310,7 @@ const parseVisual = (
     kind === 'image' &&
     relationshipId &&
     targetMode.toLowerCase() !== 'external' &&
+    context.availableRelationshipTargetIds &&
     !context.availableRelationshipTargetIds.has(relationshipId)
   ) {
     return null
@@ -682,7 +683,7 @@ const createContext = (input: {
   relationshipTargets: ReadonlyMap<string, string>
   relationshipTypes: ReadonlyMap<string, string>
   relationshipTargetModes: ReadonlyMap<string, string>
-  availableRelationshipTargetIds: ReadonlySet<string>
+  availableRelationshipTargetIds?: ReadonlySet<string>
   editableNodesById: Map<string, DocxEditableNode>
   visualsById: Map<string, DocxVisualDescriptor>
 }): SemanticTreeContext => ({ ...input })
@@ -698,7 +699,7 @@ export const buildParagraphDetail = (input: {
   relationshipTargets: ReadonlyMap<string, string>
   relationshipTypes: ReadonlyMap<string, string>
   relationshipTargetModes: ReadonlyMap<string, string>
-  availableRelationshipTargetIds: ReadonlySet<string>
+  availableRelationshipTargetIds?: ReadonlySet<string>
   editableNodesById: Map<string, DocxEditableNode>
   visualsById: Map<string, DocxVisualDescriptor>
 }): DocxDetailedParagraphBlock => {
@@ -726,7 +727,7 @@ export const buildTableDetail = (input: {
   relationshipTargets: ReadonlyMap<string, string>
   relationshipTypes: ReadonlyMap<string, string>
   relationshipTargetModes: ReadonlyMap<string, string>
-  availableRelationshipTargetIds: ReadonlySet<string>
+  availableRelationshipTargetIds?: ReadonlySet<string>
   editableNodesById: Map<string, DocxEditableNode>
   visualsById: Map<string, DocxVisualDescriptor>
 }): DocxDetailedTableBlock => {
@@ -756,7 +757,7 @@ export const buildCellDetail = (input: {
   relationshipTargets: ReadonlyMap<string, string>
   relationshipTypes: ReadonlyMap<string, string>
   relationshipTargetModes: ReadonlyMap<string, string>
-  availableRelationshipTargetIds: ReadonlySet<string>
+  availableRelationshipTargetIds?: ReadonlySet<string>
   editableNodesById: Map<string, DocxEditableNode>
   visualsById: Map<string, DocxVisualDescriptor>
 }): DocxDetailedCellBlock => {

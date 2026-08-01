@@ -332,7 +332,7 @@ export const buildBlockIndex = (
   relationshipTargets: ReadonlyMap<string, string> = new Map(),
   relationshipTypes: ReadonlyMap<string, string> = new Map(),
   relationshipTargetModes: ReadonlyMap<string, string> = new Map(),
-  availableRelationshipTargetIds: ReadonlySet<string> = new Set()
+  availableRelationshipTargetIds?: ReadonlySet<string>
 ): BlockIndex => {
   const body = getBody(documentDom)
   const outlineDraft: DocxOutlineBlock[] = []
