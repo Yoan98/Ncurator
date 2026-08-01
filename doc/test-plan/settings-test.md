@@ -132,13 +132,15 @@ Settings 顶层 suite 对齐 PRD 模块：
 
 ### 3.3 `workspace / files`
 
+本回归范围新增目录刷新生命周期约束：索引 job 运行期间目录树 IPC 必须为 0；任务成功或失败终态后，当前选中工作空间目录树只允许刷新一次。测试同时确认旧目录节点不因刷新被清空或折叠，扫描无可计算总数时显示活动状态而不是静态 0%。
+
 #### `workspace-scan-progress-refresh`
 
 - 测试类型：`e2e`
 - What：点击“检查更新”后，页面会刷新文件树和需索引摘要。
 - Why：这是用户识别待更新文件的第一步。
 - How：通过原生目录选择绑定真实临时目录，写入 600 个真实文件，通过 Settings UI 触发检查更新并读取刷新后的文件树。
-- Oracle：检查过程中出现持久化进度反馈，对齐 `SET-WORKSPACE-003-AC1`；成功后文件树和摘要刷新，对齐 `SET-WORKSPACE-003-AC2`；离开再返回时恢复当前进度和按钮状态，对齐 `SET-WORKSPACE-003-AC3`。
+- Oracle：检查过程中出现持久化进度反馈，对齐 `SET-WORKSPACE-003-AC1`；运行期间目录读取次数为 0，任务结束后目录树和摘要同步刷新且不出现 loading/空态闪烁，对齐 `SET-WORKSPACE-003-AC2`、`SET-WORKSPACE-003-AC5`；离开再返回时恢复当前进度和按钮状态，对齐 `SET-WORKSPACE-003-AC3`。
 - Not：不验证真实大目录性能和文件系统权限失败分支。
 
 #### `workspace-prepare-refresh`
@@ -147,7 +149,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - What：点击“更新索引”后，文件状态会刷新为已索引并同步更新摘要。
 - Why：“索引已经可用”的核心用户反馈链路。
 - How：复制共享 workspace 输入的隔离副本，通过 Settings UI 和原生目录选择完成创建与绑定；随后点击更新索引，读取刷新后的文件树和全部支持文件状态。
-- Oracle：更新索引过程中出现持久化总进度，且检查更新/更新索引按钮同时禁用，对齐 `SET-WORKSPACE-004-AC3`；共享 fixture 中全部支持文件真实进入处理范围，对齐 `SET-WORKSPACE-004-AC1`；更新后所有支持文件收敛为 `indexed / failed`，摘要和节点状态同步刷新，对齐 `SET-WORKSPACE-004-AC2`。
+- Oracle：更新索引过程中出现持久化总进度，且检查更新/更新索引按钮同时禁用，对齐 `SET-WORKSPACE-004-AC3`；运行期间目录读取次数为 0，终态只刷新一次且不因逐文件完成而闪烁或折叠，对齐 `SET-WORKSPACE-004-AC6`；共享 fixture 中全部支持文件真实进入处理范围，对齐 `SET-WORKSPACE-004-AC1`；更新后所有支持文件收敛为 `indexed / failed`，摘要和节点状态同步刷新，对齐 `SET-WORKSPACE-004-AC2`。
 - Not：不验证向量内容质量和搜索召回结果。
 
 #### `workspace-prepare-failed-retry`

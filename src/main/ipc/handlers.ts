@@ -443,7 +443,6 @@ export function registerHandlers(services: {
         updated_at: Date.now(),
         finished_at: Date.now()
       })
-      emitSourceListRefresh(input.sender)
       emitSourceListRefreshToAll()
       void job
     } catch (error) {
@@ -570,9 +569,6 @@ export function registerHandlers(services: {
           }
         ])
       }
-      emitSourceListRefresh(input.sender)
-      emitSourceListRefreshToAll()
-
       let processed = 0
       let failed = 0
       const knowledgeCache = createWorkspaceKnowledgeCache()
@@ -640,8 +636,6 @@ export function registerHandlers(services: {
           message: `已处理 ${processed}/${targets.length}`,
           updated_at: Date.now()
         })
-        emitSourceListRefresh(input.sender)
-        emitSourceListRefreshToAll()
       }
 
       await updateAndEmitWorkspaceIndexJob(job, {
@@ -654,6 +648,7 @@ export function registerHandlers(services: {
         updated_at: Date.now(),
         finished_at: Date.now()
       })
+      emitSourceListRefreshToAll()
     } catch (error) {
       const message = getErrorMessage(error)
       await updateAndEmitWorkspaceIndexJob(job, {
@@ -663,6 +658,7 @@ export function registerHandlers(services: {
         updated_at: Date.now(),
         finished_at: Date.now()
       })
+      emitSourceListRefreshToAll()
     } finally {
       activeWorkspaceIndexJobs.delete(getWorkspaceIndexJobKey(workspaceId, 'file'))
     }

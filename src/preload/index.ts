@@ -161,7 +161,13 @@ const api: DesktopApi = {
   workspaceSetRootPath: (payload) => ipcRenderer.invoke('workspace-set-root-path', payload),
   workspaceDelete: (workspaceId: string) => ipcRenderer.invoke('workspace-delete', workspaceId),
   workspaceTree: (payload) => ipcRenderer.invoke('workspace-tree', payload),
-  workspaceDirectoryList: (payload) => ipcRenderer.invoke('workspace-directory-list', payload),
+  workspaceDirectoryList: (payload) => {
+    emitE2EIpcCall('workspaceDirectoryList', {
+      workspaceId: String(payload.workspaceId || '').trim(),
+      relativePath: String(payload.relativePath || '')
+    })
+    return ipcRenderer.invoke('workspace-directory-list', payload)
+  },
   workspaceScan: (payload) => {
     emitE2EIpcCall('workspaceScan', {
       workspaceId: String(payload.workspaceId || '').trim()

@@ -76,11 +76,22 @@ describe('settings workspace e2e', () => {
           let scanRunningAfterReturn = false
           let restoredProgressVisible = false
           let restoredButtonsDisabled = false
+          let directoryCallBaseline = 0
+          let directoryCallsWhileRunning = -1
 
           await runtime.step({
             name: 'scan-workspace-through-ui',
             message: '点击检查更新，并捕捉真实进度事件或执行中 UI。',
             run: async () => {
+              await getSettingsLocator(page, importSelectors.workspaceTree).waitFor({ state: 'visible' })
+              directoryCallBaseline = await page.evaluate(
+                () =>
+                  (window as typeof window & {
+                    __NCURATOR_E2E_OBSERVER__?: { ipcInvokeEntries: Array<{ name: string }> }
+                  }).__NCURATOR_E2E_OBSERVER__?.ipcInvokeEntries.filter(
+                    (entry) => entry.name === 'workspaceDirectoryList'
+                  ).length || 0
+              )
               const progressEventsPromise = page.evaluate(
                 (workspaceId) =>
                   new Promise<boolean>((resolve) => {
@@ -128,6 +139,15 @@ describe('settings workspace e2e', () => {
                   ).isDisabled())
               }
               progressEventSeen = await progressEventsPromise
+              directoryCallsWhileRunning = await page.evaluate(
+                () =>
+                  (window as typeof window & {
+                    __NCURATOR_E2E_OBSERVER__?: { ipcInvokeEntries: Array<{ name: string }> }
+                  }).__NCURATOR_E2E_OBSERVER__?.ipcInvokeEntries.filter(
+                    (entry) => entry.name === 'workspaceDirectoryList'
+                  ).length || 0
+              )
+              directoryCallsWhileRunning -= directoryCallBaseline
               await navigateToSettingsSection(page, 'model')
               await navigateToSettingsSection(page, 'workspace')
               const restoredState = await page
@@ -182,6 +202,7 @@ describe('settings workspace e2e', () => {
             scanRunningAfterReturn,
             restoredProgressVisible,
             restoredButtonsDisabled,
+            directoryCallsWhileRunning,
             summary: result.tree.summary,
             itemNames: result.tree.items.map((item) => item.name)
           }
@@ -200,6 +221,16 @@ describe('settings workspace e2e', () => {
               name: 'scan-progress-restores-after-return',
               message:
                 '检查更新执行中离开并返回工作空间页后，仍运行时应恢复进度块并禁用操作，已完成时应隐藏进度并恢复按钮，对齐 SET-WORKSPACE-003-AC3。',
+              data: result
+            }
+          )
+
+          await runtime.assertThat(
+            result.directoryCallsWhileRunning === 0,
+            {
+              name: 'scan-does-not-refresh-directory-while-running',
+              message:
+                '检查更新执行期间不应读取目录，避免 loading 与空态闪烁；终态目录刷新由页面保留时的任务回调或重新进入时的选中加载承接。',
               data: result
             }
           )

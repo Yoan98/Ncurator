@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useEffect, useMemo, useState } from 'react'
+﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, Button, Empty, Input, Modal, Popover, Tabs, Tooltip, message } from 'antd'
 import { useNavigate } from 'react-router-dom'
 import type {
@@ -57,6 +57,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
   const [createSubmitting, setCreateSubmitting] = useState(false)
   const [deleteWorkspaceId, setDeleteWorkspaceId] = useState<string | null>(null)
   const [hasVectorModel, setHasVectorModel] = useState<boolean | null>(null)
+  const workspaceDirectoryRequestIds = useRef<Record<string, Record<string, number>>>({})
 
   const selectedWorkspace = useMemo(
     () => workspaces.find((workspace) => workspace.id === selectedWorkspaceId) || null,
@@ -74,6 +75,16 @@ const WorkspaceSettingsPanel: React.FC = () => {
 
   const loadWorkspaceDirectory = useCallback(
     async (workspaceId: string, relativePath: string): Promise<void> => {
+      const requestId = (workspaceDirectoryRequestIds.current[workspaceId]?.[relativePath] || 0) + 1
+      workspaceDirectoryRequestIds.current = {
+        ...workspaceDirectoryRequestIds.current,
+        [workspaceId]: {
+          ...workspaceDirectoryRequestIds.current[workspaceId],
+          [relativePath]: requestId
+        }
+      }
+      const isLatestRequest = (): boolean =>
+        workspaceDirectoryRequestIds.current[workspaceId]?.[relativePath] === requestId
       setWorkspaceDirectoryLoading((previous) => ({
         ...previous,
         [workspaceId]: { ...previous[workspaceId], [relativePath]: true }
@@ -85,6 +96,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
       try {
         const response = await window.api.workspaceDirectoryList({ workspaceId, relativePath })
         if (response.error) throw new Error(response.error)
+        if (!isLatestRequest()) return
         setWorkspaceDirectories((previous) => ({
           ...previous,
           [workspaceId]: { ...previous[workspaceId], [relativePath]: response.items }
@@ -96,6 +108,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
           }))
         }
       } catch (error) {
+        if (!isLatestRequest()) return
         setWorkspaceDirectoryErrors((previous) => ({
           ...previous,
           [workspaceId]: {
@@ -104,10 +117,12 @@ const WorkspaceSettingsPanel: React.FC = () => {
           }
         }))
       } finally {
-        setWorkspaceDirectoryLoading((previous) => ({
-          ...previous,
-          [workspaceId]: { ...previous[workspaceId], [relativePath]: false }
-        }))
+        if (isLatestRequest()) {
+          setWorkspaceDirectoryLoading((previous) => ({
+            ...previous,
+            [workspaceId]: { ...previous[workspaceId], [relativePath]: false }
+          }))
+        }
       }
     },
     []
@@ -124,6 +139,19 @@ const WorkspaceSettingsPanel: React.FC = () => {
       setWorkspaceTreeSummaries({})
       setWorkspaceExpandedKeys({})
       setWorkspaceDirectoryReloadVersion((value) => value + 1)
+    } catch (error) {
+      console.error(error)
+      message.error('加载工作空间失败')
+    } finally {
+      setWorkspaceLoading(false)
+    }
+  }, [])
+
+  const refreshWorkspaceList = useCallback(async (): Promise<void> => {
+    setWorkspaceLoading(true)
+    try {
+      const workspaceResponse = await window.api.workspaceList()
+      setWorkspaces(workspaceResponse.items)
     } catch (error) {
       console.error(error)
       message.error('加载工作空间失败')
@@ -159,12 +187,12 @@ const WorkspaceSettingsPanel: React.FC = () => {
 
   useEffect(() => {
     const unsubscribe = window.api.sourceListRefresh(() => {
-      void loadWorkspaces()
+      void refreshWorkspaceList()
     })
     return () => {
       unsubscribe()
     }
-  }, [loadWorkspaces])
+  }, [refreshWorkspaceList])
 
   useEffect(() => {
     const handleProgress = (job: WorkspaceIndexJobRecord): void => {
@@ -174,13 +202,13 @@ const WorkspaceSettingsPanel: React.FC = () => {
         [job.workspace_id]: job.status === 'running' ? job : undefined
       }))
       if (job.status !== 'running') {
-        setWorkspaceDirectories((previous) => ({ ...previous, [job.workspace_id]: {} }))
-        setWorkspaceExpandedKeys((previous) => ({ ...previous, [job.workspace_id]: [] }))
-        void loadWorkspaceDirectory(job.workspace_id, '')
+        if (job.workspace_id === selectedWorkspaceId) {
+          void loadWorkspaceDirectory(job.workspace_id, '')
+        }
       }
     }
     return window.api.onWorkspaceIndexJobProgress(handleProgress)
-  }, [loadWorkspaceDirectory])
+  }, [loadWorkspaceDirectory, refreshWorkspaceList, selectedWorkspaceId])
 
   useEffect(() => {
     if (workspaces.length === 0) {
@@ -209,13 +237,6 @@ const WorkspaceSettingsPanel: React.FC = () => {
       })
       .catch(console.error)
   }, [selectedWorkspaceId])
-
-  const reloadSelectedWorkspaceDirectory = useCallback(async (): Promise<void> => {
-    if (!selectedWorkspaceId) return
-    setWorkspaceDirectories((previous) => ({ ...previous, [selectedWorkspaceId]: {} }))
-    setWorkspaceExpandedKeys((previous) => ({ ...previous, [selectedWorkspaceId]: [] }))
-    await loadWorkspaceDirectory(selectedWorkspaceId, '')
-  }, [loadWorkspaceDirectory, selectedWorkspaceId])
 
   useEffect(() => {
     if (!selectedWorkspace?.root_path || !selectedWorkspaceId) return
@@ -369,7 +390,6 @@ const WorkspaceSettingsPanel: React.FC = () => {
     }
     message.success('工作目录已设置')
     await loadWorkspaces()
-    await reloadSelectedWorkspaceDirectory()
   }
 
   const handleWorkspaceScan = async (workspace: WorkspaceListItem): Promise<void> => {
@@ -379,11 +399,6 @@ const WorkspaceSettingsPanel: React.FC = () => {
         message.error(normalizeUserFacingError(response.error, '检查更新失败'))
         return
       }
-      if (response.job) {
-        setWorkspaceIndexJobs((previous) => ({ ...previous, [workspace.id]: response.job }))
-      }
-      await loadWorkspaces()
-      await reloadSelectedWorkspaceDirectory()
     } catch (error) {
       console.error(error)
       message.error('检查更新失败')
@@ -404,11 +419,6 @@ const WorkspaceSettingsPanel: React.FC = () => {
         message.error(normalizeUserFacingError(response.error, '更新索引失败'))
         return
       }
-      if (response.job) {
-        setWorkspaceIndexJobs((previous) => ({ ...previous, [workspace.id]: response.job }))
-      }
-      await loadWorkspaces()
-      await reloadSelectedWorkspaceDirectory()
     } catch (error) {
       console.error(error)
       message.error('更新索引失败')
