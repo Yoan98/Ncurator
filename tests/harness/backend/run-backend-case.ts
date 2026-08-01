@@ -9,6 +9,7 @@ import type {
   TestCaseDefinition
 } from './test-types'
 import { createRealAiHarness } from './realAiHarness'
+import { loadLiveLlmConfigFromEnv, loadLiveVisionLlmConfigFromEnv } from './llmConfig'
 import { collectBackendSeedArtifacts } from './seedManifest'
 import { createStreamingRunLogWriter, createRunId } from './write-run-log'
 import { cleanupWorkspace, copyFixturesIntoWorkspace, createIsolatedWorkspace } from './workspaceManager'
@@ -115,6 +116,12 @@ const buildStats = (
 })
 
 export const runBackendCase = async <TResult>(definition: TestCaseDefinition<TResult>): Promise<void> => {
+  const liveConfig = definition.harnessMode === 'live' ? loadLiveLlmConfigFromEnv() : null
+  const liveVisionConfig =
+    definition.harnessMode === 'live' && definition.requiresVisionModel
+      ? loadLiveVisionLlmConfigFromEnv()
+      : null
+  const runtimeModelName = liveConfig?.model_name || definition.runtimeModelName || null
   const startedAtMs = Date.now()
   const runId = createRunId(startedAtMs)
   const scope = buildRunScope({
@@ -184,7 +191,7 @@ export const runBackendCase = async <TResult>(definition: TestCaseDefinition<TRe
       runtime: {
         driver: 'backend',
         target: 'node',
-        modelName: definition.runtimeModelName || null
+        modelName: runtimeModelName
       }
     }
   })
@@ -214,7 +221,13 @@ export const runBackendCase = async <TResult>(definition: TestCaseDefinition<TRe
     )
 
     const harness = await createRealAiHarness({
-      definition,
+      definition: {
+        ...definition,
+        runtimeModelName,
+        visionModel: liveVisionConfig
+          ? { configId: liveVisionConfig.id, modelName: liveVisionConfig.model_name }
+          : undefined
+      },
       runId,
       taskId,
       workspaceRoot,
@@ -223,6 +236,17 @@ export const runBackendCase = async <TResult>(definition: TestCaseDefinition<TRe
       recordEvent
     })
     runtime = harness.runtime
+    if (liveConfig) await runtime.seedLlmConfig(liveConfig)
+    if (liveVisionConfig) {
+      await runtime.seedLlmConfig(liveVisionConfig)
+      recordEvent({
+        type: 'signal',
+        name: 'live-vision-config-selected',
+        status: 'info',
+        message: 'live vision model selected',
+        data: { configId: liveVisionConfig.id, modelName: liveVisionConfig.model_name }
+      })
+    }
 
     try {
       const result = await definition.execute(runtime)
@@ -289,7 +313,7 @@ export const runBackendCase = async <TResult>(definition: TestCaseDefinition<TRe
       runtime: {
         driver: 'backend',
         target: 'node',
-        modelName: definition.runtimeModelName || null
+        modelName: runtimeModelName
       }
     }
 

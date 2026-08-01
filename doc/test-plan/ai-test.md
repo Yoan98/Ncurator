@@ -1,5 +1,19 @@
 # NCurator-Desktop AI 测试计划
 
+## 最新 Live 评估
+
+| caseId | 状态 | 评分（0-100） | 模型 | 时间 | run 路径 | 简短依据 |
+| --- | --- | ---: | --- | --- | --- | --- |
+| human-ppt-read-management-risk-review-live | 失败 | 0 | deepseek-v4-flash / qwen3.6-plus | 2026-08-01 17:38 CST | tests/logs/ai/human/live/human-ppt-read-management-risk-review-live/20260801-173827-047 | 已选中 Qwen 并调用视觉读取，但视觉服务对图表返回 `Invalid URL`，未取得可用视觉证据。 |
+| human-ppt-write-management-review-live | 部分完成 | 55 | deepseek-v4-flash / qwen3.6-plus | 2026-08-01 17:44 CST | tests/logs/ai/human/live/human-ppt-write-management-review-live/20260801-174405-880 | 已生成更新后的 PPT artifact，但视觉复核返回 `Invalid URL`，关键可读性验证未完成。 |
+| human-excel-read-sales-gap-analysis-live | 完成 | 95 | deepseek-v4-flash | 2026-08-01 17:27 CST | tests/logs/ai/human/live/human-excel-read-sales-gap-analysis-live/20260801-172709-531 | 自主使用终端计算多 Sheet 差额；对话正确给出 P-100/P-300、负责人和优先级，源工作簿未改。 |
+| human-excel-write-reconciliation-live | 完成 | 96 | deepseek-v4-flash | 2026-08-01 17:55 CST | tests/logs/ai/human/live/human-excel-write-reconciliation-live/20260801-175506-394 | 自主计算并精确标记两笔待开票订单，新增 COUNTIF/SUMIF，写后复核和真实 apply/artifact 记录完整。 |
+| human-terminal-data-reconciliation-live | 完成 | 96 | deepseek-v4-flash | 2026-08-01 18:02 CST | tests/logs/ai/human/live/human-terminal-data-reconciliation-live/20260801-180230-363 | 自主终端对账，输入未改，交付财务异常 CSV 与匹配/异常金额汇总正确。 |
+| human-text-file-read-checkout-readiness-live | 完成 | 92 | deepseek-v4-flash | 2026-08-01 17:32 CST | tests/logs/ai/human/live/human-text-file-read-checkout-readiness-live/20260801-173227-230 | 只读审查准确识别主备地址未就绪、超时风险及可保留配置，源文件未改。 |
+| human-text-file-write-checkout-cutover-live | 完成 | 98 | deepseek-v4-flash | 2026-08-01 17:33 CST | tests/logs/ai/human/live/human-text-file-write-checkout-cutover-live/20260801-173329-947 | 两处端点和超时精确更新，重试与 telemetry 保持不变，并完成写后核对。 |
+| human-web-crawl-multi-hop-cross-domain-reading-live | 完成 | 94 | deepseek-v4-flash | 2026-08-01 17:39 CST | tests/logs/ai/human/live/human-web-crawl-multi-hop-cross-domain-reading-live/20260801-173904-379 | 跨域多跳取得资格、截止日期、材料和线上提交方式，并在对话中基于来源完整答复。 |
+| human-web-crawl-url-inference-reading-live | 完成 | 90 | deepseek-v4-flash | 2026-08-01 17:31 CST | tests/logs/ai/human/live/human-web-crawl-url-inference-reading-live/20260801-173110-789 | 找到两页 Pandas 官方 API 并准确说明 CSV 读写；回答较冗长，来源与效率已保留在 raw logs。 |
+
 ## 1. 总体目标
 
 - 本计划定义 AI 域回归范围和领域规则。通用测试、runner、raw logs、UI E2E 和 live 断言规则统一遵循 `doc/test.md`。
@@ -63,7 +77,7 @@
 - 目的：验证真实业务场景在真实生产调用下可以完成。
 - case 设计必须使用真实用户风格输入，不得把内部固定工具顺序写进用户输入。
 - 断言口径统一遵循 `doc/test.md` 的真实 AI / live 断言规则。
-- `human / live` 结果写入测试运行产物，不回写本计划；本计划只维护稳定 case、执行规则和 Oracle。
+- `human / live` 的完整证据写入测试运行产物；顶部“最新 Live 评估”仅由人工在复核 raw logs 与 artifact 后覆盖更新。
 
 ### 3.3 目录与命令
 
@@ -1287,23 +1301,23 @@ AI unit / 辅助测试目录：
 
 #### live 类别
 
-##### `human-excel-read-edit-live`
+##### `human-excel-read-sales-gap-analysis-live`
 
 - 测试类型：`live`
-- What：真实模型根据自然语言修改已有 Excel 并读取结果确认。
-- Why：验证模型能自主选择 Excel 能力，而不是被用户输入中的工具名提示。
-- How：只描述业务目标、目标 Sheet 和期望数据变化，不出现内部工具名或固定调用顺序。
-- Oracle：任务完成；事件流包含 Excel 读写；目标值/公式和 record 正确；最终答复引用实际文件。
-- Not：不要求固定工具调用次数和顺序。
+- What：真实模型在销售周会前审阅多 Sheet 工作簿，并给出未达标产品和优先级分析。
+- Why：用户只表达经营诉求；模型必须自行选择读取和真实计算能力。
+- How：不出现工具名，不修改工作簿；要求计算实际额、目标额和差额后直接向用户汇报。
+- Oracle：源文件完整；发生真实 Excel 读取和终端计算；结论由 raw logs 人工评估。
+- Not：不生成仅供测试消费的 JSON，不断言最终回答文案。
 
-##### `human-create-excel-report-live`
+##### `human-excel-write-reconciliation-live`
 
 - 测试类型：`live`
-- What：真实模型从自然语言需求创建多 Sheet Excel 报表。
-- Why：创建、公式、基础格式和读回验证是 Excel 交付能力的核心场景。
-- How：要求创建包含明细、汇总、公式和基础表头样式的工作簿，不提供工具名。
-- Oracle：生成可解析工作簿；Sheet、公式、关键值和基础格式满足要求；事件流包含创建后的读取验证；最终答复引用实际文件。
-- Not：不比较复杂视觉设计或固定布局像素。
+- What：真实模型在财务结账场景中更新既有对账工作簿。
+- Why：对账、精确标记、公式和写后复核是实际 Excel 交付能力。
+- How：用户只描述销售与回款核对、待补票标记和汇总需求；模型自行选择计算手段。
+- Oracle：正式工作簿的目标单元格、公式、样式和非目标数据正确；发生真实终端计算、Excel 写入和写后复核。
+- Not：不生成额外 JSON，不断言最终回答文案。
 
 ##### `human-legacy-doc-reading-live`
 
@@ -1323,14 +1337,14 @@ AI unit / 辅助测试目录：
 - Oracle：只尝试一次编辑；出现 legacy_doc_edit_unsupported；源文件不变且任务完成。
 - Not：不要求模型绕过格式限制，也不把失败后的多次重试视为可接受结果。
 
-##### `human-create-ppt-deck-live`
+##### `human-ppt-read-management-risk-review-live`
 
 - 测试类型：`backend / live`
-- What：真实模型能学习 `ppt-read / ppt-write`，读取工具描述中的 HTML 规则并自主创建多页 PPT。
-- Why：真实模型必须能理解 PPT 规则并完成可交付文件。
-- How：使用自然语言请求真实模型创建多页 PPT，并读取最终文件和修改记录。
-- Oracle：最终文件可解析且内容正确；只产生一个 PPT 修改记录和文件交付。
-- Not：不逐字断言最终回答，也不评价主观审美。
+- What：真实模型审阅经营复盘 PPT，并直接向管理层汇报风险、负责人、期限、决策事项和图表趋势。
+- Why：真实读 PPT 是对话咨询场景，不应要求用户接收测试专用 JSON 文件。
+- How：用户要求核对图表但不修改演示文稿；模型自行读取文字和视觉内容。
+- Oracle：源 PPT 不变；真实文字读取和有可用文本的视觉识别均成功；结论由 raw logs 人工评估。
+- Not：不写 `management-risk-review.json`，不匹配最终回答文案。
 
 ##### `human-conversation-memory-multi-run-live`
 
@@ -1350,25 +1364,25 @@ AI unit / 辅助测试目录：
 - Oracle：Run 1 注入失败为 `network_error` 且 `resumeSnapshotSaved=true`；恢复快照中能看到中断前沉淀的过拟合事实；Run 2 成功完成；Run 2 的 brain prompt / llm-io 中出现中断恢复 hint 文案，且包含本轮新选择文件 B 与恢复出的过拟合上下文；最终交付同时包含过拟合与反走样关键事实；Run 2 成功后恢复快照被清空。
 - Not：不验证真实 provider 的随机网络抖动；不要求 live 模型逐字复述 hint 文案；不恢复 docx 临时运行态。
 
-##### `human-runtime-inline-code-live`
+##### `human-ppt-write-management-review-live`
 
 - 测试类型：`backend / live`
-- What：真实模型使用 runtime inline code 执行代码并返回确定性结果。
-- Why：runtime 是 AI 架构的执行能力，必须验证真实解释器调用而非文本猜测。
-- How：只开放 terminal/runtime 相关工具，检查执行命令、结果标记和资源边界。
-- Oracle：实际执行 inline code 并返回预期标记；无伪造工具事件。
-- Not：不覆盖下载安装 runtime；该路径由独立下载 case 验证。
+- What：真实模型更新既有管理层汇报 PPT，新增摘要页、升级风险并更新行动期限。
+- Why：PPT 修改必须验证真实正式文件、受保护页和视觉复核，而非模型口头说明。
+- How：用户描述管理层评审诉求；模型自行读取、编辑并检查页面可读性。
+- Oracle：目标页和保护页正确，正式 PPT 可解析，artifact 与 apply record 存在，视觉识别返回可用文本。
+- Not：不生成额外 JSON，不检查固定工具顺序。
 
-##### `human-runtime-script-assets-live`
+##### `human-terminal-data-reconciliation-live`
 
 - 测试类型：`backend / live`
-- What：真实模型执行脚本并将临时产物写入受控 UUID runtime assets 目录。
-- Why：脚本和产物是 AI 工具协作的真实交付边界，不能污染工作区。
-- How：检查脚本执行、assets 路径、文件内容和清理结果。
-- Oracle：脚本真实运行；产物位于 UUID assets 子目录；工作区没有安装/临时污染文件。
-- Not：不验证业务文档交付质量，只验证 runtime 脚本与临时资产边界。
+- What：真实模型将发票与回款数据对账，并为财务交付异常清单 CSV。
+- Why：这是独立的真实终端智能性场景，不与 Excel 读写 case 混合。
+- How：用户只描述对账和财务异常清单需求，不出现终端或命令概念。
+- Oracle：输入文件不变；真实终端计算成功；`reconciliation-exceptions.csv` 的异常行和金额正确。
+- Not：不生成测试专用 JSON，不混入终端协议、runtime 下载或临时目录契约。
 
-##### `human-runtime-download-node-live`
+Runtime download coverage is maintained by `ai/tool/terminal`; it is not a live-model intelligence regression.
 
 - 测试类型：`backend / live`
 - What：本地 Node.js 不可用时，真实模型下载无需系统安装的 Node.js runtime 并完成代码执行。
@@ -1377,7 +1391,7 @@ AI unit / 辅助测试目录：
 - Oracle：下载后的 Node.js 真实执行并返回预期标记；安装文件只存在于指定 runtime 目录；工作区无安装产物。
 - Not：不修改或依赖系统级 Node.js 安装。
 
-##### `human-runtime-download-python-live`
+Runtime download coverage remains in `ai/tool/terminal`.
 
 - 测试类型：`backend / live`
 - What：本地 Python 不可用时，真实模型下载无需系统安装的 Python runtime 并完成代码执行。
@@ -1455,7 +1469,7 @@ AI unit / 辅助测试目录：
 - What：live 模式下 `human` 会围绕用户给出的入口网址持续多次调用 `web_crawl`，跨域并多跳整理分散网页事实。
 - Why：真实用户常会给一个入口站点，但答案往往分散在专题页、通知页、办理指南页和申报入口页；这条 case 要长期守住“给入口网址后继续探索链接、跨域推进并最终收口”的能力。
 - How：启动两组本地 HTTP server：入口站点先提供城市公共服务导航与就业补贴专题页，再通过外链跳到另一域名下的人社通知页；通知页、办理指南页和申报入口页分别承载申请对象/截止时间、材料清单、线上办理方式等部分事实，且前序页面均有有效信息但不足以一次拿全；输入自然语言诉求，明确要求模型继续找、不要补网页未写内容。
-- Oracle：任务最终完成；事件流中至少四次成功调用 `web_crawl`；`web_crawl` 成功结果覆盖专题页、通知页和申报入口页，办理指南页至少出现在显式访问 URL 或成功结果中，且访问 URL 覆盖至少两个域名；最终答复同时覆盖申请对象、材料、截止时间和线上办理方式四组网页事实；不出现 `browser_use` 或 `terminal_run`。
+- Oracle：事件流中至少四次成功调用 `web_crawl`；成功结果覆盖专题页、通知页、办理指南和申报入口，且访问 URL 覆盖至少两个域名；结论质量由 raw logs 人工评估。
 - Not：不要求固定访问顺序，也不要求单次 `web_crawl` 内部自动跨域；允许模型通过多轮显式 `web_crawl` 调用完成跨域推进。
 
 ##### `human-web-crawl-url-inference-reading-live`
@@ -1464,19 +1478,28 @@ AI unit / 辅助测试目录：
 - What：live 模式下 `human` 在用户不提供网址时，会先推断官网地址，再通过 `web_crawl` 完成官网文档整理。
 - Why：真实用户有时只会描述“去官网帮我看某两个条目”，不会直接给具体网址；这条 case 要长期守住“先判断目标官网，再继续抓取资料页面完成任务”的能力。
 - How：不向用户输入提供 URL，只给“基于 pandas 官网文档分别说明 `read_csv` 和 `DataFrame.to_csv` 及其最直接使用区别”的自然语言诉求；要求模型自行判断官网地址并通过 `web_crawl` 读取官网文档页面完成整理。
-- Oracle：任务最终完成；事件流中至少两次调用 `web_crawl`；调用 URL 落在 `pandas.pydata.org` 官网文档域名上；最终答复同时说明 `read_csv` 与 `to_csv` 的用途，并概括它们一个偏读取 CSV、一个偏写出 CSV 的直接区别；不出现 `browser_use` 或 `terminal_run`。
+- Oracle：至少读取两个 `pandas.pydata.org` 官方 API 页面；不出现 `browser_use` 或 `terminal_run`；非官方冗余抓取记录到 raw logs，由人工评分而非隐藏文本断言决定完成度。
 - Not：不要求复杂跨域或深链路，也不要求模型第一次就命中最终文档页，只要最终能自行推断官网地址并完成整理即可。
 
-##### `human-text-file-read-write-live`
+##### `human-text-file-read-checkout-readiness-live`
 
-- 测试类型：`backend`
-- What：live 模型读取代码文件后，使用 `replaceAll` 修改统一关键词、使用 `edit` 修改唯一块，并回读确认。
-- Why：工具契约正确不等于模型会正确选择 action；必须验证真实模型能区分唯一编辑和全部替换。
-- How：只开放 `text_file_read/text_file_edit`，准备包含两处 `OLD_API_URL` 和一处 timeout 的真实 TypeScript 文件，要求全部改名并精确修改 timeout。
-- Oracle：任务完成；至少一次 `replaceAll` 参数正确、一次 `edit` 参数有效；最终文件无旧关键词；写入工具结果不包含 diff、previewPath 或 unified patch。
-- Not：不要求固定调用轮数，不验证 Workbench UI。
+- 测试类型：`backend / live`
+- What：真实模型在上线前阅读 checkout 配置，并直接向用户说明主备地址、超时、重试和 telemetry 是否具备切换条件。
+- Why：读配置是常见的上线前审查场景，用户不需要了解底层工具或要求生成额外文件。
+- How：只给出自然语言的审查诉求；只开放真实 `text_file_read`。
+- Oracle：任务完成；发生真实读取；源文件 hash 不变；结论质量由 raw logs 人工评估。
+- Not：不检查最终回答的固定文本。
 
-##### `human-terminal-preview-service-live`
+##### `human-text-file-write-checkout-cutover-live`
+
+- 测试类型：`backend / live`
+- What：真实模型执行一次明确的 checkout 服务地址切换，并保留重试和 telemetry 配置。
+- Why：真实配置变更必须验证目标修改和非目标内容完整性，而不是固定底层 edit action。
+- How：用户明确给出两处旧地址、目标地址、超时和不可修改项；模型自行读取、编辑并复核。
+- Oracle：最终文件两处地址和超时精确更新；重试与 telemetry 不变；不检查最终回答文案。
+- Not：不要求 `replaceAll`、`edit` 或固定调用顺序。
+
+Terminal preview-service protocol coverage remains in `ai/tool/terminal`.
 
 - 测试类型：`backend`
 - What：live 模型能在项目子目录启动临时 HTTP 预览服务，真实访问页面、读取服务日志并彻底停止服务。

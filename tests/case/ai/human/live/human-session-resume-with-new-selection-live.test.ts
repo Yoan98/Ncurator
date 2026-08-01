@@ -8,10 +8,7 @@ import {
 } from '../../../../../src/main/services/ai/llmExecutor'
 import type { AiRunDeps } from '../../../../../src/main/services/ai/types'
 import type { AiRunEvent, JsonObject } from '../../../../../src/shared/types'
-import {
-  hasLiveLlmConfigInEnv,
-  loadLiveLlmConfigFromEnv
-} from '../../../../harness/backend/llmConfig'
+import { loadLiveLlmConfigFromEnv } from '../../../../harness/backend/llmConfig'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import type { BackendTestRuntime } from '../../../../harness/backend/test-types'
 import {
@@ -179,11 +176,11 @@ describe('ai human live backend', () => {
           '验证 live 模式下第一诉求已沉淀局部事实后发生网络中断，同一 session 新诉求能恢复旧语义上下文并覆盖本轮新选择文件。',
         fixtures: [SHARED_WORKSPACE_FIXTURE_PATH],
         runMode: 'single',
-        runtimeModelName: hasLiveLlmConfigInEnv() ? loadLiveLlmConfigFromEnv().model_name : null,
+        runtimeModelName: loadLiveLlmConfigFromEnv().model_name,
         execute: async (runtime) => {
-          if (!hasLiveLlmConfigInEnv()) {
+          if (!loadLiveLlmConfigFromEnv()) {
             return {
-              skipped: true,
+              configurationMissing: true,
               interruptedResult: null,
               resumedResult: null,
               snapshotAfterNetwork: null,
@@ -267,7 +264,7 @@ describe('ai human live backend', () => {
             .join('\n')
 
           return {
-            skipped: false,
+            configurationMissing: false,
             interruptedResult,
             resumedResult,
             snapshotAfterNetwork,
@@ -277,14 +274,13 @@ describe('ai human live backend', () => {
             resumeHintEventSeen: hasResumeHintEvent(run2Events, run2Id),
             run2UsedFileB: runUsedSelectedFile(run2Events, run2Id, fileBReferences[0]?.name || ''),
             run2BrainPrompt,
-            run2Delivery: resumedResult.finalDeliveryMarkdown || '',
             fileAName: fileAReferences[0]?.name || '',
             fileBName: fileBReferences[0]?.name || ''
           }
         },
         assert: async (result, runtime) => {
-          if (result.skipped) {
-            runtime.assertThat(true, {
+          if (result.configurationMissing) {
+            runtime.assertThat(false, {
               name: 'live-config-not-provided',
               message:
                 '未提供 live 模型配置，已跳过 human session resume with new selection live case。'
@@ -305,9 +301,10 @@ describe('ai human live backend', () => {
               result.resumedResult?.status === 'completed' &&
               result.snapshotAfterResume === null &&
               result.resumeHintEventSeen === true &&
-              result.run2UsedFileB === true &&
-              mentionsOverfittingTopic(result.run2Delivery) &&
-              mentionsAntiAliasingTopic(result.run2Delivery),
+               result.run2UsedFileB === true &&
+               result.run2BrainPrompt.includes('<conversation_history>') &&
+               mentionsOverfittingTopic(result.run2BrainPrompt) &&
+               mentionsAntiAliasingTopic(result.run2BrainPrompt),
             {
               name: 'human-live-session-resume-keeps-interrupted-context-and-uses-new-selection',
               message:
@@ -317,8 +314,7 @@ describe('ai human live backend', () => {
                 fileBName: result.fileBName,
                 interruptedResult: result.interruptedResult,
                 snapshotAfterNetwork: result.snapshotAfterNetwork,
-                run2BrainPrompt: result.run2BrainPrompt,
-                run2Delivery: result.run2Delivery
+                run2BrainPrompt: result.run2BrainPrompt
               }
             }
           )

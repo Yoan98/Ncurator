@@ -83,8 +83,8 @@ tests/
 - `Not`
   - 明确不验证什么，防止实现时擅自扩张范围。
 
-- `doc/test-plan/**` 只保存稳定的 case 规格、执行规则和 Oracle，不保存单次运行结果或环境故障记录。
-- 每次运行的模型、耗时、通过情况、完成度评分、失败归因和原始证据统一保存在对应 run 的 `meta.json`、`timeline.jsonl`、`runtime-events.jsonl` 与 artifacts 中。
+- `doc/test-plan/**` 只保存稳定的 case 规格、执行规则和 Oracle；`ai-test.md` 顶部“最新 Live 评估”是唯一允许覆盖回写的运行摘要，其余单次结果和环境故障记录不写入计划。
+- 每次运行的模型、耗时、通过情况、失败归因和原始证据统一保存在对应 run 的 `meta.json`、`timeline.jsonl`、`runtime-events.jsonl` 与 artifacts 中；人工完成度评分以最新 Live 评估快照为准。
 - 测试数量和 case 清单以测试源码及 runner 实时发现结果为准，不在文档中维护容易失真的计数副本。
 - `mock-llm` 回归 case 只允许替换 LLM 输出；不得 fake tool、store、docx apply service、runner 或节点执行结果。
 - DOCX 回归必须覆盖递归语义树、递归创建树、统一 `style`、全文/限定范围 `replace_text`、visual 防误删和 `docx_read_visuals`。旧简化 block payload、旧 history shape 与 `style_text` 应直接判定为无效，不保留兼容层。
@@ -104,7 +104,7 @@ tests/
 - Workbench 和需要真实文件的 Settings case 将 `tests/fixtures/workspace` 复制到临时目录，case 结束并关闭应用后删除临时副本。
 - fixture 只能准备用户实际可拥有的文件、目录和配置输入；不得直接写应用状态、调用内部写 IPC 或替换产品服务。
 - observer、只读 IPC 和截图只能收集证据，不能触发被测行为或改变运行结果。
-- 涉及真实 AI 时必须使用 live 配置；配置缺失应直接失败，不能跳过或回落到 mock。
+- `ai/human/live` 必须使用 env 真实模型且不得跳过、模拟或替换模型决策、工具结果或业务产物，允许仅为触发真实机制的可测性 override，case 不设评分门槛，运行后由人工依据 raw logs 与 artifact 将最新 0-100 评估回写至 ai-test 顶部快照。
 - 产品缺少必要 testability 入口时，应记录缺口，不能改用模拟路径绕过。
 - 除自动更新外，任何假数据或模拟路径都必须先说明必要性、取得用户确认，并在本文简短记录例外及边界。
 - 不得为了 E2E 增加生产环境变量、故障开关、全局探针或其他生产代码入口；确需修改生产代码时，必须先取得用户确认。
@@ -114,7 +114,7 @@ tests/
 
 - Workbench 真实 AI E2E 必须通过应用 UI 同时选择主模型和视觉模型；视觉模型不得静默跟随主模型。
 - backend 视觉模型测试统一读取 `AI_LIVE_VISUAL_MODEL_NAME`；视觉模型专用地址、密钥和 provider 仍可通过 `AI_LIVE_VISION_BASE_URL`、`AI_LIVE_VISION_API_KEY`、`AI_LIVE_VISION_PROVIDER_KIND` 覆盖。
-- 涉及真实 AI 调用的回归测试，硬断言只验证最低工程契约：完成态、关键事实、关键工具或事件、关键 artifact，以及用户诉求是否落地。
+- 涉及真实 AI 调用的回归测试，硬断言只验证完成态、关键事实、关键工具或事件、关键 artifact，以及用户诉求是否落地；最终自然语言回答不得作为主要正确性证据。
 - 不对最终文案做逐字断言，不断言固定工具顺序，不断言固定 prompt 原文，不因表达差异判失败。
 - 如果用户诉求已落地但断言过严，应先调整 `Oracle` 和测试代码，再根据 raw logs 记录完成度评分。
 - 完成度评分由执行者或 agent 写入运行结论；测试代码不得在执行过程中修改文档。

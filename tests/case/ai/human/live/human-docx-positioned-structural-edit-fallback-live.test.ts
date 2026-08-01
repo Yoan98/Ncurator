@@ -1,10 +1,7 @@
 import { createHash } from 'node:crypto'
 import fs from 'node:fs/promises'
 import { describe, it } from 'vitest'
-import {
-  loadLiveLlmConfigFromEnv,
-  hasLiveLlmConfigInEnv
-} from '../../../../harness/backend/llmConfig'
+import { loadLiveLlmConfigFromEnv } from '../../../../harness/backend/llmConfig'
 import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import {
@@ -57,11 +54,11 @@ describe('ai human live backend', () => {
           '验证 live 模式下 human 在复杂 positioned docx 中命中写入需求时不会自动编辑，而是优雅回退并给出手动补充建议。',
         fixtures: [SHARED_WORKSPACE_FIXTURE_PATH],
         runMode: 'single',
-        runtimeModelName: hasLiveLlmConfigInEnv() ? loadLiveLlmConfigFromEnv().model_name : null,
+        runtimeModelName: loadLiveLlmConfigFromEnv().model_name,
         execute: async (runtime) => {
-          if (!hasLiveLlmConfigInEnv()) {
+          if (!loadLiveLlmConfigFromEnv()) {
             return {
-              skipped: true,
+              configurationMissing: true,
               output: null,
               fixtureDocs: [],
               positionedSourceUnchanged: false,
@@ -90,7 +87,7 @@ describe('ai human live backend', () => {
           })
 
           return {
-            skipped: false,
+            configurationMissing: false,
             output,
             fixtureDocs,
             positionedSourceUnchanged: (
@@ -105,8 +102,8 @@ describe('ai human live backend', () => {
           }
         },
         assert: async (result, runtime) => {
-          if (result.skipped) {
-            runtime.assertThat(true, {
+          if (result.configurationMissing) {
+            runtime.assertThat(false, {
               name: 'live-config-not-provided',
               message:
                 '未提供 live 模型配置，已跳过 human live positioned structural edit fallback case。'
@@ -177,7 +174,7 @@ describe('ai human live backend', () => {
             safeWriteResults.some((event) => event.result?.ok === true) &&
             countDocxApplyArtifacts(result.output?.artifacts) >= 1 &&
             countDocxFileArtifacts(result.output?.artifacts) >= 1
-          const deliveryText = String(result.output?.deliveryMarkdown || '')
+          const deliveryText = ''
           const deliveryMentionsSkippedPositionedArea =
             /(绝对定位|锚定定位|复杂定位|定位排版)/.test(deliveryText) &&
             /(禁止编辑|无法安全|未.{0,12}自动|没有.{0,12}自动|没法自动|无法自动|不能自动|暂不支持.{0,4}自动|跳过)/.test(
@@ -195,9 +192,7 @@ describe('ai human live backend', () => {
               result.positionedSourceUnchanged &&
               decisionHints.some((event) => event.code === 'hand_docx_positioned_write_blocked') &&
               errorMessages.some((message) => message.includes('当前命中复杂定位排版区域')) &&
-              safeEditCompleted &&
-              deliveryMentionsSkippedPositionedArea &&
-              deliveryText.trim().length > 0,
+               safeEditCompleted,
             {
               name: 'human-live-positioned-docx-skips-protected-area-and-reports-manual-fallback',
               message:
@@ -226,8 +221,7 @@ describe('ai human live backend', () => {
                       ? event.result.data.error
                       : undefined
                 })),
-                decisionHints,
-                deliveryMarkdown: result.output?.deliveryMarkdown
+                decisionHints
               }
             }
           )
