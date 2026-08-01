@@ -192,5 +192,5 @@ describe('ai tool ppt visual backend', () => {
         })
       }
     })
-  }, 90_000)
+  }, 30_000)
 })
