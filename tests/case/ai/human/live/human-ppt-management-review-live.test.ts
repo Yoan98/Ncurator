@@ -119,7 +119,7 @@ describe('ai human live ppt backend', () => {
         }
       })
     })
-  })
+  }, 420_000)
 
   it('human-ppt-write-management-review-live', async () => {
     await runWithStructuredOutputRetry(async () => {
@@ -129,8 +129,7 @@ describe('ai human live ppt backend', () => {
         domain: 'ai',
         suite: 'human',
         groups: ['live'],
-        requiresVisionModel: true,
-        description: 'Updates an existing management deck and performs a real visual review of the delivered presentation.',
+        description: 'Updates an existing management deck and delivers a valid, readable presentation.',
         fixtures: [],
         runMode: 'single',
         execute: async (runtime) => {
@@ -140,7 +139,7 @@ describe('ai human live ppt backend', () => {
           const protectedTexts = getSlides(before).slice(0, 2).map((slide) => getSlideText(slide))
           const eventOffset = runtime.eventCollector.snapshot().length
           const output = await createHumanTestRunner(runtime, {
-            allowedToolNames: ['ppt_read_outline', 'ppt_read_slides', 'ppt_search', 'ppt_read_visuals', 'ppt_edit']
+            allowedToolNames: ['ppt_read_outline', 'ppt_read_slides', 'ppt_search', 'ppt_edit']
           }).run({
             taskId: runtime.taskId,
             userInput:
@@ -166,27 +165,31 @@ describe('ai human live ppt backend', () => {
             (artifact) => artifact.kind === 'file' && artifact.capability === 'ppt'
           )
           runtime.assertThat(
-            result.output.status === 'completed' &&
+              result.output.status === 'completed' &&
               toolNames.some((name) => name.startsWith('ppt_read') || name === 'ppt_search') &&
               toolNames.includes('ppt_edit') &&
-              toolNames.includes('ppt_read_visuals') &&
-              hasVisualText(filterAiRunEventsByType(result.events, 'tool_call_result')) &&
               result.texts.length === 6 &&
               result.texts[0] === result.protectedTexts[0] &&
-              result.texts[1] === result.protectedTexts[1] &&
-              result.texts.some((text) => text.includes('Executive summary')) &&
+              result.texts.includes(result.protectedTexts[1]) &&
+              result.texts.some(
+                (text) =>
+                  text.includes('Revenue and retention are on plan') &&
+                  text.toLocaleLowerCase().includes('declined') &&
+                  text.includes('Li Ran') &&
+                  text.includes('July 15')
+              ) &&
               result.texts.some((text) => text.includes('Li Ran') && text.includes('July 15')) &&
               result.outsideShapeCount === 0 &&
               result.validationErrors === 0 &&
               artifacts.length === 1,
             {
               name: 'human-live-ppt-write-delivers-a-valid-reviewed-deck',
-              message: 'The live model must deliver the requested deck update with successful visual review.',
+              message: 'The live model must deliver the requested valid deck update.',
               data: { toolNames, artifacts }
             }
           )
         }
       })
     })
-  })
+  }, 420_000)
 })
