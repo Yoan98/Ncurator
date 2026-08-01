@@ -38,6 +38,9 @@ describe('settings workspace e2e', () => {
           const workspaceId = workspace.workspace!.id
           let prepareProgressVisible = false
           let buttonsDisabled = false
+          let directoryCallBaseline = 0
+          let directoryCallsWhileRunning = -1
+          let directoryCallsAfterCompletion = -1
 
           await runtime.step({
             name: 'prepare-workspace-through-ui',
@@ -47,6 +50,17 @@ describe('settings workspace e2e', () => {
               await getSettingsLocator(page, importSelectors.workspaceQuickPrepareButton).waitFor({
                 state: 'visible'
               })
+              await getSettingsLocator(page, importSelectors.workspaceTree).waitFor({
+                state: 'visible'
+              })
+              directoryCallBaseline = await page.evaluate(
+                () =>
+                  (window as typeof window & {
+                    __NCURATOR_E2E_OBSERVER__?: { ipcInvokeEntries: Array<{ name: string }> }
+                  }).__NCURATOR_E2E_OBSERVER__?.ipcInvokeEntries.filter(
+                    (entry) => entry.name === 'workspaceDirectoryList'
+                  ).length || 0
+              )
               await getSettingsLocator(page, importSelectors.workspaceQuickPrepareButton).click()
               await getSettingsLocator(page, importSelectors.workspaceIndexJobProgress).waitFor({
                 state: 'visible'
@@ -60,16 +74,36 @@ describe('settings workspace e2e', () => {
                 (await getSettingsLocator(
                   page,
                   importSelectors.workspaceQuickPrepareButton
-                ).isDisabled())
+                  ).isDisabled())
+              directoryCallsWhileRunning = await page.evaluate(
+                () =>
+                  (window as typeof window & {
+                    __NCURATOR_E2E_OBSERVER__?: { ipcInvokeEntries: Array<{ name: string }> }
+                  }).__NCURATOR_E2E_OBSERVER__?.ipcInvokeEntries.filter(
+                    (entry) => entry.name === 'workspaceDirectoryList'
+                  ).length || 0
+              )
+              directoryCallsWhileRunning -= directoryCallBaseline
             }
           })
 
           const result = await waitForFileIndexJobIdle(page, workspaceId)
+          directoryCallsAfterCompletion = await page.evaluate(
+            () =>
+              (window as typeof window & {
+                __NCURATOR_E2E_OBSERVER__?: { ipcInvokeEntries: Array<{ name: string }> }
+              }).__NCURATOR_E2E_OBSERVER__?.ipcInvokeEntries.filter(
+                (entry) => entry.name === 'workspaceDirectoryList'
+              ).length || 0
+          )
+          directoryCallsAfterCompletion -= directoryCallBaseline
           const supportedStatuses = toSupportedFileStatuses(result.tree)
 
           return {
             prepareProgressVisible,
             buttonsDisabled,
+            directoryCallsWhileRunning,
+            directoryCallsAfterCompletion,
             summary: result.tree.summary,
             supportedStatuses
           }
@@ -81,6 +115,16 @@ describe('settings workspace e2e', () => {
               '更新索引执行中，界面应展示持久化总进度并禁用两个索引操作按钮，对齐 SET-WORKSPACE-004-AC3。',
             data: result
           })
+
+          await runtime.assertThat(
+            result.directoryCallsWhileRunning === 0 && result.directoryCallsAfterCompletion === 1,
+            {
+              name: 'prepare-refreshes-directory-once-at-terminal-state',
+              message:
+                '更新索引执行期间不应反复读取目录，任务结束后当前目录树只应刷新一次，避免 loading 与空态闪烁。',
+              data: result
+            }
+          )
 
           await runtime.assertThat(
             result.supportedStatuses.length >= 12 &&

@@ -1,5 +1,5 @@
 ﻿import React from 'react'
-import { Progress } from 'antd'
+import { Progress, Spin } from 'antd'
 import type { WorkspaceIndexJobRecord } from '../../../../shared/types'
 
 type WorkspaceIndexJobProgressProps = {
@@ -8,6 +8,10 @@ type WorkspaceIndexJobProgressProps = {
 }
 
 const getJobTitle = (job: WorkspaceIndexJobRecord): string => {
+  if (job.source_kind === 'file' && job.action === 'scan') {
+    if (job.phase === 'scan') return '步骤 1/2 扫描工作目录'
+    if (job.phase === 'diff') return '步骤 2/2 比对文件索引'
+  }
   if (job.source_kind === 'web' && job.action === 'prepare') {
     if (job.phase === 'crawl') return '步骤 1/2 抓取网页'
     if (job.phase === 'index') return '步骤 2/2 建立索引'
@@ -22,6 +26,7 @@ const WorkspaceIndexJobProgress: React.FC<WorkspaceIndexJobProgressProps> = ({ j
   const total = Math.max(0, job.total_count)
   const done = Math.min(total, Math.max(0, job.processed_count + job.failed_count))
   const percent = total > 0 ? Math.round((done / total) * 100) : 0
+  const hasDeterminateProgress = total > 0
   const message = job.message || '正在处理'
   const shouldHideMessage = message.startsWith(`${title}：`) || message === title
 
@@ -32,17 +37,23 @@ const WorkspaceIndexJobProgress: React.FC<WorkspaceIndexJobProgressProps> = ({ j
     >
       <div className="flex items-center justify-between gap-3 text-[12px]">
         <span className="font-medium text-[#37352F]">{title}</span>
-        <span className="shrink-0 text-[#9B9A97]">{percent}%</span>
+        {hasDeterminateProgress ? (
+          <span className="shrink-0 text-[#9B9A97]">{percent}%</span>
+        ) : (
+          <Spin size="small" />
+        )}
       </div>
-      <Progress
-        percent={percent}
-        status="active"
-        showInfo={false}
-        size="small"
-        strokeColor="#37352F"
-        trailColor="#F1EFEC"
-        className="mt-1.5"
-      />
+      {hasDeterminateProgress ? (
+        <Progress
+          percent={percent}
+          status="active"
+          showInfo={false}
+          size="small"
+          strokeColor="#37352F"
+          trailColor="#F1EFEC"
+          className="mt-1.5"
+        />
+      ) : null}
       {shouldHideMessage ? null : (
         <div className="mt-1 text-[11px] text-[#787774]">
           <span className="block truncate">{message}</span>

@@ -32,7 +32,7 @@ const normalizeStatus = (value: unknown): WorkspaceIndexJobStatus => {
 
 const normalizePhase = (value: unknown): WorkspaceIndexJobPhase => {
   const next = String(value ?? '').trim()
-  if (next === 'crawl' || next === 'index' || next === 'complete') return next
+  if (next === 'diff' || next === 'crawl' || next === 'index' || next === 'complete') return next
   return 'scan'
 }
 
