@@ -29,6 +29,16 @@ const sameSize = (left: ViewportRect | null, right: ViewportRect | null): boolea
   Math.abs(left.width - right.width) < 1 &&
   Math.abs(left.height - right.height) < 1
 
+const sameRect = (left: ViewportRect | null, right: ViewportRect | null): boolean =>
+  sameSize(left, right) &&
+  left !== null &&
+  right !== null &&
+  Math.abs(left.x - right.x) < 1 &&
+  Math.abs(left.y - right.y) < 1
+
+const isUsableViewport = (rect: ViewportRect | null): rect is ViewportRect =>
+  rect !== null && rect.width > 100 && rect.height > 100
+
 const waitForHeartbeatCount = async (
   readCount: () => number,
   minimum: number,
@@ -65,7 +75,8 @@ describe('workbench browser lifecycle e2e', () => {
           const checkpoint = (name: string): void => {
             runtime.signal({ name: `browser-lifecycle-${name}`, message: name })
           }
-          const server = await startLocalWorkbenchHttpServer(`<!doctype html>
+          const server = await startLocalWorkbenchHttpServer(
+            `<!doctype html>
             <html>
               <head>
                 <title>Browser lifecycle fixture</title>
@@ -85,15 +96,17 @@ describe('workbench browser lifecycle e2e', () => {
                   }, 50)
                 </script>
               </body>
-            </html>`, {
-            onRequest: (requestUrl) => {
-              if (!requestUrl.startsWith('/__ncurator-browser-lifecycle-heartbeat')) {
-                return false
+            </html>`,
+            {
+              onRequest: (requestUrl) => {
+                if (!requestUrl.startsWith('/__ncurator-browser-lifecycle-heartbeat')) {
+                  return false
+                }
+                heartbeatCount += 1
+                return true
               }
-              heartbeatCount += 1
-              return true
             }
-          })
+          )
           runtime.registerResource({
             name: 'browser-lifecycle-http-server',
             phase: 'before-app-close',
@@ -174,6 +187,19 @@ describe('workbench browser lifecycle e2e', () => {
           const readViewportRect = async (): Promise<ViewportRect | null> => {
             const box = await viewport.boundingBox()
             return box ? { x: box.x, y: box.y, width: box.width, height: box.height } : null
+          }
+          const waitForStableViewportRect = async (): Promise<ViewportRect> => {
+            const deadline = Date.now() + 5_000
+            let previous: ViewportRect | null = null
+            let stableSamples = 0
+            while (Date.now() < deadline) {
+              const current = await readViewportRect()
+              stableSamples = sameRect(previous, current) ? stableSamples + 1 : 0
+              if (current && stableSamples >= 3) return current
+              previous = current
+              await page.waitForTimeout(100)
+            }
+            throw new Error('browser viewport layout did not stabilize')
           }
           const captureViewportPixels = async (options?: { requireDomViewport?: boolean }) => {
             if (options?.requireDomViewport !== false) {
@@ -258,7 +284,7 @@ describe('workbench browser lifecycle e2e', () => {
           await page.waitForTimeout(250)
           await waitForHeartbeatCount(() => heartbeatCount, 1)
           const initialHeartbeatCount = heartbeatCount
-          const initialRect = await readViewportRect()
+          const initialRect = await waitForStableViewportRect()
           const initialPixels = await captureViewportPixels()
           const initialRuntime = await inspectBrowserRuntime()
           checkpoint('initial-browser-captured')
@@ -325,7 +351,7 @@ describe('workbench browser lifecycle e2e', () => {
             workbenchSelectors.browserMenu
           )
           checkpoint('escape-menu-opened')
-          const menuRect = await readViewportRect()
+          const menuRect = await waitForStableViewportRect()
           const menuPixels = initialPixels
           const menuState = await page.evaluate(
             async (tabId) => window.api.browserPanelStateGet({ tabId }),
@@ -388,7 +414,7 @@ describe('workbench browser lifecycle e2e', () => {
           checkpoint('switch-menu-closed')
           await browserTab.evaluate((element) => (element as HTMLElement).click())
           await viewport.waitFor({ state: 'visible' })
-          const afterMenuRect = await readViewportRect()
+          const afterMenuRect = await waitForStableViewportRect()
           const afterMenuPixels = initialPixels
           const moveMenuWindowPromise = runtime.electronApp.waitForEvent('window')
           await menuButton.click()
@@ -551,14 +577,18 @@ describe('workbench browser lifecycle e2e', () => {
             result.switchedAwayRuntimeAfter,
             result.finalRuntime
           ]
+          const viewportRects = [
+            result.initialRect,
+            result.restoredRect,
+            result.menuRect,
+            result.afterMenuRect
+          ]
           await runtime.assertThat(
             pixelSamples.every(
               (sample) =>
                 sample.sampled > 1_000 && sample.whiteRatio < 0.2 && sample.darkRatio > 0.15
             ) &&
-              sameSize(result.initialRect, result.restoredRect) &&
-              sameSize(result.restoredRect, result.menuRect) &&
-              sameSize(result.menuRect, result.afterMenuRect) &&
+              viewportRects.every(isUsableViewport) &&
               result.restoredZoom === 100 &&
               result.menuZoom === 100 &&
               result.emptyGoDisabled &&
