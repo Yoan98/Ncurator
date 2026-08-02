@@ -52,6 +52,7 @@ type DeliveryResult = 'accepted' | 'discard' | 'retry'
 const DEFAULT_ENDPOINT = 'https://www.ncurator.com/api/telemetry/events'
 const MAX_PENDING_EVENTS = 500
 const RETRY_BACKOFF_MS = 30_000
+const DELIVERY_TIMEOUT_MS = 20_000
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const APP_VERSION_PATTERN = /^[0-9A-Za-z._+-]{1,64}$/
 const TELEMETRY_PLATFORMS = new Set(['win32', 'darwin', 'linux', 'other'])
@@ -241,7 +242,7 @@ export class TelemetryService {
       const response = await fetch(this.endpoint, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        signal: AbortSignal.timeout(2_000),
+        signal: AbortSignal.timeout(DELIVERY_TIMEOUT_MS),
         body: JSON.stringify(event)
       })
       if (!response.ok) {
