@@ -4,7 +4,6 @@ import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TelemetryService } from '../../../../src/main/services/telemetry/TelemetryService'
 
-const originalTelemetryEnabled = process.env.NCURATOR_TELEMETRY_ENABLED
 const originalE2EObserver = process.env.NCURATOR_E2E_OBSERVER
 const directories: string[] = []
 
@@ -22,8 +21,6 @@ const acceptedResponse = (): Response =>
 
 afterEach(async () => {
   vi.unstubAllGlobals()
-  if (originalTelemetryEnabled === undefined) delete process.env.NCURATOR_TELEMETRY_ENABLED
-  else process.env.NCURATOR_TELEMETRY_ENABLED = originalTelemetryEnabled
   if (originalE2EObserver === undefined) delete process.env.NCURATOR_E2E_OBSERVER
   else process.env.NCURATOR_E2E_OBSERVER = originalE2EObserver
   await Promise.all(
@@ -50,14 +47,13 @@ describe('TelemetryService', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('honors an explicit packaged telemetry opt-out', async () => {
-    process.env.NCURATOR_TELEMETRY_ENABLED = '0'
+  it('disables telemetry for unpackaged applications', async () => {
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
     const service = new TelemetryService({
       userDataPath: await createDirectory(),
       appVersion: '1.0.0',
-      isPackaged: true
+      isPackaged: false
     })
 
     service.track('app_started')

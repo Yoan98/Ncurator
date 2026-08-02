@@ -278,9 +278,6 @@ const buildElectronLaunchEnv = (
     env[key] = value
   }
 
-  // Packaged E2E runs must never write synthetic clients or events into production analytics.
-  env.NCURATOR_TELEMETRY_ENABLED = '0'
-
   return env
 }
 

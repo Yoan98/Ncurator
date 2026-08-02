@@ -79,11 +79,7 @@ const resolveEnvironment = (isPackaged: boolean): TelemetryEnvironment => {
 }
 
 const shouldEnableTelemetry = (isPackaged: boolean): boolean => {
-  const override = String(process.env.NCURATOR_TELEMETRY_ENABLED || '').trim()
-  if (override === '0') return false
-  if (isE2ERuntime()) return override === '1'
-  if (isPackaged) return true
-  return override === '1'
+  return isPackaged && !isE2ERuntime()
 }
 
 const normalizePlatform = (): TelemetryEventPayload['platform'] => {
