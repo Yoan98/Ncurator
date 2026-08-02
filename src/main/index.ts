@@ -286,6 +286,10 @@ if (!singleInstanceLock) {
       name: 'terminal-session-manager',
       dispose: () => terminalSessionManager.dispose()
     })
+    shutdownCoordinator.register({
+      name: 'telemetry',
+      dispose: () => telemetryService.flush()
+    })
 
     vectorModelDownloadService
       .initialize()

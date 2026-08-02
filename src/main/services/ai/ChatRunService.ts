@@ -385,14 +385,17 @@ export class ChatRunService {
     const input = String(payload?.input || '').trim()
     if (!sessionId) return { success: false, error: 'sessionId is required' }
     if (!input) return { success: false, error: 'input is required' }
-    this.deps.telemetryService?.track('message_submit_requested', { mode })
     if (mode === 'search') {
       try {
         const response = await this.submitSearch({ ...payload, mode, sessionId, input })
         this.trackSubmitResult(mode, response)
         return response
       } catch (error) {
-        this.deps.telemetryService?.track('message_submit_failed', { mode, failureCode: 'UNKNOWN' })
+        this.deps.telemetryService?.track('message_submit_completed', {
+          mode,
+          outcome: 'failed',
+          failureCode: 'UNKNOWN'
+        })
         throw error
       }
     }
@@ -400,8 +403,9 @@ export class ChatRunService {
       this.pendingSessionSubmissions.has(sessionId) ||
       Array.from(this.activeRuns.values()).some((entry) => entry.run.sessionId === sessionId)
     ) {
-      this.deps.telemetryService?.track('message_submit_failed', {
+      this.deps.telemetryService?.track('message_submit_completed', {
         mode,
+        outcome: 'failed',
         failureCode: 'REQUEST_FAILED'
       })
       return { success: false, error: '当前会话已有运行中的任务，请等待完成后再发送。' }
@@ -412,7 +416,11 @@ export class ChatRunService {
       this.trackSubmitResult(mode, response)
       return response
     } catch (error) {
-      this.deps.telemetryService?.track('message_submit_failed', { mode, failureCode: 'UNKNOWN' })
+      this.deps.telemetryService?.track('message_submit_completed', {
+        mode,
+        outcome: 'failed',
+        failureCode: 'UNKNOWN'
+      })
       throw error
     } finally {
       this.pendingSessionSubmissions.delete(sessionId)
@@ -421,11 +429,15 @@ export class ChatRunService {
 
   private trackSubmitResult(mode: 'ai' | 'search', response: ChatSubmitResponse): void {
     if (response.success) {
-      this.deps.telemetryService?.track('message_submit_succeeded', { mode })
+      this.deps.telemetryService?.track('message_submit_completed', {
+        mode,
+        outcome: 'succeeded'
+      })
       return
     }
-    this.deps.telemetryService?.track('message_submit_failed', {
+    this.deps.telemetryService?.track('message_submit_completed', {
       mode,
+      outcome: 'failed',
       failureCode: 'REQUEST_FAILED'
     })
   }
