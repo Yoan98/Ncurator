@@ -60,6 +60,7 @@ describe('workbench result e2e', () => {
           const afterApplyText = await readDocxPlainText(targetPath)
           const applyEntry = await waitForApplyEntry(page)
           const applyEntryText = ((await applyEntry.textContent()) || '').trim()
+          const modificationCountsVisibleBeforeClick = /[+-][1-9]\d*/u.test(applyEntryText)
           const applyEntryLines = await applyEntry.evaluate((element) =>
             element instanceof HTMLElement
               ? element.innerText
@@ -185,6 +186,7 @@ describe('workbench result e2e', () => {
             afterRevertText,
             applyEntryText,
             applyEntryLines,
+            modificationCountsVisibleBeforeClick,
             artifactChipCount,
             applyPanelText,
             externalApplicationHintVisible,
@@ -217,6 +219,7 @@ describe('workbench result e2e', () => {
               result.afterRevertText === result.beforeText &&
               result.applyEntryText.includes('sample-edit.docx') &&
               result.applyEntryText.includes('Workbench docx-apply-panel-preview-and-revert') &&
+              result.modificationCountsVisibleBeforeClick &&
               result.applyEntryLines.filter((line) => line.includes('sample-edit.docx')).length ===
                 1 &&
               !result.applyEntryText.includes('已修改') &&

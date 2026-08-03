@@ -326,9 +326,9 @@ const reduceAssistantTurnByRunEvent = (
             title: event.fileName,
             sourcePath: event.path,
             operation: event.operation,
-            changeCount: 0,
-            insertCount: 0,
-            deleteCount: 0,
+            changeCount: event.changeCount ?? 0,
+            insertCount: event.insertCount ?? 0,
+            deleteCount: event.deleteCount ?? 0,
             status: 'applied'
           })
         : next.applyTargets

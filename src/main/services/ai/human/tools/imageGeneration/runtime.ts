@@ -276,7 +276,10 @@ export const generateImage = async (
         capability: 'image',
         artifactPath: outputPath,
         operation,
-        applyId: operationId
+        applyId: operationId,
+        changeCount: record.changeCount,
+        insertCount: record.insertCount,
+        deleteCount: record.deleteCount
       })
       return { outputPath: args.outputPath }
     } catch (error) {

@@ -212,6 +212,9 @@ const finishTerminalFileChangeTracking = async (pending: PendingTerminalCommand)
         artifactPath: record.path,
         operation: record.operation,
         applyId: record.id,
+        changeCount: record.changeCount,
+        insertCount: record.insertCount,
+        deleteCount: record.deleteCount,
         stepId: pending.stepId
       })
     })

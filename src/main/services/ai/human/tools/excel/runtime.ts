@@ -1006,7 +1006,10 @@ export const createExcelToolRuntime = (input: ExcelCapabilityToolsInput): ExcelT
       capability: 'excel',
       artifactPath: sourcePath,
       operation: record.operation,
-      applyId: record.id
+      applyId: record.id,
+      changeCount: record.changeCount,
+      insertCount: record.insertCount,
+      deleteCount: record.deleteCount
     })
     const postWriteReadback = operationChanges.map((change) => {
       const cell = afterWorkbook.getWorksheet(change.sheetName)?.getCell(change.address)

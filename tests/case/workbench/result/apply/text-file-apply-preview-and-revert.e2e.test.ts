@@ -119,6 +119,11 @@ describe('workbench result e2e', () => {
           ).count()
           const evidence = await completionPromise
           recordWorkbenchAiEvidence(runtime, evidence, 0.8)
+          const applyEntry = await waitForApplyEntry(page)
+          const assistantApplyTextBeforeClick = ((await applyEntry.textContent()) || '').trim()
+          const modificationCountsVisibleBeforeClick = /[+-][1-9]\d*/u.test(
+            assistantApplyTextBeforeClick
+          )
           const afterApply = await fs.readFile(targetPath, 'utf-8')
           const normalPreviewAfterAiWrite = getWorkbenchLocator(
             page,
@@ -133,7 +138,6 @@ describe('workbench result e2e', () => {
                 (window as unknown as { __NCURATOR_TEST_EXTERNAL_NOTICE_COUNT__?: number })
                   .__NCURATOR_TEST_EXTERNAL_NOTICE_COUNT__ || 0
             )) === 0
-          const applyEntry = await waitForApplyEntry(page)
           await applyEntry.click()
           const diffViewer = getWorkbenchLocator(page, workbenchSelectors.textDiffViewer)
           await diffViewer.waitFor({ state: 'visible', timeout: 30_000 })
@@ -367,6 +371,8 @@ describe('workbench result e2e', () => {
             standaloneArtifactCount,
             omittedLineLabels,
             applyEntryCountDuringRun,
+            modificationCountsVisibleBeforeClick,
+            assistantApplyTextBeforeClick,
             aiWritePreviewRefreshedSilently,
             externalApplicationHintVisible,
             omittedCountBeforeExpand,
@@ -414,6 +420,7 @@ describe('workbench result e2e', () => {
               result.resourceTabCount === 1 &&
               result.standaloneArtifactCount === 0 &&
               result.applyEntryCountDuringRun === 0 &&
+              result.modificationCountsVisibleBeforeClick &&
               result.aiWritePreviewRefreshedSilently &&
               result.externalApplicationHintVisible &&
               result.omittedLineLabels.some((label) => label.includes('行未修改')) &&
@@ -447,7 +454,8 @@ describe('workbench result e2e', () => {
               result.fileStillVisible,
             {
               name: 'workbench-text-file-preview-diff-revert-real',
-              message: '普通预览应继续渲染 Markdown，修改入口应展示文本 diff，并能恢复原始 bytes。',
+              message:
+                '普通预览应继续渲染 Markdown；AI 运行完成后修改入口在未点击时已显示非零修改数量，点击后展示文本 diff，并能恢复原始 bytes。',
               data: result
             }
           )

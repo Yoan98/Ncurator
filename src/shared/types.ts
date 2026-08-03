@@ -1491,6 +1491,9 @@ type AiRunEventPayload =
       fileName: string
       operation: AiFileArtifactOperation
       applyId?: string
+      changeCount?: number
+      insertCount?: number
+      deleteCount?: number
       stepId?: string
       createdAt: number
     }

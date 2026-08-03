@@ -125,6 +125,9 @@ export const appendDocxApplyArtifactsAndEmitEvents = (input: {
       fileName: record.source_name,
       operation: record.operation,
       applyId: record.id,
+      changeCount: record.change_count,
+      insertCount: record.insert_count,
+      deleteCount: record.delete_count,
       createdAt: Date.now()
     })
   })
@@ -162,6 +165,9 @@ export const appendFileChangeArtifactsAndEmitEvents = (input: {
       fileName: record.fileName,
       operation: record.operation,
       applyId: record.id,
+      changeCount: record.changeCount,
+      insertCount: record.insertCount,
+      deleteCount: record.deleteCount,
       createdAt: Date.now()
     })
   })
