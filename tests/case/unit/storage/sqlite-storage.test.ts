@@ -6,12 +6,15 @@ import type {
   AiRunEvent,
   AiRunRecord,
   ChatMessage,
-  ChatSession
+  ChatSession,
+  ChatSessionUiStateV1
 } from '../../../../src/shared/types'
 import { LanceDbCore } from '../../../../src/main/services/storage/core/LanceDbCore'
 import { ChatStore } from '../../../../src/main/services/storage/domains/ChatStore'
 import { AiRunStore } from '../../../../src/main/services/storage/domains/AiRunStore'
 import { DocumentsStore } from '../../../../src/main/services/storage/domains/DocumentsStore'
+import { BrowserTabStateStore } from '../../../../src/main/services/storage/domains/BrowserTabStateStore'
+import { WorkbenchUiStore } from '../../../../src/main/services/storage/domains/WorkbenchUiStore'
 import { StorageService } from '../../../../src/main/services/storage/StorageService'
 import { SqliteCore } from '../../../../src/main/services/storage/sqlite/SqliteCore'
 
@@ -173,6 +176,38 @@ const createRun = (input: Partial<AiRunRecord> = {}): AiRunRecord => ({
   finishedAt: input.finishedAt
 })
 
+const createSessionUiState = (input = 'draft'): ChatSessionUiStateV1 => ({
+  version: 1,
+  composer: {
+    mode: 'ai',
+    aiPreference: 'local_sources_strict',
+    modelSelection: {
+      mainModel: { configId: 'provider-1', modelName: 'model-1' },
+      visionModel: null
+    },
+    workspaceId: 'workspace-1',
+    draft: {
+      input,
+      contentNodes: [{ kind: 'text', text: input }],
+      selectedReferences: [],
+      attachments: [],
+      assetBucketId: null
+    }
+  },
+  panel: {
+    tabs: [],
+    activeTabId: null,
+    collapsed: false,
+    fallbackState: {
+      kind: 'search_list',
+      title: '搜索结果',
+      query: input,
+      results: [],
+      tokens: [input]
+    }
+  }
+})
+
 describe('sqlite storage core and stores', () => {
   let tempDir = ''
   let sqlite: SqliteCore
@@ -208,8 +243,103 @@ describe('sqlite storage core and stores', () => {
       { version: 2, name: 'ai_runtime_system_notifications' },
       { version: 3, name: 'chat_session_skill_state' },
       { version: 4, name: 'reset_resume_snapshots_v2' },
-      { version: 5, name: 'repair_false_docx_change_failures' }
+      { version: 5, name: 'repair_false_docx_change_failures' },
+      { version: 6, name: 'workbench_session_ui_state' }
     ])
+  })
+
+  it('persists versioned session UI state and rejects invalid writes', async () => {
+    const store = new WorkbenchUiStore(sqlite)
+    const initial = createSessionUiState('first draft')
+    const replacement = createSessionUiState('replacement draft')
+
+    await store.saveSessionState('session-1', initial)
+    expect(await store.getSessionState('session-1')).toEqual(initial)
+
+    await store.saveSessionState('session-1', replacement)
+    expect(await store.getSessionState('session-1')).toEqual(replacement)
+    await expect(store.saveSessionState('missing-session', initial)).rejects.toThrow(
+      'chat session not found'
+    )
+    await expect(
+      store.saveSessionState('session-1', {
+        ...initial,
+        version: 2
+      } as unknown as ChatSessionUiStateV1)
+    ).rejects.toThrow('invalid session UI state')
+
+    sqlite
+      .prepare('UPDATE chat_session_ui_state SET state_json = ? WHERE session_id = ?')
+      .run('{broken-json', 'session-1')
+    expect(await store.getSessionState('session-1')).toBeNull()
+  })
+
+  it('promotes draft UI and browser tabs with the first real session transaction', async () => {
+    const workbenchStore = new WorkbenchUiStore(sqlite)
+    const browserStore = new BrowserTabStateStore(sqlite)
+    const draftState = createSessionUiState('unsent draft')
+    await workbenchStore.saveWorkbenchState({ activeViewKey: '__draft__', draftState })
+    browserStore.save({
+      id: 'browser-draft-1',
+      ownerId: '__draft__',
+      title: 'Draft tab',
+      url: 'https://example.com/second',
+      zoomFactor: 1.25,
+      history: {
+        entries: [
+          { title: 'First', url: 'https://example.com/first' },
+          { title: 'Second', url: 'https://example.com/second' }
+        ],
+        index: 1
+      },
+      position: 0,
+      createdAt: 10,
+      updatedAt: 20
+    })
+
+    const promotedSession = createSession('session-promoted')
+    await chatStore.saveChatSessionFromWorkbenchDraft(promotedSession)
+
+    expect(await workbenchStore.getSessionState(promotedSession.id)).toEqual(draftState)
+    expect(await workbenchStore.getWorkbenchState()).toMatchObject({
+      activeViewKey: promotedSession.id,
+      draftState: null
+    })
+    expect(browserStore.listByOwner('__draft__')).toEqual([])
+    expect(browserStore.listByOwner(promotedSession.id)).toMatchObject([
+      {
+        id: 'browser-draft-1',
+        url: 'https://example.com/second',
+        zoomFactor: 1.25,
+        history: { index: 1 },
+        position: 0
+      }
+    ])
+  })
+
+  it('deletes session UI and browser state with its session', async () => {
+    const workbenchStore = new WorkbenchUiStore(sqlite)
+    const browserStore = new BrowserTabStateStore(sqlite)
+    await workbenchStore.saveSessionState('session-1', createSessionUiState())
+    await workbenchStore.saveWorkbenchState({
+      activeViewKey: 'session-1',
+      draftState: null
+    })
+    browserStore.save({
+      id: 'browser-session-1',
+      ownerId: 'session-1',
+      url: 'https://example.com',
+      zoomFactor: 0.9,
+      position: 0,
+      createdAt: 1,
+      updatedAt: 1
+    })
+
+    await chatStore.deleteChatSession('session-1')
+
+    expect(await workbenchStore.getSessionState('session-1')).toBeNull()
+    expect(browserStore.listByOwner('session-1')).toEqual([])
+    expect(await workbenchStore.getWorkbenchState()).toMatchObject({ activeViewKey: null })
   })
 
   it('repairs historical DOCX changes that were falsely marked as failed', () => {

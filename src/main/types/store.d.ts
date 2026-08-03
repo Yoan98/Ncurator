@@ -65,6 +65,8 @@ import {
   ChatSessionSnapshotResponse,
   ChatSessionOpenRequest,
   ChatSessionOpenResponse,
+  ChatSessionUiStateSaveRequest,
+  ChatSessionUiStateSaveResponse,
   ChatSessionRunSummariesRequest,
   ChatSessionRunSummariesResponse,
   ChatRunEventsRequest,
@@ -133,7 +135,9 @@ import {
   GetAiFileChangeRecordResponse,
   RevertAiFileChangeRequest,
   RevertAiFileChangeResponse,
-  ChatSessionResumeSnapshotRow
+  ChatSessionResumeSnapshotRow,
+  WorkbenchUiStateResponse,
+  WorkbenchUiStateSaveRequest
 } from '../../shared/types'
 
 export type {
@@ -200,6 +204,8 @@ export type {
   ChatSessionSnapshotResponse,
   ChatSessionOpenRequest,
   ChatSessionOpenResponse,
+  ChatSessionUiStateSaveRequest,
+  ChatSessionUiStateSaveResponse,
   ChatSessionRunSummariesRequest,
   ChatSessionRunSummariesResponse,
   ChatRunEventsRequest,
@@ -270,7 +276,9 @@ export type {
   RevertAiFileChangeResponse,
   ChatSessionResumeSnapshotRow,
   ListWorkspaceDirectoryRequest,
-  WorkspaceDirectoryListResponse
+  WorkspaceDirectoryListResponse,
+  WorkbenchUiStateResponse,
+  WorkbenchUiStateSaveRequest
 }
 
 /**

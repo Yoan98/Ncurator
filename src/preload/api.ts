@@ -38,6 +38,8 @@ import type {
   ChatSessionListItem,
   ChatSessionOpenRequest,
   ChatSessionOpenResponse,
+  ChatSessionUiStateSaveRequest,
+  ChatSessionUiStateSaveResponse,
   ChatSessionRunSummariesRequest,
   ChatSessionRunSummariesResponse,
   ChatSessionSnapshotRequest,
@@ -95,7 +97,9 @@ import type {
   WorkspaceListResponse,
   WorkspaceMutationResponse,
   WorkspaceTreeListResponse,
-  WorkspaceDirectoryListResponse
+  WorkspaceDirectoryListResponse,
+  WorkbenchUiStateResponse,
+  WorkbenchUiStateSaveRequest
 } from '../shared/types'
 
 export type ModelInfo = {
@@ -175,6 +179,7 @@ export type DesktopApi = {
   getModels: () => Promise<ModelInfo[]>
   getEmbeddingStatus: () => Promise<'uninitialized' | 'initializing' | 'ready' | 'error'>
   readFile: (filePath: string) => Promise<Uint8Array>
+  fileExists: (filePath: string) => Promise<boolean>
   attachmentPick: (payload: AttachmentPickRequest) => Promise<AttachmentPickResponse>
   attachmentSaveFile: (payload: AttachmentSaveRequest) => Promise<AttachmentProcessResponse>
   chatSessionList: () => Promise<ChatSessionListItem[]>
@@ -183,6 +188,11 @@ export type DesktopApi = {
   chatSessionDelete: (id: string) => Promise<{ success: boolean; error?: string }>
   chatMessageList: (sessionId: string) => Promise<ChatMessage[]>
   chatSessionOpen: (payload: ChatSessionOpenRequest) => Promise<ChatSessionOpenResponse>
+  chatSessionUiStateSave: (
+    payload: ChatSessionUiStateSaveRequest
+  ) => Promise<ChatSessionUiStateSaveResponse>
+  workbenchUiStateGet: () => Promise<WorkbenchUiStateResponse>
+  workbenchUiStateSave: (payload: WorkbenchUiStateSaveRequest) => Promise<WorkbenchUiStateResponse>
   chatSessionRunSummaries: (
     payload: ChatSessionRunSummariesRequest
   ) => Promise<ChatSessionRunSummariesResponse>
@@ -259,4 +269,5 @@ export type DesktopApi = {
   ) => Promise<OpenFileWithApplicationResponse>
   onAiRunEvent: (cb: (event: AiRunEvent) => void) => () => void
   onSystemNotificationOpenSession: (cb: (sessionId: string) => void) => () => void
+  onWorkbenchUiFlushRequest: (cb: () => void | Promise<void>) => () => void
 }

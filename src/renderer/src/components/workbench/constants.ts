@@ -6,10 +6,12 @@ export const WORKBENCH_SIDEBAR_DEFAULT_WIDTH = 240
 export const WORKBENCH_SIDEBAR_MIN_WIDTH = 220
 export const WORKBENCH_SIDEBAR_MAX_WIDTH = 320
 export const WORKBENCH_LEFT_TITLEBAR_COLLAPSED_WIDTH = 170
-export const WORKBENCH_PREFERENCE_MODE_STORAGE_KEY = 'workbench.preference.mode'
-export const WORKBENCH_PREFERENCE_AI_PREFERENCE_STORAGE_KEY = 'workbench.preference.ai-preference'
-export const WORKBENCH_PREFERENCE_MODEL_STORAGE_KEY = 'workbench.preference.model'
-export const WORKBENCH_PREFERENCE_WORKSPACE_STORAGE_KEY = 'workbench.preference.workspace-id'
+export const WORKBENCH_LEGACY_PREFERENCE_STORAGE_KEYS = [
+  'workbench.preference.mode',
+  'workbench.preference.ai-preference',
+  'workbench.preference.model',
+  'workbench.preference.workspace-id'
+] as const
 
 export const FILE_ORIGIN_LABELS: Record<WorkbenchFileOrigin, string> = {
   search_hit: '搜索命中',

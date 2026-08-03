@@ -351,6 +351,53 @@ export class ChatStore {
       })
   }
 
+  public async saveChatSessionFromWorkbenchDraft(session: ChatSession): Promise<void> {
+    const now = Date.now()
+    this.sqlite.transaction(() => {
+      this.sqlite
+        .prepare(
+          `INSERT INTO chat_session (id, title, created_at, updated_at, last_viewed_at, workspace_id)
+           VALUES (@id, @title, @created_at, @updated_at, @last_viewed_at, @workspace_id)
+           ON CONFLICT(id) DO UPDATE SET
+             title = excluded.title,
+             updated_at = excluded.updated_at,
+             workspace_id = excluded.workspace_id`
+        )
+        .run({
+          id: session.id,
+          title: session.title,
+          created_at: session.created_at,
+          updated_at: now,
+          last_viewed_at: session.created_at,
+          workspace_id: session.workspace_id || ''
+        })
+      const draft = this.sqlite
+        .prepare('SELECT draft_state_json FROM workbench_ui_state WHERE id = 1')
+        .get() as { draft_state_json?: unknown } | undefined
+      if (draft?.draft_state_json) {
+        this.sqlite
+          .prepare(
+            `INSERT OR REPLACE INTO chat_session_ui_state (session_id, state_json, updated_at)
+             VALUES (?, ?, ?)`
+          )
+          .run(session.id, draft.draft_state_json, now)
+      }
+      this.sqlite
+        .prepare(
+          `INSERT INTO workbench_ui_state (id, active_view_key, draft_state_json, updated_at)
+           VALUES (1, ?, NULL, ?)
+           ON CONFLICT(id) DO UPDATE SET
+             active_view_key = excluded.active_view_key,
+             draft_state_json = NULL,
+             updated_at = excluded.updated_at`
+        )
+        .run(session.id, now)
+      this.sqlite
+        .prepare('UPDATE browser_tab_state SET owner_key = ?, updated_at = ? WHERE owner_key = ?')
+        .run(session.id, now, '__draft__')
+    })
+  }
+
   public async markChatSessionViewed(sessionId: string, viewedAt = Date.now()): Promise<void> {
     this.sqlite
       .prepare('UPDATE chat_session SET last_viewed_at = ? WHERE id = ?')
@@ -393,6 +440,14 @@ export class ChatStore {
 
   public async deleteChatSession(id: string): Promise<void> {
     this.sqlite.transaction(() => {
+      this.sqlite.prepare('DELETE FROM browser_tab_state WHERE owner_key = ?').run(id)
+      this.sqlite
+        .prepare(
+          `UPDATE workbench_ui_state
+           SET active_view_key = NULL, updated_at = ?
+           WHERE id = 1 AND active_view_key = ?`
+        )
+        .run(Date.now(), id)
       this.sqlite.prepare('DELETE FROM chat_session WHERE id = ?').run(id)
     })
   }

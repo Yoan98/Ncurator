@@ -31,8 +31,11 @@ import type {
   ChatSession,
   ChatSessionListItem,
   ChatSessionRunSnapshot,
+  ChatSessionUiPanelState,
+  ChatSessionUiStateV1,
   LLMConfig,
   LlmRemoteModel,
+  SearchResult,
   SelectedReference,
   WorkbenchModelSelection,
   WorkspaceSource,
@@ -54,6 +57,7 @@ import type { ImageLightboxImage } from '../components/workbench/ImageLightbox'
 import type { ComposerDraftValue } from '../components/workbench/composer/types'
 import {
   WORKBENCH_LEFT_TITLEBAR_COLLAPSED_WIDTH,
+  WORKBENCH_LEGACY_PREFERENCE_STORAGE_KEYS,
   WORKBENCH_SIDEBAR_DEFAULT_WIDTH,
   WORKBENCH_SIDEBAR_MAX_WIDTH,
   WORKBENCH_SIDEBAR_MIN_WIDTH,
@@ -85,12 +89,8 @@ import {
   formatRelativeTime,
   getAttachmentTypeLabel,
   getSearchResultFileRef,
-  readWorkbenchAiPreference,
   reduceAssistantProcessGroups,
-  reduceAssistantProcessThoughts,
-  readWorkbenchModelPreference,
-  writeWorkbenchAiPreference,
-  writeWorkbenchModelPreference
+  reduceAssistantProcessThoughts
 } from '../components/workbench/utils'
 import {
   groupApplyTargetsByRunId,
@@ -110,7 +110,11 @@ import {
 import { chatSelectors, workbenchSelectors } from '../testing/selectors'
 import SidebarPanelIcon from '../components/SidebarPanelIcon'
 import brandIcon from '../../../../logo/png/ncurator-logo-24.png'
-import { collectReferenceDocumentIds, pruneReferencesByWorkspace } from '../utils/reference'
+import {
+  collectReferenceDocumentIds,
+  getReferenceKey,
+  pruneReferencesByWorkspace
+} from '../utils/reference'
 import { useWorkbenchMode } from '../contexts/WorkbenchModeContext'
 import SidebarUpdateControl from '../components/update/SidebarUpdateControl'
 
@@ -587,6 +591,36 @@ const createEmptyComposerDraft = (): ComposerDraftValue => ({
   assetBucketId: null
 })
 
+const toPersistedComposerDraft = (
+  draft: ComposerDraftValue
+): ChatSessionUiStateV1['composer']['draft'] => ({
+  input: draft.input,
+  contentNodes: draft.contentNodes,
+  selectedReferences: draft.selectedReferences,
+  attachments: draft.attachments,
+  assetBucketId: draft.assetBucketId || null
+})
+
+const createDefaultSessionUiState = (
+  modelSelection: WorkbenchModelSelection = { mainModel: null, visionModel: null },
+  workspaceId: string | null = null
+): ChatSessionUiStateV1 => ({
+  version: 1,
+  composer: {
+    mode: 'ai',
+    aiPreference: 'default',
+    modelSelection,
+    workspaceId,
+    draft: toPersistedComposerDraft(createEmptyComposerDraft())
+  },
+  panel: {
+    tabs: [],
+    activeTabId: null,
+    collapsed: true,
+    fallbackState: createEmptyPanel() as ChatSessionUiPanelState
+  }
+})
+
 const isComposerDraftEmpty = (draft: ComposerDraftValue): boolean =>
   !draft.input.trim() &&
   draft.contentNodes.length === 0 &&
@@ -623,9 +657,8 @@ const ChatPage: React.FC = () => {
   const [deleteConfirmSession, setDeleteConfirmSession] = useState<ChatSession | null>(null)
   const [deletingSessionIds, setDeletingSessionIds] = useState<Set<string>>(() => new Set())
   const { mode: composerMode, setMode: setComposerMode } = useWorkbenchMode()
-  const [composerAiPreference, setComposerAiPreference] = useState<WorkbenchAiPreference>(() =>
-    readWorkbenchAiPreference(window.localStorage)
-  )
+  const [composerAiPreference, setComposerAiPreference] =
+    useState<WorkbenchAiPreference>('default')
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [aiRunId, setAiRunId] = useState<string | null>(null)
@@ -639,13 +672,14 @@ const ChatPage: React.FC = () => {
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null)
   const [workspaceDocumentIds, setWorkspaceDocumentIds] = useState<string[]>([])
   const [modelConfigs, setModelConfigs] = useState<LLMConfig[]>([])
+  const [modelCatalogLoaded, setModelCatalogLoaded] = useState(false)
   const [modelListsByConfigId, setModelListsByConfigId] = useState<
     Record<string, LlmRemoteModel[]>
   >({})
-  const [modelSelection, setModelSelection] = useState<WorkbenchModelSelection>(
-    () =>
-      readWorkbenchModelPreference(window.localStorage) || { mainModel: null, visionModel: null }
-  )
+  const [modelSelection, setModelSelection] = useState<WorkbenchModelSelection>({
+    mainModel: null,
+    visionModel: null
+  })
   const [composerDraftKey, setComposerDraftKey] = useState('initial')
   const [contextUsage, setContextUsage] = useState<WorkbenchContextUsage | null>(null)
   const [messageAttachmentPreviewUrls, setMessageAttachmentPreviewUrls] = useState<
@@ -738,11 +772,102 @@ const ChatPage: React.FC = () => {
   const scrollFrameRef = useRef<number | null>(null)
   const messageAttachmentPreviewUrlsRef = useRef<Record<string, string>>({})
   const notifiedNoEffectiveChangeIdsRef = useRef<Set<string>>(new Set())
+  const composerModeRef = useRef<WorkbenchMode>(composerMode)
+  const composerAiPreferenceRef = useRef<WorkbenchAiPreference>(composerAiPreference)
+  const modelSelectionRef = useRef<WorkbenchModelSelection>(modelSelection)
+  const selectedWorkspaceIdRef = useRef<string | null>(selectedWorkspaceId)
+  const contentPanelRef = useRef<WorkbenchContentPanelState>(contentPanel)
+  const tabWorkspacesRef = useRef<Record<string, WorkbenchTabWorkspaceState>>(tabWorkspaces)
+  const contentPanelCollapsedRef = useRef(contentPanelCollapsed)
+  const panelFallbackByKeyRef = useRef<Record<string, WorkbenchContentPanelState>>({})
+  const uiStateReadyKeyRef = useRef<string | null>(null)
+  const [uiStateReadyKey, setUiStateReadyKey] = useState<string | null>(null)
+  const persistedDraftStateRef = useRef<ChatSessionUiStateV1 | null>(null)
+  const persistTimersRef = useRef<Record<string, number>>({})
+  const persistQueuesRef = useRef<Record<string, Promise<void>>>({})
+  const persistFailureNotifiedRef = useRef<Set<string>>(new Set())
+  const missingAttachmentNotifiedRef = useRef<Set<string>>(new Set())
 
   const tabWorkspaceKey = currentSessionId || '__draft__'
   const tabWorkspace = tabWorkspaces[tabWorkspaceKey] || EMPTY_TAB_WORKSPACE
 
+  const buildUiStateForKey = useCallback((key: string): ChatSessionUiStateV1 => {
+    const workspace = tabWorkspacesRef.current[key] || EMPTY_TAB_WORKSPACE
+    const activeTab = workspace.tabs.find((tab) => tab.id === workspace.activeTabId)
+    const fallback =
+      panelFallbackByKeyRef.current[key] ||
+      (!activeTab ? contentPanelRef.current : createEmptyPanel())
+    return {
+      version: 1,
+      composer: {
+        mode: composerModeRef.current,
+        aiPreference: composerAiPreferenceRef.current,
+        modelSelection: modelSelectionRef.current,
+        workspaceId: selectedWorkspaceIdRef.current,
+        draft: toPersistedComposerDraft(composerDraftValueRef.current)
+      },
+      panel: {
+        tabs: workspace.tabs,
+        activeTabId: workspace.activeTabId,
+        collapsed: contentPanelCollapsedRef.current,
+        fallbackState: fallback as ChatSessionUiPanelState
+      }
+    }
+  }, [])
+
+  const persistUiStateForKey = useCallback(
+    (key: string, state: ChatSessionUiStateV1): Promise<void> => {
+      const previous = persistQueuesRef.current[key] || Promise.resolve()
+      const next = previous
+        .catch(() => undefined)
+        .then(async () => {
+          const response =
+            key === '__draft__'
+              ? await window.api.workbenchUiStateSave({
+                  activeViewKey: currentSessionIdRef.current || '__draft__',
+                  draftState: state
+                })
+              : await window.api.chatSessionUiStateSave({ sessionId: key, state })
+          if (!response.success) throw new Error(response.error || '保存会话状态失败')
+          if (key === '__draft__') persistedDraftStateRef.current = state
+          persistFailureNotifiedRef.current.delete(key)
+        })
+        .catch((error) => {
+          console.error('Failed to persist workbench UI state', error)
+          if (persistFailureNotifiedRef.current.has(key)) return
+          persistFailureNotifiedRef.current.add(key)
+          message.warning('当前会话状态保存失败')
+        })
+      persistQueuesRef.current[key] = next
+      return next
+    },
+    [message]
+  )
+
+  const scheduleCurrentUiStatePersist = useCallback((): void => {
+    const key = currentSessionIdRef.current || '__draft__'
+    if (uiStateReadyKeyRef.current !== key) return
+    const existing = persistTimersRef.current[key]
+    if (existing !== undefined) window.clearTimeout(existing)
+    persistTimersRef.current[key] = window.setTimeout(() => {
+      delete persistTimersRef.current[key]
+      void persistUiStateForKey(key, buildUiStateForKey(key))
+    }, 200)
+  }, [buildUiStateForKey, persistUiStateForKey])
+
+  const flushCurrentUiState = useCallback(async (): Promise<void> => {
+    const key = currentSessionIdRef.current || '__draft__'
+    if (uiStateReadyKeyRef.current !== key) return
+    const timer = persistTimersRef.current[key]
+    if (timer !== undefined) {
+      window.clearTimeout(timer)
+      delete persistTimersRef.current[key]
+    }
+    await persistUiStateForKey(key, buildUiStateForKey(key))
+  }, [buildUiStateForKey, persistUiStateForKey])
+
   useEffect(() => {
+    if (uiStateReadyKey !== tabWorkspaceKey) return () => undefined
     let cancelled = false
     void window.api.browserTabList({ ownerId: tabWorkspaceKey }).then((response) => {
       if (cancelled || !response.success || response.tabs.length === 0) return
@@ -772,7 +897,7 @@ const ChatPage: React.FC = () => {
     return () => {
       cancelled = true
     }
-  }, [tabWorkspaceKey])
+  }, [tabWorkspaceKey, uiStateReadyKey])
 
   const composerDraftValue = useMemo<ComposerDraftValue>(
     () => ({
@@ -793,6 +918,44 @@ const ChatPage: React.FC = () => {
   useEffect(() => {
     composerDraftValueRef.current = composerDraftValue
   }, [composerDraftValue])
+
+  useEffect(() => {
+    composerModeRef.current = composerMode
+    composerAiPreferenceRef.current = composerAiPreference
+    modelSelectionRef.current = modelSelection
+    selectedWorkspaceIdRef.current = selectedWorkspaceId
+    contentPanelRef.current = contentPanel
+    tabWorkspacesRef.current = tabWorkspaces
+    contentPanelCollapsedRef.current = contentPanelCollapsed
+    scheduleCurrentUiStatePersist()
+  }, [
+    composerAiPreference,
+    composerDraftValue,
+    composerMode,
+    contentPanel,
+    contentPanelCollapsed,
+    modelSelection,
+    scheduleCurrentUiStatePersist,
+    selectedWorkspaceId,
+    tabWorkspaces
+  ])
+
+  useEffect(
+    () => () => {
+      Object.values(persistTimersRef.current).forEach((timer) => window.clearTimeout(timer))
+      void flushCurrentUiState()
+    },
+    [flushCurrentUiState]
+  )
+
+  useEffect(() => {
+    WORKBENCH_LEGACY_PREFERENCE_STORAGE_KEYS.forEach((key) => window.localStorage.removeItem(key))
+  }, [])
+
+  useEffect(
+    () => window.api.onWorkbenchUiFlushRequest(flushCurrentUiState),
+    [flushCurrentUiState]
+  )
 
   useEffect(() => {
     const imageAttachments = currentMessages
@@ -856,6 +1019,7 @@ const ChatPage: React.FC = () => {
   )
 
   const applyComposerDraft = useCallback((draft: ComposerDraftValue, reason: string): void => {
+    composerDraftValueRef.current = draft
     setInput(draft.input)
     setComposerContentNodes(draft.contentNodes)
     setSelectedReferences(draft.selectedReferences)
@@ -864,6 +1028,45 @@ const ChatPage: React.FC = () => {
     composerDraftVersionRef.current += 1
     setComposerDraftKey(`${reason}:${composerDraftVersionRef.current}`)
   }, [])
+
+  const applySessionUiState = useCallback(
+    (key: string, persisted: ChatSessionUiStateV1 | null, workspaceId?: string | null): void => {
+      const state = persisted || createDefaultSessionUiState(modelSelectionRef.current, workspaceId)
+      const draft = state.composer.draft
+      composerModeRef.current = state.composer.mode
+      composerAiPreferenceRef.current = state.composer.aiPreference
+      modelSelectionRef.current = state.composer.modelSelection
+      selectedWorkspaceIdRef.current = workspaceId ?? state.composer.workspaceId
+      setComposerMode(state.composer.mode)
+      setComposerAiPreference(state.composer.aiPreference)
+      setModelSelection(state.composer.modelSelection)
+      setSelectedWorkspaceId(selectedWorkspaceIdRef.current)
+      applyComposerDraft(draft, `restore:${key}`)
+
+      const workspace: WorkbenchTabWorkspaceState = {
+        tabs: state.panel.tabs as WorkbenchResourceTab[],
+        activeTabId: state.panel.activeTabId,
+        panelCollapsed: state.panel.collapsed
+      }
+      tabWorkspacesRef.current = { ...tabWorkspacesRef.current, [key]: workspace }
+      setTabWorkspaces(tabWorkspacesRef.current)
+      panelFallbackByKeyRef.current[key] = state.panel.fallbackState as WorkbenchContentPanelState
+      const activeTab = workspace.tabs.find((tab) => tab.id === workspace.activeTabId)
+      const nextPanel = activeTab?.state || (state.panel.fallbackState as WorkbenchContentPanelState)
+      contentPanelRef.current = nextPanel
+      contentPanelCollapsedRef.current = state.panel.collapsed
+      setContentPanel(nextPanel)
+      setContentPanelCollapsed(state.panel.collapsed)
+      if (!state.panel.collapsed) {
+        restoreContentPanelWithoutAnimationRef.current = true
+        setContentPanelShellMounted(true)
+        setContentPanelShellVisible(true)
+      }
+      uiStateReadyKeyRef.current = key
+      setUiStateReadyKey(key)
+    },
+    [applyComposerDraft, setComposerMode]
+  )
 
   const setSessionRunningState = useCallback((sessionId: string, isRunning: boolean): void => {
     setSessions((items) =>
@@ -917,6 +1120,16 @@ const ChatPage: React.FC = () => {
       })
       if (!cancelled) {
         setWorkspaceDocumentIds(collectReferenceDocumentIds(response.items))
+        const validReferenceKeys = new Set(response.items.map(getReferenceKey))
+        setSelectedReferences((current) =>
+          current.filter((reference) => validReferenceKeys.has(getReferenceKey(reference)))
+        )
+        setComposerContentNodes((current) =>
+          current.filter(
+            (node) =>
+              node.kind !== 'reference' || validReferenceKeys.has(getReferenceKey(node.reference))
+          )
+        )
       }
     }
 
@@ -1139,11 +1352,12 @@ const ChatPage: React.FC = () => {
       }
       setContentPanel(nextState)
       if (nextState.kind === 'empty' || nextState.kind === 'search_list') {
+        panelFallbackByKeyRef.current[tabWorkspaceKey] = nextState
         updateCurrentTabWorkspace((current) => ({ ...current, activeTabId: null }))
       }
       expandContentPanel()
     },
-    [contentPanel.kind, expandContentPanel, updateCurrentTabWorkspace]
+    [contentPanel.kind, expandContentPanel, tabWorkspaceKey, updateCurrentTabWorkspace]
   )
 
   const openResourceTab = useCallback(
@@ -1191,6 +1405,77 @@ const ChatPage: React.FC = () => {
       })
     },
     [emitErrorMessage, openResourceTab]
+  )
+
+  const updateBackgroundPanelState = useCallback(
+    async (
+      sessionId: string,
+      update: (state: ChatSessionUiStateV1) => ChatSessionUiStateV1
+    ): Promise<void> => {
+      try {
+        const opened = await window.api.chatSessionOpen({ sessionId, limit: 1 })
+        const currentState =
+          opened.uiState ||
+          createDefaultSessionUiState(
+            { mainModel: null, visionModel: null },
+            opened.session?.workspace_id || null
+          )
+        await persistUiStateForKey(sessionId, update(currentState))
+      } catch (error) {
+        console.error('Failed to update background session UI state', error)
+      }
+    },
+    [persistUiStateForKey]
+  )
+
+  const persistBackgroundSearchResults = useCallback(
+    (sessionId: string, query: string, results: SearchResult[]): void => {
+      const panel: WorkbenchContentPanelState = {
+        kind: 'search_list',
+        title: '搜索结果',
+        query,
+        results,
+        tokens: []
+      }
+      void updateBackgroundPanelState(sessionId, (state) => ({
+        ...state,
+        panel: {
+          ...state.panel,
+          activeTabId: null,
+          collapsed: false,
+          fallbackState: panel
+        }
+      }))
+    },
+    [updateBackgroundPanelState]
+  )
+
+  const persistBackgroundBrowserTab = useCallback(
+    (sessionId: string, browserTabId: string): void => {
+      void window.api.browserPanelStateGet({ tabId: browserTabId }).then((response) => {
+        if (!response.success || !response.state) return
+        const browser = response.state
+        const title = browser.title || browser.url || '新标签页'
+        void updateBackgroundPanelState(sessionId, (state) => {
+          const resourceId = `browser:${browser.id}`
+          const tab: WorkbenchResourceTab = {
+            id: resourceId,
+            kind: 'browser',
+            browserTabId: browser.id,
+            title,
+            state: { kind: 'browser', title, browserTabId: browser.id }
+          }
+          const tabs = state.panel.tabs.some((item) => item.id === resourceId)
+            ? state.panel.tabs.map((item) => (item.id === resourceId ? tab : item))
+            : [...state.panel.tabs, tab]
+          return {
+            ...state,
+            panel: { ...state.panel, tabs, activeTabId: resourceId, collapsed: false }
+          }
+        })
+      })
+    },
+    [updateBackgroundPanelState]
   )
 
   const showApplyWorkspace = useCallback(
@@ -1322,6 +1607,17 @@ const ChatPage: React.FC = () => {
     try {
       const opened = await window.api.chatSessionOpen({ sessionId, limit: 50 })
       if (sessionSwitchRequestRef.current !== requestId) return
+      applySessionUiState(sessionId, opened.uiState || null, opened.session?.workspace_id)
+      const restoredActiveTab = opened.uiState?.panel.tabs.find(
+        (tab) => tab.id === opened.uiState?.panel.activeTabId
+      )
+      if (
+        restoredActiveTab?.state.kind === 'apply_workspace' &&
+        restoredActiveTab.state.applyId &&
+        !restoredActiveTab.state.applyId.startsWith('session:')
+      ) {
+        void loadApplyRecordRef.current({ applyId: restoredActiveTab.state.applyId })
+      }
       setCurrentMessages(opened.messages)
       setHasMoreMessagesBefore(opened.hasMoreBefore)
       hydrateSessionView(opened.messages, opened.activeRuns, opened.activeRuns)
@@ -1377,7 +1673,6 @@ const ChatPage: React.FC = () => {
       if (list.length === 0) {
         setModelListsByConfigId({})
         setModelSelection({ mainModel: null, visionModel: null })
-        writeWorkbenchModelPreference(window.localStorage, null)
         return
       }
 
@@ -1395,7 +1690,6 @@ const ChatPage: React.FC = () => {
       const nextLists = Object.fromEntries(entries)
       setModelListsByConfigId(nextLists)
 
-      const preference = readWorkbenchModelPreference(window.localStorage)
       const resolveModel = (
         model: WorkbenchModelSelection['mainModel']
       ): WorkbenchModelSelection['mainModel'] => {
@@ -1422,40 +1716,137 @@ const ChatPage: React.FC = () => {
             }
           : null
       const nextSelection: WorkbenchModelSelection = {
-        mainModel: resolveModel(preference?.mainModel || null) || firstModel,
-        visionModel: resolveModel(preference?.visionModel || null)
+        mainModel: resolveModel(modelSelectionRef.current.mainModel) || firstModel,
+        visionModel: resolveModel(modelSelectionRef.current.visionModel)
       }
+      modelSelectionRef.current = nextSelection
       setModelSelection(nextSelection)
-      writeWorkbenchModelPreference(
-        window.localStorage,
-        nextSelection.mainModel ? nextSelection : null
-      )
     } catch (error) {
       console.error('Failed to load llm configs', error)
       setModelConfigs([])
       setModelListsByConfigId({})
       setModelSelection({ mainModel: null, visionModel: null })
+    } finally {
+      setModelCatalogLoaded(true)
     }
   }, [])
 
+  useEffect(() => {
+    const key = currentSessionIdRef.current || '__draft__'
+    if (!modelCatalogLoaded || uiStateReadyKeyRef.current !== key) return
+    const resolveModel = (
+      selected: WorkbenchModelSelection['mainModel']
+    ): WorkbenchModelSelection['mainModel'] => {
+      if (!selected) return null
+      const remote = modelListsByConfigId[selected.configId]?.find(
+        (item) => item.id === selected.modelName
+      )
+      return remote
+        ? { ...selected, structuredOutput: remote.structuredOutput }
+        : null
+    }
+    const firstConfig = modelConfigs.find((config) => modelListsByConfigId[config.id]?.length)
+    const firstRemote = firstConfig ? modelListsByConfigId[firstConfig.id]?.[0] : undefined
+    const fallback =
+      firstConfig && firstRemote
+        ? {
+            configId: firstConfig.id,
+            modelName: firstRemote.id,
+            structuredOutput: firstRemote.structuredOutput
+          }
+        : null
+    const nextSelection: WorkbenchModelSelection = {
+      mainModel: resolveModel(modelSelection.mainModel) || fallback,
+      visionModel: resolveModel(modelSelection.visionModel)
+    }
+    if (JSON.stringify(nextSelection) === JSON.stringify(modelSelection)) return
+    modelSelectionRef.current = nextSelection
+    setModelSelection(nextSelection)
+    void persistUiStateForKey(key, {
+      ...buildUiStateForKey(key),
+      composer: { ...buildUiStateForKey(key).composer, modelSelection: nextSelection }
+    })
+  }, [
+    buildUiStateForKey,
+    modelCatalogLoaded,
+    modelConfigs,
+    modelListsByConfigId,
+    modelSelection,
+    persistUiStateForKey
+  ])
+
+  useEffect(() => {
+    const key = currentSessionIdRef.current || '__draft__'
+    if (
+      !workspacesLoaded ||
+      uiStateReadyKeyRef.current !== key ||
+      !selectedWorkspaceId ||
+      workspaces.some((workspace) => workspace.id === selectedWorkspaceId)
+    ) {
+      return
+    }
+    selectedWorkspaceIdRef.current = null
+    setSelectedWorkspaceId(null)
+    const state = buildUiStateForKey(key)
+    void persistUiStateForKey(key, {
+      ...state,
+      composer: { ...state.composer, workspaceId: null }
+    })
+  }, [
+    buildUiStateForKey,
+    persistUiStateForKey,
+    selectedWorkspaceId,
+    workspaces,
+    workspacesLoaded
+  ])
+
+  useEffect(() => {
+    const key = currentSessionIdRef.current || '__draft__'
+    if (uiStateReadyKeyRef.current !== key || attachments.length === 0) return
+    let cancelled = false
+    const snapshot = attachments
+    void Promise.all(
+      snapshot.map(async (attachment) => ({
+        attachment,
+        exists: await window.api.fileExists(attachment.path)
+      }))
+    ).then((checked) => {
+      if (cancelled || (currentSessionIdRef.current || '__draft__') !== key) return
+      const missingIds = new Set(
+        checked.filter((item) => !item.exists).map((item) => item.attachment.id)
+      )
+      if (missingIds.size === 0) return
+      setAttachments((current) => current.filter((attachment) => !missingIds.has(attachment.id)))
+      if (!missingAttachmentNotifiedRef.current.has(key)) {
+        missingAttachmentNotifiedRef.current.add(key)
+        message.warning('部分附件文件已不存在，已从当前会话移除')
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [attachments, message])
+
   const handleModelSelectionChange = useCallback((selection: WorkbenchModelSelection): void => {
+    modelSelectionRef.current = selection
     setModelSelection(selection)
-    writeWorkbenchModelPreference(window.localStorage, selection.mainModel ? selection : null)
   }, [])
 
   const handleModeChange = useCallback(
     (mode: WorkbenchMode): void => {
+      composerModeRef.current = mode
       setComposerMode(mode)
     },
     [setComposerMode]
   )
 
   const handleAiPreferenceChange = useCallback((preference: WorkbenchAiPreference): void => {
+    composerAiPreferenceRef.current = preference
     setComposerAiPreference(preference)
-    writeWorkbenchAiPreference(window.localStorage, preference)
   }, [])
 
   const handleWorkspaceChange = useCallback((workspaceId: string | null): void => {
+    selectedWorkspaceIdRef.current = workspaceId
     setSelectedWorkspaceId(workspaceId)
   }, [])
 
@@ -1484,9 +1875,17 @@ const ChatPage: React.FC = () => {
   }, [])
 
   const createNewSession = useCallback(
-    (workspaceId?: string): void => {
-      saveComposerDraftForSession(currentSessionIdRef.current, composerDraftValueRef.current)
+    async (workspaceId?: string): Promise<void> => {
+      await flushCurrentUiState()
+      const previousDraftWorkspace = tabWorkspacesRef.current.__draft__
+      for (const tab of previousDraftWorkspace?.tabs || []) {
+        if (tab.kind === 'browser' && tab.browserTabId) {
+          void window.api.browserTabClose({ tabId: tab.browserTabId })
+        }
+      }
       sessionSwitchRequestRef.current += 1
+      uiStateReadyKeyRef.current = null
+      setUiStateReadyKey(null)
       currentSessionIdRef.current = null
       setCurrentSessionId(null)
       setSwitchingSessionId(null)
@@ -1505,22 +1904,18 @@ const ChatPage: React.FC = () => {
       setApprovalSubmitting(false)
       setPendingUserTakeover(null)
       setUserTakeoverConfirming(false)
-      setSelectedWorkspaceId(workspaceId || null)
-      applyComposerDraft(createEmptyComposerDraft(), `draft:${workspaceId || 'none'}`)
-      setTabWorkspaces((current) => ({
-        ...current,
-        __draft__: EMPTY_TAB_WORKSPACE
-      }))
-      setContentPanel(createEmptyPanel())
+      const draftState = createDefaultSessionUiState(modelSelectionRef.current, workspaceId || null)
+      persistedDraftStateRef.current = draftState
+      applySessionUiState('__draft__', draftState, workspaceId || null)
       setBrowserPresentationEnabled(false)
       void window.api.browserPanelHide()
-      setContentPanelCollapsed(true)
       resetApplyWorkspaceState()
       setFileChangeRecords([])
       fileChangeRunScopeRef.current = null
       void refreshContextUsage(null)
+      await window.api.workbenchUiStateSave({ activeViewKey: '__draft__', draftState })
     },
-    [applyComposerDraft, refreshContextUsage, saveComposerDraftForSession]
+    [applySessionUiState, flushCurrentUiState, refreshContextUsage]
   )
 
   const loadApplyRecord = async (input: {
@@ -1709,77 +2104,28 @@ const ChatPage: React.FC = () => {
   ): Promise<void> => {
     if (session.id === currentSessionIdRef.current && !switchingSessionId) return
 
-    if (options?.saveCurrentDraft !== false) {
-      saveComposerDraftForSession(currentSessionIdRef.current, composerDraftValueRef.current)
-    }
+    if (options?.saveCurrentDraft !== false) await flushCurrentUiState()
 
     const requestId = sessionSwitchRequestRef.current + 1
-    const restoreExpandedPanel = tabWorkspaces[session.id]?.panelCollapsed === false
     sessionSwitchRequestRef.current = requestId
+    uiStateReadyKeyRef.current = null
+    setUiStateReadyKey(null)
     currentSessionIdRef.current = session.id
 
     setCurrentSessionId(session.id)
+    selectedWorkspaceIdRef.current = session.workspace_id
     setSelectedWorkspaceId(session.workspace_id)
     setSwitchingSessionId(session.id)
-    setCurrentMessages([])
-    setAssistantTurns({})
-    assistantArtifactsRef.current = {}
-    activeRunMessageIdsRef.current = {}
-    setHasMoreMessagesBefore(false)
-    setLoadingOlderMessages(false)
-    setLoading(false)
-    setAiRunId(null)
-    setCancellingRun(false)
-    applyComposerDraft(
-      composerDraftBySessionIdRef.current[session.id] || createEmptyComposerDraft(),
-      `session:${session.id}`
-    )
-    setPendingApprovalBatch(null)
-    setApprovalCurrentIndex(0)
-    setApprovalDraftDecisions({})
-    setApprovalSubmitting(false)
-    setPendingUserTakeover(null)
-    setUserTakeoverConfirming(false)
-    setContentPanel(createEmptyPanel())
     setBrowserPresentationEnabled(false)
     void window.api.browserPanelHide()
     restoreContentPanelWithoutAnimationRef.current = false
-    setContentPanelCollapsed(!restoreExpandedPanel)
-    if (restoreExpandedPanel) {
-      restoreContentPanelWithoutAnimationRef.current = true
-      setContentPanelShellMounted(true)
-      setContentPanelShellVisible(true)
-    }
     resetApplyWorkspaceState()
 
-    void loadSessionOpen(session.id, requestId).then(() => {
-      if (sessionSwitchRequestRef.current !== requestId) return
-      const savedWorkspace = tabWorkspaces[session.id]
-      const activeTab = savedWorkspace?.tabs.find((tab) => tab.id === savedWorkspace.activeTabId)
-      if (!activeTab) {
-        setContentPanel(createEmptyPanel())
-        setPanelCollapsedForSession(session.id, true)
-        setContentPanelCollapsed(true)
-        resetApplyWorkspaceState()
-        return
-      }
-      setContentPanel(activeTab.state)
-      if (restoreExpandedPanel) {
-        setContentPanelShellMounted(true)
-        setContentPanelShellVisible(true)
-        setContentPanelCollapsed(false)
-        setBrowserPresentationEnabled(true)
-      } else {
-        setContentPanelCollapsed(true)
-      }
-      if (
-        activeTab.state.kind === 'apply_workspace' &&
-        activeTab.state.applyId &&
-        !activeTab.state.applyId.startsWith('session:')
-      ) {
-        void loadApplyRecordRef.current({ applyId: activeTab.state.applyId })
-      }
+    await window.api.workbenchUiStateSave({
+      activeViewKey: session.id,
+      draftState: persistedDraftStateRef.current
     })
+    void loadSessionOpen(session.id, requestId)
     setFileChangeRecords([])
     fileChangeRunScopeRef.current = null
     void hydrateFileChangeTargetsForSession(session.id)
@@ -1789,11 +2135,24 @@ const ChatPage: React.FC = () => {
   const adoptCreatedSession = (session: ChatSession): void => {
     sessionSwitchRequestRef.current += 1
     currentSessionIdRef.current = session.id
+    const draftWorkspace = tabWorkspacesRef.current.__draft__ || EMPTY_TAB_WORKSPACE
+    const nextTabWorkspaces = { ...tabWorkspacesRef.current, [session.id]: draftWorkspace }
+    delete nextTabWorkspaces.__draft__
+    tabWorkspacesRef.current = nextTabWorkspaces
+    setTabWorkspaces(nextTabWorkspaces)
+    if (panelFallbackByKeyRef.current.__draft__) {
+      panelFallbackByKeyRef.current[session.id] = panelFallbackByKeyRef.current.__draft__
+      delete panelFallbackByKeyRef.current.__draft__
+    }
+    uiStateReadyKeyRef.current = session.id
+    setUiStateReadyKey(session.id)
+    persistedDraftStateRef.current = null
     setSessions((items) => [
       { ...session, isRunning: false, hasUnreadCompletion: false },
       ...items.filter((item) => item.id !== session.id)
     ])
     setCurrentSessionId(session.id)
+    selectedWorkspaceIdRef.current = session.workspace_id
     setSelectedWorkspaceId(session.workspace_id)
     setSwitchingSessionId(null)
     setHasMoreMessagesBefore(false)
@@ -1850,14 +2209,31 @@ const ChatPage: React.FC = () => {
   }, [loadSessions, sessions])
 
   useEffect(() => {
-    void loadSessions().then((list) => {
+    void (async () => {
+      const [, , list, workbenchStateResponse] = await Promise.all([
+        loadWorkspaces(),
+        loadModelConfigs(),
+        loadSessions(),
+        window.api.workbenchUiStateGet()
+      ])
       if (sessionListHydratedRef.current) return
       sessionListHydratedRef.current = true
+      const workbenchState = workbenchStateResponse.state
+      persistedDraftStateRef.current = workbenchState.draftState
+      const savedSession = list.find((item) => item.id === workbenchState.activeViewKey)
+      if (savedSession) {
+        await openExistingSession(savedSession, { saveCurrentDraft: false })
+        return
+      }
+      if (workbenchState.activeViewKey === '__draft__' || list.length === 0) {
+        currentSessionIdRef.current = null
+        setCurrentSessionId(null)
+        applySessionUiState('__draft__', workbenchState.draftState)
+        return
+      }
       const firstSession = list[0]
-      if (firstSession) void openExistingSession(firstSession, { saveCurrentDraft: false })
-    })
-    void loadWorkspaces()
-    void loadModelConfigs()
+      if (firstSession) await openExistingSession(firstSession, { saveCurrentDraft: false })
+    })()
     // Initial bootstrap is intentionally explicit. Later list refreshes must not reopen sessions.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -2288,6 +2664,18 @@ const ChatPage: React.FC = () => {
         return
       }
 
+      if (eventSessionId !== currentSessionIdRef.current) {
+        if (event.type === 'tool_call_result') {
+          const searchResults = extractSearchResultsFromToolOutput(event.result?.data ?? null)
+          if (eventSessionId && searchResults.length > 0) {
+            persistBackgroundSearchResults(eventSessionId, event.toolName, searchResults)
+          }
+        } else if (event.type === 'browser_panel_opened' && eventSessionId) {
+          persistBackgroundBrowserTab(eventSessionId, event.browserTabId)
+        }
+        return
+      }
+
       if (event.type === 'run_started') {
         setAiRunId(event.runId)
       }
@@ -2506,21 +2894,13 @@ const ChatPage: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentSessionId, loadSessions, message, refreshContextUsage, setSessionRunningState])
 
-  const createDraftSessionForSubmit = async (
-    workspace: WorkspaceSource
-  ): Promise<ChatSession | null> => {
-    const nextSession: ChatSession = {
+  const createDraftSessionForSubmit = (workspace: WorkspaceSource): ChatSession => {
+    return {
       id: crypto.randomUUID(),
       title: '新对话',
       created_at: Date.now(),
       workspace_id: workspace.id
     }
-    const response = await window.api.chatSessionSave(nextSession)
-    if (!response.success) {
-      emitErrorMessage(response.error || '创建会话失败')
-      return null
-    }
-    return nextSession
   }
 
   const ensureAttachmentTarget = useCallback(async (): Promise<{
@@ -2581,7 +2961,6 @@ const ChatPage: React.FC = () => {
         workspace_id: selectedWorkspace.id
       }
       submitSessionId = createdSession.id
-      adoptCreatedSession(createdSession)
     }
     const optimisticUserMessage: ChatMessage = {
       id: `local-user-${crypto.randomUUID()}`,
@@ -2671,11 +3050,13 @@ const ChatPage: React.FC = () => {
     submitInFlightRef.current = true
     try {
       if (createdSession) {
+        await flushCurrentUiState()
         const sessionResponse = await window.api.chatSessionSave(createdSession)
         if (!sessionResponse.success) {
           failOptimisticSubmit(sessionResponse.error || '创建会话失败')
           return
         }
+        adoptCreatedSession(createdSession)
       }
 
       const response = await window.api.chatSubmit({
@@ -2754,8 +3135,7 @@ const ChatPage: React.FC = () => {
     let submitSessionId = currentSessionId
     let createdSession: ChatSession | null = null
     if (!submitSessionId) {
-      createdSession = await createDraftSessionForSubmit(selectedWorkspace)
-      if (!createdSession) return
+      createdSession = createDraftSessionForSubmit(selectedWorkspace)
       submitSessionId = createdSession.id
     }
 
@@ -2772,6 +3152,14 @@ const ChatPage: React.FC = () => {
     setUserTakeoverConfirming(false)
 
     try {
+      if (createdSession) {
+        await flushCurrentUiState()
+        const sessionResponse = await window.api.chatSessionSave(createdSession)
+        if (!sessionResponse.success) {
+          emitErrorMessage(sessionResponse.error || '创建会话失败')
+          return
+        }
+      }
       const response = await window.api.chatSubmit({
         mode: 'search',
         sessionId: submitSessionId,
@@ -2792,9 +3180,7 @@ const ChatPage: React.FC = () => {
       setCurrentMessages((previous) =>
         appendMessagesDedupe(previous, [response.userMessage, response.assistantMessage])
       )
-      if (createdSession) {
-        adoptCreatedSession(createdSession)
-      }
+      if (createdSession) adoptCreatedSession(createdSession)
       setAssistantTurns((previous) => ({
         ...previous,
         [completedAssistantMessageId]: {

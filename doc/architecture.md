@@ -70,6 +70,7 @@ Storage 负责本地持久化：
 - `SqliteCore` 负责 SQLite 连接、PRAGMA 和 migration。
 - `LanceDbCore` 只负责 `vector_chunk` 表初始化、搜索和维护。
 - 各领域 Store 负责对应业务数据读写。
+- `WorkbenchUiStore` 保存会话 Composer、右侧面板、最后活动会话和未发送草稿；`BrowserTabStateStore` 保存浏览器标签的可恢复状态。
 
 ### Retrieval
 
@@ -80,6 +81,8 @@ Retrieval 负责文档索引、向量检索、全文检索和结果融合。检�
 Tool Runtime 为 AI 提供文件、终端、浏览器等本地能力。工具实现位于 Main，由各领域服务负责具体操作；通用安全边界、审批和工作区变化追踪由运行时统一处理。
 
 内置浏览器由 Electron `WebContentsView` 承载，Stagehand 通过仅绑定本机回环地址的随机 CDP endpoint 精确连接对应 Tab，不依赖固定端口或 URL 猜测页面。
+
+Workbench 的当前交互状态由 Renderer 管理，并按会话串行写入 SQLite。切换会话时，Main 一次返回消息、运行快照和 UI 快照；Renderer 完成加载后原子替换画面。浏览器服务按 `ownerId` 管理运行期 `WebContentsView`，同时把 URL、历史、缩放和顺序写入 SQLite。正常退出前 Main 会请求 Renderer 强制 flush，再释放浏览器和其他服务。
 
 开发版默认使用独立的 `*-dev` user-data 目录，避免和安装版共享数据库、实例锁或 `DevToolsActivePort`；E2E
 可以通过 `NCURATOR_USER_DATA_PATH` 显式提供隔离目录。
@@ -160,6 +163,7 @@ AI 结构化调用按配置和模型记忆成功策略；能力不支持、解�
 存储架构遵循一个原则：业务状态只有一个真相。
 
 - SQLite 保存业务状态和元数据。
+- Workbench 会话 UI 快照和浏览器可恢复状态也以 SQLite 为唯一持久化真相；`localStorage` 只保留侧栏宽度等全局界面设置。
 - LanceDB 保存可重建索引。
 - 业务查询先经过 SQLite 确认有效范围，再进入 LanceDB 检索。
 - 详细数据库设计见 `doc/database.md`。

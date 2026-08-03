@@ -5,9 +5,7 @@ import type {
   IpcJsonObject,
   IpcJsonValue,
   RuntimeSkillId,
-  SearchResult,
-  WorkbenchSelectedModel,
-  WorkspaceSource
+  SearchResult
 } from '../../../../shared/types'
 import {
   RUNTIME_TOOL_CATALOG,
@@ -20,12 +18,6 @@ import {
   getAssistantToolSummaryText as getToolSummaryText,
   getAssistantToolUiKind as getToolUiKind
 } from '../../../../shared/assistantExecutionSummary'
-import {
-  WORKBENCH_PREFERENCE_AI_PREFERENCE_STORAGE_KEY,
-  WORKBENCH_PREFERENCE_MODE_STORAGE_KEY,
-  WORKBENCH_PREFERENCE_MODEL_STORAGE_KEY,
-  WORKBENCH_PREFERENCE_WORKSPACE_STORAGE_KEY
-} from './constants'
 import type {
   AssistantProcessGroup,
   AssistantProcessGroupItem,
@@ -35,11 +27,7 @@ import type {
   AssistantProcessStatus,
   AssistantRichTextSegment,
   AssistantToolName,
-  WorkbenchAiPreference,
-  WorkbenchFileRef,
-  WorkbenchMode,
-  WorkbenchModelPreference,
-  WorkbenchPreferenceStorage
+  WorkbenchFileRef
 } from './types'
 
 const getPageNumberFromMetadata = (metadata: SearchResult['metadata']): number | undefined => {
@@ -58,12 +46,6 @@ const getPageNumberFromMetadata = (metadata: SearchResult['metadata']): number |
 const isIpcJsonObject = (value: IpcJsonValue): value is IpcJsonObject => {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
-
-const isWorkbenchMode = (value: string | null): value is WorkbenchMode =>
-  value === 'ai' || value === 'search'
-
-const isWorkbenchAiPreference = (value: string | null): value is WorkbenchAiPreference =>
-  value === 'default' || value === 'local_sources_relaxed' || value === 'local_sources_strict'
 
 const readStringField = (value: IpcJsonObject, key: string): string | undefined => {
   const record = value as Record<string, IpcJsonValue>
@@ -865,93 +847,4 @@ export const formatRelativeTime = (timestamp: number): string => {
     return `${hours}小时`
   }
   return `${days}天`
-}
-
-export const readWorkbenchModePreference = (storage: WorkbenchPreferenceStorage): WorkbenchMode => {
-  const stored = storage.getItem(WORKBENCH_PREFERENCE_MODE_STORAGE_KEY)
-  return isWorkbenchMode(stored) ? stored : 'ai'
-}
-
-export const writeWorkbenchModePreference = (
-  storage: WorkbenchPreferenceStorage,
-  mode: WorkbenchMode
-): void => {
-  storage.setItem(WORKBENCH_PREFERENCE_MODE_STORAGE_KEY, mode)
-}
-
-export const readWorkbenchAiPreference = (
-  storage: WorkbenchPreferenceStorage
-): WorkbenchAiPreference => {
-  const stored = storage.getItem(WORKBENCH_PREFERENCE_AI_PREFERENCE_STORAGE_KEY)
-  return isWorkbenchAiPreference(stored) ? stored : 'default'
-}
-
-export const writeWorkbenchAiPreference = (
-  storage: WorkbenchPreferenceStorage,
-  preference: WorkbenchAiPreference
-): void => {
-  storage.setItem(WORKBENCH_PREFERENCE_AI_PREFERENCE_STORAGE_KEY, preference)
-}
-
-export const readWorkbenchWorkspacePreference = (
-  storage: WorkbenchPreferenceStorage
-): string | null => {
-  const stored = storage.getItem(WORKBENCH_PREFERENCE_WORKSPACE_STORAGE_KEY)
-  return stored && stored.trim() ? stored : null
-}
-
-export const writeWorkbenchWorkspacePreference = (
-  storage: WorkbenchPreferenceStorage,
-  workspaceId: string | null
-): void => {
-  if (!workspaceId) {
-    storage.removeItem(WORKBENCH_PREFERENCE_WORKSPACE_STORAGE_KEY)
-    return
-  }
-  storage.setItem(WORKBENCH_PREFERENCE_WORKSPACE_STORAGE_KEY, workspaceId)
-}
-
-export const resolveWorkbenchWorkspaceSelection = (
-  workspaces: WorkspaceSource[],
-  preferredWorkspaceId: string | null
-): string | null => {
-  if (
-    preferredWorkspaceId &&
-    workspaces.some((workspace) => workspace.id === preferredWorkspaceId)
-  ) {
-    return preferredWorkspaceId
-  }
-  return null
-}
-
-export const readWorkbenchModelPreference = (
-  storage: WorkbenchPreferenceStorage
-): WorkbenchModelPreference | null => {
-  const raw = storage.getItem(WORKBENCH_PREFERENCE_MODEL_STORAGE_KEY)
-  if (!raw) return null
-  try {
-    const parsed = JSON.parse(raw) as {
-      mainModel?: WorkbenchSelectedModel | null
-      visionModel?: WorkbenchSelectedModel | null
-    }
-    if (!parsed.mainModel?.configId || !parsed.mainModel.modelName) return null
-    return {
-      mainModel: parsed.mainModel,
-      visionModel:
-        parsed.visionModel?.configId && parsed.visionModel.modelName ? parsed.visionModel : null
-    }
-  } catch {
-    return null
-  }
-}
-
-export const writeWorkbenchModelPreference = (
-  storage: WorkbenchPreferenceStorage,
-  preference: WorkbenchModelPreference | null
-): void => {
-  if (!preference) {
-    storage.removeItem(WORKBENCH_PREFERENCE_MODEL_STORAGE_KEY)
-    return
-  }
-  storage.setItem(WORKBENCH_PREFERENCE_MODEL_STORAGE_KEY, JSON.stringify(preference))
 }

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { shell, webContents, WebContentsView } from 'electron'
-import type { BrowserWindow, NavigationEntry, Rectangle, WebContents } from 'electron'
+import type { BrowserWindow, Rectangle, WebContents } from 'electron'
 import { z } from 'zod/v4'
 import type { BrowserActionCandidate, BrowserUsePage, BrowserUseService } from '../ai/types'
 import {
@@ -14,23 +14,15 @@ import type { BrowserTabState } from '../../../shared/types'
 import { resolveStagehandRuntimeModel } from '../llm/stagehandModel'
 import { BrowserActionVisualizer } from './BrowserActionVisualizer'
 import { BrowserMenuWindowService } from './BrowserMenuWindowService'
+import type {
+  BrowserTabStateStore,
+  PersistedBrowserTabState
+} from '../storage/domains/BrowserTabStateStore'
 
 type StagehandModule = typeof import('@browserbasehq/stagehand')
 type StagehandInstance = InstanceType<StagehandModule['Stagehand']>
 
-type BrowserTabRecord = {
-  id: string
-  ownerId: string
-  title?: string
-  url: string
-  zoomFactor: number
-  history?: {
-    entries: NavigationEntry[]
-    index: number
-  }
-  createdAt: number
-  updatedAt: number
-}
+type BrowserTabRecord = PersistedBrowserTabState
 
 type BrowserTabRuntime = {
   persisted: BrowserTabRecord
@@ -38,6 +30,7 @@ type BrowserTabRuntime = {
   ready: Promise<void> | null
   attached: boolean
   visible: boolean
+  restoring: boolean
 }
 
 const EMPTY_BOUNDS: BrowserPanelBoundsState = {
@@ -117,6 +110,7 @@ const clampZoomFactor = (value: number): number =>
 
 export class BrowserEmbedService implements BrowserUseService {
   private readonly tabs = new Map<string, BrowserTabRuntime>()
+  private readonly hydratedOwnerIds = new Set<string>()
   private activeTabId: string | null = null
   private presentedTabId: string | null = null
   private presentationId = 0
@@ -124,12 +118,14 @@ export class BrowserEmbedService implements BrowserUseService {
   private readonly menuWindowService: BrowserMenuWindowService
   public constructor(
     private readonly mainWindow: BrowserWindow,
-    private readonly cdpEndpointService: CdpEndpointService
+    private readonly cdpEndpointService: CdpEndpointService,
+    private readonly stateStore: BrowserTabStateStore
   ) {
     this.menuWindowService = new BrowserMenuWindowService(mainWindow)
   }
 
   public listTabs(ownerId: string): BrowserTabState[] {
+    this.hydrateOwner(ownerId)
     return [...this.tabs.values()]
       .filter((tab) => tab.persisted.ownerId === ownerId)
       .sort((left, right) => left.persisted.createdAt - right.persisted.createdAt)
@@ -137,12 +133,15 @@ export class BrowserEmbedService implements BrowserUseService {
   }
 
   public async createTab(ownerId: string): Promise<BrowserTabState> {
+    const normalizedOwnerId = String(ownerId || '').trim() || '__browser__'
+    this.hydrateOwner(normalizedOwnerId)
     const now = Date.now()
     const persisted: BrowserTabRecord = {
       id: randomUUID(),
-      ownerId: String(ownerId || '').trim() || '__browser__',
+      ownerId: normalizedOwnerId,
       url: '',
       zoomFactor: 1,
+      position: this.listTabs(normalizedOwnerId).length,
       createdAt: now,
       updatedAt: now
     }
@@ -151,15 +150,18 @@ export class BrowserEmbedService implements BrowserUseService {
       view: null,
       ready: null,
       attached: false,
-      visible: false
+      visible: false,
+      restoring: false
     }
     this.tabs.set(persisted.id, runtime)
+    this.stateStore.save(persisted)
     this.activeTabId = persisted.id
     this.applyAllVisibility()
     return this.toState(runtime)
   }
 
   public async ensureAutomationTab(ownerId: string): Promise<BrowserTabState> {
+    this.hydrateOwner(ownerId)
     const active = this.activeTabId ? this.tabs.get(this.activeTabId) : null
     if (active?.persisted.ownerId === ownerId) return this.toState(active)
     const existing = [...this.tabs.values()]
@@ -176,6 +178,7 @@ export class BrowserEmbedService implements BrowserUseService {
     const runtime = this.requireTab(tabId)
     this.activeTabId = tabId
     runtime.persisted.updatedAt = Date.now()
+    this.stateStore.save(runtime.persisted)
     this.applyAllVisibility()
     if (!runtime.view) void this.ensureReady(runtime)
     this.emitState(runtime)
@@ -190,6 +193,7 @@ export class BrowserEmbedService implements BrowserUseService {
       runtime.view.webContents.close()
     }
     this.tabs.delete(tabId)
+    this.stateStore.delete(tabId)
     if (this.activeTabId === tabId) this.activeTabId = null
     if (this.presentedTabId === tabId) {
       this.presentedTabId = null
@@ -198,10 +202,29 @@ export class BrowserEmbedService implements BrowserUseService {
   }
 
   public async closeOwnerTabs(ownerId: string): Promise<void> {
+    this.hydrateOwner(ownerId)
     const tabIds = [...this.tabs.values()]
       .filter((runtime) => runtime.persisted.ownerId === ownerId)
       .map((runtime) => runtime.persisted.id)
     for (const tabId of tabIds) await this.closeTab(tabId)
+    this.stateStore.deleteByOwner(ownerId)
+    this.hydratedOwnerIds.delete(ownerId)
+  }
+
+  public reassignOwner(fromOwnerId: string, toOwnerId: string): void {
+    const from = String(fromOwnerId || '').trim()
+    const to = String(toOwnerId || '').trim()
+    if (!from || !to || from === to) return
+    this.hydrateOwner(from)
+    for (const runtime of this.tabs.values()) {
+      if (runtime.persisted.ownerId !== from) continue
+      runtime.persisted.ownerId = to
+      runtime.persisted.updatedAt = Date.now()
+      this.stateStore.save(runtime.persisted)
+    }
+    this.stateStore.promoteOwner(from, to)
+    this.hydratedOwnerIds.delete(from)
+    this.hydratedOwnerIds.add(to)
   }
 
   public show(tabId: string): number {
@@ -210,6 +233,7 @@ export class BrowserEmbedService implements BrowserUseService {
     this.presentedTabId = tabId
     this.presentationId += 1
     runtime.persisted.updatedAt = Date.now()
+    this.stateStore.save(runtime.persisted)
     this.applyAllVisibility()
     if (!runtime.view || runtime.view.webContents.isDestroyed()) {
       runtime.view = null
@@ -359,6 +383,7 @@ export class BrowserEmbedService implements BrowserUseService {
   public async dispose(): Promise<void> {
     this.menuWindowService.dispose()
     for (const runtime of this.tabs.values()) {
+      this.captureRuntimeState(runtime)
       if (runtime.view && !runtime.view.webContents.isDestroyed()) runtime.view.webContents.close()
     }
     this.tabs.clear()
@@ -369,6 +394,24 @@ export class BrowserEmbedService implements BrowserUseService {
     const runtime = this.tabs.get(tabId)
     if (!runtime) throw new Error('browser tab not found')
     return runtime
+  }
+
+  private hydrateOwner(ownerId: string): void {
+    const normalizedOwnerId = String(ownerId || '').trim()
+    if (!normalizedOwnerId || this.hydratedOwnerIds.has(normalizedOwnerId)) return
+    const records = this.stateStore.listByOwner(normalizedOwnerId)
+    for (const persisted of records) {
+      if (this.tabs.has(persisted.id)) continue
+      this.tabs.set(persisted.id, {
+        persisted,
+        view: null,
+        ready: null,
+        attached: false,
+        visible: false,
+        restoring: false
+      })
+    }
+    this.hydratedOwnerIds.add(normalizedOwnerId)
   }
 
   private isCurrentPresentation(tabId: string, presentationId: number): boolean {
@@ -422,10 +465,17 @@ export class BrowserEmbedService implements BrowserUseService {
     view.webContents.setZoomFactor(clampZoomFactor(runtime.persisted.zoomFactor || 1))
     const history = runtime.persisted.history
     if (history?.entries.length) {
-      await view.webContents.navigationHistory.restore({
-        entries: history.entries,
-        index: history.index
-      })
+      runtime.restoring = true
+      try {
+        await view.webContents.navigationHistory.restore({
+          entries: history.entries,
+          index: history.index
+        })
+      } finally {
+        runtime.restoring = false
+      }
+      this.captureRuntimeState(runtime)
+      this.emitState(runtime)
       return
     }
     if (runtime.persisted.url) await loadWebContentsUrl(view.webContents, runtime.persisted.url)
@@ -471,11 +521,14 @@ export class BrowserEmbedService implements BrowserUseService {
     const current = runtime.view?.webContents.getZoomFactor() || runtime.persisted.zoomFactor || 1
     runtime.persisted.zoomFactor = clampZoomFactor(current + delta)
     runtime.view?.webContents.setZoomFactor(runtime.persisted.zoomFactor)
+    runtime.persisted.updatedAt = Date.now()
+    this.stateStore.save(runtime.persisted)
     this.emitState(runtime)
     return this.toState(runtime)
   }
 
   private captureRuntimeState(runtime: BrowserTabRuntime): void {
+    if (runtime.restoring) return
     const contents = runtime.view?.webContents
     if (!contents || contents.isDestroyed()) return
     runtime.persisted.url = contents.getURL()
@@ -489,6 +542,7 @@ export class BrowserEmbedService implements BrowserUseService {
         index: contents.navigationHistory.getActiveIndex()
       }
     }
+    this.stateStore.save(runtime.persisted)
   }
 
   private toState(runtime: BrowserTabRuntime): BrowserTabState {

@@ -6,17 +6,12 @@ import type {
   IpcJsonObject,
   RuntimeSkillId,
   SearchResult,
-  WorkbenchModelSelection,
   WorkspaceSource
 } from '../../../../shared/types'
 import type { RuntimeToolName } from '../../../../shared/runtimeCapabilities'
 
 export type WorkbenchMode = 'ai' | 'search'
 export type WorkbenchAiPreference = AiPreference
-
-export type WorkbenchPreferenceStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>
-
-export type WorkbenchModelPreference = WorkbenchModelSelection
 
 export type WorkbenchContextUsage = {
   contextWindowTokens: number

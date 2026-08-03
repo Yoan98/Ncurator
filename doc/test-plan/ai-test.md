@@ -113,6 +113,15 @@ AI unit / 辅助测试目录：
 
 ### 4.0 结构化输出策略与服务重试
 
+#### `structured-output-deepseek-official-fallback-live`
+
+- 测试类型：`backend`，`human / live`
+- What：使用 DeepSeek 官方接口验证 `completions/json_schema` 首选失败后降级到 `completions/json_object`，并在新的 run 中复用保存的策略。
+- Why：兼容 OpenAI 协议的模型可能接受请求但不支持 `json_schema`；必须用真实 400 响应验证降级和首选策略持久化。
+- How：使用 `.env` 中 `AI_STRUCTURED_FALLBACK_*` 配置，预先保存 `json_schema` 首选，真实调用两次结构化请求并检查活动事件、偏好存储和第二次请求的策略链。
+- Oracle：第一次请求的 `fallbackStrategies` 为 `json_schema -> json_object`；两次输出均通过 Schema；偏好表保存 `json_object`；第二次请求只使用 `json_object`。
+- Not：不把 DeepSeek 的能力声明写死到通用 provider 逻辑，也不替代通用 mock 单元测试。
+
 ### 4.1 `tool`
 
 #### docx 类别

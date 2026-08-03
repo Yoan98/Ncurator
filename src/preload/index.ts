@@ -236,6 +236,7 @@ const api: DesktopApi = {
   },
   getEmbeddingStatus: () => ipcRenderer.invoke('get-embedding-status'),
   readFile: (filePath: string): Promise<Uint8Array> => ipcRenderer.invoke('read-file', filePath),
+  fileExists: (filePath: string): Promise<boolean> => ipcRenderer.invoke('file-exists', filePath),
   attachmentPick: (payload) => {
     emitE2EIpcCall('attachmentPick')
     return ipcRenderer.invoke('attachment-pick', payload)
@@ -252,6 +253,9 @@ const api: DesktopApi = {
   chatSessionDelete: (id: string) => ipcRenderer.invoke('chat-session-delete', id),
   chatMessageList: (sessionId: string) => ipcRenderer.invoke('chat-message-list', sessionId),
   chatSessionOpen: (payload) => ipcRenderer.invoke('chat-session-open', payload),
+  chatSessionUiStateSave: (payload) => ipcRenderer.invoke('chat-session-ui-state-save', payload),
+  workbenchUiStateGet: () => ipcRenderer.invoke('workbench-ui-state-get'),
+  workbenchUiStateSave: (payload) => ipcRenderer.invoke('workbench-ui-state-save', payload),
   chatSessionRunSummaries: (payload) => ipcRenderer.invoke('chat-session-run-summaries', payload),
   chatRunEventsGet: (payload) => ipcRenderer.invoke('chat-run-events-get', payload),
   chatSessionSnapshotGet: (payload) => ipcRenderer.invoke('chat-session-snapshot-get', payload),
@@ -432,6 +436,17 @@ const api: DesktopApi = {
     }
     return () => {
       systemNotificationSessionListeners.delete(cb)
+    }
+  },
+  onWorkbenchUiFlushRequest: (cb: () => void | Promise<void>) => {
+    const listener = (_event: Electron.IpcRendererEvent, requestId: string): void => {
+      void Promise.resolve(cb()).finally(() => {
+        ipcRenderer.send('workbench-ui-flush-complete', requestId)
+      })
+    }
+    ipcRenderer.on('workbench-ui-flush-request', listener)
+    return () => {
+      ipcRenderer.removeListener('workbench-ui-flush-request', listener)
     }
   },
   onBrowserPanelStateChange: (cb: (state: BrowserPanelState) => void) => {

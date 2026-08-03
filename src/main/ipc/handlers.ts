@@ -47,6 +47,8 @@ import type {
   ChatSessionSnapshotResponse,
   ChatSessionOpenRequest,
   ChatSessionOpenResponse,
+  ChatSessionUiStateSaveRequest,
+  ChatSessionUiStateSaveResponse,
   ChatSessionRunSummariesRequest,
   ChatSessionRunSummariesResponse,
   ChatSubmitRequest,
@@ -78,6 +80,8 @@ import type {
   BrowserTabCreateResponse,
   BrowserTabListRequest,
   BrowserTabListResponse,
+  WorkbenchUiStateResponse,
+  WorkbenchUiStateSaveRequest,
   BrowserTabMutationRequest,
   BrowserTabNavigateRequest,
   GetDocxApplyRecordRequest,
@@ -219,6 +223,7 @@ export function registerHandlers(services: {
   const activeWorkspaceIndexJobs = new Set<string>()
   const documentsStore = storageService.documents
   const chatStore = storageService.chat
+  const workbenchUiStore = storageService.workbenchUi
   const aiRunStore = storageService.aiRun
   const llmStore = storageService.llm
   const llmStrategyPreferenceStore = storageService.llmStrategyPreference
@@ -2210,6 +2215,11 @@ export function registerHandlers(services: {
     }
   })
 
+  ipcMain.handle('file-exists', (_event, filePath: string): boolean => {
+    const normalizedPath = String(filePath || '').trim()
+    return Boolean(normalizedPath) && fs.existsSync(normalizedPath)
+  })
+
   ipcMain.handle('download-model', async (_event, repoId: string) => {
     try {
       return await vectorModelDownloadService.startDownload(repoId)
@@ -2684,13 +2694,64 @@ export function registerHandlers(services: {
 
   ipcMain.handle('chat-session-save', async (_event, session: ChatSession) => {
     try {
-      await chatStore.saveChatSession(session)
+      const existing = await chatStore.getChatSession(session.id)
+      if (existing) {
+        await chatStore.saveChatSession(session)
+      } else {
+        await chatStore.saveChatSessionFromWorkbenchDraft(session)
+        browserEmbedService?.reassignOwner('__draft__', session.id)
+      }
       return { success: true }
     } catch (e: unknown) {
       console.error('[CHAT-SESSION-SAVE] Error:', e)
       return { success: false, error: getErrorMessage(e) }
     }
   })
+
+  ipcMain.handle(
+    'chat-session-ui-state-save',
+    async (
+      _event,
+      payload: ChatSessionUiStateSaveRequest
+    ): Promise<ChatSessionUiStateSaveResponse> => {
+      try {
+        const updatedAt = await workbenchUiStore.saveSessionState(payload.sessionId, payload.state)
+        return { success: true, updatedAt }
+      } catch (e: unknown) {
+        console.error('[CHAT-SESSION-UI-STATE-SAVE] Error:', e)
+        return { success: false, error: getErrorMessage(e) }
+      }
+    }
+  )
+
+  ipcMain.handle('workbench-ui-state-get', async (): Promise<WorkbenchUiStateResponse> => {
+    try {
+      return { success: true, state: await workbenchUiStore.getWorkbenchState() }
+    } catch (e: unknown) {
+      console.error('[WORKBENCH-UI-STATE-GET] Error:', e)
+      return {
+        success: false,
+        state: { activeViewKey: null, draftState: null, updatedAt: 0 },
+        error: getErrorMessage(e)
+      }
+    }
+  })
+
+  ipcMain.handle(
+    'workbench-ui-state-save',
+    async (_event, payload: WorkbenchUiStateSaveRequest): Promise<WorkbenchUiStateResponse> => {
+      try {
+        return { success: true, state: await workbenchUiStore.saveWorkbenchState(payload) }
+      } catch (e: unknown) {
+        console.error('[WORKBENCH-UI-STATE-SAVE] Error:', e)
+        return {
+          success: false,
+          state: { activeViewKey: null, draftState: null, updatedAt: 0 },
+          error: getErrorMessage(e)
+        }
+      }
+    }
+  )
 
   ipcMain.handle('chat-session-mark-viewed', async (_event, id: string) => {
     try {
@@ -2726,7 +2787,11 @@ export function registerHandlers(services: {
     'chat-session-open',
     async (_event, payload: ChatSessionOpenRequest): Promise<ChatSessionOpenResponse> => {
       try {
-        return await chatRunService.openSession(payload)
+        const [opened, uiState] = await Promise.all([
+          chatRunService.openSession(payload),
+          workbenchUiStore.getSessionState(payload.sessionId)
+        ])
+        return { ...opened, ...(uiState ? { uiState } : {}) }
       } catch (e: unknown) {
         console.error('[CHAT-SESSION-OPEN] Error:', e)
         return { messages: [], hasMoreBefore: false, activeRuns: [] }

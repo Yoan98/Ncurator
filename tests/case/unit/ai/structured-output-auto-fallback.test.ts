@@ -347,6 +347,51 @@ describe('ai unit structured output auto fallback', () => {
     expect(callOrder).toEqual(['responses/prompt_json'])
   })
 
+  it('falls back from a preferred strategy that returns invalid JSON', async () => {
+    const callOrder: string[] = []
+    configureCreateChatModel(
+      {
+        'completions/prompt_json': {
+          type: 'success',
+          rawText: 'not json'
+        },
+        'completions/json_schema': {
+          type: 'error',
+          error: Object.assign(new Error('This response_format type is unavailable now'), {
+            status: 400
+          })
+        },
+        'completions/json_object': {
+          type: 'success',
+          rawText: JSON.stringify({ answer: 'from preferred fallback' })
+        }
+      },
+      callOrder
+    )
+
+    const result = await invokeStructuredChat({
+      ...baseInput,
+      cfg: {
+        ...compatibleCfg,
+        preferredTransport: 'completions',
+        preferredStructuredOutputMode: 'prompt_json'
+      }
+    })
+
+    expect(result.output).toEqual({ answer: 'from preferred fallback' })
+    expect(result.strategy).toEqual({ transport: 'completions', mode: 'json_object' })
+    expect(result.fallbackStrategies).toEqual([
+      { transport: 'completions', mode: 'prompt_json' },
+      { transport: 'completions', mode: 'json_schema' },
+      { transport: 'completions', mode: 'json_object' }
+    ])
+    expect(callOrder).toEqual([
+      'completions/prompt_json',
+      'completions/json_schema',
+      'completions/json_object'
+    ])
+  })
+
   it('does not downgrade retryable errors into strategy fallback', async () => {
     const callOrder: string[] = []
     configureCreateChatModel(

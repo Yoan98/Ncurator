@@ -43,6 +43,26 @@ const singleInstanceLock = process.env.NCURATOR_E2E_OBSERVER
 const shutdownCoordinator = new AppShutdownCoordinator()
 let quitAfterShutdown = false
 let shutdownRequested = false
+let rendererFlushSequence = 0
+
+const requestRendererWorkbenchFlush = async (window: BrowserWindow): Promise<void> => {
+  if (window.isDestroyed() || window.webContents.isDestroyed()) return
+  rendererFlushSequence += 1
+  const requestId = `workbench-flush-${rendererFlushSequence}`
+  await new Promise<void>((resolve) => {
+    const finish = (): void => {
+      ipcMain.removeListener('workbench-ui-flush-complete', handleComplete)
+      clearTimeout(timeout)
+      resolve()
+    }
+    const handleComplete = (_event: Electron.IpcMainEvent, completedRequestId: string): void => {
+      if (completedRequestId === requestId) finish()
+    }
+    ipcMain.on('workbench-ui-flush-complete', handleComplete)
+    const timeout = setTimeout(finish, 2_000)
+    window.webContents.send('workbench-ui-flush-request', requestId)
+  })
+}
 
 const prepareAppShutdown = async (): Promise<void> => {
   if (quitAfterShutdown) return
@@ -120,6 +140,15 @@ function createWindow(): BrowserWindow {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false
     }
+  })
+  let closeAfterRendererFlush = false
+  mainWindow.on('close', (event) => {
+    if (quitAfterShutdown || shutdownRequested || closeAfterRendererFlush) return
+    event.preventDefault()
+    void requestRendererWorkbenchFlush(mainWindow).finally(() => {
+      closeAfterRendererFlush = true
+      if (!mainWindow.isDestroyed()) mainWindow.close()
+    })
   })
 
   mainWindow.on('ready-to-show', () => {
@@ -235,7 +264,11 @@ if (!singleInstanceLock) {
     const cdpEndpointService = new CdpEndpointService({
       userDataPath: app.getPath('userData')
     })
-    const browserEmbedService = new BrowserEmbedService(mainWindow, cdpEndpointService)
+    const browserEmbedService = new BrowserEmbedService(
+      mainWindow,
+      cdpEndpointService,
+      storageService.browserTabs
+    )
     const telemetryService = new TelemetryService({
       userDataPath: app.getPath('userData'),
       appVersion: app.getVersion(),
@@ -289,6 +322,10 @@ if (!singleInstanceLock) {
     shutdownCoordinator.register({
       name: 'telemetry',
       dispose: () => telemetryService.flush()
+    })
+    shutdownCoordinator.register({
+      name: 'workbench-renderer-state',
+      dispose: () => requestRendererWorkbenchFlush(mainWindow)
     })
 
     vectorModelDownloadService

@@ -1,18 +1,11 @@
 import React, { useCallback, useMemo, useState } from 'react'
-import {
-  readWorkbenchModePreference,
-  writeWorkbenchModePreference
-} from '../components/workbench/utils'
 import type { WorkbenchMode } from '../components/workbench/types'
 import { WorkbenchModeContext } from './WorkbenchModeContext'
 
 export const WorkbenchModeProvider: React.FC<React.PropsWithChildren> = ({ children }) => {
-  const [mode, setModeState] = useState<WorkbenchMode>(() =>
-    readWorkbenchModePreference(window.localStorage)
-  )
+  const [mode, setModeState] = useState<WorkbenchMode>('ai')
 
   const setMode = useCallback((nextMode: WorkbenchMode): void => {
-    writeWorkbenchModePreference(window.localStorage, nextMode)
     setModeState(nextMode)
   }, [])
 

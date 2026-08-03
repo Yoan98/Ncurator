@@ -12,6 +12,8 @@ import { LlmStrategyPreferenceStore } from './domains/LlmStrategyPreferenceStore
 import { WebSourceStore } from './domains/WebSourceStore'
 import { WorkspaceIndexJobStore } from './domains/WorkspaceIndexJobStore'
 import { WorkspaceStore } from './domains/WorkspaceStore'
+import { WorkbenchUiStore } from './domains/WorkbenchUiStore'
+import { BrowserTabStateStore } from './domains/BrowserTabStateStore'
 import type { LegacyLocalImportMigrationStatus } from '../../../shared/types'
 
 export class StorageService {
@@ -31,6 +33,8 @@ export class StorageService {
   public readonly aiRuntimeSettings: AiRuntimeSettingsStore
   public readonly workspace: WorkspaceStore
   public readonly workspaceIndexJob: WorkspaceIndexJobStore
+  public readonly workbenchUi: WorkbenchUiStore
+  public readonly browserTabs: BrowserTabStateStore
   private legacyLocalImportMigrationStatus: LegacyLocalImportMigrationStatus | null = null
 
   public constructor(input: { dbPath?: string; sqlitePath?: string; vectorPath?: string } = {}) {
@@ -51,6 +55,8 @@ export class StorageService {
     this.aiRuntimeSettings = new AiRuntimeSettingsStore(this.sqlite)
     this.workspace = new WorkspaceStore(this.sqlite)
     this.workspaceIndexJob = new WorkspaceIndexJobStore(this.sqlite)
+    this.workbenchUi = new WorkbenchUiStore(this.sqlite)
+    this.browserTabs = new BrowserTabStateStore(this.sqlite)
   }
 
   public static getInstance(): StorageService {

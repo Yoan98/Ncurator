@@ -632,6 +632,95 @@ export interface ChatSessionListItem extends ChatSession {
   hasUnreadCompletion: boolean
 }
 
+export type ChatSessionUiMode = 'ai' | 'search'
+
+export type ChatSessionUiFileRef = {
+  path: string
+  fileName: string
+  origin: 'search_hit' | 'read' | 'artifact' | 'preview' | 'source'
+  summary?: string
+  applyId?: string
+  format?: 'docx' | 'pptx'
+  pageNumber?: number
+  isDirectory?: boolean
+}
+
+export type ChatSessionUiPanelState =
+  | { kind: 'empty'; title: string; description: string }
+  | { kind: 'search_list'; title: string; query: string; results: SearchResult[]; tokens: string[] }
+  | {
+      kind: 'file_preview'
+      title: string
+      file: ChatSessionUiFileRef
+      backTarget?: ChatSessionUiPanelState
+    }
+  | { kind: 'file_launcher'; title: string }
+  | { kind: 'apply_workspace'; title: string; applyId: string | null }
+  | { kind: 'browser'; title: string; browserTabId: string }
+
+export type ChatSessionUiResourceTab = {
+  id: string
+  kind: 'file' | 'browser'
+  title: string
+  filePath?: string
+  browserTabId?: string
+  state: Extract<
+    ChatSessionUiPanelState,
+    { kind: 'file_preview' | 'file_launcher' | 'apply_workspace' | 'browser' }
+  >
+}
+
+export type ChatSessionUiStateV1 = {
+  version: 1
+  composer: {
+    mode: ChatSessionUiMode
+    aiPreference: AiPreference
+    modelSelection: WorkbenchModelSelection
+    workspaceId: string | null
+    draft: {
+      input: string
+      contentNodes: ChatMessageContentNode[]
+      selectedReferences: SelectedReference[]
+      attachments: ChatAttachment[]
+      assetBucketId: string | null
+    }
+  }
+  panel: {
+    tabs: ChatSessionUiResourceTab[]
+    activeTabId: string | null
+    collapsed: boolean
+    fallbackState: ChatSessionUiPanelState
+  }
+}
+
+export type ChatSessionUiStateSaveRequest = {
+  sessionId: string
+  state: ChatSessionUiStateV1
+}
+
+export type ChatSessionUiStateSaveResponse = {
+  success: boolean
+  updatedAt?: number
+  error?: string
+}
+
+export type WorkbenchUiState = {
+  activeViewKey: string | null
+  draftState: ChatSessionUiStateV1 | null
+  updatedAt: number
+}
+
+export type WorkbenchUiStateSaveRequest = {
+  activeViewKey: string | null
+  draftState: ChatSessionUiStateV1 | null
+}
+
+export type WorkbenchUiStateResponse = {
+  success: boolean
+  state: WorkbenchUiState
+  error?: string
+}
+
 export interface FileWatchStartRequest {
   filePath: string
 }
@@ -1073,6 +1162,7 @@ export type ChatSessionOpenResponse = {
   messages: ChatMessage[]
   hasMoreBefore: boolean
   activeRuns: ChatSessionRunSnapshot[]
+  uiState?: ChatSessionUiStateV1
 }
 
 export type ChatSessionRunSummariesRequest = {

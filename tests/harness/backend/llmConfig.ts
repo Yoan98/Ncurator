@@ -52,3 +52,26 @@ export const loadLiveVisionLlmConfigFromEnv = (): LiveLlmConfig => {
     api_key: apiKey
   }
 }
+
+export const loadStructuredFallbackLlmConfigFromEnv = (): LiveLlmConfig => {
+  const baseUrl = normalizeOpenAIBaseUrl(readEnv('AI_STRUCTURED_FALLBACK_BASE_URL'))
+  const apiKey = readEnv('AI_STRUCTURED_FALLBACK_API_KEY')
+  const modelName = readEnv('AI_STRUCTURED_FALLBACK_MODEL_NAME')
+  if (!baseUrl || !apiKey || !modelName) {
+    throw new Error(
+      '结构化输出降级 live case 缺少配置：AI_STRUCTURED_FALLBACK_BASE_URL、AI_STRUCTURED_FALLBACK_API_KEY、AI_STRUCTURED_FALLBACK_MODEL_NAME'
+    )
+  }
+  return {
+    id: 'ai-live-config',
+    name: 'AI Structured Fallback Live',
+    providerKind: resolveLlmProviderKind({
+      providerKind:
+        readEnv('AI_STRUCTURED_FALLBACK_PROVIDER_KIND') || inferLlmProviderKind(baseUrl),
+      baseUrl
+    }),
+    base_url: baseUrl,
+    model_name: modelName,
+    api_key: apiKey
+  }
+}

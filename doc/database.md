@@ -27,6 +27,7 @@ SQLite 保存以下业务数据：
 - LLM 配置、AI runtime 设置和模型输出策略偏好。
 - AI runtime 设置中的 `systemNotificationsEnabled`，默认值为 `1`，控制 AI 运行终态系统通知。
 - 文件内容和预览 artifact 的 SHA-256 对象引用；实际对象保存在工作区 `.ncurator/objects/sha256`，相同内容只存一份。
+- Workbench 会话 UI 快照、最后活动会话、未发送草稿和内置浏览器标签状态。
 
 关键规则：
 
@@ -34,6 +35,14 @@ SQLite 保存以下业务数据：
 - `ai_run_event` 使用 `run_id + seq` 保证同一 run 内事件顺序。
 - 待审批状态以 SQLite 中的 run 记录为准。
 - `document.active_generation_id` 是当前有效索引版本。
+
+### Workbench 会话 UI 状态
+
+- `chat_session_ui_state` 以 `session_id` 为主键保存版本化 `state_json`，会话删除时通过外键级联删除。
+- `workbench_ui_state` 是 `id = 1` 的单例，保存最后活动会话和未发送的 `__draft__` UI 快照。
+- `browser_tab_state` 以 `owner_key` 隔离真实会话或 `__draft__` 的标签，保存 URL、标题、缩放、导航历史、顺序和更新时间。
+- 首次发送创建真实会话时，创建会话、复制草稿 UI 快照、清空草稿和转移浏览器标签在同一个 SQLite transaction 中完成。
+- Renderer 内存只负责当前交互，SQLite 是重启恢复的真相；浏览器 `WebContentsView` 只负责运行期页面实例，不是持久化真相。
 
 ## SQLite Migration
 

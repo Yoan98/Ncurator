@@ -7,7 +7,8 @@ const { createChatModelMock } = vi.hoisted(() => ({
 
 vi.mock('../../../../src/main/services/llm/chatModel', () => ({
   createChatModel: createChatModelMock,
-  getSupportedTransportsForConfig: () => ['responses', 'completions']
+  getSupportedTransportsForConfig: (cfg: { providerKind?: string }) =>
+    cfg.providerKind === 'openai-compatible' ? ['completions'] : ['responses', 'completions']
 }))
 
 import { createAiLlmExecutor } from '../../../../src/main/services/ai/llmExecutor'
@@ -169,6 +170,147 @@ describe('ai unit llm executor text path', () => {
         preferredStructuredOutputMode: 'prompt_json'
       })
     )
+  })
+
+  it('replaces a failed preferred strategy and reuses the winner within and across runs', async () => {
+    let currentConfig: LlmRuntimeConfig = {
+      ...baseConfig,
+      providerKind: 'openai-compatible',
+      preferredTransport: 'completions',
+      preferredStructuredOutputMode: 'prompt_json'
+    }
+    const strategyCalls: string[] = []
+    const saveConfig = vi.fn(async (nextConfig: LlmRuntimeConfig) => {
+      currentConfig = nextConfig
+    })
+
+    createChatModelMock.mockImplementation(
+      (_cfg: LlmRuntimeConfig, options?: { transport?: 'responses' | 'completions' }) => {
+        const transport = options?.transport || 'completions'
+        return {
+          withConfig: (config: { response_format?: { type?: 'json_object' | 'json_schema' } }) => ({
+            invoke: async () => {
+              const mode =
+                config.response_format?.type === 'json_object' ? 'json_object' : 'json_schema'
+              strategyCalls.push(`${transport}/${mode}`)
+              if (mode === 'json_schema') {
+                throw new Error('response_format json schema is not supported by this provider')
+              }
+              return { content: JSON.stringify({ answer: 'from json object' }) }
+            }
+          }),
+          invoke: async () => {
+            strategyCalls.push(`${transport}/prompt_json`)
+            return { content: 'not json' }
+          },
+          stream: async () => ({
+            async *[Symbol.asyncIterator]() {
+              yield { content: 'unexpected' }
+            }
+          })
+        }
+      }
+    )
+
+    const createExecutor = (runId: string) =>
+      createAiLlmExecutor({
+        eventCtx: { runId, sendEvent: () => undefined },
+        runtimeSettings: { llmStreamingMode: 'force_non_stream' },
+        getConfig: async () => currentConfig,
+        saveConfig,
+        checkCancelled: () => undefined
+      })
+
+    const request = {
+      caller: 'human.brain',
+      schemaName: 'unit_schema',
+      schema: z.object({ answer: z.string() }),
+      system: 'Return JSON only.',
+      user: 'Say hello.'
+    } as const
+
+    const firstExecutor = createExecutor('run-preferred-replacement-1')
+    const firstResult = await firstExecutor.chatStructured(request)
+    const secondResult = await firstExecutor.chatStructured(request)
+    const secondRunExecutor = createExecutor('run-preferred-replacement-2')
+    const thirdResult = await secondRunExecutor.chatStructured(request)
+
+    expect(firstResult.output).toEqual({ answer: 'from json object' })
+    expect(secondResult.output).toEqual({ answer: 'from json object' })
+    expect(thirdResult.output).toEqual({ answer: 'from json object' })
+    expect(strategyCalls).toEqual([
+      'completions/prompt_json',
+      'completions/json_schema',
+      'completions/json_object',
+      'completions/json_object',
+      'completions/json_object'
+    ])
+    expect(saveConfig).toHaveBeenCalledTimes(1)
+    expect(currentConfig).toMatchObject({
+      preferredTransport: 'completions',
+      preferredStructuredOutputMode: 'json_object'
+    })
+  })
+
+  it('does not replace the preferred strategy when every strategy fails', async () => {
+    const originalConfig: LlmRuntimeConfig = {
+      ...baseConfig,
+      providerKind: 'openai-compatible',
+      preferredTransport: 'completions',
+      preferredStructuredOutputMode: 'prompt_json'
+    }
+    const saveConfig = vi.fn(async () => undefined)
+    const strategyCalls: string[] = []
+
+    createChatModelMock.mockImplementation(
+      (_cfg: LlmRuntimeConfig, options?: { transport?: 'responses' | 'completions' }) => {
+        const transport = options?.transport || 'completions'
+        return {
+          withConfig: (config: { response_format?: { type?: 'json_object' | 'json_schema' } }) => ({
+            invoke: async () => {
+              const mode =
+                config.response_format?.type === 'json_object' ? 'json_object' : 'json_schema'
+              strategyCalls.push(`${transport}/${mode}`)
+              throw new Error('response_format is unavailable')
+            }
+          }),
+          invoke: async () => {
+            strategyCalls.push(`${transport}/prompt_json`)
+            return { content: 'not json' }
+          },
+          stream: async () => ({
+            async *[Symbol.asyncIterator]() {
+              yield { content: 'unexpected' }
+            }
+          })
+        }
+      }
+    )
+
+    const executor = createAiLlmExecutor({
+      eventCtx: { runId: 'run-preferred-preserved', sendEvent: () => undefined },
+      runtimeSettings: { llmStreamingMode: 'force_non_stream' },
+      getConfig: async () => originalConfig,
+      saveConfig,
+      checkCancelled: () => undefined
+    })
+
+    await expect(
+      executor.chatStructured({
+        caller: 'human.brain',
+        schemaName: 'unit_schema',
+        schema: z.object({ answer: z.string() }),
+        system: 'Return JSON only.',
+        user: 'Say hello.'
+      })
+    ).rejects.toThrow('模型返回内容无法解析为要求的结构')
+
+    expect(strategyCalls).toEqual([
+      'completions/prompt_json',
+      'completions/json_schema',
+      'completions/json_object'
+    ])
+    expect(saveConfig).not.toHaveBeenCalled()
   })
 
   it('recovers when ResourceExhausted fails twice and the third attempt succeeds', async () => {
