@@ -97,6 +97,10 @@ import {
   mergeApplyTargets
 } from '../components/workbench/applyTargetUtils'
 import {
+  filterVisibleFileChangeRecords,
+  isRuntimeAssetPath
+} from '../../../shared/fileChangeVisibility'
+import {
   createFileChangeListRequest,
   createFileChangeRunScope,
   filterFileChangeRecordsForScope,
@@ -226,7 +230,8 @@ const createSearchAssistantTurn = (messageId: string): AssistantTurnViewModel =>
 const artifactToApplyTarget = (
   artifact: AiArtifactRef
 ): AssistantTurnViewModel['applyTargets'][number] | null => {
-  if (artifact.kind !== 'file' || !artifact.applyId) return null
+  if (artifact.kind !== 'file' || !artifact.applyId || isRuntimeAssetPath(artifact.path))
+    return null
   return {
     changeId: artifact.applyId,
     title: artifact.fileName,
@@ -305,7 +310,7 @@ const reduceAssistantTurnByRunEvent = (
     }
   }
 
-  if (event.type === 'file_artifact') {
+  if (event.type === 'file_artifact' && !isRuntimeAssetPath(event.path)) {
     next = {
       ...next,
       artifacts: dedupeFileRefs([
@@ -1602,7 +1607,9 @@ const ChatPage: React.FC = () => {
           (item) => item.status !== 'failed' || item.error !== NO_EFFECTIVE_FILE_CHANGE_MESSAGE
         )
         allRecords = nextItems
-        activeRecords = nextItems.filter((item) => ACTIVE_FILE_CHANGE_STATUSES.has(item.status))
+        activeRecords = filterVisibleFileChangeRecords(nextItems).filter((item) =>
+          ACTIVE_FILE_CHANGE_STATUSES.has(item.status)
+        )
 
         const missingPreferred =
           options?.preferredApplyId !== undefined &&
@@ -1612,7 +1619,9 @@ const ChatPage: React.FC = () => {
         if (attempt < maxAttempts - 1) await delay(150)
       }
 
-      const applyTargetsByRunId = groupApplyTargetsByRunId(allRecords)
+      const applyTargetsByRunId = groupApplyTargetsByRunId(
+        filterVisibleFileChangeRecords(allRecords)
+      )
       if (fileChangeLoadRequestRef.current !== requestId) return
       setFileChangeRecords(allRecords)
 
@@ -1675,7 +1684,9 @@ const ChatPage: React.FC = () => {
   const hydrateFileChangeTargetsForSession = async (sessionId: string): Promise<void> => {
     try {
       const response = await window.api.aiFileChangeList({ sessionId })
-      const applyTargetsByRunId = groupApplyTargetsByRunId(sortFileChangeRecords(response.items))
+      const applyTargetsByRunId = groupApplyTargetsByRunId(
+        filterVisibleFileChangeRecords(sortFileChangeRecords(response.items))
+      )
       setAssistantTurns((previous) => {
         const nextTurns: Record<string, AssistantTurnViewModel> = { ...previous }
         Object.values(previous).forEach((turn) => {
@@ -2304,6 +2315,7 @@ const ChatPage: React.FC = () => {
       }
 
       if (event.type === 'file_artifact') {
+        if (isRuntimeAssetPath(event.path)) return
         appendArtifactForMessage(assistantArtifactsRef.current, messageId, {
           kind: 'file',
           capability: event.capability,

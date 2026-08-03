@@ -11,6 +11,7 @@ import type {
   WorkspaceSource,
   WorkspaceTreeEntry
 } from '../../../../shared/types'
+import { filterVisibleFileChangeRecords } from '../../../../shared/fileChangeVisibility'
 import ChangeCountBadges from './ChangeCountBadges'
 import { workbenchSelectors } from '../../testing/selectors'
 import {
@@ -57,7 +58,10 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
   const [loading, setLoading] = useState<Set<string>>(() => new Set())
   const [query, setQuery] = useState('')
 
-  const activeChanges = useMemo(() => groupSessionFileChanges(changeRecords), [changeRecords])
+  const activeChanges = useMemo(
+    () => groupSessionFileChanges(filterVisibleFileChangeRecords(changeRecords)),
+    [changeRecords]
+  )
 
   const changesByPath = useMemo(() => {
     const map = new Map<string, AiFileChangeRecord>()
@@ -145,7 +149,7 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
             )}
             <span className="min-w-0 flex-1 truncate">{entry.name}</span>
             {change ? (
-                <span title="当前运行中已修改">
+              <span title="当前运行中已修改">
                 {change.insertCount > 0 || change.deleteCount > 0 ? (
                   <ChangeCountBadges
                     insertCount={change.insertCount}

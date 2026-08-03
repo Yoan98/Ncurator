@@ -61,11 +61,23 @@ describe('workbench result e2e', () => {
             .join('\n')
           const applyEntry = await waitForApplyEntry(page)
           const applyEntryText = ((await applyEntry.textContent()) || '').trim()
+          const assistantApplyEntriesText = await page
+            .locator(`[data-testid^="${workbenchSelectors.assistantTurnApplyPrefix}-"]`)
+            .allTextContents()
           await applyEntry.click()
           await getWorkbenchLocator(page, workbenchSelectors.pptDiffViewer).waitFor({
             state: 'visible',
             timeout: 30_000
           })
+          await getWorkbenchLocator(page, workbenchSelectors.workspaceExplorerToggle).click()
+          const workspaceExplorer = getWorkbenchLocator(
+            page,
+            workbenchSelectors.workspaceExplorerOverlay
+          )
+          await workspaceExplorer.waitFor({ state: 'visible' })
+          const workspaceExplorerText = ((await workspaceExplorer.textContent()) || '').trim()
+          await page.keyboard.press('Escape')
+          await workspaceExplorer.waitFor({ state: 'hidden' })
           const reviewToolbarText = (
             (await getWorkbenchLocator(page, workbenchSelectors.documentToolbar).textContent()) ||
             ''
@@ -148,6 +160,8 @@ describe('workbench result e2e', () => {
             slideCount: getSlides(presentation).length,
             slideText,
             applyEntryText,
+            assistantApplyEntriesText,
+            workspaceExplorerText,
             reviewToolbarText,
             initialModeTag,
             previewModeTag,
@@ -176,6 +190,12 @@ describe('workbench result e2e', () => {
             result.slideCount === 2 &&
               result.slideText.includes(MARKER) &&
               result.applyEntryText.includes(FILE_NAME) &&
+              result.assistantApplyEntriesText.every(
+                (text) => !text.includes('/.ncurator/runtime/assets/')
+              ) &&
+              result.workspaceExplorerText.includes(`本次运行改动 1`) &&
+              result.workspaceExplorerText.includes(FILE_NAME) &&
+              !result.workspaceExplorerText.includes('/.ncurator/runtime/assets/') &&
               result.reviewToolbarText.includes('+2') &&
               result.reviewToolbarText.includes('-0') &&
               result.initialModeTag === '审核' &&
@@ -196,7 +216,7 @@ describe('workbench result e2e', () => {
             {
               name: 'workbench-ppt-create-diff-revert-real',
               message:
-                '真实 AI 创建 PPT 后应展示页面级左右 Diff 和缩略图筛选，并可通过现有回撤删除新建文件，对齐 WB-PPT-001、WB-PPT-002、WB-APPLY-003。',
+                '真实 AI 创建 PPT 后应仅将用户文件展示为修改记录，不展示运行时资源；页面级左右 Diff、缩略图筛选和新建文件回撤对齐 WB-PPT-001、WB-PPT-002、WB-APPLY-003。',
               data: result
             }
           )
