@@ -96,6 +96,13 @@ import {
   groupApplyTargetsByRunId,
   mergeApplyTargets
 } from '../components/workbench/applyTargetUtils'
+import {
+  createFileChangeListRequest,
+  createFileChangeRunScope,
+  filterFileChangeRecordsForScope,
+  isCurrentFileChangeRunScope,
+  type FileChangeRunScope
+} from '../../../shared/aiFileChangeScope'
 import { chatSelectors, workbenchSelectors } from '../testing/selectors'
 import SidebarPanelIcon from '../components/SidebarPanelIcon'
 import brandIcon from '../../../../logo/png/ncurator-logo-24.png'
@@ -667,7 +674,7 @@ const ChatPage: React.FC = () => {
 
   const [activeApplyRecord, setActiveApplyRecord] = useState<AiFileChangeRecord | null>(null)
   const [fileChangeRecords, setFileChangeRecords] = useState<AiFileChangeRecord[]>([])
-  const fileChangeRunScopeRef = useRef<{ sessionId: string; runId: string } | null>(null)
+  const fileChangeRunScopeRef = useRef<FileChangeRunScope | null>(null)
   const [applyLoading, setApplyLoading] = useState(false)
   const [applyReverting, setApplyReverting] = useState(false)
   const [applyRevertConfirm, setApplyRevertConfirm] = useState<ApplyRevertConfirmState | null>(null)
@@ -1512,19 +1519,13 @@ const ChatPage: React.FC = () => {
       }
 
       setActiveApplyRecord(nextRecord)
-      if (
-        fileChangeRunScopeRef.current?.sessionId === nextRecord.sessionId &&
-        fileChangeRunScopeRef.current.runId === nextRecord.runId
-      ) {
+      if (isCurrentFileChangeRunScope(fileChangeRunScopeRef.current, nextRecord)) {
         setFileChangeRecords((current) =>
           current.map((record) => (record.id === nextRecord.id ? nextRecord : record))
         )
       }
 
-      if (
-        fileChangeRunScopeRef.current?.sessionId !== nextRecord.sessionId ||
-        fileChangeRunScopeRef.current.runId !== nextRecord.runId
-      ) {
+      if (!isCurrentFileChangeRunScope(fileChangeRunScopeRef.current, nextRecord)) {
         void loadFileChangesForSessionRef.current(nextRecord.sessionId, nextRecord.runId, {
           preferredApplyId: nextRecord.id,
           skipApplyRecordReload: true
@@ -1556,7 +1557,8 @@ const ChatPage: React.FC = () => {
   ): Promise<void> => {
     const requestId = fileChangeLoadRequestRef.current + 1
     fileChangeLoadRequestRef.current = requestId
-    fileChangeRunScopeRef.current = { sessionId, runId }
+    const scope = createFileChangeRunScope({ sessionId, runId })
+    fileChangeRunScopeRef.current = scope
     try {
       const shouldWaitForRecords =
         Boolean(options?.forceOpenWorkspace) || Boolean(options?.preferredApplyId)
@@ -1565,8 +1567,8 @@ const ChatPage: React.FC = () => {
       let activeRecords: AiFileChangeRecord[] = []
 
       for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-        const response = await window.api.aiFileChangeList({ sessionId, runId })
-        const listedItems = sortFileChangeRecords(response.items)
+        const response = await window.api.aiFileChangeList(createFileChangeListRequest(scope))
+        const listedItems = sortFileChangeRecords(filterFileChangeRecordsForScope(response.items, scope))
         const noEffectiveChangeRecords = listedItems.filter(
           (item) => item.status === 'failed' && item.error === NO_EFFECTIVE_FILE_CHANGE_MESSAGE
         )
@@ -2402,8 +2404,10 @@ const ChatPage: React.FC = () => {
         if (
           eventSessionId &&
           eventSessionId === currentSessionIdRef.current &&
-          fileChangeRunScopeRef.current?.sessionId === eventSessionId &&
-          fileChangeRunScopeRef.current.runId === event.runId
+          isCurrentFileChangeRunScope(fileChangeRunScopeRef.current, {
+            sessionId: eventSessionId,
+            runId: event.runId
+          })
         ) {
           void loadFileChangesForSession(eventSessionId, event.runId)
         }
@@ -2439,8 +2443,10 @@ const ChatPage: React.FC = () => {
         if (
           eventSessionId &&
           eventSessionId === currentSessionIdRef.current &&
-          fileChangeRunScopeRef.current?.sessionId === eventSessionId &&
-          fileChangeRunScopeRef.current.runId === event.runId
+          isCurrentFileChangeRunScope(fileChangeRunScopeRef.current, {
+            sessionId: eventSessionId,
+            runId: event.runId
+          })
         ) {
           void loadFileChangesForSession(eventSessionId, event.runId)
         }
@@ -2459,8 +2465,10 @@ const ChatPage: React.FC = () => {
         if (
           eventSessionId &&
           eventSessionId === currentSessionIdRef.current &&
-          fileChangeRunScopeRef.current?.sessionId === eventSessionId &&
-          fileChangeRunScopeRef.current.runId === event.runId
+          isCurrentFileChangeRunScope(fileChangeRunScopeRef.current, {
+            sessionId: eventSessionId,
+            runId: event.runId
+          })
         ) {
           void loadFileChangesForSession(eventSessionId, event.runId, {
             notifyNoEffectiveChange: true

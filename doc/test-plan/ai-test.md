@@ -102,6 +102,7 @@ AI unit / 辅助测试目录：
 ### 3.4 覆盖归属与去重规则
 
 - `ai/tool` 负责生产工具 runtime 的完整输入输出、读写链、错误边界、原子性、修改记录与回退契约。
+- `ChatRunService` 合同测试验证 run 结束不会扫描并归属未受控的工作区变化；只有受控文件工具与 terminal 命令窗口能创建 run 级修改记录。
 - `ai/human/mock-llm` 负责真实 human graph 下的工具学习、工具选择、串联执行、暂停恢复和结果交付；只允许固定 LLM 输出，不允许替换工具执行结果。
 - `ai/human/live` 负责真实模型在自然语言输入下能否自主选择并正确使用能力；用户输入不得包含内部工具名或固定调用顺序。
 - Workbench E2E 负责用户可见的附件、预览、Diff、跨 Sheet 交互与回退闭环，不重复验证工具内部算法。
@@ -790,6 +791,15 @@ AI unit / 辅助测试目录：
 - Oracle：命令真实生效并经过审批；terminal 工具结果不包含 `artifacts`；命令完成后产生带当前 Run ID 的修改记录和 `file_artifact`。
 - Not：不根据命令文本推断文件路径；差异只来自命令前后工作区快照。
 
+##### `terminal-tracking-start-failure-cleanup`
+
+- 测试类型：`backend`
+- What：终端命令已建立追踪基线但 PTY 启动失败时，追踪上下文会被立即丢弃。
+- Why：启动失败不应留下无法完成的快照、修改记录或文件 artifact。
+- How：真实构建 terminal 工具，替换终端会话启动为明确失败的实现，并记录开始、完成和丢弃追踪调用。
+- Oracle：恰好开始并丢弃同一个命令追踪 ID；不调用完成追踪，不产生修改记录或 `file_artifact`。
+- Not：不验证 PTY 本身的启动错误归因；该能力由终端会话管理测试覆盖。
+
 ##### `terminal-inline-interpreter-execution`
 
 - 测试类型：`backend`
@@ -802,10 +812,10 @@ AI unit / 辅助测试目录：
 ##### `terminal-persistent-session-contract`
 
 - 测试类型：`backend`
-- What：真实 PTY 持久终端保留当前路径、长命令让出控制权、增量读取和停止。
+- What：真实 PTY 持久终端保留当前路径、长命令让出控制权、增量读取、停止和命令级文件追踪。
 - Why：后台服务和长任务不能继续依赖单次 shell 超时或系统孤儿进程。
-- How：在同一 terminalId 中真实执行 cd、pwd 和持续输出命令，同时新开第二终端；短命令若先返回 running，则通过 terminal_read 等到 idle 后再复用；长命令使用 terminal_read 读取输出并用 terminal_stop 停止。
-- Oracle：同一终端保留路径，新终端从 workspace 根目录启动；长命令返回 command_still_running 且进程仍在；读取能取得真实增量输出；正常停止后终端回到 idle，强制停止后终端进入 closed，且均无子进程残留。
+- How：在同一 terminalId 中真实执行 cd、pwd 和持续输出命令，同时新开第二终端；从子目录分别执行“长命令正常完成”“写入后停止”和“写入后非零退出”，通过 terminal_read 等到 idle 或调用 terminal_stop。
+- Oracle：同一终端保留路径，新终端从 workspace 根目录启动；长命令返回 command_still_running 且进程仍在；读取能取得真实增量输出；正常停止后终端回到 idle，强制停止后终端进入 closed，且均无子进程残留。三条终端写命令均以工作区根目录为扫描范围，生成当前 run 的 `terminal_tool` 修改记录和 `file_artifact`。
 - Not：不验证 Workbench 浏览器联动，该能力由真实 e2e 覆盖。
 
 #### web-browsing 类别

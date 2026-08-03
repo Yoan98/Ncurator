@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { SPLITTER_BIG_CHUNK_SETTING, SPLITTER_MINI_CHUNK_SIZE } from '../../utils/constant'
-import { USER_DATA_PATH } from '../../utils/paths'
+import { getUserDataPath } from '../../utils/paths'
 import type {
   WorkspaceKnowledgeCache,
   WorkspaceKnowledgeSplitSnapshot,
@@ -46,7 +46,7 @@ const isWorkspaceKnowledgeCacheEnabled = (): boolean =>
 const resolveWorkspaceKnowledgeCacheRoot = (): string => {
   const explicitPath = String(process.env.NCURATOR_WORKSPACE_KNOWLEDGE_CACHE_PATH || '').trim()
   if (explicitPath) return path.resolve(explicitPath)
-  return path.join(USER_DATA_PATH, 'workspace-knowledge-cache')
+  return path.join(getUserDataPath(), 'workspace-knowledge-cache')
 }
 
 const resolveWorkspaceKnowledgeCacheStatsPath = (cacheRoot: string): string => {

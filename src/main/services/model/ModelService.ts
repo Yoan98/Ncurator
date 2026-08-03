@@ -3,7 +3,7 @@ import path from 'path'
 import { Readable, Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import type { ReadableStream as NodeReadableStream } from 'node:stream/web'
-import { listModelPathCandidates, MODELS_PATH } from '../../utils/paths'
+import { getModelsPath, listModelPathCandidates } from '../../utils/paths'
 
 const HF_ENDPOINT = 'https://hf-mirror.com'
 const DOWNLOAD_LOCK_POLL_MS = 1000
@@ -111,11 +111,11 @@ export class ModelService {
   }
 
   private resolveModelPath(repoId: string): string {
-    return path.join(MODELS_PATH, repoId)
+    return path.join(getModelsPath(), repoId)
   }
 
   private resolveDownloadLockPath(repoId: string): string {
-    return path.join(MODELS_PATH, `${repoId.replaceAll('/', '__')}.download.lock`)
+    return path.join(getModelsPath(), `${repoId.replaceAll('/', '__')}.download.lock`)
   }
 
   private resolveDownloadStatePath(repoId: string): string {

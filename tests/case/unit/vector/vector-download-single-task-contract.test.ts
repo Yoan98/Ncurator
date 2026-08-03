@@ -7,7 +7,7 @@ import type {
   ModelDownloadProgressReporter
 } from '../../../../src/main/services/model/ModelService'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
-import { MODELS_PATH } from '../../../../src/main/utils/paths'
+import { getModelsPath } from '../../../../src/main/utils/paths'
 import { TransformersEmbeddingExecutor } from '../../../../src/main/services/vector/runtime/TransformersEmbeddingExecutor'
 
 const REPO_A = 'jinaai/jina-embeddings-v2-base-zh'
@@ -36,7 +36,7 @@ describe('unit vector backend', () => {
         const modelService = ModelService.getInstance()
         const embeddingService = new EmbeddingService({
           executor: new TransformersEmbeddingExecutor({
-            modelsPath: MODELS_PATH,
+            modelsPath: getModelsPath(),
             modelName: REPO_A
           })
         })

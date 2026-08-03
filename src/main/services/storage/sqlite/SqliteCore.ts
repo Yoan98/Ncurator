@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3'
 import fs from 'fs'
 import path from 'path'
-import { SQLITE_DB_PATH } from '../../../utils/paths'
+import { getSqliteDbPath } from '../../../utils/paths'
 import { initialSchemaSql } from './migrations/001_initial_schema'
 
 const notificationSettingsMigration = `
@@ -122,8 +122,11 @@ const resolveBetterSqliteNativeBinding = (): string => {
 
 export class SqliteCore {
   private db: SqliteDatabase | null = null
+  private readonly dbPath: string
 
-  public constructor(private readonly dbPath: string = SQLITE_DB_PATH) {}
+  public constructor(dbPath?: string) {
+    this.dbPath = dbPath || getSqliteDbPath()
+  }
 
   public initialize(): void {
     if (this.db) return

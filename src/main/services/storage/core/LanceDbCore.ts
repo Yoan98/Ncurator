@@ -1,7 +1,7 @@
 import * as lancedb from '@lancedb/lancedb'
 import fs from 'fs'
 import * as arrow from 'apache-arrow'
-import { LANCE_DB_PATH } from '../../../utils/paths'
+import { getLanceDbPath } from '../../../utils/paths'
 import type { TableConfig } from '../../../types/store'
 
 export enum LanceDbCoreStatus {
@@ -19,12 +19,15 @@ export type LanceTableName = (typeof LANCE_TABLES)[keyof typeof LANCE_TABLES]
 
 export class LanceDbCore {
   private db: lancedb.Connection | null = null
+  private readonly dbPath: string
   private status: LanceDbCoreStatus = LanceDbCoreStatus.UNINITIALIZED
   private tableNamesCache: Set<string> | null = null
   private tableCache = new Map<string, object>()
   private tableWriteQueues = new Map<string, Promise<unknown>>()
 
-  public constructor(private readonly dbPath: string = LANCE_DB_PATH) {}
+  public constructor(dbPath?: string) {
+    this.dbPath = dbPath || getLanceDbPath()
+  }
 
   public getStatus(): LanceDbCoreStatus {
     return this.status

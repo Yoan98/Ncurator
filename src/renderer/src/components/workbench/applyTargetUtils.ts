@@ -1,4 +1,5 @@
 import type { AiFileChangeRecord } from '../../../../shared/types'
+import { groupFileChangeRecordsByRun } from '../../../../shared/aiFileChangeScope'
 import type { AssistantTurnApplyTarget } from './types'
 
 export const buildApplyTarget = (record: AiFileChangeRecord): AssistantTurnApplyTarget => ({
@@ -23,12 +24,7 @@ export const mergeApplyTargets = (
 export const groupApplyTargetsByRunId = (
   records: AiFileChangeRecord[]
 ): Map<string, AssistantTurnApplyTarget[]> => {
-  const grouped = new Map<string, AiFileChangeRecord[]>()
-  records.forEach((record) => {
-    const existing = grouped.get(record.runId) || []
-    existing.push(record)
-    grouped.set(record.runId, existing)
-  })
+  const grouped = groupFileChangeRecordsByRun(records)
 
   return new Map(
     [...grouped.entries()].map(([runId, runRecords]) => [

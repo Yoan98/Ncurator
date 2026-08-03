@@ -1,7 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import type { EmbeddingService } from '../vector/EmbeddingService'
-import { MODELS_PATH } from '../../utils/paths'
+import { getModelsPath } from '../../utils/paths'
 import type { ModelDownloadProgress } from './ModelService'
 import { ModelService } from './ModelService'
 
@@ -211,7 +211,7 @@ export class VectorModelDownloadService {
   }
 
   private resolveSnapshotPath(): string {
-    return path.join(MODELS_PATH, ACTIVE_DOWNLOAD_SNAPSHOT_FILE)
+    return path.join(getModelsPath(), ACTIVE_DOWNLOAD_SNAPSHOT_FILE)
   }
 
   private readSnapshot(): ActiveVectorDownloadSnapshot | null {
@@ -238,7 +238,7 @@ export class VectorModelDownloadService {
 
   private setSnapshot(snapshot: ActiveVectorDownloadSnapshot): void {
     this.activeSnapshot = snapshot
-    fs.mkdirSync(MODELS_PATH, { recursive: true })
+    fs.mkdirSync(getModelsPath(), { recursive: true })
     fs.writeFileSync(this.resolveSnapshotPath(), JSON.stringify(snapshot, null, 2), 'utf8')
   }
 

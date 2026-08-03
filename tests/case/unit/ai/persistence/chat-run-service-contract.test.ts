@@ -1,9 +1,11 @@
-import { mkdir, mkdtemp, rm } from 'node:fs/promises'
+import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ChatRunService } from '../../../../../src/main/services/ai/ChatRunService'
+import { AiRunService } from '../../../../../src/main/services/ai/AiRunService'
 import { AiRunResourceManager } from '../../../../../src/main/services/ai/run/AiRunResourceManager'
+import { createCompletedAiRunState } from '../../../../../src/main/services/ai/run/state'
 import {
   CONVERSATION_MEMORY_RECENT_TURNS,
   CONVERSATION_MEMORY_SUMMARY_TRIGGER_TURNS
@@ -686,6 +688,35 @@ describe('unit ai persistence backend', () => {
       } else {
         process.env.NCURATOR_AI_EMBEDDING_PREFLIGHT_TIMEOUT_MS = previousTimeout
       }
+    }
+  })
+
+  it('does-not-attribute-uncontrolled-workspace-changes-when-a-run-finishes', async () => {
+    const setup = await createTestService({ autoStartRuns: true })
+    const runner = vi.spyOn(AiRunService, 'getInstance').mockReturnValue({
+      run: async (payload) => {
+        await writeFile(path.join(setup.workspaceRoot, 'uncontrolled-change.txt'), 'external change')
+        return createCompletedAiRunState({
+          runId: payload.runId,
+          sessionId: payload.sessionId,
+          input: payload.input,
+          finalDeliveryMarkdown: '完成，但没有调用文件工具或终端。'
+        })
+      }
+    } as unknown as AiRunService)
+    try {
+      const run = await submitAiRun(setup)
+      await waitForCondition(() => setup.events.some((event) => event.type === 'run_completed'))
+
+      const records = await setup.storage.aiFileChange.listRecords({
+        sessionId: run.sessionId,
+        runId: run.id
+      })
+      expect(await access(path.join(setup.workspaceRoot, 'uncontrolled-change.txt')).then(() => true)).toBe(true)
+      expect(records.items).toEqual([])
+      expect(setup.events.filter((event) => event.type === 'file_artifact')).toEqual([])
+    } finally {
+      runner.mockRestore()
     }
   })
 

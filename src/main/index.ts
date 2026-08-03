@@ -17,7 +17,7 @@ import { CdpEndpointService } from './services/browser/CdpEndpointService'
 import { createWebCrawlerService } from './services/webCrawler/createWebCrawlerService'
 import { AppUpdateService } from './services/update/AppUpdateService'
 import { APP_ID } from '../shared/constants'
-import { MODELS_PATH } from './utils/paths'
+import { getModelsPath } from './utils/paths'
 import { terminalSessionManager } from './services/ai/human/tools/terminal/TerminalSessionManager'
 import { AppShutdownCoordinator } from './services/AppShutdownCoordinator'
 import { SystemNotificationService } from './services/SystemNotificationService'
@@ -201,7 +201,7 @@ if (!singleInstanceLock) {
     const ingestionService = IngestionService.getInstance()
     const embeddingRuntimeClient = new EmbeddingRuntimeClient({
       entryPath: fileURLToPath(new URL('./embeddingRuntimeProcess.js', import.meta.url)),
-      modelsPath: MODELS_PATH,
+      modelsPath: getModelsPath(),
       modelName: DEFAULT_EMBEDDING_MODEL_NAME
     })
     const embeddingService = new EmbeddingService({

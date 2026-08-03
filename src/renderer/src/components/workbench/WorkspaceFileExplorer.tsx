@@ -326,7 +326,7 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
             )
           })
         ) : (
-          <div className="px-3 py-8 text-center text-xs text-[#91918E]">本会话暂无文件改动</div>
+          <div className="px-3 py-8 text-center text-xs text-[#91918E]">本次运行暂无文件改动</div>
         )}
       </div>
     </div>

@@ -2,11 +2,36 @@ import os from 'os'
 import path from 'path'
 import { describe, expect, it } from 'vitest'
 import {
+  getLanceDbPath,
+  getSqliteDbPath,
+  getUserDataPath,
   listKnownPersistentUserDataPaths,
   listModelPathCandidates
 } from '../../../../src/main/utils/paths'
 
 describe('ai unit model path candidates', () => {
+  it('resolves user data paths when called instead of at module load time', () => {
+    const original = process.env.NCURATOR_USER_DATA_PATH
+    const firstPath = path.join(os.tmpdir(), 'ncurator-paths-first')
+    const secondPath = path.join(os.tmpdir(), 'ncurator-paths-second')
+
+    try {
+      process.env.NCURATOR_USER_DATA_PATH = firstPath
+      expect(getUserDataPath()).toBe(firstPath)
+      expect(getSqliteDbPath()).toBe(path.join(firstPath, 'app.sqlite'))
+      expect(getLanceDbPath()).toBe(path.join(firstPath, 'lancedb'))
+
+      process.env.NCURATOR_USER_DATA_PATH = secondPath
+      expect(getUserDataPath()).toBe(secondPath)
+    } finally {
+      if (original === undefined) {
+        delete process.env.NCURATOR_USER_DATA_PATH
+      } else {
+        process.env.NCURATOR_USER_DATA_PATH = original
+      }
+    }
+  })
+
   it('includes known persistent macOS user data directories', () => {
     const homeDir = path.join('/Users', 'tester')
     const candidates = listKnownPersistentUserDataPaths('darwin', homeDir)

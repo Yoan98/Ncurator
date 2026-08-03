@@ -1,7 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import { afterEach, describe, it, vi } from 'vitest'
-import { MODELS_PATH } from '../../../../src/main/utils/paths'
+import { getModelsPath } from '../../../../src/main/utils/paths'
 import { EmbeddingService } from '../../../../src/main/services/vector/EmbeddingService'
 import { ModelService } from '../../../../src/main/services/model/ModelService'
 import { VectorModelDownloadService } from '../../../../src/main/services/model/VectorModelDownloadService'
@@ -19,7 +19,7 @@ type VectorModelDownloadServiceStatics = typeof VectorModelDownloadService & {
   instance: VectorModelDownloadService | null
 }
 
-const resolveSnapshotPath = (): string => path.join(MODELS_PATH, ACTIVE_DOWNLOAD_SNAPSHOT_FILE)
+const resolveSnapshotPath = (): string => path.join(getModelsPath(), ACTIVE_DOWNLOAD_SNAPSHOT_FILE)
 
 const waitForCondition = async (predicate: () => boolean, timeoutMs = 5000): Promise<void> => {
   const deadline = Date.now() + timeoutMs
@@ -55,7 +55,7 @@ describe('unit vector backend', () => {
         const modelService = ModelService.getInstance()
         const embeddingService = new EmbeddingService({
           executor: new TransformersEmbeddingExecutor({
-            modelsPath: MODELS_PATH,
+            modelsPath: getModelsPath(),
             modelName: SNAPSHOT_REPO_ID
           })
         })
@@ -69,7 +69,7 @@ describe('unit vector backend', () => {
           releaseDownload = resolve
         })
 
-        await fs.promises.mkdir(MODELS_PATH, { recursive: true })
+        await fs.promises.mkdir(getModelsPath(), { recursive: true })
         await fs.promises.writeFile(
           resolveSnapshotPath(),
           JSON.stringify(

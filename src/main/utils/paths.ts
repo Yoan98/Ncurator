@@ -2,8 +2,6 @@ import { app } from 'electron'
 import os from 'os'
 import path from 'path'
 
-const E2E_USER_DATA_PATH = String(process.env.NCURATOR_USER_DATA_PATH || '').trim()
-const E2E_MODELS_PATH = String(process.env.NCURATOR_MODELS_PATH || '').trim()
 const FALLBACK_USER_DATA_PATH = path.join(os.tmpdir(), 'ncurator-user-data')
 const KNOWN_USER_DATA_DIRS = ['ncurator', 'ncurator-desktop'] as const
 
@@ -54,14 +52,17 @@ const resolveElectronUserDataPath = (): string => {
   return FALLBACK_USER_DATA_PATH
 }
 
-export const USER_DATA_PATH = E2E_USER_DATA_PATH
-  ? path.resolve(E2E_USER_DATA_PATH)
-  : resolveElectronUserDataPath()
-export const SQLITE_DB_PATH = path.join(USER_DATA_PATH, 'app.sqlite')
-export const LANCE_DB_PATH = path.join(USER_DATA_PATH, 'lancedb')
+export const getUserDataPath = (): string => {
+  const overridePath = String(process.env.NCURATOR_USER_DATA_PATH || '').trim()
+  return overridePath ? path.resolve(overridePath) : resolveElectronUserDataPath()
+}
+
+export const getSqliteDbPath = (): string => path.join(getUserDataPath(), 'app.sqlite')
+
+export const getLanceDbPath = (): string => path.join(getUserDataPath(), 'lancedb')
 
 export const listModelPathCandidates = (
-  userDataPath: string = USER_DATA_PATH,
+  userDataPath: string = getUserDataPath(),
   platform: NodeJS.Platform = process.platform,
   homeDir: string = os.homedir(),
   tmpDir: string = os.tmpdir()
@@ -75,11 +76,13 @@ export const listModelPathCandidates = (
     : [activeModelsPath, ...persistentModelPaths]
 
   const candidates = [
-    E2E_MODELS_PATH ? path.resolve(E2E_MODELS_PATH) : '',
+    String(process.env.NCURATOR_MODELS_PATH || '').trim()
+      ? path.resolve(String(process.env.NCURATOR_MODELS_PATH).trim())
+      : '',
     ...orderedModelPaths
   ].filter(Boolean)
 
   return dedupePaths(candidates)
 }
 
-export const MODELS_PATH = listModelPathCandidates()[0]
+export const getModelsPath = (): string => listModelPathCandidates()[0]
