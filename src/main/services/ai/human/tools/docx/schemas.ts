@@ -299,7 +299,7 @@ export const docxStylePatchSchema = z
   .refine((patch) => Object.keys(patch).some((key) => key !== 'kind'), {
     message: 'style patch must contain at least one property'
   })
-  .meta({ 'x-constraint': 'style patch must contain at least one property' })
+  .meta({ id: 'DocxStylePatch', 'x-constraint': 'style patch must contain at least one property' })
 
 export const docxStyleTargetSchema = z.discriminatedUnion('type', [
   z
@@ -311,7 +311,7 @@ export const docxStyleTargetSchema = z.discriminatedUnion('type', [
     .strict(),
   z.object({ type: z.literal('block'), blockId: z.string().min(1) }).strict(),
   z.object({ type: z.literal('node'), nodeId: z.string().min(1) }).strict()
-])
+]).meta({ id: 'DocxStyleTarget' })
 
 export const docOpSchema = z.discriminatedUnion('type', [
   z.object({
@@ -424,10 +424,12 @@ const docxEditInsertBlocksActionSchema = z
         position: z.enum(['before', 'after'])
       })
       .strict()
+      .meta({ id: 'DocxBlockLocation' })
       .optional(),
     blocks: z.array(docxCreateBlockSchema).min(1)
   })
   .strict()
+  .meta({ id: 'DocxInsertBlocksAction' })
 
 const docxEditUpdateTableCellActionSchema = z
   .object({
@@ -437,6 +439,7 @@ const docxEditUpdateTableCellActionSchema = z
     allowVisualLoss: z.literal(true).optional()
   })
   .strict()
+  .meta({ id: 'DocxUpdateTableCellAction' })
 
 const docxEditReplaceBlockActionSchema = z
   .object({
@@ -446,6 +449,7 @@ const docxEditReplaceBlockActionSchema = z
     allowVisualLoss: z.literal(true).optional()
   })
   .strict()
+  .meta({ id: 'DocxReplaceBlockAction' })
 
 const docxEditReplaceTextActionSchema = z
   .object({
@@ -455,6 +459,7 @@ const docxEditReplaceTextActionSchema = z
     blockIds: z.array(z.string().min(1)).optional()
   })
   .strict()
+  .meta({ id: 'DocxReplaceTextAction' })
 
 const docxEditDeleteBlocksActionSchema = z
   .object({
@@ -463,6 +468,7 @@ const docxEditDeleteBlocksActionSchema = z
     allowVisualLoss: z.literal(true).optional()
   })
   .strict()
+  .meta({ id: 'DocxDeleteBlocksAction' })
 
 const docxEditStyleActionSchema = z
   .object({
@@ -471,6 +477,7 @@ const docxEditStyleActionSchema = z
     patch: docxStylePatchSchema
   })
   .strict()
+  .meta({ id: 'DocxStyleAction' })
 
 export const docxEditActionSchema = z.discriminatedUnion('type', [
   docxEditInsertBlocksActionSchema,
@@ -479,7 +486,7 @@ export const docxEditActionSchema = z.discriminatedUnion('type', [
   docxEditStyleActionSchema,
   docxEditUpdateTableCellActionSchema,
   docxEditDeleteBlocksActionSchema
-])
+]).meta({ id: 'DocxEditAction' })
 
 export const docxEditSchema = z
   .object({

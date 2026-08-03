@@ -51,7 +51,7 @@ export const normalizePdfText = (value: string): string => {
 
 export const buildPdfPageText = (
   rawItems: readonly unknown[]
-): { text: string; suspicious: boolean; warnings: string[] } => {
+): { text: string; suspicious: boolean } => {
   const items = rawItems.filter((item): item is PdfTextItemLike =>
     Boolean(
       item &&
@@ -114,13 +114,8 @@ export const buildPdfPageText = (
   }
   flush()
 
-  const warnings: string[] = []
-  if (replacementCount > 0) warnings.push(`检测到 ${String(replacementCount)} 个替换字符`)
-  if (privateUseCount > 0) warnings.push(`检测到 ${String(privateUseCount)} 个私用区字符`)
-  if (controlCount > 0) warnings.push(`已清理 ${String(controlCount)} 个控制字符`)
   return {
     text: normalizePdfText(lines.join('\n')),
-    suspicious,
-    warnings
+    suspicious
   }
 }

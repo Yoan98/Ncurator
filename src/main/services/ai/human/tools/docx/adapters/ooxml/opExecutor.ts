@@ -446,7 +446,7 @@ const validateVisualLoss = (index: BlockIndex, op: StructuralDocxOp): void => {
 const applyStructural = async (
   buffer: Buffer,
   op: StructuralDocxOp
-): Promise<{ buffer: Buffer; changed?: DocxChangedBlock; warning?: string }> => {
+): Promise<{ buffer: Buffer; changed?: DocxChangedBlock }> => {
   const bundle = await loadDocxBundle(buffer)
   const index = buildBlockIndex(
     bundle.documentDom,
@@ -562,8 +562,7 @@ const applyReplaceText = async (buffer: Buffer, op: Extract<DocxOp, { type: 'rep
   if (changedBlocks.length === 0) throw new Error(`replace_text not found: ${op.query}`)
   return {
     buffer: await writeDocumentXml(bundle.zip, bundle.documentDom),
-    changedBlocks,
-    warnings: []
+    changedBlocks
   }
 }
 
@@ -633,8 +632,7 @@ const applyStyle = async (buffer: Buffer, op: Extract<DocxOp, { type: 'style' }>
   if (changedBlocks.length === 0) throw new Error('style target text not found')
   return {
     buffer: await writeDocumentXml(bundle.zip, bundle.documentDom),
-    changedBlocks,
-    warnings: []
+    changedBlocks
   }
 }
 
@@ -644,25 +642,21 @@ export const applyDocxOps = async (input: {
 }): Promise<ApplyOpsResult> => {
   let buffer = input.buffer
   const changedBlocks: DocxChangedBlock[] = []
-  const warnings: string[] = []
   for (const op of input.ops) {
     if (op.type === 'create_document') continue
     if (op.type === 'replace_text') {
       const result = await applyReplaceText(buffer, op)
       buffer = result.buffer
       changedBlocks.push(...result.changedBlocks)
-      warnings.push(...result.warnings)
     } else if (op.type === 'style') {
       const result = await applyStyle(buffer, op)
       buffer = result.buffer
       changedBlocks.push(...result.changedBlocks)
-      warnings.push(...result.warnings)
     } else {
       const result = await applyStructural(buffer, op)
       buffer = result.buffer
       if (result.changed) changedBlocks.push(result.changed)
-      if (result.warning) warnings.push(result.warning)
     }
   }
-  return { buffer, changedBlocks, warnings }
+  return { buffer, changedBlocks }
 }

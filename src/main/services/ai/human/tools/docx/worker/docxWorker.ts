@@ -412,8 +412,7 @@ export const handleDocxWorkerRequest = async (
           requestId: request.requestId,
           ok: false,
           code: 'invalid_input',
-          error: 'semantic search is not implemented in this version',
-          warnings: ['semantic mode is reserved for a future release']
+          error: 'semantic search is not implemented in this worker'
         }
       }
       const snapshot = getSnapshot(request.runId, request.payload.docId)
@@ -444,8 +443,7 @@ export const handleDocxWorkerRequest = async (
         ok: true,
         payload: {
           action: 'search',
-          matches,
-          warnings: []
+          matches
         }
       }
     }
@@ -560,8 +558,7 @@ export const handleDocxWorkerRequest = async (
           requestId: request.requestId,
           ok: false,
           code: 'failed',
-          error: `apply_ops introduced invalid docx structure: ${validationProblems.map((problem) => problem.message).join('; ')}`,
-          warnings: validationProblems.map((problem) => `${problem.code}: ${problem.message}`)
+          error: `apply_ops introduced invalid docx structure: ${validationProblems.map((problem) => problem.message).join('; ')}`
         }
       }
       const runSession = getRunSession(request.runId, true)
@@ -588,8 +585,7 @@ export const handleDocxWorkerRequest = async (
             changedBlocks: applied.changedBlocks,
             previousIdentity: snapshot.identity,
             nextIdentity: nextSnapshot.identity
-          }),
-          warnings: applied.warnings
+          })
         }
       }
     }

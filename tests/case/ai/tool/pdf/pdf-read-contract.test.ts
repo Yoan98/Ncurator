@@ -14,7 +14,6 @@ type PdfInspectResult = {
   sourcePath: string
   pageCount: number
   metadata: { title?: string }
-  warnings: string[]
 }
 type PdfReadResult = {
   sourcePath: string

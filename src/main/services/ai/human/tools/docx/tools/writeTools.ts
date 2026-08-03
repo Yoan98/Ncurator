@@ -29,13 +29,11 @@ const buildEditSummary = (input: {
   toolName: string
   actionLabel: string
   changedBlocks: DocxChangedBlock[]
-  warnings: string[]
 }): string => {
   const base = `${input.actionLabel} 完成`
   const changed =
     input.changedBlocks.length > 0 ? `，共 ${String(input.changedBlocks.length)} 处变更` : ''
-  const warnings = input.warnings.length > 0 ? `，${String(input.warnings.length)} 条警告` : ''
-  return `${base}${changed}${warnings}`
+  return `${base}${changed}`
 }
 
 const fetchOutlineBlocks = async (
@@ -466,7 +464,6 @@ type ApplySerialEditResult =
       previousRevisionRef: string
       currentRevisionRef: string
       changedBlocks: DocxChangedBlock[]
-      warnings: string[]
       nextDocId: string
       nextStats: DocxOpenStats
       createdBlocks: DocxCreatedBlock[]
@@ -772,7 +769,6 @@ const applySerialEdit = async (input: {
   let currentDocId = input.currentDocId
   const opRecords: SerialActionOpRecord[] = []
   const changedBlocks: DocxChangedBlock[] = []
-  const warnings: string[] = []
   const readbackTargets: BatchReadbackTarget[] = []
   let nextStats: DocxOpenStats | undefined
 
@@ -858,7 +854,6 @@ const applySerialEdit = async (input: {
     }
 
     changedBlocks.push(...appliedPayload.changedBlocks)
-    warnings.push(...appliedPayload.warnings)
     readbackTargets.push(actionOps.readbackTarget)
     currentDocId = appliedPayload.newDocId
   }
@@ -935,7 +930,6 @@ const applySerialEdit = async (input: {
     previousRevisionRef: revisionUpdate.previousRevisionRef,
     currentRevisionRef: revisionUpdate.currentRevisionRef,
     changedBlocks,
-    warnings,
     nextDocId: currentDocId,
     nextStats: nextStats!,
     createdBlocks,
@@ -952,7 +946,6 @@ const buildWriteToolResult = async (input: {
   summary: string
   changedBlocks: DocxChangedBlock[]
   createdBlocks: DocxCreatedBlock[]
-  warnings: string[]
   readbackTargets: BatchReadbackTarget[]
   previousDocId?: string
 }): Promise<WriteToolResult> => {
@@ -1228,7 +1221,6 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
             summary: buildCreateSummary(registered.session.sourcePath),
             changedBlocks: registered.changedBlocks || [],
             createdBlocks: registered.createdBlocks || [],
-            warnings: [],
             readbackTargets: [{ action: 'insert_after', targetBlockIds: [] }]
           })
 
@@ -1311,12 +1303,10 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
         summary: buildEditSummary({
           toolName,
           actionLabel: `串行编辑 ${String(args.actions.length)} 个 action`,
-          changedBlocks: applied.changedBlocks,
-          warnings: applied.warnings
+          changedBlocks: applied.changedBlocks
         }),
         changedBlocks: applied.changedBlocks,
         createdBlocks: applied.createdBlocks,
-        warnings: applied.warnings,
         readbackTargets: applied.readbackTargets,
         previousDocId: sessionResult.docId
       })

@@ -71,7 +71,6 @@ export type DocxCreateResult = {
   sourcePath: string
   changedBlocks: DocxChangedBlock[]
   createdBlocks: Array<{ blockId: string; type: 'paragraph' | 'table' | 'table_cell' }>
-  warnings: string[]
   postWriteReadback: {
     regions: Array<{
       fromBlockId: string
@@ -87,7 +86,6 @@ export type DocxMutationResult = {
   sourcePath: string
   changedBlocks: DocxChangedBlock[]
   createdBlocks?: Array<{ blockId: string; type: 'paragraph' | 'table' | 'table_cell' }>
-  warnings: string[]
   postWriteReadback?: {
     regions: Array<{
       fromBlockId: string
@@ -101,7 +99,6 @@ export type DocxMutationResult = {
 
 export type DocxFailureResult = {
   error: string
-  warnings: string[]
   reason?: string
   decisionHint?: {
     code?: string

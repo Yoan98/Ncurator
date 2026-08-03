@@ -313,7 +313,7 @@ describe('ai unit brain decision-hint prompt contract', () => {
       '{"thought":{"next":"审批驳回是否保留原文件已经确认，当前证据足够进入最终交付。","todolist":[{"item":"确认审批驳回时是否保留原文件","status":"done"},{"item":"检查是否已经满足用户诉求并能进入最终交付","status":"done"}],"progressionSummary":"-当前任务的用户诉求是关于审批驳回时是否保留原文件，已经确认审批驳回时会保留原文件，当前证据足够进入最终交付。\\n-每个todolist项的推进理解：'
     )
     expect(prompt.user).toContain(
-      '{ command: string(minLength=1), commandExplanation: string(minLength=1), terminalId?: string(minLength=1) }'
+      '{ command: string, commandExplanation: string, terminalId?: string }'
     )
     expect(prompt.user).not.toContain('适用时机：')
     expect(prompt.user).not.toContain('适用于需要执行终端命令的任务。')
@@ -321,7 +321,7 @@ describe('ai unit brain decision-hint prompt contract', () => {
     expect(prompt.user).toContain('工具 terminal_read')
     expect(prompt.user).toContain('工具 terminal_stop')
     expect(prompt.user).toContain(
-      '- 输入结构：\n    { queryText: string(minLength=1), strategy?: "auto" | "semantic" | "keyword", limit?: integer(minimum=1, maximum=50), sourceType?: "all" | "file" | "web", documentIds?: Array<string> }'
+      '- 输入结构：\n    { queryText: string, strategy?: "auto" | "semantic" | "keyword", limit?: number, sourceType?: "all" | "file" | "web", documentIds?: string[] }'
     )
     expect(prompt.user).not.toContain('- 示例：')
     expect(prompt.user).not.toContain('最近 DeepSeek 融资情况')

@@ -23,33 +23,6 @@ const indentBlock = (value: string, level: number): string =>
 
 const formatLiteral = (value: unknown): string => JSON.stringify(value)
 
-const renderConstraints = (node: JsonSchemaNode): string => {
-  const entries: Array<[string, unknown]> = [
-    ['minLength', node.minLength],
-    ['maxLength', node.maxLength],
-    ['pattern', node.pattern],
-    ['minimum', node.minimum],
-    ['maximum', node.maximum],
-    ['exclusiveMinimum', node.exclusiveMinimum],
-    ['exclusiveMaximum', node.exclusiveMaximum],
-    ['multipleOf', node.multipleOf],
-    ['minItems', node.minItems],
-    ['maxItems', node.maxItems],
-    ['minProperties', node.minProperties],
-    ['maxProperties', node.maxProperties]
-  ]
-  const rendered = entries
-    .filter(([, value]) => value !== undefined)
-    .map(([key, value]) => `${key}=${formatLiteral(value)}`)
-  return rendered.length > 0 ? `(${rendered.join(', ')})` : ''
-}
-
-const appendSemanticConstraint = (rendered: string, node: JsonSchemaNode): string => {
-  const constraint =
-    typeof node['x-constraint'] === 'string' ? String(node['x-constraint']).trim() : ''
-  return constraint ? `${rendered} (constraint=${formatLiteral(constraint)})` : rendered
-}
-
 const renderUnion = (parts: string[], level: number): string => {
   if (parts.length === 0) return 'unknown'
   if (parts.length === 1) return parts[0]
@@ -106,11 +79,12 @@ const renderArray = (node: JsonSchemaNode, context: RenderContext, level: number
     const tupleItems = node.items
       .filter(isJsonSchemaNode)
       .map((item) => renderSchemaType(item, context, level + 1))
-    return `[${tupleItems.join(', ')}]${renderConstraints(node)}`
+    return `[${tupleItems.join(', ')}]`
   }
 
   const itemSchema = isJsonSchemaNode(node.items) ? node.items : undefined
-  return `Array<${itemSchema ? renderSchemaType(itemSchema, context, level + 1) : 'unknown'}>${renderConstraints(node)}`
+  const itemType = itemSchema ? renderSchemaType(itemSchema, context, level + 1) : 'unknown'
+  return `${itemType.includes(' | ') ? `(${itemType})` : itemType}[]`
 }
 
 const renderSchemaType = (node: JsonSchemaNode, context: RenderContext, level: number): string => {
@@ -132,23 +106,17 @@ const renderSchemaType = (node: JsonSchemaNode, context: RenderContext, level: n
 
   const anyOf = asJsonSchemaNodeArray(node.anyOf)
   if (anyOf.length > 0) {
-    return appendSemanticConstraint(
-      renderUnion(
-        anyOf.map((item) => renderSchemaType(item, context, level + 1)),
-        level
-      ),
-      node
+    return renderUnion(
+      anyOf.map((item) => renderSchemaType(item, context, level + 1)),
+      level
     )
   }
 
   const oneOf = asJsonSchemaNodeArray(node.oneOf)
   if (oneOf.length > 0) {
-    return appendSemanticConstraint(
-      renderUnion(
-        oneOf.map((item) => renderSchemaType(item, context, level + 1)),
-        level
-      ),
-      node
+    return renderUnion(
+      oneOf.map((item) => renderSchemaType(item, context, level + 1)),
+      level
     )
   }
 
@@ -161,28 +129,24 @@ const renderSchemaType = (node: JsonSchemaNode, context: RenderContext, level: n
   }
 
   if (typeValue === 'object' || isJsonSchemaNode(node.properties)) {
-    return appendSemanticConstraint(renderObject(node, context, level), node)
+    return renderObject(node, context, level)
   }
 
   if (typeValue === 'array') {
-    return appendSemanticConstraint(renderArray(node, context, level), node)
+    return renderArray(node, context, level)
   }
 
-  if (typeValue === 'string' || typeValue === 'number' || typeValue === 'integer') {
-    return appendSemanticConstraint(`${String(typeValue)}${renderConstraints(node)}`, node)
-  }
+  if (typeValue === 'string' || typeValue === 'number') return String(typeValue)
+  if (typeValue === 'integer') return 'number'
 
-  if (typeValue === 'boolean') return appendSemanticConstraint('boolean', node)
-  if (typeValue === 'null') return appendSemanticConstraint('null', node)
+  if (typeValue === 'boolean') return 'boolean'
+  if (typeValue === 'null') return 'null'
 
   const allOf = asJsonSchemaNodeArray(node.allOf)
   if (allOf.length > 0) {
-    return appendSemanticConstraint(
-      renderUnion(
-        allOf.map((item) => renderSchemaType(item, context, level + 1)),
-        level
-      ),
-      node
+    return renderUnion(
+      allOf.map((item) => renderSchemaType(item, context, level + 1)),
+      level
     )
   }
 
@@ -223,11 +187,12 @@ const renderArrayCompact = (node: JsonSchemaNode, context: RenderContext): strin
     const tupleItems = node.items
       .filter(isJsonSchemaNode)
       .map((item) => renderSchemaTypeCompact(item, context))
-    return `[${tupleItems.join(', ')}]${renderConstraints(node)}`
+    return `[${tupleItems.join(', ')}]`
   }
 
   const itemSchema = isJsonSchemaNode(node.items) ? node.items : undefined
-  return `Array<${itemSchema ? renderSchemaTypeCompact(itemSchema, context) : 'unknown'}>${renderConstraints(node)}`
+  const itemType = itemSchema ? renderSchemaTypeCompact(itemSchema, context) : 'unknown'
+  return `${itemType.includes(' | ') ? `(${itemType})` : itemType}[]`
 }
 
 const renderSchemaTypeCompact = (node: JsonSchemaNode, context: RenderContext): string => {
@@ -249,18 +214,12 @@ const renderSchemaTypeCompact = (node: JsonSchemaNode, context: RenderContext): 
 
   const anyOf = asJsonSchemaNodeArray(node.anyOf)
   if (anyOf.length > 0) {
-    return appendSemanticConstraint(
-      anyOf.map((item) => renderSchemaTypeCompact(item, context)).join(' | '),
-      node
-    )
+    return anyOf.map((item) => renderSchemaTypeCompact(item, context)).join(' | ')
   }
 
   const oneOf = asJsonSchemaNodeArray(node.oneOf)
   if (oneOf.length > 0) {
-    return appendSemanticConstraint(
-      oneOf.map((item) => renderSchemaTypeCompact(item, context)).join(' | '),
-      node
-    )
+    return oneOf.map((item) => renderSchemaTypeCompact(item, context)).join(' | ')
   }
 
   const typeValue = node.type
@@ -269,26 +228,22 @@ const renderSchemaTypeCompact = (node: JsonSchemaNode, context: RenderContext): 
   }
 
   if (typeValue === 'object' || isJsonSchemaNode(node.properties)) {
-    return appendSemanticConstraint(renderObjectCompact(node, context), node)
+    return renderObjectCompact(node, context)
   }
 
   if (typeValue === 'array') {
-    return appendSemanticConstraint(renderArrayCompact(node, context), node)
+    return renderArrayCompact(node, context)
   }
 
-  if (typeValue === 'string' || typeValue === 'number' || typeValue === 'integer') {
-    return appendSemanticConstraint(`${String(typeValue)}${renderConstraints(node)}`, node)
-  }
+  if (typeValue === 'string' || typeValue === 'number') return String(typeValue)
+  if (typeValue === 'integer') return 'number'
 
-  if (typeValue === 'boolean') return appendSemanticConstraint('boolean', node)
-  if (typeValue === 'null') return appendSemanticConstraint('null', node)
+  if (typeValue === 'boolean') return 'boolean'
+  if (typeValue === 'null') return 'null'
 
   const allOf = asJsonSchemaNodeArray(node.allOf)
   if (allOf.length > 0) {
-    return appendSemanticConstraint(
-      allOf.map((item) => renderSchemaTypeCompact(item, context)).join(' | '),
-      node
-    )
+    return allOf.map((item) => renderSchemaTypeCompact(item, context)).join(' | ')
   }
 
   const description = typeof node.description === 'string' ? node.description.trim() : ''
@@ -311,10 +266,11 @@ const buildCompactSchemaRenderOutput = (
     ? (normalizedDocument.$defs as Record<string, JsonSchemaNode>)
     : {}
   const context: RenderContext = { defs }
+  const definitionNames = collectReferencedDefinitionNames(normalizedDocument, defs)
   return {
     rootSchema: renderSchemaTypeCompact(normalizedDocument, context),
-    definitionBlocks: Object.entries(defs).map(
-      ([name, definition]) => `${name} = ${renderSchemaTypeCompact(definition, context)}`
+    definitionBlocks: definitionNames.map(
+      (name) => `type ${name} = ${renderSchemaTypeCompact(defs[name]!, context)}`
     )
   }
 }
@@ -329,6 +285,39 @@ const cloneJsonSchemaNode = (node: JsonSchemaNode): JsonSchemaNode => {
     output[key] = isJsonSchemaNode(value) ? cloneJsonSchemaNode(value) : value
   })
   return output
+}
+
+const collectReferencedDefinitionNames = (
+  root: JsonSchemaNode,
+  defs: Record<string, JsonSchemaNode>
+): string[] => {
+  const names: string[] = []
+  const visited = new Set<string>()
+
+  const visit = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      value.forEach(visit)
+      return
+    }
+    if (!isJsonSchemaNode(value)) return
+
+    if (typeof value.$ref === 'string' && value.$ref.startsWith('#/$defs/')) {
+      const name = value.$ref.slice('#/$defs/'.length)
+      if (!visited.has(name)) {
+        visited.add(name)
+        names.push(name)
+        visit(defs[name])
+      }
+      return
+    }
+
+    Object.entries(value).forEach(([key, child]) => {
+      if (key !== '$defs') visit(child)
+    })
+  }
+
+  visit(root)
+  return names
 }
 
 const compressBrainHandCallDisplay = (node: JsonSchemaNode): JsonSchemaNode => {
@@ -405,10 +394,11 @@ const buildSchemaRenderOutput = (
     ? (normalizedDocument.$defs as Record<string, JsonSchemaNode>)
     : {}
   const context: RenderContext = { defs }
+  const definitionNames = collectReferencedDefinitionNames(normalizedDocument, defs)
   return {
     rootSchema: renderSchemaType(normalizedDocument, context, 0),
-    definitionBlocks: Object.entries(defs).map(
-      ([name, definition]) => `${name} = ${renderSchemaType(definition, context, 0)}`
+    definitionBlocks: definitionNames.map(
+      (name) => `type ${name} = ${renderSchemaType(defs[name]!, context, 0)}`
     )
   }
 }
@@ -436,7 +426,7 @@ export const renderToolInputSchemaForPrompt = (
   const { rootSchema, definitionBlocks } = buildCompactSchemaRenderOutput(schema)
   return [
     rootSchema,
-    ...(definitionBlocks.length > 0 ? [`补充定义：${definitionBlocks.join('；')}`] : [])
+    ...(definitionBlocks.length > 0 ? ['类型定义：', ...definitionBlocks] : [])
   ].join('\n')
 }
 
@@ -456,6 +446,6 @@ export const renderBrainOutputSchemaForPrompt = (
   })
   return [
     rootSchema,
-    ...(definitionBlocks.length > 0 ? [`补充定义：${definitionBlocks.join('；')}`] : [])
+    ...(definitionBlocks.length > 0 ? ['类型定义：', ...definitionBlocks] : [])
   ].join('\n')
 }

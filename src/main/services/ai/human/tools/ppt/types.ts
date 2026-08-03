@@ -55,7 +55,7 @@ export type PptCompiledSlide = {
   background: string
   notes?: string
   elements: PptCompiledElement[]
-  warnings: string[]
+  issues: string[]
 }
 
 export type PptRuntimeDocument = {
@@ -69,7 +69,6 @@ export type PptRuntimeDocument = {
   movedSlideIds: Set<string>
   movedElementIds: Set<string>
   elementLineage: Map<string, string>
-  warnings: string[]
 }
 
 export type PptCapabilityToolsInput = WorkspaceCapabilityBuildInput

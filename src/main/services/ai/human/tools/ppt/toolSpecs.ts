@@ -5,11 +5,14 @@ import type { HumanToolSpec } from '../types'
 import { createStaticExecutionMetaResolver, readStringArg } from '../utils/toolSpecUtils'
 import {
   pptEditSchema,
+  pptEditOutputSchema,
   pptOutlineSchema,
+  pptReadOutlineOutputSchema,
   pptReadVisualsSchema,
   pptReadSlidesSchema,
-  pptSearchSchema,
-  pptToolOutputSchema
+  pptReadSlidesOutputSchema,
+  pptSearchOutputSchema,
+  pptSearchSchema
 } from './schemas'
 import { visualRecognitionOutputSchema } from '../visualRecognition/schemas'
 
@@ -39,7 +42,7 @@ export const PPT_READ_OUTLINE_TOOL_SPEC = {
   requiresWorkspace: true,
   skillIds: ['ppt-read'],
   inputSchema: pptOutlineSchema,
-  outputSchema: pptToolOutputSchema,
+  outputSchema: pptReadOutlineOutputSchema,
   promptSpec: {
     name: 'ppt_read_outline',
     description:
@@ -48,7 +51,7 @@ export const PPT_READ_OUTLINE_TOOL_SPEC = {
   resolveExecutionMeta: readExecutionMeta
 } satisfies PptToolSpec<
   z.infer<typeof pptOutlineSchema>,
-  z.infer<typeof pptToolOutputSchema>,
+  z.infer<typeof pptReadOutlineOutputSchema>,
   'ppt_read_outline',
   'ppt-read'
 >
@@ -59,7 +62,7 @@ export const PPT_READ_SLIDES_TOOL_SPEC = {
   requiresWorkspace: true,
   skillIds: ['ppt-read'],
   inputSchema: pptReadSlidesSchema,
-  outputSchema: pptToolOutputSchema,
+  outputSchema: pptReadSlidesOutputSchema,
   promptSpec: {
     name: 'ppt_read_slides',
     description:
@@ -68,7 +71,7 @@ export const PPT_READ_SLIDES_TOOL_SPEC = {
   resolveExecutionMeta: readExecutionMeta
 } satisfies PptToolSpec<
   z.infer<typeof pptReadSlidesSchema>,
-  z.infer<typeof pptToolOutputSchema>,
+  z.infer<typeof pptReadSlidesOutputSchema>,
   'ppt_read_slides',
   'ppt-read'
 >
@@ -79,7 +82,7 @@ export const PPT_SEARCH_TOOL_SPEC = {
   requiresWorkspace: true,
   skillIds: ['ppt-read'],
   inputSchema: pptSearchSchema,
-  outputSchema: pptToolOutputSchema,
+  outputSchema: pptSearchOutputSchema,
   promptSpec: {
     name: 'ppt_search',
     description:
@@ -88,7 +91,7 @@ export const PPT_SEARCH_TOOL_SPEC = {
   resolveExecutionMeta: readExecutionMeta
 } satisfies PptToolSpec<
   z.infer<typeof pptSearchSchema>,
-  z.infer<typeof pptToolOutputSchema>,
+  z.infer<typeof pptSearchOutputSchema>,
   'ppt_search',
   'ppt-read'
 >
@@ -119,7 +122,7 @@ export const PPT_EDIT_TOOL_SPEC = {
   requiresWorkspace: true,
   skillIds: ['ppt-write'],
   inputSchema: pptEditSchema,
-  outputSchema: pptToolOutputSchema,
+  outputSchema: pptEditOutputSchema,
   promptSpec: {
     name: 'ppt_edit',
     description: `创建或编辑 PPTX 文件，可在一次调用中完成页面创建、新增、复制、移动、删除以及文字、元素和备注调整，成功后直接保存并返回修改后的相关页面。
@@ -160,7 +163,7 @@ CSS 使用：
   })
 } satisfies PptToolSpec<
   z.infer<typeof pptEditSchema>,
-  z.infer<typeof pptToolOutputSchema>,
+  z.infer<typeof pptEditOutputSchema>,
   'ppt_edit',
   'ppt-write'
 >

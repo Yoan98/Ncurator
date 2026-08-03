@@ -1,38 +1,47 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`ai unit tool input schema renderer > renders every registered Human tool without anonymous definitions 1`] = `
+exports[`ai unit tool input schema renderer > renders every registered Human tool as plain TypeScript-like types 1`] = `
 {
-  "browser_use": 321,
-  "docx_edit": 8321,
-  "docx_read_blocks": 263,
-  "docx_read_outline": 319,
-  "docx_read_visuals": 146,
-  "docx_search": 155,
-  "excel_edit": 1837,
-  "excel_read_cells": 126,
-  "excel_read_outline": 35,
-  "excel_search": 156,
-  "image_analyze": 63,
-  "image_generate": 129,
-  "kb_list_documents": 153,
-  "kb_search": 184,
-  "pdf_inspect": 35,
-  "pdf_read_pages": 298,
-  "pdf_read_visuals": 168,
-  "pdf_search": 262,
-  "ppt_edit": 4611,
-  "ppt_read_outline": 319,
-  "ppt_read_slides": 283,
-  "ppt_read_visuals": 168,
-  "ppt_search": 125,
-  "terminal_read": 96,
-  "terminal_run": 107,
-  "terminal_stop": 60,
-  "text_file_edit": 946,
-  "text_file_read": 292,
-  "wait_for_user_takeover": 46,
-  "wait_time": 42,
-  "web_crawl": 56,
-  "web_search": 30,
+  "docx_edit": "{ sourcePath: string, actions: DocxEditAction[] }
+类型定义：
+type DocxEditAction = DocxInsertBlocksAction | DocxReplaceBlockAction | DocxReplaceTextAction | DocxStyleAction | DocxUpdateTableCellAction | DocxDeleteBlocksAction
+type DocxInsertBlocksAction = { type: "insert_blocks", location?: DocxBlockLocation, blocks: DocxCreateBlock[] }
+type DocxBlockLocation = { blockId: string, position: "before" | "after" }
+type DocxCreateBlock = DocxCreateParagraph | DocxCreateTable
+type DocxCreateParagraph = { type: "paragraph", style?: DocxParagraphStyle, children: (DocxCreateRun | DocxCreateHyperlink)[] }
+type DocxParagraphStyle = { styleName?: string, alignment?: "left" | "center" | "right" | "justify", indent?: { left?: number, right?: number, firstLine?: number, hanging?: number }, spacing?: { before?: number, after?: number, line?: number }, keepWithNext?: boolean, pageBreakBefore?: boolean }
+type DocxCreateRun = { type: "run", style?: DocxRunStyle, children: (DocxCreateText | DocxCreateTab | DocxCreateBreak)[] }
+type DocxRunStyle = { color?: string, bold?: boolean, italic?: boolean, underline?: boolean, strike?: boolean, highlight?: string, fontFamily?: string, fontSize?: number }
+type DocxCreateText = { type: "text", text: string }
+type DocxCreateTab = { type: "tab" }
+type DocxCreateBreak = { type: "break", kind?: "line" | "page" | "column" }
+type DocxCreateHyperlink = { type: "hyperlink", target?: string, anchor?: string, children: DocxCreateRun[] }
+type DocxCreateTable = { type: "table", style?: DocxTableStyle, children: DocxCreateTableRow[] }
+type DocxTableStyle = { alignment?: "left" | "center" | "right", width?: { value: number, unit: "pt" | "percent" }, layout?: "fixed" | "autofit", borders?: { top?: { style: "none" | "single" | "dashed" | "dotted" | "double", color?: string, size?: number }, right?: { style: "none" | "single" | "dashed" | "dotted" | "double", color?: string, size?: number }, bottom?: { style: "none" | "single" | "dashed" | "dotted" | "double", color?: string, size?: number }, left?: { style: "none" | "single" | "dashed" | "dotted" | "double", color?: string, size?: number }, insideHorizontal?: { style: "none" | "single" | "dashed" | "dotted" | "double", color?: string, size?: number }, insideVertical?: { style: "none" | "single" | "dashed" | "dotted" | "double", color?: string, size?: number } } }
+type DocxCreateTableRow = { type: "table_row", style?: DocxTableRowStyle, children: DocxCreateTableCell[] }
+type DocxTableRowStyle = { height?: number, repeatHeader?: boolean, cantSplit?: boolean }
+type DocxCreateTableCell = { type: "table_cell", style?: DocxTableCellStyle, children: DocxCreateBlock[] }
+type DocxTableCellStyle = { width?: { value: number, unit: "pt" | "percent" }, verticalAlignment?: "top" | "center" | "bottom", shading?: string, margins?: { top?: number, right?: number, bottom?: number, left?: number }, borders?: { top?: { style: "none" | "single" | "dashed" | "dotted" | "double", color?: string, size?: number }, right?: { style: "none" | "single" | "dashed" | "dotted" | "double", color?: string, size?: number }, bottom?: { style: "none" | "single" | "dashed" | "dotted" | "double", color?: string, size?: number }, left?: { style: "none" | "single" | "dashed" | "dotted" | "double", color?: string, size?: number }, insideHorizontal?: { style: "none" | "single" | "dashed" | "dotted" | "double", color?: string, size?: number }, insideVertical?: { style: "none" | "single" | "dashed" | "dotted" | "double", color?: string, size?: number } } }
+type DocxReplaceBlockAction = { type: "replace_block", blockId: string, block: DocxCreateBlock, allowVisualLoss?: true }
+type DocxReplaceTextAction = { type: "replace_text", query: string, replace: string, blockIds?: string[] }
+type DocxStyleAction = { type: "style", target: DocxStyleTarget, patch: DocxStylePatch }
+type DocxStyleTarget = { type: "text_match", query: string, blockIds?: string[] } | { type: "block", blockId: string } | { type: "node", nodeId: string }
+type DocxStylePatch = { kind: "run", color?: string | null, bold?: boolean | null, italic?: boolean | null, underline?: boolean | null, strike?: boolean | null, highlight?: string | null, fontFamily?: string | null, fontSize?: number | null } | { styleName?: string | null, alignment?: "left" | "center" | "right" | "justify" | null, indent?: { left?: number, right?: number, firstLine?: number, hanging?: number } | null, spacing?: { before?: number, after?: number, line?: number } | null, keepWithNext?: boolean | null, pageBreakBefore?: boolean | null, kind: "paragraph" } | { kind: "table", alignment?: "left" | "center" | "right" | null, width?: { value: number, unit: "pt" | "percent" } | null, layout?: "fixed" | "autofit" | null, borders?: { top?: { style: "none" | "single" | "dashed" | "dotted" | "double", color?: string, size?: number }, right?: { style: "none" | "single" | "dashed" | "dotted" | "double", color?: string, size?: number }, bottom?: { style: "none" | "single" | "dashed" | "dotted" | "double", color?: string, size?: number }, left?: { style: "none" | "single" | "dashed" | "dotted" | "double", color?: string, size?: number }, insideHorizontal?: { style: "none" | "single" | "dashed" | "dotted" | "double", color?: string, size?: number }, insideVertical?: { style: "none" | "single" | "dashed" | "dotted" | "double", color?: string, size?: number } } | null } | { kind: "table_row", height?: number | null, repeatHeader?: boolean | null, cantSplit?: boolean | null } | { kind: "table_cell", width?: { value: number, unit: "pt" | "percent" } | null, verticalAlignment?: "top" | "center" | "bottom" | null, shading?: string | null, margins?: { top?: number, right?: number, bottom?: number, left?: number } | null, borders?: { top?: { style: "none" | "single" | "dashed" | "dotted" | "double", color?: string, size?: number }, right?: { style: "none" | "single" | "dashed" | "dotted" | "double", color?: string, size?: number }, bottom?: { style: "none" | "single" | "dashed" | "dotted" | "double", color?: string, size?: number }, left?: { style: "none" | "single" | "dashed" | "dotted" | "double", color?: string, size?: number }, insideHorizontal?: { style: "none" | "single" | "dashed" | "dotted" | "double", color?: string, size?: number }, insideVertical?: { style: "none" | "single" | "dashed" | "dotted" | "double", color?: string, size?: number } } | null }
+type DocxUpdateTableCellAction = { type: "update_table_cell", cellBlockId: string, children: DocxCreateBlock[], allowVisualLoss?: true }
+type DocxDeleteBlocksAction = { type: "delete_blocks", blockIds: string[], allowVisualLoss?: true }",
+  "ppt_edit": "{ sourcePath: string, actions: PptEditAction[] }
+类型定义：
+type PptEditAction = { type: "insert_slide", location?: PptSlideLocation, html: string } | { type: "delete_slides", slideIds: string[] } | { type: "move_slide", slideId: string, location: PptSlideLocation } | { type: "duplicate_slide", slideId: string, location?: PptSlideLocation } | { type: "replace_text", query: string, replace: string, slideIds?: string[] } | { type: "edit_elements", slideId: string, operations: PptElementOperation[] } | { type: "set_notes", slideId: string, text: string }
+type PptSlideLocation = { slideId: string, position: "before" | "after" }
+type PptElementOperation = { type: "set_text", elementId: string, text: string } | { type: "set_bounds", elementId: string, bounds: PptBounds } | { type: "set_style", elementId: string, style: PptElementStyle } | { type: "set_z_order", elementId: string, placement: "front" | "back" | "forward" | "backward" } | { type: "delete_element", elementId: string } | { type: "duplicate_element", elementId: string } | { type: "add_element", element: PptElement } | { type: "replace_image", elementId: string, assetPath: string, fit?: "contain" | "cover" | "stretch" } | { type: "update_table", elementId: string, cells: { rowIndex: number, columnIndex: number, text: string }[] } | { type: "update_chart", elementId: string, chartType: "bar" | "column" | "line" | "pie" | "doughnut" | "area", categories: string[], series: PptChartSeries[], title?: string } | { type: "update_formula", elementId: string, latex: string }
+type PptBounds = { x: number, y: number, width: number, height: number }
+type PptElementStyle = { fill?: string, stroke?: string, strokeWidth?: number, color?: string, fontFamily?: string, fontSize?: number, bold?: boolean, italic?: boolean, underline?: boolean, textAlign?: "left" | "center" | "right", verticalAlign?: "top" | "middle" | "bottom", rotation?: number, shadow?: boolean }
+type PptElement = { type: "text", text: string, bounds: PptBounds, style?: PptElementStyle } | { type: "shape", shape: "rect" | "roundRect" | "ellipse" | "triangle" | "chevron" | "arrow", bounds: PptBounds, text?: string, style?: PptElementStyle } | { type: "line", from: PptPoint, to: PptPoint, color?: string, width?: number, arrowEnd?: boolean } | { type: "image", assetPath: string, bounds: PptBounds, fit?: "contain" | "cover" | "stretch" } | { type: "table", bounds: PptBounds, rows: string[][] } | { type: "chart", bounds: PptBounds, chartType: "bar" | "column" | "line" | "pie" | "doughnut" | "area", categories: string[], series: PptChartSeries[], title?: string } | { type: "formula", latex: string, bounds: PptBounds }
+type PptPoint = { x: number, y: number }
+type PptChartSeries = { name: string, values: number[] }",
+  "ppt_read_outline": "{ sourcePath: string, ranges: PptOutlineRange[] }
+类型定义：
+type PptOutlineRange = { type: "percent", fromPercent: number, toPercent: number } | { type: "slide_index", fromSlideIndex: number, toSlideIndex: number }",
+  "terminal_run": "{ command: string, commandExplanation: string, terminalId?: string }",
 }
 `;

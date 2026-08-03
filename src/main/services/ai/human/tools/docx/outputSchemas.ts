@@ -325,8 +325,7 @@ export const docxSearchOutputSchema = docxBaseOutputSchema.extend({
       offsets: z.array(z.object({ start: z.number().int(), end: z.number().int() })).optional(),
       score: z.number().optional()
     })
-  ),
-  warnings: z.array(z.string())
+  )
 })
 
 export const docxReadBlocksOutputSchema = docxBaseOutputSchema.extend({

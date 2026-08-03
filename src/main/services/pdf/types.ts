@@ -22,7 +22,6 @@ export type PdfOpenResult = {
   metadata: PdfDocumentMetadata
   outline: PdfOutlineItem[]
   encrypted: boolean
-  warnings: string[]
 }
 
 export type PdfPageTextStatus = 'available' | 'empty' | 'suspicious'
@@ -36,7 +35,6 @@ export type PdfPageReadResult = {
   width: number
   height: number
   rotation: number
-  warnings: string[]
 }
 
 export type PdfSearchMode = 'literal' | 'regex'

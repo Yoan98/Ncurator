@@ -154,7 +154,6 @@ describe('ai unit human tool result renderers', () => {
         previousRevisionRef: 'v1',
         currentRevisionRef: 'v2',
         createdBlocks: [{ blockId: 'b:2', type: 'paragraph' }],
-        warnings: [],
         postWriteReadback: {
           regions: [
             {

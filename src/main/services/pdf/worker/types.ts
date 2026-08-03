@@ -60,13 +60,11 @@ export type PdfWorkerSuccessPayload =
       matches: PdfSearchMatch[]
       pagesWithNoTextCount: number
       pagesWithSuspiciousTextCount: number
-      warnings: string[]
     }
   | {
       action: 'render_pages'
       assetBucketId: string
       images: PdfRenderedImage[]
-      warnings: string[]
     }
   | { action: 'release_run'; releasedDocCount: number }
 
@@ -82,7 +80,6 @@ export type PdfWorkerResponse =
         | 'encrypted_pdf_unsupported'
         | 'failed'
       error: string
-      warnings?: string[]
     }
 
 export type PendingPdfWorkerRequest = {

@@ -16,6 +16,7 @@ export const pptBoundsSchema = z
     height: z.number().positive()
   })
   .strict()
+  .meta({ id: 'PptBounds' })
 
 const pptPointSchema = z
   .object({
@@ -23,6 +24,7 @@ const pptPointSchema = z
     y: z.number().min(0)
   })
   .strict()
+  .meta({ id: 'PptPoint' })
 
 export const pptElementStyleSchema = z
   .object({
@@ -41,6 +43,7 @@ export const pptElementStyleSchema = z
     shadow: z.boolean().optional()
   })
   .strict()
+  .meta({ id: 'PptElementStyle' })
 
 export const pptSlideRangeSchema = z.discriminatedUnion('type', [
   z
@@ -56,7 +59,7 @@ export const pptSlideRangeSchema = z.discriminatedUnion('type', [
       slideIds: z.array(slideIdSchema).min(1)
     })
     .strict()
-])
+]).meta({ id: 'PptSlideRange' })
 
 const pptOutlineRangeSchema = z.discriminatedUnion('type', [
   z
@@ -73,7 +76,7 @@ const pptOutlineRangeSchema = z.discriminatedUnion('type', [
       toSlideIndex: slideIndexSchema
     })
     .strict()
-])
+]).meta({ id: 'PptOutlineRange' })
 
 export const pptOutlineSchema = z
   .object({
@@ -123,6 +126,7 @@ const chartSeriesSchema = z
     values: z.array(z.number()).min(1)
   })
   .strict()
+  .meta({ id: 'PptChartSeries' })
 const imageFitSchema = z.enum(['contain', 'cover', 'stretch'])
 
 const pptElementSchema = z.discriminatedUnion('type', [
@@ -185,7 +189,7 @@ const pptElementSchema = z.discriminatedUnion('type', [
       bounds: pptBoundsSchema
     })
     .strict()
-])
+]).meta({ id: 'PptElement' })
 
 const pptElementOperationSchema = z.discriminatedUnion('type', [
   z
@@ -276,7 +280,7 @@ const pptElementOperationSchema = z.discriminatedUnion('type', [
       latex: z.string().min(1)
     })
     .strict()
-])
+]).meta({ id: 'PptElementOperation' })
 
 const pptSlideLocationSchema = z
   .object({
@@ -284,6 +288,7 @@ const pptSlideLocationSchema = z
     position: z.enum(['before', 'after'])
   })
   .strict()
+  .meta({ id: 'PptSlideLocation' })
 
 export const pptEditActionSchema = z.discriminatedUnion('type', [
   z
@@ -330,7 +335,7 @@ export const pptEditActionSchema = z.discriminatedUnion('type', [
       text: z.string()
     })
     .strict()
-])
+]).meta({ id: 'PptEditAction' })
 
 export const pptEditSchema = z
   .object({
@@ -339,20 +344,33 @@ export const pptEditSchema = z
   })
   .strict()
 
-export const pptToolOutputSchema = z.object({
+const pptSlideOutputSchema = z.custom<JsonObject>()
+
+export const pptReadOutlineOutputSchema = z.object({
   sourcePath: z.string(),
-  slideCount: z.number().int().min(0).optional(),
-  changedSlideIds: z.array(z.string()).optional(),
-  slides: z.array(z.custom<JsonObject>()).optional(),
-  matches: z.array(z.custom<JsonObject>()).optional(),
-  totalMatchCount: z.number().int().min(0).optional(),
-  returnedMatchCount: z.number().int().min(0).optional(),
-  assetBucketId: z.string().optional(),
-  images: z.array(z.custom<JsonObject>()).optional(),
-  postWriteReadback: z.custom<JsonObject>().optional(),
-  warnings: z.array(z.string()),
-  ok: z.literal(false).optional(),
-  error: z.string().optional()
+  slideCount: z.number().int().min(0),
+  slides: z.array(pptSlideOutputSchema)
+})
+
+export const pptReadSlidesOutputSchema = z.object({
+  sourcePath: z.string(),
+  slideCount: z.number().int().min(0),
+  slides: z.array(pptSlideOutputSchema)
+})
+
+export const pptSearchOutputSchema = z.object({
+  sourcePath: z.string(),
+  totalMatchCount: z.number().int().min(0),
+  returnedMatchCount: z.number().int().min(0),
+  truncated: z.boolean(),
+  matches: z.array(pptSlideOutputSchema)
+})
+
+export const pptEditOutputSchema = z.object({
+  sourcePath: z.string(),
+  slideCount: z.number().int().min(1),
+  changedSlideIds: z.array(z.string()),
+  postWriteReadback: z.custom<JsonObject>()
 })
 
 export type PptOutlineInput = z.infer<typeof pptOutlineSchema>

@@ -84,7 +84,6 @@ export const buildDocxToolCallResult = (input: {
 export type DocxToolFailure = {
   ok: false
   error: string
-  warnings: string[]
   decisionHint?: JsonObject
   resourceContext?: DocxToolResourceContext
 }
@@ -99,7 +98,6 @@ export type DocxToolRuntime = {
     toolCallId: string
     reason: string
     error: string
-    warnings?: string[]
     decisionHint?: JsonObject
     draftDocId?: string
     resourceContext?: DocxToolResourceContext
@@ -257,13 +255,11 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
   const toFailure = (params: {
     reason: string
     error: string
-    warnings?: string[]
     decisionHint?: JsonObject
     resourceContext?: DocxToolResourceContext
   }): DocxToolFailure => ({
     ok: false,
     error: params.error,
-    warnings: params.warnings || [],
     decisionHint: params.decisionHint,
     resourceContext: params.resourceContext
   })
@@ -273,7 +269,6 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     toolCallId: string
     reason: string
     error: string
-    warnings?: string[]
     decisionHint?: JsonObject
     draftDocId?: string
     resourceContext?: DocxToolResourceContext
@@ -281,7 +276,6 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     const out = toFailure({
       reason: params.reason,
       error: params.error,
-      warnings: params.warnings,
       decisionHint: params.decisionHint,
       resourceContext: params.resourceContext
     })
@@ -312,7 +306,6 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
       toolCallId: params.toolCallId,
       reason: params.response.code,
       error: params.response.error,
-      warnings: params.response.warnings,
       draftDocId: params.draftDocId,
       resourceContext: params.resourceContext
     })

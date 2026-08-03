@@ -137,7 +137,6 @@ const readPage = async (snapshot: PdfSnapshot, pageNumber: number): Promise<PdfP
     width: Math.round(viewport.width),
     height: Math.round(viewport.height),
     rotation: viewport.rotation,
-    warnings: normalized.warnings
   }
   snapshot.pageTextByNumber.set(pageNumber, result)
   return result
@@ -272,7 +271,6 @@ export const handlePdfWorkerRequest = async (
           metadata: buildMetadata(metadata.info),
           outline: await buildOutline(document),
           encrypted: false,
-          warnings: []
         }
       }
     }
@@ -325,7 +323,6 @@ export const handlePdfWorkerRequest = async (
           matches: allMatches.slice(0, request.payload.maxMatches),
           pagesWithNoTextCount,
           pagesWithSuspiciousTextCount,
-          warnings: []
         }
       }
     }
@@ -351,7 +348,6 @@ export const handlePdfWorkerRequest = async (
           action: 'render_pages',
           assetBucketId: bucket.assetBucketId,
           images,
-          warnings: []
         }
       }
     }

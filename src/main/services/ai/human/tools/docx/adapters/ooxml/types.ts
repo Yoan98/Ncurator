@@ -85,5 +85,4 @@ export type ParsedDocxBundle = {
 export type ApplyOpsResult = {
   buffer: Buffer
   changedBlocks: DocxChangedBlock[]
-  warnings: string[]
 }

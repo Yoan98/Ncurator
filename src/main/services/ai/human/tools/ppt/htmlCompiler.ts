@@ -296,10 +296,10 @@ const layoutWithElectron = async (html: string): Promise<PptCompiledSlide | null
           elements.push({ sourceId, type: 'shape', bounds, style: common, zIndex: z });
         });
         const rootStyle = getComputedStyle(root);
-        const warnings = [];
-        if (Math.abs(rootRect.width - ${PPT_CANVAS_WIDTH}) > 0.5 || Math.abs(rootRect.height - ${PPT_CANVAS_HEIGHT}) > 0.5) warnings.push('Slide root must be exactly 1920x1080.');
-        candidates.forEach((element) => { const style = getComputedStyle(element); if (style.filter !== 'none' || style.mixBlendMode !== 'normal' || style.animationName !== 'none') warnings.push('Unsupported CSS on ' + (element.id || element.tagName) + '.'); });
-        return { width: ${PPT_CANVAS_WIDTH}, height: ${PPT_CANVAS_HEIGHT}, background: color(rootStyle.backgroundColor) || '#FFFFFF', notes: document.querySelector('[data-ppt-notes]')?.textContent?.trim(), elements, warnings };
+        const issues = [];
+        if (Math.abs(rootRect.width - ${PPT_CANVAS_WIDTH}) > 0.5 || Math.abs(rootRect.height - ${PPT_CANVAS_HEIGHT}) > 0.5) issues.push('Slide root must be exactly 1920x1080.');
+        candidates.forEach((element) => { const style = getComputedStyle(element); if (style.filter !== 'none' || style.mixBlendMode !== 'normal' || style.animationName !== 'none') issues.push('Unsupported CSS on ' + (element.id || element.tagName) + '.'); });
+        return { width: ${PPT_CANVAS_WIDTH}, height: ${PPT_CANVAS_HEIGHT}, background: color(rootStyle.backgroundColor) || '#FFFFFF', notes: document.querySelector('[data-ppt-notes]')?.textContent?.trim(), elements, issues };
       })()`)) as PptCompiledSlide
     } finally {
       window.destroy()
@@ -434,7 +434,7 @@ const layoutWithPlaywright = async (html: string): Promise<PptCompiledSlide | nu
     const compiled = layoutFallback(positionedHtml)
     return {
       ...compiled,
-      warnings: compiled.warnings.filter(
+      issues: compiled.issues.filter(
         (warning) =>
           warning !== 'Chromium layout was unavailable; explicit element bounds were used.'
       )
@@ -658,7 +658,7 @@ const layoutFallback = (html: string): PptCompiledSlide => {
       normalizePptColor(rootStyle['background-color'] || rootStyle.background, '#FFFFFF') ||
       '#FFFFFF',
     elements,
-    warnings: ['Chromium layout was unavailable; explicit element bounds were used.']
+    issues: ['Chromium layout was unavailable; explicit element bounds were used.']
   }
 }
 
@@ -708,10 +708,10 @@ export const compilePptSlideHtml = async (html: string): Promise<PptCompiledSlid
       `${outside.length} PPT elements exceed the 1920x1080 slide bounds: ${details}. Keep right <= 1920 and bottom <= 1080.`
     )
   }
-  const blockingWarnings = compiled.warnings.filter((warning) =>
-    /Unsupported CSS|exactly 1920/.test(warning)
+  const blockingIssues = compiled.issues.filter((issue) =>
+    /Unsupported CSS|exactly 1920/.test(issue)
   )
-  if (blockingWarnings.length > 0) throw new Error(blockingWarnings.join(' '))
+  if (blockingIssues.length > 0) throw new Error(blockingIssues.join(' '))
   if (compiled.elements.length === 0)
     throw new Error('PPT slide contains no supported visual elements.')
   return compiled

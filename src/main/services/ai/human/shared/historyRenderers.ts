@@ -104,7 +104,7 @@ const PPT_RESULT_WHITELIST: NestedWhitelistConfig = {
     slides: PPT_SLIDE_WHITELIST,
     outlineWindow: PPT_SLIDE_WHITELIST
   },
-  warnings: true,
+  truncated: true,
   error: true
 }
 
@@ -300,8 +300,7 @@ const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
       pageNumber: true,
       depth: true
     },
-    encrypted: true,
-    warnings: true
+    encrypted: true
   },
   pdf_search: {
     sourcePath: true,
@@ -323,7 +322,6 @@ const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
     },
     pagesWithNoTextCount: true,
     pagesWithSuspiciousTextCount: true,
-    warnings: true,
     error: true,
     decisionHint: true
   },
@@ -338,10 +336,8 @@ const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
       imageCount: true,
       width: true,
       height: true,
-      rotation: true,
-      warnings: true
+      rotation: true
     },
-    warnings: true,
     error: true,
     decisionHint: true
   },

@@ -1,24 +1,51 @@
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod/v4'
 import { ALL_TOOL_SPECS } from '../../../../src/main/services/ai/human/tools/registry'
-import { renderToolInputSchemaForPrompt } from '../../../../src/main/services/ai/human/tools/schemaPromptRenderer'
+import {
+  docxReadBlocksOutputSchema,
+  docxOutlineOutputSchema,
+  docxSearchOutputSchema,
+  docxWriteOutputSchema
+} from '../../../../src/main/services/ai/human/tools/docx/outputSchemas'
+import {
+  pdfInspectOutputSchema,
+  pdfReadPagesOutputSchema,
+  pdfSearchOutputSchema
+} from '../../../../src/main/services/ai/human/tools/pdf/outputSchemas'
+import {
+  pptEditOutputSchema,
+  pptReadOutlineOutputSchema,
+  pptReadSlidesOutputSchema,
+  pptSearchOutputSchema
+} from '../../../../src/main/services/ai/human/tools/ppt/schemas'
+import {
+  renderToolInputSchemaForPrompt
+} from '../../../../src/main/services/ai/human/tools/schemaPromptRenderer'
 
 describe('ai unit tool input schema renderer', () => {
-  it('renders every registered Human tool without anonymous definitions', () => {
-    const lengths = Object.fromEntries(
+  it('renders every registered Human tool as plain TypeScript-like types', () => {
+    const renderedByTool = Object.fromEntries(
       ALL_TOOL_SPECS.map((spec) => {
         const rendered = renderToolInputSchemaForPrompt(spec.inputSchema, { compact: true })
         expect(rendered).not.toMatch(/__schema\d+/)
+        expect(rendered).not.toMatch(
+          /minLength|maxLength|minimum|maximum|exclusiveMinimum|exclusiveMaximum|multipleOf|minItems|maxItems|minProperties|maxProperties|pattern|constraint=|integer/
+        )
         expect(rendered.length).toBeGreaterThan(2)
         expect(rendered.length).toBeLessThan(50_000)
-        return [spec.name, rendered.length]
+        return [spec.name, rendered]
       })
     )
 
-    expect(lengths).toMatchSnapshot()
+    expect({
+      terminal_run: renderedByTool.terminal_run,
+      ppt_read_outline: renderedByTool.ppt_read_outline,
+      ppt_edit: renderedByTool.ppt_edit,
+      docx_edit: renderedByTool.docx_edit
+    }).toMatchSnapshot()
   })
 
-  it('keeps string, numeric, array and object constraints', () => {
+  it('hides runtime constraints while preserving TypeScript shapes', () => {
     const rendered = renderToolInputSchemaForPrompt(
       z
         .object({
@@ -38,18 +65,10 @@ describe('ai unit tool input schema renderer', () => {
       { compact: true }
     )
 
-    expect(rendered).toContain('minLength=2')
-    expect(rendered).toContain('maxLength=8')
-    expect(rendered).toContain('pattern="^[a-z]+$"')
-    expect(rendered).toContain('minimum=1')
-    expect(rendered).toContain('maximum=9')
-    expect(rendered).toContain('multipleOf=2')
-    expect(rendered).toContain('minItems=1')
-    expect(rendered).toContain('maxItems=3')
-    expect(rendered).toContain('constraint="code cannot be reserved"')
+    expect(rendered).toBe('{ name: string, count: number, values: string[], code: string }')
   })
 
-  it('renders DOCX shared definitions once and keeps real request limits', () => {
+  it('renders DOCX shared definitions once without schema constraints', () => {
     const docxEdit = ALL_TOOL_SPECS.find((spec) => spec.name === 'docx_edit')!
     const docxVisuals = ALL_TOOL_SPECS.find((spec) => spec.name === 'docx_read_visuals')!
     const editRendered = renderToolInputSchemaForPrompt(docxEdit.inputSchema, { compact: true })
@@ -62,13 +81,34 @@ describe('ai unit tool input schema renderer', () => {
       'DocxCreateRun',
       'DocxCreateParagraph',
       'DocxCreateTable',
-      'DocxCreateBlock'
+      'DocxCreateBlock',
+      'DocxEditAction',
+      'DocxStyleTarget',
+      'DocxStylePatch'
     ]) {
-      expect(editRendered.match(new RegExp(`${definition} =`, 'g'))).toHaveLength(1)
+      expect(editRendered.match(new RegExp(`type ${definition} =`, 'g'))).toHaveLength(1)
     }
-    expect(visualsRendered).toContain('minItems=1')
-    expect(visualsRendered).toContain('maxItems=10')
-    expect(editRendered).toContain('hyperlink requires target or anchor')
-    expect(editRendered).toContain('style patch must contain at least one property')
+    expect(visualsRendered).toBe(
+      '{ sourcePath: string, requests: { visualId: string, instruction: string }[] }'
+    )
+    expect(editRendered).not.toMatch(/constraint=|minItems|hyperlink requires|style patch must/)
+  })
+
+  it('does not expose warnings in tool output schemas', () => {
+    ;[
+      docxOutlineOutputSchema,
+      docxSearchOutputSchema,
+      docxReadBlocksOutputSchema,
+      docxWriteOutputSchema,
+      pdfInspectOutputSchema,
+      pdfSearchOutputSchema,
+      pdfReadPagesOutputSchema,
+      pptReadOutlineOutputSchema,
+      pptReadSlidesOutputSchema,
+      pptSearchOutputSchema,
+      pptEditOutputSchema
+    ].forEach((schema) => {
+      expect(Object.keys(schema.shape)).not.toContain('warnings')
+    })
   })
 })

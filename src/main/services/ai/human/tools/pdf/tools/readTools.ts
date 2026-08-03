@@ -66,7 +66,6 @@ const runTool = async (input: {
       toolCallId: input.toolCallId,
       reason: error instanceof PdfToolRuntimeError ? error.reason : 'invalid_input',
       error: error instanceof Error ? error.message : String(error),
-      warnings: error instanceof PdfToolRuntimeError ? error.warnings : undefined
     })
   }
 }
@@ -92,7 +91,6 @@ export const buildPdfReadTools = (runtime: PdfToolRuntime): StructuredToolInterf
               metadata: document.metadata,
               outline: document.outline,
               encrypted: document.encrypted,
-              warnings: document.warnings
             })
           })
       }),
@@ -152,7 +150,6 @@ export const buildPdfReadTools = (runtime: PdfToolRuntime): StructuredToolInterf
                 matches: response.payload.matches,
                 pagesWithNoTextCount: response.payload.pagesWithNoTextCount,
                 pagesWithSuspiciousTextCount: response.payload.pagesWithSuspiciousTextCount,
-                warnings: response.payload.warnings
               }
             }
           })
@@ -215,7 +212,6 @@ export const buildPdfReadTools = (runtime: PdfToolRuntime): StructuredToolInterf
                 sourcePath: document.sourcePath,
                 pageCount: document.pageCount,
                 pages: response.payload.pages,
-                warnings: response.payload.pages.flatMap((page) => page.warnings)
               }
             }
           })

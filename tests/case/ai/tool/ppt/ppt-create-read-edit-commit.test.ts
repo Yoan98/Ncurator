@@ -128,6 +128,10 @@ describe('ai tool ppt backend', () => {
             sourcePath,
             actions: [{ type: 'replace_text', query: '反馈周期', replace: '客户反馈周期' }]
           })
+          const missingReplace = await harness.invoke<JsonObject>('ppt_edit', {
+            sourcePath,
+            actions: [{ type: 'replace_text', query: '不存在的文本', replace: '不会写入' }]
+          })
           const search = await harness.invoke<JsonObject>('ppt_search', {
             sourcePath,
             query: '客户反馈周期'
@@ -169,6 +173,7 @@ describe('ai tool ppt backend', () => {
             failedDelete,
             overviewAfterFailedDelete,
             replaced,
+            missingReplace,
             search,
             visual,
             beforeCommitExists,
@@ -202,8 +207,13 @@ describe('ai tool ppt backend', () => {
             result.failedDelete.ok === false &&
             result.overviewAfterFailedDelete.slideCount === 2 &&
             !JSON.stringify(result.overviewAfterFailedDelete).includes('不应落盘的标题') &&
+            result.missingReplace.ok === false &&
+            String(result.missingReplace.error).includes('未找到要替换的文字') &&
+            !Object.hasOwn(result.overview, 'warnings') &&
+            !Object.hasOwn(result.created, 'warnings') &&
             Array.isArray(result.search.matches) &&
             result.search.matches.length === 1 &&
+            result.search.truncated === false &&
             Array.isArray(result.visual.results) &&
             result.visual.results.length === 1 &&
             String(

@@ -170,14 +170,12 @@ export type DocxWorkerSuccessPayload =
   | {
       action: 'search'
       matches: DocxSearchMatch[]
-      warnings: string[]
     }
   | {
       action: 'apply_ops'
       newDocId: string
       stats: DocxOpenStats
       changedBlocks: DocxChangedBlock[]
-      warnings: string[]
     }
   | {
       action: 'materialize_draft'
@@ -201,7 +199,6 @@ export type DocxWorkerResponse =
       ok: false
       code: 'failed' | 'invalid_input'
       error: string
-      warnings?: string[]
     }
 
 type DocSnapshotBase = {

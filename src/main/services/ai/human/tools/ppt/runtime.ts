@@ -529,7 +529,6 @@ const addCompiledElement = async (input: {
       bytes,
       extension: 'svg'
     })
-    input.document.warnings.push('当前公式已使用 SVG 回退；公式整体可缩放，但内部字符暂不可编辑。')
   } else if (input.element.type === 'svg') {
     bytes = new Uint8Array(Buffer.from(input.element.svg || '', 'utf8'))
     format = 'svg'
@@ -594,7 +593,6 @@ const addCompiledSlide = async (input: {
     })
   }
   placeSlide(input.document.presentation, slide, input.location)
-  input.document.warnings.push(...input.compiled.warnings)
   return slide
 }
 
@@ -896,7 +894,6 @@ const addFormulaShape = async (input: {
     fit: 'contain'
   })
   setShapeDescription(shape, `ppt-latex:${input.latex}`)
-  input.document.warnings.push('公式已使用 SVG 回退，公式整体可编辑，内部字符不可编辑。')
   return shape
 }
 
@@ -1179,8 +1176,7 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
       dirty: false,
       movedSlideIds: new Set(),
       movedElementIds: new Set(),
-      elementLineage: new Map(),
-      warnings: []
+      elementLineage: new Map()
     }
     documents.set(sourcePath, document)
     return document
@@ -1220,7 +1216,6 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
       slides: [...selected]
         .sort((left, right) => left - right)
         .map((index) => outlineItem(document.presentation, slides[index]!, index)),
-      warnings: [...new Set(document.warnings)]
     }
   }
 
@@ -1235,7 +1230,6 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
       slides: indices.map((index) =>
         slideReadback(document.presentation, slides[index]!, index, true)
       ),
-      warnings: [...new Set(document.warnings)]
     }
   }
 
@@ -1269,14 +1263,12 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
       )
     })
     const matches = allMatches.slice(0, 100)
-    const warnings = [...new Set(document.warnings)]
-    if (matches.length < allMatches.length) warnings.push('搜索命中过多，仅返回前 100 条。')
     return {
       sourcePath: args.sourcePath,
       totalMatchCount: allMatches.length,
       returnedMatchCount: matches.length,
-      matches,
-      warnings
+      truncated: matches.length < allMatches.length,
+      matches
     }
   }
 
@@ -1322,8 +1314,7 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
     return {
       sourcePath: args.sourcePath,
       assetBucketId: document.changeId,
-      images,
-      warnings: [...new Set(document.warnings)]
+      images
     }
   }
 
@@ -1337,7 +1328,6 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
     const movedSlideIdsBeforeAction = new Set(document.movedSlideIds)
     const movedElementIdsBeforeAction = new Set(document.movedElementIds)
     const elementLineageBeforeAction = new Map(document.elementLineage)
-    const warningsBeforeAction = [...document.warnings]
     try {
       const changedSlideIds: string[] = []
       const movedSlideIds = new Set<string>()
@@ -1422,7 +1412,7 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
                 })
               }
             }
-            if (replacements === 0) document.warnings.push(`未找到要替换的文字：${action.query}`)
+            if (replacements === 0) throw new Error(`未找到要替换的文字：${action.query}`)
           } else if (action.type === 'edit_elements') {
             const slide = findSlide(document.presentation, action.slideId)
             for (const operation of action.operations) {
@@ -1497,8 +1487,7 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
         sourcePath: args.sourcePath,
         slideCount: slides.length,
         changedSlideIds: uniqueChanged,
-        postWriteReadback,
-        warnings: [...new Set(document.warnings)]
+        postWriteReadback
       }
     } catch (error) {
       document.presentation = await loadPresentation(presentationSnapshot)
@@ -1506,7 +1495,6 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
       document.movedSlideIds = movedSlideIdsBeforeAction
       document.movedElementIds = movedElementIdsBeforeAction
       document.elementLineage = elementLineageBeforeAction
-      document.warnings = warningsBeforeAction
       if (create) documents.delete(sourcePath)
       throw error
     }
@@ -1632,6 +1620,5 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
 export const toPptToolFailure = (sourcePath: string, error: unknown): JsonObject => ({
   ok: false,
   sourcePath,
-  warnings: [],
   error: error instanceof Error ? error.message : String(error)
 })

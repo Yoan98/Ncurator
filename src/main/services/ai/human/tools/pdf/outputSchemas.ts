@@ -1,8 +1,6 @@
 import { z } from 'zod/v4'
 import { visualRecognitionOutputSchema } from '../visualRecognition/schemas'
 
-const warningsSchema = z.array(z.string())
-
 const pdfMetadataSchema = z.object({
   title: z.string().optional(),
   author: z.string().optional(),
@@ -28,8 +26,7 @@ const pdfPageSchema = z.object({
   imageCount: z.number().int(),
   width: z.number(),
   height: z.number(),
-  rotation: z.number(),
-  warnings: warningsSchema
+  rotation: z.number()
 })
 
 export const pdfInspectOutputSchema = z.object({
@@ -37,8 +34,7 @@ export const pdfInspectOutputSchema = z.object({
   pageCount: z.number().int(),
   metadata: pdfMetadataSchema,
   outline: z.array(pdfOutlineItemSchema),
-  encrypted: z.boolean(),
-  warnings: warningsSchema
+  encrypted: z.boolean()
 })
 
 export const pdfSearchOutputSchema = z.object({
@@ -59,15 +55,13 @@ export const pdfSearchOutputSchema = z.object({
     })
   ),
   pagesWithNoTextCount: z.number().int(),
-  pagesWithSuspiciousTextCount: z.number().int(),
-  warnings: warningsSchema
+  pagesWithSuspiciousTextCount: z.number().int()
 })
 
 export const pdfReadPagesOutputSchema = z.object({
   sourcePath: z.string(),
   pageCount: z.number().int(),
-  pages: z.array(pdfPageSchema),
-  warnings: warningsSchema
+  pages: z.array(pdfPageSchema)
 })
 
 export const pdfReadVisualsOutputSchema = visualRecognitionOutputSchema

@@ -18,7 +18,10 @@ import {
   PPT_CANVAS_HEIGHT,
   PPT_CANVAS_WIDTH
 } from '../../../../src/main/services/ai/human/tools/ppt/htmlCompiler'
-import { buildPptDiffManifest } from '../../../../src/main/services/ai/human/tools/ppt/runtime'
+import {
+  buildPptDiffManifest,
+  toPptToolFailure
+} from '../../../../src/main/services/ai/human/tools/ppt/runtime'
 
 describe('ai unit ppt tool contract', () => {
   it('splits ppt reading and writing into two skills and five prefixed tools', () => {
@@ -77,6 +80,14 @@ describe('ai unit ppt tool contract', () => {
         }))
       }).success
     ).toBe(false)
+  })
+
+  it('returns failures without warnings', () => {
+    expect(toPptToolFailure('deck.pptx', new Error('找不到页面'))).toEqual({
+      ok: false,
+      sourcePath: 'deck.pptx',
+      error: '找不到页面'
+    })
   })
 
   it('accepts ordered action arrays and rejects the removed single-action contract', () => {

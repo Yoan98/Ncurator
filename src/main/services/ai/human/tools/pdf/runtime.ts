@@ -13,13 +13,11 @@ type FailedPdfWorkerResponse = Extract<PdfWorkerResponse, { ok: false }>
 
 export class PdfToolRuntimeError extends Error {
   public readonly reason: FailedPdfWorkerResponse['code']
-  public readonly warnings: string[]
 
   public constructor(response: FailedPdfWorkerResponse) {
     super(response.error)
     this.name = 'PdfToolRuntimeError'
     this.reason = response.code
-    this.warnings = response.warnings || []
   }
 }
 
@@ -32,7 +30,6 @@ export type PdfToolResourceContext = {
 export type PdfToolFailure = {
   ok: false
   error: string
-  warnings: string[]
   decisionHint?: JsonObject
   resourceContext?: PdfToolResourceContext
 }
@@ -55,7 +52,6 @@ export type PdfToolRuntime = {
     toolCallId: string
     error: string
     reason: string
-    warnings?: string[]
     decisionHint?: JsonObject
     resourceContext?: PdfToolResourceContext
   }) => PdfToolFailure
@@ -154,7 +150,6 @@ export const createPdfToolRuntime = (input: PdfCapabilityToolsInput): PdfToolRun
     const failure: PdfToolFailure = {
       ok: false,
       error: params.error,
-      warnings: params.warnings || [],
       decisionHint: params.decisionHint,
       resourceContext: params.resourceContext
     }
@@ -179,7 +174,6 @@ export const createPdfToolRuntime = (input: PdfCapabilityToolsInput): PdfToolRun
       toolCallId: params.toolCallId,
       error: params.response.error,
       reason: params.response.code,
-      warnings: params.response.warnings,
       resourceContext: params.resourceContext
     })
 

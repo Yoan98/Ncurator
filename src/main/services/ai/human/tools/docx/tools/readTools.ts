@@ -135,7 +135,6 @@ const executeWorkerSearch = async (input: {
     }
   | {
       matches: DocxSearchMatch[]
-      warnings: string[]
     }
 > => {
   const workerResponse = await input.runtime.callWorker({
@@ -179,8 +178,7 @@ const executeWorkerSearch = async (input: {
     }
   }
   return {
-    matches: workerResponse.payload.matches,
-    warnings: workerResponse.payload.warnings
+    matches: workerResponse.payload.matches
   }
 }
 
@@ -208,7 +206,6 @@ const buildSearchResult = (input: {
   appliedAliases: AppliedAlias[]
   totalMatchCount: number
   matches: DocxSearchMatch[]
-  warnings: string[]
   runtime: DocxToolRuntime
 }) => ({
   sourcePath: input.sourcePath,
@@ -217,8 +214,7 @@ const buildSearchResult = (input: {
   appliedAliases: input.appliedAliases,
   totalMatchCount: input.totalMatchCount,
   returnedMatchCount: input.matches.length,
-  matches: input.matches,
-  warnings: input.warnings
+  matches: input.matches
 })
 
 const buildSearchOutputPreview = (result: ReturnType<typeof buildSearchResult>) => ({
@@ -250,7 +246,6 @@ const buildResultTooLargeFailure = (input: {
     toolCallId: input.toolCallId,
     reason: 'result_too_large',
     error: 'docx result too large',
-    warnings: [],
     decisionHint: {
       code: 'hand_tool_result_too_large',
       detail: {
@@ -505,10 +500,6 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
           minScore: SEMANTIC_MIN_SCORE
         })
         const matches = allMatches.slice(0, MAX_SEARCH_MATCHES)
-        const warnings =
-          semanticIndex.entries.length === 0
-            ? ['no searchable paragraph or table cell blocks found for semantic search']
-            : []
         const result = buildSearchResult({
           sourcePath: sessionResult.sourcePath,
           mode,
@@ -516,7 +507,6 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
           appliedAliases: [],
           totalMatchCount: allMatches.length,
           matches,
-          warnings,
           runtime
         })
         return finalizeDocxToolSuccess({
@@ -542,7 +532,6 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
       let effectiveQuery = args.query
       let appliedAliases: AppliedAlias[] = []
       let allMatches: DocxSearchMatch[] = []
-      let warnings: string[] = []
 
       for (const attempt of attempts) {
         const searchResult = await executeWorkerSearch({
@@ -566,7 +555,6 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
           })
         }
         allMatches = searchResult.matches
-        warnings = searchResult.warnings
         effectiveQuery = attempt.query
         appliedAliases = attempt.appliedAliases
         if (allMatches.length > 0 || mode !== 'literal') {
@@ -582,7 +570,6 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
         appliedAliases,
         totalMatchCount: allMatches.length,
         matches,
-        warnings,
         runtime
       })
       return finalizeDocxToolSuccess({
