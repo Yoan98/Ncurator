@@ -675,6 +675,7 @@ export type AiFileChangeCapability =
 export type AiFileChangeOperation = 'created' | 'updated' | 'deleted' | 'renamed'
 export type AiFileChangeSource =
   | 'workspace_scan'
+  | 'terminal_tool'
   | 'text_tool'
   | 'docx_tool'
   | 'ppt_tool'

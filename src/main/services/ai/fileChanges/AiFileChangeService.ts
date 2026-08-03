@@ -16,10 +16,10 @@ import {
 } from '../human/tools/textFile/textDiff'
 import { decodeTextFile } from '../human/tools/textFile/textFileUtils'
 import {
-  WorkspaceChangeTracker,
+  TerminalCommandChangeTracker,
   WorkspaceObjectStore,
-  type CompletedWorkspaceChange
 } from './WorkspaceChangeTracker'
+import { NO_EFFECTIVE_FILE_CHANGE_MESSAGE } from '../../../../shared/constants'
 
 const FORCE_REVERT_WARNING =
   '当前文件在这次 AI 修改后又发生了变化。继续操作会恢复到这次修改前的版本，并丢失之后的修改。'
@@ -31,32 +31,34 @@ export interface AiFileChangeRecordStore {
 }
 
 export class AiFileChangeService {
-  private readonly workspaceChangeTracker = new WorkspaceChangeTracker()
+  private readonly terminalCommandChangeTracker = new TerminalCommandChangeTracker()
 
   public constructor(private readonly store: AiFileChangeRecordStore) {}
 
-  public async beginRunTracking(input: {
+  public async beginTerminalCommandTracking(input: {
+    commandId: string
     runId: string
     sessionId: string
     workspaceRootPath: string
-    runSummary: string
+    command: string
   }): Promise<void> {
-    await this.workspaceChangeTracker.beginRun(input)
+    await this.terminalCommandChangeTracker.beginCommand(input)
   }
 
-  public discardRunTracking(runId: string): void {
-    this.workspaceChangeTracker.discardRun(runId)
+  public discardTerminalCommandTracking(commandId: string): void {
+    this.terminalCommandChangeTracker.discardCommand(commandId)
   }
 
-  public async finishRunTracking(runId: string): Promise<CompletedWorkspaceChange[]> {
-    const existingRecords = (await this.store.listRecords({ runId })).items
-    const completed = await this.workspaceChangeTracker.finishRun({ runId, existingRecords })
-    await Promise.all(completed.map(({ record }) => this.store.saveRecord(record)))
-    return completed
+  public async finishTerminalCommandTracking(commandId: string): Promise<AiFileChangeRecord[]> {
+    const records = await this.terminalCommandChangeTracker.finishCommand(commandId)
+    await Promise.all(records.map(async (record) => await this.saveRecord(record)))
+    return records
   }
 
-  public async saveRecord(record: AiFileChangeRecord): Promise<void> {
-    await this.store.saveRecord(record)
+  public async saveRecord(record: AiFileChangeRecord, workspaceRootPath?: string): Promise<void> {
+    const existing = (await this.store.getRecord({ changeId: record.id })).record
+    const next = await this.finalizeRecord(record, existing, workspaceRootPath)
+    await this.store.saveRecord(next)
   }
 
   public async listRecords(
@@ -85,6 +87,57 @@ export class AiFileChangeService {
         error: error instanceof Error ? error.message : String(error)
       }
     }
+  }
+
+  private async finalizeRecord(
+    record: AiFileChangeRecord,
+    existing: AiFileChangeRecord | undefined,
+    workspaceRootPath?: string
+  ): Promise<AiFileChangeRecord> {
+    const now = Date.now()
+    const next: AiFileChangeRecord = {
+      ...record,
+      beforePath: record.beforePath || existing?.beforePath,
+      afterPath: record.afterPath || existing?.afterPath,
+      beforeSnapshotPath: record.beforeSnapshotPath || existing?.beforeSnapshotPath,
+      beforeObjectHash: record.beforeObjectHash || existing?.beforeObjectHash,
+      beforeChecksum: record.beforeChecksum || existing?.beforeChecksum,
+      createdAt: existing?.createdAt || record.createdAt || now,
+      updatedAt: now
+    }
+
+    const outputPath = next.afterPath || next.path
+    if (
+      workspaceRootPath &&
+      next.operation !== 'deleted' &&
+      !next.afterSnapshotPath &&
+      (await fileExists(outputPath))
+    ) {
+      const output = await new WorkspaceObjectStore(workspaceRootPath).putFile(outputPath)
+      next.afterSnapshotPath = output.objectPath
+      next.afterObjectHash = output.hash
+      next.afterChecksum = output.hash
+    }
+
+    if (next.status === 'applied' && this.hasNoEffectiveChange(next)) {
+      next.status = 'failed'
+      next.error = NO_EFFECTIVE_FILE_CHANGE_MESSAGE
+    } else if (next.status === 'applied') {
+      next.error = undefined
+    }
+    return next
+  }
+
+  private hasNoEffectiveChange(record: AiFileChangeRecord): boolean {
+    if (record.source === 'terminal_tool' || record.source === 'workspace_scan') return false
+    if (record.operation === 'created') return !record.afterChecksum
+    if (record.operation === 'deleted') return !record.beforeChecksum
+    if (record.operation === 'renamed') {
+      return !record.beforePath || !record.afterPath || record.beforePath === record.afterPath
+    }
+    return Boolean(
+      record.beforeChecksum && record.afterChecksum && record.beforeChecksum === record.afterChecksum
+    )
   }
 
   private async materializeTextPreview(record: AiFileChangeRecord): Promise<AiFileChangeRecord> {

@@ -47,6 +47,7 @@ const normalizeOperation = (value: unknown): AiFileChangeOperation => {
 const normalizeSource = (value: unknown): AiFileChangeSource | undefined => {
   if (
     value === 'workspace_scan' ||
+    value === 'terminal_tool' ||
     value === 'text_tool' ||
     value === 'docx_tool' ||
     value === 'ppt_tool' ||

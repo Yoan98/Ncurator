@@ -438,7 +438,7 @@ describe('workbench result e2e', () => {
                   workbenchSelectors.workspaceExplorerToggle
                 ]) &&
               result.workspaceExplorerModeCountBeforeOpen === 0 &&
-              result.workspaceExplorerModeTextAfterOpen.includes('本会话改动') &&
+              result.workspaceExplorerModeTextAfterOpen.includes('本次运行改动') &&
               result.currentSessionChangeMarkerCount >= 1 &&
               result.modeBeforeLatestGroupClick === '预览' &&
               result.modeAfterLatestGroupClick === '审核' &&

@@ -84,7 +84,7 @@ describe('ai tool docx backend', () => {
             result.targetExistsAfterApply === true,
           {
             name: 'docx-create-directly-applies-target-file',
-            message: 'insert_blocks 应立即创建目标 docx，run 收尾生成 created 差异记录。',
+            message: 'insert_blocks 应立即创建目标 docx，提交当前 run 的 Docx 草稿时生成 created 差异记录。',
             data: {
               created: result.created,
               records: result.records,

@@ -784,31 +784,6 @@ export class ChatRunService {
     const sendEvent = (event: AiRunEvent): void => {
       void this.queueRunEvent(runId, event)
     }
-    let workspaceTrackingFinished = false
-    const finishWorkspaceTracking = async (): Promise<void> => {
-      if (workspaceTrackingFinished) return
-      workspaceTrackingFinished = true
-      const changes = await this.deps.aiFileChangeService.finishRunTracking(runId)
-      for (const { record, discoveredByScan } of changes) {
-        if (!discoveredByScan || record.status !== 'applied') continue
-        await this.queueRunEvent(runId, {
-          type: 'file_artifact',
-          runId,
-          taskId: `workspace-scan:${runId}`,
-          artifactId: record.id,
-          capability:
-            record.capability === 'docx' || record.capability === 'text_file'
-              ? record.capability
-              : 'terminal_exec',
-          path: record.path,
-          fileName: record.fileName,
-          operation: record.operation,
-          applyId: record.id,
-          createdAt: record.updatedAt
-        })
-      }
-    }
-
     await this.queueRunEvent(runId, {
       type: 'run_started',
       runId,
@@ -816,18 +791,6 @@ export class ChatRunService {
       createdAt: Date.now(),
       input: run.input
     })
-    try {
-      await this.deps.aiFileChangeService.beginRunTracking({
-        runId,
-        sessionId: run.sessionId,
-        workspaceRootPath: run.workspace?.rootPath || '',
-        runSummary: run.input
-      })
-    } catch (error) {
-      console.error('[CHAT-RUN] workspace baseline failed:', error)
-      this.deps.aiFileChangeService.discardRunTracking(runId)
-      workspaceTrackingFinished = true
-    }
     this.deps.docxApplyService.beginRun({
       runId,
       sessionId: run.sessionId,
@@ -859,11 +822,19 @@ export class ChatRunService {
           embeddingService: this.deps.embeddingService,
           ensureEmbeddingReady: this.deps.ensureEmbeddingReady,
           docxApplyService: this.deps.docxApplyService,
-          saveFileChangeRecord: async (record) => {
-            await this.deps.aiFileChangeService.saveRecord(record)
+          saveFileChangeRecord: async (record, workspaceRootPath) => {
+            await this.deps.aiFileChangeService.saveRecord(record, workspaceRootPath)
           },
           listFileChangeRecords: async (request) =>
             (await this.deps.aiFileChangeService.listRecords(request)).items,
+          beginTerminalCommandTracking: async (input) => {
+            await this.deps.aiFileChangeService.beginTerminalCommandTracking(input)
+          },
+          finishTerminalCommandTracking: async (commandId) =>
+            await this.deps.aiFileChangeService.finishTerminalCommandTracking(commandId),
+          discardTerminalCommandTracking: (commandId) => {
+            this.deps.aiFileChangeService.discardTerminalCommandTracking(commandId)
+          },
           isCancelled: () => Boolean(this.activeRuns.get(runId)?.cancelled),
           abortSignal: this.activeRuns.get(runId)?.abortController.signal,
           sendEvent,
@@ -876,9 +847,6 @@ export class ChatRunService {
         }
       )
 
-      await finishWorkspaceTracking().catch((error) => {
-        console.error('[CHAT-RUN] workspace change scan failed:', error)
-      })
       await this.flushRunEvents(runId)
       if (result.status === 'cancelled') {
         this.deps.docxApplyService.discardRun(runId)
@@ -927,9 +895,6 @@ export class ChatRunService {
       })
     } catch (error) {
       this.deps.docxApplyService.discardRun(runId)
-      await finishWorkspaceTracking().catch((scanError) => {
-        console.error('[CHAT-RUN] workspace change scan failed:', scanError)
-      })
       if (this.activeRuns.get(runId)?.cancelled) {
         await this.queueRunEvent(runId, {
           type: 'run_cancelled',
@@ -952,12 +917,6 @@ export class ChatRunService {
         code: 'error'
       })
     } finally {
-      if (!workspaceTrackingFinished) {
-        await finishWorkspaceTracking().catch((error) => {
-          console.error('[CHAT-RUN] final workspace change scan failed:', error)
-        })
-      }
-      this.deps.aiFileChangeService.discardRunTracking(runId)
       await this.deps.runResourceManager.releaseRun(runId)
       const approval = this.activeApprovals.get(runId)
       approval?.resolve({ accepted: false, error: 'run closed' })

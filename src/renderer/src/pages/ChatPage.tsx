@@ -667,6 +667,7 @@ const ChatPage: React.FC = () => {
 
   const [activeApplyRecord, setActiveApplyRecord] = useState<AiFileChangeRecord | null>(null)
   const [fileChangeRecords, setFileChangeRecords] = useState<AiFileChangeRecord[]>([])
+  const fileChangeRunScopeRef = useRef<{ sessionId: string; runId: string } | null>(null)
   const [applyLoading, setApplyLoading] = useState(false)
   const [applyReverting, setApplyReverting] = useState(false)
   const [applyRevertConfirm, setApplyRevertConfirm] = useState<ApplyRevertConfirmState | null>(null)
@@ -703,6 +704,7 @@ const ChatPage: React.FC = () => {
   const loadFileChangesForSessionRef = useRef<
     (
       sessionId: string,
+      runId: string,
       options?: {
         preferredApplyId?: string | null
         autoOpen?: boolean
@@ -712,6 +714,7 @@ const ChatPage: React.FC = () => {
       }
     ) => Promise<void>
   >(async () => {})
+  const fileChangeLoadRequestRef = useRef(0)
   const sidebarDragStartRef = useRef<{
     pointerId: number
     startX: number
@@ -1485,6 +1488,7 @@ const ChatPage: React.FC = () => {
       setContentPanelCollapsed(true)
       resetApplyWorkspaceState()
       setFileChangeRecords([])
+      fileChangeRunScopeRef.current = null
       void refreshContextUsage(null)
     },
     [applyComposerDraft, refreshContextUsage, saveComposerDraftForSession]
@@ -1508,9 +1512,24 @@ const ChatPage: React.FC = () => {
       }
 
       setActiveApplyRecord(nextRecord)
-      setFileChangeRecords((current) =>
-        current.map((record) => (record.id === nextRecord.id ? nextRecord : record))
-      )
+      if (
+        fileChangeRunScopeRef.current?.sessionId === nextRecord.sessionId &&
+        fileChangeRunScopeRef.current.runId === nextRecord.runId
+      ) {
+        setFileChangeRecords((current) =>
+          current.map((record) => (record.id === nextRecord.id ? nextRecord : record))
+        )
+      }
+
+      if (
+        fileChangeRunScopeRef.current?.sessionId !== nextRecord.sessionId ||
+        fileChangeRunScopeRef.current.runId !== nextRecord.runId
+      ) {
+        void loadFileChangesForSessionRef.current(nextRecord.sessionId, nextRecord.runId, {
+          preferredApplyId: nextRecord.id,
+          skipApplyRecordReload: true
+        })
+      }
 
       if (input.openWorkspace) {
         showApplyWorkspace(nextRecord)
@@ -1526,6 +1545,7 @@ const ChatPage: React.FC = () => {
 
   const loadFileChangesForSession = async (
     sessionId: string,
+    runId: string,
     options?: {
       preferredApplyId?: string | null
       autoOpen?: boolean
@@ -1534,6 +1554,9 @@ const ChatPage: React.FC = () => {
       notifyNoEffectiveChange?: boolean
     }
   ): Promise<void> => {
+    const requestId = fileChangeLoadRequestRef.current + 1
+    fileChangeLoadRequestRef.current = requestId
+    fileChangeRunScopeRef.current = { sessionId, runId }
     try {
       const shouldWaitForRecords =
         Boolean(options?.forceOpenWorkspace) || Boolean(options?.preferredApplyId)
@@ -1542,7 +1565,7 @@ const ChatPage: React.FC = () => {
       let activeRecords: AiFileChangeRecord[] = []
 
       for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-        const response = await window.api.aiFileChangeList({ sessionId })
+        const response = await window.api.aiFileChangeList({ sessionId, runId })
         const listedItems = sortFileChangeRecords(response.items)
         const noEffectiveChangeRecords = listedItems.filter(
           (item) => item.status === 'failed' && item.error === NO_EFFECTIVE_FILE_CHANGE_MESSAGE
@@ -1569,12 +1592,13 @@ const ChatPage: React.FC = () => {
       }
 
       const applyTargetsByRunId = groupApplyTargetsByRunId(allRecords)
+      if (fileChangeLoadRequestRef.current !== requestId) return
       setFileChangeRecords(allRecords)
 
       setAssistantTurns((previous) => {
         const nextTurns: Record<string, AssistantTurnViewModel> = { ...previous }
         Object.values(previous).forEach((turn) => {
-          if (!turn.runId) return
+          if (!turn.runId || turn.runId !== runId) return
           nextTurns[turn.messageId] = {
             ...turn,
             applyTargets: applyTargetsByRunId.get(turn.runId) || []
@@ -1626,6 +1650,26 @@ const ChatPage: React.FC = () => {
     }
   }
   loadFileChangesForSessionRef.current = loadFileChangesForSession
+
+  const hydrateFileChangeTargetsForSession = async (sessionId: string): Promise<void> => {
+    try {
+      const response = await window.api.aiFileChangeList({ sessionId })
+      const applyTargetsByRunId = groupApplyTargetsByRunId(sortFileChangeRecords(response.items))
+      setAssistantTurns((previous) => {
+        const nextTurns: Record<string, AssistantTurnViewModel> = { ...previous }
+        Object.values(previous).forEach((turn) => {
+          if (!turn.runId) return
+          nextTurns[turn.messageId] = {
+            ...turn,
+            applyTargets: applyTargetsByRunId.get(turn.runId) || []
+          }
+        })
+        return nextTurns
+      })
+    } catch (error) {
+      console.error('Failed to hydrate file change targets', error)
+    }
+  }
 
   const openExistingSession = async (
     session: ChatSession,
@@ -1703,7 +1747,9 @@ const ChatPage: React.FC = () => {
         void loadApplyRecordRef.current({ applyId: activeTab.state.applyId })
       }
     })
-    void loadFileChangesForSession(session.id)
+    setFileChangeRecords([])
+    fileChangeRunScopeRef.current = null
+    void hydrateFileChangeTargetsForSession(session.id)
     void refreshContextUsage(session.id)
   }
 
@@ -2023,18 +2069,18 @@ const ChatPage: React.FC = () => {
   }
 
   const openFileChange = useCallback((changeId: string): void => {
-    const activeSessionId = currentSessionIdRef.current
-    if (activeSessionId) {
-      void loadFileChangesForSessionRef.current(activeSessionId, {
-        preferredApplyId: changeId,
-        forceOpenWorkspace: true
+    void window.api.aiFileChangeGet({ changeId }).then((response) => {
+      if (response.record) {
+        void loadFileChangesForSessionRef.current(response.record.sessionId, response.record.runId, {
+          preferredApplyId: changeId,
+          forceOpenWorkspace: true
+        })
+        return
+      }
+      void loadApplyRecordRef.current({
+        applyId: changeId,
+        openWorkspace: true
       })
-      return
-    }
-
-    void loadApplyRecordRef.current({
-      applyId: changeId,
-      openWorkspace: true
     })
   }, [])
 
@@ -2164,8 +2210,8 @@ const ChatPage: React.FC = () => {
   )
 
   const openWorkspaceChange = useCallback((changeId: string): void => {
-    void loadApplyRecordRef.current({ applyId: changeId, openWorkspace: true })
-  }, [])
+    openFileChange(changeId)
+  }, [openFileChange])
 
   useEffect(() => {
     const unsubscribe = window.api.onAiRunEvent((event) => {
@@ -2173,6 +2219,7 @@ const ChatPage: React.FC = () => {
         activeRunSessionIdsRef.current[event.runId] = event.sessionId
         setSessionRunningState(event.sessionId, true)
       }
+      const eventSessionId = activeRunSessionIdsRef.current[event.runId]
 
       if (
         event.type === 'run_completed' ||
@@ -2180,9 +2227,8 @@ const ChatPage: React.FC = () => {
         event.type === 'run_cancelled' ||
         (!event.internal && (event.type === 'runtime_issue' || event.type === 'workspace_required'))
       ) {
-        const sessionId = activeRunSessionIdsRef.current[event.runId]
-        if (sessionId) {
-          setSessionRunningState(sessionId, false)
+        if (eventSessionId) {
+          setSessionRunningState(eventSessionId, false)
           delete activeRunSessionIdsRef.current[event.runId]
         }
         void loadSessions()
@@ -2353,9 +2399,13 @@ const ChatPage: React.FC = () => {
               : item
           )
         )
-        const activeSessionId = currentSessionIdRef.current
-        if (activeSessionId) {
-          void loadFileChangesForSession(activeSessionId)
+        if (
+          eventSessionId &&
+          eventSessionId === currentSessionIdRef.current &&
+          fileChangeRunScopeRef.current?.sessionId === eventSessionId &&
+          fileChangeRunScopeRef.current.runId === event.runId
+        ) {
+          void loadFileChangesForSession(eventSessionId, event.runId)
         }
         emitErrorMessage(
           event.code === 'runtime_limit'
@@ -2386,9 +2436,13 @@ const ChatPage: React.FC = () => {
               : item
           )
         )
-        const activeSessionId = currentSessionIdRef.current
-        if (activeSessionId) {
-          void loadFileChangesForSession(activeSessionId)
+        if (
+          eventSessionId &&
+          eventSessionId === currentSessionIdRef.current &&
+          fileChangeRunScopeRef.current?.sessionId === eventSessionId &&
+          fileChangeRunScopeRef.current.runId === event.runId
+        ) {
+          void loadFileChangesForSession(eventSessionId, event.runId)
         }
         message.info('已取消')
         return
@@ -2402,11 +2456,17 @@ const ChatPage: React.FC = () => {
         setApprovalSubmitting(false)
         setPendingUserTakeover(null)
         setUserTakeoverConfirming(false)
-        const activeSessionId = currentSessionIdRef.current
-        if (activeSessionId) {
-          void loadFileChangesForSession(activeSessionId, { notifyNoEffectiveChange: true })
+        if (
+          eventSessionId &&
+          eventSessionId === currentSessionIdRef.current &&
+          fileChangeRunScopeRef.current?.sessionId === eventSessionId &&
+          fileChangeRunScopeRef.current.runId === event.runId
+        ) {
+          void loadFileChangesForSession(eventSessionId, event.runId, {
+            notifyNoEffectiveChange: true
+          })
         }
-        void refreshContextUsage(activeSessionId)
+        void refreshContextUsage(eventSessionId || currentSessionIdRef.current)
       }
     })
     return () => {
@@ -2904,7 +2964,9 @@ const ChatPage: React.FC = () => {
       }
       setApplyRevertConfirm(null)
       emitSuccessMessage('已回退本次修改')
-      await loadFileChangesForSession(currentSessionId, {
+      const record = response.record || activeApplyRecord
+      if (!record) return
+      await loadFileChangesForSession(record.sessionId, record.runId, {
         preferredApplyId: response.record?.id || applyRevertConfirm.changeId,
         autoOpen: true,
         forceOpenWorkspace: true,

@@ -20,7 +20,7 @@ describe('ai tool terminal backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['terminal'],
-      description: '验证终端只执行命令，文件变化统一交给 Run 结束扫描捕获。',
+      description: '验证终端命令完成后立即记录本命令产生的文件变化。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -69,11 +69,13 @@ describe('ai tool terminal backend', () => {
             result.createdExists &&
             !Object.hasOwn(result.updateExisting, 'artifacts') &&
             !Object.hasOwn(result.createNew, 'artifacts') &&
-            result.records.length === 0 &&
-            result.artifactEvents.length === 0,
+            result.records.length === 2 &&
+            result.records.every((record) => record.source === 'terminal_tool') &&
+            result.records.every((record) => record.runId === runtime.runId) &&
+            result.artifactEvents.length === 2,
           {
-            name: 'terminal-defers-workspace-change-capture',
-            message: '终端工具不得根据命令文本猜测文件产物，变化由顶层 Run 扫描统一捕获。',
+            name: 'terminal-command-scoped-change-capture',
+            message: '终端工具应以命令前后快照记录真实文件变化，不依赖顶层 Run 收尾扫描。',
             data: result
           }
         )

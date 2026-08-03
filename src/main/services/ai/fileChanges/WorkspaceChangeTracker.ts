@@ -8,7 +8,6 @@ import type {
   AiFileChangeOperation,
   AiFileChangeRecord
 } from '../../../../shared/types'
-import { NO_EFFECTIVE_FILE_CHANGE_MESSAGE } from '../../../../shared/constants'
 
 const IGNORED_DIRECTORY_NAMES = new Set(['.git', '.ncurator', 'node_modules'])
 
@@ -62,36 +61,12 @@ type WorkspaceObject = {
   mode: number
 }
 
-type TrackedRun = {
+type TrackedTerminalCommand = {
   runId: string
   sessionId: string
   workspaceRootPath: string
   runSummary: string
   baseline: Map<string, WorkspaceObject>
-}
-
-export type CompletedWorkspaceChange = {
-  record: AiFileChangeRecord
-  discoveredByScan: boolean
-}
-
-const normalizePathKey = (value: string): string =>
-  path.resolve(value).replace(/\\/g, '/').toLowerCase()
-
-const hasEffectiveSpecialistChange = (record: AiFileChangeRecord): boolean => {
-  if (record.source === 'workspace_scan' || record.capability === 'terminal_exec') return false
-  if (record.operation === 'created') return Boolean(record.afterChecksum)
-  if (record.operation === 'deleted') return Boolean(record.beforeChecksum)
-  if (record.operation === 'renamed') {
-    return Boolean(
-      record.beforePath &&
-      record.afterPath &&
-      normalizePathKey(record.beforePath) !== normalizePathKey(record.afterPath)
-    )
-  }
-  return Boolean(
-    record.beforeChecksum && record.afterChecksum && record.beforeChecksum !== record.afterChecksum
-  )
 }
 
 const hashFile = async (filePath: string): Promise<string> => {
@@ -196,10 +171,8 @@ const scanWorkspace = async (workspaceRootPath: string): Promise<Map<string, Wor
 
 const inferCapability = (
   before: WorkspaceObject | undefined,
-  after: WorkspaceObject | undefined,
-  specialist: AiFileChangeRecord | undefined
+  after: WorkspaceObject | undefined
 ): AiFileChangeCapability => {
-  if (specialist) return specialist.capability
   const extension = path.extname(after?.absolutePath || before?.absolutePath || '').toLowerCase()
   if (TEXT_EXTENSIONS.has(extension)) return 'text_file'
   if (EXCEL_EXTENSIONS.has(extension)) return 'excel'
@@ -225,49 +198,37 @@ const pairRenames = (
   return pairs
 }
 
-export class WorkspaceChangeTracker {
-  private readonly runs = new Map<string, TrackedRun>()
+export class TerminalCommandChangeTracker {
+  private readonly commands = new Map<string, TrackedTerminalCommand>()
 
-  public async beginRun(input: {
+  public async beginCommand(input: {
+    commandId: string
     runId: string
     sessionId: string
     workspaceRootPath: string
-    runSummary: string
+    command: string
   }): Promise<void> {
     const workspaceRootPath = path.resolve(input.workspaceRootPath)
     const baseline = await scanWorkspace(workspaceRootPath)
-    this.runs.set(input.runId, {
+    this.commands.set(input.commandId, {
       runId: input.runId,
       sessionId: input.sessionId,
       workspaceRootPath,
-      runSummary: input.runSummary.trim().slice(0, 160),
+      runSummary: input.command.trim().slice(0, 160),
       baseline
     })
   }
 
-  public discardRun(runId: string): void {
-    this.runs.delete(runId)
+  public discardCommand(commandId: string): void {
+    this.commands.delete(commandId)
   }
 
-  public async finishRun(input: {
-    runId: string
-    existingRecords: AiFileChangeRecord[]
-  }): Promise<CompletedWorkspaceChange[]> {
-    const tracked = this.runs.get(input.runId)
+  public async finishCommand(commandId: string): Promise<AiFileChangeRecord[]> {
+    const tracked = this.commands.get(commandId)
     if (!tracked) return []
-    this.runs.delete(input.runId)
+    this.commands.delete(commandId)
 
     const current = await scanWorkspace(tracked.workspaceRootPath)
-    const existingByPath = new Map<string, AiFileChangeRecord>()
-    for (const record of [...input.existingRecords].sort((a, b) => b.updatedAt - a.updatedAt)) {
-      const keys = [record.path, record.beforePath, record.afterPath].filter(
-        (value): value is string => Boolean(value)
-      )
-      for (const value of keys) {
-        const key = normalizePathKey(value)
-        if (!existingByPath.has(key)) existingByPath.set(key, record)
-      }
-    }
 
     const updated: Array<{ before: WorkspaceObject; after: WorkspaceObject }> = []
     const deleted: WorkspaceObject[] = []
@@ -299,31 +260,14 @@ export class WorkspaceChangeTracker {
         .map((after) => ({ operation: 'created' as const, after }))
     ]
 
-    const completed: CompletedWorkspaceChange[] = []
-    const matchedExistingIds = new Set<string>()
-    const objectStore = new WorkspaceObjectStore(tracked.workspaceRootPath)
+    const records: AiFileChangeRecord[] = []
     for (const change of changes) {
       const targetPath = change.after?.absolutePath || change.before?.absolutePath
       if (!targetPath) continue
-      const specialist =
-        existingByPath.get(normalizePathKey(targetPath)) ||
-        (change.before
-          ? existingByPath.get(normalizePathKey(change.before.absolutePath))
-          : undefined)
-      if (specialist) matchedExistingIds.add(specialist.id)
       const now = Date.now()
-      let previewPath = specialist?.previewPath
-      let previewArtifactHash: string | undefined
-      if (previewPath) {
-        const previewObject = await objectStore.putFile(previewPath).catch(() => undefined)
-        if (previewObject) {
-          previewPath = previewObject.objectPath
-          previewArtifactHash = previewObject.hash
-        }
-      }
-      const capability = inferCapability(change.before, change.after, specialist)
+      const capability = inferCapability(change.before, change.after)
       const record: AiFileChangeRecord = {
-        id: specialist?.id || randomUUID(),
+        id: randomUUID(),
         sessionId: tracked.sessionId,
         runId: tracked.runId,
         status: 'applied',
@@ -331,62 +275,24 @@ export class WorkspaceChangeTracker {
         path: targetPath,
         fileName: path.basename(targetPath),
         operation: change.operation,
-        source:
-          specialist?.source ||
-          (capability === 'docx'
-            ? 'docx_tool'
-            : capability === 'ppt'
-              ? 'ppt_tool'
-              : capability === 'excel'
-                ? 'excel_tool'
-                : capability === 'image'
-                  ? 'image_tool'
-                  : capability === 'text_file'
-                    ? 'text_tool'
-                    : 'workspace_scan'),
+        source: 'terminal_tool',
         beforePath: change.before?.absolutePath,
         afterPath: change.after?.absolutePath,
-        changeCount: specialist?.changeCount || 1,
-        insertCount: specialist?.insertCount || 0,
-        deleteCount: specialist?.deleteCount || 0,
+        changeCount: 1,
+        insertCount: 0,
+        deleteCount: 0,
         beforeSnapshotPath: change.before?.objectPath,
         afterSnapshotPath: change.after?.objectPath,
         beforeObjectHash: change.before?.hash,
         afterObjectHash: change.after?.hash,
         beforeChecksum: change.before?.hash,
         afterChecksum: change.after?.hash,
-        previewPath,
-        previewArtifactHash,
         runSummary: tracked.runSummary,
-        createdAt: specialist?.createdAt || now,
+        createdAt: now,
         updatedAt: now
       }
-      completed.push({ record, discoveredByScan: !specialist })
+      records.push(record)
     }
-
-    for (const record of input.existingRecords) {
-      if (matchedExistingIds.has(record.id) || record.status !== 'applied') continue
-      if (hasEffectiveSpecialistChange(record)) {
-        completed.push({
-          record: {
-            ...record,
-            error: undefined,
-            updatedAt: Date.now()
-          },
-          discoveredByScan: false
-        })
-        continue
-      }
-      completed.push({
-        record: {
-          ...record,
-          status: 'failed',
-          error: NO_EFFECTIVE_FILE_CHANGE_MESSAGE,
-          updatedAt: Date.now()
-        },
-        discoveredByScan: false
-      })
-    }
-    return completed
+    return records
   }
 }

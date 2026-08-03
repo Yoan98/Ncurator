@@ -25,7 +25,10 @@ export const terminalToolFamily = createWorkspaceBoundToolFamily({
         humanRuntimeOverrides: ctx.humanRuntimeOverrides,
         sendEvent: ctx.sendEvent,
         requestApprovalBatch: ctx.requestApprovalBatch,
-        saveFileChangeRecord: ctx.saveFileChangeRecord
+        saveFileChangeRecord: ctx.saveFileChangeRecord,
+        beginTerminalCommandTracking: ctx.beginTerminalCommandTracking,
+        finishTerminalCommandTracking: ctx.finishTerminalCommandTracking,
+        discardTerminalCommandTracking: ctx.discardTerminalCommandTracking
       },
       cache,
       runId,

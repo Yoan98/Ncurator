@@ -89,24 +89,25 @@ describe('ai file change service', () => {
     }
   })
 
-  it('captures run changes and materializes text diff only when opened', async () => {
+  it('captures terminal command changes and materializes text diff only when opened', async () => {
     const targetPath = path.join(tempDir, 'notes.txt')
     await fs.writeFile(targetPath, 'line 1\nline 2\nline 3\n')
-    await service.beginRunTracking({
+    await service.beginTerminalCommandTracking({
+      commandId: 'scan-command',
       runId: 'scan-run',
       sessionId: 'session-1',
       workspaceRootPath: tempDir,
-      runSummary: '更新第二行'
+      command: 'replace notes.txt'
     })
     await fs.writeFile(targetPath, 'line 1\nchanged\nline 3\n')
 
-    const completed = await service.finishRunTracking('scan-run')
+    const completed = await service.finishTerminalCommandTracking('scan-command')
     expect(completed).toHaveLength(1)
-    expect(completed[0]?.record.operation).toBe('updated')
-    expect(completed[0]?.record.previewPath).toBeUndefined()
-    expect(completed[0]?.record.beforeObjectHash).not.toBe(completed[0]?.record.afterObjectHash)
+    expect(completed[0]?.operation).toBe('updated')
+    expect(completed[0]?.previewPath).toBeUndefined()
+    expect(completed[0]?.beforeObjectHash).not.toBe(completed[0]?.afterObjectHash)
 
-    const opened = await service.getRecord({ changeId: completed[0]!.record.id })
+    const opened = await service.getRecord({ changeId: completed[0]!.id })
     expect(opened.record?.previewPath).toBeTruthy()
     const artifact = JSON.parse(await fs.readFile(opened.record!.previewPath!, 'utf8')) as Record<
       string,
@@ -117,19 +118,13 @@ describe('ai file change service', () => {
     expect(opened.record?.insertCount).toBe(1)
     expect(opened.record?.deleteCount).toBe(1)
 
-    const reopened = await service.getRecord({ changeId: completed[0]!.record.id })
+    const reopened = await service.getRecord({ changeId: completed[0]!.id })
     expect(reopened.record?.previewPath).toBe(opened.record?.previewPath)
   })
 
-  it('preserves specialist PPT capability and diff preview after workspace scan', async () => {
+  it('stores direct tool snapshots immediately without a run-end scan', async () => {
     const targetPath = path.join(tempDir, 'deck.pptx')
     const previewPath = path.join(tempDir, '.ncurator', 'runtime', 'ppt-diff.json')
-    await service.beginRunTracking({
-      runId: 'ppt-run',
-      sessionId: 'session-1',
-      workspaceRootPath: tempDir,
-      runSummary: '创建演示文稿'
-    })
     await fs.writeFile(targetPath, 'ppt bytes')
     await fs.mkdir(path.dirname(previewPath), { recursive: true })
     await fs.writeFile(previewPath, JSON.stringify({ version: 1, slides: [] }))
@@ -142,17 +137,17 @@ describe('ai file change service', () => {
         fileName: 'deck.pptx',
         operation: 'created',
         previewPath
-      })
+      }),
+      tempDir
     )
 
-    const completed = await service.finishRunTracking('ppt-run')
-
-    expect(completed).toHaveLength(1)
-    expect(completed[0]?.record.id).toBe('ppt-change')
-    expect(completed[0]?.record.capability).toBe('ppt')
-    expect(completed[0]?.record.previewPath).toBeTruthy()
+    const completed = await service.getRecord({ changeId: 'ppt-change' })
+    expect(completed.record?.id).toBe('ppt-change')
+    expect(completed.record?.capability).toBe('ppt')
+    expect(completed.record?.previewPath).toBeTruthy()
+    expect(completed.record?.afterSnapshotPath).toBeTruthy()
     const manifest = JSON.parse(
-      await fs.readFile(completed[0]!.record.previewPath!, 'utf8')
+      await fs.readFile(completed.record!.previewPath!, 'utf8')
     ) as Record<string, unknown>
     expect(manifest.version).toBe(1)
   })
@@ -161,12 +156,6 @@ describe('ai file change service', () => {
     const targetPath = path.join(tempDir, '.ncurator', 'runtime', 'assets', 'bucket', 'input.docx')
     await fs.mkdir(path.dirname(targetPath), { recursive: true })
     await fs.writeFile(targetPath, 'before')
-    await service.beginRunTracking({
-      runId: 'attachment-run',
-      sessionId: 'session-1',
-      workspaceRootPath: tempDir,
-      runSummary: '修改附件'
-    })
     await fs.writeFile(targetPath, 'after')
     await service.saveRecord(
       createRecord({
@@ -181,11 +170,9 @@ describe('ai file change service', () => {
       })
     )
 
-    const completed = await service.finishRunTracking('attachment-run')
-
-    expect(completed).toHaveLength(1)
-    expect(completed[0]?.record.status).toBe('applied')
-    expect(completed[0]?.record.error).toBeUndefined()
+    const completed = await service.getRecord({ changeId: 'attachment-change' })
+    expect(completed.record?.status).toBe('applied')
+    expect(completed.record?.error).toBeUndefined()
     expect((await service.getRecord({ changeId: 'attachment-change' })).record?.status).toBe(
       'applied'
     )
@@ -195,12 +182,6 @@ describe('ai file change service', () => {
     const targetPath = path.join(tempDir, '.ncurator', 'runtime', 'assets', 'bucket', 'input.docx')
     await fs.mkdir(path.dirname(targetPath), { recursive: true })
     await fs.writeFile(targetPath, 'same')
-    await service.beginRunTracking({
-      runId: 'no-op-run',
-      sessionId: 'session-1',
-      workspaceRootPath: tempDir,
-      runSummary: '重复写入相同内容'
-    })
     await service.saveRecord(
       createRecord({
         id: 'no-op-change',
@@ -214,40 +195,77 @@ describe('ai file change service', () => {
       })
     )
 
-    const completed = await service.finishRunTracking('no-op-run')
-
-    expect(completed).toHaveLength(1)
-    expect(completed[0]?.record.status).toBe('failed')
-    expect(completed[0]?.record.error).toBe(NO_EFFECTIVE_FILE_CHANGE_MESSAGE)
+    const completed = await service.getRecord({ changeId: 'no-op-change' })
+    expect(completed.record?.status).toBe('failed')
+    expect(completed.record?.error).toBe(NO_EFFECTIVE_FILE_CHANGE_MESSAGE)
   })
 
-  it('captures create delete and rename in one run', async () => {
+  it('captures create delete and rename in one terminal command', async () => {
     const deletedPath = path.join(tempDir, 'deleted.txt')
     const renamedBeforePath = path.join(tempDir, 'before-name.txt')
     const renamedAfterPath = path.join(tempDir, 'after-name.txt')
     await fs.writeFile(deletedPath, 'delete me')
     await fs.writeFile(renamedBeforePath, 'unique rename content')
-    await service.beginRunTracking({
+    await service.beginTerminalCommandTracking({
+      commandId: 'operations-command',
       runId: 'operations-run',
       sessionId: 'session-1',
       workspaceRootPath: tempDir,
-      runSummary: '整理文件'
+      command: 'organize files'
     })
     await fs.rm(deletedPath)
     await fs.rename(renamedBeforePath, renamedAfterPath)
     await fs.writeFile(path.join(tempDir, 'created.txt'), 'new file')
 
-    const completed = await service.finishRunTracking('operations-run')
-    expect(completed.map((item) => item.record.operation).sort()).toEqual([
+    const completed = await service.finishTerminalCommandTracking('operations-command')
+    expect(completed.map((item) => item.operation).sort()).toEqual([
       'created',
       'deleted',
       'renamed'
     ])
-    const renamed = completed.find((item) => item.record.operation === 'renamed')?.record
+    const renamed = completed.find((item) => item.operation === 'renamed')
     expect(renamed?.beforePath).toBe(renamedBeforePath)
     expect(renamed?.afterPath).toBe(renamedAfterPath)
     const openedRename = await service.getRecord({ changeId: renamed!.id })
     expect(openedRename.record?.previewPath).toBeUndefined()
+  })
+
+  it('allows overlapping terminal command tracking without cross-run filtering', async () => {
+    const targetPath = path.join(tempDir, 'overlap.txt')
+    await fs.writeFile(targetPath, 'before')
+    await Promise.all([
+      service.beginTerminalCommandTracking({
+        commandId: 'command-a',
+        runId: 'run-a',
+        sessionId: 'session-a',
+        workspaceRootPath: tempDir,
+        command: 'write overlap.txt'
+      }),
+      service.beginTerminalCommandTracking({
+        commandId: 'command-b',
+        runId: 'run-b',
+        sessionId: 'session-b',
+        workspaceRootPath: tempDir,
+        command: 'write overlap.txt'
+      })
+    ])
+    await fs.writeFile(targetPath, 'after')
+
+    const [changesA, changesB] = await Promise.all([
+      service.finishTerminalCommandTracking('command-a'),
+      service.finishTerminalCommandTracking('command-b')
+    ])
+
+    expect(changesA).toHaveLength(1)
+    expect(changesB).toHaveLength(1)
+    expect(changesA[0]?.runId).toBe('run-a')
+    expect(changesB[0]?.runId).toBe('run-b')
+    expect((await service.listRecords({ sessionId: 'session-a', runId: 'run-a' })).items).toHaveLength(
+      1
+    )
+    expect((await service.listRecords({ sessionId: 'session-b', runId: 'run-b' })).items).toHaveLength(
+      1
+    )
   })
 
   it('restores deleted and renamed files during revert', async () => {

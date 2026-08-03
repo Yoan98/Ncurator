@@ -112,7 +112,7 @@ describe('workbench result e2e', () => {
             {
               name: 'workbench-terminal-rename-notice-revert-real',
               message:
-                'AI 通过终端重命名文件后，应保留 Run 扫描记录、展示前后文件名，并在确认后恢复原文件名。',
+                'AI 通过终端重命名文件后，应保留命令级修改记录、展示前后文件名，并在确认后恢复原文件名。',
               data: result
             }
           )

@@ -15,6 +15,7 @@ import {
   parseTerminalCommandTokens
 } from './commandPolicy'
 import { inspectTerminalOutputQuality } from './terminalExec'
+import { emitFileArtifactEvent } from '../../../events/fileArtifacts'
 import type { TerminalCapabilityToolsInput, TerminalCapabilityToolsRuntimeState } from './types'
 import {
   createTerminalRunToolSpec,
@@ -32,6 +33,7 @@ type PendingTerminalCommand = {
   stepIndex: number
   command: string
   cwd: string
+  trackingId?: string
   emitActivity: (activity: CapabilityActivityInput) => void
   finalized: boolean
 }
@@ -193,6 +195,31 @@ const emitTerminalStepFailed = (input: PendingTerminalCommand, error: string): v
   input.emitActivity({ actionType: 'terminal_exec', status: 'failed', summary: error })
 }
 
+const finishTerminalFileChangeTracking = async (pending: PendingTerminalCommand): Promise<void> => {
+  if (!pending.trackingId) return
+  try {
+    const records = await pending.ctx.finishTerminalCommandTracking(pending.trackingId)
+    records.forEach((record) => {
+      if (record.status !== 'applied') return
+      emitFileArtifactEvent({
+        ctx: pending.ctx,
+        runId: pending.runId,
+        taskId: pending.taskId,
+        capability:
+          record.capability === 'docx' || record.capability === 'text_file'
+            ? record.capability
+            : 'terminal_exec',
+        artifactPath: record.path,
+        operation: record.operation,
+        applyId: record.id,
+        stepId: pending.stepId
+      })
+    })
+  } catch (error) {
+    console.error('[TERMINAL] file change tracking failed:', error)
+  }
+}
+
 const finalizeCommand = async (input: {
   commandId: string
   exitCode: number
@@ -201,14 +228,16 @@ const finalizeCommand = async (input: {
   const pending = pendingCommands.get(input.commandId)
   if (!pending || pending.finalized) return
   pending.finalized = true
+  await finishTerminalFileChangeTracking(pending)
   emitTerminalStepCompleted(pending, input.exitCode, input.executionStatus || 'completed')
   pendingCommands.delete(input.commandId)
 }
 
-const failCommand = (commandId: string, error: unknown): void => {
+const failCommand = async (commandId: string, error: unknown): Promise<void> => {
   const pending = pendingCommands.get(commandId)
   if (!pending || pending.finalized) return
   pending.finalized = true
+  await finishTerminalFileChangeTracking(pending)
   emitTerminalStepFailed(pending, error instanceof Error ? error.message : String(error))
   pendingCommands.delete(commandId)
 }
@@ -383,6 +412,20 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
 
           state.stepIndex += 1
           const stepId = randomUUID()
+          const trackingId = randomUUID()
+          let trackingStarted = false
+          try {
+            await input.ctx.beginTerminalCommandTracking({
+              commandId: trackingId,
+              runId: input.runId,
+              sessionId: input.sessionId,
+              workspaceRootPath: input.workspaceRootPath,
+              command
+            })
+            trackingStarted = true
+          } catch (error) {
+            console.error('[TERMINAL] file change baseline failed:', error)
+          }
           emitTerminalStepStarted({
             ctx: input.ctx,
             runId: input.runId,
@@ -412,6 +455,7 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
               terminalId
             })
           } catch (error) {
+            if (trackingStarted) input.ctx.discardTerminalCommandTracking(trackingId)
             const message = error instanceof Error ? error.message : String(error)
             const failure = buildFailure({ error: message })
             session.fail(
@@ -436,6 +480,7 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
             stepIndex: state.stepIndex,
             command,
             cwd,
+            trackingId: trackingStarted ? trackingId : undefined,
             emitActivity: input.emitActivity,
             finalized: false
           })
@@ -461,7 +506,7 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
               .then(async (exitCode) => {
                 await finalizeCommand({ commandId: result.commandId, exitCode })
               })
-              .catch((error) => failCommand(result.commandId, error))
+              .catch((error) => void failCommand(result.commandId, error))
           }
 
           if (
@@ -471,6 +516,13 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
             await finalizeCommand({
               commandId: result.commandId,
               exitCode: result.exitCode ?? 1
+            })
+          }
+          if (result.returnReason === 'command_stopped') {
+            await finalizeCommand({
+              commandId: result.commandId,
+              exitCode: result.exitCode ?? 130,
+              executionStatus: 'cancelled'
             })
           }
           const guarded = applyOutputGuards({

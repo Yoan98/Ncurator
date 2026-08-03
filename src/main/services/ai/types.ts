@@ -210,6 +210,14 @@ export type BrowserUseService = {
   }) => Promise<BrowserUseResult>
 }
 
+export type TerminalCommandChangeTrackingInput = {
+  commandId: string
+  runId: string
+  sessionId: string
+  workspaceRootPath: string
+  command: string
+}
+
 export type AiRunDeps = {
   runtimeSettings: AiRuntimeSettings
   llmStore: LlmConfigStore
@@ -219,8 +227,11 @@ export type AiRunDeps = {
   embeddingService: EmbeddingService
   ensureEmbeddingReady: () => Promise<void>
   docxApplyService: DocxApplyService
-  saveFileChangeRecord: (record: AiFileChangeRecord) => Promise<void>
+  saveFileChangeRecord: (record: AiFileChangeRecord, workspaceRootPath?: string) => Promise<void>
   listFileChangeRecords: (input: { runId: string }) => Promise<AiFileChangeRecord[]>
+  beginTerminalCommandTracking: (input: TerminalCommandChangeTrackingInput) => Promise<void>
+  finishTerminalCommandTracking: (commandId: string) => Promise<AiFileChangeRecord[]>
+  discardTerminalCommandTracking: (commandId: string) => void
   isCancelled: () => boolean
   abortSignal?: AbortSignal
   sendEvent: (event: AiRunEvent) => void
@@ -334,6 +345,9 @@ export type AiRunContext = {
   discardDocxApplyRun: () => void
   saveFileChangeRecord: (record: AiFileChangeRecord) => Promise<void>
   listFileChangeRecords: (input: { runId: string }) => Promise<AiFileChangeRecord[]>
+  beginTerminalCommandTracking: (input: TerminalCommandChangeTrackingInput) => Promise<void>
+  finishTerminalCommandTracking: (commandId: string) => Promise<AiFileChangeRecord[]>
+  discardTerminalCommandTracking: (commandId: string) => void
   documentsStore: DocumentsStore
   embeddingService: EmbeddingService
 }
@@ -357,6 +371,9 @@ export type TerminalToolContext = Pick<
   | 'requestApprovalBatch'
   | 'humanRuntimeOverrides'
   | 'saveFileChangeRecord'
+  | 'beginTerminalCommandTracking'
+  | 'finishTerminalCommandTracking'
+  | 'discardTerminalCommandTracking'
 >
 
 export type KnowledgeRetrievalContext = Pick<

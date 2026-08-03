@@ -145,7 +145,7 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
             )}
             <span className="min-w-0 flex-1 truncate">{entry.name}</span>
             {change ? (
-              <span title="当前会话中已修改">
+                <span title="当前运行中已修改">
                 {change.insertCount > 0 || change.deleteCount > 0 ? (
                   <ChangeCountBadges
                     insertCount={change.insertCount}
@@ -198,7 +198,7 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
             className={`rounded-[5px] text-[12px] font-medium ${mode === 'changed' ? 'bg-white text-[#37352F] shadow-sm' : 'text-[#787774] hover:text-[#37352F]'}`}
             onClick={() => onModeChange('changed')}
           >
-            本会话改动 {activeChanges.length}
+            本次运行改动 {activeChanges.length}
           </button>
         </div>
       </div>

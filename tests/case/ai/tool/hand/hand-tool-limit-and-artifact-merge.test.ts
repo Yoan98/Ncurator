@@ -135,15 +135,26 @@ describe('ai tool hand backend', () => {
 
         return {
           firstState,
-          secondState
+          secondState,
+          terminalArtifacts: runtime.eventCollector
+            .snapshot()
+            .filter((event) => event.type === 'file_artifact')
         }
       },
       assert: async (result, runtime) => {
-        runtime.assertThat(result.firstState.execution.artifacts.length === 0, {
-          name: 'terminal-defers-artifacts-to-run-tracker',
-          message: 'terminal 工具不应直接生成 artifact，文件变化由顶层 Run 扫描统一捕获。',
-          data: result.firstState.execution.artifacts
-        })
+        runtime.assertThat(
+          result.firstState.execution.artifacts.length === 0 &&
+            result.terminalArtifacts.length === 1 &&
+            result.terminalArtifacts[0]?.runId === runtime.runId,
+          {
+          name: 'terminal-emits-command-scoped-artifact',
+            message: 'terminal 命令完成后应立即生成属于当前 Run 的文件 artifact。',
+            data: {
+              executionArtifacts: result.firstState.execution.artifacts,
+              terminalArtifacts: result.terminalArtifacts
+            }
+          }
+        )
 
         runtime.assertThat(
           result.firstState.execution.pendingDecisionHint?.code ===

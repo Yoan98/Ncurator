@@ -128,7 +128,7 @@ describe('ai tool docx backend', () => {
           {
             name: 'docx-update-directly-writes-source-and-records-checkpoint',
             message:
-              'docx_edit 成功时应立即写回源文件，run 收尾生成包含 checkpoint 的 applied 记录。',
+              '提交当前 run 的 Docx 草稿时应写回源文件，并生成包含 checkpoint 的 applied 记录。',
             data: {
               records: result.records,
               searchAfterApply: result.searchAfterApply.matches

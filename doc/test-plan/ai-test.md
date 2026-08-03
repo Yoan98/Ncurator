@@ -176,7 +176,7 @@ AI unit / 辅助测试目录：
 ##### `docx-create-with-content-direct-applies`
 
 - 测试类型：`backend`
-- What：仅对新路径执行一次无锚点 `docx_edit(insert_blocks)` 也会立即创建目标 docx，并在 run 收尾生成 apply record。
+- What：仅对新路径执行一次无锚点 `docx_edit(insert_blocks)` 也会立即创建目标 docx，并在提交当前 run 的 Docx 草稿时生成 apply record。
 - Why：真实模型很可能一次写完新文档内容，这条能力必须由回归测试保护。
 - How：真实执行 `docx_edit(insert_blocks, 无 location)` 并直接 `applyDocxRunEdits`。
 - Oracle：生成 `DocxApplyRecord(operation=created,status=applied)` 并包含 diff 预览 artifact 路径；目标文件立即存在；最终 artifacts 包含携带 `applyId` 的 docx file artifact。
@@ -185,7 +185,7 @@ AI unit / 辅助测试目录：
 ##### `docx-direct-apply-checkpoint-revert`
 
 - 测试类型：`backend`
-- What：existing docx 在 `docx_edit` 成功时立即写回，run 收尾保存 checkpoint 和修改记录，并支持干净回退。
+- What：existing docx 在提交当前 run 的 Docx 草稿时写回，立即保存 checkpoint 和修改记录，并支持干净回退。
 - Why：direct apply 模式下，写回与回退是替代旧确认提交流程的核心安全边界。
 - How：真实编辑一份 docx，执行 `applyDocxRunEdits`，再执行 `DocxApplyService.revertRecord(force=false)`。
 - Oracle：源文件在 apply 后立即变化；生成 `DocxApplyRecord(operation=updated,status=applied)`、checkpoint 与 diff 预览 artifact；真实源文件不包含 diff 标记；回退后源文件恢复 checkpoint，记录状态变为 `reverted`。
@@ -522,7 +522,7 @@ AI unit / 辅助测试目录：
 - 测试类型：`backend / tool`
 - What：同一个原始 block 在同一次 actions 和同一 run 多轮编辑后，Diff 只展示相对 run 初始版本的净变化。
 - Why：原始 block 的每次 replacement 都直接进入 review projection 会重复显示旧内容，并放大红绿数量。
-- How：真实覆盖 `A -> B -> C`、`A -> B -> A`、替换后删除，以及同一原始 block 在单次和多次 `docx_edit` 中连续变化；Run 收尾后解析真实 preview docx。
+- How：真实覆盖 `A -> B -> C`、`A -> B -> A`、替换后删除，以及同一原始 block 在单次和多次 `docx_edit` 中连续变化；提交当前 run 的 Docx 草稿后解析真实 preview docx。
 - Oracle：`A -> B -> C` 只出现一次红色 A 和一次绿色 C且不出现 B；`A -> B -> A` 不包含红绿标记；替换后删除只出现一次红色 A；正式 docx 始终是最终净稿，record 数量与净变化一致。
 - Not：不验证 live 模型如何规划编辑步骤。
 
@@ -634,10 +634,10 @@ AI unit / 辅助测试目录：
 ##### `ppt-create-read-edit-commit`
 
 - 测试类型：`backend / tool`
-- What：`ppt_edit(actions=[insert_slide...])` 一次创建多页、读取、编辑、每次写后立即回读，以及 Run 收尾生成单一页面级 diff 记录。
+- What：`ppt_edit(actions=[insert_slide...])` 一次创建多页、读取、编辑、每次写后立即回读，以及写入时生成单一页面级 diff 记录。
 - Why：PPT 工具必须同时守住直接写回和 run 级差异聚合。
-- How：创建真实多页 PPT，连续读取和编辑，再执行 Run 收尾。
-- Oracle：每次 `ppt_edit` 成功后正式文件立即存在、可解析且页面内容正确；Run 收尾后同一文件只生成一条修改记录和页面级 diff。
+- How：创建真实多页 PPT，连续读取和编辑，再检查写入保存的记录。
+- Oracle：每次 `ppt_edit` 成功后正式文件立即存在、可解析且页面内容正确；同一文件只生成一条修改记录和页面级 diff。
 - Not：不验证 human 的工具选择或页面审美。
 
 ##### `ppt-diff-slide-and-element-net-semantics`
@@ -784,11 +784,11 @@ AI unit / 辅助测试目录：
 ##### `terminal-inline-edit-artifact-contract`
 
 - 测试类型：`backend`
-- What：terminal 只执行真实文件命令，不根据命令字符串直接生成修改记录或 artifact。
-- Why：terminal、脚本和内部文件工具必须共享 Run 前后扫描这一套文件变化真相，避免重复记录和漏记无法静态分析的命令。
+- What：terminal 只通过真实命令前后差异生成修改记录和 artifact，不根据命令字符串猜测文件产物。
+- Why：terminal 命令需要在不依赖整次 Run 收尾扫描的前提下，记录无法静态分析的真实文件变化。
 - How：通过 terminal 修改已有文件并创建新文件，检查工具结果、文件结果、工具期修改记录和 `file_artifact` 事件。
-- Oracle：命令真实生效并经过审批；terminal 工具结果不包含 `artifacts`；工具执行阶段没有修改记录或 `file_artifact`，后续由顶层 Run 扫描统一捕获。
-- Not：不在工具级 case 重复验证 WorkspaceChangeTracker；统一扫描由对应 tracker 和 Workbench 测试覆盖。
+- Oracle：命令真实生效并经过审批；terminal 工具结果不包含 `artifacts`；命令完成后产生带当前 Run ID 的修改记录和 `file_artifact`。
+- Not：不根据命令文本推断文件路径；差异只来自命令前后工作区快照。
 
 ##### `terminal-inline-interpreter-execution`
 
@@ -1003,8 +1003,8 @@ AI unit / 辅助测试目录：
 - 测试类型：`backend`
 - What：`hand` 的工具次数限制与 artifact 合并行为。
 - Why：工具执行层的关键边界。
-- How：先执行不会直接产生 artifact 的 terminal 工具，再向后续状态注入已有 docx artifact，执行不产生 artifact 的 docx read，并触发 hardActionLimit 收敛。
-- Oracle：terminal artifact 延迟到顶层 Run 扫描；显式已有 artifact 不被后续无 artifact 工具覆盖；超过 hardActionLimit 后产生 `hand_tool_limit_exceeded` decision hint、交付说明和当前工具结果。
+- How：先执行会产生命令级 artifact 的 terminal 工具，再向后续状态注入已有 docx artifact，执行不产生 artifact 的 docx read，并触发 hardActionLimit 收敛。
+- Oracle：terminal artifact 在命令完成后进入当前 Run；显式已有 artifact 不被后续无 artifact 工具覆盖；超过 hardActionLimit 后产生 `hand_tool_limit_exceeded` decision hint、交付说明和当前工具结果。
 - Not：不验证 `human` 全链路。
 
 ### 4.2 `human`
