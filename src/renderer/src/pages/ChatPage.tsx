@@ -180,7 +180,8 @@ const createEmptyPanel = (): WorkbenchContentPanelState => ({
 
 const EMPTY_TAB_WORKSPACE: WorkbenchTabWorkspaceState = {
   tabs: [],
-  activeTabId: null
+  activeTabId: null,
+  panelCollapsed: true
 }
 
 const getFileTabId = (filePath: string, platform: string): string => {
@@ -669,7 +670,6 @@ const ChatPage: React.FC = () => {
     tabId: string
     dataUrl: string
   } | null>(null)
-  const contentPanelCollapsedByWorkspaceRef = useRef<Record<string, boolean>>({})
   const restoreContentPanelWithoutAnimationRef = useRef(false)
 
   const [activeApplyRecord, setActiveApplyRecord] = useState<AiFileChangeRecord | null>(null)
@@ -1068,6 +1068,19 @@ const ChatPage: React.FC = () => {
     [tabWorkspaceKey]
   )
 
+  const setPanelCollapsedForSession = useCallback(
+    (sessionKey: string, collapsed: boolean): void => {
+      setTabWorkspaces((current) => ({
+        ...current,
+        [sessionKey]: {
+          ...(current[sessionKey] || EMPTY_TAB_WORKSPACE),
+          panelCollapsed: collapsed
+        }
+      }))
+    },
+    []
+  )
+
   const captureBrowserTransition = useCallback(async (tabId: string): Promise<void> => {
     const response = await Promise.race([
       window.api.browserPanelCapture({ tabId }),
@@ -1083,23 +1096,28 @@ const ChatPage: React.FC = () => {
   }, [])
 
   const collapseContentPanel = useCallback((): void => {
+    const sessionKey = tabWorkspaceKey
     void (async () => {
       if (contentPanel.kind === 'browser') {
         await captureBrowserTransition(contentPanel.browserTabId)
       } else {
         setBrowserTransitionImage(null)
       }
+      setPanelCollapsedForSession(sessionKey, true)
+      if ((currentSessionIdRef.current || '__draft__') !== sessionKey) {
+        setBrowserTransitionImage(null)
+        return
+      }
       setBrowserPresentationEnabled(false)
       void window.api.browserPanelHide()
-      contentPanelCollapsedByWorkspaceRef.current[tabWorkspaceKey] = true
       setContentPanelCollapsed(true)
     })()
-  }, [captureBrowserTransition, contentPanel, tabWorkspaceKey])
+  }, [captureBrowserTransition, contentPanel, setPanelCollapsedForSession, tabWorkspaceKey])
 
   const expandContentPanel = useCallback((): void => {
-    contentPanelCollapsedByWorkspaceRef.current[tabWorkspaceKey] = false
+    setPanelCollapsedForSession(tabWorkspaceKey, false)
     setContentPanelCollapsed(false)
-  }, [tabWorkspaceKey])
+  }, [setPanelCollapsedForSession, tabWorkspaceKey])
 
   const restoreCollapsedContentPanel = useCallback((): void => {
     // A collapsed BrowserView is detached from the native window, where capturePage can hang.
@@ -1137,7 +1155,7 @@ const ChatPage: React.FC = () => {
           existingIndex < 0
             ? [...current.tabs, tab]
             : current.tabs.map((item, index) => (index === existingIndex ? tab : item))
-        return { tabs, activeTabId: tab.id }
+        return { ...current, tabs, activeTabId: tab.id, panelCollapsed: false }
       })
       setContentPanel(tab.state)
       expandContentPanel()
@@ -1491,7 +1509,6 @@ const ChatPage: React.FC = () => {
       setContentPanel(createEmptyPanel())
       setBrowserPresentationEnabled(false)
       void window.api.browserPanelHide()
-      contentPanelCollapsedByWorkspaceRef.current.__draft__ = true
       setContentPanelCollapsed(true)
       resetApplyWorkspaceState()
       setFileChangeRecords([])
@@ -1568,7 +1585,9 @@ const ChatPage: React.FC = () => {
 
       for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
         const response = await window.api.aiFileChangeList(createFileChangeListRequest(scope))
-        const listedItems = sortFileChangeRecords(filterFileChangeRecordsForScope(response.items, scope))
+        const listedItems = sortFileChangeRecords(
+          filterFileChangeRecordsForScope(response.items, scope)
+        )
         const noEffectiveChangeRecords = listedItems.filter(
           (item) => item.status === 'failed' && item.error === NO_EFFECTIVE_FILE_CHANGE_MESSAGE
         )
@@ -1684,7 +1703,7 @@ const ChatPage: React.FC = () => {
     }
 
     const requestId = sessionSwitchRequestRef.current + 1
-    const restoreExpandedPanel = contentPanelCollapsedByWorkspaceRef.current[session.id] === false
+    const restoreExpandedPanel = tabWorkspaces[session.id]?.panelCollapsed === false
     sessionSwitchRequestRef.current = requestId
     currentSessionIdRef.current = session.id
 
@@ -1713,6 +1732,7 @@ const ChatPage: React.FC = () => {
     setContentPanel(createEmptyPanel())
     setBrowserPresentationEnabled(false)
     void window.api.browserPanelHide()
+    restoreContentPanelWithoutAnimationRef.current = false
     setContentPanelCollapsed(!restoreExpandedPanel)
     if (restoreExpandedPanel) {
       restoreContentPanelWithoutAnimationRef.current = true
@@ -1727,7 +1747,7 @@ const ChatPage: React.FC = () => {
       const activeTab = savedWorkspace?.tabs.find((tab) => tab.id === savedWorkspace.activeTabId)
       if (!activeTab) {
         setContentPanel(createEmptyPanel())
-        contentPanelCollapsedByWorkspaceRef.current[session.id] = true
+        setPanelCollapsedForSession(session.id, true)
         setContentPanelCollapsed(true)
         resetApplyWorkspaceState()
         return
@@ -2073,10 +2093,14 @@ const ChatPage: React.FC = () => {
   const openFileChange = useCallback((changeId: string): void => {
     void window.api.aiFileChangeGet({ changeId }).then((response) => {
       if (response.record) {
-        void loadFileChangesForSessionRef.current(response.record.sessionId, response.record.runId, {
-          preferredApplyId: changeId,
-          forceOpenWorkspace: true
-        })
+        void loadFileChangesForSessionRef.current(
+          response.record.sessionId,
+          response.record.runId,
+          {
+            preferredApplyId: changeId,
+            forceOpenWorkspace: true
+          }
+        )
         return
       }
       void loadApplyRecordRef.current({
@@ -2133,7 +2157,11 @@ const ChatPage: React.FC = () => {
       }
       setTabWorkspaces((current) => ({
         ...current,
-        [tabWorkspaceKey]: { tabs, activeTabId: nextActiveId }
+        [tabWorkspaceKey]: {
+          ...(current[tabWorkspaceKey] || EMPTY_TAB_WORKSPACE),
+          tabs,
+          activeTabId: nextActiveId
+        }
       }))
       if (tabWorkspace.activeTabId !== tabId) return
       if (!nextTab) {
@@ -2211,9 +2239,12 @@ const ChatPage: React.FC = () => {
     [openFile]
   )
 
-  const openWorkspaceChange = useCallback((changeId: string): void => {
-    openFileChange(changeId)
-  }, [openFileChange])
+  const openWorkspaceChange = useCallback(
+    (changeId: string): void => {
+      openFileChange(changeId)
+    },
+    [openFileChange]
+  )
 
   useEffect(() => {
     const unsubscribe = window.api.onAiRunEvent((event) => {
@@ -2401,14 +2432,7 @@ const ChatPage: React.FC = () => {
               : item
           )
         )
-        if (
-          eventSessionId &&
-          eventSessionId === currentSessionIdRef.current &&
-          isCurrentFileChangeRunScope(fileChangeRunScopeRef.current, {
-            sessionId: eventSessionId,
-            runId: event.runId
-          })
-        ) {
+        if (eventSessionId && eventSessionId === currentSessionIdRef.current) {
           void loadFileChangesForSession(eventSessionId, event.runId)
         }
         emitErrorMessage(
@@ -2440,14 +2464,7 @@ const ChatPage: React.FC = () => {
               : item
           )
         )
-        if (
-          eventSessionId &&
-          eventSessionId === currentSessionIdRef.current &&
-          isCurrentFileChangeRunScope(fileChangeRunScopeRef.current, {
-            sessionId: eventSessionId,
-            runId: event.runId
-          })
-        ) {
+        if (eventSessionId && eventSessionId === currentSessionIdRef.current) {
           void loadFileChangesForSession(eventSessionId, event.runId)
         }
         message.info('已取消')
@@ -2462,14 +2479,7 @@ const ChatPage: React.FC = () => {
         setApprovalSubmitting(false)
         setPendingUserTakeover(null)
         setUserTakeoverConfirming(false)
-        if (
-          eventSessionId &&
-          eventSessionId === currentSessionIdRef.current &&
-          isCurrentFileChangeRunScope(fileChangeRunScopeRef.current, {
-            sessionId: eventSessionId,
-            runId: event.runId
-          })
-        ) {
+        if (eventSessionId && eventSessionId === currentSessionIdRef.current) {
           void loadFileChangesForSession(eventSessionId, event.runId, {
             notifyNoEffectiveChange: true
           })

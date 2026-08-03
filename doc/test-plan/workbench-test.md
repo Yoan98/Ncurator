@@ -197,10 +197,10 @@ tests/case/workbench/
 #### `reference-token-lifecycle`
 
 - 测试类型：`e2e`
-- What：`@` 参考资料候选覆盖工作区全部本地目录 / 文件与网页资料、目录 / 文件 / 网页 token 插入、多 token 共存、键盘删除、去重、切工作区清理和空候选提示。
+- What：`@` 参考资料候选覆盖工作区当前真实的全部本地目录 / 文件与网页资料、目录 / 文件 / 网页 token 插入、多 token 共存、键盘删除、去重、切工作区清理和空候选提示。
 - Why：显式参考资料是用户控制 AI 上下文的核心入口，错误会直接导致搜索或 AI 执行范围偏离用户意图。
-- How：创建真实 workspace，绑定 `tests/fixtures/workspace`，等待真实文件扫描并准备索引状态；添加真实 web source 并等待真实网页索引完成；输入 `@` 触发候选，选择文件、目录、网页；候选应覆盖工作区下本地项并显示索引状态，其中 md/txt 索引完成后应显示为已索引；选中即追加，同一资料才去重；通过 Backspace 删除 token；切工作区清理旧 token。
-- Oracle：候选来源和发送范围对齐 `WB-SCOPE-001`、`WB-CORE-002`、`WB-CORE-004`；token 插入、共存、发送参数、键盘删除和图标对齐 `WB-SCOPE-002`；去重、跨工作区清理和空候选对齐 `WB-SCOPE-003`、`WB-SCOPE-004`；智能模式无 warning，搜索模式说明只覆盖已索引子文件，对齐 `WB-BLOCKER-003`。
+- How：创建真实 workspace，绑定 `tests/fixtures/workspace`，等待真实文件扫描并准备索引状态；添加真实 web source 并等待真实网页索引完成；随后直接在工作区磁盘中新建文件，不触发“检查更新”或“更新索引”；输入 `@` 触发候选，选择文件、目录、网页；候选应覆盖工作区下当前本地项并显示索引状态，其中新增文件显示未索引，md/txt 索引完成后显示已索引；选中即追加，同一资料才去重；通过 Backspace 删除 token；切工作区清理旧 token。
+- Oracle：候选来源和发送范围对齐 `WB-SCOPE-001`、`WB-CORE-002`、`WB-CORE-004`；真实目录快照和新增未索引文件对齐 `WB-SCOPE-001-AC3`；token 插入、共存、发送参数、键盘删除和图标对齐 `WB-SCOPE-002`；去重、跨工作区清理和空候选对齐 `WB-SCOPE-003`、`WB-SCOPE-004`；智能模式无 warning，搜索模式说明只覆盖已索引子文件，对齐 `WB-BLOCKER-003`。
 - Not：不验证底层 KB 检索排序质量，也不验证 Settings 工作区资料配置细节。
 
 #### `right-panel-layout-and-tabs`

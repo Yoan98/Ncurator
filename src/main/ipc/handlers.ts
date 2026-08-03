@@ -28,8 +28,7 @@ import type {
 } from '../../shared/types'
 import {
   buildWebReferenceItem,
-  buildWorkspaceReferenceItemsFromRecords,
-  referenceMatchesQuery
+  buildWorkspaceReferenceItemsFromCurrentTree
 } from '../services/sourceScope/selection'
 import { WorkspaceSourceService } from '../services/workspace/WorkspaceSourceService'
 import { WorkspaceKnowledgePrepareService } from '../services/workspace/WorkspaceKnowledgePrepareService'
@@ -143,9 +142,7 @@ type E2ENativeDialogGlobal = typeof globalThis & {
 }
 
 const e2eNativeDialogSelections =
-  process.env.NCURATOR_E2E_OBSERVER === '1'
-    ? new Map<number, E2ENativeDialogSelection>()
-    : null
+  process.env.NCURATOR_E2E_OBSERVER === '1' ? new Map<number, E2ENativeDialogSelection>() : null
 
 if (e2eNativeDialogSelections) {
   ;(globalThis as E2ENativeDialogGlobal).__NCURATOR_E2E_NATIVE_DIALOG_SELECTIONS__ =
@@ -2129,29 +2126,38 @@ export function registerHandlers(services: {
         const workspaceIdFilter = String(payload.workspaceId || '').trim()
         const referenceKindFilters = normalizeReferenceKindFilters(payload.referenceKinds)
         const localReferences: SelectedReference[] = []
+        let webReferences: SelectedReference[] = []
 
         if (workspaceIdFilter) {
           const workspace = await workspaceStore.getWorkspaceById(workspaceIdFilter)
           if (workspace) {
-            const records = await workspaceStore.listWorkspaceFileIndexRecords(workspace.id)
-            localReferences.push(
-              ...buildWorkspaceReferenceItemsFromRecords({
-                workspace,
-                records
-              })
-            )
+            const [scanResult, records, webSources] = await Promise.all([
+              workspace.root_path
+                ? workspaceService.scanWorkspaceTree({
+                    workspaceId: workspace.id,
+                    rootPath: workspace.root_path,
+                    workspaceName: workspace.name
+                  })
+                : Promise.resolve(null),
+              workspaceStore.listWorkspaceFileIndexRecords(workspace.id),
+              webSourceStore.listWebSources(workspace.id)
+            ])
+            if (scanResult) {
+              localReferences.push(
+                ...buildWorkspaceReferenceItemsFromCurrentTree({
+                  workspace: scanResult.workspace,
+                  entries: scanResult.entries,
+                  records
+                })
+              )
+            }
+            webReferences = webSources.map(buildWebReferenceItem)
           }
         }
 
-        const webReferences = workspaceIdFilter
-          ? (await webSourceStore.listWebSources(workspaceIdFilter)).map(buildWebReferenceItem)
-          : []
-
-        const allReferences = [...localReferences, ...webReferences]
-          .filter((reference) => referenceMatchesQuery(reference, payload.query))
-          .filter((reference) =>
-            referenceKindFilters ? referenceKindFilters.has(reference.kind) : true
-          )
+        const allReferences = [...localReferences, ...webReferences].filter((reference) =>
+          referenceKindFilters ? referenceKindFilters.has(reference.kind) : true
+        )
 
         return { items: allReferences, total: allReferences.length }
       } catch (error) {

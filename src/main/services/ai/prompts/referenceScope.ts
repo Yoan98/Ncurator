@@ -14,7 +14,7 @@ const getReferenceTypeLabel = (reference: SelectedReference): string => {
 }
 
 const getReferenceResourceAddress = (reference: SelectedReference): string =>
-  reference.kind === 'web' ? reference.url : reference.relativePath
+  reference.kind === 'web' ? reference.url : reference.absolutePath
 
 const renderSelectedReference = (reference: SelectedReference, index: number): string => {
   const kbDocumentIds =

@@ -52,7 +52,64 @@ describe('ai unit selected context workspace path', () => {
 
     expect(text).toContain('1. weekly-risk.md')
     expect(text).toContain('类型：本地文件')
-    expect(text).toContain('资源地址：reports/weekly-risk.md')
+    expect(text).toContain('资源地址：/tmp/real-workspace-root/reports/weekly-risk.md')
+
+    expect(
+      renderReferenceScopeText(
+        buildReferenceScope({
+          workspace: {
+            workspaceId: 'workspace-1',
+            workspaceName: 'display-name-only',
+            rootPath: '/tmp/real-workspace-root'
+          },
+          selectedReferences: [
+            {
+              kind: 'directory',
+              workspaceId: 'workspace-1',
+              nodeId: 'node-dir',
+              name: 'reports',
+              relativePath: 'reports',
+              absolutePath: '/tmp/real-workspace-root/reports',
+              kbAvailability: 'partial',
+              kbDocumentIds: [],
+              indexedFileCount: 1,
+              notIndexedFileCount: 0
+            },
+            {
+              kind: 'web',
+              workspaceId: 'workspace-1',
+              webSourceId: 'web-1',
+              name: '内部规范',
+              url: 'https://example.com/policy',
+              kbAvailability: 'indexed',
+              kbDocumentIds: ['doc-web']
+            }
+          ]
+        })
+      )
+    ).toContain('资源地址：/tmp/real-workspace-root/reports')
+    expect(
+      renderReferenceScopeText(
+        buildReferenceScope({
+          workspace: {
+            workspaceId: 'workspace-1',
+            workspaceName: 'display-name-only',
+            rootPath: '/tmp/real-workspace-root'
+          },
+          selectedReferences: [
+            {
+              kind: 'web',
+              workspaceId: 'workspace-1',
+              webSourceId: 'web-1',
+              name: '内部规范',
+              url: 'https://example.com/policy',
+              kbAvailability: 'indexed',
+              kbDocumentIds: ['doc-web']
+            }
+          ]
+        })
+      )
+    ).toContain('资源地址：https://example.com/policy')
     expect(text).toContain('文档知识库状态：已索引')
     expect(text).toContain('知识库文档ID：doc-1')
   })

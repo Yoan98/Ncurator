@@ -115,6 +115,26 @@ const getAttachmentFileExt = (name: string): string => {
 const isSupportedAttachmentFile = (name: string): boolean =>
   SUPPORTED_ATTACHMENT_FILE_EXTENSION_SET.has(getAttachmentFileExt(name))
 
+const filterMentionReferences = (
+  references: SelectedReference[],
+  rawQuery: string
+): SelectedReference[] => {
+  const query = rawQuery.trim().toLowerCase()
+  if (!query) return references
+
+  return references.filter((reference) => {
+    const values =
+      reference.kind === 'web'
+        ? [reference.name, reference.url]
+        : [reference.name, reference.relativePath, reference.absolutePath]
+    return values.some((value) =>
+      String(value || '')
+        .toLowerCase()
+        .includes(query)
+    )
+  })
+}
+
 const PreferenceDots: React.FC<{ count: 1 | 2 }> = ({ count }) => (
   <span className="inline-flex items-center gap-0.5 text-[#787774]">
     {Array.from({ length: count }).map((_, index) => (
@@ -158,17 +178,23 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   const knownScopesRef = useRef(new Map<string, SelectedReference>())
   const mentionRefreshFrameRef = useRef<number | null>(null)
   const mentionQueryRef = useRef<string | null>(null)
+  const mentionSessionSequenceRef = useRef(0)
+  const modeRef = useRef(mode)
   const controlFocusTimeoutRef = useRef<number | null>(null)
   const compositionGuardTimeoutRef = useRef<number | null>(null)
   const isComposingRef = useRef(false)
   const compositionJustEndedRef = useRef(false)
   const attachmentPreviewUrlsRef = useRef<Record<string, string>>({})
   const [mentionQuery, setMentionQuery] = useState<string | null>(null)
+  const [mentionSessionId, setMentionSessionId] = useState<number | null>(null)
+  const [mentionSnapshot, setMentionSnapshot] = useState<SelectedReference[]>([])
   const [mentionOptions, setMentionOptions] = useState<SelectedReference[]>([])
   const [mentionLoading, setMentionLoading] = useState(false)
   const [mentionActiveIndex, setMentionActiveIndex] = useState(0)
   const [hasContent, setHasContent] = useState(false)
   const [attachmentPreviewUrls, setAttachmentPreviewUrls] = useState<Record<string, string>>({})
+
+  modeRef.current = mode
 
   const selectedWorkspace = useMemo(
     () => workspaces.find((workspace) => workspace.id === selectedWorkspaceId) || null,
@@ -187,6 +213,8 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   const closeMention = useCallback(() => {
     mentionQueryRef.current = null
     setMentionQuery(null)
+    setMentionSessionId(null)
+    setMentionSnapshot([])
     setMentionOptions([])
     setMentionActiveIndex(0)
   }, [])
@@ -346,8 +374,14 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
       return
     }
     if (mentionQueryRef.current === context.query) return
+    const isNewMentionSession = mentionQueryRef.current === null
     mentionQueryRef.current = context.query
     setMentionQuery(context.query)
+    if (isNewMentionSession) {
+      mentionSessionSequenceRef.current += 1
+      setMentionSnapshot([])
+      setMentionSessionId(mentionSessionSequenceRef.current)
+    }
     setMentionActiveIndex(0)
   }, [closeMention, getMentionContext])
 
@@ -452,12 +486,13 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   }, [closeMention, renderDraftNodes, selectedWorkspaceId, syncDraftFromEditor])
 
   useEffect(() => {
-    if (mentionQuery === null) return
+    if (mentionSessionId === null) return
     let cancelled = false
 
     const loadMentionOptions = async (): Promise<void> => {
       if (!selectedWorkspaceId || !selectedWorkspaceId.trim()) {
         if (!cancelled) {
+          setMentionSnapshot([])
           setMentionOptions([])
           setMentionActiveIndex(0)
           setMentionLoading(false)
@@ -469,29 +504,13 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
       try {
         const referenceKinds: ReferenceKind[] = COMPOSER_REFERENCE_KINDS
         const response = await window.api.referenceItemList({
-          mode: mode === 'ai' ? 'chat' : 'search',
-          query: mentionQuery.trim() || undefined,
+          mode: modeRef.current === 'ai' ? 'chat' : 'search',
           workspaceId: selectedWorkspaceId,
           referenceKinds
         })
 
-        const editor = editorRef.current
-        const currentKeys = new Set<string>()
-        if (editor) {
-          const draft = extractComposerDraftValue(
-            readComposerNodesFromEditor(editor, knownScopesRef.current)
-          )
-          draft.selectedReferences.forEach((scope) => currentKeys.add(getScopeKey(scope)))
-        }
-
-        const nextOptions = response.items.filter((scope) => !currentKeys.has(getScopeKey(scope)))
-        nextOptions.forEach((scope) => {
-          knownScopesRef.current.set(getScopeKey(scope), scope)
-        })
-
         if (!cancelled) {
-          setMentionOptions(nextOptions)
-          setMentionActiveIndex(0)
+          setMentionSnapshot(response.items)
         }
       } finally {
         if (!cancelled) setMentionLoading(false)
@@ -502,7 +521,28 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     return () => {
       cancelled = true
     }
-  }, [mentionQuery, mode, selectedWorkspaceId])
+  }, [mentionSessionId, selectedWorkspaceId])
+
+  useEffect(() => {
+    if (mentionQuery === null) return
+
+    const editor = editorRef.current
+    const currentKeys = new Set<string>()
+    if (editor) {
+      const draft = extractComposerDraftValue(
+        readComposerNodesFromEditor(editor, knownScopesRef.current)
+      )
+      draft.selectedReferences.forEach((scope) => currentKeys.add(getScopeKey(scope)))
+    }
+
+    const nextOptions = filterMentionReferences(mentionSnapshot, mentionQuery).filter(
+      (scope) => !currentKeys.has(getScopeKey(scope))
+    )
+    nextOptions.forEach((scope) => {
+      knownScopesRef.current.set(getScopeKey(scope), scope)
+    })
+    setMentionOptions(nextOptions)
+  }, [mentionQuery, mentionSnapshot])
 
   useEffect(() => {
     const handleSelectionChange = (): void => {

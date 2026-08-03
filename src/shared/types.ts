@@ -412,7 +412,6 @@ export interface DeleteWebSourceResponse {
 }
 
 export interface ListReferenceItemsRequest {
-  query?: string
   mode: 'chat' | 'search'
   workspaceId?: string
   referenceKinds?: ReferenceKind[]

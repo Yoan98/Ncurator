@@ -259,4 +259,5 @@ export type WorkbenchResourceTab = {
 export type WorkbenchTabWorkspaceState = {
   tabs: WorkbenchResourceTab[]
   activeTabId: string | null
+  panelCollapsed: boolean
 }

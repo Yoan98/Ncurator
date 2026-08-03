@@ -15,10 +15,7 @@ import {
   createTextFileDiffArtifact
 } from '../human/tools/textFile/textDiff'
 import { decodeTextFile } from '../human/tools/textFile/textFileUtils'
-import {
-  TerminalCommandChangeTracker,
-  WorkspaceObjectStore,
-} from './WorkspaceChangeTracker'
+import { TerminalCommandChangeTracker, WorkspaceObjectStore } from './WorkspaceChangeTracker'
 import { NO_EFFECTIVE_FILE_CHANGE_MESSAGE } from '../../../../shared/constants'
 
 const FORCE_REVERT_WARNING =
@@ -51,14 +48,32 @@ export class AiFileChangeService {
 
   public async finishTerminalCommandTracking(commandId: string): Promise<AiFileChangeRecord[]> {
     const records = await this.terminalCommandChangeTracker.finishCommand(commandId)
-    await Promise.all(records.map(async (record) => await this.saveRecord(record)))
-    return records
+    return await Promise.all(
+      records.map(async (record) => {
+        await this.saveRecord(record)
+        const response = await this.getRecord({ changeId: record.id })
+        return response.record || record
+      })
+    )
   }
 
   public async saveRecord(record: AiFileChangeRecord, workspaceRootPath?: string): Promise<void> {
     const existing = (await this.store.getRecord({ changeId: record.id })).record
     const next = await this.finalizeRecord(record, existing, workspaceRootPath)
     await this.store.saveRecord(next)
+    if (
+      next.status === 'applied' &&
+      next.capability === 'text_file' &&
+      (next.operation === 'created' || next.operation === 'updated') &&
+      !next.previewPath &&
+      (next.beforeSnapshotPath || next.afterSnapshotPath)
+    ) {
+      try {
+        await this.materializeTextPreview(next)
+      } catch {
+        // Preview generation is best effort; the change record remains usable without it.
+      }
+    }
   }
 
   public async listRecords(
@@ -136,7 +151,9 @@ export class AiFileChangeService {
       return !record.beforePath || !record.afterPath || record.beforePath === record.afterPath
     }
     return Boolean(
-      record.beforeChecksum && record.afterChecksum && record.beforeChecksum === record.afterChecksum
+      record.beforeChecksum &&
+      record.afterChecksum &&
+      record.beforeChecksum === record.afterChecksum
     )
   }
 

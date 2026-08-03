@@ -89,7 +89,7 @@ describe('ai file change service', () => {
     }
   })
 
-  it('captures terminal command changes and materializes text diff only when opened', async () => {
+  it('captures terminal command changes and materializes text diff before the run result is shown', async () => {
     const targetPath = path.join(tempDir, 'notes.txt')
     await fs.writeFile(targetPath, 'line 1\nline 2\nline 3\n')
     await service.beginTerminalCommandTracking({
@@ -104,11 +104,15 @@ describe('ai file change service', () => {
     const completed = await service.finishTerminalCommandTracking('scan-command')
     expect(completed).toHaveLength(1)
     expect(completed[0]?.operation).toBe('updated')
-    expect(completed[0]?.previewPath).toBeUndefined()
+    expect(completed[0]?.previewPath).toBeTruthy()
     expect(completed[0]?.beforeObjectHash).not.toBe(completed[0]?.afterObjectHash)
 
+    const listed = await service.listRecords({ runId: 'scan-run' })
+    expect(listed.items[0]?.previewPath).toBe(completed[0]?.previewPath)
+    expect(listed.items[0]?.insertCount).toBe(1)
+    expect(listed.items[0]?.deleteCount).toBe(1)
+
     const opened = await service.getRecord({ changeId: completed[0]!.id })
-    expect(opened.record?.previewPath).toBeTruthy()
     const artifact = JSON.parse(await fs.readFile(opened.record!.previewPath!, 'utf8')) as Record<
       string,
       unknown
@@ -260,12 +264,12 @@ describe('ai file change service', () => {
     expect(changesB).toHaveLength(1)
     expect(changesA[0]?.runId).toBe('run-a')
     expect(changesB[0]?.runId).toBe('run-b')
-    expect((await service.listRecords({ sessionId: 'session-a', runId: 'run-a' })).items).toHaveLength(
-      1
-    )
-    expect((await service.listRecords({ sessionId: 'session-b', runId: 'run-b' })).items).toHaveLength(
-      1
-    )
+    expect(
+      (await service.listRecords({ sessionId: 'session-a', runId: 'run-a' })).items
+    ).toHaveLength(1)
+    expect(
+      (await service.listRecords({ sessionId: 'session-b', runId: 'run-b' })).items
+    ).toHaveLength(1)
   })
 
   it('restores deleted and renamed files during revert', async () => {
