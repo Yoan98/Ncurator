@@ -29,7 +29,7 @@
 
 ```text
 .
-├── README.md                         # 根规则、文档入口、目录结构和协作规范
+├── AGENTS.md                         # 根规则、文档入口、目录结构和协作规范
 ├── doc/                              # 项目文档
 │   ├── architecture.md               # 项目总架构，包含 AI 架构和 Docx 架构
 │   ├── database.md                   # SQLite 与 LanceDB 存储说明
