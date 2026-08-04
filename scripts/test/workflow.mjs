@@ -33,6 +33,7 @@ const LIVE_WORKERS = 3
 const LIVE_BACKEND_RETRIES = 1
 const RUNNER_DEADLINE_MS = 55 * 60 * 1000
 const DEADLINE_EXIT_CODE = 124
+const STALE_E2E_TEMP_MAX_AGE_MS = 24 * 60 * 60 * 1000
 const E2E_EXECUTION_CLASSES = new Set(['normal', 'live', 'exclusive', 'warmup'])
 const CROSS_ARCH_WARMUP_SOURCE_TARGET = new Map([['macos-x64', 'macos-arm64']])
 const USE_WINDOWS_SHELL = process.platform === 'win32'
@@ -857,6 +858,30 @@ const runE2ETestFilesConcurrently = async (testFiles, targets, testNamePattern, 
   }
 }
 
+const cleanupStaleE2ETempRoot = async (e2eTempRoot) => {
+  let entries = []
+  try {
+    entries = await readdir(e2eTempRoot, { withFileTypes: true })
+  } catch {
+    return 0
+  }
+  const now = Date.now()
+  let removedCount = 0
+  for (const entry of entries) {
+    if (!entry.isDirectory() || !entry.name.startsWith('ncurator-')) continue
+    const entryPath = path.join(e2eTempRoot, entry.name)
+    try {
+      const entryStat = await stat(entryPath)
+      if (now - entryStat.mtimeMs <= STALE_E2E_TEMP_MAX_AGE_MS) continue
+      await rm(entryPath, { recursive: true, force: true })
+      removedCount += 1
+    } catch {
+      // 单个残留目录清理失败不阻断本次 run
+    }
+  }
+  return removedCount
+}
+
 const runTypeWorkflow = async (input) => {
   const testFiles = await findTestFiles(input)
   if (testFiles.length === 0) {
@@ -887,6 +912,12 @@ const runTypeWorkflow = async (input) => {
         path.join(TESTS_ROOT, '.tmp', 'e2e')
     )
     await mkdir(e2eTempRoot, { recursive: true })
+    const removedTempCount = await cleanupStaleE2ETempRoot(e2eTempRoot)
+    if (removedTempCount > 0) {
+      process.stdout.write(
+        `[test-workflow] cleaned ${removedTempCount} stale E2E temp dir(s) in ${e2eTempRoot}\n`
+      )
+    }
     runtimeEnv = {
       ...runtimeEnv,
       NCURATOR_E2E_TEMP_ROOT: e2eTempRoot
