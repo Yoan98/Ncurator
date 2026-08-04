@@ -1366,6 +1366,9 @@ const ChatPage: React.FC = () => {
   const collapseContentPanel = useCallback((): void => {
     const sessionKey = tabWorkspaceKey
     void (async () => {
+      // Keep the ref in sync before any await so a concurrent session switch / flush
+      // persists the collapsed intent instead of the stale expanded value.
+      contentPanelCollapsedRef.current = true
       if (contentPanel.kind === 'browser') {
         await captureBrowserTransition(contentPanel.browserTabId)
       } else {
@@ -1420,10 +1423,18 @@ const ChatPage: React.FC = () => {
       }
       updateCurrentTabWorkspace((current) => {
         const existingIndex = current.tabs.findIndex((item) => item.id === tab.id)
+        const launcherIndex =
+          tab.id !== 'file:launcher' &&
+          tab.kind === 'file' &&
+          current.activeTabId === 'file:launcher'
+            ? current.tabs.findIndex((item) => item.id === 'file:launcher')
+            : -1
         const tabs =
-          existingIndex < 0
-            ? [...current.tabs, tab]
-            : current.tabs.map((item, index) => (index === existingIndex ? tab : item))
+          launcherIndex >= 0
+            ? current.tabs.map((item, index) => (index === launcherIndex ? tab : item))
+            : existingIndex < 0
+              ? [...current.tabs, tab]
+              : current.tabs.map((item, index) => (index === existingIndex ? tab : item))
         return { ...current, tabs, activeTabId: tab.id, panelCollapsed: false }
       })
       setContentPanel(tab.state)
@@ -2090,9 +2101,13 @@ const ChatPage: React.FC = () => {
       }
 
       const previewFileKey = contentPanel.kind === 'file_preview' ? contentPanel.file.path : null
+      const panelCollapsed = contentPanelCollapsedRef.current
       if (options?.skipApplyRecordReload) {
         setActiveApplyRecord(nextSelectedRecord)
-        if (options.forceOpenWorkspace || contentPanel.kind === 'apply_workspace') {
+        if (
+          options.forceOpenWorkspace ||
+          (!panelCollapsed && contentPanel.kind === 'apply_workspace')
+        ) {
           showApplyWorkspace(nextSelectedRecord)
         }
         return
@@ -2100,7 +2115,7 @@ const ChatPage: React.FC = () => {
 
       const shouldOpenWorkspace =
         Boolean(options?.forceOpenWorkspace) ||
-        contentPanel.kind === 'apply_workspace' ||
+        (!panelCollapsed && contentPanel.kind === 'apply_workspace') ||
         (Boolean(options?.autoOpen) &&
           (contentPanel.kind === 'empty' ||
             (previewFileKey !== null && previewFileKey === nextSelectedRecord.path)))

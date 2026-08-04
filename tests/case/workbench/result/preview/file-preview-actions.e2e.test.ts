@@ -297,6 +297,7 @@ describe('workbench result e2e', () => {
             if (extension === 'xlsx') excelPreviewReadOnly = await verifyExcelPreviewReadOnly(page)
           }
           const resourceTabCount = await resourceTabs.count()
+          const launcherTabCount = await resourceTabs.filter({ hasText: '打开文件' }).count()
           const signals = await runtime.collectSignals()
 
           return {
@@ -316,6 +317,7 @@ describe('workbench result e2e', () => {
             fileLauncherVisible,
             workspaceFileFilterVisible,
             resourceTabCount,
+            launcherTabCount,
             openWithQueryCalls: signals.ipcInvokeEntries.filter(
               (entry) => entry.name === 'listOpenWithApplications'
             ).length,
@@ -343,12 +345,13 @@ describe('workbench result e2e', () => {
               result.reopenedMarkdownVisible &&
               result.fileLauncherVisible &&
               result.workspaceFileFilterVisible &&
-              result.resourceTabCount === 9 &&
+              result.resourceTabCount === 8 &&
+              result.launcherTabCount === 0 &&
               result.revealPathCalls >= 1,
             {
               name: 'workbench-file-preview-actions-real',
               message:
-                '右侧普通文件预览应能打开真实 pdf/docx/md/txt/xlsx/xlsm/xltx/xltm，并通过系统关联应用查询提供打开方式下拉和默认标记；PDF 和文本来自真实搜索结果，Excel 从工作区文件列表直接打开。',
+                '右侧普通文件预览应能打开真实 pdf/docx/md/txt/xlsx/xlsm/xltx/xltm，并通过系统关联应用查询提供打开方式下拉和默认标记；PDF 和文本来自真实搜索结果，Excel 从工作区文件列表直接打开；从“打开文件”选择器选中文件后选择器 Tab 被文件 Tab 原位替换，不残留。',
               data: result
             }
           )
