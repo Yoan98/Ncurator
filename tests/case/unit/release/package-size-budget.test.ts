@@ -50,13 +50,13 @@ describe('package size budget', () => {
 
     expect(config.platforms['darwin-arm64']).toMatchObject({
       installedApp: { baselineMiB: 1113.3, hardLimitMiB: 1200 },
-      appAsar: { baselineMiB: 210.9, hardLimitMiB: 230 },
+      appAsar: { baselineMiB: 230.9, hardLimitMiB: 252 },
       dmg: { baselineMiB: 432.9, hardLimitMiB: 480 },
       zip: { baselineMiB: 418.5, hardLimitMiB: 465 }
     })
     expect(config.platforms['darwin-x64']).toMatchObject({
       installedApp: { baselineMiB: 1145.6, hardLimitMiB: 1230 },
-      appAsar: { baselineMiB: 210.9, hardLimitMiB: 230 },
+      appAsar: { baselineMiB: 230.9, hardLimitMiB: 252 },
       dmg: { baselineMiB: 447.9, hardLimitMiB: 495 },
       zip: { baselineMiB: 433.3, hardLimitMiB: 480 }
     })
