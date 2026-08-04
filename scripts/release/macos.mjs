@@ -107,6 +107,7 @@ const validateEnvironment = async () => {
   const { stdout: pnpmPathOutput } = await execFileAsync('/usr/bin/which', ['pnpm'])
   const result = {
     pnpmPath: pnpmPathOutput.trim(),
+    sidecarVenvRoot: path.join(defaultToolRoot, 'sidecar-venv'),
     sidecarBrowserCacheRoot: path.join(defaultToolRoot, 'sidecar-browser-cache'),
     sidecarPipCacheRoot: path.join(defaultToolRoot, 'sidecar-pip-cache')
   }
@@ -306,6 +307,7 @@ if (mode === 'prepare') {
     await extractTag(archivePath, x64Source)
     const armEnvironment = {
       ...process.env,
+      NCURATOR_SIDECAR_VENV_ROOT: tools.sidecarVenvRoot,
       NCURATOR_SIDECAR_BROWSER_CACHE: path.join(tools.sidecarBrowserCacheRoot, 'darwin-arm64'),
       NCURATOR_SIDECAR_PIP_CACHE: path.join(tools.sidecarPipCacheRoot, 'darwin-arm64')
     }
@@ -313,6 +315,7 @@ if (mode === 'prepare') {
       ...process.env,
       PATH: `${path.dirname(tools.x64Node)}:${process.env.PATH || ''}`,
       PIP_CERT: String(process.env.PIP_CERT || '').trim() || '/private/etc/ssl/cert.pem',
+      NCURATOR_SIDECAR_VENV_ROOT: tools.sidecarVenvRoot,
       NCURATOR_SIDECAR_BUILD_PYTHON: tools.x64Python,
       NCURATOR_SIDECAR_BROWSER_CACHE: path.join(tools.sidecarBrowserCacheRoot, 'darwin-x64'),
       NCURATOR_SIDECAR_PIP_CACHE: path.join(tools.sidecarPipCacheRoot, 'darwin-x64')
