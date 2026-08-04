@@ -325,18 +325,31 @@ describe('workbench run e2e', () => {
           if (!openedEvent) throw new Error('browser_panel_opened event is missing')
           const inspectTaskBrowserRuntime = async () =>
             await runtime.electronApp.evaluate(async ({ webContents }, url) => {
+              const allContents = webContents.getAllWebContents().map((candidate) => ({
+                id: candidate.id,
+                url: candidate.getURL(),
+                destroyed: candidate.isDestroyed()
+              }))
               const contents = webContents
                 .getAllWebContents()
                 .find((candidate) => candidate.getURL() === url)
               if (!contents || contents.isDestroyed()) {
-                return { alive: false, id: null, resultText: null }
+                return { alive: false, id: null, resultText: null, allContents }
               }
               const resultText = (await contents.executeJavaScript(
                 `document.querySelector('#task-result')?.textContent || null`
               )) as string | null
-              return { alive: true, id: contents.id, resultText }
+              return { alive: true, id: contents.id, resultText, allContents }
             }, server.url)
-          const taskBrowserBeforeBackground = await inspectTaskBrowserRuntime()
+          const waitForTaskBrowserRuntime = async () => {
+            let browser = await inspectTaskBrowserRuntime()
+            for (let attempt = 0; attempt < 100 && !browser.alive; attempt += 1) {
+              await page.waitForTimeout(100)
+              browser = await inspectTaskBrowserRuntime()
+            }
+            return browser
+          }
+          const taskBrowserBeforeBackground = await waitForTaskBrowserRuntime()
           await waitForBrowserTaskPause(runtime)
           const resourceMenu = await selectWorkbenchResourceMenuItem(runtime, 'browser')
           const openFileMenuItemVisible = resourceMenu.fileVisible
@@ -410,7 +423,13 @@ describe('workbench run e2e', () => {
           const browserExecutionItemFontWeights = await browserExecutionItems.evaluateAll((items) =>
             items.map((item) => window.getComputedStyle(item).fontWeight)
           )
-          await resourceTabs.filter({ hasText: 'workbench-preview.md' }).first().click()
+          // The native BrowserView overlaps the renderer during its panel transition. Use the
+          // same DOM activation path as the browser-tab restore above so this assertion verifies
+          // resource switching instead of Playwright's native-surface hit testing.
+          await resourceTabs
+            .filter({ hasText: 'workbench-preview.md' })
+            .first()
+            .evaluate((element) => (element as HTMLElement).click())
           const fileTabRestored = await getWorkbenchLocator(page, workbenchSelectors.markdownViewer)
             .waitFor({ state: 'visible', timeout: 30_000 })
             .then(() => true)
@@ -440,6 +459,10 @@ describe('workbench run e2e', () => {
             resourceTabCountAfterReopen,
             backgroundBrowserStayedAlive:
               taskBrowserBeforeBackground.alive && taskBrowserWhileCollapsed.alive,
+            browserRuntimeBeforeBackground: taskBrowserBeforeBackground,
+            browserRuntimeWhileCollapsed: taskBrowserWhileCollapsed,
+            browserRuntimeAfterBackgroundRun: taskBrowserAfterBackgroundRun,
+            browserRuntimeAfterRestore: taskBrowserAfterRestore,
             backgroundBrowserFinishedTask:
               taskBrowserAfterBackgroundRun.resultText === `BROWSER_TASK_DONE:${TASK_CODE}`,
             restoredLatestBrowserState:

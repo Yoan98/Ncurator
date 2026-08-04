@@ -155,10 +155,10 @@ export const queueE2ENativeDialogSelection = async (
   if (!electronApp) throw new Error('E2E native dialog selection requires a launched Electron app')
 
   await electronApp.evaluate(({ BrowserWindow }, input) => {
-    const mainWindow = BrowserWindow.getAllWindows().find(
-      (window) => !window.isDestroyed() && window.getParentWindow() === null
+    const targetWindows = BrowserWindow.getAllWindows().filter(
+      (window) => !window.isDestroyed() && !window.webContents.isDestroyed()
     )
-    if (!mainWindow || mainWindow.webContents.isDestroyed()) {
+    if (targetWindows.length === 0) {
       throw new Error('E2E native dialog selection could not find the main window')
     }
     const state = globalThis as typeof globalThis & {
@@ -171,7 +171,11 @@ export const queueE2ENativeDialogSelection = async (
     if (!(selections instanceof Map)) {
       throw new Error('E2E native dialog selection is unavailable outside the E2E observer')
     }
-    selections.set(mainWindow.webContents.id, input)
+    // A test can have auxiliary Electron windows. Queue the same one-shot selection for every
+    // live renderer so the IPC sender that opens the dialog consumes it.
+    for (const window of targetWindows) {
+      selections.set(window.webContents.id, input)
+    }
   }, selection)
 }
 

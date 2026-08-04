@@ -29,7 +29,6 @@ import {
   navigateToSettingsSection
 } from './settings'
 import { selectDirectoryInWindowsDialog } from './windowsNativeDialog'
-import { selectFileInNativeDialog } from './nativeFileDialog'
 import type { E2ETestRuntime } from './run-e2e-case'
 import {
   pasteTextThroughElectronClipboard,
@@ -700,36 +699,42 @@ export const selectWorkbenchAttachmentThroughNativeDialog = async (
     .isVisible()
     .catch(() => false)
   if (alreadyVisible) return
-  const electronProcessId = await readElectronProcessId(page)
-  await page.bringToFront()
-  if (process.platform === 'win32') {
+  // Native file dialogs are owned by the operating system and cannot be controlled reliably in
+  // headful macOS runs. The main process consumes this E2E-only selection through the same IPC
+  // handler that imports real attachment files.
+  await addButton.waitFor({ state: 'visible' })
+  await page.waitForFunction(
+    (testId) => {
+      const button = document.querySelector(`[data-testid="${testId}"]`)
+      return button instanceof HTMLButtonElement && !button.disabled
+    },
+    workbenchSelectors.attachmentAddButton,
+    { timeout: WORKBENCH_E2E_TIMEOUT_MS }
+  )
+  for (let attempt = 0; attempt < 2; attempt += 1) {
     await queueE2ENativeDialogSelection(page, { kind: 'file', path: filePath })
-  }
-  await addButton.click()
-  try {
-    if (process.platform === 'win32') {
-      diagnostics.push('e2e-native-dialog-selection')
-    } else {
-      await page.waitForTimeout(1_000)
-      diagnostics.push(await selectFileInNativeDialog(filePath, electronProcessId))
+    await addButton.click()
+    try {
+      diagnostics.push(`e2e-native-dialog-selection:${String(attempt + 1)}`)
+      await page.waitForFunction(
+        (input: { cardPrefix: string; fileName: string }) =>
+          Array.from(document.querySelectorAll(`[data-testid^="${input.cardPrefix}-"]`)).some(
+            (card) =>
+              card instanceof HTMLElement &&
+              (card.innerText.includes(input.fileName) ||
+                card.getAttribute('title') === input.fileName)
+          ),
+        {
+          cardPrefix: workbenchSelectors.attachmentCardPrefix,
+          fileName
+        },
+        { timeout: 6_000 }
+      )
+      return
+    } catch (error) {
+      diagnostics.push(error instanceof Error ? error.message : String(error))
+      if (attempt === 0) await page.waitForTimeout(250)
     }
-    await page.waitForFunction(
-      (input: { cardPrefix: string; fileName: string }) =>
-        Array.from(document.querySelectorAll(`[data-testid^="${input.cardPrefix}-"]`)).some(
-          (card) =>
-            card instanceof HTMLElement &&
-            (card.innerText.includes(input.fileName) ||
-              card.getAttribute('title') === input.fileName)
-        ),
-      {
-        cardPrefix: workbenchSelectors.attachmentCardPrefix,
-        fileName
-      },
-      { timeout: 12_000 }
-    )
-    return
-  } catch (error) {
-    diagnostics.push(error instanceof Error ? error.message : String(error))
   }
   throw new Error(
     `native file selection did not create attachment ${fileName}; diagnostics=${JSON.stringify(diagnostics)}`
@@ -1288,17 +1293,17 @@ export const selectWorkbenchWorkspace = async (
   workspaceName: string
 ): Promise<void> => {
   const workspaceSelect = getWorkbenchLocator(page, workbenchSelectors.workspaceSelect)
+  const workspaceTrigger = workspaceSelect.locator('button.workbench-select-trigger')
   const isSelected = async (): Promise<boolean> =>
-    await workspaceSelect
-      .evaluate(
-        (host, expectedName) =>
-          host instanceof HTMLElement &&
-          (host.title === expectedName || host.textContent?.includes(expectedName)),
-        workspaceName
-      )
+    await workspaceTrigger
+      .getAttribute('title')
+      .then((title) => title === workspaceName)
       .catch(() => false)
-  if (!(await isSelected())) {
-    await workspaceSelect.click()
+
+  // The selector root contains menu text while it is mounted, so only the trigger title can
+  // reliably identify the workspace currently selected by the composer.
+  for (let attempt = 0; attempt < 2 && !(await isSelected()); attempt += 1) {
+    await workspaceTrigger.click()
     const workspaceOption = page
       .locator(
         '.workbench-select-menu [role="option"], .workspace-quick-select-popup [role="option"]'
@@ -1310,11 +1315,10 @@ export const selectWorkbenchWorkspace = async (
   }
   await page.waitForFunction(
     (input: { testId: string; workspaceName: string }) => {
-      const host = document.querySelector(`[data-testid="${input.testId}"]`)
-      return (
-        host instanceof HTMLElement &&
-        (host.title === input.workspaceName || host.textContent?.includes(input.workspaceName))
+      const trigger = document.querySelector(
+        `[data-testid="${input.testId}"] button.workbench-select-trigger`
       )
+      return trigger instanceof HTMLButtonElement && trigger.title === input.workspaceName
     },
     {
       testId: workbenchSelectors.workspaceSelect,

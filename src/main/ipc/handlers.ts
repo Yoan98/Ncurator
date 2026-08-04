@@ -2447,7 +2447,10 @@ export function registerHandlers(services: {
     async (_event, payload: BrowserTabMutationRequest): Promise<BrowserPanelStateResponse> => {
       try {
         if (!browserEmbedService) return { success: false, error: 'browser service unavailable' }
-        return { success: true, state: browserEmbedService.goBack(String(payload?.tabId || '')) }
+        return {
+          success: true,
+          state: await browserEmbedService.goBack(String(payload?.tabId || ''))
+        }
       } catch (e) {
         return { success: false, error: e instanceof Error ? e.message : String(e) }
       }
@@ -2459,7 +2462,10 @@ export function registerHandlers(services: {
     async (_event, payload: BrowserTabMutationRequest): Promise<BrowserPanelStateResponse> => {
       try {
         if (!browserEmbedService) return { success: false, error: 'browser service unavailable' }
-        return { success: true, state: browserEmbedService.goForward(String(payload?.tabId || '')) }
+        return {
+          success: true,
+          state: await browserEmbedService.goForward(String(payload?.tabId || ''))
+        }
       } catch (e) {
         return { success: false, error: e instanceof Error ? e.message : String(e) }
       }

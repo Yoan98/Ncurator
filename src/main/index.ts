@@ -67,6 +67,7 @@ const requestRendererWorkbenchFlush = async (window: BrowserWindow): Promise<voi
 const prepareAppShutdown = async (): Promise<void> => {
   if (quitAfterShutdown) return
   shutdownRequested = true
+  await Promise.all(BrowserWindow.getAllWindows().map(requestRendererWorkbenchFlush))
   const failures = await shutdownCoordinator.shutdown()
   for (const failure of failures) {
     console.error(`[APP-SHUTDOWN] ${failure.name} failed:`, failure.error)

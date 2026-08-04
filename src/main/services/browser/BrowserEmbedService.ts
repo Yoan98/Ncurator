@@ -267,17 +267,27 @@ export class BrowserEmbedService implements BrowserUseService {
     this.captureRuntimeState(runtime)
   }
 
-  public goBack(tabId: string): BrowserTabState {
+  public async goBack(tabId: string): Promise<BrowserTabState> {
     const runtime = this.requireTab(tabId)
-    const history = runtime.view?.webContents.navigationHistory
-    if (history?.canGoBack()) history.goBack()
+    const view = await this.ensureReady(runtime)
+    const history = view.webContents.navigationHistory
+    if (history.canGoBack()) {
+      history.goBack()
+    } else {
+      await this.navigatePersistedHistory(runtime, -1)
+    }
     return this.toState(runtime)
   }
 
-  public goForward(tabId: string): BrowserTabState {
+  public async goForward(tabId: string): Promise<BrowserTabState> {
     const runtime = this.requireTab(tabId)
-    const history = runtime.view?.webContents.navigationHistory
-    if (history?.canGoForward()) history.goForward()
+    const view = await this.ensureReady(runtime)
+    const history = view.webContents.navigationHistory
+    if (history.canGoForward()) {
+      history.goForward()
+    } else {
+      await this.navigatePersistedHistory(runtime, 1)
+    }
     return this.toState(runtime)
   }
 
@@ -537,9 +547,20 @@ export class BrowserEmbedService implements BrowserUseService {
     runtime.persisted.updatedAt = Date.now()
     const entries = contents.navigationHistory.getAllEntries()
     if (entries.length) {
-      runtime.persisted.history = {
-        entries,
-        index: contents.navigationHistory.getActiveIndex()
+      const index = contents.navigationHistory.getActiveIndex()
+      const persistedHistory = runtime.persisted.history
+      const persistedActiveUrl = persistedHistory?.entries[persistedHistory.index]?.url
+      if (!persistedHistory || entries.length >= persistedHistory.entries.length) {
+        runtime.persisted.history = { entries, index }
+      } else if (runtime.persisted.url !== persistedActiveUrl) {
+        const activeEntry = entries[index]
+        if (activeEntry) {
+          const retainedEntries = persistedHistory.entries.slice(0, persistedHistory.index + 1)
+          runtime.persisted.history = {
+            entries: [...retainedEntries, activeEntry],
+            index: retainedEntries.length
+          }
+        }
       }
     }
     this.stateStore.save(runtime.persisted)
@@ -548,6 +569,7 @@ export class BrowserEmbedService implements BrowserUseService {
   private toState(runtime: BrowserTabRuntime): BrowserTabState {
     const contents = runtime.view?.webContents
     const history = contents?.navigationHistory
+    const persistedHistory = runtime.persisted.history
     return {
       id: runtime.persisted.id,
       ownerId: runtime.persisted.ownerId,
@@ -558,8 +580,10 @@ export class BrowserEmbedService implements BrowserUseService {
       zoomPercent: Math.round(
         (contents?.getZoomFactor() || runtime.persisted.zoomFactor || 1) * 100
       ),
-      canGoBack: history?.canGoBack() || false,
-      canGoForward: history?.canGoForward() || false,
+      canGoBack: history?.canGoBack() || Boolean(persistedHistory && persistedHistory.index > 0),
+      canGoForward:
+        history?.canGoForward() ||
+        Boolean(persistedHistory && persistedHistory.index < persistedHistory.entries.length - 1),
       isLoading: contents?.isLoadingMainFrame() || false
     }
   }
@@ -568,6 +592,29 @@ export class BrowserEmbedService implements BrowserUseService {
     if (!this.mainWindow.isDestroyed()) {
       this.mainWindow.webContents.send('browser-panel-state-change', this.toState(runtime))
     }
+  }
+
+  private async navigatePersistedHistory(
+    runtime: BrowserTabRuntime,
+    offset: -1 | 1
+  ): Promise<void> {
+    const history = runtime.persisted.history
+    if (!history) return
+    const targetIndex = history.index + offset
+    const target = history.entries[targetIndex]
+    if (!target || !runtime.view) return
+    runtime.restoring = true
+    try {
+      await loadWebContentsUrl(runtime.view.webContents, target.url)
+    } finally {
+      runtime.restoring = false
+    }
+    runtime.persisted.history = { ...history, index: targetIndex }
+    runtime.persisted.url = target.url
+    runtime.persisted.title = target.title || runtime.persisted.title
+    runtime.persisted.updatedAt = Date.now()
+    this.stateStore.save(runtime.persisted)
+    this.emitState(runtime)
   }
 
   private async resolveDevToolsTargetId(contents: WebContents): Promise<string> {

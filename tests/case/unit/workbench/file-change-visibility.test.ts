@@ -42,4 +42,20 @@ describe('workbench file change visibility', () => {
     expect(isRuntimeAssetPath('/workspace/.ncurator/runtime-assets/preview.png')).toBe(false)
     expect(filterVisibleFileChangeRecords(records).map((item) => item.id)).toEqual(['ppt'])
   })
+
+  it('retains a runtime asset when it is an attachment the user submitted', () => {
+    const attachmentPath = '/workspace/.ncurator/runtime/assets/attachment-bucket/input.docx'
+    const records = [
+      record({ id: 'attachment', path: attachmentPath, fileName: 'input.docx' }),
+      record({
+        id: 'generated-preview',
+        path: '/workspace/.ncurator/runtime/assets/previews/page-1.png',
+        fileName: 'page-1.png'
+      })
+    ]
+
+    expect(
+      filterVisibleFileChangeRecords(records, [attachmentPath]).map((item) => item.id)
+    ).toEqual(['attachment'])
+  })
 })
