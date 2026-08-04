@@ -359,10 +359,10 @@ describe('workbench browser lifecycle e2e', () => {
           checkpoint('restore-panel-click-started')
           await panelToggle.click()
           checkpoint('restore-panel-clicked')
-          await new Promise<void>((resolve) => setTimeout(resolve, 300))
-          const restoredRect = initialRect
+          const restoredChildCount = await waitForNativeChildCount(1)
+          const restoredPixels = await waitForBrowserContentPixels()
           const restoredRuntime = await inspectBrowserRuntime()
-          const restoredPixels = initialPixels
+          const restoredRect = initialRect
           const restoredState = {
             success: restoredRuntime.alive,
             state: restoredRuntime.alive
@@ -605,6 +605,7 @@ describe('workbench browser lifecycle e2e', () => {
             afterMenuPixels,
             sessionRestoredPixels,
             resumedPixels,
+            restoredChildCount,
             detachedChildCount,
             resumedChildCount,
             initialHeartbeatCount,
@@ -703,6 +704,7 @@ describe('workbench browser lifecycle e2e', () => {
               result.restoredUrl === result.backgroundUrl &&
               result.finalRuntime.url === result.backgroundUrl &&
               result.resumedRuntime.url === result.backgroundUrl &&
+              result.restoredChildCount === 1 &&
               result.detachedChildCount === 0 &&
               result.resumedChildCount === 1 &&
               result.hiddenHeartbeatCount > result.initialHeartbeatCount &&
@@ -724,6 +726,7 @@ describe('workbench browser lifecycle e2e', () => {
                 hiddenHeartbeatCount: result.hiddenHeartbeatCount,
                 switchedAwayHeartbeatBefore: result.switchedAwayHeartbeatBefore,
                 switchedAwayHeartbeatAfter: result.switchedAwayHeartbeatAfter,
+                restoredChildCount: result.restoredChildCount,
                 detachedChildCount: result.detachedChildCount,
                 resumedChildCount: result.resumedChildCount,
                 closedTabDestroyed: result.closedTabDestroyed,

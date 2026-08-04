@@ -1115,6 +1115,7 @@ const areContentPanelPropsEqual = (
   previous.isAiRunActive === next.isAiRunActive &&
   previous.onSuccessMessage === next.onSuccessMessage &&
   previous.onInfoMessage === next.onInfoMessage &&
+  previous.browserPresentationEnabled === next.browserPresentationEnabled &&
   previous.browserTransitionImage === next.browserTransitionImage
 
 const WorkbenchContentPanel = React.memo(WorkbenchContentPanelBase, areContentPanelPropsEqual)
