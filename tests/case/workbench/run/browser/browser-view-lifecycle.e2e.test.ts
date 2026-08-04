@@ -238,6 +238,42 @@ describe('workbench browser lifecycle e2e', () => {
               }
             }, server.url)
           }
+          const waitForBrowserContentPixels = async (): Promise<
+            Awaited<ReturnType<typeof captureViewportPixels>>
+          > => {
+            const deadline = Date.now() + 8_000
+            let lastSample: Awaited<ReturnType<typeof captureViewportPixels>> | null = null
+            while (Date.now() < deadline) {
+              const sample = await captureViewportPixels()
+              lastSample = sample
+              if (sample.sampled > 1_000 && sample.whiteRatio < 0.2 && sample.darkRatio > 0.15) {
+                return sample
+              }
+              await page.waitForTimeout(200)
+            }
+            throw new Error(
+              `browser content pixels did not restore, last sample: ${JSON.stringify(lastSample)}`
+            )
+          }
+          const readNativeChildCount = async (): Promise<number> =>
+            await runtime.electronApp.evaluate(({ BrowserWindow }) => {
+              const mainWindow = BrowserWindow.getAllWindows().find(
+                (candidate) => candidate.getParentWindow() === null
+              )
+              return mainWindow?.contentView.children.length || 0
+            })
+          const waitForNativeChildCount = async (target: number): Promise<number> => {
+            const deadline = Date.now() + 8_000
+            let last = -1
+            while (Date.now() < deadline) {
+              last = await readNativeChildCount()
+              if (last === target) return last
+              await page.waitForTimeout(200)
+            }
+            throw new Error(
+              `native child view count did not reach ${String(target)}, last: ${String(last)}`
+            )
+          }
           const inspectBrowserRuntime = async () =>
             await runtime.electronApp.evaluate(async ({ webContents }, url) => {
               const contents = webContents
@@ -477,9 +513,40 @@ describe('workbench browser lifecycle e2e', () => {
             return samples
           }, workbenchSelectors.contentPanelShell)
           await viewport.waitFor({ state: 'visible' })
-          const sessionRestoredPixels = initialPixels
+          const sessionRestoredPixels = await waitForBrowserContentPixels()
           const finalRuntime = await inspectBrowserRuntime()
           checkpoint('session-restored')
+
+          await createWorkbenchNewSession(page)
+          await page.waitForFunction(
+            (testId) => document.querySelector(`[data-testid="${testId}"]`) === null,
+            workbenchSelectors.contentPanelShell
+          )
+          if ((await panelToggle.getAttribute('aria-label')) === '展开右侧栏') {
+            await panelToggle.click()
+          }
+          await page.waitForFunction((testId) => {
+            const shell = document.querySelector(`[data-testid="${testId}"]`)
+            return shell instanceof HTMLElement && shell.getBoundingClientRect().width > 100
+          }, workbenchSelectors.contentPanelShell)
+          await page.waitForFunction(
+            (testId) =>
+              document.querySelector(`[data-testid="${testId}"]`)?.getAttribute(
+                'data-panel-visible'
+              ) === 'true',
+            workbenchSelectors.contentPanelShell
+          )
+          // Wait out the expand animation so its pending enable timer has already fired;
+          // otherwise the stale timer would mask the resumed-session presentation bug.
+          await page.waitForTimeout(300)
+          checkpoint('other-session-panel-expanded')
+          const detachedChildCount = await readNativeChildCount()
+          await originalSessionItem.click()
+          await viewport.waitFor({ state: 'visible' })
+          const resumedChildCount = await waitForNativeChildCount(1)
+          const resumedPixels = await waitForBrowserContentPixels()
+          const resumedRuntime = await inspectBrowserRuntime()
+          checkpoint('session-resumed-after-expanded-switch')
 
           await browserTab.locator('button[aria-label^="关闭 "]').click()
           await browserTab.waitFor({ state: 'detached' })
@@ -537,6 +604,9 @@ describe('workbench browser lifecycle e2e', () => {
             menuPixels,
             afterMenuPixels,
             sessionRestoredPixels,
+            resumedPixels,
+            detachedChildCount,
+            resumedChildCount,
             initialHeartbeatCount,
             hiddenHeartbeatCount,
             switchedAwayHeartbeatBefore,
@@ -548,6 +618,7 @@ describe('workbench browser lifecycle e2e', () => {
             switchedAwayRuntimeBefore,
             switchedAwayRuntimeAfter,
             finalRuntime,
+            resumedRuntime,
             restoredZoom: restoredState.state?.zoomPercent,
             restoredUrl: restoredState.state?.url,
             backgroundUrl,
@@ -568,14 +639,16 @@ describe('workbench browser lifecycle e2e', () => {
             result.restoredPixels,
             result.menuPixels,
             result.afterMenuPixels,
-            result.sessionRestoredPixels
+            result.sessionRestoredPixels,
+            result.resumedPixels
           ]
           const mountedRestoreSamples = result.restoreSamples.filter((sample) => sample.mounted)
           const runtimeSamples = [
             result.initialRuntime,
             result.switchedAwayRuntimeBefore,
             result.switchedAwayRuntimeAfter,
-            result.finalRuntime
+            result.finalRuntime,
+            result.resumedRuntime
           ]
           const viewportRects = [
             result.initialRect,
@@ -596,7 +669,7 @@ describe('workbench browser lifecycle e2e', () => {
             {
               name: 'embedded-browser-native-pixels-remain-visible',
               message:
-                '浏览器初次显示、折叠恢复、原生菜单打开/关闭和会话恢复后都必须保留真实非白色窗口像素，viewport 和 zoom 不得变化。',
+                '浏览器初次显示、折叠恢复、原生菜单打开/关闭、会话恢复后以及目标会话面板同样展开时切回，都必须保留真实非白色窗口像素，viewport 和 zoom 不得变化。',
               data: {
                 pixelSamples,
                 rects: {
@@ -629,6 +702,9 @@ describe('workbench browser lifecycle e2e', () => {
               !result.hiddenUpdatedState.state?.isLoading &&
               result.restoredUrl === result.backgroundUrl &&
               result.finalRuntime.url === result.backgroundUrl &&
+              result.resumedRuntime.url === result.backgroundUrl &&
+              result.detachedChildCount === 0 &&
+              result.resumedChildCount === 1 &&
               result.hiddenHeartbeatCount > result.initialHeartbeatCount &&
               result.switchedAwayHeartbeatAfter > result.switchedAwayHeartbeatBefore &&
               mountedRestoreSamples.length > 0 &&
@@ -640,7 +716,7 @@ describe('workbench browser lifecycle e2e', () => {
             {
               name: 'embedded-browser-survives-hidden-running-session',
               message:
-                '折叠或切走会话后必须移除显示层但保留同一 WebContents；后台导航、表单和滚动状态应在恢复后直接显示。',
+                '折叠或切走会话后必须移除显示层但保留同一 WebContents；后台导航、表单和滚动状态应在恢复后直接显示，包括切走的会话面板同样处于展开状态的回归场景。',
               data: {
                 runtimeSamples,
                 restoreSamples: result.restoreSamples,
@@ -648,6 +724,8 @@ describe('workbench browser lifecycle e2e', () => {
                 hiddenHeartbeatCount: result.hiddenHeartbeatCount,
                 switchedAwayHeartbeatBefore: result.switchedAwayHeartbeatBefore,
                 switchedAwayHeartbeatAfter: result.switchedAwayHeartbeatAfter,
+                detachedChildCount: result.detachedChildCount,
+                resumedChildCount: result.resumedChildCount,
                 closedTabDestroyed: result.closedTabDestroyed,
                 deletedOwnerDestroyed: result.deletedOwnerDestroyed
               }

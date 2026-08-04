@@ -1108,6 +1108,9 @@ const ChatPage: React.FC = () => {
         restoreContentPanelWithoutAnimationRef.current = true
         setContentPanelShellMounted(true)
         setContentPanelShellVisible(true)
+        if (nextPanel.kind === 'browser') {
+          setBrowserPresentationEnabled(true)
+        }
       }
       uiStateReadyKeyRef.current = key
       setUiStateReadyKey(key)
@@ -2352,6 +2355,7 @@ const ChatPage: React.FC = () => {
   useEffect(() => {
     let startTimer: number | null = null
     let finishTimer: number | null = null
+    let imageTimer: number | null = null
 
     if (contentPanelCollapsed) {
       setBrowserPresentationEnabled(false)
@@ -2375,7 +2379,7 @@ const ChatPage: React.FC = () => {
         setContentPanelShellVisible(true)
         finishTimer = window.setTimeout(() => {
           setBrowserPresentationEnabled(true)
-          window.setTimeout(() => setBrowserTransitionImage(null), 50)
+          imageTimer = window.setTimeout(() => setBrowserTransitionImage(null), 50)
         }, 220)
       })
     }
@@ -2383,8 +2387,9 @@ const ChatPage: React.FC = () => {
     return () => {
       if (startTimer !== null) window.clearTimeout(startTimer)
       if (finishTimer !== null) window.clearTimeout(finishTimer)
+      if (imageTimer !== null) window.clearTimeout(imageTimer)
     }
-  }, [contentPanelCollapsed])
+  }, [contentPanelCollapsed, uiStateReadyKey])
 
   useEffect(
     () => () => {
