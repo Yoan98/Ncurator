@@ -12,7 +12,7 @@ describe('ai tool text-file backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['text-file'],
-      description: '验证普通文本文件创建、范围读取、批量精确编辑、replaceAll、diff 和修改记录。',
+      description: '验证普通文本文件创建、范围读取、批量精确编辑、replaceAll、diff、修改记录和保存时生成的 diff 预览。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -102,14 +102,14 @@ describe('ai tool text-file backend', () => {
             result.finalContent.includes('retries = 3') &&
             result.recordCount === 2 &&
             result.configCapability === 'text_file' &&
-            result.configChangeCount === 4 &&
-            result.hasEagerPreview === false &&
+            result.configChangeCount === 8 &&
+            result.hasEagerPreview === true &&
             result.fileArtifactCount === 3 &&
             result.configApplyIds.length === 2 &&
             new Set(result.configApplyIds).size === 1,
           {
             name: 'text-file-read-write-result-and-diff',
-            message: '文本工具应写入正确内容并保存修改元数据，Diff 延迟到首次预览生成。',
+            message: '文本工具应写入正确内容并保存修改元数据，保存时即生成 diff 预览。',
             data: result
           }
         )

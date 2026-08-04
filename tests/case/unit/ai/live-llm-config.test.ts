@@ -26,7 +26,7 @@ afterEach(() => {
 })
 
 describe('live LLM configuration', () => {
-  it('selects qwen3.6-plus as the independent image model for Alibaba Cloud', () => {
+  it('requires explicit vision model configuration and reports missing env keys', () => {
     process.env.AI_LIVE_BASE_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1'
     process.env.AI_LIVE_API_KEY = 'test-key'
     process.env.AI_LIVE_PRIMARY_MODEL_NAME = 'deepseek-v4-flash'
@@ -35,12 +35,7 @@ describe('live LLM configuration', () => {
     delete process.env.AI_LIVE_VISUAL_MODEL_NAME
     delete process.env.AI_LIVE_VISION_PROVIDER_KIND
 
-    const config = loadLiveVisionLlmConfigFromEnv()
-
-    expect(config.id).toBe('ai-live-vision-config')
-    expect(config.model_name).toBe('qwen3.6-plus')
-    expect(config.base_url).toBe('https://dashscope.aliyuncs.com/compatible-mode/v1')
-    expect(config.api_key).toBe('test-key')
+    expect(() => loadLiveVisionLlmConfigFromEnv()).toThrow('human 缺少 live 模型配置')
   })
 
   it('honors an explicitly configured image model', () => {
