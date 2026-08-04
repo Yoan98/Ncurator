@@ -2,6 +2,7 @@ import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { loadLiveVisionLlmConfigFromEnv } from '../../../harness/backend/llmConfig'
 
 const ENV_KEYS = [
+  'AI_TEST_DISABLE_DOTENV',
   'AI_LIVE_BASE_URL',
   'AI_LIVE_API_KEY',
   'AI_LIVE_PRIMARY_MODEL_NAME',
@@ -27,6 +28,7 @@ afterEach(() => {
 
 describe('live LLM configuration', () => {
   it('requires explicit vision model configuration and reports missing env keys', () => {
+    process.env.AI_TEST_DISABLE_DOTENV = '1'
     process.env.AI_LIVE_BASE_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1'
     process.env.AI_LIVE_API_KEY = 'test-key'
     process.env.AI_LIVE_PRIMARY_MODEL_NAME = 'deepseek-v4-flash'
