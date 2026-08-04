@@ -128,7 +128,7 @@ await run(process.execPath, [
 packageJson.version = version
 await writeFile(packagePath, `${JSON.stringify(packageJson, null, 2)}\n`, 'utf8')
 await run('git', ['add', '--', 'package.json'])
-await run('git', ['commit', '-m', `release: prepare ${releaseTag}`])
+await run('git', ['commit', '--allow-empty', '-m', `release: prepare ${releaseTag}`])
 await run('git', ['tag', '-a', releaseTag, '-m', notes])
 await run('git', ['push', '--atomic', 'origin', 'main', releaseTag])
 
