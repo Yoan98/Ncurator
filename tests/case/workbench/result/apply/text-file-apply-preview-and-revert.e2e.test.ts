@@ -6,6 +6,7 @@ import {
   WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
   assertNoWorkbenchFakeSignals,
   appendWorkbenchInputText,
+  createWorkbenchNewSession,
   getWorkbenchLocator,
   getWorkbenchPrefixLocator,
   insertWorkbenchReferenceToken,
@@ -123,6 +124,27 @@ describe('workbench result e2e', () => {
           const assistantApplyTextBeforeClick = ((await applyEntry.textContent()) || '').trim()
           const modificationCountsVisibleBeforeClick = /[+-][1-9]\d*/u.test(
             assistantApplyTextBeforeClick
+          )
+          const runStartedEvent = evidence.events.find(
+            (
+              item
+            ): item is Extract<
+              import('../../../../../src/shared/types').AiRunEvent,
+              { type: 'run_started' }
+            > => item.type === 'run_started'
+          )
+          if (!runStartedEvent) throw new Error('run_started event is missing')
+          await createWorkbenchNewSession(page)
+          await getWorkbenchLocator(
+            page,
+            `${workbenchSelectors.sessionItemPrefix}-${runStartedEvent.sessionId}`
+          ).click()
+          const restoredApplyEntry = await waitForApplyEntry(page)
+          const assistantApplyTextAfterSessionSwitch = (
+            (await restoredApplyEntry.textContent()) || ''
+          ).trim()
+          const modificationCountsVisibleAfterSessionSwitch = /[+-][1-9]\d*/u.test(
+            assistantApplyTextAfterSessionSwitch
           )
           const afterApply = await fs.readFile(targetPath, 'utf-8')
           const normalPreviewAfterAiWrite = getWorkbenchLocator(
@@ -372,6 +394,7 @@ describe('workbench result e2e', () => {
             omittedLineLabels,
             applyEntryCountDuringRun,
             modificationCountsVisibleBeforeClick,
+            modificationCountsVisibleAfterSessionSwitch,
             assistantApplyTextBeforeClick,
             aiWritePreviewRefreshedSilently,
             externalApplicationHintVisible,
@@ -421,6 +444,7 @@ describe('workbench result e2e', () => {
               result.standaloneArtifactCount === 0 &&
               result.applyEntryCountDuringRun === 0 &&
               result.modificationCountsVisibleBeforeClick &&
+              result.modificationCountsVisibleAfterSessionSwitch &&
               result.aiWritePreviewRefreshedSilently &&
               result.externalApplicationHintVisible &&
               result.omittedLineLabels.some((label) => label.includes('行未修改')) &&
@@ -455,7 +479,7 @@ describe('workbench result e2e', () => {
             {
               name: 'workbench-text-file-preview-diff-revert-real',
               message:
-                '普通预览应继续渲染 Markdown；AI 运行完成后修改入口在未点击时已显示非零修改数量，点击后展示文本 diff，并能恢复原始 bytes。',
+                '普通预览应继续渲染 Markdown；AI 运行完成后修改入口在未点击时已显示非零修改数量，切换会话再切回后不点击仍保持真实数量，点击后展示文本 diff，并能恢复原始 bytes。',
               data: result
             }
           )

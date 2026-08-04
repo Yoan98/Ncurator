@@ -464,10 +464,14 @@ const applyRunRecordToTurn = (
               : undefined
       }))
     ]),
-    applyTargets: artifacts
-      .map(artifactToApplyTarget)
-      .filter((target): target is AssistantTurnViewModel['applyTargets'][number] => Boolean(target))
-      .reduce((items, target) => mergeApplyTargets(items, target), turn.applyTargets),
+    applyTargets: artifacts.reduce<AssistantTurnViewModel['applyTargets']>(
+      (items, artifact) => {
+        const target = artifactToApplyTarget(artifact)
+        if (!target || items.some((item) => item.changeId === target.changeId)) return items
+        return [...items, target]
+      },
+      turn.applyTargets
+    ),
     blockers: run.pendingUserTakeover
       ? [
           {
@@ -1687,6 +1691,7 @@ const ChatPage: React.FC = () => {
       void window.api.chatSessionRunSummaries({ sessionId }).then((summary) => {
         if (sessionSwitchRequestRef.current !== requestId) return
         hydrateSessionView(opened.messages, summary.runs, opened.activeRuns)
+        void hydrateFileChangeTargetsForSession(sessionId, opened.messages)
       })
     } catch (error) {
       if (sessionSwitchRequestRef.current === requestId) setSwitchingSessionId(null)
@@ -2191,7 +2196,6 @@ const ChatPage: React.FC = () => {
     void loadSessionOpen(session.id, requestId)
     setFileChangeRecords([])
     fileChangeRunScopeRef.current = null
-    void hydrateFileChangeTargetsForSession(session.id)
     void refreshContextUsage(session.id)
   }
 

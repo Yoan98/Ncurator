@@ -186,6 +186,8 @@ export const workbenchSelectors = {
   assistantProcessItemPrefix: 'workbench-assistant-process-item',
   assistantFinalAnswerPrefix: 'workbench-assistant-final-answer',
   assistantTurnApplyPrefix: 'workbench-assistant-turn-apply',
+  assistantTurnApplyCountPrefix: 'workbench-assistant-apply-header-count',
+  assistantTurnApplyCollapsePrefix: 'workbench-assistant-apply-collapse-toggle',
   assistantTurnArtifactPrefix: 'workbench-assistant-turn-artifact',
   searchResults: 'workbench-search-results',
   documentView: 'workbench-document-view',

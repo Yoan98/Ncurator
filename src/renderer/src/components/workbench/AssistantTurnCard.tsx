@@ -1,4 +1,4 @@
-﻿import React, { useMemo } from 'react'
+﻿import React, { useMemo, useState } from 'react'
 import {
   HiChevronDown,
   HiChevronRight,
@@ -339,6 +339,8 @@ const AssistantExecutionGroupView: React.FC<{ groups: AssistantProcessGroup[]; i
   )
 }
 
+const MAX_VISIBLE_APPLY_TARGETS = 3
+
 const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
   messageId,
   turn,
@@ -347,6 +349,7 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
   fallbackWorkspaceName,
   onOpenReference
 }) => {
+  const [applyTargetsExpanded, setApplyTargetsExpanded] = useState(false)
   const processGroups = useMemo(() => turn?.processGroups || [], [turn?.processGroups])
   const processThoughts = useMemo(() => turn?.processThoughts || [], [turn?.processThoughts])
   const finalAnswerMarkdown = turn?.finalAnswerMarkdown || ''
@@ -360,6 +363,12 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
       }),
     [hasFinalAnswer, processGroups, processThoughts]
   )
+  const applyTargets = turn?.applyTargets || []
+  const applyTargetsCollapsed =
+    applyTargets.length > MAX_VISIBLE_APPLY_TARGETS && !applyTargetsExpanded
+  const visibleApplyTargets = applyTargetsCollapsed
+    ? applyTargets.slice(0, MAX_VISIBLE_APPLY_TARGETS)
+    : applyTargets
 
   if (!turn) {
     return null
@@ -423,12 +432,15 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
                 <div className="text-[14px] font-semibold text-[#37352F]">修改的文件</div>
                 <div className="mt-0.5 text-xs text-[#787774]">点击文件查看本次修改</div>
               </div>
-              <div className="ml-auto shrink-0 text-sm font-semibold tabular-nums text-[#37352F]">
+              <div
+                className="ml-auto shrink-0 text-sm font-semibold tabular-nums text-[#37352F]"
+                data-testid={`${workbenchSelectors.assistantTurnApplyCountPrefix}-${messageId}`}
+              >
                 {turn.applyTargets.length} 个
               </div>
             </div>
             <div>
-              {turn.applyTargets.map((apply) => {
+              {visibleApplyTargets.map((apply) => {
                 const statusLabel =
                   apply.status === 'reverted'
                     ? apply.operation === 'created'
@@ -473,6 +485,24 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
                 )
               })}
             </div>
+            {turn.applyTargets.length > MAX_VISIBLE_APPLY_TARGETS ? (
+              <button
+                type="button"
+                onClick={() => setApplyTargetsExpanded((value) => !value)}
+                aria-expanded={applyTargetsExpanded}
+                data-testid={`${workbenchSelectors.assistantTurnApplyCollapsePrefix}-${messageId}`}
+                className="flex w-full items-center gap-1.5 border-t border-[#F1F0ED] px-3.5 py-2 text-left text-xs font-medium text-[#787774] transition-colors duration-200 hover:bg-[#F7F7F5] hover:text-[#37352F]"
+              >
+                <HiChevronDown
+                  className={`h-3.5 w-3.5 shrink-0 transition-transform duration-200 ${
+                    applyTargetsExpanded ? 'rotate-180' : ''
+                  }`}
+                />
+                {applyTargetsExpanded
+                  ? '收起文件'
+                  : `显示剩余 ${turn.applyTargets.length - MAX_VISIBLE_APPLY_TARGETS} 个文件`}
+              </button>
+            ) : null}
           </div>
         ) : null}
 

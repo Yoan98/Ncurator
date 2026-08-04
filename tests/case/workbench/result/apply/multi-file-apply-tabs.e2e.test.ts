@@ -28,8 +28,12 @@ import {
 const CASE_ID = 'multi-file-apply-tabs'
 const FIRST_FILE = 'multi-apply-first.docx'
 const SECOND_FILE = 'multi-apply-second.docx'
+const THIRD_FILE = 'multi-apply-third.docx'
+const FOURTH_FILE = 'multi-apply-fourth.docx'
 const FIRST_MARKER = 'cedar-multi-apply-prd-141'
 const SECOND_MARKER = 'cedar-multi-apply-case-242'
+const THIRD_MARKER = 'cedar-multi-apply-spec-343'
+const FOURTH_MARKER = 'cedar-multi-apply-qa-444'
 const SOURCE_FILE = 'sample-edit.docx'
 
 const waitForApplyPanelFile = async (
@@ -63,7 +67,9 @@ const setupMultiFileApplyWorkspace = async (
   const sourcePath = path.join(workspace.rootPath, SOURCE_FILE)
   await Promise.all([
     copyFile(sourcePath, path.join(workspace.rootPath, FIRST_FILE)),
-    copyFile(sourcePath, path.join(workspace.rootPath, SECOND_FILE))
+    copyFile(sourcePath, path.join(workspace.rootPath, SECOND_FILE)),
+    copyFile(sourcePath, path.join(workspace.rootPath, THIRD_FILE)),
+    copyFile(sourcePath, path.join(workspace.rootPath, FOURTH_FILE))
   ])
 
   await configureLiveModelThroughSettingsUi(page, env)
@@ -93,7 +99,7 @@ describe('workbench result e2e', () => {
         suite: 'result',
         groups: ['apply'],
         description:
-          '真实 AI 同一轮修改两个 docx 后，验证 assistant 多入口、右侧仅展示当前点击文件并切换对应记录。',
+          '真实 AI 同一轮修改四个 docx 后，验证 assistant 多入口、超过 3 个入口的折叠展开、右侧仅展示当前点击文件并切换对应记录。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
         execution: 'live',
@@ -104,14 +110,20 @@ describe('workbench result e2e', () => {
           const setup = await setupMultiFileApplyWorkspace(page)
           const firstPath = path.join(setup.workspace.rootPath, FIRST_FILE)
           const secondPath = path.join(setup.workspace.rootPath, SECOND_FILE)
+          const thirdPath = path.join(setup.workspace.rootPath, THIRD_FILE)
+          const fourthPath = path.join(setup.workspace.rootPath, FOURTH_FILE)
           const firstBeforeText = await readDocxPlainText(firstPath)
           const secondBeforeText = await readDocxPlainText(secondPath)
+          const thirdBeforeText = await readDocxPlainText(thirdPath)
+          const fourthBeforeText = await readDocxPlainText(fourthPath)
           await insertWorkbenchReferenceToken(page, FIRST_FILE)
           await insertWorkbenchReferenceToken(page, SECOND_FILE)
+          await insertWorkbenchReferenceToken(page, THIRD_FILE)
+          await insertWorkbenchReferenceToken(page, FOURTH_FILE)
           const startedAtMs = Date.now()
           await sendWorkbenchMessage(
             page,
-            `请只完成这两个写回动作：1. 修改我刚选中的 ${FIRST_FILE}，只在文末新增一段“${FIRST_MARKER}”；2. 修改我刚选中的 ${SECOND_FILE}，只在文末新增一段“${SECOND_MARKER}”。请分别写回原文件，不要新建文件。两个文件都写回后，立即回复“已写回”，不要继续读取、复核、解释或追加其他操作。`
+            `请只完成这四个写回动作：1. 修改我刚选中的 ${FIRST_FILE}，只在文末新增一段“${FIRST_MARKER}”；2. 修改我刚选中的 ${SECOND_FILE}，只在文末新增一段“${SECOND_MARKER}”；3. 修改我刚选中的 ${THIRD_FILE}，只在文末新增一段“${THIRD_MARKER}”；4. 修改我刚选中的 ${FOURTH_FILE}，只在文末新增一段“${FOURTH_MARKER}”。请分别写回原文件，不要新建文件。四个文件都写回后，立即回复“已写回”，不要继续读取、复核、解释或追加其他操作。`
           )
           const evidence = await waitForWorkbenchAiRunCompletion(
             runtime,
@@ -123,13 +135,60 @@ describe('workbench result e2e', () => {
           recordWorkbenchAiEvidence(runtime, evidence, 0.8)
           const firstAfterText = await readDocxPlainText(firstPath)
           const secondAfterText = await readDocxPlainText(secondPath)
+          const thirdAfterText = await readDocxPlainText(thirdPath)
+          const fourthAfterText = await readDocxPlainText(fourthPath)
           await getWorkbenchPrefixLocator(page, workbenchSelectors.assistantTurnApplyPrefix)
             .first()
             .waitFor({ state: 'visible' })
-          const applyEntryCount = await getWorkbenchPrefixLocator(
+          await page.waitForFunction(
+            (countPrefix) => {
+              const header = document.querySelector(`[data-testid^="${countPrefix}"]`)
+              if (!(header instanceof HTMLElement)) return false
+              const match = header.innerText.trim().match(/^(\d+) 个$/u)
+              return Boolean(match && Number.parseInt(match[1], 10) >= 4)
+            },
+            workbenchSelectors.assistantTurnApplyCountPrefix
+          )
+          const applyCountHeader = getWorkbenchPrefixLocator(
+            page,
+            workbenchSelectors.assistantTurnApplyCountPrefix
+          )
+          const applyEntryCount = Number.parseInt(
+            ((await applyCountHeader.first().textContent()) || '0').trim(),
+            10
+          )
+          const collapseToggle = getWorkbenchPrefixLocator(
+            page,
+            workbenchSelectors.assistantTurnApplyCollapsePrefix
+          )
+          await collapseToggle.first().waitFor({ state: 'visible' })
+          const applyEntryCountWhenCollapsed = await getWorkbenchPrefixLocator(
             page,
             workbenchSelectors.assistantTurnApplyPrefix
           ).count()
+          const collapseToggleTextCollapsed = (
+            (await collapseToggle.first().textContent()) || ''
+          ).trim()
+          const applyCountHeaderTextCollapsed = (
+            (await applyCountHeader.first().textContent()) || ''
+          ).trim()
+          await collapseToggle.first().click()
+          const applyEntryCountWhenExpanded = await getWorkbenchPrefixLocator(
+            page,
+            workbenchSelectors.assistantTurnApplyPrefix
+          ).count()
+          const collapseToggleTextExpanded = (
+            (await collapseToggle.first().textContent()) || ''
+          ).trim()
+          const applyCountHeaderTextExpanded = (
+            (await applyCountHeader.first().textContent()) || ''
+          ).trim()
+          await collapseToggle.first().click()
+          const applyEntryCountAfterReCollapse = await getWorkbenchPrefixLocator(
+            page,
+            workbenchSelectors.assistantTurnApplyPrefix
+          ).count()
+          await collapseToggle.first().click()
           const firstEntry = getWorkbenchPrefixLocator(
             page,
             workbenchSelectors.assistantTurnApplyPrefix
@@ -173,9 +232,20 @@ describe('workbench result e2e', () => {
           return {
             firstBeforeText,
             secondBeforeText,
+            thirdBeforeText,
+            fourthBeforeText,
             firstAfterText,
             secondAfterText,
+            thirdAfterText,
+            fourthAfterText,
             applyEntryCount,
+            applyEntryCountWhenCollapsed,
+            applyEntryCountWhenExpanded,
+            applyEntryCountAfterReCollapse,
+            collapseToggleTextCollapsed,
+            collapseToggleTextExpanded,
+            applyCountHeaderTextCollapsed,
+            applyCountHeaderTextExpanded,
             firstEntryText,
             secondEntryText,
             afterFirstEntryText,
@@ -189,13 +259,25 @@ describe('workbench result e2e', () => {
           }
         },
         assert: async (result, runtime) => {
+          const remainingCount = result.applyEntryCount - 3
           await runtime.assertThat(
             !result.firstBeforeText.includes(FIRST_MARKER) &&
               !result.secondBeforeText.includes(SECOND_MARKER) &&
+              !result.thirdBeforeText.includes(THIRD_MARKER) &&
+              !result.fourthBeforeText.includes(FOURTH_MARKER) &&
               result.firstAfterText.includes(FIRST_MARKER) &&
               result.secondAfterText.includes(SECOND_MARKER) &&
-              result.applyEntryCount >= 2 &&
-              result.fileArtifactCount >= 2 &&
+              result.thirdAfterText.includes(THIRD_MARKER) &&
+              result.fourthAfterText.includes(FOURTH_MARKER) &&
+              result.applyEntryCount >= 4 &&
+              result.fileArtifactCount >= 4 &&
+              result.applyEntryCountWhenCollapsed === 3 &&
+              result.applyEntryCountWhenExpanded === result.applyEntryCount &&
+              result.applyEntryCountAfterReCollapse === 3 &&
+              result.collapseToggleTextCollapsed === `显示剩余 ${remainingCount} 个文件` &&
+              result.collapseToggleTextExpanded === '收起文件' &&
+              result.applyCountHeaderTextCollapsed === `${result.applyEntryCount} 个` &&
+              result.applyCountHeaderTextExpanded === `${result.applyEntryCount} 个` &&
               result.firstEntryText.includes(FIRST_FILE) &&
               result.secondEntryText.includes(SECOND_FILE) &&
               result.firstEntryText.includes('Workbench multi-file-apply-tabs') &&
@@ -212,7 +294,7 @@ describe('workbench result e2e', () => {
             {
               name: 'workbench-multi-file-apply-single-preview-real',
               message:
-                '同一轮 AI 修改多个文件时，右侧应为每个文件保留一个 tab，并能直接切换回已打开文件。',
+                '同一轮 AI 修改多个文件时，入口超过 3 个默认折叠且可展开收起，头部总数不变；右侧应为每个文件保留一个 tab，并能直接切换回已打开文件。',
               data: result
             }
           )
