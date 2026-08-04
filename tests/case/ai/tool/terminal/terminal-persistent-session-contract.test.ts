@@ -113,6 +113,22 @@ describe('ai tool terminal backend', () => {
           }
           throw new Error(`terminal change records were not saved: ${fileNames.join(', ')}`)
         }
+        const waitForArtifactEvents = async (
+          fileNames: readonly string[]
+        ): Promise<Extract<AiRunEvent, { type: 'file_artifact' }>[]> => {
+          for (let attempt = 0; attempt < 60; attempt += 1) {
+            const events = runtime.eventCollector
+              .snapshot()
+              .filter((event): event is Extract<AiRunEvent, { type: 'file_artifact' }> =>
+                event.type === 'file_artifact'
+              )
+            if (fileNames.every((fileName) => events.some((event) => event.fileName === fileName))) {
+              return events
+            }
+            await new Promise<void>((resolve) => setTimeout(resolve, 50))
+          }
+          throw new Error(`terminal artifact events were not emitted: ${fileNames.join(', ')}`)
+        }
         const changed = await waitForIdle(
           await harness.invoke<TerminalRunResult>('terminal_run', {
             command: isWindows ? 'Set-Location nested' : 'cd nested'
@@ -156,16 +172,13 @@ describe('ai tool terminal backend', () => {
               : 'printf "nonzero\\n" > ../nonzero-from-nested.txt; false'
           })
         )
-        const records = await waitForTrackedRecords([
+        const trackedFileNames = [
           'completed-from-nested.txt',
           'stopped-from-nested.txt',
           'nonzero-from-nested.txt'
-        ])
-        const artifactEvents = runtime.eventCollector
-          .snapshot()
-          .filter((event): event is Extract<AiRunEvent, { type: 'file_artifact' }> =>
-            event.type === 'file_artifact'
-          )
+        ] as const
+        const records = await waitForTrackedRecords(trackedFileNames)
+        const artifactEvents = await waitForArtifactEvents(trackedFileNames)
         const detachedRejected = await harness.invoke<TerminalFailureResult>('terminal_run', {
           command: isWindows ? 'Start-Process powershell' : 'sleep 1 &'
         })
