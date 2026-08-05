@@ -25,12 +25,11 @@ type VectorDownloadListener = (payload: ModelDownloadProgress) => void
 export class VectorModelDownloadService {
   private static instance: VectorModelDownloadService | null = null
 
-  private activeDownload:
-    | {
-        repoId: string
-        task: Promise<{ success: boolean; error?: string }>
-      }
-    | null = null
+  private activeDownload: {
+    repoId: string
+    task: Promise<{ success: boolean; error?: string }>
+  } | null = null
+  private downloadAbortController: AbortController | null = null
   private activeSnapshot: ActiveVectorDownloadSnapshot | null = null
   private readonly listeners = new Set<VectorDownloadListener>()
 
@@ -87,7 +86,9 @@ export class VectorModelDownloadService {
     void this.startDownload(snapshot.repoId)
   }
 
-  public async startDownload(repoId: string): Promise<{ success: boolean; error?: string }> {
+  public async startDownload(
+    repoId: string
+  ): Promise<{ success: boolean; error?: string; cancelled?: boolean }> {
     const existing = this.activeDownload
     if (existing) {
       if (existing.repoId === repoId) {
@@ -103,35 +104,40 @@ export class VectorModelDownloadService {
       repoId,
       status: 'downloading',
       progress: this.activeSnapshot?.repoId === repoId ? this.activeSnapshot.progress : 0,
-      currentFile:
-        this.activeSnapshot?.repoId === repoId ? this.activeSnapshot.currentFile : '',
+      currentFile: this.activeSnapshot?.repoId === repoId ? this.activeSnapshot.currentFile : '',
       totalFiles: this.activeSnapshot?.repoId === repoId ? this.activeSnapshot.totalFiles : 0,
       completedFiles:
         this.activeSnapshot?.repoId === repoId ? this.activeSnapshot.completedFiles : 0,
       updatedAt: Date.now()
     })
 
-    const task = this.runDownload(repoId)
+    this.downloadAbortController?.abort()
+    this.downloadAbortController = new AbortController()
+    const signal = this.downloadAbortController.signal
+    const task = this.runDownload(repoId, signal)
     this.activeDownload = {
       repoId,
       task
     }
 
     try {
-      return await task
+      const result = await task
+      if (!result.success && this.downloadAbortController?.signal.aborted) {
+        return { success: true, cancelled: true }
+      }
+      return result
     } finally {
       if (this.activeDownload?.task === task) {
         this.activeDownload = null
+        this.downloadAbortController = null
       }
     }
   }
 
   public async deleteModel(repoId: string): Promise<{ success: boolean; error?: string }> {
     if (this.activeDownload?.repoId === repoId) {
-      return {
-        success: false,
-        error: 'download in progress'
-      }
+      this.downloadAbortController?.abort()
+      await this.activeDownload.task
     }
 
     try {
@@ -149,11 +155,18 @@ export class VectorModelDownloadService {
     }
   }
 
-  private async runDownload(repoId: string): Promise<{ success: boolean; error?: string }> {
+  private async runDownload(
+    repoId: string,
+    signal?: AbortSignal
+  ): Promise<{ success: boolean; error?: string }> {
     const result = await this.deps.modelService
-      .downloadModel(repoId, (payload) => {
-        this.handleProgress(payload)
-      })
+      .downloadModel(
+        repoId,
+        (payload) => {
+          this.handleProgress(payload)
+        },
+        signal
+      )
       .then(async (value) => {
         await this.deps.embeddingService.initialize().catch(() => undefined)
         return value
@@ -168,6 +181,12 @@ export class VectorModelDownloadService {
         repoId,
         status: 'completed',
         progress: 100
+      })
+    } else if (this.downloadAbortController?.signal.aborted) {
+      this.emit({
+        repoId,
+        status: 'cancelled',
+        progress: this.activeSnapshot?.repoId === repoId ? this.activeSnapshot.progress : 0
       })
     } else {
       const errorMessage = 'error' in result ? result.error : 'download failed'

@@ -21,6 +21,7 @@ const TEXT = {
   deleteCompleted: '模型已删除',
   deleteConfirmTitle: '确认删除此模型吗？',
   deleteConfirmDescription: '删除后需重新下载才能再次使用。',
+  deleteDuringDownloadDescription: '删除将取消当前下载并移除已下载文件。',
   confirmDelete: '确认删除',
   cancelDelete: '取消',
   installed: '已安装',
@@ -86,6 +87,17 @@ const VectorModelSettingsPanel: React.FC = () => {
         setDownloadProgress(100)
         void fetchModels()
         message.success(TEXT.downloadCompleted)
+        return
+      }
+
+      if (status === 'cancelled') {
+        setDownloadingId(null)
+        setErrorRepoId(null)
+        setErrorMsg('')
+        setDownloadProgress(0)
+        setCurrentFile('')
+        setFileProgress({ completed: 0, total: 0 })
+        void fetchModels()
         return
       }
 
@@ -233,7 +245,29 @@ const VectorModelSettingsPanel: React.FC = () => {
                       ? [
                           <Button key={`downloading-${item.id}`} disabled loading>
                             {TEXT.downloading}
-                          </Button>
+                          </Button>,
+                          <Popconfirm
+                            key={`delete-confirm-${item.id}`}
+                            title={TEXT.deleteConfirmTitle}
+                            description={TEXT.deleteDuringDownloadDescription}
+                            okText={TEXT.confirmDelete}
+                            cancelText={TEXT.cancelDelete}
+                            onConfirm={() => void handleDelete(item.id)}
+                            okButtonProps={{
+                              'data-testid': `${vectorSelectors.deleteConfirmButtonPrefix}-${item.id}`
+                            }}
+                            cancelButtonProps={{
+                              'data-testid': `${vectorSelectors.deleteCancelButtonPrefix}-${item.id}`
+                            }}
+                          >
+                            <Button
+                              type="text"
+                              danger
+                              icon={<HiTrash className="h-4 w-4" />}
+                              aria-label={TEXT.delete}
+                              data-testid={`${vectorSelectors.deleteButtonPrefix}-${item.id}`}
+                            />
+                          </Popconfirm>
                         ]
                       : [
                           <Button

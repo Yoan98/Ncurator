@@ -1,4 +1,7 @@
-import { afterEach, describe, it, vi } from 'vitest'
+import fs from 'fs'
+import os from 'os'
+import path from 'path'
+import { afterEach, beforeEach, describe, it, vi } from 'vitest'
 import { EmbeddingService } from '../../../../src/main/services/vector/EmbeddingService'
 import { ModelService } from '../../../../src/main/services/model/ModelService'
 import { VectorModelDownloadService } from '../../../../src/main/services/model/VectorModelDownloadService'
@@ -7,7 +10,6 @@ import type {
   ModelDownloadProgressReporter
 } from '../../../../src/main/services/model/ModelService'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
-import { getModelsPath } from '../../../../src/main/utils/paths'
 import { TransformersEmbeddingExecutor } from '../../../../src/main/services/vector/runtime/TransformersEmbeddingExecutor'
 
 const REPO_A = 'jinaai/jina-embeddings-v2-base-zh'
@@ -17,9 +19,26 @@ type VectorModelDownloadServiceStatics = typeof VectorModelDownloadService & {
   instance: VectorModelDownloadService | null
 }
 
-afterEach(() => {
+let isolatedModelsPath = ''
+let originalModelsPath = ''
+
+beforeEach(async () => {
+  originalModelsPath = process.env.NCURATOR_MODELS_PATH || ''
+  isolatedModelsPath = await fs.promises.mkdtemp(
+    path.join(os.tmpdir(), 'ncurator-vector-contract-')
+  )
+  process.env.NCURATOR_MODELS_PATH = isolatedModelsPath
+})
+
+afterEach(async () => {
   vi.restoreAllMocks()
   ;(VectorModelDownloadService as VectorModelDownloadServiceStatics).instance = null
+  if (originalModelsPath) {
+    process.env.NCURATOR_MODELS_PATH = originalModelsPath
+  } else {
+    delete process.env.NCURATOR_MODELS_PATH
+  }
+  await fs.promises.rm(isolatedModelsPath, { recursive: true, force: true })
 })
 
 describe('unit vector backend', () => {
@@ -36,7 +55,7 @@ describe('unit vector backend', () => {
         const modelService = ModelService.getInstance()
         const embeddingService = new EmbeddingService({
           executor: new TransformersEmbeddingExecutor({
-            modelsPath: getModelsPath(),
+            modelsPath: isolatedModelsPath,
             modelName: REPO_A
           })
         })

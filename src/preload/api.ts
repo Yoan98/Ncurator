@@ -113,7 +113,7 @@ export type ModelInfo = {
 export type DownloadProgress = {
   repoId: string
   file?: string
-  status: 'downloading' | 'completed' | 'error'
+  status: 'downloading' | 'completed' | 'error' | 'cancelled'
   progress: number
   totalFiles?: number
   completedFiles?: number

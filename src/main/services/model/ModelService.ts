@@ -77,7 +77,7 @@ const MODEL_DEFINITIONS: readonly ModelDefinition[] = [
 export type ModelDownloadProgress = {
   repoId: string
   file?: string
-  status: 'downloading' | 'completed' | 'error'
+  status: 'downloading' | 'completed' | 'error' | 'cancelled'
   progress: number
   totalFiles?: number
   completedFiles?: number
@@ -238,41 +238,58 @@ export class ModelService {
 
   private isLargeModelArtifact(filename: string): boolean {
     return (
-      filename.endsWith('.safetensors') ||
-      filename.endsWith('.bin') ||
-      filename.endsWith('.onnx')
+      filename.endsWith('.safetensors') || filename.endsWith('.bin') || filename.endsWith('.onnx')
     )
   }
 
   private async fetchWithTimeout(
     url: string,
     timeoutMs: number,
-    init: RequestInit = {}
+    init: RequestInit = {},
+    signal?: AbortSignal
   ): Promise<Response> {
     const controller = new AbortController()
+    const abortFromSignal = (): void => {
+      controller.abort()
+    }
+    signal?.addEventListener('abort', abortFromSignal, { once: true })
     const timeout = setTimeout(() => {
       controller.abort()
     }, timeoutMs)
 
     try {
+      if (signal?.aborted) {
+        controller.abort()
+      }
       return await fetch(url, {
         ...init,
         signal: controller.signal
       })
     } finally {
       clearTimeout(timeout)
+      signal?.removeEventListener('abort', abortFromSignal)
     }
   }
 
-  private async fetchJsonWithRetry<TValue>(url: string, attempts: number): Promise<TValue> {
+  private async fetchJsonWithRetry<TValue>(
+    url: string,
+    attempts: number,
+    signal?: AbortSignal
+  ): Promise<TValue> {
     for (let attempt = 1; attempt <= attempts; attempt += 1) {
+      if (signal?.aborted) {
+        throw new Error('download aborted')
+      }
       try {
-        const response = await this.fetchWithTimeout(url, METADATA_FETCH_TIMEOUT_MS)
+        const response = await this.fetchWithTimeout(url, METADATA_FETCH_TIMEOUT_MS, {}, signal)
         if (!response.ok) {
           throw new Error(`Failed to fetch metadata: ${response.status} ${response.statusText}`)
         }
         return (await response.json()) as TValue
       } catch (error: unknown) {
+        if (signal?.aborted) {
+          throw error
+        }
         if (attempt === attempts) {
           throw error
         }
@@ -289,13 +306,20 @@ export class ModelService {
   private async downloadFileWithRetry(
     url: string,
     destPath: string,
-    onProgress: (progress: number) => void
+    onProgress: (progress: number) => void,
+    signal?: AbortSignal
   ): Promise<void> {
     for (let attempt = 1; attempt <= FILE_DOWNLOAD_MAX_ATTEMPTS; attempt += 1) {
+      if (signal?.aborted) {
+        throw new Error('download aborted')
+      }
       try {
-        await this.downloadFile(url, destPath, onProgress)
+        await this.downloadFile(url, destPath, onProgress, signal)
         return
       } catch (error: unknown) {
+        if (signal?.aborted) {
+          throw error
+        }
         if (attempt === FILE_DOWNLOAD_MAX_ATTEMPTS) {
           throw error
         }
@@ -336,14 +360,15 @@ export class ModelService {
     )
   }
 
-  private async readLockMetadata(
-    lockPath: string
-  ): Promise<{
+  private async readLockMetadata(lockPath: string): Promise<{
     pid: number
     createdAt: number
   } | null> {
     try {
-      const raw = await fs.promises.readFile(path.join(lockPath, DOWNLOAD_LOCK_METADATA_FILE), 'utf8')
+      const raw = await fs.promises.readFile(
+        path.join(lockPath, DOWNLOAD_LOCK_METADATA_FILE),
+        'utf8'
+      )
       const parsed = JSON.parse(raw)
       const pid = Number(parsed.pid)
       const createdAt = Number(parsed.createdAt)
@@ -435,7 +460,8 @@ export class ModelService {
 
   private async performDownload(
     repoId: string,
-    reporter?: ModelDownloadProgressReporter
+    reporter?: ModelDownloadProgressReporter,
+    signal?: AbortSignal
   ): Promise<{ success: boolean }> {
     const modelPath = this.resolveModelPath(repoId)
 
@@ -450,7 +476,7 @@ export class ModelService {
       console.log(`[ModelService] Fetching metadata from ${metadataUrl}`)
       const metadata = await this.fetchJsonWithRetry<{
         siblings?: Array<{ rfilename: string }>
-      }>(metadataUrl, METADATA_FETCH_MAX_ATTEMPTS)
+      }>(metadataUrl, METADATA_FETCH_MAX_ATTEMPTS, signal)
 
       const siblings = metadata.siblings || []
       const siblingNames = new Set(siblings.map((file) => String(file.rfilename)))
@@ -469,6 +495,10 @@ export class ModelService {
       const totalFiles = filesToDownload.length
 
       for (const filename of filesToDownload) {
+        if (signal?.aborted) {
+          throw new Error('download aborted')
+        }
+
         const fileUrl = `${HF_ENDPOINT}/${repoId}/resolve/main/${filename}`
         const filePath = path.join(modelPath, filename)
         const fileDir = path.dirname(filePath)
@@ -500,28 +530,33 @@ export class ModelService {
         })
 
         let lastProgress = baseProgress
-        await this.downloadFileWithRetry(fileUrl, filePath, (fileProgress) => {
-          const boundedFileProgress = Math.min(1, Math.max(0, fileProgress))
-          const nextProgress = Math.min(
-            99,
-            Math.max(
-              baseProgress,
-              Math.round(((completedFiles + boundedFileProgress) / totalFiles) * 100)
+        await this.downloadFileWithRetry(
+          fileUrl,
+          filePath,
+          (fileProgress) => {
+            const boundedFileProgress = Math.min(1, Math.max(0, fileProgress))
+            const nextProgress = Math.min(
+              99,
+              Math.max(
+                baseProgress,
+                Math.round(((completedFiles + boundedFileProgress) / totalFiles) * 100)
+              )
             )
-          )
-          if (nextProgress === lastProgress) {
-            return
-          }
-          lastProgress = nextProgress
-          this.emitProgress(reporter, {
-            repoId,
-            file: filename,
-            status: 'downloading',
-            progress: nextProgress,
-            totalFiles,
-            completedFiles
-          })
-        })
+            if (nextProgress === lastProgress) {
+              return
+            }
+            lastProgress = nextProgress
+            this.emitProgress(reporter, {
+              repoId,
+              file: filename,
+              status: 'downloading',
+              progress: nextProgress,
+              totalFiles,
+              completedFiles
+            })
+          },
+          signal
+        )
 
         completedSet.add(filename)
         completedFiles++
@@ -554,19 +589,28 @@ export class ModelService {
       return { success: true }
     } catch (error: unknown) {
       console.error('[ModelService] Download error:', error)
-      this.emitProgress(reporter, {
-        repoId,
-        status: 'error',
-        progress: 0,
-        error: getErrorMessage(error)
-      })
+      if (signal?.aborted) {
+        this.emitProgress(reporter, {
+          repoId,
+          status: 'cancelled',
+          progress: 0
+        })
+      } else {
+        this.emitProgress(reporter, {
+          repoId,
+          status: 'error',
+          progress: 0,
+          error: getErrorMessage(error)
+        })
+      }
       throw error
     }
   }
 
   public async downloadModel(
     repoId: string,
-    reporter?: ModelDownloadProgressReporter
+    reporter?: ModelDownloadProgressReporter,
+    signal?: AbortSignal
   ): Promise<{ success: boolean }> {
     const releaseLock = await this.acquireDownloadLock(repoId)
     try {
@@ -588,7 +632,7 @@ export class ModelService {
         return { success: true }
       }
 
-      return await this.performDownload(repoId, reporter)
+      return await this.performDownload(repoId, reporter, signal)
     } finally {
       await releaseLock()
     }
@@ -597,18 +641,24 @@ export class ModelService {
   private async downloadFile(
     url: string,
     destPath: string,
-    onProgress: (progress: number) => void
+    onProgress: (progress: number) => void,
+    signal?: AbortSignal
   ) {
     const tempPath = `${destPath}.part`
     const existingPartialBytes = this.hasNonEmptyFile(tempPath) ? fs.statSync(tempPath).size : 0
-    const response = await this.fetchWithTimeout(url, FILE_FETCH_TIMEOUT_MS, {
-      headers:
-        existingPartialBytes > 0
-          ? {
-              Range: `bytes=${String(existingPartialBytes)}-`
-            }
-          : undefined
-    })
+    const response = await this.fetchWithTimeout(
+      url,
+      FILE_FETCH_TIMEOUT_MS,
+      {
+        headers:
+          existingPartialBytes > 0
+            ? {
+                Range: `bytes=${String(existingPartialBytes)}-`
+              }
+            : undefined
+      },
+      signal
+    )
 
     if (response.status !== 200 && response.status !== 206) {
       throw new Error(`Failed to download ${url}: ${response.status} ${response.statusText}`)

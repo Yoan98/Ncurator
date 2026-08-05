@@ -1,7 +1,7 @@
 import fs from 'fs'
+import os from 'os'
 import path from 'path'
-import { afterEach, describe, it, vi } from 'vitest'
-import { getModelsPath } from '../../../../src/main/utils/paths'
+import { afterEach, beforeEach, describe, it, vi } from 'vitest'
 import { EmbeddingService } from '../../../../src/main/services/vector/EmbeddingService'
 import { ModelService } from '../../../../src/main/services/model/ModelService'
 import { VectorModelDownloadService } from '../../../../src/main/services/model/VectorModelDownloadService'
@@ -19,7 +19,31 @@ type VectorModelDownloadServiceStatics = typeof VectorModelDownloadService & {
   instance: VectorModelDownloadService | null
 }
 
-const resolveSnapshotPath = (): string => path.join(getModelsPath(), ACTIVE_DOWNLOAD_SNAPSHOT_FILE)
+const resolveSnapshotPath = (): string =>
+  path.join(isolatedModelsPath, ACTIVE_DOWNLOAD_SNAPSHOT_FILE)
+
+let isolatedModelsPath = ''
+let originalModelsPath = ''
+
+beforeEach(async () => {
+  originalModelsPath = process.env.NCURATOR_MODELS_PATH || ''
+  isolatedModelsPath = await fs.promises.mkdtemp(
+    path.join(os.tmpdir(), 'ncurator-vector-contract-')
+  )
+  process.env.NCURATOR_MODELS_PATH = isolatedModelsPath
+})
+
+afterEach(async () => {
+  vi.restoreAllMocks()
+  ;(VectorModelDownloadService as VectorModelDownloadServiceStatics).instance = null
+  await fs.promises.rm(resolveSnapshotPath(), { force: true })
+  if (originalModelsPath) {
+    process.env.NCURATOR_MODELS_PATH = originalModelsPath
+  } else {
+    delete process.env.NCURATOR_MODELS_PATH
+  }
+  await fs.promises.rm(isolatedModelsPath, { recursive: true, force: true })
+})
 
 const waitForCondition = async (predicate: () => boolean, timeoutMs = 5000): Promise<void> => {
   const deadline = Date.now() + timeoutMs
@@ -55,7 +79,7 @@ describe('unit vector backend', () => {
         const modelService = ModelService.getInstance()
         const embeddingService = new EmbeddingService({
           executor: new TransformersEmbeddingExecutor({
-            modelsPath: getModelsPath(),
+            modelsPath: isolatedModelsPath,
             modelName: SNAPSHOT_REPO_ID
           })
         })
@@ -69,7 +93,7 @@ describe('unit vector backend', () => {
           releaseDownload = resolve
         })
 
-        await fs.promises.mkdir(getModelsPath(), { recursive: true })
+        await fs.promises.mkdir(isolatedModelsPath, { recursive: true })
         await fs.promises.writeFile(
           resolveSnapshotPath(),
           JSON.stringify(

@@ -50,7 +50,7 @@ export type ModelInfo = {
   isDownloaded: boolean
 }
 
-export type DownloadStatus = 'downloading' | 'completed' | 'error'
+export type DownloadStatus = 'downloading' | 'completed' | 'error' | 'cancelled'
 
 export type DownloadProgressPayload = {
   repoId: string
