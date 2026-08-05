@@ -212,11 +212,49 @@ const resolveBundledPlaywrightBrowserDirectory = (pythonPath) => {
   return result.stdout.trim()
 }
 
+const resolveExpectedPlaywrightBrowserRevision = (pythonPath) => {
+  const result = spawnSync(
+    pythonPath,
+    [
+      '-c',
+      [
+        'import json',
+        'import pathlib',
+        'import playwright',
+        "browsers = json.loads((pathlib.Path(playwright.__file__).resolve().parent / 'driver' / 'package' / 'browsers.json').read_text())",
+        "revisions = {str(browser['name']): str(browser['revision']) for browser in browsers['browsers']}",
+        'print(revisions.get("chromium-headless-shell") or revisions.get("chromium") or "")'
+      ].join('; ')
+    ],
+    { cwd: ROOT, encoding: 'utf8' }
+  )
+  if (result.error || result.status !== 0) {
+    throw new Error('could not resolve the expected Playwright browser revision')
+  }
+  return result.stdout.trim()
+}
+
+const readBrowserRootRevision = (browserRoot) => {
+  if (!browserRoot || !pathExists(browserRoot)) return ''
+  const entry = fs
+    .readdirSync(browserRoot)
+    .find((name) => name.startsWith('chromium_headless_shell-'))
+  return entry ? entry.slice('chromium_headless_shell-'.length) : ''
+}
+
 const restoreBundledPlaywrightBrowserCache = (pythonPath) => {
   const source = String(process.env.NCURATOR_SIDECAR_BROWSER_CACHE || '').trim()
   if (!source || !pathExists(source)) return false
 
   const target = resolveBundledPlaywrightBrowserDirectory(pythonPath)
+  const expectedRevision = resolveExpectedPlaywrightBrowserRevision(pythonPath)
+  const cachedRevision = readBrowserRootRevision(source)
+  if (expectedRevision && cachedRevision && cachedRevision !== expectedRevision) {
+    process.stdout.write(
+      `[sidecar] browser cache revision ${cachedRevision} does not match Playwright revision ${expectedRevision}; ignoring stale cache\n`
+    )
+    return false
+  }
   fs.rmSync(target, { recursive: true, force: true })
   fs.cpSync(source, target, { recursive: true, force: true })
   for (const entry of fs.readdirSync(target)) {
@@ -227,12 +265,31 @@ const restoreBundledPlaywrightBrowserCache = (pythonPath) => {
   return hasBundledPlaywrightBrowser(pythonPath)
 }
 
+const syncBundledPlaywrightBrowserCache = (pythonPath) => {
+  const source = String(process.env.NCURATOR_SIDECAR_BROWSER_CACHE || '').trim()
+  if (!source) return
+  const installed = resolveBundledPlaywrightBrowserDirectory(pythonPath)
+  fs.rmSync(source, { recursive: true, force: true })
+  fs.mkdirSync(source, { recursive: true })
+  fs.cpSync(installed, source, { recursive: true, force: true })
+  process.stdout.write(`[sidecar] refreshed Playwright browser cache at ${source}\n`)
+}
+
 const ensureBundledPlaywrightBrowser = (pythonPath) => {
   const expectedHash = computeRequirementsHash()
   const installedHash = readInstalledPlaywrightBrowserHash()
+  const expectedRevision = resolveExpectedPlaywrightBrowserRevision(pythonPath)
+  const currentRevision = readBrowserRootRevision(
+    resolveBundledPlaywrightBrowserDirectory(pythonPath)
+  )
   // The stamp alone is not enough: an interrupted build can wipe the browser
-  // bundle from the venv while the stamp still claims it is installed.
-  if (expectedHash === installedHash && hasBundledPlaywrightBrowser(pythonPath)) {
+  // bundle from the venv while the stamp still claims it is installed, and a
+  // stale cache can bundle a revision that no longer matches the venv Playwright.
+  if (
+    expectedHash === installedHash &&
+    currentRevision === expectedRevision &&
+    hasBundledPlaywrightBrowser(pythonPath)
+  ) {
     return
   }
 
@@ -250,6 +307,7 @@ const ensureBundledPlaywrightBrowser = (pythonPath) => {
     env: browserEnv
   })
   fs.writeFileSync(PLAYWRIGHT_BROWSER_STAMP_PATH, `${expectedHash}\n`, 'utf8')
+  syncBundledPlaywrightBrowserCache(pythonPath)
 }
 
 const buildSidecar = (pythonPath) => {

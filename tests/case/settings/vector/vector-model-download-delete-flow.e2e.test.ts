@@ -8,7 +8,7 @@ import { getSettingsLocator, navigateToSettingsSection } from '../../../harness/
 
 const CASE_ID = 'vector-model-download-delete-flow'
 const MODEL_ID = 'jinaai/jina-embeddings-v2-base-zh'
-const VECTOR_DOWNLOAD_E2E_TIMEOUT_MS = 90 * 60 * 1000
+const VECTOR_DOWNLOAD_E2E_TIMEOUT_MS = 20 * 60 * 1000
 
 const modelLocator = (testIdPrefix: string) => `${testIdPrefix}-${MODEL_ID}`
 

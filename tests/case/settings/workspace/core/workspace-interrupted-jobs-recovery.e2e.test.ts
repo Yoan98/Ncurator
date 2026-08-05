@@ -32,7 +32,7 @@ const readJob = (userDataDir: string, jobId: string): WorkspaceIndexJobRecord | 
 const createLargeWorkspace = async (rootPath: string): Promise<void> => {
   const docsPath = path.join(rootPath, 'docs')
   await mkdir(docsPath, { recursive: true })
-  const totalFiles = 25_000
+  const totalFiles = 60_000
   const batchSize = 500
   for (let batchStart = 0; batchStart < totalFiles; batchStart += batchSize) {
     await Promise.all(

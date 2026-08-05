@@ -605,6 +605,14 @@ const toPersistedComposerDraft = (
   assetBucketId: draft.assetBucketId || null
 })
 
+const isChatModel = (modelId: string): boolean =>
+  !/(image|audio|video|tts|asr|realtime|embedding|rerank|ocr|transcri|whisper|search|speech)/u.test(
+    modelId.toLowerCase()
+  )
+
+const pickChatModel = (models: readonly LlmRemoteModel[]): LlmRemoteModel | undefined =>
+  models.find((item) => isChatModel(item.id))
+
 const createDefaultSessionUiState = (
   modelSelection: WorkbenchModelSelection = { mainModel: null, visionModel: null },
   workspaceId: string | null = null
@@ -1766,9 +1774,11 @@ const ChatPage: React.FC = () => {
             }
           : null
       }
-      const firstConfigWithModel = list.find((config) => (nextLists[config.id] || []).length > 0)
+      const firstConfigWithModel = list.find(
+        (config) => (nextLists[config.id] || []).length > 0
+      )
       const firstRemoteModel = firstConfigWithModel
-        ? nextLists[firstConfigWithModel.id][0]
+        ? pickChatModel(nextLists[firstConfigWithModel.id])
         : undefined
       const firstModel =
         firstConfigWithModel && firstRemoteModel
@@ -1807,7 +1817,7 @@ const ChatPage: React.FC = () => {
       return remote ? { ...selected, structuredOutput: remote.structuredOutput } : null
     }
     const firstConfig = modelConfigs.find((config) => modelListsByConfigId[config.id]?.length)
-    const firstRemote = firstConfig ? modelListsByConfigId[firstConfig.id]?.[0] : undefined
+    const firstRemote = firstConfig ? pickChatModel(modelListsByConfigId[firstConfig.id]) : undefined
     const fallback =
       firstConfig && firstRemote
         ? {
