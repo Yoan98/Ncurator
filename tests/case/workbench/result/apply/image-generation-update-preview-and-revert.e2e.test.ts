@@ -47,7 +47,7 @@ describe('workbench result e2e', () => {
           const startedAtMs = Date.now()
           await sendWorkbenchMessage(
             page,
-            `请直接更新工作区已有图片“${FILE_NAME}”：改成白色背景，中央是一个蓝色正方形。只交付这个文件，不要创建其他图片文件。完成后告诉我文件名。`
+            `请直接调用图片生成工具更新工作区已有图片“${FILE_NAME}”：改成白色背景，中央是一个蓝色正方形。不要使用 terminal，不要删除、重命名或移走原文件，也不要创建其他图片文件；必须直接覆写这个路径并只交付这个文件。完成后告诉我文件名。`
           )
           const evidence = await waitForWorkbenchAiRunCompletion(
             runtime,
