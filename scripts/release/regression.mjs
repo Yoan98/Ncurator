@@ -9,14 +9,17 @@ const valueAfter = (args, name) => {
 export const readRegressionSelection = (args) => {
   const domain = valueAfter(args, '--domain')
   const suite = valueAfter(args, '--suite')
-  const caseId = valueAfter(args, '--case')
   const groups = []
+  const caseIds = []
   for (let index = 0; index < args.length; index += 1) {
-    if (args[index] !== '--group') continue
-    const value = args[index + 1]
-    if (!value || value.startsWith('--')) throw new Error('--group requires a value')
-    groups.push(value)
-    index += 1
+    const name = args[index]
+    if (name === '--group' || name === '--case') {
+      const value = args[index + 1]
+      if (!value || value.startsWith('--')) throw new Error(`${name} requires a value`)
+      if (name === '--group') groups.push(value)
+      else caseIds.push(value)
+      index += 1
+    }
   }
   const freshKnowledgeCache = args.includes('--fresh-knowledge-cache')
 
@@ -29,10 +32,10 @@ export const readRegressionSelection = (args) => {
   if (domain) workflowArgs.push('--domain', domain)
   if (suite) workflowArgs.push('--suite', suite)
   for (const group of groups) workflowArgs.push('--group', group)
-  if (caseId) workflowArgs.push('--case', caseId)
+  for (const caseId of caseIds) workflowArgs.push('--case', caseId)
   if (freshKnowledgeCache) workflowArgs.push('--fresh-knowledge-cache')
 
-  const selected = Boolean(domain || suite || groups.length > 0 || caseId)
+  const selected = Boolean(domain || suite || groups.length > 0 || caseIds.length > 0)
   return {
     workflowArgs,
     state: {
@@ -40,7 +43,7 @@ export const readRegressionSelection = (args) => {
       ...(domain ? { domain } : {}),
       ...(suite ? { suite } : {}),
       ...(groups.length > 0 ? { groups } : {}),
-      ...(caseId ? { caseId } : {}),
+      ...(caseIds.length > 0 ? { cases: caseIds } : {}),
       ...(freshKnowledgeCache ? { freshKnowledgeCache: true } : {})
     }
   }

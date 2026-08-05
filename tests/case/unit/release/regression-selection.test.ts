@@ -43,11 +43,29 @@ describe('release regression selection', () => {
         domain: 'workbench',
         suite: 'result',
         groups: ['apply'],
-        caseId: 'WB-RESULT-001',
+        cases: ['WB-RESULT-001'],
         freshKnowledgeCache: true
       }
     })
     expect(hasRegressionSelectionArgs(['--test-only', '--domain', 'workbench'])).toBe(true)
+  })
+
+  it('forwards multiple cases across domains and records them', () => {
+    expect(
+      readRegressionSelection([
+        '--test-only',
+        '--case',
+        'web-read-direct-url',
+        '--case',
+        'workspace-interrupted-jobs-recovery'
+      ])
+    ).toEqual({
+      workflowArgs: ['--case', 'web-read-direct-url', '--case', 'workspace-interrupted-jobs-recovery'],
+      state: {
+        mode: 'selected',
+        cases: ['web-read-direct-url', 'workspace-interrupted-jobs-recovery']
+      }
+    })
   })
 
   it('rejects an incomplete hierarchy', () => {

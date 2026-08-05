@@ -76,17 +76,21 @@ git diff <previous-platform-tag>..<current-platform-tag>
 
 正式包 E2E 只消费已经构建完成的 `release-bundle-*.json`。runner 会复验 Tag、commit、fragment 和文件哈希，安装 EXE 或 DMG，再连接实际安装后的程序执行测试；测试过程不会重新构建。
 
-不带过滤参数时运行全部正式包 E2E，也可以使用 `--domain`、`--suite`、`--group` 或 `--case` 收窄范围：
+不带过滤参数时运行全部正式包 E2E，也可以使用 `--domain`、`--suite`、`--group` 或可重复的 `--case` 收窄范围。`--case` 可以同时指定多个用例（可跨域），修复后只需重跑受影响的用例，不必全量重跑：
 
 ```bash
 pnpm release:win -- --tag windows-vX.Y.Z --test-only
 pnpm release:win -- --tag windows-vX.Y.Z --test-only --domain workbench
 pnpm release:win -- --tag windows-vX.Y.Z --test-only --domain workbench --suite result
 pnpm release:win -- --tag windows-vX.Y.Z --test-only --case <caseId>
+pnpm release:win -- --tag windows-vX.Y.Z --test-only --case <caseId-1> --case <caseId-2>
 
 pnpm release:mac -- --tag mac-vX.Y.Z --test-only
 pnpm release:mac -- --tag mac-vX.Y.Z --test-only --case <caseId>
+pnpm release:mac -- --tag mac-vX.Y.Z --test-only --case <caseId-1> --case <caseId-2>
 ```
+
+回归范围由执行者根据改动影响评估决定：影响面广时跑全量，修复后的定向复测用 `--case` 列出受影响的用例。`--case` 指定的用例必须能匹配到测试文件，匹配不到时 runner 直接失败，不会静默通过。
 
 macOS arm64 候选包必须通过选定的回归范围。macOS x64 仍正常构建、签名、审计、启动验证和发布，但由于 Rosetta 下正式包 E2E 速度过慢，默认不执行 x64 正式包 E2E，也不把它作为发布门禁。需要人工诊断时可显式执行 `--include-x64-e2e`，x64 E2E 固定单并发：
 
@@ -298,6 +302,7 @@ pnpm release:mac -- --tag mac-vX.Y.Z --publish-only
 pnpm test:e2e:package -- --bundle <release-bundle.json>
 pnpm test:e2e:package -- --bundle <release-bundle.json> --domain workbench
 pnpm test:e2e:package -- --bundle <release-bundle.json> --case <caseId>
+pnpm test:e2e:package -- --bundle <release-bundle.json> --case <caseId-1> --case <caseId-2>
 ```
 
 ### 状态与恢复
