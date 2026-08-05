@@ -242,6 +242,19 @@ const readBrowserRootRevision = (browserRoot) => {
   return entry ? entry.slice('chromium_headless_shell-'.length) : ''
 }
 
+const pruneStaleBrowsers = (browserRoot, expectedRevision) => {
+  if (!browserRoot || !pathExists(browserRoot)) return
+  for (const entry of fs.readdirSync(browserRoot)) {
+    if (
+      entry.startsWith('chromium_headless_shell-') &&
+      (!expectedRevision || entry.slice('chromium_headless_shell-'.length) !== expectedRevision)
+    ) {
+      fs.rmSync(path.join(browserRoot, entry), { recursive: true, force: true })
+      process.stdout.write(`[sidecar] removed stale browser ${entry}\n`)
+    }
+  }
+}
+
 const restoreBundledPlaywrightBrowserCache = (pythonPath) => {
   const source = String(process.env.NCURATOR_SIDECAR_BROWSER_CACHE || '').trim()
   if (!source || !pathExists(source)) return false
@@ -253,8 +266,10 @@ const restoreBundledPlaywrightBrowserCache = (pythonPath) => {
     process.stdout.write(
       `[sidecar] browser cache revision ${cachedRevision} does not match Playwright revision ${expectedRevision}; ignoring stale cache\n`
     )
+    pruneStaleBrowsers(target, expectedRevision)
     return false
   }
+  pruneStaleBrowsers(target, expectedRevision)
   fs.rmSync(target, { recursive: true, force: true })
   fs.cpSync(source, target, { recursive: true, force: true })
   for (const entry of fs.readdirSync(target)) {
