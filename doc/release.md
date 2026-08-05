@@ -2,7 +2,7 @@
 
 本文是 Windows、macOS 构建、正式包回归和 R2 发布的统一说明。当前发布 Windows x64、macOS arm64 和 macOS x64，不发布 Linux。Windows 使用 `windows-vX.Y.Z`，macOS 使用 `mac-vX.Y.Z`，两个平台独立递增和发布。
 
-向量模型由应用单独下载，不进入安装包。当前不创建 GitHub Release，官网和应用更新均读取 R2。
+注意评估改动影响，只回归需要回归的测试用例，避免动不动就全部回归，尤其是在回归一次后，修复的代码并不影响已通过的测试用例时。
 
 ## 1. 发布流程
 
