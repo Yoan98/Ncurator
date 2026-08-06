@@ -16,6 +16,7 @@ import {
   APP_UPDATE_STATUS_CHANNEL
 } from '../shared/constants'
 import type { DesktopApi, DownloadProgress } from './api'
+import { isModelSource, type ModelSource } from '../shared/modelSources'
 
 const isE2EFixtureMode = process.env.NCURATOR_E2E_MODE === '1'
 const isE2EObserverEnabled = isE2EFixtureMode || process.env.NCURATOR_E2E_OBSERVER === '1'
@@ -213,10 +214,17 @@ const api: DesktopApi = {
       ipcRenderer.removeListener('source-list-refresh', listener)
     }
   },
-  downloadModel: async (repoId: string): Promise<{ success: boolean; error?: string }> => {
+  downloadModel: async (
+    repoId: string,
+    source?: ModelSource
+  ): Promise<{ success: boolean; error?: string }> => {
     const safeRepoId = String(repoId || '').trim()
-    emitE2EIpcCall('downloadModel', safeRepoId)
-    return ipcRenderer.invoke('download-model', repoId)
+    const safeSource = source && isModelSource(source) ? source : undefined
+    emitE2EIpcCall('downloadModel', {
+      repoId: safeRepoId,
+      ...(safeSource ? { source: safeSource } : {})
+    })
+    return ipcRenderer.invoke('download-model', repoId, safeSource)
   },
   onDownloadProgress: (cb) => {
     downloadProgressListeners.add(cb)

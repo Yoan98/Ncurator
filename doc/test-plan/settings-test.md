@@ -264,14 +264,14 @@ Settings 顶层 suite 对齐 PRD 模块：
 - Oracle：下载中展示删除入口且确认弹框说明删除将取消下载，确认后进度消失并恢复下载入口，对齐 `SET-VECTOR-004-AC5`；页面不出现下载失败错误，对齐 `SET-VECTOR-004-AC6`；下载与删除均只由真实用户操作触发各一次产品 IPC。
 - Not：不等待下载完成；不修改产品模型清单、下载地址、文件内容、下载服务或生产代码；不验证磁盘上遗留 `.part` 临时文件之外的其他产物。
 
-#### `vector-model-download-source-switch`（unit）
+#### `vector-model-download-source-switch`
 
-- 测试类型：`unit`（`model-download-source-contract`，运行于 backend workflow）
-- What：向量模型下载按选定源构造元数据与文件请求；失败后清理残留并上报失败源；默认源为 ModelScope 镜像；换源不自动发生。
-- Why：换源下载是对国内网络环境的可靠性兜底，源选择、失败清理与错误标识的错误会导致用户无法完成模型安装或重复下载同一失败源。
-- How：mock fetch 后调用 `ModelService.downloadModel`，分别断言 modelscope 与 huggingface-mirror 的元数据 URL、文件 URL 与默认源；模拟文件下载失败与元数据失败，断言抛出 `ModelDownloadError`、携带正确 `source`/`failedSource`、模型目录被清理。
-- Oracle：`downloadModel` 默认使用 ModelScope 源；modelscope 源只请求 `www.modelscope.cn` 端点，huggingface-mirror 源只请求 `hf-mirror.com` 端点；失败后模型目录被删除、错误事件带失败源，对齐 `SET-VECTOR-003-AC3/AC4/AC6`。
-- Not：不访问真实网络；不覆盖 UI 弹窗交互（由 e2e 回归时人工或 fixture 验证）。
+- 测试类型：`e2e`
+- What：默认下载源失效时，用户在失败提示处点击“更换源下载”，在弹窗中选择另一源并完成模型安装。
+- Why：换源是下载可靠性的兜底闭环，失败提示、失败清理、弹窗标注失败源、选源重下与 IPC 透传任一处断裂都会让用户无法完成模型安装。
+- How：启动真实应用前注入两个本地 mock 端点（`NCURATOR_MODELSCOPE_ENDPOINT` 返回 500 使默认源失效，`NCURATOR_HF_MIRROR_ENDPOINT` 提供完整模型元数据与文件）；在临时模型目录中点击下载，等待失败提示，确认模型目录被清理，再点击“更换源下载”，在弹窗中确认 huggingface-mirror 带“最近失败”标记而选择它，等待安装完成。
+- Oracle：失败区展示“下载失败”与“更换源下载”入口，对齐 `SET-VECTOR-003-AC2/AC3`；弹窗列出两个源并标注最近失败的源，确认后从所选源重新完整下载并完成安装，对齐 `SET-VECTOR-003-AC4`；失败后模型目录无残留，对齐“换源为完整下载”；IPC 共触发两次 `downloadModel`，第二次携带 `huggingface-mirror`，对齐换源由用户主动选择。
+- Not：不访问真实外网；mock 只替换端点地址，不改变产品下载逻辑、模型清单或文件内容；不验证下载文件内容有效性；源选择、失败清理与错误标识的服务层状态机由 backend workflow 中的 `model-download-source-contract` unit 用例覆盖，不在本 case 重复。
 
 ### 3.6 `general`
 

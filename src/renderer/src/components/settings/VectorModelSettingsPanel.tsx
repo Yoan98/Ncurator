@@ -176,7 +176,7 @@ const VectorModelSettingsPanel: React.FC = () => {
         const messageText = response.error || TEXT.startDownloadFailed
         setDownloadingId(null)
         setErrorRepoId(repoId)
-        setFailedSource(source ?? null)
+        setFailedSource((previous) => previous ?? (source ?? null))
         setErrorMsg(messageText)
         message.error(`${TEXT.downloadFailedReason}${messageText}`)
       }
@@ -184,7 +184,7 @@ const VectorModelSettingsPanel: React.FC = () => {
       const messageText = toErrorMessage(error instanceof Error ? error : String(error))
       setDownloadingId(null)
       setErrorRepoId(repoId)
-      setFailedSource(source ?? null)
+      setFailedSource((previous) => previous ?? (source ?? null))
       setErrorMsg(messageText)
       message.error(`${TEXT.downloadFailedReason}${messageText}`)
     }
@@ -414,9 +414,9 @@ const VectorModelSettingsPanel: React.FC = () => {
         okButtonProps={{ 'data-testid': vectorSelectors.sourceConfirmButton }}
         cancelButtonProps={{ 'data-testid': vectorSelectors.sourceCancelButton }}
         className="[&_.ant-modal-content]:!rounded-[8px]"
-        data-testid={vectorSelectors.sourceModal}
       >
-        <p className="mb-3 text-[#787774]">{TEXT.switchSourceDescription}</p>
+        <div data-testid={vectorSelectors.sourceModal}>
+          <p className="mb-3 text-[#787774]">{TEXT.switchSourceDescription}</p>
         <Radio.Group
           value={switchSourceValue}
           onChange={(event) => setSwitchSourceValue(event.target.value as ModelSource)}
@@ -442,6 +442,7 @@ const VectorModelSettingsPanel: React.FC = () => {
             </Radio>
           ))}
         </Radio.Group>
+        </div>
       </Modal>
     </div>
   )

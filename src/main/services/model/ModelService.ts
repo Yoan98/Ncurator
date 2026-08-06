@@ -9,6 +9,8 @@ import { getModelsPath } from '../../utils/paths'
 const HF_ENDPOINT = 'https://hf-mirror.com'
 const MODELSCOPE_ENDPOINT = 'https://www.modelscope.cn'
 const MODELSCOPE_REVISION = 'master'
+const MODELSCOPE_ENDPOINT_ENV = 'NCURATOR_MODELSCOPE_ENDPOINT'
+const HF_ENDPOINT_ENV = 'NCURATOR_HF_MIRROR_ENDPOINT'
 const DOWNLOAD_LOCK_POLL_MS = 1000
 const DOWNLOAD_LOCK_STALE_MS = 1000 * 60 * 60
 const DOWNLOAD_LOCK_METADATA_FILE = 'owner.json'
@@ -339,13 +341,23 @@ export class ModelService {
     return [...requestedFiles]
   }
 
+  private resolveSourceEndpoint(source: ModelSource): string {
+    if (source === 'modelscope') {
+      return (
+        String(process.env[MODELSCOPE_ENDPOINT_ENV] || '').trim() || MODELSCOPE_ENDPOINT
+      )
+    }
+    return String(process.env[HF_ENDPOINT_ENV] || '').trim() || HF_ENDPOINT
+  }
+
   private async fetchModelFileNames(
     repoId: string,
     source: ModelSource,
     signal?: AbortSignal
   ): Promise<string[]> {
     if (source === 'modelscope') {
-      const url = `${MODELSCOPE_ENDPOINT}/api/v1/models/${repoId}/repo/files?Revision=${MODELSCOPE_REVISION}&Recursive=true`
+      const endpoint = this.resolveSourceEndpoint('modelscope')
+      const url = `${endpoint}/api/v1/models/${repoId}/repo/files?Revision=${MODELSCOPE_REVISION}&Recursive=true`
       const payload = await this.fetchJsonWithRetry<{
         Data?: {
           Files?: Array<{ Path?: string; Type?: string }>
@@ -356,7 +368,8 @@ export class ModelService {
         .map((file) => String(file.Path))
     }
 
-    const url = `${HF_ENDPOINT}/api/models/${repoId}`
+    const endpoint = this.resolveSourceEndpoint('huggingface-mirror')
+    const url = `${endpoint}/api/models/${repoId}`
     const payload = await this.fetchJsonWithRetry<{
       siblings?: Array<{ rfilename?: string }>
     }>(url, METADATA_FETCH_MAX_ATTEMPTS, signal)
@@ -367,9 +380,11 @@ export class ModelService {
 
   private resolveFileUrl(repoId: string, filename: string, source: ModelSource): string {
     if (source === 'modelscope') {
-      return `${MODELSCOPE_ENDPOINT}/api/v1/models/${repoId}/repo?Revision=${MODELSCOPE_REVISION}&FilePath=${filename}`
+      const endpoint = this.resolveSourceEndpoint('modelscope')
+      return `${endpoint}/api/v1/models/${repoId}/repo?Revision=${MODELSCOPE_REVISION}&FilePath=${filename}`
     }
-    return `${HF_ENDPOINT}/${repoId}/resolve/main/${filename}`
+    const endpoint = this.resolveSourceEndpoint('huggingface-mirror')
+    return `${endpoint}/${repoId}/resolve/main/${filename}`
   }
 
   private async cleanupFailedDownload(repoId: string): Promise<void> {
