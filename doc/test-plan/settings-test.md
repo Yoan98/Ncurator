@@ -237,6 +237,8 @@ Settings 顶层 suite 对齐 PRD 模块：
 
 ### 3.5 `vector`
 
+> 模型前置约定：所有 `real` 模式的 e2e case 默认注入共享向量模型目录（`os.tmpdir()/ncurator-e2e-shared-models`），由 `tests/harness/e2e/modelFixture.ts` 复用生产下载链自动准备真实模型并跨 run 复用；case 显式设置 `NCURATOR_MODELS_PATH` 时（如下载流程类 case 的隔离临时目录）尊重显式值，不注入共享目录。`fixture` 模式不注入。模型下载失败时 case 直接失败并保留日志，作为环境前置问题暴露。
+
 #### `vector-model-catalog-load`
 
 - 测试类型：`e2e`

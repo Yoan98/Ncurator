@@ -28,6 +28,7 @@ import {
   type ElectronWindowMode,
   type LaunchedElectronApp
 } from './electronApp'
+import { ensureE2EModelReady } from './modelFixture'
 import {
   E2EResourceScope,
   runWithE2EResourceScope,
@@ -277,6 +278,21 @@ const buildPlaywrightReportHtml = (input: {
   ].join('\n')
 }
 
+const resolveE2EModelEnv = async (input: {
+  serviceMode: E2EServiceMode
+  extraEnv?: Readonly<Record<string, string>>
+}): Promise<Readonly<Record<string, string>> | undefined> => {
+  const { serviceMode, extraEnv } = input
+  if (serviceMode === 'fixture') {
+    return extraEnv
+  }
+  if (extraEnv && Object.prototype.hasOwnProperty.call(extraEnv, 'NCURATOR_MODELS_PATH')) {
+    return extraEnv
+  }
+  const modelsPath = await ensureE2EModelReady()
+  return { ...extraEnv, NCURATOR_MODELS_PATH: modelsPath }
+}
+
 export const runE2ECase = async <TResult>(
   definition: E2ETestCaseDefinition<TResult>
 ): Promise<void> => {
@@ -291,6 +307,10 @@ export const runE2ECase = async <TResult>(
     suite: definition.suite,
     groups: definition.groups || [],
     caseId: definition.caseId
+  })
+  const resolvedExtraEnv = await resolveE2EModelEnv({
+    serviceMode: definition.serviceMode,
+    extraEnv: definition.extraEnv
   })
   const events: TestLogEvent[] = []
   const artifacts: TestArtifact[] = []
@@ -554,7 +574,7 @@ export const runE2ECase = async <TResult>(
         currentApp = await launchElectronApp({
           serviceMode: definition.serviceMode,
           windowMode: definition.windowMode,
-          extraEnv: definition.extraEnv,
+          extraEnv: resolvedExtraEnv,
           signalSink,
           userDataDir: app.userDataDir
         })
@@ -657,7 +677,7 @@ export const runE2ECase = async <TResult>(
     launchedApp = await launchElectronApp({
       serviceMode: definition.serviceMode,
       windowMode: definition.windowMode,
-      extraEnv: definition.extraEnv,
+      extraEnv: resolvedExtraEnv,
       signalSink
     })
     recordEvent({
