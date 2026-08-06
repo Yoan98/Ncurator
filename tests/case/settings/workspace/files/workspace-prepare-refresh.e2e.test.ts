@@ -109,10 +109,10 @@ describe('settings workspace e2e', () => {
           }
         },
         assert: async (result, runtime) => {
-          await runtime.assertThat(result.prepareProgressVisible && result.buttonsDisabled, {
+          await runtime.assertThat(result.prepareProgressVisible && !result.buttonsDisabled, {
             name: 'prepare-progress-is-visible',
             message:
-              '更新索引执行中，界面应展示持久化总进度并禁用两个索引操作按钮，对齐 SET-WORKSPACE-004-AC3。',
+              '更新索引执行中，界面应展示持久化总进度且两个索引操作按钮保持可用，对齐 SET-WORKSPACE-004-AC3。',
             data: result
           })
 

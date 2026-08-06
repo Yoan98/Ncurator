@@ -182,8 +182,7 @@ describe('settings workspace e2e', () => {
                     page,
                     importSelectors.workspaceQuickPrepareButton
                   ).isDisabled())
-              }
-              scanProgressEvents = await progressEventsPromise
+              }              scanProgressEvents = await progressEventsPromise
               directoryCallsWhileRunning = Math.max(
                 0,
                 ...scanProgressEvents
@@ -216,7 +215,7 @@ describe('settings workspace e2e', () => {
                       scanButton.disabled &&
                       prepareButton instanceof HTMLButtonElement &&
                       prepareButton.disabled
-                    if (running === progressVisible && running === buttonsDisabled) {
+                    if (running === progressVisible && !buttonsDisabled) {
                       return { running, progressVisible, buttonsDisabled }
                     }
                     return null
@@ -284,11 +283,11 @@ describe('settings workspace e2e', () => {
           )
           await runtime.assertThat(
             result.restoredProgressVisible === result.scanRunningAfterReturn &&
-              result.restoredButtonsDisabled === result.scanRunningAfterReturn,
+              !result.restoredButtonsDisabled,
             {
               name: 'scan-progress-restores-after-return',
               message:
-                '检查更新执行中离开并返回工作空间页后，仍运行时应恢复进度块并禁用操作，已完成时应隐藏进度并恢复按钮，对齐 SET-WORKSPACE-003-AC3。',
+                '检查更新执行中离开并返回工作空间页后，仍运行时应恢复进度块，已完成时应隐藏进度；两个操作按钮全程保持可用，对齐 SET-WORKSPACE-003-AC3。',
               data: result
             }
           )

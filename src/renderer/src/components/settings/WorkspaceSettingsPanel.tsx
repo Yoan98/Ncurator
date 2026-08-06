@@ -443,7 +443,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
   }
 
   const vectorModelMissing = hasVectorModel === false
-  const workspacePrepareDisabled = Boolean(selectedWorkspaceIndexJob) || hasVectorModel !== true
+  const workspacePrepareDisabled = hasVectorModel !== true
   const workspacePrepareTooltip =
     hasVectorModel === null
       ? '正在检查向量模型状态'
@@ -667,7 +667,6 @@ const WorkspaceSettingsPanel: React.FC = () => {
                                     <Button
                                       icon={<HiArrowPath className="h-4 w-4" />}
                                       onClick={() => void handleWorkspaceScan(selectedWorkspace)}
-                                      disabled={Boolean(selectedWorkspaceIndexJob)}
                                       loading={selectedWorkspaceIndexJob?.action === 'scan'}
                                       className="border-[#EEEEEC] bg-white text-[#37352F]"
                                       data-testid={importSelectors.workspaceQuickScanButton}

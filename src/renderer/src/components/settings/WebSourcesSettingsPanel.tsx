@@ -199,7 +199,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
   }
 
   const vectorModelMissing = hasVectorModel === false
-  const webPrepareDisabled = Boolean(webIndexJob) || hasVectorModel !== true
+  const webPrepareDisabled = hasVectorModel !== true
   const webPrepareTooltip =
     hasVectorModel === null
       ? '正在检查向量模型状态'
@@ -280,7 +280,6 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
             <Button
               icon={<HiArrowPath className="h-4 w-4" />}
               onClick={() => void handleScanWebSources()}
-              disabled={Boolean(webIndexJob)}
               loading={webIndexJob?.action === 'scan'}
               className="border-[#EEEEEC] bg-white text-[#37352F]"
             >

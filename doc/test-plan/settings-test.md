@@ -125,7 +125,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 
 - 测试类型：`e2e`
 - What：真实文件检查、网页检查和网页更新索引在程序关闭时被中断，重启后任务退出执行中状态并收敛为失败。
-- Why：后台任务若在进程退出后永久保持 running，会持续禁用操作并给用户错误进度。
+- Why：后台任务若在进程退出后永久保持 running，会残留执行中状态并给用户错误进度。
 - How：通过 Settings UI 对 25,000 个真实文件启动检查；再对延迟响应的本地真实网页分别启动检查和更新索引；每次在进度可见时关闭并复用同一用户目录重启应用。
 - Oracle：文件检查退出执行中状态、按钮恢复且 job 为失败，对齐 `SET-WORKSPACE-003-AC4`；网页检查 job 为失败，对齐 `SET-WEB-003-AC4`；网页索引 job 与执行中的网页均收敛为失败，对齐 `SET-WEB-004-AC6`。
 - Not：只读 SQLite 查询用于确认已触发任务的最终状态，不写数据库、不伪造 running job；文件更新索引的底层记录收敛继续由 unit 覆盖。
@@ -149,7 +149,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - What：点击“更新索引”后，文件状态会刷新为已索引并同步更新摘要。
 - Why：“索引已经可用”的核心用户反馈链路。
 - How：复制共享 workspace 输入的隔离副本，通过 Settings UI 和原生目录选择完成创建与绑定；随后点击更新索引，读取刷新后的文件树和全部支持文件状态。
-- Oracle：更新索引过程中出现持久化总进度，且检查更新/更新索引按钮同时禁用，对齐 `SET-WORKSPACE-004-AC3`；运行期间目录读取次数为 0，终态只刷新一次且不因逐文件完成而闪烁或折叠，对齐 `SET-WORKSPACE-004-AC6`；共享 fixture 中全部支持文件真实进入处理范围，对齐 `SET-WORKSPACE-004-AC1`；更新后所有支持文件收敛为 `indexed / failed`，摘要和节点状态同步刷新，对齐 `SET-WORKSPACE-004-AC2`。
+- Oracle：更新索引过程中出现持久化总进度，且检查更新/更新索引按钮保持可用，对齐 `SET-WORKSPACE-004-AC3`；运行期间目录读取次数为 0，终态只刷新一次且不因逐文件完成而闪烁或折叠，对齐 `SET-WORKSPACE-004-AC6`；共享 fixture 中全部支持文件真实进入处理范围，对齐 `SET-WORKSPACE-004-AC1`；更新后所有支持文件收敛为 `indexed / failed`，摘要和节点状态同步刷新，对齐 `SET-WORKSPACE-004-AC2`。
 - Not：不验证向量内容质量和搜索召回结果。
 
 #### `workspace-prepare-failed-retry`
@@ -176,7 +176,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - What：文件索引执行中离开并返回工作空间页后，进度块和按钮状态会恢复。
 - Why：索引任务已切换为持久化后台 job，页面生命周期不能影响用户对任务状态的判断。
 - How：绑定真实工作空间输入并通过 UI 触发更新索引，执行中切到其他设置页，再返回工作空间页读取 active job 与 UI 状态。
-- Oracle：返回后仍能看到 running job 对应的进度块，且检查更新/更新索引按钮继续禁用，对齐 `SET-WORKSPACE-004-AC4`。
+- Oracle：返回后仍能看到 running job 对应的进度块，且检查更新/更新索引按钮保持可用，对齐 `SET-WORKSPACE-004-AC4`。
 - Not：本 case 不关闭应用；真实进程退出由 `workspace-interrupted-jobs-recovery` 覆盖。
 
 #### `workspace-detail-status-and-error`
@@ -206,7 +206,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - Why：网页索引是“爬取 + 建索引”两阶段链路，失败类型必须可区分。
 - How：预置一条成功网页和一条带失败标记的网页，先执行“检查更新”，再执行“更新索引”。
 - Oracle：网页列表、摘要、失败数量和操作区初始化对齐 `SET-WEB-001-AC1`、`SET-WEB-001-AC2`；检查进度和完成状态对齐 `SET-WEB-003-AC1`、`SET-WEB-003-AC2`；更新时网页进入抓取/索引状态，对齐 `SET-WEB-004-AC1`；成功与失败分别收敛，对齐 `SET-WEB-004-AC2`、`SET-WEB-004-AC3`；分阶段进度对齐 `SET-WEB-004-AC4`。
-- Not：不验证真实网页正文切块、embedding 写入质量和索引失败以外的网络细节。
+- Not：不验证真实网页正文切块、embedding 写入质量和索引失败以外的网络细节；向量模型未安装时“更新索引”禁用与提示由 `SET-WEB-004-AC7` 定义，本 case 运行于共享模型就绪环境，不触发该分支。
 
 #### `web-prepare-progress-restore`
 
@@ -214,7 +214,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - What：网页索引执行中离开并返回网页 tab 后，分阶段进度块和按钮状态会恢复。
 - Why：网页索引包含抓取与索引两阶段，恢复时不能只恢复“执行中”标签而丢失当前阶段。
 - How：通过 UI 添加延迟响应的本地真实网页，触发网页检查和更新索引后分别切到其他设置页，再返回网页 tab 读取 active job 与进度文案。
-- Oracle：检查更新离开再返回时恢复当前进度，对齐 `SET-WEB-003-AC3`；更新索引离开再返回时恢复当前阶段且两个按钮继续禁用，对齐 `SET-WEB-004-AC5`。
+- Oracle：检查更新离开再返回时恢复当前进度，对齐 `SET-WEB-003-AC3`；更新索引离开再返回时恢复当前阶段且两个按钮保持可用，对齐 `SET-WEB-004-AC5`。
 - Not：不验证无抓取动作时直接展示第二步的真实内容缓存分支；该分支由后端 job 状态能力保留。
 
 #### `web-detail-and-delete`

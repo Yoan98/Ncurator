@@ -139,23 +139,23 @@ describe('settings workspace web e2e', () => {
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
-            result.restoredScanProgressVisible && result.restoredScanButtonsDisabled,
+            result.restoredScanProgressVisible && !result.restoredScanButtonsDisabled,
             {
               name: 'web-scan-progress-restores-after-return',
               message:
-                '网页检查更新执行中离开并返回网页 tab 后，应恢复进度并继续禁用两个按钮，对齐 SET-WEB-003-AC3。',
+                '网页检查更新执行中离开并返回网页 tab 后，应恢复进度且两个按钮保持可用，对齐 SET-WEB-003-AC3。',
               data: result
             }
           )
           await runtime.assertThat(
             result.restoredProgressVisible &&
-              result.restoredButtonsDisabled &&
+              !result.restoredButtonsDisabled &&
               result.restoredActiveJob &&
               /步骤 [12]\/2/.test(result.restoredStepText),
             {
               name: 'web-progress-restores-after-return',
               message:
-                '离开并返回网页 tab 后，应通过持久化 running job 恢复分阶段进度并继续禁用两个按钮，对齐 SET-WEB-004-AC5。',
+                '离开并返回网页 tab 后，应通过持久化 running job 恢复分阶段进度且两个按钮保持可用，对齐 SET-WEB-004-AC5。',
               data: result
             }
           )

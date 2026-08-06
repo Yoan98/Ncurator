@@ -110,12 +110,12 @@ describe('settings workspace e2e', () => {
         assert: async (result, runtime) => {
           await runtime.assertThat(
             result.restoredProgressVisible &&
-              result.restoredButtonsDisabled &&
+              !result.restoredButtonsDisabled &&
               result.failedFileCount > 0,
             {
               name: 'file-progress-restores-after-return',
               message:
-                '离开并返回文件 tab 后，应通过持久化 running job 恢复进度块并继续禁用两个按钮，对齐 SET-WORKSPACE-004-AC4。',
+                '离开并返回文件 tab 后，应通过持久化 running job 恢复进度块且两个按钮保持可用，对齐 SET-WORKSPACE-004-AC4。',
               data: result
             }
           )

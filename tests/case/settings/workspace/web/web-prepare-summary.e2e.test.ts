@@ -166,23 +166,23 @@ describe('settings workspace web e2e', () => {
         assert: async (result, runtime) => {
           await runtime.assertThat(
             result.scanProgressVisible &&
-              result.scanButtonsDisabled &&
+              !result.scanButtonsDisabled &&
               result.scanSummary?.needs_index_count === 2 &&
               result.scanStatuses.every((status) => status === 'needs_index'),
             {
               name: 'web-scan-refreshes-summary-before-prepare',
               message:
-                '检查更新时应展示进度、禁用两个索引按钮，并把两条网页资料刷新为可索引状态，对齐 SET-WEB-003-AC1、SET-WEB-003-AC2。',
+                '检查更新时应展示进度且两个索引按钮保持可用，并把两条网页资料刷新为可索引状态，对齐 SET-WEB-003-AC1、SET-WEB-003-AC2。',
               data: result
             }
           )
 
           await runtime.assertThat(
-            result.progressVisible && result.buttonsDisabled && result.crawlStepVisible,
+            result.progressVisible && !result.buttonsDisabled && result.crawlStepVisible,
             {
               name: 'prepare-web-progress-is-visible',
               message:
-                '网页索引执行中应展示抓取/索引进度并禁用两个索引操作按钮，对齐 SET-WEB-004-AC4。',
+                '网页索引执行中应展示抓取/索引进度且两个索引操作按钮保持可用，对齐 SET-WEB-004-AC4。',
               data: result
             }
           )
