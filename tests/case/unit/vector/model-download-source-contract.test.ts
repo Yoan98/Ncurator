@@ -32,6 +32,8 @@ let isolatedModelsPath = ''
 
 const modelDir = (): string => path.join(isolatedModelsPath, REPO_ID)
 
+const realSetTimeout = globalThis.setTimeout
+
 const flushTimersUntilSettled = async (promise: Promise<unknown>): Promise<void> => {
   let done = false
   void promise.then(
@@ -42,8 +44,11 @@ const flushTimersUntilSettled = async (promise: Promise<unknown>): Promise<void>
       done = true
     }
   )
-  for (let i = 0; i < 100 && !done; i += 1) {
-    await vi.advanceTimersByTimeAsync(10_000)
+  for (let i = 0; i < 500 && !done; i += 1) {
+    await vi.runAllTimersAsync()
+    if (!done) {
+      await new Promise<void>((resolve) => realSetTimeout(resolve, 0))
+    }
   }
 }
 
