@@ -100,14 +100,14 @@ describe('settings workspace web e2e', () => {
               await navigateToSettingsSection(page, 'workspace')
               await workspaceCardLocator(page, workspaceId).click()
               await page.getByRole('tab', { name: '网页 2' }).click()
-              await page.getByRole('button', { name: '检查更新' }).click()
+              await page.getByRole('button', { name: '检查更新', exact: true }).click()
               await page.getByTestId(importSelectors.webSourceIndexJobProgress).waitFor({
                 state: 'visible'
               })
               scanProgressVisible = true
               scanButtonsDisabled =
-                (await page.getByRole('button', { name: '检查更新' }).isDisabled()) &&
-                (await page.getByRole('button', { name: '更新索引' }).isDisabled())
+                (await page.getByRole('button', { name: '检查更新', exact: true }).isDisabled()) &&
+                (await page.getByRole('button', { name: '更新索引', exact: true }).isDisabled())
               await waitForWebIndexJobIdle(page, workspaceId)
               const scanResult = await page.evaluate(async (selectedWorkspaceId) => {
                 return await window.api.webSourceList({
@@ -123,7 +123,7 @@ describe('settings workspace web e2e', () => {
             name: 'prepare-web-sources',
             message: '点击更新索引，确认成功和失败结果都被写回列表状态。',
             run: async () => {
-              await page.getByRole('button', { name: '更新索引' }).click()
+              await page.getByRole('button', { name: '更新索引', exact: true }).click()
               await page.getByTestId(importSelectors.webSourceIndexJobProgress).waitFor({
                 state: 'visible'
               })
@@ -135,8 +135,8 @@ describe('settings workspace web e2e', () => {
               progressText = (await progressBlock.innerText()) || ''
               progressVisible = true
               buttonsDisabled =
-                (await page.getByRole('button', { name: '检查更新' }).isDisabled()) &&
-                (await page.getByRole('button', { name: '更新索引' }).isDisabled())
+                (await page.getByRole('button', { name: '检查更新', exact: true }).isDisabled()) &&
+                (await page.getByRole('button', { name: '更新索引', exact: true }).isDisabled())
               await waitForPreparedWebSources(page, workspaceId)
               await waitForWebIndexJobIdle(page, workspaceId)
             }

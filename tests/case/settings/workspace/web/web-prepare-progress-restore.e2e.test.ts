@@ -58,7 +58,7 @@ describe('settings workspace web e2e', () => {
               await navigateToSettingsSection(page, 'workspace')
               await workspaceCardLocator(page, workspaceId).click()
               await page.getByRole('tab', { name: '网页 1' }).click()
-              await page.getByRole('button', { name: '检查更新' }).click()
+              await page.getByRole('button', { name: '检查更新', exact: true }).click()
               await page.getByTestId(importSelectors.webSourceIndexJobProgress).waitFor({
                 state: 'visible'
               })
@@ -73,13 +73,13 @@ describe('settings workspace web e2e', () => {
                 .getByTestId(importSelectors.webSourceIndexJobProgress)
                 .isVisible()
               restoredScanButtonsDisabled =
-                (await page.getByRole('button', { name: '检查更新' }).isDisabled()) &&
-                (await page.getByRole('button', { name: '更新索引' }).isDisabled())
+                (await page.getByRole('button', { name: '检查更新', exact: true }).isDisabled()) &&
+                (await page.getByRole('button', { name: '更新索引', exact: true }).isDisabled())
               await page.getByTestId(importSelectors.webSourceIndexJobProgress).waitFor({
                 state: 'hidden',
                 timeout: SETTINGS_WEB_E2E_TIMEOUT_MS
               })
-              await page.getByRole('button', { name: '更新索引' }).click()
+              await page.getByRole('button', { name: '更新索引', exact: true }).click()
               await page.getByTestId(importSelectors.webSourceIndexJobProgress).waitFor({
                 state: 'visible'
               })
@@ -114,8 +114,8 @@ describe('settings workspace web e2e', () => {
                 .getByTestId(importSelectors.webSourceIndexJobProgress)
                 .isVisible()
               restoredButtonsDisabled =
-                (await page.getByRole('button', { name: '检查更新' }).isDisabled()) &&
-                (await page.getByRole('button', { name: '更新索引' }).isDisabled())
+                (await page.getByRole('button', { name: '检查更新', exact: true }).isDisabled()) &&
+                (await page.getByRole('button', { name: '更新索引', exact: true }).isDisabled())
               restoredActiveJob =
                 activeJobResponse.success && activeJobResponse.job?.status === 'running'
             }

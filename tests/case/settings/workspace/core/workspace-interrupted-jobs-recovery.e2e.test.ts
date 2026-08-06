@@ -124,7 +124,7 @@ describe('settings workspace recovery e2e', () => {
           await navigateToSettingsSection(page, 'workspace')
           await workspaceCardLocator(page, workspaceId).click()
           await page.getByRole('tab', { name: /网页/u }).click()
-          await page.getByRole('button', { name: '检查更新' }).click()
+          await page.getByRole('button', { name: '检查更新', exact: true }).click()
           await page.getByTestId(importSelectors.webSourceIndexJobProgress).waitFor({
             state: 'visible'
           })
@@ -146,7 +146,7 @@ describe('settings workspace recovery e2e', () => {
             .getByTestId(importSelectors.webSourceIndexJobProgress)
             .isHidden()
 
-          await page.getByRole('button', { name: '更新索引' }).click()
+          await page.getByRole('button', { name: '更新索引', exact: true }).click()
           await page.getByTestId(importSelectors.webSourceIndexJobProgress).waitFor({
             state: 'visible'
           })
