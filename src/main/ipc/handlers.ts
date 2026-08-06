@@ -11,6 +11,7 @@ import { VectorModelDownloadService } from '../services/model/VectorModelDownloa
 import { fetchLlmRemoteModels } from '../services/llm/modelCatalog'
 import { AttachmentService } from '../services/attachments/AttachmentService'
 import { SUPPORTED_ATTACHMENT_EXTENSIONS } from '../../shared/attachmentFormats'
+import { isModelSource } from '../../shared/modelSources'
 import { ChatRunService } from '../services/ai/ChatRunService'
 import { AiRunResourceManager } from '../services/ai/run/AiRunResourceManager'
 import { AiFileChangeService } from '../services/ai/fileChanges/AiFileChangeService'
@@ -2220,9 +2221,9 @@ export function registerHandlers(services: {
     return Boolean(normalizedPath) && fs.existsSync(normalizedPath)
   })
 
-  ipcMain.handle('download-model', async (_event, repoId: string) => {
+  ipcMain.handle('download-model', async (_event, repoId: string, source?: unknown) => {
     try {
-      return await vectorModelDownloadService.startDownload(repoId)
+      return await vectorModelDownloadService.startDownload(repoId, isModelSource(source) ? source : undefined)
     } catch (error) {
       console.error('❌ [DOWNLOAD-MODEL] ERROR:', error)
       return { success: false, error: getErrorMessage(error) }

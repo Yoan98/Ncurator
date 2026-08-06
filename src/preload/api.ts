@@ -1,3 +1,4 @@
+import type { ModelSource } from '../shared/modelSources'
 import type {
   AiRuntimeSettings,
   BrowserPanelBoundsRequest,
@@ -118,6 +119,8 @@ export type DownloadProgress = {
   totalFiles?: number
   completedFiles?: number
   error?: string
+  source?: ModelSource
+  failedSource?: ModelSource
 }
 
 export type ActiveDownloadSnapshot = {
@@ -127,6 +130,7 @@ export type ActiveDownloadSnapshot = {
   currentFile: string
   totalFiles: number
   completedFiles: number
+  source: ModelSource
   updatedAt: number
 }
 
@@ -171,7 +175,10 @@ export type DesktopApi = {
   webSourceDelete: (payload: DeleteWebSourceRequest) => Promise<DeleteWebSourceResponse>
   legacyLocalImportMigrationStatus: () => Promise<LegacyLocalImportMigrationStatus | null>
   sourceListRefresh: (cb: () => void) => () => void
-  downloadModel: (repoId: string) => Promise<{ success: boolean; error?: string }>
+  downloadModel: (
+    repoId: string,
+    source?: ModelSource
+  ) => Promise<{ success: boolean; error?: string }>
   onDownloadProgress: (cb: (progressData: DownloadProgress) => void) => void
   removeDownloadProgressListeners: () => void
   getActiveDownload: () => Promise<ActiveDownloadSnapshot | null>

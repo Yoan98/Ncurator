@@ -112,7 +112,13 @@ export const vectorSelectors = {
   installedBadgePrefix: 'vector-installed-badge',
   progressPrefix: 'vector-download-progress',
   currentFilePrefix: 'vector-download-current-file',
-  errorPrefix: 'vector-download-error'
+  errorPrefix: 'vector-download-error',
+  switchSourceButtonPrefix: 'vector-switch-source-button',
+  sourceModal: 'vector-source-modal',
+  sourceRadioPrefix: 'vector-source-radio',
+  sourceConfirmButton: 'vector-source-confirm-button',
+  sourceCancelButton: 'vector-source-cancel-button',
+  failedSourceTagPrefix: 'vector-failed-source-tag'
 } as const
 
 export const workbenchSelectors = {

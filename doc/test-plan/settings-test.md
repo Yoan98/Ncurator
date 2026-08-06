@@ -253,7 +253,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - Why：模型下载是索引前置能力，必须验证应用现有下载逻辑、真实网络传输、真实落盘和用户操作形成完整闭环。
 - How：关闭代理软件 TUN 模式，在临时模型目录和隔离的 Electron 子进程用户目录中启动真实应用，避免复用本机已有模型；从 Settings 点击产品列表中的模型下载，离开并返回页面，等待下载完成，再分别取消和确认删除。
 - Oracle：下载中展示当前文件、文件完成数和总进度，离开页面后任务继续且返回时恢复进度，对齐 `SET-VECTOR-002`；完成后显示已安装，网络失败则 case 失败并保留 raw logs，对齐 `SET-VECTOR-003`；删除先确认、取消后仍安装、确认后恢复下载入口，对齐 `SET-VECTOR-004`。临时模型目录不与其他安装共享，删除后重新下载为真实完整下载，对齐 `SET-VECTOR-004-AC7`。
-- Not：不修改产品模型清单、下载地址、文件内容、下载服务或生产代码；临时模型目录只隔离测试落盘数据，不改变下载逻辑。测试不主动制造网络和文件系统故障。
+- Not：不修改产品模型清单、下载地址、文件内容、下载服务或生产代码；临时模型目录只隔离测试落盘数据，不改变下载逻辑。测试不主动制造网络和文件系统故障。更换源交互的状态机由 unit 契约测试覆盖，不在此处注入下载故障。
 
 #### `vector-model-download-delete-while-active`
 
@@ -263,6 +263,15 @@ Settings 顶层 suite 对齐 PRD 模块：
 - How：关闭代理软件 TUN 模式，在临时模型目录和隔离的 Electron 子进程用户目录中启动真实应用；点击下载并等待进度进入大文件（`onnx/model.onnx`）流式传输阶段，立即点击删除并确认，观察进度消失、下载入口恢复、模型目录移除且无错误提示。
 - Oracle：下载中展示删除入口且确认弹框说明删除将取消下载，确认后进度消失并恢复下载入口，对齐 `SET-VECTOR-004-AC5`；页面不出现下载失败错误，对齐 `SET-VECTOR-004-AC6`；下载与删除均只由真实用户操作触发各一次产品 IPC。
 - Not：不等待下载完成；不修改产品模型清单、下载地址、文件内容、下载服务或生产代码；不验证磁盘上遗留 `.part` 临时文件之外的其他产物。
+
+#### `vector-model-download-source-switch`（unit）
+
+- 测试类型：`unit`（`model-download-source-contract`，运行于 backend workflow）
+- What：向量模型下载按选定源构造元数据与文件请求；失败后清理残留并上报失败源；默认源为 ModelScope 镜像；换源不自动发生。
+- Why：换源下载是对国内网络环境的可靠性兜底，源选择、失败清理与错误标识的错误会导致用户无法完成模型安装或重复下载同一失败源。
+- How：mock fetch 后调用 `ModelService.downloadModel`，分别断言 modelscope 与 huggingface-mirror 的元数据 URL、文件 URL 与默认源；模拟文件下载失败与元数据失败，断言抛出 `ModelDownloadError`、携带正确 `source`/`failedSource`、模型目录被清理。
+- Oracle：`downloadModel` 默认使用 ModelScope 源；modelscope 源只请求 `www.modelscope.cn` 端点，huggingface-mirror 源只请求 `hf-mirror.com` 端点；失败后模型目录被删除、错误事件带失败源，对齐 `SET-VECTOR-003-AC3/AC4/AC6`。
+- Not：不访问真实网络；不覆盖 UI 弹窗交互（由 e2e 回归时人工或 fixture 验证）。
 
 ### 3.6 `general`
 

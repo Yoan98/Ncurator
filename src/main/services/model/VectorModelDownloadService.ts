@@ -2,8 +2,9 @@ import fs from 'fs'
 import path from 'path'
 import type { EmbeddingService } from '../vector/EmbeddingService'
 import { getModelsPath } from '../../utils/paths'
+import { DEFAULT_MODEL_SOURCE, isModelSource, type ModelSource } from '../../../shared/modelSources'
 import type { ModelDownloadProgress } from './ModelService'
-import { ModelService } from './ModelService'
+import { ModelDownloadError, ModelService } from './ModelService'
 
 const ACTIVE_DOWNLOAD_SNAPSHOT_FILE = '.active-vector-download.json'
 
@@ -17,6 +18,7 @@ export type ActiveVectorDownloadSnapshot = {
   currentFile: string
   totalFiles: number
   completedFiles: number
+  source: ModelSource
   updatedAt: number
 }
 
@@ -87,7 +89,8 @@ export class VectorModelDownloadService {
   }
 
   public async startDownload(
-    repoId: string
+    repoId: string,
+    source?: ModelSource
   ): Promise<{ success: boolean; error?: string; cancelled?: boolean }> {
     const existing = this.activeDownload
     if (existing) {
@@ -100,6 +103,11 @@ export class VectorModelDownloadService {
       }
     }
 
+    const resolvedSource =
+      source ??
+      (this.activeSnapshot?.repoId === repoId ? this.activeSnapshot.source : undefined) ??
+      DEFAULT_MODEL_SOURCE
+
     this.setSnapshot({
       repoId,
       status: 'downloading',
@@ -108,13 +116,14 @@ export class VectorModelDownloadService {
       totalFiles: this.activeSnapshot?.repoId === repoId ? this.activeSnapshot.totalFiles : 0,
       completedFiles:
         this.activeSnapshot?.repoId === repoId ? this.activeSnapshot.completedFiles : 0,
+      source: resolvedSource,
       updatedAt: Date.now()
     })
 
     this.downloadAbortController?.abort()
     this.downloadAbortController = new AbortController()
     const signal = this.downloadAbortController.signal
-    const task = this.runDownload(repoId, signal)
+    const task = this.runDownload(repoId, resolvedSource, signal)
     this.activeDownload = {
       repoId,
       task
@@ -157,15 +166,17 @@ export class VectorModelDownloadService {
 
   private async runDownload(
     repoId: string,
+    source: ModelSource,
     signal?: AbortSignal
-  ): Promise<{ success: boolean; error?: string }> {
+  ): Promise<{ success: boolean; error?: string; failedSource?: ModelSource }> {
     const result = await this.deps.modelService
       .downloadModel(
         repoId,
         (payload) => {
           this.handleProgress(payload)
         },
-        signal
+        signal,
+        source
       )
       .then(async (value) => {
         await this.deps.embeddingService.initialize().catch(() => undefined)
@@ -173,20 +184,23 @@ export class VectorModelDownloadService {
       })
       .catch((error: unknown) => ({
         success: false,
-        error: getErrorMessage(error)
+        error: getErrorMessage(error),
+        failedSource: error instanceof ModelDownloadError ? error.source : source
       }))
 
     if (result.success) {
       this.emit({
         repoId,
         status: 'completed',
-        progress: 100
+        progress: 100,
+        source
       })
     } else if (this.downloadAbortController?.signal.aborted) {
       this.emit({
         repoId,
         status: 'cancelled',
-        progress: this.activeSnapshot?.repoId === repoId ? this.activeSnapshot.progress : 0
+        progress: this.activeSnapshot?.repoId === repoId ? this.activeSnapshot.progress : 0,
+        source
       })
     } else {
       const errorMessage = 'error' in result ? result.error : 'download failed'
@@ -198,7 +212,9 @@ export class VectorModelDownloadService {
         totalFiles: this.activeSnapshot?.repoId === repoId ? this.activeSnapshot.totalFiles : 0,
         completedFiles:
           this.activeSnapshot?.repoId === repoId ? this.activeSnapshot.completedFiles : 0,
-        error: errorMessage || 'download failed'
+        error: errorMessage || 'download failed',
+        source,
+        failedSource: 'failedSource' in result ? result.failedSource : source
       })
     }
 
@@ -218,6 +234,10 @@ export class VectorModelDownloadService {
       currentFile: payload.file || this.activeSnapshot?.currentFile || '',
       totalFiles: payload.totalFiles || this.activeSnapshot?.totalFiles || 0,
       completedFiles: payload.completedFiles || 0,
+      source:
+        this.activeSnapshot?.repoId === payload.repoId && this.activeSnapshot
+          ? this.activeSnapshot.source
+          : (payload.source ?? DEFAULT_MODEL_SOURCE),
       updatedAt: Date.now()
     })
     this.emit(payload)
@@ -248,6 +268,7 @@ export class VectorModelDownloadService {
         currentFile: String(parsed.currentFile || ''),
         totalFiles: Math.max(0, Number(parsed.totalFiles || 0)),
         completedFiles: Math.max(0, Number(parsed.completedFiles || 0)),
+        source: isModelSource(parsed.source) ? parsed.source : DEFAULT_MODEL_SOURCE,
         updatedAt: Number(parsed.updatedAt || Date.now())
       }
     } catch {

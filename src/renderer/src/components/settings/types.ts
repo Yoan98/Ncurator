@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import type { ModelSource } from '../../../../shared/modelSources'
 import type {
   LLMConfig,
   WorkspaceIndexJobRecord,
@@ -60,6 +61,8 @@ export type DownloadProgressPayload = {
   totalFiles?: number
   completedFiles?: number
   error?: string
+  source?: ModelSource
+  failedSource?: ModelSource
 }
 
 export type ActiveDownloadSnapshot = {
@@ -69,5 +72,6 @@ export type ActiveDownloadSnapshot = {
   currentFile: string
   totalFiles: number
   completedFiles: number
+  source: ModelSource
   updatedAt: number
 }

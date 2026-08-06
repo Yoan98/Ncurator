@@ -3,9 +3,12 @@ import path from 'path'
 import { Readable, Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import type { ReadableStream as NodeReadableStream } from 'node:stream/web'
+import { DEFAULT_MODEL_SOURCE, type ModelSource } from '../../../shared/modelSources'
 import { getModelsPath } from '../../utils/paths'
 
 const HF_ENDPOINT = 'https://hf-mirror.com'
+const MODELSCOPE_ENDPOINT = 'https://www.modelscope.cn'
+const MODELSCOPE_REVISION = 'master'
 const DOWNLOAD_LOCK_POLL_MS = 1000
 const DOWNLOAD_LOCK_STALE_MS = 1000 * 60 * 60
 const DOWNLOAD_LOCK_METADATA_FILE = 'owner.json'
@@ -82,9 +85,21 @@ export type ModelDownloadProgress = {
   totalFiles?: number
   completedFiles?: number
   error?: string
+  source?: ModelSource
+  failedSource?: ModelSource
 }
 
 export type ModelDownloadProgressReporter = (event: ModelDownloadProgress) => void
+
+export class ModelDownloadError extends Error {
+  readonly source: ModelSource
+
+  constructor(message: string, source: ModelSource) {
+    super(message)
+    this.name = 'ModelDownloadError'
+    this.source = source
+  }
+}
 
 export interface ModelInfo {
   id: string
@@ -324,6 +339,44 @@ export class ModelService {
     return [...requestedFiles]
   }
 
+  private async fetchModelFileNames(
+    repoId: string,
+    source: ModelSource,
+    signal?: AbortSignal
+  ): Promise<string[]> {
+    if (source === 'modelscope') {
+      const url = `${MODELSCOPE_ENDPOINT}/api/v1/models/${repoId}/repo/files?Revision=${MODELSCOPE_REVISION}&Recursive=true`
+      const payload = await this.fetchJsonWithRetry<{
+        Data?: {
+          Files?: Array<{ Path?: string; Type?: string }>
+        }
+      }>(url, METADATA_FETCH_MAX_ATTEMPTS, signal)
+      return (payload.Data?.Files || [])
+        .filter((file) => file.Type === 'blob' && typeof file.Path === 'string' && file.Path)
+        .map((file) => String(file.Path))
+    }
+
+    const url = `${HF_ENDPOINT}/api/models/${repoId}`
+    const payload = await this.fetchJsonWithRetry<{
+      siblings?: Array<{ rfilename?: string }>
+    }>(url, METADATA_FETCH_MAX_ATTEMPTS, signal)
+    return (payload.siblings || [])
+      .map((file) => String(file.rfilename || ''))
+      .filter((name) => name.length > 0)
+  }
+
+  private resolveFileUrl(repoId: string, filename: string, source: ModelSource): string {
+    if (source === 'modelscope') {
+      return `${MODELSCOPE_ENDPOINT}/api/v1/models/${repoId}/repo?Revision=${MODELSCOPE_REVISION}&FilePath=${filename}`
+    }
+    return `${HF_ENDPOINT}/${repoId}/resolve/main/${filename}`
+  }
+
+  private async cleanupFailedDownload(repoId: string): Promise<void> {
+    await fs.promises.rm(this.resolveModelPath(repoId), { recursive: true, force: true })
+    await fs.promises.rm(this.resolveDownloadLockPath(repoId), { recursive: true, force: true })
+  }
+
   private async writeLockMetadata(lockPath: string): Promise<void> {
     await fs.promises.writeFile(
       path.join(lockPath, DOWNLOAD_LOCK_METADATA_FILE),
@@ -436,7 +489,8 @@ export class ModelService {
   private async performDownload(
     repoId: string,
     reporter?: ModelDownloadProgressReporter,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    source: ModelSource = DEFAULT_MODEL_SOURCE
   ): Promise<{ success: boolean }> {
     const modelPath = this.resolveModelPath(repoId)
 
@@ -445,16 +499,9 @@ export class ModelService {
     }
 
     try {
-      console.log(`[ModelService] Starting download for ${repoId}`)
+      console.log(`[ModelService] Starting download for ${repoId} (source=${source})`)
 
-      const metadataUrl = `${HF_ENDPOINT}/api/models/${repoId}`
-      console.log(`[ModelService] Fetching metadata from ${metadataUrl}`)
-      const metadata = await this.fetchJsonWithRetry<{
-        siblings?: Array<{ rfilename: string }>
-      }>(metadataUrl, METADATA_FETCH_MAX_ATTEMPTS, signal)
-
-      const siblings = metadata.siblings || []
-      const siblingNames = new Set(siblings.map((file) => String(file.rfilename)))
+      const siblingNames = new Set(await this.fetchModelFileNames(repoId, source, signal))
       const filesToDownload = this.resolveFilesToDownload(repoId, siblingNames)
       const persistedState =
         (await this.readJsonFile<ModelDownloadState>(this.resolveDownloadStatePath(repoId))) || null
@@ -474,7 +521,7 @@ export class ModelService {
           throw new Error('download aborted')
         }
 
-        const fileUrl = `${HF_ENDPOINT}/${repoId}/resolve/main/${filename}`
+        const fileUrl = this.resolveFileUrl(repoId, filename, source)
         const filePath = path.join(modelPath, filename)
         const fileDir = path.dirname(filePath)
 
@@ -501,7 +548,8 @@ export class ModelService {
           status: 'downloading',
           progress: baseProgress,
           totalFiles,
-          completedFiles
+          completedFiles,
+          source
         })
 
         let lastProgress = baseProgress
@@ -527,7 +575,8 @@ export class ModelService {
               status: 'downloading',
               progress: nextProgress,
               totalFiles,
-              completedFiles
+              completedFiles,
+              source
             })
           },
           signal
@@ -548,7 +597,8 @@ export class ModelService {
           status: 'downloading',
           progress: Math.round((completedFiles / totalFiles) * 100),
           totalFiles,
-          completedFiles
+          completedFiles,
+          source
         })
       }
 
@@ -558,24 +608,31 @@ export class ModelService {
       this.emitProgress(reporter, {
         repoId,
         status: 'completed',
-        progress: 100
+        progress: 100,
+        source
       })
 
       return { success: true }
     } catch (error: unknown) {
-      console.error('[ModelService] Download error:', error)
+      console.error(`[ModelService] Download error for ${repoId} (source=${source}):`, error)
+      if (!signal?.aborted) {
+        await this.cleanupFailedDownload(repoId)
+      }
       if (signal?.aborted) {
         this.emitProgress(reporter, {
           repoId,
           status: 'cancelled',
-          progress: 0
+          progress: 0,
+          source
         })
       } else {
         this.emitProgress(reporter, {
           repoId,
           status: 'error',
           progress: 0,
-          error: getErrorMessage(error)
+          error: getErrorMessage(error),
+          source,
+          failedSource: source
         })
       }
       throw error
@@ -585,7 +642,8 @@ export class ModelService {
   public async downloadModel(
     repoId: string,
     reporter?: ModelDownloadProgressReporter,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    source: ModelSource = DEFAULT_MODEL_SOURCE
   ): Promise<{ success: boolean }> {
     const releaseLock = await this.acquireDownloadLock(repoId)
     try {
@@ -593,12 +651,20 @@ export class ModelService {
         this.emitProgress(reporter, {
           repoId,
           status: 'completed',
-          progress: 100
+          progress: 100,
+          source
         })
         return { success: true }
       }
 
-      return await this.performDownload(repoId, reporter, signal)
+      try {
+        return await this.performDownload(repoId, reporter, signal, source)
+      } catch (error: unknown) {
+        if (signal?.aborted || error instanceof ModelDownloadError) {
+          throw error
+        }
+        throw new ModelDownloadError(getErrorMessage(error), source)
+      }
     } finally {
       await releaseLock()
     }

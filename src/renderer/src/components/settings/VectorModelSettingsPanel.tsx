@@ -1,6 +1,11 @@
 import React, { useCallback, useEffect, useState } from 'react'
-import { Button, List, Popconfirm, Progress, Tag, message } from 'antd'
+import { Button, List, Modal, Popconfirm, Progress, Radio, Tag, message } from 'antd'
 import { HiCheckCircle, HiExclamationCircle, HiTrash } from 'react-icons/hi2'
+import {
+  MODEL_SOURCES,
+  MODEL_SOURCE_LABELS,
+  type ModelSource
+} from '../../../../shared/modelSources'
 import type {
   ModelInfo,
   DownloadProgressPayload,
@@ -14,8 +19,15 @@ const TEXT = {
   downloadCompleted: '模型下载完成',
   activeTaskWarning: '已有任务正在下载中',
   startDownloadFailed: '启动下载失败',
-  downloadFailedPrefix: '下载失败',
+  downloadFailed: '下载失败',
+  downloadFailedReason: '下载失败：',
   unknownError: '未知错误',
+  switchSource: '更换源下载',
+  switchSourceTitle: '更换下载源',
+  switchSourceDescription: '选择新的下载源后，将从该源重新完整下载模型。',
+  failedSourceTag: '最近失败',
+  switchSourceStart: '开始下载',
+  switchSourceCancel: '取消',
   deleteFailed: '删除模型失败',
   deleteFailedPrefix: '删除失败',
   deleteCompleted: '模型已删除',
@@ -41,10 +53,13 @@ const VectorModelSettingsPanel: React.FC = () => {
   const [catalogError, setCatalogError] = useState('')
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
   const [errorRepoId, setErrorRepoId] = useState<string | null>(null)
+  const [failedSource, setFailedSource] = useState<ModelSource | null>(null)
   const [downloadProgress, setDownloadProgress] = useState(0)
   const [currentFile, setCurrentFile] = useState('')
   const [fileProgress, setFileProgress] = useState({ completed: 0, total: 0 })
   const [errorMsg, setErrorMsg] = useState('')
+  const [switchSourceRepoId, setSwitchSourceRepoId] = useState<string | null>(null)
+  const [switchSourceValue, setSwitchSourceValue] = useState<ModelSource | null>(null)
 
   const fetchModels = useCallback(async (): Promise<void> => {
     setLoading(true)
@@ -70,6 +85,7 @@ const VectorModelSettingsPanel: React.FC = () => {
       if (status === 'downloading') {
         setDownloadingId(data.repoId)
         setErrorRepoId(null)
+        setFailedSource(null)
         setErrorMsg('')
         setDownloadProgress(data.progress)
         setCurrentFile('currentFile' in data ? data.currentFile : data.file || '')
@@ -83,6 +99,7 @@ const VectorModelSettingsPanel: React.FC = () => {
       if (status === 'completed') {
         setDownloadingId(null)
         setErrorRepoId(null)
+        setFailedSource(null)
         setErrorMsg('')
         setDownloadProgress(100)
         void fetchModels()
@@ -93,6 +110,7 @@ const VectorModelSettingsPanel: React.FC = () => {
       if (status === 'cancelled') {
         setDownloadingId(null)
         setErrorRepoId(null)
+        setFailedSource(null)
         setErrorMsg('')
         setDownloadProgress(0)
         setCurrentFile('')
@@ -104,11 +122,12 @@ const VectorModelSettingsPanel: React.FC = () => {
       const nextError = 'error' in data ? data.error || TEXT.unknownError : TEXT.unknownError
       setDownloadingId(null)
       setErrorRepoId(data.repoId)
+      setFailedSource('failedSource' in data ? (data.failedSource ?? null) : null)
       setErrorMsg(nextError)
       if ('file' in data && data.file) {
         setCurrentFile(data.file)
       }
-      message.error(`${TEXT.downloadFailedPrefix}: ${nextError}`)
+      message.error(`${TEXT.downloadFailedReason}${nextError}`)
     },
     [fetchModels]
   )
@@ -137,7 +156,7 @@ const VectorModelSettingsPanel: React.FC = () => {
     }
   }, [applyDownloadState, fetchModels])
 
-  const handleDownload = async (repoId: string): Promise<void> => {
+  const handleDownload = async (repoId: string, source?: ModelSource): Promise<void> => {
     if (downloadingId) {
       message.warning(TEXT.activeTaskWarning)
       return
@@ -145,26 +164,48 @@ const VectorModelSettingsPanel: React.FC = () => {
 
     setDownloadingId(repoId)
     setErrorRepoId(null)
+    setFailedSource(null)
     setDownloadProgress(0)
     setCurrentFile('')
     setFileProgress({ completed: 0, total: 0 })
     setErrorMsg('')
 
     try {
-      const response = await window.api.downloadModel(repoId)
+      const response = await window.api.downloadModel(repoId, source)
       if (!response.success) {
         const messageText = response.error || TEXT.startDownloadFailed
         setDownloadingId(null)
         setErrorRepoId(repoId)
+        setFailedSource(source ?? null)
         setErrorMsg(messageText)
-        message.error(`${TEXT.downloadFailedPrefix}: ${messageText}`)
+        message.error(`${TEXT.downloadFailedReason}${messageText}`)
       }
     } catch (error) {
       const messageText = toErrorMessage(error instanceof Error ? error : String(error))
       setDownloadingId(null)
       setErrorRepoId(repoId)
+      setFailedSource(source ?? null)
       setErrorMsg(messageText)
-      message.error(`${TEXT.downloadFailedPrefix}: ${messageText}`)
+      message.error(`${TEXT.downloadFailedReason}${messageText}`)
+    }
+  }
+
+  const handleOpenSwitchSource = (repoId: string): void => {
+    const preferred =
+      failedSource && MODEL_SOURCES.length > 1
+        ? MODEL_SOURCES.find((source) => source !== failedSource) ?? failedSource
+        : (MODEL_SOURCES[0] ?? null)
+    setSwitchSourceValue(preferred)
+    setSwitchSourceRepoId(repoId)
+  }
+
+  const handleConfirmSwitchSource = async (): Promise<void> => {
+    const repoId = switchSourceRepoId
+    const source = switchSourceValue
+    setSwitchSourceRepoId(null)
+    setSwitchSourceValue(null)
+    if (repoId && source) {
+      await handleDownload(repoId, source)
     }
   }
 
@@ -181,6 +222,7 @@ const VectorModelSettingsPanel: React.FC = () => {
     if (errorRepoId === repoId) {
       setErrorRepoId(null)
       setErrorMsg('')
+      setFailedSource(null)
     }
     message.success(TEXT.deleteCompleted)
     await fetchModels()
@@ -332,11 +374,21 @@ const VectorModelSettingsPanel: React.FC = () => {
 
                       {errorMsg && errorRepoId === item.id ? (
                         <div
-                          className="flex items-center gap-1 text-sm text-[#B3261E]"
+                          className="flex items-center gap-2 text-sm text-[#B3261E]"
                           data-testid={`${vectorSelectors.errorPrefix}-${item.id}`}
                         >
                           <HiExclamationCircle />
-                          {errorMsg}
+                          <span className="font-medium">{TEXT.downloadFailed}</span>
+                          <span className="max-w-[300px] truncate">{errorMsg}</span>
+                          <Button
+                            type="link"
+                            size="small"
+                            className="!h-auto !p-0 !text-[#37352F]"
+                            onClick={() => handleOpenSwitchSource(item.id)}
+                            data-testid={`${vectorSelectors.switchSourceButtonPrefix}-${item.id}`}
+                          >
+                            {TEXT.switchSource}
+                          </Button>
                         </div>
                       ) : null}
                     </div>
@@ -347,6 +399,50 @@ const VectorModelSettingsPanel: React.FC = () => {
           />
         </div>
       </section>
+
+      <Modal
+        title={TEXT.switchSourceTitle}
+        open={Boolean(switchSourceRepoId)}
+        maskClosable={false}
+        onCancel={() => {
+          setSwitchSourceRepoId(null)
+          setSwitchSourceValue(null)
+        }}
+        onOk={() => void handleConfirmSwitchSource()}
+        okText={TEXT.switchSourceStart}
+        cancelText={TEXT.switchSourceCancel}
+        okButtonProps={{ 'data-testid': vectorSelectors.sourceConfirmButton }}
+        cancelButtonProps={{ 'data-testid': vectorSelectors.sourceCancelButton }}
+        className="[&_.ant-modal-content]:!rounded-[8px]"
+        data-testid={vectorSelectors.sourceModal}
+      >
+        <p className="mb-3 text-[#787774]">{TEXT.switchSourceDescription}</p>
+        <Radio.Group
+          value={switchSourceValue}
+          onChange={(event) => setSwitchSourceValue(event.target.value as ModelSource)}
+          className="flex flex-col gap-2"
+        >
+          {MODEL_SOURCES.map((source) => (
+            <Radio
+              key={source}
+              value={source}
+              className="!flex items-center gap-1"
+              data-testid={`${vectorSelectors.sourceRadioPrefix}-${source}`}
+            >
+              <span>{MODEL_SOURCE_LABELS[source]}</span>
+              {failedSource === source ? (
+                <Tag
+                  color="orange"
+                  className="ml-1 !text-xs"
+                  data-testid={`${vectorSelectors.failedSourceTagPrefix}-${source}`}
+                >
+                  {TEXT.failedSourceTag}
+                </Tag>
+              ) : null}
+            </Radio>
+          ))}
+        </Radio.Group>
+      </Modal>
     </div>
   )
 }
