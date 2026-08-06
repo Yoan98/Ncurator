@@ -246,9 +246,6 @@ if (!singleInstanceLock) {
     })
 
     console.log('Starting background initialization of services...')
-    await modelService
-      .reuseDownloadedModelFromAlternatePath(DEFAULT_EMBEDDING_MODEL_NAME)
-      .catch((err) => console.error('Failed to reuse downloaded embedding model:', err))
     embeddingService
       .initialize()
       .catch((err) => console.error('Failed to initialize EmbeddingService:', err))

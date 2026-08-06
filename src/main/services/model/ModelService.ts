@@ -3,7 +3,7 @@ import path from 'path'
 import { Readable, Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import type { ReadableStream as NodeReadableStream } from 'node:stream/web'
-import { getModelsPath, listModelPathCandidates } from '../../utils/paths'
+import { getModelsPath } from '../../utils/paths'
 
 const HF_ENDPOINT = 'https://hf-mirror.com'
 const DOWNLOAD_LOCK_POLL_MS = 1000
@@ -158,31 +158,6 @@ export class ModelService {
     }
 
     return fs.readdirSync(modelPath).length > 0
-  }
-
-  private listAlternateDownloadedModelPaths(repoId: string): string[] {
-    const currentModelPath = this.resolveModelPath(repoId)
-    return listModelPathCandidates()
-      .map((modelsPath) => path.join(modelsPath, repoId))
-      .filter((candidate) => path.resolve(candidate) !== path.resolve(currentModelPath))
-      .filter((candidate) => this.isModelDownloadedAtPath(repoId, candidate))
-  }
-
-  public async reuseDownloadedModelFromAlternatePath(repoId: string): Promise<boolean> {
-    const alternatePath = this.listAlternateDownloadedModelPaths(repoId)[0]
-    if (!alternatePath) {
-      return false
-    }
-
-    const modelPath = this.resolveModelPath(repoId)
-    await fs.promises.mkdir(path.dirname(modelPath), { recursive: true })
-    await fs.promises.rm(modelPath, { recursive: true, force: true })
-    await fs.promises.symlink(
-      alternatePath,
-      modelPath,
-      process.platform === 'win32' ? 'junction' : 'dir'
-    )
-    return true
   }
 
   private hasNonEmptyFile(filePath: string): boolean {
@@ -623,15 +598,6 @@ export class ModelService {
         return { success: true }
       }
 
-      if (await this.reuseDownloadedModelFromAlternatePath(repoId)) {
-        this.emitProgress(reporter, {
-          repoId,
-          status: 'completed',
-          progress: 100
-        })
-        return { success: true }
-      }
-
       return await this.performDownload(repoId, reporter, signal)
     } finally {
       await releaseLock()
@@ -646,40 +612,51 @@ export class ModelService {
   ) {
     const tempPath = `${destPath}.part`
     const existingPartialBytes = this.hasNonEmptyFile(tempPath) ? fs.statSync(tempPath).size : 0
-    const response = await this.fetchWithTimeout(
-      url,
-      FILE_FETCH_TIMEOUT_MS,
-      {
+
+    const controller = new AbortController()
+    const abortFromSignal = (): void => {
+      controller.abort()
+    }
+    signal?.addEventListener('abort', abortFromSignal, { once: true })
+    const headerTimeout = setTimeout(() => {
+      controller.abort()
+    }, FILE_FETCH_TIMEOUT_MS)
+
+    let fileStream: fs.WriteStream | null = null
+    try {
+      if (signal?.aborted) {
+        controller.abort()
+      }
+      const response = await fetch(url, {
         headers:
           existingPartialBytes > 0
             ? {
                 Range: `bytes=${String(existingPartialBytes)}-`
               }
-            : undefined
-      },
-      signal
-    )
+            : undefined,
+        signal: controller.signal
+      })
+      clearTimeout(headerTimeout)
 
-    if (response.status !== 200 && response.status !== 206) {
-      throw new Error(`Failed to download ${url}: ${response.status} ${response.statusText}`)
-    }
-    if (!response.body) throw new Error(`No body in response for ${url}`)
+      if (response.status !== 200 && response.status !== 206) {
+        throw new Error(`Failed to download ${url}: ${response.status} ${response.statusText}`)
+      }
+      if (!response.body) throw new Error(`No body in response for ${url}`)
 
-    let fileStartBytes = 0
-    let fileFlags: 'w' | 'a' = 'w'
-    if (existingPartialBytes > 0 && response.status === 206) {
-      fileStartBytes = existingPartialBytes
-      fileFlags = 'a'
-    } else if (existingPartialBytes > 0) {
-      await fs.promises.rm(tempPath, { force: true })
-    }
+      let fileStartBytes = 0
+      let fileFlags: 'w' | 'a' = 'w'
+      if (existingPartialBytes > 0 && response.status === 206) {
+        fileStartBytes = existingPartialBytes
+        fileFlags = 'a'
+      } else if (existingPartialBytes > 0) {
+        await fs.promises.rm(tempPath, { force: true })
+      }
 
-    const fileStream = fs.createWriteStream(tempPath, { flags: fileFlags })
-    const chunkLength = +(response.headers.get('Content-Length') || 0)
-    const totalLength = chunkLength > 0 ? fileStartBytes + chunkLength : 0
-    let receivedLength = fileStartBytes
+      fileStream = fs.createWriteStream(tempPath, { flags: fileFlags })
+      const chunkLength = +(response.headers.get('Content-Length') || 0)
+      const totalLength = chunkLength > 0 ? fileStartBytes + chunkLength : 0
+      let receivedLength = fileStartBytes
 
-    try {
       const source = Readable.fromWeb(response.body as NodeReadableStream<Uint8Array>)
       const progressStream = new Transform({
         transform(chunk, _encoding, callback) {
@@ -691,10 +668,14 @@ export class ModelService {
         }
       })
       await pipeline(source, progressStream, fileStream)
+      fileStream = null
       await fs.promises.rename(tempPath, destPath)
     } catch (error: unknown) {
-      fileStream.destroy()
+      fileStream?.destroy()
       throw error
+    } finally {
+      clearTimeout(headerTimeout)
+      signal?.removeEventListener('abort', abortFromSignal)
     }
   }
 }

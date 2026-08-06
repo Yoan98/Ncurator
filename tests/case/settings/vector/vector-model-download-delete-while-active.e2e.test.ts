@@ -49,11 +49,16 @@ describe('settings vector real download e2e', () => {
             await downloadButton.click()
 
             const progress = getSettingsLocator(page, modelLocator(vectorSelectors.progressPrefix))
-            await progress.waitFor({ state: 'visible', timeout: 60_000 })
+            await progress.waitFor({ state: 'visible', timeout: 180_000 })
             await page.waitForFunction(
               (testId) =>
-                Boolean(document.querySelector(`[data-testid="${testId}"]`)?.textContent?.trim()),
-              modelLocator(vectorSelectors.currentFilePrefix)
+                Boolean(
+                  document
+                    .querySelector(`[data-testid="${testId}"]`)
+                    ?.textContent?.includes('onnx/model.onnx')
+                ),
+              modelLocator(vectorSelectors.currentFilePrefix),
+              { timeout: 180_000 }
             )
             const progressText = (await progress.innerText()) || ''
 
