@@ -3,10 +3,7 @@ import { readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 import { promisify } from 'node:util'
-import {
-  assertWindowsReleaseRouteAvailable,
-  inspectLocalWindowsRelease
-} from './shared/windows.mjs'
+import { inspectLocalWindowsRelease } from './shared/windows.mjs'
 import {
   compareReleaseVersions,
   createReleaseTag,
@@ -27,19 +24,13 @@ const platform = valueAfter('--platform') || ''
 const releaseTag =
   RELEASE_VERSION_PATTERN.test(version) && platform ? createReleaseTag(platform, version) : ''
 const notes = valueAfter('--notes') || `Ncurator ${releaseTag}`
-const forceLocal = args.includes('--local-only')
-const forceActions = args.includes('--actions')
 const pnpmExecutable = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
 const stageDeadline = createReleaseStageDeadline('release preparation')
 
 if (!RELEASE_VERSION_PATTERN.test(version) || !['mac', 'windows'].includes(platform)) {
   throw new Error(
-    'usage: node scripts/release/prepare.mjs --platform <mac|windows> --version <1.2.3> [--notes <text>] [--local-only|--actions]'
+    'usage: node scripts/release/prepare.mjs --platform <mac|windows> --version <1.2.3> [--notes <text>]'
   )
-}
-if (forceLocal && forceActions) throw new Error('--local-only and --actions cannot be combined')
-if (platform === 'mac' && (forceLocal || forceActions)) {
-  throw new Error('mac release preparation cannot use Windows route options')
 }
 
 const run = (command, commandArgs) =>
@@ -103,13 +94,12 @@ const tagExists = await execFileAsync('git', ['rev-parse', '--verify', '--quiet'
 if (tagExists) throw new Error(`tag already exists: ${releaseTag}`)
 
 if (platform === 'windows') {
-  const localInspection = forceActions ? undefined : await inspectLocalWindowsRelease(ROOT)
-  await assertWindowsReleaseRouteAvailable({
-    root: ROOT,
-    forceLocal,
-    forceActions,
-    localInspection
-  })
+  const localInspection = await inspectLocalWindowsRelease(ROOT)
+  if (!localInspection.ready) {
+    throw new Error(
+      `local Windows release is unavailable:\n- ${localInspection.issues.join('\n- ')}`
+    )
+  }
 }
 
 await Promise.all([
@@ -139,12 +129,9 @@ if (platform === 'mac') {
   process.exit(0)
 }
 
-const routeArgs = [
+await run(process.execPath, [
   path.join(ROOT, 'scripts', 'release', 'windows.mjs'),
   '--tag',
   releaseTag,
   '--prepare-only'
-]
-if (forceLocal) routeArgs.push('--local-only')
-if (forceActions) routeArgs.push('--actions')
-await run(process.execPath, routeArgs)
+])

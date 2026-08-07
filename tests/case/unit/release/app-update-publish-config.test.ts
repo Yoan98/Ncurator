@@ -42,9 +42,8 @@ describe('app update publish config', () => {
     expect(config.linux).toBeUndefined()
   })
 
-  it('uses one Windows pipeline with a local or Actions build backend', async () => {
-    const [workflow, packageJsonText, windowsRelease, prepareRelease] = await Promise.all([
-      readFile(path.resolve('.github/workflows/release.yml'), 'utf8'),
+  it('runs the Windows pipeline on a local build backend only', async () => {
+    const [packageJsonText, windowsRelease, prepareRelease] = await Promise.all([
       readFile(path.resolve('package.json'), 'utf8'),
       readFile(path.resolve('scripts/release/windows.mjs'), 'utf8'),
       readFile(path.resolve('scripts/release/prepare.mjs'), 'utf8')
@@ -53,20 +52,13 @@ describe('app update publish config', () => {
       scripts: Record<string, string>
     }
 
-    expect(workflow).toContain('workflow_dispatch:')
-    expect(workflow).not.toMatch(/push:\s*\n\s*tags:/u)
-    expect(workflow).not.toContain('package_e2e:')
-    expect(workflow).toContain('- test')
-    expect(workflow).toContain('candidate_run_id:')
-    expect(workflow).toContain('test_domain:')
-    expect(workflow).not.toContain('keep_old:')
-    expect(workflow).toContain('test-windows:')
-    expect(workflow).toContain('actions/upload-artifact@v4')
-    expect(workflow).toContain('actions/download-artifact@v4')
     expect(packageJson.scripts['release:win']).toContain('release/windows.mjs')
     expect(packageJson.scripts['release:win:auto']).toBeUndefined()
-    expect(windowsRelease).toContain('dispatchWindowsRelease')
-    expect(windowsRelease).toContain("route === 'actions'")
+    expect(windowsRelease).toContain('inspectLocalWindowsRelease')
+    expect(windowsRelease).not.toContain('dispatchWindowsRelease')
+    expect(windowsRelease).not.toContain('--actions')
+    expect(windowsRelease).not.toContain('--local-only')
+    expect(windowsRelease).not.toContain('--candidate-run-id')
     expect(windowsRelease).not.toContain('--package-e2e')
     expect(windowsRelease).toContain('readRegressionSelection')
     expect(windowsRelease).not.toContain('--keep-old')
@@ -84,6 +76,7 @@ describe('app update publish config', () => {
     expect(prepareRelease).toContain("'typecheck:web'")
     expect(prepareRelease).not.toContain('test:update:e2e')
     expect(prepareRelease).not.toContain('--package-e2e')
+    expect(prepareRelease).not.toContain('--actions')
   })
 
   it('finalizes Windows and macOS release channels independently', async () => {

@@ -33,7 +33,3 @@ if (!inspection.ready) {
   })
   process.stdout.write('- Cloudflare R2 access: ready\n')
 }
-
-process.stdout.write(
-  `GitHub Actions fallback: ${String(process.env.NCURATOR_ACTIONS_TOKEN || '').trim() ? 'configured' : 'not configured (optional for local-only releases)'}\n`
-)

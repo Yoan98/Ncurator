@@ -13,8 +13,6 @@ import {
   recordCandidateE2E
 } from './candidate.mjs'
 import {
-  assertWindowsReleaseRouteAvailable,
-  dispatchWindowsRelease,
   inspectLocalWindowsRelease,
   readPublicReleaseFragment,
   verifyPublicReleaseFragment,
@@ -35,9 +33,6 @@ const valueAfter = (name) => {
   return index >= 0 ? args[index + 1] : undefined
 }
 const releaseTag = valueAfter('--tag') || ''
-const forceLocal = args.includes('--local-only')
-const forceActions = args.includes('--actions')
-const candidateRunId = valueAfter('--candidate-run-id') || ''
 const regression = readRegressionSelection(args)
 const modes = [
   ['prepare', args.includes('--prepare-only')],
@@ -53,16 +48,12 @@ try {
 }
 if (!releaseVersion || modes.length !== 1) {
   throw new Error(
-    'usage: node scripts/release/windows.mjs --tag <windows-v1.2.3> (--prepare-only|--test-only|--publish-only) [--local-only|--actions] [--candidate-run-id <id>] [--domain <name>] [--suite <name>] [--group <name>] [--case <caseId>] [--fresh-knowledge-cache]'
+    'usage: node scripts/release/windows.mjs --tag <windows-v1.2.3> (--prepare-only|--test-only|--publish-only) [--domain <name>] [--suite <name>] [--group <name>] [--case <caseId>] [--fresh-knowledge-cache]'
   )
 }
-if (forceLocal && forceActions) throw new Error('--local-only and --actions cannot be combined')
 const mode = modes[0][0]
 if (mode !== 'test' && hasRegressionSelectionArgs(args)) {
   throw new Error('regression selection options are only valid with --test-only')
-}
-if (candidateRunId && !['test', 'publish'].includes(mode)) {
-  throw new Error('--candidate-run-id is only valid for Actions test-only or publish-only')
 }
 
 const run = (command, commandArgs, options = {}) =>
@@ -84,28 +75,10 @@ const run = (command, commandArgs, options = {}) =>
   })
 
 const requirePublish = mode === 'publish'
-const localInspection = forceActions
-  ? undefined
-  : await inspectLocalWindowsRelease(ROOT, { requirePublish })
-const route = await assertWindowsReleaseRouteAvailable({
-  root: ROOT,
-  forceLocal,
-  forceActions,
-  localInspection
-})
-if (route === 'actions') {
-  if (['test', 'publish'].includes(mode) && !candidateRunId) {
-    throw new Error(`--candidate-run-id is required for Actions ${mode}-only`)
-  }
-  await dispatchWindowsRelease(ROOT, releaseTag, {
-    mode,
-    candidateRunId,
-    regression: regression.state
-  })
-  process.exit(0)
+const inspection = await inspectLocalWindowsRelease(ROOT, { requirePublish })
+if (!inspection.ready) {
+  throw new Error(`local Windows release is unavailable:\n- ${inspection.issues.join('\n- ')}`)
 }
-if (candidateRunId) throw new Error('--candidate-run-id is only valid for the Actions route')
-const inspection = localInspection
 
 const { stdout: tagType } = await execFileAsync('git', ['cat-file', '-t', releaseTag], {
   cwd: ROOT

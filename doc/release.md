@@ -41,12 +41,10 @@ node scripts/test/workflow.mjs --type backend --exclude-group live
 
 这些是创建 Tag 前的基础检查，不是正式包回归：两套 typecheck 并行执行；全部 Unit、update backend 和除 `live` 外的 AI 测试进入统一的 6 worker backend 队列，避免重复执行 update 子集。检查通过后，脚本更新 `package.json`、提交版本号、创建 annotated Tag，并原子推送 `main` 与 Tag。
 
-Windows 随后按本地优先的路线构建候选包；macOS 只创建 Tag，候选包需要在 Apple Silicon Mac 上单独构建。
+Windows 在本地 Windows x64 构建候选包；macOS 只创建 Tag，候选包需要在 Apple Silicon Mac 上单独构建。
 
 ```bash
 pnpm release:start -- --platform windows --version X.Y.Z
-pnpm release:start -- --platform windows --version X.Y.Z --local-only
-pnpm release:start -- --platform windows --version X.Y.Z --actions
 pnpm release:start -- --platform mac --version X.Y.Z
 ```
 
@@ -120,25 +118,12 @@ pnpm release:status -- --tag <windows-vX.Y.Z|mac-vX.Y.Z>
 
 ### Windows
 
-Windows 默认优先在本地 Windows x64 构建。本地环境不可用且配置了 `NCURATOR_ACTIONS_TOKEN` 时，自动回退到手动 dispatch 的 GitHub Actions。
-
-- `--local-only`：强制本地构建，不满足条件就失败。
-- `--actions`：强制使用 GitHub Actions。
-- Actions checkout 指定 Tag，不从浮动 `main` 构建。
-- Actions prepare 后保存完整候选包 Artifact，保留 14 天。
-- Actions test 下载 prepare 或上一次 test 的候选包，完成正式包 E2E 后重新保存候选包。
-- Actions publish 必须使用测试阶段的 run id，下载原候选包发布，不重新构建。
+Windows 在本地 Windows x64 构建，不提供远程构建路线；本地环境不满足要求时发布失败。prepare、test 和 publish 都只消费本机候选包，publish 不会重新构建。
 
 ```bash
-# Actions prepare
-pnpm release:win -- --tag windows-vX.Y.Z --prepare-only --actions
-
-# Actions test，candidate-run-id 来自 prepare 或上一次 test
-pnpm release:win -- --tag windows-vX.Y.Z --test-only --actions --candidate-run-id <run-id>
-pnpm release:win -- --tag windows-vX.Y.Z --test-only --actions --candidate-run-id <run-id> --domain workbench
-
-# Actions publish，candidate-run-id 必须来自已通过测试的 run
-pnpm release:win -- --tag windows-vX.Y.Z --publish-only --actions --candidate-run-id <run-id>
+pnpm release:win -- --tag windows-vX.Y.Z --prepare-only
+pnpm release:win -- --tag windows-vX.Y.Z --test-only --domain workbench
+pnpm release:win -- --tag windows-vX.Y.Z --publish-only
 ```
 
 Windows 本地发布环境：
@@ -228,13 +213,6 @@ R2_BUCKET_NAME
 R2_PUBLIC_BASE_URL=https://download.ncurator.com
 ```
 
-Windows Actions 额外使用：
-
-```text
-NCURATOR_ACTIONS_TOKEN
-RELEASE_REPOSITORY=owner/repo
-```
-
 publish 会上传候选产物和 fragment，更新对应平台的自动更新 metadata、官网 manifest 与固定下载地址，然后验证公开文件大小、sha512、文件名和 manifest。公开验证成功后才把候选状态标记为 `published`；随后清理本地 `tests/logs/**`，不在失败、prepare-only 或 test-only 阶段清理。
 
 公开验证成功后会清理该平台更早版本的 artifacts 与 release-status，R2 只保留当前最新版本。
@@ -243,7 +221,7 @@ publish 会上传候选产物和 fragment，更新对应平台的自动更新 me
 
 prepare 和 test 的临时代码、依赖与构建目录位于 `.ncurator/release-work`，阶段结束后自动删除。候选包位于 `.ncurator/release-candidates`；发布并完成公开验证后，本地只保留本平台最新候选及其 E2E 结果。
 
-`.ncurator/release-tools` 保存 Python 环境、浏览器和构建缓存，`.ncurator/runtime` 保存运行资源；它们可复用且不属于历史安装包，不随发布自动删除。Actions 候选 Artifact 保留 14 天后由 GitHub 自动清理。
+`.ncurator/release-tools` 保存 Python 环境、浏览器和构建缓存，`.ncurator/runtime` 保存运行资源；它们可复用且不属于历史安装包，不随发布自动删除。
 
 ### 自动更新与下载
 
