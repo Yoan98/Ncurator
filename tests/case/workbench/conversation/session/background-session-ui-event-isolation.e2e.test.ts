@@ -15,6 +15,7 @@ const emptyState = (draft: string): ChatSessionUiStateV1 => ({
   composer: {
     mode: 'search',
     aiPreference: 'default',
+    executionPermission: 'review',
     modelSelection: { mainModel: null, visionModel: null },
     workspaceId: null,
     draft: {

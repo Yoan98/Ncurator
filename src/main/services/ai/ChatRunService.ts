@@ -33,6 +33,7 @@ import type {
   AiApprovalBatchDecision,
   AiApprovalBatchItem,
   AiArtifactRef,
+  AiExecutionPermission,
   AiLlmIoRecord,
   AiPreference,
   AiRunApprovalBatchDecisionRequest,
@@ -128,6 +129,11 @@ const PARTIAL_SAVE_DELAY_MS = 500
 
 const normalizeAiPreference = (value: unknown): AiPreference =>
   value === 'local_sources_relaxed' || value === 'local_sources_strict' ? value : 'default'
+
+const normalizeExecutionPermission = (
+  value: AiExecutionPermission | undefined
+): AiExecutionPermission =>
+  value === 'full_access' ? 'full_access' : 'review'
 
 const appendArtifact = (artifacts: AiArtifactRef[] | undefined, artifact: AiArtifactRef) => {
   const current = artifacts || []
@@ -673,6 +679,7 @@ export class ChatRunService {
     const mainModel = payload.mainModel || null
     const modelName = String(mainModel?.modelName || '').trim()
     const preference = normalizeAiPreference(payload.preference)
+    const executionPermission = normalizeExecutionPermission(payload.executionPermission)
     if (!mainModel?.configId || !modelName) {
       return {
         success: false,
@@ -726,6 +733,7 @@ export class ChatRunService {
       mainModel,
       visionModel: payload.visionModel || undefined,
       preference,
+      executionPermission,
       partialAnswer: '',
       artifacts: [],
       processEvents: [],
@@ -811,6 +819,7 @@ export class ChatRunService {
           mainModel: run.mainModel,
           visionModel: run.visionModel,
           preference: run.preference,
+          executionPermission: run.executionPermission,
           workspace: run.workspace
         },
         {
@@ -947,6 +956,13 @@ export class ChatRunService {
     | { accepted: false; error: string }
   > {
     if (this.activeRuns.get(runId)?.cancelled) return { accepted: false, error: '当前运行已结束' }
+    const run = await this.getMutableRun(runId)
+    if (run?.executionPermission === 'full_access') {
+      return {
+        accepted: true,
+        decisions: request.items.map((item) => ({ itemId: item.itemId, action: 'approve' }))
+      }
+    }
     if (this.activeApprovals.has(runId)) {
       return { accepted: false, error: 'approval batch already pending' }
     }

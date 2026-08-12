@@ -143,19 +143,19 @@ tests/case/workbench/
 #### `send-guard-mode-switch-and-preferences`
 
 - 测试类型：`e2e`
-- What：缺少模型时的模式提示、发送前置条件、模式切换保留输入，以及模型 / 工作区 / AI 推进偏好的当前会话恢复。
+- What：缺少模型时的模式提示、发送前置条件、模式切换保留输入，以及模型 / 工作区 / AI 推进偏好 / 执行权限的当前会话恢复。
 - Why：Workbench 的任务入口依赖这些基础交互；任一状态失真都会导致用户无法发起任务、把任务发到错误上下文或使用错误资料边界。
-- How：先在无模型配置状态下切换智能 / 搜索模式检查提示，再通过 UI 配置真实模型和工作区；覆盖无工作区、输入保留、模型 / 工作区选择、AI 推进偏好、切换会话后的独立恢复和真实发送。
-- Oracle：无模型时智能模式快速显示配置提示；发送禁用态给出原因，工作区可用且输入非空时可发送；不要求显式本地参考资料，模式切换保持输入和内部行为；模式、模型、工作区和推进偏好按会话恢复且不再读取全局偏好，对齐 `WB-CORE-001-AC1`、`WB-CORE-001-AC2`、`WB-MODE-001-AC1`、`WB-MODE-001-AC2`、`WB-COMPOSER-001`、`WB-COMPOSER-005`、`WB-COMPOSER-007`、`WB-SESSION-008`。
+- How：先在无模型配置状态下切换智能 / 搜索模式检查提示，再通过 UI 配置真实模型和工作区；覆盖无工作区、输入保留、模型 / 工作区选择、AI 推进偏好、执行权限、切换会话后的独立恢复和真实发送。
+- Oracle：无模型时智能模式快速显示配置提示；发送禁用态给出原因，工作区可用且输入非空时可发送；不要求显式本地参考资料，模式切换保持输入和内部行为；模式、模型、工作区、推进偏好和执行权限按会话恢复且不再读取全局偏好，对齐 `WB-CORE-001-AC1`、`WB-CORE-001-AC2`、`WB-MODE-001-AC1`、`WB-MODE-001-AC2`、`WB-COMPOSER-001`、`WB-COMPOSER-005`、`WB-COMPOSER-007`、`WB-SESSION-008`。
 - Not：不验证真实模型回答质量，只验证用户路径和发送前置条件。
 
 #### `session-ui-state-isolation`
 
 - 测试类型：`e2e`
-- What：A/B 会话分别保存 Composer、搜索结果、资源标签、活动标签和展开状态，反复切换互不覆盖。
+- What：A/B 会话分别保存 Composer（包括执行权限）、搜索结果、资源标签、活动标签和展开状态，反复切换互不覆盖。
 - Why：会话状态串联会让用户把输入、模型或资料发到错误上下文。
-- How：给两个真实会话设置不同模式、偏好、模型、工作区、输入、引用、附件和右侧内容，通过真实会话列表来回切换。
-- Oracle：每次切回只出现目标会话自己的完整状态，对齐 `WB-SESSION-002`、`WB-SESSION-008-AC1`、`WB-SESSION-008-AC2`。
+- How：给两个真实会话设置不同模式、偏好、执行权限、模型、工作区、输入、引用、附件和右侧内容，通过真实会话列表来回切换。
+- Oracle：每次切回只出现目标会话自己的完整状态，执行权限与其他 Composer 状态分别恢复，对齐 `WB-SESSION-002`、`WB-SESSION-008-AC1`、`WB-SESSION-008-AC2`。
 - Not：不验证跨设备同步。
 
 #### `session-ui-state-restart-persistence`
@@ -197,10 +197,10 @@ tests/case/workbench/
 #### `composer-attachments-context`
 
 - 测试类型：`e2e / live`
-- What：`+` 与粘贴添加附件时，附件会保存到工作区 `.ncurator/runtime/assets/<assetBucketId>/`，不会提前创建真实会话；图片、`doc`、`docx`、`pptx`、`pdf`、`md`、`json`、`xlsx`、`xlsm`、`xltx`、`xltm` 可以添加，并保持图片预览、文件打开、删除、普通文本粘贴和格式提示行为。
+- What：`+`、粘贴与拖入中间聊天区添加附件时，附件会保存到工作区 `.ncurator/runtime/assets/<assetBucketId>/`，不会提前创建真实会话；图片、`doc`、`docx`、`pptx`、`pdf`、`md`、`json`、`xlsx`、`xlsm`、`xltx`、`xltm` 可以添加，并保持图片预览、文件打开、删除、普通文本粘贴和格式提示行为。
 - Why：附件链路已改为“统一落盘到工作区 + 只把路径交给 AI”，必须用回归测试守住真实保存路径和交互行为。
 - How：创建并通过原生目录选择绑定真实工作区；点击添加附件后，在 Windows 系统文件窗口或 macOS Open 面板中用系统级键鼠选择真实文件，经过 Renderer → IPC → Main → 附件保存链路；另外覆盖大文件 warning，并通过真实模型发送一次带附件消息。
-- Oracle：未绑定工作区时提示先选择工作区且不添加附件；真实添加会落盘且不提前创建会话；图片预览、Excel 格式范围和大文件提示正确；发送后的用户消息保留附件名称，路径全部位于同一 runtime assets 目录；提示词只渲染名称与路径的纯契约由 AI Unit 负责；整体对齐 `WB-COMPOSER-010`。
+- Oracle：文件拖入中间聊天区时显示“松开以添加文件”的透明覆盖层，放下后覆盖层消失并出现附件卡片；未绑定工作区时提示先选择工作区且不添加附件；真实添加会落盘且不提前创建会话；图片预览、Excel 格式范围和大文件提示正确；发送后的用户消息保留附件名称，路径全部位于同一 runtime assets 目录；提示词只渲染名称与路径的纯契约由 AI Unit 负责；整体对齐 `WB-COMPOSER-010`。
 - Not：不在跨平台业务回归中验证系统原生文件选择器的视觉细节；不通过 `attachmentPickResponse` 或直接 `attachmentSaveFile` 伪造附件结果。
 
 #### `reference-mention-keyboard`
@@ -284,10 +284,10 @@ tests/case/workbench/
 #### `approval-batch-flow`
 
 - 测试类型：`e2e`
-- What：真实 AI 运行中触发需审批 terminal 操作后，composer 上方审批卡片的同意、拒绝和指导输入流程。
+- What：真实 AI 运行中触发需审批 terminal 操作后，审核模式下 composer 上方审批卡片的同意、拒绝和指导输入流程，以及完全访问模式下的自动执行。
 - Why：审批是高风险 terminal 执行的用户确认边界；UI 误执行或误恢复都会破坏安全约束。
-- How：通过真实用户请求诱导 AI 产生需要审批的 terminal 操作；分别覆盖全同意、任一拒绝、填写指导输入和不操作期间保持等待。
-- Oracle：整批同意后按原 serial 顺序继续，对齐 `WB-BLOCKER-001-AC1`；任一拒绝或填写指导输入时本批命令 0 执行并回到后续 AI 决策，对齐 `WB-BLOCKER-001-AC2`；指导输入不作为独立第三按钮，对齐 `WB-BLOCKER-001-AC3`；审批不因固定超时自动失败，对齐 `WB-BLOCKER-001-AC4`；记录模型、耗时、完成度评分和失败归因。
+- How：通过真实用户请求诱导 AI 产生需要审批的 terminal 操作；审核模式分别覆盖全同意、任一拒绝、填写指导输入和不操作期间保持等待；完全访问在新 run 中执行同类命令。
+- Oracle：审核模式下整批同意后按原 serial 顺序继续，对齐 `WB-BLOCKER-001-AC1`；任一拒绝或填写指导输入时本批命令 0 执行并回到后续 AI 决策，对齐 `WB-BLOCKER-001-AC2`；指导输入不作为独立第三按钮，对齐 `WB-BLOCKER-001-AC3`；审批不因固定超时自动失败，对齐 `WB-BLOCKER-001-AC4`；完全访问下文件实际创建且没有审批事件、等待状态或审批卡片，对齐 `WB-BLOCKER-001-AC5`；记录模型、耗时、完成度评分和失败归因。
 - Not：不验证 terminal 工具安全指令集本身，该能力归 AI tool 测试。
 
 #### `user-takeover-flow`

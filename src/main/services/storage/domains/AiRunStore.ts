@@ -35,6 +35,7 @@ type AiRunRow = {
   model_name?: unknown
   main_model_json?: unknown
   vision_model_json?: unknown
+  execution_permission?: string | null
   partial_answer?: unknown
   final_answer?: unknown
   error?: unknown
@@ -74,6 +75,9 @@ const normalizeRunStatus = (value: unknown): AiRunStatus => {
   return 'failed'
 }
 
+const normalizeExecutionPermission = (value: string): AiRunRecord['executionPermission'] =>
+  value === 'full_access' ? 'full_access' : 'review'
+
 const shouldPersistEvent = (event: AiRunEvent): boolean =>
   event.type !== 'answer_token' && event.type !== 'llm_stream_delta'
 
@@ -99,6 +103,7 @@ const toRunRecord = (row: AiRunRow): AiRunRecord => ({
   modelName: row.model_name ? String(row.model_name) : undefined,
   mainModel: parseJsonObject<AiRunRecord['mainModel']>(row.main_model_json),
   visionModel: parseJsonObject<AiRunRecord['visionModel']>(row.vision_model_json),
+  executionPermission: normalizeExecutionPermission(row.execution_permission || ''),
   partialAnswer: toRequiredString(row.partial_answer),
   finalAnswer: row.final_answer ? String(row.final_answer) : undefined,
   error: row.error ? String(row.error) : undefined,
@@ -142,14 +147,14 @@ export class AiRunStore {
         INSERT INTO ai_run (
           id, session_id, user_message_id, assistant_message_id, status, input,
           selected_references_json, attachments_json, workspace_json, model_name,
-          main_model_json, vision_model_json,
+          main_model_json, vision_model_json, execution_permission,
           partial_answer, final_answer, error, pending_approval_json, pending_user_takeover_json,
           artifacts_json,
           event_count, visible_event_count, last_event_at, created_at, updated_at, finished_at
         ) VALUES (
           @id, @session_id, @user_message_id, @assistant_message_id, @status, @input,
           @selected_references_json, @attachments_json, @workspace_json, @model_name,
-          @main_model_json, @vision_model_json,
+          @main_model_json, @vision_model_json, @execution_permission,
           @partial_answer, @final_answer, @error, @pending_approval_json,
           @pending_user_takeover_json, @artifacts_json,
           @event_count, @visible_event_count, @last_event_at, @created_at, @updated_at, @finished_at
@@ -166,6 +171,7 @@ export class AiRunStore {
           model_name = excluded.model_name,
           main_model_json = excluded.main_model_json,
           vision_model_json = excluded.vision_model_json,
+          execution_permission = excluded.execution_permission,
           partial_answer = excluded.partial_answer,
           final_answer = excluded.final_answer,
           error = excluded.error,
@@ -192,6 +198,7 @@ export class AiRunStore {
         model_name: record.modelName || null,
         main_model_json: jsonStringify(record.mainModel),
         vision_model_json: jsonStringify(record.visionModel),
+        execution_permission: record.executionPermission || 'review',
         partial_answer: record.partialAnswer || '',
         final_answer: record.finalAnswer || null,
         error: record.error || null,

@@ -8,11 +8,16 @@ import {
   normalizeSelectedReferences,
   normalizeWorkspaceBinding
 } from './utils/runContext'
-import type { AiPreference } from '../../../shared/types'
+import type { AiExecutionPermission, AiPreference } from '../../../shared/types'
 import { saveHumanResumeSnapshot } from './utils/resumeSnapshot'
 
 const normalizeAiPreference = (value: unknown): AiPreference =>
   value === 'local_sources_relaxed' || value === 'local_sources_strict' ? value : 'default'
+
+const normalizeExecutionPermission = (
+  value: AiExecutionPermission | undefined
+): AiExecutionPermission =>
+  value === 'full_access' ? 'full_access' : 'review'
 
 const resolveSupportedStructuredOutputModes = (
   selection: AiRunStartPayload['mainModel']
@@ -42,6 +47,7 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
   const normalizedReferences = normalizeSelectedReferences(payload.selectedReferences)
   const platform = getAiRuntimePlatform()
   const preference = normalizeAiPreference(payload.preference)
+  const executionPermission = normalizeExecutionPermission(payload.executionPermission)
 
   const saveResumeSnapshot: AiRunContext['saveResumeSnapshot'] = async (input) => {
     await saveHumanResumeSnapshot({
@@ -176,6 +182,7 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     sessionId: payload.sessionId,
     platform,
     preference,
+    executionPermission,
     humanRuntimeOverrides: deps.humanRuntimeOverrides,
     referenceScope: buildReferenceScope({
       workspace: normalizedWorkspace,

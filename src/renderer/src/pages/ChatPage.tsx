@@ -73,6 +73,7 @@ import type {
   WorkbenchResourceTab,
   WorkbenchTabWorkspaceState,
   WorkbenchAiPreference,
+  WorkbenchExecutionPermission,
   WorkbenchMode
 } from '../components/workbench/types'
 import type {
@@ -153,6 +154,18 @@ const WORKBENCH_NO_DRAG_STYLE = {
 const WORKBENCH_POSITIONED_PANE_STYLE = {
   position: 'relative'
 } as React.CSSProperties
+
+type FileSystemDragItem = DataTransferItem & {
+  webkitGetAsEntry?: () => { isFile: boolean } | null
+}
+
+const getDroppedFiles = (transfer: DataTransfer): File[] =>
+  Array.from(transfer.items).flatMap((item) => {
+    const entry = (item as FileSystemDragItem).webkitGetAsEntry?.()
+    if (entry && !entry.isFile) return []
+    const file = item.getAsFile()
+    return file ? [file] : []
+  })
 
 const detectRendererPlatform = (): string =>
   navigator.platform.toLowerCase().includes('win') ? 'win32' : 'darwin'
@@ -621,6 +634,7 @@ const createDefaultSessionUiState = (
   composer: {
     mode: 'ai',
     aiPreference: 'default',
+    executionPermission: 'review',
     modelSelection,
     workspaceId,
     draft: toPersistedComposerDraft(createEmptyComposerDraft())
@@ -675,6 +689,8 @@ const ChatPage: React.FC = () => {
   const [deletingSessionIds, setDeletingSessionIds] = useState<Set<string>>(() => new Set())
   const { mode: composerMode, setMode: setComposerMode } = useWorkbenchMode()
   const [composerAiPreference, setComposerAiPreference] = useState<WorkbenchAiPreference>('default')
+  const [composerExecutionPermission, setComposerExecutionPermission] =
+    useState<WorkbenchExecutionPermission>('review')
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [aiRunId, setAiRunId] = useState<string | null>(null)
@@ -790,6 +806,12 @@ const ChatPage: React.FC = () => {
   const notifiedNoEffectiveChangeIdsRef = useRef<Set<string>>(new Set())
   const composerModeRef = useRef<WorkbenchMode>(composerMode)
   const composerAiPreferenceRef = useRef<WorkbenchAiPreference>(composerAiPreference)
+  const composerExecutionPermissionRef = useRef<WorkbenchExecutionPermission>(
+    composerExecutionPermission
+  )
+  const composerFileDropHandlerRef = useRef<((files: File[]) => void) | null>(null)
+  const attachmentDragDepthRef = useRef(0)
+  const [isAttachmentDropActive, setIsAttachmentDropActive] = useState(false)
   const modelSelectionRef = useRef<WorkbenchModelSelection>(modelSelection)
   const selectedWorkspaceIdRef = useRef<string | null>(selectedWorkspaceId)
   const contentPanelRef = useRef<WorkbenchContentPanelState>(contentPanel)
@@ -821,6 +843,7 @@ const ChatPage: React.FC = () => {
       composer: {
         mode: composerModeRef.current,
         aiPreference: composerAiPreferenceRef.current,
+        executionPermission: composerExecutionPermissionRef.current,
         modelSelection: modelSelectionRef.current,
         workspaceId: selectedWorkspaceIdRef.current,
         draft: toPersistedComposerDraft(composerDraftValueRef.current)
@@ -978,6 +1001,7 @@ const ChatPage: React.FC = () => {
   useEffect(() => {
     composerModeRef.current = composerMode
     composerAiPreferenceRef.current = composerAiPreference
+    composerExecutionPermissionRef.current = composerExecutionPermission
     modelSelectionRef.current = modelSelection
     selectedWorkspaceIdRef.current = selectedWorkspaceId
     contentPanelRef.current = contentPanel
@@ -986,6 +1010,7 @@ const ChatPage: React.FC = () => {
     scheduleCurrentUiStatePersist()
   }, [
     composerAiPreference,
+    composerExecutionPermission,
     composerDraftValue,
     composerMode,
     contentPanel,
@@ -1089,6 +1114,8 @@ const ChatPage: React.FC = () => {
       const draft = state.composer.draft
       composerModeRef.current = state.composer.mode
       composerAiPreferenceRef.current = state.composer.aiPreference
+      composerExecutionPermissionRef.current =
+        state.composer.executionPermission === 'full_access' ? 'full_access' : 'review'
       modelSelectionRef.current = state.composer.modelSelection
       // Session UI snapshots own the workspace selection. The legacy session column is only
       // a fallback for sessions that do not have a snapshot yet.
@@ -1097,6 +1124,7 @@ const ChatPage: React.FC = () => {
         : (workspaceId ?? null)
       setComposerMode(state.composer.mode)
       setComposerAiPreference(state.composer.aiPreference)
+      setComposerExecutionPermission(composerExecutionPermissionRef.current)
       setModelSelection(state.composer.modelSelection)
       setSelectedWorkspaceId(selectedWorkspaceIdRef.current)
       applyComposerDraft(draft, `restore:${key}`)
@@ -1898,6 +1926,16 @@ const ChatPage: React.FC = () => {
       uiStateInteractionVersionRef.current += 1
       composerAiPreferenceRef.current = preference
       setComposerAiPreference(preference)
+      void persistCurrentUiStateNow({ requireReady: false })
+    },
+    [persistCurrentUiStateNow]
+  )
+
+  const handleExecutionPermissionChange = useCallback(
+    (permission: WorkbenchExecutionPermission): void => {
+      uiStateInteractionVersionRef.current += 1
+      composerExecutionPermissionRef.current = permission
+      setComposerExecutionPermission(permission)
       void persistCurrentUiStateNow({ requireReady: false })
     },
     [persistCurrentUiStateNow]
@@ -3158,6 +3196,7 @@ const ChatPage: React.FC = () => {
         sessionId: submitSessionId,
         input: userQuery,
         preference: composerAiPreference,
+        executionPermission: composerExecutionPermission,
         contentNodes: submittedContentNodes.length > 0 ? submittedContentNodes : undefined,
         selectedReferences: submittedReferences.length > 0 ? submittedReferences : undefined,
         attachments: submittedAttachments.length > 0 ? submittedAttachments : undefined,
@@ -4123,7 +4162,34 @@ const ChatPage: React.FC = () => {
               </div>
             ) : null}
 
-            <div className="flex min-h-0 flex-1 overflow-hidden">
+            <div
+              className="relative flex min-h-0 flex-1 overflow-hidden"
+              data-testid={workbenchSelectors.attachmentDropTarget}
+              onDragEnter={(event) => {
+                if (!event.dataTransfer.types.includes('Files')) return
+                event.preventDefault()
+                attachmentDragDepthRef.current += 1
+                setIsAttachmentDropActive(true)
+              }}
+              onDragOver={(event) => {
+                if (!event.dataTransfer.types.includes('Files')) return
+                event.preventDefault()
+                event.dataTransfer.dropEffect = 'copy'
+              }}
+              onDragLeave={(event) => {
+                if (!event.dataTransfer.types.includes('Files')) return
+                attachmentDragDepthRef.current = Math.max(0, attachmentDragDepthRef.current - 1)
+                if (attachmentDragDepthRef.current === 0) setIsAttachmentDropActive(false)
+              }}
+              onDrop={(event) => {
+                if (!event.dataTransfer.types.includes('Files')) return
+                event.preventDefault()
+                attachmentDragDepthRef.current = 0
+                setIsAttachmentDropActive(false)
+                const files = getDroppedFiles(event.dataTransfer)
+                if (files.length > 0) composerFileDropHandlerRef.current?.(files)
+              }}
+            >
               <div className="flex h-full min-h-0 min-w-0 flex-1">
                 <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
                   <div
@@ -4308,6 +4374,8 @@ const ChatPage: React.FC = () => {
                           onModeChange={handleModeChange}
                           aiPreference={composerAiPreference}
                           onAiPreferenceChange={handleAiPreferenceChange}
+                          executionPermission={composerExecutionPermission}
+                          onExecutionPermissionChange={handleExecutionPermissionChange}
                           modelConfigs={modelConfigs}
                           modelListsByConfigId={modelListsByConfigId}
                           modelSelection={modelSelection}
@@ -4334,6 +4402,9 @@ const ChatPage: React.FC = () => {
                           draftKey={composerDraftKey}
                           contextUsage={contextUsage}
                           requestAttachmentTarget={ensureAttachmentTarget}
+                          onFileDropHandlerReady={(handler) => {
+                            composerFileDropHandlerRef.current = handler
+                          }}
                         />
                       )}
 
@@ -4354,6 +4425,16 @@ const ChatPage: React.FC = () => {
                   </div>
                 </div>
               </div>
+              {isAttachmentDropActive ? (
+                <div
+                  className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-white/55 backdrop-blur-[1px]"
+                  data-testid={workbenchSelectors.attachmentDropOverlay}
+                >
+                  <div className="border border-dashed border-[#7B96A8] bg-white/85 px-5 py-3 text-sm font-medium text-[#37586E] shadow-sm">
+                    松开以添加文件
+                  </div>
+                </div>
+              ) : null}
             </div>
           </div>
 

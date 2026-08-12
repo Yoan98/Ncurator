@@ -13,6 +13,7 @@ const CASE_ID = 'session-ui-state-isolation'
 const createUiState = (input: {
   draft: string
   mode: 'ai' | 'search'
+  executionPermission: 'review' | 'full_access'
   collapsed: boolean
   panelTitle: string
 }): ChatSessionUiStateV1 => ({
@@ -20,6 +21,7 @@ const createUiState = (input: {
   composer: {
     mode: input.mode,
     aiPreference: input.mode === 'ai' ? 'local_sources_strict' : 'default',
+    executionPermission: input.executionPermission,
     modelSelection: { mainModel: null, visionModel: null },
     workspaceId: null,
     draft: {
@@ -86,12 +88,14 @@ describe('workbench conversation e2e', () => {
           const stateA = createUiState({
             draft: 'A 独立草稿',
             mode: 'ai',
+            executionPermission: 'full_access',
             collapsed: false,
             panelTitle: 'A 文件标签'
           })
           const stateB = createUiState({
             draft: 'B 独立搜索',
             mode: 'search',
+            executionPermission: 'review',
             collapsed: true,
             panelTitle: 'B 搜索结果'
           })
@@ -116,6 +120,7 @@ describe('workbench conversation e2e', () => {
             input: ((await getWorkbenchLocator(page, workbenchSelectors.input).textContent()) || '').trim(),
             mode: ((await getWorkbenchLocator(page, workbenchSelectors.modeSwitch).textContent()) || '').trim(),
             preference: await readOptionalText(workbenchSelectors.aiPreferenceSwitch),
+            executionPermission: await readOptionalText(workbenchSelectors.executionPermissionSwitch),
             panelText: await readOptionalText(workbenchSelectors.contentPanelShell),
             panelVisible:
               (await getWorkbenchLocator(page, workbenchSelectors.contentPanelShell).getAttribute(
@@ -158,20 +163,25 @@ describe('workbench conversation e2e', () => {
             result.firstA.input === 'A 独立草稿' &&
               result.firstA.mode.includes('AI') &&
               result.firstA.preference.includes('本地资料') &&
+              result.firstA.executionPermission.includes('完全访问') &&
               result.firstA.panelText.includes('A 文件标签') &&
               result.firstA.panelVisible &&
               result.collapsedB.input === 'B 独立搜索' &&
               result.collapsedB.mode.includes('搜索') &&
+              !result.collapsedB.executionPermission &&
               !result.collapsedB.panelVisible &&
               result.expandedB.panelVisible &&
               result.expandedB.panelText.includes('搜索结果') &&
               result.secondA.input === result.firstA.input &&
               result.secondA.panelText.includes('A 文件标签') &&
+              result.secondA.executionPermission.includes('完全访问') &&
               result.secondB.input === result.collapsedB.input &&
               result.secondB.panelText.includes('搜索结果') &&
               result.persisted.stateA?.composer.aiPreference === 'local_sources_strict' &&
+              result.persisted.stateA?.composer.executionPermission === 'full_access' &&
               result.persisted.stateA?.panel.activeTabId === 'file:launcher' &&
               result.persisted.stateB?.composer.mode === 'search' &&
+              result.persisted.stateB?.composer.executionPermission === 'review' &&
               result.persisted.stateB?.panel.collapsed === false,
             {
               name: 'workbench-session-ui-state-isolation',

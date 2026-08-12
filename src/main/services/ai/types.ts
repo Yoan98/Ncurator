@@ -20,6 +20,7 @@ import type {
   AiLlmIoRecord,
   AiLlmStreamingMode,
   AiLlmUsage,
+  AiExecutionPermission,
   AiPreference,
   AiRunFailureCode,
   AiRunResumeSnapshotReason,
@@ -89,6 +90,7 @@ export type AiRunStartPayload = {
   mainModel?: WorkbenchSelectedModel
   visionModel?: WorkbenchSelectedModel
   preference?: AiPreference
+  executionPermission?: AiExecutionPermission
   workspace?: {
     workspaceId: string
     workspaceName: string
@@ -255,6 +257,7 @@ export type AiRunContext = {
   sessionId: string
   platform: AiRuntimePlatform
   preference: AiPreference
+  executionPermission: AiExecutionPermission
   referenceScope: AiReferenceScope
   allowedToolNames?: string[]
   humanRuntimeOverrides?: {

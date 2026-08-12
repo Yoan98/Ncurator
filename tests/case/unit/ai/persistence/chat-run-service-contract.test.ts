@@ -36,6 +36,17 @@ type ChatRunServicePrivate = ChatRunService & {
     runId: string,
     request: { taskId: string; requestId: string; message: string }
   ) => Promise<{ confirmed: true } | { confirmed: false; error: string }>
+  requestApprovalBatch: (
+    runId: string,
+    request: {
+      taskId: string
+      batchId: string
+      items: Array<{ itemId: string; title: string; description: string }>
+    }
+  ) => Promise<
+    | { accepted: true; decisions: Array<{ itemId: string; action: 'approve' | 'reject' | 'guide' }> }
+    | { accepted: false; error: string }
+  >
   scheduleConversationMemoryUpdate: (input: {
     runId: string
     sessionId: string
@@ -173,11 +184,15 @@ const buildConversationTurns = (input: {
     ]
   }).flat()
 
-const submitAiRun = async ({ workspaceRoot, storage, service }: TestService) => {
+const submitAiRun = async (
+  { workspaceRoot, storage, service }: TestService,
+  executionPermission: 'review' | 'full_access' = 'review'
+) => {
   await seedSession(storage)
   const response = await service.submit({
     mode: 'ai',
     preference: 'local_sources_strict',
+    executionPermission,
     sessionId: 'session-1',
     input: '生成测试回答',
     mainModel: {
@@ -213,6 +228,51 @@ describe('unit ai persistence backend', () => {
     expect(storedRun?.status).toBe('running')
     expect(storedRun?.assistantMessageId).toBe(messages[1].id)
     expect(run.preference).toBe('local_sources_strict')
+    expect(run.executionPermission).toBe('review')
+    expect(storedRun?.executionPermission).toBe('review')
+  })
+
+  it('full-access-run-skips-approval-event-and-returns-approve-decisions', async () => {
+    const setup = await createTestService()
+    const run = await submitAiRun(setup, 'full_access')
+    const service = setup.service as ChatRunServicePrivate
+
+    const result = await service.requestApprovalBatch(run.id, {
+      taskId: 'task-1',
+      batchId: 'batch-1',
+      items: [{ itemId: 'item-1', title: '创建文件', description: '创建测试文件' }]
+    })
+
+    expect(result).toEqual({
+      accepted: true,
+      decisions: [{ itemId: 'item-1', action: 'approve' }]
+    })
+    expect(setup.events.some((event) => event.type === 'approval_batch_required')).toBe(false)
+    const storedRun = await setup.storage.aiRun.getRun(run.id)
+    expect(storedRun?.executionPermission).toBe('full_access')
+    expect(storedRun?.status).toBe('running')
+  })
+
+  it('review-run-keeps-approval-event-and-waiting-state', async () => {
+    const setup = await createTestService()
+    const run = await submitAiRun(setup)
+    const service = setup.service as ChatRunServicePrivate
+    const approvalPromise = service.requestApprovalBatch(run.id, {
+      taskId: 'task-1',
+      batchId: 'batch-1',
+      items: [{ itemId: 'item-1', title: '创建文件', description: '创建测试文件' }]
+    })
+
+    await waitForCondition(() =>
+      setup.events.some((event) => event.type === 'approval_batch_required')
+    )
+    expect((await setup.storage.aiRun.getRun(run.id))?.status).toBe('waiting_approval')
+    await setup.service.decideApprovalBatch({
+      runId: run.id,
+      batchId: 'batch-1',
+      decisions: [{ itemId: 'item-1', action: 'approve' }]
+    })
+    await expect(approvalPromise).resolves.toMatchObject({ accepted: true })
   })
 
   it('run-events-update-assistant-message-run-and-event-log', async () => {

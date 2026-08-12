@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import type {
   AiPreference,
+  AiExecutionPermission,
   AiRunEvent,
   AiFileChangeStatus,
   IpcJsonObject,
@@ -12,6 +13,7 @@ import type { RuntimeToolName } from '../../../../shared/runtimeCapabilities'
 
 export type WorkbenchMode = 'ai' | 'search'
 export type WorkbenchAiPreference = AiPreference
+export type WorkbenchExecutionPermission = AiExecutionPermission
 
 export type WorkbenchContextUsage = {
   contextWindowTokens: number

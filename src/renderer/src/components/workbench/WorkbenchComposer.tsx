@@ -9,8 +9,10 @@ import {
   HiPhoto,
   HiPlus,
   HiQuestionMarkCircle,
+  HiShieldCheck,
   HiSparkles,
   HiStop,
+  HiExclamationTriangle,
   HiXMark
 } from 'react-icons/hi2'
 import { FaCircle } from 'react-icons/fa'
@@ -29,6 +31,7 @@ import { normalizeUserFacingError } from '../../utils/userFacingError'
 import type {
   WorkbenchAiPreference,
   WorkbenchContextUsage,
+  WorkbenchExecutionPermission,
   WorkbenchMode,
   WorkbenchSelectOption
 } from './types'
@@ -64,6 +67,8 @@ type WorkbenchComposerProps = {
   onModeChange: (mode: WorkbenchMode) => void
   aiPreference: WorkbenchAiPreference
   onAiPreferenceChange: (preference: WorkbenchAiPreference) => void
+  executionPermission: WorkbenchExecutionPermission
+  onExecutionPermissionChange: (permission: WorkbenchExecutionPermission) => void
   modelConfigs: LLMConfig[]
   modelListsByConfigId: Record<string, LlmRemoteModel[]>
   modelSelection: WorkbenchModelSelection
@@ -89,6 +94,7 @@ type WorkbenchComposerProps = {
     assetBucketId: string
     workspaceRootPath: string
   } | null>
+  onFileDropHandlerReady?: (handler: ((files: File[]) => void) | null) => void
 }
 
 const isTextNode = (value: Node | null): value is Text => value instanceof Text
@@ -148,6 +154,8 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   onModeChange,
   aiPreference,
   onAiPreferenceChange,
+  executionPermission,
+  onExecutionPermissionChange,
   modelConfigs,
   modelListsByConfigId,
   modelSelection,
@@ -169,7 +177,8 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   draftValue,
   draftKey,
   contextUsage,
-  requestAttachmentTarget
+  requestAttachmentTarget,
+  onFileDropHandlerReady
 }) => {
   const { message } = AntdApp.useApp()
   const editorRef = useRef<HTMLSpanElement | null>(null)
@@ -656,7 +665,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     focusEditorAfterControlChange()
   }, [appendAttachments, focusEditorAfterControlChange, message, requestAttachmentTarget])
 
-  const createAttachmentFromClipboardFile = useCallback(
+  const createAttachmentFromFile = useCallback(
     async (file: File) => {
       const target = await requestAttachmentTarget()
       if (!target) {
@@ -680,11 +689,10 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     [message, requestAttachmentTarget]
   )
 
-  const handleEditorPaste = (event: React.ClipboardEvent<HTMLSpanElement>): void => {
-    const files = Array.from(event.clipboardData.files || [])
-    if (files.length > 0) {
-      event.preventDefault()
-      void Promise.all(files.map(createAttachmentFromClipboardFile)).then((items) => {
+  const handleAttachmentFiles = useCallback(
+    (files: File[]): void => {
+      if (files.length === 0) return
+      void Promise.all(files.map(createAttachmentFromFile)).then((items) => {
         const validItems = items.filter(
           (item): item is { attachment: ChatAttachment; assetBucketId: string } => Boolean(item)
         )
@@ -693,6 +701,20 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
           validItems[0]?.assetBucketId || null
         )
       })
+    },
+    [appendAttachments, createAttachmentFromFile]
+  )
+
+  useEffect(() => {
+    onFileDropHandlerReady?.(handleAttachmentFiles)
+    return () => onFileDropHandlerReady?.(null)
+  }, [handleAttachmentFiles, onFileDropHandlerReady])
+
+  const handleEditorPaste = (event: React.ClipboardEvent<HTMLSpanElement>): void => {
+    const files = Array.from(event.clipboardData.files || [])
+    if (files.length > 0) {
+      event.preventDefault()
+      handleAttachmentFiles(files)
       return
     }
     const pastedText = event.clipboardData.getData('text/plain')
@@ -906,6 +928,25 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
         keywords: [workspace.name, workspace.root_path || '']
       })),
     [workspaces]
+  )
+  const executionPermissionOptions = useMemo<WorkbenchSelectOption[]>(
+    () => [
+      {
+        value: 'review',
+        label: '审核',
+        icon: <HiShieldCheck className="h-4 w-4 text-[#3B6E8F]" />,
+        triggerIcon: <HiShieldCheck className="h-3.5 w-3.5" />,
+        description: '执行操作前请求确认'
+      },
+      {
+        value: 'full_access',
+        label: '完全访问',
+        icon: <HiExclamationTriangle className="h-4 w-4 text-[#C46A1B]" />,
+        triggerIcon: <HiExclamationTriangle className="h-3.5 w-3.5" />,
+        description: '允许 AI 直接执行操作'
+      }
+    ],
+    []
   )
   const currentAttachments = useMemo(() => draftValue.attachments || [], [draftValue.attachments])
 
@@ -1171,6 +1212,22 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                   menuClassName="workbench-composer-menu"
                   minMenuWidth={220}
                   data-testid={workbenchSelectors.aiPreferenceSwitch}
+                />
+                <WorkbenchSelect
+                  value={executionPermission}
+                  options={executionPermissionOptions}
+                  onChange={(nextValue) => {
+                    onExecutionPermissionChange(nextValue as WorkbenchExecutionPermission)
+                    focusEditorAfterControlChange()
+                  }}
+                  placeholder="权限"
+                  compact
+                  noDrag
+                  hideChevron
+                  triggerClassName="workbench-composer-pill"
+                  menuClassName="workbench-composer-menu"
+                  minMenuWidth={220}
+                  data-testid={workbenchSelectors.executionPermissionSwitch}
                 />
               </span>
             ) : null}

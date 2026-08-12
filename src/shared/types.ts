@@ -675,6 +675,7 @@ export type ChatSessionUiStateV1 = {
   composer: {
     mode: ChatSessionUiMode
     aiPreference: AiPreference
+    executionPermission: AiExecutionPermission
     modelSelection: WorkbenchModelSelection
     workspaceId: string | null
     draft: {
@@ -1080,10 +1081,12 @@ export type AiArtifactRef = AiFileArtifactRef
 
 export type ChatSubmitMode = 'ai' | 'search'
 export type AiPreference = 'default' | 'local_sources_relaxed' | 'local_sources_strict'
+export type AiExecutionPermission = 'review' | 'full_access'
 
 export type ChatSubmitRequest = {
   mode: ChatSubmitMode
   preference?: AiPreference
+  executionPermission?: AiExecutionPermission
   sessionId: string
   input: string
   contentNodes?: ChatMessageContentNode[]
@@ -1109,6 +1112,7 @@ export type AiRunRecord = {
   mainModel?: WorkbenchSelectedModel
   visionModel?: WorkbenchSelectedModel
   preference?: AiPreference
+  executionPermission?: AiExecutionPermission
   partialAnswer: string
   finalAnswer?: string
   error?: string

@@ -66,6 +66,10 @@ CREATE INDEX IF NOT EXISTS idx_browser_tab_state_owner
   ON browser_tab_state(owner_key, position, created_at);
 `
 
+const aiRunExecutionPermissionMigration = `
+ALTER TABLE ai_run ADD COLUMN execution_permission TEXT NOT NULL DEFAULT 'review';
+`
+
 export type SqliteDatabase = Database.Database
 export type SqliteStatement = Database.Statement
 
@@ -105,6 +109,11 @@ const MIGRATIONS: Migration[] = [
     version: 6,
     name: 'workbench_session_ui_state',
     sql: workbenchSessionUiStateMigration
+  },
+  {
+    version: 7,
+    name: 'ai_run_execution_permission',
+    sql: aiRunExecutionPermissionMigration
   }
 ]
 

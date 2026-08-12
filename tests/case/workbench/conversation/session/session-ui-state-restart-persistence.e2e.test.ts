@@ -57,6 +57,7 @@ describe('workbench conversation e2e', () => {
               composer: {
                 mode: 'ai',
                 aiPreference: 'local_sources_relaxed',
+                executionPermission: 'full_access',
                 modelSelection: { mainModel: null, visionModel: null },
                 workspaceId: null,
                 draft: {
@@ -130,13 +131,24 @@ describe('workbench conversation e2e', () => {
             page,
             `${workbenchSelectors.sessionItemPrefix}-${session.id}`
           ).isVisible()
-          return { input, sessionVisible, restoredBrowser, expectedUrl: `${server.url}?step=2` }
+          const executionPermission = (
+            (await getWorkbenchLocator(page, workbenchSelectors.executionPermissionSwitch).textContent()) ||
+            ''
+          ).trim()
+          return {
+            input,
+            sessionVisible,
+            executionPermission,
+            restoredBrowser,
+            expectedUrl: `${server.url}?step=2`
+          }
         },
         assert: async (result, runtime) => {
           const restored = result.restoredBrowser.tabs.tabs[0]
           await runtime.assertThat(
-            result.sessionVisible &&
+              result.sessionVisible &&
               result.input === '重启后仍在的草稿' &&
+              result.executionPermission.includes('完全访问') &&
               result.restoredBrowser.tabs.success &&
               restored?.url === result.expectedUrl &&
               restored.zoomPercent === 110 &&

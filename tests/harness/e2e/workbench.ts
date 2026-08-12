@@ -1242,6 +1242,24 @@ export const readWorkbenchAiPreferenceSelection = async (page: Page): Promise<st
   return selectedLabel.trim()
 }
 
+export const selectWorkbenchExecutionPermission = async (
+  page: Page,
+  permissionLabel: '审核' | '完全访问'
+): Promise<void> => {
+  await getWorkbenchLocator(page, workbenchSelectors.executionPermissionSwitch).click()
+  const menu = page.locator('.workbench-select-menu.workbench-composer-menu').last()
+  await menu.getByRole('option').filter({ hasText: permissionLabel }).first().click()
+}
+
+export const readWorkbenchExecutionPermissionSelection = async (page: Page): Promise<string> => {
+  await getWorkbenchLocator(page, workbenchSelectors.executionPermissionSwitch).click()
+  const menu = page.locator('.workbench-select-menu.workbench-composer-menu').last()
+  const selected = menu.locator('[role="option"][aria-selected="true"]').first()
+  const label = ((await selected.textContent()) || '').trim()
+  await page.keyboard.press('Escape')
+  return label
+}
+
 const selectWorkbenchModelByRole = async (
   page: Page,
   modelName: string,

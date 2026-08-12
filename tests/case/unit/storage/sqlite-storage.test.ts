@@ -181,6 +181,7 @@ const createSessionUiState = (input = 'draft'): ChatSessionUiStateV1 => ({
   composer: {
     mode: 'ai',
     aiPreference: 'local_sources_strict',
+    executionPermission: 'review',
     modelSelection: {
       mainModel: { configId: 'provider-1', modelName: 'model-1' },
       visionModel: null
@@ -244,7 +245,8 @@ describe('sqlite storage core and stores', () => {
       { version: 3, name: 'chat_session_skill_state' },
       { version: 4, name: 'reset_resume_snapshots_v2' },
       { version: 5, name: 'repair_false_docx_change_failures' },
-      { version: 6, name: 'workbench_session_ui_state' }
+      { version: 6, name: 'workbench_session_ui_state' },
+      { version: 7, name: 'ai_run_execution_permission' }
     ])
   })
 

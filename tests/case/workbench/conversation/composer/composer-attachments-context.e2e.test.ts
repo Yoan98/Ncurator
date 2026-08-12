@@ -1,4 +1,4 @@
-import { mkdtemp, readdir, realpath, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import ExcelJS from 'exceljs'
@@ -194,6 +194,56 @@ describe('workbench conversation e2e', () => {
             await selectWorkbenchAttachmentThroughNativeDialog(page, spreadsheetPath)
             await waitForAttachmentCardByName(page, path.basename(spreadsheetPath))
           }
+          const droppedFileData = (await readFile(attachments.markdownPath)).toString('base64')
+          await page.evaluate(
+            ({ targetTestId, fileData }) => {
+              const target = document.querySelector<HTMLElement>(
+                `[data-testid="${targetTestId}"]`
+              )
+              if (!target) throw new Error('attachment drop target unavailable')
+              const bytes = Uint8Array.from(atob(fileData), (character) => character.charCodeAt(0))
+              const file = new File([bytes], 'dropped-context.md', { type: 'text/markdown' })
+              const transfer = new DataTransfer()
+              transfer.items.add(file)
+              target.dispatchEvent(
+                new DragEvent('dragenter', {
+                  bubbles: true,
+                  cancelable: true,
+                  dataTransfer: transfer
+                })
+              )
+            },
+            { targetTestId: workbenchSelectors.attachmentDropTarget, fileData: droppedFileData }
+          )
+          const attachmentDropOverlay = getWorkbenchLocator(
+            page,
+            workbenchSelectors.attachmentDropOverlay
+          )
+          await attachmentDropOverlay.waitFor({ state: 'visible' })
+          const attachmentDropOverlayVisible = await attachmentDropOverlay.isVisible()
+          await page.evaluate(
+            ({ targetTestId, fileData }) => {
+              const target = document.querySelector<HTMLElement>(
+                `[data-testid="${targetTestId}"]`
+              )
+              if (!target) throw new Error('attachment drop target unavailable')
+              const bytes = Uint8Array.from(atob(fileData), (character) => character.charCodeAt(0))
+              const file = new File([bytes], 'dropped-context.md', { type: 'text/markdown' })
+              const transfer = new DataTransfer()
+              transfer.items.add(file)
+              target.dispatchEvent(
+                new DragEvent('drop', {
+                  bubbles: true,
+                  cancelable: true,
+                  dataTransfer: transfer
+                })
+              )
+            },
+            { targetTestId: workbenchSelectors.attachmentDropTarget, fileData: droppedFileData }
+          )
+          await waitForAttachmentCardByName(page, 'dropped-context.md')
+          await attachmentDropOverlay.waitFor({ state: 'hidden' })
+          const attachmentDropOverlayHidden = (await attachmentDropOverlay.count()) === 0
           const sessionCountAfterPaste = await countWorkspaceSessions(
             page,
             workspaceBinding.workspaceId
@@ -347,6 +397,8 @@ describe('workbench conversation e2e', () => {
             sessionCountBeforePaste,
             sessionCountAfterPaste,
             previewVisible,
+            attachmentDropOverlayVisible,
+            attachmentDropOverlayHidden,
             imageRemoved,
             downloadButtonVisible: Boolean(downloadButtonBox),
             closeButtonVisible: Boolean(closeButtonBox),
@@ -376,6 +428,9 @@ describe('workbench conversation e2e', () => {
             attachmentPickCallCount: signals.ipcInvokeEntries.filter(
               (entry) => entry.name === 'attachmentPick'
             ).length,
+            attachmentSaveFileCallCount: signals.ipcInvokeEntries.filter(
+              (entry) => entry.name === 'attachmentSaveFile'
+            ).length,
             latestAntMessage: await getAntMessageText(page)
           }
         },
@@ -384,6 +439,8 @@ describe('workbench conversation e2e', () => {
             result.missingWorkspaceMessage.includes('请先选择工作区后再添加附件') &&
               result.attachmentCountWithoutWorkspace === 0 &&
               result.previewVisible &&
+              result.attachmentDropOverlayVisible &&
+              result.attachmentDropOverlayHidden &&
               result.imageRemoved &&
               result.downloadButtonVisible &&
               result.closeButtonVisible &&
@@ -405,7 +462,8 @@ describe('workbench conversation e2e', () => {
                 'sheet-reference.xlsx',
                 'macro-reference.xlsm',
                 'template-reference.xltx',
-                'macro-template-reference.xltm'
+                'macro-template-reference.xltm',
+                'dropped-context.md'
               ].every((name) => result.importedAttachmentNames.includes(name)) &&
               result.assetsRoot.includes(path.join('.ncurator', 'runtime', 'assets')) &&
               [
@@ -416,19 +474,21 @@ describe('workbench conversation e2e', () => {
                 'macro-reference.xlsm',
                 'template-reference.xltx',
                 'macro-template-reference.xltm',
-                'qa-large.json'
+                'qa-large.json',
+                'dropped-context.md'
               ].every((name) => result.submittedAttachmentNames.includes(name)) &&
-              result.submittedAttachmentPaths.length === 8 &&
+              result.submittedAttachmentPaths.length === 9 &&
               result.submittedAttachmentPaths.every((attachmentPath) =>
                 attachmentPath.startsWith(`${result.assetsRoot}${path.sep}`)
               ) &&
               result.largeFileMessage.includes('文件过大，建议放到工作空间索引里使用') &&
               result.inputText.includes('plain paste ok') &&
               result.openPathCallCount >= 1,
+              result.attachmentSaveFileCallCount >= 1,
             {
               name: 'workbench-composer-attachments-prd-flow',
               message:
-                '附件输入应满足 PRD：真实选择附件会走系统选择和附件导入，doc/pptx/Excel 可以添加并显示正确类型，添加附件不创建新会话，图片可预览且控件不压图，文件可默认打开，超过 10MB 只提示不拦截，普通文本粘贴仍正常。',
+                '附件输入应满足 PRD：文件拖到中间聊天区会显示覆盖层并导入附件；真实选择附件会走系统选择和附件导入，doc/pptx/Excel 可以添加并显示正确类型，添加附件不创建新会话，图片可预览且控件不压图，文件可默认打开，超过 10MB 只提示不拦截，普通文本粘贴仍正常。',
               data: result
             }
           )

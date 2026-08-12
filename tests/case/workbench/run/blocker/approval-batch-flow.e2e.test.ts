@@ -14,6 +14,8 @@ import {
   getWorkbenchLocator,
   recordWorkbenchAiEvidence,
   sendWorkbenchMessage,
+  selectWorkbenchExecutionPermission,
+  readWorkbenchExecutionPermissionSelection,
   selectWorkbenchWorkspace,
   setupWorkbenchWithTempWorkspace,
   waitForWorkbenchAiEvent,
@@ -86,7 +88,7 @@ describe('workbench run e2e', () => {
         domain: 'workbench',
         suite: 'run',
         groups: ['blocker'],
-        description: '真实 AI 触发 terminal 审批后，覆盖同意执行、拒绝无副作用和指导输入回流。',
+        description: '真实 AI 触发 terminal 操作后，覆盖审核审批、拒绝无副作用、指导输入和完全访问自动执行。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
         execution: 'live',
@@ -98,6 +100,7 @@ describe('workbench run e2e', () => {
           const approvedFile = path.join(setup.workspace.rootPath, 'approval-approved.txt')
           const deniedFile = path.join(setup.workspace.rootPath, 'approval-denied.txt')
           const guidedFile = path.join(setup.workspace.rootPath, 'approval-guided.txt')
+          const fullAccessFile = path.join(setup.workspace.rootPath, 'approval-full-access.txt')
 
           const approveStartedAtMs = Date.now()
           await sendWorkbenchMessage(
@@ -167,10 +170,45 @@ describe('workbench run e2e', () => {
               event.decisions.some((decision) => decision.action === 'guide')
           })
 
+          await createWorkbenchNewSession(page)
+          await selectWorkbenchWorkspace(page, setup.workspaceName)
+          await selectWorkbenchExecutionPermission(page, '完全访问')
+          const fullAccessStartedAtMs = Date.now()
+          await sendWorkbenchMessage(
+            page,
+            '请使用终端命令在当前工作区创建 approval-full-access.txt，内容写 full-access-by-workbench-e2e。'
+          )
+          const fullAccessRunStarted = await waitForWorkbenchAiEvent(runtime, {
+            name: 'approval_full_access_run_started',
+            matches: (event) =>
+              isRunStartedEvent(event) && event.input.includes('approval-full-access.txt')
+          })
+          if (!isRunStartedEvent(fullAccessRunStarted)) {
+            throw new Error('full access run did not start')
+          }
+          await selectWorkbenchExecutionPermission(page, '审核')
+          const composerPermissionAfterFullAccessSend = await readWorkbenchExecutionPermissionSelection(
+            page
+          )
+          const fullAccessEvidence = await waitForWorkbenchAiRunCompletion(
+            runtime,
+            fullAccessStartedAtMs,
+            setup.env.modelName
+          )
+          recordWorkbenchAiEvidence(runtime, fullAccessEvidence, 0.8)
+          const fullAccessEvents = (await collectWorkbenchAiRunEvents(runtime)).filter(
+            (event) => event.runId === fullAccessRunStarted.runId
+          )
+          const fullAccessApprovalCardVisible = await getApprovalCard(page).isVisible().catch(() => false)
+
           return {
             approvedFileExists: await exists(approvedFile),
             deniedFileExists: await exists(deniedFile),
             guidedFileExists: await exists(guidedFile),
+            fullAccessFileExists: await exists(fullAccessFile),
+            fullAccessHasApprovalEvent: fullAccessEvents.some(isApprovalBatchRequiredEvent),
+            fullAccessApprovalCardVisible,
+            composerPermissionAfterFullAccessSend,
             eventTypes: (await runtime.collectSignals()).aiRunEventEntries.map(
               (entry) => entry.event.type
             )
@@ -181,12 +219,16 @@ describe('workbench run e2e', () => {
             result.approvedFileExists &&
               !result.deniedFileExists &&
               !result.guidedFileExists &&
+              result.fullAccessFileExists &&
+              !result.fullAccessHasApprovalEvent &&
+              !result.fullAccessApprovalCardVisible &&
+              result.composerPermissionAfterFullAccessSend.includes('审核') &&
               result.eventTypes.includes('approval_batch_required') &&
               result.eventTypes.includes('approval_batch_decision'),
             {
               name: 'workbench-approval-batch-real-ui-decisions',
               message:
-                '真实审批卡片同意后应执行命令；拒绝或指导输入时对应命令不应产生文件副作用，对齐 WB-BLOCKER-001-AC1 至 WB-BLOCKER-001-AC4。',
+                '审核模式应保留审批卡片、同意和拒绝行为；完全访问执行同类终端命令时不应产生审批事件或审批卡片，且文件应实际创建，对齐 WB-BLOCKER-001。',
               data: result
             }
           )
