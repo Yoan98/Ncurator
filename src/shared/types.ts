@@ -598,6 +598,12 @@ export type AttachmentProcessResponse = {
   error?: string
 }
 
+export type AttachmentCreateFromPathRequest = {
+  sourcePath: string
+  mimeType?: string
+  kind?: ChatAttachmentKind
+}
+
 export type AttachmentSaveRequest = {
   workspaceRootPath: string
   assetBucketId: string

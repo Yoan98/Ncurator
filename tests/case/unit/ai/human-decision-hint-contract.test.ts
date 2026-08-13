@@ -132,19 +132,6 @@ const HINT_FIXTURES: Record<(typeof HUMAN_DECISION_HINT_CODES)[number], HumanDec
       ]
     }
   },
-  hand_workspace_boundary_blocked: {
-    code: 'hand_workspace_boundary_blocked',
-    detail: {
-      blockedCalls: [
-        {
-          callIndex: 1,
-          toolName: 'terminal_run',
-          message:
-            'workspace boundary check failed: relative path escapes workspace boundary: ../secret.txt'
-        }
-      ]
-    }
-  },
   brain_todolist_incomplete: {
     code: 'brain_todolist_incomplete',
     detail: {

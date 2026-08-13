@@ -7,14 +7,6 @@ import type { ToolFamilyDefinition } from '../types'
 import { IMAGE_ANALYZE_TOOL_SPEC } from './toolSpecs'
 import { createVisualRecognitionService, getImageMimeType } from '../visualRecognition/service'
 
-const isPathInsideWorkspace = (input: {
-  workspaceRootPath: string
-  targetPath: string
-}): boolean => {
-  const relativePath = path.relative(input.workspaceRootPath, input.targetPath)
-  return relativePath === '' || (!relativePath.startsWith('..') && !path.isAbsolute(relativePath))
-}
-
 export const imageRecognitionToolFamily: ToolFamilyDefinition = {
   familyId: 'image-recognition',
   buildTools: ({ ctx, runId, taskId }) => {
@@ -44,22 +36,6 @@ export const imageRecognitionToolFamily: ToolFamilyDefinition = {
               })
               return payload
             }
-            if (
-              !ctx.workspace?.rootPath ||
-              !isPathInsideWorkspace({
-                workspaceRootPath: ctx.workspace.rootPath,
-                targetPath: sourcePath
-              })
-            ) {
-              const payload = { error: '图片路径必须位于当前工作区内' }
-              session.fail(payload.error, undefined, {
-                toolName: IMAGE_ANALYZE_TOOL_SPEC.name,
-                ok: false,
-                data: payload
-              })
-              return payload
-            }
-
             try {
               const result = await visualRecognitionService.recognizeImage({
                 path: sourcePath,

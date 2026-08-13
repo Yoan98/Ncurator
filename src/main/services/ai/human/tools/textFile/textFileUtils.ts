@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { isPathInsideRoot, resolveWorkspacePath } from '../terminal/commandPolicy'
+import { resolveToolPath } from '../terminal/commandPolicy'
 
 export type DecodedTextFile = {
   bom: boolean
@@ -76,21 +76,16 @@ export const resolveSafeTextFilePath = async (input: {
   workspaceRootPath: string
   allowMissing: boolean
 }): Promise<string> => {
-  const resolved = resolveWorkspacePath({
+  const resolved = resolveToolPath({
     rawPath: input.sourcePath,
-    cwd: input.workspaceRootPath,
-    rootPath: input.workspaceRootPath
+    cwd: input.workspaceRootPath
   })
   if (!resolved) throw new Error(`Invalid file path: ${input.sourcePath}.`)
 
-  const realRoot = await fs.realpath(input.workspaceRootPath)
   const existingAncestor = await findExistingAncestor(
     input.allowMissing ? path.dirname(resolved) : resolved
   )
-  const realAncestor = await fs.realpath(existingAncestor)
-  if (!isPathInsideRoot(realAncestor, realRoot)) {
-    throw new Error(`Invalid file path: ${input.sourcePath}.`)
-  }
+  await fs.realpath(existingAncestor)
 
   if (!input.allowMissing) {
     const stats = await fs.lstat(resolved)
@@ -98,10 +93,7 @@ export const resolveSafeTextFilePath = async (input: {
       throw new Error(`Cannot access ${input.sourcePath}: symbolic links are not supported.`)
     if (!stats.isFile())
       throw new Error(`Cannot access ${input.sourcePath}: path is not a regular file.`)
-    const realTarget = await fs.realpath(resolved)
-    if (!isPathInsideRoot(realTarget, realRoot)) {
-      throw new Error(`Invalid file path: ${input.sourcePath}.`)
-    }
+    await fs.realpath(resolved)
   }
 
   return resolved

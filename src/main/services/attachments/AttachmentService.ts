@@ -137,6 +137,34 @@ export class AttachmentService {
     return isSupportedAttachment(input)
   }
 
+  public async createSourceAttachmentFromPath(input: {
+    sourcePath: string
+    kind?: ChatAttachment['kind']
+    mimeType?: string
+  }): Promise<ChatAttachment> {
+    const sourcePath = path.resolve(String(input.sourcePath || '').trim())
+    if (!sourcePath || !fs.existsSync(sourcePath)) {
+      throw new Error('附件文件不存在')
+    }
+    const stats = await fs.promises.stat(sourcePath)
+    if (!stats.isFile()) throw new Error('附件必须是文件')
+    if (
+      !this.isSupportedFile({
+        filePath: sourcePath,
+        name: path.basename(sourcePath),
+        mimeType: input.mimeType,
+        kind: input.kind
+      })
+    ) {
+      throw new Error('暂不支持该文件格式')
+    }
+    return this.createAttachmentFromPath({
+      filePath: sourcePath,
+      kind: input.kind,
+      mimeType: input.mimeType
+    })
+  }
+
   public async saveAttachment(input: {
     workspaceRootPath: string
     assetBucketId: string
@@ -166,40 +194,6 @@ export class AttachmentService {
       kind: input.kind,
       mimeType: input.mimeType,
       displayName: path.basename(input.name)
-    })
-  }
-
-  public async importAttachmentFromPath(input: {
-    workspaceRootPath: string
-    assetBucketId: string
-    sourcePath: string
-    kind?: ChatAttachment['kind']
-    mimeType?: string
-  }): Promise<ChatAttachment> {
-    const sourcePath = path.resolve(String(input.sourcePath || '').trim())
-    if (!sourcePath || !fs.existsSync(sourcePath)) {
-      throw new Error('附件文件不存在')
-    }
-    const displayName = path.basename(sourcePath)
-    if (
-      !this.isSupportedFile({
-        filePath: sourcePath,
-        name: displayName,
-        mimeType: input.mimeType,
-        kind: input.kind
-      })
-    ) {
-      throw new Error('暂不支持该文件格式')
-    }
-
-    const dirPath = await ensureWorkspaceAssetBucket(input.workspaceRootPath, input.assetBucketId)
-    const targetPath = await resolveUniqueTargetPath(dirPath, displayName)
-    await fs.promises.copyFile(sourcePath, targetPath)
-    return this.createAttachmentFromPath({
-      filePath: targetPath,
-      kind: input.kind,
-      mimeType: input.mimeType,
-      displayName
     })
   }
 

@@ -4,7 +4,7 @@ import type { AiToolCallResult, JsonObject } from '../../../../../../shared/type
 import type { PdfOpenResult } from '../../../../pdf/types'
 import { getPdfWorkerClient } from '../../../../pdf/worker/pdfWorkerClient'
 import type { PdfWorkerRequest, PdfWorkerResponse } from '../../../../pdf/worker/types'
-import { isPathInsideRoot, resolveWorkspacePath } from '../terminal/commandPolicy'
+import { resolveToolPath } from '../terminal/commandPolicy'
 import { createToolEventEmitter } from '../utils/toolEvents'
 import type { ToolEventEmitter } from '../utils/toolEvents'
 import type { PdfCapabilityToolsInput } from './types'
@@ -96,22 +96,15 @@ export const createPdfToolRuntime = (input: PdfCapabilityToolsInput): PdfToolRun
     await getPdfWorkerClient().call({ ...request, runId: input.runId } as PdfWorkerRequest)
 
   const resolvePdfPath = async (rawPath: string): Promise<string> => {
-    const lexicalPath = resolveWorkspacePath({
+    const lexicalPath = resolveToolPath({
       rawPath,
-      cwd: workspaceRootPath,
-      rootPath: workspaceRootPath
+      cwd: workspaceRootPath
     })
-    if (!lexicalPath) throw new Error('PDF 路径必须位于当前工作区内')
+    if (!lexicalPath) throw new Error('PDF 路径无效')
     if (path.extname(lexicalPath).toLowerCase() !== '.pdf')
       throw new Error('sourcePath 必须是 .pdf 文件')
 
-    const [realWorkspaceRoot, realSourcePath] = await Promise.all([
-      fs.realpath(workspaceRootPath),
-      fs.realpath(lexicalPath)
-    ])
-    if (!isPathInsideRoot(realSourcePath, realWorkspaceRoot)) {
-      throw new Error('PDF 真实路径必须位于当前工作区内')
-    }
+    const realSourcePath = await fs.realpath(lexicalPath)
     if (path.extname(realSourcePath).toLowerCase() !== '.pdf')
       throw new Error('sourcePath 必须是 .pdf 文件')
     const stat = await fs.stat(realSourcePath)

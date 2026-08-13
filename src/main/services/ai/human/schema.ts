@@ -231,20 +231,6 @@ export const humanDecisionHintSchema = z.discriminatedUnion('code', [
         )
         .min(1)
     })
-  }),
-  z.object({
-    code: z.literal('hand_workspace_boundary_blocked'),
-    detail: z.object({
-      blockedCalls: z
-        .array(
-          z.object({
-            callIndex: z.number().int().min(0),
-            toolName: z.string().min(1),
-            message: z.string().min(1)
-          })
-        )
-        .min(1)
-    })
   })
 ])
 

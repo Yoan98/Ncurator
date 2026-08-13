@@ -1008,7 +1008,7 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
             toolName,
             toolCallId,
             reason: 'invalid_input',
-            error: 'sourcePath must be a workspace-bound .docx path'
+            error: 'sourcePath must be a .docx path'
           }),
           activity: {
             actionType: DOCX_EDIT_TOOL_SPEC.activityActionType!

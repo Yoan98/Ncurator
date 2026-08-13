@@ -7,6 +7,7 @@ import { DOMParser } from '@xmldom/xmldom'
 import type { AiFileChangeOperation, AiFileChangeRecord } from '../../../../../../shared/types'
 import { emitFileArtifactEvent } from '../../../events/fileArtifacts'
 import type { WorkspaceCapabilityBuildInput } from '../types'
+import { isPathInsideRoot } from '../terminal/commandPolicy'
 import { resolveSafeTextFilePath, withTextFileMutationQueue } from '../textFile/textFileUtils'
 import type { ImageGenerateInput, ImageGenerateOutput } from './schemas'
 
@@ -203,6 +204,23 @@ export const generateImage = async (
 
     const operation: AiFileChangeOperation =
       existingRecord?.operation || (beforeBuffer ? 'updated' : 'created')
+    if (!isPathInsideRoot(outputPath, buildInput.workspaceRootPath)) {
+      if (beforeBuffer) {
+        const currentBuffer = await fs.readFile(outputPath)
+        if (!currentBuffer.equals(beforeBuffer)) {
+          throw new Error(`Cannot write ${args.outputPath}: the file changed during the operation.`)
+        }
+        await atomicReplaceFile({
+          outputPath,
+          content: outputBuffer,
+          mode: beforeMode,
+          operationId
+        })
+      } else {
+        await fs.writeFile(outputPath, outputBuffer, { flag: 'wx', mode: 0o644 })
+      }
+      return { outputPath: args.outputPath }
+    }
     const artifactRoot = path.join(
       buildInput.workspaceRootPath,
       '.ncurator',

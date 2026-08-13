@@ -31,6 +31,7 @@ import {
   resolveSafeTextFilePath,
   withTextFileMutationQueue
 } from './textFileUtils'
+import { isPathInsideRoot } from '../terminal/commandPolicy'
 
 type TextFileToolFailure = Error & {
   resultData?: JsonObject
@@ -38,7 +39,7 @@ type TextFileToolFailure = Error & {
 
 type AppliedEdit = {
   message: string
-  record: AiFileChangeRecord
+  record?: AiFileChangeRecord
 }
 
 type MatchedReplacement = {
@@ -295,6 +296,31 @@ const editTextFile = async (
 
     if (afterNormalized.includes('\0')) {
       throw new Error(`Cannot write ${args.sourcePath}: binary text is not supported.`)
+    }
+
+    const trackedByWorkspace = isPathInsideRoot(sourcePath, buildInput.workspaceRootPath)
+    if (!trackedByWorkspace) {
+      if (args.action === 'create') {
+        await fs.writeFile(sourcePath, afterBuffer, { flag: 'wx', mode: 0o644 })
+      } else {
+        const currentBuffer = await fs.readFile(sourcePath)
+        if (calculateBufferChecksum(currentBuffer) !== beforeChecksum) {
+          throw new Error(`Cannot write ${args.sourcePath}: the file changed during the operation.`)
+        }
+        await atomicReplaceFile({
+          sourcePath,
+          content: afterBuffer,
+          mode: beforeMode,
+          operationId
+        })
+      }
+      return {
+        message: buildEditMessage({
+          action: args.action,
+          sourcePath: args.sourcePath,
+          changeCount
+        })
+      }
     }
 
     let baselineNormalized = beforeNormalized

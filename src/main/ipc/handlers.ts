@@ -58,6 +58,7 @@ import type {
   ChatTurnRetractLatestResponse,
   AttachmentPickRequest,
   AttachmentPickResponse,
+  AttachmentCreateFromPathRequest,
   AttachmentProcessResponse,
   AttachmentSaveRequest,
   AiRuntimeSettings,
@@ -1651,17 +1652,29 @@ export function registerHandlers(services: {
         return {
           canceled: false,
           items: await Promise.all(
-            filePaths.map((filePath) =>
-              attachmentService.importAttachmentFromPath({
-                workspaceRootPath,
-                assetBucketId,
-                sourcePath: filePath
-              })
+            filePaths.map(async (filePath) =>
+              await attachmentService.createSourceAttachmentFromPath({ sourcePath: filePath })
             )
           )
         }
       } catch (error) {
         return { canceled: true, items: [], error: getErrorMessage(error) }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'attachment-create-from-path',
+    async (_event, payload: AttachmentCreateFromPathRequest): Promise<AttachmentProcessResponse> => {
+      try {
+        const attachment = await attachmentService.createSourceAttachmentFromPath({
+          sourcePath: payload.sourcePath,
+          mimeType: payload.mimeType,
+          kind: payload.kind
+        })
+        return { success: true, attachment }
+      } catch (error) {
+        return { success: false, error: getErrorMessage(error) }
       }
     }
   )

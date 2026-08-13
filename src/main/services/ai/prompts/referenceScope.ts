@@ -50,8 +50,7 @@ export const renderReferenceScopeText = (scope: AiReferenceScope): string => {
   const selectedReferences = scope.selectedReferences || []
   const attachments = scope.attachments || []
   const workspaceText = `工作区：
-- 根目录：${scope.workspace.rootPath}
-- 除系统明确提供的用户级 runtime 路径外，所有任务文件和新生成的产物都必须位于这个工作区内。`
+- 根目录：${scope.workspace.rootPath}`
 
   const fieldGuideText = `字段说明：
 - 类型：资料来源类型，目前支持本地文件、本地目录、网页资料。

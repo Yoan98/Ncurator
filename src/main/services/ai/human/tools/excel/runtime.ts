@@ -4,7 +4,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
 import type { JsonObject } from '../../../../../../shared/types'
-import { resolveWorkspacePath } from '../terminal/commandPolicy'
+import { isPathInsideRoot, resolveToolPath } from '../terminal/commandPolicy'
 import { createToolEventEmitter } from '../utils/toolEvents'
 import { emitFileArtifactEvent } from '../../../events/fileArtifacts'
 import type { ExcelCapabilityToolsInput, ExcelRuntimeState, ExcelToolRuntime } from './types'
@@ -684,12 +684,11 @@ export const createExcelToolRuntime = (input: ExcelCapabilityToolsInput): ExcelT
     sheetLineageByPath: new Map()
   }
   const resolvePath = (rawPath: string, mode: 'read' | 'write' = 'read'): string => {
-    const resolved = resolveWorkspacePath({
+    const resolved = resolveToolPath({
       rawPath,
-      cwd: input.workspaceRootPath,
-      rootPath: input.workspaceRootPath
+      cwd: input.workspaceRootPath
     })
-    if (!resolved) throw new Error('Excel 文件必须位于当前工作区内')
+    if (!resolved) throw new Error('Excel 文件路径无效')
     assertExcelPath(resolved, mode)
     return resolved
   }
@@ -931,6 +930,29 @@ export const createExcelToolRuntime = (input: ExcelCapabilityToolsInput): ExcelT
     )
     if (operationChanges.length === 0)
       return toJsonObject({ sourcePath, changed: false, changes: [], postWriteReadback: [] })
+    const postWriteReadback = operationChanges.map((change) => {
+      const cell = afterWorkbook.getWorksheet(change.sheetName)?.getCell(change.address)
+      return cell
+        ? { sheetName: change.sheetName, ...getCellSnapshot(cell) }
+        : {
+            sheetName: change.sheetName,
+            address: change.address,
+            value: null,
+            displayValue: '',
+            type: 'blank'
+          }
+    })
+    if (!isPathInsideRoot(sourcePath, input.workspaceRootPath)) {
+      await atomicReplace(sourcePath, afterBytes)
+      state.currentBytesByPath.set(sourcePath, afterBytes)
+      state.sheetLineageByPath.set(sourcePath, sheetLineage)
+      return toJsonObject({
+        sourcePath,
+        changed: true,
+        changes: operationChanges,
+        postWriteReadback
+      })
+    }
     const baseline = state.baselineBytesByPath.get(sourcePath)
     const baselineWorkbook = baseline ? await loadWorkbook(baseline) : null
     const diffResult = await buildDiffWorkbook({
@@ -1010,18 +1032,6 @@ export const createExcelToolRuntime = (input: ExcelCapabilityToolsInput): ExcelT
       changeCount: record.changeCount,
       insertCount: record.insertCount,
       deleteCount: record.deleteCount
-    })
-    const postWriteReadback = operationChanges.map((change) => {
-      const cell = afterWorkbook.getWorksheet(change.sheetName)?.getCell(change.address)
-      return cell
-        ? { sheetName: change.sheetName, ...getCellSnapshot(cell) }
-        : {
-            sheetName: change.sheetName,
-            address: change.address,
-            value: null,
-            displayValue: '',
-            type: 'blank'
-          }
     })
     return toJsonObject({
       sourcePath,

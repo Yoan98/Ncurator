@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type {
   AiRunEvent,
@@ -248,6 +248,11 @@ const api: DesktopApi = {
   attachmentPick: (payload) => {
     emitE2EIpcCall('attachmentPick')
     return ipcRenderer.invoke('attachment-pick', payload)
+  },
+  attachmentGetSourcePath: (file) => webUtils.getPathForFile(file),
+  attachmentCreateFromPath: (payload) => {
+    emitE2EIpcCall('attachmentCreateFromPath')
+    return ipcRenderer.invoke('attachment-create-from-path', payload)
   },
   attachmentSaveFile: (payload) => {
     emitE2EIpcCall('attachmentSaveFile')

@@ -96,7 +96,7 @@ import {
 } from 'pptx-kit'
 import type { AiFileChangeRecord, JsonObject } from '../../../../../../shared/types'
 import { fileExists } from '../docx/review/utils'
-import { resolveWorkspacePath } from '../terminal/commandPolicy'
+import { isPathInsideRoot, resolveToolPath } from '../terminal/commandPolicy'
 import {
   compilePptSlideHtml,
   normalizePptColor,
@@ -328,12 +328,11 @@ const resolveAssetBytes = async (input: {
       throw new Error(`无效的本地 file URL: ${input.rawPath}`)
     }
   }
-  const resolved = resolveWorkspacePath({
+  const resolved = resolveToolPath({
     rawPath,
-    cwd: path.dirname(input.sourcePath),
-    rootPath: input.workspaceRootPath
+    cwd: path.dirname(input.sourcePath)
   })
-  if (!resolved) throw new Error(`资源路径超出工作区: ${input.rawPath}`)
+  if (!resolved) throw new Error(`资源路径无效: ${input.rawPath}`)
   return new Uint8Array(await fs.readFile(resolved))
 }
 
@@ -1144,13 +1143,12 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
   const workspaceRootPath = path.resolve(input.workspaceRootPath)
 
   const resolvePptPath = (rawPath: string): string => {
-    const resolved = resolveWorkspacePath({
+    const resolved = resolveToolPath({
       rawPath,
-      cwd: workspaceRootPath,
-      rootPath: workspaceRootPath
+      cwd: workspaceRootPath
     })
     if (!resolved || !resolved.toLowerCase().endsWith('.pptx')) {
-      throw new Error('sourcePath 必须是当前工作区内的 .pptx 文件')
+      throw new Error('sourcePath 必须是 .pptx 文件')
     }
     return resolved
   }
@@ -1504,6 +1502,13 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
     const records: AiFileChangeRecord[] = []
     for (const document of documents.values()) {
       if (!document.dirty) continue
+      if (!isPathInsideRoot(document.sourcePath, workspaceRootPath)) {
+        document.dirty = false
+        document.movedSlideIds.clear()
+        document.movedElementIds.clear()
+        document.elementLineage.clear()
+        continue
+      }
       const issues = validatePresentation(document.presentation).filter(
         (issue) => issue.severity === 'error'
       )

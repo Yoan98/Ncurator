@@ -5,7 +5,6 @@ import { chmod, mkdtemp, rm, unlink, writeFile } from 'node:fs/promises'
 import * as pty from 'node-pty'
 import type { IPty } from 'node-pty'
 import type { AiRuntimePlatform } from '../../../types'
-import { isPathInsideAnyRoot } from './commandPolicy'
 import { buildTerminalEnvironment } from './environment/TerminalEnvironment'
 import { getTerminalPlatformAdapter, type TerminalPlatformAdapter } from './platform'
 import { TerminalProtocol, type TerminalProtocolEvent } from './protocol/TerminalProtocol'
@@ -71,7 +70,6 @@ type ManagedTerminalSession = {
   chatSessionId: string
   workspaceId: string
   runtimeDirectory: string
-  allowedRootPaths: string[]
   adapter: TerminalPlatformAdapter
   protocol: TerminalProtocol
   process: IPty
@@ -195,8 +193,7 @@ export class TerminalSessionManager {
 
     const leadingCwd = await session.adapter.resolveCommandCwd({
       command: input.command,
-      currentPath: session.currentTerminalPath,
-      allowedRootPaths: session.allowedRootPaths
+      currentPath: session.currentTerminalPath
     })
     if (leadingCwd) session.currentTerminalPath = leadingCwd
 
@@ -397,14 +394,6 @@ export class TerminalSessionManager {
     if (activeCount >= this.maxSessionsPerChat) throw new Error('terminal_session_limit_reached')
 
     const rootPath = path.resolve(input.workspaceRootPath)
-    const allowedRootPaths = Array.from(
-      new Set(
-        [rootPath, input.userRuntimeRootPath]
-          .map((root) => String(root || '').trim())
-          .filter(Boolean)
-          .map((root) => path.resolve(root))
-      )
-    )
     const ready = createDeferred()
     const exited = createDeferred()
     const runtimeDirectory = await mkdtemp(path.join(os.tmpdir(), 'ncurator-terminal-runtime-'))
@@ -434,7 +423,6 @@ export class TerminalSessionManager {
       chatSessionId: input.chatSessionId,
       workspaceId: input.workspaceId,
       runtimeDirectory,
-      allowedRootPaths,
       adapter,
       protocol,
       process: terminalProcess,
@@ -591,7 +579,7 @@ export class TerminalSessionManager {
 
   private updateCurrentPath(session: ManagedTerminalSession, encodedCwd: string): void {
     const nextPath = decodeCwd(encodedCwd)
-    if (nextPath && isPathInsideAnyRoot(nextPath, session.allowedRootPaths)) {
+    if (nextPath && path.isAbsolute(nextPath)) {
       session.currentTerminalPath = path.resolve(nextPath)
     }
   }

@@ -25,7 +25,7 @@ import type {
 } from './types'
 import { getDocxWorkerClient } from './worker/docxWorkerClient'
 import type { DocxWorkerRequest, DocxWorkerResponse } from './worker/types'
-import { resolveWorkspacePath } from '../terminal/commandPolicy'
+import { resolveToolPath } from '../terminal/commandPolicy'
 import { isSemanticSearchableBlock, splitEmbeddingRows } from './semanticSearch'
 import { createToolEventEmitter } from '../utils/toolEvents'
 import type { ToolEventEmitter } from '../utils/toolEvents'
@@ -324,10 +324,9 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
   }
 
   const resolveReadableWordPath = (params: { cwd: string; rawPath: string }): string | null => {
-    const resolved = resolveWorkspacePath({
+    const resolved = resolveToolPath({
       rawPath: params.rawPath,
-      cwd: params.cwd,
-      rootPath: workspaceRootPath
+      cwd: params.cwd
     })
     if (!resolved) return null
     if (!isReadableWordPath(resolved)) return null
@@ -1331,7 +1330,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
           toolName: params.toolName,
           toolCallId: params.toolCallId,
           reason: 'invalid_input',
-          error: 'sourcePath must be a workspace-bound .doc or .docx path'
+          error: 'sourcePath must be a .doc or .docx path'
         })
       }
     }
@@ -1383,7 +1382,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
           toolName: params.toolName,
           toolCallId: params.toolCallId,
           reason: 'invalid_input',
-          error: 'sourcePath must be a workspace-bound .docx path'
+          error: 'sourcePath must be a .docx path'
         })
       }
     }

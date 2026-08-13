@@ -31,6 +31,7 @@ import type {
   ChatMessage,
   AttachmentPickRequest,
   AttachmentPickResponse,
+  AttachmentCreateFromPathRequest,
   AttachmentProcessResponse,
   AttachmentSaveRequest,
   ChatRunEventsRequest,
@@ -188,6 +189,10 @@ export type DesktopApi = {
   readFile: (filePath: string) => Promise<Uint8Array>
   fileExists: (filePath: string) => Promise<boolean>
   attachmentPick: (payload: AttachmentPickRequest) => Promise<AttachmentPickResponse>
+  attachmentGetSourcePath: (file: File) => string
+  attachmentCreateFromPath: (
+    payload: AttachmentCreateFromPathRequest
+  ) => Promise<AttachmentProcessResponse>
   attachmentSaveFile: (payload: AttachmentSaveRequest) => Promise<AttachmentProcessResponse>
   chatSessionList: () => Promise<ChatSessionListItem[]>
   chatSessionSave: (session: ChatSession) => Promise<{ success: boolean; error?: string }>

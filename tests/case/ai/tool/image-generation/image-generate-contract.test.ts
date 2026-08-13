@@ -130,7 +130,7 @@ describe('ai tool image-generation backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['image-generation'],
-      description: '验证危险 SVG、非法格式和工作区越界失败时不写入文件。',
+      description: '验证危险 SVG、非法格式会失败，工作区外路径可写入但不产生回退记录。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -170,7 +170,7 @@ describe('ai tool image-generation backend', () => {
         const outsidePath = path.join(path.dirname(runtime.workspaceRoot), 'outside.png')
         const outsideError = await captureError({
           outputPath: outsidePath,
-          svg: '<svg malformed'
+          svg: createSvg('#123456')
         })
         const formatError = await captureError({
           outputPath: 'images/generated.gif',
@@ -222,7 +222,7 @@ describe('ai tool image-generation backend', () => {
             result.cssExternalError.includes('external resource') &&
             result.cssImportError.includes('forbidden CSS import') &&
             result.oversizedError.includes('dimensions are too large') &&
-            result.outsideError.includes('Invalid file path') &&
+            result.outsideError.length === 0 &&
             result.formatError.length > 0 &&
             result.malformedError.includes('parsing failed') &&
             result.preservedUnchanged &&
@@ -231,12 +231,12 @@ describe('ai tool image-generation backend', () => {
             !result.cssExternalExists &&
             !result.cssImportExists &&
             !result.oversizedExists &&
-            !result.outsideExists &&
+            result.outsideExists &&
             result.recordCount === 0 &&
             result.artifactCount === 0,
           {
             name: 'image-generate-rejects-unsafe-input',
-            message: '危险、越界和不支持的图片生成请求必须失败且不产生文件副作用。',
+            message: '危险和不支持的图片生成请求必须失败；工作区外路径可写入但不产生回退记录。',
             data: result
           }
         )

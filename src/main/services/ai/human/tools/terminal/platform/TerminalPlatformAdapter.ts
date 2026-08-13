@@ -11,7 +11,6 @@ export type TerminalShellConfig = {
 export type ResolveCommandCwdInput = {
   command: string
   currentPath: string
-  allowedRootPaths: readonly string[]
 }
 
 export interface TerminalPlatformAdapter {

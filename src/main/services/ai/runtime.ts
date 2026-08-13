@@ -10,6 +10,7 @@ import {
 } from './utils/runContext'
 import type { AiExecutionPermission, AiPreference } from '../../../shared/types'
 import { saveHumanResumeSnapshot } from './utils/resumeSnapshot'
+import { isPathInsideRoot } from './human/tools/terminal/commandPolicy'
 
 const normalizeAiPreference = (value: unknown): AiPreference =>
   value === 'local_sources_relaxed' || value === 'local_sources_strict' ? value : 'default'
@@ -272,6 +273,12 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
       deps.docxApplyService.discardRun(payload.runId)
     },
     saveFileChangeRecord: async (record) => {
+      if (
+        normalizedWorkspace?.rootPath &&
+        !isPathInsideRoot(record.path, normalizedWorkspace.rootPath)
+      ) {
+        return
+      }
       await deps.saveFileChangeRecord(record, normalizedWorkspace.rootPath)
     },
     listFileChangeRecords: async (input) => {

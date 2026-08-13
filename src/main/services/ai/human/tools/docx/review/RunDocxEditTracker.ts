@@ -10,6 +10,7 @@ import type { RunDocxEditDocument } from './types'
 import { buildDocxChangeSummary, calculateFileStats, sanitizeFileName } from './utils'
 import { buildDocxApplyArtifactPaths } from './viewProjection'
 import { projectReviewView } from './viewProjector'
+import { isPathInsideRoot } from '../../terminal/commandPolicy'
 
 type RunDocxEditState = {
   sessionId: string
@@ -97,12 +98,16 @@ export class RunDocxEditTracker {
     const state = this.runEdits.get(input.runId)
     if (!state) return []
 
-    const changedDocuments = [...state.documentBySourcePath.values()].filter(
-      (document) =>
-        document.dirtyChangeCount > 0 &&
-        document.replaySession &&
-        projectReviewView(document.replaySession).some((node) => node.reviewState !== 'normal')
-    )
+    const changedDocuments = [...state.documentBySourcePath.values()].filter((document) => {
+      if (
+        document.dirtyChangeCount <= 0 ||
+        !document.replaySession ||
+        !projectReviewView(document.replaySession).some((node) => node.reviewState !== 'normal')
+      ) {
+        return false
+      }
+      return isPathInsideRoot(document.sourcePath, input.workspaceRootPath)
+    })
     if (changedDocuments.length === 0) {
       this.runEdits.delete(input.runId)
       return []

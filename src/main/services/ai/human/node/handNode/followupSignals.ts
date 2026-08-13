@@ -116,9 +116,7 @@ export const deriveHandFollowupSignals = (input: {
   }
 
   return {
-    decisionHint:
-      groupedFailureHints.workspaceBoundaryHint
-      || groupedFailureHints.callInvalidHint
+    decisionHint: groupedFailureHints.callInvalidHint
   }
 }
 

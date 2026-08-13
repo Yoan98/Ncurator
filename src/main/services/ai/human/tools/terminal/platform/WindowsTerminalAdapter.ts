@@ -2,7 +2,6 @@ import path from 'node:path'
 import { stat } from 'node:fs/promises'
 import { execFile } from 'node:child_process'
 import type { IPty } from 'node-pty'
-import { isPathInsideAnyRoot } from '../commandPolicy'
 import type { TerminalProtocol } from '../protocol/TerminalProtocol'
 import type { ResolveCommandCwdInput, TerminalPlatformAdapter } from './TerminalPlatformAdapter'
 
@@ -73,7 +72,6 @@ export class WindowsTerminalAdapter implements TerminalPlatformAdapter {
     const requestedPath = match[1] || match[2] || match[3]
     if (!requestedPath) return undefined
     const nextPath = path.resolve(input.currentPath, requestedPath)
-    if (!isPathInsideAnyRoot(nextPath, input.allowedRootPaths)) return undefined
     try {
       return (await stat(nextPath)).isDirectory() ? nextPath : undefined
     } catch {

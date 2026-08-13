@@ -1,4 +1,3 @@
-import os from 'node:os'
 import path from 'node:path'
 import type { AiRuntimePlatform } from '../../../types'
 import { getAiRuntimePlatform } from '../../../utils/platform'
@@ -13,33 +12,6 @@ import {
   parseTerminalCommandSegments as parsePolicyCommandSegments,
   parseTerminalCommandTokens as parsePolicyCommandTokens
 } from './policy/shellSyntax'
-
-type PathArgumentStrategy = 'all_non_option_args' | 'skip_first_non_option_arg' | 'none'
-
-const COMMAND_PATH_ARGUMENT_STRATEGIES: Partial<Record<string, PathArgumentStrategy>> = {
-  echo: 'none',
-  printf: 'none',
-  git: 'none',
-  node: 'none',
-  python: 'none',
-  python3: 'none',
-  rg: 'skip_first_non_option_arg',
-  grep: 'skip_first_non_option_arg',
-  sed: 'skip_first_non_option_arg',
-  'get-content': 'all_non_option_args',
-  'get-childitem': 'all_non_option_args',
-  'select-object': 'none',
-  'select-string': 'all_non_option_args',
-  'test-path': 'all_non_option_args',
-  'resolve-path': 'all_non_option_args',
-  'copy-item': 'all_non_option_args',
-  'move-item': 'all_non_option_args',
-  'remove-item': 'all_non_option_args',
-  'new-item': 'all_non_option_args',
-  'set-content': 'all_non_option_args',
-  'add-content': 'all_non_option_args',
-  'out-file': 'all_non_option_args'
-}
 
 const EXCEL_FILE_PATTERN = /\.(?:xlsx|xlsm|xltx|xltm)(?:['"\s;|&]|$)/i
 
@@ -90,59 +62,6 @@ export const analyzeTerminalCommandPolicy = (
 const isRedirectionOperator = (token: string): boolean =>
   token === '>' || token === '>>' || token === '1>' || token === '1>>'
 
-const isRelativeEscapeToken = (token: string): boolean => {
-  const normalized = String(token || '')
-    .trim()
-    .replace(/\\/g, '/')
-  return (
-    normalized === '..' ||
-    normalized.startsWith('../') ||
-    normalized.includes('/../') ||
-    normalized.endsWith('/..')
-  )
-}
-
-const collectBoundaryPathTokens = (tokens: string[]): string[] => {
-  if (tokens.length <= 1) return []
-
-  const command = String(tokens[0] || '').toLowerCase()
-  const strategy = COMMAND_PATH_ARGUMENT_STRATEGIES[command] || 'all_non_option_args'
-  const pathTokens: string[] = []
-  let skippedNonOptionCount = 0
-
-  for (let index = 1; index < tokens.length; index += 1) {
-    const token = tokens[index]
-    if (!token) continue
-
-    if (isRedirectionOperator(token)) {
-      const next = tokens[index + 1]
-      if (next && !next.startsWith('-')) {
-        pathTokens.push(next)
-        index += 1
-      }
-      continue
-    }
-
-    const inlineRedirection = token.match(/^(?:1?>>?)(.+)$/)
-    if (inlineRedirection?.[1]) {
-      pathTokens.push(inlineRedirection[1])
-      continue
-    }
-
-    if (token.startsWith('-')) continue
-    if (strategy === 'none') continue
-    if (strategy === 'skip_first_non_option_arg' && skippedNonOptionCount === 0) {
-      skippedNonOptionCount += 1
-      continue
-    }
-
-    skippedNonOptionCount += 1
-    pathTokens.push(token)
-  }
-
-  return pathTokens
-}
-
 export const isPathInsideRoot = (candidatePath: string, rootPath: string) => {
   const useWindowsPaths =
     /^[a-z]:[\\/]/i.test(candidatePath) ||
@@ -156,56 +75,14 @@ export const isPathInsideRoot = (candidatePath: string, rootPath: string) => {
   return rel === '' || (!rel.startsWith('..') && !pathApi.isAbsolute(rel))
 }
 
-export const isPathInsideAnyRoot = (candidatePath: string, rootPaths: readonly string[]): boolean =>
-  rootPaths.some((rootPath) => isPathInsideRoot(candidatePath, rootPath))
-
-export const resolveWorkspacePath = (input: {
+export const resolveToolPath = (input: {
   rawPath: string
   cwd: string
-  rootPath: string
 }): string | null => {
   const raw = String(input.rawPath || '').trim()
   if (!raw) return null
-  const base = raw.startsWith('/') ? raw : path.resolve(input.cwd, raw)
-  const resolved = path.resolve(base)
-  if (!isPathInsideRoot(resolved, input.rootPath)) return null
-  return resolved
-}
-
-export const checkWorkspaceBoundary = (
-  command: string,
-  rootPaths: string | readonly string[],
-  platform: AiRuntimePlatform = getAiRuntimePlatform()
-): { ok: true } | { ok: false; reason: string } => {
-  const allowedRootPaths = (Array.isArray(rootPaths) ? rootPaths : [rootPaths])
-    .map((rootPath) => String(rootPath || '').trim())
-    .filter(Boolean)
-  if (allowedRootPaths.length === 0) {
-    return { ok: false, reason: 'allowed root path is missing' }
-  }
-
-  for (const segment of parseTerminalCommandSegments(command, {
-    windowsStyle: isWindowsPlatform(platform)
-  })) {
-    for (const candidatePath of collectBoundaryPathTokens(segment.tokens)) {
-      if (isRelativeEscapeToken(candidatePath)) {
-        return { ok: false, reason: `relative path escapes workspace boundary: ${candidatePath}` }
-      }
-      const expandedCandidatePath = /^~[\\/]/.test(candidatePath)
-        ? path.join(os.homedir(), candidatePath.slice(2))
-        : candidatePath
-      if (
-        (expandedCandidatePath.startsWith('/') ||
-          /^[a-z]:[\\/]/i.test(expandedCandidatePath) ||
-          /^\\\\/.test(expandedCandidatePath)) &&
-        !isPathInsideAnyRoot(expandedCandidatePath, allowedRootPaths)
-      ) {
-        return { ok: false, reason: `path out of allowed boundary: ${candidatePath}` }
-      }
-    }
-  }
-
-  return { ok: true }
+  const base = path.isAbsolute(raw) ? raw : path.resolve(input.cwd, raw)
+  return path.resolve(base)
 }
 
 const extractRedirectionPaths = (tokens: string[]): string[] => {

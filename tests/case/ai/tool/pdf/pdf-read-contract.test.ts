@@ -229,7 +229,7 @@ describe('ai tool pdf backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['pdf'],
-      description: '验证越界页码、非法 regex、伪 PDF 和逃逸工作区的符号链接会明确失败。',
+      description: '验证越界页码、非法 regex、伪 PDF 会明确失败，工作区外 PDF 可读取。',
       fixtures: [PDF_FIXTURE],
       runMode: 'single',
       execute: async (runtime) => {
@@ -268,7 +268,7 @@ describe('ai tool pdf backend', () => {
           const corrupt = await harness.invoke<PdfFailure>('pdf_inspect', {
             sourcePath: corruptPath
           })
-          const outside = await harness.invoke<PdfFailure>('pdf_inspect', {
+          const outside = await harness.invoke<Record<string, unknown>>('pdf_inspect', {
             sourcePath: escapedPdfPath
           })
           return { outOfRange, badRegex, oversizedRange, corrupt, outside }
@@ -279,16 +279,13 @@ describe('ai tool pdf backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          [
-            result.outOfRange,
-            result.badRegex,
-            result.oversizedRange,
-            result.corrupt,
-            result.outside
-          ].every((failure) => failure.ok === false && failure.error.length > 0),
+          [result.outOfRange, result.badRegex, result.oversizedRange, result.corrupt].every(
+            (failure) => failure.ok === false && failure.error.length > 0
+          ) &&
+            typeof result.outside.pageCount === 'number' && result.outside.pageCount > 0,
           {
             name: 'pdf-invalid-inputs-fail-explicitly',
-            message: '所有 PDF 边界错误都应返回明确失败信息。',
+            message: 'PDF 非法输入应明确失败，工作区外 PDF 应可读取。',
             data: result
           }
         )

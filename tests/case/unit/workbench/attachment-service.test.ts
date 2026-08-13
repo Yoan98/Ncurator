@@ -72,25 +72,29 @@ describe('attachment service runtime directories', () => {
     await expect(fs.stat(path.join(workspaceRootPath, '.ncurator', 'scripts'))).rejects.toThrow()
   })
 
-  it('imports attachments into the runtime bucket and keeps names unique', async () => {
+  it('creates source attachments without copying them into the runtime bucket', async () => {
     const sourcePath = path.join(sourceRootPath, 'reference.json')
     await fs.writeFile(sourcePath, '{"ready":true}')
 
-    const first = await service.importAttachmentFromPath({
-      workspaceRootPath,
-      assetBucketId: 'bucket-2',
-      sourcePath
-    })
-    const second = await service.importAttachmentFromPath({
-      workspaceRootPath,
-      assetBucketId: 'bucket-2',
-      sourcePath
-    })
+    const attachment = await service.createSourceAttachmentFromPath({ sourcePath })
 
-    const bucketPath = path.join(workspaceRootPath, '.ncurator', 'runtime', 'assets', 'bucket-2')
-    expect(first.path).toBe(path.join(bucketPath, 'reference.json'))
-    expect(second.path).toBe(path.join(bucketPath, 'reference-1.json'))
-    await expect(fs.readFile(second.path, 'utf8')).resolves.toBe('{"ready":true}')
+    expect(attachment.path).toBe(sourcePath)
+    expect(attachment.name).toBe('reference.json')
+    await expect(
+      fs.stat(path.join(workspaceRootPath, '.ncurator', 'runtime', 'assets'))
+    ).rejects.toThrow()
+  })
+
+  it('rejects source attachment directories and unsupported files', async () => {
+    const unsupportedPath = path.join(sourceRootPath, 'archive.zip')
+    await fs.writeFile(unsupportedPath, 'not supported')
+
+    await expect(
+      service.createSourceAttachmentFromPath({ sourcePath: sourceRootPath })
+    ).rejects.toThrow('附件必须是文件')
+    await expect(
+      service.createSourceAttachmentFromPath({ sourcePath: unsupportedPath })
+    ).rejects.toThrow('暂不支持该文件格式')
   })
 
   it('accepts PDF attachments and assigns application/pdf', async () => {

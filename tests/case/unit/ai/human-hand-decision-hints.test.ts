@@ -5,7 +5,6 @@ import {
 } from '../../../../src/main/services/ai/human/node/handNode/followupSignals'
 import {
   buildHandCallInvalidHint,
-  buildHandWorkspaceBoundaryBlockedHint,
   deriveGroupedHandFailureHints
 } from '../../../../src/main/services/ai/human/node/handNode/decisionHints'
 
@@ -43,7 +42,7 @@ describe('ai unit hand decision hints', () => {
     })
   })
 
-  it('groups workspace boundary failures without repeating generic runtime errors', () => {
+  it('does not convert external path failures into a workspace boundary hint', () => {
     const grouped = deriveGroupedHandFailureHints({
       calls: [
         {
@@ -79,15 +78,7 @@ describe('ai unit hand decision hints', () => {
       ]
     })
 
-    expect(grouped.workspaceBoundaryHint).toEqual(
-      buildHandWorkspaceBoundaryBlockedHint([
-        {
-          callIndex: 0,
-          toolName: 'terminal_run',
-          message: 'workspace boundary check failed: relative path escapes workspace boundary: ../secret.txt'
-        }
-      ])
-    )
+    expect(grouped).not.toHaveProperty('workspaceBoundaryHint')
     expect(grouped).not.toHaveProperty('toolRuntimeFailedHint')
   })
 

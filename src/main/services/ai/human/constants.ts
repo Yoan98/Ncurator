@@ -44,8 +44,7 @@ export const HUMAN_DECISION_HINT_CODES = [
   'brain_output_schema_invalid',
   'brain_todolist_incomplete',
   'brain_content_safety',
-  'hand_call_invalid',
-  'hand_workspace_boundary_blocked'
+  'hand_call_invalid'
 ] as const
 
 export const HUMAN_MAX_ACTIVE_TOOLS = 25

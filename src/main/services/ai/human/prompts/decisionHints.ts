@@ -78,13 +78,6 @@ export const renderDecisionHintForBrain = (hint: HumanDecisionHint): string => {
           (item) => `calls[${String(item.callIndex)}] 的工具 \`${item.toolName}\`：${item.message}`
         )
       ].join('\n')
-    case 'hand_workspace_boundary_blocked':
-      return [
-        '上一轮 hand 工具调用命中了工作区边界保护，因此相关调用没有执行。',
-        ...hint.detail.blockedCalls.map(
-          (item) => `calls[${String(item.callIndex)}] 的工具 \`${item.toolName}\`：${item.message}`
-        )
-      ].join('\n')
     case 'brain_content_safety':
       return hint.detail.message
     case 'brain_todolist_incomplete':

@@ -665,7 +665,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     focusEditorAfterControlChange()
   }, [appendAttachments, focusEditorAfterControlChange, message, requestAttachmentTarget])
 
-  const createAttachmentFromFile = useCallback(
+  const createClipboardAttachmentFromFile = useCallback(
     async (file: File) => {
       const target = await requestAttachmentTarget()
       if (!target) {
@@ -689,10 +689,34 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     [message, requestAttachmentTarget]
   )
 
+  const createDroppedAttachmentFromFile = useCallback(
+    async (file: File) => {
+      const target = await requestAttachmentTarget()
+      if (!target) return null
+      const sourcePath = window.api.attachmentGetSourcePath(file)
+      if (!sourcePath) {
+        message.warning('无法读取拖入文件的原始路径')
+        return null
+      }
+      const created = await window.api.attachmentCreateFromPath({
+        sourcePath,
+        mimeType: file.type,
+        kind: file.type.startsWith('image/') ? 'image' : 'file'
+      })
+      if (!created.success && created.error) message.warning(created.error)
+      return created.attachment
+        ? { attachment: created.attachment, assetBucketId: target.assetBucketId }
+        : null
+    },
+    [message, requestAttachmentTarget]
+  )
+
   const handleAttachmentFiles = useCallback(
-    (files: File[]): void => {
+    (files: File[], source: 'clipboard' | 'drop'): void => {
       if (files.length === 0) return
-      void Promise.all(files.map(createAttachmentFromFile)).then((items) => {
+      const createAttachment =
+        source === 'drop' ? createDroppedAttachmentFromFile : createClipboardAttachmentFromFile
+      void Promise.all(files.map(createAttachment)).then((items) => {
         const validItems = items.filter(
           (item): item is { attachment: ChatAttachment; assetBucketId: string } => Boolean(item)
         )
@@ -702,11 +726,11 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
         )
       })
     },
-    [appendAttachments, createAttachmentFromFile]
+    [appendAttachments, createClipboardAttachmentFromFile, createDroppedAttachmentFromFile]
   )
 
   useEffect(() => {
-    onFileDropHandlerReady?.(handleAttachmentFiles)
+    onFileDropHandlerReady?.((files) => handleAttachmentFiles(files, 'drop'))
     return () => onFileDropHandlerReady?.(null)
   }, [handleAttachmentFiles, onFileDropHandlerReady])
 
@@ -714,7 +738,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     const files = Array.from(event.clipboardData.files || [])
     if (files.length > 0) {
       event.preventDefault()
-      handleAttachmentFiles(files)
+      handleAttachmentFiles(files, 'clipboard')
       return
     }
     const pastedText = event.clipboardData.getData('text/plain')

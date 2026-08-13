@@ -28,8 +28,8 @@
 - `tool` 只验证真实生产工具调用，不允许 fake。
 - `tool / docx` 包含 `docx-edit-serial-actions-stability`，用于守住同一次 `docx_edit(actions)` 内插入、替换、删除后的 block 定位稳定性。
 - `tool / text-file` 覆盖普通文本读取、四种写入 action、修改记录、结构化 diff 与回退前置数据。
-- `tool / image-generation` 覆盖 SVG 内部绘制输入、PNG/JPEG/WebP 转码、自动创建或更新、修改记录、Artifact、安全校验和工作区边界。
-- `tool / pdf` 使用真实 `深度学习.pdf`，覆盖元数据、页级正文、literal/regex 搜索、页面 PNG、工作区边界、损坏文件和结果大小限制。
+- `tool / image-generation` 覆盖 SVG 内部绘制输入、PNG/JPEG/WebP 转码、自动创建或更新、工作区内修改记录、Artifact、安全校验和工作区外绝对路径写入不记录回退。
+- `tool / pdf` 使用真实 `深度学习.pdf`，覆盖元数据、页级正文、literal/regex 搜索、页面 PNG、工作区外绝对路径读取、损坏文件和结果大小限制。
 - `tool / web-browsing` 包含 `web-crawl-contract`，用于守住 `web_crawl`、`web_search` 和 `browser_use` 工具契约。
 - 目标：验证 tool 与 `hand` 执行守卫的生产输入输出。
 - 约束：使用真实工具、store、docx apply service 和 artifact 流；禁止 fake `documentsStore`、`embeddingService`、`resolveDocxOpenTarget` 或 tool result。
@@ -634,9 +634,9 @@ AI unit / 辅助测试目录：
 
 - 测试类型：`backend`
 - What：PDF 输入边界会明确失败。
-- Why：防止路径逃逸、伪 PDF、非法 regex 和越界页码进入不确定状态。
+- Why：防止伪 PDF、非法 regex 和越界页码进入不确定状态，同时确认外部附件路径可以读取。
 - How：分别传入越界页码、非法 regex、错误文件头以及指向工作区外的链接；Windows 使用无需提升权限的目录 junction，Unix 使用目录 symlink。
-- Oracle：每种输入都返回明确失败，不读取工作区外文件。
+- Oracle：越界页码、非法 regex 和错误文件头返回明确失败；工作区外 PDF 通过符号链接仍可正常读取。
 - Not：不做密码破解或损坏文件修复。
 
 #### ppt 类别
@@ -888,9 +888,9 @@ AI unit / 辅助测试目录：
 ##### `image-generate-safety-and-boundary-contract`
 
 - 测试类型：`backend`
-- What：危险 SVG、不支持格式和工作区越界请求失败且不产生文件副作用。
+- What：危险 SVG 和不支持格式请求失败；工作区外绝对路径可写入但不产生回退记录。
 - Why：SVG 是可包含脚本和外部资源的输入格式，图片工具必须在写文件前完成安全和路径校验。
-- How：分别提交包含脚本、外部图片引用、CSS 外链、CSS import、超大尺寸、malformed SVG、`.gif` 输出路径和工作区外路径的真实工具调用；越界路径同时携带非法 SVG 以确认先检查路径，malformed SVG 使用一份已存在目标文件。
+- How：分别提交包含脚本、外部图片引用、CSS 外链、CSS import、超大尺寸、malformed SVG、`.gif` 输出路径和工作区外路径的真实工具调用；工作区外路径使用安全 SVG，malformed SVG 使用一份已存在目标文件。
 - Oracle：所有调用均返回明确错误；新目标文件不存在；已有目标文件保持调用前 bytes；不生成图片修改记录或 `file_artifact`。
 - Not：不把内部安全规则写入 Tool 提示词，也不穷举全部 SVG 标签。
 
