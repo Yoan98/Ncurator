@@ -30,6 +30,8 @@ export type WorkbenchSelectOption = {
   triggerSuffix?: ReactNode
   icon?: ReactNode
   description?: string
+  labelClassName?: string
+  descriptionClassName?: string
   keywords?: string[]
   trailing?: ReactNode
   disabled?: boolean

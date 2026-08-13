@@ -36,6 +36,7 @@ type WorkbenchSelectProps = {
   menuAlign?: FloatingPlacementAlign
   menuPreferredHeight?: number
   menuMaxHeight?: number
+  showDescriptions?: boolean
   emptyAction?: {
     label: string
     icon?: React.ReactNode
@@ -73,6 +74,7 @@ const DEFAULT_MENU_POSITION: MenuPosition = {
 const SEARCH_MENU_HEADER_HEIGHT = 48
 const MENU_VERTICAL_PADDING = 12
 const MENU_OPTION_HEIGHT = 36
+const MENU_OPTION_WITH_DESCRIPTION_HEIGHT = 60
 const SUBMENU_WIDTH = 220
 const SUBMENU_GAP = 6
 
@@ -80,9 +82,11 @@ const estimateMenuHeight = (input: {
   optionCount: number
   searchable: boolean
   maxHeight: number
+  showDescriptions: boolean
 }): number => {
   const listItemCount = Math.max(1, input.optionCount)
-  const estimatedListHeight = MENU_VERTICAL_PADDING + listItemCount * MENU_OPTION_HEIGHT
+  const optionHeight = input.showDescriptions ? MENU_OPTION_WITH_DESCRIPTION_HEIGHT : MENU_OPTION_HEIGHT
+  const estimatedListHeight = MENU_VERTICAL_PADDING + listItemCount * optionHeight
   const estimatedHeight = estimatedListHeight + (input.searchable ? SEARCH_MENU_HEADER_HEIGHT : 0)
   return Math.min(input.maxHeight, estimatedHeight)
 }
@@ -129,6 +133,7 @@ const WorkbenchSelect: React.FC<WorkbenchSelectProps> = ({
   menuAlign = 'start',
   menuPreferredHeight,
   menuMaxHeight,
+  showDescriptions = false,
   emptyAction,
   'data-testid': dataTestId
 }) => {
@@ -185,7 +190,8 @@ const WorkbenchSelect: React.FC<WorkbenchSelectProps> = ({
       estimateMenuHeight({
         optionCount: filteredOptions.length,
         searchable,
-        maxHeight
+        maxHeight,
+        showDescriptions
       })
     const placement = resolveFloatingPlacement({
       triggerRect: rect,
@@ -213,7 +219,8 @@ const WorkbenchSelect: React.FC<WorkbenchSelectProps> = ({
     menuPreferredHeight,
     minMenuWidth,
     filteredOptions.length,
-    searchable
+    searchable,
+    showDescriptions
   ])
 
   useLayoutEffect(() => {
@@ -413,6 +420,9 @@ const WorkbenchSelect: React.FC<WorkbenchSelectProps> = ({
                         disabled={option.disabled}
                         className={joinClassNames(
                           'workbench-select-option',
+                          showDescriptions && option.description
+                            ? 'workbench-select-option-with-description'
+                            : '',
                           selected || childSelected ? 'workbench-select-option-selected' : '',
                           (selected || childSelected) && selectedWithoutBackground
                             ? 'workbench-select-option-selected-plain'
@@ -430,8 +440,25 @@ const WorkbenchSelect: React.FC<WorkbenchSelectProps> = ({
                               {option.icon}
                             </span>
                           ) : null}
-                          <span className="min-w-0 truncate text-[13px] font-medium text-[#37352F]">
-                            {option.label}
+                          <span className="min-w-0 flex-1">
+                            <span
+                              className={joinClassNames(
+                                'block truncate text-[13px] font-medium text-[#37352F]',
+                                option.labelClassName
+                              )}
+                            >
+                              {option.label}
+                            </span>
+                            {showDescriptions && option.description ? (
+                              <span
+                                className={joinClassNames(
+                                  'mt-0.5 block truncate text-[12px] leading-4 text-[#91918E]',
+                                  option.descriptionClassName
+                                )}
+                              >
+                                {option.description}
+                              </span>
+                            ) : null}
                           </span>
                           {!hasChildren && option.trailing ? (
                             <span className="ml-0.5 flex shrink-0 items-center text-[#787774]">

@@ -1200,6 +1200,10 @@ textarea,
   @apply flex w-full items-center justify-between gap-3 px-4 py-2 text-left transition hover:bg-[#F7F7F5];
 }
 
+.workbench-select-option-with-description {
+  @apply min-h-[60px] py-2.5;
+}
+
 .workbench-select-option-selected {
   background: transparent;
 }

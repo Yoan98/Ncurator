@@ -958,16 +958,18 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
       {
         value: 'review',
         label: '审核',
-        icon: <HiShieldCheck className="h-4 w-4 text-[#3B6E8F]" />,
+        icon: <HiShieldCheck className="h-4 w-4 text-[#787774]" />,
         triggerIcon: <HiShieldCheck className="h-3.5 w-3.5" />,
-        description: '执行操作前请求确认'
+        description: '涉及到风险操作需要你审核'
       },
       {
         value: 'full_access',
         label: '完全访问',
-        icon: <HiExclamationTriangle className="h-4 w-4 text-[#C46A1B]" />,
-        triggerIcon: <HiExclamationTriangle className="h-3.5 w-3.5" />,
-        description: '允许 AI 直接执行操作'
+        icon: <HiExclamationTriangle className="h-4 w-4 text-[#E85D04]" />,
+        triggerIcon: <HiExclamationTriangle className="h-3.5 w-3.5 text-[#E85D04]" />,
+        description: '不受限制的操作你的电脑',
+        labelClassName: '!text-[#E85D04]',
+        descriptionClassName: '!text-[#E85D04]'
       }
     ],
     []
@@ -1251,6 +1253,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                   triggerClassName="workbench-composer-pill"
                   menuClassName="workbench-composer-menu"
                   minMenuWidth={220}
+                  showDescriptions
                   data-testid={workbenchSelectors.executionPermissionSwitch}
                 />
               </span>

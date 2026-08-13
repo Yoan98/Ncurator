@@ -95,6 +95,21 @@ describe('workbench conversation e2e', () => {
           await selectWorkbenchVisualModel(page, env.visualModelName)
           await selectWorkbenchAiPreference(page, '严谨')
           const selectedAiPreferenceBeforeReload = await readWorkbenchAiPreferenceSelection(page)
+          await getWorkbenchLocator(page, workbenchSelectors.executionPermissionSwitch).click()
+          const executionPermissionMenu = page
+            .locator('.workbench-select-menu.workbench-composer-menu')
+            .last()
+          const reviewPermissionOption = executionPermissionMenu
+            .getByRole('option')
+            .filter({ hasText: '审核' })
+            .first()
+          const fullAccessPermissionOption = executionPermissionMenu
+            .getByRole('option')
+            .filter({ hasText: '完全访问' })
+            .first()
+          const reviewPermissionMenuText = (await reviewPermissionOption.textContent()) || ''
+          const fullAccessPermissionMenuText = (await fullAccessPermissionOption.textContent()) || ''
+          await page.keyboard.press('Escape')
           await switchWorkbenchMode(page, '没头脑')
           const aiPreferenceHiddenInSearch = !(await getWorkbenchLocator(
             page,
@@ -160,6 +175,8 @@ describe('workbench conversation e2e', () => {
             selectedModelAfterReload,
             selectedWorkspaceAfterReload,
             selectedAiPreferenceBeforeReload,
+            reviewPermissionMenuText,
+            fullAccessPermissionMenuText,
             selectedAiPreferenceAfterModeRoundTrip,
             selectedAiPreferenceAfterReload,
             aiPreferenceHiddenInSearch,
@@ -193,13 +210,15 @@ describe('workbench conversation e2e', () => {
               result.selectedAiPreferenceBeforeReload.includes('严谨') &&
               result.selectedAiPreferenceAfterModeRoundTrip.includes('严谨') &&
               result.selectedAiPreferenceAfterReload.includes('严谨') &&
+              result.reviewPermissionMenuText.includes('涉及到风险操作需要你审核') &&
+              result.fullAccessPermissionMenuText.includes('不受限制的操作你的电脑') &&
               result.aiPreferenceHiddenInSearch &&
               result.runningButtonLabel.includes('停止') &&
               result.finalAnswerText.trim().length > 0,
             {
               name: 'workbench-send-guard-mode-preference-real-path',
               message:
-                'Workbench 应在未选工作区时禁用发送，切换“大聪明/没头脑”保留输入，模型、工作区和 AI 推进偏好重进页面后恢复，搜索模式隐藏偏好入口，真实发送时按钮进入停止态并最终完成。',
+                'Workbench 应在未选工作区时禁用发送，切换“大聪明/没头脑”保留输入，权限菜单展示两条说明，模型、工作区和 AI 推进偏好重进页面后恢复，搜索模式隐藏偏好入口，真实发送时按钮进入停止态并最终完成。',
               data: result
             }
           )
