@@ -59,7 +59,7 @@ SQLite 保存以下业务数据：
 
 `better-sqlite3` 是 native 模块，Node backend 测试和 Electron e2e 使用不同 ABI。项目通过独立缓存保存两套 binding，不覆盖 `node_modules` 中的同一个 `.node` 文件。
 
-测试 runner 和打包流程会自动准备并注入正确 binding，正常开发与回归不手工 rebuild。已发布 migration 不修改、重排或复用；任何 schema 或数据变更都新增更高版本 migration，具体历史以 migration 源码为准。
+测试 runner 和打包流程会自动准备并注入正确 binding，正常开发与回归不手工 rebuild。已发布 migration 不修改、重排或复用；任何 schema 或数据变更都新增更高版本 migration，具体历史以 migration 源码为准。migration 版本号必须全局唯一且只递增；启动时会校验当前定义中没有重复版本。旧版本曾发生冲突时，必须新增更高版本的修复 migration，不能修改用户已有的 `schema_migrations` 记录。
 
 ## LanceDB
 

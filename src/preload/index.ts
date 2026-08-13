@@ -290,6 +290,10 @@ const api: DesktopApi = {
   isE2EMode: () => isE2EObserverEnabled,
   aiRuntimeSettingsGet: () => ipcRenderer.invoke('ai-runtime-settings-get'),
   aiRuntimeSettingsSave: (settings) => ipcRenderer.invoke('ai-runtime-settings-save', settings),
+  errorLogOpenDirectory: () => {
+    emitE2EIpcCall('errorLogOpenDirectory')
+    return ipcRenderer.invoke('error-log-open-directory')
+  },
 
   aiRunCancel: (runId: string) => ipcRenderer.invoke('ai-run-cancel', runId),
   aiRunApprovalBatchDecide: (payload) => {
@@ -490,6 +494,21 @@ ipcRenderer.on('workspace-index-job-progress', (_event, data: WorkspaceIndexJobR
   for (const listener of workspaceIndexJobProgressListeners) {
     listener(data)
   }
+})
+
+window.addEventListener('error', (event) => {
+  void ipcRenderer.invoke('app-error-log-renderer', {
+    message: event.message,
+    stack: event.error instanceof Error ? event.error.stack : ''
+  })
+})
+
+window.addEventListener('unhandledrejection', (event) => {
+  const reason = event.reason
+  void ipcRenderer.invoke('app-error-log-renderer', {
+    message: reason instanceof Error ? reason.message : String(reason || 'Unhandled rejection'),
+    stack: reason instanceof Error ? reason.stack : ''
+  })
 })
 
 // Use `contextBridge` APIs to expose Electron APIs to

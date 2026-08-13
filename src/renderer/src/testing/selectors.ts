@@ -74,6 +74,7 @@ export const settingsSelectors = {
   tabSwitch: 'settings-tab-switch',
   generalPanel: 'settings-general-panel',
   systemNotificationsSwitch: 'settings-system-notifications-switch',
+  errorLogOpenDirectoryButton: 'settings-error-log-open-directory-button',
   workspacePanel: 'settings-workspace-panel',
   modelPanel: 'settings-model-panel',
   modelTable: 'settings-model-table',

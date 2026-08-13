@@ -27,6 +27,7 @@ import type { EmbeddingService } from '../vector/EmbeddingService'
 import type { BrowserEmbedService } from '../browser/BrowserEmbedService'
 import type { WebCrawlerService } from '../webCrawler/types'
 import type { TelemetryService } from '../telemetry/TelemetryService'
+import type { AppErrorLogService } from '../logging/AppErrorLogService'
 import type { AiRunDeps } from './types'
 import type {
   AiApprovalBatchDecision,
@@ -103,6 +104,7 @@ type ChatRunServiceDeps = {
   browserUseService?: BrowserEmbedService
   webCrawlerService?: WebCrawlerService
   telemetryService?: TelemetryService
+  errorLogService?: AppErrorLogService
   recordLlmIo?: (record: AiLlmIoRecord) => void
   broadcastEvent?: (event: AiRunEvent) => void
   autoStartRuns?: boolean
@@ -866,6 +868,11 @@ export class ChatRunService {
 
       if (result.status === 'failed') {
         this.deps.docxApplyService.discardRun(runId)
+        this.deps.errorLogService?.write({
+          module: 'ai-run',
+          error: result.error || 'AI run failed',
+          context: { source: result.failureSource, code: result.failureCode }
+        })
         await this.queueRunEvent(runId, {
           type: 'run_failed',
           runId,
@@ -912,6 +919,11 @@ export class ChatRunService {
         return
       }
       console.error('[CHAT-RUN] unexpected failure:', error)
+      this.deps.errorLogService?.write({
+        module: 'ai-run',
+        error: error instanceof Error ? error : String(error),
+        context: { source: 'unexpected' }
+      })
       const failure = toRendererRunFailure(error)
       await this.queueRunEvent(runId, {
         type: 'run_failed',

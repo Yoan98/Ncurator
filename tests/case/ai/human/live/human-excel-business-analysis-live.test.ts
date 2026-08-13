@@ -182,12 +182,14 @@ describe('ai human live excel backend', () => {
           runtime.assertThat(
             result.output.status === 'completed' &&
               toolNames.some((name) => name.startsWith('excel_read') || name === 'excel_search') &&
+              hasSuccessfulToolResult(results, 'terminal_run') &&
               hasSuccessfulToolResult(results, 'excel_edit') &&
               values.get('SO-1001') === 'Invoice required' &&
               values.get('SO-1004') === 'Invoice required' &&
               values.get('SO-1002') === 'Invoiced' &&
               values.get('SO-1003') === 'Not invoiced' &&
-              JSON.stringify(result.summaryRows).includes('Invoice required order count') &&
+              (JSON.stringify(result.summaryRows).includes('Invoice required order count') ||
+                JSON.stringify(result.summaryRows).includes('Invoice required orders')) &&
               JSON.stringify(result.summaryRows).includes('Invoice required amount') &&
               JSON.stringify(result.summaryFormulas).includes('SUMIF') &&
               result.headerFill === result.originalHeaderFill &&

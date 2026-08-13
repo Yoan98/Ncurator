@@ -20,17 +20,23 @@ import {
   computeWorkspaceFileContentHash
 } from './utils/knowledge'
 import { WorkspacePrepareWorkerClient } from './worker/workspacePrepareWorkerClient'
+import type { AppErrorLogService } from '../logging/AppErrorLogService'
 
 export class WorkspaceKnowledgePrepareService {
-  private readonly workerClient = new WorkspacePrepareWorkerClient()
+  private readonly workerClient: WorkspacePrepareWorkerClient
 
   public constructor(
     private readonly deps: {
       embeddingService: EmbeddingService
       documentsStore: DocumentsStore
+      errorLogService?: AppErrorLogService
       prepareSource?: (input: WorkspacePrepareWorkerInput) => Promise<WorkspacePreparedSource>
     }
-  ) {}
+  ) {
+    this.workerClient = new WorkspacePrepareWorkerClient({
+      errorLogService: this.deps.errorLogService
+    })
+  }
 
   private async prepareSource(
     input: WorkspacePrepareWorkerInput

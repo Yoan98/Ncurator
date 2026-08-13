@@ -15,10 +15,12 @@ import type {
 export class WorkspacePrepareWorkerClient {
   private worker: Worker | null = null
   private readonly workerUrl: URL
+  private readonly errorLogService?: WorkspacePrepareWorkerClientOptions['errorLogService']
   private readonly pending = new Map<string, WorkspacePrepareWorkerPendingRequest>()
 
   public constructor(options: WorkspacePrepareWorkerClientOptions = {}) {
     this.workerUrl = options.workerUrl || new URL('./workspacePrepareWorker.js', import.meta.url)
+    this.errorLogService = options.errorLogService
   }
 
   private ensureWorker(): Worker {
@@ -36,11 +38,13 @@ export class WorkspacePrepareWorkerClient {
       pending.resolve(response)
     })
     worker.on('error', (error) => {
+      this.logError(error, 'error')
       this.failAllPending(new Error(`workspace prepare worker error: ${error.message}`))
       this.worker = null
     })
     worker.on('exit', (code) => {
       if (code !== 0) {
+        this.logError(new Error(`workspace prepare worker exited with code ${code}`), 'exit', code)
         this.failAllPending(new Error(`workspace prepare worker exited with code ${code}`))
       }
       this.worker = null
@@ -69,13 +73,17 @@ export class WorkspacePrepareWorkerClient {
         this.pending.delete(request.requestId)
         if (this.worker === worker) this.worker = null
         void worker.terminate().catch(() => {})
-        reject(new Error('workspace prepare worker timeout'))
+        const error = new Error('workspace prepare worker timeout')
+        this.logError(error, 'timeout')
+        reject(error)
       }, WORKSPACE_PREPARE_WORKER_TIMEOUT_MS)
       this.pending.set(request.requestId, { resolve, reject, timeout })
       worker.postMessage(request)
     })
     if (!response.ok || !response.payload) {
-      throw new Error(response.error || 'workspace prepare worker failed')
+      const error = new Error(response.error || 'workspace prepare worker failed')
+      this.logError(error, 'response')
+      throw error
     }
     return response.payload
   }
@@ -85,5 +93,13 @@ export class WorkspacePrepareWorkerClient {
     this.worker = null
     this.failAllPending(new Error('workspace prepare worker client closed'))
     await worker?.terminate()
+  }
+
+  private logError(error: Error, event: string, exitCode?: number): void {
+    this.errorLogService?.write({
+      module: 'workspace-prepare-worker',
+      error,
+      context: { event, exitCode }
+    })
   }
 }

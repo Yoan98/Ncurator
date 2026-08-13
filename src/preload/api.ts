@@ -224,7 +224,8 @@ export type DesktopApi = {
   aiRuntimeSettingsGet: () => Promise<AiRuntimeSettings>
   aiRuntimeSettingsSave: (
     settings: AiRuntimeSettings
-  ) => Promise<{ success: boolean; error?: string }>
+  ) => Promise<{ success: boolean; settings?: AiRuntimeSettings; error?: string }>
+  errorLogOpenDirectory: () => Promise<{ success: boolean; error?: string }>
   aiRunCancel: (runId: string) => Promise<AiRunCancelResponse>
   aiRunApprovalBatchDecide: (
     payload: AiRunApprovalBatchDecisionRequest

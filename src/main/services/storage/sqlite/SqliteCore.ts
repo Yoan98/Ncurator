@@ -74,13 +74,26 @@ const aiRunExecutionPermissionMigration = `
 ALTER TABLE ai_run ADD COLUMN execution_permission TEXT NOT NULL DEFAULT 'review';
 `
 
+type SqliteColumnInfo = {
+  name: string
+}
+
+const repairNotificationSettingsColumn = (db: SqliteDatabase): void => {
+  const columns = db.prepare('PRAGMA table_info(ai_runtime_settings)').all() as SqliteColumnInfo[]
+  if (columns.some((column) => column.name === 'systemNotificationsEnabled')) return
+  db.exec(
+    'ALTER TABLE ai_runtime_settings ADD COLUMN systemNotificationsEnabled INTEGER NOT NULL DEFAULT 1;'
+  )
+}
+
 export type SqliteDatabase = Database.Database
 export type SqliteStatement = Database.Statement
 
 type Migration = {
   version: number
   name: string
-  sql: string
+  sql?: string
+  run?: (db: SqliteDatabase) => void
 }
 
 const MIGRATIONS: Migration[] = [
@@ -123,6 +136,11 @@ const MIGRATIONS: Migration[] = [
     version: 8,
     name: 'drop_llm_strategy_preference',
     sql: dropLlmStrategyPreferenceMigration
+  },
+  {
+    version: 9,
+    name: 'repair_ai_runtime_system_notifications_column',
+    run: repairNotificationSettingsColumn
   }
 ]
 
@@ -221,6 +239,7 @@ export class SqliteCore {
 
   private runMigrations(): void {
     const db = this.getConnection()
+    this.assertMigrationDefinitions()
     db.exec(`
       CREATE TABLE IF NOT EXISTS schema_migrations (
         version INTEGER PRIMARY KEY,
@@ -233,7 +252,8 @@ export class SqliteCore {
     }>
     const applied = new Set(appliedRows.map((row) => Number(row.version)))
     const applyMigration = db.transaction((migration: Migration) => {
-      db.exec(migration.sql)
+      if (migration.sql) db.exec(migration.sql)
+      migration.run?.(db)
       db.prepare('INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)').run(
         migration.version,
         migration.name,
@@ -244,6 +264,16 @@ export class SqliteCore {
     for (const migration of MIGRATIONS) {
       if (applied.has(migration.version)) continue
       applyMigration(migration)
+    }
+  }
+
+  private assertMigrationDefinitions(): void {
+    const versions = new Set<number>()
+    for (const migration of MIGRATIONS) {
+      if (versions.has(migration.version)) {
+        throw new Error(`Duplicate SQLite migration version: ${migration.version}`)
+      }
+      versions.add(migration.version)
     }
   }
 }

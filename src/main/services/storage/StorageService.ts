@@ -14,6 +14,7 @@ import { WorkspaceStore } from './domains/WorkspaceStore'
 import { WorkbenchUiStore } from './domains/WorkbenchUiStore'
 import { BrowserTabStateStore } from './domains/BrowserTabStateStore'
 import type { LegacyLocalImportMigrationStatus } from '../../../shared/types'
+import type { AppErrorLogService } from '../logging/AppErrorLogService'
 
 export class StorageService {
   private static instance: StorageService
@@ -35,12 +36,19 @@ export class StorageService {
   public readonly browserTabs: BrowserTabStateStore
   private legacyLocalImportMigrationStatus: LegacyLocalImportMigrationStatus | null = null
 
-  public constructor(input: { dbPath?: string; sqlitePath?: string; vectorPath?: string } = {}) {
+  public constructor(
+    input: {
+      dbPath?: string
+      sqlitePath?: string
+      vectorPath?: string
+      errorLogService?: AppErrorLogService
+    } = {}
+  ) {
     const sqlitePath =
       input.sqlitePath ||
       (input.dbPath ? path.join(path.dirname(input.dbPath), 'app.sqlite') : undefined)
     this.sqlite = new SqliteCore(sqlitePath)
-    this.vector = new LanceDbCore(input.vectorPath || input.dbPath)
+    this.vector = new LanceDbCore(input.vectorPath || input.dbPath, input.errorLogService)
     this.core = this.vector
     this.documents = new DocumentsStore(this.sqlite, this.vector)
     this.webSource = new WebSourceStore(this.sqlite)
@@ -56,9 +64,9 @@ export class StorageService {
     this.browserTabs = new BrowserTabStateStore(this.sqlite)
   }
 
-  public static getInstance(): StorageService {
+  public static getInstance(input: { errorLogService?: AppErrorLogService } = {}): StorageService {
     if (!StorageService.instance) {
-      StorageService.instance = new StorageService()
+      StorageService.instance = new StorageService(input)
     }
     return StorageService.instance
   }

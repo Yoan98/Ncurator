@@ -153,6 +153,13 @@ export type WorkspacePrepareWorkerPendingRequest = {
 
 export type WorkspacePrepareWorkerClientOptions = {
   workerUrl?: URL
+  errorLogService?: {
+    write: (entry: {
+      module: string
+      error: Error | string
+      context?: Record<string, boolean | number | string | undefined>
+    }) => void
+  }
 }
 
 export type WorkspaceTreeScanResult = {

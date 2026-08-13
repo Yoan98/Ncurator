@@ -22,6 +22,7 @@ import { terminalSessionManager } from './services/ai/human/tools/terminal/Termi
 import { AppShutdownCoordinator } from './services/AppShutdownCoordinator'
 import { SystemNotificationService } from './services/SystemNotificationService'
 import { TelemetryService } from './services/telemetry/TelemetryService'
+import { AppErrorLogService } from './services/logging/AppErrorLogService'
 
 if (!app.isPackaged) {
   loadRootEnvOnce()
@@ -228,17 +229,32 @@ if (!singleInstanceLock) {
     ipcMain.on('ping', () => console.log('pong'))
 
     // Initialize services
+    const errorLogService = new AppErrorLogService({
+      userDataPath: app.getPath('userData'),
+      appVersion: app.getVersion()
+    })
+    process.on('uncaughtException', (error) => {
+      errorLogService.write({ module: 'main-process', error, context: { event: 'uncaughtException' } })
+    })
+    process.on('unhandledRejection', (reason) => {
+      errorLogService.write({
+        module: 'main-process',
+        error: reason instanceof Error ? reason : 'Unhandled promise rejection',
+        context: { event: 'unhandledRejection' }
+      })
+    })
     const ingestionService = IngestionService.getInstance()
     const embeddingRuntimeClient = new EmbeddingRuntimeClient({
       entryPath: fileURLToPath(new URL('./embeddingRuntimeProcess.js', import.meta.url)),
       modelsPath: getModelsPath(),
-      modelName: DEFAULT_EMBEDDING_MODEL_NAME
+      modelName: DEFAULT_EMBEDDING_MODEL_NAME,
+      errorLogService
     })
     const embeddingService = new EmbeddingService({
       executor: embeddingRuntimeClient,
       modelName: DEFAULT_EMBEDDING_MODEL_NAME
     })
-    const storageService = StorageService.getInstance()
+    const storageService = StorageService.getInstance({ errorLogService })
     const modelService = ModelService.getInstance()
     const vectorModelDownloadService = VectorModelDownloadService.getInstance({
       modelService,
@@ -248,10 +264,20 @@ if (!singleInstanceLock) {
     console.log('Starting background initialization of services...')
     embeddingService
       .initialize()
-      .catch((err) => console.error('Failed to initialize EmbeddingService:', err))
+      .catch((err) => {
+        console.error('Failed to initialize EmbeddingService:', err)
+        errorLogService.write({ module: 'embedding-runtime', error: err, context: { event: 'startup' } })
+      })
     await storageService.initialize()
 
     const mainWindow = createWindow()
+    mainWindow.webContents.on('render-process-gone', (_event, details) => {
+      errorLogService.write({
+        module: 'renderer',
+        error: `Renderer process exited: ${details.reason}`,
+        context: { event: 'render-process-gone', exitCode: details.exitCode }
+      })
+    })
     const systemNotificationService = new SystemNotificationService({
       settingsStore: storageService.aiRuntimeSettings,
       getMainWindow: () => BrowserWindow.getAllWindows()[0] || null,
@@ -291,7 +317,8 @@ if (!singleInstanceLock) {
       browserEmbedService,
       webCrawlerService,
       systemNotificationService,
-      telemetryService
+      telemetryService,
+      errorLogService
     })
     telemetryService.track('app_started')
     appUpdateService.initialize()

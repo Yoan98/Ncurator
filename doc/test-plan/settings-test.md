@@ -18,7 +18,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 领域规则：
 
 - `model` 验证大模型可用服务配置的加载、创建、编辑、删除和远端模型列表刷新。
-- `general` 验证 AI 运行系统通知开关的加载、保存和关闭后的静默行为；系统通知中心的真实视觉展示按 macOS 与 Windows 发布前手动验证。
+- `general` 验证 AI 运行系统通知开关的加载、保存和关闭后的静默行为，以及错误日志目录入口；系统通知中心的真实视觉展示按 macOS 与 Windows 发布前手动验证。
 - `workspace` 验证工作空间容器及其下属 `files`、`web` 两类子区域的真实用户操作链路。
 - `vector` 属于 Settings 产品域，但页面位于独立路由 `/model-download`，测试目录与 runner 仍统一归入 `tests/case/settings/vector/**`。
 - `workspace` 是 Settings 下的 suite，按 `core / files / web` 组织，语义为“具名工作空间 + 文件 tab + 网页 tab”。
@@ -303,6 +303,15 @@ Settings 顶层 suite 对齐 PRD 模块：
 - How：通过 Settings UI 打开通用页，关闭开关，重新读取 `ai-runtime-settings-get`，再恢复开关。
 - Oracle：开关默认开启，关闭后 UI 与主进程设置均为关闭，对齐 `SET-GENERAL-001-AC1`、`SET-GENERAL-001-AC3`。
 - Not：自动化不伪造通知对象、终态或点击事件；系统通知展示和点击导航保留为发布前真实人工检查。
+
+#### `error-log-open-directory`
+
+- 测试类型：`e2e`
+- What：通用设置展示错误日志说明，并可从文件夹图标打开日志目录。
+- Why：用户遇到索引或运行错误后，需要能自行找到并发送 `app.log`。
+- How：通过 Settings UI 打开通用页，确认说明和可访问名称，点击文件夹按钮并通过 IPC observer 收集调用。
+- Oracle：按钮可见且说明包含 `app.log`，点击后调用 `errorLogOpenDirectory`，对齐 `SET-GENERAL-003-AC3`。`app-error-log-service` backend unit 验证错误日志生成、隐私脱敏和 2MB 截断，对齐 `SET-GENERAL-003-AC1`、`SET-GENERAL-003-AC2`。
+- Not：不验证不同操作系统中文件管理器窗口是否出现在前台；日志服务 unit 不验证系统文件管理器窗口。
 
 ### 4. 发布前真实检查
 

@@ -1,6 +1,7 @@
 import { BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import type { SystemNotificationService } from '../services/SystemNotificationService'
 import type { TelemetryService } from '../services/telemetry/TelemetryService'
+import type { AppErrorLogService } from '../services/logging/AppErrorLogService'
 import type { OpenDialogOptions } from 'electron'
 import { IngestionService } from '../services/ingestion/loader'
 import { EmbeddingService } from '../services/vector/EmbeddingService'
@@ -201,6 +202,7 @@ export function registerHandlers(services: {
   recordLlmIo?: (record: AiLlmIoRecord) => void
   systemNotificationService?: SystemNotificationService
   telemetryService?: TelemetryService
+  errorLogService?: AppErrorLogService
 }) {
   const useE2ENoopOpenWith =
     process.env.NCURATOR_E2E_OBSERVER === '1' && process.env.NCURATOR_E2E_OPEN_WITH_NOOP === '1'
@@ -220,7 +222,8 @@ export function registerHandlers(services: {
     vectorModelDownloadService,
     browserEmbedService,
     webCrawlerService,
-    telemetryService
+    telemetryService,
+    errorLogService
   } = services
   const activeWorkspaceIndexJobs = new Set<string>()
   const documentsStore = storageService.documents
@@ -266,6 +269,7 @@ export function registerHandlers(services: {
     browserUseService: browserEmbedService,
     webCrawlerService,
     telemetryService,
+    errorLogService,
     recordLlmIo: services.recordLlmIo,
     resolveHumanRuntimeOverrides: () => {
       if (!e2eGraphRecursionLimitOnce || e2eGraphRecursionLimitUsesRemaining <= 0) {
@@ -284,7 +288,8 @@ export function registerHandlers(services: {
   const workspaceService = new WorkspaceSourceService()
   const workspaceKnowledgePrepareService = new WorkspaceKnowledgePrepareService({
     embeddingService,
-    documentsStore
+    documentsStore,
+    errorLogService
   })
   const webSourceService = new WebSourceService()
 
@@ -692,6 +697,15 @@ export function registerHandlers(services: {
           })
         } catch (error) {
           failed += 1
+          errorLogService?.write({
+            module: 'workspace-index',
+            error: error instanceof Error ? error : String(error),
+            context: {
+              phase: 'file-index',
+              file: currentRecord.relative_path,
+              extension: currentRecord.file_ext
+            }
+          })
           await documentsStore.updateDocumentImportStatus(documentId, 3).catch(() => {})
           const failedAt = Date.now()
           const failedRecord: WorkspaceFileIndexRecord = {
@@ -733,6 +747,11 @@ export function registerHandlers(services: {
       emitSourceListRefreshToAll()
     } catch (error) {
       const message = getErrorMessage(error)
+      errorLogService?.write({
+        module: 'workspace-index',
+        error: error instanceof Error ? error : message,
+        context: { phase: 'job', source: 'file' }
+      })
       await updateAndEmitWorkspaceIndexJob(job, {
         status: 'failed',
         last_error: message,
@@ -2929,7 +2948,8 @@ export function registerHandlers(services: {
     } catch (e: unknown) {
       console.error('[AI-RUNTIME-SETTINGS-GET] Error:', e)
       return {
-        llmStreamingMode: 'force_stream'
+        llmStreamingMode: 'force_stream',
+        systemNotificationsEnabled: true
       }
     }
   })
@@ -2937,10 +2957,34 @@ export function registerHandlers(services: {
   ipcMain.handle('ai-runtime-settings-save', async (_event, settings: AiRuntimeSettings) => {
     try {
       await aiRuntimeSettingsStore.save(settings)
-      return { success: true }
+      return { success: true, settings: await aiRuntimeSettingsStore.get() }
     } catch (e: unknown) {
       console.error('[AI-RUNTIME-SETTINGS-SAVE] Error:', e)
       return { success: false, error: getErrorMessage(e) }
     }
   })
+
+  ipcMain.handle('error-log-open-directory', async () => {
+    if (!errorLogService) return { success: false, error: '错误日志服务未初始化' }
+    try {
+      errorLogService.ensureDirectory()
+      const error = await shell.openPath(errorLogService.getDirectoryPath())
+      return error ? { success: false, error } : { success: true }
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
+    }
+  })
+
+  ipcMain.handle(
+    'app-error-log-renderer',
+    (_event, payload: { message?: string; stack?: string }) => {
+      const error = new Error(String(payload?.message || 'Renderer error'))
+      if (typeof payload?.stack === 'string' && payload.stack) error.stack = payload.stack
+      errorLogService?.write({
+        module: 'renderer',
+        error
+      })
+      return { success: true }
+    }
+  )
 }

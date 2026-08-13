@@ -9,10 +9,10 @@ const DEFAULT_SETTINGS: AiRuntimeSettings = {
 }
 
 type AiRuntimeSettingsRow = {
-  id?: unknown
-  llmStreamingMode?: unknown
-  systemNotificationsEnabled?: unknown
-  updated_at?: unknown
+  id?: string
+  llmStreamingMode?: string
+  systemNotificationsEnabled?: number
+  updated_at?: number
 }
 
 export class AiRuntimeSettingsStore {
@@ -30,7 +30,7 @@ export class AiRuntimeSettingsStore {
     }
   }
 
-  public async save(settings: AiRuntimeSettings): Promise<void> {
+  public async save(settings: AiRuntimeSettings): Promise<AiRuntimeSettings> {
     this.sqlite
       .prepare(
         `
@@ -45,5 +45,6 @@ export class AiRuntimeSettingsStore {
         systemNotificationsEnabled: settings.systemNotificationsEnabled === false ? 0 : 1,
         updated_at: Date.now()
       })
+    return await this.get()
   }
 }

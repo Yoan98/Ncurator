@@ -8,6 +8,7 @@ import type {
   EmbeddingRuntimeRequest,
   EmbeddingRuntimeResponse
 } from './types'
+import type { AppErrorLogService } from '../../logging/AppErrorLogService'
 
 const DEFAULT_RUNTIME_TIMEOUT_MS = 180_000
 
@@ -16,6 +17,7 @@ export class EmbeddingRuntimeClient implements EmbeddingExecutor {
   private readonly modelsPath: string
   private readonly modelName: string
   private readonly timeoutMs: number
+  private readonly errorLogService?: AppErrorLogService
   private process: UtilityProcess | null = null
   private processReady: Promise<UtilityProcess> | null = null
   private initializedProcess: UtilityProcess | null = null
@@ -28,11 +30,13 @@ export class EmbeddingRuntimeClient implements EmbeddingExecutor {
     modelsPath: string
     modelName: string
     timeoutMs?: number
+    errorLogService?: AppErrorLogService
   }) {
     this.entryPath = String(input.entryPath || '').trim()
     this.modelsPath = String(input.modelsPath || '').trim()
     this.modelName = String(input.modelName || '').trim()
     this.timeoutMs = Math.max(1_000, input.timeoutMs || DEFAULT_RUNTIME_TIMEOUT_MS)
+    this.errorLogService = input.errorLogService
     if (!this.entryPath) throw new Error('embedding runtime entryPath is required')
     if (!this.modelsPath) throw new Error('embedding runtime modelsPath is required')
     if (!this.modelName) throw new Error('embedding runtime modelName is required')
@@ -42,7 +46,9 @@ export class EmbeddingRuntimeClient implements EmbeddingExecutor {
     if (this.closing) throw new Error('embedding runtime client is closed')
     if (this.process && this.processReady) return await this.processReady
     if (!fs.existsSync(this.entryPath)) {
-      throw new Error(`embedding runtime entry not found: ${this.entryPath}`)
+      const error = new Error(`embedding runtime entry not found: ${this.entryPath}`)
+      this.logError(error, 'entry-missing')
+      throw error
     }
 
     const child = utilityProcess.fork(this.entryPath, [], {
@@ -67,6 +73,7 @@ export class EmbeddingRuntimeClient implements EmbeddingExecutor {
     })
     child.on('error', (_type, location, report) => {
       console.error(`[EMBEDDING-RUNTIME] fatal error at ${location}: ${report}`)
+      this.logError(new Error(`fatal error at ${location}: ${report}`), 'fatal-error')
     })
     child.on('exit', (code) => {
       this.handleProcessExit(child, code)
@@ -76,6 +83,7 @@ export class EmbeddingRuntimeClient implements EmbeddingExecutor {
     })
     child.stderr?.on('data', (chunk) => {
       console.error(`[EMBEDDING-RUNTIME] ${String(chunk).trimEnd()}`)
+      this.logError(new Error(String(chunk).trim()), 'stderr')
     })
 
     this.processReady = new Promise<UtilityProcess>((resolve, reject) => {
@@ -96,6 +104,7 @@ export class EmbeddingRuntimeClient implements EmbeddingExecutor {
   private handleProcessExit(child: UtilityProcess, code: number): void {
     if (this.process !== child) return
     const error = new Error(`embedding runtime exited with code ${code}`)
+    if (!this.closing) this.logError(error, 'exit', code)
     this.process = null
     this.processReady = null
     this.initializedProcess = null
@@ -117,7 +126,9 @@ export class EmbeddingRuntimeClient implements EmbeddingExecutor {
       const timeout = setTimeout(() => {
         this.pending.delete(request.requestId)
         if (this.process === child) child.kill()
-        reject(new Error(`embedding runtime request timed out: ${request.action}`))
+        const error = new Error(`embedding runtime request timed out: ${request.action}`)
+        this.logError(error, 'timeout')
+        reject(error)
       }, this.timeoutMs)
       this.pending.set(request.requestId, { resolve, reject, timeout })
       child.postMessage(request)
@@ -139,7 +150,9 @@ export class EmbeddingRuntimeClient implements EmbeddingExecutor {
         payload: null
       })
       if (response.action !== 'initialize' || !response.ok) {
-        throw new Error(response.error || 'embedding runtime initialization failed')
+        const error = new Error(response.error || 'embedding runtime initialization failed')
+        this.logError(error, 'initialize')
+        throw error
       }
       this.initializedProcess = child
     })().finally(() => {
@@ -156,7 +169,9 @@ export class EmbeddingRuntimeClient implements EmbeddingExecutor {
       payload: { texts }
     })
     if (response.action !== 'embed' || !response.ok || !response.payload) {
-      throw new Error(response.error || 'embedding runtime inference failed')
+      const error = new Error(response.error || 'embedding runtime inference failed')
+      this.logError(error, 'embed')
+      throw error
     }
     return response.payload
   }
@@ -170,5 +185,13 @@ export class EmbeddingRuntimeClient implements EmbeddingExecutor {
     this.initializationPromise = null
     this.failAllPending(new Error('embedding runtime client closed'))
     child?.kill()
+  }
+
+  private logError(error: Error, event: string, exitCode?: number): void {
+    this.errorLogService?.write({
+      module: 'embedding-runtime',
+      error,
+      context: { event, model: this.modelName, exitCode }
+    })
   }
 }

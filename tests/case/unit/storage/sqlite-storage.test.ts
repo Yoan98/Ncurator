@@ -17,6 +17,7 @@ import { BrowserTabStateStore } from '../../../../src/main/services/storage/doma
 import { WorkbenchUiStore } from '../../../../src/main/services/storage/domains/WorkbenchUiStore'
 import { StorageService } from '../../../../src/main/services/storage/StorageService'
 import { SqliteCore } from '../../../../src/main/services/storage/sqlite/SqliteCore'
+import { AiRuntimeSettingsStore } from '../../../../src/main/services/storage/domains/AiRuntimeSettingsStore'
 
 type VectorRow = Record<string, unknown>
 
@@ -247,8 +248,32 @@ describe('sqlite storage core and stores', () => {
       { version: 5, name: 'repair_false_docx_change_failures' },
       { version: 6, name: 'workbench_session_ui_state' },
       { version: 7, name: 'ai_run_execution_permission' },
-      { version: 8, name: 'drop_llm_strategy_preference' }
+      { version: 8, name: 'drop_llm_strategy_preference' },
+      { version: 9, name: 'repair_ai_runtime_system_notifications_column' }
     ])
+  })
+
+  it('repairs notification settings after a historical migration version collision', async () => {
+    sqlite.exec('DELETE FROM schema_migrations WHERE version = 9')
+    sqlite.exec(
+      "UPDATE schema_migrations SET name = 'workspace_change_sets' WHERE version = 2"
+    )
+    sqlite.exec('ALTER TABLE ai_runtime_settings DROP COLUMN systemNotificationsEnabled')
+    sqlite.close()
+    sqlite.initialize()
+
+    const columns = sqlite.prepare('PRAGMA table_info(ai_runtime_settings)').all() as Array<{
+      name: string
+    }>
+    const settingsStore = new AiRuntimeSettingsStore(sqlite)
+    const saved = await settingsStore.save({
+      llmStreamingMode: 'force_stream',
+      systemNotificationsEnabled: false
+    })
+
+    expect(columns.some((column) => column.name === 'systemNotificationsEnabled')).toBe(true)
+    expect(saved.systemNotificationsEnabled).toBe(false)
+    expect(await settingsStore.get()).toMatchObject({ systemNotificationsEnabled: false })
   })
 
   it('persists versioned session UI state and rejects invalid writes', async () => {

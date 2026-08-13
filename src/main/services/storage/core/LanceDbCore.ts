@@ -3,6 +3,7 @@ import fs from 'fs'
 import * as arrow from 'apache-arrow'
 import { getLanceDbPath } from '../../../utils/paths'
 import type { TableConfig } from '../../../types/store'
+import type { AppErrorLogService } from '../../logging/AppErrorLogService'
 
 export enum LanceDbCoreStatus {
   UNINITIALIZED = 'uninitialized',
@@ -25,7 +26,10 @@ export class LanceDbCore {
   private tableCache = new Map<string, object>()
   private tableWriteQueues = new Map<string, Promise<unknown>>()
 
-  public constructor(dbPath?: string) {
+  public constructor(
+    dbPath?: string,
+    private readonly errorLogService?: AppErrorLogService
+  ) {
     this.dbPath = dbPath || getLanceDbPath()
   }
 
@@ -52,6 +56,7 @@ export class LanceDbCore {
       this.status = LanceDbCoreStatus.READY
     } catch (error) {
       this.status = LanceDbCoreStatus.ERROR
+      this.logError(error instanceof Error ? error : String(error), 'initialize')
       throw error
     }
   }
@@ -185,7 +190,12 @@ export class LanceDbCore {
         this.tableWriteQueues.delete(tableName)
       }
     })
-    return await queued
+    try {
+      return await queued
+    } catch (error) {
+      this.logError(error instanceof Error ? error : String(error), 'write', tableName)
+      throw error
+    }
   }
 
   private createSerializedTable<TTable extends object>(tableName: string, table: TTable): TTable {
@@ -312,7 +322,7 @@ export class LanceDbCore {
       currentFields.some((field, index) => field !== nextFields[index])
     if (!schemaChanged) return
 
-    throw new Error(
+    const error = new Error(
       [
         `LanceDB table schema mismatch: ${config.name}`,
         `current=[${currentFields.join(', ')}]`,
@@ -320,6 +330,8 @@ export class LanceDbCore {
         '当前试验阶段不做自动迁移，也不会自动删表。请手动删除本地 LanceDB 数据库后重建。'
       ].join(' ')
     )
+    this.logError(error, 'schema-mismatch', config.name)
+    throw error
   }
 
   private async createMissingLanceScalarIndexes(
@@ -375,5 +387,13 @@ export class LanceDbCore {
         }
       }
     ]
+  }
+
+  private logError(error: Error | string, operation: string, table?: string): void {
+    this.errorLogService?.write({
+      module: 'lancedb',
+      error,
+      context: { operation, table }
+    })
   }
 }
