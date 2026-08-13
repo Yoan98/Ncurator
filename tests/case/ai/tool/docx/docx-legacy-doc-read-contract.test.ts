@@ -143,7 +143,7 @@ describe('ai tool docx backend', () => {
           result.failure.error.includes('不支持写入旧版 .doc') &&
             result.failure.decisionHint?.code === 'legacy_doc_edit_unsupported' &&
             result.failure.decisionHint?.instruction ===
-              '不要继续尝试编辑 .doc 文件，跳过它继续推进。' &&
+              '禁止继续尝试编辑或转换旧版 .doc 文件，请提示用户转换为 .docx 后再编辑。' &&
             result.uppercaseFailure.decisionHint?.code === 'legacy_doc_edit_unsupported' &&
             result.unchanged &&
             result.trackedReplaySessionCount === 0,

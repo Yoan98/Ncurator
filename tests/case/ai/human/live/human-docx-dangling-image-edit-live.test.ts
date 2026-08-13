@@ -1,5 +1,4 @@
 import fs from 'node:fs/promises'
-import path from 'node:path'
 import { describe, it } from 'vitest'
 import { buildBlockIndex, loadDocxBundle } from '../../../../../src/main/services/ai/human/tools/docx/adapters/ooxml/blockIndex'
 import { buildDocxApplyArtifactPaths } from '../../../../../src/main/services/ai/human/tools/docx/review/viewProjection'
@@ -73,19 +72,9 @@ describe('ai human live backend', () => {
           const runner = createHumanTestRunner(runtime, {
             selectedReferences: [reference],
             visionModel: { configId: visionConfig.id, modelName: visionConfig.model_name },
-            allowedToolNames: [
-              'docx_read_outline',
-              'docx_search',
-              'docx_read_blocks',
-              'docx_read_visuals',
-              'docx_edit'
-            ],
             runtimeSettingsOverride: { llmStreamingMode: 'force_non_stream' }
           })
           const output = await runner.run({ taskId: runtime.taskId, userInput: USER_INPUT })
-          const artifact = output.artifacts?.find(
-            (item) => item.kind === 'file' && item.capability === 'docx'
-          )
           const applyRecord = (await runtime.docxApplyStore.listRecords()).items.find(
             (item) => item.run_id === runtime.runId && item.status === 'applied'
           )

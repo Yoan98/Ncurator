@@ -1,7 +1,6 @@
 import type { ChatStore } from '../storage/domains/ChatStore'
 import type { DocumentsStore } from '../storage/domains/DocumentsStore'
 import type { LlmConfigStore } from '../storage/domains/LlmConfigStore'
-import type { LlmStrategyPreferenceStore } from '../storage/domains/LlmStrategyPreferenceStore'
 import type { EmbeddingService } from '../vector/EmbeddingService'
 import type { AiLlmDriver } from './llmExecutor'
 import type { WebCrawlerService } from '../webCrawler/types'
@@ -223,7 +222,6 @@ export type TerminalCommandChangeTrackingInput = {
 export type AiRunDeps = {
   runtimeSettings: AiRuntimeSettings
   llmStore: LlmConfigStore
-  llmStrategyPreferenceStore: LlmStrategyPreferenceStore
   chatStore: ChatStore
   documentsStore: DocumentsStore
   embeddingService: EmbeddingService

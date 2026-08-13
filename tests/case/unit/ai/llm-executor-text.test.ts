@@ -6,9 +6,7 @@ const { createChatModelMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('../../../../src/main/services/llm/chatModel', () => ({
-  createChatModel: createChatModelMock,
-  getSupportedTransportsForConfig: (cfg: { providerKind?: string }) =>
-    cfg.providerKind === 'openai-compatible' ? ['completions'] : ['responses', 'completions']
+  createChatModel: createChatModelMock
 }))
 
 import { createAiLlmExecutor } from '../../../../src/main/services/ai/llmExecutor'
@@ -19,7 +17,7 @@ import type { AiLlmIoRecord, AiRunEvent, LlmRuntimeConfig } from '../../../../sr
 const baseConfig: LlmRuntimeConfig = {
   id: 'cfg-1',
   name: 'Unit Config',
-  providerKind: 'openai',
+  providerKind: 'openai-compatible',
   base_url: 'https://example.test/v1',
   model_name: 'gpt-5',
   api_key: 'test-key'
@@ -30,38 +28,25 @@ describe('ai unit llm executor text path', () => {
     createChatModelMock.mockReset()
   })
 
-  it('falls back from completions to responses and persists the resolved text transport', async () => {
+  it('invokes the model once and returns the text output', async () => {
     const events: AiRunEvent[] = []
     const llmIoRecords: AiLlmIoRecord[] = []
-    const saveConfig = vi.fn(async () => undefined)
 
-    createChatModelMock.mockImplementation(
-      (cfg: LlmRuntimeConfig, options?: { transport?: 'completions' | 'responses' }) => {
-        void cfg
-        const transport = options?.transport ?? 'responses'
-        return {
-          invoke: async () => {
-            if (transport === 'completions') {
-              throw new Error("Cannot read properties of undefined (reading 'message')")
-            }
-
-            return {
-              content: 'Hello from responses'
-            }
-          },
-          stream: async () => ({
-            async *[Symbol.asyncIterator]() {
-              yield {
-                content: 'unexpected'
-              }
-            }
-          }),
-          withConfig: () => {
-            throw new Error('text output should not call withConfig')
+    createChatModelMock.mockImplementation(() => ({
+      invoke: async () => ({
+        content: 'Hello from the model'
+      }),
+      stream: async () => ({
+        async *[Symbol.asyncIterator]() {
+          yield {
+            content: 'unexpected'
           }
         }
+      }),
+      withConfig: () => {
+        throw new Error('text output should not call withConfig')
       }
-    )
+    }))
 
     const executor = createAiLlmExecutor({
       eventCtx: {
@@ -72,11 +57,8 @@ describe('ai unit llm executor text path', () => {
       runtimeSettings: {
         llmStreamingMode: 'force_non_stream'
       },
-      getConfig: async () => ({
-        ...baseConfig,
-        preferredTransport: 'completions'
-      }),
-      saveConfig,
+      getConfig: async () => baseConfig,
+      saveConfig: async () => undefined,
       checkCancelled: () => undefined
     })
 
@@ -88,16 +70,8 @@ describe('ai unit llm executor text path', () => {
       user: 'user prompt'
     })
 
-    expect(result).toBe('Hello from responses')
-    expect(
-      createChatModelMock.mock.calls.map(
-        (call) => (call[1] as { transport?: 'completions' | 'responses' } | undefined)?.transport
-      )
-    ).toEqual(['completions', 'responses'])
-    expect(saveConfig).toHaveBeenCalledTimes(1)
-    expect(saveConfig.mock.calls[0]?.[0]).toMatchObject({
-      preferredTransport: 'responses'
-    })
+    expect(result).toBe('Hello from the model')
+    expect(createChatModelMock).toHaveBeenCalledTimes(1)
     expect(
       events.some(
         (event) =>
@@ -108,208 +82,54 @@ describe('ai unit llm executor text path', () => {
     ).toBe(true)
     expect(llmIoRecords[0]).toMatchObject({
       caller: 'human.mouth',
-      transport: 'responses',
       streamingMode: 'force_non_stream',
       streamed: false,
-      rawText: 'Hello from responses'
+      rawText: 'Hello from the model',
+      status: 'completed'
     })
   })
 
-  it('persists the winning structured fallback strategy for the next run', async () => {
-    let currentConfig = baseConfig
-    const preferredStrategies: Array<unknown> = []
-    const saveConfig = vi.fn(async (nextConfig: LlmRuntimeConfig) => {
-      currentConfig = nextConfig
-    })
+  it('forwards driver structured output and text output without persisting preferences', async () => {
+    const saveConfig = vi.fn(async () => undefined)
     const driver: AiLlmDriver = {
-      chatStructured: async (input) => {
-        preferredStrategies.push(input.preferredStrategy)
-        return {
-          output: { answer: 'from prompt json' },
-          rawText: '{"answer":"from prompt json"}',
-          method: 'promptJson',
-          transport: 'completions',
-          structuredOutputMode: 'prompt_json',
-          strategy: { transport: 'completions', mode: 'prompt_json' }
-        }
-      }
+      chatStructured: async () => ({
+        output: { answer: 'from driver' },
+        rawText: '{"answer":"from driver"}'
+      }),
+      chatText: async () => ({
+        output: 'text from driver',
+        rawText: 'text from driver'
+      })
     }
 
     const executor = createAiLlmExecutor({
       eventCtx: {
-        runId: 'run-structured-persist',
+        runId: 'run-driver',
         sendEvent: () => undefined
       },
       runtimeSettings: { llmStreamingMode: 'force_non_stream' },
-      getConfig: async () => currentConfig,
+      getConfig: async () => baseConfig,
       saveConfig,
       checkCancelled: () => undefined,
       driver
     })
 
-    const request = {
+    const structuredResult = await executor.chatStructured({
       caller: 'human.brain',
       schemaName: 'unit_schema',
       schema: z.object({ answer: z.string() }),
       system: 'Return JSON only.',
       user: 'Say hello.'
-    } as const
-    const firstResult = await executor.chatStructured(request)
-    const secondResult = await executor.chatStructured(request)
-
-    expect(firstResult.output).toEqual({ answer: 'from prompt json' })
-    expect(secondResult.output).toEqual({ answer: 'from prompt json' })
-    expect(preferredStrategies).toEqual([
-      undefined,
-      { transport: 'completions', mode: 'prompt_json' }
-    ])
-    expect(saveConfig).toHaveBeenCalledTimes(1)
-    expect(saveConfig).toHaveBeenCalledWith(
-      expect.objectContaining({
-        preferredTransport: 'completions',
-        preferredStructuredOutputMode: 'prompt_json'
-      })
-    )
-  })
-
-  it('replaces a failed preferred strategy and reuses the winner within and across runs', async () => {
-    let currentConfig: LlmRuntimeConfig = {
-      ...baseConfig,
-      providerKind: 'openai-compatible',
-      preferredTransport: 'completions',
-      preferredStructuredOutputMode: 'prompt_json'
-    }
-    const strategyCalls: string[] = []
-    const saveConfig = vi.fn(async (nextConfig: LlmRuntimeConfig) => {
-      currentConfig = nextConfig
     })
-
-    createChatModelMock.mockImplementation(
-      (_cfg: LlmRuntimeConfig, options?: { transport?: 'responses' | 'completions' }) => {
-        const transport = options?.transport || 'completions'
-        return {
-          withConfig: (config: { response_format?: { type?: 'json_object' | 'json_schema' } }) => ({
-            invoke: async () => {
-              const mode =
-                config.response_format?.type === 'json_object' ? 'json_object' : 'json_schema'
-              strategyCalls.push(`${transport}/${mode}`)
-              if (mode === 'json_schema') {
-                throw new Error('response_format json schema is not supported by this provider')
-              }
-              return { content: JSON.stringify({ answer: 'from json object' }) }
-            }
-          }),
-          invoke: async () => {
-            strategyCalls.push(`${transport}/prompt_json`)
-            return { content: 'not json' }
-          },
-          stream: async () => ({
-            async *[Symbol.asyncIterator]() {
-              yield { content: 'unexpected' }
-            }
-          })
-        }
-      }
-    )
-
-    const createExecutor = (runId: string) =>
-      createAiLlmExecutor({
-        eventCtx: { runId, sendEvent: () => undefined },
-        runtimeSettings: { llmStreamingMode: 'force_non_stream' },
-        getConfig: async () => currentConfig,
-        saveConfig,
-        checkCancelled: () => undefined
-      })
-
-    const request = {
-      caller: 'human.brain',
+    const textResult = await executor.chatText({
+      caller: 'human.mouth',
       schemaName: 'unit_schema',
-      schema: z.object({ answer: z.string() }),
-      system: 'Return JSON only.',
-      user: 'Say hello.'
-    } as const
-
-    const firstExecutor = createExecutor('run-preferred-replacement-1')
-    const firstResult = await firstExecutor.chatStructured(request)
-    const secondResult = await firstExecutor.chatStructured(request)
-    const secondRunExecutor = createExecutor('run-preferred-replacement-2')
-    const thirdResult = await secondRunExecutor.chatStructured(request)
-
-    expect(firstResult.output).toEqual({ answer: 'from json object' })
-    expect(secondResult.output).toEqual({ answer: 'from json object' })
-    expect(thirdResult.output).toEqual({ answer: 'from json object' })
-    expect(strategyCalls).toEqual([
-      'completions/prompt_json',
-      'completions/json_schema',
-      'completions/json_object',
-      'completions/json_object',
-      'completions/json_object'
-    ])
-    expect(saveConfig).toHaveBeenCalledTimes(1)
-    expect(currentConfig).toMatchObject({
-      preferredTransport: 'completions',
-      preferredStructuredOutputMode: 'json_object'
-    })
-  })
-
-  it('does not replace the preferred strategy when every strategy fails', async () => {
-    const originalConfig: LlmRuntimeConfig = {
-      ...baseConfig,
-      providerKind: 'openai-compatible',
-      preferredTransport: 'completions',
-      preferredStructuredOutputMode: 'prompt_json'
-    }
-    const saveConfig = vi.fn(async () => undefined)
-    const strategyCalls: string[] = []
-
-    createChatModelMock.mockImplementation(
-      (_cfg: LlmRuntimeConfig, options?: { transport?: 'responses' | 'completions' }) => {
-        const transport = options?.transport || 'completions'
-        return {
-          withConfig: (config: { response_format?: { type?: 'json_object' | 'json_schema' } }) => ({
-            invoke: async () => {
-              const mode =
-                config.response_format?.type === 'json_object' ? 'json_object' : 'json_schema'
-              strategyCalls.push(`${transport}/${mode}`)
-              throw new Error('response_format is unavailable')
-            }
-          }),
-          invoke: async () => {
-            strategyCalls.push(`${transport}/prompt_json`)
-            return { content: 'not json' }
-          },
-          stream: async () => ({
-            async *[Symbol.asyncIterator]() {
-              yield { content: 'unexpected' }
-            }
-          })
-        }
-      }
-    )
-
-    const executor = createAiLlmExecutor({
-      eventCtx: { runId: 'run-preferred-preserved', sendEvent: () => undefined },
-      runtimeSettings: { llmStreamingMode: 'force_non_stream' },
-      getConfig: async () => originalConfig,
-      saveConfig,
-      checkCancelled: () => undefined
+      system: 'system',
+      user: 'user'
     })
 
-    await expect(
-      executor.chatStructured({
-        caller: 'human.brain',
-        schemaName: 'unit_schema',
-        schema: z.object({ answer: z.string() }),
-        system: 'Return JSON only.',
-        user: 'Say hello.'
-      })
-    ).rejects.toThrow('模型返回内容无法解析为要求的结构')
-
-    expect(strategyCalls).toEqual([
-      'completions/prompt_json',
-      'completions/json_schema',
-      'completions/json_object'
-    ])
+    expect(structuredResult.output).toEqual({ answer: 'from driver' })
+    expect(textResult).toBe('text from driver')
     expect(saveConfig).not.toHaveBeenCalled()
   })
 
@@ -317,7 +137,6 @@ describe('ai unit llm executor text path', () => {
     vi.useFakeTimers()
     try {
       const events: AiRunEvent[] = []
-      const saveConfig = vi.fn(async () => undefined)
       let callCount = 0
       const driver: AiLlmDriver = {
         chatStructured: async () => {
@@ -332,11 +151,7 @@ describe('ai unit llm executor text path', () => {
           }
           return {
             output: { answer: 'recovered on attempt 3' },
-            rawText: '{"answer":"recovered on attempt 3"}',
-            method: 'promptJson',
-            transport: 'completions',
-            structuredOutputMode: 'prompt_json',
-            strategy: { transport: 'completions', mode: 'prompt_json' }
+            rawText: '{"answer":"recovered on attempt 3"}'
           }
         }
       }
@@ -348,7 +163,7 @@ describe('ai unit llm executor text path', () => {
         },
         runtimeSettings: { llmStreamingMode: 'force_non_stream' },
         getConfig: async () => baseConfig,
-        saveConfig,
+        saveConfig: async () => undefined,
         checkCancelled: () => undefined,
         driver
       })
@@ -381,13 +196,6 @@ describe('ai unit llm executor text path', () => {
       expect(
         events.some((event) => event.type === 'assistant_process_group_failed')
       ).toBe(false)
-      expect(saveConfig).toHaveBeenCalledTimes(1)
-      expect(saveConfig).toHaveBeenCalledWith(
-        expect.objectContaining({
-          preferredTransport: 'completions',
-          preferredStructuredOutputMode: 'prompt_json'
-        })
-      )
     } finally {
       vi.useRealTimers()
     }
@@ -396,7 +204,6 @@ describe('ai unit llm executor text path', () => {
   it('forwards streamed text deltas through the observer and records stream metadata', async () => {
     const events: AiRunEvent[] = []
     const llmIoRecords: AiLlmIoRecord[] = []
-    const saveConfig = vi.fn(async () => undefined)
     const answerChunks: string[] = []
 
     const driver: AiLlmDriver = {
@@ -406,7 +213,6 @@ describe('ai unit llm executor text path', () => {
         return {
           output: 'Hello world',
           rawText: 'Hello world',
-          transport: 'responses',
           streamed: true
         }
       }
@@ -422,7 +228,7 @@ describe('ai unit llm executor text path', () => {
         llmStreamingMode: 'force_stream'
       },
       getConfig: async () => baseConfig,
-      saveConfig,
+      saveConfig: async () => undefined,
       checkCancelled: () => undefined,
       driver
     })
@@ -452,23 +258,17 @@ describe('ai unit llm executor text path', () => {
     })
     expect(llmIoRecords[0]).toMatchObject({
       caller: 'human.mouth',
-      transport: 'responses',
       streamingMode: 'force_stream',
       streamed: true,
       chunkCount: 2,
       rawText: 'Hello world',
       status: 'completed'
     })
-    expect(saveConfig).toHaveBeenCalledTimes(1)
-    expect(saveConfig.mock.calls[0]?.[0]).toMatchObject({
-      preferredTransport: 'responses'
-    })
   })
 
   it('fails early when a streamed response stalls on blank deltas', async () => {
     const events: AiRunEvent[] = []
     const llmIoRecords: AiLlmIoRecord[] = []
-    const saveConfig = vi.fn(async () => undefined)
 
     createChatModelMock.mockImplementation(() => ({
       invoke: async () => ({
@@ -500,11 +300,8 @@ describe('ai unit llm executor text path', () => {
       runtimeSettings: {
         llmStreamingMode: 'force_stream'
       },
-      getConfig: async () => ({
-        ...baseConfig,
-        preferredTransport: 'completions'
-      }),
-      saveConfig,
+      getConfig: async () => baseConfig,
+      saveConfig: async () => undefined,
       checkCancelled: () => undefined
     })
 

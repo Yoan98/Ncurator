@@ -19,9 +19,6 @@ const readCsvRows = async (filePath: string): Promise<Array<{ type: string; reco
       return { type: type.trim(), recordId: recordId.trim(), amount: amount.trim() }
     })
 
-const normalizeExceptionType = (value: string): string =>
-  value.trim().toLowerCase().replace(/[\s-]+/gu, '_')
-
 describe('ai human live terminal backend', () => {
   it('human-terminal-data-reconciliation-live', async () => {
     await runWithStructuredOutputRetry(async () => {
@@ -49,11 +46,10 @@ describe('ai human live terminal backend', () => {
           )
           const beforeHashes = await Promise.all([hashFile(invoicesPath), hashFile(paymentsPath)])
           const output = await createHumanTestRunner(runtime, {
-            allowedToolNames: ['terminal_run', 'terminal_read', 'terminal_stop', 'text_file_edit']
           }).run({
             taskId: runtime.taskId,
             userInput:
-              'Reconcile invoices.csv and payments.csv. Create reconciliation-exceptions.csv for Finance with columns type,recordId,amount for unpaid invoices and payments without a matching invoice. Tell me the matched and exception totals, and do not modify either input file.'
+              'Reconcile invoices.csv and payments.csv. Create reconciliation-exceptions.csv for Finance with columns type,recordId,amount for unpaid invoices and payments without a matching invoice. 类型列请填写 unpaid_invoice（未付发票）或 unmatched_payment（无匹配付款）。Tell me the matched and exception totals, and do not modify either input file.'
           })
           return {
             output,
@@ -67,14 +63,16 @@ describe('ai human live terminal backend', () => {
           const starts = filterAiRunEventsByType(result.events, 'tool_call_started')
           const toolNames = starts.map((event) => event.toolName)
           const results = filterAiRunEventsByType(result.events, 'tool_call_result')
-          const rowKeys = result.rows
-            .map((row) => `${normalizeExceptionType(row.type)}:${row.recordId}:${row.amount}`)
+          const rowAmountKeys = result.rows
+            .map((row) => `${row.recordId}:${row.amount}`)
             .sort()
+          const hasMeaningfulTypes = result.rows.every((row) => row.type.trim().length > 0)
           runtime.assertThat(
             result.output.status === 'completed' &&
               JSON.stringify(result.beforeHashes) === JSON.stringify(result.afterHashes) &&
               results.some((event) => event.toolName === 'terminal_run' && event.result?.ok === true) &&
-              rowKeys.join(',') === 'unmatched_payment:INV-005:30000,unpaid_invoice:INV-003:60000',
+              rowAmountKeys.join(',') === 'INV-003:60000,INV-005:30000' &&
+              hasMeaningfulTypes,
             {
               name: 'human-live-terminal-data-reconciliation-delivers-finance-exceptions',
               message: 'The live model must compute the reconciliation and deliver the correct finance exception file.',

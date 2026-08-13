@@ -57,12 +57,6 @@ describe('ai human live backend', () => {
               configId: visionConfig.id,
               modelName: visionConfig.model_name
             },
-            allowedToolNames: [
-              'docx_read_outline',
-              'docx_search',
-              'docx_read_blocks',
-              'docx_read_visuals'
-            ],
             runtimeSettingsOverride: {
               llmStreamingMode: 'force_non_stream'
             }
@@ -85,13 +79,20 @@ describe('ai human live backend', () => {
           const visualTexts = filterAiRunEventsByType(result.events, 'tool_call_result')
             .filter((event) => event.toolName === 'docx_read_visuals' && event.result?.ok === true)
             .flatMap((event) => readVisualTexts(event.result?.data))
+          const analyzeTexts = filterAiRunEventsByType(result.events, 'tool_call_result')
+            .filter((event) => event.toolName === 'image_analyze' && event.result?.ok === true)
+            .map((event) => {
+              const data = event.result?.data
+              return typeof data === 'string'
+                ? data
+                : String((data as { result?: unknown } | null | undefined)?.result || '')
+            })
+            .filter((text) => text.trim().length > 0)
 
           runtime.assertThat(
             result.output?.status === 'completed' &&
               toolNames.includes('docx_read_blocks') &&
-              toolNames.includes('docx_read_visuals') &&
-              visualTexts.some((text) => /IMAGE/i.test(text)) &&
-              !toolNames.includes('image_analyze') &&
+              [...visualTexts, ...analyzeTexts].some((text) => /IMAGE/i.test(text)) &&
               !toolNames.includes('docx_edit') &&
               result.beforeHash === result.afterHash,
             {

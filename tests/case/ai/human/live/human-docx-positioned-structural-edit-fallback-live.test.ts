@@ -174,13 +174,6 @@ describe('ai human live backend', () => {
             safeWriteResults.some((event) => event.result?.ok === true) &&
             countDocxApplyArtifacts(result.output?.artifacts) >= 1 &&
             countDocxFileArtifacts(result.output?.artifacts) >= 1
-          const deliveryText = ''
-          const deliveryMentionsSkippedPositionedArea =
-            /(绝对定位|锚定定位|复杂定位|定位排版)/.test(deliveryText) &&
-            /(禁止编辑|无法安全|未.{0,12}自动|没有.{0,12}自动|没法自动|无法自动|不能自动|暂不支持.{0,4}自动|跳过)/.test(
-              deliveryText
-            ) &&
-            /(手动|人工|其他非定位|其他可安全|文档末尾|禁止通过其他方式)/.test(deliveryText)
           runtime.assertThat(
             result.output?.status === 'completed' &&
               result.fixtureDocs.every((fixtureDoc) =>

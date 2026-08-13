@@ -6,7 +6,7 @@ afterEach(() => {
 })
 
 describe('llm model catalog', () => {
-  it('filters unavailable models and preserves structured-output capabilities', async () => {
+  it('filters unavailable models and preserves modalities', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue({
@@ -51,7 +51,6 @@ describe('llm model catalog', () => {
           id: 'prompt-json-model',
           label: 'prompt-json-model',
           status: 'Running',
-          structuredOutput: { jsonSchema: false, jsonObject: false },
           inputModalities: ['text', 'image'],
           outputModalities: ['text']
         }

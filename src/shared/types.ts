@@ -474,13 +474,6 @@ export interface DocumentListResponse {
 
 // Chat & LLM Types
 
-export type AiStructuredOutputTransport = 'completions' | 'responses'
-export type AiStructuredOutputMethod = 'jsonSchema' | 'jsonMode' | 'promptJson' | 'scripted'
-export type StructuredOutputMode = 'json_schema' | 'json_object' | 'prompt_json'
-export type StructuredOutputStrategy = {
-  transport: AiStructuredOutputTransport
-  mode: StructuredOutputMode
-}
 export type AiLlmStreamingMode = 'force_stream' | 'force_non_stream'
 export type LlmProviderKind = 'openai' | 'deepseek' | 'openai-compatible'
 export type LlmProviderId =
@@ -510,7 +503,6 @@ export interface LLMConfig {
 export type WorkbenchSelectedModel = {
   configId: string
   modelName: string
-  structuredOutput?: LlmStructuredOutputCapabilities
 }
 
 export type WorkbenchModelSelection = {
@@ -520,21 +512,12 @@ export type WorkbenchModelSelection = {
 
 export type LlmRuntimeConfig = LLMConfig & {
   model_name: string
-  preferredTransport?: AiStructuredOutputTransport
-  preferredStructuredOutputMode?: StructuredOutputMode
-  supportedStructuredOutputModes?: StructuredOutputMode[]
-}
-
-export type LlmStructuredOutputCapabilities = {
-  jsonSchema?: boolean
-  jsonObject?: boolean
 }
 
 export type LlmRemoteModel = {
   id: string
   label?: string
   status?: string
-  structuredOutput?: LlmStructuredOutputCapabilities
   inputModalities?: string[]
   outputModalities?: string[]
 }
@@ -1037,11 +1020,6 @@ export type AiLlmIoRecord = {
   dynamicContextHash?: string
   responseMetadata?: JsonObject
   usageMetadata?: JsonObject
-  method?: AiStructuredOutputMethod
-  transport?: AiStructuredOutputTransport
-  structuredOutputMode?: StructuredOutputMode
-  strategy?: StructuredOutputStrategy
-  fallbackStrategies?: StructuredOutputStrategy[]
   streamingMode?: AiLlmStreamingMode
   contextBudgetSnapshot?: BrainContextBudgetSnapshot
   streamed?: boolean
@@ -1369,11 +1347,6 @@ export interface AiActivityDetails {
   stablePrefixHash?: string
   dynamicContextHash?: string
   durationMs?: number
-  method?: AiStructuredOutputMethod
-  transport?: AiStructuredOutputTransport
-  structuredOutputMode?: StructuredOutputMode
-  strategy?: StructuredOutputStrategy
-  fallbackStrategies?: StructuredOutputStrategy[]
   streamingMode?: AiLlmStreamingMode
   streamed?: boolean
   chunkCount?: number

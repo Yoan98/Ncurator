@@ -6,7 +6,7 @@ export const LEGACY_DOC_EDIT_ERROR =
 
 export const LEGACY_DOC_EDIT_DECISION_HINT: JsonObject = {
   code: 'legacy_doc_edit_unsupported',
-  instruction: '不要继续尝试编辑 .doc 文件，跳过它继续推进。'
+  instruction: '禁止继续尝试编辑或转换旧版 .doc 文件，请提示用户转换为 .docx 后再编辑。'
 }
 
 export const isLegacyDocPath = (filePath: string): boolean =>

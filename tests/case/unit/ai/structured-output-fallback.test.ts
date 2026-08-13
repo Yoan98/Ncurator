@@ -1,116 +1,116 @@
 import { describe, expect, it } from 'vitest'
-import {
-  classifyStructuredOutputError,
-  isStructuredOutputMethodUnsupportedError,
-  isStructuredOutputTransportCompatibilityError
-} from '../../../../src/main/services/ai/structuredOutput'
+import { classifyLlmError } from '../../../../src/main/services/ai/structuredOutput'
 
-describe('ai unit structured output fallback', () => {
-  it('classifies response_format unavailable errors as capability mismatch', () => {
+describe('ai unit llm error classification', () => {
+  it('classifies response_format unavailable errors as unknown (no capability fallback)', () => {
     expect(
-      classifyStructuredOutputError({
-        error: {
+      classifyLlmError({
+        status: 400,
+        response: {
           status: 400,
-          response: {
-            status: 400,
-            data: {
-              error: {
-                param: 'response_format',
-                message: 'This response_format type is unavailable now'
-              }
+          data: {
+            error: {
+              param: 'response_format',
+              message: 'This response_format type is unavailable now'
             }
           }
-        },
-        transport: 'completions',
-        method: 'jsonSchema'
-      }).kind
-    ).toBe('capability_mismatch')
+        }
+      })
+    ).toBe('unknown')
   })
 
   it('classifies insufficient balance errors as fatal', () => {
     expect(
-      classifyStructuredOutputError({
-        error: {
+      classifyLlmError({
+        status: 402,
+        response: {
           status: 402,
-          response: {
-            status: 402,
-            data: {
-              error: {
-                code: 'insufficient_balance',
-                message: 'Insufficient Balance'
-              }
+          data: {
+            error: {
+              code: 'insufficient_balance',
+              message: 'Insufficient Balance'
             }
           }
-        },
-        transport: 'completions',
-        method: 'jsonSchema'
-      }).kind
+        }
+      })
+    ).toBe('fatal')
+  })
+
+  it('classifies invalid api key errors as fatal', () => {
+    expect(
+      classifyLlmError({
+        status: 401,
+        response: {
+          status: 401,
+          data: {
+            error: {
+              code: 'invalid_api_key',
+              message: 'Incorrect API key provided'
+            }
+          }
+        }
+      })
     ).toBe('fatal')
   })
 
   it('classifies rate limit errors as retryable', () => {
     expect(
-      classifyStructuredOutputError({
-        error: {
+      classifyLlmError({
+        status: 429,
+        response: {
           status: 429,
-          response: {
-            status: 429,
-            data: {
-              error: {
-                code: 'rate_limit_exceeded',
-                message: 'Rate limit exceeded'
-              }
+          data: {
+            error: {
+              code: 'rate_limit_exceeded',
+              message: 'Rate limit exceeded'
             }
           }
-        },
-        transport: 'responses',
-        method: 'jsonSchema'
-      }).kind
+        }
+      })
     ).toBe('retryable')
   })
 
-  it('treats provider jsonSchema unsupported errors as method-level fallback signals', () => {
+  it('classifies 502 as retryable regardless of body text', () => {
     expect(
-      isStructuredOutputMethodUnsupportedError('jsonSchema', {
-        message: 'response_format json schema is not supported by this provider'
+      classifyLlmError({
+        status: 502,
+        response: {
+          status: 502,
+          data: {
+            error: {
+              message: 'upstream failed: response_format is not supported'
+            }
+          }
+        }
       })
-    ).toBe(true)
+    ).toBe('retryable')
   })
 
-  it('treats provider jsonMode unsupported errors as method-level fallback signals', () => {
-    expect(
-      isStructuredOutputMethodUnsupportedError('jsonMode', {
-        message: 'response_format json_object is not supported by this provider'
-      })
-    ).toBe(true)
+  it('classifies timeouts as retryable', () => {
+    expect(classifyLlmError(Object.assign(new Error('llm_call_timeout'), { code: 'TIMEOUT' }))).toBe(
+      'retryable'
+    )
   })
 
-  it('treats provider compatibility crashes as transport-level fallback signals', () => {
+  it('classifies unknown status errors as unknown', () => {
     expect(
-      isStructuredOutputTransportCompatibilityError('completions', {
-        message: "Cannot read properties of undefined (reading 'message')"
+      classifyLlmError({
+        status: 404,
+        response: {
+          status: 404,
+          data: {
+            error: {
+              code: 'ModelNotOpen',
+              type: 'Not Found',
+              message: 'The selected model is not activated'
+            }
+          }
+        }
       })
-    ).toBe(true)
+    ).toBe('unknown')
   })
 
-  it('treats legacy protocol errors as completions transport incompatibility', () => {
-    expect(
-      isStructuredOutputTransportCompatibilityError('completions', {
-        message: 'Unsupported legacy protocol: /v1/chat/completions is not supported. Please use /v1/responses.'
-      })
-    ).toBe(true)
-  })
-
-  it('does not swallow unrelated runtime errors as fallback signals', () => {
-    expect(
-      isStructuredOutputMethodUnsupportedError('jsonSchema', {
-        message: 'network socket disconnected unexpectedly'
-      })
-    ).toBe(false)
-    expect(
-      isStructuredOutputTransportCompatibilityError('responses', {
-        message: 'network socket disconnected unexpectedly'
-      })
-    ).toBe(false)
+  it('does not treat network socket errors as retryable without signals', () => {
+    expect(classifyLlmError(new Error('network socket disconnected unexpectedly'))).toBe('unknown')
   })
 })

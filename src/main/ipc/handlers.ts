@@ -228,7 +228,6 @@ export function registerHandlers(services: {
   const workbenchUiStore = storageService.workbenchUi
   const aiRunStore = storageService.aiRun
   const llmStore = storageService.llm
-  const llmStrategyPreferenceStore = storageService.llmStrategyPreference
   const aiRuntimeSettingsStore = storageService.aiRuntimeSettings
   const webSourceStore = storageService.webSource
   const workspaceStore = storageService.workspace
@@ -252,7 +251,6 @@ export function registerHandlers(services: {
     documentsStore,
     embeddingService,
     llmStore,
-    llmStrategyPreferenceStore,
     aiRuntimeSettingsStore,
     workspaceStore,
     webSourceStore,

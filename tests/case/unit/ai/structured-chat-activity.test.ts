@@ -59,7 +59,6 @@ describe('ai unit structured chat activity', () => {
         output: {
           ok: true
         },
-        method: 'scripted',
         usage: {
           inputTokens: 100,
           outputTokens: 10,
@@ -79,10 +78,8 @@ describe('ai unit structured chat activity', () => {
     })
 
     expect(result.output).toEqual({ ok: true })
-    expect(result.method).toBe('scripted')
     expect(events.filter((event) => event.type === 'activity')).toHaveLength(2)
     expect(llmIoRecords).toHaveLength(1)
-    expect(llmIoRecords[0]?.method).toBe('scripted')
     expect(llmIoRecords[0]).toMatchObject({
       caller: 'human.brain',
       schemaName: 'human_brain_decision',
@@ -154,7 +151,6 @@ describe('ai unit structured chat activity', () => {
         return {
           output: 'Hello world',
           rawText: 'Hello world',
-          transport: 'responses',
           streamed: true
         }
       }
@@ -184,8 +180,7 @@ describe('ai unit structured chat activity', () => {
       details: {
         streamingMode: 'force_stream',
         streamed: true,
-        chunkCount: 2,
-        transport: 'responses'
+        chunkCount: 2
       }
     })
 
@@ -194,7 +189,6 @@ describe('ai unit structured chat activity', () => {
       caller: 'human.mouth',
       schemaName: 'human_mouth_markdown',
       rawText: 'Hello world',
-      transport: 'responses',
       streamingMode: 'force_stream',
       streamed: true,
       chunkCount: 2,

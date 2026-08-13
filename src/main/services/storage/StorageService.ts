@@ -8,7 +8,6 @@ import { ChatStore } from './domains/ChatStore'
 import { DocxApplyStore } from './domains/DocxApplyStore'
 import { DocumentsStore } from './domains/DocumentsStore'
 import { LlmConfigStore } from './domains/LlmConfigStore'
-import { LlmStrategyPreferenceStore } from './domains/LlmStrategyPreferenceStore'
 import { WebSourceStore } from './domains/WebSourceStore'
 import { WorkspaceIndexJobStore } from './domains/WorkspaceIndexJobStore'
 import { WorkspaceStore } from './domains/WorkspaceStore'
@@ -29,7 +28,6 @@ export class StorageService {
   public readonly aiRun: AiRunStore
   public readonly docxApply: DocxApplyStore
   public readonly llm: LlmConfigStore
-  public readonly llmStrategyPreference: LlmStrategyPreferenceStore
   public readonly aiRuntimeSettings: AiRuntimeSettingsStore
   public readonly workspace: WorkspaceStore
   public readonly workspaceIndexJob: WorkspaceIndexJobStore
@@ -51,7 +49,6 @@ export class StorageService {
     this.aiRun = new AiRunStore(this.sqlite)
     this.docxApply = new DocxApplyStore(this.sqlite)
     this.llm = new LlmConfigStore(this.sqlite)
-    this.llmStrategyPreference = new LlmStrategyPreferenceStore(this.sqlite)
     this.aiRuntimeSettings = new AiRuntimeSettingsStore(this.sqlite)
     this.workspace = new WorkspaceStore(this.sqlite)
     this.workspaceIndexJob = new WorkspaceIndexJobStore(this.sqlite)

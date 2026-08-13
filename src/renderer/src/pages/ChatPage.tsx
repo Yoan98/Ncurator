@@ -1797,8 +1797,7 @@ const ChatPage: React.FC = () => {
         return remoteModel
           ? {
               configId: model.configId,
-              modelName: model.modelName,
-              structuredOutput: remoteModel.structuredOutput
+              modelName: model.modelName
             }
           : null
       }
@@ -1812,8 +1811,7 @@ const ChatPage: React.FC = () => {
         firstConfigWithModel && firstRemoteModel
           ? {
               configId: firstConfigWithModel.id,
-              modelName: firstRemoteModel.id,
-              structuredOutput: firstRemoteModel.structuredOutput
+              modelName: firstRemoteModel.id
             }
           : null
       const nextSelection: WorkbenchModelSelection = {
@@ -1842,7 +1840,7 @@ const ChatPage: React.FC = () => {
       const remote = modelListsByConfigId[selected.configId]?.find(
         (item) => item.id === selected.modelName
       )
-      return remote ? { ...selected, structuredOutput: remote.structuredOutput } : null
+      return remote ? { ...selected } : null
     }
     const firstConfig = modelConfigs.find((config) => modelListsByConfigId[config.id]?.length)
     const firstRemote = firstConfig ? pickChatModel(modelListsByConfigId[firstConfig.id]) : undefined
@@ -1850,8 +1848,7 @@ const ChatPage: React.FC = () => {
       firstConfig && firstRemote
         ? {
             configId: firstConfig.id,
-            modelName: firstRemote.id,
-            structuredOutput: firstRemote.structuredOutput
+            modelName: firstRemote.id
           }
         : null
     const nextSelection: WorkbenchModelSelection = {

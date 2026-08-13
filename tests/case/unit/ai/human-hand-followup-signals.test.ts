@@ -27,7 +27,7 @@ describe('ai unit hand followup signals', () => {
             error: 'docx_edit 不支持写入旧版 .doc 文件。',
             decisionHint: {
               code: 'legacy_doc_edit_unsupported',
-              instruction: '不要继续尝试编辑 .doc 文件，跳过它继续推进。'
+              instruction: '禁止继续尝试编辑或转换旧版 .doc 文件，请提示用户转换为 .docx 后再编辑。'
             }
           }
         }
@@ -37,7 +37,7 @@ describe('ai unit hand followup signals', () => {
     expect(signals.decisionHint).toEqual({
       code: 'legacy_doc_edit_unsupported',
       detail: {
-        instruction: '不要继续尝试编辑 .doc 文件，跳过它继续推进。'
+        instruction: '禁止继续尝试编辑或转换旧版 .doc 文件，请提示用户转换为 .docx 后再编辑。'
       }
     })
   })

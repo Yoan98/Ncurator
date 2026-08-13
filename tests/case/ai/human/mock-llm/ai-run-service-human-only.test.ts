@@ -47,7 +47,6 @@ describe('ai human mock-llm backend', () => {
           },
           {
             runtimeSettings,
-            llmStrategyPreferenceStore: runtime.storageService.llmStrategyPreference,
             llmStore: runtime.llmStore,
             chatStore: runtime.chatStore,
             documentsStore: runtime.documentsStore,

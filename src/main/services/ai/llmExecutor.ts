@@ -1,40 +1,28 @@
 import { HumanMessage, SystemMessage } from '@langchain/core/messages'
 import type { RunnableConfig } from '@langchain/core/runnables'
 import { z } from 'zod/v4'
-import { createChatModel, getSupportedTransportsForConfig } from '../llm/chatModel'
+import { createChatModel } from '../llm/chatModel'
 import { normalizeJsonObject, normalizeLlmUsage } from '../llm/usage'
 import { resolveLlmProviderKind } from '../../../shared/llmProvider'
 import type {
   AiLlmUsage,
   AiLlmStreamingMode,
   AiRuntimeSettings,
-  AiStructuredOutputMethod,
-  AiStructuredOutputTransport,
   BrainContextBudgetSnapshot,
   JsonObject,
   LLMConfig,
   LlmRuntimeConfig,
-  LlmProviderKind,
-  StructuredOutputMode,
-  StructuredOutputStrategy
+  LlmProviderKind
 } from '../../../shared/types'
 import type { AiEventDispatchContext } from './types'
 import { AI_LLM_CALL_MAX_RETRY_ATTEMPTS, AI_LLM_CALL_TIMEOUT_MS } from './constants'
-import { LlmOutputError, LlmProviderError, isLlmProviderError, toLlmOutputError } from './errors'
+import { isLlmProviderError, toLlmOutputError } from './errors'
 import { classifyLlmFailureCode } from './utils/runFailure'
 import {
-  buildStructuredOutputStrategyAttemptOrder,
-  classifyStructuredOutputError,
   extractTextContent,
-  formatStructuredOutputStrategy,
   getErrorText,
-  isTransportCompatibilityError,
-  methodToStructuredOutputMode,
   normalizeStructuredOutputError,
-  parseJsonObjectText,
-  parsePromptJsonOutput,
-  resolveStructuredOutputStrategy,
-  type NonScriptedStructuredOutputMethod
+  parsePromptJsonOutput
 } from './structuredOutput'
 import {
   runLlmCallWithActivity,
@@ -42,15 +30,8 @@ import {
   type LlmCallStreamObserver
 } from './utils/structuredChatActivity'
 
-type TextContentPart = {
-  text?: string
-  content?: string
-}
-
-type TextContent = string | TextContentPart | Array<string | TextContentPart>
-
 type TextMessage = {
-  content: TextContent
+  content: unknown
   response_metadata?: Record<string, unknown>
   usage_metadata?: Record<string, unknown>
 }
@@ -79,24 +60,15 @@ type BaseLlmInvocationInput = {
   signal?: AbortSignal
 }
 
-export type AiLlmTextInvocationInput = BaseLlmInvocationInput & {
-  preferredTransport?: AiStructuredOutputTransport
-}
+export type AiLlmTextInvocationInput = BaseLlmInvocationInput
 
 type AiLlmStructuredDriverInput = BaseLlmInvocationInput & {
-  preferredStrategy?: StructuredOutputStrategy
   schema: z.ZodType<Record<string, unknown>>
 }
-
-export type AiLlmStructuredInvocationInput<T extends Record<string, unknown>> =
-  AiLlmStructuredDriverInput & {
-    schema: z.ZodType<T>
-  }
 
 export type AiLlmTextDriverResult = {
   output: string
   rawText?: string
-  transport?: AiStructuredOutputTransport
   streamed?: boolean
   usage?: AiLlmUsage
   responseMetadata?: JsonObject
@@ -106,11 +78,6 @@ export type AiLlmTextDriverResult = {
 export type AiLlmStructuredDriverResult = {
   output: Record<string, unknown>
   rawText?: string
-  method: AiStructuredOutputMethod
-  transport?: AiStructuredOutputTransport
-  structuredOutputMode?: StructuredOutputMode
-  strategy?: StructuredOutputStrategy
-  fallbackStrategies?: StructuredOutputStrategy[]
   streamed?: boolean
   usage?: AiLlmUsage
   responseMetadata?: JsonObject
@@ -153,33 +120,6 @@ export type AiLlmExecutor = {
     usage?: AiLlmUsage
   }>
   chatText: (input: AiLlmTextRequest) => Promise<string>
-}
-
-export type InvokeStructuredChatInput<T extends Record<string, unknown>> = {
-  caller: string
-  cfg: LlmRuntimeConfig
-  preferredStrategy?: StructuredOutputStrategy
-  streamingMode?: AiLlmStreamingMode
-  schema: z.ZodType<T>
-  schemaName: string
-  system: string
-  user: string
-  temperature?: number
-  driver?: AiLlmDriver
-}
-
-export type InvokeStructuredChatResult<T extends Record<string, unknown>> = {
-  output: T
-  rawText?: string
-  method: AiStructuredOutputMethod
-  transport?: AiStructuredOutputTransport
-  structuredOutputMode?: StructuredOutputMode
-  strategy?: StructuredOutputStrategy
-  fallbackStrategies: StructuredOutputStrategy[]
-  streamed?: boolean
-  usage?: AiLlmUsage
-  responseMetadata?: JsonObject
-  usageMetadata?: JsonObject
 }
 
 const resolveStreamingMode = (settings: AiRuntimeSettings): AiLlmStreamingMode =>
@@ -251,33 +191,6 @@ const resolveConfigProviderKind = (cfg: LLMConfig): LlmProviderKind =>
     baseUrl: cfg.base_url
   })
 
-const buildTransportAttemptOrder = (
-  preferredTransport: AiStructuredOutputTransport | undefined,
-  cfg: LlmRuntimeConfig
-): AiStructuredOutputTransport[] => {
-  const supported = getSupportedTransportsForConfig(cfg)
-  if (!preferredTransport || !supported.includes(preferredTransport)) return [...supported]
-  return [preferredTransport, ...supported.filter((item) => item !== preferredTransport)]
-}
-
-const buildPreferredStrategy = (cfg: LlmRuntimeConfig): StructuredOutputStrategy | undefined => {
-  if (!cfg.preferredTransport || !cfg.preferredStructuredOutputMode) return undefined
-  return {
-    transport: cfg.preferredTransport,
-    mode: cfg.preferredStructuredOutputMode
-  }
-}
-
-const buildStructuredAttemptOrder = (
-  preferredStrategy: StructuredOutputStrategy | undefined,
-  cfg: LlmRuntimeConfig
-): StructuredOutputStrategy[] =>
-  buildStructuredOutputStrategyAttemptOrder({
-    supportedTransports: getSupportedTransportsForConfig(cfg),
-    preferredStrategy: preferredStrategy || buildPreferredStrategy(cfg),
-    supportedModes: cfg.supportedStructuredOutputModes
-  })
-
 const toInvocationMetadata = (input: {
   message?: TextMessage
   providerKind: LlmProviderKind
@@ -293,13 +206,6 @@ const toInvocationMetadata = (input: {
   responseMetadata: normalizeJsonObject(input.message?.response_metadata),
   usageMetadata: normalizeJsonObject(input.message?.usage_metadata)
 })
-
-const buildSchemaDescription = <T extends Record<string, unknown>>(
-  schema: z.ZodType<T>
-): string | undefined => {
-  const description = schema.description?.trim()
-  return description ? description : undefined
-}
 
 const streamTextFromRunnable = async (input: {
   runnable: TextRunnable
@@ -360,141 +266,13 @@ const invokeTextFromRunnable = async (input: {
 const createTextRunnable = (input: {
   cfg: LlmRuntimeConfig
   temperature?: number
-  transport: AiStructuredOutputTransport
   streaming: boolean
 }): TextRunnable =>
   createChatModel(input.cfg, {
     temperature: input.temperature ?? 0.2,
-    transport: input.transport,
     streaming: input.streaming,
     timeout: AI_LLM_CALL_TIMEOUT_MS
   }) as TextRunnable
-
-const createStructuredJsonRunnable = <T extends Record<string, unknown>>(input: {
-  cfg: LlmRuntimeConfig
-  temperature?: number
-  transport: AiStructuredOutputTransport
-  streaming: boolean
-  schema: z.ZodType<T>
-  schemaName: string
-  method: Exclude<NonScriptedStructuredOutputMethod, 'promptJson'>
-}): TextRunnable => {
-  const model = createTextRunnable({
-    cfg: input.cfg,
-    temperature: input.temperature,
-    transport: input.transport,
-    streaming: input.streaming
-  })
-
-  if (input.method === 'jsonMode') {
-    return model.withConfig({
-      outputVersion: 'v0',
-      response_format: {
-        type: 'json_object'
-      }
-    }) as TextRunnable
-  }
-
-  return model.withConfig({
-    outputVersion: 'v0',
-    response_format: {
-      type: 'json_schema',
-      json_schema: {
-        name: input.schemaName,
-        description: buildSchemaDescription(input.schema),
-        schema: z.toJSONSchema(input.schema),
-        strict: true
-      }
-    }
-  }) as TextRunnable
-}
-
-const invokeTextWithTransport = async (
-  transport: AiStructuredOutputTransport,
-  input: AiLlmTextInvocationInput & {
-    checkCancelled: () => void
-  }
-): Promise<AiLlmTextDriverResult> => {
-  const streaming = input.streamingMode === 'force_stream'
-  const providerKind = resolveConfigProviderKind(input.cfg)
-  const runnable = createTextRunnable({
-    cfg: input.cfg,
-    temperature: input.temperature,
-    transport,
-    streaming
-  })
-  const messages = buildMessages(input.system, input.user)
-  const response = streaming
-    ? await streamTextFromRunnable({
-        runnable,
-        messages,
-        observer: input.observer,
-        checkCancelled: input.checkCancelled,
-        signal: input.signal
-      })
-    : await invokeTextFromRunnable({
-        runnable,
-        messages,
-        checkCancelled: input.checkCancelled,
-        signal: input.signal
-      })
-  const metadata = toInvocationMetadata({
-    message: response.message,
-    providerKind
-  })
-  return {
-    output: response.text,
-    rawText: response.text,
-    transport,
-    streamed: streaming,
-    ...metadata
-  }
-}
-
-type StructuredOutputRawTextError = Error & {
-  rawText?: string
-}
-
-const withRawText = (error: unknown, rawText: string): StructuredOutputRawTextError => {
-  const next: StructuredOutputRawTextError =
-    error instanceof Error ? (error as StructuredOutputRawTextError) : new Error(String(error))
-  next.rawText = rawText
-  return next
-}
-
-const getRawTextFromError = (error: unknown): string | undefined => {
-  if (!error || typeof error !== 'object') return undefined
-  const rawText = (error as { rawText?: unknown }).rawText
-  return typeof rawText === 'string' && rawText ? rawText : undefined
-}
-
-const isStructuredParseFailure = (error: unknown): boolean => {
-  if (error instanceof SyntaxError) return true
-  const message = error instanceof Error ? error.message : String(error || '')
-  return (
-    message.includes('structured_output_empty_response') ||
-    message.includes('prompt_json_empty_response') ||
-    message.includes('structured_output_non_object_response') ||
-    message.includes('prompt_json_non_object_response') ||
-    message.includes('JSON') ||
-    message.includes('Expected') ||
-    message.includes('Unexpected')
-  )
-}
-
-const resolveResultStrategy = (input: {
-  method: AiStructuredOutputMethod
-  transport?: AiStructuredOutputTransport
-  structuredOutputMode?: StructuredOutputMode
-  strategy?: StructuredOutputStrategy
-}): StructuredOutputStrategy | undefined => {
-  if (input.strategy) return input.strategy
-  if (!input.transport || input.method === 'scripted') return undefined
-  return {
-    transport: input.transport,
-    mode: input.structuredOutputMode || methodToStructuredOutputMode(input.method)
-  }
-}
 
 const isCancellationError = (error: unknown): boolean => {
   const code = error && typeof error === 'object' ? (error as { code?: unknown }).code : undefined
@@ -566,280 +344,6 @@ const isResourceExhaustedError = (error: unknown, extraText = ''): boolean => {
 const resolveResourceExhaustedDelay = (attempt: number): number =>
   Math.min(15_000, 2_000 * 2 ** Math.max(0, attempt - 1))
 
-const createLlmProviderError = (error: unknown, retryable: boolean): LlmProviderError => {
-  if (isLlmProviderError(error)) return error
-  const info = normalizeStructuredOutputError(error)
-  return new LlmProviderError({
-    message: info.message || '模型服务请求失败。',
-    httpStatus: info.status,
-    providerCode: info.code,
-    providerType: info.type,
-    retryable,
-    cause: error
-  })
-}
-
-const invokeStructuredWithStrategy = async <T extends Record<string, unknown>>(
-  strategy: StructuredOutputStrategy,
-  input: AiLlmStructuredInvocationInput<T> & {
-    checkCancelled: () => void
-  }
-): Promise<AiLlmStructuredDriverResult> => {
-  const { method, transport } = resolveStructuredOutputStrategy(strategy)
-  const streaming = input.streamingMode === 'force_stream'
-  const providerKind = resolveConfigProviderKind(input.cfg)
-  const messages = buildMessages(input.system, input.user)
-
-  if (method === 'promptJson') {
-    const runnable = createTextRunnable({
-      cfg: input.cfg,
-      temperature: input.temperature,
-      transport,
-      streaming
-    })
-    const response = streaming
-      ? await streamTextFromRunnable({
-          runnable,
-          messages,
-          observer: input.observer,
-          checkCancelled: input.checkCancelled,
-          signal: input.signal
-        })
-      : await invokeTextFromRunnable({
-          runnable,
-          messages,
-          checkCancelled: input.checkCancelled,
-          signal: input.signal
-        })
-    const metadata = toInvocationMetadata({
-      message: response.message,
-      providerKind
-    })
-    let output: Record<string, unknown>
-    try {
-      output = parsePromptJsonOutput(response.text)
-    } catch (error) {
-      throw withRawText(error, response.text)
-    }
-    return {
-      output,
-      rawText: response.text,
-      method: 'promptJson',
-      transport,
-      structuredOutputMode: strategy.mode,
-      strategy,
-      streamed: streaming,
-      ...metadata
-    }
-  }
-
-  const runnable = createStructuredJsonRunnable({
-    cfg: input.cfg,
-    temperature: input.temperature,
-    transport,
-    streaming,
-    schema: input.schema,
-    schemaName: input.schemaName,
-    method
-  })
-  const response = streaming
-    ? await streamTextFromRunnable({
-        runnable,
-        messages,
-        observer: input.observer,
-        checkCancelled: input.checkCancelled,
-        signal: input.signal
-      })
-    : await invokeTextFromRunnable({
-        runnable,
-        messages,
-        checkCancelled: input.checkCancelled,
-        signal: input.signal
-      })
-  const metadata = toInvocationMetadata({
-    message: response.message,
-    providerKind
-  })
-  let output: Record<string, unknown>
-  try {
-    output = parseJsonObjectText(response.text)
-  } catch (error) {
-    throw withRawText(error, response.text)
-  }
-
-  return {
-    output,
-    rawText: response.text,
-    method,
-    transport,
-    structuredOutputMode: strategy.mode,
-    strategy,
-    streamed: streaming,
-    ...metadata
-  }
-}
-
-const invokeStructuredChatNative = async <T extends Record<string, unknown>>(
-  input: AiLlmStructuredInvocationInput<T> & {
-    checkCancelled: () => void
-  }
-): Promise<AiLlmStructuredDriverResult> => {
-  const attemptOrder = buildStructuredAttemptOrder(input.preferredStrategy, input.cfg)
-  const attemptedStrategies: StructuredOutputStrategy[] = []
-  const strategyErrors: string[] = []
-  let latestRawText: string | undefined
-  let latestOutputError: unknown
-  let latestCapacityError: unknown
-
-  for (const strategy of attemptOrder) {
-    const { method, transport } = resolveStructuredOutputStrategy(strategy)
-    const strategyLabel = formatStructuredOutputStrategy(strategy)
-    attemptedStrategies.push(strategy)
-    try {
-      const result = await invokeStructuredWithStrategy(strategy, input)
-      let parsedOutput: T
-      try {
-        parsedOutput = input.schema.parse(result.output)
-      } catch (error) {
-        latestRawText = result.rawText || latestRawText
-        latestOutputError = error
-        strategyErrors.push(`${strategyLabel}: 模型返回内容不符合要求的结构`)
-        continue
-      }
-      return {
-        ...result,
-        output: parsedOutput,
-        fallbackStrategies: attemptedStrategies
-      }
-    } catch (error) {
-      const reason = getErrorText(error)
-      latestRawText = getRawTextFromError(error) || latestRawText
-      const errorAnalysis = classifyStructuredOutputError({
-        error,
-        transport,
-        method
-      })
-      if (errorAnalysis.kind === 'capability_mismatch') {
-        strategyErrors.push(`${strategyLabel}: ${reason}`)
-        continue
-      }
-      if (isStructuredParseFailure(error)) {
-        strategyErrors.push(`${strategyLabel}: ${reason}`)
-        latestOutputError = error
-        continue
-      }
-      if (errorAnalysis.kind === 'retryable') {
-        if (
-          isResourceExhaustedError(
-            error,
-            `${errorAnalysis.info.rawText} ${errorAnalysis.info.code} ${errorAnalysis.info.message}`
-          )
-        ) {
-          strategyErrors.push(`${strategyLabel}: ${reason}`)
-          latestCapacityError = error
-          continue
-        }
-        throw createLlmProviderError(error, true)
-      }
-      throw createLlmProviderError(error, false)
-    }
-  }
-
-  if (latestCapacityError) {
-    throw createLlmProviderError(latestCapacityError, true)
-  }
-
-  throw new LlmOutputError({
-    message: '模型返回内容无法解析为要求的结构。',
-    issues: [
-      {
-        path: 'output',
-        message: strategyErrors.join(' | ') || '模型未返回可用的结构化内容'
-      }
-    ],
-    rawText: latestRawText,
-    cause: latestOutputError
-  })
-}
-
-const invokeTextChatNative = async (
-  input: AiLlmTextInvocationInput & {
-    checkCancelled: () => void
-  }
-): Promise<AiLlmTextDriverResult> => {
-  const attemptOrder = buildTransportAttemptOrder(input.preferredTransport, input.cfg)
-  const transportErrors: string[] = []
-  let latestCompatibilityError: unknown
-
-  for (const transport of attemptOrder) {
-    try {
-      return await invokeTextWithTransport(transport, input)
-    } catch (error) {
-      const reason = getErrorText(error)
-      if (isTransportCompatibilityError(transport, error)) {
-        transportErrors.push(`${transport}: ${reason}`)
-        latestCompatibilityError = error
-        continue
-      }
-      if (classifyLlmCallRetry(error).retryable) {
-        throw createLlmProviderError(error, true)
-      }
-      throw createLlmProviderError(error, false)
-    }
-  }
-
-  throw createLlmProviderError(
-    latestCompatibilityError ||
-      new Error(transportErrors.join(' | ') || '模型服务不支持当前请求接口。'),
-    false
-  )
-}
-
-const runStructuredChatInvocation = async <T extends Record<string, unknown>>(input: {
-  driver?: AiLlmDriver
-  request: AiLlmStructuredInvocationInput<T> & {
-    checkCancelled: () => void
-  }
-}): Promise<LlmCallExecutionResult<Record<string, unknown>>> => {
-  if (input.driver?.chatStructured) {
-    const result = await input.driver.chatStructured({
-      caller: input.request.caller,
-      cfg: input.request.cfg,
-      preferredStrategy: input.request.preferredStrategy,
-      schema: input.request.schema,
-      schemaName: input.request.schemaName,
-      system: input.request.system,
-      user: input.request.user,
-      temperature: input.request.temperature,
-      streamingMode: input.request.streamingMode,
-      observer: input.request.observer,
-      signal: input.request.signal
-    })
-    const strategy = resolveResultStrategy(result)
-    const fallbackStrategies =
-      result.fallbackStrategies && result.fallbackStrategies.length > 0
-        ? result.fallbackStrategies
-        : strategy
-          ? [strategy]
-          : []
-    return {
-      output: result.output,
-      rawText: result.rawText,
-      method: result.method,
-      transport: result.transport,
-      structuredOutputMode: result.structuredOutputMode,
-      strategy,
-      fallbackStrategies,
-      streamed: result.streamed,
-      usage: result.usage,
-      responseMetadata: result.responseMetadata,
-      usageMetadata: result.usageMetadata
-    }
-  }
-
-  return await invokeStructuredChatNative(input.request)
-}
-
 const invokeTextChat = async (input: {
   driver?: AiLlmDriver
   request: AiLlmTextInvocationInput & {
@@ -851,7 +355,6 @@ const invokeTextChat = async (input: {
     return {
       output: result.output,
       rawText: result.rawText ?? result.output,
-      transport: result.transport,
       streamed: result.streamed,
       usage: result.usage,
       responseMetadata: result.responseMetadata,
@@ -859,24 +362,97 @@ const invokeTextChat = async (input: {
     }
   }
 
-  return await invokeTextChatNative(input.request)
+  const request = input.request
+  const streaming = request.streamingMode === 'force_stream'
+  const providerKind = resolveConfigProviderKind(request.cfg)
+  const runnable = createTextRunnable({
+    cfg: request.cfg,
+    temperature: request.temperature,
+    streaming
+  })
+  const messages = buildMessages(request.system, request.user)
+  const response = streaming
+    ? await streamTextFromRunnable({
+        runnable,
+        messages,
+        observer: request.observer,
+        checkCancelled: request.checkCancelled,
+        signal: request.signal
+      })
+    : await invokeTextFromRunnable({
+        runnable,
+        messages,
+        checkCancelled: request.checkCancelled,
+        signal: request.signal
+      })
+  const metadata = toInvocationMetadata({
+    message: response.message,
+    providerKind
+  })
+  return {
+    output: response.text,
+    rawText: response.text,
+    streamed: streaming,
+    ...metadata
+  }
 }
 
-const persistConfigUpdate = async (input: {
-  cfg: LlmRuntimeConfig
-  nextConfig: LlmRuntimeConfig
-  saveConfig: (cfg: LlmRuntimeConfig) => Promise<void>
-  warningPrefix: string
-}): Promise<void> => {
-  const changed =
-    input.cfg.preferredTransport !== input.nextConfig.preferredTransport ||
-    input.cfg.preferredStructuredOutputMode !== input.nextConfig.preferredStructuredOutputMode
-  if (!changed) return
+const invokeStructuredChatCore = async (input: {
+  driver?: AiLlmDriver
+  request: AiLlmStructuredDriverInput & {
+    checkCancelled: () => void
+  }
+}): Promise<LlmCallExecutionResult<Record<string, unknown>>> => {
+  if (input.driver?.chatStructured) {
+    const result = await input.driver.chatStructured(input.request)
+    return {
+      output: result.output,
+      rawText: result.rawText,
+      streamed: result.streamed,
+      usage: result.usage,
+      responseMetadata: result.responseMetadata,
+      usageMetadata: result.usageMetadata
+    }
+  }
 
+  const request = input.request
+  const streaming = request.streamingMode === 'force_stream'
+  const providerKind = resolveConfigProviderKind(request.cfg)
+  const runnable = createTextRunnable({
+    cfg: request.cfg,
+    temperature: request.temperature,
+    streaming
+  })
+  const messages = buildMessages(request.system, request.user)
+  const response = streaming
+    ? await streamTextFromRunnable({
+        runnable,
+        messages,
+        observer: request.observer,
+        checkCancelled: request.checkCancelled,
+        signal: request.signal
+      })
+    : await invokeTextFromRunnable({
+        runnable,
+        messages,
+        checkCancelled: request.checkCancelled,
+        signal: request.signal
+      })
+  const metadata = toInvocationMetadata({
+    message: response.message,
+    providerKind
+  })
+  let output: Record<string, unknown>
   try {
-    await input.saveConfig(input.nextConfig)
+    output = parsePromptJsonOutput(response.text)
   } catch (error) {
-    console.warn(input.warningPrefix, error)
+    throw toLlmOutputError(error, response.text)
+  }
+  return {
+    output,
+    rawText: response.text,
+    streamed: streaming,
+    ...metadata
   }
 }
 
@@ -925,12 +501,11 @@ export const createAiLlmExecutor = (input: {
             timeoutMs: AI_LLM_CALL_TIMEOUT_MS,
             externalSignal: input.abortSignal,
             execute: async (signal) => {
-              const invocation = await runStructuredChatInvocation({
+              const invocation = await invokeStructuredChatCore({
                 driver: input.driver,
                 request: {
                   caller: request.caller,
                   cfg,
-                  preferredStrategy: buildPreferredStrategy(cfg),
                   schema: request.schema,
                   schemaName: request.schemaName,
                   system: request.system,
@@ -953,19 +528,6 @@ export const createAiLlmExecutor = (input: {
             }
           })
       })
-
-      if (result.strategy) {
-        await persistConfigUpdate({
-          cfg,
-          nextConfig: {
-            ...cfg,
-            preferredTransport: result.strategy.transport,
-            preferredStructuredOutputMode: result.strategy.mode
-          },
-          saveConfig: input.saveConfig,
-          warningPrefix: '[AI-LLM-EXECUTOR] Failed to persist structured preferences'
-        })
-      }
 
       return {
         output: result.output,
@@ -1006,7 +568,6 @@ export const createAiLlmExecutor = (input: {
                 request: {
                   caller: request.caller,
                   cfg,
-                  preferredTransport: cfg.preferredTransport,
                   schemaName: request.schemaName,
                   system: request.system,
                   user: request.user,
@@ -1020,35 +581,33 @@ export const createAiLlmExecutor = (input: {
           })
       })
 
-      if (result.transport) {
-        await persistConfigUpdate({
-          cfg,
-          nextConfig: {
-            ...cfg,
-            preferredTransport: result.transport
-          },
-          saveConfig: input.saveConfig,
-          warningPrefix: '[AI-LLM-EXECUTOR] Failed to persist text transport preference'
-        })
-      }
-
       return String(result.output || '')
     }
   }
 }
 
-export const invokeStructuredChat = async <T extends Record<string, unknown>>(
-  input: InvokeStructuredChatInput<T>
-): Promise<InvokeStructuredChatResult<T>> => {
+export const invokeStructuredChat = async <T extends Record<string, unknown>>(input: {
+  caller: string
+  cfg: LlmRuntimeConfig
+  schema: z.ZodType<T>
+  schemaName: string
+  system: string
+  user: string
+  temperature?: number
+  streamingMode?: AiLlmStreamingMode
+}): Promise<{
+  output: T
+  rawText?: string
+  streamed?: boolean
+  usage?: AiLlmUsage
+}> => {
   const result = await withAbortTimeout({
     timeoutMs: AI_LLM_CALL_TIMEOUT_MS,
     execute: async (signal) =>
-      await runStructuredChatInvocation({
-        driver: input.driver,
+      await invokeStructuredChatCore({
         request: {
           caller: input.caller,
           cfg: input.cfg,
-          preferredStrategy: input.preferredStrategy,
           schema: input.schema,
           schemaName: input.schemaName,
           system: input.system,
@@ -1061,19 +620,6 @@ export const invokeStructuredChat = async <T extends Record<string, unknown>>(
         }
       })
   })
-  const method = result.method || 'scripted'
-  const strategy = resolveResultStrategy({
-    method,
-    transport: result.transport,
-    structuredOutputMode: result.structuredOutputMode,
-    strategy: result.strategy
-  })
-  const fallbackStrategies =
-    result.fallbackStrategies && result.fallbackStrategies.length > 0
-      ? result.fallbackStrategies
-      : strategy
-        ? [strategy]
-        : []
 
   let output: T
   try {
@@ -1085,15 +631,8 @@ export const invokeStructuredChat = async <T extends Record<string, unknown>>(
   return {
     output,
     rawText: result.rawText,
-    method,
-    transport: result.transport,
-    structuredOutputMode: result.structuredOutputMode,
-    strategy,
-    fallbackStrategies,
     streamed: result.streamed,
-    usage: result.usage,
-    responseMetadata: result.responseMetadata,
-    usageMetadata: result.usageMetadata
+    usage: result.usage
   }
 }
 

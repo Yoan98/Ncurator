@@ -133,7 +133,6 @@ export class StagehandLangChainClient extends LLMClient {
     super(config.model_name)
     this.model = createChatModel(config, {
       temperature: 0,
-      transport: 'completions',
       streaming: false
     }) as BaseChatModel
   }

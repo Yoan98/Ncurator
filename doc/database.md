@@ -24,7 +24,7 @@ SQLite 保存以下业务数据：
 - 会话、消息、conversation memory 和按会话隔离的中断恢复快照；恢复快照只在任务正常完成或会话删除时清理。
 - AI run、事件、审批和文件修改记录。
 - 工作区、文件索引任务、文档元数据和网页源。
-- LLM 配置、AI runtime 设置和模型输出策略偏好。
+- LLM 配置和 AI runtime 设置。
 - AI runtime 设置中的 `systemNotificationsEnabled`，默认值为 `1`，控制 AI 运行终态系统通知。
 - 文件内容和预览 artifact 的 SHA-256 对象引用；实际对象保存在工作区 `.ncurator/objects/sha256`，相同内容只存一份。
 - Workbench 会话 UI 快照、最后活动会话、未发送草稿和内置浏览器标签状态。

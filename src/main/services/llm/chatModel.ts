@@ -1,26 +1,14 @@
 import { ChatOpenAI } from '@langchain/openai'
 import { ChatDeepSeek } from '@langchain/deepseek'
 import type { LlmRuntimeConfig } from '../../types/store'
-import type { AiStructuredOutputTransport } from '../../../shared/types'
 import { resolveLlmProviderKind } from '../../../shared/llmProvider'
 import { resolveOpenAICompatibleRuntimeOptions } from './openaiCompatible'
 
 export type ChatModelFactoryOptions = {
   temperature?: number
   timeout?: number
-  transport?: AiStructuredOutputTransport
   streaming?: boolean
 }
-
-export const getSupportedTransportsForConfig = (
-  cfg: LlmRuntimeConfig
-): AiStructuredOutputTransport[] =>
-  resolveLlmProviderKind({
-    providerKind: cfg.providerKind,
-    baseUrl: cfg.base_url
-  }) === 'openai'
-    ? ['responses', 'completions']
-    : ['completions']
 
 export const createChatModel = (cfg: LlmRuntimeConfig, opts?: ChatModelFactoryOptions) => {
   const providerKind = resolveLlmProviderKind({
@@ -46,7 +34,7 @@ export const createChatModel = (cfg: LlmRuntimeConfig, opts?: ChatModelFactoryOp
   return new ChatOpenAI({
     model: runtimeOptions.modelName,
     apiKey: runtimeOptions.apiKey,
-    useResponsesApi: opts?.transport === 'responses',
+    useResponsesApi: providerKind === 'openai',
     temperature: opts?.temperature ?? 0.2,
     maxRetries: 0,
     timeout: opts?.timeout,

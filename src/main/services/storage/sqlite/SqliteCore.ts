@@ -8,6 +8,10 @@ const notificationSettingsMigration = `
 ALTER TABLE ai_runtime_settings ADD COLUMN systemNotificationsEnabled INTEGER NOT NULL DEFAULT 1;
 `
 
+const dropLlmStrategyPreferenceMigration = `
+DROP TABLE IF EXISTS llm_strategy_preference;
+`
+
 const sessionSkillStateMigration = `
 CREATE TABLE IF NOT EXISTS chat_session_skill_state (
   session_id TEXT PRIMARY KEY,
@@ -114,6 +118,11 @@ const MIGRATIONS: Migration[] = [
     version: 7,
     name: 'ai_run_execution_permission',
     sql: aiRunExecutionPermissionMigration
+  },
+  {
+    version: 8,
+    name: 'drop_llm_strategy_preference',
+    sql: dropLlmStrategyPreferenceMigration
   }
 ]
 

@@ -61,7 +61,6 @@ describe('ai human live backend', () => {
           const beforeHash = await fileHash(absolutePath)
           const runner = createHumanTestRunner(runtime, {
             selectedReferences: [reference],
-            allowedToolNames: ['docx_read_outline', 'docx_search', 'docx_read_blocks'],
             runtimeSettingsOverride: {
               llmStreamingMode: 'force_non_stream'
             }
@@ -134,12 +133,6 @@ describe('ai human live backend', () => {
           const beforeHash = await fileHash(absolutePath)
           const runner = createHumanTestRunner(runtime, {
             selectedReferences: [reference],
-            allowedToolNames: [
-              'docx_read_outline',
-              'docx_search',
-              'docx_read_blocks',
-              'docx_edit'
-            ],
             runtimeSettingsOverride: {
               llmStreamingMode: 'force_non_stream'
             }
@@ -176,7 +169,7 @@ describe('ai human live backend', () => {
               decisionHints.some(
                 (event) =>
                   event.code === 'legacy_doc_edit_unsupported' &&
-                  event.detail?.instruction === '不要继续尝试编辑 .doc 文件，跳过它继续推进。'
+                  event.detail?.instruction === '禁止继续尝试编辑或转换旧版 .doc 文件，请提示用户转换为 .docx 后再编辑。'
               ) &&
                 result.beforeHash === result.afterHash,
             {

@@ -232,8 +232,8 @@ export const collectDocxApplyOpsContentKinds = (
   return [...kinds]
 }
 
-const isStructuredOutputEmptyResponseError = (error: unknown): boolean =>
-  error instanceof Error && error.message.includes('structured_output_empty_response')
+const isPromptJsonEmptyResponseError = (error: unknown): boolean =>
+  error instanceof Error && error.message.includes('prompt_json_empty_response')
 
 export const runWithStructuredOutputRetry = async (
   action: () => Promise<void>,
@@ -246,7 +246,7 @@ export const runWithStructuredOutputRetry = async (
       return
     } catch (error) {
       lastError = error
-      if (!isStructuredOutputEmptyResponseError(error) || attempt >= maxAttempts) {
+      if (!isPromptJsonEmptyResponseError(error) || attempt >= maxAttempts) {
         throw error
       }
     }

@@ -111,16 +111,11 @@ AI unit / 辅助测试目录：
 
 ## 4. 回归测试清单
 
-### 4.0 结构化输出策略与服务重试
+### 4.0 结构化输出与服务重试
 
-#### `structured-output-deepseek-official-fallback-live`
+结构化输出统一走 `prompt_json`：所有结构化调用都是纯文本请求（不发送 `response_format`），模型按提示词中的 schema 描述输出 JSON，本地通过 `normalizePromptJsonText`（剥离代码块）+ `jsonrepair` + Schema 校验兜底。供应商对 `json_schema` / `json_object` 的能力支持无法可靠探测（`/v1/models` 大多不返回能力声明且分模型差异），因此不再维护任何运行期降级链、策略偏好存储或 transport 切换。
 
-- 测试类型：`backend`，`human / live`
-- What：使用 DeepSeek 官方接口验证 `completions/json_schema` 首选失败后降级到 `completions/json_object`，并在新的 run 中复用保存的策略。
-- Why：兼容 OpenAI 协议的模型可能接受请求但不支持 `json_schema`；必须用真实 400 响应验证降级和首选策略持久化。
-- How：使用 `.env` 中 `AI_STRUCTURED_FALLBACK_*` 配置，预先保存 `json_schema` 首选，真实调用两次结构化请求并检查活动事件、偏好存储和第二次请求的策略链。
-- Oracle：第一次请求的 `fallbackStrategies` 为 `json_schema -> json_object`；两次输出均通过 Schema；偏好表保存 `json_object`；第二次请求只使用 `json_object`。
-- Not：不把 DeepSeek 的能力声明写死到通用 provider 逻辑，也不替代通用 mock 单元测试。
+LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负责临时故障重连：429、5xx、超时和 `ResourceExhausted`（指数退避 2/4/8/15 秒）进入重试域；401/402/403 直接失败；其余错误不再触发任何降级。相关单元覆盖在 `tests/case/unit/ai/structured-output-auto-fallback.test.ts`（prompt_json 单一路径与解析兜底矩阵）、`tests/case/unit/ai/structured-output-fallback.test.ts`（fatal/retryable/unknown 分类）和 `tests/case/unit/ai/structured-chat-activity.test.ts`（退避与重试事件）。
 
 ### 4.1 `tool`
 

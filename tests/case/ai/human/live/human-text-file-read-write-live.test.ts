@@ -41,7 +41,6 @@ describe('ai human live text-file backend', () => {
           await seedCheckoutConfig(sourcePath)
           const beforeHash = await hashFile(sourcePath)
           const output = await createHumanTestRunner(runtime, {
-            allowedToolNames: ['text_file_read']
           }).run({
             taskId: runtime.taskId,
             userInput:
@@ -89,7 +88,6 @@ describe('ai human live text-file backend', () => {
           const sourcePath = path.join(runtime.workspaceRoot, 'checkout-config.ts')
           await seedCheckoutConfig(sourcePath)
           const output = await createHumanTestRunner(runtime, {
-            allowedToolNames: ['text_file_read', 'text_file_edit']
           }).run({
             taskId: runtime.taskId,
             userInput:

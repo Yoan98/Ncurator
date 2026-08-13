@@ -92,7 +92,6 @@ const createFaultAfterOverfittingDriver = (input: {
     const result = await invokeStructuredChat({
       caller: request.caller,
       cfg: request.cfg,
-      preferredStrategy: request.preferredStrategy,
       schema: request.schema,
       schemaName: request.schemaName,
       system: request.system,
@@ -112,11 +111,6 @@ const createFaultAfterOverfittingDriver = (input: {
     return {
       output: result.output as JsonObject,
       rawText: result.rawText,
-      method: result.method,
-      transport: result.transport,
-      structuredOutputMode: result.structuredOutputMode,
-      strategy: result.strategy,
-      fallbackStrategies: result.fallbackStrategies,
       streamed: result.streamed,
       usage: result.usage,
       responseMetadata: result.responseMetadata,
@@ -140,7 +134,6 @@ const buildAiRunDeps = async (input: {
   const runtimeSettings = await input.runtime.storageService.aiRuntimeSettings.get()
   return {
     runtimeSettings,
-    llmStrategyPreferenceStore: input.runtime.storageService.llmStrategyPreference,
     llmStore: input.runtime.llmStore,
     chatStore: input.runtime.chatStore,
     documentsStore: input.runtime.documentsStore,

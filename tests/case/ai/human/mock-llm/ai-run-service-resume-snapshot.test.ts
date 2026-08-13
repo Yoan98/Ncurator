@@ -20,7 +20,6 @@ const buildDeps = async (
     controller,
     deps: {
       runtimeSettings,
-      llmStrategyPreferenceStore: runtime.storageService.llmStrategyPreference,
       llmStore: runtime.llmStore,
       chatStore: runtime.chatStore,
       documentsStore: runtime.documentsStore,

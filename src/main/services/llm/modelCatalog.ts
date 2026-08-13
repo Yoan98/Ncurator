@@ -5,12 +5,6 @@ type RemoteModelRow = {
   id?: string
   name?: string
   status?: string
-  features?: {
-    structured_outputs?: {
-      json_schema?: boolean
-      json_object?: boolean
-    }
-  }
   modalities?: {
     input_modalities?: string[]
     output_modalities?: string[]
@@ -35,23 +29,10 @@ const toRemoteModels = (payload: RemoteModelListPayload): LlmRemoteModel[] =>
     const id = String(item.id || item.name || '').trim()
     const status = String(item.status || '').trim()
     if (!id || HIDDEN_MODEL_STATUSES.has(status.toLowerCase())) return models
-    const structuredOutputs = item.features?.structured_outputs
     models.push({
       id,
       label: id,
       status: status || undefined,
-      structuredOutput: structuredOutputs
-        ? {
-            jsonSchema:
-              typeof structuredOutputs.json_schema === 'boolean'
-                ? structuredOutputs.json_schema
-                : undefined,
-            jsonObject:
-              typeof structuredOutputs.json_object === 'boolean'
-                ? structuredOutputs.json_object
-                : undefined
-          }
-        : undefined,
       inputModalities: Array.isArray(item.modalities?.input_modalities)
         ? item.modalities.input_modalities.filter(
             (value): value is string => typeof value === 'string'

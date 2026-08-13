@@ -26,7 +26,6 @@ describe('ai human live backend', () => {
           const webCrawlerService = createWebCrawlerService()
           try {
             const output = await createHumanTestRunner(runtime, {
-              allowedToolNames: ['web_crawl'],
               webCrawlerService
             }).run({
               taskId: runtime.taskId,

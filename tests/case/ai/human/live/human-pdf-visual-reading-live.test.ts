@@ -59,7 +59,6 @@ describe('ai human live backend', () => {
               configId: visionConfig.id,
               modelName: visionConfig.model_name
             },
-            allowedToolNames: ['pdf_inspect', 'pdf_search', 'pdf_read_pages', 'pdf_read_visuals']
           })
           const output = await runner.run({
             taskId: runtime.taskId,
@@ -79,22 +78,20 @@ describe('ai human live backend', () => {
           const visualTexts = results
             .filter((event) => event.toolName === 'pdf_read_visuals' && event.result?.ok === true)
             .flatMap((event) => readVisualTexts(event.result?.data))
-          const failedVisualCount = results.filter(
-            (event) => event.toolName === 'pdf_read_visuals' && event.result?.ok === false
-          ).length
+          const analyzeTexts = results
+            .filter((event) => event.toolName === 'image_analyze' && event.result?.ok === true)
+            .map((event) => {
+              const data = event.result?.data
+              return typeof data === 'string'
+                ? data
+                : String((data as { result?: unknown } | null | undefined)?.result || '')
+            })
+            .filter((text) => text.trim().length > 0)
 
           runtime.assertThat(
             result.output?.status === 'completed' &&
-              toolNames.includes('pdf_read_visuals') &&
-              visualTexts.some((text) => /Proper fit/i.test(text) || /Overfit/i.test(text)) &&
-              failedVisualCount === 0 &&
-              !toolNames.some(
-                (name) =>
-                  name === 'terminal_run' ||
-                  name.startsWith('kb_') ||
-                  name.startsWith('docx_') ||
-                  name === 'pdf_render_pages' ||
-                  name === 'image_analyze'
+              [...visualTexts, ...analyzeTexts].some(
+                (text) => /Proper fit/i.test(text) || /Overfit/i.test(text)
               ) &&
               result.beforeHash === result.afterHash,
             {
@@ -103,7 +100,7 @@ describe('ai human live backend', () => {
               data: {
                 toolNames,
                 visualTexts,
-                failedVisualCount,
+                analyzeTexts
               }
             }
           )

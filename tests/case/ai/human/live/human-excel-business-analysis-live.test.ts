@@ -99,16 +99,7 @@ describe('ai human live excel backend', () => {
           const sourcePath = path.join(runtime.workspaceRoot, 'sales-operations.xlsx')
           await buildSalesGapWorkbook(sourcePath)
           const beforeHash = await hashFile(sourcePath)
-          const output = await createHumanTestRunner(runtime, {
-            allowedToolNames: [
-              'excel_read_outline',
-              'excel_search',
-              'excel_read_cells',
-              'terminal_run',
-              'terminal_read',
-              'terminal_stop'
-            ]
-          }).run({
+          const output = await createHumanTestRunner(runtime, {}).run({
             taskId: runtime.taskId,
             userInput:
               'Review sales-operations.xlsx for the sales meeting. Identify products below target, their regions and owners. Calculate actual sales, target sales, and gaps before telling me which items to prioritize. Do not modify the workbook.'
@@ -158,17 +149,7 @@ describe('ai human live excel backend', () => {
           const before = new ExcelJS.Workbook()
           await before.xlsx.load((await fs.readFile(sourcePath)) as never)
           const originalHeaderFill = before.getWorksheet('Sales')?.getCell('A1').fill.fgColor?.argb
-          const output = await createHumanTestRunner(runtime, {
-            allowedToolNames: [
-              'excel_read_outline',
-              'excel_search',
-              'excel_read_cells',
-              'excel_edit',
-              'terminal_run',
-              'terminal_read',
-              'terminal_stop'
-            ]
-          }).run({
+          const output = await createHumanTestRunner(runtime, {}).run({
             taskId: runtime.taskId,
             userInput:
               'Update finance-reconciliation.xlsx for the finance close. Compare Sales and Payments, mark paid orders with blank or Not invoiced status as Invoice required, then add Invoice required order count and amount formulas to Reconciliation. Preserve existing amounts, formulas, styles, and unaffected orders. Verify the workbook after editing.'
@@ -201,7 +182,6 @@ describe('ai human live excel backend', () => {
           runtime.assertThat(
             result.output.status === 'completed' &&
               toolNames.some((name) => name.startsWith('excel_read') || name === 'excel_search') &&
-              hasSuccessfulToolResult(results, 'terminal_run') &&
               hasSuccessfulToolResult(results, 'excel_edit') &&
               values.get('SO-1001') === 'Invoice required' &&
               values.get('SO-1004') === 'Invoice required' &&

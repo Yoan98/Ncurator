@@ -146,9 +146,16 @@ AI 能力通过 skill 和 tool 两层表达：
 
 skill 不按目录强行拆分，也不等同于工具数量。一个 skill 可以对应多个 tool，多个 skill 也可以共享同一实现域。
 
-### 结构化输出策略与重试
+### 结构化输出与服务重试
 
-AI 结构化调用按配置和模型记忆成功策略；能力不支持、解析失败或 Schema 不匹配时降级，服务容量、限流和超时按统一重试策略处理。只有完整成功的策略会被保存，供应商差异不写死在执行器中。
+结构化输出统一使用 `prompt_json`：所有结构化调用都是纯文本请求，不发送 `response_format`，模型按提示词中的 schema 描述输出 JSON，本地通过代码块剥离（`normalizePromptJsonText`）、`jsonrepair` 修复和 Schema 校验兜底。供应商对 `json_schema` / `json_object` 的能力支持无法可靠探测（`/v1/models` 大多不返回能力声明且分模型差异），因此不维护任何运行期策略降级链、策略偏好存储或 transport 切换。
+
+LLM 调用失败严格分两层处理：
+
+- 重试域只负责临时故障重连：HTTP 408/409/425/429/5xx、超时和 `ResourceExhausted` 触发重试，`ResourceExhausted` 使用指数退避（2/4/8/15 秒）避免放大服务端容量压力。
+- 致命错误（401/402/403、鉴权、余额）直接失败，不重试；其余错误按失败信息透传，不触发任何降级。
+
+官方 OpenAI（`api.openai.com`）固定使用 Responses API，其余服务商固定使用 Chat Completions，协议端点由服务商身份静态决定，不做运行期切换；用户地址配置错误通过请求错误信息反馈。
 
 ### 会话连续性
 

@@ -71,9 +71,7 @@ describe('ai human live ppt backend', () => {
           const sourcePath = path.join(runtime.workspaceRoot, FILE_NAME)
           const beforeHash = await hashFile(sourcePath)
           const eventOffset = runtime.eventCollector.snapshot().length
-          const output = await createHumanTestRunner(runtime, {
-            allowedToolNames: ['ppt_read_outline', 'ppt_read_slides', 'ppt_search', 'ppt_read_visuals']
-          }).run({
+          const output = await createHumanTestRunner(runtime, {}).run({
             taskId: runtime.taskId,
             userInput:
               'Review management-review.pptx for next week\'s leadership meeting. Tell me the priority risks, owners, deadlines, decisions needed, and delivery trend. Please also check the delivery chart on slide 3 before you brief me. Do not modify the presentation.'
@@ -121,9 +119,7 @@ describe('ai human live ppt backend', () => {
           const before = await loadPresentation(new Uint8Array(await fs.readFile(sourcePath)))
           const protectedTexts = getSlides(before).slice(0, 2).map((slide) => getSlideText(slide))
           const eventOffset = runtime.eventCollector.snapshot().length
-          const output = await createHumanTestRunner(runtime, {
-            allowedToolNames: ['ppt_read_outline', 'ppt_read_slides', 'ppt_search', 'ppt_edit']
-          }).run({
+          const output = await createHumanTestRunner(runtime, {}).run({
             taskId: runtime.taskId,
             userInput:
               'Update management-review.pptx for the leadership review: add an executive summary slide, escalate the delivery risk, change its owner to Li Ran and deadline to July 15, and update the matching action-plan deadline. Keep the cover and operating-metrics slides unchanged, then check the presentation is readable.'

@@ -53,7 +53,7 @@ const HINT_FIXTURES: Record<(typeof HUMAN_DECISION_HINT_CODES)[number], HumanDec
   legacy_doc_edit_unsupported: {
     code: 'legacy_doc_edit_unsupported',
     detail: {
-      instruction: '不要继续尝试编辑 .doc 文件，跳过它继续推进。'
+      instruction: '禁止继续尝试编辑或转换旧版 .doc 文件，请提示用户转换为 .docx 后再编辑。'
     }
   },
   hand_docx_edit_failed: {
@@ -181,9 +181,9 @@ describe('ai unit human decision hint contract', () => {
       renderDecisionHintForBrain({
         code: 'legacy_doc_edit_unsupported',
         detail: {
-          instruction: '不要继续尝试编辑 .doc 文件，跳过它继续推进。'
+          instruction: '禁止继续尝试编辑或转换旧版 .doc 文件，请提示用户转换为 .docx 后再编辑。'
         }
       })
-    ).toBe('不要继续尝试编辑 .doc 文件，跳过它继续推进。')
+    ).toBe('禁止继续尝试编辑或转换旧版 .doc 文件，请提示用户转换为 .docx 后再编辑。')
   })
 })

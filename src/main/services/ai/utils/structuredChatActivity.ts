@@ -5,14 +5,10 @@ import type { AiEventDispatchContext } from '../types'
 import type {
   AiLlmStreamingMode,
   AiLlmUsage,
-  AiStructuredOutputMethod,
-  AiStructuredOutputTransport,
   BrainContextBudgetSnapshot,
   JsonObject,
   JsonValue,
-  LlmProviderKind,
-  StructuredOutputMode,
-  StructuredOutputStrategy
+  LlmProviderKind
 } from '../../../../shared/types'
 import {
   emitLlmRetryProcessCompleted,
@@ -45,11 +41,6 @@ type LlmCallTelemetry = {
 export type LlmCallExecutionResult<T> = {
   output: T
   rawText?: string
-  method?: AiStructuredOutputMethod
-  transport?: AiStructuredOutputTransport
-  structuredOutputMode?: StructuredOutputMode
-  strategy?: StructuredOutputStrategy
-  fallbackStrategies?: StructuredOutputStrategy[]
   streamed?: boolean
   usage?: AiLlmUsage
   responseMetadata?: JsonObject
@@ -262,11 +253,6 @@ export const runLlmCallWithActivity = async <T>(input: {
       details: {
         ...details,
         durationMs,
-        method: result.method,
-        transport: result.transport,
-        structuredOutputMode: result.structuredOutputMode,
-        strategy: result.strategy,
-        fallbackStrategies: result.fallbackStrategies,
         streamed,
         chunkCount,
         firstTokenLatencyMs,
@@ -294,11 +280,6 @@ export const runLlmCallWithActivity = async <T>(input: {
       dynamicContextHash,
       responseMetadata: result.responseMetadata,
       usageMetadata: result.usageMetadata,
-      method: result.method,
-      transport: result.transport,
-      structuredOutputMode: result.structuredOutputMode,
-      strategy: result.strategy,
-      fallbackStrategies: result.fallbackStrategies,
       streamingMode: input.telemetry.streamingMode,
       contextBudgetSnapshot,
       streamed,
@@ -354,7 +335,6 @@ export const runLlmCallWithActivity = async <T>(input: {
       rawText: failedRawText,
       stablePrefixHash,
       dynamicContextHash,
-      fallbackStrategies: [],
       streamingMode: input.telemetry.streamingMode,
       contextBudgetSnapshot,
       streamed: chunkCount > 0,

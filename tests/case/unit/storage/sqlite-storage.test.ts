@@ -246,7 +246,8 @@ describe('sqlite storage core and stores', () => {
       { version: 4, name: 'reset_resume_snapshots_v2' },
       { version: 5, name: 'repair_false_docx_change_failures' },
       { version: 6, name: 'workbench_session_ui_state' },
-      { version: 7, name: 'ai_run_execution_permission' }
+      { version: 7, name: 'ai_run_execution_permission' },
+      { version: 8, name: 'drop_llm_strategy_preference' }
     ])
   })
 

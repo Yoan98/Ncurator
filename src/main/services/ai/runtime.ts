@@ -20,18 +20,6 @@ const normalizeExecutionPermission = (
 ): AiExecutionPermission =>
   value === 'full_access' ? 'full_access' : 'review'
 
-const resolveSupportedStructuredOutputModes = (
-  selection: AiRunStartPayload['mainModel']
-): LlmRuntimeConfig['supportedStructuredOutputModes'] => {
-  const capabilities = selection?.structuredOutput
-  if (!capabilities) return undefined
-  const modes: NonNullable<LlmRuntimeConfig['supportedStructuredOutputModes']> = []
-  if (capabilities.jsonSchema !== false) modes.push('json_schema')
-  if (capabilities.jsonObject !== false) modes.push('json_object')
-  modes.push('prompt_json')
-  return modes
-}
-
 export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps): AiRunContext => {
   const checkCancelled = () => {
     if (deps.abortSignal?.aborted || deps.isCancelled()) {
@@ -75,16 +63,9 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     }
     const cfg = await deps.llmStore.getById(configId)
     if (!cfg) throw new Error(`${label}对应的大模型配置不存在，请重新选择`)
-    const preference = await deps.llmStrategyPreferenceStore.get({
-      configId,
-      modelName
-    })
     return {
       ...cfg,
-      model_name: modelName,
-      preferredTransport: preference?.preferredTransport,
-      preferredStructuredOutputMode: preference?.preferredStructuredOutputMode,
-      supportedStructuredOutputModes: resolveSupportedStructuredOutputModes(selection)
+      model_name: modelName
     } satisfies LlmRuntimeConfig
   }
 
@@ -94,20 +75,6 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
   const loadRequestedConfig = async () => {
     requestedConfigPromise ||= getRequestedConfig()
     return await requestedConfigPromise
-  }
-
-  const saveRequestedConfig = async (nextConfig: LlmRuntimeConfig) => {
-    requestedConfigPromise = Promise.resolve(nextConfig)
-    if (nextConfig.preferredTransport && nextConfig.preferredStructuredOutputMode) {
-      await deps.llmStrategyPreferenceStore.save({
-        configId: nextConfig.id,
-        modelName: nextConfig.model_name,
-        strategy: {
-          transport: nextConfig.preferredTransport,
-          mode: nextConfig.preferredStructuredOutputMode
-        }
-      })
-    }
   }
 
   let requestedVisionConfigPromise: ReturnType<typeof getRequestedConfig> | undefined
@@ -128,7 +95,7 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     },
     runtimeSettings: deps.runtimeSettings,
     getConfig: loadRequestedConfig,
-    saveConfig: saveRequestedConfig,
+    saveConfig: async () => undefined,
     checkCancelled,
     abortSignal: deps.abortSignal,
     driver: deps.llmDriver

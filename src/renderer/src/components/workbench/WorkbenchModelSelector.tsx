@@ -210,8 +210,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
   const selectModel = (input: { configId: string; model: LlmRemoteModel }): void => {
     const model: WorkbenchSelectedModel = {
       configId: input.configId,
-      modelName: input.model.id,
-      structuredOutput: input.model.structuredOutput
+      modelName: input.model.id
     }
     const nextValue: WorkbenchModelSelection =
       view === 'main'
