@@ -1130,7 +1130,7 @@ textarea,
 .workbench-composer-model-pill {
   @apply min-w-0;
   width: fit-content;
-  max-width: min(360px, calc(100vw - 96px));
+  max-width: 100%;
 }
 
 .workbench-composer-pill.workbench-select-trigger-open {
