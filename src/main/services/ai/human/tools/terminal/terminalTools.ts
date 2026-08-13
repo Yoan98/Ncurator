@@ -11,8 +11,8 @@ import { createToolEventEmitter } from '../utils/toolEvents'
 import type { CapabilityActivityInput } from '../types'
 import {
   analyzeTerminalCommandPolicy,
-  isTerminalExcelMutationCommand,
-  parseTerminalCommandTokens
+  hasDetachedExecution,
+  isTerminalExcelMutationCommand
 } from './commandPolicy'
 import { inspectTerminalOutputQuality } from './terminalExec'
 import { emitFileArtifactEvent } from '../../../events/fileArtifacts'
@@ -96,39 +96,6 @@ const consumeApprovedTerminalCommand = (input: {
   if (count === 1) approvedCounts.delete(key)
   else approvedCounts.set(key, count - 1)
   return true
-}
-
-const hasDetachedExecution = (
-  command: string,
-  platform: TerminalToolContext['platform']
-): boolean => {
-  const tokens = parseTerminalCommandTokens(command, { windowsStyle: platform === 'windows' })
-  if (tokens.some((token) => /^(nohup|start-process)$/i.test(token))) return true
-  if (platform === 'windows') return false
-
-  let quote: '"' | "'" | null = null
-  let escaped = false
-  for (let index = 0; index < command.length; index += 1) {
-    const char = command[index]
-    if (escaped) {
-      escaped = false
-      continue
-    }
-    if (char === '\\' && quote !== "'") {
-      escaped = true
-      continue
-    }
-    if (quote) {
-      if (char === quote) quote = null
-      continue
-    }
-    if (char === '"' || char === "'") {
-      quote = char
-      continue
-    }
-    if (char === '&' && command[index - 1] !== '&' && command[index + 1] !== '&') return true
-  }
-  return false
 }
 
 const emitTerminalStepStarted = (input: {

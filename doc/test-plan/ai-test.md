@@ -821,10 +821,10 @@ AI unit / 辅助测试目录：
 ##### `terminal-persistent-session-contract`
 
 - 测试类型：`backend`
-- What：真实 PTY 持久终端保留当前路径、长命令让出控制权、增量读取、停止和命令级文件追踪。
-- Why：后台服务和长任务不能继续依赖单次 shell 超时或系统孤儿进程。
-- How：在同一 terminalId 中真实执行 cd、pwd 和持续输出命令，同时新开第二终端；从子目录分别执行“长命令正常完成”“写入后停止”和“写入后非零退出”，通过 terminal_read 等到 idle 或调用 terminal_stop。
-- Oracle：同一终端保留路径，新终端从 workspace 根目录启动；长命令返回 command_still_running 且进程仍在；读取能取得真实增量输出；正常停止后终端回到 idle，强制停止后终端进入 closed，且均无子进程残留。三条终端写命令均以工作区根目录为扫描范围，生成当前 run 的 `terminal_tool` 修改记录和 `file_artifact`。
+- What：真实 PTY 持久终端保留当前路径、长命令让出控制权、增量读取、停止和命令级文件追踪；拒绝后台分离执行，放行 fd 合并重定向。
+- Why：后台服务和长任务不能继续依赖单次 shell 超时或系统孤儿进程；`2>&1` 等 fd 合并重定向只是输出流合并，不能误判为后台执行或危险重定向。
+- How：在同一 terminalId 中真实执行 cd、pwd 和持续输出命令，同时新开第二终端；从子目录分别执行“长命令正常完成”“写入后停止”和“写入后非零退出”，通过 terminal_read 等到 idle 或调用 terminal_stop。以 `sleep 1 &`（windows `Start-Process`）验证分离执行被拒，以 `echo redirect-ok 2>&1` 验证 fd 合并重定向正常执行。
+- Oracle：同一终端保留路径，新终端从 workspace 根目录启动；长命令返回 command_still_running 且进程仍在；读取能取得真实增量输出；正常停止后终端回到 idle，强制停止后终端进入 closed，且均无子进程残留。三条终端写命令均以工作区根目录为扫描范围，生成当前 run 的 `terminal_tool` 修改记录和 `file_artifact`。分离执行返回 `detached shell execution` 错误；`2>&1` 命令以 completed 和退出码 0 结束且输出包含 `redirect-ok`。
 - Not：不验证 Workbench 浏览器联动，该能力由真实 e2e 覆盖。
 
 #### web-browsing 类别

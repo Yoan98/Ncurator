@@ -1,19 +1,15 @@
 import type { AiRuntimePlatform } from '../../../../types'
 import type { TerminalCommandSegment } from '../types'
-import { findUnsafeShellSyntax, parseTerminalCommandSegments } from './shellSyntax'
-import { buildDangerousCommandRules, normalizeCommandName } from './dangerousRules'
+import {
+  extractEmbeddedShellPayloads,
+  findUnsafeShellSyntax,
+  parseTerminalCommandSegments
+} from './shellSyntax'
+import { buildDangerousCommandRules, isDangerousCommandName, normalizeCommandName } from './dangerousRules'
 import type { DangerousCommandRule, TerminalRiskAnalysis, TerminalRiskReason } from './types'
 
 const dynamicSyntaxReason = (syntax: string): TerminalRiskReason | undefined => {
   if (syntax === 'redirection') return 'shell_redirection'
-  if (
-    syntax === 'command_substitution' ||
-    syntax === 'powershell_escape_or_command_substitution' ||
-    syntax === 'dynamic_expression'
-  ) {
-    return 'inline_code_execution'
-  }
-  if (syntax === 'background_or_invocation_operator') return 'nested_shell_execution'
   if (syntax === 'unclosed_quote') return 'parse_uncertain'
   return undefined
 }
@@ -48,7 +44,40 @@ const isShellName = (value: string): boolean =>
     'fish'
   ].includes(normalizeCommandName(value))
 
-const extractNestedPayloads = (segment: TerminalCommandSegment): string[] => {
+const SHELL_KEYWORD_NAMES = new Set([
+  'if',
+  'then',
+  'else',
+  'elseif',
+  'elif',
+  'fi',
+  'for',
+  'foreach',
+  'while',
+  'until',
+  'do',
+  'done',
+  'case',
+  'esac',
+  'in',
+  'select',
+  'switch',
+  'function',
+  'filter',
+  'try',
+  'catch',
+  'finally',
+  'trap',
+  'begin',
+  'process',
+  'end',
+  'time'
+])
+
+const extractNestedPayloads = (
+  segment: TerminalCommandSegment,
+  platform: AiRuntimePlatform
+): string[] => {
   const command = normalizeCommandName(segment.tokens[0] || '')
   const tokens = segment.tokens
   const payloads: string[] = []
@@ -84,14 +113,23 @@ const extractNestedPayloads = (segment: TerminalCommandSegment): string[] => {
     }
   }
 
-  if (command === '&' && isShellName(tokens[1] || '')) {
-    payloads.push(tokens.slice(1).join(' '))
-  }
-
   if (['invoke-expression', 'iex', 'eval', 'exec'].includes(command)) {
     const payload = tokens.slice(1).join(' ').trim()
     if (payload) payloads.push(payload)
   }
+
+  if (SHELL_KEYWORD_NAMES.has(command) && tokens.length > 1) {
+    const rest = tokens.slice(1)
+    const payload = rest.join(' ').trim()
+    if (payload) payloads.push(payload)
+    for (let index = 0; index < rest.length; index += 1) {
+      if (!isDangerousCommandName(normalizeCommandName(rest[index]))) continue
+      const tail = rest.slice(index).join(' ').trim()
+      if (tail && tail !== payload) payloads.push(tail)
+    }
+  }
+
+  payloads.push(...extractEmbeddedShellPayloads(segment.text, platform))
 
   return payloads
 }
@@ -106,7 +144,7 @@ const collectRiskMatches = (
   const segments = parseTerminalCommandSegments(command, { windowsStyle: platform === 'windows' })
   return segments.flatMap((segment) => {
     const directMatches = evaluateSegment(segment, platform, rules)
-    const nestedMatches = extractNestedPayloads(segment).flatMap((payload) =>
+    const nestedMatches = extractNestedPayloads(segment, platform).flatMap((payload) =>
       collectRiskMatches(payload, platform, rules, depth + 1).map((match) => ({
         ruleId: `nested:${match.ruleId}`,
         reason: match.reason

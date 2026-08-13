@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   analyzeTerminalCommand,
-  analyzeTerminalCommandPolicy
+  analyzeTerminalCommandPolicy,
+  hasDetachedExecution
 } from '../../../../src/main/services/ai/human/tools/terminal/commandPolicy'
 import { createTerminalRunToolSpec } from '../../../../src/main/services/ai/human/tools/terminal/toolSpecs'
 
@@ -96,7 +97,10 @@ describe('ai unit terminal dangerous-command policy', () => {
       'nested_shell_execution',
       ['privilege_or_process_control', 'destructive_command']
     )
-    approve('& cmd.exe /c del important.txt', 'windows', 'nested_shell_execution')
+    approve('& cmd.exe /c del important.txt', 'windows', 'inline_code_execution', [
+      'nested_shell_execution',
+      'destructive_command'
+    ])
     approve('cmd /c "cmd /c del important.txt"', 'windows', 'inline_code_execution')
     approve('CMD.EXE /C DEL important.txt', 'windows', 'inline_code_execution', [
       'destructive_command'
@@ -112,22 +116,83 @@ describe('ai unit terminal dangerous-command policy', () => {
     ])
   })
 
-  it('catches dynamic evaluators, substitutions and script blocks', () => {
+  it('catches dangerous commands embedded in substitutions, parens and script blocks', () => {
     approve('Invoke-Expression "Remove-Item important.txt"', 'windows', 'inline_code_execution')
     approve('iex "cmd /c del important.txt"', 'windows', 'inline_code_execution')
     approve(
       'Get-ChildItem | ForEach-Object { Remove-Item $_.FullName }',
       'windows',
-      'inline_code_execution'
+      'destructive_command'
     )
     approve(
       'Get-ChildItem -Path "$(Remove-Item important.txt)"',
       'windows',
-      'inline_code_execution'
+      'destructive_command'
     )
-    approve('echo "$(rm important.txt)"', 'macos', 'inline_code_execution')
-    approve('echo `rm important.txt`', 'macos', 'inline_code_execution')
+    approve('echo "$(rm important.txt)"', 'macos', 'destructive_command')
+    approve('echo `rm important.txt`', 'macos', 'destructive_command')
+    approve('(Remove-Item important.txt)', 'windows', 'destructive_command')
+    approve('{ rm -rf notes; }', 'macos', 'destructive_command')
     approve('echo "unterminated', 'macos', 'parse_uncertain')
+  })
+
+  it('allows query-only substitutions, parens and script blocks', () => {
+    allow('echo "$(pwd)"', 'macos')
+    allow('echo `pwd`', 'macos')
+    allow('echo "$(git status --short)"', 'macos')
+    allow('Write-Output "$(Get-Location)"', 'windows')
+    allow('Get-ChildItem | ForEach-Object { Write-Output $_.Name }', 'windows')
+    allow('find . \\( -name "*.ts" -o -name "*.tsx" \\)', 'macos')
+    allow('find . ( -name "*.ts" -o -name "*.tsx" )', 'macos')
+    allow('echo {a,b}.txt', 'macos')
+  })
+
+  it('treats fd merge redirection as safe but file redirection as approval', () => {
+    allow('ls -l "missing.docx" 2>&1', 'macos')
+    allow('ls -l "missing.docx" 2>&1; echo done', 'macos')
+    allow('ls -l "/Users/test/Downloads/x.docx" 2>&1; echo "exit:$?"', 'macos')
+    allow('cat 0<&1', 'macos')
+    allow('echo hi &>1', 'macos')
+    allow('Get-ChildItem 2>&1', 'windows')
+    allow('Get-ChildItem 2>>&1', 'windows')
+    approve('echo report > report.txt', 'macos', 'shell_redirection')
+    approve('echo report >> report.txt', 'windows', 'shell_redirection')
+    approve('echo report 2> err.log', 'macos', 'shell_redirection')
+    approve('echo report &> all.log', 'macos', 'shell_redirection')
+    approve('Get-ChildItem 2> err.log', 'windows', 'shell_redirection')
+    approve('Get-ChildItem &> all.log', 'windows', 'shell_redirection')
+  })
+
+  it('splits ampersand-separated sub-commands and analyzes each one', () => {
+    allow('cd /d C:\\work & dir', 'windows')
+    approve('cd /d C:\\work & del important.txt', 'windows', 'destructive_command')
+  })
+
+  it('analyzes compound statements through shell keywords', () => {
+    allow('if [ -f x ]; then echo yes; fi', 'macos')
+    approve('if [ -f x ]; then rm x; fi', 'macos', 'destructive_command')
+    approve('while true; do rm x; done', 'macos', 'destructive_command')
+    allow('for x in 1 2 3; do echo $x; done', 'macos')
+    approve('if exist important.txt del important.txt', 'windows', 'destructive_command')
+    approve(
+      'if ($true) { Remove-Item important.txt }',
+      'windows',
+      'destructive_command'
+    )
+    approve('foreach ($f in $files) { Remove-Item $f }', 'windows', 'destructive_command')
+  })
+
+  it('detects detached background execution while allowing redirection ampersands', () => {
+    expect(hasDetachedExecution('sleep 1 &', 'macos')).toBe(true)
+    expect(hasDetachedExecution('npm run dev&', 'macos')).toBe(true)
+    expect(hasDetachedExecution('echo a && echo b', 'macos')).toBe(false)
+    expect(hasDetachedExecution('ls -l "x.docx" 2>&1; echo done', 'macos')).toBe(false)
+    expect(hasDetachedExecution('ls -l "x.docx" 2>&1; echo "exit:$?"', 'macos')).toBe(false)
+    expect(hasDetachedExecution('echo hi &> file.log', 'macos')).toBe(false)
+    expect(hasDetachedExecution('cat 0<&1', 'macos')).toBe(false)
+    expect(hasDetachedExecution('nohup sleep 1', 'macos')).toBe(true)
+    expect(hasDetachedExecution('sleep 1 &', 'windows')).toBe(false)
+    expect(hasDetachedExecution('Start-Process notepad', 'windows')).toBe(true)
   })
 
   it('requires approval for privilege and process control', () => {

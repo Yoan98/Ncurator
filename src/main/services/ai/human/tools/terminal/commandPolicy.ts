@@ -36,6 +36,45 @@ export const parseTerminalCommandTokens = (
     windowsStyle: options?.windowsStyle ?? isWindowsPlatform()
   })
 
+export const hasDetachedExecution = (
+  command: string,
+  platform: AiRuntimePlatform
+): boolean => {
+  const tokens = parseTerminalCommandTokens(command, { windowsStyle: platform === 'windows' })
+  if (tokens.some((token) => /^(nohup|start-process)$/i.test(token))) return true
+  if (platform === 'windows') return false
+
+  let quote: '"' | "'" | null = null
+  let escaped = false
+  for (let index = 0; index < command.length; index += 1) {
+    const char = command[index]
+    if (escaped) {
+      escaped = false
+      continue
+    }
+    if (char === '\\' && quote !== "'") {
+      escaped = true
+      continue
+    }
+    if (quote) {
+      if (char === quote) quote = null
+      continue
+    }
+    if (char === '"' || char === "'") {
+      quote = char
+      continue
+    }
+    if (char === '&') {
+      const prev = command[index - 1]
+      const next = command[index + 1]
+      if (prev === '&' || next === '&') continue
+      if (prev === '>' || prev === '<' || next === '>') continue
+      return true
+    }
+  }
+  return false
+}
+
 export const parseTerminalCommandSegments = (
   command: string,
   options?: { windowsStyle?: boolean }

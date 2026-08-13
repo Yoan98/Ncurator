@@ -1,6 +1,101 @@
 import type { TerminalCommandSegment } from '../types'
 import type { DangerousCommandRule } from './types'
 
+const DESTRUCTIVE_COMMAND_NAMES = [
+  'remove-item',
+  'ri',
+  'del',
+  'delete',
+  'erase',
+  'rd',
+  'rmdir',
+  'rm',
+  'truncate',
+  'clear-content',
+  'set-content',
+  'add-content',
+  'out-file',
+  'move-item',
+  'mi',
+  'mv',
+  'chmod',
+  'chown',
+  'chgrp',
+  'dd',
+  'shred',
+  'diskutil',
+  'mkfs',
+  'format'
+] as const
+
+const FILE_WRITE_COMMAND_NAMES = [
+  'new-item',
+  'ni',
+  'mkdir',
+  'md',
+  'copy-item',
+  'cpi',
+  'copy',
+  'cp',
+  'touch',
+  'install',
+  'export-csv',
+  'rename-item',
+  'tee'
+] as const
+
+const PROCESS_OR_PRIVILEGE_COMMAND_NAMES = [
+  'sudo',
+  'runas',
+  'start-process',
+  'start',
+  'stop-process',
+  'start-service',
+  'stop-service',
+  'restart-service',
+  'set-service',
+  'register-scheduledtask',
+  'unregister-scheduledtask',
+  'taskkill',
+  'kill',
+  'pkill',
+  'sc',
+  'sc.exe',
+  'reg',
+  'reg.exe',
+  'schtasks',
+  'schtasks.exe'
+] as const
+
+const INLINE_INTERPRETER_NAMES = [
+  'python',
+  'python3',
+  'python.exe',
+  'python3.exe',
+  'node',
+  'node.exe',
+  'perl',
+  'ruby',
+  'php',
+  'pwsh',
+  'pwsh.exe',
+  'powershell',
+  'powershell.exe',
+  'cmd',
+  'cmd.exe',
+  'sh',
+  'bash',
+  'zsh',
+  'dash',
+  'fish'
+] as const
+
+export const isDangerousCommandName = (name: string): boolean =>
+  (DESTRUCTIVE_COMMAND_NAMES as readonly string[]).includes(name) ||
+  (FILE_WRITE_COMMAND_NAMES as readonly string[]).includes(name) ||
+  (PROCESS_OR_PRIVILEGE_COMMAND_NAMES as readonly string[]).includes(name) ||
+  (INLINE_INTERPRETER_NAMES as readonly string[]).includes(name)
+
 export const normalizeCommandName = (value: string): string => {
   const normalized = String(value || '')
     .replace(/\\/g, '/')
@@ -27,27 +122,7 @@ const isAnyCommand = (segment: TerminalCommandSegment, names: readonly string[])
 
 const isInlineInterpreter = (segment: TerminalCommandSegment): boolean => {
   const command = commandName(segment)
-  const interpreter =
-    command === 'python' ||
-    command === 'python3' ||
-    command === 'python.exe' ||
-    command === 'python3.exe' ||
-    command === 'node' ||
-    command === 'node.exe' ||
-    command === 'perl' ||
-    command === 'ruby' ||
-    command === 'php' ||
-    command === 'pwsh' ||
-    command === 'pwsh.exe' ||
-    command === 'powershell' ||
-    command === 'powershell.exe' ||
-    command === 'cmd' ||
-    command === 'cmd.exe' ||
-    command === 'sh' ||
-    command === 'bash' ||
-    command === 'zsh' ||
-    command === 'dash' ||
-    command === 'fish'
+  const interpreter = (INLINE_INTERPRETER_NAMES as readonly string[]).includes(command)
   if (!interpreter) return false
 
   const options = segment.tokens.slice(1).map((token) => token.toLowerCase())
@@ -116,56 +191,10 @@ const isPowerShellDynamicEvaluator = (segment: TerminalCommandSegment): boolean 
   isAnyCommand(segment, ['invoke-expression', 'iex', 'invoke-command', 'icm'])
 
 const isProcessOrPrivilegeCommand = (segment: TerminalCommandSegment): boolean =>
-  isAnyCommand(segment, [
-    'sudo',
-    'runas',
-    'start-process',
-    'start',
-    'stop-process',
-    'start-service',
-    'stop-service',
-    'restart-service',
-    'set-service',
-    'register-scheduledtask',
-    'unregister-scheduledtask',
-    'taskkill',
-    'kill',
-    'pkill',
-    'sc',
-    'sc.exe',
-    'reg',
-    'reg.exe',
-    'schtasks',
-    'schtasks.exe'
-  ])
+  isAnyCommand(segment, PROCESS_OR_PRIVILEGE_COMMAND_NAMES)
 
 const isDestructiveCommand = (segment: TerminalCommandSegment): boolean =>
-  isAnyCommand(segment, [
-    'remove-item',
-    'ri',
-    'del',
-    'delete',
-    'erase',
-    'rd',
-    'rmdir',
-    'rm',
-    'truncate',
-    'clear-content',
-    'set-content',
-    'add-content',
-    'out-file',
-    'move-item',
-    'mi',
-    'mv',
-    'chmod',
-    'chown',
-    'chgrp',
-    'dd',
-    'shred',
-    'diskutil',
-    'mkfs',
-    'format'
-  ]) ||
+  isAnyCommand(segment, DESTRUCTIVE_COMMAND_NAMES) ||
   (commandName(segment) === 'git' &&
     (() => {
       const subcommand = segment.tokens[1]?.toLowerCase()
@@ -174,21 +203,7 @@ const isDestructiveCommand = (segment: TerminalCommandSegment): boolean =>
     })())
 
 const isFileWriteCommand = (segment: TerminalCommandSegment): boolean =>
-  isAnyCommand(segment, [
-    'new-item',
-    'ni',
-    'mkdir',
-    'md',
-    'copy-item',
-    'cpi',
-    'copy',
-    'cp',
-    'touch',
-    'install',
-    'export-csv',
-    'rename-item',
-    'tee'
-  ])
+  isAnyCommand(segment, FILE_WRITE_COMMAND_NAMES)
 
 const isDangerousArgument = (segment: TerminalCommandSegment): boolean => {
   const command = commandName(segment)

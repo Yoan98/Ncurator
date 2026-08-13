@@ -182,6 +182,11 @@ describe('ai tool terminal backend', () => {
         const detachedRejected = await harness.invoke<TerminalFailureResult>('terminal_run', {
           command: isWindows ? 'Start-Process powershell' : 'sleep 1 &'
         })
+        const redirectAllowed = await waitForIdle(
+          await harness.invoke<TerminalRunResult>('terminal_run', {
+            command: 'echo redirect-ok 2>&1'
+          })
+        )
         const snapshotsAfterStop = harness.sessionManager.list({ chatSessionId: 'test-session' })
         await harness.release()
         return {
@@ -196,6 +201,7 @@ describe('ai tool terminal backend', () => {
           records,
           artifactEvents,
           detachedRejected,
+          redirectAllowed,
           snapshotsBeforeStop,
           snapshotsAfterStop
         }
@@ -241,6 +247,16 @@ describe('ai tool terminal backend', () => {
             name: 'persistent-terminal-yields-reads-and-stops',
             message: '长命令应固定让出控制权，允许读取增量输出并停止后返回空闲终端。',
             data: result
+          }
+        )
+        runtime.assertThat(
+          result.redirectAllowed.executionStatus === 'completed' &&
+            result.redirectAllowed.exitCode === 0 &&
+            result.redirectAllowed.output.includes('redirect-ok'),
+          {
+            name: 'persistent-terminal-allows-fd-merge-redirection',
+            message: '带 2>&1 fd 合并重定向的验证命令应正常执行，不被误判为后台执行或危险重定向。',
+            data: result.redirectAllowed
           }
         )
         const trackedFileNames = new Set(result.records.map((record) => record.fileName))
