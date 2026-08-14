@@ -1,15 +1,23 @@
-import path from 'node:path'
 import { tool } from '@langchain/core/tools'
 import type { IpcJsonObject } from '../../../../../../shared/types'
 import { withToolLifecycle } from '../utils/lifecycle'
 import { createToolEventEmitter } from '../utils/toolEvents'
+import { createWorkspaceBoundToolFamily } from '../utils/workspaceGuards'
 import type { ToolFamilyDefinition } from '../types'
 import { IMAGE_ANALYZE_TOOL_SPEC } from './toolSpecs'
 import { createVisualRecognitionService, getImageMimeType } from '../visualRecognition/service'
+import { resolveToolPath } from '../terminal/commandPolicy'
 
-export const imageRecognitionToolFamily: ToolFamilyDefinition = {
+export const imageRecognitionToolFamily: ToolFamilyDefinition = createWorkspaceBoundToolFamily({
   familyId: 'image-recognition',
-  buildTools: ({ ctx, runId, taskId }) => {
+  descriptionForTool: (toolName) =>
+    toolName === IMAGE_ANALYZE_TOOL_SPEC.name
+      ? IMAGE_ANALYZE_TOOL_SPEC.promptSpec.description
+      : IMAGE_ANALYZE_TOOL_SPEC.promptSpec.description,
+  reason: 'image recognition tools require workspace binding before execution',
+  error: 'workspace is required for image recognition tools',
+  buildWorkspaceTools: (input) => {
+    const { ctx, runId, taskId, workspaceRootPath } = input
     const toolEvents = createToolEventEmitter({
       ctx,
       runId,
@@ -25,8 +33,12 @@ export const imageRecognitionToolFamily: ToolFamilyDefinition = {
           args: args as IpcJsonObject,
           execute: async (session) => {
             ctx.checkCancelled()
-            const sourcePath = path.resolve(String(args.path || '').trim())
+            const rawPath = String(args.path || '').trim()
             const instruction = String(args.instruction || '').trim()
+            const sourcePath = resolveToolPath({
+              rawPath,
+              cwd: workspaceRootPath
+            })
             if (!sourcePath || !instruction) {
               const payload = { error: 'path 和 instruction 不能为空' }
               session.fail(payload.error, undefined, {
@@ -79,4 +91,4 @@ export const imageRecognitionToolFamily: ToolFamilyDefinition = {
 
     return [llmRecognize]
   }
-}
+})

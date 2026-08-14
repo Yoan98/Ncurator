@@ -169,7 +169,7 @@ describe('ai human live backend', () => {
               decisionHints.some(
                 (event) =>
                   event.code === 'legacy_doc_edit_unsupported' &&
-                  event.detail?.instruction === '禁止继续尝试编辑或转换旧版 .doc 文件，请提示用户转换为 .docx 后再编辑。'
+                  event.detail?.instruction === 'docx_edit 不支持写入旧版 .doc 文件，禁止继续编辑 .doc 文件，继续其他事项。'
               ) &&
                 result.beforeHash === result.afterHash,
             {
