@@ -16,7 +16,7 @@ describe('ai human live backend', () => {
         domain: 'ai',
         suite: 'human',
         groups: ['live'],
-        description: 'Finds the official pandas CSV APIs and explains them directly to the user.',
+        description: '找到 pandas 官方 CSV 接口并向用户直接说明。',
         fixtures: [],
         runMode: 'single',
         runtimeModelName: loadLiveLlmConfigFromEnv().model_name,
@@ -28,7 +28,7 @@ describe('ai human live backend', () => {
             }).run({
             taskId: runtime.taskId,
             userInput:
-                'Use only official pandas.pydata.org documentation. Find the CSV read and write APIs, then explain them to me. Stop after you have read the two official API pages.'
+                '只使用 pandas.pydata.org 官方文档，找到 CSV 读取和写入的 API，然后向我说明。读完两个官方 API 页面后停止。'
             })
             return { output, events: runtime.eventCollector.snapshot() }
           } finally {

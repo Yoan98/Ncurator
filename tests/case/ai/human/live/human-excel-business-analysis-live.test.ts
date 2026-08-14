@@ -92,7 +92,7 @@ describe('ai human live excel backend', () => {
         domain: 'ai',
         suite: 'human',
         groups: ['live'],
-        description: 'Analyzes a sales workbook using a real local calculation and reports the business priorities in conversation.',
+        description: '用真实本地计算分析销售工作簿，并以对话方式汇报业务优先级。',
         fixtures: [],
         runMode: 'single',
         execute: async (runtime) => {
@@ -102,7 +102,7 @@ describe('ai human live excel backend', () => {
           const output = await createHumanTestRunner(runtime, {}).run({
             taskId: runtime.taskId,
             userInput:
-              'Review sales-operations.xlsx for the sales meeting. Identify products below target, their regions and owners. Calculate actual sales, target sales, and gaps before telling me which items to prioritize. Do not modify the workbook. 请实际执行本地计算（例如使用终端）计算实际销售额、目标销售额和差额。'
+              '请为销售会议审阅 sales-operations.xlsx：找出低于目标的产品、所属区域和负责人；请实际执行本地计算（例如使用终端）算出实际销售额、目标销售额和差额，再告诉我该优先处理哪些项。不要修改工作簿。'
           })
           return {
             output,
@@ -141,7 +141,7 @@ describe('ai human live excel backend', () => {
         domain: 'ai',
         suite: 'human',
         groups: ['live'],
-        description: 'Uses a local calculation to update a finance reconciliation workbook and verify the delivered workbook.',
+        description: '用本地计算更新财务对账工作簿，并核对交付后的工作簿。',
         fixtures: [],
         runMode: 'single',
         execute: async (runtime) => {
@@ -153,7 +153,7 @@ describe('ai human live excel backend', () => {
           const output = await createHumanTestRunner(runtime, {}).run({
             taskId: runtime.taskId,
             userInput:
-              'Update finance-reconciliation.xlsx for the finance close. Compare Sales and Payments, mark paid orders with blank or Not invoiced status as Invoice required, then add Invoice required order count and amount formulas to Reconciliation. Preserve existing amounts, formulas, styles, and unaffected orders. Verify the workbook after editing. 请实际执行本地计算核对销售与回款（例如使用终端），再写入待开票标记与汇总公式。'
+              '请为财务结账更新 finance-reconciliation.xlsx：对比 Sales 和 Payments，把已付款但状态为空或 Not invoiced 的订单标记为 Invoice required，然后在 Reconciliation 里新增 Invoice required 订单数量和金额的公式。保留现有的金额、公式、样式和未涉及的订单。请实际执行本地计算核对销售与回款（例如使用终端），编辑后再核对工作簿。'
           })
           const workbook = new ExcelJS.Workbook()
           await workbook.xlsx.load((await fs.readFile(sourcePath)) as never)
@@ -197,10 +197,8 @@ describe('ai human live excel backend', () => {
               values.get('SO-1004') === 'Invoice required' &&
               values.get('SO-1002') === 'Invoiced' &&
               values.get('SO-1003') === 'Not invoiced' &&
-              /Invoice required (?:order count|count|orders)/.test(
-                JSON.stringify(result.summaryRows)
-              ) &&
-              JSON.stringify(result.summaryRows).includes('Invoice required amount') &&
+              /Invoice required[^"]*count/.test(JSON.stringify(result.summaryRows)) &&
+              /Invoice required[^"]*amount/.test(JSON.stringify(result.summaryRows)) &&
               JSON.stringify(result.summaryFormulas).includes('SUMIF') &&
               result.headerFill === result.originalHeaderFill &&
               artifacts.length >= 1,

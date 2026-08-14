@@ -28,7 +28,7 @@ describe('ai human live terminal backend', () => {
         domain: 'ai',
         suite: 'human',
         groups: ['live'],
-        description: 'Uses a real local script to reconcile two business files and delivers a finance-ready exception CSV.',
+        description: '用真实本地脚本对账两个业务文件，并交付财务可用的异常清单 CSV。',
         fixtures: [],
         runMode: 'single',
         execute: async (runtime) => {
@@ -49,7 +49,7 @@ describe('ai human live terminal backend', () => {
           }).run({
             taskId: runtime.taskId,
             userInput:
-              'Reconcile invoices.csv and payments.csv. Create reconciliation-exceptions.csv for Finance with columns type,recordId,amount for unpaid invoices and payments without a matching invoice. 类型列请填写 unpaid_invoice（未付发票）或 unmatched_payment（无匹配付款）。Tell me the matched and exception totals, and do not modify either input file.'
+              '请对账 invoices.csv 和 payments.csv。为财务生成 reconciliation-exceptions.csv，列包括 type、recordId、amount，覆盖未开发票的订单和没有对应订单的付款。类型列请填写 unpaid_invoice（未付发票）或 unmatched_payment（无匹配付款）。告诉我匹配与异常的合计金额，不要修改任何输入文件。'
           })
           return {
             output,

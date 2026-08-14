@@ -140,10 +140,10 @@ describe('ai tool docx backend', () => {
           }
         )
         runtime.assertThat(
-          result.failure.error.includes('不支持写入旧版 .doc') &&
+          result.failure.error.includes('禁止尝试任何对 .doc 文件的编辑') &&
             result.failure.decisionHint?.code === 'legacy_doc_edit_unsupported' &&
             result.failure.decisionHint?.instruction ===
-              'docx_edit 不支持写入旧版 .doc 文件，禁止继续编辑 .doc 文件，继续其他事项。' &&
+              'docx_edit 禁止尝试任何对 .doc 文件的编辑，该格式只读不可修改，请立即停止并继续其他事项。' &&
             result.uppercaseFailure.decisionHint?.code === 'legacy_doc_edit_unsupported' &&
             result.unchanged &&
             result.trackedReplaySessionCount === 0,

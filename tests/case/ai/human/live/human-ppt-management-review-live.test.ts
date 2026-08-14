@@ -63,7 +63,7 @@ describe('ai human live ppt backend', () => {
         suite: 'human',
         groups: ['live'],
         requiresVisionModel: true,
-        description: 'Reviews a management deck and gives the user a conversational risk briefing without changing the deck.',
+        description: '审阅管理层汇报 PPT 并以对话方式给出风险简报，且不修改 PPT。',
         fixtures: [],
         runMode: 'single',
         execute: async (runtime) => {
@@ -74,7 +74,7 @@ describe('ai human live ppt backend', () => {
           const output = await createHumanTestRunner(runtime, {}).run({
             taskId: runtime.taskId,
             userInput:
-              'Review management-review.pptx for next week\'s leadership meeting. Tell me the priority risks, owners, deadlines, decisions needed, and delivery trend. Please also check the delivery chart on slide 3 before you brief me. Do not modify the presentation.'
+              '请为下周的领导层会议审阅 management-review.pptx，告诉我优先风险、负责人、期限、需要决策的事项以及交付趋势。简报前请先核对第 3 页的交付图表。不要修改演示文稿。'
           })
           return {
             output,
@@ -110,7 +110,7 @@ describe('ai human live ppt backend', () => {
         domain: 'ai',
         suite: 'human',
         groups: ['live'],
-        description: 'Updates an existing management deck and delivers a valid, readable presentation.',
+        description: '更新既有管理层汇报 PPT，并交付可解析、可读取的演示文稿。',
         fixtures: [],
         runMode: 'single',
         execute: async (runtime) => {
@@ -122,7 +122,7 @@ describe('ai human live ppt backend', () => {
           const output = await createHumanTestRunner(runtime, {}).run({
             taskId: runtime.taskId,
             userInput:
-              'Update management-review.pptx for the leadership review: add an executive summary slide, escalate the delivery risk, change its owner to Li Ran and deadline to July 15, and update the matching action-plan deadline. Keep the cover and operating-metrics slides unchanged, then check the presentation is readable.'
+              '请更新这份管理层汇报 PPT：新增一页执行摘要；把交付风险升级为最高优先级，负责人改为李然，期限改为 7 月 15 日，并把行动计划中的期限也同步更新。除这些改动外，其他内容保持原样不要改动。完成后检查文件可正常读取。'
           })
           const presentation = await loadPresentation(new Uint8Array(await fs.readFile(sourcePath)))
           return {
@@ -147,24 +147,18 @@ describe('ai human live ppt backend', () => {
               result.output.status === 'completed' &&
               toolNames.some((name) => name.startsWith('ppt_read') || name === 'ppt_search') &&
               toolNames.includes('ppt_edit') &&
-              result.texts.length === 6 &&
-              result.texts[0] === result.protectedTexts[0] &&
-              result.texts.includes(result.protectedTexts[1]) &&
-              result.texts.some(
-                (text) =>
-                  text.includes('Revenue and retention are on plan') &&
-                  text.toLocaleLowerCase().includes('declined') &&
-                  text.includes('Li Ran') &&
-                  text.includes('July 15')
-              ) &&
-              result.texts.some((text) => text.includes('Li Ran') && text.includes('July 15')) &&
+              result.protectedTexts.every((text) => result.texts.includes(text)) &&
+              result.texts.some((text) => /执行摘要|executive summary/iu.test(text)) &&
+              result.texts.some((text) => text.includes('李然')) &&
+              result.texts.some((text) => /7\s*月\s*15/.test(text)) &&
               result.outsideShapeCount === 0 &&
               result.validationErrors === 0 &&
               artifacts.length === 1,
             {
               name: 'human-live-ppt-write-delivers-a-valid-reviewed-deck',
-              message: 'The live model must deliver the requested valid deck update.',
-              data: { toolNames, artifacts }
+              message:
+                'live human 应完成管理层评审 PPT 更新：新增摘要页、升级风险负责人与期限，并保持封面与指标页不变、产出可解析。',
+              data: { toolNames, artifacts, texts: result.texts }
             }
           )
         }

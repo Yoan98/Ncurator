@@ -33,7 +33,7 @@ describe('ai human live text-file backend', () => {
         domain: 'ai',
         suite: 'human',
         groups: ['live'],
-        description: 'Reads a checkout configuration and reports deployment readiness without modifying it.',
+        description: '读取结账配置并汇报上线就绪状态，且不修改文件。',
         fixtures: [],
         runMode: 'single',
         execute: async (runtime) => {
@@ -44,7 +44,7 @@ describe('ai human live text-file backend', () => {
           }).run({
             taskId: runtime.taskId,
             userInput:
-              'Before the checkout cutover, review checkout-config.ts and tell me whether the primary and fallback endpoints, timeout, retry count, and telemetry setting are ready. Do not modify the file.'
+              '在结账切换前，请审阅 checkout-config.ts，告诉我主备端点、超时、重试次数和遥测设置是否就绪。不要修改文件。'
           })
           return {
             output,
@@ -81,7 +81,7 @@ describe('ai human live text-file backend', () => {
         domain: 'ai',
         suite: 'human',
         groups: ['live'],
-        description: 'Makes a clearly specified checkout endpoint cutover while preserving unrelated configuration.',
+        description: '执行明确指定的结账端点切换，同时保留无关配置。',
         fixtures: [],
         runMode: 'single',
         execute: async (runtime) => {
@@ -91,7 +91,7 @@ describe('ai human live text-file backend', () => {
           }).run({
             taskId: runtime.taskId,
             userInput:
-              'Perform the checkout endpoint cutover in checkout-config.ts: replace both OLD_API_URL values with API_BASE_URL, change timeoutMs to 3000, and leave retryCount and telemetryChannel unchanged. Verify the file after editing.'
+              '请在 checkout-config.ts 中执行结账端点切换：把两处 OLD_API_URL 替换为 API_BASE_URL，把 timeoutMs 改为 3000，retryCount 和 telemetryChannel 保持不变。编辑后核对文件。'
           })
           return {
             output,

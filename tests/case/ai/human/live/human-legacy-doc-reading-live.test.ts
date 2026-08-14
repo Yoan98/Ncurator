@@ -165,11 +165,12 @@ describe('ai human live backend', () => {
               editStarts.length === 1 &&
               editResults.length === 1 &&
               editResults[0]?.result?.ok === false &&
-              errors.some((error) => error.includes('不支持写入旧版 .doc')) &&
+              errors.some((error) => error.includes('禁止尝试任何对 .doc 文件的编辑')) &&
               decisionHints.some(
                 (event) =>
                   event.code === 'legacy_doc_edit_unsupported' &&
-                  event.detail?.instruction === 'docx_edit 不支持写入旧版 .doc 文件，禁止继续编辑 .doc 文件，继续其他事项。'
+                  event.detail?.instruction ===
+                    'docx_edit 禁止尝试任何对 .doc 文件的编辑，该格式只读不可修改，请立即停止并继续其他事项。'
               ) &&
                 result.beforeHash === result.afterHash,
             {

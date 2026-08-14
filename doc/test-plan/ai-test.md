@@ -159,7 +159,7 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 - What：旧版 .doc 文件可以通过现有 docx-read 工具读取，并明确拒绝写入。
 - Why：旧格式读取是 AI 文档能力的兼容边界，写入拒绝必须可解释且不产生副作用。
 - How：读取 outline、block、literal/regex 搜索，再尝试编辑并检查 decision hint。
-- Oracle：读取结果有效；编辑返回“不支持写入旧版 .doc”及对应提示；源文件 bytes 不变。
+- Oracle：读取结果有效；编辑返回“禁止尝试任何对 .doc 文件的编辑”及对应提示；源文件 bytes 不变。
 - Not：不把旧版 .doc 写入转换为隐式成功。
 
 ##### `docx-minimal-edit-flow`

@@ -131,7 +131,7 @@ export const DOCX_EDIT_TOOL_SPEC = {
   promptSpec: {
     name: 'docx_edit',
     description:
-      '创建或编辑 DOCX 文件，支持递归内容树、文本替换、节点样式、表格更新和删除。可能删除视觉内容的操作必须明确允许 visual loss；参数无效时不修改文件。不支持 .doc 写入。'
+      '创建或编辑 DOCX 文件，支持递归内容树、文本替换、节点样式、表格更新和删除。可能删除视觉内容的操作必须明确允许 visual loss；参数无效时不修改文件。禁止尝试任何对 .doc 文件的编辑，不支持。'
   },
   resolveExecutionMeta: createDocxMutatingExecutionMeta(),
   activityActionType: 'docx_edit'

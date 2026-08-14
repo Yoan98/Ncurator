@@ -17,7 +17,7 @@ describe('ai human live backend', () => {
         domain: 'ai',
         suite: 'human',
         groups: ['live'],
-        description: 'Follows a real multi-hop public-service website and answers an applicant in conversation.',
+        description: '跟随真实多跳政务网站并以对话方式答复申请者。',
         fixtures: [],
         runMode: 'single',
         runtimeModelName: loadLiveLlmConfigFromEnv().model_name,
@@ -29,7 +29,7 @@ describe('ai human live backend', () => {
               webCrawlerService
             }).run({
               taskId: runtime.taskId,
-              userInput: `Starting at ${site.entryUrl}, tell me who can apply for the flexible-employment subsidy, the deadline, materials required, and how to submit online. Follow the relevant links only and do not change the website.`
+              userInput: `从 ${site.entryUrl} 开始，告诉我谁可以申请灵活就业补贴、截止日期、所需材料以及如何在线提交。只跟随相关链接，不要修改网站。`
             })
             return { output, site, events: runtime.eventCollector.snapshot() }
           } finally {

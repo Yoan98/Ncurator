@@ -53,7 +53,7 @@ const HINT_FIXTURES: Record<(typeof HUMAN_DECISION_HINT_CODES)[number], HumanDec
   legacy_doc_edit_unsupported: {
     code: 'legacy_doc_edit_unsupported',
     detail: {
-      instruction: 'docx_edit 不支持写入旧版 .doc 文件，禁止继续编辑 .doc 文件，继续其他事项。'
+      instruction: 'docx_edit 禁止尝试任何对 .doc 文件的编辑，该格式只读不可修改，请立即停止并继续其他事项。'
     }
   },
   hand_docx_edit_failed: {
@@ -181,9 +181,9 @@ describe('ai unit human decision hint contract', () => {
       renderDecisionHintForBrain({
         code: 'legacy_doc_edit_unsupported',
         detail: {
-          instruction: 'docx_edit 不支持写入旧版 .doc 文件，禁止继续编辑 .doc 文件，继续其他事项。'
+          instruction: 'docx_edit 禁止尝试任何对 .doc 文件的编辑，该格式只读不可修改，请立即停止并继续其他事项。'
         }
       })
-    ).toBe('docx_edit 不支持写入旧版 .doc 文件，禁止继续编辑 .doc 文件，继续其他事项。')
+    ).toBe('docx_edit 禁止尝试任何对 .doc 文件的编辑，该格式只读不可修改，请立即停止并继续其他事项。')
   })
 })

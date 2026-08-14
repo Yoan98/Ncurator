@@ -2,11 +2,12 @@ import path from 'node:path'
 import type { JsonObject } from '../../../../../../shared/types'
 
 export const LEGACY_DOC_EDIT_ERROR =
-  'docx_edit 不支持写入旧版 .doc 文件，禁止继续编辑 .doc 文件，继续其他事项。'
+  'docx_edit 禁止尝试任何对 .doc 文件的编辑，该格式只读不可修改。'
 
 export const LEGACY_DOC_EDIT_DECISION_HINT: JsonObject = {
   code: 'legacy_doc_edit_unsupported',
-  instruction: 'docx_edit 不支持写入旧版 .doc 文件，禁止继续编辑 .doc 文件，继续其他事项。'
+  instruction:
+    'docx_edit 禁止尝试任何对 .doc 文件的编辑，该格式只读不可修改，请立即停止并继续其他事项。'
 }
 
 export const isLegacyDocPath = (filePath: string): boolean =>
