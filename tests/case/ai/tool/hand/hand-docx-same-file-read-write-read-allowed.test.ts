@@ -1,4 +1,5 @@
 import { describe, it } from 'vitest'
+import path from 'node:path'
 import { createHandNode } from '../../../../../src/main/services/ai/human/node/handNode'
 import { ensureSkillTools } from '../../../../../src/main/services/ai/human/node/learningNode/skillLoader'
 import { createHumanRuntimeCache } from '../../../../../src/main/services/ai/human/node/utils/runtimeCache'
@@ -63,14 +64,14 @@ describe('ai tool hand backend', () => {
                   {
                     toolName: 'docx_read_outline',
                     args: {
-                      sourcePath: 'same-file-read-write-read.docx',
+                      sourcePath: path.join(runtime.workspaceRoot, 'same-file-read-write-read.docx'),
                       ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 10 }]
                     }
                   },
                   {
                     toolName: 'docx_edit',
                     args: {
-                      sourcePath: 'same-file-read-write-read.docx',
+                      sourcePath: path.join(runtime.workspaceRoot, 'same-file-read-write-read.docx'),
                       actions: [
                         {
                           type: 'replace_text',
@@ -83,7 +84,7 @@ describe('ai tool hand backend', () => {
                   {
                     toolName: 'docx_read_blocks',
                     args: {
-                      sourcePath: 'same-file-read-write-read.docx',
+                      sourcePath: path.join(runtime.workspaceRoot, 'same-file-read-write-read.docx'),
                       range: { type: 'block_index', fromBlockIndex: 0, toBlockIndex: 0 }
                     }
                   }

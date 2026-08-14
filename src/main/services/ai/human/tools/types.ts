@@ -57,7 +57,6 @@ export type HumanToolSpec<
   name: TName
   familyId: AiToolFamilyId
   skillIds: TSkillId[]
-  requiresWorkspace: boolean
   inputSchema: z.ZodType<TInput>
   outputSchema: z.ZodType<TOutput>
   promptSpec: ToolPromptSpec

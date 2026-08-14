@@ -23,7 +23,6 @@ export const IMAGE_ANALYZE_TOOL_SPEC: HumanToolSpec<
   name: 'image_analyze',
   familyId: 'image-recognition',
   skillIds: ['image-recognition'],
-  requiresWorkspace: true,
   inputSchema: IMAGE_ANALYZE_SCHEMA,
   outputSchema: IMAGE_ANALYZE_OUTPUT_SCHEMA,
   promptSpec: {

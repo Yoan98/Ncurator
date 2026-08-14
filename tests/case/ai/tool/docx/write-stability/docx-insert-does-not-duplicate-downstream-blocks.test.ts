@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises'
+import path from 'node:path'
 import { describe, it } from 'vitest'
 import {
   buildBlockIndex,
@@ -58,7 +59,7 @@ describe('ai tool docx backend', () => {
         try {
           harness.ctx.beginDocxApplyRun()
           const outlineBefore = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
-            sourcePath: 'insert-after-no-duplicate-tail.docx',
+            sourcePath: path.join(runtime.workspaceRoot, 'insert-after-no-duplicate-tail.docx'),
             ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 49 }]
           })
           const anchorBlockId =
@@ -69,11 +70,11 @@ describe('ai tool docx backend', () => {
             )?.blockId || ''
 
           const anchorBefore = await harness.invoke<DocxReadResult>('docx_read_blocks', {
-            sourcePath: 'insert-after-no-duplicate-tail.docx',
+            sourcePath: path.join(runtime.workspaceRoot, 'insert-after-no-duplicate-tail.docx'),
             range: { type: 'block_ids', blockIds: [anchorBlockId] }
           })
           const insertedParagraph = await harness.invoke<DocxMutationResult>('docx_edit', {
-            sourcePath: 'insert-after-no-duplicate-tail.docx',
+            sourcePath: path.join(runtime.workspaceRoot, 'insert-after-no-duplicate-tail.docx'),
             actions: [
               {
                 type: 'insert_blocks',

@@ -22,30 +22,30 @@ describe('ai tool image-generation backend', () => {
       execute: async (runtime) => {
         const harness = createImageGenerationToolHarness(runtime)
         const pngResult = await harness.invoke<{ outputPath: string }>('image_generate', {
-          outputPath: 'images/generated.png',
+          outputPath: path.join(runtime.workspaceRoot, 'images', 'generated.png'),
           svg: createSvg('#3366ff')
         })
         await harness.invoke('image_generate', {
-          outputPath: 'images/generated.jpg',
+          outputPath: path.join(runtime.workspaceRoot, 'images', 'generated.jpg'),
           svg: createSvg('#00aa66')
         })
         await harness.invoke('image_generate', {
-          outputPath: 'images/generated.webp',
+          outputPath: path.join(runtime.workspaceRoot, 'images', 'generated.webp'),
           svg: createSvg('#cc3366')
         })
         await harness.invoke('image_generate', {
-          outputPath: 'images/generated.png',
+          outputPath: path.join(runtime.workspaceRoot, 'images', 'generated.png'),
           svg: createSvg('#ffcc00')
         })
 
         const existingPath = path.join(runtime.workspaceRoot, 'images', 'existing.jpeg')
         await fs.writeFile(existingPath, Buffer.from('original-image'))
         await harness.invoke('image_generate', {
-          outputPath: 'images/existing.jpeg',
+          outputPath: path.join(runtime.workspaceRoot, 'images', 'existing.jpeg'),
           svg: createSvg('#111111')
         })
         await harness.invoke('image_generate', {
-          outputPath: 'images/existing.jpeg',
+          outputPath: path.join(runtime.workspaceRoot, 'images', 'existing.jpeg'),
           svg: createSvg('#eeeeee')
         })
 
@@ -94,7 +94,8 @@ describe('ai tool image-generation backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.pngResult.outputPath === 'images/generated.png' &&
+          result.pngResult.outputPath ===
+            path.join(runtime.workspaceRoot, 'images', 'generated.png') &&
             result.pngSignature === '89504e470d0a1a0a' &&
             result.jpegSignature === 'ffd8ff' &&
             result.webpSignature.startsWith('RIFF') &&
@@ -148,23 +149,23 @@ describe('ai tool image-generation backend', () => {
           }
         }
         const scriptError = await captureError({
-          outputPath: 'images/script.png',
+          outputPath: path.join(runtime.workspaceRoot, 'images', 'script.png'),
           svg: '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><script>alert(1)</script></svg>'
         })
         const externalError = await captureError({
-          outputPath: 'images/external.png',
+          outputPath: path.join(runtime.workspaceRoot, 'images', 'external.png'),
           svg: '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><image href="https://example.com/a.png" /></svg>'
         })
         const cssExternalError = await captureError({
-          outputPath: 'images/css-external.png',
+          outputPath: path.join(runtime.workspaceRoot, 'images', 'css-external.png'),
           svg: '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><style>rect { fill: url(https://example.com/fill.svg); }</style><rect width="10" height="10" /></svg>'
         })
         const cssImportError = await captureError({
-          outputPath: 'images/css-import.png',
+          outputPath: path.join(runtime.workspaceRoot, 'images', 'css-import.png'),
           svg: '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><style>@import "https://example.com/style.css";</style></svg>'
         })
         const oversizedError = await captureError({
-          outputPath: 'images/oversized.png',
+          outputPath: path.join(runtime.workspaceRoot, 'images', 'oversized.png'),
           svg: '<svg xmlns="http://www.w3.org/2000/svg" width="9000" height="10" />'
         })
         const outsidePath = path.join(path.dirname(runtime.workspaceRoot), 'outside.png')
@@ -173,11 +174,11 @@ describe('ai tool image-generation backend', () => {
           svg: createSvg('#123456')
         })
         const formatError = await captureError({
-          outputPath: 'images/generated.gif',
+          outputPath: path.join(runtime.workspaceRoot, 'images', 'generated.gif'),
           svg: createSvg('#000000')
         })
         const malformedError = await captureError({
-          outputPath: 'images/preserved.png',
+          outputPath: path.join(runtime.workspaceRoot, 'images', 'preserved.png'),
           svg: '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect></svg>'
         })
         const exists = async (filePath: string): Promise<boolean> =>

@@ -82,7 +82,7 @@ describe('ai tool ppt backend', () => {
       runMode: 'single',
       execute: async (runtime) => {
         const visionServer = await startVisionServer()
-        const sourcePath = 'product-review.pptx'
+        const sourcePath = path.join(runtime.workspaceRoot, 'product-review.pptx')
         try {
           await runtime.seedLlmConfig({
             id: 'ai-live-config',
@@ -140,7 +140,7 @@ describe('ai tool ppt backend', () => {
             sourcePath,
             requests: [{ index: 2, instruction: '说明第 2 页视觉内容。' }]
           })
-          const targetPath = path.join(runtime.workspaceRoot, sourcePath)
+          const targetPath = sourcePath
           const beforeCommitExists = await fs
             .access(targetPath)
             .then(() => true)

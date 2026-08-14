@@ -1,4 +1,5 @@
 import { describe, it } from 'vitest'
+import path from 'node:path'
 import {
   docxParagraphNode,
   docxTableNode,
@@ -60,7 +61,7 @@ describe('ai human mock-llm backend', () => {
                 output: buildToolDecision({
                   toolName: 'docx_edit',
                   args: {
-                    sourcePath: 'complex-edit.docx',
+                    sourcePath: path.join(runtime.workspaceRoot, 'complex-edit.docx'),
                     actions: [
                       {
                         type: 'replace_text',
@@ -80,7 +81,7 @@ describe('ai human mock-llm backend', () => {
                 return buildToolDecision({
                   toolName: 'docx_read_blocks',
                   args: {
-                    sourcePath: 'complex-edit.docx',
+                    sourcePath: path.join(runtime.workspaceRoot, 'complex-edit.docx'),
                     range: { type: 'block_ids', blockIds: [applyResult.changedBlocks[0]!.blockId] }
                   },
                   summary: '精读新内容'
@@ -90,7 +91,7 @@ describe('ai human mock-llm backend', () => {
                 output: buildToolDecision({
                   toolName: 'docx_search',
                   args: {
-                    sourcePath: 'complex-edit.docx',
+                    sourcePath: path.join(runtime.workspaceRoot, 'complex-edit.docx'),
                     query: 'Cycle 3 cumulative draft content.'
                   },
                   summary: '搜索新内容'
@@ -204,7 +205,7 @@ describe('ai human mock-llm backend', () => {
                 output: buildToolDecision({
                   toolName: 'docx_read_outline',
                   args: {
-                    sourcePath: 'complex-structured-edit.docx',
+                    sourcePath: path.join(runtime.workspaceRoot, 'complex-structured-edit.docx'),
                     ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 59 }]
                   },
                   summary: '读取结构提纲'
@@ -222,7 +223,7 @@ describe('ai human mock-llm backend', () => {
                 return buildToolDecision({
                   toolName: 'docx_edit',
                   args: {
-                    sourcePath: 'complex-structured-edit.docx',
+                    sourcePath: path.join(runtime.workspaceRoot, 'complex-structured-edit.docx'),
                     actions: [
                       {
                         type: 'insert_blocks',
@@ -249,7 +250,7 @@ describe('ai human mock-llm backend', () => {
                 return buildToolDecision({
                   toolName: 'docx_read_outline',
                   args: {
-                    sourcePath: 'complex-structured-edit.docx',
+                    sourcePath: path.join(runtime.workspaceRoot, 'complex-structured-edit.docx'),
                     ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 79 }]
                   },
                   summary: '读回新增段落'
@@ -267,7 +268,7 @@ describe('ai human mock-llm backend', () => {
                 return buildToolDecision({
                   toolName: 'docx_edit',
                   args: {
-                    sourcePath: 'complex-structured-edit.docx',
+                    sourcePath: path.join(runtime.workspaceRoot, 'complex-structured-edit.docx'),
                     actions: [
                       {
                         type: 'insert_blocks',
@@ -289,7 +290,7 @@ describe('ai human mock-llm backend', () => {
                 output: buildToolDecision({
                   toolName: 'docx_read_outline',
                   args: {
-                    sourcePath: 'complex-structured-edit.docx',
+                    sourcePath: path.join(runtime.workspaceRoot, 'complex-structured-edit.docx'),
                     ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 79 }]
                   },
                   summary: '复查新版本结构'

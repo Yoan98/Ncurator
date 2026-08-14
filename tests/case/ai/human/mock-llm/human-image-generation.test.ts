@@ -26,7 +26,7 @@ describe('ai human mock-llm image generation backend', () => {
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
-        const outputPath = 'human-generated.png'
+        const outputPath = path.join(runtime.workspaceRoot, 'human-generated.png')
         const runner = createHumanTestRunner(runtime, {
           allowedToolNames: ['image_generate'],
           structuredOutputScript: {
@@ -60,7 +60,7 @@ describe('ai human mock-llm image generation backend', () => {
           taskId: runtime.taskId,
           userInput: '请生成一张 40x30 的蓝色图片 human-generated.png。'
         })
-        const bytes = await fs.readFile(path.join(runtime.workspaceRoot, outputPath))
+        const bytes = await fs.readFile(outputPath)
         const image = await loadImage(bytes)
         return {
           output,

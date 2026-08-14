@@ -1,3 +1,4 @@
+import path from 'node:path'
 import { describe, it } from 'vitest'
 import { createDocxToolHarness, writeTestDocxFile } from '../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
@@ -30,7 +31,7 @@ describe('ai tool docx backend', () => {
         const harness = createDocxToolHarness(runtime)
         try {
           return await harness.invoke<DocxSearchResult>('docx_search', {
-            sourcePath: 'semantic-search.docx',
+            sourcePath: path.join(runtime.workspaceRoot, 'semantic-search.docx'),
             query: '像素边缘锯齿怎么减轻',
             mode: 'semantic'
           })

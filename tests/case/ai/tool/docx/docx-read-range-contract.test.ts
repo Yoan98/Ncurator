@@ -1,3 +1,4 @@
+import path from 'node:path'
 import { describe, it } from 'vitest'
 import { createDocxToolHarness, writeTestDocxFile } from '../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
@@ -26,13 +27,13 @@ describe('ai tool docx backend', () => {
         const harness = createDocxToolHarness(runtime)
         try {
           const outline = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
-            sourcePath: 'range-read.docx',
+            sourcePath: path.join(runtime.workspaceRoot, 'range-read.docx'),
             ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 20 }]
           })
           const fromBlockIndex = findParagraphBlockIndexByText(outline.blocks, '第二段。')
           const toBlockIndex = findParagraphBlockIndexByText(outline.blocks, '第四段。')
           const read = await harness.invoke<DocxReadResult>('docx_read_blocks', {
-            sourcePath: 'range-read.docx',
+            sourcePath: path.join(runtime.workspaceRoot, 'range-read.docx'),
             range: {
               type: 'block_index',
               fromBlockIndex,

@@ -1,3 +1,4 @@
+import path from 'node:path'
 import { describe, it } from 'vitest'
 import { createDocxToolHarness, writeTestDocxFile } from '../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
@@ -34,7 +35,7 @@ describe('ai tool docx backend', () => {
         const harness = createDocxToolHarness(runtime)
         try {
           const outline = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
-            sourcePath: 'scope-contract.docx',
+            sourcePath: path.join(runtime.workspaceRoot, 'scope-contract.docx'),
             ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 19 }]
           })
           const firstScopedBlockId =

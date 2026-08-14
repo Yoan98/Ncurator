@@ -170,7 +170,6 @@ export class TerminalSessionManager {
     chatSessionId: string
     workspaceId: string
     workspaceRootPath: string
-    userRuntimeRootPath?: string
     environment?: Record<string, string>
     platform: AiRuntimePlatform
     runId: string
@@ -386,7 +385,6 @@ export class TerminalSessionManager {
     chatSessionId: string
     workspaceId: string
     workspaceRootPath: string
-    userRuntimeRootPath?: string
     environment?: Record<string, string>
     platform: AiRuntimePlatform
   }): Promise<ManagedTerminalSession> {

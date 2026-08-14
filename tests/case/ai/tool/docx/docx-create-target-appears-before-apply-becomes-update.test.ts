@@ -28,7 +28,7 @@ describe('ai tool docx backend', () => {
         const harness = createDocxToolHarness(runtime)
         try {
           const created = await harness.invoke<DocxCreateResult>('docx_edit', {
-            sourcePath: targetFileName,
+            sourcePath: targetPath,
             actions: [
               {
                 type: 'insert_blocks',
@@ -49,7 +49,7 @@ describe('ai tool docx backend', () => {
             { type: 'paragraph', text: 'External replacement.' }
           ])
           const staleRead = await harness.invoke<DocxFailureResult>('docx_search', {
-            sourcePath: targetFileName,
+            sourcePath: targetPath,
             query: 'External replacement.'
           })
           return { created, existsAfterCreate, staleRead }

@@ -36,7 +36,7 @@ describe('ai tool docx backend', () => {
         try {
           harness.ctx.beginDocxApplyRun()
           const created = await harness.invoke<DocxCreateResult>('docx_edit', {
-            sourcePath: targetFileName,
+            sourcePath: targetPath,
             actions: [
               {
                 type: 'insert_blocks',
@@ -51,7 +51,7 @@ describe('ai tool docx backend', () => {
           })
           const records = await harness.ctx.applyDocxRunEdits()
           const search = await harness.invoke<DocxSearchResult>('docx_search', {
-            sourcePath: targetFileName,
+            sourcePath: targetPath,
             query: '过拟合',
             mode: 'literal'
           })

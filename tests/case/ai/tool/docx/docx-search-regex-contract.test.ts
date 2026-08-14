@@ -1,3 +1,4 @@
+import path from 'node:path'
 import { describe, it } from 'vitest'
 import { createDocxToolHarness, writeTestDocxFile } from '../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
@@ -26,12 +27,12 @@ describe('ai tool docx backend', () => {
         try {
           return {
             valid: await harness.invoke<DocxSearchResult>('docx_search', {
-              sourcePath: 'regex-search.docx',
+              sourcePath: path.join(runtime.workspaceRoot, 'regex-search.docx'),
               query: '反.*样',
               mode: 'regex'
             }),
             invalid: await harness.invoke<DocxFailureResult>('docx_search', {
-              sourcePath: 'regex-search.docx',
+              sourcePath: path.join(runtime.workspaceRoot, 'regex-search.docx'),
               query: '反(',
               mode: 'regex'
             })

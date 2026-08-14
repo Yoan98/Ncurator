@@ -96,10 +96,7 @@ export const createPdfToolRuntime = (input: PdfCapabilityToolsInput): PdfToolRun
     await getPdfWorkerClient().call({ ...request, runId: input.runId } as PdfWorkerRequest)
 
   const resolvePdfPath = async (rawPath: string): Promise<string> => {
-    const lexicalPath = resolveToolPath({
-      rawPath,
-      cwd: workspaceRootPath
-    })
+    const lexicalPath = resolveToolPath(rawPath)
     if (!lexicalPath) throw new Error('PDF 路径无效')
     if (path.extname(lexicalPath).toLowerCase() !== '.pdf')
       throw new Error('sourcePath 必须是 .pdf 文件')

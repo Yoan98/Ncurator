@@ -1,7 +1,6 @@
 import type { AiRunContext } from '../../types'
 import { renderReferenceScopeText } from '../../prompts/referenceScope'
 import {
-  getUserRuntimeDir,
   getWorkspaceAssetsRootDir,
   getWorkspaceScriptsRootDir
 } from '../../../assets/WorkspaceAssetService'
@@ -73,8 +72,7 @@ export const renderLocalEnvironmentText = (ctx: AiRunContext): string => {
       },
       runtime_paths: {
         assets: ctx.workspace ? getWorkspaceAssetsRootDir(ctx.workspace.rootPath) : null,
-        scripts: ctx.workspace ? getWorkspaceScriptsRootDir(ctx.workspace.rootPath) : null,
-        user_runtime: getUserRuntimeDir()
+        scripts: ctx.workspace ? getWorkspaceScriptsRootDir(ctx.workspace.rootPath) : null
       }
     },
     null,
@@ -84,10 +82,10 @@ export const renderLocalEnvironmentText = (ctx: AiRunContext): string => {
 
 const renderPreferenceText = (preference: AiRunContext['preference']): string => {
   if (preference === 'local_sources_relaxed') {
-    return '优先使用知识库内容和工作区文件内容作为依据来推进任务'
+    return '优先使用知识库内容和用户工作区域文件内容作为依据来推进任务'
   }
   if (preference === 'local_sources_strict') {
-    return '必须只能使用知识库内容和工作区文件内容作为依据来推进任务，禁止使用其他信息与模型能力本身的信息'
+    return '必须只能使用知识库内容和用户工作区域文件内容作为依据来推进任务，禁止使用其他信息与模型能力本身的信息'
   }
   return '无'
 }
@@ -236,16 +234,15 @@ export const buildBrainPrompt = (input: {
   <workspace_runtime>
     - runtime_paths.scripts：任务执行期间可用于存放脚本的目录。
     - runtime_paths.assets：任务执行期间可用于存放临时资源和运行产物的目录；使用时以 UUID 作为子目录名，即 runtime_paths.assets/<uuid>/。
-    - runtime_paths.user_runtime：用户级运行环境目录，可用于存放任务需要的运行时、依赖和相关资源。
-    - 用户要求的正式交付文件应写入工作区的正常目录。
+    - 用户要求的正式交付文件应写入用户工作区域的正常目录。
   </workspace_runtime>
 
   <context_block_guide>
     - task_goal：用户的任务诉求。
     - preference：当前用户对 AI 推进方式的偏好；若为“无”，则不施加额外偏好。
-    - reference_scope：当前工作区、默认知识范围、显式缩圈范围和可用边界。
+    - reference_scope：当前用户工作区域、默认知识范围、显式缩圈范围和可用边界。
     - search_strategy：当前任务默认遵循的检索思路提示。
-    - local_environment：当前本机运行环境，内容是 JSON；platform 是当前用户电脑平台，current_time 是当前系统时间，terminal_state 是当前会话的终端状态，runtime_paths 是工作区临时目录和用户级运行环境目录。
+    - local_environment：当前本机运行环境，内容是 JSON；platform 是当前用户电脑平台，current_time 是当前系统时间，terminal_state 是当前会话的终端状态，runtime_paths 是用户工作区域内的临时运行目录。
     - conversation_history：当前会话历史视图。
     - summary：当前会话中跨任务仍有效的滚动摘要，用于理解用户在同一窗口里的连续主线、稳定偏好与当前状态。
     - recent_turns：最近几轮已经完成且尚未被会话压缩的真实对话，不包含当前正在执行的任务。
@@ -309,7 +306,7 @@ ${JSON.stringify({
     <example_tool_plan>
 ${JSON.stringify({
   thought: {
-    next: '当前缺少工作区文件事实，先读取当前目录建立资料范围。'
+    next: '当前缺少用户工作区域文件事实，先读取当前目录建立资料范围。'
   },
   nextAction: {
     action: 'hand',

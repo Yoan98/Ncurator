@@ -13,7 +13,6 @@ import {
   filterAiRunEventsByType
 } from '../testUtils'
 
-const sourcePath = 'existing-review.pptx'
 const html = `<section data-ppt-slide style="position:relative;width:1920px;height:1080px;background:#FFFFFF">
   <h1 style="position:absolute;left:140px;top:100px;width:1500px;height:110px;font-size:72px">季度复盘</h1>
   <p style="position:absolute;left:160px;top:300px;width:1450px;height:120px;font-size:38px">负责人：TBD</p>
@@ -31,6 +30,7 @@ describe('ai human mock-llm ppt backend', () => {
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
+        const sourcePath = path.join(runtime.workspaceRoot, 'existing-review.pptx')
         await createPptToolHarness(runtime).invoke<JsonObject>('ppt_edit', {
           sourcePath,
           actions: [{ type: 'insert_slide', html }]
@@ -98,7 +98,7 @@ describe('ai human mock-llm ppt backend', () => {
           userInput: '把已有季度复盘 PPT 的负责人改成 Alice，并确认。'
         })
         const presentation = await loadPresentation(
-          new Uint8Array(await fs.readFile(path.join(runtime.workspaceRoot, sourcePath)))
+          new Uint8Array(await fs.readFile(sourcePath))
         )
         return {
           output,

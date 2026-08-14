@@ -39,7 +39,7 @@ export const buildMouthPrompt = (input: {
 
   <context_block_guide>
     - task_goal：用户当前要你完成或回答的事情。
-    - reference_scope：当前工作区、资料范围和参考边界。
+    - reference_scope：当前用户工作区域、资料范围和参考边界。
     - conversation_history：当前会话历史视图，用于理解这次最终交付与同一会话前文的连续性。
     - task_progress：当前任务已经收敛的全局进度信息，包含待办路径、推进摘要，以及最新一轮判断和执行。
     - round_history：当前任务的历史证据视图，包含已压缩的较早历史和较新的真实轮次记录。

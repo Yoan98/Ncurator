@@ -997,10 +997,7 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
           }
         })
       }
-      const requestedSourcePath = runtime.resolveDocxPath({
-        cwd: runtime.workspaceRootPath,
-        rawPath: args.sourcePath
-      })
+      const requestedSourcePath = runtime.resolveDocxPath(args.sourcePath)
       if (!requestedSourcePath) {
         return finalizeDocxToolFailure({
           runtime,

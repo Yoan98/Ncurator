@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises'
+import path from 'node:path'
 import JSZip from 'jszip'
 import { describe, it } from 'vitest'
 import type { DocxApplyRecord } from '../../../../../src/shared/types'
@@ -48,33 +49,37 @@ describe('ai tool docx net diff backend', () => {
         const harness = createDocxToolHarness(runtime)
         try {
           harness.ctx.beginDocxApplyRun()
+          const chainPath = path.join(runtime.workspaceRoot, 'chain.docx')
+          const restoredPath = path.join(runtime.workspaceRoot, 'restored.docx')
+          const deletedPath = path.join(runtime.workspaceRoot, 'deleted.docx')
+          const serialChainPath = path.join(runtime.workspaceRoot, 'serial-chain.docx')
           await harness.invoke<DocxMutationResult>('docx_edit', {
-            sourcePath: 'chain.docx',
+            sourcePath: chainPath,
             actions: [{ type: 'replace_text', query: '版本 A', replace: '版本 B' }]
           })
           await harness.invoke<DocxMutationResult>('docx_edit', {
-            sourcePath: 'chain.docx',
+            sourcePath: chainPath,
             actions: [{ type: 'replace_text', query: '版本 B', replace: '版本 C' }]
           })
 
           await harness.invoke<DocxMutationResult>('docx_edit', {
-            sourcePath: 'restored.docx',
+            sourcePath: restoredPath,
             actions: [{ type: 'replace_text', query: '恢复 A', replace: '恢复 B' }]
           })
           await harness.invoke<DocxMutationResult>('docx_edit', {
-            sourcePath: 'restored.docx',
+            sourcePath: restoredPath,
             actions: [{ type: 'replace_text', query: '恢复 B', replace: '恢复 A' }]
           })
 
           await harness.invoke<DocxMutationResult>('docx_edit', {
-            sourcePath: 'deleted.docx',
+            sourcePath: deletedPath,
             actions: [{ type: 'replace_text', query: '删除 A', replace: '删除 B' }]
           })
           const deletedOutline = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
-            sourcePath: 'deleted.docx'
+            sourcePath: deletedPath
           })
           await harness.invoke<DocxMutationResult>('docx_edit', {
-            sourcePath: 'deleted.docx',
+            sourcePath: deletedPath,
             actions: [
               {
                 type: 'delete_blocks',
@@ -84,11 +89,11 @@ describe('ai tool docx net diff backend', () => {
           })
 
           const serialOutline = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
-            sourcePath: 'serial-chain.docx'
+            sourcePath: serialChainPath
           })
           const serialBlockId = findParagraphBlockIdByText(serialOutline.blocks, '串行 A')
           await harness.invoke<DocxMutationResult>('docx_edit', {
-            sourcePath: 'serial-chain.docx',
+            sourcePath: serialChainPath,
             actions: [
               {
                 type: 'replace_block',
@@ -193,7 +198,10 @@ describe('ai tool docx net diff backend', () => {
         const harness = createDocxToolHarness(runtime)
         try {
           harness.ctx.beginDocxApplyRun()
-          for (const sourcePath of ['generated-final.docx', 'generated-removed.docx']) {
+          const finalDocxPath = path.join(runtime.workspaceRoot, 'generated-final.docx')
+          const removedDocxPath = path.join(runtime.workspaceRoot, 'generated-removed.docx')
+          const tableDocxPath = path.join(runtime.workspaceRoot, 'generated-table.docx')
+          for (const sourcePath of [finalDocxPath, removedDocxPath]) {
             const outline = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
               sourcePath
             })
@@ -208,7 +216,7 @@ describe('ai tool docx net diff backend', () => {
                     position: 'after'
                   },
                   blocks: [
-                    docxParagraphNode(sourcePath.includes('final') ? '新增初稿' : '临时新增')
+                    docxParagraphNode(path.basename(sourcePath).includes('final') ? '新增初稿' : '临时新增')
                   ]
                 }
               ]
@@ -216,11 +224,11 @@ describe('ai tool docx net diff backend', () => {
           }
 
           const finalSearch = await harness.invoke<DocxSearchResult>('docx_search', {
-            sourcePath: 'generated-final.docx',
+            sourcePath: finalDocxPath,
             query: '新增初稿'
           })
           await harness.invoke<DocxMutationResult>('docx_edit', {
-            sourcePath: 'generated-final.docx',
+            sourcePath: finalDocxPath,
             actions: [
               {
                 type: 'replace_text',
@@ -232,11 +240,11 @@ describe('ai tool docx net diff backend', () => {
           })
 
           const removedSearch = await harness.invoke<DocxSearchResult>('docx_search', {
-            sourcePath: 'generated-removed.docx',
+            sourcePath: removedDocxPath,
             query: '临时新增'
           })
           await harness.invoke<DocxMutationResult>('docx_edit', {
-            sourcePath: 'generated-removed.docx',
+            sourcePath: removedDocxPath,
             actions: [
               {
                 type: 'delete_blocks',
@@ -246,10 +254,10 @@ describe('ai tool docx net diff backend', () => {
           })
 
           const tableOutline = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
-            sourcePath: 'generated-table.docx'
+            sourcePath: tableDocxPath
           })
           await harness.invoke<DocxMutationResult>('docx_edit', {
-            sourcePath: 'generated-table.docx',
+            sourcePath: tableDocxPath,
             actions: [
               {
                 type: 'insert_blocks',
@@ -263,11 +271,11 @@ describe('ai tool docx net diff backend', () => {
             ]
           })
           const tableCellSearch = await harness.invoke<DocxSearchResult>('docx_search', {
-            sourcePath: 'generated-table.docx',
+            sourcePath: tableDocxPath,
             query: '单元格初稿'
           })
           await harness.invoke<DocxMutationResult>('docx_edit', {
-            sourcePath: 'generated-table.docx',
+            sourcePath: tableDocxPath,
             actions: [
               {
                 type: 'update_table_cell',

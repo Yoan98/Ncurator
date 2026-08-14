@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises'
+import path from 'node:path'
 import { describe, it } from 'vitest'
 import {
   createDocxToolHarness,
@@ -28,7 +29,7 @@ describe('ai tool docx backend', () => {
       execute: async (runtime) => {
         const harness = createDocxToolHarness(runtime)
         try {
-          const sourcePath = 'generated-summary.docx'
+          const sourcePath = path.join(runtime.workspaceRoot, 'generated-summary.docx')
           const created = await harness.invoke<DocxCreateResult>('docx_edit', {
             sourcePath,
             actions: [
@@ -68,9 +69,8 @@ describe('ai tool docx backend', () => {
             sourcePath,
             query: '训练时间过久'
           })
-          const targetPath = `${runtime.workspaceRoot}/${sourcePath}`
           const targetExists = await fs
-            .access(targetPath)
+            .access(sourcePath)
             .then(() => true)
             .catch(() => false)
 

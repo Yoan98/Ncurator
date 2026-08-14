@@ -70,9 +70,6 @@ export const buildImageGenerationCapabilityTools = (
 
 export const imageGenerationToolFamily = createWorkspaceBoundToolFamily({
   familyId: 'image-generation',
-  descriptionForTool: () => 'Generate an image from SVG content.',
-  reason: 'image generation requires workspace binding before execution',
-  error: 'workspace is required for image generation',
   buildWorkspaceTools: (input) => buildImageGenerationCapabilityTools(input).tools
 })
 

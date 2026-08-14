@@ -1,110 +1,13 @@
-import { tool } from '@langchain/core/tools'
-import type { StructuredToolInterface } from '@langchain/core/tools'
-import type { z } from 'zod/v4'
 import { emitActivity } from '../../../../../utils/aiCapabilityUtils'
+import type { StructuredToolInterface } from '@langchain/core/tools'
 import type { AiEventDispatchContext, AiRunContext } from '../../../types'
-import { jsonObjectSchema } from '../../toolSchemas'
 import { listToolNamesByFamily } from '../registry'
-import { withToolLifecycle } from './lifecycle'
-import { createToolEventEmitter } from './toolEvents'
 import type {
   AiToolFamilyId,
   CapabilityActivityInput,
   ToolFamilyDefinition,
   WorkspaceCapabilityBuildInput
 } from '../types'
-
-export const buildWorkspaceRequiredResult = (error: string) => ({
-  ok: false,
-  code: 'workspace_required' as const,
-  error
-})
-
-export const createWorkspaceRequiredGuardTool = <TSchema extends z.ZodType>(input: {
-  name: string
-  description: string
-  schema: TSchema
-  ctx: AiEventDispatchContext
-  runId: string
-  taskId: string
-  reason: string
-  error: string
-}): StructuredToolInterface =>
-  tool(
-    async (args) => {
-      const toolEvents = createToolEventEmitter({
-        ctx: input.ctx,
-        runId: input.runId,
-        taskId: input.taskId,
-        stage: 'human_hand'
-      })
-
-      return await withToolLifecycle({
-        emitter: toolEvents,
-        toolName: input.name,
-        args: (args || {}) as Record<string, never>,
-        execute: async (session) => {
-          input.ctx.sendEvent({
-            type: 'workspace_required',
-            runId: input.runId,
-            taskId: input.taskId,
-            reason: input.reason,
-            requiredFields: ['workspaceId', 'rootPath'],
-            createdAt: Date.now(),
-            stage: 'human_hand'
-          })
-          const payload = buildWorkspaceRequiredResult(input.error)
-          const result = {
-            toolName: input.name,
-            ok: false,
-            code: 'workspace_required' as const,
-            data: payload
-          }
-          session.fail(input.error, undefined, result)
-          return payload
-        }
-      })
-    },
-    {
-      name: input.name,
-      description: input.description,
-      schema: input.schema
-    }
-  )
-
-export const buildWorkspaceBoundGuardedTools = <TSchema extends z.ZodType>(input: {
-  toolNames: string[]
-  workspaceRootPath?: string
-  descriptionForTool: (toolName: string) => string
-  schema: TSchema
-  ctx: AiEventDispatchContext
-  runId: string
-  taskId: string
-  reason: string
-  error: string
-  buildWorkspaceTools: (workspaceRootPath: string) => StructuredToolInterface[]
-}): StructuredToolInterface[] => {
-  const workspaceRootPath = String(input.workspaceRootPath || '').trim()
-  if (!workspaceRootPath) {
-    return input.toolNames.map((name) =>
-      createWorkspaceRequiredGuardTool({
-        name,
-        description: input.descriptionForTool(name),
-        schema: input.schema,
-        ctx: input.ctx,
-        runId: input.runId,
-        taskId: input.taskId,
-        reason: input.reason,
-        error: input.error
-      })
-    )
-  }
-
-  const toolNameSet = new Set(input.toolNames)
-  return input
-    .buildWorkspaceTools(workspaceRootPath)
-    .filter((toolItem) => toolNameSet.has(String(toolItem.name || '').trim()))
-}
 
 export const createWorkspaceCapabilityActivityEmitter = (input: {
   ctx: AiEventDispatchContext
@@ -125,40 +28,31 @@ export const createWorkspaceCapabilityActivityEmitter = (input: {
 
 export const createWorkspaceBoundToolFamily = (input: {
   familyId: AiToolFamilyId
-  descriptionForTool: (toolName: string) => string
-  reason: string
-  error: string
   buildWorkspaceTools: (
     buildInput: WorkspaceCapabilityBuildInput<AiRunContext>
   ) => StructuredToolInterface[]
 }): ToolFamilyDefinition => ({
   familyId: input.familyId,
   buildTools: ({ ctx, cache, runId, taskId }) => {
-    const toolNames = listToolNamesByFamily(input.familyId)
-    return buildWorkspaceBoundGuardedTools({
-      toolNames,
-      workspaceRootPath: ctx.workspace?.rootPath,
-      descriptionForTool: input.descriptionForTool,
-      schema: jsonObjectSchema.optional(),
-      ctx,
-      runId,
-      taskId,
-      reason: input.reason,
-      error: input.error,
-      buildWorkspaceTools: (workspaceRootPath) =>
-        input.buildWorkspaceTools({
+    const workspaceRootPath = ctx.workspace?.rootPath
+    if (!workspaceRootPath) {
+      throw new Error('AI 运行必须绑定工作区，当前请求缺少工作区根目录。')
+    }
+    const toolNameSet = new Set(listToolNamesByFamily(input.familyId))
+    return input
+      .buildWorkspaceTools({
+        ctx,
+        cache,
+        runId,
+        sessionId: ctx.sessionId,
+        taskId,
+        workspaceRootPath,
+        emitActivity: createWorkspaceCapabilityActivityEmitter({
           ctx,
-          cache,
           runId,
-          sessionId: ctx.sessionId,
-          taskId,
-          workspaceRootPath,
-          emitActivity: createWorkspaceCapabilityActivityEmitter({
-            ctx,
-            runId,
-            taskId
-          })
+          taskId
         })
-    })
+      })
+      .filter((toolItem) => toolNameSet.has(String(toolItem.name || '').trim()))
   }
 })

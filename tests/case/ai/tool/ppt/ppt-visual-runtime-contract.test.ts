@@ -28,7 +28,7 @@ describe('ai tool ppt visual backend', () => {
         )
         const harness = createPptToolHarness(runtime)
         const created = await harness.invoke<JsonObject>('ppt_edit', {
-          sourcePath: 'visual-runtime.pptx',
+          sourcePath: path.join(runtime.workspaceRoot, 'visual-runtime.pptx'),
           actions: [
             {
               type: 'insert_slide',
@@ -53,7 +53,7 @@ describe('ai tool ppt visual backend', () => {
         const createdSlides = (created.postWriteReadback as { slides?: Array<{ slideId: string }> })
           .slides!
         const inserted = await harness.invoke<JsonObject>('ppt_edit', {
-          sourcePath: 'visual-runtime.pptx',
+          sourcePath: path.join(runtime.workspaceRoot, 'visual-runtime.pptx'),
           actions: [
             {
               type: 'insert_slide',
@@ -70,7 +70,7 @@ describe('ai tool ppt visual backend', () => {
           inserted.postWriteReadback as { slides?: Array<{ slideId: string }> }
         ).slides![0]!.slideId
         const moved = await harness.invoke<JsonObject>('ppt_edit', {
-          sourcePath: 'visual-runtime.pptx',
+          sourcePath: path.join(runtime.workspaceRoot, 'visual-runtime.pptx'),
           actions: [
             {
               type: 'move_slide',
@@ -81,7 +81,7 @@ describe('ai tool ppt visual backend', () => {
           ]
         })
         const duplicated = await harness.invoke<JsonObject>('ppt_edit', {
-          sourcePath: 'visual-runtime.pptx',
+          sourcePath: path.join(runtime.workspaceRoot, 'visual-runtime.pptx'),
           actions: [
             {
               type: 'duplicate_slide',
@@ -100,7 +100,7 @@ describe('ai tool ppt visual backend', () => {
           ranges: [{ type: 'slide_index', fromSlideIndex: 1, toSlideIndex: 4 }]
         })
         const invalid = await harness.invoke<JsonObject>('ppt_edit', {
-          sourcePath: 'invalid.pptx',
+          sourcePath: path.join(runtime.workspaceRoot, 'invalid.pptx'),
           actions: [
             {
               type: 'insert_slide',

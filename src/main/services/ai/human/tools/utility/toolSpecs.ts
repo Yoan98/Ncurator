@@ -28,7 +28,6 @@ export const WAIT_TIME_TOOL_SPEC: HumanToolSpec<
   name: 'wait_time',
   familyId: 'utility',
   skillIds: ['utility'],
-  requiresWorkspace: false,
   inputSchema: WAIT_TIME_SCHEMA,
   outputSchema: WAIT_TIME_OUTPUT_SCHEMA,
   promptSpec: {
@@ -50,7 +49,6 @@ export const WAIT_FOR_USER_TAKEOVER_TOOL_SPEC: HumanToolSpec<
   name: 'wait_for_user_takeover',
   familyId: 'utility',
   skillIds: ['utility'],
-  requiresWorkspace: false,
   inputSchema: WAIT_FOR_USER_TAKEOVER_SCHEMA,
   outputSchema: WAIT_FOR_USER_TAKEOVER_OUTPUT_SCHEMA,
   promptSpec: {

@@ -1,3 +1,4 @@
+import path from 'node:path'
 import { describe, it } from 'vitest'
 import { createDocxToolHarness, writeTestDocxFile } from '../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
@@ -26,12 +27,12 @@ describe('ai tool docx backend', () => {
         const harness = createDocxToolHarness(runtime)
         try {
           const outline = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
-            sourcePath: 'long-tail-upgrade.docx',
+            sourcePath: path.join(runtime.workspaceRoot, 'long-tail-upgrade.docx'),
             ranges: [{ type: 'block_index', fromBlockIndex: 5098, toBlockIndex: 5107 }]
           })
           const tailBlockId = outline.blocks[outline.blocks.length - 1]?.blockId || ''
           const mutation = await harness.invoke<DocxMutationResult>('docx_edit', {
-            sourcePath: 'long-tail-upgrade.docx',
+            sourcePath: path.join(runtime.workspaceRoot, 'long-tail-upgrade.docx'),
             actions: [
               {
                 type: 'replace_text',
@@ -42,7 +43,7 @@ describe('ai tool docx backend', () => {
             ]
           })
           const search = await harness.invoke<DocxSearchResult>('docx_search', {
-            sourcePath: 'long-tail-upgrade.docx',
+            sourcePath: path.join(runtime.workspaceRoot, 'long-tail-upgrade.docx'),
             query: '尾部段落已经改写。',
             mode: 'literal'
           })

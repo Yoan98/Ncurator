@@ -154,7 +154,6 @@ export const WEB_CRAWL_TOOL_SPEC: HumanToolSpec<
   name: 'web_crawl',
   familyId: 'web',
   skillIds: ['web-browsing'],
-  requiresWorkspace: false,
   inputSchema: WEB_CRAWL_SCHEMA,
   outputSchema: WEB_CRAWL_OUTPUT_SCHEMA,
   promptSpec: {
@@ -174,7 +173,6 @@ export const WEB_SEARCH_TOOL_SPEC: HumanToolSpec<
   name: 'web_search',
   familyId: 'web',
   skillIds: ['web-browsing'],
-  requiresWorkspace: false,
   inputSchema: WEB_SEARCH_SCHEMA,
   outputSchema: WEB_SEARCH_OUTPUT_SCHEMA,
   promptSpec: {
@@ -193,7 +191,6 @@ export const BROWSER_USE_TOOL_SPEC: HumanToolSpec<
   name: 'browser_use',
   familyId: 'web',
   skillIds: ['web-browsing'],
-  requiresWorkspace: false,
   inputSchema: BROWSER_USE_SCHEMA,
   outputSchema: BROWSER_USE_OUTPUT_SCHEMA,
   promptSpec: {

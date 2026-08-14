@@ -1,3 +1,4 @@
+import path from 'node:path'
 import { describe, it } from 'vitest'
 import {
   createDocxToolHarness,
@@ -28,7 +29,7 @@ describe('ai tool docx backend', () => {
         const harness = createDocxToolHarness(runtime)
         try {
           const outline = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
-            sourcePath: 'multi-round-created.docx'
+            sourcePath: path.join(runtime.workspaceRoot, 'multi-round-created.docx')
           })
           const anchorBlockId =
             outline.blocks.find(
@@ -36,7 +37,7 @@ describe('ai tool docx backend', () => {
             )?.blockId || ''
 
           const insertParagraph = await harness.invoke<DocxMutationResult>('docx_edit', {
-            sourcePath: 'multi-round-created.docx',
+            sourcePath: path.join(runtime.workspaceRoot, 'multi-round-created.docx'),
             actions: [
               {
                 type: 'insert_blocks',

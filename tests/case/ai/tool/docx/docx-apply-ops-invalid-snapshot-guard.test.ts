@@ -74,11 +74,11 @@ describe('ai tool docx backend', () => {
         const harness = createDocxToolHarness(runtime)
         try {
           const initialSearch = await harness.invoke<DocxSearchResult>('docx_search', {
-            sourcePath: 'invalid-snapshot-source.docx',
+            sourcePath,
             query: 'Original invalid snapshot source.'
           })
           const initialRead = await harness.invoke<DocxReadResult>('docx_read_blocks', {
-            sourcePath: 'invalid-snapshot-source.docx',
+            sourcePath,
             range: { type: 'block_ids', blockIds: [initialSearch.matches[0]!.blockId] }
           })
           const edited = await harness.invoke<DocxMutationResult>('docx_edit', {

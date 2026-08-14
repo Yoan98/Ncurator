@@ -80,12 +80,11 @@ export const KB_SEARCH_TOOL_SPEC: HumanToolSpec<
   name: 'kb_search',
   familyId: 'kb',
   skillIds: ['kb-retrieval'],
-  requiresWorkspace: true,
   inputSchema: KB_SEARCH_SCHEMA,
   outputSchema: KB_SEARCH_OUTPUT_SCHEMA,
   promptSpec: {
     name: 'kb_search',
-    description: '在工作区知识库中按查询词或语义语句检索内容片段，并返回命中证据、来源文档与内容块信息。'
+    description: '在用户工作区域知识库中按查询词或语义语句检索内容片段，并返回命中证据、来源文档与内容块信息。'
   },
   resolveExecutionMeta: KB_EXECUTION_META
 }
@@ -99,12 +98,11 @@ export const KB_LIST_DOCUMENTS_TOOL_SPEC: HumanToolSpec<
   name: 'kb_list_documents',
   familyId: 'kb',
   skillIds: ['kb-retrieval'],
-  requiresWorkspace: true,
   inputSchema: KB_LIST_DOCUMENTS_SCHEMA,
   outputSchema: KB_LIST_DOCUMENTS_OUTPUT_SCHEMA,
   promptSpec: {
     name: 'kb_list_documents',
-    description: '查询工作区知识库中已建立索引的文档并支持按文档名过滤，并返回可检索文档的分页列表。'
+    description: '查询用户工作区域知识库中已建立索引的文档并支持按文档名过滤，并返回可检索文档的分页列表。'
   },
   resolveExecutionMeta: KB_EXECUTION_META
 }

@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises'
+import path from 'node:path'
 import { describe, it } from 'vitest'
 import JSZip from 'jszip'
 import type { DocxApplyRecord } from '../../../../../src/shared/types'
@@ -89,7 +90,7 @@ describe('ai tool docx backend', () => {
         try {
           harness.ctx.beginDocxApplyRun()
           const outline = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
-            sourcePath: 'mixed-format.docx',
+            sourcePath: path.join(runtime.workspaceRoot, 'mixed-format.docx'),
             ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 49 }]
           })
 

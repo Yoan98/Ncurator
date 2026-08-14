@@ -103,8 +103,7 @@ export const createMouthNode = (input: {
       ? parsedEvidenceReferences.data
       : undefined
     const evidenceReferences = await resolveEvidenceReferenceAccess({
-      references: pendingEvidenceReferences,
-      workspaceRootPath: input.ctx.workspace?.rootPath
+      references: pendingEvidenceReferences
     })
     const promptState: HumanState = {
       ...stateWithMouthRound,

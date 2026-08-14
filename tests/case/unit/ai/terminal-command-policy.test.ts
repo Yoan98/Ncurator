@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   analyzeTerminalCommand,
   analyzeTerminalCommandPolicy,
-  hasDetachedExecution
+  hasDetachedExecution,
+  resolveToolPath
 } from '../../../../src/main/services/ai/human/tools/terminal/commandPolicy'
 import { createTerminalRunToolSpec } from '../../../../src/main/services/ai/human/tools/terminal/toolSpecs'
 
@@ -227,5 +228,15 @@ describe('ai unit terminal dangerous-command policy', () => {
     expect(
       analyzeTerminalCommand({ command: 'echo hello', platform: 'macos' }).artifactCandidates
     ).toEqual([])
+  })
+
+  it('resolveToolPath accepts only absolute paths without any cwd joining', () => {
+    expect(resolveToolPath('/tmp/workspace/report.docx')).toBe('/tmp/workspace/report.docx')
+    expect(resolveToolPath('/tmp/../tmp/report.docx')).toBe('/tmp/report.docx')
+    expect(resolveToolPath('report.docx')).toBeNull()
+    expect(resolveToolPath('./report.docx')).toBeNull()
+    expect(resolveToolPath('notes/report.docx')).toBeNull()
+    expect(resolveToolPath('')).toBeNull()
+    expect(resolveToolPath('   ')).toBeNull()
   })
 })

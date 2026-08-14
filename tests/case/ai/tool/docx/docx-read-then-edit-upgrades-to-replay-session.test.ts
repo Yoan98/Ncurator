@@ -1,3 +1,4 @@
+import path from 'node:path'
 import { describe, it } from 'vitest'
 import { createDocxToolHarness, writeTestDocxFile } from '../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
@@ -22,10 +23,10 @@ describe('ai tool docx backend', () => {
         const harness = createDocxToolHarness(runtime)
         try {
           const outline = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
-            sourcePath: 'upgrade-edit.docx'
+            sourcePath: path.join(runtime.workspaceRoot, 'upgrade-edit.docx')
           })
           const mutation = await harness.invoke<DocxMutationResult>('docx_edit', {
-            sourcePath: 'upgrade-edit.docx',
+            sourcePath: path.join(runtime.workspaceRoot, 'upgrade-edit.docx'),
             actions: [
               {
                 type: 'replace_text',
@@ -36,7 +37,7 @@ describe('ai tool docx backend', () => {
             ]
           })
           const search = await harness.invoke<DocxSearchResult>('docx_search', {
-            sourcePath: 'upgrade-edit.docx',
+            sourcePath: path.join(runtime.workspaceRoot, 'upgrade-edit.docx'),
             query: '已经改写后的内容',
             mode: 'literal'
           })

@@ -1,3 +1,4 @@
+import path from 'node:path'
 import { describe, it } from 'vitest'
 import { createDocxToolHarness, writeTestDocxFile } from '../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
@@ -25,7 +26,7 @@ describe('ai tool docx backend', () => {
         const harness = createDocxToolHarness(runtime)
         try {
           const outline = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
-            sourcePath: 'working-draft-delete.docx',
+            sourcePath: path.join(runtime.workspaceRoot, 'working-draft-delete.docx'),
             ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 19 }]
           })
           const deleteBlockId =
@@ -34,7 +35,7 @@ describe('ai tool docx backend', () => {
             )?.blockId || ''
 
           const deleted = await harness.invoke<DocxMutationResult>('docx_edit', {
-            sourcePath: 'working-draft-delete.docx',
+            sourcePath: path.join(runtime.workspaceRoot, 'working-draft-delete.docx'),
             actions: [
               {
                 type: 'delete_blocks',

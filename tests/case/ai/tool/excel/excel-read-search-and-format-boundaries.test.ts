@@ -56,57 +56,59 @@ describe('ai tool excel read backend', () => {
           ['xlsx', 'xlsm', 'xltx', 'xltm'].map(
             async (extension) =>
               await harness.invoke<Record<string, unknown>>('excel_read_outline', {
-                sourcePath: `search.${extension}`
+                sourcePath: path.join(runtime.workspaceRoot, `search.${extension}`)
               })
           )
         )
         const table = await harness.invoke<Record<string, unknown>>('excel_search', {
-          sourcePath: 'search.xlsx',
+          sourcePath: path.join(runtime.workspaceRoot, 'search.xlsx'),
           query: 'RevenueTable'
         })
         const column = await harness.invoke<Record<string, unknown>>('excel_search', {
-          sourcePath: 'search.xlsx',
+          sourcePath: path.join(runtime.workspaceRoot, 'search.xlsx'),
           query: 'Amount'
         })
         const sheet = await harness.invoke<Record<string, unknown>>('excel_search', {
-          sourcePath: 'search.xlsx',
+          sourcePath: path.join(runtime.workspaceRoot, 'search.xlsx'),
           query: 'Data'
         })
         const scopedRegex = await harness.invoke<Record<string, unknown>>('excel_search', {
-          sourcePath: 'search.xlsx',
+          sourcePath: path.join(runtime.workspaceRoot, 'search.xlsx'),
           query: '^Q[12]$',
           mode: 'regex',
           scope: { sheetNames: ['Data'] }
         })
         const read = await harness.invoke<Record<string, unknown>>('excel_read_cells', {
-          sourcePath: 'search.xlsx',
+          sourcePath: path.join(runtime.workspaceRoot, 'search.xlsx'),
           ranges: [
             { sheetName: 'Data', range: '$A$2:B2' },
             { sheetName: 'Other', range: 'A1' }
           ]
         })
         const capped = await harness.invoke<Record<string, unknown>>('excel_search', {
-          sourcePath: 'large.xlsx',
+          sourcePath: path.join(runtime.workspaceRoot, 'large.xlsx'),
           query: 'hit-'
         })
         const failures = await Promise.all([
           harness.invoke<Record<string, unknown>>('excel_read_outline', {
-            sourcePath: '../outside.xlsx'
+            sourcePath: path.join(path.dirname(runtime.workspaceRoot), 'outside.xlsx')
           }),
-          harness.invoke<Record<string, unknown>>('excel_read_outline', { sourcePath: 'data.csv' }),
           harness.invoke<Record<string, unknown>>('excel_read_outline', {
-            sourcePath: 'broken.xlsx'
+            sourcePath: path.join(runtime.workspaceRoot, 'data.csv')
+          }),
+          harness.invoke<Record<string, unknown>>('excel_read_outline', {
+            sourcePath: path.join(runtime.workspaceRoot, 'broken.xlsx')
           }),
           harness.invoke<Record<string, unknown>>('excel_read_cells', {
-            sourcePath: 'search.xlsx',
+            sourcePath: path.join(runtime.workspaceRoot, 'search.xlsx'),
             ranges: [{ sheetName: 'Missing', range: 'A1' }]
           }),
           harness.invoke<Record<string, unknown>>('excel_read_cells', {
-            sourcePath: 'search.xlsx',
+            sourcePath: path.join(runtime.workspaceRoot, 'search.xlsx'),
             ranges: [{ sheetName: 'Data', range: 'B2:A1' }]
           }),
           harness.invoke<Record<string, unknown>>('excel_search', {
-            sourcePath: 'search.xlsx',
+            sourcePath: path.join(runtime.workspaceRoot, 'search.xlsx'),
             query: '[',
             mode: 'regex'
           })

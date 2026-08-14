@@ -5,9 +5,6 @@ import { terminalSessionManager } from './TerminalSessionManager'
 
 export const terminalToolFamily = createWorkspaceBoundToolFamily({
   familyId: 'terminal',
-  descriptionForTool: () => 'Use a persistent terminal inside workspace.',
-  reason: 'terminal_exec requires workspace binding before execution',
-  error: 'workspace is required for terminal_exec',
   buildWorkspaceTools: ({
     ctx,
     cache,

@@ -1,3 +1,4 @@
+import path from 'node:path'
 import { describe, it } from 'vitest'
 import { createDocxToolHarness, writeTestDocxFile } from '../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
@@ -27,7 +28,7 @@ describe('ai tool docx backend', () => {
         const harness = createDocxToolHarness(runtime)
         try {
           return await harness.invoke<DocxOutlineResult>('docx_read_outline', {
-            sourcePath: 'outline-pagination.docx',
+            sourcePath: path.join(runtime.workspaceRoot, 'outline-pagination.docx'),
             ranges: [{ type: 'block_index', fromBlockIndex: 70, toBlockIndex: 79 }]
           })
         } finally {

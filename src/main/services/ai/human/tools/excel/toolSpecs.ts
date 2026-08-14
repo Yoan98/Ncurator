@@ -38,7 +38,6 @@ const writeMeta = createStaticExecutionMetaResolver({
 export const EXCEL_READ_OUTLINE_TOOL_SPEC = {
   name: 'excel_read_outline',
   familyId: 'excel',
-  requiresWorkspace: true,
   skillIds: ['excel-read'],
   inputSchema: excelReadOutlineSchema,
   outputSchema: excelReadOutlineOutputSchema,
@@ -57,7 +56,6 @@ export const EXCEL_READ_OUTLINE_TOOL_SPEC = {
 export const EXCEL_SEARCH_TOOL_SPEC = {
   name: 'excel_search',
   familyId: 'excel',
-  requiresWorkspace: true,
   skillIds: ['excel-read'],
   inputSchema: excelSearchSchema,
   outputSchema: excelSearchOutputSchema,
@@ -76,7 +74,6 @@ export const EXCEL_SEARCH_TOOL_SPEC = {
 export const EXCEL_READ_CELLS_TOOL_SPEC = {
   name: 'excel_read_cells',
   familyId: 'excel',
-  requiresWorkspace: true,
   skillIds: ['excel-read'],
   inputSchema: excelReadCellsSchema,
   outputSchema: excelReadCellsOutputSchema,
@@ -95,7 +92,6 @@ export const EXCEL_READ_CELLS_TOOL_SPEC = {
 export const EXCEL_EDIT_TOOL_SPEC = {
   name: 'excel_edit',
   familyId: 'excel',
-  requiresWorkspace: true,
   skillIds: ['excel-write'],
   inputSchema: excelEditSchema,
   outputSchema: excelEditOutputSchema,

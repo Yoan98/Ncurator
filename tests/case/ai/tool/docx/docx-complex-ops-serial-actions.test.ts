@@ -1,3 +1,4 @@
+import path from 'node:path'
 import { describe, it } from 'vitest'
 import {
   createDocxToolHarness,
@@ -63,8 +64,9 @@ describe('ai tool docx backend', () => {
 
         const harness = createDocxToolHarness(runtime)
         try {
+          const sourcePath = path.join(runtime.workspaceRoot, 'complex-ops.docx')
           const outline = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
-            sourcePath: 'complex-ops.docx',
+            sourcePath,
             ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 49 }]
           })
 
@@ -84,7 +86,7 @@ describe('ai tool docx backend', () => {
           const ownerCellBlockId = findTableCellBlockIdByText(outline.blocks, 'Alice')
 
           const serialEdit = await harness.invoke<DocxMutationResult>('docx_edit', {
-            sourcePath: 'complex-ops.docx',
+            sourcePath,
             actions: [
               {
                 type: 'replace_text',
@@ -121,15 +123,15 @@ describe('ai tool docx backend', () => {
             ]
           })
           const searchAfter = await harness.invoke<DocxSearchResult>('docx_search', {
-            sourcePath: 'complex-ops.docx',
+            sourcePath,
             query: 'Inserted after anchor.'
           })
           const readAfter = await harness.invoke<DocxReadResult>('docx_read_blocks', {
-            sourcePath: 'complex-ops.docx',
+            sourcePath,
             range: { type: 'block_ids', blockIds: [searchAfter.matches[0]!.blockId] }
           })
           const finalOutline = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
-            sourcePath: 'complex-ops.docx',
+            sourcePath,
             ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 79 }]
           })
 

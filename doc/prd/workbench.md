@@ -498,6 +498,7 @@
   - `WB-APPLY-002-AC5` 同一次 AI Run 对同一个 pptx 的多次编辑只生成一条修改记录；PPT Diff 固定比较本 Run 第一次接触文件时的状态和 Run 完成后的最终状态，工具调用只用于识别页面、元素和真实移动，不直接累加操作次数。
   - `WB-APPLY-002-AC6` 创建或修改 `xlsx` 后，正式路径立即包含最终净工作簿并生成一条修改记录；同一次 AI Run 对同一路径连续编辑时保持首次写入前基线，不重复生成记录。
   - `WB-APPLY-002-AC7` `docx_edit`、`ppt_edit` 和 `excel_edit` 统一使用 `sourcePath + actions[]`；目标不存在时由编辑 Action 直接创建，不再提供独立的文档或演示文稿创建 Action。
+  - `WB-APPLY-002-AC7-1` 所有文件工具（docx / ppt / excel / pdf / text-file / image）的 `sourcePath`、`outputPath`、`path` 必须是本机绝对路径；系统不做任何路径拼接，相对路径直接返回错误，AI 需自行改为绝对路径后再调用。
   - `WB-APPLY-002-AC8` `docx_edit.insert_blocks` 使用可选 `location:{blockId,position}`；传入时在目标 block 前后插入，不传时统一追加到正文末尾。旧 `position + anchorBlockId` 参数无效。
   - `WB-APPLY-002-AC9` DOCX 详细读取使用严格递归语义树，按真实顺序保留 `paragraph / run / text / tab / break / hyperlink / content_control / revision / field / table / table_row / table_cell / visual` 的归属关系；详细树中的正文只存在于叶子 `text` 节点，不重复返回 paragraph、table 或 cell 的派生文本和行列统计。
   - `WB-APPLY-002-AC10` DOCX visual 类型固定为 `image / chart / diagram / shape / embedded_object`。详细读取返回 visualId；outline 只在存在视觉内容时返回 count 和 kinds，不展开视觉节点。

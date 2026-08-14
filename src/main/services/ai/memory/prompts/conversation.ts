@@ -23,7 +23,7 @@ export const buildConversationMemoryPrompt = (input: {
 
   <output_example>
 {
-  "summary": "用户正在准备本周风险周报，偏好基于工作区资料且不覆盖原文件。延续对象：一份待确认风险周报草稿。当前状态：草稿已生成，仍缺负责人确认。"
+  "summary": "用户正在准备本周风险周报，偏好基于用户工作区域资料且不覆盖原文件。延续对象：一份待确认风险周报草稿。当前状态：草稿已生成，仍缺负责人确认。"
 }
   </output_example>
 </system>

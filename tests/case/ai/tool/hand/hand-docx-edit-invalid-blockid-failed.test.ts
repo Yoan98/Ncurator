@@ -1,4 +1,5 @@
 import { describe, it } from 'vitest'
+import path from 'node:path'
 import { createHandNode } from '../../../../../src/main/services/ai/human/node/handNode'
 import { ensureSkillTools } from '../../../../../src/main/services/ai/human/node/learningNode/skillLoader'
 import { createHumanRuntimeCache } from '../../../../../src/main/services/ai/human/node/utils/runtimeCache'
@@ -54,7 +55,7 @@ describe('ai tool hand backend', () => {
                   {
                     toolName: 'docx_edit',
                     args: {
-                      sourcePath: 'invalid-blockid.docx',
+                      sourcePath: path.join(runtime.workspaceRoot, 'invalid-blockid.docx'),
                       actions: [
                         {
                           type: 'insert_blocks',
@@ -91,7 +92,7 @@ describe('ai tool hand backend', () => {
             toolResult.ok === false &&
             hint?.code === 'hand_docx_edit_failed' &&
             hint.detail.toolName === 'docx_edit' &&
-            hint.detail.sourcePath === 'invalid-blockid.docx' &&
+            hint.detail.sourcePath === path.join(runtime.workspaceRoot, 'invalid-blockid.docx') &&
             hint.detail.action === 'insert_blocks' &&
             hint.detail.error.includes('stale or unknown docx blockId'),
           {

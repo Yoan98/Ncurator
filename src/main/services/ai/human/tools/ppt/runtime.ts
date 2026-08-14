@@ -303,8 +303,6 @@ const isLikelyImageBytes = (bytes: Uint8Array): boolean => {
 
 const resolveAssetBytes = async (input: {
   rawPath: string
-  sourcePath: string
-  workspaceRootPath: string
 }): Promise<Uint8Array> => {
   const data = decodeDataUrl(input.rawPath)
   if (data) return data
@@ -328,10 +326,7 @@ const resolveAssetBytes = async (input: {
       throw new Error(`无效的本地 file URL: ${input.rawPath}`)
     }
   }
-  const resolved = resolveToolPath({
-    rawPath,
-    cwd: path.dirname(input.sourcePath)
-  })
+  const resolved = resolveToolPath(rawPath)
   if (!resolved) throw new Error(`资源路径无效: ${input.rawPath}`)
   return new Uint8Array(await fs.readFile(resolved))
 }
@@ -539,9 +534,7 @@ const addCompiledElement = async (input: {
     })
   } else {
     bytes = await resolveAssetBytes({
-      rawPath: input.element.src || '',
-      sourcePath: input.document.sourcePath,
-      workspaceRootPath: input.workspaceRootPath
+      rawPath: input.element.src || ''
     })
     const extension = /^https?:\/\//i.test(input.element.src || '')
       ? 'png'
@@ -860,9 +853,7 @@ const resolveAndPersistAsset = async (input: {
   workspaceRootPath: string
 }): Promise<Uint8Array> => {
   const bytes = await resolveAssetBytes({
-    rawPath: input.rawPath,
-    sourcePath: input.document.sourcePath,
-    workspaceRootPath: input.workspaceRootPath
+    rawPath: input.rawPath
   })
   await persistMedia({
     document: input.document,
@@ -1143,10 +1134,7 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
   const workspaceRootPath = path.resolve(input.workspaceRootPath)
 
   const resolvePptPath = (rawPath: string): string => {
-    const resolved = resolveToolPath({
-      rawPath,
-      cwd: workspaceRootPath
-    })
+    const resolved = resolveToolPath(rawPath)
     if (!resolved || !resolved.toLowerCase().endsWith('.pptx')) {
       throw new Error('sourcePath 必须是 .pptx 文件')
     }

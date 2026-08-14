@@ -1,3 +1,4 @@
+import path from 'node:path'
 import { describe, it } from 'vitest'
 import {
   createDocxToolHarness,
@@ -34,7 +35,7 @@ describe('ai tool docx backend', () => {
         const harness = createDocxToolHarness(runtime)
         try {
           const before = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
-            sourcePath: 'serial-drift-insert.docx',
+            sourcePath: path.join(runtime.workspaceRoot, 'serial-drift-insert.docx'),
             ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 10 }]
           })
           const anchorA = findParagraphBlockIdByText(before.blocks, 'A')
@@ -109,7 +110,7 @@ describe('ai tool docx backend', () => {
         const harness = createDocxToolHarness(runtime)
         try {
           const before = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
-            sourcePath: 'serial-successor.docx',
+            sourcePath: path.join(runtime.workspaceRoot, 'serial-successor.docx'),
             ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 10 }]
           })
           const target = findParagraphBlockIdByText(before.blocks, 'Target old.')
@@ -180,7 +181,7 @@ describe('ai tool docx backend', () => {
         const harness = createDocxToolHarness(runtime)
         try {
           const before = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
-            sourcePath: 'serial-delete-failure.docx',
+            sourcePath: path.join(runtime.workspaceRoot, 'serial-delete-failure.docx'),
             ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 10 }]
           })
           const target = findParagraphBlockIdByText(before.blocks, 'Delete target')

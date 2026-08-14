@@ -23,7 +23,7 @@ describe('ai tool ppt professional editing', () => {
       runMode: 'single',
       execute: async (runtime) => {
         const harness = createPptToolHarness(runtime)
-        const sourcePath = 'professional-edit.pptx'
+        const sourcePath = path.join(runtime.workspaceRoot, 'professional-edit.pptx')
         await harness.invoke<JsonObject>('ppt_edit', {
           sourcePath,
           actions: [{ type: 'insert_slide', html: baseHtml }]
@@ -148,7 +148,7 @@ describe('ai tool ppt professional editing', () => {
         })
         const records = await harness.runtime.commitAll()
         const presentation = await loadPresentation(
-          new Uint8Array(await fs.readFile(path.join(runtime.workspaceRoot, sourcePath)))
+          new Uint8Array(await fs.readFile(sourcePath))
         )
         return {
           inserted,

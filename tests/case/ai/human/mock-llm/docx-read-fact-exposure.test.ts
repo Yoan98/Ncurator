@@ -1,3 +1,4 @@
+import path from 'node:path'
 import { describe, it } from 'vitest'
 import { writeTestDocxFile } from '../../../../harness/backend/aiToolHarness'
 import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
@@ -47,7 +48,7 @@ describe('ai human mock-llm backend', () => {
                 output: buildToolDecision({
                   toolName: 'docx_read_outline',
                   args: {
-                    sourcePath: 'docx-read-fact-exposure.docx',
+                    sourcePath: path.join(runtime.workspaceRoot, 'docx-read-fact-exposure.docx'),
                     ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 229 }]
                   },
                   summary: '提取文档结构'
@@ -65,7 +66,7 @@ describe('ai human mock-llm backend', () => {
                 return buildToolDecision({
                   toolName: 'docx_search',
                   args: {
-                    sourcePath: 'docx-read-fact-exposure.docx',
+                    sourcePath: path.join(runtime.workspaceRoot, 'docx-read-fact-exposure.docx'),
                     query: '反走样'
                   },
                   summary: '搜索反走样内容'
@@ -85,7 +86,7 @@ describe('ai human mock-llm backend', () => {
                 return buildToolDecision({
                   toolName: 'docx_read_blocks',
                   args: {
-                    sourcePath: 'docx-read-fact-exposure.docx',
+                    sourcePath: path.join(runtime.workspaceRoot, 'docx-read-fact-exposure.docx'),
                     range: { type: 'block_ids', blockIds: [searchResult.matches[0]!.blockId] }
                   },
                   summary: '精读搜索命中'

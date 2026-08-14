@@ -1,3 +1,4 @@
+import path from 'node:path'
 import { describe, it } from 'vitest'
 import { writeTestDocxFile } from '../../../../harness/backend/aiToolHarness'
 import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
@@ -47,7 +48,7 @@ describe('ai human mock-llm backend', () => {
                 output: buildToolDecision({
                   toolName: 'docx_search',
                   args: {
-                    sourcePath: 'alias-read.docx',
+                    sourcePath: path.join(runtime.workspaceRoot, 'alias-read.docx'),
                     query: '过拟合'
                   },
                   summary: '先按原词搜索'
@@ -61,7 +62,7 @@ describe('ai human mock-llm backend', () => {
                 return buildToolDecision({
                   toolName: 'docx_read_blocks',
                   args: {
-                    sourcePath: 'alias-read.docx',
+                    sourcePath: path.join(runtime.workspaceRoot, 'alias-read.docx'),
                     range: {
                       type: 'block_ids',
                       blockIds: [

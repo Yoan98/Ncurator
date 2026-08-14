@@ -167,7 +167,6 @@ export const generateImage = async (
 ): Promise<ImageGenerateOutput> => {
   const outputPath = await resolveSafeTextFilePath({
     sourcePath: args.outputPath,
-    workspaceRootPath: buildInput.workspaceRootPath,
     allowMissing: true
   })
   const outputBuffer = await renderImage(args)
@@ -176,7 +175,6 @@ export const generateImage = async (
     await fs.mkdir(path.dirname(outputPath), { recursive: true })
     await resolveSafeTextFilePath({
       sourcePath: args.outputPath,
-      workspaceRootPath: buildInput.workspaceRootPath,
       allowMissing: true
     })
 

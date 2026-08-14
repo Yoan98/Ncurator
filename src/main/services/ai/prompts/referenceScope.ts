@@ -49,8 +49,9 @@ const renderAttachment = (attachment: ChatAttachment, index: number): string => 
 export const renderReferenceScopeText = (scope: AiReferenceScope): string => {
   const selectedReferences = scope.selectedReferences || []
   const attachments = scope.attachments || []
-  const workspaceText = `工作区：
-- 根目录：${scope.workspace.rootPath}`
+  const workspaceText = `用户工作区域：
+- 根目录：${scope.workspace.rootPath}
+- 默认应优先在此目录内完成用户任务。`
 
   const fieldGuideText = `字段说明：
 - 类型：资料来源类型，目前支持本地文件、本地目录、网页资料。

@@ -18,19 +18,25 @@ afterEach(async () => {
 })
 
 describe('ai unit evidence reference access', () => {
-  it('resolves readable files and normalizes relative paths against the workspace', async () => {
+  it('marks relative paths unavailable and resolves absolute file paths', async () => {
     const workspace = await createTemporaryWorkspace()
     await mkdir(path.join(workspace, 'notes'))
-    await writeFile(path.join(workspace, 'notes', 'report.md'), '# report')
+    const absolutePath = path.join(workspace, 'notes', 'report.md')
+    await writeFile(absolutePath, '# report')
 
     const references = await resolveEvidenceReferenceAccess({
-      workspaceRootPath: workspace,
       references: [
         {
           label: 'report.md',
-          path: 'notes/report.md',
+          path: absolutePath,
           resourceType: 'file',
           usedFor: '支撑报告结论'
+        },
+        {
+          label: 'relative.md',
+          path: 'notes/report.md',
+          resourceType: 'file',
+          usedFor: '支撑相对路径结论'
         }
       ]
     })
@@ -38,10 +44,17 @@ describe('ai unit evidence reference access', () => {
     expect(references).toEqual([
       {
         label: 'report.md',
-        path: path.join(workspace, 'notes', 'report.md'),
+        path: absolutePath,
         resourceType: 'file',
         usedFor: '支撑报告结论',
         accessStatus: 'accessible'
+      },
+      {
+        label: 'relative.md',
+        path: 'notes/report.md',
+        resourceType: 'file',
+        usedFor: '支撑相对路径结论',
+        accessStatus: 'unavailable'
       }
     ])
   })
@@ -50,7 +63,6 @@ describe('ai unit evidence reference access', () => {
     const workspace = await createTemporaryWorkspace()
 
     const references = await resolveEvidenceReferenceAccess({
-      workspaceRootPath: workspace,
       references: [
         {
           label: '终端检查结果',

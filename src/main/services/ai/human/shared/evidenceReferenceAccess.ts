@@ -15,12 +15,12 @@ const resolveDefaultFetch = async (): Promise<FetchLike> => {
 }
 
 const resolveFileReference = async (
-  reference: BrainEvidenceReference,
-  workspaceRootPath: string | undefined
+  reference: BrainEvidenceReference
 ): Promise<HumanReference> => {
-  const resolvedPath = path.isAbsolute(reference.path)
-    ? path.normalize(reference.path)
-    : path.resolve(workspaceRootPath || process.cwd(), reference.path)
+  const resolvedPath = path.isAbsolute(reference.path) ? path.normalize(reference.path) : null
+  if (!resolvedPath) {
+    return { ...reference, path: reference.path, accessStatus: 'unavailable' }
+  }
 
   try {
     const fileStat = await stat(resolvedPath)
@@ -102,7 +102,6 @@ const resolveWebReference = async (
 
 export const resolveEvidenceReferenceAccess = async (input: {
   references: BrainEvidenceReference[] | undefined
-  workspaceRootPath?: string
   fetchImpl?: FetchLike
   webTimeoutMs?: number
 }): Promise<HumanReference[] | undefined> => {
@@ -119,7 +118,7 @@ export const resolveEvidenceReferenceAccess = async (input: {
       if (!resolution) {
         resolution =
           reference.resourceType === 'file'
-            ? resolveFileReference(reference, input.workspaceRootPath)
+            ? resolveFileReference(reference)
             : resolveWebReference(reference, fetchImpl, webTimeoutMs)
         resolutions.set(key, resolution)
       }

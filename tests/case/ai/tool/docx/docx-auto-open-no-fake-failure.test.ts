@@ -1,3 +1,4 @@
+import path from 'node:path'
 import { describe, it } from 'vitest'
 import { createDocxToolHarness, writeTestDocxFile } from '../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
@@ -33,7 +34,7 @@ describe('ai tool docx backend', () => {
         const harness = createDocxToolHarness(runtime)
         try {
           const searchResult = await harness.invoke<DocxSearchResult>('docx_search', {
-            sourcePath: 'auto-open.docx',
+            sourcePath: path.join(runtime.workspaceRoot, 'auto-open.docx'),
             query: '自动打开'
           })
           return {

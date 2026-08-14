@@ -22,8 +22,8 @@ describe('ai human mock-llm text backend', () => {
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
-        const sourcePath = 'notes.md'
-        const filePath = path.join(runtime.workspaceRoot, sourcePath)
+        const sourcePath = path.join(runtime.workspaceRoot, 'notes.md')
+        const filePath = sourcePath
         await fs.writeFile(filePath, '# Status\n\nOwner: TBD\n', 'utf8')
         const runner = createHumanTestRunner(runtime, {
           allowedToolNames: ['text_file_read', 'text_file_edit'],

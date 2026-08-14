@@ -39,7 +39,6 @@ const readExecutionMeta = createStaticExecutionMetaResolver({
 export const PPT_READ_OUTLINE_TOOL_SPEC = {
   name: 'ppt_read_outline',
   familyId: 'ppt',
-  requiresWorkspace: true,
   skillIds: ['ppt-read'],
   inputSchema: pptOutlineSchema,
   outputSchema: pptReadOutlineOutputSchema,
@@ -59,7 +58,6 @@ export const PPT_READ_OUTLINE_TOOL_SPEC = {
 export const PPT_READ_SLIDES_TOOL_SPEC = {
   name: 'ppt_read_slides',
   familyId: 'ppt',
-  requiresWorkspace: true,
   skillIds: ['ppt-read'],
   inputSchema: pptReadSlidesSchema,
   outputSchema: pptReadSlidesOutputSchema,
@@ -79,7 +77,6 @@ export const PPT_READ_SLIDES_TOOL_SPEC = {
 export const PPT_SEARCH_TOOL_SPEC = {
   name: 'ppt_search',
   familyId: 'ppt',
-  requiresWorkspace: true,
   skillIds: ['ppt-read'],
   inputSchema: pptSearchSchema,
   outputSchema: pptSearchOutputSchema,
@@ -99,7 +96,6 @@ export const PPT_SEARCH_TOOL_SPEC = {
 export const PPT_READ_VISUALS_TOOL_SPEC = {
   name: 'ppt_read_visuals',
   familyId: 'ppt',
-  requiresWorkspace: true,
   skillIds: ['ppt-read'],
   inputSchema: pptReadVisualsSchema,
   outputSchema: visualRecognitionOutputSchema,
@@ -119,7 +115,6 @@ export const PPT_READ_VISUALS_TOOL_SPEC = {
 export const PPT_EDIT_TOOL_SPEC = {
   name: 'ppt_edit',
   familyId: 'ppt',
-  requiresWorkspace: true,
   skillIds: ['ppt-write'],
   inputSchema: pptEditSchema,
   outputSchema: pptEditOutputSchema,
@@ -153,7 +148,7 @@ CSS 使用：
 - 必须避免大片无意义留白、文字过密、图片过小、单一深色满版和重复卡片堆叠。
 图片规范：
 - 图片必须使用 img 元素。
-- 允许使用工作区本地图片和远程图片地址。
+- 允许使用用户工作区域本地图片和远程图片地址。
 - 远程图片会在处理时尝试下载并打包；下载失败时必须保留原图片的位置、大小和可转换样式，并使用相同尺寸的占位图替代，不得因此使整个 PPT 操作失败。`
   },
   resolveExecutionMeta: createStaticExecutionMetaResolver({

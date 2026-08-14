@@ -170,7 +170,7 @@ describe('ai unit ppt tool contract', () => {
       'data-ppt-element',
       '禁止使用 CSS 渐变',
       '任何可见文字不得低于 24px',
-      '允许使用工作区本地图片和远程图片地址',
+      '允许使用用户工作区域本地图片和远程图片地址',
       '使用相同尺寸的占位图替代'
     ]) {
       expect(description).toContain(requiredRule)

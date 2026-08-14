@@ -121,8 +121,5 @@ export const buildExcelCapabilityTools = (input: ExcelCapabilityToolsInput) => {
 
 export const excelToolFamily = createWorkspaceBoundToolFamily({
   familyId: 'excel',
-  descriptionForTool: (name) => `Excel 工具暂不可用：${name}`,
-  reason: 'Excel capability requires workspace binding before execution',
-  error: 'workspace is required for Excel capability',
   buildWorkspaceTools: (input) => buildExcelCapabilityTools(input).tools
 })

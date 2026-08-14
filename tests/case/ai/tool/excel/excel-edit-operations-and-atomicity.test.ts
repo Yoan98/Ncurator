@@ -67,7 +67,7 @@ describe('ai tool excel edit backend', () => {
 
         const harness = createExcelToolHarness(runtime)
         const firstEdit = await harness.invoke<Record<string, unknown>>('excel_edit', {
-          sourcePath: 'operations.xlsx',
+          sourcePath: path.join(runtime.workspaceRoot, 'operations.xlsx'),
           actions: [
             {
               type: 'set_range',
@@ -94,7 +94,7 @@ describe('ai tool excel edit backend', () => {
           ]
         })
         const secondEdit = await harness.invoke<Record<string, unknown>>('excel_edit', {
-          sourcePath: 'operations.xlsx',
+          sourcePath: path.join(runtime.workspaceRoot, 'operations.xlsx'),
           actions: [
             { type: 'rename_sheet', sheetName: 'Summary', newName: 'Overview' },
             { type: 'merge_cells', sheetName: 'Overview', range: 'A1:B1' },
@@ -106,7 +106,7 @@ describe('ai tool excel edit backend', () => {
           ]
         })
         const noOp = await harness.invoke<Record<string, unknown>>('excel_edit', {
-          sourcePath: 'noop.xlsx',
+          sourcePath: path.join(runtime.workspaceRoot, 'noop.xlsx'),
           actions: [
             { type: 'set_cell', sheetName: 'Data', address: 'A1', value: 'same' },
             { type: 'delete_cell', sheetName: 'Data', address: 'C3' },
@@ -114,26 +114,26 @@ describe('ai tool excel edit backend', () => {
           ]
         })
         const deleteLastSheet = await harness.invoke<Record<string, unknown>>('excel_edit', {
-          sourcePath: 'noop.xlsx',
+          sourcePath: path.join(runtime.workspaceRoot, 'noop.xlsx'),
           actions: [{ type: 'delete_sheet', sheetName: 'Data' }]
         })
         const baselineFirst = await harness.invoke<Record<string, unknown>>('excel_edit', {
-          sourcePath: 'baseline.xlsx',
+          sourcePath: path.join(runtime.workspaceRoot, 'baseline.xlsx'),
           actions: [{ type: 'set_cell', sheetName: 'Data', address: 'A1', value: 2 }]
         })
         const baselineSecond = await harness.invoke<Record<string, unknown>>('excel_edit', {
-          sourcePath: 'baseline.xlsx',
+          sourcePath: path.join(runtime.workspaceRoot, 'baseline.xlsx'),
           actions: [{ type: 'set_cell', sheetName: 'Data', address: 'B1', value: 20 }]
         })
         await harness.invoke<Record<string, unknown>>('excel_edit', {
-          sourcePath: 'conflict.xlsx',
+          sourcePath: path.join(runtime.workspaceRoot, 'conflict.xlsx'),
           actions: [{ type: 'set_cell', sheetName: 'Data', address: 'A1', value: 2 }]
         })
         const external = new ExcelJS.Workbook()
         external.addWorksheet('Data').getCell('A1').value = 99
         await fs.writeFile(conflictFile.filePath, Buffer.from(await external.xlsx.writeBuffer()))
         const conflict = await harness.invoke<Record<string, unknown>>('excel_edit', {
-          sourcePath: 'conflict.xlsx',
+          sourcePath: path.join(runtime.workspaceRoot, 'conflict.xlsx'),
           actions: [{ type: 'set_cell', sheetName: 'Data', address: 'A1', value: 3 }]
         })
 
@@ -162,7 +162,7 @@ describe('ai tool excel edit backend', () => {
         let rollbackError = ''
         try {
           await rollbackRuntime.edit({
-            sourcePath: 'rollback.xlsx',
+            sourcePath: rollbackPath,
             actions: [{ type: 'set_cell', sheetName: 'Data', address: 'A1', value: 'after' }]
           })
         } catch (error) {

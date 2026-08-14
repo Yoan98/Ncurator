@@ -171,8 +171,5 @@ export const buildPptCapabilityTools = (input: Parameters<typeof createPptToolRu
 
 export const pptToolFamily = createWorkspaceBoundToolFamily({
   familyId: 'ppt',
-  descriptionForTool: (name) => `PPT 工具暂不可用：${name}`,
-  reason: 'ppt capability requires workspace binding before execution',
-  error: 'workspace is required for ppt capability',
   buildWorkspaceTools: (input) => buildPptCapabilityTools(input).tools
 })

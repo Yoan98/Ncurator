@@ -28,12 +28,12 @@ describe('ai tool docx backend', () => {
           const beforeOutline = await harness.invoke<{
             blocks: Array<{ blockId: string; type: string; text: string }>
           }>('docx_read_outline', {
-            sourcePath: 'already-exists.docx',
+            sourcePath: existingPath,
             ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 20 }]
           })
           const firstBlockId = beforeOutline.blocks[0]!.blockId
           const edited = await harness.invoke<Record<string, unknown>>('docx_edit', {
-            sourcePath: 'already-exists.docx',
+            sourcePath: existingPath,
             actions: [
               {
                 type: 'insert_blocks',
@@ -50,7 +50,7 @@ describe('ai tool docx backend', () => {
           const outline = await harness.invoke<{
             blocks: Array<{ type: string; text: string }>
           }>('docx_read_outline', {
-            sourcePath: 'already-exists.docx',
+            sourcePath: existingPath,
             ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 20 }]
           })
           const afterBytes = await fs.readFile(existingPath)

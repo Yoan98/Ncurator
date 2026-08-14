@@ -114,14 +114,10 @@ export const isPathInsideRoot = (candidatePath: string, rootPath: string) => {
   return rel === '' || (!rel.startsWith('..') && !pathApi.isAbsolute(rel))
 }
 
-export const resolveToolPath = (input: {
-  rawPath: string
-  cwd: string
-}): string | null => {
-  const raw = String(input.rawPath || '').trim()
-  if (!raw) return null
-  const base = path.isAbsolute(raw) ? raw : path.resolve(input.cwd, raw)
-  return path.resolve(base)
+export const resolveToolPath = (rawPath: string): string | null => {
+  const raw = String(rawPath || '').trim()
+  if (!raw || !path.isAbsolute(raw)) return null
+  return path.resolve(raw)
 }
 
 const extractRedirectionPaths = (tokens: string[]): string[] => {

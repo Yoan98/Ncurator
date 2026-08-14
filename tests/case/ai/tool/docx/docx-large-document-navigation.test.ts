@@ -1,3 +1,4 @@
+import path from 'node:path'
 import { describe, it } from 'vitest'
 import { createDocxToolHarness, writeTestDocxFile } from '../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
@@ -36,15 +37,15 @@ describe('ai tool docx backend', () => {
         const harness = createDocxToolHarness(runtime)
         try {
           const outline = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
-            sourcePath: 'large-navigation.docx',
+            sourcePath: path.join(runtime.workspaceRoot, 'large-navigation.docx'),
             ranges: [{ type: 'block_index', fromBlockIndex: 70, toBlockIndex: 79 }]
           })
           const search = await harness.invoke<DocxSearchResult>('docx_search', {
-            sourcePath: 'large-navigation.docx',
+            sourcePath: path.join(runtime.workspaceRoot, 'large-navigation.docx'),
             query: 'target keyword'
           })
           const read = await harness.invoke<DocxReadResult>('docx_read_blocks', {
-            sourcePath: 'large-navigation.docx',
+            sourcePath: path.join(runtime.workspaceRoot, 'large-navigation.docx'),
             range: { type: 'block_ids', blockIds: [search.matches[0]!.blockId] }
           })
 

@@ -73,7 +73,6 @@ export const TEXT_FILE_READ_TOOL_SPEC: HumanToolSpec<
   name: 'text_file_read',
   familyId: 'text-file',
   skillIds: ['text-file'],
-  requiresWorkspace: true,
   inputSchema: TEXT_FILE_READ_SCHEMA,
   outputSchema: TEXT_FILE_READ_OUTPUT_SCHEMA,
   promptSpec: {
@@ -96,7 +95,6 @@ export const TEXT_FILE_EDIT_TOOL_SPEC: HumanToolSpec<
   name: 'text_file_edit',
   familyId: 'text-file',
   skillIds: ['text-file'],
-  requiresWorkspace: true,
   inputSchema: TEXT_FILE_EDIT_SCHEMA,
   outputSchema: TEXT_FILE_EDIT_OUTPUT_SCHEMA,
   promptSpec: {

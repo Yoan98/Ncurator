@@ -13,7 +13,6 @@ export const docxResultCodeSchema = z.enum([
   'failed',
   'invalid_input',
   'approval_denied',
-  'workspace_required',
   'result_too_large'
 ])
 

@@ -35,7 +35,7 @@ describe('ai tool text-file backend', () => {
         await fs.mkdir(path.dirname(sourcePath), { recursive: true })
         await fs.writeFile(sourcePath, original, 'utf-8')
         const createResult = await harness.invoke<string>('text_file_edit', {
-          sourcePath: 'notes/generated.txt',
+          sourcePath: path.join(runtime.workspaceRoot, 'notes', 'generated.txt'),
           action: 'create',
           content: 'generated\n'
         })
@@ -45,12 +45,12 @@ describe('ai tool text-file backend', () => {
           endLine: number
           totalLines: number
         }>('text_file_read', {
-          sourcePath: 'src/config.ts',
+          sourcePath,
           startLine: 2,
           lineCount: 2
         })
         const editResult = await harness.invoke<string>('text_file_edit', {
-          sourcePath: 'src/config.ts',
+          sourcePath,
           action: 'edit',
           edits: [
             { oldText: 'const timeout = 1000', newText: 'const timeout = 3000' },
@@ -58,7 +58,7 @@ describe('ai tool text-file backend', () => {
           ]
         })
         const replaceAllResult = await harness.invoke<string>('text_file_edit', {
-          sourcePath: 'src/config.ts',
+          sourcePath,
           action: 'replaceAll',
           oldText: 'OLD_API_URL',
           newText: 'API_BASE_URL'
@@ -89,13 +89,16 @@ describe('ai tool text-file backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.createResult === 'Created file: notes/generated.txt.' &&
+          result.createResult ===
+            `Created file: ${path.join(runtime.workspaceRoot, 'notes', 'generated.txt')}.` &&
             result.readResult.content === 'const timeout = 1000\nconst filler0 = 0' &&
             result.readResult.startLine === 2 &&
             result.readResult.endLine === 3 &&
             result.readResult.totalLines === 12 &&
-            result.editResult === 'Applied 2 edits to src/config.ts.' &&
-            result.replaceAllResult === 'Replaced 2 occurrences in src/config.ts.' &&
+            result.editResult ===
+              `Applied 2 edits to ${path.join(runtime.workspaceRoot, 'src', 'config.ts')}.` &&
+            result.replaceAllResult ===
+              `Replaced 2 occurrences in ${path.join(runtime.workspaceRoot, 'src', 'config.ts')}.` &&
             result.finalContent.includes('const API_BASE_URL') &&
             result.finalContent.includes('fallback = API_BASE_URL') &&
             result.finalContent.includes('timeout = 3000') &&
@@ -137,7 +140,7 @@ describe('ai tool text-file backend', () => {
         let duplicateError = ''
         try {
           await harness.invoke('text_file_edit', {
-            sourcePath: 'keywords.txt',
+            sourcePath: path.join(runtime.workspaceRoot, 'keywords.txt'),
             action: 'edit',
             edits: [{ oldText: 'key=aa', newText: 'key=bb' }]
           })
@@ -146,7 +149,7 @@ describe('ai tool text-file backend', () => {
         }
         const afterFailedEdit = await fs.readFile(sourcePath)
         const replaceResult = await harness.invoke<string>('text_file_edit', {
-          sourcePath: 'keywords.txt',
+          sourcePath: path.join(runtime.workspaceRoot, 'keywords.txt'),
           action: 'replaceAll',
           oldText: 'aa',
           newText: 'aaa'
@@ -155,7 +158,7 @@ describe('ai tool text-file backend', () => {
         let noMatchError = ''
         try {
           await harness.invoke('text_file_edit', {
-            sourcePath: 'keywords.txt',
+            sourcePath: path.join(runtime.workspaceRoot, 'keywords.txt'),
             action: 'replaceAll',
             oldText: 'missing',
             newText: 'value'
@@ -165,7 +168,7 @@ describe('ai tool text-file backend', () => {
         }
         const afterNoMatch = await fs.readFile(sourcePath)
         const rewriteResult = await harness.invoke<string>('text_file_edit', {
-          sourcePath: 'keywords.txt',
+          sourcePath: path.join(runtime.workspaceRoot, 'keywords.txt'),
           action: 'rewrite',
           content: 'first\nsecond\n'
         })
@@ -192,12 +195,14 @@ describe('ai tool text-file backend', () => {
         runtime.assertThat(
           result.duplicateError.includes('Found 2 matches') &&
             result.unchangedAfterFailedEdit &&
-            result.replaceResult === 'Replaced 2 occurrences in keywords.txt.' &&
+            result.replaceResult ===
+              `Replaced 2 occurrences in ${path.join(runtime.workspaceRoot, 'keywords.txt')}.` &&
             result.hasBom &&
             result.preservedCrlf &&
             result.noMatchError.includes('No matches found') &&
             result.unchangedAfterNoMatch &&
-            result.rewriteResult === 'Rewrote file: keywords.txt.' &&
+            result.rewriteResult ===
+              `Rewrote file: ${path.join(runtime.workspaceRoot, 'keywords.txt')}.` &&
             result.rewritePreservedFormat,
           {
             name: 'text-file-atomic-guard-and-format-preservation',

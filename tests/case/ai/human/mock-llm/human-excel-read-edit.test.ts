@@ -28,8 +28,8 @@ describe('ai human mock-llm excel backend', () => {
           ['Item', 'Amount'],
           ['A', 12]
         ])
-        const sourcePath = 'human-report.xlsx'
-        const filePath = path.join(runtime.workspaceRoot, sourcePath)
+        const sourcePath = path.join(runtime.workspaceRoot, 'human-report.xlsx')
+        const filePath = sourcePath
         await fs.writeFile(filePath, Buffer.from(await workbook.xlsx.writeBuffer()))
         const runner = createHumanTestRunner(runtime, {
           allowedToolNames: [

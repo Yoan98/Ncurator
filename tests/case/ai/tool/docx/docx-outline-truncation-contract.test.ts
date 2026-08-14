@@ -1,3 +1,4 @@
+import path from 'node:path'
 import { describe, it } from 'vitest'
 import { createDocxToolHarness, writeTestDocxFile } from '../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
@@ -28,7 +29,7 @@ describe('ai tool docx backend', () => {
         const harness = createDocxToolHarness(runtime)
         try {
           const outline = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
-            sourcePath: 'outline-truncation.docx',
+            sourcePath: path.join(runtime.workspaceRoot, 'outline-truncation.docx'),
             ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 9 }]
           })
           const outlineEvent = filterAiRunEventsByType(

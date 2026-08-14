@@ -74,7 +74,6 @@ export const createTerminalRunToolSpec = (
   name: 'terminal_run',
   familyId: 'terminal',
   skillIds: ['terminal'],
-  requiresWorkspace: true,
   inputSchema: TERMINAL_RUN_SCHEMA,
   outputSchema: TERMINAL_RUN_OUTPUT_SCHEMA,
   promptSpec: {
@@ -97,7 +96,6 @@ export const TERMINAL_READ_TOOL_SPEC: TerminalReadToolSpec = {
   name: 'terminal_read',
   familyId: 'terminal',
   skillIds: ['terminal'],
-  requiresWorkspace: true,
   inputSchema: TERMINAL_READ_SCHEMA,
   outputSchema: TERMINAL_READ_OUTPUT_SCHEMA,
   promptSpec: {
@@ -112,7 +110,6 @@ export const TERMINAL_STOP_TOOL_SPEC: TerminalStopToolSpec = {
   name: 'terminal_stop',
   familyId: 'terminal',
   skillIds: ['terminal'],
-  requiresWorkspace: true,
   inputSchema: TERMINAL_STOP_SCHEMA,
   outputSchema: TERMINAL_STOP_OUTPUT_SCHEMA,
   promptSpec: {

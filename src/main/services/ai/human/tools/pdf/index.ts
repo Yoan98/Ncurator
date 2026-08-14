@@ -11,9 +11,6 @@ export const buildPdfCapabilityTools = (input: Parameters<typeof createPdfToolRu
 
 export const pdfToolFamily = createWorkspaceBoundToolFamily({
   familyId: 'pdf',
-  descriptionForTool: (name) => `pdf tool: ${name}`,
-  reason: 'pdf capability requires workspace binding before execution',
-  error: 'workspace is required for pdf capability',
   buildWorkspaceTools: (input) => {
     return buildPdfCapabilityTools({
       ...input,

@@ -9,7 +9,6 @@ import type {
   WorkspaceSource,
   WorkspaceTreeEntry
 } from '../../../shared/types'
-import path from 'node:path'
 
 export const getWorkspaceScopeKey = (
   node: Pick<WorkspaceTreeEntry, 'kind' | 'relative_path'>
@@ -150,50 +149,6 @@ export const buildWorkspaceReferenceItemsFromCurrentTree = (input: {
     entries: input.entries,
     records: currentRecords
   })
-}
-
-export const buildWorkspaceReferenceItemsFromRecords = (input: {
-  workspace: WorkspaceSource
-  records: WorkspaceFileIndexRecord[]
-}): SelectedReference[] => {
-  const { workspace, records } = input
-  const directoryPaths = new Set<string>()
-  const entries: WorkspaceTreeEntry[] = []
-  for (const record of records) {
-    const segments = record.relative_path.split('/').filter(Boolean)
-    for (let index = 1; index < segments.length; index += 1) {
-      directoryPaths.add(segments.slice(0, index).join('/'))
-    }
-    entries.push({
-      id: `${workspace.id}:file:${record.relative_path}`,
-      workspace_id: workspace.id,
-      parent_id: undefined,
-      kind: 'file',
-      name: record.name,
-      relative_path: record.relative_path,
-      absolute_path: record.absolute_path,
-      file_ext: record.file_ext || undefined,
-      supported_for_index: true,
-      size: record.size,
-      mtime_ms: record.mtime_ms,
-      index_status: record.index_status,
-      document_id: record.document_id,
-      indexed_at: record.indexed_at,
-      last_error: record.last_error
-    })
-  }
-  for (const relativePath of directoryPaths) {
-    entries.push({
-      id: `${workspace.id}:directory:${relativePath}`,
-      workspace_id: workspace.id,
-      kind: 'directory',
-      name: path.posix.basename(relativePath),
-      relative_path: relativePath,
-      absolute_path: path.join(workspace.root_path ?? '', ...relativePath.split('/')),
-      supported_for_index: false
-    })
-  }
-  return buildWorkspaceReferenceItems({ workspace, entries, records })
 }
 
 export const buildWebReferenceItem = (source: WebSourceRecord): WebReference => ({

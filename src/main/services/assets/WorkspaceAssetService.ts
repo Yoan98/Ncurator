@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto'
 import fs from 'node:fs/promises'
-import os from 'node:os'
 import path from 'node:path'
 
 const WORKSPACE_NCURATOR_DIR = '.ncurator'
@@ -26,9 +25,6 @@ export const getWorkspaceAssetsRootDir = (workspaceRootPath: string): string =>
 
 export const getWorkspaceScriptsRootDir = (workspaceRootPath: string): string =>
   path.join(getWorkspaceRuntimeDir(workspaceRootPath), WORKSPACE_SCRIPTS_DIR)
-
-export const getUserRuntimeDir = (): string =>
-  path.join(os.homedir(), WORKSPACE_NCURATOR_DIR, WORKSPACE_RUNTIME_DIR)
 
 export const getWorkspaceAssetBucketDir = (
   workspaceRootPath: string,

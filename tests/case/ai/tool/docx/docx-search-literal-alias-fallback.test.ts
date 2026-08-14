@@ -1,3 +1,4 @@
+import path from 'node:path'
 import { describe, it } from 'vitest'
 import { createDocxToolHarness, writeTestDocxFile } from '../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
@@ -25,7 +26,7 @@ describe('ai tool docx backend', () => {
         const harness = createDocxToolHarness(runtime)
         try {
           return await harness.invoke<DocxSearchResult>('docx_search', {
-            sourcePath: 'alias-fallback.docx',
+            sourcePath: path.join(runtime.workspaceRoot, 'alias-fallback.docx'),
             query: '过拟合'
           })
         } finally {

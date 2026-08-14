@@ -1,3 +1,4 @@
+import path from 'node:path'
 import { describe, it } from 'vitest'
 import {
   createDocxToolHarness,
@@ -28,13 +29,13 @@ describe('ai tool docx backend', () => {
         const harness = createDocxToolHarness(runtime)
         try {
           const beforeOutline = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
-            sourcePath: 'outline-percent-after-write.docx',
+            sourcePath: path.join(runtime.workspaceRoot, 'outline-percent-after-write.docx'),
             ranges: [{ type: 'percent', fromPercent: 0, toPercent: 100 }]
           })
           const anchorBlockId = findParagraphBlockIdByText(beforeOutline.blocks, '导语段落')
 
           const writeResult = await harness.invoke<DocxMutationResult>('docx_edit', {
-            sourcePath: 'outline-percent-after-write.docx',
+            sourcePath: path.join(runtime.workspaceRoot, 'outline-percent-after-write.docx'),
             actions: [
               {
                 type: 'insert_blocks',
@@ -46,7 +47,7 @@ describe('ai tool docx backend', () => {
           })
 
           const afterOutline = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
-            sourcePath: 'outline-percent-after-write.docx',
+            sourcePath: path.join(runtime.workspaceRoot, 'outline-percent-after-write.docx'),
             ranges: [{ type: 'percent', fromPercent: 0, toPercent: 100 }]
           })
 

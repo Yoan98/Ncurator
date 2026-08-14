@@ -56,12 +56,12 @@ describe('ai tool docx backend', () => {
         try {
           harness.ctx.beginDocxApplyRun()
           const outline = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
-            sourcePath: relativePath,
+            sourcePath,
             ranges: [{ type: 'percent', fromPercent: 0, toPercent: 100 }]
           })
           const headingBlockId = findParagraphBlockIdByText(outline.blocks, 'Project status')
           const edited = await harness.invoke<DocxMutationResult>('docx_edit', {
-            sourcePath: relativePath,
+            sourcePath,
             actions: [
               {
                 type: 'style',
@@ -82,7 +82,7 @@ describe('ai tool docx backend', () => {
           const records = await harness.ctx.applyDocxRunEdits()
           const afterBytes = await fs.readFile(sourcePath)
           const searchAfterApply = await harness.invoke<DocxSearchResult>('docx_search', {
-            sourcePath: relativePath,
+            sourcePath,
             query: 'Status: approved.',
             mode: 'literal'
           })
@@ -198,7 +198,7 @@ describe('ai tool docx backend', () => {
         try {
           harness.ctx.beginDocxApplyRun()
           await harness.invoke<DocxMutationResult>('docx_edit', {
-            sourcePath: relativePath,
+            sourcePath,
             actions: [
               {
                 type: 'replace_text',

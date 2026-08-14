@@ -45,7 +45,6 @@ type DocxToolSpec<
 export const DOCX_READ_OUTLINE_TOOL_SPEC = {
   name: 'docx_read_outline',
   familyId: 'docx',
-  requiresWorkspace: true,
   skillIds: ['docx-read'],
   inputSchema: docxOutlineRequestSchema,
   outputSchema: docxOutlineOutputSchema,
@@ -66,7 +65,6 @@ export const DOCX_READ_OUTLINE_TOOL_SPEC = {
 export const DOCX_SEARCH_TOOL_SPEC = {
   name: 'docx_search',
   familyId: 'docx',
-  requiresWorkspace: true,
   skillIds: ['docx-read'],
   inputSchema: docxSearchRequestSchema,
   outputSchema: docxSearchOutputSchema,
@@ -87,7 +85,6 @@ export const DOCX_SEARCH_TOOL_SPEC = {
 export const DOCX_READ_TOOL_SPEC = {
   name: 'docx_read_blocks',
   familyId: 'docx',
-  requiresWorkspace: true,
   skillIds: ['docx-read'],
   inputSchema: docxReadRequestSchema,
   outputSchema: docxReadBlocksOutputSchema,
@@ -108,7 +105,6 @@ export const DOCX_READ_TOOL_SPEC = {
 export const DOCX_READ_VISUALS_TOOL_SPEC = {
   name: 'docx_read_visuals',
   familyId: 'docx',
-  requiresWorkspace: true,
   skillIds: ['docx-read'],
   inputSchema: docxReadVisualsSchema,
   outputSchema: docxReadVisualsOutputSchema,
@@ -129,7 +125,6 @@ export const DOCX_READ_VISUALS_TOOL_SPEC = {
 export const DOCX_EDIT_TOOL_SPEC = {
   name: 'docx_edit',
   familyId: 'docx',
-  requiresWorkspace: true,
   skillIds: ['docx-write'],
   inputSchema: docxEditSchema,
   outputSchema: docxWriteOutputSchema,

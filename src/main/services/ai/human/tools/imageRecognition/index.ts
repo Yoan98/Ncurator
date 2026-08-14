@@ -10,14 +10,8 @@ import { resolveToolPath } from '../terminal/commandPolicy'
 
 export const imageRecognitionToolFamily: ToolFamilyDefinition = createWorkspaceBoundToolFamily({
   familyId: 'image-recognition',
-  descriptionForTool: (toolName) =>
-    toolName === IMAGE_ANALYZE_TOOL_SPEC.name
-      ? IMAGE_ANALYZE_TOOL_SPEC.promptSpec.description
-      : IMAGE_ANALYZE_TOOL_SPEC.promptSpec.description,
-  reason: 'image recognition tools require workspace binding before execution',
-  error: 'workspace is required for image recognition tools',
   buildWorkspaceTools: (input) => {
-    const { ctx, runId, taskId, workspaceRootPath } = input
+    const { ctx, runId, taskId } = input
     const toolEvents = createToolEventEmitter({
       ctx,
       runId,
@@ -35,10 +29,7 @@ export const imageRecognitionToolFamily: ToolFamilyDefinition = createWorkspaceB
             ctx.checkCancelled()
             const rawPath = String(args.path || '').trim()
             const instruction = String(args.instruction || '').trim()
-            const sourcePath = resolveToolPath({
-              rawPath,
-              cwd: workspaceRootPath
-            })
+            const sourcePath = resolveToolPath(rawPath)
             if (!sourcePath || !instruction) {
               const payload = { error: 'path 和 instruction 不能为空' }
               session.fail(payload.error, undefined, {

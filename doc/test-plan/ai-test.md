@@ -1412,18 +1412,18 @@ Runtime download coverage is maintained by `ai/tool/terminal`; it is not a live-
 - 测试类型：`backend / live`
 - What：本地 Node.js 不可用时，真实模型下载无需系统安装的 Node.js runtime 并完成代码执行。
 - Why：AI runtime 必须能在缺少系统 Node.js 的环境中自主补齐真实执行能力。
-- How：隐藏系统 Node.js，只开放 terminal 工具，要求模型把 runtime 安装到受控 `user_runtime` 目录后执行确定性代码。
-- Oracle：下载后的 Node.js 真实执行并返回预期标记；安装文件只存在于指定 runtime 目录；工作区无安装产物。
-- Not：不修改或依赖系统级 Node.js 安装。
+- How：隐藏系统 Node.js，只开放 terminal 工具，要求模型把 runtime 下载到测试指定的受控临时目录（绝对路径）后执行确定性代码。
+- Oracle：下载后的 Node.js 真实执行并返回预期标记；安装文件只存在于指定的临时目录；用户工作区域无安装产物。
+- Not：不修改或依赖系统级 Node.js 安装，不依赖固定安装目录。
 
 Runtime download coverage remains in `ai/tool/terminal`.
 
 - 测试类型：`backend / live`
 - What：本地 Python 不可用时，真实模型下载无需系统安装的 Python runtime 并完成代码执行。
 - Why：AI runtime 必须能在缺少系统 Python 的环境中自主补齐真实执行能力。
-- How：隐藏系统 Python，只开放 terminal 工具，要求模型把 runtime 安装到受控 `user_runtime` 目录后执行确定性代码。
-- Oracle：下载后的 Python 真实执行并返回预期标记；安装文件只存在于指定 runtime 目录；工作区无安装产物。
-- Not：不修改或依赖系统级 Python 安装。
+- How：隐藏系统 Python，只开放 terminal 工具，要求模型把 runtime 下载到测试指定的受控临时目录（绝对路径）后执行确定性代码。
+- Oracle：下载后的 Python 真实执行并返回预期标记；安装文件只存在于指定的临时目录；用户工作区域无安装产物。
+- Not：不修改或依赖系统级 Python 安装，不依赖固定安装目录。
 
 ##### `human-context-compaction-natural-trigger-live`
 

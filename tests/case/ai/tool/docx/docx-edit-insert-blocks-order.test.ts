@@ -1,3 +1,4 @@
+import path from 'node:path'
 import { describe, it } from 'vitest'
 import {
   createDocxToolHarness,
@@ -32,12 +33,12 @@ describe('ai tool docx backend', () => {
         const harness = createDocxToolHarness(runtime)
         try {
           const before = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
-            sourcePath: 'insert-blocks-order.docx',
+            sourcePath: path.join(runtime.workspaceRoot, 'insert-blocks-order.docx'),
             ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 10 }]
           })
           const anchorBlockId = findParagraphBlockIdByText(before.blocks, 'A')
           const inserted = await harness.invoke<DocxMutationResult>('docx_edit', {
-            sourcePath: 'insert-blocks-order.docx',
+            sourcePath: path.join(runtime.workspaceRoot, 'insert-blocks-order.docx'),
             actions: [
               {
                 type: 'insert_blocks',
@@ -53,7 +54,7 @@ describe('ai tool docx backend', () => {
             ]
           })
           const after = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
-            sourcePath: 'insert-blocks-order.docx',
+            sourcePath: path.join(runtime.workspaceRoot, 'insert-blocks-order.docx'),
             ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 20 }]
           })
 
@@ -105,13 +106,13 @@ describe('ai tool docx backend', () => {
         const harness = createDocxToolHarness(runtime)
         try {
           const before = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
-            sourcePath: 'batch-multi-insert.docx',
+            sourcePath: path.join(runtime.workspaceRoot, 'batch-multi-insert.docx'),
             ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 10 }]
           })
           const anchorA = findParagraphBlockIdByText(before.blocks, 'A')
           const anchorC = findParagraphBlockIdByText(before.blocks, 'C')
           const inserted = await harness.invoke<DocxMutationResult>('docx_edit', {
-            sourcePath: 'batch-multi-insert.docx',
+            sourcePath: path.join(runtime.workspaceRoot, 'batch-multi-insert.docx'),
             actions: [
               {
                 type: 'insert_blocks',
@@ -128,7 +129,7 @@ describe('ai tool docx backend', () => {
             ]
           })
           const after = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
-            sourcePath: 'batch-multi-insert.docx',
+            sourcePath: path.join(runtime.workspaceRoot, 'batch-multi-insert.docx'),
             ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 20 }]
           })
           return { inserted, after }

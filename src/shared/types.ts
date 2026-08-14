@@ -1571,14 +1571,6 @@ type AiRunEventPayload =
       createdAt: number
     }
   | {
-      type: 'workspace_required'
-      runId: string
-      taskId: string
-      reason: string
-      requiredFields: Array<'workspaceId' | 'rootPath'>
-      createdAt: number
-    }
-  | {
       type: 'approval_batch_required'
       runId: string
       taskId: string

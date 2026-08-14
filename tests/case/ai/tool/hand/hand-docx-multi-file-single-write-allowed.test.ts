@@ -1,4 +1,5 @@
 import { describe, it } from 'vitest'
+import path from 'node:path'
 import { createHandNode } from '../../../../../src/main/services/ai/human/node/handNode'
 import { ensureSkillTools } from '../../../../../src/main/services/ai/human/node/learningNode/skillLoader'
 import { executeToolCall } from '../../../../../src/main/services/ai/human/node/handNode/toolExecutor'
@@ -68,7 +69,7 @@ describe('ai tool hand backend', () => {
                   {
                     toolName: 'docx_edit',
                     args: {
-                      sourcePath: 'multi-file-a.docx',
+                      sourcePath: path.join(runtime.workspaceRoot, 'multi-file-a.docx'),
                       actions: [
                         {
                           type: 'replace_text',
@@ -81,7 +82,7 @@ describe('ai tool hand backend', () => {
                   {
                     toolName: 'docx_edit',
                     args: {
-                      sourcePath: 'multi-file-b.docx',
+                      sourcePath: path.join(runtime.workspaceRoot, 'multi-file-b.docx'),
                       actions: [
                         {
                           type: 'replace_text',
@@ -104,7 +105,7 @@ describe('ai tool hand backend', () => {
           learnedSkillIds: ['docx-read', 'docx-write'],
           toolName: 'docx_read_outline',
           args: {
-            sourcePath: 'multi-file-a.docx',
+            sourcePath: path.join(runtime.workspaceRoot, 'multi-file-a.docx'),
             ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 10 }]
           }
         })
@@ -115,7 +116,7 @@ describe('ai tool hand backend', () => {
           learnedSkillIds: ['docx-read', 'docx-write'],
           toolName: 'docx_read_outline',
           args: {
-            sourcePath: 'multi-file-b.docx',
+            sourcePath: path.join(runtime.workspaceRoot, 'multi-file-b.docx'),
             ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 10 }]
           }
         })

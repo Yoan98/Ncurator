@@ -220,7 +220,6 @@ const editTextFile = async (
   const allowMissing = args.action === 'create'
   const sourcePath = await resolveSafeTextFilePath({
     sourcePath: args.sourcePath,
-    workspaceRootPath: buildInput.workspaceRootPath,
     allowMissing
   })
 
@@ -248,7 +247,6 @@ const editTextFile = async (
       await fs.mkdir(path.dirname(sourcePath), { recursive: true })
       await resolveSafeTextFilePath({
         sourcePath: args.sourcePath,
-        workspaceRootPath: buildInput.workspaceRootPath,
         allowMissing: true
       })
       await ensureCreateTargetAvailable(sourcePath)
@@ -257,7 +255,6 @@ const editTextFile = async (
     } else {
       await resolveSafeTextFilePath({
         sourcePath: args.sourcePath,
-        workspaceRootPath: buildInput.workspaceRootPath,
         allowMissing: false
       })
       const stats = await fs.stat(sourcePath)
@@ -456,7 +453,6 @@ const readTextFile = async (
 ): Promise<FileReadOutput> => {
   const sourcePath = await resolveSafeTextFilePath({
     sourcePath: args.sourcePath,
-    workspaceRootPath: buildInput.workspaceRootPath,
     allowMissing: false
   })
   const decoded = decodeTextFile(await fs.readFile(sourcePath), args.sourcePath)

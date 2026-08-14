@@ -32,7 +32,7 @@ export const RUNTIME_SKILL_CATALOG = {
     title: 'terminal',
     displayName: '命令执行器',
     description:
-      '使用持久终端会话执行、读取和停止命令，并返回终端状态、当前路径、增量输出、退出状态和工作区文件产物。'
+      '使用持久终端会话执行、读取和停止命令，并返回终端状态、当前路径、增量输出、退出状态和用户工作区域文件产物。'
   },
   'text-file': {
     familyId: 'text-file',
@@ -50,7 +50,7 @@ export const RUNTIME_SKILL_CATALOG = {
     title: 'kb-retrieval',
     displayName: '资料查阅器',
     description:
-      '查询工作区知识库的已索引文档或检索相关内容片段，并返回命中证据、来源文档与内容块信息。'
+      '查询用户工作区域知识库的已索引文档或检索相关内容片段，并返回命中证据、来源文档与内容块信息。'
   },
   'web-browsing': {
     familyId: 'web',
@@ -146,7 +146,7 @@ export const RUNTIME_SKILL_CATALOG = {
     countsTowardToolBudget: true,
     title: '图片生成',
     displayName: '图片生成',
-    description: '通过 SVG 绘制生成 PNG、JPEG 或 WebP 图片，并保存为工作区文件。'
+    description: '通过 SVG 绘制生成 PNG、JPEG 或 WebP 图片，并保存为用户工作区域文件。'
   }
 } as const satisfies Record<string, RuntimeSkillCatalogEntry>
 

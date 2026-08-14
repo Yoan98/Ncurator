@@ -1,3 +1,4 @@
+import path from 'node:path'
 import { describe, it } from 'vitest'
 import {
   createDocxToolHarness,
@@ -28,13 +29,13 @@ describe('ai tool docx backend', () => {
         const harness = createDocxToolHarness(runtime)
         try {
           const initialOutline = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
-            sourcePath: 'replay-stats-active-revision.docx',
+            sourcePath: path.join(runtime.workspaceRoot, 'replay-stats-active-revision.docx'),
             ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 20 }]
           })
           const anchorBlockId = findParagraphBlockIdByText(initialOutline.blocks, '锚点段落')
 
           const insertResult = await harness.invoke<DocxMutationResult>('docx_edit', {
-            sourcePath: 'replay-stats-active-revision.docx',
+            sourcePath: path.join(runtime.workspaceRoot, 'replay-stats-active-revision.docx'),
             actions: [
               {
                 type: 'insert_blocks',
@@ -49,7 +50,7 @@ describe('ai tool docx backend', () => {
           )?.stats
 
           const rewriteResult = await harness.invoke<DocxMutationResult>('docx_edit', {
-            sourcePath: 'replay-stats-active-revision.docx',
+            sourcePath: path.join(runtime.workspaceRoot, 'replay-stats-active-revision.docx'),
             actions: [
               {
                 type: 'replace_text',
@@ -63,7 +64,7 @@ describe('ai tool docx backend', () => {
           )?.stats
 
           const finalOutline = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
-            sourcePath: 'replay-stats-active-revision.docx',
+            sourcePath: path.join(runtime.workspaceRoot, 'replay-stats-active-revision.docx'),
             ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 20 }]
           })
 

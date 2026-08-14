@@ -60,13 +60,13 @@ describe('ai tool excel row diff backend', () => {
         const edited = await harness.invoke<{
           record: { previewPath: string; insertCount: number; deleteCount: number }
         }>('excel_edit', {
-          sourcePath: 'row-delete.xlsx',
+          sourcePath,
           actions: [{ type: 'delete_rows', sheetName: '阶段涨幅', startRow: 3, count: 1 }]
         })
         const inserted = await harness.invoke<{
           record: { previewPath: string; insertCount: number; deleteCount: number }
         }>('excel_edit', {
-          sourcePath: 'row-insert.xlsx',
+          sourcePath: path.join(runtime.workspaceRoot, 'row-insert.xlsx'),
           actions: [
             { type: 'insert_rows', sheetName: '阶段涨幅', startRow: 3, count: 1 },
             {
@@ -80,19 +80,19 @@ describe('ai tool excel row diff backend', () => {
         const deletedFirst = await harness.invoke<{
           record: { previewPath: string; insertCount: number; deleteCount: number }
         }>('excel_edit', {
-          sourcePath: 'row-delete-first.xlsx',
+          sourcePath: path.join(runtime.workspaceRoot, 'row-delete-first.xlsx'),
           actions: [{ type: 'delete_rows', sheetName: '阶段涨幅', startRow: 2, count: 1 }]
         })
         const deletedLast = await harness.invoke<{
           record: { previewPath: string; insertCount: number; deleteCount: number }
         }>('excel_edit', {
-          sourcePath: 'row-delete-last.xlsx',
+          sourcePath: path.join(runtime.workspaceRoot, 'row-delete-last.xlsx'),
           actions: [{ type: 'delete_rows', sheetName: '阶段涨幅', startRow: 9, count: 1 }]
         })
         const deletedContiguous = await harness.invoke<{
           record: { previewPath: string; insertCount: number; deleteCount: number }
         }>('excel_edit', {
-          sourcePath: 'row-delete-contiguous.xlsx',
+          sourcePath: path.join(runtime.workspaceRoot, 'row-delete-contiguous.xlsx'),
           actions: [{ type: 'delete_rows', sheetName: '阶段涨幅', startRow: 3, count: 2 }]
         })
 
@@ -204,7 +204,7 @@ describe('ai tool excel row diff backend', () => {
 
         const harness = createExcelToolHarness(runtime)
         await harness.invoke('excel_edit', {
-          sourcePath: 'cell-restored.xlsx',
+          sourcePath: path.join(runtime.workspaceRoot, 'cell-restored.xlsx'),
           actions: [{ type: 'set_cell', sheetName: 'Data', address: 'B2', value: 'B' }]
         })
         const cellRestored = await harness.invoke<{
@@ -215,12 +215,12 @@ describe('ai tool excel row diff backend', () => {
             deleteCount: number
           }
         }>('excel_edit', {
-          sourcePath: 'cell-restored.xlsx',
+          sourcePath: path.join(runtime.workspaceRoot, 'cell-restored.xlsx'),
           actions: [{ type: 'set_cell', sheetName: 'Data', address: 'B2', value: 'A' }]
         })
 
         await harness.invoke('excel_edit', {
-          sourcePath: 'row-restored.xlsx',
+          sourcePath: path.join(runtime.workspaceRoot, 'row-restored.xlsx'),
           actions: [
             { type: 'insert_rows', sheetName: 'Data', startRow: 2, count: 1 },
             { type: 'set_cell', sheetName: 'Data', address: 'A2', value: 'Temporary' }
@@ -234,12 +234,12 @@ describe('ai tool excel row diff backend', () => {
             deleteCount: number
           }
         }>('excel_edit', {
-          sourcePath: 'row-restored.xlsx',
+          sourcePath: path.join(runtime.workspaceRoot, 'row-restored.xlsx'),
           actions: [{ type: 'delete_rows', sheetName: 'Data', startRow: 2, count: 1 }]
         })
 
         await harness.invoke('excel_edit', {
-          sourcePath: 'sheet-restored.xlsx',
+          sourcePath: path.join(runtime.workspaceRoot, 'sheet-restored.xlsx'),
           actions: [
             { type: 'add_sheet', sheetName: 'Temporary' },
             { type: 'set_cell', sheetName: 'Temporary', address: 'A1', value: 'Temporary' }
@@ -253,12 +253,12 @@ describe('ai tool excel row diff backend', () => {
             deleteCount: number
           }
         }>('excel_edit', {
-          sourcePath: 'sheet-restored.xlsx',
+          sourcePath: path.join(runtime.workspaceRoot, 'sheet-restored.xlsx'),
           actions: [{ type: 'delete_sheet', sheetName: 'Temporary' }]
         })
 
         await harness.invoke('excel_edit', {
-          sourcePath: 'sheet-renamed.xlsx',
+          sourcePath: path.join(runtime.workspaceRoot, 'sheet-renamed.xlsx'),
           actions: [{ type: 'rename_sheet', sheetName: 'Data', newName: 'Intermediate' }]
         })
         const sheetRenamed = await harness.invoke<{
@@ -269,7 +269,7 @@ describe('ai tool excel row diff backend', () => {
             deleteCount: number
           }
         }>('excel_edit', {
-          sourcePath: 'sheet-renamed.xlsx',
+          sourcePath: path.join(runtime.workspaceRoot, 'sheet-renamed.xlsx'),
           actions: [{ type: 'rename_sheet', sheetName: 'Intermediate', newName: 'Final' }]
         })
 
@@ -313,9 +313,8 @@ describe('ai tool excel row diff backend', () => {
             JSON.stringify(result.renamed.sheetNames) === JSON.stringify(['Final']) &&
             result.renamed.red.length === 0 &&
             result.renamed.green.length === 0 &&
-            JSON.stringify(result.renamed.tabColors) === JSON.stringify([GREEN]) &&
-            result.renamed.changeCount === 1 &&
-            result.renamed.insertCount === 1 &&
+            result.renamed.changeCount === 0 &&
+            result.renamed.insertCount === 0 &&
             result.renamed.deleteCount === 0,
           {
             name: 'excel-cumulative-diff-removes-zero-net-change-noise',

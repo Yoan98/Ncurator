@@ -1,3 +1,4 @@
+import path from 'node:path'
 import { describe, it } from 'vitest'
 import { AiRunService } from '../../../../../src/main/services/ai/AiRunService'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
@@ -88,7 +89,7 @@ describe('ai human mock-llm backend', () => {
                   output: buildToolDecision({
                     toolName: 'docx_search',
                     args: {
-                      sourcePath: 'semantic-docx.docx',
+                      sourcePath: path.join(runtime.workspaceRoot, 'semantic-docx.docx'),
                       query: '边缘锯齿怎么处理',
                       mode: 'semantic'
                     },

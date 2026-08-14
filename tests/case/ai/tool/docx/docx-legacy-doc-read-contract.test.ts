@@ -28,12 +28,12 @@ describe('ai tool docx backend', () => {
         const harness = createDocxToolHarness(runtime)
         try {
           const outline = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
-            sourcePath: 'legacy-doc/legacy-readable.doc',
+            sourcePath: legacyDocPath,
             ranges: [{ type: 'percent', fromPercent: 0, toPercent: 100 }]
           })
           const firstBlock = outline.blocks[0]
           const read = await harness.invoke<DocxReadResult>('docx_read_blocks', {
-            sourcePath: 'legacy-doc/legacy-readable.doc',
+            sourcePath: legacyDocPath,
             range: {
               type: 'block_index',
               fromBlockIndex: 0,
@@ -42,24 +42,24 @@ describe('ai tool docx backend', () => {
           })
           const firstBlockId = outline.blocks[0]!.blockId
           const readByIds = await harness.invoke<DocxReadResult>('docx_read_blocks', {
-            sourcePath: 'legacy-doc/legacy-readable.doc',
+            sourcePath: legacyDocPath,
             range: {
               type: 'block_ids',
               blockIds: [firstBlockId]
             }
           })
           const search = await harness.invoke<DocxSearchResult>('docx_search', {
-            sourcePath: 'legacy-doc/legacy-readable.doc',
+            sourcePath: legacyDocPath,
             query: 'Unicode characters',
             mode: 'literal'
           })
           const regexSearch = await harness.invoke<DocxSearchResult>('docx_search', {
-            sourcePath: 'legacy-doc/legacy-readable.doc',
+            sourcePath: legacyDocPath,
             query: 'Unicode\\s+characters',
             mode: 'regex'
           })
           const failure = await harness.invoke<DocxFailureResult>('docx_edit', {
-            sourcePath: 'legacy-doc/legacy-readable.doc',
+            sourcePath: legacyDocPath,
             actions: [
               {
                 type: 'replace_text',
@@ -69,7 +69,7 @@ describe('ai tool docx backend', () => {
             ]
           })
           const uppercaseFailure = await harness.invoke<DocxFailureResult>('docx_edit', {
-            sourcePath: 'legacy-doc/legacy-readable.DOC',
+            sourcePath: path.join(runtime.workspaceRoot, 'legacy-doc', 'legacy-readable.DOC'),
             actions: [
               {
                 type: 'insert_blocks',

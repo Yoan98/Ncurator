@@ -1,4 +1,3 @@
-import os from 'node:os'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { buildBrainPrompt } from '../../../../src/main/services/ai/human/prompts/brain'
@@ -45,8 +44,8 @@ describe('ai unit brain decision-hint prompt contract', () => {
     const defaultPreference =
       defaultPrompt.match(/<preference>([\s\S]*?)<\/preference>/)?.[1].trim() || ''
     expect(defaultPreference).toBe('无')
-    expect(relaxedPrompt).toContain('优先使用知识库内容和工作区文件内容作为依据来推进任务')
-    expect(strictPrompt).toContain('必须只能使用知识库内容和工作区文件内容作为依据来推进任务')
+    expect(relaxedPrompt).toContain('优先使用知识库内容和用户工作区域文件内容作为依据来推进任务')
+    expect(strictPrompt).toContain('必须只能使用知识库内容和用户工作区域文件内容作为依据来推进任务')
     expect(strictPrompt).toContain('禁止使用其他信息与模型能力本身的信息')
   })
 
@@ -74,8 +73,7 @@ describe('ai unit brain decision-hint prompt contract', () => {
       },
       runtime_paths: {
         assets: path.resolve('/tmp/workspace/.ncurator/runtime/assets'),
-        scripts: path.resolve('/tmp/workspace/.ncurator/runtime/scripts'),
-        user_runtime: path.join(os.homedir(), '.ncurator', 'runtime')
+        scripts: path.resolve('/tmp/workspace/.ncurator/runtime/scripts')
       }
     })
     expect(localEnvironment.current_time.utc_iso).toMatch(
@@ -307,7 +305,7 @@ describe('ai unit brain decision-hint prompt contract', () => {
       '{"thought":{"next":"当前缺少读取 docx 的能力说明，先补齐读取能力再继续判断资料内容。","todolist":[{"item":"补齐读取 docx 的能力说明","status":"todo"},{"item":"检查是否已经满足用户诉求并能进入最终交付","status":"todo"}],"progressionSummary":"-当前任务的用户诉求是关于审批驳回时是否保留原文件，但缺少读取 docx 的能力说明，无法判断资料内容。\\n-每个todolist项的推进理解：'
     )
     expect(toolPlanExampleSection).toContain(
-      '{"thought":{"next":"当前缺少工作区文件事实，先读取当前目录建立资料范围。"},"nextAction":{"action":"hand","calls":[{"toolName":"terminal_run","args":{"command":"pwd","commandExplanation":"读取当前终端所在路径。"}}]}}'
+      '{"thought":{"next":"当前缺少用户工作区域文件事实，先读取当前目录建立资料范围。"},"nextAction":{"action":"hand","calls":[{"toolName":"terminal_run","args":{"command":"pwd","commandExplanation":"读取当前终端所在路径。"}}]}}'
     )
     expect(deliveryExampleSection).toContain(
       '{"thought":{"next":"审批驳回是否保留原文件已经确认，当前证据足够进入最终交付。","todolist":[{"item":"确认审批驳回时是否保留原文件","status":"done"},{"item":"检查是否已经满足用户诉求并能进入最终交付","status":"done"}],"progressionSummary":"-当前任务的用户诉求是关于审批驳回时是否保留原文件，已经确认审批驳回时会保留原文件，当前证据足够进入最终交付。\\n-每个todolist项的推进理解：'

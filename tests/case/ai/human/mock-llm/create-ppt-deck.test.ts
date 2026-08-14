@@ -11,8 +11,6 @@ import {
   filterAiRunEventsByType
 } from '../testUtils'
 
-const sourcePath = 'mock-quarterly-review.pptx'
-
 const coverHtml = `<section data-ppt-slide style="position:relative;width:1920px;height:1080px;background:#F4F0E8">
   <div style="position:absolute;left:96px;top:88px;width:1728px;height:904px;background:#17324D;border-radius:32px"></div>
   <h1 style="position:absolute;left:180px;top:300px;width:1500px;height:110px;color:#FFFFFF;font-size:72px">季度业务复盘</h1>
@@ -36,6 +34,7 @@ describe('ai human mock-llm backend', () => {
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
+        const sourcePath = path.join(runtime.workspaceRoot, 'mock-quarterly-review.pptx')
         const runner = createHumanTestRunner(runtime, {
           structuredOutputScript: {
             'human.brain': [
@@ -95,7 +94,7 @@ describe('ai human mock-llm backend', () => {
           userInput: '创建两页季度业务复盘 PPT，并确认最终页面数量。'
         })
         const presentation = await loadPresentation(
-          new Uint8Array(await fs.readFile(path.join(runtime.workspaceRoot, sourcePath)))
+          new Uint8Array(await fs.readFile(sourcePath))
         )
 
         return {

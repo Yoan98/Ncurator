@@ -357,10 +357,6 @@ const reduceAssistantTurnByRunEvent = (
     }
   }
 
-  if (event.type === 'workspace_required' && !event.internal) {
-    next = { ...next, status: 'failed', error: event.reason }
-  }
-
   if (event.type === 'runtime_issue') {
     next = { ...next, status: 'failed', error: event.message }
   }
@@ -2774,7 +2770,7 @@ const ChatPage: React.FC = () => {
         event.type === 'run_completed' ||
         event.type === 'run_failed' ||
         event.type === 'run_cancelled' ||
-        (!event.internal && (event.type === 'runtime_issue' || event.type === 'workspace_required'))
+        (!event.internal && event.type === 'runtime_issue')
       ) {
         if (eventSessionId) {
           setSessionRunningState(eventSessionId, false)
@@ -2848,16 +2844,6 @@ const ChatPage: React.FC = () => {
               : item
           )
         )
-        return
-      }
-
-      if (event.type === 'workspace_required') {
-        if (!event.internal) {
-          setLoading(false)
-          setPendingUserTakeover(null)
-          setUserTakeoverConfirming(false)
-          message.warning(event.reason || '当前工作区未设置文件目录，请先完成绑定后再发送')
-        }
         return
       }
 

@@ -2,6 +2,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import ExcelJS from 'exceljs'
 import { describe, it } from 'vitest'
+import path from 'node:path'
 import { createHandNode } from '../../../../../src/main/services/ai/human/node/handNode'
 import { ensureSkillTools } from '../../../../../src/main/services/ai/human/node/learningNode/skillLoader'
 import { createHumanRuntimeCache } from '../../../../../src/main/services/ai/human/node/utils/runtimeCache'
@@ -60,18 +61,23 @@ describe('ai tool hand excel backend', () => {
               nextAction: {
                 action: 'hand',
                 calls: [
-                  { toolName: 'excel_read_outline', args: { sourcePath: 'hand-report.xlsx' } },
+                  {
+                    toolName: 'excel_read_outline',
+                    args: {
+                      sourcePath: path.join(runtime.workspaceRoot, 'hand-report.xlsx')
+                    }
+                  },
                   {
                     toolName: 'excel_edit',
                     args: {
-                      sourcePath: 'hand-report.xlsx',
+                      sourcePath: path.join(runtime.workspaceRoot, 'hand-report.xlsx'),
                       actions: [{ type: 'set_cell', sheetName: 'Data', address: 'B2', value: 20 }]
                     }
                   },
                   {
                     toolName: 'excel_read_cells',
                     args: {
-                      sourcePath: 'hand-report.xlsx',
+                      sourcePath: path.join(runtime.workspaceRoot, 'hand-report.xlsx'),
                       ranges: [{ sheetName: 'Data', range: 'A1:B2' }]
                     }
                   }

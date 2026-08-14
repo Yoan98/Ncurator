@@ -2,7 +2,6 @@ import { randomUUID } from 'node:crypto'
 import { tool } from '@langchain/core/tools'
 import type { AiToolCallResult, IpcJsonObject } from '../../../../../../shared/types'
 import type { TerminalToolContext } from '../../../types'
-import { getUserRuntimeDir } from '../../../../assets/WorkspaceAssetService'
 import { DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS } from '../../constants'
 import type { HumanDecisionHint } from '../../types'
 import { getAiResultTokenLimit, estimateToolResultTokens } from '../utils/resultSizeGuard'
@@ -269,7 +268,6 @@ const applyOutputGuards = (input: {
 }
 
 export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput) => {
-  const userRuntimeRootPath = getUserRuntimeDir()
   const terminalRunToolSpec = createTerminalRunToolSpec(input.ctx.platform)
   const state: TerminalCapabilityToolsRuntimeState = { stepIndex: 0 }
   const toolEvents = createToolEventEmitter({
@@ -417,7 +415,6 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
               chatSessionId: input.sessionId,
               workspaceId: input.workspaceId,
               workspaceRootPath: input.workspaceRootPath,
-              userRuntimeRootPath,
               environment: input.ctx.humanRuntimeOverrides?.terminalEnvironment,
               platform: input.ctx.platform,
               runId: input.runId,

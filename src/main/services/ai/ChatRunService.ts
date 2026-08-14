@@ -1261,14 +1261,11 @@ export class ChatRunService {
       run.finishedAt = now
       const content = run.partialAnswer ? `${run.partialAnswer}\n\n已取消` : '已取消'
       assistantMessage = this.buildAssistantMessage(run, content, true)
-    } else if (
-      !event.internal &&
-      (event.type === 'runtime_issue' || event.type === 'workspace_required')
-    ) {
+    } else if (!event.internal && event.type === 'runtime_issue') {
       run.status = 'failed'
       run.pendingApproval = undefined
       run.pendingUserTakeover = undefined
-      run.error = event.type === 'runtime_issue' ? event.message : event.reason
+      run.error = event.message
       run.updatedAt = now
       saveImmediately = true
     } else {

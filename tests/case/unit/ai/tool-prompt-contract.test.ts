@@ -71,7 +71,7 @@ describe('ai unit tool prompt contract', () => {
       }).success
     ).toBe(false)
     expect(spec?.promptSpec.description).toBe(
-      '将 SVG 内容渲染为图片并保存到工作区。输出格式由 outputPath 的文件扩展名决定，支持 .png、.jpg、.jpeg 和 .webp；返回生成文件路径或错误。'
+      '将 SVG 内容渲染为图片并保存到用户工作区域。输出格式由 outputPath 的文件扩展名决定，支持 .png、.jpg、.jpeg 和 .webp；返回生成文件路径或错误。'
     )
   })
 

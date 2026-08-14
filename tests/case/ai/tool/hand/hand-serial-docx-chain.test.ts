@@ -1,4 +1,5 @@
 import { describe, it } from 'vitest'
+import path from 'node:path'
 import { createHandNode } from '../../../../../src/main/services/ai/human/node/handNode'
 import { ensureSkillTools } from '../../../../../src/main/services/ai/human/node/learningNode/skillLoader'
 import { createHumanRuntimeCache } from '../../../../../src/main/services/ai/human/node/utils/runtimeCache'
@@ -76,7 +77,7 @@ describe('ai tool hand backend', () => {
                   {
                     toolName: 'docx_edit',
                     args: {
-                      sourcePath: 'serial-docx-chain.docx',
+                      sourcePath: path.join(runtime.workspaceRoot, 'serial-docx-chain.docx'),
                       actions: [
                         {
                           type: 'replace_text',
@@ -89,7 +90,7 @@ describe('ai tool hand backend', () => {
                   {
                     toolName: 'docx_read_blocks',
                     args: {
-                      sourcePath: 'serial-docx-chain.docx',
+                      sourcePath: path.join(runtime.workspaceRoot, 'serial-docx-chain.docx'),
                       range: { type: 'block_index', fromBlockIndex: 1, toBlockIndex: 1 }
                     }
                   }

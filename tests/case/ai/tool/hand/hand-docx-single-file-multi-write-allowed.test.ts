@@ -1,4 +1,5 @@
 import { describe, it } from 'vitest'
+import path from 'node:path'
 import { createHandNode } from '../../../../../src/main/services/ai/human/node/handNode'
 import { ensureSkillTools } from '../../../../../src/main/services/ai/human/node/learningNode/skillLoader'
 import { createHumanRuntimeCache } from '../../../../../src/main/services/ai/human/node/utils/runtimeCache'
@@ -58,7 +59,7 @@ describe('ai tool hand backend', () => {
                   {
                     toolName: 'docx_edit',
                     args: {
-                      sourcePath: 'same-file-multi-write.docx',
+                      sourcePath: path.join(runtime.workspaceRoot, 'same-file-multi-write.docx'),
                       actions: [
                         {
                           type: 'replace_text',
@@ -71,7 +72,7 @@ describe('ai tool hand backend', () => {
                   {
                     toolName: 'docx_edit',
                     args: {
-                      sourcePath: 'same-file-multi-write.docx',
+                      sourcePath: path.join(runtime.workspaceRoot, 'same-file-multi-write.docx'),
                       actions: [
                         {
                           type: 'replace_text',

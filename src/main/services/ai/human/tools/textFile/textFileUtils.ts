@@ -73,13 +73,9 @@ const findExistingAncestor = async (targetPath: string): Promise<string> => {
 
 export const resolveSafeTextFilePath = async (input: {
   sourcePath: string
-  workspaceRootPath: string
   allowMissing: boolean
 }): Promise<string> => {
-  const resolved = resolveToolPath({
-    rawPath: input.sourcePath,
-    cwd: input.workspaceRootPath
-  })
+  const resolved = resolveToolPath(input.sourcePath)
   if (!resolved) throw new Error(`Invalid file path: ${input.sourcePath}.`)
 
   const existingAncestor = await findExistingAncestor(

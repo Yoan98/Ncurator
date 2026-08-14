@@ -684,10 +684,7 @@ export const createExcelToolRuntime = (input: ExcelCapabilityToolsInput): ExcelT
     sheetLineageByPath: new Map()
   }
   const resolvePath = (rawPath: string, mode: 'read' | 'write' = 'read'): string => {
-    const resolved = resolveToolPath({
-      rawPath,
-      cwd: input.workspaceRootPath
-    })
+    const resolved = resolveToolPath(rawPath)
     if (!resolved) throw new Error('Excel 文件路径无效')
     assertExcelPath(resolved, mode)
     return resolved

@@ -1,3 +1,4 @@
+import path from 'node:path'
 import { describe, it } from 'vitest'
 import {
   createDocxToolHarness,
@@ -43,7 +44,7 @@ describe('ai tool docx backend', () => {
         const harness = createDocxToolHarness(runtime)
         try {
           const outlineBefore = await harness.invoke<DocxOutlineResult>('docx_read_outline', {
-            sourcePath: 'structural-op-behavior.docx',
+            sourcePath: path.join(runtime.workspaceRoot, 'structural-op-behavior.docx'),
             ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 49 }]
           })
           const anchorBlockId = findParagraphBlockIdByText(outlineBefore.blocks, 'Anchor text.')

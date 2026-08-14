@@ -112,7 +112,7 @@ export type DocxToolRuntime = {
   callWorker: (
     request: Omit<DocxWorkerRequest, 'requestId' | 'runId'>
   ) => Promise<DocxWorkerResponse>
-  resolveDocxPath: (input: { cwd: string; rawPath: string }) => string | null
+  resolveDocxPath: (rawPath: string) => string | null
   getReadSession: (sourcePath: string) => DocxReadSession | undefined
   getReplaySession: (sourcePath: string) => DocxReplaySession | undefined
   ensureReadSession: (input: {
@@ -323,18 +323,15 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     )
   }
 
-  const resolveReadableWordPath = (params: { cwd: string; rawPath: string }): string | null => {
-    const resolved = resolveToolPath({
-      rawPath: params.rawPath,
-      cwd: params.cwd
-    })
+  const resolveReadableWordPath = (rawPath: string): string | null => {
+    const resolved = resolveToolPath(rawPath)
     if (!resolved) return null
     if (!isReadableWordPath(resolved)) return null
     return resolved
   }
 
-  const resolveDocxPath = (params: { cwd: string; rawPath: string }): string | null => {
-    const resolved = resolveReadableWordPath(params)
+  const resolveDocxPath = (rawPath: string): string | null => {
+    const resolved = resolveReadableWordPath(rawPath)
     if (!resolved || isLegacyDocPath(resolved)) return null
     return resolved
   }
@@ -1320,10 +1317,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     toolCallId: string
     sourcePath: string
   }): Promise<RequireReadSessionResult> => {
-    const requestedSourcePath = resolveReadableWordPath({
-      cwd: workspaceRootPath,
-      rawPath: params.sourcePath
-    })
+    const requestedSourcePath = resolveReadableWordPath(params.sourcePath)
     if (!requestedSourcePath) {
       return {
         failure: emitFailure({
@@ -1372,10 +1366,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     sourcePath: string
     reason?: 'history' | 'edit' | 'rollback'
   }): Promise<RequireReplaySessionResult> => {
-    const requestedSourcePath = resolveDocxPath({
-      cwd: workspaceRootPath,
-      rawPath: params.sourcePath
-    })
+    const requestedSourcePath = resolveDocxPath(params.sourcePath)
     if (!requestedSourcePath) {
       return {
         failure: emitFailure({

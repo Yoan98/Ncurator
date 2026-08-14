@@ -39,7 +39,6 @@ export const PDF_INSPECT_TOOL_SPEC: PdfToolSpec<
   name: 'pdf_inspect',
   familyId: 'pdf',
   skillIds: ['pdf-read'],
-  requiresWorkspace: true,
   promptSpec: {
     name: 'pdf_inspect',
     description: '读取 PDF 的基础信息，并返回页数、元数据、书签提纲和警告。'
@@ -58,7 +57,6 @@ export const PDF_SEARCH_TOOL_SPEC: PdfToolSpec<
   name: 'pdf_search',
   familyId: 'pdf',
   skillIds: ['pdf-read'],
-  requiresWorkspace: true,
   promptSpec: {
     name: 'pdf_search',
     description:
@@ -78,7 +76,6 @@ export const PDF_READ_PAGES_TOOL_SPEC: PdfToolSpec<
   name: 'pdf_read_pages',
   familyId: 'pdf',
   skillIds: ['pdf-read'],
-  requiresWorkspace: true,
   promptSpec: {
     name: 'pdf_read_pages',
     description:
@@ -98,7 +95,6 @@ export const PDF_READ_VISUALS_TOOL_SPEC: PdfToolSpec<
   name: 'pdf_read_visuals',
   familyId: 'pdf',
   skillIds: ['pdf-read'],
-  requiresWorkspace: true,
   promptSpec: {
     name: 'pdf_read_visuals',
     description:
