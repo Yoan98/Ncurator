@@ -32,12 +32,6 @@ describe('ai human mock-llm excel backend', () => {
         const filePath = sourcePath
         await fs.writeFile(filePath, Buffer.from(await workbook.xlsx.writeBuffer()))
         const runner = createHumanTestRunner(runtime, {
-          allowedToolNames: [
-            'excel_read_outline',
-            'excel_read_cells',
-            'excel_search',
-            'excel_edit'
-          ],
           structuredOutputScript: {
             'human.brain': [
               {

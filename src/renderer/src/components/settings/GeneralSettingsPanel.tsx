@@ -53,7 +53,7 @@ const GeneralSettingsPanel: React.FC = () => {
       data-testid={settingsSelectors.generalPanel}
       aria-label="通用设置"
     >
-      <div className="max-w-3xl pt-2">
+      <div className="w-full pt-2">
         <div className="flex items-center justify-between gap-6">
           <div className="min-w-0">
             <div className="text-[14px] font-medium text-[#37352F]">AI 运行完成通知</div>
@@ -73,12 +73,12 @@ const GeneralSettingsPanel: React.FC = () => {
           <div className="min-w-0">
             <div className="text-[14px] font-medium text-[#37352F]">错误日志</div>
             <div className="mt-1 text-[12px] leading-5 text-[#787774]">
-              遇到运行或索引错误时会记录到本地，请将 app.log 发给作者。
+              遇到运行或索引错误时会记录到本地，请将 app.log 发给作者排查问题。
             </div>
           </div>
           <button
             type="button"
-            className="nc-no-drag inline-flex h-8 w-8 shrink-0 items-center justify-center rounded border border-[#E6E6E3] text-[#5F5F5B] transition-colors hover:border-[#C9C9C5] hover:bg-[#F6F6F4] disabled:cursor-not-allowed disabled:opacity-50"
+            className="nc-no-drag inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded border border-[#E6E6E3] px-3 text-[12px] font-medium text-[#5F5F5B] transition-colors hover:border-[#C9C9C5] hover:bg-[#F6F6F4] disabled:cursor-not-allowed disabled:opacity-50"
             onClick={() => void openErrorLogDirectory()}
             disabled={openingLogDirectory}
             data-testid={settingsSelectors.errorLogOpenDirectoryButton}
@@ -86,6 +86,7 @@ const GeneralSettingsPanel: React.FC = () => {
             title="打开错误日志目录"
           >
             <HiFolderOpen className="h-4 w-4" />
+            <span>打开</span>
           </button>
         </div>
       </div>

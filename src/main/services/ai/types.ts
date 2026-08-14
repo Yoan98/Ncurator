@@ -257,7 +257,6 @@ export type AiRunContext = {
   preference: AiPreference
   executionPermission: AiExecutionPermission
   referenceScope: AiReferenceScope
-  allowedToolNames?: string[]
   humanRuntimeOverrides?: {
     hardActionLimit?: number
     graphRecursionLimit?: number

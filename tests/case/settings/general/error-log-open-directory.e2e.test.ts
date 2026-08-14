@@ -30,6 +30,7 @@ describe('settings error log e2e', () => {
           const signals = await runtime.collectSignals()
           return {
             accessibleName,
+            buttonText: await button.textContent(),
             panelText,
             calls: signals.ipcInvokeEntries.filter((entry) => entry.name === 'errorLogOpenDirectory')
           }
@@ -37,7 +38,8 @@ describe('settings error log e2e', () => {
         assert: async (result, runtime) => {
           await runtime.assertThat(
             result.accessibleName === '打开错误日志目录' &&
-              result.panelText?.includes('app.log') &&
+              result.buttonText?.trim() === '打开' &&
+              result.panelText?.includes('将 app.log 发给作者排查问题') &&
               result.calls.length === 1,
             {
               name: 'error-log-directory-entry',

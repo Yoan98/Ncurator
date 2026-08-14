@@ -28,7 +28,6 @@ describe('ai human mock-llm image generation backend', () => {
       execute: async (runtime) => {
         const outputPath = path.join(runtime.workspaceRoot, 'human-generated.png')
         const runner = createHumanTestRunner(runtime, {
-          allowedToolNames: ['image_generate'],
           structuredOutputScript: {
             'human.brain': [
               {

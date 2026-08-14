@@ -163,7 +163,6 @@ export type CreateAiRunContextInput = {
   sessionId?: string
   userInput?: string
   selectedReferences?: SelectedReference[]
-  allowedToolNames?: string[]
   runtimeSettingsOverride?: Partial<AiRuntimeSettings>
   modelName?: string
   visionModel?: {

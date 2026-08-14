@@ -49,8 +49,7 @@ const buildStepToolContext = (input: {
   learnedSkillIds: input.state.skills.learnedSkillIds,
   effectiveSkillIds: getEffectiveLearnedSkillIds(input.state.skills.learnedSkillIds),
   availableToolNames: getAvailableToolNames({
-    learnedSkillIds: input.state.skills.learnedSkillIds,
-    allowedToolNames: input.ctx.allowedToolNames
+    learnedSkillIds: input.state.skills.learnedSkillIds
   })
 })
 

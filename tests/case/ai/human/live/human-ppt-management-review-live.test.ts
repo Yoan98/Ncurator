@@ -35,7 +35,7 @@ const chartHtml = `<section data-ppt-slide style="position:relative;width:1920px
 const buildFixture = async (runtime: Parameters<typeof createPptToolHarness>[0]): Promise<void> => {
   const setup = createPptToolHarness(runtime)
   await setup.invoke('ppt_edit', {
-    sourcePath: FILE_NAME,
+    sourcePath: path.join(runtime.workspaceRoot, FILE_NAME),
     actions: [
       { type: 'insert_slide', html: slideHtml('Q2 management review', 'Cover page. Do not change.', '#17324D') },
       { type: 'insert_slide', html: slideHtml('Operating metrics', 'Revenue and retention are on plan. Do not change.', '#0F766E') },

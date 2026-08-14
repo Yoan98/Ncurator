@@ -310,7 +310,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - What：通用设置展示错误日志说明，并可从文件夹图标打开日志目录。
 - Why：用户遇到索引或运行错误后，需要能自行找到并发送 `app.log`。
 - How：通过 Settings UI 打开通用页，确认说明和可访问名称，点击文件夹按钮并通过 IPC observer 收集调用。
-- Oracle：按钮可见且说明包含 `app.log`，点击后调用 `errorLogOpenDirectory`，对齐 `SET-GENERAL-003-AC3`。`app-error-log-service` backend unit 验证错误日志生成、隐私脱敏和 2MB 截断，对齐 `SET-GENERAL-003-AC1`、`SET-GENERAL-003-AC2`。
+- Oracle：带文件夹图标的“打开”按钮可见，说明包含“将 app.log 发给作者排查问题”，点击后调用 `errorLogOpenDirectory`，对齐 `SET-GENERAL-003-AC3`。`app-error-log-service` backend unit 验证错误日志生成、隐私脱敏和 2MB 截断，对齐 `SET-GENERAL-003-AC1`、`SET-GENERAL-003-AC2`。
 - Not：不验证不同操作系统中文件管理器窗口是否出现在前台；日志服务 unit 不验证系统文件管理器窗口。
 
 ### 4. 发布前真实检查

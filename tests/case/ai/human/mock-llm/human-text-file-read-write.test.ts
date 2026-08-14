@@ -26,7 +26,6 @@ describe('ai human mock-llm text backend', () => {
         const filePath = sourcePath
         await fs.writeFile(filePath, '# Status\n\nOwner: TBD\n', 'utf8')
         const runner = createHumanTestRunner(runtime, {
-          allowedToolNames: ['text_file_read', 'text_file_edit'],
           structuredOutputScript: {
             'human.brain': [
               {

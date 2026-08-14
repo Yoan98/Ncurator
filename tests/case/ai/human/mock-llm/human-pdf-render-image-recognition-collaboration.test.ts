@@ -86,7 +86,6 @@ describe('ai human mock-llm backend', () => {
           const runner = createHumanTestRunner(runtime, {
             modelName: 'gpt-5',
             selectedReferences: [reference],
-            allowedToolNames: ['pdf_read_pages', 'pdf_read_visuals'],
             structuredOutputScript: {
               'human.brain': [
                 {

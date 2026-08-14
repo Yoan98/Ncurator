@@ -36,7 +36,6 @@ describe('ai human mock-llm ppt backend', () => {
           actions: [{ type: 'insert_slide', html }]
         })
         const runner = createHumanTestRunner(runtime, {
-          allowedToolNames: ['ppt_read_outline', 'ppt_read_slides', 'ppt_search', 'ppt_edit'],
           structuredOutputScript: {
             'human.brain': [
               {

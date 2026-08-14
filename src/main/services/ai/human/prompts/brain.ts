@@ -109,19 +109,12 @@ ${inputSchemaText}
 `.trim()
 }
 
-const renderSkillCatalogSection = (
-  state: HumanState,
-  platform: AiRuntimePlatform,
-  allowedToolNames?: readonly string[]
-): string => {
+const renderSkillCatalogSection = (state: HumanState, platform: AiRuntimePlatform): string => {
   const effectiveSkillIds = getEffectiveLearnedSkillIds(state.skills.learnedSkillIds)
   const effectiveSkillDefinitions = effectiveSkillIds.map((skillId) => getSkillDefinition(skillId))
   const learnedExternalSkillDefinitions = effectiveSkillDefinitions.filter(
     (definition) => definition.source === 'external'
   )
-  const allowedToolNameSet = allowedToolNames
-    ? new Set(allowedToolNames.map((toolName) => String(toolName || '').trim()).filter(Boolean))
-    : null
   const renderSkillLine = (definition: ReturnType<typeof getSkillDefinition>): string =>
     `- ${definition.skillId}：${definition.description}`
   const learnableSkillLines = listExternalSkillDefinitions()
@@ -130,7 +123,6 @@ const renderSkillCatalogSection = (
   const effectiveToolSpecLines = Array.from(
     new Set(effectiveSkillDefinitions.flatMap((definition) => definition.toolNames))
   )
-    .filter((toolName) => !allowedToolNameSet || allowedToolNameSet.has(toolName))
     .map((toolName) => getToolSpec(toolName, platform))
     .filter((spec): spec is HumanToolSpec => Boolean(spec))
     .map((spec) =>
@@ -401,7 +393,7 @@ ${renderLocalEnvironmentText(input.ctx)}
   </conversation_history>
 
   <skill_catalog>
-${renderSkillCatalogSection(input.state, input.ctx.platform, input.ctx.allowedToolNames)}
+${renderSkillCatalogSection(input.state, input.ctx.platform)}
   </skill_catalog>
 
   <round_history>

@@ -1407,23 +1407,23 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 - Oracle：输入文件不变；真实终端计算成功；`reconciliation-exceptions.csv` 的异常行和金额正确。
 - Not：不生成测试专用 JSON，不混入终端协议、runtime 下载或临时目录契约。
 
-Runtime download coverage is maintained by `ai/tool/terminal`; it is not a live-model intelligence regression.
+##### `human-runtime-script-system-python-live`
 
 - 测试类型：`backend / live`
-- What：本地 Node.js 不可用时，真实模型下载无需系统安装的 Node.js runtime 并完成代码执行。
-- Why：AI runtime 必须能在缺少系统 Node.js 的环境中自主补齐真实执行能力。
-- How：隐藏系统 Node.js，只开放 terminal 工具，要求模型把 runtime 下载到测试指定的受控临时目录（绝对路径）后执行确定性代码。
-- Oracle：下载后的 Node.js 真实执行并返回预期标记；安装文件只存在于指定的临时目录；用户工作区域无安装产物。
-- Not：不修改或依赖系统级 Node.js 安装，不依赖固定安装目录。
+- What：真实模型在本机 Python 可用时，用本机 Python 在临时脚本目录（`runtime_paths.scripts`）编写并运行临时脚本，完成确定性计算并核对结果。
+- Why：runtime 脚本是 AI 架构的临时执行入口，必须验证真实模型能自主把临时脚本放进运行时目录并用本机解释器执行，而非文本猜测。
+- How：不限制工具；用户以自然语言要求用 Python 计算并核对，并说明脚本是临时用途、放在临时脚本目录。harness 只检查 terminal 事件、运行产物与脚本目录。
+- Oracle：run completed；terminal 结果包含确定性标记；命令使用 `python`/`python3`；临时脚本目录出现 `.py`；工作区普通目录无正式产物。
+- Not：不验证下载安装 runtime；该路径由独立下载 case 验证。
 
-Runtime download coverage remains in `ai/tool/terminal`.
+##### `human-runtime-download-python-live`
 
 - 测试类型：`backend / live`
-- What：本地 Python 不可用时，真实模型下载无需系统安装的 Python runtime 并完成代码执行。
+- What：真实模型在本机 Python 不可用时，自行下载无需系统安装的 Python 运行环境，再运行临时脚本完成确定性计算。
 - Why：AI runtime 必须能在缺少系统 Python 的环境中自主补齐真实执行能力。
-- How：隐藏系统 Python，只开放 terminal 工具，要求模型把 runtime 下载到测试指定的受控临时目录（绝对路径）后执行确定性代码。
-- Oracle：下载后的 Python 真实执行并返回预期标记；安装文件只存在于指定的临时目录；用户工作区域无安装产物。
-- Not：不修改或依赖系统级 Python 安装，不依赖固定安装目录。
+- How：harness 通过 terminal 环境 PATH 覆盖隐藏系统 Python（`python`/`python3` → exit 127），不限制工具；用户以自然语言说明 Python 不可用、请自行准备可运行环境并完成计算。
+- Oracle：run completed；terminal 结果包含确定性标记；临时脚本目录出现 `.py`；存在下载/安装/调用非系统 Python 的命令证据。
+- Not：不修改或依赖系统级 Python 安装，不预设下载 URL 或固定步骤。
 
 ##### `human-context-compaction-natural-trigger-live`
 

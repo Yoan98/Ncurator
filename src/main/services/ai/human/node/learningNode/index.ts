@@ -42,12 +42,6 @@ const BUILTIN_TOOL_NAMES = Array.from(
   new Set(listBuiltinSkillDefinitions().flatMap((definition) => definition.toolNames))
 )
 
-const filterAllowedToolNames = (names: readonly string[], allowedToolNames?: readonly string[]) => {
-  if (!allowedToolNames) return [...names]
-  const allowed = new Set(allowedToolNames.map((name) => String(name || '').trim()).filter(Boolean))
-  return names.filter((name) => allowed.has(name))
-}
-
 const buildNoEffectDecisionHint = (input: {
   requestedSkillIds: string[]
   duplicateSkillIds: HumanLearningOutcome['skippedDuplicateSkillIds']
@@ -126,9 +120,9 @@ export const createLearningNode = (input: { ctx: AiRunContext; cache: HumanRunti
     input.ctx.checkCancelled()
     assertExternalLearnedSkillIds(state.skills.learnedSkillIds)
     input.cache.currentState = state
-    const budgetToolNames = filterAllowedToolNames(BUILTIN_TOOL_NAMES, input.ctx.allowedToolNames)
-    const getBudgetToolNames = (skillId: RuntimeSkillId): string[] =>
-      filterAllowedToolNames(getSkillDefinition(skillId).toolNames, input.ctx.allowedToolNames)
+    const budgetToolNames = BUILTIN_TOOL_NAMES
+    const getBudgetToolNames = (skillId: RuntimeSkillId): readonly string[] =>
+      getSkillDefinition(skillId).toolNames
 
     if (
       !state.execution.currentThought ||

@@ -16,7 +16,6 @@ describe('ai human mock-llm utility backend', () => {
       runMode: 'single',
       execute: async (runtime) => {
         const output = await createHumanTestRunner(runtime, {
-          allowedToolNames: ['wait_time', 'wait_for_user_takeover'],
           structuredOutputScript: {
             'human.brain': [
               {

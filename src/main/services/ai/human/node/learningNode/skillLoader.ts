@@ -61,8 +61,8 @@ export const ensureSkillTools = (input: {
     taskId: input.taskId,
     familyId: definition.familyId
   })
-  const allowedToolNames = new Set(definition.toolNames)
-  const built = familyTools.filter((tool) => allowedToolNames.has(String(tool.name || '').trim()))
+  const skillToolNames = new Set(definition.toolNames)
+  const built = familyTools.filter((tool) => skillToolNames.has(String(tool.name || '').trim()))
   input.cache.skillToolsets[input.skillId] = built
   return built
 }

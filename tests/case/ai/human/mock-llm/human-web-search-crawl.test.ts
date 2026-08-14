@@ -45,7 +45,6 @@ describe('ai human mock-llm web backend', () => {
           async close() {}
         }
         const runner = createHumanTestRunner(runtime, {
-          allowedToolNames: ['web_search', 'web_crawl'],
           webCrawlerService: service,
           structuredOutputScript: {
             'human.brain': [
