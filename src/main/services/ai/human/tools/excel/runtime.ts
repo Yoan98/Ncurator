@@ -354,6 +354,21 @@ const alignChangedRows = (input: {
   return reversed.reverse()
 }
 
+const isTrailingEmptyRow = (
+  sheet: ExcelJS.Worksheet,
+  rowNumber: number,
+  maxColumn: number
+): boolean => {
+  const row = sheet.getRow(rowNumber)
+  if (row.height || row.hidden || row.outlineLevel) return false
+  for (let column = 1; column <= maxColumn; column += 1) {
+    const cell = row.getCell(column)
+    if (cell.value !== null && cell.value !== undefined && cell.value !== '') return false
+    if (getStyleId(cell) > 0 || JSON.stringify(cell.style || {}) !== '{}') return false
+  }
+  return true
+}
+
 const alignWorksheetRows = (
   before: ExcelJS.Worksheet,
   after: ExcelJS.Worksheet
@@ -361,6 +376,12 @@ const alignWorksheetRows = (
   const maxColumn = Math.max(before.columnCount, after.columnCount, 1)
   const beforeRows = Array.from({ length: before.rowCount }, (_, index) => index + 1)
   const afterRows = Array.from({ length: after.rowCount }, (_, index) => index + 1)
+  while (beforeRows.length > 0 && isTrailingEmptyRow(before, beforeRows[beforeRows.length - 1], maxColumn)) {
+    beforeRows.pop()
+  }
+  while (afterRows.length > 0 && isTrailingEmptyRow(after, afterRows[afterRows.length - 1], maxColumn)) {
+    afterRows.pop()
+  }
   const beforeSignatures = beforeRows.map((row) => rowSignature(before, row, maxColumn))
   const afterSignatures = afterRows.map((row) => rowSignature(after, row, maxColumn))
   const alignment: RowAlignment[] = []
@@ -561,7 +582,6 @@ const buildDiffWorkbook = async (input: {
     if (!beforeSheet || !afterSheet || !diffSheet) continue
     if (beforeSheetName !== afterSheetName) {
       diffSheet.properties.tabColor = { argb: GREEN }
-      changes.push({ sheetName: afterSheetName, address: 'A1', kind: 'modified' })
     }
     const alignment = alignWorksheetRows(beforeSheet, afterSheet)
     let outputRow = 1
