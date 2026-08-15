@@ -959,25 +959,18 @@ export const createExcelToolRuntime = (input: ExcelCapabilityToolsInput): ExcelT
     })
     const cumulativeChanges = diffResult.changes
     const changeId = state.recordsByPath.get(sourcePath)?.id || randomUUID()
-    const artifactRoot = path.join(
+    const snapshotRoot = path.join(
       input.workspaceRootPath,
       '.ncurator',
       'file-changes',
       input.runId
     )
-    const snapshotRoot = path.join(
-      input.workspaceRootPath,
-      '.ncurator',
-      'file-change-snapshots',
-      input.runId
-    )
-    await fs.mkdir(artifactRoot, { recursive: true })
     await fs.mkdir(snapshotRoot, { recursive: true })
     const beforeSnapshotPath = baseline
       ? path.join(snapshotRoot, `${changeId}-${path.basename(sourcePath)}`)
       : undefined
     if (baseline && beforeSnapshotPath) await fs.writeFile(beforeSnapshotPath, baseline)
-    const previewPath = path.join(artifactRoot, `${changeId}-${randomUUID()}.diff.xlsx`)
+    const previewPath = path.join(snapshotRoot, `${changeId}-${randomUUID()}.diff.xlsx`)
     await fs.writeFile(previewPath, diffResult.bytes)
     await atomicReplace(sourcePath, afterBytes)
     const now = Date.now()

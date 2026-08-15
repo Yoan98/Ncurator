@@ -145,6 +145,7 @@ export class RunDocxEditTracker {
     const now = Date.now()
     const paths = buildDocxApplyArtifactPaths({
       workspaceRootPath: input.workspaceRootPath,
+      runId: input.runId,
       applyId,
       sourceName: input.document.sourceName
     })
@@ -175,7 +176,7 @@ export class RunDocxEditTracker {
       action: 'materialize_draft',
       payload: {
         docId: input.document.latestDocId,
-        outPath: paths.committedArtifactPath
+        outPath: paths.workingArtifactPath
       }
     })
     if (!workingSaveResponse.ok || workingSaveResponse.payload.action !== 'materialize_draft') {
@@ -189,14 +190,7 @@ export class RunDocxEditTracker {
     const changeCount = this.countCommittedChanges(replaySession)
     const changeStats = this.countReviewChanges(replaySession)
     const sourceBuffer = await fs.readFile(sourceArtifactPath)
-    const workingBuffer = await fs.readFile(paths.committedArtifactPath)
-    await materializeDocxProjectedArtifact({
-      sourceBuffer,
-      workingBuffer,
-      session: replaySession,
-      kind: 'committed',
-      outPath: paths.committedArtifactPath
-    })
+    const workingBuffer = await fs.readFile(paths.workingArtifactPath)
     await materializeDocxProjectedArtifact({
       sourceBuffer,
       workingBuffer,
@@ -231,8 +225,9 @@ export class RunDocxEditTracker {
 
     try {
       await fs.rm(sourceArtifactPath, { force: true })
+      await fs.rm(paths.workingArtifactPath, { force: true })
     } catch {
-      // Ignore cleanup failures; checkpoint and committed artifacts are intentionally retained.
+      // Ignore cleanup failures; checkpoint and diff artifacts are intentionally retained.
     }
 
     return {

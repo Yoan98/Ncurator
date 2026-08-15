@@ -179,9 +179,10 @@ describe('ai tool excel edit backend', () => {
           changeArtifacts: await generatedFiles(
             path.join(rollbackRoot, '.ncurator', 'file-changes')
           ),
-          snapshots: await generatedFiles(
-            path.join(rollbackRoot, '.ncurator', 'file-change-snapshots')
-          )
+          legacySnapshotsDirExists: await fs
+            .access(path.join(rollbackRoot, '.ncurator', 'file-change-snapshots'))
+            .then(() => true)
+            .catch(() => false)
         }
 
         const operations = await loadWorkbook(operationsFile.filePath)
@@ -337,10 +338,10 @@ describe('ai tool excel edit backend', () => {
           result.rollback.error.includes('record save failed') &&
             result.rollback.sourceRestored === true &&
             result.rollback.changeArtifacts.length === 0 &&
-            result.rollback.snapshots.length === 0,
+            result.rollback.legacySnapshotsDirExists === false,
           {
             name: 'excel-record-persistence-rollback',
-            message: '修改记录持久化失败时应恢复源文件并清理预览和快照半成品。',
+            message: '修改记录持久化失败时应恢复源文件并清理 file-changes 下的预览和快照半成品。',
             data: result.rollback
           }
         )

@@ -1566,7 +1566,7 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
         const snapshotRoot = path.join(
           workspaceRootPath,
           '.ncurator',
-          'file-change-snapshots',
+          'file-changes',
           input.runId
         )
         beforeSnapshotPath = path.join(snapshotRoot, `${document.changeId}-${document.sourceName}`)

@@ -517,6 +517,15 @@ tests/case/workbench/
 - Oracle：重命名记录在 terminal 命令结束后进入 assistant 修改入口和“本次运行改动”；预览区展示原文件名、当前文件名和“文件内容没有变化”，不出现“没有专用预览稿”；统一回退确认出现后才执行，最终原文件名及原始 bytes 恢复，重命名目标消失。
 - Not：不尝试区分重叠 terminal 命令共同看到的变化；允许按各自命令窗口重复记录。
 
+#### `terminal-update-delete-change-and-revert`
+
+- 测试类型：`e2e / live`
+- What：真实 AI 通过终端修改文本文件内容和删除文件后，分别验证行级 Diff 预览与回退恢复原始 bytes、删除记录说明与回退恢复文件。
+- Why：终端是通用执行路径，内容修改和删除两条记录与内置文件工具共用同一回退入口；若只覆盖重命名，会漏掉终端产生的最常见两类可回退记录。
+- How：在临时工作区要求真实 AI 只使用 `terminal_run`，在一次 Run 中修改一个文本文件内容（如追加唯一标记行）并删除另一个文件；等待 Run 完成后分别打开两条修改入口：修改记录检查行级 Diff 预览（不出现“没有专用预览稿”），删除记录检查“本次删除了该文件”说明；分别点击回退并确认，再读取磁盘状态。
+- Oracle：两条记录在 terminal 命令结束后进入 assistant 修改入口和“本次运行改动”；修改记录在审核模式展示普通行级 Diff，对齐 `WB-APPLY-003-AC4`；回退后文本文件恢复原始 bytes 且记录状态变为 `reverted`，对齐 `WB-APPLY-003-AC1`；删除记录展示删除说明，回退后文件恢复且 bytes 与删除前一致，对齐 `WB-APPLY-003-AC2`。
+- Not：不验证 terminal 命令审批交互和重叠命令窗口归属，该能力由 AI tool terminal 回归和 `terminal-rename-change-notice-and-revert` 覆盖。
+
 #### `docx-apply-force-revert-warning`
 
 - 测试类型：`e2e`

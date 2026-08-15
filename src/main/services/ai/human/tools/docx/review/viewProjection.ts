@@ -3,21 +3,22 @@ import { sanitizeFileNameForPath } from '../../../../utils/fileNamePolicy'
 
 export type DocxApplyArtifactPaths = {
   workDir: string
-  committedArtifactPath: string
+  workingArtifactPath: string
   diffArtifactPath: string
   beforeSnapshotPath: string
 }
 
 export const buildDocxApplyArtifactPaths = (input: {
   workspaceRootPath: string
+  runId: string
   applyId: string
   sourceName: string
 }): DocxApplyArtifactPaths => {
   const workDir = path.join(
     path.resolve(input.workspaceRootPath),
     '.ncurator',
-    'docx-applies',
-    input.applyId
+    'file-changes',
+    input.runId
   )
   const baseName = sanitizeFileNameForPath({
     value: input.sourceName,
@@ -25,8 +26,8 @@ export const buildDocxApplyArtifactPaths = (input: {
   })
   return {
     workDir,
-    committedArtifactPath: path.join(workDir, `committed-${baseName}`),
-    diffArtifactPath: path.join(workDir, `diff-${baseName}`),
-    beforeSnapshotPath: path.join(workDir, `before-${baseName}`)
+    workingArtifactPath: path.join(workDir, `${input.applyId}-working-${baseName}`),
+    diffArtifactPath: path.join(workDir, `${input.applyId}-diff-${baseName}`),
+    beforeSnapshotPath: path.join(workDir, `${input.applyId}-before-${baseName}`)
   }
 }

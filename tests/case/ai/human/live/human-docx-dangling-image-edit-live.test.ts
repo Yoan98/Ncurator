@@ -1,7 +1,6 @@
 import fs from 'node:fs/promises'
 import { describe, it } from 'vitest'
 import { buildBlockIndex, loadDocxBundle } from '../../../../../src/main/services/ai/human/tools/docx/adapters/ooxml/blockIndex'
-import { buildDocxApplyArtifactPaths } from '../../../../../src/main/services/ai/human/tools/docx/review/viewProjection'
 import type { JsonObject } from '../../../../../src/shared/types'
 import { loadLiveLlmConfigFromEnv, loadLiveVisionLlmConfigFromEnv } from '../../../../harness/backend/llmConfig'
 import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
@@ -78,20 +77,14 @@ describe('ai human live backend', () => {
           const applyRecord = (await runtime.docxApplyStore.listRecords()).items.find(
             (item) => item.run_id === runtime.runId && item.status === 'applied'
           )
-          const committedPath = applyRecord
-            ? buildDocxApplyArtifactPaths({
-                workspaceRootPath: runtime.workspaceRoot,
-                applyId: applyRecord.id,
-                sourceName: applyRecord.source_name
-              }).committedArtifactPath
+          const appliedText = applyRecord
+            ? await readDocxText(reference.absolutePath || '')
             : ''
-          const appliedText = committedPath ? await readDocxText(committedPath) : ''
           return {
             output,
             events: runtime.eventCollector.snapshot(),
             sourceText,
-            appliedText,
-            committedPath
+            appliedText
           }
         },
         assert: async (result, runtime) => {
@@ -116,7 +109,7 @@ describe('ai human live backend', () => {
               result.output?.artifacts?.some(
                 (item) => item.kind === 'file' && item.capability === 'docx'
               ) === true &&
-              Boolean(result.committedPath) &&
+              result.appliedText.length > 0 &&
               visualResults.length >= 1 &&
               visualResults.some((event) => visualResultHasText(event.result?.data)) &&
               visualResults.every(
