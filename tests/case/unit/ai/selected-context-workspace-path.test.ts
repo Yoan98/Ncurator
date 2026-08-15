@@ -19,7 +19,7 @@ describe('ai unit selected context workspace path', () => {
 
     expect(text).toContain('用户工作区域：')
     expect(text).toContain('- 根目录：/tmp/real-workspace-root')
-    expect(text).toContain('默认应优先在此目录内完成用户任务')
+    expect(text).not.toContain('默认应优先在此目录内完成用户任务')
     expect(text).not.toContain('所有任务文件和新生成的产物都必须位于这个工作区内')
     expect(text).not.toContain('display-name-only')
     expect(text).not.toContain('cwd')

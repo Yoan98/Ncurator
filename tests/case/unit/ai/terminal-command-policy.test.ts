@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import path from 'node:path'
 import {
   analyzeTerminalCommand,
   analyzeTerminalCommandPolicy,
@@ -231,8 +232,12 @@ describe('ai unit terminal dangerous-command policy', () => {
   })
 
   it('resolveToolPath accepts only absolute paths without any cwd joining', () => {
-    expect(resolveToolPath('/tmp/workspace/report.docx')).toBe('/tmp/workspace/report.docx')
-    expect(resolveToolPath('/tmp/../tmp/report.docx')).toBe('/tmp/report.docx')
+    expect(resolveToolPath(path.resolve('/tmp/workspace/report.docx'))).toBe(
+      path.resolve('/tmp/workspace/report.docx')
+    )
+    expect(resolveToolPath(path.resolve('/tmp/../tmp/report.docx'))).toBe(
+      path.resolve('/tmp/report.docx')
+    )
     expect(resolveToolPath('report.docx')).toBeNull()
     expect(resolveToolPath('./report.docx')).toBeNull()
     expect(resolveToolPath('notes/report.docx')).toBeNull()
