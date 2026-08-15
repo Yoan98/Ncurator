@@ -402,7 +402,7 @@ export class TerminalSessionManager {
     try {
       terminalProcess = pty.spawn(adapter.shell.executable, adapter.shell.args, {
         name: 'xterm-256color',
-        cols: 120,
+        cols: 1000,
         rows: 30,
         cwd: rootPath,
         encoding: 'utf8',

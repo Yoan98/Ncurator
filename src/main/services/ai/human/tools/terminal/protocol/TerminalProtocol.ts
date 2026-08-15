@@ -7,6 +7,12 @@ export type TerminalProtocolEvent =
 
 const MARKER_SUFFIX = '__'
 
+// eslint-disable-next-line no-control-regex
+const ANSI_CSI_PATTERN = /[\u001B\u009B][[\]()#;?]*(?:(?:(?:[a-zA-Z\d]*(?:;[-a-zA-Z\d/#&.:=?%@~_]+)*)?\u0007)|(?:(?:\d{1,4}(?:[;:]\d{0,4})*)?[\dA-PR-TZcf-nq-uy=><~]))/g
+
+const sanitizeMarkerPayload = (value: string): string =>
+  value.replace(ANSI_CSI_PATTERN, '').replace(/[\r\n]/g, '')
+
 export class TerminalProtocol {
   public readonly readyMarker: string
   public readonly cwdPrefix: string
@@ -77,7 +83,9 @@ export class TerminalProtocol {
 
       const endIndex = this.buffer.indexOf(MARKER_SUFFIX, variableMarker.prefix.length)
       if (endIndex < 0) return events
-      const payload = this.buffer.slice(variableMarker.prefix.length, endIndex)
+      const payload = sanitizeMarkerPayload(
+        this.buffer.slice(variableMarker.prefix.length, endIndex)
+      )
       this.buffer = this.buffer.slice(endIndex + MARKER_SUFFIX.length)
 
       if (variableMarker.type === 'cwd') {
