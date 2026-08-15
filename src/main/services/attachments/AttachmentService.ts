@@ -2,14 +2,18 @@ import fs from 'fs'
 import path from 'path'
 import { v4 as uuidv4 } from 'uuid'
 import type { ChatAttachment } from '../../../shared/types'
-import {
-  SUPPORTED_ATTACHMENT_FILE_EXTENSIONS,
-  SUPPORTED_ATTACHMENT_IMAGE_EXTENSIONS
-} from '../../../shared/attachmentFormats'
 import { ensureWorkspaceAssetBucket } from '../assets/WorkspaceAssetService'
 
-const SUPPORTED_IMAGE_EXTENSIONS = new Set<string>(SUPPORTED_ATTACHMENT_IMAGE_EXTENSIONS)
-const SUPPORTED_FILE_EXTENSIONS = new Set<string>(SUPPORTED_ATTACHMENT_FILE_EXTENSIONS)
+const SUPPORTED_IMAGE_EXTENSIONS = new Set<string>([
+  'png',
+  'jpg',
+  'jpeg',
+  'webp',
+  'gif',
+  'bmp',
+  'tif',
+  'tiff'
+])
 
 const MIME_BY_EXTENSION: Record<string, string> = {
   png: 'image/png',
@@ -67,22 +71,6 @@ const resolveAttachmentKind = (input: {
     ? 'image'
     : 'file'
 
-const isSupportedAttachment = (input: {
-  filePath?: string
-  name?: string
-  mimeType?: string
-  kind?: ChatAttachment['kind']
-}): boolean => {
-  const mimeType = normalizeMimeType(input.mimeType)
-  const ext = normalizeExt(
-    input.filePath ? path.extname(input.filePath) : path.extname(input.name || '')
-  )
-  if (input.kind === 'image' || isImageMime(mimeType) || SUPPORTED_IMAGE_EXTENSIONS.has(ext)) {
-    return true
-  }
-  return SUPPORTED_FILE_EXTENSIONS.has(ext)
-}
-
 const splitFileName = (name: string): { stem: string; extWithDot: string } => {
   const safeName = path.basename(String(name || 'attachment').trim() || 'attachment')
   const parsed = path.parse(safeName)
@@ -128,15 +116,6 @@ export class AttachmentService {
     }
   }
 
-  public isSupportedFile(input: {
-    filePath?: string
-    name?: string
-    mimeType?: string
-    kind?: ChatAttachment['kind']
-  }): boolean {
-    return isSupportedAttachment(input)
-  }
-
   public async createSourceAttachmentFromPath(input: {
     sourcePath: string
     kind?: ChatAttachment['kind']
@@ -148,16 +127,6 @@ export class AttachmentService {
     }
     const stats = await fs.promises.stat(sourcePath)
     if (!stats.isFile()) throw new Error('附件必须是文件')
-    if (
-      !this.isSupportedFile({
-        filePath: sourcePath,
-        name: path.basename(sourcePath),
-        mimeType: input.mimeType,
-        kind: input.kind
-      })
-    ) {
-      throw new Error('暂不支持该文件格式')
-    }
     return this.createAttachmentFromPath({
       filePath: sourcePath,
       kind: input.kind,
@@ -175,15 +144,6 @@ export class AttachmentService {
   }): Promise<ChatAttachment> {
     if (!input.bytes.byteLength) {
       throw new Error('附件内容为空')
-    }
-    if (
-      !this.isSupportedFile({
-        name: input.name,
-        mimeType: input.mimeType,
-        kind: input.kind
-      })
-    ) {
-      throw new Error('暂不支持该文件格式')
     }
 
     const dirPath = await ensureWorkspaceAssetBucket(input.workspaceRootPath, input.assetBucketId)

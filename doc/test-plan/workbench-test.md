@@ -21,7 +21,7 @@
 - image generation apply case 需要真实模型学习 `image-generation`、真实调用 `image_generate`、生成可解码图片、展示修改入口和图片预览，并完成新建图片回退。
 - `browser-use-task-panel` 需要真实 AI run 触发 `browser_use` 并驱动内置浏览器完成本地网页任务；同时验证多个浏览器 Tab 独立历史、共享持久站点数据、切换文件后网页状态不销毁，以及同 URL 标签不会让 Stagehand 串页，不能用 fake browser 替代。
 - `web_search` 与 `web_crawl` 需要分开覆盖：搜索 case 只验证候选网页返回；读取 case 必须验证 AI 继续读取网页正文后再回答。
-- Workbench 附件链路当前支持图片、`doc`、`docx`、`pptx`、`pdf`、`md`、`json`、`xlsx`、`xlsm`、`xltx`、`xltm`；`+` 和拖放保留源文件绝对路径，粘贴文件保存到 `<workspace>/.ncurator/runtime/assets/<assetBucketId>/`。`assetBucketId` 为输入草稿 UUID，发送给 AI 时只传附件名称与路径，不再做发送前识图或文件解析。
+- Workbench 附件链路不限文件扩展名，任何可被文件选择器选中的普通文件都可以添加，不因扩展名拒绝；`+` 和拖放保留源文件绝对路径，粘贴文件保存到 `<workspace>/.ncurator/runtime/assets/<assetBucketId>/`。`assetBucketId` 为输入草稿 UUID，发送给 AI 时只传附件名称与路径，不再做发送前识图或文件解析；文件是否可被 AI 工具处理由 AI 工具层自行判断。
 - `WB-EXCEL-001-AC1`、`WB-EXCEL-001-AC2`、`WB-EXCEL-001-AC3`、`WB-EXCEL-001-AC4`、`WB-EXCEL-001-AC6`、`WB-EXCEL-001-AC7` 的工具输入输出、完整编辑操作、原子失败、冲突、只读格式、默认 Sheet 和 Sheet 严格校验由 AI tool 回归承担；`WB-EXCEL-002` 的完整 XLSX diff 语义也由 AI tool 解析 diff 文件校验。Workbench 的 Excel apply case 负责真实模型选用工具、正式文件、修改入口、只读单网格预览和回退闭环，不重复枚举底层操作。
 - docx、ppt、pdf 也按同一分层：格式专用工具的读写、边界、格式保真和 diff artifact 语义放在 AI tool；DOCX tool 必须覆盖已有表格的单元格内容与格式净变化、精确红绿标记、计数和非空回读；其中 PPT tool 必须完整覆盖 baseline 到最终状态的页面/元素净变化、自然位移、零净变化、lineage、v4 schema 和准确计数。Workbench e2e 只验证真实用户流程、现有预览入口、红绿页面标记、`+N/-N`、差异面板交互和回退，不重复枚举底层元素组合。PDF 当前是只读工具，没有 Workbench apply diff 语义。
 - DOCX 工具结果和历史结果按递归 children 树展示，Workbench 必须能显示 visualId、visual kind、nodeId 和统一 style action，不再读取旧 runs/cells/paragraphs history shape。`docx_read_visuals` 使用与 PDF/PPT 视觉读取一致的结果展示。
@@ -197,10 +197,10 @@ tests/case/workbench/
 #### `composer-attachments-context`
 
 - 测试类型：`e2e / live`
-- What：`+`、粘贴与拖入中间聊天区添加附件时，不会提前创建真实会话；图片、`doc`、`docx`、`pptx`、`pdf`、`md`、`json`、`xlsx`、`xlsm`、`xltx`、`xltm` 可以添加，并保持图片预览、文件打开、删除、普通文本粘贴和格式提示行为。
+- What：`+`、粘贴与拖入中间聊天区添加附件时，不会提前创建真实会话；常规文档和图片可以添加，非白名单扩展名（如 `zip`、`bin`）也能作为附件加入，并保持图片预览、文件打开、删除、普通文本粘贴和大文件提示行为。
 - Why：`+` 与拖放必须把源文件路径交给 AI，粘贴仍需保存副本，回归必须守住这两条不同链路。
-- How：创建并通过原生目录选择绑定真实工作区；点击添加附件后，在 Windows 系统文件窗口或 macOS Open 面板中用系统级键鼠选择真实文件，经过 Renderer → IPC → Main 源路径登记链路；另外覆盖拖入覆盖层、大文件 warning，并通过真实模型发送一次带附件消息。
-- Oracle：文件拖入中间聊天区时显示“松开以添加文件”的透明覆盖层，放下后覆盖层消失；未绑定工作区时提示先选择工作区且不添加附件；`+` 选择的文件路径等于原始源路径且不提前创建会话；图片预览、Excel 格式范围和大文件提示正确；提示词只渲染名称与路径的纯契约由 AI Unit 负责；整体对齐 `WB-COMPOSER-010`。
+- How：创建并通过原生目录选择绑定真实工作区；点击添加附件后，在 Windows 系统文件窗口或 macOS Open 面板中用系统级键鼠选择真实文件（包含一个非传统文档扩展名文件），经过 Renderer → IPC → Main 源路径登记链路；另外覆盖拖入覆盖层、大文件 warning，并通过真实模型发送一次带附件消息。
+- Oracle：文件拖入中间聊天区时显示“松开以添加文件”的透明覆盖层，放下后覆盖层消失；未绑定工作区时提示先选择工作区且不添加附件；`+` 选择的文件路径等于原始源路径且不提前创建会话；图片预览、任意扩展名文件不因格式被拒绝、大文件提示正确；提示词只渲染名称与路径的纯契约由 AI Unit 负责；整体对齐 `WB-COMPOSER-010`。
 - Not：不在跨平台业务回归中验证系统原生文件选择器的视觉细节；不通过 `attachmentPickResponse` 或直接 `attachmentSaveFile` 伪造附件结果。
 
 #### `reference-mention-keyboard`

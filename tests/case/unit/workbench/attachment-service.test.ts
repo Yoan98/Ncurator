@@ -3,7 +3,6 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { AttachmentService } from '../../../../src/main/services/attachments/AttachmentService'
-import { SUPPORTED_ATTACHMENT_EXTENSIONS } from '../../../../src/shared/attachmentFormats'
 
 describe('attachment service runtime directories', () => {
   let workspaceRootPath = ''
@@ -24,27 +23,10 @@ describe('attachment service runtime directories', () => {
     )
   })
 
-  it('exposes one extension list for validation and the native file picker', () => {
-    expect(SUPPORTED_ATTACHMENT_EXTENSIONS).toEqual([
-      'png',
-      'jpg',
-      'jpeg',
-      'webp',
-      'gif',
-      'bmp',
-      'tif',
-      'tiff',
-      'doc',
-      'docx',
-      'pptx',
-      'pdf',
-      'md',
-      'json',
-      'xlsx',
-      'xlsm',
-      'xltx',
-      'xltm'
-    ])
+  it('rejects source attachment directories', async () => {
+    await expect(
+      service.createSourceAttachmentFromPath({ sourcePath: sourceRootPath })
+    ).rejects.toThrow('附件必须是文件')
   })
 
   it('saves attachments under .ncurator/runtime and creates the scripts directory', async () => {
@@ -85,16 +67,22 @@ describe('attachment service runtime directories', () => {
     ).rejects.toThrow()
   })
 
-  it('rejects source attachment directories and unsupported files', async () => {
-    const unsupportedPath = path.join(sourceRootPath, 'archive.zip')
-    await fs.writeFile(unsupportedPath, 'not supported')
-
+  it('rejects source attachment directories', async () => {
     await expect(
       service.createSourceAttachmentFromPath({ sourcePath: sourceRootPath })
     ).rejects.toThrow('附件必须是文件')
-    await expect(
-      service.createSourceAttachmentFromPath({ sourcePath: unsupportedPath })
-    ).rejects.toThrow('暂不支持该文件格式')
+  })
+
+  it('accepts source attachments with any extension and falls back to octet-stream', async () => {
+    const sourcePath = path.join(sourceRootPath, 'archive.zip')
+    await fs.writeFile(sourcePath, 'binary-like-content')
+
+    const attachment = await service.createSourceAttachmentFromPath({ sourcePath })
+
+    expect(attachment.path).toBe(sourcePath)
+    expect(attachment.name).toBe('archive.zip')
+    expect(attachment.kind).toBe('file')
+    expect(attachment.mimeType).toBe('application/octet-stream')
   })
 
   it('accepts PDF attachments and assigns application/pdf', async () => {
@@ -146,27 +134,25 @@ describe('attachment service runtime directories', () => {
     expect(attachment.name).toBe(name)
   })
 
-  it('rejects unsupported attachment formats without writing a file', async () => {
-    await expect(
-      service.saveAttachment({
-        workspaceRootPath,
-        assetBucketId: 'bucket-unsupported',
-        name: 'archive.zip',
-        bytes: Buffer.from('not-a-supported-attachment')
-      })
-    ).rejects.toThrow('暂不支持该文件格式')
+  it('accepts attachments with unknown extensions without failing', async () => {
+    const attachment = await service.saveAttachment({
+      workspaceRootPath,
+      assetBucketId: 'bucket-unknown',
+      name: 'archive.zip',
+      bytes: Buffer.from('unknown-extension-bytes')
+    })
 
-    await expect(
-      fs.stat(
-        path.join(
-          workspaceRootPath,
-          '.ncurator',
-          'runtime',
-          'assets',
-          'bucket-unsupported',
-          'archive.zip'
-        )
+    expect(attachment.kind).toBe('file')
+    expect(attachment.mimeType).toBe('application/octet-stream')
+    expect(attachment.path).toBe(
+      path.join(
+        workspaceRootPath,
+        '.ncurator',
+        'runtime',
+        'assets',
+        'bucket-unknown',
+        'archive.zip'
       )
-    ).rejects.toThrow()
+    )
   })
 })

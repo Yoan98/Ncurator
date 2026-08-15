@@ -25,7 +25,6 @@ import type {
   WorkbenchModelSelection,
   WorkspaceSource
 } from '../../../../shared/types'
-import { SUPPORTED_ATTACHMENT_FILE_EXTENSIONS } from '../../../../shared/attachmentFormats'
 import { workbenchSelectors } from '../../testing/selectors'
 import { normalizeUserFacingError } from '../../utils/userFacingError'
 import type {
@@ -100,26 +99,6 @@ type WorkbenchComposerProps = {
 const isTextNode = (value: Node | null): value is Text => value instanceof Text
 const CARET_ANCHOR_ROLE = 'composer-caret-anchor'
 const LARGE_FILE_WARNING_BYTES = 10 * 1024 * 1024
-const SUPPORTED_ATTACHMENT_FILE_EXTENSION_SET = new Set<string>(
-  SUPPORTED_ATTACHMENT_FILE_EXTENSIONS
-)
-
-const getAttachmentFileExt = (name: string): string => {
-  const last =
-    String(name || '')
-      .split(/[\\/]/u)
-      .pop() || ''
-  const dotIndex = last.lastIndexOf('.')
-  return dotIndex >= 0
-    ? last
-        .slice(dotIndex + 1)
-        .trim()
-        .toLowerCase()
-    : ''
-}
-
-const isSupportedAttachmentFile = (name: string): boolean =>
-  SUPPORTED_ATTACHMENT_FILE_EXTENSION_SET.has(getAttachmentFileExt(name))
 
 const filterMentionReferences = (
   references: SelectedReference[],
@@ -617,10 +596,6 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
       if (nextItems.length === 0) return
       const accepted: ChatAttachment[] = []
       nextItems.forEach((item) => {
-        if (item.kind === 'file' && !isSupportedAttachmentFile(item.name)) {
-          message.warning('暂不支持该文件格式')
-          return
-        }
         if (item.kind === 'file' && Number(item.size || 0) > LARGE_FILE_WARNING_BYTES) {
           message.warning('文件过大，建议放到工作空间索引里使用')
         }

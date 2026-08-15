@@ -37,6 +37,7 @@ const createAttachmentFixtures = async (): Promise<{
   xlsmPath: string
   xltxPath: string
   xltmPath: string
+  zipPath: string
   largePath: string
   cleanup: () => Promise<void>
 }> => {
@@ -50,6 +51,7 @@ const createAttachmentFixtures = async (): Promise<{
   const xlsmPath = path.join(rootPath, 'macro-reference.xlsm')
   const xltxPath = path.join(rootPath, 'template-reference.xltx')
   const xltmPath = path.join(rootPath, 'macro-template-reference.xltm')
+  const zipPath = path.join(rootPath, 'unknown-bundle.zip')
   const largePath = path.join(rootPath, 'qa-large.json')
   const workbook = new ExcelJS.Workbook()
   workbook.addWorksheet('Data').getCell('A1').value = 'attachment fixture'
@@ -63,6 +65,7 @@ const createAttachmentFixtures = async (): Promise<{
     writeFile(xlsmPath, workbookBytes),
     writeFile(xltxPath, workbookBytes),
     writeFile(xltmPath, workbookBytes),
+    writeFile(zipPath, 'unknown extension attachment fixture'),
     writeFile(largePath, Buffer.alloc(11 * 1024 * 1024, 65))
   ])
   return {
@@ -75,6 +78,7 @@ const createAttachmentFixtures = async (): Promise<{
     xlsmPath,
     xltxPath,
     xltmPath,
+    zipPath,
     largePath,
     cleanup: async () => {
       await rm(rootPath, { recursive: true, force: true })
@@ -140,7 +144,7 @@ describe('workbench conversation e2e', () => {
         suite: 'conversation',
         groups: ['composer'],
         description:
-          '对齐附件上下文 PRD：验证统一附件选择、doc/pptx/Excel 格式放行、图片预览、文件默认打开、删除、普通文本粘贴和大文件提示。',
+          '对齐附件上下文 PRD：验证统一附件选择、任意扩展名放行（含非白名单 zip）、图片预览、文件默认打开、删除、普通文本粘贴和大文件提示。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
         execution: 'exclusive',
@@ -194,6 +198,8 @@ describe('workbench conversation e2e', () => {
             await selectWorkbenchAttachmentThroughNativeDialog(page, spreadsheetPath)
             await waitForAttachmentCardByName(page, path.basename(spreadsheetPath))
           }
+          await selectWorkbenchAttachmentThroughNativeDialog(page, attachments.zipPath)
+          await waitForAttachmentCardByName(page, 'unknown-bundle.zip')
           const droppedFileData = (await readFile(attachments.markdownPath)).toString('base64')
           await page.evaluate(
             ({ targetTestId, fileData }) => {
@@ -338,6 +344,11 @@ describe('workbench conversation e2e', () => {
                   .textContent()) || ''
             )
           )
+          const zipCardText =
+            (await getWorkbenchPrefixLocator(page, workbenchSelectors.attachmentCardPrefix)
+              .filter({ hasText: 'unknown-bundle.zip' })
+              .first()
+              .textContent()) || ''
           await selectWorkbenchAttachmentThroughNativeDialog(page, attachments.largePath)
           await waitForAttachmentCardByName(page, 'qa-large.json')
           const largeFileMessage = await waitForAntMessageText(
@@ -408,6 +419,7 @@ describe('workbench conversation e2e', () => {
             legacyDocCardText,
             pptxCardText,
             spreadsheetCardTexts,
+            zipCardText,
             submittedAttachmentNames: submittedAttachments.map((attachment) => attachment.name),
             submittedAttachmentPaths: submittedAttachments.map((attachment) => attachment.path),
             largeFileMessage,
@@ -442,6 +454,7 @@ describe('workbench conversation e2e', () => {
               ['XLSX', 'XLSM', 'XLTX', 'XLTM'].every((label, index) =>
                 result.spreadsheetCardTexts[index]?.includes(label)
               ) &&
+              result.zipCardText.includes('ZIP') &&
               [
                 'workbench-preview.md',
                 'legacy-reference.doc',
@@ -450,9 +463,10 @@ describe('workbench conversation e2e', () => {
                 'macro-reference.xlsm',
                 'template-reference.xltx',
                 'macro-template-reference.xltm',
+                'unknown-bundle.zip',
                 'qa-large.json'
               ].every((name) => result.submittedAttachmentNames.includes(name)) &&
-              result.submittedAttachmentPaths.length === 8 &&
+              result.submittedAttachmentPaths.length === 9 &&
               result.submittedAttachmentPaths.every(
                 (attachmentPath) =>
                   attachmentPath.includes(`${path.sep}ncurator-composer-attachments-`) &&
@@ -467,7 +481,7 @@ describe('workbench conversation e2e', () => {
             {
               name: 'workbench-composer-attachments-prd-flow',
               message:
-                '附件输入应满足 PRD：文件拖到中间聊天区会显示并关闭覆盖层；真实选择附件保留源文件路径，doc/pptx/Excel 可以添加并显示正确类型，添加附件不创建新会话，图片可预览且控件不压图，文件可默认打开，超过 10MB 只提示不拦截，普通文本粘贴仍正常。',
+                '附件输入应满足 PRD：文件拖到中间聊天区会显示并关闭覆盖层；真实选择附件保留源文件路径，任意扩展名（含非白名单 zip）可添加并显示正确类型，添加附件不创建新会话，图片可预览且控件不压图，文件可默认打开，超过 10MB 只提示不拦截，普通文本粘贴仍正常。',
               data: result
             }
           )

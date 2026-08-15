@@ -11,7 +11,6 @@ import { ModelService } from '../services/model/ModelService'
 import { VectorModelDownloadService } from '../services/model/VectorModelDownloadService'
 import { fetchLlmRemoteModels } from '../services/llm/modelCatalog'
 import { AttachmentService } from '../services/attachments/AttachmentService'
-import { SUPPORTED_ATTACHMENT_EXTENSIONS } from '../../shared/attachmentFormats'
 import { isModelSource } from '../../shared/modelSources'
 import { ChatRunService } from '../services/ai/ChatRunService'
 import { AiRunResourceManager } from '../services/ai/run/AiRunResourceManager'
@@ -1644,17 +1643,7 @@ export function registerHandlers(services: {
         const dialogOptions: OpenDialogOptions = {
           title: '选择附件',
           buttonLabel: '选择附件',
-          properties: ['openFile', 'multiSelections', 'dontAddToRecent'],
-          filters: [
-            {
-              name: 'Attachments',
-              extensions: [...SUPPORTED_ATTACHMENT_EXTENSIONS]
-            },
-            {
-              name: 'Supported Files',
-              extensions: [...SUPPORTED_ATTACHMENT_EXTENSIONS]
-            }
-          ]
+          properties: ['openFile', 'multiSelections', 'dontAddToRecent']
         }
         const ownerWindow = BrowserWindow.fromWebContents(event.sender)
         const e2eSelectedPath = takeE2ENativeDialogSelection(event.sender.id, 'file')
