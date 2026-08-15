@@ -40,7 +40,7 @@ const createBaselineDeck = async (workspaceRootPath: string, runId: string, task
     emitActivity: () => undefined
   })
   await runtime.edit({
-    sourcePath: FILE_NAME,
+    sourcePath: path.join(workspaceRootPath, FILE_NAME),
     actions: [
       {
         type: 'insert_slide',

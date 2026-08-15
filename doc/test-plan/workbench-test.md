@@ -501,12 +501,12 @@ tests/case/workbench/
 
 #### `docx-attachment-apply-status-and-cell-diff`
 
-- 测试类型：`e2e`
-- What：通过 Composer 添加真实 DOCX 附件，让 AI 修改已有表格单元格的文字和格式，验证附件位于 `.ncurator/runtime/assets` 时仍保持成功状态和单元格 Diff。
-- Why：通用工作区扫描忽略 `.ncurator`，且 DOCX 审核树以正文块为主，必须在真实附件链路验证专用写入记录不被误判失败。
-- How：从 UI 添加包含已有表格的 DOCX，发送明确的单元格替换和样式修改请求；等待 Run 完成后打开 assistant 修改入口，检查状态、Review Docx、临时提示和真实磁盘文件。
-- Oracle：正式 DOCX 包含最终单元格内容；修改记录为 `applied` 且不出现失败红条或“本次未检测到文件内容变化”；审核预览在对应单元格展示红绿净变化，未变单元格不整表高亮，对齐 `WB-PANEL-003-AC20`、`WB-PANEL-003-AC21`、`WB-APPLY-003-AC9`。
-- Not：不使用 fake DOCX、fake AI event 或伪造修改记录。
+- 测试类型：`e2e / live`
+- What：通过 Composer `+` 添加工作区内的真实 DOCX 附件，让 AI 修改已有表格单元格的文字和格式，验证附件保留源文件绝对路径时仍保持成功状态和单元格 Diff。
+- Why：附件链路现在保留源文件绝对路径且不限扩展名；工作区内的附件写回必须仍生成修改记录与审核内容，防止附件上下文退化或专用写入记录被误判失败。
+- How：在临时工作区根目录创建包含已有表格的 DOCX，通过 `+` 附件流程添加并发送明确的单元格替换和样式修改请求；等待 Run 完成后打开 assistant 修改入口，检查状态、Review Docx、预览模式监听真实资产文件、审核模式快照和真实磁盘文件。
+- Oracle：正式 DOCX 包含最终单元格内容；修改记录为 `applied` 且路径保持工作区内源文件绝对路径，不出现失败红条或“本次未检测到文件内容变化”；审核预览在对应单元格展示红绿净变化，未变单元格不整表高亮，对齐 `WB-PANEL-003-AC20`、`WB-PANEL-003-AC21`、`WB-APPLY-003-AC9`、`WB-COMPOSER-010-AC2`。
+- Not：不使用 fake DOCX、fake AI event 或伪造修改记录；不验证粘贴副本保存链路，该链路由 `composer-attachments-context` 覆盖。
 
 #### `terminal-rename-change-notice-and-revert`
 
