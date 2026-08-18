@@ -1,0 +1,28 @@
+.milkdown {
+  --crepe-color-background: #ffffff;
+  --crepe-color-on-background: #37352f;
+  --crepe-color-surface: #f4f4f2;
+  --crepe-color-surface-low: #fbfbfa;
+  --crepe-color-on-surface: #37352f;
+  --crepe-color-on-surface-variant: #787774;
+  --crepe-color-outline: #e0dfdc;
+  --crepe-color-primary: #2f3437;
+  --crepe-color-secondary: #eeeeec;
+  --crepe-color-on-secondary: #37352f;
+  --crepe-color-inverse: #f4f4f2;
+  --crepe-color-on-inverse: #37352f;
+  --crepe-color-inline-code: #b3261e;
+  --crepe-color-error: #b3261e;
+  --crepe-color-hover: #efefee;
+  --crepe-color-selected: #e0dfdc;
+  --crepe-color-inline-area: #eeeeec;
+  --crepe-base-font-size: 14px;
+  font-family:
+    'SF Pro Text',
+    'PingFang SC',
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
+  color: #37352f;
+}

@@ -742,6 +742,22 @@ export interface FileWatchChangeEvent {
   filePath: string
 }
 
+export interface WriteTextFileRequest {
+  filePath: string
+  content: string
+  /** 载入时的文件 SHA-256。提供时用于检测外部冲突：磁盘内容与载入时不同则拒绝覆盖。 */
+  expectedHash?: string
+}
+
+export interface WriteTextFileResponse {
+  success: boolean
+  error?: string
+  /** 磁盘内容与 expectedHash 不一致时返回 true，表示需要用户确认后再覆盖。 */
+  conflict?: boolean
+  /** 写入后的文件 SHA-256。 */
+  hash?: string
+}
+
 export type AiFileChangeStatus = 'applied' | 'reverted' | 'failed'
 export type AiFileChangeCapability =
   | 'docx'

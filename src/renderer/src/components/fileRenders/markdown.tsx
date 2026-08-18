@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Empty, Spin } from 'antd'
 import { arrayBufferFileLoader, type DocRenderer, type DocRendererProps } from 'react-doc-viewer'
 import MarkdownRenderer from '../MarkdownRenderer'
+import MarkdownEditor from './MarkdownEditor'
+import PlainTextEditor from './PlainTextEditor'
 import type { LoadedFileRenderDocument } from './types'
 import { workbenchSelectors } from '../../testing/selectors'
 import { normalizeUserFacingError } from '../../utils/userFacingError'
@@ -159,6 +161,9 @@ export const CustomMarkdownRenderer: DocRenderer = ({ mainState }: DocRendererPr
   const state = useDocumentText(currentDocument)
 
   if (!currentDocument) return null
+  if (currentDocument.editable && currentDocument.filePath) {
+    return <MarkdownEditor filePath={currentDocument.filePath} />
+  }
 
   return (
     <TextPreviewScaffold state={state}>
@@ -188,6 +193,9 @@ export const CustomPlainTextRenderer: DocRenderer = ({ mainState }: DocRendererP
   const state = useDocumentText(currentDocument)
 
   if (!currentDocument) return null
+  if (currentDocument.editable && currentDocument.filePath) {
+    return <PlainTextEditor filePath={currentDocument.filePath} />
+  }
 
   return (
     <TextPreviewScaffold state={state}>

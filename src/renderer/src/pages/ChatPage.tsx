@@ -50,6 +50,7 @@ import AssistantTurnCard from '../components/workbench/AssistantTurnCard'
 import WorkbenchComposer from '../components/workbench/WorkbenchComposer'
 import WorkbenchContentPanel from '../components/workbench/WorkbenchContentPanel'
 import UserTakeoverPanel from '../components/workbench/UserTakeoverPanel'
+import { isEditableFileDirty } from '../components/fileRenders/editableDirtyRegistry'
 import ImageLightbox from '../components/workbench/ImageLightbox'
 import AttachmentFileIcon from '../components/workbench/composer/AttachmentFileIcon'
 import ReferenceInlineToken from '../components/workbench/composer/ReferenceInlineToken'
@@ -683,6 +684,16 @@ const ChatPage: React.FC = () => {
   const [loadingOlderMessages, setLoadingOlderMessages] = useState(false)
   const [deleteConfirmSession, setDeleteConfirmSession] = useState<ChatSession | null>(null)
   const [deletingSessionIds, setDeletingSessionIds] = useState<Set<string>>(() => new Set())
+  const [discardEditsConfirm, setDiscardEditsConfirm] = useState<
+    | { kind: 'close-tab'; filePath: string; tabId: string }
+    | {
+        kind: 'open-file'
+        filePath: string
+        pendingFile: WorkbenchFileRef
+        backTarget?: WorkbenchContentPanelState
+      }
+    | null
+  >(null)
   const { mode: composerMode, setMode: setComposerMode } = useWorkbenchMode()
   const [composerAiPreference, setComposerAiPreference] = useState<WorkbenchAiPreference>('default')
   const [composerExecutionPermission, setComposerExecutionPermission] =
@@ -2512,6 +2523,16 @@ const ChatPage: React.FC = () => {
 
   const openFile = useCallback(
     async (file: WorkbenchFileRef, backTarget?: WorkbenchContentPanelState): Promise<void> => {
+      const activePath = contentPanel.kind === 'file_preview' ? contentPanel.file.path : null
+      if (activePath && activePath !== file.path && isEditableFileDirty(activePath)) {
+        setDiscardEditsConfirm({
+          kind: 'open-file',
+          filePath: activePath,
+          pendingFile: file,
+          backTarget
+        })
+        return
+      }
       const state: Extract<WorkbenchContentPanelState, { kind: 'file_preview' }> = {
         kind: 'file_preview',
         title: '文档查看',
@@ -2526,7 +2547,7 @@ const ChatPage: React.FC = () => {
         state
       })
     },
-    [openResourceTab]
+    [openResourceTab, contentPanel]
   )
 
   const openMarkdownReference = useCallback(
@@ -2645,7 +2666,7 @@ const ChatPage: React.FC = () => {
     [contentPanel, expandContentPanel, tabWorkspace.tabs, updateCurrentTabWorkspace]
   )
 
-  const closeResourceTab = useCallback(
+  const performCloseResourceTab = useCallback(
     (tabId: string): void => {
       const closedIndex = tabWorkspace.tabs.findIndex((item) => item.id === tabId)
       if (closedIndex < 0) return
@@ -2687,6 +2708,18 @@ const ChatPage: React.FC = () => {
       }
     },
     [tabWorkspace, tabWorkspaceKey]
+  )
+
+  const closeResourceTab = useCallback(
+    (tabId: string): void => {
+      const closedTab = tabWorkspace.tabs.find((item) => item.id === tabId)
+      if (closedTab?.kind === 'file' && closedTab.filePath && isEditableFileDirty(closedTab.filePath)) {
+        setDiscardEditsConfirm({ kind: 'close-tab', filePath: closedTab.filePath, tabId })
+        return
+      }
+      performCloseResourceTab(tabId)
+    },
+    [performCloseResourceTab, tabWorkspace.tabs]
   )
 
   const addBrowserTab = useCallback((): void => {
@@ -4492,6 +4525,31 @@ const ChatPage: React.FC = () => {
           <p>{applyRevertConfirm?.content}</p>
         </Modal>
         <ImageLightbox image={previewImage} onClose={() => setPreviewImage(null)} />
+        <Modal
+          open={Boolean(discardEditsConfirm)}
+          title="放弃未保存的修改？"
+          okText="放弃修改"
+          cancelText="取消"
+          okButtonProps={{ danger: true }}
+          onOk={() => {
+            const confirm = discardEditsConfirm
+            setDiscardEditsConfirm(null)
+            if (!confirm) return
+            if (confirm.kind === 'close-tab') {
+              performCloseResourceTab(confirm.tabId)
+              return
+            }
+            void openFile(confirm.pendingFile, confirm.backTarget)
+          }}
+          onCancel={() => setDiscardEditsConfirm(null)}
+        >
+          <p
+            className="text-sm leading-6 text-[#787774]"
+            data-testid={workbenchSelectors.editableDiscardConfirmModal}
+          >
+            该文件有未保存的修改，继续操作后将丢失这些修改。
+          </p>
+        </Modal>
         <Modal
           open={Boolean(deleteConfirmSession)}
           title="删除这个会话？"

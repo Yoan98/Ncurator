@@ -25,7 +25,9 @@ import type {
   FileWatchMutationRequest,
   FileWatchStartRequest,
   FileWatchStartResponse,
-  FileWatchStopResponse
+  FileWatchStopResponse,
+  WriteTextFileRequest,
+  WriteTextFileResponse
 } from '../../shared/types'
 import {
   buildWebReferenceItem,
@@ -137,6 +139,7 @@ import { WEB_INGEST_CONCURRENCY } from '../utils/constant'
 import { Jieba } from '@node-rs/jieba'
 import { dict } from '@node-rs/jieba/dict'
 import { normalizeForIpc } from '../utils/serialization'
+import { writeTextFileAtomically } from '../services/files/TextFileWriteService'
 
 type E2ENativeDialogSelection = {
   kind: 'directory' | 'file'
@@ -2239,6 +2242,32 @@ export function registerHandlers(services: {
     const normalizedPath = String(filePath || '').trim()
     return Boolean(normalizedPath) && fs.existsSync(normalizedPath)
   })
+
+  ipcMain.handle(
+    'write-text-file',
+    async (_event, payload: WriteTextFileRequest): Promise<WriteTextFileResponse> => {
+      try {
+        const filePath = String(payload?.filePath || '').trim()
+        if (!filePath) return { success: false, error: 'path is required' }
+        if (typeof payload?.content !== 'string') {
+          return { success: false, error: 'content must be a string' }
+        }
+
+        const result = writeTextFileAtomically(filePath, payload.content, payload.expectedHash)
+        if (!result.ok) {
+          return {
+            success: false,
+            conflict: result.conflict,
+            error: result.error || '写入失败'
+          }
+        }
+        return { success: true, hash: result.hash }
+      } catch (error) {
+        console.error('❌ [WRITE-TEXT-FILE] ERROR:', error)
+        return { success: false, error: getErrorMessage(error) }
+      }
+    }
+  )
 
   ipcMain.handle('download-model', async (_event, repoId: string, source?: unknown) => {
     try {

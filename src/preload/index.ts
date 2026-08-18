@@ -245,6 +245,12 @@ const api: DesktopApi = {
   getEmbeddingStatus: () => ipcRenderer.invoke('get-embedding-status'),
   readFile: (filePath: string): Promise<Uint8Array> => ipcRenderer.invoke('read-file', filePath),
   fileExists: (filePath: string): Promise<boolean> => ipcRenderer.invoke('file-exists', filePath),
+  writeTextFile: (payload) => {
+    emitE2EIpcCall('writeTextFile', {
+      filePath: String(payload?.filePath || '').trim()
+    })
+    return ipcRenderer.invoke('write-text-file', payload)
+  },
   attachmentPick: (payload) => {
     emitE2EIpcCall('attachmentPick')
     return ipcRenderer.invoke('attachment-pick', payload)

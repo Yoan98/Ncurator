@@ -14,6 +14,8 @@ export type FileRenderDocument = {
   metadata?: FileRenderMetadata
   contentRevision?: number
   file?: File | Blob
+  /** 标记该文档是否允许应用内所见即所得编辑（仅真实本地文件使用，AI 修改快照不设置）。 */
+  editable?: boolean
 }
 
 export type LoadedFileRenderDocument = IDocument & {
@@ -21,6 +23,7 @@ export type LoadedFileRenderDocument = IDocument & {
   filePath?: string
   metadata?: FileRenderMetadata
   file?: File | Blob
+  editable?: boolean
 }
 
 export type UnsupportedFileRenderDocument = {

@@ -40,6 +40,7 @@ const getDocumentsSignature = (documents: FileRenderDocument[]): string =>
         document.uri,
         document.fileType,
         document.contentRevision,
+        document.editable ? 'editable' : '',
         document.metadata ? JSON.stringify(document.metadata) : ''
       ].join('\u0000')
     )

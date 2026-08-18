@@ -25,6 +25,7 @@ import type {
 import TextHighlighter from '../TextHighlighter'
 import { FileRenderViewer } from '../fileRenders'
 import type { FileRenderDocument } from '../fileRenders'
+import { classifyEditableTextKind, type EditableTextKind } from '../fileRenders/editableTextKind'
 import WorkbenchBrowserPanel from './WorkbenchBrowserPanel'
 import type { SearchWorkbenchTurn, WorkbenchContentPanelState, WorkbenchResourceTab } from './types'
 import { workbenchSelectors } from '../../testing/selectors'
@@ -761,12 +762,32 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
   )
   const [documentDisplayMode, setDocumentDisplayMode] = useState<DocumentDisplayMode>('review')
   const [previewRevision, setPreviewRevision] = useState(0)
+  const [editableKind, setEditableKind] = useState<EditableTextKind>(null)
   const aiRunActiveRef = React.useRef(isAiRunActive)
   const previousAiRunActiveRef = React.useRef(isAiRunActive)
   const suppressExternalNoticeUntilRef = React.useRef(isAiRunActive ? Number.POSITIVE_INFINITY : 0)
   const floatingExplorer = state.kind === 'file_preview' || state.kind === 'apply_workspace'
-  const previewWatchPath =
+  const activeEditableFile =
     state.kind === 'file_preview' && !state.file.isDirectory
+      ? { path: state.file.path, fileName: state.file.fileName }
+      : null
+  useEffect(() => {
+    const path = activeEditableFile?.path
+    const fileName = activeEditableFile?.fileName
+    if (!path || !fileName) {
+      setEditableKind(null)
+      return
+    }
+    let cancelled = false
+    void classifyEditableTextKind(path, fileName).then((kind) => {
+      if (!cancelled) setEditableKind(kind)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [activeEditableFile?.path, activeEditableFile?.fileName])
+  const previewWatchPath =
+    state.kind === 'file_preview' && !state.file.isDirectory && editableKind === null
       ? state.file.path
       : state.kind === 'apply_workspace' &&
           documentDisplayMode === 'preview' &&
@@ -859,11 +880,12 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
               filePath: state.file.path,
               fileName: state.file.fileName,
               contentRevision: previewRevision,
+              editable: editableKind !== null,
               metadata: state.file.pageNumber ? { pageNumber: state.file.pageNumber } : undefined
             }
           ]
         : [],
-    [previewRevision, state]
+    [previewRevision, state, editableKind]
   )
   const hasDedicatedPreview = Boolean(activeApplyRecord?.previewPath)
   const canSwitchDisplayMode = canSwitchDocumentDisplayMode(activeApplyRecord)

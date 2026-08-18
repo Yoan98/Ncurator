@@ -82,7 +82,7 @@ const waitForPdfPreviewPage = async (page: Page): Promise<boolean> => {
 }
 
 const waitForMarkdownPreview = async (page: Page): Promise<boolean> => {
-  const viewer = getWorkbenchLocator(page, workbenchSelectors.markdownViewer)
+  const viewer = getWorkbenchLocator(page, workbenchSelectors.markdownEditor)
   await viewer.waitFor({ state: 'visible', timeout: 30_000 })
   const text = (await viewer.textContent()) || ''
   return (
@@ -93,9 +93,9 @@ const waitForMarkdownPreview = async (page: Page): Promise<boolean> => {
 }
 
 const waitForPlainTextPreview = async (page: Page): Promise<boolean> => {
-  const viewer = getWorkbenchLocator(page, workbenchSelectors.plainTextViewer)
+  const viewer = getWorkbenchLocator(page, workbenchSelectors.plainTextEditor)
   await viewer.waitFor({ state: 'visible', timeout: 30_000 })
-  const text = (await viewer.textContent()) || ''
+  const text = await viewer.inputValue().catch(() => '')
   return text.includes('Hello from human fixture.') && text.includes('workspace read validation')
 }
 

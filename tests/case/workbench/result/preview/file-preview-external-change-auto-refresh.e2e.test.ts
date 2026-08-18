@@ -90,8 +90,10 @@ describe('workbench result e2e', () => {
           const fileFilter = page.getByPlaceholder('筛选文件…')
           await fileFilter.fill('external-watch.md')
           await page.getByTitle('external-watch.md', { exact: true }).click()
-          const markdownViewer = getWorkbenchLocator(page, workbenchSelectors.markdownViewer)
-          await markdownViewer.getByText('original markdown content', { exact: true }).waitFor()
+          const markdownEditor = getWorkbenchLocator(page, workbenchSelectors.markdownEditor)
+          await markdownEditor
+            .getByText('original markdown content', { exact: true })
+            .waitFor({ timeout: 30_000 })
           await page.waitForFunction(() =>
             Boolean(
               (
@@ -131,17 +133,16 @@ describe('workbench result e2e', () => {
           await fs.writeFile(markdownPath, '# External Watch\n\nfirst external content')
           await fs.writeFile(markdownPath, '# External Watch\n\nsecond external content')
           await fs.writeFile(markdownPath, '# External Watch\n\nfinal external content')
-          await markdownViewer.getByText('final external content', { exact: true }).waitFor()
-          await page.waitForFunction(
-            () =>
-              (window as unknown as { __NCURATOR_TEST_EXTERNAL_NOTICE_COUNT__?: number })
-                .__NCURATOR_TEST_EXTERNAL_NOTICE_COUNT__ === 1
-          )
-          const externalChangeNoticeCount = await page.evaluate(
-            () =>
-              (window as unknown as { __NCURATOR_TEST_EXTERNAL_NOTICE_COUNT__?: number })
-                .__NCURATOR_TEST_EXTERNAL_NOTICE_COUNT__ || 0
-          )
+          await markdownEditor
+            .getByText('final external content', { exact: true })
+            .waitFor({ timeout: 30_000 })
+          await page.waitForTimeout(500)
+          const markdownExternalNoticeAbsent =
+            (await page.evaluate(
+              () =>
+                (window as unknown as { __NCURATOR_TEST_EXTERNAL_NOTICE_COUNT__?: number })
+                  .__NCURATOR_TEST_EXTERNAL_NOTICE_COUNT__ || 0
+            )) === 0
 
           const openWorkspaceFile = async (fileName: string): Promise<void> => {
             if (!(await fileFilter.isVisible().catch(() => false))) {
@@ -153,20 +154,26 @@ describe('workbench result e2e', () => {
           }
 
           await openWorkspaceFile('external-watch.txt')
-          const textViewer = getWorkbenchLocator(page, workbenchSelectors.plainTextViewer)
-          await textViewer.getByText('original text content', { exact: true }).waitFor()
+          const textEditor = getWorkbenchLocator(page, workbenchSelectors.plainTextEditor)
+          await page.waitForFunction(
+            (testId) =>
+              (document.querySelector(`[data-testid="${testId}"]`) as HTMLTextAreaElement | null)
+                ?.value?.includes('original text content'),
+            workbenchSelectors.plainTextEditor,
+            { timeout: 30_000 }
+          )
 
           await fs.writeFile(markdownPath, '# External Watch\n\nchanged while inactive')
           await page.waitForTimeout(1_000)
-          const inactiveFileDidNotRefreshCurrentPreview = await textViewer
-            .getByText('original text content', { exact: true })
-            .isVisible()
+          const inactiveFileDidNotRefreshCurrentPreview = await textEditor.evaluate(
+            (element) => (element as HTMLTextAreaElement).value.includes('original text content')
+          )
           const inactiveFileNoticeAbsent =
             (await page.evaluate(
               () =>
                 (window as unknown as { __NCURATOR_TEST_EXTERNAL_NOTICE_COUNT__?: number })
                   .__NCURATOR_TEST_EXTERNAL_NOTICE_COUNT__ || 0
-            )) === externalChangeNoticeCount
+            )) === 0
 
           await page.getByRole('button', { name: '选择打开应用' }).last().click()
           await page
@@ -204,7 +211,7 @@ describe('workbench result e2e', () => {
             (expectedCount) =>
               (window as unknown as { __NCURATOR_TEST_EXTERNAL_NOTICE_COUNT__?: number })
                 .__NCURATOR_TEST_EXTERNAL_NOTICE_COUNT__ === expectedCount,
-            externalChangeNoticeCount + 1
+            1
           )
           const docxRefreshNoticeCount = await page.evaluate(
             () =>
@@ -321,7 +328,7 @@ describe('workbench result e2e', () => {
           const signals = await runtime.collectSignals()
 
           return {
-            externalChangeNoticeCount,
+            markdownExternalNoticeAbsent,
             inactiveFileDidNotRefreshCurrentPreview,
             inactiveFileNoticeAbsent,
             ordinaryOpenHintAbsent,
@@ -344,15 +351,15 @@ describe('workbench result e2e', () => {
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
-            result.externalChangeNoticeCount === 1 &&
+            result.markdownExternalNoticeAbsent &&
               result.inactiveFileDidNotRefreshCurrentPreview &&
               result.inactiveFileNoticeAbsent &&
               result.ordinaryOpenHintAbsent &&
-              result.docxRefreshNoticeCount === 2 &&
+              result.docxRefreshNoticeCount === 1 &&
               result.pptxPreviewRefreshed &&
-              result.pptxRefreshNoticeCount === 3 &&
+              result.pptxRefreshNoticeCount === 2 &&
               result.xlsxPreviewRefreshed &&
-              result.xlsxRefreshNoticeCount === 4 &&
+              result.xlsxRefreshNoticeCount === 3 &&
               result.closedFileNoticeAbsent &&
               result.watchStartCalls >= 5 &&
               result.watchStopCalls >= 5 &&

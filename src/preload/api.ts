@@ -101,7 +101,9 @@ import type {
   WorkspaceTreeListResponse,
   WorkspaceDirectoryListResponse,
   WorkbenchUiStateResponse,
-  WorkbenchUiStateSaveRequest
+  WorkbenchUiStateSaveRequest,
+  WriteTextFileRequest,
+  WriteTextFileResponse
 } from '../shared/types'
 
 export type ModelInfo = {
@@ -188,6 +190,7 @@ export type DesktopApi = {
   getEmbeddingStatus: () => Promise<'uninitialized' | 'initializing' | 'ready' | 'error'>
   readFile: (filePath: string) => Promise<Uint8Array>
   fileExists: (filePath: string) => Promise<boolean>
+  writeTextFile: (payload: WriteTextFileRequest) => Promise<WriteTextFileResponse>
   attachmentPick: (payload: AttachmentPickRequest) => Promise<AttachmentPickResponse>
   attachmentGetSourcePath: (file: File) => string
   attachmentCreateFromPath: (

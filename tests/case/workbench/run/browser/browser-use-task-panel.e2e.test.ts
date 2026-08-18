@@ -295,7 +295,7 @@ describe('workbench run e2e', () => {
             .first()
             .getByRole('button', { name: '预览文件' })
             .click()
-          await getWorkbenchLocator(page, workbenchSelectors.markdownViewer).waitFor({
+          await getWorkbenchLocator(page, workbenchSelectors.markdownEditor).waitFor({
             state: 'visible',
             timeout: 30_000
           })
@@ -430,7 +430,7 @@ describe('workbench run e2e', () => {
             .filter({ hasText: 'workbench-preview.md' })
             .first()
             .evaluate((element) => (element as HTMLElement).click())
-          const fileTabRestored = await getWorkbenchLocator(page, workbenchSelectors.markdownViewer)
+          const fileTabRestored = await getWorkbenchLocator(page, workbenchSelectors.markdownEditor)
             .waitFor({ state: 'visible', timeout: 30_000 })
             .then(() => true)
             .catch(() => false)
