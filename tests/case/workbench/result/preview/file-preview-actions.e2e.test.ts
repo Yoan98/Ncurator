@@ -84,6 +84,18 @@ const waitForPdfPreviewPage = async (page: Page): Promise<boolean> => {
 const waitForMarkdownPreview = async (page: Page): Promise<boolean> => {
   const viewer = getWorkbenchLocator(page, workbenchSelectors.markdownEditor)
   await viewer.waitFor({ state: 'visible', timeout: 30_000 })
+  const rendered = await page
+    .waitForFunction(
+      (testId) => {
+        const element = document.querySelector(`[data-testid="${testId}"]`)
+        return Boolean(element?.textContent?.includes('Workbench Preview Fixture'))
+      },
+      workbenchSelectors.markdownEditor,
+      { timeout: 30_000 }
+    )
+    .then(() => true)
+    .catch(() => false)
+  if (!rendered) return false
   const text = (await viewer.textContent()) || ''
   return (
     text.includes('Workbench Preview Fixture') &&

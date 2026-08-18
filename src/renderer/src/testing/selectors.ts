@@ -236,13 +236,6 @@ export const workbenchSelectors = {
   excelGrid: 'workbench-excel-grid',
   referenceAiWarning: 'workbench-reference-ai-warning',
   referenceSearchWarning: 'workbench-reference-search-warning',
-  editableFileToolbar: 'workbench-editable-file-toolbar',
-  editableFileDirtyBadge: 'workbench-editable-file-dirty-badge',
-  editableFileSaveButton: 'workbench-editable-file-save-button',
-  editableFileConflictBanner: 'workbench-editable-file-conflict-banner',
-  editableFileConflictSave: 'workbench-editable-file-conflict-save',
-  editableFileConflictReload: 'workbench-editable-file-conflict-reload',
   markdownEditor: 'workbench-markdown-editor',
-  plainTextEditor: 'workbench-plain-text-editor',
-  editableDiscardConfirmModal: 'workbench-editable-discard-confirm-modal'
+  plainTextEditor: 'workbench-plain-text-editor'
 } as const

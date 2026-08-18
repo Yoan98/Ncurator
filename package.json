@@ -74,8 +74,6 @@
     "@langchain/langgraph": "^1.1.5",
     "@langchain/openai": "^1.4.5",
     "@langchain/textsplitters": "^1.0.1",
-    "@milkdown/crepe": "^7.22.1",
-    "@milkdown/react": "^7.22.1",
     "@napi-rs/canvas": "0.1.80",
     "@node-rs/jieba": "^2.0.1",
     "@playwright/test": "1.58.2",
@@ -119,6 +117,7 @@
     "remark-math": "^6.0.0",
     "utf-8-validate": "6.0.5",
     "uuid": "^13.0.0",
+    "vditor": "^3.11.3",
     "word-extractor": "^1.0.4",
     "xpath": "^0.0.34",
     "zod": "^4.3.6"

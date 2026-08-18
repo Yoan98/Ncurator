@@ -29,6 +29,19 @@ const openWorkspaceFile = async (
   await page.getByTitle(fileName, { exact: true }).click()
 }
 
+const waitForDiskIncludes = async (
+  filePath: string,
+  needle: string,
+  timeout = 10_000
+): Promise<boolean> => {
+  const deadline = Date.now() + timeout
+  while (Date.now() < deadline) {
+    if ((await fs.readFile(filePath, 'utf8')).includes(needle)) return true
+    await new Promise((resolve) => setTimeout(resolve, 150))
+  }
+  return false
+}
+
 describe('workbench result e2e', () => {
   it(
     CASE_ID,
@@ -38,7 +51,7 @@ describe('workbench result e2e', () => {
         domain: 'workbench',
         suite: 'result',
         groups: ['preview'],
-        description: 'TXT/JSON 等 UTF-8 普通文本打开即纯文本编辑，保存保留 CRLF 与 BOM、不 markdown 化改写。',
+        description: 'TXT/JSON 等 UTF-8 普通文本打开即纯文本编辑，输入自动落盘并保留 CRLF 与 BOM、不 markdown 化改写。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
         windowMode: 'visible',
@@ -71,6 +84,7 @@ describe('workbench result e2e', () => {
           const fileFilter = page.getByPlaceholder('筛选文件…')
           await openWorkspaceFile(page, fileFilter, 'notes-crlf.txt')
           const textEditor = getWorkbenchLocator(page, workbenchSelectors.plainTextEditor)
+          await textEditor.waitFor({ state: 'visible', timeout: 30_000 })
           await page.waitForFunction(
             (testId) =>
               (document.querySelector(`[data-testid="${testId}"]`) as HTMLTextAreaElement | null)
@@ -78,28 +92,16 @@ describe('workbench result e2e', () => {
             workbenchSelectors.plainTextEditor,
             { timeout: 30_000 }
           )
-          const dirtyBadge = getWorkbenchLocator(page, workbenchSelectors.editableFileDirtyBadge)
-          const saveButton = getWorkbenchLocator(page, workbenchSelectors.editableFileSaveButton)
 
-          await textEditor.fill('line one\r\nline two\r\nappended line\r\n')
-          await dirtyBadge.waitFor({ state: 'visible', timeout: 10_000 })
-          await saveButton.click()
-          await page.waitForFunction(
-            async (testId) => {
-              const button = document.querySelector(`[data-testid="${testId}"]`) as HTMLButtonElement | null
-              return Boolean(button?.disabled)
-            },
-            workbenchSelectors.editableFileSaveButton,
-            { timeout: 10_000 }
-          )
-          await page.waitForTimeout(300)
+          await textEditor.fill('line one\nline two\nappended line\n')
+          const autoSavedTxt = await waitForDiskIncludes(crlfPath, 'appended line')
           const savedBytes = await fs.readFile(crlfPath)
           const bomPreserved = savedBytes[0] === 0xef && savedBytes[1] === 0xbb && savedBytes[2] === 0xbf
           const crlfPreserved = savedBytes.toString('utf8').includes('appended line\r\n')
-          const noLfOnly = !savedBytes.toString('utf8').match(/(?<!\r)\n/)
-          const dirtyCleared = (await dirtyBadge.count()) === 0
+          const noBareLf = !savedBytes.toString('utf8').match(/(?<!\r)\n/)
 
           await openWorkspaceFile(page, fileFilter, 'config.json')
+          const jsonEditor = getWorkbenchLocator(page, workbenchSelectors.plainTextEditor)
           await page.waitForFunction(
             (testId) =>
               (document.querySelector(`[data-testid="${testId}"]`) as HTMLTextAreaElement | null)
@@ -107,20 +109,9 @@ describe('workbench result e2e', () => {
             workbenchSelectors.plainTextEditor,
             { timeout: 30_000 }
           )
-          const jsonValueBefore = await textEditor.inputValue()
-          const jsonEditor = getWorkbenchLocator(page, workbenchSelectors.plainTextEditor)
+          const jsonValueBefore = await jsonEditor.inputValue()
           await jsonEditor.fill('{\n  "title": "original json",\n  "items": [1, 2]\n}\n')
-          await dirtyBadge.waitFor({ state: 'visible', timeout: 10_000 })
-          await page.keyboard.press('Meta+S')
-          await page.waitForFunction(
-            async (testId) => {
-              const button = document.querySelector(`[data-testid="${testId}"]`) as HTMLButtonElement | null
-              return Boolean(button?.disabled)
-            },
-            workbenchSelectors.editableFileSaveButton,
-            { timeout: 10_000 }
-          )
-          await page.waitForTimeout(300)
+          const autoSavedJson = await waitForDiskIncludes(jsonPath, '"items"')
           const jsonOnDisk = await fs.readFile(jsonPath, 'utf8')
           const jsonNotMarkdownified =
             jsonOnDisk.includes('"title"') &&
@@ -129,11 +120,12 @@ describe('workbench result e2e', () => {
 
           const signals = await runtime.collectSignals()
           return {
+            autoSavedTxt,
             bomPreserved,
             crlfPreserved,
-            noLfOnly,
-            dirtyCleared,
+            noBareLf,
             jsonEditable: jsonValueBefore.includes('original json'),
+            autoSavedJson,
             jsonNotMarkdownified,
             writeTextFileCalls: signals.ipcInvokeEntries.filter(
               (entry) => entry.name === 'writeTextFile'
@@ -142,17 +134,19 @@ describe('workbench result e2e', () => {
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
-            result.bomPreserved &&
+            result.autoSavedTxt &&
+              result.bomPreserved &&
               result.crlfPreserved &&
-              result.noLfOnly &&
-              result.dirtyCleared &&
+              result.noBareLf &&
               result.jsonEditable &&
+              result.autoSavedJson &&
               result.jsonNotMarkdownified &&
               result.writeTextFileCalls >= 2,
             {
               name: 'workbench-plain-text-editor-edit-save-real',
               message:
-                'TXT/JSON 打开即纯文本编辑，保存后保留 UTF-8 BOM 与 CRLF 换行、内容不被 markdown 化改写。',
+                'TXT/JSON 打开即纯文本编辑，编辑后自动落盘，保留 UTF-8 BOM 与 CRLF 换行、内容不被 markdown 化改写。\n' +
+                JSON.stringify(result),
               data: result
             }
           )

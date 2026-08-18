@@ -1,8 +1,6 @@
-import React, { useCallback, useEffect, useState } from 'react'
-import { Empty, Spin, message } from 'antd'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
+import { Empty, Spin } from 'antd'
 import { useEditableTextFile } from './useEditableTextFile'
-import { registerEditableFileDirty } from './editableDirtyRegistry'
-import { EditableFileSurface } from './EditableFileSurface'
 import { workbenchSelectors } from '../../testing/selectors'
 
 const TEXT_EDIT_MAX_CHARS = 500_000
@@ -10,58 +8,36 @@ const TEXT_EDIT_MAX_CHARS = 500_000
 const PlainTextEditor: React.FC<{ filePath: string }> = ({ filePath }) => {
   const file = useEditableTextFile(filePath)
   const [value, setValue] = useState('')
-  const { initialText, setDirty } = file
+  const { initialText, autoSave, flushSave } = file
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null)
 
   useEffect(() => {
-    if (file.initialText !== null) setValue(file.initialText)
-  }, [file.initialText])
+    if (initialText !== null) setValue(initialText)
+  }, [initialText])
 
   const handleChange = useCallback(
     (event: React.ChangeEvent<HTMLTextAreaElement>): void => {
       const next = event.target.value
       setValue(next)
-      setDirty(next !== (initialText ?? ''))
+      autoSave(next)
     },
-    [initialText, setDirty]
+    [autoSave]
   )
 
-  const saveContent = useCallback(
-    async (options?: { force?: boolean }): Promise<void> => {
-      const result = await file.save(value, options)
-      if (result.ok) {
-        message.success('已保存')
-      } else if (result.conflict) {
-        message.warning(result.error || '文件已被外部修改')
-      } else {
-        message.error(result.error || '保存失败')
-      }
+  useEffect(() => {
+    const editor = textareaRef.current
+    if (!editor) return
+    const onBlur = (): void => flushSave()
+    editor.addEventListener('blur', onBlur)
+    return () => editor.removeEventListener('blur', onBlur)
+  }, [flushSave, file.loading])
+
+  useEffect(
+    () => () => {
+      flushSave()
     },
-    [file, value]
+    [flushSave]
   )
-
-  const handleSave = useCallback((): void => {
-    void saveContent()
-  }, [saveContent])
-
-  const handleForceSave = useCallback((): void => {
-    void saveContent({ force: true })
-  }, [saveContent])
-
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
-        event.preventDefault()
-        handleSave()
-      }
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [handleSave])
-
-  useEffect(() => {
-    registerEditableFileDirty(filePath, file.dirty)
-    return () => registerEditableFileDirty(filePath, false)
-  }, [filePath, file.dirty])
 
   if (file.loading) {
     return (
@@ -82,28 +58,21 @@ const PlainTextEditor: React.FC<{ filePath: string }> = ({ filePath }) => {
   const truncated = file.initialText.length > TEXT_EDIT_MAX_CHARS
 
   return (
-    <EditableFileSurface
-      file={file}
-      saveDisabled={!file.dirty}
-      onSave={handleSave}
-      onForceSave={handleForceSave}
-      onReload={() => void file.reload()}
-    >
-      <div className="flex h-full w-full flex-col overflow-hidden bg-white">
-        {truncated ? (
-          <div className="shrink-0 border-b border-[#EEEEEC] bg-[#FFF8E5] px-6 py-2 text-xs text-[#7A4D00]">
-            文件较大，仅可编辑前 {TEXT_EDIT_MAX_CHARS.toLocaleString()} 个字符。
-          </div>
-        ) : null}
-        <textarea
-          className="m-0 min-h-0 flex-1 resize-none whitespace-pre-wrap break-words border-0 bg-white px-8 py-6 font-mono text-[13px] leading-6 text-[#37352F] outline-none"
-          data-testid={workbenchSelectors.plainTextEditor}
-          value={truncated ? value.slice(0, TEXT_EDIT_MAX_CHARS) : value}
-          onChange={handleChange}
-          spellCheck={false}
-        />
-      </div>
-    </EditableFileSurface>
+    <div className="flex h-full w-full flex-col overflow-hidden bg-white">
+      {truncated ? (
+        <div className="shrink-0 border-b border-[#EEEEEC] bg-[#FFF8E5] px-6 py-2 text-xs text-[#7A4D00]">
+          文件较大，仅可编辑前 {TEXT_EDIT_MAX_CHARS.toLocaleString()} 个字符。
+        </div>
+      ) : null}
+      <textarea
+        ref={textareaRef}
+        className="m-0 min-h-0 flex-1 resize-none whitespace-pre-wrap break-words border-0 bg-white px-8 py-6 font-mono text-[13px] leading-6 text-[#37352F] outline-none"
+        data-testid={workbenchSelectors.plainTextEditor}
+        value={truncated ? value.slice(0, TEXT_EDIT_MAX_CHARS) : value}
+        onChange={handleChange}
+        spellCheck={false}
+      />
+    </div>
   )
 }
 

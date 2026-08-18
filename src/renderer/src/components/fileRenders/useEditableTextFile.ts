@@ -2,11 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { normalizeUserFacingError } from '../../utils/userFacingError'
 import { sha256Hex } from '../../utils/fileHash'
 
-export type SaveEditableResult = {
-  ok: boolean
-  conflict: boolean
-  error?: string
-}
+const AUTO_SAVE_DEBOUNCE_MS = 400
 
 type LoadState = {
   loading: boolean
@@ -19,14 +15,11 @@ export type EditableTextFile = {
   loading: boolean
   loadError: string | null
   initialText: string | null
-  initialHash: string | null
-  dirty: boolean
-  saving: boolean
-  externalConflict: boolean
-  setDirty: (dirty: boolean) => void
+  /** 注册一次内容变更并安排防抖自动保存（纯覆盖）。 */
+  autoSave: (content: string) => void
+  /** 立即保存挂起的改动并清空防抖。 */
+  flushSave: () => void
   reload: () => Promise<void>
-  save: (content: string, options?: { force?: boolean }) => Promise<SaveEditableResult>
-  clearConflict: () => void
 }
 
 const decodeUtf8 = (bytes: Uint8Array): string => {
@@ -44,6 +37,12 @@ const applyOriginalFormat = (content: string, eol: 'lf' | 'crlf', hadBom: boolea
   return output
 }
 
+/**
+ * 应用内文本编辑的加载、自动保存与外部改动协调。
+ * - 自动保存纯覆盖：每次内容变更防抖后写入磁盘，不做冲突提示。
+ * - 外部改动：磁盘与"最后成功写入的 hash"不同且当前无未保存改动时自动重载；
+ *   存在未保存改动时不打断编辑，下一次自动保存覆盖外部内容。
+ */
 export const useEditableTextFile = (filePath: string): EditableTextFile => {
   const [state, setState] = useState<LoadState>({
     loading: true,
@@ -51,20 +50,70 @@ export const useEditableTextFile = (filePath: string): EditableTextFile => {
     hash: null,
     error: null
   })
-  const [dirty, setDirty] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [externalConflict, setExternalConflict] = useState(false)
 
   const filePathRef = useRef(filePath)
-  const hashRef = useRef<string | null>(null)
-  const dirtyRef = useRef(false)
+  const lastWrittenHashRef = useRef<string | null>(null)
+  const unsavedRef = useRef(false)
+  const pendingContentRef = useRef<string | null>(null)
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const eolRef = useRef<'lf' | 'crlf'>('lf')
   const hadBomRef = useRef(false)
 
-  filePathRef.current = filePath
   useEffect(() => {
-    dirtyRef.current = dirty
-  }, [dirty])
+    filePathRef.current = filePath
+  }, [filePath])
+
+  const clearSaveTimer = useCallback((): void => {
+    if (saveTimerRef.current !== null) {
+      clearTimeout(saveTimerRef.current)
+      saveTimerRef.current = null
+    }
+  }, [])
+
+  const doSave = useCallback(async (content: string): Promise<void> => {
+    try {
+      const formattedContent = applyOriginalFormat(content, eolRef.current, hadBomRef.current)
+      const response = await window.api.writeTextFile({
+        filePath: filePathRef.current,
+        content: formattedContent
+      })
+      if (response.success && response.hash) {
+        lastWrittenHashRef.current = response.hash
+        if (pendingContentRef.current === content) pendingContentRef.current = null
+        unsavedRef.current = false
+      } else {
+        console.error('[EDITABLE-FILE] auto-save failed', response.error)
+      }
+    } catch (error) {
+      console.error('[EDITABLE-FILE] auto-save failed', error)
+    }
+  }, [])
+
+  const flushSave = useCallback((): void => {
+    clearSaveTimer()
+    if (pendingContentRef.current !== null) {
+      const content = pendingContentRef.current
+      pendingContentRef.current = null
+      void doSave(content)
+    }
+  }, [clearSaveTimer, doSave])
+
+  const autoSave = useCallback(
+    (content: string): void => {
+      unsavedRef.current = true
+      pendingContentRef.current = content
+      clearSaveTimer()
+      saveTimerRef.current = setTimeout(() => {
+        saveTimerRef.current = null
+        const pending = pendingContentRef.current
+        if (pending !== null) {
+          pendingContentRef.current = null
+          void doSave(pending)
+        }
+      }, AUTO_SAVE_DEBOUNCE_MS)
+    },
+    [clearSaveTimer, doSave]
+  )
 
   const load = useCallback(async (): Promise<void> => {
     setState((current) => ({ ...current, loading: true, error: null }))
@@ -74,9 +123,9 @@ export const useEditableTextFile = (filePath: string): EditableTextFile => {
       const text = decodeUtf8(bytes)
       hadBomRef.current = detectHadBom(bytes)
       eolRef.current = /\r\n/.test(text) ? 'crlf' : 'lf'
-      hashRef.current = hash
-      setDirty(false)
-      setExternalConflict(false)
+      lastWrittenHashRef.current = hash
+      unsavedRef.current = false
+      pendingContentRef.current = null
       setState({ loading: false, text, hash, error: null })
     } catch (error) {
       setState({
@@ -92,12 +141,9 @@ export const useEditableTextFile = (filePath: string): EditableTextFile => {
     try {
       const bytes = await window.api.readFile(filePathRef.current)
       const currentHash = await sha256Hex(bytes)
-      if (currentHash === hashRef.current) return
-      if (dirtyRef.current) {
-        setExternalConflict(true)
-      } else {
-        await load()
-      }
+      if (currentHash === lastWrittenHashRef.current) return
+      if (unsavedRef.current) return
+      await load()
     } catch (error) {
       console.error('[EDITABLE-FILE] external change check failed', error)
     }
@@ -145,61 +191,24 @@ export const useEditableTextFile = (filePath: string): EditableTextFile => {
     return () => {
       disposed = true
       unsubscribe()
+      clearSaveTimer()
+      if (pendingContentRef.current !== null) {
+        const pending = pendingContentRef.current
+        pendingContentRef.current = null
+        void doSave(pending)
+      }
       window.removeEventListener('focus', onFocus)
       document.removeEventListener('visibilitychange', onVisibility)
       if (watchId) void window.api.fileWatchStop({ watchId }).catch(() => undefined)
     }
-  }, [checkExternalChange, load, filePath])
-
-  const save = useCallback(
-    async (content: string, options?: { force?: boolean }): Promise<SaveEditableResult> => {
-      setSaving(true)
-      try {
-        const formattedContent = applyOriginalFormat(content, eolRef.current, hadBomRef.current)
-        const response = await window.api.writeTextFile({
-          filePath: filePathRef.current,
-          content: formattedContent,
-          expectedHash: options?.force ? undefined : hashRef.current || undefined
-        })
-        if (!response.success) {
-          if (response.conflict) {
-            setExternalConflict(true)
-            return { ok: false, conflict: true, error: response.error }
-          }
-          return { ok: false, conflict: false, error: response.error || '保存失败' }
-        }
-        if (response.hash) hashRef.current = response.hash
-        setDirty(false)
-        setExternalConflict(false)
-        return { ok: true, conflict: false }
-      } catch (error) {
-        return {
-          ok: false,
-          conflict: false,
-          error: normalizeUserFacingError(error, '保存失败')
-        }
-      } finally {
-        setSaving(false)
-      }
-    },
-    []
-  )
-
-  const clearConflict = useCallback(() => {
-    setExternalConflict(false)
-  }, [])
+  }, [checkExternalChange, clearSaveTimer, doSave, load, filePath])
 
   return {
     loading: state.loading,
     loadError: state.error,
     initialText: state.text,
-    initialHash: state.hash,
-    dirty,
-    saving,
-    externalConflict,
-    setDirty,
-    reload: load,
-    save,
-    clearConflict
+    autoSave,
+    flushSave,
+    reload: load
   }
 }

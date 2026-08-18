@@ -1,22 +1,25 @@
-.milkdown {
-  --crepe-color-background: #ffffff;
-  --crepe-color-on-background: #37352f;
-  --crepe-color-surface: #f4f4f2;
-  --crepe-color-surface-low: #fbfbfa;
-  --crepe-color-on-surface: #37352f;
-  --crepe-color-on-surface-variant: #787774;
-  --crepe-color-outline: #e0dfdc;
-  --crepe-color-primary: #2f3437;
-  --crepe-color-secondary: #eeeeec;
-  --crepe-color-on-secondary: #37352f;
-  --crepe-color-inverse: #f4f4f2;
-  --crepe-color-on-inverse: #37352f;
-  --crepe-color-inline-code: #b3261e;
-  --crepe-color-error: #b3261e;
-  --crepe-color-hover: #efefee;
-  --crepe-color-selected: #e0dfdc;
-  --crepe-color-inline-area: #eeeeec;
-  --crepe-base-font-size: 14px;
+.vditor {
+  --border-color: #eeeeec;
+  --panel-background-color: #ffffff;
+  --toolbar-background-color: #ffffff;
+  --textarea-background-color: #ffffff;
+  --textarea-text-color: #37352f;
+  --blockquote-color: #787774;
+  --heading-border-color: #eeeeec;
+  --ir-heading-color: #37352f;
+  --ir-title-color: #91918e;
+  --ir-bi-color: #0b6bcb;
+  --ir-link-color: #0b6bcb;
+  --ir-bracket-color: #91918e;
+  --ir-paren-color: #787774;
+  border: none;
+  height: 100%;
+  background: #ffffff;
+}
+
+.vditor .vditor-reset {
+  background: #ffffff;
+  color: #37352f;
   font-family:
     'SF Pro Text',
     'PingFang SC',
@@ -24,5 +27,73 @@
     BlinkMacSystemFont,
     'Segoe UI',
     sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  padding: 20px 24px 40px;
+  max-width: none;
+  word-break: break-word;
+}
+
+.vditor .vditor-reset h1,
+.vditor .vditor-reset h2,
+.vditor .vditor-reset h3,
+.vditor .vditor-reset h4,
+.vditor .vditor-reset h5,
+.vditor .vditor-reset h6 {
   color: #37352f;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.vditor .vditor-reset h1 {
+  font-size: 1.6em;
+  border-bottom: 1px solid #eeeeec;
+  padding-bottom: 0.3em;
+}
+
+.vditor .vditor-reset h2 {
+  font-size: 1.35em;
+  border-bottom: 1px solid #eeeeec;
+  padding-bottom: 0.3em;
+}
+
+.vditor .vditor-reset h3 {
+  font-size: 1.2em;
+}
+
+.vditor .vditor-reset a {
+  color: #0b6bcb;
+}
+
+.vditor .vditor-reset blockquote {
+  color: #787774;
+  border-left: 3px solid #e0dfdc;
+}
+
+.vditor .vditor-reset code {
+  background: #f4f4f2;
+  border-radius: 4px;
+}
+
+.vditor .vditor-reset pre code {
+  background: #fbfbfa;
+  border: 1px solid #eeeeec;
+  border-radius: 6px;
+}
+
+.vditor .vditor-reset table {
+  border-color: #e0dfdc;
+}
+
+.vditor .vditor-reset th,
+.vditor .vditor-reset td {
+  border-color: #e0dfdc;
+}
+
+.vditor .vditor-reset thead {
+  background: #f7f7f5;
+}
+
+.vditor .vditor-toolbar {
+  display: none;
 }
