@@ -189,6 +189,7 @@ runner 支持的过滤参数：
 补充规则：
 
 - runner 强制执行固定 domain/type 边界。backend 普通测试并发为 6；Source E2E 的所有 case 直接共享按构建指纹保存的 split/vector 内容缓存，各 case 只隔离统计文件，`warmup` 用例按普通并发用例执行。正式包 E2E 才先串行执行全仓唯一的 `warmup` 用例，并把缓存种子复制到后续 case 的隔离缓存目录。随后开放总并发 3、live 并发 2，`exclusive` 用例串行独占；普通失败继续收集剩余 case，正式包 warm-up 失败则不启动后续并发。
+- 正式包 E2E 即使通过 `--domain`/`--suite`/`--case` 过滤范围，只要本次实际执行的 case 数超过 1，runner 也会自动把全仓唯一的 `warmup` 用例纳入执行并先串行预热，避免过滤后漏掉 warmup 导致全部 case 冷启动重复索引；`--case` 过滤时 `warmup` 用例不受 `--testNamePattern` 影响。
 - 真实模型 backend live 用例失败后最多重试 1 次，避免模型异常时重复等待过久。
 - E2E 默认执行类型为 `normal`；真实 AI/服务调用声明 `execution: 'live'`，原生对话框、鼠标和桌面焦点用例声明 `execution: 'exclusive'`，唯一的向量冷启动用例声明 `execution: 'warmup'`。
 - `source` 是日常目标，直接复用内容缓存，不额外预热；`package` 只接受既有 release bundle，安装后通过 warm-up 验证冷启动并运行同一批 E2E，不负责构建。

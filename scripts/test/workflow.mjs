@@ -39,6 +39,13 @@ const CROSS_ARCH_WARMUP_SOURCE_TARGET = new Map([['macos-x64', 'macos-arm64']])
 const USE_WINDOWS_SHELL = process.platform === 'win32'
 const activeAsyncChildren = new Set()
 let stoppingActiveChildren = false
+const VECTOR_WARMUP_TEST_FILE = path.join(
+  TEST_CASES_ROOT,
+  'settings',
+  'workspace',
+  'files',
+  'workspace-prepare-refresh.e2e.test.ts'
+)
 const KNOWLEDGE_CACHE_ROOT = path.join(TESTS_ROOT, '.cache', 'workspace-knowledge')
 const EMPTY_KNOWLEDGE_CACHE_STATS = {
   splitCacheHits: 0,
@@ -636,6 +643,14 @@ const formatScope = (input) =>
     .join(' ')
 
 const runE2ETestFilesConcurrently = async (testFiles, targets, testNamePattern, deadlineAt) => {
+  const warmupTargets = targets.filter((target) => target.cacheMode === 'warmup')
+  if (
+    warmupTargets.length > 0 &&
+    !testFiles.includes(VECTOR_WARMUP_TEST_FILE) &&
+    testFiles.length > 1
+  ) {
+    testFiles = [...testFiles, VECTOR_WARMUP_TEST_FILE]
+  }
   const fileTasks = await Promise.all(
     testFiles.map(async (testFile) => ({
       testFile,
@@ -708,7 +723,7 @@ const runE2ETestFilesConcurrently = async (testFiles, targets, testNamePattern, 
       configPath: 'vitest.e2e.config.mts',
       testFiles: [task.testFile],
       env: caseEnv,
-      testNamePattern,
+      testNamePattern: task.execution === 'warmup' ? '' : testNamePattern,
       workers: 1,
       deadlineAt
     })
