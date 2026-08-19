@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Empty, Spin } from 'antd'
 import { useEditableTextFile } from './useEditableTextFile'
 import { workbenchSelectors } from '../../testing/selectors'
-import LineNumberGutter from './LineNumberGutter'
+import LineNumberOverlay from './LineNumberOverlay'
 import { countLines } from './lineNumbers'
 
 const TEXT_EDIT_MAX_CHARS = 500_000
@@ -81,16 +81,16 @@ const PlainTextEditor: React.FC<{ filePath: string }> = ({ filePath }) => {
           文件较大，仅可编辑前 {TEXT_EDIT_MAX_CHARS.toLocaleString()} 个字符。
         </div>
       ) : null}
-      <div className="flex min-h-0 flex-1 overflow-hidden">
-        <LineNumberGutter
+      <div className="relative min-h-0 flex-1">
+        <LineNumberOverlay
           lineCount={lineCount}
           innerRef={gutterInnerRef}
-          className="overflow-hidden border-r border-[#EEEEEC] bg-[#FBFBFA]"
-          testId={workbenchSelectors.lineNumberGutter}
+          className="inset-y-0 left-0 w-8 overflow-hidden"
+          testId={workbenchSelectors.lineNumberOverlay}
         />
         <textarea
           ref={textareaRef}
-          className="m-0 min-h-0 flex-1 resize-none whitespace-pre-wrap break-words border-0 bg-white px-8 py-6 font-mono text-[13px] leading-6 text-[#37352F] outline-none"
+          className="m-0 h-full w-full resize-none whitespace-pre-wrap break-words border-0 bg-white px-8 py-6 font-mono text-[13px] leading-6 text-[#37352F] outline-none"
           data-testid={workbenchSelectors.plainTextEditor}
           value={displayValue}
           onChange={handleChange}

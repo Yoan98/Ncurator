@@ -5,3 +5,11 @@ export const countLines = (text: string): number => {
   }
   return count
 }
+
+export const buildLineNumbers = (lineCount: number): string => {
+  let result = ''
+  for (let i = 1; i <= lineCount; i += 1) {
+    result += `${i}\n`
+  }
+  return result
+}

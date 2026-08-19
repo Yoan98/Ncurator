@@ -100,7 +100,7 @@ describe('workbench result e2e', () => {
           const crlfPreserved = savedBytes.toString('utf8').includes('appended line\r\n')
           const noBareLf = !savedBytes.toString('utf8').match(/(?<!\r)\n/)
 
-          const gutter = getWorkbenchLocator(page, workbenchSelectors.lineNumberGutter)
+          const gutter = getWorkbenchLocator(page, workbenchSelectors.lineNumberOverlay)
           const gutterText = (await gutter.textContent()) || ''
           const lineNumbersShown =
             gutterText.includes('1') && gutterText.includes('2') && gutterText.includes('3')

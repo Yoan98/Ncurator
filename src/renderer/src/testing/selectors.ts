@@ -238,5 +238,5 @@ export const workbenchSelectors = {
   referenceSearchWarning: 'workbench-reference-search-warning',
   markdownEditor: 'workbench-markdown-editor',
   plainTextEditor: 'workbench-plain-text-editor',
-  lineNumberGutter: 'workbench-line-number-gutter'
+  lineNumberOverlay: 'workbench-line-number-overlay'
 } as const

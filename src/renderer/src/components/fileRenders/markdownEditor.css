@@ -47,6 +47,13 @@
   content: none;
 }
 
+/* 去掉 Vditor content-theme 给 h1/h2 加的下划线（GitHub 风格）与预留 padding。 */
+.vditor .vditor-reset h1,
+.vditor .vditor-reset h2 {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
 .vditor .vditor-reset a {
   color: #0b6bcb;
 }
