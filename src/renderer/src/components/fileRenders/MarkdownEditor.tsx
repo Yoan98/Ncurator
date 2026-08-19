@@ -4,6 +4,7 @@ import Vditor from 'vditor'
 import 'vditor/dist/index.css'
 import './markdownEditor.css'
 import { useEditableTextFile } from './useEditableTextFile'
+import { vditorI18n } from './vditorI18n'
 import { workbenchSelectors } from '../../testing/selectors'
 
 const resolveVditorCdn = (): string => new URL('vditor', document.baseURI).href
@@ -21,6 +22,7 @@ const MarkdownEditor: React.FC<{ filePath: string }> = ({ filePath }) => {
     const vditor = new Vditor(rootRef.current, {
       mode: 'ir',
       lang: 'zh_CN',
+      i18n: vditorI18n,
       toolbar: [],
       cache: { enable: false },
       value: initialText,

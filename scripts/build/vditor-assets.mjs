@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..')
 const pnpmStore = path.join(ROOT, 'node_modules', '.pnpm')
-const findVditor = (): string | null => {
+const findVditor = () => {
   if (!fs.existsSync(pnpmStore)) return null
   const candidates = fs
     .readdirSync(pnpmStore)
@@ -21,12 +21,12 @@ if (!V) {
 
 const DST = path.join(ROOT, 'src', 'renderer', 'public', 'vditor', 'dist')
 
-const copyFile = (source: string, target: string): void => {
+const copyFile = (source, target) => {
   fs.mkdirSync(path.dirname(target), { recursive: true })
   fs.copyFileSync(source, target)
 }
 
-const copyDir = (source: string, target: string): void => {
+const copyDir = (source, target) => {
   fs.mkdirSync(target, { recursive: true })
   for (const entry of fs.readdirSync(source)) {
     const sourcePath = path.join(source, entry)
