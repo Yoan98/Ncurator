@@ -152,6 +152,12 @@ describe('workbench result e2e', () => {
               const markers = Array.from(el.querySelectorAll('.vditor-ir__marker--heading'))
               return markers.every((marker) => marker.getBoundingClientRect().width === 0)
             })
+            const headingLabelHidden = await editorProbe.evaluate((el) => {
+              const heading = el.querySelector('h1')
+              if (!heading) return false
+              const content = getComputedStyle(heading, '::before').content
+              return content === 'none' || content === '""' || content === "''"
+            })
             const resizeSurvived = await (async () => {
               const before = await runtime.electronApp.evaluate(({ BrowserWindow }) => {
                 const window = BrowserWindow.getAllWindows()[0]
@@ -185,7 +191,7 @@ describe('workbench result e2e', () => {
                 afterWidth: after?.width ?? 0
               }
             })()
-            return { fillsPanel, headingMarkerHidden, resizeSurvived }
+            return { fillsPanel, headingMarkerHidden, headingLabelHidden, resizeSurvived }
           })()
 
           const signals = await runtime.collectSignals()
@@ -203,6 +209,7 @@ describe('workbench result e2e', () => {
             layoutEditorWidth: layoutProbe.fillsPanel.editorW,
             layoutParentWidth: layoutProbe.fillsPanel.parentW,
             headingMarkerHidden: layoutProbe.headingMarkerHidden,
+            headingLabelHidden: layoutProbe.headingLabelHidden,
             resizeSurvived: layoutProbe.resizeSurvived.survived,
             resizeBeforeWidth: layoutProbe.resizeSurvived.beforeWidth,
             resizeAfterWidth: layoutProbe.resizeSurvived.afterWidth,
@@ -224,12 +231,13 @@ describe('workbench result e2e', () => {
               result.emptyEditorHasVditor &&
               result.layoutFillsPanel &&
               result.headingMarkerHidden &&
+              result.headingLabelHidden &&
               result.resizeSurvived &&
               result.writeTextFileCalls >= 1,
             {
               name: 'workbench-markdown-editor-edit-save-real',
               message:
-                'Markdown 打开即即时渲染编辑且无工具栏；输入自动落盘；空闲外部改动自动重载、编辑中外部改动被自动覆盖；链接点击局部露出 markdown 源；编辑区撑满面板无右侧灰色残留；标题前无 H1/H2 标记；拉宽窗口不白屏。\n' +
+                'Markdown 打开即即时渲染编辑且无工具栏；输入自动落盘；空闲外部改动自动重载、编辑中外部改动被自动覆盖；链接点击局部露出 markdown 源；编辑区撑满面板无右侧灰色残留；标题前无 H1/H2 标签与 #/## 标记；拉宽窗口不白屏。\n' +
                 JSON.stringify(result),
               data: result
             }

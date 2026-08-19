@@ -17,6 +17,7 @@ const MarkdownEditor: React.FC<{ filePath: string }> = ({ filePath }) => {
 
   useEffect(() => {
     if (initialText === null || !rootRef.current || vditorRef.current) return
+    readyRef.current = false
     const vditor = new Vditor(rootRef.current, {
       mode: 'ir',
       lang: 'zh_CN',
@@ -50,8 +51,15 @@ const MarkdownEditor: React.FC<{ filePath: string }> = ({ filePath }) => {
   useEffect(
     () => () => {
       flushSave()
-      vditorRef.current?.destroy()
+      const vditor = vditorRef.current
       vditorRef.current = null
+      if (!vditor || !readyRef.current) return
+      try {
+        vditor.destroy()
+      } catch (error) {
+        console.error('[APP-ERROR] vditor destroy failed', error)
+      }
+      readyRef.current = false
     },
     [flushSave]
   )

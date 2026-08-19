@@ -237,5 +237,6 @@ export const workbenchSelectors = {
   referenceAiWarning: 'workbench-reference-ai-warning',
   referenceSearchWarning: 'workbench-reference-search-warning',
   markdownEditor: 'workbench-markdown-editor',
-  plainTextEditor: 'workbench-plain-text-editor'
+  plainTextEditor: 'workbench-plain-text-editor',
+  lineNumberGutter: 'workbench-line-number-gutter'
 } as const

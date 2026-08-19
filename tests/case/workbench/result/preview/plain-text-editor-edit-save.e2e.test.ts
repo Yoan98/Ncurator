@@ -100,6 +100,11 @@ describe('workbench result e2e', () => {
           const crlfPreserved = savedBytes.toString('utf8').includes('appended line\r\n')
           const noBareLf = !savedBytes.toString('utf8').match(/(?<!\r)\n/)
 
+          const gutter = getWorkbenchLocator(page, workbenchSelectors.lineNumberGutter)
+          const gutterText = (await gutter.textContent()) || ''
+          const lineNumbersShown =
+            gutterText.includes('1') && gutterText.includes('2') && gutterText.includes('3')
+
           await openWorkspaceFile(page, fileFilter, 'config.json')
           const jsonEditor = getWorkbenchLocator(page, workbenchSelectors.plainTextEditor)
           await page.waitForFunction(
@@ -124,6 +129,7 @@ describe('workbench result e2e', () => {
             bomPreserved,
             crlfPreserved,
             noBareLf,
+            lineNumbersShown,
             jsonEditable: jsonValueBefore.includes('original json'),
             autoSavedJson,
             jsonNotMarkdownified,
@@ -138,6 +144,7 @@ describe('workbench result e2e', () => {
               result.bomPreserved &&
               result.crlfPreserved &&
               result.noBareLf &&
+              result.lineNumbersShown &&
               result.jsonEditable &&
               result.autoSavedJson &&
               result.jsonNotMarkdownified &&
@@ -145,7 +152,7 @@ describe('workbench result e2e', () => {
             {
               name: 'workbench-plain-text-editor-edit-save-real',
               message:
-                'TXT/JSON 打开即纯文本编辑，编辑后自动落盘，保留 UTF-8 BOM 与 CRLF 换行、内容不被 markdown 化改写。\n' +
+                'TXT/JSON 打开即纯文本编辑，编辑后自动落盘，保留 UTF-8 BOM 与 CRLF 换行、内容不被 markdown 化改写；每行前显示行号。\n' +
                 JSON.stringify(result),
               data: result
             }

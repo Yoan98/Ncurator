@@ -4,6 +4,8 @@ import { arrayBufferFileLoader, type DocRenderer, type DocRendererProps } from '
 import MarkdownRenderer from '../MarkdownRenderer'
 import MarkdownEditor from './MarkdownEditor'
 import PlainTextEditor from './PlainTextEditor'
+import LineNumberGutter from './LineNumberGutter'
+import { countLines } from './lineNumbers'
 import type { LoadedFileRenderDocument } from './types'
 import { workbenchSelectors } from '../../testing/selectors'
 import { normalizeUserFacingError } from '../../utils/userFacingError'
@@ -148,12 +150,19 @@ const TextPreviewScaffold = ({
 }
 
 const PlainTextBody = ({ text }: { text: string }) => (
-  <pre
-    className="m-0 min-h-full whitespace-pre-wrap break-words px-8 py-6 font-mono text-[13px] leading-6 text-[#37352F]"
-    data-testid={workbenchSelectors.plainTextViewer}
-  >
-    {text}
-  </pre>
+  <div className="flex min-h-full items-stretch">
+    <LineNumberGutter
+      lineCount={countLines(text)}
+      className="sticky left-0 z-10 border-r border-[#EEEEEC] bg-[#FBFBFA]"
+      testId={workbenchSelectors.lineNumberGutter}
+    />
+    <pre
+      className="m-0 min-h-full flex-1 whitespace-pre-wrap break-words px-8 py-6 font-mono text-[13px] leading-6 text-[#37352F]"
+      data-testid={workbenchSelectors.plainTextViewer}
+    >
+      {text}
+    </pre>
+  </div>
 )
 
 export const CustomMarkdownRenderer: DocRenderer = ({ mainState }: DocRendererProps) => {

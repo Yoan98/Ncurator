@@ -36,31 +36,15 @@
   word-break: break-word;
 }
 
-.vditor .vditor-reset h1,
-.vditor .vditor-reset h2,
-.vditor .vditor-reset h3,
-.vditor .vditor-reset h4,
-.vditor .vditor-reset h5,
-.vditor .vditor-reset h6 {
-  color: #37352f;
-  font-weight: 600;
-  line-height: 1.35;
-}
-
-.vditor .vditor-reset h1 {
-  font-size: 1.6em;
-  border-bottom: 1px solid #eeeeec;
-  padding-bottom: 0.3em;
-}
-
-.vditor .vditor-reset h2 {
-  font-size: 1.35em;
-  border-bottom: 1px solid #eeeeec;
-  padding-bottom: 0.3em;
-}
-
-.vditor .vditor-reset h3 {
-  font-size: 1.2em;
+/* IR 模式标题前的 H1/H2/... 标签（Vditor 默认 ::before content:'H1'...'H6'）隐藏，
+   标题回归 Vditor 默认排版，不加任何额外样式。 */
+.vditor .vditor-ir .vditor-reset > h1::before,
+.vditor .vditor-ir .vditor-reset > h2::before,
+.vditor .vditor-ir .vditor-reset > h3::before,
+.vditor .vditor-ir .vditor-reset > h4::before,
+.vditor .vditor-ir .vditor-reset > h5::before,
+.vditor .vditor-ir .vditor-reset > h6::before {
+  content: none;
 }
 
 .vditor .vditor-reset a {
@@ -100,8 +84,9 @@
   display: none;
 }
 
-/* IR 模式下标题前的 `#`/`##` 标记（用户视角的 H1/H2）常驻隐藏，
+/* IR 模式下标题前的 `#`/`##` 标记（展开/聚焦标题时出现）常驻隐藏，
    仅隐藏标题标记，保留链接等其它源标记以支持行内编辑。 */
-.vditor .vditor-ir .vditor-ir__node .vditor-ir__marker--heading {
+.vditor .vditor-ir .vditor-ir__node .vditor-ir__marker--heading,
+.vditor .vditor-ir .vditor-ir__node--expand .vditor-ir__marker--heading {
   display: none !important;
 }
