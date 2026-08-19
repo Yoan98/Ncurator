@@ -382,6 +382,7 @@ if (mode === 'test') {
     await run('git', ['archive', '--format=tar', '--output', archivePath, releaseTag])
     await extractTag(archivePath, sourceDirectory)
     await run(tools.pnpmPath, ['install', '--frozen-lockfile'], { cwd: sourceDirectory })
+    await seedNativeCache(sourceDirectory)
     const e2ePlatforms = includeX64E2E ? MACOS_PLATFORMS : DEFAULT_E2E_PLATFORMS
     if (!includeX64E2E) {
       await recordCandidateE2E({
