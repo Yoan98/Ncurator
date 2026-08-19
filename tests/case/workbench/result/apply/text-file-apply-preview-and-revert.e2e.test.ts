@@ -34,7 +34,7 @@ describe('workbench result e2e', () => {
         domain: 'workbench',
         suite: 'result',
         groups: ['apply'],
-        description: '验证普通文件正常预览、文本修改 diff 展示和按原始 bytes 回退。',
+        description: '验证 Markdown 打开即编辑态、文本修改 diff 展示和按原始 bytes 回退。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
         extraEnv: {
@@ -62,7 +62,7 @@ describe('workbench result e2e', () => {
             .first()
             .getByRole('button', { name: '预览文件' })
             .click()
-          await getWorkbenchLocator(page, workbenchSelectors.markdownViewer).waitFor({
+          await getWorkbenchLocator(page, workbenchSelectors.markdownEditor).waitFor({
             state: 'visible',
             timeout: 30_000
           })
@@ -149,7 +149,7 @@ describe('workbench result e2e', () => {
           const afterApply = await fs.readFile(targetPath, 'utf-8')
           const normalPreviewAfterAiWrite = getWorkbenchLocator(
             page,
-            workbenchSelectors.markdownViewer
+            workbenchSelectors.markdownEditor
           )
           await normalPreviewAfterAiWrite
             .getByText('cedar-text-diff-884')
@@ -479,7 +479,7 @@ describe('workbench result e2e', () => {
             {
               name: 'workbench-text-file-preview-diff-revert-real',
               message:
-                '普通预览应继续渲染 Markdown；AI 运行完成后修改入口在未点击时已显示非零修改数量，切换会话再切回后不点击仍保持真实数量，点击后展示文本 diff，并能恢复原始 bytes。',
+                'Markdown 打开即编辑态并展示最新内容；AI 运行完成后修改入口在未点击时已显示非零修改数量，切换会话再切回后不点击仍保持真实数量，点击后展示文本 diff，并能恢复原始 bytes。',
               data: result
             }
           )
