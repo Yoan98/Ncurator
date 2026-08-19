@@ -2,6 +2,13 @@
   overflow-y: unset !important;
 }
 
+/* react-doc-viewer 容器默认 #eee 灰底，在编辑器未完全撑满时会在右侧露出灰色区域，
+   统一改为白色，避免与业务背景冲突。 */
+#react-doc-viewer,
+#proxy-renderer {
+  background: #ffffff !important;
+}
+
 .docx-content {
   overflow-x: hidden;
 }

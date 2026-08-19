@@ -13,7 +13,9 @@
   --ir-bracket-color: #91918e;
   --ir-paren-color: #787774;
   border: none;
-  height: 100%;
+  width: 100% !important;
+  height: 100% !important;
+  box-sizing: border-box;
   background: #ffffff;
 }
 
@@ -96,4 +98,10 @@
 
 .vditor .vditor-toolbar {
   display: none;
+}
+
+/* IR 模式下标题前的 `#`/`##` 标记（用户视角的 H1/H2）常驻隐藏，
+   仅隐藏标题标记，保留链接等其它源标记以支持行内编辑。 */
+.vditor .vditor-ir .vditor-ir__node .vditor-ir__marker--heading {
+  display: none !important;
 }

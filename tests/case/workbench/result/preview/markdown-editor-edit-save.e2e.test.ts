@@ -51,7 +51,7 @@ describe('workbench result e2e', () => {
         domain: 'workbench',
         suite: 'result',
         groups: ['preview'],
-        description: 'Markdown 打开即即时渲染编辑、无工具栏，输入自动落盘，空闲外部改动重载、编辑中外部改动被自动覆盖。',
+        description: 'Markdown 打开即即时渲染编辑、无工具栏，输入自动落盘，空闲外部改动重载、编辑中外部改动被自动覆盖；编辑区撑满面板无灰色残留、标题前无 H1/H2 标记、拉宽窗口不白屏。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
         windowMode: 'visible',
@@ -130,6 +130,64 @@ describe('workbench result e2e', () => {
             .evaluate((el) => (el as HTMLElement).classList.contains('vditor'))
             .catch(() => false)
 
+          const layoutProbe = await (async () => {
+            await openWorkspaceFile(page, fileFilter, 'edit-first.md')
+            const editorProbe = getWorkbenchLocator(page, workbenchSelectors.markdownEditor)
+            await editorProbe.waitFor({ state: 'visible', timeout: 30_000 })
+            await page.waitForTimeout(800)
+            const fillsPanel = await editorProbe.evaluate((el) => {
+              const rect = el.getBoundingClientRect()
+              const parent = el.parentElement?.getBoundingClientRect()
+              if (!parent) return { fills: false, editorW: rect.width, parentW: 0 }
+              return {
+                fills: Math.abs(rect.width - parent.width) < 1,
+                editorW: rect.width,
+                parentW: parent.width,
+                background: getComputedStyle(el).backgroundColor
+              }
+            })
+            await editorProbe.locator('h1').first().click()
+            await page.waitForTimeout(400)
+            const headingMarkerHidden = await editorProbe.evaluate((el) => {
+              const markers = Array.from(el.querySelectorAll('.vditor-ir__marker--heading'))
+              return markers.every((marker) => marker.getBoundingClientRect().width === 0)
+            })
+            const resizeSurvived = await (async () => {
+              const before = await runtime.electronApp.evaluate(({ BrowserWindow }) => {
+                const window = BrowserWindow.getAllWindows()[0]
+                return window ? window.getBounds() : null
+              })
+              await runtime.electronApp.evaluate(({ BrowserWindow }) => {
+                const window = BrowserWindow.getAllWindows()[0]
+                if (!window || window.isDestroyed()) return
+                const bounds = window.getBounds()
+                window.setSize(Math.max(bounds.width + 500, 900), bounds.height)
+              })
+              await page.waitForTimeout(1000)
+              const alive = await page
+                .evaluate(() => {
+                  const root = document.getElementById('root')
+                  return {
+                    rootChildren: root?.children.length ?? -1,
+                    editorPresent: Boolean(
+                      document.querySelector('[data-testid="workbench-markdown-editor"]')
+                    )
+                  }
+                })
+                .catch(() => ({ rootChildren: -1, editorPresent: false }))
+              const after = await runtime.electronApp.evaluate(({ BrowserWindow }) => {
+                const window = BrowserWindow.getAllWindows()[0]
+                return window ? window.getBounds() : null
+              })
+              return {
+                survived: alive.rootChildren === 1 && alive.editorPresent,
+                beforeWidth: before?.width ?? 0,
+                afterWidth: after?.width ?? 0
+              }
+            })()
+            return { fillsPanel, headingMarkerHidden, resizeSurvived }
+          })()
+
           const signals = await runtime.collectSignals()
           return {
             toolbarVisible,
@@ -141,6 +199,13 @@ describe('workbench result e2e', () => {
             idleReloaded,
             editingOverwroteExternal,
             emptyEditorHasVditor,
+            layoutFillsPanel: layoutProbe.fillsPanel.fills,
+            layoutEditorWidth: layoutProbe.fillsPanel.editorW,
+            layoutParentWidth: layoutProbe.fillsPanel.parentW,
+            headingMarkerHidden: layoutProbe.headingMarkerHidden,
+            resizeSurvived: layoutProbe.resizeSurvived.survived,
+            resizeBeforeWidth: layoutProbe.resizeSurvived.beforeWidth,
+            resizeAfterWidth: layoutProbe.resizeSurvived.afterWidth,
             writeTextFileCalls: signals.ipcInvokeEntries.filter(
               (entry) => entry.name === 'writeTextFile'
             ).length
@@ -157,11 +222,14 @@ describe('workbench result e2e', () => {
               result.idleReloaded &&
               result.editingOverwroteExternal &&
               result.emptyEditorHasVditor &&
+              result.layoutFillsPanel &&
+              result.headingMarkerHidden &&
+              result.resizeSurvived &&
               result.writeTextFileCalls >= 1,
             {
               name: 'workbench-markdown-editor-edit-save-real',
               message:
-                'Markdown 打开即即时渲染编辑且无工具栏；输入自动落盘；空闲外部改动自动重载、编辑中外部改动被自动覆盖；链接点击局部露出 markdown 源。\n' +
+                'Markdown 打开即即时渲染编辑且无工具栏；输入自动落盘；空闲外部改动自动重载、编辑中外部改动被自动覆盖；链接点击局部露出 markdown 源；编辑区撑满面板无右侧灰色残留；标题前无 H1/H2 标记；拉宽窗口不白屏。\n' +
                 JSON.stringify(result),
               data: result
             }
