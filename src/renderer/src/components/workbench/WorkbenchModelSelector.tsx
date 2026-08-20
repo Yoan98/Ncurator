@@ -731,13 +731,13 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
                     className="workbench-select-option min-h-[44px]"
                     onClick={() => setView('main')}
                   >
-                    <span className="flex min-w-0 flex-1 items-center gap-1.5">
+                    <span className="flex shrink-0 items-center gap-1.5 whitespace-nowrap">
                       <span className="text-[13px] font-semibold text-[#37352F]">主模型</span>
                       <Tooltip title="用于理解问题、生成回答、规划任务。">
-                        <HiQuestionMarkCircle className="h-3.5 w-3.5 text-[#9B9A97]" />
+                        <HiQuestionMarkCircle className="h-3.5 w-3.5 shrink-0 text-[#9B9A97]" />
                       </Tooltip>
                     </span>
-                    <span className="min-w-0 truncate text-[13px] text-[#787774]">
+                    <span className="min-w-0 flex-1 truncate text-[13px] text-[#787774]">
                       {value.mainModel?.modelName || '未选择'}
                     </span>
                     <HiChevronRight className="h-3.5 w-3.5 shrink-0 text-[#9B9A97]" />
@@ -747,13 +747,13 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
                     className="workbench-select-option min-h-[44px]"
                     onClick={() => setView('vision')}
                   >
-                    <span className="flex min-w-0 flex-1 items-center gap-1.5">
+                    <span className="flex shrink-0 items-center gap-1.5 whitespace-nowrap">
                       <span className="text-[13px] font-semibold text-[#37352F]">视觉模型</span>
                       <Tooltip title="用于识别图片等视觉内容。并非所有模型都支持视觉，请选择正确的。">
-                        <HiQuestionMarkCircle className="h-3.5 w-3.5 text-[#9B9A97]" />
+                        <HiQuestionMarkCircle className="h-3.5 w-3.5 shrink-0 text-[#9B9A97]" />
                       </Tooltip>
                     </span>
-                    <span className="min-w-0 truncate text-[13px] text-[#787774]">
+                    <span className="min-w-0 flex-1 truncate text-[13px] text-[#787774]">
                       {value.visionModel?.modelName || '跟随主模型'}
                     </span>
                     <HiChevronRight className="h-3.5 w-3.5 shrink-0 text-[#9B9A97]" />
