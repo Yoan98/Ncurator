@@ -23,6 +23,7 @@ export type ResolveFloatingPlacementInput = {
   align?: FloatingPlacementAlign
   gap?: number
   viewportPadding?: number
+  topInset?: number
 }
 
 const DEFAULT_GAP = 8
@@ -33,6 +34,7 @@ export const resolveFloatingPlacement = (
 ): FloatingPlacement => {
   const gap = input.gap ?? DEFAULT_GAP
   const viewportPadding = input.viewportPadding ?? DEFAULT_VIEWPORT_PADDING
+  const topInset = input.topInset ?? viewportPadding
   const minimumWidth = input.minWidth ?? 240
   const maxAvailableWidth = Math.max(0, input.viewportWidth - viewportPadding * 2)
   const constrainedPreferredWidth = Math.max(input.preferredWidth, minimumWidth)
@@ -51,7 +53,7 @@ export const resolveFloatingPlacement = (
     0,
     input.viewportHeight - input.triggerRect.bottom - gap - viewportPadding
   )
-  const spaceAbove = Math.max(0, input.triggerRect.top - gap - viewportPadding)
+  const spaceAbove = Math.max(0, input.triggerRect.top - gap - topInset)
   const heightCap = input.maxHeight ?? input.preferredHeight
   const shouldOpenUp = spaceBelow < input.preferredHeight && spaceAbove > spaceBelow
 

@@ -28,6 +28,7 @@ import type {
   WorkbenchSelectedModel
 } from '../../../../shared/types'
 import { resolveFloatingPlacement } from './floatingPlacement'
+import { WORKBENCH_TITLEBAR_HEIGHT } from './constants'
 import { workbenchSelectors } from '../../testing/selectors'
 
 type WorkbenchModelSelectorProps = {
@@ -176,11 +177,12 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
       viewportWidth: window.innerWidth,
       viewportHeight: window.innerHeight,
       preferredWidth: 320,
-      preferredHeight: 360,
+      preferredHeight: 320,
       minWidth: 300,
       maxWidth: 360,
-      maxHeight: 420,
-      align: 'end'
+      maxHeight: 360,
+      align: 'end',
+      topInset: WORKBENCH_TITLEBAR_HEIGHT + 12
     })
     setPosition({
       left: placement.left,
