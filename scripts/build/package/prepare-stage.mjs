@@ -22,6 +22,7 @@ const ROOT_LOCKFILE_PATH = path.join(ROOT, 'pnpm-lock.yaml')
 const SIDECAR_BIN_DIR = path.join(ROOT, 'resources', 'web_crawler_sidecar', 'bin')
 const NATIVE_RESOURCE_DIR = path.join(ROOT, 'resources', 'native')
 const OPEN_WITH_RESOURCE_DIR = path.join(ROOT, 'resources', 'open-with')
+const VC_REDIST_DIR = path.join(ROOT, 'build', 'vc-redist', 'win-x64')
 const RUNTIME_TRACE_POLICY_PATH = path.join(ROOT, 'build', 'runtime-trace-policy.json')
 const RUNTIME_TRACE_REPORT_PATH = path.join(ROOT, 'release-stage', 'runtime-trace-report.json')
 const MAIN_OBFUSCATION_REPORT_PATH = path.join(
@@ -173,6 +174,13 @@ const REMOVE_DIRECTORY_NAMES = new Set([
   'tests',
   'test'
 ])
+
+const VC_REDIST_DLL_NAMES = [
+  'msvcp140.dll',
+  'msvcp140_1.dll',
+  'vcruntime140.dll',
+  'vcruntime140_1.dll'
+]
 
 const REMOVE_EXTENSIONS = new Set([
   '.adoc',
@@ -399,6 +407,31 @@ const pruneNodeModules = () => {
   }
 }
 
+const installWindowsVcRuntime = () => {
+  if (process.platform !== 'win32' || process.arch !== 'x64') return
+
+  assertDirectory(VC_REDIST_DIR, 'VC++ redistributable source directory')
+  const targetDirectory = path.join(
+    STAGE_DIR,
+    'node_modules',
+    'onnxruntime-node',
+    'bin',
+    'napi-v3',
+    'win32',
+    'x64'
+  )
+  assertDirectory(targetDirectory, 'ONNX Runtime target binary directory')
+
+  for (const filename of VC_REDIST_DLL_NAMES) {
+    const source = path.join(VC_REDIST_DIR, filename)
+    if (!fs.existsSync(source) || !fs.statSync(source).isFile()) {
+      throw new Error(`VC++ redistributable DLL missing: ${source}`)
+    }
+    fs.copyFileSync(source, path.join(targetDirectory, filename))
+  }
+  process.stdout.write('[package] installed VC++ redistributable DLLs into ONNX Runtime binary directory\n')
+}
+
 const pruneStagedResources = () => {
   const resources = path.join(STAGE_DIR, 'resources')
   const walk = (directory) => {
@@ -511,6 +544,7 @@ const main = async () => {
   fs.rmSync(path.join(STAGE_DIR, 'pnpm-lock.yaml'), { force: true })
   pruneCompiledOutput()
   pruneNodeModules()
+  installWindowsVcRuntime()
   pruneStagedResources()
   const packagedDependencies = collectInstalledTopLevelDependencies()
   fs.writeFileSync(

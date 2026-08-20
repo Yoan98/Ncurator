@@ -1,4 +1,5 @@
 import type { EmbeddingExecutor, EmbeddingResult } from './runtime/types'
+import { toEmbeddingInitializationMessage } from './embeddingError'
 
 export type { EmbeddingExecutor, EmbeddingResult } from './runtime/types'
 
@@ -40,7 +41,9 @@ export class EmbeddingService {
       })
       .catch((error: unknown) => {
         this.status = 'error'
-        throw error
+        throw new Error(toEmbeddingInitializationMessage(error), {
+          cause: error instanceof Error ? error : undefined
+        })
       })
       .finally(() => {
         this.initializationPromise = null
