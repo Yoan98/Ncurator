@@ -1,7 +1,7 @@
 import type { LlmRuntimeConfig } from '../../../shared/types'
 import type { AiRunContext, AiRunDeps, AiRunStartPayload, CancelledError } from './types'
 import { createAiLlmExecutor } from './llmExecutor'
-import { buildReferenceScope } from './prompts/referenceScope'
+import { buildReferenceScope } from './human/prompts/referenceScope'
 import { getAiRuntimePlatform } from './utils/platform'
 import {
   formatPreviousTurns,

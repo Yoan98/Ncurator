@@ -1,5 +1,5 @@
-import type { ChatAttachment, KbAvailability, SelectedReference } from '../../../../shared/types'
-import type { AiReferenceScope, AiWorkspaceBinding } from '../types'
+import type { ChatAttachment, KbAvailability, SelectedReference } from '../../../../../shared/types'
+import type { AiReferenceScope, AiWorkspaceBinding } from '../../types'
 
 const KB_AVAILABILITY_LABEL: Record<KbAvailability, string> = {
   indexed: '已索引',

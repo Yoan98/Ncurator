@@ -1,12 +1,16 @@
 import fs from 'node:fs/promises'
-import { HumanMessage } from '@langchain/core/messages'
-import { AI_LLM_CALL_TIMEOUT_MS } from '../../../constants'
-import { createChatModel } from '../../../../llm/chatModel'
-import type { AiRunContext } from '../../../types'
-import type { LlmRuntimeConfig } from '../../../../../../shared/types'
+import { HumanMessage, SystemMessage } from '@langchain/core/messages'
+import { AI_LLM_CALL_TIMEOUT_MS } from '../ai/constants'
+import { createChatModel } from '../llm/chatModel'
+import type { AiRunContext } from '../ai/types'
+import type { LlmRuntimeConfig } from '../../../shared/types'
+import {
+  buildVisualRecognitionUserInstruction,
+  VISUAL_RECOGNITION_SYSTEM_PROMPT
+} from '../ai/prompts/visualRecognition'
 
 type VisionRunnable = {
-  invoke: (input: HumanMessage[]) => Promise<{ content: unknown }>
+  invoke: (input: Array<SystemMessage | HumanMessage>) => Promise<{ content: unknown }>
 }
 
 type LlmRecognizeProtocolResult = {
@@ -108,16 +112,6 @@ const parseLlmRecognizeProtocolResult = (text: string): LlmRecognizeProtocolResu
   }
 }
 
-const buildLlmRecognizeInstruction = (instruction: string): string =>
-  [
-    '你是图像识别工具的执行模型。你必须只返回一个 JSON 对象，不要返回 Markdown、代码块或额外解释。',
-    'JSON 结构必须严格为：{"supports_image_recognition": boolean, "result": string}。',
-    '如果你能实际读取随消息提供的图片像素，则 supports_image_recognition 返回 true，result 返回按用户要求得到的图片识别结果。',
-    '如果你不能实际读取图片像素，或当前模型不支持图像识别，则 supports_image_recognition 返回 false，result 返回空字符串。',
-    '不要把不支持图像识别解释成用户没有上传图片。',
-    `用户的图片识别要求：${instruction}`
-  ].join('\n')
-
 export const getImageMimeType = (sourcePath: string): string => {
   const lowerPath = sourcePath.toLowerCase()
   if (lowerPath.endsWith('.png')) return 'image/png'
@@ -138,11 +132,12 @@ const recognizeImageWithModel = async (input: {
     const mimeType = input.mimeType || getImageMimeType(input.path)
     const base64 = (await fs.readFile(input.path)).toString('base64')
     const result = await input.model.invoke([
+      new SystemMessage(VISUAL_RECOGNITION_SYSTEM_PROMPT),
       new HumanMessage({
         content: [
           {
             type: 'text',
-            text: buildLlmRecognizeInstruction(input.instruction)
+            text: buildVisualRecognitionUserInstruction(input.instruction)
           },
           {
             type: 'image_url',

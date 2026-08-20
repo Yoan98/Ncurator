@@ -14,7 +14,7 @@ import {
   pptSearchOutputSchema,
   pptSearchSchema
 } from './schemas'
-import { visualRecognitionOutputSchema } from '../visualRecognition/schemas'
+import { visualRecognitionOutputSchema } from '../../../../visualRecognition/schemas'
 
 type PptToolName =
   | 'ppt_read_outline'

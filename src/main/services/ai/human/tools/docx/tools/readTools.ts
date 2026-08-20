@@ -16,7 +16,7 @@ import {
 } from '../toolSpecs'
 import { createDocxTool, finalizeDocxToolFailure, finalizeDocxToolSuccess } from './workerTool'
 import { HUMAN_TOOL_RESULT_TOKEN_LIMIT_RATIO } from '../../../constants'
-import { createVisualRecognitionService } from '../../visualRecognition/service'
+import { createVisualRecognitionService } from '../../../../../visualRecognition/service'
 import { renderDocxVisualToPng } from '../utils/renderVisual'
 import { projectDocxReadBlocks } from '../publicReadTree'
 

@@ -6,7 +6,7 @@ import { Document } from '@langchain/core/documents'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { TextDecoder } from 'node:util'
-import { extractLegacyDocBody } from '../word/legacyDocReader'
+import { extractLegacyDocBody } from '../ai/human/tools/docx/utils/legacyDocReader'
 import {
   SPLITTER_BIG_CHUNK_SETTING,
   SPLITTER_MINI_CHUNK_SIZE,

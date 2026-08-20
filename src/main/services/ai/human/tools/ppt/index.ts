@@ -19,7 +19,7 @@ import {
   PPT_READ_VISUALS_TOOL_SPEC,
   PPT_SEARCH_TOOL_SPEC
 } from './toolSpecs'
-import { createVisualRecognitionService } from '../visualRecognition/service'
+import { createVisualRecognitionService } from '../../../../visualRecognition/service'
 
 type PptToolName =
   | 'ppt_read_outline'

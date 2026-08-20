@@ -15,7 +15,7 @@ import {
   PDF_READ_VISUALS_TOOL_SPEC,
   PDF_SEARCH_TOOL_SPEC
 } from '../toolSpecs'
-import { createVisualRecognitionService } from '../../visualRecognition/service'
+import { createVisualRecognitionService } from '../../../../../visualRecognition/service'
 
 const uniquePageNumbers = (pageNumbers: number[]): number[] => [...new Set(pageNumbers)]
 

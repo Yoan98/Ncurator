@@ -37,6 +37,7 @@ import {
   normalizeVisionModelAnalysisResult,
   visionModelAnalysisSchema
 } from '../services/llm/visionModelAnalysis'
+import { buildVisionModelAnalysisSystemPrompt } from '../services/ai/prompts/visionModelAnalysis'
 import {
   buildWebReferenceItem,
   buildWorkspaceReferenceItemsFromCurrentTree
@@ -2997,12 +2998,7 @@ export function registerHandlers(services: {
           return { success: false, items: [], error: '主模型对应的大模型配置不存在，请重新选择' }
         }
 
-        const system = [
-          '你是模型选型助手。给定一份候选模型列表，请判断每个模型是否支持视觉输入（即能否接收图片），',
-          '并估算每个模型的相对价格成本档位：1 表示便宜，2 表示中等，3 表示昂贵。',
-          '仅依据模型名称与已知能力推断；无法确定的模型默认视为支持视觉、档位按 2 处理。',
-          '必须只输出 JSON，不要输出任何额外文字。'
-        ].join('')
+        const system = buildVisionModelAnalysisSystemPrompt()
         const user = JSON.stringify({ candidates })
 
         const result = await invokeStructuredChat({

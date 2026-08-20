@@ -1,5 +1,5 @@
 import { z } from 'zod/v4'
-import { visualRecognitionOutputSchema } from '../visualRecognition/schemas'
+import { visualRecognitionOutputSchema } from '../../../../visualRecognition/schemas'
 
 const pdfMetadataSchema = z.object({
   title: z.string().optional(),

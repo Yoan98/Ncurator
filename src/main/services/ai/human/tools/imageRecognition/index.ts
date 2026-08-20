@@ -5,7 +5,7 @@ import { createToolEventEmitter } from '../utils/toolEvents'
 import { createWorkspaceBoundToolFamily } from '../utils/workspaceGuards'
 import type { ToolFamilyDefinition } from '../types'
 import { IMAGE_ANALYZE_TOOL_SPEC } from './toolSpecs'
-import { createVisualRecognitionService, getImageMimeType } from '../visualRecognition/service'
+import { createVisualRecognitionService, getImageMimeType } from '../../../../visualRecognition/service'
 import { resolveToolPath } from '../terminal/commandPolicy'
 
 export const imageRecognitionToolFamily: ToolFamilyDefinition = createWorkspaceBoundToolFamily({

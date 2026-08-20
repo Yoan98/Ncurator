@@ -11,7 +11,7 @@ import {
   renderEvidenceReferences
 } from '../shared/references'
 import { renderHumanFileChangeLines } from '../shared/runtimeRenderers'
-import { renderReferenceScopeText } from '../../prompts/referenceScope'
+import { renderReferenceScopeText } from './referenceScope'
 import type { HumanState } from '../types'
 import { getLastRoundFocus, getRecentHistoryRounds } from '../memory/rounds'
 

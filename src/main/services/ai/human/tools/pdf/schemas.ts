@@ -1,5 +1,5 @@
 import { z } from 'zod/v4'
-import { visualRecognitionRequestSchema } from '../visualRecognition/schemas'
+import { visualRecognitionRequestSchema } from '../../../../visualRecognition/schemas'
 
 const sourcePathSchema = z.string().trim().min(1)
 const pageNumberSchema = z.number().int().min(1)

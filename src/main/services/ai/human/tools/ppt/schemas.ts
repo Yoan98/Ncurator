@@ -1,6 +1,6 @@
 import { z } from 'zod/v4'
 import type { JsonObject } from '../../../../../../shared/types'
-import { visualRecognitionRequestSchema } from '../visualRecognition/schemas'
+import { visualRecognitionRequestSchema } from '../../../../visualRecognition/schemas'
 
 const sourcePathSchema = z.string().trim().min(1)
 const slideIdSchema = z.string().trim().min(1)

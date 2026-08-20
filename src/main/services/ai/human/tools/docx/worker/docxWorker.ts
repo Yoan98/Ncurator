@@ -3,7 +3,7 @@ import path from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
 import { parentPort } from 'node:worker_threads'
 import { DOMParser, XMLSerializer } from '@xmldom/xmldom'
-import { extractLegacyDocBody, splitLegacyDocParagraphs } from '../../../../../word/legacyDocReader'
+import { extractLegacyDocBody, splitLegacyDocParagraphs } from '../utils/legacyDocReader'
 import type { DocxDetailedBlock, DocxOp, DocxOutlineBlock, DocxSearchMatch } from '../types'
 import { applyDocxOps } from '../adapters/ooxml/opExecutor'
 import {

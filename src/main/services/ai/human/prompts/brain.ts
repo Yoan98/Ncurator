@@ -1,5 +1,5 @@
 import type { AiRunContext } from '../../types'
-import { renderReferenceScopeText } from '../../prompts/referenceScope'
+import { renderReferenceScopeText } from './referenceScope'
 import {
   getWorkspaceAssetsRootDir,
   getWorkspaceScriptsRootDir
