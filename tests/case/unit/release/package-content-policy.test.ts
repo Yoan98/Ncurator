@@ -10,6 +10,10 @@ import {
   normalizeRelativePath
 } from '../../../../scripts/build/package/content-policy.mjs'
 import { PROTECTED_MAIN_PLAINTEXT_MARKERS } from '../../../../scripts/build/package/obfuscation.mjs'
+import {
+  VC_REDIST_DLL_NAMES,
+  resolveVcRuntimeDllDirectory
+} from '../../../../scripts/build/package/vc-runtime.mjs'
 
 const execFileAsync = promisify(execFile)
 let temporaryDirectory = ''
@@ -54,6 +58,11 @@ describe('package content policy paths', () => {
     await mkdir(path.dirname(archivePath), { recursive: true })
     await mkdir(path.dirname(nodePtyHelperPath), { recursive: true })
     await writeFile(nodePtyHelperPath, '', { mode: 0o755 })
+    const vcRuntimeDllDirectory = resolveVcRuntimeDllDirectory(packagedApp)
+    await mkdir(vcRuntimeDllDirectory, { recursive: true })
+    for (const filename of VC_REDIST_DLL_NAMES) {
+      await writeFile(path.join(vcRuntimeDllDirectory, filename), 'dummy')
+    }
     await writeFile(path.join(appSource, 'out', 'main', 'index.js'), 'export const ready = true\n')
     await writeFile(
       path.join(appSource, 'package.json'),

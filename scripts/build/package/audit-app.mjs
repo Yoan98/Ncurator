@@ -10,6 +10,7 @@ import {
   scanTextForSecrets
 } from './content-policy.mjs'
 import { assertProtectedMainPlaintextAbsent } from './obfuscation.mjs'
+import { assertVcRuntimeDllsPackaged } from './vc-runtime.mjs'
 import { evaluatePackageSizeBudget, loadPackageSizeBudgetConfig } from './size-budget.mjs'
 
 const inputDirectory = path.resolve(process.argv[2] || 'dist')
@@ -137,6 +138,7 @@ for (const archivePath of archives) {
 
   const appRoot = findApplicationRoot(archivePath)
   assertPackagedNodePtyHelpersExecutable(appRoot)
+  assertVcRuntimeDllsPackaged(appRoot)
   const directoryAudit = auditPackageDirectory(appRoot)
   const totalBytes = directoryAudit.files.reduce((sum, item) => sum + item.size, 0)
   const topFiles = [...directoryAudit.files]
