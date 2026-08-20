@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildReferenceScope,
   renderReferenceScopeText
-} from '../../../../src/main/services/ai/prompts/referenceScope'
+} from '../../../../src/main/services/ai/human/prompts/referenceScope'
 
 describe('ai unit selected context workspace path', () => {
   it('renders workspace rootPath without a workspace-only path restriction', () => {
