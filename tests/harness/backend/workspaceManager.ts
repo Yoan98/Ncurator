@@ -24,5 +24,5 @@ export const copyFixturesIntoWorkspace = async (
 }
 
 export const cleanupWorkspace = async (workspaceRoot: string): Promise<void> => {
-  await rm(workspaceRoot, { recursive: true, force: true })
+  await rm(workspaceRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 250 })
 }
