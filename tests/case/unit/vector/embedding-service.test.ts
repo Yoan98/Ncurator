@@ -30,7 +30,7 @@ describe('EmbeddingService', () => {
     expect(executor.initialize).toHaveBeenCalledTimes(1)
   })
 
-  it('propagates initialization failures', async () => {
+  it('wraps initialization failures with a user-facing message and preserves the cause', async () => {
     const executor: EmbeddingExecutor = {
       initialize: vi.fn(async () => {
         throw new Error('model unavailable')
@@ -39,7 +39,23 @@ describe('EmbeddingService', () => {
     }
     const service = new EmbeddingService({ executor })
 
-    await expect(service.initialize()).rejects.toThrow('model unavailable')
+    await expect(service.initialize()).rejects.toMatchObject({
+      message: expect.stringContaining('向量模型初始化失败'),
+      cause: expect.objectContaining({ message: 'model unavailable' })
+    })
+    expect(service.getStatus()).toBe('error')
+  })
+
+  it('maps VC++ runtime load failures to the runtime library message', async () => {
+    const executor: EmbeddingExecutor = {
+      initialize: vi.fn(async () => {
+        throw new Error('A dynamic link library (DLL) initialization routine failed')
+      }),
+      embed: vi.fn(async () => result)
+    }
+    const service = new EmbeddingService({ executor })
+
+    await expect(service.initialize()).rejects.toThrow('向量模型运行库加载失败')
     expect(service.getStatus()).toBe('error')
   })
 
@@ -54,7 +70,7 @@ describe('EmbeddingService', () => {
     }
     const service = new EmbeddingService({ executor })
 
-    await expect(service.embed('first')).rejects.toThrow('transient failure')
+    await expect(service.embed('first')).rejects.toThrow('向量模型初始化失败')
     await expect(service.embed('second')).resolves.toEqual(result)
     expect(initialize).toHaveBeenCalledTimes(2)
   })
