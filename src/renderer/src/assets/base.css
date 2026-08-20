@@ -1216,6 +1216,23 @@ textarea,
   @apply cursor-not-allowed opacity-50;
 }
 
+.workbench-select-segment {
+  @apply inline-flex items-center gap-0.5 rounded-[8px] bg-[#F4F4F2] p-0.5;
+}
+
+.workbench-select-segment-item {
+  @apply inline-flex h-6 items-center rounded-[6px] px-2.5 text-[12px] font-medium text-[#787774] transition-colors hover:text-[#37352F];
+}
+
+.workbench-select-segment-item-active {
+  @apply bg-white text-[#37352F];
+  box-shadow: 0 1px 2px rgba(15, 15, 15, 0.06);
+}
+
+.workbench-select-cost {
+  @apply font-semibold tracking-tight text-[#787774];
+}
+
 .workbench-context-ring {
   position: relative;
   background: #f4f4f2;

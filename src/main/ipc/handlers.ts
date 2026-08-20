@@ -21,14 +21,22 @@ import { releaseDocxRunSession } from '../services/ai/human/tools/docx/worker/do
 import { releasePdfRunSession } from '../services/pdf/worker/pdfWorkerClient'
 import type {
   AiLlmIoRecord,
+  AiVisionModelAnalysisRequest,
+  AiVisionModelAnalysisResponse,
   FileWatchCheckResponse,
   FileWatchMutationRequest,
   FileWatchStartRequest,
   FileWatchStartResponse,
   FileWatchStopResponse,
+  WorkbenchSelectedModel,
   WriteTextFileRequest,
   WriteTextFileResponse
 } from '../../shared/types'
+import { invokeStructuredChat } from '../services/ai/llmExecutor'
+import {
+  normalizeVisionModelAnalysisResult,
+  visionModelAnalysisSchema
+} from '../services/llm/visionModelAnalysis'
 import {
   buildWebReferenceItem,
   buildWorkspaceReferenceItemsFromCurrentTree
@@ -1661,8 +1669,9 @@ export function registerHandlers(services: {
         return {
           canceled: false,
           items: await Promise.all(
-            filePaths.map(async (filePath) =>
-              await attachmentService.createSourceAttachmentFromPath({ sourcePath: filePath })
+            filePaths.map(
+              async (filePath) =>
+                await attachmentService.createSourceAttachmentFromPath({ sourcePath: filePath })
             )
           )
         }
@@ -1674,7 +1683,10 @@ export function registerHandlers(services: {
 
   ipcMain.handle(
     'attachment-create-from-path',
-    async (_event, payload: AttachmentCreateFromPathRequest): Promise<AttachmentProcessResponse> => {
+    async (
+      _event,
+      payload: AttachmentCreateFromPathRequest
+    ): Promise<AttachmentProcessResponse> => {
       try {
         const attachment = await attachmentService.createSourceAttachmentFromPath({
           sourcePath: payload.sourcePath,
@@ -2271,7 +2283,10 @@ export function registerHandlers(services: {
 
   ipcMain.handle('download-model', async (_event, repoId: string, source?: unknown) => {
     try {
-      return await vectorModelDownloadService.startDownload(repoId, isModelSource(source) ? source : undefined)
+      return await vectorModelDownloadService.startDownload(
+        repoId,
+        isModelSource(source) ? source : undefined
+      )
     } catch (error) {
       console.error('❌ [DOWNLOAD-MODEL] ERROR:', error)
       return { success: false, error: getErrorMessage(error) }
@@ -2955,6 +2970,56 @@ export function registerHandlers(services: {
         return await fetchLlmRemoteModels(config)
       } catch (e: unknown) {
         console.error('[LLM-CONFIG-MODEL-LIST] Error:', e)
+        return { success: false, items: [], error: getErrorMessage(e) }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'llm-analyze-vision-models',
+    async (
+      _event,
+      payload: AiVisionModelAnalysisRequest
+    ): Promise<AiVisionModelAnalysisResponse> => {
+      try {
+        const mainModel: WorkbenchSelectedModel | undefined = payload?.mainModel
+        const candidates = Array.isArray(payload?.candidates) ? payload.candidates : []
+        const configId = String(mainModel?.configId || '').trim()
+        const modelName = String(mainModel?.modelName || '').trim()
+        if (!configId || !modelName) {
+          return { success: false, items: [], error: '请先选择主模型' }
+        }
+        if (candidates.length === 0) {
+          return { success: false, items: [], error: '暂无可分析的候选模型' }
+        }
+        const config = await llmStore.getById(configId)
+        if (!config) {
+          return { success: false, items: [], error: '主模型对应的大模型配置不存在，请重新选择' }
+        }
+
+        const system = [
+          '你是模型选型助手。给定一份候选模型列表，请判断每个模型是否支持视觉输入（即能否接收图片），',
+          '并估算每个模型的相对价格成本档位：1 表示便宜，2 表示中等，3 表示昂贵。',
+          '仅依据模型名称与已知能力推断；无法确定的模型默认视为支持视觉、档位按 2 处理。',
+          '必须只输出 JSON，不要输出任何额外文字。'
+        ].join('')
+        const user = JSON.stringify({ candidates })
+
+        const result = await invokeStructuredChat({
+          caller: 'llm-analyze-vision-models',
+          cfg: { ...config, model_name: modelName },
+          schema: visionModelAnalysisSchema,
+          schemaName: 'vision_model_analysis',
+          system,
+          user,
+          temperature: 0
+        })
+
+        const items = normalizeVisionModelAnalysisResult(candidates, result.output)
+
+        return { success: true, items }
+      } catch (e: unknown) {
+        console.error('[LLM-ANALYZE-VISION-MODELS] Error:', e)
         return { success: false, items: [], error: getErrorMessage(e) }
       }
     }

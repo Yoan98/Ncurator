@@ -10,22 +10,26 @@ import React, {
 import { createPortal } from 'react-dom'
 import { Tooltip } from 'antd'
 import {
+  HiArrowPath,
   HiCheck,
   HiChevronDown,
   HiChevronLeft,
   HiChevronRight,
   HiCpuChip,
   HiMagnifyingGlass,
-  HiQuestionMarkCircle
+  HiQuestionMarkCircle,
+  HiSparkles
 } from 'react-icons/hi2'
 import { PiEyesFill } from 'react-icons/pi'
 import type {
+  AiVisionModelAnalysisItem,
   LLMConfig,
   LlmRemoteModel,
   WorkbenchModelSelection,
   WorkbenchSelectedModel
 } from '../../../../shared/types'
 import { resolveFloatingPlacement } from './floatingPlacement'
+import { workbenchSelectors } from '../../testing/selectors'
 
 type WorkbenchModelSelectorProps = {
   configs: LLMConfig[]
@@ -41,6 +45,14 @@ type WorkbenchModelSelectorProps = {
 }
 
 type PanelView = 'root' | 'main' | 'vision'
+
+type VisionFilterMode = 'manual' | 'ai'
+
+type AiVisionAnalysisState = {
+  status: 'idle' | 'loading' | 'done' | 'error'
+  items: AiVisionModelAnalysisItem[]
+  error?: string
+}
 
 type MenuPosition = {
   top?: number
@@ -122,6 +134,12 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
     () => new Set()
   )
   const [position, setPosition] = useState<MenuPosition>(DEFAULT_POSITION)
+  const [visionFilterMode, setVisionFilterMode] = useState<VisionFilterMode>('manual')
+  const [aiAnalysis, setAiAnalysis] = useState<AiVisionAnalysisState>({
+    status: 'idle',
+    items: []
+  })
+  const aiAnalysisRequestIdRef = useRef(0)
 
   const mainLabel = value.mainModel?.modelName || '选择模型'
   const visionInitial = value.visionModel ? getVisionInitial(value.visionModel.modelName) : ''
@@ -197,6 +215,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
     if (!open) {
       setView('root')
       setQuery('')
+      setVisionFilterMode('manual')
       return
     }
     if (view === 'root') return
@@ -241,8 +260,227 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
       .filter((group) => group.models.length > 0)
   }, [configs, modelListsByConfigId, query])
 
+  const runAiAnalysis = useCallback(async (): Promise<void> => {
+    if (!value.mainModel) return
+    const requestId = aiAnalysisRequestIdRef.current + 1
+    aiAnalysisRequestIdRef.current = requestId
+    setAiAnalysis({ status: 'loading', items: [] })
+    const candidates = configs.flatMap((config) =>
+      (modelListsByConfigId[config.id] || []).map((model) => ({
+        configId: config.id,
+        configName: getConfigLabel(config),
+        modelId: model.id,
+        inputModalities: model.inputModalities,
+        outputModalities: model.outputModalities
+      }))
+    )
+    try {
+      const response = await window.api.analyzeVisionModels({
+        mainModel: value.mainModel,
+        candidates
+      })
+      if (aiAnalysisRequestIdRef.current !== requestId) return
+      if (!response.success) {
+        setAiAnalysis({
+          status: 'error',
+          items: [],
+          error: response.error || '分析失败，请重试'
+        })
+        return
+      }
+      setAiAnalysis({ status: 'done', items: response.items })
+    } catch (error) {
+      if (aiAnalysisRequestIdRef.current !== requestId) return
+      setAiAnalysis({
+        status: 'error',
+        items: [],
+        error: error instanceof Error ? error.message : '分析失败，请重试'
+      })
+    }
+  }, [configs, modelListsByConfigId, value.mainModel])
+
+  const aiVisionItems = useMemo(() => {
+    return aiAnalysis.items
+      .filter((item) => item.isVision)
+      .sort(
+        (left, right) => left.costTier - right.costTier || left.modelId.localeCompare(right.modelId)
+      )
+  }, [aiAnalysis.items])
+
+  const renderVisionTabs = (): React.ReactNode => (
+    <div className="flex items-center gap-2 border-b border-[#EEEEEC] px-2.5 py-1.5">
+      <div className="workbench-select-segment" role="tablist">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={visionFilterMode === 'manual'}
+          data-testid={workbenchSelectors.modelSelectVisionManualTab}
+          className={joinClassNames(
+            'workbench-select-segment-item',
+            visionFilterMode === 'manual' ? 'workbench-select-segment-item-active' : ''
+          )}
+          onClick={() => setVisionFilterMode('manual')}
+        >
+          手动选择
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={visionFilterMode === 'ai'}
+          data-testid={workbenchSelectors.modelSelectVisionAiTab}
+          className={joinClassNames(
+            'workbench-select-segment-item',
+            visionFilterMode === 'ai' ? 'workbench-select-segment-item-active' : ''
+          )}
+          onClick={() => setVisionFilterMode('ai')}
+        >
+          AI 筛选
+        </button>
+      </div>
+      {visionFilterMode === 'ai' ? (
+        <div className="ml-auto flex items-center gap-1">
+          <button
+            type="button"
+            disabled={aiAnalysis.status === 'loading' || !value.mainModel}
+            aria-label="重新分析视觉模型"
+            data-testid={workbenchSelectors.modelSelectVisionAiRefresh}
+            className="flex h-7 w-7 items-center justify-center rounded-[6px] text-[#787774] hover:bg-[#F4F4F2] hover:text-[#37352F] disabled:cursor-not-allowed disabled:opacity-40"
+            onClick={() => void runAiAnalysis()}
+          >
+            <HiArrowPath
+              className={joinClassNames(
+                'h-3.5 w-3.5',
+                aiAnalysis.status === 'loading' ? 'animate-spin' : ''
+              )}
+            />
+          </button>
+          <Tooltip title="点击刷新会消耗少量 token；$ 代表价格成本，越多越贵">
+            <span className="flex h-7 w-7 items-center justify-center">
+              <HiQuestionMarkCircle className="h-3.5 w-3.5 text-[#9B9A97]" />
+            </span>
+          </Tooltip>
+        </div>
+      ) : null}
+    </div>
+  )
+
+  const renderAiVisionList = (): React.ReactNode => {
+    if (!value.mainModel) {
+      return (
+        <div className="px-4 py-8 text-center text-[12px] text-[#91918E]">
+          请先选择主模型，再使用 AI 筛选
+        </div>
+      )
+    }
+    if (aiAnalysis.status === 'idle') {
+      return (
+        <div className="flex flex-col items-center gap-3 px-4 py-8">
+          <div className="text-center text-[12px] text-[#91918E]">
+            让主模型帮你找出支持视觉的模型，并按价格从低到高排序
+          </div>
+          <button
+            type="button"
+            data-testid={workbenchSelectors.modelSelectVisionAiRun}
+            className="inline-flex h-8 items-center gap-1.5 rounded-[8px] bg-[#37352F] px-3 text-[12px] font-medium text-white hover:bg-[#2F3437]"
+            onClick={() => void runAiAnalysis()}
+          >
+            <HiSparkles className="h-3.5 w-3.5" />
+            AI 分析
+          </button>
+        </div>
+      )
+    }
+    if (aiAnalysis.status === 'loading') {
+      return (
+        <div className="flex items-center justify-center gap-2 px-4 py-8 text-[12px] text-[#91918E]">
+          <HiArrowPath className="h-3.5 w-3.5 animate-spin" />
+          正在分析模型…
+        </div>
+      )
+    }
+    if (aiAnalysis.status === 'error') {
+      return (
+        <div className="flex flex-col items-center gap-3 px-4 py-8">
+          <div className="text-center text-[12px] text-[#91918E]">
+            {aiAnalysis.error || '分析失败，请重试'}
+          </div>
+          <button
+            type="button"
+            data-testid={workbenchSelectors.modelSelectVisionAiRetry}
+            className="inline-flex h-8 items-center gap-1.5 rounded-[8px] border border-[#E5E4E0] px-3 text-[12px] font-medium text-[#37352F] hover:bg-[#F4F4F2]"
+            onClick={() => void runAiAnalysis()}
+          >
+            <HiArrowPath className="h-3.5 w-3.5" />
+            重试
+          </button>
+        </div>
+      )
+    }
+    if (aiVisionItems.length === 0) {
+      return (
+        <div className="px-4 py-8 text-center text-[12px] text-[#91918E]">
+          未识别到支持视觉的模型
+        </div>
+      )
+    }
+    return (
+      <>
+        {aiVisionItems.map((item) => {
+          const config = configs.find((candidate) => candidate.id === item.configId)
+          const model = modelListsByConfigId[item.configId]?.find(
+            (candidate) => candidate.id === item.modelId
+          )
+          const selected = isSameSelection(value.visionModel, {
+            configId: item.configId,
+            modelName: item.modelId
+          })
+          return (
+            <button
+              key={`${item.configId}:${item.modelId}`}
+              type="button"
+              role="option"
+              aria-selected={selected}
+              className={joinClassNames(
+                'workbench-select-option',
+                selected ? 'workbench-select-option-selected' : ''
+              )}
+              onClick={() =>
+                selectModel({
+                  configId: item.configId,
+                  model: model ?? { id: item.modelId, label: item.modelId }
+                })
+              }
+            >
+              <span className="flex min-w-0 items-center gap-2">
+                <HiCpuChip className="h-3.5 w-3.5 shrink-0 text-[#787774]" />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[13px] font-medium text-[#37352F]">
+                    {model?.label || item.modelId}
+                  </span>
+                  <span className="block truncate text-[11px] leading-4 text-[#91918E]">
+                    {getConfigLabel(config)}
+                  </span>
+                </span>
+                <span
+                  className="workbench-select-cost shrink-0"
+                  aria-label={`价格成本 ${item.costTier} 档`}
+                >
+                  {'$'.repeat(item.costTier)}
+                </span>
+              </span>
+              {selected ? <HiCheck className="h-3.5 w-3.5 text-[#37352F]" /> : null}
+            </button>
+          )
+        })}
+      </>
+    )
+  }
+
   const renderModelList = (): React.ReactNode => {
     const currentSelection = view === 'main' ? value.mainModel : value.visionModel
+    const isVisionView = view === 'vision'
+    const showAiFilter = isVisionView && visionFilterMode === 'ai'
+    const showSearch = !showAiFilter
     return (
       <>
         <div className="flex items-center gap-2 border-b border-[#EEEEEC] px-2.5 py-2">
@@ -260,99 +498,111 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
             {view === 'main' ? '选择主模型' : '选择视觉模型'}
           </div>
         </div>
-        <div className="workbench-select-search">
-          <HiMagnifyingGlass className="h-3.5 w-3.5 shrink-0 text-[#91918E]" />
-          <input
-            ref={searchInputRef}
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="搜索模型"
-            className="workbench-select-search-input"
-          />
-        </div>
-        <div className="overflow-y-auto py-1.5" style={{ maxHeight: position.maxHeight - 88 }}>
-          {view === 'vision' && !query.trim() ? (
-            <button
-              type="button"
-              role="option"
-              aria-selected={!value.visionModel}
-              className={joinClassNames(
-                'workbench-select-option',
-                !value.visionModel ? 'workbench-select-option-selected' : ''
-              )}
-              onClick={selectFollowMain}
-            >
-              <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[#37352F]">
-                跟随主模型
-              </span>
-              {!value.visionModel ? <HiCheck className="h-3.5 w-3.5 text-[#37352F]" /> : null}
-            </button>
-          ) : null}
-          {groupedModels.map((group) => {
-            const searching = Boolean(query.trim())
-            const activeCollapsedIds = searching ? searchCollapsedConfigIds : collapsedConfigIds
-            const collapsed = activeCollapsedIds.has(group.config.id)
-            const toggleCollapsed = (): void => {
-              const setter = searching ? setSearchCollapsedConfigIds : setCollapsedConfigIds
-              setter((current) => {
-                const next = new Set(current)
-                if (next.has(group.config.id)) next.delete(group.config.id)
-                else next.add(group.config.id)
-                return next
-              })
-            }
-            return (
-              <div key={group.config.id} className="py-1">
+        {isVisionView ? renderVisionTabs() : null}
+        {showSearch ? (
+          <div className="workbench-select-search">
+            <HiMagnifyingGlass className="h-3.5 w-3.5 shrink-0 text-[#91918E]" />
+            <input
+              ref={searchInputRef}
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="搜索模型"
+              className="workbench-select-search-input"
+            />
+          </div>
+        ) : null}
+        <div
+          className="overflow-y-auto py-1.5"
+          style={{ maxHeight: position.maxHeight - (showSearch ? 88 : 52) }}
+        >
+          {showAiFilter ? (
+            renderAiVisionList()
+          ) : (
+            <>
+              {view === 'vision' && !query.trim() ? (
                 <button
                   type="button"
-                  aria-expanded={!collapsed}
-                  className="flex w-full items-center px-3 py-1 text-left text-[11px] font-medium text-[#9B9A97] hover:text-[#37352F]"
-                  onClick={toggleCollapsed}
+                  role="option"
+                  aria-selected={!value.visionModel}
+                  className={joinClassNames(
+                    'workbench-select-option',
+                    !value.visionModel ? 'workbench-select-option-selected' : ''
+                  )}
+                  onClick={selectFollowMain}
                 >
-                  <span className="inline-flex items-center gap-1">
-                    <span>{getConfigLabel(group.config)}</span>
-                    {collapsed ? (
-                      <HiChevronRight className="h-3 w-3 shrink-0" />
-                    ) : (
-                      <HiChevronDown className="h-3 w-3 shrink-0" />
-                    )}
+                  <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[#37352F]">
+                    跟随主模型
                   </span>
+                  {!value.visionModel ? <HiCheck className="h-3.5 w-3.5 text-[#37352F]" /> : null}
                 </button>
-                {!collapsed
-                  ? group.models.map((model) => {
-                      const selected = isSameSelection(currentSelection, {
-                        configId: group.config.id,
-                        modelName: model.id
-                      })
-                      return (
-                        <button
-                          key={`${group.config.id}:${model.id}`}
-                          type="button"
-                          role="option"
-                          aria-selected={selected}
-                          className={joinClassNames(
-                            'workbench-select-option',
-                            selected ? 'workbench-select-option-selected' : ''
-                          )}
-                          onClick={() => selectModel({ configId: group.config.id, model })}
-                        >
-                          <span className="flex min-w-0 items-center gap-2">
-                            <HiCpuChip className="h-3.5 w-3.5 shrink-0 text-[#787774]" />
-                            <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[#37352F]">
-                              {model.label || model.id}
-                            </span>
-                          </span>
-                          {selected ? <HiCheck className="h-3.5 w-3.5 text-[#37352F]" /> : null}
-                        </button>
-                      )
-                    })
-                  : null}
-              </div>
-            )
-          })}
-          {groupedModels.length === 0 ? (
-            <div className="px-4 py-6 text-center text-[12px] text-[#91918E]">暂无匹配模型</div>
-          ) : null}
+              ) : null}
+              {groupedModels.map((group) => {
+                const searching = Boolean(query.trim())
+                const activeCollapsedIds = searching ? searchCollapsedConfigIds : collapsedConfigIds
+                const collapsed = activeCollapsedIds.has(group.config.id)
+                const toggleCollapsed = (): void => {
+                  const setter = searching ? setSearchCollapsedConfigIds : setCollapsedConfigIds
+                  setter((current) => {
+                    const next = new Set(current)
+                    if (next.has(group.config.id)) next.delete(group.config.id)
+                    else next.add(group.config.id)
+                    return next
+                  })
+                }
+                return (
+                  <div key={group.config.id} className="py-1">
+                    <button
+                      type="button"
+                      aria-expanded={!collapsed}
+                      className="flex w-full items-center px-3 py-1 text-left text-[11px] font-medium text-[#9B9A97] hover:text-[#37352F]"
+                      onClick={toggleCollapsed}
+                    >
+                      <span className="inline-flex items-center gap-1">
+                        <span>{getConfigLabel(group.config)}</span>
+                        {collapsed ? (
+                          <HiChevronRight className="h-3 w-3 shrink-0" />
+                        ) : (
+                          <HiChevronDown className="h-3 w-3 shrink-0" />
+                        )}
+                      </span>
+                    </button>
+                    {!collapsed
+                      ? group.models.map((model) => {
+                          const selected = isSameSelection(currentSelection, {
+                            configId: group.config.id,
+                            modelName: model.id
+                          })
+                          return (
+                            <button
+                              key={`${group.config.id}:${model.id}`}
+                              type="button"
+                              role="option"
+                              aria-selected={selected}
+                              className={joinClassNames(
+                                'workbench-select-option',
+                                selected ? 'workbench-select-option-selected' : ''
+                              )}
+                              onClick={() => selectModel({ configId: group.config.id, model })}
+                            >
+                              <span className="flex min-w-0 items-center gap-2">
+                                <HiCpuChip className="h-3.5 w-3.5 shrink-0 text-[#787774]" />
+                                <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[#37352F]">
+                                  {model.label || model.id}
+                                </span>
+                              </span>
+                              {selected ? <HiCheck className="h-3.5 w-3.5 text-[#37352F]" /> : null}
+                            </button>
+                          )
+                        })
+                      : null}
+                  </div>
+                )
+              })}
+              {groupedModels.length === 0 ? (
+                <div className="px-4 py-6 text-center text-[12px] text-[#91918E]">暂无匹配模型</div>
+              ) : null}
+            </>
+          )}
         </div>
       </>
     )

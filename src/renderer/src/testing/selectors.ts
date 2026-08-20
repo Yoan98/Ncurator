@@ -238,5 +238,10 @@ export const workbenchSelectors = {
   referenceSearchWarning: 'workbench-reference-search-warning',
   markdownEditor: 'workbench-markdown-editor',
   plainTextEditor: 'workbench-plain-text-editor',
-  lineNumberOverlay: 'workbench-line-number-overlay'
+  lineNumberOverlay: 'workbench-line-number-overlay',
+  modelSelectVisionManualTab: 'workbench-model-select-vision-manual-tab',
+  modelSelectVisionAiTab: 'workbench-model-select-vision-ai-tab',
+  modelSelectVisionAiRun: 'workbench-model-select-vision-ai-run',
+  modelSelectVisionAiRefresh: 'workbench-model-select-vision-ai-refresh',
+  modelSelectVisionAiRetry: 'workbench-model-select-vision-ai-retry'
 } as const
