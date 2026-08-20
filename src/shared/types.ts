@@ -528,29 +528,14 @@ export type LlmModelListResponse = {
   error?: string
 }
 
-export type AiVisionModelCandidate = {
-  configId: string
-  configName: string
-  modelId: string
-  inputModalities?: string[]
-  outputModalities?: string[]
-}
-
-export type AiVisionModelAnalysisItem = {
-  configId: string
-  modelId: string
-  isVision: boolean
-  costTier: 1 | 2 | 3
-}
-
 export type AiVisionModelAnalysisRequest = {
   mainModel: WorkbenchSelectedModel
-  candidates: AiVisionModelCandidate[]
+  modelNames: string[]
 }
 
 export type AiVisionModelAnalysisResponse = {
   success: boolean
-  items: AiVisionModelAnalysisItem[]
+  modelNames: string[]
   error?: string
 }
 

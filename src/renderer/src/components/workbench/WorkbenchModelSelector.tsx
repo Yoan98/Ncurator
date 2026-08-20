@@ -22,7 +22,6 @@ import {
 } from 'react-icons/hi2'
 import { PiEyesFill } from 'react-icons/pi'
 import type {
-  AiVisionModelAnalysisItem,
   LLMConfig,
   LlmRemoteModel,
   WorkbenchModelSelection,
@@ -50,7 +49,7 @@ type VisionFilterMode = 'manual' | 'ai'
 
 type AiVisionAnalysisState = {
   status: 'idle' | 'loading' | 'done' | 'error'
-  items: AiVisionModelAnalysisItem[]
+  modelNames: string[]
   error?: string
 }
 
@@ -109,6 +108,20 @@ const isSameSelection = (
   right: WorkbenchSelectedModel | null
 ): boolean => left?.configId === right?.configId && left?.modelName === right?.modelName
 
+const VISION_ANALYSIS_CACHE_PREFIX = 'ncurator:vision-model-analysis:'
+
+const parseCachedVisionModelNames = (raw: string | null): string[] | null => {
+  if (!raw) return null
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    if (!Array.isArray(parsed)) return null
+    if (!parsed.every((entry) => typeof entry === 'string' && entry.trim())) return null
+    return parsed.map((entry) => entry.trim())
+  } catch {
+    return null
+  }
+}
+
 const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
   configs,
   modelListsByConfigId,
@@ -137,7 +150,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
   const [visionFilterMode, setVisionFilterMode] = useState<VisionFilterMode>('manual')
   const [aiAnalysis, setAiAnalysis] = useState<AiVisionAnalysisState>({
     status: 'idle',
-    items: []
+    modelNames: []
   })
   const aiAnalysisRequestIdRef = useRef(0)
 
@@ -174,7 +187,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
       top: placement.top,
       bottom: placement.bottom,
       width: placement.width,
-      maxHeight: Math.max(160, placement.maxHeight)
+      maxHeight: placement.maxHeight
     })
   }, [])
 
@@ -260,52 +273,85 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
       .filter((group) => group.models.length > 0)
   }, [configs, modelListsByConfigId, query])
 
+  const visionCandidateNames = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          configs.flatMap((config) => (modelListsByConfigId[config.id] || []).map((model) => model.id))
+        )
+      ).sort(),
+    [configs, modelListsByConfigId]
+  )
+
+  const analysisCacheKey = `${VISION_ANALYSIS_CACHE_PREFIX}${visionCandidateNames.join('\u0000')}`
+
+  const readCachedAnalysis = useCallback((): string[] | null => {
+    try {
+      return parseCachedVisionModelNames(localStorage.getItem(analysisCacheKey))
+    } catch {
+      return null
+    }
+  }, [analysisCacheKey])
+
+  const writeCachedAnalysis = useCallback(
+    (modelNames: string[]): void => {
+      try {
+        localStorage.setItem(analysisCacheKey, JSON.stringify(modelNames))
+      } catch {
+        // ignore storage availability / quota errors
+      }
+    },
+    [analysisCacheKey]
+  )
+
+  useEffect(() => {
+    if (visionFilterMode !== 'ai' || aiAnalysis.status !== 'idle') return
+    const cached = readCachedAnalysis()
+    if (cached) setAiAnalysis({ status: 'done', modelNames: cached })
+  }, [visionFilterMode, aiAnalysis.status, readCachedAnalysis])
+
   const runAiAnalysis = useCallback(async (): Promise<void> => {
     if (!value.mainModel) return
     const requestId = aiAnalysisRequestIdRef.current + 1
     aiAnalysisRequestIdRef.current = requestId
-    setAiAnalysis({ status: 'loading', items: [] })
-    const candidates = configs.flatMap((config) =>
-      (modelListsByConfigId[config.id] || []).map((model) => ({
-        configId: config.id,
-        configName: getConfigLabel(config),
-        modelId: model.id,
-        inputModalities: model.inputModalities,
-        outputModalities: model.outputModalities
-      }))
-    )
+    setAiAnalysis({ status: 'loading', modelNames: [] })
     try {
       const response = await window.api.analyzeVisionModels({
         mainModel: value.mainModel,
-        candidates
+        modelNames: visionCandidateNames
       })
       if (aiAnalysisRequestIdRef.current !== requestId) return
       if (!response.success) {
         setAiAnalysis({
           status: 'error',
-          items: [],
+          modelNames: [],
           error: response.error || '分析失败，请重试'
         })
         return
       }
-      setAiAnalysis({ status: 'done', items: response.items })
+      setAiAnalysis({ status: 'done', modelNames: response.modelNames })
+      writeCachedAnalysis(response.modelNames)
     } catch (error) {
       if (aiAnalysisRequestIdRef.current !== requestId) return
       setAiAnalysis({
         status: 'error',
-        items: [],
+        modelNames: [],
         error: error instanceof Error ? error.message : '分析失败，请重试'
       })
     }
-  }, [configs, modelListsByConfigId, value.mainModel])
+  }, [visionCandidateNames, value.mainModel, writeCachedAnalysis])
 
-  const aiVisionItems = useMemo(() => {
-    return aiAnalysis.items
-      .filter((item) => item.isVision)
-      .sort(
-        (left, right) => left.costTier - right.costTier || left.modelId.localeCompare(right.modelId)
-      )
-  }, [aiAnalysis.items])
+  const aiVisionGroups = useMemo(() => {
+    const visionNames = new Set(aiAnalysis.modelNames)
+    return configs
+      .map((config) => ({
+        config,
+        models: (modelListsByConfigId[config.id] || []).filter((model) =>
+          visionNames.has(model.id)
+        )
+      }))
+      .filter((group) => group.models.length > 0)
+  }, [aiAnalysis.modelNames, configs, modelListsByConfigId])
 
   const renderVisionTabs = (): React.ReactNode => (
     <div className="flex items-center gap-2 border-b border-[#EEEEEC] px-2.5 py-1.5">
@@ -376,7 +422,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
       return (
         <div className="flex flex-col items-center gap-3 px-4 py-8">
           <div className="text-center text-[12px] text-[#91918E]">
-            让主模型帮你找出支持视觉的模型，并按价格从低到高排序
+            让主模型帮你找出支持视觉的模型
           </div>
           <button
             type="button"
@@ -416,7 +462,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
         </div>
       )
     }
-    if (aiVisionItems.length === 0) {
+    if (aiVisionGroups.length === 0) {
       return (
         <div className="px-4 py-8 text-center text-[12px] text-[#91918E]">
           未识别到支持视觉的模型
@@ -425,51 +471,63 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
     }
     return (
       <>
-        {aiVisionItems.map((item) => {
-          const config = configs.find((candidate) => candidate.id === item.configId)
-          const model = modelListsByConfigId[item.configId]?.find(
-            (candidate) => candidate.id === item.modelId
-          )
-          const selected = isSameSelection(value.visionModel, {
-            configId: item.configId,
-            modelName: item.modelId
-          })
+        {aiVisionGroups.map((group) => {
+          const collapsed = collapsedConfigIds.has(group.config.id)
+          const toggleCollapsed = (): void => {
+            setCollapsedConfigIds((current) => {
+              const next = new Set(current)
+              if (next.has(group.config.id)) next.delete(group.config.id)
+              else next.add(group.config.id)
+              return next
+            })
+          }
           return (
-            <button
-              key={`${item.configId}:${item.modelId}`}
-              type="button"
-              role="option"
-              aria-selected={selected}
-              className={joinClassNames(
-                'workbench-select-option',
-                selected ? 'workbench-select-option-selected' : ''
-              )}
-              onClick={() =>
-                selectModel({
-                  configId: item.configId,
-                  model: model ?? { id: item.modelId, label: item.modelId }
-                })
-              }
-            >
-              <span className="flex min-w-0 items-center gap-2">
-                <HiCpuChip className="h-3.5 w-3.5 shrink-0 text-[#787774]" />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[13px] font-medium text-[#37352F]">
-                    {model?.label || item.modelId}
-                  </span>
-                  <span className="block truncate text-[11px] leading-4 text-[#91918E]">
-                    {getConfigLabel(config)}
-                  </span>
+            <div key={group.config.id} className="py-1">
+              <button
+                type="button"
+                aria-expanded={!collapsed}
+                className="flex w-full items-center px-3 py-1 text-left text-[11px] font-medium text-[#9B9A97] hover:text-[#37352F]"
+                onClick={toggleCollapsed}
+              >
+                <span className="inline-flex items-center gap-1">
+                  <span>{getConfigLabel(group.config)}</span>
+                  {collapsed ? (
+                    <HiChevronRight className="h-3 w-3 shrink-0" />
+                  ) : (
+                    <HiChevronDown className="h-3 w-3 shrink-0" />
+                  )}
                 </span>
-                <span
-                  className="workbench-select-cost shrink-0"
-                  aria-label={`价格成本 ${item.costTier} 档`}
-                >
-                  {'$'.repeat(item.costTier)}
-                </span>
-              </span>
-              {selected ? <HiCheck className="h-3.5 w-3.5 text-[#37352F]" /> : null}
-            </button>
+              </button>
+              {!collapsed
+                ? group.models.map((model) => {
+                    const selected = isSameSelection(value.visionModel, {
+                      configId: group.config.id,
+                      modelName: model.id
+                    })
+                    return (
+                      <button
+                        key={`${group.config.id}:${model.id}`}
+                        type="button"
+                        role="option"
+                        aria-selected={selected}
+                        className={joinClassNames(
+                          'workbench-select-option',
+                          selected ? 'workbench-select-option-selected' : ''
+                        )}
+                        onClick={() => selectModel({ configId: group.config.id, model })}
+                      >
+                        <span className="flex min-w-0 items-center gap-2">
+                          <HiCpuChip className="h-3.5 w-3.5 shrink-0 text-[#787774]" />
+                          <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[#37352F]">
+                            {model.label || model.id}
+                          </span>
+                        </span>
+                        {selected ? <HiCheck className="h-3.5 w-3.5 text-[#37352F]" /> : null}
+                      </button>
+                    )
+                  })
+                : null}
+            </div>
           )
         })}
       </>
@@ -513,7 +571,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
         ) : null}
         <div
           className="overflow-y-auto py-1.5"
-          style={{ maxHeight: position.maxHeight - (showSearch ? 88 : 52) }}
+          style={{ flex: 1, minHeight: 0 }}
         >
           {showAiFilter ? (
             renderAiVisionList()
@@ -660,6 +718,9 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
                 bottom: position.bottom,
                 left: position.left,
                 width: position.width,
+                maxHeight: position.maxHeight,
+                display: 'flex',
+                flexDirection: 'column',
                 zIndex: 1000
               }}
             >
