@@ -15,6 +15,7 @@ const localAt = (
 ): number => new Date(year, month, day, hours, minutes).getTime()
 
 const NOW = localAt(2026, 0, 1, 8, 0)
+const HOUR = 60 * 60 * 1000
 
 const makeTask = (overrides: Partial<ScheduledTask> = {}): ScheduledTask => ({
   id: 'task-1',
@@ -67,11 +68,13 @@ type ServiceHarness = {
   chatStore: { saveChatSession: ReturnType<typeof vi.fn>; deleteChatSession: ReturnType<typeof vi.fn> }
   submitTask: ReturnType<typeof vi.fn>
   emitSessionListRefresh: ReturnType<typeof vi.fn>
-  repeat: ReturnType<typeof vi.fn>
-  clearRepeat: ReturnType<typeof vi.fn>
-  now: () => number
+  setTimer: ReturnType<typeof vi.fn>
+  clearTimer: ReturnType<typeof vi.fn>
+  now: ReturnType<typeof vi.fn>
   service: ScheduledTaskService
 }
+
+let nextTimerId = 0
 
 const createService = (): ServiceHarness => {
   const taskStore = new FakeTaskStore()
@@ -90,8 +93,8 @@ const createService = (): ServiceHarness => {
     async (): Promise<ChatSubmitResponse> => ({ success: true, mode: 'ai' })
   )
   const emitSessionListRefresh = vi.fn()
-  const repeat = vi.fn(() => 1 as ReturnType<typeof setInterval>)
-  const clearRepeat = vi.fn()
+  const setTimer = vi.fn(() => ++nextTimerId)
+  const clearTimer = vi.fn()
   const now = vi.fn(() => NOW)
   const service = new ScheduledTaskService({
     taskStore,
@@ -99,8 +102,8 @@ const createService = (): ServiceHarness => {
     chatStore,
     submitTask,
     emitSessionListRefresh,
-    repeat,
-    clearRepeat,
+    setTimer,
+    clearTimer,
     now
   })
   return {
@@ -109,8 +112,8 @@ const createService = (): ServiceHarness => {
     chatStore,
     submitTask,
     emitSessionListRefresh,
-    repeat,
-    clearRepeat,
+    setTimer,
+    clearTimer,
     now,
     service
   }
@@ -183,7 +186,7 @@ describe('ScheduledTaskService', () => {
   it('fires a due task, creates a session, submits with the configured context and refreshes the list', async () => {
     const harness = createService()
     harness.taskStore.set(makeTask({ nextRunAt: NOW - 1 }))
-    await harness.service.tick()
+    await harness.service.runDue()
 
     expect(harness.chatStore.saveChatSession).toHaveBeenCalledTimes(1)
     expect(harness.chatStore.saveChatSession).toHaveBeenCalledWith({
@@ -208,12 +211,21 @@ describe('ScheduledTaskService', () => {
     expect(harness.chatStore.deleteChatSession).not.toHaveBeenCalled()
   })
 
+  it('re-arms the timer to the next run after firing a due task', async () => {
+    const harness = createService()
+    harness.taskStore.set(makeTask({ nextRunAt: NOW - 1 }))
+    await harness.service.runDue()
+
+    expect(harness.setTimer).toHaveBeenCalledTimes(1)
+    expect(harness.setTimer).toHaveBeenCalledWith(expect.any(Function), HOUR)
+  })
+
   it('cleans up the empty session and skips refresh when submit fails', async () => {
     const harness = createService()
     harness.taskStore.set(makeTask({ nextRunAt: NOW - 1 }))
     harness.submitTask.mockResolvedValueOnce({ success: false, error: '模型失效' })
 
-    await harness.service.tick()
+    await harness.service.runDue()
 
     expect(harness.chatStore.saveChatSession).toHaveBeenCalledTimes(1)
     expect(harness.chatStore.deleteChatSession).toHaveBeenCalledTimes(1)
@@ -223,7 +235,7 @@ describe('ScheduledTaskService', () => {
   it('skips without creating a session when the workspace is missing', async () => {
     const harness = createService()
     harness.taskStore.set(makeTask({ workspaceId: 'gone', nextRunAt: NOW - 1 }))
-    await harness.service.tick()
+    await harness.service.runDue()
 
     expect(harness.chatStore.saveChatSession).not.toHaveBeenCalled()
     expect(harness.submitTask).not.toHaveBeenCalled()
@@ -240,5 +252,62 @@ describe('ScheduledTaskService', () => {
     const saved = (await stored)[0]
     expect(saved.nextRunAt).not.toBeNull()
     expect(saved.nextRunAt).toBeGreaterThan(NOW)
+  })
+
+  it('skips and advances a run that was missed while asleep', async () => {
+    const harness = createService()
+    harness.taskStore.set(makeTask({ nextRunAt: NOW - 2 * HOUR }))
+    await harness.service.runDue()
+
+    expect(harness.submitTask).not.toHaveBeenCalled()
+    expect(harness.chatStore.saveChatSession).not.toHaveBeenCalled()
+    const stored = harness.taskStore.list()
+    const saved = (await stored)[0]
+    expect(saved.nextRunAt).toBe(localAt(2026, 0, 1, 9, 0))
+  })
+
+  it('fires every due task when multiple tasks share the same slot', async () => {
+    const harness = createService()
+    harness.taskStore.set(makeTask({ id: 'task-1', nextRunAt: NOW - 1 }))
+    harness.taskStore.set(
+      makeTask({ id: 'task-2', name: '晚间摘要', timeOfDay: '20:00', nextRunAt: NOW - 1 })
+    )
+    await harness.service.runDue()
+
+    expect(harness.submitTask).toHaveBeenCalledTimes(2)
+    expect(harness.chatStore.saveChatSession).toHaveBeenCalledTimes(2)
+    expect(harness.emitSessionListRefresh).toHaveBeenCalledTimes(2)
+  })
+
+  it('arms a timer when a task is enabled', async () => {
+    const harness = createService()
+    harness.taskStore.set(makeTask({ enabled: false, nextRunAt: null }))
+    await harness.service.start()
+    expect(harness.setTimer).not.toHaveBeenCalled()
+
+    await harness.service.setEnabled({ id: 'task-1', enabled: true })
+    expect(harness.setTimer).toHaveBeenCalledTimes(1)
+    expect(harness.setTimer).toHaveBeenCalledWith(expect.any(Function), HOUR)
+  })
+
+  it('does not arm a timer when there are no enabled tasks', async () => {
+    const harness = createService()
+    harness.taskStore.set(makeTask({ enabled: false, nextRunAt: null }))
+    await harness.service.start()
+
+    expect(harness.setTimer).not.toHaveBeenCalled()
+  })
+
+  it('re-arms to the earliest enabled task after a delete', async () => {
+    const harness = createService()
+    harness.taskStore.set(makeTask({ id: 'task-1', nextRunAt: NOW + HOUR }))
+    harness.taskStore.set(
+      makeTask({ id: 'task-2', name: '晚间摘要', timeOfDay: '20:00', nextRunAt: NOW + 12 * HOUR })
+    )
+    await harness.service.start()
+    expect(harness.setTimer).toHaveBeenLastCalledWith(expect.any(Function), HOUR)
+
+    await harness.service.delete('task-1')
+    expect(harness.setTimer).toHaveBeenLastCalledWith(expect.any(Function), 12 * HOUR)
   })
 })

@@ -14,9 +14,9 @@ import type { ChatStore } from '../storage/domains/ChatStore'
 import type { ScheduledTaskStore } from '../storage/domains/ScheduledTaskStore'
 import type { WorkspaceStore } from '../storage/domains/WorkspaceStore'
 
-const TICK_INTERVAL_MS = 30_000
+const MISFIRE_GRACE_MS = 60_000
 
-type RepeatHandle = ReturnType<typeof setInterval>
+type TimerHandle = ReturnType<typeof setTimeout>
 
 type ScheduledTaskServiceDeps = {
   taskStore: Pick<ScheduledTaskStore, 'list' | 'listEnabled' | 'getById' | 'save' | 'delete'>
@@ -24,8 +24,8 @@ type ScheduledTaskServiceDeps = {
   chatStore: Pick<ChatStore, 'saveChatSession' | 'deleteChatSession'>
   submitTask: (payload: ChatSubmitRequest) => Promise<ChatSubmitResponse>
   emitSessionListRefresh: () => void
-  repeat?: (callback: () => void, intervalMs: number) => RepeatHandle
-  clearRepeat?: (handle: RepeatHandle) => void
+  setTimer?: (callback: () => void, delayMs: number) => TimerHandle
+  clearTimer?: (handle: TimerHandle) => void
   now?: () => number
 }
 
@@ -92,55 +92,81 @@ export const computeNextRunAt = (
 }
 
 export class ScheduledTaskService {
-  private readonly deps: Required<Pick<ScheduledTaskServiceDeps, 'repeat' | 'clearRepeat' | 'now'>> &
-    Omit<ScheduledTaskServiceDeps, 'repeat' | 'clearRepeat' | 'now'>
-  private timer: RepeatHandle | null = null
-  private ticking = false
+  private readonly deps: Required<Pick<ScheduledTaskServiceDeps, 'setTimer' | 'clearTimer' | 'now'>> &
+    Omit<ScheduledTaskServiceDeps, 'setTimer' | 'clearTimer' | 'now'>
+  private timer: TimerHandle | null = null
+  private running = false
 
   public constructor(deps: ScheduledTaskServiceDeps) {
     this.deps = {
-      repeat: (callback, intervalMs) => setInterval(callback, intervalMs),
-      clearRepeat: (handle) => clearInterval(handle),
+      setTimer: (callback, delayMs) => setTimeout(callback, delayMs),
+      clearTimer: (handle) => clearTimeout(handle),
       now: () => Date.now(),
       ...deps
     }
   }
 
   public async start(): Promise<void> {
-    if (this.timer) return
     try {
       await this.reconcileMissed()
     } catch (error) {
       console.error('[SCHEDULED-TASK] reconcile missed failed:', error)
     }
-    if (this.timer) return
-    this.timer = this.deps.repeat(() => {
-      void this.tick()
-    }, TICK_INTERVAL_MS)
-    await this.tick()
+    await this.scheduleNext()
   }
 
-  public async tick(): Promise<void> {
-    if (this.ticking) return
-    this.ticking = true
+  public stop(): void {
+    if (this.timer === null) return
+    this.deps.clearTimer(this.timer)
+    this.timer = null
+  }
+
+  public async runDue(): Promise<void> {
+    if (this.running) return
+    this.running = true
     try {
       const now = this.deps.now()
       const tasks = await this.deps.taskStore.listEnabled()
       for (const task of tasks) {
         if (task.nextRunAt === null || now < task.nextRunAt) continue
-        await this.fireTask(task, now)
+        if (now - task.nextRunAt <= MISFIRE_GRACE_MS) {
+          await this.fireTask(task, now)
+        } else {
+          console.warn(
+            '[SCHEDULED-TASK] missed slot, skip:',
+            JSON.stringify({ id: task.id, nextRunAt: task.nextRunAt, now, gapMs: now - task.nextRunAt })
+          )
+          await this.advanceNextRun(task, now)
+        }
       }
     } catch (error) {
-      console.error('[SCHEDULED-TASK] tick failed:', error)
+      console.error('[SCHEDULED-TASK] run due failed:', error)
     } finally {
-      this.ticking = false
+      this.running = false
     }
+    await this.scheduleNext()
   }
 
-  public stop(): void {
-    if (!this.timer) return
-    this.deps.clearRepeat(this.timer)
-    this.timer = null
+  private async scheduleNext(): Promise<void> {
+    if (this.timer !== null) {
+      this.deps.clearTimer(this.timer)
+      this.timer = null
+    }
+    const now = this.deps.now()
+    const tasks = await this.deps.taskStore.listEnabled()
+    const next = tasks
+      .map((task) => task.nextRunAt)
+      .filter((value): value is number => value !== null)
+      .sort((a, b) => a - b)[0]
+    if (next === undefined) return
+    const delayMs = Math.max(0, next - now)
+    console.warn(
+      '[SCHEDULED-TASK] arm timer:',
+      JSON.stringify({ next, now, delayMs })
+    )
+    this.timer = this.deps.setTimer(() => {
+      void this.runDue()
+    }, delayMs)
   }
 
   public async list(): Promise<ScheduledTask[]> {
@@ -151,6 +177,7 @@ export class ScheduledTaskService {
     try {
       const task = this.buildTask(input)
       await this.deps.taskStore.save(task)
+      await this.scheduleNext()
       return { success: true, task }
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : String(error) }
@@ -160,6 +187,7 @@ export class ScheduledTaskService {
   public async delete(id: string): Promise<ScheduledTaskMutationResponse> {
     try {
       await this.deps.taskStore.delete(String(id || '').trim())
+      await this.scheduleNext()
       return { success: true }
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : String(error) }
@@ -181,6 +209,7 @@ export class ScheduledTaskService {
         updatedAt: now
       }
       await this.deps.taskStore.save(task)
+      await this.scheduleNext()
       return { success: true, task }
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : String(error) }
@@ -276,6 +305,10 @@ export class ScheduledTaskService {
         return
       }
       submitted = true
+      console.warn(
+        '[SCHEDULED-TASK] fired:',
+        JSON.stringify({ id: task.id, sessionId, nextRunAt: task.nextRunAt, now })
+      )
       this.deps.emitSessionListRefresh()
     } catch (error) {
       console.error('[SCHEDULED-TASK] fire failed:', error)

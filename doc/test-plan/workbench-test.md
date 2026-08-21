@@ -610,13 +610,13 @@ tests/case/workbench/
 - Why：这是定时任务的核心闭环，验证真实调度、真实 AI run 与前端会话列表刷新联动。
 - How：在真实 UI 建立当前会话后，配置并启用一个每天 + 当前系统时间下一分钟的任务（提示词触发一次轻量真实 AI 请求）；等待到点，通过 `chatSessionList` 轮询新会话出现并运行完成，同时确认当前会话仍为激活项。
 - Oracle：新会话创建与标题取提示词前 20 字符对齐 `ST-RUN-001-AC1`；运行完成后会话列表刷新且不切换当前会话对齐 `ST-RUN-001-AC2` / `ST-RUN-002-AC1/AC2`。
-- Not：不验证跨天 / 跨周边界调度，不验证程序关闭期间错过补跑（该行为由 backend 单测覆盖）。
+- Not：不验证跨天 / 跨周边界调度，不验证程序关闭 / 休眠期间错过补跑（该行为由 backend 单测覆盖）。
 
 #### `scheduled-task` backend 单测
 
 - 测试类型：`backend`
-- What：`computeNextRunAt` 的每天 / 每周 / 时间格式 / 星期边界；`ScheduledTaskService.save/setEnabled` 必填校验与 `nextRunAt` 计算；`fireTask` 成功建会话与提交载荷、失败清理空会话、工作区缺失跳过；`start` 对错过档位只前移不补跑。
+- What：`computeNextRunAt` 的每天 / 每周 / 时间格式 / 星期边界；`ScheduledTaskService.save/setEnabled` 必填校验与 `nextRunAt` 计算；`fireTask` 成功建会话与提交载荷、失败清理空会话、工作区缺失跳过；`start` 对错过档位只前移不补跑；`runDue` 对休眠错过（超过 60 秒宽限）只前移不补跑；自排 `setTimeout` 到最近 `nextRunAt` 与变更后重排。
 - Why：调度边界与副作用清理不适合用 UI E2E 稳定复现，下沉到单测保证确定性。
-- How：注入 fake task/workspace/chat store、submitTask、clock，驱动 `tick` / `start` / `save` / `setEnabled`。
-- Oracle：跳过不可用工作区不产生空会话对齐 `ST-RUN-001-AC3`；程序关闭错过不补跑对齐 `ST-RUN-003-AC1`。
+- How：注入 fake task/workspace/chat store、submitTask、clock 与 timer，驱动 `runDue` / `start` / `save` / `setEnabled`。
+- Oracle：跳过不可用工作区不产生空会话对齐 `ST-RUN-001-AC3`；程序关闭错过不补跑对齐 `ST-RUN-003-AC1`；休眠错过不补跑对齐 `ST-RUN-003-AC2`。
 

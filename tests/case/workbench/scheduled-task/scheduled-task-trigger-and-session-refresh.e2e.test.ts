@@ -22,7 +22,7 @@ const TASK_PROMPT = '定时任务触发验证，请只回复 ok。'
 const padTimePart = (value: number): string => String(value).padStart(2, '0')
 
 const nextMinuteHhmm = (): string => {
-  const next = new Date(Date.now() + 120_000)
+  const next = new Date(Date.now() + 50_000)
   return `${padTimePart(next.getHours())}:${padTimePart(next.getMinutes())}`
 }
 
@@ -59,33 +59,50 @@ describe('workbench scheduled-task e2e', () => {
         runMode: 'single',
         execute: async (runtime) => {
           const { page } = runtime
+          const mark = (label: string): void => {
+            runtime.signal({ name: 'scheduled-task-trigger-step', message: label })
+          }
+
+          mark('setup-start')
           const setup = await setupWorkbenchWithTempWorkspace(page, {
             caseId: CASE_ID,
             workspaceName: `Workbench ${CASE_ID}`,
             createSession: false
           })
+          mark('setup-done')
 
           await page.getByRole('button', { name: `在 ${setup.workspaceName} 中新建对话` }).click()
+          mark('new-chat-clicked')
           await sendWorkbenchMessage(page, FIRST_PROMPT)
+          mark('first-message-sent')
           await waitForWorkbenchAiRunCompletion(runtime, Date.now(), setup.env.modelName)
+          mark('first-run-completed')
 
           const sessionsAfterFirst = await listSessions(page)
+          mark('first-list-sessions-done')
           const firstSession = sessionsAfterFirst.find(
             (session) => session.title === FIRST_PROMPT.slice(0, 20)
           )
           if (!firstSession) throw new Error('failed to locate the first session')
 
           await openScheduledTasksView(page)
+          mark('view-opened')
           await getWorkbenchLocator(page, scheduledTaskSelectors.addButton).click()
           await getWorkbenchLocator(page, scheduledTaskSelectors.formName).fill('触发验证任务')
           await getWorkbenchLocator(page, scheduledTaskSelectors.formPrompt).fill(TASK_PROMPT)
+          mark('form-name-prompt-filled')
           await selectScheduledTaskWorkspace(page, setup.workspaceName)
+          mark('workspace-selected')
           await selectScheduledTaskModel(page, setup.env.modelName)
+          mark('model-selected')
           const scheduledHhmm = nextMinuteHhmm()
           await fillScheduledTaskTime(page, scheduledHhmm)
+          mark('time-filled')
           await getWorkbenchLocator(page, scheduledTaskSelectors.formSave).click()
+          mark('form-saved')
 
           const createdTasks = await listTasks(page)
+          mark('list-tasks-done')
           const createdTask = createdTasks.find((task) => task.name === '触发验证任务')
           if (!createdTask) throw new Error('failed to create the scheduled task')
           const taskCreatedAt = Date.now()
@@ -93,9 +110,10 @@ describe('workbench scheduled-task e2e', () => {
             page,
             `${scheduledTaskSelectors.itemTogglePrefix}-${createdTask.id}`
           ).click()
+          mark('toggle-clicked')
 
           const triggeredStartedAt = Date.now()
-          const deadline = triggeredStartedAt + 240_000
+          const deadline = triggeredStartedAt + 150_000
           let triggeredSession: ChatSessionListItem | null = null
           while (Date.now() < deadline) {
             const sessions = await listSessions(page)
@@ -109,12 +127,13 @@ describe('workbench scheduled-task e2e', () => {
             if (triggeredSession) break
             await page.waitForTimeout(5_000)
           }
+          mark('trigger-session-poll-done')
 
           const activeSessionId = await readActiveSessionId(page)
 
           let triggeredRunCompleted = false
           if (triggeredSession) {
-            const runDeadline = Date.now() + 180_000
+            const runDeadline = Date.now() + 120_000
             while (Date.now() < runDeadline) {
               const sessions = await listSessions(page)
               const current = sessions.find((session) => session.id === triggeredSession?.id)
@@ -125,6 +144,7 @@ describe('workbench scheduled-task e2e', () => {
               await page.waitForTimeout(3_000)
             }
           }
+          mark('trigger-run-completion-poll-done')
 
           return {
             scheduledHhmm,
