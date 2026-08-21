@@ -21,12 +21,15 @@ const mocks = vi.hoisted(() => {
   updater.autoInstallOnAppQuit = false
   updater.logger = null
 
+  const shutdownApp = vi.fn(async () => {})
+
   return {
     updater,
     updaterListeners,
     ipcHandlers,
     appState,
-    windowSend
+    windowSend,
+    shutdownApp
   }
 })
 
@@ -96,6 +99,7 @@ describe('AppUpdateService contract', () => {
     mocks.updater.autoDownload = false
     mocks.updater.autoInstallOnAppQuit = false
     mocks.updater.logger = null
+    mocks.shutdownApp.mockReset()
   })
 
   afterEach(() => {
@@ -130,7 +134,7 @@ describe('AppUpdateService contract', () => {
       }
     )
 
-    const service = new AppUpdateService()
+    const service = new AppUpdateService({ shutdownApp: mocks.shutdownApp })
     service.initialize()
 
     const checkResponse = (await getIpcHandler(
@@ -167,12 +171,18 @@ describe('AppUpdateService contract', () => {
       mocks.windowSend.mock.calls.map((call) => (call[1] as AppUpdateSnapshot).status)
     ).toEqual(['checking', 'checking', 'available', 'downloading', 'downloading', 'downloaded'])
 
-    const installResponse = getIpcHandler(APP_UPDATE_INSTALL_CHANNEL)() as AppUpdateActionResponse
+    const installResponse = (await getIpcHandler(
+      APP_UPDATE_INSTALL_CHANNEL
+    )()) as AppUpdateActionResponse
     expect(installResponse.success).toBe(true)
     expect(mocks.updater.quitAndInstall).toHaveBeenCalledWith(true, true)
+    const quitAndInstall = vi.mocked(mocks.updater.quitAndInstall as () => void)
+    const shutdownOrder = mocks.shutdownApp.mock.invocationCallOrder[0] ?? 0
+    const installOrder = quitAndInstall.mock.invocationCallOrder[0] ?? 0
+    expect(shutdownOrder).toBeLessThan(installOrder)
   })
 
-  it('keeps the macOS updater install interactive', () => {
+  it('keeps the macOS updater install interactive', async () => {
     const service = new AppUpdateService({
       platform: 'darwin',
       macUpdateSignatureValid: () => true
@@ -180,7 +190,7 @@ describe('AppUpdateService contract', () => {
     service.initialize()
     emitUpdaterEvent('update-downloaded', { version: '0.1.1' })
 
-    const response = getIpcHandler(APP_UPDATE_INSTALL_CHANNEL)() as AppUpdateActionResponse
+    const response = (await getIpcHandler(APP_UPDATE_INSTALL_CHANNEL)()) as AppUpdateActionResponse
 
     expect(response.success).toBe(true)
     expect(mocks.updater.quitAndInstall).toHaveBeenCalledWith(false, true)
@@ -268,12 +278,15 @@ describe('AppUpdateService contract', () => {
       }
     })
 
-    const installResponse = getIpcHandler(APP_UPDATE_INSTALL_CHANNEL)() as AppUpdateActionResponse
+    const installResponse = (await getIpcHandler(
+      APP_UPDATE_INSTALL_CHANNEL
+    )()) as AppUpdateActionResponse
     expect(installResponse).toMatchObject({
       success: false,
       error: '更新包尚未下载完成'
     })
     expect(mocks.updater.quitAndInstall).not.toHaveBeenCalled()
+    expect(mocks.shutdownApp).not.toHaveBeenCalled()
   })
 
   it('surfaces updater error events such as checksum verification failures', async () => {

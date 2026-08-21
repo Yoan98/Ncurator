@@ -30,6 +30,7 @@ type AppUpdateDependencies = {
   schedule: (callback: () => void, delayMs: number) => ReturnType<typeof setTimeout>
   repeat: (callback: () => void, intervalMs: number) => ReturnType<typeof setInterval>
   macUpdateSignatureValid: () => boolean
+  shutdownApp: () => Promise<void>
 }
 
 const createDefaultDependencies = (): AppUpdateDependencies => ({
@@ -40,7 +41,8 @@ const createDefaultDependencies = (): AppUpdateDependencies => ({
   platform: process.platform,
   schedule: (callback, delayMs) => setTimeout(callback, delayMs),
   repeat: (callback, intervalMs) => setInterval(callback, intervalMs),
-  macUpdateSignatureValid: hasStableMacUpdateSignature
+  macUpdateSignatureValid: hasStableMacUpdateSignature,
+  shutdownApp: async () => {}
 })
 
 const getUpdateErrorMessage = (error: Error | string): string =>
@@ -244,7 +246,7 @@ export class AppUpdateService {
     }
   }
 
-  private quitAndInstall(): AppUpdateActionResponse {
+  private async quitAndInstall(): Promise<AppUpdateActionResponse> {
     if (this.snapshot.status !== 'downloaded') {
       return {
         success: false,
@@ -253,6 +255,7 @@ export class AppUpdateService {
       }
     }
 
+    await this.dependencies.shutdownApp()
     const installSilently = this.dependencies.platform === 'win32'
     this.dependencies.updater.quitAndInstall(installSilently, true)
     return {

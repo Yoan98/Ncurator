@@ -237,6 +237,8 @@ macOS 更新：https://download.ncurator.com/updates/latest/latest-mac.yml
 
 应用启动 5 秒后静默检查更新，持续运行时每 4 小时检查一次。发现新版本后由用户主动下载；下载完成后可以立即重启或稍后安装。
 
+Windows 更新采用“先完成应用关闭、再启动安装器”的时序：点击立即安装时会先等待应用完成关闭（刷新工作区、终止 embedding / 网页抓取 sidecar / 终端会话等子进程），再调用 `quitAndInstall` 触发 NSIS 安装器，避免旧版本文件被运行中的进程占用而导致“Failed to uninstall old application files”。
+
 页面 fixture 只验证更新交互，不证明真实安装包下载或升级成功。真实更新验证需要使用已发布的旧版本安装包连接公开更新通道。
 
 ### 中断、恢复与回滚

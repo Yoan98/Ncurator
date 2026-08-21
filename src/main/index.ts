@@ -284,7 +284,7 @@ if (!singleInstanceLock) {
       createMainWindow: () => createWindow(),
       notificationIcon: icon
     })
-    const appUpdateService = new AppUpdateService()
+    const appUpdateService = new AppUpdateService({ shutdownApp: prepareAppShutdown })
     const cdpEndpointService = new CdpEndpointService({
       userDataPath: app.getPath('userData')
     })
