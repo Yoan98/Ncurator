@@ -549,12 +549,13 @@ const renderBrainRoundRecord = (record: HumanRoundRecord): string => {
   const lines = [
     `- 第 ${record.roundId} 轮`,
     '判断：',
-    renderBrainRoundDecision(record)
+    renderBrainRoundDecision(record),
+    '执行：',
+    renderBrainRoundExecution(record)
   ]
   if (record.thought.progressOverview) {
-    lines.push('进展：', record.thought.progressOverview)
+    lines.push('当前整体推进进展：', record.thought.progressOverview)
   }
-  lines.push('执行：', renderBrainRoundExecution(record))
   return lines.join('\n')
 }
 

@@ -35,7 +35,7 @@ describe('ai unit human memory renderers', () => {
     expect(renderTodolist(state, 'fallback_markdown')).toBe('无')
   })
 
-  it('renders a round with progress overview between decision and execution', () => {
+  it('renders the overall progress overview below the round execution', () => {
     const initialState = createInitialHumanState({
       taskId: 'task-round-progress-overview',
       userInput: '继续推进'
@@ -93,10 +93,11 @@ describe('ai unit human memory renderers', () => {
 
     expect(rendered).toContain('- 第 1 轮\n判断：')
     expect(rendered).toContain('先读取 release-note.txt 确认最新状态')
-    expect(rendered).toContain('进展：')
-    expect(rendered).toContain('已经尝试过什么：读取目录')
     expect(rendered).toContain('执行：')
     expect(rendered).toContain('类型：hand')
+    expect(rendered).toContain('当前整体推进进展：')
+    expect(rendered).toContain('已经尝试过什么：读取目录')
+    expect(rendered.indexOf('类型：hand')).toBeLessThan(rendered.indexOf('当前整体推进进展：'))
   })
 
   it('renders history tool results with boolean-tree filtered compact json', () => {
