@@ -4,7 +4,7 @@ import type {
   HumanThoughtDecision,
   HumanRuntimeCache,
   HumanState,
-  HumanThought,
+  HumanTodoItem,
   HumanDecisionHint,
 } from '../../types'
 import {
@@ -96,13 +96,13 @@ export const applyBrainDecisionTransition = (input: {
   cache: HumanRuntimeCache
   state: HumanState
   thought: HumanThoughtDecision
-  thoughtMemory: HumanThought
+  todolist: HumanTodoItem[]
   overrides?: HumanStateOverrides
 }): HumanState => {
   const nextState = applyBrainDecisionState({
     state: input.state,
     thought: input.thought,
-    thoughtMemory: input.thoughtMemory,
+    todolist: input.todolist,
     createdAt: Date.now(),
     overrides: input.overrides
   })

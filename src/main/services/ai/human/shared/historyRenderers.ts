@@ -471,7 +471,7 @@ const buildBrainToolAttemptText = (input: {
     .join('\n')
 
 const renderBrainRoundDecision = (record: HumanRoundRecord): string =>
-  `- ${record.thought.thought.next}`
+  `- ${record.thought.next}`
 
 const renderLearningExecution = (
   record: HumanRoundRecord & {
@@ -545,17 +545,18 @@ const renderBrainRoundExecution = (record: HumanRoundRecord): string => {
   }
 }
 
-export const renderBrainRoundExecutionOnly = (record: HumanRoundRecord | undefined): string =>
-  record ? renderBrainRoundExecution(record) : 'none'
-
-const renderBrainRoundRecord = (record: HumanRoundRecord): string =>
-  `
-- 第 ${record.roundId} 轮
-判断：
-${renderBrainRoundDecision(record)}
-执行：
-${renderBrainRoundExecution(record)}
-`.trim()
+const renderBrainRoundRecord = (record: HumanRoundRecord): string => {
+  const lines = [
+    `- 第 ${record.roundId} 轮`,
+    '判断：',
+    renderBrainRoundDecision(record)
+  ]
+  if (record.thought.progressOverview) {
+    lines.push('进展：', record.thought.progressOverview)
+  }
+  lines.push('执行：', renderBrainRoundExecution(record))
+  return lines.join('\n')
+}
 
 export const renderBrainRoundSection = (records: HumanRoundRecord[]): string =>
   records.length > 0 ? records.map(renderBrainRoundRecord).join('\n\n') : 'none'

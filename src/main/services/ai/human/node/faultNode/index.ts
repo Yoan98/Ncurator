@@ -27,10 +27,8 @@ export const createFaultNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
       ? appendDecisionRound({ state, execution })
       : appendRoundRecord({
           state,
-          thought: {
-            thought: { next: '本轮决策未能进入可执行节点。' },
-            nextAction: { action: 'fault' }
-          },
+          thought: { next: '本轮决策未能进入可执行节点。' },
+          nextAction: { action: 'fault' },
           execution
         })
 

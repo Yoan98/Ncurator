@@ -252,7 +252,7 @@ export const humanTodoItemSchema = z.object({
 export const humanThoughtSchema = z.object({
   next: z.string().min(1),
   todolist: z.array(humanTodoItemSchema).optional(),
-  progressionSummary: z.string().optional()
+  progressOverview: z.string().optional()
 })
 
 export const brainEvidenceReferenceSchema = z.object({
@@ -407,7 +407,8 @@ export const humanRoundExecutionSchema = z.discriminatedUnion('kind', [
 export const humanRoundRecordSchema = z.object({
   roundId: z.number().int().min(1),
   createdAt: z.number(),
-  thought: humanThoughtDecisionSchema,
+  thought: humanThoughtSchema,
+  nextAction: brainNextActionSchema,
   execution: humanRoundExecutionSchema
 })
 
@@ -440,7 +441,7 @@ export const humanTaskRunMemorySchema = z.object({
 })
 
 export const humanMemorySchema = z.object({
-  thought: humanThoughtSchema,
+  todolist: z.array(humanTodoItemSchema),
   conversation: humanConversationMemorySchema,
   taskRun: humanTaskRunMemorySchema
 })

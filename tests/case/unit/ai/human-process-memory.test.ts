@@ -9,7 +9,10 @@ import {
 } from '../../../../src/main/services/ai/human/memory/rounds'
 import { applyBrainDecisionState } from '../../../../src/main/services/ai/human/node/utils/stateTransitionState'
 import { createInitialHumanState } from '../../../../src/main/services/ai/human/state/schema'
-import type { HumanThoughtDecision } from '../../../../src/main/services/ai/human/types'
+import type {
+  HumanThoughtDecision,
+  HumanTodoItem
+} from '../../../../src/main/services/ai/human/types'
 
 const buildThought = (input: {
   summary: string
@@ -37,15 +40,12 @@ describe('ai unit human memory history', () => {
     const nextState = applyBrainDecisionState({
       state: initialState,
       thought,
-      thoughtMemory: {
-        ...initialState.memory.thought,
-        todolist: [
-          {
-            item: '完成最终交付前的剩余事项',
-            status: 'todo'
-          }
-        ]
-      },
+      todolist: [
+        {
+          item: '完成最终交付前的剩余事项',
+          status: 'todo'
+        }
+      ],
       createdAt: 1
     })
 
@@ -78,21 +78,18 @@ describe('ai unit human memory history', () => {
         }
       }
     }
-    const thoughtMemory = {
-      ...initialState.memory.thought,
-      todolist: [
-        {
-          item: '补齐剩余文档修改',
-          status: 'todo' as const
-        }
-      ]
-    }
+    const todolist: HumanTodoItem[] = [
+      {
+        item: '补齐剩余文档修改',
+        status: 'todo'
+      }
+    ]
     const decisionHint = undefined
 
     const nextState = applyBrainDecisionState({
       state: stateWithToolLimit,
       thought,
-      thoughtMemory,
+      todolist,
       decisionHint,
       createdAt: 2
     })
@@ -141,7 +138,7 @@ describe('ai unit human memory history', () => {
     const nextState = applyBrainDecisionState({
       state: stateWithToolLimit,
       thought,
-      thoughtMemory: initialState.memory.thought,
+      todolist: initialState.memory.todolist,
       createdAt: 3
     })
 
@@ -160,20 +157,17 @@ describe('ai unit human memory history', () => {
         action: 'mouth'
       }
     })
-    const thoughtMemory = {
-      ...initialState.memory.thought,
-      todolist: [
-        {
-          item: '检查是否已经满足用户诉求并能进入最终交付',
-          status: 'todo' as const
-        }
-      ]
-    }
+    const todolist: HumanTodoItem[] = [
+      {
+        item: '检查是否已经满足用户诉求并能进入最终交付',
+        status: 'todo'
+      }
+    ]
 
     const nextState = applyBrainDecisionState({
       state: initialState,
       thought,
-      thoughtMemory,
+      todolist,
       createdAt: 4
     })
 
@@ -190,19 +184,16 @@ describe('ai unit human memory history', () => {
       ...initialState,
       memory: {
         ...initialState.memory,
-        thought: {
-          ...initialState.memory.thought,
-          todolist: [
-            {
-              item: '确认 A 事项',
-              status: 'todo' as const
-            },
-            {
-              item: '检查是否已经满足用户诉求并能进入最终交付',
-              status: 'todo' as const
-            }
-          ]
-        }
+        todolist: [
+          {
+            item: '确认 A 事项',
+            status: 'todo' as const
+          },
+          {
+            item: '检查是否已经满足用户诉求并能进入最终交付',
+            status: 'todo' as const
+          }
+        ]
       }
     }
     const thought: HumanThoughtDecision = {
@@ -228,7 +219,7 @@ describe('ai unit human memory history', () => {
     const nextState = applyBrainDecisionState({
       state: stateWithPreviousTodo,
       thought,
-      thoughtMemory: thought.thought,
+      todolist: thought.thought.todolist || stateWithPreviousTodo.memory.todolist,
       createdAt: 5
     })
 
@@ -264,14 +255,14 @@ describe('ai unit human memory history', () => {
           wantLearnSkillIds: ['docx-read']
         }
       }),
-      thoughtMemory: initialState.memory.thought,
+      todolist: initialState.memory.todolist,
       createdAt: 3
     })
 
     expect(nextState.execution.evidenceReferences).toBeUndefined()
   })
 
-  it('keeps the latest round out of historical rounds and trims the window to twenty rounds', () => {
+  it('includes the latest round in recent history and trims the window to twenty rounds', () => {
     const initialState = createInitialHumanState({
       taskId: 'task-2',
       userInput: '请整理历史'
@@ -279,7 +270,7 @@ describe('ai unit human memory history', () => {
 
     const stateWithHistory = Array.from({ length: 22 }).reduce((state, _, index) => {
       const round = index + 1
-      const thought = buildThought({
+      const decision = buildThought({
         summary: `第 ${round} 轮决定`,
         nextAction: {
           action: 'learning',
@@ -293,7 +284,8 @@ describe('ai unit human memory history', () => {
           ...state.memory,
           taskRun: appendRoundRecord({
             state,
-            thought,
+            thought: decision.thought,
+            nextAction: decision.nextAction,
             execution:
               round % 2 === 0
                 ? buildHandExecution({
@@ -335,7 +327,7 @@ describe('ai unit human memory history', () => {
 
     expect(stateWithHistory.memory.taskRun.rounds.at(-1)?.roundId).toBe(22)
     expect(recentHistory.map((record) => record.roundId)).toEqual(
-      Array.from({ length: 20 }, (_, index) => index + 2)
+      Array.from({ length: 20 }, (_, index) => index + 3)
     )
   })
 
@@ -347,19 +339,21 @@ describe('ai unit human memory history', () => {
 
     const stateWithHistory = Array.from({ length: 30 }).reduce((state, _, index) => {
       const round = index + 1
+      const decision = buildThought({
+        summary: `第 ${round} 轮决定`,
+        nextAction: {
+          action: 'learning',
+          wantLearnSkillIds: ['docx-read']
+        }
+      })
       return {
         ...state,
         memory: {
           ...state.memory,
           taskRun: appendRoundRecord({
             state,
-            thought: buildThought({
-              summary: `第 ${round} 轮决定`,
-              nextAction: {
-                action: 'learning',
-                wantLearnSkillIds: ['docx-read']
-              }
-            }),
+            thought: decision.thought,
+            nextAction: decision.nextAction,
             execution: buildLearningExecution({
               learningOutcome: {
                 requestedSkillIds: ['docx-read'],
@@ -377,7 +371,7 @@ describe('ai unit human memory history', () => {
     }, initialState)
 
     expect(getRecentHistoryRounds(stateWithHistory).map((record) => record.roundId)).toEqual(
-      Array.from({ length: 20 }, (_, index) => index + 10)
+      Array.from({ length: 20 }, (_, index) => index + 11)
     )
     expect(getCompressibleHistoryRounds(stateWithHistory).map((record) => record.roundId)).toEqual(
       Array.from({ length: 29 }, (_, index) => index + 1)
@@ -436,26 +430,29 @@ describe('ai unit human memory history', () => {
       userInput: '保存原始工具结果'
     })
 
-    const nextHistory = appendRoundRecord({
-      state: initialState,
-      thought: buildThought({
-        summary: '读取 docx 片段',
-        nextAction: {
-          action: 'hand',
-          calls: [
-            {
-              toolName: 'docx_read_blocks',
-              args: {
-                sourcePath: 'graphics.docx',
-                range: {
-                  type: 'block_ids',
-                  blockIds: ['b:23', 'b:25']
-                }
+    const decision = buildThought({
+      summary: '读取 docx 片段',
+      nextAction: {
+        action: 'hand',
+        calls: [
+          {
+            toolName: 'docx_read_blocks',
+            args: {
+              sourcePath: 'graphics.docx',
+              range: {
+                type: 'block_ids',
+                blockIds: ['b:23', 'b:25']
               }
             }
-          ]
-        }
-      }),
+          }
+        ]
+      }
+    })
+
+    const nextHistory = appendRoundRecord({
+      state: initialState,
+      thought: decision.thought,
+      nextAction: decision.nextAction,
       execution: buildHandExecution({
         calls: [
           {
@@ -549,7 +546,7 @@ describe('ai unit human memory history', () => {
         }
       },
       thought,
-      thoughtMemory: initialState.memory.thought,
+      todolist: initialState.memory.todolist,
       createdAt: 1
     })
 

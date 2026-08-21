@@ -223,7 +223,7 @@ export class ChatStore {
       const selectedReferences = JSON.parse(String(row.selected_references_json || '[]'))
       const workspace = row.workspace_json ? JSON.parse(String(row.workspace_json)) : undefined
       const humanState = JSON.parse(String(row.human_state_json))
-      if (!humanState || humanState.schemaVersion !== 2) return null
+      if (!humanState || humanState.schemaVersion !== 3) return null
       const reasonText = String(row.reason || '')
       const reason =
         reasonText === 'network_error' ||

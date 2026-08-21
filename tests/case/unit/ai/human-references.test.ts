@@ -68,7 +68,7 @@ describe('ai unit human references', () => {
           ]
         }
       },
-      thoughtMemory: initialState.memory.thought,
+      todolist: initialState.memory.todolist,
       createdAt: 1
     })
 

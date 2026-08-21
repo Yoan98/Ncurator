@@ -51,7 +51,7 @@ export const createMouthNode = (input: {
       }
     }
 
-    const pendingItems = (state.memory.thought.todolist || [])
+    const pendingItems = state.memory.todolist
       .filter((item) => item.status === 'todo')
       .map((item) => item.item)
     if (pendingItems.length > 0 && state.execution.finalizationReason !== 'brain_content_safety') {

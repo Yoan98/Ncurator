@@ -1196,8 +1196,8 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 - 测试类型：`backend`
 - What：第一轮 `brain` 写入的 thought memory 字段会在下一轮真实 `brain` prompt 中继续可见。
 - Why：memory 跨轮延续是 `human` 长链路推理的核心能力，必须由真实 graph 保证。
-- How：第一轮 `brain` 通过 `thought.todolist/progressionSummary` 更新任务推进记忆，并触发一次真实 learning；第二轮 `brain` 读取真实 prompt，检查这些内容是否还在。
-- Oracle：第二轮 `brain` prompt 中出现前一轮写入的 todolist 与 progressionSummary 内容，任务最终完成。
+- How：第一轮 `brain` 通过 `thought.todolist/progressOverview` 更新任务推进记忆（todolist 进全局、progressOverview 进该轮），并触发一次真实 learning；第二轮 `brain` 读取真实 prompt，检查这些内容是否还在。
+- Oracle：第二轮 `brain` prompt 中出现前一轮写入的 todolist 与 progressOverview 内容，任务最终完成。
 - Not：不验证更复杂的 memory 压缩策略。
 
 ##### `conversation-memory-multi-run-recall`

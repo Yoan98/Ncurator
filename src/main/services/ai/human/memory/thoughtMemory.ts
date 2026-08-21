@@ -16,16 +16,12 @@ const normalizeTodoItems = (items: HumanTodoItem[]): HumanTodoItem[] =>
     }))
     .filter((item) => item.item.length > 0)
 
-export const applyThoughtPatch = (input: {
-  memory: HumanThought
-  thought: HumanThought
-}): HumanThought => ({
-  next: normalizeThoughtText(input.thought.next),
-  todolist: Array.isArray(input.thought.todolist)
-    ? normalizeTodoItems(input.thought.todolist)
-    : input.memory.todolist,
-  progressionSummary:
-    typeof input.thought.progressionSummary === 'string'
-      ? normalizeThoughtText(input.thought.progressionSummary)
-      : input.memory.progressionSummary
+export const normalizeHumanThought = (thought: HumanThought): HumanThought => ({
+  next: normalizeThoughtText(thought.next),
+  ...(Array.isArray(thought.todolist)
+    ? { todolist: normalizeTodoItems(thought.todolist) }
+    : {}),
+  ...(typeof thought.progressOverview === 'string'
+    ? { progressOverview: normalizeThoughtText(thought.progressOverview) }
+    : {})
 })

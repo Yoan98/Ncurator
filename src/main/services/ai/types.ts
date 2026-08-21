@@ -60,7 +60,7 @@ export type HumanTaskRunner = (
 export type AiRunState = z.infer<typeof aiRunStateContractSchema>
 
 export type HumanResumeSnapshot = Pick<HumanState, 'memory' | 'skills'> & {
-  schemaVersion: 2
+  schemaVersion: 3
   taskContext: HumanTaskContext
   execution: Pick<
     HumanState['execution'],

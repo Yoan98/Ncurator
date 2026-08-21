@@ -1,6 +1,6 @@
 import type { AiRunContext } from '../../../types'
 import { isLlmOutputError } from '../../../errors'
-import { applyThoughtPatch } from '../../memory/thoughtMemory'
+import { normalizeHumanThought } from '../../memory/thoughtMemory'
 import { buildBrainPrompt } from '../../prompts/brain'
 import { createHumanThoughtDecisionSchema } from '../../schema'
 import { assertExternalLearnedSkillIds } from '../../skills'
@@ -86,18 +86,16 @@ export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
         })
       }
       const parsedThought = thoughtDecisionSchema.parse(result.output)
-      const thoughtMemory = applyThoughtPatch({
-        memory: state.memory.thought,
-        thought: parsedThought.thought
-      })
+      const normalizedThought = normalizeHumanThought(parsedThought.thought)
+      const todolist = normalizedThought.todolist ?? state.memory.todolist
 
       completeThinking()
       return applyBrainDecisionTransition({
         ctx: input.ctx,
         cache: input.cache,
         state,
-        thought: parsedThought,
-        thoughtMemory,
+        thought: { ...parsedThought, thought: normalizedThought },
+        todolist,
         overrides: {}
       })
     } catch (error) {

@@ -53,10 +53,10 @@ export const buildHumanResumeSnapshot = (
   state: HumanState,
   reason: ChatSessionResumeSnapshot['reason']
 ): HumanResumeSnapshot => ({
-  schemaVersion: 2,
+  schemaVersion: 3,
   taskContext: buildInterruptedTaskContext(state, reason),
   memory: {
-    thought: state.memory.thought,
+    todolist: state.memory.todolist,
     conversation: state.memory.conversation,
     taskRun: state.memory.taskRun
   },
@@ -133,7 +133,7 @@ export const restoreHumanStateFromResumeSnapshot = (input: {
       taskContext
     },
     memory: {
-      thought: snapshot.memory?.thought || baseState.memory.thought,
+      todolist: snapshot.memory?.todolist || baseState.memory.todolist,
       conversation: snapshot.memory?.conversation || baseState.memory.conversation,
       taskRun: snapshot.memory?.taskRun || baseState.memory.taskRun
     },

@@ -34,7 +34,7 @@ describe('ai human mock-llm backend', () => {
                         status: 'todo'
                       }
                     ],
-                    progressionSummary:
+                    progressOverview:
                       '已根据用户诉求建立初始行动路径。当前形成的结论是项目上线前需要执行复核，证据是知识库显示上线前必须执行复核；当前没有失败事项。'
                   },
                   nextAction: {
@@ -59,8 +59,8 @@ describe('ai human mock-llm backend', () => {
                       status: 'done'
                     }
                   ],
-                  progressionSummary:
-                    '已确认 thought memory 会在第二轮继续可见，且负责人事项已完成。证据是第二轮真实 brain prompt 中再次读到了第一轮写入的 todolist 和 progressionSummary。'
+                  progressOverview:
+                    '已确认 thought memory 会在第二轮继续可见，且负责人事项已完成。证据是第二轮真实 brain prompt 中再次读到了第一轮写入的 todolist 和 progressOverview。'
                 })
 
                 return {

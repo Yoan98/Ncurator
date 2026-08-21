@@ -38,13 +38,11 @@ const buildStateWithCompactionHistory = (runtime: BackendTestRuntime) => {
       taskRun: appendRoundRecord({
         state: baseState,
         thought: {
-          thought: {
-            next: '先学习 kb-retrieval，建立检索路径。'
-          },
-          nextAction: {
-            action: 'learning',
-            wantLearnSkillIds: ['docx-read']
-          }
+          next: '先学习 kb-retrieval，建立检索路径。'
+        },
+        nextAction: {
+          action: 'learning',
+          wantLearnSkillIds: ['docx-read']
         },
         execution: buildLearningExecution({
           learningOutcome: {
@@ -67,20 +65,18 @@ const buildStateWithCompactionHistory = (runtime: BackendTestRuntime) => {
       taskRun: appendRoundRecord({
         state: withRound1,
         thought: {
-          thought: {
-            next: '第一次读取发布说明，确认当前版本仍缺少审批人。'
-          },
-          nextAction: {
-            action: 'hand',
-            calls: [
-              {
-                toolName: 'terminal_run',
-                args: {
-                  command: 'cat release-notes.txt'
-                }
+          next: '第一次读取发布说明，确认当前版本仍缺少审批人。'
+        },
+        nextAction: {
+          action: 'hand',
+          calls: [
+            {
+              toolName: 'terminal_run',
+              args: {
+                command: 'cat release-notes.txt'
               }
-            ]
-          }
+            }
+          ]
         },
         execution: buildHandExecution({
           calls: [
@@ -116,20 +112,18 @@ const buildStateWithCompactionHistory = (runtime: BackendTestRuntime) => {
       taskRun: appendRoundRecord({
         state: withRound2,
         thought: {
-          thought: {
-            next: '尝试直接发布，但因为审批未完成被阻断。'
-          },
-          nextAction: {
-            action: 'hand',
-            calls: [
-              {
-                toolName: 'terminal_run',
-                args: {
-                  command: 'release --publish'
-                }
+          next: '尝试直接发布，但因为审批未完成被阻断。'
+        },
+        nextAction: {
+          action: 'hand',
+          calls: [
+            {
+              toolName: 'terminal_run',
+              args: {
+                command: 'release --publish'
               }
-            ]
-          }
+            }
+          ]
         },
         execution: buildHandExecution({
           calls: [
@@ -166,20 +160,18 @@ const buildStateWithCompactionHistory = (runtime: BackendTestRuntime) => {
       taskRun: appendRoundRecord({
         state: withRound3,
         thought: {
-          thought: {
-            next: '改为读取审批记录，确认当前仍受“未审批不可发布”约束。'
-          },
-          nextAction: {
-            action: 'hand',
-            calls: [
-              {
-                toolName: 'terminal_run',
-                args: {
-                  command: 'cat approval-log.txt'
-                }
+          next: '改为读取审批记录，确认当前仍受“未审批不可发布”约束。'
+        },
+        nextAction: {
+          action: 'hand',
+          calls: [
+            {
+              toolName: 'terminal_run',
+              args: {
+                command: 'cat approval-log.txt'
               }
-            ]
-          }
+            }
+          ]
         },
         execution: buildHandExecution({
           calls: [
@@ -215,20 +207,18 @@ const buildStateWithCompactionHistory = (runtime: BackendTestRuntime) => {
       taskRun: appendRoundRecord({
         state: withRound4,
         thought: {
-          thought: {
-            next: '当前结论已经明确：负责人是 Bob，但审批和上线窗口都未完成。'
-          },
-          nextAction: {
-            action: 'hand',
-            calls: [
-              {
-                toolName: 'terminal_run',
-                args: {
-                  command: 'cat schedule-note.txt'
-                }
+          next: '当前结论已经明确：负责人是 Bob，但审批和上线窗口都未完成。'
+        },
+        nextAction: {
+          action: 'hand',
+          calls: [
+            {
+              toolName: 'terminal_run',
+              args: {
+                command: 'cat schedule-note.txt'
               }
-            ]
-          }
+            }
+          ]
         },
         execution: buildHandExecution({
           calls: [
@@ -264,20 +254,18 @@ const buildStateWithCompactionHistory = (runtime: BackendTestRuntime) => {
       taskRun: appendRoundRecord({
         state: withRound5,
         thought: {
-          thought: {
-            next: '最新一轮准备说明：下一步先确认窗口，再推进 Bob 的审批。'
-          },
-          nextAction: {
-            action: 'hand',
-            calls: [
-              {
-                toolName: 'terminal_run',
-                args: {
-                  command: 'echo latest'
-                }
+          next: '最新一轮准备说明：下一步先确认窗口，再推进 Bob 的审批。'
+        },
+        nextAction: {
+          action: 'hand',
+          calls: [
+            {
+              toolName: 'terminal_run',
+              args: {
+                command: 'echo latest'
               }
-            ]
-          }
+            }
+          ]
         },
         execution: buildHandExecution({
           calls: [
@@ -330,12 +318,11 @@ describe('ai human mock-llm backend', () => {
               ({ user }) => {
                 compactedPromptSeen =
                   user.includes('<compactions>') &&
-                  user.includes('<task_progress>') &&
+                  user.includes('<todolist>') &&
                   user.includes('审批未完成') &&
                   user.includes('未审批不可发布') &&
                   user.includes('负责人已更新为 Bob') &&
                   !user.includes('尝试直接发布，但因为审批未完成被阻断。') &&
-                  user.includes('最新一轮决策如下') &&
                   user.includes('判断：') &&
                   user.includes('执行：') &&
                   user.includes('最新一轮准备说明：下一步先确认窗口，再推进 Bob 的审批。')
@@ -421,7 +408,7 @@ describe('ai human mock-llm backend', () => {
             startedEvents.length === 1 &&
             completedEvents.length === 1 &&
             Boolean(result.compactionPrompt.includes('<user_goal>')) &&
-            Boolean(result.compactionPrompt.includes('<task_progress>')) &&
+            Boolean(result.compactionPrompt.includes('<todolist>')) &&
             Boolean(result.compactionPrompt.includes('<history_rounds>')) &&
             Boolean(result.compactionPrompt.includes('失败原因：审批未完成')) &&
             Boolean(result.compactionPrompt.includes('负责人 Bob 待确认')) &&

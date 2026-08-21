@@ -860,7 +860,7 @@ describe('unit ai persistence backend', () => {
       userInput: run.input,
       selectedReferences: [],
       humanState: {
-        schemaVersion: 2,
+        schemaVersion: 3,
         taskContext: {
           originalGoal: run.input,
           recoveryHistory: [],
@@ -962,7 +962,7 @@ describe('unit ai persistence backend', () => {
       userInput: '测试中断',
       selectedReferences: [],
       humanState: {
-        schemaVersion: 2,
+        schemaVersion: 3,
         taskContext: {
           originalGoal: '测试中断',
           recoveryHistory: [],
@@ -1006,7 +1006,7 @@ describe('unit ai persistence backend', () => {
       userInput: runningRun.input,
       selectedReferences: [],
       humanState: {
-        schemaVersion: 2,
+        schemaVersion: 3,
         taskContext: {
           originalGoal: runningRun.input,
           recoveryHistory: [],
@@ -1084,7 +1084,7 @@ describe('unit ai persistence backend', () => {
       userInput: 'retract me',
       selectedReferences: [],
       humanState: {
-        schemaVersion: 2,
+        schemaVersion: 3,
         taskContext: {
           originalGoal: 'retract me',
           recoveryHistory: [],
@@ -1143,7 +1143,7 @@ describe('unit ai persistence backend', () => {
       userInput: 'continue the newer task',
       selectedReferences: [],
       humanState: {
-        schemaVersion: 2,
+        schemaVersion: 3,
         taskContext: {
           originalGoal: 'continue the newer task',
           recoveryHistory: [],

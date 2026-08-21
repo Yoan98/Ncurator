@@ -79,6 +79,7 @@ export const buildFaultExecution = (input: {
 export const appendRoundRecord = (input: {
   state: HumanState
   thought: HumanRoundRecord['thought']
+  nextAction: HumanRoundRecord['nextAction']
   execution: HumanRoundExecution
   createdAt?: number
 }): HumanState['memory']['taskRun'] => ({
@@ -89,6 +90,7 @@ export const appendRoundRecord = (input: {
       roundId: nextRoundId(input.state.memory.taskRun.rounds),
       createdAt: input.createdAt || Date.now(),
       thought: input.thought,
+      nextAction: input.nextAction,
       execution: input.execution
     }
   ])
@@ -99,13 +101,15 @@ export const appendDecisionRound = (input: {
   execution: HumanRoundExecution
   createdAt?: number
 }): HumanState['memory']['taskRun'] => {
-  if (!input.state.execution.currentThought) {
+  const currentThought = input.state.execution.currentThought
+  if (!currentThought) {
     return input.state.memory.taskRun
   }
 
   return appendRoundRecord({
     state: input.state,
-    thought: input.state.execution.currentThought,
+    thought: currentThought.thought,
+    nextAction: currentThought.nextAction,
     execution: input.execution,
     createdAt: input.createdAt
   })
@@ -115,9 +119,7 @@ export const getLastRoundFocus = (state: HumanState): HumanRoundRecord | undefin
   state.memory.taskRun.rounds.at(-1)
 
 export const getRecentHistoryRounds = (state: HumanState): HumanRoundRecord[] =>
-  state.memory.taskRun.rounds
-    .slice(0, -1)
-    .slice(-HUMAN_HISTORY_LIMITS.recentHistoryRounds)
+  state.memory.taskRun.rounds.slice(-HUMAN_HISTORY_LIMITS.recentHistoryRounds)
 
 export const getCompressibleHistoryRounds = (state: HumanState): HumanRoundRecord[] =>
   state.memory.taskRun.rounds.slice(0, -1)

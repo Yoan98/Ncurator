@@ -1,6 +1,6 @@
 export const buildHistoryCompactionPrompt = (input: {
   userGoal: string
-  taskProgress: string
+  todolist: string
   existingCompactSummary?: string
   historyRounds: string
   targetCompressionRatio: number
@@ -24,7 +24,7 @@ export const buildHistoryCompactionPrompt = (input: {
 
 <context_block_guide>
     - user_goal：用户原始诉求。
-    - task_progress：当前任务的全局进度信；只用于判断当前什么仍相关、什么已经失效、什么尝试其实没有解决问题；它不能覆盖或改写历史事实。
+    - todolist：当前任务的待办路径；。
     - existing_compact_summary：之前压缩的总结信息；如果之前已经有过压缩总结，则本次压缩需要在它的基础上进行迭代压缩。
     - history_rounds：当前任务已发生的历史轮次信息，包含所有细节；它是本次压缩的主要依据。
   </context_block_guide>
@@ -62,9 +62,9 @@ export const buildHistoryCompactionPrompt = (input: {
 ${input.userGoal.trim() || 'none'}
   </user_goal>
 
-  <task_progress>
-${input.taskProgress.trim() || 'none'}
-  </task_progress>
+  <todolist>
+${input.todolist.trim() || 'none'}
+  </todolist>
 
   <existing_compact_summary>
   ${input.existingCompactSummary?.trim() || 'none'}

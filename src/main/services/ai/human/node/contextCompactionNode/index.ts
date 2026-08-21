@@ -3,8 +3,8 @@ import type { AiRunContext } from '../../../types'
 import { getCompressibleHistoryRounds, getLastRoundFocus } from '../../memory/rounds'
 import { CONTEXT_COMPACTION_TARGET_RATIO } from '../../constants'
 import { buildHistoryCompactionPrompt } from '../../prompts/compaction'
-import { renderBrainRoundExecutionOnly, renderBrainRoundSection } from '../../shared/historyRenderers'
-import { renderTaskProgress } from '../../shared/memoryRenderers'
+import { renderBrainRoundSection } from '../../shared/historyRenderers'
+import { renderTodolist } from '../../shared/memoryRenderers'
 import type { HumanRuntimeCache, HumanState } from '../../types'
 import { estimateTextTokens } from '../../utils/tokenEstimate'
 import { emitCompactionCompleted, emitCompactionStarted } from '../../../events/processEvents'
@@ -56,12 +56,7 @@ export const createContextCompactionNode = (input: {
     const historyRounds = renderBrainRoundSection(targetRounds)
     const prompt = buildHistoryCompactionPrompt({
       userGoal: state.task.userInput,
-      taskProgress: renderTaskProgress({
-        state,
-        latestRound,
-        latestExecutionText: renderBrainRoundExecutionOnly(latestRound),
-        mode: 'brain_prompt'
-      }),
+      todolist: renderTodolist(state, 'brain_prompt'),
       existingCompactSummary: currentHistoryBlock?.summary,
       historyRounds,
       targetCompressionRatio: CONTEXT_COMPACTION_TARGET_RATIO

@@ -33,9 +33,11 @@ const buildStateWithRound = (roundId: number) => {
       roundId,
       createdAt: roundId,
       thought: {
-        thought: {
-          next: '读取当前目录建立资料范围。'
-        }
+        next: '读取当前目录建立资料范围。'
+      },
+      nextAction: {
+        action: 'hand',
+        calls: [{ toolName: 'terminal_run', args: { command: 'pwd' } }]
       },
       execution: {
         kind: 'hand',
@@ -70,9 +72,11 @@ describe('ai unit brain prompt cache stability', () => {
         roundId: 2,
         createdAt: 2,
         thought: {
-          thought: {
-            next: '补充读取工作区文件。'
-          }
+          next: '补充读取工作区文件。'
+        },
+        nextAction: {
+          action: 'hand',
+          calls: [{ toolName: 'text_file_read', args: { sourcePath: 'a.md' } }]
         },
         execution: {
           kind: 'hand',
@@ -98,5 +102,26 @@ describe('ai unit brain prompt cache stability', () => {
     expect(extended.user.slice(0, extendedRoundsIndex)).toBe(base.user.slice(0, baseRoundsIndex))
     expect(extended.user).toContain('第 1 轮')
     expect(extended.user).toContain('补充读取工作区文件。')
+  })
+
+  it('keeps system static across tasks and embeds platform and runtime paths', () => {
+    const stateA = createInitialHumanState({
+      taskId: 'task-a',
+      userInput: '任务 A'
+    })
+    const stateB = createInitialHumanState({
+      taskId: 'task-b',
+      userInput: '任务 B'
+    })
+    const ctx = createFakeCtx()
+
+    const a = buildBrainPrompt({ state: stateA, ctx })
+    const b = buildBrainPrompt({ state: stateB, ctx })
+
+    expect(a.system).toBe(b.system)
+    expect(a.system).toContain('platform：macos')
+    expect(a.system).toContain('runtime_paths.assets：')
+    expect(a.system).toContain('runtime_paths.scripts：')
+    expect(a.system).toContain('new_terminal_default_path：/tmp/workspace')
   })
 })

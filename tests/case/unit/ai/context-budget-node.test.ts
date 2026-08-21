@@ -115,13 +115,11 @@ describe('ai unit context budget node', () => {
               taskRun: appendRoundRecord({
                 state: baseState,
                 thought: {
-                  thought: {
-                    next: `第一轮先学习 docx-read。${'需要保留的长历史。'.repeat(40)}`
-                  },
-                  nextAction: {
-                    action: 'learning',
-                    wantLearnSkillIds: ['docx-read']
-                  }
+                  next: `第一轮先学习 docx-read。${'需要保留的长历史。'.repeat(40)}`
+                },
+                nextAction: {
+                  action: 'learning',
+                  wantLearnSkillIds: ['docx-read']
                 },
                 execution: buildLearningExecution({
                   learningOutcome: {
@@ -140,13 +138,11 @@ describe('ai unit context budget node', () => {
           return appendRoundRecord({
             state: stateWithRound1,
             thought: {
-              thought: {
-                next: '第二轮继续学习 docx-write。'
-              },
-              nextAction: {
-                action: 'learning',
-                wantLearnSkillIds: ['docx-write']
-              }
+              next: '第二轮继续学习 docx-write。'
+            },
+            nextAction: {
+              action: 'learning',
+              wantLearnSkillIds: ['docx-write']
             },
             execution: buildLearningExecution({
               learningOutcome: {
@@ -235,10 +231,8 @@ describe('ai unit context budget node', () => {
     })
     const firstTaskRun = appendRoundRecord({
       state: baseState,
-      thought: {
-        thought: { next: '继续。' },
-        nextAction: { action: 'learning', wantLearnSkillIds: ['docx-read'] }
-      },
+      thought: { next: '继续。' },
+      nextAction: { action: 'learning', wantLearnSkillIds: ['docx-read'] },
       execution: buildLearningExecution({
         learningOutcome: {
           requestedSkillIds: ['docx-read'],
@@ -260,10 +254,8 @@ describe('ai unit context budget node', () => {
     }
     const secondTaskRun = appendRoundRecord({
       state: firstRoundState,
-      thought: {
-        thought: { next: '完成。' },
-        nextAction: { action: 'learning', wantLearnSkillIds: ['docx-write'] }
-      },
+      thought: { next: '完成。' },
+      nextAction: { action: 'learning', wantLearnSkillIds: ['docx-write'] },
       execution: buildLearningExecution({
         learningOutcome: {
           requestedSkillIds: ['docx-write'],

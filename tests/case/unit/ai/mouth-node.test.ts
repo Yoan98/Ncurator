@@ -99,16 +99,12 @@ describe('ai unit mouth node', () => {
       taskId: 'task-mouth-node',
       userInput: '整理最终交付'
     })
-    initialState.memory.thought = {
-      next: '旧 thought.next 不应直接作为 mouth task_progress 主体',
-      todolist: [
-        {
-          item: '核对最终产物',
-          status: 'done'
-        }
-      ],
-      progressionSummary: '总结文件已写入完成，正在准备最终交付。'
-    }
+    initialState.memory.todolist = [
+      {
+        item: '核对最终产物',
+        status: 'done'
+      }
+    ]
     initialState.execution.stage = 'mouth'
     initialState.execution.currentThought = {
       thought: {
@@ -129,26 +125,24 @@ describe('ai unit mouth node', () => {
     initialState.memory.taskRun = appendRoundRecord({
       state: initialState,
       thought: {
-        thought: {
-          next: '先整理两份资料并生成总结文件'
-        },
-        nextAction: {
-          action: 'hand',
-          calls: [
-            {
-              toolName: 'docx_edit',
-              args: {
-                sourcePath: '深度学习与图形学复习总结.docx',
-                actions: [
-                  {
-                    type: 'insert_blocks',
-                    blocks: [{ type: 'paragraph', text: '总结正文' }]
-                  }
-                ]
-              }
+        next: '先整理两份资料并生成总结文件'
+      },
+      nextAction: {
+        action: 'hand',
+        calls: [
+          {
+            toolName: 'docx_edit',
+            args: {
+              sourcePath: '深度学习与图形学复习总结.docx',
+              actions: [
+                {
+                  type: 'insert_blocks',
+                  blocks: [{ type: 'paragraph', text: '总结正文' }]
+                }
+              ]
             }
-          ]
-        }
+          }
+        ]
       },
       execution: buildHandExecution({
         calls: [
@@ -197,24 +191,23 @@ describe('ai unit mouth node', () => {
     })
 
     const nextState = await node(initialState)
-    const taskProgressSection =
-      capturedUserPrompt.match(/<task_progress>([\s\S]*?)<\/task_progress>/)?.[1] || ''
+    const roundsSection =
+      capturedUserPrompt.match(/<rounds>([\s\S]*?)<\/rounds>/)?.[1] || ''
 
     expect(nextState.memory.taskRun.rounds).toHaveLength(2)
     expect(
       nextState.memory.taskRun.rounds.filter((round) => round.execution.kind === 'mouth')
     ).toHaveLength(1)
     expect(nextState.memory.taskRun.rounds.at(-1)).toMatchObject({
-      thought: initialState.execution.currentThought,
+      thought: { next: '复习总结文件已生成完毕，基于现有结果组织最终交付' },
       execution: {
         kind: 'mouth',
         result: '已完成最终交付。'
       }
     })
-    expect(taskProgressSection).toContain('复习总结文件已生成完毕，基于现有结果组织最终交付')
-    expect(taskProgressSection).toContain('类型：mouth')
-    expect(taskProgressSection).toContain('结果：已完成最终交付。')
-    expect(taskProgressSection).not.toContain('类型：hand')
+    expect(roundsSection).toContain('复习总结文件已生成完毕，基于现有结果组织最终交付')
+    expect(roundsSection).toContain('类型：mouth')
+    expect(roundsSection).toContain('结果：已完成最终交付。')
     expect(capturedUserPrompt).toContain('文件：report.md')
     expect(capturedUserPrompt).toContain('来源能力：terminal_exec')
     expect(capturedUserPrompt).toContain('修改记录：terminal-change-1')
@@ -315,7 +308,7 @@ describe('ai unit mouth node', () => {
       nextAction: { action: 'mouth' }
     }
     state.execution.finalizationReason = 'brain_content_safety'
-    state.memory.thought.todolist = [{ item: 'unfinished item', status: 'todo' }]
+    state.memory.todolist = [{ item: 'unfinished item', status: 'todo' }]
     state.execution.deliveryGuidanceItems = [{ source: 'brain', text: '请调整输入后重试。' }]
 
     const result = await node(state)
@@ -348,7 +341,7 @@ describe('ai unit mouth node', () => {
       thought: { next: '进入收尾' },
       nextAction: { action: 'mouth' }
     }
-    state.memory.thought.todolist = [{ item: '未完成事项', status: 'todo' }]
+    state.memory.todolist = [{ item: '未完成事项', status: 'todo' }]
     state.execution.deliveryGuidanceItems = [{ source: 'brain', text: '请调整输入后重试。' }]
 
     const result = await node(state)

@@ -1,7 +1,7 @@
 import type {
   HumanThoughtDecision,
   HumanResult,
-  HumanThought,
+  HumanTodoItem,
   HumanState,
   HumanTraceStep,
   HumanDecisionHint
@@ -105,7 +105,7 @@ const resolveBrainNextStage = (input: {
 export const applyBrainDecisionState = (input: {
   state: HumanState
   thought: HumanThoughtDecision
-  thoughtMemory: HumanThought
+  todolist: HumanTodoItem[]
   createdAt: number
   overrides?: HumanStateOverrides
 }): HumanState => {
@@ -134,7 +134,7 @@ export const applyBrainDecisionState = (input: {
     },
     memory: {
       ...input.state.memory,
-      thought: input.thoughtMemory,
+      todolist: input.todolist,
       taskRun: {
         ...input.state.memory.taskRun
       }

@@ -45,7 +45,7 @@ describe('ai content safety finalization', () => {
     )
     const node = createBrainNode({ ctx, cache: createHumanRuntimeCache() })
     const state = createInitialHumanState({ taskId: 'brain-safety', userInput: 'continue' })
-    state.memory.thought.todolist = [{ item: 'unfinished item', status: 'todo' }]
+    state.memory.todolist = [{ item: 'unfinished item', status: 'todo' }]
 
     const result = await node(state)
 

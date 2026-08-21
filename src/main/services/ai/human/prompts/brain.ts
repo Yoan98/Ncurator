@@ -5,7 +5,7 @@ import {
   getWorkspaceScriptsRootDir
 } from '../../../assets/WorkspaceAssetService'
 import { HUMAN_HAND_CALL_LIMIT } from '../constants'
-import { getLastRoundFocus, getRecentHistoryRounds } from '../memory/rounds'
+import { getRecentHistoryRounds } from '../memory/rounds'
 import {
   getEffectiveLearnedSkillIds,
   getSkillDefinition,
@@ -13,12 +13,8 @@ import {
   listExternalSkillDefinitions
 } from '../skills'
 import { renderResumeMessages } from '../../utils/resumeSnapshot'
-import { renderTaskProgress } from '../shared/memoryRenderers'
-import {
-  renderBrainCompactBlocks,
-  renderBrainRoundExecutionOnly,
-  renderBrainRoundSection
-} from '../shared/historyRenderers'
+import { renderTodolist } from '../shared/memoryRenderers'
+import { renderBrainCompactBlocks, renderBrainRoundSection } from '../shared/historyRenderers'
 import { getToolSpec } from '../tools/registry'
 import {
   renderBrainOutputSchemaForPrompt,
@@ -37,7 +33,18 @@ const indentLines = (value: string, level: number): string =>
     .map((line) => `${'  '.repeat(level)}${line}`)
     .join('\n')
 
-export const renderLocalEnvironmentText = (ctx: AiRunContext): string => {
+export const renderRuntimeEnvironmentText = (ctx: AiRunContext): string => {
+  const workspace = ctx.workspace
+  return [
+    `- platform：${ctx.platform}`,
+    `- runtime_paths.scripts：${workspace ? getWorkspaceScriptsRootDir(workspace.rootPath) : 'none'}`,
+    `- runtime_paths.assets：${workspace ? getWorkspaceAssetsRootDir(workspace.rootPath) : 'none'}`,
+    `- new_terminal_default_path：${workspace?.rootPath || 'none'}`,
+    '- runtime_paths.scripts 用于存放任务执行期间的脚本；runtime_paths.assets 用于存放临时资源和运行产物，使用时以 UUID 作为子目录名；用户要求的正式交付文件应写入用户工作区域的正常目录。'
+  ].join('\n')
+}
+
+export const renderRuntimeStateText = (ctx: AiRunContext): string => {
   const now = new Date(Math.floor(Date.now() / 3_600_000) * 3_600_000)
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'unknown'
   const offsetMinutes = -now.getTimezoneOffset()
@@ -50,18 +57,12 @@ export const renderLocalEnvironmentText = (ctx: AiRunContext): string => {
     .replace('Z', `${offsetSign}${offsetHours}:${offsetRemainderMinutes}`)
 
   return JSON.stringify({
-    platform: ctx.platform,
-    runtime_paths: {
-      assets: ctx.workspace ? getWorkspaceAssetsRootDir(ctx.workspace.rootPath) : null,
-      scripts: ctx.workspace ? getWorkspaceScriptsRootDir(ctx.workspace.rootPath) : null
-    },
     current_time: {
       utc_iso: now.toISOString().replace(/\.\d{3}Z$/, 'Z'),
       timezone,
       local_iso: localIso
     },
     terminal_state: {
-      new_terminal_default_path: ctx.workspace?.rootPath || null,
       terminals: terminalSessionManager
         .list({
           chatSessionId: ctx.sessionId,
@@ -168,7 +169,6 @@ export const buildBrainPrompt = (input: {
   conversationSummaryText?: string
   recentTurnsText?: string
 }) => {
-  const latestRound = getLastRoundFocus(input.state)
   const thoughtDecisionSchema = humanThoughtDecisionPromptSchema
   const outputShapeText = indentLines(
     renderBrainOutputSchemaForPrompt(thoughtDecisionSchema, { compact: true }),
@@ -200,17 +200,13 @@ export const buildBrainPrompt = (input: {
     - 它每项只包含 item 和 status，status 只能是 todo / done,其中todo表示待办，done表示已完成。
     - 它最后一项必须是检查项，用于检查是否已经满足用户任务诉求，来看是需要继续推进完成还是交付。
 
-    - thought.progressionSummary：
-    - 它是可选择输出的字段；只有推进理解、证据、失败原因或修正结论发生变化时才输出，如果没有变动，禁止输出；一旦输出会全量覆盖旧 progressionSummary。
-    - 该子段必须输出对任务推进状态的累积性理解摘要，可以随着推进过程累积修改，但必须保留仍影响任务推进和最终交付的事项，禁止逐轮流水账式的输出；
-    - 该字段必须严格按照下方格式输出信息:
-      -对用户任务整体推进现状的总览描述。
-      -每个todolist项的推进理解：
-        1.todolist项1的名称:
-          - 已经尝试过什么
-          - 形成了什么结论
-          - 证据是什么
-        2.xxx
+    - thought.progressOverview：
+    - 它是可选择输出的字段；只有推进理解、证据、失败原因或修正结论发生变化时才输出，如果没有变动，禁止输出。
+    - 输出对当前任务整体推进现状的总览描述。
+    - 该字段必须严格按照下方三点格式输出：
+      - 已经尝试过什么
+      - 形成了什么结论
+      - 证据是什么
   </thought_contract>
 
   <next_action_contract>
@@ -235,11 +231,9 @@ export const buildBrainPrompt = (input: {
     - evidenceReferences[*].usedFor 必须明确描述“这条资料支撑了最终答复中的哪部分内容”，不能只写笼统用途。
   </next_action_contract>
 
-  <workspace_runtime>
-    - runtime_paths.scripts：任务执行期间可用于存放脚本的目录。
-    - runtime_paths.assets：任务执行期间可用于存放临时资源和运行产物的目录；使用时以 UUID 作为子目录名，即 runtime_paths.assets/<uuid>/。
-    - 用户要求的正式交付文件应写入用户工作区域的正常目录。
-  </workspace_runtime>
+  <runtime_environment>
+${renderRuntimeEnvironmentText(input.ctx)}
+  </runtime_environment>
 
   <context_block_guide>
     - task_goal：用户的任务诉求。
@@ -251,13 +245,14 @@ export const buildBrainPrompt = (input: {
     - recent_turns：最近几轮已经完成且尚未被会话压缩的真实对话，不包含当前正在执行的任务。
     - round_history：当前任务的历史证据视图。
     - compactions：已压缩的较早历史，用于保留仍相关的客观事实、失败路径、重复尝试与背景信息。
-    - rounds：最近未压缩的历史轮次，用于查看较新的判断、执行与结果轨迹。
-    - task_progress：当前任务的全局进度信息。
-    - skill_catalog：system 中的静态能力目录，包含所有技能定义与始终可用的内置工具说明。
+    - rounds：最近未压缩的历史轮次，用于查看较新的判断、进展与执行轨迹。
+    - todolist：当前任务的待办路径。
+    - skill_catalog：能力目录，包含所有技能定义与始终可用的内置工具说明。
     - skill_state：当前已学习/仍可补充学习的技能，以及已学习技能对应的工具说明。
     - resume_messages：任务中断恢复后用户补充的消息；若无则为 none。
     - decision_hint：当前额外的收敛或纠偏提示，必须重视关注该信息来推进任务；若无则为 none。
-    - local_environment：当前本机运行环境，内容是 JSON；platform 是当前用户电脑平台，runtime_paths 是用户工作区域内的临时运行目录，current_time 是当前系统时间，terminal_state 是当前会话的终端状态。
+    - runtime_environment：运行环境；platform 是当前用户电脑平台，runtime_paths 是用户工作区域内的临时运行目录，new_terminal_default_path 是新建终端时的默认工作目录。
+    - runtime_state：当前运行时状态；current_time 是当前系统时间，terminal_state 是当前会话的终端状态。
   </context_block_guide>
 
   <skill_catalog>
@@ -289,22 +284,12 @@ ${JSON.stringify({
         status: 'todo'
       }
     ],
-    progressionSummary: `-当前任务的用户诉求是关于审批驳回时是否保留原文件，但缺少读取 docx 的能力说明，无法判断资料内容。
--每个todolist项的推进理解：
-  1.补齐读取 docx 的能力说明：
-  - 已经尝试过什么：
-  当前没有明确的工具调用计划，无法判断是否满足用户诉求。
-  - 形成了什么结论：
-  缺少读取 docx 的能力说明。
-  - 证据是什么：
-  当前工具目录里没有可用的读取 docx 的工具，无法形成明确的工具调用计划。
-  2.检查是否已经满足用户诉求并能进入最终交付：
-  - 已经尝试过什么：
-  当前没有明确的工具调用计划，无法判断是否满足用户诉求。
-  - 形成了什么结论：
-  无法判断是否满足用户诉求。
-  - 证据是什么：
-  当前工具目录里没有可用的读取 docx 的工具，无法形成明确的工具调用计划。`
+    progressOverview: `- 已经尝试过什么：
+  尝试判断审批驳回时是否保留原文件，但缺少读取 docx 的能力说明，无法形成工具调用计划。
+- 形成了什么结论：
+  缺少读取 docx 的能力说明，无法判断资料内容。
+- 证据是什么：
+  当前工具目录里没有可用的读取 docx 的工具。`
   },
   nextAction: {
     action: 'learning',
@@ -347,23 +332,12 @@ ${JSON.stringify({
         status: 'done'
       }
     ],
-    progressionSummary: `-当前任务的用户诉求是关于审批驳回时是否保留原文件，已经确认审批驳回时会保留原文件，当前证据足够进入最终交付。
--每个todolist项的推进理解：
-  1.确认审批驳回时是否保留原文件：
-  - 已经尝试过什么：
-  查看了审批制度说明.docx文件的相关内容。
-  - 形成了什么结论：
-  审批驳回时会保留原文件。
-  - 证据是什么：
-  审批制度说明.docx文件中明确说明了审批驳回时会保留原文件。
-
-  2.检查是否已经满足用户诉求并能进入最终交付：
-  - 已经尝试过什么：
-  根据审批制度说明.docx文件的内容，判断了审批驳回时是否保留原文件。
-  - 形成了什么结论：
-  审批驳回时会保留原文件，因此满足用户诉求。
-  - 证据是什么：
-  审批制度说明.docx文件中明确说明了审批驳回时会保留原文件。`
+    progressOverview: `- 已经尝试过什么：
+  查看了审批制度说明.docx 文件的相关内容，判断审批驳回时是否保留原文件。
+- 形成了什么结论：
+  审批驳回时会保留原文件，当前证据足够进入最终交付。
+- 证据是什么：
+  审批制度说明.docx 文件中明确说明了审批驳回时会保留原文件。`
   },
   nextAction: {
     action: 'mouth',
@@ -424,18 +398,13 @@ ${renderSkillStateSection(input.state, input.ctx.platform)}
 ${renderResumeMessages(input.state.task.taskContext) || 'none'}
   </resume_messages>
 
-  <task_progress>
-  ${renderTaskProgress({
-    state: input.state,
-    latestRound,
-    latestExecutionText: renderBrainRoundExecutionOnly(latestRound),
-    mode: 'brain_prompt'
-  })}
-  </task_progress>
+  <todolist>
+${renderTodolist(input.state, 'brain_prompt')}
+  </todolist>
 
-  <local_environment>
-${renderLocalEnvironmentText(input.ctx)}
-  </local_environment>
+  <runtime_state>
+${renderRuntimeStateText(input.ctx)}
+  </runtime_state>
 
   <decision_hint>
 ${input.state.execution.pendingDecisionHint ? renderDecisionHintForBrain(input.state.execution.pendingDecisionHint) : 'none'}
