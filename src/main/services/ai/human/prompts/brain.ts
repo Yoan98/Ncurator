@@ -37,7 +37,7 @@ const indentLines = (value: string, level: number): string =>
     .join('\n')
 
 export const renderLocalEnvironmentText = (ctx: AiRunContext): string => {
-  const now = new Date()
+  const now = new Date(Math.floor(Date.now() / 60_000) * 60_000)
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'unknown'
   const offsetMinutes = -now.getTimezoneOffset()
   const offsetSign = offsetMinutes >= 0 ? '+' : '-'
@@ -45,13 +45,14 @@ export const renderLocalEnvironmentText = (ctx: AiRunContext): string => {
   const offsetRemainderMinutes = String(Math.abs(offsetMinutes) % 60).padStart(2, '0')
   const localIso = new Date(now.getTime() + offsetMinutes * 60_000)
     .toISOString()
+    .replace(/\.\d{3}/, '')
     .replace('Z', `${offsetSign}${offsetHours}:${offsetRemainderMinutes}`)
 
   return JSON.stringify(
     {
       platform: ctx.platform,
       current_time: {
-        utc_iso: now.toISOString(),
+        utc_iso: now.toISOString().replace(/\.\d{3}Z$/, 'Z'),
         timezone,
         local_iso: localIso
       },
@@ -235,7 +236,6 @@ export const buildBrainPrompt = (input: {
     - preference：当前用户对 AI 推进方式的偏好；若为“无”，则不施加额外偏好。
     - reference_scope：当前用户工作区域、默认知识范围、显式缩圈范围和可用边界。
     - search_strategy：当前任务默认遵循的检索思路提示。
-    - local_environment：当前本机运行环境，内容是 JSON；platform 是当前用户电脑平台，current_time 是当前系统时间，terminal_state 是当前会话的终端状态，runtime_paths 是用户工作区域内的临时运行目录。
     - conversation_history：当前会话历史视图。
     - summary：当前会话中跨任务仍有效的滚动摘要，用于理解用户在同一窗口里的连续主线、稳定偏好与当前状态。
     - recent_turns：最近几轮已经完成且尚未被会话压缩的真实对话，不包含当前正在执行的任务。
@@ -245,6 +245,7 @@ export const buildBrainPrompt = (input: {
     - task_progress：当前任务的全局进度信息。
     - skill_catalog：当前已生效或仍可学习的 skills，以及当前可直接调用的工具说明。
     - decision_hint：当前额外的收敛或纠偏提示，必须重视关注该信息来推进任务；若无则为 none。
+    - local_environment：当前本机运行环境，内容是 JSON；platform 是当前用户电脑平台，current_time 是当前系统时间，terminal_state 是当前会话的终端状态，runtime_paths 是用户工作区域内的临时运行目录。
   </context_block_guide>
 
   <output_contract>
@@ -379,10 +380,6 @@ ${renderPreferenceText(input.ctx.preference)}
 ${renderReferenceScopeText(input.ctx.referenceScope)}
   </reference_scope>
 
-  <local_environment>
-${renderLocalEnvironmentText(input.ctx)}
-  </local_environment>
-
   <conversation_history>
     <summary>
     ${input.conversationSummaryText || 'none'}
@@ -419,6 +416,10 @@ ${renderSkillCatalogSection(input.state, input.ctx.platform)}
   <decision_hint>
 ${input.state.execution.pendingDecisionHint ? renderDecisionHintForBrain(input.state.execution.pendingDecisionHint) : 'none'}
   </decision_hint>
+
+  <local_environment>
+${renderLocalEnvironmentText(input.ctx)}
+  </local_environment>
 </user_context>
 `.trim()
 

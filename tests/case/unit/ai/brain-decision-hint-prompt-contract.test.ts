@@ -77,13 +77,43 @@ describe('ai unit brain decision-hint prompt contract', () => {
       }
     })
     expect(localEnvironment.current_time.utc_iso).toMatch(
-      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/
+      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:00Z$/
     )
     expect(localEnvironment.current_time.local_iso).toMatch(
-      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}[+-]\d{2}:\d{2}$/
+      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:00[+-]\d{2}:\d{2}$/
     )
     expect(section).not.toContain('terminal_environment')
     expect(section).not.toContain('current_terminal_path')
+  })
+
+  it('orders user blocks stable-first and keeps local_environment last for prefix caching', () => {
+    const state = createInitialHumanState({
+      taskId: 'task-order',
+      userInput: '继续处理资料'
+    })
+
+    const prompt = buildBrainPrompt({
+      state,
+      ctx: createFakeCtx()
+    }).user
+
+    const indexOf = (tag: string): number => prompt.indexOf(`<${tag}>`)
+    const stableHeadOrder = [
+      'task_goal',
+      'preference',
+      'reference_scope',
+      'conversation_history',
+      'skill_catalog',
+      'round_history',
+      'task_progress',
+      'decision_hint',
+      'local_environment'
+    ]
+    const indexes = stableHeadOrder.map((tag) => indexOf(tag))
+    const sorted = [...indexes].sort((a, b) => a - b)
+
+    expect(indexes.every((value) => value >= 0)).toBe(true)
+    expect(indexes).toEqual(sorted)
   })
 
   it('renders current decision hint in decision_hint and keeps latest execution in task_progress', () => {
