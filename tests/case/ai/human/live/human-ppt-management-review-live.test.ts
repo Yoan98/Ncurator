@@ -150,7 +150,7 @@ describe('ai human live ppt backend', () => {
               result.protectedTexts.every((text) => result.texts.includes(text)) &&
               result.texts.some((text) => /执行摘要|executive summary/iu.test(text)) &&
               result.texts.some((text) => text.includes('李然')) &&
-              result.texts.some((text) => /7\s*月\s*15/.test(text)) &&
+              result.texts.some((text) => /7\s*月\s*15|july\s*15/iu.test(text)) &&
               result.outsideShapeCount === 0 &&
               result.validationErrors === 0 &&
               artifacts.length === 1,

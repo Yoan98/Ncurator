@@ -23,9 +23,9 @@
 | human-web-crawl-multi-hop-cross-domain-reading-live | 完成 | 94 | deepseek-v4-flash | 2026-08-13 20:21 CST | tests/logs/ai/human/live/human-web-crawl-multi-hop-cross-domain-reading-live/20260813-202113-036 | 跨域多跳取得资格、截止日期、材料和线上提交方式，基于来源完整答复。 |
 | human-web-crawl-url-inference-reading-live | 完成 | 91 | deepseek-v4-flash | 2026-08-13 20:21 CST | tests/logs/ai/human/live/human-web-crawl-url-inference-reading-live/20260813-202108-597 | 找到两页 Pandas 官方 API 并准确说明 CSV 读写，来源与效率保留在 raw logs。 |
 | human-legacy-doc-edit-skip-live | 部分完成 | 35 | deepseek-v4-flash | 2026-08-13 20:00 CST | tests/logs/ai/human/live/human-legacy-doc-edit-skip-live/20260813-200056-994 | docx_edit 拒绝 .doc 并收到 hint 后只试一次，但随后用 terminal/python 直接修改源文件，源文件 hash 变化，未遵守"禁止编辑或转换"。 |
-| human-docx-visual-reading-live | 失败 | 0 | deepseek-v4-flash / qwen3.6-plus | 2026-08-13 20:34 CST | tests/logs/ai/human/live/human-docx-visual-reading-live/20260813-203411-321 | 视觉服务端对 docx_read_visuals 与 image_analyze 返回 Invalid URL（dashscope 波动，直连验证代码正常），未取得视觉证据。 |
-| human-pdf-visual-reading-live | 失败 | 0 | deepseek-v4-flash / qwen3.6-plus | 2026-08-13 20:16 CST | tests/logs/ai/human/live/human-pdf-visual-reading-live/20260813-201656-822 | 视觉服务端对 pdf_read_visuals 返回 Invalid URL（dashscope 波动，直连验证代码正常），未取得视觉证据。 |
-| human-docx-dangling-image-edit-live | 失败 | 0 | deepseek-v4-flash / qwen3.6-plus | 2026-08-13 20:04 CST | tests/logs/ai/human/live/human-docx-dangling-image-edit-live/20260813-200441-186 | 视觉服务端对 docx_read_visuals 返回 Invalid URL（dashscope 波动），视觉证据缺失；docx 编辑与 12 项时长写入本身正确。 |
+| human-docx-visual-reading-live | 完成 | 92 | deepseek-v4-flash / qwen3.6-plus | 2026-08-21 23:04 CST | tests/logs/ai/human/live/human-docx-visual-reading-live/20260821-230430-243 | 根因是 workflow runner 未展开 `${AI_LIVE_BASE_URL}` 引用导致视觉配置 Invalid URL；修复后真实读取 DOCX 图片内容。 |
+| human-pdf-visual-reading-live | 完成 | 92 | deepseek-v4-flash / qwen3.6-plus | 2026-08-21 23:07 CST | tests/logs/ai/human/live/human-pdf-visual-reading-live/20260821-230727-871 | 同上，视觉配置修复后 PDF 页面视觉读取正常，正确回答图形差异。 |
+| human-docx-dangling-image-edit-live | 完成 | 93 | deepseek-v4-flash / qwen3.6-plus | 2026-08-21 23:04 CST | tests/logs/ai/human/live/human-docx-dangling-image-edit-live/20260821-230430-129 | 视觉配置修复 + 视觉识别并发池(3)后通过；docx_read_visuals 读图 230s→67s，13 项工时写回文档。 |
 
 ## 1. 总体目标
 

@@ -686,9 +686,12 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
       const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ncurator-docx-visual-'))
       try {
         let renderSourcePath: string | undefined
-        const results = [] as Array<
-          { visualId: string; text: string } | { visualId: string; error: string }
-        >
+        const results = new Array<
+          { visualId: string; text: string } | { visualId: string; error: string } | undefined
+        >(args.requests.length)
+        const stagedImages: Array<{ index: number; path: string; mimeType: string }> = []
+        const stagedRequests: Array<{ index: number; instruction: string }> = []
+
         for (const [index, request] of args.requests.entries()) {
           const tempPath = path.join(tempDir, `${String(index)}.visual`)
           try {
@@ -697,21 +700,21 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
               payload: { docId: sessionResult.docId, visualId: request.visualId }
             })
             if (!response.ok) {
-              results.push({ visualId: request.visualId, error: response.error })
+              results[index] = { visualId: request.visualId, error: response.error }
               continue
             }
             if (response.payload.action !== 'get_visual') {
-              results.push({
+              results[index] = {
                 visualId: request.visualId,
                 error: 'worker protocol mismatch (get_visual)'
-              })
+              }
               continue
             }
             if (response.payload.error) {
-              results.push({
+              results[index] = {
                 visualId: request.visualId,
                 error: response.payload.error || 'visual media is missing'
-              })
+              }
               continue
             }
             let visualData = response.payload.data
@@ -724,14 +727,14 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
                   payload: { docId: sessionResult.docId, outPath: draftPath }
                 })
                 if (!materialized.ok) {
-                  results.push({ visualId: request.visualId, error: materialized.error })
+                  results[index] = { visualId: request.visualId, error: materialized.error }
                   continue
                 }
                 if (materialized.payload.action !== 'materialize_draft') {
-                  results.push({
+                  results[index] = {
                     visualId: request.visualId,
                     error: 'worker protocol mismatch (materialize_draft)'
-                  })
+                  }
                   continue
                 }
                 renderSourcePath = materialized.payload.outPath
@@ -744,40 +747,52 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
                 visualCountInBlock: response.payload.render.visualCountInBlock
               })
               if (!rendered.data) {
-                results.push({
+                results[index] = {
                   visualId: request.visualId,
                   error: rendered.error || 'visual rendering failed'
-                })
+                }
                 continue
               }
               visualData = rendered.data
               mimeType = 'image/png'
             }
             if (!visualData || !mimeType) {
-              results.push({ visualId: request.visualId, error: 'visual media is missing' })
+              results[index] = { visualId: request.visualId, error: 'visual media is missing' }
               continue
             }
             await fs.writeFile(tempPath, visualData)
-            const recognized = await visualRecognitionService.recognizeImage({
-              path: tempPath,
-              mimeType,
-              instruction: request.instruction
-            })
-            results.push(
-              'text' in recognized
-                ? { visualId: request.visualId, text: recognized.text }
-                : { visualId: request.visualId, error: recognized.error }
-            )
+            stagedImages.push({ index, path: tempPath, mimeType })
+            stagedRequests.push({ index, instruction: request.instruction })
           } catch (error) {
-            results.push({
+            results[index] = {
               visualId: request.visualId,
               error: error instanceof Error ? error.message : String(error)
-            })
-          } finally {
-            await fs.rm(tempPath, { force: true })
+            }
           }
         }
-        const result = { sourcePath: sessionResult.sourcePath, results }
+
+        if (stagedImages.length > 0) {
+          const recognition = await visualRecognitionService.recognizeImages({
+            images: stagedImages,
+            requests: stagedRequests
+          })
+          for (const item of recognition) {
+            const request = args.requests[item.index]
+            if (!request) continue
+            results[item.index] =
+              'text' in item
+                ? { visualId: request.visualId, text: item.text }
+                : { visualId: request.visualId, error: item.error }
+          }
+        }
+
+        const result = {
+          sourcePath: sessionResult.sourcePath,
+          results: results.filter(
+            (item): item is { visualId: string; text: string } | { visualId: string; error: string } =>
+              item !== undefined
+          )
+        }
         return finalizeDocxToolSuccess({
           runtime,
           toolName,

@@ -54,6 +54,9 @@ const EMPTY_KNOWLEDGE_CACHE_STATS = {
   vectorCacheMisses: 0
 }
 
+const expandEnvironmentReferences = (value) =>
+  value.replace(/\$\{([A-Z][A-Z0-9_]*)\}/g, (_match, name) => String(process.env[name] || ''))
+
 const loadRootEnv = () => {
   if (String(process.env.AI_TEST_DISABLE_DOTENV || '').trim() === '1') return
   for (const fileName of ['.env.local', '.env']) {
@@ -71,11 +74,12 @@ const loadRootEnv = () => {
       const key = trimmed.slice(0, separator).trim()
       const value = trimmed.slice(separator + 1).trim()
       if (!key || String(process.env[key] || '').trim()) continue
-      process.env[key] =
+      const unquoted =
         (value.startsWith('"') && value.endsWith('"')) ||
         (value.startsWith("'") && value.endsWith("'"))
           ? value.slice(1, -1)
           : value
+      process.env[key] = expandEnvironmentReferences(unquoted)
     }
   }
 }

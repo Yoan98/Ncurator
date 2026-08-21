@@ -4,6 +4,7 @@ import { AI_LLM_CALL_TIMEOUT_MS } from '../ai/constants'
 import { createChatModel } from '../llm/chatModel'
 import type { AiRunContext } from '../ai/types'
 import type { LlmRuntimeConfig } from '../../../shared/types'
+import { mapLimit } from '../../utils/concurrency'
 import {
   buildVisualRecognitionUserInstruction,
   VISUAL_RECOGNITION_SYSTEM_PROMPT
@@ -12,6 +13,8 @@ import {
 type VisionRunnable = {
   invoke: (input: Array<SystemMessage | HumanMessage>) => Promise<{ content: unknown }>
 }
+
+const VISUAL_RECOGNITION_CONCURRENCY = 3
 
 type LlmRecognizeProtocolResult = {
   supports_image_recognition: boolean
@@ -203,16 +206,14 @@ export const createVisualRecognitionService = (ctx: AiRunContext): VisualRecogni
       if (!imageByIndex.has(image.index)) imageByIndex.set(image.index, image)
     })
 
-    const results: VisualRecognitionResult[] = []
-    for (const request of input.requests) {
+    return await mapLimit(input.requests, VISUAL_RECOGNITION_CONCURRENCY, async (request) => {
       ctx.checkCancelled()
       const image = imageByIndex.get(request.index)
       if (!image) {
-        results.push({
+        return {
           index: request.index,
           error: `找不到 index=${String(request.index)} 的图片`
-        })
-        continue
+        }
       }
       const result = await recognizeImageWithModel({
         ...modelContext,
@@ -220,9 +221,8 @@ export const createVisualRecognitionService = (ctx: AiRunContext): VisualRecogni
         instruction: request.instruction,
         mimeType: image.mimeType
       })
-      results.push({ index: request.index, ...result })
-    }
-    return results
+      return { index: request.index, ...result }
+    })
   }
 
   return {

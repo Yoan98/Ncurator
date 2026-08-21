@@ -28,6 +28,7 @@
     "test:update": "pnpm run test:update:backend && pnpm run test:update:e2e",
     "test:update:backend": "node scripts/test/workflow.mjs --domain unit --suite release --type backend",
     "test:update:e2e": "node scripts/test/workflow.mjs --domain workbench --type e2e --case sidebar-app-update --target source",
+    "test:update:real:win": "node scripts/test/update-real-windows.mjs",
     "release:start": "node scripts/release/prepare.mjs",
     "release:win": "node scripts/release/windows.mjs",
     "release:doctor": "node scripts/release/doctor.mjs",

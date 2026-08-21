@@ -215,6 +215,34 @@ pnpm test:update:e2e
 
 后端测试验证主进程更新状态、发布配置、R2 元数据和 release fragment。模拟 E2E 验证页面按钮、进度、错误提示和 IPC。自动化测试不下载或安装真实更新包。
 
+#### 4.3.1 自动更新真实升级专项（按需，不进回归/发布门禁）
+
+模拟测试不证明真实安装包下载或升级成功。需要验证真实覆盖升级（例如 Windows 安装器能否静默卸载旧版文件并完成升级）时，可单独运行真实升级专项：
+
+```bash
+pnpm test:update:real:win -- \
+  --source-installer <已发布旧版安装包.exe> \
+  --source-version 0.1.68 \
+  --expected-version 0.1.69
+```
+
+该专项是独立、按需的工具，与回归测试和发布门禁完全隔离：
+
+- 脚本是 `scripts/test/update-real-windows.mjs`（`.mjs` 而非 `.test.ts`），不在 `tests/case/**` 下，runner 的自动发现与测试架构校验都不会扫到它；
+- 不加入 `test:update` 或任何聚合、发布命令，只有显式执行本命令才会运行；
+- 全程离线：脚本在 `127.0.0.1` 起本地 HTTP feed 托管新版安装包并生成 `latest.yml`，安装旧版后把其 `resources/app-update.yml` 指向本地 feed，不触碰生产 `latest.yml`、R2 或公开更新通道；
+- 运行时自隔离：拒绝覆盖已有 Ncurator 安装、使用独立 user-data 与 updater 缓存、结束后卸载测试安装并恢复缓存。
+
+流程与通过标准：
+
+1. 安装 `--source-installer`（应使用不含本次修复的已发布旧版安装包复现问题；若用 `--source-version` 从当前代码构建旧版，旧版也会包含修复，无法复现升级失败）；
+2. 用当前代码构建 `--expected-version`（比旧版更高）并放入本地 feed；
+3. 启动旧版，检查更新、下载、触发重启安装；
+4. 安装器以静默方式完成覆盖升级，不再出现 "Failed to uninstall old application files"；
+5. 已安装版本变成 `--expected-version`，测试用户数据（`update-smoke-marker.txt`）保留。
+
+报告写入 `tests/logs/settings/update/real-windows/<运行时间>/report.json`，附截图与 `process.log`。卸载失败会表现为版本无法升级，脚本会明确报错并关联该失败模式。
+
 ### 4.4 读取与分析 raw logs
 
 - 默认先读取目标 run 的 `timeline.jsonl`，理解语义步骤、断言事实和失败位置。

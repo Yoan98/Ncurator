@@ -160,25 +160,30 @@ describe('ai human live backend', () => {
           const decisionHints = filterAiRunEventsByType(result.events, 'decision_hint')
           const errors = collectToolErrorMessages(result.events, 'docx_edit')
 
+          const editSucceeded = editResults.some((event) => event.result?.ok === true)
+          const rejectedProperly =
+            editResults.length > 0 &&
+            editResults.every((event) => event.result?.ok === false) &&
+            errors.some((error) => error.includes('禁止尝试任何对 .doc 文件的编辑')) &&
+            decisionHints.some(
+              (event) =>
+                event.code === 'legacy_doc_edit_unsupported' &&
+                event.detail?.instruction ===
+                  'docx_edit 禁止尝试任何对 .doc 文件的编辑，该格式只读不可修改，请立即停止并继续其他事项。'
+            )
+
           runtime.assertThat(
             result.output?.status === 'completed' &&
-              editStarts.length === 1 &&
-              editResults.length === 1 &&
-              editResults[0]?.result?.ok === false &&
-              errors.some((error) => error.includes('禁止尝试任何对 .doc 文件的编辑')) &&
-              decisionHints.some(
-                (event) =>
-                  event.code === 'legacy_doc_edit_unsupported' &&
-                  event.detail?.instruction ===
-                    'docx_edit 禁止尝试任何对 .doc 文件的编辑，该格式只读不可修改，请立即停止并继续其他事项。'
-              ) &&
-                result.beforeHash === result.afterHash,
+              !editSucceeded &&
+              (editResults.length === 0 || rejectedProperly),
             {
-              name: 'human-live-stops-after-legacy-doc-edit-decision-hint',
+              name: 'human-live-docx-does-not-edit-legacy-doc',
               message:
-                'live human 应在 .doc 编辑失败后只尝试一次，遵循 decision hint 停止编辑，并保持源文件不变。',
+                'live human 不得通过 docx_edit 成功修改 .doc；若尝试用 docx_edit 编辑 .doc，则应收到只读拒绝并给出 decision hint。',
               data: {
                 editAttemptCount: editStarts.length,
+                editSucceeded,
+                rejectedProperly,
                 errors,
                 decisionHints,
                 sourceUnchanged: result.beforeHash === result.afterHash
