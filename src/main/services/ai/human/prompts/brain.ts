@@ -39,8 +39,7 @@ export const renderRuntimeEnvironmentText = (ctx: AiRunContext): string => {
     `- platform：${ctx.platform}`,
     `- runtime_paths.scripts：${workspace ? getWorkspaceScriptsRootDir(workspace.rootPath) : 'none'}`,
     `- runtime_paths.assets：${workspace ? getWorkspaceAssetsRootDir(workspace.rootPath) : 'none'}`,
-    `- new_terminal_default_path：${workspace?.rootPath || 'none'}`,
-    '- runtime_paths.scripts 用于存放任务执行期间的脚本；runtime_paths.assets 用于存放临时资源和运行产物，使用时以 UUID 作为子目录名；用户要求的正式交付文件应写入用户工作区域的正常目录。'
+    `- new_terminal_default_path：${workspace?.rootPath || 'none'}`
   ].join('\n')
 }
 
@@ -230,15 +229,10 @@ export const buildBrainPrompt = (input: {
     - evidenceReferences[*].usedFor 必须明确描述“这条资料支撑了最终答复中的哪部分内容”，不能只写笼统用途。
   </next_action_contract>
 
-  <runtime_environment>
-${renderRuntimeEnvironmentText(input.ctx)}
-  </runtime_environment>
-
   <context_block_guide>
     - task_goal：用户的任务诉求。
     - preference：当前用户对 AI 推进方式的偏好；若为“无”，则不施加额外偏好。
     - reference_scope：当前用户工作区域、默认知识范围、显式缩圈范围和可用边界。
-    - search_strategy：当前任务默认遵循的检索思路提示。
     - conversation_history：当前会话历史视图。
     - summary：当前会话中跨任务仍有效的滚动摘要，用于理解用户在同一窗口里的连续主线、稳定偏好与当前状态。
     - recent_turns：最近几轮已经完成且尚未被会话压缩的真实对话，不包含当前正在执行的任务。
@@ -253,6 +247,10 @@ ${renderRuntimeEnvironmentText(input.ctx)}
     - runtime_environment：运行环境；platform 是当前用户电脑平台，runtime_paths 是用户工作区域内的临时运行目录，new_terminal_default_path 是新建终端时的默认工作目录。
     - runtime_state：当前运行时状态；current_time 是当前系统时间，terminal_state 是当前会话的终端状态。
   </context_block_guide>
+
+  <runtime_environment>
+${renderRuntimeEnvironmentText(input.ctx)}
+  </runtime_environment>
 
   <skill_catalog>
 ${renderStaticSkillCatalog(input.ctx.platform)}
