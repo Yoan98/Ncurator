@@ -70,7 +70,6 @@ describe('ai unit brain decision-hint prompt contract', () => {
     expect(environmentSection).toContain(
       `runtime_paths.scripts：${path.resolve('/tmp/workspace/.ncurator/runtime/scripts')}`
     )
-    expect(environmentSection).toContain('new_terminal_default_path：/tmp/workspace')
     expect(environmentSection).toMatch(/current_time\.timezone：.+/)
     expect(environmentSection).toMatch(
       /current_time\.local_iso：\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}/

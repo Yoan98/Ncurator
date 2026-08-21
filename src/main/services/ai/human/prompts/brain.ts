@@ -48,7 +48,6 @@ export const renderLocalEnvironmentText = (ctx: AiRunContext): string => {
     `- platform：${ctx.platform}`,
     `- runtime_paths.scripts：${workspace ? getWorkspaceScriptsRootDir(workspace.rootPath) : 'none'}`,
     `- runtime_paths.assets：${workspace ? getWorkspaceAssetsRootDir(workspace.rootPath) : 'none'}`,
-    `- new_terminal_default_path：${workspace?.rootPath || 'none'}`,
     `- current_time.timezone：${timezone}`,
     `- current_time.local_iso：${localIso}`
   ].join('\n')
@@ -219,7 +218,7 @@ export const buildBrainPrompt = (input: {
     - skill_state：当前已学习/仍可补充学习的技能，以及已学习技能对应的工具说明。
     - resume_messages：任务中断恢复后用户补充的消息；若无则为 none。
     - decision_hint：当前额外的收敛或纠偏提示，必须重视关注该信息来推进任务；若无则为 none。
-    - local_environment：本地运行环境；platform 是当前用户电脑平台，runtime_paths 是用户工作区域内的临时运行目录，new_terminal_default_path 是新建终端时的默认工作目录，current_time 是本次 run 启动时的系统时间。
+    - local_environment：本地运行环境；platform 是当前用户电脑平台，runtime_paths 是用户工作区域内的临时运行目录，current_time 是本次 run 启动时的系统时间（timezone 为时区，local_iso 为带偏移的本地时间）。
   </context_block_guide>
 
   <local_environment>

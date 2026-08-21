@@ -123,6 +123,5 @@ describe('ai unit brain prompt cache stability', () => {
     expect(a.system).toContain('platform：macos')
     expect(a.system).toContain('runtime_paths.assets：')
     expect(a.system).toContain('runtime_paths.scripts：')
-    expect(a.system).toContain('new_terminal_default_path：/tmp/workspace')
   })
 })
