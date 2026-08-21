@@ -371,20 +371,12 @@ export class BrowserEmbedService implements BrowserUseService {
   public async run(input: BrowserUseRunInput): Promise<BrowserUseRunResult> {
     const runtime = this.requireTab(input.tabId || this.activeTabId)
     if (input.action === 'navigate') {
-      if (!input.url) throw new Error('browser_use navigate requires url')
       await this.navigate(input.url, runtime.persisted.id)
       const view = await this.ensureReady(runtime)
       return {
         action: 'navigate',
         page: toBrowserUsePage(view.webContents.getURL(), view.webContents.getTitle()),
         result: null
-      }
-    }
-    if (input.url) {
-      const requestedUrl = normalizeUrl(input.url)
-      const currentUrl = runtime.view?.webContents.getURL() || runtime.persisted.url
-      if (currentUrl !== requestedUrl) {
-        await this.navigate(requestedUrl, runtime.persisted.id)
       }
     }
     return await this.runDom(input, runtime)
@@ -632,7 +624,7 @@ export class BrowserEmbedService implements BrowserUseService {
   }
 
   private async runDom(
-    input: BrowserUseRunInput,
+    input: Extract<BrowserUseRunInput, { action: 'extract' | 'observe' | 'act' }>,
     runtime: BrowserTabRuntime
   ): Promise<BrowserUseRunResult> {
     const view = await this.ensureReady(runtime)

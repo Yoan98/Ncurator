@@ -290,9 +290,7 @@ export const webToolFamily: ToolFamilyDefinition = {
               return payload
             }
 
-            const action = args.action
             const instruction = String(args.instruction || '').trim()
-            const url = typeof args.url === 'string' ? args.url.trim() : undefined
             try {
               automationBrowserTabPromise ||= service.ensureAutomationTab(ctx.sessionId)
               let browserTab: { id: string }
@@ -309,13 +307,22 @@ export const webToolFamily: ToolFamilyDefinition = {
                 browserTabId: browserTab.id,
                 createdAt: Date.now()
               })
-              const result = await service.run({
-                tabId: browserTab.id,
-                action,
-                instruction: instruction || '打开网页',
-                url,
-                llmConfig: await ctx.getLlmConfig()
-              })
+              const llmConfig = await ctx.getLlmConfig()
+              const result =
+                args.action === 'navigate'
+                  ? await service.run({
+                      tabId: browserTab.id,
+                      action: 'navigate',
+                      url: args.url,
+                      instruction: instruction || undefined,
+                      llmConfig
+                    })
+                  : await service.run({
+                      tabId: browserTab.id,
+                      action: args.action,
+                      instruction,
+                      llmConfig
+                    })
               const payload = { ...result }
               const sizeCheck = checkToolResultSize({
                 toolName: BROWSER_USE_TOOL_SPEC.name,

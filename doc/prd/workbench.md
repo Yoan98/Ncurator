@@ -478,7 +478,7 @@
 - 系统行为：每个浏览器 Tab 对应独立 Electron `WebContentsView`，全部视图共享持久分区 `persist:ncurator-browser`。浏览器 Runtime、界面 Presentation 和 AI Automation 相互独立：切换文件、折叠右侧栏或切换会话时，只从主窗口显示树移除 View，不关闭 `webContents`，不改变 AI 的 CDP target；重新显示时挂载同一个 View 并展示后台操作后的实时最终状态。浏览器导航栏提供后退、前进、刷新/停止、URL 输入、输入框内“前往”按钮和更多操作；浏览器更多菜单及新增标签页菜单使用主窗口原生子窗口承载自绘内容，覆盖在浏览器上方且不隐藏浏览器。
 - 验收：
   - `WB-PANEL-004-AC1` 收到 AI 浏览器面板事件后，右侧显示事件指定的浏览器 Tab；面板动画期间不逐帧缩放原生 View，动画结束后按最终 bounds 一次挂载并与正文视口对齐。
-  - `WB-PANEL-004-AC2` AI 通过 `browser_use` 传入 URL 时，右侧内置浏览器先导航到该 URL，再执行对应网页操作。
+  - `WB-PANEL-004-AC2` AI 通过 `browser_use` 的 `navigate` 动作传入 URL 时，右侧内置浏览器先导航到该 URL；`extract / observe / act` 只作用于当前页面、不会跳转，需要切换页面时先调用 `navigate`。
   - `WB-PANEL-004-AC3` 切换到文件 Tab、收起面板或切换会话时，浏览器 View 从主窗口显示树移除，不使用窗口外坐标停放；`webContents`、页面 JS、网络请求、Cookie、滚动位置、表单和 SPA 状态继续存在。
   - `WB-PANEL-004-AC4` AI 浏览器任务完成后，assistant 最终输出应使用浏览器操作获得的结果完成用户诉求，右侧浏览器面板状态与最终回答形成可理解的任务闭环。
   - `WB-PANEL-004-AC5` 多个浏览器标签可以打开相同 URL；Stagehand 必须按浏览器 Tab 对应的 CDP targetId 精确选择页面，不得按 URL 猜测或串页。

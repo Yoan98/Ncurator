@@ -1,5 +1,4 @@
-import type { BrowserUseAction, BrowserUseResult } from '../ai/types'
-import type { LlmRuntimeConfig } from '../../../shared/types'
+import type { BrowserUseResult, BrowserUseRunRequest } from '../ai/types'
 import type { BrowserPanelState } from '../../../shared/types'
 
 export type BrowserPanelBoundsState = {
@@ -9,13 +8,7 @@ export type BrowserPanelBoundsState = {
   height: number
 }
 
-export type BrowserUseRunInput = {
-  tabId: string
-  action: BrowserUseAction
-  instruction: string
-  url?: string
-  llmConfig: LlmRuntimeConfig
-}
+export type BrowserUseRunInput = BrowserUseRunRequest
 
 export type BrowserUseRunResult = BrowserUseResult
 

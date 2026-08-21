@@ -19,18 +19,15 @@ export const BROWSER_USE_SCHEMA = z.discriminatedUnion('action', [
   }),
   z.object({
     action: z.literal('extract'),
-    instruction: z.string().min(1),
-    url: z.string().min(1).optional()
+    instruction: z.string().min(1)
   }),
   z.object({
     action: z.literal('observe'),
-    instruction: z.string().min(1),
-    url: z.string().min(1).optional()
+    instruction: z.string().min(1)
   }),
   z.object({
     action: z.literal('act'),
-    instruction: z.string().min(1),
-    url: z.string().min(1).optional()
+    instruction: z.string().min(1)
   })
 ])
 
@@ -196,7 +193,7 @@ export const BROWSER_USE_TOOL_SPEC: HumanToolSpec<
   promptSpec: {
     name: 'browser_use',
     description:
-      '操作浏览器；action=navigate 打开 URL，action=extract 提取页面内容，action=observe 返回可见的交互动作，action=act 执行点击、输入、提交或选择。返回当前页面信息，以及对应 action 的提取内容、可见动作或执行结果。'
+      '操作浏览器；action=navigate 打开 URL，action=extract 提取页面内容，action=observe 返回可见的交互动作，action=act 执行点击、输入、提交或选择。extract/observe/act 只作用于当前页面、不会跳转；需要切换页面时先调用 navigate。返回当前页面信息，以及对应 action 的提取内容、可见动作或执行结果。'
   },
   resolveExecutionMeta: (args) => ({
     mutability: String(args.action || '') === 'act' ? 'mutating' : 'read_only',

@@ -199,16 +199,25 @@ export type BrowserUseResult =
       error: string
     }
 
+export type BrowserUseRunRequest =
+  | {
+      tabId: string
+      action: 'navigate'
+      url: string
+      instruction?: string
+      llmConfig: LlmRuntimeConfig
+    }
+  | {
+      tabId: string
+      action: 'extract' | 'observe' | 'act'
+      instruction: string
+      llmConfig: LlmRuntimeConfig
+    }
+
 export type BrowserUseService = {
   ensureAutomationTab: (ownerId: string) => Promise<{ id: string }>
   navigate: (url: string, tabId?: string) => Promise<void>
-  run: (input: {
-    tabId: string
-    action: BrowserUseAction
-    instruction: string
-    url?: string
-    llmConfig: LlmRuntimeConfig
-  }) => Promise<BrowserUseResult>
+  run: (input: BrowserUseRunRequest) => Promise<BrowserUseResult>
 }
 
 export type TerminalCommandChangeTrackingInput = {
