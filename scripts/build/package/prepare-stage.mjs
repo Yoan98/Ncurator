@@ -8,6 +8,7 @@ import { collectRuntimePackageNames } from '../runtime/bundle-graph.mjs'
 import { traceRuntimeDependencies, writeRuntimeTraceReport } from '../runtime/trace.mjs'
 import { verifyStagedRuntime } from '../runtime/verify-stage.mjs'
 import { obfuscatePackageMain, verifyPackageMainObfuscation } from './obfuscation.mjs'
+import { installWindowsVcRuntime } from './vc-runtime.mjs'
 import {
   assertNodePtyNativeReleaseReady,
   prepareNodePtyNativeRelease
@@ -174,13 +175,6 @@ const REMOVE_DIRECTORY_NAMES = new Set([
   'tests',
   'test'
 ])
-
-const VC_REDIST_DLL_NAMES = [
-  'msvcp140.dll',
-  'msvcp140_1.dll',
-  'vcruntime140.dll',
-  'vcruntime140_1.dll'
-]
 
 const REMOVE_EXTENSIONS = new Set([
   '.adoc',
@@ -407,31 +401,6 @@ const pruneNodeModules = () => {
   }
 }
 
-const installWindowsVcRuntime = () => {
-  if (process.platform !== 'win32' || process.arch !== 'x64') return
-
-  assertDirectory(VC_REDIST_DIR, 'VC++ redistributable source directory')
-  const targetDirectory = path.join(
-    STAGE_DIR,
-    'node_modules',
-    'onnxruntime-node',
-    'bin',
-    'napi-v3',
-    'win32',
-    'x64'
-  )
-  assertDirectory(targetDirectory, 'ONNX Runtime target binary directory')
-
-  for (const filename of VC_REDIST_DLL_NAMES) {
-    const source = path.join(VC_REDIST_DIR, filename)
-    if (!fs.existsSync(source) || !fs.statSync(source).isFile()) {
-      throw new Error(`VC++ redistributable DLL missing: ${source}`)
-    }
-    fs.copyFileSync(source, path.join(targetDirectory, filename))
-  }
-  process.stdout.write('[package] installed VC++ redistributable DLLs into ONNX Runtime binary directory\n')
-}
-
 const pruneStagedResources = () => {
   const resources = path.join(STAGE_DIR, 'resources')
   const walk = (directory) => {
@@ -544,7 +513,7 @@ const main = async () => {
   fs.rmSync(path.join(STAGE_DIR, 'pnpm-lock.yaml'), { force: true })
   pruneCompiledOutput()
   pruneNodeModules()
-  installWindowsVcRuntime()
+  installWindowsVcRuntime({ stageDir: STAGE_DIR, vcRedistDir: VC_REDIST_DIR })
   pruneStagedResources()
   const packagedDependencies = collectInstalledTopLevelDependencies()
   fs.writeFileSync(
