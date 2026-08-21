@@ -271,6 +271,17 @@ const api: DesktopApi = {
   chatSessionMarkViewed: (id: string) => ipcRenderer.invoke('chat-session-mark-viewed', id),
   chatSessionDelete: (id: string) => ipcRenderer.invoke('chat-session-delete', id),
   chatMessageList: (sessionId: string) => ipcRenderer.invoke('chat-message-list', sessionId),
+  scheduledTaskList: () => ipcRenderer.invoke('scheduled-task-list'),
+  scheduledTaskSave: (payload) => ipcRenderer.invoke('scheduled-task-save', payload),
+  scheduledTaskDelete: (id: string) => ipcRenderer.invoke('scheduled-task-delete', id),
+  scheduledTaskSetEnabled: (payload) => ipcRenderer.invoke('scheduled-task-set-enabled', payload),
+  onChatSessionListRefresh: (cb: () => void) => {
+    const listener = (): void => cb()
+    ipcRenderer.on('chat-session-list-refresh', listener)
+    return () => {
+      ipcRenderer.removeListener('chat-session-list-refresh', listener)
+    }
+  },
   chatSessionOpen: (payload) => ipcRenderer.invoke('chat-session-open', payload),
   chatSessionUiStateSave: (payload) => ipcRenderer.invoke('chat-session-ui-state-save', payload),
   workbenchUiStateGet: () => ipcRenderer.invoke('workbench-ui-state-get'),

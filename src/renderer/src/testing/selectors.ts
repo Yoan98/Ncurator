@@ -138,6 +138,7 @@ export const workbenchSelectors = {
   sessionDeleteConfirmButton: 'workbench-session-delete-confirm-button',
   sessionDeleteCancelButton: 'workbench-session-delete-cancel-button',
   newSessionButton: 'workbench-new-session-button',
+  scheduledTasksButton: 'workbench-scheduled-tasks-button',
   sessionsToggle: 'workbench-sessions-toggle',
   sidebarResizer: 'workbench-sidebar-resizer',
   settingsHelpButton: 'workbench-settings-help-button',

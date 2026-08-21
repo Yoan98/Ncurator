@@ -92,6 +92,9 @@ importers:
       chromium-bidi:
         specifier: 0.8.1
         version: 0.8.1(devtools-protocol@0.0.1464554)
+      dayjs:
+        specifier: ^1.11.19
+        version: 1.11.19
       diff:
         specifier: ^9.0.0
         version: 9.0.0

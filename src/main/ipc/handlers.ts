@@ -13,6 +13,7 @@ import { fetchLlmRemoteModels } from '../services/llm/modelCatalog'
 import { AttachmentService } from '../services/attachments/AttachmentService'
 import { isModelSource } from '../../shared/modelSources'
 import { ChatRunService } from '../services/ai/ChatRunService'
+import { ScheduledTaskService } from '../services/scheduler/ScheduledTaskService'
 import { AiRunResourceManager } from '../services/ai/run/AiRunResourceManager'
 import { AiFileChangeService } from '../services/ai/fileChanges/AiFileChangeService'
 import { getAiContextUsage } from '../services/ai/contextUsage'
@@ -28,6 +29,9 @@ import type {
   FileWatchStartRequest,
   FileWatchStartResponse,
   FileWatchStopResponse,
+  ScheduledTaskMutationResponse,
+  ScheduledTaskSaveRequest,
+  ScheduledTaskSetEnabledRequest,
   WorkbenchSelectedModel,
   WriteTextFileRequest,
   WriteTextFileResponse
@@ -318,6 +322,23 @@ export function registerHandlers(services: {
     errorLogService
   })
   const webSourceService = new WebSourceService()
+
+  const emitSessionListRefreshToAll = () => {
+    BrowserWindow.getAllWindows().forEach((window) => {
+      if (!window.webContents.isDestroyed()) {
+        window.webContents.send('chat-session-list-refresh')
+      }
+    })
+  }
+
+  const scheduledTaskService = new ScheduledTaskService({
+    taskStore: storageService.scheduledTask,
+    workspaceStore,
+    chatStore,
+    submitTask: (payload) => chatRunService.submit(payload),
+    emitSessionListRefresh: emitSessionListRefreshToAll
+  })
+  scheduledTaskService.start()
 
   const emitSourceListRefresh = (sender: Electron.WebContents) => {
     if (sender.isDestroyed()) return
@@ -3096,6 +3117,41 @@ export function registerHandlers(services: {
         error
       })
       return { success: true }
+    }
+  )
+
+  // === Scheduled Task Handlers ===
+
+  ipcMain.handle('scheduled-task-list', async () => {
+    try {
+      return await scheduledTaskService.list()
+    } catch (e: unknown) {
+      console.error('[SCHEDULED-TASK-LIST] Error:', e)
+      return []
+    }
+  })
+
+  ipcMain.handle(
+    'scheduled-task-save',
+    async (_event, payload: ScheduledTaskSaveRequest): Promise<ScheduledTaskMutationResponse> => {
+      return scheduledTaskService.save(payload)
+    }
+  )
+
+  ipcMain.handle(
+    'scheduled-task-delete',
+    async (_event, id: string): Promise<ScheduledTaskMutationResponse> => {
+      return scheduledTaskService.delete(id)
+    }
+  )
+
+  ipcMain.handle(
+    'scheduled-task-set-enabled',
+    async (
+      _event,
+      payload: ScheduledTaskSetEnabledRequest
+    ): Promise<ScheduledTaskMutationResponse> => {
+      return scheduledTaskService.setEnabled(payload)
     }
   )
 }

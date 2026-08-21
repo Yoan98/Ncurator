@@ -13,6 +13,7 @@ import { WorkspaceIndexJobStore } from './domains/WorkspaceIndexJobStore'
 import { WorkspaceStore } from './domains/WorkspaceStore'
 import { WorkbenchUiStore } from './domains/WorkbenchUiStore'
 import { BrowserTabStateStore } from './domains/BrowserTabStateStore'
+import { ScheduledTaskStore } from './domains/ScheduledTaskStore'
 import type { LegacyLocalImportMigrationStatus } from '../../../shared/types'
 import type { AppErrorLogService } from '../logging/AppErrorLogService'
 
@@ -34,6 +35,7 @@ export class StorageService {
   public readonly workspaceIndexJob: WorkspaceIndexJobStore
   public readonly workbenchUi: WorkbenchUiStore
   public readonly browserTabs: BrowserTabStateStore
+  public readonly scheduledTask: ScheduledTaskStore
   private legacyLocalImportMigrationStatus: LegacyLocalImportMigrationStatus | null = null
 
   public constructor(
@@ -62,6 +64,7 @@ export class StorageService {
     this.workspaceIndexJob = new WorkspaceIndexJobStore(this.sqlite)
     this.workbenchUi = new WorkbenchUiStore(this.sqlite)
     this.browserTabs = new BrowserTabStateStore(this.sqlite)
+    this.scheduledTask = new ScheduledTaskStore(this.sqlite)
   }
 
   public static getInstance(input: { errorLogService?: AppErrorLogService } = {}): StorageService {

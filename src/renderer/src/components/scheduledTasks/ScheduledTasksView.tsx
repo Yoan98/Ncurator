@@ -1,0 +1,478 @@
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { App as AntdApp, Button, Empty, Input, Modal, Segmented, Select, Spin, Switch, TimePicker } from 'antd'
+import dayjs from 'dayjs'
+import { HiOutlineClock, HiOutlinePlus, HiOutlineTrash, HiOutlineXMark } from 'react-icons/hi2'
+import { useNavigate } from 'react-router-dom'
+import type {
+  AiExecutionPermission,
+  AiPreference,
+  LLMConfig,
+  LlmRemoteModel,
+  ScheduledTask,
+  ScheduledTaskSaveRequest,
+  ScheduledTaskScheduleType,
+  WorkbenchModelSelection,
+  WorkspaceListItem
+} from '../../../../shared/types'
+import WorkbenchModelSelector from '../workbench/WorkbenchModelSelector'
+import WorkbenchSelect from '../workbench/WorkbenchSelect'
+import WorkspaceQuickSelect from '../workbench/WorkspaceQuickSelect'
+import { AI_PREFERENCE_OPTIONS, EXECUTION_PERMISSION_OPTIONS } from '../workbench/selectOptions'
+import type { WorkbenchAiPreference, WorkbenchExecutionPermission } from '../workbench/types'
+
+const WEEKDAY_OPTIONS = [
+  { value: 0, label: '周日' },
+  { value: 1, label: '周一' },
+  { value: 2, label: '周二' },
+  { value: 3, label: '周三' },
+  { value: 4, label: '周四' },
+  { value: 5, label: '周五' },
+  { value: 6, label: '周六' }
+]
+
+const SCHEDULE_TYPE_OPTIONS = [
+  { value: 'daily', label: '每天' },
+  { value: 'weekly', label: '每周' }
+]
+
+type FormState = {
+  id: string
+  name: string
+  prompt: string
+  scheduleType: ScheduledTaskScheduleType
+  timeOfDay: string
+  weekday: number | null
+  workspaceId: string
+  modelSelection: WorkbenchModelSelection
+  aiPreference: AiPreference
+  executionPermission: AiExecutionPermission
+}
+
+const emptyForm = (): FormState => ({
+  id: '',
+  name: '',
+  prompt: '',
+  scheduleType: 'daily',
+  timeOfDay: '09:00',
+  weekday: null,
+  workspaceId: '',
+  modelSelection: { mainModel: null, visionModel: null },
+  aiPreference: 'default',
+  executionPermission: 'full_access'
+})
+
+const normalizeWeekday = (value: number | null | undefined): number | null => {
+  if (value === null || value === undefined) return null
+  return Number.isInteger(value) && value >= 0 && value <= 6 ? value : null
+}
+
+const weekdayLabel = (weekday: number | null): string => {
+  if (weekday === null) return ''
+  return WEEKDAY_OPTIONS.find((item) => item.value === weekday)?.label || ''
+}
+
+const scheduleLabel = (task: ScheduledTask): string => {
+  if (task.scheduleType === 'weekly') {
+    const day = weekdayLabel(task.weekday)
+    return `每周${day ? ` ${day}` : ''} ${task.timeOfDay}`
+  }
+  return `每天 ${task.timeOfDay}`
+}
+
+type ScheduledTasksViewProps = {
+  onClose: () => void
+}
+
+const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({ onClose }) => {
+  const { message, modal } = AntdApp.useApp()
+  const navigate = useNavigate()
+  const [tasks, setTasks] = useState<ScheduledTask[]>([])
+  const [loading, setLoading] = useState(true)
+  const [workspaces, setWorkspaces] = useState<WorkspaceListItem[]>([])
+  const [modelConfigs, setModelConfigs] = useState<LLMConfig[]>([])
+  const [modelLists, setModelLists] = useState<Record<string, LlmRemoteModel[]>>({})
+  const [formOpen, setFormOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [form, setForm] = useState<FormState>(emptyForm())
+
+  const availableWorkspaces = useMemo(
+    () => workspaces.filter((workspace) => Boolean(workspace.root_path)),
+    [workspaces]
+  )
+
+  const loadTasks = useCallback(async (): Promise<void> => {
+    try {
+      setTasks(await window.api.scheduledTaskList())
+    } catch (error) {
+      console.error('[SCHEDULED-TASKS] list failed:', error)
+      setTasks([])
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void loadTasks()
+    void (async () => {
+      try {
+        const list = await window.api.workspaceList()
+        setWorkspaces(list.items)
+      } catch (error) {
+        console.error('[SCHEDULED-TASKS] workspace list failed:', error)
+      }
+    })()
+    void (async () => {
+      try {
+        const configs = await window.api.llmConfigList()
+        setModelConfigs(configs)
+        const entries = await Promise.all(
+          configs.map(async (config): Promise<[string, LlmRemoteModel[]]> => {
+            try {
+              const response = await window.api.llmConfigModelList(config.id)
+              return [config.id, response.success ? response.items : []]
+            } catch {
+              return [config.id, []]
+            }
+          })
+        )
+        setModelLists(Object.fromEntries(entries))
+      } catch (error) {
+        console.error('[SCHEDULED-TASKS] model config list failed:', error)
+      }
+    })()
+  }, [loadTasks])
+
+  const openCreate = (): void => {
+    setForm(emptyForm())
+    setFormOpen(true)
+  }
+
+  const openEdit = (task: ScheduledTask): void => {
+    setForm({
+      id: task.id,
+      name: task.name,
+      prompt: task.prompt,
+      scheduleType: task.scheduleType,
+      timeOfDay: task.timeOfDay,
+      weekday: task.weekday,
+      workspaceId: task.workspaceId,
+      modelSelection: {
+        mainModel: task.mainModel,
+        visionModel: task.visionModel
+      },
+      aiPreference: task.aiPreference,
+      executionPermission: task.executionPermission
+    })
+    setFormOpen(true)
+  }
+
+  const buildSaveRequest = (): ScheduledTaskSaveRequest | null => {
+    const timeOfDay = form.timeOfDay.trim()
+    if (!form.name.trim()) {
+      message.warning('请填写任务名称')
+      return null
+    }
+    if (!form.prompt.trim()) {
+      message.warning('请填写任务提示词')
+      return null
+    }
+    if (!timeOfDay) {
+      message.warning('请选择执行时间')
+      return null
+    }
+    if (!form.workspaceId) {
+      message.warning('请选择工作空间')
+      return null
+    }
+    if (!form.modelSelection.mainModel) {
+      message.warning('请选择主模型')
+      return null
+    }
+    if (form.scheduleType === 'weekly' && form.weekday === null) {
+      message.warning('请选择星期几')
+      return null
+    }
+    return {
+      id: form.id || undefined,
+      name: form.name.trim(),
+      prompt: form.prompt.trim(),
+      enabled: false,
+      scheduleType: form.scheduleType,
+      timeOfDay,
+      weekday: form.scheduleType === 'weekly' ? normalizeWeekday(form.weekday) : null,
+      workspaceId: form.workspaceId,
+      mainModel: form.modelSelection.mainModel,
+      visionModel: form.modelSelection.visionModel,
+      aiPreference: form.aiPreference,
+      executionPermission: form.executionPermission
+    }
+  }
+
+  const handleSave = async (): Promise<void> => {
+    const payload = buildSaveRequest()
+    if (!payload) return
+    setSaving(true)
+    try {
+      const response = await window.api.scheduledTaskSave(payload)
+      if (!response.success) {
+        message.error(response.error || '保存失败')
+        return
+      }
+      message.success('已保存')
+      setFormOpen(false)
+      await loadTasks()
+    } catch (error) {
+      message.error('保存失败')
+      console.error('[SCHEDULED-TASKS] save failed:', error)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleToggle = async (task: ScheduledTask, enabled: boolean): Promise<void> => {
+    try {
+      const response = await window.api.scheduledTaskSetEnabled({ id: task.id, enabled })
+      if (!response.success) {
+        message.error(response.error || '操作失败')
+        return
+      }
+      setTasks((current) =>
+        current.map((item) => (item.id === task.id ? { ...item, enabled } : item))
+      )
+    } catch (error) {
+      message.error('操作失败')
+      console.error('[SCHEDULED-TASKS] toggle failed:', error)
+    }
+  }
+
+  const handleDelete = (task: ScheduledTask): void => {
+    modal.confirm({
+      title: '删除定时任务',
+      content: `确定删除「${task.name}」吗？`,
+      okText: '删除',
+      okButtonProps: { danger: true },
+      cancelText: '取消',
+      onOk: async () => {
+        const response = await window.api.scheduledTaskDelete(task.id)
+        if (!response.success) {
+          message.error(response.error || '删除失败')
+          return
+        }
+        message.success('已删除')
+        await loadTasks()
+      }
+    })
+  }
+
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="flex h-[44px] shrink-0 items-center justify-between border-b border-[#EEEEEC] bg-white px-4">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            className="flex h-7 w-7 items-center justify-center rounded-[6px] text-[#91918E] transition-colors hover:bg-[#EFEFEE] hover:text-[#37352F]"
+            onClick={onClose}
+            aria-label="关闭定时任务"
+          >
+            <HiOutlineXMark className="h-4 w-4" />
+          </button>
+          <HiOutlineClock className="h-4 w-4 text-[#787774]" />
+          <span className="text-[13px] font-medium text-[#37352F]">定时任务</span>
+        </div>
+        <Button type="primary" size="small" icon={<HiOutlinePlus />} onClick={openCreate}>
+          新增配置
+        </Button>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+        {loading ? (
+          <div className="flex h-32 items-center justify-center">
+            <Spin />
+          </div>
+        ) : tasks.length === 0 ? (
+          <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description="还没有定时任务，点击右上角「新增配置」创建"
+          />
+        ) : (
+          <div className="flex flex-col gap-2">
+            {tasks.map((task) => (
+              <div
+                key={task.id}
+                className="group flex items-center gap-3 rounded-[8px] border border-[#EEEEEC] bg-white px-4 py-3"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-[13px] font-medium text-[#37352F]">{task.name}</div>
+                  <div className="mt-0.5 truncate text-[12px] text-[#91918E]">
+                    {scheduleLabel(task)} · {task.mainModel.modelName}
+                  </div>
+                </div>
+                <Switch
+                  size="small"
+                  checked={task.enabled}
+                  onChange={(checked) => void handleToggle(task, checked)}
+                />
+                <Button type="text" size="small" onClick={() => openEdit(task)}>
+                  编辑
+                </Button>
+                <Button
+                  type="text"
+                  size="small"
+                  danger
+                  icon={<HiOutlineTrash />}
+                  onClick={() => handleDelete(task)}
+                  aria-label={`删除 ${task.name}`}
+                />
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <Modal
+        open={formOpen}
+        title={form.id ? '编辑定时任务' : '新增定时任务'}
+        okText="保存"
+        cancelText="取消"
+        confirmLoading={saving}
+        onOk={() => void handleSave()}
+        onCancel={() => setFormOpen(false)}
+        width={560}
+        maskClosable={false}
+      >
+        <div className="flex flex-col gap-4 pt-2">
+          <label className="flex flex-col gap-1.5">
+            <span className="text-[13px] text-[#37352F]">名称</span>
+            <Input
+              value={form.name}
+              placeholder="例如：每日晨报"
+              onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
+            />
+          </label>
+
+          <label className="flex flex-col gap-1.5">
+            <span className="text-[13px] text-[#37352F]">任务提示词</span>
+            <Input.TextArea
+              value={form.prompt}
+              rows={3}
+              placeholder="描述想让 AI 完成的事"
+              onChange={(event) =>
+                setForm((current) => ({ ...current, prompt: event.target.value }))
+              }
+            />
+          </label>
+
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[13px] text-[#37352F]">执行时间</span>
+            <div className="flex items-center gap-3">
+              <Segmented
+                value={form.scheduleType}
+                options={SCHEDULE_TYPE_OPTIONS}
+                onChange={(value) =>
+                  setForm((current) => ({
+                    ...current,
+                    scheduleType: value as ScheduledTaskScheduleType
+                  }))
+                }
+              />
+              {form.scheduleType === 'weekly' ? (
+                <Select
+                  value={form.weekday ?? undefined}
+                  style={{ width: 120 }}
+                  placeholder="选择星期"
+                  options={WEEKDAY_OPTIONS}
+                  onChange={(value) =>
+                    setForm((current) => ({ ...current, weekday: normalizeWeekday(value) }))
+                  }
+                />
+              ) : null}
+              <TimePicker
+                format="HH:mm"
+                value={dayjs(form.timeOfDay, 'HH:mm')}
+                allowClear={false}
+                minuteStep={1}
+                onChange={(time) =>
+                  setForm((current) => ({
+                    ...current,
+                    timeOfDay: time ? time.format('HH:mm') : ''
+                  }))
+                }
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[13px] text-[#37352F]">工作空间</span>
+            <WorkspaceQuickSelect
+              workspaces={availableWorkspaces}
+              selectedWorkspaceId={form.workspaceId || null}
+              onWorkspaceChange={(workspaceId) =>
+                setForm((current) => ({ ...current, workspaceId }))
+              }
+              onEmptyAction={() => navigate('/settings/workspace')}
+              className="w-full"
+              data-testid="scheduled-task-workspace-select"
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[13px] text-[#37352F]">模型</span>
+            <WorkbenchModelSelector
+              configs={modelConfigs}
+              modelListsByConfigId={modelLists}
+              value={form.modelSelection}
+              onChange={(selection) =>
+                setForm((current) => ({ ...current, modelSelection: selection }))
+              }
+              className="w-full"
+              data-testid="scheduled-task-model-select"
+            />
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+              <span className="text-[13px] text-[#37352F]">偏好</span>
+              <WorkbenchSelect
+                value={form.aiPreference}
+                options={AI_PREFERENCE_OPTIONS}
+                onChange={(nextValue) =>
+                  setForm((current) => ({
+                    ...current,
+                    aiPreference: nextValue as WorkbenchAiPreference
+                  }))
+                }
+                placeholder="偏好"
+                minMenuWidth={220}
+                data-testid="scheduled-task-preference-select"
+              />
+            </div>
+            <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+              <span className="text-[13px] text-[#37352F]">执行权限</span>
+              <WorkbenchSelect
+                value={form.executionPermission}
+                options={EXECUTION_PERMISSION_OPTIONS}
+                onChange={(nextValue) =>
+                  setForm((current) => ({
+                    ...current,
+                    executionPermission: nextValue as WorkbenchExecutionPermission
+                  }))
+                }
+                placeholder="权限"
+                minMenuWidth={220}
+                showDescriptions
+                data-testid="scheduled-task-permission-select"
+              />
+            </div>
+          </div>
+          {form.executionPermission === 'review' ? (
+            <p className="text-[12px] text-[#E8805C]">
+              定时任务在无人值守时执行，选择「审核」可能导致任务因等待审批而一直阻塞，建议使用「完全访问」。
+            </p>
+          ) : null}
+        </div>
+      </Modal>
+    </div>
+  )
+}
+
+export default ScheduledTasksView

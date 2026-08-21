@@ -9,6 +9,7 @@ import {
   HiClock,
   HiFolder,
   HiOutlineClipboardDocument,
+  HiOutlineClock,
   HiOutlineExclamationCircle,
   HiOutlineFolderPlus,
   HiOutlinePencilSquare,
@@ -49,6 +50,7 @@ import { HiOutlineCog6Tooth } from 'react-icons/hi2'
 import AssistantTurnCard from '../components/workbench/AssistantTurnCard'
 import WorkbenchComposer from '../components/workbench/WorkbenchComposer'
 import WorkbenchContentPanel from '../components/workbench/WorkbenchContentPanel'
+import ScheduledTasksView from '../components/scheduledTasks/ScheduledTasksView'
 import UserTakeoverPanel from '../components/workbench/UserTakeoverPanel'
 import ImageLightbox from '../components/workbench/ImageLightbox'
 import AttachmentFileIcon from '../components/workbench/composer/AttachmentFileIcon'
@@ -732,6 +734,7 @@ const ChatPage: React.FC = () => {
   const [contentPanelCollapsed, setContentPanelCollapsed] = useState(true)
   const [contentPanelShellMounted, setContentPanelShellMounted] = useState(false)
   const [contentPanelShellVisible, setContentPanelShellVisible] = useState(false)
+  const [scheduledTasksActive, setScheduledTasksActive] = useState(false)
   const [browserPresentationEnabled, setBrowserPresentationEnabled] = useState(false)
   const [browserTransitionImage, setBrowserTransitionImage] = useState<{
     tabId: string
@@ -1436,6 +1439,7 @@ const ChatPage: React.FC = () => {
 
   const showContentPanel = useCallback(
     (nextState: WorkbenchContentPanelState): void => {
+      setScheduledTasksActive(false)
       if (contentPanel.kind === 'browser') {
         void window.api.browserPanelHide()
       }
@@ -1449,8 +1453,17 @@ const ChatPage: React.FC = () => {
     [contentPanel.kind, expandContentPanel, tabWorkspaceKey, updateCurrentTabWorkspace]
   )
 
+  const openScheduledTasks = useCallback((): void => {
+    setScheduledTasksActive(true)
+  }, [])
+
+  const closeScheduledTasks = useCallback((): void => {
+    setScheduledTasksActive(false)
+  }, [])
+
   const openResourceTab = useCallback(
     (tab: WorkbenchResourceTab): void => {
+      setScheduledTasksActive(false)
       const switchingAwayFromBrowser =
         contentPanel.kind === 'browser' &&
         (tab.kind !== 'browser' || tab.browserTabId !== contentPanel.browserTabId)
@@ -1973,6 +1986,7 @@ const ChatPage: React.FC = () => {
       // Do this before awaiting the previous draft flush so a late bootstrap response cannot
       // restore the last-opened view over an explicitly created new conversation.
       uiStateInteractionVersionRef.current += 1
+      setScheduledTasksActive(false)
       await flushCurrentUiState()
       const previousDraftWorkspace = tabWorkspacesRef.current.__draft__
       for (const tab of previousDraftWorkspace?.tabs || []) {
@@ -3009,6 +3023,12 @@ const ChatPage: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentSessionId, loadSessions, message, refreshContextUsage, setSessionRunningState])
 
+  useEffect(() => {
+    return window.api.onChatSessionListRefresh(() => {
+      void loadSessions()
+    })
+  }, [loadSessions])
+
   const createDraftSessionForSubmit = (workspace: WorkspaceSource): ChatSession => {
     return {
       id: crypto.randomUUID(),
@@ -3860,6 +3880,16 @@ const ChatPage: React.FC = () => {
             <HiOutlinePencilSquare className="h-[18px] w-[18px] shrink-0 text-[#787774]" />
             <span>新对话</span>
           </button>
+          <button
+            type="button"
+            className={`nc-sidebar-nav-row ${scheduledTasksActive ? 'nc-sidebar-item-active' : ''}`}
+            onClick={() => void openScheduledTasks()}
+            data-testid={workbenchSelectors.scheduledTasksButton}
+            aria-label="定时任务"
+          >
+            <HiOutlineClock className="h-[18px] w-[18px] shrink-0 text-[#787774]" />
+            <span>定时任务</span>
+          </button>
         </div>
 
         <div
@@ -4070,9 +4100,13 @@ const ChatPage: React.FC = () => {
       </aside>
 
       <div className="nc-main-pane min-w-0 flex-1" style={WORKBENCH_POSITIONED_PANE_STYLE}>
-        <div className="flex h-full min-h-0 overflow-hidden">
-          <div className="relative flex min-w-0 flex-1 flex-col">
-            {isNewSession ? (
+        {scheduledTasksActive ? (
+          <ScheduledTasksView onClose={closeScheduledTasks} />
+        ) : (
+          <>
+            <div className="flex h-full min-h-0 overflow-hidden">
+              <div className="relative flex min-w-0 flex-1 flex-col">
+                {isNewSession ? (
               <div className="nc-main-empty-titlebar" aria-hidden="true">
                 <div
                   className="nc-main-empty-titlebar-safe-zone"
@@ -4523,6 +4557,8 @@ const ChatPage: React.FC = () => {
             </div>
           ) : null}
         </Modal>
+          </>
+        )}
       </div>
     </div>
   )

@@ -94,6 +94,10 @@ import type {
   ListAiFileChangeRecordsResponse,
   RevertAiFileChangeRequest,
   RevertAiFileChangeResponse,
+  ScheduledTask,
+  ScheduledTaskMutationResponse,
+  ScheduledTaskSaveRequest,
+  ScheduledTaskSetEnabledRequest,
   WorkspaceIndexJobGetRequest,
   WorkspaceIndexJobRecord,
   WorkspaceIndexJobResponse,
@@ -204,6 +208,13 @@ export type DesktopApi = {
   chatSessionMarkViewed: (id: string) => Promise<{ success: boolean; error?: string }>
   chatSessionDelete: (id: string) => Promise<{ success: boolean; error?: string }>
   chatMessageList: (sessionId: string) => Promise<ChatMessage[]>
+  scheduledTaskList: () => Promise<ScheduledTask[]>
+  scheduledTaskSave: (payload: ScheduledTaskSaveRequest) => Promise<ScheduledTaskMutationResponse>
+  scheduledTaskDelete: (id: string) => Promise<ScheduledTaskMutationResponse>
+  scheduledTaskSetEnabled: (
+    payload: ScheduledTaskSetEnabledRequest
+  ) => Promise<ScheduledTaskMutationResponse>
+  onChatSessionListRefresh: (cb: () => void) => () => void
   chatSessionOpen: (payload: ChatSessionOpenRequest) => Promise<ChatSessionOpenResponse>
   chatSessionUiStateSave: (
     payload: ChatSessionUiStateSaveRequest

@@ -1,0 +1,305 @@
+import { v4 as uuidv4 } from 'uuid'
+import type {
+  AiExecutionPermission,
+  AiPreference,
+  ChatSubmitRequest,
+  ChatSubmitResponse,
+  ScheduledTask,
+  ScheduledTaskMutationResponse,
+  ScheduledTaskSaveRequest,
+  ScheduledTaskScheduleType,
+  ScheduledTaskSetEnabledRequest
+} from '../../../shared/types'
+import type { ChatStore } from '../storage/domains/ChatStore'
+import type { ScheduledTaskStore } from '../storage/domains/ScheduledTaskStore'
+import type { WorkspaceStore } from '../storage/domains/WorkspaceStore'
+
+const TICK_INTERVAL_MS = 30_000
+
+type RepeatHandle = ReturnType<typeof setInterval>
+
+type ScheduledTaskServiceDeps = {
+  taskStore: ScheduledTaskStore
+  workspaceStore: WorkspaceStore
+  chatStore: ChatStore
+  submitTask: (payload: ChatSubmitRequest) => Promise<ChatSubmitResponse>
+  emitSessionListRefresh: () => void
+  repeat?: (callback: () => void, intervalMs: number) => RepeatHandle
+  clearRepeat?: (handle: RepeatHandle) => void
+  now?: () => number
+}
+
+const normalizeScheduleType = (value: unknown): ScheduledTaskScheduleType =>
+  value === 'weekly' ? 'weekly' : 'daily'
+
+const normalizeAiPreference = (value: unknown): AiPreference =>
+  value === 'local_sources_relaxed' || value === 'local_sources_strict' ? value : 'default'
+
+const normalizeExecutionPermission = (value: unknown): AiExecutionPermission =>
+  value === 'full_access' ? 'full_access' : 'review'
+
+const parseTimeOfDay = (value: string): number | null => {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(value.trim())
+  if (!match) return null
+  const hours = Number(match[1])
+  const minutes = Number(match[2])
+  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null
+  return hours * 60 + minutes
+}
+
+const slotEpochForDate = (year: number, month: number, day: number, minutesOfDay: number): number => {
+  const date = new Date(year, month, day)
+  date.setMinutes(minutesOfDay)
+  return date.getTime()
+}
+
+const nextDailySlot = (after: number, minutesOfDay: number): number => {
+  const current = new Date(after)
+  const todaySlot = slotEpochForDate(
+    current.getFullYear(),
+    current.getMonth(),
+    current.getDate(),
+    minutesOfDay
+  )
+  if (todaySlot > after) return todaySlot
+  return slotEpochForDate(current.getFullYear(), current.getMonth(), current.getDate() + 1, minutesOfDay)
+}
+
+const nextWeeklySlot = (after: number, minutesOfDay: number, weekday: number): number => {
+  const current = new Date(after)
+  const daysUntil = (weekday - current.getDay() + 7) % 7
+  const target = new Date(
+    current.getFullYear(),
+    current.getMonth(),
+    current.getDate() + daysUntil
+  )
+  const slot = slotEpochForDate(target.getFullYear(), target.getMonth(), target.getDate(), minutesOfDay)
+  if (slot > after) return slot
+  return slotEpochForDate(target.getFullYear(), target.getMonth(), target.getDate() + 7, minutesOfDay)
+}
+
+export const computeNextRunAt = (
+  input: { scheduleType: ScheduledTaskScheduleType; timeOfDay: string; weekday: number | null },
+  after: number
+): number | null => {
+  const minutesOfDay = parseTimeOfDay(input.timeOfDay)
+  if (minutesOfDay === null) return null
+  if (input.scheduleType === 'weekly') {
+    if (input.weekday === null || input.weekday < 0 || input.weekday > 6) return null
+    return nextWeeklySlot(after, minutesOfDay, input.weekday)
+  }
+  return nextDailySlot(after, minutesOfDay)
+}
+
+export class ScheduledTaskService {
+  private readonly deps: Required<Pick<ScheduledTaskServiceDeps, 'repeat' | 'clearRepeat' | 'now'>> &
+    Omit<ScheduledTaskServiceDeps, 'repeat' | 'clearRepeat' | 'now'>
+  private timer: RepeatHandle | null = null
+  private ticking = false
+
+  public constructor(deps: ScheduledTaskServiceDeps) {
+    this.deps = {
+      repeat: (callback, intervalMs) => setInterval(callback, intervalMs),
+      clearRepeat: (handle) => clearInterval(handle),
+      now: () => Date.now(),
+      ...deps
+    }
+  }
+
+  public start(): void {
+    if (this.timer) return
+    void (async () => {
+      try {
+        await this.reconcileMissed()
+      } catch (error) {
+        console.error('[SCHEDULED-TASK] reconcile missed failed:', error)
+      }
+      if (this.timer) return
+      this.timer = this.deps.repeat(() => {
+        void this.runDueTasks()
+      }, TICK_INTERVAL_MS)
+      await this.runDueTasks()
+    })()
+  }
+
+  public stop(): void {
+    if (!this.timer) return
+    this.deps.clearRepeat(this.timer)
+    this.timer = null
+  }
+
+  public async list(): Promise<ScheduledTask[]> {
+    return this.deps.taskStore.list()
+  }
+
+  public async save(input: ScheduledTaskSaveRequest): Promise<ScheduledTaskMutationResponse> {
+    try {
+      const task = this.buildTask(input)
+      await this.deps.taskStore.save(task)
+      return { success: true, task }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  public async delete(id: string): Promise<ScheduledTaskMutationResponse> {
+    try {
+      await this.deps.taskStore.delete(String(id || '').trim())
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  public async setEnabled(
+    input: ScheduledTaskSetEnabledRequest
+  ): Promise<ScheduledTaskMutationResponse> {
+    try {
+      const existing = await this.deps.taskStore.getById(String(input.id || '').trim())
+      if (!existing) return { success: false, error: '定时任务不存在' }
+      const enabled = Boolean(input.enabled)
+      const now = this.deps.now()
+      const task: ScheduledTask = {
+        ...existing,
+        enabled,
+        nextRunAt: enabled ? computeNextRunAt(existing, now) : null,
+        updatedAt: now
+      }
+      await this.deps.taskStore.save(task)
+      return { success: true, task }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  private buildTask(input: ScheduledTaskSaveRequest): ScheduledTask {
+    const name = String(input.name || '').trim()
+    const prompt = String(input.prompt || '').trim()
+    const workspaceId = String(input.workspaceId || '').trim()
+    const mainModel = input.mainModel
+    const scheduleType = normalizeScheduleType(input.scheduleType)
+    if (!name) throw new Error('请填写任务名称')
+    if (!prompt) throw new Error('请填写任务提示词')
+    if (!workspaceId) throw new Error('请选择工作空间')
+    if (!mainModel?.configId || !mainModel?.modelName) throw new Error('请选择主模型')
+    if (parseTimeOfDay(input.timeOfDay) === null) throw new Error('执行时间格式不正确')
+
+    const weekday = scheduleType === 'weekly' ? normalizeWeekday(input.weekday) : null
+    if (scheduleType === 'weekly' && weekday === null) throw new Error('请选择星期几')
+    const visionModel = input.visionModel?.configId && input.visionModel?.modelName ? input.visionModel : null
+    const now = this.deps.now()
+    const existingId = String(input.id || '').trim()
+    const id = existingId || uuidv4()
+    const schedule = {
+      scheduleType,
+      timeOfDay: String(input.timeOfDay || '').trim(),
+      weekday
+    }
+    return {
+      id,
+      name,
+      prompt,
+      enabled: Boolean(input.enabled),
+      scheduleType,
+      timeOfDay: schedule.timeOfDay,
+      weekday,
+      workspaceId,
+      mainModel: { configId: mainModel.configId, modelName: mainModel.modelName },
+      visionModel,
+      aiPreference: normalizeAiPreference(input.aiPreference),
+      executionPermission: normalizeExecutionPermission(input.executionPermission),
+      nextRunAt: input.enabled ? computeNextRunAt(schedule, now) : null,
+      createdAt: now,
+      updatedAt: now
+    }
+  }
+
+  private async reconcileMissed(): Promise<void> {
+    const now = this.deps.now()
+    const tasks = await this.deps.taskStore.listEnabled()
+    for (const task of tasks) {
+      if (task.nextRunAt !== null && task.nextRunAt <= now) {
+        await this.deps.taskStore.save({
+          ...task,
+          nextRunAt: computeNextRunAt(task, now),
+          updatedAt: now
+        })
+      }
+    }
+  }
+
+  private async runDueTasks(): Promise<void> {
+    if (this.ticking) return
+    this.ticking = true
+    try {
+      const now = this.deps.now()
+      const tasks = await this.deps.taskStore.listEnabled()
+      for (const task of tasks) {
+        if (task.nextRunAt === null || now < task.nextRunAt) continue
+        await this.fireTask(task, now)
+      }
+    } catch (error) {
+      console.error('[SCHEDULED-TASK] tick failed:', error)
+    } finally {
+      this.ticking = false
+    }
+  }
+
+  private async fireTask(task: ScheduledTask, now: number): Promise<void> {
+    let sessionId: string | null = null
+    let submitted = false
+    try {
+      const workspace = await this.deps.workspaceStore.getWorkspaceById(task.workspaceId)
+      const rootPath = String(workspace?.root_path || '').trim()
+      if (!workspace || !rootPath) return
+      sessionId = uuidv4()
+      await this.deps.chatStore.saveChatSession({
+        id: sessionId,
+        title: task.name || '定时任务',
+        created_at: now,
+        workspace_id: task.workspaceId
+      })
+      const response = await this.deps.submitTask({
+        mode: 'ai',
+        sessionId,
+        input: task.prompt,
+        mainModel: task.mainModel,
+        visionModel: task.visionModel ?? undefined,
+        preference: task.aiPreference,
+        executionPermission: task.executionPermission,
+        workspace: {
+          workspaceId: task.workspaceId,
+          workspaceName: workspace.name,
+          rootPath
+        }
+      })
+      if (!response.success) {
+        console.error('[SCHEDULED-TASK] submit failed:', response.error)
+        return
+      }
+      submitted = true
+      this.deps.emitSessionListRefresh()
+    } catch (error) {
+      console.error('[SCHEDULED-TASK] fire failed:', error)
+    } finally {
+      if (sessionId && !submitted) {
+        await this.deps.chatStore.deleteChatSession(sessionId)
+      }
+      await this.advanceNextRun(task, now)
+    }
+  }
+
+  private async advanceNextRun(task: ScheduledTask, now: number): Promise<void> {
+    await this.deps.taskStore.save({
+      ...task,
+      nextRunAt: computeNextRunAt(task, now),
+      updatedAt: now
+    })
+  }
+}
+
+const normalizeWeekday = (value: unknown): number | null => {
+  const number = Number(value)
+  if (!Number.isInteger(number) || number < 0 || number > 6) return null
+  return number
+}

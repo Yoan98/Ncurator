@@ -2,20 +2,15 @@
 import { App as AntdApp, Spin, Tooltip } from 'antd'
 import {
   HiArrowUp,
-  HiCircleStack,
   HiFolder,
   HiMagnifyingGlass,
   HiOutlineFolderPlus,
   HiPhoto,
   HiPlus,
-  HiQuestionMarkCircle,
-  HiShieldCheck,
   HiSparkles,
   HiStop,
-  HiExclamationTriangle,
   HiXMark
 } from 'react-icons/hi2'
-import { FaCircle } from 'react-icons/fa'
 import type {
   ChatAttachment,
   LLMConfig,
@@ -51,6 +46,7 @@ import {
 } from './composer/utils'
 import WorkbenchSelect from './WorkbenchSelect'
 import WorkbenchModelSelector from './WorkbenchModelSelector'
+import { AI_PREFERENCE_OPTIONS, EXECUTION_PERMISSION_OPTIONS } from './selectOptions'
 import type { ImageLightboxImage } from './ImageLightbox'
 import { getAttachmentTypeLabel } from './utils'
 
@@ -119,14 +115,6 @@ const filterMentionReferences = (
     )
   })
 }
-
-const PreferenceDots: React.FC<{ count: 1 | 2 }> = ({ count }) => (
-  <span className="inline-flex items-center gap-0.5 text-[#787774]">
-    {Array.from({ length: count }).map((_, index) => (
-      <FaCircle key={index} className="h-1.5 w-1.5" />
-    ))}
-  </span>
-)
 
 const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   mode,
@@ -837,87 +825,6 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     ],
     []
   )
-  const aiPreferenceOptions = useMemo<WorkbenchSelectOption[]>(
-    () => [
-      {
-        value: 'default',
-        label: '默认',
-        icon: <HiSparkles className="h-3.5 w-3.5" />,
-        description: 'AI 自主判断如何推进任务',
-        trailing: (
-          <Tooltip title="AI 自主判断如何推进任务">
-            <span
-              className="inline-flex h-5 w-5 items-center justify-center rounded-full text-[#9B9A97] transition hover:bg-[#EFEFED] hover:text-[#37352F]"
-              aria-label="默认偏好说明"
-              onMouseDown={(event) => event.stopPropagation()}
-              onClick={(event) => event.stopPropagation()}
-            >
-              <HiQuestionMarkCircle className="h-3.5 w-3.5" />
-            </span>
-          </Tooltip>
-        )
-      },
-      {
-        value: 'local_sources',
-        label: '本地资料',
-        icon: <HiCircleStack className="h-3.5 w-3.5" />,
-        description: '系统管理知识库和本地资料',
-        children: [
-          {
-            value: 'local_sources_relaxed',
-            label: '宽松',
-            triggerLabel: '本地资料',
-            triggerIcon: <HiCircleStack className="h-3.5 w-3.5" />,
-            triggerSuffix: (
-              <span className="inline-flex items-center gap-1">
-                <PreferenceDots count={1} />
-              </span>
-            ),
-            icon: <PreferenceDots count={1} />,
-            description: '优先依据本地资料推进任务',
-            trailing: (
-              <Tooltip title="优先依据本地资料内容推进任务">
-                <span
-                  className="inline-flex h-5 w-5 items-center justify-center rounded-full text-[#9B9A97] transition hover:bg-[#EFEFED] hover:text-[#37352F]"
-                  aria-label="本地资料宽松模式说明"
-                  onMouseDown={(event) => event.stopPropagation()}
-                  onClick={(event) => event.stopPropagation()}
-                >
-                  <HiQuestionMarkCircle className="h-3.5 w-3.5" />
-                </span>
-              </Tooltip>
-            )
-          },
-          {
-            value: 'local_sources_strict',
-            label: '严谨',
-            triggerLabel: '本地资料',
-            triggerIcon: <HiCircleStack className="h-3.5 w-3.5" />,
-            triggerSuffix: (
-              <span className="inline-flex items-center gap-1">
-                <PreferenceDots count={2} />
-              </span>
-            ),
-            icon: <PreferenceDots count={2} />,
-            description: 'AI 只能依据本地资料推进任务',
-            trailing: (
-              <Tooltip title="完全只根据本地资料的内容推进任务">
-                <span
-                  className="inline-flex h-5 w-5 items-center justify-center rounded-full text-[#9B9A97] transition hover:bg-[#EFEFED] hover:text-[#37352F]"
-                  aria-label="本地资料严谨模式说明"
-                  onMouseDown={(event) => event.stopPropagation()}
-                  onClick={(event) => event.stopPropagation()}
-                >
-                  <HiQuestionMarkCircle className="h-3.5 w-3.5" />
-                </span>
-              </Tooltip>
-            )
-          }
-        ]
-      }
-    ],
-    []
-  )
   const workspaceOptions = useMemo<WorkbenchSelectOption[]>(
     () =>
       workspaces.map((workspace) => ({
@@ -927,27 +834,6 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
         keywords: [workspace.name, workspace.root_path || '']
       })),
     [workspaces]
-  )
-  const executionPermissionOptions = useMemo<WorkbenchSelectOption[]>(
-    () => [
-      {
-        value: 'review',
-        label: '审核',
-        icon: <HiShieldCheck className="h-4 w-4 text-[#787774]" />,
-        triggerIcon: <HiShieldCheck className="h-3.5 w-3.5" />,
-        description: '涉及到风险操作需要你审核'
-      },
-      {
-        value: 'full_access',
-        label: '完全访问',
-        icon: <HiExclamationTriangle className="h-4 w-4 text-[#E85D04]" />,
-        triggerIcon: <HiExclamationTriangle className="h-3.5 w-3.5 text-[#E85D04]" />,
-        description: '不受限制的操作你的电脑',
-        labelClassName: '!text-[#E85D04]',
-        descriptionClassName: '!text-[#E85D04]'
-      }
-    ],
-    []
   )
   const currentAttachments = useMemo(() => draftValue.attachments || [], [draftValue.attachments])
 
@@ -1200,7 +1086,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                 <span className="mx-1 h-4 w-px shrink-0 bg-[#E5E4E0]" aria-hidden="true" />
                 <WorkbenchSelect
                   value={aiPreference}
-                  options={aiPreferenceOptions}
+                  options={AI_PREFERENCE_OPTIONS}
                   onChange={(nextValue) => {
                     onAiPreferenceChange(nextValue as WorkbenchAiPreference)
                     focusEditorAfterControlChange()
@@ -1216,7 +1102,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                 />
                 <WorkbenchSelect
                   value={executionPermission}
-                  options={executionPermissionOptions}
+                  options={EXECUTION_PERMISSION_OPTIONS}
                   onChange={(nextValue) => {
                     onExecutionPermissionChange(nextValue as WorkbenchExecutionPermission)
                     focusEditorAfterControlChange()

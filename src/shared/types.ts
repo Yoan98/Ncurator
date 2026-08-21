@@ -1094,6 +1094,52 @@ export type ChatSubmitMode = 'ai' | 'search'
 export type AiPreference = 'default' | 'local_sources_relaxed' | 'local_sources_strict'
 export type AiExecutionPermission = 'review' | 'full_access'
 
+export type ScheduledTaskScheduleType = 'daily' | 'weekly'
+
+export type ScheduledTask = {
+  id: string
+  name: string
+  prompt: string
+  enabled: boolean
+  scheduleType: ScheduledTaskScheduleType
+  timeOfDay: string
+  weekday: number | null
+  workspaceId: string
+  mainModel: WorkbenchSelectedModel
+  visionModel: WorkbenchSelectedModel | null
+  aiPreference: AiPreference
+  executionPermission: AiExecutionPermission
+  nextRunAt: number | null
+  createdAt: number
+  updatedAt: number
+}
+
+export type ScheduledTaskSaveRequest = {
+  id?: string
+  name: string
+  prompt: string
+  enabled: boolean
+  scheduleType: ScheduledTaskScheduleType
+  timeOfDay: string
+  weekday?: number | null
+  workspaceId: string
+  mainModel: WorkbenchSelectedModel
+  visionModel?: WorkbenchSelectedModel | null
+  aiPreference?: AiPreference
+  executionPermission?: AiExecutionPermission
+}
+
+export type ScheduledTaskMutationResponse = {
+  success: boolean
+  task?: ScheduledTask
+  error?: string
+}
+
+export type ScheduledTaskSetEnabledRequest = {
+  id: string
+  enabled: boolean
+}
+
 export type ChatSubmitRequest = {
   mode: ChatSubmitMode
   preference?: AiPreference
