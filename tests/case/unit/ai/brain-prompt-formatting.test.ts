@@ -30,9 +30,9 @@ describe('ai unit brain prompt formatting', () => {
       userInput: '继续处理任务'
     })
 
-    const prompt = buildBrainPrompt({ state, ctx: createFakeCtx() }).user
+    const prompt = buildBrainPrompt({ state, ctx: createFakeCtx() })
     const skillCatalog =
-      prompt.match(/<skill_catalog>([\s\S]*?)<\/skill_catalog>/)?.[1].trim() || ''
+      prompt.system.match(/<skill_catalog>([\s\S]*?)<\/skill_catalog>/)?.[1].trim() || ''
 
     expect(skillCatalog).not.toContain('learning 时填写')
     expect(skillCatalog).not.toMatch(/^- [^\n]+\n\n- /m)

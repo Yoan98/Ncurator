@@ -12,6 +12,7 @@ import {
   listBuiltinSkillDefinitions,
   listExternalSkillDefinitions
 } from '../skills'
+import { renderResumeMessages } from '../../utils/resumeSnapshot'
 import { renderTaskProgress } from '../shared/memoryRenderers'
 import {
   renderBrainCompactBlocks,
@@ -37,7 +38,7 @@ const indentLines = (value: string, level: number): string =>
     .join('\n')
 
 export const renderLocalEnvironmentText = (ctx: AiRunContext): string => {
-  const now = new Date(Math.floor(Date.now() / 60_000) * 60_000)
+  const now = new Date(Math.floor(Date.now() / 3_600_000) * 3_600_000)
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'unknown'
   const offsetMinutes = -now.getTimezoneOffset()
   const offsetSign = offsetMinutes >= 0 ? '+' : '-'
@@ -48,37 +49,33 @@ export const renderLocalEnvironmentText = (ctx: AiRunContext): string => {
     .replace(/\.\d{3}/, '')
     .replace('Z', `${offsetSign}${offsetHours}:${offsetRemainderMinutes}`)
 
-  return JSON.stringify(
-    {
-      platform: ctx.platform,
-      current_time: {
-        utc_iso: now.toISOString().replace(/\.\d{3}Z$/, 'Z'),
-        timezone,
-        local_iso: localIso
-      },
-      terminal_state: {
-        new_terminal_default_path: ctx.workspace?.rootPath || null,
-        terminals: terminalSessionManager
-          .list({
-            chatSessionId: ctx.sessionId,
-            workspaceId: ctx.workspace?.workspaceId
-          })
-          .map((terminal) => ({
-            terminal_id: terminal.terminalId,
-            status: terminal.status,
-            current_path: terminal.currentTerminalPath,
-            current_command: terminal.currentCommand,
-            started_at: terminal.startedAt ? new Date(terminal.startedAt).toISOString() : null
-          }))
-      },
-      runtime_paths: {
-        assets: ctx.workspace ? getWorkspaceAssetsRootDir(ctx.workspace.rootPath) : null,
-        scripts: ctx.workspace ? getWorkspaceScriptsRootDir(ctx.workspace.rootPath) : null
-      }
+  return JSON.stringify({
+    platform: ctx.platform,
+    runtime_paths: {
+      assets: ctx.workspace ? getWorkspaceAssetsRootDir(ctx.workspace.rootPath) : null,
+      scripts: ctx.workspace ? getWorkspaceScriptsRootDir(ctx.workspace.rootPath) : null
     },
-    null,
-    2
-  )
+    current_time: {
+      utc_iso: now.toISOString().replace(/\.\d{3}Z$/, 'Z'),
+      timezone,
+      local_iso: localIso
+    },
+    terminal_state: {
+      new_terminal_default_path: ctx.workspace?.rootPath || null,
+      terminals: terminalSessionManager
+        .list({
+          chatSessionId: ctx.sessionId,
+          workspaceId: ctx.workspace?.workspaceId
+        })
+        .map((terminal) => ({
+          terminal_id: terminal.terminalId,
+          status: terminal.status,
+          current_path: terminal.currentTerminalPath,
+          current_command: terminal.currentCommand,
+          started_at: terminal.startedAt ? new Date(terminal.startedAt).toISOString() : null
+        }))
+    }
+  })
 }
 
 const renderPreferenceText = (preference: AiRunContext['preference']): string => {
@@ -110,45 +107,58 @@ ${inputSchemaText}
 `.trim()
 }
 
-const renderSkillCatalogSection = (state: HumanState, platform: AiRuntimePlatform): string => {
+const renderSkillLine = (definition: ReturnType<typeof getSkillDefinition>): string =>
+  `- ${definition.skillId}：${definition.description}`
+
+const renderToolSpecLines = (input: {
+  skillDefinitions: ReturnType<typeof getSkillDefinition>[]
+  platform: AiRuntimePlatform
+}): string =>
+  Array.from(new Set(input.skillDefinitions.flatMap((definition) => definition.toolNames)))
+    .map((toolName) => getToolSpec(toolName, input.platform))
+    .filter((spec): spec is HumanToolSpec => Boolean(spec))
+    .map((spec) =>
+      renderSkillCatalogToolSpecLine({
+        spec,
+        skillLabels: input.skillDefinitions
+          .filter((definition) => definition.toolNames.includes(spec.name))
+          .map((definition) => definition.skillId)
+      })
+    )
+    .join('\n')
+
+const renderStaticSkillCatalog = (platform: AiRuntimePlatform): string => {
+  const builtinDefinitions = listBuiltinSkillDefinitions()
+  return `
+skill是一项技能，一项技能通常会对应一个或多个tool，tool则是你最终会实际使用且用来完成事项的工具。
+
+始终可用的技能：
+${builtinDefinitions.map(renderSkillLine).join('\n') || 'none'}
+
+始终可用的工具：
+${renderToolSpecLines({ skillDefinitions: builtinDefinitions, platform }) || 'none'}
+`.trim()
+}
+
+const renderSkillStateSection = (state: HumanState, platform: AiRuntimePlatform): string => {
   const effectiveSkillIds = getEffectiveLearnedSkillIds(state.skills.learnedSkillIds)
   const effectiveSkillDefinitions = effectiveSkillIds.map((skillId) => getSkillDefinition(skillId))
   const learnedExternalSkillDefinitions = effectiveSkillDefinitions.filter(
     (definition) => definition.source === 'external'
   )
-  const renderSkillLine = (definition: ReturnType<typeof getSkillDefinition>): string =>
-    `- ${definition.skillId}：${definition.description}`
   const learnableSkillLines = listExternalSkillDefinitions()
     .filter((definition) => !state.skills.learnedSkillIds.includes(definition.skillId))
     .map(renderSkillLine)
-  const effectiveToolSpecLines = Array.from(
-    new Set(effectiveSkillDefinitions.flatMap((definition) => definition.toolNames))
-  )
-    .map((toolName) => getToolSpec(toolName, platform))
-    .filter((spec): spec is HumanToolSpec => Boolean(spec))
-    .map((spec) =>
-      renderSkillCatalogToolSpecLine({
-        spec,
-        skillLabels: effectiveSkillDefinitions
-          .filter((definition) => definition.toolNames.includes(spec.name))
-          .map((definition) => definition.skillId)
-      })
-    )
 
   return `
-skill是一项技能，一项技能通常会对应一个或多个tool，tool则是你最终会实际使用且用来完成事项的工具。
-
-始终可用的技能：
-${listBuiltinSkillDefinitions().map(renderSkillLine).join('\n') || 'none'}
-
 已经学习的技能：
 ${learnedExternalSkillDefinitions.map(renderSkillLine).join('\n') || 'none'}
 
 仍可补充学习的技能：
 ${learnableSkillLines.join('\n') || 'none'}
 
-当前可直接调用的工具：
-${effectiveToolSpecLines.join('\n') || 'none'}
+已学习技能对应的工具：
+${renderToolSpecLines({ skillDefinitions: learnedExternalSkillDefinitions, platform }) || 'none'}
 `.trim()
 }
 
@@ -213,7 +223,7 @@ export const buildBrainPrompt = (input: {
     nextAction为hand时：
     - calls 必须是完整合法的可执行计划，系统会按顺序串行执行。
     - calls[*].toolName：必须严格使用当前工具说明里的精确名称。
-    - calls[*].args：必须是对象；其中真实字段、必填参数和参数层级，必须严格遵守 skill_catalog 中对应工具的输入结构与工具说明。
+    - calls[*].args：必须是对象；其中真实字段、必填参数和参数层级，必须严格遵守 skill_catalog 或 skill_state 中对应工具的输入结构与工具说明。
     - calls 最大只允许规划${HUMAN_HAND_CALL_LIMIT}个。
 
     nextAction为mouth时：
@@ -243,10 +253,16 @@ export const buildBrainPrompt = (input: {
     - compactions：已压缩的较早历史，用于保留仍相关的客观事实、失败路径、重复尝试与背景信息。
     - rounds：最近未压缩的历史轮次，用于查看较新的判断、执行与结果轨迹。
     - task_progress：当前任务的全局进度信息。
-    - skill_catalog：当前已生效或仍可学习的 skills，以及当前可直接调用的工具说明。
+    - skill_catalog：system 中的静态能力目录，包含所有技能定义与始终可用的内置工具说明。
+    - skill_state：当前已学习/仍可补充学习的技能，以及已学习技能对应的工具说明。
+    - resume_messages：任务中断恢复后用户补充的消息；若无则为 none。
     - decision_hint：当前额外的收敛或纠偏提示，必须重视关注该信息来推进任务；若无则为 none。
-    - local_environment：当前本机运行环境，内容是 JSON；platform 是当前用户电脑平台，current_time 是当前系统时间，terminal_state 是当前会话的终端状态，runtime_paths 是用户工作区域内的临时运行目录。
+    - local_environment：当前本机运行环境，内容是 JSON；platform 是当前用户电脑平台，runtime_paths 是用户工作区域内的临时运行目录，current_time 是当前系统时间，terminal_state 是当前会话的终端状态。
   </context_block_guide>
+
+  <skill_catalog>
+${renderStaticSkillCatalog(input.ctx.platform)}
+  </skill_catalog>
 
   <output_contract>
     - 你必须只输出 JSON，不要输出任何额外说明，也不要输出 markdown。
@@ -390,9 +406,9 @@ ${renderReferenceScopeText(input.ctx.referenceScope)}
     </recent_turns>
   </conversation_history>
 
-  <skill_catalog>
-${renderSkillCatalogSection(input.state, input.ctx.platform)}
-  </skill_catalog>
+  <skill_state>
+${renderSkillStateSection(input.state, input.ctx.platform)}
+  </skill_state>
 
   <round_history>
     <compactions>
@@ -404,6 +420,10 @@ ${renderSkillCatalogSection(input.state, input.ctx.platform)}
     </rounds>
   </round_history>
 
+  <resume_messages>
+${renderResumeMessages(input.state.task.taskContext) || 'none'}
+  </resume_messages>
+
   <task_progress>
   ${renderTaskProgress({
     state: input.state,
@@ -413,13 +433,13 @@ ${renderSkillCatalogSection(input.state, input.ctx.platform)}
   })}
   </task_progress>
 
-  <decision_hint>
-${input.state.execution.pendingDecisionHint ? renderDecisionHintForBrain(input.state.execution.pendingDecisionHint) : 'none'}
-  </decision_hint>
-
   <local_environment>
 ${renderLocalEnvironmentText(input.ctx)}
   </local_environment>
+
+  <decision_hint>
+${input.state.execution.pendingDecisionHint ? renderDecisionHintForBrain(input.state.execution.pendingDecisionHint) : 'none'}
+  </decision_hint>
 </user_context>
 `.trim()
 

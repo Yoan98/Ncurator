@@ -132,7 +132,7 @@ export class ScheduledTaskService {
         if (now - task.nextRunAt <= MISFIRE_GRACE_MS) {
           await this.fireTask(task, now)
         } else {
-          console.warn(
+          console.log(
             '[SCHEDULED-TASK] missed slot, skip:',
             JSON.stringify({ id: task.id, nextRunAt: task.nextRunAt, now, gapMs: now - task.nextRunAt })
           )

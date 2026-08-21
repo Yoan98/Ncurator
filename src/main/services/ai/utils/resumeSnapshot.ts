@@ -22,32 +22,20 @@ const cloneWorkspace = (
 ): WorkspaceRuntimeBinding | undefined =>
   workspace ? (JSON.parse(JSON.stringify(workspace)) as WorkspaceRuntimeBinding) : undefined
 
-const interruptionReasonLabels: Record<ChatSessionResumeSnapshot['reason'], string> = {
-  timeout: '请求超时',
-  network_error: '网络错误',
-  user_cancelled: '用户主动停止',
-  process_interrupted: '运行进程中断',
-  runtime_limit: '达到运行上限',
-  unexpected_error: '未知运行异常'
-}
-
 export const createHumanTaskContext = (originalGoal: string): HumanTaskContext => ({
   originalGoal: String(originalGoal || '').trim(),
   recoveryHistory: []
 })
 
-export const renderHumanTaskGoal = (taskContext: HumanTaskContext): string => {
-  const originalGoal = String(taskContext.originalGoal || '').trim()
-  if (taskContext.recoveryHistory.length === 0) return originalGoal
-  return [
-    `原始任务：${originalGoal}`,
-    '',
-    '历次中断与恢复：',
-    ...taskContext.recoveryHistory.map(
-      (item, index) =>
-        `${String(index + 1)}. 任务因${interruptionReasonLabels[item.interruptionReason]}而中断；用户随后要求：“${item.userInput}”`
-    )
-  ].join('\n')
+export const renderHumanTaskGoal = (taskContext: HumanTaskContext): string =>
+  String(taskContext.originalGoal || '').trim()
+
+export const renderResumeMessages = (taskContext: HumanTaskContext | undefined): string => {
+  const history = taskContext?.recoveryHistory || []
+  if (history.length === 0) return ''
+  return history
+    .map((item, index) => `${String(index + 1)}. ${String(item.userInput || '').trim()}`)
+    .join('\n')
 }
 
 const resolveTaskContext = (state: HumanState): HumanTaskContext =>

@@ -159,5 +159,5 @@ export const formatPreviousTurns = (input: {
     }
   }
 
-  return turns.length > 0 ? JSON.stringify(turns, null, 2) : ''
+  return turns.length > 0 ? JSON.stringify(turns) : ''
 }

@@ -59,50 +59,40 @@ describe('workbench scheduled-task e2e', () => {
         runMode: 'single',
         execute: async (runtime) => {
           const { page } = runtime
-          const mark = (label: string): void => {
-            runtime.signal({ name: 'scheduled-task-trigger-step', message: label })
-          }
-
-          mark('setup-start')
           const setup = await setupWorkbenchWithTempWorkspace(page, {
             caseId: CASE_ID,
             workspaceName: `Workbench ${CASE_ID}`,
             createSession: false
           })
-          mark('setup-done')
 
           await page.getByRole('button', { name: `在 ${setup.workspaceName} 中新建对话` }).click()
-          mark('new-chat-clicked')
+          const firstStartedAtMs = Date.now()
           await sendWorkbenchMessage(page, FIRST_PROMPT)
-          mark('first-message-sent')
-          await waitForWorkbenchAiRunCompletion(runtime, Date.now(), setup.env.modelName)
-          mark('first-run-completed')
+          await waitForWorkbenchAiRunCompletion(
+            runtime,
+            firstStartedAtMs,
+            setup.env.modelName,
+            undefined,
+            { page, blockerPolicy: 'auto_approve' }
+          )
 
           const sessionsAfterFirst = await listSessions(page)
-          mark('first-list-sessions-done')
           const firstSession = sessionsAfterFirst.find(
             (session) => session.title === FIRST_PROMPT.slice(0, 20)
           )
           if (!firstSession) throw new Error('failed to locate the first session')
 
           await openScheduledTasksView(page)
-          mark('view-opened')
           await getWorkbenchLocator(page, scheduledTaskSelectors.addButton).click()
           await getWorkbenchLocator(page, scheduledTaskSelectors.formName).fill('触发验证任务')
           await getWorkbenchLocator(page, scheduledTaskSelectors.formPrompt).fill(TASK_PROMPT)
-          mark('form-name-prompt-filled')
           await selectScheduledTaskWorkspace(page, setup.workspaceName)
-          mark('workspace-selected')
           await selectScheduledTaskModel(page, setup.env.modelName)
-          mark('model-selected')
           const scheduledHhmm = nextMinuteHhmm()
           await fillScheduledTaskTime(page, scheduledHhmm)
-          mark('time-filled')
           await getWorkbenchLocator(page, scheduledTaskSelectors.formSave).click()
-          mark('form-saved')
 
           const createdTasks = await listTasks(page)
-          mark('list-tasks-done')
           const createdTask = createdTasks.find((task) => task.name === '触发验证任务')
           if (!createdTask) throw new Error('failed to create the scheduled task')
           const taskCreatedAt = Date.now()
@@ -110,7 +100,6 @@ describe('workbench scheduled-task e2e', () => {
             page,
             `${scheduledTaskSelectors.itemTogglePrefix}-${createdTask.id}`
           ).click()
-          mark('toggle-clicked')
 
           const triggeredStartedAt = Date.now()
           const deadline = triggeredStartedAt + 150_000
@@ -127,7 +116,6 @@ describe('workbench scheduled-task e2e', () => {
             if (triggeredSession) break
             await page.waitForTimeout(5_000)
           }
-          mark('trigger-session-poll-done')
 
           const activeSessionId = await readActiveSessionId(page)
 
@@ -144,7 +132,6 @@ describe('workbench scheduled-task e2e', () => {
               await page.waitForTimeout(3_000)
             }
           }
-          mark('trigger-run-completion-poll-done')
 
           return {
             scheduledHhmm,

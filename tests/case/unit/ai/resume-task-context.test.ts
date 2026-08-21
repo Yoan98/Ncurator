@@ -11,7 +11,7 @@ import {
 } from '../../../../src/main/services/ai/utils/runFailure'
 
 describe('ai unit resume task context', () => {
-  it('renders every interruption and continuation into one task goal', () => {
+  it('keeps task goal as original goal and collects continuation messages separately', () => {
     const originalState = createInitialHumanState({
       taskId: 'run-1',
       userInput: '整理资料并生成报告',
@@ -45,13 +45,8 @@ describe('ai unit resume task context', () => {
         }
       ]
     })
-    expect(secondResume.task.userInput).toContain('原始任务：整理资料并生成报告')
-    expect(secondResume.task.userInput).toContain(
-      '1. 任务因网络错误而中断；用户随后要求：“继续，并重点分析成本”'
-    )
-    expect(secondResume.task.userInput).toContain(
-      '2. 任务因达到运行上限而中断；用户随后要求：“继续，把结论整理成表格”'
-    )
+    expect(secondResume.task.userInput).toBe('整理资料并生成报告')
+    expect(secondResume.task.userInput).not.toContain('历次中断与恢复')
   })
 
   it('classifies graph and unknown failures as recoverable interruption reasons', () => {

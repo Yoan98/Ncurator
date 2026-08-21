@@ -77,10 +77,10 @@ describe('ai unit brain decision-hint prompt contract', () => {
       }
     })
     expect(localEnvironment.current_time.utc_iso).toMatch(
-      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:00Z$/
+      /^\d{4}-\d{2}-\d{2}T\d{2}:00:00Z$/
     )
     expect(localEnvironment.current_time.local_iso).toMatch(
-      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:00[+-]\d{2}:\d{2}$/
+      /^\d{4}-\d{2}-\d{2}T\d{2}:00:00[+-]\d{2}:\d{2}$/
     )
     expect(section).not.toContain('terminal_environment')
     expect(section).not.toContain('current_terminal_path')
@@ -103,11 +103,12 @@ describe('ai unit brain decision-hint prompt contract', () => {
       'preference',
       'reference_scope',
       'conversation_history',
-      'skill_catalog',
+      'skill_state',
       'round_history',
+      'resume_messages',
       'task_progress',
-      'decision_hint',
-      'local_environment'
+      'local_environment',
+      'decision_hint'
     ]
     const indexes = stableHeadOrder.map((tag) => indexOf(tag))
     const sorted = [...indexes].sort((a, b) => a - b)
@@ -340,22 +341,22 @@ describe('ai unit brain decision-hint prompt contract', () => {
     expect(deliveryExampleSection).toContain(
       '{"thought":{"next":"审批驳回是否保留原文件已经确认，当前证据足够进入最终交付。","todolist":[{"item":"确认审批驳回时是否保留原文件","status":"done"},{"item":"检查是否已经满足用户诉求并能进入最终交付","status":"done"}],"progressionSummary":"-当前任务的用户诉求是关于审批驳回时是否保留原文件，已经确认审批驳回时会保留原文件，当前证据足够进入最终交付。\\n-每个todolist项的推进理解：'
     )
-    expect(prompt.user).toContain(
+    expect(prompt.system).toContain(
       '{ command: string, commandExplanation: string, terminalId?: string }'
     )
-    expect(prompt.user).not.toContain('适用时机：')
-    expect(prompt.user).not.toContain('适用于需要执行终端命令的任务。')
-    expect(prompt.user).not.toContain('cwd?: string')
-    expect(prompt.user).toContain('工具 terminal_read')
-    expect(prompt.user).toContain('工具 terminal_stop')
-    expect(prompt.user).toContain(
+    expect(prompt.system).not.toContain('适用时机：')
+    expect(prompt.system).not.toContain('适用于需要执行终端命令的任务。')
+    expect(prompt.system).not.toContain('cwd?: string')
+    expect(prompt.system).toContain('工具 terminal_read')
+    expect(prompt.system).toContain('工具 terminal_stop')
+    expect(prompt.system).toContain(
       '- 输入结构：\n    { queryText: string, strategy?: "auto" | "semantic" | "keyword", limit?: number, sourceType?: "all" | "file" | "web", documentIds?: string[] }'
     )
-    expect(prompt.user).not.toContain('- 示例：')
-    expect(prompt.user).not.toContain('最近 DeepSeek 融资情况')
+    expect(prompt.system).not.toContain('- 示例：')
+    expect(prompt.system).not.toContain('最近 DeepSeek 融资情况')
     expect(prompt.system).toContain('输入结构与工具说明')
     expect(prompt.system).not.toContain('输入结构与示例')
-    expect(prompt.user).not.toContain('{\n        command: string\n        cwd?: string\n      }')
-    expect(prompt.user).not.toContain('{\n      "command": "ls 工作"')
+    expect(prompt.system).not.toContain('{\n        command: string\n        cwd?: string\n      }')
+    expect(prompt.system).not.toContain('{\n      "command": "ls 工作"')
   })
 })

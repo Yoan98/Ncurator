@@ -14,6 +14,7 @@ import { renderHumanFileChangeLines } from '../shared/runtimeRenderers'
 import { renderReferenceScopeText } from './referenceScope'
 import type { HumanState } from '../types'
 import { getLastRoundFocus, getRecentHistoryRounds } from '../memory/rounds'
+import { renderResumeMessages } from '../../utils/resumeSnapshot'
 
 export const buildMouthPrompt = (input: {
   state: HumanState
@@ -43,6 +44,7 @@ export const buildMouthPrompt = (input: {
     - conversation_history：当前会话历史视图，用于理解这次最终交付与同一会话前文的连续性。
     - task_progress：当前任务已经收敛的全局进度信息，包含待办路径、推进摘要，以及最新一轮判断和执行。
     - round_history：当前任务的历史证据视图，包含已压缩的较早历史和较新的真实轮次记录。
+    - resume_messages：任务中断恢复后用户补充的消息；若无则为 none。
     - delivery_guidance：上游节点明确要求你必须吸收的补充说明。
     - file_changes：本次实际修改的文件记录，用于说明本次最终修改了什么文件。
     - evidence_references：本次任务可被明确引用的证据资料列表，每条都带有引用用途说明。
@@ -95,6 +97,10 @@ ${renderTaskProgress({
     ${renderBrainRoundSection(getRecentHistoryRounds(input.state))}
     </rounds>
   </round_history>
+
+  <resume_messages>
+${renderResumeMessages(input.state.task.taskContext) || 'none'}
+  </resume_messages>
 
   <delivery_guidance>
 ${renderDeliveryGuidanceItems(input.state.execution.deliveryGuidanceItems)}
