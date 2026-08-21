@@ -403,7 +403,15 @@ const terminateProcessTree = (child) => {
     })
     return
   }
-  child.kill('SIGTERM')
+  try {
+    process.kill(-child.pid, 'SIGKILL')
+  } catch {
+    try {
+      child.kill('SIGKILL')
+    } catch {
+      // process already gone
+    }
+  }
 }
 
 const stopActiveChildren = (signal) => {
@@ -457,7 +465,8 @@ const runSpawnAsync = (bin, args, env, omitNpmEnv, deadlineAt) =>
       stdio: 'inherit',
       shell: USE_WINDOWS_SHELL && /\.(cmd|bat)$/iu.test(bin),
       env: buildCommandEnv(env, { omitNpmEnv }),
-      signal: controller.signal
+      signal: controller.signal,
+      detached: process.platform !== 'win32'
     })
     activeAsyncChildren.add(child)
     child.once('error', (error) => {

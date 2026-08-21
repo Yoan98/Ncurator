@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
+import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import readline from 'node:readline'
@@ -49,6 +49,26 @@ const DEV_SIDECAR_SCRIPT_PATH = path.join(
 
 const isObjectRecord = (value: JsonValue | undefined): value is JsonObject =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
+
+const killSidecarTree = (child: ChildProcessWithoutNullStreams): void => {
+  if (child.pid === undefined) return
+  if (process.platform === 'win32') {
+    try {
+      spawnSync('taskkill.exe', ['/pid', String(child.pid), '/T', '/F'], {
+        stdio: 'ignore',
+        windowsHide: true
+      })
+    } catch {
+      child.kill('SIGKILL')
+    }
+    return
+  }
+  try {
+    process.kill(-child.pid, 'SIGKILL')
+  } catch {
+    child.kill('SIGKILL')
+  }
+}
 
 const readString = (value: JsonValue | undefined): string | undefined =>
   typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined
@@ -457,7 +477,8 @@ export class ManagedWebCrawlerService implements WebCrawlerServiceContract {
         ...process.env,
         ...this.sidecarCommand.env
       },
-      stdio: ['pipe', 'pipe', 'pipe']
+      stdio: ['pipe', 'pipe', 'pipe'],
+      detached: process.platform !== 'win32'
     })
     this.child = child
     this.stderrBuffer = ''
@@ -501,7 +522,17 @@ export class ManagedWebCrawlerService implements WebCrawlerServiceContract {
     this.stdoutInterface = undefined
     this.child = undefined
     if (!child || child.killed) return
-    child.kill()
+    child.stdin.end()
+    await new Promise<void>((resolve) => {
+      const timer = setTimeout(resolve, 3_000)
+      child.once('exit', () => {
+        clearTimeout(timer)
+        resolve()
+      })
+    })
+    if (child.exitCode === null && child.signalCode === null) {
+      killSidecarTree(child)
+    }
   }
 
   private async sendRequest(request: WebCrawlerSidecarRequest): Promise<JsonObject> {
