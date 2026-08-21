@@ -166,18 +166,12 @@ export const buildBrainPrompt = (input: {
     - 它是每轮必须输出字段。
 
     - thought.todolist：
-    - 它是完成用户任务诉求的行动路径，允许任务推进中因为出现新的理解或无法推进而调整、废弃、重排行动路径，禁止无意义的调整、废弃、重排
-    - 它是按需输出的字段，只有todolist需要初始化或调整时才输出；如果没有变动，禁止输出；
-    - 它每项只包含 item 和 status，status 只能是 todo / done,其中todo表示待办，done表示已完成。
+    - 它是完成用户任务诉求的任务清单，既是行动路径，也是跨轮保留的推进记忆。
+    - 它是按需输出的字段，只有任务清单需要初始化或调整时才输出；如果没有变动，禁止输出；
+    - 它每项包含 item、status 和可选的 evidence，status 只能是 todo / done,其中todo表示待办，done表示已完成。
+    - evidence 是支撑该项当前状态或结论的依据，用一句话描述；只有当该项的结论或证据发生变化时才需要更新 evidence，禁止无意义地重复或改写。
+    - 仅当出现新的理解、新的证据或确实无法推进时，才允许新增、修改、废弃或重排任务清单，禁止无意义的调整、废弃、重排。
     - 它最后一项必须是检查项，用于检查是否已经满足用户任务诉求，来看是需要继续推进完成还是交付。
-
-    - thought.progressOverview：
-    - 它是对当前任务整体推进现状的总览描述。
-    - 它是按需输出的字段；只有推进理解、证据、失败原因或修正结论发生变化时才输出，如果没有变动，禁止输出。
-    - 该字段必须严格按照下方三点格式输出：
-      - 已经尝试过什么
-      - 形成了什么结论
-      - 证据是什么
   </thought_contract>
 
   <next_action_contract>
@@ -185,7 +179,7 @@ export const buildBrainPrompt = (input: {
     - nextAction 只能在 learning、hand、mouth 三者中选择其一。
     - 选择 learning：当你觉得需要学习新的技能才能完成任务时。
     - 选择 hand：当下一步已经明确成一批工具调用，且你能给出完整合法的 calls 时。
-    - 选择 mouth：认为可以进行最终交付，且完成了所有todolist项后标记为done时。
+    - 选择 mouth：认为可以进行最终交付，且完成了所有任务清单项后标记为done时;或者确实无法推进与完成任务时。
 
     nextAction为hand时：
     - calls 必须是完整合法的可执行计划，系统会按顺序串行执行。
@@ -245,19 +239,14 @@ ${JSON.stringify({
     todolist: [
       {
         item: '补齐读取 docx 的能力说明',
-        status: 'todo'
+        status: 'todo',
+        evidence: '当前工具目录里没有可用的读取 docx 的工具'
       },
       {
         item: '检查是否已经满足用户诉求并能进入最终交付',
         status: 'todo'
       }
-    ],
-    progressOverview: `- 已经尝试过什么：
-  尝试判断审批驳回时是否保留原文件，但缺少读取 docx 的能力说明，无法形成工具调用计划。
-- 形成了什么结论：
-  缺少读取 docx 的能力说明，无法判断资料内容。
-- 证据是什么：
-  当前工具目录里没有可用的读取 docx 的工具。`
+    ]
   },
   nextAction: {
     action: 'learning',
@@ -293,19 +282,14 @@ ${JSON.stringify({
     todolist: [
       {
         item: '确认审批驳回时是否保留原文件',
-        status: 'done'
+        status: 'done',
+        evidence: '审批制度说明.docx 中明确说明审批驳回时会保留原文件'
       },
       {
         item: '检查是否已经满足用户诉求并能进入最终交付',
         status: 'done'
       }
-    ],
-    progressOverview: `- 已经尝试过什么：
-  查看了审批制度说明.docx 文件的相关内容，判断审批驳回时是否保留原文件。
-- 形成了什么结论：
-  审批驳回时会保留原文件，当前证据足够进入最终交付。
-- 证据是什么：
-  审批制度说明.docx 文件中明确说明了审批驳回时会保留原文件。`
+    ]
   },
   nextAction: {
     action: 'mouth',

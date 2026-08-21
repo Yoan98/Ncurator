@@ -8,24 +8,31 @@ import {
 import { renderBrainRoundSection } from '../../../../src/main/services/ai/human/shared/historyRenderers'
 
 describe('ai unit human memory renderers', () => {
-  it('renders todolist items as the current action path', () => {
+  it('renders todolist items with optional evidence', () => {
     const items = [
       {
         item: '核对工作区文件',
         status: 'todo'
+      },
+      {
+        item: '确认发布说明',
+        status: 'done',
+        evidence: 'release-note.txt 已确认'
       }
     ]
 
     const text = renderTodoItems(items)
 
-    expect(text).toBe('- [todo] 核对工作区文件')
+    expect(text).toBe(
+      '- [todo] 核对工作区文件\n- [done] 确认发布说明（依据：release-note.txt 已确认）'
+    )
   })
 
   it('renders empty todolist as empty string', () => {
     expect(renderTodoItems([])).toBe('')
   })
 
-  it('renders the todo items before the progress overview inside a round', () => {
+  it('renders the task list inside a round', () => {
     const initialState = createInitialHumanState({
       taskId: 'task-round-todolist',
       userInput: '继续推进'
@@ -36,10 +43,9 @@ describe('ai unit human memory renderers', () => {
       thought: {
         next: '先核对工作区文件',
         todolist: [
-          { item: '核对工作区文件', status: 'done' },
+          { item: '核对工作区文件', status: 'done', evidence: 'release-note.txt 已确认' },
           { item: '检查是否满足用户诉求', status: 'todo' }
-        ],
-        progressOverview: '- 已经尝试过什么：读取目录\n- 形成了什么结论：缺少发布说明\n- 证据是什么：release-note.txt'
+        ]
       },
       nextAction: {
         action: 'hand',
@@ -85,16 +91,14 @@ describe('ai unit human memory renderers', () => {
 
     const rendered = renderBrainRoundSection(taskRun.rounds)
 
-    expect(rendered).toContain('代办事项：')
-    expect(rendered).toContain('- [done] 核对工作区文件')
+    expect(rendered).toContain('任务清单：')
+    expect(rendered).toContain('- [done] 核对工作区文件（依据：release-note.txt 已确认）')
     expect(rendered).toContain('- [todo] 检查是否满足用户诉求')
-    expect(rendered).toContain('当前整体推进进展：')
-    expect(rendered.indexOf('代办事项：')).toBeLessThan(rendered.indexOf('当前整体推进进展：'))
   })
 
-  it('renders the overall progress overview below the round execution', () => {
+  it('renders the task list below the round execution', () => {
     const initialState = createInitialHumanState({
-      taskId: 'task-round-progress-overview',
+      taskId: 'task-round-task-list',
       userInput: '继续推进'
     })
 
@@ -102,7 +106,7 @@ describe('ai unit human memory renderers', () => {
       state: initialState,
       thought: {
         next: '先读取 release-note.txt 确认最新状态',
-        progressOverview: '- 已经尝试过什么：读取目录\n- 形成了什么结论：缺少发布说明\n- 证据是什么：release-note.txt'
+        todolist: [{ item: '确认发布说明', status: 'todo' }]
       },
       nextAction: {
         action: 'hand',
@@ -152,9 +156,9 @@ describe('ai unit human memory renderers', () => {
     expect(rendered).toContain('先读取 release-note.txt 确认最新状态')
     expect(rendered).toContain('执行：')
     expect(rendered).toContain('类型：hand')
-    expect(rendered).toContain('当前整体推进进展：')
-    expect(rendered).toContain('已经尝试过什么：读取目录')
-    expect(rendered.indexOf('类型：hand')).toBeLessThan(rendered.indexOf('当前整体推进进展：'))
+    expect(rendered).toContain('任务清单：')
+    expect(rendered).toContain('- [todo] 确认发布说明')
+    expect(rendered.indexOf('类型：hand')).toBeLessThan(rendered.indexOf('任务清单：'))
   })
 
   it('renders history tool results with boolean-tree filtered compact json', () => {

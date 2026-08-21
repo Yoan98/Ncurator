@@ -38,8 +38,7 @@ describe('ai human mock-llm backend', () => {
                         item: '检查是否已经满足用户诉求并能进入最终交付',
                         status: 'todo'
                       }
-                    ],
-                    progressOverview: '已开始整理当前任务板，当前还没有最终交付依据。'
+                    ]
                   },
                   nextAction: {
                     action: 'learning',
@@ -66,9 +65,7 @@ describe('ai human mock-llm backend', () => {
                         item: '检查是否已经满足用户诉求并能进入最终交付',
                         status: 'todo'
                       }
-                    ],
-                    progressOverview:
-                      '已确认 todolist 会跨轮保留。当前仅完成 A，仍有未完成事项，故意尝试提前 mouth 以验证收口拦截。'
+                    ]
                   },
                   nextAction: {
                     action: 'mouth'
@@ -77,7 +74,7 @@ describe('ai human mock-llm backend', () => {
               },
               ({ user }) => {
                 thirdBrainSeesIncompleteHint =
-                  user.includes('上一轮选择了最终交付，但todolist中仍有未完成事项') &&
+                  user.includes('上一轮选择了最终交付，但任务清单中仍有未完成事项') &&
                   user.includes('确认 B 事项') &&
                   user.includes('检查是否已经满足用户诉求并能进入最终交付')
 
@@ -100,9 +97,7 @@ describe('ai human mock-llm backend', () => {
                       item: '检查是否已经满足用户诉求并能进入最终交付',
                       status: 'todo'
                     }
-                  ],
-                  progressOverview:
-                    '已确认 todolist 会跨轮保留，且在仍有 todo 时选择 mouth 会被真实 decision_hint 打回 brain。当前继续推进并保留最终检查项为 todo。'
+                  ]
                 })
               },
               {
@@ -122,9 +117,7 @@ describe('ai human mock-llm backend', () => {
                         item: '检查是否已经满足用户诉求并能进入最终交付',
                         status: 'done'
                       }
-                    ],
-                    progressOverview:
-                      '已确认 todolist 会跨轮保留，且在仍有 todo 时选择 mouth 会被打回；待所有事项不再是 todo 后，可以正常收口。'
+                    ]
                   },
                   nextAction: {
                     action: 'mouth'

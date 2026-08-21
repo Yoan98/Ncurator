@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import { normalizeHumanThought } from '../../../../src/main/services/ai/human/memory/thoughtMemory'
-import type { HumanThought } from '../../../../src/main/services/ai/human/types'
 
 describe('ai unit thought memory normalize', () => {
   it('normalizes next and omits optional fields when missing', () => {
@@ -13,15 +12,36 @@ describe('ai unit thought memory normalize', () => {
     })
   })
 
-  it('normalizes progressOverview when present', () => {
+  it('normalizes todo item evidence when present and drops empty evidence', () => {
     expect(
       normalizeHumanThought({
-        next: '更新推进总览',
-        progressOverview: '第一行  \r\n第二行\t \r\n'
+        next: '更新任务清单',
+        todolist: [
+          {
+            item: '确认驳回行为',
+            status: 'done',
+            evidence: '  制度说明.docx 第 3 节明确保留原文件  \r\n'
+          },
+          {
+            item: '补齐读取能力',
+            status: 'todo',
+            evidence: '   '
+          }
+        ]
       })
     ).toEqual({
-      next: '更新推进总览',
-      progressOverview: '第一行\n第二行'
+      next: '更新任务清单',
+      todolist: [
+        {
+          item: '确认驳回行为',
+          status: 'done',
+          evidence: '制度说明.docx 第 3 节明确保留原文件'
+        },
+        {
+          item: '补齐读取能力',
+          status: 'todo'
+        }
+      ]
     })
   })
 
@@ -40,7 +60,7 @@ describe('ai unit thought memory normalize', () => {
   it('trims empty todolist items and whitespace', () => {
     expect(
       normalizeHumanThought({
-        next: '更新行动路径',
+        next: '更新任务清单',
         todolist: [
           {
             item: '  已完成核对  ',
@@ -53,7 +73,7 @@ describe('ai unit thought memory normalize', () => {
         ]
       })
     ).toEqual({
-      next: '更新行动路径',
+      next: '更新任务清单',
       todolist: [
         {
           item: '已完成核对',
@@ -61,12 +81,5 @@ describe('ai unit thought memory normalize', () => {
         }
       ]
     })
-  })
-
-  it('omits progressOverview when it is not a string', () => {
-    const thought: HumanThought = {
-      next: '保持现状'
-    }
-    expect(normalizeHumanThought(thought)).toEqual({ next: '保持现状' })
   })
 })

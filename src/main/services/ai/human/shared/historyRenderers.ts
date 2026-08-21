@@ -558,10 +558,7 @@ const renderBrainRoundRecord = (record: HumanRoundRecord): string => {
     renderBrainRoundExecution(record)
   ]
   if (record.thought.todolist && record.thought.todolist.length > 0) {
-    lines.push('代办事项：', renderTodoItems(record.thought.todolist))
-  }
-  if (record.thought.progressOverview) {
-    lines.push('当前整体推进进展：', record.thought.progressOverview)
+    lines.push('任务清单：', renderTodoItems(record.thought.todolist))
   }
   return lines.join('\n')
 }

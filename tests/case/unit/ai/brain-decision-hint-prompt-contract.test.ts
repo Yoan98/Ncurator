@@ -285,7 +285,7 @@ describe('ai unit brain decision-hint prompt contract', () => {
     expect(prompt.user).not.toContain('当前与下一步：')
   })
 
-  it('renders output examples with progressOverview and compact tool schemas', () => {
+  it('renders output examples with todo evidence and compact tool schemas', () => {
     const state = createInitialHumanState({
       taskId: 'task-4',
       userInput: '继续处理资料'
@@ -303,16 +303,19 @@ describe('ai unit brain decision-hint prompt contract', () => {
     const deliveryExampleSection =
       prompt.system.match(/<example_delivery>([\s\S]*?)<\/example_delivery>/)?.[1] || ''
 
-    expect(learningExampleSection).toContain('"progressOverview":"- 已经尝试过什么：')
-    expect(learningExampleSection).toContain('已经尝试过什么')
-    expect(learningExampleSection).toContain('形成了什么结论')
-    expect(learningExampleSection).toContain('证据是什么')
-    expect(learningExampleSection).not.toContain('每个todolist项的推进理解')
+    expect(learningExampleSection).toContain(
+      '"evidence":"当前工具目录里没有可用的读取 docx 的工具"'
+    )
+    expect(deliveryExampleSection).toContain(
+      '"evidence":"审批制度说明.docx 中明确说明审批驳回时会保留原文件"'
+    )
+    expect(prompt.system).not.toContain('progressOverview')
+    expect(prompt.system).not.toContain('已经尝试过什么')
+    expect(prompt.system).not.toContain('形成了什么结论')
+    expect(prompt.system).not.toContain('证据是什么')
     expect(toolPlanExampleSection).toContain(
       '{"thought":{"next":"当前缺少用户工作区域文件事实，先读取当前目录建立资料范围。"},"nextAction":{"action":"hand","calls":[{"toolName":"terminal_run","args":{"command":"pwd","commandExplanation":"读取当前终端所在路径。"}}]}}'
     )
-    expect(deliveryExampleSection).toContain('"progressOverview":"- 已经尝试过什么：')
-    expect(deliveryExampleSection).not.toContain('每个todolist项的推进理解')
     expect(prompt.system).not.toContain('progressionSummary')
     expect(prompt.system).toContain(
       '{ command: string, commandExplanation: string, terminalId?: string }'

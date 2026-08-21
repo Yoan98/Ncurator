@@ -32,6 +32,7 @@
 - 视觉识别串行改并发池 3：新增 `src/main/utils/concurrency.ts` 的 `mapLimit`；`visualRecognition.recognizeImages` 从串行改并发，docx `docx_read_visuals` 改为「两阶段：先提取渲染、再批量识别」，pdf/ppt 走 `recognizeImages` 自动受益。dangling-image 读图 230s→67s，整 case 由超时→159s。
 - 修复 live 视觉失败根因：`scripts/test/workflow.mjs` 的 `loadRootEnv` 增加 `${VAR}` 展开（对齐 `src/main/utils/rootEnv.ts`），此前 `${AI_LIVE_BASE_URL}` 以字面量进入视觉配置导致 `Invalid URL`。
 - 断言调整：ppt-write 期限正则放宽为中英文等价（`/7\s*月\s*15|july\s*15/iu`）；legacy-doc-edit-skip 验收口径收敛为「docx_edit 未成功编辑 .doc」。
+- `progressOverview` 融入 todolist：删除 `thought.progressOverview` 字段，其「证据」维度下沉为任务清单项的 `evidence`；todolist 对外概念统一为「任务清单」（字段名仍为 `todolist`），渲染标题由「代办事项」改为「任务清单」，并收窄 prompt 措辞减少每轮无意义重排。
 
 ## 1. 总体目标
 
@@ -1202,8 +1203,8 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 - 测试类型：`backend`
 - What：第一轮 `brain` 写入的 thought memory 字段会在下一轮真实 `brain` prompt 中继续可见。
 - Why：memory 跨轮延续是 `human` 长链路推理的核心能力，必须由真实 graph 保证。
-- How：第一轮 `brain` 通过 `thought.todolist/progressOverview` 更新任务推进记忆（todolist 进全局、progressOverview 进该轮），并触发一次真实 learning；第二轮 `brain` 读取真实 prompt，检查这些内容是否还在。
-- Oracle：第二轮 `brain` prompt 中出现前一轮写入的 todolist 与 progressOverview 内容，任务最终完成。
+- How：第一轮 `brain` 通过 `thought.todolist`（每项含 item/status/可选 evidence）更新任务清单记忆（todolist 进全局），并触发一次真实 learning；第二轮 `brain` 读取真实 prompt，检查这些内容是否还在。
+- Oracle：第二轮 `brain` prompt 中出现前一轮写入的 todolist 项及其 evidence 内容，任务最终完成。
 - Not：不验证更复杂的 memory 压缩策略。
 
 ##### `conversation-memory-multi-run-recall`
@@ -1245,11 +1246,11 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 ##### `todolist-memory-maintenance`
 
 - 测试类型：`backend`
-- What：todolist 作为长期任务板会在 mock-llm 下跨轮维护 todo、done 与 obsolete 状态。
-- Why：如果 todolist 不能跨轮保留并被重写成最新任务板，brain 很容易把长期记忆退化成单轮摘要。
-- How：第一轮 `brain` 写入只含 todo 的 todolist，并触发一次真实 learning；第二轮 `brain` 读取真实 prompt 后，将 todolist 重写为包含 done、todo 与 obsolete 的新版本。
-- Oracle：第二轮 `brain` prompt 中能看到第一轮写入的结构化 todolist 项，任务最终完成，且新的 todolist 成功写回 thought memory。
-- Not：不验证除 `mouth` 收口前的 todo 检查之外的更复杂 todolist 机读策略。
+- What：任务清单（todolist）作为长期任务板会在 mock-llm 下跨轮维护 todo、done 状态。
+- Why：如果任务清单不能跨轮保留并被重写成最新任务板，brain 很容易把长期记忆退化成单轮摘要。
+- How：第一轮 `brain` 写入只含 todo 的任务清单，并触发一次真实 learning；第二轮 `brain` 读取真实 prompt 后，将任务清单重写为包含 done 与 todo 的新版本。
+- Oracle：第二轮 `brain` prompt 中能看到第一轮写入的结构化任务清单项，任务最终完成，且新的任务清单成功写回 thought memory。
+- Not：不验证除 `mouth` 收口前的 todo 检查之外的更复杂任务清单机读策略。
 
 ##### `complex-docx-edit`
 

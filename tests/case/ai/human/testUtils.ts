@@ -27,8 +27,7 @@ const buildThoughtMetadata = (
   input: { summary: string } & Partial<HumanThought>
 ): HumanThought => ({
   next: input.next || input.summary,
-  todolist: input.todolist,
-  progressOverview: input.progressOverview
+  todolist: input.todolist
 })
 
 export const buildLearnSkillsDecision = (

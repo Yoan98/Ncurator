@@ -27,15 +27,14 @@ describe('ai human mock-llm backend', () => {
                     todolist: [
                       {
                         item: '确认最终负责人',
-                        status: 'todo'
+                        status: 'todo',
+                        evidence: '知识库显示项目上线前必须执行复核'
                       },
                       {
                         item: '检查是否已经满足用户诉求并能进入最终交付',
                         status: 'todo'
                       }
-                    ],
-                    progressOverview:
-                      '已根据用户诉求建立初始行动路径。当前形成的结论是项目上线前需要执行复核，证据是知识库显示上线前必须执行复核；当前没有失败事项。'
+                    ]
                   },
                   nextAction: {
                     action: 'learning',
@@ -45,22 +44,21 @@ describe('ai human mock-llm backend', () => {
               },
               ({ user }) => {
                 secondBrainSeesMemory =
-                  user.includes('项目上线前需要执行复核') && user.includes('确认最终负责人')
+                  user.includes('项目上线前必须执行复核') && user.includes('确认最终负责人')
 
                 const completeDecision = buildCompleteTaskDecision({
                   summary: 'memory 已成功跨轮保持。',
                   todolist: [
                     {
                       item: '确认最终负责人',
-                      status: 'done'
+                      status: 'done',
+                      evidence: '第二轮真实 brain prompt 中再次读到了第一轮写入的任务清单'
                     },
                     {
                       item: '检查是否已经满足用户诉求并能进入最终交付',
                       status: 'done'
                     }
-                  ],
-                  progressOverview:
-                    '已确认 thought memory 会在第二轮继续可见，且负责人事项已完成。证据是第二轮真实 brain prompt 中再次读到了第一轮写入的 todolist 和 progressOverview。'
+                  ]
                 })
 
                 return {

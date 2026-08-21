@@ -246,13 +246,13 @@ export const humanTodoItemStatusSchema = z.enum(['todo', 'done'])
 
 export const humanTodoItemSchema = z.object({
   item: z.string().min(1),
-  status: humanTodoItemStatusSchema
+  status: humanTodoItemStatusSchema,
+  evidence: z.string().min(1).optional()
 })
 
 export const humanThoughtSchema = z.object({
   next: z.string().min(1),
-  todolist: z.array(humanTodoItemSchema).optional(),
-  progressOverview: z.string().optional()
+  todolist: z.array(humanTodoItemSchema).optional()
 })
 
 export const brainEvidenceReferenceSchema = z.object({

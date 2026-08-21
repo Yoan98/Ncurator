@@ -10,18 +10,21 @@ const normalizeThoughtText = (value: string): string =>
 
 const normalizeTodoItems = (items: HumanTodoItem[]): HumanTodoItem[] =>
   items
-    .map((item) => ({
-      item: String(item.item || '').trim(),
-      status: item.status
-    }))
+    .map((item) => {
+      const normalized: HumanTodoItem = {
+        item: String(item.item || '').trim(),
+        status: item.status
+      }
+      if (typeof item.evidence === 'string' && item.evidence.trim().length > 0) {
+        normalized.evidence = normalizeThoughtText(item.evidence)
+      }
+      return normalized
+    })
     .filter((item) => item.item.length > 0)
 
 export const normalizeHumanThought = (thought: HumanThought): HumanThought => ({
   next: normalizeThoughtText(thought.next),
   ...(Array.isArray(thought.todolist)
     ? { todolist: normalizeTodoItems(thought.todolist) }
-    : {}),
-  ...(typeof thought.progressOverview === 'string'
-    ? { progressOverview: normalizeThoughtText(thought.progressOverview) }
     : {})
 })

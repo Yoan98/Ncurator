@@ -81,7 +81,7 @@ export const renderDecisionHintForBrain = (hint: HumanDecisionHint): string => {
     case 'brain_content_safety':
       return hint.detail.message
     case 'brain_todolist_incomplete':
-      return `上一轮选择了最终交付，但todolist中仍有未完成事项：${renderStringList(hint.detail.pendingItems)}。必须完成这些事项后且标为done才能进行最终交付。`
+      return `上一轮选择了最终交付，但任务清单中仍有未完成事项：${renderStringList(hint.detail.pendingItems)}。必须完成这些事项后且标为done才能进行最终交付。`
   }
 }
 
