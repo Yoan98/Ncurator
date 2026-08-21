@@ -1047,10 +1047,10 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 ##### `human-image-generation`
 
 - 测试类型：`backend / mock-llm`
-- What：human 学习 `image-generation` 后，通过真实 `image_generate` 生成并交付 PNG。
-- Why：Tool 测试不覆盖 Brain、Learning、Hand、Mouth 的技能装载和交付主链。
+- What：human 直接使用 builtin `image_generate` 生成并交付 PNG，无需学习。
+- Why：Tool 测试不覆盖 Brain、Hand、Mouth 的技能装载和交付主链。
 - How：只脚本化 LLM 决策，真实执行 human graph、图片渲染、修改记录和 Artifact。
-- Oracle：主链经过 Learning、Hand、Mouth；只调用一次 `image_generate`；PNG 可解码且尺寸正确；Artifact 和最终交付文件名一致。
+- Oracle：主链经过 Hand、Mouth；只调用一次 `image_generate`；PNG 可解码且尺寸正确；Artifact 和最终交付文件名一致。
 - Not：不验证真实模型自主选择技能，该行为由 Workbench 图片生成 Live E2E 覆盖。
 
 ##### `human-excel-read-edit`

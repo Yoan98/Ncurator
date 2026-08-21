@@ -6,7 +6,6 @@ import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import {
   buildCompleteTaskDecision,
-  buildLearnSkillsDecision,
   buildToolDecision,
   filterAiRunEventsByType
 } from '../testUtils'
@@ -22,7 +21,7 @@ describe('ai human mock-llm image generation backend', () => {
       domain: 'ai',
       suite: 'human',
       groups: ['mock-llm'],
-      description: '验证 human 学习图片生成技能，通过真实工具生成图片并完成交付。',
+      description: '验证 human 直接使用 builtin 图片生成工具生成图片并完成交付。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -30,12 +29,6 @@ describe('ai human mock-llm image generation backend', () => {
         const runner = createHumanTestRunner(runtime, {
           structuredOutputScript: {
             'human.brain': [
-              {
-                output: buildLearnSkillsDecision({
-                  skillIds: ['image-generation'],
-                  summary: '学习图片生成能力'
-                })
-              },
               {
                 output: buildToolDecision({
                   toolName: 'image_generate',
@@ -76,7 +69,6 @@ describe('ai human mock-llm image generation backend', () => {
         const artifacts = filterAiRunEventsByType(result.events, 'file_artifact')
         runtime.assertThat(
           result.output.status === 'completed' &&
-            stages.has('human_learning') &&
             stages.has('human_hand') &&
             stages.has('human_mouth') &&
             starts.filter((event) => event.toolName === 'image_generate').length === 1 &&
@@ -92,7 +84,7 @@ describe('ai human mock-llm image generation backend', () => {
             result.output.deliveryMarkdown.includes('human-generated.png'),
           {
             name: 'human-image-generation-production-chain',
-            message: 'human 应真实走通图片技能学习、生成、Artifact 和最终交付。',
+            message: 'human 应真实走通图片生成、Artifact 和最终交付。',
             data: { stages: [...stages], starts, artifacts }
           }
         )

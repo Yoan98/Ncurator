@@ -12,7 +12,9 @@ describe('ai unit runtime skill contract', () => {
       'text-file',
       'kb-retrieval',
       'web-browsing',
-      'utility'
+      'utility',
+      'image-recognition',
+      'image-generation'
     ])
     expect(listExternalSkillDefinitions().map((definition) => definition.skillId)).toEqual([
       'docx-read',
@@ -21,9 +23,7 @@ describe('ai unit runtime skill contract', () => {
       'ppt-read',
       'ppt-write',
       'excel-read',
-      'excel-write',
-      'image-recognition',
-      'image-generation'
+      'excel-write'
     ])
   })
 
@@ -33,7 +33,9 @@ describe('ai unit runtime skill contract', () => {
       'text-file',
       'kb-retrieval',
       'web-browsing',
-      'utility'
+      'utility',
+      'image-recognition',
+      'image-generation'
     ])
   })
 })

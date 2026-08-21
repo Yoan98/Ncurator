@@ -134,16 +134,16 @@ export const RUNTIME_SKILL_CATALOG = {
   },
   'image-recognition': {
     familyId: 'image-recognition',
-    source: 'external',
-    countsTowardToolBudget: true,
+    source: 'builtin',
+    countsTowardToolBudget: false,
     title: '图像识别',
     displayName: '图像识别',
     description: '读取图片并按 instruction 分析图片内容，并返回模型生成的文本结果。'
   },
   'image-generation': {
     familyId: 'image-generation',
-    source: 'external',
-    countsTowardToolBudget: true,
+    source: 'builtin',
+    countsTowardToolBudget: false,
     title: '图片生成',
     displayName: '图片生成',
     description: '通过 SVG 绘制生成 PNG、JPEG 或 WebP 图片，并保存为用户工作区域文件。'

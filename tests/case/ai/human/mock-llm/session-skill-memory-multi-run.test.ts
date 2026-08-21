@@ -43,8 +43,8 @@ describe('ai human mock-llm backend', () => {
               ({ user }) => {
                 run2Prompt = user
                 return buildLearnSkillsDecision({
-                  skillIds: ['image-recognition'],
-                  summary: '补充图像识别技能。'
+                  skillIds: ['excel-write'],
+                  summary: '补充 Excel 编辑技能。'
                 })
               },
               { output: buildCompleteTaskDecision({ summary: '第二轮完成。' }) }
@@ -102,9 +102,9 @@ describe('ai human mock-llm backend', () => {
             result.run2Prompt.includes('工具 docx_read_outline') &&
             result.run2Prompt.includes('工具 pdf_inspect') &&
             result.stateAtLimit.learnedSkillIds.join(',') ===
-              'pdf-read,image-recognition,ppt-read,ppt-write' &&
+              'pdf-read,excel-write,ppt-read,ppt-write' &&
             result.stateAfterEviction.learnedSkillIds.join(',') ===
-              'pdf-read,image-recognition,ppt-read,ppt-write,docx-write' &&
+              'pdf-read,excel-write,ppt-read,ppt-write,docx-write' &&
             result.run4Prompt.includes('工具 ppt_read_outline') &&
             !result.run4Prompt.includes('工具 docx_read_outline') &&
             result.run4Prompt.includes('工具 docx_edit') &&
