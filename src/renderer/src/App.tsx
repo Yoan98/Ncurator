@@ -2,6 +2,9 @@
 import { HashRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useEffect } from 'react'
 import { App as AntdApp, Layout, ConfigProvider, theme } from 'antd'
+import zhCN from 'antd/locale/zh_CN'
+import dayjs from 'dayjs'
+import 'dayjs/locale/zh-cn'
 import ConversationWorkbenchPage from './pages/ConversationWorkbenchPage'
 import SettingsPage from './pages/SettingsPage'
 import ModelDownloadPage from './pages/ModelDownloadPage'
@@ -9,6 +12,8 @@ import NotificationCenter from './components/NotificationCenter'
 import { WorkbenchModeProvider } from './contexts/WorkbenchModeProvider'
 import { AppUpdateProvider } from './contexts/AppUpdateProvider'
 import AppWindowFrame from './components/app/AppWindowFrame'
+
+dayjs.locale('zh-cn')
 
 const { Content } = Layout
 const PENDING_NOTIFICATION_SESSION_KEY = 'ncurator.pending-notification-session'
@@ -31,6 +36,7 @@ const SystemNotificationNavigationBridge: React.FC = () => {
 function App(): React.JSX.Element {
   return (
     <ConfigProvider
+      locale={zhCN}
       theme={{
         algorithm: theme.defaultAlgorithm,
         token: {
