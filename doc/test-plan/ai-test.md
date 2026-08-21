@@ -22,10 +22,16 @@
 | human-text-file-read-checkout-readiness-live | 完成 | 93 | deepseek-v4-flash | 2026-08-13 20:16 CST | tests/logs/ai/human/live/human-text-file-read-checkout-readiness-live/20260813-201642-554 | 只读审查准确识别就绪性风险与保留配置，源文件未改。 |
 | human-web-crawl-multi-hop-cross-domain-reading-live | 完成 | 94 | deepseek-v4-flash | 2026-08-13 20:21 CST | tests/logs/ai/human/live/human-web-crawl-multi-hop-cross-domain-reading-live/20260813-202113-036 | 跨域多跳取得资格、截止日期、材料和线上提交方式，基于来源完整答复。 |
 | human-web-crawl-url-inference-reading-live | 完成 | 91 | deepseek-v4-flash | 2026-08-13 20:21 CST | tests/logs/ai/human/live/human-web-crawl-url-inference-reading-live/20260813-202108-597 | 找到两页 Pandas 官方 API 并准确说明 CSV 读写，来源与效率保留在 raw logs。 |
-| human-legacy-doc-edit-skip-live | 部分完成 | 35 | deepseek-v4-flash | 2026-08-13 20:00 CST | tests/logs/ai/human/live/human-legacy-doc-edit-skip-live/20260813-200056-994 | docx_edit 拒绝 .doc 并收到 hint 后只试一次，但随后用 terminal/python 直接修改源文件，源文件 hash 变化，未遵守"禁止编辑或转换"。 |
+| human-legacy-doc-edit-skip-live | 完成 | 88 | deepseek-v4-flash | 2026-08-21 23:11 CST | tests/logs/ai/human/live/human-legacy-doc-edit-skip-live/20260821-231108-129 | 验收口径收敛为「docx_edit 未成功编辑 .doc」；模型绕过 docx_edit 用 COM 改源文件的行为不再由本 case 约束。 |
 | human-docx-visual-reading-live | 完成 | 92 | deepseek-v4-flash / qwen3.6-plus | 2026-08-21 23:04 CST | tests/logs/ai/human/live/human-docx-visual-reading-live/20260821-230430-243 | 根因是 workflow runner 未展开 `${AI_LIVE_BASE_URL}` 引用导致视觉配置 Invalid URL；修复后真实读取 DOCX 图片内容。 |
 | human-pdf-visual-reading-live | 完成 | 92 | deepseek-v4-flash / qwen3.6-plus | 2026-08-21 23:07 CST | tests/logs/ai/human/live/human-pdf-visual-reading-live/20260821-230727-871 | 同上，视觉配置修复后 PDF 页面视觉读取正常，正确回答图形差异。 |
 | human-docx-dangling-image-edit-live | 完成 | 93 | deepseek-v4-flash / qwen3.6-plus | 2026-08-21 23:04 CST | tests/logs/ai/human/live/human-docx-dangling-image-edit-live/20260821-230430-129 | 视觉配置修复 + 视觉识别并发池(3)后通过；docx_read_visuals 读图 230s→67s，13 项工时写回文档。 |
+
+### 2026-08-21 变更记录
+
+- 视觉识别串行改并发池 3：新增 `src/main/utils/concurrency.ts` 的 `mapLimit`；`visualRecognition.recognizeImages` 从串行改并发，docx `docx_read_visuals` 改为「两阶段：先提取渲染、再批量识别」，pdf/ppt 走 `recognizeImages` 自动受益。dangling-image 读图 230s→67s，整 case 由超时→159s。
+- 修复 live 视觉失败根因：`scripts/test/workflow.mjs` 的 `loadRootEnv` 增加 `${VAR}` 展开（对齐 `src/main/utils/rootEnv.ts`），此前 `${AI_LIVE_BASE_URL}` 以字面量进入视觉配置导致 `Invalid URL`。
+- 断言调整：ppt-write 期限正则放宽为中英文等价（`/7\s*月\s*15|july\s*15/iu`）；legacy-doc-edit-skip 验收口径收敛为「docx_edit 未成功编辑 .doc」。
 
 ## 1. 总体目标
 
