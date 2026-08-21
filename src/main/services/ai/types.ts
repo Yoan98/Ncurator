@@ -262,6 +262,7 @@ export type AiRunDeps = {
 export type AiRunContext = {
   runId: string
   sessionId: string
+  runStartedAt: number
   platform: AiRuntimePlatform
   preference: AiPreference
   executionPermission: AiExecutionPermission

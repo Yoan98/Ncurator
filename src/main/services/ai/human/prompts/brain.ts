@@ -13,7 +13,6 @@ import {
   listExternalSkillDefinitions
 } from '../skills'
 import { renderResumeMessages } from '../../utils/resumeSnapshot'
-import { renderTodolist } from '../shared/memoryRenderers'
 import { renderBrainCompactBlocks, renderBrainRoundSection } from '../shared/historyRenderers'
 import { getToolSpec } from '../tools/registry'
 import {
@@ -25,7 +24,6 @@ import type { HumanState } from '../types'
 import type { HumanToolSpec } from '../tools/types'
 import type { AiRuntimePlatform } from '../../types'
 import { renderDecisionHintForBrain } from './decisionHints'
-import { terminalSessionManager } from '../tools/terminal/TerminalSessionManager'
 
 const indentLines = (value: string, level: number): string =>
   value
@@ -33,49 +31,27 @@ const indentLines = (value: string, level: number): string =>
     .map((line) => `${'  '.repeat(level)}${line}`)
     .join('\n')
 
-export const renderRuntimeEnvironmentText = (ctx: AiRunContext): string => {
+export const renderLocalEnvironmentText = (ctx: AiRunContext): string => {
   const workspace = ctx.workspace
-  return [
-    `- platform：${ctx.platform}`,
-    `- runtime_paths.scripts：${workspace ? getWorkspaceScriptsRootDir(workspace.rootPath) : 'none'}`,
-    `- runtime_paths.assets：${workspace ? getWorkspaceAssetsRootDir(workspace.rootPath) : 'none'}`,
-    `- new_terminal_default_path：${workspace?.rootPath || 'none'}`
-  ].join('\n')
-}
-
-export const renderRuntimeStateText = (ctx: AiRunContext): string => {
-  const now = new Date(Math.floor(Date.now() / 3_600_000) * 3_600_000)
+  const startedAt = new Date(ctx.runStartedAt)
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'unknown'
-  const offsetMinutes = -now.getTimezoneOffset()
+  const offsetMinutes = -startedAt.getTimezoneOffset()
   const offsetSign = offsetMinutes >= 0 ? '+' : '-'
   const offsetHours = String(Math.floor(Math.abs(offsetMinutes) / 60)).padStart(2, '0')
   const offsetRemainderMinutes = String(Math.abs(offsetMinutes) % 60).padStart(2, '0')
-  const localIso = new Date(now.getTime() + offsetMinutes * 60_000)
+  const localIso = new Date(startedAt.getTime() + offsetMinutes * 60_000)
     .toISOString()
     .replace(/\.\d{3}/, '')
     .replace('Z', `${offsetSign}${offsetHours}:${offsetRemainderMinutes}`)
 
-  return JSON.stringify({
-    current_time: {
-      utc_iso: now.toISOString().replace(/\.\d{3}Z$/, 'Z'),
-      timezone,
-      local_iso: localIso
-    },
-    terminal_state: {
-      terminals: terminalSessionManager
-        .list({
-          chatSessionId: ctx.sessionId,
-          workspaceId: ctx.workspace?.workspaceId
-        })
-        .map((terminal) => ({
-          terminal_id: terminal.terminalId,
-          status: terminal.status,
-          current_path: terminal.currentTerminalPath,
-          current_command: terminal.currentCommand,
-          started_at: terminal.startedAt ? new Date(terminal.startedAt).toISOString() : null
-        }))
-    }
-  })
+  return [
+    `- platform：${ctx.platform}`,
+    `- runtime_paths.scripts：${workspace ? getWorkspaceScriptsRootDir(workspace.rootPath) : 'none'}`,
+    `- runtime_paths.assets：${workspace ? getWorkspaceAssetsRootDir(workspace.rootPath) : 'none'}`,
+    `- new_terminal_default_path：${workspace?.rootPath || 'none'}`,
+    `- current_time.timezone：${timezone}`,
+    `- current_time.local_iso：${localIso}`
+  ].join('\n')
 }
 
 const renderPreferenceText = (preference: AiRunContext['preference']): string => {
@@ -239,18 +215,16 @@ export const buildBrainPrompt = (input: {
     - round_history：当前任务的历史证据视图。
     - compactions：已压缩的较早历史，用于保留仍相关的客观事实、失败路径、重复尝试与背景信息。
     - rounds：最近未压缩的历史轮次，用于查看较新的判断、进展与执行轨迹。
-    - todolist：当前任务的待办路径。
     - skill_catalog：能力目录，包含所有技能定义与始终可用的内置工具说明。
     - skill_state：当前已学习/仍可补充学习的技能，以及已学习技能对应的工具说明。
     - resume_messages：任务中断恢复后用户补充的消息；若无则为 none。
     - decision_hint：当前额外的收敛或纠偏提示，必须重视关注该信息来推进任务；若无则为 none。
-    - runtime_environment：运行环境；platform 是当前用户电脑平台，runtime_paths 是用户工作区域内的临时运行目录，new_terminal_default_path 是新建终端时的默认工作目录。
-    - runtime_state：当前运行时状态；current_time 是当前系统时间，terminal_state 是当前会话的终端状态。
+    - local_environment：本地运行环境；platform 是当前用户电脑平台，runtime_paths 是用户工作区域内的临时运行目录，new_terminal_default_path 是新建终端时的默认工作目录，current_time 是本次 run 启动时的系统时间。
   </context_block_guide>
 
-  <runtime_environment>
-${renderRuntimeEnvironmentText(input.ctx)}
-  </runtime_environment>
+  <local_environment>
+${renderLocalEnvironmentText(input.ctx)}
+  </local_environment>
 
   <skill_catalog>
 ${renderStaticSkillCatalog(input.ctx.platform)}
@@ -394,14 +368,6 @@ ${renderSkillStateSection(input.state, input.ctx.platform)}
   <resume_messages>
 ${renderResumeMessages(input.state.task.taskContext) || 'none'}
   </resume_messages>
-
-  <todolist>
-${renderTodolist(input.state, 'brain_prompt')}
-  </todolist>
-
-  <runtime_state>
-${renderRuntimeStateText(input.ctx)}
-  </runtime_state>
 
   <decision_hint>
 ${input.state.execution.pendingDecisionHint ? renderDecisionHintForBrain(input.state.execution.pendingDecisionHint) : 'none'}

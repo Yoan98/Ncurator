@@ -9,6 +9,7 @@ import type { AiRunContext } from '../../../../src/main/services/ai/types'
 const createBrainContext = (error: Error): AiRunContext =>
   ({
     runId: 'brain-safety-run',
+    runStartedAt: 0,
     platform: 'macos',
     referenceScope: {
       workspace: { workspaceId: 'ws-1', workspaceName: 'Workspace', rootPath: '/tmp/workspace' },

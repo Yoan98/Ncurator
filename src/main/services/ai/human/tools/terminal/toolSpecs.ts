@@ -14,7 +14,7 @@ export const TERMINAL_RUN_SCHEMA = z.object({
 })
 
 export const TERMINAL_READ_SCHEMA = z.object({
-  terminalId: z.string().min(1),
+  terminalId: z.string().min(1).optional(),
   outputCursor: z.number().int().nonnegative().optional()
 })
 
@@ -40,6 +40,18 @@ export const TERMINAL_READ_OUTPUT_SCHEMA = z.object({
   exitCode: z.number().int().nullable()
 })
 
+export const TERMINAL_SNAPSHOT_SCHEMA = z.object({
+  terminalId: z.string(),
+  status: TERMINAL_STATUS_SCHEMA,
+  currentPath: z.string(),
+  currentCommand: z.string().nullable()
+})
+
+export const TERMINAL_READ_LIST_OUTPUT_SCHEMA = z.union([
+  TERMINAL_READ_OUTPUT_SCHEMA,
+  z.array(TERMINAL_SNAPSHOT_SCHEMA)
+])
+
 export const TERMINAL_STOP_OUTPUT_SCHEMA = z.object({
   terminalId: z.string(),
   terminalStatus: TERMINAL_STATUS_SCHEMA,
@@ -56,7 +68,7 @@ type TerminalRunToolSpec = HumanToolSpec<
 
 type TerminalReadToolSpec = HumanToolSpec<
   z.infer<typeof TERMINAL_READ_SCHEMA>,
-  z.infer<typeof TERMINAL_READ_OUTPUT_SCHEMA>,
+  z.infer<typeof TERMINAL_READ_LIST_OUTPUT_SCHEMA>,
   'terminal_read',
   'terminal'
 >
@@ -101,7 +113,7 @@ export const TERMINAL_READ_TOOL_SPEC: TerminalReadToolSpec = {
   promptSpec: {
     name: 'terminal_read',
     description:
-      '读取持久终端从输出游标开始的增量输出和状态，并返回 terminalId、终端状态、增量输出、最新游标和退出码。'
+      '读取持久终端：不传 terminalId 时返回当前会话所有持久终端的列表（terminalId、状态、当前路径、当前命令）；传入 terminalId 时读取该终端从输出游标开始的增量输出和状态，并返回 terminalId、终端状态、增量输出、最新游标和退出码。'
   },
   resolveExecutionMeta: () => ({ mutability: 'read_only' })
 }

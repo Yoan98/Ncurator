@@ -21,18 +21,11 @@ const createFakeCtx = (): AiRunContext =>
   }) as AiRunContext
 
 describe('ai unit mouth prompt contract', () => {
-  it('renders todolist and all recent rounds including the latest mouth round', () => {
+  it('renders all recent rounds including the latest mouth round', () => {
     const state = createInitialHumanState({
       taskId: 'task-mouth-progress',
       userInput: '整理最终交付'
     })
-
-    state.memory.todolist = [
-      {
-        item: '核对最终产物',
-        status: 'done'
-      }
-    ]
 
     state.execution.currentThought = {
       thought: {
@@ -145,13 +138,9 @@ describe('ai unit mouth prompt contract', () => {
       state,
       ctx: createFakeCtx()
     })
-    const todolistSection =
-      prompt.user.match(/<todolist>([\s\S]*?)<\/todolist>/)?.[1] || ''
     const roundsSection =
       prompt.user.match(/<rounds>([\s\S]*?)<\/rounds>/)?.[1] || ''
 
-    expect(prompt.system).toContain('todolist：当前任务的待办路径。')
-    expect(todolistSection).toContain('核对最终产物')
     expect(roundsSection).toContain('先整理两份资料并生成总结文件')
     expect(roundsSection).toContain('复习总结文件已生成完毕，基于现有结果组织最终交付')
     expect(roundsSection).toContain('类型：mouth')

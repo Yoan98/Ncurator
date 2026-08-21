@@ -8,6 +8,7 @@ const createFakeCtx = (): AiRunContext =>
     platform: 'macos',
     runId: 'run-cache-stability',
     sessionId: 'session-cache-stability',
+    runStartedAt: 0,
     preference: 'default',
     workspace: {
       workspaceId: 'ws-1',

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { renderTodolist } from '../../../../src/main/services/ai/human/shared/memoryRenderers'
+import { renderTodoItems } from '../../../../src/main/services/ai/human/shared/memoryRenderers'
 import { createInitialHumanState } from '../../../../src/main/services/ai/human/state/schema'
 import {
   appendRoundRecord,
@@ -9,30 +9,87 @@ import { renderBrainRoundSection } from '../../../../src/main/services/ai/human/
 
 describe('ai unit human memory renderers', () => {
   it('renders todolist items as the current action path', () => {
-    const state = createInitialHumanState({
-      taskId: 'task-todolist-render',
-      userInput: '继续推进'
-    })
-    state.memory.todolist = [
+    const items = [
       {
         item: '核对工作区文件',
         status: 'todo'
       }
     ]
 
-    const text = renderTodolist(state, 'brain_prompt')
+    const text = renderTodoItems(items)
 
-    expect(text).toContain('- [todo] 核对工作区文件')
+    expect(text).toBe('- [todo] 核对工作区文件')
   })
 
-  it('renders fallback when todolist is empty', () => {
-    const state = createInitialHumanState({
-      taskId: 'task-todolist-empty',
+  it('renders empty todolist as empty string', () => {
+    expect(renderTodoItems([])).toBe('')
+  })
+
+  it('renders the todo items before the progress overview inside a round', () => {
+    const initialState = createInitialHumanState({
+      taskId: 'task-round-todolist',
       userInput: '继续推进'
     })
 
-    expect(renderTodolist(state, 'brain_prompt')).toBe('none')
-    expect(renderTodolist(state, 'fallback_markdown')).toBe('无')
+    const taskRun = appendRoundRecord({
+      state: initialState,
+      thought: {
+        next: '先核对工作区文件',
+        todolist: [
+          { item: '核对工作区文件', status: 'done' },
+          { item: '检查是否满足用户诉求', status: 'todo' }
+        ],
+        progressOverview: '- 已经尝试过什么：读取目录\n- 形成了什么结论：缺少发布说明\n- 证据是什么：release-note.txt'
+      },
+      nextAction: {
+        action: 'hand',
+        calls: [
+          {
+            toolName: 'terminal_run',
+            args: {
+              command: 'cat release-note.txt',
+              commandExplanation: '读取发布状态文件。'
+            }
+          }
+        ]
+      },
+      execution: buildHandExecution({
+        calls: [
+          {
+            toolName: 'terminal_run',
+            args: {
+              command: 'cat release-note.txt',
+              commandExplanation: '读取发布状态文件。'
+            }
+          }
+        ],
+        toolResults: [
+          {
+            toolName: 'terminal_run',
+            ok: true,
+            data: {
+              terminalId: 'term-1',
+              commandId: 'command-1',
+              terminalStatus: 'idle',
+              executionStatus: 'completed',
+              currentTerminalPath: '/tmp/workspace',
+              output: 'latest release status',
+              outputCursor: 21,
+              exitCode: 0
+            }
+          }
+        ]
+      }),
+      createdAt: 1
+    })
+
+    const rendered = renderBrainRoundSection(taskRun.rounds)
+
+    expect(rendered).toContain('代办事项：')
+    expect(rendered).toContain('- [done] 核对工作区文件')
+    expect(rendered).toContain('- [todo] 检查是否满足用户诉求')
+    expect(rendered).toContain('当前整体推进进展：')
+    expect(rendered.indexOf('代办事项：')).toBeLessThan(rendered.indexOf('当前整体推进进展：'))
   })
 
   it('renders the overall progress overview below the round execution', () => {

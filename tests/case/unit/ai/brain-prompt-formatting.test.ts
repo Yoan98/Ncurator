@@ -8,6 +8,7 @@ const createFakeCtx = (): AiRunContext =>
     platform: 'windows',
     runId: 'run-prompt-formatting',
     sessionId: 'session-prompt-formatting',
+    runStartedAt: 0,
     preference: 'default',
     workspace: {
       workspaceId: 'workspace-prompt-formatting',

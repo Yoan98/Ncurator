@@ -9,6 +9,7 @@ const createFakeCtx = (preference: AiRunContext['preference'] = 'default'): AiRu
     platform: 'macos',
     runId: 'run-1',
     sessionId: 'session-1',
+    runStartedAt: 0,
     preference,
     workspace: {
       workspaceId: 'ws-1',
@@ -49,7 +50,7 @@ describe('ai unit brain decision-hint prompt contract', () => {
     expect(strictPrompt).toContain('禁止使用其他信息与模型能力本身的信息')
   })
 
-  it('renders static runtime environment in system and dynamic runtime state in user', () => {
+  it('renders static local environment with run start time in system', () => {
     const state = createInitialHumanState({
       taskId: 'task-1',
       userInput: '检查当前环境'
@@ -60,10 +61,7 @@ describe('ai unit brain decision-hint prompt contract', () => {
       ctx: createFakeCtx()
     })
     const environmentSection =
-      prompt.system.match(/<runtime_environment>([\s\S]*?)<\/runtime_environment>/)?.[1] || ''
-    const runtimeStateSection =
-      prompt.user.match(/<runtime_state>([\s\S]*?)<\/runtime_state>/)?.[1] || ''
-    const runtimeState = JSON.parse(runtimeStateSection)
+      prompt.system.match(/<local_environment>([\s\S]*?)<\/local_environment>/)?.[1] || ''
 
     expect(environmentSection).toContain('platform：macos')
     expect(environmentSection).toContain(
@@ -73,23 +71,14 @@ describe('ai unit brain decision-hint prompt contract', () => {
       `runtime_paths.scripts：${path.resolve('/tmp/workspace/.ncurator/runtime/scripts')}`
     )
     expect(environmentSection).toContain('new_terminal_default_path：/tmp/workspace')
-
-    expect(runtimeState).toMatchObject({
-      current_time: {
-        timezone: expect.any(String)
-      },
-      terminal_state: {
-        terminals: []
-      }
-    })
-    expect(runtimeState.current_time.utc_iso).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:00:00Z$/)
-    expect(runtimeState.current_time.local_iso).toMatch(
-      /^\d{4}-\d{2}-\d{2}T\d{2}:00:00[+-]\d{2}:\d{2}$/
+    expect(environmentSection).toMatch(/current_time\.timezone：.+/)
+    expect(environmentSection).toMatch(
+      /current_time\.local_iso：\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}/
     )
-    expect(runtimeStateSection).not.toContain('terminal_environment')
-    expect(runtimeStateSection).not.toContain('current_terminal_path')
-    expect(runtimeStateSection).not.toContain('platform')
-    expect(runtimeStateSection).not.toContain('runtime_paths')
+    expect(prompt.user).not.toContain('<runtime_state>')
+    expect(prompt.user).not.toContain('terminal_state')
+    expect(prompt.system).not.toContain('utc_iso')
+    expect(prompt.system).not.toContain('<runtime_environment>')
   })
 
   it('orders user blocks stable-first and keeps dynamic blocks last for prefix caching', () => {
@@ -112,8 +101,6 @@ describe('ai unit brain decision-hint prompt contract', () => {
       'skill_state',
       'round_history',
       'resume_messages',
-      'todolist',
-      'runtime_state',
       'decision_hint'
     ]
     const indexes = stableHeadOrder.map((tag) => indexOf(tag))
@@ -268,18 +255,11 @@ describe('ai unit brain decision-hint prompt contract', () => {
     expect(outputShapeSection).not.toContain('\n      thought: {')
   })
 
-  it('renders conversation_history, round_history, and todolist under the new contract', () => {
+  it('renders conversation_history and round_history under the new contract', () => {
     const state = createInitialHumanState({
       taskId: 'task-3',
       userInput: '继续处理资料'
     })
-
-    state.memory.todolist = [
-      {
-        item: '核对资料范围',
-        status: 'todo'
-      }
-    ]
 
     const prompt = buildBrainPrompt({
       state,
@@ -288,21 +268,18 @@ describe('ai unit brain decision-hint prompt contract', () => {
 
     expect(prompt.system).toContain('conversation_history：当前会话历史视图。')
     expect(prompt.system).toContain('round_history：当前任务的历史证据视图。')
-    expect(prompt.system).toContain('todolist：当前任务的待办路径')
-    expect(prompt.user).toContain('<todolist>')
-    expect(prompt.user).toContain('</todolist>')
     expect(prompt.user).toContain('<conversation_history>')
     expect(prompt.user).toContain('<summary>')
     expect(prompt.user).toContain('<recent_turns>')
     expect(prompt.user).toContain('<round_history>')
     expect(prompt.user).toContain('<compactions>')
     expect(prompt.user).toContain('<rounds>')
+    expect(prompt.user).not.toContain('<todolist>')
     expect(prompt.user).not.toContain('<task_progress>')
     expect(prompt.user).not.toContain('<conversation_context>')
     expect(prompt.user).not.toContain('<task_run_context>')
     expect(prompt.user).not.toContain('<latest_round>')
     expect(prompt.user).not.toContain('<prior_rounds>')
-    expect(prompt.user).toContain('- [todo] 核对资料范围')
     expect(prompt.user).not.toContain('待办路径：')
     expect(prompt.user).not.toContain('推进摘要：')
     expect(prompt.user).not.toContain('<thought>')

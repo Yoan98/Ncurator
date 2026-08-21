@@ -148,6 +148,7 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
   return {
     runId: payload.runId,
     sessionId: payload.sessionId,
+    runStartedAt: Date.now(),
     platform,
     preference,
     executionPermission,

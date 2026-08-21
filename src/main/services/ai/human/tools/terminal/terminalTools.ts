@@ -550,9 +550,29 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
         args: args as IpcJsonObject,
         execute: async (session) => {
           input.ctx.checkCancelled()
+          const terminalId = String(args.terminalId || '').trim()
+          if (!terminalId) {
+            const terminals = input.sessionManager
+              .list({ chatSessionId: input.sessionId, workspaceId: input.workspaceId })
+              .map((snapshot) => ({
+                terminalId: snapshot.terminalId,
+                status: snapshot.status,
+                currentPath: snapshot.currentTerminalPath,
+                currentCommand: snapshot.currentCommand
+              }))
+            session.succeed(
+              undefined,
+              buildTerminalToolResult({
+                toolName: TERMINAL_READ_TOOL_SPEC.name,
+                ok: true,
+                data: terminals
+              })
+            )
+            return terminals
+          }
           try {
             const result = input.sessionManager.read({
-              terminalId: String(args.terminalId || ''),
+              terminalId,
               chatSessionId: input.sessionId,
               workspaceId: input.workspaceId,
               outputCursor: typeof args.outputCursor === 'number' ? args.outputCursor : undefined

@@ -152,7 +152,6 @@ describe('ai human live backend', () => {
             compactionRecords.every(
               (record) =>
                 record.user.includes('<user_goal>') &&
-                record.user.includes('<todolist>') &&
                 record.user.includes('<history_rounds>')
             )
           const summaryQualitySatisfied =
@@ -166,7 +165,6 @@ describe('ai human live backend', () => {
           const continuitySatisfied =
             Boolean(latestBrainRecord?.user.includes('<conversation_history>')) &&
             Boolean(latestBrainRecord?.user.includes('<round_history>')) &&
-            Boolean(latestBrainRecord?.user.includes('<todolist>')) &&
             Boolean(latestBrainRecord?.user.includes('<compactions>')) &&
             Boolean(latestBrainRecord?.user.includes('<rounds>')) &&
             !latestBrainRecord?.user.includes('<latest_round>') &&

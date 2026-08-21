@@ -4,7 +4,6 @@ import {
   renderBrainCompactBlocks,
   renderBrainRoundSection
 } from '../shared/historyRenderers'
-import { renderTodolist } from '../shared/memoryRenderers'
 import {
   NCURATOR_REF_MARKDOWN_FORMAT_EXAMPLE,
   renderEvidenceReferences
@@ -40,7 +39,6 @@ export const buildMouthPrompt = (input: {
     - task_goal：用户当前要你完成或回答的事情。
     - reference_scope：当前用户工作区域、资料范围和参考边界。
     - conversation_history：当前会话历史视图，用于理解这次最终交付与同一会话前文的连续性。
-    - todolist：当前任务的待办路径。
     - round_history：当前任务的历史证据视图，包含已压缩的较早历史和较新的真实轮次记录（含最新一轮）。
     - resume_messages：任务中断恢复后用户补充的消息；若无则为 none。
     - delivery_guidance：上游节点明确要求你必须吸收的补充说明。
@@ -76,10 +74,6 @@ ${renderReferenceScopeText(input.ctx.referenceScope)}
     ${input.recentTurnsText || 'none'}
     </recent_turns>
   </conversation_history>
-
-  <todolist>
-${renderTodolist(input.state, 'mouth_prompt')}
-  </todolist>
 
   <round_history>
     <compactions>

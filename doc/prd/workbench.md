@@ -529,7 +529,7 @@
 
 #### WB-TERMINAL-001 持久终端会话
 
-- 系统行为：terminal 使用持久终端会话。新终端从当前 workspace 根目录启动；已有空闲终端可通过 `terminalId` 继续执行并保留路径，运行中的终端不能接受新命令。长命令返回 `command_still_running` 后继续运行，可通过 `terminal_read` 增量读取，通过 `terminal_stop` 停止或关闭。工具不接收 `cwd`，只使用当前终端路径和结构化终端状态。绝对路径可以访问工作区外文件；相对路径仍以当前终端路径为起点。
+- 系统行为：terminal 使用持久终端会话。新终端从当前 workspace 根目录启动；已有空闲终端可通过 `terminalId` 继续执行并保留路径，运行中的终端不能接受新命令。`terminal_read` 不传 `terminalId` 时返回当前会话所有持久终端的列表（terminalId、状态、当前路径、当前命令），传 `terminalId` 时增量读取该终端游标后的输出。长命令返回 `command_still_running` 后继续运行，可通过 `terminal_read` 增量读取，通过 `terminal_stop` 停止或关闭。工具不接收 `cwd`，只使用当前终端路径和结构化终端状态。绝对路径可以访问工作区外文件；相对路径仍以当前终端路径为起点。
 - 验收：
   - `WB-TERMINAL-001-AC1` 同一 terminalId 连续执行时保留 `cd` 后当前路径；不传 terminalId 会创建从 workspace 根目录开始的新终端。
   - `WB-TERMINAL-001-AC2` 长命令固定让出控制权但不被误判为失败；terminal_read 只返回游标后的增量输出和客观状态。

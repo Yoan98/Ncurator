@@ -1,5 +1,6 @@
 import type { JsonObject, JsonValue } from '../../../../../shared/types'
 import { renderInlineList } from '../../utils/render'
+import { renderTodoItems } from './memoryRenderers'
 import type {
   HumanHistoryToolResult,
   HumanCompactionBlock,
@@ -219,6 +220,9 @@ const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
   terminal_read: {
     terminalId: true,
     terminalStatus: true,
+    status: true,
+    currentPath: true,
+    currentCommand: true,
     output: true,
     outputCursor: true,
     exitCode: true,
@@ -553,6 +557,9 @@ const renderBrainRoundRecord = (record: HumanRoundRecord): string => {
     '执行：',
     renderBrainRoundExecution(record)
   ]
+  if (record.thought.todolist && record.thought.todolist.length > 0) {
+    lines.push('代办事项：', renderTodoItems(record.thought.todolist))
+  }
   if (record.thought.progressOverview) {
     lines.push('当前整体推进进展：', record.thought.progressOverview)
   }

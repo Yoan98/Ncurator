@@ -318,7 +318,6 @@ describe('ai human mock-llm backend', () => {
               ({ user }) => {
                 compactedPromptSeen =
                   user.includes('<compactions>') &&
-                  user.includes('<todolist>') &&
                   user.includes('审批未完成') &&
                   user.includes('未审批不可发布') &&
                   user.includes('负责人已更新为 Bob') &&
@@ -408,7 +407,6 @@ describe('ai human mock-llm backend', () => {
             startedEvents.length === 1 &&
             completedEvents.length === 1 &&
             Boolean(result.compactionPrompt.includes('<user_goal>')) &&
-            Boolean(result.compactionPrompt.includes('<todolist>')) &&
             Boolean(result.compactionPrompt.includes('<history_rounds>')) &&
             Boolean(result.compactionPrompt.includes('失败原因：审批未完成')) &&
             Boolean(result.compactionPrompt.includes('负责人 Bob 待确认')) &&
