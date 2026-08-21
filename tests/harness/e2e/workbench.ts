@@ -15,6 +15,7 @@ import {
 import {
   chatSelectors,
   importSelectors,
+  scheduledTaskSelectors,
   settingsSelectors,
   workbenchSelectors
 } from '../../../src/renderer/src/testing/selectors'
@@ -110,7 +111,7 @@ type WorkbenchDraftSubmitState = {
   sendButtonText: string
 }
 
-export { chatSelectors, importSelectors, settingsSelectors, workbenchSelectors }
+export { chatSelectors, importSelectors, scheduledTaskSelectors, settingsSelectors, workbenchSelectors }
 
 export const selectWorkbenchResourceMenuItem = async (
   runtime: E2ETestRuntime,
@@ -1344,6 +1345,51 @@ export const selectWorkbenchWorkspace = async (
     },
     { timeout: WORKBENCH_E2E_TIMEOUT_MS }
   )
+}
+
+export const openScheduledTasksView = async (page: Page): Promise<void> => {
+  await getWorkbenchLocator(page, workbenchSelectors.scheduledTasksButton).click()
+  await getWorkbenchLocator(page, scheduledTaskSelectors.view).waitFor({ state: 'visible' })
+}
+
+export const selectScheduledTaskModel = async (page: Page, modelName: string): Promise<void> => {
+  const modelSelect = getWorkbenchLocator(page, scheduledTaskSelectors.modelSelect)
+  await modelSelect.locator('button.workbench-select-trigger').click()
+  await page
+    .locator('.workbench-select-menu.workbench-composer-menu')
+    .last()
+    .getByRole('button', { name: /^主模型/u })
+    .click()
+  const searchInput = page
+    .locator('.workbench-select-menu.workbench-composer-menu input[placeholder="搜索模型"]')
+    .last()
+  await searchInput.waitFor({ state: 'visible', timeout: WORKBENCH_MODEL_LIST_TIMEOUT_MS })
+  await searchInput.fill(modelName)
+  const dropdown = page.locator('.workbench-select-menu.workbench-composer-menu').last()
+  const option = dropdown.getByRole('option').filter({ hasText: modelName }).first()
+  await option.waitFor({ state: 'visible', timeout: WORKBENCH_MODEL_LIST_TIMEOUT_MS })
+  await option.click()
+}
+
+export const selectScheduledTaskWorkspace = async (
+  page: Page,
+  workspaceName: string
+): Promise<void> => {
+  const workspaceSelect = getWorkbenchLocator(page, scheduledTaskSelectors.workspaceSelect)
+  await workspaceSelect.locator('button.workbench-select-trigger').click()
+  const option = page
+    .locator('.workbench-select-menu [role="option"]')
+    .filter({ hasText: workspaceName })
+    .first()
+  await option.waitFor({ state: 'visible' })
+  await option.click()
+}
+
+export const fillScheduledTaskTime = async (page: Page, hhmm: string): Promise<void> => {
+  const timePicker = getWorkbenchLocator(page, scheduledTaskSelectors.formTime)
+  await timePicker.locator('input').click()
+  await timePicker.locator('input').fill(hhmm)
+  await timePicker.locator('input').press('Enter')
 }
 
 export const waitForWorkbenchSearchScopeEmptyThroughUi = async (page: Page): Promise<string> => {

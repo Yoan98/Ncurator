@@ -1439,7 +1439,6 @@ const ChatPage: React.FC = () => {
 
   const showContentPanel = useCallback(
     (nextState: WorkbenchContentPanelState): void => {
-      setScheduledTasksActive(false)
       if (contentPanel.kind === 'browser') {
         void window.api.browserPanelHide()
       }
@@ -1457,13 +1456,8 @@ const ChatPage: React.FC = () => {
     setScheduledTasksActive(true)
   }, [])
 
-  const closeScheduledTasks = useCallback((): void => {
-    setScheduledTasksActive(false)
-  }, [])
-
   const openResourceTab = useCallback(
     (tab: WorkbenchResourceTab): void => {
-      setScheduledTasksActive(false)
       const switchingAwayFromBrowser =
         contentPanel.kind === 'browser' &&
         (tab.kind !== 'browser' || tab.browserTabId !== contentPanel.browserTabId)
@@ -2224,6 +2218,7 @@ const ChatPage: React.FC = () => {
     session: ChatSession,
     options?: { saveCurrentDraft?: boolean }
   ): Promise<void> => {
+    setScheduledTasksActive(false)
     if (session.id === currentSessionIdRef.current && !switchingSessionId) return
 
     uiStateInteractionVersionRef.current += 1
@@ -3975,14 +3970,20 @@ const ChatPage: React.FC = () => {
             return (
               <div key={workspace.id} className="nc-sidebar-workspace-group">
                 <div className="nc-sidebar-workspace-header group">
-                  <div className="flex min-w-0 items-center gap-2">
+                  <div
+                    className="flex min-w-0 flex-1 cursor-pointer items-center gap-2"
+                    onClick={() => toggleWorkspaceCollapsed(workspace.id)}
+                  >
                     <HiFolder className="h-4 w-4 shrink-0 text-[#91918E]" />
                     <span className="truncate">{workspace.name}</span>
                     <button
                       type="button"
                       className="nc-sidebar-workspace-collapse workbench-no-drag relative z-10 cursor-pointer"
                       onMouseDown={(event) => event.stopPropagation()}
-                      onClick={() => toggleWorkspaceCollapsed(workspace.id)}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        toggleWorkspaceCollapsed(workspace.id)
+                      }}
                       aria-label={
                         workspaceCollapsed
                           ? `展开 ${workspace.name} 的对话`
@@ -4101,7 +4102,7 @@ const ChatPage: React.FC = () => {
 
       <div className="nc-main-pane min-w-0 flex-1" style={WORKBENCH_POSITIONED_PANE_STYLE}>
         {scheduledTasksActive ? (
-          <ScheduledTasksView onClose={closeScheduledTasks} />
+          <ScheduledTasksView />
         ) : (
           <>
             <div className="flex h-full min-h-0 overflow-hidden">

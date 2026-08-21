@@ -246,3 +246,21 @@ export const workbenchSelectors = {
   modelSelectVisionAiRefresh: 'workbench-model-select-vision-ai-refresh',
   modelSelectVisionAiRetry: 'workbench-model-select-vision-ai-retry'
 } as const
+
+export const scheduledTaskSelectors = {
+  view: 'scheduled-task-view',
+  addButton: 'scheduled-task-add-button',
+  itemPrefix: 'scheduled-task-item',
+  itemTogglePrefix: 'scheduled-task-item-toggle',
+  formName: 'scheduled-task-form-name',
+  formPrompt: 'scheduled-task-form-prompt',
+  formScheduleType: 'scheduled-task-form-schedule-type',
+  formWeekday: 'scheduled-task-form-weekday',
+  formTime: 'scheduled-task-form-time',
+  formSave: 'scheduled-task-form-save',
+  formCancel: 'scheduled-task-form-cancel',
+  workspaceSelect: 'scheduled-task-workspace-select',
+  modelSelect: 'scheduled-task-model-select',
+  preferenceSelect: 'scheduled-task-preference-select',
+  permissionSelect: 'scheduled-task-permission-select'
+} as const

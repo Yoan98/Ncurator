@@ -338,7 +338,7 @@ export function registerHandlers(services: {
     submitTask: (payload) => chatRunService.submit(payload),
     emitSessionListRefresh: emitSessionListRefreshToAll
   })
-  scheduledTaskService.start()
+  void scheduledTaskService.start()
 
   const emitSourceListRefresh = (sender: Electron.WebContents) => {
     if (sender.isDestroyed()) return

@@ -40,6 +40,7 @@ type WorkbenchModelSelectorProps = {
   disabled?: boolean
   noDrag?: boolean
   hideTriggerIcon?: boolean
+  variant?: 'composer' | 'form'
   className?: string
   'data-testid'?: string
 }
@@ -132,6 +133,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
   disabled = false,
   noDrag = false,
   hideTriggerIcon = false,
+  variant = 'composer',
   className,
   'data-testid': dataTestId
 }) => {
@@ -684,7 +686,9 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
           aria-expanded={open}
           aria-controls={listboxId}
           className={joinClassNames(
-            'workbench-select-trigger workbench-select-trigger-compact workbench-composer-pill workbench-composer-model-pill',
+            variant === 'form'
+              ? 'workbench-select-trigger w-full'
+              : 'workbench-select-trigger workbench-select-trigger-compact workbench-composer-pill workbench-composer-model-pill',
             open ? 'workbench-select-trigger-open' : '',
             disabled ? 'workbench-select-trigger-disabled' : '',
             noDrag ? 'workbench-no-drag' : ''
@@ -704,6 +708,14 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
               </span>
             ) : null}
           </span>
+          {variant === 'form' ? (
+            <HiChevronDown
+              className={joinClassNames(
+                'h-3.5 w-3.5 shrink-0 transition-transform duration-150',
+                open ? 'rotate-180' : ''
+              )}
+            />
+          ) : null}
         </button>
       </Tooltip>
       {open

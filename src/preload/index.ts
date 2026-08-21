@@ -271,10 +271,29 @@ const api: DesktopApi = {
   chatSessionMarkViewed: (id: string) => ipcRenderer.invoke('chat-session-mark-viewed', id),
   chatSessionDelete: (id: string) => ipcRenderer.invoke('chat-session-delete', id),
   chatMessageList: (sessionId: string) => ipcRenderer.invoke('chat-message-list', sessionId),
-  scheduledTaskList: () => ipcRenderer.invoke('scheduled-task-list'),
-  scheduledTaskSave: (payload) => ipcRenderer.invoke('scheduled-task-save', payload),
-  scheduledTaskDelete: (id: string) => ipcRenderer.invoke('scheduled-task-delete', id),
-  scheduledTaskSetEnabled: (payload) => ipcRenderer.invoke('scheduled-task-set-enabled', payload),
+  scheduledTaskList: () => {
+    emitE2EIpcCall('scheduledTaskList')
+    return ipcRenderer.invoke('scheduled-task-list')
+  },
+  scheduledTaskSave: (payload) => {
+    emitE2EIpcCall('scheduledTaskSave', {
+      name: String(payload?.name || '').trim(),
+      scheduleType: String(payload?.scheduleType || '').trim(),
+      timeOfDay: String(payload?.timeOfDay || '').trim()
+    })
+    return ipcRenderer.invoke('scheduled-task-save', payload)
+  },
+  scheduledTaskDelete: (id: string) => {
+    emitE2EIpcCall('scheduledTaskDelete', String(id || '').trim())
+    return ipcRenderer.invoke('scheduled-task-delete', id)
+  },
+  scheduledTaskSetEnabled: (payload) => {
+    emitE2EIpcCall('scheduledTaskSetEnabled', {
+      id: String(payload?.id || '').trim(),
+      enabled: Boolean(payload?.enabled)
+    })
+    return ipcRenderer.invoke('scheduled-task-set-enabled', payload)
+  },
   onChatSessionListRefresh: (cb: () => void) => {
     const listener = (): void => cb()
     ipcRenderer.on('chat-session-list-refresh', listener)

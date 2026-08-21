@@ -1,7 +1,19 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { App as AntdApp, Button, Empty, Input, Modal, Segmented, Select, Spin, Switch, TimePicker } from 'antd'
+import type { CSSProperties } from 'react'
+import {
+  App as AntdApp,
+  Button,
+  Empty,
+  Input,
+  Modal,
+  Segmented,
+  Select,
+  Spin,
+  Switch,
+  TimePicker
+} from 'antd'
 import dayjs from 'dayjs'
-import { HiOutlineClock, HiOutlinePlus, HiOutlineTrash, HiOutlineXMark } from 'react-icons/hi2'
+import { HiFolder, HiOutlineClock, HiOutlineFolderPlus, HiOutlinePlus, HiOutlineTrash } from 'react-icons/hi2'
 import { useNavigate } from 'react-router-dom'
 import type {
   AiExecutionPermission,
@@ -16,9 +28,13 @@ import type {
 } from '../../../../shared/types'
 import WorkbenchModelSelector from '../workbench/WorkbenchModelSelector'
 import WorkbenchSelect from '../workbench/WorkbenchSelect'
-import WorkspaceQuickSelect from '../workbench/WorkspaceQuickSelect'
 import { AI_PREFERENCE_OPTIONS, EXECUTION_PERMISSION_OPTIONS } from '../workbench/selectOptions'
-import type { WorkbenchAiPreference, WorkbenchExecutionPermission } from '../workbench/types'
+import type {
+  WorkbenchAiPreference,
+  WorkbenchExecutionPermission,
+  WorkbenchSelectOption
+} from '../workbench/types'
+import { scheduledTaskSelectors } from '../../testing/selectors'
 
 const WEEKDAY_OPTIONS = [
   { value: 0, label: '周日' },
@@ -79,11 +95,7 @@ const scheduleLabel = (task: ScheduledTask): string => {
   return `每天 ${task.timeOfDay}`
 }
 
-type ScheduledTasksViewProps = {
-  onClose: () => void
-}
-
-const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({ onClose }) => {
+const ScheduledTasksView: React.FC = () => {
   const { message, modal } = AntdApp.useApp()
   const navigate = useNavigate()
   const [tasks, setTasks] = useState<ScheduledTask[]>([])
@@ -98,6 +110,17 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({ onClose }) => {
   const availableWorkspaces = useMemo(
     () => workspaces.filter((workspace) => Boolean(workspace.root_path)),
     [workspaces]
+  )
+
+  const workspaceOptions = useMemo<WorkbenchSelectOption[]>(
+    () =>
+      availableWorkspaces.map((workspace) => ({
+        value: workspace.id,
+        label: workspace.name,
+        icon: <HiFolder className="h-3.5 w-3.5" />,
+        keywords: [workspace.name, workspace.root_path || '']
+      })),
+    [availableWorkspaces]
   )
 
   const loadTasks = useCallback(async (): Promise<void> => {
@@ -265,66 +288,78 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({ onClose }) => {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="flex h-[44px] shrink-0 items-center justify-between border-b border-[#EEEEEC] bg-white px-4">
+    <div
+      className="flex h-full min-h-0 flex-col"
+      data-testid={scheduledTaskSelectors.view}
+    >
+      <div
+        className="flex h-[44px] shrink-0 items-center justify-between border-b border-[#EEEEEC] bg-white px-4"
+        style={{ WebkitAppRegion: 'drag' } as CSSProperties}
+      >
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            className="flex h-7 w-7 items-center justify-center rounded-[6px] text-[#91918E] transition-colors hover:bg-[#EFEFEE] hover:text-[#37352F]"
-            onClick={onClose}
-            aria-label="关闭定时任务"
-          >
-            <HiOutlineXMark className="h-4 w-4" />
-          </button>
           <HiOutlineClock className="h-4 w-4 text-[#787774]" />
           <span className="text-[13px] font-medium text-[#37352F]">定时任务</span>
         </div>
-        <Button type="primary" size="small" icon={<HiOutlinePlus />} onClick={openCreate}>
+        <Button
+          type="primary"
+          size="small"
+          icon={<HiOutlinePlus />}
+          onClick={openCreate}
+          data-testid={scheduledTaskSelectors.addButton}
+        >
           新增配置
         </Button>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+      <div className="flex min-h-0 flex-1 flex-col">
         {loading ? (
-          <div className="flex h-32 items-center justify-center">
+          <div className="flex flex-1 items-center justify-center">
             <Spin />
           </div>
         ) : tasks.length === 0 ? (
-          <Empty
-            image={Empty.PRESENTED_IMAGE_SIMPLE}
-            description="还没有定时任务，点击右上角「新增配置」创建"
-          />
+          <div className="flex flex-1 items-center justify-center px-6">
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description="还没有定时任务，点击右上角「新增配置」创建"
+            />
+          </div>
         ) : (
-          <div className="flex flex-col gap-2">
-            {tasks.map((task) => (
-              <div
-                key={task.id}
-                className="group flex items-center gap-3 rounded-[8px] border border-[#EEEEEC] bg-white px-4 py-3"
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-[13px] font-medium text-[#37352F]">{task.name}</div>
-                  <div className="mt-0.5 truncate text-[12px] text-[#91918E]">
-                    {scheduleLabel(task)} · {task.mainModel.modelName}
+          <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+            <div className="flex flex-col gap-2">
+              {tasks.map((task) => (
+                <div
+                  key={task.id}
+                  className="group flex items-center gap-3 rounded-[8px] border border-[#EEEEEC] bg-white px-4 py-3"
+                  data-testid={`${scheduledTaskSelectors.itemPrefix}-${task.id}`}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[13px] font-medium text-[#37352F]">
+                      {task.name}
+                    </div>
+                    <div className="mt-0.5 truncate text-[12px] text-[#91918E]">
+                      {scheduleLabel(task)} · {task.mainModel.modelName}
+                    </div>
                   </div>
+                  <Switch
+                    size="small"
+                    checked={task.enabled}
+                    onChange={(checked) => void handleToggle(task, checked)}
+                    data-testid={`${scheduledTaskSelectors.itemTogglePrefix}-${task.id}`}
+                  />
+                  <Button type="text" size="small" onClick={() => openEdit(task)}>
+                    编辑
+                  </Button>
+                  <Button
+                    type="text"
+                    size="small"
+                    danger
+                    icon={<HiOutlineTrash />}
+                    onClick={() => handleDelete(task)}
+                    aria-label={`删除 ${task.name}`}
+                  />
                 </div>
-                <Switch
-                  size="small"
-                  checked={task.enabled}
-                  onChange={(checked) => void handleToggle(task, checked)}
-                />
-                <Button type="text" size="small" onClick={() => openEdit(task)}>
-                  编辑
-                </Button>
-                <Button
-                  type="text"
-                  size="small"
-                  danger
-                  icon={<HiOutlineTrash />}
-                  onClick={() => handleDelete(task)}
-                  aria-label={`删除 ${task.name}`}
-                />
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         )}
       </div>
@@ -335,6 +370,8 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({ onClose }) => {
         okText="保存"
         cancelText="取消"
         confirmLoading={saving}
+        okButtonProps={{ 'data-testid': scheduledTaskSelectors.formSave }}
+        cancelButtonProps={{ 'data-testid': scheduledTaskSelectors.formCancel }}
         onOk={() => void handleSave()}
         onCancel={() => setFormOpen(false)}
         width={560}
@@ -346,6 +383,7 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({ onClose }) => {
             <Input
               value={form.name}
               placeholder="例如：每日晨报"
+              data-testid={scheduledTaskSelectors.formName}
               onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
             />
           </label>
@@ -356,6 +394,7 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({ onClose }) => {
               value={form.prompt}
               rows={3}
               placeholder="描述想让 AI 完成的事"
+              data-testid={scheduledTaskSelectors.formPrompt}
               onChange={(event) =>
                 setForm((current) => ({ ...current, prompt: event.target.value }))
               }
@@ -368,6 +407,7 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({ onClose }) => {
               <Segmented
                 value={form.scheduleType}
                 options={SCHEDULE_TYPE_OPTIONS}
+                data-testid={scheduledTaskSelectors.formScheduleType}
                 onChange={(value) =>
                   setForm((current) => ({
                     ...current,
@@ -381,37 +421,53 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({ onClose }) => {
                   style={{ width: 120 }}
                   placeholder="选择星期"
                   options={WEEKDAY_OPTIONS}
+                  data-testid={scheduledTaskSelectors.formWeekday}
                   onChange={(value) =>
                     setForm((current) => ({ ...current, weekday: normalizeWeekday(value) }))
                   }
                 />
               ) : null}
-              <TimePicker
-                format="HH:mm"
-                value={dayjs(form.timeOfDay, 'HH:mm')}
-                allowClear={false}
-                minuteStep={1}
-                onChange={(time) =>
-                  setForm((current) => ({
-                    ...current,
-                    timeOfDay: time ? time.format('HH:mm') : ''
-                  }))
-                }
-              />
+              <span data-testid={scheduledTaskSelectors.formTime}>
+                <TimePicker
+                  format="HH:mm"
+                  value={dayjs(form.timeOfDay, 'HH:mm')}
+                  allowClear={false}
+                  minuteStep={1}
+                  onChange={(time) =>
+                    setForm((current) => ({
+                      ...current,
+                      timeOfDay: time ? time.format('HH:mm') : ''
+                    }))
+                  }
+                />
+              </span>
             </div>
           </div>
 
           <div className="flex flex-col gap-1.5">
             <span className="text-[13px] text-[#37352F]">工作空间</span>
-            <WorkspaceQuickSelect
-              workspaces={availableWorkspaces}
-              selectedWorkspaceId={form.workspaceId || null}
-              onWorkspaceChange={(workspaceId) =>
-                setForm((current) => ({ ...current, workspaceId }))
+            <WorkbenchSelect
+              value={form.workspaceId || null}
+              options={workspaceOptions}
+              onChange={(nextValue) =>
+                setForm((current) => ({ ...current, workspaceId: nextValue }))
               }
-              onEmptyAction={() => navigate('/settings/workspace')}
-              className="w-full"
-              data-testid="scheduled-task-workspace-select"
+              placeholder="选择工作空间"
+              triggerIcon={<HiFolder className="h-3.5 w-3.5" />}
+              searchable={availableWorkspaces.length > 6}
+              searchPlaceholder="搜索工作空间"
+              minMenuWidth={240}
+              maxMenuWidth={360}
+              emptyAction={
+                availableWorkspaces.length === 0
+                  ? {
+                      label: '去设置页绑定工作空间',
+                      icon: <HiOutlineFolderPlus className="h-3.5 w-3.5" />,
+                      onClick: () => navigate('/settings/workspace')
+                    }
+                  : undefined
+              }
+              data-testid={scheduledTaskSelectors.workspaceSelect}
             />
           </div>
 
@@ -424,51 +480,46 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({ onClose }) => {
               onChange={(selection) =>
                 setForm((current) => ({ ...current, modelSelection: selection }))
               }
+              variant="form"
               className="w-full"
-              data-testid="scheduled-task-model-select"
+              data-testid={scheduledTaskSelectors.modelSelect}
             />
           </div>
 
-          <div className="flex items-center gap-3">
-            <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-              <span className="text-[13px] text-[#37352F]">偏好</span>
-              <WorkbenchSelect
-                value={form.aiPreference}
-                options={AI_PREFERENCE_OPTIONS}
-                onChange={(nextValue) =>
-                  setForm((current) => ({
-                    ...current,
-                    aiPreference: nextValue as WorkbenchAiPreference
-                  }))
-                }
-                placeholder="偏好"
-                minMenuWidth={220}
-                data-testid="scheduled-task-preference-select"
-              />
-            </div>
-            <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-              <span className="text-[13px] text-[#37352F]">执行权限</span>
-              <WorkbenchSelect
-                value={form.executionPermission}
-                options={EXECUTION_PERMISSION_OPTIONS}
-                onChange={(nextValue) =>
-                  setForm((current) => ({
-                    ...current,
-                    executionPermission: nextValue as WorkbenchExecutionPermission
-                  }))
-                }
-                placeholder="权限"
-                minMenuWidth={220}
-                showDescriptions
-                data-testid="scheduled-task-permission-select"
-              />
-            </div>
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[13px] text-[#37352F]">偏好</span>
+            <WorkbenchSelect
+              value={form.aiPreference}
+              options={AI_PREFERENCE_OPTIONS}
+              onChange={(nextValue) =>
+                setForm((current) => ({
+                  ...current,
+                  aiPreference: nextValue as WorkbenchAiPreference
+                }))
+              }
+              placeholder="偏好"
+              minMenuWidth={220}
+              data-testid={scheduledTaskSelectors.preferenceSelect}
+            />
           </div>
-          {form.executionPermission === 'review' ? (
-            <p className="text-[12px] text-[#E8805C]">
-              定时任务在无人值守时执行，选择「审核」可能导致任务因等待审批而一直阻塞，建议使用「完全访问」。
-            </p>
-          ) : null}
+
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[13px] text-[#37352F]">执行权限</span>
+            <WorkbenchSelect
+              value={form.executionPermission}
+              options={EXECUTION_PERMISSION_OPTIONS}
+              onChange={(nextValue) =>
+                setForm((current) => ({
+                  ...current,
+                  executionPermission: nextValue as WorkbenchExecutionPermission
+                }))
+              }
+              placeholder="权限"
+              minMenuWidth={220}
+              showDescriptions
+              data-testid={scheduledTaskSelectors.permissionSelect}
+            />
+          </div>
         </div>
       </Modal>
     </div>

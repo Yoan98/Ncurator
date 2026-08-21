@@ -19,9 +19,9 @@ const TICK_INTERVAL_MS = 30_000
 type RepeatHandle = ReturnType<typeof setInterval>
 
 type ScheduledTaskServiceDeps = {
-  taskStore: ScheduledTaskStore
-  workspaceStore: WorkspaceStore
-  chatStore: ChatStore
+  taskStore: Pick<ScheduledTaskStore, 'list' | 'listEnabled' | 'getById' | 'save' | 'delete'>
+  workspaceStore: Pick<WorkspaceStore, 'getWorkspaceById'>
+  chatStore: Pick<ChatStore, 'saveChatSession' | 'deleteChatSession'>
   submitTask: (payload: ChatSubmitRequest) => Promise<ChatSubmitResponse>
   emitSessionListRefresh: () => void
   repeat?: (callback: () => void, intervalMs: number) => RepeatHandle
@@ -106,20 +106,35 @@ export class ScheduledTaskService {
     }
   }
 
-  public start(): void {
+  public async start(): Promise<void> {
     if (this.timer) return
-    void (async () => {
-      try {
-        await this.reconcileMissed()
-      } catch (error) {
-        console.error('[SCHEDULED-TASK] reconcile missed failed:', error)
+    try {
+      await this.reconcileMissed()
+    } catch (error) {
+      console.error('[SCHEDULED-TASK] reconcile missed failed:', error)
+    }
+    if (this.timer) return
+    this.timer = this.deps.repeat(() => {
+      void this.tick()
+    }, TICK_INTERVAL_MS)
+    await this.tick()
+  }
+
+  public async tick(): Promise<void> {
+    if (this.ticking) return
+    this.ticking = true
+    try {
+      const now = this.deps.now()
+      const tasks = await this.deps.taskStore.listEnabled()
+      for (const task of tasks) {
+        if (task.nextRunAt === null || now < task.nextRunAt) continue
+        await this.fireTask(task, now)
       }
-      if (this.timer) return
-      this.timer = this.deps.repeat(() => {
-        void this.runDueTasks()
-      }, TICK_INTERVAL_MS)
-      await this.runDueTasks()
-    })()
+    } catch (error) {
+      console.error('[SCHEDULED-TASK] tick failed:', error)
+    } finally {
+      this.ticking = false
+    }
   }
 
   public stop(): void {
@@ -228,23 +243,6 @@ export class ScheduledTaskService {
     }
   }
 
-  private async runDueTasks(): Promise<void> {
-    if (this.ticking) return
-    this.ticking = true
-    try {
-      const now = this.deps.now()
-      const tasks = await this.deps.taskStore.listEnabled()
-      for (const task of tasks) {
-        if (task.nextRunAt === null || now < task.nextRunAt) continue
-        await this.fireTask(task, now)
-      }
-    } catch (error) {
-      console.error('[SCHEDULED-TASK] tick failed:', error)
-    } finally {
-      this.ticking = false
-    }
-  }
-
   private async fireTask(task: ScheduledTask, now: number): Promise<void> {
     let sessionId: string | null = null
     let submitted = false
@@ -299,6 +297,8 @@ export class ScheduledTaskService {
 }
 
 const normalizeWeekday = (value: unknown): number | null => {
+  if (value === null || value === undefined) return null
+  if (typeof value === 'string' && value.trim() === '') return null
   const number = Number(value)
   if (!Number.isInteger(number) || number < 0 || number > 6) return null
   return number
