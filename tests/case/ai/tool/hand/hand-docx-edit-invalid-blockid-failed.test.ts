@@ -45,9 +45,9 @@ describe('ai tool hand backend', () => {
           },
           execution: {
             ...initialState.execution,
-            currentThought: {
+            pendingRound: {
               thought: {
-                next: '尝试使用不存在的 blockId 写入'
+                text: '尝试使用不存在的 blockId 写入'
               },
               nextAction: {
                 action: 'hand',

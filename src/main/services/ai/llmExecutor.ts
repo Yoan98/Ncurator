@@ -76,6 +76,17 @@ export type AiLlmTextDriverResult = {
   usageMetadata?: JsonObject
 }
 
+export type AiLlmTextMessagesDriverInput = {
+  caller: string
+  cfg: LlmRuntimeConfig
+  schemaName: string
+  messages: BaseMessage[]
+  temperature?: number
+  streamingMode: AiLlmStreamingMode
+  observer?: LlmCallStreamObserver
+  signal?: AbortSignal
+}
+
 export type AiLlmStructuredDriverResult = {
   output: Record<string, unknown>
   rawText?: string
@@ -89,6 +100,7 @@ export type AiLlmDriver = {
   chatStructured?: (input: AiLlmStructuredDriverInput) => Promise<AiLlmStructuredDriverResult>
   chatText?: (input: AiLlmTextInvocationInput) => Promise<AiLlmTextDriverResult>
   chatTools?: (input: AiLlmToolCallDriverInput) => Promise<AiLlmToolCallDriverResult>
+  chatMessages?: (input: AiLlmTextMessagesDriverInput) => Promise<AiLlmTextDriverResult>
 }
 
 export type AiLlmTextRequest = {
@@ -97,6 +109,16 @@ export type AiLlmTextRequest = {
   schemaName: string
   system: string
   user: string
+  temperature?: number
+  streamingMode?: AiLlmStreamingMode
+  onTextDelta?: (text: string) => void
+}
+
+export type AiLlmTextMessagesRequest = {
+  caller: string
+  taskId?: string
+  schemaName: string
+  messages: BaseMessage[]
   temperature?: number
   streamingMode?: AiLlmStreamingMode
   onTextDelta?: (text: string) => void
@@ -156,6 +178,7 @@ export type AiLlmExecutor = {
     usage?: AiLlmUsage
   }>
   chatText: (input: AiLlmTextRequest) => Promise<string>
+  chatMessages: (input: AiLlmTextMessagesRequest) => Promise<string>
   chatTools: (input: AiLlmToolCallRequest) => Promise<AiLlmToolCallResult>
 }
 
@@ -434,6 +457,58 @@ const invokeTextChat = async (input: {
   }
 }
 
+const invokeTextMessagesChat = async (input: {
+  driver?: AiLlmDriver
+  request: AiLlmTextMessagesDriverInput & {
+    checkCancelled: () => void
+  }
+}): Promise<LlmCallExecutionResult<string>> => {
+  if (input.driver?.chatMessages) {
+    const result = await input.driver.chatMessages(input.request)
+    return {
+      output: result.output,
+      rawText: result.rawText ?? result.output,
+      streamed: result.streamed,
+      usage: result.usage,
+      responseMetadata: result.responseMetadata,
+      usageMetadata: result.usageMetadata
+    }
+  }
+
+  const request = input.request
+  const streaming = request.streamingMode === 'force_stream'
+  const providerKind = resolveConfigProviderKind(request.cfg)
+  const runnable = createTextRunnable({
+    cfg: request.cfg,
+    temperature: request.temperature,
+    streaming
+  })
+  const response = streaming
+    ? await streamTextFromRunnable({
+        runnable,
+        messages: request.messages as Array<SystemMessage | HumanMessage>,
+        observer: request.observer,
+        checkCancelled: request.checkCancelled,
+        signal: request.signal
+      })
+    : await invokeTextFromRunnable({
+        runnable,
+        messages: request.messages as Array<SystemMessage | HumanMessage>,
+        checkCancelled: request.checkCancelled,
+        signal: request.signal
+      })
+  const metadata = toInvocationMetadata({
+    message: response.message,
+    providerKind
+  })
+  return {
+    output: response.text,
+    rawText: response.text,
+    streamed: streaming,
+    ...metadata
+  }
+}
+
 const invokeStructuredChatCore = async (input: {
   driver?: AiLlmDriver
   request: AiLlmStructuredDriverInput & {
@@ -652,6 +727,60 @@ export const createAiLlmExecutor = (input: {
                   schemaName: request.schemaName,
                   system: request.system,
                   user: request.user,
+                  temperature: request.temperature,
+                  streamingMode,
+                  observer,
+                  checkCancelled: input.checkCancelled,
+                  signal
+                }
+              })
+          })
+      })
+
+      return String(result.output || '')
+    },
+
+    chatMessages: async (request: AiLlmTextMessagesRequest): Promise<string> => {
+      input.checkCancelled()
+      const streamingMode = request.streamingMode || defaultStreamingMode
+      const cfg = await input.getConfig()
+      const userHash = JSON.stringify(
+        request.messages.map((message) => ({
+          role: message.getType(),
+          content: extractTextContent(message.content)
+        }))
+      )
+      const result = await runLlmCallWithActivity<string>({
+        ctx: input.eventCtx,
+        runId: input.eventCtx.runId,
+        taskId: request.taskId,
+        system: '',
+        user: userHash,
+        telemetry: {
+          actionType: 'llm_text_output',
+          caller: request.caller,
+          schemaName: request.schemaName,
+          modelName: cfg.model_name,
+          baseUrl: cfg.base_url,
+          providerKind: resolveConfigProviderKind(cfg),
+          streamingMode,
+          attempt: 1
+        },
+        onTextDelta: request.onTextDelta,
+        maxAttempts: AI_LLM_CALL_MAX_RETRY_ATTEMPTS,
+        classifyRetry: classifyLlmCallRetry,
+        execute: async (observer) =>
+          await withAbortTimeout({
+            timeoutMs: AI_LLM_CALL_TIMEOUT_MS,
+            externalSignal: input.abortSignal,
+            execute: async (signal) =>
+              await invokeTextMessagesChat({
+                driver: input.driver,
+                request: {
+                  caller: request.caller,
+                  cfg,
+                  schemaName: request.schemaName,
+                  messages: request.messages,
                   temperature: request.temperature,
                   streamingMode,
                   observer,

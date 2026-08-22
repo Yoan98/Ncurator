@@ -30,11 +30,8 @@ const createStubAiRunContext = (): AiRunContext => ({
   },
   sendEvent: () => {},
   requestApprovalBatch: async () => ({ accepted: true, decisions: [] }),
-  loadConversationContext: async () => ({
-    recentTurnsText: '',
-    conversationSummaryText: ''
-  }),
-  loadConversationMemory: async () => null,
+  loadTranscript: async () => [],
+  appendTranscript: async () => undefined,
   trackDocxOpen: () => {},
   trackDocxChanges: () => {},
   trackDocxBatchChanges: () => {},

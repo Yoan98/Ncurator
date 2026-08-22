@@ -42,9 +42,9 @@ describe('ai tool hand backend', () => {
               taskId: runtime.taskId,
               userInput: '请执行多个终端安全指令'
             }).execution,
-            currentThought: {
+            pendingRound: {
               thought: {
-                next: '提交超长 calls'
+                text: '提交超长 calls'
               },
               nextAction: {
                 action: 'hand',

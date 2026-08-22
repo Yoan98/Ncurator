@@ -54,9 +54,9 @@ describe('ai tool hand backend', () => {
               taskId: runtime.taskId,
               userInput: '读取后修改再读取'
             }).execution,
-            currentThought: {
+            pendingRound: {
               thought: {
-                next: '先读，再写，再读同一 docx'
+                text: '先读，再写，再读同一 docx'
               },
               nextAction: {
                 action: 'hand',

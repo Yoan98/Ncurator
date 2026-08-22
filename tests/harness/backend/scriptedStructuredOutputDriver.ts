@@ -362,6 +362,85 @@ export const createScriptedStructuredOutputDriver = (script: LlmScript): AiLlmDr
       throw new Error(`invalid scripted text step: caller=${payload.caller}; callIndex=${payload.callIndex}`)
     },
 
+    chatMessages: async (input): Promise<AiLlmTextDriverResult> => {
+      const user = buildUserTextFromMessages(input.messages)
+      const { payload, step } = nextCall({
+        caller: input.caller,
+        schemaName: input.schemaName,
+        system: '',
+        user,
+        mode: 'text'
+      })
+
+      if (typeof step === 'function') {
+        const resolved = await step(payload)
+        const output = typeof resolved === 'string' ? resolved : resolveTextFromObjectOutput(resolved)
+        emitChunks(
+          toChunkList({
+            rawText: output,
+            streamingMode: input.streamingMode
+          }),
+          input.observer?.onDelta
+        )
+        return {
+          output,
+          rawText: output,
+          streamed: input.streamingMode === 'force_stream'
+        }
+      }
+
+      if (isErrorStep(step)) {
+        throw new Error(step.error)
+      }
+
+      if (isWaitForAbortStep(step)) {
+        return await waitForAbort({
+          signal: input.signal,
+          onAbortError: step.onAbortError
+        })
+      }
+
+      if (isDelayedErrorStep(step)) {
+        await new Promise((resolve) => setTimeout(resolve, step.waitMs))
+        throw new Error(step.thenError)
+      }
+
+      if (isTextOutputStep(step)) {
+        emitChunks(
+          toChunkList({
+            rawText: step.text,
+            explicitChunks: step.chunks,
+            streamingMode: input.streamingMode
+          }),
+          input.observer?.onDelta
+        )
+        return {
+          output: step.text,
+          rawText: step.text,
+          streamed: input.streamingMode === 'force_stream'
+        }
+      }
+
+      if (isObjectOutputStep(step)) {
+        const output = resolveTextFromObjectOutput(step.output)
+        emitChunks(
+          toChunkList({
+            rawText: output,
+            explicitChunks: step.chunks,
+            streamingMode: input.streamingMode
+          }),
+          input.observer?.onDelta
+        )
+        return {
+          output,
+          rawText: output,
+          streamed: input.streamingMode === 'force_stream'
+        }
+      }
+
+      throw new Error(`invalid scripted messages step: caller=${payload.caller}; callIndex=${payload.callIndex}`)
+    },
+
     chatTools: async (input): Promise<AiLlmToolCallDriverResult> => {
       const user = buildUserTextFromMessages(input.messages)
       const { payload, step } = nextCall({

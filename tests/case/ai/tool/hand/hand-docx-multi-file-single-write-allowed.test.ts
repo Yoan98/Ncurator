@@ -59,9 +59,9 @@ describe('ai tool hand backend', () => {
               taskId: runtime.taskId,
               userInput: '分别更新两个文档'
             }).execution,
-            currentThought: {
+            pendingRound: {
               thought: {
-                next: '同轮对两个 docx 各写一次'
+                text: '同轮对两个 docx 各写一次'
               },
               nextAction: {
                 action: 'hand',

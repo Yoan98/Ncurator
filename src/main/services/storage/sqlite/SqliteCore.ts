@@ -2,181 +2,36 @@ import Database from 'better-sqlite3'
 import fs from 'fs'
 import path from 'path'
 import { getSqliteDbPath } from '../../../utils/paths'
-import { initialSchemaSql } from './migrations/001_initial_schema'
-import { chatSessionTranscriptMigration } from './migrations/002_chat_session_transcript'
-
-const notificationSettingsMigration = `
-ALTER TABLE ai_runtime_settings ADD COLUMN systemNotificationsEnabled INTEGER NOT NULL DEFAULT 1;
-`
-
-const dropLlmStrategyPreferenceMigration = `
-DROP TABLE IF EXISTS llm_strategy_preference;
-`
-
-const sessionSkillStateMigration = `
-CREATE TABLE IF NOT EXISTS chat_session_skill_state (
-  session_id TEXT PRIMARY KEY,
-  state_json TEXT NOT NULL,
-  revision INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL,
-  FOREIGN KEY (session_id) REFERENCES chat_session(id) ON DELETE CASCADE
-);
-`
-
-const resetResumeSnapshotsV2Migration = `
-DELETE FROM chat_session_resume_snapshot;
-`
-
-const repairFalseDocxChangeFailuresMigration = `
-UPDATE ai_file_change
-SET status = 'applied', last_error = NULL
-WHERE status = 'failed'
-  AND last_error = 'Run completed without an effective workspace change.'
-  AND EXISTS (
-    SELECT 1
-    FROM docx_apply
-    WHERE docx_apply.id = ai_file_change.id
-      AND docx_apply.status = 'applied'
-      AND COALESCE(docx_apply.before_checksum, '') <> COALESCE(docx_apply.after_checksum, '')
-  );
-`
-
-const workbenchSessionUiStateMigration = `
-CREATE TABLE IF NOT EXISTS chat_session_ui_state (
-  session_id TEXT PRIMARY KEY,
-  state_json TEXT NOT NULL,
-  updated_at INTEGER NOT NULL,
-  FOREIGN KEY (session_id) REFERENCES chat_session(id) ON DELETE CASCADE
-);
-
-CREATE TABLE IF NOT EXISTS workbench_ui_state (
-  id INTEGER PRIMARY KEY CHECK (id = 1),
-  active_view_key TEXT,
-  draft_state_json TEXT,
-  updated_at INTEGER NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS browser_tab_state (
-  id TEXT PRIMARY KEY,
-  owner_key TEXT NOT NULL,
-  title TEXT,
-  url TEXT NOT NULL DEFAULT '',
-  zoom_factor REAL NOT NULL DEFAULT 1,
-  history_json TEXT,
-  position INTEGER NOT NULL DEFAULT 0,
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_browser_tab_state_owner
-  ON browser_tab_state(owner_key, position, created_at);
-`
-
-const aiRunExecutionPermissionMigration = `
-ALTER TABLE ai_run ADD COLUMN execution_permission TEXT NOT NULL DEFAULT 'review';
-`
-
-const scheduledTaskMigration = `
-CREATE TABLE IF NOT EXISTS scheduled_task (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL DEFAULT '',
-  prompt TEXT NOT NULL DEFAULT '',
-  enabled INTEGER NOT NULL DEFAULT 0,
-  schedule_type TEXT NOT NULL DEFAULT 'daily',
-  time_of_day TEXT NOT NULL DEFAULT '09:00',
-  weekday INTEGER,
-  workspace_id TEXT NOT NULL DEFAULT '',
-  main_model_config_id TEXT NOT NULL DEFAULT '',
-  main_model_name TEXT NOT NULL DEFAULT '',
-  vision_model_config_id TEXT,
-  vision_model_name TEXT,
-  ai_preference TEXT NOT NULL DEFAULT 'default',
-  execution_permission TEXT NOT NULL DEFAULT 'full_access',
-  next_run_at INTEGER,
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_scheduled_task_enabled
-  ON scheduled_task(enabled, next_run_at);
-`
-
-type SqliteColumnInfo = {
-  name: string
-}
-
-const repairNotificationSettingsColumn = (db: SqliteDatabase): void => {
-  const columns = db.prepare('PRAGMA table_info(ai_runtime_settings)').all() as SqliteColumnInfo[]
-  if (columns.some((column) => column.name === 'systemNotificationsEnabled')) return
-  db.exec(
-    'ALTER TABLE ai_runtime_settings ADD COLUMN systemNotificationsEnabled INTEGER NOT NULL DEFAULT 1;'
-  )
-}
+import type { Migration } from './migrations/types'
+import { initialSchemaMigration } from './migrations/001_initial_schema'
+import { aiRuntimeSystemNotificationsMigration } from './migrations/002_ai_runtime_system_notifications'
+import { chatSessionSkillStateMigration } from './migrations/003_chat_session_skill_state'
+import { resetResumeSnapshotsV2Migration } from './migrations/004_reset_resume_snapshots_v2'
+import { repairFalseDocxChangeFailuresMigration } from './migrations/005_repair_false_docx_change_failures'
+import { workbenchSessionUiStateMigration } from './migrations/006_workbench_session_ui_state'
+import { aiRunExecutionPermissionMigration } from './migrations/007_ai_run_execution_permission'
+import { dropLlmStrategyPreferenceMigration } from './migrations/008_drop_llm_strategy_preference'
+import { repairAiRuntimeSystemNotificationsColumnMigration } from './migrations/009_repair_ai_runtime_system_notifications_column'
+import { scheduledTaskMigration } from './migrations/010_scheduled_task'
+import { chatSessionTranscriptMigration } from './migrations/011_chat_session_transcript'
+import { dropChatConversationMemoryMigration } from './migrations/012_drop_chat_conversation_memory'
 
 export type SqliteDatabase = Database.Database
 export type SqliteStatement = Database.Statement
 
-type Migration = {
-  version: number
-  name: string
-  sql?: string
-  run?: (db: SqliteDatabase) => void
-}
-
 const MIGRATIONS: Migration[] = [
-  {
-    version: 1,
-    name: 'initial_schema',
-    sql: initialSchemaSql
-  },
-  {
-    version: 2,
-    name: 'ai_runtime_system_notifications',
-    sql: notificationSettingsMigration
-  },
-  {
-    version: 3,
-    name: 'chat_session_skill_state',
-    sql: sessionSkillStateMigration
-  },
-  {
-    version: 4,
-    name: 'reset_resume_snapshots_v2',
-    sql: resetResumeSnapshotsV2Migration
-  },
-  {
-    version: 5,
-    name: 'repair_false_docx_change_failures',
-    sql: repairFalseDocxChangeFailuresMigration
-  },
-  {
-    version: 6,
-    name: 'workbench_session_ui_state',
-    sql: workbenchSessionUiStateMigration
-  },
-  {
-    version: 7,
-    name: 'ai_run_execution_permission',
-    sql: aiRunExecutionPermissionMigration
-  },
-  {
-    version: 8,
-    name: 'drop_llm_strategy_preference',
-    sql: dropLlmStrategyPreferenceMigration
-  },
-  {
-    version: 9,
-    name: 'repair_ai_runtime_system_notifications_column',
-    run: repairNotificationSettingsColumn
-  },
-  {
-    version: 10,
-    name: 'scheduled_task',
-    sql: scheduledTaskMigration
-  },
-  {
-    version: 11,
-    name: 'chat_session_transcript',
-    sql: chatSessionTranscriptMigration
-  }
+  initialSchemaMigration,
+  aiRuntimeSystemNotificationsMigration,
+  chatSessionSkillStateMigration,
+  resetResumeSnapshotsV2Migration,
+  repairFalseDocxChangeFailuresMigration,
+  workbenchSessionUiStateMigration,
+  aiRunExecutionPermissionMigration,
+  dropLlmStrategyPreferenceMigration,
+  repairAiRuntimeSystemNotificationsColumnMigration,
+  scheduledTaskMigration,
+  chatSessionTranscriptMigration,
+  dropChatConversationMemoryMigration
 ]
 
 const BETTER_SQLITE_NATIVE_BINDING_ENV = 'NCURATOR_BETTER_SQLITE3_NATIVE_BINDING'

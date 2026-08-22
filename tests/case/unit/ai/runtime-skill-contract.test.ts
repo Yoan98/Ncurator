@@ -14,7 +14,8 @@ describe('ai unit runtime skill contract', () => {
       'web-browsing',
       'utility',
       'image-recognition',
-      'image-generation'
+      'image-generation',
+      'agent-control'
     ])
     expect(listExternalSkillDefinitions().map((definition) => definition.skillId)).toEqual([
       'docx-read',
@@ -35,7 +36,8 @@ describe('ai unit runtime skill contract', () => {
       'web-browsing',
       'utility',
       'image-recognition',
-      'image-generation'
+      'image-generation',
+      'agent-control'
     ])
   })
 })

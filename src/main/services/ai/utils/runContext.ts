@@ -1,5 +1,4 @@
-import type { AiArtifactRef, KbAvailability, SelectedReference } from '../../../../shared/types'
-import type { ChatMessage } from '../../../types/store'
+import type { KbAvailability, SelectedReference } from '../../../../shared/types'
 import type { AiRunStartPayload } from '../types'
 
 const toTrimmedStringList = (values: string[] | undefined): string[] =>
@@ -89,75 +88,4 @@ export const normalizeSelectedReferences = (
     })
 
   return normalized.length > 0 ? normalized : undefined
-}
-
-export type PromptArtifactRef = Pick<AiArtifactRef, 'kind' | 'path' | 'operation'>
-
-export const toPromptArtifactRef = (artifact: AiArtifactRef): PromptArtifactRef => ({
-  kind: artifact.kind,
-  path: artifact.path,
-  operation: artifact.operation
-})
-
-const formatArtifactRef = (artifact: AiArtifactRef): string =>
-  JSON.stringify(toPromptArtifactRef(artifact))
-
-export const formatTurns = (messages: ChatMessage[]): string =>
-  messages
-    .map((message) => {
-      const role = String(message.role || 'user')
-      const content = String(message.content || '')
-      const artifactText =
-        message.artifacts && message.artifacts.length > 0
-          ? `\nartifacts:\n${message.artifacts.map((artifact) => `- ${formatArtifactRef(artifact)}`).join('\n')}`
-          : ''
-      return `${role}: ${content}${artifactText}`
-    })
-    .join('\n')
-
-export const formatPreviousTurns = (input: {
-  messages: ChatMessage[]
-  currentUserMessageId: string
-  currentAssistantMessageId: string
-}): string => {
-  const currentRunMessageIds = new Set([
-    input.currentUserMessageId,
-    input.currentAssistantMessageId
-  ])
-  const messages = input.messages.filter((message) => !currentRunMessageIds.has(message.id))
-  const turns: Array<{
-    turn_index: number
-    user_message: string | null
-    assistant_message: string | null
-    artifacts: PromptArtifactRef[]
-  }> = []
-
-  for (const message of messages) {
-    if (message.role === 'user') {
-      turns.push({
-        turn_index: turns.length + 1,
-        user_message: message.content,
-        assistant_message: null,
-        artifacts: []
-      })
-      continue
-    }
-
-    if (message.role === 'assistant') {
-      const latestTurn = turns.at(-1)
-      if (!latestTurn || latestTurn.assistant_message !== null) {
-        turns.push({
-          turn_index: turns.length + 1,
-          user_message: null,
-          assistant_message: message.content,
-          artifacts: (message.artifacts || []).map(toPromptArtifactRef)
-        })
-      } else {
-        latestTurn.assistant_message = message.content
-        latestTurn.artifacts = (message.artifacts || []).map(toPromptArtifactRef)
-      }
-    }
-  }
-
-  return turns.length > 0 ? JSON.stringify(turns) : ''
 }

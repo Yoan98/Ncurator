@@ -1,4 +1,9 @@
-export const chatSessionTranscriptMigration = `
+import type { Migration } from './types'
+
+export const chatSessionTranscriptMigration: Migration = {
+  version: 11,
+  name: 'chat_session_transcript',
+  sql: `
 CREATE TABLE IF NOT EXISTS chat_session_transcript (
   id TEXT PRIMARY KEY,
   session_id TEXT NOT NULL,
@@ -12,3 +17,4 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_chat_session_transcript_session_seq ON cha
 CREATE INDEX IF NOT EXISTS idx_chat_session_transcript_session_run ON chat_session_transcript(session_id, run_id);
 CREATE INDEX IF NOT EXISTS idx_chat_session_transcript_session_created ON chat_session_transcript(session_id, created_at);
 `
+}

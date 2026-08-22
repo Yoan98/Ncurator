@@ -3,7 +3,12 @@ import type { ChatTranscriptStore } from '../storage/domains/ChatTranscriptStore
 import type { DocumentsStore } from '../storage/domains/DocumentsStore'
 import type { LlmConfigStore } from '../storage/domains/LlmConfigStore'
 import type { EmbeddingService } from '../vector/EmbeddingService'
-import type { AiLlmDriver, AiLlmToolCallRequest, AiLlmToolCallResult } from './llmExecutor'
+import type {
+  AiLlmDriver,
+  AiLlmTextMessagesRequest,
+  AiLlmToolCallRequest,
+  AiLlmToolCallResult
+} from './llmExecutor'
 import type { WebCrawlerService } from '../webCrawler/types'
 import type {
   DocxChangedBlock,
@@ -31,7 +36,6 @@ import type {
   AiFileChangeRecord,
   ChatAttachment,
   BrainContextBudgetSnapshot,
-  ChatConversationMemory,
   ChatSessionResumeSnapshot,
   ChatSessionSkillState,
   ChatTranscriptEntry,
@@ -40,7 +44,7 @@ import type {
   WorkbenchSelectedModel
 } from '../../../shared/types'
 import type { LlmRuntimeConfig } from '../../../shared/types'
-import type { HumanState, HumanTaskContext, HumanTaskInput, HumanTaskOutput } from './human/types'
+import type { HumanState, HumanTaskInput, HumanTaskOutput } from './human/types'
 import { aiRunStateContractSchema, aiRunStatusSchema } from './schema'
 
 export type { AiRunStatus, HumanTaskInput, HumanTaskOutput }
@@ -63,7 +67,6 @@ export type AiRunState = z.infer<typeof aiRunStateContractSchema>
 
 export type HumanResumeSnapshot = Pick<HumanState, 'memory' | 'skills'> & {
   schemaVersion: 3
-  taskContext: HumanTaskContext
   execution: Pick<
     HumanState['execution'],
     'pendingDecisionHint' | 'deliveryGuidanceItems' | 'artifacts' | 'finalizationReason'
@@ -313,6 +316,7 @@ export type AiRunContext = {
     streamingMode?: AiLlmStreamingMode
     onTextDelta?: (text: string) => void
   }) => Promise<string>
+  chatMessages: (input: AiLlmTextMessagesRequest) => Promise<string>
   chatTools: (input: AiLlmToolCallRequest) => Promise<AiLlmToolCallResult>
   sendEvent: (event: AiRunEvent) => void
   recordLlmIo?: (record: AiLlmIoRecord) => void
@@ -322,11 +326,6 @@ export type AiRunContext = {
   getVisionLlmConfig: () => Promise<LlmRuntimeConfig>
   browserUseService?: BrowserUseService
   webCrawlerService?: WebCrawlerService
-  loadConversationContext: () => Promise<{
-    recentTurnsText: string
-    conversationSummaryText: string
-  }>
-  loadConversationMemory: () => Promise<ChatConversationMemory | null>
   appendTranscript: (entries: ChatTranscriptEntry[]) => Promise<void>
   loadTranscript: () => Promise<ChatTranscriptEntry[]>
   loadSessionSkillState: () => Promise<ChatSessionSkillState>

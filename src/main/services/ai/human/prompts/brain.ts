@@ -7,7 +7,6 @@ import {
 import type { HumanState } from '../types'
 import type { AiRuntimePlatform } from '../../types'
 import { listBuiltinSkillDefinitions, listExternalSkillDefinitions } from '../skills'
-import { renderResumeMessages } from '../../utils/resumeSnapshot'
 
 export const renderLocalEnvironmentText = (ctx: AiRunContext): string => {
   const workspace = ctx.workspace
@@ -124,7 +123,6 @@ export const buildBrainUserMessage = (input: {
   const renderCompactedHistory = input.compactedHistoryText
     ? `\n  <compacted_history>\n${input.compactedHistoryText}\n  </compacted_history>`
     : ''
-  const renderResume = renderResumeMessages(input.state.task.taskContext)
 
   return `
 <user_context>
@@ -140,10 +138,6 @@ ${renderPreferenceText(input.ctx.preference)}
 ${renderReferenceScopeText(input.ctx.referenceScope)}
   </reference_scope>
 ${renderCompactedHistory}
-  <resume_messages>
-${renderResume || 'none'}
-  </resume_messages>
-
   <current_state>${renderPlan}${renderLearnedSkills}
   </current_state>
 </user_context>

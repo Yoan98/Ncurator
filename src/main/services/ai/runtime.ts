@@ -4,7 +4,6 @@ import { createAiLlmExecutor } from './llmExecutor'
 import { buildReferenceScope } from './human/prompts/referenceScope'
 import { getAiRuntimePlatform } from './utils/platform'
 import {
-  formatPreviousTurns,
   normalizeSelectedReferences,
   normalizeWorkspaceBinding
 } from './utils/runContext'
@@ -101,26 +100,6 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     driver: deps.llmDriver
   })
 
-  const loadConversationContext: AiRunContext['loadConversationContext'] = async () => {
-    checkCancelled()
-    const { memory, recentMessages: messages } = await deps.chatStore.getConversationMemoryContext(
-      payload.sessionId
-    )
-    const recentTurnsText = formatPreviousTurns({
-      messages,
-      currentUserMessageId: payload.userMessageId,
-      currentAssistantMessageId: payload.assistantMessageId
-    })
-    const conversationSummaryText = String(memory?.summary || '')
-
-    return { recentTurnsText, conversationSummaryText }
-  }
-
-  const loadConversationMemory: AiRunContext['loadConversationMemory'] = async () => {
-    checkCancelled()
-    return await deps.chatStore.getConversationMemory(payload.sessionId)
-  }
-
   const appendTranscript: AiRunContext['appendTranscript'] = async (entries) => {
     await deps.chatTranscriptStore.appendBatch({
       sessionId: payload.sessionId,
@@ -176,6 +155,7 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     saveResumeSnapshot,
     chatStructured: llmExecutor.chatStructured,
     chatText: llmExecutor.chatText,
+    chatMessages: llmExecutor.chatMessages,
     chatTools: llmExecutor.chatTools,
     sendEvent: deps.sendEvent,
     recordLlmIo: deps.recordLlmIo,
@@ -185,8 +165,6 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     getVisionLlmConfig: loadRequestedVisionConfig,
     browserUseService: deps.browserUseService,
     webCrawlerService: deps.webCrawlerService,
-    loadConversationContext,
-    loadConversationMemory,
     appendTranscript,
     loadTranscript,
     loadSessionSkillState,

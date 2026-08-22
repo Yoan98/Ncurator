@@ -49,9 +49,9 @@ describe('ai tool hand backend', () => {
               taskId: runtime.taskId,
               userInput: '请在同一文档里连续写两次'
             }).execution,
-            currentThought: {
+            pendingRound: {
               thought: {
-                next: '对同一 docx 连续执行两次写'
+                text: '对同一 docx 连续执行两次写'
               },
               nextAction: {
                 action: 'hand',

@@ -1,6 +1,13 @@
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { buildBrainPrompt } from '../../../../src/main/services/ai/human/prompts/brain'
+import {
+  buildBrainSystemPrompt,
+  buildBrainUserMessage
+} from '../../../../src/main/services/ai/human/prompts/brain'
+import {
+  renderDecisionHintDetail,
+  renderDecisionHintForBrain
+} from '../../../../src/main/services/ai/human/prompts/decisionHints'
 import { createInitialHumanState } from '../../../../src/main/services/ai/human/state/schema'
 import type { AiRunContext } from '../../../../src/main/services/ai/types'
 
@@ -32,15 +39,15 @@ describe('ai unit brain decision-hint prompt contract', () => {
       userInput: '按当前偏好处理'
     })
 
-    const defaultPrompt = buildBrainPrompt({ state, ctx: createFakeCtx('default') }).user
-    const relaxedPrompt = buildBrainPrompt({
+    const defaultPrompt = buildBrainUserMessage({ state, ctx: createFakeCtx('default') })
+    const relaxedPrompt = buildBrainUserMessage({
       state,
       ctx: createFakeCtx('local_sources_relaxed')
-    }).user
-    const strictPrompt = buildBrainPrompt({
+    })
+    const strictPrompt = buildBrainUserMessage({
       state,
       ctx: createFakeCtx('local_sources_strict')
-    }).user
+    })
 
     const defaultPreference =
       defaultPrompt.match(/<preference>([\s\S]*?)<\/preference>/)?.[1].trim() || ''
@@ -51,17 +58,10 @@ describe('ai unit brain decision-hint prompt contract', () => {
   })
 
   it('renders static local environment with run start time in system', () => {
-    const state = createInitialHumanState({
-      taskId: 'task-1',
-      userInput: '检查当前环境'
-    })
-
-    const prompt = buildBrainPrompt({
-      state,
-      ctx: createFakeCtx()
-    })
+    const ctx = createFakeCtx()
+    const system = buildBrainSystemPrompt({ ctx })
     const environmentSection =
-      prompt.system.match(/<local_environment>([\s\S]*?)<\/local_environment>/)?.[1] || ''
+      system.match(/<local_environment>([\s\S]*?)<\/local_environment>/)?.[1] || ''
 
     expect(environmentSection).toContain('platform：macos')
     expect(environmentSection).toContain(
@@ -74,10 +74,8 @@ describe('ai unit brain decision-hint prompt contract', () => {
     expect(environmentSection).toMatch(
       /current_time\.local_iso：\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}/
     )
-    expect(prompt.user).not.toContain('<runtime_state>')
-    expect(prompt.user).not.toContain('terminal_state')
-    expect(prompt.system).not.toContain('utc_iso')
-    expect(prompt.system).not.toContain('<runtime_environment>')
+    expect(system).not.toContain('utc_iso')
+    expect(system).not.toContain('<runtime_environment>')
   })
 
   it('orders user blocks stable-first and keeps dynamic blocks last for prefix caching', () => {
@@ -86,22 +84,14 @@ describe('ai unit brain decision-hint prompt contract', () => {
       userInput: '继续处理资料'
     })
 
-    const prompt = buildBrainPrompt({
+    const prompt = buildBrainUserMessage({
       state,
-      ctx: createFakeCtx()
-    }).user
+      ctx: createFakeCtx(),
+      compactedHistoryText: '已压缩的历史'
+    })
 
     const indexOf = (tag: string): number => prompt.indexOf(`<${tag}>`)
-    const stableHeadOrder = [
-      'task_goal',
-      'preference',
-      'reference_scope',
-      'conversation_history',
-      'skill_state',
-      'round_history',
-      'resume_messages',
-      'decision_hint'
-    ]
+    const stableHeadOrder = ['task_goal', 'preference', 'reference_scope', 'compacted_history', 'current_state']
     const indexes = stableHeadOrder.map((tag) => indexOf(tag))
     const sorted = [...indexes].sort((a, b) => a - b)
 
@@ -109,230 +99,86 @@ describe('ai unit brain decision-hint prompt contract', () => {
     expect(indexes).toEqual(sorted)
   })
 
-  it('renders current decision hint in decision_hint and keeps latest execution in rounds', () => {
+  it('renders plan and learned skills inside current_state', () => {
     const state = createInitialHumanState({
       taskId: 'task-1',
       userInput: '继续处理 docx'
     })
-
-    state.execution.currentThought = {
-      thought: {
-        next: '继续处理 docx 批量写'
-      },
-      nextAction: {
-        action: 'hand',
-        calls: [
-          {
-            toolName: 'docx_edit',
-            args: {
-              sourcePath: 'report.docx',
-              actions: [
-                {
-                  type: 'insert_blocks',
-
-                  location: { blockId: 'b:1', position: 'after' },
-                  blocks: [{ type: 'paragraph', text: '补充内容' }]
-                }
-              ]
-            }
-          }
-        ]
-      }
-    }
-
-    state.memory.taskRun.rounds = [
-      {
-        roundId: 1,
-        createdAt: 1,
-        thought: { next: '继续处理 docx 批量写' },
-        nextAction: state.execution.currentThought.nextAction,
-        execution: {
-          kind: 'hand',
-          calls:
-            state.execution.currentThought.nextAction.action === 'hand'
-              ? state.execution.currentThought.nextAction.calls
-              : [],
-          toolResults: [
-            {
-              toolName: 'docx_edit',
-              ok: false,
-              data: {
-                error: 'cannot resolve anchorBlockId=b:1 in current active snapshot'
-              }
-            }
-          ],
-          decisionHint: {
-            code: 'hand_docx_edit_failed',
-            detail: {
-              toolName: 'docx_edit',
-              sourcePath: 'report.docx',
-              action: 'insert_blocks',
-              error: 'cannot resolve anchorBlockId=b:1 in current active snapshot'
-            }
-          }
-        }
-      }
+    state.memory.plan = [
+      { title: '修正文档写入', status: 'todo' },
+      { title: '检查是否满足诉求', status: 'done', evidence: '已完成' }
     ]
+    state.skills.learnedSkillIds = ['docx-read', 'docx-write']
 
-    state.execution.pendingDecisionHint = {
-      code: 'hand_docx_positioned_write_blocked',
-      detail: {
-        toolName: 'docx_edit',
-        sourcePath: 'report.docx',
-        action: 'insert_blocks',
-        error: '当前命中复杂定位排版区域：包含“达到反走样。”的区域，暂不支持自动编辑'
-      }
-    }
+    const prompt = buildBrainUserMessage({ state, ctx: createFakeCtx(), injectPlan: true })
 
-    state.memory.todolist = [
-      {
-        item: '修正文档写入',
-        status: 'todo'
-      }
-    ]
-
-    const prompt = buildBrainPrompt({
-      state,
-      ctx: createFakeCtx()
-    }).user
-
-    const roundsSection =
-      prompt.match(/<rounds>([\s\S]*?)<\/rounds>/)?.[1] || ''
-    const correctionHintSection =
-      prompt.match(/<decision_hint>([\s\S]*?)<\/decision_hint>/)?.[1] || ''
-
-    expect(prompt).not.toContain('<latest_round>')
-    expect(roundsSection).toContain('继续处理 docx 批量写')
-    expect(roundsSection).toContain('类型：hand')
-    expect(roundsSection).toContain(
-      'cannot resolve anchorBlockId=b:1 in current active snapshot'
-    )
-    expect(roundsSection).not.toContain('上一轮 docx_edit 写入失败')
-    expect(correctionHintSection).toContain('DOCX 绝对定位或锚定定位布局')
-    expect(correctionHintSection).toContain('命中区域：“达到反走样。”')
-    expect(correctionHintSection).toContain('该区域需要用户手动处理')
-    expect(correctionHintSection).not.toContain('错误：')
+    const currentState = prompt.match(/<current_state>([\s\S]*?)<\/current_state>/)?.[1] || ''
+    expect(currentState).toContain('[todo] 修正文档写入')
+    expect(currentState).toContain('[done] 检查是否满足诉求（已完成）')
+    expect(currentState).toContain('- docx-read')
+    expect(currentState).toContain('- docx-write')
   })
 
-  it('requires references disclosure when nextAction is mouth', () => {
+  it('renders compacted_history only when provided', () => {
     const state = createInitialHumanState({
       taskId: 'task-2',
-      userInput: '总结依据'
+      userInput: '继续处理资料'
     })
 
-    const prompt = buildBrainPrompt({
+    const withHistory = buildBrainUserMessage({
       state,
-      ctx: createFakeCtx()
-    }).system
-
-    expect(prompt).toContain('nextAction为mouth时：')
-    expect(prompt).toContain('nextAction.evidenceReferences')
-    expect(prompt).toContain('usedFor')
-    expect(prompt).toContain('支撑了最终交付的哪些地方')
-    expect(prompt).toContain('evidenceReferences[*].resourceType 必须为 file 或 web')
-    expect(prompt).toContain('没有明确路径或 URL 的资料不要放入 evidenceReferences')
-  })
-
-  it('renders prompt-friendly output shape for hand calls while keeping args generic', () => {
-    const state = createInitialHumanState({
-      taskId: 'task-shape',
-      userInput: '继续处理'
+      ctx: createFakeCtx(),
+      compactedHistoryText: '此前已完成资料读取。'
     })
+    const withoutHistory = buildBrainUserMessage({ state, ctx: createFakeCtx() })
 
-    const prompt = buildBrainPrompt({
-      state,
-      ctx: createFakeCtx()
-    }).system
-
-    const outputShapeSection = prompt.match(/<output_shape>([\s\S]*?)<\/output_shape>/)?.[1] || ''
-
-    expect(outputShapeSection).toContain('toolName: string')
-    expect(outputShapeSection).toContain('args: object')
-    expect(outputShapeSection).toContain('{ thought: { next: string')
-    expect(outputShapeSection).not.toContain('toolName: "terminal_run"')
-    expect(outputShapeSection).not.toContain('toolName: "docx_create"')
-    expect(outputShapeSection).not.toContain('\n      thought: {')
+    expect(withHistory).toContain('<compacted_history>')
+    expect(withHistory).toContain('此前已完成资料读取。')
+    expect(withoutHistory).not.toContain('<compacted_history>')
   })
 
-  it('renders conversation_history and round_history under the new contract', () => {
+  it('requires references disclosure when delivering through mouth', () => {
+    const system = buildBrainSystemPrompt({ ctx: createFakeCtx() })
+
+    expect(system).toContain('finish')
+    expect(system).toContain('evidenceReferences')
+    expect(system).toContain('usedFor')
+    expect(system).toContain('支撑了最终交付的哪些地方')
+    expect(system).toContain('resourceType 为 file 或 web')
+    expect(system).toContain('禁止把不可追溯的地址或无法使用的资料放入 evidenceReferences')
+  })
+
+  it('does not render removed history blocks in the user message', () => {
     const state = createInitialHumanState({
       taskId: 'task-3',
       userInput: '继续处理资料'
     })
 
-    const prompt = buildBrainPrompt({
-      state,
-      ctx: createFakeCtx()
-    })
+    const user = buildBrainUserMessage({ state, ctx: createFakeCtx() })
 
-    expect(prompt.system).toContain('conversation_history：当前会话历史视图。')
-    expect(prompt.system).toContain('round_history：当前任务的历史证据视图。')
-    expect(prompt.user).toContain('<conversation_history>')
-    expect(prompt.user).toContain('<summary>')
-    expect(prompt.user).toContain('<recent_turns>')
-    expect(prompt.user).toContain('<round_history>')
-    expect(prompt.user).toContain('<compactions>')
-    expect(prompt.user).toContain('<rounds>')
-    expect(prompt.user).not.toContain('<todolist>')
-    expect(prompt.user).not.toContain('<task_progress>')
-    expect(prompt.user).not.toContain('<conversation_context>')
-    expect(prompt.user).not.toContain('<task_run_context>')
-    expect(prompt.user).not.toContain('<latest_round>')
-    expect(prompt.user).not.toContain('<prior_rounds>')
-    expect(prompt.user).not.toContain('待办路径：')
-    expect(prompt.user).not.toContain('推进摘要：')
-    expect(prompt.user).not.toContain('<thought>')
-    expect(prompt.user).not.toContain('当前与下一步：')
+    expect(user).toContain('<current_state>')
+    expect(user).not.toContain('<conversation_history>')
+    expect(user).not.toContain('<round_history>')
+    expect(user).not.toContain('<rounds>')
+    expect(user).not.toContain('<resume_messages>')
+    expect(user).not.toContain('<todolist>')
+    expect(user).not.toContain('<summary>')
+    expect(user).not.toContain('<recent_turns>')
+    expect(user).not.toContain('待办路径：')
   })
 
-  it('renders output examples with todo evidence and compact tool schemas', () => {
-    const state = createInitialHumanState({
-      taskId: 'task-4',
-      userInput: '继续处理资料'
+  it('renders decision hints for brain without throwing', () => {
+    const summary = renderDecisionHintForBrain({
+      code: 'brain_plan_incomplete',
+      detail: { pendingItems: ['检查是否已经满足用户诉求'] }
+    })
+    const detail = renderDecisionHintDetail({
+      code: 'brain_plan_incomplete',
+      detail: { pendingItems: ['检查是否已经满足用户诉求'] }
     })
 
-    const prompt = buildBrainPrompt({
-      state,
-      ctx: createFakeCtx()
-    })
-
-    const learningExampleSection =
-      prompt.system.match(/<example_learning>([\s\S]*?)<\/example_learning>/)?.[1] || ''
-    const toolPlanExampleSection =
-      prompt.system.match(/<example_tool_plan>([\s\S]*?)<\/example_tool_plan>/)?.[1] || ''
-    const deliveryExampleSection =
-      prompt.system.match(/<example_delivery>([\s\S]*?)<\/example_delivery>/)?.[1] || ''
-
-    expect(learningExampleSection).toContain(
-      '"evidence":"当前工具目录里没有可用的读取 docx 的工具"'
-    )
-    expect(deliveryExampleSection).toContain(
-      '"evidence":"审批制度说明.docx 中明确说明审批驳回时会保留原文件"'
-    )
-    expect(prompt.system).not.toContain('progressOverview')
-    expect(prompt.system).not.toContain('已经尝试过什么')
-    expect(prompt.system).not.toContain('形成了什么结论')
-    expect(prompt.system).not.toContain('证据是什么')
-    expect(toolPlanExampleSection).toContain(
-      '{"thought":{"next":"当前缺少用户工作区域文件事实，先读取当前目录建立资料范围。"},"nextAction":{"action":"hand","calls":[{"toolName":"terminal_run","args":{"command":"pwd","commandExplanation":"读取当前终端所在路径。"}}]}}'
-    )
-    expect(prompt.system).not.toContain('progressionSummary')
-    expect(prompt.system).toContain(
-      '{ command: string, commandExplanation: string, terminalId?: string }'
-    )
-    expect(prompt.system).not.toContain('适用时机：')
-    expect(prompt.system).not.toContain('适用于需要执行终端命令的任务。')
-    expect(prompt.system).not.toContain('cwd?: string')
-    expect(prompt.system).toContain('工具 terminal_read')
-    expect(prompt.system).toContain('工具 terminal_stop')
-    expect(prompt.system).toContain(
-      '- 输入结构：\n    { queryText: string, strategy?: "auto" | "semantic" | "keyword", limit?: number, sourceType?: "all" | "file" | "web", documentIds?: string[] }'
-    )
-    expect(prompt.system).not.toContain('- 示例：')
-    expect(prompt.system).not.toContain('最近 DeepSeek 融资情况')
-    expect(prompt.system).toContain('输入结构与工具说明')
-    expect(prompt.system).not.toContain('输入结构与示例')
-    expect(prompt.system).not.toContain('{\n        command: string\n        cwd?: string\n      }')
-    expect(prompt.system).not.toContain('{\n      "command": "ls 工作"')
+    expect(summary).toContain('检查是否已经满足用户诉求')
+    expect(summary).toContain('仍有未完成事项')
+    expect(detail).toEqual({ pendingItems: ['检查是否已经满足用户诉求'] })
   })
 })

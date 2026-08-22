@@ -6,14 +6,14 @@ import { createInitialHumanState } from '../../../../../src/main/services/ai/hum
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 
 describe('ai tool hand backend', () => {
-  it('hand-schema-preflight-invalid-input', async () => {
+  it('hand-invalid-tool-input', async () => {
     await runBackendCase({
-      caseId: 'hand-schema-preflight-invalid-input',
+      caseId: 'hand-invalid-tool-input',
       harnessMode: 'tool-real',
       domain: 'ai',
       suite: 'tool',
       groups: ['hand'],
-      description: '验证 hand preflight schema 失败时稳定返回具体 error。',
+      description: '验证双层嵌套坏参数会被工具层 schema 校验拒绝并返回 hand_docx_edit_failed。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -30,7 +30,7 @@ describe('ai tool hand backend', () => {
 
         const baseState = createInitialHumanState({
           taskId: runtime.taskId,
-          userInput: '请测试 hand preflight schema 失败'
+          userInput: '请测试 hand 工具参数非法'
         })
         const handNode = createHandNode({ ctx, cache })
         const state = await handNode({
@@ -40,9 +40,9 @@ describe('ai tool hand backend', () => {
           },
           execution: {
             ...baseState.execution,
-            currentThought: {
+            pendingRound: {
               thought: {
-                next: '给一个双层嵌套的坏 docx_edit'
+                text: '给一个双层嵌套的坏 docx_edit'
               },
               nextAction: {
                 action: 'hand',
@@ -82,13 +82,11 @@ describe('ai tool hand backend', () => {
         runtime.assertThat(
           toolResult?.ok === false &&
             typeof toolResult.data?.error === 'string' &&
-            toolResult.data.error.includes('calls[0].args') &&
-            result.state.execution.pendingDecisionHint?.code === 'hand_call_invalid' &&
-            result.state.execution.pendingDecisionHint.detail.invalidCalls[0]?.callIndex === 0,
+            toolResult.data.error.includes('did not match expected schema') &&
+            result.state.execution.pendingDecisionHint?.code === 'hand_docx_edit_failed',
           {
-            name: 'hand-schema-preflight-invalid-input',
-            message:
-              'hand preflight schema 失败时应保留具体 schema error，并提升为 hand_call_invalid。',
+            name: 'hand-invalid-tool-input-rejects-nested-args',
+            message: '双层嵌套坏参数应由工具层 schema 校验拒绝，并提升为 hand_docx_edit_failed。',
             data: {
               toolResult,
               pendingDecisionHint: result.state.execution.pendingDecisionHint

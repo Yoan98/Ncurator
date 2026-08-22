@@ -149,9 +149,7 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
       await saveProcessSnapshot(initialState)
       const resumed =
         initialState.execution.pendingDecisionHint?.code === 'run_resumed_after_interruption'
-      if (!resumed) {
-        await ctx.appendTranscript([{ kind: 'user', content: initialState.task.userInput }])
-      }
+      await ctx.appendTranscript([{ kind: 'user', content: initialState.task.userInput }])
       if (resumed && initialState.execution.pendingDecisionHint) {
         emitDecisionHint({
           ctx,

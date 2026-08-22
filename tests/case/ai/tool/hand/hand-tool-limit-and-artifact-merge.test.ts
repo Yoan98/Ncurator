@@ -31,9 +31,9 @@ const buildHandState = (input: {
       userInput: input.userInput
     }).execution,
     artifacts: input.previousArtifacts || [],
-    currentThought: {
+    pendingRound: {
       thought: {
-        next: `调用 ${input.toolName}`
+        text: `调用 ${input.toolName}`
       },
       nextAction: {
         action: 'hand' as const,

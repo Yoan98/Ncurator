@@ -98,31 +98,30 @@ AI 架构围绕一次 `run` 展开。每次用户请求都会创建一个 run，
 ```mermaid
 flowchart TD
     U["用户输入"]
-    S["会话上下文\nrecent messages + conversation summary"]
+    T["会话转录\nchat_session_transcript"]
     R["AI Run"]
     B["context_budget\n检查上下文预算"]
     C["brain\n决定下一步"]
     L["learning\n加载 external skill"]
+    D["plan\n更新执行计划"]
     H["hand\n执行工具"]
-    M["mouth\n组织最终答复"]
-    P["context_compaction\n压缩 run 内较早历史"]
-    O["最终答复"]
-    N["更新 conversation summary"]
+    M["mouth\n复用消息数组交付"]
+    P["context_compaction\n压缩较早历史"]
 
     U --> R
-    S --> R
+    T -->|append user/assistant/tool| R
     R --> B
     B -->|预算正常| C
     B -->|需要压缩| P
     P --> B
     C -->|需要能力| L
+    C -->|更新计划| D
     C -->|需要工具| H
     C -->|可以答复| M
     L --> B
+    D --> B
     H --> B
-    M --> O
-    O --> N
-    N --> S
+    M -->|最终答复 assistant| T
 ```
 
 ### 主要职责
@@ -133,7 +132,7 @@ flowchart TD
 - `learning` 负责按需加载 external skill，执行 `learn_skill` 控制工具并把结果写回消息数组。
 - `plan` 执行 `update_plan` 控制工具，把计划写入 `memory.plan` 并回写 `ToolMessage`。
 - `hand` 负责执行真实工具，把结果以 `ToolMessage` 追加回消息数组。
-- `mouth` 由 `finish` 控制工具（或无工具调用的自然收尾）触发，负责组织最终答复和交付内容。
+- `mouth` 由 `finish` 控制工具（或无工具调用的自然收尾）触发，复用 brain/hand 已累积的消息数组，追加一条交付指令 user 消息后流式生成最终答复（`chatMessages`），并把最终答复作为 `assistant` 转录条目写回。
 - `context_budget` 负责在每一步前检查上下文预算。
 - `context_compaction` 把消息投影的较早区间压缩为一条摘要（`<compacted_history>`）并注入 `<current_state>`（完整 plan + learnedSkillIds），服务本次 run 继续推进。
 
@@ -157,7 +156,7 @@ skill 不按目录强行拆分，也不等同于工具数量。一个 skill 可�
 
 ### 结构化输出与服务重试
 
-`brain` 不再使用结构化 JSON 决策，而是走原生 function calling（`bindTools` + `tool_calls`），工具参数由模型按工具 schema 生成、本地仍以 zod 校验兜底。其余需要结构化输出的调用（如会话记忆摘要）仍统一使用 `prompt_json`：纯文本请求，不发送 `response_format`，模型按提示词中的 schema 描述输出 JSON，本地通过代码块剥离（`normalizePromptJsonText`）、`jsonrepair` 修复和 Schema 校验兜底。
+`brain` 不再使用结构化 JSON 决策，而是走原生 function calling（`bindTools` + `tool_calls`），工具参数由模型按工具 schema 生成、本地仍以 zod 校验兜底。其余需要结构化输出的调用仍统一使用 `prompt_json`：纯文本请求，不发送 `response_format`，模型按提示词中的 schema 描述输出 JSON，本地通过代码块剥离（`normalizePromptJsonText`）、`jsonrepair` 修复和 Schema 校验兜底。
 
 LLM 调用失败严格分两层处理：
 
@@ -168,9 +167,9 @@ LLM 调用失败严格分两层处理：
 
 ### 会话连续性
 
-跨轮上下文由 conversation summary 和未被摘要覆盖的 recent messages 组成。摘要只覆盖完整轮次，并在后台生成；失败或陈旧结果不会推进覆盖边界。run 内压缩和跨 run 的会话记忆是两套独立机制。
+跨轮上下文由会话级 append-only 消息转录（`chat_session_transcript`）唯一承载，不再维护 conversation summary / `rounds` / `conversation` 副本。每次 run 开始时把当前用户消息作为 `user` 转录条目追加；brain 从转录投影消息、注入 `<current_state>`（完整 plan + learnedSkillIds）后继续推进。中断恢复同样是往转录尾部补一条 user 消息并把 `task.userInput` 指向新消息，原目标自然保留在转录首条 user 中。
 
-未正常完成的智能模式任务另有一套按会话持久化的恢复快照。快照保存原始任务、历次中断与恢复记录、当前中断原因和 HumanState 进度；同一会话的下一条用户消息会消费当前中断原因、追加恢复记录并启动新的 run。网络错误、超时、用户停止、进程中断、运行上限和未知异常都保留快照，只有任务正常完成或会话被删除时才清理。不同会话的恢复状态严格隔离。
+未正常完成的智能模式任务另有一套按会话持久化的恢复快照。快照保存 plan、compactions、已学习技能和执行收尾态（delivery guidance / artifacts / finalizationReason）；同一会话的下一条用户消息会消费快照、启动新的 run 并补一条 user 转录条目。网络错误、超时、用户停止、进程中断、运行上限和未知异常都保留快照，只有任务正常完成或会话被删除时才清理。不同会话的恢复状态严格隔离。
 
 文件 artifact 是预览、差异与回退所需的内部业务数据；传入模型时只投影必要语义，不暴露内部记录标识。运行失败或取消不会撤销已落地的工作区内修改，所有终态都保留可查看、可回退的工作区内修改记录。
 

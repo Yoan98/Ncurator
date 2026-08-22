@@ -1,7 +1,7 @@
 import type { AiRunContext } from '../../../types'
-import { ToolMessage } from '@langchain/core/messages'
+import { HumanMessage, ToolMessage } from '@langchain/core/messages'
 import type { HumanRuntimeCache, HumanState } from '../../types'
-import { buildMouthPrompt } from '../../prompts/mouth'
+import { buildMouthDeliveryMessage } from '../../prompts/mouth'
 import { assertExternalLearnedSkillIds } from '../../skills'
 import { completeHumanTask, returnToBrainWithDecisionHint } from '../utils/stateTransitions'
 import {
@@ -122,7 +122,7 @@ export const createMouthNode = (input: {
     }
     input.cache.currentState = promptState
 
-    const prompt = buildMouthPrompt({
+    const deliveryMessage = buildMouthDeliveryMessage({
       state: promptState,
       ctx: input.ctx
     })
@@ -162,13 +162,15 @@ export const createMouthNode = (input: {
     }
     input.cache.currentState = readyState
 
+    const messages = [...(input.cache.messages || [])]
+    messages.push(new HumanMessage(deliveryMessage))
+
     let rawDeliveryMarkdown: string
     try {
-      rawDeliveryMarkdown = await input.ctx.chatText({
+      rawDeliveryMarkdown = await input.ctx.chatMessages({
         caller: 'human.mouth',
         taskId: promptState.task.taskId,
-        system: prompt.system,
-        user: prompt.user,
+        messages,
         schemaName: 'human_mouth_markdown',
         temperature: 0.2,
         onTextDelta: input.emitAnswerEvents

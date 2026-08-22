@@ -7,7 +7,7 @@ import type {
 import type { ChatStore } from '../../storage/domains/ChatStore'
 import type { AiRunStartPayload } from '../types'
 import type { HumanResumeSnapshot } from '../types'
-import type { HumanState, HumanTaskContext } from '../human/types'
+import type { HumanState } from '../human/types'
 import { createDefaultHumanTrace, createInitialHumanState } from '../human/state/schema'
 
 const toJsonObject = (value: HumanResumeSnapshot): JsonObject =>
@@ -22,39 +22,11 @@ const cloneWorkspace = (
 ): WorkspaceRuntimeBinding | undefined =>
   workspace ? (JSON.parse(JSON.stringify(workspace)) as WorkspaceRuntimeBinding) : undefined
 
-export const createHumanTaskContext = (originalGoal: string): HumanTaskContext => ({
-  originalGoal: String(originalGoal || '').trim(),
-  recoveryHistory: []
-})
-
-export const renderHumanTaskGoal = (taskContext: HumanTaskContext): string =>
-  String(taskContext.originalGoal || '').trim()
-
-export const renderResumeMessages = (taskContext: HumanTaskContext | undefined): string => {
-  const history = taskContext?.recoveryHistory || []
-  if (history.length === 0) return ''
-  return history
-    .map((item, index) => `${String(index + 1)}. ${String(item.userInput || '').trim()}`)
-    .join('\n')
-}
-
-const resolveTaskContext = (state: HumanState): HumanTaskContext =>
-  state.task.taskContext || createHumanTaskContext(state.task.userInput)
-
-const buildInterruptedTaskContext = (
-  state: HumanState,
-  reason: ChatSessionResumeSnapshot['reason']
-): HumanTaskContext => ({
-  ...resolveTaskContext(state),
-  currentInterruption: { reason }
-})
-
 export const buildHumanResumeSnapshot = (
   state: HumanState,
-  reason: ChatSessionResumeSnapshot['reason']
+  _reason: ChatSessionResumeSnapshot['reason']
 ): HumanResumeSnapshot => ({
   schemaVersion: 3,
-  taskContext: buildInterruptedTaskContext(state, reason),
   memory: {
     plan: state.memory.plan,
     compactions: state.memory.compactions
@@ -110,26 +82,12 @@ export const restoreHumanStateFromResumeSnapshot = (input: {
     userInput: input.userInput
   })
   const snapshot = input.snapshot as Partial<HumanResumeSnapshot>
-  const previousTaskContext = snapshot.taskContext || createHumanTaskContext(input.userInput)
-  const interruptionReason = previousTaskContext.currentInterruption?.reason || input.reason
-  const taskContext: HumanTaskContext = {
-    originalGoal: previousTaskContext.originalGoal,
-    recoveryHistory: [
-      ...previousTaskContext.recoveryHistory,
-      {
-        interruptionReason,
-        userInput: input.userInput
-      }
-    ]
-  }
-  const taskGoal = renderHumanTaskGoal(taskContext)
 
   return {
     ...baseState,
     task: {
       taskId: input.runId,
-      userInput: taskGoal,
-      taskContext
+      userInput: input.userInput
     },
     memory: {
       plan: snapshot.memory?.plan || baseState.memory.plan,

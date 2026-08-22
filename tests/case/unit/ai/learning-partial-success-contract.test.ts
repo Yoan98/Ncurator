@@ -4,7 +4,6 @@ import type { ChatSessionSkillState } from '../../../../src/shared/types'
 import { createLearningNode } from '../../../../src/main/services/ai/human/node/learningNode'
 import { createHumanRuntimeCache } from '../../../../src/main/services/ai/human/node/utils/runtimeCache'
 import { createInitialHumanState } from '../../../../src/main/services/ai/human/state/schema'
-import type { HumanThoughtDecision } from '../../../../src/main/services/ai/human/types'
 
 const createStubAiRunContext = (): AiRunContext => ({
   runId: 'run-learning-unit',
@@ -33,11 +32,8 @@ const createStubAiRunContext = (): AiRunContext => ({
   },
   sendEvent: () => {},
   requestApprovalBatch: async () => ({ accepted: true, decisions: [] }),
-  loadConversationContext: async () => ({
-    recentTurnsText: '',
-    conversationSummaryText: ''
-  }),
-  loadConversationMemory: async () => null,
+  loadTranscript: async () => [],
+  appendTranscript: async () => undefined,
   loadSessionSkillState: async (): Promise<ChatSessionSkillState> => ({
     schemaVersion: 1,
     learnedSkillIds: [],
@@ -65,9 +61,12 @@ const createStubAiRunContext = (): AiRunContext => ({
   embeddingService: undefined as never
 })
 
-const buildLearningDecision = (skillIds: string[]): HumanThoughtDecision => ({
+const buildLearningDecision = (skillIds: string[]): {
+  thought: { text: string }
+  nextAction: { action: 'learning'; wantLearnSkillIds: string[] }
+} => ({
   thought: {
-    next: '测试 learning partial success'
+    text: '测试 learning partial success'
   },
   nextAction: {
     action: 'learning' as const,
@@ -92,7 +91,7 @@ describe('ai unit learning partial success', () => {
       },
       execution: {
         ...baseState.execution,
-        currentThought: buildLearningDecision(['docx-read', 'docx-write'])
+        pendingRound: buildLearningDecision(['docx-read', 'docx-write'])
       }
     })
 
@@ -103,7 +102,7 @@ describe('ai unit learning partial success', () => {
       skippedUnknownSkillIds: []
     })
     expect(nextState.skills.learnedSkillIds).toEqual(['docx-read', 'docx-write'])
-    expect(nextState.memory.taskRun.rounds.at(-1)?.execution.kind).toBe('learning')
+    expect(nextState.trace.steps.at(-1)).toMatchObject({ action: 'learn_skill', skillId: 'docx-write' })
     expect(cache.skillToolsets['docx-write']).toBeTruthy()
   })
 
@@ -120,7 +119,7 @@ describe('ai unit learning partial success', () => {
       ...baseState,
       execution: {
         ...baseState.execution,
-        currentThought: buildLearningDecision(['unknown-skill', 'docx-read'])
+        pendingRound: buildLearningDecision(['unknown-skill', 'docx-read'])
       }
     })
 
@@ -130,7 +129,7 @@ describe('ai unit learning partial success', () => {
       skippedUnknownSkillIds: ['unknown-skill']
     })
     expect(nextState.skills.learnedSkillIds).toEqual(['docx-read'])
-    expect(nextState.memory.taskRun.rounds.at(-1)?.execution.kind).toBe('learning')
+    expect(nextState.trace.steps.at(-1)).toMatchObject({ action: 'learn_skill', skillId: 'docx-read' })
   })
 
   it('treats builtin-only requests as invalid learning', async () => {
@@ -146,7 +145,7 @@ describe('ai unit learning partial success', () => {
       ...baseState,
       execution: {
         ...baseState.execution,
-        currentThought: buildLearningDecision(['terminal'])
+        pendingRound: buildLearningDecision(['terminal'])
       }
     })
 
@@ -163,7 +162,6 @@ describe('ai unit learning partial success', () => {
       skippedDuplicateSkillIds: []
     })
     expect(nextState.skills.learnedSkillIds).toEqual([])
-    expect(nextState.memory.taskRun.rounds.at(-1)?.execution.kind).toBe('learning')
   })
 
   it('rejects states whose learnedSkillIds still contain builtin skills', async () => {
@@ -183,7 +181,7 @@ describe('ai unit learning partial success', () => {
         },
         execution: {
           ...baseState.execution,
-          currentThought: buildLearningDecision(['docx-read'])
+          pendingRound: buildLearningDecision(['docx-read'])
         }
       })
     ).rejects.toThrow('learnedSkillIds 只允许 external skill')

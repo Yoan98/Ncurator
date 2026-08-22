@@ -6,7 +6,6 @@
 | --- | --- | ---: | --- | --- | --- | --- |
 | human-risk-report-draft-live | 完成 | 97 | deepseek-v4-flash | 2026-08-13 20:15 CST | tests/logs/ai/human/live/human-risk-report-draft-live/20260813-201549-550 | 真实读取模板/上周周报与工作文档，docx_edit(insert_blocks) 新建周报并 apply，原文件全部未改。 |
 | human-context-compaction-natural-trigger-live | 完成 | 97 | deepseek-v4-flash | 2026-08-13 19:56 CST | tests/logs/ai/human/live/human-context-compaction-natural-trigger-live/20260813-195642-816 | 真实长任务自然触发多轮压缩（usage_plus_delta），摘要结构与关键事实保留，压缩后连续推进并完成周报交付。 |
-| human-conversation-memory-multi-run-live | 完成 | 96 | deepseek-v4-flash | 2026-08-13 20:09 CST | tests/logs/ai/human/live/human-conversation-memory-multi-run-live/20260813-200929-748 | 双 run 间 memory 持久化（batch=10/bridge-8），第二 run brain prompt 带回 memory 结构并延续业务主线。 |
 | human-excel-write-reconciliation-live | 完成 | 96 | deepseek-v4-flash | 2026-08-14 18:39 CST | tests/logs/ai/human/live/human-excel-write-reconciliation-live/20260814-183949-614 | 终端真实计算核对，四笔状态精确标记，SUMIF 公式正确，样式保持。 |
 | human-excel-read-sales-gap-analysis-live | 完成 | 95 | deepseek-v4-flash | 2026-08-13 21:02 CST | tests/logs/ai/human/live/human-excel-read-sales-gap-analysis-live/20260813-210226-107 | 真实读取多 Sheet 并终端/python 计算差额，对话给出 P-100/P-300 优先级，源工作簿未改。 |
 | human-kb-guided-docx-comparison-draft-live | 完成 | 96 | deepseek-v4-flash | 2026-08-13 20:12 CST | tests/logs/ai/human/live/human-kb-guided-docx-comparison-draft-live/20260813-201203-331 | KB 真实检索命中，两份目标 docx 写入并双 applyId artifact，来源课件未改。 |
@@ -96,7 +95,7 @@
 - 允许：脚本化 LLM 输入输出。
 - 不允许：脚本化 runtime 节点执行结果。
 - 断言重点：节点流转、工具调用、审批事件、artifact、memory、错误收敛、状态收口。
-- artifact 进入 conversation history 和 conversation memory 时只允许包含 `kind / path / operation`；内部 `capability / fileName / applyId` 不得进入提示词。
+- artifact 进入消息转录（`chat_session_transcript`）与提示词时只允许包含 `kind / path / operation`；内部 `capability / fileName / applyId` 不得进入提示词。
 - 已经落地的文件修改不得因 `run_failed` 或 `run_cancelled` 丢失，终态消息与 Workbench 都必须继续显示对应修改记录。
 
 #### live 类别
@@ -1003,13 +1002,13 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 - Oracle：返回 `hand_call_limit_exceeded` decision hint，detail 中包含 limit 与 callCount，且不会产生 `lastToolResults`。
 - Not：不验证 hardActionLimit 的执行后收敛；该场景由 `hand-tool-limit-and-artifact-merge` 覆盖。
 
-##### `hand-schema-preflight-invalid-input`
+##### `hand-invalid-tool-input`
 
 - 测试类型：`backend`
-- What：`hand` preflight schema 失败时稳定返回 `invalid_input`，并保留具体 diagnostic。
-- Why：模型常见错误是把工具参数包错层级，preflight 必须在真实工具执行前给出可恢复的结构化失败。
+- What：双层嵌套的坏工具参数会被工具层 schema 校验拒绝，并提升为 `hand_docx_edit_failed`。
+- Why：模型常见错误是把工具参数包错层级；工具自身的 zod schema 校验必须在真实执行中给出可恢复的结构化失败。
 - How：向真实 `hand` node 提交双层嵌套的坏 `docx_edit` 参数。
-- Oracle：工具结果为失败，diagnostic 指向 `calls[0].args`，并提升为 `hand_call_invalid` decision hint。
+- Oracle：工具结果为失败，error 指向 `did not match expected schema`，并提升为 `hand_docx_edit_failed` decision hint。
 - Not：不验证 brain 如何根据该 hint 重写计划。
 
 ##### `hand-docx-edit-invalid-blockid-failed`
@@ -1217,10 +1216,10 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 ##### `conversation-memory-multi-run-recall`
 
 - 测试类型：`backend`
-- What：同一 `session` 下已有 covered `conversation memory` 与 covered 边界后的 recent turns 会在下一次真实 `brain` prompt 中共同带回。
-- Why：跨任务连续性依赖持久 `conversation memory` 与未 covered 最近消息协同工作；只验证单次 summary happy path 无法证明 batch 边界后的内容仍可被召回。
-- How：seed 一条带 `coveredMessageId / coveredTimestamp / coveredMessageCount` 的发布准备 summary，再 seed covered 边界之后的新 user/assistant turns；随后启动同一 session 的真实 `human` graph 并检查 prompt 与最终交付。
-- Oracle：`brain` prompt 同时含 `<conversation_history>`、`<summary>` 与 `<recent_turns>`；summary 中旧状态不会继续出现；recent turns 中的新问题和产物状态可见；最终交付会提到 Bob、上线窗口冲突和下一步安排。
+- What：同一 `session` 下之前 run 的用户消息与助手最终回答，会通过会话消息转录（`chat_session_transcript`）作为真实消息带入下一次 `brain` prompt。
+- Why：跨任务连续性依赖 append-only 消息转录（而非 conversation summary / rounds 副本）作为唯一真相源；要证明上一轮沉淀的关键事实在后续 run 仍可被召回。
+- How：同一 session 连续跑三个 run，前两轮分别沉淀「还缺少回滚负责人」「负责人候选改成 Bob、审批未完成、上线窗口冲突待确认」，第三轮追问当前状态并检查 brain prompt 与最终交付。
+- Oracle：第三轮 `brain` prompt 同时命中 Bob、上线窗口冲突与还缺少回滚负责人；最终交付带出负责人候选、未完成审批与下一步安排。
 - Not：不验证 live 模型总结质量；不验证 session 隔离。
 
 ##### `ai-run-service-resume-snapshot`
@@ -1377,15 +1376,6 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 - How：用户要求核对图表但不修改演示文稿；模型自行读取文字和视觉内容。
 - Oracle：源 PPT 不变；真实文字读取和有可用文本的视觉识别均成功；结论由 raw logs 人工评估。
 - Not：不写 `management-risk-review.json`，不匹配最终回答文案。
-
-##### `human-conversation-memory-multi-run-live`
-
-- 测试类型：`backend`
-- What：live 模式下基于真实 workspace 的 conversation memory 会在双 run 间延续关键业务状态，并被后续真实 `brain` 正确带回。
-- Why：真实环境里的会话连续性不能脱离 workspace 语义；如果记忆里提到的对象在工作区中不存在，模型会合理地转去做环境核验，导致样例失真。
-- How：复用风险周报 live 的真实 workspace；第一轮只做“状态梳理，不新建文件”；随后构造达到 conversation memory 触发阈值的完整轮次，通过 live `conversation.memory` 调用总结应覆盖的 10 条旧消息，并保存 covered 边界；第二轮在同一 session、同一 workspace 下追问“当前最关键的待确认项、应该先找谁、为什么”，允许模型继续读取真实资料。
-- Oracle：`summary` 非空且保留风险主线、负责人、待确认项与下一步；summary batch 为 10 条消息，保存的 `coveredMessageId / coveredTimestamp / coveredMessageCount` 与本次 compaction 边界一致，最新 5 个完整轮次保留为 recent turns；第二轮 `brain` prompt 同时出现 `<conversation_history>`、`<summary>` 与 `<recent_turns>`；即使模型重新读取文件，也不应偏离第一轮形成的连续业务主线；最终交付继续命中负责人、阻塞项和后续动作，并体现第一轮总结对第二轮真实判断的延续影响。按 10 分制评估，达到 8 分即可通过。
-- Not：不要求第二轮禁止 reread workspace；不逐字约束 live 模型措辞；不验证 session 隔离。
 
 ##### `human-session-resume-with-new-selection-live`
 

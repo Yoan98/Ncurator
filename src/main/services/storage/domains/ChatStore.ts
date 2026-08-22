@@ -1,6 +1,5 @@
 import type {
   AiArtifactRef,
-  ChatConversationMemory,
   ChatMessage,
   ChatSession,
   ChatSessionResumeSnapshot,
@@ -11,7 +10,6 @@ import type { SqliteCore } from '../sqlite/SqliteCore'
 import {
   jsonStringify,
   parseJsonArray,
-  parseJsonObject,
   toOptionalNumber,
   toRequiredNumber,
   toRequiredString
@@ -38,18 +36,6 @@ type ChatMessageRow = {
   artifacts_json?: unknown
   error?: unknown
   created_at?: unknown
-}
-
-export type ConversationMemoryContext = {
-  memory: ChatConversationMemory | null
-  recentMessages: ChatMessage[]
-}
-
-export type ConversationMemoryCompaction = ConversationMemoryContext & {
-  messagesToSummarize: ChatMessage[]
-  targetCoveredMessageId: string
-  targetCoveredTimestamp: number
-  targetCoveredMessageCount: number
 }
 
 const toChatRole = (value: unknown): ChatMessage['role'] => {
@@ -81,107 +67,6 @@ const toMessage = (row: ChatMessageRow): ChatMessage & { seq?: number } => ({
 
 export class ChatStore {
   public constructor(private readonly sqlite: SqliteCore) {}
-
-  private isValidConversationMemory(value: unknown): value is ChatConversationMemory {
-    if (!value || typeof value !== 'object') return false
-    const record = value as Partial<ChatConversationMemory>
-    return (
-      typeof record.summary === 'string' &&
-      (typeof record.coveredMessageId === 'string' || record.coveredMessageId === null) &&
-      (typeof record.coveredTimestamp === 'number' || record.coveredTimestamp === null) &&
-      typeof record.coveredMessageCount === 'number' &&
-      typeof record.updatedAt === 'number'
-    )
-  }
-
-  private readConversationMemory(sessionId: string): ChatConversationMemory | null {
-    const row = this.sqlite
-      .prepare('SELECT memory_json FROM chat_conversation_memory WHERE session_id = ?')
-      .get(sessionId) as { memory_json?: unknown } | undefined
-    const memory = parseJsonObject(row?.memory_json)
-    return this.isValidConversationMemory(memory)
-      ? {
-          ...memory,
-          revision: typeof memory.revision === 'number' ? memory.revision : 0
-        }
-      : null
-  }
-
-  private findFirstMessageAfterMemory(
-    messages: ChatMessage[],
-    memory: ChatConversationMemory | null
-  ): number {
-    if (!memory?.coveredMessageId) return 0
-
-    const coveredIndex = messages.findIndex((message) => message.id === memory.coveredMessageId)
-    if (coveredIndex >= 0) return coveredIndex + 1
-
-    if (typeof memory.coveredTimestamp === 'number') {
-      const firstRecentIndex = messages.findIndex(
-        (message) => message.timestamp > Number(memory.coveredTimestamp)
-      )
-      return firstRecentIndex >= 0 ? firstRecentIndex : messages.length
-    }
-    return 0
-  }
-
-  public async saveConversationMemory(
-    sessionId: string,
-    memory: ChatConversationMemory
-  ): Promise<void> {
-    this.sqlite
-      .prepare(
-        `
-        INSERT OR REPLACE INTO chat_conversation_memory (session_id, memory_json, updated_at)
-        VALUES (@session_id, @memory_json, @updated_at)
-      `
-      )
-      .run({
-        session_id: sessionId,
-        memory_json: JSON.stringify(memory),
-        updated_at: memory.updatedAt || Date.now()
-      })
-  }
-
-  public async getConversationMemory(sessionId: string): Promise<ChatConversationMemory | null> {
-    return this.readConversationMemory(sessionId)
-  }
-
-  public async saveConversationMemoryIfCurrent(input: {
-    sessionId: string
-    expectedRevision: number
-    expectedCoveredMessageId: string | null
-    expectedUpdatedAt: number | null
-    memory: ChatConversationMemory
-  }): Promise<boolean> {
-    return this.sqlite.transaction(() => {
-      const current = this.readConversationMemory(input.sessionId)
-      if (
-        (current?.revision || 0) !== input.expectedRevision ||
-        (current?.coveredMessageId || null) !== input.expectedCoveredMessageId ||
-        (current?.updatedAt || null) !== input.expectedUpdatedAt
-      ) {
-        return false
-      }
-      this.sqlite
-        .prepare(
-          `
-          INSERT OR REPLACE INTO chat_conversation_memory (session_id, memory_json, updated_at)
-          VALUES (@session_id, @memory_json, @updated_at)
-        `
-        )
-        .run({
-          session_id: input.sessionId,
-          memory_json: JSON.stringify(input.memory),
-          updated_at: input.memory.updatedAt
-        })
-      return true
-    })
-  }
-
-  public async clearConversationMemory(sessionId: string): Promise<void> {
-    this.sqlite.prepare('DELETE FROM chat_conversation_memory WHERE session_id = ?').run(sessionId)
-  }
 
   public async saveSessionResumeSnapshot(
     sessionId: string,
@@ -555,68 +440,6 @@ export class ChatStore {
     return {
       messages: pageRows.map(toMessage),
       hasMoreBefore
-    }
-  }
-
-  public async getMessagesAfterConversationMemory(sessionId: string): Promise<ChatMessage[]> {
-    return (await this.getConversationMemoryContext(sessionId)).recentMessages
-  }
-
-  public async getConversationMemoryContext(sessionId: string): Promise<ConversationMemoryContext> {
-    return this.sqlite.transaction(() => {
-      const memory = this.readConversationMemory(sessionId)
-      const rows = this.sqlite
-        .prepare('SELECT * FROM chat_message WHERE session_id = ? ORDER BY seq ASC')
-        .all(sessionId) as ChatMessageRow[]
-      const messages = rows.map(toMessage)
-      const startIndex = this.findFirstMessageAfterMemory(messages, memory)
-      return {
-        memory,
-        recentMessages: messages.slice(startIndex)
-      }
-    })
-  }
-
-  public async getConversationMemoryCompaction(input: {
-    sessionId: string
-    recentTurns: number
-    triggerTurns: number
-  }): Promise<ConversationMemoryCompaction | null> {
-    const context = await this.getConversationMemoryContext(input.sessionId)
-    const recentTurns = Math.floor(input.recentTurns)
-    const triggerTurns = Math.floor(input.triggerTurns)
-    if (recentTurns < 1 || triggerTurns <= recentTurns) {
-      throw new Error('conversation_memory_turn_config_invalid')
-    }
-    const turnStartIndexes: number[] = []
-    for (let index = 0; index < context.recentMessages.length; index += 1) {
-      if (context.recentMessages[index].role !== 'user') continue
-      const nextUserIndex = context.recentMessages.findIndex(
-        (message, candidateIndex) => candidateIndex > index && message.role === 'user'
-      )
-      const turnEndIndex = nextUserIndex >= 0 ? nextUserIndex : context.recentMessages.length
-      if (
-        context.recentMessages
-          .slice(index + 1, turnEndIndex)
-          .some((message) => message.role === 'assistant')
-      ) {
-        turnStartIndexes.push(index)
-      }
-    }
-    if (turnStartIndexes.length < triggerTurns) return null
-
-    const firstRetainedTurnIndex = turnStartIndexes[turnStartIndexes.length - recentTurns]
-    const messagesToSummarize = context.recentMessages.slice(0, firstRetainedTurnIndex)
-    const target = messagesToSummarize.at(-1)
-    if (!target) return null
-
-    return {
-      ...context,
-      messagesToSummarize,
-      targetCoveredMessageId: target.id,
-      targetCoveredTimestamp: target.timestamp,
-      targetCoveredMessageCount:
-        (context.memory?.coveredMessageCount || 0) + messagesToSummarize.length
     }
   }
 

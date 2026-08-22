@@ -18,7 +18,6 @@ import {
 } from './constants'
 import {
   humanRoundThoughtSchema,
-  humanTaskContextSchema,
   humanNextActionSchema,
   deliveryGuidanceItemSchema,  humanPlanItemSchema,
   humanPlanItemStatusSchema,
@@ -62,7 +61,6 @@ export type SkillDefinitionBase = z.infer<typeof skillDefinitionBaseSchema>
 export type SkillDefinition = SkillDefinitionBase
 
 export type HumanRoundThought = z.infer<typeof humanRoundThoughtSchema>
-export type HumanTaskContext = z.infer<typeof humanTaskContextSchema>
 export type HumanNextAction = z.infer<typeof humanNextActionSchema>
 export type HumanDispatchItem = z.infer<typeof humanDispatchItemSchema>
 export type HumanPlanItemStatus = z.infer<typeof humanPlanItemStatusSchema>

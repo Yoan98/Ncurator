@@ -4,11 +4,6 @@ import { Jieba } from '@node-rs/jieba'
 import { dict } from '@node-rs/jieba/dict'
 import { AiRunService } from './AiRunService'
 import { toRendererRunFailure } from './errors'
-import {
-  buildConversationMemorySummary,
-  CONVERSATION_MEMORY_RECENT_TURNS,
-  CONVERSATION_MEMORY_SUMMARY_TRIGGER_TURNS
-} from './memory'
 import { terminalSessionManager } from './human/tools/terminal/TerminalSessionManager'
 import type { AiRunResourceManager } from './run/AiRunResourceManager'
 import { normalizeSelectedReferences, normalizeWorkspaceBinding } from './utils/runContext'
@@ -54,8 +49,6 @@ import type {
   ChatSubmitRequest,
   ChatSubmitResponse
 } from '../../../shared/types'
-
-type ConversationMemorySummaryBuilder = typeof buildConversationMemorySummary
 
 type ActiveApproval = {
   batchId: string
@@ -110,7 +103,6 @@ type ChatRunServiceDeps = {
   recordLlmIo?: (record: AiLlmIoRecord) => void
   broadcastEvent?: (event: AiRunEvent) => void
   autoStartRuns?: boolean
-  conversationMemorySummaryBuilder?: ConversationMemorySummaryBuilder
   resolveHumanRuntimeOverrides?: (
     run: AiRunRecord
   ) => AiRunDeps['humanRuntimeOverrides'] | undefined
@@ -153,7 +145,6 @@ export class ChatRunService {
   private readonly activeRuns = new Map<string, ActiveRun>()
   private readonly activeApprovals = new Map<string, ActiveApproval>()
   private readonly activeUserTakeovers = new Map<string, ActiveUserTakeover>()
-  private readonly conversationMemoryJobs = new Map<string, Promise<void>>()
   private readonly pendingSessionSubmissions = new Set<string>()
 
   public constructor(private readonly deps: ChatRunServiceDeps) {}
@@ -330,11 +321,6 @@ export class ChatRunService {
         .map((message) => message.id)
     ]
 
-    const memory = await this.deps.chatStore.getConversationMemory(sessionId)
-    const memoryCleared =
-      Boolean(memory?.coveredTimestamp && target.timestamp <= Number(memory.coveredTimestamp)) ||
-      Boolean(memory?.coveredMessageId && messageIdsToDelete.includes(memory.coveredMessageId))
-
     // A snapshot for this run would make the edited message resume the withdrawn task.
     const resumeSnapshot = await this.deps.chatStore.getSessionResumeSnapshot(sessionId)
     const shouldClearResumeSnapshot = Boolean(run && resumeSnapshot?.runId === run.id)
@@ -342,12 +328,10 @@ export class ChatRunService {
     await this.deps.chatStore.deleteChatMessagesByIds(messageIdsToDelete)
     if (run) {
       await this.deps.aiRunStore.deleteRunsByIds([run.id])
+      await this.deps.chatTranscriptStore.deleteByRunIds([run.id])
     }
     if (shouldClearResumeSnapshot) {
       await this.deps.chatStore.clearSessionResumeSnapshot(sessionId)
-    }
-    if (memoryCleared) {
-      await this.deps.chatStore.clearConversationMemory(sessionId)
     }
     const nextMessages = await this.deps.chatStore.getChatMessages(sessionId)
 
@@ -356,8 +340,7 @@ export class ChatRunService {
       userMessage: target,
       assistantMessageId: assistantMessage?.id,
       runId: run?.id,
-      messages: nextMessages,
-      memoryCleared
+      messages: nextMessages
     }
   }
 
@@ -901,14 +884,6 @@ export class ChatRunService {
       }
       await this.flushRunEvents(runId)
       await this.queueRunEvent(runId, { type: 'run_completed', runId })
-      this.scheduleConversationMemoryUpdate({
-        runId,
-        sessionId: run.sessionId,
-        runtimeSettings,
-        modelConfigId: run.mainModel?.configId || '',
-        modelName: run.modelName || '',
-        sendEvent
-      })
     } catch (error) {
       this.deps.docxApplyService.discardRun(runId)
       if (this.activeRuns.get(runId)?.cancelled) {
@@ -1062,81 +1037,6 @@ export class ChatRunService {
         })
       })
     })
-  }
-
-  private scheduleConversationMemoryUpdate(input: {
-    runId: string
-    sessionId: string
-    runtimeSettings: Awaited<ReturnType<AiRuntimeSettingsStore['get']>>
-    modelConfigId: string
-    modelName: string
-    sendEvent: (event: AiRunEvent) => void
-  }): Promise<void> | null {
-    const sessionId = String(input.sessionId || '').trim()
-    if (!sessionId || this.conversationMemoryJobs.has(sessionId)) return null
-
-    const job = this.runConversationMemoryJob(input)
-      .catch((error) => {
-        console.error('[CONVERSATION-MEMORY] background update failed:', error)
-      })
-      .finally(() => {
-        if (this.conversationMemoryJobs.get(sessionId) === job) {
-          this.conversationMemoryJobs.delete(sessionId)
-        }
-      })
-    this.conversationMemoryJobs.set(sessionId, job)
-    return job
-  }
-
-  private async runConversationMemoryJob(input: {
-    runId: string
-    sessionId: string
-    runtimeSettings: Awaited<ReturnType<AiRuntimeSettingsStore['get']>>
-    modelConfigId: string
-    modelName: string
-    sendEvent: (event: AiRunEvent) => void
-  }): Promise<void> {
-    for (;;) {
-      const compaction = await this.deps.chatStore.getConversationMemoryCompaction({
-        sessionId: input.sessionId,
-        recentTurns: CONVERSATION_MEMORY_RECENT_TURNS,
-        triggerTurns: CONVERSATION_MEMORY_SUMMARY_TRIGGER_TURNS
-      })
-      if (!compaction) return
-
-      const startMemory = compaction.memory
-      const summaryBuilder =
-        this.deps.conversationMemorySummaryBuilder || buildConversationMemorySummary
-      const summary = await summaryBuilder({
-        runId: input.runId,
-        sessionId: input.sessionId,
-        previousSummary: startMemory?.summary || '',
-        messages: compaction.messagesToSummarize,
-        runtimeSettings: input.runtimeSettings,
-        llmStore: this.deps.llmStore,
-        modelConfigId: input.modelConfigId,
-        modelName: input.modelName,
-        sendEvent: input.sendEvent,
-        recordLlmIo: this.deps.recordLlmIo
-      })
-      if (!summary) return
-
-      const saved = await this.deps.chatStore.saveConversationMemoryIfCurrent({
-        sessionId: input.sessionId,
-        expectedRevision: startMemory?.revision || 0,
-        expectedCoveredMessageId: startMemory?.coveredMessageId || null,
-        expectedUpdatedAt: startMemory?.updatedAt || null,
-        memory: {
-          summary,
-          coveredMessageId: compaction.targetCoveredMessageId,
-          coveredTimestamp: compaction.targetCoveredTimestamp,
-          coveredMessageCount: compaction.targetCoveredMessageCount,
-          revision: (startMemory?.revision || 0) + 1,
-          updatedAt: Date.now()
-        }
-      })
-      if (!saved) continue
-    }
   }
 
   private queueRunEvent(runId: string, event: AiRunEvent): Promise<void> {

@@ -21,7 +21,7 @@ SQLite 使用 `better-sqlite3`。启动时 `SqliteCore` 负责：
 
 SQLite 保存以下业务数据：
 
-- 会话、消息、conversation memory 和按会话隔离的中断恢复快照；恢复快照只在任务正常完成或会话删除时清理。
+- 会话、消息和按会话隔离的中断恢复快照；恢复快照只在任务正常完成或会话删除时清理。
 - AI run、事件、审批和文件修改记录。
 - 会话级 append-only 的消息转录（`chat_session_transcript`），作为模型上下文的唯一真相源。
 - 工作区、文件索引任务、文档元数据和网页源。
@@ -49,6 +49,7 @@ SQLite 保存以下业务数据：
 ## SQLite Migration
 
 - migration 记录在 `schema_migrations`。
+- migration 定义统一放在 `src/main/services/storage/sqlite/migrations/00X_*.ts`，每个文件导出一个 `Migration`（含 `version`、`name`、`sql` 或 `run`），`SqliteCore` 按文件导入并组成 `MIGRATIONS` 数组。
 - migration 按版本递增执行。
 - 每个 migration 都在 SQLite transaction 中执行。
 - migration 失败会阻止启动，并抛出明确错误。

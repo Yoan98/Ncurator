@@ -84,4 +84,13 @@ export class ChatTranscriptStore {
       .map(toTranscriptRecord)
       .filter((record): record is ChatTranscriptRecord => record !== null)
   }
+
+  public async deleteByRunIds(runIds: string[]): Promise<void> {
+    const normalized = runIds.filter((runId) => String(runId || '').trim())
+    if (normalized.length === 0) return
+    const placeholders = normalized.map(() => '?').join(',')
+    this.sqlite
+      .prepare(`DELETE FROM chat_session_transcript WHERE run_id IN (${placeholders})`)
+      .run(...normalized)
+  }
 }

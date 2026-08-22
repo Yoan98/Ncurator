@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildMouthPrompt } from '../../../../src/main/services/ai/human/prompts/mouth'
+import { buildMouthDeliveryMessage } from '../../../../src/main/services/ai/human/prompts/mouth'
 import { createInitialHumanState } from '../../../../src/main/services/ai/human/state/schema'
 import type { AiRunContext } from '../../../../src/main/services/ai/types'
 
@@ -7,8 +7,12 @@ const createFakeCtx = (): AiRunContext =>
   ({
     platform: 'darwin',
     runId: 'run-1',
+    sessionId: 'session-1',
+    runStartedAt: 0,
+    preference: 'default',
     workspace: {
-      id: 'ws-1',
+      workspaceId: 'ws-1',
+      workspaceName: '测试工作区',
       rootPath: '/tmp/workspace'
     },
     referenceScope: {
@@ -21,27 +25,29 @@ const createFakeCtx = (): AiRunContext =>
   }) as AiRunContext
 
 describe('ai unit mouth prompt contract', () => {
-  it('renders all recent rounds including the latest mouth round', () => {
+  it('renders delivery guidance, file changes and evidence references', () => {
     const state = createInitialHumanState({
       taskId: 'task-mouth-progress',
       userInput: '整理最终交付'
     })
 
-    state.execution.currentThought = {
-      thought: {
-        next: '复习总结文件已生成完毕，基于现有结果组织最终交付'
-      },
-      nextAction: {
-        action: 'mouth',
-        evidenceReferences: [
-          {
-            label: '深度学习.docx',
-            path: '学习笔记/深度学习.docx',
-            resourceType: 'file',
-            usedFor: '支撑深度学习部分的总结内容'
-          }
-        ]
-      }
+    state.execution.deliveryGuidanceItems = [
+      { source: 'brain', text: '必须在交付中说明证据来源。' }
+    ]
+    state.execution.fileChanges = {
+      changed_files: [
+        {
+          id: 'change-1',
+          fileName: '深度学习与图形学复习总结.docx',
+          path: '学习笔记/深度学习与图形学复习总结.docx',
+          capability: 'docx',
+          operation: 'updated',
+          changeCount: 1,
+          insertCount: 1,
+          deleteCount: 0,
+          status: 'applied'
+        }
+      ]
     }
     state.execution.evidenceReferences = [
       {
@@ -53,103 +59,71 @@ describe('ai unit mouth prompt contract', () => {
       }
     ]
 
-    state.memory.taskRun.rounds = [
-      {
-        roundId: 1,
-        createdAt: 1,
-        thought: {
-          next: '先整理两份资料并生成总结文件'
-        },
-        nextAction: {
-          action: 'hand',
-          calls: [
-            {
-              toolName: 'docx_edit',
-              args: {
-                sourcePath: '深度学习与图形学复习总结.docx',
-                actions: [
-                  {
-                    type: 'insert_blocks',
-                    blocks: [{ type: 'paragraph', text: '总结正文' }]
-                  }
-                ]
-              }
-            }
-          ]
-        },
-        execution: {
-          kind: 'hand',
-          calls: [
-            {
-              toolName: 'docx_edit',
-              args: {
-                sourcePath: '深度学习与图形学复习总结.docx',
-                actions: [
-                  {
-                    type: 'insert_blocks',
-                    blocks: [{ type: 'paragraph', text: '总结正文' }]
-                  }
-                ]
-              }
-            }
-          ],
-          toolResults: [
-            {
-              toolName: 'docx_edit',
-              ok: true,
-              data: {
-                sourcePath: '深度学习与图形学复习总结.docx',
-                currentRevisionRef: 'rev-1',
-                createdBlocks: [{ blockId: 'b:0', type: 'paragraph' }],
-                postWriteReadback: {
-                  regions: [
-                    {
-                      fromBlockIndex: 0,
-                      toBlockIndex: 0,
-                      blocks: [
-                        {
-                          blockId: 'b:0',
-                          type: 'paragraph',
-                          blockIndex: 0,
-                          text: '总结正文'
-                        }
-                      ]
-                    }
-                  ]
-                }
-              }
-            }
-          ]
-        }
-      },
-      {
-        roundId: 2,
-        createdAt: 2,
-        thought: state.execution.currentThought.thought,
-        nextAction: state.execution.currentThought.nextAction,
-        execution: {
-          kind: 'mouth',
-          result: '已完成最终交付。'
-        }
-      }
-    ]
-
-    const prompt = buildMouthPrompt({
+    const prompt = buildMouthDeliveryMessage({
       state,
       ctx: createFakeCtx()
     })
-    const roundsSection =
-      prompt.user.match(/<rounds>([\s\S]*?)<\/rounds>/)?.[1] || ''
 
-    expect(roundsSection).toContain('先整理两份资料并生成总结文件')
-    expect(roundsSection).toContain('复习总结文件已生成完毕，基于现有结果组织最终交付')
-    expect(roundsSection).toContain('类型：mouth')
-    expect(roundsSection).toContain('结果：已完成最终交付。')
-    expect(roundsSection).toContain('类型：hand')
-    expect(prompt.user).toContain('深度学习与图形学复习总结.docx')
-    expect(prompt.user).toContain('引用资料：深度学习.docx')
-    expect(prompt.user).toContain('正文引用片段：[深度学习.docx](ncurator://ref?kind=reference')
-    expect(prompt.user).toContain('resourceType=file')
-    expect(prompt.user).toContain('accessStatus=accessible')
+    const guidanceSection =
+      prompt.match(/<delivery_guidance>([\s\S]*?)<\/delivery_guidance>/)?.[1] || ''
+    const fileChangesSection =
+      prompt.match(/<file_changes>([\s\S]*?)<\/file_changes>/)?.[1] || ''
+    const evidenceSection =
+      prompt.match(/<evidence_references>([\s\S]*?)<\/evidence_references>/)?.[1] || ''
+
+    expect(guidanceSection).toContain('必须在交付中说明证据来源。')
+    expect(fileChangesSection).toContain('深度学习与图形学复习总结.docx')
+    expect(evidenceSection).toContain('引用资料：深度学习.docx')
+    expect(evidenceSection).toContain('支撑深度学习部分的总结内容')
+  })
+
+  it('renders the ncurator://ref markdown link format for evidence references', () => {
+    const state = createInitialHumanState({
+      taskId: 'task-mouth-ref',
+      userInput: '整理最终交付'
+    })
+    state.execution.evidenceReferences = [
+      {
+        label: '深度学习.docx',
+        path: '学习笔记/深度学习.docx',
+        resourceType: 'file',
+        usedFor: '支撑深度学习部分的总结内容',
+        accessStatus: 'accessible'
+      }
+    ]
+
+    const prompt = buildMouthDeliveryMessage({ state, ctx: createFakeCtx() })
+
+    expect(prompt).toContain('ncurator://ref?kind=reference')
+    expect(prompt).toContain('resourceType=file')
+    expect(prompt).toContain('accessStatus=accessible')
+    expect(prompt).toContain('[深度学习.docx](ncurator://ref?')
+  })
+
+  it('renders a none fallback for guidance and evidence references', () => {
+    const state = createInitialHumanState({
+      taskId: 'task-mouth-empty',
+      userInput: '整理最终交付'
+    })
+
+    const prompt = buildMouthDeliveryMessage({ state, ctx: createFakeCtx() })
+
+    expect(prompt).toContain('<delivery_guidance>')
+    expect(prompt).toContain('none')
+    expect(prompt).toContain('<evidence_references>')
+  })
+
+  it('does not render removed rounds or task evidence blocks', () => {
+    const state = createInitialHumanState({
+      taskId: 'task-mouth-progress',
+      userInput: '整理最终交付'
+    })
+
+    const prompt = buildMouthDeliveryMessage({ state, ctx: createFakeCtx() })
+
+    expect(prompt).not.toContain('<rounds>')
+    expect(prompt).not.toContain('task_evidence')
+    expect(prompt).not.toContain('<todolist>')
+    expect(prompt).not.toContain('类型：mouth')
   })
 })

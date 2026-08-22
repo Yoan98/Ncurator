@@ -18,7 +18,6 @@ import { isCancelledError, isRecoverableHumanRunError } from './utils/runFailure
 import { classifyInterruptionReason } from './utils/runFailure'
 import { createInitialHumanState } from './human/state/schema'
 import type { HumanState } from './human/types'
-import { createHumanTaskContext } from './utils/resumeSnapshot'
 
 export class AiRunService {
   private static instance: AiRunService
@@ -38,8 +37,7 @@ export class AiRunService {
     let mergedWorkspace = payload.workspace
     let initialState: HumanState = createInitialHumanState({
       taskId: payload.runId,
-      userInput,
-      taskContext: createHumanTaskContext(userInput)
+      userInput
     })
     try {
       const resumeSnapshot = await deps.chatStore.getSessionResumeSnapshot(payload.sessionId)

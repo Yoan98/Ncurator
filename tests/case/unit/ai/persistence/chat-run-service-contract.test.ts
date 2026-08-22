@@ -6,10 +6,6 @@ import { ChatRunService } from '../../../../../src/main/services/ai/ChatRunServi
 import { AiRunService } from '../../../../../src/main/services/ai/AiRunService'
 import { AiRunResourceManager } from '../../../../../src/main/services/ai/run/AiRunResourceManager'
 import { createCompletedAiRunState } from '../../../../../src/main/services/ai/run/state'
-import {
-  CONVERSATION_MEMORY_RECENT_TURNS,
-  CONVERSATION_MEMORY_SUMMARY_TRIGGER_TURNS
-} from '../../../../../src/main/services/ai/memory'
 import { AiFileChangeService } from '../../../../../src/main/services/ai/fileChanges/AiFileChangeService'
 import { DocxApplyService } from '../../../../../src/main/services/ai/human/tools/docx/review/DocxApplyService'
 import { StorageService } from '../../../../../src/main/services/storage/StorageService'
@@ -17,7 +13,6 @@ import type { EmbeddingService } from '../../../../../src/main/services/vector/E
 import type {
   AiRunEvent,
   AiRunRecord,
-  AiRuntimeSettings,
   ChatMessage,
   ChatSession
 } from '../../../../../src/shared/types'
@@ -27,7 +22,6 @@ type TestService = {
   storage: StorageService
   service: ChatRunService
   events: AiRunEvent[]
-  memorySummaryCalls: ChatMessage[][]
 }
 
 type ChatRunServicePrivate = ChatRunService & {
@@ -47,13 +41,6 @@ type ChatRunServicePrivate = ChatRunService & {
     | { accepted: true; decisions: Array<{ itemId: string; action: 'approve' | 'reject' | 'guide' }> }
     | { accepted: false; error: string }
   >
-  scheduleConversationMemoryUpdate: (input: {
-    runId: string
-    sessionId: string
-    runtimeSettings: AiRuntimeSettings
-    modelName: string
-    sendEvent: (event: AiRunEvent) => void
-  }) => Promise<void> | null
 }
 
 const tempRoots: string[] = []
@@ -71,13 +58,8 @@ const waitForCondition = async (
   }
 }
 
-type TestConversationMemorySummaryBuilder = NonNullable<
-  ConstructorParameters<typeof ChatRunService>[0]['conversationMemorySummaryBuilder']
->
-
 const createTestService = async (options?: {
   autoStartRuns?: boolean
-  conversationMemorySummaryBuilder?: TestConversationMemorySummaryBuilder
   onRunTerminal?: (run: AiRunRecord, status: 'completed' | 'failed' | 'cancelled') => void
 }): Promise<TestService> => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'ncurator-chat-run-'))
@@ -95,7 +77,6 @@ const createTestService = async (options?: {
     embed: async () => ({ data: new Float32Array(768) })
   } as EmbeddingService
   const events: AiRunEvent[] = []
-  const memorySummaryCalls: ChatMessage[][] = []
   const service = new ChatRunService({
     chatStore: storage.chat,
     chatTranscriptStore: storage.chatTranscript,
@@ -114,20 +95,9 @@ const createTestService = async (options?: {
       events.push(event)
     },
     autoStartRuns: options?.autoStartRuns ?? false,
-    conversationMemorySummaryBuilder:
-      options?.conversationMemorySummaryBuilder ||
-      (async (input) => {
-        memorySummaryCalls.push(input.messages)
-        return [
-          input.previousSummary,
-          `batch:${input.messages.map((message) => message.id).join(',')}`
-        ]
-          .filter(Boolean)
-          .join('\n')
-      }),
     onRunTerminal: options?.onRunTerminal
   })
-  return { workspaceRoot, storage, service, events, memorySummaryCalls }
+  return { workspaceRoot, storage, service, events }
 }
 
 const seedSession = async (storage: StorageService): Promise<ChatSession> => {
@@ -163,27 +133,6 @@ const saveMessages = async (
     await storage.chat.saveChatMessage(message)
   }
 }
-
-const buildConversationTurns = (input: {
-  prefix: string
-  count: number
-  startTime: number
-}): ChatMessage[] =>
-  Array.from({ length: input.count }, (_, index) => {
-    const turn = index + 1
-    return [
-      buildMessage({
-        id: `${input.prefix}-user-${turn}`,
-        role: 'user',
-        timestamp: input.startTime + index * 2
-      }),
-      buildMessage({
-        id: `${input.prefix}-assistant-${turn}`,
-        role: 'assistant',
-        timestamp: input.startTime + index * 2 + 1
-      })
-    ]
-  }).flat()
 
 const submitAiRun = async (
   { workspaceRoot, storage, service }: TestService,
@@ -453,277 +402,6 @@ describe('unit ai persistence backend', () => {
     expect(events.map((event) => event.seq)).toEqual([1, 2])
   })
 
-  it('chat-store-conversation-memory-compaction-keeps-the-latest-five-turns', async () => {
-    const setup = await createTestService()
-    await seedSession(setup.storage)
-    const baseTime = Date.now()
-    const messages = buildConversationTurns({ prefix: 'memory', count: 10, startTime: baseTime })
-    await saveMessages(setup.storage, messages)
-
-    const compaction = await setup.storage.chat.getConversationMemoryCompaction({
-      sessionId: 'session-1',
-      recentTurns: CONVERSATION_MEMORY_RECENT_TURNS,
-      triggerTurns: CONVERSATION_MEMORY_SUMMARY_TRIGGER_TURNS
-    })
-    expect(compaction?.messagesToSummarize.map((message) => message.id)).toEqual(
-      messages.slice(0, 10).map((message) => message.id)
-    )
-    expect(compaction?.targetCoveredMessageId).toBe('memory-assistant-5')
-    expect(compaction?.targetCoveredMessageCount).toBe(10)
-
-    await setup.storage.chat.saveConversationMemory('session-1', {
-      summary: 'covered first five turns',
-      coveredMessageId: compaction?.targetCoveredMessageId || null,
-      coveredTimestamp: compaction?.targetCoveredTimestamp || null,
-      coveredMessageCount: compaction?.targetCoveredMessageCount || 0,
-      revision: 1,
-      updatedAt: Date.now()
-    })
-    const recentTurns = await setup.storage.chat.getMessagesAfterConversationMemory('session-1')
-    expect(recentTurns.map((message) => message.id)).toEqual(
-      messages.slice(10).map((message) => message.id)
-    )
-    const belowTrigger = await setup.storage.chat.getConversationMemoryCompaction({
-      sessionId: 'session-1',
-      recentTurns: CONVERSATION_MEMORY_RECENT_TURNS,
-      triggerTurns: CONVERSATION_MEMORY_SUMMARY_TRIGGER_TURNS
-    })
-    expect(belowTrigger).toBeNull()
-
-    await saveMessages(
-      setup.storage,
-      buildConversationTurns({ prefix: 'later', count: 4, startTime: baseTime + 100 })
-    )
-    await setup.storage.chat.saveChatMessage(
-      buildMessage({ id: 'later-user-5', role: 'user', timestamp: baseTime + 108 })
-    )
-    expect(
-      await setup.storage.chat.getConversationMemoryCompaction({
-        sessionId: 'session-1',
-        recentTurns: CONVERSATION_MEMORY_RECENT_TURNS,
-        triggerTurns: CONVERSATION_MEMORY_SUMMARY_TRIGGER_TURNS
-      })
-    ).toBeNull()
-
-    await setup.storage.chat.saveChatMessage(
-      buildMessage({ id: 'later-assistant-5', role: 'assistant', timestamp: baseTime + 109 })
-    )
-    const nextCompaction = await setup.storage.chat.getConversationMemoryCompaction({
-      sessionId: 'session-1',
-      recentTurns: CONVERSATION_MEMORY_RECENT_TURNS,
-      triggerTurns: CONVERSATION_MEMORY_SUMMARY_TRIGGER_TURNS
-    })
-    expect(nextCompaction?.targetCoveredMessageId).toBe('memory-assistant-10')
-    expect(nextCompaction?.messagesToSummarize).toHaveLength(10)
-  })
-
-  it('conversation-memory-background-job-triggers-at-ten-turns-and-compacts-to-five', async () => {
-    const setup = await createTestService()
-    await seedSession(setup.storage)
-    const service = setup.service as ChatRunServicePrivate
-    const runtimeSettings = await setup.storage.aiRuntimeSettings.get()
-    const baseTime = Date.now()
-
-    await saveMessages(
-      setup.storage,
-      buildConversationTurns({ prefix: 'threshold', count: 9, startTime: baseTime })
-    )
-    const shortJob = service.scheduleConversationMemoryUpdate({
-      runId: 'run-short',
-      sessionId: 'session-1',
-      runtimeSettings,
-      modelName: 'mock-model',
-      sendEvent: (event) => setup.events.push(event)
-    })
-    await shortJob
-    expect(await setup.storage.chat.getConversationMemory('session-1')).toBeNull()
-    expect(setup.memorySummaryCalls).toEqual([])
-
-    await saveMessages(setup.storage, [
-      buildMessage({ id: 'threshold-user-10', role: 'user', timestamp: baseTime + 18 }),
-      buildMessage({
-        id: 'threshold-assistant-10',
-        role: 'assistant',
-        timestamp: baseTime + 19
-      })
-    ])
-    const completeJob = service.scheduleConversationMemoryUpdate({
-      runId: 'run-complete',
-      sessionId: 'session-1',
-      runtimeSettings,
-      modelName: 'mock-model',
-      sendEvent: (event) => setup.events.push(event)
-    })
-    await completeJob
-    await waitForCondition(async () =>
-      Boolean((await setup.storage.chat.getConversationMemory('session-1'))?.coveredMessageId)
-    )
-    const saved = await setup.storage.chat.getConversationMemory('session-1')
-    expect(saved?.summary).toContain('batch:threshold-user-1')
-    expect(saved?.coveredMessageId).toBe('threshold-assistant-5')
-    expect(saved?.coveredMessageCount).toBe(10)
-    expect(saved?.revision).toBe(1)
-    expect(setup.memorySummaryCalls).toHaveLength(1)
-    const recent = await setup.storage.chat.getMessagesAfterConversationMemory('session-1')
-    expect(recent).toHaveLength(10)
-    expect(recent[0].id).toBe('threshold-user-6')
-
-    await saveMessages(
-      setup.storage,
-      buildConversationTurns({ prefix: 'next-cycle', count: 4, startTime: baseTime + 1_000 })
-    )
-    await service.scheduleConversationMemoryUpdate({
-      runId: 'run-next-cycle-below-threshold',
-      sessionId: 'session-1',
-      runtimeSettings,
-      modelName: 'mock-model',
-      sendEvent: (event) => setup.events.push(event)
-    })
-    expect(setup.memorySummaryCalls).toHaveLength(1)
-
-    await saveMessages(setup.storage, [
-      buildMessage({ id: 'next-cycle-user-5', role: 'user', timestamp: baseTime + 1_008 }),
-      buildMessage({
-        id: 'next-cycle-assistant-5',
-        role: 'assistant',
-        timestamp: baseTime + 1_009
-      })
-    ])
-    await service.scheduleConversationMemoryUpdate({
-      runId: 'run-next-cycle-trigger',
-      sessionId: 'session-1',
-      runtimeSettings,
-      modelName: 'mock-model',
-      sendEvent: (event) => setup.events.push(event)
-    })
-    const secondCycleMemory = await setup.storage.chat.getConversationMemory('session-1')
-    expect(setup.memorySummaryCalls).toHaveLength(2)
-    expect(secondCycleMemory?.coveredMessageId).toBe('threshold-assistant-10')
-    expect(secondCycleMemory?.revision).toBe(2)
-    expect(await setup.storage.chat.getMessagesAfterConversationMemory('session-1')).toHaveLength(
-      10
-    )
-
-    const failing = await createTestService({
-      conversationMemorySummaryBuilder: async () => {
-        throw new Error('summary failed')
-      }
-    })
-    await seedSession(failing.storage)
-    await saveMessages(
-      failing.storage,
-      buildConversationTurns({ prefix: 'failing', count: 10, startTime: baseTime + 100 })
-    )
-    const failingService = failing.service as ChatRunServicePrivate
-    const failingJob = failingService.scheduleConversationMemoryUpdate({
-      runId: 'run-failing',
-      sessionId: 'session-1',
-      runtimeSettings: await failing.storage.aiRuntimeSettings.get(),
-      modelName: 'mock-model',
-      sendEvent: (event) => failing.events.push(event)
-    })
-    await failingJob
-    expect(await failing.storage.chat.getConversationMemory('session-1')).toBeNull()
-    expect(await failing.storage.chat.getMessagesAfterConversationMemory('session-1')).toHaveLength(
-      20
-    )
-
-    let externalUpdateWritten = false
-    const stale = await createTestService({
-      conversationMemorySummaryBuilder: async (input) => {
-        if (!externalUpdateWritten) {
-          externalUpdateWritten = true
-          await stale.storage.chat.saveConversationMemory('session-1', {
-            summary: 'external update wins',
-            coveredMessageId: 'stale-assistant-5',
-            coveredTimestamp: baseTime + 209,
-            coveredMessageCount: 10,
-            revision: 1,
-            updatedAt: Date.now()
-          })
-        }
-        return `stale:${input.messages.length}`
-      }
-    })
-    await seedSession(stale.storage)
-    await saveMessages(
-      stale.storage,
-      buildConversationTurns({ prefix: 'stale', count: 10, startTime: baseTime + 200 })
-    )
-    const staleService = stale.service as ChatRunServicePrivate
-    const staleJob = staleService.scheduleConversationMemoryUpdate({
-      runId: 'run-stale',
-      sessionId: 'session-1',
-      runtimeSettings: await stale.storage.aiRuntimeSettings.get(),
-      modelName: 'mock-model',
-      sendEvent: (event) => stale.events.push(event)
-    })
-    await staleJob
-    const staleMemory = await stale.storage.chat.getConversationMemory('session-1')
-    expect(staleMemory?.summary).toBe('external update wins')
-    expect(staleMemory?.coveredMessageId).toBe('stale-assistant-5')
-    expect(stale.memorySummaryCalls).toHaveLength(0)
-  })
-
-  it('conversation-memory-background-job-dedupes-same-session-work', async () => {
-    let releaseSummary: (() => void) | null = null
-    const calls: ChatMessage[][] = []
-    const setup = await createTestService({
-      conversationMemorySummaryBuilder: async (input) => {
-        calls.push(input.messages)
-        await new Promise<void>((resolve) => {
-          releaseSummary = resolve
-        })
-        return `deduped:${input.messages.map((message) => message.id).join(',')}`
-      }
-    })
-    await seedSession(setup.storage)
-    const runtimeSettings = await setup.storage.aiRuntimeSettings.get()
-    const service = setup.service as ChatRunServicePrivate
-    const baseTime = Date.now()
-    await saveMessages(
-      setup.storage,
-      buildConversationTurns({ prefix: 'dedupe', count: 10, startTime: baseTime })
-    )
-
-    const firstJob = service.scheduleConversationMemoryUpdate({
-      runId: 'run-dedupe-1',
-      sessionId: 'session-1',
-      runtimeSettings,
-      modelName: 'mock-model',
-      sendEvent: (event) => setup.events.push(event)
-    })
-    const secondJob = service.scheduleConversationMemoryUpdate({
-      runId: 'run-dedupe-2',
-      sessionId: 'session-1',
-      runtimeSettings,
-      modelName: 'mock-model',
-      sendEvent: (event) => setup.events.push(event)
-    })
-
-    await waitForCondition(() => calls.length === 1)
-    expect(secondJob).toBeNull()
-    const pendingContext = await setup.storage.chat.getConversationMemoryContext('session-1')
-    expect(pendingContext.memory).toBeNull()
-    expect(pendingContext.recentMessages).toHaveLength(20)
-    await saveMessages(
-      setup.storage,
-      buildConversationTurns({ prefix: 'during-summary', count: 2, startTime: baseTime + 100 })
-    )
-    releaseSummary?.()
-    await firstJob
-    await waitForCondition(async () =>
-      Boolean((await setup.storage.chat.getConversationMemory('session-1'))?.summary)
-    )
-    expect(calls).toHaveLength(1)
-    expect((await setup.storage.chat.getConversationMemory('session-1'))?.coveredMessageCount).toBe(
-      10
-    )
-    const committedContext = await setup.storage.chat.getConversationMemoryContext('session-1')
-    expect(committedContext.recentMessages).toHaveLength(14)
-    expect(committedContext.recentMessages[0].id).toBe('dedupe-user-6')
-  })
-
   it('autostart-run-emits-process-events-after-run-started', async () => {
     const previousTimeout = process.env.NCURATOR_AI_EMBEDDING_PREFLIGHT_TIMEOUT_MS
     process.env.NCURATOR_AI_EMBEDDING_PREFLIGHT_TIMEOUT_MS = '10'
@@ -862,10 +540,13 @@ describe('unit ai persistence backend', () => {
       selectedReferences: [],
       humanState: {
         schemaVersion: 3,
-        taskContext: {
-          originalGoal: run.input,
-          recoveryHistory: [],
-          currentInterruption: { reason: 'process_interrupted' }
+        memory: { plan: [], compactions: [] },
+        skills: { learnedSkillIds: [] },
+        execution: {
+          pendingDecisionHint: undefined,
+          deliveryGuidanceItems: [],
+          artifacts: [],
+          finalizationReason: undefined
         }
       },
       errorMessage: 'interrupted',
@@ -964,15 +645,13 @@ describe('unit ai persistence backend', () => {
       selectedReferences: [],
       humanState: {
         schemaVersion: 3,
-        taskContext: {
-          originalGoal: '测试中断',
-          recoveryHistory: [],
-          currentInterruption: { reason: 'process_interrupted' }
-        },
-        memory: {
-          taskRun: {
-            rounds: []
-          }
+        memory: { plan: [], compactions: [] },
+        skills: { learnedSkillIds: [] },
+        execution: {
+          pendingDecisionHint: undefined,
+          deliveryGuidanceItems: [],
+          artifacts: [],
+          finalizationReason: undefined
         }
       },
       errorMessage: '运行中断恢复快照',
@@ -1008,10 +687,13 @@ describe('unit ai persistence backend', () => {
       selectedReferences: [],
       humanState: {
         schemaVersion: 3,
-        taskContext: {
-          originalGoal: runningRun.input,
-          recoveryHistory: [],
-          currentInterruption: { reason: 'user_cancelled' }
+        memory: { plan: [], compactions: [] },
+        skills: { learnedSkillIds: [] },
+        execution: {
+          pendingDecisionHint: undefined,
+          deliveryGuidanceItems: [],
+          artifacts: [],
+          finalizationReason: undefined
         }
       },
       errorMessage: 'keep snapshot when retract is rejected',
@@ -1072,13 +754,6 @@ describe('unit ai persistence backend', () => {
       updatedAt: baseTime + 3,
       finishedAt: baseTime + 3
     })
-    await setup.storage.chat.saveConversationMemory('session-1', {
-      summary: 'covers latest turn',
-      coveredMessageId: 'retract-assistant',
-      coveredTimestamp: baseTime + 3,
-      coveredMessageCount: 4,
-      updatedAt: Date.now()
-    })
     await setup.storage.chat.saveSessionResumeSnapshot('session-1', {
       reason: 'user_cancelled',
       runId: 'retract-run',
@@ -1086,15 +761,13 @@ describe('unit ai persistence backend', () => {
       selectedReferences: [],
       humanState: {
         schemaVersion: 3,
-        taskContext: {
-          originalGoal: 'retract me',
-          recoveryHistory: [],
-          currentInterruption: { reason: 'user_cancelled' }
-        },
-        memory: {
-          taskRun: {
-            rounds: [{ summary: 'stale interrupted task state' }]
-          }
+        memory: { plan: [], compactions: [] },
+        skills: { learnedSkillIds: [] },
+        execution: {
+          pendingDecisionHint: undefined,
+          deliveryGuidanceItems: [],
+          artifacts: [],
+          finalizationReason: undefined
         }
       },
       errorMessage: 'cancelled',
@@ -1110,10 +783,8 @@ describe('unit ai persistence backend', () => {
     expect(response.userMessage?.id).toBe('retract-user')
     expect(response.assistantMessageId).toBe('retract-assistant')
     expect(response.runId).toBe('retract-run')
-    expect(response.memoryCleared).toBe(true)
     expect(response.messages.map((message) => message.id)).toEqual(['kept-user', 'kept-assistant'])
     expect(await setup.storage.aiRun.getRun('retract-run')).toBeNull()
-    expect(await setup.storage.chat.getConversationMemory('session-1')).toBeNull()
     expect(await setup.storage.chat.getSessionResumeSnapshot('session-1')).toBeNull()
   })
 
@@ -1145,10 +816,13 @@ describe('unit ai persistence backend', () => {
       selectedReferences: [],
       humanState: {
         schemaVersion: 3,
-        taskContext: {
-          originalGoal: 'continue the newer task',
-          recoveryHistory: [],
-          currentInterruption: { reason: 'process_interrupted' }
+        memory: { plan: [], compactions: [] },
+        skills: { learnedSkillIds: [] },
+        execution: {
+          pendingDecisionHint: undefined,
+          deliveryGuidanceItems: [],
+          artifacts: [],
+          finalizationReason: undefined
         }
       },
       errorMessage: 'interrupted',

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { humanThoughtDecisionSchema } from '../../../../src/main/services/ai/human/schema'
+import { humanNextActionSchema } from '../../../../src/main/services/ai/human/schema'
 import {
   countActiveToolNamesForSkillIds,
   fitSkillIdsToToolBudget
@@ -105,20 +105,13 @@ describe('ai unit learning tool budget', () => {
 
   it('allows learning decisions to request three or more skills', () => {
     expect(
-      humanThoughtDecisionSchema.parse({
-        thought: {
-          next: '学习多个技能'
-        },
-        nextAction: {
-          action: 'learning',
-          wantLearnSkillIds: ['terminal', 'docx-read', 'docx-write']
-        }
-      })
-    ).toMatchObject({
-      nextAction: {
+      humanNextActionSchema.parse({
         action: 'learning',
         wantLearnSkillIds: ['terminal', 'docx-read', 'docx-write']
-      }
+      })
+    ).toMatchObject({
+      action: 'learning',
+      wantLearnSkillIds: ['terminal', 'docx-read', 'docx-write']
     })
   })
 })

@@ -1810,21 +1810,6 @@ export type ChatTranscriptRecord = {
   createdAt: number
 }
 
-export type ChatConversationMemory = {
-  summary: string
-  coveredMessageId: string | null
-  coveredTimestamp: number | null
-  coveredMessageCount: number
-  revision: number
-  updatedAt: number
-}
-
-export type ChatConversationMemoryRow = {
-  session_id: string
-  memory_json: string
-  updated_at: number
-}
-
 export type ChatSessionResumeSnapshot = {
   reason: AiRunResumeSnapshotReason
   runId: string

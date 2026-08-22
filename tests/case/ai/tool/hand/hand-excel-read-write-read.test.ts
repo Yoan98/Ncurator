@@ -56,8 +56,8 @@ describe('ai tool hand excel backend', () => {
           skills: { learnedSkillIds: ['excel-read', 'excel-write'] },
           execution: {
             ...initial.execution,
-            currentThought: {
-              thought: { next: '读取、更新并复读工作簿' },
+            pendingRound: {
+              thought: { text: '读取、更新并复读工作簿' },
               nextAction: {
                 action: 'hand',
                 calls: [

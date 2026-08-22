@@ -19,7 +19,7 @@ export const renderDecisionHintForBrain = (hint: HumanDecisionHint): string => {
             runtime_limit: '达到运行上限',
             unexpected_error: '未知运行异常'
           }[hint.detail.reason]
-        }而中断，已恢复最近一次上下文信息，请根据 task_goal 和 resume_messages 继续推进`
+        }而中断，已恢复最近一次上下文信息，请根据 task_goal 继续推进`
       ].join('\n')
     case 'learning_no_effect':
       return `上一轮学习没有带来新能力。请求的技能有：${renderStringList(hint.detail.requestedSkillIds)}；重复的技能有：${renderStringList(hint.detail.duplicateSkillIds)}；不存在的技能有：${renderStringList(hint.detail.unknownSkillIds)}。`

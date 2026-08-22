@@ -438,9 +438,8 @@ describe('ai human mock-llm backend', () => {
             ({ user }) => {
               runtimeLimitTaskGoalSeen =
                 user.includes('<task_goal>') &&
-                user.includes('验证达到运行上限后恢复原始任务') &&
-                user.includes('<resume_messages>') &&
-                user.includes('1. 继续完成运行上限测试')
+                user.includes('继续完成运行上限测试') &&
+                user.includes('验证达到运行上限后恢复原始任务')
               return buildCompleteTaskDecision({ summary: '运行上限恢复完成。' })
             }
           ],

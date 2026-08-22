@@ -5,77 +5,27 @@ import {
   renderEvidenceReferences
 } from '../shared/references'
 import { renderHumanFileChangeLines } from '../shared/runtimeRenderers'
-import { renderReferenceScopeText } from './referenceScope'
 import type { HumanState } from '../types'
-import { renderResumeMessages } from '../../utils/resumeSnapshot'
 
-const renderTaskEvidence = (state: HumanState): string => {
-  const planLines = state.memory.plan
-    .map(
-      (item) =>
-        `- ${item.status === 'done' ? '[done]' : '[todo]'} ${item.title}${item.evidence ? `（${item.evidence}）` : ''}`
-    )
-    .join('\n')
-  if (!planLines) return 'none'
-  return planLines
-}
-
-export const buildMouthPrompt = (input: {
+export const buildMouthDeliveryMessage = (input: {
   state: HumanState
   ctx: AiRunContext
-}) => {
-  const system = `
-<system>
-  <principles>
-    - 你的职责是基于已经提供的信息，面向用户交付最终结果，而不是继续执行任务。
-    - 必须严格依据已提供的信息回答，优先回答用户真正关心的内容，使用自然、直接、容易理解的表达。
+}): string =>
+  `
+现在请基于以上完整执行历史，面向用户交付最终结果。
 
-    - 当存在file_changes时，必须要提及这些产出的信息。
-    - 当delivery_guidance存在时，必须吸收。
-    - 当存在evidence_references时，必须吸收其中信息，明确说明引用了哪些资料来分别支撑了哪部分交付内容。
+交付要求：
+- 只输出最终 markdown 正文，不要输出 JSON 或额外说明。
+- 必须严格依据执行历史中已发生的事实回答，优先回答用户真正关心的内容，使用自然、直接、容易理解的表达。
+- 当 file_changes 存在时，必须提及这些产出。
+- 当 delivery_guidance 存在时，必须吸收。
+- 当 evidence_references 存在时，必须吸收其中信息，明确说明引用了哪些资料来分别支撑了哪部分交付内容。
+- 禁止编造不存在的事实；禁止改动客观事实的锚点（文件名、路径、资料名、工具名、人物职责绑定等），必须复用原文锚点。
+- 如果任务结果已经体现在文件、命令结果或其他产物中，默认只总结结果，不要把产物正文或大段原始输出直接作为最终答复主体。
+- 文件或网页链接必须使用 Markdown 格式：[显示名称](ncurator://ref?kind=normal|reference&resourceType=file|web&label=显示名称&path=文件路径或网页URL)，样例：${NCURATOR_REF_MARKDOWN_FORMAT_EXAMPLE}。
+- evidence_references 中的正文引用片段是证据引用，输出时必须原样使用该链接格式，禁止修改；其他链接使用相同格式但 kind=normal。
 
-    - 禁止编造不存在其中的事实。
-    - 禁止对客观事实进行改动描述，比如文件名、路径、资料名、工具名、人物职责绑定等已经有明确标识的对象，必须复用原文锚点。
-    - 禁止向用户暴露系统内部定位信息、实现细节或运行态标识，例如块编号(如b:xxx这类内部工具的标定为)、段落锚点、内部字段名、工具名等。
-  </principles>
-
-  <context_block_guide>
-    - task_goal：用户当前要你完成或回答的事情。
-    - reference_scope：当前用户工作区域、资料范围和参考边界。
-    - task_evidence：本次任务的执行情况摘要（来自执行计划），用于理解任务推进过程。
-    - resume_messages：任务中断恢复后用户补充的消息；若无则为 none。
-    - delivery_guidance：上游节点明确要求你必须吸收的补充说明。
-    - file_changes：本次实际修改的文件记录，用于说明本次最终修改了什么文件。
-    - evidence_references：本次任务可被明确引用的证据资料列表，每条都带有引用用途说明。
-  </context_block_guide>
-
-  <output_contract>
-    - 只输出最终 markdown 正文，不要输出 JSON 或额外说明。
-    - 如果任务结果已经体现在文件、命令结果或其他产物中，默认只总结结果，不要把产物正文或大段原始输出直接作为最终答复主体。
-    - 最终答复里的文件或网页链接必须使用 Markdown 格式：[显示名称](ncurator://ref?kind=normal|reference&resourceType=file|web&label=显示名称&path=文件路径或网页URL)，样例：${NCURATOR_REF_MARKDOWN_FORMAT_EXAMPLE}；
-    - evidence_references 中的正文引用片段是证据引用，输出时必须原样使用该链接格式，禁止修改；其他链接使用相同格式但 kind=normal。
-  </output_contract>
-</system>
-`.trim()
-
-  const user = `
-<user_context>
-  <task_goal>
-${input.state.task.userInput}
-  </task_goal>
-
-  <reference_scope>
-${renderReferenceScopeText(input.ctx.referenceScope)}
-  </reference_scope>
-
-  <task_evidence>
-${renderTaskEvidence(input.state)}
-  </task_evidence>
-
-  <resume_messages>
-${renderResumeMessages(input.state.task.taskContext) || 'none'}
-  </resume_messages>
-
+<delivery_context>
   <delivery_guidance>
 ${renderDeliveryGuidanceItems(input.state.execution.deliveryGuidanceItems)}
   </delivery_guidance>
@@ -87,11 +37,5 @@ ${renderHumanFileChangeLines(input.state, 'prompt')}
   <evidence_references>
 ${renderEvidenceReferences(input.state.execution.evidenceReferences)}
   </evidence_references>
-</user_context>
+</delivery_context>
 `.trim()
-
-  return {
-    system,
-    user
-  }
-}

@@ -31,25 +31,9 @@ export const humanTaskInterruptionReasonSchema = z.enum([
   'unexpected_error'
 ])
 
-export const humanTaskContextSchema = z.object({
-  originalGoal: z.string(),
-  recoveryHistory: z.array(
-    z.object({
-      interruptionReason: humanTaskInterruptionReasonSchema,
-      userInput: z.string()
-    })
-  ),
-  currentInterruption: z
-    .object({
-      reason: humanTaskInterruptionReasonSchema
-    })
-    .optional()
-})
-
 export const humanTaskInputSchema = z.object({
   taskId: z.string(),
-  userInput: z.string(),
-  taskContext: humanTaskContextSchema.optional()
+  userInput: z.string()
 })
 
 export const skillDefinitionBaseSchema = z.object({

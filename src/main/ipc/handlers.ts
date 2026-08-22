@@ -2366,7 +2366,7 @@ export function registerHandlers(services: {
     try {
       const sessionId = String(payload?.sessionId || '').trim()
       if (!sessionId) return { success: false, error: 'sessionId is required' }
-      const usage = await getAiContextUsage({ sessionId, chatStore })
+      const usage = await getAiContextUsage({ sessionId, chatTranscriptStore })
       return { success: true, ...usage }
     } catch (e) {
       return { success: false, error: e instanceof Error ? e.message : String(e) }

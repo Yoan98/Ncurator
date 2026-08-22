@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { buildBrainPrompt } from '../../../../src/main/services/ai/human/prompts/brain'
+import {
+  buildBrainSystemPrompt,
+  buildBrainUserMessage
+} from '../../../../src/main/services/ai/human/prompts/brain'
 import { createInitialHumanState } from '../../../../src/main/services/ai/human/state/schema'
 import type { AiRunContext } from '../../../../src/main/services/ai/types'
 
@@ -24,104 +27,54 @@ const createFakeCtx = (): AiRunContext =>
     }
   }) as AiRunContext
 
-const buildStateWithRound = (roundId: number) => {
+const buildStateWithPlan = () => {
   const state = createInitialHumanState({
     taskId: 'task-cache-stability',
     userInput: '继续处理资料'
   })
-  state.memory.taskRun.rounds = [
-    {
-      roundId,
-      createdAt: roundId,
-      thought: {
-        next: '读取当前目录建立资料范围。'
-      },
-      nextAction: {
-        action: 'hand',
-        calls: [{ toolName: 'terminal_run', args: { command: 'pwd' } }]
-      },
-      execution: {
-        kind: 'hand',
-        calls: [{ toolName: 'terminal_run', args: { command: 'pwd' } }],
-        toolResults: [
-          { toolName: 'terminal_run', ok: true, data: { output: '/tmp/workspace' } }
-        ]
-      }
-    }
-  ]
+  state.memory.plan = [{ title: '读取当前目录', status: 'done', evidence: '已读取' }]
+  state.skills.learnedSkillIds = ['docx-read']
   return state
 }
 
 describe('ai unit brain prompt cache stability', () => {
   it('renders byte-identical output for the same state', () => {
-    const state = buildStateWithRound(1)
+    const state = buildStateWithPlan()
     const ctx = createFakeCtx()
 
-    const first = buildBrainPrompt({ state, ctx })
-    const second = buildBrainPrompt({ state, ctx })
+    const firstSystem = buildBrainSystemPrompt({ ctx })
+    const secondSystem = buildBrainSystemPrompt({ ctx })
+    const firstUser = buildBrainUserMessage({ state, ctx, injectPlan: true })
+    const secondUser = buildBrainUserMessage({ state, ctx, injectPlan: true })
 
-    expect(second.system).toBe(first.system)
-    expect(second.user).toBe(first.user)
+    expect(secondSystem).toBe(firstSystem)
+    expect(secondUser).toBe(firstUser)
   })
 
-  it('keeps the stable prefix intact when a round is appended', () => {
-    const baseState = buildStateWithRound(1)
-    const extendedState = buildStateWithRound(1)
-    extendedState.memory.taskRun.rounds = [
-      ...baseState.memory.taskRun.rounds,
-      {
-        roundId: 2,
-        createdAt: 2,
-        thought: {
-          next: '补充读取工作区文件。'
-        },
-        nextAction: {
-          action: 'hand',
-          calls: [{ toolName: 'text_file_read', args: { sourcePath: 'a.md' } }]
-        },
-        execution: {
-          kind: 'hand',
-          calls: [{ toolName: 'text_file_read', args: { sourcePath: 'a.md' } }],
-          toolResults: [{ toolName: 'text_file_read', ok: true, data: { content: 'x' } }]
-        }
-      }
-    ]
+  it('keeps the system prompt static across tasks', () => {
+    const stateA = createInitialHumanState({ taskId: 'task-a', userInput: '任务 A' })
+    const stateB = createInitialHumanState({ taskId: 'task-b', userInput: '任务 B' })
     const ctx = createFakeCtx()
 
-    const base = buildBrainPrompt({ state: baseState, ctx })
-    const extended = buildBrainPrompt({ state: extendedState, ctx })
+    const aSystem = buildBrainSystemPrompt({ ctx })
+    const bSystem = buildBrainSystemPrompt({ ctx })
 
-    expect(extended.system).toBe(base.system)
+    expect(aSystem).toBe(bSystem)
 
-    const roundsTag = '<rounds>'
-    const baseRoundsIndex = base.user.indexOf(roundsTag)
-    const extendedRoundsIndex = extended.user.indexOf(roundsTag)
-
-    expect(baseRoundsIndex).toBeGreaterThanOrEqual(0)
-    expect(extendedRoundsIndex).toBeGreaterThanOrEqual(0)
-
-    expect(extended.user.slice(0, extendedRoundsIndex)).toBe(base.user.slice(0, baseRoundsIndex))
-    expect(extended.user).toContain('第 1 轮')
-    expect(extended.user).toContain('补充读取工作区文件。')
+    const aUser = buildBrainUserMessage({ state: stateA, ctx })
+    const bUser = buildBrainUserMessage({ state: stateB, ctx })
+    expect(aUser).not.toBe(bUser)
+    expect(aUser).toContain('任务 A')
+    expect(bUser).toContain('任务 B')
   })
 
   it('keeps system static across tasks and embeds platform and runtime paths', () => {
-    const stateA = createInitialHumanState({
-      taskId: 'task-a',
-      userInput: '任务 A'
-    })
-    const stateB = createInitialHumanState({
-      taskId: 'task-b',
-      userInput: '任务 B'
-    })
     const ctx = createFakeCtx()
 
-    const a = buildBrainPrompt({ state: stateA, ctx })
-    const b = buildBrainPrompt({ state: stateB, ctx })
+    const system = buildBrainSystemPrompt({ ctx })
 
-    expect(a.system).toBe(b.system)
-    expect(a.system).toContain('platform：macos')
-    expect(a.system).toContain('runtime_paths.assets：')
-    expect(a.system).toContain('runtime_paths.scripts：')
+    expect(system).toContain('platform：macos')
+    expect(system).toContain('runtime_paths.assets：')
+    expect(system).toContain('runtime_paths.scripts：')
   })
 })

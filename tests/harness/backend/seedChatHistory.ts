@@ -28,8 +28,4 @@ export const seedChatHistory = async (input: {
       error: message.error
     })
   }
-
-  if (input.payload.memory) {
-    await input.chatStore.saveConversationMemory(input.payload.sessionId, input.payload.memory)
-  }
 }

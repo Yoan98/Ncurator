@@ -1,11 +1,8 @@
+import { HumanMessage } from '@langchain/core/messages'
 import { describe, expect, it } from 'vitest'
 import { createContextBudgetNode } from '../../../../src/main/services/ai/human/node/contextBudgetNode'
 import { createHumanRuntimeCache } from '../../../../src/main/services/ai/human/node/utils/runtimeCache'
 import { createInitialHumanState } from '../../../../src/main/services/ai/human/state/schema'
-import {
-  appendRoundRecord,
-  buildLearningExecution
-} from '../../../../src/main/services/ai/human/memory/rounds'
 import {
   CONTEXT_COMPACTION_TRIGGER_RATIO,
   DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS
@@ -43,11 +40,8 @@ const createBaseContext = (events: AiRunEvent[]): AiRunContext =>
     },
     sendEvent: (event) => events.push(event),
     requestApprovalBatch: async () => ({ accepted: true, decisions: [] }),
-    loadConversationContext: async () => ({
-      recentTurnsText: '',
-      conversationSummaryText: ''
-    }),
-    loadConversationMemory: async () => null,
+    loadTranscript: async () => [],
+    appendTranscript: async () => undefined,
     trackDocxOpen: () => undefined,
     trackDocxChanges: () => undefined,
     trackDocxBatchChanges: () => undefined,
@@ -99,67 +93,14 @@ describe('ai unit context budget node', () => {
     const events: AiRunEvent[] = []
     const ctx = createBaseContext(events)
     const cache = createHumanRuntimeCache()
-    const baseState = createInitialHumanState({
+    const state = createInitialHumanState({
       taskId: 'task-2',
       userInput: '请完成一个会触发压缩的长任务。'
     })
-    const roundState = {
-      ...baseState,
-      memory: {
-        ...baseState.memory,
-        taskRun: (() => {
-          const stateWithRound1 = {
-            ...baseState,
-            memory: {
-              ...baseState.memory,
-              taskRun: appendRoundRecord({
-                state: baseState,
-                thought: {
-                  next: `第一轮先学习 docx-read。${'需要保留的长历史。'.repeat(40)}`
-                },
-                nextAction: {
-                  action: 'learning',
-                  wantLearnSkillIds: ['docx-read']
-                },
-                execution: buildLearningExecution({
-                  learningOutcome: {
-                    requestedSkillIds: ['docx-read'],
-                    loadedSkillIds: ['docx-read'],
-                    skippedDuplicateSkillIds: [],
-                    skippedUnknownSkillIds: [],
-                    evictedSkillIds: [],
-                    activeToolCount: 4
-                  }
-                }),
-                createdAt: 1
-              })
-            }
-          }
-          return appendRoundRecord({
-            state: stateWithRound1,
-            thought: {
-              next: '第二轮继续学习 docx-write。'
-            },
-            nextAction: {
-              action: 'learning',
-              wantLearnSkillIds: ['docx-write']
-            },
-            execution: buildLearningExecution({
-              learningOutcome: {
-                requestedSkillIds: ['docx-write'],
-                loadedSkillIds: ['docx-write'],
-                skippedDuplicateSkillIds: [],
-                skippedUnknownSkillIds: [],
-                evictedSkillIds: [],
-                activeToolCount: 8
-              }
-            }),
-            createdAt: 2
-          })
-        })()
-      },
-      humanRuntimeOverrides: undefined
-    }
+    cache.messages = Array.from(
+      { length: 12 },
+      (_, index) => new HumanMessage(`long message ${index} ${'x'.repeat(200)}`)
+    )
     const ctxWithSmallWindow = {
       ...ctx,
       humanRuntimeOverrides: {
@@ -171,9 +112,8 @@ describe('ai unit context budget node', () => {
       cache
     })
     cache.lastBrainInputTokens = 500
-    cache.lastBrainRoundCount = 1
 
-    const nextState = await smallWindowNode(roundState)
+    const nextState = await smallWindowNode(state)
 
     expect(nextState.execution.stage).toBe('context_compaction')
     const event = events.find((item) => item.type === 'context_budget_evaluated')
@@ -221,60 +161,15 @@ describe('ai unit context budget node', () => {
     })
   })
 
-  it('does not compact when the available round history is too small to reduce context', async () => {
+  it('does not compact when the message history is too small to reduce context', async () => {
     const events: AiRunEvent[] = []
     const ctx = createBaseContext(events)
     const cache = createHumanRuntimeCache()
-    const baseState = createInitialHumanState({
+    const state = createInitialHumanState({
       taskId: 'task-small-history',
       userInput: '请继续当前任务。'
     })
-    const firstTaskRun = appendRoundRecord({
-      state: baseState,
-      thought: { next: '继续。' },
-      nextAction: { action: 'learning', wantLearnSkillIds: ['docx-read'] },
-      execution: buildLearningExecution({
-        learningOutcome: {
-          requestedSkillIds: ['docx-read'],
-          loadedSkillIds: ['docx-read'],
-          skippedDuplicateSkillIds: [],
-          skippedUnknownSkillIds: [],
-          evictedSkillIds: [],
-          activeToolCount: 4
-        }
-      }),
-      createdAt: 1
-    })
-    const firstRoundState = {
-      ...baseState,
-      memory: {
-        ...baseState.memory,
-        taskRun: firstTaskRun
-      }
-    }
-    const secondTaskRun = appendRoundRecord({
-      state: firstRoundState,
-      thought: { next: '完成。' },
-      nextAction: { action: 'learning', wantLearnSkillIds: ['docx-write'] },
-      execution: buildLearningExecution({
-        learningOutcome: {
-          requestedSkillIds: ['docx-write'],
-          loadedSkillIds: ['docx-write'],
-          skippedDuplicateSkillIds: [],
-          skippedUnknownSkillIds: [],
-          evictedSkillIds: [],
-          activeToolCount: 8
-        }
-      }),
-      createdAt: 2
-    })
-    const roundState = {
-      ...firstRoundState,
-      memory: {
-        ...firstRoundState.memory,
-        taskRun: secondTaskRun
-      }
-    }
+    cache.messages = Array.from({ length: 3 }, (_, index) => new HumanMessage(`short ${index}`))
     const node = createContextBudgetNode({
       ctx: {
         ...ctx,
@@ -283,9 +178,8 @@ describe('ai unit context budget node', () => {
       cache
     })
     cache.lastBrainInputTokens = 9_000
-    cache.lastBrainRoundCount = 1
 
-    const nextState = await node(roundState)
+    const nextState = await node(state)
 
     expect(nextState.execution.stage).toBe('brain')
     expect(events.find((event) => event.type === 'context_budget_evaluated')).toMatchObject({

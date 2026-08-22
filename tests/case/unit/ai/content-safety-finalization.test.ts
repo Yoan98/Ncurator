@@ -9,18 +9,21 @@ import type { AiRunContext } from '../../../../src/main/services/ai/types'
 const createBrainContext = (error: Error): AiRunContext =>
   ({
     runId: 'brain-safety-run',
+    sessionId: 'brain-safety-session',
     runStartedAt: 0,
     platform: 'macos',
+    preference: 'default',
     referenceScope: {
       workspace: { workspaceId: 'ws-1', workspaceName: 'Workspace', rootPath: '/tmp/workspace' },
       selectedReferences: []
     },
     workspace: { workspaceId: 'ws-1', workspaceName: 'Workspace', rootPath: '/tmp/workspace' },
     checkCancelled: () => undefined,
-    chatStructured: async () => {
+    chatTools: async () => {
       throw error
     },
-    loadConversationContext: async () => ({ recentTurnsText: '', conversationSummaryText: '' }),
+    loadTranscript: async () => [],
+    appendTranscript: async () => undefined,
     sendEvent: () => undefined
   }) as AiRunContext
 
@@ -46,13 +49,13 @@ describe('ai content safety finalization', () => {
     )
     const node = createBrainNode({ ctx, cache: createHumanRuntimeCache() })
     const state = createInitialHumanState({ taskId: 'brain-safety', userInput: 'continue' })
-    state.memory.todolist = [{ item: 'unfinished item', status: 'todo' }]
+    state.memory.plan = [{ title: 'unfinished item', status: 'todo' }]
 
     const result = await node(state)
 
     expect(result.execution.stage).toBe('mouth')
     expect(result.execution.finalizationReason).toBe('brain_content_safety')
-    expect(result.execution.currentThought?.nextAction.action).toBe('mouth')
+    expect(result.execution.pendingRound?.nextAction.action).toBe('mouth')
     expect(result.execution.deliveryGuidanceItems).toEqual([
       expect.objectContaining({ source: 'brain', text: expect.stringContaining('内容安全') })
     ])
@@ -83,23 +86,17 @@ describe('ai content safety finalization', () => {
     await expect(node(state)).rejects.toBe(providerError)
   })
 
-  it('routes successful provider responses with invalid output into the fault node', async () => {
+  it('propagates invalid output errors from the provider without routing to a stage', async () => {
+    const outputError = new LlmOutputError({
+      message: '模型返回内容不符合要求的结构。',
+      issues: [{ path: 'nextAction', message: 'Required' }]
+    })
     const node = createBrainNode({
-      ctx: createBrainContext(
-        new LlmOutputError({
-          message: '模型返回内容不符合要求的结构。',
-          issues: [{ path: 'nextAction', message: 'Required' }]
-        })
-      ),
+      ctx: createBrainContext(outputError),
       cache: createHumanRuntimeCache()
     })
     const state = createInitialHumanState({ taskId: 'brain-output-error', userInput: 'continue' })
 
-    const result = await node(state)
-
-    expect(result.execution.stage).toBe('fault')
-    expect(result.execution.pendingFault?.issues).toEqual([
-      { path: 'nextAction', message: 'Required' }
-    ])
+    await expect(node(state)).rejects.toBe(outputError)
   })
 })

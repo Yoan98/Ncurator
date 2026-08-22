@@ -132,8 +132,8 @@ const HINT_FIXTURES: Record<(typeof HUMAN_DECISION_HINT_CODES)[number], HumanDec
       ]
     }
   },
-  brain_todolist_incomplete: {
-    code: 'brain_todolist_incomplete',
+  brain_plan_incomplete: {
+    code: 'brain_plan_incomplete',
     detail: {
       pendingItems: ['检查是否已经满足用户诉求并能进入最终交付']
     }

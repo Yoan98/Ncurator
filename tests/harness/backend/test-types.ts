@@ -17,7 +17,6 @@ import type { WorkspaceKnowledgePrepareService } from '../../../src/main/service
 import type { WebCrawlerService } from '../../../src/main/services/webCrawler/types'
 import type {
   ChatMessage,
-  ChatConversationMemory,
   AiLlmUsage,
   JsonObject,
   JsonValue,
@@ -155,7 +154,6 @@ export type SeedChatHistoryInput = {
     artifacts?: ChatMessage['artifacts']
     error?: boolean
   }>
-  memory?: ChatConversationMemory
 }
 
 export type CreateAiRunContextInput = {

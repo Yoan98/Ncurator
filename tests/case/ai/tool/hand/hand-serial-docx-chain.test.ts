@@ -67,9 +67,9 @@ describe('ai tool hand backend', () => {
               taskId: runtime.taskId,
               userInput: '请顺序完成风险周报文档修改与预览'
             }).execution,
-            currentThought: {
+            pendingRound: {
               thought: {
-                next: '按顺序完成 docx 编辑链路'
+                text: '按顺序完成 docx 编辑链路'
               },
               nextAction: {
                 action: 'hand',
