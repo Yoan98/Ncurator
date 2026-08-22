@@ -163,6 +163,7 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     saveResumeSnapshot,
     chatStructured: llmExecutor.chatStructured,
     chatText: llmExecutor.chatText,
+    chatTools: llmExecutor.chatTools,
     sendEvent: deps.sendEvent,
     recordLlmIo: deps.recordLlmIo,
     requestApprovalBatch: deps.requestApprovalBatch,

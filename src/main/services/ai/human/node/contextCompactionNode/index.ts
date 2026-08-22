@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto'
+import { HumanMessage, type BaseMessage } from '@langchain/core/messages'
 import type { AiRunContext } from '../../../types'
 import { getCompressibleHistoryRounds, getLastRoundFocus } from '../../memory/rounds'
+import { deriveMessagesFromRounds } from '../../memory/messages'
 import { CONTEXT_COMPACTION_TARGET_RATIO } from '../../constants'
 import { buildHistoryCompactionPrompt } from '../../prompts/compaction'
 import { renderBrainRoundSection } from '../../shared/historyRenderers'
@@ -105,6 +107,20 @@ export const createContextCompactionNode = (input: {
     input.cache.lastBrainUsageUnavailable = false
     input.cache.postCompactionNeedsFreshBrainUsage = true
 
+    const remainingRounds = latestRound ? [latestRound] : []
+    input.cache.compactSummaryText = String(summary || '').trim()
+    const prefix = input.cache.prefixMessages || []
+    const rebuilt: BaseMessage[] = [...prefix]
+    if (input.cache.compactSummaryText) {
+      rebuilt.push(
+        new HumanMessage(
+          `<compacted_history>\n${input.cache.compactSummaryText}\n</compacted_history>`
+        )
+      )
+    }
+    rebuilt.push(...deriveMessagesFromRounds(remainingRounds))
+    input.cache.messages = rebuilt
+
     return {
       ...state,
       execution: {
@@ -118,7 +134,7 @@ export const createContextCompactionNode = (input: {
             ...state.memory.taskRun.compactions.filter((block) => block.kind !== 'rounds'),
             compactBlock
           ],
-          rounds: latestRound ? [latestRound] : []
+          rounds: remainingRounds
         }
       }
     }

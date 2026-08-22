@@ -42,7 +42,7 @@ export const HUMAN_DECISION_HINT_CODES = [
   'hand_tool_result_too_large',
   'hand_tool_result_unusable',
   'brain_output_schema_invalid',
-  'brain_todolist_incomplete',
+  'brain_plan_incomplete',
   'brain_content_safety',
   'hand_call_invalid'
 ] as const

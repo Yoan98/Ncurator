@@ -255,7 +255,10 @@ const TOOL_ITEM_RENDERERS = {
       text(readStringValue(input || {}, 'message') || '完成操作')
     ),
   image_analyze: (input) => sentence(text('识别图片 '), text(readToolFileLabel(input))),
-  image_generate: (input) => sentence(text('生成图片 '), text(readToolFileLabel(input)))
+  image_generate: (input) => sentence(text('生成图片 '), text(readToolFileLabel(input))),
+  learn_skill: () => sentence(text('学习新技能')),
+  update_plan: () => sentence(text('更新任务计划')),
+  finish: () => sentence(text('完成并交付任务'))
 } satisfies Record<RuntimeToolName, ToolItemRenderer>
 
 const getToolItemText = (

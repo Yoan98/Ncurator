@@ -1,16 +1,19 @@
+import { HumanMessage, SystemMessage } from '@langchain/core/messages'
+import { getToolCalls } from '../../../../../utils/aiCapabilityUtils'
+import { extractTextContent } from '../../../structuredOutput'
+import type { JsonObject } from '../../../../../../shared/types'
 import type { AiRunContext } from '../../../types'
-import { isLlmOutputError } from '../../../errors'
-import { normalizeHumanThought } from '../../memory/thoughtMemory'
-import { buildBrainPrompt } from '../../prompts/brain'
-import { createHumanThoughtDecisionSchema } from '../../schema'
-import { assertExternalLearnedSkillIds } from '../../skills'
-import type { HumanRuntimeCache, HumanState } from '../../types'
-import { applyBrainDecisionTransition } from '../utils/stateTransitions'
-import {
-  createDeliveryGuidanceItem,
-  mergeDeliveryGuidanceItems
-} from '../../shared/deliveryGuidance'
 import { isContentSafetyError } from '../../../utils/runFailure'
+import { normalizeRoundThought } from '../../memory/thoughtMemory'
+import { deriveMessagesFromRounds } from '../../memory/messages'
+import { buildBrainSystemPrompt, buildBrainUserMessage } from '../../prompts/brain'
+import { renderDecisionHintForBrain } from '../../prompts/decisionHints'
+import { assertExternalLearnedSkillIds } from '../../skills'
+import { brainEvidenceReferenceSchema } from '../../schema'
+import type { HumanNextAction, HumanRuntimeCache, HumanState } from '../../types'
+import { applyBrainDecisionTransition } from '../utils/stateTransitions'
+import { buildAvailableTools } from '../learningNode/skillLoader'
+import { createDeliveryGuidanceItem, mergeDeliveryGuidanceItems } from '../../shared/deliveryGuidance'
 import {
   emitThinkingCompleted,
   emitThinkingFailed,
@@ -20,13 +23,64 @@ import {
 const getErrorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error)
 
+const readStringList = (value: unknown): string[] =>
+  Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    : []
+
+const readFinishEvidenceReferences = (args: unknown) => {
+  const raw =
+    args && typeof args === 'object' ? (args as Record<string, unknown>).evidenceReferences : undefined
+  const parsed = brainEvidenceReferenceSchema.array().optional().safeParse(raw)
+  return parsed.success ? parsed.data : undefined
+}
+
 export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCache }) => {
   return async (state: HumanState): Promise<HumanState> => {
     input.ctx.checkCancelled()
     assertExternalLearnedSkillIds(state.skills.learnedSkillIds)
     input.cache.currentState = state
+
     const history = await input.ctx.loadConversationContext()
-    const thoughtDecisionSchema = createHumanThoughtDecisionSchema()
+
+    let messages = input.cache.messages
+    if (!messages || messages.length === 0) {
+      const prefix = [
+        new SystemMessage(buildBrainSystemPrompt({ ctx: input.ctx })),
+        new HumanMessage(
+          buildBrainUserMessage({
+            state,
+            ctx: input.ctx,
+            conversationSummaryText: history.conversationSummaryText,
+            recentTurnsText: history.recentTurnsText
+          })
+        )
+      ]
+      input.cache.prefixMessages = prefix
+      messages = [...prefix]
+      if (state.memory.taskRun.rounds.length > 0) {
+        messages.push(...deriveMessagesFromRounds(state.memory.taskRun.rounds))
+      }
+      input.cache.messages = messages
+    }
+
+    if (state.execution.pendingDecisionHint) {
+      messages.push(
+        new HumanMessage(
+          `<decision_hint>\n${renderDecisionHintForBrain(state.execution.pendingDecisionHint)}\n</decision_hint>`
+        )
+      )
+      input.cache.messages = messages
+    }
+
+    const tools = buildAvailableTools({
+      cache: input.cache,
+      ctx: input.ctx,
+      runId: input.ctx.runId,
+      taskId: state.task.taskId,
+      learnedSkillIds: state.skills.learnedSkillIds
+    })
+
     let thinkingOpen = false
     const completeThinking = (): void => {
       if (!thinkingOpen) return
@@ -52,21 +106,16 @@ export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
         runId: input.ctx.runId
       })
       thinkingOpen = true
-      const result = await input.ctx.chatStructured({
+
+      const result = await input.ctx.chatTools({
         caller: 'human.brain',
         taskId: state.task.taskId,
-        ...buildBrainPrompt({
-          state,
-          ctx: input.ctx,
-          conversationSummaryText: history.conversationSummaryText,
-          recentTurnsText: history.recentTurnsText
-        }),
-        schema: thoughtDecisionSchema,
-        schemaName: 'human_brain_decision',
+        messages,
+        tools,
         temperature: 0.1,
-        streamingMode: 'force_non_stream',
         contextBudgetSnapshot: state.execution.contextBudget
       })
+
       const inputTokens = result.usage?.inputTokens
       if (inputTokens !== undefined) {
         input.cache.lastBrainInputTokens = inputTokens
@@ -85,18 +134,56 @@ export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
           stage: 'human_brain'
         })
       }
-      const parsedThought = thoughtDecisionSchema.parse(result.output)
-      const normalizedThought = normalizeHumanThought(parsedThought.thought)
-      const todolist = normalizedThought.todolist ?? state.memory.todolist
+
+      const assistantMessage = result.message
+      messages.push(assistantMessage)
+      input.cache.messages = messages
+
+      const thoughtText = extractTextContent(assistantMessage.content)
+      const thought = normalizeRoundThought(thoughtText)
+      const toolCalls = getToolCalls(assistantMessage)
+
+      const finishCall = toolCalls.find((call) => call.name === 'finish')
+      const learnSkillCall = toolCalls.find((call) => call.name === 'learn_skill')
+      const finishEvidenceReferences = finishCall
+        ? readFinishEvidenceReferences(finishCall.args)
+        : undefined
+      const learnSkillIds = learnSkillCall ? readStringList(learnSkillCall.args?.skillIds) : []
+
+      let nextAction: HumanNextAction
+      if (toolCalls.length === 0) {
+        nextAction = { action: 'mouth' }
+      } else if (finishCall) {
+        nextAction = finishEvidenceReferences
+          ? { action: 'mouth', evidenceReferences: finishEvidenceReferences, toolCallId: finishCall.id }
+          : { action: 'mouth', toolCallId: finishCall.id }
+      } else if (learnSkillCall) {
+        nextAction =
+          learnSkillIds.length > 0
+            ? {
+                action: 'learning',
+                wantLearnSkillIds: learnSkillIds,
+                toolCallId: learnSkillCall.id
+              }
+            : { action: 'mouth' }
+      } else {
+        nextAction = {
+          action: 'hand',
+          calls: toolCalls.map((call) => ({
+            toolCallId: call.id,
+            toolName: call.name,
+            args: (call.args || {}) as JsonObject
+          }))
+        }
+      }
 
       completeThinking()
       return applyBrainDecisionTransition({
         ctx: input.ctx,
         cache: input.cache,
         state,
-        thought: { ...parsedThought, thought: normalizedThought },
-        todolist,
-        overrides: {}
+        thought,
+        nextAction
       })
     } catch (error) {
       if (isContentSafetyError(error)) {
@@ -112,10 +199,8 @@ export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
             stage: 'mouth',
             status: 'running',
             finalizationReason: 'brain_content_safety',
-            currentThought: {
-              thought: {
-                next: '由于服务端内容安全策略限制，本轮直接进入最终收尾。'
-              },
+            pendingRound: {
+              thought: { text: '由于服务端内容安全策略限制，本轮直接进入最终收尾。' },
               nextAction: { action: 'mouth' }
             },
             deliveryGuidanceItems: mergeDeliveryGuidanceItems(
@@ -130,25 +215,9 @@ export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
           }
         }
       }
-      if (!isLlmOutputError(error)) {
-        failThinking(error)
-        throw error
-      }
 
-      completeThinking()
-      const issues = error.issues || [{ path: 'output', message: error.message }]
-      return {
-        ...state,
-        execution: {
-          ...state.execution,
-          stage: 'fault',
-          pendingFault: {
-            result: '决策失败，输出无法解析为可路由的决策结构。',
-            issues
-          },
-          pendingDecisionHint: undefined
-        }
-      }
+      failThinking(error)
+      throw error
     }
   }
 }

@@ -63,6 +63,7 @@ export const skillDefinitionBaseSchema = z.object({
 })
 
 export const toolCallParamSchema = z.object({
+  toolCallId: z.string().min(1).optional(),
   toolName: z.string().min(1),
   args: jsonObjectSchema
 })
@@ -209,7 +210,7 @@ export const humanDecisionHintSchema = z.discriminatedUnion('code', [
     })
   }),
   z.object({
-    code: z.literal('brain_todolist_incomplete'),
+    code: z.literal('brain_plan_incomplete'),
     detail: z.object({
       pendingItems: z.array(z.string().min(1)).min(1)
     })
@@ -242,17 +243,16 @@ export const humanHistoryToolResultSchema = z.object({
   resourceContext: toolResourceContextSchema.optional()
 })
 
-export const humanTodoItemStatusSchema = z.enum(['todo', 'done'])
+export const humanPlanItemStatusSchema = z.enum(['todo', 'done'])
 
-export const humanTodoItemSchema = z.object({
-  item: z.string().min(1),
-  status: humanTodoItemStatusSchema,
+export const humanPlanItemSchema = z.object({
+  title: z.string().min(1),
+  status: humanPlanItemStatusSchema,
   evidence: z.string().min(1).optional()
 })
 
-export const humanThoughtSchema = z.object({
-  next: z.string().min(1),
-  todolist: z.array(humanTodoItemSchema).optional()
+export const humanRoundThoughtSchema = z.object({
+  text: z.string()
 })
 
 export const brainEvidenceReferenceSchema = z.object({
@@ -266,46 +266,25 @@ export const humanReferenceSchema = brainEvidenceReferenceSchema.extend({
   accessStatus: z.enum(['accessible', 'unavailable'])
 })
 
-export const learningNextActionSchema = z.object({
-  action: z.literal('learning'),
-  wantLearnSkillIds: z.array(z.string().min(1)).min(1)
-})
-
-export const handNextActionSchema = z.object({
-  action: z.literal('hand'),
-  calls: handCallsSchema
-})
-
-export const mouthNextActionSchema = z.object({
-  action: z.literal('mouth'),
-  evidenceReferences: z.array(brainEvidenceReferenceSchema).optional()
-})
-
-export const brainNextActionSchema = z
-  .object({
-    action: z.string().min(1)
+export const humanNextActionSchema = z.discriminatedUnion('action', [
+  z.object({
+    action: z.literal('learning'),
+    wantLearnSkillIds: z.array(z.string().min(1)).min(1),
+    toolCallId: z.string().min(1).optional()
+  }),
+  z.object({
+    action: z.literal('hand'),
+    calls: handCallsSchema
+  }),
+  z.object({
+    action: z.literal('mouth'),
+    evidenceReferences: z.array(brainEvidenceReferenceSchema).optional(),
+    toolCallId: z.string().min(1).optional()
+  }),
+  z.object({
+    action: z.literal('fault')
   })
-  .catchall(jsonValueSchema)
-
-export const brainPromptNextActionSchema = z.discriminatedUnion('action', [
-  learningNextActionSchema,
-  handNextActionSchema,
-  mouthNextActionSchema
 ])
-
-export const humanThoughtDecisionPromptSchema = z.object({
-  thought: humanThoughtSchema,
-  nextAction: brainPromptNextActionSchema
-})
-
-export const createBrainNextActionSchema = () => brainNextActionSchema
-
-export const createHumanThoughtDecisionSchema = () => humanThoughtDecisionSchema
-
-export const humanThoughtDecisionSchema = z.object({
-  thought: humanThoughtSchema,
-  nextAction: brainNextActionSchema
-})
 
 export const humanDeliveryPayloadSchema = z.object({
   deliveryMarkdown: z.string().default('')
@@ -349,7 +328,12 @@ export const humanExecutionSchema = z.object({
   stage: humanStageSchema,
   status: humanStatusSchema,
   finalizationReason: z.enum(['brain_content_safety']).optional(),
-  currentThought: humanThoughtDecisionSchema.optional(),
+  pendingRound: z
+    .object({
+      thought: humanRoundThoughtSchema,
+      nextAction: humanNextActionSchema
+    })
+    .optional(),
   pendingFault: z
     .object({
       result: z.string().min(1),
@@ -407,8 +391,8 @@ export const humanRoundExecutionSchema = z.discriminatedUnion('kind', [
 export const humanRoundRecordSchema = z.object({
   roundId: z.number().int().min(1),
   createdAt: z.number(),
-  thought: humanThoughtSchema,
-  nextAction: brainNextActionSchema,
+  thought: humanRoundThoughtSchema,
+  nextAction: humanNextActionSchema,
   execution: humanRoundExecutionSchema
 })
 
@@ -441,7 +425,7 @@ export const humanTaskRunMemorySchema = z.object({
 })
 
 export const humanMemorySchema = z.object({
-  todolist: z.array(humanTodoItemSchema),
+  plan: z.array(humanPlanItemSchema),
   conversation: humanConversationMemorySchema,
   taskRun: humanTaskRunMemorySchema
 })

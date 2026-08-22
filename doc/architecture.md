@@ -128,12 +128,16 @@ flowchart TD
 ### 主要职责
 
 - `human` 是当前 AI run 的执行核心。
-- `brain` 负责判断下一步，不直接执行工具。
-- `learning` 负责按需加载 external skill。
-- `hand` 负责执行工具，并把结果交回 run。
-- `mouth` 负责组织最终答复和交付内容。
+- `brain` 通过原生 function calling 决定下一步：调用 LLM 时绑定当前可用工具（builtin + agent-control + 已学习 external），根据返回的 `tool_calls` 路由到 learning / hand / mouth；不再输出结构化 JSON 决策。
+- `learning` 负责按需加载 external skill，执行 `learn_skill` 控制工具并把结果写回消息数组。
+- `hand` 负责执行真实工具，把结果以 `ToolMessage` 追加回消息数组；并处理 `update_plan` 控制工具。
+- `mouth` 由 `finish` 控制工具（或无工具调用的自然收尾）触发，负责组织最终答复和交付内容。
 - `context_budget` 负责在每一步前检查上下文预算。
-- `context_compaction` 只压缩当前 run 内较早过程，服务本次 run 继续推进。
+- `context_compaction` 压缩消息数组的较早区间为一条摘要消息，服务本次 run 继续推进。
+
+### 原生 tool calling 与 append-only 消息
+
+brain 采用原生 function calling（`bindTools`），工具结果以 `ToolMessage`（按 `tool_call_id` 配对）追加到 append-only 的 `messages` 数组，不再把历史每轮重渲染成字符串。静态前缀（原则 + 技能目录 + 本地环境）与技能目录只标注「内置 / 需学习」，不随 learn 变化，保证缓存友好。非工具控制动作统一为 `agent-control` 内置技能的三个工具：`learn_skill`、`update_plan`、`finish`。真相源为 append-only 的轮次日志（`rounds`），消息数组从日志确定性派生（`deriveMessagesFromRounds`），压缩用 replace-op 语义（追加摘要、保留最新轮次）。
 
 ### Skill 与 Tool
 
@@ -141,14 +145,15 @@ AI 能力通过 skill 和 tool 两层表达：
 
 - builtin skill 默认可用，不需要 learning 加载。
 - external skill 需要 learning 显式加载后才进入当前有效能力集合。
+- `agent-control` 是内置被动技能，承载 `learn_skill` / `update_plan` / `finish` 三个任务控制工具。
 - skill 描述能力边界和适用场景。
-- tool 是具体执行入口，输入输出和限制以代码中的 schema 为准。
+- tool 是具体执行入口，输入输出和限制以代码中的 schema 为准，schema 通过 `bindTools` 直接交给模型。
 
 skill 不按目录强行拆分，也不等同于工具数量。一个 skill 可以对应多个 tool，多个 skill 也可以共享同一实现域。
 
 ### 结构化输出与服务重试
 
-结构化输出统一使用 `prompt_json`：所有结构化调用都是纯文本请求，不发送 `response_format`，模型按提示词中的 schema 描述输出 JSON，本地通过代码块剥离（`normalizePromptJsonText`）、`jsonrepair` 修复和 Schema 校验兜底。供应商对 `json_schema` / `json_object` 的能力支持无法可靠探测（`/v1/models` 大多不返回能力声明且分模型差异），因此不维护任何运行期策略降级链、策略偏好存储或 transport 切换。
+`brain` 不再使用结构化 JSON 决策，而是走原生 function calling（`bindTools` + `tool_calls`），工具参数由模型按工具 schema 生成、本地仍以 zod 校验兜底。其余需要结构化输出的调用（如会话记忆摘要）仍统一使用 `prompt_json`：纯文本请求，不发送 `response_format`，模型按提示词中的 schema 描述输出 JSON，本地通过代码块剥离（`normalizePromptJsonText`）、`jsonrepair` 修复和 Schema 校验兜底。
 
 LLM 调用失败严格分两层处理：
 

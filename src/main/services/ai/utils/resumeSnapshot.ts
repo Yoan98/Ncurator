@@ -56,7 +56,7 @@ export const buildHumanResumeSnapshot = (
   schemaVersion: 3,
   taskContext: buildInterruptedTaskContext(state, reason),
   memory: {
-    todolist: state.memory.todolist,
+    plan: state.memory.plan,
     conversation: state.memory.conversation,
     taskRun: state.memory.taskRun
   },
@@ -133,7 +133,7 @@ export const restoreHumanStateFromResumeSnapshot = (input: {
       taskContext
     },
     memory: {
-      todolist: snapshot.memory?.todolist || baseState.memory.todolist,
+      plan: snapshot.memory?.plan || baseState.memory.plan,
       conversation: snapshot.memory?.conversation || baseState.memory.conversation,
       taskRun: snapshot.memory?.taskRun || baseState.memory.taskRun
     },

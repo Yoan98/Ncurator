@@ -34,6 +34,13 @@
 - 断言调整：ppt-write 期限正则放宽为中英文等价（`/7\s*月\s*15|july\s*15/iu`）；legacy-doc-edit-skip 验收口径收敛为「docx_edit 未成功编辑 .doc」。
 - `progressOverview` 融入 todolist：删除 `thought.progressOverview` 字段，其「证据」维度下沉为任务清单项的 `evidence`；todolist 对外概念统一为「任务清单」（字段名仍为 `todolist`），渲染标题由「代办事项」改为「任务清单」，并收窄 prompt 措辞减少每轮无意义重排。
 
+### 2026-08-22 变更记录
+
+- `human` 主链由「prompt_json 模拟 toolcall + 每轮重渲染历史字符串」重构为「原生 function calling（`bindTools` + `tool_calls`）+ append-only 消息数组」，详见 `doc/architecture.md`。
+- `todolist` 对外概念与字段统一为 `plan`（项含 `title/status/evidence`，末项为检查项），控制工具统一为 `agent-control` 内置技能下的 `learn_skill` / `update_plan` / `finish`。
+- 新增 executor `chatTools` 调用路径（复用重试/telemetry/abort/usage/`AiLlmDriver` mock-seam）；工具结果以 `ToolMessage` 按 `tool_call_id` 回写，历史从轮次日志确定性派生。
+- `mock-llm` 回归用例（约 30 例）本轮暂不改写，`scriptedStructuredOutputDriver` 需在后续补原生 `tool_calls` 支持；期间 `pnpm test:ai:human:mock-llm` 预期失败。
+
 ## 1. 总体目标
 
 - 本计划定义 AI 域回归范围和领域规则。通用测试、runner、raw logs、UI E2E 和 live 断言规则统一遵循 `doc/test.md`。

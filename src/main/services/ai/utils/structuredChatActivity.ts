@@ -26,7 +26,7 @@ export type LlmCallStreamObserver = {
   onError?: (error: Error) => void
 }
 
-type LlmActionType = 'llm_structured_output' | 'llm_text_output'
+type LlmActionType = 'llm_structured_output' | 'llm_text_output' | 'llm_tool_calls'
 
 type LlmCallTelemetry = {
   actionType: LlmActionType

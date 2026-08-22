@@ -1,6 +1,6 @@
-import type { HumanThought, HumanTodoItem } from '../types'
+import type { HumanPlanItem, HumanRoundThought } from '../types'
 
-const normalizeThoughtText = (value: string): string =>
+export const normalizeThoughtText = (value: string): string =>
   String(value || '')
     .replace(/\r\n/g, '\n')
     .split('\n')
@@ -8,11 +8,11 @@ const normalizeThoughtText = (value: string): string =>
     .join('\n')
     .trim()
 
-const normalizeTodoItems = (items: HumanTodoItem[]): HumanTodoItem[] =>
+export const normalizePlanItems = (items: HumanPlanItem[]): HumanPlanItem[] =>
   items
     .map((item) => {
-      const normalized: HumanTodoItem = {
-        item: String(item.item || '').trim(),
+      const normalized: HumanPlanItem = {
+        title: String(item.title || '').trim(),
         status: item.status
       }
       if (typeof item.evidence === 'string' && item.evidence.trim().length > 0) {
@@ -20,11 +20,8 @@ const normalizeTodoItems = (items: HumanTodoItem[]): HumanTodoItem[] =>
       }
       return normalized
     })
-    .filter((item) => item.item.length > 0)
+    .filter((item) => item.title.length > 0)
 
-export const normalizeHumanThought = (thought: HumanThought): HumanThought => ({
-  next: normalizeThoughtText(thought.next),
-  ...(Array.isArray(thought.todolist)
-    ? { todolist: normalizeTodoItems(thought.todolist) }
-    : {})
+export const normalizeRoundThought = (text: string): HumanRoundThought => ({
+  text: normalizeThoughtText(text)
 })

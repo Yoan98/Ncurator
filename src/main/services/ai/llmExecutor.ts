@@ -1,5 +1,6 @@
-import { HumanMessage, SystemMessage } from '@langchain/core/messages'
+import { AIMessage, HumanMessage, SystemMessage, type BaseMessage } from '@langchain/core/messages'
 import type { RunnableConfig } from '@langchain/core/runnables'
+import type { StructuredToolInterface } from '@langchain/core/tools'
 import { z } from 'zod/v4'
 import { createChatModel } from '../llm/chatModel'
 import { normalizeJsonObject, normalizeLlmUsage } from '../llm/usage'
@@ -87,6 +88,7 @@ export type AiLlmStructuredDriverResult = {
 export type AiLlmDriver = {
   chatStructured?: (input: AiLlmStructuredDriverInput) => Promise<AiLlmStructuredDriverResult>
   chatText?: (input: AiLlmTextInvocationInput) => Promise<AiLlmTextDriverResult>
+  chatTools?: (input: AiLlmToolCallDriverInput) => Promise<AiLlmToolCallDriverResult>
 }
 
 export type AiLlmTextRequest = {
@@ -112,6 +114,40 @@ export type AiLlmStructuredRequest<T extends Record<string, unknown>> = {
   contextBudgetSnapshot?: BrainContextBudgetSnapshot
 }
 
+export type AiLlmToolCallDriverInput = {
+  caller: string
+  cfg: LlmRuntimeConfig
+  schemaName: string
+  messages: BaseMessage[]
+  tools: StructuredToolInterface[]
+  temperature?: number
+  observer?: LlmCallStreamObserver
+  signal?: AbortSignal
+}
+
+export type AiLlmToolCallDriverResult = {
+  message: AIMessage
+  rawText?: string
+  streamed?: boolean
+  usage?: AiLlmUsage
+  responseMetadata?: JsonObject
+  usageMetadata?: JsonObject
+}
+
+export type AiLlmToolCallRequest = {
+  caller: string
+  taskId?: string
+  messages: BaseMessage[]
+  tools: StructuredToolInterface[]
+  temperature?: number
+  contextBudgetSnapshot?: BrainContextBudgetSnapshot
+}
+
+export type AiLlmToolCallResult = {
+  message: AIMessage
+  usage?: AiLlmUsage
+}
+
 export type AiLlmExecutor = {
   chatStructured: <T extends Record<string, unknown>>(
     input: AiLlmStructuredRequest<T>
@@ -120,6 +156,7 @@ export type AiLlmExecutor = {
     usage?: AiLlmUsage
   }>
   chatText: (input: AiLlmTextRequest) => Promise<string>
+  chatTools: (input: AiLlmToolCallRequest) => Promise<AiLlmToolCallResult>
 }
 
 const resolveStreamingMode = (settings: AiRuntimeSettings): AiLlmStreamingMode =>
@@ -456,6 +493,50 @@ const invokeStructuredChatCore = async (input: {
   }
 }
 
+type ToolCallingModel = {
+  bindTools: (tools: StructuredToolInterface[]) => {
+    invoke: (input: BaseMessage[], config?: Partial<RunnableConfig>) => Promise<AIMessage>
+  }
+}
+
+const invokeToolCallingCore = async (input: {
+  driver?: AiLlmDriver
+  request: AiLlmToolCallDriverInput
+}): Promise<LlmCallExecutionResult<AIMessage>> => {
+  if (input.driver?.chatTools) {
+    const result = await input.driver.chatTools(input.request)
+    return {
+      output: result.message,
+      rawText: result.rawText,
+      streamed: result.streamed,
+      usage: result.usage,
+      responseMetadata: result.responseMetadata,
+      usageMetadata: result.usageMetadata
+    }
+  }
+
+  const request = input.request
+  const providerKind = resolveConfigProviderKind(request.cfg)
+  const runnable = createChatModel(request.cfg, {
+    temperature: request.temperature ?? 0.2,
+    streaming: false,
+    timeout: AI_LLM_CALL_TIMEOUT_MS
+  }) as unknown as ToolCallingModel
+  const bound = runnable.bindTools(request.tools)
+  const response = await bound.invoke(request.messages, createRunnableConfig(request.signal))
+  const text = extractTextContent(response.content)
+  const metadata = toInvocationMetadata({
+    message: response,
+    providerKind
+  })
+  return {
+    output: response,
+    rawText: text,
+    streamed: false,
+    ...metadata
+  }
+}
+
 export const createAiLlmExecutor = (input: {
   eventCtx: AiEventDispatchContext
   runtimeSettings: AiRuntimeSettings
@@ -582,6 +663,68 @@ export const createAiLlmExecutor = (input: {
       })
 
       return String(result.output || '')
+    },
+
+    chatTools: async (request: AiLlmToolCallRequest): Promise<AiLlmToolCallResult> => {
+      input.checkCancelled()
+      const cfg = await input.getConfig()
+      const providerKind = resolveConfigProviderKind(cfg)
+      const systemHash = JSON.stringify(
+        request.tools.map((tool) => ({
+          name: String(tool.name || '').trim(),
+          description: String(tool.description || '').trim()
+        }))
+      )
+      const userHash = JSON.stringify(
+        request.messages.map((message) => ({
+          role: message.getType(),
+          content: extractTextContent(message.content)
+        }))
+      )
+      const result = await runLlmCallWithActivity<AIMessage>({
+        ctx: input.eventCtx,
+        runId: input.eventCtx.runId,
+        taskId: request.taskId,
+        system: systemHash,
+        user: userHash,
+        telemetry: {
+          actionType: 'llm_tool_calls',
+          caller: request.caller,
+          schemaName: 'human_brain_tool_calls',
+          modelName: cfg.model_name,
+          baseUrl: cfg.base_url,
+          providerKind,
+          streamingMode: 'force_non_stream',
+          attempt: 1,
+          contextBudgetSnapshot: request.contextBudgetSnapshot
+        },
+        maxAttempts: AI_LLM_CALL_MAX_RETRY_ATTEMPTS,
+        classifyRetry: classifyLlmCallRetry,
+        execute: async (observer) =>
+          await withAbortTimeout({
+            timeoutMs: AI_LLM_CALL_TIMEOUT_MS,
+            externalSignal: input.abortSignal,
+            execute: async (signal) =>
+              await invokeToolCallingCore({
+                driver: input.driver,
+                request: {
+                  caller: request.caller,
+                  cfg,
+                  schemaName: 'human_brain_tool_calls',
+                  messages: request.messages,
+                  tools: request.tools,
+                  temperature: request.temperature,
+                  observer,
+                  signal
+                }
+              })
+          })
+      })
+
+      return {
+        message: result.output,
+        usage: result.usage
+      }
     }
   }
 }

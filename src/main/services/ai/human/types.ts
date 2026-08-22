@@ -1,4 +1,5 @@
 import type { StructuredToolInterface } from '@langchain/core/tools'
+import type { BaseMessage } from '@langchain/core/messages'
 import type { z } from 'zod/v4'
 import type { AiToolFamilyId } from './tools/types'
 import type { DocxToolRuntime } from './tools/docx/runtime'
@@ -16,13 +17,12 @@ import {
   HUMAN_FINALIZATION_REASONS
 } from './constants'
 import {
-  humanThoughtSchema,
+  humanRoundThoughtSchema,
   humanTaskContextSchema,
-  brainNextActionSchema,
+  humanNextActionSchema,
   deliveryGuidanceItemSchema,
-  humanThoughtDecisionSchema,
-  humanTodoItemSchema,
-  humanTodoItemStatusSchema,
+  humanPlanItemSchema,
+  humanPlanItemStatusSchema,
   humanExecutionSchema,
   humanHistoryToolResultSchema,
   humanLearningOutcomeSchema,
@@ -66,12 +66,11 @@ export type ToolPromptSpec = {
 export type SkillDefinitionBase = z.infer<typeof skillDefinitionBaseSchema>
 export type SkillDefinition = SkillDefinitionBase
 
-export type HumanThought = z.infer<typeof humanThoughtSchema>
+export type HumanRoundThought = z.infer<typeof humanRoundThoughtSchema>
 export type HumanTaskContext = z.infer<typeof humanTaskContextSchema>
-export type BrainNextAction = z.infer<typeof brainNextActionSchema>
-export type HumanTodoItemStatus = z.infer<typeof humanTodoItemStatusSchema>
-export type HumanTodoItem = z.infer<typeof humanTodoItemSchema>
-export type HumanThoughtDecision = z.infer<typeof humanThoughtDecisionSchema>
+export type HumanNextAction = z.infer<typeof humanNextActionSchema>
+export type HumanPlanItemStatus = z.infer<typeof humanPlanItemStatusSchema>
+export type HumanPlanItem = z.infer<typeof humanPlanItemSchema>
 export type DeliveryGuidanceItem = z.infer<typeof deliveryGuidanceItemSchema>
 export type BrainEvidenceReference = z.infer<typeof brainEvidenceReferenceSchema>
 export type HumanReference = z.infer<typeof humanReferenceSchema>
@@ -108,6 +107,9 @@ export type HumanRuntimeCache = {
   approvedTerminalCommandCounts?: Map<string, number>
   approvedBrowserUseTaskIds?: Set<string>
   toolCallCount: number
+  messages?: BaseMessage[]
+  prefixMessages?: BaseMessage[]
+  compactSummaryText?: string
   currentState?: HumanState
   lastBrainInputTokens?: number
   lastBrainRoundCount?: number

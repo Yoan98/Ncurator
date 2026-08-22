@@ -1,4 +1,5 @@
 import type { AiRunContext } from '../../../types'
+import { ToolMessage } from '@langchain/core/messages'
 import type { HumanRuntimeCache, HumanState } from '../../types'
 import { appendDecisionRound, buildMouthExecution } from '../../memory/rounds'
 import { buildMouthPrompt } from '../../prompts/mouth'
@@ -40,7 +41,8 @@ export const createMouthNode = (input: {
     assertExternalLearnedSkillIds(state.skills.learnedSkillIds)
     input.cache.currentState = state
 
-    if (!state.execution.currentThought || state.execution.currentThought.nextAction.action !== 'mouth') {
+    const pendingRound = state.execution.pendingRound
+    if (!pendingRound || pendingRound.nextAction.action !== 'mouth') {
       return {
         ...state,
         execution: {
@@ -51,15 +53,27 @@ export const createMouthNode = (input: {
       }
     }
 
-    const pendingItems = state.memory.todolist
+    const pendingItems = state.memory.plan
       .filter((item) => item.status === 'todo')
-      .map((item) => item.item)
+      .map((item) => item.title)
     if (pendingItems.length > 0 && state.execution.finalizationReason !== 'brain_content_safety') {
       const decisionHint = {
-        code: 'brain_todolist_incomplete' as const,
+        code: 'brain_plan_incomplete' as const,
         detail: { pendingItems }
       }
-      const result = `交付失败，todolist 中仍有未完成事项：${pendingItems.join('、')}。`
+      const result = `交付失败，计划中仍有未完成事项：${pendingItems.join('、')}。`
+      const finishToolCallId =
+        pendingRound.nextAction.action === 'mouth' ? pendingRound.nextAction.toolCallId : undefined
+      if (finishToolCallId) {
+        const messages = input.cache.messages || []
+        messages.push(
+          new ToolMessage({
+            content: result,
+            tool_call_id: finishToolCallId
+          })
+        )
+        input.cache.messages = messages
+      }
       return returnToBrainWithDecisionHint({
         ctx: input.ctx,
         state,
@@ -95,8 +109,8 @@ export const createMouthNode = (input: {
     const fileChanges = buildFileChangesSummaryFromFileChangeRecords(fileChangeRecords)
     const history = await input.ctx.loadConversationContext()
     const rawEvidenceReferences =
-      stateWithMouthRound.execution.currentThought?.nextAction.action === 'mouth'
-        ? stateWithMouthRound.execution.currentThought.nextAction.evidenceReferences
+      stateWithMouthRound.execution.pendingRound?.nextAction.action === 'mouth'
+        ? stateWithMouthRound.execution.pendingRound.nextAction.evidenceReferences
         : undefined
     const parsedEvidenceReferences = brainEvidenceReferenceSchema.array().safeParse(rawEvidenceReferences)
     const pendingEvidenceReferences = parsedEvidenceReferences.success
@@ -185,9 +199,11 @@ export const createMouthNode = (input: {
 
     const deliveryMarkdown =
       String(rawDeliveryMarkdown || '').trim() ||
-      ['# 处理结果', '', promptState.execution.currentThought?.thought.next || '任务结束'].join(
-        '\n'
-      )
+      [
+        '# 处理结果',
+        '',
+        promptState.execution.pendingRound?.thought.text || '任务结束'
+      ].join('\n')
 
     return completeHumanTask({
       ctx: input.ctx,

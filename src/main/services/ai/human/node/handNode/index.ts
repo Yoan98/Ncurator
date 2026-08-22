@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { ToolMessage } from '@langchain/core/messages'
 import type { JsonObject } from '../../../../../../shared/types'
 import {
   HUMAN_DEFAULT_TOOL_CALL_LIMIT,
@@ -7,12 +8,14 @@ import {
 } from '../../constants'
 import type { AiRunContext } from '../../../types'
 import { extractArtifactRefsFromToolResults, mergeArtifactRefs } from '../../../utils/artifacts'
-import { appendDecisionRound, buildHandExecution } from '../../memory/rounds'
+import { appendDecisionRound, buildHandExecution, buildHistoryToolResult } from '../../memory/rounds'
+import { buildToolResultMessageContent } from '../../shared/historyRenderers'
+import { normalizePlanItems } from '../../memory/thoughtMemory'
+import { buildToolCallDisplayText } from '../../shared/toolResultRenderers'
 import {
   createDeliveryGuidanceItem,
   mergeDeliveryGuidanceItems
 } from '../../shared/deliveryGuidance'
-import { buildToolCallDisplayText } from '../../shared/toolResultRenderers'
 import { assertExternalLearnedSkillIds } from '../../skills'
 import { analyzeTerminalCommandPolicy } from '../../tools/terminal/commandPolicy'
 import { createToolCallSchema, formatToolCallSchemaError } from '../../toolCallSchema'
@@ -21,7 +24,8 @@ import type {
   HumanRuntimeCache,
   HumanState,
   HumanDecisionHint,
-  ToolCallResult
+  ToolCallResult,
+  HumanPlanItem
 } from '../../types'
 import { renderDeliveryGuidanceForMouth } from '../../prompts/deliveryGuidance'
 import { deriveHandFollowupSignals, shouldStopSerialHandPlan } from './followupSignals'
@@ -42,6 +46,7 @@ export const resolveHumanToolLimitWarningRatio = (override?: number): number =>
 
 const isTerminalRunCall = (toolName: string): boolean => toolName === 'terminal_run'
 const isBrowserUseCall = (toolName: string): boolean => toolName === 'browser_use'
+const isUpdatePlanCall = (toolName: string): boolean => toolName === 'update_plan'
 
 const readTerminalCommandArg = (args: JsonObject): string | undefined =>
   typeof args.command === 'string' && args.command.trim().length > 0
@@ -68,6 +73,7 @@ const readBrowserUseApprovalText = (args: JsonObject): string => {
 }
 
 type ParsedHandCall = {
+  toolCallId?: string
   toolName: string
   args: JsonObject
 }
@@ -347,6 +353,7 @@ const parseHandCalls = (input: {
 
     const data = parsed.data as { toolName: string; args: JsonObject }
     parsedCalls.push({
+      toolCallId: call.toolCallId,
       toolName: data.toolName,
       args: data.args
     })
@@ -365,6 +372,56 @@ const parseHandCalls = (input: {
   }
 }
 
+const readPlanFromArgs = (args: JsonObject): HumanPlanItem[] => {
+  const raw = Array.isArray(args.plan) ? args.plan : []
+  return normalizePlanItems(
+    raw
+      .filter(
+        (item): item is HumanPlanItem =>
+          Boolean(item && typeof item === 'object' && !Array.isArray(item))
+      )
+      .map((item) => item as HumanPlanItem)
+  )
+}
+
+const appendToolMessages = (input: {
+  cache: HumanRuntimeCache
+  calls: ParsedHandCall[]
+  results: ToolCallResult[]
+}): void => {
+  const messages = input.cache.messages || []
+  input.calls.forEach((call, index) => {
+    const result = input.results[index]
+    if (!result) return
+    const historyResult = buildHistoryToolResult(result)
+    messages.push(
+      new ToolMessage({
+        content: buildToolResultMessageContent(historyResult),
+        tool_call_id: call.toolCallId || `call-${index}`
+      })
+    )
+  })
+  input.cache.messages = messages
+}
+
+const appendPlanToolMessages = (input: {
+  cache: HumanRuntimeCache
+  planCalls: ParsedHandCall[]
+  planItemsByCall: HumanPlanItem[][]
+}): void => {
+  const messages = input.cache.messages || []
+  input.planCalls.forEach((call, index) => {
+    const plan = input.planItemsByCall[index] || []
+    messages.push(
+      new ToolMessage({
+        content: JSON.stringify({ message: '计划已更新', plan }),
+        tool_call_id: call.toolCallId || `plan-${index}`
+      })
+    )
+  })
+  input.cache.messages = messages
+}
+
 export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCache }) => {
   return async (state: HumanState): Promise<HumanState> => {
     input.ctx.checkCancelled()
@@ -377,14 +434,12 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
       input.ctx.humanRuntimeOverrides?.toolLimitWarningRatio
     )
 
-    if (
-      !state.execution.currentThought ||
-      state.execution.currentThought.nextAction.action !== 'hand'
-    ) {
+    const pendingRound = state.execution.pendingRound
+    if (!pendingRound || pendingRound.nextAction.action !== 'hand') {
       return returnToBrain(state)
     }
 
-    const rawCalls = state.execution.currentThought.nextAction.calls
+    const rawCalls = pendingRound.nextAction.calls
     const calls: HandCallList = Array.isArray(rawCalls)
       ? rawCalls.flatMap((call) => {
           if (!call || typeof call !== 'object' || Array.isArray(call)) return []
@@ -396,7 +451,14 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
             Array.isArray(candidate.args)
           )
             return []
-          return [{ toolName: candidate.toolName, args: candidate.args as JsonObject }]
+          return [
+            {
+              toolCallId:
+                typeof candidate.toolCallId === 'string' ? candidate.toolCallId : undefined,
+              toolName: candidate.toolName,
+              args: candidate.args as JsonObject
+            }
+          ]
         })
       : []
     if (calls.length === 0) {
@@ -438,8 +500,12 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
         }
       })
     }
+
+    const planCalls = calls.filter((call) => isUpdatePlanCall(call.toolName))
+    const toolCalls = calls.filter((call) => !isUpdatePlanCall(call.toolName))
+
     const parsedCallsResult = parseHandCalls({
-      calls,
+      calls: toolCalls,
       learnedSkillIds: state.skills.learnedSkillIds
     })
     if (!parsedCallsResult.ok) {
@@ -596,18 +662,42 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
       })
     }
 
-    const learnedSkillIds = state.skills.learnedSkillIds
+    const planItemsByCall = planCalls.map((call) => readPlanFromArgs(call.args))
+    const nextPlan = planItemsByCall.length > 0 ? planItemsByCall[planItemsByCall.length - 1]! : state.memory.plan
+
     const results = await executeHandCalls({
       calls: parsedCalls,
       ctx: input.ctx,
       cache: input.cache,
       taskId: state.task.taskId,
-      learnedSkillIds
+      learnedSkillIds: state.skills.learnedSkillIds
     })
     input.cache.toolCallCount += results.length
 
+    const planResults: ToolCallResult[] = planCalls.map((_call, index) => ({
+      toolName: 'update_plan',
+      ok: true,
+      data: {
+        message: '计划已更新',
+        plan: planItemsByCall[index] || []
+      }
+    }))
+    const allCalls = [...parsedCalls, ...planCalls]
+    const allResults = [...results, ...planResults]
+
+    appendToolMessages({
+      cache: input.cache,
+      calls: parsedCalls,
+      results
+    })
+    appendPlanToolMessages({
+      cache: input.cache,
+      planCalls,
+      planItemsByCall
+    })
+
     const followupSignals = deriveHandFollowupSignals({
-      calls,
+      calls: parsedCalls,
       results
     })
     const toolLimitDecisionHint =
@@ -650,11 +740,12 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
         },
         memory: {
           ...state.memory,
+          plan: nextPlan,
           taskRun: appendDecisionRound({
             state,
             execution: buildHandExecution({
-              calls,
-              toolResults: results,
+              calls: allCalls,
+              toolResults: allResults,
               decisionHint
             })
           })

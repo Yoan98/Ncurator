@@ -1,6 +1,5 @@
 import type { JsonObject, JsonValue } from '../../../../../shared/types'
 import { renderInlineList } from '../../utils/render'
-import { renderTodoItems } from './memoryRenderers'
 import type {
   HumanHistoryToolResult,
   HumanCompactionBlock,
@@ -408,6 +407,20 @@ const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
       actionDescription: true
     },
     error: true
+  },
+  learn_skill: {
+    message: true
+  },
+  update_plan: {
+    message: true,
+    plan: {
+      title: true,
+      status: true,
+      evidence: true
+    }
+  },
+  finish: {
+    message: true
   }
 }
 
@@ -462,6 +475,9 @@ const buildToolHistoryReturnValue = (result: HumanHistoryToolResult): JsonValue 
   return toJsonValue(filtered)
 }
 
+export const buildToolResultMessageContent = (result: HumanHistoryToolResult): string =>
+  JSON.stringify(buildToolHistoryReturnValue(result))
+
 const buildBrainToolAttemptText = (input: {
   call: ToolCallParam | undefined
   result: HumanHistoryToolResult
@@ -475,7 +491,7 @@ const buildBrainToolAttemptText = (input: {
     .join('\n')
 
 const renderBrainRoundDecision = (record: HumanRoundRecord): string =>
-  `- ${record.thought.next}`
+  `- ${record.thought.text}`
 
 const renderLearningExecution = (
   record: HumanRoundRecord & {
@@ -557,9 +573,6 @@ const renderBrainRoundRecord = (record: HumanRoundRecord): string => {
     '执行：',
     renderBrainRoundExecution(record)
   ]
-  if (record.thought.todolist && record.thought.todolist.length > 0) {
-    lines.push('任务清单：', renderTodoItems(record.thought.todolist))
-  }
   return lines.join('\n')
 }
 

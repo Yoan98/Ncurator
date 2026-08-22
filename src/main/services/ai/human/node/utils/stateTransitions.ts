@@ -1,11 +1,11 @@
 import type { AiRunContext } from '../../../types'
 import type { DecisionHintSource } from '../../../../../../shared/types'
 import type {
-  HumanThoughtDecision,
+  HumanNextAction,
+  HumanRoundThought,
   HumanRuntimeCache,
   HumanState,
-  HumanTodoItem,
-  HumanDecisionHint,
+  HumanDecisionHint
 } from '../../types'
 import {
   emitLatestHumanStepForState,
@@ -95,14 +95,14 @@ export const applyBrainDecisionTransition = (input: {
   ctx: AiRunContext
   cache: HumanRuntimeCache
   state: HumanState
-  thought: HumanThoughtDecision
-  todolist: HumanTodoItem[]
+  thought: HumanRoundThought
+  nextAction: HumanNextAction
   overrides?: HumanStateOverrides
 }): HumanState => {
   const nextState = applyBrainDecisionState({
     state: input.state,
     thought: input.thought,
-    todolist: input.todolist,
+    nextAction: input.nextAction,
     createdAt: Date.now(),
     overrides: input.overrides
   })
@@ -117,7 +117,7 @@ export const applyBrainDecisionTransition = (input: {
   emitAssistantProcessThought({
     sendEvent: input.ctx.sendEvent,
     runId: input.ctx.runId,
-    text: input.thought.thought.next
+    text: input.thought.text
   })
 
   return nextState

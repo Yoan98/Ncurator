@@ -1,7 +1,7 @@
 import type {
-  HumanThoughtDecision,
+  HumanNextAction,
   HumanResult,
-  HumanTodoItem,
+  HumanRoundThought,
   HumanState,
   HumanTraceStep,
   HumanDecisionHint
@@ -90,22 +90,13 @@ export const returnToBrainAfterTraceState = (input: {
   })
 }
 
-const resolveBrainNextStage = (input: {
-  thought: HumanThoughtDecision
-}): HumanState['execution']['stage'] => {
-  return input.thought.nextAction.action === 'learning'
-    ? 'learning'
-    : input.thought.nextAction.action === 'hand'
-      ? 'hand'
-      : input.thought.nextAction.action === 'mouth'
-        ? 'mouth'
-        : 'fault'
-}
+const resolveBrainNextStage = (action: HumanNextAction['action']): HumanState['execution']['stage'] =>
+  action === 'learning' ? 'learning' : action === 'hand' ? 'hand' : action === 'mouth' ? 'mouth' : 'fault'
 
 export const applyBrainDecisionState = (input: {
   state: HumanState
-  thought: HumanThoughtDecision
-  todolist: HumanTodoItem[]
+  thought: HumanRoundThought
+  nextAction: HumanNextAction
   createdAt: number
   overrides?: HumanStateOverrides
 }): HumanState => {
@@ -115,38 +106,25 @@ export const applyBrainDecisionState = (input: {
     execution: {
       ...input.state.execution,
       ...input.overrides?.execution,
-      stage: resolveBrainNextStage({
-        thought: input.thought
-      }),
+      stage: resolveBrainNextStage(input.nextAction.action),
       status: 'running',
       finalizationReason: undefined,
-      currentThought: input.thought,
+      pendingRound: {
+        thought: input.thought,
+        nextAction: input.nextAction
+      },
       pendingDecisionHint: undefined,
-      pendingFault:
-        input.thought.nextAction.action === 'learning' ||
-        input.thought.nextAction.action === 'hand' ||
-        input.thought.nextAction.action === 'mouth'
-          ? undefined
-          : {
-              result: `决策失败，无法识别 \`nextAction.action\` 的值 \`${input.thought.nextAction.action}\`。`
-            },
+      pendingFault: undefined,
       evidenceReferences: undefined
-    },
-    memory: {
-      ...input.state.memory,
-      todolist: input.todolist,
-      taskRun: {
-        ...input.state.memory.taskRun
-      }
     },
     trace: {
       steps: appendHumanTraceStep({
         steps: input.state.trace.steps,
         item: {
           action: 'brain_decision',
-          publicNarrative: input.thought.thought.next,
+          publicNarrative: input.thought.text,
           resultStatus: 'ok',
-          summary: input.thought.thought.next
+          summary: input.thought.text
         }
       })
     }

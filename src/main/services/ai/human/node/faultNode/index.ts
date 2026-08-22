@@ -23,11 +23,11 @@ export const createFaultNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
       result: pendingFault.result,
       decisionHint
     })
-    const taskRun = state.execution.currentThought
+    const taskRun = state.execution.pendingRound
       ? appendDecisionRound({ state, execution })
       : appendRoundRecord({
           state,
-          thought: { next: '本轮决策未能进入可执行节点。' },
+          thought: { text: '本轮决策未能进入可执行节点。' },
           nextAction: { action: 'fault' },
           execution
         })

@@ -1,4 +1,5 @@
 import type { AiRunContext } from '../../../types'
+import { ToolMessage } from '@langchain/core/messages'
 import { HUMAN_MAX_ACTIVE_TOOLS } from '../../constants'
 import type {
   HumanLearningOutcome,
@@ -24,6 +25,21 @@ import {
   returnToBrainWithDecisionHint
 } from '../utils/stateTransitions'
 import { emitLearningCompleted, emitLearningStarted } from '../../../events/processEvents'
+
+const appendLearnToolMessage = (input: {
+  cache: HumanRuntimeCache
+  toolCallId?: string
+  content: string
+}): void => {
+  const messages = input.cache.messages || []
+  messages.push(
+    new ToolMessage({
+      content: input.content,
+      tool_call_id: input.toolCallId || 'learn_skill'
+    })
+  )
+  input.cache.messages = messages
+}
 
 const dedupeInOrder = <TValue extends string>(values: readonly TValue[]): TValue[] => {
   const out: TValue[] = []
@@ -124,14 +140,13 @@ export const createLearningNode = (input: { ctx: AiRunContext; cache: HumanRunti
     const getBudgetToolNames = (skillId: RuntimeSkillId): readonly string[] =>
       getSkillDefinition(skillId).toolNames
 
-    if (
-      !state.execution.currentThought ||
-      state.execution.currentThought.nextAction.action !== 'learning'
-    ) {
+    const pendingRound = state.execution.pendingRound
+    if (!pendingRound || pendingRound.nextAction.action !== 'learning') {
       return returnToBrain(state)
     }
 
-    const rawRequestedSkillIds = state.execution.currentThought.nextAction.wantLearnSkillIds
+    const rawRequestedSkillIds = pendingRound.nextAction.wantLearnSkillIds
+    const learnToolCallId = pendingRound.nextAction.toolCallId
     const directRequestedSkillIds = dedupeInOrder(
       Array.isArray(rawRequestedSkillIds)
         ? rawRequestedSkillIds.filter(
@@ -174,6 +189,11 @@ export const createLearningNode = (input: { ctx: AiRunContext; cache: HumanRunti
       })
       const learningResult = renderLearningResult(lastLearningOutcome)
 
+      appendLearnToolMessage({
+        cache: input.cache,
+        toolCallId: learnToolCallId,
+        content: learningResult
+      })
       return returnToBrainWithDecisionHint({
         ctx: input.ctx,
         state,
@@ -220,6 +240,11 @@ export const createLearningNode = (input: { ctx: AiRunContext; cache: HumanRunti
         unknownSkillIds
       })
       const learningResult = '学习失败，加载请求中的技能后会超过当前活动工具数量上限。'
+      appendLearnToolMessage({
+        cache: input.cache,
+        toolCallId: learnToolCallId,
+        content: learningResult
+      })
       return returnToBrainWithDecisionHint({
         ctx: input.ctx,
         state,
@@ -276,6 +301,11 @@ export const createLearningNode = (input: { ctx: AiRunContext; cache: HumanRunti
       activeToolCount: fittedLearnedSkills.activeToolCount
     })
     const learningResult = renderLearningResult(lastLearningOutcome)
+    appendLearnToolMessage({
+      cache: input.cache,
+      toolCallId: learnToolCallId,
+      content: learningResult
+    })
     const nextState = returnToBrainAfterTrace({
       ctx: input.ctx,
       cache: input.cache,

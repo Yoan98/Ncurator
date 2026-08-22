@@ -95,7 +95,10 @@ const TOOL_UI_KINDS = {
   wait_time: 'wait',
   wait_for_user_takeover: 'user-takeover',
   image_analyze: 'image-recognition',
-  image_generate: 'image-generation'
+  image_generate: 'image-generation',
+  learn_skill: 'generic',
+  update_plan: 'generic',
+  finish: 'generic'
 } as const satisfies Record<RuntimeToolName, AssistantExecutionSkillKey>
 
 export const getAssistantToolUiKind = (

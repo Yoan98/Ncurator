@@ -101,15 +101,15 @@ export const appendDecisionRound = (input: {
   execution: HumanRoundExecution
   createdAt?: number
 }): HumanState['memory']['taskRun'] => {
-  const currentThought = input.state.execution.currentThought
-  if (!currentThought) {
+  const pendingRound = input.state.execution.pendingRound
+  if (!pendingRound) {
     return input.state.memory.taskRun
   }
 
   return appendRoundRecord({
     state: input.state,
-    thought: currentThought.thought,
-    nextAction: currentThought.nextAction,
+    thought: pendingRound.thought,
+    nextAction: pendingRound.nextAction,
     execution: input.execution,
     createdAt: input.createdAt
   })

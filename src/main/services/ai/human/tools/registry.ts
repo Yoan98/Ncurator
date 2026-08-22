@@ -7,6 +7,7 @@ import { PPT_TOOL_SPECS } from './ppt/toolSpecs'
 import { EXCEL_TOOL_SPECS } from './excel/toolSpecs'
 import { UTILITY_TOOL_SPECS } from './utility/toolSpecs'
 import { WEB_TOOL_SPECS } from './web/toolSpecs'
+import { AGENT_CONTROL_TOOL_SPECS } from './agentControl/toolSpecs'
 import {
   createTerminalRunToolSpec,
   TERMINAL_RUN_TOOL_SPEC,
@@ -28,7 +29,8 @@ export const ALL_TOOL_SPECS = [
   ...WEB_TOOL_SPECS,
   ...UTILITY_TOOL_SPECS,
   ...IMAGE_RECOGNITION_TOOL_SPECS,
-  ...IMAGE_GENERATION_TOOL_SPECS
+  ...IMAGE_GENERATION_TOOL_SPECS,
+  ...AGENT_CONTROL_TOOL_SPECS
 ] as const
 
 type AnyToolSpec = (typeof ALL_TOOL_SPECS)[number]

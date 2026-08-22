@@ -9,7 +9,8 @@ export const AI_TOOL_FAMILY_IDS = [
   'web',
   'utility',
   'image-recognition',
-  'image-generation'
+  'image-generation',
+  'agent-control'
 ] as const
 
 export type RuntimeToolFamilyId = (typeof AI_TOOL_FAMILY_IDS)[number]
@@ -147,6 +148,15 @@ export const RUNTIME_SKILL_CATALOG = {
     title: '图片生成',
     displayName: '图片生成',
     description: '通过 SVG 绘制生成 PNG、JPEG 或 WebP 图片，并保存为用户工作区域文件。'
+  },
+  'agent-control': {
+    familyId: 'agent-control',
+    source: 'builtin',
+    countsTowardToolBudget: false,
+    title: 'agent-control',
+    displayName: '任务控制',
+    description:
+      '管理任务推进过程：学习需要的技能、维护并更新执行计划、以及在完成时提交最终交付。'
   }
 } as const satisfies Record<string, RuntimeSkillCatalogEntry>
 
@@ -189,7 +199,10 @@ export const RUNTIME_TOOL_CATALOG = {
   wait_time: { familyId: 'utility', skillId: 'utility' },
   wait_for_user_takeover: { familyId: 'utility', skillId: 'utility' },
   image_analyze: { familyId: 'image-recognition', skillId: 'image-recognition' },
-  image_generate: { familyId: 'image-generation', skillId: 'image-generation' }
+  image_generate: { familyId: 'image-generation', skillId: 'image-generation' },
+  learn_skill: { familyId: 'agent-control', skillId: 'agent-control' },
+  update_plan: { familyId: 'agent-control', skillId: 'agent-control' },
+  finish: { familyId: 'agent-control', skillId: 'agent-control' }
 } as const satisfies Record<string, RuntimeToolCatalogEntry>
 
 export type RuntimeToolName = keyof typeof RUNTIME_TOOL_CATALOG

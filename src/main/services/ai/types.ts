@@ -2,7 +2,7 @@ import type { ChatStore } from '../storage/domains/ChatStore'
 import type { DocumentsStore } from '../storage/domains/DocumentsStore'
 import type { LlmConfigStore } from '../storage/domains/LlmConfigStore'
 import type { EmbeddingService } from '../vector/EmbeddingService'
-import type { AiLlmDriver } from './llmExecutor'
+import type { AiLlmDriver, AiLlmToolCallRequest, AiLlmToolCallResult } from './llmExecutor'
 import type { WebCrawlerService } from '../webCrawler/types'
 import type {
   DocxChangedBlock,
@@ -310,6 +310,7 @@ export type AiRunContext = {
     streamingMode?: AiLlmStreamingMode
     onTextDelta?: (text: string) => void
   }) => Promise<string>
+  chatTools: (input: AiLlmToolCallRequest) => Promise<AiLlmToolCallResult>
   sendEvent: (event: AiRunEvent) => void
   recordLlmIo?: (record: AiLlmIoRecord) => void
   requestApprovalBatch: (request: AiApprovalBatchRequest) => Promise<AiApprovalBatchResult>

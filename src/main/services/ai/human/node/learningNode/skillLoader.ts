@@ -3,7 +3,7 @@ import type { AiRunContext } from '../../../types'
 import type { AiToolFamilyId, ToolFamilyBuildInput } from '../../tools/types'
 import { TOOL_FAMILY_DEFINITIONS } from '../../tools'
 import type { HumanRuntimeCache, RuntimeSkillId } from '../../types'
-import { getSkillDefinition } from '../../skills'
+import { getEffectiveLearnedSkillIds, getSkillDefinition } from '../../skills'
 
 const TOOL_FAMILY_BUILDERS: Record<
   AiToolFamilyId,
@@ -19,7 +19,8 @@ const TOOL_FAMILY_BUILDERS: Record<
   web: TOOL_FAMILY_DEFINITIONS.web.buildTools,
   utility: TOOL_FAMILY_DEFINITIONS.utility.buildTools,
   'image-recognition': TOOL_FAMILY_DEFINITIONS['image-recognition'].buildTools,
-  'image-generation': TOOL_FAMILY_DEFINITIONS['image-generation'].buildTools
+  'image-generation': TOOL_FAMILY_DEFINITIONS['image-generation'].buildTools,
+  'agent-control': TOOL_FAMILY_DEFINITIONS['agent-control'].buildTools
 }
 
 const ensureFamilyTools = (input: {
@@ -65,4 +66,26 @@ export const ensureSkillTools = (input: {
   const built = familyTools.filter((tool) => skillToolNames.has(String(tool.name || '').trim()))
   input.cache.skillToolsets[input.skillId] = built
   return built
+}
+
+export const buildAvailableTools = (input: {
+  cache: HumanRuntimeCache
+  ctx: AiRunContext
+  runId: string
+  taskId: string
+  learnedSkillIds: RuntimeSkillId[]
+}): StructuredToolInterface[] => {
+  const tools: StructuredToolInterface[] = []
+  getEffectiveLearnedSkillIds(input.learnedSkillIds).forEach((skillId) => {
+    tools.push(
+      ...ensureSkillTools({
+        cache: input.cache,
+        ctx: input.ctx,
+        runId: input.runId,
+        taskId: input.taskId,
+        skillId
+      })
+    )
+  })
+  return tools
 }
