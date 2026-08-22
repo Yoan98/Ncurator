@@ -98,6 +98,7 @@ const createTestService = async (options?: {
   const memorySummaryCalls: ChatMessage[][] = []
   const service = new ChatRunService({
     chatStore: storage.chat,
+    chatTranscriptStore: storage.chatTranscript,
     aiRunStore: storage.aiRun,
     documentsStore: storage.documents,
     embeddingService,

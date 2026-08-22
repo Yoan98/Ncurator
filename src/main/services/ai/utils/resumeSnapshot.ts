@@ -57,8 +57,7 @@ export const buildHumanResumeSnapshot = (
   taskContext: buildInterruptedTaskContext(state, reason),
   memory: {
     plan: state.memory.plan,
-    conversation: state.memory.conversation,
-    taskRun: state.memory.taskRun
+    compactions: state.memory.compactions
   },
   skills: {
     learnedSkillIds: state.skills.learnedSkillIds
@@ -134,8 +133,7 @@ export const restoreHumanStateFromResumeSnapshot = (input: {
     },
     memory: {
       plan: snapshot.memory?.plan || baseState.memory.plan,
-      conversation: snapshot.memory?.conversation || baseState.memory.conversation,
-      taskRun: snapshot.memory?.taskRun || baseState.memory.taskRun
+      compactions: snapshot.memory?.compactions || baseState.memory.compactions
     },
     skills: {
       learnedSkillIds: snapshot.skills?.learnedSkillIds || baseState.skills.learnedSkillIds

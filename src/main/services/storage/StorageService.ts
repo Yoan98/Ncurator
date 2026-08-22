@@ -14,6 +14,7 @@ import { WorkspaceStore } from './domains/WorkspaceStore'
 import { WorkbenchUiStore } from './domains/WorkbenchUiStore'
 import { BrowserTabStateStore } from './domains/BrowserTabStateStore'
 import { ScheduledTaskStore } from './domains/ScheduledTaskStore'
+import { ChatTranscriptStore } from './domains/ChatTranscriptStore'
 import type { LegacyLocalImportMigrationStatus } from '../../../shared/types'
 import type { AppErrorLogService } from '../logging/AppErrorLogService'
 
@@ -36,6 +37,7 @@ export class StorageService {
   public readonly workbenchUi: WorkbenchUiStore
   public readonly browserTabs: BrowserTabStateStore
   public readonly scheduledTask: ScheduledTaskStore
+  public readonly chatTranscript: ChatTranscriptStore
   private legacyLocalImportMigrationStatus: LegacyLocalImportMigrationStatus | null = null
 
   public constructor(
@@ -65,6 +67,7 @@ export class StorageService {
     this.workbenchUi = new WorkbenchUiStore(this.sqlite)
     this.browserTabs = new BrowserTabStateStore(this.sqlite)
     this.scheduledTask = new ScheduledTaskStore(this.sqlite)
+    this.chatTranscript = new ChatTranscriptStore(this.sqlite)
   }
 
   public static getInstance(input: { errorLogService?: AppErrorLogService } = {}): StorageService {

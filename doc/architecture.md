@@ -128,16 +128,20 @@ flowchart TD
 ### 主要职责
 
 - `human` 是当前 AI run 的执行核心。
-- `brain` 通过原生 function calling 决定下一步：调用 LLM 时绑定当前可用工具（builtin + agent-control + 已学习 external），根据返回的 `tool_calls` 路由到 learning / hand / mouth；不再输出结构化 JSON 决策。
+- `brain` 通过原生 function calling 决定下一步：调用 LLM 时绑定当前可用工具（builtin + agent-control + 已学习 external），根据返回的 `tool_calls` 生成有序分发队列（dispatch）。
+- `dispatch` 按队列逐个把工具调用路由到对应节点：`learn_skill` → learning、`update_plan` → plan、`finish` → mouth、其余真实工具 → hand；队列清空后回 `context_budget`。
 - `learning` 负责按需加载 external skill，执行 `learn_skill` 控制工具并把结果写回消息数组。
-- `hand` 负责执行真实工具，把结果以 `ToolMessage` 追加回消息数组；并处理 `update_plan` 控制工具。
+- `plan` 执行 `update_plan` 控制工具，把计划写入 `memory.plan` 并回写 `ToolMessage`。
+- `hand` 负责执行真实工具，把结果以 `ToolMessage` 追加回消息数组。
 - `mouth` 由 `finish` 控制工具（或无工具调用的自然收尾）触发，负责组织最终答复和交付内容。
 - `context_budget` 负责在每一步前检查上下文预算。
-- `context_compaction` 压缩消息数组的较早区间为一条摘要消息，服务本次 run 继续推进。
+- `context_compaction` 把消息投影的较早区间压缩为一条摘要（`<compacted_history>`）并注入 `<current_state>`（完整 plan + learnedSkillIds），服务本次 run 继续推进。
 
-### 原生 tool calling 与 append-only 消息
+### 原生 tool calling 与消息转录（唯一真相源）
 
-brain 采用原生 function calling（`bindTools`），工具结果以 `ToolMessage`（按 `tool_call_id` 配对）追加到 append-only 的 `messages` 数组，不再把历史每轮重渲染成字符串。静态前缀（原则 + 技能目录 + 本地环境）与技能目录只标注「内置 / 需学习」，不随 learn 变化，保证缓存友好。非工具控制动作统一为 `agent-control` 内置技能的三个工具：`learn_skill`、`update_plan`、`finish`。真相源为 append-only 的轮次日志（`rounds`），消息数组从日志确定性派生（`deriveMessagesFromRounds`），压缩用 replace-op 语义（追加摘要、保留最新轮次）。
+brain 采用原生 function calling（`bindTools`），工具结果以 `ToolMessage`（按 `tool_call_id` 配对）追加到 append-only 的 `messages` 数组，不再把历史每轮重渲染成字符串。静态前缀（原则 + 技能目录 + 本地环境）与技能目录只标注「内置 / 需学习」，不随 learn 变化，保证缓存友好。非工具控制动作统一为 `agent-control` 内置技能的三个工具：`learn_skill`、`update_plan`、`finish`。
+
+**模型上下文唯一真相源是会话级 append-only 的消息转录（`chat_session_transcript` 表）**：每条是 `user` / `assistant`（含真实 `tool_calls`）/ `tool`（含结果）/ `annotation`（压缩摘要等过程标记）。模型上下文从转录投影（`deriveTranscriptMessages`），中断恢复与跨 run 上下文都从转录重建后补一条 user 消息继续；UI 过程与模型记忆不再维护 `rounds`/`conversation` 副本。压缩只作用于「投影出的消息」（早段 → `<compacted_history>` + `<current_state>`，尾段保留），转录本身 append-only 不动。
 
 ### Skill 与 Tool
 

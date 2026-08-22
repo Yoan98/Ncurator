@@ -1,24 +1,28 @@
 import type { AiRunContext } from '../../types'
 import { renderDeliveryGuidanceItems } from '../shared/deliveryGuidance'
 import {
-  renderBrainCompactBlocks,
-  renderBrainRoundSection
-} from '../shared/historyRenderers'
-import {
   NCURATOR_REF_MARKDOWN_FORMAT_EXAMPLE,
   renderEvidenceReferences
 } from '../shared/references'
 import { renderHumanFileChangeLines } from '../shared/runtimeRenderers'
 import { renderReferenceScopeText } from './referenceScope'
 import type { HumanState } from '../types'
-import { getRecentHistoryRounds } from '../memory/rounds'
 import { renderResumeMessages } from '../../utils/resumeSnapshot'
+
+const renderTaskEvidence = (state: HumanState): string => {
+  const planLines = state.memory.plan
+    .map(
+      (item) =>
+        `- ${item.status === 'done' ? '[done]' : '[todo]'} ${item.title}${item.evidence ? `（${item.evidence}）` : ''}`
+    )
+    .join('\n')
+  if (!planLines) return 'none'
+  return planLines
+}
 
 export const buildMouthPrompt = (input: {
   state: HumanState
   ctx: AiRunContext
-  conversationSummaryText?: string
-  recentTurnsText?: string
 }) => {
   const system = `
 <system>
@@ -38,8 +42,7 @@ export const buildMouthPrompt = (input: {
   <context_block_guide>
     - task_goal：用户当前要你完成或回答的事情。
     - reference_scope：当前用户工作区域、资料范围和参考边界。
-    - conversation_history：当前会话历史视图，用于理解这次最终交付与同一会话前文的连续性。
-    - round_history：当前任务的历史证据视图，包含已压缩的较早历史和较新的真实轮次记录（含最新一轮）。
+    - task_evidence：本次任务的执行情况摘要（来自执行计划），用于理解任务推进过程。
     - resume_messages：任务中断恢复后用户补充的消息；若无则为 none。
     - delivery_guidance：上游节点明确要求你必须吸收的补充说明。
     - file_changes：本次实际修改的文件记录，用于说明本次最终修改了什么文件。
@@ -65,25 +68,9 @@ ${input.state.task.userInput}
 ${renderReferenceScopeText(input.ctx.referenceScope)}
   </reference_scope>
 
-  <conversation_history>
-    <summary>
-    ${input.conversationSummaryText || 'none'}
-    </summary>
-
-    <recent_turns>
-    ${input.recentTurnsText || 'none'}
-    </recent_turns>
-  </conversation_history>
-
-  <round_history>
-    <compactions>
-    ${renderBrainCompactBlocks(input.state.memory.taskRun.compactions)}
-    </compactions>
-
-    <rounds>
-    ${renderBrainRoundSection(getRecentHistoryRounds(input.state))}
-    </rounds>
-  </round_history>
+  <task_evidence>
+${renderTaskEvidence(input.state)}
+  </task_evidence>
 
   <resume_messages>
 ${renderResumeMessages(input.state.task.taskContext) || 'none'}

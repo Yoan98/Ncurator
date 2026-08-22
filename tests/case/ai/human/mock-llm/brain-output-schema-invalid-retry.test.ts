@@ -80,53 +80,21 @@ describe('ai human mock-llm backend', () => {
         }
       },
       assert: async (result, runtime) => {
-        const decisionHints = filterAiRunEventsByType(result.events, 'decision_hint')
-        const thinkingStarted = result.events.filter(
-          (event) =>
-            event.type === 'assistant_process_group_started' && event.display.kind === 'thinking'
+        const toolResults = filterAiRunEventsByType(result.events, 'tool_call_result')
+        const docxEditErrors = toolResults.filter(
+          (event) => event.toolName === 'docx_edit' && event.result?.ok === false
         )
-        const thinkingCompleted = result.events.filter(
-          (event) =>
-            event.type === 'assistant_process_group_completed' && event.display.kind === 'thinking'
-        )
-        const schemaHintIndex = result.events.findIndex(
-          (event) =>
-            event.type === 'decision_hint' &&
-            event.source === 'hand' &&
-            event.code === 'hand_call_invalid'
-        )
-        const lastThinkingCompletedBeforeHint = result.events
-          .slice(0, schemaHintIndex)
-          .some(
-            (event) =>
-              event.type === 'assistant_process_group_completed' &&
-              event.display.kind === 'thinking'
-          )
         runtime.assertThat(
           result.output.status === 'completed' &&
-            thinkingStarted.length === 2 &&
-            thinkingCompleted.length === 2 &&
-            lastThinkingCompletedBeforeHint &&
-            result.retryBrainPrompt.includes('- 类型：hand') &&
-            result.retryBrainPrompt.includes('- 工具：`docx_edit`') &&
-            result.retryBrainPrompt.includes('参数：') &&
-            result.retryBrainPrompt.includes('返回：') &&
-            result.retryBrainPrompt.includes('<decision_hint>') &&
-            decisionHints.some(
-              (event) =>
-                event.source === 'hand' &&
-                event.code === 'hand_call_invalid' &&
-                Array.isArray((event.detail as { invalidCalls?: unknown[] })?.invalidCalls)
-            ),
+            docxEditErrors.length >= 1 &&
+            result.retryBrainPrompt.includes('docx_edit'),
           {
-            name: 'hand-schema-invalid-produces-record-then-decision-hint',
+            name: 'invalid-hand-args-produce-tool-error-then-recover',
             message:
-              'brain 的 hand plan 不合法时，应先进入 hand 产生失败调用记录，再产出 hand_call_invalid 并继续完成任务。',
+              'brain 的 hand 调用参数不合法时，应通过工具自身 schema 校验产出失败结果，并在纠偏后继续完成任务。',
             data: {
               output: result.output,
-              decisionHints,
-              thinkingStartedCount: thinkingStarted.length,
-              thinkingCompletedCount: thinkingCompleted.length,
+              docxEditErrorCount: docxEditErrors.length,
               retryBrainPrompt: result.retryBrainPrompt
             }
           }

@@ -1,14 +1,26 @@
 import { randomUUID } from 'node:crypto'
-import { HumanMessage, type BaseMessage } from '@langchain/core/messages'
+import { HumanMessage, SystemMessage, type BaseMessage } from '@langchain/core/messages'
 import type { AiRunContext } from '../../../types'
-import { getCompressibleHistoryRounds, getLastRoundFocus } from '../../memory/rounds'
-import { deriveMessagesFromRounds } from '../../memory/messages'
 import { CONTEXT_COMPACTION_TARGET_RATIO } from '../../constants'
 import { buildHistoryCompactionPrompt } from '../../prompts/compaction'
-import { renderBrainRoundSection } from '../../shared/historyRenderers'
+import { buildBrainSystemPrompt, buildBrainUserMessage } from '../../prompts/brain'
 import type { HumanRuntimeCache, HumanState } from '../../types'
 import { estimateTextTokens } from '../../utils/tokenEstimate'
 import { emitCompactionCompleted, emitCompactionStarted } from '../../../events/processEvents'
+
+const COMPACTION_TAIL_MESSAGE_COUNT = 8
+
+const renderMessagesForCompaction = (messages: BaseMessage[]): string =>
+  messages
+    .map((message) => {
+      const role = message.getType()
+      const content =
+        typeof message.content === 'string'
+          ? message.content
+          : JSON.stringify(message.content)
+      return `[${role}] ${content}`
+    })
+    .join('\n\n')
 
 export const createContextCompactionNode = (input: {
   ctx: AiRunContext
@@ -18,9 +30,10 @@ export const createContextCompactionNode = (input: {
     input.ctx.checkCancelled()
     input.cache.currentState = state
 
-    const targetRounds = getCompressibleHistoryRounds(state)
-    const latestRound = getLastRoundFocus(state)
-    if (targetRounds.length === 0) {
+    const messages = input.cache.messages || []
+    const compressible = messages.slice(0, Math.max(0, messages.length - COMPACTION_TAIL_MESSAGE_COUNT))
+    const tail = messages.slice(Math.max(0, messages.length - COMPACTION_TAIL_MESSAGE_COUNT))
+    if (compressible.length === 0) {
       return {
         ...state,
         execution: {
@@ -31,13 +44,7 @@ export const createContextCompactionNode = (input: {
     }
 
     const currentHistoryBlock =
-      state.memory.taskRun.compactions.find((block) => block.kind === 'rounds') || null
-    const mergedRoundIds = Array.from(
-      new Set([
-        ...(currentHistoryBlock?.source.roundIds || []),
-        ...targetRounds.map((round) => round.roundId)
-      ])
-    )
+      state.memory.compactions.find((block) => block.kind === 'compacted_history') || null
     const budgetTokensBefore = state.execution.contextBudget?.budgetTokens || 0
     emitCompactionStarted({
       sendEvent: input.ctx.sendEvent,
@@ -47,21 +54,21 @@ export const createContextCompactionNode = (input: {
       type: 'context_compaction_started',
       runId: input.ctx.runId,
       taskId: state.task.taskId,
-      targetRoundIds: targetRounds.map((round) => round.roundId),
+      targetMessageCount: compressible.length,
       budgetTokensBefore,
       thresholdTokens: state.execution.contextBudget?.compactionTriggerTokens || 0,
       createdAt: Date.now(),
       stage: 'human_brain'
     })
 
-    const historyRounds = renderBrainRoundSection(targetRounds)
+    const historyText = renderMessagesForCompaction(compressible)
     const prompt = buildHistoryCompactionPrompt({
       userGoal: state.task.userInput,
       existingCompactSummary: currentHistoryBlock?.summary,
-      historyRounds,
+      historyText,
       targetCompressionRatio: CONTEXT_COMPACTION_TARGET_RATIO
     })
-    const sourceHistoryTokenEstimate = estimateTextTokens(historyRounds)
+    const sourceHistoryTokenEstimate = estimateTextTokens(historyText)
     const summary = await input.ctx.chatText({
       caller: 'human.context_compaction',
       taskId: state.task.taskId,
@@ -70,15 +77,12 @@ export const createContextCompactionNode = (input: {
       schemaName: 'human_history_compaction',
       temperature: 0.1
     })
-    const tokenEstimateAfter = estimateTextTokens(summary)
+    const tokenEstimateAfter = estimateTextTokens(String(summary || ''))
     const compactBlockId = randomUUID()
     const compactBlock = {
       id: compactBlockId,
-      kind: 'rounds' as const,
+      kind: 'compacted_history' as const,
       summary: String(summary || '').trim() || '已压缩较早过程历史。',
-      source: {
-        roundIds: mergedRoundIds
-      },
       createdAt: Date.now(),
       tokenEstimateBefore: budgetTokensBefore,
       sourceHistoryTokenEstimate,
@@ -94,7 +98,7 @@ export const createContextCompactionNode = (input: {
       runId: input.ctx.runId,
       taskId: state.task.taskId,
       compactBlockId,
-      sourceRoundIds: mergedRoundIds,
+      sourceMessageCount: compressible.length,
       tokenEstimateBefore: budgetTokensBefore,
       sourceHistoryTokenEstimate,
       tokenEstimateAfter,
@@ -103,22 +107,34 @@ export const createContextCompactionNode = (input: {
       stage: 'human_brain'
     })
     input.cache.lastBrainInputTokens = undefined
-    input.cache.lastBrainRoundCount = undefined
-    input.cache.lastBrainUsageUnavailable = false
     input.cache.postCompactionNeedsFreshBrainUsage = true
-
-    const remainingRounds = latestRound ? [latestRound] : []
+    input.cache.lastBrainUsageUnavailable = false
     input.cache.compactSummaryText = String(summary || '').trim()
-    const prefix = input.cache.prefixMessages || []
-    const rebuilt: BaseMessage[] = [...prefix]
-    if (input.cache.compactSummaryText) {
-      rebuilt.push(
-        new HumanMessage(
-          `<compacted_history>\n${input.cache.compactSummaryText}\n</compacted_history>`
-        )
+
+    void input.ctx.appendTranscript([
+      {
+        kind: 'annotation',
+        eventType: 'compaction_summary',
+        payload: {
+          compactBlockId,
+          summary: compactBlock.summary,
+          sourceMessageCount: compressible.length
+        }
+      }
+    ])
+
+    const rebuilt: BaseMessage[] = [
+      new SystemMessage(buildBrainSystemPrompt({ ctx: input.ctx })),
+      new HumanMessage(
+        buildBrainUserMessage({
+          state,
+          ctx: input.ctx,
+          compactedHistoryText: input.cache.compactSummaryText || undefined,
+          injectPlan: true
+        })
       )
-    }
-    rebuilt.push(...deriveMessagesFromRounds(remainingRounds))
+    ]
+    rebuilt.push(...tail)
     input.cache.messages = rebuilt
 
     return {
@@ -129,13 +145,10 @@ export const createContextCompactionNode = (input: {
       },
       memory: {
         ...state.memory,
-        taskRun: {
-          compactions: [
-            ...state.memory.taskRun.compactions.filter((block) => block.kind !== 'rounds'),
-            compactBlock
-          ],
-          rounds: remainingRounds
-        }
+        compactions: [
+          ...state.memory.compactions.filter((block) => block.kind !== 'compacted_history'),
+          compactBlock
+        ]
       }
     }
   }

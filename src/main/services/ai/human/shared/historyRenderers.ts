@@ -1,23 +1,8 @@
 import type { JsonObject, JsonValue } from '../../../../../shared/types'
-import { renderInlineList } from '../../utils/render'
-import type {
-  HumanHistoryToolResult,
-  HumanCompactionBlock,
-  HumanRoundRecord,
-  ToolCallParam
-} from '../types'
+import type { HumanHistoryToolResult } from '../types'
 
 const isJsonObject = (value: JsonValue | undefined): value is JsonObject =>
   Boolean(value && typeof value === 'object' && !Array.isArray(value))
-
-const renderQuotedNames = (items: readonly string[]): string =>
-  renderInlineList(
-    items.map((item) => `\`${item}\``),
-    {
-      separator: '、',
-      fallback: 'none'
-    }
-  )
 
 type NestedWhitelistConfig = {
   [key: string]: true | NestedWhitelistConfig
@@ -424,9 +409,6 @@ const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
   }
 }
 
-const renderJsonValue = (value: JsonValue | JsonObject | undefined): string =>
-  value === undefined ? 'none' : JSON.stringify(value)
-
 const toJsonValue = (value: JsonValue | undefined): JsonValue =>
   value === undefined ? null : value
 
@@ -477,116 +459,3 @@ const buildToolHistoryReturnValue = (result: HumanHistoryToolResult): JsonValue 
 
 export const buildToolResultMessageContent = (result: HumanHistoryToolResult): string =>
   JSON.stringify(buildToolHistoryReturnValue(result))
-
-const buildBrainToolAttemptText = (input: {
-  call: ToolCallParam | undefined
-  result: HumanHistoryToolResult
-}): string =>
-  [
-    `- 工具：\`${input.result.toolName}\``,
-    `  参数：${renderJsonValue(input.call?.args)}`,
-    `  返回：${renderJsonValue(buildToolHistoryReturnValue(input.result))}`
-  ]
-    .filter(Boolean)
-    .join('\n')
-
-const renderBrainRoundDecision = (record: HumanRoundRecord): string =>
-  `- ${record.thought.text}`
-
-const renderLearningExecution = (
-  record: HumanRoundRecord & {
-    execution: Extract<HumanRoundRecord['execution'], { kind: 'learning' }>
-  }
-): string =>
-  [
-    '- 类型：learning',
-    `- 学习：${renderQuotedNames(record.execution.learningOutcome.requestedSkillIds)}`,
-    `- 结果：${record.execution.result}`
-  ]
-    .filter(Boolean)
-    .join('\n')
-
-const renderHandExecution = (
-  record: HumanRoundRecord & {
-    execution: Extract<HumanRoundRecord['execution'], { kind: 'hand' }>
-  }
-): string => {
-  const execution = record.execution
-  const executedToolNames = execution.toolResults.map((result) => result.toolName)
-  const actualToolNames =
-    executedToolNames.length > 0 ? executedToolNames : execution.calls.map((call) => call.toolName)
-  const toolAttempts = execution.toolResults
-    .map((result, index) =>
-      buildBrainToolAttemptText({
-        call: execution.calls[index],
-        result
-      })
-    )
-    .join('\n')
-  const artifactLine =
-    execution.artifactRefs && execution.artifactRefs.length > 0
-      ? `- 产物：${renderInlineList(
-          execution.artifactRefs.map((artifact) => `\`${artifact.fileName}\``),
-          {
-            separator: '、',
-            fallback: 'none'
-          }
-        )}`
-      : undefined
-
-  return [
-    '- 类型：hand',
-    `- 调用：${renderQuotedNames(actualToolNames)}`,
-    toolAttempts,
-    artifactLine
-  ]
-    .filter(Boolean)
-    .join('\n')
-}
-
-const renderBrainRoundExecution = (record: HumanRoundRecord): string => {
-  switch (record.execution.kind) {
-    case 'learning':
-      return renderLearningExecution(
-        record as HumanRoundRecord & {
-          execution: Extract<HumanRoundRecord['execution'], { kind: 'learning' }>
-        }
-      )
-    case 'hand':
-      return renderHandExecution(
-        record as HumanRoundRecord & {
-          execution: Extract<HumanRoundRecord['execution'], { kind: 'hand' }>
-        }
-      )
-    case 'mouth':
-      return ['- 类型：mouth', `- 结果：${record.execution.result}`].join('\n')
-    case 'fault':
-      return ['- 类型：fault', `- 结果：${record.execution.result}`].join('\n')
-  }
-}
-
-const renderBrainRoundRecord = (record: HumanRoundRecord): string => {
-  const lines = [
-    `- 第 ${record.roundId} 轮`,
-    '判断：',
-    renderBrainRoundDecision(record),
-    '执行：',
-    renderBrainRoundExecution(record)
-  ]
-  return lines.join('\n')
-}
-
-export const renderBrainRoundSection = (records: HumanRoundRecord[]): string =>
-  records.length > 0 ? records.map(renderBrainRoundRecord).join('\n\n') : 'none'
-
-const renderCompactBlock = (block: HumanCompactionBlock): string =>
-  `
-- compaction block ${block.id}
-  - kind：${block.kind}
-  - source.roundIds：${block.source.roundIds.join(', ')}
-  - summary：
-${block.summary}
-`.trim()
-
-export const renderBrainCompactBlocks = (blocks: HumanCompactionBlock[]): string =>
-  blocks.length > 0 ? blocks.map(renderCompactBlock).join('\n\n') : 'none'

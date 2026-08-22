@@ -1,4 +1,5 @@
 import type { ChatStore } from '../storage/domains/ChatStore'
+import type { ChatTranscriptStore } from '../storage/domains/ChatTranscriptStore'
 import type { DocumentsStore } from '../storage/domains/DocumentsStore'
 import type { LlmConfigStore } from '../storage/domains/LlmConfigStore'
 import type { EmbeddingService } from '../vector/EmbeddingService'
@@ -33,6 +34,7 @@ import type {
   ChatConversationMemory,
   ChatSessionResumeSnapshot,
   ChatSessionSkillState,
+  ChatTranscriptEntry,
   DocxApplyRecord,
   SelectedReference,
   WorkbenchSelectedModel
@@ -232,6 +234,7 @@ export type AiRunDeps = {
   runtimeSettings: AiRuntimeSettings
   llmStore: LlmConfigStore
   chatStore: ChatStore
+  chatTranscriptStore: ChatTranscriptStore
   documentsStore: DocumentsStore
   embeddingService: EmbeddingService
   ensureEmbeddingReady: () => Promise<void>
@@ -324,6 +327,8 @@ export type AiRunContext = {
     conversationSummaryText: string
   }>
   loadConversationMemory: () => Promise<ChatConversationMemory | null>
+  appendTranscript: (entries: ChatTranscriptEntry[]) => Promise<void>
+  loadTranscript: () => Promise<ChatTranscriptEntry[]>
   loadSessionSkillState: () => Promise<ChatSessionSkillState>
   saveSessionSkillState: (input: {
     expectedRevision: number

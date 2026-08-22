@@ -295,7 +295,7 @@ describe('ai human live backend', () => {
               result.snapshotAfterResume === null &&
               result.resumeHintEventSeen === true &&
                result.run2UsedFileB === true &&
-               result.run2BrainPrompt.includes('<conversation_history>') &&
+               result.run2BrainPrompt.includes('<current_state>') &&
                mentionsOverfittingTopic(result.run2BrainPrompt) &&
                mentionsAntiAliasingTopic(result.run2BrainPrompt),
             {

@@ -7,6 +7,7 @@ import {
 import type { HumanState } from '../types'
 import type { AiRuntimePlatform } from '../../types'
 import { listBuiltinSkillDefinitions, listExternalSkillDefinitions } from '../skills'
+import { renderResumeMessages } from '../../utils/resumeSnapshot'
 
 export const renderLocalEnvironmentText = (ctx: AiRunContext): string => {
   const workspace = ctx.workspace
@@ -100,10 +101,32 @@ ${renderLocalEnvironmentText(input.ctx)}
 export const buildBrainUserMessage = (input: {
   state: HumanState
   ctx: AiRunContext
-  conversationSummaryText?: string
-  recentTurnsText?: string
-}): string =>
-  `
+  compactedHistoryText?: string
+  injectPlan?: boolean
+}): string => {
+  const learnedSkillIds = input.state.skills.learnedSkillIds
+  const plan = input.state.memory.plan
+  const renderPlan =
+    input.injectPlan && plan.length > 0
+      ? `\n    <plan>\n${plan
+          .map(
+            (item) =>
+              `      - ${item.status === 'done' ? '[done]' : '[todo]'} ${item.title}${item.evidence ? `（${item.evidence}）` : ''}`
+          )
+          .join('\n')}\n    </plan>`
+      : ''
+  const renderLearnedSkills =
+    learnedSkillIds.length > 0
+      ? `\n    <learned_skills>\n${learnedSkillIds
+          .map((skillId) => `      - ${skillId}`)
+          .join('\n')}\n    </learned_skills>`
+      : '\n    <learned_skills>none</learned_skills>'
+  const renderCompactedHistory = input.compactedHistoryText
+    ? `\n  <compacted_history>\n${input.compactedHistoryText}\n  </compacted_history>`
+    : ''
+  const renderResume = renderResumeMessages(input.state.task.taskContext)
+
+  return `
 <user_context>
   <task_goal>
 ${input.state.task.userInput}
@@ -116,15 +139,13 @@ ${renderPreferenceText(input.ctx.preference)}
   <reference_scope>
 ${renderReferenceScopeText(input.ctx.referenceScope)}
   </reference_scope>
+${renderCompactedHistory}
+  <resume_messages>
+${renderResume || 'none'}
+  </resume_messages>
 
-  <conversation_history>
-    <summary>
-    ${input.conversationSummaryText || 'none'}
-    </summary>
-
-    <recent_turns>
-    ${input.recentTurnsText || 'none'}
-    </recent_turns>
-  </conversation_history>
+  <current_state>${renderPlan}${renderLearnedSkills}
+  </current_state>
 </user_context>
 `.trim()
+}

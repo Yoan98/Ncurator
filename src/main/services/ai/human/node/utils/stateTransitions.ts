@@ -5,7 +5,8 @@ import type {
   HumanRoundThought,
   HumanRuntimeCache,
   HumanState,
-  HumanDecisionHint
+  HumanDecisionHint,
+  HumanDispatchItem
 } from '../../types'
 import {
   emitLatestHumanStepForState,
@@ -22,6 +23,7 @@ import {
   type HumanTraceItemInput
 } from './stateTransitionState'
 import { emitAssistantProcessThought } from '../../../events/processEvents'
+import { peekDispatchGroup } from '../dispatch'
 
 export type { HumanTraceItemInput } from './stateTransitionState'
 
@@ -49,7 +51,9 @@ export const returnToBrainWithDecisionHint = (input: {
     ...input.overrides,
     execution: {
       ...input.overrides?.execution,
-      pendingDecisionHint: input.decisionHint
+      pendingDecisionHint: input.decisionHint,
+      pendingDispatch: undefined,
+      stage: 'context_budget'
     }
   })
 }
@@ -106,6 +110,55 @@ export const applyBrainDecisionTransition = (input: {
     createdAt: Date.now(),
     overrides: input.overrides
   })
+
+  emitLatestHumanStepForState({
+    ctx: input.ctx,
+    cache: input.cache,
+    taskId: input.state.task.taskId,
+    state: nextState,
+    stage: 'human_brain'
+  })
+  emitAssistantProcessThought({
+    sendEvent: input.ctx.sendEvent,
+    runId: input.ctx.runId,
+    text: input.thought.text
+  })
+
+  return nextState
+}
+
+export const applyBrainDispatchTransition = (input: {
+  ctx: AiRunContext
+  cache: HumanRuntimeCache
+  state: HumanState
+  thought: HumanRoundThought
+  dispatchQueue: HumanDispatchItem[]
+}): HumanState => {
+  const peeked = peekDispatchGroup(input.dispatchQueue)
+  if (peeked.empty) {
+    return applyBrainDecisionTransition({
+      ctx: input.ctx,
+      cache: input.cache,
+      state: input.state,
+      thought: input.thought,
+      nextAction: { action: 'mouth' }
+    })
+  }
+
+  const base = applyBrainDecisionState({
+    state: input.state,
+    thought: input.thought,
+    nextAction: peeked.nextAction,
+    createdAt: Date.now()
+  })
+  const nextState: HumanState = {
+    ...base,
+    execution: {
+      ...base.execution,
+      stage: 'dispatch',
+      pendingDispatch: input.dispatchQueue
+    }
+  }
 
   emitLatestHumanStepForState({
     ctx: input.ctx,

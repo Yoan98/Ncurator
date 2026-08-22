@@ -3,6 +3,7 @@ import fs from 'fs'
 import path from 'path'
 import { getSqliteDbPath } from '../../../utils/paths'
 import { initialSchemaSql } from './migrations/001_initial_schema'
+import { chatSessionTranscriptMigration } from './migrations/002_chat_session_transcript'
 
 const notificationSettingsMigration = `
 ALTER TABLE ai_runtime_settings ADD COLUMN systemNotificationsEnabled INTEGER NOT NULL DEFAULT 1;
@@ -170,6 +171,11 @@ const MIGRATIONS: Migration[] = [
     version: 10,
     name: 'scheduled_task',
     sql: scheduledTaskMigration
+  },
+  {
+    version: 11,
+    name: 'chat_session_transcript',
+    sql: chatSessionTranscriptMigration
   }
 ]
 

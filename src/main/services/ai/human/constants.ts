@@ -10,7 +10,9 @@ export const HUMAN_SKILL_SOURCES = ['builtin', 'external'] as const
 
 export const HUMAN_STAGES = [
   'brain',
+  'dispatch',
   'learning',
+  'plan',
   'hand',
   'mouth',
   'fault',

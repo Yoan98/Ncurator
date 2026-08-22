@@ -1,5 +1,4 @@
 import type { AiRunContext } from '../../../types'
-import { appendDecisionRound, appendRoundRecord, buildFaultExecution } from '../../memory/rounds'
 import type { HumanRuntimeCache, HumanState } from '../../types'
 import { returnToBrainWithDecisionHint } from '../utils/stateTransitions'
 
@@ -19,18 +18,6 @@ export const createFaultNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
       code: 'brain_output_schema_invalid' as const,
       detail: { issues }
     }
-    const execution = buildFaultExecution({
-      result: pendingFault.result,
-      decisionHint
-    })
-    const taskRun = state.execution.pendingRound
-      ? appendDecisionRound({ state, execution })
-      : appendRoundRecord({
-          state,
-          thought: { text: '本轮决策未能进入可执行节点。' },
-          nextAction: { action: 'fault' },
-          execution
-        })
 
     return returnToBrainWithDecisionHint({
       ctx: input.ctx,
@@ -42,8 +29,7 @@ export const createFaultNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
           pendingFault: undefined
         },
         memory: {
-          ...state.memory,
-          taskRun
+          ...state.memory
         }
       }
     })

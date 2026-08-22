@@ -5,15 +5,15 @@ import type { JsonObject } from '../../../../../../shared/types'
 import type { AiRunContext } from '../../../types'
 import { isContentSafetyError } from '../../../utils/runFailure'
 import { normalizeRoundThought } from '../../memory/thoughtMemory'
-import { deriveMessagesFromRounds } from '../../memory/messages'
+import { deriveTranscriptMessages } from '../../memory/transcript'
 import { buildBrainSystemPrompt, buildBrainUserMessage } from '../../prompts/brain'
 import { renderDecisionHintForBrain } from '../../prompts/decisionHints'
 import { assertExternalLearnedSkillIds } from '../../skills'
-import { brainEvidenceReferenceSchema } from '../../schema'
-import type { HumanNextAction, HumanRuntimeCache, HumanState } from '../../types'
-import { applyBrainDecisionTransition } from '../utils/stateTransitions'
+import type { HumanRuntimeCache, HumanState } from '../../types'
+import { applyBrainDispatchTransition } from '../utils/stateTransitions'
 import { buildAvailableTools } from '../learningNode/skillLoader'
 import { createDeliveryGuidanceItem, mergeDeliveryGuidanceItems } from '../../shared/deliveryGuidance'
+import { buildDispatchQueue } from '../dispatch'
 import {
   emitThinkingCompleted,
   emitThinkingFailed,
@@ -23,44 +23,37 @@ import {
 const getErrorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error)
 
-const readStringList = (value: unknown): string[] =>
-  Array.isArray(value)
-    ? value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
-    : []
-
-const readFinishEvidenceReferences = (args: unknown) => {
-  const raw =
-    args && typeof args === 'object' ? (args as Record<string, unknown>).evidenceReferences : undefined
-  const parsed = brainEvidenceReferenceSchema.array().optional().safeParse(raw)
-  return parsed.success ? parsed.data : undefined
-}
-
 export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCache }) => {
   return async (state: HumanState): Promise<HumanState> => {
     input.ctx.checkCancelled()
     assertExternalLearnedSkillIds(state.skills.learnedSkillIds)
     input.cache.currentState = state
 
-    const history = await input.ctx.loadConversationContext()
-
     let messages = input.cache.messages
     if (!messages || messages.length === 0) {
+      const injectPlan =
+        state.execution.pendingDecisionHint?.code === 'run_resumed_after_interruption'
+      const compactedHistoryText = state.memory.compactions.at(-1)?.summary
       const prefix = [
         new SystemMessage(buildBrainSystemPrompt({ ctx: input.ctx })),
         new HumanMessage(
           buildBrainUserMessage({
             state,
             ctx: input.ctx,
-            conversationSummaryText: history.conversationSummaryText,
-            recentTurnsText: history.recentTurnsText
+            injectPlan,
+            compactedHistoryText
           })
         )
       ]
       input.cache.prefixMessages = prefix
-      messages = [...prefix]
-      if (state.memory.taskRun.rounds.length > 0) {
-        messages.push(...deriveMessagesFromRounds(state.memory.taskRun.rounds))
-      }
+      const transcript = await input.ctx.loadTranscript()
+      messages = [
+        ...prefix,
+        ...deriveTranscriptMessages({
+          entries: transcript,
+          skipUserContent: state.task.userInput
+        })
+      ]
       input.cache.messages = messages
     }
 
@@ -119,7 +112,6 @@ export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
       const inputTokens = result.usage?.inputTokens
       if (inputTokens !== undefined) {
         input.cache.lastBrainInputTokens = inputTokens
-        input.cache.lastBrainRoundCount = state.memory.taskRun.rounds.length
         input.cache.postCompactionNeedsFreshBrainUsage = false
         input.cache.lastBrainUsageUnavailable = false
       } else {
@@ -138,52 +130,31 @@ export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
       const assistantMessage = result.message
       messages.push(assistantMessage)
       input.cache.messages = messages
+      await input.ctx.appendTranscript([
+        {
+          kind: 'assistant',
+          content: extractTextContent(assistantMessage.content),
+          toolCalls: getToolCalls(assistantMessage).map((call) => ({
+            id: call.id || `call-${input.cache.toolCallCount}`,
+            name: String(call.name || ''),
+            args: (call.args || {}) as JsonObject
+          }))
+        }
+      ])
 
       const thoughtText = extractTextContent(assistantMessage.content)
       const thought = normalizeRoundThought(thoughtText)
       const toolCalls = getToolCalls(assistantMessage)
 
-      const finishCall = toolCalls.find((call) => call.name === 'finish')
-      const learnSkillCall = toolCalls.find((call) => call.name === 'learn_skill')
-      const finishEvidenceReferences = finishCall
-        ? readFinishEvidenceReferences(finishCall.args)
-        : undefined
-      const learnSkillIds = learnSkillCall ? readStringList(learnSkillCall.args?.skillIds) : []
-
-      let nextAction: HumanNextAction
-      if (toolCalls.length === 0) {
-        nextAction = { action: 'mouth' }
-      } else if (finishCall) {
-        nextAction = finishEvidenceReferences
-          ? { action: 'mouth', evidenceReferences: finishEvidenceReferences, toolCallId: finishCall.id }
-          : { action: 'mouth', toolCallId: finishCall.id }
-      } else if (learnSkillCall) {
-        nextAction =
-          learnSkillIds.length > 0
-            ? {
-                action: 'learning',
-                wantLearnSkillIds: learnSkillIds,
-                toolCallId: learnSkillCall.id
-              }
-            : { action: 'mouth' }
-      } else {
-        nextAction = {
-          action: 'hand',
-          calls: toolCalls.map((call) => ({
-            toolCallId: call.id,
-            toolName: call.name,
-            args: (call.args || {}) as JsonObject
-          }))
-        }
-      }
+      const dispatchQueue = buildDispatchQueue(toolCalls)
 
       completeThinking()
-      return applyBrainDecisionTransition({
+      return applyBrainDispatchTransition({
         ctx: input.ctx,
         cache: input.cache,
         state,
         thought,
-        nextAction
+        dispatchQueue
       })
     } catch (error) {
       if (isContentSafetyError(error)) {

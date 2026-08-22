@@ -1,7 +1,6 @@
 import type { AiRunContext } from '../../../types'
 import { ToolMessage } from '@langchain/core/messages'
 import type { HumanRuntimeCache, HumanState } from '../../types'
-import { appendDecisionRound, buildMouthExecution } from '../../memory/rounds'
 import { buildMouthPrompt } from '../../prompts/mouth'
 import { assertExternalLearnedSkillIds } from '../../skills'
 import { completeHumanTask, returnToBrainWithDecisionHint } from '../utils/stateTransitions'
@@ -73,6 +72,9 @@ export const createMouthNode = (input: {
           })
         )
         input.cache.messages = messages
+        await input.ctx.appendTranscript([
+          { kind: 'tool', toolCallId: finishToolCallId, toolName: 'finish', result: { message: result } }
+        ])
       }
       return returnToBrainWithDecisionHint({
         ctx: input.ctx,
@@ -81,11 +83,7 @@ export const createMouthNode = (input: {
         decisionHint,
         overrides: {
           memory: {
-            ...state.memory,
-            taskRun: appendDecisionRound({
-              state,
-              execution: buildMouthExecution({ result, decisionHint })
-            })
+            ...state.memory
           }
         }
       })
@@ -94,11 +92,7 @@ export const createMouthNode = (input: {
     const stateWithMouthRound: HumanState = {
       ...state,
       memory: {
-        ...state.memory,
-        taskRun: appendDecisionRound({
-          state,
-          execution: buildMouthExecution({ result: '已完成最终交付。' })
-        })
+        ...state.memory
       }
     }
     input.cache.currentState = stateWithMouthRound
@@ -107,7 +101,6 @@ export const createMouthNode = (input: {
     const pptApplyRecords = (await input.cache.pptRuntime?.commitAll()) || []
     const fileChangeRecords = await input.ctx.listFileChangeRecords({ runId: input.ctx.runId })
     const fileChanges = buildFileChangesSummaryFromFileChangeRecords(fileChangeRecords)
-    const history = await input.ctx.loadConversationContext()
     const rawEvidenceReferences =
       stateWithMouthRound.execution.pendingRound?.nextAction.action === 'mouth'
         ? stateWithMouthRound.execution.pendingRound.nextAction.evidenceReferences
@@ -131,9 +124,7 @@ export const createMouthNode = (input: {
 
     const prompt = buildMouthPrompt({
       state: promptState,
-      ctx: input.ctx,
-      conversationSummaryText: history.conversationSummaryText,
-      recentTurnsText: history.recentTurnsText
+      ctx: input.ctx
     })
     if (input.emitAnswerEvents) {
       emitFinalizingStarted({
@@ -204,6 +195,10 @@ export const createMouthNode = (input: {
         '',
         promptState.execution.pendingRound?.thought.text || '任务结束'
       ].join('\n')
+
+    await input.ctx.appendTranscript([
+      { kind: 'assistant', content: deliveryMarkdown, toolCalls: [] }
+    ])
 
     return completeHumanTask({
       ctx: input.ctx,

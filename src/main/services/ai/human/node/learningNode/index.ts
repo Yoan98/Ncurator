@@ -16,18 +16,18 @@ import {
   isLearnableSkillId,
   listBuiltinSkillDefinitions
 } from '../../skills'
-import { appendDecisionRound, buildLearningExecution } from '../../memory/rounds'
 import { ensureSkillTools } from './skillLoader'
 import { countActiveToolNamesForSkillIds, fitSkillIdsToToolBudget } from './toolBudget'
 import {
-  returnToBrain,
   returnToBrainAfterTrace,
   returnToBrainWithDecisionHint
 } from '../utils/stateTransitions'
+import { advanceDispatchState } from '../dispatch'
 import { emitLearningCompleted, emitLearningStarted } from '../../../events/processEvents'
 
 const appendLearnToolMessage = (input: {
   cache: HumanRuntimeCache
+  ctx: AiRunContext
   toolCallId?: string
   content: string
 }): void => {
@@ -39,6 +39,14 @@ const appendLearnToolMessage = (input: {
     })
   )
   input.cache.messages = messages
+  void input.ctx.appendTranscript([
+    {
+      kind: 'tool',
+      toolCallId: input.toolCallId || 'learn_skill',
+      toolName: 'learn_skill',
+      result: { message: input.content }
+    }
+  ])
 }
 
 const dedupeInOrder = <TValue extends string>(values: readonly TValue[]): TValue[] => {
@@ -142,7 +150,7 @@ export const createLearningNode = (input: { ctx: AiRunContext; cache: HumanRunti
 
     const pendingRound = state.execution.pendingRound
     if (!pendingRound || pendingRound.nextAction.action !== 'learning') {
-      return returnToBrain(state)
+      return advanceDispatchState(state)
     }
 
     const rawRequestedSkillIds = pendingRound.nextAction.wantLearnSkillIds
@@ -191,6 +199,7 @@ export const createLearningNode = (input: { ctx: AiRunContext; cache: HumanRunti
 
       appendLearnToolMessage({
         cache: input.cache,
+        ctx: input.ctx,
         toolCallId: learnToolCallId,
         content: learningResult
       })
@@ -204,15 +213,7 @@ export const createLearningNode = (input: { ctx: AiRunContext; cache: HumanRunti
             lastLearningOutcome
           },
           memory: {
-            ...state.memory,
-            taskRun: appendDecisionRound({
-              state,
-              execution: buildLearningExecution({
-                learningOutcome: lastLearningOutcome,
-                result: learningResult,
-                decisionHint: noEffectDecisionHint
-              })
-            })
+            ...state.memory
           }
         }
       })
@@ -242,6 +243,7 @@ export const createLearningNode = (input: { ctx: AiRunContext; cache: HumanRunti
       const learningResult = '学习失败，加载请求中的技能后会超过当前活动工具数量上限。'
       appendLearnToolMessage({
         cache: input.cache,
+        ctx: input.ctx,
         toolCallId: learnToolCallId,
         content: learningResult
       })
@@ -255,15 +257,7 @@ export const createLearningNode = (input: { ctx: AiRunContext; cache: HumanRunti
             lastLearningOutcome
           },
           memory: {
-            ...state.memory,
-            taskRun: appendDecisionRound({
-              state,
-              execution: buildLearningExecution({
-                learningOutcome: lastLearningOutcome,
-                result: learningResult,
-                decisionHint: noEffectDecisionHint
-              })
-            })
+            ...state.memory
           }
         }
       })
@@ -303,6 +297,7 @@ export const createLearningNode = (input: { ctx: AiRunContext; cache: HumanRunti
     const learningResult = renderLearningResult(lastLearningOutcome)
     appendLearnToolMessage({
       cache: input.cache,
+      ctx: input.ctx,
       toolCallId: learnToolCallId,
       content: learningResult
     })
@@ -331,14 +326,7 @@ export const createLearningNode = (input: { ctx: AiRunContext; cache: HumanRunti
           lastLearningOutcome
         },
         memory: {
-          ...state.memory,
-          taskRun: appendDecisionRound({
-            state,
-            execution: buildLearningExecution({
-              learningOutcome: lastLearningOutcome,
-              result: learningResult
-            })
-          })
+          ...state.memory
         }
       }
     })

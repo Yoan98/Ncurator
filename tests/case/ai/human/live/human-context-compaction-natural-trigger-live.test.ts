@@ -152,7 +152,7 @@ describe('ai human live backend', () => {
             compactionRecords.every(
               (record) =>
                 record.user.includes('<user_goal>') &&
-                record.user.includes('<history_rounds>')
+                record.user.includes('<history_text>')
             )
           const summaryQualitySatisfied =
             compactionSummaries.every(
@@ -163,11 +163,9 @@ describe('ai human live backend', () => {
                 !hasContradictoryProgress(summary)
             ) && ratios.every((ratio) => ratio <= 0.5)
           const continuitySatisfied =
-            Boolean(latestBrainRecord?.user.includes('<conversation_history>')) &&
-            Boolean(latestBrainRecord?.user.includes('<round_history>')) &&
-            Boolean(latestBrainRecord?.user.includes('<compactions>')) &&
-            Boolean(latestBrainRecord?.user.includes('<rounds>')) &&
-            !latestBrainRecord?.user.includes('<latest_round>') &&
+            Boolean(latestBrainRecord?.user.includes('<current_state>')) &&
+            Boolean(latestBrainRecord?.user.includes('<compacted_history>')) &&
+            Boolean(latestBrainRecord?.user.includes('<learned_skills>')) &&
             hasExactEntityText(latestBrainRecord?.user, expectedLastWeekDocAnchor) &&
             !hasInventedEntityText(latestBrainRecord?.user, inventedLastWeekDocName)
           const taskCompletionSatisfied =

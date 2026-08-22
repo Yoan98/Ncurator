@@ -8,9 +8,8 @@ import {
 } from '../../constants'
 import type { AiRunContext } from '../../../types'
 import { extractArtifactRefsFromToolResults, mergeArtifactRefs } from '../../../utils/artifacts'
-import { appendDecisionRound, buildHandExecution, buildHistoryToolResult } from '../../memory/rounds'
+import { buildHistoryToolResult } from '../../memory/historyToolResult'
 import { buildToolResultMessageContent } from '../../shared/historyRenderers'
-import { normalizePlanItems } from '../../memory/thoughtMemory'
 import { buildToolCallDisplayText } from '../../shared/toolResultRenderers'
 import {
   createDeliveryGuidanceItem,
@@ -18,25 +17,20 @@ import {
 } from '../../shared/deliveryGuidance'
 import { assertExternalLearnedSkillIds } from '../../skills'
 import { analyzeTerminalCommandPolicy } from '../../tools/terminal/commandPolicy'
-import { createToolCallSchema, formatToolCallSchemaError } from '../../toolCallSchema'
 import type {
-  HandCallList,
   HumanRuntimeCache,
   HumanState,
   HumanDecisionHint,
-  ToolCallResult,
-  HumanPlanItem
+  ToolCallResult
 } from '../../types'
 import { renderDeliveryGuidanceForMouth } from '../../prompts/deliveryGuidance'
 import { deriveHandFollowupSignals, shouldStopSerialHandPlan } from './followupSignals'
-import { buildHandCallInvalidHint } from './decisionHints'
 import { executeToolCall } from './toolExecutor'
 import {
-  returnToBrain,
   returnToBrainAfterTrace,
   returnToBrainWithDecisionHint
 } from '../utils/stateTransitions'
-import { getAvailableToolNames } from '../utils/runtimeCache'
+import { advanceDispatchState } from '../dispatch'
 
 export const resolveHumanToolCallLimit = (override?: number): number =>
   override ?? HUMAN_DEFAULT_TOOL_CALL_LIMIT
@@ -46,7 +40,6 @@ export const resolveHumanToolLimitWarningRatio = (override?: number): number =>
 
 const isTerminalRunCall = (toolName: string): boolean => toolName === 'terminal_run'
 const isBrowserUseCall = (toolName: string): boolean => toolName === 'browser_use'
-const isUpdatePlanCall = (toolName: string): boolean => toolName === 'update_plan'
 
 const readTerminalCommandArg = (args: JsonObject): string | undefined =>
   typeof args.command === 'string' && args.command.trim().length > 0
@@ -297,93 +290,6 @@ const executeHandCalls = async (input: {
   return results
 }
 
-const buildSchemaInvalidResult = (input: {
-  toolName: string
-  error: unknown
-  callIndex: number
-}): ToolCallResult => {
-  const schemaError = formatToolCallSchemaError({
-    error: input.error,
-    pathPrefix: `calls[${String(input.callIndex)}].args`
-  })
-
-  return {
-    toolName: input.toolName,
-    ok: false,
-    data: {
-      error: schemaError.message
-    }
-  }
-}
-
-const parseHandCalls = (input: {
-  calls: HandCallList
-  learnedSkillIds: HumanState['skills']['learnedSkillIds']
-}): { ok: true; calls: ParsedHandCall[] } | { ok: false; results: ToolCallResult[] } => {
-  const toolCallSchema = createToolCallSchema(
-    getAvailableToolNames({
-      learnedSkillIds: input.learnedSkillIds
-    })
-  )
-
-  const parsedCalls: ParsedHandCall[] = []
-  const validationResults: ToolCallResult[] = []
-  let hasInvalidCall = false
-  for (const [index, call] of input.calls.entries()) {
-    const parsed = toolCallSchema.safeParse(call)
-    if (!parsed.success) {
-      hasInvalidCall = true
-      validationResults.push(
-        buildSchemaInvalidResult({
-          toolName: call.toolName,
-          error: parsed.error,
-          callIndex: index
-        })
-      )
-      continue
-    }
-
-    validationResults.push({
-      toolName: call.toolName,
-      ok: false,
-      data: {
-        error: `tool call not executed\ncalls[${String(index)}]: 同批次存在不合法调用，本调用未执行`
-      }
-    })
-
-    const data = parsed.data as { toolName: string; args: JsonObject }
-    parsedCalls.push({
-      toolCallId: call.toolCallId,
-      toolName: data.toolName,
-      args: data.args
-    })
-  }
-
-  if (hasInvalidCall) {
-    return {
-      ok: false,
-      results: validationResults
-    }
-  }
-
-  return {
-    ok: true,
-    calls: parsedCalls
-  }
-}
-
-const readPlanFromArgs = (args: JsonObject): HumanPlanItem[] => {
-  const raw = Array.isArray(args.plan) ? args.plan : []
-  return normalizePlanItems(
-    raw
-      .filter(
-        (item): item is HumanPlanItem =>
-          Boolean(item && typeof item === 'object' && !Array.isArray(item))
-      )
-      .map((item) => item as HumanPlanItem)
-  )
-}
-
 const appendToolMessages = (input: {
   cache: HumanRuntimeCache
   calls: ParsedHandCall[]
@@ -404,24 +310,6 @@ const appendToolMessages = (input: {
   input.cache.messages = messages
 }
 
-const appendPlanToolMessages = (input: {
-  cache: HumanRuntimeCache
-  planCalls: ParsedHandCall[]
-  planItemsByCall: HumanPlanItem[][]
-}): void => {
-  const messages = input.cache.messages || []
-  input.planCalls.forEach((call, index) => {
-    const plan = input.planItemsByCall[index] || []
-    messages.push(
-      new ToolMessage({
-        content: JSON.stringify({ message: '计划已更新', plan }),
-        tool_call_id: call.toolCallId || `plan-${index}`
-      })
-    )
-  })
-  input.cache.messages = messages
-}
-
 export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCache }) => {
   return async (state: HumanState): Promise<HumanState> => {
     input.ctx.checkCancelled()
@@ -436,11 +324,11 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
 
     const pendingRound = state.execution.pendingRound
     if (!pendingRound || pendingRound.nextAction.action !== 'hand') {
-      return returnToBrain(state)
+      return advanceDispatchState(state)
     }
 
     const rawCalls = pendingRound.nextAction.calls
-    const calls: HandCallList = Array.isArray(rawCalls)
+    const calls: ParsedHandCall[] = Array.isArray(rawCalls)
       ? rawCalls.flatMap((call) => {
           if (!call || typeof call !== 'object' || Array.isArray(call)) return []
           const candidate = call as Record<string, unknown>
@@ -461,130 +349,20 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
           ]
         })
       : []
+
     if (calls.length === 0) {
-      const result: ToolCallResult = {
-        toolName: 'hand',
-        ok: false,
-        data: {
-          error: 'tool call schema invalid\ncalls: 必须包含至少一个具有 toolName 和 args 对象的调用'
-        }
-      }
-      const decisionHint = buildHandCallInvalidHint([
-        { callIndex: 0, toolName: 'hand', message: String(result.data.error) }
-      ])
-      return returnToBrainAfterTrace({
-        ctx: input.ctx,
-        cache: input.cache,
-        state,
-        source: 'hand',
-        traceItems: [
-          {
-            action: 'call_tool',
-            publicNarrative: buildToolCallDisplayText(result),
-            resultStatus: 'error',
-            toolName: result.toolName,
-            summary: buildToolCallDisplayText(result)
-          }
-        ],
-        stage: 'human_hand',
-        decisionHint,
-        overrides: {
-          execution: { lastToolResults: [result] },
-          memory: {
-            ...state.memory,
-            taskRun: appendDecisionRound({
-              state,
-              execution: buildHandExecution({ calls, toolResults: [result], decisionHint })
-            })
-          }
-        }
-      })
+      return advanceDispatchState(state)
     }
 
-    const planCalls = calls.filter((call) => isUpdatePlanCall(call.toolName))
-    const toolCalls = calls.filter((call) => !isUpdatePlanCall(call.toolName))
-
-    const parsedCallsResult = parseHandCalls({
-      calls: toolCalls,
-      learnedSkillIds: state.skills.learnedSkillIds
-    })
-    if (!parsedCallsResult.ok) {
-      const results = parsedCallsResult.results
-      const decisionHint = buildHandCallInvalidHint(
-        results
-          .filter((result) =>
-            String(
-              result.data && typeof result.data === 'object' && !Array.isArray(result.data)
-                ? result.data.error
-                : ''
-            ).startsWith('tool call schema invalid')
-          )
-          .map((result) => ({
-            callIndex: Number(
-              String(
-                result.data && typeof result.data === 'object' && !Array.isArray(result.data)
-                  ? result.data.error
-                  : ''
-              ).match(/^tool call schema invalid\ncalls\[(\d+)\]\.args:/)?.[1] || 0
-            ),
-            toolName: result.toolName,
-            message: String(
-              (result.data && typeof result.data === 'object' && !Array.isArray(result.data)
-                ? result.data.error
-                : '') || ''
-            ).trim()
-          }))
-      )
-      return returnToBrainAfterTrace({
-        ctx: input.ctx,
-        cache: input.cache,
-        state,
-        source: 'hand',
-        traceItems: results.map((result) => ({
-          action: 'call_tool',
-          publicNarrative: buildToolCallDisplayText(result),
-          resultStatus: 'error',
-          toolName: result.toolName,
-          summary: buildToolCallDisplayText(result)
-        })),
-        stage: 'human_hand',
-        decisionHint,
-        overrides: {
-          execution: {
-            lastToolResults: results
-          },
-          memory: {
-            ...state.memory,
-            taskRun: appendDecisionRound({
-              state,
-              execution: buildHandExecution({
-                calls,
-                toolResults: results,
-                decisionHint
-              })
-            })
-          }
-        }
-      })
-    }
-
-    const parsedCalls = parsedCallsResult.calls
     const approvalItems = collectApprovalBatchItems({
       runId: input.ctx.runId,
       taskId: state.task.taskId,
-      calls: parsedCalls,
+      calls,
       platform: input.ctx.platform,
       cache: input.cache
     })
-    const invalidPlanDecisionHint = validateCalls(parsedCalls)
+    const invalidPlanDecisionHint = validateCalls(calls)
     if (invalidPlanDecisionHint) {
-      const results: ToolCallResult[] = parsedCalls.map((call) => ({
-        toolName: call.toolName,
-        ok: false,
-        data: {
-          error: `tool call not executed\n本轮 calls 数量为 ${String(parsedCalls.length)}，超过单轮上限 ${String(HUMAN_HAND_CALL_LIMIT)}`
-        }
-      }))
       return returnToBrainWithDecisionHint({
         ctx: input.ctx,
         state,
@@ -592,15 +370,7 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
         decisionHint: invalidPlanDecisionHint,
         overrides: {
           memory: {
-            ...state.memory,
-            taskRun: appendDecisionRound({
-              state,
-              execution: buildHandExecution({
-                calls,
-                toolResults: results,
-                decisionHint: invalidPlanDecisionHint
-              })
-            })
+            ...state.memory
           }
         }
       })
@@ -628,11 +398,6 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
           decisions: approvalBatchResult.decisions,
           approvalItems
         })
-        const results: ToolCallResult[] = parsedCalls.map((call) => ({
-          toolName: call.toolName,
-          ok: false,
-          data: { error: 'tool call not executed\n本轮审批未全部通过，批次中的调用均未执行' }
-        }))
         return returnToBrainWithDecisionHint({
           ctx: input.ctx,
           state,
@@ -640,11 +405,7 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
           decisionHint,
           overrides: {
             memory: {
-              ...state.memory,
-              taskRun: appendDecisionRound({
-                state,
-                execution: buildHandExecution({ calls, toolResults: results, decisionHint })
-              })
+              ...state.memory
             }
           }
         })
@@ -662,11 +423,8 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
       })
     }
 
-    const planItemsByCall = planCalls.map((call) => readPlanFromArgs(call.args))
-    const nextPlan = planItemsByCall.length > 0 ? planItemsByCall[planItemsByCall.length - 1]! : state.memory.plan
-
     const results = await executeHandCalls({
-      calls: parsedCalls,
+      calls,
       ctx: input.ctx,
       cache: input.cache,
       taskId: state.task.taskId,
@@ -674,30 +432,22 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
     })
     input.cache.toolCallCount += results.length
 
-    const planResults: ToolCallResult[] = planCalls.map((_call, index) => ({
-      toolName: 'update_plan',
-      ok: true,
-      data: {
-        message: '计划已更新',
-        plan: planItemsByCall[index] || []
-      }
-    }))
-    const allCalls = [...parsedCalls, ...planCalls]
-    const allResults = [...results, ...planResults]
-
     appendToolMessages({
       cache: input.cache,
-      calls: parsedCalls,
+      calls,
       results
     })
-    appendPlanToolMessages({
-      cache: input.cache,
-      planCalls,
-      planItemsByCall
-    })
+    await input.ctx.appendTranscript(
+      calls.map((call, index) => ({
+        kind: 'tool' as const,
+        toolCallId: call.toolCallId || `call-${index}`,
+        toolName: call.toolName,
+        result: results[index]?.data
+      }))
+    )
 
     const followupSignals = deriveHandFollowupSignals({
-      calls: parsedCalls,
+      calls,
       results
     })
     const toolLimitDecisionHint =
@@ -715,7 +465,7 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
       state.execution.artifacts,
       extractArtifactRefsFromToolResults(results)
     )
-    const nextState = returnToBrainAfterTrace({
+    return returnToBrainAfterTrace({
       ctx: input.ctx,
       cache: input.cache,
       state,
@@ -739,19 +489,9 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
           )
         },
         memory: {
-          ...state.memory,
-          plan: nextPlan,
-          taskRun: appendDecisionRound({
-            state,
-            execution: buildHandExecution({
-              calls: allCalls,
-              toolResults: allResults,
-              decisionHint
-            })
-          })
+          ...state.memory
         }
       }
     })
-    return nextState
   }
 }

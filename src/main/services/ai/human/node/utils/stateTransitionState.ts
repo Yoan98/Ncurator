@@ -57,15 +57,18 @@ export const appendHumanTraceStep = (input: {
 export const returnToBrainState = (
   state: HumanState,
   overrides: HumanStateOverrides = {}
-): HumanState => ({
-  ...state,
-  ...overrides,
-  execution: {
-    ...state.execution,
-    ...overrides.execution,
-    stage: 'brain'
+): HumanState => {
+  const targetStage = overrides.execution?.stage ?? 'brain'
+  return {
+    ...state,
+    ...overrides,
+    execution: {
+      ...state.execution,
+      ...overrides.execution,
+      stage: targetStage
+    }
   }
-})
+}
 
 export const returnToBrainAfterTraceState = (input: {
   state: HumanState
@@ -82,6 +85,7 @@ export const returnToBrainAfterTraceState = (input: {
     ...input.overrides,
     execution: {
       ...input.overrides?.execution,
+      stage: 'dispatch',
       pendingDecisionHint: input.decisionHint
     },
     trace: {
@@ -91,7 +95,15 @@ export const returnToBrainAfterTraceState = (input: {
 }
 
 const resolveBrainNextStage = (action: HumanNextAction['action']): HumanState['execution']['stage'] =>
-  action === 'learning' ? 'learning' : action === 'hand' ? 'hand' : action === 'mouth' ? 'mouth' : 'fault'
+  action === 'learning'
+    ? 'learning'
+    : action === 'hand'
+      ? 'hand'
+      : action === 'plan'
+        ? 'plan'
+        : action === 'mouth'
+          ? 'mouth'
+          : 'fault'
 
 export const applyBrainDecisionState = (input: {
   state: HumanState

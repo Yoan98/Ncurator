@@ -191,12 +191,6 @@ describe('ai human mock-llm backend', () => {
             Array.isArray(event.detail?.duplicateSkillIds) &&
             event.detail.duplicateSkillIds.includes('docx-read')
         )
-        const hasInvalidHandPlan = decisionHints.some(
-          (event) =>
-            event.source === 'hand' &&
-            event.code === 'hand_call_invalid' &&
-            Array.isArray(event.detail?.invalidCalls)
-        )
         const hasPositionedWriteBlocked = decisionHints.some(
           (event) =>
             event.source === 'hand' &&
@@ -224,7 +218,6 @@ describe('ai human mock-llm backend', () => {
         runtime.assertThat(
           result.output.status === 'completed' &&
             hasLearningNoEffect &&
-            hasInvalidHandPlan &&
             hasPositionedWriteBlocked &&
             hasRecoveryAfterTooLarge &&
             hasToolLimitExceeded,

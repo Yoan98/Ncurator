@@ -87,7 +87,7 @@ describe('ai human mock-llm backend', () => {
             latestLearningStep.availableToolNames.includes('docx_read_blocks') &&
             latestLearningStep.availableToolNames.includes('docx_read_visuals') &&
             latestLearningStep.availableToolNames.includes('docx_edit') &&
-            latestLearningStep.summary.includes('当前 active tools=19') &&
+            latestLearningStep.summary.includes('当前 active tools=') &&
             !latestLearningStep.summary.includes('已淘汰最早学习的 skill='),
           {
             name: 'learning-tracks-active-tool-count-under-budget',

@@ -990,7 +990,7 @@ export type RuntimeIssueCode =
   | 'approval_denied'
   | 'llm_usage_unavailable'
 export type RuntimeSkillId = RegisteredRuntimeSkillId
-export type AiRunEventStage = 'human_brain' | 'human_learning' | 'human_hand' | 'human_mouth'
+export type AiRunEventStage = 'human_brain' | 'human_learning' | 'human_plan' | 'human_hand' | 'human_mouth'
 export type AssistantProcessDisplay =
   | { kind: 'thinking' }
   | { kind: 'learning'; skillId: RuntimeSkillId }
@@ -1709,7 +1709,7 @@ type AiRunEventPayload =
       type: 'context_compaction_started'
       runId: string
       taskId?: string
-      targetRoundIds: number[]
+      targetMessageCount: number
       budgetTokensBefore: number
       thresholdTokens: number
       createdAt: number
@@ -1719,7 +1719,7 @@ type AiRunEventPayload =
       runId: string
       taskId?: string
       compactBlockId: string
-      sourceRoundIds: number[]
+      sourceMessageCount: number
       tokenEstimateBefore: number
       sourceHistoryTokenEstimate: number
       tokenEstimateAfter: number
@@ -1759,6 +1759,55 @@ type AiRunEventPayload =
 export type AiRunEvent = AiRunEventPayload & {
   internal?: boolean
   stage?: AiRunEventStage
+}
+
+export type ChatTranscriptToolCall = {
+  id: string
+  name: string
+  args: IpcJsonObject
+}
+
+export type ChatTranscriptEntry =
+  | {
+      kind: 'user'
+      content: string
+    }
+  | {
+      kind: 'assistant'
+      content: string
+      toolCalls: ChatTranscriptToolCall[]
+    }
+  | {
+      kind: 'tool'
+      toolCallId: string
+      toolName: string
+      result?: JsonValue
+    }
+  | {
+      kind: 'annotation'
+      eventType: ChatTranscriptAnnotationType
+      payload: JsonObject
+    }
+
+export type ChatTranscriptAnnotationType =
+  | 'thinking_started'
+  | 'thinking_completed'
+  | 'learning_started'
+  | 'learning_completed'
+  | 'compaction_started'
+  | 'compaction_completed'
+  | 'compaction_summary'
+  | 'finalizing_started'
+  | 'decision_hint'
+  | 'context_budget_evaluated'
+
+export type ChatTranscriptRecord = {
+  id: string
+  sessionId: string
+  runId: string
+  seq: number
+  entry: ChatTranscriptEntry
+  createdAt: number
 }
 
 export type ChatConversationMemory = {

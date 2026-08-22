@@ -1,7 +1,7 @@
 export const buildHistoryCompactionPrompt = (input: {
   userGoal: string
   existingCompactSummary?: string
-  historyRounds: string
+  historyText: string
   targetCompressionRatio: number
 }) => {
   const percent = Math.max(1, Math.min(99, Math.round(input.targetCompressionRatio * 100)))
@@ -24,7 +24,7 @@ export const buildHistoryCompactionPrompt = (input: {
 <context_block_guide>
     - user_goal：用户原始诉求。
     - existing_compact_summary：之前压缩的总结信息；如果之前已经有过压缩总结，则本次压缩需要在它的基础上进行迭代压缩。
-    - history_rounds：当前任务已发生的历史轮次信息，包含所有细节；它是本次压缩的主要依据。
+    - history_text：当前任务已发生的历史信息，包含所有细节；它是本次压缩的主要依据。
   </context_block_guide>
 
 <output_contract>
@@ -64,9 +64,9 @@ ${input.userGoal.trim() || 'none'}
   ${input.existingCompactSummary?.trim() || 'none'}
   </existing_compact_summary>
 
-  <history_rounds>
-${input.historyRounds}
-  </history_rounds>
+  <history_text>
+${input.historyText}
+  </history_text>
 </compaction_task>
 `.trim()
 

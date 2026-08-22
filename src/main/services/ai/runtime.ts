@@ -121,6 +121,19 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     return await deps.chatStore.getConversationMemory(payload.sessionId)
   }
 
+  const appendTranscript: AiRunContext['appendTranscript'] = async (entries) => {
+    await deps.chatTranscriptStore.appendBatch({
+      sessionId: payload.sessionId,
+      runId: payload.runId,
+      entries
+    })
+  }
+
+  const loadTranscript: AiRunContext['loadTranscript'] = async () => {
+    const records = await deps.chatTranscriptStore.list(payload.sessionId)
+    return records.map((record) => record.entry)
+  }
+
   let sessionSkillStatePromise: ReturnType<typeof deps.chatStore.getSessionSkillState> | undefined
   const loadSessionSkillState: AiRunContext['loadSessionSkillState'] = async () => {
     checkCancelled()
@@ -174,6 +187,8 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     webCrawlerService: deps.webCrawlerService,
     loadConversationContext,
     loadConversationMemory,
+    appendTranscript,
+    loadTranscript,
     loadSessionSkillState,
     saveSessionSkillState,
     trackDocxOpen: ({ docId, sourcePath, replaySession }) => {

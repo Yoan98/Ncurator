@@ -22,6 +22,7 @@ const buildDeps = async (
       runtimeSettings,
       llmStore: runtime.llmStore,
       chatStore: runtime.chatStore,
+      chatTranscriptStore: runtime.storageService.chatTranscript,
       documentsStore: runtime.documentsStore,
       embeddingService: runtime.embeddingService,
       ensureEmbeddingReady: async () => {
@@ -144,8 +145,7 @@ describe('ai human mock-llm backend', () => {
         const secondDriver = createScriptedStructuredOutputDriver({
           'human.brain': [
             ({ user }) => {
-              restoredSkillSeen =
-                user.includes('工具 pdf_inspect') && !user.includes('工具 docx_read_outline')
+              restoredSkillSeen = user.includes('<learned_skills>') && user.includes('pdf-read')
               restoredRoundSeen = user.includes('先学习一个 skill 再继续。')
               resumeHintSeen =
                 user.includes('上一次运行因请求超时而中断') &&
@@ -517,11 +517,12 @@ describe('ai human mock-llm backend', () => {
             result.cancelResult.failureCode === 'user_cancelled' &&
             result.cancelResult.resumeSnapshotSaved === true &&
             result.cancelSnapshot?.reason === 'user_cancelled' &&
-            JSON.stringify(result.cancelSnapshot).includes('取消前已经建立了部分任务进度') &&
+            result.cancelSnapshot?.humanState.skills?.learnedSkillIds?.includes('docx-read') ===
+              true &&
             result.earlyCancelResult.status === 'cancelled' &&
             result.earlyCancelResult.resumeSnapshotSaved === true &&
             result.earlyCancelSnapshot?.reason === 'user_cancelled' &&
-            JSON.stringify(result.earlyCancelSnapshot?.humanState).includes('"rounds":[]') &&
+            JSON.stringify(result.earlyCancelSnapshot?.humanState).includes('"compactions":[]') &&
             result.contentSafetyResult.status === 'completed' &&
             result.contentSafetySnapshot === null &&
             result.restoredSkillSeen &&

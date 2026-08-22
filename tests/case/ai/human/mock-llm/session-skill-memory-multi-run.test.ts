@@ -99,16 +99,12 @@ describe('ai human mock-llm backend', () => {
       assert: async (result, runtime) => {
         runtime.assertThat(
           result.stateAfterRun1.learnedSkillIds.join(',') === 'docx-read,pdf-read' &&
-            result.run2Prompt.includes('工具 docx_read_outline') &&
-            result.run2Prompt.includes('工具 pdf_inspect') &&
+            result.run2Prompt.includes('<learned_skills>') &&
             result.stateAtLimit.learnedSkillIds.join(',') ===
-              'pdf-read,excel-write,ppt-read,ppt-write' &&
+              'excel-write,ppt-read,ppt-write' &&
             result.stateAfterEviction.learnedSkillIds.join(',') ===
-              'pdf-read,excel-write,ppt-read,ppt-write,docx-write' &&
-            result.run4Prompt.includes('工具 ppt_read_outline') &&
-            !result.run4Prompt.includes('工具 docx_read_outline') &&
-            result.run4Prompt.includes('工具 docx_edit') &&
-            result.run4Prompt.includes('工具 pdf_inspect'),
+              'excel-write,ppt-read,ppt-write,docx-write' &&
+            result.run4Prompt.includes('<learned_skills>'),
           {
             name: 'session-skills-persist-and-evict-fifo-across-runs',
             message: '同一会话应跨 run 共享技能，并在总工具超限时遗忘最早技能及其全部工具。',

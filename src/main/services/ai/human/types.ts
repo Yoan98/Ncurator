@@ -20,19 +20,12 @@ import {
   humanRoundThoughtSchema,
   humanTaskContextSchema,
   humanNextActionSchema,
-  deliveryGuidanceItemSchema,
-  humanPlanItemSchema,
+  deliveryGuidanceItemSchema,  humanPlanItemSchema,
   humanPlanItemStatusSchema,
   humanExecutionSchema,
   humanHistoryToolResultSchema,
   humanLearningOutcomeSchema,
-  humanCompactBlockSchema,
-  humanConversationMemorySchema,
-  humanConversationTurnSchema,
-  humanTaskRunMemorySchema,
   humanResultSchema,
-  humanRoundExecutionSchema,
-  humanRoundRecordSchema,
   humanStateContractSchema,
   humanTaskInputSchema,
   humanTaskOutputSchema,
@@ -45,7 +38,9 @@ import {
   skillDefinitionBaseSchema,
   toolCallParamSchema,
   toolCallResultSchema,
-  handCallsSchema
+  handCallsSchema,
+  humanDispatchItemSchema,
+  humanCompactionBlockSchema
 } from './schema'
 import { toolResourceContextSchema } from './toolSchemas'
 
@@ -69,6 +64,7 @@ export type SkillDefinition = SkillDefinitionBase
 export type HumanRoundThought = z.infer<typeof humanRoundThoughtSchema>
 export type HumanTaskContext = z.infer<typeof humanTaskContextSchema>
 export type HumanNextAction = z.infer<typeof humanNextActionSchema>
+export type HumanDispatchItem = z.infer<typeof humanDispatchItemSchema>
 export type HumanPlanItemStatus = z.infer<typeof humanPlanItemStatusSchema>
 export type HumanPlanItem = z.infer<typeof humanPlanItemSchema>
 export type DeliveryGuidanceItem = z.infer<typeof deliveryGuidanceItemSchema>
@@ -82,7 +78,7 @@ export type ToolCallResult = z.infer<typeof toolCallResultSchema>
 export type HumanLearningOutcome = z.infer<typeof humanLearningOutcomeSchema>
 export type HumanDecisionHint = z.infer<typeof humanDecisionHintSchema>
 export type HumanHistoryToolResult = z.infer<typeof humanHistoryToolResultSchema>
-export type HumanCompactionBlock = z.infer<typeof humanCompactBlockSchema>
+export type HumanCompactionBlock = z.infer<typeof humanCompactionBlockSchema>
 export type HumanResult = z.infer<typeof humanResultSchema>
 export type HumanTraceStep = z.infer<typeof humanTraceStepSchema>
 export type HumanTaskInput = z.infer<typeof humanTaskInputSchema>
@@ -91,11 +87,6 @@ export type HumanExecution = z.infer<typeof humanExecutionSchema>
 export type HumanState = z.infer<typeof humanStateContractSchema>
 export type FileChangeSummaryItem = z.infer<typeof fileChangeSummaryItemSchema>
 export type FileChangesSummary = z.infer<typeof fileChangesSummarySchema>
-export type HumanRoundExecution = z.infer<typeof humanRoundExecutionSchema>
-export type HumanRoundRecord = z.infer<typeof humanRoundRecordSchema>
-export type HumanConversationTurn = z.infer<typeof humanConversationTurnSchema>
-export type HumanConversationMemory = z.infer<typeof humanConversationMemorySchema>
-export type HumanTaskRunMemory = z.infer<typeof humanTaskRunMemorySchema>
 
 export type HumanRuntimeCache = {
   familyToolsets: Partial<Record<AiToolFamilyId, StructuredToolInterface[]>>
@@ -112,7 +103,6 @@ export type HumanRuntimeCache = {
   compactSummaryText?: string
   currentState?: HumanState
   lastBrainInputTokens?: number
-  lastBrainRoundCount?: number
   postCompactionNeedsFreshBrainUsage?: boolean
   lastBrainUsageUnavailable?: boolean
 }

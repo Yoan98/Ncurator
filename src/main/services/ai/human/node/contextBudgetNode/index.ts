@@ -6,14 +6,13 @@ import {
   CONTEXT_COMPACTION_TRIGGER_RATIO,
   DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS
 } from '../../constants'
-import { getCompressibleHistoryRounds } from '../../memory/rounds'
-import { renderBrainRoundSection } from '../../shared/historyRenderers'
 import type { HumanRuntimeCache, HumanState } from '../../types'
 import { estimateTextTokens } from '../../utils/tokenEstimate'
 
+const COMPACTION_TAIL_MESSAGE_COUNT = 8
+
 const buildBudgetSnapshot = (input: {
   cache: HumanRuntimeCache
-  state: HumanState
   contextWindowTokens: number
   compactionTriggerTokens: number
   hasCompressibleHistory: boolean
@@ -46,20 +45,16 @@ const buildBudgetSnapshot = (input: {
     }
   }
 
-  const lastBrainRoundCount =
-    input.cache.lastBrainRoundCount ?? input.state.memory.taskRun.rounds.length
-  const newRounds = input.state.memory.taskRun.rounds.slice(lastBrainRoundCount)
-  const deltaTokenEstimate = estimateTextTokens(renderBrainRoundSection(newRounds))
   return {
     evaluationId: randomUUID(),
     basis: 'usage_plus_delta' as const,
-    budgetTokens: lastBrainInputTokens + deltaTokenEstimate,
+    budgetTokens: lastBrainInputTokens,
     contextWindowTokens: input.contextWindowTokens,
     compactionTriggerTokens: input.compactionTriggerTokens,
     hasCompressibleHistory: input.hasCompressibleHistory,
     usageAvailable: true,
     lastBrainInputTokens,
-    deltaTokenEstimate
+    deltaTokenEstimate: 0
   }
 }
 
@@ -74,15 +69,21 @@ export const createContextBudgetNode = (input: { ctx: AiRunContext; cache: Human
     const compactionTriggerTokens = Math.floor(
       contextWindowTokens * CONTEXT_COMPACTION_TRIGGER_RATIO
     )
-    const targetRounds = getCompressibleHistoryRounds(state)
-    const hasCompressibleHistory = targetRounds.length > 0
-    const compressibleTokenEstimate = estimateTextTokens(renderBrainRoundSection(targetRounds))
+    const messages = input.cache.messages || []
+    const hasCompressibleHistory = messages.length > COMPACTION_TAIL_MESSAGE_COUNT + 2
+    const compressibleMessages = messages.slice(0, Math.max(0, messages.length - COMPACTION_TAIL_MESSAGE_COUNT))
+    const compressibleTokenEstimate = estimateTextTokens(
+      compressibleMessages
+        .map((message) =>
+          typeof message.content === 'string' ? message.content : JSON.stringify(message.content)
+        )
+        .join('\n')
+    )
     const minimumCompressibleTokens = Math.floor(
       contextWindowTokens * CONTEXT_COMPACTION_MIN_SOURCE_RATIO
     )
     const contextBudgetSnapshot = buildBudgetSnapshot({
       cache: input.cache,
-      state,
       contextWindowTokens,
       compactionTriggerTokens,
       hasCompressibleHistory

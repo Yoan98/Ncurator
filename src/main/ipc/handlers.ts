@@ -259,6 +259,7 @@ export function registerHandlers(services: {
   const documentsStore = storageService.documents
   const chatStore = storageService.chat
   const workbenchUiStore = storageService.workbenchUi
+  const chatTranscriptStore = storageService.chatTranscript
   const aiRunStore = storageService.aiRun
   const llmStore = storageService.llm
   const aiRuntimeSettingsStore = storageService.aiRuntimeSettings
@@ -280,6 +281,7 @@ export function registerHandlers(services: {
   let e2eGraphRecursionLimitUsesRemaining = e2eGraphRecursionLimitOnce ? 1 : 0
   const chatRunService = new ChatRunService({
     chatStore,
+    chatTranscriptStore,
     aiRunStore,
     documentsStore,
     embeddingService,

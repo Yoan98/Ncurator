@@ -29,6 +29,7 @@ import type { WebCrawlerService } from '../webCrawler/types'
 import type { TelemetryService } from '../telemetry/TelemetryService'
 import type { AppErrorLogService } from '../logging/AppErrorLogService'
 import type { AiRunDeps } from './types'
+import type { ChatTranscriptStore } from '../storage/domains/ChatTranscriptStore'
 import type {
   AiApprovalBatchDecision,
   AiApprovalBatchItem,
@@ -90,6 +91,7 @@ type ActiveRun = {
 
 type ChatRunServiceDeps = {
   chatStore: ChatStore
+  chatTranscriptStore: ChatTranscriptStore
   aiRunStore: AiRunStore
   documentsStore: DocumentsStore
   embeddingService: EmbeddingService
@@ -826,6 +828,7 @@ export class ChatRunService {
           runtimeSettings,
           llmStore: this.deps.llmStore,
           chatStore: this.deps.chatStore,
+          chatTranscriptStore: this.deps.chatTranscriptStore,
           documentsStore: this.deps.documentsStore,
           embeddingService: this.deps.embeddingService,
           ensureEmbeddingReady: this.deps.ensureEmbeddingReady,

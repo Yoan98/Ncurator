@@ -1232,15 +1232,6 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 - Oracle：`timeout / network_error` 失败态会写出 `failureCode` 与 `resumeSnapshotSaved=true`，`ChatStore` 中保留最新恢复快照；下一轮同 session 会从 `context_budget -> brain` 重新开始，但带回恢复快照中的已学 skill / task run 语义，并在 brain prompt 中出现 `run_resumed_after_interruption` hint；成功完成后恢复快照被清空；普通 `error` 不保存恢复快照。
 - Not：不验证 docx 临时运行态恢复；不验证 live provider 的真实网络抖动概率。
 
-##### `context-compaction-ratio-and-fact-retention`
-
-- 测试类型：`backend`
-- What：mock-llm 下的真实 `context_compaction` 节点会保留关键事实、压缩到目标比例，并让后续 `brain` 通过 `<compactions>` 继续工作。
-- Why：只验证“触发了压缩”还不够；回归测试还需要守住失败原因、约束和当前结论不被压丢，以及比例不失控。
-- How：人工构造 6 轮历史，覆盖学习、首次事实读取、错误尝试、失败原因、仍生效约束、修正后的当前结论和 latest round；先直接执行真实 `context_compaction` 节点，再执行真实 `brain` 节点检查 prompt。
-- Oracle：事件流出现 `context_compaction_started / context_compaction_completed`；只保留一个 `rounds` compaction block；`latest_round` 保留原文；压缩摘要保留审批未完成、未审批不可发布、Bob 和上线窗口冲突；后续 `brain` prompt 使用 `<compactions>` 且旧 history 不再以未压缩 rounds 渲染；`tokenEstimateAfter / sourceHistoryTokenEstimate <= 0.35`。
-- Not：不验证 live 模型自由生成下的压缩质量；不验证多次滚动压缩合并。
-
 ##### `session-skill-memory-multi-run`
 
 - 测试类型：`backend / mock-llm`
