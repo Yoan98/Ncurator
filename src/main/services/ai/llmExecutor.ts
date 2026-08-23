@@ -37,6 +37,8 @@ type TextMessage = {
   usage_metadata?: Record<string, unknown>
 }
 
+export type AiLlmToolChoice = 'none' | 'auto' | 'required'
+
 type TextRunnable = {
   invoke: (
     input: Array<SystemMessage | HumanMessage>,
@@ -47,6 +49,10 @@ type TextRunnable = {
     config?: Partial<RunnableConfig>
   ) => Promise<AsyncIterable<TextMessage>>
   withConfig: (config: Record<string, unknown>) => TextRunnable
+  bindTools?: (
+    tools: StructuredToolInterface[],
+    kwargs?: { tool_choice?: AiLlmToolChoice }
+  ) => TextRunnable
 }
 
 type BaseLlmInvocationInput = {
@@ -81,6 +87,8 @@ export type AiLlmTextMessagesDriverInput = {
   cfg: LlmRuntimeConfig
   schemaName: string
   messages: BaseMessage[]
+  tools?: StructuredToolInterface[]
+  toolChoice?: AiLlmToolChoice
   temperature?: number
   streamingMode: AiLlmStreamingMode
   observer?: LlmCallStreamObserver
@@ -119,6 +127,8 @@ export type AiLlmTextMessagesRequest = {
   taskId?: string
   schemaName: string
   messages: BaseMessage[]
+  tools?: StructuredToolInterface[]
+  toolChoice?: AiLlmToolChoice
   temperature?: number
   streamingMode?: AiLlmStreamingMode
   onTextDelta?: (text: string) => void
@@ -478,11 +488,19 @@ const invokeTextMessagesChat = async (input: {
   const request = input.request
   const streaming = request.streamingMode === 'force_stream'
   const providerKind = resolveConfigProviderKind(request.cfg)
-  const runnable = createTextRunnable({
+  const baseRunnable = createTextRunnable({
     cfg: request.cfg,
     temperature: request.temperature,
     streaming
   })
+  // mouth 等需要与 brain 共享 prompt 缓存的调用会传入同一批 tools，并要求只输出文本
+  // （tool_choice: 'none'），从而在保持流式的同时让 DeepSeek 命中 brain 的 KV 缓存前缀。
+  const runnable =
+    request.tools && request.tools.length > 0 && baseRunnable.bindTools
+      ? baseRunnable.bindTools(request.tools, request.toolChoice
+          ? { tool_choice: request.toolChoice }
+          : undefined)
+      : baseRunnable
   const response = streaming
     ? await streamTextFromRunnable({
         runnable,
@@ -781,6 +799,8 @@ export const createAiLlmExecutor = (input: {
                   cfg,
                   schemaName: request.schemaName,
                   messages: request.messages,
+                  tools: request.tools,
+                  toolChoice: request.toolChoice,
                   temperature: request.temperature,
                   streamingMode,
                   observer,

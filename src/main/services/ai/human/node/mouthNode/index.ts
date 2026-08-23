@@ -3,6 +3,7 @@ import { HumanMessage } from '@langchain/core/messages'
 import type { HumanRuntimeCache, HumanState } from '../../types'
 import { buildMouthDeliveryMessage } from '../../prompts/mouth'
 import { assertExternalLearnedSkillIds } from '../../skills'
+import { buildAvailableTools } from '../learningNode/skillLoader'
 import { completeHumanTask, returnToBrain } from '../utils/stateTransitions'
 import {
   appendDocxApplyArtifactsAndEmitEvents,
@@ -154,12 +155,24 @@ export const createMouthNode = (input: {
     const messages = [...(input.cache.messages || [])]
     messages.push(new HumanMessage(deliveryMessage))
 
+    // 与最后一轮 brain 绑定完全相同的工具集，使本次调用复用 brain 的 KV 缓存前缀；
+    // 同时用 tool_choice: 'none' 强制只输出文本，避免误触发工具调用。
+    const tools = buildAvailableTools({
+      cache: input.cache,
+      ctx: input.ctx,
+      runId: input.ctx.runId,
+      taskId: promptState.task.taskId,
+      learnedSkillIds: promptState.skills.learnedSkillIds
+    })
+
     let rawDeliveryMarkdown: string
     try {
       rawDeliveryMarkdown = await input.ctx.chatMessages({
         caller: 'human.mouth',
         taskId: promptState.task.taskId,
         messages,
+        tools,
+        toolChoice: 'none',
         schemaName: 'human_mouth_markdown',
         temperature: 0.2,
         onTextDelta: input.emitAnswerEvents

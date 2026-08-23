@@ -239,15 +239,31 @@ export const parseJsonObjectText = (raw: string): Record<string, unknown> => {
 
 export type JsonRepairResult =
   | { ok: true; value: Record<string, unknown> }
-  | { ok: false }
+  | { ok: false; error: string }
 
+const resolveJsonParseErrorMessage = (error: unknown): string => {
+  const message = error instanceof Error && error.message.trim() ? error.message : ''
+  if (message === 'structured_output_non_object_response') {
+    return 'arguments 解析成功但不是 JSON 对象。'
+  }
+  return message || '无法解析 JSON。'
+}
+
+// LangChain 在解析模型 tool call 的 `arguments` 时只做一次 `JSON.parse`：
+// 成功 → 放进 `message.tool_calls`；失败 → 放进 `message.invalid_tool_calls`，
+// 并在 `invalidCall.error` 里塞入一段面向 SDK 开发者的错误文案（含原始 args 回显、
+// `are not valid JSON.` 以及 `Troubleshooting URL: https://docs.langchain.com/...`）。
+// 那段 `error` 对模型毫无价值，还会把文档链接泄漏进工具反馈，因此这里不读取它：
+// 只取 `invalidCall.args` 原始字符串，先用 jsonrepair 修复再解析；失败时由我们自己
+// 生成干净的错误信息（例如 `Bad escaped character in JSON at position 104`），
+// 供上层拼进反馈消息，避免任何 LangChain SDK 噪音进入模型上下文。
 export const tryRepairJsonObject = (raw: string | undefined): JsonRepairResult => {
   if (typeof raw !== 'string' || raw.trim().length === 0) {
-    return { ok: false }
+    return { ok: false, error: 'arguments 为空，无法解析。' }
   }
   try {
     return { ok: true, value: parseRepairableJsonObjectText(raw, 'repair_empty_response') }
-  } catch {
-    return { ok: false }
+  } catch (error) {
+    return { ok: false, error: resolveJsonParseErrorMessage(error) }
   }
 }

@@ -122,6 +122,9 @@ export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
 
       const assistantMessage = result.message
       const validToolCalls = getToolCalls(assistantMessage)
+      // invalid_tool_calls 是 LangChain 对 `arguments` 做 JSON.parse 失败后单独分出来的
+      // 一批调用。它的 `error` 字段是 SDK 面向开发者的文案（args 回显 + Troubleshooting URL），
+      // 不直接回传给模型；这里只用 `invalidCall.args` 原始串自己修复并生成干净错误。
       const invalidToolCalls = Array.isArray(assistantMessage.invalid_tool_calls)
         ? assistantMessage.invalid_tool_calls
         : []
@@ -146,15 +149,15 @@ export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
         const id =
           typeof invalidCall.id === 'string' && invalidCall.id.trim() ? invalidCall.id : undefined
         const name = typeof invalidCall.name === 'string' ? invalidCall.name : ''
-        if (repaired.ok && id) {
+        if (!id) {
+          unrecoverableCalls.push({ name, errorMessage: '工具调用缺少 tool_call_id，未执行。' })
+        } else if (repaired.ok) {
           dispatchableCalls.push({ id, name, args: repaired.value })
         } else {
-          const detail =
-            typeof invalidCall.error === 'string' ? ` 具体错误：${invalidCall.error}` : ''
           unrecoverableCalls.push({
             id,
             name,
-            errorMessage: `工具 ${name || '未知'} 的调用参数不是合法 JSON，未执行。请重新生成该工具调用并修正 JSON 格式。${detail}`
+            errorMessage: `工具 ${name || '未知'} 的调用参数不是合法 JSON，未执行。请重新生成该工具调用并修正 JSON 格式。具体错误：${repaired.error}`
           })
         }
       }

@@ -24,14 +24,29 @@ describe('ai unit structured output json repair', () => {
     }
   })
 
-  it('returns not ok for non-repairable garbage', () => {
-    expect(tryRepairJsonObject('not json at all')).toEqual({ ok: false })
-    expect(tryRepairJsonObject('')).toEqual({ ok: false })
-    expect(tryRepairJsonObject(undefined)).toEqual({ ok: false })
+  it('returns not ok with a self-owned clean error for non-repairable garbage', () => {
+    expect(tryRepairJsonObject('')).toEqual({ ok: false, error: 'arguments 为空，无法解析。' })
+    expect(tryRepairJsonObject(undefined)).toEqual({
+      ok: false,
+      error: 'arguments 为空，无法解析。'
+    })
+
+    const garbage = tryRepairJsonObject('not json at all')
+    expect(garbage.ok).toBe(false)
+    if (!garbage.ok) {
+      expect(typeof garbage.error).toBe('string')
+      expect(garbage.error.length).toBeGreaterThan(0)
+      expect(garbage.error).not.toContain('Troubleshooting URL')
+      expect(garbage.error).not.toContain('OUTPUT_PARSING_FAILURE')
+    }
   })
 
   it('returns not ok for a JSON array instead of an object', () => {
-    expect(tryRepairJsonObject('[1,2,3]')).toEqual({ ok: false })
+    const result = tryRepairJsonObject('[1,2,3]')
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.error).toBe('arguments 解析成功但不是 JSON 对象。')
+    }
   })
 
   it('parsePromptJsonOutput still repairs unescaped quotes for the prompt_json path', () => {
