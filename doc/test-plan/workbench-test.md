@@ -305,9 +305,9 @@ tests/case/workbench/
 - 测试类型：`e2e`
 - What：智能模式运行中底部发送按钮切换为停止图标，并能取消普通长任务和审批等待。
 - Why：用户需要可靠中断长任务；审批等待时停止若不能释放等待会造成运行态卡死。
-- How：E2E 发送真实长任务和审批等待请求，运行中点击停止后再发送恢复语句。
-- Oracle：运行中发送按钮和取消反馈对齐 `WB-COMPOSER-006`，会话运行标记对齐 `WB-SESSION-002-AC5`；用户停止后保存并恢复任务，对齐 `WB-SESSION-007-AC1`。
-- Not：不覆盖 Graph 运行上限；该链路由 `interrupted-task-resume-flow` 覆盖。
+- How：E2E 发送真实长任务和审批等待请求，运行中点击停止。
+- Oracle：运行中发送按钮和取消反馈对齐 `WB-COMPOSER-006`，会话运行标记对齐 `WB-SESSION-002-AC5`；用户停止后保存中断快照（`resumeSnapshotSaved`），对齐 `WB-SESSION-007-AC1`。
+- Not：不覆盖 Graph 运行上限；上限触发与恢复由 `interrupted-task-resume-flow` 覆盖。
 
 #### `interrupted-task-resume-flow`
 

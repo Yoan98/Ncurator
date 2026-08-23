@@ -8,7 +8,6 @@ import {
   WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
   WORKBENCH_RESULT_E2E_TIMEOUT_MS,
   assertNoWorkbenchFakeSignals,
-  collectWorkbenchAiRunEvents,
   createWorkbenchNewSession,
   getWorkbenchLocator,
   getWorkbenchPrefixLocator,
@@ -270,7 +269,7 @@ describe('workbench conversation e2e', () => {
           await setWorkbenchInput(page, EDITED_MESSAGE)
           const editedRunStartedAt = Date.now()
           await submitWorkbenchCurrentDraft(page)
-          const editedRunStarted = await waitForWorkbenchAiEvent(runtime, {
+          await waitForWorkbenchAiEvent(runtime, {
             name: 'edited_message_fresh_run_started',
             matches: (event) => event.type === 'run_started' && event.input === EDITED_MESSAGE
           })
@@ -282,13 +281,6 @@ describe('workbench conversation e2e', () => {
             WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
             { page }
           )
-          const editedRunResumed = (await collectWorkbenchAiRunEvents(runtime)).some(
-            (event) =>
-              event.type === 'decision_hint' &&
-              event.runId === editedRunStarted.runId &&
-              event.code === 'run_resumed_after_interruption'
-          )
-
           return {
             actionButtonsVisible,
             messageCountAfterEdit,
@@ -308,7 +300,6 @@ describe('workbench conversation e2e', () => {
             interruptedSnapshotSaved:
               interruptedRunCancelled.type === 'run_cancelled' &&
               interruptedRunCancelled.resumeSnapshotSaved === true,
-            editedRunResumed,
             attachmentsAboveBubble: Boolean(
               firstAttachmentBox && bubbleBox && firstAttachmentBox.y < bubbleBox.y
             )
@@ -326,7 +317,6 @@ describe('workbench conversation e2e', () => {
               (result.assistantProcessTextAfterWait.includes('让俺想想') ||
                 result.assistantProcessTextAfterWait.includes('处理中')) &&
               result.interruptedSnapshotSaved &&
-              !result.editedRunResumed &&
               result.attachmentsAboveBubble,
             {
               name: 'workbench-user-message-actions-and-attachments',

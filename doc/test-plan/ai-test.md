@@ -1131,7 +1131,7 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 - What：`AiRunService` 在同一 `session` 下会对 `timeout / network_error` 保存恢复快照，并在下一次 run 自动恢复语义上下文继续完成。
 - Why：中断恢复依赖最小持久化快照，而不是在同一 run 内盲目重试；这条 contract 需要回归保护。
 - How：首轮通过真实 `AiRunService` 启动一次 run，让真实 `brain` 先写入可恢复状态后命中 `timeout`；第二轮在同一 session 下不再显式传引用范围与工作区，验证真实 run 会自动恢复并继续完成；同时补一条 `network_error` 分支和一条普通 `error` 分支。
-- Oracle：`timeout / network_error` 失败态会写出 `failureCode` 与 `resumeSnapshotSaved=true`，`ChatStore` 中保留最新恢复快照；下一轮同 session 会从 `context_budget -> brain` 重新开始，但带回恢复快照中的已学 skill / task run 语义，并在 brain prompt 中出现 `run_resumed_after_interruption` hint；成功完成后恢复快照被清空；普通 `error` 不保存恢复快照。
+- Oracle：`timeout / network_error` 失败态会写出 `failureCode` 与 `resumeSnapshotSaved=true`，`ChatStore` 中保留最新恢复快照；下一轮同 session 会从 `context_budget -> brain` 重新开始，但带回恢复快照中的已学 skill / 任务计划语义；成功完成后恢复快照被清空；普通 `error` 不保存恢复快照。
 - Not：不验证 docx 临时运行态恢复；不验证 live provider 的真实网络抖动概率。
 
 ##### `session-skill-memory-multi-run`
