@@ -62,7 +62,6 @@ import { v4 as uuidv4 } from 'uuid'
 import type {
   ChatSession,
   ChatSessionListItem,
-  ChatRunEventsRequest,
   ChatSessionSnapshotRequest,
   ChatSessionSnapshotResponse,
   ChatSessionOpenRequest,
@@ -2909,15 +2908,6 @@ export function registerHandlers(services: {
       }
     }
   )
-
-  ipcMain.handle('chat-run-events-get', async (_event, payload: ChatRunEventsRequest) => {
-    try {
-      return await chatRunService.getRunEvents(payload?.runId)
-    } catch (e: unknown) {
-      console.error('[CHAT-RUN-EVENTS-GET] Error:', e)
-      return { events: [] }
-    }
-  })
 
   ipcMain.handle(
     'chat-session-snapshot-get',

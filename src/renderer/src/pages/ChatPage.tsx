@@ -94,6 +94,7 @@ import {
   reduceAssistantProcessGroups,
   reduceAssistantProcessThoughts
 } from '../components/workbench/utils'
+import { projectProcessGroups } from '../components/workbench/messageLogProjection'
 import {
   groupApplyTargetsByRunId,
   mergeApplyTargets
@@ -480,15 +481,17 @@ const applyRunRecordToTurn = (
 const buildAssistantTurnFromRunSnapshot = (
   snapshot: ChatSessionRunSnapshot
 ): AssistantTurnViewModel => {
+  const projected = projectProcessGroups({
+    runId: snapshot.run.id,
+    entries: snapshot.messageLogEntries || []
+  })
   const base: AssistantTurnViewModel = {
     ...createAssistantTurn(snapshot.run.assistantMessageId),
-    runId: snapshot.run.id
+    runId: snapshot.run.id,
+    processThoughts: projected.processThoughts,
+    processGroups: projected.processGroups
   }
-  const replayed = snapshot.events.reduce<AssistantTurnViewModel>(
-    (turn, event) => reduceAssistantTurnByRunEvent(turn, event),
-    base
-  )
-  return applyRunRecordToTurn(replayed, snapshot.run)
+  return applyRunRecordToTurn(base, snapshot.run)
 }
 
 const appendArtifactForMessage = (

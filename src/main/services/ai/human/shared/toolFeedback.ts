@@ -47,6 +47,7 @@ export const buildToolFeedback = (input: ToolFeedbackInput): {
       kind: 'tool',
       toolCallId: input.toolCallId,
       toolName: input.toolName,
+      ok: input.ok,
       result: envelope
     }
   }

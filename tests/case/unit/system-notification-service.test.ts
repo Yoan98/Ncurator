@@ -11,9 +11,6 @@ const run = (status: AiRunRecord['status'] = 'completed'): AiRunRecord => ({
   input: '测试输入',
   partialAnswer: '',
   artifacts: [],
-  processEvents: [],
-  eventCount: 0,
-  visibleEventCount: 0,
   createdAt: 1,
   updatedAt: 1
 })

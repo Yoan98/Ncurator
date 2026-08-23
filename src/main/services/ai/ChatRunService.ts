@@ -37,7 +37,6 @@ import type {
   AiRunCancelResponse,
   AiRunEvent,
   AiRunRecord,
-  ChatRunEventsResponse,
   ChatMessage,
   ChatSessionOpenResponse,
   ChatSessionRunSummariesResponse,
@@ -129,9 +128,6 @@ const appendArtifact = (artifacts: AiArtifactRef[] | undefined, artifact: AiArti
   return [...current, artifact]
 }
 
-const isSnapshotEvent = (event: AiRunEvent): boolean =>
-  event.type !== 'answer_token' && event.type !== 'llm_stream_delta'
-
 export class ChatRunService {
   private readonly activeRuns = new Map<string, ActiveRun>()
   private readonly activeApprovals = new Map<string, ActiveApproval>()
@@ -162,20 +158,6 @@ export class ChatRunService {
         timestamp: now,
         artifacts: nextRun.artifacts,
         error: true
-      })
-      await this.deps.aiRunStore.appendEvent({
-        runId: run.id,
-        sessionId: run.sessionId,
-        event: {
-          type: 'run_failed',
-          runId: run.id,
-          source: 'internal',
-          message: INTERRUPTED_RUN_MESSAGE,
-          code: 'process_interrupted',
-          resumeSnapshotSaved: Boolean(
-            await this.deps.chatStore.getSessionResumeSnapshot(run.sessionId)
-          )
-        }
       })
       try {
         await this.deps.onRunTerminal?.(nextRun, 'failed')
@@ -250,20 +232,6 @@ export class ChatRunService {
       runs: response.runs.length
     })
     return response
-  }
-
-  public async getRunEvents(runId: string): Promise<ChatRunEventsResponse> {
-    const startedAt = Date.now()
-    const normalizedRunId = String(runId || '').trim()
-    if (!normalizedRunId) return { events: [] }
-    const events = (await this.deps.aiRunStore.listEvents(normalizedRunId))
-      .map((record) => record.event)
-      .filter(isSnapshotEvent)
-    this.logSlowChatQuery('chat-run-events-get', startedAt, {
-      runId: normalizedRunId,
-      events: events.length
-    })
-    return { events }
   }
 
   public async retractLatestTurn(
@@ -481,8 +449,7 @@ export class ChatRunService {
     }
     const persisted = await this.deps.aiRunStore.decideApprovalBatchTransaction({
       runId,
-      request: payload,
-      event: decisionEvent
+      request: payload
     })
     if (!persisted.ok) return { success: false, error: persisted.error || 'approval failed' }
 
@@ -507,30 +474,12 @@ export class ChatRunService {
   }
 
   private async buildRunSnapshot(run: AiRunRecord) {
-    const inlineEvents = (run.processEvents || []).filter(isSnapshotEvent)
-    const events =
-      inlineEvents.length > 0
-        ? inlineEvents
-        : (await this.deps.aiRunStore.listEvents(run.id))
-            .map((record) => record.event)
-            .filter(isSnapshotEvent)
+    const records = await this.deps.chatMessageLogStore.listByRun(run.id)
     return {
-      run: {
-        ...run,
-        processEvents: events,
-        eventCount: run.eventCount ?? events.length,
-        visibleEventCount: run.visibleEventCount ?? events.length
-      },
-      events,
+      run,
+      messageLogEntries: records.map((record) => record.entry),
       pendingApproval: run.pendingApproval
     }
-  }
-
-  private appendProcessEvent(run: AiRunRecord, event: AiRunEvent, now: number): void {
-    if (!isSnapshotEvent(event)) return
-    run.eventCount = (run.eventCount || 0) + 1
-    run.visibleEventCount = (run.visibleEventCount || 0) + 1
-    run.lastEventAt = now
   }
 
   private logSlowChatQuery(
@@ -671,9 +620,6 @@ export class ChatRunService {
       executionPermission,
       partialAnswer: '',
       artifacts: [],
-      processEvents: [],
-      eventCount: 0,
-      visibleEventCount: 0,
       createdAt,
       updatedAt: createdAt
     }
@@ -970,11 +916,6 @@ export class ChatRunService {
     if (entry?.deleted) return
     const run = await this.getMutableRun(runId)
     if (!run) return
-    await this.deps.aiRunStore.appendEvent({
-      runId,
-      sessionId: run.sessionId,
-      event
-    })
     await this.projectEvent(runId, run, event)
     if (
       event.type === 'run_completed' ||
@@ -1001,8 +942,6 @@ export class ChatRunService {
     const now = Date.now()
     let saveImmediately = event.type !== 'answer_token'
     let assistantMessage: ChatMessage | null = null
-
-    this.appendProcessEvent(run, event, now)
 
     if (event.type === 'answer_token') {
       run.partialAnswer = `${run.partialAnswer || ''}${event.token}`

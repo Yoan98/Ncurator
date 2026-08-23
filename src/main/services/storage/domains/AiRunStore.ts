@@ -1,9 +1,6 @@
-import { v4 as uuidv4 } from 'uuid'
 import type {
   AiArtifactRef,
   AiRunApprovalBatchDecisionRequest,
-  AiRunEvent,
-  AiRunEventRecord,
   AiRunRecord,
   AiRunStatus,
   ChatAttachment,
@@ -41,22 +38,9 @@ type AiRunRow = {
   error?: unknown
   pending_approval_json?: unknown
   artifacts_json?: unknown
-  event_count?: unknown
-  visible_event_count?: unknown
-  last_event_at?: unknown
   created_at?: unknown
   updated_at?: unknown
   finished_at?: unknown
-}
-
-type AiRunEventRow = {
-  id?: unknown
-  run_id?: unknown
-  session_id?: unknown
-  seq?: unknown
-  type?: unknown
-  event_json?: unknown
-  created_at?: unknown
 }
 
 const normalizeRunStatus = (value: unknown): AiRunStatus => {
@@ -75,18 +59,6 @@ const normalizeRunStatus = (value: unknown): AiRunStatus => {
 
 const normalizeExecutionPermission = (value: string): AiRunRecord['executionPermission'] =>
   value === 'full_access' ? 'full_access' : 'review'
-
-const shouldPersistEvent = (event: AiRunEvent): boolean =>
-  event.type !== 'answer_token' && event.type !== 'llm_stream_delta'
-
-const getEventTime = (event: AiRunEvent, fallback: number): number => {
-  const record = event as unknown as Record<string, unknown>
-  for (const key of ['createdAt', 'completedAt', 'failedAt', 'decidedAt', 'confirmedAt']) {
-    const value = Number(record[key])
-    if (Number.isFinite(value) && value > 0) return value
-  }
-  return fallback
-}
 
 const toRunRecord = (row: AiRunRow): AiRunRecord => ({
   id: toRequiredString(row.id),
@@ -107,32 +79,12 @@ const toRunRecord = (row: AiRunRow): AiRunRecord => ({
   error: row.error ? String(row.error) : undefined,
   pendingApproval: parseJsonObject<AiRunRecord['pendingApproval']>(row.pending_approval_json),
   artifacts: parseJsonArray<AiArtifactRef>(row.artifacts_json),
-  processEvents: undefined,
-  eventCount: toOptionalNumber(row.event_count),
-  visibleEventCount: toOptionalNumber(row.visible_event_count),
-  lastEventAt: toOptionalNumber(row.last_event_at),
   createdAt: toRequiredNumber(row.created_at),
   updatedAt: toRequiredNumber(row.updated_at),
   finishedAt: toOptionalNumber(row.finished_at)
 })
 
-const toEventRecord = (row: AiRunEventRow): AiRunEventRecord | null => {
-  const event = parseJsonObject<AiRunEvent>(row.event_json)
-  if (!event) return null
-  return {
-    id: toRequiredString(row.id),
-    runId: toRequiredString(row.run_id),
-    sessionId: toRequiredString(row.session_id),
-    seq: toRequiredNumber(row.seq),
-    type: event.type,
-    event,
-    createdAt: toRequiredNumber(row.created_at)
-  }
-}
-
 export class AiRunStore {
-  private readonly eventSeqQueues = new Map<string, Promise<unknown>>()
-
   public constructor(private readonly sqlite: SqliteCore) {}
 
   public async saveRun(record: AiRunRecord): Promise<void> {
@@ -144,15 +96,13 @@ export class AiRunStore {
           selected_references_json, attachments_json, workspace_json, model_name,
           main_model_json, vision_model_json, execution_permission,
           partial_answer, final_answer, error, pending_approval_json,
-          artifacts_json,
-          event_count, visible_event_count, last_event_at, created_at, updated_at, finished_at
+          artifacts_json, created_at, updated_at, finished_at
         ) VALUES (
           @id, @session_id, @user_message_id, @assistant_message_id, @status, @input,
           @selected_references_json, @attachments_json, @workspace_json, @model_name,
           @main_model_json, @vision_model_json, @execution_permission,
           @partial_answer, @final_answer, @error, @pending_approval_json,
-          @artifacts_json,
-          @event_count, @visible_event_count, @last_event_at, @created_at, @updated_at, @finished_at
+          @artifacts_json, @created_at, @updated_at, @finished_at
         )
         ON CONFLICT(id) DO UPDATE SET
           session_id = excluded.session_id,
@@ -172,9 +122,6 @@ export class AiRunStore {
           error = excluded.error,
           pending_approval_json = excluded.pending_approval_json,
           artifacts_json = excluded.artifacts_json,
-          event_count = excluded.event_count,
-          visible_event_count = excluded.visible_event_count,
-          last_event_at = excluded.last_event_at,
           updated_at = excluded.updated_at,
           finished_at = excluded.finished_at
       `
@@ -198,9 +145,6 @@ export class AiRunStore {
         error: record.error || null,
         pending_approval_json: jsonStringify(record.pendingApproval),
         artifacts_json: jsonStringify(record.artifacts),
-        event_count: record.eventCount ?? null,
-        visible_event_count: record.visibleEventCount ?? null,
-        last_event_at: record.lastEventAt ?? null,
         created_at: record.createdAt,
         updated_at: record.updatedAt,
         finished_at: record.finishedAt ?? null
@@ -264,72 +208,9 @@ export class AiRunStore {
     return rows.map((row) => toRequiredString(row.session_id)).filter(Boolean)
   }
 
-  public async appendEvent(input: {
-    runId: string
-    sessionId: string
-    event: AiRunEvent
-  }): Promise<AiRunEventRecord> {
-    const records = await this.appendEvents({
-      runId: input.runId,
-      sessionId: input.sessionId,
-      events: [input.event]
-    })
-    return records[0]
-  }
-
-  public async appendEvents(input: {
-    runId: string
-    sessionId: string
-    events: AiRunEvent[]
-  }): Promise<AiRunEventRecord[]> {
-    return await this.withRunEventSeqQueue(input.runId, async () => {
-      const now = Date.now()
-      const allRecords = input.events.map((event) => ({
-        id: uuidv4(),
-        runId: input.runId,
-        sessionId: input.sessionId,
-        seq: 0,
-        type: event.type,
-        event,
-        createdAt: getEventTime(event, now)
-      }))
-      const persisted = allRecords.filter((record) => shouldPersistEvent(record.event))
-      if (persisted.length === 0) return allRecords
-
-      this.sqlite.transaction(() => {
-        const nextSeqRow = this.sqlite
-          .prepare(
-            'SELECT COALESCE(MAX(seq), 0) + 1 AS next_seq FROM ai_run_event WHERE run_id = ?'
-          )
-          .get(input.runId) as { next_seq?: unknown }
-        const startSeq = toRequiredNumber(nextSeqRow.next_seq, 1)
-        const insert = this.sqlite.prepare(
-          `
-          INSERT INTO ai_run_event (id, run_id, session_id, seq, type, event_json, created_at)
-          VALUES (@id, @run_id, @session_id, @seq, @type, @event_json, @created_at)
-        `
-        )
-        persisted.forEach((record, index) => {
-          record.seq = startSeq + index
-          insert.run({
-            id: record.id,
-            run_id: record.runId,
-            session_id: record.sessionId,
-            seq: record.seq,
-            type: record.type,
-            event_json: JSON.stringify(record.event),
-            created_at: record.createdAt
-          })
-        })
-      })
-      return allRecords
-    })
-  }
-
   public async decideApprovalBatchTransaction(input: {
     runId: string
     request: AiRunApprovalBatchDecisionRequest
-    event: AiRunEvent
   }): Promise<{ ok: boolean; run?: AiRunRecord; error?: string }> {
     return this.sqlite.transaction(() => {
       const runRow = this.sqlite.prepare('SELECT * FROM ai_run WHERE id = ?').get(input.runId) as
@@ -344,40 +225,18 @@ export class AiRunStore {
         return { ok: false, error: 'approval batch not found' }
       }
 
-      const now = getEventTime(input.event, Date.now())
-      const nextSeqRow = this.sqlite
-        .prepare('SELECT COALESCE(MAX(seq), 0) + 1 AS next_seq FROM ai_run_event WHERE run_id = ?')
-        .get(input.runId) as { next_seq?: unknown }
-      this.sqlite
-        .prepare(
-          `
-          INSERT INTO ai_run_event (id, run_id, session_id, seq, type, event_json, created_at)
-          VALUES (@id, @run_id, @session_id, @seq, @type, @event_json, @created_at)
-        `
-        )
-        .run({
-          id: uuidv4(),
-          run_id: run.id,
-          session_id: run.sessionId,
-          seq: toRequiredNumber(nextSeqRow.next_seq, 1),
-          type: input.event.type,
-          event_json: JSON.stringify(input.event),
-          created_at: now
-        })
+      const now = Date.now()
       this.sqlite
         .prepare(
           `
           UPDATE ai_run
           SET status = 'running',
               pending_approval_json = NULL,
-              event_count = COALESCE(event_count, 0) + 1,
-              visible_event_count = COALESCE(visible_event_count, 0) + 1,
-              last_event_at = @last_event_at,
               updated_at = @updated_at
           WHERE id = @id
         `
         )
-        .run({ id: run.id, last_event_at: now, updated_at: now })
+        .run({ id: run.id, updated_at: now })
 
       return {
         ok: true,
@@ -385,27 +244,14 @@ export class AiRunStore {
           ...run,
           status: 'running',
           pendingApproval: undefined,
-          eventCount: (run.eventCount || 0) + 1,
-          visibleEventCount: (run.visibleEventCount || 0) + 1,
-          lastEventAt: now,
           updatedAt: now
         }
       }
     })
   }
 
-  public async listEvents(runId: string): Promise<AiRunEventRecord[]> {
-    const rows = this.sqlite
-      .prepare('SELECT * FROM ai_run_event WHERE run_id = ? ORDER BY seq ASC')
-      .all(runId) as AiRunEventRow[]
-    return rows.map(toEventRecord).filter((record): record is AiRunEventRecord => record !== null)
-  }
-
   public async deleteRunsBySession(sessionId: string): Promise<void> {
     this.sqlite.prepare('DELETE FROM ai_run WHERE session_id = ?').run(sessionId)
-    for (const runId of Array.from(this.eventSeqQueues.keys())) {
-      this.eventSeqQueues.delete(runId)
-    }
   }
 
   public async deleteRunsByIds(runIds: string[]): Promise<void> {
@@ -414,22 +260,8 @@ export class AiRunStore {
     this.sqlite.transaction(() => {
       const stmt = this.sqlite.prepare('DELETE FROM ai_run WHERE id = ?')
       for (const id of ids) {
-        this.eventSeqQueues.delete(id)
         stmt.run(id)
       }
     })
-  }
-
-  private async withRunEventSeqQueue<T>(runId: string, operation: () => Promise<T>): Promise<T> {
-    const previous = this.eventSeqQueues.get(runId) || Promise.resolve()
-    const queued = previous.catch(() => undefined).then(operation)
-    const tail = queued.catch(() => undefined)
-    this.eventSeqQueues.set(runId, tail)
-    void tail.finally(() => {
-      if (this.eventSeqQueues.get(runId) === tail) {
-        this.eventSeqQueues.delete(runId)
-      }
-    })
-    return await queued
   }
 }

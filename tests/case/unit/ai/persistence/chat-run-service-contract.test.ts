@@ -221,7 +221,7 @@ describe('unit ai persistence backend', () => {
     await expect(approvalPromise).resolves.toMatchObject({ accepted: true })
   })
 
-  it('run-events-update-assistant-message-run-and-event-log', async () => {
+  it('run-events-update-assistant-message-and-run', async () => {
     const setup = await createTestService()
     const run = await submitAiRun(setup)
     const service = setup.service as ChatRunServicePrivate
@@ -243,15 +243,12 @@ describe('unit ai persistence backend', () => {
 
     const messages = await setup.storage.chat.getChatMessages('session-1')
     const storedRun = await setup.storage.aiRun.getRun(run.id)
-    const events = await setup.storage.aiRun.listEvents(run.id)
 
     expect(messages[1].content).toBe('Hello world')
     expect(storedRun?.status).toBe('completed')
     expect(storedRun?.finalAnswer).toBe('Hello world')
-    expect(events.map((event) => event.type)).toContain('answer_completed')
-    expect(events.map((event) => event.type)).toContain('run_completed')
-    expect(events.map((event) => event.type)).not.toContain('answer_token')
-    expect(storedRun?.processEvents).toBeUndefined()
+    expect(setup.events.map((event) => event.type)).toContain('answer_completed')
+    expect(setup.events.map((event) => event.type)).toContain('run_completed')
   })
 
   it('notifies the terminal callback after the run is persisted', async () => {
@@ -336,37 +333,6 @@ describe('unit ai persistence backend', () => {
     expect(storedRun?.artifacts).toEqual(assistantMessage?.artifacts)
   })
 
-  it('token-events-are-not-persisted-or-reread-for-seq-allocation', async () => {
-    const setup = await createTestService()
-    const run = await submitAiRun(setup)
-    const service = setup.service as ChatRunServicePrivate
-    const listEventsSpy = vi.spyOn(setup.storage.aiRun, 'listEvents')
-
-    for (let index = 0; index < 25; index += 1) {
-      await service.queueRunEvent(run.id, {
-        type: 'answer_token',
-        runId: run.id,
-        token: String(index)
-      })
-    }
-    await service.queueRunEvent(run.id, {
-      type: 'answer_completed',
-      runId: run.id,
-      text: 'done'
-    })
-    await service.queueRunEvent(run.id, {
-      type: 'run_completed',
-      runId: run.id
-    })
-
-    expect(listEventsSpy).not.toHaveBeenCalled()
-    listEventsSpy.mockRestore()
-
-    const events = await setup.storage.aiRun.listEvents(run.id)
-    expect(events.map((event) => event.type)).toEqual(['answer_completed', 'run_completed'])
-    expect(events.map((event) => event.seq)).toEqual([1, 2])
-  })
-
   it('autostart-run-emits-process-events-after-run-started', async () => {
     const previousTimeout = process.env.NCURATOR_AI_EMBEDDING_PREFLIGHT_TIMEOUT_MS
     process.env.NCURATOR_AI_EMBEDDING_PREFLIGHT_TIMEOUT_MS = '10'
@@ -380,12 +346,10 @@ describe('unit ai persistence backend', () => {
       await waitForCondition(() => setup.events.some((event) => event.type === 'run_failed'))
 
       const storedRun = await setup.storage.aiRun.getRun(run.id)
-      const storedEvents = await setup.storage.aiRun.listEvents(run.id)
 
       expect(setup.events.map((event) => event.type)).toContain('run_started')
       expect(setup.events.map((event) => event.type)).toContain('assistant_process_group_started')
       expect(storedRun?.status).toBe('failed')
-      expect(storedEvents.map((event) => event.type)).toContain('run_failed')
     } finally {
       if (previousTimeout === undefined) {
         delete process.env.NCURATOR_AI_EMBEDDING_PREFLIGHT_TIMEOUT_MS
@@ -452,70 +416,47 @@ describe('unit ai persistence backend', () => {
     expect(snapshot.activeRuns[0].pendingApproval?.batchId).toBe('batch-1')
   })
 
-  it('session-open-returns-messages-and-active-runs-without-full-event-replay', async () => {
+  it('session-open-returns-messages-and-active-runs-with-message-log', async () => {
     const setup = await createTestService()
     const run = await submitAiRun(setup)
-    const service = setup.service as ChatRunServicePrivate
-    await service.queueRunEvent(run.id, {
-      type: 'assistant_process_group_started',
+    await setup.storage.chatMessageLog.appendBatch({
+      sessionId: 'session-1',
       runId: run.id,
-      groupId: `${run.id}:thinking`,
-      kind: 'thinking',
-      display: { kind: 'thinking' },
-      createdAt: Date.now()
+      entries: [
+        { kind: 'annotation', eventType: 'thinking_started', payload: {} },
+        { kind: 'assistant', content: '先检索资料', toolCalls: [] },
+        { kind: 'annotation', eventType: 'thinking_completed', payload: {} }
+      ]
     })
-    const listEventsSpy = vi.spyOn(setup.storage.aiRun, 'listEvents')
     const listRunsByMessageIdsSpy = vi.spyOn(setup.storage.aiRun, 'listRunsByMessageIds')
 
     const opened = await setup.service.openSession({ sessionId: 'session-1', limit: 50 })
 
     expect(opened.messages).toHaveLength(2)
     expect(opened.activeRuns).toHaveLength(1)
-    expect(opened.activeRuns[0].events.map((event) => event.type)).toContain(
-      'assistant_process_group_started'
-    )
-    expect(listEventsSpy).toHaveBeenCalledTimes(1)
+    expect(opened.activeRuns[0].messageLogEntries?.map((entry) => entry.kind)).toEqual([
+      'annotation',
+      'assistant',
+      'annotation'
+    ])
     expect(listRunsByMessageIdsSpy).not.toHaveBeenCalled()
-    listEventsSpy.mockRestore()
     listRunsByMessageIdsSpy.mockRestore()
   })
 
-  it('completed-run-process-events-are-restored-through-session-snapshot', async () => {
+  it('completed-run-message-log-is-restored-through-session-snapshot', async () => {
     const setup = await createTestService()
     const run = await submitAiRun(setup)
     const service = setup.service as ChatRunServicePrivate
+    await setup.storage.chatMessageLog.appendBatch({
+      sessionId: 'session-1',
+      runId: run.id,
+      entries: [
+        { kind: 'annotation', eventType: 'thinking_started', payload: {} },
+        { kind: 'assistant', content: '先检索资料', toolCalls: [] },
+        { kind: 'annotation', eventType: 'thinking_completed', payload: {} }
+      ]
+    })
 
-    await service.queueRunEvent(run.id, {
-      type: 'assistant_process_group_started',
-      runId: run.id,
-      groupId: `${run.id}:thinking`,
-      kind: 'thinking',
-      display: { kind: 'thinking' },
-      createdAt: Date.now()
-    })
-    await service.queueRunEvent(run.id, {
-      type: 'answer_token',
-      runId: run.id,
-      token: 'partial'
-    })
-    await setup.storage.chat.saveSessionResumeSnapshot('session-1', {
-      reason: 'process_interrupted',
-      runId: run.id,
-      userInput: run.input,
-      selectedReferences: [],
-      humanState: {
-        schemaVersion: 3,
-        memory: { plan: [], compactions: [] },
-        skills: { learnedSkillIds: [] },
-        execution: {
-          deliveryGuidanceItems: [],
-          artifacts: [],
-          finalizationReason: undefined
-        }
-      },
-      errorMessage: 'interrupted',
-      updatedAt: Date.now()
-    })
     await service.queueRunEvent(run.id, {
       type: 'answer_completed',
       runId: run.id,
@@ -531,34 +472,27 @@ describe('unit ai persistence backend', () => {
     expect(snapshot.activeRuns).toEqual([])
     expect(snapshot.runs).toHaveLength(1)
     expect(snapshot.runs?.[0].run.status).toBe('completed')
-    expect(snapshot.runs?.[0].events.map((event) => event.type)).toContain(
-      'assistant_process_group_started'
-    )
-    expect(snapshot.runs?.[0].events.map((event) => event.type)).toContain('answer_completed')
-    expect(snapshot.runs?.[0].events.map((event) => event.type)).not.toContain('answer_token')
+    expect(snapshot.runs?.[0].messageLogEntries).toHaveLength(3)
+    expect(snapshot.runs?.[0].messageLogEntries?.[1]).toMatchObject({
+      kind: 'assistant',
+      content: '先检索资料'
+    })
   })
 
-  it('completed-run-process-events-are-restored-through-run-summaries', async () => {
-    // Switching back to a conversation goes through getSessionRunSummaries, whose
-    // snapshots must re-hydrate a completed run's events from the ai_run_event table
-    // (run.processEvents is empty when loaded from storage).
+  it('completed-run-message-log-is-restored-through-run-summaries', async () => {
     const setup = await createTestService()
     const run = await submitAiRun(setup)
     const service = setup.service as ChatRunServicePrivate
+    await setup.storage.chatMessageLog.appendBatch({
+      sessionId: 'session-1',
+      runId: run.id,
+      entries: [
+        { kind: 'annotation', eventType: 'thinking_started', payload: {} },
+        { kind: 'assistant', content: '先检索资料', toolCalls: [] },
+        { kind: 'annotation', eventType: 'thinking_completed', payload: {} }
+      ]
+    })
 
-    await service.queueRunEvent(run.id, {
-      type: 'assistant_process_group_started',
-      runId: run.id,
-      groupId: `${run.id}:thinking`,
-      kind: 'thinking',
-      display: { kind: 'thinking' },
-      createdAt: Date.now()
-    })
-    await service.queueRunEvent(run.id, {
-      type: 'answer_token',
-      runId: run.id,
-      token: 'partial'
-    })
     await service.queueRunEvent(run.id, {
       type: 'answer_completed',
       runId: run.id,
@@ -573,11 +507,11 @@ describe('unit ai persistence backend', () => {
 
     expect(summaries.runs).toHaveLength(1)
     expect(summaries.runs[0].run.status).toBe('completed')
-    expect(summaries.runs[0].events.map((event) => event.type)).toContain(
-      'assistant_process_group_started'
-    )
-    expect(summaries.runs[0].events.map((event) => event.type)).toContain('answer_completed')
-    expect(summaries.runs[0].events.map((event) => event.type)).not.toContain('answer_token')
+    expect(summaries.runs[0].messageLogEntries).toHaveLength(3)
+    expect(summaries.runs[0].messageLogEntries?.[0]).toMatchObject({
+      kind: 'annotation',
+      eventType: 'thinking_started'
+    })
   })
 
   it('startup-recovery-marks-interrupted-runs-failed', async () => {
@@ -625,18 +559,12 @@ describe('unit ai persistence backend', () => {
 
     const storedRun = await setup.storage.aiRun.getRun('run-1')
     const messages = await setup.storage.chat.getChatMessages('session-1')
-    const events = await setup.storage.aiRun.listEvents('run-1')
     const snapshot = await setup.storage.chat.getSessionResumeSnapshot('session-1')
 
     expect(storedRun?.status).toBe('failed')
     expect(storedRun?.error).toContain('运行已中断')
     expect(messages[0].content).toContain('运行已中断')
     expect(messages[0].error).toBe(true)
-    expect(events.at(-1)?.event).toMatchObject({
-      type: 'run_failed',
-      code: 'process_interrupted',
-      resumeSnapshotSaved: true
-    })
     expect(snapshot?.reason).toBe('process_interrupted')
   })
 
@@ -800,14 +728,13 @@ describe('unit ai persistence backend', () => {
     )
   })
 
-  it('delete-session-cleans-run-and-event-records', async () => {
+  it('delete-session-cleans-run-and-message-log-records', async () => {
     const setup = await createTestService()
     const run = await submitAiRun(setup)
-    const service = setup.service as ChatRunServicePrivate
-    await service.queueRunEvent(run.id, {
-      type: 'answer_token',
+    await setup.storage.chatMessageLog.appendBatch({
+      sessionId: 'session-1',
       runId: run.id,
-      token: 'partial'
+      entries: [{ kind: 'annotation', eventType: 'thinking_started', payload: {} }]
     })
 
     await setup.service.deleteSession('session-1')
@@ -815,13 +742,13 @@ describe('unit ai persistence backend', () => {
     const sessions = await setup.storage.chat.getChatSessions()
     const messages = await setup.storage.chat.getChatMessages('session-1')
     const storedRun = await setup.storage.aiRun.getRun(run.id)
-    const events = await setup.storage.aiRun.listEvents(run.id)
+    const messageLog = await setup.storage.chatMessageLog.list('session-1')
     const resumeSnapshot = await setup.storage.chat.getSessionResumeSnapshot('session-1')
 
     expect(sessions).toEqual([])
     expect(messages).toEqual([])
     expect(storedRun).toBeNull()
-    expect(events).toEqual([])
+    expect(messageLog).toEqual([])
     expect(resumeSnapshot).toBeNull()
   })
 })

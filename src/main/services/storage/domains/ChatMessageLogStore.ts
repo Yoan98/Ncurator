@@ -85,6 +85,15 @@ export class ChatMessageLogStore {
       .filter((record): record is ChatMessageLogRecord => record !== null)
   }
 
+  public async listByRun(runId: string): Promise<ChatMessageLogRecord[]> {
+    const rows = this.sqlite
+      .prepare('SELECT * FROM chat_session_message_log WHERE run_id = ? ORDER BY seq ASC')
+      .all(runId) as ChatMessageLogRow[]
+    return rows
+      .map(toMessageLogRecord)
+      .filter((record): record is ChatMessageLogRecord => record !== null)
+  }
+
   public async deleteByRunIds(runIds: string[]): Promise<void> {
     const normalized = runIds.filter((runId) => String(runId || '').trim())
     if (normalized.length === 0) return

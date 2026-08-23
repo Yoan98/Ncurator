@@ -178,11 +178,12 @@ const appendToolMessages = (input: {
   cache: HumanRuntimeCache
   calls: ParsedHandCall[]
   results: ToolCallResult[]
-}): Array<{ toolCallId: string; toolName: string; result: JsonValue | undefined }> => {
+}): Array<{ toolCallId: string; toolName: string; ok: boolean; result: JsonValue | undefined }> => {
   const messages = input.cache.messages || []
   const transcriptEntries: Array<{
     toolCallId: string
     toolName: string
+    ok: boolean
     result: JsonValue | undefined
   }> = []
   input.calls.forEach((call, index) => {
@@ -199,6 +200,7 @@ const appendToolMessages = (input: {
     transcriptEntries.push({
       toolCallId: call.toolCallId,
       toolName: call.toolName,
+      ok: result.ok,
       result: returnValue
     })
   })
@@ -364,6 +366,7 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
         kind: 'tool' as const,
         toolCallId: entry.toolCallId,
         toolName: entry.toolName,
+        ok: entry.ok,
         result: entry.result
       }))
     )

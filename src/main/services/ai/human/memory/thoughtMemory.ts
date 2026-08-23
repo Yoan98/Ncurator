@@ -1,12 +1,7 @@
 import type { HumanPlanItem, HumanRoundThought } from '../types'
+import { normalizeThoughtText } from '../../../../../shared/thoughtText'
 
-export const normalizeThoughtText = (value: string): string =>
-  String(value || '')
-    .replace(/\r\n/g, '\n')
-    .split('\n')
-    .map((line) => line.trimEnd())
-    .join('\n')
-    .trim()
+export { normalizeThoughtText }
 
 export const normalizePlanItems = (items: HumanPlanItem[]): HumanPlanItem[] =>
   items

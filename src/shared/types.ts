@@ -1173,28 +1173,14 @@ export type AiRunRecord = {
   error?: string
   pendingApproval?: Extract<AiRunEvent, { type: 'approval_batch_required' }>
   artifacts?: AiArtifactRef[]
-  processEvents?: AiRunEvent[]
-  eventCount?: number
-  visibleEventCount?: number
-  lastEventAt?: number
   createdAt: number
   updatedAt: number
   finishedAt?: number
 }
 
-export type AiRunEventRecord = {
-  id: string
-  runId: string
-  sessionId: string
-  seq: number
-  type: AiRunEvent['type']
-  event: AiRunEvent
-  createdAt: number
-}
-
 export type ChatSessionRunSnapshot = {
   run: AiRunRecord
-  events: AiRunEvent[]
+  messageLogEntries?: ChatMessageLogEntry[]
   pendingApproval?: Extract<AiRunEvent, { type: 'approval_batch_required' }>
 }
 
@@ -1228,14 +1214,6 @@ export type ChatSessionRunSummariesRequest = {
 
 export type ChatSessionRunSummariesResponse = {
   runs: ChatSessionRunSnapshot[]
-}
-
-export type ChatRunEventsRequest = {
-  runId: string
-}
-
-export type ChatRunEventsResponse = {
-  events: AiRunEvent[]
 }
 
 export type ChatSubmitResponse = {
@@ -1743,6 +1721,7 @@ export type ChatMessageLogEntry =
       kind: 'tool'
       toolCallId: string
       toolName: string
+      ok: boolean
       result?: JsonValue
     }
   | {
@@ -1756,11 +1735,8 @@ export type ChatMessageLogAnnotationType =
   | 'thinking_completed'
   | 'learning_started'
   | 'learning_completed'
-  | 'compaction_started'
-  | 'compaction_completed'
   | 'compaction_summary'
   | 'finalizing_started'
-  | 'context_budget_evaluated'
 
 export type ChatMessageLogRecord = {
   id: string

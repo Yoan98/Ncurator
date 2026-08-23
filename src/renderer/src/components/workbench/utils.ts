@@ -363,7 +363,7 @@ const mergeProcessGroup = (
   mapper: (group: AssistantProcessGroup) => AssistantProcessGroup
 ): AssistantProcessGroup[] => groups.map((group) => (group.id === groupId ? mapper(group) : group))
 
-const createDisplayProcessGroup = (input: {
+export const createDisplayProcessGroup = (input: {
   groupId: string
   kind: AssistantProcessGroup['kind']
   display: AssistantProcessDisplay
@@ -388,7 +388,7 @@ const createDisplayProcessGroup = (input: {
   })
 }
 
-const createDisplayProcessItem = (input: {
+export const createDisplayProcessItem = (input: {
   itemId: string
   display: AssistantProcessDisplay
   status: AssistantProcessStatus

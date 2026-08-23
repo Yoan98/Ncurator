@@ -276,7 +276,7 @@ tests/case/workbench/
 #### `run-navigation-snapshot-replay`
 
 - 测试类型：`e2e`
-- What：真实 AI 输出过程中切到 Settings，完成后回到 Workbench 能通过持久化 snapshot replay 恢复过程流和最终 assistant 回答。
+- What：真实 AI 输出过程中切到 Settings，完成后回到 Workbench 能通过会话消息记录投影恢复过程流和最终 assistant 回答。
 - Why：Workbench route 切换会导致 renderer 重新挂载；如果运行态只存在 renderer 内存中，用户离开页面后会丢失 AI 过程和最终回答。
 - How：通过 UI 配置真实模型和真实工作区；发送真实 AI 请求，等待过程流出现后切到 Settings；停留到 AI run 完成，再回到 Workbench 读取恢复后的过程流和最终回答。
 - Oracle：切换后恢复目标历史、过程流、最终回答和自身运行态，上一会话状态不泄漏，对齐 `WB-SESSION-002`；run event 包含 `answer_completed` 与 `run_completed`，对齐 `WB-COMPOSER-003-AC7`。

@@ -34,8 +34,6 @@ import type {
   AttachmentCreateFromPathRequest,
   AttachmentProcessResponse,
   AttachmentSaveRequest,
-  ChatRunEventsRequest,
-  ChatRunEventsResponse,
   ChatSession,
   ChatSessionListItem,
   ChatSessionOpenRequest,
@@ -222,7 +220,6 @@ export type DesktopApi = {
   chatSessionRunSummaries: (
     payload: ChatSessionRunSummariesRequest
   ) => Promise<ChatSessionRunSummariesResponse>
-  chatRunEventsGet: (payload: ChatRunEventsRequest) => Promise<ChatRunEventsResponse>
   chatSessionSnapshotGet: (
     payload: ChatSessionSnapshotRequest
   ) => Promise<ChatSessionSnapshotResponse>

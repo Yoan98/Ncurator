@@ -289,7 +289,7 @@ const renderVisualReadResult = (obj: JsonObject): string =>
     renderVisualResults(obj.results)
   ].join('\n')
 
-const renderWebCrawlLinkList = (value: JsonValue | undefined): string => {
+const renderWebSearchLinkList = (value: JsonValue | undefined): string => {
   if (!Array.isArray(value) || value.length === 0) return 'none'
 
   return value
@@ -307,18 +307,18 @@ const renderWebCrawlLinkList = (value: JsonValue | undefined): string => {
     .join('\n')
 }
 
-const renderWebCrawlLinks = (value: JsonValue | undefined): string => {
+const renderWebSearchLinks = (value: JsonValue | undefined): string => {
   if (!isJsonObject(value)) return 'none'
 
   return [
     'internal:',
-    renderWebCrawlLinkList(value.internal),
+    renderWebSearchLinkList(value.internal),
     'external:',
-    renderWebCrawlLinkList(value.external)
+    renderWebSearchLinkList(value.external)
   ].join('\n')
 }
 
-const renderWebCrawlResult = (obj: JsonObject): string =>
+const renderWebSearchResult = (obj: JsonObject): string =>
   [
     renderKeyValuePairs([
       ['requestedUrl', readStringField(obj, 'requestedUrl')],
@@ -330,7 +330,7 @@ const renderWebCrawlResult = (obj: JsonObject): string =>
     'markdown:',
     readStringField(obj, 'markdown') || 'none',
     'links:',
-    renderWebCrawlLinks(obj.links)
+    renderWebSearchLinks(obj.links)
   ]
     .filter(Boolean)
     .join('\n')
@@ -407,7 +407,7 @@ export const renderToolResultDataText = (
     case 'docx_read_visuals':
       return renderVisualReadResult(value)
     case 'web_search':
-      return renderWebCrawlResult(value)
+      return renderWebSearchResult(value)
     default:
       return renderGenericObject(value)
   }

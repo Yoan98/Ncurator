@@ -306,7 +306,6 @@ const api: DesktopApi = {
   workbenchUiStateGet: () => ipcRenderer.invoke('workbench-ui-state-get'),
   workbenchUiStateSave: (payload) => ipcRenderer.invoke('workbench-ui-state-save', payload),
   chatSessionRunSummaries: (payload) => ipcRenderer.invoke('chat-session-run-summaries', payload),
-  chatRunEventsGet: (payload) => ipcRenderer.invoke('chat-run-events-get', payload),
   chatSessionSnapshotGet: (payload) => ipcRenderer.invoke('chat-session-snapshot-get', payload),
   chatSubmit: (payload) => {
     emitE2EIpcCall('chatSubmit')

@@ -231,7 +231,7 @@
 
 #### WB-COMPOSER-003 智能模式发送路径
 
-- 系统行为：智能模式发送时，renderer 只调用提交接口；Main 侧统一校验会话、输入、模型、工作区与 `@` 范围，并在启动 AI 前创建用户消息、assistant 占位消息和 AI run 记录。AI 运行中的事件先持久化到 run event log，再更新 run / assistant message 投影并广播给 renderer；renderer 通过 session snapshot 中的 `runs` 恢复已完成 / 进行中的展示投影，通过 `activeRuns` 继续运行中或等待审批的交互状态，并结合实时事件展示思考层、决策层、执行层、学习层、压缩层、总结层与最终 markdown 输出。输入区模式选项中该模式展示为“大聪明”，但内部模式语义仍是智能模式。
+- 系统行为：智能模式发送时，renderer 只调用提交接口；Main 侧统一校验会话、输入、模型、工作区与 `@` 范围，并在启动 AI 前创建用户消息、assistant 占位消息和 AI run 记录。AI 运行中的事件先写入会话消息记录（`chat_session_message_log`）作为唯一真相源，再更新 run / assistant message 投影并广播给 renderer；renderer 通过 session snapshot 中的 `runs` 恢复已完成 / 进行中的展示投影（从消息记录按 `seq` 投影重建过程流），通过 `activeRuns` 继续运行中或等待审批的交互状态，并结合实时事件展示思考层、决策层、执行层、学习层、压缩层、总结层与最终 markdown 输出。输入区模式选项中该模式展示为“大聪明”，但内部模式语义仍是智能模式。
 - 验收：
   - `WB-COMPOSER-003-AC1` 智能模式发送后，主区先可见用户消息与 assistant 占位消息。
   - `WB-COMPOSER-003-AC2` AI 运行成功启动后，assistant 过程流通过事件逐步追加更新，而不是一次性静态替换。
@@ -239,7 +239,7 @@
   - `WB-COMPOSER-003-AC4` assistant turn 中 mouth 最终输出始终位于过程流下方，并按 markdown 渲染；mouth 等待 AI 返回时先展示总结层“基本完成了，让俺收尾下吧”，首个 markdown token 或完成事件到达后隐藏该等待层；证据引用链接与普通链接视觉区分，内部文件链接打开右侧文件预览，内部网页链接使用系统浏览器打开。
   - `WB-COMPOSER-003-AC5` 决策层文本来自 `assistant_process_thought` 中经过 schema 约束的 `thought.next`，不得展示模型原始 chain-of-thought；决策层出现时，当前思考层必须立即隐藏，即使下一步执行正等待审批。
   - `WB-COMPOSER-003-AC6` 过程流使用用户可理解的分层文案，不直接暴露内部 tool 名或底层事件名；同一轮执行中的多个工具调用合并为一个执行层 header，展开后每个工具按其入参生成一句自然语言说明。
-  - `WB-COMPOSER-003-AC7` AI 输出中切到 Settings 或触发 renderer 重新挂载后，回到 Workbench 能通过 snapshot replay 恢复过程流、partial answer、最终回答或等待审批状态。
+  - `WB-COMPOSER-003-AC7` AI 输出中切到 Settings 或触发 renderer 重新挂载后，回到 Workbench 能通过会话消息记录投影恢复过程流、partial answer、最终回答或等待审批状态。
   - `WB-COMPOSER-003-AC8` brain 负责生成证据引用的名称、地址、资源类型与用途；进入 mouth 前，Main 对引用地址并行去重检查并写入证据专用的 `accessStatus`。可访问引用保留文件或网页链接交互；不可访问引用不得删除，必须使用与可访问引用相同的强调色降低透明度，并显示为无资源图标、无悬浮反馈、普通鼠标且不可点击的文本。缺少 `accessStatus` 的证据按不可访问处理，普通资源链接不使用该字段；renderer 渲染和用户点击时均不再次检查可访问性。
   - `WB-COMPOSER-003-AC9` terminal 审批要求表示命令正在等待用户决定，不属于执行失败；用户未允许时命令状态为未执行且不得产生 terminal step。命令启动后自然退出时，无论退出码是否为零，都属于执行完成并保留真实退出码供 brain 判断；只有终端执行器、Shell 或会话在执行期间异常时才显示“执行终端指令失败”。用户主动停止单独记录为已取消；正常中断后终端回到 idle，强制终止进程树后终端进入 closed。
 

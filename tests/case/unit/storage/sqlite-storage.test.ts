@@ -168,9 +168,6 @@ const createRun = (input: Partial<AiRunRecord> = {}): AiRunRecord => ({
   input: input.input || 'hello',
   partialAnswer: input.partialAnswer || '',
   pendingApproval: input.pendingApproval,
-  eventCount: input.eventCount,
-  visibleEventCount: input.visibleEventCount,
-  lastEventAt: input.lastEventAt,
   createdAt: input.createdAt || 10,
   updatedAt: input.updatedAt || 10,
   finishedAt: input.finishedAt
@@ -248,7 +245,11 @@ describe('sqlite storage core and stores', () => {
       { version: 6, name: 'workbench_session_ui_state' },
       { version: 7, name: 'ai_run_execution_permission' },
       { version: 8, name: 'drop_llm_strategy_preference' },
-      { version: 9, name: 'repair_ai_runtime_system_notifications_column' }
+      { version: 9, name: 'repair_ai_runtime_system_notifications_column' },
+      { version: 10, name: 'scheduled_task' },
+      { version: 11, name: 'chat_session_message_log' },
+      { version: 12, name: 'drop_chat_conversation_memory' },
+      { version: 13, name: 'drop_ai_run_event' }
     ])
   })
 
@@ -508,7 +509,7 @@ describe('sqlite storage core and stores', () => {
     expect(await chatStore.listUnreadCompletedSessionIds()).toEqual([])
   })
 
-  it('commits approval decision, clears pending approval, and keeps event seq unique', async () => {
+  it('commits approval decision and clears pending approval', async () => {
     const pendingApproval: Extract<AiRunEvent, { type: 'approval_batch_required' }> = {
       type: 'approval_batch_required',
       runId: 'run-1',
@@ -518,11 +519,6 @@ describe('sqlite storage core and stores', () => {
       createdAt: 11
     }
     await aiRunStore.saveRun(createRun({ status: 'waiting_approval', pendingApproval }))
-    await aiRunStore.appendEvent({
-      runId: 'run-1',
-      sessionId: 'session-1',
-      event: pendingApproval
-    })
 
     const result = await aiRunStore.decideApprovalBatchTransaction({
       runId: 'run-1',
@@ -530,25 +526,14 @@ describe('sqlite storage core and stores', () => {
         runId: 'run-1',
         batchId: 'batch-1',
         decisions: [{ itemId: 'item-1', action: 'approve' }]
-      },
-      event: {
-        type: 'approval_batch_decision',
-        runId: 'run-1',
-        taskId: 'task-1',
-        batchId: 'batch-1',
-        decisions: [{ itemId: 'item-1', action: 'approve' }],
-        decidedAt: 12
       }
     })
 
     const run = await aiRunStore.getRun('run-1')
-    const events = await aiRunStore.listEvents('run-1')
 
     expect(result.ok).toBe(true)
     expect(run?.status).toBe('running')
     expect(run?.pendingApproval).toBeUndefined()
-    expect(events.map((event) => event.seq)).toEqual([1, 2])
-    expect(new Set(events.map((event) => event.seq)).size).toBe(events.length)
   })
 })
 

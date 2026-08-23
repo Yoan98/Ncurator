@@ -16,27 +16,6 @@ export const getCompactionProcessGroupId = (runId: string): string => `${runId}:
 
 export const getFinalizingProcessGroupId = (runId: string): string => `${runId}:finalizing`
 
-export const getSkillKeyFromToolName = (toolName: string): string => {
-  if (
-    toolName === 'docx_read_outline' ||
-    toolName === 'docx_read_blocks' ||
-    toolName === 'docx_read_visuals' ||
-    toolName === 'docx_search'
-  ) {
-    return 'docx-reader'
-  }
-  if (toolName === 'docx_edit') return 'docx-writer'
-  if (toolName === 'kb_search' || toolName === 'kb_list_documents') return 'reference-reader'
-  if (
-    toolName === 'terminal_run' ||
-    toolName === 'terminal_read' ||
-    toolName === 'terminal'
-  ) {
-    return 'terminal-runner'
-  }
-  return 'generic-task'
-}
-
 export const getToolProcessGroupId = (runId: string, toolCallId: string): string =>
   `${runId}:tool:${toolCallId}`
 

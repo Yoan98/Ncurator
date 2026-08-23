@@ -64,6 +64,7 @@ describe('ai unit tool feedback envelope', () => {
       kind: 'tool',
       toolCallId: 'call-1',
       toolName: 'update_plan',
+      ok: true,
       result: { ok: true, message: '计划已更新' }
     })
   })
