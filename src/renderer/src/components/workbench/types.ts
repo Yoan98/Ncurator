@@ -186,7 +186,7 @@ export type AssistantTurnApplyTarget = {
 }
 
 export type AssistantTurnBlocker = {
-  kind: 'approval' | 'workspace' | 'user_takeover'
+  kind: 'approval' | 'workspace'
   title: string
   description: string
 }

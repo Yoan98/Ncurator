@@ -300,15 +300,6 @@ tests/case/workbench/
 - Oracle：审核模式下整批同意后按原 serial 顺序继续，对齐 `WB-BLOCKER-001-AC1`；任一拒绝或填写指导输入时本批命令 0 执行并回到后续 AI 决策，对齐 `WB-BLOCKER-001-AC2`；指导输入不作为独立第三按钮，对齐 `WB-BLOCKER-001-AC3`；审批不因固定超时自动失败，对齐 `WB-BLOCKER-001-AC4`；完全访问下文件实际创建且没有审批事件、等待状态或审批卡片，对齐 `WB-BLOCKER-001-AC5`；记录模型、耗时、完成度评分和失败归因。
 - Not：不验证 terminal 工具安全指令集本身，该能力归 AI tool 测试。
 
-#### `user-takeover-flow`
-
-- 测试类型：`e2e`
-- What：AI 请求用户接手浏览器、用户完成后继续和取消任务。
-- Why：登录、验证码和人工确认无法由 AI 自动完成，等待状态必须可恢复且可释放。
-- How：通过真实浏览器任务触发接手事件；测试以 Windows `user32` 或 macOS `CGEvent` 发送系统鼠标输入，点击嵌入网页中的确认按钮，再从 Workbench UI 完成继续或取消并覆盖切换会话后返回。
-- Oracle：展示原因和对应浏览器；确认后从同一页面继续；取消后 run 结束且不再保留 blocker，对齐 `WB-BLOCKER-002`。
-- Not：不验证第三方网站业务结果。
-
 #### `stop-running-or-approval-run`
 
 - 测试类型：`e2e`
@@ -334,7 +325,7 @@ tests/case/workbench/
 - Why：取消只应停止后续 AI 执行，不能隐藏已经发生的文件修改，否则用户无法检查和回退副作用。
 - How：真实 AI 使用 `text_file_edit` 修改 Markdown，等待 `file_artifact` 后点击停止，再打开本轮修改记录。
 - Oracle：assistant turn 显示不含 Markdown 标记的“已取消”；修改文件入口仍存在；文件内容已经更新；文本审核模式可打开。
-- Not：不验证进程被强杀后的恢复，也不要求取消立即打断正在执行的 `wait_time`。
+- Not：不验证进程被强杀后的恢复。
 
 #### `browser-use-task-panel`
 

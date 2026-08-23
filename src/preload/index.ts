@@ -340,10 +340,6 @@ const api: DesktopApi = {
     emitE2EIpcCall('aiRunApprovalBatchDecide')
     return ipcRenderer.invoke('ai-run-approval-batch-decide', payload)
   },
-  aiRunUserTakeoverConfirm: (payload) => {
-    emitE2EIpcCall('aiRunUserTakeoverConfirm')
-    return ipcRenderer.invoke('ai-run-user-takeover-confirm', payload)
-  },
   aiContextUsageGet: (payload) => ipcRenderer.invoke('ai-context-usage-get', payload),
   browserPanelSetBounds: (payload) => ipcRenderer.invoke('browser-panel-set-bounds', payload),
   browserTabList: (payload) => ipcRenderer.invoke('browser-tab-list', payload),

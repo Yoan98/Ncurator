@@ -26,7 +26,6 @@ import { buildPdfCapabilityTools } from '../../../src/main/services/ai/human/too
 import { buildPptCapabilityTools } from '../../../src/main/services/ai/human/tools/ppt'
 import { buildExcelCapabilityTools } from '../../../src/main/services/ai/human/tools/excel'
 import { releasePdfRunSession } from '../../../src/main/services/pdf/worker/pdfWorkerClient'
-import { utilityToolFamily } from '../../../src/main/services/ai/human/tools/utility'
 import { webToolFamily } from '../../../src/main/services/ai/human/tools/web'
 import { createHumanRuntimeCache } from '../../../src/main/services/ai/human/node/utils/runtimeCache'
 import type { JsonObject, JsonValue } from '../../../src/shared/types'
@@ -309,27 +308,6 @@ export const createWebToolHarness = (
   return {
     ...createToolInvoker(
       webToolFamily.buildTools({
-        ctx,
-        cache,
-        runId: runtime.runId,
-        sessionId: contextInput.sessionId || 'test-session',
-        taskId: runtime.taskId
-      }) as readonly ToolLike[]
-    ),
-    ctx
-  }
-}
-
-export const createUtilityToolHarness = (
-  runtime: BackendTestRuntime,
-  contextInput: CreateAiRunContextInput = {}
-) => {
-  const ctx = runtime.createAiRunContext(contextInput)
-  const cache = createHumanRuntimeCache()
-
-  return {
-    ...createToolInvoker(
-      utilityToolFamily.buildTools({
         ctx,
         cache,
         runId: runtime.runId,

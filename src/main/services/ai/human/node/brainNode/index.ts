@@ -126,7 +126,7 @@ export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
         : []
       const repairedToolCalls: Array<{ id?: string; name?: string; args?: Record<string, unknown> }> =
         []
-      const unrecoverableCalls: Array<{ id?: string; name: string }> = []
+      const unrecoverableCalls: Array<{ id?: string; name: string; error?: string }> = []
       for (const invalidCall of invalidToolCalls) {
         const repaired = tryRepairJsonObject(invalidCall.args)
         if (repaired.ok) {
@@ -138,7 +138,8 @@ export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
         } else {
           unrecoverableCalls.push({
             id: typeof invalidCall.id === 'string' ? invalidCall.id : undefined,
-            name: typeof invalidCall.name === 'string' ? invalidCall.name : ''
+            name: typeof invalidCall.name === 'string' ? invalidCall.name : '',
+            error: typeof invalidCall.error === 'string' ? invalidCall.error : undefined
           })
         }
       }
@@ -172,9 +173,11 @@ export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
         for (const call of unrecoverableCalls) {
           const callId = call.id || `invalid-${input.cache.toolCallCount}`
           const toolName = call.name || ''
+          const detail = call.error ? ` 具体错误：${call.error}` : ''
+          const content = `工具 ${toolName || '未知'} 的调用参数不是合法 JSON，未执行。请重新生成该工具调用并修正 JSON 格式。${detail}`
           messages.push(
             new ToolMessage({
-              content: `工具 ${toolName || '未知'} 的调用参数不是合法 JSON，未执行。请重新生成该工具调用，确保参数是合法 JSON。`,
+              content,
               tool_call_id: callId
             })
           )
@@ -183,7 +186,7 @@ export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
               kind: 'tool',
               toolCallId: callId,
               toolName,
-              result: { error: `工具 ${toolName} 调用参数不是合法 JSON，未执行。` }
+              result: { error: content }
             }
           ])
         }

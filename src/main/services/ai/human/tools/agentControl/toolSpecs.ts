@@ -28,6 +28,7 @@ export const UPDATE_PLAN_OUTPUT_SCHEMA = z.object({
 })
 
 export const FINISH_SCHEMA = z.object({
+  message: z.string().min(1).optional(),
   evidenceReferences: z
     .array(
       z.object({
@@ -79,7 +80,7 @@ export const UPDATE_PLAN_TOOL_SPEC: HumanToolSpec<
   promptSpec: {
     name: 'update_plan',
     description:
-      '初始化或更新当前任务的执行计划。每项包含 title、status（todo/done）和可选的 evidence；最后一项必须是检查任务是否已满足用户诉求的检查项。'
+      '初始化或更新当前任务的执行计划。其中 evidence为一句话说明支撑当前状态或结论的依据，仅当结论或证据变化时才更新'
   },
   resolveExecutionMeta: createStaticExecutionMetaResolver({
     mutability: 'read_only',
@@ -101,7 +102,7 @@ export const FINISH_TOOL_SPEC: HumanToolSpec<
   promptSpec: {
     name: 'finish',
     description:
-      '在完成用户任务诉求后进行最终交付。若交付引用了可追溯的资料（本地文件或网页），必须在 evidenceReferences 中列出。'
+      '在完成任务、需要用户协助或确认、或等待用户下一步时调用。其中message 说明当前进展和需要用户协助的信息。若交付引用了可追溯的资料（本地文件或网页），必须在 evidenceReferences 中列出（label 为资料名、path 为可追溯地址、resourceType 为 file 或 web、usedFor 说明支撑了哪部分交付内容）。'
   },
   resolveExecutionMeta: createStaticExecutionMetaResolver({
     mutability: 'read_only',

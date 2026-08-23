@@ -247,24 +247,6 @@ export const createRealAiDepsFactory = async (input: {
           })
           return decision
         },
-        requestUserTakeover: async (request) => {
-          input.eventCollector.add({
-            type: 'user_takeover_required',
-            runId: input.runId,
-            taskId: request.taskId,
-            requestId: request.requestId,
-            message: request.message,
-            createdAt: Date.now()
-          })
-          input.eventCollector.add({
-            type: 'user_takeover_confirmed',
-            runId: input.runId,
-            taskId: request.taskId,
-            requestId: request.requestId,
-            confirmedAt: Date.now()
-          })
-          return { confirmed: true }
-        },
         llmDriver: llmScript ? createScriptedStructuredOutputDriver(llmScript) : undefined,
         browserUseService: contextInput.browserUseService,
         webCrawlerService: contextInput.webCrawlerService

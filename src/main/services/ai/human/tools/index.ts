@@ -8,7 +8,6 @@ import { pptToolFamily } from './ppt'
 import { buildKbCapabilityTools } from './kb/retrievalTools'
 import { terminalToolFamily } from './terminal'
 import { textFileToolFamily } from './textFile'
-import { utilityToolFamily } from './utility'
 import { webToolFamily } from './web'
 import { agentControlToolFamily } from './agentControl'
 
@@ -26,7 +25,6 @@ export const TOOL_FAMILY_DEFINITIONS: Record<AiToolFamilyId, ToolFamilyDefinitio
   ppt: pptToolFamily,
   excel: excelToolFamily,
   web: webToolFamily,
-  utility: utilityToolFamily,
   'image-recognition': imageRecognitionToolFamily,
   'image-generation': imageGenerationToolFamily,
   'agent-control': agentControlToolFamily

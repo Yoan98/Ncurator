@@ -92,8 +92,6 @@ const TOOL_UI_KINDS = {
   web_search: 'web-search',
   web_crawl: 'web-crawl',
   browser_use: 'browser',
-  wait_time: 'wait',
-  wait_for_user_takeover: 'user-takeover',
   image_analyze: 'image-recognition',
   image_generate: 'image-generation',
   learn_skill: 'generic',

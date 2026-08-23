@@ -156,14 +156,6 @@ const readInstructionLabel = (input?: IpcJsonObject): string => {
   return instruction ? truncateMiddle(instruction, 96) : '当前页面'
 }
 
-const readWaitDurationLabel = (input?: IpcJsonObject): string => {
-  if (!input) return '一段时间'
-  const seconds = (input as Record<string, IpcJsonValue>).seconds
-  if (typeof seconds === 'number' && Number.isFinite(seconds)) return `${String(seconds)} 秒`
-  if (typeof seconds === 'string' && seconds.trim()) return `${seconds.trim()} 秒`
-  return '一段时间'
-}
-
 const readDocxRangeLabel = (input?: IpcJsonObject): string => {
   if (!input) return '内容'
   const candidate = (input as Record<string, IpcJsonValue>)['range']
@@ -248,12 +240,6 @@ const TOOL_ITEM_RENDERERS = {
     if (action === 'act') return sentence(text('在页面上'), text(instructionLabel))
     return sentence(text('操作浏览器 '), text(instructionLabel))
   },
-  wait_time: (input) => sentence(text('等待 '), text(readWaitDurationLabel(input))),
-  wait_for_user_takeover: (input) =>
-    sentence(
-      text('等待用户接管浏览器 '),
-      text(readStringValue(input || {}, 'message') || '完成操作')
-    ),
   image_analyze: (input) => sentence(text('识别图片 '), text(readToolFileLabel(input))),
   image_generate: (input) => sentence(text('生成图片 '), text(readToolFileLabel(input))),
   learn_skill: () => sentence(text('学习新技能')),

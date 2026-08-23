@@ -117,8 +117,7 @@ export const isDocxEditCreateInput = (input: JsonObject): boolean =>
       action &&
       typeof action === 'object' &&
       !Array.isArray(action) &&
-      (action as JsonObject).type === 'insert_blocks' &&
-      !('location' in (action as JsonObject))
+      (action as JsonObject).type === 'insert_blocks'
   )
 
 export const isDocxEditWriteInput = (input: JsonObject): boolean =>
@@ -128,7 +127,7 @@ export const isDocxEditWriteInput = (input: JsonObject): boolean =>
       action &&
       typeof action === 'object' &&
       !Array.isArray(action) &&
-      ((action as JsonObject).type !== 'insert_blocks' || 'location' in (action as JsonObject))
+      (action as JsonObject).type !== 'insert_blocks'
   )
 
 export const collectStartedDocxEditSourcePaths = (

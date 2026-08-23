@@ -101,7 +101,7 @@ describe('ai human mock-llm backend', () => {
           result.stateAfterRun1.learnedSkillIds.join(',') === 'docx-read,pdf-read' &&
             result.run2Prompt.includes('<learned_skills>') &&
             result.stateAtLimit.learnedSkillIds.join(',') ===
-              'excel-write,ppt-read,ppt-write' &&
+              'pdf-read,excel-write,ppt-read,ppt-write' &&
             result.stateAfterEviction.learnedSkillIds.join(',') ===
               'excel-write,ppt-read,ppt-write,docx-write' &&
             result.run4Prompt.includes('<learned_skills>'),

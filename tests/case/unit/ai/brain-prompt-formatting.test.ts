@@ -36,8 +36,10 @@ describe('ai unit brain prompt formatting', () => {
 
     expect(skillCatalog).toContain('始终可用的内置技能：')
     expect(skillCatalog).toContain('需要先学习才能使用的外部技能：')
-    expect(skillCatalog).toContain('- terminal：')
-    expect(skillCatalog).toContain('- docx-read：')
+    expect(skillCatalog).toContain('最多同时激活')
+    expect(skillCatalog).toContain('个工具')
+    expect(skillCatalog).toContain('- terminal（')
+    expect(skillCatalog).toContain('- docx-read（')
     expect(skillCatalog).not.toContain('learning 时填写')
     expect(skillCatalog).not.toMatch(/^- [^\n]+\n\n- /m)
   })

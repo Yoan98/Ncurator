@@ -237,7 +237,7 @@ const waitForBrowserTaskPause = async (
       throw new Error(`AI run failed while waiting for browser task pause: ${failed.message}`)
     }
     if (
-      events.some((event) => event.type === 'tool_call_started' && event.toolName === 'wait_time')
+      events.some((event) => event.type === 'tool_call_started' && event.toolName === 'browser_use')
     ) {
       return
     }
@@ -304,7 +304,7 @@ describe('workbench run e2e', () => {
           const startedAtMs = Date.now()
           await sendWorkbenchMessage(
             page,
-            `Use the right embedded browser to complete this page task. Use browser_use navigate to open ${server.url}, use observe to inspect the form controls, then do not combine form actions: use one act to fill the Task code input with ${TASK_CODE}, call wait_time exactly once for 5 seconds, use another act to click Submit task, then use extract to read the full displayed result. Tell me the exact result text.`
+            `Use the right embedded browser to complete this page task. Use browser_use navigate to open ${server.url}, use observe to inspect the form controls, then do not combine form actions: use one act to fill the Task code input with ${TASK_CODE}, use another act to click Submit task, then use extract to read the full displayed result. Tell me the exact result text.`
           )
 
           await waitForBrowserPanelOpenedWithApproval(runtime)
@@ -395,10 +395,6 @@ describe('workbench run e2e', () => {
               event.type === 'tool_call_result' && event.toolName === 'browser_use'
           )
           const browserData = browserResults.map((event) => event.result?.data)
-          const waitStarts = evidence.events.filter(
-            (event): event is Extract<AiRunEvent, { type: 'tool_call_started' }> =>
-              event.type === 'tool_call_started' && event.toolName === 'wait_time'
-          )
           const processItemTexts = await getWorkbenchPrefixLocator(
             page,
             workbenchSelectors.assistantProcessItemPrefix
@@ -479,7 +475,6 @@ describe('workbench run e2e', () => {
               browserStateWhileHidden.state?.url === server.url &&
               browserStateAfterRestore.state?.url === server.url,
             browserActions: browserStarts.map((event) => readToolInputString(event, 'action')),
-            waitCallCount: waitStarts.length,
             executionSummaryTexts,
             executionIconKinds,
             browserExecutionItemTexts,
@@ -529,13 +524,10 @@ describe('workbench run e2e', () => {
               result.browserActions.includes('observe') &&
               result.browserActions.includes('act') &&
               result.browserActions.includes('extract') &&
-              result.waitCallCount === 1 &&
               result.executionSummaryTexts.some((text) => text.includes('已操作浏览器')) &&
-              result.executionSummaryTexts.some((text) => text.includes('等待 5 秒')) &&
               result.executionSummaryTexts.every((text) => !text.includes('，')) &&
               (result.executionIconKinds.includes('workflow') ||
-                (result.executionIconKinds.includes('browser') &&
-                  result.executionIconKinds.includes('wait'))) &&
+                result.executionIconKinds.includes('browser')) &&
               result.browserExecutionItemTexts.length > 0 &&
               result.browserExecutionItemTexts.every((text) => !text.includes('：')) &&
               result.browserExecutionItemFontWeights.every(

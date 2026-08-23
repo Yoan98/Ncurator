@@ -7,7 +7,6 @@ export const AI_TOOL_FAMILY_IDS = [
   'ppt',
   'excel',
   'web',
-  'utility',
   'image-recognition',
   'image-generation',
   'agent-control'
@@ -61,14 +60,6 @@ export const RUNTIME_SKILL_CATALOG = {
     displayName: '网页浏览器',
     description:
       '搜索公开网页、抓取网页正文或操作内置浏览器，并返回候选网页、正文与页面链接或浏览器动作结果。'
-  },
-  utility: {
-    familyId: 'utility',
-    source: 'builtin',
-    countsTowardToolBudget: false,
-    title: 'utility',
-    displayName: '通用辅助工具',
-    description: '执行任务中的通用辅助动作，并返回对应的客观执行结果。'
   },
   'docx-read': {
     familyId: 'docx',
@@ -196,8 +187,6 @@ export const RUNTIME_TOOL_CATALOG = {
   web_search: { familyId: 'web', skillId: 'web-browsing' },
   web_crawl: { familyId: 'web', skillId: 'web-browsing' },
   browser_use: { familyId: 'web', skillId: 'web-browsing' },
-  wait_time: { familyId: 'utility', skillId: 'utility' },
-  wait_for_user_takeover: { familyId: 'utility', skillId: 'utility' },
   image_analyze: { familyId: 'image-recognition', skillId: 'image-recognition' },
   image_generate: { familyId: 'image-generation', skillId: 'image-generation' },
   learn_skill: { familyId: 'agent-control', skillId: 'agent-control' },

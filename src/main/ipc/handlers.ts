@@ -86,8 +86,6 @@ import type {
   AiRunCancelResponse,
   AiRunApprovalBatchDecisionRequest,
   AiRunApprovalBatchDecisionResponse,
-  AiRunUserTakeoverConfirmRequest,
-  AiRunUserTakeoverConfirmResponse,
   BrowserPanelBoundsRequest,
   BrowserPanelCaptureResponse,
   BrowserPanelHideRequest,
@@ -2673,16 +2671,6 @@ export function registerHandlers(services: {
   )
 
   ipcMain.handle(
-    'ai-run-user-takeover-confirm',
-    async (
-      _event,
-      payload: AiRunUserTakeoverConfirmRequest
-    ): Promise<AiRunUserTakeoverConfirmResponse> => {
-      return await chatRunService.confirmUserTakeover(payload)
-    }
-  )
-
-  ipcMain.handle(
     'docx-apply-get',
     async (_event, payload: GetDocxApplyRecordRequest): Promise<GetDocxApplyRecordResponse> => {
       try {
@@ -2783,8 +2771,7 @@ export function registerHandlers(services: {
         chatStore.getChatSessions(),
         aiRunStore.listSessionIdsByRunStatuses([
           'running',
-          'waiting_approval',
-          'waiting_user_takeover'
+          'waiting_approval'
         ]),
         chatStore.listUnreadCompletedSessionIds()
       ])

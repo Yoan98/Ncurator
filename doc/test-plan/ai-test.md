@@ -971,26 +971,6 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 - Oracle：工具结果返回 `browser_use service unavailable`。
 - Not：不验证 Stagehand 实际网页操作。
 
-#### utility 类别
-
-##### `wait-for-user-takeover-contract`
-
-- 测试类型：`backend`
-- What：AI 在需要用户接管时通过 wait 工具暂停并正确恢复或结束。
-- Why：接管是 AI 架构的阻塞态，状态、提示和恢复边界必须稳定。
-- How：构造 takeover 请求，观察事件、等待结果和用户响应后的终态。
-- Oracle：只产生一个可识别的等待状态；响应后继续执行或安全结束，不重复调用和伪造完成。
-- Not：不覆盖 Workbench 接管面板的视觉交互。
-
-##### `wait-time-contract`
-
-- 测试类型：`backend`
-- What：`wait_time` 会等待指定秒数并返回实际等待毫秒数。
-- Why：浏览器和其他异步任务需要一个明确的等待工具，避免把等待塞进其他工具参数。
-- How：调用 `wait_time(seconds=0.05)` 并比较工具返回值与墙钟时间。
-- Oracle：返回 `waitedMs`，且实际等待时间接近请求时长。
-- Not：不验证浏览器页面加载状态。
-
 #### human hand 类别
 
 ##### `hand-invalid-tool-input`
@@ -1077,15 +1057,6 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 - How：仅固定 LLM 决策和可控搜索/网页响应，真实走 human graph 与 web tools。
 - Oracle：先获得候选再读取选中页面；最终答复只使用成功读取的事实和来源。
 - Not：不验证公网搜索排序质量。
-
-##### `human-utility-wait-and-takeover-resume`
-
-- 测试类型：`backend`
-- What：human 可等待、请求用户接管并在 resume 后继续完成任务。
-- Why：Utility 只有 tool 层和 Workbench 间接覆盖，缺少暂停/恢复状态机的业务回归。
-- How：脚本化 LLM 决策依次触发短等待、takeover、snapshot resume 和最终交付。
-- Oracle：暂停状态、resume 输入、后续节点和终态正确；不会重复执行暂停前动作。
-- Not：不验证真实等待时长精度。
 
 ##### `ai-run-service-human-only`
 

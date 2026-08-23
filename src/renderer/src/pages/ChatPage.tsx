@@ -51,7 +51,6 @@ import AssistantTurnCard from '../components/workbench/AssistantTurnCard'
 import WorkbenchComposer from '../components/workbench/WorkbenchComposer'
 import WorkbenchContentPanel from '../components/workbench/WorkbenchContentPanel'
 import ScheduledTasksView from '../components/scheduledTasks/ScheduledTasksView'
-import UserTakeoverPanel from '../components/workbench/UserTakeoverPanel'
 import ImageLightbox from '../components/workbench/ImageLightbox'
 import AttachmentFileIcon from '../components/workbench/composer/AttachmentFileIcon'
 import ReferenceInlineToken from '../components/workbench/composer/ReferenceInlineToken'
@@ -122,7 +121,6 @@ import { useWorkbenchMode } from '../contexts/WorkbenchModeContext'
 import SidebarUpdateControl from '../components/update/SidebarUpdateControl'
 
 type ApprovalBatchRequiredEvent = Extract<AiRunEvent, { type: 'approval_batch_required' }>
-type UserTakeoverRequiredEvent = Extract<AiRunEvent, { type: 'user_takeover_required' }>
 type ApprovalBatchDecisionAction = 'approve' | 'reject' | 'guide'
 const COLLAPSED_WORKSPACE_SESSION_LIMIT = 5
 type WorkbenchE2EWindow = Window &
@@ -380,23 +378,6 @@ const reduceAssistantTurnByRunEvent = (
     next = { ...next, blockers: [] }
   }
 
-  if (event.type === 'user_takeover_required') {
-    next = {
-      ...next,
-      blockers: [
-        {
-          kind: 'user_takeover',
-          title: '等待用户接手',
-          description: event.message
-        }
-      ]
-    }
-  }
-
-  if (event.type === 'user_takeover_confirmed') {
-    next = { ...next, blockers: [] }
-  }
-
   if (event.type === 'answer_token') {
     next = {
       ...next,
@@ -483,20 +464,12 @@ const applyRunRecordToTurn = (
       },
       turn.applyTargets
     ),
-    blockers: run.pendingUserTakeover
+    blockers: run.pendingApproval
       ? [
           {
-            kind: 'user_takeover',
-            title: '等待用户接手',
-            description: run.pendingUserTakeover.message
-          }
-        ]
-      : run.pendingApproval
-        ? [
-            {
-              kind: 'approval',
-              title: '等待批量审核',
-              description: `共有 ${run.pendingApproval.items.length} 条命令待审核`
+            kind: 'approval',
+            title: '等待批量审核',
+            description: `共有 ${run.pendingApproval.items.length} 条命令待审核`
             }
           ]
         : turn.blockers,
@@ -756,10 +729,6 @@ const ChatPage: React.FC = () => {
     Record<string, ApprovalDraftDecision>
   >({})
   const [approvalSubmitting, setApprovalSubmitting] = useState(false)
-  const [pendingUserTakeover, setPendingUserTakeover] = useState<UserTakeoverRequiredEvent | null>(
-    null
-  )
-  const [userTakeoverConfirming, setUserTakeoverConfirming] = useState(false)
 
   const activeRunMessageIdsRef = useRef<Record<string, string>>({})
   const activeRunSessionIdsRef = useRef<Record<string, string>>({})
@@ -1696,13 +1665,6 @@ const ChatPage: React.FC = () => {
     setApprovalCurrentIndex(0)
     setApprovalDraftDecisions({})
     setApprovalSubmitting(false)
-    const userTakeover =
-      activeRuns.find((item) => item.pendingUserTakeover)?.pendingUserTakeover || null
-    setPendingUserTakeover(userTakeover)
-    setUserTakeoverConfirming(false)
-    if (userTakeover) {
-      openBrowserTab()
-    }
     shouldAutoScrollRef.current = true
     scrollToBottom(true)
   }
@@ -2007,8 +1969,6 @@ const ChatPage: React.FC = () => {
       setApprovalCurrentIndex(0)
       setApprovalDraftDecisions({})
       setApprovalSubmitting(false)
-      setPendingUserTakeover(null)
-      setUserTakeoverConfirming(false)
       const draftState = createDefaultSessionUiState(modelSelectionRef.current, workspaceId || null)
       persistedDraftStateRef.current = draftState
       applySessionUiState('__draft__', draftState, workspaceId || null)
@@ -2419,7 +2379,7 @@ const ChatPage: React.FC = () => {
 
   useEffect(() => {
     scrollToBottom()
-  }, [assistantTurns, currentMessages, loading, pendingApprovalBatch, pendingUserTakeover])
+  }, [assistantTurns, currentMessages, loading, pendingApprovalBatch])
 
   useEffect(() => {
     let startTimer: number | null = null
@@ -2859,8 +2819,6 @@ const ChatPage: React.FC = () => {
       if (event.type === 'runtime_issue') {
         if (!event.internal) {
           setLoading(false)
-          setPendingUserTakeover(null)
-          setUserTakeoverConfirming(false)
           if (event.code === 'approval_denied') {
             setPendingApprovalBatch(null)
             setApprovalCurrentIndex(0)
@@ -2900,21 +2858,6 @@ const ChatPage: React.FC = () => {
         return
       }
 
-      if (event.type === 'user_takeover_required') {
-        setLoading(false)
-        setUserTakeoverConfirming(false)
-        setPendingUserTakeover(event)
-        openBrowserTab()
-        return
-      }
-
-      if (event.type === 'user_takeover_confirmed') {
-        setPendingUserTakeover(null)
-        setUserTakeoverConfirming(false)
-        setLoading(true)
-        return
-      }
-
       if (event.type === 'answer_token') {
         setCurrentMessages((previous) =>
           previous.map((item) =>
@@ -2941,8 +2884,6 @@ const ChatPage: React.FC = () => {
         setCancellingRun(false)
         setPendingApprovalBatch(null)
         setApprovalSubmitting(false)
-        setPendingUserTakeover(null)
-        setUserTakeoverConfirming(false)
         setCurrentMessages((previous) =>
           previous.map((item) =>
             item.id === messageId
@@ -2975,8 +2916,6 @@ const ChatPage: React.FC = () => {
         setCancellingRun(false)
         setPendingApprovalBatch(null)
         setApprovalSubmitting(false)
-        setPendingUserTakeover(null)
-        setUserTakeoverConfirming(false)
         setCurrentMessages((previous) =>
           previous.map((item) =>
             item.id === messageId
@@ -3001,8 +2940,6 @@ const ChatPage: React.FC = () => {
         setCancellingRun(false)
         setPendingApprovalBatch(null)
         setApprovalSubmitting(false)
-        setPendingUserTakeover(null)
-        setUserTakeoverConfirming(false)
         if (eventSessionId && eventSessionId === currentSessionIdRef.current) {
           void loadFileChangesForSessionRef.current(eventSessionId, event.runId, {
             notifyNoEffectiveChange: true
@@ -3166,8 +3103,6 @@ const ChatPage: React.FC = () => {
     setCancellingRun(false)
     setPendingApprovalBatch(null)
     setApprovalSubmitting(false)
-    setPendingUserTakeover(null)
-    setUserTakeoverConfirming(false)
     lastSubmittedInputRef.current = userQuery
     setCurrentMessages((previous) =>
       appendMessagesDedupe(previous, [optimisticUserMessage, optimisticAssistantMessage])
@@ -3279,8 +3214,6 @@ const ChatPage: React.FC = () => {
     setAiRunId(null)
     setPendingApprovalBatch(null)
     setApprovalSubmitting(false)
-    setPendingUserTakeover(null)
-    setUserTakeoverConfirming(false)
 
     try {
       if (createdSession) {
@@ -3355,24 +3288,6 @@ const ChatPage: React.FC = () => {
     } catch (error) {
       setCancellingRun(false)
       emitErrorMessage(error instanceof Error ? error.message : '取消失败')
-    }
-  }
-
-  const handleUserTakeoverConfirm = async (): Promise<void> => {
-    if (!pendingUserTakeover || userTakeoverConfirming) return
-    setUserTakeoverConfirming(true)
-    try {
-      const response = await window.api.aiRunUserTakeoverConfirm({
-        runId: pendingUserTakeover.runId,
-        requestId: pendingUserTakeover.requestId
-      })
-      if (!response.success) {
-        setUserTakeoverConfirming(false)
-        emitErrorMessage(response.error || '继续任务失败')
-      }
-    } catch (error) {
-      setUserTakeoverConfirming(false)
-      emitErrorMessage(error instanceof Error ? error.message : '继续任务失败')
     }
   }
 
@@ -4243,15 +4158,7 @@ const ChatPage: React.FC = () => {
                           </span>
                         </div>
                       ) : null}
-                      {composerMode === 'ai' && pendingUserTakeover ? (
-                        <UserTakeoverPanel
-                          message={pendingUserTakeover.message}
-                          confirming={userTakeoverConfirming}
-                          cancelling={cancellingRun}
-                          onConfirm={() => void handleUserTakeoverConfirm()}
-                          onCancel={() => void handleCancel()}
-                        />
-                      ) : composerMode === 'ai' && pendingApprovalBatch ? (
+                      {composerMode === 'ai' && pendingApprovalBatch ? (
                         <div
                           className="min-w-0 overflow-hidden rounded-[12px] border border-[#E0DFDC] bg-[#FFFFFF] shadow-[0_8px_24px_rgba(15,15,15,0.08)]"
                           data-testid={chatSelectors.approvalBatchCard}

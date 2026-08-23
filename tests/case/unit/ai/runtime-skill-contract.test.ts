@@ -12,7 +12,6 @@ describe('ai unit runtime skill contract', () => {
       'text-file',
       'kb-retrieval',
       'web-browsing',
-      'utility',
       'image-recognition',
       'image-generation',
       'agent-control'
@@ -34,7 +33,6 @@ describe('ai unit runtime skill contract', () => {
       'text-file',
       'kb-retrieval',
       'web-browsing',
-      'utility',
       'image-recognition',
       'image-generation',
       'agent-control'

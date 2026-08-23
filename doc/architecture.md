@@ -132,13 +132,13 @@ flowchart TD
 - `learning` 负责按需加载 external skill，执行 `learn_skill` 控制工具并把结果写回消息数组。
 - `plan` 执行 `update_plan` 控制工具，把计划写入 `memory.plan` 并回写 `ToolMessage`。
 - `hand` 负责执行真实工具，把结果以 `ToolMessage` 追加回消息数组。
-- `mouth` 由 `finish` 控制工具（或无工具调用的自然收尾）触发，复用 brain/hand 已累积的消息数组，追加一条交付指令 user 消息后流式生成最终答复（`chatMessages`），并把最终答复作为 `assistant` 转录条目写回。
+- `mouth` 由 `finish` 控制工具（或无工具调用的自然收尾）触发，复用 brain/hand 已累积的消息数组，追加一条交付指令 user 消息后流式生成最终答复（`chatMessages`），并把最终答复作为 `assistant` 转录条目写回。`finish` 统一承担「把当前进展交给用户」：完成任务、需要用户协助或确认、或等待用户下一步时都可调用，并可携带 `message` 说明需要用户做什么。
 - `context_budget` 负责在每一步前检查上下文预算。
 - `context_compaction` 把消息投影的较早区间压缩为一条摘要（`<compacted_history>`）并注入 `<current_state>`（完整 plan + learnedSkillIds），服务本次 run 继续推进。
 
 ### 原生 tool calling 与消息转录（唯一真相源）
 
-brain 采用原生 function calling（`bindTools`），工具结果以 `ToolMessage`（按 `tool_call_id` 配对）追加到 append-only 的 `messages` 数组，不再把历史每轮重渲染成字符串。静态前缀（原则 + 技能目录 + 本地环境）与技能目录只标注「内置 / 需学习」，不随 learn 变化，保证缓存友好。非工具控制动作统一为 `agent-control` 内置技能的三个工具：`learn_skill`、`update_plan`、`finish`。
+brain 采用原生 function calling（`bindTools`），工具结果以 `ToolMessage`（按 `tool_call_id` 配对）追加到 append-only 的 `messages` 数组，不再把历史每轮重渲染成字符串。静态前缀（身份 + 原则 + 技能目录 + 计划契约 + 交付契约 + 本地环境）与技能目录只标注「内置 / 需学习」，不随 learn 变化，保证缓存友好。技能目录按技能渲染工具数量与「最多同时激活 25 个工具」的动态上限，不硬编码。非工具控制动作统一为 `agent-control` 内置技能的三个工具：`learn_skill`、`update_plan`、`finish`。
 
 **模型上下文唯一真相源是会话级 append-only 的会话消息记录（`chat_session_message_log` 表）**：每条是 `user` / `assistant`（含真实 `tool_calls`）/ `tool`（含结果）/ `annotation`（思考/学习/压缩/收尾等过程标记）。模型上下文从会话消息记录投影（`deriveMessageLogMessages`），中断恢复与跨 run 上下文都从记录重建后补一条 user 消息继续；UI 过程展示与模型记忆不再维护 `rounds`/`conversation`/`ai_run_event` 副本。压缩只作用于「投影出的消息」（早段 → `<compacted_history>` + `<current_state>`，尾段保留），记录本身 append-only 不动。
 

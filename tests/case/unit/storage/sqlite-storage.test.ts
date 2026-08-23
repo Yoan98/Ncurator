@@ -168,7 +168,6 @@ const createRun = (input: Partial<AiRunRecord> = {}): AiRunRecord => ({
   input: input.input || 'hello',
   partialAnswer: input.partialAnswer || '',
   pendingApproval: input.pendingApproval,
-  pendingUserTakeover: input.pendingUserTakeover,
   eventCount: input.eventCount,
   visibleEventCount: input.visibleEventCount,
   lastEventAt: input.lastEventAt,
@@ -495,25 +494,6 @@ describe('sqlite storage core and stores', () => {
     expect(runs).toHaveLength(1)
     expect(runs[0].status).toBe('waiting_approval')
     expect(runs[0].pendingApproval?.batchId).toBe('batch-1')
-  })
-
-  it('restores pending user takeover runs from sqlite', async () => {
-    const pendingUserTakeover: Extract<AiRunEvent, { type: 'user_takeover_required' }> = {
-      type: 'user_takeover_required',
-      runId: 'run-1',
-      taskId: 'task-1',
-      requestId: 'takeover-1',
-      message: '请在右侧浏览器完成登录',
-      createdAt: 11
-    }
-    await aiRunStore.saveRun(createRun({ status: 'waiting_user_takeover', pendingUserTakeover }))
-
-    const runs = await aiRunStore.listRunsBySession('session-1', ['waiting_user_takeover'])
-
-    expect(runs).toHaveLength(1)
-    expect(runs[0].status).toBe('waiting_user_takeover')
-    expect(runs[0].pendingUserTakeover?.requestId).toBe('takeover-1')
-    expect(runs[0].pendingUserTakeover?.message).toBe('请在右侧浏览器完成登录')
   })
 
   it('tracks completed sessions as unread until viewed after completion', async () => {

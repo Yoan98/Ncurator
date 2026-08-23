@@ -120,6 +120,7 @@ export const humanNextActionSchema = z.discriminatedUnion('action', [
   }),
   z.object({
     action: z.literal('mouth'),
+    message: z.string().min(1).optional(),
     evidenceReferences: z.array(brainEvidenceReferenceSchema).optional(),
     toolCallId: z.string().min(1).optional()
   })

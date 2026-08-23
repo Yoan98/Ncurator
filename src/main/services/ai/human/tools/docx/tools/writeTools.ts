@@ -1009,9 +1009,7 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
         (await documentExists(requestedSourcePath))
       )
       if (!sourceExists) {
-        const invalidCreateAction = args.actions.find(
-          (action) => action.type !== 'insert_blocks' || Boolean(action.location)
-        )
+        const invalidCreateAction = args.actions.find((action) => action.type !== 'insert_blocks')
         if (invalidCreateAction) {
           return finalizeDocxToolFailure({
             runtime,
@@ -1019,7 +1017,7 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
               toolName,
               toolCallId,
               reason: 'invalid_input',
-              error: '新建 DOCX 时只能使用不带 location 的 insert_blocks；其他操作需要已有文档内容',
+              error: '新建 DOCX 时只能使用 insert_blocks；其他操作需要已有文档内容',
               resourceContext: runtime.buildResourceContext({
                 sourcePath: requestedSourcePath,
                 effectKind: 'mutated'
