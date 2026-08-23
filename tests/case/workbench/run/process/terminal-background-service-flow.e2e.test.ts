@@ -42,7 +42,7 @@ describe('workbench terminal e2e', () => {
         domain: 'workbench',
         suite: 'run',
         groups: ['process'],
-        description: '真实 AI 启动持久终端 HTTP 服务、浏览器验证页面并停止服务。',
+        description: '真实 AI 启动持久终端 HTTP 服务、让出控制权并用浏览器验证页面。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
         execution: 'live',
@@ -61,7 +61,7 @@ describe('workbench terminal e2e', () => {
           const handledApprovals = new Set<string>()
           await sendWorkbenchMessage(
             runtime.page,
-            `请使用持久终端启动 python3 -m http.server ${port} --bind 127.0.0.1，不要在命令末尾添加 &。服务开始运行后，用内置浏览器打开 http://127.0.0.1:${port}/terminal-service.html 并确认页面包含 ${PAGE_MARKER}，最后停止并关闭启动服务的终端。`
+            `请使用终端启动 python3 -m http.server ${port} --bind 127.0.0.1，不要在命令末尾添加 &。服务开始运行后，用内置浏览器打开 http://127.0.0.1:${port}/terminal-service.html 并确认页面包含 ${PAGE_MARKER}。`
           )
 
           const deadline = Date.now() + WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS
@@ -103,9 +103,6 @@ describe('workbench terminal e2e', () => {
             },
             0.85
           )
-          const portReleased = await fetch(`http://127.0.0.1:${port}/terminal-service.html`)
-            .then(() => false)
-            .catch(() => true)
           return {
             eventTypes: events.map((event) => event.type),
             toolNames: events
@@ -114,23 +111,18 @@ describe('workbench terminal e2e', () => {
                   event.type === 'tool_call_started'
               )
               .map((event) => event.toolName),
-            portReleased,
             finalAnswerText
           }
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
             result.eventTypes.includes('terminal_command_yielded') &&
-              result.eventTypes.includes('terminal_command_stopped') &&
               result.toolNames.includes('terminal_run') &&
-              result.toolNames.includes('terminal_stop') &&
               result.toolNames.includes('browser_use') &&
-              result.portReleased &&
               result.finalAnswerText.includes(PAGE_MARKER),
             {
               name: 'workbench-real-persistent-terminal-service-flow',
-              message:
-                '真实 AI 应通过持久终端启动服务、让出控制权、使用浏览器验证、停止服务并释放端口。',
+              message: '真实 AI 应通过终端启动服务、让出控制权并使用浏览器验证页面。',
               data: result
             }
           )

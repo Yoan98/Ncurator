@@ -129,7 +129,6 @@ export type AssistantProcessSkillKey =
   | 'kb'
   | 'terminal'
   | 'web-search'
-  | 'web-crawl'
   | 'browser'
   | 'image-recognition'
   | 'image-generation'

@@ -13,7 +13,7 @@ describe('ai human mock-llm backend', () => {
       domain: 'ai',
       suite: 'human',
       groups: ['mock-llm'],
-      description: '验证同一会话跨 run 共享技能，并在总工具超过 25 时按 FIFO 遗忘完整技能。',
+      description: '验证同一会话跨 run 共享技能，并在总工具超过 30 时按 FIFO 遗忘完整技能。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -79,8 +79,8 @@ describe('ai human mock-llm backend', () => {
             'human.brain': [
               {
                 output: buildLearnSkillsDecision({
-                  skillIds: ['docx-write'],
-                  summary: '学习 Word 编辑技能并检查 FIFO 遗忘结果。'
+                  skillIds: ['excel-read', 'image-recognition', 'image-generation', 'docx-write'],
+                  summary: '补充 Excel 阅读与图片、Word 编辑技能并检查 FIFO 遗忘结果。'
                 })
               },
               ({ user }) => {
@@ -101,9 +101,9 @@ describe('ai human mock-llm backend', () => {
           result.stateAfterRun1.learnedSkillIds.join(',') === 'docx-read,pdf-read' &&
             result.run2Prompt.includes('<learned_skills>') &&
             result.stateAtLimit.learnedSkillIds.join(',') ===
-              'pdf-read,excel-write,ppt-read,ppt-write' &&
+              'docx-read,pdf-read,excel-write,ppt-read,ppt-write' &&
             result.stateAfterEviction.learnedSkillIds.join(',') ===
-              'excel-write,ppt-read,ppt-write,docx-write' &&
+              'pdf-read,excel-write,ppt-read,ppt-write,excel-read,image-recognition,image-generation,docx-write' &&
             result.run4Prompt.includes('<learned_skills>'),
           {
             name: 'session-skills-persist-and-evict-fifo-across-runs',

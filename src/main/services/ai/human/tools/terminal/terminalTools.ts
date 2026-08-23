@@ -17,8 +17,7 @@ import { emitFileArtifactEvent } from '../../../events/fileArtifacts'
 import type { TerminalCapabilityToolsInput, TerminalCapabilityToolsRuntimeState } from './types'
 import {
   createTerminalRunToolSpec,
-  TERMINAL_READ_TOOL_SPEC,
-  TERMINAL_STOP_TOOL_SPEC
+  TERMINAL_READ_TOOL_SPEC
 } from './toolSpecs'
 
 type PendingTerminalCommand = {
@@ -180,16 +179,6 @@ const failCommand = async (commandId: string, error: unknown): Promise<void> => 
   pendingCommands.delete(commandId)
 }
 
-const readSessionCwd = (input: TerminalCapabilityToolsInput, terminalId?: string): string => {
-  if (!terminalId) return input.workspaceRootPath
-  return (
-    input.sessionManager
-      .list({ chatSessionId: input.sessionId, workspaceId: input.workspaceId })
-      .find((session) => session.terminalId === terminalId)?.currentTerminalPath ||
-    input.workspaceRootPath
-  )
-}
-
 const applyOutputGuards = (input: {
   toolName: string
   output: string
@@ -250,7 +239,6 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
           input.ctx.checkCancelled()
           const command = String(args.command || '').trim()
           const commandExplanation = String(args.commandExplanation || '').trim()
-          const terminalId = String(args.terminalId || '').trim() || undefined
           if (!command) {
             const failure = buildFailure({ error: 'empty command' })
             session.fail(
@@ -296,7 +284,7 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
             return failure
           }
 
-          const cwd = readSessionCwd(input, terminalId)
+          const cwd = input.workspaceRootPath
           const riskPolicy = analyzeTerminalCommandPolicy(command, input.ctx.platform)
           const approvedByHand = consumeApprovedTerminalCommand({ cache: input.cache, command })
           if (riskPolicy.executionPolicy === 'approval_required' && !approvedByHand) {
@@ -380,8 +368,7 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
               environment: input.ctx.humanRuntimeOverrides?.terminalEnvironment,
               platform: input.ctx.platform,
               runId: input.runId,
-              command,
-              terminalId
+              command
             })
           } catch (error) {
             if (trackingStarted) input.ctx.discardTerminalCommandTracking(trackingId)
@@ -607,88 +594,5 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
     }
   )
 
-  const terminalStop = tool(
-    async (args) =>
-      await withToolLifecycle({
-        emitter: toolEvents,
-        toolName: TERMINAL_STOP_TOOL_SPEC.name,
-        args: args as IpcJsonObject,
-        execute: async (session) => {
-          input.ctx.checkCancelled()
-          try {
-            const result = await input.sessionManager.stop({
-              terminalId: String(args.terminalId || ''),
-              chatSessionId: input.sessionId,
-              workspaceId: input.workspaceId,
-              closeTerminal: args.closeTerminal === true
-            })
-            input.ctx.sendEvent({
-              type: 'terminal_command_stopped',
-              runId: input.runId,
-              taskId: input.taskId,
-              terminalId: result.terminalId,
-              forced: result.forced,
-              createdAt: Date.now()
-            })
-            if (result.terminalStatus === 'closed') {
-              input.ctx.sendEvent({
-                type: 'terminal_session_closed',
-                runId: input.runId,
-                taskId: input.taskId,
-                terminalId: result.terminalId,
-                createdAt: Date.now()
-              })
-            }
-            const pending = Array.from(pendingCommands.entries()).find(
-              ([, value]) =>
-                value.sessionId === input.sessionId &&
-                value.terminalId === result.terminalId &&
-                !value.finalized
-            )
-            if (pending) {
-              await finalizeCommand({
-                commandId: pending[0],
-                exitCode: 130,
-                executionStatus: 'cancelled'
-              })
-            }
-            const payload = {
-              terminalId: result.terminalId,
-              terminalStatus: result.terminalStatus,
-              stopped: result.stopped,
-              forced: result.forced
-            }
-            session.succeed(
-              undefined,
-              buildTerminalToolResult({
-                toolName: TERMINAL_STOP_TOOL_SPEC.name,
-                ok: true,
-                data: payload
-              })
-            )
-            return payload
-          } catch (error) {
-            const message = error instanceof Error ? error.message : String(error)
-            const failure = buildFailure({ error: message })
-            session.fail(
-              message,
-              undefined,
-              buildTerminalToolResult({
-                toolName: TERMINAL_STOP_TOOL_SPEC.name,
-                ok: false,
-                data: failure
-              })
-            )
-            return failure
-          }
-        }
-      }),
-    {
-      name: TERMINAL_STOP_TOOL_SPEC.name,
-      description: TERMINAL_STOP_TOOL_SPEC.promptSpec.description,
-      schema: TERMINAL_STOP_TOOL_SPEC.inputSchema
-    }
-  )
-
-  return { tools: [terminalRun, terminalRead, terminalStop], state }
+  return { tools: [terminalRun, terminalRead], state }
 }

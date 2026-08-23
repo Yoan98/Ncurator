@@ -12,7 +12,7 @@ describe('ai human mock-llm web backend', () => {
       domain: 'ai',
       suite: 'human',
       groups: ['mock-llm'],
-      description: '验证 human 从网页搜索候选进入正文抓取并整合事实。',
+      description: '验证 human 使用 web_search 搜索并读取网页正文整合事实。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -57,8 +57,8 @@ describe('ai human mock-llm web backend', () => {
               },
               {
                 output: buildToolDecision({
-                  toolName: 'web_crawl',
-                  args: { url: 'https://example.test/policy', topic: '补贴截止时间' },
+                  toolName: 'web_search',
+                  args: { url: 'https://example.test/policy' },
                   summary: '读取通知正文'
                 })
               },
@@ -84,7 +84,7 @@ describe('ai human mock-llm web backend', () => {
         const results = filterAiRunEventsByType(result.events, 'tool_call_result')
         runtime.assertThat(
           result.output.status === 'completed' &&
-            results.map((event) => event.toolName).join(',') === 'web_search,web_crawl' &&
+            results.map((event) => event.toolName).join(',') === 'web_search,web_search' &&
             result.output.deliveryMarkdown.includes('2026-09-30') &&
             result.output.deliveryMarkdown.includes('https://example.test/policy'),
           {

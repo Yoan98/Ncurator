@@ -2,14 +2,14 @@ import { z } from 'zod/v4'
 import type { HumanToolSpec } from '../types'
 import { createStaticExecutionMetaResolver } from '../utils/toolSpecUtils'
 
-export const WEB_CRAWL_SCHEMA = z.object({
-  url: z.string().min(1),
-  topic: z.string().min(1)
-})
-
-export const WEB_SEARCH_SCHEMA = z.object({
-  query: z.string().min(1)
-})
+export const WEB_SEARCH_SCHEMA = z
+  .object({
+    query: z.string().min(1).optional(),
+    url: z.string().min(1).optional()
+  })
+  .refine((value) => Boolean(value.query) !== Boolean(value.url), {
+    message: 'query 与 url 必须二选一'
+  })
 
 export const BROWSER_USE_SCHEMA = z.discriminatedUnion('action', [
   z.object({
@@ -31,7 +31,7 @@ export const BROWSER_USE_SCHEMA = z.discriminatedUnion('action', [
   })
 ])
 
-export const WEB_CRAWL_OUTPUT_SCHEMA = z.union([
+export const WEB_SEARCH_OUTPUT_SCHEMA = z.union([
   z.object({
     requestedUrl: z.string(),
     finalUrl: z.string(),
@@ -66,24 +66,6 @@ export const WEB_CRAWL_OUTPUT_SCHEMA = z.union([
     requestedUrl: z.string().optional(),
     finalUrl: z.string().optional(),
     statusCode: z.number().int().optional()
-  })
-])
-
-export const WEB_SEARCH_OUTPUT_SCHEMA = z.union([
-  z.object({
-    query: z.string(),
-    results: z.array(
-      z.object({
-        rank: z.number().int(),
-        title: z.string(),
-        url: z.string(),
-        snippet: z.string().optional()
-      })
-    )
-  }),
-  z.object({
-    error: z.string(),
-    query: z.string().optional()
   })
 ])
 
@@ -142,25 +124,6 @@ const WEB_EXECUTION_META = createStaticExecutionMetaResolver({
   defaultResourceKey: 'web'
 })
 
-export const WEB_CRAWL_TOOL_SPEC: HumanToolSpec<
-  z.infer<typeof WEB_CRAWL_SCHEMA>,
-  z.infer<typeof WEB_CRAWL_OUTPUT_SCHEMA>,
-  'web_crawl',
-  'web-browsing'
-> = {
-  name: 'web_crawl',
-  familyId: 'web',
-  skillIds: ['web-browsing'],
-  inputSchema: WEB_CRAWL_SCHEMA,
-  outputSchema: WEB_CRAWL_OUTPUT_SCHEMA,
-  promptSpec: {
-    name: 'web_crawl',
-    description:
-      '抓取公开网页 URL 的正文内容，并返回 requestedUrl、finalUrl、title、markdown 和分组评分后的 links。'
-  },
-  resolveExecutionMeta: WEB_EXECUTION_META
-}
-
 export const WEB_SEARCH_TOOL_SPEC: HumanToolSpec<
   z.infer<typeof WEB_SEARCH_SCHEMA>,
   z.infer<typeof WEB_SEARCH_OUTPUT_SCHEMA>,
@@ -174,7 +137,8 @@ export const WEB_SEARCH_TOOL_SPEC: HumanToolSpec<
   outputSchema: WEB_SEARCH_OUTPUT_SCHEMA,
   promptSpec: {
     name: 'web_search',
-    description: '根据关键词搜索公开网页，并返回候选网页的标题、URL 和摘要。'
+    description:
+      '搜索网页内容。传 query 时按关键词搜索并读取最相关网页内容；传 url 时直接读取该指定网页内容。返回 requestedUrl、finalUrl、title、markdown、分组评分后的 links 与发布时间。'
   },
   resolveExecutionMeta: WEB_EXECUTION_META
 }
@@ -201,8 +165,4 @@ export const BROWSER_USE_TOOL_SPEC: HumanToolSpec<
   })
 }
 
-export const WEB_TOOL_SPECS = [
-  WEB_SEARCH_TOOL_SPEC,
-  WEB_CRAWL_TOOL_SPEC,
-  BROWSER_USE_TOOL_SPEC
-] as const
+export const WEB_TOOL_SPECS = [WEB_SEARCH_TOOL_SPEC, BROWSER_USE_TOOL_SPEC] as const

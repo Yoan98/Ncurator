@@ -30,7 +30,6 @@ export const getSkillKeyFromToolName = (toolName: string): string => {
   if (
     toolName === 'terminal_run' ||
     toolName === 'terminal_read' ||
-    toolName === 'terminal_stop' ||
     toolName === 'terminal'
   ) {
     return 'terminal-runner'

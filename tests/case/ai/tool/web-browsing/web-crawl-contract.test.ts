@@ -4,7 +4,7 @@ import { createWebToolHarness } from '../../../../harness/backend/aiToolHarness'
 import { createWebCrawlerService } from '../../../../harness/backend/webCrawlerTestUtils'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 
-type WebCrawlResult = {
+type WebSearchResult = {
   requestedUrl?: string
   finalUrl?: string
   title?: string
@@ -32,17 +32,6 @@ type WebCrawlResult = {
   statusCode?: number
   estimatedTokens?: number
   limit?: number
-}
-
-type WebSearchResult = {
-  query?: string
-  results?: Array<{
-    rank?: number
-    title?: string
-    url?: string
-    snippet?: string
-  }>
-  error?: string
 }
 
 type BrowserUseResult = {
@@ -148,14 +137,14 @@ const createLocalServer = async (): Promise<{
 }
 
 describe('ai tool web backend', () => {
-  it('web-crawl-page-contract', async () => {
+  it('web-search-reads-page-by-url', async () => {
     await runBackendCase({
-      caseId: 'web-crawl-page-contract',
+      caseId: 'web-search-reads-page-by-url',
       harnessMode: 'tool-real',
       domain: 'ai',
       suite: 'tool',
       groups: ['web-browsing'],
-      description: '验证 web_crawl 会返回当前最相关页面的标题、markdown、发布时间与后续链接。',
+      description: '验证 web_search 传 url 会返回该页面的标题、markdown、发布时间与后续链接。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -165,9 +154,8 @@ describe('ai tool web backend', () => {
           const harness = createWebToolHarness(runtime, {
             webCrawlerService
           })
-          return await harness.invoke<WebCrawlResult>('web_crawl', {
-            url: `${server.baseUrl}/policy`,
-            topic: '灵活就业补贴申报条件和办理指南'
+          return await harness.invoke<WebSearchResult>('web_search', {
+            url: `${server.baseUrl}/policy`
           })
         } finally {
           await webCrawlerService.close()
@@ -190,9 +178,9 @@ describe('ai tool web backend', () => {
                 typeof link.totalScore === 'number'
             ),
           {
-            name: 'web-crawl-returns-stable-page-fields',
+            name: 'web-search-returns-stable-page-fields',
             message:
-              'web_crawl 应返回 requestedUrl/finalUrl、标题、发布时间、markdown 和带评分的分组 links。',
+              'web_search 传 url 应返回 requestedUrl/finalUrl、标题、发布时间、markdown 和带评分的分组 links。',
             data: result
           }
         )
@@ -200,14 +188,14 @@ describe('ai tool web backend', () => {
     })
   })
 
-  it('web-search-contract', async () => {
+  it('web-search-reads-content-by-query', async () => {
     await runBackendCase({
-      caseId: 'web-search-contract',
+      caseId: 'web-search-reads-content-by-query',
       harnessMode: 'tool-real',
       domain: 'ai',
       suite: 'tool',
       groups: ['web-browsing'],
-      description: '验证 web_search 返回结构化候选网页结果。',
+      description: '验证 web_search 传 query 会搜索并读取最相关网页正文。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -230,8 +218,15 @@ describe('ai tool web backend', () => {
                 }
               }
             },
-            async crawl() {
-              throw new Error('crawl should not be called')
+            async crawl(input) {
+              return {
+                requestedUrl: input.url,
+                finalUrl: input.url,
+                title: 'DeepSeek 510亿A轮融资全解析',
+                markdown: 'DeepSeek 完成首轮外部融资 510 亿元。',
+                links: { internal: [], external: [] },
+                raw: {}
+              }
             },
             async close() {
               return
@@ -244,14 +239,12 @@ describe('ai tool web backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.query === '最近 DeepSeek 融资情况' &&
-            Array.isArray(result.results) &&
-            result.results.length === 1 &&
-            result.results[0]?.rank === 1 &&
-            result.results[0]?.url === 'https://example.com/deepseek-funding',
+          result.requestedUrl === 'https://example.com/deepseek-funding' &&
+            result.title === 'DeepSeek 510亿A轮融资全解析' &&
+            Boolean(result.markdown?.includes('510 亿元')),
           {
-            name: 'web-search-returns-structured-candidates',
-            message: 'web_search 应返回 query 和结构化候选网页结果。',
+            name: 'web-search-returns-content-by-query',
+            message: 'web_search 传 query 应搜索并读取最相关网页正文。',
             data: result
           }
         )
@@ -259,14 +252,14 @@ describe('ai tool web backend', () => {
     })
   })
 
-  it('web-crawl-entry-page-contract', async () => {
+  it('web-search-reads-entry-page', async () => {
     await runBackendCase({
-      caseId: 'web-crawl-entry-page-contract',
+      caseId: 'web-search-reads-entry-page',
       harnessMode: 'tool-real',
       domain: 'ai',
       suite: 'tool',
       groups: ['web-browsing'],
-      description: '验证 web_crawl 只读取输入 URL 对应网页，并保留页面链接。',
+      description: '验证 web_search 传 url 只读取该网页并保留页面链接。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -276,9 +269,8 @@ describe('ai tool web backend', () => {
           const harness = createWebToolHarness(runtime, {
             webCrawlerService
           })
-          return await harness.invoke<WebCrawlResult>('web_crawl', {
-            url: `${server.baseUrl}/`,
-            topic: '就业服务首页相关页面'
+          return await harness.invoke<WebSearchResult>('web_search', {
+            url: `${server.baseUrl}/`
           })
         } finally {
           await webCrawlerService.close()
@@ -293,8 +285,8 @@ describe('ai tool web backend', () => {
             Array.isArray(result.links?.internal) &&
             result.links.internal.some((link) => link.href?.endsWith('/policy')),
           {
-            name: 'web-crawl-reads-entry-page-without-auto-follow',
-            message: 'web_crawl 应读取输入 URL 对应网页并返回页面链接，不再自动跟进其他链接。',
+            name: 'web-search-reads-entry-page-without-auto-follow',
+            message: 'web_search 传 url 应读取该网页并返回页面链接，不再自动跟进其他链接。',
             data: result
           }
         )
@@ -302,14 +294,14 @@ describe('ai tool web backend', () => {
     })
   })
 
-  it('web-crawl-http-failure-contract', async () => {
+  it('web-search-http-failure', async () => {
     await runBackendCase({
-      caseId: 'web-crawl-http-failure-contract',
+      caseId: 'web-search-http-failure',
       harnessMode: 'tool-real',
       domain: 'ai',
       suite: 'tool',
       groups: ['web-browsing'],
-      description: '验证 web_crawl HTTP 失败时会保留错误文本、最终 URL 和状态码。',
+      description: '验证 web_search 传 url 遇到 HTTP 失败时会保留错误文本、最终 URL 和状态码。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -319,9 +311,8 @@ describe('ai tool web backend', () => {
           const harness = createWebToolHarness(runtime, {
             webCrawlerService
           })
-          return await harness.invoke<WebCrawlResult>('web_crawl', {
-            url: `${server.baseUrl}/missing`,
-            topic: '缺失页面'
+          return await harness.invoke<WebSearchResult>('web_search', {
+            url: `${server.baseUrl}/missing`
           })
         } finally {
           await webCrawlerService.close()
@@ -335,8 +326,8 @@ describe('ai tool web backend', () => {
             result.requestedUrl?.endsWith('/missing') === true &&
             result.finalUrl?.endsWith('/missing') === true,
           {
-            name: 'web-crawl-preserves-http-failure-fields',
-            message: 'web_crawl HTTP 失败时应保留错误文本、requestedUrl/finalUrl 和状态码。',
+            name: 'web-search-preserves-http-failure-fields',
+            message: 'web_search HTTP 失败时应保留错误文本、requestedUrl/finalUrl 和状态码。',
             data: result
           }
         )
@@ -344,14 +335,14 @@ describe('ai tool web backend', () => {
     })
   })
 
-  it('web-crawl-too-large-contract', async () => {
+  it('web-search-too-large', async () => {
     await runBackendCase({
-      caseId: 'web-crawl-too-large-contract',
+      caseId: 'web-search-too-large',
       harnessMode: 'tool-real',
       domain: 'ai',
       suite: 'tool',
       groups: ['web-browsing'],
-      description: '验证 web_crawl 结果过大时返回 error 与 estimatedTokens/limit。',
+      description: '验证 web_search 结果过大时返回 error 与 estimatedTokens/limit。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -364,9 +355,8 @@ describe('ai tool web backend', () => {
               modelContextWindowTokens: 20
             }
           })
-          return await harness.invoke<WebCrawlResult>('web_crawl', {
-            url: `${server.baseUrl}/large`,
-            topic: '超长补贴通知'
+          return await harness.invoke<WebSearchResult>('web_search', {
+            url: `${server.baseUrl}/large`
           })
         } finally {
           await webCrawlerService.close()
@@ -375,14 +365,14 @@ describe('ai tool web backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.error === 'web_crawl result too large' &&
+          result.error === 'web_search result too large' &&
             result.requestedUrl?.endsWith('/large') === true &&
             result.finalUrl?.endsWith('/large') === true &&
             typeof result.estimatedTokens === 'number' &&
             typeof result.limit === 'number',
           {
-            name: 'web-crawl-too-large-uses-shared-error-contract',
-            message: 'web_crawl 结果过大时应返回 error 及 estimatedTokens/limit 兜底字段。',
+            name: 'web-search-too-large-uses-shared-error-contract',
+            message: 'web_search 结果过大时应返回 error 及 estimatedTokens/limit 兜底字段。',
             data: result
           }
         )

@@ -211,12 +211,6 @@ const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
     exitCode: true,
     error: true
   },
-  terminal_stop: {
-    terminalId: true,
-    terminalStatus: true,
-    stopped: true,
-    error: true
-  },
   kb_search: {
     items: {
       document_name: true,
@@ -328,18 +322,6 @@ const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
   },
   pdf_read_visuals: VISUAL_READ_RESULT_WHITELIST,
   web_search: {
-    query: true,
-    results: {
-      rank: true,
-      title: true,
-      url: true,
-      snippet: true
-    },
-    error: true,
-    estimatedTokens: true,
-    limit: true
-  },
-  web_crawl: {
     requestedUrl: true,
     finalUrl: true,
     title: true,

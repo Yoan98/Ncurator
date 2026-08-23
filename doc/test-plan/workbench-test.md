@@ -18,9 +18,9 @@
 - `file-preview-actions` 当前按生产真实索引能力覆盖 `pdf/docx/md/txt/xlsx/xlsm/xltx/xltm`：连续打开的文件要分别保留为资源 Tab，并能切回旧 Tab；Excel 普通预览还要覆盖只读、切 Sheet 和拖列宽后预览仍可用。`file-preview-external-change-auto-refresh` 另行覆盖所有实时预览的统一磁盘监听：以普通文本、DOCX、PPTX、XLSX 为代表验证，工作区文件和 `.ncurator/runtime/assets` 中的真实附件复用同一预览刷新链路；审核 Diff 快照不监听。
 - docx apply case 需要真实 docx 输入、真实 AI 编辑、真实写回记录、真实预览和真实回退。
 - text-file apply case 需要真实 Markdown 或代码文件、真实 `text_file_edit`、真实结构化 diff、独立 `TextFileDiffViewer` 和按原始 bytes 回退。
-- image generation apply case 需要真实模型直接使用 builtin `image-generation`、真实调用 `image_generate`、生成可解码图片、展示修改入口和图片预览，并完成新建图片回退。
+- image generation apply case 需要真实模型先学习外置 `image-generation` 技能、真实调用 `image_generate`、生成可解码图片、展示修改入口和图片预览，并完成新建图片回退。
 - `browser-use-task-panel` 需要真实 AI run 触发 `browser_use` 并驱动内置浏览器完成本地网页任务；同时验证多个浏览器 Tab 独立历史、共享持久站点数据、切换文件后网页状态不销毁，以及同 URL 标签不会让 Stagehand 串页，不能用 fake browser 替代。
-- `web_search` 与 `web_crawl` 需要分开覆盖：搜索 case 只验证候选网页返回；读取 case 必须验证 AI 继续读取网页正文后再回答。
+- `web_search` 单独覆盖：搜索 case 验证搜索后读取网页正文；直接 URL case 验证传 URL 读取网页正文后再回答。
 - Workbench 附件链路不限文件扩展名，任何可被文件选择器选中的普通文件都可以添加，不因扩展名拒绝；`+` 和拖放保留源文件绝对路径，粘贴文件保存到 `<workspace>/.ncurator/runtime/assets/<assetBucketId>/`。`assetBucketId` 为输入草稿 UUID，发送给 AI 时只传附件名称与路径，不再做发送前识图或文件解析；文件是否可被 AI 工具处理由 AI 工具层自行判断。
 - `WB-EXCEL-001-AC1`、`WB-EXCEL-001-AC2`、`WB-EXCEL-001-AC3`、`WB-EXCEL-001-AC4`、`WB-EXCEL-001-AC6`、`WB-EXCEL-001-AC7` 的工具输入输出、完整编辑操作、原子失败、冲突、只读格式、默认 Sheet 和 Sheet 严格校验由 AI tool 回归承担；`WB-EXCEL-002` 的完整 XLSX diff 语义也由 AI tool 解析 diff 文件校验。Workbench 的 Excel apply case 负责真实模型选用工具、正式文件、修改入口、只读单网格预览和回退闭环，不重复枚举底层操作。
 - docx、ppt、pdf 也按同一分层：格式专用工具的读写、边界、格式保真和 diff artifact 语义放在 AI tool；DOCX tool 必须覆盖已有表格的单元格内容与格式净变化、精确红绿标记、计数和非空回读；其中 PPT tool 必须完整覆盖 baseline 到最终状态的页面/元素净变化、自然位移、零净变化、lineage、v4 schema 和准确计数。Workbench e2e 只验证真实用户流程、现有预览入口、红绿页面标记、`+N/-N`、差异面板交互和回退，不重复枚举底层元素组合。PDF 当前是只读工具，没有 Workbench apply diff 语义。
@@ -348,28 +348,28 @@ tests/case/workbench/
 #### `web-search-diagnostic`
 
 - 测试类型：`e2e`
-- What：真实 AI 针对“DeepSeek 最近融资情况”先调用 `web_search`，并拿到结构化候选网页。
-- Why：网页搜索是实时信息入口；如果模型没有调用搜索工具或搜索工具没有返回候选，后续网页读取和回答都会变成编造。
-- How：通过真实 Workbench UI 发送 DeepSeek 融资搜索请求；等待真实 AI run 完成；从 run event 中读取 `web_search` 调用、query 和结果数量。
-- Oracle：run 完成；至少一次 `web_search` query 包含 DeepSeek；最后一次搜索结果 `ok=true` 且候选网页数量大于 0；不出现 fake search / fake AI 信号。
-- Not：不要求读取候选网页正文；正文读取由 `web-read-from-search-result` 覆盖。
+- What：真实 AI 针对“DeepSeek 最近融资情况”调用 `web_search`，并读取到网页正文。
+- Why：网页搜索与正文读取是实时信息入口；如果模型没有调用搜索工具或搜索工具没有返回正文，后续回答都会变成编造。
+- How：通过真实 Workbench UI 发送 DeepSeek 融资搜索请求；等待真实 AI run 完成；从 run event 中读取 `web_search` 调用、query 和正文。
+- Oracle：run 完成；至少一次 `web_search` query 包含 DeepSeek；搜索结果 `ok=true` 且正文非空；不出现 fake search / fake AI 信号。
+- Not：不要求读取特定新闻网页；正文细节由 `web-read-from-search-result` 覆盖。
 
 #### `web-read-from-search-result`
 
 - 测试类型：`e2e`
-- What：真实 AI 先用 `web_search` 搜索 DeepSeek 融资候选网页，再用 `web_crawl` 读取网页正文后总结。
-- Why：搜索结果只是候选列表，不是正文证据；必须守住“搜索后读取正文”的真实网页信息闭环。
-- How：通过真实 Workbench UI 发送“搜索 DeepSeek 最近融资情况并读取最相关网页正文后总结”；等待真实 AI run 完成；检查 `web_search` 与 `web_crawl` 的工具调用和结果。
-- Oracle：run 完成；`web_search` 有候选结果，`web_crawl` 读取正文，最终回答使用网页事实；搜索、读取、失败边界和严谨偏好限制由网页组 case 合并对齐 `WB-CORE-007`；不出现 fake 信号。
+- What：真实 AI 用 `web_search` 搜索 DeepSeek 融资并读取最相关网页正文后总结。
+- Why：搜索必须落到网页正文证据上；必须守住“搜索后读取正文”的真实网页信息闭环。
+- How：通过真实 Workbench UI 发送“搜索 DeepSeek 最近融资情况并读取最相关网页正文后总结”；等待真实 AI run 完成；检查 `web_search` 的工具调用和结果。
+- Oracle：run 完成；`web_search` 返回网页正文，最终回答使用网页事实；搜索、读取、失败边界和严谨偏好限制由网页组 case 合并对齐 `WB-CORE-007`；不出现 fake 信号。
 - Not：不固定具体新闻网页、金额或日期，避免公网搜索结果变化导致误判。
 
 #### `web-read-direct-url`
 
 - 测试类型：`e2e`
-- What：用户直接给 URL 时，真实 AI 使用 `web_crawl` 读取网页正文，并回答正文中的唯一口令。
+- What：用户直接给 URL 时，真实 AI 使用 `web_search` 读取网页正文，并回答正文中的唯一口令。
 - Why：直接 URL 读取是网页阅读的最小闭环，不能退化成浏览器点击任务或只复述 URL。
 - How：启动本地 HTTP 页面并写入唯一口令；通过真实 Workbench UI 要求 AI 读取该 URL 正文；等待真实 AI run 完成。
-- Oracle：run 完成；至少一次 `web_crawl` 成功；不调用 `browser_use`；最终回答包含本地网页唯一口令；不出现 fake crawl / fake AI 信号。
+- Oracle：run 完成；至少一次 `web_search` 成功；不调用 `browser_use`；最终回答包含本地网页唯一口令；不出现 fake crawl / fake AI 信号。
 - Not：不验证网页索引入库，也不验证交互式浏览器操作；这些分别由 Settings 网页索引 case 与 `browser-use-task-panel` 覆盖。
 
 ### 5.3 `result`
@@ -494,16 +494,16 @@ tests/case/workbench/
 #### `terminal-background-service-flow`
 
 - 测试类型：`e2e`
-- What：真实 AI 使用持久终端启动本地 HTTP 服务、让出控制权、通过内置浏览器验证页面并停止服务。
-- Why：持久终端、多终端决策、浏览器联动和进程清理的完整用户路径，静态事件或 fake tool result 无法覆盖。
-- How：在真实临时 workspace 创建带唯一标记的 HTML；通过可见 Electron Workbench 发送请求，真实审批 terminal 命令，使用真实 PTY 启动 Python HTTP server，真实 browser_use 打开页面，最后 terminal_stop。
-- Oracle：事件包含 terminal_command_yielded、terminal_command_stopped、terminal_run、terminal_stop 和 browser_use；最终答复包含页面唯一标记；任务结束后真实端口不可访问；不存在 fake AI/tool/browser 信号。
+- What：真实 AI 使用终端启动本地 HTTP 服务、让出控制权、通过内置浏览器验证页面。
+- Why：终端后台服务、浏览器联动和进程清理的完整用户路径，静态事件或 fake tool result 无法覆盖。
+- How：在真实临时 workspace 创建带唯一标记的 HTML；通过可见 Electron Workbench 发送请求，真实审批 terminal 命令，使用真实 PTY 启动 Python HTTP server，真实 browser_use 打开页面。
+- Oracle：事件包含 terminal_command_yielded、terminal_run 和 browser_use；最终答复包含页面唯一标记；不存在 fake AI/tool/browser 信号。
 - Not：不依赖公网，不允许测试进程替 AI 启动目标 HTTP 服务。
 
 #### `terminal-unicode-file-list`
 
 - 测试类型：`e2e`
-- What：持久终端在当前平台处理 Unicode 路径和文件列表。
+- What：终端在当前平台处理 Unicode 路径和文件列表。
 - Why：中文路径是 macOS 与 Windows 用户的常见场景，编码错误会直接破坏终端任务。
 - How：在真实工作区创建 Unicode 文件名，通过真实终端读取目录并返回结果。
 - Oracle：终端结果保留 Unicode 文件名，任务完成后无乱码或跨会话泄漏，对齐 `WB-TERMINAL-001`。

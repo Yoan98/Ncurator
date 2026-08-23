@@ -75,11 +75,11 @@ describe('workbench run e2e', () => {
             (event): event is Extract<AiRunEvent, { type: 'tool_call_started' }> =>
               event.type === 'tool_call_started'
           )
-          const crawlStarts = toolStarts.filter((event) => event.toolName === 'web_crawl')
+          const crawlStarts = toolStarts.filter((event) => event.toolName === 'web_search')
           const browserUseStarts = toolStarts.filter((event) => event.toolName === 'browser_use')
           const crawlResults = evidence.events.filter(
             (event): event is Extract<AiRunEvent, { type: 'tool_call_result' }> =>
-              event.type === 'tool_call_result' && event.toolName === 'web_crawl'
+              event.type === 'tool_call_result' && event.toolName === 'web_search'
           )
 
           return {
@@ -101,7 +101,7 @@ describe('workbench run e2e', () => {
             {
               name: 'workbench-web-read-direct-url',
               message:
-                '真实 e2e 应对用户直接提供的 URL 使用 web_crawl 读取正文，并回答网页里的唯一口令。',
+                '真实 e2e 应对用户直接提供的 URL 使用 web_search 读取正文，并回答网页里的唯一口令。',
               data: result
             }
           )

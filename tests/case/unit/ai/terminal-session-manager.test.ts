@@ -54,13 +54,7 @@ const finishCommand = async (
       chatSessionId,
       workspaceId
     }))
-  const read = manager.read({
-    terminalId: result.terminalId,
-    chatSessionId,
-    workspaceId,
-    outputCursor: 0
-  })
-  return { exitCode, output: read.output }
+  return { exitCode, output: result.output }
 }
 
 afterEach(async () => {
@@ -98,22 +92,10 @@ describe.skipIf(process.platform === 'win32')('terminal session manager', () => 
       workspaceRootPath: root,
       platform: 'macos',
       runId: 'run-unicode',
-      terminalId: listed.terminalId,
-      command: 'cd "中文目录"'
+      command: `cd "中文目录"; printf '中文输出😀\\n'; pwd`
     })
-    expect(changed.currentTerminalPath).toBe(chineseDirectory)
-
-    const continued = await manager.run({
-      chatSessionId: 'chat-unicode',
-      workspaceId: 'workspace-unicode',
-      workspaceRootPath: root,
-      platform: 'macos',
-      runId: 'run-unicode',
-      terminalId: listed.terminalId,
-      command: `printf '中文输出😀\\n'; pwd`
-    })
-    expect(continued.output).toContain('中文输出😀')
-    expect(continued.output).toContain(chineseDirectory)
+    expect(changed.output).toContain('中文输出😀')
+    expect(changed.output).toContain(chineseDirectory)
   })
 
   it('runs commands larger than the PTY input line limit', async () => {
@@ -276,7 +258,6 @@ describe.skipIf(process.platform !== 'win32')('terminal session manager on Windo
       workspaceRootPath: root,
       platform: 'windows',
       runId: 'run-windows-unicode',
-      terminalId: powershell.terminalId,
       command: 'cmd.exe /d /c dir /b'
     })
     expect(native.output).toContain('中文目录')
@@ -288,10 +269,8 @@ describe.skipIf(process.platform !== 'win32')('terminal session manager on Windo
       workspaceRootPath: root,
       platform: 'windows',
       runId: 'run-windows-unicode',
-      terminalId: powershell.terminalId,
       command: `Set-Location "${chineseDirectory}"; Write-Output '持续中文'`
     })
-    expect(changed.currentTerminalPath).toBe(chineseDirectory)
     expect(changed.output).toContain('持续中文')
   })
 

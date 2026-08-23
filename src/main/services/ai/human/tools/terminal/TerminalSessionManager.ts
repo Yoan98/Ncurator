@@ -85,16 +85,12 @@ type ManagedTerminalSession = {
   exited: Promise<void>
   markExited: () => void
   createdAt: number
-  lastActiveAt: number
 }
 
 export type TerminalSessionManagerOptions = {
   yieldMs?: number
   stopGraceMs?: number
   maxOutputChars?: number
-  maxSessionsPerChat?: number
-  idleTtlMs?: number
-  runningTtlMs?: number
   environment?: Record<string, string>
 }
 
@@ -130,22 +126,13 @@ export class TerminalSessionManager {
   private readonly yieldMs: number
   private readonly stopGraceMs: number
   private readonly maxOutputChars: number
-  private readonly maxSessionsPerChat: number
-  private readonly idleTtlMs: number
-  private readonly runningTtlMs: number
   private readonly environment?: Record<string, string>
-  private readonly cleanupTimer: ReturnType<typeof setInterval>
 
   public constructor(options: TerminalSessionManagerOptions = {}) {
     this.yieldMs = Math.max(50, Number(options.yieldMs || 8000))
     this.stopGraceMs = Math.max(50, Number(options.stopGraceMs || 2000))
     this.maxOutputChars = Math.max(1024, Number(options.maxOutputChars || 1_000_000))
-    this.maxSessionsPerChat = Math.max(1, Number(options.maxSessionsPerChat || 3))
-    this.idleTtlMs = Math.max(1000, Number(options.idleTtlMs || 30 * 60 * 1000))
-    this.runningTtlMs = Math.max(1000, Number(options.runningTtlMs || 2 * 60 * 60 * 1000))
     this.environment = options.environment
-    this.cleanupTimer = setInterval(() => this.pruneExpiredSessions(), 60_000)
-    this.cleanupTimer.unref?.()
   }
 
   public list(input: { chatSessionId: string; workspaceId?: string }): TerminalSessionSnapshot[] {
@@ -174,21 +161,8 @@ export class TerminalSessionManager {
     platform: AiRuntimePlatform
     runId: string
     command: string
-    terminalId?: string
   }): Promise<TerminalCommandResult> {
-    const session = input.terminalId
-      ? this.requireSession({
-          terminalId: input.terminalId,
-          chatSessionId: input.chatSessionId,
-          workspaceId: input.workspaceId
-        })
-      : await this.createSession(input)
-
-    await session.ready
-    if (session.status === 'running' || session.status === 'stopping') {
-      throw new Error('terminal_busy')
-    }
-    if (session.status === 'closed') throw new Error('terminal_closed')
+    const session = await this.createSession(input)
 
     const leadingCwd = await session.adapter.resolveCommandCwd({
       command: input.command,
@@ -213,7 +187,6 @@ export class TerminalSessionManager {
     }
     session.currentCommand = commandState
     session.status = 'running'
-    session.lastActiveAt = Date.now()
     try {
       session.process.write(
         `${session.adapter.buildCommandEnvelope(
@@ -234,7 +207,7 @@ export class TerminalSessionManager {
     ])
 
     const completed = commandState.returnReason !== undefined
-    return {
+    const result: TerminalCommandResult = {
       terminalId: session.terminalId,
       commandId,
       terminalStatus: session.status,
@@ -246,6 +219,10 @@ export class TerminalSessionManager {
       outputCursor: session.outputCursor,
       exitCode: completed ? commandState.exitCode : null
     }
+    if (completed) {
+      await this.closeSession(session)
+    }
+    return result
   }
 
   public read(input: {
@@ -256,7 +233,6 @@ export class TerminalSessionManager {
   }): TerminalReadResult {
     const session = this.requireSession(input)
     const result = this.readOutput(session, input.outputCursor)
-    session.lastActiveAt = Date.now()
     return {
       terminalId: session.terminalId,
       terminalStatus: session.status,
@@ -281,7 +257,9 @@ export class TerminalSessionManager {
       return session.lastExitCode ?? 1
     }
     await command.completion
-    return command.exitCode ?? session.lastExitCode ?? 1
+    const exitCode = command.exitCode ?? session.lastExitCode ?? 1
+    await this.closeSession(session)
+    return exitCode
   }
 
   public async stop(input: {
@@ -363,22 +341,10 @@ export class TerminalSessionManager {
   }
 
   public async dispose(): Promise<void> {
-    clearInterval(this.cleanupTimer)
     await Promise.all(
       Array.from(this.sessions.values()).map(async (session) => await this.closeSession(session))
     )
     this.completedCommandExitCodes.clear()
-  }
-
-  private pruneExpiredSessions(): void {
-    const now = Date.now()
-    for (const session of this.sessions.values()) {
-      const expired = session.currentCommand
-        ? now - session.currentCommand.startedAt >= this.runningTtlMs
-        : now - session.lastActiveAt >= this.idleTtlMs
-      if (!expired) continue
-      void this.closeSession(session)
-    }
   }
 
   private async createSession(input: {
@@ -388,9 +354,6 @@ export class TerminalSessionManager {
     environment?: Record<string, string>
     platform: AiRuntimePlatform
   }): Promise<ManagedTerminalSession> {
-    const activeCount = this.list({ chatSessionId: input.chatSessionId }).length
-    if (activeCount >= this.maxSessionsPerChat) throw new Error('terminal_session_limit_reached')
-
     const rootPath = path.resolve(input.workspaceRootPath)
     const ready = createDeferred()
     const exited = createDeferred()
@@ -435,8 +398,7 @@ export class TerminalSessionManager {
       markReady: ready.resolve,
       exited: exited.promise,
       markExited: exited.resolve,
-      createdAt: Date.now(),
-      lastActiveAt: Date.now()
+      createdAt: Date.now()
     }
     this.sessions.set(session.terminalId, session)
     terminalProcess.onData((data) => this.consumeProtocolData(session, data))

@@ -39,10 +39,10 @@ describe('ai human live backend', () => {
         },
         assert: async (result, runtime) => {
           const crawlStarts = filterAiRunEventsByType(result.events, 'tool_call_started')
-            .filter((event) => event.toolName === 'web_crawl')
+            .filter((event) => event.toolName === 'web_search')
             .map((event) => String(event.input.url || ''))
           const crawlResults = filterAiRunEventsByType(result.events, 'tool_call_result').filter(
-            (event) => event.toolName === 'web_crawl' && event.result?.ok === true
+            (event) => event.toolName === 'web_search' && event.result?.ok === true
           )
           runtime.assertThat(
             result.output.status === 'completed' &&

@@ -37,11 +37,17 @@ describe('ai human live backend', () => {
         },
         assert: async (result, runtime) => {
           const starts = filterAiRunEventsByType(result.events, 'tool_call_started')
-          const urls = starts
-            .filter((event) => event.toolName === 'web_crawl')
-            .map((event) => String(event.input.url || ''))
-          const officialUrls = urls.filter(isPandasHost)
-          const nonOfficialUrls = urls.filter((url) => !isPandasHost(url))
+          const results = filterAiRunEventsByType(result.events, 'tool_call_result').filter(
+            (event) => event.toolName === 'web_search' && event.result?.ok === true
+          )
+          const readUrls = results.map((event) => {
+            const data = event.result?.data
+            if (!data || typeof data !== 'object' || Array.isArray(data)) return ''
+            const value = data as { finalUrl?: unknown; requestedUrl?: unknown }
+            return String(value.finalUrl || value.requestedUrl || '')
+          })
+          const officialUrls = readUrls.filter(isPandasHost)
+          const nonOfficialUrls = readUrls.filter((url) => url && !isPandasHost(url))
           runtime.assertThat(
             result.output.status === 'completed' &&
               officialUrls.length >= 2 &&
@@ -49,7 +55,7 @@ describe('ai human live backend', () => {
             {
               name: 'human-live-web-crawl-url-inference-uses-official-sources',
               message: 'The live model must obtain the requested official API sources before answering the user.',
-              data: { urls, nonOfficialUrls }
+              data: { readUrls, nonOfficialUrls }
             }
           )
         }

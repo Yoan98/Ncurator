@@ -196,8 +196,6 @@ const TOOL_ITEM_RENDERERS = {
   terminal_run: (input) => sentence(text('执行命令 '), text(readCommandLabel(input))),
   terminal_read: (input) =>
     sentence(text('读取终端 '), text(readStringValue(input || {}, 'terminalId') || '运行结果')),
-  terminal_stop: (input) =>
-    sentence(text('停止终端 '), text(readStringValue(input || {}, 'terminalId') || '任务')),
   text_file_read: (input) => sentence(text('读取文件 '), text(readToolFileLabel(input))),
   text_file_edit: (input) => sentence(text('编辑文件 '), text(readToolFileLabel(input))),
   kb_search: (input) => sentence(text('在知识库中搜索 '), text(readToolQueryLabel(input))),
@@ -228,8 +226,12 @@ const TOOL_ITEM_RENDERERS = {
   excel_search: (input) => sentence(text('搜索 Excel '), text(readToolQueryLabel(input))),
   excel_read_cells: (input) => sentence(text('读取 Excel 单元格 '), text(readToolFileLabel(input))),
   excel_edit: (input) => sentence(text('编辑 Excel '), text(readToolFileLabel(input))),
-  web_search: (input) => sentence(text('搜索网页 '), text(readToolQueryLabel(input))),
-  web_crawl: (input) => sentence(text('读取网页 '), text(readWebUrlLabel(input))),
+  web_search: (input) => {
+    const url = readStringValue(input || {}, 'url')
+    return url
+      ? sentence(text('读取网页 '), text(truncateMiddle(url, 96)))
+      : sentence(text('搜索网页 '), text(readToolQueryLabel(input)))
+  },
   browser_use: (input) => {
     const action = input ? readStringValue(input, 'action') || '' : ''
     const urlLabel = readWebUrlLabel(input)

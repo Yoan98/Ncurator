@@ -30,7 +30,7 @@ export const HUMAN_STEP_ACTIONS = [
 
 export const HUMAN_STEP_RESULT_STATUSES = ['ok', 'error'] as const
 
-export const HUMAN_MAX_ACTIVE_TOOLS = 25
+export const HUMAN_MAX_ACTIVE_TOOLS = 30
 export const HUMAN_GRAPH_RECURSION_LIMIT = 200
 export const HUMAN_TOOL_RESULT_TOKEN_LIMIT_RATIO = 0.6
 // 默认按 200k 上下文窗口估算，压缩阈值由 CONTEXT_COMPACTION_TRIGGER_RATIO 控制。

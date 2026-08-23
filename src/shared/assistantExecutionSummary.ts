@@ -34,7 +34,6 @@ export type AssistantExecutionSkillKey =
   | 'kb'
   | 'terminal'
   | 'web-search'
-  | 'web-crawl'
   | 'browser'
   | 'image-recognition'
   | 'image-generation'
@@ -66,7 +65,6 @@ const sentence = (...segments: AssistantExecutionTextSegment[]): AssistantExecut
 const TOOL_UI_KINDS = {
   terminal_run: 'terminal',
   terminal_read: 'terminal',
-  terminal_stop: 'terminal',
   text_file_read: 'file-read',
   text_file_edit: 'file-edit',
   kb_search: 'kb',
@@ -90,7 +88,6 @@ const TOOL_UI_KINDS = {
   excel_read_cells: 'excel-read',
   excel_edit: 'excel-edit',
   web_search: 'web-search',
-  web_crawl: 'web-crawl',
   browser_use: 'browser',
   image_analyze: 'image-recognition',
   image_generate: 'image-generation',
@@ -120,7 +117,6 @@ export const getAssistantToolIconKind = (
   if (skillKey === 'ppt-search' || skillKey === 'web-search') return 'search'
   if (skillKey === 'ppt-edit' || skillKey === 'excel-edit') return 'edit'
   if (skillKey === 'kb') return 'knowledge'
-  if (skillKey === 'web-crawl') return 'web'
   if (skillKey === 'browser' || skillKey === 'user-takeover') return 'browser'
   if (skillKey === 'image-recognition' || skillKey === 'image-generation') return 'image'
   if (skillKey === 'wait') return 'wait'
@@ -259,14 +255,6 @@ export const getAssistantToolSummaryText = (
       failed: '搜索网页失败'
     })
   }
-  if (skillKey === 'web-crawl') {
-    return statusText(status, {
-      running: '正在读取网页',
-      completed: '已读取网页',
-      partial_failed: '部分网页读取失败',
-      failed: '读取网页失败'
-    })
-  }
   if (skillKey === 'browser') {
     return statusText(status, {
       running: '正在操作浏览器',
@@ -340,8 +328,7 @@ const getSummaryActionLabel = (kind: AssistantExecutionSkillKey): string => {
     kind === 'file-read' ||
     kind === 'pdf-read' ||
     kind === 'ppt-read' ||
-    kind === 'excel-read' ||
-    kind === 'web-crawl'
+    kind === 'excel-read'
   ) {
     return '读取'
   }

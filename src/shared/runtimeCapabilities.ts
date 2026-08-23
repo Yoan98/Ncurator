@@ -32,7 +32,7 @@ export const RUNTIME_SKILL_CATALOG = {
     title: 'terminal',
     displayName: '命令执行器',
     description:
-      '使用持久终端会话执行、读取和停止命令，并返回终端状态、当前路径、增量输出、退出状态和用户工作区域文件产物。'
+      '在用户工作区根目录执行和读取命令，并返回终端状态、增量输出、退出状态和用户工作区域文件产物。'
   },
   'text-file': {
     familyId: 'text-file',
@@ -59,7 +59,7 @@ export const RUNTIME_SKILL_CATALOG = {
     title: 'web-browsing',
     displayName: '网页浏览器',
     description:
-      '搜索公开网页、抓取网页正文或操作内置浏览器，并返回候选网页、正文与页面链接或浏览器动作结果。'
+      '按关键词搜索并读取公开网页正文，或直接读取指定网页，或操作内置浏览器，并返回网页正文、链接或浏览器动作结果。'
   },
   'docx-read': {
     familyId: 'docx',
@@ -126,16 +126,16 @@ export const RUNTIME_SKILL_CATALOG = {
   },
   'image-recognition': {
     familyId: 'image-recognition',
-    source: 'builtin',
-    countsTowardToolBudget: false,
+    source: 'external',
+    countsTowardToolBudget: true,
     title: '图像识别',
     displayName: '图像识别',
     description: '读取图片并按 instruction 分析图片内容，并返回模型生成的文本结果。'
   },
   'image-generation': {
     familyId: 'image-generation',
-    source: 'builtin',
-    countsTowardToolBudget: false,
+    source: 'external',
+    countsTowardToolBudget: true,
     title: '图片生成',
     displayName: '图片生成',
     description: '通过 SVG 绘制生成 PNG、JPEG 或 WebP 图片，并保存为用户工作区域文件。'
@@ -161,7 +161,6 @@ type RuntimeToolCatalogEntry = {
 export const RUNTIME_TOOL_CATALOG = {
   terminal_run: { familyId: 'terminal', skillId: 'terminal' },
   terminal_read: { familyId: 'terminal', skillId: 'terminal' },
-  terminal_stop: { familyId: 'terminal', skillId: 'terminal' },
   text_file_read: { familyId: 'text-file', skillId: 'text-file' },
   text_file_edit: { familyId: 'text-file', skillId: 'text-file' },
   kb_search: { familyId: 'kb', skillId: 'kb-retrieval' },
@@ -185,7 +184,6 @@ export const RUNTIME_TOOL_CATALOG = {
   excel_read_cells: { familyId: 'excel', skillId: 'excel-read' },
   excel_edit: { familyId: 'excel', skillId: 'excel-write' },
   web_search: { familyId: 'web', skillId: 'web-browsing' },
-  web_crawl: { familyId: 'web', skillId: 'web-browsing' },
   browser_use: { familyId: 'web', skillId: 'web-browsing' },
   image_analyze: { familyId: 'image-recognition', skillId: 'image-recognition' },
   image_generate: { familyId: 'image-generation', skillId: 'image-generation' },

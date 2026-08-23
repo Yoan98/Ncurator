@@ -62,7 +62,7 @@
 - `tool / text-file` 覆盖普通文本读取、四种写入 action、修改记录、结构化 diff 与回退前置数据。
 - `tool / image-generation` 覆盖 SVG 内部绘制输入、PNG/JPEG/WebP 转码、自动创建或更新、工作区内修改记录、Artifact、安全校验和工作区外绝对路径写入不记录回退。
 - `tool / pdf` 使用真实 `深度学习.pdf`，覆盖元数据、页级正文、literal/regex 搜索、页面 PNG、工作区外绝对路径读取、损坏文件和结果大小限制。
-- `tool / web-browsing` 包含 `web-crawl-contract`，用于守住 `web_crawl`、`web_search` 和 `browser_use` 工具契约。
+- `tool / web-browsing` 包含 `web-search-contract`，用于守住 `web_search` 和 `browser_use` 工具契约。
 - 目标：验证 tool 与 `hand` 执行守卫的生产输入输出。
 - 约束：使用真实工具、store、docx apply service 和 artifact 流；禁止 fake `documentsStore`、`embeddingService`、`resolveDocxOpenTarget` 或 tool result。
 - `web-browsing` 工具测试先覆盖冻结 sidecar bin 程序抓取与 `browser_use` 服务不可用诊断。
@@ -843,62 +843,62 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 - Why：AI 需要可靠的短脚本执行入口，不能把解释器调用误当成普通 shell 文本。
 - How：通过 terminal 工具执行内联代码，检查命令、输出、工作目录和边界错误。
 - Oracle：返回真实标记和正确退出状态；越界或不可用解释器被明确拒绝。
-- Not：不替代持久终端会话的生命周期测试。
+- Not：不替代终端执行与长命令让出控制权的生命周期测试。
 
-##### `terminal-persistent-session-contract`
+##### `terminal-execution-contract`
 
 - 测试类型：`backend`
-- What：真实 PTY 持久终端保留当前路径、长命令让出控制权、增量读取、停止和命令级文件追踪；拒绝后台分离执行，放行 fd 合并重定向。
-- Why：后台服务和长任务不能继续依赖单次 shell 超时或系统孤儿进程；`2>&1` 等 fd 合并重定向只是输出流合并，不能误判为后台执行或危险重定向。
-- How：在同一 terminalId 中真实执行 cd、pwd 和持续输出命令，同时新开第二终端；从子目录分别执行“长命令正常完成”“写入后停止”和“写入后非零退出”，通过 terminal_read 等到 idle 或调用 terminal_stop。以 `sleep 1 &`（windows `Start-Process`）验证分离执行被拒，以 `echo redirect-ok 2>&1` 验证 fd 合并重定向正常执行。
-- Oracle：同一终端保留路径，新终端从 workspace 根目录启动；长命令返回 command_still_running 且进程仍在；读取能取得真实增量输出；正常停止后终端回到 idle，强制停止后终端进入 closed，且均无子进程残留。三条终端写命令均以工作区根目录为扫描范围，生成当前 run 的 `terminal_tool` 修改记录和 `file_artifact`。分离执行返回 `detached shell execution` 错误；`2>&1` 命令以 completed 和退出码 0 结束且输出包含 `redirect-ok`。
+- What：真实 PTY 终端从工作区根目录执行命令、长命令让出控制权并可增量读取，命令级文件追踪与退出码正确；拒绝后台分离执行，放行 fd 合并重定向。
+- Why：后台服务和长任务不能依赖单次 shell 超时或系统孤儿进程；`2>&1` 等 fd 合并重定向只是输出流合并，不能误判为后台执行或危险重定向。
+- How：通过 `terminal_run` 分别执行 `pwd`、单命令内 `cd + pwd`、写文件后长 sleep、持续输出命令、写文件后非零退出；通过 `terminal_read` 增量读取持续输出命令。以 `sleep 1 &`（windows `Start-Process`）验证分离执行被拒，以 `echo redirect-ok 2>&1` 验证 fd 合并重定向正常执行。
+- Oracle：命令默认从 workspace 根目录执行；长命令返回 `command_still_running` 且进程仍在；读取能取得真实增量输出；写文件命令（完成与非零退出）均生成当前 run 的 `terminal_tool` 修改记录和 `file_artifact`。分离执行返回 `detached shell execution` 错误；`2>&1` 命令以 completed 和退出码 0 结束且输出包含 `redirect-ok`。
 - Not：不验证 Workbench 浏览器联动，该能力由真实 e2e 覆盖。
 
 #### web-browsing 类别
 
-##### `web-crawl-page-contract`
+##### `web-search-reads-page-by-url`
 
 - 测试类型：`backend`
-- What：`web_crawl` 会返回 `requestedUrl/finalUrl`、标题、`markdown`、发布时间与分组 links；其中 `markdown` 内容来源于 crawl4ai 的 `fit_markdown`。
-- Why：程序级网页抓取是低成本网页能力入口，必须稳定返回可被 brain 继续消费的网页事实和导航线索，同时保留 crawl4ai 的分组 links 与评分语义。
-- How：启动本地 HTTP server，返回文章页 HTML，并通过真实冻结 sidecar bin 返回抓取结果。
+- What：`web_search` 传 `url` 会返回 `requestedUrl/finalUrl`、标题、`markdown`、发布时间与分组 links；其中 `markdown` 内容来源于 crawl4ai 的 `fit_markdown`。
+- Why：程序级网页读取是低成本网页能力入口，必须稳定返回可被 brain 继续消费的网页事实和导航线索，同时保留 crawl4ai 的分组 links 与评分语义。
+- How：启动本地 HTTP server，返回文章页 HTML，通过真实冻结 sidecar bin 返回抓取结果，调用 `web_search({ url })`。
 - Oracle：结果包含 `requestedUrl`、`finalUrl`、`title`、`markdown`、`publishedAt`、`links.internal/external`，且 links 项包含 `intrinsicScore/contextualScore/totalScore`。
 - Not：不验证复杂浏览器交互或外网可达性。
 
-##### `web-search-contract`
+##### `web-search-reads-content-by-query`
 
 - 测试类型：`backend`
-- What：`web_search` 返回 query 与结构化候选网页结果。
-- Why：网页搜索负责提供后续可读取的候选入口，不能只返回不可追踪的拼接文本。
-- How：通过真实 web tool harness 调用 `web_search`，使用可控搜索服务返回候选页面。
-- Oracle：结果保留原 query，候选项包含稳定 rank、标题和 URL，且第一条结果指向预期页面。
-- Not：不验证候选页面正文读取；正文读取由 `web_crawl` 与 Workbench 网页读取 case 覆盖。
+- What：`web_search` 传 `query` 会先搜索最相关网页再读取其正文。
+- Why：网页搜索与正文读取融合后，query 应直接产出可被 brain 消费的网页正文，而不是只返回候选列表。
+- How：通过真实 web tool harness 调用 `web_search({ query })`，使用可控搜索与抓取服务返回候选页面并读取其正文。
+- Oracle：结果命中搜索到的最相关页面，返回该页面的 `requestedUrl`、`title` 与正文 `markdown`。
+- Not：不验证搜索引擎级网页发现与多跳。
 
-##### `web-crawl-entry-page-contract`
+##### `web-search-reads-entry-page`
 
 - 测试类型：`backend`
-- What：`web_crawl` 只读取输入 URL 对应网页，并保留该页 links。
-- Why：当前 contract 不再让 `web_crawl` 自己多跳跟进，后续要不要继续探索由 human 自己看 links 决定。
-- How：启动本地 HTTP server，返回包含通知页和指南页链接的入口页，并通过真实冻结 sidecar bin 抓取该页。
+- What：`web_search` 传 `url` 只读取该 URL 对应网页，并保留该页 links。
+- Why：当前 contract 不让工具自己多跳跟进，后续要不要继续探索由 human 自己看 links 决定。
+- How：启动本地 HTTP server，返回包含通知页和指南页链接的入口页，通过真实冻结 sidecar bin 抓取该页，调用 `web_search({ url })`。
 - Oracle：结果命中输入 URL 对应页面正文，同时 links 中保留该页相关链接。
 - Not：不验证自动多跳或搜索引擎级网页发现。
 
-##### `web-crawl-http-failure-contract`
+##### `web-search-http-failure`
 
 - 测试类型：`backend`
-- What：`web_crawl` HTTP 失败时会保留错误文本、最终 URL 和状态码。
+- What：`web_search` 传 `url` 遇到 HTTP 失败时会保留错误文本、最终 URL 和状态码。
 - Why：网页读取失败也必须保持可诊断，避免 `human` 误把空结果当成“网页无信息”。
-- How：启动本地 HTTP server，返回 404 页面，并通过真实冻结 sidecar bin 执行抓取。
+- How：启动本地 HTTP server，返回 404 页面，通过真实冻结 sidecar bin 执行抓取，调用 `web_search({ url })`。
 - Oracle：结果返回明确错误文本，同时保留 `finalUrl` 和 `statusCode`。
 - Not：不验证复杂重定向链或外站错误页样式。
 
-##### `web-crawl-too-large-contract`
+##### `web-search-too-large`
 
 - 测试类型：`backend`
-- What：`web_crawl` 结果过大时会走统一 `hand_tool_result_too_large` 兜底。
+- What：`web_search` 结果过大时会走统一 `hand_tool_result_too_large` 兜底。
 - Why：网页正文可能很长，回归工具必须复用统一大小守卫，而不是把超长正文直接塞进 prompt。
-- How：启动本地 HTTP server，返回超长正文页，通过真实冻结 sidecar bin 抓取，并把 tool harness 的 `modelContextWindowTokens` 压低到触发阈值。
-- Oracle：结果返回 `web_crawl result too large`，且带有统一 `decisionHint`。
+- How：启动本地 HTTP server，返回超长正文页，通过真实冻结 sidecar bin 抓取，并把 tool harness 的 `modelContextWindowTokens` 压低到触发阈值，调用 `web_search({ url })`。
+- Oracle：结果返回 `web_search result too large`，且带有统一 `decisionHint`。
 - Not：不验证压缩摘要或自动截断策略。
 
 #### image-generation 类别
@@ -1411,18 +1411,18 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 ##### `human-web-crawl-multi-hop-cross-domain-reading-live`
 
 - 测试类型：`backend`
-- What：live 模式下 `human` 会围绕用户给出的入口网址持续多次调用 `web_crawl`，跨域并多跳整理分散网页事实。
+- What：live 模式下 `human` 会围绕用户给出的入口网址持续多次调用 `web_search`，跨域并多跳整理分散网页事实。
 - Why：真实用户常会给一个入口站点，但答案往往分散在专题页、通知页、办理指南页和申报入口页；这条 case 要长期守住“给入口网址后继续探索链接、跨域推进并最终收口”的能力。
 - How：启动两组本地 HTTP server：入口站点先提供城市公共服务导航与就业补贴专题页，再通过外链跳到另一域名下的人社通知页；通知页、办理指南页和申报入口页分别承载申请对象/截止时间、材料清单、线上办理方式等部分事实，且前序页面均有有效信息但不足以一次拿全；输入自然语言诉求，明确要求模型继续找、不要补网页未写内容。
-- Oracle：事件流中至少四次成功调用 `web_crawl`；成功结果覆盖专题页、通知页、办理指南和申报入口，且访问 URL 覆盖至少两个域名；结论质量由 raw logs 人工评估。
-- Not：不要求固定访问顺序，也不要求单次 `web_crawl` 内部自动跨域；允许模型通过多轮显式 `web_crawl` 调用完成跨域推进。
+- Oracle：事件流中至少四次成功调用 `web_search`；成功结果覆盖专题页、通知页、办理指南和申报入口，且访问 URL 覆盖至少两个域名；结论质量由 raw logs 人工评估。
+- Not：不要求固定访问顺序，也不要求单次 `web_search` 内部自动跨域；允许模型通过多轮显式 `web_search` 调用完成跨域推进。
 
 ##### `human-web-crawl-url-inference-reading-live`
 
 - 测试类型：`backend`
-- What：live 模式下 `human` 在用户不提供网址时，会先推断官网地址，再通过 `web_crawl` 完成官网文档整理。
+- What：live 模式下 `human` 在用户不提供网址时，会先推断官网地址，再通过 `web_search` 完成官网文档整理。
 - Why：真实用户有时只会描述“去官网帮我看某两个条目”，不会直接给具体网址；这条 case 要长期守住“先判断目标官网，再继续抓取资料页面完成任务”的能力。
-- How：不向用户输入提供 URL，只给“基于 pandas 官网文档分别说明 `read_csv` 和 `DataFrame.to_csv` 及其最直接使用区别”的自然语言诉求；要求模型自行判断官网地址并通过 `web_crawl` 读取官网文档页面完成整理。
+- How：不向用户输入提供 URL，只给“基于 pandas 官网文档分别说明 `read_csv` 和 `DataFrame.to_csv` 及其最直接使用区别”的自然语言诉求；要求模型自行判断官网地址并通过 `web_search` 读取官网文档页面完成整理。
 - Oracle：至少读取两个 `pandas.pydata.org` 官方 API 页面；不出现 `browser_use` 或 `terminal_run`；非官方冗余抓取记录到 raw logs，由人工评分而非隐藏文本断言决定完成度。
 - Not：不要求复杂跨域或深链路，也不要求模型第一次就命中最终文档页，只要最终能自行推断官网地址并完成整理即可。
 
@@ -1450,5 +1450,5 @@ Terminal preview-service protocol coverage remains in `ai/tool/terminal`.
 - What：live 模型能在项目子目录启动临时 HTTP 预览服务，真实访问页面、读取服务日志并彻底停止服务。
 - Why：工具契约正确不代表模型能理解 `command_still_running`，也不代表它会在完成检查后主动清理长时间运行的进程。
 - How：在临时 workspace 的 `preview-site` 中创建带唯一标记的页面，为用户提供一个随机空闲端口；用户只描述“进入目录启动预览、确认页面、检查请求日志、用完关闭”的真实诉求，不指定工具或命令。仅开放三个 terminal 工具，由真实模型自主决策。
-- Oracle：服务命令在 `preview-site` 中运行并返回 `command_still_running`；模型使用 `terminal_read` 读取服务终端，页面标记出现在真实终端结果和最终答复中；模型使用 `terminal_stop(closeTerminal=true)` 停止并关闭服务终端；端口最终不可访问；工具结果不包含 `availableActions` 或内部 `commandId`。
+- Oracle：服务命令在 `preview-site` 中运行并返回 `command_still_running`；模型使用 `terminal_read` 读取服务终端，页面标记出现在真实终端结果和最终答复中；运行结束后服务终端由框架清理；工具结果不包含 `availableActions` 或内部 `commandId`。
 - Not：不绑定 Python、curl 等具体命令，不要求固定工具调用轮数，不验证 Workbench UI 或公网访问。

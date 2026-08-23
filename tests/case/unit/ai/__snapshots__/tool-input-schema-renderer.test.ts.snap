@@ -42,6 +42,6 @@ type PptChartSeries = { name: string, values: number[] }",
   "ppt_read_outline": "{ sourcePath: string, ranges: PptOutlineRange[] }
 类型定义：
 type PptOutlineRange = { type: "percent", fromPercent: number, toPercent: number } | { type: "slide_index", fromSlideIndex: number, toSlideIndex: number }",
-  "terminal_run": "{ command: string, commandExplanation: string, terminalId?: string }",
+  "terminal_run": "{ command: string, commandExplanation: string }",
 }
 `;
